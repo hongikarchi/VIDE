@@ -1,0 +1,211 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="description" content="ADR-007 · 웹 검토 — 온라인 제출까지 MVP"><meta name="generator" content="tools/docs/build.mjs — generated from docs/decisions/ADR-007-web-review-online-submission-in-mvp.md; do not edit"><title>VIDE · 웹 검토 — 온라인 제출까지 MVP에 포함</title><style>
+:root{--ink:#292c2d;--muted:#626b6e;--line:#e1e3e1;--soft:#f5f5f1;--coral:#d97660;--paper:#fff;--font:"Pretendard","Noto Sans KR","Malgun Gothic",Arial,sans-serif}
+*{box-sizing:border-box}html{scroll-behavior:smooth;scroll-padding-top:92px}body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--font);letter-spacing:-.025em}a{color:inherit;text-underline-offset:4px}button,input,textarea,select{font:inherit;color:inherit}button{cursor:pointer;border:1px solid var(--line);border-radius:4px;background:var(--paper);padding:10px 15px;line-height:1.3}button:hover{background:var(--soft)}button:disabled{cursor:default;opacity:.6}button.primary{background:var(--ink);color:#fff;border-color:var(--ink)}button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible{outline:3px solid var(--coral);outline-offset:3px}textarea{resize:vertical}::selection{background:#f2d7ce}[hidden]{display:none!important}
+.skip{position:fixed;top:-80px;left:20px;z-index:100;background:white;padding:12px}.skip:focus{top:10px}
+.topbar{height:68px;position:sticky;top:0;z-index:30;border-bottom:1px solid var(--line);background:#fffffff7;display:flex;align-items:center;justify-content:space-between;gap:24px;padding:0 max(24px,calc((100vw - 1450px)/2))}.brand{text-decoration:none;display:flex;align-items:center;gap:15px;white-space:nowrap}.brand b{font-size:29px;letter-spacing:-.08em}.brand span{border-left:1px solid var(--line);padding-left:15px;font-size:11px;letter-spacing:.08em}.doc-tabs{display:flex;height:100%;gap:25px;align-items:stretch}.doc-tab{display:flex;align-items:center;position:relative;text-decoration:none;font-size:13px;color:var(--muted);white-space:nowrap}.doc-tab.active{color:var(--ink);font-weight:650}.doc-tab.active:after{content:"";position:absolute;bottom:0;left:0;right:0;height:3px;background:var(--coral)}.top-actions{display:flex;gap:8px}.top-actions button{padding:8px 11px;font-size:12px;white-space:nowrap}
+.layout{max-width:1450px;margin:auto;padding:0 30px;display:grid;grid-template-columns:218px minmax(0,1fr);gap:55px}.toc-shell{align-self:start;position:sticky;top:99px;padding-top:15px;max-height:calc(100vh - 120px)}.eyebrow{font-size:10px;line-height:1.6;letter-spacing:.16em;font-weight:500;color:var(--muted)}.toc-title{display:flex;justify-content:space-between;align-items:center;margin-bottom:15px}.toc-title strong{font-size:12px;font-weight:500}.toc-title span{font-size:10px;color:var(--muted)}#toc-toggle{display:none}.toc-search{width:100%;padding:10px 12px;border:1px solid var(--line);background:var(--paper);border-radius:4px;font-size:12px}.toc-hint{font-size:10px;color:var(--muted);margin:8px 0 15px;line-height:1.6}.toc-links{max-height:calc(100vh - 323px);overflow-y:auto;padding:0 8px 8px 0}.toc-links a{display:block;padding:8px 10px;margin:2px 0;border-left:2px solid transparent;border-radius:0 3px 3px 0;text-decoration:none;font-size:12px;line-height:1.65;color:var(--muted);word-break:keep-all;overflow-wrap:anywhere}.toc-links a:hover{background:var(--soft)}.toc-links a.active{border-color:var(--coral);background:var(--soft);color:var(--ink)}.toc-next{border-top:1px solid var(--line);padding-top:13px;margin-top:14px;font-size:11px;color:var(--muted);line-height:1.7}.toc-next b{font-weight:500;color:var(--ink)}
+main{min-width:0;max-width:1040px;padding-bottom:70px}.doc-hero{padding:55px 0 32px;border-bottom:1px solid var(--line)}.hero-label{display:flex;justify-content:space-between;gap:20px;align-items:center}.doc-hero h1{font-size:clamp(32px,3.15vw,48px);line-height:1.22;letter-spacing:-.065em;font-weight:550;margin:20px 0 18px;max-width:900px;word-break:keep-all;overflow-wrap:anywhere}.doc-description{font-size:14px;color:var(--muted);line-height:1.8;margin:0}.pill{display:inline-block;font-size:10px;letter-spacing:.01em;padding:5px 9px;border:1px solid var(--line);border-radius:3px;white-space:nowrap}.hero-meta{margin-top:22px;font-size:12px;color:var(--muted);line-height:1.9}.hero-meta p{font-size:12px;line-height:1.9;margin:8px 0}.hero-meta strong{font-weight:600}.hero-meta blockquote{margin:25px 0 0;padding:20px 22px;background:var(--soft);border-left:3px solid var(--coral);color:var(--ink)}.hero-meta blockquote p{word-break:keep-all;overflow-wrap:anywhere;font-size:18px;line-height:1.8;letter-spacing:-.03em;margin:0}.doc-section{padding:44px 0;border-bottom:1px solid var(--line);scroll-margin-top:93px;min-width:0}.doc-section h2{font-size:28px;font-weight:550;letter-spacing:-.055em;line-height:1.4;margin:0 0 24px;word-break:keep-all;overflow-wrap:anywhere}.section-num{font-weight:400;color:var(--coral);margin-right:10px;font-size:.75em;letter-spacing:-.02em}.doc-section h3{font-size:19px;font-weight:600;line-height:1.5;margin:32px 0 14px;letter-spacing:-.04em}.doc-section h4{font-size:16px;line-height:1.5;margin:25px 0 12px}.doc-section p{font-size:15px;line-height:1.92;margin:13px 0;word-break:keep-all;overflow-wrap:anywhere}.doc-section strong{font-weight:650}.doc-section ul,.doc-section ol{padding-left:22px;font-size:15px;line-height:1.85}.doc-section li{margin:7px 0}.doc-section blockquote{border-left:3px solid var(--coral);background:var(--soft);margin:23px 0;padding:15px 22px}.doc-section blockquote p{margin:0;font-size:16px;line-height:1.85}.doc-section hr{border:0;border-top:1px solid var(--line);margin:28px 0}.doc-section code:not(pre code){font-family:Consolas,"Liberation Mono",monospace;font-size:.91em;background:var(--soft);padding:2px 5px;border-radius:3px;overflow-wrap:anywhere}
+.table-scroll{overflow-x:auto;overscroll-behavior-x:contain;margin:22px 0;border-top:1px solid var(--ink);border-bottom:1px solid var(--line);width:100%}table{border-collapse:collapse;width:100%;font-size:12.5px;line-height:1.75;table-layout:auto}th,td{padding:13px 14px;vertical-align:top;text-align:left;border-bottom:1px solid var(--line);word-break:keep-all;overflow-wrap:anywhere}th{background:var(--soft);font-weight:600;font-size:11.5px}tr:last-child td{border-bottom:0}td:first-child{font-weight:550;min-width:125px}td{min-width:145px}.table-scroll table:has(th:nth-child(2)){min-width:410px}.table-scroll table:has(th:nth-child(3)){min-width:585px}.table-scroll table:has(th:nth-child(4)){min-width:710px}.table-scroll table:has(th:nth-child(5)){min-width:840px}.code-frame{position:relative;margin:23px 0;border:1px solid var(--line);border-radius:4px;overflow:hidden;background:#f8f8f5}.code-frame pre{margin:0;padding:49px 20px 19px;overflow:auto;max-height:680px;font-family:Consolas,"Liberation Mono",monospace;font-size:12px;line-height:1.9;white-space:pre;letter-spacing:-.01em}.copy-code{position:absolute;top:9px;right:10px;font-size:10px;padding:5px 9px;background:#fff}.code-frame .code-label{position:absolute;left:18px;top:15px;font-size:9px;color:var(--muted);letter-spacing:.12em}.doc-footer{margin-top:30px;display:flex;justify-content:space-between;gap:24px;font-size:10px;color:var(--muted);line-height:1.8}
+.review-workspace{background:var(--soft);border:1px solid var(--line);padding:27px;margin:30px 0 5px;border-radius:4px}.workspace-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:15px}.workspace-heading h3{margin:6px 0 10px}.workspace-heading p{font-size:12px;margin:0 0 20px}.checks{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}.check-group{min-width:0;margin:0;padding:14px 15px;border:1px solid var(--line);background:#fff;border-radius:3px}.check-group legend{padding:0 7px;font-size:12px;font-weight:600}.check-line{display:flex;gap:9px;align-items:flex-start;font-size:12px;line-height:1.7;margin:9px 0;cursor:pointer}.check-line input{accent-color:var(--coral);margin:3px 0 0;flex:none;width:15px;height:15px}.stage-field{display:flex;align-items:center;gap:15px;font-size:12px;margin:26px 0 20px}.stage-field select{background:#fff;border:1px solid var(--line);padding:9px 12px;max-width:100%;font-size:12px;border-radius:3px}.note-grid{display:grid;grid-template-columns:1fr 1fr;gap:18px}.note-field{display:block;min-width:0}.note-field>span{display:block;margin-bottom:8px;font-size:12px}.note-field textarea{width:100%;min-height:96px;border:1px solid var(--line);border-radius:3px;padding:12px;background:#fff;font-size:13px;line-height:1.8}.note-field:last-child{grid-column:1/-1}.note-actions{display:flex;gap:9px;flex-wrap:wrap;margin-top:20px}.note-actions button{font-size:12px}.review-workspace p.save-status{font-size:11px;margin:15px 0 5px;color:var(--muted)}.review-workspace p.micro{font-size:10px;line-height:1.8;color:var(--muted);margin:0}.toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);background:var(--ink);color:white;padding:12px 18px;border-radius:4px;font-size:12px;z-index:60;max-width:90vw;box-shadow:0 5px 24px #0002;line-height:1.6}.empty-nav{font-size:12px;color:var(--muted);padding:15px 5px;line-height:1.7}
+@media(min-width:1600px){.layout{gap:65px}}
+@media(max-width:1100px){.layout{grid-template-columns:188px minmax(0,1fr);gap:30px;padding:0 24px}.topbar{gap:18px}.brand span{display:none}.doc-hero h1{font-size:38px}.doc-section p{font-size:14px}.doc-section h2{font-size:26px}.doc-tabs{gap:23px}.review-workspace{padding:22px}.checks{grid-template-columns:1fr}}
+@media(max-width:820px){html{scroll-padding-top:84px}.topbar{height:60px;padding:0 18px;gap:14px}.brand b{font-size:27px}.doc-tabs{gap:18px}.doc-tab{font-size:12px}.top-actions{gap:6px}.top-actions button{font-size:10px;padding:7px 9px}.layout{display:block;padding:0 22px}.toc-shell{position:relative;top:auto;max-height:none;padding-top:18px;border-bottom:1px solid var(--line)}.toc-title{margin:0;padding-bottom:14px}.toc-title strong{font-size:11px}.toc-title>span{display:none}#toc-toggle{display:block;font-size:11px;padding:7px 11px}.toc-body{display:none}.toc-shell.open .toc-body{display:block}.toc-links{max-height:240px;margin-bottom:12px}.toc-next{display:none}.doc-hero{padding:34px 0 27px}.doc-hero h1{font-size:35px;max-width:600px}.hero-label{align-items:flex-start;gap:10px;flex-wrap:wrap}.hero-label .pill{font-size:9px}.doc-section{padding:34px 0;scroll-margin-top:80px}.doc-section h2{font-size:25px;line-height:1.45}.doc-section p{font-size:14px;line-height:1.95}.hero-meta blockquote p{font-size:16px}.note-grid{grid-template-columns:1fr}.stage-field{flex-wrap:wrap}.note-field:last-child{grid-column:auto}.workspace-heading{display:block}.workspace-heading .pill{margin-bottom:17px}.doc-footer{flex-direction:column;gap:5px}}
+@media(max-width:480px){.topbar{gap:10px;padding:0 16px}.doc-tabs{gap:15px}.top-actions button#source-download{display:none}.brand b{font-size:25px}.doc-hero h1{font-size:31px;line-height:1.3}.doc-hero .eyebrow{font-size:9px}.doc-description{font-size:12px}.hero-meta{font-size:11px}.hero-meta p{font-size:11px;line-height:1.9}.hero-meta blockquote{padding:16px 16px}.hero-meta blockquote p{font-size:15px}.doc-section h2{font-size:23px}.doc-section h3{font-size:18px}.doc-section p{font-size:14px}.table-scroll{margin:20px 0}td,th{padding:11px 12px}.code-frame pre{font-size:11px;padding-left:15px}.review-workspace{padding:18px}.note-actions{gap:8px}.note-actions button{padding:9px 10px;font-size:11px}.check-line{font-size:12px}.top-actions button{padding:7px 9px}}
+@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}*{transition:none!important}}
+@media print{@page{margin:15mm}.topbar,.toc-shell,.skip,.copy-code,.toast,.review-workspace,.doc-footer{display:none!important}.layout{display:block;padding:0;max-width:none}main{max-width:none;padding:0}.doc-hero{padding:0 0 18px}.doc-hero h1{font-size:27px}.doc-section{padding:22px 0;break-inside:auto}.doc-section h2{font-size:21px;break-after:avoid}.doc-section h3{font-size:16px;break-after:avoid}.doc-section p{font-size:11px;line-height:1.75}.table-scroll{overflow:visible;break-inside:auto}table{min-width:0!important;font-size:9px;table-layout:fixed}td,th{min-width:0;font-size:9px;word-break:normal;padding:7px}tr{break-inside:avoid}.code-frame pre{white-space:pre-wrap;max-height:none;font-size:9px;padding:16px;overflow:visible;word-break:break-word}.code-label{display:none}.hero-meta blockquote p{font-size:14px}}
+
+/* ---- 작성자별 첨삭 표기 (AI.md §5) -------------------------------------
+   ins  = 추가·교체 제안 (초록)   del = 삭제·교체 대상 (빨강 취소선)
+   blockquote.review = 검토 코멘트 (파란 상자)   .review-appendix = 검토 요약 부록
+   body.review-original  → 원문만 (제안·코멘트 숨김)
+   body.review-accepted  → 인라인 제안 미리보기 (코멘트 대안은 적용하지 않음)
+------------------------------------------------------------------------- */
+ins{background:#dff3e4;color:#17512a;text-decoration:none;border-bottom:2px solid #4f9d63;padding:0 3px;border-radius:2px}
+del{background:#fbe4e0;color:#8f3324;text-decoration:line-through;text-decoration-color:#c9573f;text-decoration-thickness:1.5px;padding:0 3px;border-radius:2px}
+h1 ins,h1 del,h2 ins,h2 del,h3 ins,h3 del{border-bottom-width:3px}
+blockquote.review{margin:14px 0 24px;padding:12px 16px 12px 18px;border:0;border-left:4px solid #3b6fd6;background:#eef3fc;border-radius:0 6px 6px 0;font-size:14px;line-height:1.75;color:#24303f}
+blockquote.review p{margin:0}
+blockquote.review p+p{margin-top:9px;padding-top:9px;border-top:1px dashed #c3d2ef}
+.review-label{display:inline-flex;gap:6px;align-items:center;margin-right:8px;font-weight:600;font-size:11.5px;vertical-align:1px;white-space:nowrap}
+.review-agent{color:#3b6fd6;text-transform:uppercase;letter-spacing:.09em}
+.review-id{background:#3b6fd6;color:#fff;border-radius:3px;padding:1px 7px;font-weight:600}
+.review-sev{border-radius:3px;padding:1px 7px;font-weight:600}
+.review-sev[data-sev="높음"]{background:#c9573f;color:#fff}
+.review-sev[data-sev="중간"]{background:#f0c14b;color:#3a2a00}
+.review-sev[data-sev="낮음"]{background:#d9dfe2;color:#3d484d}
+.doc-section.review-appendix{margin-top:60px;padding-top:28px;border-top:3px solid #3b6fd6}
+.doc-section.review-appendix h2 .section-num{color:#3b6fd6}
+.review-pill{border-color:#3b6fd6;color:#3b6fd6;text-decoration:none}
+.review-pill:hover{background:#eef3fc}
+.review-legend{margin:12px 0 0;font-size:12px;color:var(--muted);line-height:1.8}
+.review-legend span{margin-right:12px;white-space:nowrap}
+.review-select{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);white-space:nowrap}
+.review-select select{padding:7px 9px;border:1px solid var(--line);border-radius:4px;background:var(--paper);font-size:12px}
+blockquote.review[data-review-agent="codex"]{border-left-color:#7250a0;background:#f4effa;color:#352b46}
+[data-review-agent="codex"] .review-agent{color:#7250a0}
+[data-review-agent="codex"] .review-id{background:#7250a0}
+.review-pill[data-review-agent="codex"]{border-color:#7250a0;color:#7250a0}
+.review-pill[data-review-agent="codex"]:hover{background:#f4effa}
+.review-appendix[data-review-agent="codex"]{border-top-color:#7250a0}
+.review-appendix[data-review-agent="codex"] h2 .section-num{color:#7250a0}
+.review-label[id]{scroll-margin-top:110px}
+.review-label[id]:target{outline:2px solid currentColor;outline-offset:4px}
+.review-legend p{margin:5px 0}
+.review-select select:disabled{opacity:.6}
+.top-actions{flex-wrap:wrap}
+[hidden]{display:none!important}
+@media(max-width:1100px){.topbar{height:auto;min-height:68px;flex-wrap:wrap;padding-top:8px;padding-bottom:8px;gap:8px 18px}.doc-tabs{height:34px;flex:1;justify-content:flex-end}.top-actions{flex-basis:100%;justify-content:flex-end}.review-select select{max-width:185px}}
+@media(min-width:821px) and (max-width:1100px){.toc-shell{top:135px;max-height:calc(100vh - 155px)}}
+.toc-links a[data-reviews]{display:flex;justify-content:space-between;gap:8px;align-items:center}
+.toc-links a[data-reviews]::after{content:attr(data-reviews);flex:none;min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:#3b6fd6;color:#fff;font-size:10px;line-height:18px;text-align:center}
+body.review-original ins,body.review-original blockquote.review,body.review-original .review-appendix,body.review-original .review-legend{display:none}
+body.review-original del{background:none;color:inherit;text-decoration:none;padding:0}
+body.review-original .toc-links a[data-reviews]::after{display:none}
+body.review-accepted del,body.review-accepted blockquote.review,body.review-accepted .review-appendix,body.review-accepted .review-legend{display:none}
+body.review-accepted ins{background:none;color:inherit;border:0;padding:0}
+body.review-accepted .toc-links a[data-reviews]::after{display:none}
+@media print{blockquote.review{break-inside:avoid;background:#eef3fc!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}ins,del{-webkit-print-color-adjust:exact;print-color-adjust:exact}.review-select{display:none}}
+</style></head><body>
+<!-- GENERATED FILE — source: docs/decisions/ADR-007-web-review-online-submission-in-mvp.md — run: npm --prefix tools/docs run build -->
+<a class="skip" href="#reading-main">본문으로 이동</a>
+<header class="topbar"><a class="brand" href="../../index.html" aria-label="VIDE 문서 모음"><b>V.</b><span>VIDE</span></a><nav class="doc-tabs" aria-label="문서 선택"><a class="doc-tab" href="../PRD.html">PRD</a><a class="doc-tab" href="../../DEVELOPMENT_GUIDE.html">개발 가이드</a><a class="doc-tab" href="../../Design.html">Design</a><a class="doc-tab" href="../../AI.html">AI 규약</a></nav><div class="top-actions"><button id="source-download" title="현재 문서의 Markdown 원문 저장">원문 ↓</button><button id="print-doc" title="현재 문서 인쇄">인쇄</button></div></header>
+<div class="layout"><aside class="toc-shell" id="toc-shell" aria-label="현재 문서의 목차"><div class="toc-title"><strong>CONTENTS</strong><span id="toc-count"></span><button id="toc-toggle" aria-expanded="false" aria-controls="toc-body">목차 열기</button></div><div class="toc-body" id="toc-body"><input class="toc-search" id="toc-search" type="search" placeholder="장 제목으로 찾기" aria-label="현재 문서 목차 검색"><p class="toc-hint" id="nav-hint" role="status">장 제목으로 찾아갑니다.</p><nav class="toc-links" id="toc-links" aria-label="본문 장 이동"></nav><div class="toc-next">다음 작성할 문서<br><b>2차 검토 대화 → 사용자 결정</b><br>Codex·Claude 스레드 비교 → 항목별 수락/거부 → ADR·SPEC-00-common</div></div></aside><main id="reading-main" tabindex="-1"><article id="adr-007-web-review-online-submission-in-mvp" class="document"><header class="doc-hero"><div class="hero-label"><span class="eyebrow">DECISION RECORD</span><span><span class="pill">DRAFT · v0.1</span><span class="pill">6 CHAPTERS</span></span></div><h1 tabindex="-1">ADR-007 · 웹 검토 — 온라인 제출까지 MVP</h1><div class="hero-meta">
+</div></header><section class="doc-section" id="adr-007-web-review-online-submission-in-mvp-section-1"><h2><span aria-hidden="true" class="section-num">01 /</span> 배경</h2>
+<p>FR-19·OQ-04는 웹 참여의 첫 제공 범위를 미정으로 두었다. 2차 검토(PRD R-53, Design R-42)는 미정 자체가 아키텍처 비용이라며 파일 교환(FR-14 HTML 패키지 안에서 코멘트·주석 작성 → 파일 반출 → IDE 반입)을 MVP 기본값으로 권했다. 온라인 제출은 1인 팀에 두 번째 프런트엔드(호스팅·인증·동기화)를 뜻한다.</p>
+</section><section class="doc-section" id="adr-007-web-review-online-submission-in-mvp-section-2"><h2><span aria-hidden="true" class="section-num">02 /</span> 선택지</h2>
+<div aria-label="ADR 표 1" class="table-scroll" role="region" tabindex="0"><table>
+<thead>
+<tr>
+<th>안</th>
+<th>내용</th>
+<th>트레이드오프</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>A</td>
+<td>파일 교환만 MVP</td>
+<td>서버·인증 없음. 검토자가 파일을 돌려보내야 함</td>
+</tr>
+<tr>
+<td>B</td>
+<td>온라인 제출까지 MVP</td>
+<td>검토자 경험이 완결됨. 게시 주체(작업 PC / 중계 서비스)·인증·기준 버전 동기화·재접속(AC-28)이 MVP에 들어옴</td>
+</tr>
+<tr>
+<td>C</td>
+<td>보류</td>
+<td>SPEC-00 권한 모델이 외부 검토자를 포함할지 정하지 못함</td>
+</tr>
+</tbody>
+</table></div>
+</section><section class="doc-section" id="adr-007-web-review-online-submission-in-mvp-section-3"><h2><span aria-hidden="true" class="section-num">03 /</span> 결정</h2>
+<p><strong>B. 온라인 제출까지 MVP에 포함한다.</strong> 권고(A)와 다른 선택이며 소유자가 비용을 알고 정했다.</p>
+<ul>
+<li>외부 검토자는 브라우저에서 기준 버전의 모델·자료를 보고 코멘트·화면 주석을 온라인으로 제출한다. IDE는 제출을 기준 버전과 함께 수신·비교·선택 채택한다(AC-19). 원본 반영 권한은 여전히 외부 검토자에게 없다(PRD §12.5).</li>
+<li>게시 주체는 <strong>작업 PC 직접 게시가 아니라 중계 서비스</strong>로 한다(PRD §12.5 방화벽 조건). 인증·호스팅·데이터 보관 방식은 PLAN과 스파이크에서 정한다.</li>
+<li>웹 뷰어는 ADR-004의 IDE 자체 뷰와 표시용 형상·좌표계·객체 식별자를 공유한다. 웹 스케치는 '명명된 뷰 위 화면 주석'으로 저장하고, 객체 핀은 패키지가 식별자를 포함할 때만 허용한다(Design R-42 계약).</li>
+<li>파일 교환(A)은 온라인이 불가한 환경의 대체 경로로 함께 제공한다.</li>
+</ul>
+</section><section class="doc-section" id="adr-007-web-review-online-submission-in-mvp-section-4"><h2><span aria-hidden="true" class="section-num">04 /</span> 결과 — 적용 시 바꿀 문장</h2>
+<ul>
+<li>PRD FR-19 범위 값 '제공 범위 미정' → 'MVP 지원 범위(온라인 제출 + 파일 교환)', OQ-04를 &quot;지원 기기·브라우저 범위&quot;로 좁히고 이 ADR 링크. §12.5·§14.1 외부 웹 행, AC-28.</li>
+<li>Design §12 웹 행을 ① 웹 검토(온라인·파일 경로) ② IDE 반입·채택 화면 ③ 인증·재접속으로 분리(Design R-42).</li>
+<li>배포 형태(ADR-002)가 개인 도구 단계인 동안 중계 서비스는 소유자 계정의 단일 인스턴스로 충분하다.</li>
+</ul>
+</section><section class="doc-section" id="adr-007-web-review-online-submission-in-mvp-section-5"><h2><span aria-hidden="true" class="section-num">05 /</span> 축소 조건</h2>
+<ul>
+<li>Rhino alpha 판정 시점까지 중계 서비스·인증 스파이크가 끝나지 않으면 MVP 출시 조건에서 온라인 제출을 빼고 파일 교환(A)으로 출시한 뒤 온라인은 후속 확장으로 옮긴다.</li>
+<li>ADR-004가 자체 뷰를 축소하면 웹 뷰어는 캡처·명명된 뷰 기반으로 재정의한다.</li>
+</ul>
+</section><section class="doc-section" id="adr-007-web-review-online-submission-in-mvp-section-6"><h2><span aria-hidden="true" class="section-num">06 /</span> 출처</h2>
+<p>PRD R-53·R-48, Codex R-44, Design R-42·R-40. 2026-09-17 brainstorming Q&amp;A.</p>
+</section><footer class="doc-footer"><span>VIDE / PLANNING DOCUMENTS</span><span>문서 열람용 · 실제 CAD/BIM 지원은 구현·검증 후 선언</span></footer></article></main></div>
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+<script id="source-data" type="application/json">{"adr-007-web-review-online-submission-in-mvp":{"label":"웹 검토 — 온라인 제출까지 MVP에 포함","file":"ADR-007-web-review-online-submission-in-mvp.md","markdown":"---\nid: ADR-007\ntitle: 웹 검토 — 온라인 제출까지 MVP에 포함\nstatus: draft\nversion: 0.1\nupdated: 2026-09-17\nowner: user\nrelated: [OQ-04, FR-14, FR-19, AC-19, AC-28]\n---\n\n# ADR-007 · 웹 검토 — 온라인 제출까지 MVP\n\n## 1. 배경\n\nFR-19·OQ-04는 웹 참여의 첫 제공 범위를 미정으로 두었다. 2차 검토(PRD R-53, Design R-42)는 미정 자체가 아키텍처 비용이라며 파일 교환(FR-14 HTML 패키지 안에서 코멘트·주석 작성 → 파일 반출 → IDE 반입)을 MVP 기본값으로 권했다. 온라인 제출은 1인 팀에 두 번째 프런트엔드(호스팅·인증·동기화)를 뜻한다.\n\n## 2. 선택지\n\n| 안 | 내용 | 트레이드오프 |\n|---|---|---|\n| A | 파일 교환만 MVP | 서버·인증 없음. 검토자가 파일을 돌려보내야 함 |\n| B | 온라인 제출까지 MVP | 검토자 경험이 완결됨. 게시 주체(작업 PC / 중계 서비스)·인증·기준 버전 동기화·재접속(AC-28)이 MVP에 들어옴 |\n| C | 보류 | SPEC-00 권한 모델이 외부 검토자를 포함할지 정하지 못함 |\n\n## 3. 결정\n\n**B. 온라인 제출까지 MVP에 포함한다.** 권고(A)와 다른 선택이며 소유자가 비용을 알고 정했다.\n\n- 외부 검토자는 브라우저에서 기준 버전의 모델·자료를 보고 코멘트·화면 주석을 온라인으로 제출한다. IDE는 제출을 기준 버전과 함께 수신·비교·선택 채택한다(AC-19). 원본 반영 권한은 여전히 외부 검토자에게 없다(PRD §12.5).\n- 게시 주체는 **작업 PC 직접 게시가 아니라 중계 서비스**로 한다(PRD §12.5 방화벽 조건). 인증·호스팅·데이터 보관 방식은 PLAN과 스파이크에서 정한다.\n- 웹 뷰어는 ADR-004의 IDE 자체 뷰와 표시용 형상·좌표계·객체 식별자를 공유한다. 웹 스케치는 '명명된 뷰 위 화면 주석'으로 저장하고, 객체 핀은 패키지가 식별자를 포함할 때만 허용한다(Design R-42 계약).\n- 파일 교환(A)은 온라인이 불가한 환경의 대체 경로로 함께 제공한다.\n\n## 4. 결과 — 적용 시 바꿀 문장\n\n- PRD FR-19 범위 값 '제공 범위 미정' → 'MVP 지원 범위(온라인 제출 + 파일 교환)', OQ-04를 \"지원 기기·브라우저 범위\"로 좁히고 이 ADR 링크. §12.5·§14.1 외부 웹 행, AC-28.\n- Design §12 웹 행을 ① 웹 검토(온라인·파일 경로) ② IDE 반입·채택 화면 ③ 인증·재접속으로 분리(Design R-42).\n- 배포 형태(ADR-002)가 개인 도구 단계인 동안 중계 서비스는 소유자 계정의 단일 인스턴스로 충분하다.\n\n## 5. 축소 조건\n\n- Rhino alpha 판정 시점까지 중계 서비스·인증 스파이크가 끝나지 않으면 MVP 출시 조건에서 온라인 제출을 빼고 파일 교환(A)으로 출시한 뒤 온라인은 후속 확장으로 옮긴다.\n- ADR-004가 자체 뷰를 축소하면 웹 뷰어는 캡처·명명된 뷰 기반으로 재정의한다.\n\n## 6. 출처\n\nPRD R-53·R-48, Codex R-44, Design R-42·R-40. 2026-09-17 brainstorming Q&A.\n"}}</script>
+<script id="reader-config" type="application/json">{"initial":"adr-007-web-review-online-submission-in-mvp","siteTitle":"VIDE"}</script>
+<script>
+(() => {
+'use strict';
+const sourceData=JSON.parse(document.getElementById('source-data').textContent);
+const config=JSON.parse(document.getElementById('reader-config').textContent);
+const esc=s=>String(s);
+let activeDoc=config.initial;
+let observer;
+let toastTimer;
+const $=s=>document.querySelector(s);
+function notify(message){const t=$('#toast');t.textContent=message;t.hidden=false;clearTimeout(toastTimer);toastTimer=setTimeout(()=>{t.hidden=true;},3400);}
+function renderToc(){const links=$('#toc-links');links.replaceChildren();const nodes=document.querySelectorAll('#'+activeDoc+' .doc-section');nodes.forEach(section=>{const a=document.createElement('a');a.href='#'+section.id;a.textContent=section.querySelector('h2').textContent;a.dataset.title=a.textContent;a.addEventListener('click',()=>{$('#toc-shell').classList.remove('open');$('#toc-toggle').setAttribute('aria-expanded','false');});links.appendChild(a);});$('#toc-count').textContent=nodes.length+' CHAPTERS';$('#toc-search').value='';$('#nav-hint').textContent='章 제목으로 찾아갑니다.'.replace('章','장');if(observer)observer.disconnect();observer=new IntersectionObserver(entries=>{const visible=entries.filter(e=>e.isIntersecting).sort((a,b)=>a.boundingClientRect.top-b.boundingClientRect.top);if(!visible.length)return;document.querySelectorAll('#toc-links a').forEach(a=>a.classList.toggle('active',a.hash==='#'+visible[0].target.id));},{rootMargin:'-90px 0px -64% 0px',threshold:0});nodes.forEach(n=>observer.observe(n));}
+function showDoc(name,reset){if(!sourceData[name])name=config.initial;activeDoc=name;document.querySelectorAll('.document').forEach(d=>d.hidden=d.id!==name);document.querySelectorAll('.doc-tab').forEach(a=>{a.classList.toggle('active',a.dataset.doc===name);if(a.dataset.doc===name)a.setAttribute('aria-current','page');else a.removeAttribute('aria-current');});renderToc();document.title=(config.siteTitle||'VIDE')+' · '+sourceData[name].label;if(reset)window.scrollTo({top:0,behavior:'instant'});}
+function useHash(){let raw=decodeURIComponent(location.hash.slice(1)||config.initial);let name=raw.split('-section-')[0];if(!sourceData[name])name=config.initial;if(name!==activeDoc||!$('#toc-links').children.length)showDoc(name,false);const el=document.getElementById(raw);if(el&&!el.hidden){requestAnimationFrame(()=>el.scrollIntoView({block:'start',behavior:'instant'}));}}
+window.addEventListener('hashchange',useHash);
+document.querySelectorAll('.doc-tab[data-doc]').forEach(a=>a.addEventListener('click',e=>{e.preventDefault();const name=a.dataset.doc;showDoc(name,true);history.replaceState(null,'','#'+name);}));
+$('#toc-toggle').addEventListener('click',()=>{const on=$('#toc-shell').classList.toggle('open');$('#toc-toggle').setAttribute('aria-expanded',String(on));});
+$('#toc-search').addEventListener('input',()=>{const q=$('#toc-search').value.trim().toLocaleLowerCase();let n=0;document.querySelectorAll('#toc-links a').forEach(a=>{a.hidden=!a.dataset.title.toLocaleLowerCase().includes(q);if(!a.hidden)n++;});$('#nav-hint').textContent=q?(n?'일치하는 장 '+n+'개':'일치하는 장 제목이 없습니다.'):'장 제목으로 찾아갑니다.';});
+function download(name,contents,type){const blob=new Blob([contents],{type});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),2500);}
+$('#source-download').addEventListener('click',()=>download(sourceData[activeDoc].file,sourceData[activeDoc].markdown,'text/markdown;charset=utf-8'));
+$('#print-doc').addEventListener('click',()=>window.print());
+async function copy(text){try{if(navigator.clipboard&&navigator.clipboard.writeText){await navigator.clipboard.writeText(text);return true;}}catch(e){}const t=document.createElement('textarea');t.value=text;t.style.position='fixed';t.style.left='-9999px';document.body.appendChild(t);t.select();let ok=false;try{ok=document.execCommand('copy');}catch(e){}t.remove();return ok;}
+document.querySelectorAll('.copy-code').forEach(b=>b.addEventListener('click',async()=>{const text=b.parentElement.querySelector('pre').textContent;const ok=await copy(text);if(ok){b.textContent='복사됨';notify('텍스트를 복사했습니다.');setTimeout(()=>b.textContent='복사',1800);}else{const range=document.createRange();range.selectNodeContents(b.parentElement.querySelector('pre'));const sel=window.getSelection();sel.removeAllRanges();sel.addRange(range);notify('자동 복사가 제한됩니다. 선택된 텍스트를 직접 복사하세요.');}}));
+showDoc(config.initial,false);useHash();
+})();
+</script>
+<script>
+(() => {
+'use strict';
+const KEY = 'vide-docs-review-mode';
+const AUTHOR_KEY = 'vide-docs-review-author';
+const sel = document.getElementById('review-mode');
+if (!sel) return;
+const authorSel = document.getElementById('review-author');
+let mode = 'marked';
+let author = 'all';
+try { mode = localStorage.getItem(KEY) || 'marked'; } catch (e) {}
+try { author = localStorage.getItem(AUTHOR_KEY) || 'all'; } catch (e) {}
+if (!['marked', 'original', 'accepted'].includes(mode)) mode = 'marked';
+if (!authorSel || !Array.from(authorSel.options).some(o => o.value === author)) author = 'all';
+const matches = el => author === 'all' || el.dataset.reviewAgent === author;
+const decorate = () => {
+const query = (document.getElementById('toc-search')?.value || '').trim().toLocaleLowerCase();
+let visible = 0;
+document.querySelectorAll('#toc-links a').forEach(a => {
+  const section = document.getElementById(decodeURIComponent(a.hash.slice(1)));
+  if (!section) return;
+  a.hidden = !a.dataset.title.toLocaleLowerCase().includes(query) || (section.classList.contains('review-appendix') && (mode !== 'marked' || !matches(section)));
+  if (!a.hidden) visible += 1;
+  const n = Array.from(section.querySelectorAll('.review-label[data-rid]')).filter(matches).length;
+  if (n && mode === 'marked') a.dataset.reviews = String(n); else delete a.dataset.reviews;
+});
+if (query) document.getElementById('nav-hint').textContent = visible ? `일치하는 장 ${visible}개` : '일치하는 장 제목이 없습니다.';
+};
+const apply = () => {
+  sel.value = mode;
+  if (authorSel) { authorSel.value = author; authorSel.disabled = mode !== 'marked'; }
+  document.body.classList.toggle('review-original', mode === 'original');
+  document.body.classList.toggle('review-accepted', mode === 'accepted');
+  document.querySelectorAll('blockquote.review, .review-appendix').forEach(el => { el.hidden = !matches(el); });
+  decorate();
+  try { localStorage.setItem(KEY, mode); localStorage.setItem(AUTHOR_KEY, author); } catch (e) {}
+};
+apply();
+const toc = document.getElementById('toc-links');
+if (toc) new MutationObserver(decorate).observe(toc, { childList: true });
+document.getElementById('toc-search')?.addEventListener('input', decorate);
+sel.addEventListener('change', () => { mode = sel.value; apply(); });
+if (authorSel) authorSel.addEventListener('change', () => { author = authorSel.value; apply(); });
+const revealHash = () => {
+  let id;
+  try { id = decodeURIComponent(location.hash.slice(1)); } catch (e) { return; }
+  const target = document.getElementById(id);
+  if (!target || !target.dataset.reviewAgent) return;
+  mode = 'marked';
+  if (!matches(target)) author = 'all';
+  apply();
+  target.scrollIntoView({ block: 'center' });
+};
+window.addEventListener('hashchange', revealHash);
+revealHash();
+})();
+</script>
+</body></html>

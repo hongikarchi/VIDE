@@ -939,14 +939,16 @@ manifest나 빈 플러그인 탭만 존재하는 것을 확장 구현 완료로 
 
 | ID | 결정할 내용 | 유지할 제품 기준 | 결정 시점·근거 |
 |---|---|---|---|
-| OQ-01 | AutoCAD·ZWCAD 중 첫 포함 조합 | CAD 계열의 실제 네이티브 기본 제어 | SPEC 지원표 확정 전 실제 사용 환경·필요 확인 |
+| OQ-01 | AutoCAD·ZWCAD 중 첫 포함 조합 | CAD 계열의 실제 네이티브 기본 제어 | SPEC 지원표 확정 전 실제 사용 환경·필요 확인 · 결정 초안: [ADR-001](decisions/ADR-001-mvp-scope-rhino-zwcad.md) |
 | OQ-02 | Windows와 호스트의 버전·에디션·업데이트 범위 | Windows 우선 설치형, 검증한 환경만 지원 선언 | 설치 환경 조사와 호스트 지원 검증 |
 | OQ-03 | 호스트별 객체 종류·생성·수정·필수 속성 | 네이티브 객체·후속 편집·저장 지속성 | SPEC에서 사용자 과업으로 정의하고 기술 실험으로 확인 |
-| OQ-04 | 외부 웹의 첫 배포 범위·지원 기기 | 웹 검토와 코멘트·스케치, 로컬 원본 권한과 분리 | 첫 배포 범위 결정 전 참여 시나리오·기기 시험 |
+| OQ-04 | 외부 웹의 첫 배포 범위·지원 기기 | 웹 검토와 코멘트·스케치, 로컬 원본 권한과 분리 | 첫 배포 범위 결정 전 참여 시나리오·기기 시험 · 결정 초안: [ADR-007](decisions/ADR-007-web-review-online-submission-in-mvp.md) |
 | OQ-05 | 장시간 연산의 허용 제약과 반응 목표 | 언제든 지시 접수, 실제 반영·정지 상태 | 호스트 제약과 사용자 개입 시험 |
-| OQ-06 | 모델 규모·품질·지연·비용 목표치 | 필수 품질을 낮추지 않고 총부담 절감 | 기준 모델·장비·작업 반복 측정 후 출시 전 확정 |
-| OQ-07 | 초기 확장의 신뢰·배포 범위와 결과 종류 | 작은 확장 실행, 기본 권한·입력·상태 보호 | SPEC 확장 계약과 시험 확장 정의 시 |
+| OQ-06 | 모델 규모·품질·지연·비용 목표치 | 필수 품질을 낮추지 않고 총부담 절감 | 기준 모델·장비·작업 반복 측정 후 출시 전 확정 · 결정 초안: [ADR-006](decisions/ADR-006-benchmark-tasks-and-test-users.md) |
+| OQ-07 | 초기 확장의 신뢰·배포 범위와 결과 종류 | 작은 확장 실행, 기본 권한·입력·상태 보호 | SPEC 확장 계약과 시험 확장 정의 시 · 결정 초안: [ADR-008](decisions/ADR-008-extension-deferred-first-skill-schedule.md) |
 | OQ-08 | 기본 HTML 포함 자산과 편집본 출력 | 실제 버전·포함 범위·손실 공개 | 산출물 SPEC에서 선언하고 각 호스트·파일로 검수 |
+
+**결정 초안 (2026-09-17, ADR).** 위 표에 없는 결정 항목은 2차 검토가 제안한 번호로 부른다. OQ-09 배포 형태 → [ADR-002](decisions/ADR-002-deployment-personal-then-inhouse.md) · OQ-10 후보 격리 원칙 → [ADR-003](decisions/ADR-003-candidate-isolation-host-layer.md) · OQ-11 모델 뷰 전략·제품 형태 → [ADR-004](decisions/ADR-004-view-strategy-host-viewport-and-own-view.md) · OQ-12 AI 실행 형태 → [ADR-005](decisions/ADR-005-ai-execution-path-pending-spike.md) (미결, 스파이크 후 결정) · OQ-13 첫 호스트·검증 사용자, OQ-14 기준 과업·사용자 시험 → [ADR-006](decisions/ADR-006-benchmark-tasks-and-test-users.md) · 다중 호스트 연결 방식 → [ADR-009](decisions/ADR-009-single-active-host-shared-record.md). 모두 `status: draft`이며 사용자가 approved로 올리기 전까지 이 표와 본문은 바뀌지 않는다.
 
 
 <!-- codex-review:start -->

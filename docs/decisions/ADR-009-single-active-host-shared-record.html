@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="generator" content="tools/docs/build.mjs — generated; do not edit"><title>VIDE · 문서 목록</title><style>
+<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="description" content="ADR-009 · 단일 활성 호스트 + 공유 기록"><meta name="generator" content="tools/docs/build.mjs — generated from docs/decisions/ADR-009-single-active-host-shared-record.md; do not edit"><title>VIDE · 다중 호스트 연결 — 단일 활성 호스트 + 프로젝트 공유 기록</title><style>
 :root{--ink:#292c2d;--muted:#626b6e;--line:#e1e3e1;--soft:#f5f5f1;--coral:#d97660;--paper:#fff;--font:"Pretendard","Noto Sans KR","Malgun Gothic",Arial,sans-serif}
 *{box-sizing:border-box}html{scroll-behavior:smooth;scroll-padding-top:92px}body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--font);letter-spacing:-.025em}a{color:inherit;text-underline-offset:4px}button,input,textarea,select{font:inherit;color:inherit}button{cursor:pointer;border:1px solid var(--line);border-radius:4px;background:var(--paper);padding:10px 15px;line-height:1.3}button:hover{background:var(--soft)}button:disabled{cursor:default;opacity:.6}button.primary{background:var(--ink);color:#fff;border-color:var(--ink)}button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible{outline:3px solid var(--coral);outline-offset:3px}textarea{resize:vertical}::selection{background:#f2d7ce}[hidden]{display:none!important}
 .skip{position:fixed;top:-80px;left:20px;z-index:100;background:white;padding:12px}.skip:focus{top:10px}
@@ -66,26 +66,110 @@ body.review-accepted del,body.review-accepted blockquote.review,body.review-acce
 body.review-accepted ins{background:none;color:inherit;border:0;padding:0}
 body.review-accepted .toc-links a[data-reviews]::after{display:none}
 @media print{blockquote.review{break-inside:avoid;background:#eef3fc!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}ins,del{-webkit-print-color-adjust:exact;print-color-adjust:exact}.review-select{display:none}}
-
-.index-main{max-width:1040px;margin:auto;padding:55px 30px 70px}.index-main h1{font-size:34px;letter-spacing:-.05em;margin:0 0 6px}.index-main .micro{font-size:11px;color:var(--muted)}.index-main table td{vertical-align:top}</style></head><body>
-<!-- GENERATED FILE — run: npm --prefix tools/docs run build -->
-<header class="topbar"><a class="brand" href="index.html" aria-label="VIDE 문서 모음"><b>V.</b><span>VIDE</span></a><nav class="doc-tabs" aria-label="문서 선택"><a class="doc-tab" href="docs/PRD.html">PRD</a><a class="doc-tab" href="DEVELOPMENT_GUIDE.html">개발 가이드</a><a class="doc-tab" href="Design.html">Design</a><a class="doc-tab" href="AI.html">AI 규약</a></nav><div class="top-actions"></div></header>
-<main class="index-main"><span class="eyebrow">PLANNING DOCUMENTS</span><h1>VIDE 문서 목록</h1><p class="micro">MD가 원본이고 HTML은 <code>tools/docs/build.mjs</code>가 생성한다 (AI.md §4). 첨삭 표기 규칙은 AI.md §5.</p>
-<div class="table-scroll" role="region" tabindex="0" aria-label="문서 목록"><table><thead><tr><th>문서</th><th>종류</th><th>장</th><th>검토 의견</th><th>MD 수정일</th></tr></thead><tbody>
-<tr><td><a href="docs/PRD.html">VIDE 제품 요구사항</a><br><span class="micro">docs/PRD.md</span></td><td>PRODUCT REQUIREMENTS</td><td>21</td><td><a class="review-pill pill" data-review-agent="codex" href="docs/PRD.html#prd-section-x19">CODEX 24건</a><br><a class="review-pill pill" data-review-agent="claude" href="docs/PRD.html#prd-section-x20">CLAUDE 36건</a></td><td>2026-09-16</td></tr>
-<tr><td><a href="DEVELOPMENT_GUIDE.html">VIDE 개발 가이드</a><br><span class="micro">DEVELOPMENT_GUIDE.md</span></td><td>DEVELOPMENT GUIDE</td><td>16</td><td><a class="review-pill pill" data-review-agent="codex" href="DEVELOPMENT_GUIDE.html#guide-section-x14">CODEX 18건</a><br><a class="review-pill pill" data-review-agent="claude" href="DEVELOPMENT_GUIDE.html#guide-section-x15">CLAUDE 23건</a></td><td>2026-09-16</td></tr>
-<tr><td><a href="Design.html">VIDE 시각·상호작용 기준</a><br><span class="micro">Design.md</span></td><td>DESIGN PRINCIPLES</td><td>15</td><td><a class="review-pill pill" data-review-agent="codex" href="Design.html#design-section-x13">CODEX 19건</a><br><a class="review-pill pill" data-review-agent="claude" href="Design.html#design-section-x14">CLAUDE 23건</a></td><td>2026-09-16</td></tr>
-<tr><td><a href="AI.html">AI 규약</a><br><span class="micro">AI.md</span></td><td>AGENT CONVENTIONS</td><td>13</td><td><a class="review-pill pill" data-review-agent="codex" href="AI.html#ai-section-x11">CODEX 6건</a><br><a class="review-pill pill" data-review-agent="claude" href="AI.html#ai-section-x12">CLAUDE 6건</a></td><td>2026-09-16</td></tr>
-<tr><td><a href="docs/decisions/ADR-001-mvp-scope-rhino-zwcad.html">MVP 범위 — Rhino·ZWCAD 두 호스트의 전체 흐름, Revit 제외</a><br><span class="micro">docs/decisions/ADR-001-mvp-scope-rhino-zwcad.md</span></td><td>DECISION RECORD</td><td>7</td><td>—</td><td>2026-09-16</td></tr>
-<tr><td><a href="docs/decisions/ADR-002-deployment-personal-then-inhouse.html">배포 형태 — 개인 도구에서 시작해 사내 배포로</a><br><span class="micro">docs/decisions/ADR-002-deployment-personal-then-inhouse.md</span></td><td>DECISION RECORD</td><td>7</td><td>—</td><td>2026-09-16</td></tr>
-<tr><td><a href="docs/decisions/ADR-003-candidate-isolation-host-layer.html">후보 격리 원칙 — 호스트 안 격리 영역으로 통일</a><br><span class="micro">docs/decisions/ADR-003-candidate-isolation-host-layer.md</span></td><td>DECISION RECORD</td><td>7</td><td>—</td><td>2026-09-16</td></tr>
-<tr><td><a href="docs/decisions/ADR-004-view-strategy-host-viewport-and-own-view.html">모델 뷰 전략 — 호스트 뷰포트와 IDE 자체 뷰를 모두 제공하고 동기화</a><br><span class="micro">docs/decisions/ADR-004-view-strategy-host-viewport-and-own-view.md</span></td><td>DECISION RECORD</td><td>7</td><td>—</td><td>2026-09-16</td></tr>
-<tr><td><a href="docs/decisions/ADR-005-ai-execution-path-pending-spike.html">AI 실행 형태 — 미결, 스파이크 결과로 결정</a><br><span class="micro">docs/decisions/ADR-005-ai-execution-path-pending-spike.md</span></td><td>DECISION RECORD</td><td>5</td><td>—</td><td>2026-09-16</td></tr>
-<tr><td><a href="docs/decisions/ADR-006-benchmark-tasks-and-test-users.html">기준 과업 3개와 검증 사용자 — 단계 배정, 수작업 기준선은 alpha 전 측정</a><br><span class="micro">docs/decisions/ADR-006-benchmark-tasks-and-test-users.md</span></td><td>DECISION RECORD</td><td>5</td><td>—</td><td>2026-09-16</td></tr>
-<tr><td><a href="docs/decisions/ADR-007-web-review-online-submission-in-mvp.html">웹 검토 — 온라인 제출까지 MVP에 포함</a><br><span class="micro">docs/decisions/ADR-007-web-review-online-submission-in-mvp.md</span></td><td>DECISION RECORD</td><td>6</td><td>—</td><td>2026-09-16</td></tr>
-<tr><td><a href="docs/decisions/ADR-008-extension-deferred-first-skill-schedule.html">확장 계약은 후속으로, 일람표 작성을 첫 스킬로</a><br><span class="micro">docs/decisions/ADR-008-extension-deferred-first-skill-schedule.md</span></td><td>DECISION RECORD</td><td>5</td><td>—</td><td>2026-09-16</td></tr>
-<tr><td><a href="docs/decisions/ADR-009-single-active-host-shared-record.html">다중 호스트 연결 — 단일 활성 호스트 + 프로젝트 공유 기록</a><br><span class="micro">docs/decisions/ADR-009-single-active-host-shared-record.md</span></td><td>DECISION RECORD</td><td>5</td><td>—</td><td>2026-09-16</td></tr>
-</tbody></table></div>
-<p class="micro">다음 작성할 문서: <b>2차 검토 대화 → 사용자 결정</b> — Codex·Claude 스레드 비교 → 항목별 수락/거부 → ADR·SPEC-00-common</p>
-<footer class="doc-footer"><span>VIDE / PLANNING DOCUMENTS</span><span>문서 열람용 · 실제 CAD/BIM 지원은 구현·검증 후 선언</span></footer></main>
+</style></head><body>
+<!-- GENERATED FILE — source: docs/decisions/ADR-009-single-active-host-shared-record.md — run: npm --prefix tools/docs run build -->
+<a class="skip" href="#reading-main">본문으로 이동</a>
+<header class="topbar"><a class="brand" href="../../index.html" aria-label="VIDE 문서 모음"><b>V.</b><span>VIDE</span></a><nav class="doc-tabs" aria-label="문서 선택"><a class="doc-tab" href="../PRD.html">PRD</a><a class="doc-tab" href="../../DEVELOPMENT_GUIDE.html">개발 가이드</a><a class="doc-tab" href="../../Design.html">Design</a><a class="doc-tab" href="../../AI.html">AI 규약</a></nav><div class="top-actions"><button id="source-download" title="현재 문서의 Markdown 원문 저장">원문 ↓</button><button id="print-doc" title="현재 문서 인쇄">인쇄</button></div></header>
+<div class="layout"><aside class="toc-shell" id="toc-shell" aria-label="현재 문서의 목차"><div class="toc-title"><strong>CONTENTS</strong><span id="toc-count"></span><button id="toc-toggle" aria-expanded="false" aria-controls="toc-body">목차 열기</button></div><div class="toc-body" id="toc-body"><input class="toc-search" id="toc-search" type="search" placeholder="장 제목으로 찾기" aria-label="현재 문서 목차 검색"><p class="toc-hint" id="nav-hint" role="status">장 제목으로 찾아갑니다.</p><nav class="toc-links" id="toc-links" aria-label="본문 장 이동"></nav><div class="toc-next">다음 작성할 문서<br><b>2차 검토 대화 → 사용자 결정</b><br>Codex·Claude 스레드 비교 → 항목별 수락/거부 → ADR·SPEC-00-common</div></div></aside><main id="reading-main" tabindex="-1"><article id="adr-009-single-active-host-shared-record" class="document"><header class="doc-hero"><div class="hero-label"><span class="eyebrow">DECISION RECORD</span><span><span class="pill">DRAFT · v0.1</span><span class="pill">5 CHAPTERS</span></span></div><h1 tabindex="-1">ADR-009 · 단일 활성 호스트 + 공유 기록</h1><div class="hero-meta">
+</div></header><section class="doc-section" id="adr-009-single-active-host-shared-record-section-1"><h2><span aria-hidden="true" class="section-num">01 /</span> 배경</h2>
+<p>PRD §14.2·AC-25는 두 호스트의 동시 라이브 연결을 MVP 완료 조건으로 두지만 §2 문제표에 대응 문제가 없고 §12.2가 호스트 간 변환·동기화를 이미 제외했다. 남는 가치는 '대상 혼동 없음'이라는 격리 속성뿐인데, 그 하나를 위해 두 호스트 프로세스·두 문서 버전·교차 상태 기계를 첫 호스트 완성 전에 설계하게 된다(PRD R-57, Codex R-43).</p>
+</section><section class="doc-section" id="adr-009-single-active-host-shared-record-section-2"><h2><span aria-hidden="true" class="section-num">02 /</span> 결정</h2>
+<ul>
+<li><strong>WorkScope와 Run은 호스트 문서 하나를 대상으로 한다.</strong> 프로젝트는 여러 호스트·문서를 등록하고, 설계 대상 중심의 공유 기록(§6.1)으로 잇는다. 격리는 시험이 아니라 구조로 보장한다.</li>
+<li>AC-25는 &quot;등록됐지만 비활성인 호스트에 쓰기가 발생하지 않고, 요청 대상은 요청 시점의 문서·버전에 고정된다(순차 연결 포함)&quot;로 축소한다. §8.1의 &quot;프로그램을 전환해도 요청 대상이 바뀌지 않는다&quot;는 이 고정으로 충족된다.</li>
+<li>§14.2의 두 호스트 시험은 목적을 '어댑터 계약 차이 확인'으로 바꾼다. 동시 라이브 연결은 후속 확장이다.</li>
+</ul>
+</section><section class="doc-section" id="adr-009-single-active-host-shared-record-section-3"><h2><span aria-hidden="true" class="section-num">03 /</span> 결과 — 적용 시 바꿀 문장</h2>
+<p>PRD §14.1 다중 호스트 정의, §14.2 두 호스트 시험 문장, AC-25 통과 기준, FR-02 수용 기준(동시성 제외). SPEC-00-common: 프로젝트–호스트–WorkScope 관계와 활성 호스트 전환 상태.</p>
+</section><section class="doc-section" id="adr-009-single-active-host-shared-record-section-4"><h2><span aria-hidden="true" class="section-num">04 /</span> 재검토 조건</h2>
+<p>Rhino→ZWCAD 인계 작업에서 한 작업 안에 두 호스트를 함께 써야 하는 여정이 실제로 나오면 동시 연결을 다시 검토한다.</p>
+</section><section class="doc-section" id="adr-009-single-active-host-shared-record-section-5"><h2><span aria-hidden="true" class="section-num">05 /</span> 출처</h2>
+<p>PRD R-57·R-47, Codex R-43. 2026-09-17 brainstorming Q&amp;A.</p>
+</section><footer class="doc-footer"><span>VIDE / PLANNING DOCUMENTS</span><span>문서 열람용 · 실제 CAD/BIM 지원은 구현·검증 후 선언</span></footer></article></main></div>
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+<script id="source-data" type="application/json">{"adr-009-single-active-host-shared-record":{"label":"다중 호스트 연결 — 단일 활성 호스트 + 프로젝트 공유 기록","file":"ADR-009-single-active-host-shared-record.md","markdown":"---\nid: ADR-009\ntitle: 다중 호스트 연결 — 단일 활성 호스트 + 프로젝트 공유 기록\nstatus: draft\nversion: 0.1\nupdated: 2026-09-17\nowner: user\nrelated: [FR-02, AC-25, FR-12]\n---\n\n# ADR-009 · 단일 활성 호스트 + 공유 기록\n\n## 1. 배경\n\nPRD §14.2·AC-25는 두 호스트의 동시 라이브 연결을 MVP 완료 조건으로 두지만 §2 문제표에 대응 문제가 없고 §12.2가 호스트 간 변환·동기화를 이미 제외했다. 남는 가치는 '대상 혼동 없음'이라는 격리 속성뿐인데, 그 하나를 위해 두 호스트 프로세스·두 문서 버전·교차 상태 기계를 첫 호스트 완성 전에 설계하게 된다(PRD R-57, Codex R-43).\n\n## 2. 결정\n\n- **WorkScope와 Run은 호스트 문서 하나를 대상으로 한다.** 프로젝트는 여러 호스트·문서를 등록하고, 설계 대상 중심의 공유 기록(§6.1)으로 잇는다. 격리는 시험이 아니라 구조로 보장한다.\n- AC-25는 \"등록됐지만 비활성인 호스트에 쓰기가 발생하지 않고, 요청 대상은 요청 시점의 문서·버전에 고정된다(순차 연결 포함)\"로 축소한다. §8.1의 \"프로그램을 전환해도 요청 대상이 바뀌지 않는다\"는 이 고정으로 충족된다.\n- §14.2의 두 호스트 시험은 목적을 '어댑터 계약 차이 확인'으로 바꾼다. 동시 라이브 연결은 후속 확장이다.\n\n## 3. 결과 — 적용 시 바꿀 문장\n\nPRD §14.1 다중 호스트 정의, §14.2 두 호스트 시험 문장, AC-25 통과 기준, FR-02 수용 기준(동시성 제외). SPEC-00-common: 프로젝트–호스트–WorkScope 관계와 활성 호스트 전환 상태.\n\n## 4. 재검토 조건\n\nRhino→ZWCAD 인계 작업에서 한 작업 안에 두 호스트를 함께 써야 하는 여정이 실제로 나오면 동시 연결을 다시 검토한다.\n\n## 5. 출처\n\nPRD R-57·R-47, Codex R-43. 2026-09-17 brainstorming Q&A.\n"}}</script>
+<script id="reader-config" type="application/json">{"initial":"adr-009-single-active-host-shared-record","siteTitle":"VIDE"}</script>
+<script>
+(() => {
+'use strict';
+const sourceData=JSON.parse(document.getElementById('source-data').textContent);
+const config=JSON.parse(document.getElementById('reader-config').textContent);
+const esc=s=>String(s);
+let activeDoc=config.initial;
+let observer;
+let toastTimer;
+const $=s=>document.querySelector(s);
+function notify(message){const t=$('#toast');t.textContent=message;t.hidden=false;clearTimeout(toastTimer);toastTimer=setTimeout(()=>{t.hidden=true;},3400);}
+function renderToc(){const links=$('#toc-links');links.replaceChildren();const nodes=document.querySelectorAll('#'+activeDoc+' .doc-section');nodes.forEach(section=>{const a=document.createElement('a');a.href='#'+section.id;a.textContent=section.querySelector('h2').textContent;a.dataset.title=a.textContent;a.addEventListener('click',()=>{$('#toc-shell').classList.remove('open');$('#toc-toggle').setAttribute('aria-expanded','false');});links.appendChild(a);});$('#toc-count').textContent=nodes.length+' CHAPTERS';$('#toc-search').value='';$('#nav-hint').textContent='章 제목으로 찾아갑니다.'.replace('章','장');if(observer)observer.disconnect();observer=new IntersectionObserver(entries=>{const visible=entries.filter(e=>e.isIntersecting).sort((a,b)=>a.boundingClientRect.top-b.boundingClientRect.top);if(!visible.length)return;document.querySelectorAll('#toc-links a').forEach(a=>a.classList.toggle('active',a.hash==='#'+visible[0].target.id));},{rootMargin:'-90px 0px -64% 0px',threshold:0});nodes.forEach(n=>observer.observe(n));}
+function showDoc(name,reset){if(!sourceData[name])name=config.initial;activeDoc=name;document.querySelectorAll('.document').forEach(d=>d.hidden=d.id!==name);document.querySelectorAll('.doc-tab').forEach(a=>{a.classList.toggle('active',a.dataset.doc===name);if(a.dataset.doc===name)a.setAttribute('aria-current','page');else a.removeAttribute('aria-current');});renderToc();document.title=(config.siteTitle||'VIDE')+' · '+sourceData[name].label;if(reset)window.scrollTo({top:0,behavior:'instant'});}
+function useHash(){let raw=decodeURIComponent(location.hash.slice(1)||config.initial);let name=raw.split('-section-')[0];if(!sourceData[name])name=config.initial;if(name!==activeDoc||!$('#toc-links').children.length)showDoc(name,false);const el=document.getElementById(raw);if(el&&!el.hidden){requestAnimationFrame(()=>el.scrollIntoView({block:'start',behavior:'instant'}));}}
+window.addEventListener('hashchange',useHash);
+document.querySelectorAll('.doc-tab[data-doc]').forEach(a=>a.addEventListener('click',e=>{e.preventDefault();const name=a.dataset.doc;showDoc(name,true);history.replaceState(null,'','#'+name);}));
+$('#toc-toggle').addEventListener('click',()=>{const on=$('#toc-shell').classList.toggle('open');$('#toc-toggle').setAttribute('aria-expanded',String(on));});
+$('#toc-search').addEventListener('input',()=>{const q=$('#toc-search').value.trim().toLocaleLowerCase();let n=0;document.querySelectorAll('#toc-links a').forEach(a=>{a.hidden=!a.dataset.title.toLocaleLowerCase().includes(q);if(!a.hidden)n++;});$('#nav-hint').textContent=q?(n?'일치하는 장 '+n+'개':'일치하는 장 제목이 없습니다.'):'장 제목으로 찾아갑니다.';});
+function download(name,contents,type){const blob=new Blob([contents],{type});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),2500);}
+$('#source-download').addEventListener('click',()=>download(sourceData[activeDoc].file,sourceData[activeDoc].markdown,'text/markdown;charset=utf-8'));
+$('#print-doc').addEventListener('click',()=>window.print());
+async function copy(text){try{if(navigator.clipboard&&navigator.clipboard.writeText){await navigator.clipboard.writeText(text);return true;}}catch(e){}const t=document.createElement('textarea');t.value=text;t.style.position='fixed';t.style.left='-9999px';document.body.appendChild(t);t.select();let ok=false;try{ok=document.execCommand('copy');}catch(e){}t.remove();return ok;}
+document.querySelectorAll('.copy-code').forEach(b=>b.addEventListener('click',async()=>{const text=b.parentElement.querySelector('pre').textContent;const ok=await copy(text);if(ok){b.textContent='복사됨';notify('텍스트를 복사했습니다.');setTimeout(()=>b.textContent='복사',1800);}else{const range=document.createRange();range.selectNodeContents(b.parentElement.querySelector('pre'));const sel=window.getSelection();sel.removeAllRanges();sel.addRange(range);notify('자동 복사가 제한됩니다. 선택된 텍스트를 직접 복사하세요.');}}));
+showDoc(config.initial,false);useHash();
+})();
+</script>
+<script>
+(() => {
+'use strict';
+const KEY = 'vide-docs-review-mode';
+const AUTHOR_KEY = 'vide-docs-review-author';
+const sel = document.getElementById('review-mode');
+if (!sel) return;
+const authorSel = document.getElementById('review-author');
+let mode = 'marked';
+let author = 'all';
+try { mode = localStorage.getItem(KEY) || 'marked'; } catch (e) {}
+try { author = localStorage.getItem(AUTHOR_KEY) || 'all'; } catch (e) {}
+if (!['marked', 'original', 'accepted'].includes(mode)) mode = 'marked';
+if (!authorSel || !Array.from(authorSel.options).some(o => o.value === author)) author = 'all';
+const matches = el => author === 'all' || el.dataset.reviewAgent === author;
+const decorate = () => {
+const query = (document.getElementById('toc-search')?.value || '').trim().toLocaleLowerCase();
+let visible = 0;
+document.querySelectorAll('#toc-links a').forEach(a => {
+  const section = document.getElementById(decodeURIComponent(a.hash.slice(1)));
+  if (!section) return;
+  a.hidden = !a.dataset.title.toLocaleLowerCase().includes(query) || (section.classList.contains('review-appendix') && (mode !== 'marked' || !matches(section)));
+  if (!a.hidden) visible += 1;
+  const n = Array.from(section.querySelectorAll('.review-label[data-rid]')).filter(matches).length;
+  if (n && mode === 'marked') a.dataset.reviews = String(n); else delete a.dataset.reviews;
+});
+if (query) document.getElementById('nav-hint').textContent = visible ? `일치하는 장 ${visible}개` : '일치하는 장 제목이 없습니다.';
+};
+const apply = () => {
+  sel.value = mode;
+  if (authorSel) { authorSel.value = author; authorSel.disabled = mode !== 'marked'; }
+  document.body.classList.toggle('review-original', mode === 'original');
+  document.body.classList.toggle('review-accepted', mode === 'accepted');
+  document.querySelectorAll('blockquote.review, .review-appendix').forEach(el => { el.hidden = !matches(el); });
+  decorate();
+  try { localStorage.setItem(KEY, mode); localStorage.setItem(AUTHOR_KEY, author); } catch (e) {}
+};
+apply();
+const toc = document.getElementById('toc-links');
+if (toc) new MutationObserver(decorate).observe(toc, { childList: true });
+document.getElementById('toc-search')?.addEventListener('input', decorate);
+sel.addEventListener('change', () => { mode = sel.value; apply(); });
+if (authorSel) authorSel.addEventListener('change', () => { author = authorSel.value; apply(); });
+const revealHash = () => {
+  let id;
+  try { id = decodeURIComponent(location.hash.slice(1)); } catch (e) { return; }
+  const target = document.getElementById(id);
+  if (!target || !target.dataset.reviewAgent) return;
+  mode = 'marked';
+  if (!matches(target)) author = 'all';
+  apply();
+  target.scrollIntoView({ block: 'center' });
+};
+window.addEventListener('hashchange', revealHash);
+revealHash();
+})();
+</script>
 </body></html>

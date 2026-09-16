@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="generator" content="tools/docs/build.mjs — generated; do not edit"><title>VIDE · 문서 목록</title><style>
+<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="description" content="ADR-002 · 배포 형태 — 개인 도구 → 사내"><meta name="generator" content="tools/docs/build.mjs — generated from docs/decisions/ADR-002-deployment-personal-then-inhouse.md; do not edit"><title>VIDE · 배포 형태 — 개인 도구에서 시작해 사내 배포로</title><style>
 :root{--ink:#292c2d;--muted:#626b6e;--line:#e1e3e1;--soft:#f5f5f1;--coral:#d97660;--paper:#fff;--font:"Pretendard","Noto Sans KR","Malgun Gothic",Arial,sans-serif}
 *{box-sizing:border-box}html{scroll-behavior:smooth;scroll-padding-top:92px}body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--font);letter-spacing:-.025em}a{color:inherit;text-underline-offset:4px}button,input,textarea,select{font:inherit;color:inherit}button{cursor:pointer;border:1px solid var(--line);border-radius:4px;background:var(--paper);padding:10px 15px;line-height:1.3}button:hover{background:var(--soft)}button:disabled{cursor:default;opacity:.6}button.primary{background:var(--ink);color:#fff;border-color:var(--ink)}button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible{outline:3px solid var(--coral);outline-offset:3px}textarea{resize:vertical}::selection{background:#f2d7ce}[hidden]{display:none!important}
 .skip{position:fixed;top:-80px;left:20px;z-index:100;background:white;padding:12px}.skip:focus{top:10px}
@@ -66,26 +66,143 @@ body.review-accepted del,body.review-accepted blockquote.review,body.review-acce
 body.review-accepted ins{background:none;color:inherit;border:0;padding:0}
 body.review-accepted .toc-links a[data-reviews]::after{display:none}
 @media print{blockquote.review{break-inside:avoid;background:#eef3fc!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}ins,del{-webkit-print-color-adjust:exact;print-color-adjust:exact}.review-select{display:none}}
-
-.index-main{max-width:1040px;margin:auto;padding:55px 30px 70px}.index-main h1{font-size:34px;letter-spacing:-.05em;margin:0 0 6px}.index-main .micro{font-size:11px;color:var(--muted)}.index-main table td{vertical-align:top}</style></head><body>
-<!-- GENERATED FILE — run: npm --prefix tools/docs run build -->
-<header class="topbar"><a class="brand" href="index.html" aria-label="VIDE 문서 모음"><b>V.</b><span>VIDE</span></a><nav class="doc-tabs" aria-label="문서 선택"><a class="doc-tab" href="docs/PRD.html">PRD</a><a class="doc-tab" href="DEVELOPMENT_GUIDE.html">개발 가이드</a><a class="doc-tab" href="Design.html">Design</a><a class="doc-tab" href="AI.html">AI 규약</a></nav><div class="top-actions"></div></header>
-<main class="index-main"><span class="eyebrow">PLANNING DOCUMENTS</span><h1>VIDE 문서 목록</h1><p class="micro">MD가 원본이고 HTML은 <code>tools/docs/build.mjs</code>가 생성한다 (AI.md §4). 첨삭 표기 규칙은 AI.md §5.</p>
-<div class="table-scroll" role="region" tabindex="0" aria-label="문서 목록"><table><thead><tr><th>문서</th><th>종류</th><th>장</th><th>검토 의견</th><th>MD 수정일</th></tr></thead><tbody>
-<tr><td><a href="docs/PRD.html">VIDE 제품 요구사항</a><br><span class="micro">docs/PRD.md</span></td><td>PRODUCT REQUIREMENTS</td><td>21</td><td><a class="review-pill pill" data-review-agent="codex" href="docs/PRD.html#prd-section-x19">CODEX 24건</a><br><a class="review-pill pill" data-review-agent="claude" href="docs/PRD.html#prd-section-x20">CLAUDE 36건</a></td><td>2026-09-16</td></tr>
-<tr><td><a href="DEVELOPMENT_GUIDE.html">VIDE 개발 가이드</a><br><span class="micro">DEVELOPMENT_GUIDE.md</span></td><td>DEVELOPMENT GUIDE</td><td>16</td><td><a class="review-pill pill" data-review-agent="codex" href="DEVELOPMENT_GUIDE.html#guide-section-x14">CODEX 18건</a><br><a class="review-pill pill" data-review-agent="claude" href="DEVELOPMENT_GUIDE.html#guide-section-x15">CLAUDE 23건</a></td><td>2026-09-16</td></tr>
-<tr><td><a href="Design.html">VIDE 시각·상호작용 기준</a><br><span class="micro">Design.md</span></td><td>DESIGN PRINCIPLES</td><td>15</td><td><a class="review-pill pill" data-review-agent="codex" href="Design.html#design-section-x13">CODEX 19건</a><br><a class="review-pill pill" data-review-agent="claude" href="Design.html#design-section-x14">CLAUDE 23건</a></td><td>2026-09-16</td></tr>
-<tr><td><a href="AI.html">AI 규약</a><br><span class="micro">AI.md</span></td><td>AGENT CONVENTIONS</td><td>13</td><td><a class="review-pill pill" data-review-agent="codex" href="AI.html#ai-section-x11">CODEX 6건</a><br><a class="review-pill pill" data-review-agent="claude" href="AI.html#ai-section-x12">CLAUDE 6건</a></td><td>2026-09-16</td></tr>
-<tr><td><a href="docs/decisions/ADR-001-mvp-scope-rhino-zwcad.html">MVP 범위 — Rhino·ZWCAD 두 호스트의 전체 흐름, Revit 제외</a><br><span class="micro">docs/decisions/ADR-001-mvp-scope-rhino-zwcad.md</span></td><td>DECISION RECORD</td><td>7</td><td>—</td><td>2026-09-16</td></tr>
-<tr><td><a href="docs/decisions/ADR-002-deployment-personal-then-inhouse.html">배포 형태 — 개인 도구에서 시작해 사내 배포로</a><br><span class="micro">docs/decisions/ADR-002-deployment-personal-then-inhouse.md</span></td><td>DECISION RECORD</td><td>7</td><td>—</td><td>2026-09-16</td></tr>
-<tr><td><a href="docs/decisions/ADR-003-candidate-isolation-host-layer.html">후보 격리 원칙 — 호스트 안 격리 영역으로 통일</a><br><span class="micro">docs/decisions/ADR-003-candidate-isolation-host-layer.md</span></td><td>DECISION RECORD</td><td>7</td><td>—</td><td>2026-09-16</td></tr>
-<tr><td><a href="docs/decisions/ADR-004-view-strategy-host-viewport-and-own-view.html">모델 뷰 전략 — 호스트 뷰포트와 IDE 자체 뷰를 모두 제공하고 동기화</a><br><span class="micro">docs/decisions/ADR-004-view-strategy-host-viewport-and-own-view.md</span></td><td>DECISION RECORD</td><td>7</td><td>—</td><td>2026-09-16</td></tr>
-<tr><td><a href="docs/decisions/ADR-005-ai-execution-path-pending-spike.html">AI 실행 형태 — 미결, 스파이크 결과로 결정</a><br><span class="micro">docs/decisions/ADR-005-ai-execution-path-pending-spike.md</span></td><td>DECISION RECORD</td><td>5</td><td>—</td><td>2026-09-16</td></tr>
-<tr><td><a href="docs/decisions/ADR-006-benchmark-tasks-and-test-users.html">기준 과업 3개와 검증 사용자 — 단계 배정, 수작업 기준선은 alpha 전 측정</a><br><span class="micro">docs/decisions/ADR-006-benchmark-tasks-and-test-users.md</span></td><td>DECISION RECORD</td><td>5</td><td>—</td><td>2026-09-16</td></tr>
-<tr><td><a href="docs/decisions/ADR-007-web-review-online-submission-in-mvp.html">웹 검토 — 온라인 제출까지 MVP에 포함</a><br><span class="micro">docs/decisions/ADR-007-web-review-online-submission-in-mvp.md</span></td><td>DECISION RECORD</td><td>6</td><td>—</td><td>2026-09-16</td></tr>
-<tr><td><a href="docs/decisions/ADR-008-extension-deferred-first-skill-schedule.html">확장 계약은 후속으로, 일람표 작성을 첫 스킬로</a><br><span class="micro">docs/decisions/ADR-008-extension-deferred-first-skill-schedule.md</span></td><td>DECISION RECORD</td><td>5</td><td>—</td><td>2026-09-16</td></tr>
-<tr><td><a href="docs/decisions/ADR-009-single-active-host-shared-record.html">다중 호스트 연결 — 단일 활성 호스트 + 프로젝트 공유 기록</a><br><span class="micro">docs/decisions/ADR-009-single-active-host-shared-record.md</span></td><td>DECISION RECORD</td><td>5</td><td>—</td><td>2026-09-16</td></tr>
-</tbody></table></div>
-<p class="micro">다음 작성할 문서: <b>2차 검토 대화 → 사용자 결정</b> — Codex·Claude 스레드 비교 → 항목별 수락/거부 → ADR·SPEC-00-common</p>
-<footer class="doc-footer"><span>VIDE / PLANNING DOCUMENTS</span><span>문서 열람용 · 실제 CAD/BIM 지원은 구현·검증 후 선언</span></footer></main>
+</style></head><body>
+<!-- GENERATED FILE — source: docs/decisions/ADR-002-deployment-personal-then-inhouse.md — run: npm --prefix tools/docs run build -->
+<a class="skip" href="#reading-main">본문으로 이동</a>
+<header class="topbar"><a class="brand" href="../../index.html" aria-label="VIDE 문서 모음"><b>V.</b><span>VIDE</span></a><nav class="doc-tabs" aria-label="문서 선택"><a class="doc-tab" href="../PRD.html">PRD</a><a class="doc-tab" href="../../DEVELOPMENT_GUIDE.html">개발 가이드</a><a class="doc-tab" href="../../Design.html">Design</a><a class="doc-tab" href="../../AI.html">AI 규약</a></nav><div class="top-actions"><button id="source-download" title="현재 문서의 Markdown 원문 저장">원문 ↓</button><button id="print-doc" title="현재 문서 인쇄">인쇄</button></div></header>
+<div class="layout"><aside class="toc-shell" id="toc-shell" aria-label="현재 문서의 목차"><div class="toc-title"><strong>CONTENTS</strong><span id="toc-count"></span><button id="toc-toggle" aria-expanded="false" aria-controls="toc-body">목차 열기</button></div><div class="toc-body" id="toc-body"><input class="toc-search" id="toc-search" type="search" placeholder="장 제목으로 찾기" aria-label="현재 문서 목차 검색"><p class="toc-hint" id="nav-hint" role="status">장 제목으로 찾아갑니다.</p><nav class="toc-links" id="toc-links" aria-label="본문 장 이동"></nav><div class="toc-next">다음 작성할 문서<br><b>2차 검토 대화 → 사용자 결정</b><br>Codex·Claude 스레드 비교 → 항목별 수락/거부 → ADR·SPEC-00-common</div></div></aside><main id="reading-main" tabindex="-1"><article id="adr-002-deployment-personal-then-inhouse" class="document"><header class="doc-hero"><div class="hero-label"><span class="eyebrow">DECISION RECORD</span><span><span class="pill">DRAFT · v0.1</span><span class="pill">7 CHAPTERS</span></span></div><h1 tabindex="-1">ADR-002 · 배포 형태 — 개인 도구 → 사내</h1><div class="hero-meta">
+</div></header><section class="doc-section" id="adr-002-deployment-personal-then-inhouse-section-1"><h2><span aria-hidden="true" class="section-num">01 /</span> 배경</h2>
+<p>배포 형태(개인 도구 / 사내 / 상용)는 FR-17 설치 수용 환경, FR-18 기밀·권한 의무, FR-19 웹 검토 형태, OQ-07 확장 신뢰 범위, 호스트 SDK·애드인 배포 조건 조사(PRD R-20 / Codex R-40)의 공통 상류 결정인데 §18에 없었다(PRD R-55, 제안 OQ-09).</p>
+</section><section class="doc-section" id="adr-002-deployment-personal-then-inhouse-section-2"><h2><span aria-hidden="true" class="section-num">02 /</span> 선택지</h2>
+<div aria-label="ADR 표 1" class="table-scroll" role="region" tabindex="0"><table>
+<thead>
+<tr>
+<th>안</th>
+<th>내용</th>
+<th>트레이드오프</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>A</td>
+<td>개인 도구 → 사내 순서</td>
+<td>MVP 설치 조건이 최소. 서명·자동 업데이트·계약은 사내 시점으로</td>
+</tr>
+<tr>
+<td>B</td>
+<td>처음부터 사내 배포</td>
+<td>피험자 확보가 쉽지만 설치 권한·애드인 로더·업데이트가 MVP에 들어옴</td>
+</tr>
+<tr>
+<td>C</td>
+<td>상용 배포 전제</td>
+<td>SDK 재배포 약관·서명·라이선스·지원 범위가 전부 MVP 전제 — 1인 규모에 가장 무거움</td>
+</tr>
+</tbody>
+</table></div>
+</section><section class="doc-section" id="adr-002-deployment-personal-then-inhouse-section-3"><h2><span aria-hidden="true" class="section-num">03 /</span> 결정</h2>
+<p><strong>A. 개인 도구로 시작하고 사내 배포로 확장한다.</strong></p>
+<ul>
+<li>MVP 설치 수용 환경(FR-17·AC-23) = 소유자 PC + 검증용 Windows 1대. 수동 애드인 등록을 포함한 설치·제거·작업 자료 보존까지가 수용 기준이다.</li>
+<li>코드 서명·자동 업데이트·설치 권한 정책·사용 계약은 사내 배포 착수 시점의 결정으로 미룬다.</li>
+<li>호스트 SDK·애드인 배포 조건 조사는 개인·사내 사용 범위만 확인한다. 상용 재배포 조건은 조사하지 않는다.</li>
+</ul>
+</section><section class="doc-section" id="adr-002-deployment-personal-then-inhouse-section-4"><h2><span aria-hidden="true" class="section-num">04 /</span> 근거</h2>
+<p>1인 팀에서 배포 형태가 곧 작업량이다. 개인 도구 단계에서 가설 검증(ADR-006)을 먼저 끝내고, 사내 배포는 검증 결과가 있을 때 결정한다.</p>
+</section><section class="doc-section" id="adr-002-deployment-personal-then-inhouse-section-5"><h2><span aria-hidden="true" class="section-num">05 /</span> 결과 — 적용 시 바꿀 문장</h2>
+<ul>
+<li>PRD §1.3 주 작업자 문단에 배포 단계 한 줄, FR-17 수용 기준의 &quot;실제 지원 환경&quot; 정의, AC-23 시험 환경, §17 &quot;설치 권한의 차이&quot; 행.</li>
+<li>§18에 OQ-09 &quot;사내 배포 착수 조건(서명·업데이트·권한 정책·SDK 조건 재확인)&quot; 행을 추가하고 이 ADR을 링크한다.</li>
+</ul>
+</section><section class="doc-section" id="adr-002-deployment-personal-then-inhouse-section-6"><h2><span aria-hidden="true" class="section-num">06 /</span> 재검토 조건</h2>
+<p>동료 건축가 피험자(ADR-006)가 자기 PC에 설치해야 하는 시점이 오면 사내 배포 조건을 먼저 결정한다.</p>
+</section><section class="doc-section" id="adr-002-deployment-personal-then-inhouse-section-7"><h2><span aria-hidden="true" class="section-num">07 /</span> 출처</h2>
+<p>PRD R-20·R-55, Codex R-40. 2026-09-17 brainstorming Q&amp;A.</p>
+</section><footer class="doc-footer"><span>VIDE / PLANNING DOCUMENTS</span><span>문서 열람용 · 실제 CAD/BIM 지원은 구현·검증 후 선언</span></footer></article></main></div>
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+<script id="source-data" type="application/json">{"adr-002-deployment-personal-then-inhouse":{"label":"배포 형태 — 개인 도구에서 시작해 사내 배포로","file":"ADR-002-deployment-personal-then-inhouse.md","markdown":"---\nid: ADR-002\ntitle: 배포 형태 — 개인 도구에서 시작해 사내 배포로\nstatus: draft\nversion: 0.1\nupdated: 2026-09-17\nowner: user\nrelated: [FR-17, FR-18, FR-19, AC-23, OQ-07]\n---\n\n# ADR-002 · 배포 형태 — 개인 도구 → 사내\n\n## 1. 배경\n\n배포 형태(개인 도구 / 사내 / 상용)는 FR-17 설치 수용 환경, FR-18 기밀·권한 의무, FR-19 웹 검토 형태, OQ-07 확장 신뢰 범위, 호스트 SDK·애드인 배포 조건 조사(PRD R-20 / Codex R-40)의 공통 상류 결정인데 §18에 없었다(PRD R-55, 제안 OQ-09).\n\n## 2. 선택지\n\n| 안 | 내용 | 트레이드오프 |\n|---|---|---|\n| A | 개인 도구 → 사내 순서 | MVP 설치 조건이 최소. 서명·자동 업데이트·계약은 사내 시점으로 |\n| B | 처음부터 사내 배포 | 피험자 확보가 쉽지만 설치 권한·애드인 로더·업데이트가 MVP에 들어옴 |\n| C | 상용 배포 전제 | SDK 재배포 약관·서명·라이선스·지원 범위가 전부 MVP 전제 — 1인 규모에 가장 무거움 |\n\n## 3. 결정\n\n**A. 개인 도구로 시작하고 사내 배포로 확장한다.**\n\n- MVP 설치 수용 환경(FR-17·AC-23) = 소유자 PC + 검증용 Windows 1대. 수동 애드인 등록을 포함한 설치·제거·작업 자료 보존까지가 수용 기준이다.\n- 코드 서명·자동 업데이트·설치 권한 정책·사용 계약은 사내 배포 착수 시점의 결정으로 미룬다.\n- 호스트 SDK·애드인 배포 조건 조사는 개인·사내 사용 범위만 확인한다. 상용 재배포 조건은 조사하지 않는다.\n\n## 4. 근거\n\n1인 팀에서 배포 형태가 곧 작업량이다. 개인 도구 단계에서 가설 검증(ADR-006)을 먼저 끝내고, 사내 배포는 검증 결과가 있을 때 결정한다.\n\n## 5. 결과 — 적용 시 바꿀 문장\n\n- PRD §1.3 주 작업자 문단에 배포 단계 한 줄, FR-17 수용 기준의 \"실제 지원 환경\" 정의, AC-23 시험 환경, §17 \"설치 권한의 차이\" 행.\n- §18에 OQ-09 \"사내 배포 착수 조건(서명·업데이트·권한 정책·SDK 조건 재확인)\" 행을 추가하고 이 ADR을 링크한다.\n\n## 6. 재검토 조건\n\n동료 건축가 피험자(ADR-006)가 자기 PC에 설치해야 하는 시점이 오면 사내 배포 조건을 먼저 결정한다.\n\n## 7. 출처\n\nPRD R-20·R-55, Codex R-40. 2026-09-17 brainstorming Q&A.\n"}}</script>
+<script id="reader-config" type="application/json">{"initial":"adr-002-deployment-personal-then-inhouse","siteTitle":"VIDE"}</script>
+<script>
+(() => {
+'use strict';
+const sourceData=JSON.parse(document.getElementById('source-data').textContent);
+const config=JSON.parse(document.getElementById('reader-config').textContent);
+const esc=s=>String(s);
+let activeDoc=config.initial;
+let observer;
+let toastTimer;
+const $=s=>document.querySelector(s);
+function notify(message){const t=$('#toast');t.textContent=message;t.hidden=false;clearTimeout(toastTimer);toastTimer=setTimeout(()=>{t.hidden=true;},3400);}
+function renderToc(){const links=$('#toc-links');links.replaceChildren();const nodes=document.querySelectorAll('#'+activeDoc+' .doc-section');nodes.forEach(section=>{const a=document.createElement('a');a.href='#'+section.id;a.textContent=section.querySelector('h2').textContent;a.dataset.title=a.textContent;a.addEventListener('click',()=>{$('#toc-shell').classList.remove('open');$('#toc-toggle').setAttribute('aria-expanded','false');});links.appendChild(a);});$('#toc-count').textContent=nodes.length+' CHAPTERS';$('#toc-search').value='';$('#nav-hint').textContent='章 제목으로 찾아갑니다.'.replace('章','장');if(observer)observer.disconnect();observer=new IntersectionObserver(entries=>{const visible=entries.filter(e=>e.isIntersecting).sort((a,b)=>a.boundingClientRect.top-b.boundingClientRect.top);if(!visible.length)return;document.querySelectorAll('#toc-links a').forEach(a=>a.classList.toggle('active',a.hash==='#'+visible[0].target.id));},{rootMargin:'-90px 0px -64% 0px',threshold:0});nodes.forEach(n=>observer.observe(n));}
+function showDoc(name,reset){if(!sourceData[name])name=config.initial;activeDoc=name;document.querySelectorAll('.document').forEach(d=>d.hidden=d.id!==name);document.querySelectorAll('.doc-tab').forEach(a=>{a.classList.toggle('active',a.dataset.doc===name);if(a.dataset.doc===name)a.setAttribute('aria-current','page');else a.removeAttribute('aria-current');});renderToc();document.title=(config.siteTitle||'VIDE')+' · '+sourceData[name].label;if(reset)window.scrollTo({top:0,behavior:'instant'});}
+function useHash(){let raw=decodeURIComponent(location.hash.slice(1)||config.initial);let name=raw.split('-section-')[0];if(!sourceData[name])name=config.initial;if(name!==activeDoc||!$('#toc-links').children.length)showDoc(name,false);const el=document.getElementById(raw);if(el&&!el.hidden){requestAnimationFrame(()=>el.scrollIntoView({block:'start',behavior:'instant'}));}}
+window.addEventListener('hashchange',useHash);
+document.querySelectorAll('.doc-tab[data-doc]').forEach(a=>a.addEventListener('click',e=>{e.preventDefault();const name=a.dataset.doc;showDoc(name,true);history.replaceState(null,'','#'+name);}));
+$('#toc-toggle').addEventListener('click',()=>{const on=$('#toc-shell').classList.toggle('open');$('#toc-toggle').setAttribute('aria-expanded',String(on));});
+$('#toc-search').addEventListener('input',()=>{const q=$('#toc-search').value.trim().toLocaleLowerCase();let n=0;document.querySelectorAll('#toc-links a').forEach(a=>{a.hidden=!a.dataset.title.toLocaleLowerCase().includes(q);if(!a.hidden)n++;});$('#nav-hint').textContent=q?(n?'일치하는 장 '+n+'개':'일치하는 장 제목이 없습니다.'):'장 제목으로 찾아갑니다.';});
+function download(name,contents,type){const blob=new Blob([contents],{type});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),2500);}
+$('#source-download').addEventListener('click',()=>download(sourceData[activeDoc].file,sourceData[activeDoc].markdown,'text/markdown;charset=utf-8'));
+$('#print-doc').addEventListener('click',()=>window.print());
+async function copy(text){try{if(navigator.clipboard&&navigator.clipboard.writeText){await navigator.clipboard.writeText(text);return true;}}catch(e){}const t=document.createElement('textarea');t.value=text;t.style.position='fixed';t.style.left='-9999px';document.body.appendChild(t);t.select();let ok=false;try{ok=document.execCommand('copy');}catch(e){}t.remove();return ok;}
+document.querySelectorAll('.copy-code').forEach(b=>b.addEventListener('click',async()=>{const text=b.parentElement.querySelector('pre').textContent;const ok=await copy(text);if(ok){b.textContent='복사됨';notify('텍스트를 복사했습니다.');setTimeout(()=>b.textContent='복사',1800);}else{const range=document.createRange();range.selectNodeContents(b.parentElement.querySelector('pre'));const sel=window.getSelection();sel.removeAllRanges();sel.addRange(range);notify('자동 복사가 제한됩니다. 선택된 텍스트를 직접 복사하세요.');}}));
+showDoc(config.initial,false);useHash();
+})();
+</script>
+<script>
+(() => {
+'use strict';
+const KEY = 'vide-docs-review-mode';
+const AUTHOR_KEY = 'vide-docs-review-author';
+const sel = document.getElementById('review-mode');
+if (!sel) return;
+const authorSel = document.getElementById('review-author');
+let mode = 'marked';
+let author = 'all';
+try { mode = localStorage.getItem(KEY) || 'marked'; } catch (e) {}
+try { author = localStorage.getItem(AUTHOR_KEY) || 'all'; } catch (e) {}
+if (!['marked', 'original', 'accepted'].includes(mode)) mode = 'marked';
+if (!authorSel || !Array.from(authorSel.options).some(o => o.value === author)) author = 'all';
+const matches = el => author === 'all' || el.dataset.reviewAgent === author;
+const decorate = () => {
+const query = (document.getElementById('toc-search')?.value || '').trim().toLocaleLowerCase();
+let visible = 0;
+document.querySelectorAll('#toc-links a').forEach(a => {
+  const section = document.getElementById(decodeURIComponent(a.hash.slice(1)));
+  if (!section) return;
+  a.hidden = !a.dataset.title.toLocaleLowerCase().includes(query) || (section.classList.contains('review-appendix') && (mode !== 'marked' || !matches(section)));
+  if (!a.hidden) visible += 1;
+  const n = Array.from(section.querySelectorAll('.review-label[data-rid]')).filter(matches).length;
+  if (n && mode === 'marked') a.dataset.reviews = String(n); else delete a.dataset.reviews;
+});
+if (query) document.getElementById('nav-hint').textContent = visible ? `일치하는 장 ${visible}개` : '일치하는 장 제목이 없습니다.';
+};
+const apply = () => {
+  sel.value = mode;
+  if (authorSel) { authorSel.value = author; authorSel.disabled = mode !== 'marked'; }
+  document.body.classList.toggle('review-original', mode === 'original');
+  document.body.classList.toggle('review-accepted', mode === 'accepted');
+  document.querySelectorAll('blockquote.review, .review-appendix').forEach(el => { el.hidden = !matches(el); });
+  decorate();
+  try { localStorage.setItem(KEY, mode); localStorage.setItem(AUTHOR_KEY, author); } catch (e) {}
+};
+apply();
+const toc = document.getElementById('toc-links');
+if (toc) new MutationObserver(decorate).observe(toc, { childList: true });
+document.getElementById('toc-search')?.addEventListener('input', decorate);
+sel.addEventListener('change', () => { mode = sel.value; apply(); });
+if (authorSel) authorSel.addEventListener('change', () => { author = authorSel.value; apply(); });
+const revealHash = () => {
+  let id;
+  try { id = decodeURIComponent(location.hash.slice(1)); } catch (e) { return; }
+  const target = document.getElementById(id);
+  if (!target || !target.dataset.reviewAgent) return;
+  mode = 'marked';
+  if (!matches(target)) author = 'all';
+  apply();
+  target.scrollIntoView({ block: 'center' });
+};
+window.addEventListener('hashchange', revealHash);
+revealHash();
+})();
+</script>
 </body></html>
