@@ -1,0 +1,17 @@
+{
+  "name": "vino-ide-docs",
+  "version": "1.0.0",
+  "description": "md -> html renderer for the Vino-IDE planning documents",
+  "scripts": {
+    "build": "node build.mjs",
+    "check": "node build.mjs --check",
+    "watch": "node build.mjs --watch",
+    "postinstall": "node -e \"require('child_process').spawnSync('git',['config','core.hooksPath','.githooks'],{stdio:'ignore'})\""
+  },
+  "license": "MIT",
+  "type": "module",
+  "private": true,
+  "dependencies": {
+    "markdown-it": "^14.3.2"
+  }
+}

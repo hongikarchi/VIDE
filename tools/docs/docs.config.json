@@ -1,0 +1,18 @@
+{
+  "brand": "DRAWING IDE",
+  "siteTitle": "Drawing IDE",
+  "index": "index.html",
+  "next": { "title": "docs/specs/SPEC-00-common.md", "desc": "공통 상태·권한·개입·참조 규칙" },
+  "docs": [
+    { "id": "prd", "src": "docs/PRD.md", "tab": "PRD", "eyebrow": "PRODUCT REQUIREMENTS", "description": "제품 기준 · 플랫폼 MVP", "tableLabel": "PRD" },
+    { "id": "guide", "src": "DEVELOPMENT_GUIDE.md", "tab": "개발 가이드", "eyebrow": "DEVELOPMENT GUIDE", "description": "기능 명세에서 구현·검수까지", "tableLabel": "가이드", "widget": "guide-workspace", "widgetAfterSection": "12" },
+    { "id": "design", "src": "Design.md", "tab": "Design", "eyebrow": "DESIGN PRINCIPLES", "description": "시각·상호작용 기준 · SPEC 후 구체화", "tableLabel": "Design" }
+  ],
+  "discover": [
+    { "dir": "docs/specs", "eyebrow": "SPEC", "tableLabel": "SPEC" },
+    { "dir": "docs/specs/hosts", "eyebrow": "HOST SUPPORT", "tableLabel": "지원표" },
+    { "dir": "docs/plans", "eyebrow": "PLAN", "tableLabel": "PLAN" },
+    { "dir": "docs/tdd", "eyebrow": "VERIFICATION", "tableLabel": "검증" },
+    { "dir": "docs/decisions", "eyebrow": "DECISION RECORD", "tableLabel": "ADR" }
+  ]
+}

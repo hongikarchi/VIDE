@@ -1,0 +1,15 @@
+#!/bin/sh
+# Regenerate the HTML renders from Markdown before every commit (AI.md §4).
+# Activate once per clone:  git config core.hooksPath .githooks
+#   (tools/docs `npm install` runs this for you via postinstall)
+cd "$(git rev-parse --show-toplevel)" || exit 1
+if [ ! -d tools/docs/node_modules ]; then
+  echo "[docs] tools/docs/node_modules 가 없습니다. 먼저:  npm --prefix tools/docs install" >&2
+  exit 1
+fi
+changed=$(node tools/docs/build.mjs --quiet) || { echo "[docs] HTML 재생성 실패" >&2; exit 1; }
+if [ -n "$changed" ]; then
+  echo "$changed" | while IFS= read -r f; do [ -n "$f" ] && git add -- "$f"; done
+  echo "[docs] MD에서 재생성한 HTML을 이 커밋에 포함했습니다: $(echo "$changed" | tr '\n' ' ')"
+fi
+exit 0
