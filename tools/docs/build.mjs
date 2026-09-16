@@ -87,12 +87,15 @@ function makeRenderer(tableLabel) {
 const LABEL_RE = /<strong>\[검토 · ([^·\]]+?) · (R-\d+) · (높음|중간|낮음)\]<\/strong>/g;
 function markReviews(html) {
   let n = 0;
+  const authors = {};
   html = html.replace(LABEL_RE, (_, agent, rid, sev) => {
     n += 1;
-    return `<strong class="review-label" data-rid="${rid}"><span class="review-agent">${esc(agent.trim())}</span><span class="review-id">${rid}</span><span class="review-sev" data-sev="${sev}">${sev}</span></strong>`;
+    const name = agent.trim().toLowerCase();
+    authors[name] = (authors[name] || 0) + 1;
+    return `<strong class="review-label" data-rid="${rid}" data-review-agent="${esc(name)}" id="review-${rid}"><span class="review-agent">${esc(agent.trim())}</span><span class="review-id">${rid}</span><span class="review-sev" data-sev="${sev}">${sev}</span></strong>`;
   });
-  html = html.replace(/<blockquote>(\s*<p><strong class="review-label" data-rid="(R-\d+)")/g, '<blockquote class="review" id="review-$2">$1');
-  return { html, count: n };
+  html = html.replace(/<blockquote>(\s*<p><strong class="review-label" data-rid="R-\d+" data-review-agent="([^"]+)")/g, '<blockquote class="review" data-review-agent="$2">$1');
+  return { html, count: n, authors };
 }
 
 // ---------------------------------------------------------------- page assembly
@@ -137,12 +140,14 @@ function buildDoc(doc, allDocs) {
 
   const titleHtml = markReviews(title ? r.renderer.renderInline(title.children, r.options, {}) : esc(meta.title || doc.tab || doc.id)).html;
   const titleText = (title ? title.content : (meta.title || doc.id)).replace(/<[^>]+>/g, '');
-  const heroHtml = markReviews(renderToks(hero)).html;
+  const heroMarked = markReviews(renderToks(hero));
+  const heroHtml = heroMarked.html;
   const label = doc.tab || meta.title || titleText;
   const description = doc.description || meta.description || '';
 
-  let reviewTotal = 0;
-  let appendixId = null;
+  let reviewTotal = heroMarked.count;
+  const authors = { ...heroMarked.authors };
+  const appendices = {};
   const sectionHtml = sections.map((s, idx) => {
     const text = s.headingInline.content;
     const m = sectionMeta(text, idx);
@@ -150,13 +155,15 @@ function buildDoc(doc, allDocs) {
     const headingInner = r.renderer.renderInline(s.headingInline.children, r.options, {}).replace(/^\d+\.\s*/, '');
     const bodyMarked = markReviews(renderToks(s.body));
     reviewTotal += bodyMarked.count;
-    const isAppendix = /^부록 ·.*검토 요약/.test(text.trim());
-    if (isAppendix) appendixId = id;
+    for (const [name, count] of Object.entries(bodyMarked.authors)) authors[name] = (authors[name] || 0) + count;
+    const appendix = /^부록 ·\s*(.*?)\s+검토 요약/.exec(text.trim());
+    const isAppendix = Boolean(appendix);
+    const appendixAgent = appendix ? appendix[1].trim().toLowerCase() : '';
+    if (isAppendix) appendices[appendixAgent] = id;
     let widget = '';
     if (doc.widget && String(doc.widgetAfterSection) === m.num) widget = asset(path.join('partials', `${doc.widget}.html`));
-    return `<section class="doc-section${isAppendix ? ' review-appendix' : ''}" id="${id}"><h2><span aria-hidden="true" class="section-num">${m.display} /</span> ${markReviews(headingInner).html}</h2>\n${bodyMarked.html}${widget}</section>`;
+    return `<section class="doc-section${isAppendix ? ' review-appendix' : ''}" id="${id}"${isAppendix ? ` data-review-agent="${esc(appendixAgent)}"` : ''}><h2><span aria-hidden="true" class="section-num">${m.display} /</span> ${markReviews(headingInner).html}</h2>\n${bodyMarked.html}${widget}</section>`;
   }).join('');
-  reviewTotal += markReviews(renderToks(hero)).count; // hero comments count too
 
   const outDir = path.dirname(path.join(ROOT, doc.out));
   const rel = (target) => posix(path.relative(outDir, path.join(ROOT, target))) || '.';
@@ -164,9 +171,9 @@ function buildDoc(doc, allDocs) {
     ? `<a class="doc-tab active" aria-current="page" data-doc="${d.id}" href="#${d.id}">${esc(d.tab)}</a>`
     : `<a class="doc-tab" href="${esc(rel(d.out))}">${esc(d.tab)}</a>`)).join('');
   const statusPill = meta.status ? `<span class="pill">${esc(String(meta.status).toUpperCase())}${meta.version ? ' · v' + esc(String(meta.version)) : ''}</span>` : '';
-  const reviewPill = reviewTotal ? `<a class="pill review-pill" href="#${appendixId || ''}" title="검토 요약 부록으로 이동">CLAUDE 첨삭 ${reviewTotal}건</a>` : '';
-  const legend = reviewTotal ? `<p class="review-legend"><span><ins>초록</ins> 추가·교체 제안</span><span><del>빨강</del> 삭제·교체 대상</span><span><strong class="review-label"><span class="review-id">R-NN</span></strong> 검토 코멘트 (파란 상자)</span><span>상단 '첨삭' 메뉴로 원문·수락 후 보기 전환</span></p>` : '';
-  const reviewSelect = reviewTotal ? `<label class="review-select">첨삭 <select id="review-mode" aria-label="첨삭 보기 방식"><option value="marked">표시</option><option value="original">원문만</option><option value="accepted">수락 후</option></select></label>` : '';
+  const reviewPill = Object.entries(authors).map(([name, count]) => `<a class="pill review-pill" data-review-agent="${esc(name)}" href="#${appendices[name] || doc.id}" title="${esc(name.toUpperCase())} 검토 요약으로 이동">${esc(name.toUpperCase())} 검토 ${count}건</a>`).join('');
+  const legend = reviewTotal ? `<div class="review-legend"><p><span><ins>초록</ins> 추가·교체 제안</span><span><del>빨강</del> 삭제·교체 대상</span><span>CLAUDE: 파란 상자 · CODEX: 보라 상자</span></p><p>검토자 필터는 코멘트·부록만 바꿉니다. ‘인라인 제안 미리보기’는 코멘트의 대안까지 합친 최종본이 아닙니다. 보기 전환은 MD 수정·수락·승인을 하지 않습니다.</p></div>` : '';
+  const reviewSelect = reviewTotal ? `<label class="review-select">첨삭 <select id="review-mode" aria-label="첨삭 보기 방식"><option value="marked">표시</option><option value="original">원문만</option><option value="accepted">인라인 제안 미리보기</option></select></label>${Object.keys(authors).length > 1 ? `<label class="review-select">검토자 <select id="review-author" aria-label="검토자 필터"><option value="all">모두</option>${Object.keys(authors).map(name => `<option value="${esc(name)}">${esc(name.toUpperCase())}</option>`).join('')}</select></label>` : ''}` : '';
   const sourceData = { [doc.id]: { label, file: path.basename(doc.src), markdown: raw } };
   const json = (o) => JSON.stringify(o).replace(/</g, '\\u003c');
 
@@ -195,7 +202,8 @@ function buildIndex(allDocs, stats) {
   const rows = allDocs.map((d) => {
     const s = stats[d.id];
     const mtime = fs.statSync(path.join(ROOT, d.src)).mtime.toISOString().slice(0, 10);
-    return `<tr><td><a href="${esc(rel(d.out))}">${esc(s.titleText)}</a><br><span class="micro">${esc(d.src)}</span></td><td>${esc(d.eyebrow || '')}</td><td>${s.chapters}</td><td>${s.reviews ? `<a class="review-pill pill" href="${esc(rel(d.out))}#${s.appendixId || ''}">${s.reviews}건</a>` : '—'}</td><td>${mtime}</td></tr>`;
+    const reviewLinks = Object.entries(s.authors).map(([name, count]) => `<a class="review-pill pill" data-review-agent="${esc(name)}" href="${esc(rel(d.out))}#${s.appendices[name] || d.id}">${esc(name.toUpperCase())} ${count}건</a>`).join('<br>');
+    return `<tr><td><a href="${esc(rel(d.out))}">${esc(s.titleText)}</a><br><span class="micro">${esc(d.src)}</span></td><td>${esc(d.eyebrow || '')}</td><td>${s.chapters}</td><td>${reviewLinks || '—'}</td><td>${mtime}</td></tr>`;
   }).join('\n');
   const tabs = allDocs.filter((d) => d.tab).map((d) => `<a class="doc-tab" href="${esc(rel(d.out))}">${esc(d.tab)}</a>`).join('');
   return `<!doctype html>
@@ -206,7 +214,7 @@ ${asset('review.css')}
 <!-- GENERATED FILE — run: npm --prefix tools/docs run build -->
 <header class="topbar"><a class="brand" href="${esc(cfg.index)}" aria-label="${esc(cfg.siteTitle)} 문서 모음"><b>D.</b><span>${esc(cfg.brand)}</span></a><nav class="doc-tabs" aria-label="문서 선택">${tabs}</nav><div class="top-actions"></div></header>
 <main class="index-main"><span class="eyebrow">PLANNING DOCUMENTS</span><h1>${esc(cfg.siteTitle)} 문서 목록</h1><p class="micro">MD가 원본이고 HTML은 <code>tools/docs/build.mjs</code>가 생성한다 (AI.md §4). 첨삭 표기 규칙은 AI.md §5.</p>
-<div class="table-scroll" role="region" tabindex="0" aria-label="문서 목록"><table><thead><tr><th>문서</th><th>종류</th><th>장</th><th>Claude 첨삭</th><th>MD 수정일</th></tr></thead><tbody>
+<div class="table-scroll" role="region" tabindex="0" aria-label="문서 목록"><table><thead><tr><th>문서</th><th>종류</th><th>장</th><th>검토 의견</th><th>MD 수정일</th></tr></thead><tbody>
 ${rows}
 </tbody></table></div>
 <p class="micro">다음 작성할 문서: <b>${esc(cfg.next.title)}</b> — ${esc(cfg.next.desc)}</p>
@@ -235,9 +243,13 @@ function build() {
     const html = buildDoc(d, docs);
     const chapters = (html.match(/<section class="doc-section/g) || []).length;
     const reviews = (html.match(/class="review-label" data-rid=/g) || []).length;
-    const appendixId = (/<section class="doc-section review-appendix" id="([^"]+)"/.exec(html) || [])[1] || null;
-    const titleText = (/<h1 tabindex="-1">([\s\S]*?)<\/h1>/.exec(html) || ['', d.id])[1].replace(/<[^>]+>/g, '');
-    stats[d.id] = { chapters, reviews, appendixId, titleText };
+    const authors = {};
+    for (const m of html.matchAll(/class="review-label" data-rid="R-\d+" data-review-agent="([^"]+)"/g)) authors[m[1]] = (authors[m[1]] || 0) + 1;
+    const appendices = {};
+    for (const m of html.matchAll(/<section class="doc-section review-appendix" id="([^"]+)" data-review-agent="([^"]+)"/g)) appendices[m[2]] = m[1];
+    const raw = fs.readFileSync(path.join(ROOT, d.src), 'utf8');
+    const titleText = parseFrontMatter(raw).meta.title || d.tab || d.id;
+    stats[d.id] = { chapters, reviews, authors, appendices, titleText };
     if (writeIfChanged(d.out, html)) changed.push(d.out);
   }
   if (writeIfChanged(cfg.index, buildIndex(docs, stats))) changed.push(cfg.index);

@@ -1,8 +1,8 @@
-/* ---- Claude 첨삭 표기 (AI.md §5) ---------------------------------------
+/* ---- 작성자별 첨삭 표기 (AI.md §5) -------------------------------------
    ins  = 추가·교체 제안 (초록)   del = 삭제·교체 대상 (빨강 취소선)
    blockquote.review = 검토 코멘트 (파란 상자)   .review-appendix = 검토 요약 부록
    body.review-original  → 원문만 (제안·코멘트 숨김)
-   body.review-accepted  → 모든 제안을 수락한 모습 (del·코멘트 숨김)
+   body.review-accepted  → 인라인 제안 미리보기 (코멘트 대안은 적용하지 않음)
 ------------------------------------------------------------------------- */
 ins{background:#dff3e4;color:#17512a;text-decoration:none;border-bottom:2px solid #4f9d63;padding:0 3px;border-radius:2px}
 del{background:#fbe4e0;color:#8f3324;text-decoration:line-through;text-decoration-color:#c9573f;text-decoration-thickness:1.5px;padding:0 3px;border-radius:2px}
@@ -25,6 +25,21 @@ blockquote.review p+p{margin-top:9px;padding-top:9px;border-top:1px dashed #c3d2
 .review-legend span{margin-right:12px;white-space:nowrap}
 .review-select{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);white-space:nowrap}
 .review-select select{padding:7px 9px;border:1px solid var(--line);border-radius:4px;background:var(--paper);font-size:12px}
+blockquote.review[data-review-agent="codex"]{border-left-color:#7250a0;background:#f4effa;color:#352b46}
+[data-review-agent="codex"] .review-agent{color:#7250a0}
+[data-review-agent="codex"] .review-id{background:#7250a0}
+.review-pill[data-review-agent="codex"]{border-color:#7250a0;color:#7250a0}
+.review-pill[data-review-agent="codex"]:hover{background:#f4effa}
+.review-appendix[data-review-agent="codex"]{border-top-color:#7250a0}
+.review-appendix[data-review-agent="codex"] h2 .section-num{color:#7250a0}
+.review-label[id]{scroll-margin-top:110px}
+.review-label[id]:target{outline:2px solid currentColor;outline-offset:4px}
+.review-legend p{margin:5px 0}
+.review-select select:disabled{opacity:.6}
+.top-actions{flex-wrap:wrap}
+[hidden]{display:none!important}
+@media(max-width:1100px){.topbar{height:auto;min-height:68px;flex-wrap:wrap;padding-top:8px;padding-bottom:8px;gap:8px 18px}.doc-tabs{height:34px;flex:1;justify-content:flex-end}.top-actions{flex-basis:100%;justify-content:flex-end}.review-select select{max-width:185px}}
+@media(min-width:821px) and (max-width:1100px){.toc-shell{top:135px;max-height:calc(100vh - 155px)}}
 .toc-links a[data-reviews]{display:flex;justify-content:space-between;gap:8px;align-items:center}
 .toc-links a[data-reviews]::after{content:attr(data-reviews);flex:none;min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:#3b6fd6;color:#fff;font-size:10px;line-height:18px;text-align:center}
 body.review-original ins,body.review-original blockquote.review,body.review-original .review-appendix,body.review-original .review-legend{display:none}

@@ -17,3 +17,5 @@ npm --prefix tools/docs run watch      # MD 저장 때마다 재생성
 파일: `docs.config.json`(문서 목록·탭·설명·자동 탐색 폴더) · `theme.css`(기존 스타일 그대로) · `review.css`(첨삭 색상, AI.md §5) · `reader.js`(목차·검색·복사·원문 다운로드·가이드 메모 위젯) · `review.js`(첨삭 보기 전환, 목차 건수) · `partials/guide-workspace.html`(DEVELOPMENT_GUIDE §12의 개인 메모 위젯, localStorage 키 `drawing-ide-planning-notes` 유지).
 
 새 문서는 `docs/specs/`, `docs/plans/`, `docs/tdd/`, `docs/decisions/`에 두면 자동으로 탐색되어 같은 폴더에 `.html`이 생긴다. 탭에 올리려면 `docs.config.json`의 `docs`에 추가한다.
+
+검토 화면은 MD의 작성자 라벨을 기준으로 건수·부록 링크를 구분한다. Claude는 파란 상자, Codex는 보라 상자이며 검토자 필터로 코멘트·부록을 골라 볼 수 있다. R-NN은 문서 안에서 고유하게 부여하고 다른 의견은 `#review-R-NN`으로 참조한다. 원문만/인라인 제안 미리보기는 표시 모드일 뿐 MD 수락·수정·승인을 하지 않는다. 인라인 미리보기는 기존 `ins`/`del`만 적용한 모습이며 코멘트에 적힌 대안을 자동 병합하지 않는다.

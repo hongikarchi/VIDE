@@ -15,11 +15,11 @@ main{min-width:0;max-width:1040px;padding-bottom:70px}.doc-hero{padding:55px 0 3
 @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}*{transition:none!important}}
 @media print{@page{margin:15mm}.topbar,.toc-shell,.skip,.copy-code,.toast,.review-workspace,.doc-footer{display:none!important}.layout{display:block;padding:0;max-width:none}main{max-width:none;padding:0}.doc-hero{padding:0 0 18px}.doc-hero h1{font-size:27px}.doc-section{padding:22px 0;break-inside:auto}.doc-section h2{font-size:21px;break-after:avoid}.doc-section h3{font-size:16px;break-after:avoid}.doc-section p{font-size:11px;line-height:1.75}.table-scroll{overflow:visible;break-inside:auto}table{min-width:0!important;font-size:9px;table-layout:fixed}td,th{min-width:0;font-size:9px;word-break:normal;padding:7px}tr{break-inside:avoid}.code-frame pre{white-space:pre-wrap;max-height:none;font-size:9px;padding:16px;overflow:visible;word-break:break-word}.code-label{display:none}.hero-meta blockquote p{font-size:14px}}
 
-/* ---- Claude 첨삭 표기 (AI.md §5) ---------------------------------------
+/* ---- 작성자별 첨삭 표기 (AI.md §5) -------------------------------------
    ins  = 추가·교체 제안 (초록)   del = 삭제·교체 대상 (빨강 취소선)
    blockquote.review = 검토 코멘트 (파란 상자)   .review-appendix = 검토 요약 부록
    body.review-original  → 원문만 (제안·코멘트 숨김)
-   body.review-accepted  → 모든 제안을 수락한 모습 (del·코멘트 숨김)
+   body.review-accepted  → 인라인 제안 미리보기 (코멘트 대안은 적용하지 않음)
 ------------------------------------------------------------------------- */
 ins{background:#dff3e4;color:#17512a;text-decoration:none;border-bottom:2px solid #4f9d63;padding:0 3px;border-radius:2px}
 del{background:#fbe4e0;color:#8f3324;text-decoration:line-through;text-decoration-color:#c9573f;text-decoration-thickness:1.5px;padding:0 3px;border-radius:2px}
@@ -42,6 +42,21 @@ blockquote.review p+p{margin-top:9px;padding-top:9px;border-top:1px dashed #c3d2
 .review-legend span{margin-right:12px;white-space:nowrap}
 .review-select{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);white-space:nowrap}
 .review-select select{padding:7px 9px;border:1px solid var(--line);border-radius:4px;background:var(--paper);font-size:12px}
+blockquote.review[data-review-agent="codex"]{border-left-color:#7250a0;background:#f4effa;color:#352b46}
+[data-review-agent="codex"] .review-agent{color:#7250a0}
+[data-review-agent="codex"] .review-id{background:#7250a0}
+.review-pill[data-review-agent="codex"]{border-color:#7250a0;color:#7250a0}
+.review-pill[data-review-agent="codex"]:hover{background:#f4effa}
+.review-appendix[data-review-agent="codex"]{border-top-color:#7250a0}
+.review-appendix[data-review-agent="codex"] h2 .section-num{color:#7250a0}
+.review-label[id]{scroll-margin-top:110px}
+.review-label[id]:target{outline:2px solid currentColor;outline-offset:4px}
+.review-legend p{margin:5px 0}
+.review-select select:disabled{opacity:.6}
+.top-actions{flex-wrap:wrap}
+[hidden]{display:none!important}
+@media(max-width:1100px){.topbar{height:auto;min-height:68px;flex-wrap:wrap;padding-top:8px;padding-bottom:8px;gap:8px 18px}.doc-tabs{height:34px;flex:1;justify-content:flex-end}.top-actions{flex-basis:100%;justify-content:flex-end}.review-select select{max-width:185px}}
+@media(min-width:821px) and (max-width:1100px){.toc-shell{top:135px;max-height:calc(100vh - 155px)}}
 .toc-links a[data-reviews]{display:flex;justify-content:space-between;gap:8px;align-items:center}
 .toc-links a[data-reviews]::after{content:attr(data-reviews);flex:none;min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:#3b6fd6;color:#fff;font-size:10px;line-height:18px;text-align:center}
 body.review-original ins,body.review-original blockquote.review,body.review-original .review-appendix,body.review-original .review-legend{display:none}
@@ -54,13 +69,14 @@ body.review-accepted .toc-links a[data-reviews]::after{display:none}
 
 .index-main{max-width:1040px;margin:auto;padding:55px 30px 70px}.index-main h1{font-size:34px;letter-spacing:-.05em;margin:0 0 6px}.index-main .micro{font-size:11px;color:var(--muted)}.index-main table td{vertical-align:top}</style></head><body>
 <!-- GENERATED FILE — run: npm --prefix tools/docs run build -->
-<header class="topbar"><a class="brand" href="index.html" aria-label="Drawing IDE 문서 모음"><b>D.</b><span>DRAWING IDE</span></a><nav class="doc-tabs" aria-label="문서 선택"><a class="doc-tab" href="docs/PRD.html">PRD</a><a class="doc-tab" href="DEVELOPMENT_GUIDE.html">개발 가이드</a><a class="doc-tab" href="Design.html">Design</a></nav><div class="top-actions"></div></header>
+<header class="topbar"><a class="brand" href="index.html" aria-label="Drawing IDE 문서 모음"><b>D.</b><span>DRAWING IDE</span></a><nav class="doc-tabs" aria-label="문서 선택"><a class="doc-tab" href="docs/PRD.html">PRD</a><a class="doc-tab" href="DEVELOPMENT_GUIDE.html">개발 가이드</a><a class="doc-tab" href="Design.html">Design</a><a class="doc-tab" href="AI.html">AI 규약</a></nav><div class="top-actions"></div></header>
 <main class="index-main"><span class="eyebrow">PLANNING DOCUMENTS</span><h1>Drawing IDE 문서 목록</h1><p class="micro">MD가 원본이고 HTML은 <code>tools/docs/build.mjs</code>가 생성한다 (AI.md §4). 첨삭 표기 규칙은 AI.md §5.</p>
-<div class="table-scroll" role="region" tabindex="0" aria-label="문서 목록"><table><thead><tr><th>문서</th><th>종류</th><th>장</th><th>Claude 첨삭</th><th>MD 수정일</th></tr></thead><tbody>
-<tr><td><a href="docs/PRD.html">Integrated Drawing Environment · PRDDrawing IDE · PRD</a><br><span class="micro">docs/PRD.md</span></td><td>PRODUCT REQUIREMENTS</td><td>20</td><td><a class="review-pill pill" href="docs/PRD.html#prd-section-x19">20건</a></td><td>2026-09-16</td></tr>
-<tr><td><a href="DEVELOPMENT_GUIDE.html">Drawing IDE · 개발 가이드</a><br><span class="micro">DEVELOPMENT_GUIDE.md</span></td><td>DEVELOPMENT GUIDE</td><td>15</td><td><a class="review-pill pill" href="DEVELOPMENT_GUIDE.html#guide-section-x14">15건</a></td><td>2026-09-16</td></tr>
-<tr><td><a href="Design.html">Drawing IDE · Design.md</a><br><span class="micro">Design.md</span></td><td>DESIGN PRINCIPLES</td><td>14</td><td><a class="review-pill pill" href="Design.html#design-section-x13">16건</a></td><td>2026-09-16</td></tr>
+<div class="table-scroll" role="region" tabindex="0" aria-label="문서 목록"><table><thead><tr><th>문서</th><th>종류</th><th>장</th><th>검토 의견</th><th>MD 수정일</th></tr></thead><tbody>
+<tr><td><a href="docs/PRD.html">Drawing IDE 제품 요구사항</a><br><span class="micro">docs/PRD.md</span></td><td>PRODUCT REQUIREMENTS</td><td>21</td><td><a class="review-pill pill" data-review-agent="claude" href="docs/PRD.html#prd-section-x19">CLAUDE 20건</a><br><a class="review-pill pill" data-review-agent="codex" href="docs/PRD.html#prd-section-x20">CODEX 24건</a></td><td>2026-09-16</td></tr>
+<tr><td><a href="DEVELOPMENT_GUIDE.html">Drawing IDE 개발 가이드</a><br><span class="micro">DEVELOPMENT_GUIDE.md</span></td><td>DEVELOPMENT GUIDE</td><td>16</td><td><a class="review-pill pill" data-review-agent="codex" href="DEVELOPMENT_GUIDE.html#guide-section-x15">CODEX 18건</a><br><a class="review-pill pill" data-review-agent="claude" href="DEVELOPMENT_GUIDE.html#guide-section-x14">CLAUDE 15건</a></td><td>2026-09-16</td></tr>
+<tr><td><a href="Design.html">Drawing IDE 시각·상호작용 기준</a><br><span class="micro">Design.md</span></td><td>DESIGN PRINCIPLES</td><td>15</td><td><a class="review-pill pill" data-review-agent="claude" href="Design.html#design-section-x13">CLAUDE 16건</a><br><a class="review-pill pill" data-review-agent="codex" href="Design.html#design-section-x14">CODEX 19건</a></td><td>2026-09-16</td></tr>
+<tr><td><a href="AI.html">AI 규약</a><br><span class="micro">AI.md</span></td><td>AGENT CONVENTIONS</td><td>12</td><td><a class="review-pill pill" data-review-agent="codex" href="AI.html#ai-section-x11">CODEX 6건</a></td><td>2026-09-16</td></tr>
 </tbody></table></div>
-<p class="micro">다음 작성할 문서: <b>docs/specs/SPEC-00-common.md</b> — 공통 상태·권한·개입·참조 규칙</p>
+<p class="micro">다음 작성할 문서: <b>기준 문서 검토·확정</b> — Claude·Codex 의견 비교 → 사용자 판단 → 합의 후 SPEC·PLAN</p>
 <footer class="doc-footer"><span>DRAWING IDE / PLANNING DOCUMENTS</span><span>문서 열람용 · 실제 CAD/BIM 지원은 구현·검증 후 선언</span></footer></main>
 </body></html>

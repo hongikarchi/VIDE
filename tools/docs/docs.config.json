@@ -2,11 +2,12 @@
   "brand": "DRAWING IDE",
   "siteTitle": "Drawing IDE",
   "index": "index.html",
-  "next": { "title": "docs/specs/SPEC-00-common.md", "desc": "공통 상태·권한·개입·참조 규칙" },
+  "next": { "title": "기준 문서 검토·확정", "desc": "Claude·Codex 의견 비교 → 사용자 판단 → 합의 후 SPEC·PLAN" },
   "docs": [
     { "id": "prd", "src": "docs/PRD.md", "tab": "PRD", "eyebrow": "PRODUCT REQUIREMENTS", "description": "제품 기준 · 플랫폼 MVP", "tableLabel": "PRD" },
     { "id": "guide", "src": "DEVELOPMENT_GUIDE.md", "tab": "개발 가이드", "eyebrow": "DEVELOPMENT GUIDE", "description": "기능 명세에서 구현·검수까지", "tableLabel": "가이드", "widget": "guide-workspace", "widgetAfterSection": "12" },
-    { "id": "design", "src": "Design.md", "tab": "Design", "eyebrow": "DESIGN PRINCIPLES", "description": "시각·상호작용 기준 · SPEC 후 구체화", "tableLabel": "Design" }
+    { "id": "design", "src": "Design.md", "tab": "Design", "eyebrow": "DESIGN PRINCIPLES", "description": "시각·상호작용 기준 · SPEC 후 구체화", "tableLabel": "Design" },
+    { "id": "ai", "src": "AI.md", "tab": "AI 규약", "eyebrow": "AGENT CONVENTIONS", "description": "폴더·문서·AI 작업 규약 · 0.3 재검토", "tableLabel": "AI" }
   ],
   "discover": [
     { "dir": "docs/specs", "eyebrow": "SPEC", "tableLabel": "SPEC" },
