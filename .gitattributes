@@ -1,0 +1,13 @@
+# Keep text files LF in the repo; Windows checkouts get LF too (the docs are LF today).
+* text=auto eol=lf
+
+# Binary assets
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.pdf binary
+*.3dm binary
+*.dwg binary
+*.rvt binary

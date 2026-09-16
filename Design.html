@@ -1,0 +1,265 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="description" content="Drawing IDE의 제품 요구사항, 개발 진행 가이드와 디자인 기준."><title>Drawing IDE · Design</title><style>
+:root{--ink:#292c2d;--muted:#626b6e;--line:#e1e3e1;--soft:#f5f5f1;--coral:#d97660;--paper:#fff;--font:"Pretendard","Noto Sans KR","Malgun Gothic",Arial,sans-serif}
+*{box-sizing:border-box}html{scroll-behavior:smooth;scroll-padding-top:92px}body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--font);letter-spacing:-.025em}a{color:inherit;text-underline-offset:4px}button,input,textarea,select{font:inherit;color:inherit}button{cursor:pointer;border:1px solid var(--line);border-radius:4px;background:var(--paper);padding:10px 15px;line-height:1.3}button:hover{background:var(--soft)}button:disabled{cursor:default;opacity:.6}button.primary{background:var(--ink);color:#fff;border-color:var(--ink)}button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible{outline:3px solid var(--coral);outline-offset:3px}textarea{resize:vertical}::selection{background:#f2d7ce}[hidden]{display:none!important}
+.skip{position:fixed;top:-80px;left:20px;z-index:100;background:white;padding:12px}.skip:focus{top:10px}
+.topbar{height:68px;position:sticky;top:0;z-index:30;border-bottom:1px solid var(--line);background:#fffffff7;display:flex;align-items:center;justify-content:space-between;gap:24px;padding:0 max(24px,calc((100vw - 1450px)/2))}.brand{text-decoration:none;display:flex;align-items:center;gap:15px;white-space:nowrap}.brand b{font-size:29px;letter-spacing:-.08em}.brand span{border-left:1px solid var(--line);padding-left:15px;font-size:11px;letter-spacing:.08em}.doc-tabs{display:flex;height:100%;gap:25px;align-items:stretch}.doc-tab{display:flex;align-items:center;position:relative;text-decoration:none;font-size:13px;color:var(--muted);white-space:nowrap}.doc-tab.active{color:var(--ink);font-weight:650}.doc-tab.active:after{content:"";position:absolute;bottom:0;left:0;right:0;height:3px;background:var(--coral)}.top-actions{display:flex;gap:8px}.top-actions button{padding:8px 11px;font-size:12px;white-space:nowrap}
+.layout{max-width:1450px;margin:auto;padding:0 30px;display:grid;grid-template-columns:218px minmax(0,1fr);gap:55px}.toc-shell{align-self:start;position:sticky;top:99px;padding-top:15px;max-height:calc(100vh - 120px)}.eyebrow{font-size:10px;line-height:1.6;letter-spacing:.16em;font-weight:500;color:var(--muted)}.toc-title{display:flex;justify-content:space-between;align-items:center;margin-bottom:15px}.toc-title strong{font-size:12px;font-weight:500}.toc-title span{font-size:10px;color:var(--muted)}#toc-toggle{display:none}.toc-search{width:100%;padding:10px 12px;border:1px solid var(--line);background:var(--paper);border-radius:4px;font-size:12px}.toc-hint{font-size:10px;color:var(--muted);margin:8px 0 15px;line-height:1.6}.toc-links{max-height:calc(100vh - 323px);overflow-y:auto;padding:0 8px 8px 0}.toc-links a{display:block;padding:8px 10px;margin:2px 0;border-left:2px solid transparent;border-radius:0 3px 3px 0;text-decoration:none;font-size:12px;line-height:1.65;color:var(--muted);word-break:keep-all;overflow-wrap:anywhere}.toc-links a:hover{background:var(--soft)}.toc-links a.active{border-color:var(--coral);background:var(--soft);color:var(--ink)}.toc-next{border-top:1px solid var(--line);padding-top:13px;margin-top:14px;font-size:11px;color:var(--muted);line-height:1.7}.toc-next b{font-weight:500;color:var(--ink)}
+main{min-width:0;max-width:1040px;padding-bottom:70px}.doc-hero{padding:55px 0 32px;border-bottom:1px solid var(--line)}.hero-label{display:flex;justify-content:space-between;gap:20px;align-items:center}.doc-hero h1{font-size:clamp(32px,3.15vw,48px);line-height:1.22;letter-spacing:-.065em;font-weight:550;margin:20px 0 18px;max-width:900px;word-break:keep-all;overflow-wrap:anywhere}.doc-description{font-size:14px;color:var(--muted);line-height:1.8;margin:0}.pill{display:inline-block;font-size:10px;letter-spacing:.01em;padding:5px 9px;border:1px solid var(--line);border-radius:3px;white-space:nowrap}.hero-meta{margin-top:22px;font-size:12px;color:var(--muted);line-height:1.9}.hero-meta p{font-size:12px;line-height:1.9;margin:8px 0}.hero-meta strong{font-weight:600}.hero-meta blockquote{margin:25px 0 0;padding:20px 22px;background:var(--soft);border-left:3px solid var(--coral);color:var(--ink)}.hero-meta blockquote p{word-break:keep-all;overflow-wrap:anywhere;font-size:18px;line-height:1.8;letter-spacing:-.03em;margin:0}.doc-section{padding:44px 0;border-bottom:1px solid var(--line);scroll-margin-top:93px;min-width:0}.doc-section h2{font-size:28px;font-weight:550;letter-spacing:-.055em;line-height:1.4;margin:0 0 24px;word-break:keep-all;overflow-wrap:anywhere}.section-num{font-weight:400;color:var(--coral);margin-right:10px;font-size:.75em;letter-spacing:-.02em}.doc-section h3{font-size:19px;font-weight:600;line-height:1.5;margin:32px 0 14px;letter-spacing:-.04em}.doc-section h4{font-size:16px;line-height:1.5;margin:25px 0 12px}.doc-section p{font-size:15px;line-height:1.92;margin:13px 0;word-break:keep-all;overflow-wrap:anywhere}.doc-section strong{font-weight:650}.doc-section ul,.doc-section ol{padding-left:22px;font-size:15px;line-height:1.85}.doc-section li{margin:7px 0}.doc-section blockquote{border-left:3px solid var(--coral);background:var(--soft);margin:23px 0;padding:15px 22px}.doc-section blockquote p{margin:0;font-size:16px;line-height:1.85}.doc-section hr{border:0;border-top:1px solid var(--line);margin:28px 0}.doc-section code:not(pre code){font-family:Consolas,"Liberation Mono",monospace;font-size:.91em;background:var(--soft);padding:2px 5px;border-radius:3px;overflow-wrap:anywhere}
+.table-scroll{overflow-x:auto;overscroll-behavior-x:contain;margin:22px 0;border-top:1px solid var(--ink);border-bottom:1px solid var(--line);width:100%}table{border-collapse:collapse;width:100%;font-size:12.5px;line-height:1.75;table-layout:auto}th,td{padding:13px 14px;vertical-align:top;text-align:left;border-bottom:1px solid var(--line);word-break:keep-all;overflow-wrap:anywhere}th{background:var(--soft);font-weight:600;font-size:11.5px}tr:last-child td{border-bottom:0}td:first-child{font-weight:550;min-width:125px}td{min-width:145px}.table-scroll table:has(th:nth-child(2)){min-width:410px}.table-scroll table:has(th:nth-child(3)){min-width:585px}.table-scroll table:has(th:nth-child(4)){min-width:710px}.table-scroll table:has(th:nth-child(5)){min-width:840px}.code-frame{position:relative;margin:23px 0;border:1px solid var(--line);border-radius:4px;overflow:hidden;background:#f8f8f5}.code-frame pre{margin:0;padding:49px 20px 19px;overflow:auto;max-height:680px;font-family:Consolas,"Liberation Mono",monospace;font-size:12px;line-height:1.9;white-space:pre;letter-spacing:-.01em}.copy-code{position:absolute;top:9px;right:10px;font-size:10px;padding:5px 9px;background:#fff}.code-frame .code-label{position:absolute;left:18px;top:15px;font-size:9px;color:var(--muted);letter-spacing:.12em}.doc-footer{margin-top:30px;display:flex;justify-content:space-between;gap:24px;font-size:10px;color:var(--muted);line-height:1.8}
+.review-workspace{background:var(--soft);border:1px solid var(--line);padding:27px;margin:30px 0 5px;border-radius:4px}.workspace-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:15px}.workspace-heading h3{margin:6px 0 10px}.workspace-heading p{font-size:12px;margin:0 0 20px}.checks{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}.check-group{min-width:0;margin:0;padding:14px 15px;border:1px solid var(--line);background:#fff;border-radius:3px}.check-group legend{padding:0 7px;font-size:12px;font-weight:600}.check-line{display:flex;gap:9px;align-items:flex-start;font-size:12px;line-height:1.7;margin:9px 0;cursor:pointer}.check-line input{accent-color:var(--coral);margin:3px 0 0;flex:none;width:15px;height:15px}.stage-field{display:flex;align-items:center;gap:15px;font-size:12px;margin:26px 0 20px}.stage-field select{background:#fff;border:1px solid var(--line);padding:9px 12px;max-width:100%;font-size:12px;border-radius:3px}.note-grid{display:grid;grid-template-columns:1fr 1fr;gap:18px}.note-field{display:block;min-width:0}.note-field>span{display:block;margin-bottom:8px;font-size:12px}.note-field textarea{width:100%;min-height:96px;border:1px solid var(--line);border-radius:3px;padding:12px;background:#fff;font-size:13px;line-height:1.8}.note-field:last-child{grid-column:1/-1}.note-actions{display:flex;gap:9px;flex-wrap:wrap;margin-top:20px}.note-actions button{font-size:12px}.review-workspace p.save-status{font-size:11px;margin:15px 0 5px;color:var(--muted)}.review-workspace p.micro{font-size:10px;line-height:1.8;color:var(--muted);margin:0}.toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);background:var(--ink);color:white;padding:12px 18px;border-radius:4px;font-size:12px;z-index:60;max-width:90vw;box-shadow:0 5px 24px #0002;line-height:1.6}.empty-nav{font-size:12px;color:var(--muted);padding:15px 5px;line-height:1.7}
+@media(min-width:1600px){.layout{gap:65px}}
+@media(max-width:1100px){.layout{grid-template-columns:188px minmax(0,1fr);gap:30px;padding:0 24px}.topbar{gap:18px}.brand span{display:none}.doc-hero h1{font-size:38px}.doc-section p{font-size:14px}.doc-section h2{font-size:26px}.doc-tabs{gap:23px}.review-workspace{padding:22px}.checks{grid-template-columns:1fr}}
+@media(max-width:820px){html{scroll-padding-top:84px}.topbar{height:60px;padding:0 18px;gap:14px}.brand b{font-size:27px}.doc-tabs{gap:18px}.doc-tab{font-size:12px}.top-actions{gap:6px}.top-actions button{font-size:10px;padding:7px 9px}.layout{display:block;padding:0 22px}.toc-shell{position:relative;top:auto;max-height:none;padding-top:18px;border-bottom:1px solid var(--line)}.toc-title{margin:0;padding-bottom:14px}.toc-title strong{font-size:11px}.toc-title>span{display:none}#toc-toggle{display:block;font-size:11px;padding:7px 11px}.toc-body{display:none}.toc-shell.open .toc-body{display:block}.toc-links{max-height:240px;margin-bottom:12px}.toc-next{display:none}.doc-hero{padding:34px 0 27px}.doc-hero h1{font-size:35px;max-width:600px}.hero-label{align-items:flex-start;gap:10px;flex-wrap:wrap}.hero-label .pill{font-size:9px}.doc-section{padding:34px 0;scroll-margin-top:80px}.doc-section h2{font-size:25px;line-height:1.45}.doc-section p{font-size:14px;line-height:1.95}.hero-meta blockquote p{font-size:16px}.note-grid{grid-template-columns:1fr}.stage-field{flex-wrap:wrap}.note-field:last-child{grid-column:auto}.workspace-heading{display:block}.workspace-heading .pill{margin-bottom:17px}.doc-footer{flex-direction:column;gap:5px}}
+@media(max-width:480px){.topbar{gap:10px;padding:0 16px}.doc-tabs{gap:15px}.top-actions button#source-download{display:none}.brand b{font-size:25px}.doc-hero h1{font-size:31px;line-height:1.3}.doc-hero .eyebrow{font-size:9px}.doc-description{font-size:12px}.hero-meta{font-size:11px}.hero-meta p{font-size:11px;line-height:1.9}.hero-meta blockquote{padding:16px 16px}.hero-meta blockquote p{font-size:15px}.doc-section h2{font-size:23px}.doc-section h3{font-size:18px}.doc-section p{font-size:14px}.table-scroll{margin:20px 0}td,th{padding:11px 12px}.code-frame pre{font-size:11px;padding-left:15px}.review-workspace{padding:18px}.note-actions{gap:8px}.note-actions button{padding:9px 10px;font-size:11px}.check-line{font-size:12px}.top-actions button{padding:7px 9px}}
+@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}*{transition:none!important}}
+@media print{@page{margin:15mm}.topbar,.toc-shell,.skip,.copy-code,.toast,.review-workspace,.doc-footer{display:none!important}.layout{display:block;padding:0;max-width:none}main{max-width:none;padding:0}.doc-hero{padding:0 0 18px}.doc-hero h1{font-size:27px}.doc-section{padding:22px 0;break-inside:auto}.doc-section h2{font-size:21px;break-after:avoid}.doc-section h3{font-size:16px;break-after:avoid}.doc-section p{font-size:11px;line-height:1.75}.table-scroll{overflow:visible;break-inside:auto}table{min-width:0!important;font-size:9px;table-layout:fixed}td,th{min-width:0;font-size:9px;word-break:normal;padding:7px}tr{break-inside:avoid}.code-frame pre{white-space:pre-wrap;max-height:none;font-size:9px;padding:16px;overflow:visible;word-break:break-word}.code-label{display:none}.hero-meta blockquote p{font-size:14px}}
+</style></head><body>
+<a class="skip" href="#reading-main">본문으로 이동</a>
+<header class="topbar"><a class="brand" href="index.html" aria-label="Drawing IDE 문서 모음"><b>D.</b><span>DRAWING IDE</span></a><nav class="doc-tabs" aria-label="문서 선택"><a class="doc-tab" href="PRD.html">PRD</a><a class="doc-tab" href="DEVELOPMENT_GUIDE.html">개발 가이드</a><a class="doc-tab" data-doc="design" href="#design">Design</a></nav><div class="top-actions"><button id="source-download" title="현재 문서의 Markdown 원문 저장">원문 ↓</button><button id="print-doc" title="현재 문서 인쇄">인쇄</button></div></header>
+<div class="layout"><aside class="toc-shell" id="toc-shell" aria-label="현재 문서의 목차"><div class="toc-title"><strong>CONTENTS</strong><span id="toc-count"></span><button id="toc-toggle" aria-expanded="false" aria-controls="toc-body">목차 열기</button></div><div class="toc-body" id="toc-body"><input class="toc-search" id="toc-search" type="search" placeholder="장 제목으로 찾기" aria-label="현재 문서 목차 검색"><p class="toc-hint" id="nav-hint" role="status">장 제목으로 찾아갑니다.</p><nav class="toc-links" id="toc-links" aria-label="본문 장 이동"></nav><div class="toc-next">다음 작성할 문서<br><b>SPEC.md</b><br>기능별 동작·상태·수용 기준</div></div></aside><main id="reading-main" tabindex="-1"><article id="design" class="document"><header class="doc-hero"><div class="hero-label"><span class="eyebrow">DESIGN PRINCIPLES</span><span class="pill">13 CHAPTERS</span></div><h1 tabindex="-1">Drawing IDE · Design.md</h1><p class="doc-description">시각·상호작용 기준 · SPEC 후 구체화</p><div class="hero-meta">
+<p><strong>문서 역할:</strong> 기능을 사람이 어떻게 보고 조작하는지 정의한다. 제품 범위는 PRD.md, 동작의 세부 의미는 SPEC.md, 실제 기술과 구현 작업은 IMPLEMENTATION_PLAN.md에서 정한다.<br/>
+<strong>적용 상태:</strong> 시각 원칙과 기본 상호작용 기준. SPEC의 기능·상태가 구체화되면 화면별 상태·문구·행동을 대조해 확정한다. 완성된 기능 명세나 구현 완료 화면이 아니다.</p>
+<blockquote>
+<p><strong>사용자는 코드를 해독하지 않고 대상을 가리키고 그리며, 실제 중간 결과를 보면서 작업의 방향을 바꿀 수 있어야 한다.</strong></p>
+</blockquote>
+</div></header><section class="doc-section" id="design-section-01"><h2><span aria-hidden="true" class="section-num">01 /</span> 화면이 답해야 하는 질문</h2>
+<p>어느 프로젝트·호스트·문서·대안을 보고 있는가? 무엇을 바꾸고 무엇을 유지하는가? 지금 보이는 것은 원본인가 후보인가? 새 지시는 접수만 되었는가 실제 반영되었는가? 결과가 적용·저장되었는가? 지금 어떤 행동을 할 수 있는가?</p>
+<p>모델·도면·스케치·데이터가 판단의 중심이다. 채팅은 유일한 입력 수단이 아니고, 터미널은 기본 조작 경로가 아니다. AI의 긴 독백이나 가상의 진행률보다 실제 대상·변경·조건·마지막 결과를 보여준다.</p>
+<p>화면을 예쁘게 만드는 일과 기능을 지원하는 일은 다르다. 연결하지 않은 호스트, 생성하지 않은 후보, 동작하지 않는 전송을 완료처럼 표시하지 않는다.</p>
+</section><section class="doc-section" id="design-section-02"><h2><span aria-hidden="true" class="section-num">02 /</span> 시각 언어와 토큰</h2>
+<p>시각 기준은 제공된 <code>임대료_공개공지_분석.html</code>의 흰 바탕·얇은 경계·큰 한국어 제목·작은 영문 표제·절제된 코랄 강조다. 자료의 분석 수치·법규·사이트 내용은 제품 데이터로 가져오지 않는다. 글꼴 파일을 동봉하지 않고 운영체제에서 사용할 수 있는 글꼴로 대체한다.</p>
+<div class="code-frame"><span class="code-label">COPYABLE TEXT</span><button aria-label="이 텍스트 복사" class="copy-code" type="button">복사</button><pre><code class="language-css">--ink: #292c2d;
+--muted: #777e80;
+--line: #e1e3e1;
+--soft: #f5f5f1;
+--coral: #d97660;
+--paper: #ffffff;
+--font: "Pretendard", "Noto Sans KR", "Malgun Gothic", Arial, sans-serif;
+</code></pre></div>
+<p>이 토큰은 시각적 출발점이다. muted 색은 작은 필수 텍스트에 무조건 쓰지 않고 배경과 크기에 따라 읽기 가능한 대비를 확인한다. 코랄은 현재 위치·주요 행동·강조에 제한적으로 쓰며, 오류·선택·진행을 같은 색 하나로 구분하지 않는다.</p>
+<p>도면 같은 구분선, 넓은 여백, 작은 모서리 반경, 절제된 그림자, 정렬된 숫자를 사용한다. 보고서 제목은 크게 쓰되 실제 작업 화면에서는 모델 영역을 침범하지 않게 한다. 배지와 미세한 글자에 핵심 상태를 숨기지 않는다.</p>
+</section><section class="doc-section" id="design-section-03"><h2><span aria-hidden="true" class="section-num">03 /</span> 기본 정보 배치</h2>
+<p>아래는 <strong>기본 배치 제안</strong>이다. SPEC에서 사용자 흐름을 확인한 뒤 조정할 수 있다. 재귀적 화면 분할, 임의 도킹, Blender 워크스페이스 복제를 구현하라는 요구가 아니다.</p>
+<div class="code-frame"><span class="code-label">COPYABLE TEXT</span><button aria-label="이 텍스트 복사" class="copy-code" type="button">복사</button><pre><code class="language-text">상단: 프로젝트 · 작업 범위 · 호스트/문서 · 대안 · 저장 상태
+
+좌측 토글 영역      중앙 작업 영역               우측 토글 영역
+프로젝트·모델       3D / 평면 / 도면 / 비교        대화·공간 입력
+자료·기본 이력      선택·핀·스케치·실제 후보       코멘트·속성·관련 결과
+
+하단: 작업 기록·진단 (기본 접힘)
+</code></pre></div>
+<p>왼쪽은 무엇을 대상으로 어떤 자료를 사용하는지, 오른쪽은 요청·의견·현재 속성과 결과를 확인하는 역할을 기본으로 한다. 특정 위치 자체는 제품 요구가 아니다. 핵심 흐름을 방해하면 조정하되 자유 도킹 기능으로 문제를 해결하는 것으로 확대하지 않는다.</p>
+<p>토글은 표시만 닫는다. 작성 중 문장·핀·선·코멘트·실행 상태를 삭제하거나 새 AI 세션을 시작하지 않는다. 프로젝트 전환은 숨김과 다르며, 현재 작업의 소속을 분명히 보여준다.</p>
+<p>외부 웹 검토에서는 허용된 자료와 행동만 보여준다. Windows IDE의 모든 제어 기능을 작은 브라우저 화면에 그대로 복제하지 않는다.</p>
+</section><section class="doc-section" id="design-section-04"><h2><span aria-hidden="true" class="section-num">04 /</span> 같은 공간 입력기를 여러 진입점에서 사용한다</h2>
+<h3>문장 안 참조</h3>
+<p>일반 채팅처럼 문장만 입력할 수 있다. 필요한 경우 객체 핀, 스케치, 코멘트, 자료를 문장 안에 넣는다.</p>
+<blockquote>
+<p>**[변경할 객체]**를 **[스케치한 선]**에 맞추고, **[유지할 객체]**는 그대로 둔다. **[관련 결정]**을 참고한다.</p>
+</blockquote>
+<p>대상·변경 방향·유지·참고의 관계를 표현한다. 핀 삽입 순간의 참조를 보존하며 현재 선택을 바꾸어 기존 요청의 대상을 바꾸지 않는다. 핀을 누르면 해당 객체·문서·기준과 참조 상태를 확인한다.</p>
+<h3>모델 위 코멘트</h3>
+<p>모델 위 객체·위치를 가리키면 작은 공간 입력기를 연다. 문장과 스케치를 함께 작성할 수 있다. 코멘트 저장과 AI에게 제안 요청을 분리한다. 여러 코멘트를 모아 하나의 요청으로 연결할 수 있게 설계한다.</p>
+<p>코멘트와 AI 대화는 입력 UI를 공유하지만 저장된 자료는 구분한다. AI 세션을 바꾸거나 닫아도 코멘트 원본과 작성 맥락은 남아야 한다.</p>
+<h3>이번 요청의 문맥</h3>
+<p>이번에 사용할 프로젝트·대안·문서·객체·스케치·주요 조건·자료를 짧게 확인할 수 있다. 필수조건과 참고 의견, 사용자 확정과 AI 추정을 구분한다. 매번 수동으로 모든 자료를 고르는 복잡한 준비 과정을 요구하지 않는다.</p>
+</section><section class="doc-section" id="design-section-05"><h2><span aria-hidden="true" class="section-num">05 /</span> 선택·핀·스케치의 공간 기준</h2>
+<p>객체 선택과 참조는 이름만 아니라 호스트·문서·기준 버전과 연결해 표시한다. 원본 객체와 표시용 형상이 어긋나거나 대응을 확인하지 못하면 이를 드러낸다. 삭제·분할·합침 뒤 가까운 객체로 몰래 재연결하지 않는다.</p>
+<p>스케치 작성 중 작업평면, 좌표·단위, 연결 대상, 선의 역할을 확인할 수 있어야 한다. 화면 위 주석, 공간에 등록된 평면 스케치, 미등록 업로드 이미지를 다른 상태로 표시한다. 임의의 화면 선을 깊이가 확정된 3D 기하로 표현하지 않는다.</p>
+<p>스케치 해석을 보여줄 때 원본 선을 남기고 해석된 경계를 겹쳐 확인하게 한다. 선이 외곽·이동 방향·비움·유지 중 무엇인지 모호하면 필요한 역할을 확인한다. 사용자의 선을 AI의 정리된 선으로 조용히 덮어쓰지 않는다.</p>
+<p>펜·터치와 마우스·키보드는 지원 기기에서 검증한다. 펜은 스케치, 터치는 카메라라는 구분을 기본 실험안으로 사용할 수 있으나 실제 제스처·오입력·취소 동작은 SPEC과 기기 시험에 맞춘다. 펜이 없어도 기본 선택·입력·검토가 가능해야 한다.</p>
+</section><section class="doc-section" id="design-section-06"><h2><span aria-hidden="true" class="section-num">06 /</span> 실제 진행을 보여주는 작업 카드</h2>
+<p>작업 카드에는 목적, 정확한 대상, 기준, 마지막 결과, 적용 조건, 현재 상태, 가능한 다음 행동을 우선한다. 코드·전체 로그·세부 비용·도구 원문은 펼쳐 본다.</p>
+<div aria-label="Design 표 1" class="table-scroll" role="region" tabindex="0"><table>
+<thead>
+<tr>
+<th>표시 내용</th>
+<th>사용자에게 전달할 의미</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>대상과 유지 영역</td>
+<td>무엇을 바꾸고 무엇을 건드리지 않는가</td>
+</tr>
+<tr>
+<td>원본·중간 후보·최신 후보</td>
+<td>지금 무엇을 보고 있으며 어느 기준인가</td>
+</tr>
+<tr>
+<td>변경 치수·속성·관련 지표</td>
+<td>실제 무엇이 달라졌는가</td>
+</tr>
+<tr>
+<td>참조 자료·가정·검토 범위</td>
+<td>왜 그렇게 처리했고 무엇을 아직 확인하지 않았는가</td>
+</tr>
+<tr>
+<td>현재 작업·마지막 결과 시점</td>
+<td>실행과 표시의 기준이 같은가</td>
+</tr>
+<tr>
+<td>수정·중단·분기·반영</td>
+<td>지금 사람이 할 수 있는 행동은 무엇인가</td>
+</tr>
+</tbody>
+</table></div>
+<p>AI가 계획한 일을 수행했다고 표시하지 않는다. 수치 완료율은 측정 가능한 기준이 있을 때만 사용한다. 결과가 아직 없으면 이를 알리고, 마지막 후보를 보여줄 때는 그 기준과 새 지시 반영 여부를 함께 표시한다.</p>
+<p>불완전한 내부 연산의 매 단계를 중간 결과라고 노출하기보다, 사람이 이해할 수 있는 일관된 후보를 보여준다. 형상 변화가 없는 계산·자료 작업은 포함 자료, 가정, 달라진 수치로 설명한다.</p>
+</section><section class="doc-section" id="design-section-07"><h2><span aria-hidden="true" class="section-num">07 /</span> 개입·중단·복구의 표현</h2>
+<p>아래는 반드시 구분할 의미다. 세부 상태 전이와 허용 행동은 SPEC이 정의하고, Design은 그 상태를 오해하지 않게 표현한다.</p>
+<div aria-label="Design 표 2" class="table-scroll" role="region" tabindex="0"><table>
+<thead>
+<tr>
+<th>상황</th>
+<th>기본 표현 방향</th>
+<th>피할 표현</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>추가 지시 접수</td>
+<td>받은 내용과 대상 확인</td>
+<td>이미 새 조건을 반영했다고 표시</td>
+</tr>
+<tr>
+<td>새 지시 처리 중</td>
+<td>이전 실행·현재 후보와 새 지시의 관계</td>
+<td>이전 후보를 새 결과처럼 표시</td>
+</tr>
+<tr>
+<td>새 지시 반영됨</td>
+<td>적용된 조건과 생성/변경 결과</td>
+<td>실제 결과 없이 반영 성공</td>
+</tr>
+<tr>
+<td>중단 요청·연산 종료 대기</td>
+<td>새 작업은 시작하지 않으며 실제 종료 상태를 확인</td>
+<td>즉시 원상복구 완료</td>
+</tr>
+<tr>
+<td>정지됨</td>
+<td>남은 입력·후보·이미 반영된 원본 구분</td>
+<td>후보 폐기와 원본 복구를 동일 취급</td>
+</tr>
+<tr>
+<td>적용 결과 불명</td>
+<td>해당 대상 상태 확인과 필요한 행동</td>
+<td>성공·실패 단정 후 자동 재실행</td>
+</tr>
+<tr>
+<td>사람의 직접 수정과 충돌</td>
+<td>새 기준과 이전 후보 차이·재검토</td>
+<td>오래된 결과가 덮어쓰는 것을 숨김</td>
+</tr>
+</tbody>
+</table></div>
+<p>모든 중간 결과에 승인 버튼을 강제하지 않는다. 위임 범위 안의 후보 작업은 계속 진행한다. 유지 조건·변경 범위·추가 비용·원본 쓰기·외부 공개의 중요한 결정에 필요한 행동을 제시한다.</p>
+<p>보안·권한·대상 오류는 탐색 중에도 지켜야 한다. 단순 전문 검토 미완료나 경험칙 경고는 후보 탐색·입력 저장 전체를 막는 화면으로 만들지 않는다.</p>
+</section><section class="doc-section" id="design-section-08"><h2><span aria-hidden="true" class="section-num">08 /</span> 네이티브 결과와 원본·저장 상태</h2>
+<p>호스트에 반영할 객체 종류, 대상 문서, 변경 내용과 검토 상태를 확인한 뒤 반영한다. 실제 네이티브 결과를 지원하는 경우 그 유형과 후속 편집 범위를 표시한다. 지원 불가·일반 형상 대체는 정상 네이티브 완료와 시각적으로 구분한다.</p>
+<p><strong>후보 채택, 원본 적용, 적용 확인, 파일 저장, 저장 후 재열기</strong>는 같은 상태가 아니다. 파일 저장을 확인하지 못했다면 적용 상태만 표시한다. 캡처·보고서 생성에 실패했어도 확인된 원본 적용을 다시 실행하는 버튼 흐름을 만들지 않는다.</p>
+<p>되돌리기는 호스트별 실제 지원 범위가 있을 때 제공하고, 여러 호스트의 전체 원자적 복구를 암시하지 않는다. 지원하지 않는 동작은 설명 없는 회색 버튼만 남기기보다 필요한 조건을 짧게 알려준다.</p>
+</section><section class="doc-section" id="design-section-09"><h2><span aria-hidden="true" class="section-num">09 /</span> 확장과 산출물의 최소 화면</h2>
+<p>확장은 이름·목적·필요 호스트·입력·권한·실행/비활성 상태를 확인할 수 있게 한다. 등록·실행·진행·결과·실패는 공통 작업 경험으로 이어져야 한다. 초기 UI를 공개 마켓·검색·평가·결제로 확대하지 않는다.</p>
+<p>산출물은 제목, 생성 기준·자료, 실제 결과와 검토 범위, 사용 가능한 저장·공유·내보내기를 보여준다. 기본 HTML 열람·전달 화면이 곧 HTML 직접 편집기는 아니다.</p>
+<p>즉석 생성·부분 선택 편집 C-01은 채택되지 않은 후보다. 이 문서에는 캔버스·DOM 편집기, 자유 레이아웃, 임의 스크립트 실행을 확정하지 않는다. 향후 채택 시 사용자 편집이 원문·계산 가정·표현 중 무엇을 바꾸는지 SPEC에서 먼저 구분한다.</p>
+</section><section class="doc-section" id="design-section-10"><h2><span aria-hidden="true" class="section-num">10 /</span> 진단과 전문가 도구</h2>
+<p>기본 작업 기록에는 실제 처리·조회·생성·오류·개입·예산 정보를 보여준다. 실패 이유를 코드 덤프만으로 설명하지 않는다. 필요할 때 생성 코드와 상세 로그를 별도로 열 수 있다.</p>
+<p>터미널은 기본 입력 경로가 아니라 전문가용 선택 기능이다. 로그를 보는 것과 실제 셸 명령을 실행하는 것은 구분한다. 터미널에서 별도 세션을 열었다고 현재 공간 작업과 자동으로 동일한 상태가 된다고 표시하지 않는다. 실행 엔진 선택과 터미널 제공 깊이는 구현계획에서 정한다.</p>
+</section><section class="doc-section" id="design-section-11"><h2><span aria-hidden="true" class="section-num">11 /</span> 빈 상태·오류·반응형·접근성</h2>
+<p>호스트 미연결, 미지원 버전, 대상 없음, 참조 끊김, 스케치 미등록, AI 단절, 저장 실패, 권한 부족, 원본 적용 불명을 각각 표현한다. 전체 화면을 오류로 덮기보다 영향받는 작업·대상을 표시하고 가능한 다른 작업은 유지한다.</p>
+<p>좁은 화면에서는 핵심 모델·입력·상태를 우선하고 보조 정보는 펼쳐 본다. 기존 데스크톱 작업과 입력을 잃지 않게 한다. 웹 검토 화면에서 네이티브 원본 쓰기 버튼을 노출하는 것으로 기능을 대신하지 않는다.</p>
+<p>키보드 포커스, 입력 라벨, 읽을 수 있는 텍스트, 선택/변경을 구분할 외곽선·패턴·문구를 제공한다. 색만으로 원본·후보·오류를 구분하지 않는다. 주요 동작에 드래그 외의 대안을 두고 터치 목표 크기를 실제 장치에서 확인한다.</p>
+</section><section class="doc-section" id="design-section-12"><h2><span aria-hidden="true" class="section-num">12 /</span> SPEC에서 채워야 할 화면별 상세</h2>
+<div aria-label="Design 표 3" class="table-scroll" role="region" tabindex="0"><table>
+<thead>
+<tr>
+<th>화면·경험</th>
+<th>SPEC에서 필요한 정의</th>
+<th>Design에 보강할 내용</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>프로젝트·호스트 진입</td>
+<td>연결·지원 버전·권한·저장 상태</td>
+<td>화면 전환·연결 안내·미지원 상태</td>
+</tr>
+<tr>
+<td>공간 입력기</td>
+<td>입력 유형·참조·스케치·저장 규칙</td>
+<td>편집·핀·문맥 확인·오류 복구</td>
+</tr>
+<tr>
+<td>실행·개입</td>
+<td>상태 전이·중단 제약·새 지시의 유효 시점</td>
+<td>카드·문구·가능 행동·후보 기준</td>
+</tr>
+<tr>
+<td>네이티브 결과</td>
+<td>실제 지원 유형·필수 값·저장·복구</td>
+<td>변경 요약·반영·저장 상태</td>
+</tr>
+<tr>
+<td>확장</td>
+<td>초기 등록·권한·실행·비활성 계약</td>
+<td>확장 목록·상세·실행 흐름</td>
+</tr>
+<tr>
+<td>웹 검토</td>
+<td>첫 배포 범위·인증·제출·오프라인</td>
+<td>기기별 보기·스케치·제출 상태</td>
+</tr>
+</tbody>
+</table></div>
+<p>SPEC이 작성되면 각 화면을 기능·상태 ID에 연결한다. 없는 요구를 Design에서 만들지 않고, 불명확한 동작은 SPEC의 결정으로 돌린다.</p>
+</section><section class="doc-section" id="design-section-13"><h2><span aria-hidden="true" class="section-num">13 /</span> 목업 검수 기준</h2>
+<p>사용자가 정확한 호스트·대상·버전을 찾고 핀을 삽입한 뒤 선택을 바꿔도 대상이 유지되는지 확인한다. 스케치를 다른 시점에서 볼 때 공간 기준을 이해하는지, 원본 선과 해석을 교정할 수 있는지 확인한다.</p>
+<p>진행 중 유지 대상을 추가하고 접수와 실제 반영을 구분하는지, 중단 대기를 실제 정지로 오인하지 않는지, 늦은 후보를 최신 결과로 착각하지 않는지 확인한다. 네이티브 적용과 저장, 미지원 결과를 구분할 수 있어야 한다.</p>
+<p>코멘트 저장·패널 토글·화면 크기 변화로 입력이 사라지지 않아야 한다. 키보드와 마우스로 기본 흐름을 완료하고 지원하는 터치·펜 환경에서도 같은 의미를 전달해야 한다.</p>
+<p>모의 데이터·연결 미구현·실제 호스트 결과를 구분해 시험 기록에 남긴다. 시각 검수가 통과해도 호스트 객체 유형과 쓰기·저장 동작이 검증된 것은 아니다.</p>
+</section><footer class="doc-footer"><span>DRAWING IDE / PLANNING DOCUMENTS</span><span>문서 열람용 · 실제 CAD/BIM 지원은 구현·검증 후 선언</span></footer></article></main></div>
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+<script id="source-data" type="application/json">{"design": {"file": "Design.md", "label": "Design", "markdown": "# Drawing IDE · Design.md\n\n**문서 역할:** 기능을 사람이 어떻게 보고 조작하는지 정의한다. 제품 범위는 PRD.md, 동작의 세부 의미는 SPEC.md, 실제 기술과 구현 작업은 IMPLEMENTATION_PLAN.md에서 정한다.  \n**적용 상태:** 시각 원칙과 기본 상호작용 기준. SPEC의 기능·상태가 구체화되면 화면별 상태·문구·행동을 대조해 확정한다. 완성된 기능 명세나 구현 완료 화면이 아니다.\n\n\u003e **사용자는 코드를 해독하지 않고 대상을 가리키고 그리며, 실제 중간 결과를 보면서 작업의 방향을 바꿀 수 있어야 한다.**\n\n## 01. 화면이 답해야 하는 질문\n\n어느 프로젝트·호스트·문서·대안을 보고 있는가? 무엇을 바꾸고 무엇을 유지하는가? 지금 보이는 것은 원본인가 후보인가? 새 지시는 접수만 되었는가 실제 반영되었는가? 결과가 적용·저장되었는가? 지금 어떤 행동을 할 수 있는가?\n\n모델·도면·스케치·데이터가 판단의 중심이다. 채팅은 유일한 입력 수단이 아니고, 터미널은 기본 조작 경로가 아니다. AI의 긴 독백이나 가상의 진행률보다 실제 대상·변경·조건·마지막 결과를 보여준다.\n\n화면을 예쁘게 만드는 일과 기능을 지원하는 일은 다르다. 연결하지 않은 호스트, 생성하지 않은 후보, 동작하지 않는 전송을 완료처럼 표시하지 않는다.\n\n## 02. 시각 언어와 토큰\n\n시각 기준은 제공된 `임대료_공개공지_분석.html`의 흰 바탕·얇은 경계·큰 한국어 제목·작은 영문 표제·절제된 코랄 강조다. 자료의 분석 수치·법규·사이트 내용은 제품 데이터로 가져오지 않는다. 글꼴 파일을 동봉하지 않고 운영체제에서 사용할 수 있는 글꼴로 대체한다.\n\n```css\n--ink: #292c2d;\n--muted: #777e80;\n--line: #e1e3e1;\n--soft: #f5f5f1;\n--coral: #d97660;\n--paper: #ffffff;\n--font: \"Pretendard\", \"Noto Sans KR\", \"Malgun Gothic\", Arial, sans-serif;\n```\n\n이 토큰은 시각적 출발점이다. muted 색은 작은 필수 텍스트에 무조건 쓰지 않고 배경과 크기에 따라 읽기 가능한 대비를 확인한다. 코랄은 현재 위치·주요 행동·강조에 제한적으로 쓰며, 오류·선택·진행을 같은 색 하나로 구분하지 않는다.\n\n도면 같은 구분선, 넓은 여백, 작은 모서리 반경, 절제된 그림자, 정렬된 숫자를 사용한다. 보고서 제목은 크게 쓰되 실제 작업 화면에서는 모델 영역을 침범하지 않게 한다. 배지와 미세한 글자에 핵심 상태를 숨기지 않는다.\n\n## 03. 기본 정보 배치\n\n아래는 **기본 배치 제안**이다. SPEC에서 사용자 흐름을 확인한 뒤 조정할 수 있다. 재귀적 화면 분할, 임의 도킹, Blender 워크스페이스 복제를 구현하라는 요구가 아니다.\n\n```text\n상단: 프로젝트 · 작업 범위 · 호스트/문서 · 대안 · 저장 상태\n\n좌측 토글 영역      중앙 작업 영역               우측 토글 영역\n프로젝트·모델       3D / 평면 / 도면 / 비교        대화·공간 입력\n자료·기본 이력      선택·핀·스케치·실제 후보       코멘트·속성·관련 결과\n\n하단: 작업 기록·진단 (기본 접힘)\n```\n\n왼쪽은 무엇을 대상으로 어떤 자료를 사용하는지, 오른쪽은 요청·의견·현재 속성과 결과를 확인하는 역할을 기본으로 한다. 특정 위치 자체는 제품 요구가 아니다. 핵심 흐름을 방해하면 조정하되 자유 도킹 기능으로 문제를 해결하는 것으로 확대하지 않는다.\n\n토글은 표시만 닫는다. 작성 중 문장·핀·선·코멘트·실행 상태를 삭제하거나 새 AI 세션을 시작하지 않는다. 프로젝트 전환은 숨김과 다르며, 현재 작업의 소속을 분명히 보여준다.\n\n외부 웹 검토에서는 허용된 자료와 행동만 보여준다. Windows IDE의 모든 제어 기능을 작은 브라우저 화면에 그대로 복제하지 않는다.\n\n## 04. 같은 공간 입력기를 여러 진입점에서 사용한다\n\n### 문장 안 참조\n\n일반 채팅처럼 문장만 입력할 수 있다. 필요한 경우 객체 핀, 스케치, 코멘트, 자료를 문장 안에 넣는다.\n\n\u003e **[변경할 객체]**를 **[스케치한 선]**에 맞추고, **[유지할 객체]**는 그대로 둔다. **[관련 결정]**을 참고한다.\n\n대상·변경 방향·유지·참고의 관계를 표현한다. 핀 삽입 순간의 참조를 보존하며 현재 선택을 바꾸어 기존 요청의 대상을 바꾸지 않는다. 핀을 누르면 해당 객체·문서·기준과 참조 상태를 확인한다.\n\n### 모델 위 코멘트\n\n모델 위 객체·위치를 가리키면 작은 공간 입력기를 연다. 문장과 스케치를 함께 작성할 수 있다. 코멘트 저장과 AI에게 제안 요청을 분리한다. 여러 코멘트를 모아 하나의 요청으로 연결할 수 있게 설계한다.\n\n코멘트와 AI 대화는 입력 UI를 공유하지만 저장된 자료는 구분한다. AI 세션을 바꾸거나 닫아도 코멘트 원본과 작성 맥락은 남아야 한다.\n\n### 이번 요청의 문맥\n\n이번에 사용할 프로젝트·대안·문서·객체·스케치·주요 조건·자료를 짧게 확인할 수 있다. 필수조건과 참고 의견, 사용자 확정과 AI 추정을 구분한다. 매번 수동으로 모든 자료를 고르는 복잡한 준비 과정을 요구하지 않는다.\n\n## 05. 선택·핀·스케치의 공간 기준\n\n객체 선택과 참조는 이름만 아니라 호스트·문서·기준 버전과 연결해 표시한다. 원본 객체와 표시용 형상이 어긋나거나 대응을 확인하지 못하면 이를 드러낸다. 삭제·분할·합침 뒤 가까운 객체로 몰래 재연결하지 않는다.\n\n스케치 작성 중 작업평면, 좌표·단위, 연결 대상, 선의 역할을 확인할 수 있어야 한다. 화면 위 주석, 공간에 등록된 평면 스케치, 미등록 업로드 이미지를 다른 상태로 표시한다. 임의의 화면 선을 깊이가 확정된 3D 기하로 표현하지 않는다.\n\n스케치 해석을 보여줄 때 원본 선을 남기고 해석된 경계를 겹쳐 확인하게 한다. 선이 외곽·이동 방향·비움·유지 중 무엇인지 모호하면 필요한 역할을 확인한다. 사용자의 선을 AI의 정리된 선으로 조용히 덮어쓰지 않는다.\n\n펜·터치와 마우스·키보드는 지원 기기에서 검증한다. 펜은 스케치, 터치는 카메라라는 구분을 기본 실험안으로 사용할 수 있으나 실제 제스처·오입력·취소 동작은 SPEC과 기기 시험에 맞춘다. 펜이 없어도 기본 선택·입력·검토가 가능해야 한다.\n\n## 06. 실제 진행을 보여주는 작업 카드\n\n작업 카드에는 목적, 정확한 대상, 기준, 마지막 결과, 적용 조건, 현재 상태, 가능한 다음 행동을 우선한다. 코드·전체 로그·세부 비용·도구 원문은 펼쳐 본다.\n\n| 표시 내용 | 사용자에게 전달할 의미 |\n|---|---|\n| 대상과 유지 영역 | 무엇을 바꾸고 무엇을 건드리지 않는가 |\n| 원본·중간 후보·최신 후보 | 지금 무엇을 보고 있으며 어느 기준인가 |\n| 변경 치수·속성·관련 지표 | 실제 무엇이 달라졌는가 |\n| 참조 자료·가정·검토 범위 | 왜 그렇게 처리했고 무엇을 아직 확인하지 않았는가 |\n| 현재 작업·마지막 결과 시점 | 실행과 표시의 기준이 같은가 |\n| 수정·중단·분기·반영 | 지금 사람이 할 수 있는 행동은 무엇인가 |\n\nAI가 계획한 일을 수행했다고 표시하지 않는다. 수치 완료율은 측정 가능한 기준이 있을 때만 사용한다. 결과가 아직 없으면 이를 알리고, 마지막 후보를 보여줄 때는 그 기준과 새 지시 반영 여부를 함께 표시한다.\n\n불완전한 내부 연산의 매 단계를 중간 결과라고 노출하기보다, 사람이 이해할 수 있는 일관된 후보를 보여준다. 형상 변화가 없는 계산·자료 작업은 포함 자료, 가정, 달라진 수치로 설명한다.\n\n## 07. 개입·중단·복구의 표현\n\n아래는 반드시 구분할 의미다. 세부 상태 전이와 허용 행동은 SPEC이 정의하고, Design은 그 상태를 오해하지 않게 표현한다.\n\n| 상황 | 기본 표현 방향 | 피할 표현 |\n|---|---|---|\n| 추가 지시 접수 | 받은 내용과 대상 확인 | 이미 새 조건을 반영했다고 표시 |\n| 새 지시 처리 중 | 이전 실행·현재 후보와 새 지시의 관계 | 이전 후보를 새 결과처럼 표시 |\n| 새 지시 반영됨 | 적용된 조건과 생성/변경 결과 | 실제 결과 없이 반영 성공 |\n| 중단 요청·연산 종료 대기 | 새 작업은 시작하지 않으며 실제 종료 상태를 확인 | 즉시 원상복구 완료 |\n| 정지됨 | 남은 입력·후보·이미 반영된 원본 구분 | 후보 폐기와 원본 복구를 동일 취급 |\n| 적용 결과 불명 | 해당 대상 상태 확인과 필요한 행동 | 성공·실패 단정 후 자동 재실행 |\n| 사람의 직접 수정과 충돌 | 새 기준과 이전 후보 차이·재검토 | 오래된 결과가 덮어쓰는 것을 숨김 |\n\n모든 중간 결과에 승인 버튼을 강제하지 않는다. 위임 범위 안의 후보 작업은 계속 진행한다. 유지 조건·변경 범위·추가 비용·원본 쓰기·외부 공개의 중요한 결정에 필요한 행동을 제시한다.\n\n보안·권한·대상 오류는 탐색 중에도 지켜야 한다. 단순 전문 검토 미완료나 경험칙 경고는 후보 탐색·입력 저장 전체를 막는 화면으로 만들지 않는다.\n\n## 08. 네이티브 결과와 원본·저장 상태\n\n호스트에 반영할 객체 종류, 대상 문서, 변경 내용과 검토 상태를 확인한 뒤 반영한다. 실제 네이티브 결과를 지원하는 경우 그 유형과 후속 편집 범위를 표시한다. 지원 불가·일반 형상 대체는 정상 네이티브 완료와 시각적으로 구분한다.\n\n**후보 채택, 원본 적용, 적용 확인, 파일 저장, 저장 후 재열기**는 같은 상태가 아니다. 파일 저장을 확인하지 못했다면 적용 상태만 표시한다. 캡처·보고서 생성에 실패했어도 확인된 원본 적용을 다시 실행하는 버튼 흐름을 만들지 않는다.\n\n되돌리기는 호스트별 실제 지원 범위가 있을 때 제공하고, 여러 호스트의 전체 원자적 복구를 암시하지 않는다. 지원하지 않는 동작은 설명 없는 회색 버튼만 남기기보다 필요한 조건을 짧게 알려준다.\n\n## 09. 확장과 산출물의 최소 화면\n\n확장은 이름·목적·필요 호스트·입력·권한·실행/비활성 상태를 확인할 수 있게 한다. 등록·실행·진행·결과·실패는 공통 작업 경험으로 이어져야 한다. 초기 UI를 공개 마켓·검색·평가·결제로 확대하지 않는다.\n\n산출물은 제목, 생성 기준·자료, 실제 결과와 검토 범위, 사용 가능한 저장·공유·내보내기를 보여준다. 기본 HTML 열람·전달 화면이 곧 HTML 직접 편집기는 아니다.\n\n즉석 생성·부분 선택 편집 C-01은 채택되지 않은 후보다. 이 문서에는 캔버스·DOM 편집기, 자유 레이아웃, 임의 스크립트 실행을 확정하지 않는다. 향후 채택 시 사용자 편집이 원문·계산 가정·표현 중 무엇을 바꾸는지 SPEC에서 먼저 구분한다.\n\n## 10. 진단과 전문가 도구\n\n기본 작업 기록에는 실제 처리·조회·생성·오류·개입·예산 정보를 보여준다. 실패 이유를 코드 덤프만으로 설명하지 않는다. 필요할 때 생성 코드와 상세 로그를 별도로 열 수 있다.\n\n터미널은 기본 입력 경로가 아니라 전문가용 선택 기능이다. 로그를 보는 것과 실제 셸 명령을 실행하는 것은 구분한다. 터미널에서 별도 세션을 열었다고 현재 공간 작업과 자동으로 동일한 상태가 된다고 표시하지 않는다. 실행 엔진 선택과 터미널 제공 깊이는 구현계획에서 정한다.\n\n## 11. 빈 상태·오류·반응형·접근성\n\n호스트 미연결, 미지원 버전, 대상 없음, 참조 끊김, 스케치 미등록, AI 단절, 저장 실패, 권한 부족, 원본 적용 불명을 각각 표현한다. 전체 화면을 오류로 덮기보다 영향받는 작업·대상을 표시하고 가능한 다른 작업은 유지한다.\n\n좁은 화면에서는 핵심 모델·입력·상태를 우선하고 보조 정보는 펼쳐 본다. 기존 데스크톱 작업과 입력을 잃지 않게 한다. 웹 검토 화면에서 네이티브 원본 쓰기 버튼을 노출하는 것으로 기능을 대신하지 않는다.\n\n키보드 포커스, 입력 라벨, 읽을 수 있는 텍스트, 선택/변경을 구분할 외곽선·패턴·문구를 제공한다. 색만으로 원본·후보·오류를 구분하지 않는다. 주요 동작에 드래그 외의 대안을 두고 터치 목표 크기를 실제 장치에서 확인한다.\n\n## 12. SPEC에서 채워야 할 화면별 상세\n\n| 화면·경험 | SPEC에서 필요한 정의 | Design에 보강할 내용 |\n|---|---|---|\n| 프로젝트·호스트 진입 | 연결·지원 버전·권한·저장 상태 | 화면 전환·연결 안내·미지원 상태 |\n| 공간 입력기 | 입력 유형·참조·스케치·저장 규칙 | 편집·핀·문맥 확인·오류 복구 |\n| 실행·개입 | 상태 전이·중단 제약·새 지시의 유효 시점 | 카드·문구·가능 행동·후보 기준 |\n| 네이티브 결과 | 실제 지원 유형·필수 값·저장·복구 | 변경 요약·반영·저장 상태 |\n| 확장 | 초기 등록·권한·실행·비활성 계약 | 확장 목록·상세·실행 흐름 |\n| 웹 검토 | 첫 배포 범위·인증·제출·오프라인 | 기기별 보기·스케치·제출 상태 |\n\nSPEC이 작성되면 각 화면을 기능·상태 ID에 연결한다. 없는 요구를 Design에서 만들지 않고, 불명확한 동작은 SPEC의 결정으로 돌린다.\n\n## 13. 목업 검수 기준\n\n사용자가 정확한 호스트·대상·버전을 찾고 핀을 삽입한 뒤 선택을 바꿔도 대상이 유지되는지 확인한다. 스케치를 다른 시점에서 볼 때 공간 기준을 이해하는지, 원본 선과 해석을 교정할 수 있는지 확인한다.\n\n진행 중 유지 대상을 추가하고 접수와 실제 반영을 구분하는지, 중단 대기를 실제 정지로 오인하지 않는지, 늦은 후보를 최신 결과로 착각하지 않는지 확인한다. 네이티브 적용과 저장, 미지원 결과를 구분할 수 있어야 한다.\n\n코멘트 저장·패널 토글·화면 크기 변화로 입력이 사라지지 않아야 한다. 키보드와 마우스로 기본 흐름을 완료하고 지원하는 터치·펜 환경에서도 같은 의미를 전달해야 한다.\n\n모의 데이터·연결 미구현·실제 호스트 결과를 구분해 시험 기록에 남긴다. 시각 검수가 통과해도 호스트 객체 유형과 쓰기·저장 동작이 검증된 것은 아니다.\n"}}</script><script id="reader-config" type="application/json">{"initial": "design"}</script><script>
+(() => {
+'use strict';
+const sourceData=JSON.parse(document.getElementById('source-data').textContent);
+const config=JSON.parse(document.getElementById('reader-config').textContent);
+const esc=s=>String(s);
+let activeDoc=config.initial;
+let observer;
+let toastTimer;
+const $=s=>document.querySelector(s);
+function notify(message){const t=$('#toast');t.textContent=message;t.hidden=false;clearTimeout(toastTimer);toastTimer=setTimeout(()=>{t.hidden=true;},3400);}
+function renderToc(){const links=$('#toc-links');links.replaceChildren();const nodes=document.querySelectorAll('#'+activeDoc+' .doc-section');nodes.forEach(section=>{const a=document.createElement('a');a.href='#'+section.id;a.textContent=section.querySelector('h2').textContent;a.dataset.title=a.textContent;a.addEventListener('click',()=>{$('#toc-shell').classList.remove('open');$('#toc-toggle').setAttribute('aria-expanded','false');});links.appendChild(a);});$('#toc-count').textContent=nodes.length+' CHAPTERS';$('#toc-search').value='';$('#nav-hint').textContent='章 제목으로 찾아갑니다.'.replace('章','장');if(observer)observer.disconnect();observer=new IntersectionObserver(entries=>{const visible=entries.filter(e=>e.isIntersecting).sort((a,b)=>a.boundingClientRect.top-b.boundingClientRect.top);if(!visible.length)return;document.querySelectorAll('#toc-links a').forEach(a=>a.classList.toggle('active',a.hash==='#'+visible[0].target.id));},{rootMargin:'-90px 0px -64% 0px',threshold:0});nodes.forEach(n=>observer.observe(n));}
+function showDoc(name,reset){if(!sourceData[name])name=config.initial;activeDoc=name;document.querySelectorAll('.document').forEach(d=>d.hidden=d.id!==name);document.querySelectorAll('.doc-tab').forEach(a=>{a.classList.toggle('active',a.dataset.doc===name);if(a.dataset.doc===name)a.setAttribute('aria-current','page');else a.removeAttribute('aria-current');});renderToc();document.title='Drawing IDE · '+sourceData[name].label;if(reset)window.scrollTo({top:0,behavior:'instant'});}
+function useHash(){let raw=decodeURIComponent(location.hash.slice(1)||config.initial);let name=raw.split('-section-')[0];if(!sourceData[name])name=config.initial;if(name!==activeDoc||!$('#toc-links').children.length)showDoc(name,false);const el=document.getElementById(raw);if(el&&!el.hidden){requestAnimationFrame(()=>el.scrollIntoView({block:'start',behavior:'instant'}));}}
+window.addEventListener('hashchange',useHash);
+document.querySelectorAll('.doc-tab[data-doc]').forEach(a=>a.addEventListener('click',e=>{e.preventDefault();const name=a.dataset.doc;showDoc(name,true);history.replaceState(null,'','#'+name);}));
+$('#toc-toggle').addEventListener('click',()=>{const on=$('#toc-shell').classList.toggle('open');$('#toc-toggle').setAttribute('aria-expanded',String(on));});
+$('#toc-search').addEventListener('input',()=>{const q=$('#toc-search').value.trim().toLocaleLowerCase();let n=0;document.querySelectorAll('#toc-links a').forEach(a=>{a.hidden=!a.dataset.title.toLocaleLowerCase().includes(q);if(!a.hidden)n++;});$('#nav-hint').textContent=q?(n?'일치하는 장 '+n+'개':'일치하는 장 제목이 없습니다.'):'장 제목으로 찾아갑니다.';});
+function download(name,contents,type){const blob=new Blob([contents],{type});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),2500);}
+$('#source-download').addEventListener('click',()=>download(sourceData[activeDoc].file,sourceData[activeDoc].markdown,'text/markdown;charset=utf-8'));
+$('#print-doc').addEventListener('click',()=>window.print());
+async function copy(text){try{if(navigator.clipboard&&navigator.clipboard.writeText){await navigator.clipboard.writeText(text);return true;}}catch(e){}const t=document.createElement('textarea');t.value=text;t.style.position='fixed';t.style.left='-9999px';document.body.appendChild(t);t.select();let ok=false;try{ok=document.execCommand('copy');}catch(e){}t.remove();return ok;}
+document.querySelectorAll('.copy-code').forEach(b=>b.addEventListener('click',async()=>{const text=b.parentElement.querySelector('pre').textContent;const ok=await copy(text);if(ok){b.textContent='복사됨';notify('텍스트를 복사했습니다.');setTimeout(()=>b.textContent='복사',1800);}else{const range=document.createRange();range.selectNodeContents(b.parentElement.querySelector('pre'));const sel=window.getSelection();sel.removeAllRanges();sel.addRange(range);notify('자동 복사가 제한됩니다. 선택된 텍스트를 직접 복사하세요.');}}));
+const storageKey='drawing-ide-planning-notes';
+const noteFields=Array.from(document.querySelectorAll('[data-note]'));
+const checkFields=Array.from(document.querySelectorAll('[data-check]'));
+const knownStages=['SPEC.md','Design.md','IMPLEMENTATION_PLAN.md','프런트 목업','구현·테스트','수용 검수'];
+function getRecord(){const notes={},checked={};noteFields.forEach(f=>notes[f.dataset.note]=f.value);checkFields.forEach(f=>checked[f.dataset.check]=f.checked);return{kind:'drawing-ide-planning-notes',schema:1,notes,checked};}
+function validateRecord(data){if(!data||typeof data!=='object'||Array.isArray(data)||data.kind!=='drawing-ide-planning-notes'||data.schema!==1)throw new Error('지원하지 않는 기록 형식입니다.');for(const k of ['notes','checked'])if(!data[k]||typeof data[k]!=='object'||Array.isArray(data[k]))throw new Error('기록 내용이 올바르지 않습니다.');const notes={},checked={};for(const f of noteFields){const v=data.notes[f.dataset.note];if(v!==undefined&&(typeof v!=='string'||v.length>20000))throw new Error('메모 값이나 길이를 확인하세요.');notes[f.dataset.note]=v===undefined?(f.tagName==='SELECT'?'SPEC.md':''):v;}if(!knownStages.includes(notes.stage))throw new Error('알 수 없는 단계입니다.');for(const f of checkFields){const v=data.checked[f.dataset.check];if(v!==undefined&&typeof v!=='boolean')throw new Error('확인 표시 값이 올바르지 않습니다.');checked[f.dataset.check]=v===true;}return{kind:'drawing-ide-planning-notes',schema:1,notes,checked};}
+function updateCount(){$('#check-count').textContent=checkFields.filter(f=>f.checked).length+' / '+checkFields.length+' 확인 표시';}
+function putRecord(data){noteFields.forEach(f=>f.value=data.notes[f.dataset.note]??(f.tagName==='SELECT'?'SPEC.md':''));checkFields.forEach(f=>f.checked=!!data.checked[f.dataset.check]);updateCount();}
+function saveRecord(){updateCount();try{localStorage.setItem(storageKey,JSON.stringify(getRecord()));$('#save-status').textContent='이 브라우저에 개인 기록을 저장했습니다.';}catch(e){$('#save-status').textContent='브라우저 저장이 제한됩니다. 현재 화면의 기록을 JSON으로 저장하세요.';}}
+if(noteFields.length){try{const raw=localStorage.getItem(storageKey);if(raw){putRecord(validateRecord(JSON.parse(raw)));$('#save-status').textContent='이 브라우저의 개인 기록을 불러왔습니다.';}else{$('#save-status').textContent='아직 저장된 개인 기록이 없습니다.';}}catch(e){$('#save-status').textContent='브라우저 기록을 읽을 수 없습니다. JSON 불러오기·저장을 사용할 수 있습니다.';}updateCount();noteFields.forEach(f=>f.addEventListener('input',saveRecord));checkFields.forEach(f=>f.addEventListener('change',saveRecord));
+$('#export-notes').addEventListener('click',()=>{const d=getRecord();d.exportedAt=new Date().toISOString();download('Drawing_IDE_Review_Notes.json',JSON.stringify(d,null,2),'application/json');notify('현재 개인 기록을 JSON 파일로 저장합니다.');});
+$('#import-notes').addEventListener('click',()=>$('#notes-file').click());
+$('#notes-file').addEventListener('change',async()=>{const input=$('#notes-file');const f=input.files&&input.files[0];if(!f)return;try{if(f.size>1048576)throw new Error('기록 파일이 너무 큽니다. 최대 1MB입니다.');const d=validateRecord(JSON.parse(await f.text()));if(!confirm('불러온 기록으로 현재 메모와 확인 표시를 바꿀까요?'))return;putRecord(d);saveRecord();notify('개인 기록을 불러왔습니다.');}catch(e){notify(e instanceof SyntaxError?'JSON 파일을 읽을 수 없습니다. 기존 기록은 유지합니다.':String(e.message||e));}finally{input.value='';}});
+$('#reset-notes').addEventListener('click',()=>{if(!confirm('이 브라우저의 개인 메모와 확인 표시를 초기화할까요?'))return;const notes={stage:'SPEC.md'};putRecord({notes,checked:{}});saveRecord();notify('개인 기록을 초기화했습니다.');});}
+showDoc(config.initial,false);useHash();
+})();
+</script>
+</body></html>

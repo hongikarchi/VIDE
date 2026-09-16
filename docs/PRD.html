@@ -1,0 +1,1170 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="description" content="Drawing IDE의 제품 요구사항, 개발 진행 가이드와 디자인 기준."><title>Drawing IDE · PRD</title><style>
+:root{--ink:#292c2d;--muted:#626b6e;--line:#e1e3e1;--soft:#f5f5f1;--coral:#d97660;--paper:#fff;--font:"Pretendard","Noto Sans KR","Malgun Gothic",Arial,sans-serif}
+*{box-sizing:border-box}html{scroll-behavior:smooth;scroll-padding-top:92px}body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--font);letter-spacing:-.025em}a{color:inherit;text-underline-offset:4px}button,input,textarea,select{font:inherit;color:inherit}button{cursor:pointer;border:1px solid var(--line);border-radius:4px;background:var(--paper);padding:10px 15px;line-height:1.3}button:hover{background:var(--soft)}button:disabled{cursor:default;opacity:.6}button.primary{background:var(--ink);color:#fff;border-color:var(--ink)}button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible{outline:3px solid var(--coral);outline-offset:3px}textarea{resize:vertical}::selection{background:#f2d7ce}[hidden]{display:none!important}
+.skip{position:fixed;top:-80px;left:20px;z-index:100;background:white;padding:12px}.skip:focus{top:10px}
+.topbar{height:68px;position:sticky;top:0;z-index:30;border-bottom:1px solid var(--line);background:#fffffff7;display:flex;align-items:center;justify-content:space-between;gap:24px;padding:0 max(24px,calc((100vw - 1450px)/2))}.brand{text-decoration:none;display:flex;align-items:center;gap:15px;white-space:nowrap}.brand b{font-size:29px;letter-spacing:-.08em}.brand span{border-left:1px solid var(--line);padding-left:15px;font-size:11px;letter-spacing:.08em}.doc-tabs{display:flex;height:100%;gap:25px;align-items:stretch}.doc-tab{display:flex;align-items:center;position:relative;text-decoration:none;font-size:13px;color:var(--muted);white-space:nowrap}.doc-tab.active{color:var(--ink);font-weight:650}.doc-tab.active:after{content:"";position:absolute;bottom:0;left:0;right:0;height:3px;background:var(--coral)}.top-actions{display:flex;gap:8px}.top-actions button{padding:8px 11px;font-size:12px;white-space:nowrap}
+.layout{max-width:1450px;margin:auto;padding:0 30px;display:grid;grid-template-columns:218px minmax(0,1fr);gap:55px}.toc-shell{align-self:start;position:sticky;top:99px;padding-top:15px;max-height:calc(100vh - 120px)}.eyebrow{font-size:10px;line-height:1.6;letter-spacing:.16em;font-weight:500;color:var(--muted)}.toc-title{display:flex;justify-content:space-between;align-items:center;margin-bottom:15px}.toc-title strong{font-size:12px;font-weight:500}.toc-title span{font-size:10px;color:var(--muted)}#toc-toggle{display:none}.toc-search{width:100%;padding:10px 12px;border:1px solid var(--line);background:var(--paper);border-radius:4px;font-size:12px}.toc-hint{font-size:10px;color:var(--muted);margin:8px 0 15px;line-height:1.6}.toc-links{max-height:calc(100vh - 323px);overflow-y:auto;padding:0 8px 8px 0}.toc-links a{display:block;padding:8px 10px;margin:2px 0;border-left:2px solid transparent;border-radius:0 3px 3px 0;text-decoration:none;font-size:12px;line-height:1.65;color:var(--muted);word-break:keep-all;overflow-wrap:anywhere}.toc-links a:hover{background:var(--soft)}.toc-links a.active{border-color:var(--coral);background:var(--soft);color:var(--ink)}.toc-next{border-top:1px solid var(--line);padding-top:13px;margin-top:14px;font-size:11px;color:var(--muted);line-height:1.7}.toc-next b{font-weight:500;color:var(--ink)}
+main{min-width:0;max-width:1040px;padding-bottom:70px}.doc-hero{padding:55px 0 32px;border-bottom:1px solid var(--line)}.hero-label{display:flex;justify-content:space-between;gap:20px;align-items:center}.doc-hero h1{font-size:clamp(32px,3.15vw,48px);line-height:1.22;letter-spacing:-.065em;font-weight:550;margin:20px 0 18px;max-width:900px;word-break:keep-all;overflow-wrap:anywhere}.doc-description{font-size:14px;color:var(--muted);line-height:1.8;margin:0}.pill{display:inline-block;font-size:10px;letter-spacing:.01em;padding:5px 9px;border:1px solid var(--line);border-radius:3px;white-space:nowrap}.hero-meta{margin-top:22px;font-size:12px;color:var(--muted);line-height:1.9}.hero-meta p{font-size:12px;line-height:1.9;margin:8px 0}.hero-meta strong{font-weight:600}.hero-meta blockquote{margin:25px 0 0;padding:20px 22px;background:var(--soft);border-left:3px solid var(--coral);color:var(--ink)}.hero-meta blockquote p{word-break:keep-all;overflow-wrap:anywhere;font-size:18px;line-height:1.8;letter-spacing:-.03em;margin:0}.doc-section{padding:44px 0;border-bottom:1px solid var(--line);scroll-margin-top:93px;min-width:0}.doc-section h2{font-size:28px;font-weight:550;letter-spacing:-.055em;line-height:1.4;margin:0 0 24px;word-break:keep-all;overflow-wrap:anywhere}.section-num{font-weight:400;color:var(--coral);margin-right:10px;font-size:.75em;letter-spacing:-.02em}.doc-section h3{font-size:19px;font-weight:600;line-height:1.5;margin:32px 0 14px;letter-spacing:-.04em}.doc-section h4{font-size:16px;line-height:1.5;margin:25px 0 12px}.doc-section p{font-size:15px;line-height:1.92;margin:13px 0;word-break:keep-all;overflow-wrap:anywhere}.doc-section strong{font-weight:650}.doc-section ul,.doc-section ol{padding-left:22px;font-size:15px;line-height:1.85}.doc-section li{margin:7px 0}.doc-section blockquote{border-left:3px solid var(--coral);background:var(--soft);margin:23px 0;padding:15px 22px}.doc-section blockquote p{margin:0;font-size:16px;line-height:1.85}.doc-section hr{border:0;border-top:1px solid var(--line);margin:28px 0}.doc-section code:not(pre code){font-family:Consolas,"Liberation Mono",monospace;font-size:.91em;background:var(--soft);padding:2px 5px;border-radius:3px;overflow-wrap:anywhere}
+.table-scroll{overflow-x:auto;overscroll-behavior-x:contain;margin:22px 0;border-top:1px solid var(--ink);border-bottom:1px solid var(--line);width:100%}table{border-collapse:collapse;width:100%;font-size:12.5px;line-height:1.75;table-layout:auto}th,td{padding:13px 14px;vertical-align:top;text-align:left;border-bottom:1px solid var(--line);word-break:keep-all;overflow-wrap:anywhere}th{background:var(--soft);font-weight:600;font-size:11.5px}tr:last-child td{border-bottom:0}td:first-child{font-weight:550;min-width:125px}td{min-width:145px}.table-scroll table:has(th:nth-child(2)){min-width:410px}.table-scroll table:has(th:nth-child(3)){min-width:585px}.table-scroll table:has(th:nth-child(4)){min-width:710px}.table-scroll table:has(th:nth-child(5)){min-width:840px}.code-frame{position:relative;margin:23px 0;border:1px solid var(--line);border-radius:4px;overflow:hidden;background:#f8f8f5}.code-frame pre{margin:0;padding:49px 20px 19px;overflow:auto;max-height:680px;font-family:Consolas,"Liberation Mono",monospace;font-size:12px;line-height:1.9;white-space:pre;letter-spacing:-.01em}.copy-code{position:absolute;top:9px;right:10px;font-size:10px;padding:5px 9px;background:#fff}.code-frame .code-label{position:absolute;left:18px;top:15px;font-size:9px;color:var(--muted);letter-spacing:.12em}.doc-footer{margin-top:30px;display:flex;justify-content:space-between;gap:24px;font-size:10px;color:var(--muted);line-height:1.8}
+.review-workspace{background:var(--soft);border:1px solid var(--line);padding:27px;margin:30px 0 5px;border-radius:4px}.workspace-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:15px}.workspace-heading h3{margin:6px 0 10px}.workspace-heading p{font-size:12px;margin:0 0 20px}.checks{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}.check-group{min-width:0;margin:0;padding:14px 15px;border:1px solid var(--line);background:#fff;border-radius:3px}.check-group legend{padding:0 7px;font-size:12px;font-weight:600}.check-line{display:flex;gap:9px;align-items:flex-start;font-size:12px;line-height:1.7;margin:9px 0;cursor:pointer}.check-line input{accent-color:var(--coral);margin:3px 0 0;flex:none;width:15px;height:15px}.stage-field{display:flex;align-items:center;gap:15px;font-size:12px;margin:26px 0 20px}.stage-field select{background:#fff;border:1px solid var(--line);padding:9px 12px;max-width:100%;font-size:12px;border-radius:3px}.note-grid{display:grid;grid-template-columns:1fr 1fr;gap:18px}.note-field{display:block;min-width:0}.note-field>span{display:block;margin-bottom:8px;font-size:12px}.note-field textarea{width:100%;min-height:96px;border:1px solid var(--line);border-radius:3px;padding:12px;background:#fff;font-size:13px;line-height:1.8}.note-field:last-child{grid-column:1/-1}.note-actions{display:flex;gap:9px;flex-wrap:wrap;margin-top:20px}.note-actions button{font-size:12px}.review-workspace p.save-status{font-size:11px;margin:15px 0 5px;color:var(--muted)}.review-workspace p.micro{font-size:10px;line-height:1.8;color:var(--muted);margin:0}.toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);background:var(--ink);color:white;padding:12px 18px;border-radius:4px;font-size:12px;z-index:60;max-width:90vw;box-shadow:0 5px 24px #0002;line-height:1.6}.empty-nav{font-size:12px;color:var(--muted);padding:15px 5px;line-height:1.7}
+@media(min-width:1600px){.layout{gap:65px}}
+@media(max-width:1100px){.layout{grid-template-columns:188px minmax(0,1fr);gap:30px;padding:0 24px}.topbar{gap:18px}.brand span{display:none}.doc-hero h1{font-size:38px}.doc-section p{font-size:14px}.doc-section h2{font-size:26px}.doc-tabs{gap:23px}.review-workspace{padding:22px}.checks{grid-template-columns:1fr}}
+@media(max-width:820px){html{scroll-padding-top:84px}.topbar{height:60px;padding:0 18px;gap:14px}.brand b{font-size:27px}.doc-tabs{gap:18px}.doc-tab{font-size:12px}.top-actions{gap:6px}.top-actions button{font-size:10px;padding:7px 9px}.layout{display:block;padding:0 22px}.toc-shell{position:relative;top:auto;max-height:none;padding-top:18px;border-bottom:1px solid var(--line)}.toc-title{margin:0;padding-bottom:14px}.toc-title strong{font-size:11px}.toc-title>span{display:none}#toc-toggle{display:block;font-size:11px;padding:7px 11px}.toc-body{display:none}.toc-shell.open .toc-body{display:block}.toc-links{max-height:240px;margin-bottom:12px}.toc-next{display:none}.doc-hero{padding:34px 0 27px}.doc-hero h1{font-size:35px;max-width:600px}.hero-label{align-items:flex-start;gap:10px;flex-wrap:wrap}.hero-label .pill{font-size:9px}.doc-section{padding:34px 0;scroll-margin-top:80px}.doc-section h2{font-size:25px;line-height:1.45}.doc-section p{font-size:14px;line-height:1.95}.hero-meta blockquote p{font-size:16px}.note-grid{grid-template-columns:1fr}.stage-field{flex-wrap:wrap}.note-field:last-child{grid-column:auto}.workspace-heading{display:block}.workspace-heading .pill{margin-bottom:17px}.doc-footer{flex-direction:column;gap:5px}}
+@media(max-width:480px){.topbar{gap:10px;padding:0 16px}.doc-tabs{gap:15px}.top-actions button#source-download{display:none}.brand b{font-size:25px}.doc-hero h1{font-size:31px;line-height:1.3}.doc-hero .eyebrow{font-size:9px}.doc-description{font-size:12px}.hero-meta{font-size:11px}.hero-meta p{font-size:11px;line-height:1.9}.hero-meta blockquote{padding:16px 16px}.hero-meta blockquote p{font-size:15px}.doc-section h2{font-size:23px}.doc-section h3{font-size:18px}.doc-section p{font-size:14px}.table-scroll{margin:20px 0}td,th{padding:11px 12px}.code-frame pre{font-size:11px;padding-left:15px}.review-workspace{padding:18px}.note-actions{gap:8px}.note-actions button{padding:9px 10px;font-size:11px}.check-line{font-size:12px}.top-actions button{padding:7px 9px}}
+@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}*{transition:none!important}}
+@media print{@page{margin:15mm}.topbar,.toc-shell,.skip,.copy-code,.toast,.review-workspace,.doc-footer{display:none!important}.layout{display:block;padding:0;max-width:none}main{max-width:none;padding:0}.doc-hero{padding:0 0 18px}.doc-hero h1{font-size:27px}.doc-section{padding:22px 0;break-inside:auto}.doc-section h2{font-size:21px;break-after:avoid}.doc-section h3{font-size:16px;break-after:avoid}.doc-section p{font-size:11px;line-height:1.75}.table-scroll{overflow:visible;break-inside:auto}table{min-width:0!important;font-size:9px;table-layout:fixed}td,th{min-width:0;font-size:9px;word-break:normal;padding:7px}tr{break-inside:avoid}.code-frame pre{white-space:pre-wrap;max-height:none;font-size:9px;padding:16px;overflow:visible;word-break:break-word}.code-label{display:none}.hero-meta blockquote p{font-size:14px}}
+</style></head><body>
+<a class="skip" href="#reading-main">본문으로 이동</a>
+<header class="topbar"><a class="brand" href="index.html" aria-label="Drawing IDE 문서 모음"><b>D.</b><span>DRAWING IDE</span></a><nav class="doc-tabs" aria-label="문서 선택"><a class="doc-tab" data-doc="prd" href="#prd">PRD</a><a class="doc-tab" href="DEVELOPMENT_GUIDE.html">개발 가이드</a><a class="doc-tab" href="DESIGN.html">Design</a></nav><div class="top-actions"><button id="source-download" title="현재 문서의 Markdown 원문 저장">원문 ↓</button><button id="print-doc" title="현재 문서 인쇄">인쇄</button></div></header>
+<div class="layout"><aside class="toc-shell" id="toc-shell" aria-label="현재 문서의 목차"><div class="toc-title"><strong>CONTENTS</strong><span id="toc-count"></span><button id="toc-toggle" aria-expanded="false" aria-controls="toc-body">목차 열기</button></div><div class="toc-body" id="toc-body"><input class="toc-search" id="toc-search" type="search" placeholder="장 제목으로 찾기" aria-label="현재 문서 목차 검색"><p class="toc-hint" id="nav-hint" role="status">장 제목으로 찾아갑니다.</p><nav class="toc-links" id="toc-links" aria-label="본문 장 이동"></nav><div class="toc-next">다음 작성할 문서<br><b>SPEC.md</b><br>기능별 동작·상태·수용 기준</div></div></aside><main id="reading-main" tabindex="-1"><article id="prd" class="document"><header class="doc-hero"><div class="hero-label"><span class="eyebrow">PRODUCT REQUIREMENTS</span><span class="pill">19 CHAPTERS</span></div><h1 tabindex="-1">Integrated Drawing Environment · PRD</h1><p class="doc-description">제품 기준 · 플랫폼 MVP</p><div class="hero-meta">
+<p><strong>문서 목적:</strong> 제품의 사용자·가치·MVP 범위·요구사항·수용 기준을 정의한다.<br/>
+<strong>제품:</strong> Drawing IDE · 건축가를 위한 통합 설계 작업환경<br/>
+<strong>문서 상태:</strong> 제품 요구사항 기준. 실제 지원 버전과 기능별 제공 범위는 명시된 결정 항목을 확정해야 한다.</p>
+<blockquote>
+<p><strong>Windows 설치형 IDE를 기반으로 여러 CAD/BIM 프로그램을 제어하고, 건축가가 실제 작업 상태를 보며 개입하고, 전문 기능을 스킬·플러그인으로 확장하는 플랫폼.</strong></p>
+</blockquote>
+</div></header><section class="doc-section" id="prd-section-0"><h2><span aria-hidden="true" class="section-num">00 /</span> 제품 요약</h2>
+<p>Drawing IDE의 첫 MVP는 특정 건축 자동화 기능 하나가 아니라 <strong>여러 프로그램을 같은 프로젝트에서 다룰 수 있는 공통 IDE 플랫폼</strong>이다. 이후 법규 검토·사이트 모델링·매스 배치·구조 검토·평면 작성·건축 개요·일람표 작성을 전문 스킬과 플러그인으로 추가한다.</p>
+<p>기본 환경은 빈 화면과 연결 버튼을 뜻하지 않는다. 지원 호스트에서 대상 읽기, 공간 입력, 제한된 네이티브 객체 생성·수정, 진행의 시각화, 사람의 개입, 결과 확인·보존까지 이어져야 한다. 전문 업무 전체를 자동화하지 않아도 이 기본 제어를 사용할 수 있어야 한다.</p>
+<div aria-label="PRD 표 1" class="table-scroll" role="region" tabindex="0"><table>
+<thead>
+<tr>
+<th>구분</th>
+<th>제품 결정</th>
+<th>경계</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>첫 MVP</td>
+<td>프로젝트·작업·데이터·AI 실행·호스트 제어·확장의 공통 기반</td>
+<td>특정 매스 자동화 도구를 전체 MVP로 대체하지 않음</td>
+</tr>
+<tr>
+<td>주 사용 환경</td>
+<td>Windows 우선 설치형 프로그램</td>
+<td>앱 기술·설치 도구·지원 Windows 세부 버전은 별도 결정</td>
+</tr>
+<tr>
+<td>호스트</td>
+<td>Rhino·Revit·CAD 계열의 기본 제어</td>
+<td>AutoCAD·ZWCAD의 첫 지원 조합과 버전·객체 범위는 확정 필요</td>
+</tr>
+<tr>
+<td>결과</td>
+<td>지원 객체 종류에 대한 네이티브 생성·수정과 후속 편집</td>
+<td>보이는 형상이나 카테고리 지정만으로 네이티브 성공 처리 금지</td>
+</tr>
+<tr>
+<td>입력과 개입</td>
+<td>문장·핀·코멘트·좌표 기반 스케치, 실제 중간 상태에 대한 수정</td>
+<td>코멘트 저장이 자동 실행 또는 원본 수정 권한이 되지 않음</td>
+</tr>
+<tr>
+<td>확장</td>
+<td>공통 기능 위에 전문 스킬·플러그인과 분야별 규칙 추가</td>
+<td>기본 권한·대상·단위·상태 보호를 후속 단계로 미루지 않음</td>
+</tr>
+<tr>
+<td>외부 참여</td>
+<td>iPad·Mac·Windows의 웹 브라우저를 통한 검토</td>
+<td>첫 배포의 범위·지원 브라우저·동기화 방식은 확정 필요</td>
+</tr>
+</tbody>
+</table></div>
+<p><strong>핵심 경험:</strong> 프로젝트와 호스트를 연결한다 → 대상을 가리키고 의도를 그린다 → 작업을 맡긴다 → 실제 중간 상태를 보고 조정한다 → 네이티브 결과를 반영·재편집한다 → 결과와 근거를 보존·공유한다.</p>
+<p><strong>추가 검토 아이디어:</strong> 필요한 자료를 즉석 HTML로 생성하고 그 안의 문단·표·도형을 직접 선택해 수정하는 편집기는 후보 기능이다. 기본 산출물 표시·HTML 공유와 구분하며, 캔버스 방식과 직접 HTML 방식 중 어느 것도 확정하지 않는다.</p>
+</section><section class="doc-section" id="prd-section-1"><h2><span aria-hidden="true" class="section-num">01 /</span> 제품 정의와 책임</h2>
+<h3>1.1 무엇을 만드는가</h3>
+<p>건축가가 여러 모델링 프로그램의 모델과 설계 자료를 하나의 프로젝트·작업 범위에서 다루고, AI와 함께 작업하면서 과정과 결과를 직접 통제하는 통합 작업환경을 만든다. 제품의 작업명은 <strong>Integrated Drawing Environment</strong>다.</p>
+<p>VS Code와 같은 확장형 IDE의 개념을 지향하되, VS Code 기반 개발이나 터미널 중심 화면을 필수로 정하지 않는다. 모델·도면·스케치·치수·자료가 주요 입력과 판단 대상이다. 사용자는 코드와 긴 터미널 출력을 읽지 않아도 대상과 변경을 이해할 수 있어야 한다.</p>
+<p>새로운 범용 기하 커널, 모든 CAD/BIM 프로그램을 대체하는 모델러, 모든 네이티브 화면을 한 창 안에 넣는 제품은 아니다. 개별 호스트가 원본의 편집 의미를 소유하고, IDE는 연결된 작업과 근거·상태·결정을 관리한다.</p>
+<h3>1.2 제품이 책임지는 것</h3>
+<p>지정한 대상·입력·유지 조건을 보존하고, 실제 작업 상태와 결과를 보여주며, 사용자의 개입을 실행에 반영한다. 후보와 원본, 계획과 실행, 추정과 사실, 제출과 반영, 적용과 저장을 구분한다.</p>
+<p>등록되지 않은 모든 설계 조건의 자동 발견이나 전체 설계의 적합성을 포괄적으로 보증하지 않는다. 지원하는 기본 제어에서는 정의된 네이티브 결과와 상태의 신뢰성을 확보한다. 전문 스킬은 별도의 완료 기준과 검토 범위를 갖는다. ‘미검토’ 표시가 낮은 완료율과 품질의 변명이 되어서는 안 된다.</p>
+<h3>1.3 사용 환경과 접근 역할</h3>
+<p><strong>주 작업자:</strong> Windows에 설치한 IDE에서 로컬 프로젝트를 열고, 사용 권한이 있는 호스트 프로그램과 연결한다. 호스트 프로그램 자체의 설치·사용 권한이 IDE 설치만으로 제공되는 것으로 표시하지 않는다.</p>
+<p><strong>외부 검토자:</strong> 웹으로 공개된 권한 범위 안에서 모델·자료를 보고 코멘트·스케치를 제출한다. 이 웹 참여가 Windows 네이티브 API의 직접 실행이나 로컬 원본 쓰기 권한을 뜻하지 않는다.</p>
+<p><strong>Local-first:</strong> 입력·프로젝트 기록·원본 제어의 기준을 작업환경이 관리한다. 클라우드 모델을 사용할 수 있지만 전송할 자료와 권한을 확인할 수 있어야 한다. AI 연결이 끊겨도 가능한 열람·선택·스케치·코멘트·저장 작업은 유지한다. 외부 검토의 최신 상태나 온라인 추론까지 오프라인에서 가능하다고 표시하지 않는다.</p>
+</section><section class="doc-section" id="prd-section-2"><h2><span aria-hidden="true" class="section-num">02 /</span> 해결할 문제와 제품 가설</h2>
+<p>제품이 해결할 문제와 검증할 가설은 다음과 같다. 효과는 지원 과업의 사용자 시험에서 확인한다.</p>
+<div aria-label="PRD 표 2" class="table-scroll" role="region" tabindex="0"><table>
+<thead>
+<tr>
+<th>문제</th>
+<th>제품의 대응</th>
+<th>확인할 결과</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>‘여기’와 ‘이런 형태’를 문장만으로 전달하기 어렵다</td>
+<td>실제 대상 핀, 좌표에 연결된 스케치, 단위 있는 치수</td>
+<td>대상 오인과 의도 수정 부담이 줄어드는가</td>
+</tr>
+<tr>
+<td>모델·BIM 정보·회의 결정이 분리되어 있다</td>
+<td>설계 대상을 중심으로 자료·관계·근거 연결</td>
+<td>관련 조건을 찾고 변경 영향을 확인할 수 있는가</td>
+</tr>
+<tr>
+<td>큰 작업은 방향 오류를 늦게 발견한다</td>
+<td>검토 가능한 단위로 분할하고 중간 결과를 남김</td>
+<td>초기에 잘못된 대상을 찾고 방향을 바꿀 수 있는가</td>
+</tr>
+<tr>
+<td>작업 중 무엇이 일어나는지 알 수 없다</td>
+<td>실제 모델·도면·가정·계산 상태를 표시</td>
+<td>설명 로그 없이도 현재 상태를 이해하는가</td>
+</tr>
+<tr>
+<td>매 단계 승인하면 직접 CAD를 쓰는 것만큼 번거롭다</td>
+<td>위임 범위 안에서는 진행하고 설계적 결정에서만 확인</td>
+<td>불필요한 개입 없이 결과를 채택하는가</td>
+</tr>
+<tr>
+<td>큰 문맥과 반복 검증이 시간·비용을 늘린다</td>
+<td>필수조건 보존, 관련 정보 조회, 영향 범위 재계산</td>
+<td>조건 누락 없이 총비용과 재작업을 줄이는가</td>
+</tr>
+<tr>
+<td>후보·원본·보고서 상태를 혼동한다</td>
+<td>후보 저장, 채택, 원본 반영, 발행을 분리</td>
+<td>무엇이 실제 계획에 반영됐는지 확인 가능한가</td>
+</tr>
+<tr>
+<td>대안과 피드백의 이유가 사라진다</td>
+<td>기준 버전이 있는 이력·검토 요청·결정 기록</td>
+<td>과거 판단과 현재 결과의 연결을 회수할 수 있는가</td>
+</tr>
+</tbody>
+</table></div>
+</section><section class="doc-section" id="prd-section-3"><h2><span aria-hidden="true" class="section-num">03 /</span> 사용자와 핵심 업무</h2>
+<p><strong>주 사용자 — 비개발자 건축 설계자.</strong> Windows에서 Rhino·Revit·CAD를 사용한다. 프로젝트와 연결 문서를 관리하고, 모델·도면·선택·스케치로 요청하며, 후보와 실제 변경을 보고 방향을 바꾼다. 분야별 자동화 스킬이 없어도 기본 제어를 사용할 수 있어야 한다.</p>
+<p><strong>보조 사용자 — BIM·계산설계 담당자.</strong> 네이티브 객체의 의미, 데이터 관계, 입력 조건, 연결 상태와 결과의 충실도를 확인한다. 전문 설정을 일반 사용자의 매 작업 필수 절차로 만들지 않는다.</p>
+<p><strong>확장 작성자 — 스킬·플러그인 개발자.</strong> 공통 연결·입력·진행·결과·권한 기능을 재사용해 전문 기능을 추가한다. 일반적인 확장 등록을 위해 프로젝트 데이터·인증·호스트 제어를 매번 다시 만들지 않아야 한다.</p>
+<p><strong>외부 검토자 — 동료·책임자·발주자 등.</strong> 웹에서 게시된 기준 모델과 자료를 보고 의견을 남긴다. 변경의 의미를 이해하는 것과 전문적 적합성을 판정하거나 원본에 반영하는 권한은 구분한다.</p>
+</section><section class="doc-section" id="prd-section-4"><h2><span aria-hidden="true" class="section-num">04 /</span> MVP·후속 확장·제외 범위</h2>
+<h3>4.1 플랫폼 MVP에 포함하는 공통 능력</h3>
+<p>프로젝트·작업 범위 관리, 호스트·문서 식별, 상태·속성·선택 읽기, 제한된 네이티브 생성·수정, 문장·핀·기본 평면 스케치·코멘트, AI 요청·재개, 실제 중간 결과, 수정·중단, 후보·원본 구분, 입력·결정·결과 보존, 기본 산출물 열람과 HTML 전달, 작은 확장의 등록·실행을 포함한다.</p>
+<p>여러 호스트를 연결하되 모든 기능을 동일하게 제공한다고 약속하지 않는다. 각 호스트에서 지원하는 기본 동작과 결과 기준을 별도로 선언한다. 연결 상태만 보이거나 읽기만 되는 호스트를 네이티브 쓰기 지원으로 집계하지 않는다.</p>
+<h3>4.2 전문 스킬로 추가하는 업무</h3>
+<div aria-label="PRD 표 3" class="table-scroll" role="region" tabindex="0"><table>
+<thead>
+<tr>
+<th>전문 기능</th>
+<th>후속 스킬의 목적</th>
+<th>공통 기반에서 제공할 것</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>법규 검토 자동화</td>
+<td>적용 자료·시점·조건과 검토 결과 연결</td>
+<td>자료·근거·조건·대상·결과 기록</td>
+</tr>
+<tr>
+<td>주변 사이트 모델링 자동화</td>
+<td>주변 자료에서 검토 가능한 사이트 모델 생성</td>
+<td>외부 자료 수집 접점, 좌표·단위, 호스트 제어</td>
+</tr>
+<tr>
+<td>법규에 맞는 매스 배치 자동화</td>
+<td>명시한 규칙과 설계 의도를 반영한 배치 후보</td>
+<td>후보·조건·비교·네이티브 반영</td>
+</tr>
+<tr>
+<td>구조 검토 자동화</td>
+<td>해석 조건·모델·결과·검토 범위 연결</td>
+<td>계산 도구 접점, 가정·결과·근거 보존</td>
+</tr>
+<tr>
+<td>평면 Drawing 스킬</td>
+<td>AutoCAD 또는 ZWCAD의 지원 요소로 평면 작성</td>
+<td>CAD 네이티브 읽기·쓰기·속성·결과 확인</td>
+</tr>
+<tr>
+<td>건축 개요 작성</td>
+<td>확인된 프로젝트 데이터로 개요 구성</td>
+<td>데이터·자료·출처·산출물 표시</td>
+</tr>
+<tr>
+<td>일람표 작성</td>
+<td>지원 요소와 속성을 이용한 표 작성</td>
+<td>조회·집계·버전·출력 연결</td>
+</tr>
+</tbody>
+</table></div>
+<p>표는 확장 목표이지 자동 완성 기능의 출시 선언이 아니다. 분야별 rule book, 사례, 전문 평가와 하네스 조정은 각 스킬을 구현하며 구체화한다. 법규·구조의 전문 판단 전체나 허가·안전의 보편적 보증을 제공하는 것으로 정의하지 않는다.</p>
+<h3>4.3 기본 실행 규칙과 전문 하네스의 경계</h3>
+<p><strong>MVP에서 제공:</strong> 정확한 문서·객체·단위·권한, 입력·기준 보존, 실제 진행 표시, 개입·중단 상태, 사람 수정 보호, 중복 적용 방지, 불명확 결과 처리, 최소 품질·비용 관측.</p>
+<p><strong>스킬별로 확장:</strong> 법규 해석 절차, 구조 검토의 전제, 도면 작성 관례, 건축 분야의 경험칙·사례·평가, 전문 도구와 계산 흐름. 지침만으로 실행 권한을 바꾸거나 기본 보호를 끄지 않는다.</p>
+<h3>4.4 후보 기능과 비목표</h3>
+<p>즉석 HTML 자료 생성, 문단·표·도형 직접 선택과 부분 수정, 캔버스/DOM 기반 편집기는 <strong>후보 기능 C-01</strong>로 둔다. 채택 전에는 MVP 수용 조건이나 구현 티켓으로 자동 포함하지 않는다.</p>
+<p>자유로운 화면 분할·도킹·Blender식 워크스페이스, 플러그인 마켓·결제, 모든 객체 유형의 쓰기, 범용 네이티브 파일 자동 병합, 모든 BIM 의미·편집 이력의 무손실 왕복, 장시간 무관찰 자율 설계는 MVP의 필수 범위가 아니다.</p>
+<p>후속 연결 대상으로 Grasshopper·Archicad·SketchUp 등을 유지한다. 추가 호스트와 객체 종류는 동일한 지원·검수 원칙에 따라 별도 확장한다.</p>
+</section><section class="doc-section" id="prd-section-5"><h2><span aria-hidden="true" class="section-num">05 /</span> 제품의 정보 구조와 용어</h2>
+<div class="code-frame"><span class="code-label">COPYABLE TEXT</span><button aria-label="이 텍스트 복사" class="copy-code" type="button">복사</button><pre><code class="language-text">Project · 설계 맥락과 권한
+ ├─ 설계 대상 · 연결 모델 · 자료 · 조건 · 결정
+ ├─ WorkScope · 목표가 있는 작업 범위
+ │   ├─ 공간 입력 · 대화 · 참조 코멘트
+ │   ├─ 검토 가능한 작업 단위
+ │   │   └─ 실행 시도 · 중간 결과 · 개입 · 검토 상태
+ │   └─ Alt · 후보 · 비교 · 채택
+ └─ 설계 이력 · 외부 검토 · 보고서 · 내보내기
+</code></pre></div>
+<div aria-label="PRD 표 4" class="table-scroll" role="region" tabindex="0"><table>
+<thead>
+<tr>
+<th>용어</th>
+<th>정의</th>
+<th>혼동하지 않을 것</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Project</td>
+<td>설계 자료·연결 모델·조건·권한을 포함하는 프로젝트</td>
+<td>하나의 프로그램 파일 또는 AI 세션</td>
+</tr>
+<tr>
+<td>WorkScope</td>
+<td>목표·대상·변경 범위·유지 조건·기대 결과를 갖는 과업</td>
+<td>단순 채팅방</td>
+</tr>
+<tr>
+<td>검토 가능한 작업 단위</td>
+<td>한 설계 목적에 대해 일관된 중간 결과를 남기는 실행 묶음</td>
+<td>API 호출이나 LLM 호출 한 번</td>
+</tr>
+<tr>
+<td>Run · 실행 시도</td>
+<td>특정 입력·조건·기준 버전으로 작업을 수행한 사건</td>
+<td>대화 전체 또는 모델 버전 자체</td>
+</tr>
+<tr>
+<td>후보</td>
+<td>원본과 구분되는 변경 제안 또는 편집 가능한 결과</td>
+<td>이미 반영된 원본</td>
+</tr>
+<tr>
+<td>Alt · 대안</td>
+<td>공통 기준에서 분리해 발전시키는 설계안</td>
+<td>AI 대화 fork</td>
+</tr>
+<tr>
+<td>Checkpoint · 기록</td>
+<td>모델·입력·조건·결과·결정을 고정한 설계 시점</td>
+<td>원본 파일의 자동 백업·복원 보장</td>
+</tr>
+<tr>
+<td>개입</td>
+<td>진행 중 목표·대상·조건·후속 실행을 바꾸는 사용자 행동</td>
+<td>단순 로그 추가 또는 의견 저장</td>
+</tr>
+<tr>
+<td>Host · 호스트</td>
+<td>IDE가 연결하는 원본 CAD/BIM 프로그램</td>
+<td>IDE 자체 또는 파일 확장자</td>
+</tr>
+<tr>
+<td>Skill · 스킬</td>
+<td>이 제품에서 재사용하는 업무 절차·지침</td>
+<td>그 자체로 실행 가능한 모든 도구</td>
+</tr>
+<tr>
+<td>Plug-in · 플러그인</td>
+<td>도구·코드·필요한 UI를 등록하는 확장 단위</td>
+<td>무제한 로컬 권한이나 전문성의 보증</td>
+</tr>
+</tbody>
+</table></div>
+<p>하나의 WorkScope에는 여러 작업 단위와 실행 시도가 있을 수 있다. 작업 단위가 나뉘어도 상위 목표와 필수조건은 계속 공유한다. 대상 하나가 여러 모델 객체로 표현되거나 한 모델 객체가 여러 설계 대상을 포함할 수 있으므로, 관계를 무조건 일대일로 가정하지 않는다.</p>
+<p>다른 프로젝트의 자료는 명시적으로 연결한다. 열린 탭, 같은 파일 이름, 같은 AI 모델을 쓴다는 이유로 문맥과 권한이 합쳐져서는 안 된다.</p>
+</section><section class="doc-section" id="prd-section-6"><h2><span aria-hidden="true" class="section-num">06 /</span> 건축 특화 데이터 요구사항</h2>
+<h3>6.1 중심은 ‘설계 대상’이다</h3>
+<p>설계 대상에 형상·속성·관계·근거·버전·작업 결과를 연결한다. ‘형상 파일 + 임의 속성 목록’만으로 끝내지 않는다. 동시에 DB 전체를 완벽하게 분류해야만 작업을 시작할 수 있는 구조도 피한다.</p>
+<p>초기 매스나 미분류 형상을 수용한다. 아직 모르는 용도·호스트 관계·BIM 분류는 미확정으로 남기고, 지원 작업에 필요한 의미부터 점진적으로 추가한다. 단순 메시를 벽·슬래브 같은 네이티브 요소로 자동 간주하지 않는다.</p>
+<h3>6.2 연결해야 할 정보</h3>
+<div aria-label="PRD 표 5" class="table-scroll" role="region" tabindex="0"><table>
+<thead>
+<tr>
+<th>정보</th>
+<th>요구 내용</th>
+<th>사용자에게 가능한 일</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>설계 대상과 식별</td>
+<td>프로젝트·대안·원본 모델 안의 식별과 대응 관계</td>
+<td>현재 무엇을 가리키는지 확인</td>
+</tr>
+<tr>
+<td>형상 표현</td>
+<td>정밀 원본 참조, 표시용 형상, 평면·단면, 좌표·단위</td>
+<td>같은 대상을 여러 표현으로 검토</td>
+</tr>
+<tr>
+<td>속성과 수량</td>
+<td>값·단위·정의·출처·기준 버전</td>
+<td>치수·면적·용도 등의 근거 확인</td>
+</tr>
+<tr>
+<td>대상 간 관계</td>
+<td>포함, 경계, 호스트, 연결, 타입 공유, 계산 의존성</td>
+<td>영향을 받는 대상과 작업 추적</td>
+</tr>
+<tr>
+<td>근거와 조건</td>
+<td>회의록·스케치·자료 위치, 적용 범위, 채택 여부</td>
+<td>왜 유지·변경하는지 확인</td>
+</tr>
+<tr>
+<td>작업과 결과</td>
+<td>사용한 입력, 실제 생성물, 변경 내역, 개입, 결과 상태</td>
+<td>중간 상태를 다시 보고 작업 이어가기</td>
+</tr>
+</tbody>
+</table></div>
+<p>표현이 바뀌어도 확인 가능한 대응 관계는 유지한다. 그러나 객체의 분할·합침·삭제·재생성 뒤 동일성이나 부분 참조를 확인할 수 없다면, ‘연결 끊김’ 또는 ‘이전 버전 참조’로 표시한다. 가까운 객체로 조용히 재연결하지 않는다.</p>
+<h3>6.3 관계의 종류와 신뢰도를 구분한다</h3>
+<p>예를 들어 ‘문 → 개구부 → 벽’의 호스트 관계, ‘요소 → 타입’의 공유 관계, ‘스케치 → 후보 → 면적표’의 파생 관계는 서로 다르다. 단순히 ‘관련 있음’으로 저장하지 않는다. 공간적으로 가까운 것과 의미적으로 연결된 것도 구분한다.</p>
+<p>관계와 값에는 <strong>원본에서 읽음, 도구로 계산함, 사용자가 확정함, AI가 추정함</strong>을 구분해 남긴다. 현재 문 폭과 목표 문 폭은 다른 정보이며, 서로 덮어쓰지 않는다. 원문 사실을 바꾸는 것, 계산 가정을 바꾸는 것, 설계 조건을 바꾸는 것도 다른 사건으로 기록한다.</p>
+<h3>6.4 데이터가 답해야 할 질문</h3>
+<p>사용자는 대상에서 관련 조건·코멘트·지표로 이동할 수 있고, 반대로 자료나 지표에서 관련 모델 대상을 확인할 수 있어야 한다.</p>
+<p>대표 질문은 다음과 같다. “이 부분을 유지하는 근거는 무엇인가?”, “이 수치는 어느 모델과 방법으로 계산했는가?”, “이 스케치를 고치면 무엇이 다시 계산되어야 하는가?”, “이 관계는 확인된 사실인가 추정인가?”</p>
+<p>알 수 없는 관계는 알 수 없다고 드러낸다. 모든 의존성을 알고 있다고 전제한 자동 재사용·자동 변경은 허용하지 않는다.</p>
+<h3>6.5 데이터 저장·조회 요구</h3>
+<p>데이터 저장·조회는 설계 대상과 관계를 탐색하고, 버전별 상태·출처·파생 결과를 구분할 수 있어야 한다. 큰 기하 데이터와 LLM 입력을 같은 저장 단위로 취급하지 않는다. 구체적인 관계 종류와 읽기·갱신 동작은 SPEC에서, DB 엔진·물리 스키마·저장 형식은 구현계획에서 결정한다.</p>
+</section><section class="doc-section" id="prd-section-7"><h2><span aria-hidden="true" class="section-num">07 /</span> 작업을 나누는 기준</h2>
+<h3>7.1 한 단위는 하나의 설계 목적과 검토 가능한 결과를 갖는다</h3>
+<p>‘이 건물의 평면을 개선한다’는 WorkScope의 목표가 될 수 있지만 단일 무관찰 실행 단위로 삼지 않는다. 반대로 ‘객체 읽기 → 곡선 생성 → 면 생성’ 같은 내부 명령마다 사용자의 개입을 요구하지도 않는다.</p>
+<p>한 작업 단위에는 <strong>목적, 기준 버전, 변경 대상, 검토 범위, 유지 대상·조건, 기대 결과, 의존하는 작업, 수정·중단 가능한 지점</strong>이 있어야 한다. 선택과 기존 프로젝트 정보로 채울 수 있는 내용은 자동으로 구성하고, 모호한 중요한 항목만 확인한다.</p>
+<h3>7.2 변경 범위와 검토 범위를 분리한다</h3>
+<p>변경 권한이 없는 주변 대상도 영향 확인을 위해 읽을 수 있다. 반대로 검토에 포함되었다고 변경 권한이 생기지는 않는다.</p>
+<p>문을 옮기는 작업은 문과 개구부를 바꾸지만 벽·주변 공간을 함께 검토할 수 있다. 공통 타입 수정처럼 공간적으로 먼 객체에 영향을 주는 경우도 검토 범위에 포함한다. 실제 영향 범위를 좁게 확인하지 못하는 작업은 더 넓게 검토하거나 후보 실행으로 제한하며, 그 이유를 보인다.</p>
+<h3>7.3 더 나누어야 하는 경우</h3>
+<p>서로 독립적으로 채택할 수 있는 설계 판단이 여러 개 있거나, 중간 방향을 확인하지 못한 채 많은 후속 작업이 쌓이거나, 영향 범위가 원래 목표를 넘어가면 작업을 더 나눈다. 오래 걸리고 중단 제약이 큰 연산은 가능한 경우 검토 가능한 중간 단계로 분리한다.</p>
+<p>반대로 문과 개구부를 함께 수정해야 일관된 후보가 되는 것처럼 강하게 결합된 변경은 하나의 검토 단위로 묶는다. 같은 조건의 여러 객체를 일괄 변경하는 것도 하나의 검토 가능한 결과가 있으면 허용한다.</p>
+<p>객체 수·시간·토큰 수 하나만으로 고정 분할하지 않는다. 분할 자체가 새 AI 세션, 추가 검증자, 사용자 승인 단계를 자동으로 늘려서는 안 된다.</p>
+<h3>7.4 작은 작업과 전체 조건을 함께 유지한다</h3>
+<p>각 작업은 상위 WorkScope의 목표와 적용 중인 조건을 참조한다. 작업 결과를 합칠 때는 연결 부위와 전체 지표를 다시 확인한다. 개별 작업의 통과를 전체 설계의 적합으로 확대하지 않는다.</p>
+<p>작업 간 선후관계는 사용자에게 이해 가능한 이름으로 제공한다. 병렬 준비 여부와 무관하게 같은 원본·공유 대상을 변경할 때는 충돌과 대상 상태를 관리해야 한다.</p>
+</section><section class="doc-section" id="prd-section-8"><h2><span aria-hidden="true" class="section-num">08 /</span> 핵심 사용자 여정</h2>
+<p>아래는 플랫폼의 사용 경험을 설명하는 여정이다. 개별 객체와 생성 동작은 각 호스트의 지원표에 있는 기능만 사용한다. 복잡한 건축 해석 스킬의 완성을 전제하지 않는다.</p>
+<h3>8.1 설치하고 프로젝트·호스트를 연결한다</h3>
+<p>사용자가 Windows IDE를 설치하고 프로젝트를 연다. 연결 가능한 호스트와 문서를 확인한 뒤 작업 대상을 명시한다. 문서명뿐 아니라 구분 가능한 대상 정보, 단위, 현재 읽기·쓰기 수준을 확인한다. 설치된 호스트·버전이 지원되지 않으면 필요한 조건을 안내한다.</p>
+<p>Rhino와 Revit 등 여러 호스트를 같은 프로젝트에 등록할 수 있다. 화면을 전환하거나 다른 프로그램을 활성화해도 진행 중인 요청이 다른 문서를 대상으로 바뀌지 않는다.</p>
+<h3>8.2 대상을 가리키고 의도를 전달한다</h3>
+<p>기존 객체를 선택해 문장에 핀을 넣고, 작업평면에 선을 그리거나 지원 파라미터를 지정한다. 변경 대상·유지 대상·자료 참조를 함께 전달한다. 예를 들어 ‘[이 객체]를 지정 방향으로 이동하고 [주변 객체]는 유지’ 또는 ‘[기준선]과 지정 치수로 지원 객체 생성’을 요청할 수 있다.</p>
+<p>사용자가 입력한 선과 치수, 대상은 원본 데이터로 보존한다. 평면 스케치의 공간 기준을 확인하고, 등록되지 않은 이미지는 별도로 표시한다. 코멘트 저장은 AI 실행과 구분한다.</p>
+<h3>8.3 실제 중간 상태를 보며 작업한다</h3>
+<p>제품은 작업 대상과 적용 조건, 예상 변경, 마지막으로 만들어진 일관된 후보를 표시한다. 예정된 작업과 수행 중인 작업, 이미 생성한 결과를 구분한다. 자유로운 후보 탐색을 모든 내부 명령의 승인으로 끊지 않는다.</p>
+<p>의미 해석이 필요한 스케치는 원본과 해석을 함께 보여준다. 지원 범위를 벗어난 요청은 일반 메시나 다른 유형으로 몰래 대체하지 않고 가능한 대안과 한계를 제시한다.</p>
+<h3>8.4 중간에 지시하거나 직접 수정한다</h3>
+<p>사용자가 유지 대상을 추가하거나 치수·스케치를 바꾼다. 제품은 지시 접수와 실제 반영을 구분하고, 영향을 받는 후속 작업만 재처리한다. 늦게 도착한 이전 결과가 새 조건이나 호스트에서 직접 수정한 객체를 덮어쓰지 않는다.</p>
+<p>중단을 요청하면 새 작업을 멈추고, 진행 중인 연산의 실제 종료 여부를 보여준다. 원본이 이미 바뀐 부분은 후보 폐기와 구분해 기록한다.</p>
+<h3>8.5 결과를 반영하고 호스트에서 편집한다</h3>
+<p>사용자는 후보를 채택한 뒤 정확한 대상·변경을 확인해 원본 반영을 요청한다. 반영된 결과는 해당 호스트에서 지원하는 네이티브 유형이어야 한다. 기본 도구로 약속한 속성·치수·위치를 다시 수정할 수 있어야 한다.</p>
+<p>반영 버튼을 이유로 모델이 새 변경안을 생성해서는 안 된다. 실제 반영과 파일 저장, 저장 후 다시 열기는 별도 상태로 확인한다. 저장되지 않은 문서 변경을 저장 완료로 표시하지 않는다.</p>
+<h3>8.6 확장과 자료를 같은 환경에서 사용한다</h3>
+<p>검증용 작은 확장을 등록해 동일 프로젝트·대상·권한·진행·결과 보존 흐름으로 실행한다. 시험용 확장은 플랫폼의 확장 접점을 확인하는 용도이며 완성된 법규·구조 스킬을 요구하지 않는다.</p>
+<p>사용자는 선택한 기록 시점의 결과·근거를 열람하고 기본 HTML로 전달한다. 웹 검토가 제공되는 배포에서는 외부 의견을 기준 버전과 함께 수신해 검토한다. 외부 의견 제출이 자동 원본 반영으로 이어지지 않는다.</p>
+</section><section class="doc-section" id="prd-section-9"><h2><span aria-hidden="true" class="section-num">09 /</span> 진행의 시각화와 언제든 가능한 개입</h2>
+<h3>9.1 무엇이 보여야 하는가</h3>
+<p>사용자는 코드 없이 <strong>현재 대상, 사용 중인 가정과 조건, 마지막으로 준비된 결과, 실제 변경, 남은 검토, 지금 가능한 개입</strong>을 확인할 수 있어야 한다.</p>
+<div aria-label="PRD 표 6" class="table-scroll" role="region" tabindex="0"><table>
+<thead>
+<tr>
+<th>단계</th>
+<th>보여줄 실체</th>
+<th>가능한 개입</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>대상·조건 정리</td>
+<td>선택·변경·유지·검토 대상과 연결 근거</td>
+<td>대상 추가·제외, 조건 변경</td>
+</tr>
+<tr>
+<td>의도 해석</td>
+<td>원본 스케치와 해석된 경계·방향</td>
+<td>선·기준면·의미 교정</td>
+</tr>
+<tr>
+<td>후보 생성</td>
+<td>원본·후보의 차이와 마지막 일관된 중간 상태</td>
+<td>직접 조정, 다른 후보 선택, 분기</td>
+</tr>
+<tr>
+<td>영향 검토</td>
+<td>변경 위치에 연결된 치수·수량·속성·미검토 사항</td>
+<td>가정·참조 자료 수정</td>
+</tr>
+<tr>
+<td>원본 반영</td>
+<td>실제 적용 대상, 진행 상태, 적용 결과</td>
+<td>반영 확인, 중단 요청, 복구 검토</td>
+</tr>
+</tbody>
+</table></div>
+<p>형상 변화가 없는 데이터 작업도 포함·제외 자료와 가정·수치 변화를 보여준다. 텍스트 로그나 ‘생각 중’ 표시를 자주 출력하는 것만으로 시각적 진행 요구를 충족했다고 보지 않는다.</p>
+<p>AI의 내부 사고를 만들어 보여주는 대신 실제 입력·조회·생성·계산·변경과 근거를 표시한다. 숫자형 완료율은 측정 가능한 진행 기준이 있을 때만 사용한다. 결과가 아직 없으면 없다고 알리고 이전 후보의 버전과 준비 시점을 명시한다.</p>
+<h3>9.2 개입과 일반 의견을 구분한다</h3>
+<p>사용자는 문장, 객체 선택, 스케치 수정, 치수 조절, 자료 교체, 유지 영역 지정, 후보 선택·분기로 개입할 수 있다. 코멘트 저장 자체는 AI 호출이나 진행 중 조건 변경을 뜻하지 않는다.</p>
+<p>‘지금 작업에 반영’과 ‘다음 작업을 위한 의견 저장’을 구분한다. 기본 입력·코멘트·핀·스케치 저장은 AI 연결이나 승인 없이 가능해야 한다. AI 요청은 명시적 실행 행동에서 시작한다.</p>
+<h3>9.3 개입의 상태를 구분한다</h3>
+<p>제품은 최소한 <strong>지시 접수, 반영을 위한 정리 중, 새 지시 반영됨, 적용 불가 또는 추가 결정 필요</strong>를 구분한다. 입력을 받았다는 것만으로 이미 실행에 반영했다고 표시하지 않는다.</p>
+<p>개입 이후에는 이전 지시와 충돌하는 새 작업을 시작하지 않는다. 진행 중 연산을 안전하게 멈출 수 없는 경우 그 연산의 종료까지 기다려야 함을 표시하고, 종료 결과가 새 조건을 위반하면 활성 후보나 원본에 자동 채택하지 않는다.</p>
+<p>원본에 이미 일어난 변경은 별도로 기록하고 필요한 복구를 제시한다. 중단, 되돌리기, 이전 후보에서 분기하기는 다른 행동이다. 즉시 중단이나 전 프로그램 원자적 복구를 무조건 보장하지 않는다.</p>
+<h3>9.4 직접 수정과 이전 AI 결과의 충돌</h3>
+<p>IDE 또는 연결된 호스트에서 사람이 대상을 직접 바꾸면 그 변경을 새 기준으로 인식한다. 이전 기준의 AI 결과를 현재 상태 위에 자동 적용하지 않는다. 무관한 변경은 영향 확인 후 유지하고, 관련 변경은 재비교한다.</p>
+<p>수정 중에도 원본 스케치·코멘트·완료된 후보는 보존한다. 안전하게 재사용할 수 없는 결과는 과거 결과로 남기되 현재 유효한 결과와 구분한다.</p>
+<h3>9.5 확인이 필요한 순간과 필요하지 않은 순간</h3>
+<p>위임 범위 안의 자료 읽기, 후보 생성, 계산, 후보 내부의 수정은 원칙적으로 연속 진행한다. 유지 조건 변경, 영향 범위 확대, 큰 비용의 추가 작업, 원본 반영·외부 공개는 해당 권한과 사용자 결정을 확인한다.</p>
+<p>모든 단계에서 허락을 묻지 않되, 중요한 방향 결정을 AI가 조용히 대신하지 않는다. 모호함을 질문할지 표시된 가정의 후보로 진행할지는 영향·가역성·비용에 따라 정하고, 판단 기준을 사용자 시험으로 검토한다.</p>
+</section><section class="doc-section" id="prd-section-10"><h2><span aria-hidden="true" class="section-num">10 /</span> 큰 모델·BIM 문맥과 프로젝트 기억</h2>
+<h3>10.1 전체 데이터와 모델 입력을 분리한다</h3>
+<p>전체 프로젝트 데이터, 계산에 필요한 데이터, LLM에 전달할 정보는 서로 다르다. 대량 기하·속성은 원본과 계산·조회 도구에서 다루고, LLM에는 목표·적용 조건·관계·필요한 결과와 참조를 제공한다.</p>
+<p>필수조건을 보존하면서 관련 정보를 추가 조회하는 방식으로 설계한다. 전체 모델·전체 대화·전체 회의록을 매 요청마다 반복 입력하지 않는다. 이 방식을 사용한다는 이유만으로 누락이 없거나 항상 저렴하다고 주장하지 않는다.</p>
+<h3>10.2 기억의 권한과 수명을 구분한다</h3>
+<div aria-label="PRD 표 7" class="table-scroll" role="region" tabindex="0"><table>
+<thead>
+<tr>
+<th>정보</th>
+<th>의미</th>
+<th>관리 원칙</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>입력 원본</td>
+<td>사용자의 문장·핀·스케치·코멘트</td>
+<td>AI 해석과 별개로 보존</td>
+</tr>
+<tr>
+<td>대화 이력</td>
+<td>요청·응답·도구 사용 기록</td>
+<td>이어가기 정보이며 원본 모델의 사실은 아님</td>
+</tr>
+<tr>
+<td>작업 기억</td>
+<td>현재 목표·가정·미해결 질문</td>
+<td>해당 작업 범위와 대안에 연결</td>
+</tr>
+<tr>
+<td>확정 결정</td>
+<td>사용자가 채택한 조건과 근거</td>
+<td>적용 범위·버전·대체 이력 유지</td>
+</tr>
+<tr>
+<td>실제 모델 상태</td>
+<td>호스트의 기하·속성·관계와 고정 스냅샷</td>
+<td>재개·반영 시 필요한 범위에서 확인</td>
+</tr>
+</tbody>
+</table></div>
+<p>대화 압축·세션 교체로 중요한 결정이 사라지지 않도록 제품이 관리한다. AI가 제안한 기억이 확정 조건으로 자동 승격되지 않는다. 화면의 대화, 실행 엔진의 세션, 실제 모델 버전을 같은 식별자로 취급하지 않는다.</p>
+<h3>10.3 이번 작업에 쓰이는 정보를 확인할 수 있다</h3>
+<p>사용자는 이번 입력에 포함된 대상·모델 버전·핵심 조건·참조 자료·가정을 확인하고 수정할 수 있어야 한다. 정보 선택을 위한 복잡한 수동 작업을 매번 요구하지는 않는다.</p>
+<p>필수조건과 참고 의견을 구분하고, 서로 충돌하는 결정은 하나를 조용히 덮어쓰기보다 충돌로 드러낸다. 자동으로 발견하지 못한 관계나 확인하지 않은 분야는 결과의 검토 범위에 남긴다.</p>
+<h3>10.4 유효한 결과만 재사용한다</h3>
+<p>결과 재사용은 단순히 같은 객체가 존재하는지로 결정하지 않는다. 입력 버전, 관계, 계산 방법·가정, 질의 조건, 대상 집합의 변경까지 고려할 수 있어야 한다. 집계 대상에 새 객체가 추가된 경우도 결과를 낡게 만들 수 있다.</p>
+<p>관련성을 확인할 수 없으면 재조회·재계산 범위를 넓히거나 미확인으로 표시한다. 무관한 원본 수정으로 프로젝트 전체를 재계획하거나, 영향을 받는 결과를 그대로 재사용하는 두 극단을 모두 피한다.</p>
+</section><section class="doc-section" id="prd-section-11"><h2><span aria-hidden="true" class="section-num">11 /</span> 품질·검증·시간·비용의 균형</h2>
+<h3>11.1 플랫폼 품질과 전문 스킬 품질을 구분한다</h3>
+<p>플랫폼 MVP는 대상·입력 보존, 네이티브 기본 제어, 진행·개입·재개와 확장 계약의 신뢰성을 검수한다. 법규·구조·평면 설계의 전문 품질은 해당 스킬이 추가될 때 별도로 검수한다. 지원하는 각 작업은 의도 반영, 기하·속성의 정확성, 유지 조건, 네이티브 편집성, 결과 근거에 대한 완료 기준을 갖는다. 자동 검증 통과와 설계적으로 유용한 결과는 구분해 평가한다.</p>
+<div aria-label="PRD 표 8" class="table-scroll" role="region" tabindex="0"><table>
+<thead>
+<tr>
+<th>품질 측면</th>
+<th>확인할 내용</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>대상·의도</td>
+<td>지정 대상과 스케치의 의미를 반영했는가</td>
+</tr>
+<tr>
+<td>기하·데이터</td>
+<td>요구한 변경과 지원하는 유효성·단위 조건을 만족하는가</td>
+</tr>
+<tr>
+<td>조건 보존</td>
+<td>유지 대상과 등록된 필수조건을 지켰는가</td>
+</tr>
+<tr>
+<td>네이티브 편집성</td>
+<td>약속한 원본 객체 유형·속성을 가지며 호스트 기본 도구로 재편집·저장·재열기가 가능한가</td>
+</tr>
+<tr>
+<td>근거</td>
+<td>계산과 설명의 입력·방법·버전·미확인 범위가 드러나는가</td>
+</tr>
+<tr>
+<td>설계적 활용성</td>
+<td>사용자가 처음부터 다시 만드는 것보다 유용한가</td>
+</tr>
+</tbody>
+</table></div>
+<p>완료 기준을 만족하지 못한 후보도 탐색용으로 보존할 수 있다. 다만 ‘초안’으로 이름만 바꾸어 완료율과 품질을 높게 집계해서는 안 된다. 지원 작업에서 안정적으로 채택 가능한 결과를 만드는지가 출시 판단의 핵심이다.</p>
+<h3>11.2 탐색·반영·공유를 구분한다</h3>
+<div aria-label="PRD 표 9" class="table-scroll" role="region" tabindex="0"><table>
+<thead>
+<tr>
+<th>경계</th>
+<th>기본 정책</th>
+<th>필요한 확인</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>탐색</td>
+<td>후보와 입력을 자유롭게 만들고 저장</td>
+<td>원본과 분리된 상태, 데이터 보호, 미확정 조건 표시</td>
+</tr>
+<tr>
+<td>원본 반영</td>
+<td>사용자가 선택한 변경만 적용</td>
+<td>정확한 대상·권한·관련 기준·필수조건·실제 적용 결과</td>
+</tr>
+<tr>
+<td>공유·발행</td>
+<td>선택한 시점과 목적에 맞게 전달</td>
+<td>포함 범위·기밀정보·편집 충실도·검토 상태</td>
+</tr>
+</tbody>
+</table></div>
+<p>필수조건에 미달한 결과를 승인 문자열 하나로 적합 결과로 바꾸지 않는다. 유효한 권한과 근거로 조건 자체를 변경하는 결정은 별도로 기록하며, 전문·법정 검토를 단순 선택으로 대체하지 않는다.</p>
+<p>잘못된 대상과 권한 없는 원본 쓰기는 막는다. 설계 경험칙, 아직 안 한 추가 검토, 선택적 외관 평가 때문에 모든 후보 탐색과 저장을 막지는 않는다. 실제 검증이 필요한 경계만 통제한다.</p>
+<h3>11.3 최소한의 필수 확인과 사실 기반 표시</h3>
+<p>정밀 수치와 원본 변경 여부는 모델·계산·실행 결과에 근거해야 한다. 캡처와 시각 모델 판단은 보조 검토로 활용할 수 있지만 전체 기하·속성 검증을 대신하지 않는다.</p>
+<p>원본 적용 결과, 시각 증거의 수집 상태, 보고서 생성 상태를 분리한다. 캡처나 보고서 생성 실패로 확인된 변경을 다시 실행하지 않는다. 적용 결과가 불명확하면 영향받는 대상의 후속 쓰기를 보류하고 상태를 확인하되 다른 비파괴 작업은 유지한다.</p>
+<h3>11.4 불필요한 반복을 줄인다</h3>
+<p>선택·선 그리기·코멘트 저장·이미 정의된 직접 조절은 불필요한 모델 호출 없이 처리한다. 같은 입력의 재조회와 전체 재검증을 줄이고, 필수적인 확인은 가능한 경우 일반 계산과 실행 기록으로 처리한다.</p>
+<p>모든 단계에 별도의 LLM 감독자·검증자를 추가하지 않는다. 같은 오류에 진전 없이 반복하는 작업은 멈추고, 남은 문제와 현재 후보를 제공한다. 모델 호출 횟수·재시도·검토 강도는 실제 결과로 비교하며, 특정 횟수를 보편적 품질 보증으로 삼지 않는다.</p>
+<h3>11.5 예산이 부족해도 기준을 몰래 낮추지 않는다</h3>
+<p>지원 작업에 사용할 시간·비용 범위를 정하고, 초과 또는 진척 정체를 알린다. 사용자는 현재 후보 보존, 범위 축소, 추가 작업 허용, 다른 접근, 직접 수정으로 전환할 수 있어야 한다.</p>
+<p>목표나 필수조건을 완화해야 한다면 설계 결정으로 명시한다. 무제한 반복과 무의미한 중간 질문 대신, 실제 남은 문제에 대한 선택을 제공한다. 토큰·비용을 관측할 수 없는 실행 경로에서는 추정과 미측정을 구분한다.</p>
+</section><section class="doc-section" id="prd-section-12"><h2><span aria-hidden="true" class="section-num">12 /</span> 네이티브 제어·확장·공유</h2>
+<h3>12.1 네이티브 결과의 정의</h3>
+<p>지원 객체 종류에 대해서는 원본 프로그램의 해당 객체 유형과 약속한 의미·편집 동작을 갖는 결과를 생성·수정한다. 파일을 열 수 있음, 화면상 유사함, 표시용 형상에 분류를 붙임만으로 완료를 인정하지 않는다.</p>
+<p>Revit에서 벽 생성을 지원한다면 카테고리 이름만 벽인 일반 형상이 아니라 실제 벽 객체와 선언한 타입·레벨·치수·후속 편집 동작을 요구한다. 생성 출발점이 매스였다는 이유로 결과를 판단하지 않고, 최종 객체와 동작으로 판단한다.</p>
+<p>Rhino와 CAD에서도 지원하는 기하·엔티티 종류, 속성, 기본 도구의 재편집과 저장 후 지속성을 정의한다. 사용자가 메시를 요청했을 때의 네이티브 메시와, 벽을 요청했는데 표시용 메시로 대체한 결과는 다르다. 네이티브라는 말이 모든 생성 이력과 파라미터를 자동 복원한다는 뜻은 아니다.</p>
+<p>지원하지 않는 형상이나 관계는 불가·제한을 알리고 후보를 제시할 수 있다. 대체 표현은 별도로 표시하며 네이티브 요구의 성공률에 합산하지 않는다. 치수·객체 종류·정확성 기준은 호스트별 SPEC 지원표에서 확정한다.</p>
+<h3>12.2 여러 호스트의 기본 제어</h3>
+<p>Rhino·Revit·CAD 계열을 같은 프로젝트에서 다룬다. AutoCAD와 ZWCAD는 별도 호스트로 취급한다. 실제 설치 버전·에디션·업데이트는 아직 정해지지 않았으며, 첫 MVP의 CAD 조합도 확정해야 한다.</p>
+<p>각 지원 호스트는 문서 식별, 단위·상태·선택 읽기, 선언한 네이티브 생성·수정, 실제 적용 결과와 저장 상태 확인을 제공한다. 같은 기능명을 써도 호스트가 다른 의미를 제공하면 차이를 표시한다.</p>
+<p>여러 호스트를 연결했다는 이유로 모델 전체의 자동 동기화, 임의 객체의 호스트 간 변환, 하나의 트랜잭션에 의한 전 프로그램 복구를 약속하지 않는다. 각각의 문서와 기준, 쓰기 결과를 보존한다.</p>
+<h3>12.3 스킬·플러그인 확장의 최소 요구</h3>
+<p>확장에는 목적, 사용 입력, 결과 유형, 필요한 호스트·도구·권한, 진행·개입의 지원 범위가 있어야 한다. 사용자는 활성 확장과 사용할 권한을 확인할 수 있어야 한다.</p>
+<p>코어를 재작성하지 않고 작은 확장 하나를 등록·실행·비활성화하고, 진행·결과·실패를 공통 작업 기록에 남길 수 있어야 한다. 호스트용 어댑터 추가와 전문 업무용 확장 추가를 구분한다. 새로운 호스트 API가 필요한 전문 스킬은 그 어댑터 기능의 추가 구현이 필요할 수 있다.</p>
+<p>초기 확장의 신뢰·배포 범위는 SPEC에서 정한다. 공개 마켓과 임의의 비신뢰 코드 실행은 MVP 전제가 아니다. 확장이나 외부 자료가 사용자 권한을 스스로 높이지 못한다. 분야별 규칙은 데이터 출처와 적용 범위를 갖는다.</p>
+<h3>12.4 대안 이력과 자료 의존성</h3>
+<p>후보·기준 기록·비교를 공통 기반으로 제공한다. 대안의 분기·선택 병합을 확장할 때 설계 이력과 자료·작업 파생 관계를 구분한다. 같은 형상으로 돌아와도 새로운 결정은 별도로 남길 수 있다.</p>
+<p>대안 분기는 AI 대화 분기와 같지 않고, 기록을 연다고 네이티브 문서가 자동 복원되지 않는다. 임의 형상을 텍스트처럼 자동 병합하지 않는다. 고급 트리 편집과 범용 의미 병합은 MVP 필수 기능이 아니다.</p>
+<h3>12.5 웹 참여와 권한</h3>
+<p>외부 검토자는 iPad·Mac·Windows의 지원 브라우저에서 공개 범위의 모델·도면·자료를 보고, 기준 버전에 연결된 코멘트·스케치를 남기는 것을 목표로 한다. 실제 지원 브라우저·펜·터치·모델 크기는 검증한 범위만 선언한다.</p>
+<p>웹 참여는 제품 요구이며, 첫 MVP에 포함할 깊이와 제공 방식은 미정이다. 파일 기반 검토 교환을 제공하더라도 온라인 제출·실시간 동기화가 구현된 것처럼 표시하지 않는다. 외부 검토용 서비스를 위해 작업 PC를 무제한 공개하거나 방화벽 전체 해제를 요구해서는 안 된다.</p>
+<p>외부 코멘트, 변경 제안, 실행 가능한 변경안은 구분한다. 제출·채택·병합·원본 반영·공개는 각 권한과 실제 처리 상태를 확인한다. 작업 PC에 직접 접근하지 않은 외부 검토자에게 로컬 원본 제어 권한이 자동으로 생기지 않는다.</p>
+<h3>12.6 기본 산출물과 편집용 출력</h3>
+<p>MVP는 지원한 결과·기본 표·도면 표현·근거를 작업 안에서 열람하고, 선택한 기록 시점의 자료를 기본 HTML 검토 패키지로 전달할 수 있어야 한다. 지원 자산과 외부 의존, 미확인 사항을 함께 표시한다. HTML 한 파일만 열면 온라인 협업이 시작되는 것은 아니다.</p>
+<p>네이티브 저장과 내보내기는 현재 후보를 반영한 결과인지, 이전 원본 파일의 동봉인지 구분한다. 3DM·DWG·SKP·XLSX·DOCX·PPTX 등은 각 형식의 지원 범위와 손실을 따로 선언하고, PDF는 고정 도면·보고서 전달 요구로 구분한다. 모든 포맷 변환의 동시 구현은 MVP 조건이 아니다.</p>
+<p>즉석 HTML 편집기 C-01이 채택되면 문단·표·도형 선택과 데이터 연결, 편집 권한, 재생성 규칙을 별도 명세한다. 단순 산출물 열람을 그 편집기의 구현으로 간주하지 않는다.</p>
+</section><section class="doc-section" id="prd-section-13"><h2><span aria-hidden="true" class="section-num">13 /</span> 기능 요구사항과 범위</h2>
+<p><strong>MVP 필수</strong>는 공통 플랫폼이 제공해야 할 능력이다. ‘지원 범위’는 실제 호스트·객체·동작을 SPEC에서 좁혀 선언한다는 뜻이며, 연결만으로 모든 동작을 제공한다는 의미가 아니다. <strong>제공 범위 미정</strong>은 출시 전 결정이 필요한 항목이다.</p>
+<div aria-label="PRD 표 10" class="table-scroll" role="region" tabindex="0"><table>
+<thead>
+<tr>
+<th>ID</th>
+<th>요구사항</th>
+<th>범위</th>
+<th>수용 기준의 중심</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>FR-01</td>
+<td>프로젝트·작업 범위 관리</td>
+<td>MVP 필수</td>
+<td>모델·입력·조건·대화·권한이 섞이지 않음</td>
+</tr>
+<tr>
+<td>FR-02</td>
+<td>다중 호스트·문서 식별</td>
+<td>MVP 필수</td>
+<td>Rhino·Revit·선정 CAD의 실제 대상과 지원 수준 구분</td>
+</tr>
+<tr>
+<td>FR-03</td>
+<td>상태·선택·속성 읽기</td>
+<td>MVP 지원 범위</td>
+<td>원본·버전·좌표·단위·확인 수준 보존</td>
+</tr>
+<tr>
+<td>FR-04</td>
+<td>네이티브 생성·수정</td>
+<td>MVP 지원 범위</td>
+<td>선언한 객체 유형·속성·재편집·저장 후 유지</td>
+</tr>
+<tr>
+<td>FR-05</td>
+<td>문장 안 객체 핀</td>
+<td>MVP 필수</td>
+<td>핀 이후 선택이 바뀌어도 대상 유지; 끊긴 참조 표시</td>
+</tr>
+<tr>
+<td>FR-06</td>
+<td>기본 공간 스케치</td>
+<td>MVP 평면 범위</td>
+<td>원본 선·기준면·단위·역할 보존; 미등록 자료 구분</td>
+</tr>
+<tr>
+<td>FR-07</td>
+<td>코멘트·자료 참조</td>
+<td>MVP 기본 범위</td>
+<td>대화와 독립 저장; 명시 실행 전 AI 호출·쓰기 없음</td>
+</tr>
+<tr>
+<td>FR-08</td>
+<td>AI 요청·세션·문맥</td>
+<td>MVP 한 실행 경로 이상</td>
+<td>입력·조건과 실제 모델 상태에 근거한 실행·재개</td>
+</tr>
+<tr>
+<td>FR-09</td>
+<td>건축 대상 중심 데이터</td>
+<td>MVP 최소 관계</td>
+<td>형상·속성·관계·근거·작업 결과의 출처와 버전 추적</td>
+</tr>
+<tr>
+<td>FR-10</td>
+<td>검토 가능한 작업과 과정 표시</td>
+<td>MVP 필수</td>
+<td>실제 대상·가정·중간 후보·작업 상태와 남은 검토 표시</td>
+</tr>
+<tr>
+<td>FR-11</td>
+<td>진행 중 개입·직접 수정 보호</td>
+<td>MVP 필수</td>
+<td>접수·반영·정지 구분; 늦은 결과가 새 상태를 덮어쓰지 않음</td>
+</tr>
+<tr>
+<td>FR-12</td>
+<td>후보·원본·기록·기본 비교</td>
+<td>MVP 기본 범위</td>
+<td>후보 채택·원본 반영·저장 구분; 실제 변경 확인</td>
+</tr>
+<tr>
+<td>FR-13</td>
+<td>확장 등록·실행</td>
+<td>MVP 최소 계약</td>
+<td>작은 확장을 동일 권한·입력·진행·결과·실패 흐름으로 실행</td>
+</tr>
+<tr>
+<td>FR-14</td>
+<td>산출물 열람·기본 HTML 전달</td>
+<td>MVP 기본 범위</td>
+<td>선택 시점·포함 자료·검토 상태가 일치</td>
+</tr>
+<tr>
+<td>FR-15</td>
+<td>품질·비용·시간 관리</td>
+<td>MVP 필수</td>
+<td>네이티브 품질과 총시간·개입·실패 포함 비용 평가</td>
+</tr>
+<tr>
+<td>FR-16</td>
+<td>저장·재개·연결 유실·오프라인</td>
+<td>MVP 필수</td>
+<td>로컬 입력 보존; 불명확 쓰기 재실행 금지; 실제 기준에서 재개</td>
+</tr>
+<tr>
+<td>FR-17</td>
+<td>Windows 설치·최초 연결</td>
+<td>MVP 필수</td>
+<td>실제 지원 환경에서 설치·연결·설정·제거와 작업 자료 보존</td>
+</tr>
+<tr>
+<td>FR-18</td>
+<td>데이터 보호·실행·공개 권한</td>
+<td>MVP 필수</td>
+<td>외부 자료·확장이 권한을 늘리지 않음; 기밀 전송·공개 구분</td>
+</tr>
+<tr>
+<td>FR-19</td>
+<td>외부 웹 코멘트·스케치</td>
+<td>제품 요구 / 첫 제공 범위 미정</td>
+<td>지원 브라우저·기준 버전·제출 상태·권한 명시</td>
+</tr>
+<tr>
+<td>FR-20</td>
+<td>고급 대안 트리·선택 병합</td>
+<td>후속 확장</td>
+<td>이력·의존성·원본 상태를 구분해 검토·선택</td>
+</tr>
+<tr>
+<td>FR-21</td>
+<td>전문 자동화 스킬</td>
+<td>후속 확장</td>
+<td>업무별 근거·지원 범위·전문 완료 기준과 품질 평가</td>
+</tr>
+</tbody>
+</table></div>
+<p>자유 도킹, 특정 DB·MCP·실행 SDK의 도입, 특정 외부 저장소의 재사용은 독립적인 제품 성공 기준이 아니다. 기술 선택은 구현계획에서 제품 요구를 충족하는 수단으로 비교한다.</p>
+</section><section class="doc-section" id="prd-section-14"><h2><span aria-hidden="true" class="section-num">14 /</span> 플랫폼 MVP의 제공 범위와 완료 조건</h2>
+<h3>14.1 호스트 범위의 기준</h3>
+<div aria-label="PRD 표 11" class="table-scroll" role="region" tabindex="0"><table>
+<thead>
+<tr>
+<th>대상</th>
+<th>MVP에서 요구할 능력</th>
+<th>아직 확정할 내용</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Windows IDE</td>
+<td>설치, 프로젝트·작업, 저장·재개, 상태·입력·결과·확장 관리</td>
+<td>지원 Windows 세부 버전, 배포·설치 조건</td>
+</tr>
+<tr>
+<td>Rhino</td>
+<td>문서·선택 읽기와 제한된 네이티브 생성·수정·결과 확인</td>
+<td>설치 버전·기하 종류·지원 동작·허용 오차</td>
+</tr>
+<tr>
+<td>Revit</td>
+<td>문서·요소 읽기와 제한된 네이티브 요소 생성·수정·결과 확인</td>
+<td>설치 버전·요소 유형·필수 파라미터·관계 범위</td>
+</tr>
+<tr>
+<td>AutoCAD / ZWCAD</td>
+<td>선정 CAD의 문서·엔티티 읽기와 기본 생성·수정·결과 확인</td>
+<td>하나 또는 둘 모두의 첫 포함 여부, 각각의 버전·API 지원·객체 범위</td>
+</tr>
+<tr>
+<td>외부 웹</td>
+<td>권한 있는 모델·자료 검토와 코멘트·스케치 참여</td>
+<td>첫 배포에 포함할 동작·브라우저·온라인/파일 경로</td>
+</tr>
+</tbody>
+</table></div>
+<p>모든 프로그램을 동등하게 깊이 지원한다는 약속이 아니라, <strong>선언한 각 호스트의 기본 제어를 실제로 사용할 수 있는 상태</strong>가 MVP 목표다. 호스트 하나만 완결한 결과는 내부 alpha가 될 수 있지만, 다중 호스트 플랫폼 MVP의 완료를 대신하지 않는다.</p>
+<h3>14.2 기반 검증용 작은 작업</h3>
+<p>각 호스트에서 대상 읽기 → 제한된 네이티브 생성 또는 수정 → 실제 후보·상태 표시 → 사용자 조정 → 원본 반영 → 호스트 기본 도구로 재편집 → 저장·재열기의 흐름을 검수한다. 기하 생성과 사용자의 조건 판단을 별개로 확인한다.</p>
+<p>검증 사례의 후보는 Rhino의 지원 곡선·솔리드, Revit의 지정 벽 유형, CAD의 선·폴리라인 등이다. 이는 <strong>SPEC을 정하기 위한 시험 후보</strong>이며 모두 지원 확정된 목록은 아니다. 전문 법규·구조·평면 자동화까지 구현해야 이 시험을 수행할 수 있는 구조는 피한다.</p>
+<p>최소 두 호스트가 같은 프로젝트에 연결된 상황에서 대상 혼동이 없고, 한쪽의 끊김이나 변경이 다른 문서의 잘못된 쓰기로 이어지지 않는지 확인한다. 같은 호스트의 복수 문서·인스턴스 구분도 해당 지원 환경에서 확인한다.</p>
+<h3>14.3 확장 가능성을 실제로 확인한다</h3>
+<p>작은 검증용 확장 하나로 등록, 필요한 입력·권한 전달, 실행, 진행·개입, 결과 보존, 실패, 비활성화를 확인한다. 예시는 선택 객체 속성 요약이나 허용된 기본 객체 생성이다. 이것은 플랫폼 시험이지 전문 스킬의 출시가 아니다.</p>
+<p>manifest나 빈 플러그인 탭만 존재하는 것을 확장 구현 완료로 보지 않는다. 반대로 완성된 마켓플레이스를 만들 필요는 없다.</p>
+<h3>14.4 출시 판단</h3>
+<p>선정한 호스트·버전·객체별 기본 제어가 실제 시험에서 수용 기준을 충족해야 한다. 입력·개입·네이티브 결과·저장·복구·확장·설치의 품질을 확인한다. 특정 호스트에서 실패한 동작을 일반적으로 제공한다고 표시하지 않는다.</p>
+<p>웹 참여 범위와 CAD 조합처럼 미정인 제품 항목은 관련 배포의 수용 범위를 확정하기 전에 결정한다. 숫자 목표는 기준 데이터·환경으로 측정해 정하되, 결정되지 않은 값을 달성했다고 주장하지 않는다.</p>
+<p>구현 순서는 한 호스트의 내부 alpha부터 시작할 수 있다. 구현 순서가 PRD의 플랫폼 범위를 조용히 축소하거나 전문 스킬을 MVP로 앞당기는 이유가 되어서는 안 된다.</p>
+</section><section class="doc-section" id="prd-section-15"><h2><span aria-hidden="true" class="section-num">15 /</span> 수용 시나리오</h2>
+<p>각 수용 시나리오는 구현과 출시 판단에서 확인해야 할 시험 기준이다. 해당 배포에서 선언한 기능·호스트·포맷 범위에 적용한다. 미제공 웹 기능이나 후속 스킬에만 필요한 시험은 해당 없음으로 표시하며, 실행하지 않은 시험을 통과로 기록하지 않는다.</p>
+<div aria-label="PRD 표 12" class="table-scroll" role="region" tabindex="0"><table>
+<thead>
+<tr>
+<th>ID</th>
+<th>시험 상황</th>
+<th>통과 기준</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>AC-01</td>
+<td>핀 삽입 후 선택·프로젝트 변경</td>
+<td>기존 요청 대상과 권한이 바뀌지 않음</td>
+</tr>
+<tr>
+<td>AC-02</td>
+<td>평면 스케치 작성·카메라 전환</td>
+<td>원본 선과 공간 기준 유지; 화면 주석과 구분</td>
+</tr>
+<tr>
+<td>AC-03</td>
+<td>등록되지 않은 이미지·모호한 스케치</td>
+<td>미확정 상태를 드러내고 근거 없는 깊이 확정 없음</td>
+</tr>
+<tr>
+<td>AC-04</td>
+<td>코멘트 저장·AI 연결 단절</td>
+<td>입력 보존; 저장만으로 AI 호출이나 원본 쓰기 없음</td>
+</tr>
+<tr>
+<td>AC-05</td>
+<td>큰 목표를 작업으로 구성</td>
+<td>각 검토 단위의 목표·영향 범위·결과·의존성이 확인됨</td>
+</tr>
+<tr>
+<td>AC-06</td>
+<td>잘못된 대상이 포함된 시작 단계</td>
+<td>사용자가 시각적으로 찾아 제외하고 후속 결과에 반영</td>
+</tr>
+<tr>
+<td>AC-07</td>
+<td>장시간 작업 진행</td>
+<td>실제 상태·마지막 결과·중단 제약을 알 수 있고 입력 가능</td>
+</tr>
+<tr>
+<td>AC-08</td>
+<td>후보 생성 도중 새 스케치 입력</td>
+<td>접수·반영 상태 구분; 영향받는 후속 작업 재처리</td>
+</tr>
+<tr>
+<td>AC-09</td>
+<td>이전 AI 결과가 늦게 도착</td>
+<td>새 지시·사람 수정·현재 후보를 덮어쓰지 않음</td>
+</tr>
+<tr>
+<td>AC-10</td>
+<td>연결 호스트에서 사람이 직접 수정</td>
+<td>관련 기준 변경 감지·재비교; 무관한 작업 불필요 중단 없음</td>
+</tr>
+<tr>
+<td>AC-11</td>
+<td>중단 가능한/불가능한 연산</td>
+<td>요청 접수와 실제 정지 구분; 원상복구로 오인시키지 않음</td>
+</tr>
+<tr>
+<td>AC-12</td>
+<td>자료·가정·집계 대상 변경</td>
+<td>관련 수치·후보·보고서의 유효성 갱신; 안전한 결과만 재사용</td>
+</tr>
+<tr>
+<td>AC-13</td>
+<td>대화가 길어지거나 세션을 다시 엶</td>
+<td>확정 조건·현재 모델·완료 작업을 확인하고 재개</td>
+</tr>
+<tr>
+<td>AC-14</td>
+<td>AI 추정과 사용자 결정이 공존</td>
+<td>신뢰 수준·출처·범위를 구분; 자동 사실 승격 없음</td>
+</tr>
+<tr>
+<td>AC-15</td>
+<td>필수조건 충돌·결과 품질 미달</td>
+<td>탐색 후보 보존 가능; 완료·적합으로 위장하지 않음</td>
+</tr>
+<tr>
+<td>AC-16</td>
+<td>예산 초과·동일 오류 반복</td>
+<td>진척과 남은 문제 표시; 무제한 루프 없이 전환 가능</td>
+</tr>
+<tr>
+<td>AC-17</td>
+<td>원본 반영·응답 유실·중복 요청</td>
+<td>잘못된 대상·중복 적용 없음; 불명확 결과 재조회</td>
+</tr>
+<tr>
+<td>AC-18</td>
+<td>반영 확인 후 캡처·보고서 실패</td>
+<td>적용 결과와 증거·산출물 상태 분리; 쓰기 재실행 없음</td>
+</tr>
+<tr>
+<td>AC-19</td>
+<td>외부 검토 제출과 선택 채택</td>
+<td>기준 버전·권한 유지; 제출/병합/원본 반영 구분</td>
+</tr>
+<tr>
+<td>AC-20</td>
+<td>HTML·편집본 출력</td>
+<td>선택 버전·포함 범위·미검토·편집 충실도 일치</td>
+</tr>
+<tr>
+<td>AC-21</td>
+<td>원본 객체 삭제·분할·재생성</td>
+<td>핀·관계의 끊김을 표시하고 다른 객체에 자동 오연결 없음</td>
+</tr>
+<tr>
+<td>AC-22</td>
+<td>비개발자/외부 검토자의 실제 사용</td>
+<td>코드 없이 변경 이해·대상 교정·스케치 수정·반영 확인 가능</td>
+</tr>
+<tr>
+<td>AC-23</td>
+<td>Windows 설치·연결·제거</td>
+<td>지원 환경과 부족한 조건을 알 수 있고, 작업 파일·프로젝트 기록을 보호함</td>
+</tr>
+<tr>
+<td>AC-24</td>
+<td>네이티브 생성·수정·저장·재열기</td>
+<td>실제 객체 종류·속성·호스트 재편집과 지속성을 확인; 표시용 대체물은 별도 상태</td>
+</tr>
+<tr>
+<td>AC-25</td>
+<td>여러 호스트·문서의 동시 연결</td>
+<td>요청 대상을 바꾸지 않음; 한쪽의 끊김이 다른 원본의 잘못된 변경으로 이어지지 않음</td>
+</tr>
+<tr>
+<td>AC-26</td>
+<td>작은 확장 등록·실행·실패·비활성화</td>
+<td>공통 입력·권한·진행·결과 계약으로 처리; 임의 권한 확대 없음</td>
+</tr>
+<tr>
+<td>AC-27</td>
+<td>미지원 호스트·객체·버전</td>
+<td>지원 제한과 필요한 조건을 알림; 유사 형상 생성으로 지원 성공 위장 금지</td>
+</tr>
+<tr>
+<td>AC-28</td>
+<td>실제 웹 검토 제공 시 제출·재접속</td>
+<td>권한·기준 버전·입력 원본·실제 제출 여부 유지; 파일 저장을 온라인 동기화로 표현하지 않음</td>
+</tr>
+</tbody>
+</table></div>
+<p>시험 결과는 장비·호스트·작업 유형·모델 규모·데이터 상태와 함께 기록한다. 모의 결과·정적 UI 시연·실제 호스트 시험을 구분한다.</p>
+</section><section class="doc-section" id="prd-section-16"><h2><span aria-hidden="true" class="section-num">16 /</span> 성공 지표와 출시 판단</h2>
+<h3>16.1 제품의 주요 성과</h3>
+<p>핵심 성과는 <strong>지원 호스트의 기본 제어를 신뢰성 있게 수행하고, 결과 채택까지 필요한 총시간과 건축가의 부담을 줄이는 것</strong>이다. 낮은 비용, 적은 승인, 빠른 초안 중 하나만 개선되었다고 성공으로 평가하지 않는다.</p>
+<div aria-label="PRD 표 13" class="table-scroll" role="region" tabindex="0"><table>
+<thead>
+<tr>
+<th>평가 축</th>
+<th>측정할 항목</th>
+<th>해석 기준</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>플랫폼 결과 품질</td>
+<td>대상·단위·네이티브 유형·재편집·저장·입력·조건 보존</td>
+<td>전문 스킬의 건축 판단 품질과 구분</td>
+</tr>
+<tr>
+<td>실제 완료</td>
+<td>지원 작업의 완료율·채택률·재작업량</td>
+<td>초안 전환·중단·실패도 분모에 포함</td>
+</tr>
+<tr>
+<td>시각적 이해</td>
+<td>대상·변경·가정·미검토를 사용자가 찾아 설명하는지</td>
+<td>상태 문구를 출력했다는 것만으로 통과 아님</td>
+</tr>
+<tr>
+<td>개입성</td>
+<td>접수·반영 지연, 중단 상태 이해, 이전 결과 충돌</td>
+<td>입력 가능성과 실제 실행 통제를 모두 측정</td>
+</tr>
+<tr>
+<td>가시성</td>
+<td>첫 검토 결과까지 시간, 유의미한 상태를 알 수 없는 기간</td>
+<td>heartbeat와 진짜 검토 가능한 결과를 구분</td>
+</tr>
+<tr>
+<td>효율</td>
+<td>총경과시간·사용자 준비/검토/수정시간·대기·실패 포함 비용</td>
+<td>토큰만 줄이고 사람의 재작업을 늘리지 않음</td>
+</tr>
+<tr>
+<td>문맥 관리</td>
+<td>필수조건 누락, 자료 선택·재조회, 결과 무효화 정확성</td>
+<td>큰 입력 용량만으로 해결되었다고 보지 않음</td>
+</tr>
+<tr>
+<td>검증 부담</td>
+<td>불필요한 차단·질문·재시도, 검증 비용</td>
+<td>필수 안전을 유지하면서 탐색 부담을 줄임</td>
+</tr>
+<tr>
+<td>다중 호스트</td>
+<td>선언한 각 호스트·버전·객체에서 기본 제어 완료</td>
+<td>단일 호스트 시연으로 대체하지 않음</td>
+</tr>
+<tr>
+<td>확장·설치</td>
+<td>작은 확장의 실행·실패 처리, 지원 Windows 설치·재개</td>
+<td>빈 확장 슬롯·개발 PC 성공만으로 완료 아님</td>
+</tr>
+</tbody>
+</table></div>
+<h3>16.2 비교 방법</h3>
+<p>동일한 과업과 원본·조건으로 기존 수작업 또는 익숙한 CLI 작업 흐름과 비교한다. AI 모델·도구·입력 정보·예산 차이를 기록한다. 입력 방식 비교는 텍스트, 핀 추가, 스케치와 명시 조건 추가를 나누어 보되, 정보량 증가와 표현 방식의 효과를 혼동하지 않는다.</p>
+<p>성공 시연만 선택하지 않고 큰 모델, 불완전한 속성, 오래된 참조, 충돌 조건, 진행 중 사용자 개입, 연결 끊김을 포함한다. 전문가 품질 평가와 비전공자의 이해·피드백 능력 평가는 분리한다.</p>
+<h3>16.3 성능 목표와 출시 기준</h3>
+<p>반응 속도·토큰 한도·최대 무가시 기간·채택률·품질 평가의 수치 기준은 실제 장비·데이터의 기준 작업을 측정한 뒤 확정한다. 작업 종류·규모·환경별 목표와 측정 방법을 구분하고, 측정 전 임의의 수치를 서비스 보장으로 사용하지 않는다.</p>
+<p>정확한 대상·권한, 사람 수정 보호, 중복 쓰기 방지, 불명확 상태의 정직한 표시는 초기 출시 필수 기준이다. 정의된 시험에서 중대한 위반이 발견되면 해당 원본 쓰기 기능은 출시하지 않는다. 시험 통과를 모든 환경에서 무오류라는 보증으로 확대하지 않는다.</p>
+<p>지원 과업의 품질·완료율·총비용 목표를 충족하지 못하면 과업 범위나 구현을 조정한다. 단순히 ‘검토 필요’ 표시를 늘리는 것으로 제품 완성도를 대신하지 않는다.</p>
+</section><section class="doc-section" id="prd-section-17"><h2><span aria-hidden="true" class="section-num">17 /</span> 주요 위험과 제품 대응</h2>
+<div aria-label="PRD 표 14" class="table-scroll" role="region" tabindex="0"><table>
+<thead>
+<tr>
+<th>위험</th>
+<th>대응 방향</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>DB 정비가 너무 커져 실제 작업을 시작하지 못함</td>
+<td>지원 과업에 필요한 관계부터 확보; 미분류와 미확정을 허용</td>
+</tr>
+<tr>
+<td>작은 작업이 전체 설계 조건을 놓침</td>
+<td>상위 조건 공유, 결합 시 연결 관계·전체 지표 검토</td>
+</tr>
+<tr>
+<td>작업 분할이 질문·토큰·세션 수를 늘림</td>
+<td>검토 단위와 호출 단위 분리; 유효 문맥·결과 재사용</td>
+</tr>
+<tr>
+<td>시각화가 실제로는 로그의 장식에 그침</td>
+<td>실제 후보·변경·가정 연결을 사용자 과제로 검증</td>
+</tr>
+<tr>
+<td>개입 이후 오래된 결과가 현재안을 덮어씀</td>
+<td>지시·기준 변경을 기록하고 충돌 결과 자동 채택 금지</td>
+</tr>
+<tr>
+<td>관계 누락 때문에 영향 범위를 잘못 좁힘</td>
+<td>확인 수준 표시, 범위 확대 또는 미확인 상태 유지</td>
+</tr>
+<tr>
+<td>엄격한 검증이 탐색을 막고 결과 품질을 낮춤</td>
+<td>탐색·반영·발행 분리; 오차단·품질·비용 동시 측정</td>
+</tr>
+<tr>
+<td>형상 표현과 BIM 의미가 혼동됨</td>
+<td>표시 형상·원본·의미·편집 충실도 분리</td>
+</tr>
+<tr>
+<td>외부 자료가 지시·권한으로 오인됨</td>
+<td>자료와 사용자 실행 결정 분리; 공개·수정 권한 확인</td>
+</tr>
+<tr>
+<td>공유 파일에 비밀·개인 자료가 포함됨</td>
+<td>공개 범위와 포함 자료 확인; 비밀·내부 경로 제외</td>
+</tr>
+<tr>
+<td>연결 불안정·대화 재개가 잘못된 실행을 유발함</td>
+<td>대화·작업·원본 상태 별도 관리; 불명확 쓰기 재실행 금지</td>
+</tr>
+<tr>
+<td>기반 MVP가 빈 UI로 끝남</td>
+<td>실제 네이티브 제어와 작은 확장으로 종단 간 검수</td>
+</tr>
+<tr>
+<td>플랫폼이 특정 전문 업무 도구로 축소됨</td>
+<td>검증용 과업과 제품 제공 범위를 구분</td>
+</tr>
+<tr>
+<td>브라우저 참여가 로컬 원본 권한으로 연결됨</td>
+<td>외부 검토·자료 제출과 작업 PC의 원본 제어 분리</td>
+</tr>
+<tr>
+<td>지원 버전·설치 권한의 차이가 숨겨짐</td>
+<td>지원 환경·전제 조건을 명시하고 실제 설치·호스트에서 시험</td>
+</tr>
+</tbody>
+</table></div>
+</section><section class="doc-section" id="prd-section-18"><h2><span aria-hidden="true" class="section-num">18 /</span> 제품 상세 결정 항목</h2>
+<p>아래는 범위와 완료 기준을 구체화하기 위해 아직 결정해야 할 항목이다. 미정을 채우기 위해 기술과 성능을 추측하지 않는다. 확인 가능한 부분의 명세·목업·기술 실험은 먼저 진행할 수 있으나, 관련 지원 선언 전에 결정을 완료해야 한다.</p>
+<div aria-label="PRD 표 15" class="table-scroll" role="region" tabindex="0"><table>
+<thead>
+<tr>
+<th>ID</th>
+<th>결정할 내용</th>
+<th>유지할 제품 기준</th>
+<th>결정 시점·근거</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>OQ-01</td>
+<td>AutoCAD·ZWCAD 중 첫 포함 조합</td>
+<td>CAD 계열의 실제 네이티브 기본 제어</td>
+<td>SPEC 지원표 확정 전 실제 사용 환경·필요 확인</td>
+</tr>
+<tr>
+<td>OQ-02</td>
+<td>Windows와 호스트의 버전·에디션·업데이트 범위</td>
+<td>Windows 우선 설치형, 검증한 환경만 지원 선언</td>
+<td>설치 환경 조사와 호스트 지원 검증</td>
+</tr>
+<tr>
+<td>OQ-03</td>
+<td>호스트별 객체 종류·생성·수정·필수 속성</td>
+<td>네이티브 객체·후속 편집·저장 지속성</td>
+<td>SPEC에서 사용자 과업으로 정의하고 기술 실험으로 확인</td>
+</tr>
+<tr>
+<td>OQ-04</td>
+<td>외부 웹의 첫 배포 범위·지원 기기</td>
+<td>웹 검토와 코멘트·스케치, 로컬 원본 권한과 분리</td>
+<td>첫 배포 범위 결정 전 참여 시나리오·기기 시험</td>
+</tr>
+<tr>
+<td>OQ-05</td>
+<td>장시간 연산의 허용 제약과 반응 목표</td>
+<td>언제든 지시 접수, 실제 반영·정지 상태</td>
+<td>호스트 제약과 사용자 개입 시험</td>
+</tr>
+<tr>
+<td>OQ-06</td>
+<td>모델 규모·품질·지연·비용 목표치</td>
+<td>필수 품질을 낮추지 않고 총부담 절감</td>
+<td>기준 모델·장비·작업 반복 측정 후 출시 전 확정</td>
+</tr>
+<tr>
+<td>OQ-07</td>
+<td>초기 확장의 신뢰·배포 범위와 결과 종류</td>
+<td>작은 확장 실행, 기본 권한·입력·상태 보호</td>
+<td>SPEC 확장 계약과 시험 확장 정의 시</td>
+</tr>
+<tr>
+<td>OQ-08</td>
+<td>기본 HTML 포함 자산과 편집본 출력</td>
+<td>실제 버전·포함 범위·손실 공개</td>
+<td>산출물 SPEC에서 선언하고 각 호스트·파일로 검수</td>
+</tr>
+</tbody>
+</table></div>
+<p>즉석 HTML 편집기 C-01과 후속 전문 스킬은 별도 채택 판단을 거친다. SPEC과 Design은 기능·화면을 구체화하고, 실제 기술 스택·물리 스키마·프로토콜·구현 순서·시험 코드는 구현계획에서 결정한다.</p>
+</section><footer class="doc-footer"><span>DRAWING IDE / PLANNING DOCUMENTS</span><span>문서 열람용 · 실제 CAD/BIM 지원은 구현·검증 후 선언</span></footer></article></main></div>
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+<script id="source-data" type="application/json">{"prd": {"file": "PRD.md", "label": "PRD", "markdown": "# Integrated Drawing Environment · PRD\n\n**문서 목적:** 제품의 사용자·가치·MVP 범위·요구사항·수용 기준을 정의한다.  \n**제품:** Drawing IDE · 건축가를 위한 통합 설계 작업환경  \n**문서 상태:** 제품 요구사항 기준. 실제 지원 버전과 기능별 제공 범위는 명시된 결정 항목을 확정해야 한다.\n\n\u003e **Windows 설치형 IDE를 기반으로 여러 CAD/BIM 프로그램을 제어하고, 건축가가 실제 작업 상태를 보며 개입하고, 전문 기능을 스킬·플러그인으로 확장하는 플랫폼.**\n\n## 0. 제품 요약\n\nDrawing IDE의 첫 MVP는 특정 건축 자동화 기능 하나가 아니라 **여러 프로그램을 같은 프로젝트에서 다룰 수 있는 공통 IDE 플랫폼**이다. 이후 법규 검토·사이트 모델링·매스 배치·구조 검토·평면 작성·건축 개요·일람표 작성을 전문 스킬과 플러그인으로 추가한다.\n\n기본 환경은 빈 화면과 연결 버튼을 뜻하지 않는다. 지원 호스트에서 대상 읽기, 공간 입력, 제한된 네이티브 객체 생성·수정, 진행의 시각화, 사람의 개입, 결과 확인·보존까지 이어져야 한다. 전문 업무 전체를 자동화하지 않아도 이 기본 제어를 사용할 수 있어야 한다.\n\n| 구분 | 제품 결정 | 경계 |\n|---|---|---|\n| 첫 MVP | 프로젝트·작업·데이터·AI 실행·호스트 제어·확장의 공통 기반 | 특정 매스 자동화 도구를 전체 MVP로 대체하지 않음 |\n| 주 사용 환경 | Windows 우선 설치형 프로그램 | 앱 기술·설치 도구·지원 Windows 세부 버전은 별도 결정 |\n| 호스트 | Rhino·Revit·CAD 계열의 기본 제어 | AutoCAD·ZWCAD의 첫 지원 조합과 버전·객체 범위는 확정 필요 |\n| 결과 | 지원 객체 종류에 대한 네이티브 생성·수정과 후속 편집 | 보이는 형상이나 카테고리 지정만으로 네이티브 성공 처리 금지 |\n| 입력과 개입 | 문장·핀·코멘트·좌표 기반 스케치, 실제 중간 상태에 대한 수정 | 코멘트 저장이 자동 실행 또는 원본 수정 권한이 되지 않음 |\n| 확장 | 공통 기능 위에 전문 스킬·플러그인과 분야별 규칙 추가 | 기본 권한·대상·단위·상태 보호를 후속 단계로 미루지 않음 |\n| 외부 참여 | iPad·Mac·Windows의 웹 브라우저를 통한 검토 | 첫 배포의 범위·지원 브라우저·동기화 방식은 확정 필요 |\n\n**핵심 경험:** 프로젝트와 호스트를 연결한다 → 대상을 가리키고 의도를 그린다 → 작업을 맡긴다 → 실제 중간 상태를 보고 조정한다 → 네이티브 결과를 반영·재편집한다 → 결과와 근거를 보존·공유한다.\n\n**추가 검토 아이디어:** 필요한 자료를 즉석 HTML로 생성하고 그 안의 문단·표·도형을 직접 선택해 수정하는 편집기는 후보 기능이다. 기본 산출물 표시·HTML 공유와 구분하며, 캔버스 방식과 직접 HTML 방식 중 어느 것도 확정하지 않는다.\n\n## 1. 제품 정의와 책임\n\n### 1.1 무엇을 만드는가\n\n건축가가 여러 모델링 프로그램의 모델과 설계 자료를 하나의 프로젝트·작업 범위에서 다루고, AI와 함께 작업하면서 과정과 결과를 직접 통제하는 통합 작업환경을 만든다. 제품의 작업명은 **Integrated Drawing Environment**다.\n\nVS Code와 같은 확장형 IDE의 개념을 지향하되, VS Code 기반 개발이나 터미널 중심 화면을 필수로 정하지 않는다. 모델·도면·스케치·치수·자료가 주요 입력과 판단 대상이다. 사용자는 코드와 긴 터미널 출력을 읽지 않아도 대상과 변경을 이해할 수 있어야 한다.\n\n새로운 범용 기하 커널, 모든 CAD/BIM 프로그램을 대체하는 모델러, 모든 네이티브 화면을 한 창 안에 넣는 제품은 아니다. 개별 호스트가 원본의 편집 의미를 소유하고, IDE는 연결된 작업과 근거·상태·결정을 관리한다.\n\n### 1.2 제품이 책임지는 것\n\n지정한 대상·입력·유지 조건을 보존하고, 실제 작업 상태와 결과를 보여주며, 사용자의 개입을 실행에 반영한다. 후보와 원본, 계획과 실행, 추정과 사실, 제출과 반영, 적용과 저장을 구분한다.\n\n등록되지 않은 모든 설계 조건의 자동 발견이나 전체 설계의 적합성을 포괄적으로 보증하지 않는다. 지원하는 기본 제어에서는 정의된 네이티브 결과와 상태의 신뢰성을 확보한다. 전문 스킬은 별도의 완료 기준과 검토 범위를 갖는다. ‘미검토’ 표시가 낮은 완료율과 품질의 변명이 되어서는 안 된다.\n\n### 1.3 사용 환경과 접근 역할\n\n**주 작업자:** Windows에 설치한 IDE에서 로컬 프로젝트를 열고, 사용 권한이 있는 호스트 프로그램과 연결한다. 호스트 프로그램 자체의 설치·사용 권한이 IDE 설치만으로 제공되는 것으로 표시하지 않는다.\n\n**외부 검토자:** 웹으로 공개된 권한 범위 안에서 모델·자료를 보고 코멘트·스케치를 제출한다. 이 웹 참여가 Windows 네이티브 API의 직접 실행이나 로컬 원본 쓰기 권한을 뜻하지 않는다.\n\n**Local-first:** 입력·프로젝트 기록·원본 제어의 기준을 작업환경이 관리한다. 클라우드 모델을 사용할 수 있지만 전송할 자료와 권한을 확인할 수 있어야 한다. AI 연결이 끊겨도 가능한 열람·선택·스케치·코멘트·저장 작업은 유지한다. 외부 검토의 최신 상태나 온라인 추론까지 오프라인에서 가능하다고 표시하지 않는다.\n\n## 2. 해결할 문제와 제품 가설\n\n제품이 해결할 문제와 검증할 가설은 다음과 같다. 효과는 지원 과업의 사용자 시험에서 확인한다.\n\n| 문제 | 제품의 대응 | 확인할 결과 |\n|---|---|---|\n| ‘여기’와 ‘이런 형태’를 문장만으로 전달하기 어렵다 | 실제 대상 핀, 좌표에 연결된 스케치, 단위 있는 치수 | 대상 오인과 의도 수정 부담이 줄어드는가 |\n| 모델·BIM 정보·회의 결정이 분리되어 있다 | 설계 대상을 중심으로 자료·관계·근거 연결 | 관련 조건을 찾고 변경 영향을 확인할 수 있는가 |\n| 큰 작업은 방향 오류를 늦게 발견한다 | 검토 가능한 단위로 분할하고 중간 결과를 남김 | 초기에 잘못된 대상을 찾고 방향을 바꿀 수 있는가 |\n| 작업 중 무엇이 일어나는지 알 수 없다 | 실제 모델·도면·가정·계산 상태를 표시 | 설명 로그 없이도 현재 상태를 이해하는가 |\n| 매 단계 승인하면 직접 CAD를 쓰는 것만큼 번거롭다 | 위임 범위 안에서는 진행하고 설계적 결정에서만 확인 | 불필요한 개입 없이 결과를 채택하는가 |\n| 큰 문맥과 반복 검증이 시간·비용을 늘린다 | 필수조건 보존, 관련 정보 조회, 영향 범위 재계산 | 조건 누락 없이 총비용과 재작업을 줄이는가 |\n| 후보·원본·보고서 상태를 혼동한다 | 후보 저장, 채택, 원본 반영, 발행을 분리 | 무엇이 실제 계획에 반영됐는지 확인 가능한가 |\n| 대안과 피드백의 이유가 사라진다 | 기준 버전이 있는 이력·검토 요청·결정 기록 | 과거 판단과 현재 결과의 연결을 회수할 수 있는가 |\n\n## 3. 사용자와 핵심 업무\n\n**주 사용자 — 비개발자 건축 설계자.** Windows에서 Rhino·Revit·CAD를 사용한다. 프로젝트와 연결 문서를 관리하고, 모델·도면·선택·스케치로 요청하며, 후보와 실제 변경을 보고 방향을 바꾼다. 분야별 자동화 스킬이 없어도 기본 제어를 사용할 수 있어야 한다.\n\n**보조 사용자 — BIM·계산설계 담당자.** 네이티브 객체의 의미, 데이터 관계, 입력 조건, 연결 상태와 결과의 충실도를 확인한다. 전문 설정을 일반 사용자의 매 작업 필수 절차로 만들지 않는다.\n\n**확장 작성자 — 스킬·플러그인 개발자.** 공통 연결·입력·진행·결과·권한 기능을 재사용해 전문 기능을 추가한다. 일반적인 확장 등록을 위해 프로젝트 데이터·인증·호스트 제어를 매번 다시 만들지 않아야 한다.\n\n**외부 검토자 — 동료·책임자·발주자 등.** 웹에서 게시된 기준 모델과 자료를 보고 의견을 남긴다. 변경의 의미를 이해하는 것과 전문적 적합성을 판정하거나 원본에 반영하는 권한은 구분한다.\n\n## 4. MVP·후속 확장·제외 범위\n\n### 4.1 플랫폼 MVP에 포함하는 공통 능력\n\n프로젝트·작업 범위 관리, 호스트·문서 식별, 상태·속성·선택 읽기, 제한된 네이티브 생성·수정, 문장·핀·기본 평면 스케치·코멘트, AI 요청·재개, 실제 중간 결과, 수정·중단, 후보·원본 구분, 입력·결정·결과 보존, 기본 산출물 열람과 HTML 전달, 작은 확장의 등록·실행을 포함한다.\n\n여러 호스트를 연결하되 모든 기능을 동일하게 제공한다고 약속하지 않는다. 각 호스트에서 지원하는 기본 동작과 결과 기준을 별도로 선언한다. 연결 상태만 보이거나 읽기만 되는 호스트를 네이티브 쓰기 지원으로 집계하지 않는다.\n\n### 4.2 전문 스킬로 추가하는 업무\n\n| 전문 기능 | 후속 스킬의 목적 | 공통 기반에서 제공할 것 |\n|---|---|---|\n| 법규 검토 자동화 | 적용 자료·시점·조건과 검토 결과 연결 | 자료·근거·조건·대상·결과 기록 |\n| 주변 사이트 모델링 자동화 | 주변 자료에서 검토 가능한 사이트 모델 생성 | 외부 자료 수집 접점, 좌표·단위, 호스트 제어 |\n| 법규에 맞는 매스 배치 자동화 | 명시한 규칙과 설계 의도를 반영한 배치 후보 | 후보·조건·비교·네이티브 반영 |\n| 구조 검토 자동화 | 해석 조건·모델·결과·검토 범위 연결 | 계산 도구 접점, 가정·결과·근거 보존 |\n| 평면 Drawing 스킬 | AutoCAD 또는 ZWCAD의 지원 요소로 평면 작성 | CAD 네이티브 읽기·쓰기·속성·결과 확인 |\n| 건축 개요 작성 | 확인된 프로젝트 데이터로 개요 구성 | 데이터·자료·출처·산출물 표시 |\n| 일람표 작성 | 지원 요소와 속성을 이용한 표 작성 | 조회·집계·버전·출력 연결 |\n\n표는 확장 목표이지 자동 완성 기능의 출시 선언이 아니다. 분야별 rule book, 사례, 전문 평가와 하네스 조정은 각 스킬을 구현하며 구체화한다. 법규·구조의 전문 판단 전체나 허가·안전의 보편적 보증을 제공하는 것으로 정의하지 않는다.\n\n### 4.3 기본 실행 규칙과 전문 하네스의 경계\n\n**MVP에서 제공:** 정확한 문서·객체·단위·권한, 입력·기준 보존, 실제 진행 표시, 개입·중단 상태, 사람 수정 보호, 중복 적용 방지, 불명확 결과 처리, 최소 품질·비용 관측.\n\n**스킬별로 확장:** 법규 해석 절차, 구조 검토의 전제, 도면 작성 관례, 건축 분야의 경험칙·사례·평가, 전문 도구와 계산 흐름. 지침만으로 실행 권한을 바꾸거나 기본 보호를 끄지 않는다.\n\n### 4.4 후보 기능과 비목표\n\n즉석 HTML 자료 생성, 문단·표·도형 직접 선택과 부분 수정, 캔버스/DOM 기반 편집기는 **후보 기능 C-01**로 둔다. 채택 전에는 MVP 수용 조건이나 구현 티켓으로 자동 포함하지 않는다.\n\n자유로운 화면 분할·도킹·Blender식 워크스페이스, 플러그인 마켓·결제, 모든 객체 유형의 쓰기, 범용 네이티브 파일 자동 병합, 모든 BIM 의미·편집 이력의 무손실 왕복, 장시간 무관찰 자율 설계는 MVP의 필수 범위가 아니다.\n\n후속 연결 대상으로 Grasshopper·Archicad·SketchUp 등을 유지한다. 추가 호스트와 객체 종류는 동일한 지원·검수 원칙에 따라 별도 확장한다.\n\n## 5. 제품의 정보 구조와 용어\n\n```text\nProject · 설계 맥락과 권한\n ├─ 설계 대상 · 연결 모델 · 자료 · 조건 · 결정\n ├─ WorkScope · 목표가 있는 작업 범위\n │   ├─ 공간 입력 · 대화 · 참조 코멘트\n │   ├─ 검토 가능한 작업 단위\n │   │   └─ 실행 시도 · 중간 결과 · 개입 · 검토 상태\n │   └─ Alt · 후보 · 비교 · 채택\n └─ 설계 이력 · 외부 검토 · 보고서 · 내보내기\n```\n\n| 용어 | 정의 | 혼동하지 않을 것 |\n|---|---|---|\n| Project | 설계 자료·연결 모델·조건·권한을 포함하는 프로젝트 | 하나의 프로그램 파일 또는 AI 세션 |\n| WorkScope | 목표·대상·변경 범위·유지 조건·기대 결과를 갖는 과업 | 단순 채팅방 |\n| 검토 가능한 작업 단위 | 한 설계 목적에 대해 일관된 중간 결과를 남기는 실행 묶음 | API 호출이나 LLM 호출 한 번 |\n| Run · 실행 시도 | 특정 입력·조건·기준 버전으로 작업을 수행한 사건 | 대화 전체 또는 모델 버전 자체 |\n| 후보 | 원본과 구분되는 변경 제안 또는 편집 가능한 결과 | 이미 반영된 원본 |\n| Alt · 대안 | 공통 기준에서 분리해 발전시키는 설계안 | AI 대화 fork |\n| Checkpoint · 기록 | 모델·입력·조건·결과·결정을 고정한 설계 시점 | 원본 파일의 자동 백업·복원 보장 |\n| 개입 | 진행 중 목표·대상·조건·후속 실행을 바꾸는 사용자 행동 | 단순 로그 추가 또는 의견 저장 |\n| Host · 호스트 | IDE가 연결하는 원본 CAD/BIM 프로그램 | IDE 자체 또는 파일 확장자 |\n| Skill · 스킬 | 이 제품에서 재사용하는 업무 절차·지침 | 그 자체로 실행 가능한 모든 도구 |\n| Plug-in · 플러그인 | 도구·코드·필요한 UI를 등록하는 확장 단위 | 무제한 로컬 권한이나 전문성의 보증 |\n\n하나의 WorkScope에는 여러 작업 단위와 실행 시도가 있을 수 있다. 작업 단위가 나뉘어도 상위 목표와 필수조건은 계속 공유한다. 대상 하나가 여러 모델 객체로 표현되거나 한 모델 객체가 여러 설계 대상을 포함할 수 있으므로, 관계를 무조건 일대일로 가정하지 않는다.\n\n다른 프로젝트의 자료는 명시적으로 연결한다. 열린 탭, 같은 파일 이름, 같은 AI 모델을 쓴다는 이유로 문맥과 권한이 합쳐져서는 안 된다.\n\n## 6. 건축 특화 데이터 요구사항\n\n### 6.1 중심은 ‘설계 대상’이다\n\n설계 대상에 형상·속성·관계·근거·버전·작업 결과를 연결한다. ‘형상 파일 + 임의 속성 목록’만으로 끝내지 않는다. 동시에 DB 전체를 완벽하게 분류해야만 작업을 시작할 수 있는 구조도 피한다.\n\n초기 매스나 미분류 형상을 수용한다. 아직 모르는 용도·호스트 관계·BIM 분류는 미확정으로 남기고, 지원 작업에 필요한 의미부터 점진적으로 추가한다. 단순 메시를 벽·슬래브 같은 네이티브 요소로 자동 간주하지 않는다.\n\n### 6.2 연결해야 할 정보\n\n| 정보 | 요구 내용 | 사용자에게 가능한 일 |\n|---|---|---|\n| 설계 대상과 식별 | 프로젝트·대안·원본 모델 안의 식별과 대응 관계 | 현재 무엇을 가리키는지 확인 |\n| 형상 표현 | 정밀 원본 참조, 표시용 형상, 평면·단면, 좌표·단위 | 같은 대상을 여러 표현으로 검토 |\n| 속성과 수량 | 값·단위·정의·출처·기준 버전 | 치수·면적·용도 등의 근거 확인 |\n| 대상 간 관계 | 포함, 경계, 호스트, 연결, 타입 공유, 계산 의존성 | 영향을 받는 대상과 작업 추적 |\n| 근거와 조건 | 회의록·스케치·자료 위치, 적용 범위, 채택 여부 | 왜 유지·변경하는지 확인 |\n| 작업과 결과 | 사용한 입력, 실제 생성물, 변경 내역, 개입, 결과 상태 | 중간 상태를 다시 보고 작업 이어가기 |\n\n표현이 바뀌어도 확인 가능한 대응 관계는 유지한다. 그러나 객체의 분할·합침·삭제·재생성 뒤 동일성이나 부분 참조를 확인할 수 없다면, ‘연결 끊김’ 또는 ‘이전 버전 참조’로 표시한다. 가까운 객체로 조용히 재연결하지 않는다.\n\n### 6.3 관계의 종류와 신뢰도를 구분한다\n\n예를 들어 ‘문 → 개구부 → 벽’의 호스트 관계, ‘요소 → 타입’의 공유 관계, ‘스케치 → 후보 → 면적표’의 파생 관계는 서로 다르다. 단순히 ‘관련 있음’으로 저장하지 않는다. 공간적으로 가까운 것과 의미적으로 연결된 것도 구분한다.\n\n관계와 값에는 **원본에서 읽음, 도구로 계산함, 사용자가 확정함, AI가 추정함**을 구분해 남긴다. 현재 문 폭과 목표 문 폭은 다른 정보이며, 서로 덮어쓰지 않는다. 원문 사실을 바꾸는 것, 계산 가정을 바꾸는 것, 설계 조건을 바꾸는 것도 다른 사건으로 기록한다.\n\n### 6.4 데이터가 답해야 할 질문\n\n사용자는 대상에서 관련 조건·코멘트·지표로 이동할 수 있고, 반대로 자료나 지표에서 관련 모델 대상을 확인할 수 있어야 한다.\n\n대표 질문은 다음과 같다. “이 부분을 유지하는 근거는 무엇인가?”, “이 수치는 어느 모델과 방법으로 계산했는가?”, “이 스케치를 고치면 무엇이 다시 계산되어야 하는가?”, “이 관계는 확인된 사실인가 추정인가?”\n\n알 수 없는 관계는 알 수 없다고 드러낸다. 모든 의존성을 알고 있다고 전제한 자동 재사용·자동 변경은 허용하지 않는다.\n\n### 6.5 데이터 저장·조회 요구\n\n데이터 저장·조회는 설계 대상과 관계를 탐색하고, 버전별 상태·출처·파생 결과를 구분할 수 있어야 한다. 큰 기하 데이터와 LLM 입력을 같은 저장 단위로 취급하지 않는다. 구체적인 관계 종류와 읽기·갱신 동작은 SPEC에서, DB 엔진·물리 스키마·저장 형식은 구현계획에서 결정한다.\n\n## 7. 작업을 나누는 기준\n\n### 7.1 한 단위는 하나의 설계 목적과 검토 가능한 결과를 갖는다\n\n‘이 건물의 평면을 개선한다’는 WorkScope의 목표가 될 수 있지만 단일 무관찰 실행 단위로 삼지 않는다. 반대로 ‘객체 읽기 → 곡선 생성 → 면 생성’ 같은 내부 명령마다 사용자의 개입을 요구하지도 않는다.\n\n한 작업 단위에는 **목적, 기준 버전, 변경 대상, 검토 범위, 유지 대상·조건, 기대 결과, 의존하는 작업, 수정·중단 가능한 지점**이 있어야 한다. 선택과 기존 프로젝트 정보로 채울 수 있는 내용은 자동으로 구성하고, 모호한 중요한 항목만 확인한다.\n\n### 7.2 변경 범위와 검토 범위를 분리한다\n\n변경 권한이 없는 주변 대상도 영향 확인을 위해 읽을 수 있다. 반대로 검토에 포함되었다고 변경 권한이 생기지는 않는다.\n\n문을 옮기는 작업은 문과 개구부를 바꾸지만 벽·주변 공간을 함께 검토할 수 있다. 공통 타입 수정처럼 공간적으로 먼 객체에 영향을 주는 경우도 검토 범위에 포함한다. 실제 영향 범위를 좁게 확인하지 못하는 작업은 더 넓게 검토하거나 후보 실행으로 제한하며, 그 이유를 보인다.\n\n### 7.3 더 나누어야 하는 경우\n\n서로 독립적으로 채택할 수 있는 설계 판단이 여러 개 있거나, 중간 방향을 확인하지 못한 채 많은 후속 작업이 쌓이거나, 영향 범위가 원래 목표를 넘어가면 작업을 더 나눈다. 오래 걸리고 중단 제약이 큰 연산은 가능한 경우 검토 가능한 중간 단계로 분리한다.\n\n반대로 문과 개구부를 함께 수정해야 일관된 후보가 되는 것처럼 강하게 결합된 변경은 하나의 검토 단위로 묶는다. 같은 조건의 여러 객체를 일괄 변경하는 것도 하나의 검토 가능한 결과가 있으면 허용한다.\n\n객체 수·시간·토큰 수 하나만으로 고정 분할하지 않는다. 분할 자체가 새 AI 세션, 추가 검증자, 사용자 승인 단계를 자동으로 늘려서는 안 된다.\n\n### 7.4 작은 작업과 전체 조건을 함께 유지한다\n\n각 작업은 상위 WorkScope의 목표와 적용 중인 조건을 참조한다. 작업 결과를 합칠 때는 연결 부위와 전체 지표를 다시 확인한다. 개별 작업의 통과를 전체 설계의 적합으로 확대하지 않는다.\n\n작업 간 선후관계는 사용자에게 이해 가능한 이름으로 제공한다. 병렬 준비 여부와 무관하게 같은 원본·공유 대상을 변경할 때는 충돌과 대상 상태를 관리해야 한다.\n\n## 8. 핵심 사용자 여정\n\n아래는 플랫폼의 사용 경험을 설명하는 여정이다. 개별 객체와 생성 동작은 각 호스트의 지원표에 있는 기능만 사용한다. 복잡한 건축 해석 스킬의 완성을 전제하지 않는다.\n\n### 8.1 설치하고 프로젝트·호스트를 연결한다\n\n사용자가 Windows IDE를 설치하고 프로젝트를 연다. 연결 가능한 호스트와 문서를 확인한 뒤 작업 대상을 명시한다. 문서명뿐 아니라 구분 가능한 대상 정보, 단위, 현재 읽기·쓰기 수준을 확인한다. 설치된 호스트·버전이 지원되지 않으면 필요한 조건을 안내한다.\n\nRhino와 Revit 등 여러 호스트를 같은 프로젝트에 등록할 수 있다. 화면을 전환하거나 다른 프로그램을 활성화해도 진행 중인 요청이 다른 문서를 대상으로 바뀌지 않는다.\n\n### 8.2 대상을 가리키고 의도를 전달한다\n\n기존 객체를 선택해 문장에 핀을 넣고, 작업평면에 선을 그리거나 지원 파라미터를 지정한다. 변경 대상·유지 대상·자료 참조를 함께 전달한다. 예를 들어 ‘[이 객체]를 지정 방향으로 이동하고 [주변 객체]는 유지’ 또는 ‘[기준선]과 지정 치수로 지원 객체 생성’을 요청할 수 있다.\n\n사용자가 입력한 선과 치수, 대상은 원본 데이터로 보존한다. 평면 스케치의 공간 기준을 확인하고, 등록되지 않은 이미지는 별도로 표시한다. 코멘트 저장은 AI 실행과 구분한다.\n\n### 8.3 실제 중간 상태를 보며 작업한다\n\n제품은 작업 대상과 적용 조건, 예상 변경, 마지막으로 만들어진 일관된 후보를 표시한다. 예정된 작업과 수행 중인 작업, 이미 생성한 결과를 구분한다. 자유로운 후보 탐색을 모든 내부 명령의 승인으로 끊지 않는다.\n\n의미 해석이 필요한 스케치는 원본과 해석을 함께 보여준다. 지원 범위를 벗어난 요청은 일반 메시나 다른 유형으로 몰래 대체하지 않고 가능한 대안과 한계를 제시한다.\n\n### 8.4 중간에 지시하거나 직접 수정한다\n\n사용자가 유지 대상을 추가하거나 치수·스케치를 바꾼다. 제품은 지시 접수와 실제 반영을 구분하고, 영향을 받는 후속 작업만 재처리한다. 늦게 도착한 이전 결과가 새 조건이나 호스트에서 직접 수정한 객체를 덮어쓰지 않는다.\n\n중단을 요청하면 새 작업을 멈추고, 진행 중인 연산의 실제 종료 여부를 보여준다. 원본이 이미 바뀐 부분은 후보 폐기와 구분해 기록한다.\n\n### 8.5 결과를 반영하고 호스트에서 편집한다\n\n사용자는 후보를 채택한 뒤 정확한 대상·변경을 확인해 원본 반영을 요청한다. 반영된 결과는 해당 호스트에서 지원하는 네이티브 유형이어야 한다. 기본 도구로 약속한 속성·치수·위치를 다시 수정할 수 있어야 한다.\n\n반영 버튼을 이유로 모델이 새 변경안을 생성해서는 안 된다. 실제 반영과 파일 저장, 저장 후 다시 열기는 별도 상태로 확인한다. 저장되지 않은 문서 변경을 저장 완료로 표시하지 않는다.\n\n### 8.6 확장과 자료를 같은 환경에서 사용한다\n\n검증용 작은 확장을 등록해 동일 프로젝트·대상·권한·진행·결과 보존 흐름으로 실행한다. 시험용 확장은 플랫폼의 확장 접점을 확인하는 용도이며 완성된 법규·구조 스킬을 요구하지 않는다.\n\n사용자는 선택한 기록 시점의 결과·근거를 열람하고 기본 HTML로 전달한다. 웹 검토가 제공되는 배포에서는 외부 의견을 기준 버전과 함께 수신해 검토한다. 외부 의견 제출이 자동 원본 반영으로 이어지지 않는다.\n\n## 9. 진행의 시각화와 언제든 가능한 개입\n\n### 9.1 무엇이 보여야 하는가\n\n사용자는 코드 없이 **현재 대상, 사용 중인 가정과 조건, 마지막으로 준비된 결과, 실제 변경, 남은 검토, 지금 가능한 개입**을 확인할 수 있어야 한다.\n\n| 단계 | 보여줄 실체 | 가능한 개입 |\n|---|---|---|\n| 대상·조건 정리 | 선택·변경·유지·검토 대상과 연결 근거 | 대상 추가·제외, 조건 변경 |\n| 의도 해석 | 원본 스케치와 해석된 경계·방향 | 선·기준면·의미 교정 |\n| 후보 생성 | 원본·후보의 차이와 마지막 일관된 중간 상태 | 직접 조정, 다른 후보 선택, 분기 |\n| 영향 검토 | 변경 위치에 연결된 치수·수량·속성·미검토 사항 | 가정·참조 자료 수정 |\n| 원본 반영 | 실제 적용 대상, 진행 상태, 적용 결과 | 반영 확인, 중단 요청, 복구 검토 |\n\n형상 변화가 없는 데이터 작업도 포함·제외 자료와 가정·수치 변화를 보여준다. 텍스트 로그나 ‘생각 중’ 표시를 자주 출력하는 것만으로 시각적 진행 요구를 충족했다고 보지 않는다.\n\nAI의 내부 사고를 만들어 보여주는 대신 실제 입력·조회·생성·계산·변경과 근거를 표시한다. 숫자형 완료율은 측정 가능한 진행 기준이 있을 때만 사용한다. 결과가 아직 없으면 없다고 알리고 이전 후보의 버전과 준비 시점을 명시한다.\n\n### 9.2 개입과 일반 의견을 구분한다\n\n사용자는 문장, 객체 선택, 스케치 수정, 치수 조절, 자료 교체, 유지 영역 지정, 후보 선택·분기로 개입할 수 있다. 코멘트 저장 자체는 AI 호출이나 진행 중 조건 변경을 뜻하지 않는다.\n\n‘지금 작업에 반영’과 ‘다음 작업을 위한 의견 저장’을 구분한다. 기본 입력·코멘트·핀·스케치 저장은 AI 연결이나 승인 없이 가능해야 한다. AI 요청은 명시적 실행 행동에서 시작한다.\n\n### 9.3 개입의 상태를 구분한다\n\n제품은 최소한 **지시 접수, 반영을 위한 정리 중, 새 지시 반영됨, 적용 불가 또는 추가 결정 필요**를 구분한다. 입력을 받았다는 것만으로 이미 실행에 반영했다고 표시하지 않는다.\n\n개입 이후에는 이전 지시와 충돌하는 새 작업을 시작하지 않는다. 진행 중 연산을 안전하게 멈출 수 없는 경우 그 연산의 종료까지 기다려야 함을 표시하고, 종료 결과가 새 조건을 위반하면 활성 후보나 원본에 자동 채택하지 않는다.\n\n원본에 이미 일어난 변경은 별도로 기록하고 필요한 복구를 제시한다. 중단, 되돌리기, 이전 후보에서 분기하기는 다른 행동이다. 즉시 중단이나 전 프로그램 원자적 복구를 무조건 보장하지 않는다.\n\n### 9.4 직접 수정과 이전 AI 결과의 충돌\n\nIDE 또는 연결된 호스트에서 사람이 대상을 직접 바꾸면 그 변경을 새 기준으로 인식한다. 이전 기준의 AI 결과를 현재 상태 위에 자동 적용하지 않는다. 무관한 변경은 영향 확인 후 유지하고, 관련 변경은 재비교한다.\n\n수정 중에도 원본 스케치·코멘트·완료된 후보는 보존한다. 안전하게 재사용할 수 없는 결과는 과거 결과로 남기되 현재 유효한 결과와 구분한다.\n\n### 9.5 확인이 필요한 순간과 필요하지 않은 순간\n\n위임 범위 안의 자료 읽기, 후보 생성, 계산, 후보 내부의 수정은 원칙적으로 연속 진행한다. 유지 조건 변경, 영향 범위 확대, 큰 비용의 추가 작업, 원본 반영·외부 공개는 해당 권한과 사용자 결정을 확인한다.\n\n모든 단계에서 허락을 묻지 않되, 중요한 방향 결정을 AI가 조용히 대신하지 않는다. 모호함을 질문할지 표시된 가정의 후보로 진행할지는 영향·가역성·비용에 따라 정하고, 판단 기준을 사용자 시험으로 검토한다.\n\n## 10. 큰 모델·BIM 문맥과 프로젝트 기억\n\n### 10.1 전체 데이터와 모델 입력을 분리한다\n\n전체 프로젝트 데이터, 계산에 필요한 데이터, LLM에 전달할 정보는 서로 다르다. 대량 기하·속성은 원본과 계산·조회 도구에서 다루고, LLM에는 목표·적용 조건·관계·필요한 결과와 참조를 제공한다.\n\n필수조건을 보존하면서 관련 정보를 추가 조회하는 방식으로 설계한다. 전체 모델·전체 대화·전체 회의록을 매 요청마다 반복 입력하지 않는다. 이 방식을 사용한다는 이유만으로 누락이 없거나 항상 저렴하다고 주장하지 않는다.\n\n### 10.2 기억의 권한과 수명을 구분한다\n\n| 정보 | 의미 | 관리 원칙 |\n|---|---|---|\n| 입력 원본 | 사용자의 문장·핀·스케치·코멘트 | AI 해석과 별개로 보존 |\n| 대화 이력 | 요청·응답·도구 사용 기록 | 이어가기 정보이며 원본 모델의 사실은 아님 |\n| 작업 기억 | 현재 목표·가정·미해결 질문 | 해당 작업 범위와 대안에 연결 |\n| 확정 결정 | 사용자가 채택한 조건과 근거 | 적용 범위·버전·대체 이력 유지 |\n| 실제 모델 상태 | 호스트의 기하·속성·관계와 고정 스냅샷 | 재개·반영 시 필요한 범위에서 확인 |\n\n대화 압축·세션 교체로 중요한 결정이 사라지지 않도록 제품이 관리한다. AI가 제안한 기억이 확정 조건으로 자동 승격되지 않는다. 화면의 대화, 실행 엔진의 세션, 실제 모델 버전을 같은 식별자로 취급하지 않는다.\n\n### 10.3 이번 작업에 쓰이는 정보를 확인할 수 있다\n\n사용자는 이번 입력에 포함된 대상·모델 버전·핵심 조건·참조 자료·가정을 확인하고 수정할 수 있어야 한다. 정보 선택을 위한 복잡한 수동 작업을 매번 요구하지는 않는다.\n\n필수조건과 참고 의견을 구분하고, 서로 충돌하는 결정은 하나를 조용히 덮어쓰기보다 충돌로 드러낸다. 자동으로 발견하지 못한 관계나 확인하지 않은 분야는 결과의 검토 범위에 남긴다.\n\n### 10.4 유효한 결과만 재사용한다\n\n결과 재사용은 단순히 같은 객체가 존재하는지로 결정하지 않는다. 입력 버전, 관계, 계산 방법·가정, 질의 조건, 대상 집합의 변경까지 고려할 수 있어야 한다. 집계 대상에 새 객체가 추가된 경우도 결과를 낡게 만들 수 있다.\n\n관련성을 확인할 수 없으면 재조회·재계산 범위를 넓히거나 미확인으로 표시한다. 무관한 원본 수정으로 프로젝트 전체를 재계획하거나, 영향을 받는 결과를 그대로 재사용하는 두 극단을 모두 피한다.\n\n## 11. 품질·검증·시간·비용의 균형\n\n### 11.1 플랫폼 품질과 전문 스킬 품질을 구분한다\n\n플랫폼 MVP는 대상·입력 보존, 네이티브 기본 제어, 진행·개입·재개와 확장 계약의 신뢰성을 검수한다. 법규·구조·평면 설계의 전문 품질은 해당 스킬이 추가될 때 별도로 검수한다. 지원하는 각 작업은 의도 반영, 기하·속성의 정확성, 유지 조건, 네이티브 편집성, 결과 근거에 대한 완료 기준을 갖는다. 자동 검증 통과와 설계적으로 유용한 결과는 구분해 평가한다.\n\n| 품질 측면 | 확인할 내용 |\n|---|---|\n| 대상·의도 | 지정 대상과 스케치의 의미를 반영했는가 |\n| 기하·데이터 | 요구한 변경과 지원하는 유효성·단위 조건을 만족하는가 |\n| 조건 보존 | 유지 대상과 등록된 필수조건을 지켰는가 |\n| 네이티브 편집성 | 약속한 원본 객체 유형·속성을 가지며 호스트 기본 도구로 재편집·저장·재열기가 가능한가 |\n| 근거 | 계산과 설명의 입력·방법·버전·미확인 범위가 드러나는가 |\n| 설계적 활용성 | 사용자가 처음부터 다시 만드는 것보다 유용한가 |\n\n완료 기준을 만족하지 못한 후보도 탐색용으로 보존할 수 있다. 다만 ‘초안’으로 이름만 바꾸어 완료율과 품질을 높게 집계해서는 안 된다. 지원 작업에서 안정적으로 채택 가능한 결과를 만드는지가 출시 판단의 핵심이다.\n\n### 11.2 탐색·반영·공유를 구분한다\n\n| 경계 | 기본 정책 | 필요한 확인 |\n|---|---|---|\n| 탐색 | 후보와 입력을 자유롭게 만들고 저장 | 원본과 분리된 상태, 데이터 보호, 미확정 조건 표시 |\n| 원본 반영 | 사용자가 선택한 변경만 적용 | 정확한 대상·권한·관련 기준·필수조건·실제 적용 결과 |\n| 공유·발행 | 선택한 시점과 목적에 맞게 전달 | 포함 범위·기밀정보·편집 충실도·검토 상태 |\n\n필수조건에 미달한 결과를 승인 문자열 하나로 적합 결과로 바꾸지 않는다. 유효한 권한과 근거로 조건 자체를 변경하는 결정은 별도로 기록하며, 전문·법정 검토를 단순 선택으로 대체하지 않는다.\n\n잘못된 대상과 권한 없는 원본 쓰기는 막는다. 설계 경험칙, 아직 안 한 추가 검토, 선택적 외관 평가 때문에 모든 후보 탐색과 저장을 막지는 않는다. 실제 검증이 필요한 경계만 통제한다.\n\n### 11.3 최소한의 필수 확인과 사실 기반 표시\n\n정밀 수치와 원본 변경 여부는 모델·계산·실행 결과에 근거해야 한다. 캡처와 시각 모델 판단은 보조 검토로 활용할 수 있지만 전체 기하·속성 검증을 대신하지 않는다.\n\n원본 적용 결과, 시각 증거의 수집 상태, 보고서 생성 상태를 분리한다. 캡처나 보고서 생성 실패로 확인된 변경을 다시 실행하지 않는다. 적용 결과가 불명확하면 영향받는 대상의 후속 쓰기를 보류하고 상태를 확인하되 다른 비파괴 작업은 유지한다.\n\n### 11.4 불필요한 반복을 줄인다\n\n선택·선 그리기·코멘트 저장·이미 정의된 직접 조절은 불필요한 모델 호출 없이 처리한다. 같은 입력의 재조회와 전체 재검증을 줄이고, 필수적인 확인은 가능한 경우 일반 계산과 실행 기록으로 처리한다.\n\n모든 단계에 별도의 LLM 감독자·검증자를 추가하지 않는다. 같은 오류에 진전 없이 반복하는 작업은 멈추고, 남은 문제와 현재 후보를 제공한다. 모델 호출 횟수·재시도·검토 강도는 실제 결과로 비교하며, 특정 횟수를 보편적 품질 보증으로 삼지 않는다.\n\n### 11.5 예산이 부족해도 기준을 몰래 낮추지 않는다\n\n지원 작업에 사용할 시간·비용 범위를 정하고, 초과 또는 진척 정체를 알린다. 사용자는 현재 후보 보존, 범위 축소, 추가 작업 허용, 다른 접근, 직접 수정으로 전환할 수 있어야 한다.\n\n목표나 필수조건을 완화해야 한다면 설계 결정으로 명시한다. 무제한 반복과 무의미한 중간 질문 대신, 실제 남은 문제에 대한 선택을 제공한다. 토큰·비용을 관측할 수 없는 실행 경로에서는 추정과 미측정을 구분한다.\n\n## 12. 네이티브 제어·확장·공유\n\n### 12.1 네이티브 결과의 정의\n\n지원 객체 종류에 대해서는 원본 프로그램의 해당 객체 유형과 약속한 의미·편집 동작을 갖는 결과를 생성·수정한다. 파일을 열 수 있음, 화면상 유사함, 표시용 형상에 분류를 붙임만으로 완료를 인정하지 않는다.\n\nRevit에서 벽 생성을 지원한다면 카테고리 이름만 벽인 일반 형상이 아니라 실제 벽 객체와 선언한 타입·레벨·치수·후속 편집 동작을 요구한다. 생성 출발점이 매스였다는 이유로 결과를 판단하지 않고, 최종 객체와 동작으로 판단한다.\n\nRhino와 CAD에서도 지원하는 기하·엔티티 종류, 속성, 기본 도구의 재편집과 저장 후 지속성을 정의한다. 사용자가 메시를 요청했을 때의 네이티브 메시와, 벽을 요청했는데 표시용 메시로 대체한 결과는 다르다. 네이티브라는 말이 모든 생성 이력과 파라미터를 자동 복원한다는 뜻은 아니다.\n\n지원하지 않는 형상이나 관계는 불가·제한을 알리고 후보를 제시할 수 있다. 대체 표현은 별도로 표시하며 네이티브 요구의 성공률에 합산하지 않는다. 치수·객체 종류·정확성 기준은 호스트별 SPEC 지원표에서 확정한다.\n\n### 12.2 여러 호스트의 기본 제어\n\nRhino·Revit·CAD 계열을 같은 프로젝트에서 다룬다. AutoCAD와 ZWCAD는 별도 호스트로 취급한다. 실제 설치 버전·에디션·업데이트는 아직 정해지지 않았으며, 첫 MVP의 CAD 조합도 확정해야 한다.\n\n각 지원 호스트는 문서 식별, 단위·상태·선택 읽기, 선언한 네이티브 생성·수정, 실제 적용 결과와 저장 상태 확인을 제공한다. 같은 기능명을 써도 호스트가 다른 의미를 제공하면 차이를 표시한다.\n\n여러 호스트를 연결했다는 이유로 모델 전체의 자동 동기화, 임의 객체의 호스트 간 변환, 하나의 트랜잭션에 의한 전 프로그램 복구를 약속하지 않는다. 각각의 문서와 기준, 쓰기 결과를 보존한다.\n\n### 12.3 스킬·플러그인 확장의 최소 요구\n\n확장에는 목적, 사용 입력, 결과 유형, 필요한 호스트·도구·권한, 진행·개입의 지원 범위가 있어야 한다. 사용자는 활성 확장과 사용할 권한을 확인할 수 있어야 한다.\n\n코어를 재작성하지 않고 작은 확장 하나를 등록·실행·비활성화하고, 진행·결과·실패를 공통 작업 기록에 남길 수 있어야 한다. 호스트용 어댑터 추가와 전문 업무용 확장 추가를 구분한다. 새로운 호스트 API가 필요한 전문 스킬은 그 어댑터 기능의 추가 구현이 필요할 수 있다.\n\n초기 확장의 신뢰·배포 범위는 SPEC에서 정한다. 공개 마켓과 임의의 비신뢰 코드 실행은 MVP 전제가 아니다. 확장이나 외부 자료가 사용자 권한을 스스로 높이지 못한다. 분야별 규칙은 데이터 출처와 적용 범위를 갖는다.\n\n### 12.4 대안 이력과 자료 의존성\n\n후보·기준 기록·비교를 공통 기반으로 제공한다. 대안의 분기·선택 병합을 확장할 때 설계 이력과 자료·작업 파생 관계를 구분한다. 같은 형상으로 돌아와도 새로운 결정은 별도로 남길 수 있다.\n\n대안 분기는 AI 대화 분기와 같지 않고, 기록을 연다고 네이티브 문서가 자동 복원되지 않는다. 임의 형상을 텍스트처럼 자동 병합하지 않는다. 고급 트리 편집과 범용 의미 병합은 MVP 필수 기능이 아니다.\n\n### 12.5 웹 참여와 권한\n\n외부 검토자는 iPad·Mac·Windows의 지원 브라우저에서 공개 범위의 모델·도면·자료를 보고, 기준 버전에 연결된 코멘트·스케치를 남기는 것을 목표로 한다. 실제 지원 브라우저·펜·터치·모델 크기는 검증한 범위만 선언한다.\n\n웹 참여는 제품 요구이며, 첫 MVP에 포함할 깊이와 제공 방식은 미정이다. 파일 기반 검토 교환을 제공하더라도 온라인 제출·실시간 동기화가 구현된 것처럼 표시하지 않는다. 외부 검토용 서비스를 위해 작업 PC를 무제한 공개하거나 방화벽 전체 해제를 요구해서는 안 된다.\n\n외부 코멘트, 변경 제안, 실행 가능한 변경안은 구분한다. 제출·채택·병합·원본 반영·공개는 각 권한과 실제 처리 상태를 확인한다. 작업 PC에 직접 접근하지 않은 외부 검토자에게 로컬 원본 제어 권한이 자동으로 생기지 않는다.\n\n### 12.6 기본 산출물과 편집용 출력\n\nMVP는 지원한 결과·기본 표·도면 표현·근거를 작업 안에서 열람하고, 선택한 기록 시점의 자료를 기본 HTML 검토 패키지로 전달할 수 있어야 한다. 지원 자산과 외부 의존, 미확인 사항을 함께 표시한다. HTML 한 파일만 열면 온라인 협업이 시작되는 것은 아니다.\n\n네이티브 저장과 내보내기는 현재 후보를 반영한 결과인지, 이전 원본 파일의 동봉인지 구분한다. 3DM·DWG·SKP·XLSX·DOCX·PPTX 등은 각 형식의 지원 범위와 손실을 따로 선언하고, PDF는 고정 도면·보고서 전달 요구로 구분한다. 모든 포맷 변환의 동시 구현은 MVP 조건이 아니다.\n\n즉석 HTML 편집기 C-01이 채택되면 문단·표·도형 선택과 데이터 연결, 편집 권한, 재생성 규칙을 별도 명세한다. 단순 산출물 열람을 그 편집기의 구현으로 간주하지 않는다.\n\n## 13. 기능 요구사항과 범위\n\n**MVP 필수**는 공통 플랫폼이 제공해야 할 능력이다. ‘지원 범위’는 실제 호스트·객체·동작을 SPEC에서 좁혀 선언한다는 뜻이며, 연결만으로 모든 동작을 제공한다는 의미가 아니다. **제공 범위 미정**은 출시 전 결정이 필요한 항목이다.\n\n| ID | 요구사항 | 범위 | 수용 기준의 중심 |\n|---|---|---|---|\n| FR-01 | 프로젝트·작업 범위 관리 | MVP 필수 | 모델·입력·조건·대화·권한이 섞이지 않음 |\n| FR-02 | 다중 호스트·문서 식별 | MVP 필수 | Rhino·Revit·선정 CAD의 실제 대상과 지원 수준 구분 |\n| FR-03 | 상태·선택·속성 읽기 | MVP 지원 범위 | 원본·버전·좌표·단위·확인 수준 보존 |\n| FR-04 | 네이티브 생성·수정 | MVP 지원 범위 | 선언한 객체 유형·속성·재편집·저장 후 유지 |\n| FR-05 | 문장 안 객체 핀 | MVP 필수 | 핀 이후 선택이 바뀌어도 대상 유지; 끊긴 참조 표시 |\n| FR-06 | 기본 공간 스케치 | MVP 평면 범위 | 원본 선·기준면·단위·역할 보존; 미등록 자료 구분 |\n| FR-07 | 코멘트·자료 참조 | MVP 기본 범위 | 대화와 독립 저장; 명시 실행 전 AI 호출·쓰기 없음 |\n| FR-08 | AI 요청·세션·문맥 | MVP 한 실행 경로 이상 | 입력·조건과 실제 모델 상태에 근거한 실행·재개 |\n| FR-09 | 건축 대상 중심 데이터 | MVP 최소 관계 | 형상·속성·관계·근거·작업 결과의 출처와 버전 추적 |\n| FR-10 | 검토 가능한 작업과 과정 표시 | MVP 필수 | 실제 대상·가정·중간 후보·작업 상태와 남은 검토 표시 |\n| FR-11 | 진행 중 개입·직접 수정 보호 | MVP 필수 | 접수·반영·정지 구분; 늦은 결과가 새 상태를 덮어쓰지 않음 |\n| FR-12 | 후보·원본·기록·기본 비교 | MVP 기본 범위 | 후보 채택·원본 반영·저장 구분; 실제 변경 확인 |\n| FR-13 | 확장 등록·실행 | MVP 최소 계약 | 작은 확장을 동일 권한·입력·진행·결과·실패 흐름으로 실행 |\n| FR-14 | 산출물 열람·기본 HTML 전달 | MVP 기본 범위 | 선택 시점·포함 자료·검토 상태가 일치 |\n| FR-15 | 품질·비용·시간 관리 | MVP 필수 | 네이티브 품질과 총시간·개입·실패 포함 비용 평가 |\n| FR-16 | 저장·재개·연결 유실·오프라인 | MVP 필수 | 로컬 입력 보존; 불명확 쓰기 재실행 금지; 실제 기준에서 재개 |\n| FR-17 | Windows 설치·최초 연결 | MVP 필수 | 실제 지원 환경에서 설치·연결·설정·제거와 작업 자료 보존 |\n| FR-18 | 데이터 보호·실행·공개 권한 | MVP 필수 | 외부 자료·확장이 권한을 늘리지 않음; 기밀 전송·공개 구분 |\n| FR-19 | 외부 웹 코멘트·스케치 | 제품 요구 / 첫 제공 범위 미정 | 지원 브라우저·기준 버전·제출 상태·권한 명시 |\n| FR-20 | 고급 대안 트리·선택 병합 | 후속 확장 | 이력·의존성·원본 상태를 구분해 검토·선택 |\n| FR-21 | 전문 자동화 스킬 | 후속 확장 | 업무별 근거·지원 범위·전문 완료 기준과 품질 평가 |\n\n자유 도킹, 특정 DB·MCP·실행 SDK의 도입, 특정 외부 저장소의 재사용은 독립적인 제품 성공 기준이 아니다. 기술 선택은 구현계획에서 제품 요구를 충족하는 수단으로 비교한다.\n\n## 14. 플랫폼 MVP의 제공 범위와 완료 조건\n\n### 14.1 호스트 범위의 기준\n\n| 대상 | MVP에서 요구할 능력 | 아직 확정할 내용 |\n|---|---|---|\n| Windows IDE | 설치, 프로젝트·작업, 저장·재개, 상태·입력·결과·확장 관리 | 지원 Windows 세부 버전, 배포·설치 조건 |\n| Rhino | 문서·선택 읽기와 제한된 네이티브 생성·수정·결과 확인 | 설치 버전·기하 종류·지원 동작·허용 오차 |\n| Revit | 문서·요소 읽기와 제한된 네이티브 요소 생성·수정·결과 확인 | 설치 버전·요소 유형·필수 파라미터·관계 범위 |\n| AutoCAD / ZWCAD | 선정 CAD의 문서·엔티티 읽기와 기본 생성·수정·결과 확인 | 하나 또는 둘 모두의 첫 포함 여부, 각각의 버전·API 지원·객체 범위 |\n| 외부 웹 | 권한 있는 모델·자료 검토와 코멘트·스케치 참여 | 첫 배포에 포함할 동작·브라우저·온라인/파일 경로 |\n\n모든 프로그램을 동등하게 깊이 지원한다는 약속이 아니라, **선언한 각 호스트의 기본 제어를 실제로 사용할 수 있는 상태**가 MVP 목표다. 호스트 하나만 완결한 결과는 내부 alpha가 될 수 있지만, 다중 호스트 플랫폼 MVP의 완료를 대신하지 않는다.\n\n### 14.2 기반 검증용 작은 작업\n\n각 호스트에서 대상 읽기 → 제한된 네이티브 생성 또는 수정 → 실제 후보·상태 표시 → 사용자 조정 → 원본 반영 → 호스트 기본 도구로 재편집 → 저장·재열기의 흐름을 검수한다. 기하 생성과 사용자의 조건 판단을 별개로 확인한다.\n\n검증 사례의 후보는 Rhino의 지원 곡선·솔리드, Revit의 지정 벽 유형, CAD의 선·폴리라인 등이다. 이는 **SPEC을 정하기 위한 시험 후보**이며 모두 지원 확정된 목록은 아니다. 전문 법규·구조·평면 자동화까지 구현해야 이 시험을 수행할 수 있는 구조는 피한다.\n\n최소 두 호스트가 같은 프로젝트에 연결된 상황에서 대상 혼동이 없고, 한쪽의 끊김이나 변경이 다른 문서의 잘못된 쓰기로 이어지지 않는지 확인한다. 같은 호스트의 복수 문서·인스턴스 구분도 해당 지원 환경에서 확인한다.\n\n### 14.3 확장 가능성을 실제로 확인한다\n\n작은 검증용 확장 하나로 등록, 필요한 입력·권한 전달, 실행, 진행·개입, 결과 보존, 실패, 비활성화를 확인한다. 예시는 선택 객체 속성 요약이나 허용된 기본 객체 생성이다. 이것은 플랫폼 시험이지 전문 스킬의 출시가 아니다.\n\nmanifest나 빈 플러그인 탭만 존재하는 것을 확장 구현 완료로 보지 않는다. 반대로 완성된 마켓플레이스를 만들 필요는 없다.\n\n### 14.4 출시 판단\n\n선정한 호스트·버전·객체별 기본 제어가 실제 시험에서 수용 기준을 충족해야 한다. 입력·개입·네이티브 결과·저장·복구·확장·설치의 품질을 확인한다. 특정 호스트에서 실패한 동작을 일반적으로 제공한다고 표시하지 않는다.\n\n웹 참여 범위와 CAD 조합처럼 미정인 제품 항목은 관련 배포의 수용 범위를 확정하기 전에 결정한다. 숫자 목표는 기준 데이터·환경으로 측정해 정하되, 결정되지 않은 값을 달성했다고 주장하지 않는다.\n\n구현 순서는 한 호스트의 내부 alpha부터 시작할 수 있다. 구현 순서가 PRD의 플랫폼 범위를 조용히 축소하거나 전문 스킬을 MVP로 앞당기는 이유가 되어서는 안 된다.\n\n## 15. 수용 시나리오\n\n각 수용 시나리오는 구현과 출시 판단에서 확인해야 할 시험 기준이다. 해당 배포에서 선언한 기능·호스트·포맷 범위에 적용한다. 미제공 웹 기능이나 후속 스킬에만 필요한 시험은 해당 없음으로 표시하며, 실행하지 않은 시험을 통과로 기록하지 않는다.\n\n| ID | 시험 상황 | 통과 기준 |\n|---|---|---|\n| AC-01 | 핀 삽입 후 선택·프로젝트 변경 | 기존 요청 대상과 권한이 바뀌지 않음 |\n| AC-02 | 평면 스케치 작성·카메라 전환 | 원본 선과 공간 기준 유지; 화면 주석과 구분 |\n| AC-03 | 등록되지 않은 이미지·모호한 스케치 | 미확정 상태를 드러내고 근거 없는 깊이 확정 없음 |\n| AC-04 | 코멘트 저장·AI 연결 단절 | 입력 보존; 저장만으로 AI 호출이나 원본 쓰기 없음 |\n| AC-05 | 큰 목표를 작업으로 구성 | 각 검토 단위의 목표·영향 범위·결과·의존성이 확인됨 |\n| AC-06 | 잘못된 대상이 포함된 시작 단계 | 사용자가 시각적으로 찾아 제외하고 후속 결과에 반영 |\n| AC-07 | 장시간 작업 진행 | 실제 상태·마지막 결과·중단 제약을 알 수 있고 입력 가능 |\n| AC-08 | 후보 생성 도중 새 스케치 입력 | 접수·반영 상태 구분; 영향받는 후속 작업 재처리 |\n| AC-09 | 이전 AI 결과가 늦게 도착 | 새 지시·사람 수정·현재 후보를 덮어쓰지 않음 |\n| AC-10 | 연결 호스트에서 사람이 직접 수정 | 관련 기준 변경 감지·재비교; 무관한 작업 불필요 중단 없음 |\n| AC-11 | 중단 가능한/불가능한 연산 | 요청 접수와 실제 정지 구분; 원상복구로 오인시키지 않음 |\n| AC-12 | 자료·가정·집계 대상 변경 | 관련 수치·후보·보고서의 유효성 갱신; 안전한 결과만 재사용 |\n| AC-13 | 대화가 길어지거나 세션을 다시 엶 | 확정 조건·현재 모델·완료 작업을 확인하고 재개 |\n| AC-14 | AI 추정과 사용자 결정이 공존 | 신뢰 수준·출처·범위를 구분; 자동 사실 승격 없음 |\n| AC-15 | 필수조건 충돌·결과 품질 미달 | 탐색 후보 보존 가능; 완료·적합으로 위장하지 않음 |\n| AC-16 | 예산 초과·동일 오류 반복 | 진척과 남은 문제 표시; 무제한 루프 없이 전환 가능 |\n| AC-17 | 원본 반영·응답 유실·중복 요청 | 잘못된 대상·중복 적용 없음; 불명확 결과 재조회 |\n| AC-18 | 반영 확인 후 캡처·보고서 실패 | 적용 결과와 증거·산출물 상태 분리; 쓰기 재실행 없음 |\n| AC-19 | 외부 검토 제출과 선택 채택 | 기준 버전·권한 유지; 제출/병합/원본 반영 구분 |\n| AC-20 | HTML·편집본 출력 | 선택 버전·포함 범위·미검토·편집 충실도 일치 |\n| AC-21 | 원본 객체 삭제·분할·재생성 | 핀·관계의 끊김을 표시하고 다른 객체에 자동 오연결 없음 |\n| AC-22 | 비개발자/외부 검토자의 실제 사용 | 코드 없이 변경 이해·대상 교정·스케치 수정·반영 확인 가능 |\n| AC-23 | Windows 설치·연결·제거 | 지원 환경과 부족한 조건을 알 수 있고, 작업 파일·프로젝트 기록을 보호함 |\n| AC-24 | 네이티브 생성·수정·저장·재열기 | 실제 객체 종류·속성·호스트 재편집과 지속성을 확인; 표시용 대체물은 별도 상태 |\n| AC-25 | 여러 호스트·문서의 동시 연결 | 요청 대상을 바꾸지 않음; 한쪽의 끊김이 다른 원본의 잘못된 변경으로 이어지지 않음 |\n| AC-26 | 작은 확장 등록·실행·실패·비활성화 | 공통 입력·권한·진행·결과 계약으로 처리; 임의 권한 확대 없음 |\n| AC-27 | 미지원 호스트·객체·버전 | 지원 제한과 필요한 조건을 알림; 유사 형상 생성으로 지원 성공 위장 금지 |\n| AC-28 | 실제 웹 검토 제공 시 제출·재접속 | 권한·기준 버전·입력 원본·실제 제출 여부 유지; 파일 저장을 온라인 동기화로 표현하지 않음 |\n\n시험 결과는 장비·호스트·작업 유형·모델 규모·데이터 상태와 함께 기록한다. 모의 결과·정적 UI 시연·실제 호스트 시험을 구분한다.\n\n## 16. 성공 지표와 출시 판단\n\n### 16.1 제품의 주요 성과\n\n핵심 성과는 **지원 호스트의 기본 제어를 신뢰성 있게 수행하고, 결과 채택까지 필요한 총시간과 건축가의 부담을 줄이는 것**이다. 낮은 비용, 적은 승인, 빠른 초안 중 하나만 개선되었다고 성공으로 평가하지 않는다.\n\n| 평가 축 | 측정할 항목 | 해석 기준 |\n|---|---|---|\n| 플랫폼 결과 품질 | 대상·단위·네이티브 유형·재편집·저장·입력·조건 보존 | 전문 스킬의 건축 판단 품질과 구분 |\n| 실제 완료 | 지원 작업의 완료율·채택률·재작업량 | 초안 전환·중단·실패도 분모에 포함 |\n| 시각적 이해 | 대상·변경·가정·미검토를 사용자가 찾아 설명하는지 | 상태 문구를 출력했다는 것만으로 통과 아님 |\n| 개입성 | 접수·반영 지연, 중단 상태 이해, 이전 결과 충돌 | 입력 가능성과 실제 실행 통제를 모두 측정 |\n| 가시성 | 첫 검토 결과까지 시간, 유의미한 상태를 알 수 없는 기간 | heartbeat와 진짜 검토 가능한 결과를 구분 |\n| 효율 | 총경과시간·사용자 준비/검토/수정시간·대기·실패 포함 비용 | 토큰만 줄이고 사람의 재작업을 늘리지 않음 |\n| 문맥 관리 | 필수조건 누락, 자료 선택·재조회, 결과 무효화 정확성 | 큰 입력 용량만으로 해결되었다고 보지 않음 |\n| 검증 부담 | 불필요한 차단·질문·재시도, 검증 비용 | 필수 안전을 유지하면서 탐색 부담을 줄임 |\n| 다중 호스트 | 선언한 각 호스트·버전·객체에서 기본 제어 완료 | 단일 호스트 시연으로 대체하지 않음 |\n| 확장·설치 | 작은 확장의 실행·실패 처리, 지원 Windows 설치·재개 | 빈 확장 슬롯·개발 PC 성공만으로 완료 아님 |\n\n### 16.2 비교 방법\n\n동일한 과업과 원본·조건으로 기존 수작업 또는 익숙한 CLI 작업 흐름과 비교한다. AI 모델·도구·입력 정보·예산 차이를 기록한다. 입력 방식 비교는 텍스트, 핀 추가, 스케치와 명시 조건 추가를 나누어 보되, 정보량 증가와 표현 방식의 효과를 혼동하지 않는다.\n\n성공 시연만 선택하지 않고 큰 모델, 불완전한 속성, 오래된 참조, 충돌 조건, 진행 중 사용자 개입, 연결 끊김을 포함한다. 전문가 품질 평가와 비전공자의 이해·피드백 능력 평가는 분리한다.\n\n### 16.3 성능 목표와 출시 기준\n\n반응 속도·토큰 한도·최대 무가시 기간·채택률·품질 평가의 수치 기준은 실제 장비·데이터의 기준 작업을 측정한 뒤 확정한다. 작업 종류·규모·환경별 목표와 측정 방법을 구분하고, 측정 전 임의의 수치를 서비스 보장으로 사용하지 않는다.\n\n정확한 대상·권한, 사람 수정 보호, 중복 쓰기 방지, 불명확 상태의 정직한 표시는 초기 출시 필수 기준이다. 정의된 시험에서 중대한 위반이 발견되면 해당 원본 쓰기 기능은 출시하지 않는다. 시험 통과를 모든 환경에서 무오류라는 보증으로 확대하지 않는다.\n\n지원 과업의 품질·완료율·총비용 목표를 충족하지 못하면 과업 범위나 구현을 조정한다. 단순히 ‘검토 필요’ 표시를 늘리는 것으로 제품 완성도를 대신하지 않는다.\n\n## 17. 주요 위험과 제품 대응\n\n| 위험 | 대응 방향 |\n|---|---|\n| DB 정비가 너무 커져 실제 작업을 시작하지 못함 | 지원 과업에 필요한 관계부터 확보; 미분류와 미확정을 허용 |\n| 작은 작업이 전체 설계 조건을 놓침 | 상위 조건 공유, 결합 시 연결 관계·전체 지표 검토 |\n| 작업 분할이 질문·토큰·세션 수를 늘림 | 검토 단위와 호출 단위 분리; 유효 문맥·결과 재사용 |\n| 시각화가 실제로는 로그의 장식에 그침 | 실제 후보·변경·가정 연결을 사용자 과제로 검증 |\n| 개입 이후 오래된 결과가 현재안을 덮어씀 | 지시·기준 변경을 기록하고 충돌 결과 자동 채택 금지 |\n| 관계 누락 때문에 영향 범위를 잘못 좁힘 | 확인 수준 표시, 범위 확대 또는 미확인 상태 유지 |\n| 엄격한 검증이 탐색을 막고 결과 품질을 낮춤 | 탐색·반영·발행 분리; 오차단·품질·비용 동시 측정 |\n| 형상 표현과 BIM 의미가 혼동됨 | 표시 형상·원본·의미·편집 충실도 분리 |\n| 외부 자료가 지시·권한으로 오인됨 | 자료와 사용자 실행 결정 분리; 공개·수정 권한 확인 |\n| 공유 파일에 비밀·개인 자료가 포함됨 | 공개 범위와 포함 자료 확인; 비밀·내부 경로 제외 |\n| 연결 불안정·대화 재개가 잘못된 실행을 유발함 | 대화·작업·원본 상태 별도 관리; 불명확 쓰기 재실행 금지 |\n| 기반 MVP가 빈 UI로 끝남 | 실제 네이티브 제어와 작은 확장으로 종단 간 검수 |\n| 플랫폼이 특정 전문 업무 도구로 축소됨 | 검증용 과업과 제품 제공 범위를 구분 |\n| 브라우저 참여가 로컬 원본 권한으로 연결됨 | 외부 검토·자료 제출과 작업 PC의 원본 제어 분리 |\n| 지원 버전·설치 권한의 차이가 숨겨짐 | 지원 환경·전제 조건을 명시하고 실제 설치·호스트에서 시험 |\n\n## 18. 제품 상세 결정 항목\n\n아래는 범위와 완료 기준을 구체화하기 위해 아직 결정해야 할 항목이다. 미정을 채우기 위해 기술과 성능을 추측하지 않는다. 확인 가능한 부분의 명세·목업·기술 실험은 먼저 진행할 수 있으나, 관련 지원 선언 전에 결정을 완료해야 한다.\n\n| ID | 결정할 내용 | 유지할 제품 기준 | 결정 시점·근거 |\n|---|---|---|---|\n| OQ-01 | AutoCAD·ZWCAD 중 첫 포함 조합 | CAD 계열의 실제 네이티브 기본 제어 | SPEC 지원표 확정 전 실제 사용 환경·필요 확인 |\n| OQ-02 | Windows와 호스트의 버전·에디션·업데이트 범위 | Windows 우선 설치형, 검증한 환경만 지원 선언 | 설치 환경 조사와 호스트 지원 검증 |\n| OQ-03 | 호스트별 객체 종류·생성·수정·필수 속성 | 네이티브 객체·후속 편집·저장 지속성 | SPEC에서 사용자 과업으로 정의하고 기술 실험으로 확인 |\n| OQ-04 | 외부 웹의 첫 배포 범위·지원 기기 | 웹 검토와 코멘트·스케치, 로컬 원본 권한과 분리 | 첫 배포 범위 결정 전 참여 시나리오·기기 시험 |\n| OQ-05 | 장시간 연산의 허용 제약과 반응 목표 | 언제든 지시 접수, 실제 반영·정지 상태 | 호스트 제약과 사용자 개입 시험 |\n| OQ-06 | 모델 규모·품질·지연·비용 목표치 | 필수 품질을 낮추지 않고 총부담 절감 | 기준 모델·장비·작업 반복 측정 후 출시 전 확정 |\n| OQ-07 | 초기 확장의 신뢰·배포 범위와 결과 종류 | 작은 확장 실행, 기본 권한·입력·상태 보호 | SPEC 확장 계약과 시험 확장 정의 시 |\n| OQ-08 | 기본 HTML 포함 자산과 편집본 출력 | 실제 버전·포함 범위·손실 공개 | 산출물 SPEC에서 선언하고 각 호스트·파일로 검수 |\n\n즉석 HTML 편집기 C-01과 후속 전문 스킬은 별도 채택 판단을 거친다. SPEC과 Design은 기능·화면을 구체화하고, 실제 기술 스택·물리 스키마·프로토콜·구현 순서·시험 코드는 구현계획에서 결정한다.\n"}}</script><script id="reader-config" type="application/json">{"initial": "prd"}</script><script>
+(() => {
+'use strict';
+const sourceData=JSON.parse(document.getElementById('source-data').textContent);
+const config=JSON.parse(document.getElementById('reader-config').textContent);
+const esc=s=>String(s);
+let activeDoc=config.initial;
+let observer;
+let toastTimer;
+const $=s=>document.querySelector(s);
+function notify(message){const t=$('#toast');t.textContent=message;t.hidden=false;clearTimeout(toastTimer);toastTimer=setTimeout(()=>{t.hidden=true;},3400);}
+function renderToc(){const links=$('#toc-links');links.replaceChildren();const nodes=document.querySelectorAll('#'+activeDoc+' .doc-section');nodes.forEach(section=>{const a=document.createElement('a');a.href='#'+section.id;a.textContent=section.querySelector('h2').textContent;a.dataset.title=a.textContent;a.addEventListener('click',()=>{$('#toc-shell').classList.remove('open');$('#toc-toggle').setAttribute('aria-expanded','false');});links.appendChild(a);});$('#toc-count').textContent=nodes.length+' CHAPTERS';$('#toc-search').value='';$('#nav-hint').textContent='章 제목으로 찾아갑니다.'.replace('章','장');if(observer)observer.disconnect();observer=new IntersectionObserver(entries=>{const visible=entries.filter(e=>e.isIntersecting).sort((a,b)=>a.boundingClientRect.top-b.boundingClientRect.top);if(!visible.length)return;document.querySelectorAll('#toc-links a').forEach(a=>a.classList.toggle('active',a.hash==='#'+visible[0].target.id));},{rootMargin:'-90px 0px -64% 0px',threshold:0});nodes.forEach(n=>observer.observe(n));}
+function showDoc(name,reset){if(!sourceData[name])name=config.initial;activeDoc=name;document.querySelectorAll('.document').forEach(d=>d.hidden=d.id!==name);document.querySelectorAll('.doc-tab').forEach(a=>{a.classList.toggle('active',a.dataset.doc===name);if(a.dataset.doc===name)a.setAttribute('aria-current','page');else a.removeAttribute('aria-current');});renderToc();document.title='Drawing IDE · '+sourceData[name].label;if(reset)window.scrollTo({top:0,behavior:'instant'});}
+function useHash(){let raw=decodeURIComponent(location.hash.slice(1)||config.initial);let name=raw.split('-section-')[0];if(!sourceData[name])name=config.initial;if(name!==activeDoc||!$('#toc-links').children.length)showDoc(name,false);const el=document.getElementById(raw);if(el&&!el.hidden){requestAnimationFrame(()=>el.scrollIntoView({block:'start',behavior:'instant'}));}}
+window.addEventListener('hashchange',useHash);
+document.querySelectorAll('.doc-tab[data-doc]').forEach(a=>a.addEventListener('click',e=>{e.preventDefault();const name=a.dataset.doc;showDoc(name,true);history.replaceState(null,'','#'+name);}));
+$('#toc-toggle').addEventListener('click',()=>{const on=$('#toc-shell').classList.toggle('open');$('#toc-toggle').setAttribute('aria-expanded',String(on));});
+$('#toc-search').addEventListener('input',()=>{const q=$('#toc-search').value.trim().toLocaleLowerCase();let n=0;document.querySelectorAll('#toc-links a').forEach(a=>{a.hidden=!a.dataset.title.toLocaleLowerCase().includes(q);if(!a.hidden)n++;});$('#nav-hint').textContent=q?(n?'일치하는 장 '+n+'개':'일치하는 장 제목이 없습니다.'):'장 제목으로 찾아갑니다.';});
+function download(name,contents,type){const blob=new Blob([contents],{type});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),2500);}
+$('#source-download').addEventListener('click',()=>download(sourceData[activeDoc].file,sourceData[activeDoc].markdown,'text/markdown;charset=utf-8'));
+$('#print-doc').addEventListener('click',()=>window.print());
+async function copy(text){try{if(navigator.clipboard&&navigator.clipboard.writeText){await navigator.clipboard.writeText(text);return true;}}catch(e){}const t=document.createElement('textarea');t.value=text;t.style.position='fixed';t.style.left='-9999px';document.body.appendChild(t);t.select();let ok=false;try{ok=document.execCommand('copy');}catch(e){}t.remove();return ok;}
+document.querySelectorAll('.copy-code').forEach(b=>b.addEventListener('click',async()=>{const text=b.parentElement.querySelector('pre').textContent;const ok=await copy(text);if(ok){b.textContent='복사됨';notify('텍스트를 복사했습니다.');setTimeout(()=>b.textContent='복사',1800);}else{const range=document.createRange();range.selectNodeContents(b.parentElement.querySelector('pre'));const sel=window.getSelection();sel.removeAllRanges();sel.addRange(range);notify('자동 복사가 제한됩니다. 선택된 텍스트를 직접 복사하세요.');}}));
+const storageKey='drawing-ide-planning-notes';
+const noteFields=Array.from(document.querySelectorAll('[data-note]'));
+const checkFields=Array.from(document.querySelectorAll('[data-check]'));
+const knownStages=['SPEC.md','Design.md','IMPLEMENTATION_PLAN.md','프런트 목업','구현·테스트','수용 검수'];
+function getRecord(){const notes={},checked={};noteFields.forEach(f=>notes[f.dataset.note]=f.value);checkFields.forEach(f=>checked[f.dataset.check]=f.checked);return{kind:'drawing-ide-planning-notes',schema:1,notes,checked};}
+function validateRecord(data){if(!data||typeof data!=='object'||Array.isArray(data)||data.kind!=='drawing-ide-planning-notes'||data.schema!==1)throw new Error('지원하지 않는 기록 형식입니다.');for(const k of ['notes','checked'])if(!data[k]||typeof data[k]!=='object'||Array.isArray(data[k]))throw new Error('기록 내용이 올바르지 않습니다.');const notes={},checked={};for(const f of noteFields){const v=data.notes[f.dataset.note];if(v!==undefined&&(typeof v!=='string'||v.length>20000))throw new Error('메모 값이나 길이를 확인하세요.');notes[f.dataset.note]=v===undefined?(f.tagName==='SELECT'?'SPEC.md':''):v;}if(!knownStages.includes(notes.stage))throw new Error('알 수 없는 단계입니다.');for(const f of checkFields){const v=data.checked[f.dataset.check];if(v!==undefined&&typeof v!=='boolean')throw new Error('확인 표시 값이 올바르지 않습니다.');checked[f.dataset.check]=v===true;}return{kind:'drawing-ide-planning-notes',schema:1,notes,checked};}
+function updateCount(){$('#check-count').textContent=checkFields.filter(f=>f.checked).length+' / '+checkFields.length+' 확인 표시';}
+function putRecord(data){noteFields.forEach(f=>f.value=data.notes[f.dataset.note]??(f.tagName==='SELECT'?'SPEC.md':''));checkFields.forEach(f=>f.checked=!!data.checked[f.dataset.check]);updateCount();}
+function saveRecord(){updateCount();try{localStorage.setItem(storageKey,JSON.stringify(getRecord()));$('#save-status').textContent='이 브라우저에 개인 기록을 저장했습니다.';}catch(e){$('#save-status').textContent='브라우저 저장이 제한됩니다. 현재 화면의 기록을 JSON으로 저장하세요.';}}
+if(noteFields.length){try{const raw=localStorage.getItem(storageKey);if(raw){putRecord(validateRecord(JSON.parse(raw)));$('#save-status').textContent='이 브라우저의 개인 기록을 불러왔습니다.';}else{$('#save-status').textContent='아직 저장된 개인 기록이 없습니다.';}}catch(e){$('#save-status').textContent='브라우저 기록을 읽을 수 없습니다. JSON 불러오기·저장을 사용할 수 있습니다.';}updateCount();noteFields.forEach(f=>f.addEventListener('input',saveRecord));checkFields.forEach(f=>f.addEventListener('change',saveRecord));
+$('#export-notes').addEventListener('click',()=>{const d=getRecord();d.exportedAt=new Date().toISOString();download('Drawing_IDE_Review_Notes.json',JSON.stringify(d,null,2),'application/json');notify('현재 개인 기록을 JSON 파일로 저장합니다.');});
+$('#import-notes').addEventListener('click',()=>$('#notes-file').click());
+$('#notes-file').addEventListener('change',async()=>{const input=$('#notes-file');const f=input.files&&input.files[0];if(!f)return;try{if(f.size>1048576)throw new Error('기록 파일이 너무 큽니다. 최대 1MB입니다.');const d=validateRecord(JSON.parse(await f.text()));if(!confirm('불러온 기록으로 현재 메모와 확인 표시를 바꿀까요?'))return;putRecord(d);saveRecord();notify('개인 기록을 불러왔습니다.');}catch(e){notify(e instanceof SyntaxError?'JSON 파일을 읽을 수 없습니다. 기존 기록은 유지합니다.':String(e.message||e));}finally{input.value='';}});
+$('#reset-notes').addEventListener('click',()=>{if(!confirm('이 브라우저의 개인 메모와 확인 표시를 초기화할까요?'))return;const notes={stage:'SPEC.md'};putRecord({notes,checked:{}});saveRecord();notify('개인 기록을 초기화했습니다.');});}
+showDoc(config.initial,false);useHash();
+})();
+</script>
+</body></html>
