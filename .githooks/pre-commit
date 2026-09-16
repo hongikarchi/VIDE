@@ -3,6 +3,15 @@
 # Activate once per clone:  git config core.hooksPath .githooks
 #   (tools/docs `npm install` runs this for you via postinstall)
 cd "$(git rev-parse --show-toplevel)" || exit 1
+# Build inputs must be fully staged, or the committed HTML would not match the committed MD.
+unstaged=$(git diff --name-only -- '*.md' 'tools/docs')
+untracked=$(git ls-files --others --exclude-standard -- '*.md')
+if [ -n "$unstaged$untracked" ]; then
+  echo "[docs] 스테이징되지 않은 빌드 입력이 있어 MD/HTML이 어긋날 수 있습니다:" >&2
+  printf '  %s\n' $unstaged $untracked >&2
+  echo "[docs] 전부 스테이징(git add)하거나 잠시 치우세요(git stash push --keep-index)." >&2
+  exit 1
+fi
 if [ ! -d tools/docs/node_modules ]; then
   echo "[docs] tools/docs/node_modules 가 없습니다. 먼저:  npm --prefix tools/docs install" >&2
   exit 1

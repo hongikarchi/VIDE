@@ -1,7 +1,7 @@
 (() => {
 'use strict';
-const KEY = 'vino-docs-review-mode';
-const AUTHOR_KEY = 'vino-docs-review-author';
+const KEY = 'vide-docs-review-mode';
+const AUTHOR_KEY = 'vide-docs-review-author';
 const sel = document.getElementById('review-mode');
 if (!sel) return;
 const authorSel = document.getElementById('review-author');

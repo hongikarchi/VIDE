@@ -1,6 +1,6 @@
 ---
 id: PRD
-title: Drawing IDE 제품 요구사항
+title: VIDE 제품 요구사항
 status: review          # Claude 첨삭(R-NN) 해소 전
 version: 0.1
 updated: 2026-09-16
@@ -8,7 +8,7 @@ owner: user
 related: []
 ---
 
-# <del>Integrated Drawing Environment · PRD</del><ins>Drawing IDE · PRD</ins>
+# VIDE · PRD
 
 > **[검토 · claude · R-01 · 낮음]** H1만 긴 이름이고 Design.md·DEVELOPMENT_GUIDE.md의 H1과 세 HTML 제목은 'Drawing IDE · …' 형식이다. 렌더러가 H1을 문서 제목으로 쓰므로 형식을 맞춘다.
 
@@ -19,14 +19,14 @@ related: []
 <!-- codex-review:end -->
 
 **문서 목적:** 제품의 사용자·가치·MVP 범위·요구사항·수용 기준을 정의한다.  
-**제품:** Drawing IDE · 건축가를 위한 통합 설계 작업환경  
+**제품:** VIDE (Vibe Integrated Drawing Environment) · 건축가를 위한 통합 설계 작업환경  
 **문서 상태:** 제품 요구사항 기준. 실제 지원 버전과 기능별 제공 범위는 명시된 결정 항목을 확정해야 한다.
 
 > **Windows 설치형 IDE를 기반으로 여러 CAD/BIM 프로그램을 제어하고, 건축가가 실제 작업 상태를 보며 개입하고, 전문 기능을 스킬·플러그인으로 확장하는 플랫폼.**
 
 ## 0. 제품 요약
 
-Drawing IDE의 첫 MVP는 특정 건축 자동화 기능 하나가 아니라 **여러 프로그램을 같은 프로젝트에서 다룰 수 있는 공통 IDE 플랫폼**이다. 이후 법규 검토·사이트 모델링·매스 배치·구조 검토·평면 작성·건축 개요·일람표 작성을 전문 스킬과 플러그인으로 추가한다.
+VIDE의 첫 MVP는 특정 건축 자동화 기능 하나가 아니라 **여러 프로그램을 같은 프로젝트에서 다룰 수 있는 공통 IDE 플랫폼**이다. 이후 법규 검토·사이트 모델링·매스 배치·구조 검토·평면 작성·건축 개요·일람표 작성을 전문 스킬과 플러그인으로 추가한다. 이름의 Vibe는 vibe coding처럼 코드·명령 대신 의도와 대화, 가리키기·그리기로 설계를 진행하는 작업 방식을 뜻한다.
 
 기본 환경은 빈 화면과 연결 버튼을 뜻하지 않는다. 지원 호스트에서 대상 읽기, 공간 입력, 제한된 네이티브 객체 생성·수정, 진행의 시각화, 사람의 개입, 결과 확인·보존까지 이어져야 한다. 전문 업무 전체를 자동화하지 않아도 이 기본 제어를 사용할 수 있어야 한다.
 
@@ -64,7 +64,7 @@ Drawing IDE의 첫 MVP는 특정 건축 자동화 기능 하나가 아니라 **�
 
 ### 1.1 무엇을 만드는가
 
-건축가가 여러 모델링 프로그램의 모델과 설계 자료를 하나의 프로젝트·작업 범위에서 다루고, AI와 함께 작업하면서 과정과 결과를 직접 통제하는 통합 작업환경을 만든다. <del>제품의 작업명은 **Integrated Drawing Environment**다.</del><ins>제품의 작업명은 **Drawing IDE**(Integrated Drawing Environment)다.</ins>
+건축가가 여러 모델링 프로그램의 모델과 설계 자료를 하나의 프로젝트·작업 범위에서 다루고, AI와 함께 작업하면서 과정과 결과를 직접 통제하는 통합 작업환경을 만든다. 제품 이름은 **VIDE**(Vibe Integrated Drawing Environment)다. 저장소와 폴더 이름도 같다.
 
 > **[검토 · claude · R-04 · 중간]** 1행 제목과 이 문장은 Integrated Drawing Environment, 4·11행과 Design.md·DEVELOPMENT_GUIDE.md는 Drawing IDE, 저장소 이름은 Vino-IDE라 이름이 셋이다. 다음 문서(SPEC·PLAN)가 인용할 작업명을 하나로 고정하고 긴 이름은 병기만 한다. 코드명 Vino를 PRD에 등록할지는 소유자 결정.
 

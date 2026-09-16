@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// md -> html renderer for the Vino-IDE planning documents.
+// md -> html renderer for the VIDE planning documents.
 //   node tools/docs/build.mjs            build every document + index.html
 //   node tools/docs/build.mjs --check    exit 1 if any generated file is stale
 //   node tools/docs/build.mjs --watch    rebuild on change
@@ -160,9 +160,7 @@ function buildDoc(doc, allDocs) {
     const isAppendix = Boolean(appendix);
     const appendixAgent = appendix ? appendix[1].trim().toLowerCase() : '';
     if (isAppendix) appendices[appendixAgent] = id;
-    let widget = '';
-    if (doc.widget && String(doc.widgetAfterSection) === m.num) widget = asset(path.join('partials', `${doc.widget}.html`));
-    return `<section class="doc-section${isAppendix ? ' review-appendix' : ''}" id="${id}"${isAppendix ? ` data-review-agent="${esc(appendixAgent)}"` : ''}><h2><span aria-hidden="true" class="section-num">${m.display} /</span> ${markReviews(headingInner).html}</h2>\n${bodyMarked.html}${widget}</section>`;
+    return `<section class="doc-section${isAppendix ? ' review-appendix' : ''}" id="${id}"${isAppendix ? ` data-review-agent="${esc(appendixAgent)}"` : ''}><h2><span aria-hidden="true" class="section-num">${m.display} /</span> ${markReviews(headingInner).html}</h2>\n${bodyMarked.html}</section>`;
   }).join('');
 
   const outDir = path.dirname(path.join(ROOT, doc.out));
@@ -183,12 +181,12 @@ ${asset('theme.css')}
 ${asset('review.css')}</style></head><body>
 <!-- GENERATED FILE — source: ${esc(doc.src)} — run: npm --prefix tools/docs run build -->
 <a class="skip" href="#reading-main">본문으로 이동</a>
-<header class="topbar"><a class="brand" href="${esc(rel(cfg.index))}" aria-label="${esc(cfg.siteTitle)} 문서 모음"><b>D.</b><span>${esc(cfg.brand)}</span></a><nav class="doc-tabs" aria-label="문서 선택">${tabs}</nav><div class="top-actions">${reviewSelect}<button id="source-download" title="현재 문서의 Markdown 원문 저장">원문 ↓</button><button id="print-doc" title="현재 문서 인쇄">인쇄</button></div></header>
+<header class="topbar"><a class="brand" href="${esc(rel(cfg.index))}" aria-label="${esc(cfg.siteTitle)} 문서 모음"><b>V.</b><span>${esc(cfg.brand)}</span></a><nav class="doc-tabs" aria-label="문서 선택">${tabs}</nav><div class="top-actions">${reviewSelect}<button id="source-download" title="현재 문서의 Markdown 원문 저장">원문 ↓</button><button id="print-doc" title="현재 문서 인쇄">인쇄</button></div></header>
 <div class="layout"><aside class="toc-shell" id="toc-shell" aria-label="현재 문서의 목차"><div class="toc-title"><strong>CONTENTS</strong><span id="toc-count"></span><button id="toc-toggle" aria-expanded="false" aria-controls="toc-body">목차 열기</button></div><div class="toc-body" id="toc-body"><input class="toc-search" id="toc-search" type="search" placeholder="장 제목으로 찾기" aria-label="현재 문서 목차 검색"><p class="toc-hint" id="nav-hint" role="status">장 제목으로 찾아갑니다.</p><nav class="toc-links" id="toc-links" aria-label="본문 장 이동"></nav><div class="toc-next">다음 작성할 문서<br><b>${esc(cfg.next.title)}</b><br>${esc(cfg.next.desc)}</div></div></aside><main id="reading-main" tabindex="-1"><article id="${doc.id}" class="document"><header class="doc-hero"><div class="hero-label"><span class="eyebrow">${esc(doc.eyebrow || 'DOCUMENT')}</span><span>${statusPill}<span class="pill">${sections.length} CHAPTERS</span>${reviewPill}</span></div><h1 tabindex="-1">${titleHtml}</h1>${description ? `<p class="doc-description">${esc(description)}</p>` : ''}${legend}<div class="hero-meta">
 ${heroHtml}</div></header>${sectionHtml}<footer class="doc-footer"><span>${esc(cfg.brand)} / PLANNING DOCUMENTS</span><span>문서 열람용 · 실제 CAD/BIM 지원은 구현·검증 후 선언</span></footer></article></main></div>
 <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 <script id="source-data" type="application/json">${json(sourceData)}</script>
-<script id="reader-config" type="application/json">${json({ initial: doc.id })}</script>
+<script id="reader-config" type="application/json">${json({ initial: doc.id, siteTitle: cfg.siteTitle })}</script>
 <script>
 ${asset('reader.js')}</script>
 <script>
@@ -212,7 +210,7 @@ ${asset('theme.css')}
 ${asset('review.css')}
 .index-main{max-width:1040px;margin:auto;padding:55px 30px 70px}.index-main h1{font-size:34px;letter-spacing:-.05em;margin:0 0 6px}.index-main .micro{font-size:11px;color:var(--muted)}.index-main table td{vertical-align:top}</style></head><body>
 <!-- GENERATED FILE — run: npm --prefix tools/docs run build -->
-<header class="topbar"><a class="brand" href="${esc(cfg.index)}" aria-label="${esc(cfg.siteTitle)} 문서 모음"><b>D.</b><span>${esc(cfg.brand)}</span></a><nav class="doc-tabs" aria-label="문서 선택">${tabs}</nav><div class="top-actions"></div></header>
+<header class="topbar"><a class="brand" href="${esc(cfg.index)}" aria-label="${esc(cfg.siteTitle)} 문서 모음"><b>V.</b><span>${esc(cfg.brand)}</span></a><nav class="doc-tabs" aria-label="문서 선택">${tabs}</nav><div class="top-actions"></div></header>
 <main class="index-main"><span class="eyebrow">PLANNING DOCUMENTS</span><h1>${esc(cfg.siteTitle)} 문서 목록</h1><p class="micro">MD가 원본이고 HTML은 <code>tools/docs/build.mjs</code>가 생성한다 (AI.md §4). 첨삭 표기 규칙은 AI.md §5.</p>
 <div class="table-scroll" role="region" tabindex="0" aria-label="문서 목록"><table><thead><tr><th>문서</th><th>종류</th><th>장</th><th>검토 의견</th><th>MD 수정일</th></tr></thead><tbody>
 ${rows}

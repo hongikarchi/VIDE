@@ -1,6 +1,6 @@
 ---
 id: DESIGN
-title: Drawing IDE 시각·상호작용 기준
+title: VIDE 시각·상호작용 기준
 status: review          # Claude 첨삭(R-NN) 해소 전
 version: 0.1
 updated: 2026-09-16
@@ -8,7 +8,7 @@ owner: user
 related: []
 ---
 
-# Drawing IDE · Design.md
+# VIDE · Design.md
 
 **문서 역할:** 기능을 사람이 어떻게 보고 조작하는지 정의한다. <del>제품 범위는 PRD.md, 동작의 세부 의미는 SPEC.md, 실제 기술과 구현 작업은 IMPLEMENTATION_PLAN.md에서 정한다.</del><ins>제품 범위는 docs/PRD.md, 동작의 세부 의미는 SPEC(docs/specs/), 실제 기술과 구현 작업은 PLAN(docs/plans/PLAN.md)에서 정한다.</ins>  
 **적용 상태:** 시각 원칙과 기본 상호작용 기준. SPEC의 기능·상태가 구체화되면 화면별 상태·문구·행동을 대조해 확정한다. 완성된 기능 명세나 구현 완료 화면이 아니다.

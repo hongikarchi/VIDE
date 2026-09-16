@@ -1,7 +1,7 @@
 {
-  "name": "vino-ide-docs",
+  "name": "vide-docs",
   "version": "1.0.0",
-  "description": "md -> html renderer for the Vino-IDE planning documents",
+  "description": "md -> html renderer for the VIDE planning documents",
   "scripts": {
     "build": "node build.mjs",
     "check": "node build.mjs --check",

@@ -28,7 +28,7 @@
 <!-- codex-review:end -->
 
 ```text
-Vino-IDE/
+VIDE/
 ├─ AI.md                          이 파일. 형식 규약의 단일 원본
 ├─ CLAUDE.md                      "@AI.md" 한 줄 (Claude Code가 인라인)
 ├─ AGENTS.md                      AI.md를 읽으라는 안내 (Codex 등)
@@ -85,7 +85,6 @@ Vino-IDE/
 - 재생성: `npm --prefix tools/docs run build` (최초 1회 `npm --prefix tools/docs install`). 사람이 편집할 때는 `run watch`, 확인만 하려면 `run check`(오래됐으면 exit 1).
 - 자동 재생성: Claude Code가 `.md`를 Edit/Write 하면 `.claude/settings.json`의 PostToolUse 훅이 재생성한다. `git commit` 때는 `.githooks/pre-commit`이 재생성하고 바뀐 HTML을 커밋에 넣는다.
 - 새 문서는 `docs/specs/` `docs/plans/` `docs/tdd/` `docs/decisions/`에 두면 자동 탐색된다. 상단 탭·설명은 `tools/docs/docs.config.json`에서 정한다.
-- `DEVELOPMENT_GUIDE.html`의 개인 메모 위젯은 `tools/docs/partials/guide-workspace.html`이 §12 끝에 넣는다(localStorage 키 `drawing-ide-planning-notes` 유지).
 - MD를 고친 에이전트는 HTML을 직접 건드리지 않는다. 훅이 실패하면 위 명령으로 재생성한다.
 
 ## 5. 검토·첨삭 표기

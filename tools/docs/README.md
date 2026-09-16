@@ -14,7 +14,7 @@ npm --prefix tools/docs run watch      # MD 저장 때마다 재생성
 - `git commit` 때 `.githooks/pre-commit`이 재생성하고 바뀐 HTML을 커밋에 넣는다.
 - 사람이 편집할 때는 `run watch`를 켜 둔다.
 
-파일: `docs.config.json`(문서 목록·탭·설명·자동 탐색 폴더) · `theme.css`(기존 스타일 그대로) · `review.css`(첨삭 색상, AI.md §5) · `reader.js`(목차·검색·복사·원문 다운로드·가이드 메모 위젯) · `review.js`(첨삭 보기 전환, 목차 건수) · `partials/guide-workspace.html`(DEVELOPMENT_GUIDE §12의 개인 메모 위젯, localStorage 키 `drawing-ide-planning-notes` 유지).
+파일: `build.mjs`(렌더러) · `docs.config.json`(문서 목록·탭·설명·자동 탐색 폴더) · `theme.css`(기존 스타일 그대로) · `review.css`(첨삭 색상, AI.md §5) · `reader.js`(목차·검색·복사·원문 다운로드) · `review.js`(첨삭 보기 전환·검토자 필터·목차 건수) · `hook-postedit.mjs`(Claude Code 훅).
 
 새 문서는 `docs/specs/`, `docs/plans/`, `docs/tdd/`, `docs/decisions/`에 두면 자동으로 탐색되어 같은 폴더에 `.html`이 생긴다. 탭에 올리려면 `docs.config.json`의 `docs`에 추가한다.
 
