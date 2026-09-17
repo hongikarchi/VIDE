@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="description" content="ADR-005 · AI 실행 형태 — 미결 (스파이크 후 결정)"><meta name="generator" content="tools/docs/build.mjs — generated from docs/decisions/ADR-005-ai-execution-path-pending-spike.md; do not edit"><title>VIDE · AI 실행 형태 — 미결, 스파이크 결과로 결정</title><style>
+<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="description" content="ADR-011 · 위임형 작업 방식"><meta name="generator" content="tools/docs/build.mjs — generated from docs/decisions/ADR-011-delegation-working-mode.md; do not edit"><title>VIDE · AI와 일하는 방식 — 위임형 기본, 원본 반영 시점에만 확인</title><style>
 :root{--ink:#292c2d;--muted:#626b6e;--line:#e1e3e1;--soft:#f5f5f1;--coral:#d97660;--paper:#fff;--font:"Pretendard","Noto Sans KR","Malgun Gothic",Arial,sans-serif}
 *{box-sizing:border-box}html{scroll-behavior:smooth;scroll-padding-top:92px}body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--font);letter-spacing:-.025em}a{color:inherit;text-underline-offset:4px}button,input,textarea,select{font:inherit;color:inherit}button{cursor:pointer;border:1px solid var(--line);border-radius:4px;background:var(--paper);padding:10px 15px;line-height:1.3}button:hover{background:var(--soft)}button:disabled{cursor:default;opacity:.6}button.primary{background:var(--ink);color:#fff;border-color:var(--ink)}button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible{outline:3px solid var(--coral);outline-offset:3px}textarea{resize:vertical}::selection{background:#f2d7ce}[hidden]{display:none!important}
 .skip{position:fixed;top:-80px;left:20px;z-index:100;background:white;padding:12px}.skip:focus{top:10px}
@@ -67,14 +67,13 @@ body.review-accepted ins{background:none;color:inherit;border:0;padding:0}
 body.review-accepted .toc-links a[data-reviews]::after{display:none}
 @media print{blockquote.review{break-inside:avoid;background:#eef3fc!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}ins,del{-webkit-print-color-adjust:exact;print-color-adjust:exact}.review-select{display:none}}
 </style></head><body>
-<!-- GENERATED FILE — source: docs/decisions/ADR-005-ai-execution-path-pending-spike.md — run: npm --prefix tools/docs run build -->
+<!-- GENERATED FILE — source: docs/decisions/ADR-011-delegation-working-mode.md — run: npm --prefix tools/docs run build -->
 <a class="skip" href="#reading-main">본문으로 이동</a>
-<header class="topbar"><a class="brand" href="../../index.html" aria-label="VIDE 문서 모음"><b>V.</b><span>VIDE</span></a><nav class="doc-tabs" aria-label="문서 선택"><a class="doc-tab" href="../PRD.html">PRD</a><a class="doc-tab" href="../../DEVELOPMENT_GUIDE.html">개발 가이드</a><a class="doc-tab" href="../../Design.html">Design</a><a class="doc-tab" href="../../AI.html">AI 규약</a></nav><div class="top-actions"><label class="review-select">첨삭 <select id="review-mode" aria-label="첨삭 보기 방식"><option value="marked">표시</option><option value="original">원문만</option><option value="accepted">인라인 제안 미리보기</option></select></label><button id="source-download" title="현재 문서의 Markdown 원문 저장">원문 ↓</button><button id="print-doc" title="현재 문서 인쇄">인쇄</button></div></header>
-<div class="layout"><aside class="toc-shell" id="toc-shell" aria-label="현재 문서의 목차"><div class="toc-title"><strong>CONTENTS</strong><span id="toc-count"></span><button id="toc-toggle" aria-expanded="false" aria-controls="toc-body">목차 열기</button></div><div class="toc-body" id="toc-body"><input class="toc-search" id="toc-search" type="search" placeholder="장 제목으로 찾기" aria-label="현재 문서 목차 검색"><p class="toc-hint" id="nav-hint" role="status">장 제목으로 찾아갑니다.</p><nav class="toc-links" id="toc-links" aria-label="본문 장 이동"></nav><div class="toc-next">다음 작성할 문서<br><b>2차 검토 대화 → 사용자 결정</b><br>Codex·Claude 스레드 비교 → 항목별 수락/거부 → ADR·SPEC-00-common</div></div></aside><main id="reading-main" tabindex="-1"><article id="adr-005-ai-execution-path-pending-spike" class="document"><header class="doc-hero"><div class="hero-label"><span class="eyebrow">DECISION RECORD</span><span><span class="pill">SUPERSEDED · v0.2</span><span class="pill">6 CHAPTERS</span><a class="pill review-pill" data-review-agent="codex" href="#adr-005-ai-execution-path-pending-spike-section-x5" title="CODEX 검토 요약으로 이동">CODEX 검토 1건</a></span></div><h1 tabindex="-1">ADR-005 · AI 실행 형태 — 미결 (스파이크 후 결정)</h1><div class="review-legend"><p><span><ins>초록</ins> 추가·교체 제안</span><span><del>빨강</del> 삭제·교체 대상</span><span>CLAUDE: 파란 상자 · CODEX: 보라 상자</span></p><p>검토자 필터는 코멘트·부록만 바꿉니다. ‘인라인 제안 미리보기’는 코멘트의 대안까지 합친 최종본이 아닙니다. 보기 전환은 MD 수정·수락·승인을 하지 않습니다.</p></div><div class="hero-meta">
-<p><strong>대체(superseded) · 2026-09-17.</strong> 제품 결정이 아니라 PLAN 결정이다. PLAN §9 결정 항목으로 이동했다.</p>
-</div></header><section class="doc-section" id="adr-005-ai-execution-path-pending-spike-section-1"><h2><span aria-hidden="true" class="section-num">01 /</span> 배경</h2>
-<p>FR-08 'MVP 한 실행 경로 이상'이 직접 API+자체 하네스인지, 에이전트 CLI/런타임 내장인지, 혼합인지에 따라 §9.3 중단·재개, §10.2 압축, §11.5 비용 관측, §1.3 전송 확인, FR-15·FR-18 수용 기준이 지켜지는 정도가 달라진다(PRD R-52, 가이드 Codex R-33·Claude R-39, 제안 OQ-12). 구독형 CLI를 제품 안에 내장하는 것은 이용 약관·데이터 보존·비용 모델이 걸린 제품 제약이다.</p>
-</section><section class="doc-section" id="adr-005-ai-execution-path-pending-spike-section-2"><h2><span aria-hidden="true" class="section-num">02 /</span> 선택지</h2>
+<header class="topbar"><a class="brand" href="../../index.html" aria-label="VIDE 문서 모음"><b>V.</b><span>VIDE</span></a><nav class="doc-tabs" aria-label="문서 선택"><a class="doc-tab" href="../PRD.html">PRD</a><a class="doc-tab" href="../../DEVELOPMENT_GUIDE.html">개발 가이드</a><a class="doc-tab" href="../../Design.html">Design</a><a class="doc-tab" href="../../AI.html">AI 규약</a></nav><div class="top-actions"><button id="source-download" title="현재 문서의 Markdown 원문 저장">원문 ↓</button><button id="print-doc" title="현재 문서 인쇄">인쇄</button></div></header>
+<div class="layout"><aside class="toc-shell" id="toc-shell" aria-label="현재 문서의 목차"><div class="toc-title"><strong>CONTENTS</strong><span id="toc-count"></span><button id="toc-toggle" aria-expanded="false" aria-controls="toc-body">목차 열기</button></div><div class="toc-body" id="toc-body"><input class="toc-search" id="toc-search" type="search" placeholder="장 제목으로 찾기" aria-label="현재 문서 목차 검색"><p class="toc-hint" id="nav-hint" role="status">장 제목으로 찾아갑니다.</p><nav class="toc-links" id="toc-links" aria-label="본문 장 이동"></nav><div class="toc-next">다음 작성할 문서<br><b>2차 검토 대화 → 사용자 결정</b><br>Codex·Claude 스레드 비교 → 항목별 수락/거부 → ADR·SPEC-00-common</div></div></aside><main id="reading-main" tabindex="-1"><article id="adr-011-delegation-working-mode" class="document"><header class="doc-hero"><div class="hero-label"><span class="eyebrow">DECISION RECORD</span><span><span class="pill">DRAFT · v0.1</span><span class="pill">7 CHAPTERS</span></span></div><h1 tabindex="-1">ADR-011 · 위임형 작업 방식</h1><div class="hero-meta">
+</div></header><section class="doc-section" id="adr-011-delegation-working-mode-section-1"><h2><span aria-hidden="true" class="section-num">01 /</span> 배경</h2>
+<p>PRD §8 여정(§8.2~§8.5)과 §9.5(확인이 필요한 순간)는 대상 지정 → 후보 → 개입 → 반영의 단계를 적지만, AI가 여러 단계를 스스로 진행하는지 단계마다 확인을 받는지가 문장마다 달랐다. §2 가설 5(&quot;매 단계 승인하면 직접 CAD를 쓰는 것만큼 번거롭다&quot;)는 위임을 전제하지만 본문이 그 전제를 선언하지 않았다(PRD R-58). 기준 과업(ADR-006)은 호스트 명령 3회 이상·유지 조건 1개 이상을 요구하므로, 작업 방식이 정해져야 측정이 뜻을 갖는다.</p>
+</section><section class="doc-section" id="adr-011-delegation-working-mode-section-2"><h2><span aria-hidden="true" class="section-num">02 /</span> 선택지</h2>
 <div aria-label="ADR 표 1" class="table-scroll" role="region" tabindex="0"><table>
 <thead>
 <tr>
@@ -86,91 +85,50 @@ body.review-accepted .toc-links a[data-reviews]::after{display:none}
 <tbody>
 <tr>
 <td>A</td>
-<td>API 기반 자체 하네스(사용자 API 키, 종량제)</td>
-<td>도구 호출 승인/거부·비용 관측·전송 목록·세션 소유가 모두 제품 통제 아래. 하네스를 직접 만들어야 함</td>
+<td>단계별 확인 — 도구 호출·후보마다 승인</td>
+<td>통제가 세밀. 가설 5를 검증할 수 없고 직접 CAD보다 느림</td>
 </tr>
 <tr>
 <td>B</td>
-<td>에이전트 CLI/런타임 내장</td>
-<td>하네스 구축 없이 빠름. 비용·전송 관측이 제한되고 제품 내 재사용 허용 여부를 약관으로 확인해야 함</td>
+<td>위임형 기본 — 목표·조건을 주면 여러 단계 진행, 중간 결과는 후보로 계속 표시, 원본 반영 시점에만 확인</td>
+<td>사용자는 언제든 끼어들거나 멈춘다. 후보 격리(ADR-003)와 개입 상태(FR-11)가 전제</td>
 </tr>
 <tr>
 <td>C</td>
-<td>지금 정하지 않고 스파이크 뒤 결정</td>
-<td>결정이 늦어지는 대신 실측 근거로 정함</td>
+<td>두 모드(빠른 요청 / 위임 작업)를 따로 제공</td>
+<td>작은 요청이 빠름. 모드 전환과 상태 기계가 두 벌</td>
 </tr>
 </tbody>
 </table></div>
-</section><section class="doc-section" id="adr-005-ai-execution-path-pending-spike-section-3"><h2><span aria-hidden="true" class="section-num">03 /</span> 결정</h2>
-<p><strong>C. 지금 정하지 않는다.</strong> 가이드 §06 스파이크 순서 ①(AI 실행 경로)의 결과로 결정한다.</p>
+</section><section class="doc-section" id="adr-011-delegation-working-mode-section-3"><h2><span aria-hidden="true" class="section-num">03 /</span> 결정</h2>
+<p><strong>B. 위임형이 기본이다.</strong></p>
 <ul>
-<li>스파이크가 후보 경로 계열(API+자체 하네스 / 에이전트 SDK / CLI 내장)별로 다음 7항목을 확인/불가/미확인+증거로 기록하면 이 ADR을 갱신해 확정한다: (1) 텍스트+핀 참조+스케치 좌표+이미지의 구조화 입력 (2) 호스트 쓰기 도구 호출을 제품이 승인/거부 (3) 도구 호출 단위 중단과 실제 정지 관측 (4) 앱 재시작 후 제품 소유 세션 ID로 재개 (5) 실행별 토큰·비용 값 취득 (6) 전송 전 자료 목록 표시·제외 (7) 제품 내 재사용의 이용 조건.</li>
-<li>결정 전까지: 개발·실험 단계에서는 Claude Code·Codex CLI 사용을 허용하고, 출시 경로로는 인정하지 않는다(PRD §11.5 보강 문장). SPEC-00-common의 실행·개입·재개 상태 절은 초안까지만 쓰고 확정하지 않는다.</li>
-<li>프로젝트 단위 전송 정책(허용/금지)과 로컬 추론 경로 요구 여부(PRD R-52 후반)는 같은 스파이크 결과와 함께 결정한다.</li>
+<li>목표와 지켜야 할 조건(유지 대상 등)을 주면 AI가 여러 단계를 진행한다.</li>
+<li>중간 결과는 후보로 계속 보인다. 사용자는 언제든 끼어들거나 멈춘다(FR-11: 접수·반영·정지 구분).</li>
+<li>원본 반영 시점에만 확인한다.</li>
+<li>작은 요청도 같은 구조 안에서 빨리 끝난다. 별도 모드는 없다.</li>
+<li>PRD §4.3의 보호 규칙(쓰기 승인, 사람 수정 보호, 늦은 결과가 새 상태를 덮어쓰지 않음)은 위임 범위 안에서도 그대로다.</li>
 </ul>
-<!-- codex-review:start -->
-<blockquote class="review" data-review-agent="codex">
-<p><strong class="review-label" data-rid="R-01" data-review-agent="codex" id="review-R-01"><span class="review-agent">codex</span><span class="review-id">R-01</span><span class="review-sev" data-sev="높음">높음</span></strong> <strong>추가 지적.</strong> <strong>일곱 확인 항목의 통과 의미.</strong> 실제 경로를 조사한 뒤 선택하는 방향에 동의한다. 다만 확인 목록이 일곱 항목 모두 완전 지원해야 한다는 출시 조건으로 해석되면 기존 PRD보다 요구가 강해진다. §9.3은 중단 불가와 실제 정지 확인을 구분하고 §11.5는 관측 가능한 비용·추정·관측 불가를 구분한다. 제품 소유 세션/작업 기록 복원도 공급자 내부 세션을 그대로 복원하는 것과 다르다. 제안: 제품이 강제할 쓰기 승인·전송 범위 등 필수 통제와, 중단 단위·비용 정확도·재개 수단처럼 제약을 표시할 능력을 나눠 후보별 증거를 기록한다. API 직접 사용도 이미 실행 중인 호스트 쓰기를 자동 취소해 주지는 않는다. 공식 문서로 제외할 후보는 먼저 좁히고 유력 경로만 작은 실험을 하며, 공급자와 무관한 보호 의미까지 미결로 되돌리지 않는다.</p>
-</blockquote>
-<!-- codex-review:end -->
-</section><section class="doc-section" id="adr-005-ai-execution-path-pending-spike-section-4"><h2><span aria-hidden="true" class="section-num">04 /</span> 결과</h2>
+</section><section class="doc-section" id="adr-011-delegation-working-mode-section-4"><h2><span aria-hidden="true" class="section-num">04 /</span> 근거</h2>
+<p>가설 5는 이 방식의 전제다. 위임 없이는 기준 과업의 총시간이 두 기준선(ADR-012)을 이길 수 없고, 별도 모드는 상태·화면·시험을 두 벌로 만든다. 후보 격리(ADR-003)와 개입 상태(FR-11)가 이미 원본을 보호하므로 확인 지점을 반영 시점으로 모을 수 있다.</p>
+</section><section class="doc-section" id="adr-011-delegation-working-mode-section-5"><h2><span aria-hidden="true" class="section-num">05 /</span> 결과 — 적용 시 바꿀 문장</h2>
 <ul>
-<li>§18에 OQ-12 행(이 ADR 링크, 상태 &quot;스파이크 후 결정&quot;).</li>
-<li>스파이크 기록 위치: <code>docs/tdd/SPIKE-&lt;date&gt;-ai-execution-path.md</code>, 코드 <code>tools/spikes/&lt;date&gt;-ai-execution-path/</code>.</li>
+<li>PRD §2: 가설 5는 이 방식의 전제라고 한 문장.</li>
+<li>PRD §8.2~§8.5 여정과 §9.5를 이 방식으로 맞춘다 — 목표·조건 전달 → 여러 단계 진행 → 후보 표시 → 끼어들기·멈춤 → 반영 시 확인.</li>
+<li>SPEC-00-common: 실행·개입·확인 상태의 논리적 의미(위임 범위, 끼어들기·멈춤, 반영 확인)를 이 결정 기준으로 쓴다. 필드·전송 형식은 PLAN.</li>
+<li>Design §06·§07: 이 전제와 어긋나는 문장이 있을 때만 고친다.</li>
 </ul>
-</section><section class="doc-section" id="adr-005-ai-execution-path-pending-spike-section-5"><h2><span aria-hidden="true" class="section-num">05 /</span> 출처</h2>
-<p>PRD R-52, 가이드 Codex R-33·Claude R-39. 2026-09-17 brainstorming Q&amp;A.</p>
-<!-- codex-review:start -->
-</section><section class="doc-section review-appendix" id="adr-005-ai-execution-path-pending-spike-section-x5" data-review-agent="codex"><h2><span aria-hidden="true" class="section-num">05 /</span> 부록 · Codex 검토 요약 (2026-09-17)</h2>
-<p>AI 실행 형태 미결을 정직하게 기록한 점은 적절하다. 다만 공급자 선택 조사와 새로운 제품 필수 요구의 추가가 섞이지 않도록 검증 기준을 구분해야 한다.</p>
-<p>이번 검토는 사용자 수락이나 본문 반영을 뜻하지 않는다. 기존 스레드는 같은 ID로 갱신하고, 새 지적은 별도 ID를 부여한다. 철회 기록은 상대 참조가 정리될 때까지 남긴다.</p>
-<h3>스레드 — Codex 2차</h3>
-<div aria-label="ADR 표 2" class="table-scroll" role="region" tabindex="0"><table>
-<thead>
-<tr>
-<th>위치</th>
-<th>Codex</th>
-<th>Claude</th>
-<th>판단</th>
-<th>상태</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>3. 결정 · 일곱 확인 항목의 통과 의미</td>
-<td><a href="#review-R-01">R-01</a></td>
-<td>—</td>
-<td>보완 제안</td>
-<td>사용자 판단 대기</td>
-</tr>
-</tbody>
-</table></div>
-<h3>이번 라운드의 신규 검토</h3>
-<div aria-label="ADR 표 3" class="table-scroll" role="region" tabindex="0"><table>
-<thead>
-<tr>
-<th>대상</th>
-<th>Codex</th>
-<th>요지</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>3. 결정</td>
-<td><a href="#review-R-01">R-01</a></td>
-<td>일곱 확인 항목의 통과 의미</td>
-</tr>
-</tbody>
-</table></div>
-<h3>결정이 필요한 사항</h3>
-<p>PRD가 이미 약속한 필수 통제와 허용할 관측 제한을 구분한다. 로컬 추론 의무 여부는 실제 프로젝트 전송 정책과 함께 결정하고, 단순히 CLI가 비교 대상이라는 이유로 내장·재사용을 가정하지 않는다.</p>
-<h3>다음 단계</h3>
-<p>이 ADR의 사용자 선택과 기술적 보장·검증 조건을 구분해 비교한다. 수락할 보완을 정한 뒤 ADR의 적용 목록과 PRD·Design·가이드의 관련 문장을 함께 정리한다. 이번에는 결정 본문과 draft 상태를 보존하고 검토 의견만 추가했다.</p>
-<!-- codex-review:end -->
+</section><section class="doc-section" id="adr-011-delegation-working-mode-section-6"><h2><span aria-hidden="true" class="section-num">06 /</span> 재검토 조건</h2>
+<ul>
+<li>기준 과업 시험에서 잘못된 대상·조건 위반이 후보 단계에서 잡히지 않고 반영 직전에야 드러나는 사례가 반복되면 중간 확인 지점을 추가할지 재검토한다.</li>
+<li>별도 모드 요구가 실제 사용에서 나오면 그때 검토한다.</li>
+</ul>
+</section><section class="doc-section" id="adr-011-delegation-working-mode-section-7"><h2><span aria-hidden="true" class="section-num">07 /</span> 출처</h2>
+<p>2026-09-17 순차 결정 대화(D6). PRD §2 가설 5, R-58.</p>
 </section><footer class="doc-footer"><span>VIDE / PLANNING DOCUMENTS</span><span>문서 열람용 · 실제 CAD/BIM 지원은 구현·검증 후 선언</span></footer></article></main></div>
 <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
-<script id="source-data" type="application/json">{"adr-005-ai-execution-path-pending-spike":{"label":"AI 실행 형태 — 미결, 스파이크 결과로 결정","file":"ADR-005-ai-execution-path-pending-spike.md","markdown":"---\nid: ADR-005\ntitle: AI 실행 형태 — 미결, 스파이크 결과로 결정\nstatus: superseded\nversion: 0.2\nupdated: 2026-09-17\nowner: user\nrelated: [FR-08, FR-15, FR-18, AC-11, AC-13]\n---\n\n# ADR-005 · AI 실행 형태 — 미결 (스파이크 후 결정)\n\n**대체(superseded) · 2026-09-17.** 제품 결정이 아니라 PLAN 결정이다. PLAN §9 결정 항목으로 이동했다.\n\n## 1. 배경\n\nFR-08 'MVP 한 실행 경로 이상'이 직접 API+자체 하네스인지, 에이전트 CLI/런타임 내장인지, 혼합인지에 따라 §9.3 중단·재개, §10.2 압축, §11.5 비용 관측, §1.3 전송 확인, FR-15·FR-18 수용 기준이 지켜지는 정도가 달라진다(PRD R-52, 가이드 Codex R-33·Claude R-39, 제안 OQ-12). 구독형 CLI를 제품 안에 내장하는 것은 이용 약관·데이터 보존·비용 모델이 걸린 제품 제약이다.\n\n## 2. 선택지\n\n| 안 | 내용 | 트레이드오프 |\n|---|---|---|\n| A | API 기반 자체 하네스(사용자 API 키, 종량제) | 도구 호출 승인/거부·비용 관측·전송 목록·세션 소유가 모두 제품 통제 아래. 하네스를 직접 만들어야 함 |\n| B | 에이전트 CLI/런타임 내장 | 하네스 구축 없이 빠름. 비용·전송 관측이 제한되고 제품 내 재사용 허용 여부를 약관으로 확인해야 함 |\n| C | 지금 정하지 않고 스파이크 뒤 결정 | 결정이 늦어지는 대신 실측 근거로 정함 |\n\n## 3. 결정\n\n**C. 지금 정하지 않는다.** 가이드 §06 스파이크 순서 ①(AI 실행 경로)의 결과로 결정한다.\n\n- 스파이크가 후보 경로 계열(API+자체 하네스 / 에이전트 SDK / CLI 내장)별로 다음 7항목을 확인/불가/미확인+증거로 기록하면 이 ADR을 갱신해 확정한다: (1) 텍스트+핀 참조+스케치 좌표+이미지의 구조화 입력 (2) 호스트 쓰기 도구 호출을 제품이 승인/거부 (3) 도구 호출 단위 중단과 실제 정지 관측 (4) 앱 재시작 후 제품 소유 세션 ID로 재개 (5) 실행별 토큰·비용 값 취득 (6) 전송 전 자료 목록 표시·제외 (7) 제품 내 재사용의 이용 조건.\n- 결정 전까지: 개발·실험 단계에서는 Claude Code·Codex CLI 사용을 허용하고, 출시 경로로는 인정하지 않는다(PRD §11.5 보강 문장). SPEC-00-common의 실행·개입·재개 상태 절은 초안까지만 쓰고 확정하지 않는다.\n- 프로젝트 단위 전송 정책(허용/금지)과 로컬 추론 경로 요구 여부(PRD R-52 후반)는 같은 스파이크 결과와 함께 결정한다.\n\n\u003c!-- codex-review:start -->\n\n> **[검토 · codex · R-01 · 높음]** **추가 지적.** **일곱 확인 항목의 통과 의미.** 실제 경로를 조사한 뒤 선택하는 방향에 동의한다. 다만 확인 목록이 일곱 항목 모두 완전 지원해야 한다는 출시 조건으로 해석되면 기존 PRD보다 요구가 강해진다. §9.3은 중단 불가와 실제 정지 확인을 구분하고 §11.5는 관측 가능한 비용·추정·관측 불가를 구분한다. 제품 소유 세션/작업 기록 복원도 공급자 내부 세션을 그대로 복원하는 것과 다르다. 제안: 제품이 강제할 쓰기 승인·전송 범위 등 필수 통제와, 중단 단위·비용 정확도·재개 수단처럼 제약을 표시할 능력을 나눠 후보별 증거를 기록한다. API 직접 사용도 이미 실행 중인 호스트 쓰기를 자동 취소해 주지는 않는다. 공식 문서로 제외할 후보는 먼저 좁히고 유력 경로만 작은 실험을 하며, 공급자와 무관한 보호 의미까지 미결로 되돌리지 않는다.\n\n\u003c!-- codex-review:end -->\n\n## 4. 결과\n\n- §18에 OQ-12 행(이 ADR 링크, 상태 \"스파이크 후 결정\").\n- 스파이크 기록 위치: `docs/tdd/SPIKE-\u003cdate>-ai-execution-path.md`, 코드 `tools/spikes/\u003cdate>-ai-execution-path/`.\n\n## 5. 출처\n\nPRD R-52, 가이드 Codex R-33·Claude R-39. 2026-09-17 brainstorming Q&A.\n\n\u003c!-- codex-review:start -->\n\n## 부록 · Codex 검토 요약 (2026-09-17)\n\nAI 실행 형태 미결을 정직하게 기록한 점은 적절하다. 다만 공급자 선택 조사와 새로운 제품 필수 요구의 추가가 섞이지 않도록 검증 기준을 구분해야 한다.\n\n이번 검토는 사용자 수락이나 본문 반영을 뜻하지 않는다. 기존 스레드는 같은 ID로 갱신하고, 새 지적은 별도 ID를 부여한다. 철회 기록은 상대 참조가 정리될 때까지 남긴다.\n\n### 스레드 — Codex 2차\n\n| 위치 | Codex | Claude | 판단 | 상태 |\n|---|---|---|---|---|\n| 3. 결정 · 일곱 확인 항목의 통과 의미 | [R-01](#review-R-01) | — | 보완 제안 | 사용자 판단 대기 |\n\n### 이번 라운드의 신규 검토\n\n| 대상 | Codex | 요지 |\n|---|---|---|\n| 3. 결정 | [R-01](#review-R-01) | 일곱 확인 항목의 통과 의미 |\n\n### 결정이 필요한 사항\n\nPRD가 이미 약속한 필수 통제와 허용할 관측 제한을 구분한다. 로컬 추론 의무 여부는 실제 프로젝트 전송 정책과 함께 결정하고, 단순히 CLI가 비교 대상이라는 이유로 내장·재사용을 가정하지 않는다.\n\n### 다음 단계\n\n이 ADR의 사용자 선택과 기술적 보장·검증 조건을 구분해 비교한다. 수락할 보완을 정한 뒤 ADR의 적용 목록과 PRD·Design·가이드의 관련 문장을 함께 정리한다. 이번에는 결정 본문과 draft 상태를 보존하고 검토 의견만 추가했다.\n\n\u003c!-- codex-review:end -->\n"}}</script>
-<script id="reader-config" type="application/json">{"initial":"adr-005-ai-execution-path-pending-spike","siteTitle":"VIDE"}</script>
+<script id="source-data" type="application/json">{"adr-011-delegation-working-mode":{"label":"AI와 일하는 방식 — 위임형 기본, 원본 반영 시점에만 확인","file":"ADR-011-delegation-working-mode.md","markdown":"---\nid: ADR-011\ntitle: AI와 일하는 방식 — 위임형 기본, 원본 반영 시점에만 확인\nstatus: draft\nversion: 0.1\nupdated: 2026-09-17\nowner: user\nrelated: [FR-08, FR-10, FR-11, AC-08, AC-09]\n---\n\n# ADR-011 · 위임형 작업 방식\n\n## 1. 배경\n\nPRD §8 여정(§8.2~§8.5)과 §9.5(확인이 필요한 순간)는 대상 지정 → 후보 → 개입 → 반영의 단계를 적지만, AI가 여러 단계를 스스로 진행하는지 단계마다 확인을 받는지가 문장마다 달랐다. §2 가설 5(\"매 단계 승인하면 직접 CAD를 쓰는 것만큼 번거롭다\")는 위임을 전제하지만 본문이 그 전제를 선언하지 않았다(PRD R-58). 기준 과업(ADR-006)은 호스트 명령 3회 이상·유지 조건 1개 이상을 요구하므로, 작업 방식이 정해져야 측정이 뜻을 갖는다.\n\n## 2. 선택지\n\n| 안 | 내용 | 트레이드오프 |\n|---|---|---|\n| A | 단계별 확인 — 도구 호출·후보마다 승인 | 통제가 세밀. 가설 5를 검증할 수 없고 직접 CAD보다 느림 |\n| B | 위임형 기본 — 목표·조건을 주면 여러 단계 진행, 중간 결과는 후보로 계속 표시, 원본 반영 시점에만 확인 | 사용자는 언제든 끼어들거나 멈춘다. 후보 격리(ADR-003)와 개입 상태(FR-11)가 전제 |\n| C | 두 모드(빠른 요청 / 위임 작업)를 따로 제공 | 작은 요청이 빠름. 모드 전환과 상태 기계가 두 벌 |\n\n## 3. 결정\n\n**B. 위임형이 기본이다.**\n\n- 목표와 지켜야 할 조건(유지 대상 등)을 주면 AI가 여러 단계를 진행한다.\n- 중간 결과는 후보로 계속 보인다. 사용자는 언제든 끼어들거나 멈춘다(FR-11: 접수·반영·정지 구분).\n- 원본 반영 시점에만 확인한다.\n- 작은 요청도 같은 구조 안에서 빨리 끝난다. 별도 모드는 없다.\n- PRD §4.3의 보호 규칙(쓰기 승인, 사람 수정 보호, 늦은 결과가 새 상태를 덮어쓰지 않음)은 위임 범위 안에서도 그대로다.\n\n## 4. 근거\n\n가설 5는 이 방식의 전제다. 위임 없이는 기준 과업의 총시간이 두 기준선(ADR-012)을 이길 수 없고, 별도 모드는 상태·화면·시험을 두 벌로 만든다. 후보 격리(ADR-003)와 개입 상태(FR-11)가 이미 원본을 보호하므로 확인 지점을 반영 시점으로 모을 수 있다.\n\n## 5. 결과 — 적용 시 바꿀 문장\n\n- PRD §2: 가설 5는 이 방식의 전제라고 한 문장.\n- PRD §8.2~§8.5 여정과 §9.5를 이 방식으로 맞춘다 — 목표·조건 전달 → 여러 단계 진행 → 후보 표시 → 끼어들기·멈춤 → 반영 시 확인.\n- SPEC-00-common: 실행·개입·확인 상태의 논리적 의미(위임 범위, 끼어들기·멈춤, 반영 확인)를 이 결정 기준으로 쓴다. 필드·전송 형식은 PLAN.\n- Design §06·§07: 이 전제와 어긋나는 문장이 있을 때만 고친다.\n\n## 6. 재검토 조건\n\n- 기준 과업 시험에서 잘못된 대상·조건 위반이 후보 단계에서 잡히지 않고 반영 직전에야 드러나는 사례가 반복되면 중간 확인 지점을 추가할지 재검토한다.\n- 별도 모드 요구가 실제 사용에서 나오면 그때 검토한다.\n\n## 7. 출처\n\n2026-09-17 순차 결정 대화(D6). PRD §2 가설 5, R-58.\n"}}</script>
+<script id="reader-config" type="application/json">{"initial":"adr-011-delegation-working-mode","siteTitle":"VIDE"}</script>
 <script>
 (() => {
 'use strict';

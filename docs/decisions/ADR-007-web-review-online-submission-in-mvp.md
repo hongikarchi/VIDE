@@ -1,14 +1,16 @@
 ---
 id: ADR-007
 title: 웹 검토 — 온라인 제출까지 MVP에 포함
-status: draft
-version: 0.1
+status: superseded
+version: 0.2
 updated: 2026-09-17
 owner: user
 related: [OQ-04, FR-14, FR-19, AC-19, AC-28]
 ---
 
 # ADR-007 · 웹 검토 — 온라인 제출까지 MVP
+
+**대체(superseded) · 2026-09-17.** ADR-010이 대체한다 — 웹 검토(FR-19)는 첫 출시에서 빼고 후속 확장으로 옮긴다.
 
 ## 1. 배경
 

@@ -1,14 +1,16 @@
 ---
 id: ADR-005
 title: AI 실행 형태 — 미결, 스파이크 결과로 결정
-status: draft
-version: 0.1
+status: superseded
+version: 0.2
 updated: 2026-09-17
 owner: user
 related: [FR-08, FR-15, FR-18, AC-11, AC-13]
 ---
 
 # ADR-005 · AI 실행 형태 — 미결 (스파이크 후 결정)
+
+**대체(superseded) · 2026-09-17.** 제품 결정이 아니라 PLAN 결정이다. PLAN §9 결정 항목으로 이동했다.
 
 ## 1. 배경
 

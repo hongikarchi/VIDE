@@ -2,15 +2,15 @@
 id: PLAN
 title: VIDE 구현계획 (마스터)
 status: draft
-version: 0.2
+version: 0.3
 updated: 2026-09-17
 owner: user
-related: [FR-02, FR-04, FR-13, AC-25, AC-26, AC-29, AC-30, OQ-01, OQ-06, ADR-001, ADR-006, ADR-007, ADR-008, ADR-009]
+related: [FR-02, FR-04, FR-13, AC-25, AC-26, AC-29, AC-30, OQ-01, OQ-06, ADR-001, ADR-005, ADR-006, ADR-008, ADR-009, ADR-012]
 ---
 
 # VIDE · PLAN (구현계획)
 
-**이 파일의 현재 상태.** PRD 0.3 재구성(2026-09-17)에서 PRD §14에 섞여 있던 구현 순서와 기술 검수 과업을 옮겨 담은 초안이다. 가이드 §05 목차 가운데 §6·§7만 내용이 있고, 구조·Stack·데이터 계약·호스트 연결·설치·위험(§1~§5·§8·§9)은 SPEC-00-common과 첫 SPEC이 정해진 뒤에 쓴다. 이 문서가 `draft`인 동안 AI.md §8의 구현 착수 조건은 충족되지 않는다. 앱 기술·설치 도구 선택(구 PRD §0 요약표)은 §3 Stack에서 정한다.
+**이 파일의 현재 상태.** PRD 0.3 재구성(2026-09-17)에서 PRD §14에 섞여 있던 구현 순서와 기술 검수 과업을 옮겨 담은 초안이다. 가이드 §05 목차 가운데 §6·§7·§9(일부)만 내용이 있고, 구조·Stack·데이터 계약·호스트 연결·설치(§1~§5·§8)는 SPEC-00-common과 첫 SPEC이 정해진 뒤에 쓴다. 이 문서가 `draft`인 동안 AI.md §8의 구현 착수 조건은 충족되지 않는다. 앱 기술·설치 도구 선택(구 PRD §0 요약표)은 §3 Stack에서 정한다.
 
 ## 6. 마일스톤·선행 조건·하위 task
 
@@ -22,7 +22,7 @@ related: [FR-02, FR-04, FR-13, AC-25, AC-26, AC-29, AC-30, OQ-01, OQ-06, ADR-001
 
 ### 6.2 정할 것
 
-- 첫 호스트와 그 alpha의 판정 입력·관문·축소 조건: PRD §14.3의 이견 스레드(R-59)와 [ADR-001](../decisions/ADR-001-mvp-scope-rhino-zwcad.md)·[ADR-004](../decisions/ADR-004-view-strategy-host-viewport-and-own-view.md)·[ADR-006](../decisions/ADR-006-benchmark-tasks-and-test-users.md)·[ADR-007](../decisions/ADR-007-web-review-online-submission-in-mvp.md)의 축소 조건이 확정되면 그 결정을 인용해 실행 순서와 판정 시점에 반영한다. 판정 기준 자체는 PRD §14.3·§16.3이 소유한다.
+- 첫 호스트와 그 alpha의 목표는 PRD §16.1·[ADR-012](../decisions/ADR-012-goal-two-baselines.md)(두 기준선 대비 개선)이며 판정 관문이 아니다. 미달은 자동 축소가 아니라 사용자의 재결정 시점이다. 판정 입력은 [ADR-006](../decisions/ADR-006-benchmark-tasks-and-test-users.md)의 기준 과업 ①, 판정 절차와 시점은 이 절과 §9.2가 정한다. 판정 기준 자체(무엇이 참이어야 하는지)는 PRD §14.3·§16.1이 소유한다.
 - 하위 task(T-NNN)는 첫 SPEC 뒤에 가이드 §05 양식으로 쓴다.
 
 ## 7. 테스트 계획·실호스트 검수
@@ -59,3 +59,27 @@ AC별 시험 조작·증거 인정 규칙(구 PRD §15 AC 셀에서 이관):
 - AC-30: 목업에서 버튼이 보이지 않는 것만으로 권한 검사를 통과 처리하지 않는다.
 
 기록 양식은 `docs/tdd/VERIFY-YYYY-MM-DD-<scope>.md`(AI.md §2)를 따르고, 관련 AC와 호스트 검수일 때 H-*를 인용한다.
+
+## 9. 미확인 위험·작은 실험·결정이 필요한 사항
+
+이 절은 PRD가 소유하지 않는 기술 결정과 그 확인 실험을 모은다. 결정이 나면 ADR로 기록하고 해당 장(§2~§6)에 반영한다.
+
+### 9.1 AI 실행 형태 (구 ADR-005 · OQ-12에서 이관)
+
+제품 결정이 아니라 기술 결정이다(2026-09-17). PRD가 약속하는 것은 이미 FR과 §4.3에 있다 — 쓰기 승인, 전송 자료 목록, 중단·재개(FR-08·FR-11·FR-15·FR-18). [ADR-005](../decisions/ADR-005-ai-execution-path-pending-spike.md)는 superseded이며 그 후보와 확인 항목은 여기서 잇는다.
+
+- 후보: 에이전트 SDK/CLI 내장 vs API 직접(자체 하네스).
+- 확인할 필수 통제 3가지 — 후보별로 확인/불가/미확인과 증거를 기록한다:
+  1. 쓰기 승인/거부 — 호스트 쓰기 도구 호출을 제품이 승인하거나 거부할 수 있는가.
+  2. 전송 자료 목록 표시·제외 — 전송 전에 자료 목록을 보여 주고 뺄 수 있는가.
+  3. 중단·재개 — 도구 호출 단위 중단과 실제 정지 관측, 앱 재시작 뒤 재개.
+- 사용자가 언급한 'aside' 방식은 PLAN 작성 시 확인한다(무엇을 뜻하는지, 위 후보 중 어디에 속하는지).
+- 실험 기록: `docs/tdd/SPIKE-<date>-ai-execution-path.md`, 코드 `tools/spikes/<date>-ai-execution-path/`(AI.md §2). 결정은 ADR로 남기고 §3 Stack과 §5에 반영한다.
+
+### 9.2 alpha 판정 절차·시점
+
+목표는 PRD §16.1·[ADR-012](../decisions/ADR-012-goal-two-baselines.md)(두 기준선 대비 개선)이며 판정 관문이 아니다. 미달은 자동 축소가 아니라 사용자의 재결정 시점이다. 이 절이 정할 것:
+
+- 판정 시점: 기준 과업 ①([ADR-006](../decisions/ADR-006-benchmark-tasks-and-test-users.md))의 두 기준선(수작업, 에이전트+MCP) 측정과 VIDE 측정을 언제 하는가.
+- 판정 절차: 같은 조건(모델·장비·과업 정의)으로 총시간·대상 오인·재작업을 재고, 시험 미완료·실패·보완 가능을 구분해 기록한다(§7.2·§7.4). 측정 절차는 §7.2가 소유한다.
+- 재결정 지점: 목표 미달 시 사용자가 범위·순서·노력 상한을 다시 정한다. 자동 축소 조건은 두지 않는다.
