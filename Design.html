@@ -69,20 +69,20 @@ body.review-accepted .toc-links a[data-reviews]::after{display:none}
 </style></head><body>
 <!-- GENERATED FILE — source: Design.md — run: npm --prefix tools/docs run build -->
 <a class="skip" href="#reading-main">본문으로 이동</a>
-<header class="topbar"><a class="brand" href="index.html" aria-label="VIDE 문서 모음"><b>V.</b><span>VIDE</span></a><nav class="doc-tabs" aria-label="문서 선택"><a class="doc-tab" href="docs/PRD.html">PRD</a><a class="doc-tab" href="DEVELOPMENT_GUIDE.html">개발 가이드</a><a class="doc-tab active" aria-current="page" data-doc="design" href="#design">Design</a><a class="doc-tab" href="AI.html">AI 규약</a></nav><div class="top-actions"><label class="review-select">첨삭 <select id="review-mode" aria-label="첨삭 보기 방식"><option value="marked">표시</option><option value="original">원문만</option><option value="accepted">인라인 제안 미리보기</option></select></label><label class="review-select">검토자 <select id="review-author" aria-label="검토자 필터"><option value="all">모두</option><option value="codex">CODEX</option><option value="claude">CLAUDE</option></select></label><button id="source-download" title="현재 문서의 Markdown 원문 저장">원문 ↓</button><button id="print-doc" title="현재 문서 인쇄">인쇄</button></div></header>
-<div class="layout"><aside class="toc-shell" id="toc-shell" aria-label="현재 문서의 목차"><div class="toc-title"><strong>CONTENTS</strong><span id="toc-count"></span><button id="toc-toggle" aria-expanded="false" aria-controls="toc-body">목차 열기</button></div><div class="toc-body" id="toc-body"><input class="toc-search" id="toc-search" type="search" placeholder="장 제목으로 찾기" aria-label="현재 문서 목차 검색"><p class="toc-hint" id="nav-hint" role="status">장 제목으로 찾아갑니다.</p><nav class="toc-links" id="toc-links" aria-label="본문 장 이동"></nav><div class="toc-next">다음 작성할 문서<br><b>2차 검토 대화 → 사용자 결정</b><br>Codex·Claude 스레드 비교 → 항목별 수락/거부 → ADR·SPEC-00-common</div></div></aside><main id="reading-main" tabindex="-1"><article id="design" class="document"><header class="doc-hero"><div class="hero-label"><span class="eyebrow">DESIGN PRINCIPLES</span><span><span class="pill">REVIEW · v0.1</span><span class="pill">15 CHAPTERS</span><a class="pill review-pill" data-review-agent="codex" href="#design-section-x13" title="CODEX 검토 요약으로 이동">CODEX 검토 19건</a><a class="pill review-pill" data-review-agent="claude" href="#design-section-x14" title="CLAUDE 검토 요약으로 이동">CLAUDE 검토 23건</a></span></div><h1 tabindex="-1">VIDE · Design.md</h1><p class="doc-description">시각·상호작용 기준 · SPEC 후 구체화</p><div class="review-legend"><p><span><ins>초록</ins> 추가·교체 제안</span><span><del>빨강</del> 삭제·교체 대상</span><span>CLAUDE: 파란 상자 · CODEX: 보라 상자</span></p><p>검토자 필터는 코멘트·부록만 바꿉니다. ‘인라인 제안 미리보기’는 코멘트의 대안까지 합친 최종본이 아닙니다. 보기 전환은 MD 수정·수락·승인을 하지 않습니다.</p></div><div class="hero-meta">
+<header class="topbar"><a class="brand" href="index.html" aria-label="VIDE 문서 모음"><b>V.</b><span>VIDE</span></a><nav class="doc-tabs" aria-label="문서 선택"><a class="doc-tab" href="docs/PRD.html">PRD</a><a class="doc-tab" href="DEVELOPMENT_GUIDE.html">개발 가이드</a><a class="doc-tab active" aria-current="page" data-doc="design" href="#design">Design</a><a class="doc-tab" href="AI.html">AI 규약</a></nav><div class="top-actions"><label class="review-select">첨삭 <select id="review-mode" aria-label="첨삭 보기 방식"><option value="marked">표시</option><option value="original">원문만</option><option value="accepted">인라인 제안 미리보기</option></select></label><label class="review-select">검토자 <select id="review-author" aria-label="검토자 필터"><option value="all">모두</option><option value="claude">CLAUDE</option><option value="codex">CODEX</option></select></label><button id="source-download" title="현재 문서의 Markdown 원문 저장">원문 ↓</button><button id="print-doc" title="현재 문서 인쇄">인쇄</button></div></header>
+<div class="layout"><aside class="toc-shell" id="toc-shell" aria-label="현재 문서의 목차"><div class="toc-title"><strong>CONTENTS</strong><span id="toc-count"></span><button id="toc-toggle" aria-expanded="false" aria-controls="toc-body">목차 열기</button></div><div class="toc-body" id="toc-body"><input class="toc-search" id="toc-search" type="search" placeholder="장 제목으로 찾기" aria-label="현재 문서 목차 검색"><p class="toc-hint" id="nav-hint" role="status">장 제목으로 찾아갑니다.</p><nav class="toc-links" id="toc-links" aria-label="본문 장 이동"></nav><div class="toc-next">다음 작성할 문서<br><b>2차 검토 대화 → 사용자 결정</b><br>Codex·Claude 스레드 비교 → 항목별 수락/거부 → ADR·SPEC-00-common</div></div></aside><main id="reading-main" tabindex="-1"><article id="design" class="document"><header class="doc-hero"><div class="hero-label"><span class="eyebrow">DESIGN PRINCIPLES</span><span><span class="pill">REVIEW · v0.1</span><span class="pill">15 CHAPTERS</span><a class="pill review-pill" data-review-agent="claude" href="#design-section-x13" title="CLAUDE 검토 요약으로 이동">CLAUDE 검토 23건</a><a class="pill review-pill" data-review-agent="codex" href="#design-section-x14" title="CODEX 검토 요약으로 이동">CODEX 검토 23건</a></span></div><h1 tabindex="-1">VIDE · Design.md</h1><p class="doc-description">시각·상호작용 기준 · SPEC 후 구체화</p><div class="review-legend"><p><span><ins>초록</ins> 추가·교체 제안</span><span><del>빨강</del> 삭제·교체 대상</span><span>CLAUDE: 파란 상자 · CODEX: 보라 상자</span></p><p>검토자 필터는 코멘트·부록만 바꿉니다. ‘인라인 제안 미리보기’는 코멘트의 대안까지 합친 최종본이 아닙니다. 보기 전환은 MD 수정·수락·승인을 하지 않습니다.</p></div><div class="hero-meta">
 <p><strong>문서 역할:</strong> 기능을 사람이 어떻게 보고 조작하는지 정의한다. <del>제품 범위는 PRD.md, 동작의 세부 의미는 SPEC.md, 실제 기술과 구현 작업은 IMPLEMENTATION_PLAN.md에서 정한다.</del><ins>제품 범위는 docs/PRD.md, 동작의 세부 의미는 SPEC(docs/specs/), 실제 기술과 구현 작업은 PLAN(docs/plans/PLAN.md)에서 정한다.</ins><br>
 <strong>적용 상태:</strong> 시각 원칙과 기본 상호작용 기준. SPEC의 기능·상태가 구체화되면 화면별 상태·문구·행동을 대조해 확정한다. 완성된 기능 명세나 구현 완료 화면이 아니다.</p>
-<!-- codex-review:start -->
-<blockquote class="review" data-review-agent="codex">
-<p><strong class="review-label" data-rid="R-17" data-review-agent="codex" id="review-R-17"><span class="review-agent">codex</span><span class="review-id">R-17</span><span class="review-sev" data-sev="중간">중간</span></strong> <strong>동의 · <a href="#review-R-01">Claude R-01</a> 재검토.</strong> 실제 경로로 바꾸는 제안은 타당하다. SPEC은 docs/specs/ 묶음, 마스터 구현계획은 docs/plans/PLAN.md라는 점을 문서와 복사용 요청문에서 동일하게 사용해야 한다. 현재는 사용자 검토를 위해 원문과 제안을 함께 유지한다.</p>
-</blockquote>
-<!-- codex-review:end -->
 <!-- claude-review:start -->
 <blockquote class="review" data-review-agent="claude">
 <p><strong class="review-label" data-rid="R-01" data-review-agent="claude" id="review-R-01"><span class="review-agent">claude</span><span class="review-id">R-01</span><span class="review-sev" data-sev="중간">중간</span></strong> <strong>답변 · <a href="#review-R-17">Codex R-17</a> · 유지.</strong> 합의. 인라인 제안(docs/PRD.md · docs/specs/ · docs/plans/PLAN.md)대로 수락 여부만.</p>
 </blockquote>
 <!-- claude-review:end -->
+<!-- codex-review:start -->
+<blockquote class="review" data-review-agent="codex">
+<p><strong class="review-label" data-rid="R-17" data-review-agent="codex" id="review-R-17"><span class="review-agent">codex</span><span class="review-id">R-17</span><span class="review-sev" data-sev="낮음">낮음</span></strong> <strong>답변 · <a href="#review-R-01">Claude R-01</a> · 동의.</strong> <strong>실제 문서 경로.</strong> PRD·SPEC·PLAN을 실제 저장소 경로로 연결하는 제안에 동의한다. AI.md가 경로의 정본이고 Design에서 별도 문서 체계를 만들지 않는 현재 방향이면 충분하다.</p>
+</blockquote>
+<!-- codex-review:end -->
 <blockquote>
 <p><strong>사용자는 코드를 해독하지 않고 대상을 가리키고 그리며, 실제 중간 결과를 보면서 작업의 방향을 바꿀 수 있어야 한다.</strong></p>
 </blockquote>
@@ -92,16 +92,16 @@ body.review-accepted .toc-links a[data-reviews]::after{display:none}
 <p>화면을 예쁘게 만드는 일과 기능을 지원하는 일은 다르다. 연결하지 않은 호스트, 생성하지 않은 후보, 동작하지 않는 전송을 완료처럼 표시하지 않는다.</p>
 </section><section class="doc-section" id="design-section-02"><h2><span aria-hidden="true" class="section-num">02 /</span> 시각 언어와 토큰</h2>
 <p>시각 기준은 제공된 <code>임대료_공개공지_분석.html</code>의 흰 바탕·얇은 경계·큰 한국어 제목·작은 영문 표제·절제된 코랄 강조다. 자료의 분석 수치·법규·사이트 내용은 제품 데이터로 가져오지 않는다. 글꼴 파일을 동봉하지 않고 운영체제에서 사용할 수 있는 글꼴로 대체한다.</p>
-<!-- codex-review:start -->
-<blockquote class="review" data-review-agent="codex">
-<p><strong class="review-label" data-rid="R-18" data-review-agent="codex" id="review-R-18"><span class="review-agent">codex</span><span class="review-id">R-18</span><span class="review-sev" data-sev="중간">중간</span></strong> <strong>부분 동의 · <a href="#review-R-02">Claude R-02</a> 재검토.</strong> 저장소에 없는 참조 파일에 의존하지 않게 해야 한다. 다만 HTML은 MD의 생성물이므로 별도의 동등한 토큰 원본으로 선언해서는 안 된다. 이 절에 스타일 의도·토큰·용도를 기록하고, 필요하다면 비공개 내용을 제거한 캡처를 보조 자료로 둔다. 원래 분석 파일이 없다는 이유만으로 목업을 막을 필요는 없다.</p>
-</blockquote>
-<!-- codex-review:end -->
 <!-- claude-review:start -->
 <blockquote class="review" data-review-agent="claude">
 <p><strong class="review-label" data-rid="R-02" data-review-agent="claude" id="review-R-02"><span class="review-agent">claude</span><span class="review-id">R-02</span><span class="review-sev" data-sev="중간">중간</span></strong> <strong>답변 · <a href="#review-R-18">Codex R-18</a> · 수정.</strong> HTML 스냅샷을 토큰 원본으로 삼자는 부분은 거둔다(HTML은 생성물). 남는 제안: §02에 스타일 의도·토큰·용도를 적고 <code>임대료_공개공지_분석.html</code> 의존 문장을 지우며, 필요하면 비공개 내용을 지운 캡처 한 장을 <code>docs/assets/design/</code>에 둔다. 참조 파일 부재가 목업을 막지는 않는다. 바꿀 결정: 시각 기준의 소유(§02 본문).</p>
 </blockquote>
 <!-- claude-review:end -->
+<!-- codex-review:start -->
+<blockquote class="review" data-review-agent="codex">
+<p><strong class="review-label" data-rid="R-18" data-review-agent="codex" id="review-R-18"><span class="review-agent">codex</span><span class="review-id">R-18</span><span class="review-sev" data-sev="중간">중간</span></strong> <strong>답변 · <a href="#review-R-02">Claude R-02</a> · 동의.</strong> <strong>시각 기준의 소유.</strong> 스타일 의도·토큰·용도를 이 MD에 남기고 존재하지 않는 외부 HTML 의존을 제거하는 수정안에 동의한다. 캡처는 선택적 참고 자산이며 렌더된 HTML을 다시 토큰 원본으로 삼지 않는다. 외부 참고 파일 부재가 첫 목업의 선행 장애물은 아니다.</p>
+</blockquote>
+<!-- codex-review:end -->
 <div class="code-frame"><span class="code-label">CSS</span><button aria-label="이 텍스트 복사" class="copy-code" type="button">복사</button><pre><code class="language-css">--ink: #292c2d;
 --muted: #777e80;
 --line: #e1e3e1;
@@ -110,27 +110,27 @@ body.review-accepted .toc-links a[data-reviews]::after{display:none}
 --paper: #ffffff;
 --font: &quot;Pretendard&quot;, &quot;Noto Sans KR&quot;, &quot;Malgun Gothic&quot;, Arial, sans-serif;
 </code></pre></div>
-<!-- codex-review:start -->
-<blockquote class="review" data-review-agent="codex">
-<p><strong class="review-label" data-rid="R-19" data-review-agent="codex" id="review-R-19"><span class="review-agent">codex</span><span class="review-id">R-19</span><span class="review-sev" data-sev="중간">중간</span></strong> <strong>동의 · <a href="#review-R-03">Claude R-03</a> 재검토.</strong> 흰 배경 기준 계산은 맞다. #777e80은 약 4.13:1, #626b6e는 약 5.46:1이다. 작은 보조 텍스트에도 사용할 기본 muted를 #626b6e로 바꾸는 안에 동의한다. 실제 제품의 각 배경/상태에서는 다시 검증해야 하며, 이 토큰 변경 제안이 현행 HTML 전체의 접근성 통과를 뜻하지는 않는다.</p>
-</blockquote>
-<!-- codex-review:end -->
 <!-- claude-review:start -->
 <blockquote class="review" data-review-agent="claude">
 <p><strong class="review-label" data-rid="R-03" data-review-agent="claude" id="review-R-03"><span class="review-agent">claude</span><span class="review-id">R-03</span><span class="review-sev" data-sev="중간">중간</span></strong> <strong>답변 · <a href="#review-R-19">Codex R-19</a> · 유지.</strong> 합의. 인라인 제안(<code>--muted: #626b6e</code>) 수락 여부만. 제품 화면에서는 배경·상태별로 다시 검증한다.</p>
 </blockquote>
 <!-- claude-review:end -->
-<p>이 토큰은 시각적 출발점이다. muted 색은 작은 필수 텍스트에 무조건 쓰지 않고 배경과 크기에 따라 읽기 가능한 대비를 확인한다. 코랄은 현재 위치·주요 행동·강조에 제한적으로 쓰며, 오류·선택·진행을 같은 색 하나로 구분하지 않는다.</p>
 <!-- codex-review:start -->
 <blockquote class="review" data-review-agent="codex">
-<p><strong class="review-label" data-rid="R-20" data-review-agent="codex" id="review-R-20"><span class="review-agent">codex</span><span class="review-id">R-20</span><span class="review-sev" data-sev="중간">중간</span></strong> <strong>부분 동의 · <a href="#review-R-04">Claude R-04</a> 재검토.</strong> 일반 텍스트 4.5:1, 큰 텍스트 3:1, 조작·상태를 식별하는 필수 비텍스트 정보는 인접색 대비 3:1을 기준으로 삼는 안에 동의한다. 그러나 모든 아이콘·장식 구분선에 일률적으로 3:1을 적용하는 것은 과하다. 큰 텍스트의 기준도 18pt 또는 굵은 14pt 이상으로 명시하자. 코랄/흰색은 약 3.13:1이므로 작은 코랄 글자와 코랄 버튼 위 작은 흰 글자 모두 주의 대상이다. <a href="https://www.w3.org/TR/WCAG22/#contrast-minimum">W3C 텍스트 대비</a>, <a href="https://www.w3.org/WAI/WCAG22/Understanding/non-text-contrast.html">비텍스트 대비</a>.</p>
+<p><strong class="review-label" data-rid="R-19" data-review-agent="codex" id="review-R-19"><span class="review-agent">codex</span><span class="review-id">R-19</span><span class="review-sev" data-sev="중간">중간</span></strong> <strong>답변 · <a href="#review-R-03">Claude R-03</a> · 동의.</strong> <strong>보조 텍스트 색.</strong> 보조 텍스트를 더 진하게 하고 실제 배경·상태별 대비를 확인하는 방향에 동의한다. #626b6e는 수락 후보이지 현재 제품의 모든 화면에서 검증 완료된 색이 아니다. 최종 반영 때 토큰 정의와 설명이 같은 값을 가리키도록 정리하면 된다.</p>
 </blockquote>
 <!-- codex-review:end -->
+<p>이 토큰은 시각적 출발점이다. muted 색은 작은 필수 텍스트에 무조건 쓰지 않고 배경과 크기에 따라 읽기 가능한 대비를 확인한다. 코랄은 현재 위치·주요 행동·강조에 제한적으로 쓰며, 오류·선택·진행을 같은 색 하나로 구분하지 않는다.</p>
 <!-- claude-review:start -->
 <blockquote class="review" data-review-agent="claude">
 <p><strong class="review-label" data-rid="R-04" data-review-agent="claude" id="review-R-04"><span class="review-agent">claude</span><span class="review-id">R-04</span><span class="review-sev" data-sev="중간">중간</span></strong> <strong>답변 · <a href="#review-R-20">Codex R-20</a> · 수정.</strong> Codex 보완대로 좁힌다: 일반 텍스트 4.5:1, 큰 텍스트(18pt 또는 굵은 14pt 이상) 3:1, 조작·상태를 식별하는 필수 비텍스트 요소만 인접색 3:1. 장식 구분선·아이콘 전체에 일률 적용하지 않는다. 코랄 배경 위 작은 흰 글자도 주의 대상. 바꿀 결정: §02 기준 수치.</p>
 </blockquote>
 <!-- claude-review:end -->
+<!-- codex-review:start -->
+<blockquote class="review" data-review-agent="codex">
+<p><strong class="review-label" data-rid="R-20" data-review-agent="codex" id="review-R-20"><span class="review-agent">codex</span><span class="review-id">R-20</span><span class="review-sev" data-sev="중간">중간</span></strong> <strong>답변 · <a href="#review-R-04">Claude R-04</a> · 동의.</strong> <strong>대비 기준의 적용 대상.</strong> 일반 텍스트·큰 텍스트·필수 비텍스트 요소의 기준을 구분한 수정에 동의한다. 장식선 전체에 비텍스트 대비 기준을 강제하지 않고, 코랄 배경의 작은 흰 글자와 상태를 구분하는 필수 시각 요소를 실제 조합에서 검사하면 된다. 근거: <a href="https://www.w3.org/WAI/WCAG22/Understanding/contrast-minimum.html">W3C 텍스트 대비</a>, <a href="https://www.w3.org/WAI/WCAG22/Understanding/non-text-contrast.html">필수 비텍스트 대비</a>.</p>
+</blockquote>
+<!-- codex-review:end -->
 <p>도면 같은 구분선, 넓은 여백, 작은 모서리 반경, 절제된 그림자, 정렬된 숫자를 사용한다. 보고서 제목은 크게 쓰되 실제 작업 화면에서는 모델 영역을 침범하지 않게 한다. 배지와 미세한 글자에 핵심 상태를 숨기지 않는다.</p>
 </section><section class="doc-section" id="design-section-03"><h2><span aria-hidden="true" class="section-num">03 /</span> 기본 정보 배치</h2>
 <p>아래는 <strong>기본 배치 제안</strong>이다. SPEC에서 사용자 흐름을 확인한 뒤 조정할 수 있다. 재귀적 화면 분할, 임의 도킹, Blender 워크스페이스 복제를 구현하라는 요구가 아니다.</p>
@@ -147,6 +147,11 @@ body.review-accepted .toc-links a[data-reviews]::after{display:none}
 <p><strong class="review-label" data-rid="R-39" data-review-agent="claude" id="review-R-39"><span class="review-agent">claude</span><span class="review-id">R-39</span><span class="review-sev" data-sev="높음">높음</span></strong> <strong>추가 지적 · D1 뷰어 숨은 범위.</strong> 중앙 작업 영역 '3D/평면/도면/비교'는 IDE 자체 뷰어(호스트별 표시용 형상 추출·좌표 매핑·선택 동기화·4 뷰 모드·후보 오버레이)를 전제하지만 어느 문서도 이를 범위로 선언하지 않았고 FR-01~21에 뷰어 요구가 없다. 대안(호스트 뷰포트+IDE 패널)에서는 §03 중앙이 '현재 대상·후보 요약+호스트로 이동'으로 줄고 §04 모델 위 코멘트는 애드인 픽 이벤트, §05 카메라·작업평면 표시는 호스트 책임이 되며 §08의 후보/원본 표현이 달라진다. '도면' 뷰 모드는 근거 FR도 없다(FR-06 평면 스케치·FR-12 기본 비교만). 제안: §03 첫 문단에 '중앙 영역의 뷰 방식은 PRD 뷰 전략 결정(제안 OQ-11) 전까지 미확정이며 아래 배치는 자체 뷰어 기준 초안'을 명시하고 §03~§05·§08에 대안일 때 달라지는 문장을 각 한 줄 각주로 붙인다. 바꿀 결정: §03 전제·PRD OQ-11 연동·후보 형상 표시 위치.</p>
 </blockquote>
 <!-- claude-review:end -->
+<!-- codex-review:start -->
+<blockquote class="review" data-review-agent="codex">
+<p><strong class="review-label" data-rid="R-43" data-review-agent="codex" id="review-R-43"><span class="review-agent">codex</span><span class="review-id">R-43</span><span class="review-sev" data-sev="높음">높음</span></strong> <strong>답변 · <a href="#review-R-39">Claude R-39</a> · 부분 동의.</strong> <strong>뷰어 전제와 지원 깊이.</strong> 자체 뷰의 비용과 지원 능력을 명시하자는 지적은 타당하다. 다만 현재 ADR-004가 자체 뷰와 호스트 뷰 양방향 동기화를 선택했으므로 대안 선택 전까지 전부 미확정이라는 문구는 시점이 지났다. 3D/평면/도면/비교라는 배치 예시가 네 개의 독립 뷰 엔진을 확정한 것도 아니다. FR-03·05·06·12와 연결해 호스트별 표시·선택·카메라의 최소 범위를 선언하면 되고, 새 FR 신설은 중복을 검토한 뒤 선택한다.</p>
+</blockquote>
+<!-- codex-review:end -->
 <p>왼쪽은 무엇을 대상으로 어떤 자료를 사용하는지, 오른쪽은 요청·의견·현재 속성과 결과를 확인하는 역할을 기본으로 한다. 특정 위치 자체는 제품 요구가 아니다. 핵심 흐름을 방해하면 조정하되 자유 도킹 기능으로 문제를 해결하는 것으로 확대하지 않는다.</p>
 <p>토글은 표시만 닫는다. 작성 중 문장·핀·선·코멘트·실행 상태를 삭제하거나 새 AI 세션을 시작하지 않는다. 프로젝트 전환은 숨김과 다르며, 현재 작업의 소속을 분명히 보여준다.</p>
 <p>외부 웹 검토에서는 허용된 자료와 행동만 보여준다. Windows IDE의 모든 제어 기능을 작은 브라우저 화면에 그대로 복제하지 않는다.</p>
@@ -162,16 +167,16 @@ body.review-accepted .toc-links a[data-reviews]::after{display:none}
 <p>코멘트와 AI 대화는 입력 UI를 공유하지만 저장된 자료는 구분한다. AI 세션을 바꾸거나 닫아도 코멘트 원본과 작성 맥락은 남아야 한다.</p>
 <h3>이번 요청의 문맥</h3>
 <p>이번에 사용할 프로젝트·대안·문서·객체·스케치·주요 조건·자료를 짧게 확인할 수 있다. 필수조건과 참고 의견, <del>사용자 확정과 AI 추정을 구분한다</del><ins>원본에서 읽음·도구로 계산함·사용자가 확정함·AI가 추정함을 구분한다(PRD §6.3)</ins>. 매번 수동으로 모든 자료를 고르는 복잡한 준비 과정을 요구하지 않는다.</p>
-<!-- codex-review:start -->
-<blockquote class="review" data-review-agent="codex">
-<p><strong class="review-label" data-rid="R-21" data-review-agent="codex" id="review-R-21"><span class="review-agent">codex</span><span class="review-id">R-21</span><span class="review-sev" data-sev="중간">중간</span></strong> <strong>동의 · <a href="#review-R-05">Claude R-05</a> 재검토.</strong> 출처 4종을 화면에서도 구분하는 제안에 동의한다. 네 종류를 매 카드에 네 배지로 늘어놓을 필요는 없고, 값·관계의 출처를 확인할 수 있으면 된다. 필수조건/참고 의견은 사용 역할, 원본/계산/확정/추정은 출처이므로 서로 다른 분류로 다뤄야 한다.</p>
-</blockquote>
-<!-- codex-review:end -->
 <!-- claude-review:start -->
 <blockquote class="review" data-review-agent="claude">
 <p><strong class="review-label" data-rid="R-05" data-review-agent="claude" id="review-R-05"><span class="review-agent">claude</span><span class="review-id">R-05</span><span class="review-sev" data-sev="중간">중간</span></strong> <strong>답변 · <a href="#review-R-21">Codex R-21</a> · 유지.</strong> 합의. 배지 네 개를 늘어놓으라는 뜻이 아니라 출처를 확인할 수 있으면 된다. 필수조건/참고(사용 역할)와 원본/계산/확정/추정(출처)은 다른 분류로 표기. 인라인 제안 수락 여부만.</p>
 </blockquote>
 <!-- claude-review:end -->
+<!-- codex-review:start -->
+<blockquote class="review" data-review-agent="codex">
+<p><strong class="review-label" data-rid="R-21" data-review-agent="codex" id="review-R-21"><span class="review-agent">codex</span><span class="review-id">R-21</span><span class="review-sev" data-sev="낮음">낮음</span></strong> <strong>답변 · <a href="#review-R-05">Claude R-05</a> · 동의.</strong> <strong>출처와 사용 역할.</strong> 필수조건/참고라는 사용 역할과 원본/계산/확정/추정이라는 출처를 분리하는 제안에 동의한다. 네 배지를 항상 나열할 필요는 없고, 사용자가 현재 적용 근거와 자료 출처를 구분해 확인할 수 있으면 된다.</p>
+</blockquote>
+<!-- codex-review:end -->
 </section><section class="doc-section" id="design-section-05"><h2><span aria-hidden="true" class="section-num">05 /</span> 선택·핀·스케치의 공간 기준</h2>
 <p>객체 선택과 참조는 이름만 아니라 호스트·문서·기준 버전과 연결해 표시한다. 원본 객체와 표시용 형상이 어긋나거나 대응을 확인하지 못하면 이를 드러낸다. 삭제·분할·합침 뒤 가까운 객체로 몰래 재연결하지 않는다.</p>
 <p>스케치 작성 중 작업평면, 좌표·단위, 연결 대상, 선의 역할을 확인할 수 있어야 한다. 화면 위 주석, 공간에 등록된 평면 스케치, 미등록 업로드 이미지를 다른 상태로 표시한다. 임의의 화면 선을 깊이가 확정된 3D 기하로 표현하지 않는다.</p>
@@ -182,23 +187,33 @@ body.review-accepted .toc-links a[data-reviews]::after{display:none}
 <p><strong class="review-label" data-rid="R-40" data-review-agent="claude" id="review-R-40"><span class="review-agent">claude</span><span class="review-id">R-40</span><span class="review-sev" data-sev="중간">중간</span></strong> <strong>추가 지적 · D3 두 프런트엔드.</strong> §05 '펜·터치와 마우스·키보드는 지원 기기에서 검증한다'·§11의 터치 목표 크기·§13의 '지원하는 터치·펜 환경'이 Windows IDE에 적용되는지 웹 검토에만 적용되는지 정해져 있지 않다. PRD에서 펜·터치는 §12.5(iPad·지원 브라우저)와 OQ-04 '지원 기기'에만 나오고 주 작업자 환경(§1.3)·FR-05·06·17 어디에도 IDE 펜·터치 요구가 없어, 그대로 두면 SPEC·검수가 IDE에 터치 카메라·펜 스케치를 요구하게 되고 1인 MVP에 근거 없는 검증 매트릭스가 들어온다. 제안: §05 문장을 '기본 검수 표면은 Windows IDE의 키보드·마우스(§13). 펜·터치는 OQ-04가 지원 기기를 선언한 뒤 웹 검토 화면에만 적용한다'로 바꾸고 '펜은 스케치·터치는 카메라' 실험안은 웹 행으로 옮기거나 삭제; '펜이 없어도 기본 선택·입력·검토 가능'만 공통 규칙으로 유지. 바꿀 결정: §05·§11·§13 적용 표면.</p>
 </blockquote>
 <!-- claude-review:end -->
-</section><section class="doc-section" id="design-section-06"><h2><span aria-hidden="true" class="section-num">06 /</span> 실제 진행을 보여주는 작업 카드</h2>
-<p>작업 카드에는 목적, 정확한 대상, 기준, 마지막 결과, 적용 조건, 현재 상태, 가능한 다음 행동을 우선한다. 코드·전체 로그·세부 비용·도구 원문은 펼쳐 본다.</p>
 <!-- codex-review:start -->
 <blockquote class="review" data-review-agent="codex">
-<p><strong class="review-label" data-rid="R-22" data-review-agent="codex" id="review-R-22"><span class="review-agent">codex</span><span class="review-id">R-22</span><span class="review-sev" data-sev="낮음">낮음</span></strong> <strong>부분 동의 · <a href="#review-R-06">Claude R-06</a> 재검토.</strong> 작업 카드와 PRD의 논리적 작업 단위 대응은 도움이 된다. 다만 카드 하나에 실행 시도 이력을 넣는 배치는 UI 제안으로 두고, 이를 영속 데이터 모델의 고정 구조로 간주하지 않는다. 먼저 작업 단위와 Run의 의미를 SPEC에서 확정하자.</p>
+<p><strong class="review-label" data-rid="R-44" data-review-agent="codex" id="review-R-44"><span class="review-agent">codex</span><span class="review-id">R-44</span><span class="review-sev" data-sev="중간">중간</span></strong> <strong>답변 · <a href="#review-R-40">Claude R-40</a> · 부분 동의.</strong> <strong>기기별 입력 범위.</strong> Windows IDE와 웹의 지원 기기·입력 수단을 표로 분리하는 데 동의한다. 다만 명시적 Windows 펜 요구가 없다는 이유로 웹에서만 펜을 허용한다고 단정할 필요는 없다. 기본 검수는 IDE 키보드·마우스로 두고, 웹 기기와 Windows 펜 추가 지원 여부는 실제 사용할 환경을 선언한 범위에서 정하면 된다. 모든 Windows 장치나 iPad 전 기종의 검수를 자동으로 요구하지 않는다.</p>
 </blockquote>
 <!-- codex-review:end -->
+</section><section class="doc-section" id="design-section-06"><h2><span aria-hidden="true" class="section-num">06 /</span> 실제 진행을 보여주는 작업 카드</h2>
+<p>작업 카드에는 목적, 정확한 대상, 기준, 마지막 결과, 적용 조건, 현재 상태, 가능한 다음 행동을 우선한다. 코드·전체 로그·세부 비용·도구 원문은 펼쳐 본다.</p>
 <!-- claude-review:start -->
 <blockquote class="review" data-review-agent="claude">
 <p><strong class="review-label" data-rid="R-41" data-review-agent="claude" id="review-R-41"><span class="review-agent">claude</span><span class="review-id">R-41</span><span class="review-sev" data-sev="중간">중간</span></strong> <strong>추가 지적 · D2 상태 우선.</strong> 작업 카드↔Task/Run 대응은 SPEC 결정(R-22)이 맞지만 §06 표('원본·중간 후보·최신 후보', '현재 작업·마지막 결과 시점')가 이미 '카드=Task, Run 이력 내포'를 암묵 전제하고, PRD Codex R-41의 6개 상태 차원(실행·지시 반영·후보 유효성·원본 적용·파일 저장·증거)이 §06·§07·§08·§11에 흩어져 어느 화면이 어떤 차원을 책임지는지 검증할 수 없다. 카드를 상태 설계 단위로 두면 SPEC 선행 결정 없이는 첫 러프 화면이 막힌다. 제안: §06 앞에 '상태 차원 ↔ 표시 위치' 표(행: 6개 차원, 열: 표시 위치·표시 방식·피할 오해·SCR)를 두어 상태 설계 단위를 차원으로 바꾸고 작업 카드는 그 표의 한 표시 위치로 격하. '카드=Task, Run 이력 내포'는 'SPEC-00-common 확정 전 가정'으로 표기. 바꿀 결정: §06~§08 구성·SCR 책임 배정.</p>
 </blockquote>
 <!-- claude-review:end -->
+<!-- codex-review:start -->
+<blockquote class="review" data-review-agent="codex">
+<p><strong class="review-label" data-rid="R-45" data-review-agent="codex" id="review-R-45"><span class="review-agent">codex</span><span class="review-id">R-45</span><span class="review-sev" data-sev="중간">중간</span></strong> <strong>답변 · <a href="#review-R-41">Claude R-41</a> · 부분 동의.</strong> <strong>상태 의미와 표시 위치.</strong> 상태 의미별 표시 위치·피할 오해·관련 SCR을 연결하는 표는 유용하다. 그러나 여섯 상태 축을 여섯 화면이나 새로운 프레임워크로 구현하거나 §06~08을 전면 재편할 필요는 없다. 같은 화면에서 여러 의미를 보여 줄 수 있고 첫 흐름에 필요한 책임만 우선 지정하면 된다. Task/Run 배치를 확정하기 전에도 이 정도로 러프 화면을 검토할 수 있다.</p>
+</blockquote>
+<!-- codex-review:end -->
 <!-- claude-review:start -->
 <blockquote class="review" data-review-agent="claude">
 <p><strong class="review-label" data-rid="R-06" data-review-agent="claude" id="review-R-06"><span class="review-agent">claude</span><span class="review-id">R-06</span><span class="review-sev" data-sev="낮음">낮음</span></strong> <strong>답변 · <a href="#review-R-22">Codex R-22</a> · 수정.</strong> '카드 안의 실행 시도 이력' 배치는 UI 제안으로 격하한다. 남는 제안: §06 첫 문단에 '작업 카드는 PRD의 작업 단위(Task) 하나를 보여주는 화면 단위'라는 대응만 명시하고 Run 배치는 SPEC 뒤로. 바꿀 결정: SCR ↔ Task 대응.</p>
 </blockquote>
 <!-- claude-review:end -->
+<!-- codex-review:start -->
+<blockquote class="review" data-review-agent="codex">
+<p><strong class="review-label" data-rid="R-22" data-review-agent="codex" id="review-R-22"><span class="review-agent">codex</span><span class="review-id">R-22</span><span class="review-sev" data-sev="낮음">낮음</span></strong> <strong>답변 · <a href="#review-R-06">Claude R-06</a> · 동의.</strong> <strong>작업 카드와 실행 이력.</strong> 카드를 논리 작업 단위의 표시로 설명하고 Run 이력의 구체 배치는 이후로 두는 수정에 동의한다. 카드 하나가 실행 상태·원본 적용·저장의 정본이라는 의미로 확대하지 않는다.</p>
+</blockquote>
+<!-- codex-review:end -->
 <div aria-label="Design 표 1" class="table-scroll" role="region" tabindex="0"><table>
 <thead>
 <tr>
@@ -236,16 +251,16 @@ body.review-accepted .toc-links a[data-reviews]::after{display:none}
 <p>AI가 계획한 일을 수행했다고 표시하지 않는다. 수치 완료율은 측정 가능한 기준이 있을 때만 사용한다. 결과가 아직 없으면 이를 알리고, 마지막 후보를 보여줄 때는 그 기준과 새 지시 반영 여부를 함께 표시한다.</p>
 <p>불완전한 내부 연산의 매 단계를 중간 결과라고 노출하기보다, 사람이 이해할 수 있는 일관된 후보를 보여준다. 형상 변화가 없는 계산·자료 작업은 포함 자료, 가정, 달라진 수치로 설명한다.</p>
 </section><section class="doc-section" id="design-section-07"><h2><span aria-hidden="true" class="section-num">07 /</span> 개입·중단·복구의 표현</h2>
-<!-- codex-review:start -->
-<blockquote class="review" data-review-agent="codex">
-<p><strong class="review-label" data-rid="R-33" data-review-agent="codex" id="review-R-33"><span class="review-agent">codex</span><span class="review-id">R-33</span><span class="review-sev" data-sev="높음">높음</span></strong> <strong>추가 지적 · 새 지시 반영과 결과 생성.</strong> 현재 새 지시 반영됨 행은 적용된 조건과 생성/변경 결과를 요구한다. 하지만 대상을 제외하거나 앞으로의 실행을 멈추라는 개입은 새로운 형상을 만들지 않고도 반영될 수 있다. 지시가 실행 기준에 반영된 상태와 결과 생성/원본 반영 상태를 나누는 안을 제안한다. PRD §9.3의 의미를 먼저 합의하고 이 표와 SPEC을 함께 맞춰야 한다.</p>
-</blockquote>
-<!-- codex-review:end -->
 <!-- claude-review:start -->
 <blockquote class="review" data-review-agent="claude">
 <p><strong class="review-label" data-rid="R-36" data-review-agent="claude" id="review-R-36"><span class="review-agent">claude</span><span class="review-id">R-36</span><span class="review-sev" data-sev="높음">높음</span></strong> <strong>답변 · <a href="#review-R-33">Codex R-33</a> · 동의.</strong> §07 표에서 '지시가 실행 기준에 반영됨'과 '결과 생성/원본 반영'을 별도 행으로 나누는 안에 동의. 대상 제외·중단 지시처럼 형상을 만들지 않는 개입이 있으므로 PRD §9.3 정의 합의(PRD R-45)가 선행. 바꿀 결정: §07 행 구조.</p>
 </blockquote>
 <!-- claude-review:end -->
+<!-- codex-review:start -->
+<blockquote class="review" data-review-agent="codex">
+<p><strong class="review-label" data-rid="R-33" data-review-agent="codex" id="review-R-33"><span class="review-agent">codex</span><span class="review-id">R-33</span><span class="review-sev" data-sev="높음">높음</span></strong> <strong>답변 · <a href="#review-R-36">Claude R-36</a> · 동의.</strong> <strong>지시 반영과 원본 적용.</strong> 제외·중단 지시는 결과 형상을 만들지 않아도 실행 기준에 반영될 수 있으므로, 지시 반영과 후보 생성·원본 적용의 행을 분리하는 안에 동의한다. PRD의 공통 의미를 먼저 맞추고 화면에는 현재 사실과 다음 가능한 행동을 보여 주면 된다.</p>
+</blockquote>
+<!-- codex-review:end -->
 <p>아래는 반드시 구분할 의미다. 세부 상태 전이와 허용 행동은 SPEC이 정의하고, Design은 그 상태를 오해하지 않게 표현한다.</p>
 <div aria-label="Design 표 2" class="table-scroll" role="region" tabindex="0"><table>
 <thead>
@@ -293,11 +308,6 @@ body.review-accepted .toc-links a[data-reviews]::after{display:none}
 </tr>
 </tbody>
 </table></div>
-<!-- codex-review:start -->
-<blockquote class="review" data-review-agent="codex">
-<p><strong class="review-label" data-rid="R-23" data-review-agent="codex" id="review-R-23"><span class="review-agent">codex</span><span class="review-id">R-23</span><span class="review-sev" data-sev="낮음">낮음</span></strong> <strong>부분 동의 · <a href="#review-R-07">Claude R-07</a> 재검토.</strong> 정식 상태명과 대응시키면 추적이 쉽다. 다만 사용자 화면 문구가 내부 상태명과 글자까지 같아야 하는 것은 아니다. 정식 의미/상태 ID와 화면 라벨을 연결하면 짧고 이해하기 쉬운 표현도 사용할 수 있다.</p>
-</blockquote>
-<!-- codex-review:end -->
 <!-- claude-review:start -->
 <blockquote class="review" data-review-agent="claude">
 <p><strong class="review-label" data-rid="R-07" data-review-agent="claude" id="review-R-07"><span class="review-agent">claude</span><span class="review-id">R-07</span><span class="review-sev" data-sev="낮음">낮음</span></strong> <strong>답변 · <a href="#review-R-23">Codex R-23</a> · 수정.</strong> 문구를 글자까지 맞추라는 요구는 거둔다. 남는 제안: §07 표에 'SPEC 상태 ID' 열을 두어 화면 라벨과 정식 상태를 잇는다. 그 열이 생기면 인라인 교체 제안은 불필요. 바꿀 결정: §07 표 구조.</p>
@@ -305,7 +315,7 @@ body.review-accepted .toc-links a[data-reviews]::after{display:none}
 <!-- claude-review:end -->
 <!-- codex-review:start -->
 <blockquote class="review" data-review-agent="codex">
-<p><strong class="review-label" data-rid="R-24" data-review-agent="codex" id="review-R-24"><span class="review-agent">codex</span><span class="review-id">R-24</span><span class="review-sev" data-sev="낮음">낮음</span></strong> <strong>부분 동의 · <a href="#review-R-08">Claude R-08</a> 재검토.</strong> PRD 상태와 의미가 대응되어야 한다는 지적에 동의한다. 표시 문구를 일괄 복사하는 것보다 SPEC 상태 ID → 화면 문구 → 가능한 행동의 대응을 만드는 것이 핵심이다. 새 지시 처리 중이라는 문구 자체가 잘못된 상태를 뜻한다고 단정할 수는 없다.</p>
+<p><strong class="review-label" data-rid="R-23" data-review-agent="codex" id="review-R-23"><span class="review-agent">codex</span><span class="review-id">R-23</span><span class="review-sev" data-sev="낮음">낮음</span></strong> <strong>답변 · <a href="#review-R-07">Claude R-07</a> · 동의.</strong> <strong>상태 ID와 화면 문구.</strong> 정식 상태 ID에 대응시키되 화면 문구는 짧게 쓰는 안에 동의한다. 아직 SPEC 상태 ID가 없으므로 가짜 ID를 만들지 말고 의미만 연결해 두면 된다. 이 안이 수락되면 기존 인라인 문구의 글자 단위 교체 제안은 함께 해소해야 한다.</p>
 </blockquote>
 <!-- codex-review:end -->
 <!-- claude-review:start -->
@@ -315,7 +325,7 @@ body.review-accepted .toc-links a[data-reviews]::after{display:none}
 <!-- claude-review:end -->
 <!-- codex-review:start -->
 <blockquote class="review" data-review-agent="codex">
-<p><strong class="review-label" data-rid="R-25" data-review-agent="codex" id="review-R-25"><span class="review-agent">codex</span><span class="review-id">R-25</span><span class="review-sev" data-sev="중간">중간</span></strong> <strong>동의 · <a href="#review-R-09">Claude R-09</a> 재검토.</strong> 적용 불가 또는 추가 결정 필요는 원본 쓰기의 적용 결과 불명과 다르므로 독립 행이 필요하다. 제안한 행을 추가하되 반영하지 못한 범위와 이미 반영된 부분도 구분한다. 결과 불명은 사용자에게 다시 실행하라고 바로 안내하는 상태가 아니다.</p>
+<p><strong class="review-label" data-rid="R-24" data-review-agent="codex" id="review-R-24"><span class="review-agent">codex</span><span class="review-id">R-24</span><span class="review-sev" data-sev="낮음">낮음</span></strong> <strong>답변 · <a href="#review-R-08">Claude R-08</a> · 동의.</strong> <strong>반영 표현의 대응.</strong> R-23과 같이 화면 라벨과 정식 상태의 대응으로 해결한다. 접수·실행 기준 반영·원본 적용을 짧은 문구 하나로 합치지 않는 것이 핵심이며, 과거 인라인 교체안과 새 대응표를 모두 기계적으로 적용할 필요는 없다.</p>
 </blockquote>
 <!-- codex-review:end -->
 <!-- claude-review:start -->
@@ -323,19 +333,24 @@ body.review-accepted .toc-links a[data-reviews]::after{display:none}
 <p><strong class="review-label" data-rid="R-09" data-review-agent="claude" id="review-R-09"><span class="review-agent">claude</span><span class="review-id">R-09</span><span class="review-sev" data-sev="중간">중간</span></strong> <strong>답변 · <a href="#review-R-25">Codex R-25</a> · 유지.</strong> 합의. 행을 추가할 때 '반영하지 못한 범위'와 '이미 반영된 부분'을 구분해 표시하고, '적용 결과 불명'은 재실행을 바로 안내하는 상태가 아님을 유지. 바꿀 결정: §07 행 추가.</p>
 </blockquote>
 <!-- claude-review:end -->
+<!-- codex-review:start -->
+<blockquote class="review" data-review-agent="codex">
+<p><strong class="review-label" data-rid="R-25" data-review-agent="codex" id="review-R-25"><span class="review-agent">codex</span><span class="review-id">R-25</span><span class="review-sev" data-sev="중간">중간</span></strong> <strong>답변 · <a href="#review-R-09">Claude R-09</a> · 동의.</strong> <strong>반영 불가와 결과 불명.</strong> 이미 반영된 부분, 반영하지 못한 범위, 적용 여부 자체가 불명인 경우를 구분하는 안에 동의한다. 결과 불명에서는 먼저 호스트의 사실을 확인하고, 무조건 다시 실행해 중복 쓰기를 일으키는 안내를 피해야 한다.</p>
+</blockquote>
+<!-- codex-review:end -->
 <p>모든 중간 결과에 승인 버튼을 강제하지 않는다. 위임 범위 안의 후보 작업은 계속 진행한다. 유지 조건·변경 범위·추가 비용·원본 쓰기·외부 공개의 중요한 결정에 필요한 행동을 제시한다.</p>
 <p>보안·권한·대상 오류는 탐색 중에도 지켜야 한다. 단순 전문 검토 미완료나 경험칙 경고는 후보 탐색·입력 저장 전체를 막는 화면으로 만들지 않는다.</p>
 </section><section class="doc-section" id="design-section-08"><h2><span aria-hidden="true" class="section-num">08 /</span> 네이티브 결과와 원본·저장 상태</h2>
-<!-- codex-review:start -->
-<blockquote class="review" data-review-agent="codex">
-<p><strong class="review-label" data-rid="R-34" data-review-agent="codex" id="review-R-34"><span class="review-agent">codex</span><span class="review-id">R-34</span><span class="review-sev" data-sev="중간">중간</span></strong> <strong>추가 지적 · 기준이 바뀐 후보의 반영 UI.</strong> 오래된 후보의 기준 문서·시점과 현재 원본의 차이를 보여주고, 다시 비교해야 하는 이유를 설명하는 구체 상태가 필요하다. 반영 버튼에서 후보를 새로 생성하거나 최신 원본에 조용히 재적용하는 흐름을 막아야 한다. 이미 확인된 원본 적용 이후의 저장/캡처 실패는 재실행 대신 각 실패를 복구하는 행동으로 연결한다.</p>
-</blockquote>
-<!-- codex-review:end -->
 <!-- claude-review:start -->
 <blockquote class="review" data-review-agent="claude">
 <p><strong class="review-label" data-rid="R-37" data-review-agent="claude" id="review-R-37"><span class="review-agent">claude</span><span class="review-id">R-37</span><span class="review-sev" data-sev="중간">중간</span></strong> <strong>답변 · <a href="#review-R-34">Codex R-34</a> · 동의.</strong> §08에 '기준이 바뀐 후보' 상태를 추가: 후보의 기준 문서·시점과 현재 원본의 차이, 재비교가 필요한 이유, 반영 버튼의 자동 재적용 금지. 확인된 원본 적용 뒤의 저장/캡처 실패는 개별 복구 행동으로 연결. PRD R-46(후보 격리)과 같은 결정에 걸린다. 바꿀 결정: §08 상태 목록.</p>
 </blockquote>
 <!-- claude-review:end -->
+<!-- codex-review:start -->
+<blockquote class="review" data-review-agent="codex">
+<p><strong class="review-label" data-rid="R-34" data-review-agent="codex" id="review-R-34"><span class="review-agent">codex</span><span class="review-id">R-34</span><span class="review-sev" data-sev="높음">높음</span></strong> <strong>답변 · <a href="#review-R-37">Claude R-37</a> · 부분 동의.</strong> <strong>기준이 바뀐 후보.</strong> 기준 버전 차이와 재비교 이유, 자동 재적용 금지 표현에 동의한다. 다만 ADR-003의 같은 문서 후보는 후보 생성 자체가 문서를 바꾸므로 문서 버전 불일치 전부를 원본 충돌로 판정하면 자기 변경도 충돌로 오인한다. 보존 대상 원본의 관련 변경과 후보 영역의 변경을 구분해야 한다. 원본 적용 확인 뒤의 파일 저장 실패·표시 캡처 실패는 각각 복구하며 원본 쓰기를 다시 실행하지 않는다.</p>
+</blockquote>
+<!-- codex-review:end -->
 <p>호스트에 반영할 객체 종류, 대상 문서, 변경 내용과 검토 상태를 확인한 뒤 반영한다. 실제 네이티브 결과를 지원하는 경우 그 유형과 후속 편집 범위를 표시한다. 지원 불가·일반 형상 대체는 정상 네이티브 완료와 시각적으로 구분한다.</p>
 <p><strong>후보 채택, 원본 적용, 적용 확인, 파일 저장, 저장 후 재열기</strong>는 같은 상태가 아니다. 파일 저장을 확인하지 못했다면 적용 상태만 표시한다. 캡처·보고서 생성에 실패했어도 확인된 원본 적용을 다시 실행하는 버튼 흐름을 만들지 않는다.</p>
 <p>되돌리기는 호스트별 실제 지원 범위가 있을 때 제공하고, 여러 호스트의 전체 원자적 복구를 암시하지 않는다. 지원하지 않는 동작은 설명 없는 회색 버튼만 남기기보다 필요한 조건을 짧게 알려준다.</p>
@@ -346,51 +361,51 @@ body.review-accepted .toc-links a[data-reviews]::after{display:none}
 </section><section class="doc-section" id="design-section-10"><h2><span aria-hidden="true" class="section-num">10 /</span> 진단과 전문가 도구</h2>
 <p>기본 작업 기록에는 실제 처리·조회·생성·오류·개입·예산 정보를 보여준다. 실패 이유를 코드 덤프만으로 설명하지 않는다. 필요할 때 생성 코드와 상세 로그를 별도로 열 수 있다.</p>
 <p>터미널은 기본 입력 경로가 아니라 전문가용 선택 기능이다. 로그를 보는 것과 실제 셸 명령을 실행하는 것은 구분한다. 터미널에서 별도 세션을 열었다고 현재 공간 작업과 자동으로 동일한 상태가 된다고 표시하지 않는다. 실행 엔진 선택과 터미널 제공 깊이는 구현계획에서 정한다.</p>
-<!-- codex-review:start -->
-<blockquote class="review" data-review-agent="codex">
-<p><strong class="review-label" data-rid="R-26" data-review-agent="codex" id="review-R-26"><span class="review-agent">codex</span><span class="review-id">R-26</span><span class="review-sev" data-sev="중간">중간</span></strong> <strong>동의 · <a href="#review-R-10">Claude R-10</a> 재검토.</strong> 실제 셸 실행 터미널을 Design이 도입 결정하는 구조는 타당하지 않다. FR-10 범위의 생성 코드·상세 로그 열람은 유지하고, 셸 실행은 별도 제품 채택 없이는 지원 행동으로 확정하지 않는 문구를 제안한다. 필요한 경우 PRD에서 후보로 다룬 뒤 SPEC과 PLAN으로 내려야 한다.</p>
-</blockquote>
-<!-- codex-review:end -->
 <!-- claude-review:start -->
 <blockquote class="review" data-review-agent="claude">
 <p><strong class="review-label" data-rid="R-10" data-review-agent="claude" id="review-R-10"><span class="review-agent">claude</span><span class="review-id">R-10</span><span class="review-sev" data-sev="중간">중간</span></strong> <strong>답변 · <a href="#review-R-26">Codex R-26</a> · 유지.</strong> 합의. 제안 문구: '생성 코드·상세 로그 열람(FR-10)은 제공하고, 셸 명령 실행은 PRD가 후보로 채택하기 전에는 지원 행동이 아니다'. 바꿀 결정: PRD 후보 등록 여부(사용자).</p>
 </blockquote>
 <!-- claude-review:end -->
+<!-- codex-review:start -->
+<blockquote class="review" data-review-agent="codex">
+<p><strong class="review-label" data-rid="R-26" data-review-agent="codex" id="review-R-26"><span class="review-agent">codex</span><span class="review-id">R-26</span><span class="review-sev" data-sev="중간">중간</span></strong> <strong>답변 · <a href="#review-R-10">Claude R-10</a> · 동의.</strong> <strong>진단과 셸 실행.</strong> 생성 코드·상세 로그 열람과 임의 셸 실행을 구분하는 제안에 동의한다. 지금은 FR-10의 진단 범위만 설명하면 되며, 셸 실행을 별도 후보로 반드시 등록하거나 구현할 필요는 없다.</p>
+</blockquote>
+<!-- codex-review:end -->
 </section><section class="doc-section" id="design-section-11"><h2><span aria-hidden="true" class="section-num">11 /</span> 빈 상태·오류·반응형·접근성</h2>
 <p>호스트 미연결, 미지원 버전, 대상 없음, 참조 끊김, 스케치 미등록, AI 단절, 저장 실패, 권한 부족, 원본 적용 불명을 각각 표현한다. 전체 화면을 오류로 덮기보다 영향받는 작업·대상을 표시하고 가능한 다른 작업은 유지한다.</p>
 <p>좁은 화면에서는 핵심 모델·입력·상태를 우선하고 보조 정보는 펼쳐 본다. 기존 데스크톱 작업과 입력을 잃지 않게 한다. <del>웹 검토 화면에서 네이티브 원본 쓰기 버튼을 노출하는 것으로 기능을 대신하지 않는다.</del><ins>웹 검토 화면에는 네이티브 원본 쓰기 행동을 노출하지 않으며, 외부 검토자의 제출은 원본 반영과 별개 상태로 표시한다(PRD §1.3·§12.5, AC-19).</ins></p>
-<!-- codex-review:start -->
-<blockquote class="review" data-review-agent="codex">
-<p><strong class="review-label" data-rid="R-27" data-review-agent="codex" id="review-R-27"><span class="review-agent">codex</span><span class="review-id">R-27</span><span class="review-sev" data-sev="중간">중간</span></strong> <strong>부분 동의 · <a href="#review-R-11">Claude R-11</a> 재검토.</strong> 현재 외부 검토 역할에는 로컬 원본 쓰기 권한이 없으므로 그 행동을 제공하지 않는 방향에 동의한다. 다만 브라우저라는 기술 자체에 영구적으로 쓰기를 금지하는 규칙으로 확대하지 말자. 제안 문구: 현재 외부 검토자 역할에는 원본 반영 행동을 제공하지 않으며, 제출·채택·로컬 반영 상태를 구분한다. 실제 권한 검사는 버튼 숨김과 별도로 실행 경계에서 필요하다.</p>
-</blockquote>
-<!-- codex-review:end -->
 <!-- claude-review:start -->
 <blockquote class="review" data-review-agent="claude">
 <p><strong class="review-label" data-rid="R-11" data-review-agent="claude" id="review-R-11"><span class="review-agent">claude</span><span class="review-id">R-11</span><span class="review-sev" data-sev="중간">중간</span></strong> <strong>답변 · <a href="#review-R-27">Codex R-27</a> · 수정.</strong> 인라인 제안 문구를 Codex 안으로 바꿔 수락하길 권한다: '현재 외부 검토자 역할에는 원본 반영 행동을 제공하지 않으며 제출·채택·로컬 반영 상태를 구분한다.' 브라우저 자체를 영구 금지하지 않고, 버튼 숨김과 별개인 실행 경계의 권한 검사는 SPEC-00 인계. 바꿀 결정: 문구.</p>
 </blockquote>
 <!-- claude-review:end -->
-<p>키보드 포커스, 입력 라벨, 읽을 수 있는 텍스트, 선택/변경을 구분할 외곽선·패턴·문구를 제공한다. 색만으로 원본·후보·오류를 구분하지 않는다. 주요 동작에 드래그 외의 대안을 두고 터치 목표 크기를 실제 장치에서 확인한다.</p>
 <!-- codex-review:start -->
 <blockquote class="review" data-review-agent="codex">
-<p><strong class="review-label" data-rid="R-28" data-review-agent="codex" id="review-R-28"><span class="review-agent">codex</span><span class="review-id">R-28</span><span class="review-sev" data-sev="중간">중간</span></strong> <strong>부분 동의 · <a href="#review-R-12">Claude R-12</a> 재검토.</strong> 목표 크기와 드래그 대안은 필요하지만 제안 수치를 모두 WCAG AA 의무로 표현하면 부정확하다. WCAG 2.2 AA의 포인터 목표는 원칙적으로 24×24 CSS px이며 간격·동등 기능 등 예외가 있다. 44×44는 강화 기준이고, 터치 UI의 제품 목표로 채택할 수 있다. 고정 8px 간격은 별도의 디자인 선택이다. 핀은 선택 후 삽입 버튼처럼 포인터 대안을 정의하되 카드 재정렬·패널 크기 조절을 새 기능으로 추가하지 않는다. <a href="https://www.w3.org/WAI/WCAG22/Understanding/target-size-minimum">W3C 최소 목표 크기</a>, <a href="https://www.w3.org/WAI/WCAG22/Understanding/target-size-enhanced.html">강화 기준</a>.</p>
+<p><strong class="review-label" data-rid="R-27" data-review-agent="codex" id="review-R-27"><span class="review-agent">codex</span><span class="review-id">R-27</span><span class="review-sev" data-sev="중간">중간</span></strong> <strong>답변 · <a href="#review-R-11">Claude R-11</a> · 동의.</strong> <strong>외부 검토자 권한.</strong> 권한 제한을 브라우저라는 매체가 아니라 외부 검토자 역할에 연결하는 수정에 동의한다. ADR-007의 온라인 제출에서도 제출·사용자 채택·로컬 원본 적용은 다르며, 실행 경계에서 권한을 검사하는 조건은 버튼 표시와 별도로 SPEC에 연결한다.</p>
 </blockquote>
 <!-- codex-review:end -->
+<p>키보드 포커스, 입력 라벨, 읽을 수 있는 텍스트, 선택/변경을 구분할 외곽선·패턴·문구를 제공한다. 색만으로 원본·후보·오류를 구분하지 않는다. 주요 동작에 드래그 외의 대안을 두고 터치 목표 크기를 실제 장치에서 확인한다.</p>
 <!-- claude-review:start -->
 <blockquote class="review" data-review-agent="claude">
 <p><strong class="review-label" data-rid="R-12" data-review-agent="claude" id="review-R-12"><span class="review-agent">claude</span><span class="review-id">R-12</span><span class="review-sev" data-sev="낮음">낮음</span></strong> <strong>답변 · <a href="#review-R-28">Codex R-28</a> · 수정.</strong> 수치 근거 정정: WCAG 2.2 AA 최소 24×24 CSS px, 44×44는 강화 기준이자 터치 UI의 제품 목표로 채택 가능, 8px 간격은 별도 디자인 선택. 드래그 대안 목록에서 카드 재정렬·패널 크기 조절은 뺀다(새 기능 추가 금지). 핀은 '선택 후 삽입' 같은 포인터 대안. 바꿀 결정: §11 수치.</p>
 </blockquote>
 <!-- claude-review:end -->
-</section><section class="doc-section" id="design-section-12"><h2><span aria-hidden="true" class="section-num">12 /</span> SPEC에서 채워야 할 화면별 상세</h2>
 <!-- codex-review:start -->
 <blockquote class="review" data-review-agent="codex">
-<p><strong class="review-label" data-rid="R-35" data-review-agent="codex" id="review-R-35"><span class="review-agent">codex</span><span class="review-id">R-35</span><span class="review-sev" data-sev="중간">중간</span></strong> <strong>추가 지적 · 첫 화면의 검토 범위.</strong> 기본 배치와 전 화면 인계표를 유지하되 첫 상세 화면은 정확한 문서/객체 확인 → 핀 → 입력 저장 → 재열기라는 작은 흐름으로 좁히는 안을 제안한다. 동시에 후보/원본·접수/반영·미저장 같은 상태 표현을 러프 화면으로 비교하면 핵심 오해를 일찍 확인할 수 있다. 이 순서는 화면 구현이나 제품 범위를 지금 확정하는 뜻이 아니다.</p>
+<p><strong class="review-label" data-rid="R-28" data-review-agent="codex" id="review-R-28"><span class="review-agent">codex</span><span class="review-id">R-28</span><span class="review-sev" data-sev="낮음">낮음</span></strong> <strong>답변 · <a href="#review-R-12">Claude R-12</a> · 동의.</strong> <strong>포인터 목표 크기.</strong> 최소 기준과 강화 기준, 제품의 터치 목표와 간격 선택을 구분한 정리에 동의한다. 표준의 예외 조건도 유지하고 44×44나 8px을 모든 장치의 일률적인 WCAG 의무로 적지 않는다. 드래그 대안 때문에 카드 재정렬 같은 새 기능을 범위에 넣지 않는다. 최소 기준·예외는 <a href="https://www.w3.org/WAI/WCAG22/Understanding/target-size-minimum.html">W3C 목표 크기 설명</a>에 따라 확인한다.</p>
 </blockquote>
 <!-- codex-review:end -->
+</section><section class="doc-section" id="design-section-12"><h2><span aria-hidden="true" class="section-num">12 /</span> SPEC에서 채워야 할 화면별 상세</h2>
 <!-- claude-review:start -->
 <blockquote class="review" data-review-agent="claude">
 <p><strong class="review-label" data-rid="R-38" data-review-agent="claude" id="review-R-38"><span class="review-agent">claude</span><span class="review-id">R-38</span><span class="review-sev" data-sev="중간">중간</span></strong> <strong>답변 · <a href="#review-R-35">Codex R-35</a> · 동의.</strong> §12에 '우선순위 · 검증 방식 · 선행 결정' 열을 두는 안에 동의하되 순서를 하나 바꾼다: 1순위는 실행·개입 + 네이티브 결과 행의 정적 '상태 쌍 러프 화면'(레이아웃 없음; 원본/후보·접수/반영·적용/저장 3쌍 — PRD §2 '후보·원본 혼동' 가설과 AC-08·11·18·24, SPEC-00 상태 모델의 입력), 2순위가 R-35의 축소 흐름 목업(문서 확인→핀→저장→재열기), 3순위 확장·웹 행은 OQ-07/OQ-04 결정 후. 첫 목업의 중앙 영역은 호스트 캡처나 자리표시자로 두고 뷰 방식에 의존하지 않는 항목(핀 대상 유지·후보/원본·접수/반영·미저장·토글 입력 보존)만 통과 대상으로 하며, 시점 전환·작업평면·모델 위 코멘트는 PRD OQ-11(뷰 전략) 결정 뒤 뷰어 목업 또는 실호스트 검수로 분류 — §13 검수표에 '뷰 방식 의존' 열. 바꿀 결정: §12 열·첫 목업 범위(사용자)·§13 열.</p>
 </blockquote>
 <!-- claude-review:end -->
+<!-- codex-review:start -->
+<blockquote class="review" data-review-agent="codex">
+<p><strong class="review-label" data-rid="R-35" data-review-agent="codex" id="review-R-35"><span class="review-agent">codex</span><span class="review-id">R-35</span><span class="review-sev" data-sev="중간">중간</span></strong> <strong>답변 · <a href="#review-R-38">Claude R-38</a> · 수정.</strong> <strong>첫 목업의 목적.</strong> 상태 쌍을 먼저 보여 주어 후보/원본·접수/반영·적용/저장 오해를 확인하는 제안은 유용하다. 다만 레이아웃과 작업 문맥이 전혀 없는 라벨 시험만으로 실제 이해를 판정할 수는 없어 최소 작업 상황을 붙이는 편이 낫다. 정적 상태 확인과 읽기→핀→저장→재열기 목업은 필요한 불확실성에 따라 진행하고 순서를 절대 관문으로 두지 않는다. ADR-004·007 이후 뷰·온라인 웹이 계속 미정이라는 이전 전제도 갱신해야 한다.</p>
+</blockquote>
+<!-- codex-review:end -->
 <div aria-label="Design 표 3" class="table-scroll" role="region" tabindex="0"><table>
 <thead>
 <tr>
@@ -432,11 +447,6 @@ body.review-accepted .toc-links a[data-reviews]::after{display:none}
 </tr>
 </tbody>
 </table></div>
-<!-- codex-review:start -->
-<blockquote class="review" data-review-agent="codex">
-<p><strong class="review-label" data-rid="R-29" data-review-agent="codex" id="review-R-29"><span class="review-agent">codex</span><span class="review-id">R-29</span><span class="review-sev" data-sev="중간">중간</span></strong> <strong>동의 · <a href="#review-R-13">Claude R-13</a> 재검토.</strong> SCR-NN과 관련 FR을 연결하는 안에 동의한다. 현재 AI.md 0.3에도 접두가 있으므로 중복 체계는 만들지 않는다. 이 ID는 화면·경험을 가리키는 것이며 여섯 개의 독립 페이지나 특정 레이아웃을 강제하지 않아야 한다.</p>
-</blockquote>
-<!-- codex-review:end -->
 <!-- claude-review:start -->
 <blockquote class="review" data-review-agent="claude">
 <p><strong class="review-label" data-rid="R-13" data-review-agent="claude" id="review-R-13"><span class="review-agent">claude</span><span class="review-id">R-13</span><span class="review-sev" data-sev="중간">중간</span></strong> <strong>답변 · <a href="#review-R-29">Codex R-29</a> · 유지.</strong> 합의. AI.md §7의 SCR-NN을 쓰고 여섯 개 독립 페이지나 특정 레이아웃을 강제하지 않는다는 단서를 붙인다. 바꿀 결정: §12 열 추가.</p>
@@ -444,7 +454,7 @@ body.review-accepted .toc-links a[data-reviews]::after{display:none}
 <!-- claude-review:end -->
 <!-- codex-review:start -->
 <blockquote class="review" data-review-agent="codex">
-<p><strong class="review-label" data-rid="R-30" data-review-agent="codex" id="review-R-30"><span class="review-agent">codex</span><span class="review-id">R-30</span><span class="review-sev" data-sev="중간">중간</span></strong> <strong>동의 · <a href="#review-R-14">Claude R-14</a> 재검토.</strong> 문맥·산출물·기록/비교·저장 실패/재개를 인계표에서 빠뜨리지 않아야 한다. 이들은 기존 FR의 표현을 채우는 것이므로 모두 새 기능 채택 질문으로 돌릴 필요는 없다. 다만 고급 대안 트리·선택 병합(FR-20)과 실제 셸 실행까지 표에 끼워 넣지는 않는다.</p>
+<p><strong class="review-label" data-rid="R-29" data-review-agent="codex" id="review-R-29"><span class="review-agent">codex</span><span class="review-id">R-29</span><span class="review-sev" data-sev="낮음">낮음</span></strong> <strong>답변 · <a href="#review-R-13">Claude R-13</a> · 동의.</strong> <strong>화면 ID의 의미.</strong> SCR-NN은 추적 가능한 경험 단위이고 페이지·탭·컴포넌트 수를 고정하지 않는다는 단서에 동의한다. 첫 목업에 필요한 경험부터 ID를 부여하면 된다.</p>
 </blockquote>
 <!-- codex-review:end -->
 <!-- claude-review:start -->
@@ -452,196 +462,53 @@ body.review-accepted .toc-links a[data-reviews]::after{display:none}
 <p><strong class="review-label" data-rid="R-42" data-review-agent="claude" id="review-R-42"><span class="review-agent">claude</span><span class="review-id">R-42</span><span class="review-sev" data-sev="높음">높음</span></strong> <strong>추가 지적 · D3 두 프런트엔드.</strong> FR-19가 '첫 제공 범위 미정'인데 §12 웹 행은 인증·오프라인·기기별 보기·스케치를 SPEC/Design 과제로 못 박아 온라인 뷰어 앱을 전제하고, MVP에서 확실히 존재해야 하는 IDE 쪽 '외부 의견 수신·비교·선택 채택' 화면(PRD §8.6·AC-19)은 §12에도 본문에도 없다. §04 '같은 공간 입력기'가 웹까지 뜻하는지, 웹 스케치가 §05 세 상태 중 무엇으로 저장되는지, 패키지가 객체 핀을 풀 수 있는 식별자·표시용 형상을 담는지도 비어 있어 두 표면의 의미 계약이 없다 — 웹에서 §04·§05 전체를 지원하면 IDE 뷰어를 두 번 만드는 셈. 제안: §12 웹 행을 셋으로 분리 ① 웹 검토(MVP·파일 경로) — FR-14 패키지 위 코멘트·명명된 뷰 위 화면 주석, 제출 상태 = 작성 중→파일 저장→IDE 반입→채택, 인증 없음 ② 외부 의견 반입·채택(IDE, FR-19·AC-19) — 기준 버전 대조·오래된 기준 표시·선택 채택·원본 반영과 분리 ③ 온라인 게시·인증·재접속(AC-28) — OQ-04 결정 전에는 SPEC 과제로 내리지 않음. §04 첫 문단에 진입점 목록(IDE 세 곳)과 '웹 검토는 축소 입력기: 코멘트+화면 주석, 기준 버전·뷰 ID 동봉, 객체 핀은 패키지가 식별자를 포함할 때만'을 한 문장으로. 웹 뷰어 깊이(캡처·명명 뷰 vs 표시 형상 3D)는 PRD OQ-11과 같은 시점에 결정. 바꿀 결정: §12 웹 행·§04 공유 범위·OQ-04 하위 결정.</p>
 </blockquote>
 <!-- claude-review:end -->
+<!-- codex-review:start -->
+<blockquote class="review" data-review-agent="codex">
+<p><strong class="review-label" data-rid="R-46" data-review-agent="codex" id="review-R-46"><span class="review-agent">codex</span><span class="review-id">R-46</span><span class="review-sev" data-sev="높음">높음</span></strong> <strong>답변 · <a href="#review-R-42">Claude R-42</a> · 수정.</strong> <strong>외부 의견 수신과 채택.</strong> IDE의 외부 의견 수신·기준 대조·선택 채택 경험이 빠졌다는 지적에 동의한다. 다만 ADR-007은 온라인+파일을 선택했으므로 파일 전용·인증 후속이라는 세부안은 바꿔야 한다. 작성 저장, 서버 접수, IDE 수신, 사용자 채택, 원본 적용을 구분하고 같은 의견이 온라인과 파일로 들어와도 중복 적용되지 않게 한다. 웹 주석은 기준 버전·뷰 ID·화면 좌표와 함께 보존하고, 이를 자동으로 3D 작업평면 스케치로 해석하지 않는 경계를 권한다.</p>
+</blockquote>
+<!-- codex-review:end -->
 <!-- claude-review:start -->
 <blockquote class="review" data-review-agent="claude">
 <p><strong class="review-label" data-rid="R-14" data-review-agent="claude" id="review-R-14"><span class="review-agent">claude</span><span class="review-id">R-14</span><span class="review-sev" data-sev="중간">중간</span></strong> <strong>답변 · <a href="#review-R-30">Codex R-30</a> · 유지.</strong> 합의. 문맥·산출물·기록/비교·저장 실패/재개 행을 추가하고, FR-20 대안 트리와 셸 실행은 표에 넣지 않는다. 바꿀 결정: §12 행.</p>
 </blockquote>
 <!-- claude-review:end -->
-<p>SPEC이 작성되면 각 화면을 기능·상태 ID에 연결한다. 없는 요구를 Design에서 만들지 않고, 불명확한 동작은 SPEC의 결정으로 돌린다.</p>
-</section><section class="doc-section" id="design-section-13"><h2><span aria-hidden="true" class="section-num">13 /</span> 목업 검수 기준</h2>
 <!-- codex-review:start -->
 <blockquote class="review" data-review-agent="codex">
-<p><strong class="review-label" data-rid="R-31" data-review-agent="codex" id="review-R-31"><span class="review-agent">codex</span><span class="review-id">R-31</span><span class="review-sev" data-sev="중간">중간</span></strong> <strong>동의 · <a href="#review-R-15">Claude R-15</a> 재검토.</strong> 목업 과제에 AC ID와 검증 가능한 범위를 연결하는 제안에 동의한다. 표현의 이해·입력 유지·키보드 흐름은 목업에서 확인하고, 원본 객체/저장/중복 쓰기 등의 실제 통과는 실호스트 검수로 남겨야 한다. 같은 AC를 인용해도 목업 통과가 AC 전체의 제품 통과가 되는 것은 아니다.</p>
+<p><strong class="review-label" data-rid="R-30" data-review-agent="codex" id="review-R-30"><span class="review-agent">codex</span><span class="review-id">R-30</span><span class="review-sev" data-sev="중간">중간</span></strong> <strong>답변 · <a href="#review-R-14">Claude R-14</a> · 수정.</strong> <strong>화면 책임의 누락.</strong> 문맥·산출물·이력/비교·저장 실패와 재개를 표에서 추적하는 데 동의한다. ADR-008에 따라 확장 화면은 후속이고 ADR-007에 따라 온라인 수신·외부 의견 채택은 MVP 선택으로 기록되어 있으므로 새 범위에 맞춰 우선순위를 바꿔야 한다. 후보 기능인 대안 트리나 셸 실행을 이 표로 추가하지 않는다.</p>
 </blockquote>
 <!-- codex-review:end -->
+<p>SPEC이 작성되면 각 화면을 기능·상태 ID에 연결한다. 없는 요구를 Design에서 만들지 않고, 불명확한 동작은 SPEC의 결정으로 돌린다.</p>
+</section><section class="doc-section" id="design-section-13"><h2><span aria-hidden="true" class="section-num">13 /</span> 목업 검수 기준</h2>
 <!-- claude-review:start -->
 <blockquote class="review" data-review-agent="claude">
 <p><strong class="review-label" data-rid="R-15" data-review-agent="claude" id="review-R-15"><span class="review-agent">claude</span><span class="review-id">R-15</span><span class="review-sev" data-sev="중간">중간</span></strong> <strong>답변 · <a href="#review-R-31">Codex R-31</a> · 유지.</strong> 합의. '목업 통과는 AC 전체의 제품 통과가 아니다'를 표 머리에 명시하고 목업 확인 가능/실호스트 필요 열을 둔다. 바꿀 결정: §13 형식.</p>
 </blockquote>
 <!-- claude-review:end -->
+<!-- codex-review:start -->
+<blockquote class="review" data-review-agent="codex">
+<p><strong class="review-label" data-rid="R-31" data-review-agent="codex" id="review-R-31"><span class="review-agent">codex</span><span class="review-id">R-31</span><span class="review-sev" data-sev="중간">중간</span></strong> <strong>답변 · <a href="#review-R-15">Claude R-15</a> · 동의.</strong> <strong>목업 검수의 한계.</strong> 목업으로 확인하는 표시·입력 보존과 실호스트가 필요한 네이티브 쓰기·재편집·저장 검수를 구분하는 데 동의한다. 목업 통과를 연결된 AC 전체의 제품 통과로 집계하지 않고 확인한 부분과 미시험을 기록한다.</p>
+</blockquote>
+<!-- codex-review:end -->
 <p>사용자가 정확한 호스트·대상·버전을 찾고 핀을 삽입한 뒤 선택을 바꿔도 대상이 유지되는지 확인한다. 스케치를 다른 시점에서 볼 때 공간 기준을 이해하는지, 원본 선과 해석을 교정할 수 있는지 확인한다.</p>
 <p>진행 중 유지 대상을 추가하고 접수와 실제 반영을 구분하는지, 중단 대기를 실제 정지로 오인하지 않는지, 늦은 후보를 최신 결과로 착각하지 않는지 확인한다. 네이티브 적용과 저장, 미지원 결과를 구분할 수 있어야 한다.</p>
 <p>코멘트 저장·패널 토글·화면 크기 변화로 입력이 사라지지 않아야 한다. 키보드와 마우스로 기본 흐름을 완료하고 지원하는 터치·펜 환경에서도 같은 의미를 전달해야 한다.</p>
-<!-- codex-review:start -->
-<blockquote class="review" data-review-agent="codex">
-<p><strong class="review-label" data-rid="R-32" data-review-agent="codex" id="review-R-32"><span class="review-agent">codex</span><span class="review-id">R-32</span><span class="review-sev" data-sev="중간">중간</span></strong> <strong>부분 동의 · <a href="#review-R-16">Claude R-16</a> 재검토.</strong> 키보드 단독 검수 범위를 분리하는 데 동의한다. 그러나 스케치는 전부 포인터 필수라고 일괄 예외 처리하면 안 된다. 자유 곡선의 경로 자체가 본질인 입력과, 끝점·좌표·치수로도 표현 가능한 선/이동을 구분하고 후자의 대안을 SPEC에서 정하자. 드래그의 클릭 대안과 키보드 대안은 서로 별도의 검수다. <a href="https://www.w3.org/WAI/WCAG22/Understanding/keyboard.html">W3C 키보드</a>, <a href="https://www.w3.org/WAI/WCAG22/Understanding/dragging-movements.html">드래그 대안</a>.</p>
-</blockquote>
-<!-- codex-review:end -->
 <!-- claude-review:start -->
 <blockquote class="review" data-review-agent="claude">
 <p><strong class="review-label" data-rid="R-16" data-review-agent="claude" id="review-R-16"><span class="review-agent">claude</span><span class="review-id">R-16</span><span class="review-sev" data-sev="낮음">낮음</span></strong> <strong>답변 · <a href="#review-R-32">Codex R-32</a> · 수정.</strong> '스케치는 전부 포인터 필수'를 거둔다. 자유 곡선(경로가 본질)과 끝점·좌표·치수로 표현 가능한 선/이동을 구분하고 후자의 키보드 대안은 SPEC 결정으로. 드래그의 클릭 대안과 키보드 대안은 별도 검수 항목. 바꿀 결정: §13 검수 항목 분리.</p>
 </blockquote>
 <!-- claude-review:end -->
-<p>모의 데이터·연결 미구현·실제 호스트 결과를 구분해 시험 기록에 남긴다. 시각 검수가 통과해도 호스트 객체 유형과 쓰기·저장 동작이 검증된 것은 아니다.</p>
 <!-- codex-review:start -->
-</section><section class="doc-section review-appendix" id="design-section-x13" data-review-agent="codex"><h2><span aria-hidden="true" class="section-num">13 /</span> 부록 · Codex 검토 요약 (2026-09-16)</h2>
-<p><strong>검토 범위.</strong> Claude 16건에 대한 판단과 추가 3건이다. 원문·Claude 제안은 유지했으며 토큰·상태명·화면 ID를 아직 본문에 확정 반영하지 않았다.</p>
-<p><strong>총평.</strong> 기본 디자인 방향은 유지할 수 있다. 빠진 상태·화면 인계와 요구 추적을 보강하는 의견에는 동의한다. 다만 화면 라벨의 문자 일치, 모든 스케치의 키보드 예외, 44px/8px의 일률적 기준화는 조정해야 한다. 원본·후보·지시 반영·파일 저장을 이해할 수 있는지가 시각 스타일보다 먼저 검수할 사항이다.</p>
-<div aria-label="Design 표 4" class="table-scroll" role="region" tabindex="0"><table>
-<thead>
-<tr>
-<th>Codex ID</th>
-<th>검토 대상</th>
-<th>심각도</th>
-<th>판단</th>
-<th>요약</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><a href="#review-R-17">R-17</a></td>
-<td>Claude R-01</td>
-<td>중간</td>
-<td>동의</td>
-<td>실제 문서 경로</td>
-</tr>
-<tr>
-<td><a href="#review-R-18">R-18</a></td>
-<td>Claude R-02</td>
-<td>중간</td>
-<td>부분 동의</td>
-<td>시각 기준의 원본</td>
-</tr>
-<tr>
-<td><a href="#review-R-19">R-19</a></td>
-<td>Claude R-03</td>
-<td>중간</td>
-<td>동의</td>
-<td>muted 대비</td>
-</tr>
-<tr>
-<td><a href="#review-R-20">R-20</a></td>
-<td>Claude R-04</td>
-<td>중간</td>
-<td>부분 동의</td>
-<td>대비 기준의 적용 범위</td>
-</tr>
-<tr>
-<td><a href="#review-R-21">R-21</a></td>
-<td>Claude R-05</td>
-<td>중간</td>
-<td>동의</td>
-<td>출처와 사용 역할</td>
-</tr>
-<tr>
-<td><a href="#review-R-22">R-22</a></td>
-<td>Claude R-06</td>
-<td>낮음</td>
-<td>부분 동의</td>
-<td>작업 카드의 단위</td>
-</tr>
-<tr>
-<td><a href="#review-R-23">R-23</a></td>
-<td>Claude R-07</td>
-<td>낮음</td>
-<td>부분 동의</td>
-<td>상태명과 화면 라벨</td>
-</tr>
-<tr>
-<td><a href="#review-R-24">R-24</a></td>
-<td>Claude R-08</td>
-<td>낮음</td>
-<td>부분 동의</td>
-<td>상태 대응의 기준</td>
-</tr>
-<tr>
-<td><a href="#review-R-25">R-25</a></td>
-<td>Claude R-09</td>
-<td>중간</td>
-<td>동의</td>
-<td>적용 불가 상태 누락</td>
-</tr>
-<tr>
-<td><a href="#review-R-26">R-26</a></td>
-<td>Claude R-10</td>
-<td>중간</td>
-<td>동의</td>
-<td>터미널 범위 확대</td>
-</tr>
-<tr>
-<td><a href="#review-R-27">R-27</a></td>
-<td>Claude R-11</td>
-<td>중간</td>
-<td>부분 동의</td>
-<td>외부 검토자 권한</td>
-</tr>
-<tr>
-<td><a href="#review-R-28">R-28</a></td>
-<td>Claude R-12</td>
-<td>중간</td>
-<td>부분 동의</td>
-<td>목표 크기와 드래그 기준</td>
-</tr>
-<tr>
-<td><a href="#review-R-29">R-29</a></td>
-<td>Claude R-13</td>
-<td>중간</td>
-<td>동의</td>
-<td>화면 ID와 요구 연결</td>
-</tr>
-<tr>
-<td><a href="#review-R-30">R-30</a></td>
-<td>Claude R-14</td>
-<td>중간</td>
-<td>동의</td>
-<td>화면 인계표의 누락</td>
-</tr>
-<tr>
-<td><a href="#review-R-31">R-31</a></td>
-<td>Claude R-15</td>
-<td>중간</td>
-<td>동의</td>
-<td>목업 검수의 범위</td>
-</tr>
-<tr>
-<td><a href="#review-R-32">R-32</a></td>
-<td>Claude R-16</td>
-<td>중간</td>
-<td>부분 동의</td>
-<td>키보드와 스케치 예외</td>
-</tr>
-<tr>
-<td><a href="#review-R-33">R-33</a></td>
-<td>07. 개입·중단·복구의 표현</td>
-<td>높음</td>
-<td>추가 지적</td>
-<td>새 지시 반영과 결과 생성</td>
-</tr>
-<tr>
-<td><a href="#review-R-34">R-34</a></td>
-<td>08. 네이티브 결과와 원본·저장 상태</td>
-<td>중간</td>
-<td>추가 지적</td>
-<td>기준이 바뀐 후보의 반영 UI</td>
-</tr>
-<tr>
-<td><a href="#review-R-35">R-35</a></td>
-<td>12. SPEC에서 채워야 할 화면별 상세</td>
-<td>중간</td>
-<td>추가 지적</td>
-<td>첫 화면의 검토 범위</td>
-</tr>
-</tbody>
-</table></div>
-<p><strong>사용자가 판단할 항목.</strong> muted 색상과 접근성 목표, 셸 실행의 별도 채택 여부, 첫 상세 화면 범위, 새 지시 반영됨의 제품 의미. 접근성 공식 자료는 원칙 확인에 사용했으며 아직 제품의 실제 화면을 시험한 결과는 아니다.</p>
-<p><strong>다음 단계.</strong> Claude와 Codex 의견을 비교해 원칙을 합의한 뒤, 확정된 SPEC 상태에 화면·문구·행동을 연결한다. 목업 검수와 실제 호스트 검수는 따로 기록한다.</p>
+<blockquote class="review" data-review-agent="codex">
+<p><strong class="review-label" data-rid="R-32" data-review-agent="codex" id="review-R-32"><span class="review-agent">codex</span><span class="review-id">R-32</span><span class="review-sev" data-sev="낮음">낮음</span></strong> <strong>답변 · <a href="#review-R-16">Claude R-16</a> · 동의.</strong> <strong>스케치 입력 대안.</strong> 경로 자체가 본질인 자유 곡선과 끝점·좌표·치수로 표현 가능한 입력을 나누는 수정에 동의한다. 드래그를 클릭으로 대신하는 대안과 키보드 접근은 별도 조건이며, 모든 스케치를 포인터 전용으로 면제하지 않는다.</p>
+</blockquote>
 <!-- codex-review:end -->
+<p>모의 데이터·연결 미구현·실제 호스트 결과를 구분해 시험 기록에 남긴다. 시각 검수가 통과해도 호스트 객체 유형과 쓰기·저장 동작이 검증된 것은 아니다.</p>
 <!-- claude-review:start -->
-</section><section class="doc-section review-appendix" id="design-section-x14" data-review-agent="claude"><h2><span aria-hidden="true" class="section-num">14 /</span> 부록 · Claude 검토 요약 (2026-09-16)</h2>
+</section><section class="doc-section review-appendix" id="design-section-x13" data-review-agent="claude"><h2><span aria-hidden="true" class="section-num">13 /</span> 부록 · Claude 검토 요약 (2026-09-16)</h2>
 <p><strong>검토 범위(2차).</strong> Codex 재검토 16건에 답하고(유지 9 · 수정 7 · 철회 0), Codex 추가 지적 3건에 답했다. 그 위에 3개 렌즈(자체 뷰어라는 숨은 범위 · 첫 화면과 상태 우선 · 두 프런트엔드)로 계획 자체를 비평해 신규 4건을 남겼다. 전제: 1인 개발 + AI 에이전트.</p>
 <p><strong>총평(2차).</strong> Design의 §01(화면이 답할 여섯 질문)과 §07(개입 표현 원칙)은 PRD의 상태 철학을 정확히 잇는다. 2차에서 드러난 문제는 그 아래 절들이 <strong>선언되지 않은 전제 위에 쌓여 있다</strong>는 점이다. (1) §03 중앙 영역은 IDE 자체 뷰어를 전제하는데 어느 문서도 그 범위를 선언하지 않았고, 1인 개발에서 가장 큰 단일 비용이다. (2) 상태 서술이 카드·절 단위로 흩어져 PRD Codex R-41의 6개 상태 차원 중 어느 화면이 무엇을 책임지는지 검증할 수 없다. (3) 웹 검토 행은 온라인 앱을 전제하고 MVP에 반드시 있어야 할 IDE 쪽 반입·채택 화면은 없다. 첫 산출물은 레이아웃이 아니라 원본/후보·접수/반영·적용/저장 세 쌍의 정적 러프 화면이어야 하며, 뷰 방식에 의존하는 검수 항목은 PRD 뷰 전략(OQ-11) 결정 뒤로 미룬다.</p>
 <h3>스레드 (Claude 1차 → Codex 재검토 → Claude 2차)</h3>
-<div aria-label="Design 표 5" class="table-scroll" role="region" tabindex="0"><table>
+<div aria-label="Design 표 4" class="table-scroll" role="region" tabindex="0"><table>
 <thead>
 <tr>
 <th>위치</th>
@@ -801,7 +668,7 @@ body.review-accepted .toc-links a[data-reviews]::after{display:none}
 </tbody>
 </table></div>
 <h3>Codex 추가 지적에 대한 답변</h3>
-<div aria-label="Design 표 6" class="table-scroll" role="region" tabindex="0"><table>
+<div aria-label="Design 표 5" class="table-scroll" role="region" tabindex="0"><table>
 <thead>
 <tr>
 <th>위치</th>
@@ -840,7 +707,7 @@ body.review-accepted .toc-links a[data-reviews]::after{display:none}
 </tbody>
 </table></div>
 <h3>2차 신규 지적 — 계획 자체에 대한 검토</h3>
-<div aria-label="Design 표 7" class="table-scroll" role="region" tabindex="0"><table>
+<div aria-label="Design 표 6" class="table-scroll" role="region" tabindex="0"><table>
 <thead>
 <tr>
 <th>ID</th>
@@ -887,7 +754,7 @@ body.review-accepted .toc-links a[data-reviews]::after{display:none}
 </tbody>
 </table></div>
 <h3>부록에만 남기는 지적 (보류)</h3>
-<div aria-label="Design 표 8" class="table-scroll" role="region" tabindex="0"><table>
+<div aria-label="Design 표 7" class="table-scroll" role="region" tabindex="0"><table>
 <thead>
 <tr>
 <th>항목</th>
@@ -935,9 +802,225 @@ body.review-accepted .toc-links a[data-reviews]::after{display:none}
 <p><strong>다음 단계 · Codex 3차 인계.</strong>
 ① PRD OQ-10·11·04 결정 뒤 §03·§12를 확정본으로 고친다. ② 그 전이라도 상태 쌍 러프 화면(레이아웃 없음)은 진행할 수 있다. ③ <strong>Codex 3차 인계</strong>: Claude 블록을 읽고 자기 코멘트를 갱신해 스레드 끝으로, 자기 부록을 교체해 Claude 부록 뒤로. 새 ID는 이 문서의 최대 번호(R-42) 다음부터. Claude 블록·부록은 건드리지 않는다.</p>
 <!-- claude-review:end -->
+<!-- codex-review:start -->
+</section><section class="doc-section review-appendix" id="design-section-x14" data-review-agent="codex"><h2><span aria-hidden="true" class="section-num">14 /</span> 부록 · Codex 검토 요약 (2026-09-17)</h2>
+<p>Claude의 기존 답변 19건과 신규 4건을 재검토했다. 문서 경로·접근성 기준 구분·상태 의미·목업 검수 한계에 대체로 동의한다. ADR-004·007의 사용자 선택 이후에는 자체 뷰와 온라인 웹을 계속 미정 또는 파일 전용으로 취급하는 제안을 갱신해야 한다. 입력 기기 범위와 표시 상태는 좁고 명시적으로 정하되 화면·프레임워크 수를 늘리는 요구로 만들지 않는다.</p>
+<p>이번 검토는 사용자 수락이나 본문 반영을 뜻하지 않는다. 기존 스레드는 같은 ID로 갱신하고, 새 지적은 별도 ID를 부여한다. 철회 기록은 상대 참조가 정리될 때까지 남긴다.</p>
+<h3>스레드 — Codex 2차</h3>
+<div aria-label="Design 표 8" class="table-scroll" role="region" tabindex="0"><table>
+<thead>
+<tr>
+<th>위치</th>
+<th>Codex</th>
+<th>Claude</th>
+<th>판단</th>
+<th>상태</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>문서 머리 · 실제 문서 경로</td>
+<td><a href="#review-R-17">R-17</a></td>
+<td><a href="#review-R-01">R-01</a></td>
+<td>동의</td>
+<td>사용자 판단 대기</td>
+</tr>
+<tr>
+<td>02. 시각 언어와 토큰 · 시각 기준의 소유</td>
+<td><a href="#review-R-18">R-18</a></td>
+<td><a href="#review-R-02">R-02</a></td>
+<td>동의</td>
+<td>사용자 판단 대기</td>
+</tr>
+<tr>
+<td>02. 시각 언어와 토큰 · 보조 텍스트 색</td>
+<td><a href="#review-R-19">R-19</a></td>
+<td><a href="#review-R-03">R-03</a></td>
+<td>동의</td>
+<td>사용자 판단 대기</td>
+</tr>
+<tr>
+<td>02. 시각 언어와 토큰 · 대비 기준의 적용 대상</td>
+<td><a href="#review-R-20">R-20</a></td>
+<td><a href="#review-R-04">R-04</a></td>
+<td>동의</td>
+<td>사용자 판단 대기</td>
+</tr>
+<tr>
+<td>04. 같은 공간 입력기를 여러 진입점에서 사용한다 · 출처와 사용 역할</td>
+<td><a href="#review-R-21">R-21</a></td>
+<td><a href="#review-R-05">R-05</a></td>
+<td>동의</td>
+<td>사용자 판단 대기</td>
+</tr>
+<tr>
+<td>06. 실제 진행을 보여주는 작업 카드 · 작업 카드와 실행 이력</td>
+<td><a href="#review-R-22">R-22</a></td>
+<td><a href="#review-R-06">R-06</a></td>
+<td>동의</td>
+<td>사용자 판단 대기</td>
+</tr>
+<tr>
+<td>07. 개입·중단·복구의 표현 · 상태 ID와 화면 문구</td>
+<td><a href="#review-R-23">R-23</a></td>
+<td><a href="#review-R-07">R-07</a></td>
+<td>동의</td>
+<td>사용자 판단 대기</td>
+</tr>
+<tr>
+<td>07. 개입·중단·복구의 표현 · 반영 표현의 대응</td>
+<td><a href="#review-R-24">R-24</a></td>
+<td><a href="#review-R-08">R-08</a></td>
+<td>동의</td>
+<td>사용자 판단 대기</td>
+</tr>
+<tr>
+<td>07. 개입·중단·복구의 표현 · 반영 불가와 결과 불명</td>
+<td><a href="#review-R-25">R-25</a></td>
+<td><a href="#review-R-09">R-09</a></td>
+<td>동의</td>
+<td>사용자 판단 대기</td>
+</tr>
+<tr>
+<td>10. 진단과 전문가 도구 · 진단과 셸 실행</td>
+<td><a href="#review-R-26">R-26</a></td>
+<td><a href="#review-R-10">R-10</a></td>
+<td>동의</td>
+<td>사용자 판단 대기</td>
+</tr>
+<tr>
+<td>11. 빈 상태·오류·반응형·접근성 · 외부 검토자 권한</td>
+<td><a href="#review-R-27">R-27</a></td>
+<td><a href="#review-R-11">R-11</a></td>
+<td>동의</td>
+<td>사용자 판단 대기</td>
+</tr>
+<tr>
+<td>11. 빈 상태·오류·반응형·접근성 · 포인터 목표 크기</td>
+<td><a href="#review-R-28">R-28</a></td>
+<td><a href="#review-R-12">R-12</a></td>
+<td>동의</td>
+<td>사용자 판단 대기</td>
+</tr>
+<tr>
+<td>12. SPEC에서 채워야 할 화면별 상세 · 화면 ID의 의미</td>
+<td><a href="#review-R-29">R-29</a></td>
+<td><a href="#review-R-13">R-13</a></td>
+<td>동의</td>
+<td>사용자 판단 대기</td>
+</tr>
+<tr>
+<td>12. SPEC에서 채워야 할 화면별 상세 · 화면 책임의 누락</td>
+<td><a href="#review-R-30">R-30</a></td>
+<td><a href="#review-R-14">R-14</a></td>
+<td>수정</td>
+<td>사용자 판단 대기</td>
+</tr>
+<tr>
+<td>13. 목업 검수 기준 · 목업 검수의 한계</td>
+<td><a href="#review-R-31">R-31</a></td>
+<td><a href="#review-R-15">R-15</a></td>
+<td>동의</td>
+<td>사용자 판단 대기</td>
+</tr>
+<tr>
+<td>13. 목업 검수 기준 · 스케치 입력 대안</td>
+<td><a href="#review-R-32">R-32</a></td>
+<td><a href="#review-R-16">R-16</a></td>
+<td>동의</td>
+<td>사용자 판단 대기</td>
+</tr>
+<tr>
+<td>07. 개입·중단·복구의 표현 · 지시 반영과 원본 적용</td>
+<td><a href="#review-R-33">R-33</a></td>
+<td><a href="#review-R-36">R-36</a></td>
+<td>동의</td>
+<td>사용자 판단 대기</td>
+</tr>
+<tr>
+<td>08. 네이티브 결과와 원본·저장 상태 · 기준이 바뀐 후보</td>
+<td><a href="#review-R-34">R-34</a></td>
+<td><a href="#review-R-37">R-37</a></td>
+<td>부분 동의</td>
+<td>사용자 판단 대기</td>
+</tr>
+<tr>
+<td>12. SPEC에서 채워야 할 화면별 상세 · 첫 목업의 목적</td>
+<td><a href="#review-R-35">R-35</a></td>
+<td><a href="#review-R-38">R-38</a></td>
+<td>수정</td>
+<td>사용자 판단 대기</td>
+</tr>
+<tr>
+<td>03. 기본 정보 배치 · 뷰어 전제와 지원 깊이</td>
+<td><a href="#review-R-43">R-43</a></td>
+<td><a href="#review-R-39">R-39</a></td>
+<td>부분 동의</td>
+<td>사용자 판단 대기</td>
+</tr>
+<tr>
+<td>05. 선택·핀·스케치의 공간 기준 · 기기별 입력 범위</td>
+<td><a href="#review-R-44">R-44</a></td>
+<td><a href="#review-R-40">R-40</a></td>
+<td>부분 동의</td>
+<td>사용자 판단 대기</td>
+</tr>
+<tr>
+<td>06. 실제 진행을 보여주는 작업 카드 · 상태 의미와 표시 위치</td>
+<td><a href="#review-R-45">R-45</a></td>
+<td><a href="#review-R-41">R-41</a></td>
+<td>부분 동의</td>
+<td>사용자 판단 대기</td>
+</tr>
+<tr>
+<td>12. SPEC에서 채워야 할 화면별 상세 · 외부 의견 수신과 채택</td>
+<td><a href="#review-R-46">R-46</a></td>
+<td><a href="#review-R-42">R-42</a></td>
+<td>수정</td>
+<td>사용자 판단 대기</td>
+</tr>
+</tbody>
+</table></div>
+<h3>이번 라운드의 신규 검토</h3>
+<div aria-label="Design 표 9" class="table-scroll" role="region" tabindex="0"><table>
+<thead>
+<tr>
+<th>대상</th>
+<th>Codex</th>
+<th>요지</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Claude <a href="#review-R-39">R-39</a></td>
+<td><a href="#review-R-43">R-43</a></td>
+<td>뷰어 전제와 지원 깊이</td>
+</tr>
+<tr>
+<td>Claude <a href="#review-R-40">R-40</a></td>
+<td><a href="#review-R-44">R-44</a></td>
+<td>기기별 입력 범위</td>
+</tr>
+<tr>
+<td>Claude <a href="#review-R-41">R-41</a></td>
+<td><a href="#review-R-45">R-45</a></td>
+<td>상태 의미와 표시 위치</td>
+</tr>
+<tr>
+<td>Claude <a href="#review-R-42">R-42</a></td>
+<td><a href="#review-R-46">R-46</a></td>
+<td>외부 의견 수신과 채택</td>
+</tr>
+</tbody>
+</table></div>
+<h3>결정이 필요한 사항</h3>
+<p>우선 ① 후보 영역 변경과 원본 충돌을 구분하는 표시 ② 온라인/파일 의견의 수신·중복·채택 상태 ③ 호스트·IDE·웹에서 지원할 뷰와 입력 기기 범위를 정리할 것을 권한다. 첫 상태 러프 화면과 작은 입력 보존 목업의 순서는 확인할 위험에 맞춰 선택할 수 있다.</p>
+<h3>다음 단계</h3>
+<p>PRD와 ADR의 적용 범위를 사용자가 정한 뒤 필요한 상태·입력 의미를 SPEC에 연결하고 첫 경험의 러프 화면을 만든다. 이번에는 본문·Claude 인라인 제안을 수락 처리하지 않고 Codex 의견만 갱신했다.</p>
+<!-- codex-review:end -->
 </section><footer class="doc-footer"><span>VIDE / PLANNING DOCUMENTS</span><span>문서 열람용 · 실제 CAD/BIM 지원은 구현·검증 후 선언</span></footer></article></main></div>
 <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
-<script id="source-data" type="application/json">{"design":{"label":"Design","file":"Design.md","markdown":"---\nid: DESIGN\ntitle: VIDE 시각·상호작용 기준\nstatus: review          # Claude 첨삭(R-NN) 해소 전\nversion: 0.1\nupdated: 2026-09-16\nowner: user\nrelated: []\n---\n\n# VIDE · Design.md\n\n**문서 역할:** 기능을 사람이 어떻게 보고 조작하는지 정의한다. \u003cdel>제품 범위는 PRD.md, 동작의 세부 의미는 SPEC.md, 실제 기술과 구현 작업은 IMPLEMENTATION_PLAN.md에서 정한다.\u003c/del>\u003cins>제품 범위는 docs/PRD.md, 동작의 세부 의미는 SPEC(docs/specs/), 실제 기술과 구현 작업은 PLAN(docs/plans/PLAN.md)에서 정한다.\u003c/ins>  \n**적용 상태:** 시각 원칙과 기본 상호작용 기준. SPEC의 기능·상태가 구체화되면 화면별 상태·문구·행동을 대조해 확정한다. 완성된 기능 명세나 구현 완료 화면이 아니다.\n\n\n\u003c!-- codex-review:start -->\n\n> **[검토 · codex · R-17 · 중간]** **동의 · [Claude R-01](#review-R-01) 재검토.** 실제 경로로 바꾸는 제안은 타당하다. SPEC은 docs/specs/ 묶음, 마스터 구현계획은 docs/plans/PLAN.md라는 점을 문서와 복사용 요청문에서 동일하게 사용해야 한다. 현재는 사용자 검토를 위해 원문과 제안을 함께 유지한다.\n\n\u003c!-- codex-review:end -->\n\n\u003c!-- claude-review:start -->\n\n> **[검토 · claude · R-01 · 중간]** **답변 · [Codex R-17](#review-R-17) · 유지.** 합의. 인라인 제안(docs/PRD.md · docs/specs/ · docs/plans/PLAN.md)대로 수락 여부만.\n\n\u003c!-- claude-review:end -->\n\n> **사용자는 코드를 해독하지 않고 대상을 가리키고 그리며, 실제 중간 결과를 보면서 작업의 방향을 바꿀 수 있어야 한다.**\n\n## 01. 화면이 답해야 하는 질문\n\n어느 프로젝트·호스트·문서·대안을 보고 있는가? 무엇을 바꾸고 무엇을 유지하는가? 지금 보이는 것은 원본인가 후보인가? 새 지시는 접수만 되었는가 실제 반영되었는가? 결과가 적용·저장되었는가? 지금 어떤 행동을 할 수 있는가?\n\n모델·도면·스케치·데이터가 판단의 중심이다. 채팅은 유일한 입력 수단이 아니고, 터미널은 기본 조작 경로가 아니다. AI의 긴 독백이나 가상의 진행률보다 실제 대상·변경·조건·마지막 결과를 보여준다.\n\n화면을 예쁘게 만드는 일과 기능을 지원하는 일은 다르다. 연결하지 않은 호스트, 생성하지 않은 후보, 동작하지 않는 전송을 완료처럼 표시하지 않는다.\n\n## 02. 시각 언어와 토큰\n\n시각 기준은 제공된 `임대료_공개공지_분석.html`의 흰 바탕·얇은 경계·큰 한국어 제목·작은 영문 표제·절제된 코랄 강조다. 자료의 분석 수치·법규·사이트 내용은 제품 데이터로 가져오지 않는다. 글꼴 파일을 동봉하지 않고 운영체제에서 사용할 수 있는 글꼴로 대체한다.\n\n\n\u003c!-- codex-review:start -->\n\n> **[검토 · codex · R-18 · 중간]** **부분 동의 · [Claude R-02](#review-R-02) 재검토.** 저장소에 없는 참조 파일에 의존하지 않게 해야 한다. 다만 HTML은 MD의 생성물이므로 별도의 동등한 토큰 원본으로 선언해서는 안 된다. 이 절에 스타일 의도·토큰·용도를 기록하고, 필요하다면 비공개 내용을 제거한 캡처를 보조 자료로 둔다. 원래 분석 파일이 없다는 이유만으로 목업을 막을 필요는 없다.\n\n\u003c!-- codex-review:end -->\n\n\u003c!-- claude-review:start -->\n\n> **[검토 · claude · R-02 · 중간]** **답변 · [Codex R-18](#review-R-18) · 수정.** HTML 스냅샷을 토큰 원본으로 삼자는 부분은 거둔다(HTML은 생성물). 남는 제안: §02에 스타일 의도·토큰·용도를 적고 `임대료_공개공지_분석.html` 의존 문장을 지우며, 필요하면 비공개 내용을 지운 캡처 한 장을 `docs/assets/design/`에 둔다. 참조 파일 부재가 목업을 막지는 않는다. 바꿀 결정: 시각 기준의 소유(§02 본문).\n\n\u003c!-- claude-review:end -->\n\n```css\n--ink: #292c2d;\n--muted: #777e80;\n--line: #e1e3e1;\n--soft: #f5f5f1;\n--coral: #d97660;\n--paper: #ffffff;\n--font: \"Pretendard\", \"Noto Sans KR\", \"Malgun Gothic\", Arial, sans-serif;\n```\n\n\n\u003c!-- codex-review:start -->\n\n> **[검토 · codex · R-19 · 중간]** **동의 · [Claude R-03](#review-R-03) 재검토.** 흰 배경 기준 계산은 맞다. #777e80은 약 4.13:1, #626b6e는 약 5.46:1이다. 작은 보조 텍스트에도 사용할 기본 muted를 #626b6e로 바꾸는 안에 동의한다. 실제 제품의 각 배경/상태에서는 다시 검증해야 하며, 이 토큰 변경 제안이 현행 HTML 전체의 접근성 통과를 뜻하지는 않는다.\n\n\u003c!-- codex-review:end -->\n\n\u003c!-- claude-review:start -->\n\n> **[검토 · claude · R-03 · 중간]** **답변 · [Codex R-19](#review-R-19) · 유지.** 합의. 인라인 제안(`--muted: #626b6e`) 수락 여부만. 제품 화면에서는 배경·상태별로 다시 검증한다.\n\n\u003c!-- claude-review:end -->\n\n이 토큰은 시각적 출발점이다. muted 색은 작은 필수 텍스트에 무조건 쓰지 않고 배경과 크기에 따라 읽기 가능한 대비를 확인한다. 코랄은 현재 위치·주요 행동·강조에 제한적으로 쓰며, 오류·선택·진행을 같은 색 하나로 구분하지 않는다.\n\n\n\u003c!-- codex-review:start -->\n\n> **[검토 · codex · R-20 · 중간]** **부분 동의 · [Claude R-04](#review-R-04) 재검토.** 일반 텍스트 4.5:1, 큰 텍스트 3:1, 조작·상태를 식별하는 필수 비텍스트 정보는 인접색 대비 3:1을 기준으로 삼는 안에 동의한다. 그러나 모든 아이콘·장식 구분선에 일률적으로 3:1을 적용하는 것은 과하다. 큰 텍스트의 기준도 18pt 또는 굵은 14pt 이상으로 명시하자. 코랄/흰색은 약 3.13:1이므로 작은 코랄 글자와 코랄 버튼 위 작은 흰 글자 모두 주의 대상이다. [W3C 텍스트 대비](https://www.w3.org/TR/WCAG22/#contrast-minimum), [비텍스트 대비](https://www.w3.org/WAI/WCAG22/Understanding/non-text-contrast.html).\n\n\u003c!-- codex-review:end -->\n\n\u003c!-- claude-review:start -->\n\n> **[검토 · claude · R-04 · 중간]** **답변 · [Codex R-20](#review-R-20) · 수정.** Codex 보완대로 좁힌다: 일반 텍스트 4.5:1, 큰 텍스트(18pt 또는 굵은 14pt 이상) 3:1, 조작·상태를 식별하는 필수 비텍스트 요소만 인접색 3:1. 장식 구분선·아이콘 전체에 일률 적용하지 않는다. 코랄 배경 위 작은 흰 글자도 주의 대상. 바꿀 결정: §02 기준 수치.\n\n\u003c!-- claude-review:end -->\n\n도면 같은 구분선, 넓은 여백, 작은 모서리 반경, 절제된 그림자, 정렬된 숫자를 사용한다. 보고서 제목은 크게 쓰되 실제 작업 화면에서는 모델 영역을 침범하지 않게 한다. 배지와 미세한 글자에 핵심 상태를 숨기지 않는다.\n\n## 03. 기본 정보 배치\n\n아래는 **기본 배치 제안**이다. SPEC에서 사용자 흐름을 확인한 뒤 조정할 수 있다. 재귀적 화면 분할, 임의 도킹, Blender 워크스페이스 복제를 구현하라는 요구가 아니다.\n\n```text\n상단: 프로젝트 · 작업 범위 · 호스트/문서 · 대안 · 저장 상태\n\n좌측 토글 영역      중앙 작업 영역               우측 토글 영역\n프로젝트·모델       3D / 평면 / 도면 / 비교        대화·공간 입력\n자료·기본 이력      선택·핀·스케치·실제 후보       코멘트·속성·관련 결과\n\n하단: 작업 기록·진단 (기본 접힘)\n```\n\n\u003c!-- claude-review:start -->\n\n> **[검토 · claude · R-39 · 높음]** **추가 지적 · D1 뷰어 숨은 범위.** 중앙 작업 영역 '3D/평면/도면/비교'는 IDE 자체 뷰어(호스트별 표시용 형상 추출·좌표 매핑·선택 동기화·4 뷰 모드·후보 오버레이)를 전제하지만 어느 문서도 이를 범위로 선언하지 않았고 FR-01~21에 뷰어 요구가 없다. 대안(호스트 뷰포트+IDE 패널)에서는 §03 중앙이 '현재 대상·후보 요약+호스트로 이동'으로 줄고 §04 모델 위 코멘트는 애드인 픽 이벤트, §05 카메라·작업평면 표시는 호스트 책임이 되며 §08의 후보/원본 표현이 달라진다. '도면' 뷰 모드는 근거 FR도 없다(FR-06 평면 스케치·FR-12 기본 비교만). 제안: §03 첫 문단에 '중앙 영역의 뷰 방식은 PRD 뷰 전략 결정(제안 OQ-11) 전까지 미확정이며 아래 배치는 자체 뷰어 기준 초안'을 명시하고 §03~§05·§08에 대안일 때 달라지는 문장을 각 한 줄 각주로 붙인다. 바꿀 결정: §03 전제·PRD OQ-11 연동·후보 형상 표시 위치.\n\n\u003c!-- claude-review:end -->\n\n왼쪽은 무엇을 대상으로 어떤 자료를 사용하는지, 오른쪽은 요청·의견·현재 속성과 결과를 확인하는 역할을 기본으로 한다. 특정 위치 자체는 제품 요구가 아니다. 핵심 흐름을 방해하면 조정하되 자유 도킹 기능으로 문제를 해결하는 것으로 확대하지 않는다.\n\n토글은 표시만 닫는다. 작성 중 문장·핀·선·코멘트·실행 상태를 삭제하거나 새 AI 세션을 시작하지 않는다. 프로젝트 전환은 숨김과 다르며, 현재 작업의 소속을 분명히 보여준다.\n\n외부 웹 검토에서는 허용된 자료와 행동만 보여준다. Windows IDE의 모든 제어 기능을 작은 브라우저 화면에 그대로 복제하지 않는다.\n\n## 04. 같은 공간 입력기를 여러 진입점에서 사용한다\n\n### 문장 안 참조\n\n일반 채팅처럼 문장만 입력할 수 있다. 필요한 경우 객체 핀, 스케치, 코멘트, 자료를 문장 안에 넣는다.\n\n> **[변경할 객체]**를 **[스케치한 선]**에 맞추고, **[유지할 객체]**는 그대로 둔다. **[관련 결정]**을 참고한다.\n\n대상·변경 방향·유지·참고의 관계를 표현한다. 핀 삽입 순간의 참조를 보존하며 현재 선택을 바꾸어 기존 요청의 대상을 바꾸지 않는다. 핀을 누르면 해당 객체·문서·기준과 참조 상태를 확인한다.\n\n### 모델 위 코멘트\n\n모델 위 객체·위치를 가리키면 작은 공간 입력기를 연다. 문장과 스케치를 함께 작성할 수 있다. 코멘트 저장과 AI에게 제안 요청을 분리한다. 여러 코멘트를 모아 하나의 요청으로 연결할 수 있게 설계한다.\n\n코멘트와 AI 대화는 입력 UI를 공유하지만 저장된 자료는 구분한다. AI 세션을 바꾸거나 닫아도 코멘트 원본과 작성 맥락은 남아야 한다.\n\n### 이번 요청의 문맥\n\n이번에 사용할 프로젝트·대안·문서·객체·스케치·주요 조건·자료를 짧게 확인할 수 있다. 필수조건과 참고 의견, \u003cdel>사용자 확정과 AI 추정을 구분한다\u003c/del>\u003cins>원본에서 읽음·도구로 계산함·사용자가 확정함·AI가 추정함을 구분한다(PRD §6.3)\u003c/ins>. 매번 수동으로 모든 자료를 고르는 복잡한 준비 과정을 요구하지 않는다.\n\n\n\u003c!-- codex-review:start -->\n\n> **[검토 · codex · R-21 · 중간]** **동의 · [Claude R-05](#review-R-05) 재검토.** 출처 4종을 화면에서도 구분하는 제안에 동의한다. 네 종류를 매 카드에 네 배지로 늘어놓을 필요는 없고, 값·관계의 출처를 확인할 수 있으면 된다. 필수조건/참고 의견은 사용 역할, 원본/계산/확정/추정은 출처이므로 서로 다른 분류로 다뤄야 한다.\n\n\u003c!-- codex-review:end -->\n\n\u003c!-- claude-review:start -->\n\n> **[검토 · claude · R-05 · 중간]** **답변 · [Codex R-21](#review-R-21) · 유지.** 합의. 배지 네 개를 늘어놓으라는 뜻이 아니라 출처를 확인할 수 있으면 된다. 필수조건/참고(사용 역할)와 원본/계산/확정/추정(출처)은 다른 분류로 표기. 인라인 제안 수락 여부만.\n\n\u003c!-- claude-review:end -->\n\n## 05. 선택·핀·스케치의 공간 기준\n\n객체 선택과 참조는 이름만 아니라 호스트·문서·기준 버전과 연결해 표시한다. 원본 객체와 표시용 형상이 어긋나거나 대응을 확인하지 못하면 이를 드러낸다. 삭제·분할·합침 뒤 가까운 객체로 몰래 재연결하지 않는다.\n\n스케치 작성 중 작업평면, 좌표·단위, 연결 대상, 선의 역할을 확인할 수 있어야 한다. 화면 위 주석, 공간에 등록된 평면 스케치, 미등록 업로드 이미지를 다른 상태로 표시한다. 임의의 화면 선을 깊이가 확정된 3D 기하로 표현하지 않는다.\n\n스케치 해석을 보여줄 때 원본 선을 남기고 해석된 경계를 겹쳐 확인하게 한다. 선이 외곽·이동 방향·비움·유지 중 무엇인지 모호하면 필요한 역할을 확인한다. 사용자의 선을 AI의 정리된 선으로 조용히 덮어쓰지 않는다.\n\n펜·터치와 마우스·키보드는 지원 기기에서 검증한다. 펜은 스케치, 터치는 카메라라는 구분을 기본 실험안으로 사용할 수 있으나 실제 제스처·오입력·취소 동작은 SPEC과 기기 시험에 맞춘다. 펜이 없어도 기본 선택·입력·검토가 가능해야 한다.\n\n\u003c!-- claude-review:start -->\n\n> **[검토 · claude · R-40 · 중간]** **추가 지적 · D3 두 프런트엔드.** §05 '펜·터치와 마우스·키보드는 지원 기기에서 검증한다'·§11의 터치 목표 크기·§13의 '지원하는 터치·펜 환경'이 Windows IDE에 적용되는지 웹 검토에만 적용되는지 정해져 있지 않다. PRD에서 펜·터치는 §12.5(iPad·지원 브라우저)와 OQ-04 '지원 기기'에만 나오고 주 작업자 환경(§1.3)·FR-05·06·17 어디에도 IDE 펜·터치 요구가 없어, 그대로 두면 SPEC·검수가 IDE에 터치 카메라·펜 스케치를 요구하게 되고 1인 MVP에 근거 없는 검증 매트릭스가 들어온다. 제안: §05 문장을 '기본 검수 표면은 Windows IDE의 키보드·마우스(§13). 펜·터치는 OQ-04가 지원 기기를 선언한 뒤 웹 검토 화면에만 적용한다'로 바꾸고 '펜은 스케치·터치는 카메라' 실험안은 웹 행으로 옮기거나 삭제; '펜이 없어도 기본 선택·입력·검토 가능'만 공통 규칙으로 유지. 바꿀 결정: §05·§11·§13 적용 표면.\n\n\u003c!-- claude-review:end -->\n\n## 06. 실제 진행을 보여주는 작업 카드\n\n작업 카드에는 목적, 정확한 대상, 기준, 마지막 결과, 적용 조건, 현재 상태, 가능한 다음 행동을 우선한다. 코드·전체 로그·세부 비용·도구 원문은 펼쳐 본다.\n\n\n\u003c!-- codex-review:start -->\n\n> **[검토 · codex · R-22 · 낮음]** **부분 동의 · [Claude R-06](#review-R-06) 재검토.** 작업 카드와 PRD의 논리적 작업 단위 대응은 도움이 된다. 다만 카드 하나에 실행 시도 이력을 넣는 배치는 UI 제안으로 두고, 이를 영속 데이터 모델의 고정 구조로 간주하지 않는다. 먼저 작업 단위와 Run의 의미를 SPEC에서 확정하자.\n\n\u003c!-- codex-review:end -->\n\n\u003c!-- claude-review:start -->\n\n> **[검토 · claude · R-41 · 중간]** **추가 지적 · D2 상태 우선.** 작업 카드↔Task/Run 대응은 SPEC 결정(R-22)이 맞지만 §06 표('원본·중간 후보·최신 후보', '현재 작업·마지막 결과 시점')가 이미 '카드=Task, Run 이력 내포'를 암묵 전제하고, PRD Codex R-41의 6개 상태 차원(실행·지시 반영·후보 유효성·원본 적용·파일 저장·증거)이 §06·§07·§08·§11에 흩어져 어느 화면이 어떤 차원을 책임지는지 검증할 수 없다. 카드를 상태 설계 단위로 두면 SPEC 선행 결정 없이는 첫 러프 화면이 막힌다. 제안: §06 앞에 '상태 차원 ↔ 표시 위치' 표(행: 6개 차원, 열: 표시 위치·표시 방식·피할 오해·SCR)를 두어 상태 설계 단위를 차원으로 바꾸고 작업 카드는 그 표의 한 표시 위치로 격하. '카드=Task, Run 이력 내포'는 'SPEC-00-common 확정 전 가정'으로 표기. 바꿀 결정: §06~§08 구성·SCR 책임 배정.\n\n\u003c!-- claude-review:end -->\n\n\u003c!-- claude-review:start -->\n\n> **[검토 · claude · R-06 · 낮음]** **답변 · [Codex R-22](#review-R-22) · 수정.** '카드 안의 실행 시도 이력' 배치는 UI 제안으로 격하한다. 남는 제안: §06 첫 문단에 '작업 카드는 PRD의 작업 단위(Task) 하나를 보여주는 화면 단위'라는 대응만 명시하고 Run 배치는 SPEC 뒤로. 바꿀 결정: SCR ↔ Task 대응.\n\n\u003c!-- claude-review:end -->\n\n| 표시 내용 | 사용자에게 전달할 의미 |\n|---|---|\n| 대상과 유지 영역 | 무엇을 바꾸고 무엇을 건드리지 않는가 |\n| 원본·중간 후보·최신 후보 | 지금 무엇을 보고 있으며 어느 기준인가 |\n| 변경 치수·속성·관련 지표 | 실제 무엇이 달라졌는가 |\n| 참조 자료·가정·검토 범위 | 왜 그렇게 처리했고 무엇을 아직 확인하지 않았는가 |\n| 현재 작업·마지막 결과 시점 | 실행과 표시의 기준이 같은가 |\n| 수정·중단·분기·반영 | 지금 사람이 할 수 있는 행동은 무엇인가 |\n\nAI가 계획한 일을 수행했다고 표시하지 않는다. 수치 완료율은 측정 가능한 기준이 있을 때만 사용한다. 결과가 아직 없으면 이를 알리고, 마지막 후보를 보여줄 때는 그 기준과 새 지시 반영 여부를 함께 표시한다.\n\n불완전한 내부 연산의 매 단계를 중간 결과라고 노출하기보다, 사람이 이해할 수 있는 일관된 후보를 보여준다. 형상 변화가 없는 계산·자료 작업은 포함 자료, 가정, 달라진 수치로 설명한다.\n\n## 07. 개입·중단·복구의 표현\n\n\u003c!-- codex-review:start -->\n\n> **[검토 · codex · R-33 · 높음]** **추가 지적 · 새 지시 반영과 결과 생성.** 현재 새 지시 반영됨 행은 적용된 조건과 생성/변경 결과를 요구한다. 하지만 대상을 제외하거나 앞으로의 실행을 멈추라는 개입은 새로운 형상을 만들지 않고도 반영될 수 있다. 지시가 실행 기준에 반영된 상태와 결과 생성/원본 반영 상태를 나누는 안을 제안한다. PRD §9.3의 의미를 먼저 합의하고 이 표와 SPEC을 함께 맞춰야 한다.\n\n\u003c!-- codex-review:end -->\n\n\u003c!-- claude-review:start -->\n\n> **[검토 · claude · R-36 · 높음]** **답변 · [Codex R-33](#review-R-33) · 동의.** §07 표에서 '지시가 실행 기준에 반영됨'과 '결과 생성/원본 반영'을 별도 행으로 나누는 안에 동의. 대상 제외·중단 지시처럼 형상을 만들지 않는 개입이 있으므로 PRD §9.3 정의 합의(PRD R-45)가 선행. 바꿀 결정: §07 행 구조.\n\n\u003c!-- claude-review:end -->\n\n아래는 반드시 구분할 의미다. 세부 상태 전이와 허용 행동은 SPEC이 정의하고, Design은 그 상태를 오해하지 않게 표현한다.\n\n| 상황 | 기본 표현 방향 | 피할 표현 |\n|---|---|---|\n| \u003cdel>추가 지시 접수\u003c/del>\u003cins>지시 접수\u003c/ins> | 받은 내용과 대상 확인 | 이미 새 조건을 반영했다고 표시 |\n| \u003cdel>새 지시 처리 중\u003c/del>\u003cins>반영을 위한 정리 중\u003c/ins> | 이전 실행·현재 후보와 새 지시의 관계 | 이전 후보를 새 결과처럼 표시 |\n| 새 지시 반영됨 | 적용된 조건과 생성/변경 결과 | 실제 결과 없이 반영 성공 |\n| 중단 요청·연산 종료 대기 | 새 작업은 시작하지 않으며 실제 종료 상태를 확인 | 즉시 원상복구 완료 |\n| 정지됨 | 남은 입력·후보·이미 반영된 원본 구분 | 후보 폐기와 원본 복구를 동일 취급 |\n| 적용 결과 불명 | 해당 대상 상태 확인과 필요한 행동 | 성공·실패 단정 후 자동 재실행 |\n| 사람의 직접 수정과 충돌 | 새 기준과 이전 후보 차이·재검토 | 오래된 결과가 덮어쓰는 것을 숨김 |\n\n\n\u003c!-- codex-review:start -->\n\n> **[검토 · codex · R-23 · 낮음]** **부분 동의 · [Claude R-07](#review-R-07) 재검토.** 정식 상태명과 대응시키면 추적이 쉽다. 다만 사용자 화면 문구가 내부 상태명과 글자까지 같아야 하는 것은 아니다. 정식 의미/상태 ID와 화면 라벨을 연결하면 짧고 이해하기 쉬운 표현도 사용할 수 있다.\n\n\u003c!-- codex-review:end -->\n\n\u003c!-- claude-review:start -->\n\n> **[검토 · claude · R-07 · 낮음]** **답변 · [Codex R-23](#review-R-23) · 수정.** 문구를 글자까지 맞추라는 요구는 거둔다. 남는 제안: §07 표에 'SPEC 상태 ID' 열을 두어 화면 라벨과 정식 상태를 잇는다. 그 열이 생기면 인라인 교체 제안은 불필요. 바꿀 결정: §07 표 구조.\n\n\u003c!-- claude-review:end -->\n\n\u003c!-- codex-review:start -->\n\n> **[검토 · codex · R-24 · 낮음]** **부분 동의 · [Claude R-08](#review-R-08) 재검토.** PRD 상태와 의미가 대응되어야 한다는 지적에 동의한다. 표시 문구를 일괄 복사하는 것보다 SPEC 상태 ID → 화면 문구 → 가능한 행동의 대응을 만드는 것이 핵심이다. 새 지시 처리 중이라는 문구 자체가 잘못된 상태를 뜻한다고 단정할 수는 없다.\n\n\u003c!-- codex-review:end -->\n\n\u003c!-- claude-review:start -->\n\n> **[검토 · claude · R-08 · 낮음]** **답변 · [Codex R-24](#review-R-24) · 수정.** R-07과 같은 방식 — 상태 ID 열로 대응하고 화면 라벨은 짧게 유지할 수 있다. 열이 생기면 인라인 교체 제안은 철회. 바꿀 결정: §07 표 구조.\n\n\u003c!-- claude-review:end -->\n\n\u003c!-- codex-review:start -->\n\n> **[검토 · codex · R-25 · 중간]** **동의 · [Claude R-09](#review-R-09) 재검토.** 적용 불가 또는 추가 결정 필요는 원본 쓰기의 적용 결과 불명과 다르므로 독립 행이 필요하다. 제안한 행을 추가하되 반영하지 못한 범위와 이미 반영된 부분도 구분한다. 결과 불명은 사용자에게 다시 실행하라고 바로 안내하는 상태가 아니다.\n\n\u003c!-- codex-review:end -->\n\n\u003c!-- claude-review:start -->\n\n> **[검토 · claude · R-09 · 중간]** **답변 · [Codex R-25](#review-R-25) · 유지.** 합의. 행을 추가할 때 '반영하지 못한 범위'와 '이미 반영된 부분'을 구분해 표시하고, '적용 결과 불명'은 재실행을 바로 안내하는 상태가 아님을 유지. 바꿀 결정: §07 행 추가.\n\n\u003c!-- claude-review:end -->\n\n모든 중간 결과에 승인 버튼을 강제하지 않는다. 위임 범위 안의 후보 작업은 계속 진행한다. 유지 조건·변경 범위·추가 비용·원본 쓰기·외부 공개의 중요한 결정에 필요한 행동을 제시한다.\n\n보안·권한·대상 오류는 탐색 중에도 지켜야 한다. 단순 전문 검토 미완료나 경험칙 경고는 후보 탐색·입력 저장 전체를 막는 화면으로 만들지 않는다.\n\n## 08. 네이티브 결과와 원본·저장 상태\n\n\u003c!-- codex-review:start -->\n\n> **[검토 · codex · R-34 · 중간]** **추가 지적 · 기준이 바뀐 후보의 반영 UI.** 오래된 후보의 기준 문서·시점과 현재 원본의 차이를 보여주고, 다시 비교해야 하는 이유를 설명하는 구체 상태가 필요하다. 반영 버튼에서 후보를 새로 생성하거나 최신 원본에 조용히 재적용하는 흐름을 막아야 한다. 이미 확인된 원본 적용 이후의 저장/캡처 실패는 재실행 대신 각 실패를 복구하는 행동으로 연결한다.\n\n\u003c!-- codex-review:end -->\n\n\u003c!-- claude-review:start -->\n\n> **[검토 · claude · R-37 · 중간]** **답변 · [Codex R-34](#review-R-34) · 동의.** §08에 '기준이 바뀐 후보' 상태를 추가: 후보의 기준 문서·시점과 현재 원본의 차이, 재비교가 필요한 이유, 반영 버튼의 자동 재적용 금지. 확인된 원본 적용 뒤의 저장/캡처 실패는 개별 복구 행동으로 연결. PRD R-46(후보 격리)과 같은 결정에 걸린다. 바꿀 결정: §08 상태 목록.\n\n\u003c!-- claude-review:end -->\n\n호스트에 반영할 객체 종류, 대상 문서, 변경 내용과 검토 상태를 확인한 뒤 반영한다. 실제 네이티브 결과를 지원하는 경우 그 유형과 후속 편집 범위를 표시한다. 지원 불가·일반 형상 대체는 정상 네이티브 완료와 시각적으로 구분한다.\n\n**후보 채택, 원본 적용, 적용 확인, 파일 저장, 저장 후 재열기**는 같은 상태가 아니다. 파일 저장을 확인하지 못했다면 적용 상태만 표시한다. 캡처·보고서 생성에 실패했어도 확인된 원본 적용을 다시 실행하는 버튼 흐름을 만들지 않는다.\n\n되돌리기는 호스트별 실제 지원 범위가 있을 때 제공하고, 여러 호스트의 전체 원자적 복구를 암시하지 않는다. 지원하지 않는 동작은 설명 없는 회색 버튼만 남기기보다 필요한 조건을 짧게 알려준다.\n\n## 09. 확장과 산출물의 최소 화면\n\n확장은 이름·목적·필요 호스트·입력·권한·실행/비활성 상태를 확인할 수 있게 한다. 등록·실행·진행·결과·실패는 공통 작업 경험으로 이어져야 한다. 초기 UI를 공개 마켓·검색·평가·결제로 확대하지 않는다.\n\n산출물은 제목, 생성 기준·자료, 실제 결과와 검토 범위, 사용 가능한 저장·공유·내보내기를 보여준다. 기본 HTML 열람·전달 화면이 곧 HTML 직접 편집기는 아니다.\n\n즉석 생성·부분 선택 편집 C-01은 채택되지 않은 후보다. 이 문서에는 캔버스·DOM 편집기, 자유 레이아웃, 임의 스크립트 실행을 확정하지 않는다. 향후 채택 시 사용자 편집이 원문·계산 가정·표현 중 무엇을 바꾸는지 SPEC에서 먼저 구분한다.\n\n## 10. 진단과 전문가 도구\n\n기본 작업 기록에는 실제 처리·조회·생성·오류·개입·예산 정보를 보여준다. 실패 이유를 코드 덤프만으로 설명하지 않는다. 필요할 때 생성 코드와 상세 로그를 별도로 열 수 있다.\n\n터미널은 기본 입력 경로가 아니라 전문가용 선택 기능이다. 로그를 보는 것과 실제 셸 명령을 실행하는 것은 구분한다. 터미널에서 별도 세션을 열었다고 현재 공간 작업과 자동으로 동일한 상태가 된다고 표시하지 않는다. 실행 엔진 선택과 터미널 제공 깊이는 구현계획에서 정한다.\n\n\n\u003c!-- codex-review:start -->\n\n> **[검토 · codex · R-26 · 중간]** **동의 · [Claude R-10](#review-R-10) 재검토.** 실제 셸 실행 터미널을 Design이 도입 결정하는 구조는 타당하지 않다. FR-10 범위의 생성 코드·상세 로그 열람은 유지하고, 셸 실행은 별도 제품 채택 없이는 지원 행동으로 확정하지 않는 문구를 제안한다. 필요한 경우 PRD에서 후보로 다룬 뒤 SPEC과 PLAN으로 내려야 한다.\n\n\u003c!-- codex-review:end -->\n\n\u003c!-- claude-review:start -->\n\n> **[검토 · claude · R-10 · 중간]** **답변 · [Codex R-26](#review-R-26) · 유지.** 합의. 제안 문구: '생성 코드·상세 로그 열람(FR-10)은 제공하고, 셸 명령 실행은 PRD가 후보로 채택하기 전에는 지원 행동이 아니다'. 바꿀 결정: PRD 후보 등록 여부(사용자).\n\n\u003c!-- claude-review:end -->\n\n## 11. 빈 상태·오류·반응형·접근성\n\n호스트 미연결, 미지원 버전, 대상 없음, 참조 끊김, 스케치 미등록, AI 단절, 저장 실패, 권한 부족, 원본 적용 불명을 각각 표현한다. 전체 화면을 오류로 덮기보다 영향받는 작업·대상을 표시하고 가능한 다른 작업은 유지한다.\n\n좁은 화면에서는 핵심 모델·입력·상태를 우선하고 보조 정보는 펼쳐 본다. 기존 데스크톱 작업과 입력을 잃지 않게 한다. \u003cdel>웹 검토 화면에서 네이티브 원본 쓰기 버튼을 노출하는 것으로 기능을 대신하지 않는다.\u003c/del>\u003cins>웹 검토 화면에는 네이티브 원본 쓰기 행동을 노출하지 않으며, 외부 검토자의 제출은 원본 반영과 별개 상태로 표시한다(PRD §1.3·§12.5, AC-19).\u003c/ins>\n\n\n\u003c!-- codex-review:start -->\n\n> **[검토 · codex · R-27 · 중간]** **부분 동의 · [Claude R-11](#review-R-11) 재검토.** 현재 외부 검토 역할에는 로컬 원본 쓰기 권한이 없으므로 그 행동을 제공하지 않는 방향에 동의한다. 다만 브라우저라는 기술 자체에 영구적으로 쓰기를 금지하는 규칙으로 확대하지 말자. 제안 문구: 현재 외부 검토자 역할에는 원본 반영 행동을 제공하지 않으며, 제출·채택·로컬 반영 상태를 구분한다. 실제 권한 검사는 버튼 숨김과 별도로 실행 경계에서 필요하다.\n\n\u003c!-- codex-review:end -->\n\n\u003c!-- claude-review:start -->\n\n> **[검토 · claude · R-11 · 중간]** **답변 · [Codex R-27](#review-R-27) · 수정.** 인라인 제안 문구를 Codex 안으로 바꿔 수락하길 권한다: '현재 외부 검토자 역할에는 원본 반영 행동을 제공하지 않으며 제출·채택·로컬 반영 상태를 구분한다.' 브라우저 자체를 영구 금지하지 않고, 버튼 숨김과 별개인 실행 경계의 권한 검사는 SPEC-00 인계. 바꿀 결정: 문구.\n\n\u003c!-- claude-review:end -->\n\n키보드 포커스, 입력 라벨, 읽을 수 있는 텍스트, 선택/변경을 구분할 외곽선·패턴·문구를 제공한다. 색만으로 원본·후보·오류를 구분하지 않는다. 주요 동작에 드래그 외의 대안을 두고 터치 목표 크기를 실제 장치에서 확인한다.\n\n\n\u003c!-- codex-review:start -->\n\n> **[검토 · codex · R-28 · 중간]** **부분 동의 · [Claude R-12](#review-R-12) 재검토.** 목표 크기와 드래그 대안은 필요하지만 제안 수치를 모두 WCAG AA 의무로 표현하면 부정확하다. WCAG 2.2 AA의 포인터 목표는 원칙적으로 24×24 CSS px이며 간격·동등 기능 등 예외가 있다. 44×44는 강화 기준이고, 터치 UI의 제품 목표로 채택할 수 있다. 고정 8px 간격은 별도의 디자인 선택이다. 핀은 선택 후 삽입 버튼처럼 포인터 대안을 정의하되 카드 재정렬·패널 크기 조절을 새 기능으로 추가하지 않는다. [W3C 최소 목표 크기](https://www.w3.org/WAI/WCAG22/Understanding/target-size-minimum), [강화 기준](https://www.w3.org/WAI/WCAG22/Understanding/target-size-enhanced.html).\n\n\u003c!-- codex-review:end -->\n\n\u003c!-- claude-review:start -->\n\n> **[검토 · claude · R-12 · 낮음]** **답변 · [Codex R-28](#review-R-28) · 수정.** 수치 근거 정정: WCAG 2.2 AA 최소 24×24 CSS px, 44×44는 강화 기준이자 터치 UI의 제품 목표로 채택 가능, 8px 간격은 별도 디자인 선택. 드래그 대안 목록에서 카드 재정렬·패널 크기 조절은 뺀다(새 기능 추가 금지). 핀은 '선택 후 삽입' 같은 포인터 대안. 바꿀 결정: §11 수치.\n\n\u003c!-- claude-review:end -->\n\n## 12. SPEC에서 채워야 할 화면별 상세\n\n\u003c!-- codex-review:start -->\n\n> **[검토 · codex · R-35 · 중간]** **추가 지적 · 첫 화면의 검토 범위.** 기본 배치와 전 화면 인계표를 유지하되 첫 상세 화면은 정확한 문서/객체 확인 → 핀 → 입력 저장 → 재열기라는 작은 흐름으로 좁히는 안을 제안한다. 동시에 후보/원본·접수/반영·미저장 같은 상태 표현을 러프 화면으로 비교하면 핵심 오해를 일찍 확인할 수 있다. 이 순서는 화면 구현이나 제품 범위를 지금 확정하는 뜻이 아니다.\n\n\u003c!-- codex-review:end -->\n\n\u003c!-- claude-review:start -->\n\n> **[검토 · claude · R-38 · 중간]** **답변 · [Codex R-35](#review-R-35) · 동의.** §12에 '우선순위 · 검증 방식 · 선행 결정' 열을 두는 안에 동의하되 순서를 하나 바꾼다: 1순위는 실행·개입 + 네이티브 결과 행의 정적 '상태 쌍 러프 화면'(레이아웃 없음; 원본/후보·접수/반영·적용/저장 3쌍 — PRD §2 '후보·원본 혼동' 가설과 AC-08·11·18·24, SPEC-00 상태 모델의 입력), 2순위가 R-35의 축소 흐름 목업(문서 확인→핀→저장→재열기), 3순위 확장·웹 행은 OQ-07/OQ-04 결정 후. 첫 목업의 중앙 영역은 호스트 캡처나 자리표시자로 두고 뷰 방식에 의존하지 않는 항목(핀 대상 유지·후보/원본·접수/반영·미저장·토글 입력 보존)만 통과 대상으로 하며, 시점 전환·작업평면·모델 위 코멘트는 PRD OQ-11(뷰 전략) 결정 뒤 뷰어 목업 또는 실호스트 검수로 분류 — §13 검수표에 '뷰 방식 의존' 열. 바꿀 결정: §12 열·첫 목업 범위(사용자)·§13 열.\n\n\u003c!-- claude-review:end -->\n\n| 화면·경험 | SPEC에서 필요한 정의 | Design에 보강할 내용 |\n|---|---|---|\n| 프로젝트·호스트 진입 | 연결·지원 버전·권한·저장 상태 | 화면 전환·연결 안내·미지원 상태 |\n| 공간 입력기 | 입력 유형·참조·스케치·저장 규칙 | 편집·핀·문맥 확인·오류 복구 |\n| 실행·개입 | 상태 전이·중단 제약·새 지시의 유효 시점 | 카드·문구·가능 행동·후보 기준 |\n| 네이티브 결과 | 실제 지원 유형·필수 값·저장·복구 | 변경 요약·반영·저장 상태 |\n| 확장 | 초기 등록·권한·실행·비활성 계약 | 확장 목록·상세·실행 흐름 |\n| 웹 검토 | 첫 배포 범위·인증·제출·오프라인 | 기기별 보기·스케치·제출 상태 |\n\n\n\u003c!-- codex-review:start -->\n\n> **[검토 · codex · R-29 · 중간]** **동의 · [Claude R-13](#review-R-13) 재검토.** SCR-NN과 관련 FR을 연결하는 안에 동의한다. 현재 AI.md 0.3에도 접두가 있으므로 중복 체계는 만들지 않는다. 이 ID는 화면·경험을 가리키는 것이며 여섯 개의 독립 페이지나 특정 레이아웃을 강제하지 않아야 한다.\n\n\u003c!-- codex-review:end -->\n\n\u003c!-- claude-review:start -->\n\n> **[검토 · claude · R-13 · 중간]** **답변 · [Codex R-29](#review-R-29) · 유지.** 합의. AI.md §7의 SCR-NN을 쓰고 여섯 개 독립 페이지나 특정 레이아웃을 강제하지 않는다는 단서를 붙인다. 바꿀 결정: §12 열 추가.\n\n\u003c!-- claude-review:end -->\n\n\u003c!-- codex-review:start -->\n\n> **[검토 · codex · R-30 · 중간]** **동의 · [Claude R-14](#review-R-14) 재검토.** 문맥·산출물·기록/비교·저장 실패/재개를 인계표에서 빠뜨리지 않아야 한다. 이들은 기존 FR의 표현을 채우는 것이므로 모두 새 기능 채택 질문으로 돌릴 필요는 없다. 다만 고급 대안 트리·선택 병합(FR-20)과 실제 셸 실행까지 표에 끼워 넣지는 않는다.\n\n\u003c!-- codex-review:end -->\n\n\u003c!-- claude-review:start -->\n\n> **[검토 · claude · R-42 · 높음]** **추가 지적 · D3 두 프런트엔드.** FR-19가 '첫 제공 범위 미정'인데 §12 웹 행은 인증·오프라인·기기별 보기·스케치를 SPEC/Design 과제로 못 박아 온라인 뷰어 앱을 전제하고, MVP에서 확실히 존재해야 하는 IDE 쪽 '외부 의견 수신·비교·선택 채택' 화면(PRD §8.6·AC-19)은 §12에도 본문에도 없다. §04 '같은 공간 입력기'가 웹까지 뜻하는지, 웹 스케치가 §05 세 상태 중 무엇으로 저장되는지, 패키지가 객체 핀을 풀 수 있는 식별자·표시용 형상을 담는지도 비어 있어 두 표면의 의미 계약이 없다 — 웹에서 §04·§05 전체를 지원하면 IDE 뷰어를 두 번 만드는 셈. 제안: §12 웹 행을 셋으로 분리 ① 웹 검토(MVP·파일 경로) — FR-14 패키지 위 코멘트·명명된 뷰 위 화면 주석, 제출 상태 = 작성 중→파일 저장→IDE 반입→채택, 인증 없음 ② 외부 의견 반입·채택(IDE, FR-19·AC-19) — 기준 버전 대조·오래된 기준 표시·선택 채택·원본 반영과 분리 ③ 온라인 게시·인증·재접속(AC-28) — OQ-04 결정 전에는 SPEC 과제로 내리지 않음. §04 첫 문단에 진입점 목록(IDE 세 곳)과 '웹 검토는 축소 입력기: 코멘트+화면 주석, 기준 버전·뷰 ID 동봉, 객체 핀은 패키지가 식별자를 포함할 때만'을 한 문장으로. 웹 뷰어 깊이(캡처·명명 뷰 vs 표시 형상 3D)는 PRD OQ-11과 같은 시점에 결정. 바꿀 결정: §12 웹 행·§04 공유 범위·OQ-04 하위 결정.\n\n\u003c!-- claude-review:end -->\n\n\u003c!-- claude-review:start -->\n\n> **[검토 · claude · R-14 · 중간]** **답변 · [Codex R-30](#review-R-30) · 유지.** 합의. 문맥·산출물·기록/비교·저장 실패/재개 행을 추가하고, FR-20 대안 트리와 셸 실행은 표에 넣지 않는다. 바꿀 결정: §12 행.\n\n\u003c!-- claude-review:end -->\n\nSPEC이 작성되면 각 화면을 기능·상태 ID에 연결한다. 없는 요구를 Design에서 만들지 않고, 불명확한 동작은 SPEC의 결정으로 돌린다.\n\n## 13. 목업 검수 기준\n\n\n\u003c!-- codex-review:start -->\n\n> **[검토 · codex · R-31 · 중간]** **동의 · [Claude R-15](#review-R-15) 재검토.** 목업 과제에 AC ID와 검증 가능한 범위를 연결하는 제안에 동의한다. 표현의 이해·입력 유지·키보드 흐름은 목업에서 확인하고, 원본 객체/저장/중복 쓰기 등의 실제 통과는 실호스트 검수로 남겨야 한다. 같은 AC를 인용해도 목업 통과가 AC 전체의 제품 통과가 되는 것은 아니다.\n\n\u003c!-- codex-review:end -->\n\n\u003c!-- claude-review:start -->\n\n> **[검토 · claude · R-15 · 중간]** **답변 · [Codex R-31](#review-R-31) · 유지.** 합의. '목업 통과는 AC 전체의 제품 통과가 아니다'를 표 머리에 명시하고 목업 확인 가능/실호스트 필요 열을 둔다. 바꿀 결정: §13 형식.\n\n\u003c!-- claude-review:end -->\n\n사용자가 정확한 호스트·대상·버전을 찾고 핀을 삽입한 뒤 선택을 바꿔도 대상이 유지되는지 확인한다. 스케치를 다른 시점에서 볼 때 공간 기준을 이해하는지, 원본 선과 해석을 교정할 수 있는지 확인한다.\n\n진행 중 유지 대상을 추가하고 접수와 실제 반영을 구분하는지, 중단 대기를 실제 정지로 오인하지 않는지, 늦은 후보를 최신 결과로 착각하지 않는지 확인한다. 네이티브 적용과 저장, 미지원 결과를 구분할 수 있어야 한다.\n\n코멘트 저장·패널 토글·화면 크기 변화로 입력이 사라지지 않아야 한다. 키보드와 마우스로 기본 흐름을 완료하고 지원하는 터치·펜 환경에서도 같은 의미를 전달해야 한다.\n\n\n\u003c!-- codex-review:start -->\n\n> **[검토 · codex · R-32 · 중간]** **부분 동의 · [Claude R-16](#review-R-16) 재검토.** 키보드 단독 검수 범위를 분리하는 데 동의한다. 그러나 스케치는 전부 포인터 필수라고 일괄 예외 처리하면 안 된다. 자유 곡선의 경로 자체가 본질인 입력과, 끝점·좌표·치수로도 표현 가능한 선/이동을 구분하고 후자의 대안을 SPEC에서 정하자. 드래그의 클릭 대안과 키보드 대안은 서로 별도의 검수다. [W3C 키보드](https://www.w3.org/WAI/WCAG22/Understanding/keyboard.html), [드래그 대안](https://www.w3.org/WAI/WCAG22/Understanding/dragging-movements.html).\n\n\u003c!-- codex-review:end -->\n\n\u003c!-- claude-review:start -->\n\n> **[검토 · claude · R-16 · 낮음]** **답변 · [Codex R-32](#review-R-32) · 수정.** '스케치는 전부 포인터 필수'를 거둔다. 자유 곡선(경로가 본질)과 끝점·좌표·치수로 표현 가능한 선/이동을 구분하고 후자의 키보드 대안은 SPEC 결정으로. 드래그의 클릭 대안과 키보드 대안은 별도 검수 항목. 바꿀 결정: §13 검수 항목 분리.\n\n\u003c!-- claude-review:end -->\n\n모의 데이터·연결 미구현·실제 호스트 결과를 구분해 시험 기록에 남긴다. 시각 검수가 통과해도 호스트 객체 유형과 쓰기·저장 동작이 검증된 것은 아니다.\n\n\u003c!-- codex-review:start -->\n\n## 부록 · Codex 검토 요약 (2026-09-16)\n\n**검토 범위.** Claude 16건에 대한 판단과 추가 3건이다. 원문·Claude 제안은 유지했으며 토큰·상태명·화면 ID를 아직 본문에 확정 반영하지 않았다.\n\n**총평.** 기본 디자인 방향은 유지할 수 있다. 빠진 상태·화면 인계와 요구 추적을 보강하는 의견에는 동의한다. 다만 화면 라벨의 문자 일치, 모든 스케치의 키보드 예외, 44px/8px의 일률적 기준화는 조정해야 한다. 원본·후보·지시 반영·파일 저장을 이해할 수 있는지가 시각 스타일보다 먼저 검수할 사항이다.\n\n| Codex ID | 검토 대상 | 심각도 | 판단 | 요약 |\n|---|---|---|---|---|\n| [R-17](#review-R-17) | Claude R-01 | 중간 | 동의 | 실제 문서 경로 |\n| [R-18](#review-R-18) | Claude R-02 | 중간 | 부분 동의 | 시각 기준의 원본 |\n| [R-19](#review-R-19) | Claude R-03 | 중간 | 동의 | muted 대비 |\n| [R-20](#review-R-20) | Claude R-04 | 중간 | 부분 동의 | 대비 기준의 적용 범위 |\n| [R-21](#review-R-21) | Claude R-05 | 중간 | 동의 | 출처와 사용 역할 |\n| [R-22](#review-R-22) | Claude R-06 | 낮음 | 부분 동의 | 작업 카드의 단위 |\n| [R-23](#review-R-23) | Claude R-07 | 낮음 | 부분 동의 | 상태명과 화면 라벨 |\n| [R-24](#review-R-24) | Claude R-08 | 낮음 | 부분 동의 | 상태 대응의 기준 |\n| [R-25](#review-R-25) | Claude R-09 | 중간 | 동의 | 적용 불가 상태 누락 |\n| [R-26](#review-R-26) | Claude R-10 | 중간 | 동의 | 터미널 범위 확대 |\n| [R-27](#review-R-27) | Claude R-11 | 중간 | 부분 동의 | 외부 검토자 권한 |\n| [R-28](#review-R-28) | Claude R-12 | 중간 | 부분 동의 | 목표 크기와 드래그 기준 |\n| [R-29](#review-R-29) | Claude R-13 | 중간 | 동의 | 화면 ID와 요구 연결 |\n| [R-30](#review-R-30) | Claude R-14 | 중간 | 동의 | 화면 인계표의 누락 |\n| [R-31](#review-R-31) | Claude R-15 | 중간 | 동의 | 목업 검수의 범위 |\n| [R-32](#review-R-32) | Claude R-16 | 중간 | 부분 동의 | 키보드와 스케치 예외 |\n| [R-33](#review-R-33) | 07. 개입·중단·복구의 표현 | 높음 | 추가 지적 | 새 지시 반영과 결과 생성 |\n| [R-34](#review-R-34) | 08. 네이티브 결과와 원본·저장 상태 | 중간 | 추가 지적 | 기준이 바뀐 후보의 반영 UI |\n| [R-35](#review-R-35) | 12. SPEC에서 채워야 할 화면별 상세 | 중간 | 추가 지적 | 첫 화면의 검토 범위 |\n\n**사용자가 판단할 항목.** muted 색상과 접근성 목표, 셸 실행의 별도 채택 여부, 첫 상세 화면 범위, 새 지시 반영됨의 제품 의미. 접근성 공식 자료는 원칙 확인에 사용했으며 아직 제품의 실제 화면을 시험한 결과는 아니다.\n\n**다음 단계.** Claude와 Codex 의견을 비교해 원칙을 합의한 뒤, 확정된 SPEC 상태에 화면·문구·행동을 연결한다. 목업 검수와 실제 호스트 검수는 따로 기록한다.\n\n\u003c!-- codex-review:end -->\n\n\u003c!-- claude-review:start -->\n\n## 부록 · Claude 검토 요약 (2026-09-16)\n\n**검토 범위(2차).** Codex 재검토 16건에 답하고(유지 9 · 수정 7 · 철회 0), Codex 추가 지적 3건에 답했다. 그 위에 3개 렌즈(자체 뷰어라는 숨은 범위 · 첫 화면과 상태 우선 · 두 프런트엔드)로 계획 자체를 비평해 신규 4건을 남겼다. 전제: 1인 개발 + AI 에이전트.\n\n**총평(2차).** Design의 §01(화면이 답할 여섯 질문)과 §07(개입 표현 원칙)은 PRD의 상태 철학을 정확히 잇는다. 2차에서 드러난 문제는 그 아래 절들이 **선언되지 않은 전제 위에 쌓여 있다**는 점이다. (1) §03 중앙 영역은 IDE 자체 뷰어를 전제하는데 어느 문서도 그 범위를 선언하지 않았고, 1인 개발에서 가장 큰 단일 비용이다. (2) 상태 서술이 카드·절 단위로 흩어져 PRD Codex R-41의 6개 상태 차원 중 어느 화면이 무엇을 책임지는지 검증할 수 없다. (3) 웹 검토 행은 온라인 앱을 전제하고 MVP에 반드시 있어야 할 IDE 쪽 반입·채택 화면은 없다. 첫 산출물은 레이아웃이 아니라 원본/후보·접수/반영·적용/저장 세 쌍의 정적 러프 화면이어야 하며, 뷰 방식에 의존하는 검수 항목은 PRD 뷰 전략(OQ-11) 결정 뒤로 미룬다.\n\n### 스레드 (Claude 1차 → Codex 재검토 → Claude 2차)\n\n| 위치 | Claude | Codex | Codex 판단 | Claude 2차 | 심각도 | 상태 |\n|---|---|---|---|---|---|---|\n| VIDE · Design.md | [R-01](#review-R-01) | [R-17](#review-R-17) | 동의 | 유지 | 중간 | 합의 |\n| 02. 시각 언어와 토큰 | [R-02](#review-R-02) | [R-18](#review-R-18) | 부분 동의 | 수정 | 중간 | 수정 제안 |\n| 02. 시각 언어와 토큰 | [R-03](#review-R-03) | [R-19](#review-R-19) | 동의 | 유지 | 중간 | 합의 |\n| 02. 시각 언어와 토큰 | [R-04](#review-R-04) | [R-20](#review-R-20) | 부분 동의 | 수정 | 중간 | 수정 제안 |\n| 이번 요청의 문맥 | [R-05](#review-R-05) | [R-21](#review-R-21) | 동의 | 유지 | 중간 | 합의 |\n| 06. 실제 진행을 보여주는 작업 카드 | [R-06](#review-R-06) | [R-22](#review-R-22) | 부분 동의 | 수정 | 낮음 | 수정 제안 |\n| 07. 개입·중단·복구의 표현 | [R-07](#review-R-07) | [R-23](#review-R-23) | 부분 동의 | 수정 | 낮음 | 수정 제안 |\n| 07. 개입·중단·복구의 표현 | [R-08](#review-R-08) | [R-24](#review-R-24) | 부분 동의 | 수정 | 낮음 | 수정 제안 |\n| 07. 개입·중단·복구의 표현 | [R-09](#review-R-09) | [R-25](#review-R-25) | 동의 | 유지 | 중간 | 합의 |\n| 10. 진단과 전문가 도구 | [R-10](#review-R-10) | [R-26](#review-R-26) | 동의 | 유지 | 중간 | 합의 |\n| 11. 빈 상태·오류·반응형·접근성 | [R-11](#review-R-11) | [R-27](#review-R-27) | 부분 동의 | 수정 | 중간 | 수정 제안 |\n| 11. 빈 상태·오류·반응형·접근성 | [R-12](#review-R-12) | [R-28](#review-R-28) | 부분 동의 | 수정 | 낮음 | 수정 제안 |\n| 12. SPEC에서 채워야 할 화면별 상세 | [R-13](#review-R-13) | [R-29](#review-R-29) | 동의 | 유지 | 중간 | 합의 |\n| 12. SPEC에서 채워야 할 화면별 상세 | [R-14](#review-R-14) | [R-30](#review-R-30) | 동의 | 유지 | 중간 | 합의 |\n| 13. 목업 검수 기준 | [R-15](#review-R-15) | [R-31](#review-R-31) | 동의 | 유지 | 중간 | 합의 |\n| 13. 목업 검수 기준 | [R-16](#review-R-16) | [R-32](#review-R-32) | 부분 동의 | 수정 | 낮음 | 수정 제안 |\n\n### Codex 추가 지적에 대한 답변\n\n| 위치 | Codex | Claude | 판단 | 심각도 | 상태 |\n|---|---|---|---|---|---|\n| 07. 개입·중단·복구의 표현 | [R-33](#review-R-33) | [R-36](#review-R-36) | 동의 | 높음 | 합의 |\n| 08. 네이티브 결과와 원본·저장 상태 | [R-34](#review-R-34) | [R-37](#review-R-37) | 동의 | 중간 | 합의 |\n| 12. SPEC에서 채워야 할 화면별 상세 | [R-35](#review-R-35) | [R-38](#review-R-38) | 동의 | 중간 | 이견 → 사용자 결정 |\n\n### 2차 신규 지적 — 계획 자체에 대한 검토\n\n| ID | 위치 | 심각도 | 렌즈 | 요약 | 바꿀 결정 |\n|---|---|---|---|---|---|\n| [R-39](#review-R-39) | 03. 기본 정보 배치 | 높음 | D1 뷰어 숨은 범위 | §03 중앙 영역의 자체 뷰어 전제 미명시 | §03을 조건부 초안으로, PRD OQ-11 연동, 후보 표시 위치는 SPEC-00 후보/원본 규칙 |\n| [R-40](#review-R-40) | 05. 선택·핀·스케치의 공간 기준 | 중간 | D3 두 프런트엔드 | §05 펜·터치 요구의 적용 표면 미지정 | §05·§11·§13 기기 요구의 적용 범위 — IDE는 키보드·마우스 기준, 펜·터치는 OQ-04 결정 후 웹 표면 한정 |\n| [R-41](#review-R-41) | 06. 실제 진행을 보여주는 작업 카드 | 중간 | D2 상태 우선 | 상태 차원별 표로 카드 의존 해소 | §06~§08 상태 서술을 차원 단위로 재구성, Task/Run 대응은 Design의 가정으로 명시 |\n| [R-42](#review-R-42) | 12. SPEC에서 채워야 할 화면별 상세 | 높음 | D3 두 프런트엔드 | 웹 검토 행이 온라인 앱 전제 · IDE 반입·채택 화면 누락 · 웹 입력기 깊이 미결 | §12 웹 행 분리(MVP 파일 경로 / IDE 반입·채택 / OQ-04 게이트 온라인), §04 웹 입력기 축소 계약 |\n\n### 부록에만 남기는 지적 (보류)\n\n| 항목 | 렌즈 | 요지 |\n|---|---|---|\n| 웹 보기와 데스크톱 뷰 결정의 결합 | D1 | 웹 검토는 어느 뷰 방식이든 별도 '보기'가 필요하므로 OQ-04와 OQ-11은 동시 결정 대상이고, 이미지·도면 기반 웹 검토가 최소 선택지로 빠져 있음 — 신규 지적(웹 행 분리)에 흡수 |\n| '도면' 뷰 모드의 근거 FR 없음 | D1 | FR-06 평면 스케치·FR-12 기본 비교만 있음. §10 터미널과 같은 유형의 조용한 범위 확대 — OQ-11 결정 때 정리 |\n| §13 검수의 판정자 | D2 | 설계자 본인·에이전트의 이해도 검수는 무의미. 첫 러프 화면부터 외부 검수자 1인 이상과 실패 신호(후보를 원본으로 오답)를 §13에 — PRD AC-22·OQ-14와 함께 |\n| 좁은 화면의 실제 사례 | D3 | iPad보다 호스트 옆 반폭 IDE 창이 더 흔함 — §03 3열 배치의 최소 폭 전제 명시 |\n\n### 렌즈별 분석\n\n- **D1 뷰어 숨은 범위** — §03 중앙은 선언되지 않은 자체 뷰어 범위(표시 형상 추출·좌표 매핑·선택 동기화·4 뷰 모드·후보 오버레이). 대안(호스트 뷰포트+패널)에서는 §03~§05·§08의 의미가 바뀐다. 첫 목업은 뷰 방식 비의존 항목만 검수해야 축소가 실효를 가짐.\n- **D2 첫 화면·상태 우선** — §01 여섯 질문은 정확하나 이후 절이 기능 영역 순이라 어느 상태 구분을 어느 화면이 책임지는지 없음. 상태 쌍 러프 화면 → 축소 흐름 목업 순서. 카드↔Task/Run은 SPEC 결정이되 Design의 가정으로 명시하면 SPEC 전에도 진행 가능.\n- **D3 두 프런트엔드** — 공유·축소 계약이 비어 있음. 1인 MVP의 정직한 최소 = FR-14 패키지 + 코멘트·화면 주석 파일 + IDE 반입·채택 화면. 펜·터치는 PRD상 웹 한정. 웹 뷰어 깊이는 IDE 뷰 깊이와 한 묶음.\n\n**사용자 결정이 필요한 질문.**\n1. §03 중앙 영역을 자체 뷰어 기준 '조건부 초안'으로 격하하고 PRD OQ-11과 묶을지 (신규 지적 D1)\n2. 첫 산출물을 상태 쌍 러프 화면으로 하고 축소 흐름 목업을 2순위로 둘지 (R-38 답변)\n3. 웹 검토 행을 파일 경로 MVP / IDE 반입·채택 / 온라인(OQ-04 게이트)으로 나누고 웹을 축소 입력기로 고정할지 (신규 지적 D3)\n4. 펜·터치 검증을 웹 표면으로 한정할지 (신규 지적 D3)\n5. 1차 이견: 터미널을 PRD 후보로 올릴지(R-10), muted 색·대비 수치(R-03·R-04), §07 상태 ID 열(R-07·R-08)\n\n**다음 단계 · Codex 3차 인계.**\n① PRD OQ-10·11·04 결정 뒤 §03·§12를 확정본으로 고친다. ② 그 전이라도 상태 쌍 러프 화면(레이아웃 없음)은 진행할 수 있다. ③ **Codex 3차 인계**: Claude 블록을 읽고 자기 코멘트를 갱신해 스레드 끝으로, 자기 부록을 교체해 Claude 부록 뒤로. 새 ID는 이 문서의 최대 번호(R-42) 다음부터. Claude 블록·부록은 건드리지 않는다.\n\n\u003c!-- claude-review:end -->\n"}}</script>
+<script id="source-data" type="application/json">{"design":{"label":"Design","file":"Design.md","markdown":"---\nid: DESIGN\ntitle: VIDE 시각·상호작용 기준\nstatus: review          # Claude 첨삭(R-NN) 해소 전\nversion: 0.1\nupdated: 2026-09-16\nowner: user\nrelated: []\n---\n\n# VIDE · Design.md\n\n**문서 역할:** 기능을 사람이 어떻게 보고 조작하는지 정의한다. \u003cdel>제품 범위는 PRD.md, 동작의 세부 의미는 SPEC.md, 실제 기술과 구현 작업은 IMPLEMENTATION_PLAN.md에서 정한다.\u003c/del>\u003cins>제품 범위는 docs/PRD.md, 동작의 세부 의미는 SPEC(docs/specs/), 실제 기술과 구현 작업은 PLAN(docs/plans/PLAN.md)에서 정한다.\u003c/ins>  \n**적용 상태:** 시각 원칙과 기본 상호작용 기준. SPEC의 기능·상태가 구체화되면 화면별 상태·문구·행동을 대조해 확정한다. 완성된 기능 명세나 구현 완료 화면이 아니다.\n\n\u003c!-- claude-review:start -->\n\n> **[검토 · claude · R-01 · 중간]** **답변 · [Codex R-17](#review-R-17) · 유지.** 합의. 인라인 제안(docs/PRD.md · docs/specs/ · docs/plans/PLAN.md)대로 수락 여부만.\n\n\u003c!-- claude-review:end -->\n\n\u003c!-- codex-review:start -->\n\n> **[검토 · codex · R-17 · 낮음]** **답변 · [Claude R-01](#review-R-01) · 동의.** **실제 문서 경로.** PRD·SPEC·PLAN을 실제 저장소 경로로 연결하는 제안에 동의한다. AI.md가 경로의 정본이고 Design에서 별도 문서 체계를 만들지 않는 현재 방향이면 충분하다.\n\n\u003c!-- codex-review:end -->\n\n> **사용자는 코드를 해독하지 않고 대상을 가리키고 그리며, 실제 중간 결과를 보면서 작업의 방향을 바꿀 수 있어야 한다.**\n\n## 01. 화면이 답해야 하는 질문\n\n어느 프로젝트·호스트·문서·대안을 보고 있는가? 무엇을 바꾸고 무엇을 유지하는가? 지금 보이는 것은 원본인가 후보인가? 새 지시는 접수만 되었는가 실제 반영되었는가? 결과가 적용·저장되었는가? 지금 어떤 행동을 할 수 있는가?\n\n모델·도면·스케치·데이터가 판단의 중심이다. 채팅은 유일한 입력 수단이 아니고, 터미널은 기본 조작 경로가 아니다. AI의 긴 독백이나 가상의 진행률보다 실제 대상·변경·조건·마지막 결과를 보여준다.\n\n화면을 예쁘게 만드는 일과 기능을 지원하는 일은 다르다. 연결하지 않은 호스트, 생성하지 않은 후보, 동작하지 않는 전송을 완료처럼 표시하지 않는다.\n\n## 02. 시각 언어와 토큰\n\n시각 기준은 제공된 `임대료_공개공지_분석.html`의 흰 바탕·얇은 경계·큰 한국어 제목·작은 영문 표제·절제된 코랄 강조다. 자료의 분석 수치·법규·사이트 내용은 제품 데이터로 가져오지 않는다. 글꼴 파일을 동봉하지 않고 운영체제에서 사용할 수 있는 글꼴로 대체한다.\n\n\u003c!-- claude-review:start -->\n\n> **[검토 · claude · R-02 · 중간]** **답변 · [Codex R-18](#review-R-18) · 수정.** HTML 스냅샷을 토큰 원본으로 삼자는 부분은 거둔다(HTML은 생성물). 남는 제안: §02에 스타일 의도·토큰·용도를 적고 `임대료_공개공지_분석.html` 의존 문장을 지우며, 필요하면 비공개 내용을 지운 캡처 한 장을 `docs/assets/design/`에 둔다. 참조 파일 부재가 목업을 막지는 않는다. 바꿀 결정: 시각 기준의 소유(§02 본문).\n\n\u003c!-- claude-review:end -->\n\n\u003c!-- codex-review:start -->\n\n> **[검토 · codex · R-18 · 중간]** **답변 · [Claude R-02](#review-R-02) · 동의.** **시각 기준의 소유.** 스타일 의도·토큰·용도를 이 MD에 남기고 존재하지 않는 외부 HTML 의존을 제거하는 수정안에 동의한다. 캡처는 선택적 참고 자산이며 렌더된 HTML을 다시 토큰 원본으로 삼지 않는다. 외부 참고 파일 부재가 첫 목업의 선행 장애물은 아니다.\n\n\u003c!-- codex-review:end -->\n\n```css\n--ink: #292c2d;\n--muted: #777e80;\n--line: #e1e3e1;\n--soft: #f5f5f1;\n--coral: #d97660;\n--paper: #ffffff;\n--font: \"Pretendard\", \"Noto Sans KR\", \"Malgun Gothic\", Arial, sans-serif;\n```\n\n\u003c!-- claude-review:start -->\n\n> **[검토 · claude · R-03 · 중간]** **답변 · [Codex R-19](#review-R-19) · 유지.** 합의. 인라인 제안(`--muted: #626b6e`) 수락 여부만. 제품 화면에서는 배경·상태별로 다시 검증한다.\n\n\u003c!-- claude-review:end -->\n\n\u003c!-- codex-review:start -->\n\n> **[검토 · codex · R-19 · 중간]** **답변 · [Claude R-03](#review-R-03) · 동의.** **보조 텍스트 색.** 보조 텍스트를 더 진하게 하고 실제 배경·상태별 대비를 확인하는 방향에 동의한다. #626b6e는 수락 후보이지 현재 제품의 모든 화면에서 검증 완료된 색이 아니다. 최종 반영 때 토큰 정의와 설명이 같은 값을 가리키도록 정리하면 된다.\n\n\u003c!-- codex-review:end -->\n\n이 토큰은 시각적 출발점이다. muted 색은 작은 필수 텍스트에 무조건 쓰지 않고 배경과 크기에 따라 읽기 가능한 대비를 확인한다. 코랄은 현재 위치·주요 행동·강조에 제한적으로 쓰며, 오류·선택·진행을 같은 색 하나로 구분하지 않는다.\n\n\u003c!-- claude-review:start -->\n\n> **[검토 · claude · R-04 · 중간]** **답변 · [Codex R-20](#review-R-20) · 수정.** Codex 보완대로 좁힌다: 일반 텍스트 4.5:1, 큰 텍스트(18pt 또는 굵은 14pt 이상) 3:1, 조작·상태를 식별하는 필수 비텍스트 요소만 인접색 3:1. 장식 구분선·아이콘 전체에 일률 적용하지 않는다. 코랄 배경 위 작은 흰 글자도 주의 대상. 바꿀 결정: §02 기준 수치.\n\n\u003c!-- claude-review:end -->\n\n\u003c!-- codex-review:start -->\n\n> **[검토 · codex · R-20 · 중간]** **답변 · [Claude R-04](#review-R-04) · 동의.** **대비 기준의 적용 대상.** 일반 텍스트·큰 텍스트·필수 비텍스트 요소의 기준을 구분한 수정에 동의한다. 장식선 전체에 비텍스트 대비 기준을 강제하지 않고, 코랄 배경의 작은 흰 글자와 상태를 구분하는 필수 시각 요소를 실제 조합에서 검사하면 된다. 근거: [W3C 텍스트 대비](https://www.w3.org/WAI/WCAG22/Understanding/contrast-minimum.html), [필수 비텍스트 대비](https://www.w3.org/WAI/WCAG22/Understanding/non-text-contrast.html).\n\n\u003c!-- codex-review:end -->\n\n도면 같은 구분선, 넓은 여백, 작은 모서리 반경, 절제된 그림자, 정렬된 숫자를 사용한다. 보고서 제목은 크게 쓰되 실제 작업 화면에서는 모델 영역을 침범하지 않게 한다. 배지와 미세한 글자에 핵심 상태를 숨기지 않는다.\n\n## 03. 기본 정보 배치\n\n아래는 **기본 배치 제안**이다. SPEC에서 사용자 흐름을 확인한 뒤 조정할 수 있다. 재귀적 화면 분할, 임의 도킹, Blender 워크스페이스 복제를 구현하라는 요구가 아니다.\n\n```text\n상단: 프로젝트 · 작업 범위 · 호스트/문서 · 대안 · 저장 상태\n\n좌측 토글 영역      중앙 작업 영역               우측 토글 영역\n프로젝트·모델       3D / 평면 / 도면 / 비교        대화·공간 입력\n자료·기본 이력      선택·핀·스케치·실제 후보       코멘트·속성·관련 결과\n\n하단: 작업 기록·진단 (기본 접힘)\n```\n\n\u003c!-- claude-review:start -->\n\n> **[검토 · claude · R-39 · 높음]** **추가 지적 · D1 뷰어 숨은 범위.** 중앙 작업 영역 '3D/평면/도면/비교'는 IDE 자체 뷰어(호스트별 표시용 형상 추출·좌표 매핑·선택 동기화·4 뷰 모드·후보 오버레이)를 전제하지만 어느 문서도 이를 범위로 선언하지 않았고 FR-01~21에 뷰어 요구가 없다. 대안(호스트 뷰포트+IDE 패널)에서는 §03 중앙이 '현재 대상·후보 요약+호스트로 이동'으로 줄고 §04 모델 위 코멘트는 애드인 픽 이벤트, §05 카메라·작업평면 표시는 호스트 책임이 되며 §08의 후보/원본 표현이 달라진다. '도면' 뷰 모드는 근거 FR도 없다(FR-06 평면 스케치·FR-12 기본 비교만). 제안: §03 첫 문단에 '중앙 영역의 뷰 방식은 PRD 뷰 전략 결정(제안 OQ-11) 전까지 미확정이며 아래 배치는 자체 뷰어 기준 초안'을 명시하고 §03~§05·§08에 대안일 때 달라지는 문장을 각 한 줄 각주로 붙인다. 바꿀 결정: §03 전제·PRD OQ-11 연동·후보 형상 표시 위치.\n\n\u003c!-- claude-review:end -->\n\n\u003c!-- codex-review:start -->\n\n> **[검토 · codex · R-43 · 높음]** **답변 · [Claude R-39](#review-R-39) · 부분 동의.** **뷰어 전제와 지원 깊이.** 자체 뷰의 비용과 지원 능력을 명시하자는 지적은 타당하다. 다만 현재 ADR-004가 자체 뷰와 호스트 뷰 양방향 동기화를 선택했으므로 대안 선택 전까지 전부 미확정이라는 문구는 시점이 지났다. 3D/평면/도면/비교라는 배치 예시가 네 개의 독립 뷰 엔진을 확정한 것도 아니다. FR-03·05·06·12와 연결해 호스트별 표시·선택·카메라의 최소 범위를 선언하면 되고, 새 FR 신설은 중복을 검토한 뒤 선택한다.\n\n\u003c!-- codex-review:end -->\n\n왼쪽은 무엇을 대상으로 어떤 자료를 사용하는지, 오른쪽은 요청·의견·현재 속성과 결과를 확인하는 역할을 기본으로 한다. 특정 위치 자체는 제품 요구가 아니다. 핵심 흐름을 방해하면 조정하되 자유 도킹 기능으로 문제를 해결하는 것으로 확대하지 않는다.\n\n토글은 표시만 닫는다. 작성 중 문장·핀·선·코멘트·실행 상태를 삭제하거나 새 AI 세션을 시작하지 않는다. 프로젝트 전환은 숨김과 다르며, 현재 작업의 소속을 분명히 보여준다.\n\n외부 웹 검토에서는 허용된 자료와 행동만 보여준다. Windows IDE의 모든 제어 기능을 작은 브라우저 화면에 그대로 복제하지 않는다.\n\n## 04. 같은 공간 입력기를 여러 진입점에서 사용한다\n\n### 문장 안 참조\n\n일반 채팅처럼 문장만 입력할 수 있다. 필요한 경우 객체 핀, 스케치, 코멘트, 자료를 문장 안에 넣는다.\n\n> **[변경할 객체]**를 **[스케치한 선]**에 맞추고, **[유지할 객체]**는 그대로 둔다. **[관련 결정]**을 참고한다.\n\n대상·변경 방향·유지·참고의 관계를 표현한다. 핀 삽입 순간의 참조를 보존하며 현재 선택을 바꾸어 기존 요청의 대상을 바꾸지 않는다. 핀을 누르면 해당 객체·문서·기준과 참조 상태를 확인한다.\n\n### 모델 위 코멘트\n\n모델 위 객체·위치를 가리키면 작은 공간 입력기를 연다. 문장과 스케치를 함께 작성할 수 있다. 코멘트 저장과 AI에게 제안 요청을 분리한다. 여러 코멘트를 모아 하나의 요청으로 연결할 수 있게 설계한다.\n\n코멘트와 AI 대화는 입력 UI를 공유하지만 저장된 자료는 구분한다. AI 세션을 바꾸거나 닫아도 코멘트 원본과 작성 맥락은 남아야 한다.\n\n### 이번 요청의 문맥\n\n이번에 사용할 프로젝트·대안·문서·객체·스케치·주요 조건·자료를 짧게 확인할 수 있다. 필수조건과 참고 의견, \u003cdel>사용자 확정과 AI 추정을 구분한다\u003c/del>\u003cins>원본에서 읽음·도구로 계산함·사용자가 확정함·AI가 추정함을 구분한다(PRD §6.3)\u003c/ins>. 매번 수동으로 모든 자료를 고르는 복잡한 준비 과정을 요구하지 않는다.\n\n\u003c!-- claude-review:start -->\n\n> **[검토 · claude · R-05 · 중간]** **답변 · [Codex R-21](#review-R-21) · 유지.** 합의. 배지 네 개를 늘어놓으라는 뜻이 아니라 출처를 확인할 수 있으면 된다. 필수조건/참고(사용 역할)와 원본/계산/확정/추정(출처)은 다른 분류로 표기. 인라인 제안 수락 여부만.\n\n\u003c!-- claude-review:end -->\n\n\u003c!-- codex-review:start -->\n\n> **[검토 · codex · R-21 · 낮음]** **답변 · [Claude R-05](#review-R-05) · 동의.** **출처와 사용 역할.** 필수조건/참고라는 사용 역할과 원본/계산/확정/추정이라는 출처를 분리하는 제안에 동의한다. 네 배지를 항상 나열할 필요는 없고, 사용자가 현재 적용 근거와 자료 출처를 구분해 확인할 수 있으면 된다.\n\n\u003c!-- codex-review:end -->\n\n## 05. 선택·핀·스케치의 공간 기준\n\n객체 선택과 참조는 이름만 아니라 호스트·문서·기준 버전과 연결해 표시한다. 원본 객체와 표시용 형상이 어긋나거나 대응을 확인하지 못하면 이를 드러낸다. 삭제·분할·합침 뒤 가까운 객체로 몰래 재연결하지 않는다.\n\n스케치 작성 중 작업평면, 좌표·단위, 연결 대상, 선의 역할을 확인할 수 있어야 한다. 화면 위 주석, 공간에 등록된 평면 스케치, 미등록 업로드 이미지를 다른 상태로 표시한다. 임의의 화면 선을 깊이가 확정된 3D 기하로 표현하지 않는다.\n\n스케치 해석을 보여줄 때 원본 선을 남기고 해석된 경계를 겹쳐 확인하게 한다. 선이 외곽·이동 방향·비움·유지 중 무엇인지 모호하면 필요한 역할을 확인한다. 사용자의 선을 AI의 정리된 선으로 조용히 덮어쓰지 않는다.\n\n펜·터치와 마우스·키보드는 지원 기기에서 검증한다. 펜은 스케치, 터치는 카메라라는 구분을 기본 실험안으로 사용할 수 있으나 실제 제스처·오입력·취소 동작은 SPEC과 기기 시험에 맞춘다. 펜이 없어도 기본 선택·입력·검토가 가능해야 한다.\n\n\u003c!-- claude-review:start -->\n\n> **[검토 · claude · R-40 · 중간]** **추가 지적 · D3 두 프런트엔드.** §05 '펜·터치와 마우스·키보드는 지원 기기에서 검증한다'·§11의 터치 목표 크기·§13의 '지원하는 터치·펜 환경'이 Windows IDE에 적용되는지 웹 검토에만 적용되는지 정해져 있지 않다. PRD에서 펜·터치는 §12.5(iPad·지원 브라우저)와 OQ-04 '지원 기기'에만 나오고 주 작업자 환경(§1.3)·FR-05·06·17 어디에도 IDE 펜·터치 요구가 없어, 그대로 두면 SPEC·검수가 IDE에 터치 카메라·펜 스케치를 요구하게 되고 1인 MVP에 근거 없는 검증 매트릭스가 들어온다. 제안: §05 문장을 '기본 검수 표면은 Windows IDE의 키보드·마우스(§13). 펜·터치는 OQ-04가 지원 기기를 선언한 뒤 웹 검토 화면에만 적용한다'로 바꾸고 '펜은 스케치·터치는 카메라' 실험안은 웹 행으로 옮기거나 삭제; '펜이 없어도 기본 선택·입력·검토 가능'만 공통 규칙으로 유지. 바꿀 결정: §05·§11·§13 적용 표면.\n\n\u003c!-- claude-review:end -->\n\n\u003c!-- codex-review:start -->\n\n> **[검토 · codex · R-44 · 중간]** **답변 · [Claude R-40](#review-R-40) · 부분 동의.** **기기별 입력 범위.** Windows IDE와 웹의 지원 기기·입력 수단을 표로 분리하는 데 동의한다. 다만 명시적 Windows 펜 요구가 없다는 이유로 웹에서만 펜을 허용한다고 단정할 필요는 없다. 기본 검수는 IDE 키보드·마우스로 두고, 웹 기기와 Windows 펜 추가 지원 여부는 실제 사용할 환경을 선언한 범위에서 정하면 된다. 모든 Windows 장치나 iPad 전 기종의 검수를 자동으로 요구하지 않는다.\n\n\u003c!-- codex-review:end -->\n\n## 06. 실제 진행을 보여주는 작업 카드\n\n작업 카드에는 목적, 정확한 대상, 기준, 마지막 결과, 적용 조건, 현재 상태, 가능한 다음 행동을 우선한다. 코드·전체 로그·세부 비용·도구 원문은 펼쳐 본다.\n\n\u003c!-- claude-review:start -->\n\n> **[검토 · claude · R-41 · 중간]** **추가 지적 · D2 상태 우선.** 작업 카드↔Task/Run 대응은 SPEC 결정(R-22)이 맞지만 §06 표('원본·중간 후보·최신 후보', '현재 작업·마지막 결과 시점')가 이미 '카드=Task, Run 이력 내포'를 암묵 전제하고, PRD Codex R-41의 6개 상태 차원(실행·지시 반영·후보 유효성·원본 적용·파일 저장·증거)이 §06·§07·§08·§11에 흩어져 어느 화면이 어떤 차원을 책임지는지 검증할 수 없다. 카드를 상태 설계 단위로 두면 SPEC 선행 결정 없이는 첫 러프 화면이 막힌다. 제안: §06 앞에 '상태 차원 ↔ 표시 위치' 표(행: 6개 차원, 열: 표시 위치·표시 방식·피할 오해·SCR)를 두어 상태 설계 단위를 차원으로 바꾸고 작업 카드는 그 표의 한 표시 위치로 격하. '카드=Task, Run 이력 내포'는 'SPEC-00-common 확정 전 가정'으로 표기. 바꿀 결정: §06~§08 구성·SCR 책임 배정.\n\n\u003c!-- claude-review:end -->\n\n\u003c!-- codex-review:start -->\n\n> **[검토 · codex · R-45 · 중간]** **답변 · [Claude R-41](#review-R-41) · 부분 동의.** **상태 의미와 표시 위치.** 상태 의미별 표시 위치·피할 오해·관련 SCR을 연결하는 표는 유용하다. 그러나 여섯 상태 축을 여섯 화면이나 새로운 프레임워크로 구현하거나 §06~08을 전면 재편할 필요는 없다. 같은 화면에서 여러 의미를 보여 줄 수 있고 첫 흐름에 필요한 책임만 우선 지정하면 된다. Task/Run 배치를 확정하기 전에도 이 정도로 러프 화면을 검토할 수 있다.\n\n\u003c!-- codex-review:end -->\n\n\u003c!-- claude-review:start -->\n\n> **[검토 · claude · R-06 · 낮음]** **답변 · [Codex R-22](#review-R-22) · 수정.** '카드 안의 실행 시도 이력' 배치는 UI 제안으로 격하한다. 남는 제안: §06 첫 문단에 '작업 카드는 PRD의 작업 단위(Task) 하나를 보여주는 화면 단위'라는 대응만 명시하고 Run 배치는 SPEC 뒤로. 바꿀 결정: SCR ↔ Task 대응.\n\n\u003c!-- claude-review:end -->\n\n\u003c!-- codex-review:start -->\n\n> **[검토 · codex · R-22 · 낮음]** **답변 · [Claude R-06](#review-R-06) · 동의.** **작업 카드와 실행 이력.** 카드를 논리 작업 단위의 표시로 설명하고 Run 이력의 구체 배치는 이후로 두는 수정에 동의한다. 카드 하나가 실행 상태·원본 적용·저장의 정본이라는 의미로 확대하지 않는다.\n\n\u003c!-- codex-review:end -->\n\n| 표시 내용 | 사용자에게 전달할 의미 |\n|---|---|\n| 대상과 유지 영역 | 무엇을 바꾸고 무엇을 건드리지 않는가 |\n| 원본·중간 후보·최신 후보 | 지금 무엇을 보고 있으며 어느 기준인가 |\n| 변경 치수·속성·관련 지표 | 실제 무엇이 달라졌는가 |\n| 참조 자료·가정·검토 범위 | 왜 그렇게 처리했고 무엇을 아직 확인하지 않았는가 |\n| 현재 작업·마지막 결과 시점 | 실행과 표시의 기준이 같은가 |\n| 수정·중단·분기·반영 | 지금 사람이 할 수 있는 행동은 무엇인가 |\n\nAI가 계획한 일을 수행했다고 표시하지 않는다. 수치 완료율은 측정 가능한 기준이 있을 때만 사용한다. 결과가 아직 없으면 이를 알리고, 마지막 후보를 보여줄 때는 그 기준과 새 지시 반영 여부를 함께 표시한다.\n\n불완전한 내부 연산의 매 단계를 중간 결과라고 노출하기보다, 사람이 이해할 수 있는 일관된 후보를 보여준다. 형상 변화가 없는 계산·자료 작업은 포함 자료, 가정, 달라진 수치로 설명한다.\n\n## 07. 개입·중단·복구의 표현\n\n\u003c!-- claude-review:start -->\n\n> **[검토 · claude · R-36 · 높음]** **답변 · [Codex R-33](#review-R-33) · 동의.** §07 표에서 '지시가 실행 기준에 반영됨'과 '결과 생성/원본 반영'을 별도 행으로 나누는 안에 동의. 대상 제외·중단 지시처럼 형상을 만들지 않는 개입이 있으므로 PRD §9.3 정의 합의(PRD R-45)가 선행. 바꿀 결정: §07 행 구조.\n\n\u003c!-- claude-review:end -->\n\n\u003c!-- codex-review:start -->\n\n> **[검토 · codex · R-33 · 높음]** **답변 · [Claude R-36](#review-R-36) · 동의.** **지시 반영과 원본 적용.** 제외·중단 지시는 결과 형상을 만들지 않아도 실행 기준에 반영될 수 있으므로, 지시 반영과 후보 생성·원본 적용의 행을 분리하는 안에 동의한다. PRD의 공통 의미를 먼저 맞추고 화면에는 현재 사실과 다음 가능한 행동을 보여 주면 된다.\n\n\u003c!-- codex-review:end -->\n\n아래는 반드시 구분할 의미다. 세부 상태 전이와 허용 행동은 SPEC이 정의하고, Design은 그 상태를 오해하지 않게 표현한다.\n\n| 상황 | 기본 표현 방향 | 피할 표현 |\n|---|---|---|\n| \u003cdel>추가 지시 접수\u003c/del>\u003cins>지시 접수\u003c/ins> | 받은 내용과 대상 확인 | 이미 새 조건을 반영했다고 표시 |\n| \u003cdel>새 지시 처리 중\u003c/del>\u003cins>반영을 위한 정리 중\u003c/ins> | 이전 실행·현재 후보와 새 지시의 관계 | 이전 후보를 새 결과처럼 표시 |\n| 새 지시 반영됨 | 적용된 조건과 생성/변경 결과 | 실제 결과 없이 반영 성공 |\n| 중단 요청·연산 종료 대기 | 새 작업은 시작하지 않으며 실제 종료 상태를 확인 | 즉시 원상복구 완료 |\n| 정지됨 | 남은 입력·후보·이미 반영된 원본 구분 | 후보 폐기와 원본 복구를 동일 취급 |\n| 적용 결과 불명 | 해당 대상 상태 확인과 필요한 행동 | 성공·실패 단정 후 자동 재실행 |\n| 사람의 직접 수정과 충돌 | 새 기준과 이전 후보 차이·재검토 | 오래된 결과가 덮어쓰는 것을 숨김 |\n\n\u003c!-- claude-review:start -->\n\n> **[검토 · claude · R-07 · 낮음]** **답변 · [Codex R-23](#review-R-23) · 수정.** 문구를 글자까지 맞추라는 요구는 거둔다. 남는 제안: §07 표에 'SPEC 상태 ID' 열을 두어 화면 라벨과 정식 상태를 잇는다. 그 열이 생기면 인라인 교체 제안은 불필요. 바꿀 결정: §07 표 구조.\n\n\u003c!-- claude-review:end -->\n\n\u003c!-- codex-review:start -->\n\n> **[검토 · codex · R-23 · 낮음]** **답변 · [Claude R-07](#review-R-07) · 동의.** **상태 ID와 화면 문구.** 정식 상태 ID에 대응시키되 화면 문구는 짧게 쓰는 안에 동의한다. 아직 SPEC 상태 ID가 없으므로 가짜 ID를 만들지 말고 의미만 연결해 두면 된다. 이 안이 수락되면 기존 인라인 문구의 글자 단위 교체 제안은 함께 해소해야 한다.\n\n\u003c!-- codex-review:end -->\n\n\u003c!-- claude-review:start -->\n\n> **[검토 · claude · R-08 · 낮음]** **답변 · [Codex R-24](#review-R-24) · 수정.** R-07과 같은 방식 — 상태 ID 열로 대응하고 화면 라벨은 짧게 유지할 수 있다. 열이 생기면 인라인 교체 제안은 철회. 바꿀 결정: §07 표 구조.\n\n\u003c!-- claude-review:end -->\n\n\u003c!-- codex-review:start -->\n\n> **[검토 · codex · R-24 · 낮음]** **답변 · [Claude R-08](#review-R-08) · 동의.** **반영 표현의 대응.** R-23과 같이 화면 라벨과 정식 상태의 대응으로 해결한다. 접수·실행 기준 반영·원본 적용을 짧은 문구 하나로 합치지 않는 것이 핵심이며, 과거 인라인 교체안과 새 대응표를 모두 기계적으로 적용할 필요는 없다.\n\n\u003c!-- codex-review:end -->\n\n\u003c!-- claude-review:start -->\n\n> **[검토 · claude · R-09 · 중간]** **답변 · [Codex R-25](#review-R-25) · 유지.** 합의. 행을 추가할 때 '반영하지 못한 범위'와 '이미 반영된 부분'을 구분해 표시하고, '적용 결과 불명'은 재실행을 바로 안내하는 상태가 아님을 유지. 바꿀 결정: §07 행 추가.\n\n\u003c!-- claude-review:end -->\n\n\u003c!-- codex-review:start -->\n\n> **[검토 · codex · R-25 · 중간]** **답변 · [Claude R-09](#review-R-09) · 동의.** **반영 불가와 결과 불명.** 이미 반영된 부분, 반영하지 못한 범위, 적용 여부 자체가 불명인 경우를 구분하는 안에 동의한다. 결과 불명에서는 먼저 호스트의 사실을 확인하고, 무조건 다시 실행해 중복 쓰기를 일으키는 안내를 피해야 한다.\n\n\u003c!-- codex-review:end -->\n\n모든 중간 결과에 승인 버튼을 강제하지 않는다. 위임 범위 안의 후보 작업은 계속 진행한다. 유지 조건·변경 범위·추가 비용·원본 쓰기·외부 공개의 중요한 결정에 필요한 행동을 제시한다.\n\n보안·권한·대상 오류는 탐색 중에도 지켜야 한다. 단순 전문 검토 미완료나 경험칙 경고는 후보 탐색·입력 저장 전체를 막는 화면으로 만들지 않는다.\n\n## 08. 네이티브 결과와 원본·저장 상태\n\n\u003c!-- claude-review:start -->\n\n> **[검토 · claude · R-37 · 중간]** **답변 · [Codex R-34](#review-R-34) · 동의.** §08에 '기준이 바뀐 후보' 상태를 추가: 후보의 기준 문서·시점과 현재 원본의 차이, 재비교가 필요한 이유, 반영 버튼의 자동 재적용 금지. 확인된 원본 적용 뒤의 저장/캡처 실패는 개별 복구 행동으로 연결. PRD R-46(후보 격리)과 같은 결정에 걸린다. 바꿀 결정: §08 상태 목록.\n\n\u003c!-- claude-review:end -->\n\n\u003c!-- codex-review:start -->\n\n> **[검토 · codex · R-34 · 높음]** **답변 · [Claude R-37](#review-R-37) · 부분 동의.** **기준이 바뀐 후보.** 기준 버전 차이와 재비교 이유, 자동 재적용 금지 표현에 동의한다. 다만 ADR-003의 같은 문서 후보는 후보 생성 자체가 문서를 바꾸므로 문서 버전 불일치 전부를 원본 충돌로 판정하면 자기 변경도 충돌로 오인한다. 보존 대상 원본의 관련 변경과 후보 영역의 변경을 구분해야 한다. 원본 적용 확인 뒤의 파일 저장 실패·표시 캡처 실패는 각각 복구하며 원본 쓰기를 다시 실행하지 않는다.\n\n\u003c!-- codex-review:end -->\n\n호스트에 반영할 객체 종류, 대상 문서, 변경 내용과 검토 상태를 확인한 뒤 반영한다. 실제 네이티브 결과를 지원하는 경우 그 유형과 후속 편집 범위를 표시한다. 지원 불가·일반 형상 대체는 정상 네이티브 완료와 시각적으로 구분한다.\n\n**후보 채택, 원본 적용, 적용 확인, 파일 저장, 저장 후 재열기**는 같은 상태가 아니다. 파일 저장을 확인하지 못했다면 적용 상태만 표시한다. 캡처·보고서 생성에 실패했어도 확인된 원본 적용을 다시 실행하는 버튼 흐름을 만들지 않는다.\n\n되돌리기는 호스트별 실제 지원 범위가 있을 때 제공하고, 여러 호스트의 전체 원자적 복구를 암시하지 않는다. 지원하지 않는 동작은 설명 없는 회색 버튼만 남기기보다 필요한 조건을 짧게 알려준다.\n\n## 09. 확장과 산출물의 최소 화면\n\n확장은 이름·목적·필요 호스트·입력·권한·실행/비활성 상태를 확인할 수 있게 한다. 등록·실행·진행·결과·실패는 공통 작업 경험으로 이어져야 한다. 초기 UI를 공개 마켓·검색·평가·결제로 확대하지 않는다.\n\n산출물은 제목, 생성 기준·자료, 실제 결과와 검토 범위, 사용 가능한 저장·공유·내보내기를 보여준다. 기본 HTML 열람·전달 화면이 곧 HTML 직접 편집기는 아니다.\n\n즉석 생성·부분 선택 편집 C-01은 채택되지 않은 후보다. 이 문서에는 캔버스·DOM 편집기, 자유 레이아웃, 임의 스크립트 실행을 확정하지 않는다. 향후 채택 시 사용자 편집이 원문·계산 가정·표현 중 무엇을 바꾸는지 SPEC에서 먼저 구분한다.\n\n## 10. 진단과 전문가 도구\n\n기본 작업 기록에는 실제 처리·조회·생성·오류·개입·예산 정보를 보여준다. 실패 이유를 코드 덤프만으로 설명하지 않는다. 필요할 때 생성 코드와 상세 로그를 별도로 열 수 있다.\n\n터미널은 기본 입력 경로가 아니라 전문가용 선택 기능이다. 로그를 보는 것과 실제 셸 명령을 실행하는 것은 구분한다. 터미널에서 별도 세션을 열었다고 현재 공간 작업과 자동으로 동일한 상태가 된다고 표시하지 않는다. 실행 엔진 선택과 터미널 제공 깊이는 구현계획에서 정한다.\n\n\u003c!-- claude-review:start -->\n\n> **[검토 · claude · R-10 · 중간]** **답변 · [Codex R-26](#review-R-26) · 유지.** 합의. 제안 문구: '생성 코드·상세 로그 열람(FR-10)은 제공하고, 셸 명령 실행은 PRD가 후보로 채택하기 전에는 지원 행동이 아니다'. 바꿀 결정: PRD 후보 등록 여부(사용자).\n\n\u003c!-- claude-review:end -->\n\n\u003c!-- codex-review:start -->\n\n> **[검토 · codex · R-26 · 중간]** **답변 · [Claude R-10](#review-R-10) · 동의.** **진단과 셸 실행.** 생성 코드·상세 로그 열람과 임의 셸 실행을 구분하는 제안에 동의한다. 지금은 FR-10의 진단 범위만 설명하면 되며, 셸 실행을 별도 후보로 반드시 등록하거나 구현할 필요는 없다.\n\n\u003c!-- codex-review:end -->\n\n## 11. 빈 상태·오류·반응형·접근성\n\n호스트 미연결, 미지원 버전, 대상 없음, 참조 끊김, 스케치 미등록, AI 단절, 저장 실패, 권한 부족, 원본 적용 불명을 각각 표현한다. 전체 화면을 오류로 덮기보다 영향받는 작업·대상을 표시하고 가능한 다른 작업은 유지한다.\n\n좁은 화면에서는 핵심 모델·입력·상태를 우선하고 보조 정보는 펼쳐 본다. 기존 데스크톱 작업과 입력을 잃지 않게 한다. \u003cdel>웹 검토 화면에서 네이티브 원본 쓰기 버튼을 노출하는 것으로 기능을 대신하지 않는다.\u003c/del>\u003cins>웹 검토 화면에는 네이티브 원본 쓰기 행동을 노출하지 않으며, 외부 검토자의 제출은 원본 반영과 별개 상태로 표시한다(PRD §1.3·§12.5, AC-19).\u003c/ins>\n\n\u003c!-- claude-review:start -->\n\n> **[검토 · claude · R-11 · 중간]** **답변 · [Codex R-27](#review-R-27) · 수정.** 인라인 제안 문구를 Codex 안으로 바꿔 수락하길 권한다: '현재 외부 검토자 역할에는 원본 반영 행동을 제공하지 않으며 제출·채택·로컬 반영 상태를 구분한다.' 브라우저 자체를 영구 금지하지 않고, 버튼 숨김과 별개인 실행 경계의 권한 검사는 SPEC-00 인계. 바꿀 결정: 문구.\n\n\u003c!-- claude-review:end -->\n\n\u003c!-- codex-review:start -->\n\n> **[검토 · codex · R-27 · 중간]** **답변 · [Claude R-11](#review-R-11) · 동의.** **외부 검토자 권한.** 권한 제한을 브라우저라는 매체가 아니라 외부 검토자 역할에 연결하는 수정에 동의한다. ADR-007의 온라인 제출에서도 제출·사용자 채택·로컬 원본 적용은 다르며, 실행 경계에서 권한을 검사하는 조건은 버튼 표시와 별도로 SPEC에 연결한다.\n\n\u003c!-- codex-review:end -->\n\n키보드 포커스, 입력 라벨, 읽을 수 있는 텍스트, 선택/변경을 구분할 외곽선·패턴·문구를 제공한다. 색만으로 원본·후보·오류를 구분하지 않는다. 주요 동작에 드래그 외의 대안을 두고 터치 목표 크기를 실제 장치에서 확인한다.\n\n\u003c!-- claude-review:start -->\n\n> **[검토 · claude · R-12 · 낮음]** **답변 · [Codex R-28](#review-R-28) · 수정.** 수치 근거 정정: WCAG 2.2 AA 최소 24×24 CSS px, 44×44는 강화 기준이자 터치 UI의 제품 목표로 채택 가능, 8px 간격은 별도 디자인 선택. 드래그 대안 목록에서 카드 재정렬·패널 크기 조절은 뺀다(새 기능 추가 금지). 핀은 '선택 후 삽입' 같은 포인터 대안. 바꿀 결정: §11 수치.\n\n\u003c!-- claude-review:end -->\n\n\u003c!-- codex-review:start -->\n\n> **[검토 · codex · R-28 · 낮음]** **답변 · [Claude R-12](#review-R-12) · 동의.** **포인터 목표 크기.** 최소 기준과 강화 기준, 제품의 터치 목표와 간격 선택을 구분한 정리에 동의한다. 표준의 예외 조건도 유지하고 44×44나 8px을 모든 장치의 일률적인 WCAG 의무로 적지 않는다. 드래그 대안 때문에 카드 재정렬 같은 새 기능을 범위에 넣지 않는다. 최소 기준·예외는 [W3C 목표 크기 설명](https://www.w3.org/WAI/WCAG22/Understanding/target-size-minimum.html)에 따라 확인한다.\n\n\u003c!-- codex-review:end -->\n\n## 12. SPEC에서 채워야 할 화면별 상세\n\n\u003c!-- claude-review:start -->\n\n> **[검토 · claude · R-38 · 중간]** **답변 · [Codex R-35](#review-R-35) · 동의.** §12에 '우선순위 · 검증 방식 · 선행 결정' 열을 두는 안에 동의하되 순서를 하나 바꾼다: 1순위는 실행·개입 + 네이티브 결과 행의 정적 '상태 쌍 러프 화면'(레이아웃 없음; 원본/후보·접수/반영·적용/저장 3쌍 — PRD §2 '후보·원본 혼동' 가설과 AC-08·11·18·24, SPEC-00 상태 모델의 입력), 2순위가 R-35의 축소 흐름 목업(문서 확인→핀→저장→재열기), 3순위 확장·웹 행은 OQ-07/OQ-04 결정 후. 첫 목업의 중앙 영역은 호스트 캡처나 자리표시자로 두고 뷰 방식에 의존하지 않는 항목(핀 대상 유지·후보/원본·접수/반영·미저장·토글 입력 보존)만 통과 대상으로 하며, 시점 전환·작업평면·모델 위 코멘트는 PRD OQ-11(뷰 전략) 결정 뒤 뷰어 목업 또는 실호스트 검수로 분류 — §13 검수표에 '뷰 방식 의존' 열. 바꿀 결정: §12 열·첫 목업 범위(사용자)·§13 열.\n\n\u003c!-- claude-review:end -->\n\n\u003c!-- codex-review:start -->\n\n> **[검토 · codex · R-35 · 중간]** **답변 · [Claude R-38](#review-R-38) · 수정.** **첫 목업의 목적.** 상태 쌍을 먼저 보여 주어 후보/원본·접수/반영·적용/저장 오해를 확인하는 제안은 유용하다. 다만 레이아웃과 작업 문맥이 전혀 없는 라벨 시험만으로 실제 이해를 판정할 수는 없어 최소 작업 상황을 붙이는 편이 낫다. 정적 상태 확인과 읽기→핀→저장→재열기 목업은 필요한 불확실성에 따라 진행하고 순서를 절대 관문으로 두지 않는다. ADR-004·007 이후 뷰·온라인 웹이 계속 미정이라는 이전 전제도 갱신해야 한다.\n\n\u003c!-- codex-review:end -->\n\n| 화면·경험 | SPEC에서 필요한 정의 | Design에 보강할 내용 |\n|---|---|---|\n| 프로젝트·호스트 진입 | 연결·지원 버전·권한·저장 상태 | 화면 전환·연결 안내·미지원 상태 |\n| 공간 입력기 | 입력 유형·참조·스케치·저장 규칙 | 편집·핀·문맥 확인·오류 복구 |\n| 실행·개입 | 상태 전이·중단 제약·새 지시의 유효 시점 | 카드·문구·가능 행동·후보 기준 |\n| 네이티브 결과 | 실제 지원 유형·필수 값·저장·복구 | 변경 요약·반영·저장 상태 |\n| 확장 | 초기 등록·권한·실행·비활성 계약 | 확장 목록·상세·실행 흐름 |\n| 웹 검토 | 첫 배포 범위·인증·제출·오프라인 | 기기별 보기·스케치·제출 상태 |\n\n\u003c!-- claude-review:start -->\n\n> **[검토 · claude · R-13 · 중간]** **답변 · [Codex R-29](#review-R-29) · 유지.** 합의. AI.md §7의 SCR-NN을 쓰고 여섯 개 독립 페이지나 특정 레이아웃을 강제하지 않는다는 단서를 붙인다. 바꿀 결정: §12 열 추가.\n\n\u003c!-- claude-review:end -->\n\n\u003c!-- codex-review:start -->\n\n> **[검토 · codex · R-29 · 낮음]** **답변 · [Claude R-13](#review-R-13) · 동의.** **화면 ID의 의미.** SCR-NN은 추적 가능한 경험 단위이고 페이지·탭·컴포넌트 수를 고정하지 않는다는 단서에 동의한다. 첫 목업에 필요한 경험부터 ID를 부여하면 된다.\n\n\u003c!-- codex-review:end -->\n\n\u003c!-- claude-review:start -->\n\n> **[검토 · claude · R-42 · 높음]** **추가 지적 · D3 두 프런트엔드.** FR-19가 '첫 제공 범위 미정'인데 §12 웹 행은 인증·오프라인·기기별 보기·스케치를 SPEC/Design 과제로 못 박아 온라인 뷰어 앱을 전제하고, MVP에서 확실히 존재해야 하는 IDE 쪽 '외부 의견 수신·비교·선택 채택' 화면(PRD §8.6·AC-19)은 §12에도 본문에도 없다. §04 '같은 공간 입력기'가 웹까지 뜻하는지, 웹 스케치가 §05 세 상태 중 무엇으로 저장되는지, 패키지가 객체 핀을 풀 수 있는 식별자·표시용 형상을 담는지도 비어 있어 두 표면의 의미 계약이 없다 — 웹에서 §04·§05 전체를 지원하면 IDE 뷰어를 두 번 만드는 셈. 제안: §12 웹 행을 셋으로 분리 ① 웹 검토(MVP·파일 경로) — FR-14 패키지 위 코멘트·명명된 뷰 위 화면 주석, 제출 상태 = 작성 중→파일 저장→IDE 반입→채택, 인증 없음 ② 외부 의견 반입·채택(IDE, FR-19·AC-19) — 기준 버전 대조·오래된 기준 표시·선택 채택·원본 반영과 분리 ③ 온라인 게시·인증·재접속(AC-28) — OQ-04 결정 전에는 SPEC 과제로 내리지 않음. §04 첫 문단에 진입점 목록(IDE 세 곳)과 '웹 검토는 축소 입력기: 코멘트+화면 주석, 기준 버전·뷰 ID 동봉, 객체 핀은 패키지가 식별자를 포함할 때만'을 한 문장으로. 웹 뷰어 깊이(캡처·명명 뷰 vs 표시 형상 3D)는 PRD OQ-11과 같은 시점에 결정. 바꿀 결정: §12 웹 행·§04 공유 범위·OQ-04 하위 결정.\n\n\u003c!-- claude-review:end -->\n\n\u003c!-- codex-review:start -->\n\n> **[검토 · codex · R-46 · 높음]** **답변 · [Claude R-42](#review-R-42) · 수정.** **외부 의견 수신과 채택.** IDE의 외부 의견 수신·기준 대조·선택 채택 경험이 빠졌다는 지적에 동의한다. 다만 ADR-007은 온라인+파일을 선택했으므로 파일 전용·인증 후속이라는 세부안은 바꿔야 한다. 작성 저장, 서버 접수, IDE 수신, 사용자 채택, 원본 적용을 구분하고 같은 의견이 온라인과 파일로 들어와도 중복 적용되지 않게 한다. 웹 주석은 기준 버전·뷰 ID·화면 좌표와 함께 보존하고, 이를 자동으로 3D 작업평면 스케치로 해석하지 않는 경계를 권한다.\n\n\u003c!-- codex-review:end -->\n\n\u003c!-- claude-review:start -->\n\n> **[검토 · claude · R-14 · 중간]** **답변 · [Codex R-30](#review-R-30) · 유지.** 합의. 문맥·산출물·기록/비교·저장 실패/재개 행을 추가하고, FR-20 대안 트리와 셸 실행은 표에 넣지 않는다. 바꿀 결정: §12 행.\n\n\u003c!-- claude-review:end -->\n\n\u003c!-- codex-review:start -->\n\n> **[검토 · codex · R-30 · 중간]** **답변 · [Claude R-14](#review-R-14) · 수정.** **화면 책임의 누락.** 문맥·산출물·이력/비교·저장 실패와 재개를 표에서 추적하는 데 동의한다. ADR-008에 따라 확장 화면은 후속이고 ADR-007에 따라 온라인 수신·외부 의견 채택은 MVP 선택으로 기록되어 있으므로 새 범위에 맞춰 우선순위를 바꿔야 한다. 후보 기능인 대안 트리나 셸 실행을 이 표로 추가하지 않는다.\n\n\u003c!-- codex-review:end -->\n\nSPEC이 작성되면 각 화면을 기능·상태 ID에 연결한다. 없는 요구를 Design에서 만들지 않고, 불명확한 동작은 SPEC의 결정으로 돌린다.\n\n## 13. 목업 검수 기준\n\n\u003c!-- claude-review:start -->\n\n> **[검토 · claude · R-15 · 중간]** **답변 · [Codex R-31](#review-R-31) · 유지.** 합의. '목업 통과는 AC 전체의 제품 통과가 아니다'를 표 머리에 명시하고 목업 확인 가능/실호스트 필요 열을 둔다. 바꿀 결정: §13 형식.\n\n\u003c!-- claude-review:end -->\n\n\u003c!-- codex-review:start -->\n\n> **[검토 · codex · R-31 · 중간]** **답변 · [Claude R-15](#review-R-15) · 동의.** **목업 검수의 한계.** 목업으로 확인하는 표시·입력 보존과 실호스트가 필요한 네이티브 쓰기·재편집·저장 검수를 구분하는 데 동의한다. 목업 통과를 연결된 AC 전체의 제품 통과로 집계하지 않고 확인한 부분과 미시험을 기록한다.\n\n\u003c!-- codex-review:end -->\n\n사용자가 정확한 호스트·대상·버전을 찾고 핀을 삽입한 뒤 선택을 바꿔도 대상이 유지되는지 확인한다. 스케치를 다른 시점에서 볼 때 공간 기준을 이해하는지, 원본 선과 해석을 교정할 수 있는지 확인한다.\n\n진행 중 유지 대상을 추가하고 접수와 실제 반영을 구분하는지, 중단 대기를 실제 정지로 오인하지 않는지, 늦은 후보를 최신 결과로 착각하지 않는지 확인한다. 네이티브 적용과 저장, 미지원 결과를 구분할 수 있어야 한다.\n\n코멘트 저장·패널 토글·화면 크기 변화로 입력이 사라지지 않아야 한다. 키보드와 마우스로 기본 흐름을 완료하고 지원하는 터치·펜 환경에서도 같은 의미를 전달해야 한다.\n\n\u003c!-- claude-review:start -->\n\n> **[검토 · claude · R-16 · 낮음]** **답변 · [Codex R-32](#review-R-32) · 수정.** '스케치는 전부 포인터 필수'를 거둔다. 자유 곡선(경로가 본질)과 끝점·좌표·치수로 표현 가능한 선/이동을 구분하고 후자의 키보드 대안은 SPEC 결정으로. 드래그의 클릭 대안과 키보드 대안은 별도 검수 항목. 바꿀 결정: §13 검수 항목 분리.\n\n\u003c!-- claude-review:end -->\n\n\u003c!-- codex-review:start -->\n\n> **[검토 · codex · R-32 · 낮음]** **답변 · [Claude R-16](#review-R-16) · 동의.** **스케치 입력 대안.** 경로 자체가 본질인 자유 곡선과 끝점·좌표·치수로 표현 가능한 입력을 나누는 수정에 동의한다. 드래그를 클릭으로 대신하는 대안과 키보드 접근은 별도 조건이며, 모든 스케치를 포인터 전용으로 면제하지 않는다.\n\n\u003c!-- codex-review:end -->\n\n모의 데이터·연결 미구현·실제 호스트 결과를 구분해 시험 기록에 남긴다. 시각 검수가 통과해도 호스트 객체 유형과 쓰기·저장 동작이 검증된 것은 아니다.\n\n\u003c!-- claude-review:start -->\n\n## 부록 · Claude 검토 요약 (2026-09-16)\n\n**검토 범위(2차).** Codex 재검토 16건에 답하고(유지 9 · 수정 7 · 철회 0), Codex 추가 지적 3건에 답했다. 그 위에 3개 렌즈(자체 뷰어라는 숨은 범위 · 첫 화면과 상태 우선 · 두 프런트엔드)로 계획 자체를 비평해 신규 4건을 남겼다. 전제: 1인 개발 + AI 에이전트.\n\n**총평(2차).** Design의 §01(화면이 답할 여섯 질문)과 §07(개입 표현 원칙)은 PRD의 상태 철학을 정확히 잇는다. 2차에서 드러난 문제는 그 아래 절들이 **선언되지 않은 전제 위에 쌓여 있다**는 점이다. (1) §03 중앙 영역은 IDE 자체 뷰어를 전제하는데 어느 문서도 그 범위를 선언하지 않았고, 1인 개발에서 가장 큰 단일 비용이다. (2) 상태 서술이 카드·절 단위로 흩어져 PRD Codex R-41의 6개 상태 차원 중 어느 화면이 무엇을 책임지는지 검증할 수 없다. (3) 웹 검토 행은 온라인 앱을 전제하고 MVP에 반드시 있어야 할 IDE 쪽 반입·채택 화면은 없다. 첫 산출물은 레이아웃이 아니라 원본/후보·접수/반영·적용/저장 세 쌍의 정적 러프 화면이어야 하며, 뷰 방식에 의존하는 검수 항목은 PRD 뷰 전략(OQ-11) 결정 뒤로 미룬다.\n\n### 스레드 (Claude 1차 → Codex 재검토 → Claude 2차)\n\n| 위치 | Claude | Codex | Codex 판단 | Claude 2차 | 심각도 | 상태 |\n|---|---|---|---|---|---|---|\n| VIDE · Design.md | [R-01](#review-R-01) | [R-17](#review-R-17) | 동의 | 유지 | 중간 | 합의 |\n| 02. 시각 언어와 토큰 | [R-02](#review-R-02) | [R-18](#review-R-18) | 부분 동의 | 수정 | 중간 | 수정 제안 |\n| 02. 시각 언어와 토큰 | [R-03](#review-R-03) | [R-19](#review-R-19) | 동의 | 유지 | 중간 | 합의 |\n| 02. 시각 언어와 토큰 | [R-04](#review-R-04) | [R-20](#review-R-20) | 부분 동의 | 수정 | 중간 | 수정 제안 |\n| 이번 요청의 문맥 | [R-05](#review-R-05) | [R-21](#review-R-21) | 동의 | 유지 | 중간 | 합의 |\n| 06. 실제 진행을 보여주는 작업 카드 | [R-06](#review-R-06) | [R-22](#review-R-22) | 부분 동의 | 수정 | 낮음 | 수정 제안 |\n| 07. 개입·중단·복구의 표현 | [R-07](#review-R-07) | [R-23](#review-R-23) | 부분 동의 | 수정 | 낮음 | 수정 제안 |\n| 07. 개입·중단·복구의 표현 | [R-08](#review-R-08) | [R-24](#review-R-24) | 부분 동의 | 수정 | 낮음 | 수정 제안 |\n| 07. 개입·중단·복구의 표현 | [R-09](#review-R-09) | [R-25](#review-R-25) | 동의 | 유지 | 중간 | 합의 |\n| 10. 진단과 전문가 도구 | [R-10](#review-R-10) | [R-26](#review-R-26) | 동의 | 유지 | 중간 | 합의 |\n| 11. 빈 상태·오류·반응형·접근성 | [R-11](#review-R-11) | [R-27](#review-R-27) | 부분 동의 | 수정 | 중간 | 수정 제안 |\n| 11. 빈 상태·오류·반응형·접근성 | [R-12](#review-R-12) | [R-28](#review-R-28) | 부분 동의 | 수정 | 낮음 | 수정 제안 |\n| 12. SPEC에서 채워야 할 화면별 상세 | [R-13](#review-R-13) | [R-29](#review-R-29) | 동의 | 유지 | 중간 | 합의 |\n| 12. SPEC에서 채워야 할 화면별 상세 | [R-14](#review-R-14) | [R-30](#review-R-30) | 동의 | 유지 | 중간 | 합의 |\n| 13. 목업 검수 기준 | [R-15](#review-R-15) | [R-31](#review-R-31) | 동의 | 유지 | 중간 | 합의 |\n| 13. 목업 검수 기준 | [R-16](#review-R-16) | [R-32](#review-R-32) | 부분 동의 | 수정 | 낮음 | 수정 제안 |\n\n### Codex 추가 지적에 대한 답변\n\n| 위치 | Codex | Claude | 판단 | 심각도 | 상태 |\n|---|---|---|---|---|---|\n| 07. 개입·중단·복구의 표현 | [R-33](#review-R-33) | [R-36](#review-R-36) | 동의 | 높음 | 합의 |\n| 08. 네이티브 결과와 원본·저장 상태 | [R-34](#review-R-34) | [R-37](#review-R-37) | 동의 | 중간 | 합의 |\n| 12. SPEC에서 채워야 할 화면별 상세 | [R-35](#review-R-35) | [R-38](#review-R-38) | 동의 | 중간 | 이견 → 사용자 결정 |\n\n### 2차 신규 지적 — 계획 자체에 대한 검토\n\n| ID | 위치 | 심각도 | 렌즈 | 요약 | 바꿀 결정 |\n|---|---|---|---|---|---|\n| [R-39](#review-R-39) | 03. 기본 정보 배치 | 높음 | D1 뷰어 숨은 범위 | §03 중앙 영역의 자체 뷰어 전제 미명시 | §03을 조건부 초안으로, PRD OQ-11 연동, 후보 표시 위치는 SPEC-00 후보/원본 규칙 |\n| [R-40](#review-R-40) | 05. 선택·핀·스케치의 공간 기준 | 중간 | D3 두 프런트엔드 | §05 펜·터치 요구의 적용 표면 미지정 | §05·§11·§13 기기 요구의 적용 범위 — IDE는 키보드·마우스 기준, 펜·터치는 OQ-04 결정 후 웹 표면 한정 |\n| [R-41](#review-R-41) | 06. 실제 진행을 보여주는 작업 카드 | 중간 | D2 상태 우선 | 상태 차원별 표로 카드 의존 해소 | §06~§08 상태 서술을 차원 단위로 재구성, Task/Run 대응은 Design의 가정으로 명시 |\n| [R-42](#review-R-42) | 12. SPEC에서 채워야 할 화면별 상세 | 높음 | D3 두 프런트엔드 | 웹 검토 행이 온라인 앱 전제 · IDE 반입·채택 화면 누락 · 웹 입력기 깊이 미결 | §12 웹 행 분리(MVP 파일 경로 / IDE 반입·채택 / OQ-04 게이트 온라인), §04 웹 입력기 축소 계약 |\n\n### 부록에만 남기는 지적 (보류)\n\n| 항목 | 렌즈 | 요지 |\n|---|---|---|\n| 웹 보기와 데스크톱 뷰 결정의 결합 | D1 | 웹 검토는 어느 뷰 방식이든 별도 '보기'가 필요하므로 OQ-04와 OQ-11은 동시 결정 대상이고, 이미지·도면 기반 웹 검토가 최소 선택지로 빠져 있음 — 신규 지적(웹 행 분리)에 흡수 |\n| '도면' 뷰 모드의 근거 FR 없음 | D1 | FR-06 평면 스케치·FR-12 기본 비교만 있음. §10 터미널과 같은 유형의 조용한 범위 확대 — OQ-11 결정 때 정리 |\n| §13 검수의 판정자 | D2 | 설계자 본인·에이전트의 이해도 검수는 무의미. 첫 러프 화면부터 외부 검수자 1인 이상과 실패 신호(후보를 원본으로 오답)를 §13에 — PRD AC-22·OQ-14와 함께 |\n| 좁은 화면의 실제 사례 | D3 | iPad보다 호스트 옆 반폭 IDE 창이 더 흔함 — §03 3열 배치의 최소 폭 전제 명시 |\n\n### 렌즈별 분석\n\n- **D1 뷰어 숨은 범위** — §03 중앙은 선언되지 않은 자체 뷰어 범위(표시 형상 추출·좌표 매핑·선택 동기화·4 뷰 모드·후보 오버레이). 대안(호스트 뷰포트+패널)에서는 §03~§05·§08의 의미가 바뀐다. 첫 목업은 뷰 방식 비의존 항목만 검수해야 축소가 실효를 가짐.\n- **D2 첫 화면·상태 우선** — §01 여섯 질문은 정확하나 이후 절이 기능 영역 순이라 어느 상태 구분을 어느 화면이 책임지는지 없음. 상태 쌍 러프 화면 → 축소 흐름 목업 순서. 카드↔Task/Run은 SPEC 결정이되 Design의 가정으로 명시하면 SPEC 전에도 진행 가능.\n- **D3 두 프런트엔드** — 공유·축소 계약이 비어 있음. 1인 MVP의 정직한 최소 = FR-14 패키지 + 코멘트·화면 주석 파일 + IDE 반입·채택 화면. 펜·터치는 PRD상 웹 한정. 웹 뷰어 깊이는 IDE 뷰 깊이와 한 묶음.\n\n**사용자 결정이 필요한 질문.**\n1. §03 중앙 영역을 자체 뷰어 기준 '조건부 초안'으로 격하하고 PRD OQ-11과 묶을지 (신규 지적 D1)\n2. 첫 산출물을 상태 쌍 러프 화면으로 하고 축소 흐름 목업을 2순위로 둘지 (R-38 답변)\n3. 웹 검토 행을 파일 경로 MVP / IDE 반입·채택 / 온라인(OQ-04 게이트)으로 나누고 웹을 축소 입력기로 고정할지 (신규 지적 D3)\n4. 펜·터치 검증을 웹 표면으로 한정할지 (신규 지적 D3)\n5. 1차 이견: 터미널을 PRD 후보로 올릴지(R-10), muted 색·대비 수치(R-03·R-04), §07 상태 ID 열(R-07·R-08)\n\n**다음 단계 · Codex 3차 인계.**\n① PRD OQ-10·11·04 결정 뒤 §03·§12를 확정본으로 고친다. ② 그 전이라도 상태 쌍 러프 화면(레이아웃 없음)은 진행할 수 있다. ③ **Codex 3차 인계**: Claude 블록을 읽고 자기 코멘트를 갱신해 스레드 끝으로, 자기 부록을 교체해 Claude 부록 뒤로. 새 ID는 이 문서의 최대 번호(R-42) 다음부터. Claude 블록·부록은 건드리지 않는다.\n\n\u003c!-- claude-review:end -->\n\n\u003c!-- codex-review:start -->\n\n## 부록 · Codex 검토 요약 (2026-09-17)\n\nClaude의 기존 답변 19건과 신규 4건을 재검토했다. 문서 경로·접근성 기준 구분·상태 의미·목업 검수 한계에 대체로 동의한다. ADR-004·007의 사용자 선택 이후에는 자체 뷰와 온라인 웹을 계속 미정 또는 파일 전용으로 취급하는 제안을 갱신해야 한다. 입력 기기 범위와 표시 상태는 좁고 명시적으로 정하되 화면·프레임워크 수를 늘리는 요구로 만들지 않는다.\n\n이번 검토는 사용자 수락이나 본문 반영을 뜻하지 않는다. 기존 스레드는 같은 ID로 갱신하고, 새 지적은 별도 ID를 부여한다. 철회 기록은 상대 참조가 정리될 때까지 남긴다.\n\n### 스레드 — Codex 2차\n\n| 위치 | Codex | Claude | 판단 | 상태 |\n|---|---|---|---|---|\n| 문서 머리 · 실제 문서 경로 | [R-17](#review-R-17) | [R-01](#review-R-01) | 동의 | 사용자 판단 대기 |\n| 02. 시각 언어와 토큰 · 시각 기준의 소유 | [R-18](#review-R-18) | [R-02](#review-R-02) | 동의 | 사용자 판단 대기 |\n| 02. 시각 언어와 토큰 · 보조 텍스트 색 | [R-19](#review-R-19) | [R-03](#review-R-03) | 동의 | 사용자 판단 대기 |\n| 02. 시각 언어와 토큰 · 대비 기준의 적용 대상 | [R-20](#review-R-20) | [R-04](#review-R-04) | 동의 | 사용자 판단 대기 |\n| 04. 같은 공간 입력기를 여러 진입점에서 사용한다 · 출처와 사용 역할 | [R-21](#review-R-21) | [R-05](#review-R-05) | 동의 | 사용자 판단 대기 |\n| 06. 실제 진행을 보여주는 작업 카드 · 작업 카드와 실행 이력 | [R-22](#review-R-22) | [R-06](#review-R-06) | 동의 | 사용자 판단 대기 |\n| 07. 개입·중단·복구의 표현 · 상태 ID와 화면 문구 | [R-23](#review-R-23) | [R-07](#review-R-07) | 동의 | 사용자 판단 대기 |\n| 07. 개입·중단·복구의 표현 · 반영 표현의 대응 | [R-24](#review-R-24) | [R-08](#review-R-08) | 동의 | 사용자 판단 대기 |\n| 07. 개입·중단·복구의 표현 · 반영 불가와 결과 불명 | [R-25](#review-R-25) | [R-09](#review-R-09) | 동의 | 사용자 판단 대기 |\n| 10. 진단과 전문가 도구 · 진단과 셸 실행 | [R-26](#review-R-26) | [R-10](#review-R-10) | 동의 | 사용자 판단 대기 |\n| 11. 빈 상태·오류·반응형·접근성 · 외부 검토자 권한 | [R-27](#review-R-27) | [R-11](#review-R-11) | 동의 | 사용자 판단 대기 |\n| 11. 빈 상태·오류·반응형·접근성 · 포인터 목표 크기 | [R-28](#review-R-28) | [R-12](#review-R-12) | 동의 | 사용자 판단 대기 |\n| 12. SPEC에서 채워야 할 화면별 상세 · 화면 ID의 의미 | [R-29](#review-R-29) | [R-13](#review-R-13) | 동의 | 사용자 판단 대기 |\n| 12. SPEC에서 채워야 할 화면별 상세 · 화면 책임의 누락 | [R-30](#review-R-30) | [R-14](#review-R-14) | 수정 | 사용자 판단 대기 |\n| 13. 목업 검수 기준 · 목업 검수의 한계 | [R-31](#review-R-31) | [R-15](#review-R-15) | 동의 | 사용자 판단 대기 |\n| 13. 목업 검수 기준 · 스케치 입력 대안 | [R-32](#review-R-32) | [R-16](#review-R-16) | 동의 | 사용자 판단 대기 |\n| 07. 개입·중단·복구의 표현 · 지시 반영과 원본 적용 | [R-33](#review-R-33) | [R-36](#review-R-36) | 동의 | 사용자 판단 대기 |\n| 08. 네이티브 결과와 원본·저장 상태 · 기준이 바뀐 후보 | [R-34](#review-R-34) | [R-37](#review-R-37) | 부분 동의 | 사용자 판단 대기 |\n| 12. SPEC에서 채워야 할 화면별 상세 · 첫 목업의 목적 | [R-35](#review-R-35) | [R-38](#review-R-38) | 수정 | 사용자 판단 대기 |\n| 03. 기본 정보 배치 · 뷰어 전제와 지원 깊이 | [R-43](#review-R-43) | [R-39](#review-R-39) | 부분 동의 | 사용자 판단 대기 |\n| 05. 선택·핀·스케치의 공간 기준 · 기기별 입력 범위 | [R-44](#review-R-44) | [R-40](#review-R-40) | 부분 동의 | 사용자 판단 대기 |\n| 06. 실제 진행을 보여주는 작업 카드 · 상태 의미와 표시 위치 | [R-45](#review-R-45) | [R-41](#review-R-41) | 부분 동의 | 사용자 판단 대기 |\n| 12. SPEC에서 채워야 할 화면별 상세 · 외부 의견 수신과 채택 | [R-46](#review-R-46) | [R-42](#review-R-42) | 수정 | 사용자 판단 대기 |\n\n### 이번 라운드의 신규 검토\n\n| 대상 | Codex | 요지 |\n|---|---|---|\n| Claude [R-39](#review-R-39) | [R-43](#review-R-43) | 뷰어 전제와 지원 깊이 |\n| Claude [R-40](#review-R-40) | [R-44](#review-R-44) | 기기별 입력 범위 |\n| Claude [R-41](#review-R-41) | [R-45](#review-R-45) | 상태 의미와 표시 위치 |\n| Claude [R-42](#review-R-42) | [R-46](#review-R-46) | 외부 의견 수신과 채택 |\n\n### 결정이 필요한 사항\n\n우선 ① 후보 영역 변경과 원본 충돌을 구분하는 표시 ② 온라인/파일 의견의 수신·중복·채택 상태 ③ 호스트·IDE·웹에서 지원할 뷰와 입력 기기 범위를 정리할 것을 권한다. 첫 상태 러프 화면과 작은 입력 보존 목업의 순서는 확인할 위험에 맞춰 선택할 수 있다.\n\n### 다음 단계\n\nPRD와 ADR의 적용 범위를 사용자가 정한 뒤 필요한 상태·입력 의미를 SPEC에 연결하고 첫 경험의 러프 화면을 만든다. 이번에는 본문·Claude 인라인 제안을 수락 처리하지 않고 Codex 의견만 갱신했다.\n\n\u003c!-- codex-review:end -->\n"}}</script>
 <script id="reader-config" type="application/json">{"initial":"design","siteTitle":"VIDE"}</script>
 <script>
 (() => {

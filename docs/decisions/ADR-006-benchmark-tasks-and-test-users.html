@@ -69,8 +69,8 @@ body.review-accepted .toc-links a[data-reviews]::after{display:none}
 </style></head><body>
 <!-- GENERATED FILE — source: docs/decisions/ADR-006-benchmark-tasks-and-test-users.md — run: npm --prefix tools/docs run build -->
 <a class="skip" href="#reading-main">본문으로 이동</a>
-<header class="topbar"><a class="brand" href="../../index.html" aria-label="VIDE 문서 모음"><b>V.</b><span>VIDE</span></a><nav class="doc-tabs" aria-label="문서 선택"><a class="doc-tab" href="../PRD.html">PRD</a><a class="doc-tab" href="../../DEVELOPMENT_GUIDE.html">개발 가이드</a><a class="doc-tab" href="../../Design.html">Design</a><a class="doc-tab" href="../../AI.html">AI 규약</a></nav><div class="top-actions"><button id="source-download" title="현재 문서의 Markdown 원문 저장">원문 ↓</button><button id="print-doc" title="현재 문서 인쇄">인쇄</button></div></header>
-<div class="layout"><aside class="toc-shell" id="toc-shell" aria-label="현재 문서의 목차"><div class="toc-title"><strong>CONTENTS</strong><span id="toc-count"></span><button id="toc-toggle" aria-expanded="false" aria-controls="toc-body">목차 열기</button></div><div class="toc-body" id="toc-body"><input class="toc-search" id="toc-search" type="search" placeholder="장 제목으로 찾기" aria-label="현재 문서 목차 검색"><p class="toc-hint" id="nav-hint" role="status">장 제목으로 찾아갑니다.</p><nav class="toc-links" id="toc-links" aria-label="본문 장 이동"></nav><div class="toc-next">다음 작성할 문서<br><b>2차 검토 대화 → 사용자 결정</b><br>Codex·Claude 스레드 비교 → 항목별 수락/거부 → ADR·SPEC-00-common</div></div></aside><main id="reading-main" tabindex="-1"><article id="adr-006-benchmark-tasks-and-test-users" class="document"><header class="doc-hero"><div class="hero-label"><span class="eyebrow">DECISION RECORD</span><span><span class="pill">DRAFT · v0.1</span><span class="pill">5 CHAPTERS</span></span></div><h1 tabindex="-1">ADR-006 · 기준 과업 3개와 검증 사용자</h1><div class="hero-meta">
+<header class="topbar"><a class="brand" href="../../index.html" aria-label="VIDE 문서 모음"><b>V.</b><span>VIDE</span></a><nav class="doc-tabs" aria-label="문서 선택"><a class="doc-tab" href="../PRD.html">PRD</a><a class="doc-tab" href="../../DEVELOPMENT_GUIDE.html">개발 가이드</a><a class="doc-tab" href="../../Design.html">Design</a><a class="doc-tab" href="../../AI.html">AI 규약</a></nav><div class="top-actions"><label class="review-select">첨삭 <select id="review-mode" aria-label="첨삭 보기 방식"><option value="marked">표시</option><option value="original">원문만</option><option value="accepted">인라인 제안 미리보기</option></select></label><button id="source-download" title="현재 문서의 Markdown 원문 저장">원문 ↓</button><button id="print-doc" title="현재 문서 인쇄">인쇄</button></div></header>
+<div class="layout"><aside class="toc-shell" id="toc-shell" aria-label="현재 문서의 목차"><div class="toc-title"><strong>CONTENTS</strong><span id="toc-count"></span><button id="toc-toggle" aria-expanded="false" aria-controls="toc-body">목차 열기</button></div><div class="toc-body" id="toc-body"><input class="toc-search" id="toc-search" type="search" placeholder="장 제목으로 찾기" aria-label="현재 문서 목차 검색"><p class="toc-hint" id="nav-hint" role="status">장 제목으로 찾아갑니다.</p><nav class="toc-links" id="toc-links" aria-label="본문 장 이동"></nav><div class="toc-next">다음 작성할 문서<br><b>2차 검토 대화 → 사용자 결정</b><br>Codex·Claude 스레드 비교 → 항목별 수락/거부 → ADR·SPEC-00-common</div></div></aside><main id="reading-main" tabindex="-1"><article id="adr-006-benchmark-tasks-and-test-users" class="document"><header class="doc-hero"><div class="hero-label"><span class="eyebrow">DECISION RECORD</span><span><span class="pill">DRAFT · v0.1</span><span class="pill">6 CHAPTERS</span><a class="pill review-pill" data-review-agent="codex" href="#adr-006-benchmark-tasks-and-test-users-section-x5" title="CODEX 검토 요약으로 이동">CODEX 검토 2건</a></span></div><h1 tabindex="-1">ADR-006 · 기준 과업 3개와 검증 사용자</h1><div class="review-legend"><p><span><ins>초록</ins> 추가·교체 제안</span><span><del>빨강</del> 삭제·교체 대상</span><span>CLAUDE: 파란 상자 · CODEX: 보라 상자</span></p><p>검토자 필터는 코멘트·부록만 바꿉니다. ‘인라인 제안 미리보기’는 코멘트의 대안까지 합친 최종본이 아닙니다. 보기 전환은 MD 수정·수락·승인을 하지 않습니다.</p></div><div class="hero-meta">
 </div></header><section class="doc-section" id="adr-006-benchmark-tasks-and-test-users-section-1"><h2><span aria-hidden="true" class="section-num">01 /</span> 배경</h2>
 <p>'지원 과업·기준 과업'이 PRD §2·§11·§16·§17·OQ-06 등 10곳에서 성공·비용·출시 기준으로 인용되지만 정의가 없고, §8.2·§14.2의 MVP 과업은 전부 호스트 명령 1회짜리라 AI 위임의 가치를 잴 수 없다(PRD R-58·R-50). AC-22(비개발자 실제 사용)는 피험자·과업·판정자가 없어 통과할 수 없다(제안 OQ-13·14).</p>
 </section><section class="doc-section" id="adr-006-benchmark-tasks-and-test-users-section-2"><h2><span aria-hidden="true" class="section-num">02 /</span> 결정</h2>
@@ -120,18 +120,87 @@ body.review-accepted .toc-links a[data-reviews]::after{display:none}
 <li>가설 판정과 AC-22: 개발에 관여하지 않은 <strong>동료 건축가 1~2명</strong>. 판정자는 피험자와 분리한다.</li>
 <li>AC-22 통과 조건: 개발자 외 피험자가 기준 과업을 개발자 개입 없이 완료하고, 후보/원본·접수/반영 상태를 스스로 설명한다.</li>
 </ul>
+<!-- codex-review:start -->
+<blockquote class="review" data-review-agent="codex">
+<p><strong class="review-label" data-rid="R-01" data-review-agent="codex" id="review-R-01"><span class="review-agent">codex</span><span class="review-id">R-01</span><span class="review-sev" data-sev="높음">높음</span></strong> <strong>추가 지적.</strong> <strong>기준 과업의 판정 가능성.</strong> 세 과업의 단계 배정은 유용하나 과업 ①의 매스만으로 층별 면적·일람표의 정답이 정해지지는 않는다. 제안: 작은 고정 시험 모델에 층 구분·높이/절단 기준·닫힌 형상·단위·면적 계산 규칙과 허용 오차를 선언한다. 유지 대상은 어떤 형상·속성·관계가 같아야 하는지 정하고, ②의 벽·문은 폴리라인 최소 표현임을 명시해 BIM 객체나 도면 완성까지 확대하지 않는다. 총시간은 입력 준비·대기·검토·수정·반영까지 같은 범위로 측정한다. 이 시험용 계산 가정은 법정 면적이나 모든 실제 프로젝트에 통용되는 건축 규칙의 확정을 뜻하지 않는다.</p>
+</blockquote>
+<!-- codex-review:end -->
 </section><section class="doc-section" id="adr-006-benchmark-tasks-and-test-users-section-3"><h2><span aria-hidden="true" class="section-num">03 /</span> 결과 — 적용 시 바꿀 문장</h2>
 <ul>
 <li>PRD §14.2를 '기술 검수 과업'(현 목록)과 '기준 과업'(위 표)로 분리, §16.3에 기준 과업·측정 항목, OQ-06 결정 시점을 &quot;alpha 착수 전 기준선 측정&quot;으로 전진, AC-22 통과 기준 보강, §2 표에 우선순위·검증 시점 열, §17에 &quot;가설 미검증&quot; 위험 행. §18에 OQ-13·OQ-14 행(이 ADR 링크).</li>
 <li>Design §13 검수에 외부 검수자와 실패 신호(후보를 원본으로 오답) 명시.</li>
 </ul>
+<!-- codex-review:start -->
+<blockquote class="review" data-review-agent="codex">
+<p><strong class="review-label" data-rid="R-02" data-review-agent="codex" id="review-R-02"><span class="review-agent">codex</span><span class="review-id">R-02</span><span class="review-sev" data-sev="중간">중간</span></strong> <strong>추가 지적.</strong> <strong>기준선의 시점과 증거 해석.</strong> ③을 MVP 조건이 아니라고 하면서 세 과업 모두의 수작업 기준선을 Rhino alpha 착수 전에 요구하면 후속 사이트 자료 준비가 첫 기능을 막는다. 제안: ①의 시험 자료·수작업 기준선은 그 alpha 가치 시험 전, ②는 ZWCAD 가치 시험 전, ③은 사이트 스킬 착수 시 측정한다. 작은 기술 실험과 읽기/입력 보존 구현은 이 전체 가치 시험과 구분한다. 1~2명 검수는 초기 사용성의 실패 신호를 찾는 데 유용하지만 일반적인 우위를 입증하는 표본으로 표현하지 않는다. 목표는 기준선 측정 뒤, AI 비교 결과를 보기 전에 정하고, 원래 오인·재작업이 0이면 감소 대신 비열화와 시간 지표 등 판정 방식을 선언한다.</p>
+</blockquote>
+<!-- codex-review:end -->
 </section><section class="doc-section" id="adr-006-benchmark-tasks-and-test-users-section-4"><h2><span aria-hidden="true" class="section-num">04 /</span> 재검토 조건</h2>
 <p>과업 ①이 Rhino alpha에서 수작업 대비 절감을 보이지 못하면 ADR-001·ADR-004의 축소 조건이 발동한다.</p>
 </section><section class="doc-section" id="adr-006-benchmark-tasks-and-test-users-section-5"><h2><span aria-hidden="true" class="section-num">05 /</span> 출처</h2>
 <p>PRD R-50·R-58·R-27(1차 R-27 → 2차 답변), Codex R-30·R-38. 2026-09-17 brainstorming Q&amp;A.</p>
+<!-- codex-review:start -->
+</section><section class="doc-section review-appendix" id="adr-006-benchmark-tasks-and-test-users-section-x5" data-review-agent="codex"><h2><span aria-hidden="true" class="section-num">05 /</span> 부록 · Codex 검토 요약 (2026-09-17)</h2>
+<p>구체적인 과업과 개발자 외 검수자를 정한 것은 좋은 진전이다. 남은 것은 과업의 정답·허용 오차를 재현 가능하게 만들고, 후속 과업의 기준선이 현재 단계의 불필요한 선행 조건이 되지 않도록 하는 일이다.</p>
+<p>이번 검토는 사용자 수락이나 본문 반영을 뜻하지 않는다. 기존 스레드는 같은 ID로 갱신하고, 새 지적은 별도 ID를 부여한다. 철회 기록은 상대 참조가 정리될 때까지 남긴다.</p>
+<h3>스레드 — Codex 2차</h3>
+<div aria-label="ADR 표 2" class="table-scroll" role="region" tabindex="0"><table>
+<thead>
+<tr>
+<th>위치</th>
+<th>Codex</th>
+<th>Claude</th>
+<th>판단</th>
+<th>상태</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>2. 결정 · 기준 과업의 판정 가능성</td>
+<td><a href="#review-R-01">R-01</a></td>
+<td>—</td>
+<td>보완 제안</td>
+<td>사용자 판단 대기</td>
+</tr>
+<tr>
+<td>3. 결과 — 적용 시 바꿀 문장 · 기준선의 시점과 증거 해석</td>
+<td><a href="#review-R-02">R-02</a></td>
+<td>—</td>
+<td>보완 제안</td>
+<td>사용자 판단 대기</td>
+</tr>
+</tbody>
+</table></div>
+<h3>이번 라운드의 신규 검토</h3>
+<div aria-label="ADR 표 3" class="table-scroll" role="region" tabindex="0"><table>
+<thead>
+<tr>
+<th>대상</th>
+<th>Codex</th>
+<th>요지</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>2. 결정</td>
+<td><a href="#review-R-01">R-01</a></td>
+<td>기준 과업의 판정 가능성</td>
+</tr>
+<tr>
+<td>3. 결과 — 적용 시 바꿀 문장</td>
+<td><a href="#review-R-02">R-02</a></td>
+<td>기준선의 시점과 증거 해석</td>
+</tr>
+</tbody>
+</table></div>
+<h3>결정이 필요한 사항</h3>
+<p>Rhino 면적 계산의 시험 가정·보존 대상·시간 측정 구간을 정한다. 각 단계의 기준선 시점을 분리하고, 소수 사용자 시험에서 주장할 수 있는 범위를 명확히 한다.</p>
+<h3>다음 단계</h3>
+<p>이 ADR의 사용자 선택과 기술적 보장·검증 조건을 구분해 비교한다. 수락할 보완을 정한 뒤 ADR의 적용 목록과 PRD·Design·가이드의 관련 문장을 함께 정리한다. 이번에는 결정 본문과 draft 상태를 보존하고 검토 의견만 추가했다.</p>
+<!-- codex-review:end -->
 </section><footer class="doc-footer"><span>VIDE / PLANNING DOCUMENTS</span><span>문서 열람용 · 실제 CAD/BIM 지원은 구현·검증 후 선언</span></footer></article></main></div>
 <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
-<script id="source-data" type="application/json">{"adr-006-benchmark-tasks-and-test-users":{"label":"기준 과업 3개와 검증 사용자 — 단계 배정, 수작업 기준선은 alpha 전 측정","file":"ADR-006-benchmark-tasks-and-test-users.md","markdown":"---\nid: ADR-006\ntitle: 기준 과업 3개와 검증 사용자 — 단계 배정, 수작업 기준선은 alpha 전 측정\nstatus: draft\nversion: 0.1\nupdated: 2026-09-17\nowner: user\nrelated: [OQ-06, AC-22, FR-15, FR-21]\n---\n\n# ADR-006 · 기준 과업 3개와 검증 사용자\n\n## 1. 배경\n\n'지원 과업·기준 과업'이 PRD §2·§11·§16·§17·OQ-06 등 10곳에서 성공·비용·출시 기준으로 인용되지만 정의가 없고, §8.2·§14.2의 MVP 과업은 전부 호스트 명령 1회짜리라 AI 위임의 가치를 잴 수 없다(PRD R-58·R-50). AC-22(비개발자 실제 사용)는 피험자·과업·판정자가 없어 통과할 수 없다(제안 OQ-13·14).\n\n## 2. 결정\n\n### 기준 과업 (모두 채택, 단계 배정)\n\n| # | 과업 | 호스트 | 판정 단계 | 검증하는 §2 가설 |\n|---|---|---|---|---|\n| ① | 지정 매스를 핀·스케치로 이동·변형하되 유지 대상(인접 매스·대지 경계)을 보존하고, 층별 면적·일람표를 다시 계산해 보여 준다 | Rhino | Rhino alpha 판정 입력 · MVP 완료 조건 | 1·3·4·5·7 |\n| ② | 기준선·치수·스케치로 벽·문 폴리라인을 생성하고 기존 요소를 유지한다 (평면 작성 최소형) | ZWCAD | ZWCAD 슬라이스 판정 입력 · MVP 완료 조건 | 1·3·4·5 |\n| ③ | 외부 자료(지적·건물 정보)로 주변 사이트 매스를 생성한다 | Rhino | 사이트 스킬 착수 시 측정 (MVP 조건 아님) | 2·6 |\n\n- 조건: 공통 기능만으로 가능(③은 외부 자료 접점이 필요하므로 후속 스킬 단계), 조회+판단+변경 결합 또는 호스트 명령 3회 이상, 유지 조건 1개 이상, 수작업 대조 측정 가능.\n- **수작업 기준선은 세 과업 모두 Rhino alpha 착수 전에 측정한다**(총시간·대상 오인 횟수·재작업 횟수). OQ-06의 수치 목표는 그 뒤 확정한다.\n- ①의 면적·일람표 갱신은 §4.2 '일람표 작성' 스킬의 최소형이며 첫 스킬 후보다(ADR-008).\n\n### 검증 사용자\n\n- 기준선 측정과 자가 시험: 소유자 본인.\n- 가설 판정과 AC-22: 개발에 관여하지 않은 **동료 건축가 1~2명**. 판정자는 피험자와 분리한다.\n- AC-22 통과 조건: 개발자 외 피험자가 기준 과업을 개발자 개입 없이 완료하고, 후보/원본·접수/반영 상태를 스스로 설명한다.\n\n## 3. 결과 — 적용 시 바꿀 문장\n\n- PRD §14.2를 '기술 검수 과업'(현 목록)과 '기준 과업'(위 표)로 분리, §16.3에 기준 과업·측정 항목, OQ-06 결정 시점을 \"alpha 착수 전 기준선 측정\"으로 전진, AC-22 통과 기준 보강, §2 표에 우선순위·검증 시점 열, §17에 \"가설 미검증\" 위험 행. §18에 OQ-13·OQ-14 행(이 ADR 링크).\n- Design §13 검수에 외부 검수자와 실패 신호(후보를 원본으로 오답) 명시.\n\n## 4. 재검토 조건\n\n과업 ①이 Rhino alpha에서 수작업 대비 절감을 보이지 못하면 ADR-001·ADR-004의 축소 조건이 발동한다.\n\n## 5. 출처\n\nPRD R-50·R-58·R-27(1차 R-27 → 2차 답변), Codex R-30·R-38. 2026-09-17 brainstorming Q&A.\n"}}</script>
+<script id="source-data" type="application/json">{"adr-006-benchmark-tasks-and-test-users":{"label":"기준 과업 3개와 검증 사용자 — 단계 배정, 수작업 기준선은 alpha 전 측정","file":"ADR-006-benchmark-tasks-and-test-users.md","markdown":"---\nid: ADR-006\ntitle: 기준 과업 3개와 검증 사용자 — 단계 배정, 수작업 기준선은 alpha 전 측정\nstatus: draft\nversion: 0.1\nupdated: 2026-09-17\nowner: user\nrelated: [OQ-06, AC-22, FR-15, FR-21]\n---\n\n# ADR-006 · 기준 과업 3개와 검증 사용자\n\n## 1. 배경\n\n'지원 과업·기준 과업'이 PRD §2·§11·§16·§17·OQ-06 등 10곳에서 성공·비용·출시 기준으로 인용되지만 정의가 없고, §8.2·§14.2의 MVP 과업은 전부 호스트 명령 1회짜리라 AI 위임의 가치를 잴 수 없다(PRD R-58·R-50). AC-22(비개발자 실제 사용)는 피험자·과업·판정자가 없어 통과할 수 없다(제안 OQ-13·14).\n\n## 2. 결정\n\n### 기준 과업 (모두 채택, 단계 배정)\n\n| # | 과업 | 호스트 | 판정 단계 | 검증하는 §2 가설 |\n|---|---|---|---|---|\n| ① | 지정 매스를 핀·스케치로 이동·변형하되 유지 대상(인접 매스·대지 경계)을 보존하고, 층별 면적·일람표를 다시 계산해 보여 준다 | Rhino | Rhino alpha 판정 입력 · MVP 완료 조건 | 1·3·4·5·7 |\n| ② | 기준선·치수·스케치로 벽·문 폴리라인을 생성하고 기존 요소를 유지한다 (평면 작성 최소형) | ZWCAD | ZWCAD 슬라이스 판정 입력 · MVP 완료 조건 | 1·3·4·5 |\n| ③ | 외부 자료(지적·건물 정보)로 주변 사이트 매스를 생성한다 | Rhino | 사이트 스킬 착수 시 측정 (MVP 조건 아님) | 2·6 |\n\n- 조건: 공통 기능만으로 가능(③은 외부 자료 접점이 필요하므로 후속 스킬 단계), 조회+판단+변경 결합 또는 호스트 명령 3회 이상, 유지 조건 1개 이상, 수작업 대조 측정 가능.\n- **수작업 기준선은 세 과업 모두 Rhino alpha 착수 전에 측정한다**(총시간·대상 오인 횟수·재작업 횟수). OQ-06의 수치 목표는 그 뒤 확정한다.\n- ①의 면적·일람표 갱신은 §4.2 '일람표 작성' 스킬의 최소형이며 첫 스킬 후보다(ADR-008).\n\n### 검증 사용자\n\n- 기준선 측정과 자가 시험: 소유자 본인.\n- 가설 판정과 AC-22: 개발에 관여하지 않은 **동료 건축가 1~2명**. 판정자는 피험자와 분리한다.\n- AC-22 통과 조건: 개발자 외 피험자가 기준 과업을 개발자 개입 없이 완료하고, 후보/원본·접수/반영 상태를 스스로 설명한다.\n\n\u003c!-- codex-review:start -->\n\n> **[검토 · codex · R-01 · 높음]** **추가 지적.** **기준 과업의 판정 가능성.** 세 과업의 단계 배정은 유용하나 과업 ①의 매스만으로 층별 면적·일람표의 정답이 정해지지는 않는다. 제안: 작은 고정 시험 모델에 층 구분·높이/절단 기준·닫힌 형상·단위·면적 계산 규칙과 허용 오차를 선언한다. 유지 대상은 어떤 형상·속성·관계가 같아야 하는지 정하고, ②의 벽·문은 폴리라인 최소 표현임을 명시해 BIM 객체나 도면 완성까지 확대하지 않는다. 총시간은 입력 준비·대기·검토·수정·반영까지 같은 범위로 측정한다. 이 시험용 계산 가정은 법정 면적이나 모든 실제 프로젝트에 통용되는 건축 규칙의 확정을 뜻하지 않는다.\n\n\u003c!-- codex-review:end -->\n\n## 3. 결과 — 적용 시 바꿀 문장\n\n- PRD §14.2를 '기술 검수 과업'(현 목록)과 '기준 과업'(위 표)로 분리, §16.3에 기준 과업·측정 항목, OQ-06 결정 시점을 \"alpha 착수 전 기준선 측정\"으로 전진, AC-22 통과 기준 보강, §2 표에 우선순위·검증 시점 열, §17에 \"가설 미검증\" 위험 행. §18에 OQ-13·OQ-14 행(이 ADR 링크).\n- Design §13 검수에 외부 검수자와 실패 신호(후보를 원본으로 오답) 명시.\n\n\u003c!-- codex-review:start -->\n\n> **[검토 · codex · R-02 · 중간]** **추가 지적.** **기준선의 시점과 증거 해석.** ③을 MVP 조건이 아니라고 하면서 세 과업 모두의 수작업 기준선을 Rhino alpha 착수 전에 요구하면 후속 사이트 자료 준비가 첫 기능을 막는다. 제안: ①의 시험 자료·수작업 기준선은 그 alpha 가치 시험 전, ②는 ZWCAD 가치 시험 전, ③은 사이트 스킬 착수 시 측정한다. 작은 기술 실험과 읽기/입력 보존 구현은 이 전체 가치 시험과 구분한다. 1~2명 검수는 초기 사용성의 실패 신호를 찾는 데 유용하지만 일반적인 우위를 입증하는 표본으로 표현하지 않는다. 목표는 기준선 측정 뒤, AI 비교 결과를 보기 전에 정하고, 원래 오인·재작업이 0이면 감소 대신 비열화와 시간 지표 등 판정 방식을 선언한다.\n\n\u003c!-- codex-review:end -->\n\n## 4. 재검토 조건\n\n과업 ①이 Rhino alpha에서 수작업 대비 절감을 보이지 못하면 ADR-001·ADR-004의 축소 조건이 발동한다.\n\n## 5. 출처\n\nPRD R-50·R-58·R-27(1차 R-27 → 2차 답변), Codex R-30·R-38. 2026-09-17 brainstorming Q&A.\n\n\u003c!-- codex-review:start -->\n\n## 부록 · Codex 검토 요약 (2026-09-17)\n\n구체적인 과업과 개발자 외 검수자를 정한 것은 좋은 진전이다. 남은 것은 과업의 정답·허용 오차를 재현 가능하게 만들고, 후속 과업의 기준선이 현재 단계의 불필요한 선행 조건이 되지 않도록 하는 일이다.\n\n이번 검토는 사용자 수락이나 본문 반영을 뜻하지 않는다. 기존 스레드는 같은 ID로 갱신하고, 새 지적은 별도 ID를 부여한다. 철회 기록은 상대 참조가 정리될 때까지 남긴다.\n\n### 스레드 — Codex 2차\n\n| 위치 | Codex | Claude | 판단 | 상태 |\n|---|---|---|---|---|\n| 2. 결정 · 기준 과업의 판정 가능성 | [R-01](#review-R-01) | — | 보완 제안 | 사용자 판단 대기 |\n| 3. 결과 — 적용 시 바꿀 문장 · 기준선의 시점과 증거 해석 | [R-02](#review-R-02) | — | 보완 제안 | 사용자 판단 대기 |\n\n### 이번 라운드의 신규 검토\n\n| 대상 | Codex | 요지 |\n|---|---|---|\n| 2. 결정 | [R-01](#review-R-01) | 기준 과업의 판정 가능성 |\n| 3. 결과 — 적용 시 바꿀 문장 | [R-02](#review-R-02) | 기준선의 시점과 증거 해석 |\n\n### 결정이 필요한 사항\n\nRhino 면적 계산의 시험 가정·보존 대상·시간 측정 구간을 정한다. 각 단계의 기준선 시점을 분리하고, 소수 사용자 시험에서 주장할 수 있는 범위를 명확히 한다.\n\n### 다음 단계\n\n이 ADR의 사용자 선택과 기술적 보장·검증 조건을 구분해 비교한다. 수락할 보완을 정한 뒤 ADR의 적용 목록과 PRD·Design·가이드의 관련 문장을 함께 정리한다. 이번에는 결정 본문과 draft 상태를 보존하고 검토 의견만 추가했다.\n\n\u003c!-- codex-review:end -->\n"}}</script>
 <script id="reader-config" type="application/json">{"initial":"adr-006-benchmark-tasks-and-test-users","siteTitle":"VIDE"}</script>
 <script>
 (() => {

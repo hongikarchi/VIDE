@@ -69,8 +69,8 @@ body.review-accepted .toc-links a[data-reviews]::after{display:none}
 </style></head><body>
 <!-- GENERATED FILE — source: docs/decisions/ADR-007-web-review-online-submission-in-mvp.md — run: npm --prefix tools/docs run build -->
 <a class="skip" href="#reading-main">본문으로 이동</a>
-<header class="topbar"><a class="brand" href="../../index.html" aria-label="VIDE 문서 모음"><b>V.</b><span>VIDE</span></a><nav class="doc-tabs" aria-label="문서 선택"><a class="doc-tab" href="../PRD.html">PRD</a><a class="doc-tab" href="../../DEVELOPMENT_GUIDE.html">개발 가이드</a><a class="doc-tab" href="../../Design.html">Design</a><a class="doc-tab" href="../../AI.html">AI 규약</a></nav><div class="top-actions"><button id="source-download" title="현재 문서의 Markdown 원문 저장">원문 ↓</button><button id="print-doc" title="현재 문서 인쇄">인쇄</button></div></header>
-<div class="layout"><aside class="toc-shell" id="toc-shell" aria-label="현재 문서의 목차"><div class="toc-title"><strong>CONTENTS</strong><span id="toc-count"></span><button id="toc-toggle" aria-expanded="false" aria-controls="toc-body">목차 열기</button></div><div class="toc-body" id="toc-body"><input class="toc-search" id="toc-search" type="search" placeholder="장 제목으로 찾기" aria-label="현재 문서 목차 검색"><p class="toc-hint" id="nav-hint" role="status">장 제목으로 찾아갑니다.</p><nav class="toc-links" id="toc-links" aria-label="본문 장 이동"></nav><div class="toc-next">다음 작성할 문서<br><b>2차 검토 대화 → 사용자 결정</b><br>Codex·Claude 스레드 비교 → 항목별 수락/거부 → ADR·SPEC-00-common</div></div></aside><main id="reading-main" tabindex="-1"><article id="adr-007-web-review-online-submission-in-mvp" class="document"><header class="doc-hero"><div class="hero-label"><span class="eyebrow">DECISION RECORD</span><span><span class="pill">DRAFT · v0.1</span><span class="pill">6 CHAPTERS</span></span></div><h1 tabindex="-1">ADR-007 · 웹 검토 — 온라인 제출까지 MVP</h1><div class="hero-meta">
+<header class="topbar"><a class="brand" href="../../index.html" aria-label="VIDE 문서 모음"><b>V.</b><span>VIDE</span></a><nav class="doc-tabs" aria-label="문서 선택"><a class="doc-tab" href="../PRD.html">PRD</a><a class="doc-tab" href="../../DEVELOPMENT_GUIDE.html">개발 가이드</a><a class="doc-tab" href="../../Design.html">Design</a><a class="doc-tab" href="../../AI.html">AI 규약</a></nav><div class="top-actions"><label class="review-select">첨삭 <select id="review-mode" aria-label="첨삭 보기 방식"><option value="marked">표시</option><option value="original">원문만</option><option value="accepted">인라인 제안 미리보기</option></select></label><button id="source-download" title="현재 문서의 Markdown 원문 저장">원문 ↓</button><button id="print-doc" title="현재 문서 인쇄">인쇄</button></div></header>
+<div class="layout"><aside class="toc-shell" id="toc-shell" aria-label="현재 문서의 목차"><div class="toc-title"><strong>CONTENTS</strong><span id="toc-count"></span><button id="toc-toggle" aria-expanded="false" aria-controls="toc-body">목차 열기</button></div><div class="toc-body" id="toc-body"><input class="toc-search" id="toc-search" type="search" placeholder="장 제목으로 찾기" aria-label="현재 문서 목차 검색"><p class="toc-hint" id="nav-hint" role="status">장 제목으로 찾아갑니다.</p><nav class="toc-links" id="toc-links" aria-label="본문 장 이동"></nav><div class="toc-next">다음 작성할 문서<br><b>2차 검토 대화 → 사용자 결정</b><br>Codex·Claude 스레드 비교 → 항목별 수락/거부 → ADR·SPEC-00-common</div></div></aside><main id="reading-main" tabindex="-1"><article id="adr-007-web-review-online-submission-in-mvp" class="document"><header class="doc-hero"><div class="hero-label"><span class="eyebrow">DECISION RECORD</span><span><span class="pill">DRAFT · v0.1</span><span class="pill">7 CHAPTERS</span><a class="pill review-pill" data-review-agent="codex" href="#adr-007-web-review-online-submission-in-mvp-section-x6" title="CODEX 검토 요약으로 이동">CODEX 검토 2건</a></span></div><h1 tabindex="-1">ADR-007 · 웹 검토 — 온라인 제출까지 MVP</h1><div class="review-legend"><p><span><ins>초록</ins> 추가·교체 제안</span><span><del>빨강</del> 삭제·교체 대상</span><span>CLAUDE: 파란 상자 · CODEX: 보라 상자</span></p><p>검토자 필터는 코멘트·부록만 바꿉니다. ‘인라인 제안 미리보기’는 코멘트의 대안까지 합친 최종본이 아닙니다. 보기 전환은 MD 수정·수락·승인을 하지 않습니다.</p></div><div class="hero-meta">
 </div></header><section class="doc-section" id="adr-007-web-review-online-submission-in-mvp-section-1"><h2><span aria-hidden="true" class="section-num">01 /</span> 배경</h2>
 <p>FR-19·OQ-04는 웹 참여의 첫 제공 범위를 미정으로 두었다. 2차 검토(PRD R-53, Design R-42)는 미정 자체가 아키텍처 비용이라며 파일 교환(FR-14 HTML 패키지 안에서 코멘트·주석 작성 → 파일 반출 → IDE 반입)을 MVP 기본값으로 권했다. 온라인 제출은 1인 팀에 두 번째 프런트엔드(호스팅·인증·동기화)를 뜻한다.</p>
 </section><section class="doc-section" id="adr-007-web-review-online-submission-in-mvp-section-2"><h2><span aria-hidden="true" class="section-num">02 /</span> 선택지</h2>
@@ -108,6 +108,11 @@ body.review-accepted .toc-links a[data-reviews]::after{display:none}
 <li>웹 뷰어는 ADR-004의 IDE 자체 뷰와 표시용 형상·좌표계·객체 식별자를 공유한다. 웹 스케치는 '명명된 뷰 위 화면 주석'으로 저장하고, 객체 핀은 패키지가 식별자를 포함할 때만 허용한다(Design R-42 계약).</li>
 <li>파일 교환(A)은 온라인이 불가한 환경의 대체 경로로 함께 제공한다.</li>
 </ul>
+<!-- codex-review:start -->
+<blockquote class="review" data-review-agent="codex">
+<p><strong class="review-label" data-rid="R-01" data-review-agent="codex" id="review-R-01"><span class="review-agent">codex</span><span class="review-id">R-01</span><span class="review-sev" data-sev="높음">높음</span></strong> <strong>추가 지적.</strong> <strong>제출의 권한과 전달 보장.</strong> 온라인+파일이라는 사용자 선택은 유지한다. 다만 파일 대체 경로는 읽기 전용 HTML 출력만으로 얻어지는 기능이 아니며 내보내기·반입·자료 검증이 필요하다. 제안: 패키지/기준 버전과 의견의 고유 ID를 유지하고 온라인 재시도·파일 재반입에서 같은 의견을 중복 채택하지 않는다. 작성 저장→서버 접수 확인→IDE 수신→사용자 채택→원본 반영은 구분하며 작업 PC가 오프라인일 때도 접수 사실을 잃지 않는 경계를 정한다. 검토 링크의 접근 범위·만료/철회와 보관/삭제, 허용 첨부 형식·크기를 SPEC의 의미와 PLAN의 방법으로 나누고, 반입 자료를 실행 권한으로 해석하지 않는다. 실제 서버 기술이나 실시간 공동 편집을 여기서 추가할 필요는 없다.</p>
+</blockquote>
+<!-- codex-review:end -->
 </section><section class="doc-section" id="adr-007-web-review-online-submission-in-mvp-section-4"><h2><span aria-hidden="true" class="section-num">04 /</span> 결과 — 적용 시 바꿀 문장</h2>
 <ul>
 <li>PRD FR-19 범위 값 '제공 범위 미정' → 'MVP 지원 범위(온라인 제출 + 파일 교환)', OQ-04를 &quot;지원 기기·브라우저 범위&quot;로 좁히고 이 ADR 링크. §12.5·§14.1 외부 웹 행, AC-28.</li>
@@ -119,11 +124,75 @@ body.review-accepted .toc-links a[data-reviews]::after{display:none}
 <li>Rhino alpha 판정 시점까지 중계 서비스·인증 스파이크가 끝나지 않으면 MVP 출시 조건에서 온라인 제출을 빼고 파일 교환(A)으로 출시한 뒤 온라인은 후속 확장으로 옮긴다.</li>
 <li>ADR-004가 자체 뷰를 축소하면 웹 뷰어는 캡처·명명된 뷰 기반으로 재정의한다.</li>
 </ul>
+<!-- codex-review:start -->
+<blockquote class="review" data-review-agent="codex">
+<p><strong class="review-label" data-rid="R-02" data-review-agent="codex" id="review-R-02"><span class="review-agent">codex</span><span class="review-id">R-02</span><span class="review-sev" data-sev="중간">중간</span></strong> <strong>추가 지적.</strong> <strong>스파이크 미완료와 출시 범위.</strong> Rhino alpha 시점에 중계 스파이크가 끝나지 않은 것은 온라인 기능이 불가능하다는 증거와 다르다. 온라인은 명시적으로 선택된 MVP 범위이므로, alpha에서 조사 미완료·실패·보완 가능을 나누고 다음 일정/노력 상한이나 범위 변경을 판단하는 것으로 적는 편이 명확하다. 사용자가 alpha 시점의 파일 전용 전환까지 조건부 수락했다면 그 의도를 문장에 분명히 남기고, 그렇지 않으면 에이전트가 자동으로 후속화하지 않는다. 파일 대체 경로도 기준 버전 대조·반입 검수가 완료되어야 출시 대안이 된다.</p>
+</blockquote>
+<!-- codex-review:end -->
 </section><section class="doc-section" id="adr-007-web-review-online-submission-in-mvp-section-6"><h2><span aria-hidden="true" class="section-num">06 /</span> 출처</h2>
 <p>PRD R-53·R-48, Codex R-44, Design R-42·R-40. 2026-09-17 brainstorming Q&amp;A.</p>
+<!-- codex-review:start -->
+</section><section class="doc-section review-appendix" id="adr-007-web-review-online-submission-in-mvp-section-x6" data-review-agent="codex"><h2><span aria-hidden="true" class="section-num">06 /</span> 부록 · Codex 검토 요약 (2026-09-17)</h2>
+<p>온라인 제출까지 제공하는 선택을 존중한다. 외부 의견이 접수·수신·채택·적용되는 의미와 파일 대체 경로의 중복 처리, 미완료 실험을 근거로 한 자동 후속화 조건을 보완할 것을 권한다.</p>
+<p>이번 검토는 사용자 수락이나 본문 반영을 뜻하지 않는다. 기존 스레드는 같은 ID로 갱신하고, 새 지적은 별도 ID를 부여한다. 철회 기록은 상대 참조가 정리될 때까지 남긴다.</p>
+<h3>스레드 — Codex 2차</h3>
+<div aria-label="ADR 표 2" class="table-scroll" role="region" tabindex="0"><table>
+<thead>
+<tr>
+<th>위치</th>
+<th>Codex</th>
+<th>Claude</th>
+<th>판단</th>
+<th>상태</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>3. 결정 · 제출의 권한과 전달 보장</td>
+<td><a href="#review-R-01">R-01</a></td>
+<td>—</td>
+<td>보완 제안</td>
+<td>사용자 판단 대기</td>
+</tr>
+<tr>
+<td>5. 축소 조건 · 스파이크 미완료와 출시 범위</td>
+<td><a href="#review-R-02">R-02</a></td>
+<td>—</td>
+<td>보완 제안</td>
+<td>사용자 판단 대기</td>
+</tr>
+</tbody>
+</table></div>
+<h3>이번 라운드의 신규 검토</h3>
+<div aria-label="ADR 표 3" class="table-scroll" role="region" tabindex="0"><table>
+<thead>
+<tr>
+<th>대상</th>
+<th>Codex</th>
+<th>요지</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>3. 결정</td>
+<td><a href="#review-R-01">R-01</a></td>
+<td>제출의 권한과 전달 보장</td>
+</tr>
+<tr>
+<td>5. 축소 조건</td>
+<td><a href="#review-R-02">R-02</a></td>
+<td>스파이크 미완료와 출시 범위</td>
+</tr>
+</tbody>
+</table></div>
+<h3>결정이 필요한 사항</h3>
+<p>외부 의견의 기준·권한·접수 확인·중복 방지와 오프라인 복구를 정한다. alpha 시점의 파일 전용 전환이 자동 조건인지 사용자 재검토 지점인지 명시한다.</p>
+<h3>다음 단계</h3>
+<p>이 ADR의 사용자 선택과 기술적 보장·검증 조건을 구분해 비교한다. 수락할 보완을 정한 뒤 ADR의 적용 목록과 PRD·Design·가이드의 관련 문장을 함께 정리한다. 이번에는 결정 본문과 draft 상태를 보존하고 검토 의견만 추가했다.</p>
+<!-- codex-review:end -->
 </section><footer class="doc-footer"><span>VIDE / PLANNING DOCUMENTS</span><span>문서 열람용 · 실제 CAD/BIM 지원은 구현·검증 후 선언</span></footer></article></main></div>
 <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
-<script id="source-data" type="application/json">{"adr-007-web-review-online-submission-in-mvp":{"label":"웹 검토 — 온라인 제출까지 MVP에 포함","file":"ADR-007-web-review-online-submission-in-mvp.md","markdown":"---\nid: ADR-007\ntitle: 웹 검토 — 온라인 제출까지 MVP에 포함\nstatus: draft\nversion: 0.1\nupdated: 2026-09-17\nowner: user\nrelated: [OQ-04, FR-14, FR-19, AC-19, AC-28]\n---\n\n# ADR-007 · 웹 검토 — 온라인 제출까지 MVP\n\n## 1. 배경\n\nFR-19·OQ-04는 웹 참여의 첫 제공 범위를 미정으로 두었다. 2차 검토(PRD R-53, Design R-42)는 미정 자체가 아키텍처 비용이라며 파일 교환(FR-14 HTML 패키지 안에서 코멘트·주석 작성 → 파일 반출 → IDE 반입)을 MVP 기본값으로 권했다. 온라인 제출은 1인 팀에 두 번째 프런트엔드(호스팅·인증·동기화)를 뜻한다.\n\n## 2. 선택지\n\n| 안 | 내용 | 트레이드오프 |\n|---|---|---|\n| A | 파일 교환만 MVP | 서버·인증 없음. 검토자가 파일을 돌려보내야 함 |\n| B | 온라인 제출까지 MVP | 검토자 경험이 완결됨. 게시 주체(작업 PC / 중계 서비스)·인증·기준 버전 동기화·재접속(AC-28)이 MVP에 들어옴 |\n| C | 보류 | SPEC-00 권한 모델이 외부 검토자를 포함할지 정하지 못함 |\n\n## 3. 결정\n\n**B. 온라인 제출까지 MVP에 포함한다.** 권고(A)와 다른 선택이며 소유자가 비용을 알고 정했다.\n\n- 외부 검토자는 브라우저에서 기준 버전의 모델·자료를 보고 코멘트·화면 주석을 온라인으로 제출한다. IDE는 제출을 기준 버전과 함께 수신·비교·선택 채택한다(AC-19). 원본 반영 권한은 여전히 외부 검토자에게 없다(PRD §12.5).\n- 게시 주체는 **작업 PC 직접 게시가 아니라 중계 서비스**로 한다(PRD §12.5 방화벽 조건). 인증·호스팅·데이터 보관 방식은 PLAN과 스파이크에서 정한다.\n- 웹 뷰어는 ADR-004의 IDE 자체 뷰와 표시용 형상·좌표계·객체 식별자를 공유한다. 웹 스케치는 '명명된 뷰 위 화면 주석'으로 저장하고, 객체 핀은 패키지가 식별자를 포함할 때만 허용한다(Design R-42 계약).\n- 파일 교환(A)은 온라인이 불가한 환경의 대체 경로로 함께 제공한다.\n\n## 4. 결과 — 적용 시 바꿀 문장\n\n- PRD FR-19 범위 값 '제공 범위 미정' → 'MVP 지원 범위(온라인 제출 + 파일 교환)', OQ-04를 \"지원 기기·브라우저 범위\"로 좁히고 이 ADR 링크. §12.5·§14.1 외부 웹 행, AC-28.\n- Design §12 웹 행을 ① 웹 검토(온라인·파일 경로) ② IDE 반입·채택 화면 ③ 인증·재접속으로 분리(Design R-42).\n- 배포 형태(ADR-002)가 개인 도구 단계인 동안 중계 서비스는 소유자 계정의 단일 인스턴스로 충분하다.\n\n## 5. 축소 조건\n\n- Rhino alpha 판정 시점까지 중계 서비스·인증 스파이크가 끝나지 않으면 MVP 출시 조건에서 온라인 제출을 빼고 파일 교환(A)으로 출시한 뒤 온라인은 후속 확장으로 옮긴다.\n- ADR-004가 자체 뷰를 축소하면 웹 뷰어는 캡처·명명된 뷰 기반으로 재정의한다.\n\n## 6. 출처\n\nPRD R-53·R-48, Codex R-44, Design R-42·R-40. 2026-09-17 brainstorming Q&A.\n"}}</script>
+<script id="source-data" type="application/json">{"adr-007-web-review-online-submission-in-mvp":{"label":"웹 검토 — 온라인 제출까지 MVP에 포함","file":"ADR-007-web-review-online-submission-in-mvp.md","markdown":"---\nid: ADR-007\ntitle: 웹 검토 — 온라인 제출까지 MVP에 포함\nstatus: draft\nversion: 0.1\nupdated: 2026-09-17\nowner: user\nrelated: [OQ-04, FR-14, FR-19, AC-19, AC-28]\n---\n\n# ADR-007 · 웹 검토 — 온라인 제출까지 MVP\n\n## 1. 배경\n\nFR-19·OQ-04는 웹 참여의 첫 제공 범위를 미정으로 두었다. 2차 검토(PRD R-53, Design R-42)는 미정 자체가 아키텍처 비용이라며 파일 교환(FR-14 HTML 패키지 안에서 코멘트·주석 작성 → 파일 반출 → IDE 반입)을 MVP 기본값으로 권했다. 온라인 제출은 1인 팀에 두 번째 프런트엔드(호스팅·인증·동기화)를 뜻한다.\n\n## 2. 선택지\n\n| 안 | 내용 | 트레이드오프 |\n|---|---|---|\n| A | 파일 교환만 MVP | 서버·인증 없음. 검토자가 파일을 돌려보내야 함 |\n| B | 온라인 제출까지 MVP | 검토자 경험이 완결됨. 게시 주체(작업 PC / 중계 서비스)·인증·기준 버전 동기화·재접속(AC-28)이 MVP에 들어옴 |\n| C | 보류 | SPEC-00 권한 모델이 외부 검토자를 포함할지 정하지 못함 |\n\n## 3. 결정\n\n**B. 온라인 제출까지 MVP에 포함한다.** 권고(A)와 다른 선택이며 소유자가 비용을 알고 정했다.\n\n- 외부 검토자는 브라우저에서 기준 버전의 모델·자료를 보고 코멘트·화면 주석을 온라인으로 제출한다. IDE는 제출을 기준 버전과 함께 수신·비교·선택 채택한다(AC-19). 원본 반영 권한은 여전히 외부 검토자에게 없다(PRD §12.5).\n- 게시 주체는 **작업 PC 직접 게시가 아니라 중계 서비스**로 한다(PRD §12.5 방화벽 조건). 인증·호스팅·데이터 보관 방식은 PLAN과 스파이크에서 정한다.\n- 웹 뷰어는 ADR-004의 IDE 자체 뷰와 표시용 형상·좌표계·객체 식별자를 공유한다. 웹 스케치는 '명명된 뷰 위 화면 주석'으로 저장하고, 객체 핀은 패키지가 식별자를 포함할 때만 허용한다(Design R-42 계약).\n- 파일 교환(A)은 온라인이 불가한 환경의 대체 경로로 함께 제공한다.\n\n\u003c!-- codex-review:start -->\n\n> **[검토 · codex · R-01 · 높음]** **추가 지적.** **제출의 권한과 전달 보장.** 온라인+파일이라는 사용자 선택은 유지한다. 다만 파일 대체 경로는 읽기 전용 HTML 출력만으로 얻어지는 기능이 아니며 내보내기·반입·자료 검증이 필요하다. 제안: 패키지/기준 버전과 의견의 고유 ID를 유지하고 온라인 재시도·파일 재반입에서 같은 의견을 중복 채택하지 않는다. 작성 저장→서버 접수 확인→IDE 수신→사용자 채택→원본 반영은 구분하며 작업 PC가 오프라인일 때도 접수 사실을 잃지 않는 경계를 정한다. 검토 링크의 접근 범위·만료/철회와 보관/삭제, 허용 첨부 형식·크기를 SPEC의 의미와 PLAN의 방법으로 나누고, 반입 자료를 실행 권한으로 해석하지 않는다. 실제 서버 기술이나 실시간 공동 편집을 여기서 추가할 필요는 없다.\n\n\u003c!-- codex-review:end -->\n\n## 4. 결과 — 적용 시 바꿀 문장\n\n- PRD FR-19 범위 값 '제공 범위 미정' → 'MVP 지원 범위(온라인 제출 + 파일 교환)', OQ-04를 \"지원 기기·브라우저 범위\"로 좁히고 이 ADR 링크. §12.5·§14.1 외부 웹 행, AC-28.\n- Design §12 웹 행을 ① 웹 검토(온라인·파일 경로) ② IDE 반입·채택 화면 ③ 인증·재접속으로 분리(Design R-42).\n- 배포 형태(ADR-002)가 개인 도구 단계인 동안 중계 서비스는 소유자 계정의 단일 인스턴스로 충분하다.\n\n## 5. 축소 조건\n\n- Rhino alpha 판정 시점까지 중계 서비스·인증 스파이크가 끝나지 않으면 MVP 출시 조건에서 온라인 제출을 빼고 파일 교환(A)으로 출시한 뒤 온라인은 후속 확장으로 옮긴다.\n- ADR-004가 자체 뷰를 축소하면 웹 뷰어는 캡처·명명된 뷰 기반으로 재정의한다.\n\n\u003c!-- codex-review:start -->\n\n> **[검토 · codex · R-02 · 중간]** **추가 지적.** **스파이크 미완료와 출시 범위.** Rhino alpha 시점에 중계 스파이크가 끝나지 않은 것은 온라인 기능이 불가능하다는 증거와 다르다. 온라인은 명시적으로 선택된 MVP 범위이므로, alpha에서 조사 미완료·실패·보완 가능을 나누고 다음 일정/노력 상한이나 범위 변경을 판단하는 것으로 적는 편이 명확하다. 사용자가 alpha 시점의 파일 전용 전환까지 조건부 수락했다면 그 의도를 문장에 분명히 남기고, 그렇지 않으면 에이전트가 자동으로 후속화하지 않는다. 파일 대체 경로도 기준 버전 대조·반입 검수가 완료되어야 출시 대안이 된다.\n\n\u003c!-- codex-review:end -->\n\n## 6. 출처\n\nPRD R-53·R-48, Codex R-44, Design R-42·R-40. 2026-09-17 brainstorming Q&A.\n\n\u003c!-- codex-review:start -->\n\n## 부록 · Codex 검토 요약 (2026-09-17)\n\n온라인 제출까지 제공하는 선택을 존중한다. 외부 의견이 접수·수신·채택·적용되는 의미와 파일 대체 경로의 중복 처리, 미완료 실험을 근거로 한 자동 후속화 조건을 보완할 것을 권한다.\n\n이번 검토는 사용자 수락이나 본문 반영을 뜻하지 않는다. 기존 스레드는 같은 ID로 갱신하고, 새 지적은 별도 ID를 부여한다. 철회 기록은 상대 참조가 정리될 때까지 남긴다.\n\n### 스레드 — Codex 2차\n\n| 위치 | Codex | Claude | 판단 | 상태 |\n|---|---|---|---|---|\n| 3. 결정 · 제출의 권한과 전달 보장 | [R-01](#review-R-01) | — | 보완 제안 | 사용자 판단 대기 |\n| 5. 축소 조건 · 스파이크 미완료와 출시 범위 | [R-02](#review-R-02) | — | 보완 제안 | 사용자 판단 대기 |\n\n### 이번 라운드의 신규 검토\n\n| 대상 | Codex | 요지 |\n|---|---|---|\n| 3. 결정 | [R-01](#review-R-01) | 제출의 권한과 전달 보장 |\n| 5. 축소 조건 | [R-02](#review-R-02) | 스파이크 미완료와 출시 범위 |\n\n### 결정이 필요한 사항\n\n외부 의견의 기준·권한·접수 확인·중복 방지와 오프라인 복구를 정한다. alpha 시점의 파일 전용 전환이 자동 조건인지 사용자 재검토 지점인지 명시한다.\n\n### 다음 단계\n\n이 ADR의 사용자 선택과 기술적 보장·검증 조건을 구분해 비교한다. 수락할 보완을 정한 뒤 ADR의 적용 목록과 PRD·Design·가이드의 관련 문장을 함께 정리한다. 이번에는 결정 본문과 draft 상태를 보존하고 검토 의견만 추가했다.\n\n\u003c!-- codex-review:end -->\n"}}</script>
 <script id="reader-config" type="application/json">{"initial":"adr-007-web-review-online-submission-in-mvp","siteTitle":"VIDE"}</script>
 <script>
 (() => {
