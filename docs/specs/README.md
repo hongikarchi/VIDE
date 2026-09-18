@@ -2,8 +2,8 @@
 id: INDEX-SPECS
 title: SPEC 색인
 status: draft
-version: 0.1
-updated: 2026-09-17
+version: 0.2
+updated: 2026-09-18
 owner: user
 related: []
 ---
@@ -35,3 +35,4 @@ FR → SPEC 대응표. 이 표가 FR → SPEC 대응의 원본이다(AI.md §7).
 | FR-19 | 미작성 | — |
 | FR-20 | 미작성 | — |
 | FR-21 | 미작성 | — |
+| FR-22 | 미작성 | — |

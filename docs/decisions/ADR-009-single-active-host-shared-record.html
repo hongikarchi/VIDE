@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="description" content="ADR-009 · 단일 활성 호스트 + 공유 기록"><meta name="generator" content="tools/docs/build.mjs — generated from docs/decisions/ADR-009-single-active-host-shared-record.md; do not edit"><title>VIDE · 다중 호스트 연결 — 단일 활성 호스트 + 프로젝트 공유 기록</title><style>
+<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="description" content="ADR-009 · 여러 호스트를 하나의 설계 작업으로 연결한다"><meta name="generator" content="tools/docs/build.mjs — generated from docs/decisions/ADR-009-single-active-host-shared-record.md; do not edit"><title>VIDE · 복수 호스트 연결·연계 작업·독립 작업 병렬 실행</title><style>
 :root{--ink:#292c2d;--muted:#626b6e;--line:#e1e3e1;--soft:#f5f5f1;--coral:#d97660;--paper:#fff;--font:"Pretendard","Noto Sans KR","Malgun Gothic",Arial,sans-serif}
 *{box-sizing:border-box}html{scroll-behavior:smooth;scroll-padding-top:92px}body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--font);letter-spacing:-.025em}a{color:inherit;text-underline-offset:4px}button,input,textarea,select{font:inherit;color:inherit}button{cursor:pointer;border:1px solid var(--line);border-radius:4px;background:var(--paper);padding:10px 15px;line-height:1.3}button:hover{background:var(--soft)}button:disabled{cursor:default;opacity:.6}button.primary{background:var(--ink);color:#fff;border-color:var(--ink)}button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible{outline:3px solid var(--coral);outline-offset:3px}textarea{resize:vertical}::selection{background:#f2d7ce}[hidden]{display:none!important}
 .skip{position:fixed;top:-80px;left:20px;z-index:100;background:white;padding:12px}.skip:focus{top:10px}
@@ -69,77 +69,27 @@ body.review-accepted .toc-links a[data-reviews]::after{display:none}
 </style></head><body>
 <!-- GENERATED FILE — source: docs/decisions/ADR-009-single-active-host-shared-record.md — run: npm --prefix tools/docs run build -->
 <a class="skip" href="#reading-main">본문으로 이동</a>
-<header class="topbar"><a class="brand" href="../../index.html" aria-label="VIDE 문서 모음"><b>V.</b><span>VIDE</span></a><nav class="doc-tabs" aria-label="문서 선택"><a class="doc-tab" href="../PRD.html">PRD</a><a class="doc-tab" href="../../DEVELOPMENT_GUIDE.html">개발 가이드</a><a class="doc-tab" href="../../Design.html">Design</a><a class="doc-tab" href="../../AI.html">AI 규약</a></nav><div class="top-actions"><label class="review-select">첨삭 <select id="review-mode" aria-label="첨삭 보기 방식"><option value="marked">표시</option><option value="original">원문만</option><option value="accepted">인라인 제안 미리보기</option></select></label><button id="source-download" title="현재 문서의 Markdown 원문 저장">원문 ↓</button><button id="print-doc" title="현재 문서 인쇄">인쇄</button></div></header>
-<div class="layout"><aside class="toc-shell" id="toc-shell" aria-label="현재 문서의 목차"><div class="toc-title"><strong>CONTENTS</strong><span id="toc-count"></span><button id="toc-toggle" aria-expanded="false" aria-controls="toc-body">목차 열기</button></div><div class="toc-body" id="toc-body"><input class="toc-search" id="toc-search" type="search" placeholder="장 제목으로 찾기" aria-label="현재 문서 목차 검색"><p class="toc-hint" id="nav-hint" role="status">장 제목으로 찾아갑니다.</p><nav class="toc-links" id="toc-links" aria-label="본문 장 이동"></nav><div class="toc-next">다음 작성할 문서<br><b>2차 검토 대화 → 사용자 결정</b><br>Codex·Claude 스레드 비교 → 항목별 수락/거부 → ADR·SPEC-00-common</div></div></aside><main id="reading-main" tabindex="-1"><article id="adr-009-single-active-host-shared-record" class="document"><header class="doc-hero"><div class="hero-label"><span class="eyebrow">DECISION RECORD</span><span><span class="pill">DRAFT · v0.1</span><span class="pill">6 CHAPTERS</span><a class="pill review-pill" data-review-agent="codex" href="#adr-009-single-active-host-shared-record-section-x5" title="CODEX 검토 요약으로 이동">CODEX 검토 1건</a></span></div><h1 tabindex="-1">ADR-009 · 단일 활성 호스트 + 공유 기록</h1><div class="review-legend"><p><span><ins>초록</ins> 추가·교체 제안</span><span><del>빨강</del> 삭제·교체 대상</span><span>CLAUDE: 파란 상자 · CODEX: 보라 상자</span></p><p>검토자 필터는 코멘트·부록만 바꿉니다. ‘인라인 제안 미리보기’는 코멘트의 대안까지 합친 최종본이 아닙니다. 보기 전환은 MD 수정·수락·승인을 하지 않습니다.</p></div><div class="hero-meta">
-</div></header><section class="doc-section" id="adr-009-single-active-host-shared-record-section-1"><h2><span aria-hidden="true" class="section-num">01 /</span> 배경</h2>
-<p>PLAN §7.1(구 PRD §14.2)·AC-25는 두 호스트의 동시 라이브 연결을 MVP 완료 조건으로 두지만 §2 문제표에 대응 문제가 없고 §12.2가 호스트 간 변환·동기화를 이미 제외했다. 남는 가치는 '대상 혼동 없음'이라는 격리 속성뿐인데, 그 하나를 위해 두 호스트 프로세스·두 문서 버전·교차 상태 기계를 첫 호스트 완성 전에 설계하게 된다(PRD R-57, Codex R-43).</p>
-</section><section class="doc-section" id="adr-009-single-active-host-shared-record-section-2"><h2><span aria-hidden="true" class="section-num">02 /</span> 결정</h2>
-<ul>
-<li><strong>WorkScope와 Run은 호스트 문서 하나를 대상으로 한다.</strong> 프로젝트는 여러 호스트·문서를 등록하고, 설계 대상 중심의 공유 기록(§6.1)으로 잇는다. 격리는 시험이 아니라 구조로 보장한다.</li>
-<li>AC-25는 &quot;등록됐지만 비활성인 호스트에 쓰기가 발생하지 않고, 요청 대상은 요청 시점의 문서·버전에 고정된다(순차 연결 포함)&quot;로 축소한다. §8.1의 &quot;프로그램을 전환해도 요청 대상이 바뀌지 않는다&quot;는 이 고정으로 충족된다.</li>
-<li>두 호스트 시험(구 PRD §14.2, 현재 PLAN §7.1)은 목적을 '어댑터 계약 차이 확인'으로 바꾼다. 동시 라이브 연결은 후속 확장이다.</li>
-</ul>
-<!-- codex-review:start -->
-<blockquote class="review" data-review-agent="codex">
-<p><strong class="review-label" data-rid="R-01" data-review-agent="codex" id="review-R-01"><span class="review-agent">codex</span><span class="review-id">R-01</span><span class="review-sev" data-sev="높음">높음</span></strong> <strong>추가 지적.</strong> <strong>활성 전환과 진행 중 쓰기.</strong> WorkScope/Run의 단일 문서 대상과 공유 기록 선택에는 동의한다. 다만 격리를 시험 대신 구조로 보장한다는 문장은 구조와 시험을 함께 사용하는 것으로 수정할 것을 권한다. A에서 시작한 중단 불가 쓰기가 B 활성화 후 완료되면 대상은 고정했어도 비활성 호스트 쓰기 금지와 충돌한다. 제안: 활성 대상의 적용 범위를 정하고, 쓰기 중 전환을 막거나 실제 정지/완료를 확인한 뒤 넘긴다. 결과 불명은 확인 전 새 쓰기를 허용하지 않는다. 요청에는 호스트·문서 인스턴스·기준 버전·연결 세대를 고정하고 화면의 현재 선택으로 재해석하지 않는다. A→B→A 전환·문서 재열기·늦은 응답·연결 끊김을 시험해야 하며 동시 라이브 연결 기능을 추가할 필요는 없다.</p>
-</blockquote>
-<!-- codex-review:end -->
-</section><section class="doc-section" id="adr-009-single-active-host-shared-record-section-3"><h2><span aria-hidden="true" class="section-num">03 /</span> 결과 — 적용 시 바꿀 문장</h2>
-<p>PRD §14.1 다중 호스트 정의, PLAN §7.1 두 호스트 시험 문장, AC-25 통과 기준, FR-02 수용 기준(동시성 제외). SPEC-00-common: 프로젝트–호스트–WorkScope 관계와 활성 호스트 전환 상태.</p>
-</section><section class="doc-section" id="adr-009-single-active-host-shared-record-section-4"><h2><span aria-hidden="true" class="section-num">04 /</span> 재검토 조건</h2>
-<p>Rhino→ZWCAD 인계 작업에서 한 작업 안에 두 호스트를 함께 써야 하는 여정이 실제로 나오면 동시 연결을 다시 검토한다.</p>
-</section><section class="doc-section" id="adr-009-single-active-host-shared-record-section-5"><h2><span aria-hidden="true" class="section-num">05 /</span> 출처</h2>
-<p>PRD R-57·R-47, Codex R-43. 2026-09-17 brainstorming Q&amp;A.</p>
-<!-- codex-review:start -->
-</section><section class="doc-section review-appendix" id="adr-009-single-active-host-shared-record-section-x5" data-review-agent="codex"><h2><span aria-hidden="true" class="section-num">05 /</span> 부록 · Codex 검토 요약 (2026-09-17)</h2>
-<p>동시 라이브 연결을 제외하면서 대상 고정을 유지하는 선택은 명확하다. 남은 핵심은 이미 실행 중인 쓰기와 활성 전환 사이의 의미이며, 단일 활성 구조만으로 그 검증이 대체되지는 않는다.</p>
-<p>이번 검토는 사용자 수락이나 본문 반영을 뜻하지 않는다. 기존 스레드는 같은 ID로 갱신하고, 새 지적은 별도 ID를 부여한다. 철회 기록은 상대 참조가 정리될 때까지 남긴다.</p>
-<h3>스레드 — Codex 2차</h3>
-<div aria-label="ADR 표 1" class="table-scroll" role="region" tabindex="0"><table>
-<thead>
-<tr>
-<th>위치</th>
-<th>Codex</th>
-<th>Claude</th>
-<th>판단</th>
-<th>상태</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>2. 결정 · 활성 전환과 진행 중 쓰기</td>
-<td><a href="#review-R-01">R-01</a></td>
-<td>—</td>
-<td>보완 제안</td>
-<td>사용자 판단 대기</td>
-</tr>
-</tbody>
-</table></div>
-<h3>이번 라운드의 신규 검토</h3>
-<div aria-label="ADR 표 2" class="table-scroll" role="region" tabindex="0"><table>
-<thead>
-<tr>
-<th>대상</th>
-<th>Codex</th>
-<th>요지</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>2. 결정</td>
-<td><a href="#review-R-01">R-01</a></td>
-<td>활성 전환과 진행 중 쓰기</td>
-</tr>
-</tbody>
-</table></div>
-<h3>결정이 필요한 사항</h3>
-<p>단일 활성의 적용 범위와 진행 중/결과 불명 쓰기의 전환 정책을 정한다. AC-25에는 그 경계를 재현하는 순차 전환 시험을 남긴다.</p>
-<h3>다음 단계</h3>
-<p>이 ADR의 사용자 선택과 기술적 보장·검증 조건을 구분해 비교한다. 수락할 보완을 정한 뒤 ADR의 적용 목록과 PRD·Design·가이드의 관련 문장을 함께 정리한다. 이번에는 결정 본문과 draft 상태를 보존하고 검토 의견만 추가했다.</p>
-<!-- codex-review:end -->
+<header class="topbar"><a class="brand" href="../../index.html" aria-label="VIDE 문서 모음"><b>V.</b><span>VIDE</span></a><nav class="doc-tabs" aria-label="문서 선택"><a class="doc-tab" href="../PRD.html">PRD</a><a class="doc-tab" href="../../DEVELOPMENT_GUIDE.html">개발 가이드</a><a class="doc-tab" href="../../Design.html">Design</a><a class="doc-tab" href="../../AI.html">AI 규약</a></nav><div class="top-actions"><button id="source-download" title="현재 문서의 Markdown 원문 저장">원문 ↓</button><button id="print-doc" title="현재 문서 인쇄">인쇄</button></div></header>
+<div class="layout"><aside class="toc-shell" id="toc-shell" aria-label="현재 문서의 목차"><div class="toc-title"><strong>CONTENTS</strong><span id="toc-count"></span><button id="toc-toggle" aria-expanded="false" aria-controls="toc-body">목차 열기</button></div><div class="toc-body" id="toc-body"><input class="toc-search" id="toc-search" type="search" placeholder="장 제목으로 찾기" aria-label="현재 문서 목차 검색"><p class="toc-hint" id="nav-hint" role="status">장 제목으로 찾아갑니다.</p><nav class="toc-links" id="toc-links" aria-label="본문 장 이동"></nav><div class="toc-next">다음 작성할 문서<br><b>2차 검토 대화 → 사용자 결정</b><br>Codex·Claude 스레드 비교 → 항목별 수락/거부 → ADR·SPEC-00-common</div></div></aside><main id="reading-main" tabindex="-1"><article id="adr-009-single-active-host-shared-record" class="document"><header class="doc-hero"><div class="hero-label"><span class="eyebrow">DECISION RECORD</span><span><span class="pill">APPROVED · v0.2</span><span class="pill">5 CHAPTERS</span></span></div><h1 tabindex="-1">ADR-009 · 여러 호스트를 하나의 설계 작업으로 연결한다</h1><div class="hero-meta">
+</div></header><section class="doc-section" id="adr-009-single-active-host-shared-record-section-1"><h2><span aria-hidden="true" class="section-num">01 /</span> 결정</h2>
+<p>Rhino와 ZWCAD의 복수 연결을 지원하고, 하나의 작업 범위에서 여러 호스트의 정보와 변경을 연결한다. 선언한 객체·동작 범위에서 CAD 정보를 이용해 Rhino에 네이티브 결과를 생성하거나, 하나의 설계 변경을 도면과 모델의 지정 대상에 함께 반영할 수 있어야 한다.</p>
+<p>독립 작업은 병렬로 진행할 수 있고, 앞선 결과에 의존하거나 충돌하는 작업은 필요한 순서를 관리한다. 모든 명령을 무조건 동시에 실행한다는 뜻이 아니다. 사용자는 전체 목적과 호스트별 진행·후보·적용 결과를 보고 개입한다.</p>
+<p>WorkScope와 Run을 호스트 문서 하나로 제한하는 안과, 단일 활성 호스트만 제어하는 안은 채택하지 않는다. 화면에서 보고 있는 호스트와 실제 실행 대상을 구분한다. 실행마다 호스트·문서·대상이 명시되어야 한다.</p>
+</section><section class="doc-section" id="adr-009-single-active-host-shared-record-section-2"><h2><span aria-hidden="true" class="section-num">02 /</span> 판단 근거</h2>
+<p>사용자가 'CAD 정보를 읽어 Rhino에 매스로 반영'하고 '설계 변경을 도면·모델 양쪽에 반영'하는 실제 여정을 제시했다. 따라서 두 도구를 지원 목록에 올리는 것을 넘어 하나의 요청에서 연결하는 능력이 MVP 가치에 해당한다.</p>
+<p>복수 연결, 호스트 간 연계, 독립 작업의 병렬 실행은 다른 능력이다. 두 개의 독립 에이전트를 띄웠다는 것만으로 공동 변경의 일관성을 검증하지 않는다. 호스트별 전용 AI 모델이나 추가 감독 에이전트를 필수로 정하지 않는다.</p>
+</section><section class="doc-section" id="adr-009-single-active-host-shared-record-section-3"><h2><span aria-hidden="true" class="section-num">03 /</span> 보장 범위와 한계</h2>
+<p>대상 대응·좌표·단위·입력 기준과 작업 의존성을 구분한다. 처음부터 모든 객체의 자동 대응을 보장하지 않고 사용자 지정 또는 확인된 대응에서 시작할 수 있다.</p>
+<p>한쪽 적용 성공과 다른 쪽 실패·결과 불명을 전체 성공으로 표시하지 않는다. 이미 확인된 변경은 재시도 과정에서 중복 적용하지 않는다. 전체 요청 또는 하위 작업에 대한 개입과 관련 작업에 미치는 영향은 SPEC에서 정한다.</p>
+<p>요청 없는 상시 양방향 동기화, 임의 객체의 무손실 변환, 모든 호스트의 원자적 성공·취소·복구는 첫 출시 보장이 아니다. 선택·카메라 동기화도 별도 능력이다.</p>
+<p>프로젝트별 한 로컬 작업환경(ADR-002)은 이 결정과 양립한다. 여러 로컬 PC의 공동 제어를 포함한다는 뜻은 아니다.</p>
+</section><section class="doc-section" id="adr-009-single-active-host-shared-record-section-4"><h2><span aria-hidden="true" class="section-num">04 /</span> 기준 문서와 구현 위임</h2>
+<p>PRD §12.2·§14.1·FR-02가 제품의 정본이며, AC-25·32·33에서 연결·연계·부분 결과를 확인한다. SPEC-00 및 연계 기능 SPEC은 논리적 실행 대상·선후관계·충돌·개입·재개를 정한다. PLAN은 큐·메시지·연결·호스트 스레드·저장 등의 기술 방법을 정한다.</p>
+</section><section class="doc-section" id="adr-009-single-active-host-shared-record-section-5"><h2><span aria-hidden="true" class="section-num">05 /</span> 승인 근거</h2>
+<p>2026-09-18 순차 결정 2에서 사용자가 수정한 C안(복수 연결 + 호스트 간 연계 + 독립 작업의 병렬 실행)을 수락했다. 이전 단일 활성 호스트 초안은 적용하지 않는다. 번호와 경로는 유지하며 현재 의미는 제목과 본문을 따른다. 기준 커밋은 <code>e6856742b899d857059fb3f5da6d36cdee210220</code>이다.</p>
 </section><footer class="doc-footer"><span>VIDE / PLANNING DOCUMENTS</span><span>문서 열람용 · 실제 CAD/BIM 지원은 구현·검증 후 선언</span></footer></article></main></div>
 <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
-<script id="source-data" type="application/json">{"adr-009-single-active-host-shared-record":{"label":"다중 호스트 연결 — 단일 활성 호스트 + 프로젝트 공유 기록","file":"ADR-009-single-active-host-shared-record.md","markdown":"---\nid: ADR-009\ntitle: 다중 호스트 연결 — 단일 활성 호스트 + 프로젝트 공유 기록\nstatus: draft\nversion: 0.1\nupdated: 2026-09-17\nowner: user\nrelated: [FR-02, AC-25, FR-12]\n---\n\n# ADR-009 · 단일 활성 호스트 + 공유 기록\n\n## 1. 배경\n\nPLAN §7.1(구 PRD §14.2)·AC-25는 두 호스트의 동시 라이브 연결을 MVP 완료 조건으로 두지만 §2 문제표에 대응 문제가 없고 §12.2가 호스트 간 변환·동기화를 이미 제외했다. 남는 가치는 '대상 혼동 없음'이라는 격리 속성뿐인데, 그 하나를 위해 두 호스트 프로세스·두 문서 버전·교차 상태 기계를 첫 호스트 완성 전에 설계하게 된다(PRD R-57, Codex R-43).\n\n## 2. 결정\n\n- **WorkScope와 Run은 호스트 문서 하나를 대상으로 한다.** 프로젝트는 여러 호스트·문서를 등록하고, 설계 대상 중심의 공유 기록(§6.1)으로 잇는다. 격리는 시험이 아니라 구조로 보장한다.\n- AC-25는 \"등록됐지만 비활성인 호스트에 쓰기가 발생하지 않고, 요청 대상은 요청 시점의 문서·버전에 고정된다(순차 연결 포함)\"로 축소한다. §8.1의 \"프로그램을 전환해도 요청 대상이 바뀌지 않는다\"는 이 고정으로 충족된다.\n- 두 호스트 시험(구 PRD §14.2, 현재 PLAN §7.1)은 목적을 '어댑터 계약 차이 확인'으로 바꾼다. 동시 라이브 연결은 후속 확장이다.\n\n\u003c!-- codex-review:start -->\n\n> **[검토 · codex · R-01 · 높음]** **추가 지적.** **활성 전환과 진행 중 쓰기.** WorkScope/Run의 단일 문서 대상과 공유 기록 선택에는 동의한다. 다만 격리를 시험 대신 구조로 보장한다는 문장은 구조와 시험을 함께 사용하는 것으로 수정할 것을 권한다. A에서 시작한 중단 불가 쓰기가 B 활성화 후 완료되면 대상은 고정했어도 비활성 호스트 쓰기 금지와 충돌한다. 제안: 활성 대상의 적용 범위를 정하고, 쓰기 중 전환을 막거나 실제 정지/완료를 확인한 뒤 넘긴다. 결과 불명은 확인 전 새 쓰기를 허용하지 않는다. 요청에는 호스트·문서 인스턴스·기준 버전·연결 세대를 고정하고 화면의 현재 선택으로 재해석하지 않는다. A→B→A 전환·문서 재열기·늦은 응답·연결 끊김을 시험해야 하며 동시 라이브 연결 기능을 추가할 필요는 없다.\n\n\u003c!-- codex-review:end -->\n\n## 3. 결과 — 적용 시 바꿀 문장\n\nPRD §14.1 다중 호스트 정의, PLAN §7.1 두 호스트 시험 문장, AC-25 통과 기준, FR-02 수용 기준(동시성 제외). SPEC-00-common: 프로젝트–호스트–WorkScope 관계와 활성 호스트 전환 상태.\n\n## 4. 재검토 조건\n\nRhino→ZWCAD 인계 작업에서 한 작업 안에 두 호스트를 함께 써야 하는 여정이 실제로 나오면 동시 연결을 다시 검토한다.\n\n## 5. 출처\n\nPRD R-57·R-47, Codex R-43. 2026-09-17 brainstorming Q&A.\n\n\u003c!-- codex-review:start -->\n\n## 부록 · Codex 검토 요약 (2026-09-17)\n\n동시 라이브 연결을 제외하면서 대상 고정을 유지하는 선택은 명확하다. 남은 핵심은 이미 실행 중인 쓰기와 활성 전환 사이의 의미이며, 단일 활성 구조만으로 그 검증이 대체되지는 않는다.\n\n이번 검토는 사용자 수락이나 본문 반영을 뜻하지 않는다. 기존 스레드는 같은 ID로 갱신하고, 새 지적은 별도 ID를 부여한다. 철회 기록은 상대 참조가 정리될 때까지 남긴다.\n\n### 스레드 — Codex 2차\n\n| 위치 | Codex | Claude | 판단 | 상태 |\n|---|---|---|---|---|\n| 2. 결정 · 활성 전환과 진행 중 쓰기 | [R-01](#review-R-01) | — | 보완 제안 | 사용자 판단 대기 |\n\n### 이번 라운드의 신규 검토\n\n| 대상 | Codex | 요지 |\n|---|---|---|\n| 2. 결정 | [R-01](#review-R-01) | 활성 전환과 진행 중 쓰기 |\n\n### 결정이 필요한 사항\n\n단일 활성의 적용 범위와 진행 중/결과 불명 쓰기의 전환 정책을 정한다. AC-25에는 그 경계를 재현하는 순차 전환 시험을 남긴다.\n\n### 다음 단계\n\n이 ADR의 사용자 선택과 기술적 보장·검증 조건을 구분해 비교한다. 수락할 보완을 정한 뒤 ADR의 적용 목록과 PRD·Design·가이드의 관련 문장을 함께 정리한다. 이번에는 결정 본문과 draft 상태를 보존하고 검토 의견만 추가했다.\n\n\u003c!-- codex-review:end -->\n"}}</script>
+<script id="source-data" type="application/json">{"adr-009-single-active-host-shared-record":{"label":"복수 호스트 연결·연계 작업·독립 작업 병렬 실행","file":"ADR-009-single-active-host-shared-record.md","markdown":"---\nid: ADR-009\ntitle: 복수 호스트 연결·연계 작업·독립 작업 병렬 실행\nstatus: approved\nversion: 0.2\nupdated: 2026-09-18\nowner: user\nrelated: [FR-01, FR-02, FR-04, FR-09, FR-11, AC-25, AC-32, AC-33]\n---\n\n# ADR-009 · 여러 호스트를 하나의 설계 작업으로 연결한다\n\n## 1. 결정\n\nRhino와 ZWCAD의 복수 연결을 지원하고, 하나의 작업 범위에서 여러 호스트의 정보와 변경을 연결한다. 선언한 객체·동작 범위에서 CAD 정보를 이용해 Rhino에 네이티브 결과를 생성하거나, 하나의 설계 변경을 도면과 모델의 지정 대상에 함께 반영할 수 있어야 한다.\n\n독립 작업은 병렬로 진행할 수 있고, 앞선 결과에 의존하거나 충돌하는 작업은 필요한 순서를 관리한다. 모든 명령을 무조건 동시에 실행한다는 뜻이 아니다. 사용자는 전체 목적과 호스트별 진행·후보·적용 결과를 보고 개입한다.\n\nWorkScope와 Run을 호스트 문서 하나로 제한하는 안과, 단일 활성 호스트만 제어하는 안은 채택하지 않는다. 화면에서 보고 있는 호스트와 실제 실행 대상을 구분한다. 실행마다 호스트·문서·대상이 명시되어야 한다.\n\n## 2. 판단 근거\n\n사용자가 'CAD 정보를 읽어 Rhino에 매스로 반영'하고 '설계 변경을 도면·모델 양쪽에 반영'하는 실제 여정을 제시했다. 따라서 두 도구를 지원 목록에 올리는 것을 넘어 하나의 요청에서 연결하는 능력이 MVP 가치에 해당한다.\n\n복수 연결, 호스트 간 연계, 독립 작업의 병렬 실행은 다른 능력이다. 두 개의 독립 에이전트를 띄웠다는 것만으로 공동 변경의 일관성을 검증하지 않는다. 호스트별 전용 AI 모델이나 추가 감독 에이전트를 필수로 정하지 않는다.\n\n## 3. 보장 범위와 한계\n\n대상 대응·좌표·단위·입력 기준과 작업 의존성을 구분한다. 처음부터 모든 객체의 자동 대응을 보장하지 않고 사용자 지정 또는 확인된 대응에서 시작할 수 있다.\n\n한쪽 적용 성공과 다른 쪽 실패·결과 불명을 전체 성공으로 표시하지 않는다. 이미 확인된 변경은 재시도 과정에서 중복 적용하지 않는다. 전체 요청 또는 하위 작업에 대한 개입과 관련 작업에 미치는 영향은 SPEC에서 정한다.\n\n요청 없는 상시 양방향 동기화, 임의 객체의 무손실 변환, 모든 호스트의 원자적 성공·취소·복구는 첫 출시 보장이 아니다. 선택·카메라 동기화도 별도 능력이다.\n\n프로젝트별 한 로컬 작업환경(ADR-002)은 이 결정과 양립한다. 여러 로컬 PC의 공동 제어를 포함한다는 뜻은 아니다.\n\n## 4. 기준 문서와 구현 위임\n\nPRD §12.2·§14.1·FR-02가 제품의 정본이며, AC-25·32·33에서 연결·연계·부분 결과를 확인한다. SPEC-00 및 연계 기능 SPEC은 논리적 실행 대상·선후관계·충돌·개입·재개를 정한다. PLAN은 큐·메시지·연결·호스트 스레드·저장 등의 기술 방법을 정한다.\n\n## 5. 승인 근거\n\n2026-09-18 순차 결정 2에서 사용자가 수정한 C안(복수 연결 + 호스트 간 연계 + 독립 작업의 병렬 실행)을 수락했다. 이전 단일 활성 호스트 초안은 적용하지 않는다. 번호와 경로는 유지하며 현재 의미는 제목과 본문을 따른다. 기준 커밋은 `e6856742b899d857059fb3f5da6d36cdee210220`이다.\n"}}</script>
 <script id="reader-config" type="application/json">{"initial":"adr-009-single-active-host-shared-record","siteTitle":"VIDE"}</script>
 <script>
 (() => {
