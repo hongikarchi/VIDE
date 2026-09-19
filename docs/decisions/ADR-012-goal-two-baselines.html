@@ -70,9 +70,10 @@ body.review-accepted .toc-links a[data-reviews]::after{display:none}
 <!-- GENERATED FILE — source: docs/decisions/ADR-012-goal-two-baselines.md — run: npm --prefix tools/docs run build -->
 <a class="skip" href="#reading-main">본문으로 이동</a>
 <header class="topbar"><a class="brand" href="../../index.html" aria-label="VIDE 문서 모음"><b>V.</b><span>VIDE</span></a><nav class="doc-tabs" aria-label="문서 선택"><a class="doc-tab" href="../PRD.html">PRD</a><a class="doc-tab" href="../../DEVELOPMENT_GUIDE.html">개발 가이드</a><a class="doc-tab" href="../../Design.html">Design</a><a class="doc-tab" href="../../AI.html">AI 규약</a></nav><div class="top-actions"><button id="source-download" title="현재 문서의 Markdown 원문 저장">원문 ↓</button><button id="print-doc" title="현재 문서 인쇄">인쇄</button></div></header>
-<div class="layout"><aside class="toc-shell" id="toc-shell" aria-label="현재 문서의 목차"><div class="toc-title"><strong>CONTENTS</strong><span id="toc-count"></span><button id="toc-toggle" aria-expanded="false" aria-controls="toc-body">목차 열기</button></div><div class="toc-body" id="toc-body"><input class="toc-search" id="toc-search" type="search" placeholder="장 제목으로 찾기" aria-label="현재 문서 목차 검색"><p class="toc-hint" id="nav-hint" role="status">장 제목으로 찾아갑니다.</p><nav class="toc-links" id="toc-links" aria-label="본문 장 이동"></nav><div class="toc-next">다음 작성할 문서<br><b>2차 검토 대화 → 사용자 결정</b><br>Codex·Claude 스레드 비교 → 항목별 수락/거부 → ADR·SPEC-00-common</div></div></aside><main id="reading-main" tabindex="-1"><article id="adr-012-goal-two-baselines" class="document"><header class="doc-hero"><div class="hero-label"><span class="eyebrow">DECISION RECORD</span><span><span class="pill">DRAFT · v0.2</span><span class="pill">7 CHAPTERS</span></span></div><h1 tabindex="-1">ADR-012 · 목표 — 두 기준선 대비 개선</h1><div class="hero-meta">
+<div class="layout"><aside class="toc-shell" id="toc-shell" aria-label="현재 문서의 목차"><div class="toc-title"><strong>CONTENTS</strong><span id="toc-count"></span><button id="toc-toggle" aria-expanded="false" aria-controls="toc-body">목차 열기</button></div><div class="toc-body" id="toc-body"><input class="toc-search" id="toc-search" type="search" placeholder="장 제목으로 찾기" aria-label="현재 문서 목차 검색"><p class="toc-hint" id="nav-hint" role="status">장 제목으로 찾아갑니다.</p><nav class="toc-links" id="toc-links" aria-label="본문 장 이동"></nav><div class="toc-next">다음 작성할 문서<br><b>2차 검토 대화 → 사용자 결정</b><br>Codex·Claude 스레드 비교 → 항목별 수락/거부 → ADR·SPEC-00-common</div></div></aside><main id="reading-main" tabindex="-1"><article id="adr-012-goal-two-baselines" class="document"><header class="doc-hero"><div class="hero-label"><span class="eyebrow">DECISION RECORD</span><span><span class="pill">APPROVED · v0.3</span><span class="pill">7 CHAPTERS</span></span></div><h1 tabindex="-1">ADR-012 · 목표 — 두 기준선 대비 개선</h1><div class="hero-meta">
 </div></header><section class="doc-section" id="adr-012-goal-two-baselines-section-1"><h2><span aria-hidden="true" class="section-num">01 /</span> 배경</h2>
-<p>PRD §14.3의 alpha 판정 관문과 축소 조건이 이견(PRD R-59·R-71)으로 남아 있었다. Claude 안은 축소 조건을 지금 고정하는 것(재사용률 미달 → 호스트 수 축소, 핀 오인 미감소 → 자체 뷰 제외 등), Codex 안은 측정 범위·판정 시점·허용 오차·실패 대안을 사전에 정하고 사용자 재결정 지점으로만 두는 것이었다. ADR-001 §6·ADR-004 §6·ADR-007 §5가 각자 축소 조건을 두어 판정이 세 곳에 흩어졌고, §16.2의 비교 대상은 &quot;수작업 또는 익숙한 CLI 작업 흐름&quot;으로 느슨했다.</p>
+<p>VIDE가 실제 건축가의 부담을 줄이는지 판단하려면 단순 성공 시연만으로는 부족하다. 기존 작업 방식과 비교해야 하지만, 하나의 부분 지표가 나쁘다고 제품 범위를 자동으로 줄이는 관문으로 사용하면 시험 미완료·구현 보완 가능·다른 사용자 가치를 구분하기 어렵다.</p>
+<p>이 결정은 수작업과 일반 에이전트+MCP 흐름을 비교 기준으로 두되, 측정 결과를 자동 축소 조건이 아닌 사용자 재결정 자료로 사용하는 원칙을 정한다.</p>
 </section><section class="doc-section" id="adr-012-goal-two-baselines-section-2"><h2><span aria-hidden="true" class="section-num">02 /</span> 선택지</h2>
 <div aria-label="ADR 표 1" class="table-scroll" role="region" tabindex="0"><table>
 <thead>
@@ -85,49 +86,57 @@ body.review-accepted .toc-links a[data-reviews]::after{display:none}
 <tbody>
 <tr>
 <td>A</td>
-<td>판정 관문 — 수치 조건 미달 시 자동 축소</td>
-<td>결정이 빠름. 시험 미완료와 실패를 구분하지 못하고 부분 지표 하나로 다른 가치를 부정할 수 있음</td>
+<td>판정 관문 — 수치 미달 시 자동 범위 축소</td>
+<td>빠르게 범위를 줄일 수 있으나 시험 미완료와 실패를 혼동하고 부분 지표가 다른 가치를 지울 수 있음</td>
 </tr>
 <tr>
 <td>B</td>
-<td>목표 — 두 기준선 대비 개선을 목표로 두고, 미달은 사용자 재결정 시점</td>
-<td>자동 축소 없음. 판정 절차·시점은 PLAN이 따로 정해야 함</td>
+<td>목표 — 두 기준선 대비 개선을 목표로 하고 미달은 사용자 재결정 시점</td>
+<td>자동 축소 없음. 비교 절차·환경을 PLAN에서 별도로 관리해야 함</td>
 </tr>
 <tr>
 <td>C</td>
-<td>목표 없이 시험만</td>
-<td>비교 대상이 없어 가설 검증 불가</td>
+<td>비교 목표 없이 기능 시험만 수행</td>
+<td>동작 여부는 확인하지만 VIDE 고유의 가치가 실제로 개선됐는지 판단하기 어려움</td>
 </tr>
 </tbody>
 </table></div>
 </section><section class="doc-section" id="adr-012-goal-two-baselines-section-3"><h2><span aria-hidden="true" class="section-num">03 /</span> 결정</h2>
-<p><strong>B. &quot;판정 기준&quot;이 아니라 &quot;목표&quot;다.</strong></p>
-<ul>
-<li>같은 기준 과업(ADR-006 ①)을 (1) 손으로 했을 때, (2) Claude·Codex 같은 에이전트를 MCP로 Rhino에 붙여 그냥 썼을 때와 비교해, VIDE로 했을 때 총시간이 짧고 대상 오인·재작업(헛수고)이 적어야 한다.</li>
-<li>정본은 PRD §16.1이다. §2 가설 1·5의 비교 대상에 &quot;에이전트+MCP&quot; 기준선을 추가한다.</li>
-<li>미달은 자동 축소가 아니라 사용자의 재결정 시점이다. 판정 절차와 시점은 PLAN §6·§9가 정한다.</li>
-<li>ADR-004의 축소 조건은 없애고(0.2 &quot;없음 — 목표는 ADR-012&quot;), ADR-006의 기준선은 두 개로 보완한다(0.3 §3). ADR-007은 ADR-010이 대체하므로 그 축소 조건은 사라진다.</li>
-</ul>
+<p><strong>B. 두 기준선 대비 개선은 출시 범위를 자동으로 자르는 판정 관문이 아니라 제품 목표다.</strong></p>
+<p>비교 기준은 다음 두 가지다.</p>
+<ol>
+<li><strong>수작업</strong> — 같은 과업을 사용자가 기존 호스트 도구로 직접 수행</li>
+<li><strong>에이전트+MCP</strong> — Claude·Codex 같은 일반 에이전트를 호스트 제어 경로에 연결해 VIDE의 별도 구조 없이 수행</li>
+</ol>
+<p>VIDE는 같은 조건의 지원 과업에서 **총시간, 대상 오인, 재작업(헛수고)**을 줄이는 것을 목표로 한다. 이 세 항목 중 하나만 좋아졌다고 전체 성공으로 단정하지 않고, 모든 과업에서 세 항목을 똑같은 방식으로 측정해야 한다고 강제하지도 않는다.</p>
+<p>대표 검수 과업의 정본은 PRD §16.4와 ADR-006이다. 과업 ①은 첫 호스트 alpha에서 두 기준선과 비교하기 좋은 초기 가치 시험으로 사용할 수 있지만, 그것이 과업 ②·③의 사용자 가치나 전체 MVP의 유일한 판정 과업을 뜻하지 않는다.</p>
+<p>목표 미달은 자동 범위 축소가 아니라 <strong>사용자의 재결정 시점</strong>이다. 유지, 구현 보완, 순서 변경, 노력 상한 설정, 범위 변경 중 무엇을 할지는 측정 증거를 보고 사용자가 결정한다. 비교 절차·시점·측정 환경은 PLAN §6·§7·§9에서 정한다.</p>
 </section><section class="doc-section" id="adr-012-goal-two-baselines-section-4"><h2><span aria-hidden="true" class="section-num">04 /</span> 근거</h2>
-<p>가설 1·5는 비교 없이 검증할 수 없다. 수작업 기준선만으로는 &quot;AI를 붙였다&quot;는 효과와 VIDE 고유의 구조(핀·스케치·후보·개입) 효과가 섞이므로, 에이전트+MCP 기준선이 VIDE의 몫을 분리한다. 자동 축소는 시험 미완료와 실패를 구분하지 못하고 부분 지표 하나로 다른 가치(호스트 부재 열람·후보 비교)를 부정할 수 있어, 미달을 재결정 시점으로 둔다.</p>
-</section><section class="doc-section" id="adr-012-goal-two-baselines-section-5"><h2><span aria-hidden="true" class="section-num">05 /</span> 결과 — 적용 시 바꿀 문장</h2>
 <ul>
-<li>PRD §16.1에 이 목표를 두 기준선과 함께 적는다(정본). §2 가설 1·5의 비교 대상에 &quot;에이전트+MCP&quot; 추가.</li>
-<li>PRD §14.3의 &quot;alpha 판정 관문과 축소 조건은 미결이며(R-59·R-71, …)&quot; 항목을 &quot;첫 호스트 alpha의 목표는 §16.1이다. 미달은 자동 축소가 아니라 사용자의 재결정 시점이며, 판정 절차와 시점은 PLAN §6이 정한다.&quot;로 교체.</li>
-<li>ADR-006 0.2: 두 기준선, &quot;판정 기준이 아니라 목표(ADR-012)&quot;. ADR-004 0.2 §6: &quot;없음 — 목표는 ADR-012&quot;.</li>
-<li>PLAN §6.2의 관문 참조를 이 ADR로 바꾸고, PLAN §9에 alpha 판정 절차·시점을 결정 항목으로 둔다. 측정 항목(총시간·대상 오인·재작업)의 절차는 PLAN §7.2가 소유한다.</li>
-<li>ADR-001 0.2에는 축소 조건 절이 없고 §3이 &quot;성과 미달에 따른 자동 범위 축소는 채택하지 않는다&quot;고 적어 이 결정과 정합한다.</li>
+<li>수작업만 비교하면 <code>AI를 붙인 효과</code>와 VIDE의 핀·스케치·후보·진행·개입 구조의 효과를 분리하기 어렵다.</li>
+<li>일반 에이전트+MCP 기준선을 함께 두면 VIDE가 추가로 제공하는 구조가 실제로 시간·오인·재작업을 줄였는지 볼 수 있다.</li>
+<li>자동 축소 조건은 시험 미완료나 개선 가능한 구현을 제품 가치 부재로 오해할 수 있다.</li>
+<li>자체 뷰·웹 검토·호스트 연계처럼 여러 가치를 가진 기능을 단일 지표 하나로 자동 폐기하지 않는다.</li>
+</ul>
+</section><section class="doc-section" id="adr-012-goal-two-baselines-section-5"><h2><span aria-hidden="true" class="section-num">05 /</span> 문서 적용</h2>
+<ul>
+<li>PRD §16.1: 두 기준선과 개선 목표의 정본.</li>
+<li>PRD §16.4: 대표 검수 과업 세 가지와 성공의 의미.</li>
+<li>ADR-006: 실제 대표 과업의 역할과 검증 사용자 범위.</li>
+<li>PLAN §6·§7·§9: 동일 조건의 비교 절차, 시점, 기록 방법과 사용자 재결정 지점.</li>
+<li>ADR-004 등 개별 기능 문서는 자체 자동 축소 조건을 두지 않고, 측정 결과를 이 결정의 재결정 자료로 사용한다.</li>
 </ul>
 </section><section class="doc-section" id="adr-012-goal-two-baselines-section-6"><h2><span aria-hidden="true" class="section-num">06 /</span> 재검토 조건</h2>
 <ul>
-<li>기준 과업 ①에서 두 기준선 중 하나를 같은 조건으로 재현할 수 없으면(예: 에이전트+MCP 경로가 해당 호스트에서 불가) 그 기준선의 대체 방법을 사용자가 정한다.</li>
-<li>기준선의 오인·재작업이 0인 과업에서는 목표 문장을 다시 쓴다.</li>
+<li>특정 과업에서 두 기준선 중 하나를 같은 조건으로 재현할 수 없으면 그 차이를 기록하고 대체 비교 방법을 사용자가 정한다.</li>
+<li>기준선의 대상 오인·재작업이 이미 0인 과업처럼 개선 목표가 의미를 잃는 경우 해당 과업의 측정 항목을 조정한다.</li>
+<li>대표 과업이나 제품 가치가 바뀌어 현재 두 기준선이 비교 대상으로 부적절해지면 기준선을 다시 검토한다.</li>
 </ul>
 </section><section class="doc-section" id="adr-012-goal-two-baselines-section-7"><h2><span aria-hidden="true" class="section-num">07 /</span> 출처</h2>
-<p>2026-09-17 순차 결정 대화(D7). PRD R-59·R-71, ADR-006.</p>
+<p>2026-09-17 두 기준선·자동 축소 제외 결정, 2026-09-18 대표 검수 과업 확정, 2026-09-19 상태·참조 정리. PRD §16, ADR-006.</p>
 </section><footer class="doc-footer"><span>VIDE / PLANNING DOCUMENTS</span><span>문서 열람용 · 실제 CAD/BIM 지원은 구현·검증 후 선언</span></footer></article></main></div>
 <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
-<script id="source-data" type="application/json">{"adr-012-goal-two-baselines":{"label":"목표 — 두 기준선(수작업·에이전트+MCP) 대비 개선, 판정 관문 아님","file":"ADR-012-goal-two-baselines.md","markdown":"---\nid: ADR-012\ntitle: 목표 — 두 기준선(수작업·에이전트+MCP) 대비 개선, 판정 관문 아님\nstatus: draft\nversion: 0.2\nupdated: 2026-09-18\nowner: user\nrelated: [FR-15, AC-22, OQ-06, ADR-006]\n---\n\n# ADR-012 · 목표 — 두 기준선 대비 개선\n\n## 1. 배경\n\nPRD §14.3의 alpha 판정 관문과 축소 조건이 이견(PRD R-59·R-71)으로 남아 있었다. Claude 안은 축소 조건을 지금 고정하는 것(재사용률 미달 → 호스트 수 축소, 핀 오인 미감소 → 자체 뷰 제외 등), Codex 안은 측정 범위·판정 시점·허용 오차·실패 대안을 사전에 정하고 사용자 재결정 지점으로만 두는 것이었다. ADR-001 §6·ADR-004 §6·ADR-007 §5가 각자 축소 조건을 두어 판정이 세 곳에 흩어졌고, §16.2의 비교 대상은 \"수작업 또는 익숙한 CLI 작업 흐름\"으로 느슨했다.\n\n## 2. 선택지\n\n| 안 | 내용 | 트레이드오프 |\n|---|---|---|\n| A | 판정 관문 — 수치 조건 미달 시 자동 축소 | 결정이 빠름. 시험 미완료와 실패를 구분하지 못하고 부분 지표 하나로 다른 가치를 부정할 수 있음 |\n| B | 목표 — 두 기준선 대비 개선을 목표로 두고, 미달은 사용자 재결정 시점 | 자동 축소 없음. 판정 절차·시점은 PLAN이 따로 정해야 함 |\n| C | 목표 없이 시험만 | 비교 대상이 없어 가설 검증 불가 |\n\n## 3. 결정\n\n**B. \"판정 기준\"이 아니라 \"목표\"다.**\n\n- 같은 기준 과업(ADR-006 ①)을 (1) 손으로 했을 때, (2) Claude·Codex 같은 에이전트를 MCP로 Rhino에 붙여 그냥 썼을 때와 비교해, VIDE로 했을 때 총시간이 짧고 대상 오인·재작업(헛수고)이 적어야 한다.\n- 정본은 PRD §16.1이다. §2 가설 1·5의 비교 대상에 \"에이전트+MCP\" 기준선을 추가한다.\n- 미달은 자동 축소가 아니라 사용자의 재결정 시점이다. 판정 절차와 시점은 PLAN §6·§9가 정한다.\n- ADR-004의 축소 조건은 없애고(0.2 \"없음 — 목표는 ADR-012\"), ADR-006의 기준선은 두 개로 보완한다(0.3 §3). ADR-007은 ADR-010이 대체하므로 그 축소 조건은 사라진다.\n\n## 4. 근거\n\n가설 1·5는 비교 없이 검증할 수 없다. 수작업 기준선만으로는 \"AI를 붙였다\"는 효과와 VIDE 고유의 구조(핀·스케치·후보·개입) 효과가 섞이므로, 에이전트+MCP 기준선이 VIDE의 몫을 분리한다. 자동 축소는 시험 미완료와 실패를 구분하지 못하고 부분 지표 하나로 다른 가치(호스트 부재 열람·후보 비교)를 부정할 수 있어, 미달을 재결정 시점으로 둔다.\n\n## 5. 결과 — 적용 시 바꿀 문장\n\n- PRD §16.1에 이 목표를 두 기준선과 함께 적는다(정본). §2 가설 1·5의 비교 대상에 \"에이전트+MCP\" 추가.\n- PRD §14.3의 \"alpha 판정 관문과 축소 조건은 미결이며(R-59·R-71, …)\" 항목을 \"첫 호스트 alpha의 목표는 §16.1이다. 미달은 자동 축소가 아니라 사용자의 재결정 시점이며, 판정 절차와 시점은 PLAN §6이 정한다.\"로 교체.\n- ADR-006 0.2: 두 기준선, \"판정 기준이 아니라 목표(ADR-012)\". ADR-004 0.2 §6: \"없음 — 목표는 ADR-012\".\n- PLAN §6.2의 관문 참조를 이 ADR로 바꾸고, PLAN §9에 alpha 판정 절차·시점을 결정 항목으로 둔다. 측정 항목(총시간·대상 오인·재작업)의 절차는 PLAN §7.2가 소유한다.\n- ADR-001 0.2에는 축소 조건 절이 없고 §3이 \"성과 미달에 따른 자동 범위 축소는 채택하지 않는다\"고 적어 이 결정과 정합한다.\n\n## 6. 재검토 조건\n\n- 기준 과업 ①에서 두 기준선 중 하나를 같은 조건으로 재현할 수 없으면(예: 에이전트+MCP 경로가 해당 호스트에서 불가) 그 기준선의 대체 방법을 사용자가 정한다.\n- 기준선의 오인·재작업이 0인 과업에서는 목표 문장을 다시 쓴다.\n\n## 7. 출처\n\n2026-09-17 순차 결정 대화(D7). PRD R-59·R-71, ADR-006.\n"}}</script>
+<script id="source-data" type="application/json">{"adr-012-goal-two-baselines":{"label":"목표 — 두 기준선(수작업·에이전트+MCP) 대비 개선, 판정 관문 아님","file":"ADR-012-goal-two-baselines.md","markdown":"---\nid: ADR-012\ntitle: 목표 — 두 기준선(수작업·에이전트+MCP) 대비 개선, 판정 관문 아님\nstatus: approved\nversion: 0.3\nupdated: 2026-09-19\nowner: user\nrelated: [FR-15, AC-22, OQ-06, OQ-14, ADR-006]\n---\n\n# ADR-012 · 목표 — 두 기준선 대비 개선\n\n## 1. 배경\n\nVIDE가 실제 건축가의 부담을 줄이는지 판단하려면 단순 성공 시연만으로는 부족하다. 기존 작업 방식과 비교해야 하지만, 하나의 부분 지표가 나쁘다고 제품 범위를 자동으로 줄이는 관문으로 사용하면 시험 미완료·구현 보완 가능·다른 사용자 가치를 구분하기 어렵다.\n\n이 결정은 수작업과 일반 에이전트+MCP 흐름을 비교 기준으로 두되, 측정 결과를 자동 축소 조건이 아닌 사용자 재결정 자료로 사용하는 원칙을 정한다.\n\n## 2. 선택지\n\n| 안 | 내용 | 트레이드오프 |\n|---|---|---|\n| A | 판정 관문 — 수치 미달 시 자동 범위 축소 | 빠르게 범위를 줄일 수 있으나 시험 미완료와 실패를 혼동하고 부분 지표가 다른 가치를 지울 수 있음 |\n| B | 목표 — 두 기준선 대비 개선을 목표로 하고 미달은 사용자 재결정 시점 | 자동 축소 없음. 비교 절차·환경을 PLAN에서 별도로 관리해야 함 |\n| C | 비교 목표 없이 기능 시험만 수행 | 동작 여부는 확인하지만 VIDE 고유의 가치가 실제로 개선됐는지 판단하기 어려움 |\n\n## 3. 결정\n\n**B. 두 기준선 대비 개선은 출시 범위를 자동으로 자르는 판정 관문이 아니라 제품 목표다.**\n\n비교 기준은 다음 두 가지다.\n\n1. **수작업** — 같은 과업을 사용자가 기존 호스트 도구로 직접 수행\n2. **에이전트+MCP** — Claude·Codex 같은 일반 에이전트를 호스트 제어 경로에 연결해 VIDE의 별도 구조 없이 수행\n\nVIDE는 같은 조건의 지원 과업에서 **총시간, 대상 오인, 재작업(헛수고)**을 줄이는 것을 목표로 한다. 이 세 항목 중 하나만 좋아졌다고 전체 성공으로 단정하지 않고, 모든 과업에서 세 항목을 똑같은 방식으로 측정해야 한다고 강제하지도 않는다.\n\n대표 검수 과업의 정본은 PRD §16.4와 ADR-006이다. 과업 ①은 첫 호스트 alpha에서 두 기준선과 비교하기 좋은 초기 가치 시험으로 사용할 수 있지만, 그것이 과업 ②·③의 사용자 가치나 전체 MVP의 유일한 판정 과업을 뜻하지 않는다.\n\n목표 미달은 자동 범위 축소가 아니라 **사용자의 재결정 시점**이다. 유지, 구현 보완, 순서 변경, 노력 상한 설정, 범위 변경 중 무엇을 할지는 측정 증거를 보고 사용자가 결정한다. 비교 절차·시점·측정 환경은 PLAN §6·§7·§9에서 정한다.\n\n## 4. 근거\n\n- 수작업만 비교하면 `AI를 붙인 효과`와 VIDE의 핀·스케치·후보·진행·개입 구조의 효과를 분리하기 어렵다.\n- 일반 에이전트+MCP 기준선을 함께 두면 VIDE가 추가로 제공하는 구조가 실제로 시간·오인·재작업을 줄였는지 볼 수 있다.\n- 자동 축소 조건은 시험 미완료나 개선 가능한 구현을 제품 가치 부재로 오해할 수 있다.\n- 자체 뷰·웹 검토·호스트 연계처럼 여러 가치를 가진 기능을 단일 지표 하나로 자동 폐기하지 않는다.\n\n## 5. 문서 적용\n\n- PRD §16.1: 두 기준선과 개선 목표의 정본.\n- PRD §16.4: 대표 검수 과업 세 가지와 성공의 의미.\n- ADR-006: 실제 대표 과업의 역할과 검증 사용자 범위.\n- PLAN §6·§7·§9: 동일 조건의 비교 절차, 시점, 기록 방법과 사용자 재결정 지점.\n- ADR-004 등 개별 기능 문서는 자체 자동 축소 조건을 두지 않고, 측정 결과를 이 결정의 재결정 자료로 사용한다.\n\n## 6. 재검토 조건\n\n- 특정 과업에서 두 기준선 중 하나를 같은 조건으로 재현할 수 없으면 그 차이를 기록하고 대체 비교 방법을 사용자가 정한다.\n- 기준선의 대상 오인·재작업이 이미 0인 과업처럼 개선 목표가 의미를 잃는 경우 해당 과업의 측정 항목을 조정한다.\n- 대표 과업이나 제품 가치가 바뀌어 현재 두 기준선이 비교 대상으로 부적절해지면 기준선을 다시 검토한다.\n\n## 7. 출처\n\n2026-09-17 두 기준선·자동 축소 제외 결정, 2026-09-18 대표 검수 과업 확정, 2026-09-19 상태·참조 정리. PRD §16, ADR-006.\n"}}</script>
 <script id="reader-config" type="application/json">{"initial":"adr-012-goal-two-baselines","siteTitle":"VIDE"}</script>
 <script>
 (() => {

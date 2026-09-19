@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="description" content="ADR-011 · 위임형 작업 방식"><meta name="generator" content="tools/docs/build.mjs — generated from docs/decisions/ADR-011-delegation-working-mode.md; do not edit"><title>VIDE · AI와 일하는 방식 — 위임형 기본, 원본 반영 시점에만 확인</title><style>
+<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="description" content="ADR-011 · 위임형 작업 방식"><meta name="generator" content="tools/docs/build.mjs — generated from docs/decisions/ADR-011-delegation-working-mode.md; do not edit"><title>VIDE · AI와 일하는 방식 — 위임형 기본, 위임 범위 변경·원본 반영·외부 공개에서 확인</title><style>
 :root{--ink:#292c2d;--muted:#626b6e;--line:#e1e3e1;--soft:#f5f5f1;--coral:#d97660;--paper:#fff;--font:"Pretendard","Noto Sans KR","Malgun Gothic",Arial,sans-serif}
 *{box-sizing:border-box}html{scroll-behavior:smooth;scroll-padding-top:92px}body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--font);letter-spacing:-.025em}a{color:inherit;text-underline-offset:4px}button,input,textarea,select{font:inherit;color:inherit}button{cursor:pointer;border:1px solid var(--line);border-radius:4px;background:var(--paper);padding:10px 15px;line-height:1.3}button:hover{background:var(--soft)}button:disabled{cursor:default;opacity:.6}button.primary{background:var(--ink);color:#fff;border-color:var(--ink)}button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible{outline:3px solid var(--coral);outline-offset:3px}textarea{resize:vertical}::selection{background:#f2d7ce}[hidden]{display:none!important}
 .skip{position:fixed;top:-80px;left:20px;z-index:100;background:white;padding:12px}.skip:focus{top:10px}
@@ -70,9 +70,10 @@ body.review-accepted .toc-links a[data-reviews]::after{display:none}
 <!-- GENERATED FILE — source: docs/decisions/ADR-011-delegation-working-mode.md — run: npm --prefix tools/docs run build -->
 <a class="skip" href="#reading-main">본문으로 이동</a>
 <header class="topbar"><a class="brand" href="../../index.html" aria-label="VIDE 문서 모음"><b>V.</b><span>VIDE</span></a><nav class="doc-tabs" aria-label="문서 선택"><a class="doc-tab" href="../PRD.html">PRD</a><a class="doc-tab" href="../../DEVELOPMENT_GUIDE.html">개발 가이드</a><a class="doc-tab" href="../../Design.html">Design</a><a class="doc-tab" href="../../AI.html">AI 규약</a></nav><div class="top-actions"><button id="source-download" title="현재 문서의 Markdown 원문 저장">원문 ↓</button><button id="print-doc" title="현재 문서 인쇄">인쇄</button></div></header>
-<div class="layout"><aside class="toc-shell" id="toc-shell" aria-label="현재 문서의 목차"><div class="toc-title"><strong>CONTENTS</strong><span id="toc-count"></span><button id="toc-toggle" aria-expanded="false" aria-controls="toc-body">목차 열기</button></div><div class="toc-body" id="toc-body"><input class="toc-search" id="toc-search" type="search" placeholder="장 제목으로 찾기" aria-label="현재 문서 목차 검색"><p class="toc-hint" id="nav-hint" role="status">장 제목으로 찾아갑니다.</p><nav class="toc-links" id="toc-links" aria-label="본문 장 이동"></nav><div class="toc-next">다음 작성할 문서<br><b>2차 검토 대화 → 사용자 결정</b><br>Codex·Claude 스레드 비교 → 항목별 수락/거부 → ADR·SPEC-00-common</div></div></aside><main id="reading-main" tabindex="-1"><article id="adr-011-delegation-working-mode" class="document"><header class="doc-hero"><div class="hero-label"><span class="eyebrow">DECISION RECORD</span><span><span class="pill">DRAFT · v0.2</span><span class="pill">7 CHAPTERS</span></span></div><h1 tabindex="-1">ADR-011 · 위임형 작업 방식</h1><div class="hero-meta">
+<div class="layout"><aside class="toc-shell" id="toc-shell" aria-label="현재 문서의 목차"><div class="toc-title"><strong>CONTENTS</strong><span id="toc-count"></span><button id="toc-toggle" aria-expanded="false" aria-controls="toc-body">목차 열기</button></div><div class="toc-body" id="toc-body"><input class="toc-search" id="toc-search" type="search" placeholder="장 제목으로 찾기" aria-label="현재 문서 목차 검색"><p class="toc-hint" id="nav-hint" role="status">장 제목으로 찾아갑니다.</p><nav class="toc-links" id="toc-links" aria-label="본문 장 이동"></nav><div class="toc-next">다음 작성할 문서<br><b>2차 검토 대화 → 사용자 결정</b><br>Codex·Claude 스레드 비교 → 항목별 수락/거부 → ADR·SPEC-00-common</div></div></aside><main id="reading-main" tabindex="-1"><article id="adr-011-delegation-working-mode" class="document"><header class="doc-hero"><div class="hero-label"><span class="eyebrow">DECISION RECORD</span><span><span class="pill">APPROVED · v0.3</span><span class="pill">7 CHAPTERS</span></span></div><h1 tabindex="-1">ADR-011 · 위임형 작업 방식</h1><div class="hero-meta">
 </div></header><section class="doc-section" id="adr-011-delegation-working-mode-section-1"><h2><span aria-hidden="true" class="section-num">01 /</span> 배경</h2>
-<p>PRD §8 여정(§8.2~§8.5)과 §9.5(위임 범위와 확인 경계)는 대상 지정 → 후보 → 개입 → 반영의 단계를 적지만, AI가 여러 단계를 스스로 진행하는지 단계마다 확인을 받는지가 문장마다 달랐다. §2 가설 5(&quot;매 단계 승인하면 직접 CAD를 쓰는 것만큼 번거롭다&quot;)는 위임을 전제하지만 본문이 그 전제를 선언하지 않았다(PRD R-58). 대표 검수 과업(ADR-006 0.3 ①)은 대상 지정 → 문장·스케치 요청 → 후보 검토와 지시 수정 → 원본 반영 → 네이티브 재편집·저장의 흐름을 확인하므로, 작업 방식이 정해져야 측정이 뜻을 갖는다. 호스트 명령 횟수·유지 조건 개수 같은 세부 조건은 ADR-006 0.3 §2에서 고정하지 않는다.</p>
+<p>VIDE는 사람이 매 도구 호출마다 승인하는 방식도, 장시간 무엇이 일어나는지 알 수 없는 무관찰 자율 실행도 목표로 하지 않는다. 사용자는 목표·대상·유지 조건을 정하고 AI에게 작업을 맡기되, 실제 중간 상태를 보면서 언제든 개입할 수 있어야 한다.</p>
+<p>기존 0.2의 <code>원본 반영 시점에만 확인한다</code>는 표현은 위임의 취지를 설명하는 데는 유용했지만, 외부 공개·유지 조건 변경·작업 범위 확대·큰 추가 비용처럼 사용자가 다시 결정해야 하는 경계까지 생략하는 것으로 읽힐 수 있었다. 2026-09-19 사용자 결정으로 확인 경계를 정합화한다.</p>
 </section><section class="doc-section" id="adr-011-delegation-working-mode-section-2"><h2><span aria-hidden="true" class="section-num">02 /</span> 선택지</h2>
 <div aria-label="ADR 표 1" class="table-scroll" role="region" tabindex="0"><table>
 <thead>
@@ -85,49 +86,68 @@ body.review-accepted .toc-links a[data-reviews]::after{display:none}
 <tbody>
 <tr>
 <td>A</td>
-<td>단계별 확인 — 도구 호출·후보마다 승인</td>
-<td>통제가 세밀. 가설 5를 검증할 수 없고 직접 CAD보다 느림</td>
+<td>단계별 확인 — 내부 명령·후보마다 승인</td>
+<td>통제는 세밀하지만 사용자가 계속 CAD를 직접 조작하는 것과 비슷해지고 위임 효과가 낮음</td>
 </tr>
 <tr>
 <td>B</td>
-<td>위임형 기본 — 목표·조건을 주면 여러 단계 진행, 중간 결과는 후보로 계속 표시, 원본 반영 시점에만 확인</td>
-<td>사용자는 언제든 끼어들거나 멈춘다. 후보 격리(ADR-003)와 개입 상태(FR-11)가 전제</td>
+<td>위임형 기본 — 맡긴 범위 안에서는 진행하고, 권한·범위가 바뀌는 경계에서 확인</td>
+<td>자율성과 개입 가능성을 함께 유지. 후보 보호·진행 표시·중단 계약이 필요</td>
 </tr>
 <tr>
 <td>C</td>
-<td>두 모드(빠른 요청 / 위임 작업)를 따로 제공</td>
-<td>작은 요청이 빠름. 모드 전환과 상태 기계가 두 벌</td>
+<td>빠른 요청/위임 작업을 별도 모드로 제공</td>
+<td>사용 방식이 두 벌이 되어 상태·화면·시험 복잡도가 증가</td>
 </tr>
 </tbody>
 </table></div>
 </section><section class="doc-section" id="adr-011-delegation-working-mode-section-3"><h2><span aria-hidden="true" class="section-num">03 /</span> 결정</h2>
-<p><strong>B. 위임형이 기본이다.</strong></p>
+<p><strong>B. 위임형을 기본으로 한다.</strong></p>
 <ul>
-<li>목표와 지켜야 할 조건(유지 대상 등)을 주면 AI가 여러 단계를 진행한다.</li>
-<li>중간 결과는 후보로 계속 보인다. 사용자는 언제든 끼어들거나 멈춘다(FR-11: 접수·반영·정지 구분).</li>
-<li>원본 반영 시점에만 확인한다.</li>
-<li>작은 요청도 같은 구조 안에서 빨리 끝난다. 별도 모드는 없다.</li>
-<li>PRD §4.3의 보호 규칙(쓰기 승인, 사람 수정 보호, 늦은 결과가 새 상태를 덮어쓰지 않음)은 위임 범위 안에서도 그대로다.</li>
+<li>사용자가 맡긴 <strong>목표·대상·유지 조건·허용 범위</strong> 안에서 AI는 자료 읽기, 후보 생성·수정, 계산을 여러 단계 이어서 수행한다.</li>
+<li>내부 명령이나 중간 후보마다 반복 승인을 요구하지 않는다.</li>
+<li>중간 결과와 실제 진행은 검토 가능한 형태로 계속 보여주며, 사용자는 언제든 추가 지시·중단 등으로 개입할 수 있다.</li>
+<li>작은 요청도 같은 구조 안에서 빠르게 끝나며 별도의 빠른 모드를 필수로 두지 않는다.</li>
+<li>후보 보호, 사람의 직접 수정 보호, 늦은 결과의 덮어쓰기 방지 등 플랫폼 공통 보호는 위임 범위 안에서도 유지한다.</li>
 </ul>
+<h3>3.1 사용자 확인이 필요한 경계</h3>
+<p>다음은 AI가 조용히 대신 결정하지 않는다.</p>
+<ol>
+<li><strong>원본 반영</strong> — 검토한 변경을 실제 호스트 원본에 적용하는 행동</li>
+<li><strong>외부 공개 또는 공개 범위 확대</strong> — 이미 허용된 공유 범위의 상태 갱신과 구분</li>
+<li><strong>유지 조건의 변경</strong> — 사용자가 지키라고 지정한 조건을 완화·삭제·대체</li>
+<li><strong>작업 범위 확대</strong> — 맡긴 대상·영역·결과를 넘어 새 설계 판단이나 변경을 추가</li>
+<li><strong>큰 추가 비용</strong> — 사용자가 맡긴 범위를 넘어서는 유의미한 시간·비용·외부 자원 증가</li>
+</ol>
+<p><code>큰 추가 비용</code>의 실제 판정 기준과 요청 형태는 SPEC·PLAN에서 구체화한다. 이 ADR은 모든 비용 증가에 팝업을 띄우라는 뜻이 아니다.</p>
+<h3>3.2 확인과 중복 승인을 구분한다</h3>
+<p>사용자가 특정 후보와 대상을 명시하여 <code>이 후보를 원본에 반영해</code>처럼 충분히 명확하게 요청했다면 그 행동 자체가 원본 반영 결정의 근거가 될 수 있다. 같은 내용을 채팅과 별도 팝업으로 무조건 두 번 승인하게 하는 것은 요구하지 않는다.</p>
+<p>한 하위 작업에서 추가 결정이 필요하더라도, 독립적으로 안전하게 진행할 수 있는 다른 조회·후보 작업까지 모두 멈추게 할 필요는 없다. 대기 중 가능한 행동과 작업 간 의존성은 SPEC에서 정한다.</p>
 </section><section class="doc-section" id="adr-011-delegation-working-mode-section-4"><h2><span aria-hidden="true" class="section-num">04 /</span> 근거</h2>
-<p>가설 5는 이 방식의 전제다. 위임 없이는 기준 과업의 총시간이 두 기준선(ADR-012)을 이길 수 없고, 별도 모드는 상태·화면·시험을 두 벌로 만든다. 후보 격리(ADR-003)와 개입 상태(FR-11)가 이미 원본을 보호하므로 확인 지점을 반영 시점으로 모을 수 있다.</p>
-</section><section class="doc-section" id="adr-011-delegation-working-mode-section-5"><h2><span aria-hidden="true" class="section-num">05 /</span> 결과 — 적용 시 바꿀 문장</h2>
 <ul>
-<li>PRD §2: 가설 5는 이 방식의 전제라고 한 문장.</li>
-<li>PRD §8.2~§8.5 여정과 §9.5를 이 방식으로 맞춘다 — 목표·조건 전달 → 여러 단계 진행 → 후보 표시 → 끼어들기·멈춤 → 반영 시 확인.</li>
-<li>SPEC-00-common: 실행·개입·확인 상태의 논리적 의미(위임 범위, 끼어들기·멈춤, 반영 확인)를 이 결정 기준으로 쓴다. 필드·전송 형식은 PLAN.</li>
-<li>Design §06·§07: 이 전제와 어긋나는 문장이 있을 때만 고친다.</li>
+<li>모든 단계의 승인은 직접 CAD를 조작하는 부담을 다시 만들고 총시간·개입 부담을 늘린다.</li>
+<li>반대로 원본 반영·공개·조건/범위 변경까지 AI가 자동 결정하면 사람이 중요한 설계 판단에 개입할 수 없게 된다.</li>
+<li>위임의 단위는 <code>AI가 몇 번 호출되는가</code>가 아니라 사용자가 맡긴 목표·대상·조건·권한의 범위다.</li>
+<li>후보 격리(ADR-003)와 진행·개입 상태(FR-11)가 있어야 위임형 작업이 원본 보호와 양립한다.</li>
+</ul>
+</section><section class="doc-section" id="adr-011-delegation-working-mode-section-5"><h2><span aria-hidden="true" class="section-num">05 /</span> 문서 적용</h2>
+<ul>
+<li>PRD §2·§8·§9.5: 맡긴 범위 안의 진행과 확인 경계를 이 결정으로 유지한다.</li>
+<li>Design §06·§07: 모든 후보에 승인 버튼을 강제하지 않고, 확인이 필요한 경계에서는 사용자가 필요한 행동을 이해할 수 있게 한다.</li>
+<li>SPEC-00-common 및 실행·개입 SPEC: 확인 시점, 승인 성립 조건, 대기 중 가능한 행동, 작업 의존·중단 의미를 정의한다.</li>
+<li>PLAN: 실제 승인 인터페이스, AI 실행 방식, 비용 계측·중단 구현을 정한다.</li>
 </ul>
 </section><section class="doc-section" id="adr-011-delegation-working-mode-section-6"><h2><span aria-hidden="true" class="section-num">06 /</span> 재검토 조건</h2>
 <ul>
-<li>기준 과업 시험에서 잘못된 대상·조건 위반이 후보 단계에서 잡히지 않고 반영 직전에야 드러나는 사례가 반복되면 중간 확인 지점을 추가할지 재검토한다.</li>
-<li>별도 모드 요구가 실제 사용에서 나오면 그때 검토한다.</li>
+<li>대표 과업에서 잘못된 대상·조건 위반이 후보 단계에서 발견되지 않고 원본 반영 직전에 반복적으로 드러나면 중간 확인 지점을 추가할지 재검토한다.</li>
+<li>실제 사용자 시험에서 별도 모드가 필요하다는 반복 요구가 나오면 빠른 요청/위임 작업 분리를 검토한다.</li>
+<li>확인 경계가 지나치게 자주 발생해 위임 효과를 잃거나, 반대로 중요한 설계 판단을 AI가 조용히 넘어가는 사례가 확인되면 SPEC의 경계 기준을 조정한다.</li>
 </ul>
 </section><section class="doc-section" id="adr-011-delegation-working-mode-section-7"><h2><span aria-hidden="true" class="section-num">07 /</span> 출처</h2>
-<p>2026-09-17 순차 결정 대화(D6). PRD §2 가설 5, R-58.</p>
+<p>2026-09-17 위임형 작업 결정과 2026-09-19 사용자 정합화 결정. PRD §2·§8·§9.5, ADR-003, ADR-006, ADR-012.</p>
 </section><footer class="doc-footer"><span>VIDE / PLANNING DOCUMENTS</span><span>문서 열람용 · 실제 CAD/BIM 지원은 구현·검증 후 선언</span></footer></article></main></div>
 <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
-<script id="source-data" type="application/json">{"adr-011-delegation-working-mode":{"label":"AI와 일하는 방식 — 위임형 기본, 원본 반영 시점에만 확인","file":"ADR-011-delegation-working-mode.md","markdown":"---\nid: ADR-011\ntitle: AI와 일하는 방식 — 위임형 기본, 원본 반영 시점에만 확인\nstatus: draft\nversion: 0.2\nupdated: 2026-09-18\nowner: user\nrelated: [FR-08, FR-10, FR-11, AC-08, AC-09]\n---\n\n# ADR-011 · 위임형 작업 방식\n\n## 1. 배경\n\nPRD §8 여정(§8.2~§8.5)과 §9.5(위임 범위와 확인 경계)는 대상 지정 → 후보 → 개입 → 반영의 단계를 적지만, AI가 여러 단계를 스스로 진행하는지 단계마다 확인을 받는지가 문장마다 달랐다. §2 가설 5(\"매 단계 승인하면 직접 CAD를 쓰는 것만큼 번거롭다\")는 위임을 전제하지만 본문이 그 전제를 선언하지 않았다(PRD R-58). 대표 검수 과업(ADR-006 0.3 ①)은 대상 지정 → 문장·스케치 요청 → 후보 검토와 지시 수정 → 원본 반영 → 네이티브 재편집·저장의 흐름을 확인하므로, 작업 방식이 정해져야 측정이 뜻을 갖는다. 호스트 명령 횟수·유지 조건 개수 같은 세부 조건은 ADR-006 0.3 §2에서 고정하지 않는다.\n\n## 2. 선택지\n\n| 안 | 내용 | 트레이드오프 |\n|---|---|---|\n| A | 단계별 확인 — 도구 호출·후보마다 승인 | 통제가 세밀. 가설 5를 검증할 수 없고 직접 CAD보다 느림 |\n| B | 위임형 기본 — 목표·조건을 주면 여러 단계 진행, 중간 결과는 후보로 계속 표시, 원본 반영 시점에만 확인 | 사용자는 언제든 끼어들거나 멈춘다. 후보 격리(ADR-003)와 개입 상태(FR-11)가 전제 |\n| C | 두 모드(빠른 요청 / 위임 작업)를 따로 제공 | 작은 요청이 빠름. 모드 전환과 상태 기계가 두 벌 |\n\n## 3. 결정\n\n**B. 위임형이 기본이다.**\n\n- 목표와 지켜야 할 조건(유지 대상 등)을 주면 AI가 여러 단계를 진행한다.\n- 중간 결과는 후보로 계속 보인다. 사용자는 언제든 끼어들거나 멈춘다(FR-11: 접수·반영·정지 구분).\n- 원본 반영 시점에만 확인한다.\n- 작은 요청도 같은 구조 안에서 빨리 끝난다. 별도 모드는 없다.\n- PRD §4.3의 보호 규칙(쓰기 승인, 사람 수정 보호, 늦은 결과가 새 상태를 덮어쓰지 않음)은 위임 범위 안에서도 그대로다.\n\n## 4. 근거\n\n가설 5는 이 방식의 전제다. 위임 없이는 기준 과업의 총시간이 두 기준선(ADR-012)을 이길 수 없고, 별도 모드는 상태·화면·시험을 두 벌로 만든다. 후보 격리(ADR-003)와 개입 상태(FR-11)가 이미 원본을 보호하므로 확인 지점을 반영 시점으로 모을 수 있다.\n\n## 5. 결과 — 적용 시 바꿀 문장\n\n- PRD §2: 가설 5는 이 방식의 전제라고 한 문장.\n- PRD §8.2~§8.5 여정과 §9.5를 이 방식으로 맞춘다 — 목표·조건 전달 → 여러 단계 진행 → 후보 표시 → 끼어들기·멈춤 → 반영 시 확인.\n- SPEC-00-common: 실행·개입·확인 상태의 논리적 의미(위임 범위, 끼어들기·멈춤, 반영 확인)를 이 결정 기준으로 쓴다. 필드·전송 형식은 PLAN.\n- Design §06·§07: 이 전제와 어긋나는 문장이 있을 때만 고친다.\n\n## 6. 재검토 조건\n\n- 기준 과업 시험에서 잘못된 대상·조건 위반이 후보 단계에서 잡히지 않고 반영 직전에야 드러나는 사례가 반복되면 중간 확인 지점을 추가할지 재검토한다.\n- 별도 모드 요구가 실제 사용에서 나오면 그때 검토한다.\n\n## 7. 출처\n\n2026-09-17 순차 결정 대화(D6). PRD §2 가설 5, R-58.\n"}}</script>
+<script id="source-data" type="application/json">{"adr-011-delegation-working-mode":{"label":"AI와 일하는 방식 — 위임형 기본, 위임 범위 변경·원본 반영·외부 공개에서 확인","file":"ADR-011-delegation-working-mode.md","markdown":"---\nid: ADR-011\ntitle: AI와 일하는 방식 — 위임형 기본, 위임 범위 변경·원본 반영·외부 공개에서 확인\nstatus: approved\nversion: 0.3\nupdated: 2026-09-19\nowner: user\nrelated: [FR-08, FR-10, FR-11, FR-12, FR-18, AC-08, AC-09, AC-17]\n---\n\n# ADR-011 · 위임형 작업 방식\n\n## 1. 배경\n\nVIDE는 사람이 매 도구 호출마다 승인하는 방식도, 장시간 무엇이 일어나는지 알 수 없는 무관찰 자율 실행도 목표로 하지 않는다. 사용자는 목표·대상·유지 조건을 정하고 AI에게 작업을 맡기되, 실제 중간 상태를 보면서 언제든 개입할 수 있어야 한다.\n\n기존 0.2의 `원본 반영 시점에만 확인한다`는 표현은 위임의 취지를 설명하는 데는 유용했지만, 외부 공개·유지 조건 변경·작업 범위 확대·큰 추가 비용처럼 사용자가 다시 결정해야 하는 경계까지 생략하는 것으로 읽힐 수 있었다. 2026-09-19 사용자 결정으로 확인 경계를 정합화한다.\n\n## 2. 선택지\n\n| 안 | 내용 | 트레이드오프 |\n|---|---|---|\n| A | 단계별 확인 — 내부 명령·후보마다 승인 | 통제는 세밀하지만 사용자가 계속 CAD를 직접 조작하는 것과 비슷해지고 위임 효과가 낮음 |\n| B | 위임형 기본 — 맡긴 범위 안에서는 진행하고, 권한·범위가 바뀌는 경계에서 확인 | 자율성과 개입 가능성을 함께 유지. 후보 보호·진행 표시·중단 계약이 필요 |\n| C | 빠른 요청/위임 작업을 별도 모드로 제공 | 사용 방식이 두 벌이 되어 상태·화면·시험 복잡도가 증가 |\n\n## 3. 결정\n\n**B. 위임형을 기본으로 한다.**\n\n- 사용자가 맡긴 **목표·대상·유지 조건·허용 범위** 안에서 AI는 자료 읽기, 후보 생성·수정, 계산을 여러 단계 이어서 수행한다.\n- 내부 명령이나 중간 후보마다 반복 승인을 요구하지 않는다.\n- 중간 결과와 실제 진행은 검토 가능한 형태로 계속 보여주며, 사용자는 언제든 추가 지시·중단 등으로 개입할 수 있다.\n- 작은 요청도 같은 구조 안에서 빠르게 끝나며 별도의 빠른 모드를 필수로 두지 않는다.\n- 후보 보호, 사람의 직접 수정 보호, 늦은 결과의 덮어쓰기 방지 등 플랫폼 공통 보호는 위임 범위 안에서도 유지한다.\n\n### 3.1 사용자 확인이 필요한 경계\n\n다음은 AI가 조용히 대신 결정하지 않는다.\n\n1. **원본 반영** — 검토한 변경을 실제 호스트 원본에 적용하는 행동\n2. **외부 공개 또는 공개 범위 확대** — 이미 허용된 공유 범위의 상태 갱신과 구분\n3. **유지 조건의 변경** — 사용자가 지키라고 지정한 조건을 완화·삭제·대체\n4. **작업 범위 확대** — 맡긴 대상·영역·결과를 넘어 새 설계 판단이나 변경을 추가\n5. **큰 추가 비용** — 사용자가 맡긴 범위를 넘어서는 유의미한 시간·비용·외부 자원 증가\n\n`큰 추가 비용`의 실제 판정 기준과 요청 형태는 SPEC·PLAN에서 구체화한다. 이 ADR은 모든 비용 증가에 팝업을 띄우라는 뜻이 아니다.\n\n### 3.2 확인과 중복 승인을 구분한다\n\n사용자가 특정 후보와 대상을 명시하여 `이 후보를 원본에 반영해`처럼 충분히 명확하게 요청했다면 그 행동 자체가 원본 반영 결정의 근거가 될 수 있다. 같은 내용을 채팅과 별도 팝업으로 무조건 두 번 승인하게 하는 것은 요구하지 않는다.\n\n한 하위 작업에서 추가 결정이 필요하더라도, 독립적으로 안전하게 진행할 수 있는 다른 조회·후보 작업까지 모두 멈추게 할 필요는 없다. 대기 중 가능한 행동과 작업 간 의존성은 SPEC에서 정한다.\n\n## 4. 근거\n\n- 모든 단계의 승인은 직접 CAD를 조작하는 부담을 다시 만들고 총시간·개입 부담을 늘린다.\n- 반대로 원본 반영·공개·조건/범위 변경까지 AI가 자동 결정하면 사람이 중요한 설계 판단에 개입할 수 없게 된다.\n- 위임의 단위는 `AI가 몇 번 호출되는가`가 아니라 사용자가 맡긴 목표·대상·조건·권한의 범위다.\n- 후보 격리(ADR-003)와 진행·개입 상태(FR-11)가 있어야 위임형 작업이 원본 보호와 양립한다.\n\n## 5. 문서 적용\n\n- PRD §2·§8·§9.5: 맡긴 범위 안의 진행과 확인 경계를 이 결정으로 유지한다.\n- Design §06·§07: 모든 후보에 승인 버튼을 강제하지 않고, 확인이 필요한 경계에서는 사용자가 필요한 행동을 이해할 수 있게 한다.\n- SPEC-00-common 및 실행·개입 SPEC: 확인 시점, 승인 성립 조건, 대기 중 가능한 행동, 작업 의존·중단 의미를 정의한다.\n- PLAN: 실제 승인 인터페이스, AI 실행 방식, 비용 계측·중단 구현을 정한다.\n\n## 6. 재검토 조건\n\n- 대표 과업에서 잘못된 대상·조건 위반이 후보 단계에서 발견되지 않고 원본 반영 직전에 반복적으로 드러나면 중간 확인 지점을 추가할지 재검토한다.\n- 실제 사용자 시험에서 별도 모드가 필요하다는 반복 요구가 나오면 빠른 요청/위임 작업 분리를 검토한다.\n- 확인 경계가 지나치게 자주 발생해 위임 효과를 잃거나, 반대로 중요한 설계 판단을 AI가 조용히 넘어가는 사례가 확인되면 SPEC의 경계 기준을 조정한다.\n\n## 7. 출처\n\n2026-09-17 위임형 작업 결정과 2026-09-19 사용자 정합화 결정. PRD §2·§8·§9.5, ADR-003, ADR-006, ADR-012.\n"}}</script>
 <script id="reader-config" type="application/json">{"initial":"adr-011-delegation-working-mode","siteTitle":"VIDE"}</script>
 <script>
 (() => {
