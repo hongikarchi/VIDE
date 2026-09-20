@@ -2,6 +2,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { randomUUID, createHash } from 'node:crypto';
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
+import { checkDatabase } from './database-check.mjs';
 
 export class DomainError extends Error {
   constructor(code) { super(code); this.code = code; }
@@ -50,6 +51,7 @@ export class Store {
         try { this.controller.exec('PRAGMA busy_timeout=0; BEGIN EXCLUSIVE'); }
         catch { this.controller.close(); this.controller = null; fail('CONTROLLER_BUSY'); }
       }
+      checkDatabase(filename);
       this.db = new DatabaseSync(filename);
       this.db.exec(`PRAGMA foreign_keys=ON; PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL;
         CREATE TABLE IF NOT EXISTS schema_version(version INTEGER NOT NULL);

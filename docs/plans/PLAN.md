@@ -2,7 +2,7 @@
 id: PLAN
 title: VIDE 구현계획 (마스터)
 status: review
-version: 0.44
+version: 0.45
 updated: 2026-09-20
 owner: agent:codex
 related: [SPEC-00, SPEC-01, SPEC-02, SPEC-03, SPEC-04, SPEC-05, ADR-013, OQ-03, OQ-04, OQ-06, OQ-07, OQ-08, OQ-09, OQ-10, OQ-14]
@@ -660,3 +660,6 @@ SPEC-05.3·6의 재개 경로에서 --open으로 다시 실행하면 동일 데�
 SPEC-05.3·6에 따라 src/desktop의 C# 실행기와 빌더를 추가했다. npm run package:windows -- <버전>으로 .vide/releases에 기존 산출물을 덮어쓰지 않는 ZIP을 만든다. Node 24.15.0 x64와 필요한 Three 파일·라이선스·SHA-256 목록만 포함한다. 사용자 데이터·인증·호스트/CLI 설치본은 포함하지 않는다. 공식 Node 고지는 https://raw.githubusercontent.com/nodejs/node/v24.15.0/LICENSE 에서 고정 버전으로 취득했다.
 압축 해제 후 VIDE.exe를 실행하며 기본 데이터는 %LOCALAPPDATA%/VIDE에 둔다. 앱 종료 후 새 버전 폴더에서 실행할 수 있으나 DB 버전 변경의 백업/복구는 후속 작업이다. Codex는 명시 경로 다음으로 알려진 npm/데스크톱 설치 위치를 제한적으로 확인한다.
 0.1.0-dev.20260920.1 패키지의 생성·해시·공백 경로·개발 Node 없는 PATH·브라우저·공식 Codex 구독 연결·중복 실행·재시작·실행 폴더 제거 후 자료 보존을 현재 PC에서 검증했다. 별도 PC 설치, 서명, 외부 배포, ZWCAD 미응답 문제 해결은 완료로 세지 않는다.
+
+### 기존 데이터의 쓰기 전 호환성 검사
+SPEC-05.6에 따라 단일 제어 잠금을 얻은 뒤 기존 DB를 읽기 전용으로 열어 quick_check와 단일 schema_version=1을 확인한다. 다른 버전·여러 버전 행·다른 앱 DB·읽기 실패는 WAL 설정/테이블 생성 전에 거절한다. 실패하면 제어 잠금을 해제하며 기존 DB를 초기화하지 않는다. 새/빈 DB는 기존 초기화 경로를 따른다. 자동 백업·마이그레이션·사용자 복구 UI는 별도 남은 작업이다.
