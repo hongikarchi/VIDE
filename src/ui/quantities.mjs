@@ -3,8 +3,8 @@ import {api} from './gateway.mjs';
 const dialog=document.createElement('dialog');dialog.className='quantity-dialog';dialog.setAttribute('aria-label','후보 수량표');document.body.append(dialog);
 function element(tag,text,parent){const node=document.createElement(tag);node.textContent=text;parent.append(node);return node;}
 let opening=0;
-export async function showQuantities(projectId,requestId,onSelect){
- const currentOpening=++opening;const [table,requests,views]=await Promise.all([api(`/projects/${projectId}/requests/${requestId}/quantities`),api(`/projects/${projectId}/requests`),api(`/projects/${projectId}/table-views`)]);if(currentOpening!==opening)return;
+export async function showQuantities(projectId,requestId,onSelect,objectId=''){
+ const currentOpening=++opening;const [table,requests,views]=await Promise.all([api(`/projects/${projectId}/requests/${requestId}/quantities?${new URLSearchParams({objectId})}`),api(`/projects/${projectId}/requests`),api(`/projects/${projectId}/table-views`)]);if(currentOpening!==opening)return;
  dialog.replaceChildren();const head=element('div','',dialog);head.className='quantity-head';element('h2','후보 수량표',head);const close=element('button','닫기',head);close.onclick=()=>{opening++;dialog.close();};dialog.oncancel=()=>opening++;
  element('p',`${table.host==='rhino'?'Rhino':'ZWCAD'} · ${table.rows.length}개 객체 · 저장된 후보 기준`,dialog);
  const compareArea=element('div','',dialog);compareArea.className='comparison-controls';

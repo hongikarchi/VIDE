@@ -7,6 +7,7 @@ export function initializeQuantityView(parent,projectId,requestId,initial,views,
  const search=element('input','',controls);search.placeholder='객체 검색';search.setAttribute('aria-label','객체 검색');search.maxLength=200;
  const select=(label,items)=>{const node=element('select','',controls);node.setAttribute('aria-label',label);for(const [value,text] of items)element('option',text,node).value=value;return node;};
  const object=select('집계 객체',[['','전체 객체'],...initial.available.objects.map(item=>[item.id,item.name])]);
+ object.value=initial.query.objectId||'';
  const type=select('객체 유형',[['','전체 유형'],...initial.available.types.map(value=>[value,value])]);
  const layer=select('레이어 필터',[['','전체 레이어'],...initial.available.layers.map(value=>[value,value])]);
  const group=select('그룹 기준',[['none','그룹 없음'],['type','유형별'],['layer','레이어별']]);

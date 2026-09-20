@@ -83,6 +83,7 @@ export function renderInspector(object, result, request, tab='properties', refer
   const grid=document.createElement('div');grid.className='property-grid';content.append(grid);
   for(const [label,value] of properties){const item=document.createElement('div');item.className='property';const key=document.createElement('small');key.textContent=label;const text=document.createElement('strong');text.textContent=value;item.append(key,text);grid.append(item);}
   if(tab==='properties'){
+    if(references.quantities){const quantities=document.createElement('button');quantities.textContent='이 객체 수량표';quantities.onclick=()=>references.quantities(request,object);content.append(quantities);}
     const attributes=nativeAttributes(native);
     if(attributes.known&&(attributes.entries.length||!attributes.complete)){
       const title=document.createElement('p');title.textContent='Rhino 사용자 속성 · 취득 기준';content.append(title);
