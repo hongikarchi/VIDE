@@ -5,6 +5,13 @@ export const models = [
 ];
 export const initial = () => ({selected:null,host:'rhino',body:'',instructions:[],pins:[],sketches:[],files:[],model:models[0].id,effort:'default',permission:'review',messages:[]});
 export const storageKey='vide:review:composer:v3';
+export function failedRequestDraft(state,request){
+ if(!['failed','cancelled','interrupted'].includes(request?.state)||!request.input||['file','document'].includes(request.input.source)||request.input.provider==='extension')throw Error('복원할 수 있는 AI 요청이 아닙니다.');
+ const input=request.input;
+ if(input.baseRequestId&&!state.messages.some(message=>message.id===input.baseRequestId&&message.request?.result?.hostExecuted))throw Error('원 요청의 기준 후보를 확인할 수 없습니다.');
+ if(typeof input.body!=='string'||!['pins','sketches','files'].every(key=>Array.isArray(input[key])))throw Error('저장된 입력을 확인할 수 없습니다.');
+ return structuredClone({body:input.body,instructions:[],pins:input.pins,sketches:input.sketches,files:input.files,host:input.host||'rhino',baseRequestId:input.baseRequestId,model:input.model,effort:input.effort,permission:input.permission,selected:null});
+}
 export function chooseModel(s,id){const model=models.find(m=>m.id===id);if(!model)throw Error('모델을 선택하세요.');s.model=id;if(!model.efforts.includes(s.effort))s.effort=model.efforts.includes('medium')?'medium':model.efforts[0];}
 export function pinSelection(s){const o=objects.find(o=>o.id===s.selected);if(o&&!s.pins.some(p=>p.id===o.id))s.pins.push({id:o.id,name:o.name,role:'target',basis:o.revision});}
 export function validate(s){if(s.instructions!==undefined&&(!Array.isArray(s.instructions)||s.instructions.some(t=>typeof t!=='string')))return '요청 목록을 확인하세요.';if(requestBody(s).length>20000)return '요청 묶음은 20,000자까지 입력할 수 있습니다.';if(!requestBody(s).trim()&&!s.pins.length&&!s.sketches.length&&!s.files.length)return '메시지나 참조를 추가하세요.';const m=models.find(m=>m.id===s.model);if(!m||!m.efforts.includes(s.effort))return '모델과 effort를 확인하세요.';if(!['review','candidate'].includes(s.permission))return '권한을 확인하세요.';return '';}

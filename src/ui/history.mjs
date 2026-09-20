@@ -26,6 +26,9 @@ export function renderHistory(root,messages,models,projectId,actions){
    }
   if(request.result?.hostExecuted)renderCandidate(card,message,projectId,actions);
   if(request.result?.code)element('p',errors[request.result.code]||request.result.code,card);
+  if(['failed','cancelled','interrupted'].includes(request.state)&&message.provider!=='extension'&&!['file','document'].includes(message.source)){
+   const restore=element('button','입력을 초안으로 복원',card);restore.onclick=()=>{try{actions.restore(request);}catch(error){actions.error(error.message);}};
+  }
   if(message.provider!=='extension'&&['queued','running'].includes(request.state)&&!['file','document'].includes(message.source)&&request.result?.phase!=='host'){
    const stop=element('button','중단',card);
    stop.onclick=async()=>{stop.disabled=true;try{await api(`/projects/${projectId}/requests/${message.id}/cancel`,'POST',{});}catch(error){actions.error(error.message);stop.disabled=false;}};

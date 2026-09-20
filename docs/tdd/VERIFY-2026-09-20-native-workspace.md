@@ -2,8 +2,8 @@
 id: VERIFY-2026-09-20-native-workspace
 title: 브라우저 입력에서 실제 Rhino 후보까지
 status: review
-version: 0.30
-updated: 2026-09-20
+version: 0.31
+updated: 2026-09-21
 owner: agent:codex
 related: [AC-05, AC-17, AC-24, AC-38, T-005, T-013, T-015, T-016, T-018]
 ---
@@ -215,3 +215,6 @@ T-011 / SPEC-05.3·6: tests/core/backup.test.mjs에서 실행 중 제어 잠금 
 
 ## 프로젝트별 초안·메뉴 회귀
 T-002·010 / SPEC-01 / SCR-01·07: tests/integration/browser-draft-isolation.mjs에서 두 기존 프로젝트의 독립 저장·불러오기, 다른 프로젝트 ID 변조 거절과 현재 입력 보존, 과거 후보 기준 복원, 기준 없는 초안의 재열기 보존을 확인했다. AI/호스트 요청은 제출하지 않았다. 1440×900·390×844에서 메뉴가 화면 안에 있고 summary로 닫힘을 확인했다. [드롭다운 화면](../assets/native-workspace/draft-menu.png). 기존 공용 저장본은 자동 이관하지 않는다.
+
+## 중단 요청 초안 복원 검증 — 2026-09-21
+T-002·004 / SPEC-01·05.5 / SCR-03·07: tests/core/request-draft.test.mjs는 이전 후보/모델/권한 보존, 원 입력과 가변 참조 분리, 요청 ID 제외, unknown·누락 기준 거절을 확인한다. tests/integration/browser-request-restore.mjs는 응답 fixture로 복원 취소/수락, 핀·자료·본문·기준 복원, 사용 불가 모델의 전송 차단과 새로고침 보존을 검증했다. 요청 POST는 0건이며 실제 AI/호스트 기록을 변경하지 않았다. 자동 시험 78개 통과.
