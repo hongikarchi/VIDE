@@ -26,6 +26,9 @@ export function renderHistory(root,messages,models,projectId,actions){
    }
   if(request.result?.hostExecuted)renderCandidate(card,message,projectId,actions);
   if(request.result?.code)element('p',errors[request.result.code]||request.result.code,card);
+  if(request.state==='unknown'&&message.source==='file'&&message.host==='zwcad'&&request.result?.sourceHash){
+   const recover=element('button','불러오기 결과 확인',card);recover.onclick=async()=>{recover.disabled=true;try{message.request=await api(`/projects/${projectId}/imports/${message.id}/reconcile`,'POST',{});actions.changed();}catch(error){actions.error(error.message);recover.disabled=false;}};
+  }
   if(['failed','cancelled','interrupted'].includes(request.state)&&message.provider!=='extension'&&!['file','document'].includes(message.source)){
    const restore=element('button','입력을 초안으로 복원',card);restore.onclick=()=>{try{actions.restore(request);}catch(error){actions.error(error.message);}};
   }

@@ -2,7 +2,7 @@
 id: VERIFY-2026-09-20-native-workspace
 title: 브라우저 입력에서 실제 Rhino 후보까지
 status: review
-version: 0.34
+version: 0.35
 updated: 2026-09-21
 owner: agent:codex
 related: [AC-05, AC-17, AC-24, AC-38, T-005, T-013, T-015, T-016, T-018]
@@ -229,3 +229,8 @@ T-002·013 / SPEC-01: 브라우저 초안 시험에서 이전 후보에 입력�
 
 ## Inspector 근거 탐색 검증 — 2026-09-21
 T-007·010 / SPEC-03.4 / SCR-09: tests/integration/browser-inspector-relations.mjs는 실제 DWG 연계 시험의 Rhino 객체에서 참고 입력의 ZWCAD 객체를 열고, 초안의 Rhino 대상·기준 ID·본문 유지와 원 입력 기준 복귀를 확인했다. [관계 화면](../assets/native-workspace/inspector-relations.png). 데이터 변경이나 AI/호스트 실행은 없다. 프로젝트별 초안 및 데스크톱/모바일 작업 공간 회귀도 통과했다. 작업 수준의 참조이며 개별 객체의 설계 인과관계 증명은 아니다.
+
+## DWG 가져오기 결과 재확인 — 2026-09-21
+T-006 / SPEC-00·05.5 / H-ZWCAD-04 읽기: 자동 시험은 초기 해시 보존, 변경 파일 거절과 unknown 유지, 증거 없는 과거 기록/다른 프로젝트 거절, 성공 확인의 멱등성을 확인했다. 전체 자동 시험 80개 통과.
+tests/integration/browser-dwg-recovery.mjs는 실제 DWG 읽기 완료 후 응답 유실을 주입했다. 같은 요청의 동시 확인 두 건이 추가 읽기 한 번으로 합쳐졌고, 최초 import는 1회였다. 동일 요청 ID의 성공 전환·면적 200 m²·길이 60 m·원 DWG 해시 보존·업로드 임시 파일 제거를 확인했다. 시험 데이터 .vide/import-recovery-check/88775809-6c0d-4c62-ab13-b92636da6eef, 프로젝트 d4bad20c-09bd-46bf-81a5-9c9cd3eb2d39, 요청 e777ff3b-9b1f-44b3-b072-e8b3660224ad. AI 호출이나 사용자 도면 쓰기는 없었다.
+0.1.0-dev.20260921 패키지는 70개 파일 검증과 실행/종료/재시작/백업을 통과했다. 시험 데이터 .vide/package-check/78ee49a7-21c0-4699-8e61-cbca7060b81c/data. 이 패키지에는 뒤에 추가한 DWG 복구 기능은 아직 포함되지 않는다.

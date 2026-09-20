@@ -17,7 +17,7 @@ import { Execution } from './execution.mjs';
 import { RhinoWorkspace } from '../../hosts/rhino/workspace.mjs';
 import { ZwcadWorkspace } from '../../hosts/zwcad/workspace.mjs';
 import { dirname, join } from 'node:path';
-import { importModel,captureModel } from './import-model.mjs';
+import { importModel,captureModel,recoverDwgImport } from './import-model.mjs';
 import { renderReport } from './report.mjs';
 
 const assets = new Map([
@@ -43,11 +43,11 @@ async function body(request) {
 }
 const statuses = { NOT_FOUND: 404, FORBIDDEN: 403, UNAUTHORIZED: 401, JSON_REQUIRED: 415, INPUT_TOO_LARGE: 413,
   REVISION_CONFLICT: 409, TARGET_MISMATCH: 409, CONTROLLER_BUSY: 409, PROJECT_BUSY:409, STALE_REFERENCE:409 };
-export async function startServer({ filename, port = 0, providerFactory, host, applicationOptions,onShutdown } = {}) {
+export async function startServer({ filename, port = 0, providerFactory, host, cadHost,applicationOptions,onShutdown } = {}) {
   const store = new Store(filename), bootstrap = randomBytes(32).toString('hex'), session = randomBytes(32).toString('hex');
   const workspace = new Workspace(store),tableViews=new TableViews(store),reviews=new Reviews(store),reviewNotes=new ReviewNotes(store,reviews);
   host ??= new RhinoWorkspace(join(dirname(filename),'models'));
-  const hosts={rhino:host,zwcad:new ZwcadWorkspace(join(dirname(filename),'cad-models'))};
+  const hosts={rhino:host,zwcad:cadHost||new ZwcadWorkspace(join(dirname(filename),'cad-models'))},importRecoveries=new Map();
   const applications=new Applications(store,workspace,applicationOptions);
   const aiSettings=new AiSettings(store),extensions=new Extensions(store,workspace);
   const execution = new Execution(workspace, { providerFactory, host, hosts,settings:aiSettings });
@@ -131,6 +131,12 @@ export async function startServer({ filename, port = 0, providerFactory, host, a
       if (url.pathname === '/api/v1/models' && request.method === 'GET') { send(200,await execution.models()); return; }
       if(url.pathname==='/api/v1/host/documents'&&request.method==='GET'){send(200,await listDocuments());return;}
       if(url.pathname==='/api/v1/host/selection'&&request.method==='GET'){send(200,await inspectDocument(url.searchParams.get('instance')||'',Number(url.searchParams.get('document'))));return;}
+      const importRecovery=/^\/api\/v1\/projects\/([^/]+)\/imports\/([^/]+)\/reconcile$/.exec(url.pathname);
+      if(importRecovery&&request.method==='POST'){
+        await body(request);const [,projectId,id]=importRecovery,key=projectId+':'+id;
+        if(!importRecoveries.has(key)){const pending=recoverDwgImport(projectId,id,workspace,hosts.zwcad).finally(()=>importRecoveries.delete(key));importRecoveries.set(key,pending);}
+        send(200,await importRecoveries.get(key));return;
+      }
       const application=/^\/api\/v1\/projects\/([^/]+)\/applications(?:\/([^/]+)(\/reconcile)?)?$/.exec(url.pathname);
       if(application){
         if(request.method==='POST'&&application[3]){send(200,await applications.recover(application[1],application[2]));return;}

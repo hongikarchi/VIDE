@@ -60,3 +60,5 @@ Object.assign(errors,{INVALID_CLI_PATH:'설치된 claude.exe 또는 codex.exe의
 Object.assign(errors,{EXTENSION_DISABLED:'확장이 비활성화되어 새 실행을 시작할 수 없습니다.',EXTENSION_FAILED:'확장 실행이 실패했습니다. 입력과 이전 후보는 유지됩니다.'});
 
 Object.assign(errors,{APP_STOPPING:'VIDE가 종료 중이라 새 작업을 시작할 수 없습니다.'});
+
+Object.assign(errors,{IMPORT_EVIDENCE_MISSING:'업로드 당시의 확인 근거가 없어 자동 복구할 수 없습니다.',IMPORT_RECOVERY_FAILED:'DWG 복사본을 다시 읽지 못했습니다. 연결과 파일 상태를 확인하세요.'});

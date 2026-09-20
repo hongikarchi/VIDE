@@ -26,7 +26,13 @@ export class ZwcadWorkspace {
   async importFile(projectId,requestId,source){
     if(!/^[a-zA-Z0-9-]+$/.test(projectId)||!/^[a-zA-Z0-9-]+$/.test(requestId))throw Error('INVALID_ID');
     const directory=join(this.directory,projectId);await mkdir(directory,{recursive:true});const filename=join(directory,requestId+'.dwg');
-    await copyFile(source,filename,constants.COPYFILE_EXCL);const before=createHash('sha256').update(await readFile(filename)).digest('hex');
+    await copyFile(source,filename,constants.COPYFILE_EXCL);return this.inspectImport(projectId,requestId,createHash('sha256').update(await readFile(source)).digest('hex'));
+  }
+  async inspectImport(projectId,requestId,expectedHash){
+    if(!/^[a-zA-Z0-9-]+$/.test(projectId)||!/^[a-zA-Z0-9-]+$/.test(requestId)||!/^[a-f0-9]{64}$/.test(expectedHash))throw Object.assign(new Error('INVALID_INPUT'),{code:'INVALID_INPUT'});
+    const filename=join(this.directory,projectId,requestId+'.dwg');
+    const before=createHash('sha256').update(await readFile(filename)).digest('hex');
+    if(before!==expectedHash)throw Object.assign(new Error('SOURCE_CHANGED'),{code:'SOURCE_CHANGED'});
     const result=await this.invoke({mode:'inspect',filename});
     const after=createHash('sha256').update(await readFile(filename)).digest('hex');
     if(!result.verified||before!==after)throw Object.assign(new Error('HOST_VERIFICATION_FAILED'),{code:'HOST_VERIFICATION_FAILED'});
