@@ -24,10 +24,10 @@ test('explicit empty basis never picks the latest model and refuses writable pin
 test('AI receives native lengths, world bounds and decoded layers instead of sampled viewport geometry',async()=>{
  const {store,workspace,project,input}=fixture();let received;
  const source={id:'curve',kind:'native',nativeId:'guid',name:'Circle',origin:[-2,-2,0]};
- workspace.submit(project.id,input);workspace.update(project.id,input.id,'succeeded',{host:'rhino',hostExecuted:true,objects:[source],scene:[{id:'curve',length:4*Math.PI,boundsSize:[4,4,0],layer64:Buffer.from('대지').toString('base64'),area:4*Math.PI,volume:null,line:[1,2,3]}]});
+ workspace.submit(project.id,input);workspace.update(project.id,input.id,'succeeded',{host:'rhino',hostExecuted:true,objects:[source],scene:[{id:'curve',length:4*Math.PI,boundsSize:[4,4,0],layer64:Buffer.from('대지').toString('base64'),area:4*Math.PI,volume:null,line:[1,2,3],attributes64:[[Buffer.from('PrivateKey').toString('base64'),Buffer.from('PrivateValue').toString('base64')]],attributesComplete:true}]});
  const execution=new Execution(workspace,{host:{},providerFactory:()=>({run:async packet=>{received=packet;return {text:JSON.stringify({message:'Measured circle',operations:[]})};}})});
  try{execution.start(workspace.submit(project.id,{...input,id:'measure-followup',baseRequestId:input.id}).request);await Promise.all([...execution.active.values()].map(item=>item.completion));
-  const measure=received.items.find(item=>item.id==='measurements').data[0];assert.equal(measure.length,4*Math.PI);assert.deepEqual(measure.boundsSize,[4,4,0]);assert.equal(measure.layer,'대지');assert.equal(measure.line,undefined);assert.equal(workspace.get(project.id,'measure-followup').state,'succeeded');
+  const measure=received.items.find(item=>item.id==='measurements').data[0];assert.equal(measure.length,4*Math.PI);assert.equal(JSON.stringify(received).includes('PrivateValue'),false);assert.equal(JSON.stringify(received).includes('UHJpdmF0ZVZhbHVl'),false);assert.equal(measure.attributes64,undefined);assert.deepEqual(measure.boundsSize,[4,4,0]);assert.equal(measure.layer,'대지');assert.equal(measure.line,undefined);assert.equal(workspace.get(project.id,'measure-followup').state,'succeeded');
  }finally{store.close();}
 });
 

@@ -1,3 +1,4 @@
+import {userAttributesCode} from './user-attributes.mjs';
 import {prepareNativeCopies} from './native-copy.mjs';
 import { mkdir,readFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
@@ -83,7 +84,7 @@ export class RhinoWorkspace {
 
 
 function readback(filename){return `    using(var verify=Rhino.RhinoDoc.OpenHeadless(${literal(filename)})){
-      var result=new List<string>();
+      var result=new List<string>();int remainingAttributeBytes=262144;
       foreach(var obj in verify.Objects){
         var bounds=obj.Geometry.GetBoundingBox(true);
         var vertices=new List<double>();var indices=new List<int>();var line=new List<double>();
@@ -100,7 +101,8 @@ function readback(filename){return `    using(var verify=Rhino.RhinoDoc.OpenHead
         var volume=brep!=null&&brep.IsSolid?Rhino.Geometry.VolumeMassProperties.Compute(brep):null;
         Func<double,string> number=n=>n.ToString("R",System.Globalization.CultureInfo.InvariantCulture);
         var nativeLength=curve!=null?curve.GetLength():0;
-        result.Add("{\\"boundsSize\\":["+number(bounds.Max.X-bounds.Min.X)+","+number(bounds.Max.Y-bounds.Min.Y)+","+number(bounds.Max.Z-bounds.Min.Z)+"],\\"length\\":"+(nativeLength>0?number(nativeLength):"null")+",\\"layer64\\":\\""+Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(verify.Layers[obj.Attributes.LayerIndex].FullPath))+"\\",\\"id\\":\\""+obj.Attributes.GetUserString("vide-id")+"\\",\\"nativeId\\":\\""+obj.Id+"\\",\\"nativeType\\":\\""+obj.Geometry.ObjectType.ToString()+"\\",\\"name64\\":\\""+Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(obj.Name??"Object"))+"\\",\\"origin\\":["+number(bounds.Min.X)+","+number(bounds.Min.Y)+","+number(bounds.Min.Z)+"],\\"vertices\\":["+String.Join(",",vertices.Select(number))+"],\\"indices\\":["+String.Join(",",indices)+"],\\"line\\":["+String.Join(",",line.Select(number))+"],\\"area\\":"+(area!=null?number(area.Area):"null")+",\\"volume\\":"+(volume!=null?number(volume.Volume):"null")+",\\"valid\\":"+(obj.Geometry.IsValid?"true":"false")+"}");
+        ${userAttributesCode}
+        result.Add("{\\"attributes64\\":["+String.Join(",",attributePairs)+"],\\"attributesComplete\\":"+(attributesComplete?"true":"false")+",\\"boundsSize\\":["+number(bounds.Max.X-bounds.Min.X)+","+number(bounds.Max.Y-bounds.Min.Y)+","+number(bounds.Max.Z-bounds.Min.Z)+"],\\"length\\":"+(nativeLength>0?number(nativeLength):"null")+",\\"layer64\\":\\""+Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(verify.Layers[obj.Attributes.LayerIndex].FullPath))+"\\",\\"id\\":\\""+obj.Attributes.GetUserString("vide-id")+"\\",\\"nativeId\\":\\""+obj.Id+"\\",\\"nativeType\\":\\""+obj.Geometry.ObjectType.ToString()+"\\",\\"name64\\":\\""+Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(obj.Name??"Object"))+"\\",\\"origin\\":["+number(bounds.Min.X)+","+number(bounds.Min.Y)+","+number(bounds.Min.Z)+"],\\"vertices\\":["+String.Join(",",vertices.Select(number))+"],\\"indices\\":["+String.Join(",",indices)+"],\\"line\\":["+String.Join(",",line.Select(number))+"],\\"area\\":"+(area!=null?number(area.Area):"null")+",\\"volume\\":"+(volume!=null?number(volume.Volume):"null")+",\\"valid\\":"+(obj.Geometry.IsValid?"true":"false")+"}");
       }
       output.AppendLine("["+String.Join(",",result)+"]");
     }`;}

@@ -2,7 +2,7 @@
 id: VERIFY-2026-09-20-native-workspace
 title: 브라우저 입력에서 실제 Rhino 후보까지
 status: review
-version: 0.36
+version: 0.37
 updated: 2026-09-21
 owner: agent:codex
 related: [AC-05, AC-17, AC-24, AC-38, T-005, T-013, T-015, T-016, T-018]
@@ -237,3 +237,8 @@ tests/integration/browser-dwg-recovery.mjs는 실제 DWG 읽기 완료 후 응�
 
 ## 큰 좌표 세부 형상 검증 — 2026-09-21
 T-015 / SCR-01·02: tests/integration/browser-large-coordinate-detail.mjs는 X=90000.001 m, Y=80000.001 m 부근 0.002 m 사각 메시의 정투영/원근 중앙 선택을 확인했다. [실제 렌더](../assets/native-workspace/large-coordinate-detail.png). 점의 정투영/원근/핀/30px 바깥 클릭 회귀와 기존 데스크톱·모바일 작업 공간 시험도 통과했다. 원 호스트나 AI 호출은 없다. GPU에 전달할 상대 좌표 표현의 보정이며 원 좌표/측정 데이터는 수정하지 않는다.
+
+## Rhino 사용자 속성 확인 — 2026-09-21
+
+T-002·016 / SCR-01 객체 Inspector의 보완 검증이다. native-attributes.mjs는 활성 문서 대신 별도 headless 합성 파일에 BuildingId/FloorId/리터럴 문자열/한도 초과 값을 만들고 저장 후 importFile로 다시 읽었다. 정상 속성 3쌍과 incomplete 표시, 내부 vide-id 제외, 원본 SHA-256 불변을 확인했다. browser-native-attributes.mjs는 실제 Chromium에서 HTML처럼 생긴 값을 문자로 표시하고 명시적 첨부가 기존 요청 기준을 바꾸지 않는 것을 확인했다. execution.test는 사용자 속성이 AI 측정 문맥에 자동 유출되지 않음을 확인한다. 이 시험은 임의 BIM 속성 편집·관계 추론·실무 모델 검수 완료를 뜻하지 않는다.
+

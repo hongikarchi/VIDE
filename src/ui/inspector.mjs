@@ -1,3 +1,4 @@
+import {nativeAttributes} from './native-attributes.mjs';
 const $ = id => document.getElementById(id);
 let expanded=false;
 function showInspector(open){
@@ -81,4 +82,14 @@ export function renderInspector(object, result, request, tab='properties', refer
   }
   const grid=document.createElement('div');grid.className='property-grid';content.append(grid);
   for(const [label,value] of properties){const item=document.createElement('div');item.className='property';const key=document.createElement('small');key.textContent=label;const text=document.createElement('strong');text.textContent=value;item.append(key,text);grid.append(item);}
+  if(tab==='properties'){
+    const attributes=nativeAttributes(native);
+    if(attributes.known&&(attributes.entries.length||!attributes.complete)){
+      const title=document.createElement('p');title.textContent='Rhino 사용자 속성 · 취득 기준';content.append(title);
+      const values=document.createElement('div');values.className='property-grid';content.append(values);
+      for(const entry of attributes.entries){const item=document.createElement('div');item.className='property';const key=document.createElement('small');key.textContent=entry.key;const value=document.createElement('strong');value.textContent=entry.value;item.append(key,value);values.append(item);}
+      if(!attributes.complete){const partial=document.createElement('p');partial.textContent='일부 속성만 읽었습니다.';content.append(partial);}
+      if(attributes.entries.length){const attach=document.createElement('button');attach.textContent='표시 속성을 요청에 첨부';attach.onclick=()=>references.attachAttributes?.(request,object);content.append(attach);}
+    }
+  }
 }

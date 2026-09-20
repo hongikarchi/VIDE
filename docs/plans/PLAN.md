@@ -2,7 +2,7 @@
 id: PLAN
 title: VIDE 구현계획 (마스터)
 status: review
-version: 0.54
+version: 0.55
 updated: 2026-09-21
 owner: agent:codex
 related: [SPEC-00, SPEC-01, SPEC-02, SPEC-03, SPEC-04, SPEC-05, ADR-013, OQ-03, OQ-04, OQ-06, OQ-07, OQ-08, OQ-09, OQ-10, OQ-14]
@@ -308,6 +308,12 @@ T-003·005는 H-RHINO-04·05의 지원안을, T-003·006은 H-ZWCAD-04·05의 �
 기존 구현을 지우고 재시작하거나 현재 코드 모양에 SPEC을 맞추지 않는다. 필요 변경을 티켓 단위로 적용하며 실제 소스 대조/미시험 구분은 [구현 전 문서 검수](../tdd/VERIFY-2026-09-20-preimplementation.md)에 남긴다.
 
 ### 6.5 현재 티켓 현황과 이어갈 위치
+
+### Rhino 사용자 속성 입력
+
+T-002·016: ObjectAttributes user text를 저장된 사본에서 읽어 Inspector에 표시한다. 사용자 선택으로 표시 속성을 출처 후보·객체 ID와 함께 요청 파일에 첨부한다. 취득만으로 AI measurements에 자동 포함하지 않는다. 객체당 32쌍/4 KiB, 전체 256 KiB와 문자열 길이 한도를 적용하고 일부 누락을 표시한다. geometry dictionary·플러그인 UserData와 BIM 관계 추론은 포함하지 않는다. 합성 Rhino 파일의 실제 읽기·원본 해시 보존, 브라우저 문자 표시·첨부·기준 보존, 자동 전송 제외 시험을 통과했다. 검증 코드는 tests/integration/native-attributes.mjs와 browser-native-attributes.mjs이다.
+
+
 
 **UI 개편 후 실행 순서 (2026-09-20 사용자 위임):** 사용자는 UI 스터디 반영 후 남은 PRD·SPEC 목표까지 이어서 구현하도록 지시했다. 기능별 재승인을 진행 조건으로 추가하지 않는다. 실제 원본 적용처럼 제품이 요구하는 사용자 확인은 UI 행동으로 유지한다.
 
