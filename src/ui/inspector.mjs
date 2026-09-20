@@ -39,13 +39,28 @@ export function initializeInspector(onTab) {
     expanded=!expanded;showInspector(expanded);
   };
 }
-export function renderInspector(object, result, request, tab='properties') {
+export function renderInspector(object, result, request, tab='properties', references={}) {
   showInspector(Boolean(object)&&expanded);
   $('inspector-toggle').disabled=!object;
   $('selection').textContent=object?.name||'선택 없음';
   $('selection-kind').textContent=object?`${result?.host==='zwcad'?'ZWCAD':'Rhino'} · 작업 사본`:'';
   const content=$('inspector-content');content.replaceChildren();
   if(!object){content.textContent='객체를 선택하세요.';return;}
+  if(tab==='relations'){
+    const hint=document.createElement('small');hint.textContent='이 객체가 포함된 작업의 기준과 입력';content.append(hint);
+    const links=[];
+    const basis=request?.input?.baseRequestId||result?.baseRequestId;
+    if(basis)links.push({basis,id:object.nativeSourceId||object.id,label:'이전 후보'});
+    for(const pin of request?.input?.pins||[])links.push({basis:pin.basis,id:pin.id,label:({target:'변경 입력',preserve:'유지 입력',reference:'참고 입력'}[pin.role]||'입력')+' · '+pin.name});
+    if(!links.length){const empty=document.createElement('p');empty.textContent='연결된 이전 후보나 객체 입력이 없습니다.';content.append(empty);}
+    for(const link of links){
+      const source=references.get?.(link.basis),target=source?.result?.objects?.find(item=>item.id===link.id);
+      const row=document.createElement('p'),button=document.createElement('button');
+      button.textContent=link.label+(source?.result?.hostExecuted?' · '+(source.result.host==='zwcad'?'ZWCAD':'Rhino'):' · 기준 확인 불가');button.disabled=!source?.result?.hostExecuted;
+      button.onclick=()=>references.open?.(link.basis,target?.id);row.append(button);content.append(row);
+    }
+    return;
+  }
   const native=result?.scene?.find(item=>item.id===object.id);
   const number=(value,unit='')=>Number.isFinite(value)?`${value.toLocaleString('ko-KR',{maximumFractionDigits:3})}${unit}`:'—';
   const vector=value=>Array.isArray(value)?value.map(v=>number(v)).join(', ')+' m':'—';

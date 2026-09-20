@@ -2,7 +2,7 @@
 id: VERIFY-2026-09-20-native-workspace
 title: 브라우저 입력에서 실제 Rhino 후보까지
 status: review
-version: 0.33
+version: 0.34
 updated: 2026-09-21
 owner: agent:codex
 related: [AC-05, AC-17, AC-24, AC-38, T-005, T-013, T-015, T-016, T-018]
@@ -226,3 +226,6 @@ tests/integration/browser-dwg-to-rhino.mjs에서 프로젝트 f6f4aac2-f3eb-4698
 
 ## 입력 기준 고정 검증 — 2026-09-21
 T-002·013 / SPEC-01: 브라우저 초안 시험에서 이전 후보에 입력한 뒤 최신 후보를 탐색해도 저장된 기준이 유지되고 입력 기준 보기로 돌아감을 확인했다. 실행 계약 시험은 명시적 빈 기준이 이전 모델/측정값을 AI 작업 모델에 포함하지 않고, 다른 기준의 변경 핀을 거절함을 확인한다. 자동 시험 79개 통과. 대화 기록 자체는 문맥으로 남으며 작업 모델 기준과 구분한다.
+
+## Inspector 근거 탐색 검증 — 2026-09-21
+T-007·010 / SPEC-03.4 / SCR-09: tests/integration/browser-inspector-relations.mjs는 실제 DWG 연계 시험의 Rhino 객체에서 참고 입력의 ZWCAD 객체를 열고, 초안의 Rhino 대상·기준 ID·본문 유지와 원 입력 기준 복귀를 확인했다. [관계 화면](../assets/native-workspace/inspector-relations.png). 데이터 변경이나 AI/호스트 실행은 없다. 프로젝트별 초안 및 데스크톱/모바일 작업 공간 회귀도 통과했다. 작업 수준의 참조이며 개별 객체의 설계 인과관계 증명은 아니다.

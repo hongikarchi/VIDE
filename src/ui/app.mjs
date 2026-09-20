@@ -49,7 +49,7 @@ function render(rebuildRequests=true){
  $('context').replaceChildren();state.pins.forEach((p,i)=>chip('@ '+p.name,()=>{state.pins.splice(i,1);render();},p));state.sketches.forEach((s,i)=>chip('⌁ '+s.name,()=>{state.sketches.splice(i,1);render();}));state.files.forEach((f,i)=>chip('▧ '+(f.displayName||f.name),()=>{state.files.splice(i,1);render();}));
  if(draftHasInput(state)&&displayedResult&&state.baseRequestId!==displayedResult){if(state.baseRequestId){const basis=el('button','입력 기준 보기',$('context'));basis.onclick=()=>{selectedResult=state.baseRequestId;renderMessages();};}else el('small','새 작업 기준',$('context'));}
  const selected=models.find(m=>m.id===state.model);if(!selected&&!Array.from($('model').options).some(option=>option.value===state.model))el('option',state.model+' · 사용 확인 필요',$('model'),{value:state.model});$('model').value=state.model;$('effort').replaceChildren();(selected?.efforts||[state.effort]).forEach(e=>el('option',e,$('effort'),{value:e}));$('effort').value=state.effort;$('permission').value=state.permission;
- const active=state.messages.find(m=>m.id===displayedResult)?.request;renderInspector(objects.find(o=>o.id===state.selected),active?.result,active,inspectorTab);$('document-host').textContent=state.host==='zwcad'?'ZWCAD':'Rhino';$('work-count').textContent=`${state.messages.length}개 작업`;$('workspace-status').textContent=state.messages.some(m=>['queued','running'].includes(m.request?.state))?'작업 진행 중':project?'로컬 작업 공간 · '+project.name:'연결 중';
+ const active=state.messages.find(m=>m.id===displayedResult)?.request;renderInspector(objects.find(o=>o.id===state.selected),active?.result,active,inspectorTab,{get:id=>state.messages.find(message=>message.id===id)?.request,open:(id,objectId)=>{selectedResult=id;renderMessages();state.selected=objectId||null;render();}});$('document-host').textContent=(active?.result?.host||state.host)==='zwcad'?'ZWCAD':'Rhino';$('work-count').textContent=`${state.messages.length}개 작업`;$('workspace-status').textContent=state.messages.some(m=>['queued','running'].includes(m.request?.state))?'작업 진행 중':project?'로컬 작업 공간 · '+project.name:'연결 중';
  sidebar();$('request').disabled=!project||busy||state.messages.some(m=>['queued','running'].includes(m.request?.state))||!!validate(state);$('request').title=validate(state)||'보내기 · Ctrl+Enter';draw();
 }
 function sidebar(){
@@ -58,7 +58,7 @@ function sidebar(){
 }
 function renderMessages(){
  const latest=selectedResult===null?undefined:state.messages.find(m=>m.id===selectedResult)||state.messages.filter(m=>m.request?.result?.hostExecuted&&(m.request.result.host||'rhino')===(state.host||'rhino')).at(-1);
- if(latest&&latest.id!==displayedResult){const result=latest.request.result;state.host=result.host||'rhino';$('host-target').value=state.host;objects.splice(0,objects.length,...result.objects.map(o=>({...o,revision:latest.id})));viewport?.replace(result.scene);displayedResult=latest.id;render();}
+ if(latest&&latest.id!==displayedResult){const result=latest.request.result;if(!draftHasInput(state)){state.host=result.host||'rhino';$('host-target').value=state.host;}objects.splice(0,objects.length,...result.objects.map(o=>({...o,revision:latest.id})));viewport?.replace(result.scene);displayedResult=latest.id;render();}
  sidebar();renderHistory($('conversation'),state.messages,models,project?.id,{
   restore:request=>{
    if(busy)throw Error('현재 전송이 끝난 뒤 복원하세요.');
