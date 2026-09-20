@@ -2,7 +2,7 @@
 id: VERIFY-2026-09-20-native-workspace
 title: 브라우저 입력에서 실제 Rhino 후보까지
 status: review
-version: 0.9
+version: 0.10
 updated: 2026-09-20
 owner: agent:codex
 related: [AC-05, AC-17, AC-24, AC-38, T-005, T-013, T-015, T-016, T-018]
@@ -109,3 +109,8 @@ UI 작업 호스트를 Rhino/ZWCAD로 고르며 다른 호스트에서 첨부한
 ## 경계 수정·복사 검수
 
 자동 테스트 50건 통과. `tests/integration/native-geometry.mjs --run-live`에서 격리된 Rhino 시험 파일을 생성했다. 삼각 경계의 폭 4→5 m 정점 수정 후 높이 6 m 유지, +10 m 이동 복사, 네이티브 Extrusion 2개, 체적 각각 약 45 m³, 저장·재열기 검증을 통과했다. 이 시험은 AI 없이 검증된 기하 명령을 실제 호스트에 전달한 것이며 임의 네이티브 객체 복사나 원본 적용 완료를 뜻하지 않는다.
+
+
+## 열린 Rhino 문서 조회
+
+실행 중인 검수 Rhino의 열린 문서 ID·Millimeters 단위·객체 0개를 읽고, 브라우저에서 지정 문서의 선택 0개 조회를 확인했다. 거짓 프로세스 인스턴스는 STALE_CONNECTION, 음수 문서 ID는 INVALID_INPUT으로 거절했다. 문서 열기/닫기·선택 변경·원본 쓰기는 수행하지 않았다. 객체가 있는 사용자 원본의 전체 취득·원본 적용은 별도 후속 검증이다.

@@ -1,3 +1,4 @@
+import {listDocuments,inspectDocument} from '../../hosts/rhino/documents.mjs';
 import {compareCandidates,relatedCandidates} from '../core/comparison.mjs';
 import {quantities,quantitiesCsv} from '../core/quantities.mjs';
 import { createServer } from 'node:http';
@@ -16,7 +17,7 @@ const assets = new Map([
   ['/', ['../ui/index.html', 'text/html; charset=utf-8']],
   ['/app.mjs', ['../ui/app.mjs', 'text/javascript; charset=utf-8']],
   ['/style.css', ['../ui/style.css', 'text/css; charset=utf-8']],
-  ...['model','viewport','gateway','inspector','requests','sketch','quantities'].map(name => [`/${name}.mjs`, [`../ui/${name}.mjs`, 'text/javascript; charset=utf-8']]),
+  ...['model','viewport','gateway','inspector','requests','sketch','quantities','documents'].map(name => [`/${name}.mjs`, [`../ui/${name}.mjs`, 'text/javascript; charset=utf-8']]),
   ['/vendor/three.module.js', ['../../node_modules/three/build/three.module.js', 'text/javascript']],
   ['/vendor/three.core.js', ['../../node_modules/three/build/three.core.js', 'text/javascript']],
   ['/vendor/OrbitControls.js', ['../../node_modules/three/examples/jsm/controls/OrbitControls.js', 'text/javascript']],
@@ -82,6 +83,8 @@ export async function startServer({ filename, port = 0, providerFactory, host } 
       }
       if (url.pathname === '/api/v1/host' && request.method === 'GET') { send(200,await host.status()); return; }
       if (url.pathname === '/api/v1/models' && request.method === 'GET') { send(200,await execution.models()); return; }
+      if(url.pathname==='/api/v1/host/documents'&&request.method==='GET'){send(200,await listDocuments());return;}
+      if(url.pathname==='/api/v1/host/selection'&&request.method==='GET'){send(200,await inspectDocument(url.searchParams.get('instance')||'',Number(url.searchParams.get('document'))));return;}
       const comparison=/^\/api\/v1\/projects\/([^/]+)\/comparison$/.exec(url.pathname);
       if(comparison&&request.method==='GET'){
         const projectId=comparison[1],before=workspace.get(projectId,url.searchParams.get('before')),after=workspace.get(projectId,url.searchParams.get('after'));

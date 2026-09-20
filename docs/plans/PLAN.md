@@ -2,7 +2,7 @@
 id: PLAN
 title: VIDE 구현계획 (마스터)
 status: review
-version: 0.24
+version: 0.25
 updated: 2026-09-20
 owner: agent:codex
 related: [SPEC-00, SPEC-01, SPEC-02, SPEC-03, SPEC-04, SPEC-05, ADR-013, OQ-03, OQ-04, OQ-06, OQ-07, OQ-08, OQ-09, OQ-10, OQ-14]
@@ -551,3 +551,8 @@ ZWCAD 경로는 `hosts/zwcad`의 COM 작업자로 제공한다. 새로 만든 �
 ### 경계 정점 수정·이동 복사
 
 유한 기하 계약에 `vertices`(생성된 폴리라인/돌출의 정점 대체)와 `copy`(생성된 박스/폴리라인/돌출의 명시적 이동 복사)를 추가했다. 돌출 경계의 닫힘·XY 평면·기존 높이를 검증하며 좌표/명령 상한을 유지한다. 가져온 임의 네이티브 객체의 복사는 지원한다고 표시하지 않는다. 실제 Rhino 시험에서 경계 폭 변경 후 두 Extrusion의 체적 각 45 m³, 높이 6 m, 복사 위치 +10 m 및 저장/재열기를 확인했다.
+
+
+### 열린 Rhino 문서의 식별 조회
+
+`hosts/rhino/documents.mjs`는 Rhino 프로세스 ID·시작 시각과 문서 RuntimeSerialNumber를 함께 확인한다. 열린 문서의 이름·단위·객체 수·modified 상태와 지정 문서의 현재 선택 ID를 읽는다. 활성 문서에 기대지 않으며 프로세스/문서 불일치는 거절한다. 왼쪽 ‘열린 Rhino 문서’는 조회 전용이고 작업 기준으로 취득/원본 적용을 완료했다고 표시하지 않는다. [OpenDocuments](https://developer.rhino3d.com/api/RhinoCommon/html/M_Rhino_RhinoDoc_OpenDocuments.htm), [RuntimeSerialNumber](https://developer.rhino3d.com/api/rhinocommon/rhino.rhinodoc/runtimeserialnumber)를 기준으로 구현했다.

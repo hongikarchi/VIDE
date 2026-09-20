@@ -1,3 +1,4 @@
+import {initializeDocuments} from './documents.mjs';
 import {showQuantities} from './quantities.mjs';
 import {renderPoints,validCoordinate} from './sketch.mjs';
 import {renderRequests,renderActiveWork} from './requests.mjs';
@@ -10,6 +11,7 @@ let project, busy=false, displayedResult,selectedResult,draftSaved=false;
 let state=initial(),tool='select',points=[],toastTimer;
 const message=text=>{clearTimeout(toastTimer);$('message').textContent=text;$('message').hidden=false;toastTimer=setTimeout(()=>$('message').hidden=true,4500);};
 function el(tag,text,parent,attrs={}){const node=document.createElement(tag);node.textContent=text;for(const [k,v] of Object.entries(attrs))node.setAttribute(k,v);parent.append(node);return node;}
+initializeDocuments(message);
 let inspectorTab='properties';
 initializeInspector(tab=>{inspectorTab=tab;render();});
 let viewport;

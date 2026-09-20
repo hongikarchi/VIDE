@@ -13,6 +13,11 @@ try{
   page.on('console',message=>{if(message.type()==='error')errors.push(message.text());});
   await page.goto(url);
   await page.waitForFunction(()=>document.querySelector('#connection-status').textContent.includes('연결됨'));
+  await page.locator('#refresh-documents').evaluate(n=>n.closest('details').open=true);
+  await page.locator('#refresh-documents').click();
+  await page.locator('#host-documents').waitFor({state:'visible'});
+  await page.locator('#inspect-selection').click();
+  await page.getByRole('status').filter({hasText:/Rhino 문서 선택/}).waitFor();
   const records=await page.evaluate(async()=>{
     const projects=await(await fetch('/api/v1/projects')).json();
     return (await fetch(`/api/v1/projects/${projects[0].id}/requests`)).json();
