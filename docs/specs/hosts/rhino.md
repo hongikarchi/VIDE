@@ -2,8 +2,8 @@
 id: HOST-RHINO
 title: Rhino 호스트 계약과 검증 범위
 status: review
-version: 0.7
-updated: 2026-09-20
+version: 0.8
+updated: 2026-09-21
 owner: agent:codex
 related: [SPEC-01, SPEC-02, FR-03, FR-04, AC-24, AC-38, OQ-03, OQ-10]
 ---
@@ -55,3 +55,7 @@ related: [SPEC-01, SPEC-02, FR-03, FR-04, AC-24, AC-38, OQ-03, OQ-10]
 
 ### 네이티브 복사 후보의 추가 증거
 독립된 Extrusion을 네이티브 형상과 사용자 문자열을 유지해 복사하고 작업 사본에서 이동·삭제·후속 복사를 수행했다. 그룹을 포함한 복사는 거절했다. [작업 공간 검증](../../tdd/VERIFY-2026-09-20-native-workspace.md)의 네이티브 복사 절은 실제 구독 AI 입력과 Rhino 저장/재열기 증거를 제공한다. 이 결과는 일반 관계 보존이나 복사 후보의 원본 적용 지원 선언이 아니다.
+
+### 객체 사용자 문자열의 읽기 증거
+
+저장된 작업 사본의 ObjectAttributes 사용자 문자열을 읽어 Inspector에 출처와 함께 표시하고 사용자가 표시된 값을 요청에 첨부할 수 있다. 읽기 한도로 누락된 값은 일부 취득으로 표시한다. 이 지원은 geometry dictionary·임의 플러그인 UserData·BIM 관계 추론·원본 속성 편집을 포함하지 않는다. 실제 합성 파일 읽기·원본 불변·브라우저 첨부 검증은 [작업 공간 검증](../../tdd/VERIFY-2026-09-20-native-workspace.md)의 Rhino 사용자 속성 확인 절에 있다.
