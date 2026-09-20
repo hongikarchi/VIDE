@@ -1,3 +1,4 @@
+import {sceneRepresentation} from '../core/scene-representation.mjs';
 import {validatePreview} from '../core/reviews.mjs';
 import {quantities} from '../core/quantities.mjs';
 import {DomainError} from '../core/store.mjs';
@@ -12,7 +13,7 @@ export function renderReport(project,request,image,snapshot){
   const applied=(request.applications||[]).filter(item=>item.state==='succeeded').length,unknown=(request.applications||[]).filter(item=>item.state==='unknown').length;
   const state=unknown?`원본 적용 결과 미확인 ${unknown}건`:applied?`원본 반영 기록 ${applied}건 · 파일 저장은 별도`:'원본 반영 기록 없음 · 작업 사본';
   const context=(request.input.pins||[]).map(pin=>`${pin.name} (${{target:'변경',preserve:'유지',reference:'참고'}[pin.role]||pin.role})`).concat((request.input.sketches||[]).map(sketch=>`${sketch.name} · ${sketch.plane} · ${sketch.role}`),(request.input.files||[]).map(file=>file.name)).join(' · ');
-  const unsupported=request.result.displayUnsupported??(snapshot?[]:request.result.scene.filter(object=>!object.vertices?.length&&!object.line?.length).map(object=>object.nativeType||'미상'));
+  const unsupported=request.result.displayUnsupported??(snapshot?[]:request.result.scene.filter(object=>!sceneRepresentation(object)).map(object=>object.nativeType||'미상'));
   const filter=[table.query.search&&'검색: '+table.query.search,table.query.type&&'유형: '+table.query.type,table.query.layer&&'레이어: '+table.query.layer,table.query.groupBy!=='none'&&'그룹: '+({type:'유형별',layer:'레이어별'}[table.query.groupBy])].filter(Boolean).join(' · ')||'전체 객체';
   const groups=table.groups.map(group=>`<p>${escape(group.key)} · ${group.totals.count}개 · 기하 면적 ${group.totals.area.known?number(group.totals.area.value):'—'} m² (미상 ${group.totals.area.unknown}개 제외) · 체적 ${group.totals.volume.known?number(group.totals.volume.value):'—'} m³ (미상 ${group.totals.volume.unknown}개 제외)</p>`).join('');
   return `<!doctype html><html lang="ko"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escape(project.name)} · 검토본</title>

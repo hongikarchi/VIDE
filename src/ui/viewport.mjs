@@ -1,3 +1,4 @@
+import {sceneRepresentation} from '/scene-representation.mjs';
 import * as THREE from '/vendor/three.module.js';
 import { OrbitControls } from '/vendor/OrbitControls.js';
 
@@ -20,12 +21,12 @@ export function createViewport(container, objects, onPick, onPoint) {
   function replace(data){
     for(const mesh of meshes){scene.remove(mesh);mesh.traverse(o=>{o.geometry?.dispose();o.material?.dispose();});}meshes.length=0;
     for(const object of data){
-      const geometry=new THREE.BufferGeometry();
-      const positions=object.vertices?.length?object.vertices:object.line;
-      if(!positions?.length)continue;
+      const representation=sceneRepresentation(object);if(!representation)continue;
+      const geometry=new THREE.BufferGeometry(),positions=representation.positions;
       geometry.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));
       let mesh;
-      if(object.indices?.length){geometry.setIndex(object.indices);geometry.computeVertexNormals();mesh=new THREE.Mesh(geometry,new THREE.MeshStandardMaterial({color:0xd7ded4,roughness:.85,side:THREE.DoubleSide}));mesh.add(new THREE.LineSegments(new THREE.EdgesGeometry(geometry),new THREE.LineBasicMaterial({color:0x69766c})));}
+      if(representation.type==='point')mesh=new THREE.Points(geometry,new THREE.PointsMaterial({color:0x69766c,size:9,sizeAttenuation:false}));
+      else if(representation.type==='mesh'){geometry.setIndex(object.indices);geometry.computeVertexNormals();mesh=new THREE.Mesh(geometry,new THREE.MeshStandardMaterial({color:0xd7ded4,roughness:.85,side:THREE.DoubleSide}));mesh.add(new THREE.LineSegments(new THREE.EdgesGeometry(geometry),new THREE.LineBasicMaterial({color:0x69766c})));}
       else mesh=new THREE.Line(geometry,new THREE.LineBasicMaterial({color:0x69766c}));
       mesh.userData.id=object.id;scene.add(mesh);meshes.push(mesh);
     }
@@ -42,7 +43,7 @@ export function createViewport(container, objects, onPick, onPoint) {
     const bounds=new THREE.Box3();targets.forEach(m=>bounds.expandByObject(m));const center=bounds.getCenter(new THREE.Vector3());const sceneRadius=Math.max(bounds.getBoundingSphere(new THREE.Sphere()).radius,.1);camera.near=Math.max(sceneRadius/10000,.001);camera.far=Math.max(sceneRadius*100,1000);controls.minDistance=Math.max(sceneRadius*.01,.05);controls.maxDistance=Math.max(sceneRadius*20,180);
     const shift=center.clone().sub(controls.target);camera.position.add(shift);controls.target.copy(center);camera.lookAt(center);camera.updateMatrixWorld();
     if(camera.isOrthographicCamera){const direction=camera.position.clone().sub(center).normalize();camera.position.copy(center).addScaledVector(direction,sceneRadius*3);camera.lookAt(center);camera.updateMatrixWorld();let halfW=0,halfH=0;const c=center.clone().applyMatrix4(camera.matrixWorldInverse);for(const x of [bounds.min.x,bounds.max.x])for(const y of [bounds.min.y,bounds.max.y])for(const z of [bounds.min.z,bounds.max.z]){const q=new THREE.Vector3(x,y,z).applyMatrix4(camera.matrixWorldInverse).sub(c);halfW=Math.max(halfW,Math.abs(q.x));halfH=Math.max(halfH,Math.abs(q.y));}const aspect=container.clientWidth/Math.max(1,container.clientHeight);viewSpan=2.6*Math.max(halfH,halfW/aspect,1);camera.zoom=1;}
-    else {const radius=bounds.getBoundingSphere(new THREE.Sphere()).radius;const v=THREE.MathUtils.degToRad(camera.fov/2),h=Math.atan(Math.tan(v)*camera.aspect);const distance=radius/Math.sin(Math.min(v,h))*1.1;const direction=camera.position.clone().sub(center).normalize();camera.position.copy(center).addScaledVector(direction,distance);}
+    else {const radius=sceneRadius;const v=THREE.MathUtils.degToRad(camera.fov/2),h=Math.atan(Math.tan(v)*camera.aspect);const distance=radius/Math.sin(Math.min(v,h))*1.1;const direction=camera.position.clone().sub(center).normalize();camera.position.copy(center).addScaledVector(direction,distance);}
     sizing();controls.update();
   }
   function home(){standardView=false;perspective.up.set(0,0,1);perspective.position.set(34,-43,32);activate(perspective,new THREE.Vector3(0,2,2));grid.rotation.set(Math.PI/2,0,0);fit();}
@@ -58,7 +59,7 @@ export function createViewport(container, objects, onPick, onPoint) {
     next.position.copy(position);next.up.copy(up);next.near=camera.near;next.far=camera.far;
     activate(next,target);
   }
-  function rayAt(e){const r=renderer.domElement.getBoundingClientRect();mouse.set((e.clientX-r.left)/r.width*2-1,-(e.clientY-r.top)/r.height*2+1);ray.setFromCamera(mouse,camera);}
+  function rayAt(e){const r=renderer.domElement.getBoundingClientRect();mouse.set((e.clientX-r.left)/r.width*2-1,-(e.clientY-r.top)/r.height*2+1);ray.setFromCamera(mouse,camera);const span=camera.isOrthographicCamera?viewSpan/camera.zoom:2*camera.position.distanceTo(controls.target)*Math.tan(THREE.MathUtils.degToRad(camera.fov/2));ray.params.Points.threshold=ray.params.Line.threshold=span/Math.max(r.height,1)*6;}
   function pointerDown(e){if(e.button===0)down={x:e.clientX,y:e.clientY};}
   function pointerUp(e){if(e.button!==0||!down)return;const moved=Math.hypot(e.clientX-down.x,e.clientY-down.y);down=null;if(moved>5)return;rayAt(e);
     if(mode==='sketch'){const normal=planeName==='XY'?new THREE.Vector3(0,0,1):planeName==='XZ'?new THREE.Vector3(0,1,0):new THREE.Vector3(1,0,0);const hit=ray.ray.intersectPlane(new THREE.Plane(normal,0),new THREE.Vector3());if(hit){const uv=planeName==='XY'?[hit.x,hit.y]:planeName==='XZ'?[hit.x,hit.z]:[hit.y,hit.z];onPoint(uv.map(n=>Math.round(n*100)/100));}}
@@ -71,7 +72,7 @@ export function createViewport(container, objects, onPick, onPoint) {
   return {
     capture(){renderer.render(scene,camera);return renderer.domElement.toDataURL('image/png');},
     replace(data){replace(data);fit();},
-    select(id){meshes.forEach(m=>m.material.color.setHex(m.userData.id===id?0xe4bca6:0xd7ded4));},
+    select(id){meshes.forEach(m=>m.material.color.setHex(m.userData.id===id?0xe4bca6:m.isMesh?0xd7ded4:0x69766c));},
     mode(next,plane='XY'){mode=next;configure();renderer.domElement.dataset.tool=next;if(next==='sketch')planeView(plane);},
     plane:planeView,home,fit,projection,
     lines(sketches,draft,plane){while(lines.children.length){const l=lines.children[0];lines.remove(l);l.geometry.dispose();l.material.dispose();}for(const s of [...sketches,{points:draft,plane}]){if(s.points.length<2)continue;const points=s.points.map(([u,v])=>s.plane==='XY'?new THREE.Vector3(u,v,.02):s.plane==='XZ'?new THREE.Vector3(u,-.02,v):new THREE.Vector3(.02,u,v));const l=new THREE.Line(new THREE.BufferGeometry().setFromPoints(points),new THREE.LineBasicMaterial({color:0xc5684b,depthTest:false}));l.renderOrder=10;lines.add(l);}},

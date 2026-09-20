@@ -2,7 +2,7 @@
 id: PLAN
 title: VIDE 구현계획 (마스터)
 status: review
-version: 0.37
+version: 0.38
 updated: 2026-09-20
 owner: agent:codex
 related: [SPEC-00, SPEC-01, SPEC-02, SPEC-03, SPEC-04, SPEC-05, ADR-013, OQ-03, OQ-04, OQ-06, OQ-07, OQ-08, OQ-09, OQ-10, OQ-14]
@@ -631,3 +631,6 @@ SPEC-04.5의 원 의견·작성 기준 보존 중 로컬 부분을 구현했다.
 독립된 Brep·Extrusion·Curve·Mesh·Point의 copy 명령을 작업 사본 경로에 추가했다. 원본 네이티브 형상을 박스/메시로 재구성하지 않고 RhinoCommon [GeometryBase.Duplicate](https://developer.rhino3d.com/api/rhinocommon/rhino.geometry.geometrybase/duplicate?version=8.x)와 [ObjectAttributes.Duplicate](https://developer.rhino3d.com/api/rhinocommon/rhino.docobjects.objectattributes/duplicate)를 사용한다. 내부 ID·새 이름만 명시적으로 바꾸며 레이어와 사용자 속성을 복제한다.
 같은 요청에서 원 객체 이동·복사·재복사·삭제를 조합해도 명령 순서가 형상을 이중 이동시키지 않도록 원본 기하/속성을 먼저 복제한다. nativeSourceId는 작업 사본의 원 기준을 가리키고 후속 후보에서는 실제 새 GUID를 사용한다. 그룹·잠김·참조·이력·공유 정의 관계는 복사 전에 거절한다. 생성 기준 없는 임의 솔리드의 높이 편집은 여전히 지원하지 않는다. 이 복사 후보의 열린 원본 문서 적용은 미구현이며 기존 native-move 적용 검증에서 거절한다.
 실제 브라우저 3DM 입력→객체 핀→ChatGPT 구독 Sol low 1회→Rhino Extrusion 복사→저장/재열기에서 원형 체적 72 m³ 유지, 복사 위치 X+10 m를 확인했다. 사용자의 열린 문서·파일은 변경하지 않았다.
+
+### 점 객체 표시와 선택
+nativeType=Point의 실제 원점 좌표를 3D 점으로 표시하고 객체 선택·핀·전체 보기·표준 정투영/원근 전환에 포함했다. 화면 픽셀 기준으로 점/선 히트 영역을 계산하고 점 하나의 전체 보기에서도 카메라가 점 좌표와 겹치지 않도록 최소 반경을 사용한다. 표시 가능 여부는 scene-representation 모듈을 UI·검토본·보고서에서 공유한다. 이전 검토본은 저장 당시 미지원 기록을 그대로 보존한다.

@@ -19,6 +19,7 @@ import { importModel,captureModel } from './import-model.mjs';
 import { renderReport } from './report.mjs';
 
 const assets = new Map([
+  ['/scene-representation.mjs', ['../core/scene-representation.mjs', 'text/javascript; charset=utf-8']],
   ['/', ['../ui/index.html', 'text/html; charset=utf-8']],
   ['/app.mjs', ['../ui/app.mjs', 'text/javascript; charset=utf-8']],
   ['/style.css', ['../ui/style.css', 'text/css; charset=utf-8']],

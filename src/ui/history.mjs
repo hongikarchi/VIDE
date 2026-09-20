@@ -1,3 +1,4 @@
+import {sceneRepresentation} from '/scene-representation.mjs';
 import {api,labels,errors} from './gateway.mjs';
 import {showApplication} from './application.mjs';
 import {showQuantities} from './quantities.mjs';
@@ -34,7 +35,7 @@ function renderCandidate(card,message,projectId,actions){
  const view=element('button','이 후보 보기',card);view.onclick=()=>actions.candidate(message.id);
  element('small',`${host} ${['file','document'].includes(message.source)?'작업 사본':'후보'} · 저장·재열기 검증됨`,card);
  if(result.sourceDocument){const source=result.sourceDocument;element('small',`${source.name} · ${new Date(source.capturedAt).toLocaleString()} 취득 · 현재 상태 미확인`,card);}
- const missing=(result.scene||[]).filter(object=>!object.vertices?.length&&!object.line?.length);
+ const missing=(result.scene||[]).filter(object=>!sceneRepresentation(object));
  if(missing.length)element('small',`3D 표시 미지원 ${missing.length}개 (${[...new Set(missing.map(object=>object.nativeType))].join(', ')}) · 파일과 객체 목록에는 보존됨`,card);
  element('a',extension==='dwg'?'DWG 내려받기':'3dm 내려받기',card,{href:`/api/v1/projects/${projectId}/requests/${message.id}/model`,download:`VIDE-candidate.${extension}`});
  const open=element('button',`${host}에서 열기`,card);
