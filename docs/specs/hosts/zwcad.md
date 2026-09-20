@@ -2,8 +2,8 @@
 id: HOST-ZWCAD
 title: ZWCAD 호스트 계약과 검증 범위
 status: review
-version: 0.3
-updated: 2026-09-20
+version: 0.4
+updated: 2026-09-21
 owner: agent:codex
 related: [SPEC-01, SPEC-02, FR-03, FR-04, AC-24, AC-38, OQ-03, OQ-10]
 ---
@@ -37,3 +37,7 @@ related: [SPEC-01, SPEC-02, FR-03, FR-04, AC-24, AC-38, OQ-03, OQ-10]
 ## 실제 제품 연결의 현재 증거
 
 [작업 공간 검증](../../tdd/VERIFY-2026-09-20-native-workspace.md)에 브라우저 → 구독 CLI → ZWCAD의 닫힌 LWPolyline 생성·저장·재열기 및 CAD 경계를 Rhino Extrusion의 입력으로 쓴 실증이 있다. 실제 면적 200m²·돌출 체적 1,200m³와 DWG 다운로드를 확인했다. 시험 문서는 기존 사용자 문서와 분리했다. 현재 평면 폴리라인 작업 사본에 한정하며 기존 DWG 원본 적용·일반 CAD 객체·전체 연계 완료로 확대하지 않는다.
+
+## DWG 참고 입력 확인 — 2026-09-21
+H-ZWCAD-04 중 직선 XY LWPolyline 읽기를 ZWCAD 2023에서 확인했다. 업로드한 바이트의 고유 복사본을 읽기 전용으로 열고 mm 단위 경계 20×10 m의 정점·닫힘·Elevation·Normal·Handle·레이어·색·길이/면적을 읽는다. 원 파일 해시는 유지됐다. 확인한 수치는 길이 60 m·면적 200 m²이며 참고 핀을 통해 Rhino 높이 3 m 후보(체적 600 m³)로 연결했다.
+참고 DWG 자체를 후보 편집/원본 적용하는 기능은 아직 지원하지 않는다. 모델 공간에 지원 밖 객체나 호 세그먼트가 있으면 일부 객체만 성공으로 취득하지 않고 거절한다. 다른 단위·블록·참조/구속관계·실무 도면 전체는 후속 검수다. [실증 기록](../../tdd/VERIFY-2026-09-20-native-workspace.md)의 실행 환경과 불명확 시험 기록을 함께 따른다.
