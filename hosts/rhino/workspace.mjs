@@ -1,3 +1,4 @@
+import {prepareNativeCopies} from './native-copy.mjs';
 import { mkdir,readFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { resolve,join } from 'node:path';
@@ -42,10 +43,11 @@ export class RhinoWorkspace {
     const directory=join(this.directory,projectId);await mkdir(directory,{recursive:true});
     const filename=join(directory,requestId+'.3dm');
     if(baseline?.fileHash&&await fingerprint(baseline.filename)!==baseline.fileHash)throw Object.assign(new Error('SOURCE_CHANGED'),{code:'SOURCE_CHANGED'});
+    const copies=prepareNativeCopies(objects,baseline);
     const operations=objects.map((o,i)=>{
       if(o.kind==='native'){
         const previous=baseline?.objects.find(x=>x.id===o.id);
-        if(!previous)throw Error('MISSING_NATIVE_BASE');
+        if(!previous){if(copies.additions.has(o.id))return copies.additions.get(o.id);throw Error('MISSING_NATIVE_BASE');}
         const delta=o.origin.map((n,j)=>n-previous.origin[j]);
         return `var original${i}=work.Objects.FindId(new Guid(${literal(previous.nativeId)}));if(original${i}==null)throw new Exception("Missing source");
           if(!work.Objects.Transform(original${i}.Id,Rhino.Geometry.Transform.Translation(${delta.join(',')}),true).Equals(Guid.Empty)){}else throw new Exception("Transform failed");`;
@@ -62,6 +64,7 @@ export class RhinoWorkspace {
     }).join('\n');
     const wanted=objects.filter(o=>o.kind==='native').map(o=>o.id);
     const code=`using(var work=${baseline?.filename?`Rhino.RhinoDoc.OpenHeadless(${literal(baseline.filename)})`:'Rhino.RhinoDoc.CreateHeadless(null)'}){
+      ${copies.prepare}
       var keep=new HashSet<string>(new string[]{${wanted.map(literal).join(',')}});
       foreach(var old in work.Objects.ToArray())if(!keep.Contains(old.Attributes.GetUserString("vide-id")))work.Objects.Delete(old.Id,true);
       work.ModelUnitSystem=Rhino.UnitSystem.Meters;work.ModelAbsoluteTolerance=0.001;

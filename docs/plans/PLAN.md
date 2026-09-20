@@ -2,7 +2,7 @@
 id: PLAN
 title: VIDE 구현계획 (마스터)
 status: review
-version: 0.36
+version: 0.37
 updated: 2026-09-20
 owner: agent:codex
 related: [SPEC-00, SPEC-01, SPEC-02, SPEC-03, SPEC-04, SPEC-05, ADR-013, OQ-03, OQ-04, OQ-06, OQ-07, OQ-08, OQ-09, OQ-10, OQ-14]
@@ -626,3 +626,8 @@ SPEC-03.6·8의 검토본 선택을 프로젝트 목록에서 연결했다. A/B 
 SPEC-04.5의 원 의견·작성 기준 보존 중 로컬 부분을 구현했다. 검토본 열람창에서 전체 또는 객체를 지정해 의견을 별도 review_notes에 저장한다. 본문/원 검토본/요청/대상/접수 시각은 고정되며 동일 제출 ID 재전송은 중복을 만들지 않는다. 결과 유실 시 같은 ID·내용으로 확인하며 재전송 전에 내용을 바꾸지 않는다.
 ‘기준 후보 열기’와 ‘요청 초안에 첨부’를 분리했다. 현재 후보가 원 기준과 다르면 첨부를 거절하고, 맞으면 원 의견 참조 자료와 대상 핀·요청 조건을 기존 초안에 추가한다. 기존 본문과 보존 역할을 덮어쓰지 않는다. 초안의 기준 후보도 저장/재접속 때 유지한다. 초안 첨부는 AI 실행/채택 완료/원본 적용과 구분한다.
 프로젝트별 검토본 notes GET/POST는 기존 로컬 인증 경계 안에 있다. 외부 게시·작성자 인증·서버 간 수신·스케치 의견은 이 구현에 포함하지 않는다. 다음은 실제 설계 과업의 지오메트리 편집 범위를 넓히고 외부 공유의 미결 배포 조건과 독립된 부분을 진행한다.
+
+### 네이티브 작업 사본의 복사 후보
+독립된 Brep·Extrusion·Curve·Mesh·Point의 copy 명령을 작업 사본 경로에 추가했다. 원본 네이티브 형상을 박스/메시로 재구성하지 않고 RhinoCommon [GeometryBase.Duplicate](https://developer.rhino3d.com/api/rhinocommon/rhino.geometry.geometrybase/duplicate?version=8.x)와 [ObjectAttributes.Duplicate](https://developer.rhino3d.com/api/rhinocommon/rhino.docobjects.objectattributes/duplicate)를 사용한다. 내부 ID·새 이름만 명시적으로 바꾸며 레이어와 사용자 속성을 복제한다.
+같은 요청에서 원 객체 이동·복사·재복사·삭제를 조합해도 명령 순서가 형상을 이중 이동시키지 않도록 원본 기하/속성을 먼저 복제한다. nativeSourceId는 작업 사본의 원 기준을 가리키고 후속 후보에서는 실제 새 GUID를 사용한다. 그룹·잠김·참조·이력·공유 정의 관계는 복사 전에 거절한다. 생성 기준 없는 임의 솔리드의 높이 편집은 여전히 지원하지 않는다. 이 복사 후보의 열린 원본 문서 적용은 미구현이며 기존 native-move 적용 검증에서 거절한다.
+실제 브라우저 3DM 입력→객체 핀→ChatGPT 구독 Sol low 1회→Rhino Extrusion 복사→저장/재열기에서 원형 체적 72 m³ 유지, 복사 위치 X+10 m를 확인했다. 사용자의 열린 문서·파일은 변경하지 않았다.

@@ -44,3 +44,10 @@ test('vertex edits preserve extrusion height and copying translates independent 
  assert.throws(()=>apply([{kind:'copy',id:'copy',sourceId:'outline',name:'Second',delta:[100000,0,0]}],[outline]),{code:'INVALID_GEOMETRY'});
  assert.throws(()=>apply([{kind:'copy',id:'copy',sourceId:'native',name:'N',delta:[1,0,0]}],[{id:'native',kind:'native',origin:[0,0,0]}]),{code:'INVALID_GEOMETRY'});
 });
+
+test('native copies retain source provenance through move-copy-copy-remove without reconstructing geometry',()=>{
+ const source={id:'native',nativeId:'guid',kind:'native',name:'Original',origin:[0,0,0]};
+ const result=apply([{kind:'move',id:'native',delta:[2,0,0]},{kind:'copy',id:'a',sourceId:'native',name:'A',delta:[10,0,0]},{kind:'copy',id:'b',sourceId:'a',name:'B',delta:[5,0,0]},{kind:'remove',id:'native'}],[source]);
+ assert.deepEqual(result.objects.map(object=>object.origin),[[12,0,0],[17,0,0]]);assert.ok(result.objects.every(object=>object.kind==='native'&&object.nativeSourceId==='native'));assert.deepEqual(source.origin,[0,0,0]);
+ const follow=apply([{kind:'copy',id:'c',sourceId:'b',name:'C',delta:[3,0,0]}],result.objects);assert.equal(follow.objects[2].nativeSourceId,'b');
+});

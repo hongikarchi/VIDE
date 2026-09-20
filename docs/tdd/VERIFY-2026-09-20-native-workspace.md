@@ -2,7 +2,7 @@
 id: VERIFY-2026-09-20-native-workspace
 title: 브라우저 입력에서 실제 Rhino 후보까지
 status: review
-version: 0.19
+version: 0.20
 updated: 2026-09-20
 owner: agent:codex
 related: [AC-05, AC-17, AC-24, AC-38, T-005, T-013, T-015, T-016, T-018]
@@ -175,3 +175,7 @@ UI 작업 호스트를 Rhino/ZWCAD로 고르며 다른 호스트에서 첨부한
 ## 검토 의견 보존·요청 첨부 검증
 tests/integration/browser-review-notes.mjs에서 저장은 성공했으나 응답만 유실되는 상황을 주입했다. 동일 ID 재확인 후 의견은 하나이며 원 기준이 보존됐다. 다른 후보에서 첨부 거절, 원 기준 열기 후 기존 초안에 의견/핀/출처 첨부, 새로고침 후 기준 후보 유지까지 확인했다. 신규 AI·호스트 쓰기는 없다. [의견을 첨부한 초안](../assets/native-workspace/review-note-draft.png).
 자동 시험 67개와 기존 browser-workspace의 카메라·스케치·초안·다운로드 회귀 시험이 통과했다. 외부 의견 서버·PC 종료 지속성·펜 입력은 미검증이다.
+
+## 네이티브 복사 후보 검증
+tests/integration/native-copy.mjs는 독립된 시험 3DM에서 이동→복사→재복사→원 객체 삭제→후속 이동/복사를 검증했다. 원 기준 파일 해시·사용자 문자열 유지, Extrusion 체적 72 m³, 최종 X=13/17/20 m, 저장/재열기를 확인했다. 그룹 속성이 있는 원본의 복사는 HOST_REJECTED로 실패하며 성공 파일로 보고하지 않았다.
+tests/integration/browser-native-copy.mjs는 3DM 가져오기→핀→구독 Sol low 1회→후보 표시까지 검증했다. 프로젝트 a7f862d5-cc07-4dd9-8a12-b6eea516afca, 요청 122035ba-386d-415a-b45e-510d87f61a3f. 두 Extrusion의 체적은 각각 72 m³, X는 0/10 m다. [복사 화면](../assets/native-workspace/native-copy.png). 전체 자동 시험 68개 통과. 다른 네이티브 유형·일반 사용자 플러그인 데이터·복사 후보 원본 적용은 이 실증이 보증하지 않는다.

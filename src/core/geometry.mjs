@@ -10,9 +10,9 @@ Available operations, all coordinates/dimensions in meters:
 {"kind":"move","id":"existing-id","delta":[x,y,z]}
 {"kind":"height","id":"existing-box-or-extrusion-id","height":number}
 {"kind":"vertices","id":"existing-polyline-or-extrusion-id","points":[[x,y,z],...]} (replaces boundary points; extrusion must remain closed planar XY)
-{"kind":"copy","id":"new-id","sourceId":"existing-generated-id","name":"copy name","delta":[x,y,z]} (generated box/polyline/extrusion only; repeat explicit copies up to the operation limit)
+{"kind":"copy","id":"new-id","sourceId":"existing-id","name":"copy name","delta":[x,y,z]} (box/polyline/extrusion or independent native geometry; repeat explicit copies up to the operation limit)
 {"kind":"remove","id":"existing-id"}
-Existing kind=native objects came from a user-selected 3dm. Their origin is the bounding box minimum. They support move/remove only; never reconstruct them as boxes or claim to know their topology. Their original geometry and attributes must be retained.
+Existing kind=native objects came from a user-selected 3dm. Their origin is the bounding box minimum. They support move/remove and copying independent geometry; native copies remain native, with no parametric height/vertices editing. Copying grouped, locked, referenced or history-linked native objects is unsupported; never reconstruct them as boxes or claim to know their topology. Their original geometry and attributes must be retained.
 Read-only requests: operations=[] and grounded answer. Missing required dimensions: operations=[] and ask a specific question. Never invent requested dimensions. Sketch points use plane XY/XZ/YZ, origin 0 and meters. Object pins identify targets. Existing geometry is supplied as context. Preserve unmentioned geometry. Only describe proposed changes; execution is verified separately by VIDE.`;
 
 export function interpret(text,existing=[],permission='review') {
@@ -46,8 +46,13 @@ export function interpret(text,existing=[],permission='review') {
       obj.points=replacement.points;
     }else if(op.kind==='copy'){
       const source=objects.find(o=>o.id===op.sourceId);
-      if(obj||!source||!['box','polyline','extrude'].includes(source.kind)||!vector(op.delta)||typeof op.name!=='string'||!op.name.trim()||op.name.length>200)fail();
+      if(obj||!source||!['box','polyline','extrude','native'].includes(source.kind)||!vector(op.delta)||typeof op.name!=='string'||!op.name.trim()||op.name.length>200)fail();
       const copy=structuredClone(source);copy.id=op.id;copy.name=op.name;
+      if(source.kind==='native'){
+        if(typeof source.nativeId!=='string')fail();
+        copy.nativeSourceId=existing.some(item=>item.id===source.id)?source.id:source.nativeSourceId;
+        if(typeof copy.nativeSourceId!=='string')fail();
+      }
       if(copy.origin){copy.origin=copy.origin.map((n,i)=>n+op.delta[i]);if(!vector(copy.origin))fail();}
       else {copy.points=copy.points.map(p=>p.map((n,i)=>n+op.delta[i]));if(!copy.points.every(vector))fail();}
       objects.push(copy);
