@@ -2,7 +2,7 @@
 id: PLAN
 title: VIDE 구현계획 (마스터)
 status: review
-version: 0.25
+version: 0.26
 updated: 2026-09-20
 owner: agent:codex
 related: [SPEC-00, SPEC-01, SPEC-02, SPEC-03, SPEC-04, SPEC-05, ADR-013, OQ-03, OQ-04, OQ-06, OQ-07, OQ-08, OQ-09, OQ-10, OQ-14]
@@ -332,7 +332,7 @@ T-003·005는 H-RHINO-04·05의 지원안을, T-003·006은 H-ZWCAD-04·05의 �
 | T-002 | 프로젝트·메모 API/기초 UI 있음 | 공간 입력·핀·실제 대상 연결 | VERIFY-2026-09-19-local-input-ui |
 | T-003 | 두 호스트 합성 폴리라인 API 실험 있음 | 제품 어댑터 빌드/연결·새 지원안 실증 | SPIKE-2026-09-19-host-native |
 | T-004 | Claude/Codex 응답·취소 어댑터 있음 | 제품 설정·실행 루프·재개·한도 오류 연결 | SPIKE-2026-09-19-ai-execution-path |
-| T-005 | 실제 Rhino 후보 생성·수정·저장/재열기 연결 | Rhino 실제 후보→개입→적용·재편집 | — |
+| T-005 | 생성 후보의 실제 문서 적용·GUID 보존·후속 수정까지 검증 | 임의 원본 적용·정밀 충돌·불명확 해소·수동 재편집 검수 | VERIFY-2026-09-20-native-workspace |
 | T-006 | 실제 ZWCAD 경계·DWG 저장/재열기 및 CAD→Rhino 돌출 통과 | ZWCAD 완결 흐름·CAD→Rhino·병렬/부분 결과 | — |
 | T-007 | 실제 후보 수량표·CSV, 뷰·측정값 HTML 검토본과 네이티브 다운로드 구현 | 필터/그룹 저장·전후 비교·검토본 관계 확장 | VERIFY-2026-09-20-native-workspace |
 | T-008 | 미착수 | 신뢰 확장 등록·실행·실패·비활성화 | — |
@@ -556,3 +556,12 @@ ZWCAD 경로는 `hosts/zwcad`의 COM 작업자로 제공한다. 새로 만든 �
 ### 열린 Rhino 문서의 식별 조회
 
 `hosts/rhino/documents.mjs`는 Rhino 프로세스 ID·시작 시각과 문서 RuntimeSerialNumber를 함께 확인한다. 열린 문서의 이름·단위·객체 수·modified 상태와 지정 문서의 현재 선택 ID를 읽는다. 활성 문서에 기대지 않으며 프로세스/문서 불일치는 거절한다. 왼쪽 ‘열린 Rhino 문서’는 조회 전용이고 작업 기준으로 취득/원본 적용을 완료했다고 표시하지 않는다. [OpenDocuments](https://developer.rhino3d.com/api/RhinoCommon/html/M_Rhino_RhinoDoc_OpenDocuments.htm), [RuntimeSerialNumber](https://developer.rhino3d.com/api/rhinocommon/rhino.rhinodoc/runtimeserialnumber)를 기준으로 구현했다.
+
+
+### 열린 Rhino 문서에 생성 후보 적용
+
+`src/server/application.mjs`는 영향 검토와 적용을 분리한다. 검토한 문서 인스턴스·전체 객체 형상/속성 지문·후보 파일 지문을 10분짜리 서버 검토 항목에 묶고 기존 Store의 승인 해시·명령 큐·결과 기록을 사용한다. 명시적 적용 버튼이 확인한 명령만 실행하며 중복 요청은 같은 결과를 반환한다. 서버 재시작 후 검토 항목은 다시 만들고 진행 중 쓰기는 기존 큐의 unknown 보호를 따른다.
+
+`hosts/rhino/application.mjs`는 실제 호출 안에서 프로세스/문서와 양쪽 지문을 다시 확인한다. generated box/polyline/extrude만 허용하며 단위를 변환한다. 프로젝트 소유 객체를 GUID 유지 Replace로 수정하고 새 객체에는 소유 표식을 붙인다. 미포함 소유 객체만 삭제하며 무관한 객체는 건드리지 않는다. 잠김/참조 객체는 보류한다. 변경 후 객체 수·유효성·경계를 재조회한다. 일부 쓰기 또는 응답 유실은 unknown으로 남긴다. 파일 저장은 수행하지 않으며 원본 적용과 저장 상태를 분리한다.
+
+현재 생성 후보의 소유 객체 적용을 실증했다. 가져온 임의 네이티브 원본 편집·ZWCAD 원본 적용·관련 변경만 구분하는 정밀 충돌·호스트 증거 기반 unknown 해소는 남아 있다. 전체 문서 지문 검사는 무관한 편집도 보수적으로 재검토시킬 수 있다. [ObjectTable.Replace](https://developer.rhino3d.com/api/RhinoCommon/html/M_Rhino_DocObjects_Tables_ObjectTable_Replace.htm)와 [CommonObject.ToJSON](https://developer.rhino3d.com/api/rhinocommon/rhino.runtime.commonobject/tojson)을 참고했다.

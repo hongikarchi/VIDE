@@ -2,7 +2,7 @@
 id: VERIFY-2026-09-20-native-workspace
 title: 브라우저 입력에서 실제 Rhino 후보까지
 status: review
-version: 0.10
+version: 0.11
 updated: 2026-09-20
 owner: agent:codex
 related: [AC-05, AC-17, AC-24, AC-38, T-005, T-013, T-015, T-016, T-018]
@@ -114,3 +114,14 @@ UI 작업 호스트를 Rhino/ZWCAD로 고르며 다른 호스트에서 첨부한
 ## 열린 Rhino 문서 조회
 
 실행 중인 검수 Rhino의 열린 문서 ID·Millimeters 단위·객체 0개를 읽고, 브라우저에서 지정 문서의 선택 0개 조회를 확인했다. 거짓 프로세스 인스턴스는 STALE_CONNECTION, 음수 문서 ID는 INVALID_INPUT으로 거절했다. 문서 열기/닫기·선택 변경·원본 쓰기는 수행하지 않았다. 객체가 있는 사용자 원본의 전체 취득·원본 적용은 별도 후속 검증이다.
+
+
+## 생성 후보의 실제 Rhino 문서 적용
+
+자동 테스트 52건 통과. 서버 검토 없는 적용 거절, 승인한 명령의 단일 실행·중복 응답, 다른 프로젝트 접근 거절과 불명확 후속 쓰기 차단을 검사했다.
+
+`tests/integration/native-application.mjs`는 명시한 검수 Rhino 프로세스/빈 문서만 대상으로 한다. 이번 실제 브라우저 실행에서 무관한 시험 점을 둔 뒤 첫 매스 후보 적용, 두 번째 높이 수정 후보 적용을 수행했다. 매스 GUID 유지, 높이 6,000→4,500 mm, 전체 객체 2개(매스+무관한 점) 유지, 새로고침 후 적용 이력 2건을 확인했다. 원본 파일 저장은 하지 않았다. 추가 어댑터 확인에서 적용 후 실제 객체 수·경계 재조회도 통과했다. 잘못된 원본 지문은 쓰기 전에 SOURCE_CHANGED로 거절했다.
+
+![실제 문서 적용 이력](../assets/native-workspace/native-application.png)
+
+이 검수는 에이전트가 만든 검수 Rhino 문서만 변경했다. 사용자의 기존 논현동 프로젝트를 적용 대상으로 사용하지 않았다. 임의 가져오기 객체·ZWCAD 적용·전체 MVP 완료로 확대하지 않는다.

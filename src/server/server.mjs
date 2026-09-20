@@ -1,3 +1,4 @@
+import {Applications} from './application.mjs';
 import {listDocuments,inspectDocument} from '../../hosts/rhino/documents.mjs';
 import {compareCandidates,relatedCandidates} from '../core/comparison.mjs';
 import {quantities,quantitiesCsv} from '../core/quantities.mjs';
@@ -17,7 +18,7 @@ const assets = new Map([
   ['/', ['../ui/index.html', 'text/html; charset=utf-8']],
   ['/app.mjs', ['../ui/app.mjs', 'text/javascript; charset=utf-8']],
   ['/style.css', ['../ui/style.css', 'text/css; charset=utf-8']],
-  ...['model','viewport','gateway','inspector','requests','sketch','quantities','documents'].map(name => [`/${name}.mjs`, [`../ui/${name}.mjs`, 'text/javascript; charset=utf-8']]),
+  ...['model','viewport','gateway','inspector','requests','sketch','quantities','documents','application'].map(name => [`/${name}.mjs`, [`../ui/${name}.mjs`, 'text/javascript; charset=utf-8']]),
   ['/vendor/three.module.js', ['../../node_modules/three/build/three.module.js', 'text/javascript']],
   ['/vendor/three.core.js', ['../../node_modules/three/build/three.core.js', 'text/javascript']],
   ['/vendor/OrbitControls.js', ['../../node_modules/three/examples/jsm/controls/OrbitControls.js', 'text/javascript']],
@@ -40,7 +41,9 @@ export async function startServer({ filename, port = 0, providerFactory, host } 
   const workspace = new Workspace(store);
   host ??= new RhinoWorkspace(join(dirname(filename),'models'));
   const hosts={rhino:host,zwcad:new ZwcadWorkspace(join(dirname(filename),'cad-models'))};
+  const applications=new Applications(store,workspace);
   const execution = new Execution(workspace, { providerFactory, host, hosts });
+  const withApplications=request=>({...request,applications:store.db.prepare("SELECT id,state,result FROM commands WHERE projectId=? AND kind='applyCandidate' AND json_extract(payload,'$.requestId')=? ORDER BY rowid").all(request.projectId,request.id).map(row=>({...row,result:row.result?JSON.parse(row.result):null}))});
   let origin, authority;
   const server = createServer(async (request, response) => {
     const requestId = randomBytes(8).toString('hex');
@@ -85,6 +88,12 @@ export async function startServer({ filename, port = 0, providerFactory, host } 
       if (url.pathname === '/api/v1/models' && request.method === 'GET') { send(200,await execution.models()); return; }
       if(url.pathname==='/api/v1/host/documents'&&request.method==='GET'){send(200,await listDocuments());return;}
       if(url.pathname==='/api/v1/host/selection'&&request.method==='GET'){send(200,await inspectDocument(url.searchParams.get('instance')||'',Number(url.searchParams.get('document'))));return;}
+      const application=/^\/api\/v1\/projects\/([^/]+)\/applications(?:\/([^/]+))?$/.exec(url.pathname);
+      if(application){
+        if(request.method==='POST'&&!application[2]){const input=await body(request);send(201,await applications.prepare(application[1],input.requestId,{instance:input.instance,documentId:input.documentId}));return;}
+        if(request.method==='POST'&&application[2]){send(200,await applications.confirm(application[1],application[2]));return;}
+        if(request.method==='GET'&&application[2]){send(200,store.getCommand(application[1],application[2]));return;}
+      }
       const comparison=/^\/api\/v1\/projects\/([^/]+)\/comparison$/.exec(url.pathname);
       if(comparison&&request.method==='GET'){
         const projectId=comparison[1],before=workspace.get(projectId,url.searchParams.get('before')),after=workspace.get(projectId,url.searchParams.get('after'));
@@ -107,7 +116,7 @@ export async function startServer({ filename, port = 0, providerFactory, host } 
       const job = /^\/api\/v1\/projects\/([^/]+)\/requests(?:\/([^/]+)(\/cancel)?)?$/.exec(url.pathname);
       if (job) {
         const [, projectId, id, cancel] = job;
-        if (request.method === 'GET') { send(200, id ? workspace.get(projectId,id) : workspace.list(projectId)); return; }
+        if (request.method === 'GET') { send(200, id ? withApplications(workspace.get(projectId,id)) : workspace.list(projectId).map(withApplications)); return; }
         if (request.method === 'POST' && cancel) { send(200, execution.cancel(projectId,id)); return; }
         if (request.method === 'POST' && !id) {
           const result = workspace.submit(projectId, await body(request));
