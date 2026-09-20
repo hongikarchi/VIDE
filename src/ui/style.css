@@ -14,3 +14,5 @@
 .comparison-controls{display:flex;gap:8px;margin-top:12px}.comparison-controls select{max-width:70%;padding:6px;border:1px solid var(--line);border-radius:4px;background:white}.comparison-result{font-size:12px;line-height:1.8;max-height:180px;overflow:auto;margin-top:12px}.comparison-result small{display:inline}
 
 .application-dialog>select{max-width:75%;padding:8px;margin-right:8px;border:1px solid var(--line);border-radius:4px}.application-dialog>p{font-size:12px;line-height:1.7}.application-dialog>button:last-child{background:#292f2e;color:white}
+
+.table-controls{display:flex;gap:6px;flex-wrap:wrap;margin:10px 0}.table-controls input,.table-controls select,.table-controls button{max-width:100%;min-width:0;padding:6px 8px;border:1px solid var(--line);border-radius:4px;background:white;color:var(--ink)}.table-controls input{width:150px}.quantity-summary{background:var(--soft)}

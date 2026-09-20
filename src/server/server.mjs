@@ -1,3 +1,4 @@
+import {TableViews} from '../core/table-views.mjs';
 import {Applications} from './application.mjs';
 import {listDocuments,inspectDocument} from '../../hosts/rhino/documents.mjs';
 import {compareCandidates,relatedCandidates} from '../core/comparison.mjs';
@@ -18,7 +19,7 @@ const assets = new Map([
   ['/', ['../ui/index.html', 'text/html; charset=utf-8']],
   ['/app.mjs', ['../ui/app.mjs', 'text/javascript; charset=utf-8']],
   ['/style.css', ['../ui/style.css', 'text/css; charset=utf-8']],
-  ...['model','viewport','gateway','inspector','requests','sketch','quantities','documents','application','history'].map(name => [`/${name}.mjs`, [`../ui/${name}.mjs`, 'text/javascript; charset=utf-8']]),
+  ...['model','viewport','gateway','inspector','requests','sketch','quantities','quantity-view','documents','application','history'].map(name => [`/${name}.mjs`, [`../ui/${name}.mjs`, 'text/javascript; charset=utf-8']]),
   ['/vendor/three.module.js', ['../../node_modules/three/build/three.module.js', 'text/javascript']],
   ['/vendor/three.core.js', ['../../node_modules/three/build/three.core.js', 'text/javascript']],
   ['/vendor/OrbitControls.js', ['../../node_modules/three/examples/jsm/controls/OrbitControls.js', 'text/javascript']],
@@ -38,7 +39,7 @@ const statuses = { NOT_FOUND: 404, FORBIDDEN: 403, UNAUTHORIZED: 401, JSON_REQUI
   REVISION_CONFLICT: 409, TARGET_MISMATCH: 409, CONTROLLER_BUSY: 409, PROJECT_BUSY:409, STALE_REFERENCE:409 };
 export async function startServer({ filename, port = 0, providerFactory, host, applicationOptions } = {}) {
   const store = new Store(filename), bootstrap = randomBytes(32).toString('hex'), session = randomBytes(32).toString('hex');
-  const workspace = new Workspace(store);
+  const workspace = new Workspace(store),tableViews=new TableViews(store);
   host ??= new RhinoWorkspace(join(dirname(filename),'models'));
   const hosts={rhino:host,zwcad:new ZwcadWorkspace(join(dirname(filename),'cad-models'))};
   const applications=new Applications(store,workspace,applicationOptions);
@@ -102,9 +103,16 @@ export async function startServer({ filename, port = 0, providerFactory, host, a
         const projectId=comparison[1],before=workspace.get(projectId,url.searchParams.get('before')),after=workspace.get(projectId,url.searchParams.get('after'));
         send(200,compareCandidates(before,after,relatedCandidates(workspace,projectId,before,after)));return;
       }
+      const view=/^\/api\/v1\/projects\/([^/]+)\/table-views(?:\/([^/]+)(\/delete)?)?$/.exec(url.pathname);
+      if(view){
+        if(request.method==='GET'&&!view[2]){send(200,tableViews.list(view[1]));return;}
+        if(request.method==='POST'&&view[3]){send(200,tableViews.remove(view[1],view[2],(await body(request)).revision));return;}
+        if(request.method==='POST'&&!view[2]){send(201,tableViews.save(view[1],await body(request)));return;}
+        if(request.method==='PUT'&&view[2]){send(200,tableViews.save(view[1],await body(request),view[2]));return;}
+      }
       const table=/^\/api\/v1\/projects\/([^/]+)\/requests\/([^/]+)\/(quantities|quantities.csv)$/.exec(url.pathname);
       if(table&&request.method==='GET'){
-        const data=quantities(workspace.get(table[1],table[2]));
+        const data=quantities(workspace.get(table[1],table[2]),Object.fromEntries(url.searchParams));
         if(table[3]==='quantities'){send(200,data);return;}
         response.writeHead(200,{'Content-Type':'text/csv; charset=utf-8','Content-Disposition':'attachment; filename="VIDE-quantities.csv"'});response.end(quantitiesCsv(data));return;
       }
