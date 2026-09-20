@@ -11,7 +11,7 @@ import { Execution } from './execution.mjs';
 import { RhinoWorkspace } from '../../hosts/rhino/workspace.mjs';
 import { ZwcadWorkspace } from '../../hosts/zwcad/workspace.mjs';
 import { dirname, join } from 'node:path';
-import { importModel } from './import-model.mjs';
+import { importModel,captureModel } from './import-model.mjs';
 import { renderReport } from './report.mjs';
 
 const assets = new Map([
@@ -76,6 +76,8 @@ export async function startServer({ filename, port = 0, providerFactory, host } 
       if (!equal(cookie, session)) throw new DomainError('UNAUTHORIZED');
       const upload=/^\/api\/v1\/projects\/([^/]+)\/import$/.exec(url.pathname);
       if(upload&&request.method==='POST'){send(200,await importModel(request,upload[1],url.searchParams.get('name'),workspace,host));return;}
+      const capture=/^\/api\/v1\/projects\/([^/]+)\/capture$/.exec(url.pathname);
+      if(capture&&request.method==='POST'){send(200,await captureModel(capture[1],await body(request),workspace,host));return;}
       const report=/^\/api\/v1\/projects\/([^/]+)\/requests\/([^/]+)\/report$/.exec(url.pathname);
       if(report&&request.method==='POST'){
         const html=renderReport(store.project(report[1]),workspace.get(report[1],report[2]),(await body(request)).image);

@@ -24,6 +24,7 @@ Object.assign(errors,{SOURCE_CHANGED:'기준 Rhino 파일이 외부에서 변경
 Object.assign(errors,{ZWCAD_POLYLINE_ONLY:'현재 ZWCAD 작업은 XY 평면 폴리라인을 지원합니다.',ZWCAD_EXECUTION_FAILED:'ZWCAD가 작업을 완료하지 못했습니다. 설치·실행 상태를 확인하세요.'});
 
 Object.assign(errors,{
+ CAPTURE_FAILED:'문서 사본을 가져오지 못했습니다. 문서 연결·단위와 객체 수(500개 이하)를 확인하세요.',
  NETWORK_UNAVAILABLE:'로컬 서버에 연결하지 못했습니다. 서버 실행 상태를 확인하세요. 전송한 작업은 이력에서 상태를 확인한 뒤 다시 요청하세요.',
  INVALID_RESPONSE:'서버 응답을 읽지 못했습니다. 작업 이력을 새로 확인하세요.',
  REQUEST_FAILED:'요청을 처리하지 못했습니다. 작업 이력을 확인하세요.',

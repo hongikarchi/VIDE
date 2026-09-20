@@ -15,14 +15,14 @@ export function renderHistory(root,messages,models,projectId,actions){
   element('p',message.body||'첨부한 문맥 검토',card);
   const references=[...message.pins.map(p=>p.name),...message.sketches.map(s=>s.name),...message.files.map(f=>f.name)];
   if(references.length)element('small',references.join(' · '),card);
-  element('small',message.source==='file'?'Rhino 작업 사본':`${models.find(model=>model.id===message.model)?.name||message.model} · ${message.effort} · ${message.permission==='review'?'검토만':'후보 작업 허용'}`,card);
+  element('small',['file','document'].includes(message.source)?'Rhino 작업 사본':`${models.find(model=>model.id===message.model)?.name||message.model} · ${message.effort} · ${message.permission==='review'?'검토만':'후보 작업 허용'}`,card);
   const context=element('details','',card);element('summary','요청 문맥',context);element('pre',JSON.stringify(message.request?.input||message,null,2),context);
   const request=message.request;if(!request)continue;
   element('small',request.state==='running'&&request.result?.phase==='host'?'호스트 생성·저장 검증 중':request.result?.phase==='stopping'?'중단 확인 중':labels[request.state]||request.state,card);
   if(request.result?.text)element('p',request.result.text,card);
   if(request.result?.hostExecuted)renderCandidate(card,message,projectId,actions);
   if(request.result?.code)element('p',errors[request.result.code]||request.result.code,card);
-  if(['queued','running'].includes(request.state)&&request.result?.phase!=='host'){
+  if(['queued','running'].includes(request.state)&&!['file','document'].includes(message.source)&&request.result?.phase!=='host'){
    const stop=element('button','중단',card);
    stop.onclick=async()=>{stop.disabled=true;try{await api(`/projects/${projectId}/requests/${message.id}/cancel`,'POST',{});}catch(error){actions.error(error.message);stop.disabled=false;}};
   }
@@ -32,7 +32,10 @@ export function renderHistory(root,messages,models,projectId,actions){
 function renderCandidate(card,message,projectId,actions){
  const {request}=message,result=request.result,host=result.host==='zwcad'?'ZWCAD':'Rhino',extension=result.host==='zwcad'?'dwg':'3dm';
  const view=element('button','이 후보 보기',card);view.onclick=()=>actions.candidate(message.id);
- element('small',`${host} 후보 · 저장·재열기 검증됨`,card);
+ element('small',`${host} ${['file','document'].includes(message.source)?'작업 사본':'후보'} · 저장·재열기 검증됨`,card);
+ if(result.sourceDocument){const source=result.sourceDocument;element('small',`${source.name} · ${new Date(source.capturedAt).toLocaleString()} 취득 · 현재 상태 미확인`,card);}
+ const missing=(result.scene||[]).filter(object=>!object.vertices?.length&&!object.line?.length);
+ if(missing.length)element('small',`3D 표시 미지원 ${missing.length}개 (${[...new Set(missing.map(object=>object.nativeType))].join(', ')}) · 파일과 객체 목록에는 보존됨`,card);
  element('a',extension==='dwg'?'DWG 내려받기':'3dm 내려받기',card,{href:`/api/v1/projects/${projectId}/requests/${message.id}/model`,download:`VIDE-candidate.${extension}`});
  const open=element('button',`${host}에서 열기`,card);
  open.onclick=async()=>{open.disabled=true;try{await api(`/projects/${projectId}/requests/${message.id}/open`,'POST',{});}catch(error){actions.error(error.message);}finally{open.disabled=false;}};

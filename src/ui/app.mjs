@@ -11,7 +11,14 @@ let project, busy=false, displayedResult,selectedResult,draftSaved=false;
 let state=initial(),tool='select',points=[],toastTimer;
 const message=text=>{clearTimeout(toastTimer);$('message').textContent=text;$('message').hidden=false;toastTimer=setTimeout(()=>$('message').hidden=true,4500);};
 function el(tag,text,parent,attrs={}){const node=document.createElement(tag);node.textContent=text;for(const [k,v] of Object.entries(attrs))node.setAttribute(k,v);parent.append(node);return node;}
-initializeDocuments(message);
+initializeDocuments(message,async target=>{
+ if(!project||busy)throw Error('현재 작업이 끝난 뒤 가져오세요.');
+ busy=true;render();message('열린 Rhino 문서의 작업 사본을 가져오고 있습니다.');
+ try{const request=await api(`/projects/${project.id}/capture`,'POST',{...target,id:crypto.randomUUID()});
+ state.messages.push({...request.input,request});if(request.result?.hostExecuted){selectedResult=request.id;state.selected=null;}
+ renderMessages();message(request.result?.text||errors[request.result?.code]||'작업 사본을 가져오지 못했습니다.');
+ }finally{busy=false;render();}
+});
 let inspectorTab='properties';
 initializeInspector(tab=>{inspectorTab=tab;render();});
 let viewport;

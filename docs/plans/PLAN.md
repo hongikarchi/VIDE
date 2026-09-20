@@ -2,7 +2,7 @@
 id: PLAN
 title: VIDE 구현계획 (마스터)
 status: review
-version: 0.28
+version: 0.29
 updated: 2026-09-20
 owner: agent:codex
 related: [SPEC-00, SPEC-01, SPEC-02, SPEC-03, SPEC-04, SPEC-05, ADR-013, OQ-03, OQ-04, OQ-06, OQ-07, OQ-08, OQ-09, OQ-10, OQ-14]
@@ -571,3 +571,10 @@ ZWCAD 경로는 `hosts/zwcad`의 COM 작업자로 제공한다. 새로 만든 �
 
 
 로컬 API 오류는 작업을 자동 재전송하지 않고 한국어 원인·다음 행동으로 표시한다. 원본 적용의 영향 검토 중에는 닫기·대상 변경·중복 검토를 막아 늦게 도착한 응답이 다른 적용 창에 섞이지 않게 했다. 기능 검증 후 개별 커밋을 남긴다는 사용자 후속 지시를 따른다.
+
+
+### 열린 문서의 수동 작업 사본 취득
+
+SPEC-01.2·9의 시작 경로를 `hosts/rhino/capture.mjs`와 프로젝트 capture API에 연결했다. 문서 인스턴스와 객체 지문을 확인하고 `UpdateDocumentPath=false`로 새 사본을 기록한 뒤 기존 3dm 취득 경로에서 m 단위 변환·재열기·객체 재조회를 수행한다. 원본 경로·이름·modified 상태가 변하지 않았는지도 호스트 안에서 확인한다. 성공 시 취득 시각·원본 단위·선택 ID·문서 인스턴스를 저장하고, 현재 호스트의 최신 상태라고 표시하지 않는다. 렌더링하지 못한 유형과 개수를 표시하며 원본 파일에는 보존한다.
+
+같은 요청 ID의 재전송은 재취득하지 않고 기존 기록을 반환한다. 실패한 취득은 이전 성공 사본을 유지한다. 이 경로는 원본 쓰기가 없으므로 실패를 원본 적용 unknown으로 분류하지 않는다. 응답 유실 시 임시 사본은 늦은 호스트 작업과 충돌하지 않도록 남긴다. 실시간 동기화·정밀 변경 비교·네이티브 원본 적용 완료를 뜻하지 않는다. 파일 복사 옵션 근거는 [FileWriteOptions](https://developer.rhino3d.com/api/RhinoCommon/html/T_Rhino_FileIO_FileWriteOptions.htm)다.

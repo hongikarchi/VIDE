@@ -2,7 +2,7 @@
 id: VERIFY-2026-09-20-native-workspace
 title: 브라우저 입력에서 실제 Rhino 후보까지
 status: review
-version: 0.11
+version: 0.12
 updated: 2026-09-20
 owner: agent:codex
 related: [AC-05, AC-17, AC-24, AC-38, T-005, T-013, T-015, T-016, T-018]
@@ -125,3 +125,10 @@ UI 작업 호스트를 Rhino/ZWCAD로 고르며 다른 호스트에서 첨부한
 ![실제 문서 적용 이력](../assets/native-workspace/native-application.png)
 
 이 검수는 에이전트가 만든 검수 Rhino 문서만 변경했다. 사용자의 기존 논현동 프로젝트를 적용 대상으로 사용하지 않았다. 임의 가져오기 객체·ZWCAD 적용·전체 MVP 완료로 확대하지 않는다.
+
+
+## 열린 Rhino 문서 취득 검증
+
+근거: SPEC-01.2·9, SCR-01, T-003·005. `tests/integration/native-capture.mjs`는 명시한 합성 Rhino 문서를 읽어 새 검수 프로젝트의 작업 사본으로 취득한다. 이 검수에서 2개 객체, 솔리드 체적 216 m³, 객체 목록과 브라우저 재열기 복원을 확인했다. 취득 전후 원본의 형상·속성 지문·단위·경로·이름·modified·선택을 비교해 불변을 확인했다. 원본 저장/변경과 AI 호출은 수행하지 않는다.
+
+프로젝트 `34731109-a5c8-4b88-b5c5-17fada81fac2`, 취득 `5b659069-0e8e-4a4e-ad31-02b067da1704`. 단위/계약 테스트 54개가 통과했다. 취득 요청 멱등성·다른 문서로 요청 ID 재사용 거절·실패 시 이전 기준 보존을 검사했다. 브라우저에 표시되지 않는 Point 1개는 객체 목록/파일에 남으며 미지원 개수를 표시한다. 일반 레이어·블록·참조 문서와 수동 Sync 전체 지원을 선언하지 않는다.
