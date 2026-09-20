@@ -1,7 +1,7 @@
+import {installedCodex} from '../ai/paths.mjs';
 import { createProvider } from '../ai/providers.mjs';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
-import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { geometryContract, interpret, protectGeometry } from '../core/geometry.mjs';
 
@@ -13,7 +13,7 @@ export class Execution {
   executable(provider) {
     return this.settings?.get().paths[provider] || (provider==='claude-cli'
       ? process.env.VIDE_CLAUDE_PATH || join(homedir(),'.local','bin','claude.exe')
-      : process.env.VIDE_CODEX_PATH || [join(homedir(),'AppData','Roaming','npm','node_modules','@openai','codex','node_modules','@openai','codex-win32-x64','vendor','x86_64-pc-windows-msvc','bin','codex.exe')].find(existsSync));
+      : process.env.VIDE_CODEX_PATH || installedCodex());
   }
   provider(input) {
     const executable=this.executable(input.provider);

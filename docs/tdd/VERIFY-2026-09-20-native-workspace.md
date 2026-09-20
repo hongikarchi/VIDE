@@ -2,7 +2,7 @@
 id: VERIFY-2026-09-20-native-workspace
 title: 브라우저 입력에서 실제 Rhino 후보까지
 status: review
-version: 0.26
+version: 0.27
 updated: 2026-09-20
 owner: agent:codex
 related: [AC-05, AC-17, AC-24, AC-38, T-005, T-013, T-015, T-016, T-018]
@@ -201,3 +201,7 @@ tests/integration/browser-extensions.mjs에서 등록/활성화→실제 저장�
 ## 실행 재사용·종료·재시작 검증
 tests/server/lifecycle.test.mjs는 실제 Node 프로세스를 실행해 프로젝트를 저장하고 두 번째 실행이 기존 제어자를 재사용한 뒤 종료되는지 확인했다. 앱 종료 API→프로세스 종료→다시 실행 후 같은 프로젝트가 남아 있다. 잘못된 외부 launch URL을 거절했다. 종료 요청 이후 조회는 유지하고 새 쓰기는 APP_STOPPING으로 거절하는 시험도 통과했다. 총 75개 자동 시험 통과.
 이 시험은 현재 Windows 환경의 실제 프로세스 수명/데이터 유지 검수이며 개발 도구가 없는 별도 PC 설치 검수를 대체하지 않는다.
+
+## Windows 실행 패키지 검증
+T-011 / SPEC-05.3·6 / AC-23·27의 일부 검증이다. src/desktop/build.mjs의 전체 생성이 성공했고 tests/integration/portable-package.mjs가 0.1.0-dev.20260920.1 ZIP의 67개 파일 해시와 포함 Node 실행을 확인했다. PATH를 System32로 제한하고 명시 CLI 환경 경로를 제거한 상태에서 WebGL 화면·ChatGPT 연결·프로젝트 생성·중복 실행 재사용·UI 종료·다시 실행·같은 프로젝트 복원·실행 폴더 제거 후 SQLite 보존을 확인했다.
+격리 실행에서는 공식 로그인 상태를 확인할 수 없어 연결 단언이 실패했다. 사용자 프로필 접근을 허용한 검증 실행에서 통과했다. AI 생성 호출이나 사용자 CAD 원본 쓰기는 없었다. 시험 데이터는 .vide/package-check/2f411d87-84c2-44af-bc59-ca2c82ca8bcf/data이며 설치 폴더는 검증 후 제거됐다. 전체 자동 시험 75개 통과. 별도 비개발 PC·서명/설치 프로그램·DB 마이그레이션 검수를 대체하지 않는다.
