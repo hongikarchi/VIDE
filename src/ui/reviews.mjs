@@ -1,8 +1,9 @@
+import {renderReviewNotes} from './review-notes.mjs';
 import {showReviewComparison} from './review-comparison.mjs';
 import {api} from './gateway.mjs';
 const dialog=document.createElement('dialog');document.body.append(dialog);
 const element=(tag,text,parent)=>{const node=document.createElement(tag);node.textContent=text;parent.append(node);return node;};
-export function initializeReviews(getProject,notify){
+export function initializeReviews(getProject,notify,onAdopt,onBasis){
  const list=document.getElementById('review-list');let generation=0;
  const refresh=async()=>{
   const projectId=getProject();if(!projectId)return;const current=++generation,rows=await api(`/projects/${projectId}/reviews`);if(current!==generation)return;
@@ -14,6 +15,8 @@ export function initializeReviews(getProject,notify){
   dialog.replaceChildren();dialog.className='review-dialog';dialog.setAttribute('aria-label','저장한 검토본');dialog.oncancel=null;
   const head=element('div','',dialog);head.className='quantity-head';element('h2',row.title,head);const download=element('a','HTML 내려받기',head);download.href=`/api/v1/projects/${getProject()}/reviews/${row.id}/download`;download.download='VIDE-review.html';const close=element('button','닫기',head);close.onclick=()=>dialog.close();
   const frame=element('iframe','',dialog);frame.title='검토본 내용';frame.setAttribute('sandbox','');frame.src=`/api/v1/projects/${getProject()}/reviews/${row.id}/preview`;
+  const notes=element('details','',dialog);notes.className='review-notes';element('summary','검토 의견',notes);const noteContent=element('section','',notes);
+  void renderReviewNotes(noteContent,getProject(),row.id,(note,review)=>{onAdopt(note,review);dialog.close();},id=>{onBasis(id);dialog.close();}).catch(error=>notify(error.message));
   if(!dialog.open)dialog.showModal();
  };
  const create=async(requestId,image)=>{

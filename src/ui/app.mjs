@@ -5,13 +5,17 @@ import {renderPoints,validCoordinate} from './sketch.mjs';
 import {renderRequests,renderActiveWork} from './requests.mjs';
 import {initializeInspector,renderInspector} from './inspector.mjs';
 import {api,connect,errors} from './gateway.mjs';
-import {objects,models,initial,chooseModel,pinSelection,attachHostSelection,validate,packet,attachSketch,storageKey} from './model.mjs';
+import {objects,models,initial,chooseModel,pinSelection,attachHostSelection,attachReviewNote,validate,packet,attachSketch,storageKey} from './model.mjs';
 import {createViewport} from './viewport.mjs';
 const $=id=>document.getElementById(id);
 let project, busy=false, displayedResult,selectedResult,draftSaved=false;
 let state=initial(),tool='select',points=[],toastTimer;
 const message=text=>{clearTimeout(toastTimer);$('message').textContent=text;$('message').hidden=false;toastTimer=setTimeout(()=>$('message').hidden=true,4500);};
-const reviews=initializeReviews(()=>project?.id,message);
+const reviews=initializeReviews(()=>project?.id,message,(note,review)=>{
+ if(busy)throw Error('현재 요청 전송이 끝난 뒤 첨부하세요.');
+ attachReviewNote(state,note,review);render();if($('right').hidden)$('toggle-right').click();mobileView('input');
+ message('의견과 원 기준을 요청 초안에 첨부했습니다. 조건을 확인한 뒤 보내세요.');
+},id=>{selectedResult=id;renderMessages();message('의견 작성 당시 후보를 열었습니다.');});
 function el(tag,text,parent,attrs={}){const node=document.createElement(tag);node.textContent=text;for(const [k,v] of Object.entries(attrs))node.setAttribute(k,v);parent.append(node);return node;}
 initializeDocuments(message,async target=>{
  if(!project||busy)throw Error('현재 작업이 끝난 뒤 가져오세요.');
@@ -36,10 +40,10 @@ function render(rebuildRequests=true){
  if(rebuildRequests)renderRequests(state,render);
  renderActiveWork(state.messages);
  $('host-target').value=state.host||'rhino';
- if(project)try{localStorage.setItem('vide:draft:'+project.id,JSON.stringify({host:state.host,body:state.body,instructions:state.instructions,pins:state.pins,sketches:state.sketches,files:state.files,model:state.model,effort:state.effort,permission:state.permission}));draftSaved=true;}catch{draftSaved=false;}
+ if(project)try{localStorage.setItem('vide:draft:'+project.id,JSON.stringify({baseRequestId:state.baseRequestId,host:state.host,body:state.body,instructions:state.instructions,pins:state.pins,sketches:state.sketches,files:state.files,model:state.model,effort:state.effort,permission:state.permission}));draftSaved=true;}catch{draftSaved=false;}
  $('objects').replaceChildren();for(const o of objects){const b=el('button',o.name,$('objects'),{class:'object','aria-pressed':String(state.selected===o.id)});b.onclick=()=>{state.selected=o.id;if(tool==='pin')pinSelection(state);render();};}
  viewport?.select(state.selected);$('selection').textContent=objects.find(o=>o.id===state.selected)?.name||'';$('selection-pin').hidden=!state.selected;
- $('context').replaceChildren();state.pins.forEach((p,i)=>chip('@ '+p.name,()=>{state.pins.splice(i,1);render();},p));state.sketches.forEach((s,i)=>chip('⌁ '+s.name,()=>{state.sketches.splice(i,1);render();}));state.files.forEach((f,i)=>chip('▧ '+f.name,()=>{state.files.splice(i,1);render();}));
+ $('context').replaceChildren();state.pins.forEach((p,i)=>chip('@ '+p.name,()=>{state.pins.splice(i,1);render();},p));state.sketches.forEach((s,i)=>chip('⌁ '+s.name,()=>{state.sketches.splice(i,1);render();}));state.files.forEach((f,i)=>chip('▧ '+(f.displayName||f.name),()=>{state.files.splice(i,1);render();}));
  const selected=models.find(m=>m.id===state.model);$('model').value=state.model;$('effort').replaceChildren();selected.efforts.forEach(e=>el('option',e,$('effort'),{value:e}));$('effort').value=state.effort;$('permission').value=state.permission;
  const active=state.messages.find(m=>m.id===displayedResult)?.request;renderInspector(objects.find(o=>o.id===state.selected),active?.result,active,inspectorTab);$('document-host').textContent=state.host==='zwcad'?'ZWCAD':'Rhino';$('work-count').textContent=`${state.messages.length}개 작업`;$('workspace-status').textContent=state.messages.some(m=>['queued','running'].includes(m.request?.state))?'작업 진행 중':project?'로컬 작업 공간 · '+project.name:'연결 중';
  sidebar();$('request').disabled=!project||busy||state.messages.some(m=>['queued','running'].includes(m.request?.state))||!!validate(state);$('request').title=validate(state)||'보내기 · Ctrl+Enter';draw();
@@ -101,7 +105,7 @@ window.addEventListener('beforeunload',e=>{if(points.length||(!draftSaved&&(stat
 window.addEventListener('pagehide',()=>viewport?.dispose(),{once:true});
 mobileView('model');render();
 
-try{const linked=await connect();const catalog=await api('/models');models.splice(0,models.length,...catalog);$('model').replaceChildren();for(const m of models)el('option',m.name,$('model'),{value:m.id});project=linked.project;void reviews.refresh().catch(error=>message(error.message));for(const p of linked.projects)el('option',p.name,$('project-picker'),{value:p.id});$('project-picker').value=project.id;try{const draft=JSON.parse(localStorage.getItem('vide:draft:'+project.id));if(draft&&typeof draft.body==='string'&&['pins','sketches','files'].every(k=>Array.isArray(draft[k]))){Object.assign(state,draft);chooseModel(state,state.model);$('body').value=state.body;}}catch{}state.messages=linked.requests.map(request=>({...request.input,request}));$('project-name').textContent=project.name;render();renderMessages();for(const m of state.messages)if(['queued','running'].includes(m.request.state))void poll(m.id);const host=await api('/host');const providers=await api('/providers');$('connection-status').textContent=providers.map(p=>`${p.id==='claude-cli'?'Claude':'ChatGPT'} ${p.available?'연결됨':'미연결'}`).join(' · ')+(host.available?' · Rhino 연결됨':' · Rhino 미연결');}catch(error){message(errors[error.code]||error.message);}
+try{const linked=await connect();const catalog=await api('/models');models.splice(0,models.length,...catalog);$('model').replaceChildren();for(const m of models)el('option',m.name,$('model'),{value:m.id});project=linked.project;void reviews.refresh().catch(error=>message(error.message));for(const p of linked.projects)el('option',p.name,$('project-picker'),{value:p.id});$('project-picker').value=project.id;try{const draft=JSON.parse(localStorage.getItem('vide:draft:'+project.id));if(draft&&typeof draft.body==='string'&&['pins','sketches','files'].every(k=>Array.isArray(draft[k]))){Object.assign(state,draft);selectedResult=draft.baseRequestId;chooseModel(state,state.model);$('body').value=state.body;}}catch{}state.messages=linked.requests.map(request=>({...request.input,request}));$('project-name').textContent=project.name;render();renderMessages();for(const m of state.messages)if(['queued','running'].includes(m.request.state))void poll(m.id);const host=await api('/host');const providers=await api('/providers');$('connection-status').textContent=providers.map(p=>`${p.id==='claude-cli'?'Claude':'ChatGPT'} ${p.available?'연결됨':'미연결'}`).join(' · ')+(host.available?' · Rhino 연결됨':' · Rhino 미연결');}catch(error){message(errors[error.code]||error.message);}
 
 $('project-picker').onchange=()=>{location.search='?project='+encodeURIComponent($('project-picker').value);};
 $('new-project').onclick=async()=>{const name=prompt('프로젝트 이름');if(!name?.trim())return;try{const p=await api('/projects','POST',{name:name.trim()});location.search='?project='+encodeURIComponent(p.id);}catch(error){message(error.message);}};

@@ -1,3 +1,4 @@
+import {ReviewNotes} from '../core/review-notes.mjs';
 import {compareReviews} from '../core/review-comparison.mjs';
 import {Reviews} from '../core/reviews.mjs';
 import {TableViews} from '../core/table-views.mjs';
@@ -21,7 +22,7 @@ const assets = new Map([
   ['/', ['../ui/index.html', 'text/html; charset=utf-8']],
   ['/app.mjs', ['../ui/app.mjs', 'text/javascript; charset=utf-8']],
   ['/style.css', ['../ui/style.css', 'text/css; charset=utf-8']],
-  ...['model','viewport','gateway','inspector','requests','sketch','quantities','quantity-view','documents','application','history','reviews','review-comparison'].map(name => [`/${name}.mjs`, [`../ui/${name}.mjs`, 'text/javascript; charset=utf-8']]),
+  ...['model','viewport','gateway','inspector','requests','sketch','quantities','quantity-view','documents','application','history','reviews','review-comparison','review-notes'].map(name => [`/${name}.mjs`, [`../ui/${name}.mjs`, 'text/javascript; charset=utf-8']]),
   ['/vendor/three.module.js', ['../../node_modules/three/build/three.module.js', 'text/javascript']],
   ['/vendor/three.core.js', ['../../node_modules/three/build/three.core.js', 'text/javascript']],
   ['/vendor/OrbitControls.js', ['../../node_modules/three/examples/jsm/controls/OrbitControls.js', 'text/javascript']],
@@ -41,7 +42,7 @@ const statuses = { NOT_FOUND: 404, FORBIDDEN: 403, UNAUTHORIZED: 401, JSON_REQUI
   REVISION_CONFLICT: 409, TARGET_MISMATCH: 409, CONTROLLER_BUSY: 409, PROJECT_BUSY:409, STALE_REFERENCE:409 };
 export async function startServer({ filename, port = 0, providerFactory, host, applicationOptions } = {}) {
   const store = new Store(filename), bootstrap = randomBytes(32).toString('hex'), session = randomBytes(32).toString('hex');
-  const workspace = new Workspace(store),tableViews=new TableViews(store),reviews=new Reviews(store);
+  const workspace = new Workspace(store),tableViews=new TableViews(store),reviews=new Reviews(store),reviewNotes=new ReviewNotes(store,reviews);
   host ??= new RhinoWorkspace(join(dirname(filename),'models'));
   const hosts={rhino:host,zwcad:new ZwcadWorkspace(join(dirname(filename),'cad-models'))};
   const applications=new Applications(store,workspace,applicationOptions);
@@ -86,6 +87,11 @@ export async function startServer({ filename, port = 0, providerFactory, host, a
         const projectId=reviewComparison[1],before=reviews.get(projectId,url.searchParams.get('before')),after=reviews.get(projectId,url.searchParams.get('after'));
         let related=false;try{related=relatedCandidates(workspace,projectId,workspace.get(projectId,before.requestId),workspace.get(projectId,after.requestId));}catch(error){if(error.code!=='NOT_FOUND')throw error;}
         send(200,compareReviews(before,after,related));return;
+      }
+      const note=/^\/api\/v1\/projects\/([^/]+)\/reviews\/([^/]+)\/notes$/.exec(url.pathname);
+      if(note){
+        if(request.method==='GET'){send(200,reviewNotes.list(note[1],note[2]));return;}
+        if(request.method==='POST'){send(201,reviewNotes.create(note[1],note[2],await body(request)));return;}
       }
       const review=/^\/api\/v1\/projects\/([^/]+)\/reviews(?:\/([^/]+)(\/(?:preview|download))?)?$/.exec(url.pathname);
       if(review){

@@ -28,3 +28,20 @@ export function attachHostSelection(state,request,selection){
  if(selected.length)state.selected=selected[0].id;
  return additions.length;
 }
+
+export function attachReviewNote(state,note,review){
+ if(state.baseRequestId!==review.requestId)throw Error('다른 후보를 보고 있습니다. 기준 후보를 먼저 열어 대상을 확인하세요.');
+ if(requestBody({...state,instructions:[...(state.instructions||[]),note.body]}).length>20000)throw Error('요청 묶음은 20,000자까지 입력할 수 있습니다.');
+ const name='Review-'+note.id+'.md';
+ if(state.files.some(file=>file.name===name))throw Error('이미 요청 초안에 첨부한 의견입니다.');
+ if(state.files.length>=100)throw Error('첨부 자료는 100개까지입니다.');
+ const object=review.payload.model.find(object=>object.id===note.objectId);
+ if(note.objectId&&!object)throw Error('검토본의 대상 객체를 확인할 수 없습니다.');
+ const existing=object&&state.pins.find(pin=>pin.id===object.id);
+ if(existing&&(existing.basis!==review.requestId||existing.role!=='target'))throw Error('첨부된 객체의 기준과 역할을 먼저 확인하세요.');
+ if(object&&!existing&&state.pins.length>=100)throw Error('요청 객체는 100개까지입니다.');
+ const text=JSON.stringify({reviewId:review.id,reviewTitle:review.title,requestId:review.requestId,noteId:note.id,createdAt:note.createdAt,objectId:note.objectId,body:note.body},null,2);
+ state.files.push({name,displayName:'검토 의견 · '+review.title,type:'text/markdown',text,size:new TextEncoder().encode(text).length,contentStatus:'included'});
+ if(object&&!existing)state.pins.push({id:object.id,name:object.name,role:'target',basis:review.requestId});
+ state.instructions.push(note.body);
+}

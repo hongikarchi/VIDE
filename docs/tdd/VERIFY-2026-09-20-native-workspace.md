@@ -2,7 +2,7 @@
 id: VERIFY-2026-09-20-native-workspace
 title: 브라우저 입력에서 실제 Rhino 후보까지
 status: review
-version: 0.18
+version: 0.19
 updated: 2026-09-20
 owner: agent:codex
 related: [AC-05, AC-17, AC-24, AC-38, T-005, T-013, T-015, T-016, T-018]
@@ -171,3 +171,7 @@ UI 작업 호스트를 Rhino/ZWCAD로 고르며 다른 호스트에서 첨부한
 ## 저장한 검토본 A/B 브라우저 검증
 기존 실제 AI·Rhino 검수 프로젝트 a6e12909-6461-47bc-8cae-ca0910a27e7f의 두 후보를 UI에서 각각 저장하고 비교했다. 신규 AI 호출·원본 쓰기는 없다. 8×6×6 m → 8×6×4.5 m에 대해 체적 −72 m³, 기하 면적 −42 m²가 표시됐다. 두 sandbox iframe과 390px 화면 내 대화상자 폭, 브라우저 예외 없음, 자동 테스트 66개 통과를 확인했다. 재현: tests/integration/browser-review-comparison.mjs. 증거: [A/B 화면](../assets/native-workspace/review-comparison.png).
 비교는 저장한 표시 형상/속성 기준이다. 네이티브 원본의 모든 기하·속성 동일성이나 외부 공유 검수는 이 시험이 보증하지 않는다.
+
+## 검토 의견 보존·요청 첨부 검증
+tests/integration/browser-review-notes.mjs에서 저장은 성공했으나 응답만 유실되는 상황을 주입했다. 동일 ID 재확인 후 의견은 하나이며 원 기준이 보존됐다. 다른 후보에서 첨부 거절, 원 기준 열기 후 기존 초안에 의견/핀/출처 첨부, 새로고침 후 기준 후보 유지까지 확인했다. 신규 AI·호스트 쓰기는 없다. [의견을 첨부한 초안](../assets/native-workspace/review-note-draft.png).
+자동 시험 67개와 기존 browser-workspace의 카메라·스케치·초안·다운로드 회귀 시험이 통과했다. 외부 의견 서버·PC 종료 지속성·펜 입력은 미검증이다.
