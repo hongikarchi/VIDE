@@ -24,3 +24,5 @@
 .review-notes{max-height:38vh;overflow:auto;border-top:1px solid var(--line);padding:10px}.review-notes summary{cursor:pointer}.review-note-form{display:grid;gap:8px;margin-top:12px}.review-note-form textarea{min-height:70px;resize:vertical}.review-notes article{padding:10px 0;border-bottom:1px solid #ddd}.review-notes article p{white-space:pre-wrap}.review-notes article button{margin-right:8px}
 
 .ai-settings{width:min(620px,94vw)}.ai-settings section{margin:16px 0}.ai-settings input{width:100%;box-sizing:border-box;min-height:34px;padding:6px 8px;border:1px solid var(--line);border-radius:6px;font:inherit}.ai-settings p{overflow-wrap:anywhere}
+
+#draft-menu{position:relative}#draft-menu .draft-actions{position:absolute;top:calc(100% + 8px);right:0;z-index:20;min-width:150px;padding:5px;border:1px solid var(--line);border-radius:6px;background:white;box-shadow:0 6px 20px #0002}#draft-menu .draft-actions button{display:block;width:100%;text-align:left;border:0}

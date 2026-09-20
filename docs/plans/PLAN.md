@@ -2,7 +2,7 @@
 id: PLAN
 title: VIDE 구현계획 (마스터)
 status: review
-version: 0.47
+version: 0.48
 updated: 2026-09-20
 owner: agent:codex
 related: [SPEC-00, SPEC-01, SPEC-02, SPEC-03, SPEC-04, SPEC-05, ADR-013, OQ-03, OQ-04, OQ-06, OQ-07, OQ-08, OQ-09, OQ-10, OQ-14]
@@ -668,3 +668,7 @@ SPEC-05.6에 따라 단일 제어 잠금을 얻은 뒤 기존 DB를 읽기 전�
 SPEC-05.3·6의 보존 경로로 src/core/backup.mjs와 src/desktop/backup.mjs를 추가했다. 앱과 같은 제어 잠금을 얻어야 하며 실행 중인 앱을 자동 종료하지 않는다. Node의 [SQLite backup API](https://nodejs.org/download/release/latest-v24.x/docs/api/sqlite.html)를 사용해 DB를 복사하고 models/cad-models의 파일 해시를 대조한다. 기존 백업 폴더·데이터 폴더 내부 목적지·심볼릭 링크는 거절한다. 실패한 부분 폴더를 유효한 백업으로 표시하지 않으며 완료 manifest는 마지막에 기록한다.
 개발 실행은 `npm run backup -- create "<데이터 폴더>" "<새 백업 폴더>"`, 확인은 `npm run backup -- verify "<백업 폴더>"`다. 패키지에는 동봉 Node로 같은 명령을 실행하는 START-HERE 안내가 있다. 백업에는 로그인 파일이나 launch 토큰을 포함하지 않는다. 앱 DB의 경로 설정과 프로젝트 자료는 포함되므로 로컬 사용자 자료로 취급한다.
 복구 시에는 앱을 종료하고 백업 검증 후 기존 데이터 폴더를 별도로 보존해야 한다. 모델 파일 참조가 절대 경로이므로 manifest.source와 동일한 데이터 경로에 DB·models·cad-models를 함께 복원한다. 현재 도구는 기존 데이터를 덮어쓰는 복원·경로 이관·마이그레이션을 자동 수행하지 않는다. 백업은 로컬 기록/후보를 보존하며 외부 호스트 원본이나 브라우저의 미제출 초안까지 포함하지 않는다.
+
+### 프로젝트별 수동 초안 복원
+SPEC-01의 프로젝트/입력 기준 보호를 수동 저장본에도 적용했다. 브라우저 저장 키와 envelope에 projectId를 넣고 다른 프로젝트나 알 수 없는 기준 후보는 현재 초안을 유지한 채 거절한다. 저장 당시 후보를 선택해 화면과 입력 기준을 함께 복원한다. 명시적으로 기준이 없는 초안은 최신 후보에 자동 연결하지 않으며 재열기에도 유지한다. 과거 공용 v3 저장본은 삭제하지 않지만 프로젝트 소속을 추정해 불러오지 않는다.
+초안 메뉴 항목 증가로 summary가 헤더 위로 밀리던 배치도 수정했다. 버튼은 헤더 아래 드롭다운 안에서 표시되며 390px 화면에서도 화면 안에 남는다.
