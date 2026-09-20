@@ -1,0 +1,16 @@
+{
+  "host": "zwcad",
+  "checks": {
+    "candidate_created": true,
+    "original_preserved": true,
+    "candidate_discard": true,
+    "native_edit": true,
+    "attributes_preserved": true,
+    "save": true,
+    "reopen": true,
+    "reopened_geometry": true,
+    "units": true
+  },
+  "success": true,
+  "version": "2023"
+}

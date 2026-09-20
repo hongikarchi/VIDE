@@ -18,3 +18,14 @@ build/
 bin/
 obj/
 *.log
+
+# Local product data and credentials
+.vide/
+.env
+.env.*
+!.env.example
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+*.sqlite.controller
+*.sqlite.controller-journal

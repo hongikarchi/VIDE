@@ -5,7 +5,7 @@
 cd "$(git rev-parse --show-toplevel)" || exit 1
 # Build inputs must be fully staged, or the committed HTML would not match the committed MD.
 unstaged=$(git diff --name-only -- '*.md' 'tools/docs')
-untracked=$(git ls-files --others --exclude-standard -- '*.md')
+untracked=$(git ls-files --others --exclude-standard -- '*.md' 'tools/docs')
 if [ -n "$unstaged$untracked" ]; then
   echo "[docs] 스테이징되지 않은 빌드 입력이 있어 MD/HTML이 어긋날 수 있습니다:" >&2
   printf '  %s\n' $unstaged $untracked >&2
@@ -20,5 +20,14 @@ changed=$(node tools/docs/build.mjs --quiet) || { echo "[docs] HTML 재생성 �
 if [ -n "$changed" ]; then
   echo "$changed" | while IFS= read -r f; do [ -n "$f" ] && git add -- "$f"; done
   echo "[docs] MD에서 재생성한 HTML을 이 커밋에 포함했습니다: $(echo "$changed" | tr '\n' ' ')"
+fi
+# Pre-rendered HTML may not appear in this build's changed list.
+# Do not silently commit stale index content or stage unrelated local edits.
+remaining=$(git diff --name-only -- '*.html')
+new_html=$(git ls-files --others --exclude-standard -- '*.html')
+if [ -n "$remaining$new_html" ]; then
+  echo "[docs] HTML에 아직 스테이징되지 않은 변경이 있습니다. 생성물을 확인하여 함께 스테이징한 뒤 다시 커밋하세요." >&2
+  printf '%s\n' "$remaining" "$new_html" >&2
+  exit 1
 fi
 exit 0

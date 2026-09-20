@@ -1,0 +1,356 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="description" content="선행 프로젝트 조사와 구현 선택 근거"><meta name="generator" content="tools/docs/build.mjs — generated from docs/plans/PLAN-01-reference-research.md; do not edit"><title>VIDE · 선행 프로젝트 조사와 구현 선택 근거</title><style>
+:root{--ink:#292c2d;--muted:#626b6e;--line:#e1e3e1;--soft:#f5f5f1;--coral:#d97660;--paper:#fff;--font:"Pretendard","Noto Sans KR","Malgun Gothic",Arial,sans-serif}
+*{box-sizing:border-box}html{scroll-behavior:smooth;scroll-padding-top:92px}body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--font);letter-spacing:-.025em}a{color:inherit;text-underline-offset:4px}button,input,textarea,select{font:inherit;color:inherit}button{cursor:pointer;border:1px solid var(--line);border-radius:4px;background:var(--paper);padding:10px 15px;line-height:1.3}button:hover{background:var(--soft)}button:disabled{cursor:default;opacity:.6}button.primary{background:var(--ink);color:#fff;border-color:var(--ink)}button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible{outline:3px solid var(--coral);outline-offset:3px}textarea{resize:vertical}::selection{background:#f2d7ce}[hidden]{display:none!important}
+.skip{position:fixed;top:-80px;left:20px;z-index:100;background:white;padding:12px}.skip:focus{top:10px}
+.topbar{height:68px;position:sticky;top:0;z-index:30;border-bottom:1px solid var(--line);background:#fffffff7;display:flex;align-items:center;justify-content:space-between;gap:24px;padding:0 max(24px,calc((100vw - 1450px)/2))}.brand{text-decoration:none;display:flex;align-items:center;gap:15px;white-space:nowrap}.brand b{font-size:29px;letter-spacing:-.08em}.brand span{border-left:1px solid var(--line);padding-left:15px;font-size:11px;letter-spacing:.08em}.doc-tabs{display:flex;height:100%;gap:25px;align-items:stretch;min-width:0;overflow-x:auto}.doc-tab{flex-shrink:0}.doc-tab{display:flex;align-items:center;position:relative;text-decoration:none;font-size:13px;color:var(--muted);white-space:nowrap}.doc-tab.active{color:var(--ink);font-weight:650}.doc-tab.active:after{content:"";position:absolute;bottom:0;left:0;right:0;height:3px;background:var(--coral)}.top-actions{display:flex;gap:8px}.top-actions button{padding:8px 11px;font-size:12px;white-space:nowrap}
+.layout{max-width:1450px;margin:auto;padding:0 30px;display:grid;grid-template-columns:218px minmax(0,1fr);gap:55px}.toc-shell{align-self:start;position:sticky;top:99px;padding-top:15px;max-height:calc(100vh - 120px)}.eyebrow{font-size:10px;line-height:1.6;letter-spacing:.16em;font-weight:500;color:var(--muted)}.toc-title{display:flex;justify-content:space-between;align-items:center;margin-bottom:15px}.toc-title strong{font-size:12px;font-weight:500}.toc-title span{font-size:10px;color:var(--muted)}#toc-toggle{display:none}.toc-search{width:100%;padding:10px 12px;border:1px solid var(--line);background:var(--paper);border-radius:4px;font-size:12px}.toc-hint{font-size:10px;color:var(--muted);margin:8px 0 15px;line-height:1.6}.toc-links{max-height:calc(100vh - 323px);overflow-y:auto;padding:0 8px 8px 0}.toc-links a{display:block;padding:8px 10px;margin:2px 0;border-left:2px solid transparent;border-radius:0 3px 3px 0;text-decoration:none;font-size:12px;line-height:1.65;color:var(--muted);word-break:keep-all;overflow-wrap:anywhere}.toc-links a:hover{background:var(--soft)}.toc-links a.active{border-color:var(--coral);background:var(--soft);color:var(--ink)}.toc-next{border-top:1px solid var(--line);padding-top:13px;margin-top:14px;font-size:11px;color:var(--muted);line-height:1.7}.toc-next b{font-weight:500;color:var(--ink)}
+main{min-width:0;max-width:1040px;padding-bottom:70px}.doc-hero{padding:55px 0 32px;border-bottom:1px solid var(--line)}.hero-label{display:flex;justify-content:space-between;gap:20px;align-items:center}.doc-hero h1{font-size:clamp(32px,3.15vw,48px);line-height:1.22;letter-spacing:-.065em;font-weight:550;margin:20px 0 18px;max-width:900px;word-break:keep-all;overflow-wrap:anywhere}.doc-description{font-size:14px;color:var(--muted);line-height:1.8;margin:0}.pill{display:inline-block;font-size:10px;letter-spacing:.01em;padding:5px 9px;border:1px solid var(--line);border-radius:3px;white-space:nowrap}.hero-meta{margin-top:22px;font-size:12px;color:var(--muted);line-height:1.9}.hero-meta p{font-size:12px;line-height:1.9;margin:8px 0}.hero-meta strong{font-weight:600}.hero-meta blockquote{margin:25px 0 0;padding:20px 22px;background:var(--soft);border-left:3px solid var(--coral);color:var(--ink)}.hero-meta blockquote p{word-break:keep-all;overflow-wrap:anywhere;font-size:18px;line-height:1.8;letter-spacing:-.03em;margin:0}.doc-section{padding:44px 0;border-bottom:1px solid var(--line);scroll-margin-top:93px;min-width:0}.doc-section h2{font-size:28px;font-weight:550;letter-spacing:-.055em;line-height:1.4;margin:0 0 24px;word-break:keep-all;overflow-wrap:anywhere}.section-num{font-weight:400;color:var(--coral);margin-right:10px;font-size:.75em;letter-spacing:-.02em}.doc-section h3{font-size:19px;font-weight:600;line-height:1.5;margin:32px 0 14px;letter-spacing:-.04em}.doc-section h4{font-size:16px;line-height:1.5;margin:25px 0 12px}.doc-section p{font-size:15px;line-height:1.92;margin:13px 0;word-break:keep-all;overflow-wrap:anywhere}.doc-section strong{font-weight:650}.doc-section ul,.doc-section ol{padding-left:22px;font-size:15px;line-height:1.85}.doc-section li{margin:7px 0}.doc-section blockquote{border-left:3px solid var(--coral);background:var(--soft);margin:23px 0;padding:15px 22px}.doc-section blockquote p{margin:0;font-size:16px;line-height:1.85}.doc-section hr{border:0;border-top:1px solid var(--line);margin:28px 0}.doc-section code:not(pre code){font-family:Consolas,"Liberation Mono",monospace;font-size:.91em;background:var(--soft);padding:2px 5px;border-radius:3px;overflow-wrap:anywhere}
+.table-scroll{overflow-x:auto;overscroll-behavior-x:contain;margin:22px 0;border-top:1px solid var(--ink);border-bottom:1px solid var(--line);width:100%}table{border-collapse:collapse;width:100%;font-size:12.5px;line-height:1.75;table-layout:auto}th,td{padding:13px 14px;vertical-align:top;text-align:left;border-bottom:1px solid var(--line);word-break:keep-all;overflow-wrap:anywhere}th{background:var(--soft);font-weight:600;font-size:11.5px}tr:last-child td{border-bottom:0}td:first-child{font-weight:550;min-width:125px}td{min-width:145px}.table-scroll table:has(th:nth-child(2)){min-width:410px}.table-scroll table:has(th:nth-child(3)){min-width:585px}.table-scroll table:has(th:nth-child(4)){min-width:710px}.table-scroll table:has(th:nth-child(5)){min-width:840px}.code-frame{position:relative;margin:23px 0;border:1px solid var(--line);border-radius:4px;overflow:hidden;background:#f8f8f5}.code-frame pre{margin:0;padding:49px 20px 19px;overflow:auto;max-height:680px;font-family:Consolas,"Liberation Mono",monospace;font-size:12px;line-height:1.9;white-space:pre;letter-spacing:-.01em}.copy-code{position:absolute;top:9px;right:10px;font-size:10px;padding:5px 9px;background:#fff}.code-frame .code-label{position:absolute;left:18px;top:15px;font-size:9px;color:var(--muted);letter-spacing:.12em}.doc-footer{margin-top:30px;display:flex;justify-content:space-between;gap:24px;font-size:10px;color:var(--muted);line-height:1.8}
+.review-workspace{background:var(--soft);border:1px solid var(--line);padding:27px;margin:30px 0 5px;border-radius:4px}.workspace-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:15px}.workspace-heading h3{margin:6px 0 10px}.workspace-heading p{font-size:12px;margin:0 0 20px}.checks{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}.check-group{min-width:0;margin:0;padding:14px 15px;border:1px solid var(--line);background:#fff;border-radius:3px}.check-group legend{padding:0 7px;font-size:12px;font-weight:600}.check-line{display:flex;gap:9px;align-items:flex-start;font-size:12px;line-height:1.7;margin:9px 0;cursor:pointer}.check-line input{accent-color:var(--coral);margin:3px 0 0;flex:none;width:15px;height:15px}.stage-field{display:flex;align-items:center;gap:15px;font-size:12px;margin:26px 0 20px}.stage-field select{background:#fff;border:1px solid var(--line);padding:9px 12px;max-width:100%;font-size:12px;border-radius:3px}.note-grid{display:grid;grid-template-columns:1fr 1fr;gap:18px}.note-field{display:block;min-width:0}.note-field>span{display:block;margin-bottom:8px;font-size:12px}.note-field textarea{width:100%;min-height:96px;border:1px solid var(--line);border-radius:3px;padding:12px;background:#fff;font-size:13px;line-height:1.8}.note-field:last-child{grid-column:1/-1}.note-actions{display:flex;gap:9px;flex-wrap:wrap;margin-top:20px}.note-actions button{font-size:12px}.review-workspace p.save-status{font-size:11px;margin:15px 0 5px;color:var(--muted)}.review-workspace p.micro{font-size:10px;line-height:1.8;color:var(--muted);margin:0}.toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);background:var(--ink);color:white;padding:12px 18px;border-radius:4px;font-size:12px;z-index:60;max-width:90vw;box-shadow:0 5px 24px #0002;line-height:1.6}.empty-nav{font-size:12px;color:var(--muted);padding:15px 5px;line-height:1.7}
+@media(min-width:1600px){.layout{gap:65px}}
+@media(max-width:1100px){.layout{grid-template-columns:188px minmax(0,1fr);gap:30px;padding:0 24px}.topbar{gap:18px}.brand span{display:none}.doc-hero h1{font-size:38px}.doc-section p{font-size:14px}.doc-section h2{font-size:26px}.doc-tabs{gap:23px}.review-workspace{padding:22px}.checks{grid-template-columns:1fr}}
+@media(max-width:820px){html{scroll-padding-top:84px}.topbar{height:60px;padding:0 18px;gap:14px}.brand b{font-size:27px}.doc-tabs{gap:18px}.doc-tab{font-size:12px}.top-actions{gap:6px}.top-actions button{font-size:10px;padding:7px 9px}.layout{display:block;padding:0 22px}.toc-shell{position:relative;top:auto;max-height:none;padding-top:18px;border-bottom:1px solid var(--line)}.toc-title{margin:0;padding-bottom:14px}.toc-title strong{font-size:11px}.toc-title>span{display:none}#toc-toggle{display:block;font-size:11px;padding:7px 11px}.toc-body{display:none}.toc-shell.open .toc-body{display:block}.toc-links{max-height:240px;margin-bottom:12px}.toc-next{display:none}.doc-hero{padding:34px 0 27px}.doc-hero h1{font-size:35px;max-width:600px}.hero-label{align-items:flex-start;gap:10px;flex-wrap:wrap}.hero-label .pill{font-size:9px}.doc-section{padding:34px 0;scroll-margin-top:80px}.doc-section h2{font-size:25px;line-height:1.45}.doc-section p{font-size:14px;line-height:1.95}.hero-meta blockquote p{font-size:16px}.note-grid{grid-template-columns:1fr}.stage-field{flex-wrap:wrap}.note-field:last-child{grid-column:auto}.workspace-heading{display:block}.workspace-heading .pill{margin-bottom:17px}.doc-footer{flex-direction:column;gap:5px}}
+@media(max-width:480px){.topbar{gap:10px;padding:0 16px}.doc-tabs{gap:15px}.top-actions button#source-download{display:none}.brand b{font-size:25px}.doc-hero h1{font-size:31px;line-height:1.3}.doc-hero .eyebrow{font-size:9px}.doc-description{font-size:12px}.hero-meta{font-size:11px}.hero-meta p{font-size:11px;line-height:1.9}.hero-meta blockquote{padding:16px 16px}.hero-meta blockquote p{font-size:15px}.doc-section h2{font-size:23px}.doc-section h3{font-size:18px}.doc-section p{font-size:14px}.table-scroll{margin:20px 0}td,th{padding:11px 12px}.code-frame pre{font-size:11px;padding-left:15px}.review-workspace{padding:18px}.note-actions{gap:8px}.note-actions button{padding:9px 10px;font-size:11px}.check-line{font-size:12px}.top-actions button{padding:7px 9px}}
+@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}*{transition:none!important}}
+@media print{@page{margin:15mm}.topbar,.toc-shell,.skip,.copy-code,.toast,.review-workspace,.doc-footer{display:none!important}.layout{display:block;padding:0;max-width:none}main{max-width:none;padding:0}.doc-hero{padding:0 0 18px}.doc-hero h1{font-size:27px}.doc-section{padding:22px 0;break-inside:auto}.doc-section h2{font-size:21px;break-after:avoid}.doc-section h3{font-size:16px;break-after:avoid}.doc-section p{font-size:11px;line-height:1.75}.table-scroll{overflow:visible;break-inside:auto}table{min-width:0!important;font-size:9px;table-layout:fixed}td,th{min-width:0;font-size:9px;word-break:normal;padding:7px}tr{break-inside:avoid}.code-frame pre{white-space:pre-wrap;max-height:none;font-size:9px;padding:16px;overflow:visible;word-break:break-word}.code-label{display:none}.hero-meta blockquote p{font-size:14px}}
+
+/* ---- 작성자별 첨삭 표기 (AI.md §5) -------------------------------------
+   ins  = 추가·교체 제안 (초록)   del = 삭제·교체 대상 (빨강 취소선)
+   blockquote.review = 검토 코멘트 (파란 상자)   .review-appendix = 검토 요약 부록
+   body.review-original  → 원문만 (제안·코멘트 숨김)
+   body.review-accepted  → 인라인 제안 미리보기 (코멘트 대안은 적용하지 않음)
+------------------------------------------------------------------------- */
+ins{background:#dff3e4;color:#17512a;text-decoration:none;border-bottom:2px solid #4f9d63;padding:0 3px;border-radius:2px}
+del{background:#fbe4e0;color:#8f3324;text-decoration:line-through;text-decoration-color:#c9573f;text-decoration-thickness:1.5px;padding:0 3px;border-radius:2px}
+h1 ins,h1 del,h2 ins,h2 del,h3 ins,h3 del{border-bottom-width:3px}
+blockquote.review{margin:14px 0 24px;padding:12px 16px 12px 18px;border:0;border-left:4px solid #3b6fd6;background:#eef3fc;border-radius:0 6px 6px 0;font-size:14px;line-height:1.75;color:#24303f}
+blockquote.review p{margin:0}
+blockquote.review p+p{margin-top:9px;padding-top:9px;border-top:1px dashed #c3d2ef}
+.review-label{display:inline-flex;gap:6px;align-items:center;margin-right:8px;font-weight:600;font-size:11.5px;vertical-align:1px;white-space:nowrap}
+.review-agent{color:#3b6fd6;text-transform:uppercase;letter-spacing:.09em}
+.review-id{background:#3b6fd6;color:#fff;border-radius:3px;padding:1px 7px;font-weight:600}
+.review-sev{border-radius:3px;padding:1px 7px;font-weight:600}
+.review-sev[data-sev="높음"]{background:#c9573f;color:#fff}
+.review-sev[data-sev="중간"]{background:#f0c14b;color:#3a2a00}
+.review-sev[data-sev="낮음"]{background:#d9dfe2;color:#3d484d}
+.doc-section.review-appendix{margin-top:60px;padding-top:28px;border-top:3px solid #3b6fd6}
+.doc-section.review-appendix h2 .section-num{color:#3b6fd6}
+.review-pill{border-color:#3b6fd6;color:#3b6fd6;text-decoration:none}
+.review-pill:hover{background:#eef3fc}
+.review-legend{margin:12px 0 0;font-size:12px;color:var(--muted);line-height:1.8}
+.review-legend span{margin-right:12px;white-space:nowrap}
+.review-select{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);white-space:nowrap}
+.review-select select{padding:7px 9px;border:1px solid var(--line);border-radius:4px;background:var(--paper);font-size:12px}
+blockquote.review[data-review-agent="codex"]{border-left-color:#7250a0;background:#f4effa;color:#352b46}
+[data-review-agent="codex"] .review-agent{color:#7250a0}
+[data-review-agent="codex"] .review-id{background:#7250a0}
+.review-pill[data-review-agent="codex"]{border-color:#7250a0;color:#7250a0}
+.review-pill[data-review-agent="codex"]:hover{background:#f4effa}
+.review-appendix[data-review-agent="codex"]{border-top-color:#7250a0}
+.review-appendix[data-review-agent="codex"] h2 .section-num{color:#7250a0}
+.review-label[id]{scroll-margin-top:110px}
+.review-label[id]:target{outline:2px solid currentColor;outline-offset:4px}
+.review-legend p{margin:5px 0}
+.review-select select:disabled{opacity:.6}
+.top-actions{flex-wrap:wrap}
+[hidden]{display:none!important}
+@media(max-width:1100px){.topbar{height:auto;min-height:68px;flex-wrap:wrap;padding-top:8px;padding-bottom:8px;gap:8px 18px}.doc-tabs{height:34px;flex:1;justify-content:flex-end}.top-actions{flex-basis:100%;justify-content:flex-end}.review-select select{max-width:185px}}
+@media(min-width:821px) and (max-width:1100px){.toc-shell{top:135px;max-height:calc(100vh - 155px)}}
+.toc-links a[data-reviews]{display:flex;justify-content:space-between;gap:8px;align-items:center}
+.toc-links a[data-reviews]::after{content:attr(data-reviews);flex:none;min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:#3b6fd6;color:#fff;font-size:10px;line-height:18px;text-align:center}
+body.review-original ins,body.review-original blockquote.review,body.review-original .review-appendix,body.review-original .review-legend{display:none}
+body.review-original del{background:none;color:inherit;text-decoration:none;padding:0}
+body.review-original .toc-links a[data-reviews]::after{display:none}
+body.review-accepted del,body.review-accepted blockquote.review,body.review-accepted .review-appendix,body.review-accepted .review-legend{display:none}
+body.review-accepted ins{background:none;color:inherit;border:0;padding:0}
+body.review-accepted .toc-links a[data-reviews]::after{display:none}
+@media print{blockquote.review{break-inside:avoid;background:#eef3fc!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}ins,del{-webkit-print-color-adjust:exact;print-color-adjust:exact}.review-select{display:none}}
+</style></head><body>
+<!-- GENERATED FILE — source: docs/plans/PLAN-01-reference-research.md — run: npm --prefix tools/docs run build -->
+<a class="skip" href="#reading-main">본문으로 이동</a>
+<header class="topbar"><a class="brand" href="../../index.html" aria-label="VIDE 문서 모음"><b>V.</b><span>VIDE</span></a><nav class="doc-tabs" aria-label="문서 선택"><a class="doc-tab" href="../PRD.html">PRD</a><a class="doc-tab" href="../specs/README.html">SPEC</a><a class="doc-tab" href="../../Design.html">Design</a><a class="doc-tab" href="PLAN.html">PLAN</a><a class="doc-tab" href="../../DEVELOPMENT_GUIDE.html">개발 가이드</a><a class="doc-tab" href="../../AI.html">AI 규약</a></nav><div class="top-actions"><button id="source-download" title="현재 문서의 Markdown 원문 저장">원문 ↓</button><button id="print-doc" title="현재 문서 인쇄">인쇄</button></div></header>
+<div class="layout"><aside class="toc-shell" id="toc-shell" aria-label="현재 문서의 목차"><div class="toc-title"><strong>CONTENTS</strong><span id="toc-count"></span><button id="toc-toggle" aria-expanded="false" aria-controls="toc-body">목차 열기</button></div><div class="toc-body" id="toc-body"><input class="toc-search" id="toc-search" type="search" placeholder="장 제목으로 찾기" aria-label="현재 문서 목차 검색"><p class="toc-hint" id="nav-hint" role="status">장 제목으로 찾아갑니다.</p><nav class="toc-links" id="toc-links" aria-label="본문 장 이동"></nav><div class="toc-next">다음 작성할 문서<br><b>구현 시작 · PLAN §6.3</b><br>개발 지시 후 입력 계약 → 공간 작업 UI → 실제 호스트 후보</div></div></aside><main id="reading-main" tabindex="-1"><article id="plan-01-reference-research" class="document"><header class="doc-hero"><div class="hero-label"><span class="eyebrow">PLAN</span><span><span class="pill">REVIEW · v0.4</span><span class="pill">8 CHAPTERS</span></span></div><h1 tabindex="-1">선행 프로젝트 조사와 구현 선택 근거</h1><div class="hero-meta">
+</div></header><section class="doc-section" id="plan-01-reference-research-section-1"><h2><span aria-hidden="true" class="section-num">01 /</span> 목적과 조사 수준</h2>
+<p>사용자는 Aside의 접을 수 있는 좌우 패널·구독 계정 연결·여러 모델을 이어 쓰는 경험과 Vino·FigCAD·논현동 규모검토·Speckle·food4Rhino AI 플러그인을 참고하도록 요청했다. 이 문서는 마스터 PLAN §3의 조사·대안 비교를 분리한 것이다. 제품 범위는 PRD, 동작은 SPEC, 화면 표현은 Design이 소유한다.</p>
+<p>조사일은 2026-09-20이다. 아래에서 <strong>문서 확인</strong>, <strong>코드 확인</strong>, <strong>VIDE 적용 판단</strong>, <strong>미검증</strong>을 구분한다. 공개 소개·다운로드 수·기존 코드의 존재를 성공률이나 호환성 실증으로 취급하지 않는다. 이번에는 참고 프로젝트를 실행·변경하거나 코드를 복사하지 않았고 제품 의존성을 설치하지 않았다. 실제 채택은 §5의 작은 비교 시험과 해당 티켓에서 확정한다.</p>
+</section><section class="doc-section" id="plan-01-reference-research-section-2"><h2><span aria-hidden="true" class="section-num">02 /</span> 사례별 확인과 적용 범위</h2>
+<h3>2.1 Aside — 작업 공간과 계정 연결 경험</h3>
+<p><strong>문서 확인:</strong> 공식 도움말은 사이드바 토글, 분할 탭, 현재 페이지를 첨부한 사이드 패널과 페이지별 초안 보존을 설명한다. 모델 설정은 자체 제공·구독·API 연결을 구분하고, 지원 구독의 OAuth 로그인과 사용량 표시를 안내한다. <a href="https://docs.aside.com/help/browser-basics">브라우저 조작</a>, <a href="https://docs.aside.com/help/side-panel">사이드 패널</a>, <a href="https://docs.aside.com/help/ai">AI 공급자 설정</a>.</p>
+<p><strong>VIDE 적용 판단:</strong> 중앙 모델을 유지하면서 좌측 탐색·우측 작업 패널을 독립적으로 접고 복귀시키는 경험을 채택한다. 현재 대상과 입력 문맥을 가까이 보여 주고 계정 연결과 모델 선택을 분리한다. 구체 표현은 Design §03에 둔다. Aside의 사이드바 단축키 Ctrl+S는 CAD 저장과 충돌하므로 그대로 복사하지 않는다.</p>
+<p><strong>미검증:</strong> 공개 도움말에서 내부 UI 프레임워크·토큰 저장 구현·공급자 간 문맥 이전 알고리즘은 확인되지 않았다. 사용자 관찰인 ‘부드러운 모델 전환’을 특정 내부 기술의 증거로 바꾸지 않는다. Aside의 인증 방식이 VIDE에도 그대로 허용된다고 가정하지 않고 §3의 공급자 공식 경로를 사용한다.</p>
+<h3>2.2 Vino — 공급자 어댑터와 검증된 변경</h3>
+<p>로컬 <code>C:/Users/user/Desktop/Vino</code>의 README·docs/architecture.md·ui/panel/package.json과 아래 코드를 읽었다. 공개 저장소는 <a href="https://github.com/hongikarchi/Vino">hongikarchi/Vino</a>다. 로컬 작업본과 원격 HEAD가 같다고 검증한 것은 아니다.</p>
+<p><strong>코드 확인:</strong> <code>IAgentSessionClient</code>가 공급자 이벤트·시작·재개·중단을 추상화한다. Codex 클라이언트는 app-server의 thread/turn 요청을, Claude 클라이언트는 stream-json과 세션 재개를 사용한다. 패널 의존성은 React·TypeScript·Vite다. 아키텍처 문서는 broker의 대상/지문 검사·단일 쓰기·사후 확인을 설명한다. 이번에는 broker 전체 경로를 실행 검증하지 않았다.</p>
+<p><strong>VIDE 적용 판단:</strong> 공급자 이벤트를 제품 공통 이벤트로 정규화하고, 모델 응답과 원본 변경 성공을 분리하는 패턴을 참고한다. 다만 Vino의 Rhino 중심 세션/문서 수명, C# 호스트 프로세스 구조, 공급자별 고정 세션을 VIDE의 복수 호스트·문서 구조에 그대로 이식하지 않는다. 현재 Node 제어 계층을 대체할 근거는 없다.</p>
+<p>추적 가능한 로컬 파일 SHA-256 앞 16자리:</p>
+<div aria-label="PLAN 표 1" class="table-scroll" role="region" tabindex="0"><table>
+<thead>
+<tr>
+<th>파일</th>
+<th>지문</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>src/Vino.AgentHost/Codex/IAgentSessionClient.cs</td>
+<td>5e8a0b6247f5f3b9</td>
+</tr>
+<tr>
+<td>src/Vino.AgentHost/Codex/CodexAppServerClient.cs</td>
+<td>334cb47a2984ac18</td>
+</tr>
+<tr>
+<td>src/Vino.AgentHost/Claude/ClaudeCliSessionClient.cs</td>
+<td>100019989182f9cd</td>
+</tr>
+</tbody>
+</table></div>
+<h3>2.3 FigCAD — 뷰어와 입력 장치의 분리</h3>
+<p>대상은 사용자 GitHub의 <a href="https://github.com/hongikarchi/LFTH_Figcad">LFTH_Figcad</a>이며, 조사 기준 커밋은 <code>73a0d0457f8aa8f21fc910f4081c89280472fe41</code>다.</p>
+<p><strong>코드 확인:</strong> <a href="https://github.com/hongikarchi/LFTH_Figcad/blob/73a0d0457f8aa8f21fc910f4081c89280472fe41/apps/web/src/input/InputManager.ts">InputManager.ts</a>는 포인터 입력을 도구/카메라로 분리하고 pointercancel을 취소로 처리한다. <a href="https://github.com/hongikarchi/LFTH_Figcad/blob/73a0d0457f8aa8f21fc910f4081c89280472fe41/apps/web/src/input/gestures.ts">gestures.ts</a>는 터치 상태와 펜 전환 시 초기화를 관리한다. <a href="https://github.com/hongikarchi/LFTH_Figcad/blob/73a0d0457f8aa8f21fc910f4081c89280472fe41/apps/web/src/engine/SceneManager.ts">SceneManager.ts</a>는 객체 ID별 표시 항목과 파생 형상 캐시를 사용한다. <a href="https://github.com/hongikarchi/LFTH_Figcad/blob/73a0d0457f8aa8f21fc910f4081c89280472fe41/apps/web/package.json">package.json</a>에는 React·TypeScript·Three.js·Yjs 등이 있다.</p>
+<p><strong>VIDE 적용 판단:</strong> 입력 제어기·카메라·도구·렌더링 수명 분리, 객체 참조와 표시 형상의 대응, 취소 시 미완료 선을 확정하지 않는 패턴을 참고한다. 읽은 코드에는 문서 전체에 등록하는 이벤트도 있으므로 직접 재사용 전 해제·중복 등록·재마운트 동작을 점검한다. 기존 프로젝트의 완성도나 iPad 실기기 통과는 이번 조사로 보증하지 않는다.</p>
+<p><strong>현재 채택하지 않는 것:</strong> FigCAD의 Yjs 기반 모델 공동편집과 파라미터 정본을 그대로 도입하지 않는다. VIDE는 원본 CAD 문서와 게시본의 권한이 다르고 첫 웹은 검토 경로다. 건축 객체의 전체 자체 편집 커널도 이번 참고를 이유로 추가하지 않는다.</p>
+<h3>2.4 논현동 규모검토 — 객체·수량·근거·발표의 연결</h3>
+<p>로컬 <code>C:/Users/user/Desktop/논현동 164 규모검토</code>의 Architecture.md, 검토엔진 package.json, <code>src/templates/presentation.js</code>, <code>analysis-evidence.js</code>, <code>scripts/bridge_verify.js</code> 및 모델 템플릿의 관련 부분을 확인했다. 프로젝트 원자료·모델·계산값은 VIDE 저장소에 복사하지 않는다.</p>
+<p><strong>확인:</strong> Architecture.md는 Rhino 마스터·분석 정의·웹 전달본을 구분하고 명시적 파일 동기화와 미완료 역방향 연결을 설명한다. bridge_verify에는 BuildingId와 웹/Rhino 속성을 대조하는 코드가 있다. 검토엔진은 Node·rhino3dm·earcut·polygon-clipping을 사용한다. 모델 템플릿은 현재 2,284행이어서 통째 재사용하면 화면·프로젝트 규칙이 함께 들어올 위험이 있다.</p>
+<p><strong>VIDE 적용 판단:</strong> 객체 선택↔분석값↔출처↔장면의 연결을 SPEC-03 구현에 참고한다. 호스트 추출에 빠진 범위를 오래된 표시 캐시로 가리지 않는 검증을 적용한다. 프로젝트 전용 법규·경제성 계산·대안 생성은 범용 기능으로 간주하지 않는다. 실제 수치 대신 합성 시험으로 조인·단위·누락을 먼저 검사한다.</p>
+<h3>2.5 Speckle — AEC 뷰어와 교환 계층</h3>
+<p><strong>문서 확인:</strong> Viewer는 loader/converter를 통해 입력을 WorldTree와 표시 형상으로 변환하고, 확장과 객체 속성 조회·수명 관리 API를 제공한다. <a href="https://docs.speckle.systems/developers/viewer/loaders">Loaders</a>, <a href="https://docs.speckle.systems/developers/viewer/viewer-api">Viewer API</a>.</p>
+<p><strong>VIDE 적용 판단:</strong> Three.js 직접 구성과 Speckle Viewer를 T-015의 두 후보로 비교한다. 전자는 공간 입력·제한된 호스트 형상에 맞춘 단순 경계, 후자는 객체 탐색·AEC 표시 기능 활용을 기대한다. Speckle을 쓰더라도 로컬 경로에 외부 서버·계정을 필수로 만드는 구성을 전제하지 않는다. 실제 로컬 자산 loader와 후보 갱신·선택 대응이 시험 대상이다.</p>
+<p>전체 Speckle 서버·권한·버전 체계를 그대로 복제하지 않는다. <a href="https://github.com/specklesystems/speckle-server/blob/main/LICENSE">저장소 LICENSE</a>는 일부 서버 디렉터리의 별도 조건을 구분한다. 코드/패키지 채택 때 대상 버전과 해당 경로의 라이선스·고지·종속성을 확인한다. 이번에는 패키지 설치나 자체 호스팅 가능성 검수를 하지 않았다.</p>
+<h3>2.6 food4Rhino와 Rhino AI 생태계</h3>
+<div aria-label="PLAN 표 2" class="table-scroll" role="region" tabindex="0"><table>
+<thead>
+<tr>
+<th>대상·출처</th>
+<th>확인된 공개 설명</th>
+<th>VIDE에 참고할 것 / 이번 조사 한계</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><a href="https://www.food4rhino.com/en/app/rhinomcp">RhinoMCP 등록 페이지</a>, <a href="https://github.com/jingcheng-chen/rhinomcp">제작자 저장소</a></td>
+<td>Python MCP 서버→TCP→C# 플러그인, 메인 스레드 실행, JSON Schema. README는 인증 없는 loopback과 임의 명령/코드 실행도 명시</td>
+<td>도구 분류·프로토콜·실행 문맥을 참고. 인증·대상 고정·후보 적용을 보장하는 VIDE 경계의 대체물로 바로 연결하지 않음</td>
+</tr>
+<tr>
+<td><a href="https://www.raven.build/en/help/context-profiles">Raven 제작자 문서</a></td>
+<td>지침·설명·재사용 GH 정의를 context profile로 묶음</td>
+<td>신뢰 확장의 설명/입출력과 재사용 가능한 작업 지식. .ghx 전체 기능·클라우드 서비스를 MVP 필수로 늘리지 않음</td>
+</tr>
+<tr>
+<td><a href="https://blog.fr.rhino3d.com/2026/02/ant-votre-nouvel-assistant-dia-pour.html">Ant의 McNeel 소개</a></td>
+<td>선택한 컴포넌트·배선을 구조화해 AI에 전달하고 GH 작업을 수행한다고 설명</td>
+<td>현재 작업을 구조화해 전달하는 문맥 구성. 소개 문서 확인이며 내부 구현·성공률은 미검증</td>
+</tr>
+<tr>
+<td><a href="https://github.com/mcneel/RhinoAI">McNeel RhinoAI</a>, <a href="https://mcneel.github.io/RhinoAI/">공식 프로젝트 문서</a></td>
+<td>Rhino에서 AI가 생성·편집하는 MCP 프로젝트</td>
+<td>제작사 측 도구 구조도 비교. 조사 당시 기본 브랜치는 rhino-9.x이므로 설치 Rhino 8.34 지원을 추정하지 않음</td>
+</tr>
+</tbody>
+</table></div>
+<p>Raven의 food4Rhino 상세 페이지는 도구에서 405로 열리지 않아 제작자 문서와 McNeel 소개로 보완했다. 전체 플러그인 시장의 전수 조사나 설치 검증은 아니며, 실제 네이티브 편집·구조화 문맥·재사용 패턴과 가까운 대상을 선별했다.</p>
+</section><section class="doc-section" id="plan-01-reference-research-section-3"><h2><span aria-hidden="true" class="section-num">03 /</span> 구독 연결과 모델 연속성의 구현 방향</h2>
+<h3>3.1 계정은 공식 실행 도구가 소유</h3>
+<p><strong>OpenAI 문서 확인:</strong> Codex App Server는 ChatGPT managed 로그인, 계정 조회·로그인 완료 알림·사용 한도 조회를 제공한다. <a href="https://learn.chatgpt.com/docs/app-server">공식 App Server 문서</a>.</p>
+<p><strong>채택 후보:</strong> 현재 <code>codex exec</code> 기반 어댑터는 보존하고 T-004에서 app-server를 비교한다. app-server는 후속 비교 후보로만 남긴다. 첫 통합은 ADR-013의 단발 호출이며, 전환에는 설치 버전의 스키마·도구 차단·복구 검증과 ADR 변경이 필요하다. VIDE가 OAuth 토큰을 추출해 별도 API에 넣는 방식을 사용하지 않는다.</p>
+<p><strong>Anthropic 문서 확인:</strong> 공식 지침은 제품에서 수정하지 않은 Claude Code를 실행하는 조건과, 사용자가 그 도구에서 자기 계정으로 로그인하는 경로를 설명한다. 자체 앱이 Claude.ai 자격 증명을 수집하거나 대신 요청을 중계하는 방식과 구분한다. <a href="https://code.claude.com/docs/en/legal-and-compliance">공식 이용·인증 지침</a>. 프로그램 실행은 <a href="https://code.claude.com/docs/en/headless">공식 headless 문서</a>를 확인했다.</p>
+<p><strong>적용 판단:</strong> Claude는 공식 바이너리의 로그인·단발 호출·스트림을 사용하고 지원 인증 방식을 임의 제거하지 않는다. VIDE의 기본 연결은 사용자 지시대로 구독 경로를 우선하되 한도와 과금은 해당 계정 조건에 따른다. 기술 응답 성공과 배포 조건 충족을 구분하고 OQ-09/배포 티켓에서 다시 확인한다. Aside의 로그인 화면을 보고 비공개 인증 구현을 추정하지 않는다.</p>
+<h3>3.2 공급자와 독립된 작업 기록</h3>
+<p>다음은 Aside 내부 구현 설명이 아니라, 기존 SPEC·ADR-013을 구현하기 위한 <strong>VIDE 설계 방향</strong>이다.</p>
+<ul>
+<li>제품 Task/Run·입력 revision·대상·확인된 결과는 로컬 기록에 보존한다. 공급자 세션 ID는 그 기록에 연결된 실행 정보다.</li>
+<li>현재는 같은 공급자의 재개도 저장된 제품 문맥에서 새 호출로 시작한다. 세션 재사용은 후속 후보이며 다른 공급자로의 인계와 구분한다. 모델/공급자 전환은 명시적 선택을 유지하며 자동 대체·자동 API 과금 전환은 하지 않는다.</li>
+<li>공급자가 바뀌면 허용된 원문/핀/선·현재 조건·완료 결과·남은 작업·도구 능력의 문맥 묶음을 구성한다. 과거 전체 대화를 무조건 복제하거나 비공개 추론을 옮기는 경로를 전제하지 않는다.</li>
+<li>이미지·도구·구조화 출력·취소·한도 관측의 지원 차이는 어댑터 능력으로 처리한다. 빠진 입력이나 요약 손실을 숨겨 연속성을 가장하지 않는다.</li>
+<li>진행 중 호출·쓰기 결과가 미확정이면 기존 SPEC의 중단/불명확 계약을 먼저 따른다. 모델을 바꿨다는 이유로 같은 호스트 쓰기를 다시 보내지 않는다.</li>
+</ul>
+<p>세부 스키마는 마스터 PLAN §4, 사용자 동작의 추가/변경이 필요하면 SPEC-02·05가 소유한다. 공급자 간 인계 품질을 ‘무손실’로 약속하지 않고 §5의 동일 과업으로 검증한다.</p>
+</section><section class="doc-section" id="plan-01-reference-research-section-4"><h2><span aria-hidden="true" class="section-num">04 /</span> 기술 선택 비교와 현재 결론</h2>
+<div aria-label="PLAN 표 3" class="table-scroll" role="region" tabindex="0"><table>
+<thead>
+<tr>
+<th>책임</th>
+<th>우선 검토 방향</th>
+<th>비교/유지할 대안</th>
+<th>결정 시점</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>프런트 shell·패널</td>
+<td>기존 ESM/CSS 유지. 책임별 모듈과 상태/gateway 분리</td>
+<td>현재 ESM/CSS 모듈 유지. 기존 코어·API 재작성 없음</td>
+<td>2026-09-20 유지 결정; 프런트 승인 후 재선정하지 않음</td>
+</tr>
+<tr>
+<td>뷰어·공간 입력</td>
+<td>Three.js 직접 구성 + 별도 입력 제어기</td>
+<td>Speckle Viewer + 로컬 loader/확장</td>
+<td>T-015의 좌표·선택·후보·수명 검증</td>
+</tr>
+<tr>
+<td>로컬 기록·실행 제어</td>
+<td>기존 Node/SQLite와 application/core 경계 유지</td>
+<td>Vino C# 전체 이식은 현재 근거 부족</td>
+<td>T-013에서 기존 데이터 보존·계약 검증</td>
+</tr>
+<tr>
+<td>AI 연결</td>
+<td>공급자 어댑터 + 제품 문맥 기록; Codex app-server 비교, Claude 공식 CLI</td>
+<td>기존 codex exec 경로 유지 가능</td>
+<td>T-004·018</td>
+</tr>
+<tr>
+<td>호스트</td>
+<td>설치본별 C# 어댑터, 대상 고정·결과 재조회</td>
+<td>MCP 프로젝트의 부분 패턴만 검토</td>
+<td>T-003·005·006</td>
+</tr>
+<tr>
+<td>데이터/웹 검토</td>
+<td>객체 참조·출처·불변 게시본과 의견 경계 유지</td>
+<td>Speckle 전체 플랫폼·FigCAD CRDT는 현재 선행 의존성으로 채택하지 않음</td>
+<td>T-007·009·017</td>
+</tr>
+</tbody>
+</table></div>
+<p>라이브러리 버전은 참고 프로젝트의 숫자를 복사하지 않고 채택 시 호환성 확인 후 잠금 파일에 고정한다. 연구 결과는 현재 코드를 모두 폐기할 근거가 아니며, 기존 구현이 있다는 이유로 이후 UI 스택을 무조건 고정할 근거도 아니다.</p>
+</section><section class="doc-section" id="plan-01-reference-research-section-5"><h2><span aria-hidden="true" class="section-num">05 /</span> 채택 전에 수행할 작은 비교와 종료 조건</h2>
+<p>새 개발 티켓을 중복 발급하지 않고 마스터의 기존 티켓에 아래 조사 결과를 연결한다. 이번 문서 조사에서 아래 실험을 실행한 것은 아니다.</p>
+<div aria-label="PLAN 표 4" class="table-scroll" role="region" tabindex="0"><table>
+<thead>
+<tr>
+<th>티켓</th>
+<th>비교 시험</th>
+<th>통과/선택 근거</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>T-014·016</td>
+<td>선택한 ESM에서 좌/우 패널·초안·작업 카드 검증</td>
+<td>초안·포커스·뷰어 유지, 이벤트 해제, 기능별 변경 범위, 빌드/배포 추가 비용. 현재 CSP(script/style/connect self), Host/Origin, 정적 MIME·경로 검증. inline script/style·eval·CDN·별도 HMR origin을 요구하지 않음</td>
+</tr>
+<tr>
+<td>T-015</td>
+<td>동일한 호스트 추출 자료를 Three.js/Speckle로 표시</td>
+<td>문서/객체 참조, 단위·축·작업평면, 선/메시 선택, 후보 교체, 여러 번 로드/해제, 펜 취소. 입력 규모·버전·시간·메모리 관측 기록; 성능 합격선은 기존 OQ를 따름</td>
+</tr>
+<tr>
+<td>T-004·018</td>
+<td>동일 작업을 Codex/Claude에서 시작·중단·재개하고 명시적으로 공급자 변경</td>
+<td>계정 상태, 전송 범위, 지원 입력 차이, 기존 지시 보존, 한도 오류, 중복 쓰기 없음. 실제 네이티브 결과와 비용/지연을 구분 기록</td>
+</tr>
+<tr>
+<td>T-007·017</td>
+<td>합성 객체↔표↔출처↔게시본 연결</td>
+<td>같은 nativeId의 다른 문서, 누락 추출, 단위 변경, 오래된 결과가 현재 값으로 보이지 않음</td>
+</tr>
+<tr>
+<td>T-003·005·006</td>
+<td>참고 어댑터 패턴을 설치 호스트의 작은 동작에 적용</td>
+<td>문서 대상 고정, 요구 실행 문맥, 후보 격리·직접 수정 보존·저장/재열기. 참조 프로젝트 실행 성공을 VIDE 통과로 대체하지 않음</td>
+</tr>
+</tbody>
+</table></div>
+<p>각 비교는 동일 과업과 판단표를 먼저 정하고, 필요한 조건을 충족하면 선택 근거·버린 대안·미시험을 PLAN/중요 ADR에 남겨 종료한다. 증거가 부족하면 막힌 조건과 대체 경로를 적고 독립 작업을 계속한다. 참고 프로젝트 전체를 복제하거나 기술 이름을 늘리는 일을 연구 완료 기준으로 삼지 않는다.</p>
+<p>직접 코드 채택 시 원본 경로·커밋·라이선스/고지·적용 범위·회귀 검증을 기록한다. FigCAD는 이번 조회에서 라이선스 선언을 확인하지 못했으므로 사용자 소유 코드와 포함된 외부 코드의 권리를 구분해 확인한다. 비공개 로컬 자료·자격 증명은 공개 저장소에 옮기지 않는다.</p>
+</section><section class="doc-section" id="plan-01-reference-research-section-6"><h2><span aria-hidden="true" class="section-num">06 /</span> 이번 구현 기준</h2>
+<p>ESM 유지 결정은 기존 코드와 같은 보안·배포 경로, 신규 의존성 없이 검수 가능하다는 판단이다. React와 성능/유지보수 비교를 실행한 결과로 포장하지 않는다. 복잡도 증거로 변경이 필요하면 ADR과 영향 화면의 재검수를 거친다.</p>
+<p>AI 첫 통합은 ADR-013의 도구 없는 단발 CLI 호출을 VIDE가 반복하는 기준으로 고정한다. app-server·세션 재개는 후속 비교 후보이며 현재 채택이 아니다. UI 승인 이후의 연결 방식 변경도 사용자 경험과 보안 계약을 유지해야 한다.</p>
+</section><section class="doc-section" id="plan-01-reference-research-section-7"><h2><span aria-hidden="true" class="section-num">07 /</span> 입력·3D 구현 참고의 추가 확인</h2>
+<p>사용자가 제공한 Aside 화면의 우측 하단 작성기/문맥 칩/간결한 제어 배치를 참고했다. 내부 구현을 추정하지 않았다. 로컬 Vino의 <code>ui/panel/src/components/ChatPane.tsx</code>에서 composer-rail, 선택 핀·첨부와 초안 보존, 모델 목록에 따른 effort, permission 선택을 확인했다. <code>ui/panel/src/api/mock.ts</code>의 모델은 예시 목록이므로 실제 사용 가능 모델의 근거로 쓰지 않는다.</p>
+<p>FigCAD의 조사 기준 커밋에서 <a href="https://github.com/hongikarchi/LFTH_Figcad/blob/73a0d0457f8aa8f21fc910f4081c89280472fe41/apps/web/src/engine/SceneManager.ts">SceneManager</a>의 객체별 mesh/edge와 dispose, <a href="https://github.com/hongikarchi/LFTH_Figcad/blob/73a0d0457f8aa8f21fc910f4081c89280472fe41/apps/web/src/input/InputManager.ts">InputManager</a>의 카메라/도구 입력 분리·pointercancel 처리를 다시 읽었다. 직접 복제/이식 없이 같은 책임 분리를 적용했다. 기본 3D 렌더링은 <a href="https://threejs.org/docs/">Three.js</a>의 PerspectiveCamera/WebGLRenderer/Raycaster와 OrbitControls로 구현한다. FigCAD 전체 기능의 재현이나 호환성 검증을 뜻하지 않는다.</p>
+</section><section class="doc-section" id="plan-01-reference-research-section-8"><h2><span aria-hidden="true" class="section-num">08 /</span> 논현동 model.html 뷰포트 추가 참고</h2>
+<p>사용자가 지정한 로컬 <code>C:/Users/user/Desktop/논현동 164 규모검토/50_보고서작업/산출물/model.html</code>의 카메라/프레이밍/레이아웃 코드를 읽었다. 2236~2237행의 원근/정투영 카메라 분리, 3686행 fitTo의 화면 축별 범위 맞춤, 3736행 setOrtho, 4193행 setCam의 종횡비별 정투영 행렬 갱신, 캔버스 CSS 크기와 버퍼 크기 분리를 참고했다. 내장 모델 JSON·프로젝트 수치·보고서 내용을 복사하거나 실행하지 않았다. 여기서는 카메라 전환·전체 보기·리사이즈 원리만 새 구현에 반영했다. 보고서용 저장 뷰·분석·발표 오버레이는 이번 범위에 추가하지 않았다.</p>
+</section><footer class="doc-footer"><span>VIDE / PLANNING DOCUMENTS</span><span>문서 열람용 · 실제 CAD/BIM 지원은 구현·검증 후 선언</span></footer></article></main></div>
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+<script id="source-data" type="application/json">{"plan-01-reference-research":{"label":"선행 프로젝트 조사와 구현 선택 근거","file":"PLAN-01-reference-research.md","markdown":"---\nid: PLAN-01\ntitle: 선행 프로젝트 조사와 구현 선택 근거\nstatus: review\nversion: 0.4\nupdated: 2026-09-20\nowner: agent:codex\nrelated: [PLAN, DESIGN, SPEC-01, SPEC-02, SPEC-03, SPEC-04, SPEC-05, ADR-013]\n---\n\n# 선행 프로젝트 조사와 구현 선택 근거\n\n## 1. 목적과 조사 수준\n\n사용자는 Aside의 접을 수 있는 좌우 패널·구독 계정 연결·여러 모델을 이어 쓰는 경험과 Vino·FigCAD·논현동 규모검토·Speckle·food4Rhino AI 플러그인을 참고하도록 요청했다. 이 문서는 마스터 PLAN §3의 조사·대안 비교를 분리한 것이다. 제품 범위는 PRD, 동작은 SPEC, 화면 표현은 Design이 소유한다.\n\n조사일은 2026-09-20이다. 아래에서 **문서 확인**, **코드 확인**, **VIDE 적용 판단**, **미검증**을 구분한다. 공개 소개·다운로드 수·기존 코드의 존재를 성공률이나 호환성 실증으로 취급하지 않는다. 이번에는 참고 프로젝트를 실행·변경하거나 코드를 복사하지 않았고 제품 의존성을 설치하지 않았다. 실제 채택은 §5의 작은 비교 시험과 해당 티켓에서 확정한다.\n\n## 2. 사례별 확인과 적용 범위\n\n### 2.1 Aside — 작업 공간과 계정 연결 경험\n\n**문서 확인:** 공식 도움말은 사이드바 토글, 분할 탭, 현재 페이지를 첨부한 사이드 패널과 페이지별 초안 보존을 설명한다. 모델 설정은 자체 제공·구독·API 연결을 구분하고, 지원 구독의 OAuth 로그인과 사용량 표시를 안내한다. [브라우저 조작](https://docs.aside.com/help/browser-basics), [사이드 패널](https://docs.aside.com/help/side-panel), [AI 공급자 설정](https://docs.aside.com/help/ai).\n\n**VIDE 적용 판단:** 중앙 모델을 유지하면서 좌측 탐색·우측 작업 패널을 독립적으로 접고 복귀시키는 경험을 채택한다. 현재 대상과 입력 문맥을 가까이 보여 주고 계정 연결과 모델 선택을 분리한다. 구체 표현은 Design §03에 둔다. Aside의 사이드바 단축키 Ctrl+S는 CAD 저장과 충돌하므로 그대로 복사하지 않는다.\n\n**미검증:** 공개 도움말에서 내부 UI 프레임워크·토큰 저장 구현·공급자 간 문맥 이전 알고리즘은 확인되지 않았다. 사용자 관찰인 ‘부드러운 모델 전환’을 특정 내부 기술의 증거로 바꾸지 않는다. Aside의 인증 방식이 VIDE에도 그대로 허용된다고 가정하지 않고 §3의 공급자 공식 경로를 사용한다.\n\n### 2.2 Vino — 공급자 어댑터와 검증된 변경\n\n로컬 `C:/Users/user/Desktop/Vino`의 README·docs/architecture.md·ui/panel/package.json과 아래 코드를 읽었다. 공개 저장소는 [hongikarchi/Vino](https://github.com/hongikarchi/Vino)다. 로컬 작업본과 원격 HEAD가 같다고 검증한 것은 아니다.\n\n**코드 확인:** `IAgentSessionClient`가 공급자 이벤트·시작·재개·중단을 추상화한다. Codex 클라이언트는 app-server의 thread/turn 요청을, Claude 클라이언트는 stream-json과 세션 재개를 사용한다. 패널 의존성은 React·TypeScript·Vite다. 아키텍처 문서는 broker의 대상/지문 검사·단일 쓰기·사후 확인을 설명한다. 이번에는 broker 전체 경로를 실행 검증하지 않았다.\n\n**VIDE 적용 판단:** 공급자 이벤트를 제품 공통 이벤트로 정규화하고, 모델 응답과 원본 변경 성공을 분리하는 패턴을 참고한다. 다만 Vino의 Rhino 중심 세션/문서 수명, C# 호스트 프로세스 구조, 공급자별 고정 세션을 VIDE의 복수 호스트·문서 구조에 그대로 이식하지 않는다. 현재 Node 제어 계층을 대체할 근거는 없다.\n\n추적 가능한 로컬 파일 SHA-256 앞 16자리:\n\n| 파일 | 지문 |\n|---|---|\n| src/Vino.AgentHost/Codex/IAgentSessionClient.cs | 5e8a0b6247f5f3b9 |\n| src/Vino.AgentHost/Codex/CodexAppServerClient.cs | 334cb47a2984ac18 |\n| src/Vino.AgentHost/Claude/ClaudeCliSessionClient.cs | 100019989182f9cd |\n\n### 2.3 FigCAD — 뷰어와 입력 장치의 분리\n\n대상은 사용자 GitHub의 [LFTH_Figcad](https://github.com/hongikarchi/LFTH_Figcad)이며, 조사 기준 커밋은 `73a0d0457f8aa8f21fc910f4081c89280472fe41`다.\n\n**코드 확인:** [InputManager.ts](https://github.com/hongikarchi/LFTH_Figcad/blob/73a0d0457f8aa8f21fc910f4081c89280472fe41/apps/web/src/input/InputManager.ts)는 포인터 입력을 도구/카메라로 분리하고 pointercancel을 취소로 처리한다. [gestures.ts](https://github.com/hongikarchi/LFTH_Figcad/blob/73a0d0457f8aa8f21fc910f4081c89280472fe41/apps/web/src/input/gestures.ts)는 터치 상태와 펜 전환 시 초기화를 관리한다. [SceneManager.ts](https://github.com/hongikarchi/LFTH_Figcad/blob/73a0d0457f8aa8f21fc910f4081c89280472fe41/apps/web/src/engine/SceneManager.ts)는 객체 ID별 표시 항목과 파생 형상 캐시를 사용한다. [package.json](https://github.com/hongikarchi/LFTH_Figcad/blob/73a0d0457f8aa8f21fc910f4081c89280472fe41/apps/web/package.json)에는 React·TypeScript·Three.js·Yjs 등이 있다.\n\n**VIDE 적용 판단:** 입력 제어기·카메라·도구·렌더링 수명 분리, 객체 참조와 표시 형상의 대응, 취소 시 미완료 선을 확정하지 않는 패턴을 참고한다. 읽은 코드에는 문서 전체에 등록하는 이벤트도 있으므로 직접 재사용 전 해제·중복 등록·재마운트 동작을 점검한다. 기존 프로젝트의 완성도나 iPad 실기기 통과는 이번 조사로 보증하지 않는다.\n\n**현재 채택하지 않는 것:** FigCAD의 Yjs 기반 모델 공동편집과 파라미터 정본을 그대로 도입하지 않는다. VIDE는 원본 CAD 문서와 게시본의 권한이 다르고 첫 웹은 검토 경로다. 건축 객체의 전체 자체 편집 커널도 이번 참고를 이유로 추가하지 않는다.\n\n### 2.4 논현동 규모검토 — 객체·수량·근거·발표의 연결\n\n로컬 `C:/Users/user/Desktop/논현동 164 규모검토`의 Architecture.md, 검토엔진 package.json, `src/templates/presentation.js`, `analysis-evidence.js`, `scripts/bridge_verify.js` 및 모델 템플릿의 관련 부분을 확인했다. 프로젝트 원자료·모델·계산값은 VIDE 저장소에 복사하지 않는다.\n\n**확인:** Architecture.md는 Rhino 마스터·분석 정의·웹 전달본을 구분하고 명시적 파일 동기화와 미완료 역방향 연결을 설명한다. bridge_verify에는 BuildingId와 웹/Rhino 속성을 대조하는 코드가 있다. 검토엔진은 Node·rhino3dm·earcut·polygon-clipping을 사용한다. 모델 템플릿은 현재 2,284행이어서 통째 재사용하면 화면·프로젝트 규칙이 함께 들어올 위험이 있다.\n\n**VIDE 적용 판단:** 객체 선택↔분석값↔출처↔장면의 연결을 SPEC-03 구현에 참고한다. 호스트 추출에 빠진 범위를 오래된 표시 캐시로 가리지 않는 검증을 적용한다. 프로젝트 전용 법규·경제성 계산·대안 생성은 범용 기능으로 간주하지 않는다. 실제 수치 대신 합성 시험으로 조인·단위·누락을 먼저 검사한다.\n\n### 2.5 Speckle — AEC 뷰어와 교환 계층\n\n**문서 확인:** Viewer는 loader/converter를 통해 입력을 WorldTree와 표시 형상으로 변환하고, 확장과 객체 속성 조회·수명 관리 API를 제공한다. [Loaders](https://docs.speckle.systems/developers/viewer/loaders), [Viewer API](https://docs.speckle.systems/developers/viewer/viewer-api).\n\n**VIDE 적용 판단:** Three.js 직접 구성과 Speckle Viewer를 T-015의 두 후보로 비교한다. 전자는 공간 입력·제한된 호스트 형상에 맞춘 단순 경계, 후자는 객체 탐색·AEC 표시 기능 활용을 기대한다. Speckle을 쓰더라도 로컬 경로에 외부 서버·계정을 필수로 만드는 구성을 전제하지 않는다. 실제 로컬 자산 loader와 후보 갱신·선택 대응이 시험 대상이다.\n\n전체 Speckle 서버·권한·버전 체계를 그대로 복제하지 않는다. [저장소 LICENSE](https://github.com/specklesystems/speckle-server/blob/main/LICENSE)는 일부 서버 디렉터리의 별도 조건을 구분한다. 코드/패키지 채택 때 대상 버전과 해당 경로의 라이선스·고지·종속성을 확인한다. 이번에는 패키지 설치나 자체 호스팅 가능성 검수를 하지 않았다.\n\n### 2.6 food4Rhino와 Rhino AI 생태계\n\n| 대상·출처 | 확인된 공개 설명 | VIDE에 참고할 것 / 이번 조사 한계 |\n|---|---|---|\n| [RhinoMCP 등록 페이지](https://www.food4rhino.com/en/app/rhinomcp), [제작자 저장소](https://github.com/jingcheng-chen/rhinomcp) | Python MCP 서버→TCP→C# 플러그인, 메인 스레드 실행, JSON Schema. README는 인증 없는 loopback과 임의 명령/코드 실행도 명시 | 도구 분류·프로토콜·실행 문맥을 참고. 인증·대상 고정·후보 적용을 보장하는 VIDE 경계의 대체물로 바로 연결하지 않음 |\n| [Raven 제작자 문서](https://www.raven.build/en/help/context-profiles) | 지침·설명·재사용 GH 정의를 context profile로 묶음 | 신뢰 확장의 설명/입출력과 재사용 가능한 작업 지식. .ghx 전체 기능·클라우드 서비스를 MVP 필수로 늘리지 않음 |\n| [Ant의 McNeel 소개](https://blog.fr.rhino3d.com/2026/02/ant-votre-nouvel-assistant-dia-pour.html) | 선택한 컴포넌트·배선을 구조화해 AI에 전달하고 GH 작업을 수행한다고 설명 | 현재 작업을 구조화해 전달하는 문맥 구성. 소개 문서 확인이며 내부 구현·성공률은 미검증 |\n| [McNeel RhinoAI](https://github.com/mcneel/RhinoAI), [공식 프로젝트 문서](https://mcneel.github.io/RhinoAI/) | Rhino에서 AI가 생성·편집하는 MCP 프로젝트 | 제작사 측 도구 구조도 비교. 조사 당시 기본 브랜치는 rhino-9.x이므로 설치 Rhino 8.34 지원을 추정하지 않음 |\n\nRaven의 food4Rhino 상세 페이지는 도구에서 405로 열리지 않아 제작자 문서와 McNeel 소개로 보완했다. 전체 플러그인 시장의 전수 조사나 설치 검증은 아니며, 실제 네이티브 편집·구조화 문맥·재사용 패턴과 가까운 대상을 선별했다.\n\n## 3. 구독 연결과 모델 연속성의 구현 방향\n\n### 3.1 계정은 공식 실행 도구가 소유\n\n**OpenAI 문서 확인:** Codex App Server는 ChatGPT managed 로그인, 계정 조회·로그인 완료 알림·사용 한도 조회를 제공한다. [공식 App Server 문서](https://learn.chatgpt.com/docs/app-server).\n\n**채택 후보:** 현재 `codex exec` 기반 어댑터는 보존하고 T-004에서 app-server를 비교한다. app-server는 후속 비교 후보로만 남긴다. 첫 통합은 ADR-013의 단발 호출이며, 전환에는 설치 버전의 스키마·도구 차단·복구 검증과 ADR 변경이 필요하다. VIDE가 OAuth 토큰을 추출해 별도 API에 넣는 방식을 사용하지 않는다.\n\n**Anthropic 문서 확인:** 공식 지침은 제품에서 수정하지 않은 Claude Code를 실행하는 조건과, 사용자가 그 도구에서 자기 계정으로 로그인하는 경로를 설명한다. 자체 앱이 Claude.ai 자격 증명을 수집하거나 대신 요청을 중계하는 방식과 구분한다. [공식 이용·인증 지침](https://code.claude.com/docs/en/legal-and-compliance). 프로그램 실행은 [공식 headless 문서](https://code.claude.com/docs/en/headless)를 확인했다.\n\n**적용 판단:** Claude는 공식 바이너리의 로그인·단발 호출·스트림을 사용하고 지원 인증 방식을 임의 제거하지 않는다. VIDE의 기본 연결은 사용자 지시대로 구독 경로를 우선하되 한도와 과금은 해당 계정 조건에 따른다. 기술 응답 성공과 배포 조건 충족을 구분하고 OQ-09/배포 티켓에서 다시 확인한다. Aside의 로그인 화면을 보고 비공개 인증 구현을 추정하지 않는다.\n\n### 3.2 공급자와 독립된 작업 기록\n\n다음은 Aside 내부 구현 설명이 아니라, 기존 SPEC·ADR-013을 구현하기 위한 **VIDE 설계 방향**이다.\n\n- 제품 Task/Run·입력 revision·대상·확인된 결과는 로컬 기록에 보존한다. 공급자 세션 ID는 그 기록에 연결된 실행 정보다.\n- 현재는 같은 공급자의 재개도 저장된 제품 문맥에서 새 호출로 시작한다. 세션 재사용은 후속 후보이며 다른 공급자로의 인계와 구분한다. 모델/공급자 전환은 명시적 선택을 유지하며 자동 대체·자동 API 과금 전환은 하지 않는다.\n- 공급자가 바뀌면 허용된 원문/핀/선·현재 조건·완료 결과·남은 작업·도구 능력의 문맥 묶음을 구성한다. 과거 전체 대화를 무조건 복제하거나 비공개 추론을 옮기는 경로를 전제하지 않는다.\n- 이미지·도구·구조화 출력·취소·한도 관측의 지원 차이는 어댑터 능력으로 처리한다. 빠진 입력이나 요약 손실을 숨겨 연속성을 가장하지 않는다.\n- 진행 중 호출·쓰기 결과가 미확정이면 기존 SPEC의 중단/불명확 계약을 먼저 따른다. 모델을 바꿨다는 이유로 같은 호스트 쓰기를 다시 보내지 않는다.\n\n세부 스키마는 마스터 PLAN §4, 사용자 동작의 추가/변경이 필요하면 SPEC-02·05가 소유한다. 공급자 간 인계 품질을 ‘무손실’로 약속하지 않고 §5의 동일 과업으로 검증한다.\n\n## 4. 기술 선택 비교와 현재 결론\n\n| 책임 | 우선 검토 방향 | 비교/유지할 대안 | 결정 시점 |\n|---|---|---|---|\n| 프런트 shell·패널 | 기존 ESM/CSS 유지. 책임별 모듈과 상태/gateway 분리 | 현재 ESM/CSS 모듈 유지. 기존 코어·API 재작성 없음 | 2026-09-20 유지 결정; 프런트 승인 후 재선정하지 않음 |\n| 뷰어·공간 입력 | Three.js 직접 구성 + 별도 입력 제어기 | Speckle Viewer + 로컬 loader/확장 | T-015의 좌표·선택·후보·수명 검증 |\n| 로컬 기록·실행 제어 | 기존 Node/SQLite와 application/core 경계 유지 | Vino C# 전체 이식은 현재 근거 부족 | T-013에서 기존 데이터 보존·계약 검증 |\n| AI 연결 | 공급자 어댑터 + 제품 문맥 기록; Codex app-server 비교, Claude 공식 CLI | 기존 codex exec 경로 유지 가능 | T-004·018 |\n| 호스트 | 설치본별 C# 어댑터, 대상 고정·결과 재조회 | MCP 프로젝트의 부분 패턴만 검토 | T-003·005·006 |\n| 데이터/웹 검토 | 객체 참조·출처·불변 게시본과 의견 경계 유지 | Speckle 전체 플랫폼·FigCAD CRDT는 현재 선행 의존성으로 채택하지 않음 | T-007·009·017 |\n\n라이브러리 버전은 참고 프로젝트의 숫자를 복사하지 않고 채택 시 호환성 확인 후 잠금 파일에 고정한다. 연구 결과는 현재 코드를 모두 폐기할 근거가 아니며, 기존 구현이 있다는 이유로 이후 UI 스택을 무조건 고정할 근거도 아니다.\n\n## 5. 채택 전에 수행할 작은 비교와 종료 조건\n\n새 개발 티켓을 중복 발급하지 않고 마스터의 기존 티켓에 아래 조사 결과를 연결한다. 이번 문서 조사에서 아래 실험을 실행한 것은 아니다.\n\n| 티켓 | 비교 시험 | 통과/선택 근거 |\n|---|---|---|\n| T-014·016 | 선택한 ESM에서 좌/우 패널·초안·작업 카드 검증 | 초안·포커스·뷰어 유지, 이벤트 해제, 기능별 변경 범위, 빌드/배포 추가 비용. 현재 CSP(script/style/connect self), Host/Origin, 정적 MIME·경로 검증. inline script/style·eval·CDN·별도 HMR origin을 요구하지 않음 |\n| T-015 | 동일한 호스트 추출 자료를 Three.js/Speckle로 표시 | 문서/객체 참조, 단위·축·작업평면, 선/메시 선택, 후보 교체, 여러 번 로드/해제, 펜 취소. 입력 규모·버전·시간·메모리 관측 기록; 성능 합격선은 기존 OQ를 따름 |\n| T-004·018 | 동일 작업을 Codex/Claude에서 시작·중단·재개하고 명시적으로 공급자 변경 | 계정 상태, 전송 범위, 지원 입력 차이, 기존 지시 보존, 한도 오류, 중복 쓰기 없음. 실제 네이티브 결과와 비용/지연을 구분 기록 |\n| T-007·017 | 합성 객체↔표↔출처↔게시본 연결 | 같은 nativeId의 다른 문서, 누락 추출, 단위 변경, 오래된 결과가 현재 값으로 보이지 않음 |\n| T-003·005·006 | 참고 어댑터 패턴을 설치 호스트의 작은 동작에 적용 | 문서 대상 고정, 요구 실행 문맥, 후보 격리·직접 수정 보존·저장/재열기. 참조 프로젝트 실행 성공을 VIDE 통과로 대체하지 않음 |\n\n각 비교는 동일 과업과 판단표를 먼저 정하고, 필요한 조건을 충족하면 선택 근거·버린 대안·미시험을 PLAN/중요 ADR에 남겨 종료한다. 증거가 부족하면 막힌 조건과 대체 경로를 적고 독립 작업을 계속한다. 참고 프로젝트 전체를 복제하거나 기술 이름을 늘리는 일을 연구 완료 기준으로 삼지 않는다.\n\n직접 코드 채택 시 원본 경로·커밋·라이선스/고지·적용 범위·회귀 검증을 기록한다. FigCAD는 이번 조회에서 라이선스 선언을 확인하지 못했으므로 사용자 소유 코드와 포함된 외부 코드의 권리를 구분해 확인한다. 비공개 로컬 자료·자격 증명은 공개 저장소에 옮기지 않는다.\n\n\n## 6. 이번 구현 기준\n\nESM 유지 결정은 기존 코드와 같은 보안·배포 경로, 신규 의존성 없이 검수 가능하다는 판단이다. React와 성능/유지보수 비교를 실행한 결과로 포장하지 않는다. 복잡도 증거로 변경이 필요하면 ADR과 영향 화면의 재검수를 거친다.\n\nAI 첫 통합은 ADR-013의 도구 없는 단발 CLI 호출을 VIDE가 반복하는 기준으로 고정한다. app-server·세션 재개는 후속 비교 후보이며 현재 채택이 아니다. UI 승인 이후의 연결 방식 변경도 사용자 경험과 보안 계약을 유지해야 한다.\n\n\n## 7. 입력·3D 구현 참고의 추가 확인\n\n사용자가 제공한 Aside 화면의 우측 하단 작성기/문맥 칩/간결한 제어 배치를 참고했다. 내부 구현을 추정하지 않았다. 로컬 Vino의 `ui/panel/src/components/ChatPane.tsx`에서 composer-rail, 선택 핀·첨부와 초안 보존, 모델 목록에 따른 effort, permission 선택을 확인했다. `ui/panel/src/api/mock.ts`의 모델은 예시 목록이므로 실제 사용 가능 모델의 근거로 쓰지 않는다.\n\nFigCAD의 조사 기준 커밋에서 [SceneManager](https://github.com/hongikarchi/LFTH_Figcad/blob/73a0d0457f8aa8f21fc910f4081c89280472fe41/apps/web/src/engine/SceneManager.ts)의 객체별 mesh/edge와 dispose, [InputManager](https://github.com/hongikarchi/LFTH_Figcad/blob/73a0d0457f8aa8f21fc910f4081c89280472fe41/apps/web/src/input/InputManager.ts)의 카메라/도구 입력 분리·pointercancel 처리를 다시 읽었다. 직접 복제/이식 없이 같은 책임 분리를 적용했다. 기본 3D 렌더링은 [Three.js](https://threejs.org/docs/)의 PerspectiveCamera/WebGLRenderer/Raycaster와 OrbitControls로 구현한다. FigCAD 전체 기능의 재현이나 호환성 검증을 뜻하지 않는다.\n\n\n## 8. 논현동 model.html 뷰포트 추가 참고\n\n사용자가 지정한 로컬 `C:/Users/user/Desktop/논현동 164 규모검토/50_보고서작업/산출물/model.html`의 카메라/프레이밍/레이아웃 코드를 읽었다. 2236~2237행의 원근/정투영 카메라 분리, 3686행 fitTo의 화면 축별 범위 맞춤, 3736행 setOrtho, 4193행 setCam의 종횡비별 정투영 행렬 갱신, 캔버스 CSS 크기와 버퍼 크기 분리를 참고했다. 내장 모델 JSON·프로젝트 수치·보고서 내용을 복사하거나 실행하지 않았다. 여기서는 카메라 전환·전체 보기·리사이즈 원리만 새 구현에 반영했다. 보고서용 저장 뷰·분석·발표 오버레이는 이번 범위에 추가하지 않았다.\n"}}</script>
+<script id="reader-config" type="application/json">{"initial":"plan-01-reference-research","siteTitle":"VIDE"}</script>
+<script>
+(() => {
+'use strict';
+const sourceData=JSON.parse(document.getElementById('source-data').textContent);
+const config=JSON.parse(document.getElementById('reader-config').textContent);
+const esc=s=>String(s);
+let activeDoc=config.initial;
+let observer;
+let toastTimer;
+const $=s=>document.querySelector(s);
+function notify(message){const t=$('#toast');t.textContent=message;t.hidden=false;clearTimeout(toastTimer);toastTimer=setTimeout(()=>{t.hidden=true;},3400);}
+function renderToc(){const links=$('#toc-links');links.replaceChildren();const nodes=document.querySelectorAll('#'+activeDoc+' .doc-section');nodes.forEach(section=>{const a=document.createElement('a');a.href='#'+section.id;a.textContent=section.querySelector('h2').textContent;a.dataset.title=a.textContent;a.addEventListener('click',()=>{$('#toc-shell').classList.remove('open');$('#toc-toggle').setAttribute('aria-expanded','false');});links.appendChild(a);});$('#toc-count').textContent=nodes.length+' CHAPTERS';$('#toc-search').value='';$('#nav-hint').textContent='章 제목으로 찾아갑니다.'.replace('章','장');if(observer)observer.disconnect();observer=new IntersectionObserver(entries=>{const visible=entries.filter(e=>e.isIntersecting).sort((a,b)=>a.boundingClientRect.top-b.boundingClientRect.top);if(!visible.length)return;document.querySelectorAll('#toc-links a').forEach(a=>a.classList.toggle('active',a.hash==='#'+visible[0].target.id));},{rootMargin:'-90px 0px -64% 0px',threshold:0});nodes.forEach(n=>observer.observe(n));}
+function showDoc(name,reset){if(!sourceData[name])name=config.initial;activeDoc=name;document.querySelectorAll('.document').forEach(d=>d.hidden=d.id!==name);document.querySelectorAll('.doc-tab').forEach(a=>{a.classList.toggle('active',a.dataset.doc===name);if(a.dataset.doc===name)a.setAttribute('aria-current','page');else a.removeAttribute('aria-current');});renderToc();document.title=(config.siteTitle||'VIDE')+' · '+sourceData[name].label;if(reset)window.scrollTo({top:0,behavior:'instant'});}
+function useHash(){let raw=decodeURIComponent(location.hash.slice(1)||config.initial);let name=raw.split('-section-')[0];if(!sourceData[name])name=config.initial;if(name!==activeDoc||!$('#toc-links').children.length)showDoc(name,false);const el=document.getElementById(raw);if(el&&!el.hidden){requestAnimationFrame(()=>el.scrollIntoView({block:'start',behavior:'instant'}));}}
+window.addEventListener('hashchange',useHash);
+document.querySelectorAll('.doc-tab[data-doc]').forEach(a=>a.addEventListener('click',e=>{e.preventDefault();const name=a.dataset.doc;showDoc(name,true);history.replaceState(null,'','#'+name);}));
+$('#toc-toggle').addEventListener('click',()=>{const on=$('#toc-shell').classList.toggle('open');$('#toc-toggle').setAttribute('aria-expanded',String(on));});
+$('#toc-search').addEventListener('input',()=>{const q=$('#toc-search').value.trim().toLocaleLowerCase();let n=0;document.querySelectorAll('#toc-links a').forEach(a=>{a.hidden=!a.dataset.title.toLocaleLowerCase().includes(q);if(!a.hidden)n++;});$('#nav-hint').textContent=q?(n?'일치하는 장 '+n+'개':'일치하는 장 제목이 없습니다.'):'장 제목으로 찾아갑니다.';});
+function download(name,contents,type){const blob=new Blob([contents],{type});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),2500);}
+$('#source-download').addEventListener('click',()=>download(sourceData[activeDoc].file,sourceData[activeDoc].markdown,'text/markdown;charset=utf-8'));
+$('#print-doc').addEventListener('click',()=>window.print());
+async function copy(text){try{if(navigator.clipboard&&navigator.clipboard.writeText){await navigator.clipboard.writeText(text);return true;}}catch(e){}const t=document.createElement('textarea');t.value=text;t.style.position='fixed';t.style.left='-9999px';document.body.appendChild(t);t.select();let ok=false;try{ok=document.execCommand('copy');}catch(e){}t.remove();return ok;}
+document.querySelectorAll('.copy-code').forEach(b=>b.addEventListener('click',async()=>{const text=b.parentElement.querySelector('pre').textContent;const ok=await copy(text);if(ok){b.textContent='복사됨';notify('텍스트를 복사했습니다.');setTimeout(()=>b.textContent='복사',1800);}else{const range=document.createRange();range.selectNodeContents(b.parentElement.querySelector('pre'));const sel=window.getSelection();sel.removeAllRanges();sel.addRange(range);notify('자동 복사가 제한됩니다. 선택된 텍스트를 직접 복사하세요.');}}));
+showDoc(config.initial,false);useHash();
+})();
+</script>
+<script>
+(() => {
+'use strict';
+const KEY = 'vide-docs-review-mode';
+const AUTHOR_KEY = 'vide-docs-review-author';
+const sel = document.getElementById('review-mode');
+if (!sel) return;
+const authorSel = document.getElementById('review-author');
+let mode = 'marked';
+let author = 'all';
+try { mode = localStorage.getItem(KEY) || 'marked'; } catch (e) {}
+try { author = localStorage.getItem(AUTHOR_KEY) || 'all'; } catch (e) {}
+if (!['marked', 'original', 'accepted'].includes(mode)) mode = 'marked';
+if (!authorSel || !Array.from(authorSel.options).some(o => o.value === author)) author = 'all';
+const matches = el => author === 'all' || el.dataset.reviewAgent === author;
+const decorate = () => {
+const query = (document.getElementById('toc-search')?.value || '').trim().toLocaleLowerCase();
+let visible = 0;
+document.querySelectorAll('#toc-links a').forEach(a => {
+  const section = document.getElementById(decodeURIComponent(a.hash.slice(1)));
+  if (!section) return;
+  a.hidden = !a.dataset.title.toLocaleLowerCase().includes(query) || (section.classList.contains('review-appendix') && (mode !== 'marked' || !matches(section)));
+  if (!a.hidden) visible += 1;
+  const n = Array.from(section.querySelectorAll('.review-label[data-rid]')).filter(matches).length;
+  if (n && mode === 'marked') a.dataset.reviews = String(n); else delete a.dataset.reviews;
+});
+if (query) document.getElementById('nav-hint').textContent = visible ? `일치하는 장 ${visible}개` : '일치하는 장 제목이 없습니다.';
+};
+const apply = () => {
+  sel.value = mode;
+  if (authorSel) { authorSel.value = author; authorSel.disabled = mode !== 'marked'; }
+  document.body.classList.toggle('review-original', mode === 'original');
+  document.body.classList.toggle('review-accepted', mode === 'accepted');
+  document.querySelectorAll('blockquote.review, .review-appendix').forEach(el => { el.hidden = !matches(el); });
+  decorate();
+  try { localStorage.setItem(KEY, mode); localStorage.setItem(AUTHOR_KEY, author); } catch (e) {}
+};
+apply();
+const toc = document.getElementById('toc-links');
+if (toc) new MutationObserver(decorate).observe(toc, { childList: true });
+document.getElementById('toc-search')?.addEventListener('input', decorate);
+sel.addEventListener('change', () => { mode = sel.value; apply(); });
+if (authorSel) authorSel.addEventListener('change', () => { author = authorSel.value; apply(); });
+const revealHash = () => {
+  let id;
+  try { id = decodeURIComponent(location.hash.slice(1)); } catch (e) { return; }
+  const target = document.getElementById(id);
+  if (!target || !target.dataset.reviewAgent) return;
+  mode = 'marked';
+  if (!matches(target)) author = 'all';
+  apply();
+  target.scrollIntoView({ block: 'center' });
+};
+window.addEventListener('hashchange', revealHash);
+revealHash();
+})();
+</script>
+</body></html>

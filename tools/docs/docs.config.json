@@ -3,8 +3,8 @@
   "siteTitle": "VIDE",
   "index": "index.html",
   "next": {
-    "title": "2차 검토 대화 → 사용자 결정",
-    "desc": "Codex·Claude 스레드 비교 → 항목별 수락/거부 → ADR·SPEC-00-common"
+    "title": "구현 시작 · PLAN §6.3",
+    "desc": "개발 지시 후 입력 계약 → 공간 작업 UI → 실제 호스트 후보"
   },
   "docs": [
     {
@@ -16,20 +16,36 @@
       "tableLabel": "PRD"
     },
     {
-      "id": "guide",
-      "src": "DEVELOPMENT_GUIDE.md",
-      "tab": "개발 가이드",
-      "eyebrow": "DEVELOPMENT GUIDE",
-      "description": "기능 명세에서 구현·검수까지",
-      "tableLabel": "가이드"
+      "id": "readme",
+      "src": "docs/specs/README.md",
+      "tab": "SPEC",
+      "eyebrow": "SPEC",
+      "description": "기능 명세 목록 · 공통 규칙과 기능별 상세",
+      "tableLabel": "SPEC"
     },
     {
       "id": "design",
       "src": "Design.md",
       "tab": "Design",
       "eyebrow": "DESIGN PRINCIPLES",
-      "description": "시각·상호작용 기준 · SPEC 후 구체화",
+      "description": "디자인 DNA · 배치 · 컴포넌트 · 화면 표현",
       "tableLabel": "Design"
+    },
+    {
+      "id": "plan",
+      "src": "docs/plans/PLAN.md",
+      "tab": "PLAN",
+      "eyebrow": "PLAN",
+      "description": "아키텍처 · 구현 순서 · 검증 계획",
+      "tableLabel": "PLAN"
+    },
+    {
+      "id": "guide",
+      "src": "DEVELOPMENT_GUIDE.md",
+      "tab": "개발 가이드",
+      "eyebrow": "DEVELOPMENT GUIDE",
+      "description": "문서별 판단 기준 · 자율 개발 · 다음 세션 재개",
+      "tableLabel": "가이드"
     },
     {
       "id": "ai",

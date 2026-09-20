@@ -1,0 +1,16 @@
+{
+  "host": "rhino",
+  "checks": {
+    "reopened_geometry": true,
+    "attributes_preserved": true,
+    "original_preserved": true,
+    "candidate_created": true,
+    "candidate_discard": true,
+    "save": true,
+    "units": true,
+    "native_edit": true,
+    "reopen": true
+  },
+  "success": true,
+  "version": "8.34.26223.11001"
+}
