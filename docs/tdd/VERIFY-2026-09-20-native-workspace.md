@@ -2,7 +2,7 @@
 id: VERIFY-2026-09-20-native-workspace
 title: 브라우저 입력에서 실제 Rhino 후보까지
 status: review
-version: 0.38
+version: 0.39
 updated: 2026-09-21
 owner: agent:codex
 related: [AC-05, AC-17, AC-24, AC-38, T-005, T-013, T-015, T-016, T-018]
@@ -248,3 +248,9 @@ T-002·016 / SCR-01 객체 Inspector의 보완 검증이다. native-attributes.m
 SPEC-03.5·AC-20: browser-quantity-object.mjs는 저장된 복수 객체 후보의 단일 객체 필터, 동일 범위 CSV(헤더+객체 1행), 전체 범위 복귀를 확인했다. quantities.test는 이름 대신 ID 선택·조건 교집합·없는 ID의 빈 결과·잘못된 자료형 거절을 검증한다. 복수 객체 집합 선택은 아직 지원하지 않는다.
 
 portable-package.mjs로 0.1.0-dev.20260921.1의 72개 파일과 실행/재시작/자료 보존/백업을 재검증했다. 시험 데이터는 .vide/package-check/644081d2-9d4d-4a6d-b123-9dcd89e3ff99/data에 격리했다. 이 패키지는 59506cb 기준이며 이후 수량표 필터를 포함하지 않는다.
+
+## 합성 8층 모델 선택 수정 — 2026-09-21
+
+SPEC-02 후보 반복·SPEC-03.8 변경 수량의 부분 검증이다. native-multilevel.mjs에서 Claude 구독 CLI 2회로 독립 슬래브 8개(20×10 m, 두께 0.3 m, 기준 높이 0~21 m)와 코어 1개(4×4×24 m)를 생성했다. 상부 4개 슬래브 두께만 0.25 m로 수정했고, 경계·기준 높이·나머지 5개 객체가 동일함을 검증했다. 실제 Rhino 저장·재열기 결과의 체적 합 차이는 −40 m³, 비교표 변경 객체는 4개다. 코어와 슬래브의 겹침을 공제하지 않은 객체별 기하 체적이며 법정 면적이나 BIM 완성을 주장하지 않는다. 원본 적용은 하지 않았다.
+
+프로젝트 27c0bf8d-3662-4a90-95d3-ea55c55ba2c4, 생성 533a1108-a5d5-4958-af4c-717d43496997, 수정 6add27c4-72c1-441a-ab04-5826812e9fa3. 재개 시 이 프로젝트 ID를 시험 인자로 주면 기존 요청을 확인하며 중복 생성하지 않는다. [실제 브라우저 화면](../assets/native-workspace/multilevel-candidate.png)을 렌더 후 확인했다. 이는 단순 형상보다 큰 합성 과업 증거이며 T-012의 실무 두 기준선 비교 완료는 아니다.

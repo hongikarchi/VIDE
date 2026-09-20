@@ -2,7 +2,7 @@
 id: PLAN
 title: VIDE 구현계획 (마스터)
 status: review
-version: 0.57
+version: 0.58
 updated: 2026-09-21
 owner: agent:codex
 related: [SPEC-00, SPEC-01, SPEC-02, SPEC-03, SPEC-04, SPEC-05, ADR-013, OQ-03, OQ-04, OQ-06, OQ-07, OQ-08, OQ-09, OQ-10, OQ-14]
@@ -340,7 +340,7 @@ T-002·016: ObjectAttributes user text를 저장된 사본에서 읽어 Inspecto
 | 티켓 | 현재 결과 | 남은 완료 조건·다음 행동 | 증거 |
 |---|---|---|---|
 | T-001 | 로컬 저장·큐 보호 기반 있음 | 새 계약의 관계/버전·마이그레이션을 T-013과 연결 | VERIFY-2026-09-19-core-cli |
-| T-002 | 채팅·핀·스케치·파일 입력과 초안/기준 복원 검증 | 대표 실무 과업·복잡한 입력 확대 | VERIFY-2026-09-20-native-workspace |
+| T-002 | 채팅·핀·스케치·파일 입력·초안 복원·합성 8층 선택 수정 검증 | 대표 실무 과업·복잡한 입력 확대 | VERIFY-2026-09-20-native-workspace |
 | T-003 | 두 호스트 합성 폴리라인 API 실험 있음 | 제품 어댑터 빌드/연결·새 지원안 실증 | SPIKE-2026-09-19-host-native |
 | T-004 | Claude/Codex 실제 구독·취소·경로 설정·로그인 확인 연결 | 확장 실행 루프·모델별 능력·한도 오류 검수 | VERIFY-2026-09-20-native-workspace |
 | T-005 | 생성 후보 적용, 취득 원본 이동·속성 보존, 증거 기반 불명확 해소 검증 | 복사/삭제 원본 적용·일반 관계·수동 재편집 검수 | VERIFY-2026-09-20-native-workspace |
@@ -355,7 +355,7 @@ T-002·016: ObjectAttributes user text를 저장된 사본에서 읽어 Inspecto
 | T-014 | 선행 사례 조사 있음 | 합성 gateway·화면 문맥, ESM 유지 결정 | PLAN-01 §4·5 |
 | T-015 | Rhino 메시·선·점 표시/선택, 실제 길이·범위·레이어 연결 | 대형 실무 모델·추가 네이티브 유형·기기 성능 | VERIFY-2026-09-20-native-workspace |
 | T-016 | 실제 API·작업 이력·네이티브 뷰 연결 | 현재 실제 MVP 통합 진행. UI 및 전체 출시 수용은 미완료 | VERIFY-2026-09-20-native-workspace |
-| T-017 | 계획 있음 | 표/검토본/의견/확장 표시의 실제 기능 통합 | — |
+| T-017 | 표/검토본/의견/확장과 Inspector→객체 수량표 연결 검증 | 실무 과업·복수 객체 선택 확대 | VERIFY-2026-09-20-native-workspace |
 | T-018 | 실제 ChatGPT 요청 해석→유한 명령 검증→Rhino 후보 구현 | 요청 해석→조회→후보→검증·개입 루프 | — |
 
 근거 파일은 `docs/tdd/`의 동일 ID 문서다. 현재 열린 호스트·프로세스 상태와 실행 경로는 다음 세션에서 다시 확인하며 과거 PID를 재사용하지 않는다. 진행 도중 막힌 티켓은 이유·필요 결정·다음 행동을 해당 행에 기록하고 준비된 독립 작업으로 이동한다.
