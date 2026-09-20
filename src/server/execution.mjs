@@ -45,6 +45,7 @@ export class Execution {
     const {projectId,id,input}=request;
     const target=input.host||'rhino',host=this.hosts[target];
     this.workspace.update(projectId,id,'running');
+    let hostIntent;
     try {
       const items=[...input.pins.map((data,i)=>({id:`pin-${i}`,type:'object-reference',data})),
         ...input.sketches.map((data,i)=>({id:`sketch-${i}`,type:'sketch',data})),
@@ -68,14 +69,15 @@ export class Execution {
         protectGeometry(previous?.result.objects||[],proposal.objects,protectedIds);
         if(controller.signal.aborted)throw {code:'CANCELLED'};
         if(proposal.changed){
-          this.workspace.update(projectId,id,'running',{phase:'host',hostExecuted:false});
+          hostIntent={phase:'host',hostExecuted:false,objects:proposal.objects,baseRequestId:previous?.id,host:target};
+          this.workspace.update(projectId,id,'running',hostIntent);
           const native=await host.build(projectId,id,proposal.objects,previous?.result);
           const objects=proposal.objects.map(o=>o.kind==='native'?{...o,nativeId:native.scene.find(x=>x.id===o.id).nativeId}:o);
           this.workspace.update(projectId,id,'succeeded',{...result,text:proposal.message,objects,...native,baseRequestId:previous?.id,host:target,hostExecuted:true});
         }else this.workspace.update(projectId,id,'succeeded',{...result,text:proposal.message,hostExecuted:false});
       }else this.workspace.update(projectId,id,'succeeded',{...result,hostExecuted:false});
     } catch(error) {
-      this.workspace.update(projectId,id,error.code==='CANCELLED'?'cancelled':error.code==='HOST_RESULT_UNKNOWN'?'unknown':'failed',{code:error.code||'EXECUTION_FAILED',hostExecuted:false});
+      this.workspace.update(projectId,id,error.code==='CANCELLED'?'cancelled':error.code==='HOST_RESULT_UNKNOWN'?'unknown':'failed',{...(error.code==='HOST_RESULT_UNKNOWN'?hostIntent:{}),code:error.code||'EXECUTION_FAILED',hostExecuted:false});
     }
   }
   cancel(projectId,id) {

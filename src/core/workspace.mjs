@@ -10,7 +10,7 @@ export class Workspace {
     store.db.exec(`CREATE TABLE IF NOT EXISTS workspace_requests (
       id TEXT PRIMARY KEY, projectId TEXT NOT NULL REFERENCES projects(id),
       input TEXT NOT NULL, state TEXT NOT NULL, result TEXT, createdAt TEXT NOT NULL);
-      UPDATE workspace_requests SET state='interrupted' WHERE state IN ('queued','running');`);
+      UPDATE workspace_requests SET state=CASE WHEN state='running' AND json_extract(result,'$.phase')='host' THEN 'unknown' ELSE 'interrupted' END WHERE state IN ('queued','running');`);
   }
   list(projectId) {
     this.store.project(projectId);
@@ -44,6 +44,7 @@ export class Workspace {
       return { request: decode(existing), created: false };
     }
     const target=input.host||'rhino';
+    if(input.permission==='candidate'&&this.list(projectId).some(r=>r.state==='unknown'&&(r.input.host||'rhino')===target))fail('HOST_RESULT_UNRESOLVED');
     const baseline=input.baseRequestId?this.get(projectId,input.baseRequestId):this.list(projectId).filter(r=>r.result?.hostExecuted&&(r.result.host||'rhino')===target).at(-1);
     if(input.baseRequestId&&!baseline?.result?.hostExecuted)fail('STALE_REFERENCE');
     if(baseline&&(baseline.result.host||'rhino')!==target)fail('TARGET_MISMATCH');

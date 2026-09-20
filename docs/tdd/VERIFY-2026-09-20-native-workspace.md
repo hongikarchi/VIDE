@@ -2,7 +2,7 @@
 id: VERIFY-2026-09-20-native-workspace
 title: 브라우저 입력에서 실제 Rhino 후보까지
 status: review
-version: 0.7
+version: 0.8
 updated: 2026-09-20
 owner: agent:codex
 related: [AC-05, AC-17, AC-24, AC-38, T-005, T-013, T-015, T-016, T-018]
@@ -99,3 +99,8 @@ UI 작업 호스트를 Rhino/ZWCAD로 고르며 다른 호스트에서 첨부한
 재현 코드: `tests/integration/native-workflow.mjs`. 실제 CLI 사용과 격리된 네이티브 파일 생성은 `--run-live`를 명시해야 실행된다. 이번 실행 중 테스트 대기 로직 두 곳을 바로잡았으며, 이미 성공한 요청은 재호출하지 않고 동일 검수 프로젝트를 읽어 재개했다. AI 호출은 총 2회다. 사용자 원본 문서에 적용한 검수가 아니다.
 
 ![실제 후보 수량 비교](../assets/native-workspace/quantity-comparison.png)
+
+
+## 호스트 불명확 결과 보호
+
+자동 테스트 49건 통과. 호스트 단계에서 재시작한 작업은 객체 의도를 보존한 `unknown`, AI 단계 중단은 `interrupted`로 구분했다. 불명확 작업이 있는 동일 호스트의 새 후보 제출은 차단하고 읽기 검토는 허용했다. 전송 응답 유실 시험에서도 의도 객체와 미확인 상태를 유지했다. 실제 호스트 강제 종료나 사용자 원본 복구 시험으로 확대하지 않는다.

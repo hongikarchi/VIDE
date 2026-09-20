@@ -14,7 +14,7 @@ export function renderRequests(state,onChange){
 }
 export function renderActiveWork(messages){
  const root=document.getElementById('active-work');root.replaceChildren();
- const active=messages.filter(m=>['queued','running'].includes(m.request?.state));
+ const active=messages.filter(m=>['queued','running','unknown','interrupted'].includes(m.request?.state));
  if(!active.length){root.textContent='진행 중인 작업 없음';return;}
- for(const m of active){const item=document.createElement('div');const title=document.createElement('strong');title.textContent=m.body||'첨부 문맥 검토';const phase=document.createElement('small');phase.textContent=m.request.state==='queued'?'대기':m.request.result?.phase==='host'?'호스트 생성·저장 검증':m.request.result?.phase==='stopping'?'중단 확인 중':'AI 요청 처리';item.append(title,phase);root.append(item);}
+ for(const m of active){const item=document.createElement('div');const title=document.createElement('strong');title.textContent=m.body||'첨부 문맥 검토';const phase=document.createElement('small');phase.textContent=m.request.state==='unknown'?'호스트 결과 확인 필요 · 새 후보 보류':m.request.state==='interrupted'?'연결 종료로 중단됨 · 자동 재실행 없음':m.request.state==='queued'?'대기':m.request.result?.phase==='host'?'호스트 생성·저장 검증':m.request.result?.phase==='stopping'?'중단 확인 중':'AI 요청 처리';item.append(title,phase);root.append(item);}
 }

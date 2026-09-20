@@ -46,3 +46,25 @@ test('cross-host references are read-only input and cannot become the wrong outp
     assert.throws(()=>workspace.submit(project.id,{...input,id:'overlap'}),{code:'PROJECT_BUSY'});
   }finally{store.close();}
 });
+
+test('restart during host execution preserves unknown intent and blocks new writes on that host',()=>{
+ const {store,workspace,project,input}=fixture();
+ try{
+  workspace.submit(project.id,{...input,permission:'candidate'});
+  workspace.update(project.id,input.id,'running',{phase:'host',objects:[{id:'planned'}],host:'rhino',hostExecuted:false});
+  const resumed=new Workspace(store);const saved=resumed.get(project.id,input.id);
+  assert.equal(saved.state,'unknown');assert.equal(saved.result.objects[0].id,'planned');
+  assert.throws(()=>resumed.submit(project.id,{...input,id:'new-write',permission:'candidate'}),{code:'HOST_RESULT_UNRESOLVED'});
+  assert.equal(resumed.submit(project.id,{...input,id:'read-only'}).created,true);
+ }finally{store.close();}
+});
+test('host transport uncertainty retains intended geometry and cannot be reported as ordinary failure',async()=>{
+ const {store,workspace,project,input}=fixture();
+ const object={id:'box',kind:'box',name:'Box',origin:[0,0,0],size:[1,1,1]};
+ const execution=new Execution(workspace,{host:{build:async()=>{throw {code:'HOST_RESULT_UNKNOWN'};}},providerFactory:()=>({run:async()=>({text:JSON.stringify({message:'create',operations:[object]})})})});
+ try{
+  execution.start(workspace.submit(project.id,{...input,permission:'candidate'}).request);
+  await Promise.all([...execution.active.values()].map(x=>x.completion));
+  const saved=workspace.get(project.id,input.id);assert.equal(saved.state,'unknown');assert.deepEqual(saved.result.objects,[object]);assert.equal(saved.result.hostExecuted,false);
+ }finally{store.close();}
+});
