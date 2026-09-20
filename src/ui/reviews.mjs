@@ -1,3 +1,4 @@
+import {showReviewComparison} from './review-comparison.mjs';
 import {api} from './gateway.mjs';
 const dialog=document.createElement('dialog');document.body.append(dialog);
 const element=(tag,text,parent)=>{const node=document.createElement(tag);node.textContent=text;parent.append(node);return node;};
@@ -6,6 +7,7 @@ export function initializeReviews(getProject,notify){
  const refresh=async()=>{
   const projectId=getProject();if(!projectId)return;const current=++generation,rows=await api(`/projects/${projectId}/reviews`);if(current!==generation)return;
   list.replaceChildren();if(!rows.length)element('small','저장한 검토본이 없습니다.',list);
+  if(rows.length>1){const compare=element('button','검토본 비교',list);compare.onclick=()=>showReviewComparison(projectId).catch(error=>notify(error.message));}
   for(const row of rows){const button=element('button',row.title,list);button.title=new Date(row.createdAt).toLocaleString('ko-KR');button.onclick=()=>open(row);}
  };
  const open=row=>{

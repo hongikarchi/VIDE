@@ -1,3 +1,4 @@
+import {compareReviews} from '../core/review-comparison.mjs';
 import {Reviews} from '../core/reviews.mjs';
 import {TableViews} from '../core/table-views.mjs';
 import {Applications} from './application.mjs';
@@ -20,7 +21,7 @@ const assets = new Map([
   ['/', ['../ui/index.html', 'text/html; charset=utf-8']],
   ['/app.mjs', ['../ui/app.mjs', 'text/javascript; charset=utf-8']],
   ['/style.css', ['../ui/style.css', 'text/css; charset=utf-8']],
-  ...['model','viewport','gateway','inspector','requests','sketch','quantities','quantity-view','documents','application','history','reviews'].map(name => [`/${name}.mjs`, [`../ui/${name}.mjs`, 'text/javascript; charset=utf-8']]),
+  ...['model','viewport','gateway','inspector','requests','sketch','quantities','quantity-view','documents','application','history','reviews','review-comparison'].map(name => [`/${name}.mjs`, [`../ui/${name}.mjs`, 'text/javascript; charset=utf-8']]),
   ['/vendor/three.module.js', ['../../node_modules/three/build/three.module.js', 'text/javascript']],
   ['/vendor/three.core.js', ['../../node_modules/three/build/three.core.js', 'text/javascript']],
   ['/vendor/OrbitControls.js', ['../../node_modules/three/examples/jsm/controls/OrbitControls.js', 'text/javascript']],
@@ -80,6 +81,12 @@ export async function startServer({ filename, port = 0, providerFactory, host, a
       if(upload&&request.method==='POST'){send(200,await importModel(request,upload[1],url.searchParams.get('name'),workspace,host));return;}
       const capture=/^\/api\/v1\/projects\/([^/]+)\/capture$/.exec(url.pathname);
       if(capture&&request.method==='POST'){send(200,await captureModel(capture[1],await body(request),workspace,host));return;}
+      const reviewComparison=/^\/api\/v1\/projects\/([^/]+)\/review-comparison$/.exec(url.pathname);
+      if(reviewComparison&&request.method==='GET'){
+        const projectId=reviewComparison[1],before=reviews.get(projectId,url.searchParams.get('before')),after=reviews.get(projectId,url.searchParams.get('after'));
+        let related=false;try{related=relatedCandidates(workspace,projectId,workspace.get(projectId,before.requestId),workspace.get(projectId,after.requestId));}catch(error){if(error.code!=='NOT_FOUND')throw error;}
+        send(200,compareReviews(before,after,related));return;
+      }
       const review=/^\/api\/v1\/projects\/([^/]+)\/reviews(?:\/([^/]+)(\/(?:preview|download))?)?$/.exec(url.pathname);
       if(review){
         if(request.method==='POST'&&!review[2]){const input=await body(request);send(201,reviews.create(review[1],input,withApplications(workspace.get(review[1],input.requestId))));return;}

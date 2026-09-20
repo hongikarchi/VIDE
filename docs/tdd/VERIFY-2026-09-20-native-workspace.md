@@ -2,7 +2,7 @@
 id: VERIFY-2026-09-20-native-workspace
 title: 브라우저 입력에서 실제 Rhino 후보까지
 status: review
-version: 0.17
+version: 0.18
 updated: 2026-09-20
 owner: agent:codex
 related: [AC-05, AC-17, AC-24, AC-38, T-005, T-013, T-015, T-016, T-018]
@@ -167,3 +167,7 @@ UI 작업 호스트를 Rhino/ZWCAD로 고르며 다른 호스트에서 첨부한
 `tests/integration/browser-reviews.mjs`에서 실제 취득 후보와 저장한 레이어별 표 구성을 검토본으로 저장했다. 왼쪽 목록에서 재열기, sandbox iframe 렌더, 자체 포함 PNG/HTML 다운로드, 필터된 표, 원본 반영 기록 표시를 검증했다. [저장한 검토본](../assets/native-workspace/saved-review.png)을 실제 Chromium 1440×900에서 확인했다. 원본 호스트 쓰기·AI 호출은 없다.
 
 단위/계약 테스트 64개 통과. 원래 요청의 본문·체적·적용 상태를 바꾼 뒤에도 검토본이 당시 값을 보존하고, 다른 프로젝트 접근을 거절하며, 원본 경로·첨부 전문을 payload에 넣지 않는지 검사했다. HTML 특수문자는 이스케이프한다. 검수 프로젝트는 직전 수량표 검수 프로젝트를 사용했다. 저장된 검토본은 3D 이미지와 표의 고정 열람이며 대화형 전체 모델 복원·외부 웹 게시 완료를 뜻하지 않는다.
+
+## 저장한 검토본 A/B 브라우저 검증
+기존 실제 AI·Rhino 검수 프로젝트 a6e12909-6461-47bc-8cae-ca0910a27e7f의 두 후보를 UI에서 각각 저장하고 비교했다. 신규 AI 호출·원본 쓰기는 없다. 8×6×6 m → 8×6×4.5 m에 대해 체적 −72 m³, 기하 면적 −42 m²가 표시됐다. 두 sandbox iframe과 390px 화면 내 대화상자 폭, 브라우저 예외 없음, 자동 테스트 66개 통과를 확인했다. 재현: tests/integration/browser-review-comparison.mjs. 증거: [A/B 화면](../assets/native-workspace/review-comparison.png).
+비교는 저장한 표시 형상/속성 기준이다. 네이티브 원본의 모든 기하·속성 동일성이나 외부 공유 검수는 이 시험이 보증하지 않는다.
