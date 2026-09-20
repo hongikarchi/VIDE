@@ -16,14 +16,17 @@ export function renderHistory(root,messages,models,projectId,actions){
   element('p',message.body||'첨부한 문맥 검토',card);
   const references=[...message.pins.map(p=>p.name),...message.sketches.map(s=>s.name),...message.files.map(f=>f.name)];
   if(references.length)element('small',references.join(' · '),card);
-  element('small',['file','document'].includes(message.source)?'Rhino 작업 사본':`${models.find(model=>model.id===message.model)?.name||message.model} · ${message.effort} · ${message.permission==='review'?'검토만':'후보 작업 허용'}`,card);
+  element('small',message.provider==='extension'?'확장 · '+message.extensionVersion:['file','document'].includes(message.source)?(message.host==='zwcad'?'ZWCAD 참고 도면':'Rhino 작업 사본'):`${models.find(model=>model.id===message.model)?.name||message.model} · ${message.effort} · ${message.permission==='review'?'검토만':'후보 작업 허용'}`,card);
   const context=element('details','',card);element('summary','요청 문맥',context);element('pre',JSON.stringify(message.request?.input||message,null,2),context);
   const request=message.request;if(!request)continue;
-  element('small',request.state==='running'&&request.result?.phase==='host'?'호스트 생성·저장 검증 중':request.result?.phase==='stopping'?'중단 확인 중':labels[request.state]||request.state,card);
+  element('small',message.provider==='extension'&&request.state==='succeeded'?'확장 완료':request.state==='running'&&request.result?.phase==='host'?'호스트 생성·저장 검증 중':request.result?.phase==='stopping'?'중단 확인 중':labels[request.state]||request.state,card);
   if(request.result?.text)element('p',request.result.text,card);
+  if(request.result?.extensionResult){
+    for(const row of request.result.extensionResult.rows){const group=element('details','',card);element('summary',row.type+' · '+(row.layer||'레이어 미상')+' · '+row.count+'개',group);for(const id of row.objectIds){const target=element('button',message.pins.find(pin=>pin.id===id)?.name||id,group);target.onclick=()=>actions.selection(message.baseRequestId,id);}}
+   }
   if(request.result?.hostExecuted)renderCandidate(card,message,projectId,actions);
   if(request.result?.code)element('p',errors[request.result.code]||request.result.code,card);
-  if(['queued','running'].includes(request.state)&&!['file','document'].includes(message.source)&&request.result?.phase!=='host'){
+  if(message.provider!=='extension'&&['queued','running'].includes(request.state)&&!['file','document'].includes(message.source)&&request.result?.phase!=='host'){
    const stop=element('button','중단',card);
    stop.onclick=async()=>{stop.disabled=true;try{await api(`/projects/${projectId}/requests/${message.id}/cancel`,'POST',{});}catch(error){actions.error(error.message);stop.disabled=false;}};
   }

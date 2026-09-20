@@ -1,3 +1,4 @@
+import {Extensions} from '../core/extensions.mjs';
 import {AiSettings} from '../core/ai-settings.mjs';
 import {ReviewNotes} from '../core/review-notes.mjs';
 import {compareReviews} from '../core/review-comparison.mjs';
@@ -24,7 +25,7 @@ const assets = new Map([
   ['/', ['../ui/index.html', 'text/html; charset=utf-8']],
   ['/app.mjs', ['../ui/app.mjs', 'text/javascript; charset=utf-8']],
   ['/style.css', ['../ui/style.css', 'text/css; charset=utf-8']],
-  ...['model','viewport','gateway','inspector','requests','sketch','quantities','quantity-view','documents','application','history','reviews','review-comparison','review-notes','ai-settings'].map(name => [`/${name}.mjs`, [`../ui/${name}.mjs`, 'text/javascript; charset=utf-8']]),
+  ...['model','viewport','gateway','inspector','requests','sketch','quantities','quantity-view','documents','application','history','reviews','review-comparison','review-notes','ai-settings','extensions'].map(name => [`/${name}.mjs`, [`../ui/${name}.mjs`, 'text/javascript; charset=utf-8']]),
   ['/vendor/three.module.js', ['../../node_modules/three/build/three.module.js', 'text/javascript']],
   ['/vendor/three.core.js', ['../../node_modules/three/build/three.core.js', 'text/javascript']],
   ['/vendor/OrbitControls.js', ['../../node_modules/three/examples/jsm/controls/OrbitControls.js', 'text/javascript']],
@@ -48,7 +49,7 @@ export async function startServer({ filename, port = 0, providerFactory, host, a
   host ??= new RhinoWorkspace(join(dirname(filename),'models'));
   const hosts={rhino:host,zwcad:new ZwcadWorkspace(join(dirname(filename),'cad-models'))};
   const applications=new Applications(store,workspace,applicationOptions);
-  const aiSettings=new AiSettings(store);
+  const aiSettings=new AiSettings(store),extensions=new Extensions(store,workspace);
   const execution = new Execution(workspace, { providerFactory, host, hosts,settings:aiSettings });
   const withApplications=request=>({...request,applications:store.db.prepare("SELECT id,state,result FROM commands WHERE projectId=? AND kind='applyCandidate' AND json_extract(payload,'$.requestId')=? ORDER BY rowid").all(request.projectId,request.id).map(row=>({...row,result:row.result?JSON.parse(row.result):null}))});
   let origin, authority;
@@ -112,6 +113,11 @@ export async function startServer({ filename, port = 0, providerFactory, host, a
         const html=renderReport(store.project(report[1]),withApplications(workspace.get(report[1],report[2])),(await body(request)).image);
         response.writeHead(200,{'Content-Type':'text/html; charset=utf-8','Content-Disposition':'attachment; filename="VIDE-review.html"'});response.end(html);return;
       }
+      if(url.pathname==='/api/v1/extensions'&&request.method==='GET'){send(200,extensions.list());return;}
+      const extension=/^\/api\/v1\/extensions\/([^/]+)$/.exec(url.pathname);
+      if(extension&&request.method==='PUT'){send(200,extensions.save(extension[1],await body(request)));return;}
+      const extensionRun=/^\/api\/v1\/projects\/([^/]+)\/extensions\/([^/]+)\/run$/.exec(url.pathname);
+      if(extensionRun&&request.method==='POST'){send(200,extensions.execute(extensionRun[1],extensionRun[2],await body(request)));return;}
       if(url.pathname==='/api/v1/settings/ai'){
         if(request.method==='PUT'){send(200,aiSettings.save(await body(request)));return;}
         if(request.method==='GET'){send(200,{...aiSettings.get(),resolved:Object.fromEntries(['claude-cli','codex-cli'].map(id=>[id,execution.executable(id)||null]))});return;}
@@ -162,7 +168,8 @@ export async function startServer({ filename, port = 0, providerFactory, host, a
         if (request.method === 'GET') { send(200, id ? withApplications(workspace.get(projectId,id)) : workspace.list(projectId).map(withApplications)); return; }
         if (request.method === 'POST' && cancel) { send(200, execution.cancel(projectId,id)); return; }
         if (request.method === 'POST' && !id) {
-          const result = workspace.submit(projectId, await body(request));
+          const input=await body(request);if(input.provider==='extension')throw new DomainError('INVALID_INPUT');
+          const result = workspace.submit(projectId, input);
           if (result.created) execution.start(result.request);
           send(result.created ? 202 : 200, workspace.get(projectId,result.request.id)); return;
         }

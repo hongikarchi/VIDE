@@ -24,7 +24,8 @@ export class Workspace {
     if (!input || typeof input.id !== 'string' || !/^[a-zA-Z0-9-]{1,100}$/.test(input.id)
       || typeof input.body !== 'string' || input.body.length > 20000
       || !['review','candidate'].includes(input.permission)
-      || !['claude-cli','codex-cli'].includes(input.provider)) fail('INVALID_INPUT');
+      || !['claude-cli','codex-cli','extension'].includes(input.provider)) fail('INVALID_INPUT');
+    if(input.provider==='extension'&&(input.permission!=='review'||typeof input.extension!=='string'||!(/^[a-z0-9-]{1,80}$/.test(input.extension))||typeof input.extensionVersion!=='string'))fail('INVALID_INPUT');
     for (const key of ['pins','sketches','files']) if (!Array.isArray(input[key]) || input[key].length > 100) fail('INVALID_INPUT');
     if(input.host!==undefined&&!['rhino','zwcad'].includes(input.host))fail('INVALID_INPUT');
     if(input.baseRequestId!==undefined&&(typeof input.baseRequestId!=='string'||!/^[a-zA-Z0-9-]{1,100}$/.test(input.baseRequestId)))fail('INVALID_INPUT');

@@ -2,7 +2,7 @@
 id: VERIFY-2026-09-20-native-workspace
 title: 브라우저 입력에서 실제 Rhino 후보까지
 status: review
-version: 0.24
+version: 0.25
 updated: 2026-09-20
 owner: agent:codex
 related: [AC-05, AC-17, AC-24, AC-38, T-005, T-013, T-015, T-016, T-018]
@@ -193,3 +193,7 @@ tests/integration/browser-point-selection.mjs에서 [10000,20000,30] m의 점을
 ## AI 설정 화면 검증
 tests/integration/browser-ai-settings.mjs에서 실제 Codex 실행 경로를 설정/재열기하고 없는 파일 입력을 거절한 뒤 기존 설정이 보존됨을 확인했다. 검증 후 원 설정으로 복원했다. Claude Code·Codex 모두 available=true의 공식 구독 상태를 반환했다. [설정 화면](../assets/native-workspace/ai-settings.png).
 자동 시험은 경로/버전 충돌·셸 문자열/토큰 거절·진행 중 요청의 기존 경로 유지와 다음 요청의 변경 경로 사용을 확인한다. 72개 자동 시험 통과. 이 시험에는 AI 생성 호출이나 원본 호스트 쓰기가 없다.
+
+## 신뢰 확장 전체 흐름 검증
+tests/integration/browser-extensions.mjs에서 등록/활성화→실제 저장된 Extrusion 2개 요약→작업 이력→원 객체 선택→비활성화를 확인했다. 프로젝트 a7f862d5-cc07-4dd9-8a12-b6eea516afca, 실행 bfaf6d24-2f87-41f6-baa1-c8c5d0a41d23. 비활성화 후 새 실행과 일반 AI API 우회가 거절되고 동일 실행 ID는 기존 결과를 반환한다. [확장 결과](../assets/native-workspace/extension-summary.png).
+계약 시험은 권한 밖 선언·다른 프로젝트·알 수 없는 확장·중복 요청 거절, 잘못된 원 데이터의 실행 실패 기록과 이전 결과 보존을 확인했다. 자동 시험 73개와 브라우저 작업 공간 회귀 통과. 외부 개발자 확장 배포·범용 샌드박스·장기 작업 중단은 미구현이다.

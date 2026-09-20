@@ -1,3 +1,4 @@
+import {showExtensions} from './extensions.mjs';
 import {showAiSettings} from './ai-settings.mjs';
 import {initializeReviews} from './reviews.mjs';
 import {renderHistory} from './history.mjs';
@@ -63,6 +64,9 @@ function renderMessages(){
  });
 }
 
+$('extensions').onclick=()=>{void showExtensions({projectId:project?.id,requestId:displayedResult,selected:state.selected,objects:structuredClone(objects)},request=>{
+ if(!state.messages.some(message=>message.id===request.id))state.messages.push({...request.input,request});renderMessages();render();mobileView('input');
+}).catch(error=>message(error.message));};
 $('ai-settings').onclick=()=>{ $('draft-menu').open=false;void showAiSettings(rows=>{const host=$('connection-status').textContent.match(/ · Rhino.*$/)?.[0]||'';$('connection-status').textContent=rows.map(row=>`${row.id==='claude-cli'?'Claude':'ChatGPT'} ${row.available?'연결됨':'미연결'}`).join(' · ')+host;}).catch(error=>message(error.message));};
 for(const model of models)el('option',model.name,$('model'),{value:model.id});
 $('model').onchange=()=>{chooseModel(state,$('model').value);render();};$('effort').onchange=()=>{state.effort=$('effort').value;render();};$('permission').onchange=()=>{state.permission=$('permission').value;render();};

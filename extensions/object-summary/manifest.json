@@ -1,0 +1,10 @@
+{
+  "id": "object-summary",
+  "name": "지원 객체 속성 요약",
+  "version": "1.0.0",
+  "contractVersion": 1,
+  "capabilities": ["model.read"],
+  "input": "saved-selection",
+  "output": "object-summary",
+  "cancellation": false
+}
