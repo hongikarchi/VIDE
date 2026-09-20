@@ -17,7 +17,7 @@ try{
   await page.locator('#refresh-documents').click();
   await page.locator('#host-documents').waitFor({state:'visible'});
   await page.locator('#inspect-selection').click();
-  await page.getByRole('status').filter({hasText:/Rhino 문서 선택/}).waitFor();
+  await page.getByRole('status').filter({hasText:/작업 사본을 먼저 가져오세요/}).waitFor();
   const records=await page.evaluate(async()=>{
     const projects=await(await fetch('/api/v1/projects')).json();
     return (await fetch(`/api/v1/projects/${projects[0].id}/requests`)).json();

@@ -15,3 +15,16 @@ export function requestBody(s){
  const instructions=[...(s.instructions||[]),s.body].filter(text=>text.trim());
  return instructions.length>1?instructions.map((text,i)=>`${i+1}. ${text}`).join('\n\n'):instructions[0]||'';
 }
+
+export function attachHostSelection(state,request,selection){
+ const source=request?.result?.sourceDocument;
+ if(!source||source.instance!==selection.instance||source.documentId!==selection.documentId)throw Error('선택한 Rhino 문서의 작업 사본을 먼저 가져오세요.');
+ if(source.documentHash!==selection.documentHash)throw Error('원본이 취득 후 변경됐습니다. 작업 사본을 다시 가져온 뒤 선택을 첨부하세요.');
+ const selected=selection.selectedIds.map(id=>request.result.objects.find(object=>object.id===id));
+ if(selected.some(object=>!object))throw Error('현재 후보에 없는 선택 객체가 있습니다. 원본 작업 사본에서 선택을 다시 확인하세요.');
+ const additions=selected.filter(object=>!state.pins.some(pin=>pin.id===object.id&&pin.basis===request.id));
+ if(state.pins.length+additions.length>100)throw Error('요청에 첨부할 수 있는 객체는 100개까지입니다.');
+ state.pins.push(...additions.map(object=>({id:object.id,name:object.name,role:'target',basis:request.id})));
+ if(selected.length)state.selected=selected[0].id;
+ return additions.length;
+}

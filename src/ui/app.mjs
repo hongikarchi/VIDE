@@ -4,7 +4,7 @@ import {renderPoints,validCoordinate} from './sketch.mjs';
 import {renderRequests,renderActiveWork} from './requests.mjs';
 import {initializeInspector,renderInspector} from './inspector.mjs';
 import {api,connect,errors} from './gateway.mjs';
-import {objects,models,initial,chooseModel,pinSelection,validate,packet,attachSketch,storageKey} from './model.mjs';
+import {objects,models,initial,chooseModel,pinSelection,attachHostSelection,validate,packet,attachSketch,storageKey} from './model.mjs';
 import {createViewport} from './viewport.mjs';
 const $=id=>document.getElementById(id);
 let project, busy=false, displayedResult,selectedResult,draftSaved=false;
@@ -18,6 +18,10 @@ initializeDocuments(message,async target=>{
  state.messages.push({...request.input,request});if(request.result?.hostExecuted){selectedResult=request.id;state.selected=null;}
  renderMessages();message(request.result?.text||errors[request.result?.code]||'작업 사본을 가져오지 못했습니다.');
  }finally{busy=false;render();}
+},selection=>{
+ const request=state.messages.find(message=>message.id===displayedResult)?.request;
+ const count=attachHostSelection(state,request,selection);render();
+ message(selection.selectedIds.length?`${count}개 객체를 요청에 첨부했습니다.`:'Rhino에서 선택한 객체가 없습니다.');
 });
 let inspectorTab='properties';
 initializeInspector(tab=>{inspectorTab=tab;render();});

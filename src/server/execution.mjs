@@ -73,7 +73,7 @@ export class Execution {
           this.workspace.update(projectId,id,'running',hostIntent);
           const native=await host.build(projectId,id,proposal.objects,previous?.result);
           const objects=proposal.objects.map(o=>o.kind==='native'?{...o,nativeId:native.scene.find(x=>x.id===o.id).nativeId}:o);
-          this.workspace.update(projectId,id,'succeeded',{...result,text:proposal.message,objects,...native,baseRequestId:previous?.id,host:target,hostExecuted:true});
+          this.workspace.update(projectId,id,'succeeded',{...result,text:proposal.message,objects,...native,sourceDocument:previous?.result.sourceDocument,baseRequestId:previous?.id,host:target,hostExecuted:true});
         }else this.workspace.update(projectId,id,'succeeded',{...result,text:proposal.message,hostExecuted:false});
       }else this.workspace.update(projectId,id,'succeeded',{...result,hostExecuted:false});
     } catch(error) {

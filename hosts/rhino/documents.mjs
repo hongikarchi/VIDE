@@ -1,3 +1,4 @@
+import {documentGuard,documentFingerprint} from './document-contract.mjs';
 import {rhinoCommand} from './transport.mjs';
 import {DomainError} from '../../src/core/store.mjs';
 const session='var process=System.Diagnostics.Process.GetCurrentProcess();var session=process.Id.ToString()+":"+process.StartTime.ToUniversalTime().Ticks.ToString();';
@@ -17,15 +18,12 @@ export async function listDocuments(){
 }
 export async function inspectDocument(instance,id){
  if(!/^\d+:\d+$/.test(instance)||!Number.isInteger(id)||id<=0||id>4294967295)throw new DomainError('INVALID_INPUT');
- const code=`${session}
- if(session!="${instance}")throw new Exception("Document process changed");
- var document=Rhino.RhinoDoc.FromRuntimeSerialNumber(${id}u);
- if(document==null||document.IsHeadless)throw new Exception("Document closed");
- output.AppendLine(document.RuntimeSerialNumber.ToString());
+ const code=`${documentGuard(instance,id)}${documentFingerprint}
+ output.AppendLine(document.RuntimeSerialNumber.ToString());output.AppendLine(fingerprint);
  foreach(var item in document.Objects.GetSelectedObjects(false,false))output.AppendLine(item.Id.ToString());`;
  const result=await rhinoCommand('execute_rhinocommon_csharp_code',{code},{timeoutMs:8000});
  if(!result.success)throw new DomainError('STALE_CONNECTION');
- const [serial,...selectedIds]=result.output.trim().split(/\r?\n/);
- if(Number(serial)!==id)throw new DomainError('STALE_CONNECTION');
- return {instance,documentId:id,selectedIds,observedAt:new Date().toISOString()};
+ const [serial,documentHash,...selectedIds]=result.output.trim().split(/\r?\n/);
+ if(Number(serial)!==id||!/^[a-f0-9]{64}$/.test(documentHash))throw new DomainError('STALE_CONNECTION');
+ return {instance,documentId:id,documentHash,selectedIds,observedAt:new Date().toISOString()};
 }
