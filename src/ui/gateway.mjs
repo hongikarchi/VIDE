@@ -1,7 +1,10 @@
 export async function api(path, method='GET', data) {
-  const response=await fetch('/api/v1'+path,{method,headers:data?{'Content-Type':'application/json'}:{},body:data?JSON.stringify(data):undefined});
-  const result=await response.json();
-  if(!response.ok)throw Object.assign(new Error(result.code),{code:result.code});
+  let response;
+  try{response=await fetch('/api/v1'+path,{method,headers:data?{'Content-Type':'application/json'}:{},body:data?JSON.stringify(data):undefined});}
+  catch{throw apiError('NETWORK_UNAVAILABLE');}
+  let result;
+  try{result=await response.json();}catch{throw apiError('INVALID_RESPONSE');}
+  if(!response.ok)throw apiError(result.code||'REQUEST_FAILED');
   return result;
 }
 export async function connect() {
@@ -19,3 +22,17 @@ Object.assign(errors,{HOST_UNAVAILABLE:'Rhino에서 mcpstart 명령으로 연결
 Object.assign(errors,{SOURCE_CHANGED:'기준 Rhino 파일이 외부에서 변경됐습니다. 수정된 파일을 다시 불러와 이어서 작업하세요.',IMPORT_LIMIT:'현재 가져오기는 유효한 객체 500개까지 지원합니다.',IMPORT_FAILED:'파일을 불러오지 못했습니다.'});
 
 Object.assign(errors,{ZWCAD_POLYLINE_ONLY:'현재 ZWCAD 작업은 XY 평면 폴리라인을 지원합니다.',ZWCAD_EXECUTION_FAILED:'ZWCAD가 작업을 완료하지 못했습니다. 설치·실행 상태를 확인하세요.'});
+
+Object.assign(errors,{
+ NETWORK_UNAVAILABLE:'로컬 서버에 연결하지 못했습니다. 서버 실행 상태를 확인하세요. 전송한 작업은 이력에서 상태를 확인한 뒤 다시 요청하세요.',
+ INVALID_RESPONSE:'서버 응답을 읽지 못했습니다. 작업 이력을 새로 확인하세요.',
+ REQUEST_FAILED:'요청을 처리하지 못했습니다. 작업 이력을 확인하세요.',
+ STALE_CONNECTION:'Rhino 문서 연결이 바뀌었습니다. 열린 문서를 다시 조회하고 대상을 선택하세요.',
+ SOURCE_CHANGED:'기준 파일 또는 열린 문서가 변경됐습니다. 원본 적용은 영향 검토를 다시 하고, 파일 기반 작업은 수정된 파일을 다시 불러오세요.',
+ PREVIEW_EXPIRED:'영향 검토가 만료됐습니다. 영향 검토를 다시 한 뒤 적용하세요.',
+ WRITE_UNCERTAIN:'이 문서에 결과를 확인하지 못한 쓰기가 있어 추가 적용을 보류합니다.',
+ CONTROLLER_BUSY:'이 문서에 다른 작업을 적용 중입니다. 완료 후 영향 검토를 다시 하세요.',
+ DOCUMENT_ALREADY_CONNECTED:'이 Rhino 문서는 다른 프로젝트에 연결돼 있습니다. 해당 프로젝트에서 작업하거나 다른 문서를 선택하세요.',
+ UNSUPPORTED_APPLICATION:'현재 원본 적용은 VIDE에서 생성한 박스·폴리라인·돌출 후보를 지원합니다.'
+});
+function apiError(code){return Object.assign(new Error(errors[code]||`요청 처리 오류 (${code})`),{code});}
