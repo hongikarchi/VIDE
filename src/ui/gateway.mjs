@@ -54,3 +54,5 @@ Object.assign(errors,{
  EMPTY_DWG:'DWG 모델 공간에서 읽을 경계를 찾지 못했습니다.',
  ZWCAD_REFERENCE_ONLY:'이 DWG는 참고용입니다. 경계를 핀으로 첨부하고 Rhino를 선택해 후보를 만들 수 있습니다. 원 도면 편집은 아직 지원하지 않습니다.'
 });
+
+Object.assign(errors,{INVALID_CLI_PATH:'설치된 claude.exe 또는 codex.exe의 로컬 전체 경로를 입력하세요.',CLI_FILE_MISSING:'해당 경로에 실행 파일이 없습니다.',AUTH_TIMEOUT:'로그인 상태 확인 시간이 초과됐습니다.',AUTH_INVALID:'공식 CLI의 구독 로그인 상태를 확인할 수 없습니다.'});

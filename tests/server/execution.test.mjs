@@ -19,6 +19,14 @@ test('AI receives native lengths, world bounds and decoded layers instead of sam
   const measure=received.items.find(item=>item.id==='measurements').data[0];assert.equal(measure.length,4*Math.PI);assert.deepEqual(measure.boundsSize,[4,4,0]);assert.equal(measure.layer,'대지');assert.equal(measure.line,undefined);assert.equal(workspace.get(project.id,'measure-followup').state,'succeeded');
  }finally{store.close();}
 });
+
+test('CLI path changes only affect providers created for subsequent requests',async()=>{
+ const {store,workspace,project,input}=fixture();let path='C:/first/codex.exe',release;input.provider='codex-cli';const seen=[];
+ const execution=new Execution(workspace,{settings:{get:()=>({paths:{'codex-cli':path}})},providerFactory:options=>({run:async()=>{seen.push(options.executable);await new Promise(resolve=>release=resolve);return {text:'Done'};}})});
+ try{execution.start(workspace.submit(project.id,input).request);path='C:/second/codex.exe';release();await Promise.all([...execution.active.values()].map(item=>item.completion));
+  execution.start(workspace.submit(project.id,{...input,id:'next-settings'}).request);release();await Promise.all([...execution.active.values()].map(item=>item.completion));assert.deepEqual(seen,['C:/first/codex.exe','C:/second/codex.exe']);
+ }finally{store.close();}
+});
 test('request retry is idempotent and rejects changed payload or foreign project',()=>{
   const {store,workspace,project,input}=fixture();
   try {

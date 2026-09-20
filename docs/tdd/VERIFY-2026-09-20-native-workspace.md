@@ -2,7 +2,7 @@
 id: VERIFY-2026-09-20-native-workspace
 title: 브라우저 입력에서 실제 Rhino 후보까지
 status: review
-version: 0.23
+version: 0.24
 updated: 2026-09-20
 owner: agent:codex
 related: [AC-05, AC-17, AC-24, AC-38, T-005, T-013, T-015, T-016, T-018]
@@ -189,3 +189,7 @@ tests/integration/browser-point-selection.mjs에서 [10000,20000,30] m의 점을
 
 ## DWG 입력 계약과 실환경 차단
 70개 자동 시험 중 DWG 업로드 분기는 올바른 호스트 선택·시그니처 검사·업로드 임시 파일 제거·참고 상태를 확인했다. PowerShell 구문 검사를 통과했다. tests/integration/native-dwg-import.mjs는 선행 합성 DWG 생성이 90초 동안 응답하지 않아 HOST_RESULT_UNKNOWN으로 종료됐다. import 자체의 실환경 성공 증거는 아직 없다. 생성 대상은 PLAN의 고유 .vide 시험 경로이며 사용자 문서를 닫거나 새 생성 요청으로 우회하지 않았다.
+
+## AI 설정 화면 검증
+tests/integration/browser-ai-settings.mjs에서 실제 Codex 실행 경로를 설정/재열기하고 없는 파일 입력을 거절한 뒤 기존 설정이 보존됨을 확인했다. 검증 후 원 설정으로 복원했다. Claude Code·Codex 모두 available=true의 공식 구독 상태를 반환했다. [설정 화면](../assets/native-workspace/ai-settings.png).
+자동 시험은 경로/버전 충돌·셸 문자열/토큰 거절·진행 중 요청의 기존 경로 유지와 다음 요청의 변경 경로 사용을 확인한다. 72개 자동 시험 통과. 이 시험에는 AI 생성 호출이나 원본 호스트 쓰기가 없다.

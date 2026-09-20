@@ -6,14 +6,17 @@ import { readFile } from 'node:fs/promises';
 import { geometryContract, interpret, protectGeometry } from '../core/geometry.mjs';
 
 export class Execution {
-  constructor(workspace, { providerFactory = createProvider, host, hosts } = {}) {
+  constructor(workspace, { providerFactory = createProvider, host, hosts,settings } = {}) {
     this.workspace=workspace; this.providerFactory=providerFactory; this.host=host; this.active=new Map();
-    this.hosts=hosts||{rhino:host};
+    this.hosts=hosts||{rhino:host};this.settings=settings;
+  }
+  executable(provider) {
+    return this.settings?.get().paths[provider] || (provider==='claude-cli'
+      ? process.env.VIDE_CLAUDE_PATH || join(homedir(),'.local','bin','claude.exe')
+      : process.env.VIDE_CODEX_PATH || [join(homedir(),'AppData','Roaming','npm','node_modules','@openai','codex','node_modules','@openai','codex-win32-x64','vendor','x86_64-pc-windows-msvc','bin','codex.exe')].find(existsSync));
   }
   provider(input) {
-    const executable=input.provider==='claude-cli'
-      ? process.env.VIDE_CLAUDE_PATH || join(homedir(),'.local','bin','claude.exe')
-      : process.env.VIDE_CODEX_PATH || [join(homedir(),'AppData','Roaming','npm','node_modules','@openai','codex','node_modules','@openai','codex-win32-x64','vendor','x86_64-pc-windows-msvc','bin','codex.exe')].find(existsSync);
+    const executable=this.executable(input.provider);
     return this.providerFactory({provider:input.provider,executable,timeoutMs:180000,
       model:input.model&&input.model!==input.provider?input.model:undefined,
       effort:input.effort&&input.effort!=='default'?input.effort:undefined});

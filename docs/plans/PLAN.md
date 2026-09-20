@@ -2,7 +2,7 @@
 id: PLAN
 title: VIDE 구현계획 (마스터)
 status: review
-version: 0.40
+version: 0.41
 updated: 2026-09-20
 owner: agent:codex
 related: [SPEC-00, SPEC-01, SPEC-02, SPEC-03, SPEC-04, SPEC-05, ADR-013, OQ-03, OQ-04, OQ-06, OQ-07, OQ-08, OQ-09, OQ-10, OQ-14]
@@ -236,7 +236,7 @@ CAD→Rhino는 native 객체를 통째로 넘기는 대신 선택 경계의 확�
 | T-001 | SPEC-00 §6·7, SPEC-01.1·3, SPEC-02.3; 설치 Node | src/core, tests/core, package.json; 영속 프로젝트·입력·연결·실행·명령 | 재열기 보존, 프로젝트 격리, revision 충돌, 동일 명령 중복·변조 거절, 문서별 직렬화·다른 문서 병렬, 재시작 unknown 테스트 |
 | T-002 | 채팅·핀·스케치·파일 입력과 초안/기준 복원 검증 | 대표 실무 과업·복잡한 입력 확대 | VERIFY-2026-09-20-native-workspace |
 | T-003 | 설치 호스트, SPEC-02.2·3 | 격리 호스트 실험·지원표·어댑터 빌드 | 두 호스트 각각 실제 조회·생성·재편집·저장·재열기 증거 |
-| T-004 | T-001, CLI 실험, SPEC-02.1·4 | 공급자 어댑터·전송 목록·제한·중단 | 실제 구독 응답·전송 제외·시간 초과·실제 정지·오류·새 세션 재개 |
+| T-004 | Claude/Codex 실제 구독·취소·경로 설정·로그인 확인 연결 | 확장 실행 루프·모델별 능력·한도 오류 검수 | VERIFY-2026-09-20-native-workspace |
 | T-005 | 생성 후보 적용, 취득 원본 이동·속성 보존, 증거 기반 불명확 해소 검증 | 복사/삭제 원본 적용·일반 관계·수동 재편집 검수 | VERIFY-2026-09-20-native-workspace |
 | T-006 | ZWCAD 생성 경계→Rhino 돌출 검증, DWG 참고 입력 코드 추가 | DWG 실환경 재검증(현재 COM 문서 생성 응답 없음), 원 도면 편집 | VERIFY-2026-09-20-native-workspace |
 | T-007 | 수량 필터/그룹 저장·CSV·고정 검토본·A/B 비교 검증 | 실무 산출물 범위·전문 표 계산·외부 공유 | VERIFY-2026-09-20-native-workspace |
@@ -642,3 +642,7 @@ Rhino 재열기 검증의 GetBoundingBox(true) 축별 범위를 boundsSize(m)로
 T-006의 DWG 업로드를 ZWCAD 전용 읽기 경로에 연결했다. 고유 작업 사본을 읽기 전용으로 열고 모델 공간의 직선 XY LWPolyline만 정점·닫힘·Elevation·단위·Handle·레이어·색·길이·면적으로 읽는다. 지원 밖 모델 공간 객체나 bulge/Normal 조건이면 일부만 성공으로 반환하지 않는다. 작업 사본 바이트 해시가 유지돼야 읽기 성공이다.
 참고 입력은 원 도면 편집을 지원한다고 표시하지 않는다. 같은 DWG 기준의 후보 쓰기는 AI 호출 전에 거절하며 경계를 핀으로 첨부해 Rhino로 넘기는 경로가 대상이다. 구체 읽기 의미는 ZWSOFT COM 지원 문서와 호환 ActiveX의 GetBulge 계약을 조사했으나 설치본 실증으로 별도 확인해야 한다.
 현재 2026-09-20 재검증에서 기존 build 경로의 Documents.Add가 90초 응답 없이 종료돼 HOST_RESULT_UNKNOWN이다. 반복 생성하지 않았고 이 DWG 읽기 기능은 실환경 검증 전이다. 별도 시험 경로 .vide/dwg-import-check/fcec58c1-3bb9-47ce-809d-5f8826660bdb/c064f476-5fcf-4c55-87f6-8372e5e71cfa.dwg의 상태를 확인한 뒤 이어간다. 사용자에게 열린 ZWCAD 대화상자 여부를 질문했고 다른 독립 작업을 계속한다.
+
+### AI 실행 경로 설정
+SPEC-05.2·5의 로컬 AI 설정을 보조 화면으로 연결했다. Claude Code와 Codex의 실행 파일 경로는 ai_settings에 버전과 함께 저장하며 비우면 환경/기본 경로를 사용한다. 인증 토큰·API 키·임의 셸 명령은 설정 계약에 포함하지 않는다. 로컬 절대 경로의 claude.exe/codex.exe와 파일 존재를 검사하고 오래된 수정은 거절한다.
+공식 CLI의 기존 status 경로로 구독 로그인 여부를 다시 확인한다. 실행 중 공급자 객체는 생성 당시 경로를 유지하고 다음 요청에서 새 경로를 읽는다. 설정 변경은 권한 확대·자동 공급자 전환·로그인 토큰 추출을 수행하지 않는다. 브라우저 경로 저장/재열기/잘못된 파일 거절과 두 실제 구독 로그인 확인을 통과했다.

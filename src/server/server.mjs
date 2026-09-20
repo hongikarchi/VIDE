@@ -1,3 +1,4 @@
+import {AiSettings} from '../core/ai-settings.mjs';
 import {ReviewNotes} from '../core/review-notes.mjs';
 import {compareReviews} from '../core/review-comparison.mjs';
 import {Reviews} from '../core/reviews.mjs';
@@ -23,7 +24,7 @@ const assets = new Map([
   ['/', ['../ui/index.html', 'text/html; charset=utf-8']],
   ['/app.mjs', ['../ui/app.mjs', 'text/javascript; charset=utf-8']],
   ['/style.css', ['../ui/style.css', 'text/css; charset=utf-8']],
-  ...['model','viewport','gateway','inspector','requests','sketch','quantities','quantity-view','documents','application','history','reviews','review-comparison','review-notes'].map(name => [`/${name}.mjs`, [`../ui/${name}.mjs`, 'text/javascript; charset=utf-8']]),
+  ...['model','viewport','gateway','inspector','requests','sketch','quantities','quantity-view','documents','application','history','reviews','review-comparison','review-notes','ai-settings'].map(name => [`/${name}.mjs`, [`../ui/${name}.mjs`, 'text/javascript; charset=utf-8']]),
   ['/vendor/three.module.js', ['../../node_modules/three/build/three.module.js', 'text/javascript']],
   ['/vendor/three.core.js', ['../../node_modules/three/build/three.core.js', 'text/javascript']],
   ['/vendor/OrbitControls.js', ['../../node_modules/three/examples/jsm/controls/OrbitControls.js', 'text/javascript']],
@@ -47,7 +48,8 @@ export async function startServer({ filename, port = 0, providerFactory, host, a
   host ??= new RhinoWorkspace(join(dirname(filename),'models'));
   const hosts={rhino:host,zwcad:new ZwcadWorkspace(join(dirname(filename),'cad-models'))};
   const applications=new Applications(store,workspace,applicationOptions);
-  const execution = new Execution(workspace, { providerFactory, host, hosts });
+  const aiSettings=new AiSettings(store);
+  const execution = new Execution(workspace, { providerFactory, host, hosts,settings:aiSettings });
   const withApplications=request=>({...request,applications:store.db.prepare("SELECT id,state,result FROM commands WHERE projectId=? AND kind='applyCandidate' AND json_extract(payload,'$.requestId')=? ORDER BY rowid").all(request.projectId,request.id).map(row=>({...row,result:row.result?JSON.parse(row.result):null}))});
   let origin, authority;
   const server = createServer(async (request, response) => {
@@ -109,6 +111,10 @@ export async function startServer({ filename, port = 0, providerFactory, host, a
       if(report&&request.method==='POST'){
         const html=renderReport(store.project(report[1]),withApplications(workspace.get(report[1],report[2])),(await body(request)).image);
         response.writeHead(200,{'Content-Type':'text/html; charset=utf-8','Content-Disposition':'attachment; filename="VIDE-review.html"'});response.end(html);return;
+      }
+      if(url.pathname==='/api/v1/settings/ai'){
+        if(request.method==='PUT'){send(200,aiSettings.save(await body(request)));return;}
+        if(request.method==='GET'){send(200,{...aiSettings.get(),resolved:Object.fromEntries(['claude-cli','codex-cli'].map(id=>[id,execution.executable(id)||null]))});return;}
       }
       if (url.pathname === '/api/v1/providers' && request.method === 'GET') {
         send(200, await execution.status()); return;

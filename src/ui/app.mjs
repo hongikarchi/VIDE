@@ -1,3 +1,4 @@
+import {showAiSettings} from './ai-settings.mjs';
 import {initializeReviews} from './reviews.mjs';
 import {renderHistory} from './history.mjs';
 import {initializeDocuments} from './documents.mjs';
@@ -62,6 +63,7 @@ function renderMessages(){
  });
 }
 
+$('ai-settings').onclick=()=>{ $('draft-menu').open=false;void showAiSettings(rows=>{const host=$('connection-status').textContent.match(/ · Rhino.*$/)?.[0]||'';$('connection-status').textContent=rows.map(row=>`${row.id==='claude-cli'?'Claude':'ChatGPT'} ${row.available?'연결됨':'미연결'}`).join(' · ')+host;}).catch(error=>message(error.message));};
 for(const model of models)el('option',model.name,$('model'),{value:model.id});
 $('model').onchange=()=>{chooseModel(state,$('model').value);render();};$('effort').onchange=()=>{state.effort=$('effort').value;render();};$('permission').onchange=()=>{state.permission=$('permission').value;render();};
 $('body').oninput=()=>{state.body=$('body').value;render();$('saved').textContent=draftSaved?'초안 저장됨':'저장 실패';if(state.body.endsWith('@'))$('attach-menu').open=true;};

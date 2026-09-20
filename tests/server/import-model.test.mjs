@@ -7,5 +7,5 @@ test('DWG import routes to its own host and preserves input identity without exp
  try{const request=await importModel(upload(Buffer.from('AC1032fixture')),project.id,'boundary.dwg',workspace,{importFile:()=>assert.fail('Wrong host')},cad);assert.equal(request.state,'succeeded');assert.equal(request.input.host,'zwcad');assert.equal(request.result.referenceOnly,true);await assert.rejects(access(source));
   await assert.rejects(()=>importModel(upload(Buffer.from('3D Geometry File Format')),project.id,'bad.dwg',workspace,{},cad),{code:'INVALID_INPUT'});
   await assert.rejects(()=>importModel(upload(Buffer.from('AC1032fixture')),project.id,'bad.3dm',workspace,{},cad),{code:'INVALID_INPUT'});
- }finally{store.close();await rmdir(directory);}
+ }finally{store.close();await rmdir(join(directory,project.id));await rmdir(directory);}
 });
