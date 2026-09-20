@@ -23,12 +23,17 @@ export function createViewport(container, objects, onPick, onPoint) {
     for(const object of data){
       const representation=sceneRepresentation(object);if(!representation)continue;
       const geometry=new THREE.BufferGeometry(),positions=representation.positions;
-      geometry.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));
+      // Keep small details near the geometry origin before uploading float32 GPU attributes.
+      const min=[Infinity,Infinity,Infinity],max=[-Infinity,-Infinity,-Infinity];
+      for(let i=0;i<positions.length;i++){const axis=i%3;min[axis]=Math.min(min[axis],positions[i]);max[axis]=Math.max(max[axis],positions[i]);}
+      const origin=min.map((value,axis)=>value+(max[axis]-value)/2),local=new Float32Array(positions.length);
+      for(let i=0;i<positions.length;i++)local[i]=positions[i]-origin[i%3];
+      geometry.setAttribute('position',new THREE.BufferAttribute(local,3));
       let mesh;
       if(representation.type==='point')mesh=new THREE.Points(geometry,new THREE.PointsMaterial({color:0x69766c,size:9,sizeAttenuation:false}));
       else if(representation.type==='mesh'){geometry.setIndex(object.indices);geometry.computeVertexNormals();mesh=new THREE.Mesh(geometry,new THREE.MeshStandardMaterial({color:0xd7ded4,roughness:.85,side:THREE.DoubleSide}));mesh.add(new THREE.LineSegments(new THREE.EdgesGeometry(geometry),new THREE.LineBasicMaterial({color:0x69766c})));}
       else mesh=new THREE.Line(geometry,new THREE.LineBasicMaterial({color:0x69766c}));
-      mesh.userData.id=object.id;scene.add(mesh);meshes.push(mesh);
+      mesh.position.set(...origin);mesh.userData.id=object.id;scene.add(mesh);meshes.push(mesh);
     }
   }
   replace(objects);
@@ -42,7 +47,7 @@ export function createViewport(container, objects, onPick, onPoint) {
     if(!targets.length)return;
     const bounds=new THREE.Box3();targets.forEach(m=>bounds.expandByObject(m));const center=bounds.getCenter(new THREE.Vector3());const sceneRadius=Math.max(bounds.getBoundingSphere(new THREE.Sphere()).radius,.1);camera.near=Math.max(sceneRadius/10000,.001);camera.far=Math.max(sceneRadius*100,1000);controls.minDistance=Math.max(sceneRadius*.01,.05);controls.maxDistance=Math.max(sceneRadius*20,180);
     const shift=center.clone().sub(controls.target);camera.position.add(shift);controls.target.copy(center);camera.lookAt(center);camera.updateMatrixWorld();
-    if(camera.isOrthographicCamera){const direction=camera.position.clone().sub(center).normalize();camera.position.copy(center).addScaledVector(direction,sceneRadius*3);camera.lookAt(center);camera.updateMatrixWorld();let halfW=0,halfH=0;const c=center.clone().applyMatrix4(camera.matrixWorldInverse);for(const x of [bounds.min.x,bounds.max.x])for(const y of [bounds.min.y,bounds.max.y])for(const z of [bounds.min.z,bounds.max.z]){const q=new THREE.Vector3(x,y,z).applyMatrix4(camera.matrixWorldInverse).sub(c);halfW=Math.max(halfW,Math.abs(q.x));halfH=Math.max(halfH,Math.abs(q.y));}const aspect=container.clientWidth/Math.max(1,container.clientHeight);viewSpan=2.6*Math.max(halfH,halfW/aspect,1);camera.zoom=1;}
+    if(camera.isOrthographicCamera){const direction=camera.position.clone().sub(center).normalize();camera.position.copy(center).addScaledVector(direction,sceneRadius*3);camera.lookAt(center);camera.updateMatrixWorld();let halfW=0,halfH=0;const c=center.clone().applyMatrix4(camera.matrixWorldInverse);for(const x of [bounds.min.x,bounds.max.x])for(const y of [bounds.min.y,bounds.max.y])for(const z of [bounds.min.z,bounds.max.z]){const q=new THREE.Vector3(x,y,z).applyMatrix4(camera.matrixWorldInverse).sub(c);halfW=Math.max(halfW,Math.abs(q.x));halfH=Math.max(halfH,Math.abs(q.y));}const aspect=container.clientWidth/Math.max(1,container.clientHeight);viewSpan=2.6*Math.max(halfH,halfW/aspect,.001);camera.zoom=1;}
     else {const radius=sceneRadius;const v=THREE.MathUtils.degToRad(camera.fov/2),h=Math.atan(Math.tan(v)*camera.aspect);const distance=radius/Math.sin(Math.min(v,h))*1.1;const direction=camera.position.clone().sub(center).normalize();camera.position.copy(center).addScaledVector(direction,distance);}
     sizing();controls.update();
   }
