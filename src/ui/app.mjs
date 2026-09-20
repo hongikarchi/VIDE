@@ -64,6 +64,10 @@ function renderMessages(){
  });
 }
 
+$('quit-app').onclick=async()=>{
+ if(!confirm('VIDE를 종료할까요? 진행 중인 작업은 마무리하거나 중단하고 기록을 보존합니다.'))return;
+ try{await api('/shutdown','POST',{});document.body.replaceChildren();const text=document.createElement('p');text.textContent='VIDE 종료 중입니다. 이 창을 닫아도 됩니다.';document.body.append(text);}catch(error){message(error.message);}
+};
 $('extensions').onclick=()=>{void showExtensions({projectId:project?.id,requestId:displayedResult,selected:state.selected,objects:structuredClone(objects)},request=>{
  if(!state.messages.some(message=>message.id===request.id))state.messages.push({...request.input,request});renderMessages();render();mobileView('input');
 }).catch(error=>message(error.message));};

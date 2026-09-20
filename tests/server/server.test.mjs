@@ -6,9 +6,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { startServer } from '../../src/server/server.mjs';
 
-async function fixture(t) {
+async function fixture(t,options={}) {
   const directory = mkdtempSync(join(tmpdir(), 'vide-http-test-'));
-  const app = await startServer({ filename: join(directory, 'test.sqlite') });
+  const app = await startServer({ filename: join(directory, 'test.sqlite'),...options });
   t.after(async () => { await app.close(); rmSync(directory, { recursive: true, force: true }); });
   const api = (path, { body, method = 'GET', headers = {} } = {}) => fetch(app.origin + '/api/v1' + path,
     { method, headers: { Origin: app.origin, 'Content-Type': 'application/json', ...headers }, body: body === undefined ? undefined : JSON.stringify(body) });
@@ -16,6 +16,12 @@ async function fixture(t) {
   const cookie = response.headers.get('set-cookie').split(';')[0];
   return { app, api: (path, options = {}) => api(path, { ...options, headers: { Cookie: cookie, ...options.headers } }), cookie };
 }
+
+test('종료 요청 이후 조회를 유지하고 새 쓰기를 거절한다',async t=>{
+ let stopping=false;const {api}=await fixture(t,{onShutdown:()=>{stopping=true;}});
+ assert.equal((await api('/shutdown',{method:'POST',body:{}})).status,200);await new Promise(resolve=>setImmediate(resolve));assert.equal(stopping,true);
+ assert.equal((await api('/projects')).status,200);const write=await api('/projects',{method:'POST',body:{name:'Too late'}});assert.equal((await write.json()).code,'APP_STOPPING');
+});
 
 test('쿠키 없는 접근, 다른 Origin, DNS rebinding Host를 거절한다', async t => {
   const { app, api } = await fixture(t);

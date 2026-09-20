@@ -2,7 +2,7 @@
 id: VERIFY-2026-09-20-native-workspace
 title: 브라우저 입력에서 실제 Rhino 후보까지
 status: review
-version: 0.25
+version: 0.26
 updated: 2026-09-20
 owner: agent:codex
 related: [AC-05, AC-17, AC-24, AC-38, T-005, T-013, T-015, T-016, T-018]
@@ -197,3 +197,7 @@ tests/integration/browser-ai-settings.mjs에서 실제 Codex 실행 경로를 �
 ## 신뢰 확장 전체 흐름 검증
 tests/integration/browser-extensions.mjs에서 등록/활성화→실제 저장된 Extrusion 2개 요약→작업 이력→원 객체 선택→비활성화를 확인했다. 프로젝트 a7f862d5-cc07-4dd9-8a12-b6eea516afca, 실행 bfaf6d24-2f87-41f6-baa1-c8c5d0a41d23. 비활성화 후 새 실행과 일반 AI API 우회가 거절되고 동일 실행 ID는 기존 결과를 반환한다. [확장 결과](../assets/native-workspace/extension-summary.png).
 계약 시험은 권한 밖 선언·다른 프로젝트·알 수 없는 확장·중복 요청 거절, 잘못된 원 데이터의 실행 실패 기록과 이전 결과 보존을 확인했다. 자동 시험 73개와 브라우저 작업 공간 회귀 통과. 외부 개발자 확장 배포·범용 샌드박스·장기 작업 중단은 미구현이다.
+
+## 실행 재사용·종료·재시작 검증
+tests/server/lifecycle.test.mjs는 실제 Node 프로세스를 실행해 프로젝트를 저장하고 두 번째 실행이 기존 제어자를 재사용한 뒤 종료되는지 확인했다. 앱 종료 API→프로세스 종료→다시 실행 후 같은 프로젝트가 남아 있다. 잘못된 외부 launch URL을 거절했다. 종료 요청 이후 조회는 유지하고 새 쓰기는 APP_STOPPING으로 거절하는 시험도 통과했다. 총 75개 자동 시험 통과.
+이 시험은 현재 Windows 환경의 실제 프로세스 수명/데이터 유지 검수이며 개발 도구가 없는 별도 PC 설치 검수를 대체하지 않는다.

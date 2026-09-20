@@ -58,3 +58,5 @@ Object.assign(errors,{
 Object.assign(errors,{INVALID_CLI_PATH:'설치된 claude.exe 또는 codex.exe의 로컬 전체 경로를 입력하세요.',CLI_FILE_MISSING:'해당 경로에 실행 파일이 없습니다.',AUTH_TIMEOUT:'로그인 상태 확인 시간이 초과됐습니다.',AUTH_INVALID:'공식 CLI의 구독 로그인 상태를 확인할 수 없습니다.'});
 
 Object.assign(errors,{EXTENSION_DISABLED:'확장이 비활성화되어 새 실행을 시작할 수 없습니다.',EXTENSION_FAILED:'확장 실행이 실패했습니다. 입력과 이전 후보는 유지됩니다.'});
+
+Object.assign(errors,{APP_STOPPING:'VIDE가 종료 중이라 새 작업을 시작할 수 없습니다.'});

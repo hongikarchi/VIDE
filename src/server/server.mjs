@@ -43,7 +43,7 @@ async function body(request) {
 }
 const statuses = { NOT_FOUND: 404, FORBIDDEN: 403, UNAUTHORIZED: 401, JSON_REQUIRED: 415, INPUT_TOO_LARGE: 413,
   REVISION_CONFLICT: 409, TARGET_MISMATCH: 409, CONTROLLER_BUSY: 409, PROJECT_BUSY:409, STALE_REFERENCE:409 };
-export async function startServer({ filename, port = 0, providerFactory, host, applicationOptions } = {}) {
+export async function startServer({ filename, port = 0, providerFactory, host, applicationOptions,onShutdown } = {}) {
   const store = new Store(filename), bootstrap = randomBytes(32).toString('hex'), session = randomBytes(32).toString('hex');
   const workspace = new Workspace(store),tableViews=new TableViews(store),reviews=new Reviews(store),reviewNotes=new ReviewNotes(store,reviews);
   host ??= new RhinoWorkspace(join(dirname(filename),'models'));
@@ -52,7 +52,7 @@ export async function startServer({ filename, port = 0, providerFactory, host, a
   const aiSettings=new AiSettings(store),extensions=new Extensions(store,workspace);
   const execution = new Execution(workspace, { providerFactory, host, hosts,settings:aiSettings });
   const withApplications=request=>({...request,applications:store.db.prepare("SELECT id,state,result FROM commands WHERE projectId=? AND kind='applyCandidate' AND json_extract(payload,'$.requestId')=? ORDER BY rowid").all(request.projectId,request.id).map(row=>({...row,result:row.result?JSON.parse(row.result):null}))});
-  let origin, authority;
+  let origin, authority,stopping=false;
   const server = createServer(async (request, response) => {
     const requestId = randomBytes(8).toString('hex');
     response.setHeader('Cache-Control', 'no-store');
@@ -82,6 +82,8 @@ export async function startServer({ filename, port = 0, providerFactory, host, a
       }
       const cookie = request.headers.cookie?.split(';').map(s => s.trim()).find(s => s.startsWith('vide_session='))?.slice(13);
       if (!equal(cookie, session)) throw new DomainError('UNAUTHORIZED');
+      if(stopping&&request.method!=='GET')throw new DomainError('APP_STOPPING');
+      if(url.pathname==='/api/v1/shutdown'&&request.method==='POST'&&onShutdown){stopping=true;send(200,{stopping:true});setImmediate(onShutdown);return;}
       const upload=/^\/api\/v1\/projects\/([^/]+)\/import$/.exec(url.pathname);
       if(upload&&request.method==='POST'){send(200,await importModel(request,upload[1],url.searchParams.get('name'),workspace,host,hosts.zwcad));return;}
       const capture=/^\/api\/v1\/projects\/([^/]+)\/capture$/.exec(url.pathname);
