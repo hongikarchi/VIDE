@@ -12,7 +12,8 @@
     "test": "node --test tests/core/*.test.mjs tests/ai/*.test.mjs tests/server/*.test.mjs",
     "docs:build": "npm --prefix tools/docs run build",
     "docs:check": "npm --prefix tools/docs run check",
-    "package:windows": "node src/desktop/build.mjs"
+    "package:windows": "node src/desktop/build.mjs",
+    "backup": "node src/desktop/backup.mjs"
   },
   "dependencies": {
     "three": "0.186.0"

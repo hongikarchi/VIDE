@@ -2,7 +2,7 @@
 id: VERIFY-2026-09-20-native-workspace
 title: 브라우저 입력에서 실제 Rhino 후보까지
 status: review
-version: 0.28
+version: 0.29
 updated: 2026-09-20
 owner: agent:codex
 related: [AC-05, AC-17, AC-24, AC-38, T-005, T-013, T-015, T-016, T-018]
@@ -208,3 +208,7 @@ T-011 / SPEC-05.3·6 / AC-23·27의 일부 검증이다. src/desktop/build.mjs�
 
 ## 호환되지 않는 데이터 보존 검증
 T-011 / SPEC-05.6: tests/core/database-check.test.mjs는 미래 버전 99, 복수 버전 행, 다른 앱 DB, SQLite가 아닌 파일의 시작 거절과 바이트 보존을 확인한다. 같은 파일을 두 번 시도해 실패한 시작이 제어 잠금을 남기지 않음을 확인했다. 정상 파일 재시작 회귀를 포함한 자동 시험 76개 통과. quick_check는 구조 검사이며 모든 업무 의미의 무결성이나 복구 성공을 보증하지 않는다.
+
+## 오프라인 백업 검증
+T-011 / SPEC-05.3·6: tests/core/backup.test.mjs에서 실행 중 제어 잠금 거절, 기존 백업/중첩 목적지 거절, 원 DB 바이트 보존, 백업 DB의 프로젝트 읽기, 모델 파일 해시와 변조 탐지, launch 토큰 제외를 확인했다. 전체 자동 시험 77개 통과.
+0.1.0-dev.20260920.2 패키지의 70개 파일을 검증하고 포함 런타임으로 백업 create/verify까지 실행했다. 브라우저·실제 구독 연결·중복 실행·재시작·제거 후 자료 보존 회귀도 통과했다. 시험 데이터 .vide/package-check/10718fdf-5a9a-4a65-94d6-f365345c1e58/data. 실제 사용자 데이터 복원, 다른 PC/경로 이관, DB 버전 변경은 시험하지 않았다.

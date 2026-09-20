@@ -2,7 +2,7 @@
 id: PLAN
 title: VIDE 구현계획 (마스터)
 status: review
-version: 0.46
+version: 0.47
 updated: 2026-09-20
 owner: agent:codex
 related: [SPEC-00, SPEC-01, SPEC-02, SPEC-03, SPEC-04, SPEC-05, ADR-013, OQ-03, OQ-04, OQ-06, OQ-07, OQ-08, OQ-09, OQ-10, OQ-14]
@@ -338,7 +338,7 @@ T-003·005는 H-RHINO-04·05의 지원안을, T-003·006은 H-ZWCAD-04·05의 �
 | T-008 | 허용된 속성 요약 확장 등록·실행·실패·비활성화와 객체 연결 검증 | 추가 확장/장기 작업/배포 수용 검수 | VERIFY-2026-09-20-native-workspace |
 | T-009 | 로컬 검토 의견 보존·중복 방지·원 기준 요청 초안 연결 | 외부 게시/작성자 인증·수신·PC 종료 지속성 | VERIFY-2026-09-20-native-workspace |
 | T-010 | 사용자 스터디 기반 3D shell·Inspector·실제 입력·모바일 회귀 검증 | 사용자 최종 디자인·실기기 사용성 | VERIFY-2026-09-20-native-workspace |
-| T-011 | 진행 중 | Windows 런타임 동봉 ZIP·실행/중복 재사용/재시작/제거 후 데이터 보존 확인. 별도 비개발 PC·업데이트/복구 검수 남음 | VERIFY의 Windows 실행 패키지 검증 |
+| T-011 | 진행 중 | Windows 런타임 동봉 ZIP·실행/중복 재사용/재시작/제거 후 데이터 보존·오프라인 백업 검증. 별도 비개발 PC·마이그레이션/복구 UI 검수 남음 | VERIFY의 Windows 실행 패키지 검증 |
 | T-012 | 미착수 | 두 기준선과 동일 과업 비교 | — |
 | T-013 | 작업 요청·상태·결과의 SQLite 영속 저장 구현 | 실제 요청 저장·이력·원본 보호 확장 | PLAN §4·§6.3 |
 | T-014 | 선행 사례 조사 있음 | 합성 gateway·화면 문맥, ESM 유지 결정 | PLAN-01 §4·5 |
@@ -663,3 +663,8 @@ SPEC-05.3·6에 따라 src/desktop의 C# 실행기와 빌더를 추가했다. np
 
 ### 기존 데이터의 쓰기 전 호환성 검사
 SPEC-05.6에 따라 단일 제어 잠금을 얻은 뒤 기존 DB를 읽기 전용으로 열어 quick_check와 단일 schema_version=1을 확인한다. 다른 버전·여러 버전 행·다른 앱 DB·읽기 실패는 WAL 설정/테이블 생성 전에 거절한다. 실패하면 제어 잠금을 해제하며 기존 DB를 초기화하지 않는다. 새/빈 DB는 기존 초기화 경로를 따른다. 자동 백업·마이그레이션·사용자 복구 UI는 별도 남은 작업이다.
+
+### 종료된 작업 공간 백업
+SPEC-05.3·6의 보존 경로로 src/core/backup.mjs와 src/desktop/backup.mjs를 추가했다. 앱과 같은 제어 잠금을 얻어야 하며 실행 중인 앱을 자동 종료하지 않는다. Node의 [SQLite backup API](https://nodejs.org/download/release/latest-v24.x/docs/api/sqlite.html)를 사용해 DB를 복사하고 models/cad-models의 파일 해시를 대조한다. 기존 백업 폴더·데이터 폴더 내부 목적지·심볼릭 링크는 거절한다. 실패한 부분 폴더를 유효한 백업으로 표시하지 않으며 완료 manifest는 마지막에 기록한다.
+개발 실행은 `npm run backup -- create "<데이터 폴더>" "<새 백업 폴더>"`, 확인은 `npm run backup -- verify "<백업 폴더>"`다. 패키지에는 동봉 Node로 같은 명령을 실행하는 START-HERE 안내가 있다. 백업에는 로그인 파일이나 launch 토큰을 포함하지 않는다. 앱 DB의 경로 설정과 프로젝트 자료는 포함되므로 로컬 사용자 자료로 취급한다.
+복구 시에는 앱을 종료하고 백업 검증 후 기존 데이터 폴더를 별도로 보존해야 한다. 모델 파일 참조가 절대 경로이므로 manifest.source와 동일한 데이터 경로에 DB·models·cad-models를 함께 복원한다. 현재 도구는 기존 데이터를 덮어쓰는 복원·경로 이관·마이그레이션을 자동 수행하지 않는다. 백업은 로컬 기록/후보를 보존하며 외부 호스트 원본이나 브라우저의 미제출 초안까지 포함하지 않는다.
