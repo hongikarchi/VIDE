@@ -2,7 +2,7 @@
 id: VERIFY-2026-09-20-native-workspace
 title: 브라우저 입력에서 실제 Rhino 후보까지
 status: review
-version: 0.21
+version: 0.22
 updated: 2026-09-20
 owner: agent:codex
 related: [AC-05, AC-17, AC-24, AC-38, T-005, T-013, T-015, T-016, T-018]
@@ -182,3 +182,7 @@ tests/integration/browser-native-copy.mjs는 3DM 가져오기→핀→구독 Sol
 
 ## 점 객체 표시·선택 검증
 tests/integration/browser-point-selection.mjs에서 [10000,20000,30] m의 점을 실제 WebGL로 렌더했다. 정투영/원근 중앙 클릭, 핀 첨부 콜백, 점에서 30px 떨어진 클릭 미선택, 단일 점 전체 보기를 확인했다. 이 시험은 표시·선택 계약이며 새 호스트 작업이나 AI 호출을 수행하지 않았다.
+
+## 실제 치수와 Inspector 검증
+반지름 2 m의 네이티브 원을 새 작업 사본으로 읽어 boundsSize=[4,4,0] m, 길이 12.566370643255096 m, Site 레이어와 Inspector 표시를 확인했다. 프로젝트 6b621c71-4030-426e-b250-c94c56a9d617. [Inspector 화면](../assets/native-workspace/native-measurements.png). tests/integration/browser-native-measurements.mjs와 native-geometry.mjs의 [5,3,6] m 돌출 범위 검증을 통과했다.
+실행 계약 시험은 AI 문맥에 길이·실제 범위·한글 레이어가 전달되고 표시 점열은 포함되지 않는지 확인한다. 전체 자동 시험 69개 통과. 축 정렬 경계 상자의 범위는 부재 고유 파라미터나 법정 치수가 아니다.

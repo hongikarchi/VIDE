@@ -51,14 +51,17 @@ export function renderInspector(object, result, request, tab='properties') {
   let properties;
   if(tab==='geometry') {
     const positions=native?.vertices?.length?native.vertices:native?.line;
-    const size=positions?.length?Array.from({length:3},(_,axis)=>{
+    const measuredBounds=Array.isArray(native?.boundsSize)&&native.boundsSize.length===3&&native.boundsSize.every(Number.isFinite);
+    const size=measuredBounds?native.boundsSize:positions?.length?Array.from({length:3},(_,axis)=>{
       let min=Infinity,max=-Infinity;for(let i=axis;i<positions.length;i+=3){min=Math.min(min,positions[i]);max=Math.max(max,positions[i]);}return max-min;
     }):null;
-    properties=[['폭 X',number(size?.[0],' m')],['깊이 Y',number(size?.[1],' m')],['높이 Z',number(size?.[2],' m')],['기하 면적',number(native?.area,' m²')],['체적',number(native?.volume,' m³')],['원점',vector(object.origin)]];
+    const prefix=measuredBounds?'':'표시 ';
+    properties=[[prefix+'폭 X',number(size?.[0],' m')],[prefix+'깊이 Y',number(size?.[1],' m')],[prefix+'높이 Z',number(size?.[2],' m')],['곡선 길이',number(native?.length,' m')],['기하 면적',number(native?.area,' m²')],['체적',number(native?.volume,' m³')],['원점',vector(object.origin)]];
   } else if(tab==='history') {
     properties=[['생성 요청',request?.input?.body||'파일 가져오기'],['처리 상태',request?.state||'—'],['결과 시각',request?.createdAt?new Date(request.createdAt).toLocaleString('ko-KR'):'—'],['기준 후보',object.revision||'—']];
   } else {
-    properties=[['객체 이름',object.name],['형상',native?.nativeType||object.kind||object.type||'—'],['호스트',result?.host==='zwcad'?'ZWCAD':'Rhino'],['네이티브 ID',native?.nativeId||object.nativeId||'—'],['단위','m'],['상태','저장된 후보']];
+    let layer='—';try{if(native?.layer64)layer=new TextDecoder().decode(Uint8Array.from(atob(native.layer64),c=>c.charCodeAt(0)));}catch{}
+    properties=[['객체 이름',object.name],['레이어',layer],['형상',native?.nativeType||object.kind||object.type||'—'],['호스트',result?.host==='zwcad'?'ZWCAD':'Rhino'],['네이티브 ID',native?.nativeId||object.nativeId||'—'],['단위','m'],['상태','저장된 후보']];
   }
   const grid=document.createElement('div');grid.className='property-grid';content.append(grid);
   for(const [label,value] of properties){const item=document.createElement('div');item.className='property';const key=document.createElement('small');key.textContent=label;const text=document.createElement('strong');text.textContent=value;item.append(key,text);grid.append(item);}

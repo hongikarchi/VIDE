@@ -2,7 +2,7 @@
 id: PLAN
 title: VIDE 구현계획 (마스터)
 status: review
-version: 0.38
+version: 0.39
 updated: 2026-09-20
 owner: agent:codex
 related: [SPEC-00, SPEC-01, SPEC-02, SPEC-03, SPEC-04, SPEC-05, ADR-013, OQ-03, OQ-04, OQ-06, OQ-07, OQ-08, OQ-09, OQ-10, OQ-14]
@@ -634,3 +634,6 @@ SPEC-04.5의 원 의견·작성 기준 보존 중 로컬 부분을 구현했다.
 
 ### 점 객체 표시와 선택
 nativeType=Point의 실제 원점 좌표를 3D 점으로 표시하고 객체 선택·핀·전체 보기·표준 정투영/원근 전환에 포함했다. 화면 픽셀 기준으로 점/선 히트 영역을 계산하고 점 하나의 전체 보기에서도 카메라가 점 좌표와 겹치지 않도록 최소 반경을 사용한다. 표시 가능 여부는 scene-representation 모듈을 UI·검토본·보고서에서 공유한다. 이전 검토본은 저장 당시 미지원 기록을 그대로 보존한다.
+
+### 실제 치수·길이·레이어 전달
+Rhino 재열기 검증의 GetBoundingBox(true) 축별 범위를 boundsSize(m)로 저장한다. Inspector는 이 값을 폭/깊이/높이로 표시하고, 과거 후보의 표시 메시에서만 얻은 범위는 ‘표시 폭’ 등으로 구분한다. 실제 Curve.GetLength와 레이어 이름도 표시한다. AI 문맥의 측정값에는 길이·실제 범위·디코딩된 레이어를 포함하며 표시용 점열을 실측값으로 전달하지 않는다.

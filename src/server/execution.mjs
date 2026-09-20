@@ -57,7 +57,7 @@ export class Execution {
         .map(r=>({request:r.input.body,response:r.result?.text}));
       if(conversation.length)items.push({id:'conversation',type:'conversation',data:conversation});
       if(host)items.push({id:'working-model',type:'geometry',data:previous?.result.objects||[]});
-      if(previous?.result.scene)items.push({id:'measurements',type:'native-measurements',data:previous.result.scene.map(({id,area,volume})=>({id,area,volume}))});
+      if(previous?.result.scene)items.push({id:'measurements',type:'native-measurements',data:previous.result.scene.map(({id,area,volume,length,boundsSize,layer64})=>({id,area,volume,length,boundsSize,layer:layer64?Buffer.from(layer64,'base64').toString('utf8'):null}))});
       const targetContract=target==='zwcad'?'Target is ZWCAD: only planar XY polylines, their move and remove are supported. No solid operations.':'Target is Rhino.';
       const goal=(host?geometryContract+'\n'+targetContract+' Other-host pinned geometry is read-only reference in meters, never a writable target.\nPermission: '+input.permission+'\nUser request: ':'')+(input.body||'첨부한 설계 문맥을 검토해 주세요.');
       const result=await this.provider(input).run({goal,
