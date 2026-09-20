@@ -23,3 +23,11 @@ test('native exact length is preferred and legacy sampled native curves are not 
  const sample=structuredClone(request);sample.result.objects[0].kind='native';sample.result.scene[0].length=5.2;
  assert.equal(quantities(sample).rows[0].length,5.2);delete sample.result.scene[0].length;assert.equal(quantities(sample).rows[0].length,null);
 });
+test('object scope uses identity, composes filters and never widens a missing selection',()=>{
+ const table=quantities(request,{objectId:'a'});assert.equal(table.rows.length,1);assert.equal(table.totals.area.value,12);
+ assert.equal(table.available.objects.length,2);assert.equal(table.query.objectId,'a');
+ assert.equal(quantities(request,{objectId:'missing'}).rows.length,0);
+ assert.equal(quantities(request,{objectId:'a',search:'Unknown'}).rows.length,0);
+ assert.throws(()=>quantities(request,{objectId:['a']}),{code:'INVALID_INPUT'});
+ assert.equal(quantitiesCsv(table).includes('"Unknown"'),false);
+});

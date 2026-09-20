@@ -2,7 +2,7 @@
 id: VERIFY-2026-09-20-native-workspace
 title: 브라우저 입력에서 실제 Rhino 후보까지
 status: review
-version: 0.37
+version: 0.38
 updated: 2026-09-21
 owner: agent:codex
 related: [AC-05, AC-17, AC-24, AC-38, T-005, T-013, T-015, T-016, T-018]
@@ -242,3 +242,9 @@ T-015 / SCR-01·02: tests/integration/browser-large-coordinate-detail.mjs는 X=9
 
 T-002·016 / SCR-01 객체 Inspector의 보완 검증이다. native-attributes.mjs는 활성 문서 대신 별도 headless 합성 파일에 BuildingId/FloorId/리터럴 문자열/한도 초과 값을 만들고 저장 후 importFile로 다시 읽었다. 정상 속성 3쌍과 incomplete 표시, 내부 vide-id 제외, 원본 SHA-256 불변을 확인했다. browser-native-attributes.mjs는 실제 Chromium에서 HTML처럼 생긴 값을 문자로 표시하고 명시적 첨부가 기존 요청 기준을 바꾸지 않는 것을 확인했다. execution.test는 사용자 속성이 AI 측정 문맥에 자동 유출되지 않음을 확인한다. 이 시험은 임의 BIM 속성 편집·관계 추론·실무 모델 검수 완료를 뜻하지 않는다.
 
+
+## 객체 범위 수량표와 패키지 재검증 — 2026-09-21
+
+SPEC-03.5·AC-20: browser-quantity-object.mjs는 저장된 복수 객체 후보의 단일 객체 필터, 동일 범위 CSV(헤더+객체 1행), 전체 범위 복귀를 확인했다. quantities.test는 이름 대신 ID 선택·조건 교집합·없는 ID의 빈 결과·잘못된 자료형 거절을 검증한다. 복수 객체 집합 선택은 아직 지원하지 않는다.
+
+portable-package.mjs로 0.1.0-dev.20260921.1의 72개 파일과 실행/재시작/자료 보존/백업을 재검증했다. 시험 데이터는 .vide/package-check/644081d2-9d4d-4a6d-b123-9dcd89e3ff99/data에 격리했다. 이 패키지는 59506cb 기준이며 이후 수량표 필터를 포함하지 않는다.

@@ -6,6 +6,7 @@ export function initializeQuantityView(parent,projectId,requestId,initial,views,
  const controls=element('div','',parent);controls.className='table-controls';
  const search=element('input','',controls);search.placeholder='객체 검색';search.setAttribute('aria-label','객체 검색');search.maxLength=200;
  const select=(label,items)=>{const node=element('select','',controls);node.setAttribute('aria-label',label);for(const [value,text] of items)element('option',text,node).value=value;return node;};
+ const object=select('집계 객체',[['','전체 객체'],...initial.available.objects.map(item=>[item.id,item.name])]);
  const type=select('객체 유형',[['','전체 유형'],...initial.available.types.map(value=>[value,value])]);
  const layer=select('레이어 필터',[['','전체 레이어'],...initial.available.layers.map(value=>[value,value])]);
  const group=select('그룹 기준',[['none','그룹 없음'],['type','유형별'],['layer','레이어별']]);
@@ -17,7 +18,7 @@ export function initializeQuantityView(parent,projectId,requestId,initial,views,
  const status=element('p','',parent);status.setAttribute('role','status');const wrap=element('div','',parent);wrap.className='quantity-scroll';
  const download=element('a','CSV 내려받기',parent);download.download='VIDE-quantities.csv';
  let generation=0,selected;
- const query=()=>({search:search.value,type:type.value,layer:layer.value,groupBy:group.value});
+ const query=()=>({search:search.value,type:type.value,layer:layer.value,groupBy:group.value,objectId:object.value});
  const render=table=>{
   wrap.replaceChildren();status.textContent=`${table.rows.length} / ${table.totalCount}개 객체 · 선택한 저장 기준`;
   const grid=element('table','',wrap),head=element('tr','',element('thead','',grid));for(const title of ['객체','유형','레이어','길이 (m)','기하 면적 (m²)','체적 (m³)'])element('th',title,head);
@@ -29,10 +30,10 @@ export function initializeQuantityView(parent,projectId,requestId,initial,views,
  };
  const reload=async()=>{const current=++generation;refresh.disabled=true;try{const table=await api(`/projects/${projectId}/requests/${requestId}/quantities?${new URLSearchParams(query())}`);if(current===generation&&isCurrent())render(table);}catch(error){if(current===generation&&isCurrent())status.textContent=error.message+' 마지막 성공 표를 유지합니다.';}finally{if(current===generation)refresh.disabled=false;}};
  const catalog=()=>{picker.replaceChildren();element('option','새 구성',picker).value='';for(const view of views)element('option',view.name,picker).value=view.id;picker.value=selected?.id||'';remove.disabled=!selected;};
- picker.onchange=()=>{selected=views.find(view=>view.id===picker.value);name.value=selected?.name||'';remove.disabled=!selected;if(selected){search.value=selected.query.search;for(const [node,value] of [[type,selected.query.type],[layer,selected.query.layer],[group,selected.query.groupBy]]){if(![...node.options].some(option=>option.value===value))element('option',value+' · 현재 기준에 없음',node).value=value;node.value=value;}void reload();}};
+ picker.onchange=()=>{selected=views.find(view=>view.id===picker.value);name.value=selected?.name||'';remove.disabled=!selected;if(selected){search.value=selected.query.search;for(const [node,value] of [[object,selected.query.objectId||''],[type,selected.query.type],[layer,selected.query.layer],[group,selected.query.groupBy]]){if(![...node.options].some(option=>option.value===value))element('option',value+' · 현재 기준에 없음',node).value=value;node.value=value;}void reload();}};
  const viewBusy=busy=>{picker.disabled=name.disabled=save.disabled=busy;remove.disabled=busy||!selected;};
  save.onclick=async()=>{viewBusy(true);try{const value=await api(`/projects/${projectId}/table-views${selected?'/'+selected.id:''}`,selected?'PUT':'POST',{name:name.value,query:query(),revision:selected?.revision});if(!isCurrent())return;const index=views.findIndex(view=>view.id===value.id);if(index<0)views.push(value);else views[index]=value;selected=value;catalog();status.textContent='표 구성을 저장했습니다.';}catch(error){if(isCurrent())status.textContent=error.message;}finally{viewBusy(false);}};
  remove.onclick=async()=>{if(!selected)return;const target=selected;viewBusy(true);try{await api(`/projects/${projectId}/table-views/${target.id}/delete`,'POST',{revision:target.revision});if(!isCurrent())return;views.splice(views.findIndex(view=>view.id===target.id),1);selected=undefined;catalog();status.textContent='표 구성을 삭제했습니다.';}catch(error){if(isCurrent())status.textContent=error.message;}finally{viewBusy(false);}};
- refresh.onclick=reload;type.onchange=layer.onchange=group.onchange=reload;search.onchange=reload;search.onkeydown=event=>{if(event.key==='Enter'){event.preventDefault();void reload();}};
+ refresh.onclick=reload;object.onchange=type.onchange=layer.onchange=group.onchange=reload;search.onchange=reload;search.onkeydown=event=>{if(event.key==='Enter'){event.preventDefault();void reload();}};
  catalog();render(initial);
 }

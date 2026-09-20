@@ -11,10 +11,10 @@ export function quantities(request,rawQuery={}){
   const native=request.result.scene.find(s=>s.id===object.id);
   return {id:object.id,name:object.name,type:native?.nativeType||object.kind||'미상',layer:native?.layer64!==undefined?Buffer.from(native.layer64,'base64').toString('utf8'):null,length:known(native?.length)??(object.kind!=='native'?lengthOf(native?.line):null),area:known(native?.area),volume:known(native?.volume)};
  });
- const filtered=rows.filter(row=>(!query.search||row.name.toLocaleLowerCase().includes(query.search.toLocaleLowerCase()))&&(!query.type||row.type===query.type)&&(!query.layer||row.layer===query.layer));
+ const filtered=rows.filter(row=>(!query.objectId||row.id===query.objectId)&&(!query.search||row.name.toLocaleLowerCase().includes(query.search.toLocaleLowerCase()))&&(!query.type||row.type===query.type)&&(!query.layer||row.layer===query.layer));
  const groups=[];
  if(query.groupBy!=='none')for(const key of new Set(filtered.map(row=>row[query.groupBy]))){const members=filtered.filter(row=>row[query.groupBy]===key);groups.push({key:key??'미상',totals:summarize(members),ids:members.map(row=>row.id)});}
- return {basis:request.id,host:request.result.host||'rhino',createdAt:request.createdAt,scope:'candidate',source:'저장·재열기한 호스트 형상',units:{length:'m',area:'m²',volume:'m³'},query,available:{types:[...new Set(rows.map(row=>row.type))],layers:[...new Set(rows.map(row=>row.layer).filter(value=>value!==null))]},totalCount:rows.length,rows:filtered,groups,totals:summarize(filtered)};
+ return {basis:request.id,host:request.result.host||'rhino',createdAt:request.createdAt,scope:'candidate',source:'저장·재열기한 호스트 형상',units:{length:'m',area:'m²',volume:'m³'},query,available:{objects:rows.map(({id,name})=>({id,name})),types:[...new Set(rows.map(row=>row.type))],layers:[...new Set(rows.map(row=>row.layer).filter(value=>value!==null))]},totalCount:rows.length,rows:filtered,groups,totals:summarize(filtered)};
 }
 function cell(value){
  let text=value===null?'미상':String(value??'');
@@ -29,9 +29,9 @@ export function quantitiesCsv(table){
 }
 
 export function quantityQuery(value={}){
- if(!value||typeof value!=='object'||Array.isArray(value)||Object.keys(value).some(key=>!['search','type','layer','groupBy'].includes(key)))throw new DomainError('INVALID_INPUT');
- const query={search:value.search??'',type:value.type??'',layer:value.layer??'',groupBy:value.groupBy??'none'};
- if(['search','type','layer'].some(key=>typeof query[key]!=='string'||query[key].length>200)||!['none','type','layer'].includes(query.groupBy))throw new DomainError('INVALID_INPUT');return query;
+ if(!value||typeof value!=='object'||Array.isArray(value)||Object.keys(value).some(key=>!['search','type','layer','groupBy','objectId'].includes(key)))throw new DomainError('INVALID_INPUT');
+ const query={search:value.search??'',type:value.type??'',layer:value.layer??'',groupBy:value.groupBy??'none',objectId:value.objectId??''};
+ if(['search','type','layer','objectId'].some(key=>typeof query[key]!=='string'||query[key].length>200)||!['none','type','layer'].includes(query.groupBy))throw new DomainError('INVALID_INPUT');return query;
 }
 function summarize(rows){
  const totals={count:rows.length};
