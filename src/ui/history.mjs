@@ -44,7 +44,16 @@ function renderCandidate(card,message,projectId,actions){
   const apply=element('button','문서에 적용',card);
   apply.onclick=async()=>{try{await showApplication(projectId,message.id,application=>{request.applications=[...(request.applications||[]),application];actions.changed();},result.sourceDocument);}catch(error){actions.error(error.message);}};
  }
- for(const application of request.applications||[])element('small',application.state==='succeeded'?'원본 반영됨 · 파일 저장 별도':application.state==='unknown'?'원본 적용 결과 미확인':application.state==='failed'?'원본 적용 실패':'원본 적용 중',card);
+ for(const application of request.applications||[]){
+  element('small',application.state==='succeeded'?'원본 반영됨 · 파일 저장 별도':application.state==='unknown'?'원본 적용 결과 미확인':application.state==='failed'?'원본 적용 실패':'원본 적용 중',card);
+  if(application.result?.code)element('small',errors[application.result.code]||application.result.code,card);
+  if(application.state==='unknown'){
+   const recover=element('button','결과 다시 확인',card);recover.onclick=async()=>{recover.disabled=true;try{
+    const result=await api(`/projects/${projectId}/applications/${application.id}/reconcile`,'POST',{});
+    Object.assign(application,result);actions.changed();
+   }catch(error){actions.error(error.message);recover.disabled=false;}};
+  }
+ }
  const table=element('button','수량표',card);table.onclick=async()=>{try{await showQuantities(projectId,message.id,id=>actions.selection(message.id,id));}catch(error){actions.error(error.message);}};
  const measurements=element('details','',card);element('summary','측정값',measurements);
  for(const object of result.scene||[])element('p',`${result.objects.find(o=>o.id===object.id)?.name||object.id} · 기하 면적 ${object.area?.toFixed(2)??'—'} m² · 체적 ${object.volume?.toFixed(2)??'—'} m³`,measurements);

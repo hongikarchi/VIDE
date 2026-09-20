@@ -36,12 +36,12 @@ async function body(request) {
 }
 const statuses = { NOT_FOUND: 404, FORBIDDEN: 403, UNAUTHORIZED: 401, JSON_REQUIRED: 415, INPUT_TOO_LARGE: 413,
   REVISION_CONFLICT: 409, TARGET_MISMATCH: 409, CONTROLLER_BUSY: 409, PROJECT_BUSY:409, STALE_REFERENCE:409 };
-export async function startServer({ filename, port = 0, providerFactory, host } = {}) {
+export async function startServer({ filename, port = 0, providerFactory, host, applicationOptions } = {}) {
   const store = new Store(filename), bootstrap = randomBytes(32).toString('hex'), session = randomBytes(32).toString('hex');
   const workspace = new Workspace(store);
   host ??= new RhinoWorkspace(join(dirname(filename),'models'));
   const hosts={rhino:host,zwcad:new ZwcadWorkspace(join(dirname(filename),'cad-models'))};
-  const applications=new Applications(store,workspace);
+  const applications=new Applications(store,workspace,applicationOptions);
   const execution = new Execution(workspace, { providerFactory, host, hosts });
   const withApplications=request=>({...request,applications:store.db.prepare("SELECT id,state,result FROM commands WHERE projectId=? AND kind='applyCandidate' AND json_extract(payload,'$.requestId')=? ORDER BY rowid").all(request.projectId,request.id).map(row=>({...row,result:row.result?JSON.parse(row.result):null}))});
   let origin, authority;
@@ -90,8 +90,9 @@ export async function startServer({ filename, port = 0, providerFactory, host } 
       if (url.pathname === '/api/v1/models' && request.method === 'GET') { send(200,await execution.models()); return; }
       if(url.pathname==='/api/v1/host/documents'&&request.method==='GET'){send(200,await listDocuments());return;}
       if(url.pathname==='/api/v1/host/selection'&&request.method==='GET'){send(200,await inspectDocument(url.searchParams.get('instance')||'',Number(url.searchParams.get('document'))));return;}
-      const application=/^\/api\/v1\/projects\/([^/]+)\/applications(?:\/([^/]+))?$/.exec(url.pathname);
+      const application=/^\/api\/v1\/projects\/([^/]+)\/applications(?:\/([^/]+)(\/reconcile)?)?$/.exec(url.pathname);
       if(application){
+        if(request.method==='POST'&&application[3]){send(200,await applications.recover(application[1],application[2]));return;}
         if(request.method==='POST'&&!application[2]){const input=await body(request);send(201,await applications.prepare(application[1],input.requestId,{instance:input.instance,documentId:input.documentId}));return;}
         if(request.method==='POST'&&application[2]){send(200,await applications.confirm(application[1],application[2]));return;}
         if(request.method==='GET'&&application[2]){send(200,store.getCommand(application[1],application[2]));return;}

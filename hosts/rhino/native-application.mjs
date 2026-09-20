@@ -30,8 +30,16 @@ export async function applyNativeMovements(commandId,candidate,payload){
  var unchanged=document.Objects.Where(obj=>!movements.ContainsKey(obj.Id)).ToDictionary(obj=>obj.Id,obj=>obj.Geometry.ToJSON(serialization));
  double scale=Rhino.RhinoMath.UnitScale(Rhino.UnitSystem.Meters,document.ModelUnitSystem);
  foreach(var move in movements){var geometry=document.Objects.FindId(move.Key).Geometry.Duplicate();var delta=move.Value*scale;if(!geometry.Translate(delta)||!geometry.IsValid)throw new Exception("Invalid translation");staged.Add(move.Key,geometry);}
+ var evidencePath=${literal(candidate.filename+'.'+commandId+'.application')};
+ using(var evidence=new System.IO.StreamWriter(new System.IO.FileStream(evidencePath,System.IO.FileMode.CreateNew,System.IO.FileAccess.Write))){
+ evidence.WriteLine("VIDE-NATIVE-APPLICATION-2");evidence.WriteLine(${literal(commandId)});evidence.WriteLine(${literal(payload.instance)});evidence.WriteLine(${payload.documentId});evidence.WriteLine(fingerprint);evidence.WriteLine(document.ModelUnitSystem.ToString());evidence.WriteLine(attributes.Count);
+ Func<string,string> encode=value=>Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(value));
+ foreach(var obj in document.Objects){var expected=staged.ContainsKey(obj.Id)?staged[obj.Id]:obj.Geometry;evidence.WriteLine(obj.Id.ToString()+"|"+encode(attributes[obj.Id])+"|"+encode(obj.Geometry.ToJSON(serialization))+"|"+encode(expected.ToJSON(serialization)));}
+ }
+ string evidenceHash;using(var sha=System.Security.Cryptography.SHA256.Create()){evidenceHash=BitConverter.ToString(sha.ComputeHash(System.IO.File.ReadAllBytes(evidencePath))).Replace("-","").ToLowerInvariant();}
  uint undo=document.BeginUndoRecord("VIDE native movement");
  try{
+ started=true;document.Strings.SetString(${literal('vide-evidence-'+commandId)},evidenceHash);
  foreach(var item in staged){started=true;if(!document.Objects.Replace(item.Key,item.Value,false))throw new Exception("Replace failed");}
  if(document.Objects.Count!=attributes.Count)throw new Exception("Object count changed");
  foreach(var entry in attributes){var obj=document.Objects.FindId(entry.Key);if(obj==null||attributeSnapshot(obj.Attributes)!=entry.Value)throw new Exception("Attributes changed");if(staged.ContainsKey(entry.Key)){if(!Rhino.Geometry.GeometryBase.GeometryEquals(staged[entry.Key],obj.Geometry))throw new Exception("Geometry mismatch");}else if(obj.Geometry.ToJSON(serialization)!=unchanged[entry.Key])throw new Exception("Unrelated object changed");}

@@ -44,3 +44,13 @@ test('native application is bound to its captured document and approved cumulati
   const result=await application.confirm(project.id,preview.id);assert.equal(result.state,'succeeded');await application.confirm(project.id,preview.id);assert.equal(calls,1);
  }finally{store.close();}
 });
+
+test('unknown recovery is read-only, evidence-bound and preserves prior diagnostics',async()=>{
+ const f=setup(async()=>({state:'unknown',result:{code:'HOST_RESULT_UNKNOWN'}}));try{
+  const preview=await f.applications.prepare(f.project.id,'candidate',{instance:'1:2',documentId:5});
+  await f.applications.confirm(f.project.id,preview.id);
+  // Existing generated commands have no native-movement evidence and remain unresolved.
+  await assert.rejects(()=>f.applications.recover(f.project.id,preview.id),{code:'APPLICATION_EVIDENCE_MISSING'});
+  assert.equal(f.store.getCommand(f.project.id,preview.id).state,'unknown');
+ }finally{f.store.close();}
+});

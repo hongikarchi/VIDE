@@ -1,10 +1,11 @@
+import {reconcileNativeApplication} from '../../hosts/rhino/reconciliation.mjs';
 import {nativeMoves} from '../core/native-application.mjs';
 import {previewNativeApplication,applyNativeMovements} from '../../hosts/rhino/native-application.mjs';
 import {randomUUID} from 'node:crypto';
 import {DomainError} from '../core/store.mjs';
 import {previewApplication,applyToDocument} from '../../hosts/rhino/application.mjs';
 export class Applications{
- constructor(store,workspace,{preview=previewApplication,apply=applyToDocument,nativePreview=previewNativeApplication,nativeApply=applyNativeMovements}={}){this.store=store;this.workspace=workspace;this.preview=preview;this.apply=apply;this.nativePreview=nativePreview;this.nativeApply=nativeApply;this.pending=new Map();this.active=new Set();}
+ constructor(store,workspace,{preview=previewApplication,apply=applyToDocument,nativePreview=previewNativeApplication,nativeApply=applyNativeMovements,reconcile=reconcileNativeApplication}={}){this.store=store;this.workspace=workspace;this.preview=preview;this.apply=apply;this.reconcile=reconcile;this.nativePreview=nativePreview;this.nativeApply=nativeApply;this.pending=new Map();this.active=new Set();}
  async prepare(projectId,requestId,target){
   const candidate=this.workspace.get(projectId,requestId);
   if(!candidate.result?.hostExecuted||(candidate.result.host||'rhino')!=='rhino')throw new DomainError('UNSUPPORTED_APPLICATION');
@@ -31,6 +32,18 @@ export class Applications{
   if(this.pending.size>=100)this.pending.delete(this.pending.keys().next().value);
   this.pending.set(command.id,{projectId,command,expires:Date.now()+10*60*1000});
   return {id:command.id,...effect,documentId:target.documentId,saveRequired:true};
+ }
+ async recover(projectId,id){
+  const command=this.store.getCommand(projectId,id);
+  if(command.kind!=='applyCandidate'||command.payload.mode!=='native-move')throw new DomainError('APPLICATION_EVIDENCE_MISSING');
+  if(command.state!=='unknown')return command;
+  if(this.active.has(command.connectionId))throw new DomainError('CONTROLLER_BUSY');
+  this.active.add(command.connectionId);
+  try{
+   const candidate=this.workspace.get(projectId,command.payload.requestId);
+   const outcome=await this.reconcile(id,candidate.result,command.payload);
+   return this.store.complete(command.connectionId,id,{state:outcome.state,result:{...outcome.result,previousResult:command.result?.previousResult||command.result}});
+  }finally{this.active.delete(command.connectionId);}
  }
  async confirm(projectId,id){
   try{return this.store.getCommand(projectId,id);}catch(error){if(error.code!=='NOT_FOUND')throw error;}

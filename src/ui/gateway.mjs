@@ -24,6 +24,9 @@ Object.assign(errors,{SOURCE_CHANGED:'기준 Rhino 파일이 외부에서 변경
 Object.assign(errors,{ZWCAD_POLYLINE_ONLY:'현재 ZWCAD 작업은 XY 평면 폴리라인을 지원합니다.',ZWCAD_EXECUTION_FAILED:'ZWCAD가 작업을 완료하지 못했습니다. 설치·실행 상태를 확인하세요.'});
 
 Object.assign(errors,{
+ APPLICATION_EVIDENCE_MISSING:'변경 전후의 확인 증거가 없어 자동 해소할 수 없습니다. 추가 적용은 보류합니다.',
+ APPLICATION_DIVERGED:'현재 문서가 변경 전·후 증거와 일치하지 않습니다. 추가 적용은 보류합니다.',
+ SOURCE_RESTORED:'현재 문서가 적용 전 상태와 일치합니다. 새로 취득해 작업을 이어갈 수 있습니다.',
  NO_CHANGES:'원본에 반영할 이동 변경이 없습니다.',
  TARGET_MISMATCH:'후보를 가져온 원래 Rhino 문서를 선택하세요.',
  UNSUPPORTED_NATIVE_TARGET:'잠김·참조·그룹·이력 관계 또는 미지원 형상 때문에 원본 이동을 적용할 수 없습니다.',
