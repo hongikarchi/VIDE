@@ -5,6 +5,7 @@ export const models = [
 ];
 export const initial = () => ({selected:null,host:'rhino',body:'',instructions:[],pins:[],sketches:[],files:[],model:models[0].id,effort:'default',permission:'review',messages:[]});
 export const storageKey='vide:review:composer:v3';
+export function draftHasInput(state){return Boolean(state.body.trim()||(state.instructions||[]).some(text=>text.trim())||state.pins.length||state.sketches.length||state.files.length);}
 export function failedRequestDraft(state,request){
  if(!['failed','cancelled','interrupted'].includes(request?.state)||!request.input||['file','document'].includes(request.input.source)||request.input.provider==='extension')throw Error('복원할 수 있는 AI 요청이 아닙니다.');
  const input=request.input;
@@ -15,7 +16,7 @@ export function failedRequestDraft(state,request){
 export function chooseModel(s,id){const model=models.find(m=>m.id===id);if(!model)throw Error('모델을 선택하세요.');s.model=id;if(!model.efforts.includes(s.effort))s.effort=model.efforts.includes('medium')?'medium':model.efforts[0];}
 export function pinSelection(s){const o=objects.find(o=>o.id===s.selected);if(o&&!s.pins.some(p=>p.id===o.id))s.pins.push({id:o.id,name:o.name,role:'target',basis:o.revision});}
 export function validate(s){if(s.instructions!==undefined&&(!Array.isArray(s.instructions)||s.instructions.some(t=>typeof t!=='string')))return '요청 목록을 확인하세요.';if(requestBody(s).length>20000)return '요청 묶음은 20,000자까지 입력할 수 있습니다.';if(!requestBody(s).trim()&&!s.pins.length&&!s.sketches.length&&!s.files.length)return '메시지나 참조를 추가하세요.';const m=models.find(m=>m.id===s.model);if(!m||!m.efforts.includes(s.effort))return '모델과 effort를 확인하세요.';if(!['review','candidate'].includes(s.permission))return '권한을 확인하세요.';return '';}
-export function packet(s){const error=validate(s);if(error)throw Error(error);return structuredClone({host:s.host||'rhino',baseRequestId:s.baseRequestId,body:requestBody(s),pins:s.pins,sketches:s.sketches,files:s.files,provider:models.find(m=>m.id===s.model).provider,model:s.model,effort:s.effort,permission:s.permission});}
+export function packet(s){const error=validate(s);if(error)throw Error(error);return structuredClone({host:s.host||'rhino',baseRequestId:s.baseRequestId??null,body:requestBody(s),pins:s.pins,sketches:s.sketches,files:s.files,provider:models.find(m=>m.id===s.model).provider,model:s.model,effort:s.effort,permission:s.permission});}
 export function attachSketch(s,points,plane,role){if(points.length<2)throw Error('두 점 이상 그리세요.');if(!['XY','XZ','YZ'].includes(plane)||!['reference','boundary','path','direction'].includes(role))throw Error('평면과 역할을 확인하세요.');if(role==='direction'&&points.length!==2)throw Error('방향은 두 점으로 지정하세요.');if(points.some(p=>p.length!==2||p.some(n=>!Number.isFinite(n))))throw Error('좌표를 확인하세요.');s.sketches.push({id:crypto.randomUUID(),name:`스케치 ${s.sketches.length+1}`,plane,origin:[0,0,0],axisU:plane==='YZ'?[0,1,0]:[1,0,0],axisV:plane==='XY'?[0,1,0]:[0,0,1],unit:'m',role,points:structuredClone(points)});}
 
 export function requestBody(s){

@@ -10,6 +10,17 @@ function fixture() {
   return {store,workspace,project,input};
 }
 
+test('explicit empty basis never picks the latest model and refuses writable pins from an unselected basis',async()=>{
+ const {store,workspace,project,input}=fixture();let received;
+ workspace.submit(project.id,input);workspace.update(project.id,input.id,'succeeded',{host:'rhino',hostExecuted:true,objects:[{id:'existing',kind:'box',name:'Existing',origin:[0,0,0],size:[1,1,1]}],scene:[]});
+ const execution=new Execution(workspace,{host:{},providerFactory:()=>({run:async packet=>{received=packet;return {text:JSON.stringify({message:'No model selected',operations:[]})};}})});
+ try{
+  assert.throws(()=>workspace.submit(project.id,{...input,id:'wrong-pin',baseRequestId:null,pins:[{id:'existing',name:'Existing',basis:input.id,role:'target'}]}),{code:'STALE_REFERENCE'});
+  const request=workspace.submit(project.id,{...input,id:'empty-basis',baseRequestId:null}).request;execution.start(request);await Promise.all([...execution.active.values()].map(item=>item.completion));
+  assert.deepEqual(received.items.find(item=>item.id==='working-model').data,[]);assert.equal(received.items.some(item=>item.id==='measurements'),false);assert.equal(workspace.get(project.id,request.id).input.baseRequestId,null);assert.equal(workspace.get(project.id,request.id).state,'succeeded');
+ }finally{store.close();}
+});
+
 test('AI receives native lengths, world bounds and decoded layers instead of sampled viewport geometry',async()=>{
  const {store,workspace,project,input}=fixture();let received;
  const source={id:'curve',kind:'native',nativeId:'guid',name:'Circle',origin:[-2,-2,0]};

@@ -19,6 +19,11 @@ export class Workspace {
   get(projectId, id) {
     return decode(this.store.db.prepare('SELECT * FROM workspace_requests WHERE projectId=? AND id=?').get(projectId,id)) ?? fail('NOT_FOUND');
   }
+  basis(projectId,input){
+    if(input.baseRequestId===null)return undefined;
+    if(input.baseRequestId)return this.get(projectId,input.baseRequestId);
+    return this.list(projectId).filter(request=>request.id!==input.id&&request.result?.hostExecuted&&(request.result.host||'rhino')===(input.host||'rhino')).at(-1);
+  }
   submit(projectId, input) {
     this.store.project(projectId);
     if (!input || typeof input.id !== 'string' || !/^[a-zA-Z0-9-]{1,100}$/.test(input.id)
@@ -28,7 +33,7 @@ export class Workspace {
     if(input.provider==='extension'&&(input.permission!=='review'||typeof input.extension!=='string'||!(/^[a-z0-9-]{1,80}$/.test(input.extension))||typeof input.extensionVersion!=='string'))fail('INVALID_INPUT');
     for (const key of ['pins','sketches','files']) if (!Array.isArray(input[key]) || input[key].length > 100) fail('INVALID_INPUT');
     if(input.host!==undefined&&!['rhino','zwcad'].includes(input.host))fail('INVALID_INPUT');
-    if(input.baseRequestId!==undefined&&(typeof input.baseRequestId!=='string'||!/^[a-zA-Z0-9-]{1,100}$/.test(input.baseRequestId)))fail('INVALID_INPUT');
+    if(input.baseRequestId!==undefined&&input.baseRequestId!==null&&(typeof input.baseRequestId!=='string'||!/^[a-zA-Z0-9-]{1,100}$/.test(input.baseRequestId)))fail('INVALID_INPUT');
     if(input.model!==undefined&&(typeof input.model!=='string'||!/^[a-zA-Z0-9._-]{1,100}(?:\[1m\])?$/.test(input.model)))fail('INVALID_INPUT');
     if(input.effort!==undefined&&!['default','low','medium','high','xhigh','max'].includes(input.effort))fail('INVALID_INPUT');
     for(const s of input.sketches){
@@ -46,7 +51,7 @@ export class Workspace {
     }
     const target=input.host||'rhino';
     if(input.permission==='candidate'&&this.list(projectId).some(r=>r.state==='unknown'&&(r.input.host||'rhino')===target))fail('HOST_RESULT_UNRESOLVED');
-    const baseline=input.baseRequestId?this.get(projectId,input.baseRequestId):this.list(projectId).filter(r=>r.result?.hostExecuted&&(r.result.host||'rhino')===target).at(-1);
+    const baseline=this.basis(projectId,input);
     if(input.baseRequestId&&!baseline?.result?.hostExecuted)fail('STALE_REFERENCE');
     if(baseline&&(baseline.result.host||'rhino')!==target)fail('TARGET_MISMATCH');
     for(const pin of input.pins){

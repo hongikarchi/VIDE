@@ -20,7 +20,7 @@ try {
   await candidates.first().click(); await page.locator('#body').fill('Project A saved draft'); await action('save');
   const key = 'vide:review:composer:v3:' + a.id;
   const saved = await page.evaluate(key => JSON.parse(localStorage.getItem(key)), key);
-  await candidates.last().click(); await page.locator('#body').fill('Temporary text'); await action('load');
+  await candidates.last().click();assert.equal(await page.evaluate(id=>JSON.parse(localStorage.getItem('vide:draft:'+id)).baseRequestId,a.id),saved.state.baseRequestId);await page.getByRole('button',{name:'입력 기준 보기',exact:true}).click(); await page.locator('#body').fill('Temporary text'); await action('load');
   assert.equal(await page.locator('#body').inputValue(), 'Project A saved draft');
   assert.equal(await page.evaluate(id => JSON.parse(localStorage.getItem('vide:draft:' + id)).baseRequestId, a.id), saved.state.baseRequestId);
   await navigate(b.id); await page.locator('#body').fill('Project B current draft'); await action('load');

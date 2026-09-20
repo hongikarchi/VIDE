@@ -53,7 +53,7 @@ export class Execution {
       const items=[...input.pins.map((data,i)=>({id:`pin-${i}`,type:'object-reference',data})),
         ...input.sketches.map((data,i)=>({id:`sketch-${i}`,type:'sketch',data})),
         ...input.files.map((data,i)=>({id:`file-${i}`,type:'file',data}))];
-      const previous=input.baseRequestId?this.workspace.get(projectId,input.baseRequestId):this.workspace.list(projectId).filter(r=>r.id!==id&&r.result?.hostExecuted&&(r.result.host||'rhino')===target).at(-1);
+      const previous=this.workspace.basis(projectId,input);
       if(previous?.result.referenceOnly&&input.permission==='candidate')throw {code:'ZWCAD_REFERENCE_ONLY'};
       const referenced=input.pins.map(pin=>{const source=this.workspace.get(projectId,pin.basis);return {role:pin.role,sourceRequestId:source.id,host:source.result.host||'rhino',object:source.result.objects.find(o=>o.id===pin.id)};});
       if(referenced.length)items.push({id:'referenced-geometry',type:'geometry-reference',data:referenced});

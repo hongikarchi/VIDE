@@ -2,7 +2,7 @@
 id: VERIFY-2026-09-20-native-workspace
 title: 브라우저 입력에서 실제 Rhino 후보까지
 status: review
-version: 0.32
+version: 0.33
 updated: 2026-09-21
 owner: agent:codex
 related: [AC-05, AC-17, AC-24, AC-38, T-005, T-013, T-015, T-016, T-018]
@@ -223,3 +223,6 @@ T-002·004 / SPEC-01·05.5 / SCR-03·07: tests/core/request-draft.test.mjs는 �
 T-006 / H-ZWCAD-04 읽기 / AC-25·32 일부: tests/integration/native-dwg-import.mjs --run-live <기존 합성 DWG>는 원 파일 해시·참고 상태·면적 200 m²·길이 60 m·mm→m 환산·같은 참고 기준의 쓰기 거절을 확인했다.
 tests/integration/browser-dwg-to-rhino.mjs에서 프로젝트 f6f4aac2-f3eb-4698-989f-8197c8482899, 참고 a0ebcb0b-10da-48f1-b913-cf155c516d4b, 후보 ab941640-2d5a-4fb4-a753-979ae0efb921를 생성했다. Claude 구독 1회 후 Rhino 체적 600 m³와 저장/재열기 통과, 참고 핀 역할·기준 보존을 확인했다. [연계 화면](../assets/native-workspace/dwg-import-rhino.png).
 첫 브라우저 시험에서 초기화 완료 전 파일 이벤트가 유실돼 기록이 생성되지 않았다. 핸들러 등록 순서를 수정했다. 이후 제한 실행 환경의 COM 접근은 unknown으로 남았고, 사용자 실행 환경의 별도 시험은 통과했다. 일반 DWG 편집·외부 원본 적용·모든 INSUNITS 값·블록/호/관계는 이 시험 범위가 아니다.
+
+## 입력 기준 고정 검증 — 2026-09-21
+T-002·013 / SPEC-01: 브라우저 초안 시험에서 이전 후보에 입력한 뒤 최신 후보를 탐색해도 저장된 기준이 유지되고 입력 기준 보기로 돌아감을 확인했다. 실행 계약 시험은 명시적 빈 기준이 이전 모델/측정값을 AI 작업 모델에 포함하지 않고, 다른 기준의 변경 핀을 거절함을 확인한다. 자동 시험 79개 통과. 대화 기록 자체는 문맥으로 남으며 작업 모델 기준과 구분한다.
