@@ -1,3 +1,4 @@
+import {compareCandidates,relatedCandidates} from '../core/comparison.mjs';
 import {quantities,quantitiesCsv} from '../core/quantities.mjs';
 import { createServer } from 'node:http';
 import { randomBytes, timingSafeEqual } from 'node:crypto';
@@ -81,6 +82,11 @@ export async function startServer({ filename, port = 0, providerFactory, host } 
       }
       if (url.pathname === '/api/v1/host' && request.method === 'GET') { send(200,await host.status()); return; }
       if (url.pathname === '/api/v1/models' && request.method === 'GET') { send(200,await execution.models()); return; }
+      const comparison=/^\/api\/v1\/projects\/([^/]+)\/comparison$/.exec(url.pathname);
+      if(comparison&&request.method==='GET'){
+        const projectId=comparison[1],before=workspace.get(projectId,url.searchParams.get('before')),after=workspace.get(projectId,url.searchParams.get('after'));
+        send(200,compareCandidates(before,after,relatedCandidates(workspace,projectId,before,after)));return;
+      }
       const table=/^\/api\/v1\/projects\/([^/]+)\/requests\/([^/]+)\/(quantities|quantities.csv)$/.exec(url.pathname);
       if(table&&request.method==='GET'){
         const data=quantities(workspace.get(table[1],table[2]));

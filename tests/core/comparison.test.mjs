@@ -1,0 +1,16 @@
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import {compareCandidates} from '../../src/core/comparison.mjs';
+const object={id:'a',name:'Wall',kind:'box',origin:[0,0,0],size:[1,2,3]};
+const candidate=(id,objects,scene,host='rhino')=>({id,result:{hostExecuted:true,host,objects,scene}});
+test('related candidates distinguish geometry edits, additions, removals and measured deltas',()=>{
+ const a=candidate('first',[object,{...object,id:'removed'}],[{id:'a',volume:6}]);
+ const b=candidate('next',[{...object,size:[1,2,4]},{...object,id:'added'}],[{id:'a',volume:8}]);
+ const comparison=compareCandidates(a,b,true);assert.deepEqual(comparison.rows.map(r=>r.status),['changed','removed','added']);assert.equal(comparison.rows[0].delta.volume,2);assert.equal(comparison.rows[0].delta.area,null);
+});
+test('same names and IDs cannot establish cross-host or unrelated identity',()=>{
+ const a=candidate('first',[object],[]),b=candidate('other',[object],[]);
+ assert.equal(compareCandidates(a,b,false).rows[0].status,'incomparable');
+ assert.equal(compareCandidates(a,{...b,result:{...b.result,host:'zwcad'}},true).compatible,false);
+ assert.equal(compareCandidates(a,a,true).rows[0].status,'unchanged');
+});

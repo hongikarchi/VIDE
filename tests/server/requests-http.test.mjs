@@ -1,3 +1,4 @@
+import {Workspace} from '../../src/core/workspace.mjs';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {startServer} from '../../src/server/server.mjs';
@@ -22,5 +23,16 @@ test('authenticated requests execute once, persist results and protect cross-pro
     assert.equal((await api(`/projects/${other.id}/requests/request-one/model`)).status,404);
     assert.equal((await api(path+'/request-one/model')).status,404);
     assert.equal((await api(path,'POST',{...input,id:'stale',pins:[{id:'missing',basis:'old'}]})).status,409);
+    const workspace=new Workspace(app.store);
+    const object={id:'box',name:'Box',kind:'box',origin:[0,0,0],size:[2,2,2]};
+    for(const [id,base,size,volume] of [['before',undefined,2,8],['after','before',3,12]]){
+      workspace.submit(p.id,{...input,id,baseRequestId:base});
+      workspace.update(p.id,id,'succeeded',{hostExecuted:true,host:'rhino',objects:[{...object,size:[2,2,size]}],scene:[{id:'box',volume}],baseRequestId:base});
+    }
+    const comparison=await(await api(`/projects/${p.id}/comparison?before=before&after=after`)).json();
+    assert.equal(comparison.rows[0].status,'changed');assert.equal(comparison.rows[0].delta.volume,4);
+    assert.equal((await api(`/projects/${other.id}/comparison?before=before&after=after`)).status,404);
+    assert.equal((await api(`/projects/${other.id}/requests/after/quantities`)).status,404);
+
   }finally{await app.close();}
 });

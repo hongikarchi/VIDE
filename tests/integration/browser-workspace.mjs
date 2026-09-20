@@ -88,6 +88,9 @@ try{
   await page.locator('[data-inspect=geometry]').click();
   await page.getByRole('button',{name:'수량표',exact:true}).last().click();
   await page.locator('.quantity-dialog').waitFor({state:'visible'});
+  await page.getByLabel('비교할 이전 후보',{exact:true}).selectOption(firstNative.id);
+  await page.getByRole('button',{name:'현재 후보와 비교',exact:true}).click();
+  await page.locator('.comparison-result').getByText(/비교 불가/).first().waitFor();
   const csvDownload=page.waitForEvent('download');await page.getByRole('link',{name:'CSV 내려받기',exact:true}).click();
   const csvArtifact=await csvDownload;const csv=await readFile(await csvArtifact.path(),'utf8');
   assert.ok(csv.includes('기하 면적 (m²)'));assert.ok(csv.includes('저장·재열기한 호스트 형상'));
