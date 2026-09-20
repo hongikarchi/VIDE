@@ -9,6 +9,8 @@ Available operations, all coordinates/dimensions in meters:
 {"kind":"extrude","id":"unique-id","name":"name","points":[[x,y,z],...],"height":number} (closed planar XY boundary)
 {"kind":"move","id":"existing-id","delta":[x,y,z]}
 {"kind":"height","id":"existing-box-or-extrusion-id","height":number}
+{"kind":"vertices","id":"existing-polyline-or-extrusion-id","points":[[x,y,z],...]} (replaces boundary points; extrusion must remain closed planar XY)
+{"kind":"copy","id":"new-id","sourceId":"existing-generated-id","name":"copy name","delta":[x,y,z]} (generated box/polyline/extrusion only; repeat explicit copies up to the operation limit)
 {"kind":"remove","id":"existing-id"}
 Existing kind=native objects came from a user-selected 3dm. Their origin is the bounding box minimum. They support move/remove only; never reconstruct them as boxes or claim to know their topology. Their original geometry and attributes must be retained.
 Read-only requests: operations=[] and grounded answer. Missing required dimensions: operations=[] and ask a specific question. Never invent requested dimensions. Sketch points use plane XY/XZ/YZ, origin 0 and meters. Object pins identify targets. Existing geometry is supplied as context. Preserve unmentioned geometry. Only describe proposed changes; execution is verified separately by VIDE.`;
@@ -38,6 +40,17 @@ export function interpret(text,existing=[],permission='review') {
     }else if(op.kind==='height'){
       if(!obj||!['box','extrude'].includes(obj.kind)||!scalar(op.height)||op.height<=0)fail();
       if(obj.kind==='box')obj.size[2]=op.height;else obj.height=op.height;
+    }else if(op.kind==='vertices'){
+      if(!obj||!['polyline','extrude'].includes(obj.kind))fail();
+      const replacement=interpret(JSON.stringify({message:'validate',operations:[{...obj,points:op.points}]}),[],'candidate').objects[0];
+      obj.points=replacement.points;
+    }else if(op.kind==='copy'){
+      const source=objects.find(o=>o.id===op.sourceId);
+      if(obj||!source||!['box','polyline','extrude'].includes(source.kind)||!vector(op.delta)||typeof op.name!=='string'||!op.name.trim()||op.name.length>200)fail();
+      const copy=structuredClone(source);copy.id=op.id;copy.name=op.name;
+      if(copy.origin){copy.origin=copy.origin.map((n,i)=>n+op.delta[i]);if(!vector(copy.origin))fail();}
+      else {copy.points=copy.points.map(p=>p.map((n,i)=>n+op.delta[i]));if(!copy.points.every(vector))fail();}
+      objects.push(copy);
     }else if(op.kind==='remove'){
       if(!obj)fail();objects.splice(index,1);
     }else fail();

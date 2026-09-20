@@ -34,3 +34,13 @@ test('preserved geometry refuses movement, removal and renamed replacements befo
  }
  assert.doesNotThrow(()=>protectGeometry(original,[box,{...box,id:'b'}],['a']));
 });
+
+test('vertex edits preserve extrusion height and copying translates independent geometry',()=>{
+ const outline={kind:'extrude',id:'outline',name:'Mass',points:[[0,0,0],[4,0,0],[4,3,0],[0,0,0]],height:6};
+ const points=[[0,0,0],[5,0,0],[5,3,0],[0,0,0]];
+ const result=apply([{kind:'vertices',id:'outline',points},{kind:'copy',id:'copy',sourceId:'outline',name:'Second',delta:[10,0,0]}],[outline]);
+ assert.equal(result.objects[0].height,6);assert.deepEqual(result.objects[0].points,points);assert.deepEqual(result.objects[1].points[0],[10,0,0]);assert.equal(outline.points[1][0],4);
+ assert.throws(()=>apply([{kind:'vertices',id:'outline',points:points.slice(0,3)}],[outline]),{code:'INVALID_GEOMETRY'});
+ assert.throws(()=>apply([{kind:'copy',id:'copy',sourceId:'outline',name:'Second',delta:[100000,0,0]}],[outline]),{code:'INVALID_GEOMETRY'});
+ assert.throws(()=>apply([{kind:'copy',id:'copy',sourceId:'native',name:'N',delta:[1,0,0]}],[{id:'native',kind:'native',origin:[0,0,0]}]),{code:'INVALID_GEOMETRY'});
+});
