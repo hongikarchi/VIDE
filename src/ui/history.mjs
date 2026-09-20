@@ -39,6 +39,7 @@ function renderCandidate(card,message,projectId,actions){
  element('a',extension==='dwg'?'DWG 내려받기':'3dm 내려받기',card,{href:`/api/v1/projects/${projectId}/requests/${message.id}/model`,download:`VIDE-candidate.${extension}`});
  const open=element('button',`${host}에서 열기`,card);
  open.onclick=async()=>{open.disabled=true;try{await api(`/projects/${projectId}/requests/${message.id}/open`,'POST',{});}catch(error){actions.error(error.message);}finally{open.disabled=false;}};
+ const saveReview=element('button','검토본 저장',card);saveReview.onclick=async()=>{try{await actions.saveReview(message.id);}catch(error){actions.error(error.message);}};
  const report=element('button','검토본 내려받기',card);report.onclick=()=>actions.report(message.id);
  if(host==='Rhino'&&((!result.sourceDocument&&result.objects.every(object=>['box','polyline','extrude'].includes(object.kind)))||(result.sourceDocument&&result.objects.every(object=>object.kind==='native')&&message.source!=='document'))){
   const apply=element('button','문서에 적용',card);

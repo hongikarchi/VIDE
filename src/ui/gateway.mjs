@@ -30,6 +30,7 @@ Object.assign(errors,{
  TABLE_VIEW_LIMIT:'프로젝트에 저장할 수 있는 표 구성은 200개까지입니다. 쓰지 않는 구성을 정리하세요.',
  REVISION_CONFLICT:'다른 화면에서 내용이 변경됐습니다. 다시 열어 최신 내용을 확인하세요.',
  INVALID_INPUT:'입력한 이름이나 조건을 확인하세요.',
+ REVIEW_LIMIT:'프로젝트의 검토본 저장 한도에 도달했습니다.',
  NO_CHANGES:'원본에 반영할 이동 변경이 없습니다.',
  TARGET_MISMATCH:'후보를 가져온 원래 Rhino 문서를 선택하세요.',
  UNSUPPORTED_NATIVE_TARGET:'잠김·참조·그룹·이력 관계 또는 미지원 형상 때문에 원본 이동을 적용할 수 없습니다.',

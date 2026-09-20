@@ -1,3 +1,4 @@
+import {initializeReviews} from './reviews.mjs';
 import {renderHistory} from './history.mjs';
 import {initializeDocuments} from './documents.mjs';
 import {renderPoints,validCoordinate} from './sketch.mjs';
@@ -10,6 +11,7 @@ const $=id=>document.getElementById(id);
 let project, busy=false, displayedResult,selectedResult,draftSaved=false;
 let state=initial(),tool='select',points=[],toastTimer;
 const message=text=>{clearTimeout(toastTimer);$('message').textContent=text;$('message').hidden=false;toastTimer=setTimeout(()=>$('message').hidden=true,4500);};
+const reviews=initializeReviews(()=>project?.id,message);
 function el(tag,text,parent,attrs={}){const node=document.createElement(tag);node.textContent=text;for(const [k,v] of Object.entries(attrs))node.setAttribute(k,v);parent.append(node);return node;}
 initializeDocuments(message,async target=>{
  if(!project||busy)throw Error('현재 작업이 끝난 뒤 가져오세요.');
@@ -52,7 +54,7 @@ function renderMessages(){
  sidebar();renderHistory($('conversation'),state.messages,models,project?.id,{
   candidate:id=>{selectedResult=id;renderMessages();},
   selection:(requestId,id)=>{selectedResult=requestId;renderMessages();state.selected=id;render();},
-  report:downloadReport,changed:renderMessages,error:message,
+  report:downloadReport,saveReview:async id=>{selectedResult=id;renderMessages();await reviews.create(id,viewport.capture());},changed:renderMessages,error:message,
  });
 }
 
@@ -99,7 +101,7 @@ window.addEventListener('beforeunload',e=>{if(points.length||(!draftSaved&&(stat
 window.addEventListener('pagehide',()=>viewport?.dispose(),{once:true});
 mobileView('model');render();
 
-try{const linked=await connect();const catalog=await api('/models');models.splice(0,models.length,...catalog);$('model').replaceChildren();for(const m of models)el('option',m.name,$('model'),{value:m.id});project=linked.project;for(const p of linked.projects)el('option',p.name,$('project-picker'),{value:p.id});$('project-picker').value=project.id;try{const draft=JSON.parse(localStorage.getItem('vide:draft:'+project.id));if(draft&&typeof draft.body==='string'&&['pins','sketches','files'].every(k=>Array.isArray(draft[k]))){Object.assign(state,draft);chooseModel(state,state.model);$('body').value=state.body;}}catch{}state.messages=linked.requests.map(request=>({...request.input,request}));$('project-name').textContent=project.name;render();renderMessages();for(const m of state.messages)if(['queued','running'].includes(m.request.state))void poll(m.id);const host=await api('/host');const providers=await api('/providers');$('connection-status').textContent=providers.map(p=>`${p.id==='claude-cli'?'Claude':'ChatGPT'} ${p.available?'연결됨':'미연결'}`).join(' · ')+(host.available?' · Rhino 연결됨':' · Rhino 미연결');}catch(error){message(errors[error.code]||error.message);}
+try{const linked=await connect();const catalog=await api('/models');models.splice(0,models.length,...catalog);$('model').replaceChildren();for(const m of models)el('option',m.name,$('model'),{value:m.id});project=linked.project;void reviews.refresh().catch(error=>message(error.message));for(const p of linked.projects)el('option',p.name,$('project-picker'),{value:p.id});$('project-picker').value=project.id;try{const draft=JSON.parse(localStorage.getItem('vide:draft:'+project.id));if(draft&&typeof draft.body==='string'&&['pins','sketches','files'].every(k=>Array.isArray(draft[k]))){Object.assign(state,draft);chooseModel(state,state.model);$('body').value=state.body;}}catch{}state.messages=linked.requests.map(request=>({...request.input,request}));$('project-name').textContent=project.name;render();renderMessages();for(const m of state.messages)if(['queued','running'].includes(m.request.state))void poll(m.id);const host=await api('/host');const providers=await api('/providers');$('connection-status').textContent=providers.map(p=>`${p.id==='claude-cli'?'Claude':'ChatGPT'} ${p.available?'연결됨':'미연결'}`).join(' · ')+(host.available?' · Rhino 연결됨':' · Rhino 미연결');}catch(error){message(errors[error.code]||error.message);}
 
 $('project-picker').onchange=()=>{location.search='?project='+encodeURIComponent($('project-picker').value);};
 $('new-project').onclick=async()=>{const name=prompt('프로젝트 이름');if(!name?.trim())return;try{const p=await api('/projects','POST',{name:name.trim()});location.search='?project='+encodeURIComponent(p.id);}catch(error){message(error.message);}};

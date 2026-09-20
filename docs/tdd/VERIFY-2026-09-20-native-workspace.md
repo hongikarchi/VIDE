@@ -2,7 +2,7 @@
 id: VERIFY-2026-09-20-native-workspace
 title: 브라우저 입력에서 실제 Rhino 후보까지
 status: review
-version: 0.16
+version: 0.17
 updated: 2026-09-20
 owner: agent:codex
 related: [AC-05, AC-17, AC-24, AC-38, T-005, T-013, T-015, T-016, T-018]
@@ -160,3 +160,10 @@ UI 작업 호스트를 Rhino/ZWCAD로 고르며 다른 호스트에서 첨부한
 `tests/integration/browser-table-views.mjs`에서 실제 Rhino 취득 결과 2개 중 Brep 1개를 필터하고 레이어 합계를 저장했다. 브라우저 재열기 후 구성을 적용하고, CSV가 같은 후보 ID·레이어·필터 대상·그룹 합계를 포함하며 제외한 Point를 포함하지 않는지 확인했다. 결과 0개도 마지막 성공 행을 남기는 실패와 구분했다. 프로젝트 `44961bf1-0bb1-4c89-8b09-f43b111dae00`, 취득 `43a6bc33-4430-4b17-90e0-ae1668a3b6d2`, 구성 `5d455cab-b3b2-4bcd-b659-02accfa920eb`. 화면은 [수량표 구성](../assets/native-workspace/quantity-filters.png)에 보존했다.
 
 단위/계약 테스트 63개 통과. DB 재열기, 다른 프로젝트 접근, 오래된 갱신·삭제 거절, 새 객체가 포함된 다음 기준의 재계산, 미상 처리와 CSV 그룹 합계를 검사했다. 실제 Rhino의 3-4-5 선분은 5 m, 반지름 2 m 원의 네이티브 길이는 12.566370643255096 m로 공식 기본 상대 정밀도 범위에 들었고 지정 레이어 Site를 읽었다. 법정 면적이나 과거 자료의 누락 측정값을 추정하지 않는다.
+
+
+## 고정 검토본 저장·재열기
+
+`tests/integration/browser-reviews.mjs`에서 실제 취득 후보와 저장한 레이어별 표 구성을 검토본으로 저장했다. 왼쪽 목록에서 재열기, sandbox iframe 렌더, 자체 포함 PNG/HTML 다운로드, 필터된 표, 원본 반영 기록 표시를 검증했다. [저장한 검토본](../assets/native-workspace/saved-review.png)을 실제 Chromium 1440×900에서 확인했다. 원본 호스트 쓰기·AI 호출은 없다.
+
+단위/계약 테스트 64개 통과. 원래 요청의 본문·체적·적용 상태를 바꾼 뒤에도 검토본이 당시 값을 보존하고, 다른 프로젝트 접근을 거절하며, 원본 경로·첨부 전문을 payload에 넣지 않는지 검사했다. HTML 특수문자는 이스케이프한다. 검수 프로젝트는 직전 수량표 검수 프로젝트를 사용했다. 저장된 검토본은 3D 이미지와 표의 고정 열람이며 대화형 전체 모델 복원·외부 웹 게시 완료를 뜻하지 않는다.

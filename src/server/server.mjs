@@ -1,3 +1,4 @@
+import {Reviews} from '../core/reviews.mjs';
 import {TableViews} from '../core/table-views.mjs';
 import {Applications} from './application.mjs';
 import {listDocuments,inspectDocument} from '../../hosts/rhino/documents.mjs';
@@ -19,7 +20,7 @@ const assets = new Map([
   ['/', ['../ui/index.html', 'text/html; charset=utf-8']],
   ['/app.mjs', ['../ui/app.mjs', 'text/javascript; charset=utf-8']],
   ['/style.css', ['../ui/style.css', 'text/css; charset=utf-8']],
-  ...['model','viewport','gateway','inspector','requests','sketch','quantities','quantity-view','documents','application','history'].map(name => [`/${name}.mjs`, [`../ui/${name}.mjs`, 'text/javascript; charset=utf-8']]),
+  ...['model','viewport','gateway','inspector','requests','sketch','quantities','quantity-view','documents','application','history','reviews'].map(name => [`/${name}.mjs`, [`../ui/${name}.mjs`, 'text/javascript; charset=utf-8']]),
   ['/vendor/three.module.js', ['../../node_modules/three/build/three.module.js', 'text/javascript']],
   ['/vendor/three.core.js', ['../../node_modules/three/build/three.core.js', 'text/javascript']],
   ['/vendor/OrbitControls.js', ['../../node_modules/three/examples/jsm/controls/OrbitControls.js', 'text/javascript']],
@@ -39,7 +40,7 @@ const statuses = { NOT_FOUND: 404, FORBIDDEN: 403, UNAUTHORIZED: 401, JSON_REQUI
   REVISION_CONFLICT: 409, TARGET_MISMATCH: 409, CONTROLLER_BUSY: 409, PROJECT_BUSY:409, STALE_REFERENCE:409 };
 export async function startServer({ filename, port = 0, providerFactory, host, applicationOptions } = {}) {
   const store = new Store(filename), bootstrap = randomBytes(32).toString('hex'), session = randomBytes(32).toString('hex');
-  const workspace = new Workspace(store),tableViews=new TableViews(store);
+  const workspace = new Workspace(store),tableViews=new TableViews(store),reviews=new Reviews(store);
   host ??= new RhinoWorkspace(join(dirname(filename),'models'));
   const hosts={rhino:host,zwcad:new ZwcadWorkspace(join(dirname(filename),'cad-models'))};
   const applications=new Applications(store,workspace,applicationOptions);
@@ -79,9 +80,20 @@ export async function startServer({ filename, port = 0, providerFactory, host, a
       if(upload&&request.method==='POST'){send(200,await importModel(request,upload[1],url.searchParams.get('name'),workspace,host));return;}
       const capture=/^\/api\/v1\/projects\/([^/]+)\/capture$/.exec(url.pathname);
       if(capture&&request.method==='POST'){send(200,await captureModel(capture[1],await body(request),workspace,host));return;}
+      const review=/^\/api\/v1\/projects\/([^/]+)\/reviews(?:\/([^/]+)(\/(?:preview|download))?)?$/.exec(url.pathname);
+      if(review){
+        if(request.method==='POST'&&!review[2]){const input=await body(request);send(201,reviews.create(review[1],input,withApplications(workspace.get(review[1],input.requestId))));return;}
+        if(request.method==='GET'&&!review[2]){send(200,reviews.list(review[1]));return;}
+        if(request.method==='GET'&&review[2]){
+          const value=reviews.get(review[1],review[2]);if(!review[3]){send(200,value);return;}
+          const saved=value.payload,html=renderReport(saved.project,saved.request,saved.image,saved);
+          response.setHeader('Content-Security-Policy',"default-src 'none'; style-src 'unsafe-inline'; img-src data:; frame-ancestors 'self'; base-uri 'none'; form-action 'none'");
+          response.writeHead(200,{'Content-Type':'text/html; charset=utf-8',...(review[3]==='/download'?{'Content-Disposition':'attachment; filename="VIDE-review.html"'}:{})});response.end(html);return;
+        }
+      }
       const report=/^\/api\/v1\/projects\/([^/]+)\/requests\/([^/]+)\/report$/.exec(url.pathname);
       if(report&&request.method==='POST'){
-        const html=renderReport(store.project(report[1]),workspace.get(report[1],report[2]),(await body(request)).image);
+        const html=renderReport(store.project(report[1]),withApplications(workspace.get(report[1],report[2])),(await body(request)).image);
         response.writeHead(200,{'Content-Type':'text/html; charset=utf-8','Content-Disposition':'attachment; filename="VIDE-review.html"'});response.end(html);return;
       }
       if (url.pathname === '/api/v1/providers' && request.method === 'GET') {
