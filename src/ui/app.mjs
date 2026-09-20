@@ -114,7 +114,7 @@ $('import-model').onclick=()=>{if(project&&!busy)$('model-file').click();};
 $('model-file').onchange=async()=>{
  const file=$('model-file').files[0];if(!file||!project)return;
  if(file.size>64*1024*1024){message('현재 파일 크기는 64MB까지 지원합니다.');return;}
- busy=true;$('import-model').disabled=true;render();message('Rhino 작업 사본을 읽고 있습니다.');
+ busy=true;$('import-model').disabled=true;render();message('모델 작업 사본을 읽고 있습니다.');
  try{
   const response=await fetch(`/api/v1/projects/${project.id}/import?name=${encodeURIComponent(file.name)}`,{method:'POST',headers:{'Content-Type':'application/octet-stream'},body:file});
   const request=await response.json();if(!response.ok)throw Error(request.code);

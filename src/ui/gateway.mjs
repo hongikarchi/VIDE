@@ -47,3 +47,10 @@ Object.assign(errors,{
  UNSUPPORTED_APPLICATION:'현재 원본 적용은 생성한 박스·폴리라인·돌출, 또는 열린 문서에서 가져온 객체의 이동을 지원합니다.'
 });
 function apiError(code){return Object.assign(new Error(errors[code]||`요청 처리 오류 (${code})`),{code});}
+
+Object.assign(errors,{
+ UNKNOWN_UNITS:'DWG 단위가 없거나 미지원 단위입니다. 원 도면에서 단위를 확인한 뒤 다시 가져오세요.',
+ UNSUPPORTED_DWG_CONTENT:'현재 DWG 모델 공간 읽기는 직선 XY 폴리라인을 지원합니다. 호·블록·다른 유형이 포함돼 일부만 가져오지 않았습니다.',
+ EMPTY_DWG:'DWG 모델 공간에서 읽을 경계를 찾지 못했습니다.',
+ ZWCAD_REFERENCE_ONLY:'이 DWG는 참고용입니다. 경계를 핀으로 첨부하고 Rhino를 선택해 후보를 만들 수 있습니다. 원 도면 편집은 아직 지원하지 않습니다.'
+});

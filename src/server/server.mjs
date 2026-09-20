@@ -80,7 +80,7 @@ export async function startServer({ filename, port = 0, providerFactory, host, a
       const cookie = request.headers.cookie?.split(';').map(s => s.trim()).find(s => s.startsWith('vide_session='))?.slice(13);
       if (!equal(cookie, session)) throw new DomainError('UNAUTHORIZED');
       const upload=/^\/api\/v1\/projects\/([^/]+)\/import$/.exec(url.pathname);
-      if(upload&&request.method==='POST'){send(200,await importModel(request,upload[1],url.searchParams.get('name'),workspace,host));return;}
+      if(upload&&request.method==='POST'){send(200,await importModel(request,upload[1],url.searchParams.get('name'),workspace,host,hosts.zwcad));return;}
       const capture=/^\/api\/v1\/projects\/([^/]+)\/capture$/.exec(url.pathname);
       if(capture&&request.method==='POST'){send(200,await captureModel(capture[1],await body(request),workspace,host));return;}
       const reviewComparison=/^\/api\/v1\/projects\/([^/]+)\/review-comparison$/.exec(url.pathname);

@@ -2,7 +2,7 @@
 id: VERIFY-2026-09-20-native-workspace
 title: 브라우저 입력에서 실제 Rhino 후보까지
 status: review
-version: 0.22
+version: 0.23
 updated: 2026-09-20
 owner: agent:codex
 related: [AC-05, AC-17, AC-24, AC-38, T-005, T-013, T-015, T-016, T-018]
@@ -186,3 +186,6 @@ tests/integration/browser-point-selection.mjs에서 [10000,20000,30] m의 점을
 ## 실제 치수와 Inspector 검증
 반지름 2 m의 네이티브 원을 새 작업 사본으로 읽어 boundsSize=[4,4,0] m, 길이 12.566370643255096 m, Site 레이어와 Inspector 표시를 확인했다. 프로젝트 6b621c71-4030-426e-b250-c94c56a9d617. [Inspector 화면](../assets/native-workspace/native-measurements.png). tests/integration/browser-native-measurements.mjs와 native-geometry.mjs의 [5,3,6] m 돌출 범위 검증을 통과했다.
 실행 계약 시험은 AI 문맥에 길이·실제 범위·한글 레이어가 전달되고 표시 점열은 포함되지 않는지 확인한다. 전체 자동 시험 69개 통과. 축 정렬 경계 상자의 범위는 부재 고유 파라미터나 법정 치수가 아니다.
+
+## DWG 입력 계약과 실환경 차단
+70개 자동 시험 중 DWG 업로드 분기는 올바른 호스트 선택·시그니처 검사·업로드 임시 파일 제거·참고 상태를 확인했다. PowerShell 구문 검사를 통과했다. tests/integration/native-dwg-import.mjs는 선행 합성 DWG 생성이 90초 동안 응답하지 않아 HOST_RESULT_UNKNOWN으로 종료됐다. import 자체의 실환경 성공 증거는 아직 없다. 생성 대상은 PLAN의 고유 .vide 시험 경로이며 사용자 문서를 닫거나 새 생성 요청으로 우회하지 않았다.
