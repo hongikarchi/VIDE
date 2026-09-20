@@ -24,6 +24,9 @@ Object.assign(errors,{SOURCE_CHANGED:'기준 Rhino 파일이 외부에서 변경
 Object.assign(errors,{ZWCAD_POLYLINE_ONLY:'현재 ZWCAD 작업은 XY 평면 폴리라인을 지원합니다.',ZWCAD_EXECUTION_FAILED:'ZWCAD가 작업을 완료하지 못했습니다. 설치·실행 상태를 확인하세요.'});
 
 Object.assign(errors,{
+ NO_CHANGES:'원본에 반영할 이동 변경이 없습니다.',
+ TARGET_MISMATCH:'후보를 가져온 원래 Rhino 문서를 선택하세요.',
+ UNSUPPORTED_NATIVE_TARGET:'잠김·참조·그룹·이력 관계 또는 미지원 형상 때문에 원본 이동을 적용할 수 없습니다.',
  CAPTURE_FAILED:'문서 사본을 가져오지 못했습니다. 문서 연결·단위와 객체 수(500개 이하)를 확인하세요.',
  NETWORK_UNAVAILABLE:'로컬 서버에 연결하지 못했습니다. 서버 실행 상태를 확인하세요. 전송한 작업은 이력에서 상태를 확인한 뒤 다시 요청하세요.',
  INVALID_RESPONSE:'서버 응답을 읽지 못했습니다. 작업 이력을 새로 확인하세요.',
@@ -34,6 +37,6 @@ Object.assign(errors,{
  WRITE_UNCERTAIN:'이 문서에 결과를 확인하지 못한 쓰기가 있어 추가 적용을 보류합니다.',
  CONTROLLER_BUSY:'이 문서에 다른 작업을 적용 중입니다. 완료 후 영향 검토를 다시 하세요.',
  DOCUMENT_ALREADY_CONNECTED:'이 Rhino 문서는 다른 프로젝트에 연결돼 있습니다. 해당 프로젝트에서 작업하거나 다른 문서를 선택하세요.',
- UNSUPPORTED_APPLICATION:'현재 원본 적용은 VIDE에서 생성한 박스·폴리라인·돌출 후보를 지원합니다.'
+ UNSUPPORTED_APPLICATION:'현재 원본 적용은 생성한 박스·폴리라인·돌출, 또는 열린 문서에서 가져온 객체의 이동을 지원합니다.'
 });
 function apiError(code){return Object.assign(new Error(errors[code]||`요청 처리 오류 (${code})`),{code});}

@@ -40,9 +40,9 @@ function renderCandidate(card,message,projectId,actions){
  const open=element('button',`${host}에서 열기`,card);
  open.onclick=async()=>{open.disabled=true;try{await api(`/projects/${projectId}/requests/${message.id}/open`,'POST',{});}catch(error){actions.error(error.message);}finally{open.disabled=false;}};
  const report=element('button','검토본 내려받기',card);report.onclick=()=>actions.report(message.id);
- if(host==='Rhino'&&result.objects.every(object=>['box','polyline','extrude'].includes(object.kind))){
+ if(host==='Rhino'&&((!result.sourceDocument&&result.objects.every(object=>['box','polyline','extrude'].includes(object.kind)))||(result.sourceDocument&&result.objects.every(object=>object.kind==='native')&&message.source!=='document'))){
   const apply=element('button','문서에 적용',card);
-  apply.onclick=async()=>{try{await showApplication(projectId,message.id,application=>{request.applications=[...(request.applications||[]),application];actions.changed();});}catch(error){actions.error(error.message);}};
+  apply.onclick=async()=>{try{await showApplication(projectId,message.id,application=>{request.applications=[...(request.applications||[]),application];actions.changed();},result.sourceDocument);}catch(error){actions.error(error.message);}};
  }
  for(const application of request.applications||[])element('small',application.state==='succeeded'?'원본 반영됨 · 파일 저장 별도':application.state==='unknown'?'원본 적용 결과 미확인':application.state==='failed'?'원본 적용 실패':'원본 적용 중',card);
  const table=element('button','수량표',card);table.onclick=async()=>{try{await showQuantities(projectId,message.id,id=>actions.selection(message.id,id));}catch(error){actions.error(error.message);}};
