@@ -2,7 +2,7 @@
 id: PLAN
 title: VIDE 구현계획 (마스터)
 status: review
-version: 0.26
+version: 0.27
 updated: 2026-09-20
 owner: agent:codex
 related: [SPEC-00, SPEC-01, SPEC-02, SPEC-03, SPEC-04, SPEC-05, ADR-013, OQ-03, OQ-04, OQ-06, OQ-07, OQ-08, OQ-09, OQ-10, OQ-14]
@@ -565,3 +565,6 @@ ZWCAD 경로는 `hosts/zwcad`의 COM 작업자로 제공한다. 새로 만든 �
 `hosts/rhino/application.mjs`는 실제 호출 안에서 프로세스/문서와 양쪽 지문을 다시 확인한다. generated box/polyline/extrude만 허용하며 단위를 변환한다. 프로젝트 소유 객체를 GUID 유지 Replace로 수정하고 새 객체에는 소유 표식을 붙인다. 미포함 소유 객체만 삭제하며 무관한 객체는 건드리지 않는다. 잠김/참조 객체는 보류한다. 변경 후 객체 수·유효성·경계를 재조회한다. 일부 쓰기 또는 응답 유실은 unknown으로 남긴다. 파일 저장은 수행하지 않으며 원본 적용과 저장 상태를 분리한다.
 
 현재 생성 후보의 소유 객체 적용을 실증했다. 가져온 임의 네이티브 원본 편집·ZWCAD 원본 적용·관련 변경만 구분하는 정밀 충돌·호스트 증거 기반 unknown 해소는 남아 있다. 전체 문서 지문 검사는 무관한 편집도 보수적으로 재검토시킬 수 있다. [ObjectTable.Replace](https://developer.rhino3d.com/api/RhinoCommon/html/M_Rhino_DocObjects_Tables_ObjectTable_Replace.htm)와 [CommonObject.ToJSON](https://developer.rhino3d.com/api/rhinocommon/rhino.runtime.commonobject/tojson)을 참고했다.
+
+
+결과 카드의 표시·후보 행동은 `src/ui/history.mjs`로 분리했다. 앱 제어기는 현재 상태와 화면 간 선택만 연결한다. 작업 갱신 때 사용자가 과거 이력을 읽고 있으면 강제로 맨 아래로 이동하지 않는다. 기존 후보·수량표·다운로드·초안·좁은 화면 회귀를 다시 통과했다.

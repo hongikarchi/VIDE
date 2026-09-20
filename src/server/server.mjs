@@ -18,7 +18,7 @@ const assets = new Map([
   ['/', ['../ui/index.html', 'text/html; charset=utf-8']],
   ['/app.mjs', ['../ui/app.mjs', 'text/javascript; charset=utf-8']],
   ['/style.css', ['../ui/style.css', 'text/css; charset=utf-8']],
-  ...['model','viewport','gateway','inspector','requests','sketch','quantities','documents','application'].map(name => [`/${name}.mjs`, [`../ui/${name}.mjs`, 'text/javascript; charset=utf-8']]),
+  ...['model','viewport','gateway','inspector','requests','sketch','quantities','documents','application','history'].map(name => [`/${name}.mjs`, [`../ui/${name}.mjs`, 'text/javascript; charset=utf-8']]),
   ['/vendor/three.module.js', ['../../node_modules/three/build/three.module.js', 'text/javascript']],
   ['/vendor/three.core.js', ['../../node_modules/three/build/three.core.js', 'text/javascript']],
   ['/vendor/OrbitControls.js', ['../../node_modules/three/examples/jsm/controls/OrbitControls.js', 'text/javascript']],

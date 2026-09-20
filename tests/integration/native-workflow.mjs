@@ -38,7 +38,7 @@ try{
  const comparison=await page.evaluate(async({projectId,before,after})=>(await fetch(`/api/v1/projects/${projectId}/comparison?before=${before}&after=${after}`)).json(),{projectId:project.id,before:first.id,after:second.id});
  assert.equal(comparison.compatible,true);assert.equal(comparison.rows[0].status,'changed');assert.ok(Math.abs(comparison.rows[0].delta.volume+72)<.001);
  await page.waitForFunction(()=>[...document.querySelectorAll('.chat-message button')].filter(b=>b.textContent==='수량표').length===2);
- await page.getByRole('button',{name:'수량표',exact:true}).last().click();await page.locator('.quantity-dialog').waitFor({state:'visible'});
+ await page.getByRole('button',{name:'수량표',exact:true}).last().click();await page.getByRole('dialog',{name:'후보 수량표',exact:true}).waitFor({state:'visible'});
  await page.getByLabel('비교할 이전 후보',{exact:true}).selectOption(first.id);await page.getByRole('button',{name:'현재 후보와 비교',exact:true}).click();await page.locator('.comparison-result').getByText(/체적/).waitFor();
  await mkdir('docs/assets/native-workspace',{recursive:true});await page.screenshot({path:'docs/assets/native-workspace/quantity-comparison.png'});
  console.log(JSON.stringify({projectId:project.id,first:first.id,second:second.id,beforeSize:first.result.objects[0].size,afterSize:second.result.objects[0].size,volumeDelta:comparison.rows[0].delta.volume}));

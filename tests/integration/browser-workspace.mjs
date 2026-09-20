@@ -92,7 +92,7 @@ try{
   await page.locator('#inspector-toggle').click();
   await page.locator('[data-inspect=geometry]').click();
   await page.getByRole('button',{name:'수량표',exact:true}).last().click();
-  await page.locator('.quantity-dialog').waitFor({state:'visible'});
+  await page.getByRole('dialog',{name:'후보 수량표',exact:true}).waitFor({state:'visible'});
   await page.getByLabel('비교할 이전 후보',{exact:true}).selectOption(firstNative.id);
   await page.getByRole('button',{name:'현재 후보와 비교',exact:true}).click();
   await page.locator('.comparison-result').getByText(/비교 불가/).first().waitFor();

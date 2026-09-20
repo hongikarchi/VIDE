@@ -1,0 +1,48 @@
+import {api,labels,errors} from './gateway.mjs';
+import {showApplication} from './application.mjs';
+import {showQuantities} from './quantities.mjs';
+function element(tag,text,parent,attributes={}){
+ const node=document.createElement(tag);node.textContent=text;
+ for(const [key,value] of Object.entries(attributes))node.setAttribute(key,value);
+ parent.append(node);return node;
+}
+export function renderHistory(root,messages,models,projectId,actions){
+ const follow=root.scrollHeight-root.scrollTop-root.clientHeight<60;
+ const previousScroll=root.scrollTop;root.replaceChildren();
+ if(!messages.length){element('div','V.',root,{class:'chat-empty'});return;}
+ for(const message of messages){
+  const card=element('article','',root,{class:'chat-message'});
+  element('p',message.body||'첨부한 문맥 검토',card);
+  const references=[...message.pins.map(p=>p.name),...message.sketches.map(s=>s.name),...message.files.map(f=>f.name)];
+  if(references.length)element('small',references.join(' · '),card);
+  element('small',message.source==='file'?'Rhino 작업 사본':`${models.find(model=>model.id===message.model)?.name||message.model} · ${message.effort} · ${message.permission==='review'?'검토만':'후보 작업 허용'}`,card);
+  const context=element('details','',card);element('summary','요청 문맥',context);element('pre',JSON.stringify(message.request?.input||message,null,2),context);
+  const request=message.request;if(!request)continue;
+  element('small',request.state==='running'&&request.result?.phase==='host'?'호스트 생성·저장 검증 중':request.result?.phase==='stopping'?'중단 확인 중':labels[request.state]||request.state,card);
+  if(request.result?.text)element('p',request.result.text,card);
+  if(request.result?.hostExecuted)renderCandidate(card,message,projectId,actions);
+  if(request.result?.code)element('p',errors[request.result.code]||request.result.code,card);
+  if(['queued','running'].includes(request.state)&&request.result?.phase!=='host'){
+   const stop=element('button','중단',card);
+   stop.onclick=async()=>{stop.disabled=true;try{await api(`/projects/${projectId}/requests/${message.id}/cancel`,'POST',{});}catch(error){actions.error(error.message);stop.disabled=false;}};
+  }
+ }
+ root.scrollTop=follow?root.scrollHeight:previousScroll;
+}
+function renderCandidate(card,message,projectId,actions){
+ const {request}=message,result=request.result,host=result.host==='zwcad'?'ZWCAD':'Rhino',extension=result.host==='zwcad'?'dwg':'3dm';
+ const view=element('button','이 후보 보기',card);view.onclick=()=>actions.candidate(message.id);
+ element('small',`${host} 후보 · 저장·재열기 검증됨`,card);
+ element('a',extension==='dwg'?'DWG 내려받기':'3dm 내려받기',card,{href:`/api/v1/projects/${projectId}/requests/${message.id}/model`,download:`VIDE-candidate.${extension}`});
+ const open=element('button',`${host}에서 열기`,card);
+ open.onclick=async()=>{open.disabled=true;try{await api(`/projects/${projectId}/requests/${message.id}/open`,'POST',{});}catch(error){actions.error(error.message);}finally{open.disabled=false;}};
+ const report=element('button','검토본 내려받기',card);report.onclick=()=>actions.report(message.id);
+ if(host==='Rhino'&&result.objects.every(object=>['box','polyline','extrude'].includes(object.kind))){
+  const apply=element('button','문서에 적용',card);
+  apply.onclick=async()=>{try{await showApplication(projectId,message.id,application=>{request.applications=[...(request.applications||[]),application];actions.changed();});}catch(error){actions.error(error.message);}};
+ }
+ for(const application of request.applications||[])element('small',application.state==='succeeded'?'원본 반영됨 · 파일 저장 별도':application.state==='unknown'?'원본 적용 결과 미확인':application.state==='failed'?'원본 적용 실패':'원본 적용 중',card);
+ const table=element('button','수량표',card);table.onclick=async()=>{try{await showQuantities(projectId,message.id,id=>actions.selection(message.id,id));}catch(error){actions.error(error.message);}};
+ const measurements=element('details','',card);element('summary','측정값',measurements);
+ for(const object of result.scene||[])element('p',`${result.objects.find(o=>o.id===object.id)?.name||object.id} · 기하 면적 ${object.area?.toFixed(2)??'—'} m² · 체적 ${object.volume?.toFixed(2)??'—'} m³`,measurements);
+}
