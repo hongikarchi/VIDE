@@ -2,7 +2,7 @@
 id: VERIFY-2026-09-20-native-workspace
 title: 브라우저 입력에서 실제 Rhino 후보까지
 status: review
-version: 0.41
+version: 0.42
 updated: 2026-09-21
 owner: agent:codex
 related: [AC-05, AC-17, AC-24, AC-38, T-005, T-013, T-015, T-016, T-018]
@@ -266,3 +266,7 @@ T-006 / H-ZWCAD-04·05 / SPEC-02.12·13 부분 검증이다. native-dwg-edit.mjs
 Aside MCP repl로 프로젝트 4180a41c-14a1-43bc-8f77-b55c94822a60을 열어 Claude 구독 AI에 실제 경계 수정 요청을 보냈다. 저장·재열기 성공과 수량표 240 m²/68 m, 이전 취득 fa106639-f967-4977-ac6f-f4a63b01c71c 대비 +40 m²/+8 m를 실제 화면에서 확인했다. [Aside 화면](../assets/native-workspace/dwg-edit-aside.png). 원본 DWG 적용이나 일반 CAD 편집 완료는 아니다.
 
 ActiveX 참고: [읽기 전용 HasExtensionDictionary](https://help.autodesk.com/cloudhelp/2024/PTB/AutoCAD-ActiveX-Reference/files/GUID-691DA1BB-3D33-45A9-9A0F-212988DBA5F6.htm). 조회 중 사전을 생성하는 GetExtensionDictionary는 사용하지 않았다. Autodesk 문서만으로 ZWCAD 호환을 주장하지 않고 위 설치본에서 검증했다.
+
+### CAD 프로젝트 첫 열기
+
+browser-project-startup.mjs는 새 브라우저에서 DWG 전용 프로젝트를 처음 열 때 실제 후보와 ZWCAD 호스트가 표시되는 것을 확인했다. 이후 명시적으로 빈 기준의 Rhino 초안을 저장해 재열었을 때는 문장·호스트·빈 뷰가 유지돼 기존 초안을 최신 CAD 후보로 바꾸지 않았다. 사용자 Aside의 실제 초안은 이 자동 시험에서 변경하지 않았다.

@@ -2,7 +2,7 @@
 id: PLAN
 title: VIDE 구현계획 (마스터)
 status: review
-version: 0.60
+version: 0.61
 updated: 2026-09-21
 owner: agent:codex
 related: [SPEC-00, SPEC-01, SPEC-02, SPEC-03, SPEC-04, SPEC-05, ADR-013, OQ-03, OQ-04, OQ-06, OQ-07, OQ-08, OQ-09, OQ-10, OQ-14]
@@ -308,6 +308,9 @@ T-003·005는 H-RHINO-04·05의 지원안을, T-003·006은 H-ZWCAD-04·05의 �
 기존 구현을 지우고 재시작하거나 현재 코드 모양에 SPEC을 맞추지 않는다. 필요 변경을 티켓 단위로 적용하며 실제 소스 대조/미시험 구분은 [구현 전 문서 검수](../tdd/VERIFY-2026-09-20-preimplementation.md)에 남긴다.
 
 ### 6.5 현재 티켓 현황과 이어갈 위치
+
+T-016: 저장된 초안이 없는 첫 프로젝트 열기에서는 호스트와 무관하게 마지막 실제 후보를 연다. CAD-only 프로젝트가 Rhino 기본값 때문에 빈 화면으로 열리는 문제를 수정했다. 기존 초안의 명시적 빈 기준·호스트·문장은 그대로 유지한다. browser-project-startup.mjs에서 실제 저장된 DWG 프로젝트로 두 경우를 검증했다.
+
 
 T-006: 신규 DWG 취득에 polyline-vertices-v1 능력을 기록한다. mm·독립 직선 XY LWPolyline에 대해 그룹/확장 사전/XData/잠긴 레이어/선폭/두께를 검사하며 확인 실패는 참고 전용으로 유지한다. 허용 사본은 같은 ID·Handle·이름·객체 집합의 이동/정점 변경만 받는다. 고유 DWG 복사본을 직접 편집하고 재열기 후 점열·단위·Handle·레이어·색상을 검증한다. 원본 바이트와 이전 후보는 변경하지 않는다. 기존 능력 표시 없는 취득은 재취득해야 하며 새 기능을 소급 가정하지 않는다. native-dwg-edit.mjs와 Aside 실제 구독 요청 검증을 통과했다.
 
