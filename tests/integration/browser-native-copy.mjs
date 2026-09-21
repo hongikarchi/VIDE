@@ -1,3 +1,4 @@
+import {installBrowserSupport} from './browser-support.mjs';
 // One subscription call on an isolated imported native extrusion; optional project resumes without resubmission.
 import assert from 'node:assert/strict';import {readFile} from 'node:fs/promises';import {pathToFileURL} from 'node:url';import {randomUUID} from 'node:crypto';
 import {RhinoWorkspace} from '../../hosts/rhino/workspace.mjs';
@@ -5,8 +6,8 @@ const [playwright,launch,flag,existingProject]=process.argv.slice(2);if(flag!=='
 const {chromium}=await import(pathToFileURL(playwright).href),{url}=JSON.parse(await readFile(launch,'utf8'));
 const browser=await chromium.launch({channel:'chrome',headless:true,args:['--enable-unsafe-swiftshader']});
 try{
- const page=await browser.newPage({viewport:{width:1440,height:900}});await page.goto(url);await page.waitForFunction(()=>document.querySelector('#connection-status').textContent.includes('연결됨'));
- const projectId=existingProject||await page.evaluate(async()=>{const {api}=await import('/gateway.mjs');return (await api('/projects','POST',{name:'네이티브 복사 통합 검증'})).id;});console.log(JSON.stringify({projectId}));
+ const page=await browser.newPage({viewport:{width:1440,height:900}});await installBrowserSupport(page);await page.goto(url);await page.waitForFunction(()=>document.querySelector('#connection-status').textContent.includes('연결됨'));
+ const projectId=existingProject||await page.evaluate(async()=>{const api=window.testApi;return (await api('/projects','POST',{name:'네이티브 복사 통합 검증'})).id;});console.log(JSON.stringify({projectId}));
  await page.goto(new URL('/?project='+projectId,url).href);await page.waitForFunction(()=>document.querySelector('#connection-status').textContent.includes('연결됨'));
  const read=()=>page.evaluate(async id=>(await fetch('/api/v1/projects/'+id+'/requests')).json(),projectId);let rows=await read();
  if(!rows.length){const host=new RhinoWorkspace('.vide/native-copy-check'),native=await host.build(randomUUID(),randomUUID(),[{kind:'extrude',id:'source',name:'검수 돌출',points:[[0,0,0],[4,0,0],[4,3,0],[0,3,0],[0,0,0]],height:6}]);await page.locator('#model-file').setInputFiles(native.filename);await page.getByText('작업 사본을 열었습니다.',{exact:true}).waitFor();rows=await read();}

@@ -23,7 +23,8 @@
     "prestart": "npm run build:web",
     "preworkspace": "npm run build:web",
     "pretest": "npm run build:web",
-    "prepackage:windows": "npm run build:web"
+    "prepackage:windows": "npm run build:web",
+    "test:browser": "npm run build:web && node tests/integration/browser-react-panels.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.30.0",
@@ -38,6 +39,7 @@
     "@types/react-dom": "19.3.0",
     "@types/three": "0.186.0",
     "@vitejs/plugin-react": "6.1.1",
+    "playwright": "1.63.0",
     "typescript": "7.0.2",
     "vite": "8.3.0"
   }

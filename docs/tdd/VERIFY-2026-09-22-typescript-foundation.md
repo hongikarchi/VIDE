@@ -2,7 +2,7 @@
 id: VERIFY-2026-09-22-typescript-foundation
 title: TypeScript·React·Vite 전환 기반 검증
 status: review
-version: 0.3
+version: 0.4
 updated: 2026-09-22
 owner: agent:codex
 related: [PLAN, ADR-016, ADR-017, T-010, T-011, T-015]
@@ -48,3 +48,17 @@ AI 설정 코어는 strict TypeScript로 옮겼고 src/contracts/ai-settings.ts�
 설정 창은 React가 단독 소유하며 닫힌 창의 늦은 연결 확인 응답을 무시한다. 저장 중 닫기/편집은 막고 저장 후 반환된 revision을 사용한다. 설정 모듈은 창을 열 때 지연 로딩한다. 빌드 결과 설정 청크는 약 91.55 kB이며 초기 app 청크는 약 621.92 kB다. 이 수치는 성능 벤치마크가 아니다.
 
 빌드와 100/100 자동 테스트를 통과했다. Chromium의 별도 테스트 데이터에서 잘못된 명령 경로를 거절하며 revision 0을 유지했고 빈 경로 저장 뒤 revision 1과 성공 안내를 확인했다. 연결 확인 응답을 지연시킨 상태에서 취소·재열기 후 입력이 유지됐다. 모달의 실제 렌더와 지연 로딩 후 열림·입력 2개·브라우저 오류 없음을 확인했다. 사용자 기본 설정은 변경하지 않았다. Claude 구독 상태는 확인됐지만 테스트 환경의 Codex는 로그인 필요로 표시됐다. 이 검증은 AI 과업 실행 성공을 뜻하지 않는다.
+
+## 열린 문서 패널·브라우저 회귀 복구
+
+열린 Rhino 문서 조회·선택·취득 패널을 React로 옮겼다. 조회·취득·선택 요청 중 문서 전환과 중복 요청을 막고 선택 응답의 instance/documentId가 요청 대상과 같은지 확인한다. host-documents 공통 스키마는 Rhino 어댑터와 UI 양쪽에서 사용한다. 실제 호스트 수신부 교체나 Rhino worker 준비 실패 해결은 아니다.
+
+`npm run build`, `npm test` 101/101, `npm run test:browser`가 통과했다. 새 브라우저 회귀는 임시 DB를 만들고 종료 시 정리하며 CLI·호스트 응답은 합성 route로 대체한다. 요청 편집/삭제·포커스·프로젝트 초안 격리·문서 응답 경합·390px 화면을 검증한다. 실호스트 성공으로 집계하지 않는다.
+
+기존 통합 테스트의 `/gateway.mjs` 등 소스 직접 import는 Vite 배포에서 404가 된다. 공개 HTTP API를 호출하는 테스트 보조 함수로 바꾸고 viewport/inspector/quantities 직접 시험은 Vite로 메모리 빌드한 fixture를 Playwright route에서만 제공한다. 제품 서버에 테스트 endpoint나 원본 소스 공개를 추가하지 않는다. Playwright 1.63.0은 개발 의존성으로 고정했다. React의 비동기 mount를 기다리도록 기존 준비 조건도 수정했다.
+
+재실행한 기존 테스트는 browser-point-selection, browser-large-coordinate-detail, browser-ai-settings다. 실제 선택·핀·빗나간 클릭·대좌표 2 mm 형상·설정 저장/복원/잘못된 경로 보존이 통과했다. Codex 구독 상태가 미연결인 환경에서도 실제 공급자 상태와 UI가 일치하는지 검사한다. 변경한 다른 실호스트/저장 후보 의존 통합 스크립트는 이번에 전부 실행한 것은 아니다.
+
+재현: 제품 서버를 별도 VIDE_DATA_DIR에 띄우고 `node tests/integration/browser-point-selection.mjs node_modules/playwright/index.mjs <launch.json>` 형식으로 실행한다. 대좌표·AI 설정 검증도 같은 인수를 쓴다. 서버가 필요 없는 합성 패널 회귀는 `npm run test:browser`다. 설치된 Chrome을 사용하며 별도 PC/저성능 장비 성능 보증은 아니다.
+
+공유 런타임 검증을 사용하는 문서 패널을 추가하면서 Zod 관련 공유 청크는 초기 로딩에 포함된다. AI 설정 화면 자체는 계속 지연 로딩한다. 앞 절의 설정 단독 전환 당시 청크 수치는 역사 기록이다.

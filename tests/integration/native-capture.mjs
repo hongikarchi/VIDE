@@ -1,3 +1,4 @@
+import {installBrowserSupport} from './browser-support.mjs';
 // Read-only snapshot of an explicitly identified Rhino test document; creates a VIDE project.
 // args: playwright launch.json instance documentId --run-live
 import assert from 'node:assert/strict';
@@ -16,13 +17,13 @@ const {chromium}=await import(pathToFileURL(playwright).href),{url}=JSON.parse(a
 const browser=await chromium.launch({channel:'chrome',headless:true,args:['--enable-unsafe-swiftshader']});
 try{
  const page=await browser.newPage({viewport:{width:1440,height:900}}),errors=[];page.on('pageerror',error=>errors.push(error.message));
- await page.goto(url);await page.waitForFunction(()=>document.querySelector('#connection-status').textContent.includes('연결됨'));
- const project=await page.evaluate(async()=>{const {api}=await import('/gateway.mjs');return api('/projects','POST',{name:'열린 문서 취득 검증'});});
+ await installBrowserSupport(page);await page.goto(url);await page.waitForFunction(()=>document.querySelector('#connection-status').textContent.includes('연결됨'));
+ const project=await page.evaluate(async()=>{const api=window.testApi;return api('/projects','POST',{name:'열린 문서 취득 검증'});});
  await page.goto(new URL('/?project='+project.id,url).href);await page.waitForFunction(()=>document.querySelector('#connection-status').textContent.includes('연결됨'));
  await page.getByText('열린 Rhino 문서',{exact:true}).click();await page.locator('#refresh-documents').click();await page.locator('#host-documents').selectOption(String(documentId));
  await page.locator('#capture-document').click();
  await page.waitForFunction(()=>document.querySelectorAll('.chat-message').length===1&&document.querySelector('.chat-message').textContent.includes('현재 상태 미확인'),{},{timeout:60000});
- const requests=await page.evaluate(async id=>{const {api}=await import('/gateway.mjs');return api(`/projects/${id}/requests`);},project.id);
+ const requests=await page.evaluate(async id=>{const api=window.testApi;return api(`/projects/${id}/requests`);},project.id);
  const capture=requests[0];assert.equal(capture.state,'succeeded');assert.equal(capture.result.sourceDocument.instance,instance);assert.equal(capture.result.sourceDocument.documentId,documentId);
  assert.ok(capture.result.objects.length);assert.equal(await page.locator('#objects button').count(),capture.result.objects.length);assert.equal(capture.result.verified,true);
  const supported=capture.result.scene.find(object=>object.vertices.length);assert.ok(supported);assert.ok(supported.volume>0);

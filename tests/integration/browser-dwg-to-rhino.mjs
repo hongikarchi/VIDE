@@ -1,11 +1,12 @@
+import {installBrowserSupport} from './browser-support.mjs';
 // Reads an existing synthetic DWG copy; one subscription call creates an isolated Rhino candidate.
 import assert from 'node:assert/strict';import {readFile} from 'node:fs/promises';import {pathToFileURL} from 'node:url';
 const [playwright,launch,source,flag,existingProject]=process.argv.slice(2);if(flag!=='--run-live')throw Error('Explicit --run-live required');
 const {chromium}=await import(pathToFileURL(playwright).href),{url}=JSON.parse(await readFile(launch,'utf8'));
 const browser=await chromium.launch({channel:'chrome',headless:true,args:['--enable-unsafe-swiftshader']});
 try{
- const page=await browser.newPage({viewport:{width:1440,height:900}});await page.goto(url);const ready=()=>page.waitForFunction(()=>document.querySelector('#project-picker').value);await ready();
- const projectId=existingProject||await page.evaluate(async()=>{const {api}=await import('/gateway.mjs');return (await api('/projects','POST',{name:'DWG 참고 입력 연계 검증'})).id;});console.log(JSON.stringify({projectId}));
+ const page=await browser.newPage({viewport:{width:1440,height:900}});await installBrowserSupport(page);await page.goto(url);const ready=()=>page.waitForFunction(()=>document.querySelector('#project-picker')?.value);await ready();
+ const projectId=existingProject||await page.evaluate(async()=>{const api=window.testApi;return (await api('/projects','POST',{name:'DWG 참고 입력 연계 검증'})).id;});console.log(JSON.stringify({projectId}));
  await page.goto(new URL('/?project='+projectId,url).href);await ready();
  const read=()=>page.evaluate(async id=>(await fetch('/api/v1/projects/'+id+'/requests')).json(),projectId);let rows=await read();
  if(!rows.length){await page.locator('#model-file').setInputFiles(source);await page.getByText('작업 사본을 열었습니다.',{exact:true}).waitFor({timeout:110000});rows=await read();}

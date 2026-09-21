@@ -6,7 +6,7 @@ import {showExtensions} from './extensions.mjs';
 const showAiSettings = async onStatus => (await import('./ai-settings.tsx')).showAiSettings(onStatus);
 import {initializeReviews} from './reviews.mjs';
 import {renderHistory} from './history.mjs';
-import {initializeDocuments} from './documents.mjs';
+import {initializeDocuments} from './documents.tsx';
 import {renderPoints,validCoordinate} from './sketch.mjs';
 import {renderRequests,renderActiveWork} from './requests.tsx';
 import {initializeInspector,renderInspector} from './inspector.mjs';

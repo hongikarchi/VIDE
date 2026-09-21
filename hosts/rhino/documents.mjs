@@ -1,3 +1,4 @@
+import {hostDocumentsSchema,hostSelectionSchema} from '../../src/contracts/host-documents.ts';
 import {documentGuard,documentFingerprint} from './document-contract.mjs';
 import {rhinoCommand} from './transport.mjs';
 import {DomainError} from '../../src/core/store.mjs';
@@ -14,7 +15,8 @@ export async function listDocuments(){
  if(!result.success)throw new DomainError('HOST_REJECTED');
  const [instance,...rows]=result.output.trim().split(/\r?\n/);
  if(!/^\d+:\d+$/.test(instance))throw new DomainError('HOST_INVALID_RESPONSE');
- return {instance,documents:rows.filter(Boolean).map(row=>{const [id,name,units,count,modified]=row.split('|');return {id:Number(id),name:Buffer.from(name,'base64').toString('utf8')||'무제',units,objectCount:Number(count),modified:modified==='1'};})};
+ const parsed=hostDocumentsSchema.safeParse({instance,documents:rows.filter(Boolean).map(row=>{const [id,name,units,count,modified]=row.split('|');return {id:Number(id),name:Buffer.from(name,'base64').toString('utf8')||'무제',units,objectCount:Number(count),modified:modified==='1'};})});
+ if(!parsed.success)throw new DomainError('HOST_INVALID_RESPONSE');return parsed.data;
 }
 export async function inspectDocument(instance,id){
  if(!/^\d+:\d+$/.test(instance)||!Number.isInteger(id)||id<=0||id>4294967295)throw new DomainError('INVALID_INPUT');
@@ -25,5 +27,6 @@ export async function inspectDocument(instance,id){
  if(!result.success)throw new DomainError('STALE_CONNECTION');
  const [serial,documentHash,...selectedIds]=result.output.trim().split(/\r?\n/);
  if(Number(serial)!==id||!/^[a-f0-9]{64}$/.test(documentHash))throw new DomainError('STALE_CONNECTION');
- return {instance,documentId:id,documentHash,selectedIds,observedAt:new Date().toISOString()};
+ const parsed=hostSelectionSchema.safeParse({instance,documentId:id,documentHash,selectedIds,observedAt:new Date().toISOString()});
+ if(!parsed.success)throw new DomainError('HOST_INVALID_RESPONSE');return parsed.data;
 }

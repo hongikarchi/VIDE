@@ -1,11 +1,12 @@
+import {installBrowserSupport} from './browser-support.mjs';
 // Read-only live capture and persistent table UI; no AI calls or original writes.
 // args: playwright launch.json instance documentId --run-live
 import assert from 'node:assert/strict';import {readFile,mkdir} from 'node:fs/promises';import {pathToFileURL} from 'node:url';
 const [playwright,launch,instance,serial,flag]=process.argv.slice(2);if(flag!=='--run-live')throw Error('Explicit --run-live required');
 const {chromium}=await import(pathToFileURL(playwright).href),{url}=JSON.parse(await readFile(launch,'utf8'));const browser=await chromium.launch({channel:'chrome',headless:true,args:['--enable-unsafe-swiftshader']});
 try{
- const page=await browser.newPage({viewport:{width:1440,height:900}});await page.goto(url);await page.waitForFunction(()=>document.querySelector('#connection-status').textContent.includes('연결됨'));
- const data=await page.evaluate(async({instance,documentId})=>{const {api}=await import('/gateway.mjs');const project=await api('/projects','POST',{name:'수량표 구성 검증'});const capture=await api(`/projects/${project.id}/capture`,'POST',{id:crypto.randomUUID(),instance,documentId});return {project,capture};},{instance,documentId:Number(serial)});assert.equal(data.capture.state,'succeeded');
+ const page=await browser.newPage({viewport:{width:1440,height:900}});await installBrowserSupport(page);await page.goto(url);await page.waitForFunction(()=>document.querySelector('#connection-status').textContent.includes('연결됨'));
+ const data=await page.evaluate(async({instance,documentId})=>{const api=window.testApi;const project=await api('/projects','POST',{name:'수량표 구성 검증'});const capture=await api(`/projects/${project.id}/capture`,'POST',{id:crypto.randomUUID(),instance,documentId});return {project,capture};},{instance,documentId:Number(serial)});assert.equal(data.capture.state,'succeeded');
  await page.goto(new URL('/?project='+data.project.id,url).href);await page.getByRole('button',{name:'수량표',exact:true}).click();const dialog=page.getByRole('dialog',{name:'후보 수량표',exact:true});await dialog.waitFor();
  await dialog.getByLabel('객체 유형',{exact:true}).selectOption('Brep');await dialog.getByLabel('그룹 기준',{exact:true}).selectOption('layer');await dialog.getByRole('status').filter({hasText:'1 / 2개 객체'}).waitFor();
  assert.ok((await dialog.locator('tbody').innerText()).includes('Default'));assert.ok(!(await dialog.locator('tbody').innerText()).includes('Unrelated test point'));

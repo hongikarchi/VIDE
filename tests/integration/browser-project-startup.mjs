@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';import {readFile} from 'node:fs/promises
 const [playwright,launch,projectId]=process.argv.slice(2),{chromium}=await import(pathToFileURL(playwright).href),{url}=JSON.parse(await readFile(launch,'utf8'));
 const browser=await chromium.launch({channel:'chrome',headless:true,args:['--enable-unsafe-swiftshader']});
 try{
- const page=await browser.newPage();await page.goto(url);await page.waitForFunction(()=>document.querySelector('#project-picker').value);
+ const page=await browser.newPage();await page.goto(url);await page.waitForFunction(()=>document.querySelector('#project-picker')?.value);
  await page.goto(new URL('/?project='+projectId,url).href);await page.waitForFunction(()=>document.querySelectorAll('#objects button').length>0);
  assert.equal(await page.locator('#host-target').inputValue(),'zwcad');
  const basis=await page.evaluate(id=>JSON.parse(localStorage.getItem('vide:draft:'+id)).baseRequestId,projectId);assert.ok(basis);
