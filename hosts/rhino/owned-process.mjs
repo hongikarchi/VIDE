@@ -24,11 +24,11 @@ export async function inspectWindowsProcess(pid, port) {
 }
 
 /** Only a process created here receives a lease; existing user processes cannot be adopted. */
-export async function launchOwnedRhino({ executable, args = [], spawnProcess = spawn,
+export async function launchOwnedRhino({ executable, args = [], environment = process.env, visible = false, spawnProcess = spawn,
   inspect = inspectWindowsProcess } = {}) {
   if (typeof executable !== 'string' || !isAbsolute(executable) || !Array.isArray(args) ||
       args.some(value => typeof value !== 'string')) throw failure('INVALID_HOST_LAUNCH');
-  const child = spawnProcess(executable, args, { shell: false, windowsHide: true, stdio: 'ignore' });
+  const child = spawnProcess(executable, args, { env: environment, shell: false, windowsHide: !visible, stdio: 'ignore' });
   let exited = false;
   child.once('exit', () => { exited = true; });
   // Keep an error listener after spawn too; no automatic relaunch or process adoption.
@@ -47,6 +47,19 @@ export async function launchOwnedRhino({ executable, args = [], spawnProcess = s
   return Object.freeze({
     identity: expected,
     revoke() { revoked = true; },
+    async stop() {
+      revoked = true;
+      if (exited) return;
+      const observed = await inspect(expected.pid);
+      if (observed.pid !== expected.pid || observed.startTicks !== expected.startTicks ||
+          pathKey(observed.executable) !== pathKey(expected.executable)) throw failure('HOST_OWNERSHIP_MISMATCH');
+      if (exited) return;
+      await new Promise((accept, reject) => {
+        const timer = setTimeout(() => reject(failure('HOST_STOP_UNCONFIRMED')), 5000);
+        child.once('exit', () => { clearTimeout(timer); accept(); });
+        if (!child.kill()) { clearTimeout(timer); reject(failure('HOST_STOP_UNCONFIRMED')); }
+      });
+    },
     async verify(port) {
       if (revoked || exited) throw failure('HOST_LEASE_EXPIRED');
       const observed = await inspect(expected.pid, port);

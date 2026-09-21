@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <TargetExt>.rhp</TargetExt>
+    <RhinoSystem Condition="'$(RhinoSystem)' == ''">C:\Program Files\Rhino 8\System</RhinoSystem>
+    <OutputPath>../../../.vide/build/rhino-worker/bin/</OutputPath>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="RhinoCommon"><HintPath>$(RhinoSystem)\RhinoCommon.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="Microsoft.CodeAnalysis"><HintPath>$(RhinoSystem)\Microsoft.CodeAnalysis.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="Microsoft.CodeAnalysis.CSharp"><HintPath>$(RhinoSystem)\Microsoft.CodeAnalysis.CSharp.dll</HintPath><Private>false</Private></Reference>
+  </ItemGroup>
+</Project>

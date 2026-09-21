@@ -2,8 +2,8 @@
 id: SPIKE-2026-09-21-agent-tools
 title: 작업별 MCP 연결과 호스트 실행본 소유 확인
 status: review
-version: 0.2
-updated: 2026-09-21
+version: 0.3
+updated: 2026-09-22
 owner: agent:codex
 related: [PLAN, PLAN-02, SPEC-02, T-004, T-018]
 ---
@@ -53,3 +53,17 @@ Windows 개발 패키지 `0.1.0-agent-tools-1`을 생성했다. 포함된 Node �
 공식 설정 근거: [Codex MCP](https://developers.openai.com/codex/mcp/), [Claude MCP](https://code.claude.com/docs/en/mcp), [Claude CLI](https://code.claude.com/docs/en/cli-reference).
 
 OS 소유 대조만으로 AI 코드의 컴파일/초기화 안전을 주장하지 않는다. 다음 호스트 시험은 고정 조회로 소유 실행본과 합성 문서 기준을 확인하고, 컴파일 전 신뢰된 진입점이 확인을 다시 수행하는지 검증해야 한다. 확인 전에는 범용 AI 코드를 기존 Rhino 수신부로 전달하지 않는다. 소유 프로세스 수명 관리·원본 사본 생성·실제 CAD 편집·공유 서비스는 이 시험의 완료 범위가 아니다.
+
+## 자체 Rhino worker 실증 — 2026-09-22
+
+`hosts/rhino/worker`에 .NET 8 C# 플러그인과 신뢰된 시작 로더를 구현했다. `dotnet build hosts/rhino/worker/VIDE.Worker.csproj --no-restore`로 설치된 RhinoCommon/Roslyn을 참조한다. 컴파일 결과는 `.vide/build/rhino-worker`에 두고 Git에 포함하지 않는다. `tools/spikes/2026-09-21-agent-tools/host-probe.mjs`가 새 Rhino 실행본·headless 문서만 만들며 시험 종료 시 소유 PID/시작 ticks/실행 파일이 일치하는 실행본만 종료한다. `--visible`은 진단용 창 표시다.
+
+이전 90초 준비 실패의 두 원인을 실제 Rhino 창과 명령 이력에서 확인했다. Node의 기본 Windows 인자 인용으로 /runscript가 실행되지 않았고, 이를 고치자 -PlugInManager가 설정 대화상자를 열고 정지했다. [공식 시작 인자](https://docs.mcneel.com/rhino/8/help/en-us/information/startingrhino.htm)에 맞춘 verbatim /runscript와 RunPythonScript 로더로 바꿨다. 로더는 설치본 RhinoCommon.xml의 `PlugIn.LoadPlugIn(string, out Guid)`를 호출한 다음 고정 VIDEWorkHost 명령만 실행한다. 이 API는 플러그인 등록 정보를 Rhino에 남기므로 향후 배포/제거 처리에 포함해야 한다. 현재는 개발 실험이며 사용자 기본 플러그인 설정을 정리하거나 삭제하지 않았다.
+
+수신부는 loopback 임의 포트를 열고 작업별 토큰·세션·PID·시작 ticks를 확인한 후 UI 스레드의 고정 실행기로 보낸다. 실행기는 headless 문서 ID·revision·operation ID/코드 해시를 검사한 뒤에만 코드를 컴파일/로드한다. 사용자 원본 문서를 전달하지 않는다. 실행 의도와 결과를 flush한 임시 파일→교체로 기록하며, 실행 후 오류는 unknown으로 잠근다. 같은 작업 ID/동일 코드는 기존 결과를 반환하고 다른 코드는 거절한다.
+
+최종 기본 숨김 실행 시험은 16.218초였다. 10×8×6 m 박스 1개를 생성해 20,895-byte 3dm에 저장하고 재열었다. 재열기 검증은 단위·객체 개수/ID/종류·유효 기하·경계이며 모든 속성/위상 동등성 검증이라는 뜻은 아니다. 파일 SHA-256도 Node에서 대조했다. 잘못된 문서/세션/낡은 revision/컴파일 오류/같은 operation ID의 다른 코드가 거절됐고 동일 제출 재전송으로 객체가 늘지 않았다. 실행본 종료를 확인했다. 증거 디렉터리는 `.vide/worker-probe/5cc3764c-86e8-4ba5-9a38-742c00bc754b`이며 토큰은 로그나 저장소에 넣지 않는다. 앞선 표시 실행 시험에서도 생성/저장/중복 억제가 13.424초에 통과했다.
+
+자동 회귀는 102/102 통과했다. 추가 시험은 PID 재사용 시 stop이 프로세스를 종료하지 않고 소유 실행본만 한 번 종료하는지 확인한다.
+
+이제 시작 실패는 재현 원인을 수정한 상태다. 남은 단계는 실제 구독 에이전트의 query→SDK 코드→execute 루프, 제품 후보/뷰포트 DTO 이식, 사용자 사본 취득과 결과 저널 복구, 복수 실행본·ZWCAD, 패키지 배포다. 이 worker는 같은 사용자 권한의 C# 코드 실행기이며 악성 코드 샌드박스가 아니다. 제품의 일반 요청 경로는 아직 기존 구현을 사용한다.

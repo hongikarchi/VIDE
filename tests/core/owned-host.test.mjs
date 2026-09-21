@@ -8,6 +8,7 @@ import { rhinoCommand } from '../../hosts/rhino/transport.mjs';
 
 async function leaseFixture() {
   const child = new EventEmitter(); child.pid = 123;
+  child.kill = () => { queueMicrotask(() => child.emit('exit', 0)); return true; };
   const executable = resolve('synthetic-rhino.exe');
   let observed = { pid: 123, startTicks: '638940000000000001', executable, listeners: [123] };
   const lease = await launchOwnedRhino({ executable,
@@ -32,6 +33,16 @@ test('revocation during OS inspection cannot issue a valid lease', async () => {
   const { lease } = await leaseFixture();
   const pending = lease.verify(1999); lease.revoke();
   await assert.rejects(pending, { code: 'HOST_LEASE_EXPIRED' });
+});
+
+test('stopping a lease refuses a reused PID and stops only the owned process', async () => {
+  const {lease,child,change}=await leaseFixture();let kills=0;
+  child.kill=()=>{kills++;queueMicrotask(()=>child.emit('exit',0));return true;};
+  change({startTicks:'638940000000000002'});
+  await assert.rejects(lease.stop(),{code:'HOST_OWNERSHIP_MISMATCH'});assert.equal(kills,0);
+  change({startTicks:'638940000000000001'});await lease.stop();assert.equal(kills,1);
+  await lease.stop();assert.equal(kills,1);
+  await assert.rejects(lease.verify(1999),{code:'HOST_LEASE_EXPIRED'});
 });
 
 test('every TCP connection verifies ownership before transmission; foreign listener receives zero bytes', async t => {
