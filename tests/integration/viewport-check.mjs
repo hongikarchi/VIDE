@@ -3,7 +3,7 @@ import {tmpdir} from 'node:os';
 import {join,resolve,dirname} from 'node:path';
 import {execFile} from 'node:child_process';
 import {promisify} from 'node:util';
-import {startServer} from '../../src/server/server.mjs';
+import {startServer} from '../../src/server/server.ts';
 const directory=await mkdtemp(join(tmpdir(),'vide-viewport-')),exec=promisify(execFile);let app;
 try{
  app=await startServer({filename:join(directory,'test.sqlite'),host:{status:async()=>({available:true})},providerFactory:()=>({status:async()=>({available:true})})});

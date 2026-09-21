@@ -4,7 +4,7 @@ import {mkdir,writeFile} from 'node:fs/promises';
 import {randomUUID} from 'node:crypto';
 import {resolve,join} from 'node:path';
 import {chromium} from 'playwright';
-import {startServer} from '../../src/server/server.mjs';
+import {startServer} from '../../src/server/server.ts';
 
 const directory=resolve('.vide/sdk-sketch',randomUUID());await mkdir(directory,{recursive:true});
 let app,browser;

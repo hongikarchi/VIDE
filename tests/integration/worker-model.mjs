@@ -5,7 +5,7 @@ import {createHash,randomUUID} from 'node:crypto';
 import {resolve,join} from 'node:path';
 import {chromium} from 'playwright';
 import {launchRhinoWorker} from '../../hosts/rhino/worker-client.ts';
-import {startServer} from '../../src/server/server.mjs';
+import {startServer} from '../../src/server/server.ts';
 import {SdkExecution} from '../../src/server/sdk-execution.ts';
 
 const directory=resolve('.vide/worker-ui-check',randomUUID());await mkdir(directory,{recursive:true});

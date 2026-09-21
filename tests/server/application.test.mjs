@@ -2,7 +2,7 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {Store} from '../../src/core/store.ts';
 import {Workspace} from '../../src/core/workspace.ts';
-import {Applications} from '../../src/server/application.mjs';
+import {Applications} from '../../src/server/application.ts';
 function setup(apply){
  const store=new Store(':memory:'),workspace=new Workspace(store),project=store.createProject('apply');
  workspace.submit(project.id,{id:'candidate',body:'create',provider:'codex-cli',permission:'candidate',pins:[],sketches:[],files:[]});workspace.update(project.id,'candidate','succeeded',{hostExecuted:true,host:'rhino',objects:[{kind:'box',id:'box'}],fileHash:'hash'});

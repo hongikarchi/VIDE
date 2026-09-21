@@ -1,7 +1,7 @@
 // Live Rhino recovery fault injection. AI is a deterministic test adapter; native execution is real.
 // args: playwright instance documentId --run-live
 import assert from 'node:assert/strict';import {mkdir,readFile,writeFile} from 'node:fs/promises';import {join,resolve} from 'node:path';import {pathToFileURL} from 'node:url';import {randomUUID} from 'node:crypto';
-import {startServer} from '../../src/server/server.mjs';import {applyNativeMovements} from '../../hosts/rhino/native-application.mjs';
+import {startServer} from '../../src/server/server.ts';import {applyNativeMovements} from '../../hosts/rhino/native-application.mjs';
 const [playwright,instance,serial,flag]=process.argv.slice(2);if(flag!=='--run-live')throw Error('Explicit --run-live required');const documentId=Number(serial);
 const directory=resolve('.vide','recovery-check',randomUUID());await mkdir(directory,{recursive:true});const filename=join(directory,'workspace.sqlite');let target,calls=0;
 const providerFactory=()=>({status:async()=>({available:true}),run:async()=>({text:JSON.stringify({message:'Recovery test movement',operations:[{kind:'move',id:target,delta:[1,0,0]}]})})});

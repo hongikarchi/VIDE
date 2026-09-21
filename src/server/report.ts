@@ -1,7 +1,7 @@
-import type {SourceRequest} from '../core/quantities.ts';
-import type {QuantityTable} from '../contracts/quantities.ts';
-import type {DisplayGeometry} from '../core/scene-representation.ts';
-interface ReportRequest extends Omit<SourceRequest,'result'>{input:{body:string;pins?:{name?:string;role:string}[];sketches?:{name?:string;plane:string;role:string}[];files?:{name:string}[]};result?:NonNullable<SourceRequest['result']>&{displayUnsupported?:string[];verified?:boolean;text?:string;scene:(NonNullable<SourceRequest['result']>['scene'][number]&DisplayGeometry)[]};applications?:{state:string}[]}
+import {z} from 'zod';
+import {workspaceResultSchema,applicationResultSchema} from '../contracts/workspace-result.ts';
+import {quantityTableSchema} from '../contracts/quantities.ts';
+const reportSchema=z.object({id:z.string(),createdAt:z.string(),input:z.object({body:z.string(),pins:z.array(z.object({name:z.string().optional(),role:z.string()})).optional(),sketches:z.array(z.object({name:z.string().optional(),plane:z.string(),role:z.string()})).optional(),files:z.array(z.object({name:z.string()})).optional()}),result:workspaceResultSchema.extend({verified:z.boolean().optional(),displayUnsupported:z.array(z.string()).optional(),objects:z.array(z.object({id:z.string(),name:z.string(),kind:z.string().optional()})),scene:workspaceResultSchema.shape.scene.unwrap()}),applications:z.array(applicationResultSchema).optional()});
 import {sceneRepresentation} from '../core/scene-representation.ts';
 import {validatePreview} from '../core/reviews.ts';
 import {quantities} from '../core/quantities.ts';
@@ -9,7 +9,9 @@ import {DomainError} from '../core/store.ts';
 const escape=(value:unknown)=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]!));
 const number=(value:unknown)=>typeof value==='number'&&Number.isFinite(value)?value.toFixed(3):'—';
 
-export function renderReport(project:{name:string},request:ReportRequest,image:unknown,snapshot?:{table:QuantityTable;title?:string;createdAt?:string}){
+export function renderReport(projectValue:unknown,requestValue:unknown,image:unknown,snapshotValue?:unknown){
+  const project=z.object({name:z.string()}).parse(projectValue),request=reportSchema.parse(requestValue);
+  const snapshot=snapshotValue===undefined?undefined:z.object({table:quantityTableSchema,title:z.string().optional(),createdAt:z.string().optional()}).parse(snapshotValue);
   if(!request.result?.hostExecuted)throw new DomainError('NOT_FOUND');
   validatePreview(image);
   const table=snapshot?.table||quantities(request);

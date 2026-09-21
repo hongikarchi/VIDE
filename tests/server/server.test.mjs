@@ -4,7 +4,7 @@ import { request as httpRequest } from 'node:http';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { startServer } from '../../src/server/server.mjs';
+import { startServer } from '../../src/server/server.ts';
 
 async function fixture(t,options={}) {
   const directory = mkdtempSync(join(tmpdir(), 'vide-http-test-'));

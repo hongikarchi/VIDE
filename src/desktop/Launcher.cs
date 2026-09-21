@@ -13,7 +13,7 @@ internal static class Launcher
         {
             string root = AppDomain.CurrentDomain.BaseDirectory;
             string node = Path.Combine(root, "runtime", "node.exe");
-            string main = Path.Combine(root, "app", "src", "server", "main.mjs");
+            string main = Path.Combine(root, "app", "src", "server", "main.ts");
             if (!File.Exists(node) || !File.Exists(main)) throw new IOException("Incomplete package");
             var start = new ProcessStartInfo(node, "\"" + main + "\" --open --quiet" + (noBrowser ? " --no-browser" : ""));
             start.WorkingDirectory = Path.Combine(root, "app");

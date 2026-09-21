@@ -2,7 +2,7 @@
 id: PLAN
 title: VIDE 구현계획 (마스터)
 status: review
-version: 0.110
+version: 0.111
 updated: 2026-09-22
 owner: agent:codex
 related: [SPEC-00, SPEC-01, SPEC-02, SPEC-03, SPEC-04, SPEC-05, ADR-013, OQ-03, OQ-04, OQ-06, OQ-07, OQ-08, OQ-09, OQ-10, OQ-14]
@@ -372,6 +372,8 @@ T-003·005는 H-RHINO-04·05의 지원안을, T-003·006은 H-ZWCAD-04·05의 �
 기존 구현을 지우고 재시작하거나 현재 코드 모양에 SPEC을 맞추지 않는다. 필요 변경을 티켓 단위로 적용하며 실제 소스 대조/미시험 구분은 [구현 전 문서 검수](../tdd/VERIFY-2026-09-20-preimplementation.md)에 남긴다.
 
 ### 6.5 현재 티켓 현황과 이어갈 위치
+
+서버 라우팅·진입점·원본 적용 제어까지 TypeScript로 옮겼다. HTTP 경계 입력을 검사하며 적용 전 검토/확인·대상별 직렬화·unknown 회수를 유지한다. 런처도 main.ts를 실행한다. src 아래 제품 런타임은 TS/TSX이며 데스크톱 빌드/백업 도구와 기존 호스트 어댑터는 JS가 남아 있다. 114개 자동 시험·빌드·전체 브라우저 회귀가 통과했다.
 
 서버의 모델 가져오기·DWG 재확인·문서 취득·검토 HTML·기존 실행본 재접속도 TypeScript로 전환했다. 114개 자동 시험과 UI/서버 strict 검사가 통과했다. 서버 진입/라우팅·원본 적용·호스트 어댑터를 이어서 정리한다.
 

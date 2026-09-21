@@ -7,8 +7,8 @@
     "node": ">=24.15.0 <25"
   },
   "scripts": {
-    "start": "node src/server/main.mjs",
-    "workspace": "node src/server/main.mjs --open",
+    "start": "node src/server/main.ts",
+    "workspace": "node src/server/main.ts --open",
     "test": "node --test tests/core/*.test.mjs tests/ai/*.test.mjs tests/server/*.test.mjs",
     "docs:build": "npm --prefix tools/docs run build",
     "docs:check": "npm --prefix tools/docs run check",

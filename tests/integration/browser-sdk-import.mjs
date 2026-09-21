@@ -5,7 +5,7 @@ import {resolve,join} from 'node:path';
 import {createHash,randomUUID} from 'node:crypto';
 import {chromium} from 'playwright';
 import {launchRhinoWorker} from '../../hosts/rhino/worker-client.ts';
-import {startServer} from '../../src/server/server.mjs';
+import {startServer} from '../../src/server/server.ts';
 const directory=resolve('.vide/sdk-import',randomUUID());await mkdir(directory,{recursive:true});
 const options={executable:'C:\\Program Files\\Rhino 8\\System\\Rhino.exe',plugin:resolve('.vide/build/rhino-worker/bin/net8.0-windows/VIDE.Worker.rhp'),bootstrap:resolve('hosts/rhino/worker/bootstrap.py')};
 const filename=join(directory,'millimeters.3dm'),unknown=join(directory,'unknown.3dm'),literal=value=>'@"'+value.replaceAll('"','""')+'"';

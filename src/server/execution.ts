@@ -8,7 +8,7 @@ import type {SdkExecution} from './sdk-execution.ts';
 import {workspaceResultSchema} from '../contracts/workspace-result.ts';
 interface Provider {run(context:ProviderContext,options:{signal:AbortSignal;onProgress:(event:Progress)=>void}):Promise<{text:string;[key:string]:unknown}>;status():Promise<ProviderStatus>}
 interface Host {build(projectId:string,id:string,objects:GeometryObject[],previous?:Record<string,unknown>):Promise<unknown>}
-interface Options {providerFactory?:(options:CliOptions & {provider:string})=>Provider;host?:Host;hosts?:Partial<Record<'rhino'|'zwcad',Host>>;settings?:{get:()=>{paths:Partial<Record<string,string>>}};sdk?:SdkExecution}
+interface Options {providerFactory?:(options:CliOptions & {provider:string})=>Provider;host?:Host;hosts?:Partial<Record<'rhino'|'zwcad',Host>>;settings?:{get:()=>{paths:Partial<Record<string,string|null>>}};sdk?:SdkExecution}
 const pinsSchema=z.array(z.object({id:z.string(),basis:z.string(),role:z.enum(['target','preserve','reference'])}).passthrough());
 const executionResultSchema=workspaceResultSchema.extend({referenceOnly:z.boolean().optional()});
 const errorSchema=z.object({code:z.string().optional(),intent:z.record(z.string(),z.unknown()).optional()}).passthrough();

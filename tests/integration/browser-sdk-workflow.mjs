@@ -4,7 +4,7 @@ import {mkdir,readFile,writeFile} from 'node:fs/promises';
 import {randomUUID,createHash} from 'node:crypto';
 import {resolve,join,basename} from 'node:path';
 import {chromium} from 'playwright';
-import {startServer} from '../../src/server/server.mjs';
+import {startServer} from '../../src/server/server.ts';
 const runId=process.argv[2]||randomUUID();assert.match(runId,/^[a-f0-9-]{36}$/);
 const directory=resolve('.vide/sdk-workflow',runId);await mkdir(directory,{recursive:true});
 let app,browser;

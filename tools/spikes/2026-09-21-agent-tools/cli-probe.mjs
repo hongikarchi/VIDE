@@ -3,7 +3,7 @@ import { tmpdir, homedir } from 'node:os';
 import { join } from 'node:path';
 import { randomBytes } from 'node:crypto';
 import { spawn } from 'node:child_process';
-import { startServer } from '../../../src/server/server.mjs';
+import { startServer } from '../../../src/server/server.ts';
 import { createProvider } from '../../../src/ai/providers.ts';
 import { installedCodex } from '../../../src/ai/paths.ts';
 

@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
-import { startServer } from '../../src/server/server.mjs';
+import { startServer } from '../../src/server/server.ts';
 
 async function fixture(t) {
   const directory = await mkdtemp(join(tmpdir(), 'vide-mcp-test-'));

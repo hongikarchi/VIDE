@@ -2,7 +2,7 @@
 id: VERIFY-2026-09-22-typescript-foundation
 title: TypeScript·React·Vite 전환 기반 검증
 status: review
-version: 0.32
+version: 0.33
 updated: 2026-09-22
 owner: agent:codex
 related: [PLAN, ADR-016, ADR-017, T-010, T-011, T-015]
@@ -216,3 +216,7 @@ backupWorkspace를 TypeScript로 옮기며 sdk-models를 모델 백업 대상에
 ## 가져오기·보고서·재접속 서버 전환
 
 파일 가져오기/unknown DWG 재확인/열린 문서 취득·검토 HTML·기존 서버 재접속을 TypeScript로 옮겼다. 작업 공간·호스트 입출력·오류 의도를 구분하고 재접속 URL/인증 응답을 확인한다. HTML escaping·PNG 검사·공유본 민감 원문 제외를 유지한다. 114개 자동 시험과 UI/서버 strict 검사가 통과했다.
+
+## 서버 진입/라우팅과 원본 적용 제어 전환
+
+application/server/main을 TypeScript로 전환해 HTTP 입력·저장 결과·복구 promise·서버 종료와 적용 명령을 연결했다. 호스트 쓰기 뒤 잘못된 결과는 unknown으로 보존하고 SDK 후보의 레거시 적용 차단을 유지한다. 보고서 입력/저장 검토본도 경계에서 확인한다. Windows 런처가 main.ts를 실행하도록 변경하고 설치 안내에서 후보 worker와 기존 문서 연결을 구분했다. 114개 자동 시험·빌드·브라우저 전체 회귀가 통과했다. 최신 설치 패키지 검수와 기존 호스트 어댑터 타입 전환은 후속이다.

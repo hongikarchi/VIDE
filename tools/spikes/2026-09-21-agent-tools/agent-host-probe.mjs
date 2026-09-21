@@ -5,7 +5,7 @@ import { homedir } from 'node:os';
 import { resolve, join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { launchRhinoWorker } from '../../../hosts/rhino/worker-client.ts';
-import { startServer } from '../../../src/server/server.mjs';
+import { startServer } from '../../../src/server/server.ts';
 import { createProvider } from '../../../src/ai/providers.ts';
 import { installedCodex } from '../../../src/ai/paths.ts';
 
