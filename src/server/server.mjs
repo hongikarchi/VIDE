@@ -1,4 +1,5 @@
 import {Extensions} from '../core/extensions.mjs';
+import { AgentTools } from './agent-tools.mjs';
 import {AiSettings} from '../core/ai-settings.mjs';
 import {ReviewNotes} from '../core/review-notes.mjs';
 import {compareReviews} from '../core/review-comparison.mjs';
@@ -45,6 +46,7 @@ const statuses = { NOT_FOUND: 404, FORBIDDEN: 403, UNAUTHORIZED: 401, JSON_REQUI
   REVISION_CONFLICT: 409, TARGET_MISMATCH: 409, CONTROLLER_BUSY: 409, PROJECT_BUSY:409, STALE_REFERENCE:409 };
 export async function startServer({ filename, port = 0, providerFactory, host, cadHost,applicationOptions,onShutdown } = {}) {
   const store = new Store(filename), bootstrap = randomBytes(32).toString('hex'), session = randomBytes(32).toString('hex');
+  const agentTools = new AgentTools();
   const workspace = new Workspace(store),tableViews=new TableViews(store),reviews=new Reviews(store),reviewNotes=new ReviewNotes(store,reviews);
   host ??= new RhinoWorkspace(join(dirname(filename),'models'));
   const hosts={rhino:host,zwcad:cadHost||new ZwcadWorkspace(join(dirname(filename),'cad-models'))},importRecoveries=new Map();
@@ -65,6 +67,10 @@ export async function startServer({ filename, port = 0, providerFactory, host, c
       if (request.headers.origin && request.headers.origin !== origin) throw new DomainError('FORBIDDEN');
       if (request.headers['sec-fetch-site'] === 'cross-site') throw new DomainError('FORBIDDEN');
       const url = new URL(request.url, origin);
+      if (url.pathname === '/mcp') {
+        if (stopping) throw new DomainError('APP_STOPPING');
+        await agentTools.handle(request, response, body); return;
+      }
       if (request.method === 'GET' && assets.has(url.pathname)) {
         const [file, contentType] = assets.get(url.pathname);
         let content = await readFile(new URL(file, import.meta.url));
@@ -206,6 +212,6 @@ export async function startServer({ filename, port = 0, providerFactory, host, c
     await new Promise((resolve, reject) => { server.once('error', reject); server.listen(port, '127.0.0.1', resolve); });
   } catch (error) { store.close(); throw error; }
   authority = `127.0.0.1:${server.address().port}`; origin = `http://${authority}`;
-  return { origin, launchUrl: `${origin}/#${bootstrap}`, store,
-    close: async () => { await execution.close(); return new Promise((resolve, reject) => server.close(error => { store.close(); error ? reject(error) : resolve(); })); } };
+  return { origin, launchUrl: `${origin}/#${bootstrap}`, store, agentTools,
+    close: async () => { agentTools.close(); await execution.close(); return new Promise((resolve, reject) => server.close(error => { store.close(); error ? reject(error) : resolve(); })); } };
 }

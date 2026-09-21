@@ -9,8 +9,13 @@ for(const folder of ['ai','core','server','ui'])await cp(join(root,'src',folder)
 await mkdir(join(directory,'app','src','desktop'),{recursive:true});await copyFile(join(source,'backup.mjs'),join(directory,'app','src','desktop','backup.mjs'));
 for(const folder of ['hosts','extensions'])await cp(join(root,folder),join(directory,'app',folder),{recursive:true});
 await writeFile(join(directory,'app','package.json'),JSON.stringify({...pkg,version},null,2)+'\n');
-for(const file of ['build/three.module.js','build/three.core.js','examples/jsm/controls/OrbitControls.js','LICENSE']){
- const destination=join(directory,'app','node_modules','three',file);await mkdir(resolve(destination,'..'),{recursive:true});await copyFile(join(root,'node_modules','three',file),destination);
+// Include the locked production dependency tree, including SDK transitive imports and licenses.
+const lock=JSON.parse(await readFile(join(root,'package-lock.json'),'utf8'));
+await copyFile(join(root,'package-lock.json'),join(directory,'app','package-lock.json'));
+for(const [packagePath,metadata] of Object.entries(lock.packages)){
+ if(!packagePath||metadata.dev)continue;
+ if(!packagePath.startsWith('node_modules/')||packagePath.split('/').includes('..')||metadata.link)throw Error('Unsupported runtime dependency path');
+ await cp(join(root,packagePath),join(directory,'app',packagePath),{recursive:true});
 }
 await mkdir(join(directory,'runtime'));await copyFile(process.execPath,join(directory,'runtime','node.exe'));
 await mkdir(join(directory,'licenses'));await copyFile(join(source,'licenses','node-v24.15.0.txt'),join(directory,'licenses','node.txt'));await copyFile(join(root,'node_modules','three','LICENSE'),join(directory,'licenses','three.txt'));

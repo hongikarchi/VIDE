@@ -16,6 +16,8 @@
     "backup": "node src/desktop/backup.mjs"
   },
   "dependencies": {
-    "three": "0.186.0"
+    "@modelcontextprotocol/sdk": "1.30.0",
+    "three": "0.186.0",
+    "zod": "4.6.5"
   }
 }
