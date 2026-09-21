@@ -1,6 +1,11 @@
+import {z} from 'zod';
+const model=z.object({objects:z.array(z.object({id:z.string(),kind:z.string(),name:z.string(),origin:z.tuple([z.number(),z.number(),z.number()])}))});
 import {DomainError} from './store.ts';
-export function nativeMoves(candidate,source){
- const reject=()=>{throw new DomainError('UNSUPPORTED_APPLICATION');};
+export function nativeMoves(candidateValue:unknown,sourceValue:unknown){
+ const candidateParsed=model.safeParse(candidateValue),sourceParsed=model.extend({sourceDocument:z.object({}).passthrough()}).safeParse(sourceValue);
+ if(!candidateParsed.success||!sourceParsed.success)throw new DomainError('UNSUPPORTED_APPLICATION');
+ const candidate=candidateParsed.data,source=sourceParsed.data;
+ function reject():never{throw new DomainError('UNSUPPORTED_APPLICATION');}
  if(!source?.sourceDocument||candidate.objects.length!==source.objects.length)reject();
  const movements=[];
  for(const object of candidate.objects){

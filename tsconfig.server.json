@@ -12,7 +12,8 @@
     "types": ["node"],
     "rootDir": ".",
     "outDir": "dist/server",
-    "skipLibCheck": true
+    "skipLibCheck": true,
+    "resolveJsonModule": true
   },
-  "include": ["src/server/**/*", "src/core/**/*", "src/ai/**/*", "src/contracts/**/*", "hosts/**/*.mjs", "hosts/**/*.ts", "extensions/**/*.mjs"]
+  "include": ["src/server/**/*", "src/core/**/*", "src/ai/**/*", "src/contracts/**/*", "hosts/**/*.mjs", "hosts/**/*.ts", "extensions/**/*.mjs", "extensions/**/*.ts"]
 }

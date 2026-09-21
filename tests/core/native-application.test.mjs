@@ -1,5 +1,5 @@
 import {test} from 'node:test';import assert from 'node:assert/strict';
-import {nativeMoves} from '../../src/core/native-application.mjs';
+import {nativeMoves} from '../../src/core/native-application.ts';
 const source={sourceDocument:{instance:'1:2'},objects:[{id:'one',kind:'native',name:'One',origin:[0,0,0]},{id:'two',kind:'native',name:'Two',origin:[10,0,0]}]};
 test('native original application computes only bounded cumulative translations',()=>{
  const candidate=structuredClone(source);candidate.objects[0].origin=[2,0,0];

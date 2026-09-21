@@ -1,5 +1,5 @@
 import {readWebAsset} from './web-assets.ts';
-import {Extensions} from '../core/extensions.mjs';
+import {Extensions} from '../core/extensions.ts';
 import { AgentTools } from './agent-tools.ts';
 import { SdkExecution } from './sdk-execution.ts';
 import {AiSettings} from '../core/ai-settings.ts';

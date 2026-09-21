@@ -2,7 +2,7 @@
 id: VERIFY-2026-09-22-typescript-foundation
 title: TypeScript·React·Vite 전환 기반 검증
 status: review
-version: 0.30
+version: 0.31
 updated: 2026-09-22
 owner: agent:codex
 related: [PLAN, ADR-016, ADR-017, T-010, T-011, T-015]
@@ -208,3 +208,7 @@ Execution은 요청·공급자·호스트·SDK·진행/취소/결과 의도를 �
 ## SDK 후보 백업 누락 보완
 
 backupWorkspace를 TypeScript로 옮기며 sdk-models를 모델 백업 대상에 추가했다. 기존 구현은 models/cad-models만 복사해 새 SDK 후보/영수증이 빠졌다. 합성 SDK 후보와 영수증을 추가한 시험에서 DB·기존 모델·SDK 파일 복사/해시 일치, 실행 중 거절, 시작 토큰 제외, 원본 보존, 변조 검출이 통과했다. 복원 경로 재배치나 다른 PC 자동 복원 완료를 뜻하지 않는다.
+
+## 확장과 네이티브 이동 코어 전환
+
+확장 등록/실행·내장 객체 요약·원본 이동 계산을 TypeScript로 옮겼다. 확장 계약/선택/결과와 DB 행을 검증한다. 잘못된 기존 형상은 확장 실행 기록을 만든 뒤 실패로 남기는 동작을 유지해 입력/기준이 유실되지 않는다. 네이티브 이동은 기존 제한 범위를 유지하며 SDK 일반 형상 적용 기능이 아니다. src/core·src/ai·src/ui는 TS/TSX 전환을 마쳤고 서버/호스트/데스크톱은 일부 남는다. 114개 자동 시험·strict 타입 검사·브라우저 전체 회귀가 통과했다.

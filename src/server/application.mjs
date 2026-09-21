@@ -1,5 +1,5 @@
 import {reconcileNativeApplication} from '../../hosts/rhino/reconciliation.mjs';
-import {nativeMoves} from '../core/native-application.mjs';
+import {nativeMoves} from '../core/native-application.ts';
 import {previewNativeApplication,applyNativeMovements} from '../../hosts/rhino/native-application.mjs';
 import {randomUUID} from 'node:crypto';
 import {DomainError} from '../core/store.ts';
