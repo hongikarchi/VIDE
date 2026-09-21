@@ -1,6 +1,6 @@
 import {sceneRepresentation} from '../core/scene-representation.mjs';
 import {validatePreview} from '../core/reviews.mjs';
-import {quantities} from '../core/quantities.mjs';
+import {quantities} from '../core/quantities.ts';
 import {DomainError} from '../core/store.mjs';
 const escape=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const number=value=>Number.isFinite(value)?value.toFixed(3):'—';

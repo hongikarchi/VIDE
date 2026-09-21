@@ -1,5 +1,5 @@
 import {test} from 'node:test';import assert from 'node:assert/strict';import {mkdtempSync,rmSync} from 'node:fs';import {join} from 'node:path';import {tmpdir} from 'node:os';
-import {Store} from '../../src/core/store.mjs';import {TableViews} from '../../src/core/table-views.mjs';
+import {Store} from '../../src/core/store.mjs';import {TableViews} from '../../src/core/table-views.ts';
 test('table definitions survive reopen and reject foreign projects or stale edits/deletes',()=>{
  const directory=mkdtempSync(join(tmpdir(),'vide-table-views-'));let store=new Store(join(directory,'data.sqlite'));
  try{

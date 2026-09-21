@@ -1,5 +1,5 @@
 import {DomainError} from './store.mjs';
-import {quantities} from './quantities.mjs';
+import {quantities} from './quantities.ts';
 function representation(object,scene){
  const {nativeId,...attributes}=object;
  return JSON.stringify({attributes,geometry:scene?{vertices:scene.vertices,indices:scene.indices,line:scene.line,area:scene.area,volume:scene.volume,nativeType:scene.nativeType}:null});
