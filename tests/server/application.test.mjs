@@ -9,6 +9,15 @@ function setup(apply){
  const applications=new Applications(store,workspace,{preview:async()=>({documentHash:'original-hash',added:1,updated:0,removed:0}),apply});
  return {store,workspace,project,applications};
 }
+test('general SDK edits cannot enter the legacy translation-only original apply path',async()=>{
+ let called=false;const f=setup(async()=>{called=true;});
+ try{
+  const current=f.workspace.get(f.project.id,'candidate');
+  f.workspace.update(f.project.id,'candidate','succeeded',{...current.result,executionMode:'sdk',sourceDocument:{instance:'1:2',documentId:5},objects:[{id:'native',kind:'native',name:'Changed shape',origin:[2,0,0]}]});
+  await assert.rejects(f.applications.prepare(f.project.id,'candidate',{instance:'1:2',documentId:5}),{code:'UNSUPPORTED_APPLICATION'});
+  assert.equal(called,false);assert.equal(f.applications.pending.size,0);
+ }finally{f.store.close();}
+});
 test('inspected application requires a server preview, executes once and records unsaved success',async()=>{
  let calls=0;const f=setup(async()=>{calls++;return {state:'succeeded',result:{applied:true,saved:false}};});
  try{

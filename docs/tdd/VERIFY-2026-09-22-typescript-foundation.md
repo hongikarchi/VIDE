@@ -2,7 +2,7 @@
 id: VERIFY-2026-09-22-typescript-foundation
 title: TypeScript·React·Vite 전환 기반 검증
 status: review
-version: 0.17
+version: 0.18
 updated: 2026-09-22
 owner: agent:codex
 related: [PLAN, ADR-016, ADR-017, T-010, T-011, T-015]
@@ -146,3 +146,7 @@ Windows 패키지 0.1.0-dev.20260922.1은 5,086개 파일 해시·번들 Node·�
 ## 작업 저장소 전환
 
 Workspace를 strict TypeScript로 옮기고 저장 입력·상태·최소 호스트 결과 스키마를 추가했다. 호스트별 형상 전체를 저장소 스키마에 중복 정의하지 않는다. 읽기 검증에서 JSON 키 순서가 바뀌어 확장 재시도 비교가 실패한 문제를 발견해, 검증 후 원래 직렬화 순서를 보존하도록 수정했다. 저장 형식/테이블 변경은 없다. 타입·빌드·109개 자동 시험과 전체 합성 브라우저 회귀가 통과했다.
+
+## SDK 후보의 기존 원본 적용 경계
+
+기존 nativeMoves는 위치 차이만 적용하므로 SDK 코드가 바꾼 높이/형상을 옮길 수 없다. SDK 후보를 이 경로로 보내면 일부 이동만 반영하고 성공처럼 보일 수 있어 서버에서 거절하고 해당 버튼을 숨겼다. 후보 파일 내려받기·별도 Rhino 열기는 유지한다. 일반 SDK 형상 교체 적용은 별도 구현 대상이다. 서버 경계 시험과 UI 타입 검사가 통과했다.

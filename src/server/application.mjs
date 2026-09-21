@@ -9,6 +9,8 @@ export class Applications{
  async prepare(projectId,requestId,target){
   const candidate=this.workspace.get(projectId,requestId);
   if(!candidate.result?.hostExecuted||(candidate.result.host||'rhino')!=='rhino')throw new DomainError('UNSUPPORTED_APPLICATION');
+  // The legacy apply adapter understands translations/templates, not arbitrary SDK geometry edits.
+  if(candidate.result.executionMode==='sdk')throw new DomainError('UNSUPPORTED_APPLICATION');
   let movements,effect;
   if(candidate.result.sourceDocument||candidate.result.objects.some(object=>object.kind==='native')){
    const sourceDocument=candidate.result.sourceDocument;

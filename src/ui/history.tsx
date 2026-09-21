@@ -32,7 +32,7 @@ function Candidate({message,projectId,actions}:{message:Message;projectId:string
  const request=message.request!,result=request.result!,objects=result.objects??[],scene=result.scene??[];
  const host=result.host==='zwcad'?'ZWCAD':'Rhino',extension=result.host==='zwcad'?'dwg':'3dm';
  const missing=scene.filter(object=>!sceneRepresentation(object));
- const apply=host==='Rhino'&&((!result.sourceDocument&&objects.every(object=>['box','polyline','extrude'].includes(object.kind)))||(result.sourceDocument&&objects.every(object=>object.kind==='native')&&message.source!=='document'));
+ const apply=host==='Rhino'&&result.executionMode!=='sdk'&&((!result.sourceDocument&&objects.every(object=>['box','polyline','extrude'].includes(object.kind)))||(result.sourceDocument&&objects.every(object=>object.kind==='native')&&message.source!=='document'));
  return <>
   <button onClick={()=>actions.candidate(message.id)}>이 후보 보기</button>
   <small>{host} {['file','document'].includes(message.source??'')?'작업 사본':'후보'} · 저장·재열기 검증됨</small>
