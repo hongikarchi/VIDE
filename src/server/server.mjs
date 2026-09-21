@@ -1,7 +1,7 @@
 import {readWebAsset} from './web-assets.ts';
 import {Extensions} from '../core/extensions.mjs';
 import { AgentTools } from './agent-tools.mjs';
-import {AiSettings} from '../core/ai-settings.mjs';
+import {AiSettings} from '../core/ai-settings.ts';
 import {ReviewNotes} from '../core/review-notes.mjs';
 import {compareReviews} from '../core/review-comparison.mjs';
 import {Reviews} from '../core/reviews.mjs';

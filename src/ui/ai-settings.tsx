@@ -1,0 +1,79 @@
+import { useEffect, useState } from 'react';
+import { createRoot } from 'react-dom/client';
+import { api, errors } from './gateway.mjs';
+import { aiSettingsSchema, aiSettingsResponseSchema, providerStatusSchema, providers } from '../contracts/ai-settings.ts';
+import type { AiSettingsResponse, ProviderStatus, Provider } from '../contracts/ai-settings.ts';
+
+const errorLabels: Record<string, string> = errors;
+const dialog = document.createElement('dialog');
+dialog.className = 'quantity-dialog ai-settings';
+dialog.setAttribute('aria-label', 'AI 연결 설정');
+document.body.append(dialog);
+const root = createRoot(dialog);
+let generation = 0;
+interface Props { config: AiSettingsResponse; current: number; onStatus?: (rows: ProviderStatus) => void }
+function Settings({ config, current, onStatus }: Props) {
+  const [revision, setRevision] = useState(config.revision);
+  const [paths, setPaths] = useState(config.paths);
+  const [saving, setSaving] = useState(false);
+  const [checking, setChecking] = useState(false);
+  const [status, setStatus] = useState('');
+  const [states, setStates] = useState<Partial<Record<Provider, string>>>({});
+  const isCurrent = () => current === generation;
+  const close = () => { generation++; dialog.close(); root.render(null); };
+  const verify = async () => {
+    setChecking(true);
+    try {
+      const rows = providerStatusSchema.parse(await api('/providers'));
+      if (!isCurrent()) return;
+      setStates(Object.fromEntries(rows.map(row => [row.id, row.available ? '구독 로그인 확인됨' : errorLabels[row.reason ?? ''] || '로그인 또는 실행 상태를 확인하세요.'])));
+      onStatus?.(rows);
+    } catch (error) { if (isCurrent()) setStatus(error instanceof Error ? error.message : '연결을 확인하지 못했습니다.'); }
+    finally { if (isCurrent()) setChecking(false); }
+  };
+  useEffect(() => { void verify(); }, []);
+  useEffect(() => {
+    const cancel = (event: Event) => { event.preventDefault(); if (!saving) close(); };
+    dialog.addEventListener('cancel', cancel);
+    return () => dialog.removeEventListener('cancel', cancel);
+  }, [saving]);
+  const save = async () => {
+    if (saving || checking) return;
+    setSaving(true);
+    try {
+      const saved = aiSettingsSchema.parse(await api('/settings/ai', 'PUT', {
+        revision, paths: Object.fromEntries(providers.map(provider => [provider, paths[provider]?.trim() || null])),
+      }));
+      if (!isCurrent()) return;
+      setRevision(saved.revision);
+      setStatus('설정을 저장했습니다. 다음 요청부터 적용됩니다.');
+      await verify();
+    } catch (error) { if (isCurrent()) setStatus(error instanceof Error ? error.message : '설정을 저장하지 못했습니다.'); }
+    finally { if (isCurrent()) setSaving(false); }
+  };
+  return <>
+    <div className="quantity-head"><h2>AI 연결 설정</h2><button disabled={saving} onClick={close}>닫기</button></div>
+    <p>공식 CLI의 구독 로그인을 사용합니다. 경로를 비우면 자동 탐색합니다.</p>
+    {providers.map(provider => {
+      const label = provider === 'claude-cli' ? 'Claude Code' : 'Codex · ChatGPT';
+      return <section key={provider}><h3>{label}</h3>
+        <input aria-label={`${label} 실행 경로`} disabled={saving} value={paths[provider] ?? ''}
+          placeholder={config.resolved[provider] || '실행 파일 전체 경로'}
+          onChange={event => setPaths(previous => ({...previous, [provider]: event.target.value}))} />
+        <p role="status">{states[provider] || '연결 확인 전'}</p>
+      </section>;
+    })}
+    <div className="table-controls"><button disabled={saving || checking} onClick={() => { void save(); }}>설정 저장</button>
+      <button disabled={saving || checking} onClick={() => { void verify(); }}>연결 확인</button></div>
+    <p role="status">{status}</p>
+    <small>로그인은 각 공식 CLI에서 진행합니다. 설정 변경은 다음 요청부터 적용되며 구독 잔여 사용량은 여기서 확인할 수 없습니다.</small>
+  </>;
+}
+export async function showAiSettings(onStatus?: (rows: ProviderStatus) => void): Promise<void> {
+  const current = ++generation;
+  const config = aiSettingsResponseSchema.parse(await api('/settings/ai'));
+  if (current !== generation) return;
+  root.render(<Settings key={current} config={config} current={current} onStatus={onStatus} />);
+  if (!dialog.open) dialog.showModal();
+}
+window.addEventListener('pagehide', event => { if (!event.persisted) { generation++; root.unmount(); } });

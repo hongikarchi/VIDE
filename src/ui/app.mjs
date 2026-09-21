@@ -3,7 +3,7 @@ import {setMobileView} from './mobile-navigation.tsx';
 import {showQuantities} from './quantities.mjs';
 import {attachNativeAttributes} from './native-attributes.mjs';
 import {showExtensions} from './extensions.mjs';
-import {showAiSettings} from './ai-settings.mjs';
+const showAiSettings = async onStatus => (await import('./ai-settings.tsx')).showAiSettings(onStatus);
 import {initializeReviews} from './reviews.mjs';
 import {renderHistory} from './history.mjs';
 import {initializeDocuments} from './documents.mjs';
