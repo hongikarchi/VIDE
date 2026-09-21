@@ -13,7 +13,7 @@ import {compareCandidates,relatedCandidates} from '../core/comparison.mjs';
 import {quantities,quantitiesCsv} from '../core/quantities.ts';
 import { createServer } from 'node:http';
 import { randomBytes, timingSafeEqual } from 'node:crypto';
-import { readFile } from 'node:fs/promises';
+import { readFile,unlink } from 'node:fs/promises';
 import { Store, DomainError } from '../core/store.mjs';
 import { Workspace } from '../core/workspace.ts';
 import { Execution } from './execution.mjs';
@@ -45,6 +45,7 @@ export async function startServer({ filename, port = 0, providerFactory, host, c
   const applications=new Applications(store,workspace,applicationOptions);
   const aiSettings=new AiSettings(store),extensions=new Extensions(store,workspace);
   const sdk=sdkOptions?new SdkExecution({...sdkOptions,tools:agentTools,origin:()=>origin}):undefined;
+  const rhinoImport=sdk?{directory:host.directory,importFile:(projectId,id,source)=>sdk.importFile(source,intent=>workspace.update(projectId,id,'running',intent))}:host;
   const execution = new Execution(workspace, { providerFactory, host, hosts,settings:aiSettings,sdk });
   const withApplications=request=>({...request,applications:store.db.prepare("SELECT id,state,result FROM commands WHERE projectId=? AND kind='applyCandidate' AND json_extract(payload,'$.requestId')=? ORDER BY rowid").all(request.projectId,request.id).map(row=>({...row,result:row.result?JSON.parse(row.result):null}))});
   let origin, authority,stopping=false;
@@ -82,7 +83,7 @@ export async function startServer({ filename, port = 0, providerFactory, host, c
       if(stopping&&request.method!=='GET')throw new DomainError('APP_STOPPING');
       if(url.pathname==='/api/v1/shutdown'&&request.method==='POST'&&onShutdown){stopping=true;send(200,{stopping:true});setImmediate(onShutdown);return;}
       const upload=/^\/api\/v1\/projects\/([^/]+)\/import$/.exec(url.pathname);
-      if(upload&&request.method==='POST'){send(200,await importModel(request,upload[1],url.searchParams.get('name'),workspace,host,hosts.zwcad));return;}
+      if(upload&&request.method==='POST'){send(200,await importModel(request,upload[1],url.searchParams.get('name'),workspace,rhinoImport,hosts.zwcad));return;}
       const capture=/^\/api\/v1\/projects\/([^/]+)\/capture$/.exec(url.pathname);
       if(capture&&request.method==='POST'){send(200,await captureModel(capture[1],await body(request),workspace,host));return;}
       const reviewComparison=/^\/api\/v1\/projects\/([^/]+)\/review-comparison$/.exec(url.pathname);
@@ -175,7 +176,11 @@ export async function startServer({ filename, port = 0, providerFactory, host, c
         if(saved.state!=='unknown'||saved.result?.executionMode!=='sdk'||!sdk)throw new DomainError('NOT_FOUND');
         const key='sdk:'+projectId+':'+id;
         if(!importRecoveries.has(key)){
-          const pending=sdk.recover(saved.result).then(result=>workspace.update(projectId,id,'succeeded',result))
+          const pending=sdk.recover(saved.result).then(async result=>{
+            const recovered=workspace.update(projectId,id,'succeeded',result);
+            if(saved.input.source==='file')await unlink(join(host.directory,projectId,id+'.upload.3dm')).catch(()=>{});
+            return recovered;
+          })
             .catch(()=>workspace.get(projectId,id)).finally(()=>importRecoveries.delete(key));
           importRecoveries.set(key,pending);
         }

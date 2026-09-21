@@ -2,7 +2,7 @@
 id: VERIFY-2026-09-22-typescript-foundation
 title: TypeScript·React·Vite 전환 기반 검증
 status: review
-version: 0.18
+version: 0.19
 updated: 2026-09-22
 owner: agent:codex
 related: [PLAN, ADR-016, ADR-017, T-010, T-011, T-015]
@@ -150,3 +150,9 @@ Workspace를 strict TypeScript로 옮기고 저장 입력·상태·최소 호스
 ## SDK 후보의 기존 원본 적용 경계
 
 기존 nativeMoves는 위치 차이만 적용하므로 SDK 코드가 바꾼 높이/형상을 옮길 수 없다. SDK 후보를 이 경로로 보내면 일부 이동만 반영하고 성공처럼 보일 수 있어 서버에서 거절하고 해당 버튼을 숨겼다. 후보 파일 내려받기·별도 Rhino 열기는 유지한다. 일반 SDK 형상 교체 적용은 별도 구현 대상이다. 서버 경계 시험과 UI 타입 검사가 통과했다.
+
+## 자체 worker로 3dm 파일 불러오기
+
+Rhino 파일 업로드는 고유 작업 사본→명시적 단위 정규화→저장/재열기→DTO 내보내기로 연결했다. 기존 Rhino MCP import 함수를 호출하지 않는다. 단위가 없거나 사용자 정의 단위이면 거절하며 일반 후속 SDK 작업에서는 임의 단위 변환을 허용하지 않는다. 쓰기 전 기록과 unknown 영수증 재확인도 파일 가져오기에 적용한다. 회수 완료 후 임시 업로드 복사본을 정리한다.
+
+browser-sdk-import.mjs에서 합성 mm 3dm을 실제 브라우저로 업로드했다. 10000×8000×6000 mm가 10×8×6 m/480 m³로 표시되고 원본 해시가 동일했다. 기존 MCP import 호출은 시험용 어댑터로 금지했으며 호출되지 않았다. 단위 미상 파일은 UNKNOWN_UNITS로 거절했다. 첫 시험에서 C# 오류를 Python 시작 로더가 덮어쓰는 문제를 발견해 기존 오류 보존과 원자적 기록으로 수정했다. 증거: .vide/sdk-import/ff10b260-3707-4e29-a585-ec28ecaa2054. C# 빌드·TS 빌드와 관련 서버 시험이 통과했다. 열린 기존 문서 취득/원본 적용은 아직 기존 연결이다.

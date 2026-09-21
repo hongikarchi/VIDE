@@ -29,10 +29,15 @@ public sealed class WorkerCommand : Command
         var ticks = process.StartTime.ToUniversalTime().Ticks.ToString();
         var source = Environment.GetEnvironmentVariable("VIDE_WORKER_SOURCE") ?? "";
         var doc = string.IsNullOrEmpty(source) ? RhinoDoc.CreateHeadless(null) : RhinoDoc.OpenHeadless(source);
-        if (doc == null) return Result.Failure;
+        if (doc == null) return StartupFailure(report, "INVALID_GEOMETRY", null);
         if (string.IsNullOrEmpty(source)) doc.ModelUnitSystem = UnitSystem.Meters;
-        if (doc.ModelUnitSystem != UnitSystem.Meters) { doc.Dispose(); return Result.Failure; }
-        WorkerScene.Validate(doc);
+        if (doc.ModelUnitSystem == UnitSystem.None || doc.ModelUnitSystem == UnitSystem.CustomUnits)
+            return StartupFailure(report, "UNKNOWN_UNITS", doc);
+        if (doc.ModelUnitSystem != UnitSystem.Meters && Environment.GetEnvironmentVariable("VIDE_WORKER_NORMALIZE_UNITS") == "1")
+            doc.AdjustModelUnitSystem(UnitSystem.Meters, true);
+        if (doc.ModelUnitSystem != UnitSystem.Meters) return StartupFailure(report, "UNKNOWN_UNITS", doc);
+        try { WorkerScene.Validate(doc); }
+        catch (InvalidOperationException error) { return StartupFailure(report, error.Message, doc); }
         doc.ModelAbsoluteTolerance = 0.001;
         var executor = new WorkerExecutor(doc, Path.GetDirectoryName(report)!);
         listener = new TcpListener(IPAddress.Loopback, 0);
@@ -52,6 +57,14 @@ public sealed class WorkerCommand : Command
         });
         RhinoApp.WriteLine("VIDE isolated work host ready.");
         return Result.Success;
+    }
+
+    private static Result StartupFailure(string report, string code, RhinoDoc? doc)
+    {
+        doc?.Dispose();
+        File.WriteAllText(report + ".error.tmp", JsonSerializer.Serialize(new { code }));
+        File.Move(report + ".error.tmp", report + ".error.json", true);
+        return Result.Failure;
     }
 
     private static async Task Serve(TcpClient client, string token, string session, int pid, string ticks, WorkerExecutor executor)

@@ -38,6 +38,23 @@ export class SdkExecution {
   });
   return {opened:true};
  }
+ async importFile(filename:string,update:(intent:Record<string,unknown>)=>void){
+  const options=this.options;await mkdir(options.directory,{recursive:true});
+  const directory=join(options.directory,randomUUID()),operationId=randomUUID();
+  const hash=createHash('sha256');for await(const chunk of createReadStream(filename))hash.update(chunk);
+  const source={filename,fileHash:hash.digest('hex')};
+  const intent={phase:'host',hostExecuted:false,host:'rhino',executionMode:'sdk',workerDirectory:directory,operationId};
+  let worker:Worker|undefined,writing=false;
+  try{
+   worker=await (options.launch||launchRhinoWorker)({...options,directory,source,normalizeUnits:true});
+   update(intent);writing=true;
+   const receipt=await worker.execute(operationId,0,'// Save the validated, normalized imported working copy.');
+   if(!receipt.ok)throw failure('HOST_RESULT_UNKNOWN');
+   const model=await worker.exportModel();
+   return {...model,filename:receipt.filename,fileHash:receipt.fileHash,verified:true,executionMode:'sdk',workerDirectory:directory};
+  }catch(error){if(writing)throw Object.assign(failure('HOST_RESULT_UNKNOWN'),{intent,cause:error});throw error;}
+  finally{if(worker)await worker.stop();}
+ }
  async run({input,previous,items,signal,provider,update}:Task){
   const options=this.options;await mkdir(options.directory,{recursive:true});
   const directory=join(options.directory,randomUUID());
