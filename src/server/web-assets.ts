@@ -1,13 +1,7 @@
 import { readFile } from 'node:fs/promises';
-import { existsSync } from 'node:fs';
+import {packageRoot} from './package-root.ts';
 
 // Source, compiled server and packaged app share the nearest package root.
-let packageRoot = new URL('./', import.meta.url);
-while (!existsSync(new URL('package.json', packageRoot))) {
-  const parent = new URL('../', packageRoot);
-  if (parent.href === packageRoot.href) throw new Error('VIDE_PACKAGE_ROOT_NOT_FOUND');
-  packageRoot = parent;
-}
 const root = new URL('dist/ui/', packageRoot);
 const assetPath = /^\/assets\/[A-Za-z0-9_-]+\.(js|css)$/;
 

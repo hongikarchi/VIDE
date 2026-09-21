@@ -2,7 +2,7 @@
 id: VERIFY-2026-09-22-typescript-foundation
 title: TypeScript·React·Vite 전환 기반 검증
 status: review
-version: 0.15
+version: 0.16
 updated: 2026-09-22
 owner: agent:codex
 related: [PLAN, ADR-016, ADR-017, T-010, T-011, T-015]
@@ -128,3 +128,17 @@ gateway.ts의 API 결과는 unknown으로 받고 소비하는 UI가 스키마로
 WorkerScene과 native-model 스키마로 실제 Rhino 형상을 기존 뷰포트 DTO에 연결했다. AI 조회에는 간단한 객체/경계만 보내고 상세 메시·수량은 후보 내보내기에서 계산한다. 기존 객체 한도 500개와 속성 한도는 유지한다. 이전 후보의 SHA-256을 확인하고 새 전용 디렉터리로 복사한 뒤 원본/복사본 해시를 다시 확인한다. 성공 응답의 snapshot.uncertain도 false로 바로잡았다.
 
 tests/integration/worker-model.mjs를 실제 Rhino 8과 Chrome에서 실행했다. 10×8×6 m 박스를 생성하고 다음 worker에서 X축으로 2 m 이동했다. vide-id·Use=Study 속성·면적 376 m²·체적 480 m³가 유지됐으며 이전 3dm 바이트 해시가 동일했다. 브라우저의 실제 메시·Inspector·수량표를 확인했다. 증거는 .vide/worker-ui-check/1758fbce-5c73-4c71-b7ad-bedb57358c8e이며 테스트 소유 프로세스는 종료했다. 고정 SDK 코드 시험으로, 일반 채팅 연결·원본 적용·대형 모델 검증 완료는 아니다.
+
+## 일반 채팅 SDK 실행기 연결
+
+sdk-execution.ts가 작업별 전용 Rhino 사본·권한별 도구·현재 revision·쓰기 전 기록·최종 후보를 소유한다. 검토 권한에는 query만 제공한다. 후보 권한에서는 AI가 RhinoCommon 코드 본문을 작성하고, 제어기가 저장·재열기를 검증한다. 성공 뒤 CLI 응답 실패나 실행 결과 불명확은 unknown으로 남기며 자동 재실행하지 않는다. 저장 영수증과 파일 해시가 유효하면 새 worker에서 사본을 열어 후보를 회수한다. 실패한 쓰기의 이전 성공 영수증으로 몰래 되돌아가지 않는다. UI에 저장된 후보 재확인 행동을 연결했다.
+
+보존/참고 핀의 동일 기준 객체는 실행 전후 geometry/attributes 직렬화 SHA-256으로 비교한다. 실제 Rhino 시험에서 그대로 둔 객체는 통과하고 이동한 객체는 차단했다. 이는 악성 C# 격리 샌드박스가 아니다. .vide/worker-ui-check/974cb22a-30f3-49cc-9c8d-bdbb36a1658a에서 영수증 회수·보존 차단·실제 브라우저 표까지 확인했다.
+
+browser-sdk-workflow.mjs의 실제 Claude 구독 요청으로 10×8×6 m 생성→클릭 핀→높이 4.5 m 수정이 통과했다. 기존 ID·이전 후보 해시를 유지했고 체적은 480→360 m³이다. 결과는 .vide/sdk-workflow/dd881325-2223-4c17-801f-c35d62abfed1에 남겼다. 첫 검증은 체적의 부동소수점 오차(359.9999999999999)를 엄밀 동등으로 비교해 실패했고 허용오차로 수정한 뒤 저장된 동일 결과를 재검증했다. AI 입력 토큰/출력 토큰 보고는 첫 요청 8/713, 둘째 8/907이며 구독 차감량이나 전체 캐시 포함 비용은 알 수 없다.
+
+Node 직접 TS 실행에서 parameter property가 불가한 문제를 수정하고 erasableSyntaxOnly로 재발을 검사한다. 빌드·타입 검사·108개 자동 시험·기존 전체 합성 브라우저 회귀가 통과했다. SDK 구독 실행의 복잡한 장기 과업·임의 호스트 API 전체·원본 적용 완결·대형 모델 최적화까지 통과한 것은 아니다.
+
+SDK 후보의 실제 성공 영수증 뒤 최종 응답 유실을 주입하고 브라우저의 `저장된 후보 다시 확인`으로 동일 파일 해시·객체 ID를 회수했다. 새 AI 호출은 없었다. 일반 실행(main)은 자체 SDK 경로를 사용하고, 패키지에는 worker.rhp와 고정 시작 로더를 포함한다. 새 후보에서 Rhino 열기도 SDK 자료 경로/해시를 검사한다. SDK 준비 상태는 실제 실행 중인 연결과 구분해 표시한다.
+
+Windows 패키지 0.1.0-dev.20260922.1은 5,086개 파일 해시·번들 Node·공백 설치 경로·중복 실행·재시작·자료 보존·제거·백업 검증을 통과했다. 추가 패키지 worker 시험에서 PowerShell PATH 의존성을 발견해 절대 경로로 수정하고 초기 프로세스 확인 실패의 종료 처리를 추가했다(전용 자동 시험 통과). 수정 패키지 0.1.0-dev.20260922.2는 개발 Node가 없는 PATH와 공백 설치 경로에서 실제 Rhino worker로 2×3×4 m 박스를 생성하고 체적 24 m³를 내보냈다. 증거는 .vide/packaged-sdk/62a3ea57-2756-480e-8074-48924700bf4e이다. 기존 사용자 Rhino 실행본은 종료하지 않았다. 다른 PC·서명·플러그인 등록 제거 검증은 남아 있다.

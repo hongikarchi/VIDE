@@ -55,7 +55,7 @@ export async function launchRhinoWorker({directory,executable,plugin,bootstrap,v
    identity:{...identity},
    async query(){return workerSnapshotSchema.parse(await call('query'));},
    async exportModel(){return nativeModelSchema.parse(await call('export'));},
-   async execute(operationId:string,revision:number,code:string){return workerResultSchema.parse(await call('execute',{operationId,revision,code}));},
+   async execute(operationId:string,revision:number,code:string,protectedIds:string[]=[]){return workerResultSchema.parse(await call('execute',{operationId,revision,code,protectedIds}));},
    async stop(){closed=true;await lease.stop();},
   };
  }catch(error){await lease.stop();throw error;}

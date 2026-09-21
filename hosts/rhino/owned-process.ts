@@ -1,7 +1,7 @@
 import type {ChildProcess, SpawnOptions} from 'node:child_process';
 import { spawn, execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { isAbsolute, resolve } from 'node:path';
+import { isAbsolute, resolve, join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 
 const run = promisify(execFile);
@@ -20,7 +20,8 @@ export async function inspectWindowsProcess(pid:number, port?:number):Promise<Pr
     `$owners=@(${port === undefined ? '' : `Get-NetTCPConnection -State Listen -LocalPort ${port} -ErrorAction SilentlyContinue | Where-Object { $_.LocalAddress -in @('127.0.0.1','0.0.0.0','::','::ffff:127.0.0.1') } | Select-Object -ExpandProperty OwningProcess -Unique`}); ` +
     `[pscustomobject]@{pid=$p.Id;startTicks=$p.StartTime.ToUniversalTime().Ticks.ToString();executable=$p.Path;listeners=$owners}|ConvertTo-Json -Compress`;
   try {
-    const { stdout } = await run('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script],
+    const powershell=join(process.env.SystemRoot||'C:\\Windows','System32','WindowsPowerShell','v1.0','powershell.exe');
+    const { stdout } = await run(powershell, ['-NoProfile', '-NonInteractive', '-Command', script],
       { windowsHide: true, timeout: 10000, maxBuffer: 16384, encoding: 'utf8' });
     return JSON.parse(stdout);
   } catch { throw failure('HOST_IDENTITY_UNAVAILABLE'); }
@@ -40,7 +41,17 @@ export async function launchOwnedRhino({ executable, args = [], environment = pr
     child.once('spawn', () => accept());
     child.once('error', () => reject(failure('HOST_LAUNCH_FAILED')));
   });
-  const identity = await inspect(child.pid!);
+  let identity:ProcessEvidence;
+  try{identity=await inspect(child.pid!);}
+  catch(error){
+    // This is the newly spawned child, not an adopted PID. Reap it if startup cannot be verified.
+    if(!exited)await new Promise<void>((accept,reject)=>{
+      const timer=setTimeout(()=>reject(failure('HOST_STOP_UNCONFIRMED')),5000);
+      child.once('exit',()=>{clearTimeout(timer);accept();});
+      if(!child.kill()){clearTimeout(timer);reject(failure('HOST_STOP_UNCONFIRMED'));}
+    });
+    throw error;
+  }
   const pathKey = (value:unknown) => typeof value === 'string' ? resolve(value).toLowerCase() : '';
   if (identity.pid !== child.pid || !/^\d+$/.test(identity.startTicks) ||
       pathKey(identity.executable) !== pathKey(executable) || exited) throw failure('HOST_OWNERSHIP_MISMATCH');

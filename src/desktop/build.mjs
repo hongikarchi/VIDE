@@ -9,6 +9,9 @@ for(const folder of ['ai','core','server','ui','contracts'])await cp(join(root,'
 await cp(join(root,'dist','ui'),join(directory,'app','dist','ui'),{recursive:true});
 await mkdir(join(directory,'app','src','desktop'),{recursive:true});await copyFile(join(source,'backup.mjs'),join(directory,'app','src','desktop','backup.mjs'));
 for(const folder of ['hosts','extensions'])await cp(join(root,folder),join(directory,'app',folder),{recursive:true});
+await exec('dotnet',['build',join(root,'hosts/rhino/worker/VIDE.Worker.csproj'),'--no-restore'],{windowsHide:true});
+const workerRuntime=join(directory,'app','hosts','rhino','worker','runtime');await mkdir(workerRuntime,{recursive:true});
+for(const file of ['VIDE.Worker.rhp','VIDE.Worker.deps.json'])await copyFile(join(root,'.vide/build/rhino-worker/bin/net8.0-windows',file),join(workerRuntime,file));
 await writeFile(join(directory,'app','package.json'),JSON.stringify({...pkg,version},null,2)+'\n');
 // Include the locked production dependency tree, including SDK transitive imports and licenses.
 const lock=JSON.parse(await readFile(join(root,'package-lock.json'),'utf8'));

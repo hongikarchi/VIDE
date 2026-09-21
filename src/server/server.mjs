@@ -1,6 +1,7 @@
 import {readWebAsset} from './web-assets.ts';
 import {Extensions} from '../core/extensions.mjs';
 import { AgentTools } from './agent-tools.mjs';
+import { SdkExecution } from './sdk-execution.ts';
 import {AiSettings} from '../core/ai-settings.ts';
 import {ReviewNotes} from '../core/review-notes.mjs';
 import {compareReviews} from '../core/review-comparison.mjs';
@@ -35,7 +36,7 @@ async function body(request) {
 }
 const statuses = { NOT_FOUND: 404, FORBIDDEN: 403, UNAUTHORIZED: 401, JSON_REQUIRED: 415, INPUT_TOO_LARGE: 413,
   REVISION_CONFLICT: 409, TARGET_MISMATCH: 409, CONTROLLER_BUSY: 409, PROJECT_BUSY:409, STALE_REFERENCE:409 };
-export async function startServer({ filename, port = 0, providerFactory, host, cadHost,applicationOptions,onShutdown } = {}) {
+export async function startServer({ filename, port = 0, providerFactory, host, cadHost,applicationOptions,onShutdown,sdkOptions } = {}) {
   const store = new Store(filename), bootstrap = randomBytes(32).toString('hex'), session = randomBytes(32).toString('hex');
   const agentTools = new AgentTools();
   const workspace = new Workspace(store),tableViews=new TableViews(store),reviews=new Reviews(store),reviewNotes=new ReviewNotes(store,reviews);
@@ -43,7 +44,8 @@ export async function startServer({ filename, port = 0, providerFactory, host, c
   const hosts={rhino:host,zwcad:cadHost||new ZwcadWorkspace(join(dirname(filename),'cad-models'))},importRecoveries=new Map();
   const applications=new Applications(store,workspace,applicationOptions);
   const aiSettings=new AiSettings(store),extensions=new Extensions(store,workspace);
-  const execution = new Execution(workspace, { providerFactory, host, hosts,settings:aiSettings });
+  const sdk=sdkOptions?new SdkExecution({...sdkOptions,tools:agentTools,origin:()=>origin}):undefined;
+  const execution = new Execution(workspace, { providerFactory, host, hosts,settings:aiSettings,sdk });
   const withApplications=request=>({...request,applications:store.db.prepare("SELECT id,state,result FROM commands WHERE projectId=? AND kind='applyCandidate' AND json_extract(payload,'$.requestId')=? ORDER BY rowid").all(request.projectId,request.id).map(row=>({...row,result:row.result?JSON.parse(row.result):null}))});
   let origin, authority,stopping=false;
   const server = createServer(async (request, response) => {
@@ -122,7 +124,7 @@ export async function startServer({ filename, port = 0, providerFactory, host, c
       if (url.pathname === '/api/v1/providers' && request.method === 'GET') {
         send(200, await execution.status()); return;
       }
-      if (url.pathname === '/api/v1/host' && request.method === 'GET') { send(200,await host.status()); return; }
+      if (url.pathname === '/api/v1/host' && request.method === 'GET') { send(200,sdk?await sdk.status():await host.status()); return; }
       if (url.pathname === '/api/v1/models' && request.method === 'GET') { send(200,await execution.models()); return; }
       if(url.pathname==='/api/v1/host/documents'&&request.method==='GET'){send(200,await listDocuments());return;}
       if(url.pathname==='/api/v1/host/selection'&&request.method==='GET'){send(200,await inspectDocument(url.searchParams.get('instance')||'',Number(url.searchParams.get('document'))));return;}
@@ -161,11 +163,24 @@ export async function startServer({ filename, port = 0, providerFactory, host, c
       if(artifact&&((request.method==='GET'&&artifact[3]==='model')||(request.method==='POST'&&artifact[3]==='open'))){
         const saved=workspace.get(artifact[1],artifact[2]);
         if(!saved.result?.hostExecuted||!saved.result.filename)throw new DomainError('NOT_FOUND');
-        if(artifact[3]==='open'){send(200,await hosts[saved.result.host||'rhino'].open(saved.result.filename));return;}
+        if(artifact[3]==='open'){send(200,saved.result.executionMode==='sdk'&&sdk?await sdk.open(saved.result):await hosts[saved.result.host||'rhino'].open(saved.result.filename));return;}
         const content=await readFile(saved.result.filename);
         response.writeHead(200,{'Content-Type':'application/octet-stream','Content-Disposition':`attachment; filename="VIDE-candidate.${saved.result.host==='zwcad'?'dwg':'3dm'}"`});response.end(content);return;
       }
       const job = /^\/api\/v1\/projects\/([^/]+)\/requests(?:\/([^/]+)(\/cancel)?)?$/.exec(url.pathname);
+      const sdkRecovery=/^\/api\/v1\/projects\/([^/]+)\/requests\/([^/]+)\/reconcile$/.exec(url.pathname);
+      if(sdkRecovery&&request.method==='POST'){
+        const [,projectId,id]=sdkRecovery,saved=workspace.get(projectId,id);
+        if(saved.state==='succeeded'){send(200,withApplications(saved));return;}
+        if(saved.state!=='unknown'||saved.result?.executionMode!=='sdk'||!sdk)throw new DomainError('NOT_FOUND');
+        const key='sdk:'+projectId+':'+id;
+        if(!importRecoveries.has(key)){
+          const pending=sdk.recover(saved.result).then(result=>workspace.update(projectId,id,'succeeded',result))
+            .catch(()=>workspace.get(projectId,id)).finally(()=>importRecoveries.delete(key));
+          importRecoveries.set(key,pending);
+        }
+        send(200,withApplications(await importRecoveries.get(key)));return;
+      }
       if (job) {
         const [, projectId, id, cancel] = job;
         if (request.method === 'GET') { send(200, id ? withApplications(workspace.get(projectId,id)) : workspace.list(projectId).map(withApplications)); return; }
@@ -202,5 +217,5 @@ export async function startServer({ filename, port = 0, providerFactory, host, c
   } catch (error) { store.close(); throw error; }
   authority = `127.0.0.1:${server.address().port}`; origin = `http://${authority}`;
   return { origin, launchUrl: `${origin}/#${bootstrap}`, store, agentTools,
-    close: async () => { agentTools.close(); await execution.close(); return new Promise((resolve, reject) => server.close(error => { store.close(); error ? reject(error) : resolve(); })); } };
+    close: async () => { stopping=true;agentTools.close(); await execution.close();await Promise.allSettled([...importRecoveries.values()]);return new Promise((resolve, reject) => server.close(error => { store.close(); error ? reject(error) : resolve(); })); } };
 }

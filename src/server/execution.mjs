@@ -6,18 +6,18 @@ import { readFile } from 'node:fs/promises';
 import { geometryContract, interpret, protectGeometry } from '../core/geometry.mjs';
 
 export class Execution {
-  constructor(workspace, { providerFactory = createProvider, host, hosts,settings } = {}) {
+  constructor(workspace, { providerFactory = createProvider, host, hosts,settings,sdk } = {}) {
     this.workspace=workspace; this.providerFactory=providerFactory; this.host=host; this.active=new Map();
-    this.hosts=hosts||{rhino:host};this.settings=settings;
+    this.hosts=hosts||{rhino:host};this.settings=settings;this.sdk=sdk;
   }
   executable(provider) {
     return this.settings?.get().paths[provider] || (provider==='claude-cli'
       ? process.env.VIDE_CLAUDE_PATH || join(homedir(),'.local','bin','claude.exe')
       : process.env.VIDE_CODEX_PATH || installedCodex());
   }
-  provider(input) {
+  provider(input,agent) {
     const executable=this.executable(input.provider);
-    return this.providerFactory({provider:input.provider,executable,timeoutMs:180000,
+    return this.providerFactory({provider:input.provider,executable,timeoutMs:180000,agent,
       model:input.model&&input.model!==input.provider?input.model:undefined,
       effort:input.effort&&input.effort!=='default'?input.effort:undefined});
   }
@@ -62,6 +62,11 @@ export class Execution {
       if(conversation.length)items.push({id:'conversation',type:'conversation',data:conversation});
       if(host)items.push({id:'working-model',type:'geometry',data:previous?.result.objects||[]});
       if(previous?.result.scene)items.push({id:'measurements',type:'native-measurements',data:previous.result.scene.map(({id,area,volume,length,boundsSize,layer64})=>({id,area,volume,length,boundsSize,layer:layer64?Buffer.from(layer64,'base64').toString('utf8'):null}))});
+      if(this.sdk&&target==='rhino'){
+        const result=await this.sdk.run({input,previous,items,signal:controller.signal,provider:agent=>this.provider(input,agent),
+          update:progress=>{if(progress.phase==='host')hostIntent=progress;this.workspace.update(projectId,id,'running',progress);}});
+        this.workspace.update(projectId,id,'succeeded',result);return;
+      }
       const targetContract=target==='zwcad'?'Target is ZWCAD: only planar XY polylines, their move and remove are supported. No solid operations.':'Target is Rhino.';
       const dwgContract=previous?.result.dwgEditMode==='polyline-vertices-v1'?' Imported DWG: ONLY move/vertices of existing IDs. Preserve names, object count and unmentioned geometry. No add/copy/remove in this path.':'';
         const goal=(host?geometryContract+'\n'+targetContract+dwgContract+' Other-host pinned geometry is read-only reference in meters, never a writable target.\nPermission: '+input.permission+'\nUser request: ':'')+(input.body||'첨부한 설계 문맥을 검토해 주세요.');
@@ -82,7 +87,7 @@ export class Execution {
         }else this.workspace.update(projectId,id,'succeeded',{...result,text:proposal.message,hostExecuted:false});
       }else this.workspace.update(projectId,id,'succeeded',{...result,hostExecuted:false});
     } catch(error) {
-      this.workspace.update(projectId,id,error.code==='CANCELLED'?'cancelled':error.code==='HOST_RESULT_UNKNOWN'?'unknown':'failed',{...(error.code==='HOST_RESULT_UNKNOWN'?hostIntent:{}),code:error.code||'EXECUTION_FAILED',hostExecuted:false});
+      this.workspace.update(projectId,id,error.code==='CANCELLED'?'cancelled':error.code==='HOST_RESULT_UNKNOWN'?'unknown':'failed',{...(error.code==='HOST_RESULT_UNKNOWN'?error.intent||hostIntent:{}),code:error.code||'EXECUTION_FAILED',hostExecuted:false});
     }
   }
   cancel(projectId,id) {

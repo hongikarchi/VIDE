@@ -6,6 +6,7 @@ import {resolve,join} from 'node:path';
 import {chromium} from 'playwright';
 import {launchRhinoWorker} from '../../hosts/rhino/worker-client.ts';
 import {startServer} from '../../src/server/server.mjs';
+import {SdkExecution} from '../../src/server/sdk-execution.ts';
 
 const directory=resolve('.vide/worker-ui-check',randomUUID());await mkdir(directory,{recursive:true});
 const options={executable:'C:\\Program Files\\Rhino 8\\System\\Rhino.exe',plugin:resolve('.vide/build/rhino-worker/bin/net8.0-windows/VIDE.Worker.rhp'),bootstrap:resolve('hosts/rhino/worker/bootstrap.py')};
@@ -29,6 +30,13 @@ try{
  assert.ok(model.scene[0].attributes64.some(([key,value])=>Buffer.from(key,'base64').toString()==='Use'&&Buffer.from(value,'base64').toString()==='Study'));
  assert.equal(await fingerprint(first.filename),first.fileHash);assert.equal(await fingerprint(second.filename),second.fileHash);
  await worker.stop();worker=undefined;
+ const recovered=await new SdkExecution({...options,directory,tools:{},origin:()=>''}).recover({workerDirectory:join(directory,'second'),operationId:second.operationId});
+ assert.equal(recovered.objects[0].id,originalId);assert.equal(recovered.fileHash,second.fileHash);assert.equal(recovered.scene[0].volume,480);
+ worker=await launchRhinoWorker({...options,directory:join(directory,'protected'),source:{filename:first.filename,fileHash:first.fileHash}});
+ const unchanged=await worker.execute(randomUUID(),0,'var count=doc.Objects.Count;',[originalId]);assert.equal(unchanged.ok,true,JSON.stringify(unchanged));
+ const rejected=await worker.execute(randomUUID(),1,'var item=doc.Objects.GetObjectList(Rhino.DocObjects.ObjectType.AnyObject).Single(); doc.Objects.Transform(item.Id,Transform.Translation(1,0,0),true);',[originalId]);
+ assert.equal(rejected.ok,false);assert.equal(rejected.code,'HOST_RESULT_UNKNOWN');assert.equal((await worker.query()).uncertain,true);
+ await worker.stop();worker=undefined;
  app=await startServer({filename:join(directory,'test.sqlite')});
  const project=app.store.createProject('SDK export test');
  const input={id:randomUUID(),body:'SDK model export verification',pins:[],sketches:[],files:[],provider:'codex-cli',model:'codex-cli',effort:'default',permission:'candidate',host:'rhino'};
@@ -49,6 +57,6 @@ try{
  await page.locator('[data-inspect="properties"]').click();await page.getByRole('button',{name:'이 객체 수량표',exact:true}).click();
  const quantities=page.getByRole('dialog',{name:'후보 수량표',exact:true});await quantities.getByRole('status').filter({hasText:'1 / 1개 객체'}).waitFor();assert.match(await quantities.textContent(),/480/);
  assert.deepEqual(errors,[]);
- const evidence={passed:true,directory,stableId:originalId,sourceUnchanged:true,seedCopied:true,area:376,volume:480,browserInspector:true,browserQuantities:true,first:first.filename,second:second.filename};
+ const evidence={passed:true,directory,stableId:originalId,sourceUnchanged:true,seedCopied:true,receiptRecovered:true,protectedChangeRejected:true,area:376,volume:480,browserInspector:true,browserQuantities:true,first:first.filename,second:second.filename};
  await writeFile(join(directory,'result.json'),JSON.stringify(evidence,null,2));console.log(JSON.stringify(evidence));
 }finally{if(browser)await browser.close();if(app)await app.close();if(worker)await worker.stop();}

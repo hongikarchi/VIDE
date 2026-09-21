@@ -3,12 +3,18 @@ using Rhino.DocObjects;
 using Rhino.Geometry;
 using System.Text;
 using System.Text.RegularExpressions;
+using System.Security.Cryptography;
 
 namespace Vide.Worker;
 
 internal static class WorkerScene
 {
     internal static string Id(RhinoObject obj) => obj.Attributes.GetUserString("vide-id") ?? obj.Id.ToString();
+    internal static string Fingerprint(RhinoObject obj)
+    {
+        var options = new Rhino.FileIO.SerializationOptions { WriteUserData = true, WriteRenderMeshes = false, WriteAnalysisMeshes = false };
+        return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(obj.Geometry.ToJSON(options) + "\n" + obj.Attributes.ToJSON(options))));
+    }
 
     internal static void Validate(RhinoDoc doc)
     {

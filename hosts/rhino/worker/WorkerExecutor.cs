@@ -32,7 +32,9 @@ internal sealed class WorkerExecutor(RhinoDoc document, string directory)
         var code = request.GetProperty("code").GetString() ?? "";
         if (code.Length is < 1 or > 65536) throw new InvalidOperationException("INVALID_CODE");
         var basis = request.GetProperty("revision").GetInt32();
-        var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(basis + "\n" + code)));
+        var protectedIds = request.TryGetProperty("protectedIds", out var protectedValues)
+            ? protectedValues.EnumerateArray().Select(value => value.GetString()!).ToHashSet() : new HashSet<string>();
+        var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(basis + "\n" + code + "\n" + string.Join(",", protectedIds.Order()))));
         if (receipts.TryGetValue(operation, out var prior))
         {
             if (prior.hash != hash) throw new InvalidOperationException("OPERATION_CONFLICT");
@@ -40,6 +42,9 @@ internal sealed class WorkerExecutor(RhinoDoc document, string directory)
         }
         if (uncertain) throw new InvalidOperationException("HOST_RESULT_UNKNOWN");
         if (basis != revision) throw new InvalidOperationException("STALE_REFERENCE");
+        var protectedObjects = document.Objects.GetObjectList(Rhino.DocObjects.ObjectType.AnyObject)
+            .Where(obj => protectedIds.Contains(WorkerScene.Id(obj))).ToDictionary(WorkerScene.Id, WorkerScene.Fingerprint);
+        if (protectedObjects.Count != protectedIds.Count) throw new InvalidOperationException("STALE_REFERENCE");
 
         // User code is a string until ALL identity/basis checks above succeed.
         var source = "using System; using System.Linq; using Rhino; using Rhino.Geometry; public static class TaskCode { public static object Run(RhinoDoc doc) { " + code + "\nreturn null; } }";
@@ -63,6 +68,10 @@ internal sealed class WorkerExecutor(RhinoDoc document, string directory)
             var value = assembly.GetType("TaskCode")!.GetMethod("Run")!.Invoke(null, [document]);
             if (document.ModelUnitSystem != UnitSystem.Meters) throw new Exception("Working units changed");
             WorkerScene.Validate(document);
+            var currentObjects = document.Objects.GetObjectList(Rhino.DocObjects.ObjectType.AnyObject).ToDictionary(WorkerScene.Id);
+            foreach (var entry in protectedObjects)
+                if (!currentObjects.TryGetValue(entry.Key, out var current) || WorkerScene.Fingerprint(current) != entry.Value)
+                    throw new Exception("Protected object changed");
             var filename = Path.Combine(directory, operation + ".3dm");
             if (!document.Write3dmFile(filename, new Rhino.FileIO.FileWriteOptions())) throw new Exception("Save failed");
             using (var reopened = RhinoDoc.OpenHeadless(filename))

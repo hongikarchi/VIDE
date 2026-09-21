@@ -17,6 +17,15 @@ async function leaseFixture() {
   return { lease, child, change: patch => { observed = { ...observed, ...patch }; } };
 }
 
+test('failed initial inspection reaps only the freshly spawned child',async()=>{
+ const child=new EventEmitter();child.pid=123;let kills=0;
+ child.kill=()=>{kills++;queueMicrotask(()=>child.emit('exit',0));return true;};
+ await assert.rejects(launchOwnedRhino({executable:resolve('synthetic-rhino.exe'),
+  spawnProcess:()=>{queueMicrotask(()=>child.emit('spawn'));return child;},
+  inspect:async()=>{throw Object.assign(Error('No identity'),{code:'HOST_IDENTITY_UNAVAILABLE'});}}),{code:'HOST_IDENTITY_UNAVAILABLE'});
+ assert.equal(kills,1);
+});
+
 test('owned host lease rejects a foreign listener, reused PID, and ended launch', async () => {
   const { lease, child, change } = await leaseFixture();
   assert.equal((await lease.verify(1999)).pid, 123);
