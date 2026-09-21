@@ -6,7 +6,7 @@ import {join,resolve,relative,isAbsolute} from 'node:path';
 import {z} from 'zod';
 import {launchRhinoWorker,workerResultSchema} from '../../hosts/rhino/worker-client.ts';
 import type {RequestInput} from '../contracts/workspace.ts';
-import {AgentTools} from './agent-tools.mjs';
+import {AgentTools} from './agent-tools.ts';
 
 type Worker=Awaited<ReturnType<typeof launchRhinoWorker>>;
 type Receipt=Extract<Awaited<ReturnType<Worker['execute']>>,{ok:true}>;

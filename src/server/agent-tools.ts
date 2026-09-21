@@ -1,10 +1,12 @@
+import type {IncomingMessage,ServerResponse} from 'node:http';
+import type {CallToolResult} from '@modelcontextprotocol/sdk/types.js';
 import { createHash, randomBytes } from 'node:crypto';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { z } from 'zod';
 
-const digest = token => createHash('sha256').update(token).digest('hex');
-const failure = code => Object.assign(new Error(code), { code });
+const digest = (token:string) => createHash('sha256').update(token).digest('hex');
+const failure = (code:string) => Object.assign(new Error(code), { code });
 const target = z.string().min(1).max(256);
 const definitions = {
   query: { description: 'Read the current task target. Returns observed host data.', schema: z.object({ targetRef: target }).strict() },
@@ -13,19 +15,34 @@ const definitions = {
   status: { description: 'Read the current task execution status.', schema: z.object({}).strict() },
   cancel: { description: 'Request cancellation of the current task. The result determines whether stopping was confirmed.', schema: z.object({}).strict() },
 };
+type ToolName=keyof typeof definitions;
+type ToolArgs<N extends ToolName>=z.infer<(typeof definitions)[N]['schema']>;
+type Handler<N extends ToolName>=(args:ToolArgs<N>,context:{signal:AbortSignal})=>unknown|Promise<unknown>;
+type Handlers={[N in ToolName]?:Handler<N>};
+interface ScopeOptions {targetRef:string;handlers:Handlers;isCurrent:()=>boolean|Promise<boolean>;maxCalls?:number;ttlMs?:number}
+interface Run {targetRef:string;handlers:Handlers;isCurrent:ScopeOptions['isCurrent'];remaining:number;expires:number;abort:AbortController;busy:boolean}
+function toolName(value:string):value is ToolName{return Object.hasOwn(definitions,value);}
+function invoke(name:ToolName,handlers:Handlers,args:unknown,signal:AbortSignal){
+ switch(name){
+  case 'query':return handlers.query!(definitions.query.schema.parse(args),{signal});
+  case 'execute':return handlers.execute!(definitions.execute.schema.parse(args),{signal});
+  case 'status':return handlers.status!(definitions.status.schema.parse(args),{signal});
+  case 'cancel':return handlers.cancel!(definitions.cancel.schema.parse(args),{signal});
+ }
+}
 const knownErrors = new Set(['STALE_REFERENCE', 'HOST_OWNERSHIP_MISMATCH', 'HOST_LEASE_EXPIRED',
   'HOST_UNAVAILABLE', 'HOST_RESULT_UNKNOWN', 'HOST_REJECTED', 'EXECUTOR_NOT_READY', 'CANCELLED']);
 
 /** Internal controller capability, never minted by browser/agent input. No CAD executor is installed by default. */
 export class AgentTools {
-  #runs = new Map();
-  #now;
+  #runs = new Map<string,Run>();
+  #now:()=>number;
   constructor({ now = Date.now } = {}) { this.#now = now; }
 
-  issue({ targetRef, handlers, isCurrent, maxCalls = 20, ttlMs = 120000 }) {
+  issue({ targetRef, handlers, isCurrent, maxCalls = 20, ttlMs = 120000 }:ScopeOptions) {
     if (typeof targetRef !== 'string' || !targetRef || typeof isCurrent !== 'function' ||
         !handlers || !Object.keys(handlers).length ||
-        Object.entries(handlers).some(([name, handler]) => !definitions[name] || typeof handler !== 'function') ||
+        Object.entries(handlers).some(([name, handler]) => !toolName(name) || typeof handler !== 'function') ||
         !Number.isInteger(maxCalls) || maxCalls < 1 || maxCalls > 100 ||
         !Number.isFinite(ttlMs) || ttlMs < 1 || ttlMs > 600000) throw failure('INVALID_AGENT_SCOPE');
     // Bound retained capabilities even when callers forget to release completed runs.
@@ -38,27 +55,28 @@ export class AgentTools {
     return { token, revoke: () => this.#revoke(key) };
   }
 
-  #revoke(key) {
+  #revoke(key:string) {
     const run = this.#runs.get(key);
     if (run) { run.abort.abort(); this.#runs.delete(key); }
   }
   close() { for (const key of this.#runs.keys()) this.#revoke(key); }
 
-  async handle(request, response, readBody) {
+  async handle(request:IncomingMessage, response:ServerResponse, readBody:(request:IncomingMessage)=>Promise<unknown>) {
     const token = /^Bearer ([a-f0-9]{64})$/.exec(request.headers.authorization || '')?.[1];
     const key = token && digest(token), run = key && this.#runs.get(key);
     if (!run || run.expires <= this.#now()) {
-      if (run) this.#revoke(key);
+      if (run&&key) this.#revoke(key);
       response.writeHead(401, { 'Content-Type': 'application/json' });
       response.end(JSON.stringify({ code: 'AGENT_UNAUTHORIZED' })); return;
     }
     if (request.method !== 'POST') { response.writeHead(405, { Allow: 'POST' }); response.end(); return; }
     const input = await readBody(request);
     const server = new McpServer({ name: 'vide-task', version: '0.1.0' });
-    for (const [name, handler] of Object.entries(run.handlers)) {
+    for (const name of Object.keys(run.handlers)) {
+      if(!toolName(name))continue;
       const definition = definitions[name];
-      server.registerTool(name, { description: definition.description, inputSchema: definition.schema }, async args => {
-        const error = code => ({ isError: true, content: [{ type: 'text', text: JSON.stringify({ code }) }] });
+      server.registerTool(name, { description: definition.description, inputSchema: definition.schema }, async (args:{targetRef?:string}):Promise<CallToolResult> => {
+        const error = (code:string):CallToolResult => ({ isError: true, content: [{ type: 'text', text: JSON.stringify({ code }) }] });
         if (run.abort.signal.aborted || run.expires <= this.#now()) return error('AGENT_SCOPE_EXPIRED');
         if (args.targetRef && args.targetRef !== run.targetRef) return error('TARGET_MISMATCH');
         const controlled = name === 'execute' || name === 'query';
@@ -70,9 +88,9 @@ export class AgentTools {
           if (controlled && !await run.isCurrent()) return error('STALE_REFERENCE');
           // Conditions may change while the revision check is awaiting storage.
           if (run.abort.signal.aborted || run.expires <= this.#now()) return error('AGENT_SCOPE_EXPIRED');
-          const result = await handler(args, { signal: run.abort.signal });
+          const result = await invoke(name,run.handlers,args,run.abort.signal);
           return { content: [{ type: 'text', text: JSON.stringify(result) }] };
-        } catch (cause) { return error(knownErrors.has(cause?.code) ? cause.code : 'AGENT_TOOL_FAILED'); }
+        } catch (cause) { const code=cause&&typeof cause==='object'&&'code' in cause&&typeof cause.code==='string'?cause.code:'';return error(knownErrors.has(code) ? code : 'AGENT_TOOL_FAILED'); }
         finally { if (controlled) run.busy = false; }
       });
     }

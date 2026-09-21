@@ -2,7 +2,7 @@
 id: VERIFY-2026-09-22-typescript-foundation
 title: TypeScript·React·Vite 전환 기반 검증
 status: review
-version: 0.25
+version: 0.26
 updated: 2026-09-22
 owner: agent:codex
 related: [PLAN, ADR-016, ADR-017, T-010, T-011, T-015]
@@ -184,3 +184,9 @@ app.ts에 프로젝트/요청/입력/선택/카메라 이벤트 경계를 명시
 src/ai의 실행·연결·경로·공급자 선택 코드를 strict TypeScript로 옮겼다. 선택 문맥·진행 이벤트·구독 상태·응답 타입을 명시하고 JSONL의 중첩 필드/사용량과 인증 응답을 검사한다. 잘못된 content/usage 응답은 스트림 콜백 예외 대신 INVALID_PROVIDER_OUTPUT으로 중단한다. 전환 후 기존 112개 자동 시험·빌드가 통과했고, 추가 malformed 응답 시험 포함 AI 16개 시험도 통과했다.
 
 cli-probe를 실제 계정으로 실행해 Claude 4.5초·Codex 12.9초에 합성 query 각 1회와 nonce 반환을 확인했다. 공급자 보고 사용량은 Claude 입력 4/출력 75, Codex 입력 27,721/출력 186이며 과금/크레딧 총량이나 캐시 비용으로 환산하지 않는다. 원시 인증/사용자 문서는 수집하지 않았다.
+
+## 도구 범위 관리와 실제 스케치 실행
+
+AgentTools를 TypeScript로 옮겨 query/execute/status/cancel 입력·처리기·HTTP 수명과 결과를 명시했다. 만료/호출 상한/동시 쓰기/대상 검사를 유지한다. 전체 113개 자동 시험과 strict 타입 검사가 통과했다.
+
+browser-sdk-sketch.mjs는 브라우저에서 닫힌 XY 경계 5점을 첨부하고 실제 Claude 구독으로 3 m 돌출을 요청했다. 자체 Rhino worker가 단일 객체를 저장/재열기했고 bounds 6×4×3 m·체적 72 m³를 확인했다. 입력 스케치 점열/역할도 보존됐다. 증거 .vide/sdk-sketch/cd45cb78-f7e7-4a1f-84f1-fa0386e20b3b의 result.json/viewport.png를 확인했다. 스케치 직교 시점을 유지해 화면은 윗면이며 체적/형상은 저장된 SDK 결과로 확인했다. 공급자 보고 입력 6/출력 915 토큰이다.
