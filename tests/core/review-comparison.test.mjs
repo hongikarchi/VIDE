@@ -1,4 +1,4 @@
-import {test} from 'node:test';import assert from 'node:assert/strict';import {compareReviews} from '../../src/core/review-comparison.mjs';
+import {test} from 'node:test';import assert from 'node:assert/strict';import {compareReviews} from '../../src/core/review-comparison.ts';
 const snapshot=(id,hash,volume,query={})=>({id,payload:{table:{host:'rhino',query,units:{volume:'m³'},rows:[{id:'object',length:null,area:null,volume}]},model:[{id:'object',name:'Object',kind:'native',comparable:true,geometryHash:hash}]}});
 test('review comparison uses frozen representations and only matching table definitions',()=>{
  const before=snapshot('a','first',288),after=snapshot('b','second',216);

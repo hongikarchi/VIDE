@@ -1,8 +1,8 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {compareCandidates} from '../../src/core/comparison.mjs';
+import {compareCandidates} from '../../src/core/comparison.ts';
 const object={id:'a',name:'Wall',kind:'box',origin:[0,0,0],size:[1,2,3]};
-const candidate=(id,objects,scene,host='rhino')=>({id,result:{hostExecuted:true,host,objects,scene}});
+const candidate=(id,objects,scene,host='rhino')=>({id,createdAt:'2026-09-22T00:00:00.000Z',result:{hostExecuted:true,host,objects,scene}});
 test('related candidates distinguish geometry edits, additions, removals and measured deltas',()=>{
  const a=candidate('first',[object,{...object,id:'removed'}],[{id:'a',volume:6}]);
  const b=candidate('next',[{...object,size:[1,2,4]},{...object,id:'added'}],[{id:'a',volume:8}]);

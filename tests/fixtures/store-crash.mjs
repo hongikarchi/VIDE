@@ -8,4 +8,5 @@ store.enqueue(project.id, { id: 'in-flight', runId: run.id, connectionId: connec
   kind: 'createCandidate', payload: {} });
 store.lease(connection.id);
 process.send({ projectId: project.id, inputId: input.id });
-setInterval(() => {}, 1000);
+// Hold and check the controller throughout the fixture lifetime, until the parent kills it.
+setInterval(() => { if(store.closed)throw Error('Fixture controller closed early'); }, 1000);

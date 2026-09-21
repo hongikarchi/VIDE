@@ -1,5 +1,5 @@
 import {sceneRepresentation} from '../core/scene-representation.ts';
-import {validatePreview} from '../core/reviews.mjs';
+import {validatePreview} from '../core/reviews.ts';
 import {quantities} from '../core/quantities.ts';
 import {DomainError} from '../core/store.ts';
 const escape=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));

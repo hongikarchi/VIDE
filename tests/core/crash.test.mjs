@@ -11,8 +11,12 @@ test('실제 제어 프로세스 강제 종료 후 잠금이 풀리고 입력·�
   const root = mkdtempSync(join(tmpdir(), 'vide-crash-test-')), filename = join(root, 'crash.sqlite');
   const child = fork(new URL('../fixtures/store-crash.mjs', import.meta.url), [filename], { windowsHide: true, stdio: ['ignore', 'ignore', 'pipe', 'ipc'] });
   let store;
-  t.after(() => { child.kill(); store?.close(); rmSync(root, { recursive: true, force: true }); });
+  t.after(async () => {
+    if(child.exitCode===null&&child.signalCode===null){const closed=once(child,'close');child.kill();await closed;}
+    store?.close();rmSync(root,{recursive:true,force:true});
+  });
   const [ready] = await once(child, 'message');
+  assert.equal(typeof ready.projectId,'string');assert.equal(typeof ready.inputId,'string');
   assert.throws(() => new Store(filename), { code: 'CONTROLLER_BUSY' });
   const exit = once(child, 'exit'); child.kill(); await exit;
   store = new Store(filename);
