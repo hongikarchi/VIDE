@@ -21,6 +21,11 @@ internal sealed class WorkerExecutor(RhinoDoc document, string directory)
             throw new InvalidOperationException("TARGET_MISMATCH");
         var method = request.GetProperty("method").GetString();
         if (method == "query") return Snapshot();
+        if (method == "export")
+        {
+            if (uncertain) throw new InvalidOperationException("HOST_RESULT_UNKNOWN");
+            return WorkerScene.Export(document);
+        }
         if (method != "execute") throw new InvalidOperationException("UNKNOWN_METHOD");
         var operation = request.GetProperty("operationId").GetString()!;
         if (!Guid.TryParseExact(operation, "D", out _)) throw new InvalidOperationException("INVALID_OPERATION");
@@ -56,6 +61,8 @@ internal sealed class WorkerExecutor(RhinoDoc document, string directory)
         {
             var assembly = Assembly.Load(bytes.ToArray());
             var value = assembly.GetType("TaskCode")!.GetMethod("Run")!.Invoke(null, [document]);
+            if (document.ModelUnitSystem != UnitSystem.Meters) throw new Exception("Working units changed");
+            WorkerScene.Validate(document);
             var filename = Path.Combine(directory, operation + ".3dm");
             if (!document.Write3dmFile(filename, new Rhino.FileIO.FileWriteOptions())) throw new Exception("Save failed");
             using (var reopened = RhinoDoc.OpenHeadless(filename))
@@ -79,7 +86,7 @@ internal sealed class WorkerExecutor(RhinoDoc document, string directory)
             }
             var fileHash = Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(filename))).ToLowerInvariant();
             revision++;
-            var result = new { ok = true, operationId = operation, revision, value, filename, fileHash, readbackVerified = true, snapshot = Snapshot() };
+            var result = new { ok = true, operationId = operation, revision, value, filename, fileHash, readbackVerified = true, snapshot = Snapshot(false) };
             Persist(operation, hash, result);
             receipts[operation] = (hash, result);
             uncertain = false;
@@ -88,9 +95,9 @@ internal sealed class WorkerExecutor(RhinoDoc document, string directory)
         catch { throw new InvalidOperationException("HOST_RESULT_UNKNOWN"); }
     }
 
-    private object Snapshot() => new { ok = true, revision, uncertain, units = document.ModelUnitSystem.ToString(),
+    private object Snapshot(bool? uncertainty = null) => new { ok = true, revision, uncertain = uncertainty ?? uncertain, units = document.ModelUnitSystem.ToString(),
         objects = document.Objects.GetObjectList(Rhino.DocObjects.ObjectType.AnyObject).Select(obj => new {
-            id = obj.Id, type = obj.ObjectType.ToString(), bounds = Bounds(obj.Geometry.GetBoundingBox(true)) }).ToArray() };
+            id = WorkerScene.Id(obj), nativeId = obj.Id, name = obj.Name ?? "Object", type = obj.ObjectType.ToString(), bounds = Bounds(obj.Geometry.GetBoundingBox(true)) }).ToArray() };
     private static double[][] Bounds(Rhino.Geometry.BoundingBox bounds) =>
         [[bounds.Min.X, bounds.Min.Y, bounds.Min.Z], [bounds.Max.X, bounds.Max.Y, bounds.Max.Z]];
     private void Persist(string operation, string hash, object result)

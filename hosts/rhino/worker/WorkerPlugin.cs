@@ -27,8 +27,12 @@ public sealed class WorkerCommand : Command
         if (!Guid.TryParse(session, out _) || token.Length != 64 || !Path.IsPathFullyQualified(report)) return Result.Failure;
         var process = Process.GetCurrentProcess();
         var ticks = process.StartTime.ToUniversalTime().Ticks.ToString();
-        var doc = RhinoDoc.CreateHeadless(null);
-        doc.ModelUnitSystem = UnitSystem.Meters;
+        var source = Environment.GetEnvironmentVariable("VIDE_WORKER_SOURCE") ?? "";
+        var doc = string.IsNullOrEmpty(source) ? RhinoDoc.CreateHeadless(null) : RhinoDoc.OpenHeadless(source);
+        if (doc == null) return Result.Failure;
+        if (string.IsNullOrEmpty(source)) doc.ModelUnitSystem = UnitSystem.Meters;
+        if (doc.ModelUnitSystem != UnitSystem.Meters) { doc.Dispose(); return Result.Failure; }
+        WorkerScene.Validate(doc);
         doc.ModelAbsoluteTolerance = 0.001;
         var executor = new WorkerExecutor(doc, Path.GetDirectoryName(report)!);
         listener = new TcpListener(IPAddress.Loopback, 0);

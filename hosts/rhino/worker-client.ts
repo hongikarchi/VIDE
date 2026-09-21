@@ -1,29 +1,38 @@
 import { spawn } from 'node:child_process';
-import { randomBytes, randomUUID } from 'node:crypto';
-import { access, mkdir, readFile } from 'node:fs/promises';
+import { createHash, randomBytes, randomUUID } from 'node:crypto';
+import { constants, createReadStream } from 'node:fs';
+import { access, copyFile, mkdir, readFile } from 'node:fs/promises';
 import { isAbsolute, join } from 'node:path';
 import { z } from 'zod';
 import { launchOwnedRhino } from './owned-process.ts';
 import { rhinoCommand } from './transport.ts';
+import { nativeModelSchema } from '../../src/contracts/native-model.ts';
 
 const readySchema=z.object({port:z.number().int().min(1).max(65535),pid:z.number().int().positive(),startTicks:z.string().regex(/^\d+$/),sessionId:z.string().uuid(),documentId:z.number().int().positive(),revision:z.literal(0)});
 const point=z.tuple([z.number(),z.number(),z.number()]);
-export const workerSnapshotSchema=z.object({ok:z.literal(true),revision:z.number().int().nonnegative(),uncertain:z.boolean(),units:z.string(),objects:z.array(z.object({id:z.string(),type:z.string(),bounds:z.tuple([point,point])}))});
+export const workerSnapshotSchema=z.object({ok:z.literal(true),revision:z.number().int().nonnegative(),uncertain:z.boolean(),units:z.string(),objects:z.array(z.object({id:z.string(),nativeId:z.string().uuid(),name:z.string(),type:z.string(),bounds:z.tuple([point,point])}))});
 export const workerResultSchema=z.discriminatedUnion('ok',[
  z.object({ok:z.literal(false),code:z.string(),revision:z.number().optional(),diagnostics:z.array(z.string()).optional()}),
  z.object({ok:z.literal(true),operationId:z.string().uuid(),revision:z.number().int().positive(),filename:z.string(),fileHash:z.string().regex(/^[a-f0-9]{64}$/),readbackVerified:z.literal(true),snapshot:workerSnapshotSchema,value:z.unknown().optional()}),
 ]);
-interface Options {directory:string;executable:string;plugin:string;bootstrap:string;visible?:boolean;startupTimeoutMs?:number}
+interface Options {directory:string;executable:string;plugin:string;bootstrap:string;visible?:boolean;startupTimeoutMs?:number;source?:{filename:string;fileHash:string}}
 const failure=(code:string)=>Object.assign(new Error(code),{code});
-export async function launchRhinoWorker({directory,executable,plugin,bootstrap,visible=false,startupTimeoutMs=90000}:Options){
+async function fingerprint(filename:string){const hash=createHash('sha256');for await(const chunk of createReadStream(filename))hash.update(chunk);return hash.digest('hex');}
+export async function launchRhinoWorker({directory,executable,plugin,bootstrap,visible=false,startupTimeoutMs=90000,source}:Options){
  if(![directory,executable,plugin,bootstrap].every(isAbsolute)||/["\r\n()]/.test(bootstrap)||!Number.isFinite(startupTimeoutMs)||startupTimeoutMs<1||startupTimeoutMs>180000)throw failure('INVALID_HOST_LAUNCH');
  await Promise.all([access(executable),access(plugin),access(bootstrap)]);
  // A fresh output directory prevents adoption of stale reports or prior task receipts.
  await mkdir(directory,{recursive:false});
+ let seed='';
+ if(source){
+  if(!isAbsolute(source.filename)||!/^[a-f0-9]{64}$/.test(source.fileHash)||await fingerprint(source.filename)!==source.fileHash)throw failure('SOURCE_CHANGED');
+  seed=join(directory,'source.3dm');await copyFile(source.filename,seed,constants.COPYFILE_EXCL);
+  if(await fingerprint(seed)!==source.fileHash||await fingerprint(source.filename)!==source.fileHash)throw failure('SOURCE_CHANGED');
+ }
  const report=join(directory,'ready.json'),sessionId=randomUUID(),token=randomBytes(32).toString('hex');
  const lease=await launchOwnedRhino({executable,visible,
   args:['/nosplash','/notemplate','/scheme=VIDE-Worker-Test',`/runscript="_-RunPythonScript (${bootstrap})"`],
-  environment:{...process.env,VIDE_WORKER_PLUGIN:plugin,VIDE_WORKER_TOKEN:token,VIDE_WORKER_SESSION:sessionId,VIDE_WORKER_REPORT:report},
+  environment:{...process.env,VIDE_WORKER_SOURCE:seed,VIDE_WORKER_PLUGIN:plugin,VIDE_WORKER_TOKEN:token,VIDE_WORKER_SESSION:sessionId,VIDE_WORKER_REPORT:report},
   spawnProcess:(file,args,options)=>spawn(file,args,{...options,windowsVerbatimArguments:true}),
  });
  try{
@@ -45,6 +54,7 @@ export async function launchRhinoWorker({directory,executable,plugin,bootstrap,v
   return {
    identity:{...identity},
    async query(){return workerSnapshotSchema.parse(await call('query'));},
+   async exportModel(){return nativeModelSchema.parse(await call('export'));},
    async execute(operationId:string,revision:number,code:string){return workerResultSchema.parse(await call('execute',{operationId,revision,code}));},
    async stop(){closed=true;await lease.stop();},
   };

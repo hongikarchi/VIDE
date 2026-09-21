@@ -2,7 +2,7 @@
 id: VERIFY-2026-09-22-typescript-foundation
 title: TypeScript·React·Vite 전환 기반 검증
 status: review
-version: 0.14
+version: 0.15
 updated: 2026-09-22
 owner: agent:codex
 related: [PLAN, ADR-016, ADR-017, T-010, T-011, T-015]
@@ -122,3 +122,9 @@ native-attributes.ts는 원본 사용자 속성의 디코딩 결과와 첨부 �
 gateway.ts의 API 결과는 unknown으로 받고 소비하는 UI가 스키마로 확인한다. 초기 프로젝트/요청 조회와 이력의 복구 응답도 확인한다. workspace-result 스키마는 UI가 사용하는 필드를 검사하며 passthrough로 파일/네이티브 ID/속성 등 호스트 메타데이터를 보존한다. 아직 모든 호스트 결과 필드의 완전한 계약은 아니다.
 
 타입 검사·전체 합성 브라우저 회귀와 추가 경계 시험 2개가 통과했다. null 오류 응답/잘못된 JSON/연결 실패는 각각 요청 실패/잘못된 응답/네트워크 오류로 구분한다. 네이티브 메타데이터가 디코딩에서 사라지지 않고 잘못된 정점 형식은 거절되는지 확인했다.
+
+## SDK 후보 내보내기·이전 사본 연결
+
+WorkerScene과 native-model 스키마로 실제 Rhino 형상을 기존 뷰포트 DTO에 연결했다. AI 조회에는 간단한 객체/경계만 보내고 상세 메시·수량은 후보 내보내기에서 계산한다. 기존 객체 한도 500개와 속성 한도는 유지한다. 이전 후보의 SHA-256을 확인하고 새 전용 디렉터리로 복사한 뒤 원본/복사본 해시를 다시 확인한다. 성공 응답의 snapshot.uncertain도 false로 바로잡았다.
+
+tests/integration/worker-model.mjs를 실제 Rhino 8과 Chrome에서 실행했다. 10×8×6 m 박스를 생성하고 다음 worker에서 X축으로 2 m 이동했다. vide-id·Use=Study 속성·면적 376 m²·체적 480 m³가 유지됐으며 이전 3dm 바이트 해시가 동일했다. 브라우저의 실제 메시·Inspector·수량표를 확인했다. 증거는 .vide/worker-ui-check/1758fbce-5c73-4c71-b7ad-bedb57358c8e이며 테스트 소유 프로세스는 종료했다. 고정 SDK 코드 시험으로, 일반 채팅 연결·원본 적용·대형 모델 검증 완료는 아니다.
