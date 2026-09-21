@@ -1,3 +1,4 @@
+import {quantityQuerySchema} from '../contracts/quantities.ts';
 import {DomainError} from './store.mjs';
 const known=value=>Number.isFinite(value)&&value>=0?value:null;
 function lengthOf(line){
@@ -29,9 +30,7 @@ export function quantitiesCsv(table){
 }
 
 export function quantityQuery(value={}){
- if(!value||typeof value!=='object'||Array.isArray(value)||Object.keys(value).some(key=>!['search','type','layer','groupBy','objectId'].includes(key)))throw new DomainError('INVALID_INPUT');
- const query={search:value.search??'',type:value.type??'',layer:value.layer??'',groupBy:value.groupBy??'none',objectId:value.objectId??''};
- if(['search','type','layer','objectId'].some(key=>typeof query[key]!=='string'||query[key].length>200)||!['none','type','layer'].includes(query.groupBy))throw new DomainError('INVALID_INPUT');return query;
+ const parsed=quantityQuerySchema.safeParse(value);if(!parsed.success)throw new DomainError('INVALID_INPUT');return parsed.data;
 }
 function summarize(rows){
  const totals={count:rows.length};

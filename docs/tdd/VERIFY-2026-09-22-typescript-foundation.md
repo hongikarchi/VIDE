@@ -2,7 +2,7 @@
 id: VERIFY-2026-09-22-typescript-foundation
 title: TypeScript·React·Vite 전환 기반 검증
 status: review
-version: 0.5
+version: 0.6
 updated: 2026-09-22
 owner: agent:codex
 related: [PLAN, ADR-016, ADR-017, T-010, T-011, T-015]
@@ -68,3 +68,9 @@ AI 설정 코어는 strict TypeScript로 옮겼고 src/contracts/ai-settings.ts�
 속성·기하·관계·이력 본문을 inspector-content.tsx로 옮겼다. 기존 inspector.mjs는 선택/탭 표시 모델과 접기·크기 조절을 유지한다. 같은 본문 DOM을 두 구현이 동시에 변경하지 않는다. 탭이나 객체가 바뀌면 이전 본문의 스크롤을 초기화해 첫 행이 가려지지 않게 했다. 해제 함수와 pagehide 처리를 제공하며 bfcache 진입에서는 root를 유지한다.
 
 `npm run build`, 기존 자동 테스트 101개, 확장한 browser-react-panels 검증이 통과했다. 임시 DB의 합성 후보로 실제 앱에서 네 탭을 전환하고 면적 12.5 m²/체적 24 m³, 사용자 속성의 문자 표시, 명시적 첨부, 초안 보존을 확인했다. 저장 초안의 빈 기준을 자동으로 새 후보로 바꾸지 않는 기존 동작을 유지하며 테스트도 후보 버튼을 명시적으로 누른다. [검사기 렌더](../assets/native-workspace/react-inspector.png)를 확인했다. 이 합성 후보는 실호스트 취득 증거가 아니다.
+
+## 수량표 전환
+
+quantity-view.tsx는 검색·객체/유형/레이어 필터·그룹·합계·저장 구성·CSV 링크를 소유한다. quantities.mjs의 비교/모달 진입부는 아직 레거시다. 닫기·재열기에서 이전 React root를 해제한다. 공통 quantityQuerySchema로 서버 쿼리를 검증하고 UI는 수량표·표 구성 응답을 검증한 뒤 사용한다.
+
+101개 기존 자동 시험과 타입 검사, 확장한 브라우저 회귀가 통과했다. 실제 임시 DB/API를 통해 선택 객체 범위와 그룹 조건 저장→빈 검색 결과→강제 조회 실패→마지막 표 및 CSV 필터 보존→저장 구성 재선택→삭제를 검증했다. 삭제 성공 뒤 앞선 조회 완료가 안내를 지우던 경합을 발견해 조회 세대와 안내 세대를 구분했다. [수량표 렌더](../assets/native-workspace/react-quantities.png)를 확인했다. 수량값은 합성 후보이며 새 호스트 계산 검증은 아니다.

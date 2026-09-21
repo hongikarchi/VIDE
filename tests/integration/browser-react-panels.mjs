@@ -59,11 +59,37 @@ try{
  await page.waitForFunction(()=>document.querySelector('#inspector-content').textContent.includes('Inspector fixture'));
  await page.locator('[data-inspect="relations"]').click();
  await page.waitForFunction(()=>document.querySelector('#inspector-content').textContent.includes('연결된 이전 후보나 객체 입력이 없습니다'));
+ await page.locator('[data-inspect="properties"]').click();await page.getByRole('button',{name:'이 객체 수량표',exact:true}).click();
+ const quantities=page.getByRole('dialog',{name:'후보 수량표',exact:true});await quantities.waitFor();
+ assert.equal(await quantities.getByLabel('집계 객체',{exact:true}).inputValue(),'object-1');
+ await quantities.getByLabel('그룹 기준',{exact:true}).selectOption('type');
+ await quantities.getByText('표 구성',{exact:true}).click();await quantities.getByLabel('표 구성 이름',{exact:true}).fill('Fixture layout');
+ await quantities.getByRole('button',{name:'구성 저장',exact:true}).click();
+ await quantities.getByRole('status').filter({hasText:'표 구성을 저장했습니다.'}).waitFor();
+ const view=await page.evaluate(async id=>(await(await fetch(`/api/v1/projects/${id}/table-views`)).json())[0],first);
+ assert.equal(view.query.objectId,'object-1');assert.equal(view.query.groupBy,'type');
+ await quantities.getByLabel('객체 검색',{exact:true}).fill('missing');await quantities.getByLabel('객체 검색',{exact:true}).press('Enter');
+ await quantities.getByRole('status').filter({hasText:'0 / 1개 객체'}).waitFor();
+ assert.match(await quantities.getByRole('link',{name:'CSV 내려받기',exact:true}).getAttribute('href'),/search=missing/);
+ await page.route('**/api/v1/projects/*/requests/*/quantities?*',async route=>{if(new URL(route.request().url()).searchParams.get('search')==='failure')await route.fulfill({status:500,json:{code:'TEST_FAILURE'}});else await route.continue();});
+ await quantities.getByLabel('객체 검색',{exact:true}).fill('failure');await quantities.getByLabel('객체 검색',{exact:true}).press('Enter');
+ await quantities.getByRole('status').filter({hasText:'마지막 성공 표를 유지합니다.'}).waitFor();
+ assert.match(await quantities.getByRole('link',{name:'CSV 내려받기',exact:true}).getAttribute('href'),/search=missing/);
+ await quantities.getByLabel('저장한 표 구성',{exact:true}).selectOption('');await quantities.getByLabel('저장한 표 구성',{exact:true}).selectOption(view.id);
+ await quantities.getByRole('status').filter({hasText:'1 / 1개 객체'}).waitFor();
+ await quantities.getByRole('button',{name:'구성 삭제',exact:true}).click();await quantities.getByRole('status').filter({hasText:'표 구성을 삭제했습니다.'}).waitFor();
+ assert.equal(await page.evaluate(async id=>(await(await fetch(`/api/v1/projects/${id}/table-views`)).json()).length,first),0);
+ await page.screenshot({path:'docs/assets/native-workspace/react-quantities.png'});
+ await quantities.getByRole('button',{name:'닫기',exact:true}).click();
  await page.setViewportSize({width:390,height:844});await page.locator('[data-mobile="input"]').click();
  assert.equal(await page.getByLabel('요청 1',{exact:true}).inputValue(),'edited');
  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
  assert.deepEqual(errors,[]);
- console.log(JSON.stringify({requestEditing:true,projectIsolation:true,documentRaceGuard:true,inspectorTabs:true,literalAttributes:true,mobileDraft:true}));
+ console.log(JSON.stringify({requestEditing:true,projectIsolation:true,documentRaceGuard:true,inspectorTabs:true,literalAttributes:true,quantityViews:true,failedQueryPreservesCsv:true,mobileDraft:true}));
+}catch(error){
+ const failedPage=browser?.contexts()[0]?.pages()[0];
+ if(failedPage)console.error(await failedPage.locator('[role=status]').allTextContents());
+ throw error;
 }finally{
  if(browser)await browser.close();if(app)await app.close();
  await rm(directory,{recursive:true,force:true});
