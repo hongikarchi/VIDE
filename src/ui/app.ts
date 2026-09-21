@@ -1,3 +1,4 @@
+import {draftSnapshot,restoreDraft,restoreSavedDraft} from './draft-storage.ts';
 import {z} from 'zod';
 import {element as $,append as el,readableError} from './elements.ts';
 import {requestData,requestMessage,modelsSchema,providersSchema,hostStatusSchema} from './workspace-data.ts';
@@ -19,7 +20,7 @@ import {api,connect,errors} from './gateway.ts';
 import {objects,models,initial,chooseModel,pinSelection,attachHostSelection,attachReviewNote,failedRequestDraft,draftHasInput,validate,packet,attachSketch,storageKey} from './model.ts';
 import {createViewport} from './viewport.ts';
 
-let project:{id:string;name:string}|undefined,busy=false,displayedResult:string|undefined,selectedResult:string|null|undefined,draftSaved=false;
+let project:{id:string;name:string}|undefined,busy=false,displayedResult:string|undefined,selectedResult:string|null|undefined,draftSaved=false,unreadableDraft=false;
 function currentProject(){if(!project)throw Error('프로젝트를 먼저 여세요.');return project;}
 let state=initial();let tool:'select'|'pin'|'sketch'='select',points:Point2[]=[],toastTimer:ReturnType<typeof setTimeout>|undefined;
 const message=(text:string)=>{clearTimeout(toastTimer);$('message').textContent=text;$('message').hidden=false;toastTimer=setTimeout(()=>$('message').hidden=true,4500);};
@@ -50,11 +51,12 @@ function draw(){renderPoints(points,draw,message);viewport?.lines(state.sketches
 function setTool(next:'select'|'pin'|'sketch'){if(tool==='sketch'&&next!=='sketch'&&points.length){message('그린 선을 첨부하거나 취소하세요.');return;}tool=next;document.querySelectorAll<HTMLButtonElement>('[data-tool]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.tool===tool)));$('sketch-tools').hidden=tool!=='sketch';viewport?.mode(tool,planeName());$('tool-hint').textContent=tool==='sketch'?'평면에 점을 찍어 선을 그리세요. Esc 취소':tool==='pin'?'객체를 누르면 입력에 첨부됩니다.':'';draw();}
 function chip(text:string,remove:()=>void,pin?:DraftPin){const span=el('span',text,$('context'),{class:'chip'});const b=el('button','×',span,{'aria-label':`${text} 제외`});b.onclick=remove;if(pin){const role=el('select','',span,{'aria-label':pin.name+' 역할'});for(const [value,label] of [['target','변경'],['preserve','유지'],['reference','참고']])el('option',label,role,{value});role.value=pin.role;role.onchange=()=>{pin.role=z.enum(['target','preserve','reference']).parse(role.value);render();};}}
 function render(rebuildRequests=true){
+ if(unreadableDraft&&draftHasInput(state))unreadableDraft=false;
  if(!draftHasInput(state)&&displayedResult)state.baseRequestId=displayedResult;
  if(rebuildRequests)renderRequests(state,render);
  renderActiveWork(state.messages);
  $('host-target').value=state.host||'rhino';
- if(project)try{localStorage.setItem('vide:draft:'+currentProject().id,JSON.stringify({baseRequestId:state.baseRequestId??null,host:state.host,body:state.body,instructions:state.instructions,pins:state.pins,sketches:state.sketches,files:state.files,model:state.model,effort:state.effort,permission:state.permission}));draftSaved=true;}catch{draftSaved=false;}
+ if(project&&!unreadableDraft)try{localStorage.setItem('vide:draft:'+currentProject().id,JSON.stringify(draftSnapshot(state)));draftSaved=true;}catch{draftSaved=false;}
  $('objects').replaceChildren();for(const o of objects){const b=el('button',o.name,$('objects'),{class:'object','aria-pressed':String(state.selected===o.id)});b.onclick=()=>{state.selected=o.id;if(tool==='pin')pinSelection(state);render();};}
  viewport?.select(state.selected);$('selection').textContent=objects.find(o=>o.id===state.selected)?.name||'';$('selection-pin').hidden=!state.selected;
  $('context').replaceChildren();state.pins.forEach((p,i)=>chip('@ '+p.name,()=>{state.pins.splice(i,1);render();},p));state.sketches.forEach((s,i)=>chip('⌁ '+s.name,()=>{state.sketches.splice(i,1);render();}));state.files.forEach((f,i)=>chip('▧ '+(f.displayName||f.name),()=>{state.files.splice(i,1);render();}));
@@ -124,8 +126,8 @@ $('finish-sketch').onclick=()=>{try{attachSketch(state,points,$('plane').value,$
 $('cancel-sketch').onclick=()=>{points=[];setTool('select');};$('undo-point').onclick=()=>{points.pop();draw();};
 $('fit-view').onclick=()=>viewport?.fit();
 $('projection').onchange=()=>{if(tool==='sketch'){message('스케치를 마친 뒤 뷰를 바꿀 수 있습니다.');return;}if($('projection').value==='axon')viewport?.home();else viewport?.plane(({plan:'XY',front:'XZ',side:'YZ'} as const)[z.enum(['plan','front','side']).parse($('projection').value)]);};
-$('save').onclick=()=>{if(!project||busy)return;try{localStorage.setItem(storageKey+':'+currentProject().id,JSON.stringify({version:4,projectId:currentProject().id,state:{...state,baseRequestId:state.baseRequestId??null,messages:[]}}));$('saved').textContent='저장됨';$('draft-menu').open=false;message('이 프로젝트의 초안을 이 브라우저에 저장했습니다.');}catch{message('저장 실패. 초안은 유지됩니다.');}};
-$('load').onclick=()=>{if(!project||busy)return;try{const saved=JSON.parse(localStorage.getItem(storageKey+':'+currentProject().id)??'null');if(saved?.version!==4||saved.projectId!==currentProject().id||typeof saved.state?.body!=='string'||!['pins','sketches','files','messages'].every(k=>Array.isArray(saved.state[k])))throw Error();if(saved.state.baseRequestId&&!state.messages.some(m=>m.id===saved.state.baseRequestId&&m.request?.result?.hostExecuted))throw Error();state={...saved.state,baseRequestId:saved.state.baseRequestId||undefined,messages:state.messages};selectedResult=saved.state.baseRequestId??null;displayedResult=undefined;objects.splice(0,objects.length);viewport?.replace([]);points=[];$('body').value=state.body;$('draft-menu').open=false;render();renderMessages();message('초안을 불러왔습니다.');}catch{message('이 프로젝트에서 읽을 수 있는 저장본이 없습니다.');}};
+$('save').onclick=()=>{if(!project||busy)return;try{localStorage.setItem(storageKey+':'+currentProject().id,JSON.stringify({version:4,projectId:currentProject().id,state:draftSnapshot(state)}));$('saved').textContent='저장됨';$('draft-menu').open=false;message('이 프로젝트의 초안을 이 브라우저에 저장했습니다.');}catch{message('저장 실패. 초안은 유지됩니다.');}};
+$('load').onclick=()=>{if(!project||busy)return;try{state=restoreSavedDraft(JSON.parse(localStorage.getItem(storageKey+':'+currentProject().id)??'null'),currentProject().id,state.messages);selectedResult=state.baseRequestId??null;displayedResult=undefined;objects.splice(0,objects.length);viewport?.replace([]);points=[];$('body').value=state.body;$('draft-menu').open=false;render();renderMessages();message('초안을 불러왔습니다.');}catch{message('이 프로젝트에서 읽을 수 있는 저장본이 없습니다.');}};
 function mobileView(view:MobileView){setMobileView(view);}
 for(const side of ['left','right'])$(`toggle-${side}`).onclick=()=>{if(matchMedia('(max-width:850px)').matches){$(side).hidden=false;mobileView(side==='left'?'documents':'input');return;}$(side).hidden=!$(side).hidden;document.body.classList.toggle(`${side}-hidden`,Boolean($(side).hidden));$(`toggle-${side}`).setAttribute('aria-expanded',String(!$(side).hidden));$(`toggle-${side}`).textContent=side==='left'?($(side).hidden?'›':'‹'):($(side).hidden?'‹':'›');$(`toggle-${side}`).focus();};
 document.addEventListener('keydown',e=>{if(e.key==='Escape'){if(tool==='sketch'){points=[];setTool('select');}$('attach-menu').open=false;$('draft-menu').open=false;}if(e.altKey&&e.shiftKey&&['KeyL','KeyR'].includes(e.code)){e.preventDefault();$(`toggle-${e.code==='KeyL'?'left':'right'}`).click();}});
@@ -196,4 +198,28 @@ $('add-point').onclick=()=>{
 };
 for(const id of ['point-u','point-v'] as const)$(id).onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();$('add-point').click();}};
 
-try{let restoredDraft=false;const linked=await connect();const catalog=modelsSchema.parse(await api('/models'));models.splice(0,models.length,...catalog);$('model').replaceChildren();for(const m of models)el('option',m.name,$('model'),{value:m.id});project=linked.project;void reviews.refresh().catch(error=>message(error.message));renderProjectHeading({projects:linked.projects,selected:currentProject().id,select:selectProject,create:createProject});try{const draft=JSON.parse(localStorage.getItem('vide:draft:'+currentProject().id)??'null');if(draft&&typeof draft.body==='string'&&['pins','sketches','files'].every(k=>Array.isArray(draft[k]))){restoredDraft=true;Object.assign(state,draft,{baseRequestId:draft.baseRequestId||undefined});selectedResult=draft.baseRequestId;$('body').value=state.body;}}catch{}state.messages=linked.requests.map(requestMessage);if(!restoredDraft)selectedResult=linked.requests.filter(request=>request.result?.hostExecuted).at(-1)?.id;render();renderMessages();for(const m of state.messages)if(['queued','running'].includes(m.request.state))void poll(m.id);const host=hostStatusSchema.parse(await api('/host'));const providers=providersSchema.parse(await api('/providers'));$('connection-status').textContent=providers.map(p=>`${p.id==='claude-cli'?'Claude':'ChatGPT'} ${p.available?'연결됨':'미연결'}`).join(' · ')+(host.available?(host.mode==='sdk'?' · Rhino 실행 준비':' · Rhino 연결됨'):' · Rhino 미연결');}catch(cause){const error=readableError(cause);message(errors[error.code??'']||error.message);}
+async function initializeWorkspace(){
+ try{
+  const linked=await connect();
+  const catalog=modelsSchema.parse(await api('/models'));
+  models.splice(0,models.length,...catalog);
+  $('model').replaceChildren();
+  for(const model of models)el('option',model.name,$('model'),{value:model.id});
+  project=linked.project;
+  state.messages=linked.requests.map(requestMessage);
+  void reviews.refresh().catch(error=>message(error.message));
+  renderProjectHeading({projects:linked.projects,selected:project.id,select:selectProject,create:createProject});
+  let restored=false;
+  try{
+   const raw=localStorage.getItem('vide:draft:'+project.id);
+   if(raw){state=restoreDraft(JSON.parse(raw),state.messages);selectedResult=state.baseRequestId??null;restored=true;$('body').value=state.body;}
+  }catch{unreadableDraft=true;message('저장된 초안의 형식 또는 기준을 확인할 수 없습니다. 작업 이력은 유지됩니다.');}
+  if(!restored)selectedResult=linked.requests.filter(request=>request.result?.hostExecuted).at(-1)?.id;
+  render();renderMessages();
+  for(const entry of state.messages)if(['queued','running'].includes(entry.request.state))void poll(entry.id);
+  const host=hostStatusSchema.parse(await api('/host'));
+  const providers=providersSchema.parse(await api('/providers'));
+  $('connection-status').textContent=providers.map(provider=>`${provider.id==='claude-cli'?'Claude':'ChatGPT'} ${provider.available?'연결됨':'미연결'}`).join(' · ')+(host.available?(host.mode==='sdk'?' · Rhino 실행 준비':' · Rhino 연결됨'):' · Rhino 미연결');
+ }catch(cause){const error=readableError(cause);message(errors[error.code??'']||error.message);}
+}
+await initializeWorkspace();

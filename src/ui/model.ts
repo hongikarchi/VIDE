@@ -24,7 +24,7 @@ export function failedRequestDraft(state:DraftState,request:RestoreRequest){
  const input=request.input;
  if(input.baseRequestId&&!state.messages.some(message=>message.id===input.baseRequestId&&message.request?.result?.hostExecuted))throw Error('원 요청의 기준 후보를 확인할 수 없습니다.');
  if(typeof input.body!=='string'||!(['pins','sketches','files'] as const).every(key=>Array.isArray(input[key])))throw Error('저장된 입력을 확인할 수 없습니다.');
- return structuredClone({body:input.body,instructions:[],pins:input.pins,sketches:input.sketches,files:input.files,host:input.host||'rhino',baseRequestId:input.baseRequestId,model:input.model,effort:input.effort,permission:input.permission,selected:null});
+ return structuredClone({body:input.body,instructions:[],pins:input.pins,sketches:input.sketches,files:input.files,host:input.host||'rhino',baseRequestId:input.baseRequestId,model:input.model||input.provider||state.model,effort:input.effort||'default',permission:input.permission,selected:null});
 }
 export function chooseModel(s:DraftState,id:string){const model=models.find(m=>m.id===id);if(!model)throw Error('모델을 선택하세요.');s.model=id;if(!model.efforts.includes(s.effort))s.effort=model.efforts.includes('medium')?'medium':model.efforts[0];}
 export function pinSelection(s:DraftState){const o=objects.find(o=>o.id===s.selected);if(o&&o.revision&&!s.pins.some(p=>p.id===o.id&&p.basis===o.revision))s.pins.push({id:o.id,name:o.name,role:'target',basis:o.revision});}

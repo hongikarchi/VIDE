@@ -20,7 +20,7 @@ export async function connect() {
 }
 export const labels:Record<string,string>={queued:'대기 중',running:'AI 작업 중',succeeded:'응답 완료',failed:'실패',cancelled:'중단됨',interrupted:'재시작으로 중단됨',unknown:'호스트 결과 확인 필요'};
 export const errors:Record<string,string>={UNSUPPORTED_DWG_EDIT:'이 DWG에서는 기존 독립 직선 경계의 이동·정점 수정만 가능합니다. 객체 추가·삭제 또는 관계가 있는 객체는 지원하지 않습니다.',HOST_RESULT_UNRESOLVED:'이 호스트에 결과를 확인하지 못한 작업이 있어 새 후보 생성을 보류합니다. 검토와 기존 결과 조회는 가능합니다.',PROTECTED_OBJECT_CHANGED:'유지·참고 대상으로 지정한 객체를 바꾸는 제안이어서 실행하지 않았습니다.',SUBSCRIPTION_LOGIN_REQUIRED:'구독 계정으로 CLI에 로그인하세요.',CLI_PATH_REQUIRED:'Codex 실행 경로를 설정하세요.',CLI_UNAVAILABLE:'AI 실행 파일을 찾을 수 없습니다.',TIMEOUT:'응답 시간이 초과됐습니다.',PROVIDER_FAILED:'AI 공급자가 요청을 완료하지 못했습니다.',UNAUTHORIZED:'서버가 표시한 실행 링크로 다시 열어 주세요.'};
-Object.assign(errors,{HOST_UNAVAILABLE:'Rhino에서 mcpstart 명령으로 연결을 켜 주세요.',HOST_REJECTED:'Rhino가 형상 생성을 완료하지 못했습니다. 입력을 수정해 다시 요청할 수 있습니다.',INVALID_GEOMETRY:'AI의 형상 제안이 검증을 통과하지 못했습니다.',WRITE_NOT_ALLOWED:'검토 권한으로는 형상을 변경하지 않습니다. 후보 작업 허용으로 전환하세요.',PROJECT_BUSY:'현재 작업이 끝나거나 중단된 뒤 요청해 주세요.',STALE_REFERENCE:'첨부한 객체가 이전 후보 기준입니다. 현재 모델에서 다시 첨부해 주세요.',HOST_RESULT_UNKNOWN:'호스트 응답을 확인하지 못했습니다. 자동 재실행하지 않았습니다.'});
+Object.assign(errors,{HOST_UNAVAILABLE:'Rhino 설치와 호스트 연결 상태를 확인하세요.',HOST_REJECTED:'Rhino가 형상 생성을 완료하지 못했습니다. 입력을 수정해 다시 요청할 수 있습니다.',INVALID_GEOMETRY:'AI의 형상 제안이 검증을 통과하지 못했습니다.',WRITE_NOT_ALLOWED:'검토 권한으로는 형상을 변경하지 않습니다. 후보 작업 허용으로 전환하세요.',PROJECT_BUSY:'현재 작업이 끝나거나 중단된 뒤 요청해 주세요.',STALE_REFERENCE:'첨부한 객체가 이전 후보 기준입니다. 현재 모델에서 다시 첨부해 주세요.',HOST_RESULT_UNKNOWN:'호스트 응답을 확인하지 못했습니다. 자동 재실행하지 않았습니다.'});
 
 Object.assign(errors,{SOURCE_CHANGED:'기준 Rhino 파일이 외부에서 변경됐습니다. 수정된 파일을 다시 불러와 이어서 작업하세요.',IMPORT_LIMIT:'현재 가져오기는 유효한 객체 500개까지 지원합니다.',IMPORT_FAILED:'파일을 불러오지 못했습니다.'});
 
@@ -47,12 +47,12 @@ Object.assign(errors,{
  WRITE_UNCERTAIN:'이 문서에 결과를 확인하지 못한 쓰기가 있어 추가 적용을 보류합니다.',
  CONTROLLER_BUSY:'이 문서에 다른 작업을 적용 중입니다. 완료 후 영향 검토를 다시 하세요.',
  DOCUMENT_ALREADY_CONNECTED:'이 Rhino 문서는 다른 프로젝트에 연결돼 있습니다. 해당 프로젝트에서 작업하거나 다른 문서를 선택하세요.',
- UNSUPPORTED_APPLICATION:'현재 원본 적용은 생성한 박스·폴리라인·돌출, 또는 열린 문서에서 가져온 객체의 이동을 지원합니다.'
+ UNSUPPORTED_APPLICATION:'이 후보는 현재 원본 적용을 지원하지 않습니다. 후보 파일을 내려받거나 별도 Rhino 문서로 열어 작업을 이어가세요.'
 });
 function apiError(code:string){return Object.assign(new Error(errors[code]||`요청 처리 오류 (${code})`),{code});}
 
 Object.assign(errors,{
- UNKNOWN_UNITS:'DWG 단위가 없거나 미지원 단위입니다. 원 도면에서 단위를 확인한 뒤 다시 가져오세요.',
+ UNKNOWN_UNITS:'모델 단위가 없거나 미지원 단위입니다. 원본에서 단위를 지정한 뒤 다시 가져오세요.',
  UNSUPPORTED_DWG_CONTENT:'현재 DWG 모델 공간 읽기는 직선 XY 폴리라인을 지원합니다. 호·블록·다른 유형이 포함돼 일부만 가져오지 않았습니다.',
  EMPTY_DWG:'DWG 모델 공간에서 읽을 경계를 찾지 못했습니다.',
  ZWCAD_REFERENCE_ONLY:'이 DWG는 참고용입니다. 경계를 핀으로 첨부하고 Rhino를 선택해 후보를 만들 수 있습니다. 원 도면 편집은 아직 지원하지 않습니다.'
