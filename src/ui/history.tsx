@@ -3,13 +3,13 @@ import { createRoot } from 'react-dom/client';
 import type { Root } from 'react-dom/client';
 import { sceneRepresentation } from '../core/scene-representation.mjs';
 import { api, labels, errors } from './gateway.mjs';
-import { showApplication } from './application.mjs';
+import { showApplication } from './application.tsx';
 import { showQuantities } from './quantities.mjs';
 interface Scene {id:string;nativeType?:string;vertices?:number[];indices?:number[];line?:number[];origin?:number[];area?:number|null;volume?:number|null}
-interface Application {id:string;state:string;result?:{code?:string}}
+interface Application {id:string;state:string;result?:{code?:string}|null}
 interface Result {
  hostExecuted?:boolean;host?:string;phase?:string;text?:string;code?:string;dwgEditMode?:string;sourceHash?:string;
- sourceDocument?:{name:string;capturedAt:string};
+ sourceDocument?:{name:string;capturedAt:string;instance:string;documentId:number};
  objects?:{id:string;name:string;kind:string}[];scene?:Scene[];
  extensionResult?:{rows:{type:string;layer?:string;count:number;objectIds:string[]}[]};
 }
