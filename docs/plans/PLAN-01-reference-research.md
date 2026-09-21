@@ -2,13 +2,15 @@
 id: PLAN-01
 title: 선행 프로젝트 조사와 구현 선택 근거
 status: review
-version: 0.4
-updated: 2026-09-20
+version: 0.5
+updated: 2026-09-21
 owner: agent:codex
 related: [PLAN, DESIGN, SPEC-01, SPEC-02, SPEC-03, SPEC-04, SPEC-05, ADR-013]
 ---
 
 # 선행 프로젝트 조사와 구현 선택 근거
+
+2026-09-21 후속 실행 설계는 [PLAN-02](PLAN-02-agent-host-versioning.md)에 있다. 이 문서의 ADR-013·도구 없는 단발 호출 채택 문구는 이전 조사 시점의 판단이며 새 구현 기준을 대체하지 않는다.
 
 ## 1. 목적과 조사 수준
 

@@ -1,14 +1,16 @@
 ---
 id: ADR-013
 title: 로컬 제어 계층과 구독 CLI 분리
-status: review
-version: 0.3
-updated: 2026-09-20
+status: superseded
+version: 0.4
+updated: 2026-09-21
 owner: agent:codex
 related: [PLAN, FR-08, FR-16, FR-18, ADR-005]
 ---
 
 # 로컬 제어 계층과 구독 CLI 분리
+
+2026-09-21 사용자의 범용 SDK 코드 실행·통신 구체화 지시에 따라 실행 방식은 [PLAN-02](../plans/PLAN-02-agent-host-versioning.md)로 대체한다. 제품 기록과 공급자 인증 분리는 유지하되, 도구 없는 단발 응답·고정 동작 제안 제한을 새 경로의 조건으로 사용하지 않는다. 아래는 기존 선택 근거다. 현재 제품 코드 이행 여부는 PLAN §6.5가 소유한다.
 
 ## 결정과 근거
 

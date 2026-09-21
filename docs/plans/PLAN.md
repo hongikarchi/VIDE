@@ -2,13 +2,15 @@
 id: PLAN
 title: VIDE 구현계획 (마스터)
 status: review
-version: 0.61
+version: 0.62
 updated: 2026-09-21
 owner: agent:codex
 related: [SPEC-00, SPEC-01, SPEC-02, SPEC-03, SPEC-04, SPEC-05, ADR-013, OQ-03, OQ-04, OQ-06, OQ-07, OQ-08, OQ-09, OQ-10, OQ-14]
 ---
 
 # VIDE · PLAN
+
+실행·통신·버전 저장의 새 구현 기준은 [PLAN-02](PLAN-02-agent-host-versioning.md)다. 아래 도구 없는 CLI·구조화 제안 변환 설명은 현재 레거시 구현의 기록이며, 새 경로를 제한하는 기준으로 사용하지 않는다. 진행 상태는 §6.5에서 구분한다.
 
 ## 1. 기준·범위·착수 근거
 
@@ -308,6 +310,9 @@ T-003·005는 H-RHINO-04·05의 지원안을, T-003·006은 H-ZWCAD-04·05의 �
 기존 구현을 지우고 재시작하거나 현재 코드 모양에 SPEC을 맞추지 않는다. 필요 변경을 티켓 단위로 적용하며 실제 소스 대조/미시험 구분은 [구현 전 문서 검수](../tdd/VERIFY-2026-09-20-preimplementation.md)에 남긴다.
 
 ### 6.5 현재 티켓 현황과 이어갈 위치
+
+**2026-09-21 실행 구조 상세화:** T-003·004·005·006·013·017·018의 다음 구현 기준은 [PLAN-02](PLAN-02-agent-host-versioning.md)다. 사용자 지시에 따라 SDK 코드 작성·내장 MCP stdio·Named Pipe·다중 실행본 계약·모델/데이터 버전 저장을 구체화했다. SPEC-02.15·SPEC-03.9와 연결했다. T-009의 호스팅은 Cloudflare·Render·Supabase·Lightsail 비교와 시험 기준을 추가했으며 구매/배포 확정은 아니다. 이번에는 계획·명세·HTML만 변경했으며 제품 실행은 여전히 기존 제한 JSON/TCP·COM 경로다. 다음 시작점은 PLAN-02 §6 첫 수직 연결의 계약·설치본 호환성 시험이다. 아래 기존 완료 증거는 그대로 유지하며 새 방식 지원 완료로 해석하지 않는다.
+
 
 T-016: 저장된 초안이 없는 첫 프로젝트 열기에서는 호스트와 무관하게 마지막 실제 후보를 연다. CAD-only 프로젝트가 Rhino 기본값 때문에 빈 화면으로 열리는 문제를 수정했다. 기존 초안의 명시적 빈 기준·호스트·문장은 그대로 유지한다. browser-project-startup.mjs에서 실제 저장된 DWG 프로젝트로 두 경우를 검증했다.
 
