@@ -1,6 +1,8 @@
+import {renderInspectorContent} from './inspector-content.tsx';
 import {nativeAttributes} from './native-attributes.mjs';
 const $ = id => document.getElementById(id);
 let expanded=false;
+const inspected=new WeakMap();
 function showInspector(open){
   $('inspector').classList.toggle('collapsed',!open);
   $('inspector-toggle').setAttribute('aria-expanded',String(open));
@@ -40,26 +42,23 @@ export function initializeInspector(onTab) {
     expanded=!expanded;showInspector(expanded);
   };
 }
-export function renderInspector(object, result, request, tab='properties', references={}) {
+export function renderInspector(object, result, request, tab='properties', references={}, content=$('inspector-content')) {
+  const key=`${object?.id||''}:${tab}`;
+  if(inspected.get(content)!==key){content.scrollTop=0;inspected.set(content,key);}
   showInspector(Boolean(object)&&expanded);
   $('inspector-toggle').disabled=!object;
   $('selection').textContent=object?.name||'선택 없음';
   $('selection-kind').textContent=object?`${result?.host==='zwcad'?'ZWCAD':'Rhino'} · 작업 사본`:'';
-  const content=$('inspector-content');content.replaceChildren();
-  if(!object){content.textContent='객체를 선택하세요.';return;}
+  if(!object){renderInspectorContent(content,{empty:true});return;}
   if(tab==='relations'){
-    const hint=document.createElement('small');hint.textContent='이 객체가 포함된 작업의 기준과 입력';content.append(hint);
     const links=[];
     const basis=request?.input?.baseRequestId||result?.baseRequestId;
     if(basis)links.push({basis,id:object.nativeSourceId||object.id,label:'이전 후보'});
     for(const pin of request?.input?.pins||[])links.push({basis:pin.basis,id:pin.id,label:({target:'변경 입력',preserve:'유지 입력',reference:'참고 입력'}[pin.role]||'입력')+' · '+pin.name});
-    if(!links.length){const empty=document.createElement('p');empty.textContent='연결된 이전 후보나 객체 입력이 없습니다.';content.append(empty);}
-    for(const link of links){
+    renderInspectorContent(content,{links:links.map(link=>{
       const source=references.get?.(link.basis),target=source?.result?.objects?.find(item=>item.id===link.id);
-      const row=document.createElement('p'),button=document.createElement('button');
-      button.textContent=link.label+(source?.result?.hostExecuted?' · '+(source.result.host==='zwcad'?'ZWCAD':'Rhino'):' · 기준 확인 불가');button.disabled=!source?.result?.hostExecuted;
-      button.onclick=()=>references.open?.(link.basis,target?.id);row.append(button);content.append(row);
-    }
+      return {label:link.label+(source?.result?.hostExecuted?' · '+(source.result.host==='zwcad'?'ZWCAD':'Rhino'):' · 기준 확인 불가'),disabled:!source?.result?.hostExecuted,open:()=>references.open?.(link.basis,target?.id)};
+    })});
     return;
   }
   const native=result?.scene?.find(item=>item.id===object.id);
@@ -80,17 +79,12 @@ export function renderInspector(object, result, request, tab='properties', refer
     let layer='—';try{if(native?.layer64)layer=new TextDecoder().decode(Uint8Array.from(atob(native.layer64),c=>c.charCodeAt(0)));}catch{}
     properties=[['객체 이름',object.name],['레이어',layer],['형상',native?.nativeType||object.kind||object.type||'—'],['호스트',result?.host==='zwcad'?'ZWCAD':'Rhino'],['네이티브 ID',native?.nativeId||object.nativeId||'—'],['단위','m'],['상태','저장된 후보']];
   }
-  const grid=document.createElement('div');grid.className='property-grid';content.append(grid);
-  for(const [label,value] of properties){const item=document.createElement('div');item.className='property';const key=document.createElement('small');key.textContent=label;const text=document.createElement('strong');text.textContent=value;item.append(key,text);grid.append(item);}
-  if(tab==='properties'){
-    if(references.quantities){const quantities=document.createElement('button');quantities.textContent='이 객체 수량표';quantities.onclick=()=>references.quantities(request,object);content.append(quantities);}
-    const attributes=nativeAttributes(native);
-    if(attributes.known&&(attributes.entries.length||!attributes.complete)){
-      const title=document.createElement('p');title.textContent='Rhino 사용자 속성 · 취득 기준';content.append(title);
-      const values=document.createElement('div');values.className='property-grid';content.append(values);
-      for(const entry of attributes.entries){const item=document.createElement('div');item.className='property';const key=document.createElement('small');key.textContent=entry.key;const value=document.createElement('strong');value.textContent=entry.value;item.append(key,value);values.append(item);}
-      if(!attributes.complete){const partial=document.createElement('p');partial.textContent='일부 속성만 읽었습니다.';content.append(partial);}
-      if(attributes.entries.length){const attach=document.createElement('button');attach.textContent='표시 속성을 요청에 첨부';attach.onclick=()=>references.attachAttributes?.(request,object);content.append(attach);}
-    }
-  }
+  const attributes=tab==='properties'?nativeAttributes(native):null;
+  renderInspectorContent(content,{
+    rows:properties,
+    quantities:tab==='properties'&&references.quantities?()=>references.quantities(request,object):undefined,
+    attributes:attributes?.known&&(attributes.entries.length||!attributes.complete)?{
+      entries:attributes.entries,complete:attributes.complete,attach:()=>references.attachAttributes?.(request,object)
+    }:undefined,
+  });
 }

@@ -2,7 +2,7 @@
 id: VERIFY-2026-09-22-typescript-foundation
 title: TypeScript·React·Vite 전환 기반 검증
 status: review
-version: 0.4
+version: 0.5
 updated: 2026-09-22
 owner: agent:codex
 related: [PLAN, ADR-016, ADR-017, T-010, T-011, T-015]
@@ -62,3 +62,9 @@ AI 설정 코어는 strict TypeScript로 옮겼고 src/contracts/ai-settings.ts�
 재현: 제품 서버를 별도 VIDE_DATA_DIR에 띄우고 `node tests/integration/browser-point-selection.mjs node_modules/playwright/index.mjs <launch.json>` 형식으로 실행한다. 대좌표·AI 설정 검증도 같은 인수를 쓴다. 서버가 필요 없는 합성 패널 회귀는 `npm run test:browser`다. 설치된 Chrome을 사용하며 별도 PC/저성능 장비 성능 보증은 아니다.
 
 공유 런타임 검증을 사용하는 문서 패널을 추가하면서 Zod 관련 공유 청크는 초기 로딩에 포함된다. AI 설정 화면 자체는 계속 지연 로딩한다. 앞 절의 설정 단독 전환 당시 청크 수치는 역사 기록이다.
+
+## 객체 검사기 본문 전환
+
+속성·기하·관계·이력 본문을 inspector-content.tsx로 옮겼다. 기존 inspector.mjs는 선택/탭 표시 모델과 접기·크기 조절을 유지한다. 같은 본문 DOM을 두 구현이 동시에 변경하지 않는다. 탭이나 객체가 바뀌면 이전 본문의 스크롤을 초기화해 첫 행이 가려지지 않게 했다. 해제 함수와 pagehide 처리를 제공하며 bfcache 진입에서는 root를 유지한다.
+
+`npm run build`, 기존 자동 테스트 101개, 확장한 browser-react-panels 검증이 통과했다. 임시 DB의 합성 후보로 실제 앱에서 네 탭을 전환하고 면적 12.5 m²/체적 24 m³, 사용자 속성의 문자 표시, 명시적 첨부, 초안 보존을 확인했다. 저장 초안의 빈 기준을 자동으로 새 후보로 바꾸지 않는 기존 동작을 유지하며 테스트도 후보 버튼을 명시적으로 누른다. [검사기 렌더](../assets/native-workspace/react-inspector.png)를 확인했다. 이 합성 후보는 실호스트 취득 증거가 아니다.
