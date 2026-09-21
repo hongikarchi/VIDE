@@ -2,7 +2,7 @@
 id: PLAN
 title: VIDE 구현계획 (마스터)
 status: review
-version: 0.107
+version: 0.108
 updated: 2026-09-22
 owner: agent:codex
 related: [SPEC-00, SPEC-01, SPEC-02, SPEC-03, SPEC-04, SPEC-05, ADR-013, OQ-03, OQ-04, OQ-06, OQ-07, OQ-08, OQ-09, OQ-10, OQ-14]
@@ -372,6 +372,8 @@ T-003·005는 H-RHINO-04·05의 지원안을, T-003·006은 H-ZWCAD-04·05의 �
 기존 구현을 지우고 재시작하거나 현재 코드 모양에 SPEC을 맞추지 않는다. 필요 변경을 티켓 단위로 적용하며 실제 소스 대조/미시험 구분은 [구현 전 문서 검수](../tdd/VERIFY-2026-09-20-preimplementation.md)에 남긴다.
 
 ### 6.5 현재 티켓 현황과 이어갈 위치
+
+백업 코어를 TypeScript로 전환하면서 새 sdk-models 후보/영수증이 기존 백업 대상에서 누락된 것을 보완했다. 중지된 작업 공간의 SDK 파일도 복사·해시 검증하며 시작 토큰은 제외한다.
 
 검토본 저장·의견·후보/검토본 비교 코어도 TypeScript로 전환했다. 저장된 표/객체 지문/의견 행을 확인하며 변경 전 스냅샷·재시도·프로젝트 격리를 유지한다. 114개 자동 시험과 브라우저 비교 회귀를 통과했다.
 

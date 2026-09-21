@@ -1,15 +1,16 @@
+import {z} from 'zod';
 import { DatabaseSync, backup } from 'node:sqlite';
 import { mkdir, readdir, lstat, realpath, copyFile, readFile, writeFile } from 'node:fs/promises';
 import { resolve, join, relative, dirname, isAbsolute } from 'node:path';
 import { createHash } from 'node:crypto';
 import { checkDatabase } from './database-check.ts';
 
-const fail = code => { throw Object.assign(new Error(code), { code }); };
-const inside = (root, path) => { const rel = relative(root, path); return rel && !rel.startsWith('..') && !isAbsolute(rel); };
-const hash = async path => createHash('sha256').update(await readFile(path)).digest('hex');
+function fail(code:string):never {throw Object.assign(new Error(code),{code});}
+const inside = (root:string, path:string) => { const rel = relative(root, path); return rel && !rel.startsWith('..') && !isAbsolute(rel); };
+const hash = async (path:string) => createHash('sha256').update(await readFile(path)).digest('hex');
 
-async function files(root, path = root) {
-  const result = [];
+async function files(root:string, path = root):Promise<string[]> {
+  const result:string[] = [];
   for (const entry of await readdir(path, { withFileTypes: true })) {
     const filename = join(path, entry.name), info = await lstat(filename);
     if (info.isSymbolicLink()) fail('BACKUP_LINK_UNSUPPORTED');
@@ -21,13 +22,13 @@ async function files(root, path = root) {
 }
 
 /** Stopped local workspace only. Never opens Store or changes interrupted job states. */
-export async function backupWorkspace(source, destination) {
+export async function backupWorkspace(source:string, destination:string) {
   source = await realpath(resolve(source));
-  destination = join(await realpath(dirname(resolve(destination))), resolve(destination).split(/[\\/]/).at(-1));
+  destination = join(await realpath(dirname(resolve(destination))), resolve(destination).split(/[\\/]/).at(-1)!);
   if (source === destination || inside(source, destination) || inside(destination, source)) fail('BACKUP_LOCATION_INVALID');
   const filename = join(source, 'vide.sqlite');
   if (!(await lstat(filename)).isFile()) fail('BACKUP_FILE_UNSUPPORTED');
-  let controller, db;
+  let controller:DatabaseSync|undefined, db:DatabaseSync|undefined;
   try {
     controller = new DatabaseSync(filename + '.controller');
     try { controller.exec('PRAGMA busy_timeout=0; BEGIN EXCLUSIVE'); }
@@ -38,10 +39,10 @@ export async function backupWorkspace(source, destination) {
     await backup(db, join(destination, 'vide.sqlite'));
     checkDatabase(join(destination, 'vide.sqlite'));
     const entries = [{ path: 'vide.sqlite', sha256: await hash(join(destination, 'vide.sqlite')) }];
-    for (const folder of ['models', 'cad-models']) {
+    for (const folder of ['models', 'cad-models', 'sdk-models']) {
       const directory = join(source, folder);
       try { if ((await lstat(directory)).isSymbolicLink()) fail('BACKUP_LINK_UNSUPPORTED'); }
-      catch (error) { if (error.code === 'ENOENT') continue; throw error; }
+      catch (error) { if(error&&typeof error==='object'&&'code' in error&&error.code==='ENOENT') continue; throw error; }
       for (const file of await files(directory)) {
         const path = relative(source, file), target = join(destination, path), before = await hash(file);
         await mkdir(dirname(target), { recursive: true }); await copyFile(file, target);
@@ -56,9 +57,10 @@ export async function backupWorkspace(source, destination) {
   } finally { db?.close(); controller?.close(); }
 }
 
-export async function verifyBackup(directory) {
+export async function verifyBackup(directory:string) {
   directory = await realpath(resolve(directory));
-  const manifest = JSON.parse(await readFile(join(directory, 'backup-manifest.json'), 'utf8'));
+  const parsed=z.object({format:z.literal(1),schema:z.literal(1),source:z.string(),createdAt:z.string(),files:z.array(z.object({path:z.string(),sha256:z.string().regex(/^[a-f0-9]{64}$/)})).min(1)}).safeParse(JSON.parse(await readFile(join(directory, 'backup-manifest.json'), 'utf8')));
+  if(!parsed.success)fail('BACKUP_INVALID');const manifest=parsed.data;
   if (manifest.format !== 1 || manifest.schema !== 1 || !Array.isArray(manifest.files) || !manifest.files.length) fail('BACKUP_INVALID');
   const seen = new Set();
   for (const file of manifest.files) {

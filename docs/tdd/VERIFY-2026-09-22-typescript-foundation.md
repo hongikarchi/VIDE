@@ -2,7 +2,7 @@
 id: VERIFY-2026-09-22-typescript-foundation
 title: TypeScript·React·Vite 전환 기반 검증
 status: review
-version: 0.29
+version: 0.30
 updated: 2026-09-22
 owner: agent:codex
 related: [PLAN, ADR-016, ADR-017, T-010, T-011, T-015]
@@ -204,3 +204,7 @@ Execution은 요청·공급자·호스트·SDK·진행/취소/결과 의도를 �
 검토본/의견 저장과 후보/검토본 비교를 TypeScript로 전환했다. 실제 저장된 요청 시간·형상/표·검토 지문·의견 필드를 검사하고 원본 파일 경로/첨부 본문을 공개 스냅샷에 넣지 않는다. 테스트 픽스처의 누락된 요청 시간을 실제 계약에 맞게 추가했다. 일반 브라우저 비교 회귀와 114개 자동 시험이 통과했다.
 
 전체 동시 시험 중 crash 잠금 assertion 1회와 시험 자식 프로세스 종료가 간헐적으로 발생했다. crash 픽스처가 종료 전까지 Store 참조를 유지하고 실제 자식 close 뒤 정리하도록 보완했다. 개별 재현 및 전체 114개 시험 연속 5회가 통과했다. 나머지 자식 종료의 원인은 확정하지 않았으며 제품 잠금 결함을 재현했다고 주장하지 않는다.
+
+## SDK 후보 백업 누락 보완
+
+backupWorkspace를 TypeScript로 옮기며 sdk-models를 모델 백업 대상에 추가했다. 기존 구현은 models/cad-models만 복사해 새 SDK 후보/영수증이 빠졌다. 합성 SDK 후보와 영수증을 추가한 시험에서 DB·기존 모델·SDK 파일 복사/해시 일치, 실행 중 거절, 시작 토큰 제외, 원본 보존, 변조 검출이 통과했다. 복원 경로 재배치나 다른 PC 자동 복원 완료를 뜻하지 않는다.

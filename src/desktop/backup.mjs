@@ -1,4 +1,4 @@
-import { backupWorkspace, verifyBackup } from '../core/backup.mjs';
+import { backupWorkspace, verifyBackup } from '../core/backup.ts';
 const [command, source, destination] = process.argv.slice(2);
 try {
   if (!source || !['create', 'verify'].includes(command) || (command === 'create' && !destination)) throw Error('BACKUP_ARGUMENTS');
