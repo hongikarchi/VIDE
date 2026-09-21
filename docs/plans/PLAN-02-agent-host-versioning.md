@@ -2,7 +2,7 @@
 id: PLAN-02
 title: 범용 AI 실행·다중 호스트 통신·모델 데이터 버전 관리
 status: review
-version: 0.5
+version: 0.6
 updated: 2026-09-21
 owner: agent:codex
 related: [PLAN, SPEC-02, SPEC-03, SPEC-04, SPEC-05, ADR-013]
@@ -175,7 +175,7 @@ AI 과업 완료 또는 명시적 저장/체크포인트 시 .3dm/.dwg와 데이
 
 공식 근거: [Cloudflare 웹 앱 구성](https://developers.cloudflare.com/use-cases/web-apps/), [Workers 제한](https://developers.cloudflare.com/workers/platform/limits/), [Workers 요금](https://developers.cloudflare.com/workers/platform/pricing/), [R2 요금](https://developers.cloudflare.com/r2/pricing/), [Render 디스크 제한](https://render.com/docs/disks), [Supabase 데이터베이스](https://supabase.com/docs/guides/database/overview), [Auth](https://supabase.com/docs/guides/auth), [Storage](https://supabase.com/docs/guides/storage), [Lightsail 구성](https://docs.aws.amazon.com/lightsail/latest/userguide/what-is-amazon-lightsail.html), [요금](https://aws.amazon.com/lightsail/pricing/).
 
-사용자 로그인·프로젝트 초대/공유를 고려한 기본 계획은 Supabase Auth+Postgres+비공개 Storage와 정적 프런트 호스팅의 조합이다. Cloudflare는 정적 화면/CDN 후보로 남기되 D1과 Postgres, R2와 Storage를 처음부터 중복 운영하지 않는다. 정적 호스팅 제공자·요금·지역은 배포 검증에서 선택한다. 현재 요구만으로 AWS 서버 운영 부담을 추가할 근거는 약하다.
+사용자 로그인·프로젝트 초대/공유를 고려한 운영 편의 비교의 기본안은 Supabase Auth+Postgres+비공개 Storage와 정적 프런트 호스팅의 조합이다. 최종 배포 선택은 아래 비용 비교를 통과해야 한다. Cloudflare는 정적 화면/CDN 후보로 남기되 D1과 Postgres, R2와 Storage를 처음부터 중복 운영하지 않는다. 정적 호스팅 제공자·요금·지역은 배포 검증에서 선택한다. 현재 요구만으로 AWS 서버 운영 부담을 추가할 근거는 약하다.
 
 ### 서버와 데이터베이스를 고르는 기준
 
@@ -198,6 +198,27 @@ T-009는 다음 순서로 배포 구성을 판정한다.
 4. 먼저 문서/요금/제약으로 후보를 좁히고 기본안 하나의 작은 공유 흐름을 검증한다. 필수 조건 미달 또는 비용/운영 부담의 구체적 근거가 있을 때 대안 하나를 시험한다. 세 플랫폼을 모두 구현하지 않는다. 비용 산정의 실제 사용량·요금제·지역과 복구 시험 결과를 남긴 뒤 배포안을 확정한다.
 
 현재 Supabase는 이 검증의 기본안이며 로컬 MVP의 선행 조건이 아니다. 무료 요금제의 존재만으로 운영 지속성이나 복구 요구 충족을 선언하지 않는다.
+
+### 비용 증가와 예산 판정 — 2026-09-21 공식 요금 확인
+
+유지비는 시간 자체보다 누적 게시본 용량, 다운로드 전송량, DB 컴퓨트/배포 환경, 인증·부가 기능 사용에 따라 증가한다. VIDE는 큰 모델의 반복 열람이 먼저 비용을 키울 수 있다는 가설로 측정한다. Supabase를 비용 검증 없이 확정하지 않는다.
+
+현재 [Supabase 요금](https://supabase.com/pricing)은 Pro 월 $25부터, Micro 하나에 해당하는 컴퓨트 크레딧을 포함한다. 파일 100 GB 포함 후 $0.0213/GB-month, 비캐시 전송 250 GB 포함 후 $0.09/GB, 캐시 전송 별도 250 GB 포함 후 $0.03/GB다. 추가 인프라 프로젝트·컴퓨트 증설·선택 부가 기능은 별도 비용이다. VIDE의 사용자 프로젝트마다 Supabase 인프라 프로젝트를 만들지 않고 공유 DB의 project_id/권한으로 구분한다.
+
+[Cloudflare R2 Standard](https://developers.cloudflare.com/r2/pricing/)는 저장 $0.015/GB-month, 직접 인터넷 전송료 $0이며 무료 저장 10 GB-month가 있다. 요청 수와 인증 API/Workers 등 비용은 별도다. 인증·메타데이터는 Supabase, 큰 게시 파일은 비공개 R2에 두는 조합을 비용 대조안으로 추가한다. 같은 파일을 두 저장소에 상시 이중 저장하지 않는다. R2를 사용할 때 권한 확인 후 직접 다운로드를 허용하고 대용량 바이트를 Supabase로 중계하지 않는다. 이 경우 파일 권한·서명 URL 발급은 별도 구현/검수해야 하며 Supabase Storage RLS가 자동 적용되지 않는다.
+
+아래는 **실사용 예측이 아닌 요금 민감도 계산**이다. 달러·세전, 월평균 저장량, 1 TB=1,000 GB, Supabase Micro 1개/나머지 기본 포함량 내를 가정한다. Supabase는 초과 사용을 허용한 경우다. R2 요청은 무료 포함량 안으로 가정한다. 프런트 호스팅·인증 메일·추가 백업·API 실행·운영 인건비는 제외하므로 서비스 총액이 아니다.
+
+| 월평균 저장 / 월 파일 전송 | Supabase 일체형: 전송 전부 비캐시 | Supabase 일체형: 전송 전부 캐시 | Supabase Auth/DB + R2 파일 |
+|---|---|---|---|
+| 100 GB / 1,000 GB | $92.50 | $47.50 | $26.35 + 제외 비용 |
+| 500 GB / 5,000 GB | $461.02 | $176.02 | $32.35 + 제외 비용 |
+
+계산식은 일체형 $25 + max(저장GB−100,0)×0.0213 + max(비캐시GB−250,0)×0.09 + max(캐시GB−250,0)×0.03, 혼합형 $25 + max(저장GB−10,0)×0.015다. 실제 캐시/비캐시는 각각 집계하며 두 열은 실제 결과의 보장 범위가 아닌 가정별 예시다. 모델 파일 크기×실제 전송 횟수와 공급자 청구량을 대조한다.
+
+배포 전 초기 사용량·성장 시나리오·트래픽 10배 상황의 월 비용과 12개월 누적 비용을 계산한다. 동일 입력으로 일체형, 혼합형, 기존 Node/SQLite 또는 Workers/D1 후보를 비교하고 인증·메일·백업·유지보수·데이터 이전 비용을 더한다. 사용자별 요금제/용량 제한을 이 계획으로 확정하지 않는다. 감당 가능한 월 예산과 서비스 제한 정책은 실제 유료 배포 전에 사용자와 정하며 임의 금액을 승인된 예산으로 간주하지 않는다.
+
+[Supabase Spend Cap](https://supabase.com/docs/guides/platform/cost-control)은 일부 사용량만 제한하며 컴퓨트·일부 부가 기능은 제외된다. 한도 초과 시 서비스 제한이 생길 수 있고 임의 총액 상한이나 세밀한 예산 알림 기능으로 간주하지 않는다. 공급자 사용량 확인과 제품의 업로드/요청 제한·예산 알림 방식을 별도로 검증한다. 비용을 이유로 승인 없이 확정 게시본을 삭제하지 않는다. 일회성 캐시/실패 업로드 정리와 사용자 데이터 보존을 구분한다.
 
 ### 로그인·프로젝트 공유
 
