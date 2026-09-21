@@ -2,7 +2,7 @@
 id: VERIFY-2026-09-22-typescript-foundation
 title: TypeScript·React·Vite 전환 기반 검증
 status: review
-version: 0.6
+version: 0.7
 updated: 2026-09-22
 owner: agent:codex
 related: [PLAN, ADR-016, ADR-017, T-010, T-011, T-015]
@@ -74,3 +74,9 @@ AI 설정 코어는 strict TypeScript로 옮겼고 src/contracts/ai-settings.ts�
 quantity-view.tsx는 검색·객체/유형/레이어 필터·그룹·합계·저장 구성·CSV 링크를 소유한다. quantities.mjs의 비교/모달 진입부는 아직 레거시다. 닫기·재열기에서 이전 React root를 해제한다. 공통 quantityQuerySchema로 서버 쿼리를 검증하고 UI는 수량표·표 구성 응답을 검증한 뒤 사용한다.
 
 101개 기존 자동 시험과 타입 검사, 확장한 브라우저 회귀가 통과했다. 실제 임시 DB/API를 통해 선택 객체 범위와 그룹 조건 저장→빈 검색 결과→강제 조회 실패→마지막 표 및 CSV 필터 보존→저장 구성 재선택→삭제를 검증했다. 삭제 성공 뒤 앞선 조회 완료가 안내를 지우던 경합을 발견해 조회 세대와 안내 세대를 구분했다. [수량표 렌더](../assets/native-workspace/react-quantities.png)를 확인했다. 수량값은 합성 후보이며 새 호스트 계산 검증은 아니다.
+
+## 스케치 좌표 편집 전환
+
+sketch.tsx는 점 좌표의 편집 문자열과 확정 수치를 구분한다. 입력 중에는 값을 유지하고 blur/Enter에서 유효한 수치를 반영한다. 범위 초과·빈 수치는 원래 값으로 되돌리며 오류를 표시한다. 기존 mjs는 삭제했다.
+
+빌드·타입 검사와 브라우저 회귀가 통과했다. 두 점 생성 후 두 번째 U를 4.5로 편집하고 첫 번째 U의 100001 입력을 거절한 뒤, 첨부 결과가 [[0,0],[4.5,3]], XY, reference로 저장됨을 확인했다. 모바일 탭에서 같은 초안을 유지했다. 3D 스냅 알고리즘 추가나 호스트 실행 검증은 아니다.

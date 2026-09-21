@@ -7,7 +7,7 @@ const showAiSettings = async onStatus => (await import('./ai-settings.tsx')).sho
 import {initializeReviews} from './reviews.mjs';
 import {renderHistory} from './history.mjs';
 import {initializeDocuments} from './documents.tsx';
-import {renderPoints,validCoordinate} from './sketch.mjs';
+import {renderPoints,validCoordinate} from './sketch.tsx';
 import {renderRequests,renderActiveWork} from './requests.tsx';
 import {initializeInspector,renderInspector} from './inspector.mjs';
 import {api,connect,errors} from './gateway.mjs';

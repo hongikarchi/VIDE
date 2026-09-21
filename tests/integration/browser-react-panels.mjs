@@ -81,11 +81,19 @@ try{
  assert.equal(await page.evaluate(async id=>(await(await fetch(`/api/v1/projects/${id}/table-views`)).json()).length,first),0);
  await page.screenshot({path:'docs/assets/native-workspace/react-quantities.png'});
  await quantities.getByRole('button',{name:'닫기',exact:true}).click();
- await page.setViewportSize({width:390,height:844});await page.locator('[data-mobile="input"]').click();
+ await page.locator('[data-tool="sketch"]').click();
+ for(const [u,v] of [['0','0'],['2','3']]){await page.locator('#point-u').fill(u);await page.locator('#point-v').fill(v);await page.locator('#add-point').click();}
+ await page.getByLabel('점 2 U',{exact:true}).fill('4.5');await page.getByLabel('점 2 U',{exact:true}).press('Enter');
+ await page.getByLabel('점 1 U',{exact:true}).fill('100001');await page.getByLabel('점 1 U',{exact:true}).press('Tab');
+ assert.equal(await page.getByLabel('점 1 U',{exact:true}).inputValue(),'0');
+ await page.locator('#finish-sketch').click();
+ const sketch=await page.evaluate(id=>JSON.parse(localStorage.getItem('vide:draft:'+id)).sketches.at(-1),first);
+ assert.deepEqual(sketch.points,[[0,0],[4.5,3]]);assert.equal(sketch.plane,'XY');assert.equal(sketch.role,'reference');
+ await page.setViewportSize({width:390,height:844});await page.locator('button[data-mobile="input"]').click();
  assert.equal(await page.getByLabel('요청 1',{exact:true}).inputValue(),'edited');
  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
  assert.deepEqual(errors,[]);
- console.log(JSON.stringify({requestEditing:true,projectIsolation:true,documentRaceGuard:true,inspectorTabs:true,literalAttributes:true,quantityViews:true,failedQueryPreservesCsv:true,mobileDraft:true}));
+ console.log(JSON.stringify({requestEditing:true,projectIsolation:true,documentRaceGuard:true,inspectorTabs:true,literalAttributes:true,quantityViews:true,failedQueryPreservesCsv:true,sketchCoordinates:true,mobileDraft:true}));
 }catch(error){
  const failedPage=browser?.contexts()[0]?.pages()[0];
  if(failedPage)console.error(await failedPage.locator('[role=status]').allTextContents());
