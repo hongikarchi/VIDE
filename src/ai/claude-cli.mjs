@@ -3,6 +3,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, isAbsolute } from 'node:path';
 import { StringDecoder } from 'node:string_decoder';
+import { agentConnection, configureAgentArguments, allowedAgentEvent } from './agent-connection.mjs';
 
 export class ProviderError extends Error {
   constructor(code) { super(code); this.code = code; }
@@ -59,13 +60,14 @@ export function killOwnedProcess(child) {
 
 /** No raw provider logs/identity are returned. Stopping means requested; stopped requires process exit. */
 export class ClaudeCli {
-  constructor({ executable, model, effort, timeoutMs = 60000, stopGraceMs = 5000, spawnProcess = spawn } = {}) {
+  constructor({ executable, model, effort, agent, timeoutMs = 60000, stopGraceMs = 5000, spawnProcess = spawn } = {}) {
     if (typeof executable !== 'string' || !isAbsolute(executable)) throw error('CLI_PATH_REQUIRED');
     if (!Number.isFinite(timeoutMs) || timeoutMs < 1 || !Number.isFinite(stopGraceMs) || stopGraceMs < 1) throw error('INVALID_LIMIT');
     this.executable = executable; this.timeoutMs = timeoutMs; this.stopGraceMs = stopGraceMs; this.spawnProcess = spawnProcess;
     if(model!==undefined&&(typeof model!=='string'||!/^[a-zA-Z0-9._-]{1,100}(?:\[1m\])?$/.test(model)))throw error('INVALID_MODEL');
     if(effort!==undefined&&!['low','medium','high','xhigh','max'].includes(effort))throw error('INVALID_EFFORT');
     this.model=model;this.effort=effort;
+    this.agent=agentConnection(agent);
   }
   environment() { return subscriptionEnvironment(); }
   arguments() { const args=cliArguments();if(this.model)args.push('--model',this.model);if(this.effort)args.push('--effort',this.effort);return args; }
@@ -102,8 +104,10 @@ export class ClaudeCli {
     const cwd = await mkdtemp(join(tmpdir(), 'vide-cli-'));
     let child;
     try {
-      child = this.spawnProcess(this.executable, this.arguments(), {
-        cwd, env: this.environment(), shell: false, windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'],
+      const env=this.environment(); delete env.VIDE_AGENT_TOKEN;
+      if(this.agent)env.VIDE_AGENT_TOKEN=this.agent.token;
+      child = this.spawnProcess(this.executable, configureAgentArguments(this.arguments(),this.eventFormat,this.agent), {
+        cwd, env, shell: false, windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'],
       });
       const result = await new Promise((resolve, reject) => {
         const decoder = new StringDecoder('utf8');
@@ -135,7 +139,8 @@ export class ClaudeCli {
           if (this.eventFormat === 'codex') {
             if (event.type === 'turn.started') { initialized = true; progress({ state: 'running', phase: 'model' }); }
             if (event.type.startsWith('item.')) {
-              if (!['agent_message', 'reasoning', 'plan', 'error'].includes(event.item?.type)) { stop('UNEXPECTED_TOOL_CALL'); return; }
+              if (!['agent_message', 'reasoning', 'plan', 'error'].includes(event.item?.type) && !allowedAgentEvent(event,'codex',this.agent)) { stop('UNEXPECTED_TOOL_CALL'); return; }
+              if(event.item?.type==='mcp_tool_call')progress({state:'running',phase:'tool',tool:event.item.tool});
               if (event.item.type === 'error') progress({ state: 'provider-warning' });
               if (event.type === 'item.completed' && event.item.type === 'agent_message') codexText = event.item.text;
             }
@@ -144,12 +149,19 @@ export class ClaudeCli {
             return;
           }
           if (event.type === 'system' && event.subtype === 'init') {
-            if (!Array.isArray(event.tools) || event.tools.length || !Array.isArray(event.mcp_servers) || event.mcp_servers.length) {
+            const valid=this.agent
+              ? Array.isArray(event.tools)&&event.tools.every(name=>allowedAgentEvent({name},'claude',this.agent))&&
+                Array.isArray(event.mcp_servers)&&event.mcp_servers.length===1&&event.mcp_servers[0].name==='vide'&&event.mcp_servers[0].status==='connected'
+              : Array.isArray(event.tools)&&!event.tools.length&&Array.isArray(event.mcp_servers)&&!event.mcp_servers.length;
+            if (!valid) {
               stop('UNEXPECTED_TOOL_ACCESS'); return;
             }
             initialized = true; progress({ state: 'running', phase: 'model' });
           }
-          if (event.type === 'assistant' && event.message?.content?.some(item => item.type === 'tool_use')) stop('UNEXPECTED_TOOL_CALL');
+          if (event.type === 'assistant') for(const item of event.message?.content||[])if(item.type==='tool_use'){
+            if(!allowedAgentEvent(item,'claude',this.agent)){stop('UNEXPECTED_TOOL_CALL');return;}
+            progress({state:'running',phase:'tool',tool:item.name.slice('mcp__vide__'.length)});
+          }
           if (event.type === 'result') final = event;
         };
         child.stdout.on('data', chunk => {

@@ -2,7 +2,7 @@
 id: SPIKE-2026-09-21-agent-tools
 title: 작업별 MCP 연결과 호스트 실행본 소유 확인
 status: review
-version: 0.1
+version: 0.2
 updated: 2026-09-21
 owner: agent:codex
 related: [PLAN, PLAN-02, SPEC-02, T-004, T-018]
@@ -25,7 +25,7 @@ PLAN-02 §6의 1단계 착수다. 기존 Node 서버에 별도 서버 프로세�
 
 ## 수행 결과
 
-`npm test`의 기존 회귀와 신규 시험 합계 94개가 통과했다. 신규 시험은 실제 loopback TCP 및 HTTP 연결을 사용하고 호스트 동작은 모의 처리한다.
+`npm test`의 기존 회귀와 신규 시험 합계 96개가 통과했다. 신규 시험은 실제 loopback TCP 및 HTTP 연결을 사용하고 호스트 동작은 모의 처리한다.
 
 | 확인 | 결과 |
 |---|---|
@@ -44,6 +44,12 @@ Windows 개발 패키지 `0.1.0-agent-tools-1`을 생성했다. 포함된 Node �
 
 ## 한계와 다음 검증
 
-실제 구독 AI 호출은 이번 시험에서 0회다. 양쪽 CLI의 모의 도구 연결은 공급자별 합성 과업 1회·최대 60초·최대 도구 호출 5회부터 수행하고 결과 없이 자동 반복하지 않는다. API 유료 인증으로 전환하지 않는다.
+실제 구독 CLI 연결을 `tools/spikes/2026-09-21-agent-tools/cli-probe.mjs`로 수행했다. Claude는 합성 조회 1회/5.567초로 통과했다. Codex는 도구 런타임 비활성 문제 2회와 도구 승인 설정 문제 1회를 진단한 뒤 수정본에서 조회 1회/25.174초로 통과했다. 각 호출은 최대 60초·도구 상한 5회이며 실패 이유를 확인한 수정/진단 외에 자동 반복하지 않았다. API 유료 인증으로 전환하지 않았다.
+
+성공 호출의 공급자 보고 사용량: Claude input 4/output 74, Codex input 27,836/output 262. 이는 보고된 필드이며 캐시 입력을 합산한 총량이나 구독 차감량을 뜻하지 않는다. 실패/진단 호출도 구독을 사용했다. 이 소규모 연결 시험으로 속도나 비용 우위를 판정하지 않는다.
+
+설치 Codex 0.154.0-alpha.6.2는 내장 code-mode host를 통해 MCP를 제공하므로 새 연결에서만 해당 런타임을 활성화했다. 셸/파일/웹 도구는 비활성 상태를 유지한다. 허용된 VIDE 서버 도구에만 승인 설정을 부여한다. Claude의 safe-mode는 명시한 MCP도 비활성화하므로 새 경로에서 restricted 모드·빈 내장 도구·명시적 MCP/도구 허용 목록을 사용한다. 기존 도구 없는 경로의 거절 시험은 유지했다.
+
+공식 설정 근거: [Codex MCP](https://developers.openai.com/codex/mcp/), [Claude MCP](https://code.claude.com/docs/en/mcp), [Claude CLI](https://code.claude.com/docs/en/cli-reference).
 
 OS 소유 대조만으로 AI 코드의 컴파일/초기화 안전을 주장하지 않는다. 다음 호스트 시험은 고정 조회로 소유 실행본과 합성 문서 기준을 확인하고, 컴파일 전 신뢰된 진입점이 확인을 다시 수행하는지 검증해야 한다. 확인 전에는 범용 AI 코드를 기존 Rhino 수신부로 전달하지 않는다. 소유 프로세스 수명 관리·원본 사본 생성·실제 CAD 편집·공유 서비스는 이 시험의 완료 범위가 아니다.
