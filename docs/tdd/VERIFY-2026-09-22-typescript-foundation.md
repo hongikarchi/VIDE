@@ -2,7 +2,7 @@
 id: VERIFY-2026-09-22-typescript-foundation
 title: TypeScript·React·Vite 전환 기반 검증
 status: review
-version: 0.27
+version: 0.28
 updated: 2026-09-22
 owner: agent:codex
 related: [PLAN, ADR-016, ADR-017, T-010, T-011, T-015]
@@ -194,3 +194,7 @@ browser-sdk-sketch.mjs는 브라우저에서 닫힌 XY 경계 5점을 첨부하�
 ## 로컬 DB/명령 저장소 전환
 
 Store와 database-check를 strict TypeScript로 전환했다. 프로젝트·연결·입력·run·명령의 SQLite 행/저장 JSON을 읽을 때 검증하며 트랜잭션 반환 타입을 유지한다. DB 테이블/마이그레이션 변경은 없다. 명령 해시·승인·중복 재전송·unknown 쓰기 차단·재시작·데이터 손상·프로젝트 격리를 포함한 113개 자동 시험과 전체 브라우저 회귀가 통과했다.
+
+## 실행 제어와 기존 형상 명령 전환
+
+Execution은 요청·공급자·호스트·SDK·진행/취소/결과 의도를 타입으로 연결한다. 기존 제한 명령 Geometry는 판별 가능한 객체/작업 타입으로 전환했고 원 사본·속성 순서를 보존한다. 이 경로는 일반 Rhino SDK 실행을 대체하지 않는다. 호스트 쓰기 후 응답 형식/네이티브 ID를 확인하지 못하면 unknown과 의도를 보존해 재실행을 막는다. 타입·빌드·기존 113개 자동 시험·전체 브라우저 회귀와 추가 malformed 호스트 응답 시험이 통과했다.

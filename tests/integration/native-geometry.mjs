@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
 import {RhinoWorkspace} from '../../hosts/rhino/workspace.mjs';
-import {interpret} from '../../src/core/geometry.mjs';
+import {interpret} from '../../src/core/geometry.ts';
 if(process.argv[2]!=='--run-live')throw Error('Pass --run-live to create isolated Rhino test files.');
 const host=new RhinoWorkspace('.vide/geometry-check');
 const source={kind:'extrude',id:'outline',name:'Boundary edit check',points:[[0,0,0],[4,0,0],[4,3,0],[0,0,0]],height:6};

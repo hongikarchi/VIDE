@@ -16,7 +16,7 @@ import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { readFile,unlink } from 'node:fs/promises';
 import { Store, DomainError } from '../core/store.ts';
 import { Workspace } from '../core/workspace.ts';
-import { Execution } from './execution.mjs';
+import { Execution } from './execution.ts';
 import { RhinoWorkspace } from '../../hosts/rhino/workspace.mjs';
 import { ZwcadWorkspace } from '../../hosts/zwcad/workspace.mjs';
 import { dirname, join } from 'node:path';

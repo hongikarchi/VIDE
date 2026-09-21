@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {interpret,protectGeometry} from '../../src/core/geometry.mjs';
+import {interpret,protectGeometry} from '../../src/core/geometry.ts';
 const box={kind:'box',id:'a',name:'A',origin:[0,0,0],size:[10,8,6]};
 const apply=(operations,objects=[],permission='candidate')=>interpret(JSON.stringify({message:'안',operations}),objects,permission);
 test('bounded geometry edits preserve base snapshots and unrelated dimensions',()=>{

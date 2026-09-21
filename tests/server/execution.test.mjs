@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { Store } from '../../src/core/store.ts';
 import { Workspace } from '../../src/core/workspace.ts';
-import { Execution } from '../../src/server/execution.mjs';
+import { Execution } from '../../src/server/execution.ts';
 
 function fixture() {
   const store=new Store(':memory:'), workspace=new Workspace(store), project=store.createProject('test');
@@ -95,5 +95,18 @@ test('host transport uncertainty retains intended geometry and cannot be reporte
   execution.start(workspace.submit(project.id,{...input,permission:'candidate'}).request);
   await Promise.all([...execution.active.values()].map(x=>x.completion));
   const saved=workspace.get(project.id,input.id);assert.equal(saved.state,'unknown');assert.deepEqual(saved.result.objects,[object]);assert.equal(saved.result.hostExecuted,false);
+ }finally{store.close();}
+});
+
+test('malformed host response after execution preserves uncertainty instead of allowing a blind retry',async()=>{
+ const {store,workspace,project,input}=fixture();
+ const object={id:'box',kind:'box',name:'Box',origin:[0,0,0],size:[1,1,1]};
+ const execution=new Execution(workspace,{host:{build:async()=>({scene:'invalid'})},providerFactory:()=>({run:async()=>({text:JSON.stringify({message:'create',operations:[object]})})})});
+ try{
+  execution.start(workspace.submit(project.id,{...input,permission:'candidate'}).request);
+  await Promise.all([...execution.active.values()].map(x=>x.completion));
+  const saved=workspace.get(project.id,input.id);
+  assert.equal(saved.state,'unknown');assert.equal(saved.result.code,'HOST_RESULT_UNKNOWN');assert.deepEqual(saved.result.objects,[object]);
+  assert.throws(()=>workspace.submit(project.id,{...input,id:'retry',permission:'candidate'}),{code:'HOST_RESULT_UNRESOLVED'});
  }finally{store.close();}
 });
