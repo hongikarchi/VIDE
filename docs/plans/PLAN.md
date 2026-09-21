@@ -2,7 +2,7 @@
 id: PLAN
 title: VIDE 구현계획 (마스터)
 status: review
-version: 0.100
+version: 0.101
 updated: 2026-09-22
 owner: agent:codex
 related: [SPEC-00, SPEC-01, SPEC-02, SPEC-03, SPEC-04, SPEC-05, ADR-013, OQ-03, OQ-04, OQ-06, OQ-07, OQ-08, OQ-09, OQ-10, OQ-14]
@@ -372,6 +372,8 @@ T-003·005는 H-RHINO-04·05의 지원안을, T-003·006은 H-ZWCAD-04·05의 �
 기존 구현을 지우고 재시작하거나 현재 코드 모양에 SPEC을 맞추지 않는다. 필요 변경을 티켓 단위로 적용하며 실제 소스 대조/미시험 구분은 [구현 전 문서 검수](../tdd/VERIFY-2026-09-20-preimplementation.md)에 남긴다.
 
 ### 6.5 현재 티켓 현황과 이어갈 위치
+
+앱 조립 코드도 `app.ts`로 전환했다. API 요청/모델 목록/호스트 상태와 DOM 입력을 타입 및 응답 스키마로 연결했으며 `src/ui`의 실행 코드는 TS/TSX다. 타입 검사·제품 빌드·110개 자동 시험·전체 합성 브라우저 회귀를 통과했다. 저장된 초안의 복원 경계와 서버/AI 내부 JS 모듈의 전환은 이어서 진행한다.
 
 2026-09-22 후속 실행: 3D 후보 조사·실측은 [SPIKE](../tdd/SPIKE-2026-09-21-viewport-engine.md), 유지 결정은 [ADR-017](../decisions/ADR-017-three-viewport.md)에 기록했다. 선정은 Speckle·xeokit 추가 분석까지 완료했으며 T-015 제품 통합·대형 모델 전체 검수는 남아 있다. §3.3의 TypeScript/React/Vite 전환 기반을 구현·검증했다. 일반 패널과 서버의 점진적 타입 전환은 진행 중이다. 이전 ‘문서/조사 먼저’ 제한은 사용자의 ‘수행해야지’ 후속 지시로 실행 단계에 진입했다. 기존 Rhino worker 미완료 작업은 보존한다.
 

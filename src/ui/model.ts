@@ -1,15 +1,15 @@
 import type {Review,ReviewNote} from '../contracts/reviews.ts';
+import type {UiMessage} from './workspace-data.ts';
 export interface DraftPin {id:string;basis:string;role:'target'|'preserve'|'reference';name?:string}
 export interface DraftFile {name:string;text:string;[key:string]:unknown}
 export type Point2=[number,number];
 export interface DraftSketch {points:Point2[];id?:string;name?:string;plane?:string;[key:string]:unknown}
 interface DraftObject {id:string;name:string;revision?:string;[key:string]:unknown}
-interface DraftMessage {id:string;request?:{result?:{hostExecuted?:boolean}|null};[key:string]:unknown}
-export interface DraftState {selected:string|null;host:'rhino'|'zwcad';body:string;instructions:string[];pins:DraftPin[];sketches:DraftSketch[];files:DraftFile[];model:string;effort:string;permission:'review'|'candidate';messages:DraftMessage[];baseRequestId?:string|null}
+export interface DraftState {selected:string|null;host:'rhino'|'zwcad';body:string;instructions:string[];pins:DraftPin[];sketches:DraftSketch[];files:DraftFile[];model:string;effort:string;permission:'review'|'candidate';messages:UiMessage[];baseRequestId?:string|null;drawingPlane?:'XY'|'XZ'|'YZ'}
 interface RestoreInput {body:string;pins:DraftPin[];sketches:DraftSketch[];files:DraftFile[];host?:DraftState['host'];model?:string;effort?:string;permission:DraftState['permission'];baseRequestId?:string|null;source?:string;provider?:string}
 interface RestoreRequest {state:string;input?:RestoreInput}
 interface ModelOption {id:string;name:string;provider:'claude-cli'|'codex-cli';efforts:string[]}
-interface SelectionRequest {id:string;result?:{sourceDocument?:{instance:string;documentId:number;documentHash:string};objects:{id:string;name:string}[]}}
+interface SelectionRequest {id:string;result?:{sourceDocument?:{instance:string;documentId:number;documentHash?:string};objects?:{id:string;name:string}[]}|null}
 interface HostSelection {instance:string;documentId:number;documentHash:string;selectedIds:string[]}
 export const objects:DraftObject[] = [];
 export const models:ModelOption[] = [
@@ -37,11 +37,12 @@ export function requestBody(s:Pick<DraftState,'body'|'instructions'>){
  return instructions.length>1?instructions.map((text,i)=>`${i+1}. ${text}`).join('\n\n'):instructions[0]||'';
 }
 
-export function attachHostSelection(state:DraftState,request:SelectionRequest,selection:HostSelection){
+export function attachHostSelection(state:DraftState,request:SelectionRequest|undefined,selection:HostSelection){
  const source=request?.result?.sourceDocument;
- if(!source||source.instance!==selection.instance||source.documentId!==selection.documentId)throw Error('선택한 Rhino 문서의 작업 사본을 먼저 가져오세요.');
+ const available=request?.result?.objects;
+ if(!request||!available||!source||source.instance!==selection.instance||source.documentId!==selection.documentId)throw Error('선택한 Rhino 문서의 작업 사본을 먼저 가져오세요.');
  if(source.documentHash!==selection.documentHash)throw Error('원본이 취득 후 변경됐습니다. 작업 사본을 다시 가져온 뒤 선택을 첨부하세요.');
- const selected=selection.selectedIds.map(id=>request.result!.objects.find(object=>object.id===id));
+ const selected=selection.selectedIds.map(id=>available.find(object=>object.id===id));
  if(selected.some(object=>!object))throw Error('현재 후보에 없는 선택 객체가 있습니다. 원본 작업 사본에서 선택을 다시 확인하세요.');
  const valid=selected.filter((object):object is {id:string;name:string}=>Boolean(object));
  const additions=valid.filter(object=>!state.pins.some(pin=>pin.id===object.id&&pin.basis===request.id));

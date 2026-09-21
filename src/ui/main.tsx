@@ -8,4 +8,4 @@ root.render(<MobileNavigation />);
 window.addEventListener('pagehide', event => { if (!event.persisted) root.unmount(); });
 
 // Legacy panels retain ownership of their DOM until their individual migration.
-await import('./app.mjs');
+await import('./app.ts');

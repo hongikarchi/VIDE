@@ -1,6 +1,6 @@
 interface Attachment {name:string;displayName?:string;type?:string;text:string}
 interface SceneAttributes {id?:string;attributes64?:unknown;attributesComplete?:unknown}
-interface AttributeRequest {id:string;result?:{scene?:SceneAttributes[]}}
+interface AttributeRequest {id:string;result?:{scene?:SceneAttributes[]}|null}
 export interface NativeAttributes {known:boolean;complete:boolean;entries:{key:string;value:string}[]}
 export function nativeAttributes(scene:SceneAttributes|undefined|null):NativeAttributes{
  const decode=(value:string)=>new TextDecoder('utf-8',{fatal:true}).decode(Uint8Array.from(atob(value),char=>char.charCodeAt(0)));

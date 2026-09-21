@@ -2,7 +2,7 @@
 id: VERIFY-2026-09-22-typescript-foundation
 title: TypeScript·React·Vite 전환 기반 검증
 status: review
-version: 0.22
+version: 0.23
 updated: 2026-09-22
 owner: agent:codex
 related: [PLAN, ADR-016, ADR-017, T-010, T-011, T-015]
@@ -170,3 +170,7 @@ viewport.ts와 scene-representation.ts는 표시 형상·카메라·재질·평�
 ## 객체 검사기 연결 전환
 
 inspector.ts가 선택 객체/기하/요청/이전 후보 참조와 DOM 크기 조절을 타입으로 연결한다. React 본문과 기존 슬롯 소유권은 유지한다. 문자열 숫자를 측정값으로 취급하지 않으며 없는 측정값은 미상 표시한다. UI 타입 검사와 속성·기하·관계·이력·수량표/속성 첨부를 포함한 전체 합성 브라우저 회귀가 통과했다.
+
+## 앱 조립 코드 전환
+
+app.ts에 프로젝트/요청/입력/선택/카메라 이벤트 경계를 명시했다. 작업 응답과 모델 목록·호스트 상태는 스키마로 확인하며 새 프로젝트 응답도 검증한다. src/ui 실행 코드는 모두 TS/TSX로 전환됐다. strict UI/서버 타입 검사·제품 빌드·110개 자동 시험과 전체 합성 브라우저 회귀(문서 경쟁·원본 적용 대상·응답 유실·검토 의견·모바일 초안 포함)가 통과했다. 서버 내부의 남은 JS 전환과 localStorage 복원 검증은 별도 후속이다.

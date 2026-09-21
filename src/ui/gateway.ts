@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { workspaceRequestSchema } from '../contracts/workspace-result.ts';
-const projectSchema=z.object({id:z.string(),name:z.string()}).passthrough();
+export const projectSchema=z.object({id:z.string(),name:z.string()}).passthrough();
 export async function api(path:string, method='GET', data?:unknown):Promise<unknown> {
   let response;
   try{response=await fetch('/api/v1'+path,{method,headers:data?{'Content-Type':'application/json'}:{},body:data?JSON.stringify(data):undefined});}
@@ -15,7 +15,7 @@ export async function connect() {
   if(token){await api('/session','POST',{token});history.replaceState(null,'',location.pathname+location.search);}
   const projects=z.array(projectSchema).parse(await api('/projects'));
   const wanted=new URLSearchParams(location.search).get('project');
-  const project=projects.find(p=>p.id===wanted)||projects[0]||await api('/projects','POST',{name:'새 프로젝트'});
+  const project=projects.find(p=>p.id===wanted)||projects[0]||projectSchema.parse(await api('/projects','POST',{name:'새 프로젝트'}));
   return {project,projects:projects.length?projects:[project],requests:z.array(workspaceRequestSchema).parse(await api(`/projects/${project.id}/requests`))};
 }
 export const labels:Record<string,string>={queued:'대기 중',running:'AI 작업 중',succeeded:'응답 완료',failed:'실패',cancelled:'중단됨',interrupted:'재시작으로 중단됨',unknown:'호스트 결과 확인 필요'};

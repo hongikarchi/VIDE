@@ -5,15 +5,11 @@ import { sceneRepresentation } from '../core/scene-representation.ts';
 import { api, labels, errors } from './gateway.ts';
 import { showApplication } from './application.tsx';
 import { showQuantities } from './quantities.tsx';
-import {workspaceRequestSchema,applicationResultSchema} from '../contracts/workspace-result.ts';
-import type {WorkspaceRequest as Request} from '../contracts/workspace-result.ts';
+import {applicationResultSchema} from '../contracts/workspace-result.ts';
+import {uiRequestSchema as workspaceRequestSchema} from './workspace-data.ts';
+import type {UiRequest as Request,UiMessage as Message} from './workspace-data.ts';
 import type {z} from 'zod';
 type Application=z.infer<typeof applicationResultSchema>;
-interface Message {
- id:string;body:string;provider:string;model:string;effort:string;permission:string;
- source?:string;host?:string;extensionVersion?:string;baseRequestId?:string;
- pins:{id?:string;name:string}[];sketches:{name:string}[];files:{name:string}[];request?:Request;
-}
 interface Actions {
  candidate:(id:string)=>void;selection:(requestId:string|undefined,id:string)=>void;
  saveReview:(id:string)=>Promise<void>;report:(id:string)=>void;changed:()=>void;
@@ -63,7 +59,7 @@ function Card({message,models,projectId,actions}:{message:Message;models:{id:str
   {request?<>
    <small>{message.provider==='extension'&&request.state==='succeeded'?'확장 완료':request.state==='running'&&result?.phase==='host'?'호스트 생성·저장 검증 중':result?.phase==='stopping'?'중단 확인 중':stateLabels[request.state]||request.state}</small>
    {result?.text?<p>{result.text}</p>:null}
-   {result?.extensionResult?.rows.map((row,index)=><details key={index}><summary>{row.type} · {row.layer||'레이어 미상'} · {row.count}개</summary>{row.objectIds.map(id=><button key={id} onClick={()=>actions.selection(message.baseRequestId,id)}>{message.pins.find(pin=>pin.id===id)?.name||id}</button>)}</details>)}
+   {result?.extensionResult?.rows.map((row,index)=><details key={index}><summary>{row.type} · {row.layer||'레이어 미상'} · {row.count}개</summary>{row.objectIds.map(id=><button key={id} onClick={()=>actions.selection(message.baseRequestId??undefined,id)}>{message.pins.find(pin=>pin.id===id)?.name||id}</button>)}</details>)}
    {result?.hostExecuted?<Candidate message={message} projectId={projectId} actions={actions}/>:null}
    {result?.code?<p>{errorLabels[result.code]||result.code}</p>:null}
    {request.state==='unknown'&&result?.executionMode==='sdk'?<Action error={actions.error} run={async()=>{message.request=workspaceRequestSchema.parse(await api(`/projects/${projectId}/requests/${message.id}/reconcile`,'POST',{}));actions.changed();}}>저장된 후보 다시 확인</Action>:null}
