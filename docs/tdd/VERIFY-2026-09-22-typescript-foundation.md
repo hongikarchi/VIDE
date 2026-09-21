@@ -2,7 +2,7 @@
 id: VERIFY-2026-09-22-typescript-foundation
 title: TypeScript·React·Vite 전환 기반 검증
 status: review
-version: 0.1
+version: 0.2
 updated: 2026-09-22
 owner: agent:codex
 related: [PLAN, ADR-016, ADR-017, T-010, T-011, T-015]
@@ -30,3 +30,13 @@ React는 모바일 탭 DOM을 단독 소유한다. 기존 화면 전환은 같�
 ## 다음 검증
 
 공유 계약 타입, 일반 패널 React 전환, 서버 모듈 TypeScript 전환을 각각 기능 단위로 진행한다. 기존 호스트 실행·저장 보호 시험을 유지한다. 실제 Rhino worker 준비 타임아웃은 별도 미완료 항목이며 이번 웹 빌드 성공으로 해소되지 않는다.
+
+## 요청 계약·일반 패널 후속 전환
+
+src/contracts/workspace.ts에 기존 요청 입력 검증과 상태 enum을 옮겼다. Zod 원본에서 TypeScript 타입을 유도한다. 서버는 동일 스키마로 입력을 검사하되 기존 멱등 비교를 위해 원래 JSON 직렬화를 보존한다. 프로젝트 내 핀 기준·대상·바이트 한도·unknown 보호는 Workspace에서 계속 검사한다. 전체 요청 결과/호스트 DTO의 타입 전환이 완료된 것은 아니다.
+
+프로젝트 선택/생성, 요청 목록과 진행 작업을 React로 전환했다. 기존 requests.mjs는 삭제했으며 mount별로 React가 DOM을 단독 소유한다. bfcache 진입 시 root를 해제하지 않도록 pagehide 처리를 보완했다. 실제 bfcache 복원 전 과정 시험은 별도이다.
+
+타입 검사·빌드와 99/99 자동 시험이 통과했다. 비정상 좌표·크기 초과·확장 권한·잘못된 모델/호스트/기준을 거절하는 계약 시험을 추가했다. Chromium에서 요청 2개 추가→두 번째 편집→첫 번째 삭제 후 남은 값·카운트·localStorage 일치를 확인했다. 입력 포커스도 유지됐다. 다른 테스트 프로젝트로 전환하면 빈 초안, 원 프로젝트로 돌아오면 수정한 요청이 복원됐다. 브라우저 오류 없음과 실제 데스크톱 스크린샷을 확인했다. AI/호스트 실행은 이 화면 전환 시험에서 호출하지 않았다.
+
+패키징의 소스 복사 대상에 contracts를 추가했다. 0.1.0-react-panels-20260922 개발 묶음은 별도 검증용이며 일반 배포가 아니다.

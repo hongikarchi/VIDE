@@ -1,3 +1,4 @@
+import {requestInputSchema,requestStateSchema} from '../contracts/workspace.ts';
 import { DomainError } from './store.mjs';
 
 const fail = code => { throw new DomainError(code); };
@@ -26,22 +27,8 @@ export class Workspace {
   }
   submit(projectId, input) {
     this.store.project(projectId);
-    if (!input || typeof input.id !== 'string' || !/^[a-zA-Z0-9-]{1,100}$/.test(input.id)
-      || typeof input.body !== 'string' || input.body.length > 20000
-      || !['review','candidate'].includes(input.permission)
-      || !['claude-cli','codex-cli','extension'].includes(input.provider)) fail('INVALID_INPUT');
-    if(input.provider==='extension'&&(input.permission!=='review'||typeof input.extension!=='string'||!(/^[a-z0-9-]{1,80}$/.test(input.extension))||typeof input.extensionVersion!=='string'))fail('INVALID_INPUT');
-    for (const key of ['pins','sketches','files']) if (!Array.isArray(input[key]) || input[key].length > 100) fail('INVALID_INPUT');
-    if(input.host!==undefined&&!['rhino','zwcad'].includes(input.host))fail('INVALID_INPUT');
-    if(input.baseRequestId!==undefined&&input.baseRequestId!==null&&(typeof input.baseRequestId!=='string'||!/^[a-zA-Z0-9-]{1,100}$/.test(input.baseRequestId)))fail('INVALID_INPUT');
-    if(input.model!==undefined&&(typeof input.model!=='string'||!/^[a-zA-Z0-9._-]{1,100}(?:\[1m\])?$/.test(input.model)))fail('INVALID_INPUT');
-    if(input.effort!==undefined&&!['default','low','medium','high','xhigh','max'].includes(input.effort))fail('INVALID_INPUT');
-    for(const s of input.sketches){
-      if(!s||!['XY','XZ','YZ'].includes(s.plane)||s.unit!=='m'||!['reference','boundary','path','direction'].includes(s.role)
-        ||!Array.isArray(s.points)||s.points.length<2||s.points.length>1000||s.points.some(p=>!Array.isArray(p)||p.length!==2||p.some(n=>!Number.isFinite(n)||Math.abs(n)>100000)))fail('INVALID_INPUT');
-    }
-    for(const f of input.files)if(!f||typeof f.name!=='string'||typeof f.text!=='string'||f.text.length>50000)fail('INVALID_INPUT');
-    if (!input.body.trim() && !input.sketches.length && !input.pins.length && !input.files.length) fail('INVALID_INPUT');
+    if (!requestInputSchema.safeParse(input).success) fail('INVALID_INPUT');
+    // Keep the original serialization for existing idempotency records.
     const serialized = JSON.stringify(input);
     if (Buffer.byteLength(serialized) > 200000) fail('INPUT_TOO_LARGE');
     const existing = this.store.db.prepare('SELECT * FROM workspace_requests WHERE id=?').get(input.id);
@@ -66,7 +53,7 @@ export class Workspace {
     return {request:this.get(projectId,input.id),created:true};
   }
   update(projectId,id,state,result=null) {
-    if (!['running','succeeded','failed','cancelled','interrupted','unknown'].includes(state)) fail('INVALID_INPUT');
+    if (state==='queued'||!requestStateSchema.safeParse(state).success) fail('INVALID_INPUT');
     this.get(projectId,id);
     this.store.db.prepare('UPDATE workspace_requests SET state=?,result=? WHERE id=? AND projectId=?')
       .run(state,result===null?null:JSON.stringify(result),id,projectId);
