@@ -2,7 +2,7 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {Store} from '../../src/core/store.ts';
 import {Workspace} from '../../src/core/workspace.ts';
-import {captureModel} from '../../src/server/import-model.mjs';
+import {captureModel} from '../../src/server/import-model.ts';
 
 test('document capture is idempotent, pins its source and rejects changed identity',async()=>{
  const store=new Store(':memory:');try{

@@ -1,8 +1,8 @@
 import {quantityQuerySchema} from '../contracts/quantities.ts';
 import type {QuantityQuery,QuantityTable} from '../contracts/quantities.ts';
 import {DomainError} from './store.ts';
-interface SourceScene {id:string;nativeType?:string;layer64?:string;line?:number[];length?:number|null;area?:number|null;volume?:number|null}
-interface SourceRequest {id:string;createdAt:string;result?:{hostExecuted?:boolean;host?:string;objects:{id:string;name:string;kind?:string}[];scene:SourceScene[]}}
+export interface SourceScene {id:string;nativeType?:string;layer64?:string;line?:number[];length?:number|null;area?:number|null;volume?:number|null}
+export interface SourceRequest {id:string;createdAt:string;result?:{hostExecuted?:boolean;host?:string;objects:{id:string;name:string;kind?:string}[];scene:SourceScene[]}}
 type Metric='length'|'area'|'volume';
 const metrics:Metric[]=['length','area','volume'];
 const known=(value:unknown):number|null=>typeof value==='number'&&Number.isFinite(value)&&value>=0?value:null;

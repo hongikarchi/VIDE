@@ -1,6 +1,6 @@
 import {installBrowserSupport} from './browser-support.mjs';
 // Extracts only the generated package into a private test directory and uses its bundled runtime.
-import assert from 'node:assert/strict';import {mkdir,readFile,rm} from 'node:fs/promises';import {randomUUID,createHash} from 'node:crypto';import {resolve,join,basename} from 'node:path';import {pathToFileURL} from 'node:url';import {execFile} from 'node:child_process';import {promisify} from 'node:util';import {liveLaunch} from '../../src/server/lifecycle.mjs';
+import assert from 'node:assert/strict';import {mkdir,readFile,rm} from 'node:fs/promises';import {randomUUID,createHash} from 'node:crypto';import {resolve,join,basename} from 'node:path';import {pathToFileURL} from 'node:url';import {execFile} from 'node:child_process';import {promisify} from 'node:util';import {liveLaunch} from '../../src/server/lifecycle.ts';
 const exec=promisify(execFile),[playwright,archive]=process.argv.slice(2),workspace=resolve('.vide','package-check',randomUUID()),install=join(workspace,'install space'),data=join(workspace,'data');
 await mkdir(install,{recursive:true});await mkdir(data);await exec('tar.exe',['-xf',resolve(archive),'-C',install],{windowsHide:true});
 const packageRoot=join(install,basename(archive,'.zip')),manifest=JSON.parse(await readFile(join(packageRoot,'package-manifest.json'),'utf8'));

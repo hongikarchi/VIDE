@@ -20,8 +20,8 @@ import { Execution } from './execution.ts';
 import { RhinoWorkspace } from '../../hosts/rhino/workspace.mjs';
 import { ZwcadWorkspace } from '../../hosts/zwcad/workspace.mjs';
 import { dirname, join } from 'node:path';
-import { importModel,captureModel,recoverDwgImport } from './import-model.mjs';
-import { renderReport } from './report.mjs';
+import { importModel,captureModel,recoverDwgImport } from './import-model.ts';
+import { renderReport } from './report.ts';
 
 const equal = (a, b) => typeof a === 'string' && Buffer.byteLength(a) === Buffer.byteLength(b) && timingSafeEqual(Buffer.from(a), Buffer.from(b));
 async function body(request) {

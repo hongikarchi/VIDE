@@ -1,5 +1,5 @@
 import {resolve,join} from 'node:path';import {writeFile,mkdir} from 'node:fs/promises';import {homedir} from 'node:os';import {spawn} from 'node:child_process';
-import {startServer} from './server.mjs';import {liveLaunch} from './lifecycle.mjs';
+import {startServer} from './server.mjs';import {liveLaunch} from './lifecycle.ts';
 import {sdkOptions} from './sdk-options.ts';
 const directory=resolve(process.env.VIDE_DATA_DIR||join(process.env.LOCALAPPDATA||homedir(),'VIDE'));
 let app,closing=false;

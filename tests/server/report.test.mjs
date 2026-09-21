@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {renderReport} from '../../src/server/report.mjs';
+import {renderReport} from '../../src/server/report.ts';
 test('portable report escapes input and labels geometric quantities without claiming floor area',()=>{
   const request={id:'request',createdAt:'2026-09-20',input:{body:'<script>alert(1)</script>'},result:{hostExecuted:true,verified:true,text:'result',objects:[{id:'a',name:'<img onerror=evil>'}],scene:[{id:'a',nativeId:'guid',area:376,volume:480}]}};
   const image='data:image/png;base64,iVBORw0KGgo=';
