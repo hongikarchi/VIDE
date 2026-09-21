@@ -2,7 +2,7 @@
 id: VERIFY-2026-09-22-typescript-foundation
 title: TypeScript·React·Vite 전환 기반 검증
 status: review
-version: 0.21
+version: 0.22
 updated: 2026-09-22
 owner: agent:codex
 related: [PLAN, ADR-016, ADR-017, T-010, T-011, T-015]
@@ -166,3 +166,7 @@ model.ts에 초안·핀·스케치·파일·모델 선택과 복원/첨부 경�
 viewport.ts와 scene-representation.ts는 표시 형상·카메라·재질·평면·도구·좌표 콜백을 타입으로 구분한다. 메모리 해제는 실제 Mesh/Line/Points의 geometry/material에만 수행한다. 카메라 종류를 분기해 원근 fov와 직교 zoom 계산을 구별하고 기존 부동 원점/표준 직교 뷰를 유지한다. 엔진 교체는 아니다.
 
 타입 검사·110개 자동 시험·일반 React 브라우저 회귀와 viewport-check.mjs가 통과했다. 좌표 크기 90,000 m의 2 mm 메시가 직교/원근에서 선택되고, 큰 좌표의 점 선택·핀 지정·점에서 벗어난 클릭 무시를 확인했다. 테스트 전용 라이브러리 번들에 React 환경 상수가 빠진 문제를 보완했다. 대형 모델 전체 성능·스냅·단면 추가 구현을 뜻하지 않는다.
+
+## 객체 검사기 연결 전환
+
+inspector.ts가 선택 객체/기하/요청/이전 후보 참조와 DOM 크기 조절을 타입으로 연결한다. React 본문과 기존 슬롯 소유권은 유지한다. 문자열 숫자를 측정값으로 취급하지 않으며 없는 측정값은 미상 표시한다. UI 타입 검사와 속성·기하·관계·이력·수량표/속성 첨부를 포함한 전체 합성 브라우저 회귀가 통과했다.

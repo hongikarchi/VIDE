@@ -9,7 +9,7 @@ import {renderHistory} from './history.tsx';
 import {initializeDocuments} from './documents.tsx';
 import {renderPoints,validCoordinate} from './sketch.tsx';
 import {renderRequests,renderActiveWork} from './requests.tsx';
-import {initializeInspector,renderInspector} from './inspector.mjs';
+import {initializeInspector,renderInspector} from './inspector.ts';
 import {api,connect,errors} from './gateway.ts';
 import {objects,models,initial,chooseModel,pinSelection,attachHostSelection,attachReviewNote,failedRequestDraft,draftHasInput,validate,packet,attachSketch,storageKey} from './model.ts';
 import {createViewport} from './viewport.ts';
