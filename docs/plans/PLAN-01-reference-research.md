@@ -2,8 +2,8 @@
 id: PLAN-01
 title: 선행 프로젝트 조사와 구현 선택 근거
 status: review
-version: 0.6
-updated: 2026-09-21
+version: 0.8
+updated: 2026-09-22
 owner: agent:codex
 related: [PLAN, DESIGN, SPEC-01, SPEC-02, SPEC-03, SPEC-04, SPEC-05, ADR-013]
 ---
@@ -157,7 +157,7 @@ FigCAD의 조사 기준 커밋에서 [SceneManager](https://github.com/hongikarc
 
 ## 9. 3D 엔진·뷰어 추가 조사와 선정
 
-2026-09-21 문서 조사 단계다. 확정된 웹/서버 스택을 다시 비교하지 않는다. 아래는 후보 선별이며 실제 VIDE 모델로 성능·정밀도를 측정한 결과나 최종 채택 선언이 아니다. 현재 Three.js 구현은 비교 기준으로 유지한다.
+2026-09-21 조사·두 엔진 실험 후 [ADR-017](../decisions/ADR-017-three-viewport.md)의 유지 결정을 기록했다. 2026-09-22 Speckle·xeokit 코드 분석과 로컬 실행을 추가하여 §9.2에서 선정 근거를 보완했다. 웹/서버 스택은 재선정하지 않는다. [SPIKE](../tdd/SPIKE-2026-09-21-viewport-engine.md)에 실제 측정과 미검증 범위를 구분했다. 아래 비교 절차는 선정 재현 근거이며 후속 기능 전체 완료를 뜻하지 않는다.
 
 | 후보 | 검토할 장점 | VIDE에서 확인할 비용·위험 |
 |---|---|---|
@@ -168,7 +168,7 @@ FigCAD의 조사 기준 커밋에서 [SceneManager](https://github.com/hongikarc
 
 근거: [Three.js 공식 문서](https://threejs.org/docs/), [Babylon.js 기능표](https://www.babylonjs.com/specifications/), [Speckle Viewer 개발 가이드](https://docs.speckle.systems/developers/viewer/introduction), [xeokit 공식 사이트](https://xeokit.io/). 공급자의 대규모/고속 주장은 같은 장면 비교 결과로 해석하지 않는다. React 결합 도구는 독립 3D 엔진과 구별하여 엔진 선택 뒤 검토한다.
 
-**추가 조사 항목:** 후보별 정확한 패키지/버전, 라이선스, 릴리스·유지보수 현황, 공식 예제, 최근 동일 기간 npm 다운로드와 저장소 활동을 기록한다. 다운로드·별 수는 사용자 수가 아니며 모노레포 전체 수치를 뷰어 사용자 수로 옮기지 않는다. 현재 이 수치 조사는 완료되지 않았다.
+**추가 조사 항목:** 후보별 정확한 패키지/버전, 라이선스, 릴리스·유지보수 현황, 공식 예제, 최근 동일 기간 npm 다운로드와 저장소 활동을 기록한다. 다운로드·별 수는 사용자 수가 아니며 모노레포 전체 수치를 뷰어 사용자 수로 옮기지 않는다. 확인 지표는 아래 §9.1에 기록했다.
 
 **비교 방식:** 먼저 라이선스/로컬 로딩/객체 ID 보존/필수 도구 확장 가능성을 확인하여 현재 구현을 포함한 최대 두 후보로 좁힌다. 같은 호스트 추출 모델·좌표·객체 ID·카메라·해상도·장치에서 초기 표시 시간, 카메라 이동 프레임 시간, 선택 응답, 부분 갱신 시간, 로드/해제 반복 후 메모리를 비교한다. 객체 수와 삼각형 수를 별도로 기록하고 논현동 수준 장면과 반복 확대한 합성 장면을 구별한다. 확대 합성 장면을 실무 검증으로 포장하지 않는다.
 
@@ -177,3 +177,42 @@ FigCAD의 조사 기준 커밋에서 [SceneManager](https://github.com/hongikarc
 **선택 기준:** 필수 동작·좌표 정확성·배포 조건 통과가 먼저다. 통과 후보 사이에서 응답성·메모리·개발/유지보수 비용을 비교한다. 비교 결과가 비슷하면 검증된 기존 구현을 유지하는 비용상 이점을 반영한다. 성능 차이나 필수 기능 제공 이점이 실제 이전 비용을 상쇄할 때 교체한다. 제품 성능 수용 기준을 임의로 새로 만들지 않고 기존 기준과 측정 결과를 나란히 제시한다.
 
 **완료 조건:** 근거와 실측/미측정 범위가 분리된 선정 ADR, PLAN §3 스택 표의 3D 항목 확정, §3.3 5단계에 이전 대상·회귀 항목 반영이다. 엔진 선정 전 정밀 선택·스냅·단면·대형 모델 최적화의 본격 구현을 확대하지 않는다.
+
+### 9.1 보급·유지보수와 후보 압축 결과
+
+2026-09-21 공식 npm/GitHub API 조회. 다운로드 기간은 모두 2026-09-14~20이다.
+
+| 패키지 | 버전 | 주간 다운로드 | 등록 라이선스 | 저장소 별 수 / 최근 push |
+|---|---|---|---|---|
+| three | 0.186.0 | 12,131,839 | MIT | 115,711 / 09-21 |
+| @babylonjs/core | 9.27.1 | 308,975 | Apache-2.0 | 26,093 / 09-21 |
+| @speckle/viewer | 2.31.14 | 11,161 | Apache-2.0 | 전용 패키지 수치 미제공; 서버 모노레포 845 / 09-20 |
+| @xeokit/xeokit-sdk | 2.6.114 | 15,937 | AGPL-3.0 | 936 / 09-08 |
+
+출처: [npm three](https://api.npmjs.org/downloads/point/2026-09-14:2026-09-20/three), [npm Babylon](https://api.npmjs.org/downloads/point/2026-09-14:2026-09-20/@babylonjs/core), [npm Speckle](https://api.npmjs.org/downloads/point/2026-09-14:2026-09-20/@speckle/viewer), [npm xeokit](https://api.npmjs.org/downloads/point/2026-09-14:2026-09-20/@xeokit/xeokit-sdk), [Three 저장소](https://github.com/mrdoob/three.js), [Babylon 저장소](https://github.com/BabylonJS/Babylon.js), [Speckle 저장소](https://github.com/specklesystems/speckle-server), [xeokit 저장소](https://github.com/xeokit/xeokit-sdk). 다운로드에는 CI·중복 설치 등이 포함되므로 사용자 수로 환산하지 않는다. 마지막 push는 지원 보장의 지표가 아니다. xeokit AGPL을 단순히 상업 사용 금지로 해석하지 않으며 실제 배포 조건 확인 없이 제품 의존성으로 넣지 않는다.
+
+범용 엔진 Three/Babylon은 통제 성능 실험을 수행했다. Speckle/xeokit은 후속 §9.2에서 코드 분석과 실제 로컬 통합 시험을 수행했다. 서로 다른 렌더 설정의 단회 로더 시간을 직접 성능 순위로 사용하지 않는다.
+
+넓은 후보군에서는 [CesiumJS](https://cesium.com/platform/cesiumjs)의 지리공간 지구/지도 중심, [VTK.js](https://kitware.github.io/vtk-js/docs/)의 과학 시각화 중심, [PlayCanvas](https://developer.playcanvas.com/user-manual/graphics/)의 범용 그래픽 엔진도 검토했다. 현재 CAD 객체 편집 입력과 기존 호스트 연결에 비해 도입 이점이 확인되지 않아 실행 후보를 늘리지 않았다. 이 도구들의 기능 한계를 단정한 것은 아니다.
+
+**현재 구현 기준:** §9.2의 추가 코드/실행 검토 후 Three.js 유지. 객체 변경분 갱신·배칭과 선택 가속의 경계를 먼저 설계하고, 새 엔진 설치/전면 재작성을 수행하지 않는다. [BatchedMesh/InstancedMesh 공식 문서](https://threejs.org/docs/)와 [three-mesh-bvh](https://github.com/gkjohnson/three-mesh-bvh)는 후속 최적화 참고이며 아직 새 제품 의존성 채택은 아니다.
+
+### 9.2 AEC 뷰어를 포함한 적용성 판단 (2026-09-22)
+
+| 항목 | Three.js | Babylon.js | Speckle Viewer | xeokit |
+|---|---|---|---|---|
+| 계층 | 범용 렌더링 라이브러리 | 범용 엔진 | Three 기반 AEC 뷰어·배칭·확장 | BIM 조회 SDK·플러그인 |
+| VIDE 로컬 메시 | 현재 구현·동일 장면 실측 | 같은 DTO로 실측 | 오프라인 loader 보완 후 실제 로딩 | SceneModel 직접 로딩 |
+| 대규모 표시·선택 | 배칭/BVH 등 필요한 구성 선택 | 엔진의 인스턴싱/LOD/picking 활용 | 자체 배칭/BVH 제공, 별도 구성 절감 가능 | 대형 BIM 표시 중심 SceneModel 제공 |
+| 핀·스케치·치수 | 제품의 평면/참조 규칙으로 직접 구현 | 제품 입력 연결은 별도 | 선택·측정·단면 확장 재사용 가능; VIDE 입력 계약 연결은 별도 | 주석·측정·단면 플러그인 재사용 가능; 제품 입력 연결은 별도 |
+| 수정 갱신 | 객체별 geometry/transform 제어 | mesh/vertex/transform 제어 | BatchObject 변환 존재; 이번 시험의 정점 변경은 리소스 재로딩 | entity offset 확인; 이번 정점 변경은 SceneModel 재생성 |
+| 현 CSP/빌드 | 기존 경로 보존 | 기본 실험 실행; 제품 CSP 전부 미검수 | loader/입력 복사/환경 설정 보완 후 현 CSP 실행 | 직접 메시 실행 가능; UI inline style 차단·빌드 경고 후속 처리 |
+| 배포·유지보수 | MIT, 현 버전 유지 | Apache-2.0, 이전 비용 발생 | Apache-2.0, Three 0.140 계열 결합·데이터 변경 대응 필요 | 2.6.114 AGPL-3.0; 배포 조건 또는 상용 라이선스 검토 필요 |
+
+위 표의 대규모 성능은 기능/구조 설명과 실측 범위를 구별한다. Speckle/xeokit의 전체 성능 벤치마크를 끝냈다는 뜻이 아니다. 코드·실행 근거는 [AEC 추가 SPIKE](../tdd/SPIKE-2026-09-21-viewport-engine.md), 고정 패키지 소스는 [Speckle 배포 커밋](https://github.com/specklesystems/speckle-server/tree/5627e490f9a3ecadf19cc4686ad15f344d9ad2d3/packages/viewer), [xeokit SceneModel](https://github.com/xeokit/xeokit-sdk/blob/master/src/viewer/scene/model/SceneModel.js)이다. 소스 전체를 복제하지 않고 설치된 고정 버전을 읽고 별도 어댑터 실험만 작성했다.
+
+Speckle의 [2026.9 공식 이전 안내](https://docs.speckle.systems/next/developers/viewer/introduction)는 새 데이터 형식을 읽는 Viewer 패키지가 아직 없으며 내부 API 확장 소비자가 영향을 받을 수 있다고 알린다. VIDE가 기존 로컬 형식을 고정하면 당장 외부 데이터 전환의 영향을 받는 것은 아니다. 다만 향후 새 패키지 이행 비용은 남는다. 이 경고나 작은 loader 보완만을 단독 탈락 사유로 삼지 않았다.
+
+**도구별 이득과 비용:** 조회·측정·단면 위주의 뷰어를 빠르게 구성하는 제품이라면 Speckle/xeokit의 도구 묶음이 유리할 수 있다. VIDE는 동일 객체의 반복 수정·스케치 원본 보존·AI 후보 갱신과 고유 UI가 핵심이라 SDK 기본 작업 방식과 제품 상태를 다시 연결해야 한다. 이번에는 Three를 유지하고 객체별 갱신·지역 원점·선택 가속을 필요한 범위에서 구현한다. 측정/단면/스냅을 공짜로 얻는 선택도, 직접 구현이 공짜인 선택도 아니다. 세부 도구 구현량이 실제로 예상보다 커지거나 대규모 목표를 충족하지 못하면 SDK 채택을 다시 비교한다.
+
+**그 밖의 후보:** Cesium의 [Primitive/Entity](https://cesium.com/learn/cesiumjs-learn/cesiumjs-creating-entities/)는 로컬 형상·선택도 가능하지만 지구 좌표·타일/지도 중심 이득을 현재 편집 입력이 필요로 하지는 않는다. VTK.js의 [Widget/plane manipulator](https://kitware.github.io/vtk-js/docs/concepts_widgets.html)는 과학·볼륨 분석 도구에 유리하지만 CAD 객체 메타데이터·호스트 변경 연결은 추가 구현이다. PlayCanvas의 [그래픽 엔진](https://developer.playcanvas.com/user-manual/graphics/)도 후보지만 현재 필요 도구를 Three보다 덜 만들 수 있다는 근거를 확인하지 못했다. 세 후보는 공식 API 조사 단계로 종료하며 실험하지 않은 속도/안정성 열위를 주장하지 않는다. 이처럼 후보 전체를 분석하되 모두 같은 깊이로 전면 이식하지 않는다.

@@ -1,0 +1,371 @@
+{
+  "three": {
+    "dpr": 1,
+    "emptyPick": true,
+    "engine": "three",
+    "gpu": "ANGLE (NVIDIA, NVIDIA GeForce RTX 5070 Ti (0x00002C05) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+    "importMs": 30.4,
+    "pickExpected": true,
+    "runs": [
+      {
+        "dataset": "reference-ground",
+        "frameP50Ms": 16.7,
+        "frameP95Ms": 16.8,
+        "geometriesAfterClear": 0,
+        "geometriesLoaded": 240,
+        "initialMs": 23.4,
+        "objects": 240,
+        "pickP95Ms": 1.8,
+        "renderFinishP50Ms": 0.4,
+        "repeat": 0,
+        "triangles": 62837,
+        "update10Ms": 0.3
+      },
+      {
+        "dataset": "reference-ground",
+        "frameP50Ms": 16.7,
+        "frameP95Ms": 16.9,
+        "geometriesAfterClear": 0,
+        "geometriesLoaded": 240,
+        "initialMs": 5.7,
+        "objects": 240,
+        "pickP95Ms": 1.5,
+        "renderFinishP50Ms": 0.4,
+        "repeat": 1,
+        "triangles": 62837,
+        "update10Ms": 0.4
+      },
+      {
+        "dataset": "reference-ground",
+        "frameP50Ms": 16.7,
+        "frameP95Ms": 16.8,
+        "geometriesAfterClear": 0,
+        "geometriesLoaded": 240,
+        "initialMs": 4.8,
+        "objects": 240,
+        "pickP95Ms": 1.4,
+        "renderFinishP50Ms": 0.3,
+        "repeat": 2,
+        "triangles": 62837,
+        "update10Ms": 0.3
+      },
+      {
+        "dataset": "boxes-1000",
+        "frameP50Ms": 16.7,
+        "frameP95Ms": 16.8,
+        "geometriesAfterClear": 0,
+        "geometriesLoaded": 1000,
+        "initialMs": 11.6,
+        "objects": 1000,
+        "pickP95Ms": 0.1,
+        "renderFinishP50Ms": 1.3,
+        "repeat": 0,
+        "triangles": 12000,
+        "update10Ms": 0.7
+      },
+      {
+        "dataset": "boxes-1000",
+        "frameP50Ms": 16.7,
+        "frameP95Ms": 16.8,
+        "geometriesAfterClear": 0,
+        "geometriesLoaded": 1000,
+        "initialMs": 10.5,
+        "objects": 1000,
+        "pickP95Ms": 0.1,
+        "renderFinishP50Ms": 1,
+        "repeat": 1,
+        "triangles": 12000,
+        "update10Ms": 0.8
+      },
+      {
+        "dataset": "boxes-1000",
+        "frameP50Ms": 16.7,
+        "frameP95Ms": 16.8,
+        "geometriesAfterClear": 0,
+        "geometriesLoaded": 1000,
+        "initialMs": 11.4,
+        "objects": 1000,
+        "pickP95Ms": 0.1,
+        "renderFinishP50Ms": 1.2,
+        "repeat": 2,
+        "triangles": 12000,
+        "update10Ms": 0.7
+      },
+      {
+        "dataset": "boxes-10000",
+        "frameP50Ms": 16.7,
+        "frameP95Ms": 16.8,
+        "geometriesAfterClear": 0,
+        "geometriesLoaded": 10000,
+        "initialMs": 177.6,
+        "objects": 10000,
+        "pickP95Ms": 0.7,
+        "renderFinishP50Ms": 13.7,
+        "repeat": 0,
+        "triangles": 120000,
+        "update10Ms": 13.5
+      },
+      {
+        "dataset": "boxes-10000",
+        "frameP50Ms": 17,
+        "frameP95Ms": 19.4,
+        "geometriesAfterClear": 0,
+        "geometriesLoaded": 10000,
+        "initialMs": 228.8,
+        "objects": 10000,
+        "pickP95Ms": 0.7,
+        "renderFinishP50Ms": 16.8,
+        "repeat": 1,
+        "triangles": 120000,
+        "update10Ms": 18.3
+      },
+      {
+        "dataset": "boxes-10000",
+        "frameP50Ms": 17.2,
+        "frameP95Ms": 18.8,
+        "geometriesAfterClear": 0,
+        "geometriesLoaded": 10000,
+        "initialMs": 207.9,
+        "objects": 10000,
+        "pickP95Ms": 0.8,
+        "renderFinishP50Ms": 16.9,
+        "repeat": 2,
+        "triangles": 120000,
+        "update10Ms": 18.8
+      }
+    ],
+    "scope": "groundDisplay mesh subset only; meters, original viewer Y-up",
+    "sourceSha256": "5f9cf2a3b9bcf53aaca9826dec8d6ccf5953efc619d2a280d9a39b98d0ec3b5c",
+    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.0.0 Safari/537.36",
+    "version": "186",
+    "viewport": [
+      1000,
+      650
+    ]
+  },
+  "babylon": {
+    "dpr": 1,
+    "emptyPick": true,
+    "engine": "babylon",
+    "gpu": "ANGLE (NVIDIA, NVIDIA GeForce RTX 5070 Ti (0x00002C05) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+    "importMs": 1020.8,
+    "pickExpected": true,
+    "runs": [
+      {
+        "dataset": "reference-ground",
+        "frameP50Ms": 16.7,
+        "frameP95Ms": 16.9,
+        "geometriesAfterClear": 0,
+        "geometriesLoaded": 240,
+        "initialMs": 50.8,
+        "objects": 240,
+        "pickP95Ms": 1.7,
+        "renderFinishP50Ms": 0.7,
+        "repeat": 0,
+        "triangles": 62837,
+        "update10Ms": 1.9
+      },
+      {
+        "dataset": "reference-ground",
+        "frameP50Ms": 16.7,
+        "frameP95Ms": 17,
+        "geometriesAfterClear": 0,
+        "geometriesLoaded": 240,
+        "initialMs": 14.1,
+        "objects": 240,
+        "pickP95Ms": 1.2,
+        "renderFinishP50Ms": 0.6,
+        "repeat": 1,
+        "triangles": 62837,
+        "update10Ms": 0.5
+      },
+      {
+        "dataset": "reference-ground",
+        "frameP50Ms": 16.7,
+        "frameP95Ms": 16.9,
+        "geometriesAfterClear": 0,
+        "geometriesLoaded": 240,
+        "initialMs": 9.9,
+        "objects": 240,
+        "pickP95Ms": 1.2,
+        "renderFinishP50Ms": 0.6,
+        "repeat": 2,
+        "triangles": 62837,
+        "update10Ms": 0.5
+      },
+      {
+        "dataset": "boxes-1000",
+        "frameP50Ms": 16.7,
+        "frameP95Ms": 16.9,
+        "geometriesAfterClear": 0,
+        "geometriesLoaded": 1000,
+        "initialMs": 21.8,
+        "objects": 1000,
+        "pickP95Ms": 0.2,
+        "renderFinishP50Ms": 1.7,
+        "repeat": 0,
+        "triangles": 12000,
+        "update10Ms": 1.5
+      },
+      {
+        "dataset": "boxes-1000",
+        "frameP50Ms": 16.7,
+        "frameP95Ms": 16.8,
+        "geometriesAfterClear": 0,
+        "geometriesLoaded": 1000,
+        "initialMs": 21.3,
+        "objects": 1000,
+        "pickP95Ms": 0.1,
+        "renderFinishP50Ms": 1.7,
+        "repeat": 1,
+        "triangles": 12000,
+        "update10Ms": 1.2
+      },
+      {
+        "dataset": "boxes-1000",
+        "frameP50Ms": 16.7,
+        "frameP95Ms": 16.8,
+        "geometriesAfterClear": 0,
+        "geometriesLoaded": 1000,
+        "initialMs": 20,
+        "objects": 1000,
+        "pickP95Ms": 0.1,
+        "renderFinishP50Ms": 1.9,
+        "repeat": 2,
+        "triangles": 12000,
+        "update10Ms": 1
+      },
+      {
+        "dataset": "boxes-10000",
+        "frameP50Ms": 16.5,
+        "frameP95Ms": 18.1,
+        "geometriesAfterClear": 0,
+        "geometriesLoaded": 10000,
+        "initialMs": 228.7,
+        "objects": 10000,
+        "pickP95Ms": 2.2,
+        "renderFinishP50Ms": 16.3,
+        "repeat": 0,
+        "triangles": 120000,
+        "update10Ms": 15
+      },
+      {
+        "dataset": "boxes-10000",
+        "frameP50Ms": 16.6,
+        "frameP95Ms": 17.7,
+        "geometriesAfterClear": 0,
+        "geometriesLoaded": 10000,
+        "initialMs": 279.7,
+        "objects": 10000,
+        "pickP95Ms": 2.1,
+        "renderFinishP50Ms": 16.3,
+        "repeat": 1,
+        "triangles": 120000,
+        "update10Ms": 15.7
+      },
+      {
+        "dataset": "boxes-10000",
+        "frameP50Ms": 16.7,
+        "frameP95Ms": 17.1,
+        "geometriesAfterClear": 0,
+        "geometriesLoaded": 10000,
+        "initialMs": 286.4,
+        "objects": 10000,
+        "pickP95Ms": 1.9,
+        "renderFinishP50Ms": 15.3,
+        "repeat": 2,
+        "triangles": 120000,
+        "update10Ms": 14.9
+      }
+    ],
+    "scope": "groundDisplay mesh subset only; meters, original viewer Y-up",
+    "sourceSha256": "5f9cf2a3b9bcf53aaca9826dec8d6ccf5953efc619d2a280d9a39b98d0ec3b5c",
+    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.0.0 Safari/537.36",
+    "version": "9.27.1",
+    "viewport": [
+      1000,
+      650
+    ]
+  },
+  "capabilities": {
+    "babylon": {
+      "clipPixels": {
+        "clipped": 8192,
+        "full": 16384
+      },
+      "halfClip": true,
+      "linePick": true,
+      "orthographicObjectId": true,
+      "planePoint": true,
+      "rebasedMillimeterError": 0,
+      "updatedId": true
+    },
+    "three": {
+      "clipPixels": {
+        "clipped": 8192,
+        "full": 16384
+      },
+      "halfClip": true,
+      "linePick": true,
+      "orthographicObjectId": true,
+      "planePoint": true,
+      "rebasedMillimeterError": 0,
+      "updatedId": true
+    }
+  },
+  "speckle": {
+    "checks": {
+      "cameraExtension": true,
+      "finiteSceneBounds": true,
+      "localObjectId": true,
+      "measurementExtension": true,
+      "reloadedStableId": true,
+      "sectionExtension": true,
+      "sourcePositionsPreserved": true,
+      "unloadIdGone": true
+    },
+    "cspViolations": [],
+    "engine": "speckle",
+    "limitations": [
+      "Reloaded resource, not in-place vertex update; extension presence is not complete UI interaction validation."
+    ],
+    "loadMs": 168.29999995231628,
+    "objects": 240,
+    "renderStats": {
+      "calls": 0,
+      "frame": 460,
+      "lines": 0,
+      "points": 0,
+      "triangles": 0
+    },
+    "resources": [
+      "http://127.0.0.1:4317"
+    ],
+    "stockError": "Cannot read properties of undefined (reading 'getRootObject')"
+  },
+  "xeokit": {
+    "checks": {
+      "localObjectId": true,
+      "offsetUpdate": true,
+      "reloadedStableId": true,
+      "sectionCreated": true,
+      "selectionState": true,
+      "unloadIdGone": true
+    },
+    "cspViolations": [
+      {
+        "blocked": "inline",
+        "directive": "style-src-elem"
+      }
+    ],
+    "engine": "xeokit",
+    "limitations": [
+      "Entity offset tested; arbitrary vertex editing uses rebuild in this probe. Section created, interaction not validated."
+    ],
+    "loadMs": 82.90000009536743,
+    "objects": 240,
+    "resources": [
+      "http://127.0.0.1:4317"
+    ]
+  }
+}
