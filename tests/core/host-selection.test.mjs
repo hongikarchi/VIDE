@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {attachHostSelection,initial} from '../../src/ui/model.mjs';
+import {attachHostSelection,initial} from '../../src/ui/model.ts';
 const source={instance:'1:2',documentId:3,documentHash:'hash'};
 const request={id:'snapshot',result:{sourceDocument:source,objects:[{id:'one',name:'Object 1'},{id:'two',name:'Object 2'}]}};
 test('host selection attaches all matched objects once and preserves existing roles and draft',()=>{

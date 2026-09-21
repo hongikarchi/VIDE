@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { failedRequestDraft, initial } from '../../src/ui/model.mjs';
+import { failedRequestDraft, initial } from '../../src/ui/model.ts';
 
 test('failed input restoration preserves original basis and settings without request identity or shared mutable references', () => {
   const state=initial();state.messages=[{id:'old',request:{result:{hostExecuted:true}}},{id:'latest',request:{result:{hostExecuted:true}}}];

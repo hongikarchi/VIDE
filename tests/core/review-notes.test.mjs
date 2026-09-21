@@ -1,6 +1,6 @@
 import {test} from 'node:test';import assert from 'node:assert/strict';
 import {Store} from '../../src/core/store.mjs';import {Reviews} from '../../src/core/reviews.mjs';import {ReviewNotes} from '../../src/core/review-notes.mjs';
-import {attachReviewNote,initial} from '../../src/ui/model.mjs';
+import {attachReviewNote,initial} from '../../src/ui/model.ts';
 test('review notes preserve original basis, deduplicate retries and reject foreign objects and changed submissions',()=>{
  const store=new Store(':memory:');try{
   const project=store.createProject('Notes'),other=store.createProject('Other'),reviews=new Reviews(store),notes=new ReviewNotes(store,reviews);

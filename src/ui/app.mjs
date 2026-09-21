@@ -11,7 +11,7 @@ import {renderPoints,validCoordinate} from './sketch.tsx';
 import {renderRequests,renderActiveWork} from './requests.tsx';
 import {initializeInspector,renderInspector} from './inspector.mjs';
 import {api,connect,errors} from './gateway.ts';
-import {objects,models,initial,chooseModel,pinSelection,attachHostSelection,attachReviewNote,failedRequestDraft,draftHasInput,validate,packet,attachSketch,storageKey} from './model.mjs';
+import {objects,models,initial,chooseModel,pinSelection,attachHostSelection,attachReviewNote,failedRequestDraft,draftHasInput,validate,packet,attachSketch,storageKey} from './model.ts';
 import {createViewport} from './viewport.mjs';
 const $=id=>document.getElementById(id);
 let project, busy=false, displayedResult,selectedResult,draftSaved=false;
