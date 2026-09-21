@@ -2,8 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
 import { PassThrough } from 'node:stream';
-import { CodexCli, codexArguments, codexEnvironment } from '../../src/ai/codex-cli.mjs';
-import { createProvider, providerCatalog } from '../../src/ai/providers.mjs';
+import { CodexCli, codexArguments, codexEnvironment } from '../../src/ai/codex-cli.ts';
+import { createProvider, providerCatalog } from '../../src/ai/providers.ts';
 const context = { goal: '합성 요청', revision: 3, items: [{ id: 'yes', data: 'included' }, { id: 'no', data: 'excluded' }], includedIds: ['yes'] };
 const success = [{ type: 'turn.started' }, { type: 'item.completed', item: { type: 'agent_message', text: 'VIDE_OK' } },
   { type: 'turn.completed', usage: { input_tokens: 10, output_tokens: 2 } }];

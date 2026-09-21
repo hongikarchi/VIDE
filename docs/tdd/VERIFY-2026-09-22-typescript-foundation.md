@@ -2,7 +2,7 @@
 id: VERIFY-2026-09-22-typescript-foundation
 title: TypeScript·React·Vite 전환 기반 검증
 status: review
-version: 0.24
+version: 0.25
 updated: 2026-09-22
 owner: agent:codex
 related: [PLAN, ADR-016, ADR-017, T-010, T-011, T-015]
@@ -178,3 +178,9 @@ app.ts에 프로젝트/요청/입력/선택/카메라 이벤트 경계를 명시
 ## 초안 복원 경계
 
 자동/수동 저장본은 형식·스케치 좌표·핀의 원 후보/객체·프로젝트를 확인한다. 저장된 messages/selected를 실행 이력이나 선택으로 덮어쓰지 않는다. 유효하지 않은 자동 저장본은 새 입력 작성 전까지 덮어쓰지 않고 알린다. 빈 기준과 호스트/모델/권한은 유지한다. 모델이 빠진 실패 요청은 원 공급자와 기본 effort로 복원한다. 112개 자동 시험과 전체 브라우저 회귀가 통과했다. 오류 안내도 기본 SDK 연결과 3dm/DWG 단위 검사에 맞게 수정했다.
+
+## 구독 AI 어댑터 전환
+
+src/ai의 실행·연결·경로·공급자 선택 코드를 strict TypeScript로 옮겼다. 선택 문맥·진행 이벤트·구독 상태·응답 타입을 명시하고 JSONL의 중첩 필드/사용량과 인증 응답을 검사한다. 잘못된 content/usage 응답은 스트림 콜백 예외 대신 INVALID_PROVIDER_OUTPUT으로 중단한다. 전환 후 기존 112개 자동 시험·빌드가 통과했고, 추가 malformed 응답 시험 포함 AI 16개 시험도 통과했다.
+
+cli-probe를 실제 계정으로 실행해 Claude 4.5초·Codex 12.9초에 합성 query 각 1회와 nonce 반환을 확인했다. 공급자 보고 사용량은 Claude 입력 4/출력 75, Codex 입력 27,721/출력 186이며 과금/크레딧 총량이나 캐시 비용으로 환산하지 않는다. 원시 인증/사용자 문서는 수집하지 않았다.

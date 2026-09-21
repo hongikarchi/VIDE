@@ -1,4 +1,4 @@
-import { createProvider } from '../../../src/ai/providers.mjs';
+import { createProvider } from '../../../src/ai/providers.ts';
 import { spawn } from 'node:child_process';
 const executable = process.env.VIDE_CODEX_PATH;
 if (!executable) throw new Error('Set VIDE_CODEX_PATH to the installed official Codex executable.');

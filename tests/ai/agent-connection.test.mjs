@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { agentConnection, configureAgentArguments, allowedAgentEvent } from '../../src/ai/agent-connection.mjs';
-import { codexArguments } from '../../src/ai/codex-cli.mjs';
-import { cliArguments } from '../../src/ai/claude-cli.mjs';
+import { agentConnection, configureAgentArguments, allowedAgentEvent } from '../../src/ai/agent-connection.ts';
+import { codexArguments } from '../../src/ai/codex-cli.ts';
+import { cliArguments } from '../../src/ai/claude-cli.ts';
 const scope = { url: 'http://127.0.0.1:1234/mcp', token: 'a'.repeat(64), tools: ['query'] };
 
 test('agent configuration only connects to a local controller and token is never a command line argument', () => {

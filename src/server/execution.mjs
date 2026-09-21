@@ -1,5 +1,5 @@
-import {installedCodex} from '../ai/paths.mjs';
-import { createProvider } from '../ai/providers.mjs';
+import {installedCodex} from '../ai/paths.ts';
+import { createProvider } from '../ai/providers.ts';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 import { readFile } from 'node:fs/promises';

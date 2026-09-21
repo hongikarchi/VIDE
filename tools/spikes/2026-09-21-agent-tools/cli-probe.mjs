@@ -4,8 +4,8 @@ import { join } from 'node:path';
 import { randomBytes } from 'node:crypto';
 import { spawn } from 'node:child_process';
 import { startServer } from '../../../src/server/server.mjs';
-import { createProvider } from '../../../src/ai/providers.mjs';
-import { installedCodex } from '../../../src/ai/paths.mjs';
+import { createProvider } from '../../../src/ai/providers.ts';
+import { installedCodex } from '../../../src/ai/paths.ts';
 
 // One synthetic call per invocation, no host, no user data, no raw provider/auth logs.
 const provider=process.argv[2];

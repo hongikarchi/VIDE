@@ -6,8 +6,8 @@ import { resolve, join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { launchRhinoWorker } from '../../../hosts/rhino/worker-client.ts';
 import { startServer } from '../../../src/server/server.mjs';
-import { createProvider } from '../../../src/ai/providers.mjs';
-import { installedCodex } from '../../../src/ai/paths.mjs';
+import { createProvider } from '../../../src/ai/providers.ts';
+import { installedCodex } from '../../../src/ai/paths.ts';
 
 const provider=process.argv[2];
 if(!['claude-cli','codex-cli'].includes(provider))throw Error('Specify subscription CLI');

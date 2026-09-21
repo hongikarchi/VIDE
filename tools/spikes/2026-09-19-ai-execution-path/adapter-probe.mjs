@@ -1,4 +1,4 @@
-import { ClaudeCli } from '../../../src/ai/claude-cli.mjs';
+import { ClaudeCli } from '../../../src/ai/claude-cli.ts';
 
 const provider = new ClaudeCli({ executable: process.env.VIDE_CLAUDE_PATH || 'C:\\Users\\user\\.local\\bin\\claude.exe' });
 const controller = new AbortController();

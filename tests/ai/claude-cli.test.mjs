@@ -2,13 +2,20 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
 import { PassThrough } from 'node:stream';
-import { ClaudeCli, buildPacket, subscriptionEnvironment } from '../../src/ai/claude-cli.mjs';
+import { ClaudeCli, buildPacket, subscriptionEnvironment } from '../../src/ai/claude-cli.ts';
 
 const context = () => ({ goal: '선택 자료를 설명', revision: 1,
   items: [{ id: 'a', label: '허용', type: 'text', data: 'public', internalPath: 'private-path' },
     { id: 'b', label: '제외', type: 'text', data: 'secret' }], includedIds: ['a'] });
 const init = { type: 'system', subtype: 'init', tools: [], mcp_servers: [] };
 const result = { type: 'result', subtype: 'success', is_error: false, result: '분석 응답', usage: { input_tokens: 5, output_tokens: 3 } };
+
+test('malformed nested provider output is rejected instead of throwing from a stream callback',async()=>{
+ for(const event of [{type:'assistant',message:{content:{type:'tool_use'}}},{...result,usage:{input_tokens:'5'}},{type:'assistant',message:{content:[null]}}]){
+  const fake=transport([init,event,result]);
+  await assert.rejects(new ClaudeCli({executable:process.execPath,spawnProcess:fake.spawnProcess}).run(context()),{code:'INVALID_PROVIDER_OUTPUT'});
+ }
+});
 function transport(events, { neverClose = false } = {}) {
   const calls = [];
   const spawnProcess = (executable, args, options) => {
