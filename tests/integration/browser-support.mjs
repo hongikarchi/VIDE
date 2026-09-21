@@ -15,7 +15,7 @@ export async function installBrowserSupport(page, {fixtures = false} = {}) {
     };
   });
   if (!fixtures) return;
-  fixture ??= build({configFile:false,logLevel:'error',build:{write:false,minify:false,lib:{
+  fixture ??= build({configFile:false,logLevel:'error',define:{'process.env.NODE_ENV':JSON.stringify('production')},build:{write:false,minify:false,lib:{
     entry:fileURLToPath(new URL('./browser-fixture.mjs',import.meta.url)),formats:['es'],fileName:'fixture',
   },rollupOptions:{output:{codeSplitting:false}}}}).then(result => {
     const output = (Array.isArray(result) ? result[0] : result).output;

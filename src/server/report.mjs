@@ -1,4 +1,4 @@
-import {sceneRepresentation} from '../core/scene-representation.mjs';
+import {sceneRepresentation} from '../core/scene-representation.ts';
 import {validatePreview} from '../core/reviews.mjs';
 import {quantities} from '../core/quantities.ts';
 import {DomainError} from '../core/store.mjs';

@@ -1,7 +1,7 @@
 import { useLayoutEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import type { Root } from 'react-dom/client';
-import { sceneRepresentation } from '../core/scene-representation.mjs';
+import { sceneRepresentation } from '../core/scene-representation.ts';
 import { api, labels, errors } from './gateway.ts';
 import { showApplication } from './application.tsx';
 import { showQuantities } from './quantities.tsx';

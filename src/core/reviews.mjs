@@ -1,4 +1,4 @@
-import {sceneRepresentation} from './scene-representation.mjs';
+import {sceneRepresentation} from './scene-representation.ts';
 import {randomUUID,createHash} from 'node:crypto';
 import {DomainError} from './store.mjs';
 import {quantities} from './quantities.ts';

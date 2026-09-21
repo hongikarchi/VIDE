@@ -12,7 +12,7 @@ import {renderRequests,renderActiveWork} from './requests.tsx';
 import {initializeInspector,renderInspector} from './inspector.mjs';
 import {api,connect,errors} from './gateway.ts';
 import {objects,models,initial,chooseModel,pinSelection,attachHostSelection,attachReviewNote,failedRequestDraft,draftHasInput,validate,packet,attachSketch,storageKey} from './model.ts';
-import {createViewport} from './viewport.mjs';
+import {createViewport} from './viewport.ts';
 const $=id=>document.getElementById(id);
 let project, busy=false, displayedResult,selectedResult,draftSaved=false;
 let state=initial(),tool='select',points=[],toastTimer;
