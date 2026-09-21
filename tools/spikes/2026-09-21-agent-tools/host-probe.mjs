@@ -3,8 +3,8 @@ import {spawn} from 'node:child_process';
 import { mkdir, readFile } from 'node:fs/promises';
 import { resolve, join } from 'node:path';
 import { randomUUID, randomBytes, createHash } from 'node:crypto';
-import { launchOwnedRhino } from '../../../hosts/rhino/owned-process.mjs';
-import { rhinoCommand } from '../../../hosts/rhino/transport.mjs';
+import { launchOwnedRhino } from '../../../hosts/rhino/owned-process.ts';
+import { rhinoCommand } from '../../../hosts/rhino/transport.ts';
 
 const directory=resolve('.vide','worker-probe',randomUUID());await mkdir(directory,{recursive:true});
 const report=join(directory,'ready.json'),sessionId=randomUUID(),token=randomBytes(32).toString('hex');

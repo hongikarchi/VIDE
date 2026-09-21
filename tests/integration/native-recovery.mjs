@@ -22,7 +22,7 @@ try{
  await page.getByRole('button',{name:'결과 다시 확인',exact:true}).click();await page.getByText('변경 전후의 확인 증거가 없어 자동 해소할 수 없습니다. 추가 적용은 보류합니다.',{exact:true}).waitFor();assert.equal((await api(`/projects/${project.id}/applications/${preview.id}`)).state,'unknown');
  await writeFile(evidence,saved);
  // A unit change invalidates recovery even when numeric coordinates have not changed.
- const {rhinoCommand}=await import('../../hosts/rhino/transport.mjs');
+ const {rhinoCommand}=await import('../../hosts/rhino/transport.ts');
  const change=await rhinoCommand('execute_rhinocommon_csharp_code',{code:`var doc=Rhino.RhinoDoc.FromRuntimeSerialNumber(${documentId}u);output.AppendLine(doc.ModelUnitSystem.ToString());doc.ModelUnitSystem=Rhino.UnitSystem.Meters;`});assert.equal(change.success,true);assert.equal(change.output.trim(),'Millimeters');
  try{const diverged=await api(`/projects/${project.id}/applications/${preview.id}/reconcile`,{});assert.equal(diverged.state,'unknown');assert.equal(diverged.result.code,'APPLICATION_DIVERGED');}
  finally{await rhinoCommand('execute_rhinocommon_csharp_code',{code:`Rhino.RhinoDoc.FromRuntimeSerialNumber(${documentId}u).ModelUnitSystem=Rhino.UnitSystem.Millimeters;`});}

@@ -3,8 +3,8 @@ import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
 import { createServer } from 'node:net';
 import { resolve } from 'node:path';
-import { launchOwnedRhino } from '../../hosts/rhino/owned-process.mjs';
-import { rhinoCommand } from '../../hosts/rhino/transport.mjs';
+import { launchOwnedRhino } from '../../hosts/rhino/owned-process.ts';
+import { rhinoCommand } from '../../hosts/rhino/transport.ts';
 
 async function leaseFixture() {
   const child = new EventEmitter(); child.pid = 123;

@@ -1,7 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {createServer} from 'node:net';
-import {rhinoCommand} from '../../hosts/rhino/transport.mjs';
+import {rhinoCommand} from '../../hosts/rhino/transport.ts';
 
 test('Rhino frames handle split UTF-8 and never retry an uncertain write',async()=>{
   let connections=0;

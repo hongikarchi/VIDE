@@ -1,4 +1,4 @@
-import {rhinoCommand} from './transport.mjs';
+import {rhinoCommand} from './transport.ts';
 import {DomainError} from '../../src/core/store.mjs';
 import {documentGuard,attributeSnapshot} from './document-contract.mjs';
 const literal=text=>'@"'+String(text).replaceAll('"','""')+'"';

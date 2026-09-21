@@ -1,7 +1,7 @@
 // Uses an existing synthetic capture; consumes at most one subscription call. Restores test selection.
 // args: playwright launch.json projectId --run-live
 import assert from 'node:assert/strict';import {readFile} from 'node:fs/promises';import {pathToFileURL} from 'node:url';
-import {rhinoCommand} from '../../hosts/rhino/transport.mjs';
+import {rhinoCommand} from '../../hosts/rhino/transport.ts';
 import {documentGuard,documentFingerprint} from '../../hosts/rhino/document-contract.mjs';
 const [playwright,launch,projectId,flag]=process.argv.slice(2);if(flag!=='--run-live')throw Error('Explicit --run-live required');
 const {chromium}=await import(pathToFileURL(playwright).href),{url}=JSON.parse(await readFile(launch,'utf8'));

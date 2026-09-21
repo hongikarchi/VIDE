@@ -1,5 +1,5 @@
 import {documentGuard as guard,documentFingerprint as fingerprint} from './document-contract.mjs';
-import {rhinoCommand} from './transport.mjs';
+import {rhinoCommand} from './transport.ts';
 import {DomainError} from '../../src/core/store.mjs';
 const literal=text=>'@"'+String(text).replaceAll('"','""')+'"';
 export async function previewApplication(projectId,instance,documentId,objects){

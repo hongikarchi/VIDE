@@ -1,13 +1,16 @@
+import type {ChildProcess, SpawnOptions} from 'node:child_process';
 import { spawn, execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { isAbsolute, resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
 
 const run = promisify(execFile);
-const failure = code => Object.assign(new Error(code), { code });
+interface ProcessEvidence {pid:number;startTicks:string;executable:string;listeners:number[]}
+interface LaunchOptions {executable:string;args?:string[];environment?:NodeJS.ProcessEnv;visible?:boolean;spawnProcess?:(file:string,args:string[],options:SpawnOptions)=>ChildProcess;inspect?:(pid:number,port?:number)=>Promise<ProcessEvidence>}
+const failure = (code:string) => Object.assign(new Error(code), { code });
 
 /** Read-only OS evidence. Strings preserve .NET ticks beyond JS integer precision. */
-export async function inspectWindowsProcess(pid, port) {
+export async function inspectWindowsProcess(pid:number, port?:number):Promise<ProcessEvidence> {
   if (process.platform !== 'win32') throw failure('HOST_PLATFORM_UNSUPPORTED');
   if (!Number.isSafeInteger(pid) || pid <= 0 ||
       (port !== undefined && (!Number.isInteger(port) || port < 1 || port > 65535))) {
@@ -25,20 +28,20 @@ export async function inspectWindowsProcess(pid, port) {
 
 /** Only a process created here receives a lease; existing user processes cannot be adopted. */
 export async function launchOwnedRhino({ executable, args = [], environment = process.env, visible = false, spawnProcess = spawn,
-  inspect = inspectWindowsProcess } = {}) {
+  inspect = inspectWindowsProcess }:LaunchOptions) {
   if (typeof executable !== 'string' || !isAbsolute(executable) || !Array.isArray(args) ||
-      args.some(value => typeof value !== 'string')) throw failure('INVALID_HOST_LAUNCH');
+      typeof visible !== 'boolean' || args.some(value => typeof value !== 'string')) throw failure('INVALID_HOST_LAUNCH');
   const child = spawnProcess(executable, args, { env: environment, shell: false, windowsHide: !visible, stdio: 'ignore' });
   let exited = false;
   child.once('exit', () => { exited = true; });
   // Keep an error listener after spawn too; no automatic relaunch or process adoption.
   child.on('error', () => { exited = true; });
-  await new Promise((accept, reject) => {
-    child.once('spawn', accept);
+  await new Promise<void>((accept, reject) => {
+    child.once('spawn', () => accept());
     child.once('error', () => reject(failure('HOST_LAUNCH_FAILED')));
   });
-  const identity = await inspect(child.pid);
-  const pathKey = value => typeof value === 'string' ? resolve(value).toLowerCase() : '';
+  const identity = await inspect(child.pid!);
+  const pathKey = (value:unknown) => typeof value === 'string' ? resolve(value).toLowerCase() : '';
   if (identity.pid !== child.pid || !/^\d+$/.test(identity.startTicks) ||
       pathKey(identity.executable) !== pathKey(executable) || exited) throw failure('HOST_OWNERSHIP_MISMATCH');
   const expected = Object.freeze({ pid: identity.pid, startTicks: identity.startTicks,
@@ -54,13 +57,13 @@ export async function launchOwnedRhino({ executable, args = [], environment = pr
       if (observed.pid !== expected.pid || observed.startTicks !== expected.startTicks ||
           pathKey(observed.executable) !== pathKey(expected.executable)) throw failure('HOST_OWNERSHIP_MISMATCH');
       if (exited) return;
-      await new Promise((accept, reject) => {
+      await new Promise<void>((accept, reject) => {
         const timer = setTimeout(() => reject(failure('HOST_STOP_UNCONFIRMED')), 5000);
         child.once('exit', () => { clearTimeout(timer); accept(); });
         if (!child.kill()) { clearTimeout(timer); reject(failure('HOST_STOP_UNCONFIRMED')); }
       });
     },
-    async verify(port) {
+    async verify(port:number) {
       if (revoked || exited) throw failure('HOST_LEASE_EXPIRED');
       const observed = await inspect(expected.pid, port);
       if (revoked || exited) throw failure('HOST_LEASE_EXPIRED');

@@ -1,7 +1,7 @@
 import {mkdir,unlink} from 'node:fs/promises';
 import {join} from 'node:path';
 import {DomainError} from '../../src/core/store.mjs';
-import {rhinoCommand} from './transport.mjs';
+import {rhinoCommand} from './transport.ts';
 import {documentGuard,documentFingerprint} from './document-contract.mjs';
 const literal=text=>'@"'+String(text).replaceAll('"','""')+'"';
 export async function captureDocument(host,projectId,requestId,instance,documentId){

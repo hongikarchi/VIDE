@@ -34,8 +34,9 @@ public sealed class WorkerCommand : Command
         listener = new TcpListener(IPAddress.Loopback, 0);
         listener.Start();
         var port = ((IPEndPoint)listener.LocalEndpoint).Port;
-        File.WriteAllText(report, JsonSerializer.Serialize(new { port, pid = process.Id, startTicks = ticks,
+        File.WriteAllText(report + ".tmp", JsonSerializer.Serialize(new { port, pid = process.Id, startTicks = ticks,
             sessionId = session, documentId = doc.RuntimeSerialNumber, revision = 0 }));
+        File.Move(report + ".tmp", report);
         _ = Task.Run(async () =>
         {
             while (true)

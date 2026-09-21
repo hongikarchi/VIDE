@@ -3,7 +3,7 @@ import {prepareNativeCopies} from './native-copy.mjs';
 import { mkdir,readFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { resolve,join } from 'node:path';
-import { rhinoCommand } from './transport.mjs';
+import { rhinoCommand } from './transport.ts';
 import { spawn } from 'node:child_process';
 
 const literal=text=>'@"'+String(text).replaceAll('"','""')+'"';

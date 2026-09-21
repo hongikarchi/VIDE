@@ -4,7 +4,7 @@ import {installBrowserSupport} from './browser-support.mjs';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import {pathToFileURL} from 'node:url';
-import {rhinoCommand} from '../../hosts/rhino/transport.mjs';
+import {rhinoCommand} from '../../hosts/rhino/transport.ts';
 import {documentGuard,documentFingerprint} from '../../hosts/rhino/document-contract.mjs';
 const [playwright,launch,instance,serial,flag]=process.argv.slice(2);if(flag!=='--run-live')throw Error('Explicit --run-live required');
 const documentId=Number(serial);

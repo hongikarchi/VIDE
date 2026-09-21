@@ -13,5 +13,5 @@
     "outDir": "dist/server",
     "skipLibCheck": true
   },
-  "include": ["src/server/**/*", "src/core/**/*", "src/ai/**/*", "src/contracts/**/*", "hosts/**/*.mjs", "extensions/**/*.mjs"]
+  "include": ["src/server/**/*", "src/core/**/*", "src/ai/**/*", "src/contracts/**/*", "hosts/**/*.mjs", "hosts/**/*.ts", "extensions/**/*.mjs"]
 }

@@ -1,6 +1,6 @@
 // Creates isolated working files only; does not modify any open Rhino document.
 import assert from 'node:assert/strict';import {randomUUID,createHash} from 'node:crypto';import {readFile} from 'node:fs/promises';
-import {RhinoWorkspace} from '../../hosts/rhino/workspace.mjs';import {interpret} from '../../src/core/geometry.mjs';import {rhinoCommand} from '../../hosts/rhino/transport.mjs';
+import {RhinoWorkspace} from '../../hosts/rhino/workspace.mjs';import {interpret} from '../../src/core/geometry.mjs';import {rhinoCommand} from '../../hosts/rhino/transport.ts';
 if(process.argv[2]!=='--run-live')throw Error('Pass --run-live for isolated files.');
 const host=new RhinoWorkspace('.vide/native-copy-check'),project=randomUUID();
 const first=await host.build(project,randomUUID(),[{kind:'extrude',id:'original',name:'Original',points:[[0,0,0],[4,0,0],[4,3,0],[0,3,0],[0,0,0]],height:6}]);

@@ -1,6 +1,6 @@
 import {hostDocumentsSchema,hostSelectionSchema} from '../../src/contracts/host-documents.ts';
 import {documentGuard,documentFingerprint} from './document-contract.mjs';
-import {rhinoCommand} from './transport.mjs';
+import {rhinoCommand} from './transport.ts';
 import {DomainError} from '../../src/core/store.mjs';
 const session='var process=System.Diagnostics.Process.GetCurrentProcess();var session=process.Id.ToString()+":"+process.StartTime.ToUniversalTime().Ticks.ToString();';
 export async function listDocuments(){
