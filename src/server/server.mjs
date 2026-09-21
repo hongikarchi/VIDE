@@ -1,3 +1,4 @@
+import {readWebAsset} from './web-assets.ts';
 import {Extensions} from '../core/extensions.mjs';
 import { AgentTools } from './agent-tools.mjs';
 import {AiSettings} from '../core/ai-settings.mjs';
@@ -21,16 +22,6 @@ import { dirname, join } from 'node:path';
 import { importModel,captureModel,recoverDwgImport } from './import-model.mjs';
 import { renderReport } from './report.mjs';
 
-const assets = new Map([
-  ['/scene-representation.mjs', ['../core/scene-representation.mjs', 'text/javascript; charset=utf-8']],
-  ['/', ['../ui/index.html', 'text/html; charset=utf-8']],
-  ['/app.mjs', ['../ui/app.mjs', 'text/javascript; charset=utf-8']],
-  ['/style.css', ['../ui/style.css', 'text/css; charset=utf-8']],
-  ...['model','viewport','gateway','inspector','requests','sketch','quantities','quantity-view','documents','application','history','reviews','review-comparison','review-notes','ai-settings','extensions','native-attributes'].map(name => [`/${name}.mjs`, [`../ui/${name}.mjs`, 'text/javascript; charset=utf-8']]),
-  ['/vendor/three.module.js', ['../../node_modules/three/build/three.module.js', 'text/javascript']],
-  ['/vendor/three.core.js', ['../../node_modules/three/build/three.core.js', 'text/javascript']],
-  ['/vendor/OrbitControls.js', ['../../node_modules/three/examples/jsm/controls/OrbitControls.js', 'text/javascript']],
-]);
 const equal = (a, b) => typeof a === 'string' && Buffer.byteLength(a) === Buffer.byteLength(b) && timingSafeEqual(Buffer.from(a), Buffer.from(b));
 async function body(request) {
   if (request.headers['content-type']?.split(';')[0] !== 'application/json') throw new DomainError('JSON_REQUIRED');
@@ -71,11 +62,9 @@ export async function startServer({ filename, port = 0, providerFactory, host, c
         if (stopping) throw new DomainError('APP_STOPPING');
         await agentTools.handle(request, response, body); return;
       }
-      if (request.method === 'GET' && assets.has(url.pathname)) {
-        const [file, contentType] = assets.get(url.pathname);
-        let content = await readFile(new URL(file, import.meta.url));
-        if (url.pathname === '/vendor/OrbitControls.js') content = content.toString().replace(/from 'three'/g, "from '/vendor/three.module.js'");
-        response.writeHead(200, { 'Content-Type': contentType }); response.end(content); return;
+      if (request.method === 'GET') {
+        const asset=await readWebAsset(url.pathname);
+        if(asset){response.writeHead(200,{'Content-Type':asset.contentType});response.end(asset.body);return;}
       }
       if (!url.pathname.startsWith('/api/v1/')) throw new DomainError('NOT_FOUND');
       if (!['GET', 'POST', 'PUT'].includes(request.method)) { send(405, { code: 'METHOD_NOT_ALLOWED', requestId }); return; }

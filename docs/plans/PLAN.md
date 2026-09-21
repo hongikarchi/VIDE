@@ -2,7 +2,7 @@
 id: PLAN
 title: VIDE 구현계획 (마스터)
 status: review
-version: 0.76
+version: 0.77
 updated: 2026-09-22
 owner: agent:codex
 related: [SPEC-00, SPEC-01, SPEC-02, SPEC-03, SPEC-04, SPEC-05, ADR-013, OQ-03, OQ-04, OQ-06, OQ-07, OQ-08, OQ-09, OQ-10, OQ-14]
@@ -373,9 +373,11 @@ T-003·005는 H-RHINO-04·05의 지원안을, T-003·006은 H-ZWCAD-04·05의 �
 
 ### 6.5 현재 티켓 현황과 이어갈 위치
 
-2026-09-22 후속 실행: 3D 후보 조사·실측은 [SPIKE](../tdd/SPIKE-2026-09-21-viewport-engine.md), 유지 결정은 [ADR-017](../decisions/ADR-017-three-viewport.md)에 기록했다. 선정은 Speckle·xeokit 추가 분석까지 완료했으며 T-015 제품 통합·대형 모델 전체 검수는 남아 있다. 다음 작업은 §3.3의 TypeScript/React/Vite 전환 기반이다. 이전 ‘문서/조사 먼저’ 제한은 사용자의 ‘수행해야지’ 후속 지시로 실행 단계에 진입했다. 기존 Rhino worker 미완료 작업은 보존한다.
+2026-09-22 후속 실행: 3D 후보 조사·실측은 [SPIKE](../tdd/SPIKE-2026-09-21-viewport-engine.md), 유지 결정은 [ADR-017](../decisions/ADR-017-three-viewport.md)에 기록했다. 선정은 Speckle·xeokit 추가 분석까지 완료했으며 T-015 제품 통합·대형 모델 전체 검수는 남아 있다. §3.3의 TypeScript/React/Vite 전환 기반을 구현·검증했다. 일반 패널과 서버의 점진적 타입 전환은 진행 중이다. 이전 ‘문서/조사 먼저’ 제한은 사용자의 ‘수행해야지’ 후속 지시로 실행 단계에 진입했다. 기존 Rhino worker 미완료 작업은 보존한다.
 
 **최신 작업 우선순위:** 사용자 확정 스택은 §3/ADR-016, 전환 계획은 §3.3이다. 웹 프레임워크·언어·런타임 선택을 재검토하지 않는다. PLAN-01 §9의 후보 조사·실험은 완료했다. 이제 §3.3의 타입/빌드 기반→일반 React 화면→서버 전환을 진행한다. 아래 과거 구현 기록과 새 전환 진행 상태를 구별한다.
+
+**2026-09-22 전환 1차:** TypeScript UI/서버 검사와 Vite 배포 빌드, 빌드 정적 파일 제공, React 모바일 탭을 연결했다. 서버 실행은 Node 24의 TypeScript 지원을 사용하며 tsc 출력에서도 정적 자산 경로를 확인했다. 기존 mjs는 allowJs/checkJs:false로 공존하므로 전체 타입 전환 완료가 아니다. 자동 테스트 97개, 데스크톱/모바일 브라우저, 번들 Node의 패키지 화면 실행을 통과했다. 근거: [전환 검증](../tdd/VERIFY-2026-09-22-typescript-foundation.md). 다음은 §3.3의 공유 계약 타입과 일반 React 패널 전환이며, viewport 엔진은 ADR-017의 Three.js를 유지한다.
 
 **중단된 호스트 시험의 실제 상태:** 2026-09-21 자체 Rhino 실행기 빌드는 통과했지만 별도 실행본의 준비 신호가 90초 안에 오지 않아 WORKER_START_TIMEOUT으로 끝났다. 해당 시험 실행본만 종료했다. 새 C# worker와 host-probe는 미커밋 작업으로 보존하며 실호스트 실행 성공으로 집계하지 않는다. 구독 CLI의 모의 도구 연결 성공과 구분한다.
 

@@ -1,6 +1,6 @@
-import {sceneRepresentation} from '/scene-representation.mjs';
-import * as THREE from '/vendor/three.module.js';
-import { OrbitControls } from '/vendor/OrbitControls.js';
+import {sceneRepresentation} from '../core/scene-representation.mjs';
+import * as THREE from 'three';
+import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 
 export function createViewport(container, objects, onPick, onPoint) {
   const scene = new THREE.Scene(); scene.background = new THREE.Color('#edf0ec');

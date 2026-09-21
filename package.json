@@ -13,11 +13,32 @@
     "docs:build": "npm --prefix tools/docs run build",
     "docs:check": "npm --prefix tools/docs run check",
     "package:windows": "node src/desktop/build.mjs",
-    "backup": "node src/desktop/backup.mjs"
+    "backup": "node src/desktop/backup.mjs",
+    "typecheck:ui": "tsc -p tsconfig.ui.json",
+    "typecheck:server": "tsc -p tsconfig.server.json --noEmit",
+    "typecheck": "npm run typecheck:ui && npm run typecheck:server",
+    "build:web": "vite build",
+    "build:server": "tsc -p tsconfig.server.json",
+    "build": "npm run typecheck && npm run build:web && npm run build:server",
+    "prestart": "npm run build:web",
+    "preworkspace": "npm run build:web",
+    "pretest": "npm run build:web",
+    "prepackage:windows": "npm run build:web"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.30.0",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
     "three": "0.186.0",
     "zod": "4.6.5"
+  },
+  "devDependencies": {
+    "@types/node": "24.13.6",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "@types/three": "0.186.0",
+    "@vitejs/plugin-react": "6.1.1",
+    "typescript": "7.0.2",
+    "vite": "8.3.0"
   }
 }

@@ -1,0 +1,17 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022"],
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "strict": true,
+    "allowJs": true,
+    "checkJs": false,
+    "rewriteRelativeImportExtensions": true,
+    "types": ["node"],
+    "rootDir": ".",
+    "outDir": "dist/server",
+    "skipLibCheck": true
+  },
+  "include": ["src/server/**/*", "src/core/**/*", "src/ai/**/*", "src/contracts/**/*", "hosts/**/*.mjs", "extensions/**/*.mjs"]
+}

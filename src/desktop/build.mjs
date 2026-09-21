@@ -6,6 +6,7 @@ if(!/^\d+\.\d+\.\d+(?:-[a-z0-9.-]+)?$/.test(version))throw Error('Invalid packag
 const releases=join(root,'.vide','releases'),directory=join(releases,'VIDE-'+version+'-windows-x64');
 await mkdir(releases,{recursive:true});await mkdir(directory); // Never overwrite an existing reviewable artifact.
 for(const folder of ['ai','core','server','ui'])await cp(join(root,'src',folder),join(directory,'app','src',folder),{recursive:true});
+await cp(join(root,'dist','ui'),join(directory,'app','dist','ui'),{recursive:true});
 await mkdir(join(directory,'app','src','desktop'),{recursive:true});await copyFile(join(source,'backup.mjs'),join(directory,'app','src','desktop','backup.mjs'));
 for(const folder of ['hosts','extensions'])await cp(join(root,folder),join(directory,'app',folder),{recursive:true});
 await writeFile(join(directory,'app','package.json'),JSON.stringify({...pkg,version},null,2)+'\n');

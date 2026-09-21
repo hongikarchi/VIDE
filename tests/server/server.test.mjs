@@ -70,3 +70,20 @@ test('UTF-8 바이트가 요청 청크 사이에 나뉘어도 한국어 입력�
   });
   assert.equal(response.status, 201); assert.equal(response.data.name, '한글 프로젝트');
 });
+
+
+test('built UI assets load without exposing source files or build metadata', async t => {
+  const { app } = await fixture(t);
+  const page = await fetch(app.origin + '/');
+  const html = await page.text();
+  const scripts = [...html.matchAll(/(?:src|href)="(\/assets\/[^" ]+)"/g)].map(match => match[1]);
+  assert.ok(scripts.length > 0);
+  for (const path of scripts) {
+    const response = await fetch(app.origin + path);
+    assert.equal(response.status, 200, path);
+    assert.match(response.headers.get('content-type'), /javascript|css/);
+  }
+  for (const path of ['/main.tsx', '/app.mjs', '/web-assets.ts', '/.vite/manifest.json', '/assets/missing.js', '/assets/index.js.map']) {
+    assert.equal((await fetch(app.origin + path)).status, 404, path);
+  }
+});

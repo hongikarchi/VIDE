@@ -1,4 +1,4 @@
-import {sceneRepresentation} from '/scene-representation.mjs';
+import {sceneRepresentation} from '../core/scene-representation.mjs';
 import {api,labels,errors} from './gateway.mjs';
 import {showApplication} from './application.mjs';
 import {showQuantities} from './quantities.mjs';
