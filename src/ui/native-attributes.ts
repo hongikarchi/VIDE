@@ -1,15 +1,19 @@
-export function nativeAttributes(scene){
- const decode=value=>new TextDecoder('utf-8',{fatal:true}).decode(Uint8Array.from(atob(value),char=>char.charCodeAt(0)));
+interface Attachment {name:string;displayName?:string;type?:string;text:string}
+interface SceneAttributes {id?:string;attributes64?:unknown;attributesComplete?:unknown}
+interface AttributeRequest {id:string;result?:{scene?:SceneAttributes[]}}
+export interface NativeAttributes {known:boolean;complete:boolean;entries:{key:string;value:string}[]}
+export function nativeAttributes(scene:SceneAttributes|undefined|null):NativeAttributes{
+ const decode=(value:string)=>new TextDecoder('utf-8',{fatal:true}).decode(Uint8Array.from(atob(value),char=>char.charCodeAt(0)));
  const pairs=scene?.attributes64;
  if(!Array.isArray(pairs))return {known:false,complete:false,entries:[]};
  try{
   if(pairs.length>32)throw Error();
   const entries=pairs.map(pair=>{if(!Array.isArray(pair)||pair.length!==2||pair.some(value=>typeof value!=='string'||value.length>12000))throw Error();return {key:decode(pair[0]),value:decode(pair[1])};});
-  return {known:true,complete:scene.attributesComplete===true,entries};
+  return {known:true,complete:scene?.attributesComplete===true,entries};
  }catch{return {known:false,complete:false,entries:[]};}
 }
 
-export function attachNativeAttributes(state,request,object){
+export function attachNativeAttributes(state:{files:Attachment[]},request:AttributeRequest,object:{id:string;name:string}):void{
  const attributes=nativeAttributes(request?.result?.scene?.find(item=>item.id===object?.id));
  if(!attributes.known||!attributes.entries.length)throw Error('첨부할 원본 사용자 속성이 없습니다.');
  const name=`Attributes-${request.id}-${object.id}.json`;

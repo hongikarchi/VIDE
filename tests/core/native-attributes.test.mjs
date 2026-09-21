@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {nativeAttributes,attachNativeAttributes} from '../../src/ui/native-attributes.mjs';
+import {nativeAttributes,attachNativeAttributes} from '../../src/ui/native-attributes.ts';
 const encode=value=>Buffer.from(value).toString('base64');
 test('native attributes decode literal UTF-8 and preserve incomplete evidence',()=>{
  const scene={attributes64:[[encode('층'),encode('<script>"L03"</script>')]],attributesComplete:false};

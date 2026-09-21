@@ -5,7 +5,7 @@ import {mkdir,readFile} from 'node:fs/promises';
 import {resolve,join} from 'node:path';
 import {rhinoCommand} from '../../hosts/rhino/transport.mjs';
 import {RhinoWorkspace} from '../../hosts/rhino/workspace.mjs';
-import {nativeAttributes} from '../../src/ui/native-attributes.mjs';
+import {nativeAttributes} from '../../src/ui/native-attributes.ts';
 if(process.argv[2]!=='--run-live')throw Error('Pass --run-live');
 const directory=resolve('.vide/attribute-check',randomUUID());await mkdir(directory,{recursive:true});
 const source=join(directory,'source.3dm');

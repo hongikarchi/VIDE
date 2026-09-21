@@ -1,7 +1,7 @@
 import {renderProjectHeading} from './project-heading.tsx';
 import {setMobileView} from './mobile-navigation.tsx';
 import {showQuantities} from './quantities.tsx';
-import {attachNativeAttributes} from './native-attributes.mjs';
+import {attachNativeAttributes} from './native-attributes.ts';
 import {showExtensions} from './extensions.tsx';
 const showAiSettings = async onStatus => (await import('./ai-settings.tsx')).showAiSettings(onStatus);
 import {initializeReviews} from './reviews.tsx';

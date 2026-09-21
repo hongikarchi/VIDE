@@ -2,7 +2,7 @@
 id: VERIFY-2026-09-22-typescript-foundation
 title: TypeScript·React·Vite 전환 기반 검증
 status: review
-version: 0.12
+version: 0.13
 updated: 2026-09-22
 owner: agent:codex
 related: [PLAN, ADR-016, ADR-017, T-010, T-011, T-015]
@@ -112,3 +112,7 @@ reviews.tsx와 review-notes.tsx는 목록·저장·샌드박스 iframe·의견 �
 quantities.tsx와 review-comparison.tsx로 모달의 나머지 DOM을 옮겼다. 비교 결과 스키마와 표시 컴포넌트를 공유하고 반환된 before/after가 요청과 같은지 확인한다. 기준 변경 시 이전 결과와 A/B iframe을 제거하며 진행 중 선택 변경을 막는다. 수량표는 중첩 수동 React root 대신 QuantityView를 직접 구성한다. 기존 mjs와 불필요한 초기화 함수를 제거하고 테스트 fixture 경로를 갱신했다.
 
 타입 검사·브라우저 회귀를 통과했다. 임시 DB에 연결된 합성 후보/검토본을 만들어 체적 +6 m³, 같은 검토본 비교의 동일 표시, 기준 변경 시 이전 iframe 제거, iframe sandbox 유지와 후보 수량표의 동일 차이를 확인했다. 호스트 계산 추가 실행이나 대형 모델 성능 측정은 아니다.
+
+## 사용자 속성 입력 타입 전환
+
+native-attributes.ts는 원본 사용자 속성의 디코딩 결과와 첨부 입력을 타입으로 정의한다. 기존 개수/문자열 한도·잘못된 UTF-8 거절·중복 첨부 거절을 유지한다. 타입 검사와 사용자 속성 문자 표시·첨부를 포함한 전체 합성 브라우저 회귀가 통과했다. 기존 mjs 참조를 제거했다.

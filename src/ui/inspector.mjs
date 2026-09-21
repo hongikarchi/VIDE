@@ -1,5 +1,5 @@
 import {renderInspectorContent} from './inspector-content.tsx';
-import {nativeAttributes} from './native-attributes.mjs';
+import {nativeAttributes} from './native-attributes.ts';
 const $ = id => document.getElementById(id);
 let expanded=false;
 const inspected=new WeakMap();
