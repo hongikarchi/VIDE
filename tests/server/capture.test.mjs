@@ -1,7 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {Store} from '../../src/core/store.mjs';
-import {Workspace} from '../../src/core/workspace.mjs';
+import {Workspace} from '../../src/core/workspace.ts';
 import {captureModel} from '../../src/server/import-model.mjs';
 
 test('document capture is idempotent, pins its source and rejects changed identity',async()=>{

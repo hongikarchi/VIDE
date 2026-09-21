@@ -1,4 +1,4 @@
-import {Workspace} from '../../src/core/workspace.mjs';
+import {Workspace} from '../../src/core/workspace.ts';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {startServer} from '../../src/server/server.mjs';

@@ -15,7 +15,7 @@ import { createServer } from 'node:http';
 import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { Store, DomainError } from '../core/store.mjs';
-import { Workspace } from '../core/workspace.mjs';
+import { Workspace } from '../core/workspace.ts';
 import { Execution } from './execution.mjs';
 import { RhinoWorkspace } from '../../hosts/rhino/workspace.mjs';
 import { ZwcadWorkspace } from '../../hosts/zwcad/workspace.mjs';
