@@ -1,6 +1,6 @@
 import {mkdir,unlink} from 'node:fs/promises';
 import {join} from 'node:path';
-import {DomainError} from '../../src/core/store.mjs';
+import {DomainError} from '../../src/core/store.ts';
 import {rhinoCommand} from './transport.ts';
 import {documentGuard,documentFingerprint} from './document-contract.mjs';
 const literal=text=>'@"'+String(text).replaceAll('"','""')+'"';

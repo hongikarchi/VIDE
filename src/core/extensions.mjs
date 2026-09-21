@@ -1,5 +1,5 @@
 import manifest from '../../extensions/object-summary/manifest.json' with {type:'json'};
-import {run} from '../../extensions/object-summary/index.mjs';import {DomainError} from './store.mjs';
+import {run} from '../../extensions/object-summary/index.mjs';import {DomainError} from './store.ts';
 const allowed=new Map([[manifest.id,{manifest,run}]]);
 export function validateExtensionManifest(value){
  if(!value||value.contractVersion!==1||value.input!=='saved-selection'||value.output!=='object-summary'||value.cancellation!==false||JSON.stringify(value.capabilities)!=='["model.read"]'||!(/^[a-z0-9-]{1,80}$/.test(value.id))||!(/^\d+\.\d+\.\d+$/.test(value.version))||typeof value.name!=='string')throw new DomainError('INVALID_EXTENSION_CONTRACT');

@@ -1,4 +1,4 @@
-import {DomainError} from './store.mjs';
+import {DomainError} from './store.ts';
 export class ReviewNotes{
  constructor(store,reviews){this.store=store;this.reviews=reviews;store.db.exec('CREATE TABLE IF NOT EXISTS review_notes(id TEXT PRIMARY KEY, projectId TEXT NOT NULL REFERENCES projects(id), reviewId TEXT NOT NULL REFERENCES review_snapshots(id), requestId TEXT NOT NULL, objectId TEXT, body TEXT NOT NULL, createdAt TEXT NOT NULL)');}
  list(projectId,reviewId){this.reviews.get(projectId,reviewId);return this.store.db.prepare('SELECT * FROM review_notes WHERE projectId=? AND reviewId=? ORDER BY rowid').all(projectId,reviewId);}

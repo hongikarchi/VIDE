@@ -56,7 +56,7 @@ test('API는 Origin 없는 쓰기와 실행 엔드포인트·경로 탈출을 �
   const response = await fetch(app.origin + '/api/v1/projects', { method: 'POST', headers: { Cookie: cookie, 'Content-Type': 'application/json' }, body: '{"name":"wrong"}' });
   assert.equal(response.status, 403);
   assert.equal((await api('/execute', { method: 'POST', body: {} })).status, 404);
-  assert.equal((await fetch(app.origin + '/src/core/store.mjs')).status, 404);
+  assert.equal((await fetch(app.origin + '/src/core/store.ts')).status, 404);
   assert.equal((await fetch(app.origin + '/')).headers.get('content-security-policy').includes("frame-ancestors 'none'"), true);
 });
 

@@ -1,4 +1,4 @@
-import {DomainError} from './store.mjs';
+import {DomainError} from './store.ts';
 import {quantities} from './quantities.ts';
 function representation(object,scene){
  const {nativeId,...attributes}=object;

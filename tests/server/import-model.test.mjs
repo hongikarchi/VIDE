@@ -1,5 +1,5 @@
 import {test} from 'node:test';import assert from 'node:assert/strict';import {Readable} from 'node:stream';import {mkdtemp,readFile,access,rmdir} from 'node:fs/promises';import {tmpdir} from 'node:os';import {join} from 'node:path';
-import {Store} from '../../src/core/store.mjs';import {Workspace} from '../../src/core/workspace.ts';import {importModel,recoverDwgImport} from '../../src/server/import-model.mjs';
+import {Store} from '../../src/core/store.ts';import {Workspace} from '../../src/core/workspace.ts';import {importModel,recoverDwgImport} from '../../src/server/import-model.mjs';
 import {rm} from 'node:fs/promises';import {createHash} from 'node:crypto';
 const upload=bytes=>Object.assign(Readable.from([bytes]),{headers:{'content-type':'application/octet-stream'}});
 test('DWG import routes to its own host and preserves input identity without exposing upload paths',async()=>{

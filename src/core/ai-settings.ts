@@ -1,7 +1,7 @@
 import { statSync } from 'node:fs';
 import { win32 } from 'node:path';
-import { DomainError } from './store.mjs';
-import type { Store } from './store.mjs';
+import { DomainError } from './store.ts';
+import type { Store } from './store.ts';
 import { providers, aiSettingsSchema, aiSettingsUpdateSchema } from '../contracts/ai-settings.ts';
 import type { AiConfiguration } from '../contracts/ai-settings.ts';
 

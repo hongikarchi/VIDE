@@ -2,7 +2,7 @@
 id: VERIFY-2026-09-22-typescript-foundation
 title: TypeScript·React·Vite 전환 기반 검증
 status: review
-version: 0.26
+version: 0.27
 updated: 2026-09-22
 owner: agent:codex
 related: [PLAN, ADR-016, ADR-017, T-010, T-011, T-015]
@@ -190,3 +190,7 @@ cli-probe를 실제 계정으로 실행해 Claude 4.5초·Codex 12.9초에 합�
 AgentTools를 TypeScript로 옮겨 query/execute/status/cancel 입력·처리기·HTTP 수명과 결과를 명시했다. 만료/호출 상한/동시 쓰기/대상 검사를 유지한다. 전체 113개 자동 시험과 strict 타입 검사가 통과했다.
 
 browser-sdk-sketch.mjs는 브라우저에서 닫힌 XY 경계 5점을 첨부하고 실제 Claude 구독으로 3 m 돌출을 요청했다. 자체 Rhino worker가 단일 객체를 저장/재열기했고 bounds 6×4×3 m·체적 72 m³를 확인했다. 입력 스케치 점열/역할도 보존됐다. 증거 .vide/sdk-sketch/cd45cb78-f7e7-4a1f-84f1-fa0386e20b3b의 result.json/viewport.png를 확인했다. 스케치 직교 시점을 유지해 화면은 윗면이며 체적/형상은 저장된 SDK 결과로 확인했다. 공급자 보고 입력 6/출력 915 토큰이다.
+
+## 로컬 DB/명령 저장소 전환
+
+Store와 database-check를 strict TypeScript로 전환했다. 프로젝트·연결·입력·run·명령의 SQLite 행/저장 JSON을 읽을 때 검증하며 트랜잭션 반환 타입을 유지한다. DB 테이블/마이그레이션 변경은 없다. 명령 해시·승인·중복 재전송·unknown 쓰기 차단·재시작·데이터 손상·프로젝트 격리를 포함한 113개 자동 시험과 전체 브라우저 회귀가 통과했다.

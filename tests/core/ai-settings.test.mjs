@@ -1,4 +1,4 @@
-import {test} from 'node:test';import assert from 'node:assert/strict';import {Store} from '../../src/core/store.mjs';import {AiSettings} from '../../src/core/ai-settings.ts';
+import {test} from 'node:test';import assert from 'node:assert/strict';import {Store} from '../../src/core/store.ts';import {AiSettings} from '../../src/core/ai-settings.ts';
 test('CLI settings persist paths, enforce revisions and reject credentials, shell commands and missing files',()=>{
  const store=new Store(':memory:');try{
   const settings=new AiSettings(store,path=>!path.includes('missing'));assert.equal(settings.get().revision,0);

@@ -1,6 +1,6 @@
 import {requestInputSchema,requestStateSchema} from '../contracts/workspace.ts';
-import { DomainError } from './store.mjs';
-import type {Store} from './store.mjs';
+import { DomainError } from './store.ts';
+import type {Store} from './store.ts';
 import type {RequestInput,RequestState} from '../contracts/workspace.ts';
 import {storedWorkSchema,storedResultSchema} from '../contracts/stored-work.ts';
 import type {StoredWork} from '../contracts/stored-work.ts';

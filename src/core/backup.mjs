@@ -2,7 +2,7 @@ import { DatabaseSync, backup } from 'node:sqlite';
 import { mkdir, readdir, lstat, realpath, copyFile, readFile, writeFile } from 'node:fs/promises';
 import { resolve, join, relative, dirname, isAbsolute } from 'node:path';
 import { createHash } from 'node:crypto';
-import { checkDatabase } from './database-check.mjs';
+import { checkDatabase } from './database-check.ts';
 
 const fail = code => { throw Object.assign(new Error(code), { code }); };
 const inside = (root, path) => { const rel = relative(root, path); return rel && !rel.startsWith('..') && !isAbsolute(rel); };

@@ -1,48 +1,62 @@
+import {z} from 'zod';
 import { DatabaseSync } from 'node:sqlite';
 import { randomUUID, createHash } from 'node:crypto';
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
-import { checkDatabase } from './database-check.mjs';
+import { checkDatabase } from './database-check.ts';
 
 export class DomainError extends Error {
-  constructor(code) { super(code); this.code = code; }
+  code:string;
+  constructor(code:string) { super(code); this.code = code; }
 }
-const fail = code => { throw new DomainError(code); };
+function fail(code:string):never {throw new DomainError(code);}
 const kinds = new Set(['sync', 'createCandidate', 'applyCandidate', 'discardCandidate']);
-const isWrite = kind => kind !== 'sync';
-function canonical(value) {
+const isWrite = (kind:string) => kind !== 'sync';
+function canonical(value:unknown):string {
   if (value === null || typeof value === 'boolean' || typeof value === 'string') return JSON.stringify(value);
   if (typeof value === 'number' && Number.isFinite(value)) return JSON.stringify(value);
   if (Array.isArray(value)) return '[' + value.map(canonical).join(',') + ']';
   if (value && Object.getPrototypeOf(value) === Object.prototype) {
-    return '{' + Object.keys(value).sort().map(k => JSON.stringify(k) + ':' + canonical(value[k])).join(',') + '}';
+    return '{' + Object.keys(value).sort().map(k => JSON.stringify(k) + ':' + canonical((value as Record<string,unknown>)[k])).join(',') + '}';
   }
   fail('INVALID_INPUT');
 }
-function json(value) {
+function json(value:unknown) {
   const result = canonical(value);
   if (Buffer.byteLength(result) > 1024 * 1024) fail('INPUT_TOO_LARGE');
   return result;
 }
-function text(value, max = 10000) {
+function text(value:unknown, max = 10000):string {
   if (typeof value !== 'string' || !value.trim() || value.length > max) fail('INVALID_INPUT');
   return value;
 }
-function request(command) {
-  if (!command || !kinds.has(command.kind)) fail('INVALID_COMMAND');
-  for (const key of ['id', 'runId', 'connectionId']) text(command[key], 200);
-  if (!Number.isSafeInteger(command.revision) || command.revision < 1) fail('INVALID_INPUT');
-  if (!command.payload || Array.isArray(command.payload) || typeof command.payload !== 'object') fail('INVALID_INPUT');
-  return { id: command.id, runId: command.runId, connectionId: command.connectionId,
-    revision: command.revision, kind: command.kind, payload: command.payload };
+const projectRow=z.object({id:z.string(),name:z.string()});
+const connectionRow=z.object({id:z.string(),projectId:z.string(),host:z.enum(['rhino','zwcad']),instanceId:z.string(),documentId:z.string(),connected:z.number()});
+const inputBody=z.object({text:z.string(),pins:z.array(z.object({connectionId:z.string(),objectId:z.string()}).passthrough()).optional()}).passthrough();
+const inputRow=z.object({id:z.string(),projectId:z.string(),revision:z.number(),body:z.string()});
+const runRow=z.object({id:z.string(),projectId:z.string(),revision:z.number(),goal:z.string(),targets:z.string()});
+const commandSchema=z.object({id:z.string(),runId:z.string(),connectionId:z.string(),revision:z.number().int().positive(),kind:z.enum(['sync','createCandidate','applyCandidate','discardCandidate']),payload:z.record(z.string(),z.unknown())});
+type Command=z.infer<typeof commandSchema>;
+const commandRow=commandSchema.omit({payload:true}).extend({projectId:z.string(),payload:z.string(),hash:z.string(),state:z.enum(['queued','running','succeeded','failed','unknown','cancelled']),result:z.string().nullable(),stale:z.number()});
+function request(value:unknown):Command {
+ const kind=value&&typeof value==='object'&&'kind' in value?value.kind:undefined;
+ if(typeof kind!=='string'||!kinds.has(kind))fail('INVALID_COMMAND');
+ const parsed=commandSchema.safeParse(value);if(!parsed.success)fail('INVALID_INPUT');const command=parsed.data;
+ for(const key of ['id','runId','connectionId'] as const)text(command[key],200);
+ return command;
 }
-const digest = value => createHash('sha256').update(json(value)).digest('hex');
-const decode = row => row ? { ...row, payload: JSON.parse(row.payload),
-  result: row.result === null ? null : JSON.parse(row.result), stale: Boolean(row.stale) } : null;
+const digest = (value:unknown) => createHash('sha256').update(json(value)).digest('hex');
+function decode(row:unknown){
+ if(!row)return null;const value=commandRow.parse(row);
+ return {...value,payload:z.record(z.string(),z.unknown()).parse(JSON.parse(value.payload)),result:value.result===null?null:JSON.parse(value.result) as unknown,stale:Boolean(value.stale)};
+}
+function decodeInput(row:unknown){const value=inputRow.parse(row);return {...value,body:inputBody.parse(JSON.parse(value.body))};}
+function decodeRun(row:unknown){const value=runRow.parse(row);return {...value,targets:z.array(z.string()).parse(JSON.parse(value.targets))};}
 
 /** Single local controller. Every network caller must authenticate before reaching this layer. */
 export class Store {
-  constructor(filename) {
+  closed=false;db!:DatabaseSync;controller?:DatabaseSync|null;
+  constructor(filename:string) {
     this.closed = false;
     try {
       if (filename !== ':memory:') {
@@ -56,7 +70,7 @@ export class Store {
       this.db.exec(`PRAGMA foreign_keys=ON; PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL;
         CREATE TABLE IF NOT EXISTS schema_version(version INTEGER NOT NULL);
         INSERT INTO schema_version SELECT 1 WHERE NOT EXISTS(SELECT 1 FROM schema_version);`);
-      if (this.db.prepare('SELECT version FROM schema_version').get().version !== 1) fail('UNSUPPORTED_SCHEMA');
+      if (this.db.prepare('SELECT version FROM schema_version').get()?.version !== 1) fail('UNSUPPORTED_SCHEMA');
       this.db.exec(`
         CREATE TABLE IF NOT EXISTS projects(id TEXT PRIMARY KEY, name TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS connections(id TEXT PRIMARY KEY, projectId TEXT NOT NULL REFERENCES projects(id),
@@ -81,25 +95,25 @@ export class Store {
     this.closed = true;
     try { this.db?.close(); } finally { this.controller?.close(); }
   }
-  tx(fn) {
+  tx<T>(fn:()=>T):T {
     this.db.exec('BEGIN IMMEDIATE');
     try { const value = fn(); this.db.exec('COMMIT'); return value; }
     catch (error) { this.db.exec('ROLLBACK'); throw error; }
   }
-  project(id) {
+  project(id:string) {
     const row = this.db.prepare('SELECT * FROM projects WHERE id=?').get(id);
-    return row ?? fail('NOT_FOUND');
+    return row ? projectRow.parse(row) : fail('NOT_FOUND');
   }
-  createProject(name) {
+  createProject(name:unknown) {
     const row = { id: randomUUID(), name: text(name, 200) };
     this.db.prepare('INSERT INTO projects VALUES(?,?)').run(row.id, row.name); return row;
   }
-  listProjects() { return this.db.prepare('SELECT * FROM projects ORDER BY rowid').all(); }
-  connection(projectId, id) {
+  listProjects() { return this.db.prepare('SELECT * FROM projects ORDER BY rowid').all().map(row=>projectRow.parse(row)); }
+  connection(projectId:string, id:string) {
     const row = this.db.prepare('SELECT * FROM connections WHERE id=? AND projectId=?').get(id, projectId);
-    return row ?? fail('TARGET_MISMATCH');
+    return row ? connectionRow.parse(row) : fail('TARGET_MISMATCH');
   }
-  registerConnection(projectId, source) {
+  registerConnection(projectId:string, source:{host:string;instanceId:string;documentId:string}) {
     this.project(projectId);
     if (!['rhino', 'zwcad'].includes(source.host)) fail('INVALID_HOST');
     const row = { id: randomUUID(), projectId, host: source.host,
@@ -112,34 +126,34 @@ export class Store {
       return row;
     });
   }
-  disconnect(connectionId) {
+  disconnect(connectionId:string) {
     this.tx(() => {
       this.db.prepare('UPDATE connections SET connected=0 WHERE id=?').run(connectionId);
       this.db.prepare("UPDATE commands SET state='unknown' WHERE connectionId=? AND state='running'").run(connectionId);
       this.db.prepare("UPDATE commands SET state='cancelled' WHERE connectionId=? AND state='queued'").run(connectionId);
     });
   }
-  validateInput(projectId, body) {
+  validateInput(projectId:string, body:unknown) {
     this.project(projectId); json(body);
-    if (!body || typeof body !== 'object' || Array.isArray(body) || typeof body.text !== 'string') fail('INVALID_INPUT');
-    if (body.pins !== undefined && !Array.isArray(body.pins)) fail('INVALID_INPUT');
-    for (const pin of body.pins ?? []) { this.connection(projectId, pin.connectionId); text(pin.objectId, 200); }
+    const parsed=inputBody.safeParse(body);if(!parsed.success)fail('INVALID_INPUT');
+    for(const pin of parsed.data.pins??[]){this.connection(projectId,pin.connectionId);text(pin.objectId,200);}
   }
-  saveInput(projectId, body) {
+
+  saveInput(projectId:string, body:unknown) {
     this.validateInput(projectId, body);
     const id = randomUUID(); this.db.prepare('INSERT INTO inputs VALUES(?,?,1,?)').run(id, projectId, json(body));
     return this.getInput(projectId, id);
   }
-  getInput(projectId, id) {
+  getInput(projectId:string, id:string) {
     const row = this.db.prepare('SELECT * FROM inputs WHERE id=? AND projectId=?').get(id, projectId);
-    if (!row) fail('NOT_FOUND'); return { ...row, body: JSON.parse(row.body) };
+    if (!row) fail('NOT_FOUND'); return decodeInput(row);
   }
-  listInputs(projectId) {
+  listInputs(projectId:string) {
     this.project(projectId);
     return this.db.prepare('SELECT * FROM inputs WHERE projectId=? ORDER BY rowid DESC').all(projectId)
-      .map(row => ({ ...row, body: JSON.parse(row.body) }));
+      .map(decodeInput);
   }
-  updateInput(projectId, id, revision, body) {
+  updateInput(projectId:string, id:string, revision:number, body:unknown) {
     this.validateInput(projectId, body);
     return this.tx(() => {
       if (this.getInput(projectId, id).revision !== revision) fail('REVISION_CONFLICT');
@@ -147,7 +161,7 @@ export class Store {
       return this.getInput(projectId, id);
     });
   }
-  createRun(projectId, { goal, targets }) {
+  createRun(projectId:string, { goal, targets }:{goal:string;targets:string[]}) {
     this.project(projectId); text(goal);
     if (!Array.isArray(targets) || !targets.length || new Set(targets).size !== targets.length) fail('INVALID_INPUT');
     for (const id of targets) { if (!this.connection(projectId, id).connected) fail('DISCONNECTED'); }
@@ -155,11 +169,11 @@ export class Store {
     this.db.prepare('INSERT INTO runs VALUES(?,?,1,?,?)').run(id, projectId, goal, json(targets));
     return this.getRun(projectId, id);
   }
-  getRun(projectId, id) {
+  getRun(projectId:string, id:string) {
     const row = this.db.prepare('SELECT * FROM runs WHERE projectId=? AND id=?').get(projectId, id);
-    if (!row) fail('NOT_FOUND'); return { ...row, targets: JSON.parse(row.targets) };
+    if (!row) fail('NOT_FOUND'); return decodeRun(row);
   }
-  reviseRun(projectId, id, revision, goal) {
+  reviseRun(projectId:string, id:string, revision:number, goal:string) {
     text(goal);
     return this.tx(() => {
       if (this.getRun(projectId, id).revision !== revision) fail('REVISION_CONFLICT');
@@ -168,7 +182,7 @@ export class Store {
       return this.getRun(projectId, id);
     });
   }
-  validateTarget(projectId, command) {
+  validateTarget(projectId:string, command:Command) {
     const run = this.getRun(projectId, command.runId);
     if (run.revision !== command.revision) fail('REVISION_CONFLICT');
     const connection = this.connection(projectId, command.connectionId);
@@ -176,13 +190,13 @@ export class Store {
     if (!connection.connected) fail('DISCONNECTED');
     return run;
   }
-  approve(projectId, raw, authority) {
+  approve(projectId:string, raw:unknown, authority:string) {
     if (authority !== 'local-controller') fail('FORBIDDEN');
     const command = request(raw); this.validateTarget(projectId, command);
     this.db.prepare('INSERT INTO approvals VALUES(?,?,?) ON CONFLICT(commandId) DO UPDATE SET hash=excluded.hash WHERE approvals.projectId=excluded.projectId')
       .run(command.id, projectId, digest(command));
   }
-  hasUncertainWrite(connectionId) {
+  hasUncertainWrite(connectionId:string) {
     // A fresh transport connection is not evidence that an earlier native write failed.
     return Boolean(this.db.prepare(`SELECT 1 FROM commands command
       JOIN connections previous ON command.connectionId=previous.id
@@ -191,7 +205,7 @@ export class Store {
       AND previous.host=current.host AND previous.instanceId=current.instanceId
       AND previous.documentId=current.documentId`).get(connectionId));
   }
-  enqueue(projectId, raw) {
+  enqueue(projectId:string, raw:unknown) {
     const command = request(raw), hash = digest(command);
     return this.tx(() => {
       this.project(projectId);
@@ -211,18 +225,19 @@ export class Store {
       return this.getCommand(projectId, command.id);
     });
   }
-  getCommand(projectId, id) {
+  getCommand(projectId:string, id:string) {
     const row = this.db.prepare('SELECT * FROM commands WHERE projectId=? AND id=?').get(projectId, id);
     return decode(row) ?? fail('NOT_FOUND');
   }
-  lease(connectionId) {
+  lease(connectionId:string) {
     return this.tx(() => {
       const connection = this.db.prepare('SELECT * FROM connections WHERE id=?').get(connectionId);
       if (!connection?.connected) return null;
       if (this.db.prepare("SELECT 1 FROM commands WHERE connectionId=? AND state='running'").get(connectionId)) return null;
       const uncertain = this.hasUncertainWrite(connectionId);
       const rows = this.db.prepare("SELECT * FROM commands WHERE connectionId=? AND state='queued' ORDER BY rowid").all(connectionId);
-      for (const row of rows) {
+      for (const raw of rows) {
+        const row=commandRow.parse(raw);
         if (uncertain && isWrite(row.kind)) continue;
         if (this.getRun(row.projectId, row.runId).revision !== row.revision) {
           this.db.prepare("UPDATE commands SET state='cancelled',stale=1 WHERE id=?").run(row.id); continue;
@@ -233,12 +248,13 @@ export class Store {
       return null;
     });
   }
-  complete(connectionId, commandId, outcome) {
+  complete(connectionId:string, commandId:string, outcome:{state:string;result?:unknown}) {
     if (!['succeeded', 'failed', 'unknown'].includes(outcome?.state)) fail('INVALID_RESULT');
     const encoded = json(outcome.result ?? null);
     return this.tx(() => {
-      const row = this.db.prepare('SELECT * FROM commands WHERE id=?').get(commandId);
-      if (!row || row.connectionId !== connectionId) fail('TARGET_MISMATCH');
+      const raw = this.db.prepare('SELECT * FROM commands WHERE id=?').get(commandId);
+      if (!raw)fail('TARGET_MISMATCH');const row=commandRow.parse(raw);
+      if (row.connectionId !== connectionId) fail('TARGET_MISMATCH');
       if (!['running', 'unknown'].includes(row.state)) {
         if (row.state === outcome.state && row.result === encoded) return decode(row);
         fail('INVALID_TRANSITION');

@@ -1,4 +1,4 @@
-import {DomainError} from '../../src/core/store.mjs';
+import {DomainError} from '../../src/core/store.ts';
 const literal=text=>'@"'+String(text).replaceAll('"','""')+'"';
 export function documentGuard(instance,id){
  if(!/^\d+:\d+$/.test(instance)||!Number.isInteger(id)||id<=0||id>4294967295)throw new DomainError('INVALID_INPUT');

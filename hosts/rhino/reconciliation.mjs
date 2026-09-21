@@ -1,5 +1,5 @@
 import {rhinoCommand} from './transport.ts';
-import {DomainError} from '../../src/core/store.mjs';
+import {DomainError} from '../../src/core/store.ts';
 import {documentGuard,attributeSnapshot} from './document-contract.mjs';
 const literal=text=>'@"'+String(text).replaceAll('"','""')+'"';
 export async function reconcileNativeApplication(commandId,candidate,payload){

@@ -2,7 +2,7 @@ import {captureDocument} from '../../hosts/rhino/capture.mjs';
 import {randomUUID,createHash} from 'node:crypto';
 import {mkdir,writeFile,unlink} from 'node:fs/promises';
 import {join} from 'node:path';
-import {DomainError} from '../core/store.mjs';
+import {DomainError} from '../core/store.ts';
 
 export async function importModel(request,projectId,name,workspace,host,cadHost){
   workspace.store.project(projectId);

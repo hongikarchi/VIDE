@@ -1,4 +1,4 @@
-import {test} from 'node:test';import assert from 'node:assert/strict';import {Store} from '../../src/core/store.mjs';import {Reviews} from '../../src/core/reviews.mjs';import {renderReport} from '../../src/server/report.mjs';
+import {test} from 'node:test';import assert from 'node:assert/strict';import {Store} from '../../src/core/store.ts';import {Reviews} from '../../src/core/reviews.mjs';import {renderReport} from '../../src/server/report.mjs';
 test('review snapshots freeze table, inputs and application state without native paths or file contents',()=>{
  const store=new Store(':memory:');try{
   const project=store.createProject('Review project'),other=store.createProject('Other'),reviews=new Reviews(store);

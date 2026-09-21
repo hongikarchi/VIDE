@@ -1,4 +1,4 @@
-import { Store } from '../../src/core/store.mjs';
+import { Store } from '../../src/core/store.ts';
 const store = new Store(process.argv[2]);
 const project = store.createProject('crash fixture');
 const connection = store.registerConnection(project.id, { host: 'rhino', instanceId: 'crash-instance', documentId: 'crash-doc' });

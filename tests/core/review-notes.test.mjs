@@ -1,5 +1,5 @@
 import {test} from 'node:test';import assert from 'node:assert/strict';
-import {Store} from '../../src/core/store.mjs';import {Reviews} from '../../src/core/reviews.mjs';import {ReviewNotes} from '../../src/core/review-notes.mjs';
+import {Store} from '../../src/core/store.ts';import {Reviews} from '../../src/core/reviews.mjs';import {ReviewNotes} from '../../src/core/review-notes.mjs';
 import {attachReviewNote,initial} from '../../src/ui/model.ts';
 test('review notes preserve original basis, deduplicate retries and reject foreign objects and changed submissions',()=>{
  const store=new Store(':memory:');try{

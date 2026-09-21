@@ -1,9 +1,9 @@
 import {z} from 'zod';
 import {tableViewSchema} from '../contracts/quantities.ts';
-import type {Store} from './store.mjs';
+import type {Store} from './store.ts';
 import type {TableView} from '../contracts/quantities.ts';
 import {randomUUID} from 'node:crypto';
-import {DomainError} from './store.mjs';
+import {DomainError} from './store.ts';
 import {quantityQuery} from './quantities.ts';
 const storedRow=z.object({query:z.string()}).passthrough();
 const inputSchema=z.object({name:z.string().max(80).refine(value=>Boolean(value.trim())),query:z.unknown().optional(),revision:z.unknown().optional()}).passthrough();

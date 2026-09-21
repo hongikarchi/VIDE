@@ -1,6 +1,6 @@
 import {documentGuard as guard,documentFingerprint as fingerprint} from './document-contract.mjs';
 import {rhinoCommand} from './transport.ts';
-import {DomainError} from '../../src/core/store.mjs';
+import {DomainError} from '../../src/core/store.ts';
 const literal=text=>'@"'+String(text).replaceAll('"','""')+'"';
 export async function previewApplication(projectId,instance,documentId,objects){
  if(!/^[a-zA-Z0-9-]+$/.test(projectId))throw new DomainError('INVALID_INPUT');

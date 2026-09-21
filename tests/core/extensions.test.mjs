@@ -1,4 +1,4 @@
-import {test} from 'node:test';import assert from 'node:assert/strict';import {Store} from '../../src/core/store.mjs';import {Workspace} from '../../src/core/workspace.ts';import {Extensions,validateExtensionManifest} from '../../src/core/extensions.mjs';
+import {test} from 'node:test';import assert from 'node:assert/strict';import {Store} from '../../src/core/store.ts';import {Workspace} from '../../src/core/workspace.ts';import {Extensions,validateExtensionManifest} from '../../src/core/extensions.mjs';
 test('trusted extension uses immutable selection, records results, deduplicates retries and blocks disabled or foreign executions',()=>{
  const store=new Store(':memory:');try{
   const workspace=new Workspace(store),project=store.createProject('Extension'),other=store.createProject('Other'),extensions=new Extensions(store,workspace);

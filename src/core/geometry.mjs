@@ -1,4 +1,4 @@
-import { DomainError } from './store.mjs';
+import { DomainError } from './store.ts';
 const fail=()=>{throw new DomainError('INVALID_GEOMETRY');};
 const scalar=n=>typeof n==='number'&&Number.isFinite(n)&&Math.abs(n)<=100000;
 const vector=p=>Array.isArray(p)&&p.length===3&&p.every(scalar);

@@ -4,7 +4,7 @@ import { mkdtemp, mkdir, writeFile, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
-import { Store } from '../../src/core/store.mjs';
+import { Store } from '../../src/core/store.ts';
 import { backupWorkspace, verifyBackup } from '../../src/core/backup.mjs';
 
 test('offline backup preserves records and model files, excludes launch secrets, rejects active control and detects corruption', async t => {

@@ -5,7 +5,7 @@ import { once } from 'node:events';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { Store } from '../../src/core/store.mjs';
+import { Store } from '../../src/core/store.ts';
 
 test('실제 제어 프로세스 강제 종료 후 잠금이 풀리고 입력·불명확 쓰기가 복원된다', { timeout: 15000 }, async t => {
   const root = mkdtempSync(join(tmpdir(), 'vide-crash-test-')), filename = join(root, 'crash.sqlite');

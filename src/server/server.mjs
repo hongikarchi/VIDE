@@ -14,7 +14,7 @@ import {quantities,quantitiesCsv} from '../core/quantities.ts';
 import { createServer } from 'node:http';
 import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { readFile,unlink } from 'node:fs/promises';
-import { Store, DomainError } from '../core/store.mjs';
+import { Store, DomainError } from '../core/store.ts';
 import { Workspace } from '../core/workspace.ts';
 import { Execution } from './execution.mjs';
 import { RhinoWorkspace } from '../../hosts/rhino/workspace.mjs';

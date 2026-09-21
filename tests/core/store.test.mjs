@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { Store } from '../../src/core/store.mjs';
+import { Store } from '../../src/core/store.ts';
 
 function fixture(t) {
   const root = mkdtempSync(join(tmpdir(), 'vide-store-test-'));

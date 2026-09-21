@@ -1,6 +1,6 @@
 import {sceneRepresentation} from './scene-representation.ts';
 import {randomUUID,createHash} from 'node:crypto';
-import {DomainError} from './store.mjs';
+import {DomainError} from './store.ts';
 import {quantities} from './quantities.ts';
 export function validatePreview(image){
  if(typeof image!=='string'||image.length>1000000||!/^data:image\/png;base64,[A-Za-z0-9+/=]+$/.test(image)||Buffer.from(image.split(',')[1],'base64').subarray(0,8).toString('hex')!=='89504e470d0a1a0a')throw new DomainError('INVALID_INPUT');

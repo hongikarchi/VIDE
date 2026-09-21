@@ -1,4 +1,4 @@
-import {DomainError} from './store.mjs';
+import {DomainError} from './store.ts';
 export function nativeMoves(candidate,source){
  const reject=()=>{throw new DomainError('UNSUPPORTED_APPLICATION');};
  if(!source?.sourceDocument||candidate.objects.length!==source.objects.length)reject();

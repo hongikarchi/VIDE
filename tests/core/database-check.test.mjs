@@ -4,7 +4,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { mkdtempSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { Store } from '../../src/core/store.mjs';
+import { Store } from '../../src/core/store.ts';
 
 test('incompatible and unreadable databases are rejected without changing their bytes or retaining controller ownership', t => {
   const root = mkdtempSync(join(tmpdir(), 'vide-database-check-'));

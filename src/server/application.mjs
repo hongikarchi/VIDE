@@ -2,7 +2,7 @@ import {reconcileNativeApplication} from '../../hosts/rhino/reconciliation.mjs';
 import {nativeMoves} from '../core/native-application.mjs';
 import {previewNativeApplication,applyNativeMovements} from '../../hosts/rhino/native-application.mjs';
 import {randomUUID} from 'node:crypto';
-import {DomainError} from '../core/store.mjs';
+import {DomainError} from '../core/store.ts';
 import {previewApplication,applyToDocument} from '../../hosts/rhino/application.mjs';
 export class Applications{
  constructor(store,workspace,{preview=previewApplication,apply=applyToDocument,nativePreview=previewNativeApplication,nativeApply=applyNativeMovements,reconcile=reconcileNativeApplication}={}){this.store=store;this.workspace=workspace;this.preview=preview;this.apply=apply;this.reconcile=reconcile;this.nativePreview=nativePreview;this.nativeApply=nativeApply;this.pending=new Map();this.active=new Set();}
