@@ -5,7 +5,7 @@ import {attachNativeAttributes} from './native-attributes.mjs';
 import {showExtensions} from './extensions.mjs';
 const showAiSettings = async onStatus => (await import('./ai-settings.tsx')).showAiSettings(onStatus);
 import {initializeReviews} from './reviews.mjs';
-import {renderHistory} from './history.mjs';
+import {renderHistory} from './history.tsx';
 import {initializeDocuments} from './documents.tsx';
 import {renderPoints,validCoordinate} from './sketch.tsx';
 import {renderRequests,renderActiveWork} from './requests.tsx';

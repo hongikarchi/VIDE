@@ -92,8 +92,20 @@ try{
  await page.setViewportSize({width:390,height:844});await page.locator('button[data-mobile="input"]').click();
  assert.equal(await page.getByLabel('요청 1',{exact:true}).inputValue(),'edited');
  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
+ const failed={...fixtureInput,id:'failed-history',body:'Restore exact original',baseRequestId:null};
+ app.store.db.prepare('INSERT INTO workspace_requests VALUES(?,?,?,?,?,?)').run(failed.id,second,JSON.stringify(failed),'failed',JSON.stringify({code:'PROVIDER_FAILED'}),new Date().toISOString());
+ const unknown={...fixtureInput,id:'unknown-history',body:'Uncertain host action',permission:'candidate'};
+ app.store.db.prepare('INSERT INTO workspace_requests VALUES(?,?,?,?,?,?)').run(unknown.id,second,JSON.stringify(unknown),'unknown',JSON.stringify({code:'HOST_RESULT_UNKNOWN'}),new Date().toISOString());
+ await page.setViewportSize({width:1440,height:900});await page.goto(app.origin+'/?project='+second);
+ const restore=page.getByRole('button',{name:'입력을 초안으로 복원',exact:true});await restore.waitFor();
+ assert.equal(await restore.count(),1);assert.equal(await page.getByRole('button',{name:'중단',exact:true}).count(),0);
+ const unknownCard=page.locator('.chat-message').filter({hasText:'Uncertain host action'});
+ assert.match(await unknownCard.textContent(),/호스트 결과 확인 필요/);
+ await restore.click();await page.waitForFunction(()=>document.querySelector('#body').value==='Restore exact original');
+ const restored=await page.evaluate(id=>JSON.parse(localStorage.getItem('vide:draft:'+id)),second);
+ assert.equal(restored.body,failed.body);assert.equal(restored.permission,'review');assert.deepEqual(restored.pins,[]);
  assert.deepEqual(errors,[]);
- console.log(JSON.stringify({requestEditing:true,projectIsolation:true,documentRaceGuard:true,inspectorTabs:true,literalAttributes:true,quantityViews:true,failedQueryPreservesCsv:true,sketchCoordinates:true,mobileDraft:true}));
+ console.log(JSON.stringify({requestEditing:true,projectIsolation:true,documentRaceGuard:true,inspectorTabs:true,literalAttributes:true,quantityViews:true,failedQueryPreservesCsv:true,sketchCoordinates:true,historyRestore:true,unknownNoReplay:true,mobileDraft:true}));
 }catch(error){
  const failedPage=browser?.contexts()[0]?.pages()[0];
  if(failedPage)console.error(await failedPage.locator('[role=status]').allTextContents());
