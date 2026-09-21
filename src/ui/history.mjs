@@ -16,7 +16,7 @@ export function renderHistory(root,messages,models,projectId,actions){
   element('p',message.body||'첨부한 문맥 검토',card);
   const references=[...message.pins.map(p=>p.name),...message.sketches.map(s=>s.name),...message.files.map(f=>f.name)];
   if(references.length)element('small',references.join(' · '),card);
-  element('small',message.provider==='extension'?'확장 · '+message.extensionVersion:['file','document'].includes(message.source)?(message.host==='zwcad'?'ZWCAD 참고 도면':'Rhino 작업 사본'):`${models.find(model=>model.id===message.model)?.name||message.model} · ${message.effort} · ${message.permission==='review'?'검토만':'후보 작업 허용'}`,card);
+  element('small',message.provider==='extension'?'확장 · '+message.extensionVersion:['file','document'].includes(message.source)?(message.host==='zwcad'?(message.request?.result?.dwgEditMode==='polyline-vertices-v1'?'ZWCAD 작업 사본':'ZWCAD 참고 도면'):'Rhino 작업 사본'):`${models.find(model=>model.id===message.model)?.name||message.model} · ${message.effort} · ${message.permission==='review'?'검토만':'후보 작업 허용'}`,card);
   const context=element('details','',card);element('summary','요청 문맥',context);element('pre',JSON.stringify(message.request?.input||message,null,2),context);
   const request=message.request;if(!request)continue;
   element('small',message.provider==='extension'&&request.state==='succeeded'?'확장 완료':request.state==='running'&&request.result?.phase==='host'?'호스트 생성·저장 검증 중':request.result?.phase==='stopping'?'중단 확인 중':labels[request.state]||request.state,card);

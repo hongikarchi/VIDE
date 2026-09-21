@@ -21,7 +21,7 @@ export async function importModel(request,projectId,name,workspace,host,cadHost)
   try{
     await mkdir(directory,{recursive:true});await writeFile(source,bytes,{flag:'wx'});
     const result=await host.importFile(projectId,id,source);
-    return workspace.update(projectId,id,'succeeded',{...result,host:cad?'zwcad':'rhino',hostExecuted:true,text:cad?'DWG 모델 공간의 참고 경계를 읽었습니다. 좌표는 m이며 원본 도면 편집은 아직 지원하지 않습니다.':'원본과 분리된 작업 사본을 열었습니다. 좌표 단위는 m입니다.'});
+    return workspace.update(projectId,id,'succeeded',{...result,host:cad?'zwcad':'rhino',hostExecuted:true,text:cad&&result.dwgEditMode==='polyline-vertices-v1'?'DWG 작업 사본을 열었습니다. 기존 직선 경계의 이동·정점 수정을 지원하며 원본 파일은 변경하지 않습니다.':cad?'DWG 모델 공간의 참고 경계를 읽었습니다. 좌표는 m이며 원본 도면 편집은 아직 지원하지 않습니다.':'원본과 분리된 작업 사본을 열었습니다. 좌표 단위는 m입니다.'});
   }catch(error){
     uncertain=error.code==='HOST_RESULT_UNKNOWN';
     return workspace.update(projectId,id,uncertain?'unknown':'failed',{...intent,code:error.code||'IMPORT_FAILED',hostExecuted:false});

@@ -54,7 +54,7 @@ export class Execution {
         ...input.sketches.map((data,i)=>({id:`sketch-${i}`,type:'sketch',data})),
         ...input.files.map((data,i)=>({id:`file-${i}`,type:'file',data}))];
       const previous=this.workspace.basis(projectId,input);
-      if(previous?.result.referenceOnly&&input.permission==='candidate')throw {code:'ZWCAD_REFERENCE_ONLY'};
+      if(previous?.result.referenceOnly&&previous.result.dwgEditMode!=='polyline-vertices-v1'&&input.permission==='candidate')throw {code:'ZWCAD_REFERENCE_ONLY'};
       const referenced=input.pins.map(pin=>{const source=this.workspace.get(projectId,pin.basis);return {role:pin.role,sourceRequestId:source.id,host:source.result.host||'rhino',object:source.result.objects.find(o=>o.id===pin.id)};});
       if(referenced.length)items.push({id:'referenced-geometry',type:'geometry-reference',data:referenced});
       const conversation=this.workspace.list(projectId).filter(r=>r.id!==id&&r.state==='succeeded').slice(-6)
@@ -63,7 +63,8 @@ export class Execution {
       if(host)items.push({id:'working-model',type:'geometry',data:previous?.result.objects||[]});
       if(previous?.result.scene)items.push({id:'measurements',type:'native-measurements',data:previous.result.scene.map(({id,area,volume,length,boundsSize,layer64})=>({id,area,volume,length,boundsSize,layer:layer64?Buffer.from(layer64,'base64').toString('utf8'):null}))});
       const targetContract=target==='zwcad'?'Target is ZWCAD: only planar XY polylines, their move and remove are supported. No solid operations.':'Target is Rhino.';
-      const goal=(host?geometryContract+'\n'+targetContract+' Other-host pinned geometry is read-only reference in meters, never a writable target.\nPermission: '+input.permission+'\nUser request: ':'')+(input.body||'첨부한 설계 문맥을 검토해 주세요.');
+      const dwgContract=previous?.result.dwgEditMode==='polyline-vertices-v1'?' Imported DWG: ONLY move/vertices of existing IDs. Preserve names, object count and unmentioned geometry. No add/copy/remove in this path.':'';
+        const goal=(host?geometryContract+'\n'+targetContract+dwgContract+' Other-host pinned geometry is read-only reference in meters, never a writable target.\nPermission: '+input.permission+'\nUser request: ':'')+(input.body||'첨부한 설계 문맥을 검토해 주세요.');
       const result=await this.provider(input).run({goal,
         revision:1,items,includedIds:items.map(item=>item.id)}, {signal:controller.signal,
         onProgress:event=>this.workspace.update(projectId,id,'running',{phase:event.state==='stopping'?'stopping':'model',hostExecuted:false})});

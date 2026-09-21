@@ -2,7 +2,7 @@
 id: VERIFY-2026-09-20-native-workspace
 title: 브라우저 입력에서 실제 Rhino 후보까지
 status: review
-version: 0.40
+version: 0.41
 updated: 2026-09-21
 owner: agent:codex
 related: [AC-05, AC-17, AC-24, AC-38, T-005, T-013, T-015, T-016, T-018]
@@ -258,3 +258,11 @@ SPEC-02 후보 반복·SPEC-03.8 변경 수량의 부분 검증이다. native-mu
 ### 최신 실행 패키지 재검증
 
 0.1.0-dev.20260921.2는 a09ecdb의 제품 코드를 포함한다. portable-package.mjs에서 파일 72개 해시, 런타임 동봉 실행, 공백 경로, 중복 실행 재사용, 재시작, 실행 폴더 제거 후 프로젝트 보존, 오프라인 백업을 통과했다. 별도 시험 데이터는 .vide/package-check/32106fd9-fe62-4ee9-8f00-9ff1113b9c1a/data이다. 전체 자동 시험 83개 통과. 사용자 실무 산출물과 별도 PC 검수는 여전히 남아 있다.
+
+## DWG 사본 경계 수정과 Aside 검수 — 2026-09-21
+
+T-006 / H-ZWCAD-04·05 / SPEC-02.12·13 부분 검증이다. native-dwg-edit.mjs는 원본과 분리된 합성 mm DWG를 취득해 경계 폭 20→24 m와 후속 X+2 m 이동을 수행했다. 면적 200→240 m², 길이 60→68 m, Handle·Layer·Color 보존과 원본/이전 후보 SHA-256 불변을 확인했다. 단위·관계·객체 집합 제한과 잘못된 readback은 zwcad-edit.test.mjs로 검사했다. 전체 자동 시험 85개 통과.
+
+Aside MCP repl로 프로젝트 4180a41c-14a1-43bc-8f77-b55c94822a60을 열어 Claude 구독 AI에 실제 경계 수정 요청을 보냈다. 저장·재열기 성공과 수량표 240 m²/68 m, 이전 취득 fa106639-f967-4977-ac6f-f4a63b01c71c 대비 +40 m²/+8 m를 실제 화면에서 확인했다. [Aside 화면](../assets/native-workspace/dwg-edit-aside.png). 원본 DWG 적용이나 일반 CAD 편집 완료는 아니다.
+
+ActiveX 참고: [읽기 전용 HasExtensionDictionary](https://help.autodesk.com/cloudhelp/2024/PTB/AutoCAD-ActiveX-Reference/files/GUID-691DA1BB-3D33-45A9-9A0F-212988DBA5F6.htm). 조회 중 사전을 생성하는 GetExtensionDictionary는 사용하지 않았다. Autodesk 문서만으로 ZWCAD 호환을 주장하지 않고 위 설치본에서 검증했다.

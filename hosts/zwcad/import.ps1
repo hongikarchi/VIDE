@@ -11,11 +11,16 @@ try {
     $units=[int]$doc.GetVariable('INSUNITS')
     $factor=switch ($units) {4 {0.001} 5 {0.01} 6 {1.0} 1 {0.0254} 2 {0.3048} default {throw 'UNKNOWN_UNITS'}}
     if($doc.ModelSpace.Count -gt 500){throw 'IMPORT_LIMIT'}
-    $scene=@();$objects=@();$unsupported=@()
+    $scene=@();$objects=@();$unsupported=@();$editable=($units -eq 4 -and $doc.Groups.Count -eq 0)
     foreach($entity in $doc.ModelSpace){
         if($entity.ObjectName -ne 'AcDbPolyline'){$unsupported+=$entity.ObjectName;continue}
         $normal=$entity.Normal
         if([Math]::Abs($normal[0]) -gt 1e-10 -or [Math]::Abs($normal[1]) -gt 1e-10 -or [Math]::Abs($normal[2]-1) -gt 1e-10){$unsupported+='non-XY polyline';continue}
+        try {
+            if($entity.HasExtensionDictionary -or $doc.Layers.Item($entity.Layer).Lock -or $entity.Thickness -ne 0){$editable=$false}
+            $types=$null;$values=$null;$entity.GetXData('',[ref]$types,[ref]$values);if($types.Count){$editable=$false}
+            for($w=0;$w -lt $entity.Coordinates.Length/2;$w++){$start=0.0;$end=0.0;$entity.GetWidth($w,[ref]$start,[ref]$end);if($start -ne 0 -or $end -ne 0){$editable=$false}}
+        }catch{$editable=$false}
         $coordinates=$entity.Coordinates
         if($coordinates.Length -lt 4 -or $coordinates.Length -gt 2000){throw 'IMPORT_LIMIT'}
         $curved=$false
@@ -35,7 +40,7 @@ try {
     }
     if($unsupported.Count){throw 'UNSUPPORTED_DWG_CONTENT'}
     if(-not $objects.Count){throw 'EMPTY_DWG'}
-    [Console]::WriteLine((@{objects=@($objects);scene=@($scene);verified=$true;referenceOnly=$true;scope='model-space';sourceUnits=$units} | ConvertTo-Json -Compress -Depth 15))
+    [Console]::WriteLine((@{objects=@($objects);scene=@($scene);verified=$true;referenceOnly=$true;scope='model-space';sourceUnits=$units;dwgEditMode=$(if($editable){'polyline-vertices-v1'}else{$null})} | ConvertTo-Json -Compress -Depth 15))
 }catch{
     $code=$_.Exception.Message
     if($code -notin @('UNKNOWN_UNITS','IMPORT_LIMIT','UNSUPPORTED_DWG_CONTENT','EMPTY_DWG')){$code='ZWCAD_EXECUTION_FAILED'}
