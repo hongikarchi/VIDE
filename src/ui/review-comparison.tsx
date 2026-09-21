@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { z } from 'zod';
-import { api } from './gateway.mjs';
+import { api } from './gateway.ts';
 import { reviewRowSchema } from '../contracts/reviews.ts';
 import type { ReviewRow } from '../contracts/reviews.ts';
 import { comparisonSchema } from '../contracts/comparison.ts';

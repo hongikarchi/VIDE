@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useRef, useState } from 'react';
-import { api } from './gateway.mjs';
+import { api } from './gateway.ts';
 import { quantityTableSchema, tableViewSchema } from '../contracts/quantities.ts';
 import type { QuantityQuery, QuantityTable, TableView } from '../contracts/quantities.ts';
 const metrics = ['length','area','volume'] as const;

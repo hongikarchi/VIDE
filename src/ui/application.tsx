@@ -3,7 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { z } from 'zod';
 import { hostDocumentsSchema } from '../contracts/host-documents.ts';
 import type { HostDocuments, HostTarget } from '../contracts/host-documents.ts';
-import { api, errors } from './gateway.mjs';
+import { api, errors } from './gateway.ts';
 
 const previewSchema=z.object({id:z.string().min(1),documentId:z.number().int().positive(),added:z.number().int().nonnegative(),updated:z.number().int().nonnegative(),removed:z.number().int().nonnegative(),mode:z.string().optional()});
 const resultSchema=z.object({id:z.string().min(1),state:z.enum(['queued','running','succeeded','failed','unknown']),result:z.object({code:z.string().optional()}).passthrough().nullish()}).passthrough();

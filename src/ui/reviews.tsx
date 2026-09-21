@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { ReviewNotes } from './review-notes.tsx';
 import type { NoteActions } from './review-notes.tsx';
 import { showReviewComparison } from './review-comparison.tsx';
-import { api } from './gateway.mjs';
+import { api } from './gateway.ts';
 import { reviewRowSchema, reviewSchema, reviewNoteSchema } from '../contracts/reviews.ts';
 import type { ReviewRow, Review, ReviewNote } from '../contracts/reviews.ts';
 import { tableViewSchema } from '../contracts/quantities.ts';

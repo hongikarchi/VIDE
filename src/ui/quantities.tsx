@@ -3,7 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { z } from 'zod';
 import { QuantityView } from './quantity-view.tsx';
 import { ComparisonResult } from './comparison-result.tsx';
-import { api } from './gateway.mjs';
+import { api } from './gateway.ts';
 import { comparisonSchema } from '../contracts/comparison.ts';
 import type { Comparison } from '../contracts/comparison.ts';
 import { quantityTableSchema, tableViewsSchema } from '../contracts/quantities.ts';

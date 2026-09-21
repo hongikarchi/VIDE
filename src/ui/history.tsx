@@ -2,18 +2,13 @@ import { useLayoutEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import type { Root } from 'react-dom/client';
 import { sceneRepresentation } from '../core/scene-representation.mjs';
-import { api, labels, errors } from './gateway.mjs';
+import { api, labels, errors } from './gateway.ts';
 import { showApplication } from './application.tsx';
 import { showQuantities } from './quantities.tsx';
-interface Scene {id:string;nativeType?:string;vertices?:number[];indices?:number[];line?:number[];origin?:number[];area?:number|null;volume?:number|null}
-interface Application {id:string;state:string;result?:{code?:string}|null}
-interface Result {
- hostExecuted?:boolean;host?:string;phase?:string;text?:string;code?:string;dwgEditMode?:string;sourceHash?:string;
- sourceDocument?:{name:string;capturedAt:string;instance:string;documentId:number};
- objects?:{id:string;name:string;kind:string}[];scene?:Scene[];
- extensionResult?:{rows:{type:string;layer?:string;count:number;objectIds:string[]}[]};
-}
-interface Request {id:string;state:string;input?:unknown;result?:Result;applications?:Application[]}
+import {workspaceRequestSchema,applicationResultSchema} from '../contracts/workspace-result.ts';
+import type {WorkspaceRequest as Request} from '../contracts/workspace-result.ts';
+import type {z} from 'zod';
+type Application=z.infer<typeof applicationResultSchema>;
 interface Message {
  id:string;body:string;provider:string;model:string;effort:string;permission:string;
  source?:string;host?:string;extensionVersion?:string;baseRequestId?:string;
@@ -51,7 +46,7 @@ function Candidate({message,projectId,actions}:{message:Message;projectId:string
   {request.applications?.map(application=><div key={application.id}>
    <small>{application.state==='succeeded'?'원본 반영됨 · 파일 저장 별도':application.state==='unknown'?'원본 적용 결과 미확인':application.state==='failed'?'원본 적용 실패':'원본 적용 중'}</small>
    {application.result?.code?<small>{errorLabels[application.result.code]||application.result.code}</small>:null}
-   {application.state==='unknown'?<Action error={actions.error} run={async()=>{Object.assign(application,await api(`/projects/${projectId}/applications/${application.id}/reconcile`,'POST',{}));actions.changed();}}>결과 다시 확인</Action>:null}
+   {application.state==='unknown'?<Action error={actions.error} run={async()=>{Object.assign(application,applicationResultSchema.parse(await api(`/projects/${projectId}/applications/${application.id}/reconcile`,'POST',{})));actions.changed();}}>결과 다시 확인</Action>:null}
   </div>)}
   <Action error={actions.error} run={async()=>{await showQuantities(projectId,message.id,(id:string)=>actions.selection(message.id,id));}}>수량표</Action>
   <details><summary>측정값</summary>{scene.map(object=><p key={object.id}>{objects.find(item=>item.id===object.id)?.name||object.id} · 기하 면적 {object.area?.toFixed(2)??'—'} m² · 체적 {object.volume?.toFixed(2)??'—'} m³</p>)}</details>
@@ -71,7 +66,7 @@ function Card({message,models,projectId,actions}:{message:Message;models:{id:str
    {result?.extensionResult?.rows.map((row,index)=><details key={index}><summary>{row.type} · {row.layer||'레이어 미상'} · {row.count}개</summary>{row.objectIds.map(id=><button key={id} onClick={()=>actions.selection(message.baseRequestId,id)}>{message.pins.find(pin=>pin.id===id)?.name||id}</button>)}</details>)}
    {result?.hostExecuted?<Candidate message={message} projectId={projectId} actions={actions}/>:null}
    {result?.code?<p>{errorLabels[result.code]||result.code}</p>:null}
-   {request.state==='unknown'&&message.source==='file'&&message.host==='zwcad'&&result?.sourceHash?<Action error={actions.error} run={async()=>{message.request=await api(`/projects/${projectId}/imports/${message.id}/reconcile`,'POST',{});actions.changed();}}>불러오기 결과 확인</Action>:null}
+   {request.state==='unknown'&&message.source==='file'&&message.host==='zwcad'&&result?.sourceHash?<Action error={actions.error} run={async()=>{message.request=workspaceRequestSchema.parse(await api(`/projects/${projectId}/imports/${message.id}/reconcile`,'POST',{}));actions.changed();}}>불러오기 결과 확인</Action>:null}
    {['failed','cancelled','interrupted'].includes(request.state)&&message.provider!=='extension'&&!imported?<Action error={actions.error} run={()=>actions.restore(request)}>입력을 초안으로 복원</Action>:null}
    {message.provider!=='extension'&&['queued','running'].includes(request.state)&&!imported&&result?.phase!=='host'?<Action latch error={actions.error} run={async()=>{await api(`/projects/${projectId}/requests/${message.id}/cancel`,'POST',{});}}>중단</Action>:null}
   </>:null}

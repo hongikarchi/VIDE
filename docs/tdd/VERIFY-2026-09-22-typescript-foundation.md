@@ -2,7 +2,7 @@
 id: VERIFY-2026-09-22-typescript-foundation
 title: TypeScript·React·Vite 전환 기반 검증
 status: review
-version: 0.13
+version: 0.14
 updated: 2026-09-22
 owner: agent:codex
 related: [PLAN, ADR-016, ADR-017, T-010, T-011, T-015]
@@ -116,3 +116,9 @@ quantities.tsx와 review-comparison.tsx로 모달의 나머지 DOM을 옮겼다.
 ## 사용자 속성 입력 타입 전환
 
 native-attributes.ts는 원본 사용자 속성의 디코딩 결과와 첨부 입력을 타입으로 정의한다. 기존 개수/문자열 한도·잘못된 UTF-8 거절·중복 첨부 거절을 유지한다. 타입 검사와 사용자 속성 문자 표시·첨부를 포함한 전체 합성 브라우저 회귀가 통과했다. 기존 mjs 참조를 제거했다.
+
+## HTTP 응답 경계 전환
+
+gateway.ts의 API 결과는 unknown으로 받고 소비하는 UI가 스키마로 확인한다. 초기 프로젝트/요청 조회와 이력의 복구 응답도 확인한다. workspace-result 스키마는 UI가 사용하는 필드를 검사하며 passthrough로 파일/네이티브 ID/속성 등 호스트 메타데이터를 보존한다. 아직 모든 호스트 결과 필드의 완전한 계약은 아니다.
+
+타입 검사·전체 합성 브라우저 회귀와 추가 경계 시험 2개가 통과했다. null 오류 응답/잘못된 JSON/연결 실패는 각각 요청 실패/잘못된 응답/네트워크 오류로 구분한다. 네이티브 메타데이터가 디코딩에서 사라지지 않고 잘못된 정점 형식은 거절되는지 확인했다.

@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { api } from './gateway.mjs';
+import { api } from './gateway.ts';
 import { hostDocumentsSchema, hostSelectionSchema } from '../contracts/host-documents.ts';
 import type { HostDocuments, HostTarget, HostSelection } from '../contracts/host-documents.ts';
 interface Props {

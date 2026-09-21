@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { z } from 'zod';
-import { api } from './gateway.mjs';
+import { api } from './gateway.ts';
 import { reviewNoteSchema } from '../contracts/reviews.ts';
 import type { Review, ReviewNote } from '../contracts/reviews.ts';
 

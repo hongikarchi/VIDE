@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { api, errors } from './gateway.mjs';
+import { api, errors } from './gateway.ts';
 import { aiSettingsSchema, aiSettingsResponseSchema, providerStatusSchema, providers } from '../contracts/ai-settings.ts';
 import type { AiSettingsResponse, ProviderStatus, Provider } from '../contracts/ai-settings.ts';
 

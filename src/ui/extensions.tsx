@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { z } from 'zod';
-import { api } from './gateway.mjs';
+import { api } from './gateway.ts';
 
 const registrationSchema=z.object({enabled:z.boolean(),revision:z.number().int().nonnegative()});
 const extensionSchema=registrationSchema.extend({id:z.string().min(1),name:z.string(),version:z.string()});
@@ -40,7 +40,7 @@ function Extensions({context,catalog,onResult}:Props){
     <button disabled={pending||!available} onClick={()=>perform(async()=>{
      const submission=submissions.current[extension.id]??={id:crypto.randomUUID(),requestId:context.requestId!,objectIds:[...ids]};
      setAttempts(current=>({...current,[extension.id]:submission}));
-     const request=await api(`/projects/${context.projectId}/extensions/${extension.id}/run`,'POST',submission);
+     const request=z.object({id:z.string()}).passthrough().parse(await api(`/projects/${context.projectId}/extensions/${extension.id}/run`,'POST',submission));
      if(request?.id!==submission.id)throw new Error('실행 결과의 요청이 일치하지 않습니다.');
      onResult(request);dialog.close();
     })}>{attempt?'같은 실행 다시 확인':'실행'}</button>
