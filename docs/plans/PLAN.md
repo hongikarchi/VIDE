@@ -2,7 +2,7 @@
 id: PLAN
 title: VIDE 구현계획 (마스터)
 status: review
-version: 0.67
+version: 0.68
 updated: 2026-09-21
 owner: agent:codex
 related: [SPEC-00, SPEC-01, SPEC-02, SPEC-03, SPEC-04, SPEC-05, ADR-013, OQ-03, OQ-04, OQ-06, OQ-07, OQ-08, OQ-09, OQ-10, OQ-14]
@@ -316,6 +316,8 @@ T-003·005는 H-RHINO-04·05의 지원안을, T-003·006은 H-ZWCAD-04·05의 �
 기존 구현을 지우고 재시작하거나 현재 코드 모양에 SPEC을 맞추지 않는다. 필요 변경을 티켓 단위로 적용하며 실제 소스 대조/미시험 구분은 [구현 전 문서 검수](../tdd/VERIFY-2026-09-20-preimplementation.md)에 남긴다.
 
 ### 6.5 현재 티켓 현황과 이어갈 위치
+
+**공유 대안 비교 갱신:** PLAN-02 §5에서 설정 자동화를 전제로 Workers/D1/R2와 Linux VPS/Node/SQLite를 우선 비교안으로 정리했다. Supabase는 인증/DB 관리형 대조안으로 유지한다. 공식 단가 기반 인프라 소계, 인증/메일·지역·DB 제한·백업 복구·12개월 총비용을 함께 비교하며 실제 배포/성능 검증은 미수행이다. 아래 Supabase 기본안 기록은 이전 검토 경과다.
 
 **공유 비용 검증 보완:** PLAN-02 §5에 공식 요금 기준 저장/전송 민감도, Supabase Auth/DB+R2 대조안, 월/12개월 비용·예산·Spend Cap 한계를 추가했다. Supabase는 비용 비교 전 확정 배포안이 아니며 계정 생성·유료 배포·구현은 수행하지 않았다.
 

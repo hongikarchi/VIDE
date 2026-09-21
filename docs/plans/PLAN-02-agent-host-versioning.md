@@ -2,7 +2,7 @@
 id: PLAN-02
 title: 범용 AI 실행·다중 호스트 통신·모델 데이터 버전 관리
 status: review
-version: 0.6
+version: 0.7
 updated: 2026-09-21
 owner: agent:codex
 related: [PLAN, SPEC-02, SPEC-03, SPEC-04, SPEC-05, ADR-013]
@@ -175,7 +175,7 @@ AI 과업 완료 또는 명시적 저장/체크포인트 시 .3dm/.dwg와 데이
 
 공식 근거: [Cloudflare 웹 앱 구성](https://developers.cloudflare.com/use-cases/web-apps/), [Workers 제한](https://developers.cloudflare.com/workers/platform/limits/), [Workers 요금](https://developers.cloudflare.com/workers/platform/pricing/), [R2 요금](https://developers.cloudflare.com/r2/pricing/), [Render 디스크 제한](https://render.com/docs/disks), [Supabase 데이터베이스](https://supabase.com/docs/guides/database/overview), [Auth](https://supabase.com/docs/guides/auth), [Storage](https://supabase.com/docs/guides/storage), [Lightsail 구성](https://docs.aws.amazon.com/lightsail/latest/userguide/what-is-amazon-lightsail.html), [요금](https://aws.amazon.com/lightsail/pricing/).
 
-사용자 로그인·프로젝트 초대/공유를 고려한 운영 편의 비교의 기본안은 Supabase Auth+Postgres+비공개 Storage와 정적 프런트 호스팅의 조합이다. 최종 배포 선택은 아래 비용 비교를 통과해야 한다. Cloudflare는 정적 화면/CDN 후보로 남기되 D1과 Postgres, R2와 Storage를 처음부터 중복 운영하지 않는다. 정적 호스팅 제공자·요금·지역은 배포 검증에서 선택한다. 현재 요구만으로 AWS 서버 운영 부담을 추가할 근거는 약하다.
+사용자 로그인·프로젝트 초대/공유는 Cloudflare Workers+D1+R2와 Linux VPS+Node+SQLite+객체 저장소를 우선 비교한다. Supabase는 관리형 인증/DB 대조안으로 유지한다. 초기 설정을 에이전트가 수행할 수 있으므로 설정 편의만으로 관리형 서비스를 우선하지 않는다. D1과 Postgres, R2와 Storage를 처음부터 중복 운영하지 않는다. 구체 제공자·요금·지역은 아래 비용/복구 검증에서 선택한다.
 
 ### 서버와 데이터베이스를 고르는 기준
 
@@ -188,7 +188,7 @@ PostgreSQL은 웹 서버가 아니라 데이터베이스다. 관계형 조회 �
 | 과거 모델의 객체별 의견 | 게시본 → 기준 버전/객체 참조 → comments | 다른 버전의 객체와 의견을 섞지 않음 |
 | 초대 수락 | 초대 → 검증한 사용자 → 멤버십 | 만료/중복 수락을 처리하고 한 번의 트랜잭션으로 반영 |
 
-이 조회 때문에 PostgreSQL만 가능한 것은 아니다. Supabase를 우선 검증하는 이유는 Auth·Postgres·Storage를 함께 운영하는 관리형 서비스로 인증/권한/백업의 직접 운영 부담을 줄일 수 있다는 판단이다. 별도 PostgreSQL 서버를 직접 설치·관리한다는 뜻이 아니다. 서비스 규모에 대한 검증된 필요나 최저 비용이라는 주장도 아니다. [SQLite 적용 기준](https://www.sqlite.org/whentouse.html), [Supabase 구성](https://supabase.com/docs/guides/database/overview).
+이 조회 때문에 PostgreSQL만 가능한 것은 아니다. Supabase를 비교 후보로 유지하는 이유는 Auth·Postgres·Storage를 함께 운영하는 관리형 서비스로 인증/권한/백업의 직접 운영 부담을 줄일 수 있다는 판단이다. 별도 PostgreSQL 서버를 직접 설치·관리한다는 뜻이 아니다. 서비스 규모에 대한 검증된 필요나 최저 비용이라는 주장도 아니다. [SQLite 적용 기준](https://www.sqlite.org/whentouse.html), [Supabase 구성](https://supabase.com/docs/guides/database/overview).
 
 T-009는 다음 순서로 배포 구성을 판정한다.
 
@@ -197,7 +197,7 @@ T-009는 다음 순서로 배포 구성을 판정한다.
 3. Supabase+정적 호스팅, Node+SQLite+인증+파일 저장, Workers+D1+R2+인증을 완성된 서비스 단위로 비교한다. 사용량 요금뿐 아니라 인증 연동, 권한 구현, 배포 중단, 백업/복구, 운영 시간과 이전 비용을 합산한다. 자체 로그인 보안 구현을 무료로 가정하지 않는다.
 4. 먼저 문서/요금/제약으로 후보를 좁히고 기본안 하나의 작은 공유 흐름을 검증한다. 필수 조건 미달 또는 비용/운영 부담의 구체적 근거가 있을 때 대안 하나를 시험한다. 세 플랫폼을 모두 구현하지 않는다. 비용 산정의 실제 사용량·요금제·지역과 복구 시험 결과를 남긴 뒤 배포안을 확정한다.
 
-현재 Supabase는 이 검증의 기본안이며 로컬 MVP의 선행 조건이 아니다. 무료 요금제의 존재만으로 운영 지속성이나 복구 요구 충족을 선언하지 않는다.
+공유 서비스의 우선 비교안은 아래 두 구성으로 좁히며 로컬 MVP의 선행 조건이 아니다. 무료 요금제의 존재만으로 운영 지속성이나 복구 요구 충족을 선언하지 않는다.
 
 ### 비용 증가와 예산 판정 — 2026-09-21 공식 요금 확인
 
@@ -220,13 +220,39 @@ T-009는 다음 순서로 배포 구성을 판정한다.
 
 [Supabase Spend Cap](https://supabase.com/docs/guides/platform/cost-control)은 일부 사용량만 제한하며 컴퓨트·일부 부가 기능은 제외된다. 한도 초과 시 서비스 제한이 생길 수 있고 임의 총액 상한이나 세밀한 예산 알림 기능으로 간주하지 않는다. 공급자 사용량 확인과 제품의 업로드/요청 제한·예산 알림 방식을 별도로 검증한다. 비용을 이유로 승인 없이 확정 게시본을 삭제하지 않는다. 일회성 캐시/실패 업로드 정리와 사용자 데이터 보존을 구분한다.
 
+### 다른 구성과의 비교 — 설정 자동화를 전제로 한 우선순위
+
+공유 서버는 계정·프로젝트 권한·게시본·의견을 담당한다. Rhino 실행이나 전체 로컬 IDE 서버를 그대로 인터넷에 노출하지 않는다. 아래 금액은 2026-09-21 공식 자료의 **기본 인프라 소계**다. 앞 절과 같은 저장/전송 가정이며 메타데이터 1 GB 이하, API/CPU/DB/R2 요청은 각 포함량 내, 모델 파일은 객체 저장소에서 직접 전달한다고 가정한다. 모두 세금·도메인·메일·추가 백업·관측·운영 비용을 별도로 더한다. 최저 요금 서버가 과업 성능을 만족한다는 측정 결과는 아니다.
+
+| 구성 | 100 GB 저장 / 월 1 TB 전송 | 500 GB 저장 / 월 5 TB 전송 | 평가 |
+|---|---|---|---|
+| Workers Paid + D1 + R2 + 인증 라이브러리 | $6.35 | $12.35 | 저비용 공유 API의 우선 후보. OS 운영 없음. D1/Workers 제약 검증 필요 |
+| Lightsail Linux 2 GB IPv4 + Node/SQLite + R2 | $13.35 | $19.35 | 일반 Node 실행과 데이터 이전이 쉬운 우선 대조안. OS/DB 운영·단일 서버 복구 담당 |
+| Hetzner CX23 유럽 + Node/SQLite + R2 | $7.84 + IPv4 | $13.84 + IPv4 | 가격 대조안. 한국에서의 API 지연, 지역별 가격/가용성 확인 전 채택하지 않음 |
+| Render Starter + SQLite 지속 디스크 + R2 | $8.35 + 디스크 | $14.35 + 디스크 | Node 배포 편의. 작은 메모리·단일 디스크/배포 제약·계정 요금 검증 필요 |
+| Supabase Auth/DB + R2 | $26.35 | $32.35 | 관리형 인증/DB 대조안. 운영 편의의 추가 비용을 비교 |
+
+Workers 기본료 $5, Lightsail 비교 인스턴스 $12, Hetzner 유럽 CX23 $6.49(IPv4 제외), Render Starter $7에 R2의 $1.35/$7.35를 더한 산식이다. 무료 체험·한시 크레딧은 제외한다. VPS의 포함 전송량을 이용하는 안은 지역별 초과 요금까지 따로 계산하며 위 표의 모델 다운로드는 VPS를 통과하지 않는다. Hetzner 유럽 가격을 싱가포르 가격으로 적용하지 않는다. 운영/개발 환경을 여러 개 띄우면 각각의 비용을 합산한다.
+
+근거: [Workers 가격](https://developers.cloudflare.com/workers/platform/pricing/), [D1 가격](https://developers.cloudflare.com/d1/platform/pricing/), [Lightsail 가격](https://aws.amazon.com/lightsail/pricing/), [Hetzner 현행 지역별 가격 조정표](https://docs.hetzner.com/general/infrastructure-and-availability/price-adjustment/), [Render 공식 Starter 비교](https://render.com/articles/render-vs-railway), [지속 디스크 제약](https://render.com/docs/disks). R2/Supabase 단가는 앞 절의 공식 자료를 따른다.
+
+**Cloudflare 우선 시험안:** 정적 화면+Workers API, D1에는 계정/멤버십/게시 참조/의견, R2에는 비공개 게시 파일을 둔다. 인증은 Better Auth 등 유지보수되는 라이브러리를 검토하며 암호/세션 프로토콜을 새로 만들지 않는다. [Better Auth의 D1 지원](https://better-auth.com/blog/1-5)은 선택 근거일 뿐 현재 VIDE와의 통합 검증은 아니다. 이메일 인증/초대 발송은 별도 메일 공급자 비용과 전송 제한을 포함한다. 제품 사용자를 위한 로그인과 Cloudflare 관리 계정/Access를 혼동하지 않는다. 프로젝트 권한·초대 회수는 라이브러리가 자동 해결한다고 가정하지 않고 구현한다.
+
+[D1 제한](https://developers.cloudflare.com/d1/platform/limits/)은 유료 DB 하나당 10 GB이며 각 DB는 질의를 직렬 처리한다. 첫 공유 메타데이터에는 적합할 수 있으나 대량 객체 속성/메시를 넣거나 과도한 분할로 제한을 우회하는 설계는 하지 않는다. 동시 초대 수락·권한 회수·게시 확정의 원자성과 인덱스 사용량, 런타임/인증 호환성, 백업 반출/복원을 시험한다. 수용 불가하면 여러 플랫폼 전용 우회 계층 대신 Node 안으로 전환한다.
+
+**VPS 우선 대조안:** Linux+Caddy HTTPS+지원 중인 Node LTS+SQLite+인증 라이브러리+외부 객체 저장소로 시작한다. 배포 설정과 마이그레이션을 코드로 관리하고 프로세스 자동 재시작, OS 업데이트, 일관된 DB 백업의 외부 보관, 복구 스크립트, 외부 상태 확인을 준비한다. SQLite 파일을 네트워크 디스크로 공유하지 않으며, 다중 쓰기 서버가 실제 필요할 때 Postgres로 이행한다. 단일 VPS는 고가용성이 아니므로 완전히 새 서버에 복원하는 시험으로 복구 시간/자료 손실 구간을 측정한다. 에이전트의 작업 세션이 종료되어도 돌아가는 자동화와 알림을 구축하며 상시 에이전트 감시를 가정하지 않는다.
+
+**객체 저장소도 별도 비교:** R2는 반복 열람용 우선안이다. [Backblaze B2](https://www.backblaze.com/cloud-storage/pricing)는 현재 $6.95/TB-month부터, 저장량의 3배까지 무료 전송이므로 장기 보관/백업의 가격 대조안이다. 앞 표처럼 전송이 저장의 10배인 경우 초과 전송 또는 CDN 파트너 경로의 실제 요금을 확인해야 한다. 모든 전송이 무료라고 계산하지 않는다. AWS 객체 저장소나 VPS 디스크만 쓰는 안도 같은 전송/백업 조건으로 견적을 대조하되, 특정 저장소를 제외하려고 자료를 이중 보관하지 않는다.
+
+**선택 순서:** 먼저 Cloudflare 안에서 로그인→초대→게시→열람→의견→권한 회수와 백업 복원을 작은 범위로 검증한다. Node/VPS 안은 런타임·DB 제약 또는 한국에서의 지연·총비용상 실익이 드러날 때 비교한다. 설치가 쉽다는 이유로 Supabase를 선택하거나 월 기본료만 보고 VPS를 선택하지 않는다. 실제 전송·API p95·동시 쓰기·복구 시간과 운영 작업을 기록하고 12개월 총비용을 대조한다. 예시 소계에 새 기능/사용량이 더해질 수 있으므로 예산 보장으로 사용하지 않는다. 구매·배포 전 지역/예산 결정은 그대로 필요하며 이번 작업은 조사와 계획 갱신이다.
+
 ### 로그인·프로젝트 공유
 
 첫 구현 계획의 프로젝트 링크는 로그인 후 멤버십을 확인하는 링크다. 로그인 없는 공개 링크를 허용할지, 공개 범위·만료를 어떻게 둘지는 OQ-04의 별도 제품 결정으로 남긴다. ‘링크 공유’라는 표현만으로 익명 접근을 열지 않는다.
 
 공유 동작은 SPEC-04.8, 제품 약속은 PRD §12.5를 따른다. 최소 테이블은 projects, project_members(project_id,user_id,role), invitations, publications, comments다. 첫 역할은 owner/viewer/commenter이며 임의 원격 CAD 실행 권한을 만들지 않는다. 초대는 검증된 수신 계정으로 수락하고 토큰은 해시로 저장하며 만료·취소·중복 수락을 처리한다.
 
-프로젝트·의견·자산 접근은 현재 멤버십을 조회하는 RLS/API 정책으로 판정한다. JWT의 오래된 역할이나 표시 이름으로 권한을 부여하지 않는다. 비공개 Storage의 파일은 권한 검사 또는 짧은 만료 URL로 전달하고 권한 회수 이후 새 발급/접근을 차단한다. 이미 발급된 URL의 만료 전 접근과 내려받은 파일까지 즉시 철회했다고 표시하지 않는다. service role 자격 증명은 프런트/공유 자산에 넣지 않는다. [데이터 RLS](https://supabase.com/docs/guides/database/postgres/row-level-security), [파일 접근 정책](https://supabase.com/docs/guides/storage/security/access-control)을 사용하되 프로젝트별 격리 정책은 직접 구현·시험한다.
+프로젝트·의견·자산 접근은 현재 멤버십을 조회하는 API 정책으로 판정하며 Supabase 선택 시 RLS를 함께 적용한다. JWT의 오래된 역할이나 표시 이름으로 권한을 부여하지 않는다. 비공개 Storage의 파일은 권한 검사 또는 짧은 만료 URL로 전달하고 권한 회수 이후 새 발급/접근을 차단한다. 이미 발급된 URL의 만료 전 접근과 내려받은 파일까지 즉시 철회했다고 표시하지 않는다. service role 자격 증명은 프런트/공유 자산에 넣지 않는다. [데이터 RLS](https://supabase.com/docs/guides/database/postgres/row-level-security), [파일 접근 정책](https://supabase.com/docs/guides/storage/security/access-control)은 Supabase 선택 시 적용하며 다른 구성에서도 같은 프로젝트별 격리를 직접 구현·시험한다.
 
 검수에는 두 사용자·두 프로젝트의 교차 접근 거절, 초대 만료/취소, 탈퇴·권한 회수, 파일 직접 URL, 과거 게시본 접근을 포함한다. 계정 공유는 동시 CAD 편집·타인 PC 실행·오프라인 자동 병합의 채택을 뜻하지 않는다.
 
