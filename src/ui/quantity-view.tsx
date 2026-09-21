@@ -1,13 +1,12 @@
 import { Fragment, useEffect, useRef, useState } from 'react';
-import { createRoot } from 'react-dom/client';
 import { api } from './gateway.mjs';
-import { quantityTableSchema, tableViewSchema, tableViewsSchema } from '../contracts/quantities.ts';
+import { quantityTableSchema, tableViewSchema } from '../contracts/quantities.ts';
 import type { QuantityQuery, QuantityTable, TableView } from '../contracts/quantities.ts';
 const metrics = ['length','area','volume'] as const;
 const number = (value:number|null) => value===null?'미상':value.toLocaleString('ko-KR',{maximumFractionDigits:3});
 const aggregate = (metric:QuantityTable['totals']['area']) => `${metric.known?number(metric.value):'미상'}${metric.unknown?' · 미상 '+metric.unknown+'개 제외':''}`;
 interface Props {projectId:string;requestId:string;initial:QuantityTable;views:TableView[];onSelect:(id:string)=>void;isCurrent:()=>boolean}
-function QuantityView({projectId,requestId,initial,views:initialViews,onSelect,isCurrent}:Props) {
+export function QuantityView({projectId,requestId,initial,views:initialViews,onSelect,isCurrent}:Props) {
  const [table,setTable]=useState(initial),[query,setQuery]=useState(initial.query);
  const [views,setViews]=useState(initialViews),[selected,setSelected]=useState<TableView>();
  const [name,setName]=useState(''),[status,setStatus]=useState('');
@@ -64,10 +63,4 @@ function QuantityView({projectId,requestId,initial,views:initialViews,onSelect,i
   </tbody></table></div>
   <a download="VIDE-quantities.csv" href={`/api/v1/projects/${projectId}/requests/${requestId}/quantities.csv?${new URLSearchParams(table.query)}`}>CSV 내려받기</a>
  </>;
-}
-export function initializeQuantityView(parent:HTMLElement,projectId:string,requestId:string,initial:unknown,views:unknown,onSelect:Props['onSelect'],isCurrent:Props['isCurrent']):()=>void {
- const props={projectId,requestId,initial:quantityTableSchema.parse(initial),views:tableViewsSchema.parse(views),onSelect,isCurrent};
- const mount=document.createElement('div');parent.append(mount);const root=createRoot(mount);
- root.render(<QuantityView {...props} />);
- return ()=>{root.unmount();mount.remove();};
 }

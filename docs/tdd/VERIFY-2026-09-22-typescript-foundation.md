@@ -2,7 +2,7 @@
 id: VERIFY-2026-09-22-typescript-foundation
 title: TypeScript·React·Vite 전환 기반 검증
 status: review
-version: 0.11
+version: 0.12
 updated: 2026-09-22
 owner: agent:codex
 related: [PLAN, ADR-016, ADR-017, T-010, T-011, T-015]
@@ -106,3 +106,9 @@ application.tsx와 extensions.tsx로 옮기고 기존 mjs는 삭제했다. 적�
 reviews.tsx와 review-notes.tsx는 목록·저장·샌드박스 iframe·의견 입력을 소유한다. 목록 버튼은 조회 당시 프로젝트 ID를 사용한다. 늦은 조회가 다른 프로젝트나 열린 검토본을 덮지 않으며 저장 완료와 목록 새로고침 실패를 구분한다. 검토본/의견 응답과 브라우저 보관 초안을 사용 전에 검증한다. 닫힌 의견 폼의 늦은 저장 결과는 새로 작성한 다른 ID의 초안을 지우지 않는다.
 
 임시 HTTP/DB/Chrome에서 합성 후보의 검토본 저장→의견 저장 응답 유실→창 닫기/재열기→같은 ID로 회수→저장 행 1개를 검증했다. 기존 초안과 다른 후보 기준에 대한 첨부는 거절했고, 초안을 비우고 기준 후보를 선택한 후 의견을 명시적으로 첨부했다. HTML iframe의 빈 sandbox도 유지했다. 외부 게시·작성자 인증·실호스트 검증은 아니다.
+
+## 수량표 모달·비교 전환
+
+quantities.tsx와 review-comparison.tsx로 모달의 나머지 DOM을 옮겼다. 비교 결과 스키마와 표시 컴포넌트를 공유하고 반환된 before/after가 요청과 같은지 확인한다. 기준 변경 시 이전 결과와 A/B iframe을 제거하며 진행 중 선택 변경을 막는다. 수량표는 중첩 수동 React root 대신 QuantityView를 직접 구성한다. 기존 mjs와 불필요한 초기화 함수를 제거하고 테스트 fixture 경로를 갱신했다.
+
+타입 검사·브라우저 회귀를 통과했다. 임시 DB에 연결된 합성 후보/검토본을 만들어 체적 +6 m³, 같은 검토본 비교의 동일 표시, 기준 변경 시 이전 iframe 제거, iframe sandbox 유지와 후보 수량표의 동일 차이를 확인했다. 호스트 계산 추가 실행이나 대형 모델 성능 측정은 아니다.

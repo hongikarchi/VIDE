@@ -4,7 +4,7 @@ import type { Root } from 'react-dom/client';
 import { sceneRepresentation } from '../core/scene-representation.mjs';
 import { api, labels, errors } from './gateway.mjs';
 import { showApplication } from './application.tsx';
-import { showQuantities } from './quantities.mjs';
+import { showQuantities } from './quantities.tsx';
 interface Scene {id:string;nativeType?:string;vertices?:number[];indices?:number[];line?:number[];origin?:number[];area?:number|null;volume?:number|null}
 interface Application {id:string;state:string;result?:{code?:string}|null}
 interface Result {
