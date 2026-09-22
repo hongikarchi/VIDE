@@ -10,9 +10,11 @@ const env={...process.env,VIDE_DATA_DIR:data,VIDE_PORT:'0',PATH:join(process.env
 const launch=()=>exec(join(packageRoot,'VIDE.exe'),['--no-browser'],{env,windowsHide:true,timeout:15000});
 const waitUrl=async()=>{const deadline=Date.now()+15000;while(Date.now()<deadline){const url=await liveLaunch(data);if(url)return url;await new Promise(resolve=>setTimeout(resolve,50));}throw Error('Package startup timed out');};
 const {chromium}=await import(pathToFileURL(playwright).href);let browser;
+const stage=async phase=>{await writeFile(join(workspace,'stage.json'),JSON.stringify({phase,at:new Date().toISOString()},null,2));console.log('package-check: '+phase);};
 try{
- await launch();let url=await waitUrl();browser=await chromium.launch({channel:'chrome',headless:true,args:['--enable-unsafe-swiftshader']});const page=await browser.newPage({viewport:{width:1440,height:900}}),errors=[];page.on('pageerror',error=>errors.push(error.message));await installBrowserSupport(page);await page.goto(url);await page.waitForFunction(()=>document.querySelector('#connection-status').textContent.includes('연결됨'));assert.equal(await page.locator('#canvas canvas').count(),1);await page.waitForFunction(()=>document.querySelector('#connection-status').textContent.includes('ChatGPT 연결됨'),null,{timeout:20000});
+ await stage('starting');await launch();let url=await waitUrl();browser=await chromium.launch({channel:'chrome',headless:true,args:['--enable-unsafe-swiftshader']});const page=await browser.newPage({viewport:{width:1440,height:900}}),errors=[];page.on('pageerror',error=>errors.push(error.message));await installBrowserSupport(page);await page.goto(url);await page.waitForFunction(()=>document.querySelector('#connection-status').textContent.includes('연결됨'));assert.equal(await page.locator('#canvas canvas').count(),1);await page.waitForFunction(()=>document.querySelector('#connection-status').textContent.includes('ChatGPT 연결됨'),null,{timeout:20000});
  const projectId=await page.evaluate(async()=>{const api=window.testApi;return (await api('/projects','POST',{name:'Portable preserved project'})).id;});await launch();assert.equal(await waitUrl(),url);
+ await stage('browser-ready');
  const feedback=await page.evaluate(async id=>window.testApi('/projects/'+id+'/shared-feedback'),projectId);assert.deepEqual(feedback,[]);
  await page.getByText('검토본',{exact:true}).click();await page.getByRole('button',{name:'외부 의견',exact:true}).click();await page.getByLabel('외부 의견 파일').waitFor();await page.getByRole('button',{name:'닫기',exact:true}).click();
  if(dwgFixture){
@@ -24,14 +26,15 @@ try{
   const deadline=Date.now()+120000;let imported;
   while(Date.now()<deadline){const rows=await page.evaluate(async id=>window.testApi('/projects/'+id+'/requests'),projectId);if(rows.length&&!['queued','running'].includes(rows.at(-1).state)){imported=rows.at(-1);break;}await new Promise(resolve=>setTimeout(resolve,300));}
   assert.equal(imported?.state,'succeeded',JSON.stringify(imported));assert.equal(imported.result.importMode,'sdk');assert.equal(imported.result.scene[0].area,200);assert.equal(imported.result.scene[0].length,60);
-  await page.getByRole('button',{name:'이 후보 보기',exact:true}).click();await page.screenshot({path:join(workspace,'dwg-import.png')});
+  await page.getByRole('button',{name:'이 후보 보기',exact:true}).click();await page.screenshot({path:join(workspace,'dwg-import.png')});await stage('dwg-imported');
  }
  await page.getByLabel('초안 메뉴').click();page.once('dialog',dialog=>dialog.accept());await page.getByRole('button',{name:'앱 종료',exact:true}).click();await page.getByText('VIDE 종료 중입니다. 이 창을 닫아도 됩니다.',{exact:true}).waitFor();
  // Keep the shutdown page alive beyond the last toast lifetime to catch detached-DOM callbacks.
- await page.waitForTimeout(5000);assert.deepEqual(errors,[]);
+ await stage('shutdown-visible');await page.waitForTimeout(5000);assert.deepEqual(errors,[]);await stage('shutdown-timer-checked');
  const deadline=Date.now()+10000;while(await liveLaunch(data)){if(Date.now()>deadline)throw Error('Shutdown timed out');await new Promise(resolve=>setTimeout(resolve,40));}
- await launch();url=await waitUrl();await page.goto(url);await page.waitForFunction(()=>document.querySelector('#connection-status').textContent.includes('연결됨'));const projects=await page.evaluate(async()=>{const api=window.testApi;return api('/projects');});assert.ok(projects.some(project=>project.id===projectId));assert.deepEqual(errors,[]);
+ await stage('restarting');await launch();url=await waitUrl();await page.goto(url);await page.waitForFunction(()=>document.querySelector('#connection-status').textContent.includes('연결됨'));const projects=await page.evaluate(async()=>{const api=window.testApi;return api('/projects');});assert.ok(projects.some(project=>project.id===projectId));assert.deepEqual(errors,[]);
  await page.evaluate(async()=>{const api=window.testApi;await api('/shutdown','POST',{});});while(await liveLaunch(data))await new Promise(resolve=>setTimeout(resolve,40));
+ await stage('restarted-and-stopped');
  const backup=join(workspace,'saved backup'),runtime=join(packageRoot,'runtime','node.exe'),backupScript=join(packageRoot,'app','src','desktop','backup.mjs');await exec(runtime,[backupScript,'create',data,backup],{env,windowsHide:true});const verification=JSON.parse((await exec(runtime,[backupScript,'verify',backup],{env,windowsHide:true})).stdout);assert.ok(verification.verified);
  assert.ok(resolve(install).startsWith(workspace+'\\'));await rm(install,{recursive:true,force:true,maxRetries:20,retryDelay:100});assert.ok((await readFile(join(data,'vide.sqlite'))).length>0);
  const evidence={version:manifest.version,bundledRuntime:true,filesVerified:manifest.files.length,spaceInPath:true,duplicateLaunch:true,browserLoaded:true,sharedFeedbackAvailable:true,packagedDwgSdkRead:Boolean(dwgFixture),restarted:true,dataPreservedAfterRemoval:true,offlineBackupVerified:true,isolatedData:data};await writeFile(join(workspace,'result.json'),JSON.stringify(evidence,null,2));console.log(JSON.stringify(evidence));
