@@ -2,7 +2,7 @@
 id: VERIFY-2026-09-22-typescript-foundation
 title: TypeScript·React·Vite 전환 기반 검증
 status: review
-version: 0.42
+version: 0.43
 updated: 2026-09-22
 owner: agent:codex
 related: [PLAN, ADR-016, ADR-017, T-010, T-011, T-015]
@@ -280,3 +280,9 @@ SDK execute 영수증의 value가 서버 응답에서 누락되어 AI가 직접 
 ## 최신 패키지 재검증
 
 375e4ea 기준 `VIDE-0.1.0-dev.20260922.4-windows-x64.zip`의 5,098개 파일 해시·번들 Node·공백 경로·중복 실행·브라우저 로드·재시작·제거 후 데이터 보존·오프라인 백업을 확인했다. 증거 경로 `.vide/package-check/ee85ae57-7d71-4004-85ea-3456cdaed9e9`. 번들 SDK 시험 `.vide/packaged-sdk/564bd03d-6ea9-440a-bde8-d194738cc095`에서 객체 1개·체적 24의 생성/저장/재열기를 통과했다. 제품 UI·호스트 제어 코드는 패키지에 포함하지만 외부 공유 실험은 포함하지 않는다.
+
+## 최신 로컬 공유 기능 포함 패키지
+
+`0.1.0-dev.20260922.5`는 6824627 기준 데스크톱 제품 코드다. `tests/integration/portable-package.mjs`를 번들 Node와 개발 Node 없는 PATH, 공백 설치 경로에서 실행했다. `.vide/package-check/09ac29b4-a07b-449c-97f4-945556003225/result.json`에 5,105개 파일 해시·브라우저·외부 의견 API/메뉴·중복 실행·재시작·제거 후 사용자 데이터 보존·오프라인 백업 통과를 기록했다. 화면은 headless Chrome, 런처는 숨김 실행으로 시스템 마우스를 사용하지 않았다. 성공한 시험의 압축 해제 복사본은 제거했다.
+
+공유 자료 내보내기/외부 의견 수신은 포함하지만 Cloudflare 서버의 자동 설치/배포는 포함하지 않는다. 네이티브 SDK 실행은 이 패키지에서 재시험하지 않았으며 이전 .4의 실제 SDK 결과와 구분한다. 별도 비개발 PC·서명/설치 프로그램은 미검수다. 기존 IDE 전체 headless 브라우저 회귀와 전체 자동 시험 129개도 통과했다.
