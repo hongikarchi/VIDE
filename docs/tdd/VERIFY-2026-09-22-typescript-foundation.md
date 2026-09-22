@@ -2,7 +2,7 @@
 id: VERIFY-2026-09-22-typescript-foundation
 title: TypeScript·React·Vite 전환 기반 검증
 status: review
-version: 0.33
+version: 0.34
 updated: 2026-09-22
 owner: agent:codex
 related: [PLAN, ADR-016, ADR-017, T-010, T-011, T-015]
@@ -220,3 +220,11 @@ backupWorkspace를 TypeScript로 옮기며 sdk-models를 모델 백업 대상에
 ## 서버 진입/라우팅과 원본 적용 제어 전환
 
 application/server/main을 TypeScript로 전환해 HTTP 입력·저장 결과·복구 promise·서버 종료와 적용 명령을 연결했다. 호스트 쓰기 뒤 잘못된 결과는 unknown으로 보존하고 SDK 후보의 레거시 적용 차단을 유지한다. 보고서 입력/저장 검토본도 경계에서 확인한다. Windows 런처가 main.ts를 실행하도록 변경하고 설치 안내에서 후보 worker와 기존 문서 연결을 구분했다. 114개 자동 시험·빌드·브라우저 전체 회귀가 통과했다. 최신 설치 패키지 검수와 기존 호스트 어댑터 타입 전환은 후속이다.
+
+## 호스트 어댑터 전환 및 설치본 검증
+
+Rhino의 기존 취득·이동·적용·회수와 ZWCAD COM 어댑터를 TypeScript로 옮겼다. 외부 응답을 실행 경계에서 검사한다. DWG 쓰기 응답이 깨진 경우 unknown으로 유지하고 자동 재전송하지 않는다. 서버 allowJs/checkJs 공존 설정을 제거했고 제품 런타임 전체가 strict 검사 대상이다. desktop 빌드/백업 스크립트와 시험 도구는 별도다.
+
+115개 자동 시험, 서버 타입 검사 및 browser-react-panels 전체 회귀 통과. 실제 ZWCAD 시험 `48287c1b-2e84-47a6-8f3c-c078aa7615b4`는 면적 200→240, 길이 68, handle·속성 보존, 반복 편집, 원본 해시 보존을 확인했다. 사용자 파일 대신 기존 합성 fixture 사본을 사용했다.
+
+패키지 `VIDE-0.1.0-dev.20260922.3-windows-x64.zip`(284bdcc 기준)은 5,090개 파일 검증과 portable-package 시험을 통과했다. 증거 디렉터리는 `.vide/package-check/39e93c49-03fe-49ed-be2c-1cf5bc31bc79`다. packaged-sdk 시험 `.vide/packaged-sdk/aa8169c4-9607-4977-96e4-58c8b8328aa2`에서 번들 런타임·공백 경로로 실제 Rhino 생성, 객체 1개·체적 24를 확인했다. 이 ZIP은 최신 호스트 어댑터 전환 전 스냅샷이다.

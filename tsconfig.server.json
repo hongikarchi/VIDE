@@ -1,19 +1,28 @@
 {
   "compilerOptions": {
     "target": "ES2022",
-    "lib": ["ES2022"],
+    "lib": [
+      "ES2022"
+    ],
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
     "strict": true,
     "erasableSyntaxOnly": true,
-    "allowJs": true,
-    "checkJs": false,
     "rewriteRelativeImportExtensions": true,
-    "types": ["node"],
+    "types": [
+      "node"
+    ],
     "rootDir": ".",
     "outDir": "dist/server",
     "skipLibCheck": true,
     "resolveJsonModule": true
   },
-  "include": ["src/server/**/*", "src/core/**/*", "src/ai/**/*", "src/contracts/**/*", "hosts/**/*.mjs", "hosts/**/*.ts", "extensions/**/*.mjs", "extensions/**/*.ts"]
+  "include": [
+    "src/server/**/*",
+    "src/core/**/*",
+    "src/ai/**/*",
+    "src/contracts/**/*",
+    "hosts/**/*.ts",
+    "extensions/**/*.ts"
+  ]
 }

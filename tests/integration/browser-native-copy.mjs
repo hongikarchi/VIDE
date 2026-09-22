@@ -1,7 +1,7 @@
 import {installBrowserSupport} from './browser-support.mjs';
 // One subscription call on an isolated imported native extrusion; optional project resumes without resubmission.
 import assert from 'node:assert/strict';import {readFile} from 'node:fs/promises';import {pathToFileURL} from 'node:url';import {randomUUID} from 'node:crypto';
-import {RhinoWorkspace} from '../../hosts/rhino/workspace.mjs';
+import {RhinoWorkspace} from '../../hosts/rhino/workspace.ts';
 const [playwright,launch,flag,existingProject]=process.argv.slice(2);if(flag!=='--run-live')throw Error('Explicit --run-live required');
 const {chromium}=await import(pathToFileURL(playwright).href),{url}=JSON.parse(await readFile(launch,'utf8'));
 const browser=await chromium.launch({channel:'chrome',headless:true,args:['--enable-unsafe-swiftshader']});

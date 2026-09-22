@@ -1,7 +1,7 @@
 // node tests/integration/native-geometry.mjs --run-live
 import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
-import {RhinoWorkspace} from '../../hosts/rhino/workspace.mjs';
+import {RhinoWorkspace} from '../../hosts/rhino/workspace.ts';
 import {interpret} from '../../src/core/geometry.ts';
 if(process.argv[2]!=='--run-live')throw Error('Pass --run-live to create isolated Rhino test files.');
 const host=new RhinoWorkspace('.vide/geometry-check');

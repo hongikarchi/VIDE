@@ -1,4 +1,4 @@
-import assert from 'node:assert/strict';import {randomUUID,createHash} from 'node:crypto';import {readFile} from 'node:fs/promises';import {ZwcadWorkspace} from '../../hosts/zwcad/workspace.mjs';
+import assert from 'node:assert/strict';import {randomUUID,createHash} from 'node:crypto';import {readFile} from 'node:fs/promises';import {ZwcadWorkspace} from '../../hosts/zwcad/workspace.ts';
 if(process.argv[2]!=='--run-live')throw Error('Pass --run-live for isolated DWG files.');
 const host=new ZwcadWorkspace('.vide/dwg-import-check'),project=randomUUID();
 const source=process.argv[3]?{filename:process.argv[3]}:await host.build(project,randomUUID(),[{id:'boundary',kind:'polyline',name:'Boundary',points:[[0,0,0],[20,0,0],[20,10,0],[0,10,0],[0,0,0]]}]);

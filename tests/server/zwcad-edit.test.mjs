@@ -1,4 +1,4 @@
-import test from 'node:test';import assert from 'node:assert/strict';import {validateDwgEdit,verifyDwgEdit} from '../../hosts/zwcad/edit-contract.mjs';
+import test from 'node:test';import assert from 'node:assert/strict';import {validateDwgEdit,verifyDwgEdit} from '../../hosts/zwcad/edit-contract.ts';
 const object={id:'cad-47',nativeId:'47',kind:'polyline',name:'Site',points:[[0,0,0],[2,0,0],[2,2,0],[0,0,0]]};
 const baseline={dwgEditMode:'polyline-vertices-v1',sourceUnits:4,objects:[object],scene:[{id:'cad-47',layer64:'U2l0ZQ==',color:3}]};
 test('native DWG edit preserves identity and rejects unsupported scope before host writes',()=>{
@@ -10,4 +10,13 @@ test('saved DWG readback must preserve points, handles and declared appearance',
  const result={...structuredClone(baseline),verified:true};verifyDwgEdit([object],baseline,result);
  result.scene[0].color=5;assert.throws(()=>verifyDwgEdit([object],baseline,result),{code:'UNSUPPORTED_DWG_EDIT'});
  result.scene[0].color=3;result.objects[0].points[1][0]=3;assert.throws(()=>verifyDwgEdit([object],baseline,result),{code:'UNSUPPORTED_DWG_EDIT'});
+});
+
+test('malformed DWG write response remains unknown rather than safe to retry',async()=>{
+ const {ZwcadWorkspace}=await import('../../hosts/zwcad/workspace.ts');
+ const {mkdtemp,rm}=await import('node:fs/promises');const {tmpdir}=await import('node:os');const {join}=await import('node:path');
+ const directory=await mkdtemp(join(tmpdir(),'vide-dwg-response-'));
+ try{const host=new ZwcadWorkspace(directory);let writes=0;host.invoke=async()=>{writes++;return {verified:true,scene:'broken'};};
+ await assert.rejects(host.build('project','request',[object]),{code:'HOST_RESULT_UNKNOWN'});assert.equal(writes,1);
+ }finally{await rm(directory,{recursive:true,force:true});}
 });

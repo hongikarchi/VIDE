@@ -1,8 +1,12 @@
-import {rhinoCommand} from './transport.ts';
+import {z} from 'zod';
+import {nativeApplicationPayloadSchema,applicationCandidateSchema} from './application-contract.ts';
+import type {Movement} from './application-contract.ts';
+import {legacyRhinoCommand as rhinoCommand} from './transport.ts';
 import {DomainError} from '../../src/core/store.ts';
-import {documentGuard,attributeSnapshot} from './document-contract.mjs';
-const literal=text=>'@"'+String(text).replaceAll('"','""')+'"';
-export async function reconcileNativeApplication(commandId,candidate,payload){
+import {documentGuard,attributeSnapshot} from './document-contract.ts';
+const literal=(text:unknown)=>'@"'+String(text).replaceAll('"','""')+'"';
+export async function reconcileNativeApplication(commandId:string,candidateValue:unknown,payloadValue:unknown){
+ const candidate=applicationCandidateSchema.parse(candidateValue),payload=nativeApplicationPayloadSchema.parse(payloadValue);
  const filename=candidate.filename+'.'+commandId+'.application';
  const code=`try{
  ${documentGuard(payload.instance,payload.documentId)}${attributeSnapshot}

@@ -4,7 +4,7 @@ import {randomUUID,createHash} from 'node:crypto';
 import {mkdir,readFile} from 'node:fs/promises';
 import {resolve,join} from 'node:path';
 import {rhinoCommand} from '../../hosts/rhino/transport.ts';
-import {RhinoWorkspace} from '../../hosts/rhino/workspace.mjs';
+import {RhinoWorkspace} from '../../hosts/rhino/workspace.ts';
 import {nativeAttributes} from '../../src/ui/native-attributes.ts';
 if(process.argv[2]!=='--run-live')throw Error('Pass --run-live');
 const directory=resolve('.vide/attribute-check',randomUUID());await mkdir(directory,{recursive:true});

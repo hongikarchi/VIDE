@@ -1,13 +1,16 @@
-import {rhinoCommand} from './transport.ts';
+import {z} from 'zod';
+import {nativeApplicationPayloadSchema,applicationCandidateSchema} from './application-contract.ts';
+import type {Movement} from './application-contract.ts';
+import {legacyRhinoCommand as rhinoCommand} from './transport.ts';
 import {DomainError} from '../../src/core/store.ts';
-import {documentGuard,documentFingerprint,attributeSnapshot} from './document-contract.mjs';
-const literal=text=>'@"'+String(text).replaceAll('"','""')+'"';
-function movementsCode(movements){
+import {documentGuard,documentFingerprint,attributeSnapshot} from './document-contract.ts';
+const literal=(text:unknown)=>'@"'+String(text).replaceAll('"','""')+'"';
+function movementsCode(movements:Movement[]){
  if(!Array.isArray(movements)||!movements.length||movements.length>500||movements.some(item=>!/^[-a-f0-9]{36}$/i.test(item.id)||!Array.isArray(item.delta)||item.delta.length!==3||item.delta.some(value=>!Number.isFinite(value)||Math.abs(value)>200000)))throw new DomainError('INVALID_INPUT');
  return `var movements=new Dictionary<Guid,Rhino.Geometry.Vector3d>();${movements.map(item=>`movements.Add(new Guid(${literal(item.id)}),new Rhino.Geometry.Vector3d(${item.delta.join(',')}));`).join('')}
  foreach(var id in movements.Keys){var obj=document.Objects.FindId(id);if(obj==null||obj.IsLocked||obj.IsReference||obj.IsInstanceDefinitionGeometry||obj.Attributes.GroupCount>0||obj.HasHistoryRecord()||obj.HistoryParents().Length>0||obj.HistoryChildren().Length>0||!(obj.Geometry is Rhino.Geometry.Brep||obj.Geometry is Rhino.Geometry.Extrusion||obj.Geometry is Rhino.Geometry.Curve||obj.Geometry is Rhino.Geometry.Mesh||obj.Geometry is Rhino.Geometry.Point))throw new Exception("Unsupported target");}`;
 }
-export async function previewNativeApplication(instance,documentId,expectedHash,movements){
+export async function previewNativeApplication(instance:string,documentId:number,expectedHash:string,movements:Movement[]){
  const response=await rhinoCommand('execute_rhinocommon_csharp_code',{code:`try{${documentGuard(instance,documentId)}${documentFingerprint}
  if(fingerprint!=${literal(expectedHash)}){output.AppendLine("CONFLICT");return;}
  ${movementsCode(movements)}output.AppendLine(fingerprint);output.AppendLine(document.ModelUnitSystem.ToString());}catch{output.AppendLine("REJECTED");}`},{timeoutMs:15000});
@@ -17,7 +20,8 @@ export async function previewNativeApplication(instance,documentId,expectedHash,
  const [documentHash,units]=response.output.trim().split(/\r?\n/);if(!/^[a-f0-9]{64}$/.test(documentHash))throw new DomainError('HOST_INVALID_RESPONSE');
  return {documentHash,units,added:0,updated:movements.length,removed:0,mode:'native-move'};
 }
-export async function applyNativeMovements(commandId,candidate,payload){
+export async function applyNativeMovements(commandId:string,candidateValue:unknown,payloadValue:unknown){
+ const candidate=applicationCandidateSchema.parse(candidateValue),payload=nativeApplicationPayloadSchema.parse(payloadValue);
  const code=`bool started=false;var staged=new Dictionary<Guid,Rhino.Geometry.GeometryBase>();
  try{
  ${documentGuard(payload.instance,payload.documentId)}${documentFingerprint}

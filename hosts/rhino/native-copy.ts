@@ -1,7 +1,8 @@
-const literal=value=>'@"'+String(value).replaceAll('"','""')+'"';
+import type {GeometryObject} from '../../src/core/geometry.ts';
+const literal=(value:unknown)=>'@"'+String(value).replaceAll('"','""')+'"';
 // Duplicate before any original candidate object is transformed or removed.
-export function prepareNativeCopies(objects,baseline){
- const additions=new Map(),prepare=[];
+export function prepareNativeCopies(objects:GeometryObject[],baseline?:{objects:GeometryObject[]}){
+ const additions=new Map<string,string>(),prepare:string[]=[];
  for(const [index,object] of objects.entries()){
   if(object.kind!=='native'||baseline?.objects.some(item=>item.id===object.id))continue;
   const source=baseline?.objects.find(item=>item.id===object.nativeSourceId);

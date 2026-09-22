@@ -1,6 +1,6 @@
 import {hostDocumentsSchema,hostSelectionSchema} from '../../src/contracts/host-documents.ts';
-import {documentGuard,documentFingerprint} from './document-contract.mjs';
-import {rhinoCommand} from './transport.ts';
+import {documentGuard,documentFingerprint} from './document-contract.ts';
+import {legacyRhinoCommand as rhinoCommand} from './transport.ts';
 import {DomainError} from '../../src/core/store.ts';
 const session='var process=System.Diagnostics.Process.GetCurrentProcess();var session=process.Id.ToString()+":"+process.StartTime.ToUniversalTime().Ticks.ToString();';
 export async function listDocuments(){
@@ -18,7 +18,7 @@ export async function listDocuments(){
  const parsed=hostDocumentsSchema.safeParse({instance,documents:rows.filter(Boolean).map(row=>{const [id,name,units,count,modified]=row.split('|');return {id:Number(id),name:Buffer.from(name,'base64').toString('utf8')||'무제',units,objectCount:Number(count),modified:modified==='1'};})});
  if(!parsed.success)throw new DomainError('HOST_INVALID_RESPONSE');return parsed.data;
 }
-export async function inspectDocument(instance,id){
+export async function inspectDocument(instance:string,id:number){
  if(!/^\d+:\d+$/.test(instance)||!Number.isInteger(id)||id<=0||id>4294967295)throw new DomainError('INVALID_INPUT');
  const code=`${documentGuard(instance,id)}${documentFingerprint}
  output.AppendLine(document.RuntimeSerialNumber.ToString());output.AppendLine(fingerprint);

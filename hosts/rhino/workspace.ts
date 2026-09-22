@@ -1,26 +1,33 @@
-import {userAttributesCode} from './user-attributes.mjs';
-import {prepareNativeCopies} from './native-copy.mjs';
+import {z} from 'zod';
+import {legacyObjectSchema} from '../../src/core/geometry.ts';
+import type {GeometryObject} from '../../src/core/geometry.ts';
+import {nativeSceneSchema} from '../../src/contracts/native-model.ts';
+const baselineSchema=z.object({filename:z.string(),fileHash:z.string().optional(),objects:z.array(legacyObjectSchema)}).passthrough();
+function sceneOutput(output:string){try{return z.array(nativeSceneSchema).parse(JSON.parse(output));}catch{throw Object.assign(Error('HOST_RESULT_UNKNOWN'),{code:'HOST_RESULT_UNKNOWN'});}}
+import {userAttributesCode} from './user-attributes.ts';
+import {prepareNativeCopies} from './native-copy.ts';
 import { mkdir,readFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { resolve,join } from 'node:path';
-import { rhinoCommand } from './transport.ts';
+import { legacyRhinoCommand as rhinoCommand } from './transport.ts';
 import { spawn } from 'node:child_process';
 
-const literal=text=>'@"'+String(text).replaceAll('"','""')+'"';
-const point=p=>`new Rhino.Geometry.Point3d(${p.join(',')})`;
-const fingerprint=async file=>createHash('sha256').update(await readFile(file)).digest('hex');
+const literal=(text:unknown)=>'@"'+String(text).replaceAll('"','""')+'"';
+const point=(p:number[])=>`new Rhino.Geometry.Point3d(${p.join(',')})`;
+const fingerprint=async (file:string)=>createHash('sha256').update(await readFile(file)).digest('hex');
 /** Fixed RhinoCommon programs compiled from validated geometry, never model-authored code. */
 export class RhinoWorkspace {
-  constructor(directory){this.directory=resolve(directory);}
-  async open(filename){
+  directory:string;
+  constructor(directory:string){this.directory=resolve(directory);}
+  async open(filename:string){
     const target=resolve(filename);
     if(!target.startsWith(this.directory+'\\')&&!target.startsWith(this.directory+'/'))throw Error('INVALID_ARTIFACT');
     const executable=join(process.env.ProgramFiles||'C:\\Program Files','Rhino 8','System','Rhino.exe');
-    await new Promise((resolve,reject)=>{const child=spawn(executable,['/nosplash',target],{detached:true,stdio:'ignore',windowsHide:false});child.once('error',reject);child.once('spawn',()=>{child.unref();resolve();});});
+    await new Promise<void>((resolve,reject)=>{const child=spawn(executable,['/nosplash',target],{detached:true,stdio:'ignore',windowsHide:false});child.once('error',reject);child.once('spawn',()=>{child.unref();resolve();});});
     return {opened:true};
   }
-  async status(){try{const result=await rhinoCommand('execute_rhinocommon_csharp_code',{code:'output.AppendLine(Rhino.RhinoApp.Version.ToString());'},{timeoutMs:4000});return {available:result.success===true,version:result.output?.trim()};}catch(error){return {available:false,reason:error.code};}}
-  async importFile(projectId,requestId,source){
+  async status(){try{const result=await rhinoCommand('execute_rhinocommon_csharp_code',{code:'output.AppendLine(Rhino.RhinoApp.Version.ToString());'},{timeoutMs:4000});return {available:result.success===true,version:result.output?.trim()};}catch(error){return {available:false,reason:error&&typeof error==='object'&&'code' in error?error.code:'HOST_UNAVAILABLE'};}}
+  async importFile(projectId:string,requestId:string,source:string){
     if(!/^[a-zA-Z0-9-]+$/.test(projectId)||!/^[a-zA-Z0-9-]+$/.test(requestId))throw Error('INVALID_ID');
     const directory=join(this.directory,projectId);await mkdir(directory,{recursive:true});
     const filename=join(directory,requestId+'.3dm');
@@ -34,12 +41,13 @@ export class RhinoWorkspace {
     }${readback(filename)}`;
     const response=await rhinoCommand('execute_rhinocommon_csharp_code',{code},{timeoutMs:60000});
     if(!response.success)throw Object.assign(new Error('HOST_REJECTED'),{code:'HOST_REJECTED',detail:response.message});
-    const scene=JSON.parse(response.output);
+    const scene=sceneOutput(response.output);
     if(scene.length>500||scene.some(o=>!o.valid))throw Object.assign(new Error('IMPORT_LIMIT'),{code:'IMPORT_LIMIT'});
-    const objects=scene.map(o=>({id:o.id,nativeId:o.nativeId,kind:'native',name:Buffer.from(o.name64,'base64').toString('utf8'),origin:o.origin}));
+    const objects=scene.map(o=>({id:o.id,nativeId:o.nativeId,kind:'native' as const,name:Buffer.from(o.name64,'base64').toString('utf8'),origin:o.origin}));
     return {objects,scene,filename,fileHash:await fingerprint(filename),verified:true};
   }
-  async build(projectId,requestId,objects,baseline){
+  async build(projectId:string,requestId:string,objects:GeometryObject[],baselineValue?:unknown){
+    const baseline=baselineValue===undefined?undefined:baselineSchema.parse(baselineValue);
     if(!/^[a-zA-Z0-9-]+$/.test(projectId)||!/^[a-zA-Z0-9-]+$/.test(requestId))throw Error('INVALID_ID');
     const directory=join(this.directory,projectId);await mkdir(directory,{recursive:true});
     const filename=join(directory,requestId+'.3dm');
@@ -49,6 +57,7 @@ export class RhinoWorkspace {
       if(o.kind==='native'){
         const previous=baseline?.objects.find(x=>x.id===o.id);
         if(!previous){if(copies.additions.has(o.id))return copies.additions.get(o.id);throw Error('MISSING_NATIVE_BASE');}
+        if(previous.kind!=='native')throw Error('MISSING_NATIVE_BASE');
         const delta=o.origin.map((n,j)=>n-previous.origin[j]);
         return `var original${i}=work.Objects.FindId(new Guid(${literal(previous.nativeId)}));if(original${i}==null)throw new Exception("Missing source");
           if(!work.Objects.Transform(original${i}.Id,Rhino.Geometry.Transform.Translation(${delta.join(',')}),true).Equals(Guid.Empty)){}else throw new Exception("Transform failed");`;
@@ -76,14 +85,14 @@ export class RhinoWorkspace {
     ${readback(filename)}`;
     const response=await rhinoCommand('execute_rhinocommon_csharp_code',{code},{timeoutMs:60000});
     if(!response.success)throw Object.assign(new Error('HOST_REJECTED'),{code:'HOST_REJECTED',detail:response.message});
-    const scene=JSON.parse(response.output);
+    const scene=sceneOutput(response.output);
     if(scene.length!==objects.length||scene.some(o=>!o.valid))throw Object.assign(new Error('HOST_VERIFICATION_FAILED'),{code:'HOST_VERIFICATION_FAILED'});
     return {scene,filename,fileHash:await fingerprint(filename),verified:true};
   }
 }
 
 
-function readback(filename){return `    using(var verify=Rhino.RhinoDoc.OpenHeadless(${literal(filename)})){
+function readback(filename:string){return `    using(var verify=Rhino.RhinoDoc.OpenHeadless(${literal(filename)})){
       var result=new List<string>();int remainingAttributeBytes=262144;
       foreach(var obj in verify.Objects){
         var bounds=obj.Geometry.GetBoundingBox(true);

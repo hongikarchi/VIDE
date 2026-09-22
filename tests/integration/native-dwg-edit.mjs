@@ -1,4 +1,4 @@
-import assert from 'node:assert/strict';import {randomUUID,createHash} from 'node:crypto';import {readFile} from 'node:fs/promises';import {ZwcadWorkspace} from '../../hosts/zwcad/workspace.mjs';
+import assert from 'node:assert/strict';import {randomUUID,createHash} from 'node:crypto';import {readFile} from 'node:fs/promises';import {ZwcadWorkspace} from '../../hosts/zwcad/workspace.ts';
 if(process.argv[2]!=='--run-live'||!process.argv[3])throw Error('Pass --run-live and a synthetic DWG');
 const host=new ZwcadWorkspace('.vide/dwg-edit-check'),project=randomUUID(),source=process.argv[3];
 const hash=async file=>createHash('sha256').update(await readFile(file)).digest('hex');const original=await hash(source);

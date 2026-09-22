@@ -4,7 +4,7 @@ import type {Workspace} from '../core/workspace.ts';
 interface ImportHost {directory:string;importFile(projectId:string,id:string,source:string):Promise<Record<string,unknown>>}
 interface CadImportHost extends ImportHost {inspectImport(projectId:string,id:string,sourceHash:string):Promise<Record<string,unknown>>}
 const errorData=(cause:unknown)=>z.object({code:z.string().optional(),intent:z.record(z.string(),z.unknown()).optional()}).safeParse(cause).data??{};
-import {captureDocument} from '../../hosts/rhino/capture.mjs';
+import {captureDocument} from '../../hosts/rhino/capture.ts';
 import {randomUUID,createHash} from 'node:crypto';
 import {mkdir,writeFile,unlink} from 'node:fs/promises';
 import {join} from 'node:path';

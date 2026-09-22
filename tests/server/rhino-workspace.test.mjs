@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {mkdtemp,writeFile,readFile,rm} from 'node:fs/promises';
 import {join} from 'node:path';
 import {tmpdir} from 'node:os';
-import {RhinoWorkspace} from '../../hosts/rhino/workspace.mjs';
+import {RhinoWorkspace} from '../../hosts/rhino/workspace.ts';
 
 test('externally edited source is refused before any Rhino command or output overwrite',async()=>{
   const directory=await mkdtemp(join(tmpdir(),'vide-source-test-'));

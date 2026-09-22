@@ -1,5 +1,10 @@
-const fail=()=>{throw Object.assign(new Error('UNSUPPORTED_DWG_EDIT'),{code:'UNSUPPORTED_DWG_EDIT'});};
-export function validateDwgEdit(objects,baseline){
+import {z} from 'zod';
+const objectSchema=z.object({id:z.string(),name:z.string(),nativeId:z.string(),kind:z.literal('polyline'),points:z.array(z.tuple([z.number(),z.number(),z.number()]))}).passthrough();
+const baselineSchema=z.object({dwgEditMode:z.literal('polyline-vertices-v1'),sourceUnits:z.literal(4),objects:z.array(objectSchema),scene:z.array(z.object({id:z.string(),layer64:z.string().optional(),color:z.number().optional()}).passthrough())}).passthrough();
+function read<T>(schema:z.ZodType<T>,value:unknown):T{const parsed=schema.safeParse(value);if(!parsed.success)fail();return parsed.data;}
+function fail():never{throw Object.assign(new Error('UNSUPPORTED_DWG_EDIT'),{code:'UNSUPPORTED_DWG_EDIT'});}
+export function validateDwgEdit(objectsValue:unknown,baselineValue:unknown){
+ const objects=read(z.array(objectSchema),objectsValue),baseline=read(baselineSchema,baselineValue);
  if(baseline?.dwgEditMode!=='polyline-vertices-v1'||baseline.sourceUnits!==4||!objects.length||objects.length!==baseline.objects?.length||new Set(objects.map(o=>o.id)).size!==objects.length)fail();
  for(const object of objects){
   const old=baseline.objects.find(o=>o.id===object.id);
@@ -7,7 +12,8 @@ export function validateDwgEdit(objects,baseline){
   if(object.points.some(p=>!Array.isArray(p)||p.length!==3||p.some(n=>!Number.isFinite(n)||Math.abs(n)>100000)||p[2]!==object.points[0][2]))fail();
  }
 }
-export function verifyDwgEdit(objects,baseline,result){
+export function verifyDwgEdit(objectsValue:unknown,baselineValue:unknown,resultValue:unknown){
+ const objects=read(z.array(objectSchema),objectsValue),baseline=read(baselineSchema,baselineValue),result=read(baselineSchema.extend({verified:z.literal(true)}),resultValue);
  validateDwgEdit(objects,baseline);
  if(!result.verified||result.sourceUnits!==4||result.objects?.length!==objects.length)fail();
  for(const expected of objects){

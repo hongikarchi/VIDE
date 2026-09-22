@@ -11,12 +11,12 @@ const outcomeSchema=z.object({state:z.enum(['succeeded','failed','unknown']),res
 interface Options {preview?:(projectId:string,instance:string,documentId:number,objects:{id:string;kind:string}[])=>Promise<unknown>;apply?:(projectId:string,id:string,candidate:unknown,payload:Payload)=>Promise<unknown>;nativePreview?:(instance:string,documentId:number,hash:string,moves:Movement[])=>Promise<unknown>;nativeApply?:(id:string,candidate:unknown,payload:Payload)=>Promise<unknown>;reconcile?:(id:string,candidate:unknown,payload:Payload)=>Promise<unknown>}
 type Command={id:string;runId:string;connectionId:string;revision:number;kind:string;payload:Payload};
 const errorCode=(value:unknown)=>value&&typeof value==='object'&&'code' in value&&typeof value.code==='string'?value.code:undefined;
-import {reconcileNativeApplication} from '../../hosts/rhino/reconciliation.mjs';
+import {reconcileNativeApplication} from '../../hosts/rhino/reconciliation.ts';
 import {nativeMoves} from '../core/native-application.ts';
-import {previewNativeApplication,applyNativeMovements} from '../../hosts/rhino/native-application.mjs';
+import {previewNativeApplication,applyNativeMovements} from '../../hosts/rhino/native-application.ts';
 import {randomUUID} from 'node:crypto';
 import {DomainError} from '../core/store.ts';
-import {previewApplication,applyToDocument} from '../../hosts/rhino/application.mjs';
+import {previewApplication,applyToDocument} from '../../hosts/rhino/application.ts';
 export class Applications{
  store:Store;workspace:Workspace;preview:NonNullable<Options['preview']>;apply:NonNullable<Options['apply']>;nativePreview:NonNullable<Options['nativePreview']>;nativeApply:NonNullable<Options['nativeApply']>;reconcile:NonNullable<Options['reconcile']>;
  pending=new Map<string,{projectId:string;command:Command;expires:number}>();active=new Set<string>();

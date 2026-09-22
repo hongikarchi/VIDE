@@ -4,7 +4,7 @@ import { requestStateSchema } from './workspace.ts';
 const scene=z.object({id:z.string(),nativeId:z.string().optional(),nativeType:z.string().optional(),vertices:z.array(z.number()).optional(),indices:z.array(z.number()).optional(),line:z.array(z.number()).optional(),origin:z.array(z.number()).optional(),boundsSize:z.array(z.number()).optional(),length:z.number().nullish(),area:z.number().nullish(),volume:z.number().nullish(),layer64:z.string().optional()}).passthrough();
 export const applicationResultSchema=z.object({id:z.string(),state:z.string(),result:z.object({code:z.string().optional()}).passthrough().nullish()}).passthrough();
 export const workspaceResultSchema=z.object({
- hostExecuted:z.boolean().optional(),host:z.enum(['rhino','zwcad']).optional(),phase:z.string().optional(),text:z.string().optional(),code:z.string().optional(),dwgEditMode:z.string().optional(),sourceHash:z.string().optional(),baseRequestId:z.string().optional(),
+ hostExecuted:z.boolean().optional(),host:z.enum(['rhino','zwcad']).optional(),phase:z.string().optional(),text:z.string().optional(),code:z.string().optional(),dwgEditMode:z.string().nullish(),sourceHash:z.string().optional(),baseRequestId:z.string().optional(),
  sourceDocument:z.object({name:z.string(),capturedAt:z.string(),instance:z.string(),documentId:z.number()}).passthrough().optional(),
  objects:z.array(z.object({id:z.string(),name:z.string(),kind:z.string(),origin:z.array(z.number()).optional(),nativeId:z.string().optional(),nativeSourceId:z.string().optional()}).passthrough()).optional(),scene:z.array(scene).optional(),
  extensionResult:z.object({rows:z.array(z.object({type:z.string(),layer:z.string().nullish(),count:z.number(),objectIds:z.array(z.string())}).passthrough())}).passthrough().optional(),

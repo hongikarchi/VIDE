@@ -1,8 +1,11 @@
-import {documentGuard as guard,documentFingerprint as fingerprint} from './document-contract.mjs';
-import {rhinoCommand} from './transport.ts';
+import {z} from 'zod';
+import {applicationPayloadSchema,applicationCandidateSchema} from './application-contract.ts';
+import type {Movement} from './application-contract.ts';
+import {documentGuard as guard,documentFingerprint as fingerprint} from './document-contract.ts';
+import {legacyRhinoCommand as rhinoCommand} from './transport.ts';
 import {DomainError} from '../../src/core/store.ts';
-const literal=text=>'@"'+String(text).replaceAll('"','""')+'"';
-export async function previewApplication(projectId,instance,documentId,objects){
+const literal=(text:unknown)=>'@"'+String(text).replaceAll('"','""')+'"';
+export async function previewApplication(projectId:string,instance:string,documentId:number,objects:{id:string}[]){
  if(!/^[a-zA-Z0-9-]+$/.test(projectId))throw new DomainError('INVALID_INPUT');
  const code=`${guard(instance,documentId)}${fingerprint}
  output.AppendLine(fingerprint);output.AppendLine(document.ModelUnitSystem.ToString());
@@ -14,7 +17,8 @@ export async function previewApplication(projectId,instance,documentId,objects){
  const wanted=objects.map(o=>o.id);
  return {documentHash:hash,units,added:wanted.filter(id=>!owned.includes(id)).length,updated:wanted.filter(id=>owned.includes(id)).length,removed:owned.filter(id=>!wanted.includes(id)).length};
 }
-export async function applyToDocument(projectId,commandId,candidate,payload){
+export async function applyToDocument(projectId:string,commandId:string,candidateValue:unknown,payloadValue:unknown){
+ const candidate=applicationCandidateSchema.parse(candidateValue),payload=applicationPayloadSchema.parse(payloadValue);
  const code=`bool started=false;
  try{
  ${guard(payload.instance,payload.documentId)}${fingerprint}

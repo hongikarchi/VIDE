@@ -1,6 +1,6 @@
 import {DomainError} from '../../src/core/store.ts';
-const literal=text=>'@"'+String(text).replaceAll('"','""')+'"';
-export function documentGuard(instance,id){
+const literal=(text:unknown)=>'@"'+String(text).replaceAll('"','""')+'"';
+export function documentGuard(instance:string,id:number){
  if(!/^\d+:\d+$/.test(instance)||!Number.isInteger(id)||id<=0||id>4294967295)throw new DomainError('INVALID_INPUT');
  return `var process=System.Diagnostics.Process.GetCurrentProcess();
  if(process.Id.ToString()+":"+process.StartTime.ToUniversalTime().Ticks.ToString()!=${literal(instance)})throw new Exception("Process changed");

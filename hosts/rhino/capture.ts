@@ -1,10 +1,11 @@
+interface CaptureHost {directory:string;importFile(projectId:string,requestId:string,source:string):Promise<Record<string,unknown>>}
 import {mkdir,unlink} from 'node:fs/promises';
 import {join} from 'node:path';
 import {DomainError} from '../../src/core/store.ts';
-import {rhinoCommand} from './transport.ts';
-import {documentGuard,documentFingerprint} from './document-contract.mjs';
-const literal=text=>'@"'+String(text).replaceAll('"','""')+'"';
-export async function captureDocument(host,projectId,requestId,instance,documentId){
+import {legacyRhinoCommand as rhinoCommand} from './transport.ts';
+import {documentGuard,documentFingerprint} from './document-contract.ts';
+const literal=(text:unknown)=>'@"'+String(text).replaceAll('"','""')+'"';
+export async function captureDocument(host:CaptureHost,projectId:string,requestId:string,instance:string,documentId:number){
  if(!/^[a-zA-Z0-9-]+$/.test(projectId)||!/^[a-zA-Z0-9-]+$/.test(requestId))throw new DomainError('INVALID_INPUT');
  const guard=documentGuard(instance,documentId);
  const directory=join(host.directory,projectId),snapshot=join(directory,requestId+'.capture.3dm');
@@ -26,6 +27,6 @@ export async function captureDocument(host,projectId,requestId,instance,document
   if(!/^[a-f0-9]{64}$/.test(hash))throw new DomainError('HOST_INVALID_RESPONSE');
   const result=await host.importFile(projectId,requestId,snapshot);
   return {...result,sourceDocument:{instance,documentId,documentHash:hash,units,name:Buffer.from(name,'base64').toString('utf8'),selectedIds:selection?selection.split(','):[],capturedAt:new Date().toISOString()}};
- }catch(error){uncertain=error.code==='HOST_RESULT_UNKNOWN';throw error;}
+ }catch(error){uncertain=!!(error&&typeof error==='object'&&'code' in error&&error.code==='HOST_RESULT_UNKNOWN');throw error;}
  finally{if(!uncertain)await unlink(snapshot).catch(()=>{});}
 }

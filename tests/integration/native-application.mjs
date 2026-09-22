@@ -1,7 +1,7 @@
 // Applies existing synthetic candidates only to an explicitly identified empty test document.
 // args: playwright, launch.json, project, first, second, instance, documentId, --run-live
 import assert from 'node:assert/strict';import {readFile,mkdir} from 'node:fs/promises';import {pathToFileURL} from 'node:url';
-import {listDocuments} from '../../hosts/rhino/documents.mjs';import {rhinoCommand} from '../../hosts/rhino/transport.ts';
+import {listDocuments} from '../../hosts/rhino/documents.ts';import {rhinoCommand} from '../../hosts/rhino/transport.ts';
 if(process.argv[9]!=='--run-live')throw Error('Explicit --run-live required');
 const [playwright,launch,projectId,firstId,secondId,instance,documentId]=process.argv.slice(2,9);const id=Number(documentId);
 const documents=await listDocuments();assert.equal(documents.instance,instance);assert.equal(documents.documents.find(d=>d.id===id)?.objectCount,0,'Test target must be empty; inspect prior result before resuming.');
