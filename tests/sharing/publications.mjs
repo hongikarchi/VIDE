@@ -1,11 +1,17 @@
 import assert from 'node:assert/strict';
-import {createHash,randomUUID} from 'node:crypto';
+import {randomUUID} from 'node:crypto';
+import {createPublicationBundle} from '../../src/core/publication.ts';
 
 export async function verifyPublications({call,mf,db,alice,bob,eve,projectId,invite,accept}){
   await accept(bob,await invite(bob.email,'viewer'));
-  const bytes=Buffer.from('synthetic mesh chunk'),hash=createHash('sha256').update(bytes).digest('hex');
+  const bundle=createPublicationBundle({id:'local-work',state:'succeeded',input:{body:'PRIVATE instructions'},result:{verified:true,
+    sourceDocument:{name:'PRIVATE.3dm',instance:'PRIVATE',documentId:1,capturedAt:'today',path:'C:/PRIVATE/model.3dm'},
+    objects:[{id:'object-1',name:'PRIVATE name',kind:'Brep',nativeId:'PRIVATE-guid'}],
+    scene:[{id:'object-1',vertices:[0,0,0,1,0,0,0,1,0],indices:[0,1,2],nativeId:'PRIVATE-guid'}],
+  }},{title:'Public model',objectIds:['object-1']});
+  const bytes=Buffer.concat(bundle.chunks);assert.doesNotMatch(bytes.toString(),/PRIVATE/);
   const base=`/api/projects/${projectId}/publications`;
-  const manifest={title:'Public model',objectIds:['object-1'],assets:[{id:'scene',parts:[{size:bytes.length,sha256:hash}]}]};
+  const manifest=bundle.manifest;
   const prepare=async(requestId=randomUUID(),payload=manifest)=>call(base,{method:'POST',cookie:alice.cookie,data:{requestId,manifest:payload}});
   const requestId=randomUUID(),first=await prepare(requestId);assert.equal(first.status,201,JSON.stringify(first));const id=first.value.id;
   const again=await prepare(requestId);assert.equal(again.value.id,id);
