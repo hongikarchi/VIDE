@@ -2,7 +2,7 @@
 id: VERIFY-2026-09-22-cloudflare-sharing
 title: Cloudflare 공유 권한·게시 검증
 status: review
-version: 0.9
+version: 0.10
 updated: 2026-09-22
 owner: agent:codex
 related: [T-009, SPEC-04, AC-30, AC-37]
@@ -118,3 +118,30 @@ pointercancel/창 포커스 유실의 선은 완성된 것으로 처리하지 �
 계정 연결에 의한 자동 의견 수신과 현재 후보 비교는 후속 작업이다. 원격 R2/D1 장애·백업/복구, 운영 제한·비용 검증은 남았다. 계정/발신 도메인/메일 자격·예산 확인 전 유료 자원이나 공개 배포를 만들지 않는다. 게시/의견/과거 이력의 권한 검수, 실기기 입력, 복원·부하/비용 검증을 포함해 T-009 전체 완료로 표시하지 않는다.
 
 2026-09-22 사용자 지시: 원격 계정 준비 대신 로컬 검증을 먼저 계속한다. 이 단계에서는 외부 배포·유료 자원·실제 메일을 만들지 않는다.
+
+
+## Cloudflare 계정 연결과 원격 자원 준비
+
+2026-09-22 사용자가 Aside의 로그인 계정으로 CLI 연결과 VIDE 시험 배포를 승인했다. 첫 OAuth 재인증은 자동 승인 검토에서 권한 범위의 명시적 승인 부족으로 거절되었고, 사용자가 범위를 승인한 뒤 동일 범위로 재시도해 연결했다. `wrangler whoami`로 브라우저와 CLI가 같은 계정임을 확인했다. 인증정보는 Wrangler의 사용자 설정에만 저장하고 저장소/검증 증거에는 복사하지 않았다. 기본 전체 OAuth 권한 대신 account/user read, workers/scripts write, tail read, D1 write, zone read, email_sending write, offline access를 사용한다. `whoami`의 나머지 기본 scope 누락 경고는 권한을 제한한 결과이며 필요한 작업이 실패하지 않는 한 확장하지 않는다.
+
+| 확인 | 실제 결과 |
+|---|---|
+| 계정 요금제 / 도메인 | Workers Free / Domains 목록에 등록 도메인 없음 |
+| D1 | `vide-sharing-staging`, APAC 생성. 0001-auth·0002-projects·0003-publications 적용 후 원격 재조회 일치 |
+| 원격 사용자 자료 | user 0행, projects 0행. 사용자 원본과 합성 모델도 아직 업로드하지 않음 |
+| R2 | `vide-sharing-staging` 생성, `r2 bucket dev-url get`에서 공개 접근 disabled 확인 |
+| 로컬 설정 보존 | 기존 `wrangler.jsonc` 유지, 별도 `wrangler.staging.jsonc` 추가 |
+| 웹 빌드 / Worker dry-run | 통과. Worker 2652.03 KiB, gzip 456.64 KiB. 공유 3D 청크의 기존 500 kB 경고는 유지 |
+| 미완료 | Worker 실제 배포·공개 URL·AUTH_SECRET·발신 도메인·메일·원격 가입/공유·청구량/복구 시험 |
+
+원격 설정의 `workers_dev:false`, `preview_urls:false`, 빈 origin/발신자는 아직 서비스를 열지 않았음을 나타낸다. 비밀키도 미주입이므로 현재 앱의 설정 검사가 요청을 거절한다. 이 구성은 완성된 서비스가 아니다. `remote:false`는 로컬 개발의 원격 데이터 접근 방지 설정이며 실제 원격 마이그레이션은 명시적 `--remote`로 실행했다. D1/R2 식별자는 비밀이 아니며 설정에 기록한다.
+
+공식 [Email Service 가격](https://developers.cloudflare.com/email-service/platform/pricing/)에 따르면 일반 수신자 발송은 Workers Paid가 필요하고 사전 인증한 destination에 대한 발송은 무료 예외다. [발신 설정](https://developers.cloudflare.com/email-service/get-started/send-emails/)에는 Cloudflare DNS의 발신 도메인이 필요하다. 계정 대시보드의 Paid 표시는 월 $5 + 사용량이며 유료 전환은 하지 않았다. 발신 도메인·시험 비용 범위와 실제 메일 시험 수신자를 확인한 뒤 설정한다. 이 확인은 메일 API 형식이 틀렸다는 의미가 아니며 현재 `EMAIL.send({from,to,subject,text})`는 공식 Workers binding 형식과 일치한다.
+
+재개 순서:
+
+1. 발신 도메인/DNS·발송 자격과 비용 승인을 확인한다. 기존 서비스 DNS나 요금제를 임의 변경하지 않는다.
+2. 준비된 전용 자원으로 정확한 origin/발신자를 설정하고 AUTH_SECRET을 비밀 바인딩으로 주입한다. 메일 발송과 공개 접근을 실제 설정 전에는 완료로 올리지 않는다.
+3. `npm run build:sharing` 후 `node src/sharing/node_modules/wrangler/bin/wrangler.js deploy --dry-run --config src/sharing/wrangler.staging.jsonc`를 확인하고, 준비된 설정만 실제 배포한다.
+4. 허용된 시험 계정의 실제 인증 메일·로그인/로그아웃·복구·공유 권한/파일을 검증한다. D1의 emailVerified 값을 강제로 바꿔 실제 메일 검증을 통과 처리하지 않는다.
+5. PC 종료 지속성·사용량·백업/복구 시험을 수행한다. 로컬 대용량 시험을 원격 부하 시험으로 재사용해 주장하지 않는다.

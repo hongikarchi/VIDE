@@ -1,0 +1,46 @@
+// Remote staging resources. Keep workers_dev disabled until origin, sender, mail eligibility and AUTH_SECRET are configured.
+// remote:false keeps local development from using cloud data; --remote migrations explicitly target staging.
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "vide-sharing-staging",
+  "main": "worker.ts",
+  "compatibility_date": "2026-09-22",
+  "compatibility_flags": [
+    "nodejs_compat"
+  ],
+  "workers_dev": false,
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "vide-sharing-staging",
+      "database_id": "c7f1541a-6fd5-43fb-b70f-6247af392a2e",
+      "remote": false,
+      "migrations_dir": "migrations"
+    }
+  ],
+  "send_email": [
+    {
+      "name": "EMAIL",
+      "remote": false
+    }
+  ],
+  "vars": {
+    "AUTH_ORIGIN": "",
+    "EMAIL_FROM": ""
+  },
+  "r2_buckets": [
+    {
+      "binding": "ASSETS",
+      "bucket_name": "vide-sharing-staging",
+      "remote": false
+    }
+  ],
+  "assets": {
+    "directory": "../../dist/sharing",
+    "binding": "WEB",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": true
+  },
+  "account_id": "04342c5d7e3c1adaf6da81a8964b3ed4",
+  "preview_urls": false
+}
