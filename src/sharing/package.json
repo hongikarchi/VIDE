@@ -7,12 +7,13 @@
     "test": "node ../../tests/sharing/membership.mjs"
   },
   "dependencies": {
-    "better-auth": "1.7.5"
+    "better-auth": "1.7.5",
+    "zod": "4.6.5"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "5.20260922.1",
-    "wrangler": "4.136.1",
+    "esbuild": "0.28.1",
     "miniflare": "5.20260921.0-alpha",
-    "esbuild": "0.28.1"
+    "wrangler": "4.136.1"
   }
 }

@@ -2,7 +2,8 @@ import type {Env} from './auth';
 import type {Actor} from './projects';
 import {membership} from './projects';
 import {accessiblePublication,type Manifest} from './publications';
-import {HttpError,body,digest,json,text} from './http';
+import {HttpError,body,digest,json} from './http';
+import {sharedCommentInputSchema} from '../contracts/shared-spatial';
 
 interface CommentRow {id:string;publication_id:string;user_id:string;payload:string;received_at:number;input_hash:string}
 const view=(row:CommentRow)=>({id:row.id,publicationId:row.publication_id,authorId:row.user_id,input:JSON.parse(row.payload),receivedAt:row.received_at});
@@ -17,13 +18,12 @@ export async function commentRoute(request:Request,env:Env,actor:Actor,projectId
   }
   if(request.method!=='POST')throw new HttpError(405,'METHOD_NOT_ALLOWED');
   const role=await membership(db,projectId,actor.id);if(role==='viewer')throw new HttpError(403,'COMMENTER_REQUIRED');
-  const input=await body(request);
-  if(Object.keys(input).some(key=>!['submissionId','body','objectId'].includes(key)))throw new HttpError(400,'UNSUPPORTED_COMMENT_INPUT');
-  const submissionId=text(input.submissionId,100);if(!/^[a-zA-Z0-9_-]+$/.test(submissionId))throw new HttpError(400,'INVALID_INPUT');
-  text(input.body,4000);
+  const parsed=sharedCommentInputSchema.safeParse(await body(request,256*1024));
+  if(!parsed.success)throw new HttpError(400,'INVALID_COMMENT_INPUT');
+  const input=parsed.data,submissionId=input.submissionId;
   const manifest=JSON.parse(publication.manifest) as Manifest;
   if(input.objectId!==null&&(typeof input.objectId!=='string'||!manifest.objectIds.includes(input.objectId)))throw new HttpError(400,'OBJECT_NOT_PUBLISHED');
-  const payload=JSON.stringify({body:input.body,objectId:input.objectId}),hash=await digest(publicationId+'\n'+payload),id=crypto.randomUUID();
+  const payload=JSON.stringify({body:input.body,objectId:input.objectId,...(input.pin?{pin:input.pin}:{}),...(input.sketches?.length?{sketches:input.sketches}:{})}),hash=await digest(publicationId+'\n'+payload),id=crypto.randomUUID();
   // Recheck write permission at the insertion point, not just when the request started.
   await db.prepare(`INSERT INTO comments(id,project_id,publication_id,user_id,submission_id,input_hash,payload,received_at)
     SELECT ?,?,?,?,?,?,?,? WHERE EXISTS(SELECT 1 FROM project_members WHERE project_id=? AND user_id=? AND role IN ('owner','commenter'))

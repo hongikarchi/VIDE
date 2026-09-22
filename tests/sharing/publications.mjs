@@ -39,6 +39,9 @@ export async function verifyPublications({call,mf,db,alice,bob,eve,projectId,inv
   assert.equal(comments[0].value.id,comments[1].value.id);
   assert.equal((await submit(id,{...comment,body:'Changed'})).status,409);
   assert.equal((await submit(id,{...comment,submissionId:randomUUID(),objectId:'hidden-object'})).status,400);
+  const spatial={submissionId:randomUUID(),body:'',objectId:'object-1',pin:{unit:'m',position:[1,2,3]},sketches:[{plane:'XZ',unit:'m',role:'direction',points:[[1,3],[4,5]]}]};
+  const spatialResult=await submit(id,spatial);assert.equal(spatialResult.status,201,JSON.stringify(spatialResult));assert.deepEqual(spatialResult.value.input.pin,spatial.pin);assert.deepEqual(spatialResult.value.input.sketches,spatial.sketches);
+  assert.equal((await submit(id,{...spatial,submissionId:randomUUID(),pin:{unit:'px',position:[1,2,3]}})).status,400);
   let r=await mf.dispatchFetch(origin+base+'/'+id+'/assets/scene/0',{headers:{Cookie:bob.cookie}});
   assert.equal(r.status,200);assert.deepEqual(Buffer.from(await r.arrayBuffer()),bytes);assert.match(r.headers.get('cache-control'),/no-store/);
   assert.equal((await call(base+'/'+id+'/assets/scene/0',{cookie:eve.cookie})).status,404);
@@ -54,7 +57,7 @@ export async function verifyPublications({call,mf,db,alice,bob,eve,projectId,inv
   assert.equal((await call(base+'/'+id+'/assets/scene/0',{cookie:bob.cookie})).status,404);
   assert.equal((await call(base+'/'+id+'/history-access',{method:'PATCH',cookie:alice.cookie,data:{shared:true}})).status,200);
   assert.equal((await call(base+'/'+id,{cookie:bob.cookie})).status,200);
-  const original=await call(base+'/'+id+'/comments',{cookie:bob.cookie});assert.equal(original.value.comments.length,1);assert.equal(original.value.comments[0].publicationId,id);
+  const original=await call(base+'/'+id+'/comments',{cookie:bob.cookie});assert.equal(original.value.comments.length,2);assert.equal(original.value.comments[0].publicationId,id);
   assert.equal((await submit(second)).status,409);
   // A lost finalization response can be retried without reverting the newer publication.
   assert.equal((await finish(id)).status,200);
