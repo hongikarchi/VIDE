@@ -2,7 +2,7 @@
 id: VERIFY-2026-09-22-cloudflare-sharing
 title: Cloudflare 공유 권한·게시 검증
 status: review
-version: 0.8
+version: 0.9
 updated: 2026-09-22
 owner: agent:codex
 related: [T-009, SPEC-04, AC-30, AC-37]
@@ -106,6 +106,12 @@ pointercancel/창 포커스 유실의 선은 완성된 것으로 처리하지 �
 2 MiB 청크의 동시 읽기 1/10/50건은 각각 p50 14/93/457 ms, p95 14/111/558 ms였다. 모든 읽기의 크기·SHA-256을 대조했고 오류는 0건이었다. 단일 로컬 실행의 합성 바이너리 전송값이며 한국 원격 접속·Cloudflare 운영 제한·대형 3D 모델 렌더링 성능으로 일반화하지 않는다. 64 MiB 웹 표시 한도는 유지한다. 성공한 대용량 실행의 런타임 상태는 경로·심볼릭 링크 확인 후 정리했고 result.json과 worker.log만 보존했다.
 
 `node tests/sharing/membership.mjs --backup`은 `.vide/sharing-membership/1031adda-3075-4511-8da1-8bbe82ee743c`에서 통과했다. 정지한 로컬 에뮬레이터 D1/R2 상태를 복사한 뒤 합성 의견과 자산 청크를 직접 삭제해 손실을 확인했다. 별도 새 경로로 복원하여 같은 세션의 접근·게시 포인터·의견 ID·자산 해시가 돌아옴을 확인했다(손실 주입부터 복원 검증까지 939 ms). 이 방식은 로컬 런타임 사본 검증이며 원격 D1 SQL 반출/R2 백업이나 운영 재해 복구 절차의 대체물이 아니다.
+
+## 공유 화면의 큰 좌표 정밀도
+
+데스크톱에서 사용하던 상대 GPU 정점 계산을 `src/core/display-coordinates.ts`로 공통화해 공유 모델과 의견 선에도 적용했다. 월드 원점은 객체 변환에 유지하고 작은 차이만 Float32 정점에 저장한다. 작은 모델의 전체 보기에서 최소 1 m 범위를 강제하던 부분도 조정했다. 원 공개 자료와 핀/선 좌표는 변경하지 않는다.
+
+`tests/sharing/precision.mjs`가 `.vide/sharing-precision/89c12475-4ffe-4220-82a6-e28bcf67f48f`에서 실제 공유 Model 컴포넌트로 90,000 m 부근의 2 mm 형상을 정투영/원근에서 선택하고 월드 핀 위치를 0.1 µm 이내로 대조했다. 이는 합성 입력·수치 판정 허용오차이며 실제 설계/측량 정확도 보증은 아니다. precision.png에서 형상과 핀 표시를 확인했다. 코어 상대 좌표 시험·UI/서버 strict가 통과했고, `.vide/sharing-membership/819c4483-9dc5-4de1-8b9c-549934702b0a`에서 공유 브라우저 전체 왕복도 재검증했다. 설치 ZIP .5는 이 후속 표시 보완 이전 코드다.
 
 ## 남은 조건
 

@@ -1,4 +1,5 @@
 import {sceneRepresentation} from '../core/scene-representation.ts';
+import {displayCoordinates} from '../core/display-coordinates.ts';
 import type {DisplayGeometry} from '../core/scene-representation.ts';
 import type {Point2} from './model.ts';
 import * as THREE from 'three';
@@ -38,10 +39,7 @@ export function createViewport(container:HTMLElement,objects:DisplayObject[],onP
       const representation=sceneRepresentation(object);if(!representation)continue;
       const geometry=new THREE.BufferGeometry(),positions=representation.positions;
       // Keep small details near the geometry origin before uploading float32 GPU attributes.
-      const min=[Infinity,Infinity,Infinity],max=[-Infinity,-Infinity,-Infinity];
-      for(let i=0;i<positions.length;i++){const axis=i%3;min[axis]=Math.min(min[axis],positions[i]);max[axis]=Math.max(max[axis],positions[i]);}
-      const origin=min.map((value,axis)=>value+(max[axis]-value)/2),local=new Float32Array(positions.length);
-      for(let i=0;i<positions.length;i++)local[i]=positions[i]-origin[i%3];
+      const {origin,local}=displayCoordinates(positions);
       geometry.setAttribute('position',new THREE.BufferAttribute(local,3));
       let mesh:RenderObject;
       if(representation.type==='point')mesh=new THREE.Points(geometry,new THREE.PointsMaterial({color:0x69766c,size:9,sizeAttenuation:false}));

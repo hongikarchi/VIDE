@@ -4,14 +4,15 @@ import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
 import type {Scene} from './api';
 import type {SharedPin,SharedSketch} from '../../contracts/shared-spatial';
 import {spatialTools,worldPoint,type SpatialState,type StrokeDraft} from './spatial-tools';
+import {displayCoordinates} from '../../core/display-coordinates';
 
 export interface SpatialDraft {pin?:SharedPin|null;sketches?:SharedSketch[];interrupted?:StrokeDraft|null;pending?:boolean}
 function clear(group:THREE.Group){for(const child of group.children){if(child instanceof THREE.Mesh||child instanceof THREE.Line||child instanceof THREE.Points){child.geometry.dispose();const materials=Array.isArray(child.material)?child.material:[child.material];for(const material of materials)material.dispose();}}group.clear();}
 function drawStroke(group:THREE.Group,stroke:StrokeDraft,span:number,dashed=false){
-  const geometry=new THREE.BufferGeometry().setFromPoints(stroke.points.map(point=>new THREE.Vector3(...worldPoint(stroke.plane,point))));
-  if(stroke.points.length===1){group.add(new THREE.Points(geometry,new THREE.PointsMaterial({color:0xd97660,size:7,sizeAttenuation:false,depthTest:false})));return;}
+  const {origin,local}=displayCoordinates(stroke.points.flatMap(point=>worldPoint(stroke.plane,point))),geometry=new THREE.BufferGeometry();geometry.setAttribute('position',new THREE.BufferAttribute(local,3));
+  if(stroke.points.length===1){const point=new THREE.Points(geometry,new THREE.PointsMaterial({color:0xd97660,size:7,sizeAttenuation:false,depthTest:false}));point.position.set(...origin);group.add(point);return;}
   const material=dashed?new THREE.LineDashedMaterial({color:0xd97660,dashSize:span/30,gapSize:span/50,depthTest:false}):new THREE.LineBasicMaterial({color:0xd97660,depthTest:false});
-  const line=new THREE.Line(geometry,material);line.computeLineDistances();line.renderOrder=10;group.add(line);
+  const line=new THREE.Line(geometry,material);line.position.set(...origin);line.computeLineDistances();line.renderOrder=10;group.add(line);
 }
 
 export function Model({model,selected,onSelect,editable=false,draft={},onPin,onSketch,onInterrupted}:{model:Scene;selected:string|null;onSelect:(id:string|null)=>void;editable?:boolean;draft?:SpatialDraft;onPin?:(pin:SharedPin,id:string|null)=>void;onSketch?:(sketch:SharedSketch)=>void;onInterrupted?:(sketch:StrokeDraft)=>void}){
@@ -27,15 +28,15 @@ export function Model({model,selected,onSelect,editable=false,draft={},onPin,onS
     scene.add(new THREE.AmbientLight(0xffffff,2));const light=new THREE.DirectionalLight(0xffffff,3);light.position.set(3,-4,7);scene.add(light);
     const group=new THREE.Group();scene.add(group);
     for(const object of model.objects){
-      const geometry=new THREE.BufferGeometry();geometry.setAttribute('position',new THREE.Float32BufferAttribute(object.geometry.positions,3));
+      const {origin,local}=displayCoordinates(object.geometry.positions),geometry=new THREE.BufferGeometry();geometry.setAttribute('position',new THREE.BufferAttribute(local,3));
       let shape:THREE.Object3D;
       if(object.geometry.type==='mesh'){geometry.setIndex(object.geometry.indices);geometry.computeVertexNormals();shape=new THREE.Mesh(geometry,new THREE.MeshStandardMaterial({color:0xb6c3c4,roughness:0.8,side:THREE.DoubleSide}));}
       else if(object.geometry.type==='line')shape=new THREE.Line(geometry,new THREE.LineBasicMaterial({color:0x607d84}));
       else shape=new THREE.Points(geometry,new THREE.PointsMaterial({color:0x607d84,size:6,sizeAttenuation:false}));
-      shape.userData.id=object.id;group.add(shape);
+      shape.position.set(...origin);shape.userData.id=object.id;group.add(shape);
     }
     objects.current=group.children;
-    const bounds=new THREE.Box3().setFromObject(group),center=bounds.getCenter(new THREE.Vector3()),span=Math.max(bounds.getSize(new THREE.Vector3()).length(),1),distance=span*1.5;
+    const bounds=new THREE.Box3().setFromObject(group),center=bounds.getCenter(new THREE.Vector3()),span=Math.max(bounds.getSize(new THREE.Vector3()).length(),.001),distance=span*1.5;
     const perspective=view==='perspective',camera=perspective?new THREE.PerspectiveCamera(40,1,span/10000,span*100):new THREE.OrthographicCamera(-span,span,span,-span,span/10000,span*100);
     camera.up.set(0,0,1);const direction=view==='top'?new THREE.Vector3(0,0,1):view==='front'?new THREE.Vector3(0,-1,0):view==='right'?new THREE.Vector3(1,0,0):new THREE.Vector3(1,-1,0.8).normalize();
     if(view==='top')camera.up.set(0,1,0);camera.position.copy(center).addScaledVector(direction,distance);camera.lookAt(center);
