@@ -21,6 +21,7 @@ export function rhinoCommand(type:string,params:Record<string,unknown>={}, {port
       sent=true;socket.write(Buffer.concat([header,data]));
     });
     socket.on('data',chunk=>{
+      if(!sent)return fail('HOST_INVALID_RESPONSE');
       buffer=Buffer.concat([buffer,chunk]);
       if(buffer.length<4)return;
       const length=buffer.readUInt32BE();

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import {mkdir,writeFile} from 'node:fs/promises';
+import {mkdir,writeFile,rm} from 'node:fs/promises';
 import {resolve,join} from 'node:path';
 import {randomUUID} from 'node:crypto';
 import {chromium} from 'playwright';
@@ -31,7 +31,8 @@ try{
  const nextReceipt=await changing.execute(randomUUID(),0,'var item=doc.Objects.GetObjectList(Rhino.DocObjects.ObjectType.AnyObject).Single();using(var geometry=new Box(new BoundingBox(0,0,0,2,3,8)).ToBrep())doc.Objects.Replace(item.Id,geometry);');assert.equal(nextReceipt.ok,true,JSON.stringify(nextReceipt));
  const nextModel=await changing.exportModel();await changing.stop();const nextId=randomUUID();
  app.store.db.prepare('INSERT INTO workspace_requests VALUES(?,?,?,?,?,?)').run(nextId,project.id,JSON.stringify({...input,id:nextId,body:'Synthetic height edit',baseRequestId:result.id}),'succeeded',JSON.stringify({...nextModel,hostExecuted:true,executionMode:'sdk',host:'rhino',verified:true,filename:nextReceipt.filename,fileHash:nextReceipt.fileHash,baseRequestId:result.id,sourceDocument:result.result.sourceDocument}),new Date().toISOString());
- await page.reload();await page.locator('#project-picker').selectOption(project.id);
+ await app.close();app=await startServer({filename:join(directory,'test.sqlite'),sdkOptions:{...options,directory,launch}});
+ await page.goto(app.launchUrl);await page.locator('#project-picker').selectOption(project.id);
  await page.getByRole('button',{name:'문서에 적용',exact:true}).click();const dialog=page.getByRole('dialog',{name:'Rhino 원본 적용'});
  await dialog.getByRole('button',{name:'영향 검토',exact:true}).click();await dialog.getByRole('status').filter({hasText:'수정 1'}).waitFor();
  await dialog.getByRole('button',{name:'검토한 변경 적용',exact:true}).click();await dialog.getByRole('status').filter({hasText:'문서 반영 완료'}).waitFor();
@@ -40,6 +41,6 @@ try{
  const finalCapture=page.waitForResponse(response=>response.url().endsWith(`/projects/${project.id}/capture`)&&response.request().method()==='POST');await page.locator('#capture-document').click();const final=await(await finalCapture).json();
  assert.equal(final.state,'succeeded',JSON.stringify(final));assert.ok(Math.abs(final.result.scene[0].volume-48)<1e-8);assert.equal(final.result.objects[0].nativeId,result.result.objects[0].nativeId);
  await page.getByRole('button',{name:'이 후보 보기',exact:true}).last().click();await page.screenshot({path:join(directory,'applied.png')});
- const evidence={passed:true,directory,browserOpened:true,ownDocumentSelected:true,browserRecaptured:true,browserPreviewApplied:true,nativeIdentityPreserved:true,volumeBefore:24,volumeAfter:48};
+ const evidence={passed:true,directory,browserOpened:true,ownDocumentSelected:true,browserRecaptured:true,browserPreviewApplied:true,controllerRestartReconnected:true,nativeIdentityPreserved:true,volumeBefore:24,volumeAfter:48};
  await writeFile(join(directory,'result.json'),JSON.stringify(evidence,null,2));console.log(JSON.stringify(evidence));
-}finally{if(browser)await browser.close();if(app)await app.close();for(const worker of workers.reverse())await worker.stop();}
+}finally{if(browser)await browser.close();if(app)await app.close();for(const worker of workers.reverse())await worker.stop();await rm(directory+'.editors.json',{force:true});}

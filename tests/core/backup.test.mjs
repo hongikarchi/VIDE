@@ -18,6 +18,7 @@ test('offline backup preserves records and model files, excludes launch secrets,
   await writeFile(join(source,'sdk-models','worker','candidate.3dm'),'synthetic SDK candidate');
   await writeFile(join(source,'sdk-models','worker','receipt.json'),'synthetic SDK receipt');
   await writeFile(join(source, 'launch.json'), 'private launch token');
+  await writeFile(join(source,'sdk-models.editors.json'),'private editor pairing tokens');
   await assert.rejects(backupWorkspace(source, destination), { code: 'CONTROLLER_BUSY' });
   store.close();
   const original = await readFile(join(source, 'vide.sqlite'));
@@ -27,6 +28,7 @@ test('offline backup preserves records and model files, excludes launch secrets,
   assert.equal(await readFile(join(destination,'sdk-models','worker','candidate.3dm'),'utf8'),'synthetic SDK candidate');
   assert.equal(await readFile(join(destination,'sdk-models','worker','receipt.json'),'utf8'),'synthetic SDK receipt');
   await assert.rejects(readFile(join(destination, 'launch.json')), { code: 'ENOENT' });
+  await assert.rejects(readFile(join(destination,'sdk-models.editors.json')),{code:'ENOENT'});
   const restored = new DatabaseSync(join(destination, 'vide.sqlite'), { readOnly: true });
   assert.equal(restored.prepare('SELECT name FROM projects WHERE id=?').get(project.id).name, 'saved project'); restored.close();
   await verifyBackup(destination);

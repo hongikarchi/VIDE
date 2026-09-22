@@ -16,3 +16,15 @@ test('Rhino frames handle split UTF-8 and never retry an uncertain write',async(
     await assert.rejects(rhinoCommand('write',{},options),{code:'HOST_RESULT_UNKNOWN'});assert.equal(connections,2);
   }finally{await new Promise(resolve=>server.close(resolve));}
 });
+
+
+test('a listener cannot return success before ownership checks and request transmission',async()=>{
+ let bytes=0,release;const gate=new Promise(resolve=>release=resolve);
+ const server=createServer(socket=>{
+  socket.on('data',chunk=>bytes+=chunk.length);
+  const payload=Buffer.from(JSON.stringify({status:'success',result:{ok:true}})),header=Buffer.alloc(4);header.writeUInt32BE(payload.length);socket.write(Buffer.concat([header,payload]));
+ });
+ await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
+ try{await assert.rejects(rhinoCommand('vide',{token:'must-not-send'},{port:server.address().port,beforeSend:()=>gate}),{code:'HOST_INVALID_RESPONSE'});assert.equal(bytes,0);}
+ finally{release();await new Promise(resolve=>server.close(resolve));}
+});

@@ -1,3 +1,4 @@
+import {editorMethods} from './editor-channel.ts';
 import { spawn } from 'node:child_process';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { constants, createReadStream } from 'node:fs';
@@ -18,16 +19,8 @@ export const workerResultSchema=z.discriminatedUnion('ok',[
  z.object({ok:z.literal(true),operationId:z.string().uuid(),revision:z.number().int().positive(),filename:z.string(),fileHash:z.string().regex(/^[a-f0-9]{64}$/),readbackVerified:z.literal(true),snapshot:workerSnapshotSchema,changes:workerChangesSchema.optional(),value:z.unknown().optional()}),
 ]);
 
-const editorSnapshotSchema=z.object({ok:z.literal(true),documentId:z.number().int().positive(),name:z.string(),units:z.string(),objectCount:z.number().int().nonnegative(),modified:z.boolean(),documentHash:z.string().regex(/^[a-f0-9]{64}$/),selectedIds:z.array(z.string().uuid())});
-const applicationPreviewSchema=z.object({documentHash:z.string(),added:z.number().int(),updated:z.number().int(),removed:z.number().int(),mode:z.literal('sdk-native')});
-const applicationOutcomeSchema=z.object({state:z.enum(['succeeded','failed','unknown']),result:z.record(z.string(),z.unknown())});
-const editorCaptureSchema=editorSnapshotSchema.omit({objectCount:true,modified:true}).extend({filename:z.string(),fileHash:z.string().regex(/^[a-f0-9]{64}$/)});
 interface Options {directory:string;executable:string;plugin:string;bootstrap:string;visible?:boolean;mode?:'worker'|'editor';startupTimeoutMs?:number;source?:{filename:string;fileHash:string;measurements?:{id:string;area:number|null;volume:number|null;length:number|null}[]};normalizeUnits?:boolean}
 const failure=(code:string)=>Object.assign(new Error(code),{code});
-function editorReply<T>(schema:z.ZodType<T>,value:unknown):T{
- const error=z.object({ok:z.literal(false),code:z.string()}).safeParse(value);
- if(error.success)throw failure(error.data.code);return schema.parse(value);
-}
 async function fingerprint(filename:string){const hash=createHash('sha256');for await(const chunk of createReadStream(filename))hash.update(chunk);return hash.digest('hex');}
 export async function launchRhinoWorker({directory,executable,plugin,bootstrap,visible=false,mode='worker',startupTimeoutMs=90000,source,normalizeUnits=false}:Options){
  if(![directory,executable,plugin,bootstrap].every(isAbsolute)||/["\r\n()]/.test(bootstrap)||!Number.isFinite(startupTimeoutMs)||startupTimeoutMs<1||startupTimeoutMs>180000)throw failure('INVALID_HOST_LAUNCH');
@@ -67,11 +60,8 @@ export async function launchRhinoWorker({directory,executable,plugin,bootstrap,v
   };
   return {
    identity:{...identity},
-   async inspectEditor(){return editorReply(editorSnapshotSchema,await call('inspectEditor'));},
-   async captureEditor(operationId:string){editorReply(z.object({ok:z.literal(true),pending:z.literal(true)}),await call('captureEditor',{operationId}));return editorReply(editorCaptureSchema,await call('verifyEditorCapture',{operationId}));},
-   async previewEditorApplication(filename:string,candidateHash:string,documentHash:string){return editorReply(applicationPreviewSchema,await call('previewEditorApplication',{filename,candidateHash,documentHash}));},
-   async applyEditorCandidate(operationId:string,filename:string,candidateHash:string,documentHash:string){return editorReply(applicationOutcomeSchema,await call('applyEditorCandidate',{operationId,filename,candidateHash,documentHash}));},
-   async recoverEditorApplication(operationId:string,filename:string,candidateHash:string,documentHash:string){return editorReply(applicationOutcomeSchema,await call('recoverEditorApplication',{operationId,filename,candidateHash,documentHash}));},
+   ...editorMethods(call),
+   editorConnection:mode==='editor'?{identity:{...identity},token,executable}:undefined,
    detach(){lease.detach();},
    async query(){return workerSnapshotSchema.parse(await call('query'));},
    async exportModel(){return nativeModelSchema.parse(await call('export',source?.measurements&&!normalizeUnits?{measurementCache:source.measurements}:{}));},

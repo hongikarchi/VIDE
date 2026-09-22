@@ -94,7 +94,7 @@ export async function startServer({ filename, port = 0, providerFactory, host, c
       const capture=/^\/api\/v1\/projects\/([^/]+)\/capture$/.exec(url.pathname);
       if(capture&&request.method==='POST'){
         const target=hostTargetSchema.extend({id:z.string()}).parse(await body(request));
-        const own=sdk?.editors.has(target.instance);
+        const own=await sdk?.editors.has(target.instance);
         send(200,await captureModel(capture[1],target,workspace,own?rhinoImport:host,own?async()=>sdk!.captureEditor(target,intent=>workspace.update(capture[1],target.id,'running',intent)):undefined));return;
       }
       const reviewComparison=/^\/api\/v1\/projects\/([^/]+)\/review-comparison$/.exec(url.pathname);
@@ -143,7 +143,7 @@ export async function startServer({ filename, port = 0, providerFactory, host, c
         try{const legacy=await listDocuments();const documents=legacy.documents.map(doc=>({...doc,instance:doc.instance??legacy.instance}));send(200,owned?{...owned,documents:[...owned.documents,...documents.filter(doc=>!owned.documents.some(item=>item.instance===doc.instance&&item.id===doc.id))]}:legacy);}
         catch(error){if(!owned)throw error;send(200,owned);}return;
       }
-      if(url.pathname==='/api/v1/host/selection'&&request.method==='GET'){const target=hostTargetSchema.parse({instance:url.searchParams.get('instance'),documentId:Number(url.searchParams.get('document'))});send(200,sdk?.editors.has(target.instance)?await sdk.editors.inspect(target):await inspectDocument(target.instance,target.documentId));return;}
+      if(url.pathname==='/api/v1/host/selection'&&request.method==='GET'){const target=hostTargetSchema.parse({instance:url.searchParams.get('instance'),documentId:Number(url.searchParams.get('document'))});send(200,await sdk?.editors.has(target.instance)?await sdk!.editors.inspect(target):await inspectDocument(target.instance,target.documentId));return;}
       const importRecovery=/^\/api\/v1\/projects\/([^/]+)\/imports\/([^/]+)\/reconcile$/.exec(url.pathname);
       if(importRecovery&&request.method==='POST'){
         await body(request);const [,projectId,id]=importRecovery,key=projectId+':'+id;
