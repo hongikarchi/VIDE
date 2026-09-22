@@ -29,6 +29,20 @@ export async function verifyDesktopPublish({browser,origin,alice,directory,db,pr
     await owner.getByText('게시가 완료되었습니다.',{exact:true}).waitFor();await owner.locator('canvas').waitFor();
     assert.equal((await db.prepare('SELECT count(*) n FROM publications WHERE project_id=? AND request_id=?').bind(projectId,file.requestId).first()).n,1);
     await owner.screenshot({path:join(directory,'published-from-desktop.png'),fullPage:true});
-    return {desktopExplicitExport:true,crossProjectExportRejected:true,browserPublish:true,publishResponseLossReloadIdempotent:true};
+    const publication=await db.prepare('SELECT id FROM publications WHERE project_id=? AND request_id=?').bind(projectId,file.requestId).first();
+    const noteInput={submissionId:'feedback-roundtrip',body:'이 부분의 높이를 낮춰 주세요.',objectId:'object-1',pin:{unit:'m',position:[1,2,3]},sketches:[{plane:'XZ',unit:'m',role:'path',points:[[1,2],[2,3],[3,4]]}]};
+    const posted=await owner.evaluate(async({projectId,publication,input})=>{const response=await fetch(`/api/projects/${projectId}/publications/${publication}/comments`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(input)});return {status:response.status,data:await response.json()};},{projectId,publication:publication.id,input:noteInput});assert.equal(posted.status,201);
+    await owner.reload();const feedbackDownload=owner.waitForEvent('download');await owner.getByRole('link',{name:'IDE용 의견 내려받기',exact:true}).last().click();const feedback=join(directory,'feedback.json');await(await feedbackDownload).saveAs(feedback);
+    await desktop.getByRole('button',{name:'닫기',exact:true}).click();await desktop.getByText('검토본',{exact:true}).click();await desktop.getByRole('button',{name:'외부 의견',exact:true}).click();
+    await desktop.getByLabel('외부 의견 파일').setInputFiles(feedback);await desktop.getByText('의견을 로컬에 보관했습니다. 아직 작업 입력으로 채택하거나 실행하지 않았습니다.',{exact:true}).waitFor();
+    await desktop.getByLabel('외부 의견 파일').setInputFiles(feedback);await desktop.getByRole('button',{name:'외부 의견을 요청 초안에 첨부',exact:true}).click();
+    const draft=await desktop.evaluate(id=>JSON.parse(localStorage.getItem('vide:draft:'+id)),local.id);
+    assert.equal(draft.baseRequestId,id);assert.equal(draft.pins[0].basis,id);assert.deepEqual(draft.sketches[0].points,noteInput.sketches[0].points);assert.equal(draft.instructions[0],noteInput.body);
+    const original=JSON.parse(draft.files.find(file=>file.name.startsWith('Shared-feedback-')).text);assert.deepEqual(original.original.comment.input.pin,noteInput.pin);assert.equal(original.original.publicationId,publication.id);
+    assert.equal(app.store.db.prepare('SELECT count(*) n FROM shared_feedback').get().n,1);assert.equal(app.store.db.prepare('SELECT count(*) n FROM workspace_requests').get().n,1);
+    await desktop.screenshot({path:join(directory,'feedback-adopted.png'),fullPage:true});
+    await desktop.reload();await desktop.getByRole('button',{name:'▧ 외부 의견 · 브라우저 게시 검수 제외',exact:true}).waitFor();
+    await desktop.waitForFunction(id=>JSON.parse(localStorage.getItem('vide:draft:'+id)||'null')?.files?.some(file=>file.name.startsWith('Shared-feedback-')),local.id);
+    return {desktopExplicitExport:true,crossProjectExportRejected:true,browserPublish:true,publishResponseLossReloadIdempotent:true,feedbackFileRoundtrip:true,feedbackDraftOnly:true};
   }finally{await desktop.close();await owner.close();await app.close();}
 }

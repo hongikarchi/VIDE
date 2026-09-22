@@ -34,3 +34,14 @@ export async function commentRoute(request:Request,env:Env,actor:Actor,projectId
   if(!row)throw new HttpError(403,'COMMENT_NOT_ACCEPTED');
   if(row.input_hash!==hash)throw new HttpError(409,'SUBMISSION_CONFLICT');return json(view(row),201);
 }
+
+export async function exportComment(request:Request,env:Env,actor:Actor,projectId:string,publicationId:string,commentId:string):Promise<Response>{
+  if(request.method!=='GET')throw new HttpError(405,'METHOD_NOT_ALLOWED');
+  if(await membership(env.DB,projectId,actor.id)!=='owner')throw new HttpError(403,'OWNER_REQUIRED');
+  const publication=await accessiblePublication(env,actor,projectId,publicationId);
+  const comment=await env.DB.prepare('SELECT * FROM comments WHERE project_id=? AND publication_id=? AND id=?').bind(projectId,publicationId,commentId).first<CommentRow>();
+  const exported=await env.DB.prepare('SELECT request_id FROM publications WHERE id=?').bind(publicationId).first<{request_id:string}>();
+  if(!comment||!exported)throw new HttpError(404,'COMMENT_NOT_FOUND');
+  const file={format:'vide-feedback-v1',origin:new URL(request.url).origin,projectId,publicationId,exportId:exported.request_id,manifest:JSON.parse(publication.manifest),comment:{id:comment.id,authorId:comment.user_id,receivedAt:comment.received_at,input:JSON.parse(comment.payload)}};
+  const response=json(file);response.headers.set('Content-Disposition','attachment; filename="VIDE-feedback.json"');return response;
+}

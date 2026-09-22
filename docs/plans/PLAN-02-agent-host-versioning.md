@@ -2,7 +2,7 @@
 id: PLAN-02
 title: 범용 AI 실행·다중 호스트 통신·모델 데이터 버전 관리
 status: review
-version: 0.12
+version: 0.13
 updated: 2026-09-22
 owner: agent:codex
 related: [PLAN, SPEC-02, SPEC-03, SPEC-04, SPEC-05, ADR-013]
@@ -240,6 +240,9 @@ AWS는 같은 파일 사용량에서 Lightsail+서울 S3+CloudFront Pro 소계�
 게시 API는 manifest 생성→파일 업로드→해시 검증→게시 확정 순서이며 의견은 publicationId·objectId·기준 버전·공간 입력을 보존하고 cursor로 조회한다. 다른 버전 객체에 의견을 섞지 않는다. 두 사용자·두 프로젝트 교차 접근, 초대 만료/취소·탈퇴·직접 파일 URL·과거 게시본을 검수한다. 공개 웹으로 localhost 쿠키/CLI 자격 증명을 보내지 않는다. 계정 공유는 동시 CAD 편집·타인 PC 실행·오프라인 병합을 뜻하지 않는다. 선택한 제공자용 작은 저장/메일 어댑터만 만들고 범용 멀티클라우드 프레임워크는 만들지 않는다.
 
 ### 로컬 공유 구현의 물리 계약
+
+로컬 파일 왕복 단계는 `publication_exports`에 공개 export ID·프로젝트/작업 ID·manifest/원 결과 해시를 저장한다. 웹의 소유자 전용 `GET /api/projects/:project/publications/:publication/comments/:comment/export`는 의견 하나와 공개 기준을 반환한다. 로컬 `POST /api/v1/projects/:project/shared-feedback`는 이 기준을 대조해 `shared_feedback`에 원문을 불변 보관한다. origin·웹 프로젝트·게시본·의견 ID를 중복 키로 사용하고 동일 ID의 변경된 원문을 거절한다. UI의 채택은 사용자 초안에 원본 첨부·선·대상을 복사하며 실행은 기존 명시적 요청을 따른다. 파일의 서버/작성자 표시는 온라인 검증으로 취급하지 않는다. 계정 인증 연결에 의한 자동 전송은 이 단계의 완료 주장에 포함하지 않는다.
+
 
 `src/sharing/`는 독립 Workers 패키지다. 인증 스키마는 Better Auth 1.7.5 생성 SQL, 제품 스키마는 `migrations/`의 순서 있는 SQL로 관리한다. 운영 배포 스크립트나 제품 HTTP 관리 경로로 자동 마이그레이션하지 않는다. 현재 시험은 로컬 전용 Wrangler 설정과 Miniflare의 D1/R2 바인딩을 사용한다.
 

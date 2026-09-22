@@ -37,6 +37,9 @@ export async function verifyPublications({call,mf,db,alice,bob,eve,projectId,inv
   await call(`/api/projects/${projectId}/members/${bob.id}`,{method:'PATCH',cookie:alice.cookie,data:{role:'commenter'}});
   const comments=await Promise.all([submit(id),submit(id)]);for(const comment of comments)assert.equal(comment.status,201,JSON.stringify(comment));
   assert.equal(comments[0].value.id,comments[1].value.id);
+  const exportPath=base+'/'+id+'/comments/'+comments[0].value.id+'/export';
+  assert.equal((await call(exportPath,{cookie:bob.cookie})).status,403);
+  const exportedComment=await call(exportPath,{cookie:alice.cookie});assert.equal(exportedComment.status,200);assert.equal(exportedComment.value.exportId,requestId);assert.deepEqual(exportedComment.value.comment.input,{body:comment.body,objectId:comment.objectId});
   assert.equal((await submit(id,{...comment,body:'Changed'})).status,409);
   assert.equal((await submit(id,{...comment,submissionId:randomUUID(),objectId:'hidden-object'})).status,400);
   const spatial={submissionId:randomUUID(),body:'',objectId:'object-1',pin:{unit:'m',position:[1,2,3]},sketches:[{plane:'XZ',unit:'m',role:'direction',points:[[1,3],[4,5]]}]};

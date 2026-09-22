@@ -11,6 +11,7 @@ import {attachNativeAttributes} from './native-attributes.ts';
 import {showExtensions} from './extensions.tsx';
 const showAiSettings:typeof import('./ai-settings.tsx').showAiSettings = async onStatus => (await import('./ai-settings.tsx')).showAiSettings(onStatus);
 import {initializeReviews} from './reviews.tsx';
+import {attachSharedFeedback} from './shared-feedback.tsx';
 import {renderHistory} from './history.tsx';
 import {initializeDocuments} from './documents.tsx';
 import {renderPoints,validCoordinate} from './sketch.tsx';
@@ -28,7 +29,12 @@ const reviews=initializeReviews(()=>project?.id,message,(note,review)=>{
  if(busy)throw Error('현재 요청 전송이 끝난 뒤 첨부하세요.');
  attachReviewNote(state,note,review);render();if($('right').hidden)$('toggle-right').click();mobileView('input');
  message('의견과 원 기준을 요청 초안에 첨부했습니다. 조건을 확인한 뒤 보내세요.');
-},id=>{selectedResult=id;renderMessages();message('의견 작성 당시 후보를 열었습니다.');});
+},id=>{selectedResult=id;renderMessages();message('의견 작성 당시 후보를 열었습니다.');},note=>{
+ if(busy)throw Error('현재 요청 전송이 끝난 뒤 첨부하세요.');
+ if(note.projectId!==project?.id)throw Error('의견의 프로젝트가 다릅니다.');
+ attachSharedFeedback(state,note);render();if($('right').hidden)$('toggle-right').click();mobileView('input');
+ message('외부 의견의 원문과 공간 입력을 초안에 첨부했습니다. 확인한 뒤 보내세요.');
+});
 initializeDocuments(message,async target=>{
  if(!project||busy)throw Error('현재 작업이 끝난 뒤 가져오세요.');
  busy=true;render();message('열린 Rhino 문서의 작업 사본을 가져오고 있습니다.');

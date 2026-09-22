@@ -2,7 +2,7 @@ import {createAuth,type Env} from './auth';
 import {HttpError,json} from './http';
 import {acceptInvitation,projectRoute} from './projects';
 import {publicationRoute} from './publications';
-import {commentRoute} from './comments';
+import {commentRoute,exportComment} from './comments';
 
 async function handle(request:Request,env:Env,ctx:ExecutionContext):Promise<Response>{
     try{
@@ -17,6 +17,7 @@ async function handle(request:Request,env:Env,ctx:ExecutionContext):Promise<Resp
       const actor={id:session.user.id,email:session.user.email};
       if(url.pathname==='/api/invitations/accept'&&request.method==='POST')return await acceptInvitation(request,env,actor);
       const path=url.pathname.split('/').filter(Boolean);
+      if(path[1]==='projects'&&path[2]&&path[3]==='publications'&&path[4]&&path[5]==='comments'&&path[6]&&path[7]==='export'&&path.length===8)return await exportComment(request,env,actor,path[2],path[4],path[6]);
       if(path[1]==='projects'&&path[2]&&path[3]==='publications'&&path[4]&&path[5]==='comments'&&path.length===6)return await commentRoute(request,env,actor,path[2],path[4]);
       if(path[1]==='projects'&&path[2]&&path[3]==='publications')return await publicationRoute(request,env,actor,path[2],path.slice(4));
       if(path[1]==='projects')return await projectRoute(request,env,actor,path.slice(2));

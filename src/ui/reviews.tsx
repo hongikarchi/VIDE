@@ -8,6 +8,8 @@ import { api } from './gateway.ts';
 import { reviewRowSchema, reviewSchema, reviewNoteSchema } from '../contracts/reviews.ts';
 import type { ReviewRow, Review, ReviewNote } from '../contracts/reviews.ts';
 import { tableViewSchema } from '../contracts/quantities.ts';
+import {SharedFeedback} from './shared-feedback.tsx';
+import type {ReceivedFeedback} from '../contracts/shared-feedback.ts';
 import type { TableView } from '../contracts/quantities.ts';
 
 const dialog=document.createElement('dialog');document.body.append(dialog);
@@ -55,7 +57,7 @@ function SaveReview({projectId,requestId,image,views,onSaved}:{projectId:string;
   </div><p role="status">{status}</p>
  </>;
 }
-export function initializeReviews(getProject:()=>string|undefined,notify:(message:string)=>void,onAdopt:NoteActions['onAdopt'],onBasis:NoteActions['onBasis']){
+export function initializeReviews(getProject:()=>string|undefined,notify:(message:string)=>void,onAdopt:NoteActions['onAdopt'],onBasis:NoteActions['onBasis'],onSharedAdopt:(note:ReceivedFeedback)=>void){
  const list=createRoot(document.getElementById('review-list')!);let refreshGeneration=0;
  const actions:NoteActions={onAdopt:(note,review)=>{onAdopt(note,review);dialog.close();},onBasis:id=>{onBasis(id);dialog.close();}};
  function open(projectId:string,row:ReviewRow){
@@ -67,6 +69,7 @@ export function initializeReviews(getProject:()=>string|undefined,notify:(messag
   const rows=z.array(reviewRowSchema).parse(await api(`/projects/${projectId}/reviews`));
   if(current!==refreshGeneration||getProject()!==projectId)return;
   list.render(<>
+   <button onClick={()=>{generation++;dialog.className='quantity-dialog';dialog.setAttribute('aria-label','외부 의견');modal.render(<><button onClick={()=>dialog.close()}>닫기</button><SharedFeedback key={generation} projectId={projectId} onBasis={actions.onBasis} onAdopt={note=>{if(getProject()!==projectId)throw Error('프로젝트가 변경되었습니다.');onSharedAdopt(note);dialog.close();}}/></>);if(!dialog.open)dialog.showModal();}}>외부 의견</button>
    {!rows.length?<small>저장한 검토본이 없습니다.</small>:null}
    {rows.length>1?<button onClick={()=>{void showReviewComparison(projectId).catch((error:unknown)=>notify(errorText(error)));}}>검토본 비교</button>:null}
    {rows.map(row=><button key={row.id} title={new Date(row.createdAt).toLocaleString('ko-KR')} onClick={()=>open(projectId,row)}>{row.title}</button>)}

@@ -14,6 +14,7 @@ import {ReviewNotes} from '../core/review-notes.ts';
 import {compareReviews} from '../core/review-comparison.ts';
 import {Reviews} from '../core/reviews.ts';
 import {createPublicationBundle} from '../core/publication.ts';
+import {SharedFeedback} from '../core/shared-feedback.ts';
 import {TableViews} from '../core/table-views.ts';
 import {Applications} from './application.ts';
 import {listDocuments,inspectDocument} from '../../hosts/rhino/documents.ts';
@@ -48,6 +49,7 @@ export async function startServer({ filename, port = 0, providerFactory, host, c
   const store = new Store(filename), bootstrap = randomBytes(32).toString('hex'), session = randomBytes(32).toString('hex');
   const agentTools = new AgentTools();
   const workspace = new Workspace(store),tableViews=new TableViews(store),reviews=new Reviews(store),reviewNotes=new ReviewNotes(store,reviews);
+  const sharedFeedback=new SharedFeedback(store,workspace);
   host ??= new RhinoWorkspace(join(dirname(filename),'models'));
   const hosts={rhino:host,zwcad:cadHost||new ZwcadWorkspace(join(dirname(filename),'cad-models'))},importRecoveries=new Map<string,Promise<StoredWork>>();
   const aiSettings=new AiSettings(store),extensions=new Extensions(store,workspace);
@@ -100,12 +102,16 @@ export async function startServer({ filename, port = 0, providerFactory, host, c
       }
       const reviewComparison=/^\/api\/v1\/projects\/([^/]+)\/review-comparison$/.exec(url.pathname);
       const publicExport=/^\/api\/v1\/projects\/([^/]+)\/requests\/([^/]+)\/publication-export$/.exec(url.pathname);
+      const feedback=/^\/api\/v1\/projects\/([^/]+)\/shared-feedback$/.exec(url.pathname);
+      if(feedback&&request.method==='GET'){send(200,sharedFeedback.list(feedback[1]));return;}
+      if(feedback&&request.method==='POST'){send(201,sharedFeedback.receive(feedback[1],await body(request)));return;}
       if(publicExport&&request.method==='POST'){
         const bundle=createPublicationBundle(workspace.get(publicExport[1],publicExport[2]),await body(request));
         const bytes=Buffer.concat(bundle.chunks);
         if(bytes.byteLength>64*1024*1024)throw new DomainError('WEB_MODEL_LIMIT');
         response.setHeader('Content-Disposition','attachment; filename="VIDE-publication.json"');
-        send(200,{format:'vide-publication-v1',requestId:randomUUID(),manifest:bundle.manifest,scene:JSON.parse(bytes.toString('utf8'))});return;
+        const exportId=sharedFeedback.record(publicExport[1],publicExport[2],bundle.manifest);
+        send(200,{format:'vide-publication-v1',requestId:exportId,manifest:bundle.manifest,scene:JSON.parse(bytes.toString('utf8'))});return;
       }
       if(reviewComparison&&request.method==='GET'){
         const projectId=reviewComparison[1],before=reviews.get(projectId,url.searchParams.get('before')||''),after=reviews.get(projectId,url.searchParams.get('after')||'');

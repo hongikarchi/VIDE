@@ -38,7 +38,7 @@ export function Comments({project,publicationId,session,selected,inputRef,onDraf
     catch(error){setStatus(message(error)+' · 같은 내용으로 접수 확인을 다시 할 수 있습니다.');}
     finally{locked.current=false;setBusy(false);}
   }
-  return <><h2>의견</h2>{notes.map(note=><article key={note.id} className="comment"><small>{note.authorId===session.user.id?'나':'참여자'} · {new Date(note.receivedAt).toLocaleString('ko-KR')}</small>{note.input.objectId?<p className="muted">{note.input.objectId}</p>:null}<p>{note.input.body}</p>{note.input.pin||note.input.sketches?.length?<button onClick={()=>onEvidence(note.input)}>공간 의견 보기{note.input.sketches?.length?' · 선 '+note.input.sketches.length:''}</button>:null}</article>)}
+  return <><h2>의견</h2>{notes.map(note=><article key={note.id} className="comment"><small>{note.authorId===session.user.id?'나':'참여자'} · {new Date(note.receivedAt).toLocaleString('ko-KR')}</small>{note.input.objectId?<p className="muted">{note.input.objectId}</p>:null}<p>{note.input.body}</p>{note.input.pin||note.input.sketches?.length?<button onClick={()=>onEvidence(note.input)}>공간 의견 보기{note.input.sketches?.length?' · 선 '+note.input.sketches.length:''}</button>:null}{project.role==='owner'?<p><a href={'/api'+base+'/'+note.id+'/export'} download="VIDE-feedback.json">IDE용 의견 내려받기</a></p>:null}</article>)}
     {cursor?<button onClick={()=>{void refresh(cursor).catch(error=>setStatus(message(error)));}}>이전 의견 더 보기</button>:null}
     {project.role==='viewer'?<p className="muted">열람 권한으로 보고 있습니다.</p>:<form onSubmit={event=>{event.preventDefault();void submit();}}>
       <div className="muted">{draft.objectId?'대상: '+draft.objectId:'게시본 전체에 대한 의견'}</div>
