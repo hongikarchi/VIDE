@@ -3,6 +3,7 @@ import {betterAuth} from 'better-auth';
 export interface Env {
   DB:D1Database;
   ASSETS:R2Bucket;
+  WEB?:Fetcher;
   EMAIL:SendEmail;
   AUTH_ORIGIN:string;
   AUTH_SECRET:string;

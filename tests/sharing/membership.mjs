@@ -4,6 +4,7 @@ import {fileURLToPath} from 'node:url';
 import {resolve,join} from 'node:path';
 import {mkdir,readFile,writeFile,readdir} from 'node:fs/promises';
 import {randomUUID,randomBytes} from 'node:crypto';
+import {createServer} from 'node:http';
 import {verifyPublications} from './publications.mjs';
 
 const root=fileURLToPath(new URL('../../src/sharing/',import.meta.url));
@@ -11,10 +12,27 @@ const require=createRequire(join(root,'package.json'));
 const {Miniflare,Log,LogLevel}=require('miniflare'),{build}=require('esbuild');
 const directory=resolve(root,'../../.vide/sharing-membership',randomUUID());await mkdir(directory,{recursive:true});
 const bundled=await build({entryPoints:[join(root,'worker.ts')],bundle:true,write:false,format:'esm',platform:'browser',target:'es2022',external:['node:*','cloudflare:*'],conditions:['workerd','worker','browser']});
-const origin='http://localhost',secret=randomBytes(32).toString('hex');
+let mf;
+const server=createServer(async(request,response)=>{
+  try{
+    const url=new URL(request.url,origin);
+    if(url.pathname.startsWith('/api/')){
+      const chunks=[];for await(const chunk of request)chunks.push(chunk);
+      const result=await mf.dispatchFetch(url.href,{method:request.method,headers:request.headers,...(!['GET','HEAD'].includes(request.method)?{body:Buffer.concat(chunks)}:{})});
+      for(const [key,value] of result.headers)response.setHeader(key,value);
+      if(result.headers.getSetCookie().length)response.setHeader('Set-Cookie',result.headers.getSetCookie());
+      response.statusCode=result.status;response.end(Buffer.from(await result.arrayBuffer()));return;
+    }
+    const webRoot=resolve(root,'../../dist/sharing'),path=url.pathname.startsWith('/assets/')?resolve(webRoot,'.'+url.pathname):join(webRoot,'index.html');
+    if(!path.startsWith(webRoot+'\\')){response.writeHead(404).end();return;}
+    const contents=await readFile(path);response.setHeader('Content-Type',path.endsWith('.js')?'text/javascript':path.endsWith('.css')?'text/css':'text/html');response.end(contents);
+  }catch{response.writeHead(500).end('Test bridge failed');}
+});
+await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
+const origin='http://127.0.0.1:'+server.address().port,secret=randomBytes(32).toString('hex');
 let logs='';
 class TestLog extends Log { log(message){logs+=message+'\n';} }
-const mf=new Miniflare({resourcePersistencePath:join(directory,'state'),telemetry:{enabled:false},log:new TestLog(LogLevel.NONE),workers:[{config:{
+mf=new Miniflare({resourcePersistencePath:join(directory,'state'),telemetry:{enabled:false},log:new TestLog(LogLevel.NONE),workers:[{config:{
   name:'vide-sharing-test',compatibilityDate:'2026-09-22',compatibilityFlags:['nodejs_compat'],
   manifest:{mainModule:'worker.js',modules:{'worker.js':{type:'esm',contents:bundled.outputFiles[0].text}}},
   env:{DB:{type:'d1',id:'test-db',dev:{remote:false}},ASSETS:{type:'r2',name:'test-assets',dev:{remote:false}},EMAIL:{type:'send-email',dev:{remote:false}},
@@ -37,7 +55,7 @@ try{
     // Account verification itself is covered by the auth spike. No test-only product route.
     await db.prepare('UPDATE user SET emailVerified=1 WHERE email=?').bind(email).run();
     response=await call('/api/auth/sign-in/email',{method:'POST',data:{email,password}});assert.equal(response.status,200,JSON.stringify(response));
-    assert.ok(response.cookie);return {id:response.value.user.id,email,cookie:response.cookie};
+    assert.ok(response.cookie);return {id:response.value.user.id,email,cookie:response.cookie,password};
   };
   const alice=await account('alice'),bob=await account('bob'),eve=await account('eve');
   assert.equal((await call('/api/projects')).status,401);
@@ -71,7 +89,12 @@ try{
   const stored=await db.prepare('SELECT * FROM invitations WHERE id=?').bind(invitation.id).first();assert.ok(!JSON.stringify(stored).includes(invitation.token));
   assert.equal((await call('/__test/migrate',{method:'POST',cookie:alice.cookie,data:{}})).status,404);
   assert.equal((await call('/api/host/execute',{method:'POST',cookie:alice.cookie,data:{code:'test'}})).status,404);
-  const publicationEvidence=await verifyPublications({call,mf,db,alice,bob,eve,projectId:a,invite,accept});
-  const evidence={passed:true,directory,localWorkerdD1:true,accounts:3,projects:2,crossProjectRejected:true,concurrentAcceptIdempotent:true,revokedMembershipNotRestored:true,expiredAndRevokedInvitationRejected:true,ownerProtected:true,noProductTestRoutes:true,...publicationEvidence,remoteDeployed:false};
+  const publicationEvidence=await verifyPublications({call,mf,db,alice,bob,eve,projectId:a,invite,accept,origin});
+  let browserEvidence={};
+  if(process.argv.includes('--browser')){
+    await accept(bob,await invite(bob.email,'commenter'));
+    const {verifyBrowser}=await import('./browser.mjs');browserEvidence=await verifyBrowser({origin,bob,directory,db,projectId:a});
+  }
+  const evidence={passed:true,directory,localWorkerdD1:true,accounts:3,projects:2,crossProjectRejected:true,concurrentAcceptIdempotent:true,revokedMembershipNotRestored:true,expiredAndRevokedInvitationRejected:true,ownerProtected:true,noProductTestRoutes:true,...publicationEvidence,...browserEvidence,remoteDeployed:false};
   await writeFile(join(directory,'result.json'),JSON.stringify(evidence,null,2));console.log(JSON.stringify(evidence));
-}finally{await mf.dispose();await writeFile(join(directory,'worker.log'),logs);}
+}finally{await new Promise(resolve=>server.close(resolve));await mf.dispose();await writeFile(join(directory,'worker.log'),logs);}

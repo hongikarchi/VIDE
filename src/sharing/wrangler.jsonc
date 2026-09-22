@@ -32,5 +32,11 @@
       "bucket_name": "vide-sharing-local",
       "remote": false
     }
-  ]
+  ],
+  "assets": {
+    "directory": "../../dist/sharing",
+    "binding": "WEB",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": true
+  }
 }

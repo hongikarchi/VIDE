@@ -2,7 +2,7 @@
 id: VERIFY-2026-09-22-cloudflare-sharing
 title: Cloudflare 공유 권한·게시 검증
 status: review
-version: 0.3
+version: 0.4
 updated: 2026-09-22
 owner: agent:codex
 related: [T-009, SPEC-04, AC-30, AC-37]
@@ -58,6 +58,16 @@ PLAN-02 §5의 단계 1, SPEC-04.8에 따른 로컬 Workers/D1 프로젝트 계�
 
 `tests/core/publication.test.mjs` 세 사례와 서버 strict 타입 검사가 통과했다. 실제 추출 번들을 로컬 R2 업로드/다운로드까지 연결한 공유 시험도 `.vide/sharing-membership/ebc4a049-b4be-4d4a-8e09-8f7ed8ca6c58`에서 통과했다. 아직 내보내기 UI나 사용자 자료 업로드를 수행한 결과는 아니다.
 
+## 공유 웹 화면 — SCR-06
+
+`src/sharing/web/`에 TypeScript·React·Vite·CSS·Three.js 화면을 추가했다. 로그인/가입/복구, 프로젝트/초대 진입, 소유자 공유 관리, 게시 모델·과거본 선택, 객체 선택/첨부와 문장 의견을 연결했다. 이름/측정값이 공개된 객체만 해당 정보를 보여 준다. 3D 코드는 모델을 열 때 지연 로드한다.
+
+`npm run build:sharing` 후 `node tests/sharing/membership.mjs --browser`로 실행한다. 실제 로컬 workerd/D1/R2 API에 테스트 HTTP 정적 파일 브리지를 연결하며 설치 Chrome을 headless로 사용한다. 사용자 마우스/키보드와 기존 브라우저 세션은 사용하지 않았다. Cloudflare Static Assets의 원격 전달 검수는 아니다.
+
+`.vide/sharing-membership/accfd9ba-9768-43df-b6c2-fd043988cafa`에서 로그인→프로젝트→3D→객체 첨부→의견 접수, 위 보기의 orthographic 전환, 접수 성공 직후 응답 유실→새로고침→동일 제출 ID 재확인을 통과했다. 응답 불명확 상태와 원문을 로컬 초안에 보존하며 재확인 동안 입력을 고정한다. 서버 의견은 하나였다. 1440×900/390×844 캡처를 직접 확인했고 모바일 프로젝트 버튼의 높이 문제를 수정했다. 모바일 가로 넘침과 pageerror는 없었다.
+
+화면 증거는 같은 폴더의 sharing-desktop.png·sharing-mobile.png다. 실제 iPad/펜 사용성 검수는 아니다. 현재 웹 표시 파서는 64 MiB 이하 JSON 모델로 제한하고 더 큰 모델은 명시적으로 거절한다. 게시 전송 한도와 웹 렌더 지원 크기는 별개다. 큰 모델/부분 로드 최적화와 계획의 10/100/500 MiB 측정은 미시험이다. 3D 지연 청크 약 559 kB의 빌드 경고를 유지하며 초기 화면 번들과 분리했다.
+
 ## 남은 조건
 
-내보내기/게시 UI·웹 화면·핀/스케치 의견과 로컬 IDE 수신/채택은 후속 작업이다. R2/D1 중간 장애·복구와 대형 전송 검증도 남았다. 계정/발신 도메인/메일 자격·예산 확인 전 유료 자원이나 공개 배포를 만들지 않는다. 게시/의견/과거 이력의 권한 검수, 실기기 입력, 복원·부하/비용 검증을 포함해 T-009 전체 완료로 표시하지 않는다.
+로컬 내보내기/게시 연결·핀/스케치 의견과 로컬 IDE 수신/채택은 후속 작업이다. R2/D1 중간 장애·복구와 대형 전송 검증도 남았다. 계정/발신 도메인/메일 자격·예산 확인 전 유료 자원이나 공개 배포를 만들지 않는다. 게시/의견/과거 이력의 권한 검수, 실기기 입력, 복원·부하/비용 검증을 포함해 T-009 전체 완료로 표시하지 않는다.

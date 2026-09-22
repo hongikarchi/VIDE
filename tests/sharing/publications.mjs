@@ -2,12 +2,12 @@ import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
 import {createPublicationBundle} from '../../src/core/publication.ts';
 
-export async function verifyPublications({call,mf,db,alice,bob,eve,projectId,invite,accept}){
+export async function verifyPublications({call,mf,db,alice,bob,eve,projectId,invite,accept,origin}){
   await accept(bob,await invite(bob.email,'viewer'));
   const bundle=createPublicationBundle({id:'local-work',state:'succeeded',input:{body:'PRIVATE instructions'},result:{verified:true,
     sourceDocument:{name:'PRIVATE.3dm',instance:'PRIVATE',documentId:1,capturedAt:'today',path:'C:/PRIVATE/model.3dm'},
     objects:[{id:'object-1',name:'PRIVATE name',kind:'Brep',nativeId:'PRIVATE-guid'}],
-    scene:[{id:'object-1',vertices:[0,0,0,1,0,0,0,1,0],indices:[0,1,2],nativeId:'PRIVATE-guid'}],
+    scene:[{id:'object-1',vertices:[0,0,0,4,0,0,4,3,0,0,3,0,0,0,5,4,0,5,4,3,5,0,3,5],indices:[0,2,1,0,3,2,4,5,6,4,6,7,0,1,5,0,5,4,1,2,6,1,6,5,2,3,7,2,7,6,3,0,4,3,4,7],nativeId:'PRIVATE-guid'}],
   }},{title:'Public model',objectIds:['object-1']});
   const bytes=Buffer.concat(bundle.chunks);assert.doesNotMatch(bytes.toString(),/PRIVATE/);
   const base=`/api/projects/${projectId}/publications`;
@@ -20,7 +20,7 @@ export async function verifyPublications({call,mf,db,alice,bob,eve,projectId,inv
   assert.equal((await call(base+'/'+id,{cookie:bob.cookie})).status,404);
   const finish=id=>call(base+'/'+id+'/finalize',{method:'POST',cookie:alice.cookie,data:{}});
   const upload=async(id,data=bytes,cookie=alice.cookie)=>{
-    const r=await mf.dispatchFetch('http://localhost'+base+'/'+id+'/assets/scene/0',{method:'PUT',body:data,headers:{Origin:'http://localhost',Cookie:cookie,'Content-Length':String(data.length)}});
+    const r=await mf.dispatchFetch(origin+base+'/'+id+'/assets/scene/0',{method:'PUT',body:data,headers:{Origin:origin,Cookie:cookie,'Content-Length':String(data.length)}});
     return {status:r.status,value:await r.json()};
   };
   assert.equal((await finish(id)).status,409);
@@ -39,7 +39,7 @@ export async function verifyPublications({call,mf,db,alice,bob,eve,projectId,inv
   assert.equal(comments[0].value.id,comments[1].value.id);
   assert.equal((await submit(id,{...comment,body:'Changed'})).status,409);
   assert.equal((await submit(id,{...comment,submissionId:randomUUID(),objectId:'hidden-object'})).status,400);
-  let r=await mf.dispatchFetch('http://localhost'+base+'/'+id+'/assets/scene/0',{headers:{Cookie:bob.cookie}});
+  let r=await mf.dispatchFetch(origin+base+'/'+id+'/assets/scene/0',{headers:{Cookie:bob.cookie}});
   assert.equal(r.status,200);assert.deepEqual(Buffer.from(await r.arrayBuffer()),bytes);assert.match(r.headers.get('cache-control'),/no-store/);
   assert.equal((await call(base+'/'+id+'/assets/scene/0',{cookie:eve.cookie})).status,404);
   assert.equal((await upload(id)).status,409);

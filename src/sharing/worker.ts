@@ -4,14 +4,13 @@ import {acceptInvitation,projectRoute} from './projects';
 import {publicationRoute} from './publications';
 import {commentRoute} from './comments';
 
-export default {
-  async fetch(request:Request,env:Env,ctx:ExecutionContext):Promise<Response>{
+async function handle(request:Request,env:Env,ctx:ExecutionContext):Promise<Response>{
     try{
       const url=new URL(request.url);
       if(!env.AUTH_SECRET||env.AUTH_SECRET.length<32||!env.AUTH_ORIGIN||url.origin!==env.AUTH_ORIGIN)throw new HttpError(503,'SHARING_NOT_CONFIGURED');
       const auth=createAuth(env,ctx);
       if(url.pathname.startsWith('/api/auth/'))return auth.handler(request);
-      if(!url.pathname.startsWith('/api/'))throw new HttpError(404,'NOT_FOUND');
+      if(!url.pathname.startsWith('/api/')){if(env.WEB&&['GET','HEAD'].includes(request.method))return env.WEB.fetch(request);throw new HttpError(404,'NOT_FOUND');}
       if(!['GET','HEAD'].includes(request.method)&&request.headers.get('Origin')!==env.AUTH_ORIGIN)throw new HttpError(403,'ORIGIN_REJECTED');
       const session=await auth.api.getSession({headers:request.headers});
       if(!session?.user.emailVerified)throw new HttpError(401,'LOGIN_REQUIRED');
@@ -28,5 +27,13 @@ export default {
       console.error('Sharing request failed',error instanceof Error?error.name:'UnknownError');
       return json({error:'INTERNAL_ERROR'},500);
     }
-  }
+}
+export default {
+  async fetch(request:Request,env:Env,ctx:ExecutionContext):Promise<Response>{
+    const result=await handle(request,env,ctx),response=new Response(result.body,result);
+    response.headers.set('Referrer-Policy','no-referrer');
+    response.headers.set('X-Content-Type-Options','nosniff');
+    response.headers.set('Content-Security-Policy',"default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'");
+    return response;
+  },
 } satisfies ExportedHandler<Env>;

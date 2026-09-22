@@ -24,7 +24,8 @@
     "preworkspace": "npm run build:web",
     "pretest": "npm run build:web",
     "prepackage:windows": "npm run build:web",
-    "test:browser": "npm run build:web && node tests/integration/browser-react-panels.mjs"
+    "test:browser": "npm run build:web && node tests/integration/browser-react-panels.mjs",
+    "build:sharing": "npm run typecheck:ui && vite build --config vite.sharing.config.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.30.0",
