@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import {createRequire} from 'node:module';
 import {fileURLToPath} from 'node:url';
-import {resolve,join} from 'node:path';
-import {mkdir,readFile,writeFile,readdir} from 'node:fs/promises';
+import {resolve,join,sep} from 'node:path';
+import {mkdir,readFile,writeFile,readdir,realpath,rm,cp} from 'node:fs/promises';
 import {randomUUID,randomBytes} from 'node:crypto';
 import {createServer} from 'node:http';
 import {verifyPublications} from './publications.mjs';
@@ -13,6 +13,7 @@ const {Miniflare,Log,LogLevel}=require('miniflare'),{build}=require('esbuild');
 const directory=resolve(root,'../../.vide/sharing-membership',randomUUID());await mkdir(directory,{recursive:true});
 const bundled=await build({entryPoints:[join(root,'worker.ts')],bundle:true,write:false,format:'esm',platform:'browser',target:'es2022',external:['node:*','cloudflare:*'],conditions:['workerd','worker','browser']});
 let mf;
+let passed=false;
 const server=createServer(async(request,response)=>{
   try{
     const url=new URL(request.url,origin);
@@ -32,12 +33,16 @@ await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
 const origin='http://127.0.0.1:'+server.address().port,secret=randomBytes(32).toString('hex');
 let logs='';
 class TestLog extends Log { log(message){logs+=message+'\n';} }
-mf=new Miniflare({resourcePersistencePath:join(directory,'state'),telemetry:{enabled:false},log:new TestLog(LogLevel.NONE),workers:[{config:{
+const runtimeOptions={resourcePersistencePath:join(directory,'state'),telemetry:{enabled:false},log:new TestLog(LogLevel.NONE),workers:[{config:{
   name:'vide-sharing-test',compatibilityDate:'2026-09-22',compatibilityFlags:['nodejs_compat'],
   manifest:{mainModule:'worker.js',modules:{'worker.js':{type:'esm',contents:bundled.outputFiles[0].text}}},
   env:{DB:{type:'d1',id:'test-db',dev:{remote:false}},ASSETS:{type:'r2',name:'test-assets',dev:{remote:false}},EMAIL:{type:'send-email',dev:{remote:false}},
     AUTH_ORIGIN:{type:'text',value:origin},AUTH_SECRET:{type:'text',value:secret},EMAIL_FROM:{type:'text',value:'VIDE <noreply@example.com>'}},
-}}]});
+}}]};
+mf=new Miniflare(runtimeOptions);
+const restart=async()=>{await mf.dispose();mf=new Miniflare(runtimeOptions);};
+const checkpoint=async()=>{await mf.dispose();await cp(runtimeOptions.resourcePersistencePath,join(directory,'state-backup'),{recursive:true,errorOnExist:true,force:false});mf=new Miniflare(runtimeOptions);};
+const restore=async()=>{await mf.dispose();const restored=join(directory,'state-restored');await cp(join(directory,'state-backup'),restored,{recursive:true,errorOnExist:true,force:false});runtimeOptions.resourcePersistencePath=restored;mf=new Miniflare(runtimeOptions);};
 const call=async(path,{method='GET',data,cookie,origin:requestOrigin=origin}={})=>{
   const response=await mf.dispatchFetch(origin+path,{method,headers:{Origin:requestOrigin,'Content-Type':'application/json','CF-Connecting-IP':'192.0.2.20',...(cookie?{Cookie:cookie}:{})},...(data?{body:JSON.stringify(data)}:{})});
   const raw=await response.text();let value;try{value=JSON.parse(raw);}catch{value=raw;}
@@ -95,6 +100,18 @@ try{
     await accept(bob,await invite(bob.email,'commenter'));
     const {verifyBrowser}=await import('./browser.mjs');browserEvidence=await verifyBrowser({origin,bob,alice,directory,db,projectId:a});
   }
-  const evidence={passed:true,directory,localWorkerdD1:true,accounts:3,projects:2,crossProjectRejected:true,concurrentAcceptIdempotent:true,revokedMembershipNotRestored:true,expiredAndRevokedInvitationRejected:true,ownerProtected:true,noProductTestRoutes:true,...publicationEvidence,...browserEvidence,remoteDeployed:false};
+  let recoveryEvidence={};if(process.argv.includes('--recovery')||process.argv.includes('--backup')){const {verifyRecovery}=await import('./recovery.mjs');recoveryEvidence=await verifyRecovery({call,current:()=>mf,restart,origin,alice,projectId:a,...(process.argv.includes('--backup')?{checkpoint,restore}:{})});}
+  let transferEvidence={};if(process.argv.includes('--large')){const {verifyLargeTransfer}=await import('./large-transfer.mjs');transferEvidence=await verifyLargeTransfer({call,current:()=>mf,origin,alice,projectId:a});}
+  const evidence={passed:true,directory,localWorkerdD1:true,accounts:3,projects:2,crossProjectRejected:true,concurrentAcceptIdempotent:true,revokedMembershipNotRestored:true,expiredAndRevokedInvitationRejected:true,ownerProtected:true,noProductTestRoutes:true,...publicationEvidence,...browserEvidence,...recoveryEvidence,...transferEvidence,remoteDeployed:false};
+  passed=true;
   await writeFile(join(directory,'result.json'),JSON.stringify(evidence,null,2));console.log(JSON.stringify(evidence));
-}finally{await new Promise(resolve=>server.close(resolve));await mf.dispose();await writeFile(join(directory,'worker.log'),logs);}
+}finally{
+ await new Promise(resolve=>server.close(resolve));await mf.dispose();await writeFile(join(directory,'worker.log'),logs);
+ if(passed&&process.argv.includes('--large')){
+  const target=await realpath(runtimeOptions.resourcePersistencePath),expected=resolve(runtimeOptions.resourcePersistencePath),allowed=resolve(root,'../../.vide/sharing-membership')+sep;
+  assert.equal(target,expected);assert.ok(target.startsWith(allowed));
+  const check=async path=>{for(const item of await readdir(path,{withFileTypes:true})){assert.equal(item.isSymbolicLink(),false);if(item.isDirectory())await check(join(path,item.name));}};await check(target);
+  await rm(target,{recursive:true});
+  const evidence=JSON.parse(await readFile(join(directory,'result.json'),'utf8'));evidence.generatedRuntimeStateRemoved=true;await writeFile(join(directory,'result.json'),JSON.stringify(evidence,null,2));console.log('Removed this successful large-transfer test runtime state; retained result and log.');
+ }
+}
