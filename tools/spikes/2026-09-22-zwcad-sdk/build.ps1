@@ -9,6 +9,7 @@ $compiler=Join-Path $env:WINDIR 'Microsoft.NET/Framework64/v4.0.30319/csc.exe'
 $arguments=@('/nologo','/target:library','/platform:x64','/codepage:65001','/reference:System.Web.Extensions.dll',('/out:'+(Join-Path $outputDirectory 'VIDE.Zwcad.SdkProbe.dll')))
 foreach($reference in $references){$arguments+=('/reference:'+$reference)}
 $arguments+=(Join-Path $PSScriptRoot 'SdkProbe.cs')
+$arguments+=(Join-Path $PSScriptRoot 'CodeProbe.cs')
 & $compiler @arguments
 if($LASTEXITCODE -ne 0){throw 'ZWCAD SDK probe compilation failed'}
 $evidence=@{compiled=$true;runtimeTested=$false;references=@($references | ForEach-Object { @{name=[IO.Path]::GetFileName($_);assembly=[Reflection.AssemblyName]::GetAssemblyName($_).FullName} });output=(Join-Path $outputDirectory 'VIDE.Zwcad.SdkProbe.dll')}

@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Collections.Generic;
 using System.Web.Script.Serialization;
+using System.Security.Cryptography;
 using ZwSoft.ZwCAD.DatabaseServices;
 using ZwSoft.ZwCAD.Geometry;
 using ZwSoft.ZwCAD.Runtime;
@@ -16,6 +17,7 @@ public sealed class VideZwcadSdkProbe
         if (String.IsNullOrEmpty(directory) || !Path.IsPathRooted(directory) || !Directory.Exists(directory)) return;
         string model = Path.Combine(directory, "sdk-probe.dwg");
         string report = Path.Combine(directory, "result.json");
+        string originalHash = null;
         if (File.Exists(model) || File.Exists(report)) return;
         try
         {
@@ -53,12 +55,46 @@ public sealed class VideZwcadSdkProbe
                     ObjectId id = reopened.GetObjectId(false, new Handle(Convert.ToInt64(handle, 16)), 0);
                     Polyline line = (Polyline)transaction.GetObject(id, OpenMode.ForRead);
                     if (line.NumberOfVertices != 4 || !line.Closed || line.ColorIndex != 3 || Math.Abs(line.Area - 200000000) > 0.01) throw new InvalidOperationException("READBACK_MISMATCH");
-                    Write(report, new Dictionary<string, object> { {"passed", true}, {"handle", handle}, {"areaSquareMetres", line.Area / 1000000}, {"lengthMetres", line.Length / 1000}, {"units", "mm"}, {"activeDocumentAccessed", false} });
                 }
             }
+            Dictionary<string, object> evidence = new Dictionary<string, object> { {"passed", true}, {"handle", handle}, {"areaSquareMetres", 200}, {"lengthMetres", 60}, {"units", "mm"}, {"activeDocumentAccessed", false} };
+            string codeFile = Path.Combine(directory, "code.cs");
+            originalHash = Hash(model);
+            if (File.Exists(codeFile))
+            {
+                string before = Hash(model), candidate = Path.Combine(directory, "candidate.dwg");
+                if (File.Exists(candidate)) throw new InvalidOperationException("CANDIDATE_EXISTS");
+                using (Database copy = new Database(false, true))
+                {
+                    copy.ReadDwgFile(model, FileOpenMode.OpenForReadAndAllShare, true, null);
+                    copy.CloseInput(true);
+                    evidence["codeResult"] = VideCodeProbe.Run(copy, File.ReadAllText(codeFile), directory);
+                    copy.SaveAs(candidate, DwgVersion.Current);
+                }
+                if (Hash(model) != before) throw new InvalidOperationException("SOURCE_CHANGED");
+                using (Database copy = new Database(false, true))
+                {
+                    copy.ReadDwgFile(candidate, FileOpenMode.OpenForReadAndAllShare, true, null);
+                    copy.CloseInput(true);
+                    using (Transaction transaction = copy.TransactionManager.StartTransaction())
+                    {
+                        Polyline line = (Polyline)transaction.GetObject(copy.GetObjectId(false, new Handle(Convert.ToInt64(handle, 16)), 0), OpenMode.ForRead);
+                        if (copy.Insunits != UnitsValue.Millimeters || line.ColorIndex != 3 || Math.Abs(line.Area - 240000000) > 0.01 || Math.Abs(line.Length - 68000) > 0.001) throw new InvalidOperationException("CODE_READBACK_MISMATCH");
+                        evidence["candidateAreaSquareMetres"] = line.Area / 1000000;
+                        evidence["candidateLengthMetres"] = line.Length / 1000;
+                        evidence["sourceHashPreserved"] = true;
+                    }
+                }
+            }
+            Write(report, evidence);
         }
-        catch (System.Exception error) { Write(report, new Dictionary<string, object> { {"passed", false}, {"error", error.GetType().FullName}, {"message", error.Message} }); }
+        catch (System.Exception error)
+        {
+            System.Exception cause = error is System.Reflection.TargetInvocationException && error.InnerException != null ? error.InnerException : error;
+            Write(report, new Dictionary<string, object> { {"passed", false}, {"error", cause.GetType().FullName}, {"message", cause.Message}, {"sourceHashPreserved", originalHash != null && File.Exists(model) && Hash(model) == originalHash}, {"candidateCreated", File.Exists(Path.Combine(directory, "candidate.dwg"))} });
+        }
     }
+    private static string Hash(string filename) { using (SHA256 hash = SHA256.Create()) return Convert.ToBase64String(hash.ComputeHash(File.ReadAllBytes(filename))); }
     private static void Write(string filename, object value)
     {
         string temporary = filename + ".tmp";
