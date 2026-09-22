@@ -2,7 +2,7 @@
 id: VERIFY-2026-09-22-typescript-foundation
 title: TypeScript·React·Vite 전환 기반 검증
 status: review
-version: 0.44
+version: 0.45
 updated: 2026-09-22
 owner: agent:codex
 related: [PLAN, ADR-016, ADR-017, T-010, T-011, T-015]
@@ -292,3 +292,15 @@ SDK execute 영수증의 value가 서버 응답에서 누락되어 AI가 직접 
 `hosts/common/owned-process.ts`의 `launchOwnedHost`가 실행 파일에 독립적인 프로세스 소유 검사를 담당하고, `hosts/common/transport.ts`의 `sendHostCommand`가 명시적으로 받은 포트의 framed loopback TCP를 담당한다. Rhino worker/editor와 ZWCAD SDK 실험에서 공통 구현을 사용한다. 기존 `hosts/rhino/transport.ts`는 레거시 기본 1999 포트와 기존 응답 형식의 호환 어댑터다. 더 이상 ZWCAD에서 Rhino 이름의 시작 함수를 호출하지 않는다.
 
 서버 strict 타입 검사·빌드와 관련 자동 회귀 17건(소유권/종료/전송 8건, 편집 세션/SDK 실행 9건)이 통과했다. 포트 소유 검사 전 토큰 송신 방지·PID 재사용·늦은 전송 거절·응답 유실·기존 editor 복원·컴파일 교정·불명확 쓰기 차단을 유지했다. 프로토콜이나 제품의 원본 적용 권한은 변경하지 않았으며 이 리팩터링 뒤 새 배포 ZIP/실호스트 전체 회귀는 아직 수행하지 않았다. 빌드·배포는 hosts 트리를 포함하므로 새 common 경로도 포함된다.
+
+## ZWCAD 자체 SDK 읽기의 제품 이식
+
+`hosts/zwcad/worker/`의 .NET Framework DLL은 설치된 ZWCAD 2023 SDK를 참조한다. `inspector.ts`가 새 소유 실행본·임시 토큰·프로세스/문서 식별을 확인한 뒤 common TCP 채널로 고정 읽기 결과를 받는다. CAD 명령 스레드에서 별도 Database를 읽고 네트워크 스레드는 불변 결과만 반환한다. 실행 코드나 파일 경로를 네트워크 요청으로 받지 않는다. 제품 `ZwcadWorkspace`의 inspect가 이 경로를 사용하며 실패 시 COM으로 몰래 전환하지 않는다. 이전 `import.ps1`은 호출·참조가 없어 제거했다. 생성/편집/열기의 기존 COM 경로는 유지한다.
+
+| 실제 검증 | 결과·증거 |
+|---|---|
+| `native-dwg-import.mjs --run-live <합성 원본>` | 제품 importFile API의 200 m²·60 m·정점·Handle·단위·원본 해시 보존 통과 |
+| `browser-dwg-sdk-import.mjs <합성 원본>` | `.vide/browser-dwg-sdk/58025e06-170f-4140-99c2-6c8dcf210110`: 업로드→자체 SDK 읽기→후보 보기→객체 선택, 브라우저 오류 없음. 1440×900 스크린샷을 직접 확인 |
+| `native-dwg-sdk-cases.mjs` | `.vide/dwg-sdk-cases/158b80c7-1d6d-4d8d-841d-fb7ed8713a5b`: 단위 미상·곡선 거절, 잠긴 레이어·m 단위 입력은 200 m²·60 m로 읽되 참고 전용, 모든 원본 해시 보존 |
+
+시험은 헤드리스 브라우저와 새 CAD 실행본만 사용하고 종료했다. 성공한 읽기의 시작 스크립트·프로세스/준비 파일은 소유 실행본 종료 뒤 자신이 만든 파일만 비재귀 삭제하도록 구현했고, 실패 진단은 보존한다. 패키지 빌드에 자체 DLL 포함을 추가했으며 설치된 공식 SDK DLL을 재배포하지 않는다. 전체 UI/서버 strict 검사·빌드와 코어/AI/서버 회귀 130건이 통과했다. 새 ZIP의 실행 검증은 다음 단계다. 범용 AI 편집·열린 원본 적용·일반 DWG 객체·사용자 CAD 문서 연결 완료로 확대하지 않는다.

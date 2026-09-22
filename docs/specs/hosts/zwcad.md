@@ -2,7 +2,7 @@
 id: HOST-ZWCAD
 title: ZWCAD 호스트 계약과 검증 범위
 status: review
-version: 0.6
+version: 0.7
 updated: 2026-09-22
 owner: agent:codex
 related: [SPEC-01, SPEC-02, FR-03, FR-04, AC-24, AC-38, OQ-03, OQ-10]
@@ -49,3 +49,9 @@ H-ZWCAD-04·05의 일부로, 새로 취득한 독립 직선 XY LWPolyline의 이
 ## 설치 SDK 실험 — 2026-09-22
 
 [ZWCAD SDK 실험](../../tdd/SPIKE-2026-09-22-zwcad-sdk.md)에서 설치된 공식 .NET DLL의 빌드·소유 시험 실행본 로드, 별도 Database/Transaction의 합성 경계 생성·저장·재열기를 확인했다. 활성 사용자 문서를 사용하지 않고 면적 200 m²·길이 60 m·mm·Handle·색을 대조했다. 위 첫 COM 실험과 구분되는 SDK 증거이며, 제품 범용 SDK 실행·기본 도구 재편집·열린 원본 적용·다중 문서 완료를 뜻하지 않는다.
+
+## 자체 SDK DWG 가져오기 — 2026-09-22
+
+제품의 DWG 읽기는 소유한 별도 ZWCAD 2023 실행본의 자체 .NET 애드인으로 전환했다. 사용자가 업로드한 고유 사본을 별도 Database로 읽고, 활성 사용자 문서/COM 활성 인스턴스에 붙지 않는다. 기존 읽기 지원 범위와 편집 능력 판정은 유지한다. 브라우저에서 20×10 m DWG의 표시·객체 선택, 200 m²·60 m·Handle·원본 해시 보존을 확인했다.
+
+단위 미상/곡선 bulge는 거절하고 잠긴 레이어 및 m 단위 직선 경계는 정확한 단위 환산으로 표시하되 기존 정점 편집 능력을 부여하지 않는다. 근거는 [SDK 제품 이식 검증](../../tdd/VERIFY-2026-09-22-typescript-foundation.md)이다. 생성·수정은 아직 기존 COM 제품 경로이며 범용 SDK AI 편집은 실험에 머문다.
