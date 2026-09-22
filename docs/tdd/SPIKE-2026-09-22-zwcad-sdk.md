@@ -2,7 +2,7 @@
 id: SPIKE-2026-09-22-zwcad-sdk
 title: 설치된 ZWCAD 2023 SDK 빌드·작업 사본 실험
 status: review
-version: 0.3
+version: 0.4
 updated: 2026-09-22
 owner: agent:codex
 related: [T-003, T-006, T-011, H-ZWCAD-04, H-ZWCAD-05]
@@ -37,3 +37,11 @@ related: [T-003, T-006, T-011, H-ZWCAD-04, H-ZWCAD-05]
 | `run.mjs --runtime-error` | 사본 메모리의 정점 수정 후 예외 전달, 원본 해시 보존, 후보 파일 없음 | `7ece5b2c-3830-495a-81a0-60528b8ae747` |
 
 음성 시험의 `result.json`에서 `passed:false`는 요청된 편집의 실패이고, `verification.json`의 `verificationPassed:true`는 예상한 거절·보존 결과를 확인했다는 뜻이다. 각 시험은 소유한 프로세스만 종료했다. 다음 검증은 실행본·문서·기준을 확인하는 인증 연결이며 기존 COM 제품 경로는 아직 유지한다.
+
+## 2 실행본의 인증 채널과 호스트 스레드
+
+`ChannelProbe.cs`·`channel.mjs`는 같은 4바이트 길이 + JSON TCP 프레임을 재사용한 읽기 전용 실험이다. loopback 임의 포트, 실행별 임시 토큰, PID/시작 시각/세션과 논리 문서 ID·revision을 대조한다. 토큰은 환경으로 전달하고 결과 파일에 저장하지 않는다. CAD API는 네트워크 스레드에서 호출하지 않고 `Application.Idle` 큐에서 실행하며 시작 명령과 같은 스레드 ID인지 확인한다. 요청마다 별도 합성 Database를 만들고 읽은 뒤 폐기하며 활성 사용자 문서는 접근하지 않는다. 이 논리 ID는 지속 문서/저장 DWG 식별의 완성본이 아니다.
+
+`node tools/spikes/2026-09-22-zwcad-sdk/channel.mjs`가 `.vide/zwcad-channel/cbdd413b-101f-4499-b66f-f1170b88c6c2/result.json`에서 통과했다. 실제 ZWCAD 2023 두 프로세스의 각 조회는 면적 200 m²와 서로 다른 PID/문서 ID를 반환했다. 잘못된 토큰, 상대 세션/PID/문서 ID, 틀린 시작 시각, 오래된 revision 및 미지원 실행 메서드를 거절한 후 정상 조회도 유지됐다. 첫 프로세스만 종료한 뒤 두 번째 조회가 계속 성공했고 마지막에 나머지 소유 실행본도 종료했다.
+
+이는 2개의 자체 시험 채널·호스트 스레드 전달 검증이다. 지속 문서 쓰기/취소/영수증·중복 요청·응답 유실·재연결, 실제 사용자 여러 문서, AI 호출과 UI 제품 연결은 아직 미완료다. 실험의 직렬 네트워크 처리와 제한된 큐는 제품 서버의 완성형으로 채택하지 않는다.

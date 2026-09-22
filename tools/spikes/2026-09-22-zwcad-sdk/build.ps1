@@ -10,6 +10,7 @@ $arguments=@('/nologo','/target:library','/platform:x64','/codepage:65001','/ref
 foreach($reference in $references){$arguments+=('/reference:'+$reference)}
 $arguments+=(Join-Path $PSScriptRoot 'SdkProbe.cs')
 $arguments+=(Join-Path $PSScriptRoot 'CodeProbe.cs')
+$arguments+=(Join-Path $PSScriptRoot 'ChannelProbe.cs')
 & $compiler @arguments
 if($LASTEXITCODE -ne 0){throw 'ZWCAD SDK probe compilation failed'}
 $evidence=@{compiled=$true;runtimeTested=$false;references=@($references | ForEach-Object { @{name=[IO.Path]::GetFileName($_);assembly=[Reflection.AssemblyName]::GetAssemblyName($_).FullName} });output=(Join-Path $outputDirectory 'VIDE.Zwcad.SdkProbe.dll')}
