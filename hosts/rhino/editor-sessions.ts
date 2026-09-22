@@ -1,11 +1,14 @@
 import {randomUUID} from 'node:crypto';
-import {join} from 'node:path';
+import {join,resolve,relative,isAbsolute} from 'node:path';
+import {z} from 'zod';
 import {mkdir} from 'node:fs/promises';
 import {launchRhinoWorker} from './worker-client.ts';
 import type {HostTarget,HostDocuments} from '../../src/contracts/host-documents.ts';
 
 type Worker=Awaited<ReturnType<typeof launchRhinoWorker>>;
 interface Options {directory:string;executable:string;plugin:string;bootstrap:string;launch?:typeof launchRhinoWorker}
+const candidateSchema=z.object({filename:z.string(),fileHash:z.string(),sourceDocument:z.object({instance:z.string(),documentId:z.number(),documentHash:z.string()})});
+type ApplicationTarget=HostTarget&{documentHash:string;candidateHash:string};
 const failure=(code:string)=>Object.assign(new Error(code),{code});
 
 /** Visible user editing sessions stay alive when the controller closes. */
@@ -38,5 +41,14 @@ export class EditorSessions {
   const snapshot=await this.get(target).inspectEditor();
   return {...target,documentHash:snapshot.documentHash,selectedIds:snapshot.selectedIds,observedAt:new Date().toISOString()};
  }
+ private candidate(value:unknown,target:HostTarget){
+  const candidate=candidateSchema.parse(value),path=relative(resolve(this.options.directory),resolve(candidate.filename));
+  if(!path||path.startsWith('..')||isAbsolute(path))throw failure('INVALID_ARTIFACT');
+  if(candidate.sourceDocument.instance!==target.instance||candidate.sourceDocument.documentId!==target.documentId)throw failure('TARGET_MISMATCH');
+  return candidate;
+ }
+ async preview(target:HostTarget,value:unknown){const candidate=this.candidate(value,target);return this.get(target).previewEditorApplication(candidate.filename,candidate.fileHash,candidate.sourceDocument.documentHash);}
+ async apply(id:string,value:unknown,target:ApplicationTarget){const candidate=this.candidate(value,target);return this.get(target).applyEditorCandidate(id,candidate.filename,target.candidateHash,target.documentHash);}
+ async reconcile(id:string,value:unknown,target:ApplicationTarget){const candidate=this.candidate(value,target);return this.get(target).recoverEditorApplication(id,candidate.filename,target.candidateHash,target.documentHash);}
  async capture(target:HostTarget){return this.get(target).captureEditor(randomUUID());}
 }

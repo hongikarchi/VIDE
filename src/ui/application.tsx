@@ -32,7 +32,7 @@ function Application({projectId,requestId,catalog,sourceDocument,onResult}:Props
    const next=previewSchema.parse(await api(`/projects/${projectId}/applications`,'POST',{requestId,instance:selected.instance??catalog.instance,documentId:selected.id}));
    if(next.documentId!==selected.id)throw new Error('문서 연결이 바뀌었습니다. 다시 확인하세요.');
    if(!alive.current)return;setPreview(next);
-   setInfo(`추가 ${next.added} · 수정 ${next.updated} · 삭제 ${next.removed}개. ${next.mode==='native-move'?'취득한 원본의 이동 대상만 변경합니다.':'이 프로젝트가 소유한 객체만 수정·삭제합니다.'}`);
+   setInfo(`추가 ${next.added} · 수정 ${next.updated} · 삭제 ${next.removed}개. ${next.mode==='sdk-native'?'취득한 문서의 검토한 형상·속성을 반영합니다.':next.mode==='native-move'?'취득한 원본의 이동 대상만 변경합니다.':'이 프로젝트가 소유한 객체만 수정·삭제합니다.'}`);
   }catch(error){if(alive.current)setInfo('영향 검토 실패: '+message(error));}
   finally{unlock();}
  }

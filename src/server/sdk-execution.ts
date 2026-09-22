@@ -39,7 +39,7 @@ export class SdkExecution {
  }
  async captureEditor(target:HostTarget,update:(intent:Record<string,unknown>)=>void){
   const captured=await this.editors.capture(target);
-  const sourceDocument={...target,documentHash:captured.documentHash,name:captured.name,units:captured.units,selectedIds:captured.selectedIds,capturedAt:new Date().toISOString()};
+  const sourceDocument={...target,connection:'owned-editor',documentHash:captured.documentHash,name:captured.name,units:captured.units,selectedIds:captured.selectedIds,capturedAt:new Date().toISOString()};
   try{const result=await this.importFile(captured.filename,intent=>update({...intent,sourceDocument}));return {...result,sourceDocument};}
   catch(error){if(error&&typeof error==='object'&&'intent' in error&&error.intent&&typeof error.intent==='object')Object.assign(error,{intent:{...error.intent,sourceDocument}});throw error;}
  }

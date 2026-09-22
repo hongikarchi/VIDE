@@ -49,9 +49,9 @@ export async function startServer({ filename, port = 0, providerFactory, host, c
   const workspace = new Workspace(store),tableViews=new TableViews(store),reviews=new Reviews(store),reviewNotes=new ReviewNotes(store,reviews);
   host ??= new RhinoWorkspace(join(dirname(filename),'models'));
   const hosts={rhino:host,zwcad:cadHost||new ZwcadWorkspace(join(dirname(filename),'cad-models'))},importRecoveries=new Map<string,Promise<StoredWork>>();
-  const applications=new Applications(store,workspace,applicationOptions);
   const aiSettings=new AiSettings(store),extensions=new Extensions(store,workspace);
   const sdk=sdkOptions?new SdkExecution({...sdkOptions,tools:agentTools,origin:()=>origin}):undefined;
+  const applications=new Applications(store,workspace,{...applicationOptions,sdk:sdk?.editors});
   const rhinoImport=sdk?{directory:host.directory,importFile:(projectId:string,id:string,source:string)=>sdk.importFile(source,intent=>workspace.update(projectId,id,'running',intent))}:host;
   const execution = new Execution(workspace, { providerFactory, host, hosts,settings:aiSettings,sdk });
   const withApplications=(request:StoredWork)=>({...request,applications:store.db.prepare("SELECT id,state,result FROM commands WHERE projectId=? AND kind='applyCandidate' AND json_extract(payload,'$.requestId')=? ORDER BY rowid").all(request.projectId,request.id).map(row=>({...row,result:row.result?JSON.parse(z.string().parse(row.result)):null}))});

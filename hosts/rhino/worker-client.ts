@@ -19,6 +19,8 @@ export const workerResultSchema=z.discriminatedUnion('ok',[
 ]);
 
 const editorSnapshotSchema=z.object({ok:z.literal(true),documentId:z.number().int().positive(),name:z.string(),units:z.string(),objectCount:z.number().int().nonnegative(),modified:z.boolean(),documentHash:z.string().regex(/^[a-f0-9]{64}$/),selectedIds:z.array(z.string().uuid())});
+const applicationPreviewSchema=z.object({documentHash:z.string(),added:z.number().int(),updated:z.number().int(),removed:z.number().int(),mode:z.literal('sdk-native')});
+const applicationOutcomeSchema=z.object({state:z.enum(['succeeded','failed','unknown']),result:z.record(z.string(),z.unknown())});
 const editorCaptureSchema=editorSnapshotSchema.omit({objectCount:true,modified:true}).extend({filename:z.string(),fileHash:z.string().regex(/^[a-f0-9]{64}$/)});
 interface Options {directory:string;executable:string;plugin:string;bootstrap:string;visible?:boolean;mode?:'worker'|'editor';startupTimeoutMs?:number;source?:{filename:string;fileHash:string;measurements?:{id:string;area:number|null;volume:number|null;length:number|null}[]};normalizeUnits?:boolean}
 const failure=(code:string)=>Object.assign(new Error(code),{code});
@@ -67,6 +69,9 @@ export async function launchRhinoWorker({directory,executable,plugin,bootstrap,v
    identity:{...identity},
    async inspectEditor(){return editorReply(editorSnapshotSchema,await call('inspectEditor'));},
    async captureEditor(operationId:string){editorReply(z.object({ok:z.literal(true),pending:z.literal(true)}),await call('captureEditor',{operationId}));return editorReply(editorCaptureSchema,await call('verifyEditorCapture',{operationId}));},
+   async previewEditorApplication(filename:string,candidateHash:string,documentHash:string){return editorReply(applicationPreviewSchema,await call('previewEditorApplication',{filename,candidateHash,documentHash}));},
+   async applyEditorCandidate(operationId:string,filename:string,candidateHash:string,documentHash:string){return editorReply(applicationOutcomeSchema,await call('applyEditorCandidate',{operationId,filename,candidateHash,documentHash}));},
+   async recoverEditorApplication(operationId:string,filename:string,candidateHash:string,documentHash:string){return editorReply(applicationOutcomeSchema,await call('recoverEditorApplication',{operationId,filename,candidateHash,documentHash}));},
    detach(){lease.detach();},
    async query(){return workerSnapshotSchema.parse(await call('query'));},
    async exportModel(){return nativeModelSchema.parse(await call('export',source?.measurements&&!normalizeUnits?{measurementCache:source.measurements}:{}));},

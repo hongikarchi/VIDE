@@ -2,7 +2,7 @@
 id: VERIFY-2026-09-22-typescript-foundation
 title: TypeScript·React·Vite 전환 기반 검증
 status: review
-version: 0.38
+version: 0.39
 updated: 2026-09-22
 owner: agent:codex
 related: [PLAN, ADR-016, ADR-017, T-010, T-011, T-015]
@@ -254,3 +254,9 @@ EditorExecutor는 소유 실행본에서 복사한 SDK 후보를 보이는 Rhino
 취득은 원본 경로·이름·modified·지문을 보존하며 결과 파일을 기하·공개 속성·user string·층 ID/이름으로 검증한다. 최초 실험은 같은 UI 호출 안의 재열기가 Rhino 파일 잠금 모달을 띄워 HOST_RESULT_UNKNOWN이 됐다. 쓰기 반환 후 별도 읽기 호출에서 File3dm으로 검사하는 경로로 수정했다. 쓰기를 자동 반복하지 않는다. 선택 ID/문서 이름은 취득 시점 값을 보존한다. SDK 복사본 실행 단계의 미확인은 영수증과 sourceDocument를 보존해 회수하고, 단순 읽기 취득 실패와 구분한다.
 
 실제 `owned-editor.mjs` 증거 `.vide/owned-editor/a8f7e588-8695-4d43-a997-0f8cb8ba30b1`: 보이는 Rhino, 임의 코드 거절, 취득/별도 worker 재열기, source hash 보존, 체적 24. `browser-owned-editor.mjs` 증거 `.vide/browser-owned-editor/175de119-5bd9-4f15-a7a2-8e0e015e96a8`: 브라우저의 Rhino 열기→자체 문서 선택→취득 성공·체적 24·뷰포트 스크린샷 확인. 120개 자동 시험·타입 검사 및 기존 브라우저 패널 회귀 통과. 일반 형상 원본 적용은 아직 연결하지 않았다.
+
+## 자체 연결 적용
+
+C#의 고정 적용기는 후보 파일 해시·취득 문서 지문·대상 프로세스/문서를 확인한 뒤 추가/수정/삭제를 미리 계산한다. 형상별 Replace 오버로드로 기존 GUID를 유지하고 속성의 기대값을 쓰기 전에 독립 문자열로 보존한다. 네이티브 호출 후 변할 수 있는 ObjectAttributes를 검증 기준으로 다시 사용하지 않는다. 적용 뒤 실제 기하와 속성을 검사하며 saved=false로 보고한다. 그룹·참조·이력·잠김 대상과 층/문서 자원 변경 등 미지원 조건을 거절한다. 저장된 intent/최종 영수증으로 중복 실행과 불명확 결과를 재전송 없이 처리한다.
+
+실제 `owned-editor-apply.mjs`의 `.vide/editor-apply/0361bee5-9d49-4859-93cc-52ba8f566554`: 추가 1·수정 1·삭제 1, Level=L02와 기존 GUID 보존, 체적 24→48, 반복 요청 미실행·이전 기준 거절·최종 영수증 누락 모의 후 read-only 회수 통과. `browser-owned-editor.mjs`의 `.vide/browser-owned-editor/8312ed7d-6226-41df-9ce8-070659a8f402`: 브라우저 영향 검토→확인→실제 Rhino 반영→재취득과 체적 48, GUID 보존을 통과했고 applied.png를 확인했다. 이 두 시험의 후보는 고정 SDK 코드이며 새 AI 추론 검증으로 집계하지 않는다. 전체 121개 자동 시험·제품 빌드·기존 패널 브라우저 회귀 통과. 어댑터 없는 복구는 unknown을 유지하며 명시적 오류를 반환하는 서버 시험도 통과했다.

@@ -30,7 +30,7 @@ internal static class WorkerReadback
 
     internal static string Metadata(RhinoObject obj) =>
         Metadata(obj.Attributes, obj.Geometry);
-    private static string Metadata(ObjectAttributes attributes, GeometryBase geometry) =>
+    internal static string Metadata(ObjectAttributes attributes, GeometryBase geometry) =>
         Attributes(attributes) + "|geometry-data=" + Strings(geometry.GetUserStrings());
 
     internal static void VerifyArchive(RhinoDoc expected, Rhino.FileIO.File3dm actual)

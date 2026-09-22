@@ -6,7 +6,7 @@ using Rhino.DocObjects;
 
 namespace Vide.Worker;
 
-// Fixed read/capture methods for a visible editing copy. Never executes agent code.
+// Fixed inspect/capture/candidate-application methods for a visible editing copy. Never executes agent code.
 internal sealed class EditorExecutor(RhinoDoc document, string directory)
 {
     public object Dispatch(JsonElement request)
@@ -16,6 +16,16 @@ internal sealed class EditorExecutor(RhinoDoc document, string directory)
             throw new InvalidOperationException("TARGET_MISMATCH");
         var method = request.GetProperty("method").GetString();
         if (method == "inspectEditor") return Inspect();
+        if (method is "previewEditorApplication" or "applyEditorCandidate" or "recoverEditorApplication")
+        {
+            var application = new EditorApplication(document, directory, Fingerprint);
+            var candidateFile = request.GetProperty("filename").GetString()!;
+            var hash = request.GetProperty("candidateHash").GetString()!;
+            var expected = request.GetProperty("documentHash").GetString()!;
+            if (method == "previewEditorApplication") return application.Preview(candidateFile, hash, expected);
+            var applicationId = request.GetProperty("operationId").GetString()!;
+            return method == "applyEditorCandidate" ? application.Apply(applicationId, candidateFile, hash, expected) : application.Recover(applicationId, candidateFile, hash, expected);
+        }
         if (method != "captureEditor" && method != "verifyEditorCapture") throw new InvalidOperationException("UNKNOWN_METHOD");
         var operation = request.GetProperty("operationId").GetString();
         if (!Guid.TryParseExact(operation, "D", out _)) throw new InvalidOperationException("INVALID_OPERATION");
@@ -61,7 +71,10 @@ internal sealed class EditorExecutor(RhinoDoc document, string directory)
     {
         var objects = document.Objects.GetObjectList(ObjectType.AnyObject).OrderBy(obj => obj.Id).ToArray();
         if (objects.Length > 500) throw new InvalidOperationException("IMPORT_LIMIT");
-        var values = document.ModelUnitSystem.ToString() + "\n" + string.Join("\n", objects.Select(obj => obj.Id + ":" + WorkerScene.Fingerprint(obj)));
+        var serialization = new Rhino.FileIO.SerializationOptions { WriteUserData = true, WriteRenderMeshes = false, WriteAnalysisMeshes = false };
+        var layers = string.Join("\n", document.Layers.Where(layer => !layer.IsDeleted).OrderBy(layer => layer.Id).Select(layer => layer.ToJSON(serialization)));
+        var strings = JsonSerializer.Serialize(Enumerable.Range(0, document.Strings.Count).Select(i => new { key = document.Strings.GetKey(i), value = document.Strings.GetValue(i) }).OrderBy(item => item.key, StringComparer.Ordinal));
+        var values = strings + "\n" + layers + "\n" + document.ModelAbsoluteTolerance + "\n" + document.ModelUnitSystem.ToString() + "\n" + string.Join("\n", objects.Select(obj => obj.Id + ":" + WorkerScene.Fingerprint(obj)));
         return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(values))).ToLowerInvariant();
     }
 }

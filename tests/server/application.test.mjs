@@ -63,3 +63,18 @@ test('unknown recovery is read-only, evidence-bound and preserves prior diagnost
   assert.equal(f.store.getCommand(f.project.id,preview.id).state,'unknown');
  }finally{f.store.close();}
 });
+
+test('SDK application uses its own adapter, preserves approval and recovers without replay',async()=>{
+ const f=setup(async()=>{throw Error('Legacy apply must not run');});let writes=0,reads=0;
+ try{
+  const current=f.workspace.get(f.project.id,'candidate');f.workspace.update(f.project.id,'candidate','succeeded',{...current.result,executionMode:'sdk',sourceDocument:{instance:'1:2',documentId:5,documentHash:'original'}});
+  f.applications.sdk={preview:async(target,candidate)=>({documentHash:'original',added:0,updated:1,removed:0,mode:'sdk-native'}),apply:async(id,candidate,payload)=>{writes++;assert.equal(payload.mode,'sdk-native');throw {code:'HOST_RESULT_UNKNOWN'};},reconcile:async()=>{reads++;return {state:'succeeded',result:{applied:true,saved:false}};}};
+  const preview=await f.applications.prepare(f.project.id,'candidate',{instance:'1:2',documentId:5});assert.equal(writes,0);
+  assert.equal((await f.applications.confirm(f.project.id,preview.id)).state,'unknown');
+  assert.equal((await f.applications.confirm(f.project.id,preview.id)).state,'unknown');assert.equal(writes,1);
+  const sdk=f.applications.sdk;f.applications.sdk=undefined;
+  await assert.rejects(()=>f.applications.recover(f.project.id,preview.id),{code:'UNSUPPORTED_APPLICATION'});
+  assert.equal(f.store.getCommand(f.project.id,preview.id).state,'unknown');f.applications.sdk=sdk;
+  assert.equal((await f.applications.recover(f.project.id,preview.id)).state,'succeeded');assert.equal(reads,1);assert.equal(writes,1);
+ }finally{f.store.close();}
+});
