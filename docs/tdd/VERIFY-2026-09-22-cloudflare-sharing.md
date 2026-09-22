@@ -2,7 +2,7 @@
 id: VERIFY-2026-09-22-cloudflare-sharing
 title: Cloudflare 공유 권한·게시 검증
 status: review
-version: 0.10
+version: 0.11
 updated: 2026-09-22
 owner: agent:codex
 related: [T-009, SPEC-04, AC-30, AC-37]
@@ -145,3 +145,5 @@ pointercancel/창 포커스 유실의 선은 완성된 것으로 처리하지 �
 3. `npm run build:sharing` 후 `node src/sharing/node_modules/wrangler/bin/wrangler.js deploy --dry-run --config src/sharing/wrangler.staging.jsonc`를 확인하고, 준비된 설정만 실제 배포한다.
 4. 허용된 시험 계정의 실제 인증 메일·로그인/로그아웃·복구·공유 권한/파일을 검증한다. D1의 emailVerified 값을 강제로 바꿔 실제 메일 검증을 통과 처리하지 않는다.
 5. PC 종료 지속성·사용량·백업/복구 시험을 수행한다. 로컬 대용량 시험을 원격 부하 시험으로 재사용해 주장하지 않는다.
+
+사용자 후속 결정: 무료 범위의 서버 준비까지만 진행한다. 현재 전용 D1/R2 및 설정·스키마·dry-run 준비를 완료했으며 도메인 구매/요금제 전환은 하지 않는다. R2 무료 제공량은 계정 내 기존 서비스와 공유되므로 무료 상한 보장을 주장하지 않고, 이번 단계에서는 빈 버킷과 작은 빈 DB만 생성했다. 원격 부하 시험과 외부 가입 공개는 수행하지 않는다.
