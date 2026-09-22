@@ -9,6 +9,7 @@ namespace Vide.Worker;
 
 internal static class WorkerScene
 {
+    internal sealed record Measurements(double? Area, double? Volume, double? Length);
     internal static string Id(RhinoObject obj) => obj.Attributes.GetUserString("vide-id") ?? obj.Id.ToString();
     internal static string Fingerprint(RhinoObject obj)
     {
@@ -36,11 +37,13 @@ internal static class WorkerScene
     }
 
     // Detailed meshes/measurements are exported once for the candidate, not on every AI query.
-    internal static object Export(RhinoDoc doc)
+    internal static object Export(RhinoDoc doc, Func<RhinoObject, Measurements?>? cached = null)
     {
         var objects = new List<object>();
         var scene = new List<object>();
         var remainingAttributes = 262144;
+        var measuredObjects = 0;
+        var reusedObjects = 0;
         foreach (var obj in doc.Objects.GetObjectList(ObjectType.AnyObject))
         {
             var geometry = obj.Geometry;
@@ -65,8 +68,15 @@ internal static class WorkerScene
                 if (curve.TryGetPolyline(out var polyline)) foreach (var point in polyline) AddPoint(point, line);
                 else foreach (var parameter in curve.DivideByCount(128, true) ?? []) AddPoint(curve.PointAt(parameter), line);
             }
-            using var area = brep != null ? AreaMassProperties.Compute(brep) : curve?.IsClosed == true ? AreaMassProperties.Compute(curve) : null;
-            using var volume = brep?.IsSolid == true ? VolumeMassProperties.Compute(brep) : null;
+            var measurements = cached?.Invoke(obj);
+            if (measurements != null) reusedObjects++;
+            else
+            {
+                using var area = brep != null ? AreaMassProperties.Compute(brep) : geometry is Mesh areaMesh ? AreaMassProperties.Compute(areaMesh) : curve?.IsClosed == true ? AreaMassProperties.Compute(curve) : null;
+                using var volume = brep?.IsSolid == true ? VolumeMassProperties.Compute(brep) : geometry is Mesh volumeMesh && volumeMesh.IsClosed ? VolumeMassProperties.Compute(volumeMesh) : null;
+                measurements = new Measurements(area?.Area, volume?.Volume, curve?.GetLength());
+                measuredObjects++;
+            }
             var attributes = new List<string[]>(); var complete = true; var bytes = 0;
             var strings = obj.Attributes.GetUserStrings();
             foreach (var key in strings.AllKeys)
@@ -80,10 +90,10 @@ internal static class WorkerScene
             objects.Add(new { id, nativeId = obj.Id.ToString(), kind = "native", name, origin });
             scene.Add(new { id, nativeId = obj.Id.ToString(), nativeType = geometry.ObjectType.ToString(), name64 = Encode(name), origin,
                 boundsSize = new[] { bounds.Max.X - bounds.Min.X, bounds.Max.Y - bounds.Min.Y, bounds.Max.Z - bounds.Min.Z },
-                vertices, indices, line, area = area?.Area, volume = volume?.Volume, length = curve?.GetLength(),
+                vertices, indices, line, area = measurements.Area, volume = measurements.Volume, length = measurements.Length,
                 layer64 = Encode(doc.Layers[obj.Attributes.LayerIndex].FullPath), attributes64 = attributes, attributesComplete = complete, valid = geometry.IsValid });
         }
-        return new { objects, scene };
+        return new { objects, scene, measurementVersion = 1, measurementStats = new { measuredObjects, reusedObjects } };
     }
 
     private static string Encode(string value) => Convert.ToBase64String(Encoding.UTF8.GetBytes(value));

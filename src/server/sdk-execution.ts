@@ -6,6 +6,7 @@ import {join,resolve,relative,isAbsolute} from 'node:path';
 import {z} from 'zod';
 import {launchRhinoWorker,workerResultSchema} from '../../hosts/rhino/worker-client.ts';
 import type {RequestInput} from '../contracts/workspace.ts';
+import {nativeModelSchema} from '../contracts/native-model.ts';
 import {AgentTools} from './agent-tools.ts';
 
 type Worker=Awaited<ReturnType<typeof launchRhinoWorker>>;
@@ -59,6 +60,8 @@ export class SdkExecution {
   const options=this.options;await mkdir(options.directory,{recursive:true});
   const directory=join(options.directory,randomUUID());
   const source=previous?sourceSchema.parse(previous.result):undefined;
+  const priorModel=previous?.result.executionMode==='sdk'&&previous.result.measurementVersion===1?nativeModelSchema.safeParse(previous.result):undefined;
+  const seededSource=source&&priorModel?.success?{...source,measurements:priorModel.data.scene.map(({id,area,volume,length})=>({id,area,volume,length}))}:source;
   const protectedIds=input.pins.map(pin=>pinSchema.parse(pin)).filter(pin=>pin.basis===previous?.id&&pin.role!=='target').map(pin=>pin.id);
   let worker:Worker|undefined,scope:ReturnType<AgentTools['issue']>|undefined,last:Receipt|undefined;
   let revision=0,uncertain=false,pending:Promise<unknown>|undefined,attempts=0,currentOperation:string|undefined;
@@ -66,7 +69,7 @@ export class SdkExecution {
   try{
    if(signal.aborted)throw failure('CANCELLED');
    update({phase:'starting-host',hostExecuted:false});
-   worker=await (options.launch||launchRhinoWorker)({...options,directory,source});
+   worker=await (options.launch||launchRhinoWorker)({...options,directory,source:seededSource});
    if(signal.aborted)throw failure('CANCELLED');
    const targetRef='rhino:'+worker.identity.sessionId;
    const handlers:{query:()=>Promise<unknown>;execute?:(args:{code:string})=>Promise<unknown>}={query:()=>worker!.query()};

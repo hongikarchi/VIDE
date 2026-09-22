@@ -25,7 +25,19 @@ internal sealed class WorkerExecutor(RhinoDoc document, string directory)
         if (method == "export")
         {
             if (uncertain) throw new InvalidOperationException("HOST_RESULT_UNKNOWN");
-            return WorkerScene.Export(document);
+            var cached = new Dictionary<string, WorkerScene.Measurements>();
+            if (request.TryGetProperty("measurementCache", out var values))
+            {
+                if (values.GetArrayLength() > 500) throw new InvalidOperationException("INVALID_MEASUREMENT_CACHE");
+                foreach (var item in values.EnumerateArray())
+                {
+                    double? Read(string key) { var value=item.GetProperty(key); if(value.ValueKind==JsonValueKind.Null)return null;
+                        var number=value.GetDouble();if(!double.IsFinite(number)||number<0)throw new InvalidOperationException("INVALID_MEASUREMENT_CACHE");return number; }
+                    if (!cached.TryAdd(item.GetProperty("id").GetString()!, new(Read("area"), Read("volume"), Read("length"))))
+                        throw new InvalidOperationException("INVALID_MEASUREMENT_CACHE");
+                }
+            }
+            return WorkerScene.Export(document, obj => modelBasis.SameGeometry(obj) && cached.TryGetValue(WorkerScene.Id(obj), out var value) ? value : null);
         }
         if (method != "execute") throw new InvalidOperationException("UNKNOWN_METHOD");
         var operation = request.GetProperty("operationId").GetString()!;

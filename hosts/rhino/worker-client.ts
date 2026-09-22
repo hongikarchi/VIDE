@@ -16,7 +16,7 @@ export const workerResultSchema=z.discriminatedUnion('ok',[
  z.object({ok:z.literal(false),code:z.string(),revision:z.number().optional(),diagnostics:z.array(z.string()).optional()}),
  z.object({ok:z.literal(true),operationId:z.string().uuid(),revision:z.number().int().positive(),filename:z.string(),fileHash:z.string().regex(/^[a-f0-9]{64}$/),readbackVerified:z.literal(true),snapshot:workerSnapshotSchema,changes:workerChangesSchema.optional(),value:z.unknown().optional()}),
 ]);
-interface Options {directory:string;executable:string;plugin:string;bootstrap:string;visible?:boolean;startupTimeoutMs?:number;source?:{filename:string;fileHash:string};normalizeUnits?:boolean}
+interface Options {directory:string;executable:string;plugin:string;bootstrap:string;visible?:boolean;startupTimeoutMs?:number;source?:{filename:string;fileHash:string;measurements?:{id:string;area:number|null;volume:number|null;length:number|null}[]};normalizeUnits?:boolean}
 const failure=(code:string)=>Object.assign(new Error(code),{code});
 async function fingerprint(filename:string){const hash=createHash('sha256');for await(const chunk of createReadStream(filename))hash.update(chunk);return hash.digest('hex');}
 export async function launchRhinoWorker({directory,executable,plugin,bootstrap,visible=false,startupTimeoutMs=90000,source,normalizeUnits=false}:Options){
@@ -58,7 +58,7 @@ export async function launchRhinoWorker({directory,executable,plugin,bootstrap,v
   return {
    identity:{...identity},
    async query(){return workerSnapshotSchema.parse(await call('query'));},
-   async exportModel(){return nativeModelSchema.parse(await call('export'));},
+   async exportModel(){return nativeModelSchema.parse(await call('export',source?.measurements&&!normalizeUnits?{measurementCache:source.measurements}:{}));},
    async execute(operationId:string,revision:number,code:string,protectedIds:string[]=[]){return workerResultSchema.parse(await call('execute',{operationId,revision,code,protectedIds}));},
    async stop(){closed=true;await lease.stop();},
   };

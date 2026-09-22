@@ -2,7 +2,7 @@
 id: VERIFY-2026-09-22-typescript-foundation
 title: TypeScript·React·Vite 전환 기반 검증
 status: review
-version: 0.35
+version: 0.36
 updated: 2026-09-22
 owner: agent:codex
 related: [PLAN, ADR-016, ADR-017, T-010, T-011, T-015]
@@ -236,3 +236,9 @@ WorkerReadback은 GeometryEquals로 기하를 비교하고 공개 속성·user s
 실제 `worker-readback.mjs`의 `.vide/worker-readback/8853504c-addd-45b1-903f-d4a62ad38942`에서 동일 외곽의 박스/구 불일치와 Level 속성 불일치를 검출했다. `worker-model.mjs`의 `.vide/worker-ui-check/9702dc85-e431-4b17-915a-1b4a30773591`에서 후보 생성·이동·재열기·영수증 회수·원본 및 보존 객체 보호와 브라우저 속성/수량표 표시가 통과했다.
 
 WorkerChanges는 입력 사본을 기준으로 추가/삭제와 기하·속성·native identity 변경을 구분하며 successful receipt에 남긴다. SdkExecution은 후보 및 영수증 회수 결과로 전달한다. `.vide/worker-changes/0dccebdc-c861-4d6c-b437-fd536d49c639` 실제 시험에서 추가·삭제, 기하 변경 없는 속성 수정, 무변경 객체 제외, 속성 원상복구 후 순변경 제거를 확인했다. 실행 단계 사이의 원시 이벤트 로그나 원본 문서 적용 기능은 아니다.
+
+## 무변경 객체 수량 재사용
+
+SDK 입력 사본 해시를 검증한 뒤 이전 후보의 measurementVersion=1 및 DTO가 유효할 때만 측정값을 전달한다. 자체 호스트는 입력 기하와 GeometryEquals가 참인 객체만 재사용한다. 이름/속성 변경은 기하 수량을 무효화하지 않는다. 수량 값이 없거나 형상/계산 버전이 달라지면 계산한다. Mesh의 면적과 닫힌 Mesh의 체적 계산도 추가했다.
+
+실제 Rhino `worker-measurements.mjs` 증거 `.vide/worker-measurements/65b61344-7c02-4023-96cb-522727835b1b`: 최초 4개 계산, 같은 입력 4개 재계산 0건, 이름만 변경한 객체 포함 3개 재사용·높이 수정 1개만 계산, 체적 24→48. 닫힌 Mesh의 면적 52/체적 24도 확인했다. 서버 단위 시험은 버전 누락·유효하지 않은 이전 수량을 캐시로 전달하지 않는 것을 확인했다. 타입 검사 통과. 이 구현은 수량 재사용이며 메시 생성이나 전체 형상 비교 비용을 제거한 것은 아니다.

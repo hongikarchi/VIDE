@@ -30,5 +30,8 @@ internal sealed class WorkerChanges : IDisposable
         return new { added, removed, modified };
     }
 
+    internal bool SameGeometry(RhinoObject obj) => basis.TryGetValue(WorkerScene.Id(obj), out var entry) &&
+        GeometryBase.GeometryEquals(entry.Geometry, obj.Geometry);
+
     public void Dispose() { foreach (var entry in basis.Values) entry.Geometry.Dispose(); }
 }
