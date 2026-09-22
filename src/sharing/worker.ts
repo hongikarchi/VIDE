@@ -1,4 +1,4 @@
-import {createAuth,type Env} from './auth';
+import {createAuth,manualApproval,type Env} from './auth';
 import {HttpError,json} from './http';
 import {acceptInvitation,projectRoute} from './projects';
 import {publicationRoute} from './publications';
@@ -8,12 +8,15 @@ async function handle(request:Request,env:Env,ctx:ExecutionContext):Promise<Resp
     try{
       const url=new URL(request.url);
       if(!env.AUTH_SECRET||env.AUTH_SECRET.length<32||!env.AUTH_ORIGIN||url.origin!==env.AUTH_ORIGIN)throw new HttpError(503,'SHARING_NOT_CONFIGURED');
+      if(url.pathname==='/api/config'&&request.method==='GET')return json({manualApproval:manualApproval(env),uploadsEnabled:env.UPLOADS_ENABLED!=='false'});
+      if(manualApproval(env)&&url.pathname.startsWith('/api/auth/')&&!['/api/auth/sign-up/email','/api/auth/sign-in/email','/api/auth/sign-out','/api/auth/get-session'].includes(url.pathname))throw new HttpError(403,'AUTH_FEATURE_UNAVAILABLE');
       const auth=createAuth(env,ctx);
       if(url.pathname.startsWith('/api/auth/'))return auth.handler(request);
       if(!url.pathname.startsWith('/api/')){if(env.WEB&&['GET','HEAD'].includes(request.method))return env.WEB.fetch(request);throw new HttpError(404,'NOT_FOUND');}
       if(!['GET','HEAD'].includes(request.method)&&request.headers.get('Origin')!==env.AUTH_ORIGIN)throw new HttpError(403,'ORIGIN_REJECTED');
       const session=await auth.api.getSession({headers:request.headers});
-      if(!session?.user.emailVerified)throw new HttpError(401,'LOGIN_REQUIRED');
+      if(!session?.user||(!manualApproval(env)&&!session.user.emailVerified))throw new HttpError(401,'LOGIN_REQUIRED');
+      if(env.UPLOADS_ENABLED==='false'&&url.pathname.includes('/publications')&&!['GET','HEAD'].includes(request.method))throw new HttpError(503,'UPLOADS_DISABLED');
       const actor={id:session.user.id,email:session.user.email};
       if(url.pathname==='/api/invitations/accept'&&request.method==='POST')return await acceptInvitation(request,env,actor);
       const path=url.pathname.split('/').filter(Boolean);

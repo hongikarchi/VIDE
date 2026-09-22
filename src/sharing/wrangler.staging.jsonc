@@ -1,5 +1,4 @@
-// Remote staging resources. Keep workers_dev disabled until origin, sender, mail eligibility and AUTH_SECRET are configured.
-// remote:false keeps local development from using cloud data; --remote migrations explicitly target staging.
+// Email-free staging: owner-approved membership, uploads paused to preserve the free-only budget.
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "vide-sharing-staging",
@@ -8,7 +7,7 @@
   "compatibility_flags": [
     "nodejs_compat"
   ],
-  "workers_dev": false,
+  "workers_dev": true,
   "d1_databases": [
     {
       "binding": "DB",
@@ -18,15 +17,11 @@
       "migrations_dir": "migrations"
     }
   ],
-  "send_email": [
-    {
-      "name": "EMAIL",
-      "remote": false
-    }
-  ],
   "vars": {
-    "AUTH_ORIGIN": "",
-    "EMAIL_FROM": ""
+    "AUTH_ORIGIN": "https://vide-sharing-staging.archivibe.workers.dev",
+    "EMAIL_FROM": "",
+    "AUTH_MODE": "manual-approval",
+    "UPLOADS_ENABLED": "false"
   },
   "r2_buckets": [
     {

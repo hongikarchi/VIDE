@@ -2,7 +2,7 @@
 id: VERIFY-2026-09-22-cloudflare-sharing
 title: Cloudflare 공유 권한·게시 검증
 status: review
-version: 0.11
+version: 0.12
 updated: 2026-09-22
 owner: agent:codex
 related: [T-009, SPEC-04, AC-30, AC-37]
@@ -147,3 +147,17 @@ pointercancel/창 포커스 유실의 선은 완성된 것으로 처리하지 �
 5. PC 종료 지속성·사용량·백업/복구 시험을 수행한다. 로컬 대용량 시험을 원격 부하 시험으로 재사용해 주장하지 않는다.
 
 사용자 후속 결정: 무료 범위의 서버 준비까지만 진행한다. 현재 전용 D1/R2 및 설정·스키마·dry-run 준비를 완료했으며 도메인 구매/요금제 전환은 하지 않는다. R2 무료 제공량은 계정 내 기존 서비스와 공유되므로 무료 상한 보장을 주장하지 않고, 이번 단계에서는 빈 버킷과 작은 빈 DB만 생성했다. 원격 부하 시험과 외부 가입 공개는 수행하지 않는다.
+
+
+## 메일 없는 무료 시험 배포
+
+사용자의 후속 승인으로 앞 절의 공개 보류 조건을 변경했다. SPEC-04.8의 미인증 가입·소유자 승인 참여를 구현했다. 기존 메일 인증 모드는 유지하며 staging만 `AUTH_MODE=manual-approval`을 사용한다. 인증 플래그를 조작하지 않으며 메일 바인딩도 배포에서 제거했다. 비밀번호 복구·이메일 변경 API는 서버에서 차단한다.
+
+- 주소: https://vide-sharing-staging.archivibe.workers.dev
+- 원격 D1: 기존 3개에 `0004-join-requests.sql` 추가. 비밀키는 생성 후 Wrangler stdin으로 전달했고 파일/출력에 저장하지 않았다.
+- 로컬 신규 검증: `tests/sharing/manual-approval.mjs`, `.vide/sharing-membership/eb5742bb-daca-42ed-a6c9-b75c09d98d16/result.json`. 미인증 가입/로그인, 중복 신청, 승인 전 접근 거절, 소유자만 승인, Origin 거절, 승인 후 접근, 회수 뒤 재승인/재수락 차단, 만료·취소·거절, 메일 관련 API 거절, emailVerified false 유지 통과.
+- 기존 회귀: `membership.mjs --browser`, `.vide/sharing-membership/e07a3c7e-8256-4af1-b716-bfe0d70c1865/result.json`. 기존 인증/권한·R2 게시·핀/스케치·외부 의견 로컬 채택·모바일 검증 통과.
+- 실제 원격 Chrome: `tests/sharing/remote-manual.mjs`, `VIDE_SHARING_TEST_ORIGIN`에 위 staging 주소를 명시해야 실행한다. `.vide/sharing-remote/75a65c91-4cf3-477d-8a98-afb1e054328d/result.json`에서 두 합성 계정의 UI 가입→로그인→프로젝트 생성→초대 링크→신청→소유자 승인→접근→회수→접근 거절·로그아웃을 통과했다. owner/member 스크린샷을 렌더 확인했다. 테스트 계정은 example.com의 합성 주소이며 메일 발송은 없다. 초기 Playwright 기본 Chromium 실행 파일 부재는 기존 설치 Chrome channel로 해결했다.
+- 원격의 가입/로그인은 Workers Free에서 실제 200 응답을 확인했다. 이를 높은 동시 접속이나 모든 CPU 한도 통과의 근거로 확대하지 않는다.
+
+R2 대시보드는 기존 서비스들의 총 11.17 GB와 당시 billable $0.00을 표시했다. 순간 저장량과 월 청구량은 같지 않으며 추가 저장의 무료 여부를 보장할 수 없다. 사용자의 무료 한정을 지키기 위해 staging에서 `UPLOADS_ENABLED=false`로 게시 관련 쓰기를 차단했다. 원격 브라우저 시험은 차단(503)을 확인했으며 기존 R2 내용은 변경하지 않았다. 모델/의견 원격 시험·PC 종료 후 모델 열람·운영 백업/복구·비용 계측은 아직 하지 않았다. Worker Static Assets의 앱 배포는 R2 모델 업로드와 별개다.

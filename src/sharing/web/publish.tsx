@@ -15,6 +15,8 @@ async function prepare(text:string){
   return {file,chunks};
 }
 export function Publish({project,session,onPublished}:{project:Project;session:Session;onPublished:()=>void}){
+  const [uploadsEnabled,setUploadsEnabled]=useState<boolean|null>(null);
+  useEffect(()=>{void api('/config').then(v=>setUploadsEnabled(z.object({uploadsEnabled:z.boolean()}).parse(v).uploadsEnabled)).catch(()=>setUploadsEnabled(false));},[]);
   const storageKey=`${session.user.id}:${project.id}`,[file,setFile]=useState<Package|null>(null),[busy,setBusy]=useState(false),[loading,setLoading]=useState(true),[status,setStatus]=useState('');
   const prepared=useRef<Awaited<ReturnType<typeof prepare>>|null>(null),locked=useRef(false);
   useEffect(()=>{let alive=true;void uploadStorage(storageKey).then(async text=>{if(text){const value=await prepare(text);if(alive){prepared.current=value;setFile(value.file);setStatus('이전 게시의 접수 상태를 확인하고 이어갈 수 있습니다.');}}}).catch(error=>{if(alive)setStatus(message(error));}).finally(()=>{if(alive)setLoading(false);});return()=>{alive=false;};},[storageKey]);
@@ -36,6 +38,7 @@ export function Publish({project,session,onPublished}:{project:Project;session:S
     }catch(error){setStatus(message(error)+' · 같은 파일의 게시 확인으로 이어갈 수 있습니다.');}
     finally{locked.current=false;setBusy(false);}
   }
+  if(uploadsEnabled!==true)return <details className="admin"><summary>모델 게시</summary><p className="muted">{uploadsEnabled===null?'설정 확인 중…':'시험 서버의 모델 업로드는 비용 범위 확인 전까지 중지되어 있습니다.'}</p></details>;
   return <details className="admin"><summary>모델 게시</summary><p className="muted">VIDE에서 선택해 만든 공유 자료 파일을 사용합니다.</p>
     {!file?<input type="file" accept=".json,application/json" aria-label="공유 자료 파일" disabled={loading||busy} onChange={event=>{void choose(event.target.files?.[0]);event.target.value='';}}/>:<><h3>{file.manifest.title}</h3><p>{file.scene.objects.length}개 객체 · {file.scene.objects.some(object=>object.name)?'이름 포함':'이름 제외'} · {file.scene.objects.some(object=>object.measurements)?'측정값 포함':'측정값 제외'}</p><ul>{file.scene.objects.slice(0,20).map(object=><li key={object.id}>{object.name||object.id}</li>)}</ul><button className="primary" disabled={busy} onClick={()=>{void publish();}}>{busy?'게시 확인 중…':'이 자료 게시 / 재확인'}</button><button disabled={busy} onClick={()=>{void uploadStorage(storageKey,null).then(()=>{prepared.current=null;setFile(null);setStatus('브라우저의 재시도 자료를 지웠습니다. 이미 서버에 접수된 게시본은 유지됩니다.');}).catch(error=>setStatus(message(error)));}}>이 파일 닫기</button></>}
     <p role="status" className="status">{status}</p></details>;

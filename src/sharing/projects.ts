@@ -1,4 +1,5 @@
-import type {Env} from './auth';
+import {manualApproval,type Env} from './auth';
+import {requestJoin,joinRoute} from './joins';
 import {HttpError,body,digest,json,role,text} from './http';
 
 export interface Actor {id:string;email:string}
@@ -29,6 +30,7 @@ export async function projectRoute(request:Request,env:Env,actor:Actor,path:stri
   const projectId=path[0],current=await membership(db,projectId,actor.id);
   if(path.length===1&&request.method==='GET')return json(await db.prepare('SELECT id,name,created_at FROM projects WHERE id=?').bind(projectId).first());
   if(current!=='owner')throw new HttpError(403,'OWNER_REQUIRED');
+  if(path[1]==='join-requests')return joinRoute(request,env,actor,projectId,path.slice(2));
   if(path[1]==='members'){
     if(path.length===2&&request.method==='GET')return json({members:(await db.prepare('SELECT m.user_id,m.role,u.name,u.email FROM project_members m JOIN user u ON u.id=m.user_id WHERE project_id=? ORDER BY m.user_id').bind(projectId).all()).results});
     if(path.length===3&&['PATCH','DELETE'].includes(request.method)){
@@ -49,8 +51,8 @@ export async function projectRoute(request:Request,env:Env,actor:Actor,path:stri
       if(!result.meta.changes)throw new HttpError(403,'OWNER_REQUIRED');
       // Fragment keeps the raw invitation token out of server access logs/referrers.
       const link=env.AUTH_ORIGIN+'/invite#'+token;
-      let delivered=false;try{await env.EMAIL.send({from:env.EMAIL_FROM,to:email,subject:'VIDE project invitation',text:link});delivered=true;}catch{}
-      return json({id,expiresAt,link,emailDelivery:delivered?'submitted':'failed'},201);
+      let delivered=false;try{if(!manualApproval(env))await env.EMAIL!.send({from:env.EMAIL_FROM,to:email,subject:'VIDE project invitation',text:link});delivered=!manualApproval(env);}catch{}
+      return json({id,expiresAt,link,emailDelivery:manualApproval(env)?'disabled':delivered?'submitted':'failed'},201);
     }
     if(path.length===3&&request.method==='DELETE'){
       const result=await db.prepare(`UPDATE invitations SET revoked_at=? WHERE project_id=? AND id=? AND ${ownerSql}`).bind(Date.now(),projectId,path[2],projectId,actor.id).run();
@@ -61,6 +63,7 @@ export async function projectRoute(request:Request,env:Env,actor:Actor,path:stri
 }
 
 export async function acceptInvitation(request:Request,env:Env,actor:Actor):Promise<Response>{
+  if(manualApproval(env))return requestJoin(request,env,actor);
   const token=text((await body(request)).token,200),hash=await digest(token),now=Date.now(),db=env.DB;
   // Both statements are one D1 transaction. A replay never recreates a removed membership.
   await db.batch([

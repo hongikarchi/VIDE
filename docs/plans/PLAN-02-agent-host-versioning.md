@@ -2,7 +2,7 @@
 id: PLAN-02
 title: 범용 AI 실행·다중 호스트 통신·모델 데이터 버전 관리
 status: review
-version: 0.14
+version: 0.15
 updated: 2026-09-22
 owner: agent:codex
 related: [PLAN, SPEC-02, SPEC-03, SPEC-04, SPEC-05, ADR-013]
@@ -233,7 +233,7 @@ AWS는 같은 파일 사용량에서 Lightsail+서울 S3+CloudFront Pro 소계�
 
 ### 로그인·프로젝트 공유 계약
 
-동작 정본은 SPEC-04.8, 제품 약속은 PRD §12.5다. 첫 프로젝트 링크는 로그인 후 멤버십을 확인한다. 익명 공개 링크·범위·만료는 OQ-04의 별도 결정이며 자동 허용하지 않는다. 최소 테이블은 projects, project_members(project_id,user_id,role), invitations, publications, comments다. 역할은 owner/viewer/commenter이며 원격 CAD 실행 권한을 만들지 않는다. 검증된 수신 계정으로 초대를 수락하고 토큰은 해시 저장하며 만료·취소·중복 수락을 처리한다.
+동작 정본은 SPEC-04.8, 제품 약속은 PRD §12.5다. 첫 프로젝트 링크는 로그인 후 멤버십을 확인한다. 익명 공개 링크·범위·만료는 OQ-04의 별도 결정이며 자동 허용하지 않는다. 최소 테이블은 projects, project_members(project_id,user_id,role), invitations, publications, comments다. 역할은 owner/viewer/commenter이며 원격 CAD 실행 권한을 만들지 않는다. 메일 인증 모드는 검증된 수신 계정으로 초대를 수락한다. 무료 시험의 메일 없는 모드는 SPEC-04.8의 소유자 승인 절차를 따른다. 토큰은 해시 저장하며 만료·취소·중복 수락을 처리한다.
 
 프로젝트/의견/파일 접근은 현재 멤버십을 API에서 확인한다. 오래된 JWT 역할/표시 이름을 권한 근거로 쓰지 않는다. 비공개 객체 저장소는 권한 검사 또는 짧은 만료 URL로 전달하고 회수 이후 새 발급/접근을 차단한다. 이미 발급한 URL의 만료 전 접근과 내려받은 파일까지 즉시 회수했다고 표시하지 않는다. Cloudflare는 R2 공개 접근을 열지 않고 인증된 전달 경로를 검증한다. 관리자 키는 프런트/게시 파일에 넣지 않는다.
 
@@ -243,6 +243,10 @@ AWS는 같은 파일 사용량에서 Lightsail+서울 S3+CloudFront Pro 소계�
 
 로컬 파일 왕복 단계는 `publication_exports`에 공개 export ID·프로젝트/작업 ID·manifest/원 결과 해시를 저장한다. 웹의 소유자 전용 `GET /api/projects/:project/publications/:publication/comments/:comment/export`는 의견 하나와 공개 기준을 반환한다. 로컬 `POST /api/v1/projects/:project/shared-feedback`는 이 기준을 대조해 `shared_feedback`에 원문을 불변 보관한다. origin·웹 프로젝트·게시본·의견 ID를 중복 키로 사용하고 동일 ID의 변경된 원문을 거절한다. UI의 채택은 사용자 초안에 원본 첨부·선·대상을 복사하며 실행은 기존 명시적 요청을 따른다. 파일의 서버/작성자 표시는 온라인 검증으로 취급하지 않는다. 계정 인증 연결에 의한 자동 전송은 이 단계의 완료 주장에 포함하지 않는다.
 
+
+2026-09-22 사용자 승인으로 무료 원격 시험은 `AUTH_MODE=manual-approval`을 사용한다. Better Auth의 `requireEmailVerification=false`, `autoSignIn=false`로 가입 후 로그인을 제공하며 `emailVerified`는 false로 남긴다. 메일 바인딩은 배포에서 제거하고 인증 API를 가입/로그인/세션/로그아웃으로 제한한다. `/api/config`가 화면에 현재 모드를 전달한다. 기본 모드는 기존 이메일 인증이며 환경 변수 한 번으로 기존 계정 이행까지 완료했다고 간주하지 않는다.
+
+`0004-join-requests.sql`은 초대/계정당 하나의 참여 신청을 기록한다. `POST /api/invitations/accept`는 메일 없는 모드에서 멤버를 만들지 않고 202 pending을 반환한다. 소유자는 `GET /api/projects/:id/join-requests`와 `POST .../:requestId`의 approve/reject로 처리한다. 승인 D1 batch 안에서 소유권·미처리·만료·취소·대상 계정을 재확인한다. 현재 R2 계정 사용량이 무료 제공량보다 커 `UPLOADS_ENABLED=false`로 원격 게시 쓰기를 중지하고 화면에도 표시한다. 로컬 게시/권한 시험에는 적용하지 않는다. 업로드 재개는 사용자 비용 범위 확인 뒤 한다.
 
 `src/sharing/`는 독립 Workers 패키지다. 인증 스키마는 Better Auth 1.7.5 생성 SQL, 제품 스키마는 `migrations/`의 순서 있는 SQL로 관리한다. 운영 배포 스크립트나 제품 HTTP 관리 경로로 자동 마이그레이션하지 않는다. 현재 시험은 로컬 전용 Wrangler 설정과 Miniflare의 D1/R2 바인딩을 사용한다.
 
