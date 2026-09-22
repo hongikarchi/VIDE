@@ -18,9 +18,9 @@ test('SDK review cannot acquire execute and closes its owned worker',()=>fixture
  assert.equal(result.hostExecuted,false);assert.deepEqual(counts(),{stopped:1,revoked:1,calls:0});
 }));
 test('SDK saves host intent before execution and preserves protected IDs',()=>fixture(async({sdk,task,scope,worker,updates})=>{
- let protectedIds;worker.execute=async(id,revision,code,ids)=>{assert.equal(updates.at(-1).phase,'host');assert.equal(updates.at(-1).operationId,id);protectedIds=ids;return {ok:true,operationId:id,revision:1,filename:'saved.3dm',fileHash:'a'.repeat(64),snapshot:{},readbackVerified:true};};
+ const changes={added:[],removed:['deleted'],modified:[{id:'changed',geometry:true,attributes:false,nativeIdentity:false}]};let protectedIds;worker.execute=async(id,revision,code,ids)=>{assert.equal(updates.at(-1).phase,'host');assert.equal(updates.at(-1).operationId,id);protectedIds=ids;return {ok:true,operationId:id,revision:1,filename:'saved.3dm',fileHash:'a'.repeat(64),snapshot:{},changes,readbackVerified:true};};
  const result=await sdk.run({...task,previous:{id:'basis',result:{filename:'source.3dm',fileHash:'b'.repeat(64)}},input:{...task.input,pins:[{id:'keep',basis:'basis',role:'preserve'}]},provider:()=>({run:async()=>{await scope().handlers.execute({code:'SDK code'});return {text:'Saved'};}})});
- assert.deepEqual(protectedIds,['keep']);assert.equal(result.hostExecuted,true);assert.equal(result.baseRequestId,'basis');assert.equal(result.executionMode,'sdk');
+ assert.deepEqual(protectedIds,['keep']);assert.equal(result.hostExecuted,true);assert.equal(result.baseRequestId,'basis');assert.equal(result.executionMode,'sdk');assert.deepEqual(result.changes,changes);
 }));
 test('SDK compile rejection allows correction but lost write blocks subsequent writes',()=>fixture(async({sdk,task,scope,worker,counts})=>{
  let count=0;worker.execute=async()=>{count++;if(count===1)return {ok:false,code:'COMPILE_ERROR',diagnostics:['fix']};throw Error('lost response');};

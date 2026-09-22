@@ -12,6 +12,7 @@ internal sealed class WorkerExecutor(RhinoDoc document, string directory)
 {
     private int revision;
     private bool uncertain;
+    private readonly WorkerChanges modelBasis = new(document);
     private readonly Dictionary<string, (string hash, object result)> receipts = new();
 
     public object Dispatch(JsonElement request)
@@ -76,26 +77,12 @@ internal sealed class WorkerExecutor(RhinoDoc document, string directory)
             if (!document.Write3dmFile(filename, new Rhino.FileIO.FileWriteOptions())) throw new Exception("Save failed");
             using (var reopened = RhinoDoc.OpenHeadless(filename))
             {
-                if (reopened == null || reopened.ModelUnitSystem != document.ModelUnitSystem)
-                    throw new Exception("Readback units mismatch");
-                var originals = document.Objects.GetObjectList(Rhino.DocObjects.ObjectType.AnyObject).ToArray();
-                if (reopened.Objects.GetObjectList(Rhino.DocObjects.ObjectType.AnyObject).Count() != originals.Length)
-                    throw new Exception("Readback count mismatch");
-                foreach (var original in originals)
-                {
-                    var restored = reopened.Objects.FindId(original.Id);
-                    if (restored == null || restored.ObjectType != original.ObjectType || !restored.Geometry.IsValid)
-                        throw new Exception("Readback identity mismatch");
-                    var expected = original.Geometry.GetBoundingBox(true);
-                    var actual = restored.Geometry.GetBoundingBox(true);
-                    if (actual.Min.DistanceTo(expected.Min) > document.ModelAbsoluteTolerance ||
-                        actual.Max.DistanceTo(expected.Max) > document.ModelAbsoluteTolerance)
-                        throw new Exception("Readback bounds mismatch");
-                }
+                if (reopened == null) throw new Exception("Readback open failed");
+                WorkerReadback.Verify(document, reopened);
             }
             var fileHash = Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(filename))).ToLowerInvariant();
             revision++;
-            var result = new { ok = true, operationId = operation, revision, value, filename, fileHash, readbackVerified = true, snapshot = Snapshot(false) };
+            var result = new { ok = true, operationId = operation, revision, value, filename, fileHash, readbackVerified = true, snapshot = Snapshot(false), changes = modelBasis.Compare(document) };
             Persist(operation, hash, result);
             receipts[operation] = (hash, result);
             uncertain = false;

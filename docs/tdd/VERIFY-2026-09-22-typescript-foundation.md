@@ -2,7 +2,7 @@
 id: VERIFY-2026-09-22-typescript-foundation
 title: TypeScript·React·Vite 전환 기반 검증
 status: review
-version: 0.34
+version: 0.35
 updated: 2026-09-22
 owner: agent:codex
 related: [PLAN, ADR-016, ADR-017, T-010, T-011, T-015]
@@ -228,3 +228,11 @@ Rhino의 기존 취득·이동·적용·회수와 ZWCAD COM 어댑터를 TypeScr
 115개 자동 시험, 서버 타입 검사 및 browser-react-panels 전체 회귀 통과. 실제 ZWCAD 시험 `48287c1b-2e84-47a6-8f3c-c078aa7615b4`는 면적 200→240, 길이 68, handle·속성 보존, 반복 편집, 원본 해시 보존을 확인했다. 사용자 파일 대신 기존 합성 fixture 사본을 사용했다.
 
 패키지 `VIDE-0.1.0-dev.20260922.3-windows-x64.zip`(284bdcc 기준)은 5,090개 파일 검증과 portable-package 시험을 통과했다. 증거 디렉터리는 `.vide/package-check/39e93c49-03fe-49ed-be2c-1cf5bc31bc79`다. packaged-sdk 시험 `.vide/packaged-sdk/aa8169c4-9607-4977-96e4-58c8b8328aa2`에서 번들 런타임·공백 경로로 실제 Rhino 생성, 객체 1개·체적 24를 확인했다. 이 ZIP은 최신 호스트 어댑터 전환 전 스냅샷이다.
+
+## SDK 기하 재열기 및 변경 요약
+
+WorkerReadback은 GeometryEquals로 기하를 비교하고 공개 속성·user strings·group 목록·층 경로를 확인한다. bounds만 같은 다른 형상을 성공으로 기록하지 않는다. 사용자 정의 플러그인 데이터 전체나 관계 자원의 완전 보존을 보증하는 검사는 아니다.
+
+실제 `worker-readback.mjs`의 `.vide/worker-readback/8853504c-addd-45b1-903f-d4a62ad38942`에서 동일 외곽의 박스/구 불일치와 Level 속성 불일치를 검출했다. `worker-model.mjs`의 `.vide/worker-ui-check/9702dc85-e431-4b17-915a-1b4a30773591`에서 후보 생성·이동·재열기·영수증 회수·원본 및 보존 객체 보호와 브라우저 속성/수량표 표시가 통과했다.
+
+WorkerChanges는 입력 사본을 기준으로 추가/삭제와 기하·속성·native identity 변경을 구분하며 successful receipt에 남긴다. SdkExecution은 후보 및 영수증 회수 결과로 전달한다. `.vide/worker-changes/0dccebdc-c861-4d6c-b437-fd536d49c639` 실제 시험에서 추가·삭제, 기하 변경 없는 속성 수정, 무변경 객체 제외, 속성 원상복구 후 순변경 제거를 확인했다. 실행 단계 사이의 원시 이벤트 로그나 원본 문서 적용 기능은 아니다.

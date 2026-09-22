@@ -11,9 +11,10 @@ import { nativeModelSchema } from '../../src/contracts/native-model.ts';
 const readySchema=z.object({port:z.number().int().min(1).max(65535),pid:z.number().int().positive(),startTicks:z.string().regex(/^\d+$/),sessionId:z.string().uuid(),documentId:z.number().int().positive(),revision:z.literal(0)});
 const point=z.tuple([z.number(),z.number(),z.number()]);
 export const workerSnapshotSchema=z.object({ok:z.literal(true),revision:z.number().int().nonnegative(),uncertain:z.boolean(),units:z.string(),objects:z.array(z.object({id:z.string(),nativeId:z.string().uuid(),name:z.string(),type:z.string(),bounds:z.tuple([point,point])}))});
+export const workerChangesSchema=z.object({added:z.array(z.string()),removed:z.array(z.string()),modified:z.array(z.object({id:z.string(),geometry:z.boolean(),attributes:z.boolean(),nativeIdentity:z.boolean()}))});
 export const workerResultSchema=z.discriminatedUnion('ok',[
  z.object({ok:z.literal(false),code:z.string(),revision:z.number().optional(),diagnostics:z.array(z.string()).optional()}),
- z.object({ok:z.literal(true),operationId:z.string().uuid(),revision:z.number().int().positive(),filename:z.string(),fileHash:z.string().regex(/^[a-f0-9]{64}$/),readbackVerified:z.literal(true),snapshot:workerSnapshotSchema,value:z.unknown().optional()}),
+ z.object({ok:z.literal(true),operationId:z.string().uuid(),revision:z.number().int().positive(),filename:z.string(),fileHash:z.string().regex(/^[a-f0-9]{64}$/),readbackVerified:z.literal(true),snapshot:workerSnapshotSchema,changes:workerChangesSchema.optional(),value:z.unknown().optional()}),
 ]);
 interface Options {directory:string;executable:string;plugin:string;bootstrap:string;visible?:boolean;startupTimeoutMs?:number;source?:{filename:string;fileHash:string};normalizeUnits?:boolean}
 const failure=(code:string)=>Object.assign(new Error(code),{code});

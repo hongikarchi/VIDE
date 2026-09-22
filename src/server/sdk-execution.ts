@@ -51,7 +51,7 @@ export class SdkExecution {
    const receipt=await worker.execute(operationId,0,'// Save the validated, normalized imported working copy.');
    if(!receipt.ok)throw failure('HOST_RESULT_UNKNOWN');
    const model=await worker.exportModel();
-   return {...model,filename:receipt.filename,fileHash:receipt.fileHash,verified:true,executionMode:'sdk',workerDirectory:directory};
+   return {...model,filename:receipt.filename,fileHash:receipt.fileHash,verified:true,changes:receipt.changes,executionMode:'sdk',workerDirectory:directory};
   }catch(error){if(writing)throw Object.assign(failure('HOST_RESULT_UNKNOWN'),{intent,cause:error});throw error;}
   finally{if(worker)await worker.stop();}
  }
@@ -83,7 +83,7 @@ export class SdkExecution {
      const receipt=await pending as Awaited<ReturnType<Worker['execute']>>;
      if(receipt.ok){last=receipt;revision=receipt.revision;uncertain=false;
       update({...intent(),operationId,revision,filename:receipt.filename,fileHash:receipt.fileHash});
-      return {ok:true,revision,readbackVerified:true,snapshot:receipt.snapshot};
+      return {ok:true,revision,readbackVerified:true,snapshot:receipt.snapshot,changes:receipt.changes};
      }
      if(receipt.code==='COMPILE_ERROR'||receipt.code==='STALE_REFERENCE'){
       uncertain=false;currentOperation=last?.operationId;if(last)update({...intent(),revision});return receipt;
@@ -102,7 +102,7 @@ User request: ${input.body||'첨부한 설계 문맥을 검토해 주세요.'}`;
    if(signal.aborted)throw failure(last?'HOST_RESULT_UNKNOWN':'CANCELLED');
    if(!last)return {...response,hostExecuted:false,executionMode:'sdk'};
    const model=await worker.exportModel();
-   return {...response,...model,filename:last.filename,fileHash:last.fileHash,verified:true,hostExecuted:true,host:'rhino',executionMode:'sdk',workerDirectory:directory,baseRequestId:previous?.id,sourceDocument:previous?.result.sourceDocument};
+   return {...response,...model,changes:last.changes,filename:last.filename,fileHash:last.fileHash,verified:true,hostExecuted:true,host:'rhino',executionMode:'sdk',workerDirectory:directory,baseRequestId:previous?.id,sourceDocument:previous?.result.sourceDocument};
   }catch(error){
    if(uncertain||last)throw Object.assign(failure('HOST_RESULT_UNKNOWN'),{intent:intent(),cause:error});
    throw error;
@@ -121,7 +121,7 @@ User request: ${input.body||'첨부한 설계 문맥을 검토해 주세요.'}`;
   try{
    worker=await (this.options.launch||launchRhinoWorker)({...this.options,directory:join(this.options.directory,randomUUID()),source:{filename:receipt.filename,fileHash:receipt.fileHash}});
    const model=await worker.exportModel();
-   return {...model,filename:receipt.filename,fileHash:receipt.fileHash,verified:true,hostExecuted:true,host:'rhino',executionMode:'sdk',workerDirectory:directory,baseRequestId:intent.baseRequestId,sourceDocument:intent.sourceDocument,text:'저장된 Rhino 후보를 재확인했습니다. AI 응답은 복구되지 않았습니다.'};
+   return {...model,changes:receipt.changes,filename:receipt.filename,fileHash:receipt.fileHash,verified:true,hostExecuted:true,host:'rhino',executionMode:'sdk',workerDirectory:directory,baseRequestId:intent.baseRequestId,sourceDocument:intent.sourceDocument,text:'저장된 Rhino 후보를 재확인했습니다. AI 응답은 복구되지 않았습니다.'};
   }finally{if(worker)await worker.stop();}
  }
 }
