@@ -1,0 +1,46 @@
+import assert from 'node:assert/strict';
+import {mkdir,readFile,writeFile} from 'node:fs/promises';
+import {resolve,join} from 'node:path';
+import {fileURLToPath} from 'node:url';
+import {randomUUID,randomBytes} from 'node:crypto';
+import {spawn} from 'node:child_process';
+import {createServer} from 'node:net';
+import {killOwnedProcess} from '../../../src/ai/claude-cli.ts';
+const root=fileURLToPath(new URL('.',import.meta.url)),directory=resolve(root,'../../../.vide/cloudflare-auth',randomUUID());await mkdir(directory,{recursive:true});
+const portServer=createServer();await new Promise(resolve=>portServer.listen(0,'127.0.0.1',resolve));const port=portServer.address().port;await new Promise(resolve=>portServer.close(resolve));
+const origin='http://127.0.0.1:'+port,key=randomBytes(32).toString('hex'),config=JSON.parse(await readFile(join(root,'wrangler.jsonc'),'utf8'));
+config.main=join(root,'worker.ts');config.vars={...config.vars,AUTH_ORIGIN:origin,AUTH_SECRET:key};await writeFile(join(directory,'wrangler.json'),JSON.stringify(config,null,2));
+let child,output='';const environment={...process.env,WRANGLER_SEND_METRICS:'false'};delete environment.CLOUDFLARE_API_TOKEN;delete environment.CLOUDFLARE_API_KEY;
+const start=async()=>{
+ child=spawn(process.execPath,[join(root,'node_modules/wrangler/bin/wrangler.js'),'dev','--local','--ip','127.0.0.1','--port',String(port),'--config',join(directory,'wrangler.json'),'--persist-to',join(directory,'state')],{env:environment,windowsHide:true,stdio:['ignore','pipe','pipe']});
+ child.stdout.on('data',chunk=>output+=chunk);child.stderr.on('data',chunk=>output+=chunk);
+ const deadline=Date.now()+60000;while(Date.now()<deadline){if(child.exitCode!==null)throw Error('Wrangler exited: '+output.slice(-6000));try{if((await fetch(origin+'/health')).ok)return;}catch{}await new Promise(resolve=>setTimeout(resolve,200));}throw Error('Local worker start timeout: '+output.slice(-6000));
+};
+const stop=async()=>{if(child){const stopped=new Promise(resolve=>child.once('close',resolve));await killOwnedProcess(child);await stopped;child=undefined;}};
+const call=(path,body,cookie,extra={})=>fetch(origin+path,{method:body===undefined?'GET':'POST',headers:{Origin:origin,'CF-Connecting-IP':'192.0.2.10','Content-Type':'application/json',...(cookie?{Cookie:cookie}:{}),...extra},...(body!==undefined?{body:JSON.stringify(body)}:{}),redirect:'manual'});
+const readMail=async(email,kind)=>{const deadline=Date.now()+10000;while(Date.now()<deadline){const response=await call('/__test/mail?email='+encodeURIComponent(email),undefined,undefined,{'X-Spike-Key':key});const rows=await response.json();const mail=rows.find(row=>row.kind===kind);if(mail)return mail.link;await new Promise(resolve=>setTimeout(resolve,100));}throw Error('Local mail missing');};
+const email='synthetic-'+randomUUID()+'@example.com',password=randomBytes(20).toString('hex'),newPassword=randomBytes(20).toString('hex');
+try{
+ await start();let response=await call('/__test/migrate',{},undefined,{'X-Spike-Key':key});assert.equal(response.status,200);await writeFile(join(directory,'auth-schema.sql'),(await response.json()).schema);
+ response=await call('/api/auth/sign-up/email',{name:'Synthetic reviewer',email,password});assert.equal(response.status,200,await response.text());
+ response=await call('/api/auth/sign-in/email',{email,password});assert.equal(response.status,403);
+ const verification=await readMail(email,'verify');response=await fetch(verification,{redirect:'manual'});assert.ok([200,302].includes(response.status),await response.text());
+ response=await call('/api/auth/sign-in/email',{email,password});assert.equal(response.status,200,await response.text());const cookie=response.headers.getSetCookie().map(value=>value.split(';')[0]).join('; ');assert.ok(cookie);
+ response=await call('/api/auth/get-session',undefined,cookie);assert.equal((await response.json()).user.email,email);
+ response=await call('/api/auth/sign-in/email',{email,password:'wrong-password'});assert.equal(response.status,401);
+ response=await call('/api/auth/sign-in/email',{email,password});assert.equal(response.status,429);const retry=Number(response.headers.get('x-retry-after'));assert.ok(retry>0&&retry<=10);
+ response=await call('/api/auth/sign-in/email',{email,password:'wrong-password'},undefined,{'CF-Connecting-IP':'192.0.2.11'});assert.equal(response.status,401);
+ await new Promise(resolve=>setTimeout(resolve,(retry+1)*1000));
+ response=await call('/api/auth/sign-in/email',{email,password},undefined,{Origin:'https://foreign.example'});assert.equal(response.status,403);
+ await stop();await start();response=await call('/api/auth/get-session',undefined,cookie);assert.equal((await response.json()).user.email,email);
+ response=await call('/api/auth/request-password-reset',{email,redirectTo:origin+'/reset'});assert.equal(response.status,200,await response.text());
+ const reset=await readMail(email,'reset');const resetToken=new URL(reset).pathname.split('/').at(-1);
+ response=await call('/api/auth/reset-password',{token:resetToken,newPassword});assert.equal(response.status,200,await response.text());
+ response=await call('/api/auth/get-session',undefined,cookie);assert.equal(await response.json(),null);
+ response=await call('/api/auth/reset-password',{token:resetToken,newPassword});assert.ok(response.status>=400);
+ response=await call('/api/auth/sign-in/email',{email,password:newPassword});assert.equal(response.status,200,await response.text());const nextCookie=response.headers.getSetCookie().map(value=>value.split(';')[0]).join('; ');
+ response=await call('/api/auth/sign-out',{},nextCookie);assert.equal(response.status,200);
+ response=await call('/api/auth/get-session',undefined,nextCookie);assert.equal(await response.json(),null);
+ const evidence={passed:true,directory,betterAuth:'1.7.5',wrangler:'4.136.1',localWorkerdD1:true,emailBinding:'simulated',emailVerification:true,sessionPersistence:true,foreignOriginRejected:true,rateLimitEnforced:true,separateIpBuckets:true,passwordReset:true,oldSessionRevoked:true,resetReplayRejected:true,logout:true,remoteDeployed:false};
+ await writeFile(join(directory,'result.json'),JSON.stringify(evidence,null,2));console.log(JSON.stringify(evidence));
+}finally{await stop();await writeFile(join(directory,'worker.log'),output);}

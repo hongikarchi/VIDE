@@ -2,7 +2,7 @@
 id: VERIFY-2026-09-22-typescript-foundation
 title: TypeScript·React·Vite 전환 기반 검증
 status: review
-version: 0.41
+version: 0.42
 updated: 2026-09-22
 owner: agent:codex
 related: [PLAN, ADR-016, ADR-017, T-010, T-011, T-015]
@@ -276,3 +276,7 @@ SDK execute 영수증의 value가 서버 응답에서 누락되어 AI가 직접 
 부팅 로더는 가시적 문서를 여는 명령이 false를 반환하더라도 해당 실행의 ready 파일을 발행한 경우 이를 실패로 덮어쓰지 않는다. 기존 상세 오류 파일은 보존한다. 설치 안내도 자체 편집 사본과 외부 기존 Rhino 연결의 차이를 갱신했다.
 
 실제 Codex 구독을 사용한 `browser-owned-editor.mjs --ai --codex`의 `.vide/browser-owned-editor/3e9f8b40-1727-4915-a891-4b92902929f5`는 브라우저 문서 취득→높이 4→8 m/Level=L02 요청→SDK 후보→서버 재시작→영향 검토/확인→Rhino 적용→재취득을 통과했다. 체적 24→48, 네이티브 GUID와 Level 값도 확인했다. 공급자 보고 입력 79,346/출력 1,436 토큰이며 크레딧 비용이나 남은 구독량은 알 수 없다. Claude 첫 시도는 시험의 카드 선택 오류, 재시도는 쓰기 전 TIMEOUT이었으므로 이 흐름의 Claude 성공으로 기록하지 않는다. Codex의 default 모델 effort는 low를 제공하지 않아 실제 default 선택으로 보정했다.
+
+## 최신 패키지 재검증
+
+375e4ea 기준 `VIDE-0.1.0-dev.20260922.4-windows-x64.zip`의 5,098개 파일 해시·번들 Node·공백 경로·중복 실행·브라우저 로드·재시작·제거 후 데이터 보존·오프라인 백업을 확인했다. 증거 경로 `.vide/package-check/ee85ae57-7d71-4004-85ea-3456cdaed9e9`. 번들 SDK 시험 `.vide/packaged-sdk/564bd03d-6ea9-440a-bde8-d194738cc095`에서 객체 1개·체적 24의 생성/저장/재열기를 통과했다. 제품 UI·호스트 제어 코드는 패키지에 포함하지만 외부 공유 실험은 포함하지 않는다.

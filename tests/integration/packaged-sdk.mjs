@@ -1,5 +1,5 @@
 // Real packaged worker startup from a path with spaces using only its bundled Node.
-import {mkdir,writeFile} from 'node:fs/promises';
+import {mkdir,writeFile,rm} from 'node:fs/promises';
 import {resolve,join} from 'node:path';
 import {randomUUID} from 'node:crypto';
 import {execFile} from 'node:child_process';
@@ -19,4 +19,6 @@ const {launchRhinoWorker}=await import(pathToFileURL(join(root,'app/hosts/rhino/
 const worker=await launchRhinoWorker({directory:join(directory,'worker'),executable:'C:/Program Files/Rhino 8/System/Rhino.exe',plugin:join(root,'app/hosts/rhino/worker/runtime/VIDE.Worker.rhp'),bootstrap:join(root,'app/hosts/rhino/worker/bootstrap.py')});
 try{const result=await worker.execute(randomUUID(),0,'doc.Objects.AddBox(new Box(new BoundingBox(0,0,0,2,3,4)));');assert.equal(result.ok,true,JSON.stringify(result));const model=await worker.exportModel();assert.ok(Math.abs(model.scene[0].volume-24)<1e-8);console.log(JSON.stringify({packagedSdk:true,spaceInPath:true,objects:model.objects.length,volume:model.scene[0].volume,directory}));}finally{await worker.stop();}
 `);
-const result=await exec(join(root,'runtime/node.exe'),[script],{windowsHide:true,timeout:150000,env:{...process.env,PATH:process.env.WINDIR+'\\System32'}});console.log(result.stdout.trim());
+const result=await exec(join(root,'runtime/node.exe'),[script],{windowsHide:true,timeout:150000,env:{...process.env,PATH:process.env.WINDIR+'\\System32'}});const evidence=JSON.parse(result.stdout.trim());await writeFile(join(directory,'result.json'),JSON.stringify(evidence,null,2));
+if(!resolve(install).startsWith(resolve(directory)+'\\'))throw Error('Invalid test cleanup path');
+await rm(install,{recursive:true,force:true,maxRetries:10,retryDelay:100});console.log(JSON.stringify(evidence));
