@@ -1,6 +1,8 @@
 import {createAuth,type Env} from './auth';
 import {HttpError,json} from './http';
 import {acceptInvitation,projectRoute} from './projects';
+import {publicationRoute} from './publications';
+import {commentRoute} from './comments';
 
 export default {
   async fetch(request:Request,env:Env,ctx:ExecutionContext):Promise<Response>{
@@ -16,6 +18,8 @@ export default {
       const actor={id:session.user.id,email:session.user.email};
       if(url.pathname==='/api/invitations/accept'&&request.method==='POST')return await acceptInvitation(request,env,actor);
       const path=url.pathname.split('/').filter(Boolean);
+      if(path[1]==='projects'&&path[2]&&path[3]==='publications'&&path[4]&&path[5]==='comments'&&path.length===6)return await commentRoute(request,env,actor,path[2],path[4]);
+      if(path[1]==='projects'&&path[2]&&path[3]==='publications')return await publicationRoute(request,env,actor,path[2],path.slice(4));
       if(path[1]==='projects')return await projectRoute(request,env,actor,path.slice(2));
       throw new HttpError(404,'NOT_FOUND');
     }catch(error){

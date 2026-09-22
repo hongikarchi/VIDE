@@ -4,6 +4,7 @@ import {fileURLToPath} from 'node:url';
 import {resolve,join} from 'node:path';
 import {mkdir,readFile,writeFile,readdir} from 'node:fs/promises';
 import {randomUUID,randomBytes} from 'node:crypto';
+import {verifyPublications} from './publications.mjs';
 
 const root=fileURLToPath(new URL('../../src/sharing/',import.meta.url));
 const require=createRequire(join(root,'package.json'));
@@ -16,7 +17,7 @@ class TestLog extends Log { log(message){logs+=message+'\n';} }
 const mf=new Miniflare({resourcePersistencePath:join(directory,'state'),telemetry:{enabled:false},log:new TestLog(LogLevel.NONE),workers:[{config:{
   name:'vide-sharing-test',compatibilityDate:'2026-09-22',compatibilityFlags:['nodejs_compat'],
   manifest:{mainModule:'worker.js',modules:{'worker.js':{type:'esm',contents:bundled.outputFiles[0].text}}},
-  env:{DB:{type:'d1',id:'test-db',dev:{remote:false}},EMAIL:{type:'send-email',dev:{remote:false}},
+  env:{DB:{type:'d1',id:'test-db',dev:{remote:false}},ASSETS:{type:'r2',name:'test-assets',dev:{remote:false}},EMAIL:{type:'send-email',dev:{remote:false}},
     AUTH_ORIGIN:{type:'text',value:origin},AUTH_SECRET:{type:'text',value:secret},EMAIL_FROM:{type:'text',value:'VIDE <noreply@example.com>'}},
 }}]});
 const call=async(path,{method='GET',data,cookie,origin:requestOrigin=origin}={})=>{
@@ -70,6 +71,7 @@ try{
   const stored=await db.prepare('SELECT * FROM invitations WHERE id=?').bind(invitation.id).first();assert.ok(!JSON.stringify(stored).includes(invitation.token));
   assert.equal((await call('/__test/migrate',{method:'POST',cookie:alice.cookie,data:{}})).status,404);
   assert.equal((await call('/api/host/execute',{method:'POST',cookie:alice.cookie,data:{code:'test'}})).status,404);
-  const evidence={passed:true,directory,localWorkerdD1:true,accounts:3,projects:2,crossProjectRejected:true,concurrentAcceptIdempotent:true,revokedMembershipNotRestored:true,expiredAndRevokedInvitationRejected:true,ownerProtected:true,noProductTestRoutes:true,remoteDeployed:false};
+  const publicationEvidence=await verifyPublications({call,mf,db,alice,bob,eve,projectId:a,invite,accept});
+  const evidence={passed:true,directory,localWorkerdD1:true,accounts:3,projects:2,crossProjectRejected:true,concurrentAcceptIdempotent:true,revokedMembershipNotRestored:true,expiredAndRevokedInvitationRejected:true,ownerProtected:true,noProductTestRoutes:true,...publicationEvidence,remoteDeployed:false};
   await writeFile(join(directory,'result.json'),JSON.stringify(evidence,null,2));console.log(JSON.stringify(evidence));
 }finally{await mf.dispose();await writeFile(join(directory,'worker.log'),logs);}

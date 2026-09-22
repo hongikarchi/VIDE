@@ -25,5 +25,12 @@
   "vars": {
     "AUTH_ORIGIN": "http://127.0.0.1:8792",
     "EMAIL_FROM": "VIDE <noreply@example.com>"
-  }
+  },
+  "r2_buckets": [
+    {
+      "binding": "ASSETS",
+      "bucket_name": "vide-sharing-local",
+      "remote": false
+    }
+  ]
 }

@@ -2,6 +2,7 @@ import {betterAuth} from 'better-auth';
 
 export interface Env {
   DB:D1Database;
+  ASSETS:R2Bucket;
   EMAIL:SendEmail;
   AUTH_ORIGIN:string;
   AUTH_SECRET:string;
