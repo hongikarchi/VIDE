@@ -1,8 +1,9 @@
 import assert from 'node:assert/strict';
 import {join} from 'node:path';
 import {chromium} from 'playwright';
+import {verifyDesktopPublish} from './desktop-publish.mjs';
 
-export async function verifyBrowser({origin,bob,directory,db,projectId}){
+export async function verifyBrowser({origin,bob,alice,directory,db,projectId}){
   const browser=await chromium.launch({channel:'chrome',headless:true}),page=await browser.newPage({viewport:{width:1440,height:900}}),errors=[];
   page.setDefaultTimeout(15000);
   page.on('pageerror',error=>errors.push(error.message));
@@ -32,6 +33,9 @@ export async function verifyBrowser({origin,bob,directory,db,projectId}){
     await page.screenshot({path:join(directory,'sharing-mobile.png'),fullPage:true});
     assert.ok((await page.getByRole('button',{name:'A',exact:true}).boundingBox())?.height>=30);
     assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
-    assert.deepEqual(errors,[]);return {browserLogin:true,browserModelDisplayed:true,browserComment:true,responseLossReloadIdempotent:true,mobileNoHorizontalOverflow:true};
+    assert.deepEqual(errors,[]);const published=await verifyDesktopPublish({browser,origin,alice,directory,db,projectId});
+    await page.getByLabel('검토 의견').fill('이전 화면의 기준을 유지합니다.');await page.getByRole('button',{name:'의견 보내기',exact:true}).click();
+    await page.getByRole('button',{name:'이전 게시본에 의견 보내기',exact:true}).waitFor();assert.equal(await page.getByLabel('검토 의견').inputValue(),'이전 화면의 기준을 유지합니다.');
+    return {browserLogin:true,browserModelDisplayed:true,browserComment:true,responseLossReloadIdempotent:true,mobileNoHorizontalOverflow:true,staleBasisWarning:true,...published};
   }finally{await browser.close();}
 }

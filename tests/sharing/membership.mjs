@@ -93,7 +93,7 @@ try{
   let browserEvidence={};
   if(process.argv.includes('--browser')){
     await accept(bob,await invite(bob.email,'commenter'));
-    const {verifyBrowser}=await import('./browser.mjs');browserEvidence=await verifyBrowser({origin,bob,directory,db,projectId:a});
+    const {verifyBrowser}=await import('./browser.mjs');browserEvidence=await verifyBrowser({origin,bob,alice,directory,db,projectId:a});
   }
   const evidence={passed:true,directory,localWorkerdD1:true,accounts:3,projects:2,crossProjectRejected:true,concurrentAcceptIdempotent:true,revokedMembershipNotRestored:true,expiredAndRevokedInvitationRejected:true,ownerProtected:true,noProductTestRoutes:true,...publicationEvidence,...browserEvidence,remoteDeployed:false};
   await writeFile(join(directory,'result.json'),JSON.stringify(evidence,null,2));console.log(JSON.stringify(evidence));

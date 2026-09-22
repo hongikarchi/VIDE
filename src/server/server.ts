@@ -13,13 +13,14 @@ import {AiSettings} from '../core/ai-settings.ts';
 import {ReviewNotes} from '../core/review-notes.ts';
 import {compareReviews} from '../core/review-comparison.ts';
 import {Reviews} from '../core/reviews.ts';
+import {createPublicationBundle} from '../core/publication.ts';
 import {TableViews} from '../core/table-views.ts';
 import {Applications} from './application.ts';
 import {listDocuments,inspectDocument} from '../../hosts/rhino/documents.ts';
 import {compareCandidates,relatedCandidates} from '../core/comparison.ts';
 import {quantities,quantitiesCsv} from '../core/quantities.ts';
 import { createServer } from 'node:http';
-import { randomBytes, timingSafeEqual } from 'node:crypto';
+import { randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import { readFile,unlink } from 'node:fs/promises';
 import { Store, DomainError } from '../core/store.ts';
 import { Workspace } from '../core/workspace.ts';
@@ -98,6 +99,14 @@ export async function startServer({ filename, port = 0, providerFactory, host, c
         send(200,await captureModel(capture[1],target,workspace,own?rhinoImport:host,own?async()=>sdk!.captureEditor(target,intent=>workspace.update(capture[1],target.id,'running',intent)):undefined));return;
       }
       const reviewComparison=/^\/api\/v1\/projects\/([^/]+)\/review-comparison$/.exec(url.pathname);
+      const publicExport=/^\/api\/v1\/projects\/([^/]+)\/requests\/([^/]+)\/publication-export$/.exec(url.pathname);
+      if(publicExport&&request.method==='POST'){
+        const bundle=createPublicationBundle(workspace.get(publicExport[1],publicExport[2]),await body(request));
+        const bytes=Buffer.concat(bundle.chunks);
+        if(bytes.byteLength>64*1024*1024)throw new DomainError('WEB_MODEL_LIMIT');
+        response.setHeader('Content-Disposition','attachment; filename="VIDE-publication.json"');
+        send(200,{format:'vide-publication-v1',requestId:randomUUID(),manifest:bundle.manifest,scene:JSON.parse(bytes.toString('utf8'))});return;
+      }
       if(reviewComparison&&request.method==='GET'){
         const projectId=reviewComparison[1],before=reviews.get(projectId,url.searchParams.get('before')||''),after=reviews.get(projectId,url.searchParams.get('after')||'');
         let related=false;try{related=relatedCandidates(workspace,projectId,workspace.get(projectId,before.requestId),workspace.get(projectId,after.requestId));}catch(error){if(!(error instanceof DomainError)||error.code!=='NOT_FOUND')throw error;}

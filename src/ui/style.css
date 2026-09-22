@@ -26,3 +26,5 @@
 .ai-settings{width:min(620px,94vw)}.ai-settings section{margin:16px 0}.ai-settings input{width:100%;box-sizing:border-box;min-height:34px;padding:6px 8px;border:1px solid var(--line);border-radius:6px;font:inherit}.ai-settings p{overflow-wrap:anywhere}
 
 #draft-menu{position:relative}#draft-menu .draft-actions{position:absolute;top:calc(100% + 8px);right:0;z-index:20;min-width:150px;padding:5px;border:1px solid var(--line);border-radius:6px;background:white;box-shadow:0 6px 20px #0002}#draft-menu .draft-actions button{display:block;width:100%;text-align:left;border:0}
+
+.publication-objects{display:grid;gap:8px;max-height:300px;overflow:auto;margin:16px 0}.publication-objects label{display:flex;align-items:center;gap:8px}

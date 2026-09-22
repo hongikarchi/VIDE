@@ -65,3 +65,5 @@ Object.assign(errors,{EXTENSION_DISABLED:'확장이 비활성화되어 새 실�
 Object.assign(errors,{APP_STOPPING:'VIDE가 종료 중이라 새 작업을 시작할 수 없습니다.'});
 
 Object.assign(errors,{IMPORT_EVIDENCE_MISSING:'업로드 당시의 확인 근거가 없어 자동 복구할 수 없습니다.',IMPORT_RECOVERY_FAILED:'DWG 복사본을 다시 읽지 못했습니다. 연결과 파일 상태를 확인하세요.'});
+
+Object.assign(errors,{WEB_MODEL_LIMIT:'현재 공유 뷰어의 64 MiB 표시 한도를 넘었습니다. 공개할 객체를 줄여 주세요.',RESULT_NOT_VERIFIED:'검증이 끝난 결과만 공유할 수 있습니다.',UNSUPPORTED_GEOMETRY:'선택한 객체 중 공유 뷰어가 표시하지 못하는 형상이 있습니다.'});

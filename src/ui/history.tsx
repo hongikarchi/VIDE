@@ -38,6 +38,7 @@ function Candidate({message,projectId,actions}:{message:Message;projectId:string
   <Action error={actions.error} run={async()=>{await api(`/projects/${projectId}/requests/${message.id}/open`,'POST',{});}}>{host+'에서 열기'}</Action>
   <Action error={actions.error} run={()=>actions.saveReview(message.id)}>검토본 저장</Action>
   <button onClick={()=>actions.report(message.id)}>검토본 내려받기</button>
+  <Action error={actions.error} run={async()=>{const {showPublicationExport}=await import('./publication-export.tsx');showPublicationExport(projectId,message.id,objects);}}>공유 자료</Action>
   {apply?<Action error={actions.error} run={async()=>{await showApplication(projectId,message.id,(application:Application)=>{request.applications=[...(request.applications??[]),application];actions.changed();},result.sourceDocument);}}>문서에 적용</Action>:null}
   {request.applications?.map(application=><div key={application.id}>
    <small>{application.state==='succeeded'?'원본 반영됨 · 파일 저장 별도':application.state==='unknown'?'원본 적용 결과 미확인':application.state==='failed'?'원본 적용 실패':'원본 적용 중'}</small>

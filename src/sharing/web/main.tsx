@@ -1,4 +1,4 @@
-import {useEffect,useState} from 'react';
+import {useEffect,useRef,useState} from 'react';
 import {createRoot} from 'react-dom/client';
 import {z} from 'zod';
 import {api,sessionSchema,projectsSchema,message,type Session,type Project} from './api';
@@ -8,11 +8,13 @@ import './style.css';
 
 function App(){
   const [session,setSession]=useState<Session|null>(null),[loading,setLoading]=useState(true),[projects,setProjects]=useState<Project[]>([]),[selected,setSelected]=useState(new URL(location.href).searchParams.get('project')||''),[name,setName]=useState(''),[status,setStatus]=useState(''),[busy,setBusy]=useState(false);
+  const currentUser=useRef(session?.user.id);currentUser.current=session?.user.id;
   const [invitation,setInvitation]=useState(()=>{if(location.pathname==='/invite'&&location.hash){const token=location.hash.slice(1);try{sessionStorage.setItem('vide-invitation',token);}catch{}history.replaceState(null,'','/invite');return token;}try{return sessionStorage.getItem('vide-invitation')||'';}catch{return '';}});
   async function refreshSession(){setSession(sessionSchema.parse(await api('/auth/get-session')));}
-  async function refreshProjects(){setProjects(projectsSchema.parse(await api('/projects')).projects);}
+  async function refreshProjects(){const expected=currentUser.current,value=projectsSchema.parse(await api('/projects')).projects;if(expected===currentUser.current)setProjects(value);}
   useEffect(()=>{void refreshSession().catch(error=>setStatus(message(error))).finally(()=>setLoading(false));},[]);
-  useEffect(()=>{if(session)void refreshProjects().catch(error=>setStatus(message(error)));else setProjects([]);},[session]);
+  useEffect(()=>{let active=true;if(session)void api('/projects').then(value=>{if(active)setProjects(projectsSchema.parse(value).projects);}).catch(error=>{if(active)setStatus(message(error));});else setProjects([]);return()=>{active=false;};},[session]);
+  useEffect(()=>{const expired=()=>setSession(null);window.addEventListener('vide-sharing-login-required',expired);return()=>window.removeEventListener('vide-sharing-login-required',expired);},[]);
   async function create(){if(busy)return;setBusy(true);try{const project=z.object({id:z.string()}).parse(await api('/projects','POST',{name}));await refreshProjects();setSelected(project.id);setName('');}catch(error){setStatus(message(error));}finally{setBusy(false);}}
   async function accept(){if(busy)return;setBusy(true);try{const response=z.object({project_id:z.string()}).parse(await api('/invitations/accept','POST',{token:invitation}));setInvitation('');try{sessionStorage.removeItem('vide-invitation');}catch{}await refreshProjects();setSelected(response.project_id);setStatus('프로젝트에 참여했습니다.');}catch(error){setStatus(message(error));}finally{setBusy(false);}}
   if(loading)return <p className="empty" role="status">불러오는 중…</p>;
