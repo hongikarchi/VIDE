@@ -14,13 +14,14 @@ using ZwSoft.ZwCAD.DatabaseServices;
 using ZwSoft.ZwCAD.Geometry;
 using ZwSoft.ZwCAD.Runtime;
 
-// Read-only transport/host-thread experiment. No caller code or user document is accessed.
+// Transport/host-thread experiment. Execution mode uses only an owned synthetic work copy.
 public sealed class VideChannelProbe
 {
     private static TcpListener listener;
     private static readonly ConcurrentQueue<Action> pending = new ConcurrentQueue<Action>();
     private static string token, session, document, ticks;
     private static int pid, commandThread;
+    private static VideSessionProbe execution;
 
     [CommandMethod("VIDEChannelProbe", CommandFlags.Session)]
     public void Start()
@@ -37,6 +38,7 @@ public sealed class VideChannelProbe
         Process process = Process.GetCurrentProcess();
         pid = process.Id; ticks = process.StartTime.ToUniversalTime().Ticks.ToString();
         document = Guid.NewGuid().ToString(); commandThread = Thread.CurrentThread.ManagedThreadId;
+        if (Environment.GetEnvironmentVariable("VIDE_ZWCAD_EXECUTION") == "1") execution = new VideSessionProbe(directory);
         listener = new TcpListener(IPAddress.Loopback, 0); listener.Start();
         Application.Idle += OnIdle;
         File.WriteAllText(report + ".tmp", new JavaScriptSerializer().Serialize(new {
@@ -95,13 +97,16 @@ public sealed class VideChannelProbe
                 if (Value(request, "sessionId") != session || Value(request, "pid") != pid.ToString() || Value(request, "startTicks") != ticks)
                     throw new InvalidOperationException("HOST_OWNERSHIP_MISMATCH");
                 if (Value(request, "documentId") != document) throw new InvalidOperationException("DOCUMENT_MISMATCH");
-                if (Value(request, "revision") != "0") throw new InvalidOperationException("STALE_REVISION");
-                if (Value(envelope, "type") != "vide" || Value(request, "method") != "query") throw new InvalidOperationException("UNSUPPORTED_METHOD");
+                if (execution == null && Value(request, "revision") != "0") throw new InvalidOperationException("STALE_REVISION");
+                if (Value(envelope, "type") != "vide" || (execution == null && Value(request, "method") != "query")) throw new InvalidOperationException("UNSUPPORTED_METHOD");
                 var completion = new TaskCompletionSource<object>();
                 pending.Enqueue(delegate {
-                    // A timed-out query must not run later. No mutation is exposed by this spike.
+                    // A queued request that already timed out must not begin later. An in-flight result may remain unknown.
                     if (completion.Task.IsCompleted) return;
-                    try { completion.TrySetResult(Query()); }
+                    try {
+                        if (Thread.CurrentThread.ManagedThreadId != commandThread) throw new InvalidOperationException("WRONG_HOST_THREAD");
+                        completion.TrySetResult(execution == null ? Query() : execution.Dispatch(request));
+                    }
                     catch (System.Exception error) { completion.TrySetException(error); }
                 });
                 if (!completion.Task.Wait(15000)) { completion.TrySetCanceled(); throw new InvalidOperationException("HOST_RESULT_UNKNOWN"); }
