@@ -2,7 +2,7 @@
 id: PLAN
 title: VIDE 구현계획 (마스터)
 status: review
-version: 0.130
+version: 0.131
 updated: 2026-09-22
 owner: agent:codex
 related: [SPEC-00, SPEC-01, SPEC-02, SPEC-03, SPEC-04, SPEC-05, ADR-013, OQ-03, OQ-04, OQ-06, OQ-07, OQ-08, OQ-09, OQ-10, OQ-14]
@@ -381,7 +381,7 @@ T-003·005는 H-RHINO-04·05의 지원안을, T-003·006은 H-ZWCAD-04·05의 �
 
 **최신 설치 산출물:** `.vide/releases/VIDE-0.1.0-dev.20260922.5-windows-x64.zip`은 6824627 기준 데스크톱 코드와 로컬 공유 자료 내보내기/외부 의견 수신을 포함한다. 5,105개 파일 해시, 번들 Node·공백 경로·중복 실행·화면·외부 의견 메뉴·재시작·제거 후 데이터 보존·오프라인 백업이 통과했다. 공유 Workers 서버를 자동 설치/배포하는 패키지는 아니다. 이후 공유 뷰어 표시 정밀도 보완은 이 ZIP에 포함하지 않는다. 실제 번들 Rhino SDK 생성(체적 24)은 이전 .4 패키지 검증이며, .5에서는 변경되지 않은 SDK 실행을 다시 시험했다고 주장하지 않는다.
 
-**이어갈 순서:** 로컬 UI/공유 통합의 좌표·복원·기준 보존 결함을 먼저 처리하고, PLAN-02 §6의 복수 실행본·기존 문서 자체 연결·ZWCAD SDK 확장을 이어간다. 원격 배포 준비를 묻느라 독립 작업을 멈추지 않는다. 대표 실무 과업·대형 모델·두 기준선 비교와 별도 PC/실기기 검수는 아래 미완료 조건으로 유지한다.
+**이어갈 순서:** 로컬 UI/공유 통합의 좌표·복원·기준 보존 결함을 먼저 처리하고, PLAN-02 §6의 복수 실행본·기존 문서 자체 연결·ZWCAD SDK 확장을 이어간다. ZWCAD 2023 설치 SDK의 빌드·로드·별도 Database 생성/저장/재열기 실험은 통과했으며 다음은 범용 코드 래퍼와 소유 실행본 연결이다. 원격 배포 준비를 묻느라 독립 작업을 멈추지 않는다. 대표 실무 과업·대형 모델·두 기준선 비교와 별도 PC/실기기 검수는 아래 미완료 조건으로 유지한다.
 
 | 티켓 | 현재 결과 | 남은 완료 조건·다음 행동 | 증거 |
 |---|---|---|---|
@@ -390,7 +390,7 @@ T-003·005는 H-RHINO-04·05의 지원안을, T-003·006은 H-ZWCAD-04·05의 �
 | T-003 | 자체 Rhino worker·소유 실행본 확인·인증 TCP·SDK 실행/재열기 | 외부 실행본 자동 연결, 복수 문서·일반 호스트 유형 확대 | 에이전트 도구 SPIKE, TS/자체 호스트 VERIFY |
 | T-004 | Claude/Codex 실제 구독 도구 호출·SDK 코드·취소·설정 연결 | 모델별 능력/한도·장기 과업·복잡한 개입 | TS/자체 호스트 VERIFY |
 | T-005 | 자체 Rhino 편집 사본에 형상/속성 추가·수정·삭제 적용, GUID 보존·재연결·중복/오래된 기준 거절; 실제 Move/SaveAs·재열기 | 외부 열린 원본의 일반 적용, 그룹/재질/문서 자원·관계 확대, 대표 과업 | TS/자체 호스트 VERIFY |
-| T-006 | ZWCAD DWG 사본의 독립 직선 XY LWPolyline 수정·재열기·Handle/속성 보존, CAD→Rhino 돌출 | 열린 원본 적용·추가/삭제·일반 객체/단위·자체 SDK 경로 | 네이티브 VERIFY, TS/자체 호스트 VERIFY |
+| T-006 | ZWCAD DWG 사본의 독립 직선 XY LWPolyline 수정·재열기·Handle/속성 보존, CAD→Rhino 돌출; 설치 .NET SDK의 별도 Database 생성/재열기 실험 | 열린 원본 적용·추가/삭제·일반 객체/단위·자체 SDK 경로 | 네이티브 VERIFY, TS/자체 호스트 VERIFY |
 | T-007 | 수량 필터/그룹·CSV·고정 검토본·A/B 비교·객체 수량표, SDK 미변경 기하의 수량 재사용 | 실무 전문 표·회전/이동 최적화·외부 변경 이벤트 캐시 | 네이티브 VERIFY, TS/자체 호스트 VERIFY |
 | T-008 | 속성 요약 확장 등록/실행/실패/비활성화·객체 연결 | 추가 확장·장기 작업·배포 수용 | 네이티브 VERIFY |
 | T-009 | 로컬 Workers/D1 인증·초대/권한·R2 게시·원문/핀/스케치 의견·파일 왕복 채택·재시작/로컬 복원·대용량 전송 | 인증된 자동 의견 수신·현재 후보 비교·실제 메일/원격 배포·PC 종료 지속성·운영 복구/비용 | 공유 VERIFY |
@@ -414,7 +414,7 @@ T-003·005는 H-RHINO-04·05의 지원안을, T-003·006은 H-ZWCAD-04·05의 �
 - 공유 게시/의견 왕복은 명시적 파일 전달이다. 파일의 작성자/서버 접수 정보는 온라인 재인증한 정보가 아니며 원 공개 후보와 manifest를 대조한 로컬 수신으로 표시한다. 500 MiB 바이너리 전송 통과와 별개로 웹 표시 JSON은 64 MiB 한도이며 대형 모델 최적화는 남았다.
 - Rhino 수동 SaveAs 뒤 나타난 읽기 전용 안내의 원인은 미해소다. 실제 파일 저장·별도 실행본 재열기 결과와 이 안내를 구분해 기록했다.
 
-증거: [TS/자체 호스트 VERIFY](../tdd/VERIFY-2026-09-22-typescript-foundation.md), [네이티브 VERIFY](../tdd/VERIFY-2026-09-20-native-workspace.md), [공유 VERIFY](../tdd/VERIFY-2026-09-22-cloudflare-sharing.md), [에이전트 도구 SPIKE](../tdd/SPIKE-2026-09-21-agent-tools.md), [뷰포트 SPIKE](../tdd/SPIKE-2026-09-21-viewport-engine.md). 상세 과거 실행 기록은 이 증거와 Git 이력에 보존하며 이 절은 최신 결과·제약·다음 행동만 유지한다. 전체 완료는 §6.6의 관문으로 판단한다.
+증거: [TS/자체 호스트 VERIFY](../tdd/VERIFY-2026-09-22-typescript-foundation.md), [네이티브 VERIFY](../tdd/VERIFY-2026-09-20-native-workspace.md), [공유 VERIFY](../tdd/VERIFY-2026-09-22-cloudflare-sharing.md), [에이전트 도구 SPIKE](../tdd/SPIKE-2026-09-21-agent-tools.md), [뷰포트 SPIKE](../tdd/SPIKE-2026-09-21-viewport-engine.md). [ZWCAD SDK SPIKE](../tdd/SPIKE-2026-09-22-zwcad-sdk.md)도 참조한다. 상세 과거 실행 기록은 이 증거와 Git 이력에 보존하며 이 절은 최신 결과·제약·다음 행동만 유지한다. 전체 완료는 §6.6의 관문으로 판단한다.
 
 ### 6.6 전체 완료 관문
 

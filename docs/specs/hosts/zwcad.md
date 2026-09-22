@@ -2,8 +2,8 @@
 id: HOST-ZWCAD
 title: ZWCAD 호스트 계약과 검증 범위
 status: review
-version: 0.5
-updated: 2026-09-21
+version: 0.6
+updated: 2026-09-22
 owner: agent:codex
 related: [SPEC-01, SPEC-02, FR-03, FR-04, AC-24, AC-38, OQ-03, OQ-10]
 ---
@@ -45,3 +45,7 @@ H-ZWCAD-04 중 직선 XY LWPolyline 읽기를 ZWCAD 2023에서 확인했다. 업
 ## DWG 작업 사본 경계 수정 — 2026-09-21
 
 H-ZWCAD-04·05의 일부로, 새로 취득한 독립 직선 XY LWPolyline의 이동·정점 수정 후보를 실제 ZWCAD 2023에서 검증했다. mm 단위, 그룹·확장 사전·XData·잠긴 레이어·선폭·두께가 없는 확인된 객체에 한정한다. 이름·객체 집합·Handle·레이어·색상을 유지하고 새 DWG 사본에서 수정한다. 20×10 m를 24×10 m로 수정해 240 m²·68 m를 재열기 확인했고 후속 이동도 통과했다. 원본 파일 적용, 추가·삭제·복사, 다른 단위·관계·일반 CAD 객체는 미지원이다. 앞 절의 참고 전용 제한은 능력 확인이 없는 이전 취득과 지원 밖 도면에 계속 적용된다. [실제 검증](../../tdd/VERIFY-2026-09-20-native-workspace.md).
+
+## 설치 SDK 실험 — 2026-09-22
+
+[ZWCAD SDK 실험](../../tdd/SPIKE-2026-09-22-zwcad-sdk.md)에서 설치된 공식 .NET DLL의 빌드·소유 시험 실행본 로드, 별도 Database/Transaction의 합성 경계 생성·저장·재열기를 확인했다. 활성 사용자 문서를 사용하지 않고 면적 200 m²·길이 60 m·mm·Handle·색을 대조했다. 위 첫 COM 실험과 구분되는 SDK 증거이며, 제품 범용 SDK 실행·기본 도구 재편집·열린 원본 적용·다중 문서 완료를 뜻하지 않는다.
