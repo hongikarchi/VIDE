@@ -40,3 +40,13 @@ test('measurement reuse requires the matching SDK calculation version and valida
  await execute({...result,measurementVersion:undefined});assert.equal(launches.at(-1).source.measurements,undefined);
  await execute({...result,scene:[{...result.scene[0],volume:-1}]});assert.equal(launches.at(-1).source.measurements,undefined);
 }));
+
+
+test('SDK returns bounded computed data to the agent without hiding successful large-result edits',()=>fixture(async({sdk,task,scope,worker})=>{
+ const execute=worker.execute;let value={height:8,level:'L02'};worker.execute=async(...args)=>({...await execute(...args),value});
+ await sdk.run({...task,provider:()=>({run:async()=>{
+  const small=await scope().handlers.execute({code:'return summary;'});assert.deepEqual(small.value,value);
+  value='x'.repeat(17000);const large=await scope().handlers.execute({code:'return large;'});
+  assert.equal(large.ok,true);assert.equal(large.value,undefined);assert.equal(large.valueOmitted,true);return {text:'Saved'};
+ }})});
+}));

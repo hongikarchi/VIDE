@@ -91,7 +91,7 @@ export class SdkExecution {
      const receipt=await pending as Awaited<ReturnType<Worker['execute']>>;
      if(receipt.ok){last=receipt;revision=receipt.revision;uncertain=false;
       update({...intent(),operationId,revision,filename:receipt.filename,fileHash:receipt.fileHash});
-      return {ok:true,revision,readbackVerified:true,snapshot:receipt.snapshot,changes:receipt.changes};
+      return {ok:true,revision,readbackVerified:true,snapshot:receipt.snapshot,changes:receipt.changes,...(Buffer.byteLength(JSON.stringify(receipt.value??null))<=16384?{value:receipt.value}:{valueOmitted:true})};
      }
      if(receipt.code==='COMPILE_ERROR'||receipt.code==='STALE_REFERENCE'){
       uncertain=false;currentOperation=last?.operationId;if(last)update({...intent(),revision});return receipt;
@@ -101,8 +101,8 @@ export class SdkExecution {
    };
    scope=options.tools.issue({targetRef,handlers,isCurrent:()=>!signal.aborted&&!uncertain,maxCalls:30,ttlMs:240000});
    const goal=`Target is Rhino 8, dedicated working copy ${targetRef}, meters. Permission: ${input.permission}.
-Use query to observe current native IDs and bounds. For candidate permission, implement the user request with RhinoCommon SDK calls using execute. Send only a C# method body; the wrapper imports System, System.Linq, Rhino, Rhino.Geometry and supplies RhinoDoc doc. Do not declare a class or method. Example construction syntax: doc.Objects.AddBox(new Box(new BoundingBox(0,0,0,1,1,1))).
-Use supplied dimensions, sketch plane/coordinates and pin roles. Never invent a missing critical dimension; explain what is missing. Other-host references are read-only. Keep vide-id on existing objects; copies need a new vide-id or removal of the inherited tag. Do not modify preserved/reference objects. Do not access files, processes, networking, other documents or application-wide state. The controller saves and reopens each successful edit. Never save/open documents yourself. Compilation diagnostics allow correction; after an uncertain result never execute again. Query after successful edits, then summarize actual results in Korean. For review permission only query is available; do not claim edits.
+Use query to observe current native IDs and bounds. For candidate permission, implement the user request with RhinoCommon SDK calls using execute. Send only a C# method body; the wrapper imports System, System.Linq, Rhino, Rhino.Geometry and supplies RhinoDoc doc. Do not declare a class or method. You may return a small JSON-serializable summary (numbers, strings, arrays, anonymous objects; at most 16 KiB) to observe calculated results. Do not return Rhino geometry/document instances. Example construction syntax: doc.Objects.AddBox(new Box(new BoundingBox(0,0,0,1,1,1))).
+Use supplied dimensions, sketch plane/coordinates and pin roles. Never invent a missing critical dimension; explain what is missing. Other-host references are read-only. Before replacing an object, retain its ID and duplicate its attributes; use typed Replace overloads and re-fetch the object after mutations. Keep vide-id on existing objects; copies need a new vide-id or removal of the inherited tag. Do not modify preserved/reference objects. Do not access files, processes, networking, other documents or application-wide state. The controller saves and reopens each successful edit. Never save/open documents yourself. Compilation diagnostics allow correction; after an uncertain result never execute again. Query after successful edits, then summarize actual results in Korean. For review permission only query is available; do not claim edits.
 User request: ${input.body||'첨부한 설계 문맥을 검토해 주세요.'}`;
    const response=await provider({url:options.origin()+'/mcp',token:scope.token,tools:Object.keys(handlers)}).run({goal,revision:1,items,includedIds:items.map(item=>item.id)},
     {signal,onProgress:()=>{if(!last&&!uncertain)update({phase:'model',hostExecuted:false});}});

@@ -2,7 +2,7 @@
 id: VERIFY-2026-09-22-typescript-foundation
 title: TypeScript·React·Vite 전환 기반 검증
 status: review
-version: 0.40
+version: 0.41
 updated: 2026-09-22
 owner: agent:codex
 related: [PLAN, ADR-016, ADR-017, T-010, T-011, T-015]
@@ -266,3 +266,13 @@ C#의 고정 적용기는 후보 파일 해시·취득 문서 지문·대상 프
 EditorSessions는 로컬 pairing 레지스트리를 읽고, 연결 때 PID/시작 시각/실행 경로/포트 소유를 다시 검사한다. 편집 창은 제어기와 별도로 유지한다. 복원 핸들은 프로세스 종료와 임의 코드 실행을 제공하지 않는다. 레지스트리는 모델 파일 디렉터리 밖에 저장하며 백업 제외를 시험했다. 인증정보를 검토본·로그 증거에 기록하지 않는다. 잘못된 레지스트리는 새 연결로 추정하지 않고 오류를 반환한다. 같은 프로세스에서 문서를 교체한 경우의 새 pairing은 아직 지원하지 않는다.
 
 실제 브라우저 시험 `.vide/browser-owned-editor/7d07527d-d9b2-43a0-bf26-86f4d1b30d84`에서 서버 종료→같은 DB로 재시작→기존 Rhino 창에 후보 적용→재취득, 체적 24→48과 GUID 보존을 확인했다. 자동 시험 122개와 빌드 통과 후, 재사용 PID/외부 포트에 인증 바이트를 전송하지 않는 추가 시험 및 요청 전 응답 거절 시험도 통과했다. 서버 측 인증 전 가짜 성공 응답을 받을 수 있었던 프레임 처리는 실제 요청 전 응답을 거절하도록 보완했다.
+
+## SDK 계산 결과 및 네이티브 후속 편집
+
+SDK execute 영수증의 value가 서버 응답에서 누락되어 AI가 직접 계산한 결과를 읽을 수 없었다. 16 KiB 이하 JSON 결과를 전달하며 초과분은 valueOmitted로 구분한다. 저장이 성공한 큰 결과를 실패/재실행 대상으로 바꾸지 않는다. 관련 시험과 전체 125개 자동 시험 통과. 실제 브라우저 검수의 카드 선택은 갱신 전의 마지막 버튼 대신 요청 ID를 기다리도록 수정했다.
+
+`native-editor-followup.mjs`는 이전 브라우저 적용 결과를 독립된 합성 Rhino 창으로 열었다. computer-use로 기본 `_SelAll _Move w0,0,0 w1,0,0`과 `_SaveAs`를 수행했다. `.vide/native-editor-followup/6ced088b-325d-4bc3-b8bd-b605cb5b2e92`에서 saved=false가 아닌 실제 저장 완료(modified=false), 별도 Rhino 재열기, 기존 GUID/사용자 문자열·체적 48 보존, 월드 X +1 m를 확인했다. SaveAs 후 읽기 전용 안내가 한 차례 보였으며 새 저장 파일의 검증은 통과했다. 매크로 끝의 추가 Enter/파일 잠금과 안내의 관계는 확정하지 않았다. 다른 형상·관계의 네이티브 후속 편집을 모두 검수한 것은 아니다.
+
+부팅 로더는 가시적 문서를 여는 명령이 false를 반환하더라도 해당 실행의 ready 파일을 발행한 경우 이를 실패로 덮어쓰지 않는다. 기존 상세 오류 파일은 보존한다. 설치 안내도 자체 편집 사본과 외부 기존 Rhino 연결의 차이를 갱신했다.
+
+실제 Codex 구독을 사용한 `browser-owned-editor.mjs --ai --codex`의 `.vide/browser-owned-editor/3e9f8b40-1727-4915-a891-4b92902929f5`는 브라우저 문서 취득→높이 4→8 m/Level=L02 요청→SDK 후보→서버 재시작→영향 검토/확인→Rhino 적용→재취득을 통과했다. 체적 24→48, 네이티브 GUID와 Level 값도 확인했다. 공급자 보고 입력 79,346/출력 1,436 토큰이며 크레딧 비용이나 남은 구독량은 알 수 없다. Claude 첫 시도는 시험의 카드 선택 오류, 재시도는 쓰기 전 TIMEOUT이었으므로 이 흐름의 Claude 성공으로 기록하지 않는다. Codex의 default 모델 effort는 low를 제공하지 않아 실제 default 선택으로 보정했다.

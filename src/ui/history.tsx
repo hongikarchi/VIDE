@@ -53,7 +53,7 @@ function Card({message,models,projectId,actions}:{message:Message;models:{id:str
  const references=[...message.pins,...message.sketches,...message.files].map(item=>item.name);
  const imported=['file','document'].includes(message.source??'');
  const subtitle=message.provider==='extension'?'확장 · '+message.extensionVersion:imported?(message.host==='zwcad'?(result?.dwgEditMode==='polyline-vertices-v1'?'ZWCAD 작업 사본':'ZWCAD 참고 도면'):'Rhino 작업 사본'):`${models.find(model=>model.id===message.model)?.name||message.model} · ${message.effort} · ${message.permission==='review'?'검토만':'후보 작업 허용'}`;
- return <article className="chat-message">
+ return <article className="chat-message" data-request-id={message.id}>
   <p>{message.body||'첨부한 문맥 검토'}</p>{references.length?<small>{references.join(' · ')}</small>:null}<small>{subtitle}</small>
   <details><summary>요청 문맥</summary><pre>{JSON.stringify(request?.input||message,null,2)}</pre></details>
   {request?<>
