@@ -2,7 +2,7 @@
 id: VERIFY-2026-09-22-typescript-foundation
 title: TypeScript·React·Vite 전환 기반 검증
 status: review
-version: 0.47
+version: 0.48
 updated: 2026-09-22
 owner: agent:codex
 related: [PLAN, ADR-016, ADR-017, T-010, T-011, T-015]
@@ -322,3 +322,10 @@ SDK execute 영수증의 value가 서버 응답에서 누락되어 AI가 직접 
 - `node tests/integration/native-dwg-edit.mjs --run-live <기존 합성 sdk-probe.dwg>` 실호스트 검수 통과. `.vide/dwg-edit-check/f2158f4c-acb7-4b40-81e3-0c5be50dcfe2/result.json`에 200→240 m², 길이 68 m, 반복 이동, Handle/레이어/색 보존, 원본/이전 후보 파일 해시 유지, 잘못된 Handle 요청의 후보 미생성을 기록했다.
 - 130개 core/AI/server 자동 시험 통과, 별도 DWG 편집 계약 시험 3개도 통과. GUI 마우스를 사용하지 않았고 시험 소유 프로세스만 종료했다.
 - 생성·열기 COM 경로, 범용 AI 코드의 제품 실행, 열린 원본 적용·다중 문서는 계속 남는다. 현재 배포 ZIP .7에는 이번 SDK 변경이 아직 포함되지 않았다.
+
+
+## Windows .8 패키지의 SDK 편집 검증
+
+`npm run package:windows -- 0.1.0-dev.20260922.8`로 1990695의 SDK 코드와 갱신된 START-HERE 안내를 포함한 새 ZIP을 생성했다. `tests/integration/portable-package.mjs`는 별도 공백 경로에 압축을 풀고 개발 Node 없는 PATH·번들 Node로 실제 실행한다. 기존 시험에 번들 `ZwcadWorkspace`/SDK DLL의 DWG 정점 수정(200→240 m²·Handle 유지)을 추가했다.
+
+`.vide/package-check/fa9433df-10a9-4da7-8dc9-5c68c79f52c6/result.json`에서 5,111개 파일 해시, 중복 실행, 공유 의견 기능 진입, 실제 DWG 읽기·SDK 수정, 종료 후 타이머 오류 없음, 재시작, 오프라인 백업 검증, 설치 복사본 제거 뒤 데이터 유지가 통과했다. 같은 위치의 `dwg-import.png`를 렌더 확인했다. 시험용 설치 폴더는 검증 후 제거했고 ZIP·합성 DWG/DB와 증거는 보존했다. 별도 PC/코드 서명/설치 프로그램·일반 CAD 편집·이번 패키지의 Rhino 재검수는 미완료다.
