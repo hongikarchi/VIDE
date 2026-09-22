@@ -16,8 +16,9 @@ const root=createRoot(dialog);
 let opening=0,busy=false;
 const message=(error:unknown)=>error instanceof Error?error.message:'요청을 처리하지 못했습니다.';
 function Application({projectId,requestId,catalog,sourceDocument,onResult}:Props){
- const documents=catalog.documents.filter(doc=>!sourceDocument||(catalog.instance===sourceDocument.instance&&doc.id===sourceDocument.documentId));
- const [target,setTarget]=useState(String(documents[0]?.id??'')),[preview,setPreview]=useState<Preview|null>(null);
+ const key=(doc:HostDocuments['documents'][number])=>doc.instance?doc.instance+'/'+doc.id:String(doc.id);
+ const documents=catalog.documents.filter(doc=>!sourceDocument||((doc.instance??catalog.instance)===sourceDocument.instance&&doc.id===sourceDocument.documentId));
+ const [target,setTarget]=useState(documents[0]?key(documents[0]):''),[preview,setPreview]=useState<Preview|null>(null);
  const [pending,setPending]=useState(false),[sent,setSent]=useState(false);
  const [info,setInfo]=useState(documents.length?'적용할 문서를 고르고 영향 범위를 확인하세요.':'열린 Rhino 문서가 없습니다.');
  const locked=useRef(false),submitted=useRef(false),alive=useRef(true);
@@ -25,10 +26,11 @@ function Application({projectId,requestId,catalog,sourceDocument,onResult}:Props
  const lock=()=>{locked.current=true;busy=true;setPending(true);};
  const unlock=()=>{locked.current=false;busy=false;if(alive.current)setPending(false);};
  async function inspect(){
-  if(locked.current||submitted.current||!target)return;lock();setPreview(null);
+  const selected=documents.find(doc=>key(doc)===target);
+  if(locked.current||submitted.current||!selected)return;lock();setPreview(null);
   try{
-   const next=previewSchema.parse(await api(`/projects/${projectId}/applications`,'POST',{requestId,instance:catalog.instance,documentId:Number(target)}));
-   if(next.documentId!==Number(target))throw new Error('문서 연결이 바뀌었습니다. 다시 확인하세요.');
+   const next=previewSchema.parse(await api(`/projects/${projectId}/applications`,'POST',{requestId,instance:selected.instance??catalog.instance,documentId:selected.id}));
+   if(next.documentId!==selected.id)throw new Error('문서 연결이 바뀌었습니다. 다시 확인하세요.');
    if(!alive.current)return;setPreview(next);
    setInfo(`추가 ${next.added} · 수정 ${next.updated} · 삭제 ${next.removed}개. ${next.mode==='native-move'?'취득한 원본의 이동 대상만 변경합니다.':'이 프로젝트가 소유한 객체만 수정·삭제합니다.'}`);
   }catch(error){if(alive.current)setInfo('영향 검토 실패: '+message(error));}
@@ -51,7 +53,7 @@ function Application({projectId,requestId,catalog,sourceDocument,onResult}:Props
   <div className="quantity-head"><h2>Rhino 문서에 적용</h2><button disabled={pending} onClick={()=>{if(!locked.current)dialog.close();}}>닫기</button></div>
   <p>선택한 열린 문서에 이 후보를 반영합니다. 파일 저장은 Rhino에서 별도로 수행합니다.</p>
   <select aria-label="적용할 Rhino 문서" value={target} disabled={pending||sent||!!sourceDocument||!documents.length} onChange={event=>{setTarget(event.target.value);setPreview(null);setInfo('새 대상의 영향 범위를 다시 확인하세요.');}}>
-   {documents.map(doc=><option key={doc.id} value={doc.id}>{doc.name} · {doc.objectCount}개 객체 · {doc.units}</option>)}
+   {documents.map(doc=><option key={key(doc)} value={key(doc)}>{doc.name} · {doc.objectCount}개 객체 · {doc.units}</option>)}
   </select>
   <button disabled={pending||sent||!documents.length} onClick={inspect}>영향 검토</button>
   <p role="status">{info}</p>

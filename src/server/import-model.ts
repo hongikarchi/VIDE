@@ -57,5 +57,5 @@ export async function captureModel(projectId:string,target:{id:string;instance:s
  try{
   const result=await capture(host,projectId,input.id,target.instance,target.documentId);
   return workspace.update(projectId,input.id,'succeeded',{...result,host:'rhino',hostExecuted:true,text:'열린 문서의 작업 사본을 가져왔습니다. 원본은 변경하지 않았으며 이후 변경은 자동 동기화하지 않습니다.'});
- }catch(cause){const error=errorData(cause);return workspace.update(projectId,input.id,'failed',{code:error.code||'CAPTURE_FAILED',host:'rhino',hostExecuted:false});}
+ }catch(cause){const error=errorData(cause);return workspace.update(projectId,input.id,error.code==='HOST_RESULT_UNKNOWN'&&error.intent?.executionMode==='sdk'?'unknown':'failed',{...error.intent,code:error.code||'CAPTURE_FAILED',host:'rhino',hostExecuted:false});}
 }

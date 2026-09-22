@@ -61,6 +61,7 @@ export async function launchOwnedRhino({ executable, args = [], environment = pr
   return Object.freeze({
     identity: expected,
     revoke() { revoked = true; },
+    detach() { child.unref(); },
     async stop() {
       revoked = true;
       if (exited) return;

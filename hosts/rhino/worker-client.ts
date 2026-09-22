@@ -17,10 +17,17 @@ export const workerResultSchema=z.discriminatedUnion('ok',[
  z.object({ok:z.literal(false),code:z.string(),revision:z.number().optional(),diagnostics:z.array(z.string()).optional()}),
  z.object({ok:z.literal(true),operationId:z.string().uuid(),revision:z.number().int().positive(),filename:z.string(),fileHash:z.string().regex(/^[a-f0-9]{64}$/),readbackVerified:z.literal(true),snapshot:workerSnapshotSchema,changes:workerChangesSchema.optional(),value:z.unknown().optional()}),
 ]);
-interface Options {directory:string;executable:string;plugin:string;bootstrap:string;visible?:boolean;startupTimeoutMs?:number;source?:{filename:string;fileHash:string;measurements?:{id:string;area:number|null;volume:number|null;length:number|null}[]};normalizeUnits?:boolean}
+
+const editorSnapshotSchema=z.object({ok:z.literal(true),documentId:z.number().int().positive(),name:z.string(),units:z.string(),objectCount:z.number().int().nonnegative(),modified:z.boolean(),documentHash:z.string().regex(/^[a-f0-9]{64}$/),selectedIds:z.array(z.string().uuid())});
+const editorCaptureSchema=editorSnapshotSchema.omit({objectCount:true,modified:true}).extend({filename:z.string(),fileHash:z.string().regex(/^[a-f0-9]{64}$/)});
+interface Options {directory:string;executable:string;plugin:string;bootstrap:string;visible?:boolean;mode?:'worker'|'editor';startupTimeoutMs?:number;source?:{filename:string;fileHash:string;measurements?:{id:string;area:number|null;volume:number|null;length:number|null}[]};normalizeUnits?:boolean}
 const failure=(code:string)=>Object.assign(new Error(code),{code});
+function editorReply<T>(schema:z.ZodType<T>,value:unknown):T{
+ const error=z.object({ok:z.literal(false),code:z.string()}).safeParse(value);
+ if(error.success)throw failure(error.data.code);return schema.parse(value);
+}
 async function fingerprint(filename:string){const hash=createHash('sha256');for await(const chunk of createReadStream(filename))hash.update(chunk);return hash.digest('hex');}
-export async function launchRhinoWorker({directory,executable,plugin,bootstrap,visible=false,startupTimeoutMs=90000,source,normalizeUnits=false}:Options){
+export async function launchRhinoWorker({directory,executable,plugin,bootstrap,visible=false,mode='worker',startupTimeoutMs=90000,source,normalizeUnits=false}:Options){
  if(![directory,executable,plugin,bootstrap].every(isAbsolute)||/["\r\n()]/.test(bootstrap)||!Number.isFinite(startupTimeoutMs)||startupTimeoutMs<1||startupTimeoutMs>180000)throw failure('INVALID_HOST_LAUNCH');
  await Promise.all([access(executable),access(plugin),access(bootstrap)]);
  // A fresh output directory prevents adoption of stale reports or prior task receipts.
@@ -34,7 +41,7 @@ export async function launchRhinoWorker({directory,executable,plugin,bootstrap,v
  const report=join(directory,'ready.json'),sessionId=randomUUID(),token=randomBytes(32).toString('hex');
  const lease=await launchOwnedRhino({executable,visible,
   args:['/nosplash','/notemplate','/scheme=VIDE-Worker-Test',`/runscript="_-RunPythonScript (${bootstrap})"`],
-  environment:{...process.env,VIDE_WORKER_NORMALIZE_UNITS:normalizeUnits?'1':'0',VIDE_WORKER_SOURCE:seed,VIDE_WORKER_PLUGIN:plugin,VIDE_WORKER_TOKEN:token,VIDE_WORKER_SESSION:sessionId,VIDE_WORKER_REPORT:report},
+  environment:{...process.env,VIDE_WORKER_MODE:mode,VIDE_WORKER_NORMALIZE_UNITS:normalizeUnits?'1':'0',VIDE_WORKER_SOURCE:seed,VIDE_WORKER_PLUGIN:plugin,VIDE_WORKER_TOKEN:token,VIDE_WORKER_SESSION:sessionId,VIDE_WORKER_REPORT:report},
   spawnProcess:(file,args,options)=>spawn(file,args,{...options,windowsVerbatimArguments:true}),
  });
  try{
@@ -58,6 +65,9 @@ export async function launchRhinoWorker({directory,executable,plugin,bootstrap,v
   };
   return {
    identity:{...identity},
+   async inspectEditor(){return editorReply(editorSnapshotSchema,await call('inspectEditor'));},
+   async captureEditor(operationId:string){editorReply(z.object({ok:z.literal(true),pending:z.literal(true)}),await call('captureEditor',{operationId}));return editorReply(editorCaptureSchema,await call('verifyEditorCapture',{operationId}));},
+   detach(){lease.detach();},
    async query(){return workerSnapshotSchema.parse(await call('query'));},
    async exportModel(){return nativeModelSchema.parse(await call('export',source?.measurements&&!normalizeUnits?{measurementCache:source.measurements}:{}));},
    async execute(operationId:string,revision:number,code:string,protectedIds:string[]=[]){return workerResultSchema.parse(await call('execute',{operationId,revision,code,protectedIds}));},

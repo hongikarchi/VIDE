@@ -1,7 +1,8 @@
 import {randomUUID,createHash} from 'node:crypto';
 import {mkdir,readFile,access} from 'node:fs/promises';
 import {createReadStream} from 'node:fs';
-import {spawn} from 'node:child_process';
+import {EditorSessions} from '../../hosts/rhino/editor-sessions.ts';
+import type {HostTarget} from '../contracts/host-documents.ts';
 import {join,resolve,relative,isAbsolute} from 'node:path';
 import {z} from 'zod';
 import {launchRhinoWorker,workerResultSchema} from '../../hosts/rhino/worker-client.ts';
@@ -23,7 +24,8 @@ const failure=(code:string)=>Object.assign(new Error(code),{code});
 /** The controller owns the process, output path, revision and receipt; the agent owns SDK code. */
 export class SdkExecution {
  private options:Options;
- constructor(options:Options){this.options=options;}
+ readonly editors:EditorSessions;
+ constructor(options:Options){this.options=options;this.editors=new EditorSessions(options);}
  async status(){
   try{await Promise.all([this.options.executable,this.options.plugin,this.options.bootstrap].map(path=>access(path)));return {available:true,mode:'sdk',ready:true};}
   catch{return {available:false,mode:'sdk',reason:'SDK_HOST_NOT_INSTALLED'};}
@@ -33,12 +35,15 @@ export class SdkExecution {
   if(!path||path.startsWith('..')||isAbsolute(path))throw failure('INVALID_ARTIFACT');
   const hash=createHash('sha256');for await(const chunk of createReadStream(source.filename))hash.update(chunk);
   if(hash.digest('hex')!==source.fileHash)throw failure('SOURCE_CHANGED');
-  await new Promise<void>((resolve,reject)=>{
-   const child=spawn(this.options.executable,['/nosplash',source.filename],{detached:true,stdio:'ignore',windowsHide:false});
-   child.once('error',reject);child.once('spawn',()=>{child.unref();resolve();});
-  });
-  return {opened:true};
+  return this.editors.open(source);
  }
+ async captureEditor(target:HostTarget,update:(intent:Record<string,unknown>)=>void){
+  const captured=await this.editors.capture(target);
+  const sourceDocument={...target,documentHash:captured.documentHash,name:captured.name,units:captured.units,selectedIds:captured.selectedIds,capturedAt:new Date().toISOString()};
+  try{const result=await this.importFile(captured.filename,intent=>update({...intent,sourceDocument}));return {...result,sourceDocument};}
+  catch(error){if(error&&typeof error==='object'&&'intent' in error&&error.intent&&typeof error.intent==='object')Object.assign(error,{intent:{...error.intent,sourceDocument}});throw error;}
+ }
+
  async importFile(filename:string,update:(intent:Record<string,unknown>)=>void){
   const options=this.options;await mkdir(options.directory,{recursive:true});
   const directory=join(options.directory,randomUUID()),operationId=randomUUID();

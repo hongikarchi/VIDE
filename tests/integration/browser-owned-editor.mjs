@@ -1,0 +1,32 @@
+import assert from 'node:assert/strict';
+import {mkdir,writeFile} from 'node:fs/promises';
+import {resolve,join} from 'node:path';
+import {randomUUID} from 'node:crypto';
+import {chromium} from 'playwright';
+import {launchRhinoWorker} from '../../hosts/rhino/worker-client.ts';
+import {startServer} from '../../src/server/server.ts';
+const directory=resolve('.vide/browser-owned-editor',randomUUID());await mkdir(directory,{recursive:true});
+const options={executable:'C:/Program Files/Rhino 8/System/Rhino.exe',plugin:resolve('.vide/build/rhino-worker/bin/net8.0-windows/VIDE.Worker.rhp'),bootstrap:resolve('hosts/rhino/worker/bootstrap.py')};
+const workers=[];let app,browser;
+const launch=async options=>{const worker=await launchRhinoWorker(options);workers.push(worker);return worker;};
+try{
+ const worker=await launch({...options,directory:join(directory,'source')});
+ const receipt=await worker.execute(randomUUID(),0,'doc.Objects.AddBox(new Box(new BoundingBox(0,0,0,2,3,4)));');assert.equal(receipt.ok,true,JSON.stringify(receipt));
+ const model=await worker.exportModel();await worker.stop();
+ app=await startServer({filename:join(directory,'test.sqlite'),sdkOptions:{...options,directory,launch}});
+ const project=app.store.createProject('Own editor'),id=randomUUID();
+ const input={id,body:'Synthetic editor test',provider:'codex-cli',permission:'candidate',host:'rhino',pins:[],sketches:[],files:[]};
+ app.store.db.prepare('INSERT INTO workspace_requests VALUES(?,?,?,?,?,?)').run(id,project.id,JSON.stringify(input),'succeeded',JSON.stringify({...model,hostExecuted:true,executionMode:'sdk',host:'rhino',verified:true,filename:receipt.filename,fileHash:receipt.fileHash}),new Date().toISOString());
+ browser=await chromium.launch({channel:'chrome',headless:true});const page=await browser.newPage({viewport:{width:1440,height:900}});page.setDefaultTimeout(90000);
+ await page.route('**/api/v1/providers',route=>route.fulfill({json:[]}));await page.route('**/api/v1/models',route=>route.fulfill({json:[]}));
+ await page.goto(app.launchUrl);await page.locator('#project-picker').selectOption(project.id);
+ const opened=page.waitForResponse(response=>response.url().endsWith(`/requests/${id}/open`)&&response.request().method()==='POST');
+ await page.getByRole('button',{name:'Rhino에서 열기',exact:true}).click();const response=await opened;assert.equal(response.status(),200);const target=await response.json();
+ await page.getByText('열린 Rhino 문서',{exact:true}).click();await page.locator('#refresh-documents').click();await page.locator('#host-documents').selectOption(target.instance+'/'+target.documentId);
+ const capturing=page.waitForResponse(response=>response.url().endsWith(`/projects/${project.id}/capture`)&&response.request().method()==='POST');
+ await page.locator('#capture-document').click();const result=await (await capturing).json();
+ assert.equal(result.state,'succeeded',JSON.stringify(result));assert.equal(result.result.executionMode,'sdk');assert.equal(result.result.sourceDocument.instance,target.instance);assert.equal(result.result.scene[0].volume,24);
+ await page.getByRole('button',{name:'이 후보 보기',exact:true}).last().click();await page.screenshot({path:join(directory,'recaptured.png')});
+ const evidence={passed:true,directory,browserOpened:true,ownDocumentSelected:true,browserRecaptured:true,volume:24};
+ await writeFile(join(directory,'result.json'),JSON.stringify(evidence,null,2));console.log(JSON.stringify(evidence));
+}finally{if(browser)await browser.close();if(app)await app.close();for(const worker of workers.reverse())await worker.stop();}

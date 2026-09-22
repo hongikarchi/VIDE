@@ -26,3 +26,12 @@ test('failed capture preserves prior basis without marking read-only copy as an 
   assert.equal(workspace.submit(project.id,{id:'next',provider:'codex-cli',permission:'candidate',body:'continue',pins:[],sketches:[],files:[]}).created,true);
  }finally{store.close();}
 });
+
+test('uncertain SDK copy import retains its receipt and source for read-only recovery',async()=>{
+ const store=new Store(':memory:');try{
+  const workspace=new Workspace(store),project=store.createProject('capture'),target={id:'sdk-copy',instance:'1:2',documentId:4};
+  const intent={executionMode:'sdk',operationId:'operation',workerDirectory:'worker',sourceDocument:{instance:'1:2',documentId:4}};
+  const result=await captureModel(project.id,target,workspace,{},async()=>{throw {code:'HOST_RESULT_UNKNOWN',intent};});
+  assert.equal(result.state,'unknown');assert.equal(result.result.operationId,'operation');assert.deepEqual(result.result.sourceDocument,intent.sourceDocument);
+ }finally{store.close();}
+});

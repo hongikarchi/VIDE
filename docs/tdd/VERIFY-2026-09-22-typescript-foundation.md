@@ -2,7 +2,7 @@
 id: VERIFY-2026-09-22-typescript-foundation
 title: TypeScript·React·Vite 전환 기반 검증
 status: review
-version: 0.37
+version: 0.38
 updated: 2026-09-22
 owner: agent:codex
 related: [PLAN, ADR-016, ADR-017, T-010, T-011, T-015]
@@ -246,3 +246,11 @@ SDK 입력 사본 해시를 검증한 뒤 이전 후보의 measurementVersion=1 
 ## 후보 비교 변경 누락 보완
 
 기존 후보 비교는 표시 기하의 일부 필드만 비교하여 층·사용자 속성만 바뀐 경우 동일로 표시할 수 있었다. native ID를 제외한 scene 데이터를 비교하며 SDK 변경 영수증은 정확한 직전 기준 후보에 대해서만 사용한다. 다른 조상 후보나 관계 없는 후보에 변경 요약을 재사용하지 않는다. 속성/층 변경 및 기준 불일치 단위 시험, 전체 118개 자동 시험, 타입 검사, browser-react-panels 회귀 통과.
+
+## 자체 Rhino 편집 사본 연결
+
+EditorExecutor는 소유 실행본에서 복사한 SDK 후보를 보이는 Rhino 문서로 연다. 고정 inspect/capture만 제공하며 execute는 UNKNOWN_METHOD로 거절한다. 연결은 기존 pairing·PID/start ticks/port 확인을 유지한다. EditorSessions는 실행본별로 관리하고 같은 document ID를 구분한다. transient 조회 실패로 세션을 폐기하지 않으며 확인된 종료/대상 소멸만 제거한다. 사용자 편집 창은 제어기 종료 때 닫지 않는다. 아직 제어기 재시작 후 재접속이나 새 문서로 교체한 세션의 재등록은 지원하지 않는다.
+
+취득은 원본 경로·이름·modified·지문을 보존하며 결과 파일을 기하·공개 속성·user string·층 ID/이름으로 검증한다. 최초 실험은 같은 UI 호출 안의 재열기가 Rhino 파일 잠금 모달을 띄워 HOST_RESULT_UNKNOWN이 됐다. 쓰기 반환 후 별도 읽기 호출에서 File3dm으로 검사하는 경로로 수정했다. 쓰기를 자동 반복하지 않는다. 선택 ID/문서 이름은 취득 시점 값을 보존한다. SDK 복사본 실행 단계의 미확인은 영수증과 sourceDocument를 보존해 회수하고, 단순 읽기 취득 실패와 구분한다.
+
+실제 `owned-editor.mjs` 증거 `.vide/owned-editor/a8f7e588-8695-4d43-a997-0f8cb8ba30b1`: 보이는 Rhino, 임의 코드 거절, 취득/별도 worker 재열기, source hash 보존, 체적 24. `browser-owned-editor.mjs` 증거 `.vide/browser-owned-editor/175de119-5bd9-4f15-a7a2-8e0e015e96a8`: 브라우저의 Rhino 열기→자체 문서 선택→취득 성공·체적 24·뷰포트 스크린샷 확인. 120개 자동 시험·타입 검사 및 기존 브라우저 패널 회귀 통과. 일반 형상 원본 적용은 아직 연결하지 않았다.

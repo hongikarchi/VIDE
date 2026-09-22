@@ -28,7 +28,10 @@ public sealed class WorkerCommand : Command
         var process = Process.GetCurrentProcess();
         var ticks = process.StartTime.ToUniversalTime().Ticks.ToString();
         var source = Environment.GetEnvironmentVariable("VIDE_WORKER_SOURCE") ?? "";
-        var doc = string.IsNullOrEmpty(source) ? RhinoDoc.CreateHeadless(null) : RhinoDoc.OpenHeadless(source);
+        var editor = Environment.GetEnvironmentVariable("VIDE_WORKER_MODE") == "editor";
+        if (editor && (string.IsNullOrEmpty(source) || ignored.Modified || ignored.Objects.Count != 0))
+            return StartupFailure(report, "EDITOR_START_REJECTED", null);
+        var doc = editor ? RhinoDoc.Open(source, out _) : string.IsNullOrEmpty(source) ? RhinoDoc.CreateHeadless(null) : RhinoDoc.OpenHeadless(source);
         if (doc == null) return StartupFailure(report, "INVALID_GEOMETRY", null);
         if (string.IsNullOrEmpty(source)) doc.ModelUnitSystem = UnitSystem.Meters;
         if (doc.ModelUnitSystem == UnitSystem.None || doc.ModelUnitSystem == UnitSystem.CustomUnits)
@@ -36,10 +39,12 @@ public sealed class WorkerCommand : Command
         if (doc.ModelUnitSystem != UnitSystem.Meters && Environment.GetEnvironmentVariable("VIDE_WORKER_NORMALIZE_UNITS") == "1")
             doc.AdjustModelUnitSystem(UnitSystem.Meters, true);
         if (doc.ModelUnitSystem != UnitSystem.Meters) return StartupFailure(report, "UNKNOWN_UNITS", doc);
-        try { WorkerScene.Validate(doc); }
+        try { if (!editor) WorkerScene.Validate(doc); }
         catch (InvalidOperationException error) { return StartupFailure(report, error.Message, doc); }
-        doc.ModelAbsoluteTolerance = 0.001;
-        var executor = new WorkerExecutor(doc, Path.GetDirectoryName(report)!);
+        if (!editor) doc.ModelAbsoluteTolerance = 0.001;
+        Func<JsonElement, object> dispatch = editor
+            ? new EditorExecutor(doc, Path.GetDirectoryName(report)!).Dispatch
+            : new WorkerExecutor(doc, Path.GetDirectoryName(report)!).Dispatch;
         listener = new TcpListener(IPAddress.Loopback, 0);
         listener.Start();
         var port = ((IPEndPoint)listener.LocalEndpoint).Port;
@@ -52,7 +57,7 @@ public sealed class WorkerCommand : Command
             {
                 TcpClient client;
                 try { client = await listener.AcceptTcpClientAsync(); } catch { break; }
-                _ = Serve(client, token, session, process.Id, ticks, executor);
+                _ = Serve(client, token, session, process.Id, ticks, dispatch);
             }
         });
         RhinoApp.WriteLine("VIDE isolated work host ready.");
@@ -67,7 +72,7 @@ public sealed class WorkerCommand : Command
         return Result.Failure;
     }
 
-    private static async Task Serve(TcpClient client, string token, string session, int pid, string ticks, WorkerExecutor executor)
+    private static async Task Serve(TcpClient client, string token, string session, int pid, string ticks, Func<JsonElement, object> dispatch)
     {
         using (client)
         using (var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(60)))
@@ -93,7 +98,7 @@ public sealed class WorkerCommand : Command
                 RhinoApp.InvokeOnUiThread(new Action(() =>
                 {
                     if (timeout.IsCancellationRequested) { completion.TrySetCanceled(); return; }
-                    try { completion.TrySetResult(executor.Dispatch(request)); }
+                    try { completion.TrySetResult(dispatch(request)); }
                     catch (Exception error) { completion.TrySetException(error); }
                 }));
                 var result = await completion.Task.WaitAsync(timeout.Token);
