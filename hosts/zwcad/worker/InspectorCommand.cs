@@ -11,7 +11,7 @@ using ZwSoft.ZwCAD.Runtime;
 
 namespace Vide.Zwcad
 {
-    // One immutable read per owned process. There is no execute method or ActiveDocument lookup.
+    // One launch-time operation per owned process. Network only returns immutable results; no ActiveDocument lookup.
     public sealed class InspectorCommand
     {
         private static TcpListener listener;
@@ -27,7 +27,9 @@ namespace Vide.Zwcad
             try
             {
                 // The host invokes this command on its command thread. Network threads only return immutable data.
-                object model = DwgReader.Read(source);
+                string output = Environment.GetEnvironmentVariable("VIDE_WORKER_OUTPUT");
+                if (!String.IsNullOrEmpty(output)) DwgEditor.Edit(source, output, Environment.GetEnvironmentVariable("VIDE_WORKER_EDITS"));
+                object model = DwgReader.Read(String.IsNullOrEmpty(output) ? source : output);
                 Process process = Process.GetCurrentProcess();
                 int pid = process.Id; string ticks = process.StartTime.ToUniversalTime().Ticks.ToString(), document = Guid.NewGuid().ToString();
                 byte[] reply = Encode(new { ok = true, model });

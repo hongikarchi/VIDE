@@ -2,7 +2,7 @@
 id: VERIFY-2026-09-22-typescript-foundation
 title: TypeScript·React·Vite 전환 기반 검증
 status: review
-version: 0.46
+version: 0.47
 updated: 2026-09-22
 owner: agent:codex
 related: [PLAN, ADR-016, ADR-017, T-010, T-011, T-015]
@@ -312,3 +312,13 @@ SDK execute 영수증의 value가 서버 응답에서 누락되어 AI가 직접 
 중간 실패를 통과로 바꾸지 않는다. .6 첫 시험 `699c25e7-7e90-4925-aa22-ffcbac8c8ec8`은 프로젝트 전환/페이지 이동과 파일 선택이 경합해 업로드 요청이 없었다. 테스트가 새 프로젝트 로딩을 기다리도록 고쳤다. 다음 `d43191f8-a540-4359-bc98-6a93ea3227d7`에서 DWG 가져오기는 통과했으나 종료 후 안내 타이머가 삭제된 message 요소를 찾아 브라우저 오류를 냈다. 제품 종료 시 타이머와 뷰포트를 정리하도록 수정했다. .7 첫 시험 `b7a1a803-1d34-4d13-89f0-ee06a5444348`은 DWG 스크린샷 이후 실패 기록 없이 exit 1로 끝났으며 원인은 확정하지 못했다. 단계 기록을 추가한 후 위 최종 시험이 전부 통과했다. 정상/비정상 종료 모두 관측된 결과만 기록한다.
 
 실패 시험 3개의 실행 제어 서버 종료를 확인한 뒤 자신이 만든 설치 복사본만 삭제했다. 오류/스크린샷/시험 데이터는 보존했다. 미배포 .6 ZIP과 전개 빌드만 제거했고 이전 .5 및 검증된 .7을 유지했다. 원격 Cloudflare 배포·실제 이메일·별도 PC 검수는 수행하지 않았다.
+
+
+## ZWCAD 정점 수정의 자체 SDK 전환
+
+기준: H-ZWCAD-04·05, T-006, PLAN-02 §6. `hosts/zwcad/worker/DwgEditor.cs`가 별도 Database에서 검증된 mm XY LWPolyline만 수정하고 새 DWG에 저장한다. Inspector의 소유 실행본/토큰/세션/PID 확인 기반과 명령 스레드를 재사용하고, 네트워크에는 변경 후 불변 읽기 결과만 반환한다. 원본·활성 사용자 문서를 저장하지 않는다. 기존 `edit.ps1` 참조가 없음을 확인하고 제거했다. 기존 JSON 정점 편집 계약을 SDK로 이식한 작업이며 임의 AI SDK 코드 실행의 제품 연결 완료는 아니다.
+
+- SDK 컴파일 및 서버 strict 통과.
+- `node tests/integration/native-dwg-edit.mjs --run-live <기존 합성 sdk-probe.dwg>` 실호스트 검수 통과. `.vide/dwg-edit-check/f2158f4c-acb7-4b40-81e3-0c5be50dcfe2/result.json`에 200→240 m², 길이 68 m, 반복 이동, Handle/레이어/색 보존, 원본/이전 후보 파일 해시 유지, 잘못된 Handle 요청의 후보 미생성을 기록했다.
+- 130개 core/AI/server 자동 시험 통과, 별도 DWG 편집 계약 시험 3개도 통과. GUI 마우스를 사용하지 않았고 시험 소유 프로세스만 종료했다.
+- 생성·열기 COM 경로, 범용 AI 코드의 제품 실행, 열린 원본 적용·다중 문서는 계속 남는다. 현재 배포 ZIP .7에는 이번 SDK 변경이 아직 포함되지 않았다.

@@ -9,7 +9,7 @@ import {sendHostCommand} from '../common/transport.ts';
 import {packageRoot} from '../../src/server/package-root.ts';
 
 const readySchema=z.object({port:z.number().int().min(1).max(65535),pid:z.number().int().positive(),startTicks:z.string().regex(/^\d+$/),sessionId:z.string().uuid(),documentId:z.string().uuid(),revision:z.literal(0)});
-const allowedErrors=new Set(['UNKNOWN_UNITS','IMPORT_LIMIT','UNSUPPORTED_DWG_CONTENT','EMPTY_DWG']);
+const allowedErrors=new Set(['UNKNOWN_UNITS','IMPORT_LIMIT','UNSUPPORTED_DWG_CONTENT','EMPTY_DWG','UNSUPPORTED_DWG_EDIT']);
 const failure=(code:string)=>Object.assign(Error(code),{code});
 async function fingerprint(filename:string){const hash=createHash('sha256');for await(const bytes of createReadStream(filename))hash.update(bytes);return hash.digest('hex');}
 export function inspectorOptions(){
@@ -19,15 +19,17 @@ export function inspectorOptions(){
 }
 
 /** Inspect only the caller's artifact copy; never attach to an existing CAD application. */
-export async function inspectDwg(filename:string,outputRoot:string,options=inspectorOptions()):Promise<unknown>{
+export async function inspectDwg(filename:string,outputRoot:string,options=inspectorOptions(),edit?:{output:string;objects:unknown[]}):Promise<unknown>{
  if(![filename,outputRoot,options.executable,options.plugin].every(isAbsolute))throw failure('INVALID_HOST_LAUNCH');
  try{await Promise.all([filename,options.executable,options.plugin].map(path=>access(path)));}catch{throw failure('SDK_HOST_NOT_INSTALLED');}
+ if(edit&&(!isAbsolute(edit.output)||resolve(edit.output)===resolve(filename)||existsSync(edit.output)))throw failure('UNSUPPORTED_DWG_EDIT');
  const before=await fingerprint(filename),directory=join(outputRoot,randomUUID());await mkdir(outputRoot,{recursive:true});await mkdir(directory);
  const report=join(directory,'ready.json'),script=join(directory,'start.scr');
  const token=randomBytes(32).toString('hex'),sessionId=randomUUID();
  await writeFile(script,`(command "_NETLOAD" ${JSON.stringify(options.plugin.replaceAll('\\','/'))})\nVIDEInspectDwg\n`,{flag:'wx'});
+ if(edit)await writeFile(join(directory,'edits.json'),JSON.stringify({objects:edit.objects}),{flag:'wx'});
  const owner=await launchOwnedHost({executable:options.executable,args:['/b',script],visible:false,environment:{...process.env,
-  VIDE_WORKER_TOKEN:token,VIDE_WORKER_SESSION:sessionId,VIDE_WORKER_REPORT:report,VIDE_WORKER_SOURCE:resolve(filename)}});
+  VIDE_WORKER_TOKEN:token,VIDE_WORKER_SESSION:sessionId,VIDE_WORKER_REPORT:report,VIDE_WORKER_SOURCE:resolve(filename),VIDE_WORKER_OUTPUT:edit?.output||'',VIDE_WORKER_EDITS:edit?join(directory,'edits.json'):''}});
  let completed=false;
  try{
   await writeFile(join(directory,'process.json'),JSON.stringify(owner.identity),{flag:'wx'});
@@ -52,7 +54,7 @@ export async function inspectDwg(filename:string,outputRoot:string,options=inspe
   await owner.stop();
   if(completed){
    // Remove only known bootstrap artifacts created in this fresh directory; never recurse.
-   for(const name of ['start.scr','process.json','ready.json'])await unlink(join(directory,name));
+   for(const name of ['start.scr','process.json','ready.json',...(edit?['edits.json']:[])])await unlink(join(directory,name));
    await rmdir(directory);
   }
  }

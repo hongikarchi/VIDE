@@ -7,7 +7,7 @@ const sceneSchema=workspaceResultSchema.shape.scene.unwrap();
 const baselineSchema=z.object({filename:z.string(),fileHash:z.string(),referenceOnly:z.boolean().optional(),dwgEditMode:z.string().nullish(),sourceUnits:z.number().optional(),objects:z.array(legacyObjectSchema),scene:sceneSchema}).passthrough();
 const importSchema=baselineSchema.omit({filename:true,fileHash:true}).extend({verified:z.literal(true)});
 const buildSchema=z.object({verified:z.literal(true),scene:sceneSchema}).passthrough();
-interface Invocation {mode:'inspect'|'edit'|'build'|'open';filename:string;objects?:GeometryObject[]}
+interface Invocation {mode:'inspect'|'build'|'open';filename:string;objects?:GeometryObject[]}
 const commandError=(cause:unknown)=>z.object({stdout:z.string().optional(),stderr:z.string().optional(),killed:z.boolean().optional()}).safeParse(cause).data??{};
 import {validateDwgEdit,verifyDwgEdit} from './edit-contract.ts';
 import {execFile} from 'node:child_process';
@@ -28,7 +28,7 @@ export class ZwcadWorkspace {
       const request=join(this.directory,randomUUID()+'.request.json');
       await writeFile(request,JSON.stringify(input),{flag:'wx'});
       try{
-        const {stdout}=await run(join(process.env.SystemRoot||'C:\\Windows','System32/WindowsPowerShell/v1.0/powershell.exe'),['-NoProfile','-NonInteractive','-ExecutionPolicy','RemoteSigned','-File',fileURLToPath(new URL(input.mode==='edit'?'./edit.ps1':'./workspace.ps1',import.meta.url)),'-RequestPath',request],{windowsHide:true,encoding:'utf8',timeout:90000,maxBuffer:16*1024*1024});
+        const {stdout}=await run(join(process.env.SystemRoot||'C:\\Windows','System32/WindowsPowerShell/v1.0/powershell.exe'),['-NoProfile','-NonInteractive','-ExecutionPolicy','RemoteSigned','-File',fileURLToPath(new URL('./workspace.ps1',import.meta.url)),'-RequestPath',request],{windowsHide:true,encoding:'utf8',timeout:90000,maxBuffer:16*1024*1024});
         try{return JSON.parse(stdout.trim());}catch{throw Object.assign(new Error('HOST_RESULT_UNKNOWN'),{code:'HOST_RESULT_UNKNOWN'});}
       }catch(cause){if(cause instanceof Error&&'code' in cause&&cause.code==='HOST_RESULT_UNKNOWN')throw cause;const error=commandError(cause);let code='ZWCAD_EXECUTION_FAILED';try{const failure=JSON.parse((error.stdout??'').trim());if(['UNKNOWN_UNITS','IMPORT_LIMIT','UNSUPPORTED_DWG_CONTENT','EMPTY_DWG','UNSUPPORTED_DWG_EDIT'].includes(failure.error))code=failure.error;}catch{}
         throw Object.assign(new Error(code),{code:error.killed?'HOST_RESULT_UNKNOWN':code,detail:(error.stdout||error.stderr||'').slice(0,2000)});}
@@ -61,9 +61,8 @@ export class ZwcadWorkspace {
     const directory=join(this.directory,projectId);await mkdir(directory,{recursive:true});
     const filename=join(directory,requestId+'.dwg');
     if(baseline?.referenceOnly){
-      validateDwgEdit(objects,baseline);await copyFile(baseline.filename,filename,constants.COPYFILE_EXCL);
-      if(createHash('sha256').update(await readFile(filename)).digest('hex')!==baseline.fileHash)throw Object.assign(new Error('SOURCE_CHANGED'),{code:'SOURCE_CHANGED'});
-      await this.invoke({mode:'edit',filename,objects});
+      validateDwgEdit(objects,baseline);
+      await inspectDwg(baseline.filename,join(this.directory,'editing'),undefined,{output:filename,objects});
       const result=await this.inspectImport(projectId,requestId,createHash('sha256').update(await readFile(filename)).digest('hex'));
       verifyDwgEdit(objects,baseline,result);return result;
     }

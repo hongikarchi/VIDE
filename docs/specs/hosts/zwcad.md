@@ -2,7 +2,7 @@
 id: HOST-ZWCAD
 title: ZWCAD 호스트 계약과 검증 범위
 status: review
-version: 0.7
+version: 0.8
 updated: 2026-09-22
 owner: agent:codex
 related: [SPEC-01, SPEC-02, FR-03, FR-04, AC-24, AC-38, OQ-03, OQ-10]
@@ -55,3 +55,10 @@ H-ZWCAD-04·05의 일부로, 새로 취득한 독립 직선 XY LWPolyline의 이
 제품의 DWG 읽기는 소유한 별도 ZWCAD 2023 실행본의 자체 .NET 애드인으로 전환했다. 사용자가 업로드한 고유 사본을 별도 Database로 읽고, 활성 사용자 문서/COM 활성 인스턴스에 붙지 않는다. 기존 읽기 지원 범위와 편집 능력 판정은 유지한다. 브라우저에서 20×10 m DWG의 표시·객체 선택, 200 m²·60 m·Handle·원본 해시 보존을 확인했다.
 
 단위 미상/곡선 bulge는 거절하고 잠긴 레이어 및 m 단위 직선 경계는 정확한 단위 환산으로 표시하되 기존 정점 편집 능력을 부여하지 않는다. 근거는 [SDK 제품 이식 검증](../../tdd/VERIFY-2026-09-22-typescript-foundation.md)이다. 생성·수정은 아직 기존 COM 제품 경로이며 범용 SDK AI 편집은 실험에 머문다.
+
+
+## 자체 SDK 작업 사본 수정 — 2026-09-22
+
+독립 mm 직선 XY LWPolyline의 기존 정점 수정도 별도 소유 ZWCAD SDK 실행본으로 전환했다. 활성 COM 문서에 연결하지 않으며 원본을 별도 Database로 읽어 새 후보 DWG만 저장한다. 모델 공간·대상 Handle·객체 집합·단위·관계/레이어 잠금·지원 범위를 확인하고 트랜잭션으로 편집한다. 200→240 m² 경계 변경과 후속 이동, 저장/재열기, Handle·레이어·색·원본 해시 보존을 실증했다. 잘못된 Handle 요청은 후보 파일 없이 실패했다. 기존 COM `edit.ps1`은 제거했다.
+
+생성/화면에서 열기는 아직 기존 경로이며, 범용 AI 코드 실행·열린 원본 적용·일반 CAD 객체의 완결 증거는 아니다. 검증은 [TS/자체 호스트 기록](../../tdd/VERIFY-2026-09-22-typescript-foundation.md)을 따른다.

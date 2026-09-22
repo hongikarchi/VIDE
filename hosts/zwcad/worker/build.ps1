@@ -11,5 +11,6 @@ foreach($name in @('ZwManaged.dll','ZwDatabaseMgd.dll')){
 }
 $arguments+=(Join-Path $PSScriptRoot 'InspectorCommand.cs')
 $arguments+=(Join-Path $PSScriptRoot 'DwgReader.cs')
+$arguments+=(Join-Path $PSScriptRoot 'DwgEditor.cs')
 & $compiler @arguments
 if($LASTEXITCODE -ne 0){throw 'ZWCAD worker compilation failed'}
