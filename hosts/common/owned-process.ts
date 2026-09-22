@@ -28,7 +28,7 @@ export async function inspectWindowsProcess(pid:number, port?:number):Promise<Pr
 }
 
 /** Only a process created here receives a lease; existing user processes cannot be adopted. */
-export async function launchOwnedRhino({ executable, args = [], environment = process.env, visible = false, spawnProcess = spawn,
+export async function launchOwnedHost({ executable, args = [], environment = process.env, visible = false, spawnProcess = spawn,
   inspect = inspectWindowsProcess }:LaunchOptions) {
   if (typeof executable !== 'string' || !isAbsolute(executable) || !Array.isArray(args) ||
       typeof visible !== 'boolean' || args.some(value => typeof value !== 'string')) throw failure('INVALID_HOST_LAUNCH');

@@ -2,7 +2,7 @@
 id: VERIFY-2026-09-22-typescript-foundation
 title: TypeScript·React·Vite 전환 기반 검증
 status: review
-version: 0.43
+version: 0.44
 updated: 2026-09-22
 owner: agent:codex
 related: [PLAN, ADR-016, ADR-017, T-010, T-011, T-015]
@@ -286,3 +286,9 @@ SDK execute 영수증의 value가 서버 응답에서 누락되어 AI가 직접 
 `0.1.0-dev.20260922.5`는 6824627 기준 데스크톱 제품 코드다. `tests/integration/portable-package.mjs`를 번들 Node와 개발 Node 없는 PATH, 공백 설치 경로에서 실행했다. `.vide/package-check/09ac29b4-a07b-449c-97f4-945556003225/result.json`에 5,105개 파일 해시·브라우저·외부 의견 API/메뉴·중복 실행·재시작·제거 후 사용자 데이터 보존·오프라인 백업 통과를 기록했다. 화면은 headless Chrome, 런처는 숨김 실행으로 시스템 마우스를 사용하지 않았다. 성공한 시험의 압축 해제 복사본은 제거했다.
 
 공유 자료 내보내기/외부 의견 수신은 포함하지만 Cloudflare 서버의 자동 설치/배포는 포함하지 않는다. 네이티브 SDK 실행은 이 패키지에서 재시험하지 않았으며 이전 .4의 실제 SDK 결과와 구분한다. 별도 비개발 PC·서명/설치 프로그램은 미검수다. 기존 IDE 전체 headless 브라우저 회귀와 전체 자동 시험 129개도 통과했다.
+
+## 두 호스트의 공통 연결 기반 분리
+
+`hosts/common/owned-process.ts`의 `launchOwnedHost`가 실행 파일에 독립적인 프로세스 소유 검사를 담당하고, `hosts/common/transport.ts`의 `sendHostCommand`가 명시적으로 받은 포트의 framed loopback TCP를 담당한다. Rhino worker/editor와 ZWCAD SDK 실험에서 공통 구현을 사용한다. 기존 `hosts/rhino/transport.ts`는 레거시 기본 1999 포트와 기존 응답 형식의 호환 어댑터다. 더 이상 ZWCAD에서 Rhino 이름의 시작 함수를 호출하지 않는다.
+
+서버 strict 타입 검사·빌드와 관련 자동 회귀 17건(소유권/종료/전송 8건, 편집 세션/SDK 실행 9건)이 통과했다. 포트 소유 검사 전 토큰 송신 방지·PID 재사용·늦은 전송 거절·응답 유실·기존 editor 복원·컴파일 교정·불명확 쓰기 차단을 유지했다. 프로토콜이나 제품의 원본 적용 권한은 변경하지 않았으며 이 리팩터링 뒤 새 배포 ZIP/실호스트 전체 회귀는 아직 수행하지 않았다. 빌드·배포는 hosts 트리를 포함하므로 새 common 경로도 포함된다.

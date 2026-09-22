@@ -1,7 +1,7 @@
 import {z} from 'zod';
 import {resolve,isAbsolute} from 'node:path';
-import {inspectWindowsProcess} from './owned-process.ts';
-import {rhinoCommand} from './transport.ts';
+import {inspectWindowsProcess} from '../common/owned-process.ts';
+import {sendHostCommand} from '../common/transport.ts';
 const failure=(code:string)=>Object.assign(new Error(code),{code});
 export const editorConnectionSchema=z.object({
  identity:z.object({port:z.number().int().min(1).max(65535),pid:z.number().int().positive(),startTicks:z.string().regex(/^\d+$/),sessionId:z.string().uuid(),documentId:z.number().int().positive(),revision:z.literal(0)}),
@@ -29,7 +29,7 @@ export function editorMethods(call:(method:string,extra?:Record<string,unknown>)
 export function resumeEditor(connection:EditorConnection,executable:string,inspect=inspectWindowsProcess){
  const {identity,token}=editorConnectionSchema.parse(connection);
  if(resolve(connection.executable).toLowerCase()!==resolve(executable).toLowerCase())throw failure('HOST_OWNERSHIP_MISMATCH');
- const call=async(method:string,extra:Record<string,unknown>={})=>rhinoCommand('vide',{
+ const call=async(method:string,extra:Record<string,unknown>={})=>sendHostCommand('vide',{
   ...extra,token,sessionId:identity.sessionId,pid:identity.pid,startTicks:identity.startTicks,documentId:identity.documentId,method,
  },{port:identity.port,timeoutMs:60000,beforeSend:async()=>{
   const observed=await inspect(identity.pid,identity.port);

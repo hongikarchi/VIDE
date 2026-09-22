@@ -5,8 +5,8 @@ import { constants, createReadStream } from 'node:fs';
 import { access, copyFile, mkdir, readFile } from 'node:fs/promises';
 import { isAbsolute, join } from 'node:path';
 import { z } from 'zod';
-import { launchOwnedRhino } from './owned-process.ts';
-import { rhinoCommand } from './transport.ts';
+import { launchOwnedHost } from '../common/owned-process.ts';
+import { sendHostCommand } from '../common/transport.ts';
 import {modelChangesSchema} from '../../src/contracts/model-changes.ts';
 import { nativeModelSchema } from '../../src/contracts/native-model.ts';
 
@@ -34,7 +34,7 @@ export async function launchRhinoWorker({directory,executable,plugin,bootstrap,v
   if(await fingerprint(seed)!==source.fileHash||await fingerprint(source.filename)!==source.fileHash)throw failure('SOURCE_CHANGED');
  }
  const report=join(directory,'ready.json'),sessionId=randomUUID(),token=randomBytes(32).toString('hex');
- const lease=await launchOwnedRhino({executable,visible,
+ const lease=await launchOwnedHost({executable,visible,
   args:['/nosplash','/notemplate','/scheme=VIDE-Worker-Test',`/runscript="_-RunPythonScript (${bootstrap})"`],
   environment:{...process.env,VIDE_WORKER_MODE:mode,VIDE_WORKER_NORMALIZE_UNITS:normalizeUnits?'1':'0',VIDE_WORKER_SOURCE:seed,VIDE_WORKER_PLUGIN:plugin,VIDE_WORKER_TOKEN:token,VIDE_WORKER_SESSION:sessionId,VIDE_WORKER_REPORT:report},
   spawnProcess:(file,args,options)=>spawn(file,args,{...options,windowsVerbatimArguments:true}),
@@ -56,7 +56,7 @@ export async function launchRhinoWorker({directory,executable,plugin,bootstrap,v
   const identity=ready;let closed=false;
   const call=async(method:string,extra:Record<string,unknown>={})=>{
    if(closed)throw failure('HOST_LEASE_EXPIRED');
-   return rhinoCommand('vide',{...extra,token,sessionId,pid:identity.pid,startTicks:identity.startTicks,documentId:identity.documentId,method},{port:identity.port,timeoutMs:60000,beforeSend:()=>lease.verify(identity.port)});
+   return sendHostCommand('vide',{...extra,token,sessionId,pid:identity.pid,startTicks:identity.startTicks,documentId:identity.documentId,method},{port:identity.port,timeoutMs:60000,beforeSend:()=>lease.verify(identity.port)});
   };
   return {
    identity:{...identity},

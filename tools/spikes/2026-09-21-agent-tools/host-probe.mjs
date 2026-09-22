@@ -3,14 +3,14 @@ import {spawn} from 'node:child_process';
 import { mkdir, readFile } from 'node:fs/promises';
 import { resolve, join } from 'node:path';
 import { randomUUID, randomBytes, createHash } from 'node:crypto';
-import { launchOwnedRhino } from '../../../hosts/rhino/owned-process.ts';
+import { launchOwnedHost } from '../../../hosts/common/owned-process.ts';
 import { rhinoCommand } from '../../../hosts/rhino/transport.ts';
 
 const directory=resolve('.vide','worker-probe',randomUUID());await mkdir(directory,{recursive:true});
 const report=join(directory,'ready.json'),sessionId=randomUUID(),token=randomBytes(32).toString('hex');
 const plugin=resolve('.vide/build/rhino-worker/bin/net8.0-windows/VIDE.Worker.rhp');
 const start=Date.now();
-const lease=await launchOwnedRhino({executable:'C:\\Program Files\\Rhino 8\\System\\Rhino.exe',
+const lease=await launchOwnedHost({executable:'C:\\Program Files\\Rhino 8\\System\\Rhino.exe',
   visible:process.argv.includes('--visible'),
   spawnProcess:(file,args,options)=>spawn(file,args,{...options,windowsVerbatimArguments:true}),
   args:['/nosplash','/notemplate','/scheme=VIDE-Worker-Test',`/runscript="_-RunPythonScript (${resolve('hosts/rhino/worker/bootstrap.py')})"`],

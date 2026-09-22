@@ -2,8 +2,8 @@ import assert from 'node:assert/strict';
 import {mkdir,readFile,writeFile} from 'node:fs/promises';
 import {resolve,join} from 'node:path';
 import {randomBytes,randomUUID} from 'node:crypto';
-import {launchOwnedRhino as launchOwnedProcess} from '../../../hosts/rhino/owned-process.ts';
-import {rhinoCommand as send} from '../../../hosts/rhino/transport.ts';
+import {launchOwnedHost as launchOwnedProcess} from '../../../hosts/common/owned-process.ts';
+import {sendHostCommand as send} from '../../../hosts/common/transport.ts';
 
 export async function launchProbe(directory,name,execution=false){
  const folder=join(directory,name);await mkdir(folder);

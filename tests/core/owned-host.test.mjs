@@ -3,15 +3,15 @@ import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
 import { createServer } from 'node:net';
 import { resolve } from 'node:path';
-import { launchOwnedRhino } from '../../hosts/rhino/owned-process.ts';
-import { rhinoCommand } from '../../hosts/rhino/transport.ts';
+import { launchOwnedHost } from '../../hosts/common/owned-process.ts';
+import { sendHostCommand } from '../../hosts/common/transport.ts';
 
 async function leaseFixture() {
   const child = new EventEmitter(); child.pid = 123;
   child.kill = () => { queueMicrotask(() => child.emit('exit', 0)); return true; };
   const executable = resolve('synthetic-rhino.exe');
   let observed = { pid: 123, startTicks: '638940000000000001', executable, listeners: [123] };
-  const lease = await launchOwnedRhino({ executable,
+  const lease = await launchOwnedHost({ executable,
     spawnProcess: () => { queueMicrotask(() => child.emit('spawn')); return child; },
     inspect: async () => ({ ...observed }) });
   return { lease, child, change: patch => { observed = { ...observed, ...patch }; } };
@@ -20,7 +20,7 @@ async function leaseFixture() {
 test('failed initial inspection reaps only the freshly spawned child',async()=>{
  const child=new EventEmitter();child.pid=123;let kills=0;
  child.kill=()=>{kills++;queueMicrotask(()=>child.emit('exit',0));return true;};
- await assert.rejects(launchOwnedRhino({executable:resolve('synthetic-rhino.exe'),
+ await assert.rejects(launchOwnedHost({executable:resolve('synthetic-rhino.exe'),
   spawnProcess:()=>{queueMicrotask(()=>child.emit('spawn'));return child;},
   inspect:async()=>{throw Object.assign(Error('No identity'),{code:'HOST_IDENTITY_UNAVAILABLE'});}}),{code:'HOST_IDENTITY_UNAVAILABLE'});
  assert.equal(kills,1);
@@ -67,10 +67,10 @@ test('every TCP connection verifies ownership before transmission; foreign liste
   t.after(() => new Promise(resolve => server.close(resolve)));
   const port = server.address().port;
   const options = { port, beforeSend: () => lease.verify(port) };
-  assert.deepEqual(await rhinoCommand('fixed_probe', {}, options), { ok: true });
+  assert.deepEqual(await sendHostCommand('fixed_probe', {}, options), { ok: true });
   const first = received;
   change({ listeners: [456] });
-  await assert.rejects(rhinoCommand('fixed_probe', {}, options), { code: 'HOST_OWNERSHIP_MISMATCH' });
+  await assert.rejects(sendHostCommand('fixed_probe', {}, options), { code: 'HOST_OWNERSHIP_MISMATCH' });
   assert.equal(received, first);
 });
 
@@ -79,7 +79,7 @@ test('timeout while inspecting ownership never sends a late command', async t =>
   const server = createServer(socket => socket.on('data', chunk => { received += chunk.length; }));
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   t.after(() => new Promise(resolve => server.close(resolve)));
-  const pending = rhinoCommand('fixed_probe', {}, { port: server.address().port, timeoutMs: 30,
+  const pending = sendHostCommand('fixed_probe', {}, { port: server.address().port, timeoutMs: 30,
     beforeSend: () => new Promise(resolve => { release = resolve; }) });
   await assert.rejects(pending, { code: 'HOST_UNAVAILABLE' });
   release(); await new Promise(resolve => setTimeout(resolve, 20));

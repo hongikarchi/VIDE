@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import {mkdir,writeFile,readFile} from 'node:fs/promises';
 import {resolve,join} from 'node:path';
 import {randomUUID} from 'node:crypto';
-import {launchOwnedRhino as launchOwnedProcess} from '../../../hosts/rhino/owned-process.ts';
+import {launchOwnedHost as launchOwnedProcess} from '../../../hosts/common/owned-process.ts';
 
 const directory=resolve('.vide/zwcad-sdk',randomUUID());await mkdir(directory,{recursive:true});
 const plugin=resolve('.vide/build/zwcad-sdk-probe/VIDE.Zwcad.SdkProbe.dll'),script=join(directory,'probe.scr');
