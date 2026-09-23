@@ -115,7 +115,26 @@ export async function startServer({
     : undefined;
   const applications = new Applications(store, workspace, {
     ...applicationOptions,
-    sdk: sdk?.editors,
+    sdk:
+      sdk && zwcadSdk
+        ? {
+            preview: async (target, candidate) =>
+              ((await zwcadSdk.editors.has(target.instance))
+                ? zwcadSdk.editors
+                : sdk.editors
+              ).preview(target, candidate),
+            apply: async (id, candidate, target) =>
+              ((await zwcadSdk.editors.has(target.instance))
+                ? zwcadSdk.editors
+                : sdk.editors
+              ).apply(id, candidate, target),
+            reconcile: async (id, candidate, target) =>
+              ((await zwcadSdk.editors.has(target.instance))
+                ? zwcadSdk.editors
+                : sdk.editors
+              ).reconcile(id, candidate, target),
+          }
+        : sdk?.editors,
   });
   const rhinoImport = sdk
     ? {
@@ -228,6 +247,7 @@ export async function startServer({
       if (capture && request.method === 'POST') {
         const target = hostTargetSchema.extend({ id: z.string() }).parse(await body(request));
         const own = await sdk?.editors.has(target.instance);
+        const cadOwn = await zwcadSdk?.editors.has(target.instance);
         send(
           200,
           await captureModel(
@@ -235,12 +255,15 @@ export async function startServer({
             target,
             workspace,
             own ? rhinoImport : host,
-            own
-              ? async () =>
-                  sdk!.captureEditor(target, (intent) =>
-                    workspace.update(capture[1], target.id, 'running', intent),
-                  )
-              : undefined,
+            cadOwn
+              ? async () => zwcadSdk!.editors.capture(target)
+              : own
+                ? async () =>
+                    sdk!.captureEditor(target, (intent) =>
+                      workspace.update(capture[1], target.id, 'running', intent),
+                    )
+                : undefined,
+            cadOwn ? 'zwcad' : 'rhino',
           ),
         );
         return;
@@ -406,7 +429,13 @@ export async function startServer({
         return;
       }
       if (url.pathname === '/api/v1/host/documents' && request.method === 'GET') {
-        const owned = await sdk?.editors.list();
+        const rhinoOwned = await sdk?.editors.list();
+        const cadOwned = (await zwcadSdk?.editors.list()) || [];
+        const owned = rhinoOwned
+          ? { ...rhinoOwned, documents: [...rhinoOwned.documents, ...cadOwned] }
+          : cadOwned.length
+            ? { instance: cadOwned[0].instance, documents: cadOwned }
+            : undefined;
         try {
           const legacy = await listDocuments();
           const documents = legacy.documents.map((doc) => ({
@@ -443,9 +472,11 @@ export async function startServer({
         });
         send(
           200,
-          (await sdk?.editors.has(target.instance))
-            ? await sdk!.editors.inspect(target)
-            : await inspectDocument(target.instance, target.documentId),
+          (await zwcadSdk?.editors.has(target.instance))
+            ? await zwcadSdk!.editors.inspect(target)
+            : (await sdk?.editors.has(target.instance))
+              ? await sdk!.editors.inspect(target)
+              : await inspectDocument(target.instance, target.documentId),
         );
         return;
       }
@@ -570,11 +601,13 @@ export async function startServer({
         if (artifact[3] === 'open') {
           send(
             200,
-            saved.result.executionMode === 'sdk' && saved.result.host !== 'zwcad' && sdk
-              ? await sdk.open(saved.result)
-              : await hosts[z.enum(['rhino', 'zwcad']).parse(saved.result.host || 'rhino')].open(
-                  z.string().parse(saved.result.filename),
-                ),
+            saved.result.executionMode === 'sdk' && saved.result.host === 'zwcad' && zwcadSdk
+              ? await zwcadSdk.open(saved.result)
+              : saved.result.executionMode === 'sdk' && sdk
+                ? await sdk.open(saved.result)
+                : await hosts[z.enum(['rhino', 'zwcad']).parse(saved.result.host || 'rhino')].open(
+                    z.string().parse(saved.result.filename),
+                  ),
           );
           return;
         }

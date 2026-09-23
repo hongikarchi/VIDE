@@ -76,7 +76,7 @@ function Candidate({
     extension = result.host === 'zwcad' ? 'dwg' : '3dm';
   const missing = scene.filter((object) => !sceneRepresentation(object));
   const apply =
-    host === 'Rhino' &&
+    (host === 'Rhino' || result.executionMode === 'sdk') &&
     (result.executionMode === 'sdk'
       ? result.sourceDocument?.connection === 'owned-editor' && message.source !== 'document'
       : (!result.sourceDocument &&

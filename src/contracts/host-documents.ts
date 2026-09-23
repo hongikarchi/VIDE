@@ -13,7 +13,8 @@ export const hostDocumentsSchema = z.object({
       name: z.string(),
       units: z.string(),
       objectCount: z.number().int().nonnegative(),
-      modified: z.boolean(),
+      modified: z.boolean().nullable(),
+      host: z.enum(['rhino', 'zwcad']).optional(),
     }),
   ),
 });

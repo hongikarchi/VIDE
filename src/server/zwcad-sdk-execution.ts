@@ -1,3 +1,4 @@
+import { ZwcadEditors } from '../../hosts/zwcad/editor-sessions.ts';
 import { randomUUID } from 'node:crypto';
 import { mkdir, readFile } from 'node:fs/promises';
 import { join, resolve, relative, isAbsolute } from 'node:path';
@@ -51,8 +52,13 @@ interface Options {
 }
 export class ZwcadSdkExecution {
   private options: Options;
+  readonly editors: ZwcadEditors;
   constructor(options: Options) {
     this.options = options;
+    this.editors = new ZwcadEditors(options.directory);
+  }
+  async open(result: Record<string, unknown>) {
+    return this.editors.open(sourceSchema.parse(result));
   }
   async run({ input, previous, items, signal, provider, update }: Task) {
     const options = this.options;

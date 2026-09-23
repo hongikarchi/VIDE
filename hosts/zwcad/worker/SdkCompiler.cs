@@ -40,7 +40,7 @@ namespace Vide.Zwcad
                 string ns = type?.ContainingNamespace?.IsGlobalNamespace == true ? "" : type?.ContainingNamespace?.ToDisplayString() ?? "";
                 string name = type?.ToDisplayString() ?? "";
                 bool system = ns == "System" || ns == "System.Linq" || ns == "System.Collections" || ns.StartsWith("System.Collections.", StringComparison.Ordinal);
-                bool sdk = ns == "ZwSoft.ZwCAD.DatabaseServices" || ns == "ZwSoft.ZwCAD.Geometry" || ns == "ZwSoft.ZwCAD.Colors";
+                bool sdk = ns == "ZwSoft.ZwCAD.DatabaseServices" || ns == "ZwSoft.ZwCAD.Geometry" || ns == "ZwSoft.ZwCAD.Colors" || (name == "ZwSoft.ZwCAD.Runtime.RXObject" && symbol.Name == "Clone");
                 if ((ns.Length != 0 && !system && !sdk) ||
                     new[] { "System.Environment", "System.AppDomain", "System.Type", "System.Activator", "System.Console", "System.GC" }.Contains(name) ||
                     (name == "object" && symbol.Name == "GetType") ||

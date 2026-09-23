@@ -40,6 +40,8 @@ export async function launchZwcadWorker(options: {
   executable?: string;
   plugin?: string;
   source?: { filename: string; fileHash: string };
+  editor?: boolean;
+  visible?: boolean;
 }) {
   const config = { ...inspectorOptions(), ...options };
   if (![config.directory, config.executable, config.plugin].every(isAbsolute))
@@ -56,7 +58,7 @@ export async function launchZwcadWorker(options: {
   const owner = await launchOwnedHost({
     executable: config.executable,
     args: ['/b', script],
-    visible: false,
+    visible: config.visible ?? false,
     environment: {
       ...process.env,
       VIDE_WORKER_DIRECTORY: config.directory,
@@ -64,6 +66,7 @@ export async function launchZwcadWorker(options: {
       VIDE_WORKER_SESSION: sessionId,
       VIDE_WORKER_SOURCE: config.source?.filename || '',
       VIDE_WORKER_SOURCE_HASH: config.source?.fileHash || '',
+      VIDE_WORKER_EDITOR: config.editor ? '1' : '0',
     },
   });
   try {
@@ -123,8 +126,11 @@ export async function launchZwcadWorker(options: {
       );
     return {
       identity,
+      connection: { identity, token, directory: config.directory, executable: config.executable },
+      detach: () => owner.detach(),
       stop: () => owner.stop(),
       query: () => call({ method: 'query' }),
+      capture: () => call({ method: 'capture' }),
       exportModel: async () =>
         z
           .object({ ok: z.literal(true), model: z.unknown() })

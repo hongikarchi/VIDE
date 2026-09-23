@@ -6,13 +6,8 @@ import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { checkDatabase } from './database-check.ts';
 
-export class DomainError extends Error {
-  code: string;
-  constructor(code: string) {
-    super(code);
-    this.code = code;
-  }
-}
+import { DomainError } from '../contracts/errors.ts';
+export { DomainError } from '../contracts/errors.ts';
 function fail(code: string): never {
   throw new DomainError(code);
 }

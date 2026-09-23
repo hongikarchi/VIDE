@@ -81,7 +81,7 @@ function Documents({ notify, onCapture, onSelection }: Props) {
       </button>
       <select
         id="host-documents"
-        aria-label="열린 Rhino 문서"
+        aria-label="열린 호스트 문서"
         hidden={!catalog?.documents.length}
         disabled={busy}
         value={selected}
@@ -93,14 +93,16 @@ function Documents({ notify, onCapture, onSelection }: Props) {
         {catalog?.documents.map((item) => (
           <option key={key(item)} value={key(item)}>
             {item.name}
-            {item.instance ? ` · Rhino ${item.instance.split(':')[0]}` : ''}
+            {item.instance
+              ? ` · ${item.host === 'zwcad' ? 'ZWCAD' : 'Rhino'} ${item.instance.split(':')[0]}`
+              : ''}
           </option>
         ))}
       </select>
       <small id="host-document-info">
         {notice ||
           (active
-            ? `${active.objectCount}개 객체 · ${active.units}${active.modified ? ' · 저장되지 않은 변경' : ''}`
+            ? `${active.objectCount}개 객체 · ${active.units}${active.modified === null ? ' · 저장 상태 미확인' : active.modified ? ' · 저장되지 않은 변경' : ''}`
             : '연결된 열린 문서가 없습니다.')}
       </small>
       <button

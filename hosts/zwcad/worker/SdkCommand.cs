@@ -24,6 +24,7 @@ public sealed class SdkCommand
     private static string token, session, document, ticks, directory;
     private static int pid, commandThread;
     private static SdkSession execution;
+    private static EditorSession editor;
 
     [CommandMethod("VIDESdkSession", CommandFlags.Session)]
     public void Start()
@@ -41,7 +42,11 @@ public sealed class SdkCommand
         Process process = Process.GetCurrentProcess();
         pid = process.Id; ticks = process.StartTime.ToUniversalTime().Ticks.ToString();
         document = Guid.NewGuid().ToString(); commandThread = Thread.CurrentThread.ManagedThreadId;
-        try { execution = new SdkSession(directory, Environment.GetEnvironmentVariable("VIDE_WORKER_SOURCE"), Environment.GetEnvironmentVariable("VIDE_WORKER_SOURCE_HASH")); }
+        try {
+            if (Environment.GetEnvironmentVariable("VIDE_WORKER_EDITOR") == "1")
+                editor = new EditorSession(directory, Environment.GetEnvironmentVariable("VIDE_WORKER_SOURCE"), Environment.GetEnvironmentVariable("VIDE_WORKER_SOURCE_HASH"));
+            else execution = new SdkSession(directory, Environment.GetEnvironmentVariable("VIDE_WORKER_SOURCE"), Environment.GetEnvironmentVariable("VIDE_WORKER_SOURCE_HASH"));
+        }
         catch (System.Exception error) {
             File.WriteAllText(report + ".error.json", new JavaScriptSerializer().Serialize(new { code = error is InvalidOperationException ? error.Message : "ZWCAD_EXECUTION_FAILED" }));
             return;
@@ -104,8 +109,7 @@ public sealed class SdkCommand
                 if (Value(request, "sessionId") != session || Value(request, "pid") != pid.ToString() || Value(request, "startTicks") != ticks)
                     throw new InvalidOperationException("HOST_OWNERSHIP_MISMATCH");
                 if (Value(request, "documentId") != document) throw new InvalidOperationException("DOCUMENT_MISMATCH");
-                if (execution == null && Value(request, "revision") != "0") throw new InvalidOperationException("STALE_REVISION");
-                if (Value(envelope, "type") != "vide" || (execution == null && Value(request, "method") != "query")) throw new InvalidOperationException("UNSUPPORTED_METHOD");
+                if (Value(envelope, "type") != "vide") throw new InvalidOperationException("UNSUPPORTED_METHOD");
                 if (pending.Count >= 1) throw new InvalidOperationException("HOST_BUSY");
                 var completion = new TaskCompletionSource<object>();
                 pending.Enqueue(delegate {
@@ -113,7 +117,7 @@ public sealed class SdkCommand
                     if (completion.Task.IsCompleted) return;
                     try {
                         if (Thread.CurrentThread.ManagedThreadId != commandThread) throw new InvalidOperationException("WRONG_HOST_THREAD");
-                        completion.TrySetResult(execution.Dispatch(request));
+                        completion.TrySetResult(editor != null ? editor.Dispatch(request) : execution.Dispatch(request));
                     }
                     catch (System.Exception error) { completion.TrySetException(error); }
                 });

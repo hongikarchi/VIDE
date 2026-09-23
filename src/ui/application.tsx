@@ -31,7 +31,7 @@ interface Props {
 }
 const dialog = document.createElement('dialog');
 dialog.className = 'quantity-dialog application-dialog';
-dialog.setAttribute('aria-label', 'Rhino 원본 적용');
+dialog.setAttribute('aria-label', '호스트 원본 적용');
 document.body.append(dialog);
 const root = createRoot(dialog);
 let opening = 0,
@@ -54,7 +54,7 @@ function Application({ projectId, requestId, catalog, sourceDocument, onResult }
   const [info, setInfo] = useState(
     documents.length
       ? '적용할 문서를 고르고 영향 범위를 확인하세요.'
-      : '열린 Rhino 문서가 없습니다.',
+      : '열린 호스트 문서가 없습니다.',
   );
   const locked = useRef(false),
     submitted = useRef(false),
@@ -106,7 +106,7 @@ function Application({ projectId, requestId, catalog, sourceDocument, onResult }
     submitted.current = true;
     setSent(true);
     lock();
-    setInfo('Rhino 문서에 반영 중…');
+    setInfo('선택한 문서에 반영 중…');
     try {
       const result = resultSchema.parse(
         await api(`/projects/${projectId}/applications/${preview.id}`, 'POST', {}),
@@ -132,7 +132,10 @@ function Application({ projectId, requestId, catalog, sourceDocument, onResult }
   return (
     <>
       <div className="quantity-head">
-        <h2>Rhino 문서에 적용</h2>
+        <h2>
+          {documents.find((doc) => key(doc) === target)?.host === 'zwcad' ? 'ZWCAD' : 'Rhino'}{' '}
+          문서에 적용
+        </h2>
         <button
           disabled={pending}
           onClick={() => {
@@ -142,9 +145,9 @@ function Application({ projectId, requestId, catalog, sourceDocument, onResult }
           닫기
         </button>
       </div>
-      <p>선택한 열린 문서에 이 후보를 반영합니다. 파일 저장은 Rhino에서 별도로 수행합니다.</p>
+      <p>선택한 열린 문서에 이 후보를 반영합니다. 파일 저장은 해당 호스트에서 별도로 수행합니다.</p>
       <select
-        aria-label="적용할 Rhino 문서"
+        aria-label="적용할 호스트 문서"
         value={target}
         disabled={pending || sent || !!sourceDocument || !documents.length}
         onChange={(event) => {

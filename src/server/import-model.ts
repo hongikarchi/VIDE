@@ -165,6 +165,7 @@ export async function captureModel(
   workspace: Workspace,
   host: ImportHost,
   capture: typeof captureDocument = captureDocument,
+  hostKind: 'rhino' | 'zwcad' = 'rhino',
 ) {
   if (
     !target ||
@@ -177,10 +178,10 @@ export async function captureModel(
   const input = {
     id: target.id,
     provider: 'codex-cli',
-    host: 'rhino',
+    host: hostKind,
     source: 'document',
     permission: 'candidate',
-    body: '열린 Rhino 문서 가져오기',
+    body: `열린 ${hostKind === 'zwcad' ? 'ZWCAD' : 'Rhino'} 문서 가져오기`,
     pins: [],
     sketches: [],
     files: [],
@@ -188,12 +189,12 @@ export async function captureModel(
   };
   const submitted = workspace.submit(projectId, input);
   if (!submitted.created) return submitted.request;
-  workspace.update(projectId, input.id, 'running', { phase: 'capture', host: 'rhino' });
+  workspace.update(projectId, input.id, 'running', { phase: 'capture', host: hostKind });
   try {
     const result = await capture(host, projectId, input.id, target.instance, target.documentId);
     return workspace.update(projectId, input.id, 'succeeded', {
       ...result,
-      host: 'rhino',
+      host: hostKind,
       hostExecuted: true,
       text: '열린 문서의 작업 사본을 가져왔습니다. 원본은 변경하지 않았으며 이후 변경은 자동 동기화하지 않습니다.',
     });
@@ -205,7 +206,12 @@ export async function captureModel(
       error.code === 'HOST_RESULT_UNKNOWN' && error.intent?.executionMode === 'sdk'
         ? 'unknown'
         : 'failed',
-      { ...error.intent, code: error.code || 'CAPTURE_FAILED', host: 'rhino', hostExecuted: false },
+      {
+        ...error.intent,
+        code: error.code || 'CAPTURE_FAILED',
+        host: hostKind,
+        hostExecuted: false,
+      },
     );
   }
 }

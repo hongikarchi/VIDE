@@ -42,7 +42,7 @@ try {
   const apply = async (index) => {
     await page.getByRole('button', { name: '문서에 적용', exact: true }).nth(index).click();
     await page.locator('.application-dialog').waitFor({ state: 'visible' });
-    await page.getByLabel('적용할 Rhino 문서', { exact: true }).selectOption(String(id));
+    await page.getByLabel('적용할 호스트 문서', { exact: true }).selectOption(String(id));
     await page.getByRole('button', { name: '영향 검토', exact: true }).click();
     await page
       .getByRole('button', { name: '검토한 변경 적용', exact: true })

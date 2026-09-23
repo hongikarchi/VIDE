@@ -94,7 +94,7 @@ initializeDocuments(
     if (!project || busy) throw Error('현재 작업이 끝난 뒤 가져오세요.');
     busy = true;
     render();
-    message('열린 Rhino 문서의 작업 사본을 가져오고 있습니다.');
+    message('열린 호스트 문서의 작업 사본을 가져오고 있습니다.');
     try {
       const request = await requestData(`/projects/${currentProject().id}/capture`, 'POST', {
         ...target,

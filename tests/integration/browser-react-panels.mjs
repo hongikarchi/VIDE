@@ -95,7 +95,7 @@ try {
       },
     });
   });
-  await page.getByText('열린 Rhino 문서', { exact: true }).click();
+  await page.getByText('열린 호스트 문서', { exact: true }).click();
   await page.locator('#refresh-documents').click();
   await page.locator('#host-documents').selectOption('2');
   await page.locator('#inspect-selection').click();
@@ -361,12 +361,12 @@ try {
   });
   await page.reload();
   await page.getByRole('button', { name: '문서에 적용', exact: true }).click();
-  const application = page.getByRole('dialog', { name: 'Rhino 원본 적용', exact: true });
+  const application = page.getByRole('dialog', { name: '호스트 원본 적용', exact: true });
   await application.getByRole('button', { name: '영향 검토', exact: true }).click();
   await page.waitForFunction(
     () => !document.querySelector('.application-dialog button:last-child').disabled,
   );
-  await application.getByLabel('적용할 Rhino 문서', { exact: true }).selectOption('2');
+  await application.getByLabel('적용할 호스트 문서', { exact: true }).selectOption('2');
   assert.equal(
     await application.getByRole('button', { name: '검토한 변경 적용', exact: true }).isDisabled(),
     true,

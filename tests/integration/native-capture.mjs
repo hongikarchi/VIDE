@@ -41,7 +41,7 @@ try {
   await page.waitForFunction(() =>
     document.querySelector('#connection-status').textContent.includes('연결됨'),
   );
-  await page.getByText('열린 Rhino 문서', { exact: true }).click();
+  await page.getByText('열린 호스트 문서', { exact: true }).click();
   await page.locator('#refresh-documents').click();
   await page.locator('#host-documents').selectOption(String(documentId));
   await page.locator('#capture-document').click();

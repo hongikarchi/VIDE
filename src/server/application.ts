@@ -108,11 +108,15 @@ export class Applications {
   async prepare(projectId: string, requestId: string, rawTarget: unknown) {
     const target = hostTargetSchema.parse(rawTarget);
     const candidate = this.workspace.get(projectId, requestId);
-    if (!candidate.result?.hostExecuted || (candidate.result.host || 'rhino') !== 'rhino')
+    if (
+      !candidate.result?.hostExecuted ||
+      ((candidate.result.host || 'rhino') !== 'rhino' && candidate.result.executionMode !== 'sdk')
+    )
       throw new DomainError('UNSUPPORTED_APPLICATION');
     // The legacy apply adapter understands translations/templates, not arbitrary SDK geometry edits.
     if (candidate.result.executionMode === 'sdk' && !this.sdk)
       throw new DomainError('UNSUPPORTED_APPLICATION');
+    const targetHost = candidate.result.host === 'zwcad' ? 'zwcad' : 'rhino';
     const candidateResult = resultSchema.parse(candidate.result);
     let movements: Movement[] | undefined, effect: z.infer<typeof effectSchema>;
     if (candidate.result.executionMode === 'sdk') {
@@ -160,20 +164,20 @@ export class Applications {
       .prepare(
         'SELECT * FROM connections WHERE host=? AND instanceId=? AND documentId=? AND connected=1',
       )
-      .get('rhino', target.instance, String(target.documentId));
+      .get(targetHost, target.instance, String(target.documentId));
     let connection = row
       ? z.object({ id: z.string(), projectId: z.string() }).parse(row)
       : undefined;
     if (connection && connection.projectId !== projectId)
       throw new DomainError('DOCUMENT_ALREADY_CONNECTED');
     connection ??= this.store.registerConnection(projectId, {
-      host: 'rhino',
+      host: targetHost,
       instanceId: target.instance,
       documentId: String(target.documentId),
     });
     if (this.store.hasUncertainWrite(connection.id)) throw new DomainError('WRITE_UNCERTAIN');
     const run = this.store.createRun(projectId, {
-      goal: 'Apply inspected Rhino candidate',
+      goal: `Apply inspected ${targetHost} candidate`,
       targets: [connection.id],
     });
     const command: Command = {
@@ -197,7 +201,13 @@ export class Applications {
     };
     if (this.pending.size >= 100) this.pending.delete(this.pending.keys().next().value!);
     this.pending.set(command.id, { projectId, command, expires: Date.now() + 10 * 60 * 1000 });
-    return { id: command.id, ...effect, documentId: target.documentId, saveRequired: true };
+    return {
+      id: command.id,
+      ...effect,
+      mode: command.payload.mode,
+      documentId: target.documentId,
+      saveRequired: true,
+    };
   }
   async recover(projectId: string, id: string) {
     const command = this.store.getCommand(projectId, id);

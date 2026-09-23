@@ -46,7 +46,7 @@ try {
     code: `${guard}document.Objects.UnselectAll();document.Objects.Select(new Guid("${solid.id}"),true);document.Views.Redraw();`,
   });
   assert.equal(select.success, true);
-  await page.getByText('열린 Rhino 문서', { exact: true }).click();
+  await page.getByText('열린 호스트 문서', { exact: true }).click();
   await page.locator('#refresh-documents').click();
   await page.locator('#host-documents').selectOption(String(source.documentId));
   await page.locator('#inspect-selection').click();

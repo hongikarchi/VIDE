@@ -48,13 +48,13 @@ try {
     'Test must start at captured state; do not retry a completed write.',
   );
   await page.getByRole('button', { name: '문서에 적용', exact: true }).click();
-  const dialog = page.getByRole('dialog', { name: 'Rhino 원본 적용' });
+  const dialog = page.getByRole('dialog', { name: '호스트 원본 적용' });
   await dialog.waitFor();
   assert.equal(
-    await dialog.getByLabel('적용할 Rhino 문서').inputValue(),
+    await dialog.getByLabel('적용할 호스트 문서').inputValue(),
     String(source.documentId),
   );
-  assert.equal(await dialog.getByLabel('적용할 Rhino 문서').isDisabled(), true);
+  assert.equal(await dialog.getByLabel('적용할 호스트 문서').isDisabled(), true);
   await dialog.getByRole('button', { name: '영향 검토', exact: true }).click();
   await dialog
     .getByText('추가 0 · 수정 1 · 삭제 0개. 취득한 원본의 이동 대상만 변경합니다.', { exact: true })
