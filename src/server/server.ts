@@ -18,6 +18,7 @@ import { readWebAsset } from './web-assets.ts';
 import { Extensions } from '../core/extensions.ts';
 import { AgentTools } from './agent-tools.ts';
 import { SdkExecution } from './sdk-execution.ts';
+import { ZwcadSdkExecution } from './zwcad-sdk-execution.ts';
 import { AiSettings } from '../core/ai-settings.ts';
 import { ReviewNotes } from '../core/review-notes.ts';
 import { compareReviews } from '../core/review-comparison.ts';
@@ -105,6 +106,13 @@ export async function startServer({
   const sdk = sdkOptions
     ? new SdkExecution({ ...sdkOptions, tools: agentTools, origin: () => origin })
     : undefined;
+  const zwcadSdk = sdkOptions
+    ? new ZwcadSdkExecution({
+        directory: join(dirname(filename), 'zwcad-sdk-models'),
+        tools: agentTools,
+        origin: () => origin,
+      })
+    : undefined;
   const applications = new Applications(store, workspace, {
     ...applicationOptions,
     sdk: sdk?.editors,
@@ -122,6 +130,7 @@ export async function startServer({
     hosts,
     settings: aiSettings,
     sdk,
+    zwcadSdk,
   });
   const withApplications = (request: StoredWork) => ({
     ...request,
@@ -561,7 +570,7 @@ export async function startServer({
         if (artifact[3] === 'open') {
           send(
             200,
-            saved.result.executionMode === 'sdk' && sdk
+            saved.result.executionMode === 'sdk' && saved.result.host !== 'zwcad' && sdk
               ? await sdk.open(saved.result)
               : await hosts[z.enum(['rhino', 'zwcad']).parse(saved.result.host || 'rhino')].open(
                   z.string().parse(saved.result.filename),
@@ -590,11 +599,12 @@ export async function startServer({
           send(200, withApplications(saved));
           return;
         }
-        if (saved.state !== 'unknown' || saved.result?.executionMode !== 'sdk' || !sdk)
+        const recoverySdk = saved.result?.host === 'zwcad' ? zwcadSdk : sdk;
+        if (saved.state !== 'unknown' || saved.result?.executionMode !== 'sdk' || !recoverySdk)
           throw new DomainError('NOT_FOUND');
         const key = 'sdk:' + projectId + ':' + id;
         if (!importRecoveries.has(key)) {
-          const pending = sdk
+          const pending = recoverySdk
             .recover(saved.result)
             .then(async (result) => {
               const recovered = workspace.update(projectId, id, 'succeeded', result);

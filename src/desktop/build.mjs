@@ -60,10 +60,21 @@ await exec(
 );
 const zwcadRuntime = join(directory, 'app', 'hosts', 'zwcad', 'worker', 'runtime');
 await mkdir(zwcadRuntime, { recursive: true });
-await copyFile(
-  join(root, '.vide/build/zwcad-worker/VIDE.Zwcad.Worker.dll'),
-  join(zwcadRuntime, 'VIDE.Zwcad.Worker.dll'),
-);
+// Explicit runtime dependencies only; installed ZWCAD SDK assemblies are never bundled.
+for (const file of [
+  'VIDE.Zwcad.Worker.dll',
+  'Microsoft.CodeAnalysis.dll',
+  'Microsoft.CodeAnalysis.CSharp.dll',
+  'System.Buffers.dll',
+  'System.Collections.Immutable.dll',
+  'System.Memory.dll',
+  'System.Numerics.Vectors.dll',
+  'System.Reflection.Metadata.dll',
+  'System.Runtime.CompilerServices.Unsafe.dll',
+  'System.Text.Encoding.CodePages.dll',
+  'System.Threading.Tasks.Extensions.dll',
+])
+  await copyFile(join(root, '.vide/build/zwcad-worker', file), join(zwcadRuntime, file));
 await writeFile(
   join(directory, 'app', 'package.json'),
   JSON.stringify({ ...pkg, version }, null, 2) + '\n',

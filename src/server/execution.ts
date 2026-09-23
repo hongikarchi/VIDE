@@ -5,6 +5,7 @@ import type { RequestInput } from '../contracts/workspace.ts';
 import type { CliOptions, ProviderContext, Progress, ProviderStatus } from '../ai/claude-cli.ts';
 import type { GeometryObject } from '../core/geometry.ts';
 import type { SdkExecution } from './sdk-execution.ts';
+import type { ZwcadSdkExecution } from './zwcad-sdk-execution.ts';
 import { workspaceResultSchema } from '../contracts/workspace-result.ts';
 interface Provider {
   run(
@@ -27,6 +28,7 @@ interface Options {
   hosts?: Partial<Record<'rhino' | 'zwcad', Host>>;
   settings?: { get: () => { paths: Partial<Record<string, string | null>> } };
   sdk?: SdkExecution;
+  zwcadSdk?: ZwcadSdkExecution;
 }
 const pinsSchema = z.array(
   z
@@ -59,13 +61,14 @@ export class Execution {
   hosts: Partial<Record<'rhino' | 'zwcad', Host>>;
   settings?: Options['settings'];
   sdk?: SdkExecution;
+  zwcadSdk?: ZwcadSdkExecution;
   active = new Map<
     string,
     { controller: AbortController; completion: Promise<void>; projectId: string }
   >();
   constructor(
     workspace: Workspace,
-    { providerFactory = createProvider, host, hosts, settings, sdk }: Options = {},
+    { providerFactory = createProvider, host, hosts, settings, sdk, zwcadSdk }: Options = {},
   ) {
     this.workspace = workspace;
     this.providerFactory = providerFactory;
@@ -74,6 +77,7 @@ export class Execution {
     this.hosts = hosts || { rhino: host };
     this.settings = settings;
     this.sdk = sdk;
+    this.zwcadSdk = zwcadSdk;
   }
   executable(provider: string) {
     return (
@@ -231,8 +235,9 @@ export class Execution {
             layer: layer64 ? Buffer.from(layer64, 'base64').toString('utf8') : null,
           })),
         });
-      if (this.sdk && target === 'rhino') {
-        const result = await this.sdk.run({
+      const sdk = target === 'rhino' ? this.sdk : this.zwcadSdk;
+      if (sdk) {
+        const result = await sdk.run({
           input,
           previous,
           items,
