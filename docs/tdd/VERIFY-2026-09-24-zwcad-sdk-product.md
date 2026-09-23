@@ -2,7 +2,7 @@
 id: VERIFY-2026-09-24-zwcad-sdk-product
 title: ZWCAD 범용 SDK 제품 연결 검증
 status: review
-version: 0.3
+version: 0.4
 updated: 2026-09-24
 owner: agent:codex
 related: [PLAN-02, T-006, T-018, H-ZWCAD-01, H-ZWCAD-03, H-ZWCAD-04, AC-24]
@@ -28,7 +28,7 @@ related: [PLAN-02, T-006, T-018, H-ZWCAD-01, H-ZWCAD-03, H-ZWCAD-04, AC-24]
 
 ## 남은 범위
 
-독립 직선 XY LWPolyline의 기존 표시/검수 범위다. 모든 CAD 객체·관계 보존이나 완전한 OS 코드 격리의 증거가 아니다. 자체 SDK 편집 창·고정 적용은 아래 범위까지 검증했다. 일반 문서 간 복사, 실제 설치 배포, 공유 의견 후 수정·재게시 왕복은 남아 있다. 논현동 실무 과업 수용을 대신하지 않는다. 구독 사용량은 공급자가 보고하지 않은 경우 미확인이며 시험 결과로 요금/속도 우열을 주장하지 않는다.
+독립 직선 XY LWPolyline의 기존 표시/검수 범위다. 모든 CAD 객체·관계 보존이나 완전한 OS 코드 격리의 증거가 아니다. 자체 SDK 편집 창·고정 적용은 아래 범위까지 검증했다. 일반 객체/관계의 문서 간 정확 복사와 별도 PC 설치는 남아 있다. 로컬 패키지는 [패키지 검증](VERIFY-2026-09-24-sdk-package.md), 공유 의견 후 수정·재게시 파일 왕복은 [공유 검증](VERIFY-2026-09-24-sharing-host-roundtrip.md), 한 요청의 연계는 [연계 검증](VERIFY-2026-09-24-linked-hosts.md)을 통과했다. 논현동 실무 과업 수용을 대신하지 않는다. 구독 사용량은 공급자가 보고하지 않은 경우 미확인이며 시험 결과로 요금/속도 우열을 주장하지 않는다.
 
 ## 자체 편집 창과 고정 적용
 
@@ -47,3 +47,7 @@ related: [PLAN-02, T-006, T-018, H-ZWCAD-01, H-ZWCAD-03, H-ZWCAD-04, AC-24]
 - `tests/integration/zwcad-native-edit.mjs`: 소유한 합성 편집 창에서 기본 MOVE·QSAVE 명령을 실행하고 실제 저장 DWG를 별도 SDK 실행본으로 재열어 이동 좌표·240 m²·Handle을 확인했다. SAVEAS 뒤 이름이 달라진 문서와 CLOSE로 닫힌 문서는 재취득을 거절했다. 증거: `.vide/zwcad-native-edit/5c72d2e2-7d4e-45f4-a206-c98ddfc728cc`. 시험용 명령 어셈블리는 tests에만 있고 제품 배포에 포함하지 않는다.
 - 검사 사본 SaveAs 뒤 DBMOD가 켜지는 현상을 발견해 설치 SDK의 Document.PushDbmod/PopDbmod로 취득 전 플래그를 보존했다. 저장/미저장 이동 두 조건에서 반복 취득 뒤 플래그·파일명·형상/Handle 보존과 저장 파일 재열기를 통과했다. Undo 표식을 둔 대조군과 취득 후 조건 모두 기본 UNDO Back으로 이전 형상 복구를 확인했다. 단일 U 시험에는 호스트 시작의 Layer 동작이 섞여 그 결과를 취득 회귀로 단정하지 않았다. Database.UndoRecording getter는 설치본에서 NotImplementedException이어서 사용하지 않는다. 최신 증거: `.vide/zwcad-native-edit/20b5a6b5-a85a-472c-8d07-513085b2cb29`.
 - Rhino의 같은 문서 UI 회귀: `.vide/browser-owned-editor/ed70b4d0-a3b8-4960-9886-b380fa1083d2`, 실제 열기·재취득·적용·재연결과 같은 객체의 체적 24→48 m³ 통과.
+
+## SDK 삭제와 적용 후 재열기
+
+확장한 `tests/integration/zwcad-editors.mjs`가 `.vide/zwcad-editors/5849cfc7-e77e-4eb8-beaf-56202e97ef65`에서 통과했다. 실제 SDK로 두 폴리라인 중 추가 객체를 삭제하고 후보 저장/읽기에서 남은 객체의 Handle을 유지했다. 명시 적용 전 영향은 삭제 1·수정 0, 고정 적용 뒤 객체 1개·260 m², 중복 적용은 같은 영수증이었다. 취득한 최종 DWG를 별도 SDK 실행본에서 재열어 객체 수와 Handle을 확인했다. 다른 실행본의 문서와 입력 원본은 유지했다. 사용자가 연 원본, 블록/참조/관계 객체의 삭제 지원으로 확대 해석하지 않는다.

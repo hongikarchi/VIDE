@@ -2,7 +2,7 @@
 id: VERIFY-2026-09-24-sharing-host-roundtrip
 title: 공유 의견의 실제 호스트 수정·재게시 왕복
 status: review
-version: 0.2
+version: 0.3
 updated: 2026-09-24
 owner: agent:codex
 related: [PLAN-02, T-009, T-017, SPEC-04, H-ZWCAD-04]
@@ -29,3 +29,7 @@ related: [PLAN-02, T-009, T-017, SPEC-04, H-ZWCAD-04]
 ## 로컬 복구 회귀
 
 `membership.mjs --backup`도 통과했다. `.vide/sharing-membership/660ee563-94ec-4194-b401-dd3e5c8e4059`에서 10 MiB 전송/재시작 복구 1,084 ms, 중지한 로컬 에뮬레이터 스냅샷의 복원/검증 937 ms였다. 게시·의견·권한의 복원 일치를 검사했다. 이는 loopback 실측이며 원격 D1 반출·실서비스 재해복구·인터넷 지연의 증거가 아니다.
+
+## 원격 무료 조건 재확인
+
+2026-09-24 Wrangler 4.136.1의 읽기 전용 `r2 bucket list/info`로 계정 저장 통계를 재확인했다. VIDE staging은 0개·0 B이지만 기존 다른 버킷 하나가 약 11.2 GB이며 추가 버킷에도 데이터가 있다. 객체 내용은 읽지 않았고 자료를 삭제하지 않았다. [공식 R2 가격표](https://developers.cloudflare.com/r2/pricing/)의 Standard 무료 저장은 월 10 GB-month이며 일별 최고 저장량의 월 평균으로 계산된다. 현재 용량만으로 실제 월 청구액을 확정할 수 없지만 무료 시험을 보장할 근거도 없어 `UPLOADS_ENABLED=false`를 유지했다. 무료 여유 또는 명시된 유료 시험 예산이 확인된 뒤 원격 모델 게시·PC 종료 후 열람을 재개한다. 현재 원격 미검수와 로컬 왕복 완료를 구분한다.

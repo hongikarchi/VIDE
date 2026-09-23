@@ -91,9 +91,67 @@ var copy=(Polyline)line.Clone();copy.TransformBy(Matrix3d.Displacement(new Vecto
   assert.equal(other.objects.length, 1);
   assert.equal(other.scene[0].area, 240);
   await assert.rejects(editors.preview(target, candidate), { code: 'STALE_REFERENCE' });
+  const deletionWorker = await launchZwcadWorker({
+    directory: join(directory, 'deletion'),
+    source: { filename: edited.filename, fileHash: edited.fileHash },
+  });
+  workers.push(deletionWorker);
+  const deletion = await deletionWorker.execute(
+    randomUUID(),
+    0,
+    `
+var bt=(BlockTable)tr.GetObject(db.BlockTableId,OpenMode.ForRead);
+var ms=(BlockTableRecord)tr.GetObject(bt[BlockTableRecord.ModelSpace],OpenMode.ForRead);
+var ids=ms.Cast<ObjectId>().ToArray();
+tr.GetObject(ids[1],OpenMode.ForWrite).Erase();`,
+  );
+  assert.equal(deletion.ok, true, JSON.stringify(deletion));
+  assert.equal(deletion.model.objects.length, 1);
+  assert.equal(deletion.model.objects[0].nativeId, edited.objects[0].nativeId);
+  const deletionCandidate = { ...deletion, sourceDocument: edited.sourceDocument };
+  const deletionEffect = await editors.preview(target, deletionCandidate);
+  assert.equal(deletionEffect.removed, 1);
+  assert.equal(deletionEffect.updated, 0);
+  const deletionId = randomUUID();
+  const deletionTarget = {
+    ...target,
+    documentHash: edited.sourceDocument.documentHash,
+    candidateHash: deletion.fileHash,
+  };
+  const deletionApplied = await editors.apply(deletionId, deletionCandidate, deletionTarget);
+  assert.equal(deletionApplied.state, 'succeeded', JSON.stringify(deletionApplied));
+  assert.deepEqual(
+    await editors.apply(deletionId, deletionCandidate, deletionTarget),
+    deletionApplied,
+  );
+  const final = await editors.capture(target);
+  assert.equal(final.objects.length, 1);
+  assert.equal(final.objects[0].nativeId, edited.objects[0].nativeId);
+  assert.equal(final.scene[0].area, 260);
+  const reopened = await launchZwcadWorker({
+    directory: join(directory, 'reopened'),
+    source: { filename: final.filename, fileHash: final.fileHash },
+  });
+  workers.push(reopened);
+  const readback = await reopened.exportModel();
+  assert.equal(readback.objects.length, 1);
+  assert.equal(readback.objects[0].nativeId, final.objects[0].nativeId);
+
   await writeFile(
     join(directory, 'passed.json'),
-    JSON.stringify({ passed: true, docs, capture, sourceUnchanged: true }, null, 2),
+    JSON.stringify(
+      {
+        passed: true,
+        docs,
+        capture,
+        deletionEffect,
+        deletionApplied,
+        deletionReadback: readback,
+        sourceUnchanged: true,
+      },
+      null,
+      2,
+    ),
   );
   console.log(JSON.stringify({ passed: true, directory }));
 } catch (error) {

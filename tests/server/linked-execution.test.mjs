@@ -1,4 +1,4 @@
-import test from 'node:test';
+﻿import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -219,3 +219,64 @@ for (const uncertain of [false, true])
       assert.equal(parentAfterRecovery.result.targetResults[1].candidate, true);
     }
   });
+
+test('linked target startup failure releases the ready target without calling the agent', async (t) => {
+  const { workspace, project, request, tools } = await fixture(t);
+  const parent = workspace.submit(project.id, request).request;
+  workspace.update(project.id, parent.id, 'running');
+  let agentCalls = 0;
+  const ready = {
+    run: async (task) => {
+      const scope = tools.issue({
+        targetRef: 'ready',
+        isCurrent: () => true,
+        handlers: { query: () => ({}) },
+      });
+      try {
+        await task
+          .provider({
+            url: 'http://127.0.0.1:1/mcp',
+            token: scope.token,
+            targetRef: 'ready',
+            tools: ['query'],
+          })
+          .run(
+            { goal: 'ready', revision: 1, items: [], includedIds: [] },
+            { signal: task.signal, onProgress: () => {} },
+          );
+        return { hostExecuted: true, verified: true, host: task.input.host };
+      } finally {
+        scope.revoke();
+      }
+    },
+  };
+  await runLinked({
+    request: parent,
+    workspace,
+    tools,
+    drivers: {
+      zwcad: ready,
+      rhino: {
+        run: async () => {
+          throw Object.assign(Error('startup'), { code: 'HOST_UNAVAILABLE' });
+        },
+      },
+    },
+    items: [],
+    signal: new AbortController().signal,
+    provider: () => ({
+      run: async () => {
+        agentCalls++;
+        return { text: '' };
+      },
+    }),
+  });
+  assert.equal(agentCalls, 0);
+  const final = workspace.get(project.id, parent.id);
+  assert.equal(final.state, 'failed');
+  assert.equal(final.result.code, 'LINKED_TARGET_UNAVAILABLE');
+  assert.deepEqual(
+    final.result.targetResults.map((row) => row.state),
+    ['succeeded', 'failed'],
+  );
+});
