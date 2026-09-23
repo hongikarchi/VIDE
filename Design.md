@@ -2,7 +2,7 @@
 id: DESIGN
 title: VIDE 시각·상호작용 기준
 status: review
-version: 0.32
+version: 0.33
 updated: 2026-09-24
 owner: user
 related: [FR-02, FR-03, FR-13, FR-16, FR-19, FR-22, AC-19, AC-22, AC-25, AC-33, AC-34, AC-35, AC-38, AC-39, OQ-04, ADR-003, ADR-004, ADR-009, ADR-010]
@@ -11,7 +11,7 @@ related: [FR-02, FR-03, FR-13, FR-16, FR-19, FR-22, AC-19, AC-22, AC-25, AC-33, 
 
 # VIDE · Design DNA와 프런트 표현 기준
 
-이 문서는 **화면의 시각 언어·배치·컴포넌트·조작 표현**을 소유한다. 기능 입력/결과·상태 전이·권한은 [SPEC](docs/specs/README.md), 아키텍처·저장/API·구현 순서·시험 방법은 [PLAN](docs/plans/PLAN.md)을 따른다. 기능을 설명하는 문장을 여기서 다시 확정하지 않는다. 문서별 판단 방법과 개발 진행은 [개발 가이드 §01·§12](DEVELOPMENT_GUIDE.md)에 있다.
+이 문서는 **화면의 시각 언어·배치·컴포넌트·조작 표현**을 소유한다. 기능 입력/결과·상태 전이·권한은 [SPEC](docs/specs/README.md), 기술 구조·저장/API는 [ARCH](docs/architecture/ARCH-01-system.md), 구현 순서·시험 방법은 [PLAN](docs/plans/PLAN.md)을 따른다. 기능을 설명하는 문장을 여기서 다시 확정하지 않는다. 문서별 판단 방법과 개발 진행은 [개발 가이드 §01·§12](DEVELOPMENT_GUIDE.md)에 있다.
 
 기능 의미가 바뀌면 SPEC을 고치고, 같은 의미를 더 잘 보여 주는 변경이면 이 문서를 고친다. 아래 상태 라벨은 SPEC 상태의 표현이며 서버 동작을 정의하지 않는다. 현재 개발 지시·착수 기준은 가이드 §12를 읽는다.
 

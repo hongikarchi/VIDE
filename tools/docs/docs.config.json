@@ -3,8 +3,8 @@
   "siteTitle": "VIDE",
   "index": "index.html",
   "next": {
-    "title": "구현 시작 · PLAN §6.3",
-    "desc": "개발 지시 후 입력 계약 → 공간 작업 UI → 실제 호스트 후보"
+    "title": "다음 작업 · PLAN §6.5",
+    "desc": "현재 단계와 작업별 계획을 확인한 뒤 해당 범위에서 재개"
   },
   "docs": [
     {
@@ -32,11 +32,19 @@
       "tableLabel": "Design"
     },
     {
+      "id": "architecture",
+      "src": "docs/architecture/ARCH-01-system.md",
+      "tab": "기술 설계",
+      "eyebrow": "TECHNICAL ARCHITECTURE",
+      "description": "구조 · 스택 · 저장/API · 호스트·공유 계약",
+      "tableLabel": "ARCH"
+    },
+    {
       "id": "plan",
       "src": "docs/plans/PLAN.md",
       "tab": "PLAN",
       "eyebrow": "PLAN",
-      "description": "아키텍처 · 구현 순서 · 검증 계획",
+      "description": "실행 순서 · 작업 연결 · 현재 상태 · 완료 관문",
       "tableLabel": "PLAN"
     },
     {
@@ -81,6 +89,16 @@
       "dir": "docs/decisions",
       "eyebrow": "DECISION RECORD",
       "tableLabel": "ADR"
+    },
+    {
+      "dir": "docs/architecture",
+      "eyebrow": "ARCHITECTURE",
+      "tableLabel": "ARCH"
+    },
+    {
+      "dir": "docs/research",
+      "eyebrow": "RESEARCH",
+      "tableLabel": "조사"
     }
   ]
 }

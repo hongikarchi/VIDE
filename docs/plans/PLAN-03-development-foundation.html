@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="description" content="ADR-005 · AI 실행 형태 — 미결 (스파이크 후 결정)"><meta name="generator" content="tools/docs/build.mjs — generated from docs/decisions/ADR-005-ai-execution-path-pending-spike.md; do not edit"><title>VIDE · AI 실행 형태 — 미결, 스파이크 결과로 결정</title><style>
+<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="description" content="개발 기반 구축과 저장소 보호"><meta name="generator" content="tools/docs/build.mjs — generated from docs/plans/PLAN-03-development-foundation.md; do not edit"><title>VIDE · 개발 기반 구축과 저장소 보호</title><style>
 :root{--ink:#292c2d;--muted:#626b6e;--line:#e1e3e1;--soft:#f5f5f1;--coral:#d97660;--paper:#fff;--font:"Pretendard","Noto Sans KR","Malgun Gothic",Arial,sans-serif}
 *{box-sizing:border-box}html{scroll-behavior:smooth;scroll-padding-top:92px}body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--font);letter-spacing:-.025em}a{color:inherit;text-underline-offset:4px}button,input,textarea,select{font:inherit;color:inherit}button{cursor:pointer;border:1px solid var(--line);border-radius:4px;background:var(--paper);padding:10px 15px;line-height:1.3}button:hover{background:var(--soft)}button:disabled{cursor:default;opacity:.6}button.primary{background:var(--ink);color:#fff;border-color:var(--ink)}button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible{outline:3px solid var(--coral);outline-offset:3px}textarea{resize:vertical}::selection{background:#f2d7ce}[hidden]{display:none!important}
 .skip{position:fixed;top:-80px;left:20px;z-index:100;background:white;padding:12px}.skip:focus{top:10px}
@@ -67,110 +67,70 @@ body.review-accepted ins{background:none;color:inherit;border:0;padding:0}
 body.review-accepted .toc-links a[data-reviews]::after{display:none}
 @media print{blockquote.review{break-inside:avoid;background:#eef3fc!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}ins,del{-webkit-print-color-adjust:exact;print-color-adjust:exact}.review-select{display:none}}
 </style></head><body>
-<!-- GENERATED FILE — source: docs/decisions/ADR-005-ai-execution-path-pending-spike.md — run: npm --prefix tools/docs run build -->
+<!-- GENERATED FILE — source: docs/plans/PLAN-03-development-foundation.md — run: npm --prefix tools/docs run build -->
 <a class="skip" href="#reading-main">본문으로 이동</a>
-<header class="topbar"><a class="brand" href="../../index.html" aria-label="VIDE 문서 모음"><b>V.</b><span>VIDE</span></a><nav class="doc-tabs" aria-label="문서 선택"><a class="doc-tab" href="../PRD.html">PRD</a><a class="doc-tab" href="../specs/README.html">SPEC</a><a class="doc-tab" href="../../Design.html">Design</a><a class="doc-tab" href="../architecture/ARCH-01-system.html">기술 설계</a><a class="doc-tab" href="../plans/PLAN.html">PLAN</a><a class="doc-tab" href="../../DEVELOPMENT_GUIDE.html">개발 가이드</a><a class="doc-tab" href="../../AI.html">AI 규약</a></nav><div class="top-actions"><label class="review-select">첨삭 <select id="review-mode" aria-label="첨삭 보기 방식"><option value="marked">표시</option><option value="original">원문만</option><option value="accepted">인라인 제안 미리보기</option></select></label><button id="source-download" title="현재 문서의 Markdown 원문 저장">원문 ↓</button><button id="print-doc" title="현재 문서 인쇄">인쇄</button></div></header>
-<div class="layout"><aside class="toc-shell" id="toc-shell" aria-label="현재 문서의 목차"><div class="toc-title"><strong>CONTENTS</strong><span id="toc-count"></span><button id="toc-toggle" aria-expanded="false" aria-controls="toc-body">목차 열기</button></div><div class="toc-body" id="toc-body"><input class="toc-search" id="toc-search" type="search" placeholder="장 제목으로 찾기" aria-label="현재 문서 목차 검색"><p class="toc-hint" id="nav-hint" role="status">장 제목으로 찾아갑니다.</p><nav class="toc-links" id="toc-links" aria-label="본문 장 이동"></nav><div class="toc-next">다음 작성할 문서<br><b>다음 작업 · PLAN §6.5</b><br>현재 단계와 작업별 계획을 확인한 뒤 해당 범위에서 재개</div></div></aside><main id="reading-main" tabindex="-1"><article id="adr-005-ai-execution-path-pending-spike" class="document"><header class="doc-hero"><div class="hero-label"><span class="eyebrow">DECISION RECORD</span><span><span class="pill">SUPERSEDED · v0.3</span><span class="pill">6 CHAPTERS</span><a class="pill review-pill" data-review-agent="codex" href="#adr-005-ai-execution-path-pending-spike-section-x5" title="CODEX 검토 요약으로 이동">CODEX 검토 1건</a></span></div><h1 tabindex="-1">ADR-005 · AI 실행 형태 — 미결 (스파이크 후 결정)</h1><div class="review-legend"><p><span><ins>초록</ins> 추가·교체 제안</span><span><del>빨강</del> 삭제·교체 대상</span><span>CLAUDE: 파란 상자 · CODEX: 보라 상자</span></p><p>검토자 필터는 코멘트·부록만 바꿉니다. ‘인라인 제안 미리보기’는 코멘트의 대안까지 합친 최종본이 아닙니다. 보기 전환은 MD 수정·수락·승인을 하지 않습니다.</p></div><div class="hero-meta">
-<p><strong>대체(superseded) · 2026-09-17.</strong> 제품 결정이 아니라 PLAN 결정이다. PLAN §9 결정 항목으로 이동했다.</p>
-</div></header><section class="doc-section" id="adr-005-ai-execution-path-pending-spike-section-1"><h2><span aria-hidden="true" class="section-num">01 /</span> 배경</h2>
-<p>FR-08 'MVP 한 실행 경로 이상'이 직접 API+자체 하네스인지, 에이전트 CLI/런타임 내장인지, 혼합인지에 따라 §9.3 중단·재개, §10.2 압축, §11.5(현 §11.4) 비용 관측, §1.3 전송 확인, FR-15·FR-18 수용 기준이 지켜지는 정도가 달라진다(PRD R-52, 가이드 Codex R-33·Claude R-39, 제안 OQ-12). 구독형 CLI를 제품 안에 내장하는 것은 이용 약관·데이터 보존·비용 모델이 걸린 제품 제약이다.</p>
-</section><section class="doc-section" id="adr-005-ai-execution-path-pending-spike-section-2"><h2><span aria-hidden="true" class="section-num">02 /</span> 선택지</h2>
-<div aria-label="ADR 표 1" class="table-scroll" role="region" tabindex="0"><table>
-<thead>
-<tr>
-<th>안</th>
-<th>내용</th>
-<th>트레이드오프</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>A</td>
-<td>API 기반 자체 하네스(사용자 API 키, 종량제)</td>
-<td>도구 호출 승인/거부·비용 관측·전송 목록·세션 소유가 모두 제품 통제 아래. 하네스를 직접 만들어야 함</td>
-</tr>
-<tr>
-<td>B</td>
-<td>에이전트 CLI/런타임 내장</td>
-<td>하네스 구축 없이 빠름. 비용·전송 관측이 제한되고 제품 내 재사용 허용 여부를 약관으로 확인해야 함</td>
-</tr>
-<tr>
-<td>C</td>
-<td>지금 정하지 않고 스파이크 뒤 결정</td>
-<td>결정이 늦어지는 대신 실측 근거로 정함</td>
-</tr>
-</tbody>
-</table></div>
-</section><section class="doc-section" id="adr-005-ai-execution-path-pending-spike-section-3"><h2><span aria-hidden="true" class="section-num">03 /</span> 결정</h2>
-<p><strong>C. 지금 정하지 않는다.</strong> 가이드 §06 스파이크 순서 ①(AI 실행 경로)의 결과로 결정한다.</p>
+<header class="topbar"><a class="brand" href="../../index.html" aria-label="VIDE 문서 모음"><b>V.</b><span>VIDE</span></a><nav class="doc-tabs" aria-label="문서 선택"><a class="doc-tab" href="../PRD.html">PRD</a><a class="doc-tab" href="../specs/README.html">SPEC</a><a class="doc-tab" href="../../Design.html">Design</a><a class="doc-tab" href="../architecture/ARCH-01-system.html">기술 설계</a><a class="doc-tab" href="PLAN.html">PLAN</a><a class="doc-tab" href="../../DEVELOPMENT_GUIDE.html">개발 가이드</a><a class="doc-tab" href="../../AI.html">AI 규약</a></nav><div class="top-actions"><button id="source-download" title="현재 문서의 Markdown 원문 저장">원문 ↓</button><button id="print-doc" title="현재 문서 인쇄">인쇄</button></div></header>
+<div class="layout"><aside class="toc-shell" id="toc-shell" aria-label="현재 문서의 목차"><div class="toc-title"><strong>CONTENTS</strong><span id="toc-count"></span><button id="toc-toggle" aria-expanded="false" aria-controls="toc-body">목차 열기</button></div><div class="toc-body" id="toc-body"><input class="toc-search" id="toc-search" type="search" placeholder="장 제목으로 찾기" aria-label="현재 문서 목차 검색"><p class="toc-hint" id="nav-hint" role="status">장 제목으로 찾아갑니다.</p><nav class="toc-links" id="toc-links" aria-label="본문 장 이동"></nav><div class="toc-next">다음 작성할 문서<br><b>다음 작업 · PLAN §6.5</b><br>현재 단계와 작업별 계획을 확인한 뒤 해당 범위에서 재개</div></div></aside><main id="reading-main" tabindex="-1"><article id="plan-03-development-foundation" class="document"><header class="doc-hero"><div class="hero-label"><span class="eyebrow">PLAN</span><span><span class="pill">REVIEW · v0.1</span><span class="pill">3 CHAPTERS</span></span></div><h1 tabindex="-1">개발 기반 구축과 저장소 보호</h1><div class="hero-meta">
+</div></header><section class="doc-section" id="plan-03-development-foundation-section-1"><h2><span aria-hidden="true" class="section-num">01 /</span> 범위와 착수</h2>
+<p>사용자가 계획을 검토한 뒤 착수한다. 이번 문서 작성은 도구 설치·Git 훅 변경·이력 재작성·제품 구현 착수가 아니다. 목표는 개발 중 회귀와 저장소 노출을 발견하고 기존 자료를 보존하며 다음 제품 작업을 진행할 기반이다. 현재 상태는 <a href="PLAN.html">마스터 §6.5</a>가 소유한다.</p>
+<p>제품 목표는 PRD를 유지한다. AI 실행기의 오류/위험 API 방어, Rhino/ZWCAD 기능 확장, 원격 게시·의견은 후속 PLAN-02 제품 작업이다. 개발 기반을 이유로 완전한 보안 보증이나 끝없는 리팩터링을 목표로 삼지 않는다. 이후 데이터 보존의 사용자 약속이 바뀌면 SPEC-05·관련 SPEC을 먼저 검토한다.</p>
+</section><section class="doc-section" id="plan-03-development-foundation-section-2"><h2><span aria-hidden="true" class="section-num">02 /</span> 작업 순서와 완료 기준</h2>
+<p>T-019 → T-020 → T-021 → T-022 → T-023 → T-024 순서로 진행한다. 포맷과 동작 변경은 별도 커밋으로 나눈다. 새 라이브러리는 기존 도구·잠금 파일과 호환성을 확인해 최소한으로 채택한다.</p>
+<p><a id="t-019"></a></p>
+<h3>T-019 · Git 추적과 ignore</h3>
 <ul>
-<li>스파이크가 후보 경로 계열(API+자체 하네스 / 에이전트 SDK / CLI 내장)별로 다음 7항목을 확인/불가/미확인+증거로 기록하면 이 ADR을 갱신해 확정한다: (1) 텍스트+핀 참조+스케치 좌표+이미지의 구조화 입력 (2) 호스트 쓰기 도구 호출을 제품이 승인/거부 (3) 도구 호출 단위 중단과 실제 정지 관측 (4) 앱 재시작 후 제품 소유 세션 ID로 재개 (5) 실행별 토큰·비용 값 취득 (6) 전송 전 자료 목록 표시·제외 (7) 제품 내 재사용의 이용 조건.</li>
-<li>결정 전까지: 개발·실험 단계에서는 Claude Code·Codex CLI 사용을 허용하고, 출시 경로로는 인정하지 않는다(당시 PRD §11.5에 보강하려던 문장; 해당 내용의 절은 현재 PRD §11.4다). SPEC-00-common의 실행·개입·재개 상태 절은 초안까지만 쓰고 확정하지 않는다.</li>
-<li>프로젝트 단위 전송 정책(허용/금지)과 로컬 추론 경로 요구 여부(PRD R-52 후반)는 같은 스파이크 결과와 함께 결정한다.</li>
+<li>변경 대상: <code>.gitignore</code>, 추적 파일 정책, 패키지/시험 산출물 경로.</li>
+<li>조사: tracked/untracked/ignored를 구분하고 자격 증명·개인 DB·사용자 모델·로그·덤프·캐시·빌드·패키지 산출물을 목록화한다. 승인된 합성 fixture·잠금 파일·생성 문서 HTML은 보존한다.</li>
+<li>구현: 필요한 ignore 패턴을 좁게 추가한다. 이미 추적된 파일은 ignore로 숨겨지지 않으므로 개별 판단한다. 사용자 파일을 삭제하거나 일괄 git clean을 하지 않는다.</li>
+<li>완료: <code>git check-ignore</code>로 포함/제외 양쪽 예시를 확인하고 필요한 소스·시험 자료가 누락되지 않는다. ignore된 파일이 배포 패키지에 포함되는지도 별도 검사한다.</li>
 </ul>
-<!-- codex-review:start -->
-<blockquote class="review" data-review-agent="codex">
-<p><strong class="review-label" data-rid="R-01" data-review-agent="codex" id="review-R-01"><span class="review-agent">codex</span><span class="review-id">R-01</span><span class="review-sev" data-sev="높음">높음</span></strong> <strong>추가 지적.</strong> <strong>일곱 확인 항목의 통과 의미.</strong> 실제 경로를 조사한 뒤 선택하는 방향에 동의한다. 다만 확인 목록이 일곱 항목 모두 완전 지원해야 한다는 출시 조건으로 해석되면 기존 PRD보다 요구가 강해진다. §9.3은 중단 불가와 실제 정지 확인을 구분하고 §11.5는 관측 가능한 비용·추정·관측 불가를 구분한다. 제품 소유 세션/작업 기록 복원도 공급자 내부 세션을 그대로 복원하는 것과 다르다. 제안: 제품이 강제할 쓰기 승인·전송 범위 등 필수 통제와, 중단 단위·비용 정확도·재개 수단처럼 제약을 표시할 능력을 나눠 후보별 증거를 기록한다. API 직접 사용도 이미 실행 중인 호스트 쓰기를 자동 취소해 주지는 않는다. 공식 문서로 제외할 후보는 먼저 좁히고 유력 경로만 작은 실험을 하며, 공급자와 무관한 보호 의미까지 미결로 되돌리지 않는다.</p>
-</blockquote>
-<!-- codex-review:end -->
-</section><section class="doc-section" id="adr-005-ai-execution-path-pending-spike-section-4"><h2><span aria-hidden="true" class="section-num">04 /</span> 결과</h2>
+<p><a id="t-020"></a></p>
+<h3>T-020 · 비밀정보와 Git 배포 보호</h3>
 <ul>
-<li>OQ-12 행은 PRD 0.6 §18에서 제거되었고, AI 실행 형태 결정은 PLAN §9가 소유한다.</li>
-<li>스파이크 기록 위치: <code>docs/tdd/SPIKE-&lt;date&gt;-ai-execution-path.md</code>, 코드 <code>tools/spikes/&lt;date&gt;-ai-execution-path/</code>.</li>
+<li>변경 대상: 검사 도구 설정, 로컬 커밋/푸시 검사와 CI, 배포 대상 확인 절차.</li>
+<li>조사: 현재 추적 파일과 로컬 Git 이력·참조를 읽기 전용으로 점검한다. 원격 전체 이력을 확보하지 못한 범위는 미검사로 표시한다. 실제 키 값을 로그·채팅·검증 문서에 복사하지 않는다.</li>
+<li>구현: 기존 도구 유무를 확인한 뒤 비밀정보 스캐너를 선정한다. 예외는 정확한 합성 fixture와 이유에 한정한다. account_id는 인증 비밀과 구분하며 환경 변수화는 배포 대상 분리 목적일 때만 적용한다. 계정·D1·R2·환경명이 맞는지 배포 전에 확인한다.</li>
+<li>완료: 무효한 합성 키 패턴이 검사에서 차단되고 일반 코드·시험 fixture는 통과한다. 검사 실패나 도구 미설치가 성공으로 처리되지 않는다. 로컬 훅 우회만으로 원격 검증이 생략되지 않도록 CI 검사를 마련한다. 브랜치 보호 등 원격 설정은 현재 권한과 공개 저장소 조건을 확인해 별도 보고한다.</li>
+<li>발견 시: 파일 위치·유형·범위만 보고하고 실제 비밀정보는 폐기/교체를 우선한다. Git 이력 재작성·강제 push·키 변경은 구체 영향 범위에 대한 사용자 지시 없이 하지 않는다. 공개 이력에서 삭제만 하면 비밀이 복구됐다고 말하지 않는다.</li>
 </ul>
-</section><section class="doc-section" id="adr-005-ai-execution-path-pending-spike-section-5"><h2><span aria-hidden="true" class="section-num">05 /</span> 출처</h2>
-<p>PRD R-52, 가이드 Codex R-33·Claude R-39. 2026-09-17 brainstorming Q&amp;A.</p>
-<!-- codex-review:start -->
-</section><section class="doc-section review-appendix" id="adr-005-ai-execution-path-pending-spike-section-x5" data-review-agent="codex"><h2><span aria-hidden="true" class="section-num">05 /</span> 부록 · Codex 검토 요약 (2026-09-17)</h2>
-<p>AI 실행 형태 미결을 정직하게 기록한 점은 적절하다. 다만 공급자 선택 조사와 새로운 제품 필수 요구의 추가가 섞이지 않도록 검증 기준을 구분해야 한다.</p>
-<p>이번 검토는 사용자 수락이나 본문 반영을 뜻하지 않는다. 기존 스레드는 같은 ID로 갱신하고, 새 지적은 별도 ID를 부여한다. 철회 기록은 상대 참조가 정리될 때까지 남긴다.</p>
-<h3>스레드 — Codex 2차</h3>
-<div aria-label="ADR 표 2" class="table-scroll" role="region" tabindex="0"><table>
-<thead>
-<tr>
-<th>위치</th>
-<th>Codex</th>
-<th>Claude</th>
-<th>판단</th>
-<th>상태</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>3. 결정 · 일곱 확인 항목의 통과 의미</td>
-<td><a href="#review-R-01">R-01</a></td>
-<td>—</td>
-<td>보완 제안</td>
-<td>사용자 판단 대기</td>
-</tr>
-</tbody>
-</table></div>
-<h3>이번 라운드의 신규 검토</h3>
-<div aria-label="ADR 표 3" class="table-scroll" role="region" tabindex="0"><table>
-<thead>
-<tr>
-<th>대상</th>
-<th>Codex</th>
-<th>요지</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>3. 결정</td>
-<td><a href="#review-R-01">R-01</a></td>
-<td>일곱 확인 항목의 통과 의미</td>
-</tr>
-</tbody>
-</table></div>
-<h3>결정이 필요한 사항</h3>
-<p>PRD가 이미 약속한 필수 통제와 허용할 관측 제한을 구분한다. 로컬 추론 의무 여부는 실제 프로젝트 전송 정책과 함께 결정하고, 단순히 CLI가 비교 대상이라는 이유로 내장·재사용을 가정하지 않는다.</p>
-<h3>다음 단계</h3>
-<p>이 ADR의 사용자 선택과 기술적 보장·검증 조건을 구분해 비교한다. 수락할 보완을 정한 뒤 ADR의 적용 목록과 PRD·Design·가이드의 관련 문장을 함께 정리한다. 이번에는 결정 본문과 draft 상태를 보존하고 검토 의견만 추가했다.</p>
-<!-- codex-review:end -->
+<p><a id="t-021"></a></p>
+<h3>T-021 · 자동 검증 경로</h3>
+<ul>
+<li>변경 대상: 루트/공유 package scripts, <code>.githooks</code>, CI 구성.</li>
+<li>구현: UI·서버·공유 Workers의 타입 검사, 코어/AI/서버·공유 테스트, 빌드·문서 일치 검사를 통합 명령으로 연결한다. 현재 루트 <code>npm test</code>의 웹 사전 빌드와 공유 패키지의 별도 검증을 고려한다.</li>
+<li>커밋: 변경 범위에 맞는 빠른 검사와 기존 MD/HTML 일치 보호를 유지한다. 부분 스테이징 상태에서 작업 트리 검사만 통과하고 다른 코드가 커밋되는 문제를 방지한다. 자동 포맷으로 사용자의 미스테이징 변경을 함께 추가하지 않는다.</li>
+<li>통합: 전체 검사와 헤드리스 브라우저 회귀를 CI/명시적 통합 명령으로 실행한다. C# 빌드는 SDK 보유 환경에서, Rhino/ZWCAD 실호스트 검증은 합성 자료를 사용하는 별도 경로로 둔다. CLI 계정이나 CAD 라이선스가 필요한 시험을 일반 공개 CI에 강제하지 않는다.</li>
+<li>완료: 의도한 타입 오류·실패 테스트·오래된 HTML을 각각 검출하고 실패 시 커밋/검증이 중단된다. 실제 실행한 검사와 환경 미확보로 빠진 검사를 구분한다. CI에서 비밀값이나 사용자 프로젝트를 사용하지 않는다.</li>
+</ul>
+<p><a id="t-022"></a></p>
+<h3>T-022 · 일관된 포맷</h3>
+<ul>
+<li>변경 대상: TS/TSX/JS/CSS/JSON 등 제품·도구 소스의 포맷 설정. C#은 해당 생태계의 도구로 별도 검토한다.</li>
+<li>구현: Prettier/Biome 중 기존 문법·CSS·JSONC와 호환되는 도구 하나를 선정한다. 생성 HTML, 번들, 사용자 자료, SDK/vendor, 잠금 파일을 임의 재포맷하지 않는다. Markdown 재배치는 이 티켓에서 반복하지 않는다.</li>
+<li>완료: check/write가 재현 가능하고 두 번째 실행에서 차이가 없다. 포맷 전후 검증 결과가 같으며 기능 변경을 별도 커밋으로 분리한다. 긴 줄 개수 감소를 설계 품질의 완료 기준으로 삼지 않는다.</li>
+</ul>
+<p><a id="t-023"></a></p>
+<h3>T-023 · 로컬 SQLite 마이그레이션</h3>
+<ul>
+<li>변경 대상: <code>src/core/store.ts</code>와 생성자별 스키마 초기화, 업그레이드 시험 fixture, 백업 경로.</li>
+<li>구현: 기존 schema 1의 실제 테이블을 조사하고 현재 데이터를 보존하는 기준선을 만든다. 번호가 있는 순차 이행·지원 버전 검사·단일 제어자·백업·트랜잭션·무결성 확인을 일관되게 처리한다. D1의 번호 관리 원리는 참고하되 로컬 SQLite/WAL/자산 파일의 수명에 맞게 구현한다.</li>
+<li>완료: 빈 DB, 기존 설치본 DB, 재실행, 중간 실패, 지원보다 새로운 DB, 디스크/백업 실패를 시험한다. 기존 요청·후보·관계와 파일 참조가 보존되고 실패 후 확인 가능한 복구 경로가 있다. 시험은 복사본에서만 한다. 미래 전체 제품 테이블을 선구현하지 않는다.</li>
+</ul>
+<p><a id="t-024"></a></p>
+<h3>T-024 · 호스트 의존 경계와 공통 함수</h3>
+<ul>
+<li>변경 대상: <code>hosts/zwcad/inspector.ts</code>의 서버 내부 경로 의존, Rhino literal 변환의 중복, 실제 필요한 호스트 포트 타입.</li>
+<li>구현: 서버가 실행 환경/리소스 위치를 주입하고 호스트가 서버 구현을 import하지 않게 한다. 의미가 같은 C# 문자열 인코딩만 공통화하며 PowerShell/JSON 등 서로 다른 언어의 이스케이프를 합치지 않는다. 불필요한 범용 플러그인 프레임워크를 만들지 않는다.</li>
+<li>빈 catch: 종료/정리의 best-effort, 입력 파싱, 사용자 작업 실패를 구분한다. 실패를 숨기는 경로는 관련 시험과 진단을 보완하고 정상적인 정리 예외는 의도와 관측 방법을 남긴다. 제품 실행기의 상세 오류/unknown 정책은 후속 제품 티켓과 연결한다.</li>
+<li>완료: 호스트→서버 구현 import가 없고 따옴표·역슬래시·개행·유니코드 문자열 시험과 기존 호스트 회귀가 통과한다. 동작을 바꾸는 추상화를 포맷 변경에 섞지 않는다.</li>
+</ul>
+</section><section class="doc-section" id="plan-03-development-foundation-section-3"><h2><span aria-hidden="true" class="section-num">03 /</span> 산출물과 다음 단계</h2>
+<p>확정된 구조는 ARCH-01, 실제 검사 명령과 실행 절차는 가이드의 해당 절, 결과는 범위를 가진 VERIFY에 기록한다. PLAN §6.5에는 현재 결과·남은 조건·증거 링크만 갱신하고 별도 일지를 쌓지 않는다. 티켓마다 필요한 경우에만 호스트 지원표를 갱신한다.</p>
+<p>기반 검증 후 제품 단계는 오류·실행 방어 → ZWCAD 범용 AI/SDK → 기존 문서·복수 실행본 → 공유 왕복 → 대표 과업/출시 관문 순서다. 기존 Rhino SDK 연결을 새로 시작하지 않는다. 외부 권한·장비가 필요한 시험은 미시험으로 명시하고 사용자와 완료 범위를 확인한다. Jev는 마스터 §9.4의 후속 조사로 유지한다.</p>
 </section><footer class="doc-footer"><span>VIDE / PLANNING DOCUMENTS</span><span>문서 열람용 · 실제 CAD/BIM 지원은 구현·검증 후 선언</span></footer></article></main></div>
 <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
-<script id="source-data" type="application/json">{"adr-005-ai-execution-path-pending-spike":{"label":"AI 실행 형태 — 미결, 스파이크 결과로 결정","file":"ADR-005-ai-execution-path-pending-spike.md","markdown":"---\nid: ADR-005\ntitle: AI 실행 형태 — 미결, 스파이크 결과로 결정\nstatus: superseded\nversion: 0.3\nupdated: 2026-09-18\nowner: user\nrelated: [FR-08, FR-15, FR-18, AC-11, AC-13]\n---\n\n# ADR-005 · AI 실행 형태 — 미결 (스파이크 후 결정)\n\n**대체(superseded) · 2026-09-17.** 제품 결정이 아니라 PLAN 결정이다. PLAN §9 결정 항목으로 이동했다.\n\n## 1. 배경\n\nFR-08 'MVP 한 실행 경로 이상'이 직접 API+자체 하네스인지, 에이전트 CLI/런타임 내장인지, 혼합인지에 따라 §9.3 중단·재개, §10.2 압축, §11.5(현 §11.4) 비용 관측, §1.3 전송 확인, FR-15·FR-18 수용 기준이 지켜지는 정도가 달라진다(PRD R-52, 가이드 Codex R-33·Claude R-39, 제안 OQ-12). 구독형 CLI를 제품 안에 내장하는 것은 이용 약관·데이터 보존·비용 모델이 걸린 제품 제약이다.\n\n## 2. 선택지\n\n| 안 | 내용 | 트레이드오프 |\n|---|---|---|\n| A | API 기반 자체 하네스(사용자 API 키, 종량제) | 도구 호출 승인/거부·비용 관측·전송 목록·세션 소유가 모두 제품 통제 아래. 하네스를 직접 만들어야 함 |\n| B | 에이전트 CLI/런타임 내장 | 하네스 구축 없이 빠름. 비용·전송 관측이 제한되고 제품 내 재사용 허용 여부를 약관으로 확인해야 함 |\n| C | 지금 정하지 않고 스파이크 뒤 결정 | 결정이 늦어지는 대신 실측 근거로 정함 |\n\n## 3. 결정\n\n**C. 지금 정하지 않는다.** 가이드 §06 스파이크 순서 ①(AI 실행 경로)의 결과로 결정한다.\n\n- 스파이크가 후보 경로 계열(API+자체 하네스 / 에이전트 SDK / CLI 내장)별로 다음 7항목을 확인/불가/미확인+증거로 기록하면 이 ADR을 갱신해 확정한다: (1) 텍스트+핀 참조+스케치 좌표+이미지의 구조화 입력 (2) 호스트 쓰기 도구 호출을 제품이 승인/거부 (3) 도구 호출 단위 중단과 실제 정지 관측 (4) 앱 재시작 후 제품 소유 세션 ID로 재개 (5) 실행별 토큰·비용 값 취득 (6) 전송 전 자료 목록 표시·제외 (7) 제품 내 재사용의 이용 조건.\n- 결정 전까지: 개발·실험 단계에서는 Claude Code·Codex CLI 사용을 허용하고, 출시 경로로는 인정하지 않는다(당시 PRD §11.5에 보강하려던 문장; 해당 내용의 절은 현재 PRD §11.4다). SPEC-00-common의 실행·개입·재개 상태 절은 초안까지만 쓰고 확정하지 않는다.\n- 프로젝트 단위 전송 정책(허용/금지)과 로컬 추론 경로 요구 여부(PRD R-52 후반)는 같은 스파이크 결과와 함께 결정한다.\n\n\u003c!-- codex-review:start -->\n\n> **[검토 · codex · R-01 · 높음]** **추가 지적.** **일곱 확인 항목의 통과 의미.** 실제 경로를 조사한 뒤 선택하는 방향에 동의한다. 다만 확인 목록이 일곱 항목 모두 완전 지원해야 한다는 출시 조건으로 해석되면 기존 PRD보다 요구가 강해진다. §9.3은 중단 불가와 실제 정지 확인을 구분하고 §11.5는 관측 가능한 비용·추정·관측 불가를 구분한다. 제품 소유 세션/작업 기록 복원도 공급자 내부 세션을 그대로 복원하는 것과 다르다. 제안: 제품이 강제할 쓰기 승인·전송 범위 등 필수 통제와, 중단 단위·비용 정확도·재개 수단처럼 제약을 표시할 능력을 나눠 후보별 증거를 기록한다. API 직접 사용도 이미 실행 중인 호스트 쓰기를 자동 취소해 주지는 않는다. 공식 문서로 제외할 후보는 먼저 좁히고 유력 경로만 작은 실험을 하며, 공급자와 무관한 보호 의미까지 미결로 되돌리지 않는다.\n\n\u003c!-- codex-review:end -->\n\n## 4. 결과\n\n- OQ-12 행은 PRD 0.6 §18에서 제거되었고, AI 실행 형태 결정은 PLAN §9가 소유한다.\n- 스파이크 기록 위치: `docs/tdd/SPIKE-\u003cdate>-ai-execution-path.md`, 코드 `tools/spikes/\u003cdate>-ai-execution-path/`.\n\n## 5. 출처\n\nPRD R-52, 가이드 Codex R-33·Claude R-39. 2026-09-17 brainstorming Q&A.\n\n\u003c!-- codex-review:start -->\n\n## 부록 · Codex 검토 요약 (2026-09-17)\n\nAI 실행 형태 미결을 정직하게 기록한 점은 적절하다. 다만 공급자 선택 조사와 새로운 제품 필수 요구의 추가가 섞이지 않도록 검증 기준을 구분해야 한다.\n\n이번 검토는 사용자 수락이나 본문 반영을 뜻하지 않는다. 기존 스레드는 같은 ID로 갱신하고, 새 지적은 별도 ID를 부여한다. 철회 기록은 상대 참조가 정리될 때까지 남긴다.\n\n### 스레드 — Codex 2차\n\n| 위치 | Codex | Claude | 판단 | 상태 |\n|---|---|---|---|---|\n| 3. 결정 · 일곱 확인 항목의 통과 의미 | [R-01](#review-R-01) | — | 보완 제안 | 사용자 판단 대기 |\n\n### 이번 라운드의 신규 검토\n\n| 대상 | Codex | 요지 |\n|---|---|---|\n| 3. 결정 | [R-01](#review-R-01) | 일곱 확인 항목의 통과 의미 |\n\n### 결정이 필요한 사항\n\nPRD가 이미 약속한 필수 통제와 허용할 관측 제한을 구분한다. 로컬 추론 의무 여부는 실제 프로젝트 전송 정책과 함께 결정하고, 단순히 CLI가 비교 대상이라는 이유로 내장·재사용을 가정하지 않는다.\n\n### 다음 단계\n\n이 ADR의 사용자 선택과 기술적 보장·검증 조건을 구분해 비교한다. 수락할 보완을 정한 뒤 ADR의 적용 목록과 PRD·Design·가이드의 관련 문장을 함께 정리한다. 이번에는 결정 본문과 draft 상태를 보존하고 검토 의견만 추가했다.\n\n\u003c!-- codex-review:end -->\n"}}</script>
-<script id="reader-config" type="application/json">{"initial":"adr-005-ai-execution-path-pending-spike","siteTitle":"VIDE"}</script>
+<script id="source-data" type="application/json">{"plan-03-development-foundation":{"label":"개발 기반 구축과 저장소 보호","file":"PLAN-03-development-foundation.md","markdown":"---\nid: PLAN-03\ntitle: 개발 기반 구축과 저장소 보호\nstatus: review\nversion: 0.1\nupdated: 2026-09-24\nowner: agent:codex\nrelated: [PLAN, ARCH-01, SPEC-05, T-019, T-020, T-021, T-022, T-023, T-024]\n---\n\n# 개발 기반 구축과 저장소 보호\n\n## 1. 범위와 착수\n\n사용자가 계획을 검토한 뒤 착수한다. 이번 문서 작성은 도구 설치·Git 훅 변경·이력 재작성·제품 구현 착수가 아니다. 목표는 개발 중 회귀와 저장소 노출을 발견하고 기존 자료를 보존하며 다음 제품 작업을 진행할 기반이다. 현재 상태는 [마스터 §6.5](PLAN.md)가 소유한다.\n\n제품 목표는 PRD를 유지한다. AI 실행기의 오류/위험 API 방어, Rhino/ZWCAD 기능 확장, 원격 게시·의견은 후속 PLAN-02 제품 작업이다. 개발 기반을 이유로 완전한 보안 보증이나 끝없는 리팩터링을 목표로 삼지 않는다. 이후 데이터 보존의 사용자 약속이 바뀌면 SPEC-05·관련 SPEC을 먼저 검토한다.\n\n## 2. 작업 순서와 완료 기준\n\nT-019 → T-020 → T-021 → T-022 → T-023 → T-024 순서로 진행한다. 포맷과 동작 변경은 별도 커밋으로 나눈다. 새 라이브러리는 기존 도구·잠금 파일과 호환성을 확인해 최소한으로 채택한다.\n\n\u003ca id=\"t-019\">\u003c/a>\n### T-019 · Git 추적과 ignore\n\n- 변경 대상: `.gitignore`, 추적 파일 정책, 패키지/시험 산출물 경로.\n- 조사: tracked/untracked/ignored를 구분하고 자격 증명·개인 DB·사용자 모델·로그·덤프·캐시·빌드·패키지 산출물을 목록화한다. 승인된 합성 fixture·잠금 파일·생성 문서 HTML은 보존한다.\n- 구현: 필요한 ignore 패턴을 좁게 추가한다. 이미 추적된 파일은 ignore로 숨겨지지 않으므로 개별 판단한다. 사용자 파일을 삭제하거나 일괄 git clean을 하지 않는다.\n- 완료: `git check-ignore`로 포함/제외 양쪽 예시를 확인하고 필요한 소스·시험 자료가 누락되지 않는다. ignore된 파일이 배포 패키지에 포함되는지도 별도 검사한다.\n\n\u003ca id=\"t-020\">\u003c/a>\n### T-020 · 비밀정보와 Git 배포 보호\n\n- 변경 대상: 검사 도구 설정, 로컬 커밋/푸시 검사와 CI, 배포 대상 확인 절차.\n- 조사: 현재 추적 파일과 로컬 Git 이력·참조를 읽기 전용으로 점검한다. 원격 전체 이력을 확보하지 못한 범위는 미검사로 표시한다. 실제 키 값을 로그·채팅·검증 문서에 복사하지 않는다.\n- 구현: 기존 도구 유무를 확인한 뒤 비밀정보 스캐너를 선정한다. 예외는 정확한 합성 fixture와 이유에 한정한다. account_id는 인증 비밀과 구분하며 환경 변수화는 배포 대상 분리 목적일 때만 적용한다. 계정·D1·R2·환경명이 맞는지 배포 전에 확인한다.\n- 완료: 무효한 합성 키 패턴이 검사에서 차단되고 일반 코드·시험 fixture는 통과한다. 검사 실패나 도구 미설치가 성공으로 처리되지 않는다. 로컬 훅 우회만으로 원격 검증이 생략되지 않도록 CI 검사를 마련한다. 브랜치 보호 등 원격 설정은 현재 권한과 공개 저장소 조건을 확인해 별도 보고한다.\n- 발견 시: 파일 위치·유형·범위만 보고하고 실제 비밀정보는 폐기/교체를 우선한다. Git 이력 재작성·강제 push·키 변경은 구체 영향 범위에 대한 사용자 지시 없이 하지 않는다. 공개 이력에서 삭제만 하면 비밀이 복구됐다고 말하지 않는다.\n\n\u003ca id=\"t-021\">\u003c/a>\n### T-021 · 자동 검증 경로\n\n- 변경 대상: 루트/공유 package scripts, `.githooks`, CI 구성.\n- 구현: UI·서버·공유 Workers의 타입 검사, 코어/AI/서버·공유 테스트, 빌드·문서 일치 검사를 통합 명령으로 연결한다. 현재 루트 `npm test`의 웹 사전 빌드와 공유 패키지의 별도 검증을 고려한다.\n- 커밋: 변경 범위에 맞는 빠른 검사와 기존 MD/HTML 일치 보호를 유지한다. 부분 스테이징 상태에서 작업 트리 검사만 통과하고 다른 코드가 커밋되는 문제를 방지한다. 자동 포맷으로 사용자의 미스테이징 변경을 함께 추가하지 않는다.\n- 통합: 전체 검사와 헤드리스 브라우저 회귀를 CI/명시적 통합 명령으로 실행한다. C# 빌드는 SDK 보유 환경에서, Rhino/ZWCAD 실호스트 검증은 합성 자료를 사용하는 별도 경로로 둔다. CLI 계정이나 CAD 라이선스가 필요한 시험을 일반 공개 CI에 강제하지 않는다.\n- 완료: 의도한 타입 오류·실패 테스트·오래된 HTML을 각각 검출하고 실패 시 커밋/검증이 중단된다. 실제 실행한 검사와 환경 미확보로 빠진 검사를 구분한다. CI에서 비밀값이나 사용자 프로젝트를 사용하지 않는다.\n\n\u003ca id=\"t-022\">\u003c/a>\n### T-022 · 일관된 포맷\n\n- 변경 대상: TS/TSX/JS/CSS/JSON 등 제품·도구 소스의 포맷 설정. C#은 해당 생태계의 도구로 별도 검토한다.\n- 구현: Prettier/Biome 중 기존 문법·CSS·JSONC와 호환되는 도구 하나를 선정한다. 생성 HTML, 번들, 사용자 자료, SDK/vendor, 잠금 파일을 임의 재포맷하지 않는다. Markdown 재배치는 이 티켓에서 반복하지 않는다.\n- 완료: check/write가 재현 가능하고 두 번째 실행에서 차이가 없다. 포맷 전후 검증 결과가 같으며 기능 변경을 별도 커밋으로 분리한다. 긴 줄 개수 감소를 설계 품질의 완료 기준으로 삼지 않는다.\n\n\u003ca id=\"t-023\">\u003c/a>\n### T-023 · 로컬 SQLite 마이그레이션\n\n- 변경 대상: `src/core/store.ts`와 생성자별 스키마 초기화, 업그레이드 시험 fixture, 백업 경로.\n- 구현: 기존 schema 1의 실제 테이블을 조사하고 현재 데이터를 보존하는 기준선을 만든다. 번호가 있는 순차 이행·지원 버전 검사·단일 제어자·백업·트랜잭션·무결성 확인을 일관되게 처리한다. D1의 번호 관리 원리는 참고하되 로컬 SQLite/WAL/자산 파일의 수명에 맞게 구현한다.\n- 완료: 빈 DB, 기존 설치본 DB, 재실행, 중간 실패, 지원보다 새로운 DB, 디스크/백업 실패를 시험한다. 기존 요청·후보·관계와 파일 참조가 보존되고 실패 후 확인 가능한 복구 경로가 있다. 시험은 복사본에서만 한다. 미래 전체 제품 테이블을 선구현하지 않는다.\n\n\u003ca id=\"t-024\">\u003c/a>\n### T-024 · 호스트 의존 경계와 공통 함수\n\n- 변경 대상: `hosts/zwcad/inspector.ts`의 서버 내부 경로 의존, Rhino literal 변환의 중복, 실제 필요한 호스트 포트 타입.\n- 구현: 서버가 실행 환경/리소스 위치를 주입하고 호스트가 서버 구현을 import하지 않게 한다. 의미가 같은 C# 문자열 인코딩만 공통화하며 PowerShell/JSON 등 서로 다른 언어의 이스케이프를 합치지 않는다. 불필요한 범용 플러그인 프레임워크를 만들지 않는다.\n- 빈 catch: 종료/정리의 best-effort, 입력 파싱, 사용자 작업 실패를 구분한다. 실패를 숨기는 경로는 관련 시험과 진단을 보완하고 정상적인 정리 예외는 의도와 관측 방법을 남긴다. 제품 실행기의 상세 오류/unknown 정책은 후속 제품 티켓과 연결한다.\n- 완료: 호스트→서버 구현 import가 없고 따옴표·역슬래시·개행·유니코드 문자열 시험과 기존 호스트 회귀가 통과한다. 동작을 바꾸는 추상화를 포맷 변경에 섞지 않는다.\n\n## 3. 산출물과 다음 단계\n\n확정된 구조는 ARCH-01, 실제 검사 명령과 실행 절차는 가이드의 해당 절, 결과는 범위를 가진 VERIFY에 기록한다. PLAN §6.5에는 현재 결과·남은 조건·증거 링크만 갱신하고 별도 일지를 쌓지 않는다. 티켓마다 필요한 경우에만 호스트 지원표를 갱신한다.\n\n기반 검증 후 제품 단계는 오류·실행 방어 → ZWCAD 범용 AI/SDK → 기존 문서·복수 실행본 → 공유 왕복 → 대표 과업/출시 관문 순서다. 기존 Rhino SDK 연결을 새로 시작하지 않는다. 외부 권한·장비가 필요한 시험은 미시험으로 명시하고 사용자와 완료 범위를 확인한다. Jev는 마스터 §9.4의 후속 조사로 유지한다.\n"}}</script>
+<script id="reader-config" type="application/json">{"initial":"plan-03-development-foundation","siteTitle":"VIDE"}</script>
 <script>
 (() => {
 'use strict';
