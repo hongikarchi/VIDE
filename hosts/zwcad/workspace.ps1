@@ -59,6 +59,6 @@ try {
     exit 1
 } finally {
     # Only documents explicitly created/opened by this invocation are closed. Never quit the app.
-    if ($reopened) { try { $reopened.Close($false) | Out-Null } catch { Write-Warning "Owned inspection document could not be closed; the host was left running." } }
-    if ($doc) { try { $doc.Close($false) | Out-Null } catch { Write-Warning "Owned inspection document could not be closed; the host was left running." } }
+    if ($reopened) { try { $reopened.Close($false) | Out-Null } catch { [Console]::Error.WriteLine("Owned inspection document could not be closed; the host was left running.") } }
+    if ($doc) { try { $doc.Close($false) | Out-Null } catch { [Console]::Error.WriteLine("Owned inspection document could not be closed; the host was left running.") } }
 }

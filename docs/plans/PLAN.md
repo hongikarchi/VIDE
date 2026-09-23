@@ -2,7 +2,7 @@
 id: PLAN
 title: VIDE 실행 로드맵
 status: review
-version: 0.146
+version: 0.148
 updated: 2026-09-24
 owner: agent:codex
 related: [ARCH-01, PLAN-02, PLAN-03, SPEC-00, SPEC-01, SPEC-02, SPEC-03, SPEC-04, SPEC-05]
@@ -64,7 +64,7 @@ T-001~018의 번호·지원 증거는 유지한다. 각 티켓의 현재 결과�
 
 ### 6.3 착수 조건
 
-가이드 §05의 해당 티켓 계약·출력·증거·환경 조건을 확인한다. 이번 개발 기반 착수는 사용자의 계획 검토 후 진행한다. 예전 첫 목업 승인 순서를 새 관문으로 적용하지 않는다.
+가이드 §05의 해당 티켓 계약·출력·증거·환경 조건을 확인한다. 2026-09-24 사용자 지시로 개발 기반 구현에 착수했다. 예전 첫 목업 승인 순서를 새 관문으로 적용하지 않는다.
 
 ### 6.4 기존 구현 이행
 
@@ -72,7 +72,7 @@ T-001~018의 번호·지원 증거는 유지한다. 각 티켓의 현재 결과�
 
 ### 6.5 현재 티켓 현황과 이어갈 위치
 
-**현재 단계: 문서 재구성 완료·개발 기반 계획 검토.** 사용자가 이번 분류·계획을 확인한 뒤 착수한다. 문서 분류·참조·HTML 탐색 검증을 완료했다. 제품 코드·개발 도구·Git 보안 설정은 아직 변경하지 않았다. 다음 작업은 승인된 [PLAN-03](PLAN-03-development-foundation.md)의 T-019부터이며, 이후 PLAN-02의 제품 개발을 이어간다.
+**현재 단계: PLAN-03 개발 기반 구현·로컬 검증 완료, 동시 문서 작업과 통합 대기.** `codex/development-foundation`에서 T-019~024를 구현하고 타입·136개 자동 시험·공유 통합·브라우저 회귀를 검증했다. [개발 기반 VERIFY](../tdd/VERIFY-2026-09-24-development-foundation.md)에 실제 범위와 미시험을 구분했다. 다음은 연구 세션 변경을 보존해 통합한 뒤 PLAN-02의 실행기 오류 진단·방어를 진행하는 것이다. 원격 CI/필수 검사 보호·전체 배포 ZIP은 아직 검수하지 않았다.
 
 개발 위임·중단 기준은 [가이드 §12](../../DEVELOPMENT_GUIDE.md#development-delegation)를 따른다. 기존 기능 단위 커밋 위임은 유지하며 원격 push는 해당 사용자 지시 범위에서만 한다. Cloudflare 시험은 무료·메일 없는 가입/소유자 승인 모드다. 유료 전환·도메인 구매·메일 발송은 승인되지 않았다. R2 기존 사용량 때문에 원격 모델 업로드는 차단돼 있으며, 무료 시험 조건을 확인하기 전 해제하지 않는다. 기존 사용자 자료·열린 호스트는 시험용으로 변경하지 않는다.
 
@@ -114,12 +114,12 @@ T-001~018의 번호·지원 증거는 유지한다. 각 티켓의 현재 결과�
 
 | 기반 티켓 | 현재 상태 | 상세 |
 |---|---|---|
-| T-019 · Git 추적·ignore | 계획 검토 대기·미착수 | [PLAN-03](PLAN-03-development-foundation.md#t-019) |
-| T-020 · 비밀정보·배포 보호 | 계획 검토 대기·미착수 | [PLAN-03](PLAN-03-development-foundation.md#t-020) |
-| T-021 · 자동 검증 | 계획 검토 대기·미착수 | [PLAN-03](PLAN-03-development-foundation.md#t-021) |
-| T-022 · 포맷 | 계획 검토 대기·미착수 | [PLAN-03](PLAN-03-development-foundation.md#t-022) |
-| T-023 · DB 마이그레이션 | 계획 검토 대기·미착수 | [PLAN-03](PLAN-03-development-foundation.md#t-023) |
-| T-024 · 호스트 의존 경계 | 계획 검토 대기·미착수 | [PLAN-03](PLAN-03-development-foundation.md#t-024) |
+| T-019 · Git 추적·ignore | 제외·패키징 소스 정책 검증 | [PLAN-03](PLAN-03-development-foundation.md#t-019) |
+| T-020 · 비밀정보·배포 보호 | 로컬 스캔·배포 대상 검사 완료; 원격 CI/보호 미검수 | [PLAN-03](PLAN-03-development-foundation.md#t-020) |
+| T-021 · 자동 검증 | 통합 명령·커밋 가드·실패 차단 검증 | [PLAN-03](PLAN-03-development-foundation.md#t-021) |
+| T-022 · 포맷 | 포맷 별도 커밋·재검사 통과 | [PLAN-03](PLAN-03-development-foundation.md#t-022) |
+| T-023 · DB 마이그레이션 | schema 2·백업·실패 복구 검증 | [PLAN-03](PLAN-03-development-foundation.md#t-023) |
+| T-024 · 호스트 의존 경계 | 중립 경로·공통 literal·예외 점검 완료 | [PLAN-03](PLAN-03-development-foundation.md#t-024) |
 
 ### 6.6 전체 완료 관문
 
