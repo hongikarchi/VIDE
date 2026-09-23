@@ -29,3 +29,27 @@ obj/
 *.sqlite-shm
 *.sqlite.controller
 *.sqlite.controller-journal
+
+# Local cloud tooling, credentials and diagnostics
+.wrangler/
+.dev.vars
+.dev.vars.*
+!.dev.vars.example
+*.db
+*.db-wal
+*.db-shm
+*.sqlite-journal
+*.dmp
+*.pfx
+*.p12
+*.key
+*.pem
+# User CAD documents belong in product data, not source control.
+*.3dm
+*.3dmbak
+*.dwg
+*.dwl
+*.dwl2
+# Deliberately reviewed synthetic test fixtures may be committed.
+!tests/fixtures/**/*.3dm
+!tests/fixtures/**/*.dwg

@@ -1,3 +1,4 @@
+import {copyPackageSources} from './package-source.mjs';
 import {cp,mkdir,readFile,writeFile,readdir,copyFile} from 'node:fs/promises';import {join,resolve,relative,basename} from 'node:path';import {fileURLToPath} from 'node:url';import {execFile} from 'node:child_process';import {promisify} from 'node:util';import {createHash} from 'node:crypto';
 const exec=promisify(execFile),root=resolve(fileURLToPath(new URL('../..',import.meta.url))),source=join(root,'src','desktop');
 if(process.platform!=='win32'||process.arch!=='x64'||process.version!=='v24.15.0')throw Error('Build requires the verified Windows x64 Node.js v24.15.0 runtime.');
@@ -5,10 +6,11 @@ const pkg=JSON.parse(await readFile(join(root,'package.json'),'utf8')),version=p
 if(!/^\d+\.\d+\.\d+(?:-[a-z0-9.-]+)?$/.test(version))throw Error('Invalid package version');
 const releases=join(root,'.vide','releases'),directory=join(releases,'VIDE-'+version+'-windows-x64');
 await mkdir(releases,{recursive:true});await mkdir(directory); // Never overwrite an existing reviewable artifact.
-for(const folder of ['ai','core','server','ui','contracts'])await cp(join(root,'src',folder),join(directory,'app','src',folder),{recursive:true});
+const {stdout:tracked}=await exec('git',['ls-files','-z'],{cwd:root,maxBuffer:16*1024*1024});
+await copyPackageSources(root,join(directory,'app'),tracked.split('\0').filter(Boolean),['src/ai','src/core','src/server','src/ui','src/contracts','hosts','extensions']);
 await cp(join(root,'dist','ui'),join(directory,'app','dist','ui'),{recursive:true});
 await mkdir(join(directory,'app','src','desktop'),{recursive:true});await copyFile(join(source,'backup.mjs'),join(directory,'app','src','desktop','backup.mjs'));
-for(const folder of ['hosts','extensions'])await cp(join(root,folder),join(directory,'app',folder),{recursive:true});
+
 await exec('dotnet',['build',join(root,'hosts/rhino/worker/VIDE.Worker.csproj'),'--no-restore'],{windowsHide:true});
 const workerRuntime=join(directory,'app','hosts','rhino','worker','runtime');await mkdir(workerRuntime,{recursive:true});
 for(const file of ['VIDE.Worker.rhp','VIDE.Worker.deps.json'])await copyFile(join(root,'.vide/build/rhino-worker/bin/net8.0-windows',file),join(workerRuntime,file));
