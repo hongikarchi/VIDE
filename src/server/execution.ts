@@ -1,4 +1,6 @@
 import { z } from 'zod';
+import { runLinked } from './linked-execution.ts';
+import type { AgentTools } from './agent-tools.ts';
 import type { Workspace } from '../core/workspace.ts';
 import type { StoredWork } from '../contracts/stored-work.ts';
 import type { RequestInput } from '../contracts/workspace.ts';
@@ -23,6 +25,7 @@ interface Host {
   ): Promise<unknown>;
 }
 interface Options {
+  tools?: AgentTools;
   providerFactory?: (options: CliOptions & { provider: string }) => Provider;
   host?: Host;
   hosts?: Partial<Record<'rhino' | 'zwcad', Host>>;
@@ -62,13 +65,14 @@ export class Execution {
   settings?: Options['settings'];
   sdk?: SdkExecution;
   zwcadSdk?: ZwcadSdkExecution;
+  tools?: AgentTools;
   active = new Map<
     string,
     { controller: AbortController; completion: Promise<void>; projectId: string }
   >();
   constructor(
     workspace: Workspace,
-    { providerFactory = createProvider, host, hosts, settings, sdk, zwcadSdk }: Options = {},
+    { providerFactory = createProvider, host, hosts, settings, sdk, zwcadSdk, tools }: Options = {},
   ) {
     this.workspace = workspace;
     this.providerFactory = providerFactory;
@@ -78,6 +82,7 @@ export class Execution {
     this.settings = settings;
     this.sdk = sdk;
     this.zwcadSdk = zwcadSdk;
+    this.tools = tools;
   }
   executable(provider: string) {
     return (
@@ -191,6 +196,19 @@ export class Execution {
         ...input.sketches.map((data, i) => ({ id: `sketch-${i}`, type: 'sketch', data })),
         ...input.files.map((data, i) => ({ id: `file-${i}`, type: 'file', data })),
       ];
+      if (input.linkedTargets) {
+        if (!this.sdk || !this.zwcadSdk || !this.tools) throw { code: 'EXECUTOR_NOT_READY' };
+        await runLinked({
+          request,
+          workspace: this.workspace,
+          tools: this.tools,
+          drivers: { rhino: this.sdk, zwcad: this.zwcadSdk },
+          items,
+          signal: controller.signal,
+          provider: (agent) => this.provider(input, agent),
+        });
+        return;
+      }
       const basis = this.workspace.basis(projectId, input);
       const previous = basis
         ? { ...basis, result: executionResultSchema.parse(basis.result) }

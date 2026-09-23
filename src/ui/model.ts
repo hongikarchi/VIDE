@@ -26,6 +26,8 @@ interface DraftObject {
   [key: string]: unknown;
 }
 export interface DraftState {
+  linkedTargets?: { baseRequestId: string; host: 'rhino' | 'zwcad' }[];
+  coordinateBasis?: 'shared-metre-axes';
   selected: string | null;
   host: 'rhino' | 'zwcad';
   body: string;
@@ -41,6 +43,7 @@ export interface DraftState {
   drawingPlane?: 'XY' | 'XZ' | 'YZ';
 }
 interface RestoreInput {
+  linkedTargets?: DraftState['linkedTargets'];
   body: string;
   pins: DraftPin[];
   sketches: DraftSketch[];
@@ -107,6 +110,7 @@ export const initial = (): DraftState => ({
 export const storageKey = 'vide:review:composer:v3';
 export function draftHasInput(state: DraftState) {
   return Boolean(
+    state.linkedTargets?.length ||
     state.body.trim() ||
     (state.instructions || []).some((text) => text.trim()) ||
     state.pins.length ||
@@ -115,6 +119,10 @@ export function draftHasInput(state: DraftState) {
   );
 }
 export function failedRequestDraft(state: DraftState, request: RestoreRequest) {
+  if (request.input?.linkedTargets)
+    throw Error(
+      '연계 요청은 대상별 확인 결과에서 새 요청을 만드세요. 성공한 작업을 함께 재실행하지 않습니다.',
+    );
   if (
     !['failed', 'cancelled', 'interrupted'].includes(request?.state) ||
     !request.input ||
@@ -137,6 +145,8 @@ export function failedRequestDraft(state: DraftState, request: RestoreRequest) {
     throw Error('저장된 입력을 확인할 수 없습니다.');
   return structuredClone({
     body: input.body,
+    linkedTargets: undefined,
+    coordinateBasis: undefined,
     instructions: [],
     pins: input.pins,
     sketches: input.sketches,
@@ -163,6 +173,13 @@ export function pinSelection(s: DraftState) {
 }
 export function validate(s: DraftState) {
   if (
+    s.linkedTargets &&
+    (s.linkedTargets.length !== 2 ||
+      new Set(s.linkedTargets.map((target) => target.baseRequestId)).size !== 2 ||
+      s.coordinateBasis !== 'shared-metre-axes')
+  )
+    return '연계 대상 두 개와 좌표 기준을 확인하세요.';
+  if (
     s.instructions !== undefined &&
     (!Array.isArray(s.instructions) || s.instructions.some((t) => typeof t !== 'string'))
   )
@@ -180,6 +197,9 @@ export function packet(s: DraftState) {
   if (error) throw Error(error);
   return structuredClone({
     host: s.host || 'rhino',
+    ...(s.linkedTargets
+      ? { linkedTargets: s.linkedTargets, coordinateBasis: s.coordinateBasis }
+      : {}),
     baseRequestId: s.baseRequestId ?? null,
     body: requestBody(s),
     pins: s.pins,

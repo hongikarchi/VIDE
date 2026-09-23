@@ -15,6 +15,8 @@ const draftSchema = z.object({
   effort: z.string().min(1).max(30),
   permission: z.enum(['review', 'candidate']),
   baseRequestId: z.string().nullable().optional(),
+  linkedTargets: requestInputSchema.shape.linkedTargets,
+  coordinateBasis: requestInputSchema.shape.coordinateBasis,
 });
 
 export function draftSnapshot(state: DraftState) {
@@ -23,6 +25,15 @@ export function draftSnapshot(state: DraftState) {
 
 export function restoreDraft(value: unknown, messages: DraftState['messages']) {
   const draft = draftSchema.parse(value);
+  for (const target of draft.linkedTargets || []) {
+    const basis = messages.find((message) => message.id === target.baseRequestId)?.request;
+    if (
+      basis?.state !== 'succeeded' ||
+      !basis.result?.hostExecuted ||
+      (basis.result.host || 'rhino') !== target.host
+    )
+      throw Error('연계 대상의 기준 후보를 확인할 수 없습니다.');
+  }
   if (
     draft.baseRequestId &&
     !messages.some(

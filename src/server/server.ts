@@ -144,6 +144,7 @@ export async function startServer({
       }
     : host;
   const execution = new Execution(workspace, {
+    tools: agentTools,
     providerFactory,
     host,
     hosts,

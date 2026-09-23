@@ -33,14 +33,14 @@ type Handler<N extends ToolName> = (
 ) => unknown | Promise<unknown>;
 type Handlers = { [N in ToolName]?: Handler<N> };
 interface ScopeOptions {
-  targetRef: string;
+  targetRef: string | string[];
   handlers: Handlers;
   isCurrent: () => boolean | Promise<boolean>;
   maxCalls?: number;
   ttlMs?: number;
 }
 interface Run {
-  targetRef: string;
+  targets: Set<string>;
   handlers: Handlers;
   isCurrent: ScopeOptions['isCurrent'];
   remaining: number;
@@ -83,9 +83,12 @@ export class AgentTools {
   }
 
   issue({ targetRef, handlers, isCurrent, maxCalls = 20, ttlMs = 120000 }: ScopeOptions) {
+    const targets = Array.isArray(targetRef) ? targetRef : [targetRef];
     if (
-      typeof targetRef !== 'string' ||
-      !targetRef ||
+      targets.length < 1 ||
+      targets.length > 8 ||
+      new Set(targets).size !== targets.length ||
+      targets.some((value) => !target.safeParse(value).success) ||
       typeof isCurrent !== 'function' ||
       !handlers ||
       !Object.keys(handlers).length ||
@@ -106,7 +109,7 @@ export class AgentTools {
     const token = randomBytes(32).toString('hex'),
       key = digest(token);
     const run = {
-      targetRef,
+      targets: new Set(targets),
       handlers: { ...handlers },
       isCurrent,
       remaining: maxCalls,
@@ -129,6 +132,56 @@ export class AgentTools {
     for (const key of this.#runs.keys()) this.#revoke(key);
   }
 
+  /** Controller-only dispatch; applies the same checks as MCP without a loopback HTTP hop. */
+  async call(token: string, name: ToolName, raw: unknown): Promise<CallToolResult> {
+    const run = this.#runs.get(digest(token));
+    if (!run)
+      return {
+        isError: true,
+        content: [{ type: 'text', text: JSON.stringify({ code: 'AGENT_UNAUTHORIZED' }) }],
+      };
+    if (!toolName(name) || !run.handlers[name])
+      return {
+        isError: true,
+        content: [{ type: 'text', text: JSON.stringify({ code: 'AGENT_TOOL_UNAVAILABLE' }) }],
+      };
+    const parsed = definitions[name].schema.safeParse(raw);
+    if (!parsed.success)
+      return {
+        isError: true,
+        content: [{ type: 'text', text: JSON.stringify({ code: 'INVALID_INPUT' }) }],
+      };
+    return this.#invoke(run, name, parsed.data);
+  }
+  async #invoke(run: Run, name: ToolName, args: { targetRef?: string }): Promise<CallToolResult> {
+    const error = (code: string): CallToolResult => ({
+      isError: true,
+      content: [{ type: 'text', text: JSON.stringify({ code }) }],
+    });
+    if (run.abort.signal.aborted || run.expires <= this.#now()) return error('AGENT_SCOPE_EXPIRED');
+    if (args.targetRef && !run.targets.has(args.targetRef)) return error('TARGET_MISMATCH');
+    const controlled = name === 'execute' || name === 'query';
+    if (controlled && run.busy) return error('AGENT_BUSY');
+    if (run.remaining <= 0) return error('AGENT_CALL_LIMIT');
+    run.remaining--;
+    if (controlled) run.busy = true;
+    try {
+      if (controlled && !(await run.isCurrent())) return error('STALE_REFERENCE');
+      // Conditions may change while the revision check is awaiting storage.
+      if (run.abort.signal.aborted || run.expires <= this.#now())
+        return error('AGENT_SCOPE_EXPIRED');
+      const result = await invoke(name, run.handlers, args, run.abort.signal);
+      return { content: [{ type: 'text', text: JSON.stringify(result) }] };
+    } catch (cause) {
+      const code =
+        cause && typeof cause === 'object' && 'code' in cause && typeof cause.code === 'string'
+          ? cause.code
+          : '';
+      return error(knownErrors.has(code) ? code : 'AGENT_TOOL_FAILED');
+    } finally {
+      if (controlled) run.busy = false;
+    }
+  }
   async handle(
     request: IncomingMessage,
     response: ServerResponse,
@@ -157,37 +210,7 @@ export class AgentTools {
         name,
         { description: definition.description, inputSchema: definition.schema },
         async (args: { targetRef?: string }): Promise<CallToolResult> => {
-          const error = (code: string): CallToolResult => ({
-            isError: true,
-            content: [{ type: 'text', text: JSON.stringify({ code }) }],
-          });
-          if (run.abort.signal.aborted || run.expires <= this.#now())
-            return error('AGENT_SCOPE_EXPIRED');
-          if (args.targetRef && args.targetRef !== run.targetRef) return error('TARGET_MISMATCH');
-          const controlled = name === 'execute' || name === 'query';
-          if (controlled && run.busy) return error('AGENT_BUSY');
-          if (run.remaining <= 0) return error('AGENT_CALL_LIMIT');
-          run.remaining--;
-          if (controlled) run.busy = true;
-          try {
-            if (controlled && !(await run.isCurrent())) return error('STALE_REFERENCE');
-            // Conditions may change while the revision check is awaiting storage.
-            if (run.abort.signal.aborted || run.expires <= this.#now())
-              return error('AGENT_SCOPE_EXPIRED');
-            const result = await invoke(name, run.handlers, args, run.abort.signal);
-            return { content: [{ type: 'text', text: JSON.stringify(result) }] };
-          } catch (cause) {
-            const code =
-              cause &&
-              typeof cause === 'object' &&
-              'code' in cause &&
-              typeof cause.code === 'string'
-                ? cause.code
-                : '';
-            return error(knownErrors.has(code) ? code : 'AGENT_TOOL_FAILED');
-          } finally {
-            if (controlled) run.busy = false;
-          }
+          return this.#invoke(run, name, args);
         },
       );
     }

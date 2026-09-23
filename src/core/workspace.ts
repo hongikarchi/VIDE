@@ -70,6 +70,7 @@ export class Workspace {
     const parsed = requestInputSchema.safeParse(value);
     if (!parsed.success) fail('INVALID_INPUT');
     const input = parsed.data;
+    if (input.parentRequestId !== undefined) fail('INVALID_INPUT');
     // Keep the original serialization for existing idempotency records.
     const serialized = JSON.stringify(value);
     if (Buffer.byteLength(serialized) > 200000) fail('INPUT_TOO_LARGE');
@@ -82,15 +83,48 @@ export class Workspace {
       return { request: decode(existing)!, created: false };
     }
     const target = input.host || 'rhino';
+    const targets = input.linkedTargets;
+    if (targets) {
+      const documentKeys = new Set<string>();
+      for (const item of targets) {
+        const source = this.get(projectId, item.baseRequestId);
+        if (
+          source.state !== 'succeeded' ||
+          !source.result?.verified ||
+          !source.result?.hostExecuted
+        )
+          fail('STALE_REFERENCE');
+        if ((source.result.host || 'rhino') !== item.host || source.result.executionMode !== 'sdk')
+          fail('TARGET_MISMATCH');
+        if (
+          input.permission === 'candidate' &&
+          source.result.referenceOnly &&
+          source.result.dwgEditMode !== 'polyline-vertices-v1'
+        )
+          fail('ZWCAD_REFERENCE_ONLY');
+        const doc = z
+          .object({ instance: z.string(), documentId: z.number() })
+          .safeParse(source.result.sourceDocument);
+        if (doc.success) {
+          const key = doc.data.instance + '/' + doc.data.documentId;
+          if (documentKeys.has(key)) fail('TARGET_MISMATCH');
+          documentKeys.add(key);
+        }
+      }
+    }
     if (
       input.permission === 'candidate' &&
       this.list(projectId).some(
-        (r) => r.state === 'unknown' && (r.input.host || 'rhino') === target,
+        (r) =>
+          r.state === 'unknown' &&
+          (targets
+            ? targets.some((t) => t.host === (r.input.host || 'rhino'))
+            : (r.input.host || 'rhino') === target),
       )
     )
       fail('HOST_RESULT_UNRESOLVED');
-    const baseline = this.basis(projectId, input);
-    if (input.baseRequestId && !baseline?.result?.hostExecuted) fail('STALE_REFERENCE');
+    const baseline = targets ? undefined : this.basis(projectId, input);
+    if (!targets && input.baseRequestId && !baseline?.result?.hostExecuted) fail('STALE_REFERENCE');
     if (baseline && (baseline.result?.host || 'rhino') !== target) fail('TARGET_MISMATCH');
     for (const value of input.pins) {
       const parsedPin = pinSchema.safeParse(value);
@@ -105,9 +139,11 @@ export class Workspace {
       if (!source.result?.hostExecuted || !source.result.objects?.some((o) => o.id === pin.id))
         fail('STALE_REFERENCE');
       if (
-        (source.result.host || 'rhino') === target &&
+        (targets
+          ? targets.some((t) => t.host === (source.result!.host || 'rhino'))
+          : (source.result.host || 'rhino') === target) &&
         ['target', 'preserve'].includes(pin.role) &&
-        pin.basis !== baseline?.id
+        (targets ? !targets.some((t) => t.baseRequestId === pin.basis) : pin.basis !== baseline?.id)
       )
         fail('STALE_REFERENCE');
     }
@@ -132,6 +168,53 @@ export class Workspace {
     this.store.db
       .prepare('UPDATE workspace_requests SET state=?,result=? WHERE id=? AND projectId=?')
       .run(state, result === null ? null : JSON.stringify(result), id, projectId);
-    return this.get(projectId, id);
+    const updated = this.get(projectId, id);
+    if (typeof updated.input.parentRequestId === 'string') {
+      const parent = this.get(projectId, updated.input.parentRequestId);
+      const rows = z
+        .array(
+          z
+            .object({ requestId: z.string(), host: z.string(), state: requestStateSchema })
+            .passthrough(),
+        )
+        .safeParse(parent.result?.targetResults);
+      if (rows.success && rows.data.some((row) => row.requestId === id)) {
+        const next = {
+          ...parent.result,
+          targetResults: rows.data.map((row) =>
+            row.requestId === id
+              ? { ...row, state, candidate: updated.result?.hostExecuted === true }
+              : row,
+          ),
+        };
+        this.store.db
+          .prepare('UPDATE workspace_requests SET result=? WHERE id=? AND projectId=?')
+          .run(JSON.stringify(next), parent.id, projectId);
+      }
+    }
+    return updated;
+  }
+  createLinkedChild(parent: StoredWork, childId: string, index: number): StoredWork {
+    const target = parent.input.linkedTargets?.[index];
+    if (!target || this.get(parent.projectId, parent.id).state !== 'running') fail('INVALID_INPUT');
+    const { linkedTargets: _targets, coordinateBasis: _basis, ...rest } = parent.input;
+    const input = requestInputSchema.parse({
+      ...rest,
+      id: childId,
+      ...target,
+      parentRequestId: parent.id,
+      body: `${target.host} · ${parent.input.body}`,
+    });
+    this.store.db
+      .prepare('INSERT INTO workspace_requests VALUES(?,?,?,?,?,?)')
+      .run(
+        childId,
+        parent.projectId,
+        JSON.stringify(input),
+        'running',
+        null,
+        new Date().toISOString(),
+      );
+    return this.get(parent.projectId, childId);
   }
 }

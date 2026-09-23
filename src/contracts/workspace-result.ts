@@ -34,6 +34,16 @@ export const workspaceResultSchema = z
     dwgEditMode: z.string().nullish(),
     sourceHash: z.string().optional(),
     baseRequestId: z.string().optional(),
+    targetResults: z
+      .array(
+        z.object({
+          requestId: z.string(),
+          host: z.enum(['rhino', 'zwcad']),
+          state: requestStateSchema,
+          candidate: z.boolean().optional(),
+        }),
+      )
+      .optional(),
     sourceDocument: z
       .object({
         name: z.string(),

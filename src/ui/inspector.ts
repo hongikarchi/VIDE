@@ -27,6 +27,7 @@ interface InspectorScene {
   attributesComplete?: unknown;
 }
 interface InspectorResult {
+  targetResults?: { requestId: string; candidate?: boolean }[];
   host?: string;
   hostExecuted?: boolean;
   baseRequestId?: string;
@@ -37,6 +38,7 @@ interface InspectorRequest {
   id: string;
   input?: {
     body?: string;
+    parentRequestId?: string;
     baseRequestId?: string | null;
     pins?: { basis: string; id: string; role: string; name?: string }[];
   };
@@ -154,6 +156,12 @@ export function renderInspector(
     const links: { basis: string; id: string; label: string }[] = [];
     const basis = request?.input?.baseRequestId || result?.baseRequestId;
     if (basis) links.push({ basis, id: object.nativeSourceId || object.id, label: '이전 후보' });
+    const parent =
+      request?.input?.parentRequestId && references.get?.(request.input.parentRequestId);
+    for (const sibling of (parent && parent.result?.targetResults) || []) {
+      if (sibling.requestId !== request?.id && sibling.candidate)
+        links.push({ basis: sibling.requestId, id: '', label: '같은 요청 후보' });
+    }
     for (const pin of request?.input?.pins || [])
       links.push({
         basis: pin.basis,

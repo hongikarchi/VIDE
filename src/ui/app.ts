@@ -19,6 +19,7 @@ const showAiSettings: typeof import('./ai-settings.tsx').showAiSettings = async 
   (await import('./ai-settings.tsx')).showAiSettings(onStatus);
 import { initializeReviews } from './reviews.tsx';
 import { attachSharedFeedback } from './shared-feedback.tsx';
+import { showLinkedTargets } from './linked-targets.tsx';
 import { renderHistory } from './history.tsx';
 import { initializeDocuments } from './documents.tsx';
 import { renderPoints, validCoordinate } from './sketch.tsx';
@@ -43,6 +44,7 @@ import {
 import { createViewport } from './viewport.ts';
 
 let project: { id: string; name: string } | undefined,
+  ready = false,
   busy = false,
   displayedResult: string | undefined,
   selectedResult: string | null | undefined,
@@ -202,6 +204,8 @@ function chip(text: string, remove: () => void, pin?: DraftPin) {
   }
 }
 function render(rebuildRequests = true) {
+  $('body').disabled = !ready;
+  for (const id of ['permission', 'model', 'effort'] as const) $(id).disabled = !ready;
   if (unreadableDraft && draftHasInput(state)) unreadableDraft = false;
   if (!draftHasInput(state) && displayedResult) state.baseRequestId = displayedResult;
   if (rebuildRequests) renderRequests(state, render);
@@ -233,6 +237,16 @@ function render(rebuildRequests = true) {
   $('selection').textContent = objects.find((o) => o.id === state.selected)?.name || '';
   $('selection-pin').hidden = !state.selected;
   $('context').replaceChildren();
+  state.linkedTargets?.forEach((target) =>
+    chip(
+      `연계 · ${target.host === 'zwcad' ? 'ZWCAD' : 'Rhino'} · ${state.messages.find((m) => m.id === target.baseRequestId)?.body.slice(0, 35) || '기준 후보'}`,
+      () => {
+        state.linkedTargets = undefined;
+        state.coordinateBasis = undefined;
+        render();
+      },
+    ),
+  );
   state.pins.forEach((p, i) =>
     chip(
       '@ ' + p.name,
@@ -326,6 +340,7 @@ function render(rebuildRequests = true) {
       : '연결 중';
   sidebar();
   $('request').disabled =
+    !ready ||
     !project ||
     busy ||
     state.messages.some((m) => ['queued', 'running'].includes(m.request?.state)) ||
@@ -509,6 +524,8 @@ $('request').onclick = async () => {
     state.pins = [];
     state.sketches = [];
     state.files = [];
+    state.linkedTargets = undefined;
+    state.coordinateBasis = undefined;
     $('body').value = '';
     renderMessages();
     void poll(request.id);
@@ -522,7 +539,19 @@ $('request').onclick = async () => {
 };
 async function poll(id: string) {
   try {
-    const request = await requestData(`/projects/${currentProject().id}/requests/${id}`);
+    const projectId = currentProject().id;
+    const request = await requestData(`/projects/${projectId}/requests/${id}`);
+    const children = await Promise.all(
+      (request.result?.targetResults || []).map((target) =>
+        requestData(`/projects/${projectId}/requests/${target.requestId}`),
+      ),
+    );
+    if (project?.id !== projectId) return;
+    for (const child of children) {
+      const existing = state.messages.find((message) => message.id === child.id);
+      if (existing) existing.request = child;
+      else state.messages.push(requestMessage(child));
+    }
     const m = state.messages.find((x) => x.id === id);
     if (m) m.request = request;
     if (request.result?.hostExecuted) selectedResult = request.id;
@@ -554,6 +583,15 @@ $('draw').onclick = () => {
 $('attach-file').onclick = () => {
   $('files').click();
   $('attach-menu').open = false;
+};
+$('linked-targets').onclick = () => {
+  if (busy) return;
+  $('attach-menu').open = false;
+  const original = state;
+  showLinkedTargets(state, () => {
+    if (state !== original) throw Error('프로젝트가 바뀌었습니다.');
+    render();
+  });
 };
 $('files').onchange = async () => {
   try {
@@ -908,6 +946,7 @@ async function initializeWorkspace() {
     }
     if (!restored)
       selectedResult = linked.requests.filter((request) => request.result?.hostExecuted).at(-1)?.id;
+    ready = true;
     render();
     renderMessages();
     for (const entry of state.messages)

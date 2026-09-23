@@ -212,11 +212,13 @@ function Card({
   models,
   projectId,
   actions,
+  related,
 }: {
   message: Message;
   models: { id: string; name: string }[];
   projectId: string;
   actions: Actions;
+  related: Map<string, Request>;
 }) {
   const request = message.request,
     result = request?.result;
@@ -255,6 +257,25 @@ function Card({
                   : stateLabels[request.state] || request.state}
           </small>
           {result?.text ? <p>{result.text}</p> : null}
+          {result?.targetResults?.map((saved) => {
+            const current = related.get(saved.requestId);
+            const target = current
+              ? { ...saved, state: current.state, candidate: current.result?.hostExecuted === true }
+              : saved;
+            return (
+              <div key={target.requestId}>
+                <span>
+                  {target.host === 'zwcad' ? 'ZWCAD' : 'Rhino'} ·{' '}
+                  {stateLabels[target.state] || target.state}
+                </span>
+                {target.state === 'succeeded' && target.candidate ? (
+                  <button onClick={() => actions.candidate(target.requestId)}>
+                    대상 후보 보기
+                  </button>
+                ) : null}
+              </div>
+            );
+          })}
           {result?.extensionResult?.rows.map((row, index) => (
             <details key={index}>
               <summary>
@@ -305,6 +326,7 @@ function Card({
           ) : null}
           {['failed', 'cancelled', 'interrupted'].includes(request.state) &&
           message.provider !== 'extension' &&
+          !message.linkedTargets &&
           !imported ? (
             <Action error={actions.error} run={() => actions.restore(request)}>
               입력을 초안으로 복원
@@ -349,6 +371,7 @@ function History({
   useLayoutEffect(() => {
     element.scrollTop = follow ? element.scrollHeight : scroll;
   });
+  const related = new Map(messages.map((message) => [message.id, message.request]));
   return messages.length ? (
     <>
       {messages.map((message) => (
@@ -358,6 +381,7 @@ function History({
           models={models}
           projectId={projectId}
           actions={actions}
+          related={related}
         />
       ))}
     </>

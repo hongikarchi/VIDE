@@ -179,6 +179,7 @@ The currently verified viewer supports independent planar XY straight LWPolyline
 User request: ${input.body || '첨부한 설계 문맥을 검토해 주세요.'}`;
       const response = await provider({
         url: options.origin() + '/mcp',
+        targetRef,
         token: scope.token,
         tools: Object.keys(handlers),
       }).run(

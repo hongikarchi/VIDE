@@ -12,6 +12,12 @@ export const requestStateSchema = z.enum([
 export type RequestState = z.infer<typeof requestStateSchema>;
 const id = z.string().regex(/^[a-zA-Z0-9-]{1,100}$/);
 const coordinate = z.number().finite().min(-100000).max(100000);
+export const linkedTargetSchema = z
+  .object({
+    baseRequestId: id,
+    host: z.enum(['rhino', 'zwcad']),
+  })
+  .strict();
 export const sketchSchema = z
   .object({
     plane: z.enum(['XY', 'XZ', 'YZ']),
@@ -37,6 +43,8 @@ export const requestInputSchema = z
       .max(100),
     host: z.enum(['rhino', 'zwcad']).optional(),
     baseRequestId: id.nullable().optional(),
+    linkedTargets: z.array(linkedTargetSchema).length(2).optional(),
+    coordinateBasis: z.literal('shared-metre-axes').optional(),
     model: z
       .string()
       .regex(/^[a-zA-Z0-9._-]{1,100}(?:\[1m\])?$/)
@@ -45,6 +53,16 @@ export const requestInputSchema = z
   })
   .passthrough()
   .superRefine((input, context) => {
+    if (
+      input.linkedTargets &&
+      (input.coordinateBasis !== 'shared-metre-axes' ||
+        new Set(input.linkedTargets.map((target) => target.baseRequestId)).size !== 2 ||
+        input.provider === 'extension')
+    )
+      context.addIssue({
+        code: 'custom',
+        message: 'Explicit distinct targets and confirmed coordinates are required',
+      });
     if (
       input.provider === 'extension' &&
       (input.permission !== 'review' ||

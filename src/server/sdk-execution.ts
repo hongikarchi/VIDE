@@ -23,10 +23,11 @@ interface Provider {
     options: { signal: AbortSignal; onProgress: (event: { state?: string }) => void },
   ): Promise<{ text: string; [key: string]: unknown }>;
 }
-interface AgentConnection {
+export interface AgentConnection {
   url: string;
   token: string;
   tools: string[];
+  targetRef?: string;
 }
 interface Options {
   directory: string;
@@ -37,7 +38,7 @@ interface Options {
   origin: () => string;
   launch?: typeof launchRhinoWorker;
 }
-interface Task {
+export interface Task {
   input: RequestInput;
   previous?: { id: string; result: Record<string, unknown> };
   items: ContextItem[];
@@ -291,6 +292,7 @@ Use supplied dimensions, sketch plane/coordinates and pin roles. Never invent a 
 User request: ${input.body || '첨부한 설계 문맥을 검토해 주세요.'}`;
       const response = await provider({
         url: options.origin() + '/mcp',
+        targetRef,
         token: scope.token,
         tools: Object.keys(handlers),
       }).run(
