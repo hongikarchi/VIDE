@@ -1,3 +1,4 @@
+import { copyZwcadNotices } from './package-licenses.mjs';
 import { copyPackageSources } from './package-source.mjs';
 import { cp, mkdir, readFile, writeFile, readdir, copyFile } from 'node:fs/promises';
 import { join, resolve, relative, basename } from 'node:path';
@@ -61,7 +62,7 @@ await exec(
 const zwcadRuntime = join(directory, 'app', 'hosts', 'zwcad', 'worker', 'runtime');
 await mkdir(zwcadRuntime, { recursive: true });
 // Explicit runtime dependencies only; installed ZWCAD SDK assemblies are never bundled.
-for (const file of [
+const zwcadAssemblies = [
   'VIDE.Zwcad.Worker.dll',
   'Microsoft.CodeAnalysis.dll',
   'Microsoft.CodeAnalysis.CSharp.dll',
@@ -73,7 +74,8 @@ for (const file of [
   'System.Runtime.CompilerServices.Unsafe.dll',
   'System.Text.Encoding.CodePages.dll',
   'System.Threading.Tasks.Extensions.dll',
-])
+];
+for (const file of zwcadAssemblies)
   await copyFile(join(root, '.vide/build/zwcad-worker', file), join(zwcadRuntime, file));
 await writeFile(
   join(directory, 'app', 'package.json'),
@@ -95,6 +97,11 @@ for (const [packagePath, metadata] of Object.entries(lock.packages)) {
 await mkdir(join(directory, 'runtime'));
 await copyFile(process.execPath, join(directory, 'runtime', 'node.exe'));
 await mkdir(join(directory, 'licenses'));
+await copyZwcadNotices(
+  root,
+  join(directory, 'licenses', 'zwcad-runtime'),
+  zwcadAssemblies.slice(1),
+);
 await copyFile(
   join(source, 'licenses', 'node-v24.15.0.txt'),
   join(directory, 'licenses', 'node.txt'),
@@ -125,7 +132,7 @@ await exec(
 );
 await writeFile(
   join(directory, 'START-HERE.txt'),
-  `VIDE ${version} · Windows x64 개발 검수용\n\n압축을 모두 푼 뒤 VIDE.exe를 실행하세요. Node/npm을 별도로 실행할 필요가 없습니다.\n두 번 실행하면 이미 열린 작업 공간을 사용합니다. AI WORK 메뉴의 앱 종료로 종료하세요.\n사용자 데이터: %LOCALAPPDATA%\\VIDE (VIDE_DATA_DIR 환경 변수로 별도 지정 가능).\n이 폴더를 지워도 사용자 데이터는 자동 삭제하지 않습니다.\nRhino/ZWCAD와 공식 Claude Code/Codex CLI는 별도 설치본을 사용합니다. AI 연결 설정에서 경로와 로그인을 확인하세요.\nRhino 후보 생성과 3dm 파일 가져오기는 포함된 VIDE worker를 사용하며 외부 MCP 설치가 필요하지 않습니다. VIDE에서 연 Rhino 편집 사본은 자체 채널의 취득·후보 적용·제어기 재시작 후 재연결을 사용합니다. 별도로 열린 기존 Rhino 문서에는 아직 기존 연결의 mcpstart가 필요합니다. ZWCAD DWG 가져오기와 독립 mm XY LWPolyline 정점 수정은 포함된 자체 SDK 도구를 사용합니다. 일반 DWG 객체 편집·열린 원본 적용은 아직 지원하지 않습니다.\n\n포함 런타임: Node.js ${process.version}, Three.js ${pkg.dependencies.three}. 고지는 licenses 폴더에 있습니다.\n백업(앱 종료 후): runtime\\node.exe app\\src\\desktop\\backup.mjs create <데이터 폴더> <새 백업 폴더>\n백업 확인: runtime\\node.exe app\\src\\desktop\\backup.mjs verify <백업 폴더>\n복원은 자동 덮어쓰기를 제공하지 않습니다. 기존 자료를 보존하고 동일 데이터 경로로 복구해야 합니다.\n\n개발 도구가 없는 별도 Windows PC 검수·서명·설치 프로그램·외부 배포 검수는 아직 완료되지 않았습니다.\n`,
+  `VIDE ${version} · Windows x64 개발 검수용\n\n압축을 모두 푼 뒤 VIDE.exe를 실행하세요. Node/npm을 별도로 실행할 필요가 없습니다.\n두 번 실행하면 이미 열린 작업 공간을 사용합니다. AI WORK 메뉴의 앱 종료로 종료하세요.\n사용자 데이터: %LOCALAPPDATA%\\VIDE (VIDE_DATA_DIR 환경 변수로 별도 지정 가능).\n이 폴더를 지워도 사용자 데이터는 자동 삭제하지 않습니다.\nRhino/ZWCAD와 공식 Claude Code/Codex CLI는 별도 설치본을 사용합니다. AI 연결 설정에서 경로와 로그인을 확인하세요.\nRhino 후보 생성과 3dm 파일 가져오기는 포함된 VIDE worker를 사용하며 외부 MCP 설치가 필요하지 않습니다. VIDE에서 연 Rhino 편집 사본은 자체 채널의 취득·후보 적용·제어기 재시작 후 재연결을 사용합니다. 별도로 열린 기존 Rhino 문서에는 아직 기존 연결의 mcpstart가 필요합니다. ZWCAD의 독립 mm XY LWPolyline 생성·수정과 VIDE가 연 편집 사본의 취득·후보 적용은 포함된 자체 SDK 도구를 사용합니다. 일반 DWG 객체·별도로 열린 기존 사용자 문서 적용은 아직 지원하지 않습니다.\n\n포함 런타임: Node.js ${process.version}, Three.js ${pkg.dependencies.three}. 고지는 licenses 폴더에 있습니다.\n백업(앱 종료 후): runtime\\node.exe app\\src\\desktop\\backup.mjs create <데이터 폴더> <새 백업 폴더>\n백업 확인: runtime\\node.exe app\\src\\desktop\\backup.mjs verify <백업 폴더>\n복원은 자동 덮어쓰기를 제공하지 않습니다. 기존 자료를 보존하고 동일 데이터 경로로 복구해야 합니다.\n\n개발 도구가 없는 별도 Windows PC 검수·서명·설치 프로그램·외부 배포 검수는 아직 완료되지 않았습니다.\n`,
   'utf8',
 );
 async function inventory(folder) {

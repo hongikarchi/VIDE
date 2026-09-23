@@ -2,7 +2,7 @@
 id: VERIFY-2026-09-24-sharing-host-roundtrip
 title: 공유 의견의 실제 호스트 수정·재게시 왕복
 status: review
-version: 0.1
+version: 0.2
 updated: 2026-09-24
 owner: agent:codex
 related: [PLAN-02, T-009, T-017, SPEC-04, H-ZWCAD-04]
@@ -25,3 +25,7 @@ related: [PLAN-02, T-009, T-017, SPEC-04, H-ZWCAD-04]
 ## 판정과 한계
 
 파일 방식의 로컬 의견 수신→명시 실행→실제 후보 수정→재게시 연결은 검증했다. 자연어 추론 품질은 이 결정적 대역 시험의 판정 대상이 아니며 양쪽 실제 구독 시험은 [SDK 제품 검증](VERIFY-2026-09-24-zwcad-sdk-product.md)을 참조한다. 열린 원본에 자동 적용하지 않으며 후보의 명시 적용은 별도 호스트 검수다. 온라인 자동 동기화, 원격 게시/PC 종료 후 지속성, 논현동 수준의 실무 수용을 완료로 표시하지 않는다.
+
+## 로컬 복구 회귀
+
+`membership.mjs --backup`도 통과했다. `.vide/sharing-membership/660ee563-94ec-4194-b401-dd3e5c8e4059`에서 10 MiB 전송/재시작 복구 1,084 ms, 중지한 로컬 에뮬레이터 스냅샷의 복원/검증 937 ms였다. 게시·의견·권한의 복원 일치를 검사했다. 이는 loopback 실측이며 원격 D1 반출·실서비스 재해복구·인터넷 지연의 증거가 아니다.
