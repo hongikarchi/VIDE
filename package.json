@@ -30,7 +30,7 @@
     "security:check": "node tools/checks/secrets.mjs history",
     "security:selftest": "node tools/checks/secrets.mjs selftest",
     "typecheck:sharing": "tsc -p src/sharing/tsconfig.json",
-    "verify": "npm run deployment:check && npm run typecheck && npm run typecheck:sharing && npm test && npm run build:server && npm run build:sharing && npm --prefix src/sharing test && npm run docs:check",
+    "verify": "npm run format:check && npm run deployment:check && npm run typecheck && npm run typecheck:sharing && npm test && npm run build:server && npm run build:sharing && npm --prefix src/sharing test && npm run docs:check",
     "verify:all": "npm run security:check && npm run security:selftest && npm run verify && npm run test:browser",
     "format:check": "prettier --check \"{src,hosts,extensions,tests,tools/checks}/**/*.{ts,tsx,js,mjs,css,json,jsonc}\" \"*.{json,ts}\"",
     "format": "prettier --write \"{src,hosts,extensions,tests,tools/checks}/**/*.{ts,tsx,js,mjs,css,json,jsonc}\" \"*.{json,ts}\"",

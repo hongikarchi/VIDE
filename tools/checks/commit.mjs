@@ -2,7 +2,8 @@ import { spawnSync, execFileSync } from 'node:child_process';
 const git = (args) => execFileSync('git', args, { encoding: 'utf8' }).split('\0').filter(Boolean);
 const staged = git(['diff', '--cached', '--name-only', '-z']);
 const code = (name) =>
-  /^(src|hosts|extensions|tests|tools\/checks)\//.test(name) ||
+  /^(\.prettier|\.gitleaks)/.test(name) ||
+  /^(src|hosts|extensions|tests|tools\/checks|\.github|\.githooks)\//.test(name) ||
   /(?:package(?:-lock)?\.json|tsconfig[^/]*\.json|vite[^/]*\.ts)$/.test(name);
 function run(command, args) {
   const result = spawnSync(command, args, { stdio: 'inherit', windowsHide: true });
@@ -18,6 +19,12 @@ if (staged.some(code)) {
     );
     process.exit(1);
   }
+  run(process.execPath, [
+    'node_modules/prettier/bin/prettier.cjs',
+    '--check',
+    '{src,hosts,extensions,tests,tools/checks}/**/*.{ts,tsx,js,mjs,css,json,jsonc}',
+    '*.{json,ts}',
+  ]);
   // No write-mode formatter and no automatic staging of user edits.
   run(process.execPath, ['node_modules/typescript/bin/tsc', '-p', 'tsconfig.ui.json']);
   run(process.execPath, [
@@ -27,4 +34,11 @@ if (staged.some(code)) {
     '--noEmit',
   ]);
   run(process.execPath, ['node_modules/typescript/bin/tsc', '-p', 'src/sharing/tsconfig.json']);
+  run(process.execPath, ['node_modules/vite/bin/vite.js', 'build']);
+  run(process.execPath, [
+    '--test',
+    'tests/core/*.test.mjs',
+    'tests/ai/*.test.mjs',
+    'tests/server/*.test.mjs',
+  ]);
 }
