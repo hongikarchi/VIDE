@@ -2,7 +2,7 @@
 id: ARCH-01
 title: VIDE 기술 구조와 구현 계약
 status: review
-version: 0.1
+version: 0.2
 updated: 2026-09-24
 owner: agent:codex
 related: [SPEC-00, SPEC-02, SPEC-03, SPEC-04, PLAN, ADR-014, ADR-015, ADR-016, ADR-017]
@@ -488,4 +488,8 @@ R2 조건부 쓰기/체크섬은 [공식 Workers API](https://developers.cloudfl
 
 ## 7. 개발 기반과 변경 경계
 
-개발 도구·Git 보호·CI·마이그레이션의 채택안은 [PLAN-03](../plans/PLAN-03-development-foundation.md)에서 검토한다. 아직 채택되지 않은 도구를 확정 스택에 추가하지 않는다. 구현을 통해 확정된 저장 이행·호스트 의존 경계는 해당 절을 갱신하며 실행 순서나 진행 로그를 여기에 누적하지 않는다.
+개발 도구는 Gitleaks 8.30.1과 Prettier 3.8.1을 고정한다. Git 커밋은 staged 비밀정보·입력 일치·포맷·UI/서버/공유 타입·웹 빌드·단위/계약 시험을 검사한다. CI는 공유 통합·브라우저 회귀·전체 이력 검사도 실행한다. 실제 원격 CI/브랜치 보호 상태는 PLAN §6.5가 소유한다.
+
+로컬 DB의 현재 schema는 2다. `src/core/migrations.ts`가 번호 순서와 모든 초기 테이블을 소유하며 서비스 생성자는 스키마를 변경하지 않는다. 단일 제어 잠금 → 읽기 전용 버전/무결성 확인 → 이전 DB의 SQLite 스냅샷 → 단일 트랜잭션 이행/무결성 확인 순서다. 실패는 rollback하고 기존 모델 파일을 변경하지 않는다. `<DB 파일>.backups/schema-<이전 버전>-<UUID>.sqlite`는 이전 DB만 보존하며 전체 프로젝트 백업과 다르다. 성공 후 같은 버전 재시작은 추가 백업을 만들지 않는다. 복구 시 앱을 종료하고 실패 DB/WAL 및 모델 자료를 보존한 뒤 이전 DB와 호환되는 앱으로 사본을 검증한다. 자동 덮어쓰기·이전 앱으로의 자동 다운그레이드는 하지 않는다.
+
+런타임 루트 탐색은 `src/core/package-root.ts`, C# verbatim 문자열은 `hosts/common/csharp.ts`가 소유한다. 호스트는 서버 구현을 import하지 않는다. 패키지 소스는 Git index의 허용된 소스 폴더만 복사하며 금지 파일·심볼릭 링크를 거절한다. 런타임/의존성/UI 빌드 산출물은 별도 명시 경로로 포함한다. 구현/검증 절차는 PLAN-03, 실제 증거는 개발 기반 VERIFY를 따른다.

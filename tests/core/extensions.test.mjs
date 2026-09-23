@@ -1,13 +1,87 @@
-import {test} from 'node:test';import assert from 'node:assert/strict';import {Store} from '../../src/core/store.ts';import {Workspace} from '../../src/core/workspace.ts';import {Extensions,validateExtensionManifest} from '../../src/core/extensions.ts';
-test('trusted extension uses immutable selection, records results, deduplicates retries and blocks disabled or foreign executions',()=>{
- const store=new Store(':memory:');try{
-  const workspace=new Workspace(store),project=store.createProject('Extension'),other=store.createProject('Other'),extensions=new Extensions(store,workspace);
-  workspace.submit(project.id,{id:'base',provider:'codex-cli',permission:'review',body:'Source',pins:[],files:[],sketches:[]});workspace.update(project.id,'base','succeeded',{hostExecuted:true,host:'rhino',objects:[{id:'a',name:'A',kind:'box'},{id:'b',name:'B',kind:'box'}],scene:[{id:'a',nativeType:'Brep',layer64:Buffer.from('대지').toString('base64')},{id:'b',nativeType:'Brep',layer64:Buffer.from('대지').toString('base64')}]});
-  const input={id:'summary',requestId:'base',objectIds:['a','b']};assert.throws(()=>extensions.execute(project.id,'object-summary',input),{code:'EXTENSION_DISABLED'});extensions.save('object-summary',{revision:0,enabled:true});
-  assert.throws(()=>extensions.execute(other.id,'object-summary',input),{code:'NOT_FOUND'});assert.throws(()=>extensions.execute(project.id,'object-summary',{...input,capabilities:['host.write']}),{code:'INVALID_INPUT'});
-  const result=extensions.execute(project.id,'object-summary',input);assert.equal(result.state,'succeeded');assert.equal(result.result.hostExecuted,false);assert.deepEqual(result.result.extensionResult.rows,[{type:'Brep',layer:'대지',objectIds:['a','b'],count:2}]);assert.equal(result.input.baseRequestId,'base');assert.equal(workspace.get(project.id,'base').result.scene.length,2);
-  extensions.save('object-summary',{revision:1,enabled:false});assert.deepEqual(extensions.execute(project.id,'object-summary',input),result);assert.throws(()=>extensions.execute(project.id,'object-summary',{...input,id:'new'}),{code:'EXTENSION_DISABLED'});
-  assert.throws(()=>extensions.save('untrusted',{revision:0,enabled:true}),{code:'NOT_FOUND'});assert.throws(()=>validateExtensionManifest({...extensions.list()[0],capabilities:['host.write']}),{code:'INVALID_EXTENSION_CONTRACT'});
-  extensions.save('object-summary',{revision:2,enabled:true});workspace.update(project.id,'base','succeeded',{hostExecuted:true,objects:[{id:'a'}]});const failure=extensions.execute(project.id,'object-summary',{id:'failure',requestId:'base',objectIds:['a']});assert.equal(failure.state,'failed');assert.equal(failure.result.code,'EXTENSION_FAILED');assert.equal(failure.input.pins[0].id,'a');assert.equal(workspace.get(project.id,'summary').result.extensionResult.rows[0].count,2);
- }finally{store.close();}
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { Store } from '../../src/core/store.ts';
+import { Workspace } from '../../src/core/workspace.ts';
+import { Extensions, validateExtensionManifest } from '../../src/core/extensions.ts';
+test('trusted extension uses immutable selection, records results, deduplicates retries and blocks disabled or foreign executions', () => {
+  const store = new Store(':memory:');
+  try {
+    const workspace = new Workspace(store),
+      project = store.createProject('Extension'),
+      other = store.createProject('Other'),
+      extensions = new Extensions(store, workspace);
+    workspace.submit(project.id, {
+      id: 'base',
+      provider: 'codex-cli',
+      permission: 'review',
+      body: 'Source',
+      pins: [],
+      files: [],
+      sketches: [],
+    });
+    workspace.update(project.id, 'base', 'succeeded', {
+      hostExecuted: true,
+      host: 'rhino',
+      objects: [
+        { id: 'a', name: 'A', kind: 'box' },
+        { id: 'b', name: 'B', kind: 'box' },
+      ],
+      scene: [
+        { id: 'a', nativeType: 'Brep', layer64: Buffer.from('대지').toString('base64') },
+        { id: 'b', nativeType: 'Brep', layer64: Buffer.from('대지').toString('base64') },
+      ],
+    });
+    const input = { id: 'summary', requestId: 'base', objectIds: ['a', 'b'] };
+    assert.throws(() => extensions.execute(project.id, 'object-summary', input), {
+      code: 'EXTENSION_DISABLED',
+    });
+    extensions.save('object-summary', { revision: 0, enabled: true });
+    assert.throws(() => extensions.execute(other.id, 'object-summary', input), {
+      code: 'NOT_FOUND',
+    });
+    assert.throws(
+      () =>
+        extensions.execute(project.id, 'object-summary', {
+          ...input,
+          capabilities: ['host.write'],
+        }),
+      { code: 'INVALID_INPUT' },
+    );
+    const result = extensions.execute(project.id, 'object-summary', input);
+    assert.equal(result.state, 'succeeded');
+    assert.equal(result.result.hostExecuted, false);
+    assert.deepEqual(result.result.extensionResult.rows, [
+      { type: 'Brep', layer: '대지', objectIds: ['a', 'b'], count: 2 },
+    ]);
+    assert.equal(result.input.baseRequestId, 'base');
+    assert.equal(workspace.get(project.id, 'base').result.scene.length, 2);
+    extensions.save('object-summary', { revision: 1, enabled: false });
+    assert.deepEqual(extensions.execute(project.id, 'object-summary', input), result);
+    assert.throws(() => extensions.execute(project.id, 'object-summary', { ...input, id: 'new' }), {
+      code: 'EXTENSION_DISABLED',
+    });
+    assert.throws(() => extensions.save('untrusted', { revision: 0, enabled: true }), {
+      code: 'NOT_FOUND',
+    });
+    assert.throws(
+      () => validateExtensionManifest({ ...extensions.list()[0], capabilities: ['host.write'] }),
+      { code: 'INVALID_EXTENSION_CONTRACT' },
+    );
+    extensions.save('object-summary', { revision: 2, enabled: true });
+    workspace.update(project.id, 'base', 'succeeded', {
+      hostExecuted: true,
+      objects: [{ id: 'a' }],
+    });
+    const failure = extensions.execute(project.id, 'object-summary', {
+      id: 'failure',
+      requestId: 'base',
+      objectIds: ['a'],
+    });
+    assert.equal(failure.state, 'failed');
+    assert.equal(failure.result.code, 'EXTENSION_FAILED');
+    assert.equal(failure.input.pins[0].id, 'a');
+    assert.equal(workspace.get(project.id, 'summary').result.extensionResult.rows[0].count, 2);
+  } finally {
+    store.close();
+  }
 });

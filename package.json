@@ -25,7 +25,16 @@
     "pretest": "npm run build:web",
     "prepackage:windows": "npm run build:web",
     "test:browser": "npm run build:web && node tests/integration/browser-react-panels.mjs",
-    "build:sharing": "npm run typecheck:ui && vite build --config vite.sharing.config.ts"
+    "build:sharing": "npm run typecheck:ui && vite build --config vite.sharing.config.ts",
+    "security:install": "node tools/checks/secrets.mjs install",
+    "security:check": "node tools/checks/secrets.mjs history",
+    "security:selftest": "node tools/checks/secrets.mjs selftest",
+    "typecheck:sharing": "tsc -p src/sharing/tsconfig.json",
+    "verify": "npm run format:check && npm run deployment:check && npm run typecheck && npm run typecheck:sharing && npm test && npm run build:server && npm run build:sharing && npm --prefix src/sharing test && npm run docs:check",
+    "verify:all": "npm run security:check && npm run security:selftest && npm run verify && npm run test:browser",
+    "format:check": "prettier --check \"{src,hosts,extensions,tests,tools/checks}/**/*.{ts,tsx,js,mjs,css,json,jsonc}\" \"*.{json,ts}\"",
+    "format": "prettier --write \"{src,hosts,extensions,tests,tools/checks}/**/*.{ts,tsx,js,mjs,css,json,jsonc}\" \"*.{json,ts}\"",
+    "deployment:check": "node tools/checks/deployment.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.30.0",
@@ -41,6 +50,7 @@
     "@types/three": "0.186.0",
     "@vitejs/plugin-react": "6.1.1",
     "playwright": "1.63.0",
+    "prettier": "3.8.1",
     "typescript": "7.0.2",
     "vite": "8.3.0"
   }

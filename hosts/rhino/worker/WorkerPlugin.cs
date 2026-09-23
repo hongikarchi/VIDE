@@ -107,7 +107,7 @@ public sealed class WorkerCommand : Command
             catch (Exception error)
             {
                 try { await Reply(stream, new { status = "success", result = new { ok = false,
-                    code = error is InvalidOperationException ? error.Message : "HOST_RESULT_UNKNOWN" } }, timeout.Token); } catch { }
+                    code = error is InvalidOperationException ? error.Message : "HOST_RESULT_UNKNOWN" } }, timeout.Token); } catch { /* Disconnected caller cannot receive the failure; persisted receipt remains authoritative. */ }
             }
         }
     }
