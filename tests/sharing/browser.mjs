@@ -114,6 +114,7 @@ export async function verifyBrowser({ origin, bob, alice, directory, db, project
     );
     assert.deepEqual(errors, []);
     const published = await verifyDesktopPublish({
+      reviewer: page,
       browser,
       origin,
       alice,

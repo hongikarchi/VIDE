@@ -1,10 +1,25 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { nativeSharingFixture } from './host-roundtrip.mjs';
 import { startServer } from '../../src/server/server.ts';
 
-export async function verifyDesktopPublish({ browser, origin, alice, directory, db, projectId }) {
-  const app = await startServer({ filename: join(directory, 'desktop.sqlite') }),
+export async function verifyDesktopPublish({
+  browser,
+  origin,
+  alice,
+  directory,
+  db,
+  projectId,
+  reviewer,
+}) {
+  const native = process.argv.includes('--host')
+    ? await nativeSharingFixture(directory)
+    : undefined;
+  const app = await startServer({
+      filename: join(directory, 'desktop.sqlite'),
+      ...native?.options,
+    }),
     desktop = await browser.newPage({ viewport: { width: 1440, height: 900 } }),
     owner = await browser.newPage({ viewport: { width: 1440, height: 900 } });
   try {
@@ -20,9 +35,9 @@ export async function verifyDesktopPublish({ browser, origin, alice, directory, 
       sketches: [],
       files: [],
       source: 'file',
-      host: 'rhino',
+      host: native ? 'zwcad' : 'rhino',
     };
-    const result = {
+    const result = native?.result || {
       hostExecuted: true,
       verified: true,
       host: 'rhino',
@@ -45,6 +60,7 @@ export async function verifyDesktopPublish({ browser, origin, alice, directory, 
         { id: 'hidden', nativeType: 'Point', origin: [10, 10, 10] },
       ],
     };
+    const objectId = result.objects[0].id;
     app.store.db
       .prepare('INSERT INTO workspace_requests VALUES(?,?,?,?,?,?)')
       .run(
@@ -72,7 +88,7 @@ export async function verifyDesktopPublish({ browser, origin, alice, directory, 
     await desktop.goto(app.launchUrl);
     await desktop.getByRole('button', { name: '공유 자료', exact: true }).click();
     await desktop.getByLabel('게시 제목', { exact: true }).fill('브라우저 게시 검수');
-    await desktop.getByLabel('Public object', { exact: true }).check();
+    await desktop.getByLabel(result.objects[0].name, { exact: true }).check();
     const downloadPromise = desktop.waitForEvent('download');
     await desktop.getByRole('button', { name: '공유 자료 내려받기', exact: true }).click();
     const download = await downloadPromise,
@@ -134,8 +150,8 @@ export async function verifyDesktopPublish({ browser, origin, alice, directory, 
       .first();
     const noteInput = {
       submissionId: 'feedback-roundtrip',
-      body: '이 부분의 높이를 낮춰 주세요.',
-      objectId: 'object-1',
+      body: native ? '경계의 폭을 24 m에서 26 m로 변경해 주세요.' : '이 부분의 높이를 낮춰 주세요.',
+      objectId,
       pin: { unit: 'm', position: [1, 2, 3] },
       sketches: [
         {
@@ -150,7 +166,7 @@ export async function verifyDesktopPublish({ browser, origin, alice, directory, 
         },
       ],
     };
-    const posted = await owner.evaluate(
+    const posted = await (reviewer || owner).evaluate(
       async ({ projectId, publication, input }) => {
         const response = await fetch(
           `/api/projects/${projectId}/publications/${publication}/comments`,
@@ -210,7 +226,11 @@ export async function verifyDesktopPublish({ browser, origin, alice, directory, 
         ),
       local.id,
     );
+    const hostEvidence = native
+      ? await native.complete({ desktop, owner, local, draft, projectId, publication })
+      : {};
     return {
+      ...hostEvidence,
       desktopExplicitExport: true,
       crossProjectExportRejected: true,
       browserPublish: true,
