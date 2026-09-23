@@ -33,7 +33,7 @@ export async function backupWorkspace(source:string, destination:string) {
     controller = new DatabaseSync(filename + '.controller');
     try { controller.exec('PRAGMA busy_timeout=0; BEGIN EXCLUSIVE'); }
     catch { fail('CONTROLLER_BUSY'); }
-    checkDatabase(filename);
+    const schema = checkDatabase(filename);
     db = new DatabaseSync(filename, { readOnly: true });
     await mkdir(destination); // Existing backups are never overwritten.
     await backup(db, join(destination, 'vide.sqlite'));
@@ -50,7 +50,7 @@ export async function backupWorkspace(source:string, destination:string) {
         entries.push({ path: path.replaceAll('\\', '/'), sha256: before });
       }
     }
-    const manifest = { format: 1, schema: 1, source, createdAt: new Date().toISOString(), files: entries };
+    const manifest = { format: 1, schema, source, createdAt: new Date().toISOString(), files: entries };
     // Written last. A partial folder without this manifest is not a complete backup.
     await writeFile(join(destination, 'backup-manifest.json'), JSON.stringify(manifest, null, 2) + '\n', { flag: 'wx' });
     return manifest;
@@ -59,9 +59,9 @@ export async function backupWorkspace(source:string, destination:string) {
 
 export async function verifyBackup(directory:string) {
   directory = await realpath(resolve(directory));
-  const parsed=z.object({format:z.literal(1),schema:z.literal(1),source:z.string(),createdAt:z.string(),files:z.array(z.object({path:z.string(),sha256:z.string().regex(/^[a-f0-9]{64}$/)})).min(1)}).safeParse(JSON.parse(await readFile(join(directory, 'backup-manifest.json'), 'utf8')));
+  const parsed=z.object({format:z.literal(1),schema:z.union([z.literal(1),z.literal(2)]),source:z.string(),createdAt:z.string(),files:z.array(z.object({path:z.string(),sha256:z.string().regex(/^[a-f0-9]{64}$/)})).min(1)}).safeParse(JSON.parse(await readFile(join(directory, 'backup-manifest.json'), 'utf8')));
   if(!parsed.success)fail('BACKUP_INVALID');const manifest=parsed.data;
-  if (manifest.format !== 1 || manifest.schema !== 1 || !Array.isArray(manifest.files) || !manifest.files.length) fail('BACKUP_INVALID');
+  if (manifest.format !== 1 || ![1,2].includes(manifest.schema) || !Array.isArray(manifest.files) || !manifest.files.length) fail('BACKUP_INVALID');
   const seen = new Set();
   for (const file of manifest.files) {
     if (typeof file.path !== 'string' || !/^[a-f0-9]{64}$/.test(file.sha256)) fail('BACKUP_INVALID');
@@ -71,6 +71,6 @@ export async function verifyBackup(directory:string) {
     if (!inside(directory, await realpath(target)) || await hash(target) !== file.sha256) fail('BACKUP_INVALID');
   }
   if (!seen.has(join(directory, 'vide.sqlite'))) fail('BACKUP_INVALID');
-  checkDatabase(join(directory, 'vide.sqlite'));
+  if(checkDatabase(join(directory, 'vide.sqlite')) !== manifest.schema) fail('BACKUP_INVALID');
   return manifest;
 }

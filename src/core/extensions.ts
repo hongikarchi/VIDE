@@ -11,7 +11,7 @@ export function validateExtensionManifest(raw:unknown){
 }
 export class Extensions{
  store:Store;workspace:Workspace;
- constructor(store:Store,workspace:Workspace){for(const extension of allowed.values())validateExtensionManifest(extension.manifest);this.store=store;this.workspace=workspace;store.db.exec('CREATE TABLE IF NOT EXISTS extension_registrations(id TEXT PRIMARY KEY,version TEXT NOT NULL,enabled INTEGER NOT NULL,revision INTEGER NOT NULL)');}
+ constructor(store:Store,workspace:Workspace){for(const extension of allowed.values())validateExtensionManifest(extension.manifest);this.store=store;this.workspace=workspace;}
  list(){return [...allowed.values()].map(({manifest})=>({...manifest,...this.registration(manifest.id)}));}
  registration(id:string){if(!allowed.has(id))throw new DomainError('NOT_FOUND');const row=this.store.db.prepare('SELECT enabled,revision,version FROM extension_registrations WHERE id=?').get(id);return {enabled:!!row?.enabled&&row.version===allowed.get(id)!.manifest.version,revision:row?z.number().parse(row.revision):0};}
  save(id:string,raw:unknown){const parsed=z.object({enabled:z.boolean(),revision:z.number().int()}).strict().safeParse(raw);if(!parsed.success)throw new DomainError('INVALID_INPUT');const input=parsed.data;const extension=allowed.get(id);if(!extension)throw new DomainError('NOT_FOUND');if(!input||Object.keys(input).some(key=>!['enabled','revision'].includes(key))||typeof input.enabled!=='boolean'||!Number.isSafeInteger(input.revision))throw new DomainError('INVALID_INPUT');if(this.registration(id).revision!==input.revision)throw new DomainError('REVISION_CONFLICT');

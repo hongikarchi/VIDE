@@ -1,3 +1,4 @@
+import { migrateDatabase } from './migrations.ts';
 import {z} from 'zod';
 import { DatabaseSync } from 'node:sqlite';
 import { randomUUID, createHash } from 'node:crypto';
@@ -65,26 +66,11 @@ export class Store {
         try { this.controller.exec('PRAGMA busy_timeout=0; BEGIN EXCLUSIVE'); }
         catch { this.controller.close(); this.controller = null; fail('CONTROLLER_BUSY'); }
       }
-      checkDatabase(filename);
+      const version = checkDatabase(filename);
       this.db = new DatabaseSync(filename);
-      this.db.exec(`PRAGMA foreign_keys=ON; PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL;
-        CREATE TABLE IF NOT EXISTS schema_version(version INTEGER NOT NULL);
-        INSERT INTO schema_version SELECT 1 WHERE NOT EXISTS(SELECT 1 FROM schema_version);`);
-      if (this.db.prepare('SELECT version FROM schema_version').get()?.version !== 1) fail('UNSUPPORTED_SCHEMA');
+      migrateDatabase(this.db, filename, version);
+      this.db.exec('PRAGMA foreign_keys=ON; PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL;');
       this.db.exec(`
-        CREATE TABLE IF NOT EXISTS projects(id TEXT PRIMARY KEY, name TEXT NOT NULL);
-        CREATE TABLE IF NOT EXISTS connections(id TEXT PRIMARY KEY, projectId TEXT NOT NULL REFERENCES projects(id),
-          host TEXT NOT NULL, instanceId TEXT NOT NULL, documentId TEXT NOT NULL, connected INTEGER NOT NULL);
-        CREATE TABLE IF NOT EXISTS inputs(id TEXT PRIMARY KEY, projectId TEXT NOT NULL REFERENCES projects(id),
-          revision INTEGER NOT NULL, body TEXT NOT NULL);
-        CREATE TABLE IF NOT EXISTS runs(id TEXT PRIMARY KEY, projectId TEXT NOT NULL REFERENCES projects(id),
-          revision INTEGER NOT NULL, goal TEXT NOT NULL, targets TEXT NOT NULL);
-        CREATE TABLE IF NOT EXISTS commands(id TEXT PRIMARY KEY, projectId TEXT NOT NULL REFERENCES projects(id),
-          runId TEXT NOT NULL REFERENCES runs(id), connectionId TEXT NOT NULL REFERENCES connections(id),
-          revision INTEGER NOT NULL, kind TEXT NOT NULL, payload TEXT NOT NULL, hash TEXT NOT NULL,
-          state TEXT NOT NULL, result TEXT, stale INTEGER NOT NULL DEFAULT 0);
-        CREATE INDEX IF NOT EXISTS queue_target ON commands(connectionId,state);
-        CREATE TABLE IF NOT EXISTS approvals(commandId TEXT PRIMARY KEY, projectId TEXT NOT NULL REFERENCES projects(id), hash TEXT NOT NULL);
         UPDATE commands SET state='unknown' WHERE state='running';
         UPDATE connections SET connected=0;
         UPDATE commands SET state='cancelled' WHERE state='queued';`);

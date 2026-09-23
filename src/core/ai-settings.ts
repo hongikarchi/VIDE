@@ -11,7 +11,7 @@ export class AiSettings {
   constructor(store: Store, checkFile: (path: string) => boolean = path => statSync(path).isFile()) {
     this.store = store;
     this.checkFile = checkFile;
-    store.db.exec('CREATE TABLE IF NOT EXISTS ai_settings(id INTEGER PRIMARY KEY CHECK(id=1), revision INTEGER NOT NULL, paths TEXT NOT NULL)');
+    
   }
   get(): AiConfiguration {
     const row = this.store.db.prepare('SELECT revision,paths FROM ai_settings WHERE id=1').get();

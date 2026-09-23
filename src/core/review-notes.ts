@@ -5,7 +5,7 @@ import {reviewNoteSchema} from '../contracts/reviews.ts';
 import {DomainError} from './store.ts';
 export class ReviewNotes{
  store:Store;reviews:Reviews;
- constructor(store:Store,reviews:Reviews){this.store=store;this.reviews=reviews;store.db.exec('CREATE TABLE IF NOT EXISTS review_notes(id TEXT PRIMARY KEY, projectId TEXT NOT NULL REFERENCES projects(id), reviewId TEXT NOT NULL REFERENCES review_snapshots(id), requestId TEXT NOT NULL, objectId TEXT, body TEXT NOT NULL, createdAt TEXT NOT NULL)');}
+ constructor(store:Store,reviews:Reviews){this.store=store;this.reviews=reviews;}
  list(projectId:string,reviewId:string){this.reviews.get(projectId,reviewId);return this.store.db.prepare('SELECT * FROM review_notes WHERE projectId=? AND reviewId=? ORDER BY rowid').all(projectId,reviewId).map(row=>reviewNoteSchema.parse(row));}
  create(projectId:string,reviewId:string,value:unknown){
   const parsed=z.object({id:z.string(),body:z.string(),objectId:z.string().nullable()}).safeParse(value);if(!parsed.success)throw new DomainError('INVALID_INPUT');const input=parsed.data;

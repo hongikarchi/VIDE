@@ -10,7 +10,7 @@ const inputSchema=z.object({name:z.string().max(80).refine(value=>Boolean(value.
 const decode=(row:unknown):TableView=>{const value=storedRow.parse(row);return tableViewSchema.parse({...value,query:JSON.parse(value.query)});};
 export class TableViews{
  private readonly store:Store;
- constructor(store:Store){this.store=store;store.db.exec(`CREATE TABLE IF NOT EXISTS table_views(id TEXT PRIMARY KEY,projectId TEXT NOT NULL REFERENCES projects(id),name TEXT NOT NULL,query TEXT NOT NULL,revision INTEGER NOT NULL,updatedAt TEXT NOT NULL)`);}
+ constructor(store:Store){this.store=store;}
  list(projectId:string):TableView[]{this.store.project(projectId);return this.store.db.prepare('SELECT * FROM table_views WHERE projectId=? ORDER BY name,id').all(projectId).map(decode);}
  save(projectId:string,value:unknown,id?:string):TableView{
   this.store.project(projectId);

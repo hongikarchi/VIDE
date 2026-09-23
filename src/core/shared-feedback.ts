@@ -15,10 +15,7 @@ const storedRow=z.object({id:z.string(),projectId:z.string(),requestId:z.string(
 const decode=(value:unknown)=>{const row=storedRow.parse(value);return receivedFeedbackSchema.parse({...row,source:'file',original:JSON.parse(row.original)});};
 export class SharedFeedback{
   readonly store:Store;readonly workspace:Workspace;
-  constructor(store:Store,workspace:Workspace){this.store=store;this.workspace=workspace;store.db.exec(`
-    CREATE TABLE IF NOT EXISTS publication_exports(id TEXT PRIMARY KEY,projectId TEXT NOT NULL REFERENCES projects(id),requestId TEXT NOT NULL REFERENCES workspace_requests(id),manifestHash TEXT NOT NULL,sourceHash TEXT NOT NULL);
-    CREATE TABLE IF NOT EXISTS shared_feedback(id TEXT PRIMARY KEY,projectId TEXT NOT NULL REFERENCES projects(id),requestId TEXT NOT NULL REFERENCES workspace_requests(id),identity TEXT NOT NULL UNIQUE,original TEXT NOT NULL,receivedAt TEXT NOT NULL);
-  `);}
+  constructor(store:Store,workspace:Workspace){this.store=store;this.workspace=workspace;}
   record(projectId:string,requestId:string,manifest:unknown){
     const request=this.workspace.get(projectId,requestId),id=randomUUID();
     this.store.db.prepare('INSERT INTO publication_exports VALUES(?,?,?,?,?)').run(id,projectId,requestId,hash(manifest),hash(request.result));return id;

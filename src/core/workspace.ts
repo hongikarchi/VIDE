@@ -23,9 +23,7 @@ export class Workspace {
   readonly store:Store;
   constructor(store:Store) {
     this.store = store;
-    store.db.exec(`CREATE TABLE IF NOT EXISTS workspace_requests (
-      id TEXT PRIMARY KEY, projectId TEXT NOT NULL REFERENCES projects(id),
-      input TEXT NOT NULL, state TEXT NOT NULL, result TEXT, createdAt TEXT NOT NULL);
+    store.db.exec(`
       UPDATE workspace_requests SET state=CASE WHEN state='running' AND json_extract(result,'$.phase')='host' THEN 'unknown' ELSE 'interrupted' END WHERE state IN ('queued','running');`);
   }
   list(projectId:string):StoredWork[] {

@@ -20,7 +20,7 @@ export function validatePreview(image:unknown):asserts image is string{
 }
 export class Reviews{
  store:Store;
- constructor(store:Store){this.store=store;store.db.exec('CREATE TABLE IF NOT EXISTS review_snapshots(id TEXT PRIMARY KEY,projectId TEXT NOT NULL REFERENCES projects(id),requestId TEXT NOT NULL,title TEXT NOT NULL,createdAt TEXT NOT NULL,payload TEXT NOT NULL)');}
+ constructor(store:Store){this.store=store;}
  list(projectId:string){this.store.project(projectId);return this.store.db.prepare('SELECT id,requestId,title,createdAt FROM review_snapshots WHERE projectId=? ORDER BY rowid DESC').all(projectId).map(row=>reviewRowSchema.parse(row));}
  get(projectId:string,id:string){this.store.project(projectId);const row=this.store.db.prepare('SELECT * FROM review_snapshots WHERE projectId=? AND id=?').get(projectId,id);if(!row)throw new DomainError('NOT_FOUND');return snapshotSchema.parse({...row,payload:JSON.parse(z.string().parse(row.payload))});}
  create(projectId:string,rawInput:unknown,rawRequest:unknown){
