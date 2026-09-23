@@ -2,8 +2,8 @@
 id: ADR-015
 title: 공유 실험은 Cloudflare 단독으로 구성
 status: approved
-version: 0.1
-updated: 2026-09-21
+version: 0.2
+updated: 2026-09-24
 owner: user
 related: [PLAN-02, SPEC-04, FR-19, OQ-04, OQ-09]
 ---
@@ -13,6 +13,10 @@ related: [PLAN-02, SPEC-04, FR-19, OQ-04, OQ-09]
 ## 확정 범위
 
 2026-09-21 사용자의 “이번 실험은 cloudflare 단독으로 구현하는걸로 해서 계획안을 확정” 지시에 따라 Static Assets/Workers+D1+비공개 R2, 호환 인증 라이브러리와 Cloudflare Email Service로 공유 실험을 구성한다. [PLAN-02 §5](../plans/PLAN-02-agent-host-versioning.md)가 구현 순서/검증 기준을, [SPEC-04](../specs/SPEC-04-web-review.md)가 공유 동작을 소유한다. 승인은 이번 실험의 공급자 선택이며 제품 전체 승인·구현 착수·유료 배포 예산 승인과 다르다.
+
+## 후속 시험 조건
+
+2026-09-22 후속 사용자 지시에 따라 현재 시험은 무료 범위로 제한한다. 도메인 구매·유료 전환·실제 메일 발송은 진행하지 않고, 메일 없는 가입과 소유자 승인 참여 방식으로 시험한다. 이메일 인증 상태는 미확인으로 유지하며 메일 인증·복구는 후속 조건 충족 뒤 연결한다. 최초 결정의 Email Service는 현재 가동 조건이 아니다. 현재 승인·업로드 제약과 진행 상태는 [PLAN §6.5](../plans/PLAN.md), 기능 동작은 [SPEC-04](../specs/SPEC-04-web-review.md)를 따른다. 무료 시험 조건은 제품의 전체 웹 범위를 축소하지 않는다.
 
 ## 선택 근거
 

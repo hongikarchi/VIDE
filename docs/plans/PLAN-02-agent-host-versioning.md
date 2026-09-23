@@ -2,15 +2,15 @@
 id: PLAN-02
 title: 범용 AI 실행·다중 호스트 통신·모델 데이터 버전 관리
 status: review
-version: 0.16
-updated: 2026-09-23
+version: 0.17
+updated: 2026-09-24
 owner: agent:codex
 related: [PLAN, SPEC-02, SPEC-03, SPEC-04, SPEC-05, ADR-013]
 ---
 
 # 범용 실행과 모델 데이터 기록 구현계획
 
-PLAN §4·5의 상세화다. 결정 근거는 [ADR-014](../decisions/ADR-014-sdk-agent-execution.md)와 [ADR-015](../decisions/ADR-015-cloudflare-sharing-experiment.md)다. 사용자의 2026-09-21 지시(공식 API를 AI가 조합, 공통 규약, 복수 실행본, Git 원리 차용)에 따라 작성했다. 통신 단순화와 후속 비판 검토를 통합한 계획이다. 현재 지시는 계획 정리이며 §5의 Cloudflare 단독 실험 방향은 사용자 확정이다. 제품 코드 구현·배포 착수 지시와는 구분한다. 구현·성능 검증 완료를 뜻하지 않는다. 동작 정본은 SPEC-02.15·SPEC-03.9, 현재 티켓 현황은 PLAN §6.5다. PRD의 출시 범위와 원본 적용 권한은 유지한다.
+PLAN §4·5의 상세화다. 결정 근거는 [ADR-014](../decisions/ADR-014-sdk-agent-execution.md)와 [ADR-015](../decisions/ADR-015-cloudflare-sharing-experiment.md)다. 사용자의 2026-09-21 지시(공식 API를 AI가 조합, 공통 규약, 복수 실행본, Git 원리 차용)에 따라 작성했다. 통신 단순화와 후속 비판 검토를 통합한 계획이다. 개발 위임은 [가이드 §12](../../DEVELOPMENT_GUIDE.md#development-delegation), 배포 승인·무료 시험 제약과 진행 상태는 PLAN §6.5를 따른다. §5의 Cloudflare 단독 실험 방향은 사용자 확정이다. 구현·성능 검증 완료를 뜻하지 않는다. 동작 정본은 SPEC-02.15·SPEC-03.9, 현재 티켓 현황은 PLAN §6.5다. PRD의 출시 범위와 원본 적용 권한은 유지한다.
 
 ## 1. 현재 구현과 목표 구조
 
