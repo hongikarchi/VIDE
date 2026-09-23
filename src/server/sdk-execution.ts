@@ -197,7 +197,9 @@ export class SdkExecution {
       pending: Promise<unknown> | undefined,
       attempts = 0,
       currentOperation: string | undefined;
+    let diagnostic: { diagnosticId?: string; exceptionType?: string } = {};
     const intent = () => ({
+      ...diagnostic,
       phase: 'host',
       hostExecuted: false,
       host: 'rhino',
@@ -256,12 +258,21 @@ export class SdkExecution {
                   : { valueOmitted: true }),
               };
             }
-            if (receipt.code === 'COMPILE_ERROR' || receipt.code === 'STALE_REFERENCE') {
+            if (
+              receipt.code === 'COMPILE_ERROR' ||
+              receipt.code === 'CODE_POLICY_REJECTED' ||
+              receipt.code === 'STALE_REFERENCE'
+            ) {
               uncertain = false;
               currentOperation = last?.operationId;
               if (last) update({ ...intent(), revision });
               return receipt;
             }
+            diagnostic = {
+              diagnosticId: receipt.diagnosticId,
+              exceptionType: receipt.exceptionType,
+            };
+            update(intent());
             throw failure('HOST_RESULT_UNKNOWN');
           } finally {
             pending = undefined;

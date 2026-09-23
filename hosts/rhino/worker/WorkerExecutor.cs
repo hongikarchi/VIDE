@@ -66,6 +66,8 @@ internal sealed class WorkerExecutor(RhinoDoc document, string directory)
         var compilation = CSharpCompilation.Create("VIDETask_" + operation.Replace("-", ""),
             [CSharpSyntaxTree.ParseText(source)], references,
             new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+        var policyDiagnostics = CodePolicy.Check(compilation);
+        if (policyDiagnostics.Length > 0) return new { ok = false, code = "CODE_POLICY_REJECTED", revision, diagnostics = policyDiagnostics };
         using var bytes = new MemoryStream();
         var compiled = compilation.Emit(bytes);
         if (!compiled.Success) return new { ok = false, code = "COMPILE_ERROR", revision,
@@ -100,7 +102,20 @@ internal sealed class WorkerExecutor(RhinoDoc document, string directory)
             uncertain = false;
             return result;
         }
-        catch { throw new InvalidOperationException("HOST_RESULT_UNKNOWN"); }
+        catch (Exception error)
+        {
+            var cause = error is TargetInvocationException { InnerException: not null } invocation ? invocation.InnerException! : error;
+            // Full diagnostic is local only. Never return exception messages containing paths or secrets to the agent.
+            var diagnosticId = Guid.NewGuid().ToString("D");
+            try { File.WriteAllText(Path.Combine(directory, diagnosticId + ".diagnostic.txt"), cause.ToString()); }
+            catch { /* Preserve uncertainty even when local diagnostic storage is unavailable. */ }
+            var result = new { ok = false, code = "HOST_RESULT_UNKNOWN", operationId = operation, revision,
+                diagnosticId, exceptionType = cause.GetType().FullName };
+            receipts[operation] = (hash, result);
+            try { Persist(operation, hash, result); }
+            catch { throw new InvalidOperationException("HOST_RESULT_UNKNOWN", cause); }
+            return result;
+        }
     }
 
     private object Snapshot(bool? uncertainty = null) => new { ok = true, revision, uncertain = uncertainty ?? uncertain, units = document.ModelUnitSystem.ToString(),

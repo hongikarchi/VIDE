@@ -41,6 +41,8 @@ export const workerResultSchema = z.discriminatedUnion('ok', [
     code: z.string(),
     revision: z.number().optional(),
     diagnostics: z.array(z.string()).optional(),
+    diagnosticId: z.string().uuid().optional(),
+    exceptionType: z.string().optional(),
   }),
   z.object({
     ok: z.literal(true),

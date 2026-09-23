@@ -258,3 +258,46 @@ test('SDK returns bounded computed data to the agent without hiding successful l
       }),
     });
   }));
+
+test('SDK policy rejection permits correction but runtime diagnostic remains unknown without replay', () =>
+  fixture(async ({ sdk, task, worker, scope, updates }) => {
+    let calls = 0;
+    const diagnosticId = '11111111-1111-4111-8111-111111111111';
+    worker.execute = async () =>
+      ++calls === 1
+        ? {
+            ok: false,
+            code: 'CODE_POLICY_REJECTED',
+            revision: 0,
+            diagnostics: ['API not permitted'],
+          }
+        : {
+            ok: false,
+            code: 'HOST_RESULT_UNKNOWN',
+            diagnosticId,
+            exceptionType: 'System.InvalidOperationException',
+          };
+    await assert.rejects(
+      sdk.run({
+        ...task,
+        provider: () => ({
+          run: async () => {
+            assert.equal(
+              (await scope().handlers.execute({ code: 'disallowed' })).code,
+              'CODE_POLICY_REJECTED',
+            );
+            await assert.rejects(scope().handlers.execute({ code: 'throws' }), {
+              code: 'HOST_RESULT_UNKNOWN',
+            });
+            await assert.rejects(scope().handlers.execute({ code: 'must not replay' }), {
+              code: 'HOST_RESULT_UNKNOWN',
+            });
+            return { text: 'failed' };
+          },
+        }),
+      }),
+      (error) => error.code === 'HOST_RESULT_UNKNOWN' && error.intent.diagnosticId === diagnosticId,
+    );
+    assert.equal(calls, 2);
+    assert.equal(updates.at(-1).diagnosticId, diagnosticId);
+  }));
