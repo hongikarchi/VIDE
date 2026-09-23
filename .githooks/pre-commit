@@ -30,4 +30,5 @@ if [ -n "$remaining$new_html" ]; then
   printf '%s\n' "$remaining" "$new_html" >&2
   exit 1
 fi
+node tools/checks/commit.mjs || exit 1
 exit 0

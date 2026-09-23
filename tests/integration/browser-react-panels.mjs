@@ -54,7 +54,7 @@ try{
  await page.waitForFunction(()=>document.querySelector('#inspector-content').textContent.includes('12.5 m²'));
  assert.match(await page.locator('#inspector-content').textContent(),/24 m³/);
  assert.equal(await page.locator('#inspector-content').evaluate(node=>node.scrollTop),0);
- await page.screenshot({path:'docs/assets/native-workspace/react-inspector.png'});
+ await page.screenshot({path:join(directory,'react-inspector.png')});
  await page.locator('[data-inspect="history"]').click();
  await page.waitForFunction(()=>document.querySelector('#inspector-content').textContent.includes('Inspector fixture'));
  await page.locator('[data-inspect="relations"]').click();
@@ -79,7 +79,7 @@ try{
  await quantities.getByRole('status').filter({hasText:'1 / 1개 객체'}).waitFor();
  await quantities.getByRole('button',{name:'구성 삭제',exact:true}).click();await quantities.getByRole('status').filter({hasText:'표 구성을 삭제했습니다.'}).waitFor();
  assert.equal(await page.evaluate(async id=>(await(await fetch(`/api/v1/projects/${id}/table-views`)).json()).length,first),0);
- await page.screenshot({path:'docs/assets/native-workspace/react-quantities.png'});
+ await page.screenshot({path:join(directory,'react-quantities.png')});
  await quantities.getByRole('button',{name:'닫기',exact:true}).click();
  await page.locator('[data-tool="sketch"]').click();
  for(const [u,v] of [['0','0'],['2','3']]){await page.locator('#point-u').fill(u);await page.locator('#point-v').fill(v);await page.locator('#add-point').click();}

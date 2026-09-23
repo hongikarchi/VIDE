@@ -1,0 +1,13 @@
+node_modules/
+.vide/
+.wrangler/
+dist/
+build/
+bin/
+obj/
+**/package-lock.json
+**/*.html
+**/*.md
+**/*.min.js
+**/licenses/**
+docs/assets/**
