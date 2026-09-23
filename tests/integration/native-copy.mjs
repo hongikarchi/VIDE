@@ -1,20 +1,128 @@
 // Creates isolated working files only; does not modify any open Rhino document.
-import assert from 'node:assert/strict';import {randomUUID,createHash} from 'node:crypto';import {readFile} from 'node:fs/promises';
-import {RhinoWorkspace} from '../../hosts/rhino/workspace.ts';import {interpret} from '../../src/core/geometry.ts';import {rhinoCommand} from '../../hosts/rhino/transport.ts';
-if(process.argv[2]!=='--run-live')throw Error('Pass --run-live for isolated files.');
-const host=new RhinoWorkspace('.vide/native-copy-check'),project=randomUUID();
-const first=await host.build(project,randomUUID(),[{kind:'extrude',id:'original',name:'Original',points:[[0,0,0],[4,0,0],[4,3,0],[0,3,0],[0,0,0]],height:6}]);
-const literal=value=>'@"'+value.replaceAll('"','""')+'"';
-const tagged=await rhinoCommand('execute_rhinocommon_csharp_code',{code:`using(var doc=Rhino.RhinoDoc.OpenHeadless(${literal(first.filename)})){var obj=doc.Objects.First();var attrs=obj.Attributes.Duplicate();attrs.SetUserString("test-attribute","preserve");doc.Objects.ModifyAttributes(obj,attrs,true);var options=new Rhino.FileIO.FileWriteOptions();options.SuppressAllInput=true;options.SuppressDialogBoxes=true;if(!doc.Write3dmFile(${literal(first.filename)},options))throw new Exception("Save failed");}output.AppendLine("ok");`});assert.equal(tagged.success,true);
-const imported=await host.importFile(project,randomUUID(),first.filename),source=imported.objects[0],beforeHash=createHash('sha256').update(await readFile(imported.filename)).digest('hex');
-const proposal=interpret(JSON.stringify({message:'copy',operations:[{kind:'move',id:source.id,delta:[2,0,0]},{kind:'copy',id:'copy-a',sourceId:source.id,name:'First copy',delta:[10,0,0]},{kind:'copy',id:'copy-b',sourceId:'copy-a',name:'Second copy',delta:[5,0,0]},{kind:'remove',id:source.id}]}),imported.objects,'candidate');
-const copied=await host.build(project,randomUUID(),proposal.objects,imported);assert.equal(copied.scene.length,2);assert.deepEqual(copied.scene.map(item=>item.origin[0]).sort((a,b)=>a-b),[12,17]);for(const item of copied.scene){assert.equal(item.nativeType,'Extrusion');assert.ok(Math.abs(item.volume-72)<.001);assert.notEqual(item.nativeId,source.nativeId);}
-const checked=await rhinoCommand('execute_rhinocommon_csharp_code',{code:`using(var doc=Rhino.RhinoDoc.OpenHeadless(${literal(copied.filename)})){foreach(var obj in doc.Objects)if(obj.Attributes.GetUserString("test-attribute")!="preserve")throw new Exception("Attribute changed");}output.AppendLine("ok");`});assert.equal(checked.success,true);
-assert.equal(createHash('sha256').update(await readFile(imported.filename)).digest('hex'),beforeHash);
-const baseline={...copied,objects:proposal.objects.map(object=>({...object,nativeId:copied.scene.find(item=>item.id===object.id).nativeId}))};
-const follow=interpret(JSON.stringify({message:'follow',operations:[{kind:'move',id:'copy-a',delta:[1,0,0]},{kind:'copy',id:'copy-c',sourceId:'copy-b',name:'Third copy',delta:[3,0,0]}]}),baseline.objects,'candidate');
-const final=await host.build(project,randomUUID(),follow.objects,baseline);assert.deepEqual(final.scene.map(item=>item.origin[0]).sort((a,b)=>a-b),[13,17,20]);
-const grouped=await rhinoCommand('execute_rhinocommon_csharp_code',{code:`using(var doc=Rhino.RhinoDoc.OpenHeadless(${literal(first.filename)})){var group=doc.Groups.Add("copy-test-group");var obj=doc.Objects.First();var attrs=obj.Attributes.Duplicate();attrs.AddToGroup(group);doc.Objects.ModifyAttributes(obj,attrs,true);var options=new Rhino.FileIO.FileWriteOptions();options.SuppressAllInput=true;options.SuppressDialogBoxes=true;if(!doc.Write3dmFile(${literal(first.filename)},options))throw new Exception("Save failed");}output.AppendLine("ok");`});assert.equal(grouped.success,true);
-const groupImport=await host.importFile(project,randomUUID(),first.filename),groupObject=groupImport.objects[0];const groupProposal=interpret(JSON.stringify({message:'copy',operations:[{kind:'copy',id:'group-copy',sourceId:groupObject.id,name:'Unsupported',delta:[1,0,0]}]}),groupImport.objects,'candidate');
-await assert.rejects(()=>host.build(project,randomUUID(),groupProposal.objects,groupImport),{code:'HOST_REJECTED'});
-console.log(JSON.stringify({nativeCopies:3,volumes:final.scene.map(item=>item.volume),origins:final.scene.map(item=>item.origin[0]),userAttributesPreserved:true,sourceFileUnchanged:true,savedAndReopened:true,groupCopyRejected:true}));
+import assert from 'node:assert/strict';
+import { randomUUID, createHash } from 'node:crypto';
+import { readFile } from 'node:fs/promises';
+import { RhinoWorkspace } from '../../hosts/rhino/workspace.ts';
+import { interpret } from '../../src/core/geometry.ts';
+import { rhinoCommand } from '../../hosts/rhino/transport.ts';
+if (process.argv[2] !== '--run-live') throw Error('Pass --run-live for isolated files.');
+const host = new RhinoWorkspace('.vide/native-copy-check'),
+  project = randomUUID();
+const first = await host.build(project, randomUUID(), [
+  {
+    kind: 'extrude',
+    id: 'original',
+    name: 'Original',
+    points: [
+      [0, 0, 0],
+      [4, 0, 0],
+      [4, 3, 0],
+      [0, 3, 0],
+      [0, 0, 0],
+    ],
+    height: 6,
+  },
+]);
+const literal = (value) => '@"' + value.replaceAll('"', '""') + '"';
+const tagged = await rhinoCommand('execute_rhinocommon_csharp_code', {
+  code: `using(var doc=Rhino.RhinoDoc.OpenHeadless(${literal(first.filename)})){var obj=doc.Objects.First();var attrs=obj.Attributes.Duplicate();attrs.SetUserString("test-attribute","preserve");doc.Objects.ModifyAttributes(obj,attrs,true);var options=new Rhino.FileIO.FileWriteOptions();options.SuppressAllInput=true;options.SuppressDialogBoxes=true;if(!doc.Write3dmFile(${literal(first.filename)},options))throw new Exception("Save failed");}output.AppendLine("ok");`,
+});
+assert.equal(tagged.success, true);
+const imported = await host.importFile(project, randomUUID(), first.filename),
+  source = imported.objects[0],
+  beforeHash = createHash('sha256')
+    .update(await readFile(imported.filename))
+    .digest('hex');
+const proposal = interpret(
+  JSON.stringify({
+    message: 'copy',
+    operations: [
+      { kind: 'move', id: source.id, delta: [2, 0, 0] },
+      { kind: 'copy', id: 'copy-a', sourceId: source.id, name: 'First copy', delta: [10, 0, 0] },
+      { kind: 'copy', id: 'copy-b', sourceId: 'copy-a', name: 'Second copy', delta: [5, 0, 0] },
+      { kind: 'remove', id: source.id },
+    ],
+  }),
+  imported.objects,
+  'candidate',
+);
+const copied = await host.build(project, randomUUID(), proposal.objects, imported);
+assert.equal(copied.scene.length, 2);
+assert.deepEqual(
+  copied.scene.map((item) => item.origin[0]).sort((a, b) => a - b),
+  [12, 17],
+);
+for (const item of copied.scene) {
+  assert.equal(item.nativeType, 'Extrusion');
+  assert.ok(Math.abs(item.volume - 72) < 0.001);
+  assert.notEqual(item.nativeId, source.nativeId);
+}
+const checked = await rhinoCommand('execute_rhinocommon_csharp_code', {
+  code: `using(var doc=Rhino.RhinoDoc.OpenHeadless(${literal(copied.filename)})){foreach(var obj in doc.Objects)if(obj.Attributes.GetUserString("test-attribute")!="preserve")throw new Exception("Attribute changed");}output.AppendLine("ok");`,
+});
+assert.equal(checked.success, true);
+assert.equal(
+  createHash('sha256')
+    .update(await readFile(imported.filename))
+    .digest('hex'),
+  beforeHash,
+);
+const baseline = {
+  ...copied,
+  objects: proposal.objects.map((object) => ({
+    ...object,
+    nativeId: copied.scene.find((item) => item.id === object.id).nativeId,
+  })),
+};
+const follow = interpret(
+  JSON.stringify({
+    message: 'follow',
+    operations: [
+      { kind: 'move', id: 'copy-a', delta: [1, 0, 0] },
+      { kind: 'copy', id: 'copy-c', sourceId: 'copy-b', name: 'Third copy', delta: [3, 0, 0] },
+    ],
+  }),
+  baseline.objects,
+  'candidate',
+);
+const final = await host.build(project, randomUUID(), follow.objects, baseline);
+assert.deepEqual(
+  final.scene.map((item) => item.origin[0]).sort((a, b) => a - b),
+  [13, 17, 20],
+);
+const grouped = await rhinoCommand('execute_rhinocommon_csharp_code', {
+  code: `using(var doc=Rhino.RhinoDoc.OpenHeadless(${literal(first.filename)})){var group=doc.Groups.Add("copy-test-group");var obj=doc.Objects.First();var attrs=obj.Attributes.Duplicate();attrs.AddToGroup(group);doc.Objects.ModifyAttributes(obj,attrs,true);var options=new Rhino.FileIO.FileWriteOptions();options.SuppressAllInput=true;options.SuppressDialogBoxes=true;if(!doc.Write3dmFile(${literal(first.filename)},options))throw new Exception("Save failed");}output.AppendLine("ok");`,
+});
+assert.equal(grouped.success, true);
+const groupImport = await host.importFile(project, randomUUID(), first.filename),
+  groupObject = groupImport.objects[0];
+const groupProposal = interpret(
+  JSON.stringify({
+    message: 'copy',
+    operations: [
+      {
+        kind: 'copy',
+        id: 'group-copy',
+        sourceId: groupObject.id,
+        name: 'Unsupported',
+        delta: [1, 0, 0],
+      },
+    ],
+  }),
+  groupImport.objects,
+  'candidate',
+);
+await assert.rejects(() => host.build(project, randomUUID(), groupProposal.objects, groupImport), {
+  code: 'HOST_REJECTED',
+});
+console.log(
+  JSON.stringify({
+    nativeCopies: 3,
+    volumes: final.scene.map((item) => item.volume),
+    origins: final.scene.map((item) => item.origin[0]),
+    userAttributesPreserved: true,
+    sourceFileUnchanged: true,
+    savedAndReopened: true,
+    groupCopyRejected: true,
+  }),
+);

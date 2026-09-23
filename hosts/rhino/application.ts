@@ -1,27 +1,49 @@
-import {csharpLiteral as literal} from '../common/csharp.ts';
-import {z} from 'zod';
-import {applicationPayloadSchema,applicationCandidateSchema} from './application-contract.ts';
-import type {Movement} from './application-contract.ts';
-import {documentGuard as guard,documentFingerprint as fingerprint} from './document-contract.ts';
-import {legacyRhinoCommand as rhinoCommand} from './transport.ts';
-import {DomainError} from '../../src/core/store.ts';
-export async function previewApplication(projectId:string,instance:string,documentId:number,objects:{id:string}[]){
- if(!/^[a-zA-Z0-9-]+$/.test(projectId))throw new DomainError('INVALID_INPUT');
- const code=`${guard(instance,documentId)}${fingerprint}
+import { csharpLiteral as literal } from '../common/csharp.ts';
+import { z } from 'zod';
+import { applicationPayloadSchema, applicationCandidateSchema } from './application-contract.ts';
+import type { Movement } from './application-contract.ts';
+import { documentGuard as guard, documentFingerprint as fingerprint } from './document-contract.ts';
+import { legacyRhinoCommand as rhinoCommand } from './transport.ts';
+import { DomainError } from '../../src/core/store.ts';
+export async function previewApplication(
+  projectId: string,
+  instance: string,
+  documentId: number,
+  objects: { id: string }[],
+) {
+  if (!/^[a-zA-Z0-9-]+$/.test(projectId)) throw new DomainError('INVALID_INPUT');
+  const code = `${guard(instance, documentId)}${fingerprint}
  output.AppendLine(fingerprint);output.AppendLine(document.ModelUnitSystem.ToString());
  foreach(var obj in document.Objects)if(obj.Attributes.GetUserString("vide-project")==${literal(projectId)})output.AppendLine(obj.Attributes.GetUserString("vide-id"));`;
- const response=await rhinoCommand('execute_rhinocommon_csharp_code',{code},{timeoutMs:15000});
- if(!response.success)throw new DomainError('STALE_CONNECTION');
- const [hash,units,...owned]=response.output.trim().split(/\r?\n/);
- if(!/^[a-f0-9]{64}$/.test(hash)||new Set(owned).size!==owned.length)throw new DomainError('HOST_INVALID_RESPONSE');
- const wanted=objects.map(o=>o.id);
- return {documentHash:hash,units,added:wanted.filter(id=>!owned.includes(id)).length,updated:wanted.filter(id=>owned.includes(id)).length,removed:owned.filter(id=>!wanted.includes(id)).length};
+  const response = await rhinoCommand(
+    'execute_rhinocommon_csharp_code',
+    { code },
+    { timeoutMs: 15000 },
+  );
+  if (!response.success) throw new DomainError('STALE_CONNECTION');
+  const [hash, units, ...owned] = response.output.trim().split(/\r?\n/);
+  if (!/^[a-f0-9]{64}$/.test(hash) || new Set(owned).size !== owned.length)
+    throw new DomainError('HOST_INVALID_RESPONSE');
+  const wanted = objects.map((o) => o.id);
+  return {
+    documentHash: hash,
+    units,
+    added: wanted.filter((id) => !owned.includes(id)).length,
+    updated: wanted.filter((id) => owned.includes(id)).length,
+    removed: owned.filter((id) => !wanted.includes(id)).length,
+  };
 }
-export async function applyToDocument(projectId:string,commandId:string,candidateValue:unknown,payloadValue:unknown){
- const candidate=applicationCandidateSchema.parse(candidateValue),payload=applicationPayloadSchema.parse(payloadValue);
- const code=`bool started=false;
+export async function applyToDocument(
+  projectId: string,
+  commandId: string,
+  candidateValue: unknown,
+  payloadValue: unknown,
+) {
+  const candidate = applicationCandidateSchema.parse(candidateValue),
+    payload = applicationPayloadSchema.parse(payloadValue);
+  const code = `bool started=false;
  try{
- ${guard(payload.instance,payload.documentId)}${fingerprint}
+ ${guard(payload.instance, payload.documentId)}${fingerprint}
  if(fingerprint!=${literal(payload.documentHash)}){output.AppendLine("CONFLICT");return;}
  string fileHash;using(var sha=System.Security.Cryptography.SHA256.Create()){fileHash=BitConverter.ToString(sha.ComputeHash(System.IO.File.ReadAllBytes(${literal(candidate.filename)}))).Replace("-","").ToLowerInvariant();}
  if(fileHash!=${literal(payload.candidateHash)}){output.AppendLine("CONFLICT");return;}
@@ -44,11 +66,27 @@ export async function applyToDocument(projectId:string,commandId:string,candidat
   }finally{if(undo!=0)document.EndUndoRecord(undo);foreach(var item in staged)item.Item2.Dispose();}
  }
  }catch{output.AppendLine(started?"UNKNOWN":"REJECTED");}`;
- const response=await rhinoCommand('execute_rhinocommon_csharp_code',{code},{timeoutMs:60000});
- if(!response.success)throw new DomainError('HOST_REJECTED');
- const result=response.output.trim();
- if(result==='CONFLICT')return {state:'failed',result:{code:'SOURCE_CHANGED',applied:false}};
- if(result==='REJECTED')return {state:'failed',result:{code:'HOST_REJECTED',applied:false}};
- if(result==='UNKNOWN'||!/^OK\|\d+$/.test(result))return {state:'unknown',result:{code:'HOST_RESULT_UNKNOWN',applied:false}};
- return {state:'succeeded',result:{applied:true,saved:false,objectCount:Number(result.split('|')[1]),documentId:payload.documentId,instance:payload.instance}};
+  const response = await rhinoCommand(
+    'execute_rhinocommon_csharp_code',
+    { code },
+    { timeoutMs: 60000 },
+  );
+  if (!response.success) throw new DomainError('HOST_REJECTED');
+  const result = response.output.trim();
+  if (result === 'CONFLICT')
+    return { state: 'failed', result: { code: 'SOURCE_CHANGED', applied: false } };
+  if (result === 'REJECTED')
+    return { state: 'failed', result: { code: 'HOST_REJECTED', applied: false } };
+  if (result === 'UNKNOWN' || !/^OK\|\d+$/.test(result))
+    return { state: 'unknown', result: { code: 'HOST_RESULT_UNKNOWN', applied: false } };
+  return {
+    state: 'succeeded',
+    result: {
+      applied: true,
+      saved: false,
+      objectCount: Number(result.split('|')[1]),
+      documentId: payload.documentId,
+      instance: payload.instance,
+    },
+  };
 }

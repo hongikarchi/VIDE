@@ -1,11 +1,7 @@
 {
   "compilerOptions": {
     "target": "ES2022",
-    "lib": [
-      "ES2022",
-      "DOM",
-      "DOM.Iterable"
-    ],
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "module": "ESNext",
     "moduleResolution": "Bundler",
     "jsx": "react-jsx",
@@ -14,14 +10,8 @@
     "allowJs": true,
     "checkJs": false,
     "allowImportingTsExtensions": true,
-    "types": [
-      "vite/client"
-    ],
+    "types": ["vite/client"],
     "skipLibCheck": true
   },
-  "include": [
-    "src/ui/**/*",
-    "src/contracts/**/*",
-    "src/sharing/web/**/*"
-  ]
+  "include": ["src/ui/**/*", "src/contracts/**/*", "src/sharing/web/**/*"]
 }

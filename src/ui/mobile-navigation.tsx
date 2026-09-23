@@ -20,8 +20,22 @@ function currentView(): MobileView {
 
 export function MobileNavigation() {
   const view = useSyncExternalStore(subscribe, currentView);
-  return <>
-    <button data-mobile="model" aria-pressed={view === 'model'} onClick={() => setMobileView('model')}>모델</button>
-    <button data-mobile="input" aria-pressed={view === 'input'} onClick={() => setMobileView('input')}>대화</button>
-  </>;
+  return (
+    <>
+      <button
+        data-mobile="model"
+        aria-pressed={view === 'model'}
+        onClick={() => setMobileView('model')}
+      >
+        모델
+      </button>
+      <button
+        data-mobile="input"
+        aria-pressed={view === 'input'}
+        onClick={() => setMobileView('input')}
+      >
+        대화
+      </button>
+    </>
+  );
 }

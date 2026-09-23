@@ -1,5 +1,5 @@
 // ObjectAttributes user text only; geometry dictionaries and plugin payloads are not inferred.
-export const userAttributesCode=`
+export const userAttributesCode = `
 var attributePairs=new List<string>();bool attributesComplete=true;int objectAttributeBytes=0;
 var userAttributes=obj.Attributes.GetUserStrings();
 foreach(var key in userAttributes.AllKeys.Where(key=>key!=null&&key!="vide-id").OrderBy(key=>key,StringComparer.Ordinal)){

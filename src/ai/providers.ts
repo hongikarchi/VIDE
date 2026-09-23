@@ -1,4 +1,4 @@
-import type {CliOptions} from './claude-cli.ts';
+import type { CliOptions } from './claude-cli.ts';
 import { ClaudeCli, ProviderError } from './claude-cli.ts';
 import { CodexCli } from './codex-cli.ts';
 
@@ -8,7 +8,7 @@ export const providerCatalog = Object.freeze([
 ]);
 
 /** Caller chooses explicitly. No automatic provider/billing fallback. */
-export function createProvider({ provider, ...options }:CliOptions & {provider:string}) {
+export function createProvider({ provider, ...options }: CliOptions & { provider: string }) {
   if (provider === 'claude-cli') return new ClaudeCli(options);
   if (provider === 'codex-cli') return new CodexCli(options);
   throw new ProviderError('UNKNOWN_PROVIDER');
