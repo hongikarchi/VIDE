@@ -37,7 +37,7 @@ namespace Vide.Zwcad
             {
                 string snapshot = Path.Combine(directory, Guid.NewGuid().ToString() + ".dwg");
                 // Save a copy without renaming the editor document; Wblock would change native Handles.
-                document.Database.SaveAs(snapshot, false, DwgVersion.Current, document.Database.SecurityParameters);
+                Snapshot(snapshot);
                 if (!String.Equals(Path.GetFullPath(document.Name), filename, StringComparison.OrdinalIgnoreCase)) throw new InvalidOperationException("DOCUMENT_MISMATCH");
                 object model;
                 try { model = DwgReader.Read(snapshot); }
@@ -95,7 +95,7 @@ namespace Vide.Zwcad
             try
             {
                 effect = serializer.Deserialize<Dictionary<string, object>>(serializer.Serialize(EditorApply.Apply(document.Database, candidate, true)));
-                document.Database.SaveAs(snapshot, false, DwgVersion.Current, document.Database.SecurityParameters);
+                Snapshot(snapshot);
                 EditorApply.Verify(candidate, snapshot, (Dictionary<string, object>)effect["mapping"]);
                 var resultModel = DwgReader.Read(snapshot);
                 effect["documentHash"] = Hash(Encoding.UTF8.GetBytes(serializer.Serialize(resultModel)));
@@ -111,6 +111,13 @@ namespace Vide.Zwcad
                 SaveReceipt(receipt, new { requestHash, outcome });
             }
             return outcome;
+        }
+        private void Snapshot(string path)
+        {
+            // Save a copy without changing the editor's pre-existing modification flag.
+            document.PushDbmod();
+            try { document.Database.SaveAs(path, false, DwgVersion.Current, document.Database.SecurityParameters); }
+            finally { document.PopDbmod(); }
         }
         private static void SaveReceipt(string path, object value)
         {

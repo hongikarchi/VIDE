@@ -23,7 +23,7 @@ execFileSync(join(process.env.WINDIR, 'Microsoft.NET/Framework64/v4.0.30319/csc.
 ]);
 const quote = (path) => JSON.stringify(path.replaceAll('\\', '/'));
 const evidence = [];
-for (const mode of ['move-save', 'save-as', 'close']) {
+for (const mode of ['move-unsaved-control', 'move-save', 'move-unsaved', 'save-as', 'close']) {
   const folder = join(directory, mode);
   await mkdir(folder);
   const token = randomBytes(32).toString('hex'),
@@ -31,16 +31,15 @@ for (const mode of ['move-save', 'save-as', 'close']) {
   const script = join(folder, 'start.scr'),
     done = join(folder, 'done.txt'),
     renamed = join(folder, 'renamed.dwg');
-  const commands =
-    mode === 'move-save'
-      ? `(command "_MOVE" "_ALL" "" "_non" "0,0,0" "_non" "1000,0,0")\n(command "_QSAVE")`
-      : mode === 'save-as'
-        ? `(setvar "FILEDIA" 0)\n(command "_SAVEAS" "" ${quote(renamed)})`
-        : `(princ)`;
+  const commands = mode.startsWith('move-')
+    ? `_UNDO\n_CONTROL\n_ALL\n_UNDO\n_MARK\n_MOVE\n_ALL\n\n_non\n0,0,0\n_non\n1000,0,0\n${mode === 'move-save' ? '_QSAVE\n' : ''}`
+    : mode === 'save-as'
+      ? `(setvar "FILEDIA" 0)\n(command "_SAVEAS" "" ${quote(renamed)})`
+      : `(princ)`;
   if (mode === 'close') await writeFile(join(folder, 'close.flag'), '');
   await writeFile(
-    join(folder, 'commands.lsp'),
-    `${commands}\n(setq videTestFile (open ${quote(done)} "w"))\n(write-line "done" videTestFile)\n(close videTestFile)\n`,
+    join(folder, 'commands.scr'),
+    `(setvar "LOGFILEPATH" ${quote(folder)})\n(setvar "LOGFILEMODE" 1)\n${commands.trimEnd()}\n(setq videTestFile (open ${quote(done)} "w"))\n(write-line "done" videTestFile)\n(close videTestFile)\n`,
   );
   await writeFile(
     script,
@@ -86,14 +85,41 @@ for (const mode of ['move-save', 'save-as', 'close']) {
     );
     const editors = new ZwcadEditors(folder),
       target = { instance: ready.pid + ':' + ready.startTicks, documentId: 1 };
-    if (mode === 'move-save') {
-      const captured = await editors.capture(target);
-      assert.equal(captured.scene[0].area, 240);
-      assert.equal(captured.objects[0].points[0][0], source.objects[0].points[0][0] + 1);
-      assert.equal(captured.objects[0].nativeId, source.objects[0].nativeId);
-      const saved = await inspectDwg(join(folder, 'editing.dwg'), join(folder, 'saved-inspection'));
-      assert.equal(saved.scene[0].area, 240);
-      assert.equal(saved.objects[0].points[0][0], source.objects[0].points[0][0] + 1);
+    if (mode.startsWith('move-')) {
+      if (mode !== 'move-unsaved-control') {
+        const captured = await editors.capture(target);
+        assert.equal(captured.scene[0].area, 240);
+        assert.equal(captured.objects[0].points[0][0], source.objects[0].points[0][0] + 1);
+        assert.equal(captured.objects[0].nativeId, source.objects[0].nativeId);
+        assert.equal((await editors.list())[0].modified, mode === 'move-unsaved');
+        const saved = await inspectDwg(
+          join(folder, 'editing.dwg'),
+          join(folder, 'saved-inspection'),
+        );
+        assert.equal(saved.scene[0].area, 240);
+        assert.equal(
+          saved.objects[0].points[0][0],
+          source.objects[0].points[0][0] + (mode === 'move-save' ? 1 : 0),
+        );
+      }
+      if (mode.startsWith('move-unsaved')) {
+        await writeFile(join(folder, 'undo.flag'), '');
+        const deadline = Date.now() + 10000;
+        let undone = false;
+        while (Date.now() < deadline) {
+          try {
+            await readFile(join(folder, 'undo.done'));
+            undone = true;
+            break;
+          } catch (error) {
+            if (error.code !== 'ENOENT') throw error;
+          }
+          await new Promise((resolve) => setTimeout(resolve, 100));
+        }
+        assert.ok(undone, 'Native undo did not finish');
+        const undoCapture = await editors.capture(target);
+        assert.equal(undoCapture.objects[0].points[0][0], source.objects[0].points[0][0]);
+      }
     } else {
       if (mode === 'close') await new Promise((resolve) => setTimeout(resolve, 1500));
       await assert.rejects(editors.capture(target));
