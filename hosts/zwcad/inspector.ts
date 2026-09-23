@@ -6,7 +6,7 @@ import {randomBytes,randomUUID,createHash} from 'node:crypto';
 import {z} from 'zod';
 import {launchOwnedHost} from '../common/owned-process.ts';
 import {sendHostCommand} from '../common/transport.ts';
-import {packageRoot} from '../../src/server/package-root.ts';
+import {packageRoot} from '../../src/core/package-root.ts';
 
 const readySchema=z.object({port:z.number().int().min(1).max(65535),pid:z.number().int().positive(),startTicks:z.string().regex(/^\d+$/),sessionId:z.string().uuid(),documentId:z.string().uuid(),revision:z.literal(0)});
 const allowedErrors=new Set(['UNKNOWN_UNITS','IMPORT_LIMIT','UNSUPPORTED_DWG_CONTENT','EMPTY_DWG','UNSUPPORTED_DWG_EDIT']);

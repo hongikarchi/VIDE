@@ -1,10 +1,10 @@
+import {csharpLiteral as literal} from '../common/csharp.ts';
 interface CaptureHost {directory:string;importFile(projectId:string,requestId:string,source:string):Promise<Record<string,unknown>>}
 import {mkdir,unlink} from 'node:fs/promises';
 import {join} from 'node:path';
 import {DomainError} from '../../src/core/store.ts';
 import {legacyRhinoCommand as rhinoCommand} from './transport.ts';
 import {documentGuard,documentFingerprint} from './document-contract.ts';
-const literal=(text:unknown)=>'@"'+String(text).replaceAll('"','""')+'"';
 export async function captureDocument(host:CaptureHost,projectId:string,requestId:string,instance:string,documentId:number){
  if(!/^[a-zA-Z0-9-]+$/.test(projectId)||!/^[a-zA-Z0-9-]+$/.test(requestId))throw new DomainError('INVALID_INPUT');
  const guard=documentGuard(instance,documentId);

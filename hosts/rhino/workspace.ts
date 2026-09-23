@@ -1,3 +1,4 @@
+import {csharpLiteral as literal} from '../common/csharp.ts';
 import {z} from 'zod';
 import {legacyObjectSchema} from '../../src/core/geometry.ts';
 import type {GeometryObject} from '../../src/core/geometry.ts';
@@ -12,7 +13,6 @@ import { resolve,join } from 'node:path';
 import { legacyRhinoCommand as rhinoCommand } from './transport.ts';
 import { spawn } from 'node:child_process';
 
-const literal=(text:unknown)=>'@"'+String(text).replaceAll('"','""')+'"';
 const point=(p:number[])=>`new Rhino.Geometry.Point3d(${p.join(',')})`;
 const fingerprint=async (file:string)=>createHash('sha256').update(await readFile(file)).digest('hex');
 /** Fixed RhinoCommon programs compiled from validated geometry, never model-authored code. */

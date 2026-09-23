@@ -47,7 +47,7 @@ export class Execution {
     }catch{/* Default model remains usable without a cached catalog. */}
     try{const settings=z.object({model:z.string().optional()}).parse(JSON.parse(await readFile(join(homedir(),'.claude','settings.json'),'utf8')));
       if(typeof settings.model==='string'&&/^[a-zA-Z0-9._-]{1,100}(?:\[1m\])?$/.test(settings.model))catalog.push({id:settings.model,name:settings.model,provider:'claude-cli',efforts:['default','low','medium','high','xhigh','max']});
-    }catch{}
+    }catch{/* Optional provider preferences: built-in model remains usable. */}
     return catalog;
   }
   async status() {

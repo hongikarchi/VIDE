@@ -1,5 +1,5 @@
+import {csharpLiteral as literal} from '../common/csharp.ts';
 import {DomainError} from '../../src/core/store.ts';
-const literal=(text:unknown)=>'@"'+String(text).replaceAll('"','""')+'"';
 export function documentGuard(instance:string,id:number){
  if(!/^\d+:\d+$/.test(instance)||!Number.isInteger(id)||id<=0||id>4294967295)throw new DomainError('INVALID_INPUT');
  return `var process=System.Diagnostics.Process.GetCurrentProcess();

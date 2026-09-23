@@ -1,10 +1,10 @@
+import {csharpLiteral as literal} from '../common/csharp.ts';
 import {z} from 'zod';
 import {applicationPayloadSchema,applicationCandidateSchema} from './application-contract.ts';
 import type {Movement} from './application-contract.ts';
 import {documentGuard as guard,documentFingerprint as fingerprint} from './document-contract.ts';
 import {legacyRhinoCommand as rhinoCommand} from './transport.ts';
 import {DomainError} from '../../src/core/store.ts';
-const literal=(text:unknown)=>'@"'+String(text).replaceAll('"','""')+'"';
 export async function previewApplication(projectId:string,instance:string,documentId:number,objects:{id:string}[]){
  if(!/^[a-zA-Z0-9-]+$/.test(projectId))throw new DomainError('INVALID_INPUT');
  const code=`${guard(instance,documentId)}${fingerprint}

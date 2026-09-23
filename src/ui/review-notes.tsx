@@ -10,7 +10,7 @@ const empty=():Draft=>({body:'',objectId:null,id:crypto.randomUUID(),pending:fal
 export interface NoteActions {onAdopt:(note:ReviewNote,review:Review)=>void;onBasis:(id:string)=>void}
 export function ReviewNotes({review,initialNotes,onAdopt,onBasis}:{review:Review;initialNotes:ReviewNote[]}&NoteActions){
  const key=`vide:review-note:${review.projectId}:${review.id}`;
- const [draft,setDraft]=useState<Draft>(()=>{try{const saved=draftSchema.safeParse(JSON.parse(localStorage.getItem(key)??'null'));if(saved.success)return saved.data;}catch{}return empty();});
+ const [draft,setDraft]=useState<Draft>(()=>{try{const saved=draftSchema.safeParse(JSON.parse(localStorage.getItem(key)??'null'));if(saved.success)return saved.data;}catch{/* Unreadable browser cache is not authoritative; stored server notes remain available. */}return empty();});
  const [notes,setNotes]=useState(initialNotes),[status,setStatus]=useState(''),[saving,setSaving]=useState(false),locked=useRef(false);
  const alive=useRef(true);useEffect(()=>{alive.current=true;return()=>{alive.current=false;};},[]);
  function persist(next:Draft){setDraft(next);try{localStorage.setItem(key,JSON.stringify(next));}catch{setStatus('초안 저장 불가. 화면을 닫기 전에 의견을 저장하세요.');}}
@@ -21,7 +21,7 @@ export function ReviewNotes({review,initialNotes,onAdopt,onBasis}:{review:Review
    const note=reviewNoteSchema.parse(await api(`/projects/${review.projectId}/reviews/${review.id}/notes`,'POST',{id:submitted.id,body:submitted.body,objectId:submitted.objectId}));
    if(note.id!==submitted.id||note.projectId!==review.projectId||note.reviewId!==review.id||note.requestId!==review.requestId||note.body!==submitted.body||note.objectId!==submitted.objectId)throw new Error('의견 저장 결과의 기준이 일치하지 않습니다.');
    if(alive.current){setNotes(current=>current.some(item=>item.id===note.id)?current:[...current,note]);persist(empty());setStatus('의견을 저장했습니다. AI 실행 전의 검토 기록입니다.');}
-   else try{const saved=JSON.parse(localStorage.getItem(key)??'null');if(saved?.id===submitted.id)localStorage.setItem(key,JSON.stringify(empty()));}catch{}
+   else try{const saved=JSON.parse(localStorage.getItem(key)??'null');if(saved?.id===submitted.id)localStorage.setItem(key,JSON.stringify(empty()));}catch{/* Server save succeeded; retained submission ID makes a later retry idempotent. */}
   }catch(error){if(alive.current)setStatus((error instanceof Error?error.message:'의견을 저장하지 못했습니다.')+' · 같은 의견을 다시 확인할 수 있습니다.');}
   finally{locked.current=false;if(alive.current)setSaving(false);}
  }

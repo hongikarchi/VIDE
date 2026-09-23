@@ -1,5 +1,5 @@
+import {csharpLiteral as literal} from '../common/csharp.ts';
 import type {GeometryObject} from '../../src/core/geometry.ts';
-const literal=(value:unknown)=>'@"'+String(value).replaceAll('"','""')+'"';
 // Duplicate before any original candidate object is transformed or removed.
 export function prepareNativeCopies(objects:GeometryObject[],baseline?:{objects:GeometryObject[]}){
  const additions=new Map<string,string>(),prepare:string[]=[];

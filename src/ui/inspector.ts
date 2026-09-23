@@ -85,7 +85,7 @@ export function renderInspector(object:InspectorObject|undefined|null,result:Ins
   } else if(tab==='history') {
     properties=[['생성 요청',request?.input?.body||'파일 가져오기'],['처리 상태',request?.state||'—'],['결과 시각',request?.createdAt?new Date(request.createdAt).toLocaleString('ko-KR'):'—'],['기준 후보',object.revision||'—']];
   } else {
-    let layer='—';try{if(native?.layer64)layer=new TextDecoder().decode(Uint8Array.from(atob(native.layer64),c=>c.charCodeAt(0)));}catch{}
+    let layer='—';try{if(native?.layer64)layer=new TextDecoder().decode(Uint8Array.from(atob(native.layer64),c=>c.charCodeAt(0)));}catch{layer='읽기 실패';}
     properties=[['객체 이름',object.name],['레이어',layer],['형상',native?.nativeType||object.kind||object.type||'—'],['호스트',result?.host==='zwcad'?'ZWCAD':'Rhino'],['네이티브 ID',native?.nativeId||object.nativeId||'—'],['단위','m'],['상태','저장된 후보']];
   }
   const attributes=tab==='properties'?nativeAttributes(native):null;

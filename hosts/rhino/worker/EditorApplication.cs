@@ -176,7 +176,7 @@ internal sealed class EditorApplication(RhinoDoc document, string directory, Fun
             if (plan.Items.All(entry => mapping.TryGetProperty(entry.Key, out var nativeId) && nativeId.GetString() == entry.Value.NativeId.ToString()) && Matches(plan)) return Outcome("succeeded", "APPLIED", true);
             if (fingerprint() == expected) return Outcome("failed", "ORIGINAL_UNCHANGED", false);
         }
-        catch { }
+        catch { /* Unreadable receipt is not proof of success; report unknown below. */ }
         return Outcome("unknown", "HOST_RESULT_UNKNOWN", false);
     }
 

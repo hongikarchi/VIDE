@@ -14,7 +14,7 @@ const notesSchema=z.object({comments:z.array(z.object({id:z.string(),publication
 export interface CommentInputHandle {pin:(pin:SharedPin,id:string|null)=>void;sketch:(sketch:SharedSketch)=>void;interrupted:(sketch:StrokeDraft)=>void}
 export function Comments({project,publicationId,session,selected,inputRef,onDraft,onEvidence}:{project:Project;publicationId:string;session:Session;selected:string|null;inputRef:Ref<CommentInputHandle>;onDraft:(draft:SpatialDraft)=>void;onEvidence:(draft:SpatialDraft)=>void}){
   const storageKey=`vide-review:${session.user.id}:${project.id}:${publicationId}`;
-  const [draft,setDraft]=useState<Draft>(()=>{try{const saved=draftSchema.safeParse(JSON.parse(localStorage.getItem(storageKey)||'null'));if(saved.success)return saved.data;}catch{}return fresh();});
+  const [draft,setDraft]=useState<Draft>(()=>{try{const saved=draftSchema.safeParse(JSON.parse(localStorage.getItem(storageKey)||'null'));if(saved.success)return saved.data;}catch{/* Invalid browser cache cannot override server comments. */}return fresh();});
   const [notes,setNotes]=useState<z.infer<typeof notesSchema>['comments']>([]),[cursor,setCursor]=useState<string|null>(null),[busy,setBusy]=useState(false),[status,setStatus]=useState(''),[storageError,setStorageError]=useState('');
   const uncertain=draft.pending;
   const [previousBasis,setPreviousBasis]=useState(false);

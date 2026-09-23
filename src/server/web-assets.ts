@@ -1,5 +1,5 @@
 import { readFile } from 'node:fs/promises';
-import {packageRoot} from './package-root.ts';
+import {packageRoot} from '../core/package-root.ts';
 
 // Source, compiled server and packaged app share the nearest package root.
 const root = new URL('dist/ui/', packageRoot);

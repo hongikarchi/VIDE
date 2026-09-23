@@ -30,7 +30,7 @@ export class ZwcadWorkspace {
       try{
         const {stdout}=await run(join(process.env.SystemRoot||'C:\\Windows','System32/WindowsPowerShell/v1.0/powershell.exe'),['-NoProfile','-NonInteractive','-ExecutionPolicy','RemoteSigned','-File',fileURLToPath(new URL('./workspace.ps1',import.meta.url)),'-RequestPath',request],{windowsHide:true,encoding:'utf8',timeout:90000,maxBuffer:16*1024*1024});
         try{return JSON.parse(stdout.trim());}catch{throw Object.assign(new Error('HOST_RESULT_UNKNOWN'),{code:'HOST_RESULT_UNKNOWN'});}
-      }catch(cause){if(cause instanceof Error&&'code' in cause&&cause.code==='HOST_RESULT_UNKNOWN')throw cause;const error=commandError(cause);let code='ZWCAD_EXECUTION_FAILED';try{const failure=JSON.parse((error.stdout??'').trim());if(['UNKNOWN_UNITS','IMPORT_LIMIT','UNSUPPORTED_DWG_CONTENT','EMPTY_DWG','UNSUPPORTED_DWG_EDIT'].includes(failure.error))code=failure.error;}catch{}
+      }catch(cause){if(cause instanceof Error&&'code' in cause&&cause.code==='HOST_RESULT_UNKNOWN')throw cause;const error=commandError(cause);let code='ZWCAD_EXECUTION_FAILED';try{const failure=JSON.parse((error.stdout??'').trim());if(['UNKNOWN_UNITS','IMPORT_LIMIT','UNSUPPORTED_DWG_CONTENT','EMPTY_DWG','UNSUPPORTED_DWG_EDIT'].includes(failure.error))code=failure.error;}catch{/* Non-JSON process output retains the generic failure and bounded diagnostic below. */}
         throw Object.assign(new Error(code),{code:error.killed?'HOST_RESULT_UNKNOWN':code,detail:(error.stdout||error.stderr||'').slice(0,2000)});}
       finally{await unlink(request).catch(()=>{});}
     };

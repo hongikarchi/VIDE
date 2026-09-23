@@ -51,7 +51,7 @@ export async function projectRoute(request:Request,env:Env,actor:Actor,path:stri
       if(!result.meta.changes)throw new HttpError(403,'OWNER_REQUIRED');
       // Fragment keeps the raw invitation token out of server access logs/referrers.
       const link=env.AUTH_ORIGIN+'/invite#'+token;
-      let delivered=false;try{if(!manualApproval(env))await env.EMAIL!.send({from:env.EMAIL_FROM,to:email,subject:'VIDE project invitation',text:link});delivered=!manualApproval(env);}catch{}
+      let delivered=false;try{if(!manualApproval(env))await env.EMAIL!.send({from:env.EMAIL_FROM,to:email,subject:'VIDE project invitation',text:link});delivered=!manualApproval(env);}catch{/* Response explicitly reports emailDelivery=failed; invitation remains usable. */}
       return json({id,expiresAt,link,emailDelivery:manualApproval(env)?'disabled':delivered?'submitted':'failed'},201);
     }
     if(path.length===3&&request.method==='DELETE'){

@@ -74,7 +74,7 @@ namespace Vide.Zwcad
                 }
                 catch (System.Exception error)
                 {
-                    try { Reply(stream, Encode(new { ok = false, code = error is InvalidOperationException ? error.Message : "HOST_INVALID_RESPONSE" })); } catch { }
+                    try { Reply(stream, Encode(new { ok = false, code = error is InvalidOperationException ? error.Message : "HOST_INVALID_RESPONSE" })); } catch { /* Broken transport cannot accept a second reply; caller keeps unknown outcome. */ }
                 }
             }
         }

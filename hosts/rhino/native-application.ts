@@ -1,10 +1,10 @@
+import {csharpLiteral as literal} from '../common/csharp.ts';
 import {z} from 'zod';
 import {nativeApplicationPayloadSchema,applicationCandidateSchema} from './application-contract.ts';
 import type {Movement} from './application-contract.ts';
 import {legacyRhinoCommand as rhinoCommand} from './transport.ts';
 import {DomainError} from '../../src/core/store.ts';
 import {documentGuard,documentFingerprint,attributeSnapshot} from './document-contract.ts';
-const literal=(text:unknown)=>'@"'+String(text).replaceAll('"','""')+'"';
 function movementsCode(movements:Movement[]){
  if(!Array.isArray(movements)||!movements.length||movements.length>500||movements.some(item=>!/^[-a-f0-9]{36}$/i.test(item.id)||!Array.isArray(item.delta)||item.delta.length!==3||item.delta.some(value=>!Number.isFinite(value)||Math.abs(value)>200000)))throw new DomainError('INVALID_INPUT');
  return `var movements=new Dictionary<Guid,Rhino.Geometry.Vector3d>();${movements.map(item=>`movements.Add(new Guid(${literal(item.id)}),new Rhino.Geometry.Vector3d(${item.delta.join(',')}));`).join('')}
