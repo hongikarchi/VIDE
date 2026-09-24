@@ -1,4 +1,5 @@
 import { claudeEfforts } from './model-capabilities.ts';
+import { requestConflict } from '../contracts/request-scope.ts';
 import { z } from 'zod';
 import { runLinked } from './linked-execution.ts';
 import type { AgentTools } from './agent-tools.ts';
@@ -192,6 +193,55 @@ export class Execution {
     const controller = new AbortController();
     const completion = this.run(request, controller).finally(() => this.active.delete(request.id));
     this.active.set(request.id, { controller, completion, projectId: request.projectId });
+  }
+  intervene(projectId: string, predecessorId: string, value: unknown) {
+    const saved = this.workspace.intervene(projectId, predecessorId, value);
+    if (!saved.created) return saved.request;
+    const predecessor = this.active.get(predecessorId);
+    const { request } = saved;
+    if (!predecessor || predecessor.projectId !== projectId)
+      return this.workspace.update(projectId, request.id, 'interrupted', {
+        code: 'PREDECESSOR_UNAVAILABLE',
+      });
+    const controller = new AbortController();
+    const completion = (async () => {
+      await predecessor.completion;
+      if (controller.signal.aborted) {
+        this.workspace.update(projectId, request.id, 'cancelled');
+        return;
+      }
+      const previous = this.workspace.get(projectId, predecessorId);
+      const children = this.workspace
+        .list(projectId)
+        .filter((row) => row.input.parentRequestId === predecessorId);
+      if (
+        previous.state === 'unknown' ||
+        children.some((row) => row.state === 'unknown' || row.result?.hostExecuted)
+      ) {
+        this.workspace.update(projectId, request.id, 'interrupted', {
+          code: 'INTERVENTION_REVIEW_REQUIRED',
+        });
+        return;
+      }
+      const conflict = requestConflict(
+        request.input,
+        this.workspace.list(projectId).filter((row) => row.id !== request.id),
+      );
+      if (conflict) {
+        this.workspace.update(projectId, request.id, 'interrupted', { code: conflict });
+        return;
+      }
+      await this.run(request, controller);
+    })()
+      .catch(() => {
+        this.workspace.update(projectId, request.id, 'interrupted', {
+          code: 'INTERVENTION_REVIEW_REQUIRED',
+        });
+      })
+      .finally(() => this.active.delete(request.id));
+    this.active.set(request.id, { controller, completion, projectId });
+    predecessor.controller.abort();
+    return request;
   }
   async run(request: StoredWork, controller: AbortController) {
     const { projectId, id, input } = request;

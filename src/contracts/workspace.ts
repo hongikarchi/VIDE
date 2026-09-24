@@ -82,5 +82,5 @@ export type RequestInput = z.infer<typeof requestInputSchema>;
 export interface WorkSummary {
   id: string;
   body: string;
-  request?: { state: RequestState; result?: { phase?: string } | null };
+  request?: { state: RequestState; result?: { phase?: string; code?: string } | null };
 }

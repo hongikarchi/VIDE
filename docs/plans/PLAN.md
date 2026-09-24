@@ -2,7 +2,7 @@
 id: PLAN
 title: VIDE 실행 로드맵
 status: review
-version: 0.161
+version: 0.162
 updated: 2026-09-24
 owner: agent:codex
 related: [ARCH-01, PLAN-02, PLAN-03, SPEC-00, SPEC-01, SPEC-02, SPEC-03, SPEC-04, SPEC-05]
@@ -73,7 +73,7 @@ T-001~018의 번호·지원 증거는 유지한다. 각 티켓의 현재 결과�
 
 ### 6.5 현재 티켓 현황과 이어갈 위치
 
-현재 작업: [PLAN-02 §6.2](PLAN-02-agent-host-versioning.md)의 L1~L6 로컬 제품 완결 진행 중. 실제 Rhino/Claude 후속 수정·ZWCAD/Codex 생성 및 CAD 기본 편집 5종 통과, L2 대상별 경합/늦은 결과 보호 구현·152개 계약 시험과 브라우저 회귀 통과. 개입 접수·편집 확대·수량/큰 모델/복합 작업은 남아 있다. 증거: [로컬 완결 검수](../tdd/VERIFY-2026-09-24-local-product-completion.md). UI 선택 항목은 [VERIFY](../tdd/VERIFY-2026-09-24-workspace-controls.md) 완료. 배포 ZIP·원격 공유·대표 과업 선정은 후순위다. L1~L6 이후 Jev 및 다중 계정 CLI 리서치를 검토해 채택 근거·기존 계약과의 충돌·선행 실험·검증 기준을 갖춘 후속 구현 계획을 작성한다. 진행 중인 다른 세션의 연구 원문은 수정하지 않는다.
+현재 작업: [PLAN-02 §6.2](PLAN-02-agent-host-versioning.md)의 L1~L6 로컬 제품 완결 진행 중. 실제 Rhino/Claude 후속 수정·ZWCAD/Codex 생성 및 CAD 기본 편집 5종 통과, L2 대상별 경합/늦은 결과 보호·추가 지시 저장/종료 대기/후속 실행 구현, 159개 계약 시험과 브라우저 회귀 통과. 실호스트 병렬/중단·개입의 부분 결과 재사용·편집 확대·수량/큰 모델/복합 작업은 남아 있다. 증거: [로컬 완결 검수](../tdd/VERIFY-2026-09-24-local-product-completion.md). UI 선택 항목은 [VERIFY](../tdd/VERIFY-2026-09-24-workspace-controls.md) 완료. 배포 ZIP·원격 공유·대표 과업 선정은 후순위다. L1~L6 이후 Jev 및 다중 계정 CLI 리서치를 검토해 채택 근거·기존 계약과의 충돌·선행 실험·검증 기준을 갖춘 후속 구현 계획을 작성한다. 진행 중인 다른 세션의 연구 원문은 수정하지 않는다.
 
 **현재 단계: PLAN-02 §6.1의 1·2·3a·3b·4a를 아래 합성 지원 범위로 검증했고, 4b 원격 모델 검수는 무료 조건 대기다.** 개발 기반 main 통합(`78b180c`), [실행 안전성](../tdd/VERIFY-2026-09-24-sdk-execution-safety.md), [양쪽 구독 ZWCAD SDK·소유 편집 창·직접 편집/저장](../tdd/VERIFY-2026-09-24-zwcad-sdk-product.md), [한 요청 CAD→Rhino·두 CAD 문서·부분 실패 보존](../tdd/VERIFY-2026-09-24-linked-hosts.md), [다른 사용자 의견→실제 수정→재게시](../tdd/VERIFY-2026-09-24-sharing-host-roundtrip.md), [로컬 Windows 패키지](../tdd/VERIFY-2026-09-24-sdk-package.md)를 검증했다. 최신 자동 회귀는 145개 통과다. 최신 ZIP의 연계·런처·재시작·데이터 유지도 통과했다. 4b는 9월 24일 재조회에서 계정의 다른 R2 버킷이 약 11.2 GB인 것을 확인해 차단을 유지했다([조건/재개 기준](../tdd/VERIFY-2026-09-24-sharing-host-roundtrip.md)). 다음 행동은 무료 조건 또는 시험 예산 확정 후 원격 검수, 사용자 결정 후 대표 실무 과업 검수다. 원격 업로드 제한은 유지하며 원격 CI/별도 PC 설치·일반 자산 복사까지 완료한 것은 아니다. 논현동 수준의 대표 과업 선정·실무 검수는 사용자 지시대로 현재 묶음 이후 결정한다. Jev 조사 문서는 보존한다. 구현 범위·완료 기준은 [PLAN-02 §6.1](PLAN-02-agent-host-versioning.md)을 따른다.
 

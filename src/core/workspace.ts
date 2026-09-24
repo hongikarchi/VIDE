@@ -1,4 +1,5 @@
 import { requestConflict } from '../contracts/request-scope.ts';
+import { interventionInput } from './intervention.ts';
 import { requestInputSchema, requestStateSchema } from '../contracts/workspace.ts';
 import { DomainError } from './store.ts';
 import type { Store } from './store.ts';
@@ -67,11 +68,41 @@ export class Workspace {
       .at(-1);
   }
   submit(projectId: string, value: unknown) {
+    return this.insert(projectId, value);
+  }
+  intervene(projectId: string, predecessorId: string, value: unknown) {
+    const predecessor = this.get(projectId, predecessorId);
+    const merged = interventionInput(predecessor.input, value);
+    const existing = this.list(projectId).find((row) => row.id === merged.id);
+    if (existing) {
+      if (
+        existing.input.supersedesRequestId !== predecessorId ||
+        JSON.stringify(existing.input.interventionInput) !== JSON.stringify(value)
+      )
+        fail('REVISION_CONFLICT');
+      return { request: existing, created: false };
+    }
+    if (!['queued', 'running'].includes(predecessor.state) || predecessor.input.parentRequestId)
+      fail('REVISION_CONFLICT');
+    if (
+      this.list(projectId).some(
+        (row) =>
+          row.input.supersedesRequestId === predecessorId &&
+          ['queued', 'running'].includes(row.state),
+      )
+    )
+      fail('PROJECT_BUSY');
+    merged.baseRequestId = this.basis(projectId, predecessor.input)?.id ?? null;
+    return this.insert(projectId, merged, predecessorId);
+  }
+  private insert(projectId: string, value: unknown, predecessorId?: string) {
     this.store.project(projectId);
     const parsed = requestInputSchema.safeParse(value);
     if (!parsed.success) fail('INVALID_INPUT');
     const input = parsed.data;
     if (input.parentRequestId !== undefined) fail('INVALID_INPUT');
+    if (input.supersedesRequestId !== undefined && input.supersedesRequestId !== predecessorId)
+      fail('INVALID_INPUT');
     // Keep the original serialization for existing idempotency records.
     const serialized = JSON.stringify(value);
     if (Buffer.byteLength(serialized) > 200000) fail('INPUT_TOO_LARGE');
@@ -137,11 +168,25 @@ export class Workspace {
       )
         fail('STALE_REFERENCE');
     }
-    const conflict = requestConflict(input, this.list(projectId));
+    const conflict = requestConflict(
+      input,
+      this.list(projectId).filter(
+        (row) =>
+          !predecessorId ||
+          (row.id !== predecessorId && row.input.parentRequestId !== predecessorId),
+      ),
+    );
     if (conflict) fail(conflict);
     this.store.db
       .prepare('INSERT INTO workspace_requests VALUES(?,?,?,?,?,?)')
-      .run(input.id, projectId, serialized, 'queued', null, new Date().toISOString());
+      .run(
+        input.id,
+        projectId,
+        serialized,
+        'queued',
+        predecessorId ? JSON.stringify({ phase: 'waiting' }) : null,
+        new Date().toISOString(),
+      );
     return { request: this.get(projectId, input.id), created: true };
   }
   update(projectId: string, id: string, state: RequestState, result: unknown = null): StoredWork {

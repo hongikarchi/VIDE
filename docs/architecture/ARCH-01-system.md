@@ -2,7 +2,7 @@
 id: ARCH-01
 title: VIDE 기술 구조와 구현 계약
 status: review
-version: 0.8
+version: 0.9
 updated: 2026-09-24
 owner: agent:codex
 related: [SPEC-00, SPEC-02, SPEC-03, SPEC-04, PLAN, ADR-014, ADR-015, ADR-016, ADR-017]
@@ -403,7 +403,9 @@ VIDE가 직접 기동한 기록(프로세스 ID·시작 시각·실행 세션)�
 
 documentSessionId는 열릴 때마다 새 값, documentId는 VIDE 논리 문서 ID다. 경로 변경(Save As), 동일 파일의 동시 열기, 외부 복사로 내부 ID가 중복된 경우를 매핑 기록으로 구분한다. readonly 취득만으로 사용자 파일에 ID를 쓰지 않는다. 식별 불명은 재연결 대상으로 제시하고 활성 문서에 자동 대체하지 않는다.
 
-접수 경합 키는 host와 sourceDocument의 instance/documentId, 또는 baseRequestId 계보의 최초 후보 ID로 만든다. baseRequestId=null은 요청 ID별 새 독립 후보, 필드 생략/계보 식별 실패는 해당 host 전체 키다. 연계 요청은 두 대상 키를 모두 점유하고 자식 작업을 중복 집계하지 않는다. 실행 중 독립 부모 요청은 프로젝트당 2개까지 접수한다(초기 자원 상한이며 성능 보증이 아님). 기존 PROJECT_BUSY는 대상 경합, WORKSPACE_CAPACITY는 상한 초과, HOST_RESULT_UNRESOLVED는 해당 대상 불명확 쓰기에 사용한다. 동일 JSON 재접수의 기존 직렬화·멱등성 계약은 유지한다. UI와 서버가 같은 순수 경합 판정을 사용하며 서버가 최종 확인한다. UI polling은 시작 프로젝트와 작업 공간 인스턴스를 고정하고 프로젝트 전환 후 결과를 다른 화면에 넣지 않는다. 자동 후보 전환은 마지막으로 보낸 요청이고 선택 후보·초안·미완성 스케치가 제출 후 바뀌지 않은 경우만 허용한다. 그 외 완료 결과는 이력에 보존하고 명시적으로 열 수 있다.
+접수 경합 키는 host와 sourceDocument의 instance/documentId, 또는 baseRequestId 계보의 최초 후보 ID로 만든다. baseRequestId=null은 요청 ID별 새 독립 후보, 필드 생략/계보 식별 실패는 해당 host 전체 키다. 연계 요청은 두 대상 키를 모두 점유하고 자식 작업을 중복 집계하지 않는다. 실행 중 독립 부모 요청은 프로젝트당 2개까지 접수한다(초기 자원 상한이며 성능 보증이 아님). 기존 PROJECT_BUSY는 대상 경합, WORKSPACE_CAPACITY는 상한 초과, HOST_RESULT_UNRESOLVED는 해당 대상 불명확 쓰기에 사용한다. 동일 JSON 재접수의 기존 직렬화·멱등성 계약은 유지한다. UI와 서버가 같은 순수 경합 판정을 사용하며 서버가 최종 확인한다. `POST /api/v1/projects/:project/requests/:request/interventions`는 추가 입력을 받아 원본 조건과 합친 새 workspace_requests 행을 queued로 저장하고 서버가 supersedesRequestId를 부여한다. 일반 submit에서 이 필드를 받지 않는다. 별도 스키마/테이블을 추가하지 않는다. 기존 요청 하나에 대기 후속은 하나만 허용하고 후속 대기는 독립 슬롯을 추가 점유하지 않는다. 입력/권한/대상과 직렬화 멱등성을 확인한 뒤 이전 실행을 abort하고 completion을 기다린다. 불명확 결과 또는 확인되지 않은 연계 부분 결과는 후속을 interrupted로 남긴다. 종료 후 실행 직전에 다른 작업과의 충돌을 다시 검사한다. 후속 취소는 이전 실행 종료 대기 후 cancelled로 기록하며 종료 확인 전 완료라고 표시하지 않는다.
+
+UI polling은 시작 프로젝트와 작업 공간 인스턴스를 고정하고 프로젝트 전환 후 결과를 다른 화면에 넣지 않는다. 자동 후보 전환은 마지막으로 보낸 요청이고 선택 후보·초안·미완성 스케치가 제출 후 바뀌지 않은 경우만 허용한다. 그 외 완료 결과는 이력에 보존하고 명시적으로 열 수 있다.
 
 문서 쓰기는 직렬화하고, UI 스레드 API 실행은 호스트 프로세스 단위 큐에서도 직렬화한다. 서로 다른 프로세스의 독립 작업은 병렬 실행 가능하다. 같은 호스트의 서로 다른 문서라는 이유만으로 SDK 동시 호출이 가능하다고 가정하지 않는다. 실행 직전에 대상 존재·문서 세션·관련 객체 버전을 재검사한다. readSet을 모르는 임의 코드에는 문서 전체 revision을 보수적으로 적용한다.
 

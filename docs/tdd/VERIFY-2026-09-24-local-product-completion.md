@@ -2,7 +2,7 @@
 id: VERIFY-2026-09-24-local-product-completion
 title: 로컬 제품 완결 · 실제 왕복 및 확장 검수
 status: review
-version: 0.1
+version: 0.2
 updated: 2026-09-24
 owner: agent:codex
 related: [PLAN-02, AC-07, AC-08, AC-09, AC-10, AC-24, AC-25, AC-32, AC-33, AC-34]
@@ -35,6 +35,9 @@ related: [PLAN-02, AC-07, AC-08, AC-09, AC-10, AC-24, AC-25, AC-32, AC-33, AC-34
 - Rhino 소유 편집 창 고정 적용 회귀 통과: 추가/수정/삭제 각각 1개, 체적 48, 기존 native ID·속성 보존, 중복 재적용 없음, 낡은 기준 거절, 불명확 영수증 복구. `tests/integration/owned-editor-apply.mjs`, 증거 `.vide/editor-apply/c9094c8f-d453-4ac4-a08c-fc4c4a96d297`.
 - 기존 `browser-workspace-controls.mjs` 및 `browser-react-panels.mjs` 실제 Chromium 회귀 통과. 타입 검사·웹 빌드 통과.
 
+- L2 추가 지시: 기존 조건/스케치/자료를 보존해 먼저 저장하고 이전 실행 실제 종료 뒤 새 조건을 실행하는 경로를 연결했다. 종료 전 호출 0회, 중복 요청/변경 요청 구분, 불명확 결과의 재실행 0회, 후속 취소, 다른 대상/권한 거절, 재시작 보존을 결정적 공급자로 검증했다. 전체 단위/계약 159개 통과.
+- `browser-intervention.mjs`는 실제 Chromium/로컬 API에서 “추가 지시”→접수/종료 대기 표시→초안 비우기→이전 요청 cancelled/후속 succeeded→새 조건 전달을 확인했다. 실제 장시간 네이티브 연산 중단의 증거는 아니며 중단 불가/결과 불명확은 보류한다. 후속은 원 기준 재실행이며 이전 후보의 부분 완료분을 자동 이어 붙이는 기능은 아니다.
+
 ## 남은 검증
 
-진행 중 추가 지시의 저장·채택·후속 실행, 실호스트 병렬/중단·원본 충돌, Rhino 기본 도구/Save As, L3~L6는 완료 처리하지 않는다. 현재까지의 시험 성공을 전체 제품 완결로 해석하지 않는다. 이후 Jev·다중 계정 CLI 연구 검토/후속 계획은 이 묶음 뒤에 수행한다.
+실호스트 병렬/중단·원본 충돌 및 개입 후 부분 완료분의 세밀한 재사용, Rhino 기본 도구/Save As, L3~L6는 완료 처리하지 않는다. 현재까지의 시험 성공을 전체 제품 완결로 해석하지 않는다. 이후 Jev·다중 계정 CLI 연구 검토/후속 계획은 이 묶음 뒤에 수행한다.

@@ -73,6 +73,9 @@ Object.assign(errors, {
   INVALID_GEOMETRY: 'AI의 형상 제안이 검증을 통과하지 못했습니다.',
   WRITE_NOT_ALLOWED: '검토 권한으로는 형상을 변경하지 않습니다. 후보 작업 허용으로 전환하세요.',
   PROJECT_BUSY: '같은 대상의 작업이 진행 중입니다. 다른 문서를 선택하거나 완료를 기다리세요.',
+  INTERVENTION_REVIEW_REQUIRED:
+    '이전 작업의 부분 결과 또는 불명확 상태를 확인해야 합니다. 추가 지시는 보존했습니다.',
+  PREDECESSOR_UNAVAILABLE: '이전 실행 연결을 확인할 수 없어 추가 지시를 보류했습니다.',
   WORKSPACE_CAPACITY: '독립 작업 두 개가 진행 중입니다. 하나가 끝난 뒤 보내세요.',
   STALE_REFERENCE: '첨부한 객체가 이전 후보 기준입니다. 현재 모델에서 다시 첨부해 주세요.',
   HOST_RESULT_UNKNOWN: '호스트 응답을 확인하지 못했습니다. 자동 재실행하지 않았습니다.',

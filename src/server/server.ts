@@ -624,6 +624,13 @@ export async function startServer({
         response.end(content);
         return;
       }
+      const intervention = /^\/api\/v1\/projects\/([^/]+)\/requests\/([^/]+)\/interventions$/.exec(
+        url.pathname,
+      );
+      if (intervention && request.method === 'POST') {
+        send(202, execution.intervene(intervention[1], intervention[2], await body(request)));
+        return;
+      }
       const job = /^\/api\/v1\/projects\/([^/]+)\/requests(?:\/([^/]+)(\/cancel)?)?$/.exec(
         url.pathname,
       );

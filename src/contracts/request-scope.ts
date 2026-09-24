@@ -5,6 +5,7 @@ interface ScopeInput {
   linkedTargets?: { host: string; baseRequestId: string }[];
   permission: string;
   parentRequestId?: unknown;
+  supersedesRequestId?: unknown;
 }
 interface ScopeWork {
   id: string;
@@ -62,7 +63,14 @@ export function requestConflict(input: ScopeInput, rows: readonly ScopeWork[]): 
   )
     return 'HOST_RESULT_UNRESOLVED';
   const active = rows.filter(
-    (row) => !row.input.parentRequestId && ['queued', 'running'].includes(row.state),
+    (row) =>
+      !row.input.parentRequestId &&
+      ['queued', 'running'].includes(row.state) &&
+      !rows.some(
+        (parent) =>
+          parent.id === row.input.supersedesRequestId &&
+          ['queued', 'running'].includes(parent.state),
+      ),
   );
   if (active.some(overlaps)) return 'PROJECT_BUSY';
   if (active.length >= 2) return 'WORKSPACE_CAPACITY';

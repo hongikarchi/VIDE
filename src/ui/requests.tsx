@@ -1,3 +1,4 @@
+import { errors } from './gateway.ts';
 import { createRoot } from 'react-dom/client';
 import type { WorkSummary } from '../contracts/workspace.ts';
 
@@ -39,7 +40,12 @@ function PendingRequests({ state, onChange }: RequestProps) {
     </>
   );
 }
-function ActiveWork({ messages }: { messages: WorkSummary[] }) {
+interface ActiveProps {
+  messages: WorkSummary[];
+  reason?: (id: string) => string | undefined;
+  intervene?: (id: string) => void;
+}
+function ActiveWork({ messages, reason, intervene }: ActiveProps) {
   const active = messages.filter(
     (message) =>
       message.request &&
@@ -54,9 +60,11 @@ function ActiveWork({ messages }: { messages: WorkSummary[] }) {
           request.state === 'unknown'
             ? '호스트 결과 확인 필요 · 새 후보 보류'
             : request.state === 'interrupted'
-              ? '연결 종료로 중단됨 · 자동 재실행 없음'
+              ? errors[request.result?.code || ''] || '연결 종료로 중단됨 · 자동 재실행 없음'
               : request.state === 'queued'
-                ? '대기'
+                ? request.result?.phase === 'waiting'
+                  ? '추가 지시 접수 · 이전 작업 종료 대기'
+                  : '대기'
                 : request.result?.phase === 'host'
                   ? '호스트 생성·저장 검증'
                   : request.result?.phase === 'stopping'
@@ -66,6 +74,20 @@ function ActiveWork({ messages }: { messages: WorkSummary[] }) {
           <div key={message.id}>
             <strong>{message.body || '첨부 문맥 검토'}</strong>
             <small>{phase}</small>
+            {intervene &&
+              ['queued', 'running'].includes(request.state) &&
+              request.result?.phase !== 'waiting' && (
+                <button
+                  disabled={!!reason?.(message.id)}
+                  title={
+                    reason?.(message.id) ||
+                    '현재 입력을 추가하고 이전 작업 종료 후 원 기준에서 다시 실행합니다.'
+                  }
+                  onClick={() => intervene(message.id)}
+                >
+                  추가 지시
+                </button>
+              )}
           </div>
         );
       })}
@@ -84,8 +106,12 @@ export function renderRequests(state: Draft, onChange: (rebuild: boolean) => voi
   countRoot.render(String(state.instructions?.length ?? 0));
   pendingRoot.render(<PendingRequests state={state} onChange={onChange} />);
 }
-export function renderActiveWork(messages: WorkSummary[]): void {
-  activeRoot.render(<ActiveWork messages={messages} />);
+export function renderActiveWork(
+  messages: WorkSummary[],
+  reason?: ActiveProps['reason'],
+  intervene?: ActiveProps['intervene'],
+): void {
+  activeRoot.render(<ActiveWork messages={messages} reason={reason} intervene={intervene} />);
 }
 window.addEventListener('pagehide', (event) => {
   if (!event.persisted) {

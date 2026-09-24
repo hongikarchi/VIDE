@@ -228,7 +228,9 @@ function render(rebuildRequests = true) {
   if (unreadableDraft && draftHasInput(state)) unreadableDraft = false;
   if (!draftHasInput(state) && displayedResult) state.baseRequestId = displayedResult;
   if (rebuildRequests) renderRequests(state, render);
-  renderActiveWork(state.messages);
+  renderActiveWork(state.messages, interventionReason, (id) => {
+    void submitRequest(id);
+  });
   $('host-target').value = state.host || 'rhino';
   if (project && !unreadableDraft)
     try {
@@ -552,17 +554,45 @@ $('body').oninput = () => {
   $('saved').textContent = draftSaved ? '초안 저장됨' : '저장 실패';
   if (state.body.endsWith('@')) $('attach-menu').open = true;
 };
-$('request').onclick = async () => {
-  if (validate(state) || busy || !project) return;
+function interventionReason(id: string): string | undefined {
+  if (busy || !ready) return '현재 전송이 끝난 뒤 추가하세요.';
+  const original = state.messages.find((entry) => entry.id === id)?.request.input;
+  if (!original || original.parentRequestId) return '상위 작업에서 추가하세요.';
+  if (validate(state)) return validate(state);
+  if (
+    (original.host || 'rhino') !== state.host ||
+    original.permission !== state.permission ||
+    (original.baseRequestId ?? null) !== (state.baseRequestId ?? null) ||
+    JSON.stringify(original.linkedTargets) !== JSON.stringify(state.linkedTargets)
+  )
+    return '이 작업의 대상·기준·권한을 맞춘 뒤 추가하세요.';
+  if (
+    state.messages.some(
+      (entry) =>
+        entry.request.input.supersedesRequestId === id &&
+        ['queued', 'running'].includes(entry.request.state),
+    )
+  )
+    return '이미 추가 지시가 대기 중입니다.';
+}
+$('request').onclick = () => {
+  void submitRequest();
+};
+async function submitRequest(predecessorId?: string) {
+  if (validate(state) || busy || !project || (predecessorId && interventionReason(predecessorId)))
+    return;
   busy = true;
   render();
   const input = { ...packet(state), id: crypto.randomUUID() };
   const projectId = currentProject().id,
     original = state;
   try {
-    const request = await requestData(`/projects/${projectId}/requests`, 'POST', input);
+    const path =
+      `/projects/${projectId}/requests` + (predecessorId ? `/${predecessorId}/interventions` : '');
+    const request = await requestData(path, 'POST', input);
     if (project?.id !== projectId || state !== original) return;
-    state.messages.push(requestMessage(request));
+    if (!state.messages.some((entry) => entry.id === request.id))
+      state.messages.push(requestMessage(request));
     state.body = '';
     state.instructions = [];
     state.pins = [];
@@ -582,7 +612,7 @@ $('request').onclick = async () => {
     busy = false;
     render();
   }
-};
+}
 async function poll(id: string, projectId = currentProject().id, original = state) {
   if (project?.id !== projectId || state !== original) return;
   if (selectedResult === undefined) selectedResult = displayedResult ?? null;
