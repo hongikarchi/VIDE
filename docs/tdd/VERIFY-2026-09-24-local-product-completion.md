@@ -2,7 +2,7 @@
 id: VERIFY-2026-09-24-local-product-completion
 title: 로컬 제품 완결 · 실제 왕복 및 확장 검수
 status: review
-version: 0.2
+version: 0.3
 updated: 2026-09-24
 owner: agent:codex
 related: [PLAN-02, AC-07, AC-08, AC-09, AC-10, AC-24, AC-25, AC-32, AC-33, AC-34]
@@ -37,6 +37,22 @@ related: [PLAN-02, AC-07, AC-08, AC-09, AC-10, AC-24, AC-25, AC-32, AC-33, AC-34
 
 - L2 추가 지시: 기존 조건/스케치/자료를 보존해 먼저 저장하고 이전 실행 실제 종료 뒤 새 조건을 실행하는 경로를 연결했다. 종료 전 호출 0회, 중복 요청/변경 요청 구분, 불명확 결과의 재실행 0회, 후속 취소, 다른 대상/권한 거절, 재시작 보존을 결정적 공급자로 검증했다. 전체 단위/계약 159개 통과.
 - `browser-intervention.mjs`는 실제 Chromium/로컬 API에서 “추가 지시”→접수/종료 대기 표시→초안 비우기→이전 요청 cancelled/후속 succeeded→새 조건 전달을 확인했다. 실제 장시간 네이티브 연산 중단의 증거는 아니며 중단 불가/결과 불명확은 보류한다. 후속은 원 기준 재실행이며 이전 후보의 부분 완료분을 자동 이어 붙이는 기능은 아니다.
+
+## 큰 모델 뷰포트 측정 — L5 일부
+
+실제 Chromium headless(`--enable-unsafe-swiftshader`)의 단일 실행 수치다. 시작/반복 편차나 실제 GPU 전체의 성능 보증이 아니며 호스트 가져오기 시험과 구분한다. 시험 코드는 `tests/integration/browser-large-model.mjs`이며 기존 `browser-support.mjs`의 테스트 전용 fixture를 사용한다.
+
+| 합성 자료 | 변경 전 표시+첫 프레임 | 변경 후 표시+첫 프레임 | 변경 후 선택 왕복 |
+|---|---|---|---|
+| 독립 점 1,000개 | 45.6 ms | 40.4 ms | 48.9 ms |
+| 독립 점 10,000개 | 197.9 ms | 185.6 ms | 25.8 ms |
+| 메시 1개 · 131,072 삼각형 | 297.2 ms | 298.3 ms | 중앙 객체 선택 통과 |
+
+- 변화 없는 300 ms 동안 두 뷰포트의 WebGL clear 호출 합계 38→0. 주된 개선은 유휴 GPU 작업 제거이며 로딩 속도 개선으로 단정하지 않는다.
+- 카메라·크기·형상·선택·스케치 변경 시만 렌더링한다. 선택 표시는 이전/현재 객체만 갱신하고, 동일 스케치 입력은 GPU 버퍼를 재생성하지 않는다. 새 표시 입력은 재렌더되고 동일 입력은 재렌더되지 않는 회귀 통과.
+- 모델 교체 후 추적한 WebGL buffer 8→4(두 뷰포트의 그리드 등 유지 자산), 기존 모델 버퍼 해제 확인. 대형 좌표 90,000에서 2 mm 세부 및 직교/원근 선택·핀 회귀 통과(`viewport-check.mjs`).
+- 원시 자료: `.vide/viewport-spike/large-model-before-57b970c0-66f3-4bdd-900a-3ec0b5fcf650.json`, `.vide/viewport-spike/large-model-after-e52f615e-0ccc-40fb-b84a-bc08faad9afc.json`.
+- 미완료: Rhino 수신/캡처의 기존 500객체 제한, 많은 개별 Brep의 메시 생성 비용, 전체 목록 UI의 가상화·장시간 메모리 검수. 점 1만 개 통과를 네이티브 BIM 1만 객체 지원 완료로 보고하지 않는다.
 
 ## 남은 검증
 

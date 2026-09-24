@@ -31,6 +31,9 @@ export function createViewport(
   onPoint: (point: Point2) => void,
   onCamera?: (state: { view: string; projection: 'orthographic' | 'perspective' }) => void,
 ) {
+  let dirty = true;
+  let selectedId: string | null = null;
+  let lineSignature = '';
   const scene = new THREE.Scene();
   scene.background = new THREE.Color('#edf0ec');
   const perspective = new THREE.PerspectiveCamera(40, 1, 0.1, 1000);
@@ -56,7 +59,11 @@ export function createViewport(
   light.position.set(-12, -16, 30);
   scene.add(light);
   const meshes: RenderObject[] = [];
+  const byId = new Map<string, RenderObject>();
   function replace(data: DisplayObject[]) {
+    dirty = true;
+    selectedId = null;
+    byId.clear();
     for (const mesh of meshes) {
       scene.remove(mesh);
       disposeObject(mesh);
@@ -98,6 +105,7 @@ export function createViewport(
       mesh.userData.id = object.id;
       scene.add(mesh);
       meshes.push(mesh);
+      byId.set(object.id, mesh);
     }
   }
   replace(objects);
@@ -110,6 +118,7 @@ export function createViewport(
     down: { x: number; y: number } | null = null,
     frame: number;
   function sizing() {
+    dirty = true;
     const w = container.clientWidth,
       h = container.clientHeight;
     if (!w || !h) return;
@@ -128,6 +137,7 @@ export function createViewport(
       mode === 'sketch' ? undefined : standardView ? THREE.MOUSE.PAN : THREE.MOUSE.ROTATE;
   }
   function reportCamera() {
+    dirty = true;
     const direction = camera.position.clone().sub(controls.target).normalize();
     const ortho = camera instanceof THREE.OrthographicCamera;
     let view =
@@ -309,12 +319,19 @@ export function createViewport(
   renderer.domElement.addEventListener('pointerdown', pointerDown);
   renderer.domElement.addEventListener('pointerup', pointerUp);
   renderer.domElement.addEventListener('pointercancel', cancel);
+  const contextRestored = () => {
+    dirty = true;
+  };
+  renderer.domElement.addEventListener('webglcontextrestored', contextRestored);
   const resize = new ResizeObserver(sizing);
   resize.observe(container);
   function animate() {
     frame = requestAnimationFrame(animate);
     controls.update();
-    renderer.render(scene, camera);
+    if (dirty) {
+      renderer.render(scene, camera);
+      dirty = false;
+    }
   }
   animate();
   return {
@@ -327,11 +344,12 @@ export function createViewport(
       fit();
     },
     select(id: string | null) {
-      meshes.forEach((m) =>
-        m.material.color.setHex(
-          m.userData.id === id ? 0xe4bca6 : m instanceof THREE.Mesh ? 0xd7ded4 : 0x69766c,
-        ),
-      );
+      if (id === selectedId) return;
+      const previous = selectedId ? byId.get(selectedId) : undefined;
+      previous?.material.color.setHex(previous instanceof THREE.Mesh ? 0xd7ded4 : 0x69766c);
+      if (id) byId.get(id)?.material.color.setHex(0xe4bca6);
+      selectedId = id;
+      dirty = true;
     },
     mode(next: ToolMode, plane: PlaneName = 'XY') {
       mode = next;
@@ -344,6 +362,10 @@ export function createViewport(
     fit,
     projection,
     lines(sketches: { points: Point2[]; plane?: string }[], draft: Point2[], plane: PlaneName) {
+      const signature = JSON.stringify([sketches, draft, plane]);
+      if (signature === lineSignature) return;
+      lineSignature = signature;
+      dirty = true;
       while (lines.children.length) {
         const l = lines.children[0];
         lines.remove(l);
@@ -373,6 +395,7 @@ export function createViewport(
       renderer.domElement.removeEventListener('pointerdown', pointerDown);
       renderer.domElement.removeEventListener('pointerup', pointerUp);
       renderer.domElement.removeEventListener('pointercancel', cancel);
+      renderer.domElement.removeEventListener('webglcontextrestored', contextRestored);
       disposeObject(scene);
       renderer.dispose();
       renderer.domElement.remove();
