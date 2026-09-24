@@ -74,6 +74,7 @@ const statuses: Record<string, number> = {
   TARGET_MISMATCH: 409,
   CONTROLLER_BUSY: 409,
   PROJECT_BUSY: 409,
+  WORKSPACE_CAPACITY: 409,
   STALE_REFERENCE: 409,
 };
 export async function startServer({

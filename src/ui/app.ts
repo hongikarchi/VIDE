@@ -1,3 +1,4 @@
+import { requestConflict } from '../contracts/request-scope.ts';
 import { draftSnapshot, restoreDraft, restoreSavedDraft } from './draft-storage.ts';
 import { z } from 'zod';
 import { element as $, append as el, readableError } from './elements.ts';
@@ -56,6 +57,8 @@ function currentProject() {
   return project;
 }
 let state = initial();
+let foregroundRequest: { id: string; selected: typeof selectedResult; draft: string } | undefined;
+const focusDraft = () => JSON.stringify({ draft: draftSnapshot(state), points });
 initializeWorkspacePanels();
 let tool: 'select' | 'pin' | 'sketch' = 'select',
   points: Point2[] = [],
@@ -379,13 +382,12 @@ function render(rebuildRequests = true) {
       ? '로컬 작업 공간 · ' + project.name
       : '연결 중';
   sidebar();
-  $('request').disabled =
-    !ready ||
-    !project ||
-    busy ||
-    state.messages.some((m) => ['queued', 'running'].includes(m.request?.state)) ||
-    !!validate(state);
-  $('request').title = validate(state) || '보내기 · Ctrl+Enter';
+  const conflict = requestConflict(
+    { ...state, id: '__draft__', baseRequestId: state.baseRequestId ?? null },
+    state.messages.map((entry) => entry.request),
+  );
+  $('request').disabled = !ready || !project || busy || !!conflict || !!validate(state);
+  $('request').title = validate(state) || (conflict && errors[conflict]) || '보내기 · Ctrl+Enter';
   draw();
 }
 function sidebar() {
@@ -555,8 +557,11 @@ $('request').onclick = async () => {
   busy = true;
   render();
   const input = { ...packet(state), id: crypto.randomUUID() };
+  const projectId = currentProject().id,
+    original = state;
   try {
-    const request = await requestData(`/projects/${currentProject().id}/requests`, 'POST', input);
+    const request = await requestData(`/projects/${projectId}/requests`, 'POST', input);
+    if (project?.id !== projectId || state !== original) return;
     state.messages.push(requestMessage(request));
     state.body = '';
     state.instructions = [];
@@ -566,8 +571,10 @@ $('request').onclick = async () => {
     state.linkedTargets = undefined;
     state.coordinateBasis = undefined;
     $('body').value = '';
+    if (selectedResult === undefined) selectedResult = displayedResult ?? null;
+    foregroundRequest = { id: request.id, selected: selectedResult, draft: focusDraft() };
     renderMessages();
-    void poll(request.id);
+    void poll(request.id, projectId, original);
   } catch (cause) {
     const error = readableError(cause);
     message(errors[error.code ?? ''] || error.message);
@@ -576,16 +583,17 @@ $('request').onclick = async () => {
     render();
   }
 };
-async function poll(id: string) {
+async function poll(id: string, projectId = currentProject().id, original = state) {
+  if (project?.id !== projectId || state !== original) return;
+  if (selectedResult === undefined) selectedResult = displayedResult ?? null;
   try {
-    const projectId = currentProject().id;
     const request = await requestData(`/projects/${projectId}/requests/${id}`);
     const children = await Promise.all(
       (request.result?.targetResults || []).map((target) =>
         requestData(`/projects/${projectId}/requests/${target.requestId}`),
       ),
     );
-    if (project?.id !== projectId) return;
+    if (project?.id !== projectId || state !== original) return;
     for (const child of children) {
       const existing = state.messages.find((message) => message.id === child.id);
       if (existing) existing.request = child;
@@ -593,12 +601,18 @@ async function poll(id: string) {
     }
     const m = state.messages.find((x) => x.id === id);
     if (m) m.request = request;
-    if (request.result?.hostExecuted) selectedResult = request.id;
+    if (request.result?.hostExecuted && foregroundRequest?.id === id) {
+      if (foregroundRequest.selected === selectedResult && foregroundRequest.draft === focusDraft())
+        selectedResult = request.id;
+      foregroundRequest = undefined;
+    }
     renderMessages();
     render();
-    if (['queued', 'running'].includes(request.state)) setTimeout(() => poll(id), 1200);
+    if (['queued', 'running'].includes(request.state))
+      setTimeout(() => poll(id, projectId, original), 1200);
   } catch (cause) {
     const error = readableError(cause);
+    if (project?.id !== projectId || state !== original) return;
     message('작업 상태 연결이 끊겼습니다. 새로고침하면 저장된 기록을 다시 읽습니다.');
   }
 }

@@ -1,3 +1,4 @@
+import { requestConflict } from '../contracts/request-scope.ts';
 import { requestInputSchema, requestStateSchema } from '../contracts/workspace.ts';
 import { DomainError } from './store.ts';
 import type { Store } from './store.ts';
@@ -112,17 +113,6 @@ export class Workspace {
         }
       }
     }
-    if (
-      input.permission === 'candidate' &&
-      this.list(projectId).some(
-        (r) =>
-          r.state === 'unknown' &&
-          (targets
-            ? targets.some((t) => t.host === (r.input.host || 'rhino'))
-            : (r.input.host || 'rhino') === target),
-      )
-    )
-      fail('HOST_RESULT_UNRESOLVED');
     const baseline = targets ? undefined : this.basis(projectId, input);
     if (!targets && input.baseRequestId && !baseline?.result?.hostExecuted) fail('STALE_REFERENCE');
     if (baseline && (baseline.result?.host || 'rhino') !== target) fail('TARGET_MISMATCH');
@@ -147,14 +137,8 @@ export class Workspace {
       )
         fail('STALE_REFERENCE');
     }
-    if (
-      this.store.db
-        .prepare(
-          "SELECT id FROM workspace_requests WHERE projectId=? AND state IN ('queued','running')",
-        )
-        .get(projectId)
-    )
-      fail('PROJECT_BUSY');
+    const conflict = requestConflict(input, this.list(projectId));
+    if (conflict) fail(conflict);
     this.store.db
       .prepare('INSERT INTO workspace_requests VALUES(?,?,?,?,?,?)')
       .run(input.id, projectId, serialized, 'queued', null, new Date().toISOString());
