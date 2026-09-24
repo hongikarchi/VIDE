@@ -31,7 +31,12 @@ try {
   await page.route('**/requests', async (route) => {
     if (route.request().method() !== 'POST') return route.continue();
     const input = route.request().postDataJSON();
-    const request = { id: input.id, input, state: 'running', result: { phase: 'ai' } };
+    const request = {
+      id: input.id,
+      input,
+      state: 'running',
+      result: { phase: 'host', progress: { queries: 2, attempts: 3, completed: 2 } },
+    };
     pending.set(input.id, request);
     await route.fulfill({ json: request });
   });
@@ -46,6 +51,10 @@ try {
   await page.locator('#body').fill('First independent document');
   await page.locator('#request').click();
   await page.waitForFunction(() => document.querySelector('#body').value === '');
+  await page.waitForFunction(() =>
+    document.querySelector('#active-work').textContent.includes('사본 저장 검증 2단계'),
+  );
+  assert.match(await page.locator('#active-work').textContent(), /조회 2회.*실행 3\/12/s);
   await page.locator('#body').fill('Second independent document');
   assert.equal(await page.locator('#request').isEnabled(), true);
   await page.locator('#request').click();

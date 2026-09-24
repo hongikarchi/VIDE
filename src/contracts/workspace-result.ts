@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { requestStateSchema } from './workspace.ts';
+import { requestStateSchema, executionProgressSchema } from './workspace.ts';
 // Fields consumed by the workspace UI. Unknown host metadata is preserved for later adapters.
 const scene = z
   .object({
@@ -29,6 +29,7 @@ export const workspaceResultSchema = z
     hostExecuted: z.boolean().optional(),
     host: z.enum(['rhino', 'zwcad']).optional(),
     phase: z.string().optional(),
+    progress: executionProgressSchema.optional(),
     text: z.string().optional(),
     code: z.string().optional(),
     dwgEditMode: z.string().nullish(),

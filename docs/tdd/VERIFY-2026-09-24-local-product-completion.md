@@ -2,7 +2,7 @@
 id: VERIFY-2026-09-24-local-product-completion
 title: 로컬 제품 완결 · 실제 왕복 및 확장 검수
 status: review
-version: 0.7
+version: 0.8
 updated: 2026-09-24
 owner: agent:codex
 related: [PLAN-02, AC-07, AC-08, AC-09, AC-10, AC-24, AC-25, AC-32, AC-33, AC-34]
@@ -81,6 +81,13 @@ related: [PLAN-02, AC-07, AC-08, AC-09, AC-10, AC-24, AC-25, AC-32, AC-33, AC-34
 
 - 실제 Rhino Curve·Extrusion·Mesh·Point의 후보 이동(월드 10/20/30 m)·사용자 문자열 수정→소유 편집 창 적용→재취득→독립 재열기 통과. 객체 유형·native ID·속성·수량·이동 좌표를 대조했다. `owned-editor-types.mjs`, 증거 `.vide/editor-types/d0c2e6ac-cd53-4dc0-8d46-3ddd0c1049b4/result.json`. 기본 호스트의 수동 편집/저장 UI, 그룹·재질·관계 보존의 일반화는 이 시험에 포함하지 않는다.
 - Sync 추가 회귀: 새 박스 1개(체적 6)만 계산하고 기존 3객체는 재사용했다. 기존 객체의 Level 문자열 변경도 취득 결과에 반영됐으며 기하가 같아 측정을 재사용했다. 앞선 캐시 시나리오 전체와 함께 통과했다. 증거 `.vide/worker-measurements/4462c559-5449-4b0f-abc9-6191f607e70c/result.json`.
+
+## 실제 SDK 진행 표시 — L6 일부
+
+- 양쪽 SDK에서 조회 완료 2회·실행 시도 3회·저장 검증 2단계를 구분했다. 첫 컴파일 실패는 완료로 세지 않고, 이후 두 성공과 공급자 오류 뒤 불명확 결과의 마지막 진행값을 유지한다. `tests/server/sdk-execution.test.mjs`, `zwcad-sdk-execution.test.mjs`의 성공/실패 4개 회귀 통과.
+- 첫 저장 이후의 조회·응답 진행은 host phase를 유지해 재시작 시 결과 확인 경로를 잃지 않도록 했다. 이 값은 작업 사본의 저장 검증이지 원본 적용 완료가 아니다.
+- 실제 Chromium에서 `조회 2회 · 실행 3/12 · 사본 저장 검증 2단계` 표시와 기존 독립 요청/지연 응답/새 초안 보존이 함께 통과했다(`browser-concurrent-work.mjs`). 화면 시험은 결정적 HTTP 응답 대역이며 구독 모델 작업 완료율 시험은 아니다. 타입 검사와 웹 빌드 통과.
+- 남음: 호출·시간 상한의 사용자 조절, 중단 원인별 재개, 부분 완료 후보 탐색의 전체 UI 연결. 고정 12회 표시는 현재 호스트 실행 상한이며 전체 작업 단계 수가 아니다.
 
 ## 남은 검증
 

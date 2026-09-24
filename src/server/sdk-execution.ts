@@ -208,9 +208,12 @@ export class SdkExecution {
       uncertain = false,
       pending: Promise<unknown> | undefined,
       attempts = 0,
+      queries = 0,
       currentOperation: string | undefined;
     let diagnostic: { diagnosticId?: string; exceptionType?: string } = {};
+    const progress = () => ({ queries, attempts, completed: revision });
     const intent = () => ({
+      progress: progress(),
       ...diagnostic,
       phase: 'host',
       hostExecuted: false,
@@ -234,12 +237,20 @@ export class SdkExecution {
       const handlers: {
         query: () => Promise<unknown>;
         execute?: (args: { code: string }) => Promise<unknown>;
-      } = { query: () => worker!.query() };
+      } = {
+        query: async () => {
+          const result = await worker!.query();
+          queries++;
+          update({ ...intent(), phase: last ? 'host' : 'query' });
+          return result;
+        },
+      };
       if (input.permission === 'candidate')
         handlers.execute = async ({ code }) => {
           if (signal.aborted) throw failure('CANCELLED');
           if (uncertain) throw failure('HOST_RESULT_UNKNOWN');
-          if (++attempts > 12) throw failure('HOST_REJECTED');
+          if (attempts >= 12) throw failure('HOST_REJECTED');
+          attempts++;
           const operationId = randomUUID();
           currentOperation = operationId;
           // Persist intent before the controller sends a write. A crash cannot become a safe retry.
@@ -277,7 +288,7 @@ export class SdkExecution {
             ) {
               uncertain = false;
               currentOperation = last?.operationId;
-              if (last) update({ ...intent(), revision });
+              update({ ...intent(), revision, phase: last ? 'host' : 'model' });
               return receipt;
             }
             diagnostic = {
@@ -311,17 +322,19 @@ User request: ${input.body || '첨부한 설계 문맥을 검토해 주세요.'}
         {
           signal,
           onProgress: () => {
-            if (!last && !uncertain) update({ phase: 'model', hostExecuted: false });
+            if (!uncertain) update({ ...intent(), phase: last ? 'host' : 'model' });
           },
         },
       );
       if (uncertain) throw failure('HOST_RESULT_UNKNOWN');
       if (signal.aborted) throw failure(last ? 'HOST_RESULT_UNKNOWN' : 'CANCELLED');
-      if (!last) return { ...response, hostExecuted: false, executionMode: 'sdk' };
+      if (!last)
+        return { ...response, progress: progress(), hostExecuted: false, executionMode: 'sdk' };
       const model = await worker.exportModel();
       return {
         ...response,
         ...model,
+        progress: progress(),
         changes: last.changes,
         filename: last.filename,
         fileHash: last.fileHash,

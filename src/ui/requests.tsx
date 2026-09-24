@@ -69,11 +69,22 @@ function ActiveWork({ messages, reason, intervene }: ActiveProps) {
                   ? '호스트 생성·저장 검증'
                   : request.result?.phase === 'stopping'
                     ? '중단 확인 중'
-                    : 'AI 요청 처리';
+                    : request.result?.phase === 'query'
+                      ? '호스트 조회 완료 · 다음 단계 처리'
+                      : request.result?.phase === 'starting-host'
+                        ? '작업 사본 준비'
+                        : 'AI 요청 처리';
         return (
           <div key={message.id}>
             <strong>{message.body || '첨부 문맥 검토'}</strong>
             <small>{phase}</small>
+            {request.result?.progress && (
+              <small>
+                조회 {request.result.progress.queries}회
+                {request.result.progress.attempts > 0 &&
+                  ` · 실행 ${request.result.progress.attempts}/12 · 사본 저장 검증 ${request.result.progress.completed}단계`}
+              </small>
+            )}
             {intervene &&
               ['queued', 'running'].includes(request.state) &&
               request.result?.phase !== 'waiting' && (

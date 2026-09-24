@@ -301,3 +301,50 @@ test('SDK policy rejection permits correction but runtime diagnostic remains unk
     assert.equal(calls, 2);
     assert.equal(updates.at(-1).diagnosticId, diagnosticId);
   }));
+
+for (const failAfterWrite of [false, true])
+  test(
+    'Rhino progress counts observed queries, attempts and verified writes; fail=' + failAfterWrite,
+    () =>
+      fixture(async ({ sdk, task, worker, scope }) => {
+        const updates = [];
+        let calls = 0;
+        const original = worker.execute;
+        worker.execute = async (...args) => {
+          calls++;
+          if (calls === 1) return { ok: false, code: 'COMPILE_ERROR', diagnostics: ['fixture'] };
+          return { ...(await original(...args)), revision: calls - 1 };
+        };
+        const running = sdk.run({
+          ...task,
+          update: (value) => updates.push(value),
+          provider: () => ({
+            run: async (_context, callbacks) => {
+              await scope().handlers.query();
+              assert.deepEqual(updates.at(-1).progress, { queries: 1, attempts: 0, completed: 0 });
+              await scope().handlers.execute({ code: 'invalid' });
+              assert.deepEqual(updates.at(-1).progress, { queries: 1, attempts: 1, completed: 0 });
+              await scope().handlers.execute({ code: 'first' });
+              await scope().handlers.query();
+              await scope().handlers.execute({ code: 'second' });
+              callbacks.onProgress({ state: 'running' });
+              assert.equal(
+                updates.at(-1).phase,
+                'host',
+                'Confirmed writes must remain recoverable after restart',
+              );
+              assert.deepEqual(updates.at(-1).progress, { queries: 2, attempts: 3, completed: 2 });
+              if (failAfterWrite) throw new Error('provider stopped after write');
+              return { text: 'done' };
+            },
+          }),
+        });
+        if (failAfterWrite)
+          await assert.rejects(running, (error) => {
+            assert.equal(error.code, 'HOST_RESULT_UNKNOWN');
+            assert.deepEqual(error.intent.progress, { queries: 2, attempts: 3, completed: 2 });
+            return true;
+          });
+        else assert.deepEqual((await running).progress, { queries: 2, attempts: 3, completed: 2 });
+      }),
+  );

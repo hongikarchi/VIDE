@@ -78,9 +78,21 @@ export const requestInputSchema = z
   });
 export type RequestInput = z.infer<typeof requestInputSchema>;
 
+export const executionProgressSchema = z
+  .object({
+    queries: z.number().int().min(0).max(30),
+    attempts: z.number().int().min(0).max(12),
+    completed: z.number().int().min(0).max(12),
+  })
+  .refine((value) => value.completed <= value.attempts);
+export type ExecutionProgress = z.infer<typeof executionProgressSchema>;
+
 // Only the fields consumed by the work summary, not the full host result.
 export interface WorkSummary {
   id: string;
   body: string;
-  request?: { state: RequestState; result?: { phase?: string; code?: string } | null };
+  request?: {
+    state: RequestState;
+    result?: { phase?: string; code?: string; progress?: ExecutionProgress } | null;
+  };
 }
