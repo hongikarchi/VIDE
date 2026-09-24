@@ -29,6 +29,7 @@ try {
     source: { filename: model.filename, fileHash: model.fileHash },
   });
   const before = await editor.inspectEditor();
+  console.log(JSON.stringify({ stage: 'opened', readOnly: before.readOnly }));
   assert.equal(before.objectCount, 1);
   assert.equal(before.units, 'Meters');
   const rejected = await editor.execute(randomUUID(), 0, 'doc.Objects.Clear();');
@@ -37,6 +38,9 @@ try {
   const captured = await editor.captureEditor(randomUUID());
   assert.equal(captured.documentHash, before.documentHash);
   const after = await editor.inspectEditor();
+  console.log(JSON.stringify({ stage: 'captured', readOnly: after.readOnly }));
+  assert.equal(before.readOnly, false);
+  assert.equal(after.readOnly, false);
   assert.equal(after.documentHash, before.documentHash);
   assert.equal(after.modified, before.modified);
   assert.equal(

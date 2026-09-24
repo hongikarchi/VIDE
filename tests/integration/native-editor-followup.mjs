@@ -60,9 +60,18 @@ try {
   // Allow SaveAs to release its file before the separate native reader opens it.
   await new Promise((resolve) => setTimeout(resolve, 1500));
   const after = await editor.inspectEditor();
+  console.log(
+    JSON.stringify({ stage: 'saved', readOnly: after.readOnly, modified: after.modified }),
+  );
+  if (process.argv.includes('--inspect-save'))
+    await new Promise((resolve) => setTimeout(resolve, 15000));
   assert.equal(after.modified, false);
   assert.notEqual(after.documentHash, before.documentHash);
   const captured = await editor.captureEditor(randomUUID());
+  const afterCapture = await editor.inspectEditor();
+  console.log(JSON.stringify({ stage: 'captured', readOnly: afterCapture.readOnly }));
+  if (process.argv.includes('--inspect-save'))
+    await new Promise((resolve) => setTimeout(resolve, 15000));
   const hash = createHash('sha256')
     .update(await readFile(saved))
     .digest('hex');
@@ -92,6 +101,9 @@ try {
     nativeIdentityPreserved: true,
     attributesPreserved: true,
     volume: actual.volume,
+    readOnlyAtOpen: before.readOnly,
+    readOnlyAfterSave: after.readOnly,
+    readOnlyAfterCapture: afterCapture.readOnly,
   };
   await writeFile(join(directory, 'result.json'), JSON.stringify(evidence, null, 2));
   console.log(JSON.stringify(evidence));

@@ -33,7 +33,7 @@ internal sealed class EditorExecutor(RhinoDoc document, string directory)
         if (method == "verifyEditorCapture") return VerifyCapture(filename);
         if (File.Exists(filename)) throw new InvalidOperationException("OPERATION_CONFLICT");
         var fingerprint = Fingerprint();
-        var originalPath = document.Path; var originalName = document.Name; var modified = document.Modified;
+        var originalPath = document.Path; var originalName = document.Name; var modified = document.Modified; var readOnly = document.IsReadOnly;
         var selectedIds = document.Objects.GetSelectedObjects(false, false).Select(obj => obj.Id.ToString()).ToArray();
         var options = new Rhino.FileIO.FileWriteOptions { SuppressAllInput = true, SuppressDialogBoxes = true,
             UpdateDocumentPath = false, WriteSelectedObjectsOnly = false, IncludePreviewImage = false };
@@ -41,7 +41,7 @@ internal sealed class EditorExecutor(RhinoDoc document, string directory)
         Stage("writing");
         using (options) { if (!document.Write3dmFile(filename, options)) throw new InvalidOperationException("CAPTURE_FAILED"); }
         Stage("written");
-        if (document.Path != originalPath || document.Name != originalName || document.Modified != modified || Fingerprint() != fingerprint)
+        if (document.Path != originalPath || document.Name != originalName || document.Modified != modified || document.IsReadOnly != readOnly || Fingerprint() != fingerprint)
             throw new InvalidOperationException("HOST_RESULT_UNKNOWN");
         File.WriteAllText(filename + ".capture.json", JsonSerializer.Serialize(new { operation, stage = "written", documentHash = fingerprint, name = originalName ?? "Untitled", units = document.ModelUnitSystem.ToString(), selectedIds }));
         return new { ok = true, pending = true };
@@ -64,7 +64,7 @@ internal sealed class EditorExecutor(RhinoDoc document, string directory)
 
     private object Inspect() => new { ok = true, documentId = document.RuntimeSerialNumber, name = document.Name ?? "Untitled",
         units = document.ModelUnitSystem.ToString(), objectCount = document.Objects.GetObjectList(ObjectType.AnyObject).Count(),
-        modified = document.Modified, documentHash = Fingerprint(),
+        modified = document.Modified, readOnly = document.IsReadOnly, documentHash = Fingerprint(),
         selectedIds = document.Objects.GetSelectedObjects(false, false).Select(obj => obj.Id.ToString()).ToArray() };
 
     private string Fingerprint()

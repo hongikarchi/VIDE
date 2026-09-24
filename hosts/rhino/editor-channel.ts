@@ -23,6 +23,7 @@ const editorSnapshotSchema = z.object({
   units: z.string(),
   objectCount: z.number().int().nonnegative(),
   modified: z.boolean(),
+  readOnly: z.boolean().optional(),
   documentHash: z.string().regex(/^[a-f0-9]{64}$/),
   selectedIds: z.array(z.string().uuid()),
 });

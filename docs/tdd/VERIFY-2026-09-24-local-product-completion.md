@@ -2,7 +2,7 @@
 id: VERIFY-2026-09-24-local-product-completion
 title: 로컬 제품 완결 · 실제 왕복 및 확장 검수
 status: review
-version: 0.4
+version: 0.5
 updated: 2026-09-24
 owner: agent:codex
 related: [PLAN-02, AC-07, AC-08, AC-09, AC-10, AC-24, AC-25, AC-32, AC-33, AC-34]
@@ -21,7 +21,7 @@ related: [PLAN-02, AC-07, AC-08, AC-09, AC-10, AC-24, AC-25, AC-32, AC-33, AC-34
 
 ## 현재 관찰
 
-코드 대조 결과 프로젝트 전체의 단일 실행 잠금이 남아 있어 서로 다른 문서의 독립 요청도 막힌다. SPEC-02.14 및 PRD AC-25에 맞춰 대상 기준의 경합 검사로 변경하고, 명시하지 않은 기본 대상의 모호성은 별도로 거절해야 한다. 구현 전 SPEC/ARCH에서 정확한 처리 규칙을 보완한다.
+착수 때 확인한 프로젝트 전체 잠금은 대상별 경합 검사로 교체했다. SPEC-02.14 및 ARCH의 현재 계약을 따르며, 아래의 계약·브라우저·실호스트 증거를 구분한다.
 
 ## 확인된 결과
 
@@ -60,6 +60,15 @@ related: [PLAN-02, AC-07, AC-08, AC-09, AC-10, AC-24, AC-25, AC-32, AC-33, AC-34
 - 앞선 이벤트 기반 실험은 직접 ObjectTable.Transform의 재사용 예상에서 실패했다(실측 계산 3개/재사용 1개). 이벤트를 근거로 한 구현은 제거했고, 정확한 기하 일치로 확인한 평행이동만 채택했다. 회전 재사용·사용자 Sync 전체 캐시 연결은 남아 있다.
 - Computer Use로 소유 시험 창에서 Rhino 기본 Move를 월드 X +1 m, Save As를 수행했다. 독립 실행본 재열기에서 기존 native ID/속성·체적 48 보존 통과. 증거: `.vide/native-editor-followup/eb88649f-2ade-4bb7-931d-9c76126014e0/result.json`. Save As 뒤 읽기 전용 안내도 재현됐으므로 저장 성공과 안내 문제를 분리한다. 이 안내의 원인은 아직 해결하지 않았다.
 
+## 실호스트 병렬 및 저장 상태 진단
+
+- `native-concurrent-work.mjs`: 같은 프로젝트의 Rhino·ZWCAD가 모두 실제 query를 완료하고 동시에 running인 것을 확인한 뒤 각각 생성했다. Rhino 체적 24, ZWCAD 면적 6, 서로 다른 대상·파일과 두 succeeded 결과 통과. 증거: `.vide/native-concurrent-work/26ff7771-24f5-4a89-86c0-96ec24c8f995/result.json`. 공급자는 결정적 대역이며 구독 모델의 동시 추론 성능을 측정한 것은 아니다.
+- `native-concurrent-work.mjs --cancel-rhino`: 두 실제 호스트의 query 완료 후 Rhino 요청만 취소했다. Rhino cancelled·ZWCAD succeeded(면적 6) 통과. 증거: `.vide/native-concurrent-work/f978666c-45fb-486d-bc94-e106eafaed5f/result.json`. 쓰기 이전 취소이며 진행 중인 네이티브 연산 강제 중단 검증은 아니다. 첫 대역은 일반 Error를 던져 failed로 판정됐고, 실제 공급자 계약인 CANCELLED 코드로 맞춘 뒤 재검증했다.
+- `native-editor-followup.mjs --inspect-save`: 열기 readOnly=false → 기본 Save As 직후 true → capture 후 true. ID·속성·체적 48·월드 X 1 m 이동·독립 재열기는 통과했다. 증거: `.vide/native-editor-followup/3109942e-7bbe-47b8-9551-dcb853cd0176/result.json`. 따라서 경고는 capture 이전부터 발생한다.
+- VIDE 플러그인을 로드하지 않는 새 Rhino 창의 대조 시험도 기본 Save As 뒤 readOnly=true와 동일 경고를 재현했다. `rhino-saveas-control.mjs --command`, 증거 `.vide/rhino-saveas-control/71a3c045-dcba-46f6-ae8d-c1edbb773f47/result.json`. 현재 Rhino 프로필/설치 플러그인을 포함한 환경에서의 결과이며 Rhino 자체 결함으로 단정하지 않는다. SDK SaveAs만 호출한 대조군은 readOnly=false지만 Path=null·Modified=true여서 사용자 기본 저장과 동등하지 않다(`97bf2fc8-5cef-416b-897c-8bb8adb923d9`). 경고 숨김·사용자 설정 변경은 하지 않았다.
+- 독립 대조 시험 초기 3회는 Windows 시작 인자 인용이 달라 스크립트가 시작되지 않아 시간 초과했다. 기존 worker와 동일하게 windowsVerbatimArguments를 적용한 후에만 위 결과를 얻었다. 시간 초과를 저장 실패 증거로 쓰지 않는다.
+- 진단 응답에 optional readOnly를 추가하고, capture 전후 이 값도 보존 검사한다. 새 빌드의 `owned-editor.mjs`에서 열기/취득 readOnly=false와 원본 해시·체적 24 보존 통과(`.vide/owned-editor/282a7543-6153-46e9-ab7a-e0820badc8dc/result.json`). 지원되지 않는 구 실행본의 누락 값을 false로 해석하지 않는다.
+
 ## 남은 검증
 
-실호스트 병렬/중단·원본 충돌 및 개입 후 부분 완료분의 세밀한 재사용, Rhino 기본 도구/Save As, L3~L6는 완료 처리하지 않는다. 현재까지의 시험 성공을 전체 제품 완결로 해석하지 않는다. 이후 Jev·다중 계정 CLI 연구 검토/후속 계획은 이 묶음 뒤에 수행한다.
+독립 실호스트 병렬은 위 합성 범위에서 통과했다. 네이티브 연산 중 중단·원본 충돌 및 개입 후 부분 완료분의 세밀한 재사용, Rhino Save As의 환경 원인 해소, L3~L6 전체는 완료 처리하지 않는다. 현재까지의 시험 성공을 전체 제품 완결로 해석하지 않는다. 이후 Jev·다중 계정 CLI 연구 검토/후속 계획은 이 묶음 뒤에 수행한다.
