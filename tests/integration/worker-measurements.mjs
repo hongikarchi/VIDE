@@ -132,6 +132,47 @@ try {
     })),
   );
   assert.deepEqual(repeated.measurementStats, { measuredObjects: 0, reusedObjects: 3 });
+  worker = await launchRhinoWorker({
+    ...options,
+    directory: join(directory, 'added'),
+    source: { filename: repeated.filename, fileHash: repeated.fileHash },
+  });
+  const added = await worker.execute(
+    randomUUID(),
+    0,
+    `
+    var a=new Rhino.DocObjects.ObjectAttributes();a.Name="fresh";a.SetUserString("vide-id","fresh");
+    doc.Objects.AddBox(new Box(new BoundingBox(0,0,0,1,2,3)),a);
+    var old=doc.Objects.GetObjectList(Rhino.DocObjects.ObjectType.AnyObject).Single(o=>o.Name=="New name");
+    var attributes=old.Attributes.Duplicate();attributes.SetUserString("Level","L03");
+    doc.Objects.ModifyAttributes(old.Id,attributes,true);
+  `,
+  );
+  assert.equal(added.ok, true, JSON.stringify(added));
+  await worker.stop();
+  worker = undefined;
+  const addedImport = await sdk.importFile(
+    added.filename,
+    () => {},
+    repeated.scene.map(({ id, geometryHash, area, volume, length }) => ({
+      id,
+      geometryHash,
+      area,
+      volume,
+      length,
+    })),
+  );
+  assert.deepEqual(addedImport.measurementStats, { measuredObjects: 1, reusedObjects: 3 });
+  assert.ok(Math.abs(addedImport.scene.find((row) => row.id === 'fresh').volume - 6) < 1e-8);
+  assert.ok(
+    addedImport.scene
+      .find((row) => row.id === 'rename')
+      .attributes64.some(
+        ([key, value]) =>
+          Buffer.from(key, 'base64').toString() === 'Level' &&
+          Buffer.from(value, 'base64').toString() === 'L03',
+      ),
+  );
   const evidence = {
     passed: true,
     directory,
@@ -146,6 +187,8 @@ try {
     deletedExcluded: true,
     importedGeometryCacheVerified: true,
     repeatedImportCalculated: 0,
+    addedImportCalculated: 1,
+    attributeOnlyImportReused: true,
   };
   await writeFile(join(directory, 'result.json'), JSON.stringify(evidence, null, 2));
   console.log(JSON.stringify(evidence));

@@ -2,7 +2,7 @@
 id: VERIFY-2026-09-24-local-product-completion
 title: 로컬 제품 완결 · 실제 왕복 및 확장 검수
 status: review
-version: 0.6
+version: 0.7
 updated: 2026-09-24
 owner: agent:codex
 related: [PLAN-02, AC-07, AC-08, AC-09, AC-10, AC-24, AC-25, AC-32, AC-33, AC-34]
@@ -75,7 +75,12 @@ related: [PLAN-02, AC-07, AC-08, AC-09, AC-10, AC-24, AC-25, AC-32, AC-33, AC-34
 - 실제 Rhino 파일 가져오기: 이전 4객체 캐시와 비교해 형상이 변경된 2객체만 계산하고 무변경 1객체를 재사용했다. 삭제 객체는 결과에서 제외됐다. 그 결과를 다시 가져오면 계산 0개/재사용 3개다. `worker-measurements.mjs`, 증거 `.vide/worker-measurements/beb84cb2-bdad-456d-a24b-3ea4f9a3d141/result.json`.
 - 실제 Chromium → 소유 Rhino 편집 창 → 후보 적용 → Sync: 체적 24→48, 변경 객체 계산 1개/재사용 0개. 제어기 재시작 뒤 같은 문서를 다시 Sync하면 계산 0개/재사용 1개이고 체적은 유지됐다. `browser-owned-editor.mjs`, 증거 `.vide/browser-owned-editor/a3d2c1a5-db51-4dc2-b1e4-dea6b3f87882/result.json`. 해당 실행의 JSON에는 캐시 전용 플래그가 없지만 시험의 measurementStats assertion까지 통과했다. 이후 재현용 출력에는 전용 플래그를 추가했다. 공급자는 결정적 대역이며 구독 모델 추론 시험은 아니다.
 - 초기 네이티브 빌드는 변수 이름 충돌로 실패했고 이전 DLL로 시작한 시험도 실패했다. 변수 이름 수정·새 DLL 빌드 성공 후 위 두 시험을 재실행해 통과했다. 이전 실행은 검증 증거로 집계하지 않는다.
-- 한계: 기하 해시 생성·메시 생성 비용 자체는 남는다. Sync의 새 객체·단위 환산·Undo 복귀 조합 및 대형 모델 시간은 추가 검증 대상이다. 원본의 이동/회전은 해시가 달라지면 재계산한다. 자동 Live Sync 지원으로 확대 해석하지 않는다.
+- 한계: 기하 해시 생성·메시 생성 비용 자체는 남는다. Sync의 단위 환산·Undo 복귀 조합 및 대형 모델 시간은 추가 검증 대상이다. 원본의 이동/회전은 해시가 달라지면 재계산한다. 자동 Live Sync 지원으로 확대 해석하지 않는다.
+
+## 유형별 고정 적용 및 새 객체 측정
+
+- 실제 Rhino Curve·Extrusion·Mesh·Point의 후보 이동(월드 10/20/30 m)·사용자 문자열 수정→소유 편집 창 적용→재취득→독립 재열기 통과. 객체 유형·native ID·속성·수량·이동 좌표를 대조했다. `owned-editor-types.mjs`, 증거 `.vide/editor-types/d0c2e6ac-cd53-4dc0-8d46-3ddd0c1049b4/result.json`. 기본 호스트의 수동 편집/저장 UI, 그룹·재질·관계 보존의 일반화는 이 시험에 포함하지 않는다.
+- Sync 추가 회귀: 새 박스 1개(체적 6)만 계산하고 기존 3객체는 재사용했다. 기존 객체의 Level 문자열 변경도 취득 결과에 반영됐으며 기하가 같아 측정을 재사용했다. 앞선 캐시 시나리오 전체와 함께 통과했다. 증거 `.vide/worker-measurements/4462c559-5449-4b0f-abc9-6191f607e70c/result.json`.
 
 ## 남은 검증
 

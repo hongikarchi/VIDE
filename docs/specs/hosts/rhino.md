@@ -2,7 +2,7 @@
 id: HOST-RHINO
 title: Rhino 호스트 계약과 검증 범위
 status: review
-version: 0.15
+version: 0.16
 updated: 2026-09-24
 owner: agent:codex
 related: [SPEC-01, SPEC-02, FR-03, FR-04, AC-24, AC-38, OQ-03, OQ-10]
@@ -48,4 +48,4 @@ related: [SPEC-01, SPEC-02, FR-03, FR-04, AC-24, AC-38, OQ-03, OQ-10]
 
 ### 2.3 자체 SDK 실행기와 편집 창 적용 — 2026-09-22
 
-제품 경로를 VIDE 소유 실행본의 자체 .NET 8 플러그인으로 전환했다. 소유 프로세스 확인·토큰 인증·헤드리스 재읽기 검증을 갖추고, 구독 AI가 작성한 SDK 코드를 작업 사본에서 실행한다. VIDE에서 복사해 연 Rhino 편집 문서에 SDK 후보의 형상·사용자 문자열 수정, 추가·삭제를 반영하고 기존 GUID·무변경 객체를 보존했다. 실제 브라우저에서 영향 검토→적용→재취득과 체적 24→48을 확인했다. 실제 복합 적용 시험은 Brep와 Point다. 제어기 재시작 후 편집 창 pairing 복원과 응답 유실 영수증도 확인했다. 상세 증거는 [자체 연결 적용 검증](../../tdd/VERIFY-2026-09-22-typescript-foundation.md)의 해당 절이다.
+제품 경로를 VIDE 소유 실행본의 자체 .NET 8 플러그인으로 전환했다. 소유 프로세스 확인·토큰 인증·헤드리스 재읽기 검증을 갖추고, 구독 AI가 작성한 SDK 코드를 작업 사본에서 실행한다. VIDE에서 복사해 연 Rhino 편집 문서에 SDK 후보의 형상·사용자 문자열 수정, 추가·삭제를 반영하고 기존 GUID·무변경 객체를 보존했다. 실제 브라우저에서 영향 검토→적용→재취득과 체적 24→48을 확인했다. Brep·Point 복합 적용 뒤 독립 Curve·Extrusion·Mesh·Point의 이동/속성 후보 적용·재취득·독립 재열기도 확인했다([검수](../../tdd/VERIFY-2026-09-24-local-product-completion.md)). 그룹·재질·관계 일반화나 각 유형의 기본 호스트 수동 편집 검수는 별도다. 제어기 재시작 후 편집 창 pairing 복원과 응답 유실 영수증도 확인했다. 상세 증거는 [자체 연결 적용 검증](../../tdd/VERIFY-2026-09-22-typescript-foundation.md)의 해당 절이다.
