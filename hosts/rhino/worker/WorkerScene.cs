@@ -37,7 +37,7 @@ internal static class WorkerScene
     }
 
     // Detailed meshes/measurements are exported once for the candidate, not on every AI query.
-    internal static object Export(RhinoDoc doc, Func<RhinoObject, Measurements?>? cached = null)
+    internal static object Export(RhinoDoc doc, Func<RhinoObject, string, Measurements?>? cached = null)
     {
         var objects = new List<object>();
         var scene = new List<object>();
@@ -68,7 +68,9 @@ internal static class WorkerScene
                 if (curve.TryGetPolyline(out var polyline)) foreach (var point in polyline) AddPoint(point, line);
                 else foreach (var parameter in curve.DivideByCount(128, true) ?? []) AddPoint(curve.PointAt(parameter), line);
             }
-            var measurements = cached?.Invoke(obj);
+            var geometryOptions = new Rhino.FileIO.SerializationOptions { WriteUserData = true, WriteRenderMeshes = false, WriteAnalysisMeshes = false };
+            var geometryHash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(geometry.ToJSON(geometryOptions)))).ToLowerInvariant();
+            var measurements = cached?.Invoke(obj, geometryHash);
             if (measurements != null) reusedObjects++;
             else
             {
@@ -88,7 +90,7 @@ internal static class WorkerScene
             }
             var id = Id(obj); var name = obj.Name ?? "Object";
             objects.Add(new { id, nativeId = obj.Id.ToString(), kind = "native", name, origin });
-            scene.Add(new { id, nativeId = obj.Id.ToString(), nativeType = geometry.ObjectType.ToString(), name64 = Encode(name), origin,
+            scene.Add(new { id, nativeId = obj.Id.ToString(), nativeType = geometry.ObjectType.ToString(), geometryHash, name64 = Encode(name), origin,
                 boundsSize = new[] { bounds.Max.X - bounds.Min.X, bounds.Max.Y - bounds.Min.Y, bounds.Max.Z - bounds.Min.Z },
                 vertices, indices, line, area = measurements.Area, volume = measurements.Volume, length = measurements.Length,
                 layer64 = Encode(doc.Layers[obj.Attributes.LayerIndex].FullPath), attributes64 = attributes, attributesComplete = complete, valid = geometry.IsValid });

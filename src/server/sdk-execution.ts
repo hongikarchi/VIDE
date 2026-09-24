@@ -9,6 +9,7 @@ import { launchRhinoWorker, workerResultSchema } from '../../hosts/rhino/worker-
 import type { RequestInput } from '../contracts/workspace.ts';
 import { nativeModelSchema } from '../contracts/native-model.ts';
 import { AgentTools } from './agent-tools.ts';
+import type { GeometryMeasurement } from '../core/measurement-cache.ts';
 
 type Worker = Awaited<ReturnType<typeof launchRhinoWorker>>;
 type Receipt = Extract<Awaited<ReturnType<Worker['execute']>>, { ok: true }>;
@@ -86,7 +87,11 @@ export class SdkExecution {
     if (hash.digest('hex') !== source.fileHash) throw failure('SOURCE_CHANGED');
     return this.editors.open(source);
   }
-  async captureEditor(target: HostTarget, update: (intent: Record<string, unknown>) => void) {
+  async captureEditor(
+    target: HostTarget,
+    update: (intent: Record<string, unknown>) => void,
+    measurements: GeometryMeasurement[] = [],
+  ) {
     const captured = await this.editors.capture(target);
     const sourceDocument = {
       ...target,
@@ -98,8 +103,10 @@ export class SdkExecution {
       capturedAt: new Date().toISOString(),
     };
     try {
-      const result = await this.importFile(captured.filename, (intent) =>
-        update({ ...intent, sourceDocument }),
+      const result = await this.importFile(
+        captured.filename,
+        (intent) => update({ ...intent, sourceDocument }),
+        measurements,
       );
       return { ...result, sourceDocument };
     } catch (error) {
@@ -115,14 +122,18 @@ export class SdkExecution {
     }
   }
 
-  async importFile(filename: string, update: (intent: Record<string, unknown>) => void) {
+  async importFile(
+    filename: string,
+    update: (intent: Record<string, unknown>) => void,
+    measurements: GeometryMeasurement[] = [],
+  ) {
     const options = this.options;
     await mkdir(options.directory, { recursive: true });
     const directory = join(options.directory, randomUUID()),
       operationId = randomUUID();
     const hash = createHash('sha256');
     for await (const chunk of createReadStream(filename)) hash.update(chunk);
-    const source = { filename, fileHash: hash.digest('hex') };
+    const source = { filename, fileHash: hash.digest('hex'), geometryMeasurements: measurements };
     const intent = {
       phase: 'host',
       hostExecuted: false,

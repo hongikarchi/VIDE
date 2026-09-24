@@ -11,6 +11,10 @@ export const nativeSceneSchema = z.object({
   id: z.string(),
   nativeId: z.string().uuid(),
   nativeType: z.string(),
+  geometryHash: z
+    .string()
+    .regex(/^[a-f0-9]{64}$/)
+    .optional(),
   name64: z.string(),
   origin: point,
   boundsSize: point,

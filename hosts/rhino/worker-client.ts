@@ -74,6 +74,13 @@ interface Options {
       volume: number | null;
       length: number | null;
     }[];
+    geometryMeasurements?: {
+      id: string;
+      geometryHash: string;
+      area: number | null;
+      volume: number | null;
+      length: number | null;
+    }[];
   };
   normalizeUnits?: boolean;
 }
@@ -209,12 +216,14 @@ export async function launchRhinoWorker({
       },
       async exportModel() {
         return nativeModelSchema.parse(
-          await call(
-            'export',
-            source?.measurements && !normalizeUnits
+          await call('export', {
+            ...(source?.measurements && !normalizeUnits
               ? { measurementCache: source.measurements }
-              : {},
-          ),
+              : {}),
+            ...(source?.geometryMeasurements
+              ? { geometryMeasurementCache: source.geometryMeasurements }
+              : {}),
+          }),
         );
       },
       async execute(

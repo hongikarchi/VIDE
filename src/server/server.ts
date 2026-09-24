@@ -36,6 +36,7 @@ import { readFile, unlink } from 'node:fs/promises';
 import { Store, DomainError } from '../core/store.ts';
 import { Workspace } from '../core/workspace.ts';
 import { Execution } from './execution.ts';
+import { captureMeasurements } from '../core/measurement-cache.ts';
 import { RhinoWorkspace } from '../../hosts/rhino/workspace.ts';
 import { ZwcadWorkspace } from '../../hosts/zwcad/workspace.ts';
 import { dirname, join } from 'node:path';
@@ -261,8 +262,10 @@ export async function startServer({
               ? async () => zwcadSdk!.editors.capture(target)
               : own
                 ? async () =>
-                    sdk!.captureEditor(target, (intent) =>
-                      workspace.update(capture[1], target.id, 'running', intent),
+                    sdk!.captureEditor(
+                      target,
+                      (intent) => workspace.update(capture[1], target.id, 'running', intent),
+                      captureMeasurements(workspace.list(capture[1]), target),
                     )
                 : undefined,
             cadOwn ? 'zwcad' : 'rhino',

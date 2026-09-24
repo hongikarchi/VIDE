@@ -204,6 +204,7 @@ try {
   const final = await (await finalCapture).json();
   assert.equal(final.state, 'succeeded', JSON.stringify(final));
   assert.ok(Math.abs(final.result.scene[0].volume - 48) < 1e-8);
+  assert.deepEqual(final.result.measurementStats, { measuredObjects: 1, reusedObjects: 0 });
   assert.equal(final.result.objects[0].nativeId, result.result.objects[0].nativeId);
   if (ai)
     assert.ok(
@@ -218,6 +219,28 @@ try {
     .getByRole('button', { name: '이 후보 보기', exact: true })
     .click();
   await page.screenshot({ path: join(directory, 'applied.png') });
+  if (!ai) {
+    await app.close();
+    app = await startServer({
+      filename: join(directory, 'test.sqlite'),
+      sdkOptions: { ...options, directory, launch },
+    });
+    await page.goto(app.launchUrl);
+    await page.locator('#project-picker').selectOption(project.id);
+    await page.getByText('열린 호스트 문서', { exact: true }).click();
+    await page.locator('#refresh-documents').click();
+    await page.locator('#host-documents').selectOption(target.instance + '/' + target.documentId);
+    const recapturing = page.waitForResponse(
+      (response) =>
+        response.url().endsWith(`/projects/${project.id}/capture`) &&
+        response.request().method() === 'POST',
+    );
+    await page.locator('#capture-document').click();
+    const unchanged = await (await recapturing).json();
+    assert.equal(unchanged.state, 'succeeded', JSON.stringify(unchanged));
+    assert.deepEqual(unchanged.result.measurementStats, { measuredObjects: 0, reusedObjects: 1 });
+    assert.equal(unchanged.result.scene[0].volume, final.result.scene[0].volume);
+  }
   const evidence = {
     passed: true,
     directory,
@@ -229,6 +252,8 @@ try {
     browserRecaptured: true,
     browserPreviewApplied: true,
     controllerRestartReconnected: true,
+    changedCaptureRecomputed: true,
+    unchangedCaptureReusedAfterRestart: !ai,
     nativeIdentityPreserved: true,
     volumeBefore: 24,
     volumeAfter: 48,

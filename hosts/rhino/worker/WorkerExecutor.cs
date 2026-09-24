@@ -37,7 +37,23 @@ internal sealed class WorkerExecutor(RhinoDoc document, string directory)
                         throw new InvalidOperationException("INVALID_MEASUREMENT_CACHE");
                 }
             }
-            return WorkerScene.Export(document, obj => modelBasis.SameMeasurements(obj) && cached.TryGetValue(WorkerScene.Id(obj), out var value) ? value : null);
+            var geometryCache = new Dictionary<string, (string hash, WorkerScene.Measurements value)>();
+            if (request.TryGetProperty("geometryMeasurementCache", out var geometryValues))
+            {
+                if (geometryValues.GetArrayLength() > 500) throw new InvalidOperationException("INVALID_MEASUREMENT_CACHE");
+                foreach (var item in geometryValues.EnumerateArray())
+                {
+                    double? Read(string key) { var value = item.GetProperty(key); if (value.ValueKind == JsonValueKind.Null) return null;
+                        var number = value.GetDouble(); if (!double.IsFinite(number) || number < 0) throw new InvalidOperationException("INVALID_MEASUREMENT_CACHE"); return number; }
+                    var geometryKey = item.GetProperty("geometryHash").GetString()!;
+                    if (!System.Text.RegularExpressions.Regex.IsMatch(geometryKey, "^[a-f0-9]{64}$") ||
+                        !geometryCache.TryAdd(item.GetProperty("id").GetString()!, (geometryKey, new(Read("area"), Read("volume"), Read("length")))))
+                        throw new InvalidOperationException("INVALID_MEASUREMENT_CACHE");
+                }
+            }
+            return WorkerScene.Export(document, (obj, geometryHash) =>
+                geometryCache.TryGetValue(WorkerScene.Id(obj), out var match) && match.hash == geometryHash ? match.value :
+                modelBasis.SameMeasurements(obj) && cached.TryGetValue(WorkerScene.Id(obj), out var value) ? value : null);
         }
         if (method != "execute") throw new InvalidOperationException("UNKNOWN_METHOD");
         var operation = request.GetProperty("operationId").GetString()!;

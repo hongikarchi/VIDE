@@ -3,6 +3,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { resolve, join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { launchRhinoWorker } from '../../hosts/rhino/worker-client.ts';
+import { SdkExecution } from '../../src/server/sdk-execution.ts';
 const directory = resolve('.vide/worker-measurements', randomUUID());
 await mkdir(directory, { recursive: true });
 const options = {
@@ -96,6 +97,41 @@ try {
     false,
   );
   assert.deepEqual(removed.measurementStats, { measuredObjects: 2, reusedObjects: 1 });
+  await worker.stop();
+  worker = undefined;
+  const sdk = new SdkExecution({
+    ...options,
+    directory: join(directory, 'sync'),
+    tools: {},
+    origin: () => '',
+  });
+  const geometryMeasurements = model.scene.map(({ id, geometryHash, area, volume, length }) => ({
+    id,
+    geometryHash,
+    area,
+    volume,
+    length,
+  }));
+  const imported = await sdk.importFile(deleted.filename, () => {}, geometryMeasurements);
+  assert.deepEqual(imported.measurementStats, { measuredObjects: 2, reusedObjects: 1 });
+  assert.equal(
+    imported.scene.some((row) => row.id === 'mesh'),
+    false,
+  );
+  assert.ok(Math.abs(imported.scene.find((row) => row.id === 'keep').volume - 192) < 1e-7);
+  assert.ok(Math.abs(imported.scene.find((row) => row.id === 'resize').volume - 48) < 1e-8);
+  const repeated = await sdk.importFile(
+    imported.filename,
+    () => {},
+    imported.scene.map(({ id, geometryHash, area, volume, length }) => ({
+      id,
+      geometryHash,
+      area,
+      volume,
+      length,
+    })),
+  );
+  assert.deepEqual(repeated.measurementStats, { measuredObjects: 0, reusedObjects: 3 });
   const evidence = {
     passed: true,
     directory,
@@ -108,6 +144,8 @@ try {
     rigidStillMarkedChanged: true,
     scaleInvalidated: true,
     deletedExcluded: true,
+    importedGeometryCacheVerified: true,
+    repeatedImportCalculated: 0,
   };
   await writeFile(join(directory, 'result.json'), JSON.stringify(evidence, null, 2));
   console.log(JSON.stringify(evidence));
