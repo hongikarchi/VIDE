@@ -28,7 +28,7 @@ try {
   if (!existing.length) {
     await page.locator('#host-target').selectOption('zwcad');
     await page.locator('#model').selectOption(provider);
-    await page.locator('#effort').selectOption('default');
+    assert.equal(await page.locator('#effort-label').textContent(), '기본값');
     await page.locator('#permission').selectOption('candidate');
     await page
       .locator('#body')

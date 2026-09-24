@@ -121,6 +121,8 @@ Object.assign(errors, {
     '이 후보는 현재 원본 적용을 지원하지 않습니다. 후보 파일을 내려받거나 별도 Rhino 문서로 열어 작업을 이어가세요.',
 });
 function apiError(code: string) {
+  if (typeof window !== 'undefined' && ['UNAUTHORIZED', 'NETWORK_UNAVAILABLE'].includes(code))
+    window.dispatchEvent(new CustomEvent('vide:connection-lost', { detail: code }));
   return Object.assign(new Error(errors[code] || `요청 처리 오류 (${code})`), { code });
 }
 

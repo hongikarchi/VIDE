@@ -1,6 +1,7 @@
+import { inspectorOptions } from '../../hosts/zwcad/inspector.ts';
 import { ZwcadEditors } from '../../hosts/zwcad/editor-sessions.ts';
 import { randomUUID } from 'node:crypto';
-import { mkdir, readFile } from 'node:fs/promises';
+import { access, mkdir, readFile } from 'node:fs/promises';
 import { join, resolve, relative, isAbsolute } from 'node:path';
 import { z } from 'zod';
 import { launchZwcadWorker, zwcadReceiptSchema } from '../../hosts/zwcad/worker-client.ts';
@@ -56,6 +57,19 @@ export class ZwcadSdkExecution {
   constructor(options: Options) {
     this.options = options;
     this.editors = new ZwcadEditors(options.directory);
+  }
+  async status() {
+    const config = inspectorOptions();
+    try {
+      await Promise.all(
+        [this.options.executable || config.executable, this.options.plugin || config.plugin].map(
+          (path) => access(path),
+        ),
+      );
+      return { available: true };
+    } catch {
+      return { available: false };
+    }
   }
   async open(result: Record<string, unknown>) {
     return this.editors.open(sourceSchema.parse(result));

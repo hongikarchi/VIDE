@@ -164,7 +164,7 @@ export function chooseModel(s: DraftState, id: string) {
   if (!model) throw Error('모델을 선택하세요.');
   s.model = id;
   if (!model.efforts.includes(s.effort))
-    s.effort = model.efforts.includes('medium') ? 'medium' : model.efforts[0];
+    s.effort = model.efforts.includes('default') ? 'default' : model.efforts[0];
 }
 export function pinSelection(s: DraftState) {
   const o = objects.find((o) => o.id === s.selected);

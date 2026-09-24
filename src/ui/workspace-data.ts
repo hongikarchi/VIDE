@@ -47,5 +47,9 @@ export const providersSchema = z.array(
   z.object({ id: z.string(), available: z.boolean() }).passthrough(),
 );
 export const hostStatusSchema = z
-  .object({ available: z.boolean(), mode: z.string().optional() })
+  .object({
+    available: z.boolean(),
+    mode: z.string().optional(),
+    zwcadAvailable: z.boolean().optional(),
+  })
   .passthrough();

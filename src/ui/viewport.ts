@@ -29,6 +29,7 @@ export function createViewport(
   objects: DisplayObject[],
   onPick: (id: string, pin: boolean) => void,
   onPoint: (point: Point2) => void,
+  onCamera?: (state: { view: string; projection: 'orthographic' | 'perspective' }) => void,
 ) {
   const scene = new THREE.Scene();
   scene.background = new THREE.Color('#edf0ec');
@@ -126,6 +127,20 @@ export function createViewport(
     controls.mouseButtons.LEFT =
       mode === 'sketch' ? undefined : standardView ? THREE.MOUSE.PAN : THREE.MOUSE.ROTATE;
   }
+  function reportCamera() {
+    const direction = camera.position.clone().sub(controls.target).normalize();
+    const ortho = camera instanceof THREE.OrthographicCamera;
+    let view =
+      !ortho && direction.distanceTo(new THREE.Vector3(34, -45, 30).normalize()) < 0.001
+        ? 'axon'
+        : '';
+    if (ortho) {
+      if (direction.distanceTo(new THREE.Vector3(0, 0, 1)) < 0.001) view = 'plan';
+      else if (direction.distanceTo(new THREE.Vector3(0, -1, 0)) < 0.001) view = 'front';
+      else if (direction.distanceTo(new THREE.Vector3(1, 0, 0)) < 0.001) view = 'side';
+    }
+    onCamera?.({ view, projection: ortho ? 'orthographic' : 'perspective' });
+  }
   function activate(next: Camera, target: THREE.Vector3) {
     controls.dispose();
     camera = next;
@@ -137,11 +152,13 @@ export function createViewport(
     controls.minZoom = 0.2;
     controls.maxZoom = 20;
     controls.target.copy(target);
+    controls.addEventListener('change', reportCamera);
     configure();
     sizing();
     controls.update();
     renderer.domElement.dataset.projection =
       camera instanceof THREE.OrthographicCamera ? 'orthographic' : 'perspective';
+    reportCamera();
   }
   function fit(id?: string) {
     const targets = id ? meshes.filter((m) => m.userData.id === id) : meshes;

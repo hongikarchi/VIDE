@@ -24,7 +24,7 @@
     "preworkspace": "npm run build:web",
     "pretest": "npm run build:web",
     "prepackage:windows": "npm run build:web",
-    "test:browser": "npm run build:web && node tests/integration/browser-react-panels.mjs",
+    "test:browser": "npm run build:web && node tests/integration/browser-react-panels.mjs && node tests/integration/browser-workspace-controls.mjs",
     "build:sharing": "npm run typecheck:ui && vite build --config vite.sharing.config.ts",
     "security:install": "node tools/checks/secrets.mjs install",
     "security:check": "node tools/checks/secrets.mjs history",

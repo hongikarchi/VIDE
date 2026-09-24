@@ -2,7 +2,7 @@ interface Controls {
   body: HTMLTextAreaElement;
   'host-target': HTMLSelectElement;
   model: HTMLSelectElement;
-  effort: HTMLSelectElement;
+  effort: HTMLInputElement;
   permission: HTMLSelectElement;
   plane: HTMLSelectElement;
   'line-role': HTMLSelectElement;
@@ -14,6 +14,9 @@ interface Controls {
   'attach-menu': HTMLDetailsElement;
   'draft-menu': HTMLDetailsElement;
   request: HTMLButtonElement;
+  pin: HTMLButtonElement;
+  'add-request': HTMLButtonElement;
+  'linked-targets': HTMLButtonElement;
   'finish-sketch': HTMLButtonElement;
   'undo-point': HTMLButtonElement;
   'import-model': HTMLButtonElement;

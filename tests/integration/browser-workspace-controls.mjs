@@ -1,0 +1,191 @@
+import assert from 'node:assert/strict';
+import { mkdtemp, rm, mkdir } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
+import { chromium } from 'playwright';
+import { startServer } from '../../src/server/server.ts';
+const directory = await mkdtemp(join(tmpdir(), 'vide-controls-'));
+let app, browser;
+try {
+  app = await startServer({ filename: join(directory, 'workspace.sqlite') });
+  browser = await chromium.launch({ channel: 'chrome', headless: true });
+  const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+  const errors = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+  await page.route('**/api/v1/models', (route) =>
+    route.fulfill({
+      json: [
+        {
+          id: 'test-model',
+          name: 'Test model',
+          provider: 'codex-cli',
+          efforts: ['default', 'low', 'high'],
+        },
+        { id: 'claude-cli', name: 'Default', provider: 'claude-cli', efforts: ['default'] },
+      ],
+    }),
+  );
+  await page.route('**/api/v1/providers', (route) => route.fulfill({ json: [] }));
+  await page.route('**/api/v1/host', (route) =>
+    route.fulfill({ json: { available: false, zwcadAvailable: true } }),
+  );
+  await page.goto(app.launchUrl);
+  await page.waitForFunction(() => !document.querySelector('#body').disabled);
+  assert.equal(await page.locator('#add-request').isDisabled(), true);
+  await page.locator('#attach-menu summary').click();
+  assert.equal(await page.locator('#pin').isDisabled(), true);
+  assert.equal(await page.locator('#linked-targets').isDisabled(), true);
+  assert.match(await page.locator('#linked-hint').textContent(), /2개/);
+  await page.locator('#attach-menu summary').click();
+  assert.match(await page.locator('#host-status').textContent(), /ZWCAD 실행 준비/);
+  await page.locator('#model').selectOption('test-model');
+  await page.locator('#effort').focus();
+  await page.keyboard.press('End');
+  assert.equal(await page.locator('#effort-label').textContent(), 'high');
+  await page.locator('#model').selectOption('claude-cli');
+  assert.equal(await page.locator('#effort').isDisabled(), true);
+  assert.equal(await page.locator('#effort-label').textContent(), '기본값');
+  await page.locator('#body').fill('Saved draft');
+  await page.locator('#draft-menu summary').click();
+  await page.locator('#save').click();
+  await page.locator('#body').fill('Unsaved edit');
+  await page.locator('[data-tool="sketch"]').click();
+  await page.locator('#point-u').fill('1');
+  await page.locator('#point-v').fill('2');
+  await page.locator('#add-point').click();
+  await page.locator('#draft-menu summary').click();
+  page.once('dialog', (dialog) => dialog.dismiss());
+  await page.locator('#load').click();
+  assert.equal(await page.locator('#body').inputValue(), 'Unsaved edit');
+  assert.match(await page.locator('#sketch-points').textContent(), /1/);
+  page.once('dialog', (dialog) => dialog.accept());
+  await page.locator('#load').click();
+  assert.equal(await page.locator('#body').inputValue(), 'Saved draft');
+  assert.equal(await page.locator('#sketch-points').textContent(), '');
+  await page.locator('#cancel-sketch').click();
+  await page.locator('[data-view="plan"]').click();
+  assert.equal(await page.locator('[data-view="plan"]').getAttribute('aria-pressed'), 'true');
+  assert.equal(await page.locator('#projection-toggle').textContent(), '직교');
+  await page.locator('#projection-toggle').click();
+  assert.equal(await page.locator('[data-view="plan"]').getAttribute('aria-pressed'), 'false');
+  assert.equal(await page.locator('#projection-toggle').textContent(), '원근');
+  await page.locator('[data-view="front"]').click();
+  assert.equal(
+    await page.locator('#canvas canvas').getAttribute('data-projection'),
+    'orthographic',
+  );
+  await page.locator('[data-section="task-list"]').click();
+  assert.equal(await page.locator('#document-tree').isVisible(), false);
+  assert.equal(await page.locator('#task-list').isVisible(), true);
+  assert.equal(await page.locator('#review-list').isVisible(), true);
+  await page.locator('[data-section="reference-list"]').click();
+  assert.equal(await page.locator('#task-list').isVisible(), false);
+  assert.equal(await page.locator('#reference-list').isVisible(), true);
+  assert.equal(await page.locator('#body').inputValue(), 'Saved draft');
+  await page.locator('[data-section="document-tree"]').click();
+  const before = (await page.locator('#left').boundingBox()).width;
+  await page.getByRole('separator', { name: '문서 패널 너비' }).focus();
+  await page.keyboard.press('ArrowRight');
+  assert.equal((await page.locator('#left').boundingBox()).width, before + 16);
+  const right = await page.getByRole('separator', { name: '대화 패널 너비' }).boundingBox();
+  await page.mouse.move(right.x + 3, right.y + 100);
+  await page.mouse.down();
+  await page.mouse.move(right.x - 30, right.y + 100);
+  await page.mouse.up();
+  assert.ok((await page.locator('#right').boundingBox()).width > 370);
+  assert.ok((await page.locator('.workspace').boundingBox()).width >= 260);
+  await page.locator('#files').setInputFiles([
+    { name: 'valid.txt', mimeType: 'text/plain', buffer: Buffer.from('valid') },
+    { name: 'invalid.exe', mimeType: 'application/octet-stream', buffer: Buffer.from('bad') },
+  ]);
+  await page.waitForFunction(() =>
+    document.querySelector('#message').textContent.includes('50,000'),
+  );
+  assert.equal(await page.locator('#context').textContent(), '');
+  await page
+    .locator('#files')
+    .setInputFiles({ name: 'valid.txt', mimeType: 'text/plain', buffer: Buffer.from('valid') });
+  await page.waitForFunction(() =>
+    document.querySelector('#context').textContent.includes('valid.txt'),
+  );
+  const evidence = resolve('.vide/ui-audit');
+  await mkdir(evidence, { recursive: true });
+  await page.screenshot({ path: join(evidence, 'controls-1440.png') });
+  await page.setViewportSize({ width: 800, height: 900 });
+  await page.locator('[data-mobile="model"]').click();
+  await page.locator('#toggle-left').click();
+  await page.locator('.left-panel-tabs').getByRole('button', { name: '작업 이력' }).click();
+  assert.equal(await page.locator('#review-list').isVisible(), true);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const project = await page.locator('#project-picker').inputValue();
+  for (const id of ['basis-one', 'basis-two']) {
+    const input = {
+      id,
+      body: id,
+      pins: [],
+      sketches: [],
+      files: [],
+      host: 'rhino',
+      provider: 'codex-cli',
+      model: 'test-model',
+      effort: 'high',
+      permission: 'candidate',
+    };
+    const result = {
+      hostExecuted: true,
+      executionMode: 'sdk',
+      host: 'rhino',
+      objects: [],
+      scene: [],
+    };
+    app.store.db
+      .prepare('INSERT INTO workspace_requests VALUES(?,?,?,?,?,?)')
+      .run(
+        id,
+        project,
+        JSON.stringify(input),
+        'succeeded',
+        JSON.stringify(result),
+        new Date().toISOString(),
+      );
+  }
+  await page.reload();
+  await page.waitForFunction(() => !document.querySelector('#body').disabled);
+  await page.locator('#attach-menu summary').click();
+  await page.locator('#linked-targets').click();
+  const linking = page.getByRole('dialog', { name: '연계 대상', exact: true });
+  await linking.getByLabel('연계 대상 1', { exact: true }).selectOption('basis-one');
+  await linking.getByLabel('연계 대상 2', { exact: true }).selectOption('basis-two');
+  await linking.getByRole('checkbox').check();
+  await linking.getByRole('button', { name: '요청에 첨부', exact: true }).click();
+  const linkedChip = page.locator('#context .chip').filter({ hasText: '연계 묶음' });
+  assert.match(await linkedChip.textContent(), /basis-one.*basis-two/);
+  await linkedChip.getByRole('button').click();
+  assert.equal(await page.locator('#context .chip').filter({ hasText: '연계 묶음' }).count(), 0);
+  const card = page.locator('[data-request-id="basis-one"]');
+  await card.getByText('요청 문맥', { exact: true }).click();
+  assert.equal(await card.locator('pre').isVisible(), false);
+  assert.match(await card.textContent(), /대상: Rhino/);
+  await card.getByText('진단용 원문', { exact: true }).click();
+  assert.equal(await card.locator('pre').isVisible(), true);
+  await page.route('**/api/v1/ai-settings', (route) =>
+    route.fulfill({ status: 401, json: { code: 'UNAUTHORIZED' } }),
+  );
+  // Exercise the common API boundary without sending any operation to a real host/provider.
+  await page.route('**/api/v1/providers', (route) =>
+    route.fulfill({ status: 401, json: { code: 'UNAUTHORIZED' } }),
+  );
+  await page.locator('#draft-menu summary').click();
+  await page.locator('#ai-settings').click();
+  await page.waitForFunction(() => !document.querySelector('#auth-status').hidden);
+  assert.equal(await page.locator('#request').isDisabled(), true);
+  assert.equal(await page.locator('#body').inputValue(), 'Saved draft');
+  assert.deepEqual(errors, []);
+  console.log(
+    'Workspace controls passed: guards, restore cancel/accept, slider, camera, tabs, resize, files, auth loss.',
+  );
+} finally {
+  await browser?.close();
+  await app?.close();
+  await rm(directory, { recursive: true, force: true });
+}

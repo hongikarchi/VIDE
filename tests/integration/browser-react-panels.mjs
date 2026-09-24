@@ -462,7 +462,7 @@ try {
     .filter({ hasText: '같은 의견을 다시 확인할 수 있습니다.' })
     .waitFor();
   await savedReview.getByRole('button', { name: '닫기', exact: true }).click();
-  await page.locator('#review-list').evaluate((node) => (node.closest('details').open = true));
+  await page.locator('[data-section="task-list"]').click();
   await page
     .locator('#review-list')
     .getByRole('button', { name: 'Fixture review', exact: true })
@@ -533,7 +533,7 @@ try {
   );
   assert.ok(nextReview.id);
   await page.reload();
-  await page.locator('#review-list').evaluate((node) => (node.closest('details').open = true));
+  await page.locator('[data-section="task-list"]').click();
   await page.getByRole('button', { name: '검토본 비교', exact: true }).click();
   const comparison = page.getByRole('dialog', { name: '검토본 비교', exact: true });
   await comparison.getByRole('status').filter({ hasText: '체적 +6 m³' }).waitFor();

@@ -2,7 +2,7 @@
 id: ARCH-01
 title: VIDE 기술 구조와 구현 계약
 status: review
-version: 0.6
+version: 0.7
 updated: 2026-09-24
 owner: agent:codex
 related: [SPEC-00, SPEC-02, SPEC-03, SPEC-04, PLAN, ADR-014, ADR-015, ADR-016, ADR-017]
@@ -528,3 +528,6 @@ R2 조건부 쓰기/체크섬은 [공식 Workers API](https://developers.cloudfl
 로컬 DB의 현재 schema는 2다. `src/core/migrations.ts`가 번호 순서와 모든 초기 테이블을 소유하며 서비스 생성자는 스키마를 변경하지 않는다. 단일 제어 잠금 → 읽기 전용 버전/무결성 확인 → 이전 DB의 SQLite 스냅샷 → 단일 트랜잭션 이행/무결성 확인 순서다. 실패는 rollback하고 기존 모델 파일을 변경하지 않는다. `<DB 파일>.backups/schema-<이전 버전>-<UUID>.sqlite`는 이전 DB만 보존하며 전체 프로젝트 백업과 다르다. 성공 후 같은 버전 재시작은 추가 백업을 만들지 않는다. 복구 시 앱을 종료하고 실패 DB/WAL 및 모델 자료를 보존한 뒤 이전 DB와 호환되는 앱으로 사본을 검증한다. 자동 덮어쓰기·이전 앱으로의 자동 다운그레이드는 하지 않는다.
 
 런타임 루트 탐색은 `src/core/package-root.ts`, C# verbatim 문자열은 `hosts/common/csharp.ts`가 소유한다. 호스트는 서버 구현을 import하지 않는다. 패키지 소스는 Git index의 허용된 소스 폴더만 복사하며 금지 파일·심볼릭 링크를 거절한다. 런타임/의존성/UI 빌드 산출물은 별도 명시 경로로 포함한다. 구현/검증 절차는 PLAN-03, 실제 증거는 개발 기반 VERIFY를 따른다.
+
+### 로컬 세션의 다중 실행 격리
+같은 loopback 호스트의 쿠키는 포트별로 격리되지 않는다. 로컬 세션 쿠키 이름에 서버 포트를 포함해 다른 VIDE 인스턴스의 로그인이 덮어쓰지 않게 한다. 값·Host/Origin 검사·HttpOnly·SameSite=Strict는 유지하고 고정 이름의 이전 쿠키로 인증을 우회하지 않는다. UI는 인증 오류를 공통 API 경계에서 받아 연결 상실을 표시하며 자동 쓰기 재시도를 하지 않는다.

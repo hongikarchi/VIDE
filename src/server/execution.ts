@@ -1,3 +1,4 @@
+import { claudeEfforts } from './model-capabilities.ts';
 import { z } from 'zod';
 import { runLinked } from './linked-execution.ts';
 import type { AgentTools } from './agent-tools.ts';
@@ -109,10 +110,16 @@ export class Execution {
         id: 'claude-cli',
         name: 'Claude · 기본 모델',
         provider: 'claude-cli',
-        efforts: ['default', 'low', 'medium', 'high', 'xhigh', 'max'],
+        efforts: ['default'],
       },
       { id: 'codex-cli', name: 'ChatGPT · 기본 모델', provider: 'codex-cli', efforts: ['default'] },
     ];
+    for (const [id, name] of [
+      ['claude-fable-5', 'Claude Fable 5'],
+      ['claude-opus-4-6', 'Claude Opus 4.6'],
+      ['claude-sonnet-4-6', 'Claude Sonnet 4.6'],
+    ])
+      catalog.push({ id, name, provider: 'claude-cli', efforts: claudeEfforts(id) });
     try {
       const cache = z
         .object({
@@ -120,6 +127,7 @@ export class Execution {
             .array(
               z.object({
                 slug: z.string(),
+                visibility: z.string().optional(),
                 display_name: z.string().optional(),
                 supported_reasoning_levels: z.array(z.object({ effort: z.string() })).optional(),
               }),
@@ -128,7 +136,7 @@ export class Execution {
         })
         .parse(JSON.parse(await readFile(join(homedir(), '.codex', 'models_cache.json'), 'utf8')));
       for (const model of cache.models || [])
-        if (/^[a-zA-Z0-9._-]{1,100}$/.test(model.slug))
+        if (model.visibility !== 'hide' && /^[a-zA-Z0-9._-]{1,100}$/.test(model.slug))
           catalog.push({
             id: model.slug,
             name: model.display_name || model.slug,
@@ -155,12 +163,14 @@ export class Execution {
           id: settings.model,
           name: settings.model,
           provider: 'claude-cli',
-          efforts: ['default', 'low', 'medium', 'high', 'xhigh', 'max'],
+          efforts: claudeEfforts(settings.model),
         });
     } catch {
       /* Optional provider preferences: built-in model remains usable. */
     }
-    return catalog;
+    return catalog.filter(
+      (model, index) => catalog.findIndex((entry) => entry.id === model.id) === index,
+    );
   }
   async status() {
     return Promise.all(

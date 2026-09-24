@@ -2,7 +2,7 @@
 id: PLAN
 title: VIDE 실행 로드맵
 status: review
-version: 0.159
+version: 0.160
 updated: 2026-09-24
 owner: agent:codex
 related: [ARCH-01, PLAN-02, PLAN-03, SPEC-00, SPEC-01, SPEC-02, SPEC-03, SPEC-04, SPEC-05]
@@ -22,6 +22,7 @@ related: [ARCH-01, PLAN-02, PLAN-03, SPEC-00, SPEC-01, SPEC-02, SPEC-03, SPEC-04
 | 구조·스택·저장/API·호스트·공유 계약 | [ARCH-01](../architecture/ARCH-01-system.md) |
 | 참고 사례와 대안 조사 | [RESEARCH-01](../research/RESEARCH-01-reference.md) |
 | AI·호스트·모델·공유 실행 계획 | [PLAN-02](PLAN-02-agent-host-versioning.md) |
+| 선택된 UI 수정 계획 | [PLAN-04](PLAN-04-workspace-ui.md) |
 | 개발 기반 구축 계획 | [PLAN-03](PLAN-03-development-foundation.md) |
 | 채택 이유·실제 검증 | [ADR 목록](../../index.html), docs/tdd의 SPIKE·VERIFY |
 
@@ -72,6 +73,8 @@ T-001~018의 번호·지원 증거는 유지한다. 각 티켓의 현재 결과�
 
 ### 6.5 현재 티켓 현황과 이어갈 위치
 
+현재 UI 작업: [PLAN-04](PLAN-04-workspace-ui.md)의 사용자 선택 범위 구현·검증 완료. [UI 조작 VERIFY](../tdd/VERIFY-2026-09-24-workspace-controls.md) 참조.
+
 **현재 단계: PLAN-02 §6.1의 1·2·3a·3b·4a를 아래 합성 지원 범위로 검증했고, 4b 원격 모델 검수는 무료 조건 대기다.** 개발 기반 main 통합(`78b180c`), [실행 안전성](../tdd/VERIFY-2026-09-24-sdk-execution-safety.md), [양쪽 구독 ZWCAD SDK·소유 편집 창·직접 편집/저장](../tdd/VERIFY-2026-09-24-zwcad-sdk-product.md), [한 요청 CAD→Rhino·두 CAD 문서·부분 실패 보존](../tdd/VERIFY-2026-09-24-linked-hosts.md), [다른 사용자 의견→실제 수정→재게시](../tdd/VERIFY-2026-09-24-sharing-host-roundtrip.md), [로컬 Windows 패키지](../tdd/VERIFY-2026-09-24-sdk-package.md)를 검증했다. 최신 자동 회귀는 145개 통과다. 최신 ZIP의 연계·런처·재시작·데이터 유지도 통과했다. 4b는 9월 24일 재조회에서 계정의 다른 R2 버킷이 약 11.2 GB인 것을 확인해 차단을 유지했다([조건/재개 기준](../tdd/VERIFY-2026-09-24-sharing-host-roundtrip.md)). 다음 행동은 무료 조건 또는 시험 예산 확정 후 원격 검수, 사용자 결정 후 대표 실무 과업 검수다. 원격 업로드 제한은 유지하며 원격 CI/별도 PC 설치·일반 자산 복사까지 완료한 것은 아니다. 논현동 수준의 대표 과업 선정·실무 검수는 사용자 지시대로 현재 묶음 이후 결정한다. Jev 조사 문서는 보존한다. 구현 범위·완료 기준은 [PLAN-02 §6.1](PLAN-02-agent-host-versioning.md)을 따른다.
 
 개발 위임·중단 기준은 [가이드 §12](../../DEVELOPMENT_GUIDE.md#development-delegation)를 따른다. 기존 기능 단위 커밋 위임은 유지하며 원격 push는 해당 사용자 지시 범위에서만 한다. Cloudflare 시험은 무료·메일 없는 가입/소유자 승인 모드다. 유료 전환·도메인 구매·메일 발송은 승인되지 않았다. R2 기존 사용량 때문에 원격 모델 업로드는 차단돼 있으며, 무료 시험 조건을 확인하기 전 해제하지 않는다. 기존 사용자 자료·열린 호스트는 시험용으로 변경하지 않는다.
@@ -89,7 +92,7 @@ T-001~018의 번호·지원 증거는 유지한다. 각 티켓의 현재 결과�
 | T-007 | 수량 필터/그룹·CSV·고정 검토본·A/B 비교·객체 수량표, SDK 미변경 기하의 수량 재사용 | 실무 전문 표·회전/이동 최적화·외부 변경 이벤트 캐시 | 네이티브 VERIFY, TS/자체 호스트 VERIFY |
 | T-008 | 속성 요약 확장 등록/실행/실패/비활성화·객체 연결 | 추가 확장·장기 작업·배포 수용 | 네이티브 VERIFY |
 | T-009 | 원격 배포 완료(무료·메일 없는 소유자 승인 모드): 가입·로그인·프로젝트·참여 신청/승인·회수를 실제 staging에서 검증. 로컬 런타임: 초대/권한·R2 게시·원문/핀/스케치 의견·파일 왕복 채택·재시작 복원·대용량 전송 | 모델 게시·의견의 원격 완결(R2 업로드 차단 해제 조건 포함)·PC 종료 후 모델 열람·운영 백업/복구·비용 계측; 후속 메일 인증 모드(발신 도메인·요금제 승인 뒤) | 공유 VERIFY |
-| T-010 | 사용자 스터디 기반 shell/Inspector·정투영/입력/모바일 회귀 | 사용자 최종 디자인·iPad/펜 실기기 사용성 | 네이티브 VERIFY, 공유 VERIFY |
+| T-010 | shell/Inspector 및 PLAN-04 선택 UI 항목·입력 보호·Aside/브라우저 회귀 | 사용자 최종 디자인·미선택 UI 항목·iPad/펜 실기기 사용성 | [UI VERIFY](../tdd/VERIFY-2026-09-24-workspace-controls.md), 네이티브·공유 VERIFY |
 | T-011 | 최신 Windows ZIP의 번들 실행·재시작·제거 후 자료 보존·백업 검증 | 별도 비개발 PC·서명/설치 프로그램·복구 UI | TS/자체 호스트 VERIFY |
 | T-012 | 미착수 | 동일 과업의 수작업 및 에이전트+MCP 기준선 비교 | §6.6·§7 |
 | T-013 | 작업 요청/상태/결과 저장·HTTP 경계 검사·불명확 실행 회수, TS strict | 실제 관계/버전·호스트 확대 및 DB 이행 | TS/자체 호스트 VERIFY, PLAN-02 §4 |

@@ -211,7 +211,7 @@ export async function startServer({
         if (!equal(input.token, bootstrap)) throw new DomainError('UNAUTHORIZED');
         response.setHeader(
           'Set-Cookie',
-          `vide_session=${session}; HttpOnly; SameSite=Strict; Path=/`,
+          `vide_session_${new URL(origin).port}=${session}; HttpOnly; SameSite=Strict; Path=/`,
         );
         send(200, { authenticated: true });
         return;
@@ -219,8 +219,8 @@ export async function startServer({
       const cookie = request.headers.cookie
         ?.split(';')
         .map((s) => s.trim())
-        .find((s) => s.startsWith('vide_session='))
-        ?.slice(13);
+        .find((s) => s.startsWith(`vide_session_${new URL(origin).port}=`))
+        ?.split('=')[1];
       if (!equal(cookie, session)) throw new DomainError('UNAUTHORIZED');
       if (stopping && request.method !== 'GET') throw new DomainError('APP_STOPPING');
       if (url.pathname === '/api/v1/shutdown' && request.method === 'POST' && onShutdown) {
@@ -422,7 +422,10 @@ export async function startServer({
         return;
       }
       if (url.pathname === '/api/v1/host' && request.method === 'GET') {
-        send(200, sdk ? await sdk.status() : await host.status());
+        send(200, {
+          ...(sdk ? await sdk.status() : await host.status()),
+          zwcadAvailable: (await zwcadSdk?.status())?.available ?? false,
+        });
         return;
       }
       if (url.pathname === '/api/v1/models' && request.method === 'GET') {

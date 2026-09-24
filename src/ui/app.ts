@@ -19,7 +19,7 @@ const showAiSettings: typeof import('./ai-settings.tsx').showAiSettings = async 
   (await import('./ai-settings.tsx')).showAiSettings(onStatus);
 import { initializeReviews } from './reviews.tsx';
 import { attachSharedFeedback } from './shared-feedback.tsx';
-import { showLinkedTargets } from './linked-targets.tsx';
+import { linkedCandidates, showLinkedTargets } from './linked-targets.tsx';
 import { renderHistory } from './history.tsx';
 import { initializeDocuments } from './documents.tsx';
 import { renderPoints, validCoordinate } from './sketch.tsx';
@@ -41,6 +41,7 @@ import {
   attachSketch,
   storageKey,
 } from './model.ts';
+import { initializeWorkspacePanels } from './workspace-panels.ts';
 import { createViewport } from './viewport.ts';
 
 let project: { id: string; name: string } | undefined,
@@ -55,6 +56,7 @@ function currentProject() {
   return project;
 }
 let state = initial();
+initializeWorkspacePanels();
 let tool: 'select' | 'pin' | 'sketch' = 'select',
   points: Point2[] = [],
   toastTimer: ReturnType<typeof setTimeout> | undefined;
@@ -148,6 +150,20 @@ try {
       points.push(point);
       draw();
     },
+    (camera) => {
+      document
+        .querySelectorAll<HTMLButtonElement>('[data-view]')
+        .forEach((button) =>
+          button.setAttribute('aria-pressed', String(button.dataset.view === camera.view)),
+        );
+      const toggle = $('projection-toggle');
+      toggle.dataset.projection = camera.projection;
+      toggle.textContent = camera.projection === 'perspective' ? '원근' : '직교';
+      toggle.setAttribute(
+        'aria-label',
+        camera.projection === 'perspective' ? '직교 투영으로 전환' : '원근 투영으로 전환',
+      );
+    },
   );
 } catch {
   message('3D 뷰포트를 열 수 없습니다. WebGL 지원을 확인하세요.');
@@ -237,16 +253,24 @@ function render(rebuildRequests = true) {
   $('selection').textContent = objects.find((o) => o.id === state.selected)?.name || '';
   $('selection-pin').hidden = !state.selected;
   $('context').replaceChildren();
-  state.linkedTargets?.forEach((target) =>
+  if (state.linkedTargets?.length)
     chip(
-      `연계 · ${target.host === 'zwcad' ? 'ZWCAD' : 'Rhino'} · ${state.messages.find((m) => m.id === target.baseRequestId)?.body.slice(0, 35) || '기준 후보'}`,
+      '연계 묶음 · ' +
+        state.linkedTargets
+          .map(
+            (target) =>
+              (target.host === 'zwcad' ? 'ZWCAD' : 'Rhino') +
+              ' · ' +
+              (state.messages.find((m) => m.id === target.baseRequestId)?.body.slice(0, 35) ||
+                '기준 후보'),
+          )
+          .join(' ↔ '),
       () => {
         state.linkedTargets = undefined;
         state.coordinateBasis = undefined;
         render();
       },
-    ),
-  );
+    );
   state.pins.forEach((p, i) =>
     chip(
       '@ ' + p.name,
@@ -282,9 +306,25 @@ function render(rebuildRequests = true) {
   if (!selected && !Array.from($('model').options).some((option) => option.value === state.model))
     el('option', state.model + ' · 사용 확인 필요', $('model'), { value: state.model });
   $('model').value = state.model;
-  $('effort').replaceChildren();
-  (selected?.efforts || [state.effort]).forEach((e) => el('option', e, $('effort'), { value: e }));
-  $('effort').value = state.effort;
+  const efforts = selected?.efforts || [state.effort];
+  $('effort').max = String(Math.max(0, efforts.length - 1));
+  $('effort').value = String(Math.max(0, efforts.indexOf(state.effort)));
+  $('effort').disabled = !ready || efforts.length < 2;
+  const effortLabel = state.effort === 'default' ? '기본값' : state.effort;
+  $('effort-label').textContent = effortLabel;
+  $('effort').setAttribute('aria-valuetext', effortLabel);
+  $('effort').title = efforts.join(' → ');
+  $('pin').disabled =
+    !ready ||
+    busy ||
+    !objects.some((o) => o.id === state.selected && o.revision) ||
+    state.pins.some((p) => p.id === state.selected);
+  $('pin').title = '현재 후보에서 첨부하지 않은 객체를 선택하세요.';
+  $('add-request').disabled = !ready || busy || !state.body.trim();
+  $('linked-targets').disabled = !ready || busy || linkedCandidates(state).length < 2;
+  $('linked-hint').textContent =
+    linkedCandidates(state).length < 2 ? '실행에 성공한 SDK 후보 2개가 필요합니다.' : '';
+
   $('permission').value = state.permission;
   const active = state.messages.find((m) => m.id === displayedResult)?.request;
   renderInspector(
@@ -482,14 +522,12 @@ $('extensions').onclick = () => {
 $('ai-settings').onclick = () => {
   $('draft-menu').open = false;
   void showAiSettings((rows) => {
-    const host = $('connection-status').textContent.match(/ · Rhino.*$/)?.[0] || '';
-    $('connection-status').textContent =
-      rows
-        .map(
-          (row) =>
-            `${row.id === 'claude-cli' ? 'Claude' : 'ChatGPT'} ${row.available ? '연결됨' : '미연결'}`,
-        )
-        .join(' · ') + host;
+    $('connection-status').textContent = rows
+      .map(
+        (row) =>
+          `${row.id === 'claude-cli' ? 'Claude' : 'ChatGPT'} ${row.available ? '연결됨' : '미연결'}`,
+      )
+      .join(' · ');
   }).catch((error) => message(error.message));
 };
 for (const model of models) el('option', model.name, $('model'), { value: model.id });
@@ -497,8 +535,9 @@ $('model').onchange = () => {
   chooseModel(state, $('model').value);
   render();
 };
-$('effort').onchange = () => {
-  state.effort = $('effort').value;
+$('effort').oninput = () => {
+  state.effort =
+    models.find((m) => m.id === state.model)?.efforts[$('effort').valueAsNumber] || 'default';
   render();
 };
 $('permission').onchange = () => {
@@ -595,10 +634,13 @@ $('linked-targets').onclick = () => {
 };
 $('files').onchange = async () => {
   try {
-    for (const f of $('files').files ?? []) {
-      if (f.size > 50000 || !/\.(txt|md|csv|json)$/i.test(f.name))
-        throw Error('현재 참고 자료는 50KB 이하 TXT·MD·CSV·JSON을 지원합니다.');
-      state.files.push({
+    const original = state;
+    const selectedFiles = Array.from($('files').files ?? []);
+    if (selectedFiles.some((f) => f.size > 50000 || !/\.(txt|md|csv|json)$/i.test(f.name)))
+      throw Error('현재 참고 자료는 파일당 50,000바이트 이하 TXT·MD·CSV·JSON을 지원합니다.');
+    const attached = [];
+    for (const f of selectedFiles) {
+      attached.push({
         name: f.name,
         size: f.size,
         type: f.type,
@@ -606,6 +648,8 @@ $('files').onchange = async () => {
         contentStatus: 'included',
       });
     }
+    if (state !== original) throw Error('프로젝트가 바뀌어 파일 첨부를 취소했습니다.');
+    state.files.push(...attached);
     render();
   } catch (cause) {
     const error = readableError(cause);
@@ -679,11 +723,17 @@ $('save').onclick = () => {
 $('load').onclick = () => {
   if (!project || busy) return;
   try {
-    state = restoreSavedDraft(
+    const restored = restoreSavedDraft(
       JSON.parse(localStorage.getItem(storageKey + ':' + currentProject().id) ?? 'null'),
       currentProject().id,
       state.messages,
     );
+    if (
+      (draftHasInput(state) || points.length) &&
+      !confirm('현재 입력과 미첨부 스케치를 저장본으로 바꿀까요? 취소하면 그대로 유지됩니다.')
+    )
+      return;
+    state = restored;
     selectedResult = state.baseRequestId ?? null;
     displayedResult = undefined;
     objects.splice(0, objects.length);
@@ -849,37 +899,20 @@ for (const button of document.querySelectorAll<HTMLButtonElement>('[data-view]')
     }
     $('projection').value = z.enum(['axon', 'plan', 'front', 'side']).parse(button.dataset.view);
     $('projection').dispatchEvent(new Event('change'));
-    document
-      .querySelectorAll<HTMLButtonElement>('[data-view]')
-      .forEach((b) => b.setAttribute('aria-pressed', String(b === button)));
   };
-for (const button of document.querySelectorAll<HTMLButtonElement>('[data-section]'))
-  button.onclick = () => {
-    if ($('left').hidden) $('toggle-left').click();
-    mobileView('documents');
-    const sectionId = button.dataset.section;
-    if (!sectionId) return;
-    const section = $(sectionId);
-    const details = section.closest('details');
-    if (details) details.open = true;
-    section.scrollIntoView({ block: 'nearest' });
-    document
-      .querySelectorAll<HTMLButtonElement>('[data-section]')
-      .forEach((b) => b.setAttribute('aria-pressed', String(b === button)));
-  };
-
 $('fit-selection').onclick = () => {
   if (state.selected) viewport?.fit(state.selected);
   else message('먼저 객체를 선택하세요.');
 };
-for (const button of document.querySelectorAll<HTMLButtonElement>('[data-projection]'))
-  button.onclick = () => {
-    if (tool === 'sketch') {
-      message('스케치를 마친 뒤 투영을 바꿀 수 있습니다.');
-      return;
-    }
-    viewport?.projection(z.enum(['orthographic', 'perspective']).parse(button.dataset.projection));
-  };
+$('projection-toggle').onclick = () => {
+  if (tool === 'sketch') {
+    message('스케치를 마친 뒤 투영을 바꿀 수 있습니다.');
+    return;
+  }
+  viewport?.projection(
+    $('projection-toggle').dataset.projection === 'perspective' ? 'orthographic' : 'perspective',
+  );
+};
 
 $('add-request').onclick = () => {
   if (!state.body.trim()) return;
@@ -953,21 +986,32 @@ async function initializeWorkspace() {
       if (['queued', 'running'].includes(entry.request.state)) void poll(entry.id);
     const host = hostStatusSchema.parse(await api('/host'));
     const providers = providersSchema.parse(await api('/providers'));
-    $('connection-status').textContent =
-      providers
-        .map(
-          (provider) =>
-            `${provider.id === 'claude-cli' ? 'Claude' : 'ChatGPT'} ${provider.available ? '연결됨' : '미연결'}`,
-        )
-        .join(' · ') +
-      (host.available
-        ? host.mode === 'sdk'
-          ? ' · Rhino 실행 준비'
-          : ' · Rhino 연결됨'
-        : ' · Rhino 미연결');
+    $('connection-status').textContent = providers
+      .map(
+        (provider) =>
+          `${provider.id === 'claude-cli' ? 'Claude' : 'ChatGPT'} ${provider.available ? '연결됨' : '미연결'}`,
+      )
+      .join(' · ');
+    $('host-status').textContent =
+      'Rhino ' +
+      (host.available ? '실행 준비' : '미연결') +
+      ' · ZWCAD ' +
+      (host.zwcadAvailable ? '실행 준비' : '미연결') +
+      ' · 문서 연결은 문서 목록에서 확인';
   } catch (cause) {
     const error = readableError(cause);
     message(errors[error.code ?? ''] || error.message);
   }
 }
+window.addEventListener('vide:connection-lost', (event) => {
+  ready = false;
+  $('auth-status').hidden = false;
+  $('auth-status').textContent =
+    (event as CustomEvent<string>).detail === 'UNAUTHORIZED'
+      ? '로컬 인증이 만료됐습니다. VIDE 실행 링크로 다시 여세요. 초안은 유지됩니다.'
+      : '로컬 서버 연결이 끊겼습니다. 서버 확인 후 다시 여세요. 초안은 유지됩니다.';
+  $('connection-status').textContent = '연결 상태 확인 필요';
+  $('host-status').textContent = '호스트 상태 확인 필요';
+  render();
+});
 await initializeWorkspace();

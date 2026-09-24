@@ -101,8 +101,18 @@ try {
   await page.screenshot({ path: join(directory, 'recaptured.png') });
   let nextId, usage;
   if (ai) {
-    await page.locator('#model').selectOption(provider);
-    await page.locator('#effort').selectOption(provider === 'claude-cli' ? 'low' : 'default');
+    await page
+      .locator('#model')
+      .selectOption(provider === 'claude-cli' ? 'claude-opus-4-6' : provider);
+    if (provider === 'claude-cli') {
+      await page.locator('#effort').focus();
+      await page.keyboard.press('Home');
+      await page.keyboard.press('ArrowRight');
+    }
+    assert.equal(
+      await page.locator('#effort-label').textContent(),
+      provider === 'claude-cli' ? 'low' : '기본값',
+    );
     await page.locator('#permission').selectOption('candidate');
     await page
       .locator('#body')

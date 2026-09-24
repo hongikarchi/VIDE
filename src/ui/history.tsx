@@ -243,7 +243,37 @@ function Card({
       <small>{subtitle}</small>
       <details>
         <summary>요청 문맥</summary>
-        <pre>{JSON.stringify(request?.input || message, null, 2)}</pre>
+        <p>
+          대상:{' '}
+          {request?.input?.linkedTargets?.length
+            ? request.input.linkedTargets
+                .map(
+                  (target) =>
+                    (target.host === 'zwcad' ? 'ZWCAD' : 'Rhino') +
+                    ' · ' +
+                    (related.get(target.baseRequestId)?.input.body || '기준 후보'),
+                )
+                .join(' ↔ ')
+            : (request?.input?.host || message.host) === 'zwcad'
+              ? 'ZWCAD'
+              : 'Rhino'}
+        </p>
+        {message.pins.length ? (
+          <ul>
+            {message.pins.map((pin, index) => (
+              <li key={index}>
+                {pin.name || pin.id} ·{' '}
+                {{ target: '변경', preserve: '유지', reference: '참고' }[pin.role]}
+              </li>
+            ))}
+          </ul>
+        ) : null}
+        <p>첨부: {references.length ? references.join(' · ') : '없음'}</p>
+        <p>조건: {message.body || '첨부한 문맥 검토'}</p>
+        <details>
+          <summary>진단용 원문</summary>
+          <pre>{JSON.stringify(request?.input || message, null, 2)}</pre>
+        </details>
       </details>
       {request ? (
         <>

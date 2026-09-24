@@ -87,12 +87,12 @@ try {
   assert.equal(await page.getByLabel('점 2 U', { exact: true }).inputValue(), '12');
   await page.locator('#cancel-sketch').click();
   await page.locator('[data-view=axon]').click();
-  await page.locator('[data-projection=orthographic]').click();
+  await page.locator('#projection-toggle').click();
   assert.equal(
     await page.locator('#canvas canvas').getAttribute('data-projection'),
     'orthographic',
   );
-  await page.locator('[data-projection=perspective]').click();
+  await page.locator('#projection-toggle').click();
   assert.equal(await page.locator('#canvas canvas').getAttribute('data-projection'), 'perspective');
   await page.locator('#fit-selection').click();
   const heightBefore = await page.locator('#inspector').evaluate((n) => n.clientHeight);

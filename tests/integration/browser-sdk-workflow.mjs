@@ -30,8 +30,11 @@ try {
     async (id) => await (await fetch(`/api/v1/projects/${id}/requests`)).json(),
     projectId,
   );
-  await page.locator('#model').selectOption('claude-cli');
-  await page.locator('#effort').selectOption('low');
+  await page.locator('#model').selectOption('claude-opus-4-6');
+  await page.locator('#effort').focus();
+  await page.keyboard.press('Home');
+  await page.keyboard.press('ArrowRight');
+  assert.equal(await page.locator('#effort-label').textContent(), 'low');
   await page.locator('#permission').selectOption('candidate');
   const submit = async (body, count) => {
     await page.locator('#body').fill(body);

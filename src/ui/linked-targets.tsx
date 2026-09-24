@@ -2,6 +2,13 @@ import { useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import type { DraftState } from './model.ts';
 
+export const linkedCandidates = (state: DraftState) =>
+  state.messages.filter(
+    (message) =>
+      message.request.state === 'succeeded' &&
+      message.request.result?.hostExecuted &&
+      message.request.result?.executionMode === 'sdk',
+  );
 export function showLinkedTargets(state: DraftState, changed: () => void) {
   const dialog = document.createElement('dialog');
   dialog.className = 'quantity-dialog';
@@ -17,12 +24,7 @@ export function showLinkedTargets(state: DraftState, changed: () => void) {
     event.preventDefault();
     close();
   });
-  const candidates = state.messages.filter(
-    (message) =>
-      message.request.state === 'succeeded' &&
-      message.request.result?.hostExecuted &&
-      message.request.result?.executionMode === 'sdk',
-  );
+  const candidates = linkedCandidates(state);
   function Targets() {
     const [selected, setSelected] = useState([
       state.linkedTargets?.[0]?.baseRequestId || '',

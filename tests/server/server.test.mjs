@@ -187,3 +187,13 @@ test('built UI assets load without exposing source files or build metadata', asy
     assert.equal((await fetch(app.origin + path)).status, 404, path);
   }
 });
+
+test('동일 호스트의 서로 다른 VIDE 포트가 세션 쿠키를 덮어쓰지 않는다', async (t) => {
+  const first = await fixture(t),
+    second = await fixture(t);
+  assert.notEqual(first.cookie.split('=')[0], second.cookie.split('=')[0]);
+  const together = first.cookie + '; ' + second.cookie;
+  for (const instance of [first, second])
+    assert.equal((await instance.api('/projects', { headers: { Cookie: together } })).status, 200);
+  assert.equal((await first.api('/projects', { headers: { Cookie: second.cookie } })).status, 401);
+});

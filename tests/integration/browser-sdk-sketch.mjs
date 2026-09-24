@@ -25,8 +25,11 @@ try {
   await page.goto(app.launchUrl);
   await page.waitForFunction(() => document.querySelector('#project-picker')?.value);
   const projectId = await page.locator('#project-picker').inputValue();
-  await page.locator('#model').selectOption('claude-cli');
-  await page.locator('#effort').selectOption('low');
+  await page.locator('#model').selectOption('claude-opus-4-6');
+  await page.locator('#effort').focus();
+  await page.keyboard.press('Home');
+  await page.keyboard.press('ArrowRight');
+  assert.equal(await page.locator('#effort-label').textContent(), 'low');
   await page.locator('#permission').selectOption('candidate');
   await page.locator('[data-tool="sketch"]').click();
   await page.locator('#line-role').selectOption('boundary');
