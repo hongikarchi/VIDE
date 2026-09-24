@@ -2,7 +2,7 @@
 id: ARCH-01
 title: VIDE 기술 구조와 구현 계약
 status: review
-version: 0.9
+version: 0.10
 updated: 2026-09-24
 owner: agent:codex
 related: [SPEC-00, SPEC-02, SPEC-03, SPEC-04, PLAN, ADR-014, ADR-015, ADR-016, ADR-017]
@@ -524,6 +524,10 @@ AI 과업 완료 또는 명시적 저장/체크포인트 시 .3dm/.dwg와 데이
 
 R2 조건부 쓰기/체크섬은 [공식 Workers API](https://developers.cloudflare.com/r2/api/workers/workers-api-reference/)를 따른다. manifest는 경로·임의 속성을 받지 않지만 바이너리 자산의 공개 범위 검증은 별도 로컬 allowlist 내보내기 책임이다. 기존 내부 검토본의 sourceDocument나 입력 자료 전체를 그대로 게시하지 않는다. 해당 내보내기와 화면을 연결하기 전에는 사용자 자료 업로드 완료로 집계하지 않는다. 현재 검증·미시험은 PLAN §6.5와 공유 VERIFY를 따른다.
 
+
+### Rhino 측정 캐시의 평행이동 검증
+
+기존 파일 해시·계산 버전으로 확인된 측정 캐시에 한해, 동일 기하 또는 평행이동으로 동일성이 확인된 기하의 면적·체적·길이를 재사용한다. 원본과 현재 경계 상자 중심 차이를 원 기하 사본에 적용한 뒤 GeometryEquals가 참인 경우만 재사용한다. 형상 일치 검증 전에는 경계 상자만으로 동일하다고 판단하지 않는다. 회전·크기 변경·미확인 편집·새 객체·단위/계산 버전 변경은 이 증거로 재사용하지 않는다. geometry 변경 집합과 world bounds는 계속 갱신하며 측정 재사용을 객체 무변경으로 처리하지 않는다. 변환 이벤트는 직접 SDK 경로에서 관측되지 않은 실험 결과 때문에 이 캐시의 근거로 사용하지 않는다.
 
 ## 7. 개발 기반과 변경 경계
 

@@ -54,6 +54,48 @@ try {
   const edited = await worker.exportModel();
   assert.deepEqual(edited.measurementStats, { measuredObjects: 1, reusedObjects: 3 });
   assert.ok(Math.abs(edited.scene.find((row) => row.id === 'resize').volume - 48) < 1e-8);
+  const moved = await worker.execute(
+    randomUUID(),
+    1,
+    `
+ var objects=doc.Objects.GetObjectList(Rhino.DocObjects.ObjectType.AnyObject).ToArray();
+ doc.Objects.Transform(objects.Single(o=>o.Name=="keep").Id,Transform.Translation(10,20,30),true);
+ doc.Objects.Transform(objects.Single(o=>o.Name=="mesh").Id,Transform.Rotation(Math.PI/3,Vector3d.ZAxis,Point3d.Origin),true);
+ `,
+  );
+  assert.equal(moved.ok, true, JSON.stringify(moved));
+  const rigid = await worker.exportModel();
+  assert.deepEqual(rigid.measurementStats, { measuredObjects: 2, reusedObjects: 2 });
+  assert.equal(moved.changes.modified.find((row) => row.id === 'keep').geometry, true);
+  assert.equal(moved.changes.modified.find((row) => row.id === 'mesh').geometry, true);
+  assert.ok(Math.abs(rigid.scene.find((row) => row.id === 'keep').volume - 24) < 1e-8);
+  const scaled = await worker.execute(
+    randomUUID(),
+    2,
+    `
+ var obj=doc.Objects.GetObjectList(Rhino.DocObjects.ObjectType.AnyObject).Single(o=>o.Name=="keep");
+ doc.Objects.Transform(obj.Id,Transform.Scale(Point3d.Origin,2),true);
+ `,
+  );
+  assert.equal(scaled.ok, true, JSON.stringify(scaled));
+  const resized = await worker.exportModel();
+  assert.deepEqual(resized.measurementStats, { measuredObjects: 3, reusedObjects: 1 });
+  assert.ok(Math.abs(resized.scene.find((row) => row.id === 'keep').volume - 192) < 1e-7);
+  const deleted = await worker.execute(
+    randomUUID(),
+    3,
+    `
+ var obj=doc.Objects.GetObjectList(Rhino.DocObjects.ObjectType.AnyObject).Single(o=>o.Name=="mesh");
+ doc.Objects.Delete(obj.Id,true);
+ `,
+  );
+  assert.equal(deleted.ok, true, JSON.stringify(deleted));
+  const removed = await worker.exportModel();
+  assert.equal(
+    removed.scene.some((row) => row.id === 'mesh'),
+    false,
+  );
+  assert.deepEqual(removed.measurementStats, { measuredObjects: 2, reusedObjects: 1 });
   const evidence = {
     passed: true,
     directory,
@@ -61,6 +103,11 @@ try {
     changedCalculated: 1,
     renamedReused: true,
     closedMeshVolume: 24,
+    translationReused: true,
+    rotationRecomputed: true,
+    rigidStillMarkedChanged: true,
+    scaleInvalidated: true,
+    deletedExcluded: true,
   };
   await writeFile(join(directory, 'result.json'), JSON.stringify(evidence, null, 2));
   console.log(JSON.stringify(evidence));

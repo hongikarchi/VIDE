@@ -37,7 +37,7 @@ internal sealed class WorkerExecutor(RhinoDoc document, string directory)
                         throw new InvalidOperationException("INVALID_MEASUREMENT_CACHE");
                 }
             }
-            return WorkerScene.Export(document, obj => modelBasis.SameGeometry(obj) && cached.TryGetValue(WorkerScene.Id(obj), out var value) ? value : null);
+            return WorkerScene.Export(document, obj => modelBasis.SameMeasurements(obj) && cached.TryGetValue(WorkerScene.Id(obj), out var value) ? value : null);
         }
         if (method != "execute") throw new InvalidOperationException("UNKNOWN_METHOD");
         var operation = request.GetProperty("operationId").GetString()!;

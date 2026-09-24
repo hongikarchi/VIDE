@@ -33,5 +33,17 @@ internal sealed class WorkerChanges : IDisposable
     internal bool SameGeometry(RhinoObject obj) => basis.TryGetValue(WorkerScene.Id(obj), out var entry) &&
         GeometryBase.GeometryEquals(entry.Geometry, obj.Geometry);
 
+    internal bool SameMeasurements(RhinoObject obj)
+    {
+        if (!basis.TryGetValue(WorkerScene.Id(obj), out var entry)) return false;
+        if (GeometryBase.GeometryEquals(entry.Geometry, obj.Geometry)) return true;
+        var before = entry.Geometry.GetBoundingBox(true);
+        var after = obj.Geometry.GetBoundingBox(true);
+        if (!before.IsValid || !after.IsValid) return false;
+        using var moved = entry.Geometry.Duplicate();
+        return moved.Transform(Transform.Translation(after.Center - before.Center)) &&
+            GeometryBase.GeometryEquals(moved, obj.Geometry);
+    }
+
     public void Dispose() { foreach (var entry in basis.Values) entry.Geometry.Dispose(); }
 }

@@ -2,7 +2,7 @@
 id: VERIFY-2026-09-24-local-product-completion
 title: 로컬 제품 완결 · 실제 왕복 및 확장 검수
 status: review
-version: 0.3
+version: 0.4
 updated: 2026-09-24
 owner: agent:codex
 related: [PLAN-02, AC-07, AC-08, AC-09, AC-10, AC-24, AC-25, AC-32, AC-33, AC-34]
@@ -53,6 +53,12 @@ related: [PLAN-02, AC-07, AC-08, AC-09, AC-10, AC-24, AC-25, AC-32, AC-33, AC-34
 - 모델 교체 후 추적한 WebGL buffer 8→4(두 뷰포트의 그리드 등 유지 자산), 기존 모델 버퍼 해제 확인. 대형 좌표 90,000에서 2 mm 세부 및 직교/원근 선택·핀 회귀 통과(`viewport-check.mjs`).
 - 원시 자료: `.vide/viewport-spike/large-model-before-57b970c0-66f3-4bdd-900a-3ec0b5fcf650.json`, `.vide/viewport-spike/large-model-after-e52f615e-0ccc-40fb-b84a-bc08faad9afc.json`.
 - 미완료: Rhino 수신/캡처의 기존 500객체 제한, 많은 개별 Brep의 메시 생성 비용, 전체 목록 UI의 가상화·장시간 메모리 검수. 점 1만 개 통과를 네이티브 BIM 1만 객체 지원 완료로 보고하지 않는다.
+
+## Rhino 측정 및 기본 편집 재검증 — L1/L4 일부
+
+- `worker-measurements.mjs`가 실제 Rhino에서 통과했다. 무변경 4객체 계산 0개, 형상 1개 수정 시 계산 1개/재사용 3개, 속성 이름만 바꾼 객체는 재사용. 평행이동은 전체 기하 일치가 확인돼 측정을 재사용하면서 변경 집합에는 geometry 변경으로 기록했다. 회전은 재계산, 2배 스케일은 체적 24→192 재계산, 삭제 객체는 export/집계에서 제외됐다. 증거: `.vide/worker-measurements/14452f9a-6975-406e-86ae-9637084d8b21/result.json`.
+- 앞선 이벤트 기반 실험은 직접 ObjectTable.Transform의 재사용 예상에서 실패했다(실측 계산 3개/재사용 1개). 이벤트를 근거로 한 구현은 제거했고, 정확한 기하 일치로 확인한 평행이동만 채택했다. 회전 재사용·사용자 Sync 전체 캐시 연결은 남아 있다.
+- Computer Use로 소유 시험 창에서 Rhino 기본 Move를 월드 X +1 m, Save As를 수행했다. 독립 실행본 재열기에서 기존 native ID/속성·체적 48 보존 통과. 증거: `.vide/native-editor-followup/eb88649f-2ade-4bb7-931d-9c76126014e0/result.json`. Save As 뒤 읽기 전용 안내도 재현됐으므로 저장 성공과 안내 문제를 분리한다. 이 안내의 원인은 아직 해결하지 않았다.
 
 ## 남은 검증
 
