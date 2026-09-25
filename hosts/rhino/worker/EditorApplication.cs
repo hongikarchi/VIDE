@@ -34,6 +34,8 @@ internal sealed class EditorApplication(RhinoDoc document, string directory, Fun
             throw new InvalidOperationException("UNSUPPORTED_APPLICATION");
         if (GroupIdentity.Signature(candidate.AllGroups) != GroupIdentity.Signature(document.Groups))
             throw new InvalidOperationException("UNSUPPORTED_APPLICATION");
+        if (LayerIdentity.Signature(candidate.AllLayers) != LayerIdentity.Signature(document.Layers))
+            throw new InvalidOperationException("UNSUPPORTED_APPLICATION");
         var current = document.Objects.GetObjectList(ObjectType.AnyObject).ToDictionary(WorkerScene.Id);
         var plan = new Plan();
         try
@@ -46,7 +48,7 @@ internal sealed class EditorApplication(RhinoDoc document, string directory, Fun
                     !(obj.Geometry is Brep or Extrusion or Curve or Mesh or Point)) throw new InvalidOperationException("UNSUPPORTED_APPLICATION");
                 var layer = candidate.AllLayers.FirstOrDefault(layer => layer.Index == obj.Attributes.LayerIndex);
                 var targetLayer = layer == null ? null : document.Layers.FirstOrDefault(item => !item.IsDeleted && item.Id == layer.Id);
-                if (targetLayer == null || targetLayer.Name != layer!.Name || targetLayer.ParentLayerId != layer.ParentLayerId || targetLayer.Color != layer.Color || targetLayer.IsVisible != layer.IsVisible || targetLayer.IsLocked != layer.IsLocked || targetLayer.PlotWeight != layer.PlotWeight || targetLayer.PlotColor != layer.PlotColor || targetLayer.LinetypeIndex != layer.LinetypeIndex || targetLayer.RenderMaterialIndex != layer.RenderMaterialIndex)
+                if (targetLayer == null)
                     throw new InvalidOperationException("UNSUPPORTED_APPLICATION");
                 var geometry = obj.Geometry.Duplicate();
                 var attributes = obj.Attributes.Duplicate();

@@ -2,7 +2,7 @@
 id: VERIFY-2026-09-24-local-product-completion
 title: 로컬 제품 완결 · 실제 왕복 및 확장 검수
 status: review
-version: 0.25
+version: 0.26
 updated: 2026-09-25
 owner: agent:codex
 related: [PLAN-02, AC-07, AC-08, AC-09, AC-10, AC-24, AC-25, AC-32, AC-33, AC-34]
@@ -186,3 +186,9 @@ Rhino [파일 설정 설명](https://docs.mcneel.com/rhino/8/help/en-us/options/
 `rhino-oversize-recovery.mjs`에서 640×640 격자(819,200 삼각형)를 자체 Rhino SDK로 한 번 생성/저장했다. 이어지는 export는 16 MiB 응답 제한으로 거절됐고, SDK 실행은 전체 결과가 확인되지 않은 `HOST_RESULT_UNKNOWN`으로 남았다. 내부 원인의 `HOST_RESULT_TOO_LARGE`가 모델 스키마 오류로 사라지지 않도록 읽기 응답 처리를 보완했다. 크기 제한을 늘리거나 부분 모델로 성공을 표시하지 않았다.
 
 복구는 저장 후보를 새 소유 Rhino에서 다시 읽기만 했고 같은 export 제한을 반환했다. 쓰기 호출은 전후 합계 1회, 양쪽 소유 프로세스 종료 2회, 저장 영수증 바이트와 3dm SHA-256 불변을 확인했다. 증거: `.vide/rhino-oversize-recovery/cc11958d-f193-4873-a81f-4315e877fa97/result.json`. 이는 초과 모델의 정상 표시 지원이나 자동 축소 복구의 완료를 뜻하지 않는다.
+
+## 빈 층의 조용한 누락 방지 — L3
+
+`rhino-layer-preservation.mjs`에서 객체가 없는 층의 추가·삭제·이름 변경·사용자 문자열 변경을 각각 후보에 만들고 적용 미리보기와 실제 적용이 모두 쓰기 전에 거절되는지 확인했다. 매 거절 뒤 대상 문서 지문은 같았다. 같은 층 표에서 객체 하나만 이동한 경우 적용·취득·독립 재열기를 통과했고 객체 native ID와 빈 층 이름/사용자 문자열이 유지됐다. 증거: `.vide/rhino-layer-preservation/f438a020-6347-4697-bcb6-bfefa9b61fb3/result.json`.
+
+`EditorApplication`의 검사를 참조된 층 일부에서 전체 활성 층 목록으로 옮겼다. ID·부모·이름·표시 색/가시성/잠김·출력 속성·선종류/렌더 재질 참조·사용자 문자열을 비교하며 후보 층 인덱스를 대상 인덱스로 대응한다. 신규 층 편집이나 모든 플러그인 UserData 보존의 지원 선언은 아니다.
