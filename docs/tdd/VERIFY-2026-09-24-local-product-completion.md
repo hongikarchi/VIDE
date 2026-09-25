@@ -2,7 +2,7 @@
 id: VERIFY-2026-09-24-local-product-completion
 title: 로컬 제품 완결 · 실제 왕복 및 확장 검수
 status: review
-version: 0.32
+version: 0.33
 updated: 2026-09-25
 owner: agent:codex
 related: [PLAN-02, AC-07, AC-08, AC-09, AC-10, AC-24, AC-25, AC-32, AC-33, AC-34]
@@ -241,3 +241,11 @@ File → Save As 대화상자는 열렸으나 Computer Use의 파일명 요소�
 `worker-measurements.mjs`에서 4개 객체 중 크기 변경 1개만 재계산한 뒤 반복 export의 계산 0개/재사용 4개를 확인했다. 이후 이동은 재사용, 회전은 첫 1개 재계산, 스케일은 해당 1개 재계산, 삭제 후 나머지 3개는 모두 재사용했다. 절대 tolerance 변경 뒤 3개 모두 무효화/재계산했고 같은 조건의 다음 조회는 계산 0개였다. 형상·수량·속성은 반복 조회에서 동일하며 재열기/Sync 해시 캐시 회귀도 통과했다.
 
 증거: `.vide/worker-measurements/a6bfceab-0132-4531-a245-54ebee4deff1/result.json`. 직전 성공 export의 ID/기하 해시/조건별 수량만 실행본 수명 동안 보존하며 삭제 항목을 누적하지 않는다. 기하 해시 및 표시 메시 생성은 계속 수행한다. 회전 자체의 수량 재사용이나 전체 export 비용 제거를 검증한 것은 아니다. C# 빌드 경고/오류 0개.
+
+## 다층 관통 개구부 Brep 수정·적용 — L3·L6
+
+`rhino-complex-brep.mjs`는 외곽 20×12m·두께 0.3m의 3개 층에 [공식 BooleanDifference](https://developer.rhino3d.com/api/rhinocommon/rhino.geometry.brep/createbooleandifference)로 4×4m 관통 개구부를 만들고 6×4m로 확대했다. 각 단계의 단일 유효 솔리드/10개 이상 면, 총 체적 201.6→194.4m³, Level/Role/OpeningWidth 속성, 기존 GUID·무관 점과 원본 SHA-256을 확인했다. 고정 적용은 수정 3개/추가·삭제 0개였고 독립 재열기의 전체 scene이 후보와 같았다.
+
+증거: `.vide/rhino-complex-brep/f2e87b34-ed8d-4577-80d4-9026e9a5d1be/result.json`. 최초 시험은 Replace 뒤 ModifyAttributes의 성공 반환에도 OpeningWidth가 4로 남아 실패했다. ID/속성을 교체 전에 확보하는 것만으로도 해결되지 않았다. 속성을 먼저 ModifyAttributes로 갱신한 뒤 Replace하고 재조회하는 순서로 위 검수가 통과했다. 이 실제 확인 순서를 제품 SDK 실행 안내에 반영했다. 특정 Rhino 내부 원인까지 확정한 것은 아니다.
+
+결정적 SDK 과업 검수다. 실제 구독 AI의 형상 설계 판단, 기본 Rhino UI로 개구부 수정, 임의 Boolean/곡면/이력·블록/렌더 자원의 일반 지원을 증명하지 않는다.
