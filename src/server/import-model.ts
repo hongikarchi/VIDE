@@ -1,3 +1,4 @@
+import { isDwgSdkEditMode } from '../contracts/dwg-edit-mode.ts';
 import { z } from 'zod';
 import type { IncomingMessage } from 'node:http';
 import type { Workspace } from '../core/workspace.ts';
@@ -89,8 +90,8 @@ export async function importModel(
       host: cad ? 'zwcad' : 'rhino',
       hostExecuted: true,
       text:
-        cad && result.dwgEditMode === 'polyline-vertices-v1'
-          ? 'DWG 작업 사본을 열었습니다. 기존 직선 경계의 이동·정점 수정을 지원하며 원본 파일은 변경하지 않습니다.'
+        cad && isDwgSdkEditMode(result.dwgEditMode)
+          ? 'DWG 작업 사본을 열었습니다. 지원되는 직선 객체는 자체 SDK에서 수정할 수 있으며 원본 파일은 변경하지 않습니다.'
           : cad
             ? 'DWG 모델 공간의 참고 경계를 읽었습니다. 좌표는 m이며 원본 도면 편집은 아직 지원하지 않습니다.'
             : '원본과 분리된 작업 사본을 열었습니다. 좌표 단위는 m입니다.',

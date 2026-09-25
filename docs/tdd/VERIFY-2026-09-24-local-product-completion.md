@@ -2,7 +2,7 @@
 id: VERIFY-2026-09-24-local-product-completion
 title: 로컬 제품 완결 · 실제 왕복 및 확장 검수
 status: review
-version: 0.26
+version: 0.27
 updated: 2026-09-25
 owner: agent:codex
 related: [PLAN-02, AC-07, AC-08, AC-09, AC-10, AC-24, AC-25, AC-32, AC-33, AC-34]
@@ -192,3 +192,13 @@ Rhino [파일 설정 설명](https://docs.mcneel.com/rhino/8/help/en-us/options/
 `rhino-layer-preservation.mjs`에서 객체가 없는 층의 추가·삭제·이름 변경·사용자 문자열 변경을 각각 후보에 만들고 적용 미리보기와 실제 적용이 모두 쓰기 전에 거절되는지 확인했다. 매 거절 뒤 대상 문서 지문은 같았다. 같은 층 표에서 객체 하나만 이동한 경우 적용·취득·독립 재열기를 통과했고 객체 native ID와 빈 층 이름/사용자 문자열이 유지됐다. 증거: `.vide/rhino-layer-preservation/f438a020-6347-4697-bcb6-bfefa9b61fb3/result.json`.
 
 `EditorApplication`의 검사를 참조된 층 일부에서 전체 활성 층 목록으로 옮겼다. ID·부모·이름·표시 색/가시성/잠김·출력 속성·선종류/렌더 재질 참조·사용자 문자열을 비교하며 후보 층 인덱스를 대상 인덱스로 대응한다. 신규 층 편집이나 모든 플러그인 UserData 보존의 지원 선언은 아니다.
+
+## 평면 CAD LINE 지원 확대 — L3 · H-ZWCAD-06
+
+`zwcad-linear-entities.mjs`의 LINE 2개+닫힌 Polyline 1개에서 기존 5m LINE을 10m로 끝점 수정·색 변경하고 다른 LINE을 삭제·새 1m LINE을 추가했다. 미리보기의 추가/수정/삭제 각 1개, 고정 적용, 영수증 재조회, 독립 재열기에서 기존 Handle·LINE 유형·색과 무변경 Polyline의 scene 전체를 확인했다. 낡은 기준 적용은 거절됐고 비평면 LINE 후보는 성공으로 반환하지 않았다. 입력 원본 해시는 유지됐다. 증거: `.vide/zwcad-linear-entities/ce5210be-7d42-4257-b5cd-c6543646030d/result.json`.
+
+`browser-dwg-sdk-import.mjs --linear`에서 실제 Chromium으로 혼합 DWG를 가져와 세 객체·LINE 길이 1/10m·Polyline 면적 6m²를 검증하고 선택 강조 화면을 확인했다. 원본 해시 유지·pageerror 없음. 증거: `.vide/browser-dwg-sdk/0a52caaf-5952-479d-b3cc-3897de9f6c1f/result.json`, 같은 폴더의 `import.png`. 최초 검사 실행본은 시작 timeout이었고, 보이는 소유 실행본으로 재현해 ZWCAD의 충돌 진단 전송 대기 창을 확인했다. 외부 전송/설정 변경 없이 아니오를 선택한 뒤 ready가 생성됐고 재검증이 통과했다. 시작 충돌의 근본 원인이 해결됐다고 단정하지 않는다.
+
+`zwcad-native-edit.mjs --move-only`는 같은 혼합 문서에서 ZWCAD 기본 Move·QSAVE와 저장 파일 재열기를 확인했다. 모든 Handle·nativeType·길이/면적이 유지됐고 선택 기준 좌표는 1m 이동했다. `.vide/zwcad-native-edit/3e772e78-c0ee-40f1-aec2-023ef094d328/passed.json`. 생성 코드는 결정적 SDK 시험이며 이번 LINE 과업의 실제 구독 AI 작성 시험을 뜻하지 않는다.
+
+제품 연결은 혼합 모드를 자체 SDK에 전달하고 구 SDK 미설정 시 이전 템플릿으로 우회하지 않는다. 혼합 기준의 연계 입력 허용/미지원 모드 거절, 기존 정점 템플릿의 혼합 모드 거절을 계약 시험했다. UI는 작업 사본으로 표시하고 전송 안내에 LINE을 포함한다. 확장 데이터·잠김·그룹·다른 단위 편집 제한은 유지한다.

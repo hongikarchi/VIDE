@@ -360,3 +360,27 @@ test('linked policy correction and call limit preserve candidates for restart wi
   assert.equal(draft.permission, 'candidate');
   assert.equal(draft.executionLimits.maxToolCalls, 4);
 });
+
+test('linked candidate validation accepts the mixed LINE SDK capability but refuses unknown modes', async (t) => {
+  const { workspace, project, request } = await fixture(t);
+  workspace.update(project.id, 'a', 'succeeded', {
+    host: 'zwcad',
+    hostExecuted: true,
+    verified: true,
+    executionMode: 'sdk',
+    referenceOnly: true,
+    dwgEditMode: 'unsupported',
+    objects: [],
+  });
+  assert.throws(() => workspace.submit(project.id, request), { code: 'ZWCAD_REFERENCE_ONLY' });
+  workspace.update(project.id, 'a', 'succeeded', {
+    host: 'zwcad',
+    hostExecuted: true,
+    verified: true,
+    executionMode: 'sdk',
+    referenceOnly: true,
+    dwgEditMode: 'linear-entities-v1',
+    objects: [],
+  });
+  assert.equal(workspace.submit(project.id, request).request.state, 'queued');
+});

@@ -6,7 +6,8 @@ import { createHash, randomUUID } from 'node:crypto';
 import { chromium } from 'playwright';
 import { startServer } from '../../src/server/server.ts';
 
-if (!process.argv[2]) throw Error('Provide a synthetic 20x10 m DWG fixture');
+if (!process.argv[2]) throw Error('Provide a synthetic DWG fixture');
+const linear = process.argv.includes('--linear');
 const source = resolve(process.argv[2]),
   directory = resolve('.vide/browser-dwg-sdk', randomUUID());
 await mkdir(directory, { recursive: true });
@@ -44,9 +45,22 @@ try {
   }
   assert.equal(imported?.state, 'succeeded', JSON.stringify(imported));
   assert.equal(imported.result.importMode, 'sdk');
-  assert.equal(imported.result.scene[0].area, 200);
-  assert.equal(imported.result.scene[0].length, 60);
-  assert.equal(imported.result.dwgEditMode, 'polyline-vertices-v1');
+  if (linear) {
+    assert.equal(imported.result.objects.length, 3);
+    assert.equal(imported.result.dwgEditMode, 'linear-entities-v1');
+    assert.deepEqual(
+      imported.result.scene
+        .filter((row) => row.nativeType === 'Line')
+        .map((row) => row.length)
+        .sort((a, b) => a - b),
+      [1, 10],
+    );
+    assert.equal(imported.result.scene.find((row) => row.nativeType === 'LWPolyline').area, 6);
+  } else {
+    assert.equal(imported.result.scene[0].area, 200);
+    assert.equal(imported.result.scene[0].length, 60);
+    assert.equal(imported.result.dwgEditMode, 'polyline-vertices-v1');
+  }
   assert.equal(await fingerprint(), before);
   await page.getByRole('button', { name: '이 후보 보기', exact: true }).click();
   await page.locator('#document-tree').evaluate((node) => (node.open = true));
@@ -60,8 +74,9 @@ try {
     requestId: imported.id,
     sourceUnchanged: true,
     importMode: 'sdk',
-    area: 200,
-    length: 60,
+    area: imported.result.scene.reduce((sum, row) => sum + (row.area ?? 0), 0),
+    length: imported.result.scene.reduce((sum, row) => sum + (row.length ?? 0), 0),
+    mode: imported.result.dwgEditMode,
     browserImported: true,
     objectSelected: true,
   };

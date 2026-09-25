@@ -38,6 +38,10 @@ test('native DWG edit preserves identity and rejects unsupported scope before ho
     [object, object],
   ])
     assert.throws(() => validateDwgEdit(objects, baseline), { code: 'UNSUPPORTED_DWG_EDIT' });
+  assert.throws(
+    () => validateDwgEdit([object], { ...baseline, dwgEditMode: 'linear-entities-v1' }),
+    { code: 'UNSUPPORTED_DWG_EDIT' },
+  );
   assert.throws(() => validateDwgEdit([object], { ...baseline, dwgEditMode: null }), {
     code: 'UNSUPPORTED_DWG_EDIT',
   });

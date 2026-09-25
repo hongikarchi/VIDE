@@ -1,3 +1,4 @@
+import { isDwgSdkEditMode } from '../contracts/dwg-edit-mode.ts';
 import { requestConflict } from '../contracts/request-scope.ts';
 import { interventionInput } from './intervention.ts';
 import { requestInputSchema, requestStateSchema } from '../contracts/workspace.ts';
@@ -131,7 +132,7 @@ export class Workspace {
         if (
           input.permission === 'candidate' &&
           source.result.referenceOnly &&
-          source.result.dwgEditMode !== 'polyline-vertices-v1'
+          !isDwgSdkEditMode(source.result.dwgEditMode)
         )
           fail('ZWCAD_REFERENCE_ONLY');
         const doc = z

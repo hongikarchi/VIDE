@@ -1,3 +1,4 @@
+import { isDwgSdkEditMode } from '../contracts/dwg-edit-mode.ts';
 import { useLayoutEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import type { Root } from 'react-dom/client';
@@ -231,7 +232,7 @@ function Card({
       ? '확장 · ' + message.extensionVersion
       : imported
         ? message.host === 'zwcad'
-          ? result?.dwgEditMode === 'polyline-vertices-v1'
+          ? isDwgSdkEditMode(result?.dwgEditMode)
             ? 'ZWCAD 작업 사본'
             : 'ZWCAD 참고 도면'
           : 'Rhino 작업 사본'

@@ -2,7 +2,7 @@
 id: ARCH-01
 title: VIDE 기술 구조와 구현 계약
 status: review
-version: 0.28
+version: 0.29
 updated: 2026-09-25
 owner: agent:codex
 related: [SPEC-00, SPEC-02, SPEC-03, SPEC-04, PLAN, ADR-014, ADR-015, ADR-016, ADR-017]
@@ -587,3 +587,7 @@ PLAN-06의 프로필 실행은 서버가 선택한 절대 configDirectory를 Cli
 프로필 메타데이터는 로컬 데이터 루트의 cli-profiles/profiles.json에 원자적 교체로 저장하고, 공식 CLI 인증은 UUID 하위 경로에만 둔다. 모델 백업의 허용 디렉터리 밖이며 웹 게시에는 포함하지 않는다. Codex 관리 프로필은 로그인·상태·실행 모두 file 자격증명 저장소를 명시해 OS keyring 기본값의 공유를 피한다. 기본 호환 프로필의 저장 방식은 바꾸지 않는다.
 
 전환은 공급자별 활성/대기 ID를 저장한다. workspace_requests의 queued/running/unknown과 실제 Execution.active를 함께 확인하며 대기 전환 중 신규 접수를 거절한다. 별도 휘발성 카운터를 복제하지 않는다. 접수된 input.accountProfileId는 서버가 고정하며 클라이언트 지정은 거절한다. 개입은 원 프로필을 승계하고 다른 공급자로 바꾸지 않는다. 재시작 뒤 unknown은 전환 장벽을 유지한다. 계정 API는 기존 로컬 인증·Origin 검사를 그대로 따른다.
+
+### ZWCAD의 평면 LINE 표현
+
+모델 공간 LINE은 기존 뷰어의 `kind=polyline` 두 점 표현으로 정규화하고 scene의 `nativeType=Line`으로 원래 유형을 보존한다. `area=null`, 길이는 원본 단위를 m로 환산한다. 편집 가능한 mm 문서가 LINE을 포함하면 `dwgEditMode=linear-entities-v1`, 기존 Polyline 전용 문서는 `polyline-vertices-v1`을 유지한다. 혼합 모드는 자체 SDK/고정 적용만 허용하고 레거시 정점 템플릿 계약은 바꾸지 않는다. 고정 적용은 같은 Handle의 Entity 타입이 달라졌으면 쓰기 전 거절한다. LINE은 시작/끝점, Polyline은 기존 정점 복사를 사용하고 공통 표시 속성은 Entity 단위로 보존한다.

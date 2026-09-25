@@ -350,3 +350,50 @@ test('malformed host response after execution preserves uncertainty instead of a
     store.close();
   }
 });
+
+for (const available of [true, false]) {
+  test(`mixed LINE candidates use the SDK without falling back to legacy templates; sdk=${available}`, async () => {
+    const { store, workspace, project, input } = fixture();
+    let calls = 0;
+    workspace.submit(project.id, { ...input, host: 'zwcad' });
+    workspace.update(project.id, input.id, 'succeeded', {
+      host: 'zwcad',
+      hostExecuted: true,
+      verified: true,
+      referenceOnly: true,
+      dwgEditMode: 'linear-entities-v1',
+      objects: [],
+      scene: [],
+    });
+    const execution = new Execution(workspace, {
+      zwcadSdk: available
+        ? {
+            run: async () => {
+              calls++;
+              return { text: 'SDK result', hostExecuted: true };
+            },
+          }
+        : undefined,
+      providerFactory: () => {
+        throw Error('Legacy provider must not run');
+      },
+    });
+    try {
+      const request = workspace.submit(project.id, {
+        ...input,
+        host: 'zwcad',
+        id: 'followup',
+        permission: 'candidate',
+        baseRequestId: input.id,
+      }).request;
+      execution.start(request);
+      await Promise.all([...execution.active.values()].map((item) => item.completion));
+      const saved = workspace.get(project.id, request.id);
+      assert.equal(calls, available ? 1 : 0);
+      assert.equal(saved.state, available ? 'succeeded' : 'failed');
+      if (!available) assert.equal(saved.result.code, 'ZWCAD_REFERENCE_ONLY');
+    } finally {
+      store.close();
+    }
+  });
+}

@@ -1,3 +1,4 @@
+import { isDwgSdkEditMode } from '../contracts/dwg-edit-mode.ts';
 import type { AccountProfiles } from '../ai/account-profiles.ts';
 import { executionLimits } from '../contracts/execution-limits.ts';
 import { modelContext } from './model-context.ts';
@@ -325,7 +326,8 @@ export class Execution {
         : undefined;
       if (
         previous?.result.referenceOnly &&
-        previous.result.dwgEditMode !== 'polyline-vertices-v1' &&
+        (!isDwgSdkEditMode(previous.result.dwgEditMode) ||
+          (previous.result.dwgEditMode === 'linear-entities-v1' && !this.zwcadSdk)) &&
         input.permission === 'candidate'
       )
         throw { code: 'ZWCAD_REFERENCE_ONLY' };

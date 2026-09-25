@@ -8,7 +8,11 @@ import { launchOwnedHost } from '../../hosts/common/owned-process.ts';
 import { ZwcadEditors } from '../../hosts/zwcad/editor-sessions.ts';
 import { inspectDwg, inspectorOptions } from '../../hosts/zwcad/inspector.ts';
 
-const source = JSON.parse(await readFile(process.argv[2], 'utf8')).result;
+const fixture = JSON.parse(await readFile(process.argv[2], 'utf8'));
+const source = fixture.result || fixture.captured;
+const modes = process.argv.includes('--move-only')
+  ? ['move-save']
+  : ['move-unsaved-control', 'move-save', 'move-unsaved', 'save-as', 'close'];
 const directory = resolve('.vide/zwcad-native-edit', randomUUID());
 await mkdir(directory, { recursive: true });
 const config = inspectorOptions();
@@ -23,7 +27,7 @@ execFileSync(join(process.env.WINDIR, 'Microsoft.NET/Framework64/v4.0.30319/csc.
 ]);
 const quote = (path) => JSON.stringify(path.replaceAll('\\', '/'));
 const evidence = [];
-for (const mode of ['move-unsaved-control', 'move-save', 'move-unsaved', 'save-as', 'close']) {
+for (const mode of modes) {
   const folder = join(directory, mode);
   await mkdir(folder);
   const token = randomBytes(32).toString('hex'),
@@ -88,7 +92,11 @@ for (const mode of ['move-unsaved-control', 'move-save', 'move-unsaved', 'save-a
     if (mode.startsWith('move-')) {
       if (mode !== 'move-unsaved-control') {
         const captured = await editors.capture(target);
-        assert.equal(captured.scene[0].area, 240);
+        assert.equal(captured.scene[0].area, source.scene[0].area);
+        assert.deepEqual(
+          captured.scene.map((row) => [row.nativeId, row.nativeType, row.length, row.area]),
+          source.scene.map((row) => [row.nativeId, row.nativeType, row.length, row.area]),
+        );
         assert.equal(captured.objects[0].points[0][0], source.objects[0].points[0][0] + 1);
         assert.equal(captured.objects[0].nativeId, source.objects[0].nativeId);
         assert.equal((await editors.list())[0].modified, mode === 'move-unsaved');
@@ -96,7 +104,11 @@ for (const mode of ['move-unsaved-control', 'move-save', 'move-unsaved', 'save-a
           join(folder, 'editing.dwg'),
           join(folder, 'saved-inspection'),
         );
-        assert.equal(saved.scene[0].area, 240);
+        assert.equal(saved.scene[0].area, source.scene[0].area);
+        assert.deepEqual(
+          saved.scene.map((row) => [row.nativeId, row.nativeType, row.length, row.area]),
+          source.scene.map((row) => [row.nativeId, row.nativeType, row.length, row.area]),
+        );
         assert.equal(
           saved.objects[0].points[0][0],
           source.objects[0].points[0][0] + (mode === 'move-save' ? 1 : 0),
