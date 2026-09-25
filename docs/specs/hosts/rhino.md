@@ -2,7 +2,7 @@
 id: HOST-RHINO
 title: Rhino 호스트 계약과 검증 범위
 status: review
-version: 0.19
+version: 0.20
 updated: 2026-09-25
 owner: agent:codex
 related: [SPEC-01, SPEC-02, FR-03, FR-04, AC-24, AC-38, OQ-03, OQ-10]
@@ -14,7 +14,7 @@ related: [SPEC-01, SPEC-02, FR-03, FR-04, AC-24, AC-38, OQ-03, OQ-10]
 
 SDK의 AI query는 기본 50개·최대 100개/64 KiB 페이지와 ID 필터를 지원한다. 다음 페이지는 같은 revision을 요구한다. 소유 합성 문서 120개 실제 조회와 전체 후보 보존을 확인했다([검수](../../tdd/VERIFY-2026-09-24-local-product-completion.md)). 네이티브 가져오기 규모의 확대 검증과 구분한다.
 
-## 1. 현재 지원 상태 — 2026-09-24 기준
+## 1. 현재 지원 상태 — 2026-09-25 기준
 
 제품 경로는 VIDE가 기동·소유한 별도 Rhino 실행본의 자체 .NET 8 플러그인(`hosts/rhino/worker/`)이다. AI 코드는 작업 사본에서 실행하고, 편집 창(VIDE가 복사해 연 문서)에는 검토한 후보를 적용하는 고정 메서드만 제공한다. 사용자가 직접 연 외부 실행본에는 기존 RhinoMCP 호환 어댑터(TCP 1999)가 남아 있으며 제품 지원 경로로 확대하지 않는다.
 
@@ -27,6 +27,8 @@ SDK의 AI query는 기본 50개·최대 100개/64 KiB 페이지와 ID 필터를 
 | H-RHINO-05 | 닫힌 평면 경계로 수직 돌출 후보 생성·높이/경계 변경 | 실증: CLI→XY 스케치→Extrusion 저장/재열기(§2.1), 편집 창 적용에서 높이 변경(체적 24→48, §2.3), 현재 UI의 Claude 생성/핀 높이 수정 체적 480→360·원본 보존 재검증([검수](../../tdd/VERIFY-2026-09-24-local-product-completion.md)), 한 요청의 CAD 수정 경계→Rhino 돌출과 부분 실패 보존([연계 검증](../../tdd/VERIFY-2026-09-24-linked-hosts.md)) | 생성 기준 없는 임의 솔리드의 파라메트릭 편집으로 일반화 금지, 기본 Move·Save As·재열기 검수 통과([검수](../../tdd/VERIFY-2026-09-24-local-product-completion.md)); 읽기 전용 안내는 VIDE 없는 기본 Save As 대조군에서도 재현; 환경 원인은 미해소 |
 
 편집 창 적용의 지원 범위: 독립 Brep/Extrusion/Curve/Mesh/Point의 형상·사용자 문자열 수정, 추가·삭제와 기존 층. 그룹·이력·참조·잠김·재질·층/문서 자원 변경과 미확인 관계는 거절한다. 적용과 파일 저장은 구분하며, 적용 후 원본 지문이 달라지므로 취득 전 후보를 다시 적용하지 않는다.
+
+자체 SDK·소유 편집 창의 객체 상한은 10,000개다. 합성 1천 박스·1만 점의 네이티브 저장/재열기·ID·수량 캐시와 실제 브라우저 가져오기/선택을 확인했고, 1만 점 중 한 객체 후보를 편집 창에 적용한 뒤 전체 ID 보존을 확인했다([검수](../../tdd/VERIFY-2026-09-24-local-product-completion.md)). 요청 4 MiB·응답 16 MiB 제한을 유지하므로 개수 이내인 임의 복잡 메시까지 지원을 보장하지 않는다. 레거시 JSON/외부 MCP 경로의 500개 제한과 원격 공유 규모는 별도다.
 
 독립 Rhino·ZWCAD 요청의 실제 동시 실행과 분리 결과 저장을 합성 문서로 확인했다([검수](../../tdd/VERIFY-2026-09-24-local-product-completion.md)). 같은 문서의 동시 쓰기 허용을 뜻하지 않는다.
 

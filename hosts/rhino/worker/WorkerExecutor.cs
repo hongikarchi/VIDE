@@ -28,7 +28,7 @@ internal sealed class WorkerExecutor(RhinoDoc document, string directory)
             var cached = new Dictionary<string, WorkerScene.Measurements>();
             if (request.TryGetProperty("measurementCache", out var values))
             {
-                if (values.GetArrayLength() > 500) throw new InvalidOperationException("INVALID_MEASUREMENT_CACHE");
+                if (values.GetArrayLength() > WorkerScene.MaxObjects) throw new InvalidOperationException("INVALID_MEASUREMENT_CACHE");
                 foreach (var item in values.EnumerateArray())
                 {
                     double? Read(string key) { var value=item.GetProperty(key); if(value.ValueKind==JsonValueKind.Null)return null;
@@ -40,7 +40,7 @@ internal sealed class WorkerExecutor(RhinoDoc document, string directory)
             var geometryCache = new Dictionary<string, (string hash, WorkerScene.Measurements value)>();
             if (request.TryGetProperty("geometryMeasurementCache", out var geometryValues))
             {
-                if (geometryValues.GetArrayLength() > 500) throw new InvalidOperationException("INVALID_MEASUREMENT_CACHE");
+                if (geometryValues.GetArrayLength() > WorkerScene.MaxObjects) throw new InvalidOperationException("INVALID_MEASUREMENT_CACHE");
                 foreach (var item in geometryValues.EnumerateArray())
                 {
                     double? Read(string key) { var value = item.GetProperty(key); if (value.ValueKind == JsonValueKind.Null) return null;

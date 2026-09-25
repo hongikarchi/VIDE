@@ -31,8 +31,8 @@ export const nativeSceneSchema = z.object({
 });
 export const nativeModelSchema = z
   .object({
-    objects: z.array(object).max(500),
-    scene: z.array(nativeSceneSchema).max(500),
+    objects: z.array(object).max(10000),
+    scene: z.array(nativeSceneSchema).max(10000),
     measurementVersion: z.literal(1).optional(),
     measurementStats: z
       .object({

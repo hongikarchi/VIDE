@@ -83,7 +83,7 @@ public sealed class WorkerCommand : Command
                 var header = new byte[4];
                 await stream.ReadExactlyAsync(header, timeout.Token);
                 var length = System.Buffers.Binary.BinaryPrimitives.ReadInt32BigEndian(header);
-                if (length < 1 || length > 1024 * 1024) return;
+                if (length < 1 || length > 4 * 1024 * 1024) return;
                 var data = new byte[length];
                 await stream.ReadExactlyAsync(data, timeout.Token);
                 using var json = JsonDocument.Parse(data);

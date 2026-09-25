@@ -2,7 +2,7 @@
 id: VERIFY-2026-09-24-local-product-completion
 title: 로컬 제품 완결 · 실제 왕복 및 확장 검수
 status: review
-version: 0.16
+version: 0.17
 updated: 2026-09-25
 owner: agent:codex
 related: [PLAN-02, AC-07, AC-08, AC-09, AC-10, AC-24, AC-25, AC-32, AC-33, AC-34]
@@ -41,6 +41,16 @@ related: [PLAN-02, AC-07, AC-08, AC-09, AC-10, AC-24, AC-25, AC-32, AC-33, AC-34
 ## 큰 모델 초기 AI 문맥 — L5 일부
 
 SDK 단일 대상의 초기 객체/수량 요약을 100개·64 KiB로 제한했다. 핀 대상 우선, 전체/포함/생략 수, 실제 정보 재조회 안내를 전달하고 실행기에는 전체 기준 모델과 보호 핀을 유지한다. `tests/server/model-context.test.mjs`의 합성 1만 객체·대형 정점 배열·다국어 byte 상한·빈 모델 및 `execution.test.mjs`의 실제 실행 제어기→SDK 대역 전달을 통과했다(관련 14시험, UI/서버 타입 검사 통과). 원본 자료나 보호 범위를 잘라내지 않으며 기존 JSON 경로는 그대로다. 이 시험은 초기 입력 크기의 검증이고 네이티브 가져오기 500개 상한 확대·조회 페이지화·실제 대형 호스트 지원 완료가 아니다.
+
+## 네이티브 큰 모델 확대 — L5
+
+Rhino 자체 SDK/편집 창 및 TS native 모델의 상한을 1만 객체로 맞추고 측정 캐시 요청을 4 MiB까지 받도록 했다. 레거시 경로의 500개·응답 16 MiB 제한은 유지한다. C# 빌드 경고/오류 0, 타입 검사, 1만 허용/초과·불완전 ID 거절 계약 검증 통과.
+
+- `tests/integration/rhino-large-native.mjs`: 1천 박스(각 체적24), 1만 점의 생성·저장/재열기·전체 ID·export·마지막 페이지 통과. 재열기 후 측정 계산0/재사용 각각1000·10000. 1천 박스 execute2.11초/export2.75초/캐시export1.41초, 1만 점 execute3.06초/export1.29초/캐시export1.43초. JSON 크기는 각각961,143/6,080,225 bytes. 점처럼 계산이 싼 경우 캐시 경로가 더 빠르다는 보장은 없다. 증거 `.vide/rhino-large-native/f4cc23cb-8c6f-4f51-bf87-4a2585196e03/result.json`.
+- `tests/integration/browser-large-native.mjs`: 위 실제 3dm을 Chromium UI에서 가져오기→전체 객체 목록→마지막 객체 선택 통과. 각각12.04초/12.44초(호스트 기동 포함). 화면 확인과 pageerror0. 증거 `.vide/browser-large-native/4d780763-4a37-440e-9c67-1b2aabafcfde/result.json` 및 같은 폴더 PNG.
+- `tests/integration/rhino-large-apply.mjs`: 1만 점 문서에서 한 객체만5m 이동하는 후보 preview/apply3.61초, 재취득/재열기 후 전체 ID와 좌표 일치. 증거 `.vide/rhino-large-apply/868c3878-33dd-4ac1-a9fa-e80c26fa9b9b/result.json`.
+
+단일 실행 측정이고 모든 하드웨어·복잡 메시의 성능 보증은 아니다. CPU/GPU/호스트 메모리 peak의 체계적 측정과 조밀 네이티브 메시의 전송 한도 대응은 남았다. 초기 시험 디렉터리 부모 누락은 호스트 실행 전 실패했고 하네스 수정 뒤 재실행했다. 원격 공유의 객체/용량 한도를 자동 확장하지 않았다.
 
 ## 큰 TCP 결과 수신 — L5 일부
 

@@ -36,7 +36,7 @@ internal sealed class EditorApplication(RhinoDoc document, string directory, Fun
         var plan = new Plan();
         try
         {
-            if (candidate.Objects.Count > 500) throw new InvalidOperationException("IMPORT_LIMIT");
+            if (candidate.Objects.Count > WorkerScene.MaxObjects) throw new InvalidOperationException("IMPORT_LIMIT");
             foreach (var obj in candidate.Objects)
             {
                 var id = obj.Attributes.GetUserString("vide-id") ?? obj.Attributes.ObjectId.ToString();

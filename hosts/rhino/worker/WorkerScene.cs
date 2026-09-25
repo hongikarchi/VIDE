@@ -9,6 +9,7 @@ namespace Vide.Worker;
 
 internal static class WorkerScene
 {
+    internal const int MaxObjects = 10000;
     internal sealed record Measurements(double? Area, double? Volume, double? Length);
     internal static string Id(RhinoObject obj) => obj.Attributes.GetUserString("vide-id") ?? obj.Id.ToString();
     internal static string Fingerprint(RhinoObject obj)
@@ -20,7 +21,7 @@ internal static class WorkerScene
     internal static void Validate(RhinoDoc doc)
     {
         var objects = doc.Objects.GetObjectList(ObjectType.AnyObject).ToArray();
-        if (objects.Length > 500) throw new InvalidOperationException("IMPORT_LIMIT");
+        if (objects.Length > MaxObjects) throw new InvalidOperationException("IMPORT_LIMIT");
         var ids = new HashSet<string>();
         foreach (var obj in objects)
         {

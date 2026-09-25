@@ -94,7 +94,7 @@ Object.assign(errors, {
 Object.assign(errors, {
   SOURCE_CHANGED:
     '기준 Rhino 파일이 외부에서 변경됐습니다. 수정된 파일을 다시 불러와 이어서 작업하세요.',
-  IMPORT_LIMIT: '현재 가져오기는 유효한 객체 500개까지 지원합니다.',
+  IMPORT_LIMIT: '현재 연결 경로의 객체 수 한도를 넘었습니다. 문서를 나누어 불러와 주세요.',
   IMPORT_FAILED: '파일을 불러오지 못했습니다.',
 });
 
@@ -118,7 +118,7 @@ Object.assign(errors, {
   UNSUPPORTED_NATIVE_TARGET:
     '잠김·참조·그룹·이력 관계 또는 미지원 형상 때문에 원본 이동을 적용할 수 없습니다.',
   CAPTURE_FAILED:
-    '문서 사본을 가져오지 못했습니다. 문서 연결·단위와 객체 수(500개 이하)를 확인하세요.',
+    '문서 사본을 가져오지 못했습니다. 문서 연결·단위와 해당 연결 경로의 객체 수 한도를 확인하세요.',
   NETWORK_UNAVAILABLE:
     '로컬 서버에 연결하지 못했습니다. 서버 실행 상태를 확인하세요. 전송한 작업은 이력에서 상태를 확인한 뒤 다시 요청하세요.',
   INVALID_RESPONSE: '서버 응답을 읽지 못했습니다. 작업 이력을 새로 확인하세요.',

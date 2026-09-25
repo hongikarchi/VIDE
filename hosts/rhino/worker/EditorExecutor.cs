@@ -70,7 +70,7 @@ internal sealed class EditorExecutor(RhinoDoc document, string directory)
     private string Fingerprint()
     {
         var objects = document.Objects.GetObjectList(ObjectType.AnyObject).OrderBy(obj => obj.Id).ToArray();
-        if (objects.Length > 500) throw new InvalidOperationException("IMPORT_LIMIT");
+        if (objects.Length > WorkerScene.MaxObjects) throw new InvalidOperationException("IMPORT_LIMIT");
         var serialization = new Rhino.FileIO.SerializationOptions { WriteUserData = true, WriteRenderMeshes = false, WriteAnalysisMeshes = false };
         var layers = string.Join("\n", document.Layers.Where(layer => !layer.IsDeleted).OrderBy(layer => layer.Id).Select(layer => layer.ToJSON(serialization)));
         var strings = JsonSerializer.Serialize(Enumerable.Range(0, document.Strings.Count).Select(i => new { key = document.Strings.GetKey(i), value = document.Strings.GetValue(i) }).OrderBy(item => item.key, StringComparer.Ordinal));
