@@ -55,7 +55,9 @@ export const labels: Record<string, string> = {
 };
 export const errors: Record<string, string> = {
   PROFILE_SWITCH_PENDING: '계정 전환 대기 중입니다. 기존 작업이 끝난 뒤 보내세요.',
-  PROFILE_IN_USE: '이 공급자의 작업을 마친 뒤 로그인하세요.',
+  PROFILE_IN_USE: '이 공급자의 작업을 마친 뒤 계정을 변경하세요.',
+  PROFILE_LOGOUT_REQUIRED: '먼저 이 계정을 로그아웃하고 완료 여부를 확인하세요.',
+  PROFILE_CLEANUP_FAILED: '로컬 계정 파일을 정리하지 못했습니다. 계정은 목록에 유지됩니다.',
   PROFILE_NOT_FOUND: '계정을 찾을 수 없습니다. 계정 목록을 새로고침하세요.',
   PROFILE_PATH_INVALID: '계정 저장 경로를 확인할 수 없습니다. 실행을 중단했습니다.',
   PROFILE_LIMIT: '계정 프로필은 최대 30개까지 등록할 수 있습니다.',

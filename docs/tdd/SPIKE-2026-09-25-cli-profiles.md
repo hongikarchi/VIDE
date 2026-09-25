@@ -2,7 +2,7 @@
 id: SPIKE-2026-09-25-cli-profiles
 title: CLI 계정 경로 격리 시험
 status: review
-version: 0.6
+version: 0.7
 updated: 2026-09-25
 owner: agent:codex
 related: [PLAN-06, SPEC-02, ARCH-01]
@@ -33,3 +33,7 @@ related: [PLAN-06, SPEC-02, ARCH-01]
 ## 관리 프로필 로그아웃
 
 공식 CLI 로그아웃을 기존 인증 프로세스 수명 관리에 연결했다. 기본 프로필은 대상에서 제외하고 종료/검증 동안 새 요청·전환을 막는다. 성공 종료와 SUBSCRIPTION_LOGIN_REQUIRED 확인이 모두 필요하며 timeout/CLI 실행 실패는 성공이 아니다. 양쪽 명령/환경/확인 실패 계약 시험과 실제 Chromium 진행→완료/선택 유지 검증을 통과했다. 설치 Codex를 새 빈 임시 홈에서 실행한 `tools/spikes/2026-09-25-cli-profiles/logout.mjs`도 통과했고 기본 로그인 상태는 전후 동일했다. 실제 사용자 계정은 로그아웃하지 않았으며 Claude 실인증 로그아웃은 미검증이다. 근거: [Codex 명령](https://learn.chatgpt.com/docs/developer-commands?surface=cli), [Claude CLI](https://code.claude.com/docs/en/cli-reference).
+
+## 관리 프로필 제거
+
+로그아웃 확인과 로컬 설정/이력 삭제 확인 뒤 관리 디렉터리/목록만 제거하도록 연결했다. 기본/다른 공급자/사용 중 거절, nested junction이 있으면 삭제 전 거절, 선택 기본 복원·재시작·다른 프로필 보존을 계약 검증했다. HTTP는 비동기 인증 확인 중 새 불명확 작업이 생기는 경우도 사용 중으로 거절했고 프로젝트 이력은 남았다. Chromium의 제거 확인 취소/수락과 목록 제거·기본 선택 복원 통과. 실제 사용자 프로필은 제거하지 않고 임시 합성 프로필로만 시험했다. 코드: `account-profiles.test.mjs`, `server.test.mjs`, `browser-accounts.mjs`.

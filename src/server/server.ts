@@ -460,6 +460,25 @@ export async function startServer({
           return;
         }
       }
+      if (url.pathname === '/api/v1/accounts/remove' && request.method === 'POST') {
+        const input = z
+          .object({
+            provider: z.enum(['claude-cli', 'codex-cli']),
+            id: z.string().uuid(),
+            deleteLocalData: z.literal(true),
+          })
+          .strict()
+          .parse(await body(request));
+        profiles.assertIdle(input.provider);
+        profiles.directory(input.provider, input.id);
+        const status = await execution
+          .provider({ provider: input.provider, accountProfileId: input.id })
+          .status();
+        if (status.available || status.reason !== 'SUBSCRIPTION_LOGIN_REQUIRED')
+          throw new DomainError('PROFILE_LOGOUT_REQUIRED');
+        send(200, profiles.remove(input.provider, input.id));
+        return;
+      }
       if (url.pathname === '/api/v1/accounts/select' && request.method === 'POST') {
         const input = z
           .object({ provider: z.enum(['claude-cli', 'codex-cli']), id: z.string() })

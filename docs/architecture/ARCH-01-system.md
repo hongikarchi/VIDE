@@ -2,7 +2,7 @@
 id: ARCH-01
 title: VIDE 기술 구조와 구현 계약
 status: review
-version: 0.24
+version: 0.25
 updated: 2026-09-25
 owner: agent:codex
 related: [SPEC-00, SPEC-02, SPEC-03, SPEC-04, PLAN, ADR-014, ADR-015, ADR-016, ADR-017]
@@ -453,6 +453,8 @@ AI execute의 성공 응답은 Rhino snapshot 또는 ZWCAD model을 query의 첫
 Rhino 편집 적용은 그룹 표의 ID·이름·인덱스·사용자 문자열을 후보/대상 문서 간 비교하며 문서 지문에도 포함한다. 그룹 객체는 변하지 않은 경우에만 통과하고 추가·수정·삭제·그룹 해제/배정은 거절한다. 독립 객체의 적용 때문에 그룹을 재생성하거나 인덱스를 추정 매핑하지 않는다.
 
 `POST /api/v1/accounts/logout`은 관리 profileId만 받고 기존 로그인 프로세스 수명 관리기를 `operation=logout`으로 재사용한다. Codex는 고정 file 저장소의 `logout`, Claude는 `auth logout`을 사용한다. exit0과 공식 status의 SUBSCRIPTION_LOGIN_REQUIRED를 모두 확인하며 AUTH_TIMEOUT/CLI_UNAVAILABLE는 성공이 아니다. 상태 API는 operation을 포함하고 공급자 lease는 종료/검증까지 유지한다. 프로필 디렉터리/인증 파일을 VIDE가 직접 파싱하거나 지우지 않는다.
+
+`POST /api/v1/accounts/remove`는 관리 profileId, `deleteLocalData=true`를 요구한다. 공식 상태의 인증 해제를 확인하고 비동기 조회 후 사용 중 여부를 재검사한다. 관리 루트 아래 UUID 디렉터리의 정규 경로와 하위 심볼릭 링크/경로 이탈을 검사한 뒤 해당 디렉터리만 제거한다. 파일 제거 실패는 메타데이터를 유지한다. 파일 제거 뒤 manifest 저장 실패 시 기존 프로필 메타데이터를 복원하고 다음 접근에서 빈 관리 디렉터리를 만들 수 있으나 삭제된 이력의 복원은 보장하지 않는다. 자격 증명 내용은 읽지 않는다.
 
 ## 5. 모델·데이터 저장
 

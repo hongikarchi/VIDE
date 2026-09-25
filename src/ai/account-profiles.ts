@@ -8,8 +8,10 @@ import {
   lstatSync,
   existsSync,
   unlinkSync,
+  readdirSync,
+  rmSync,
 } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { join, resolve, sep } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { providers } from '../contracts/ai-settings.ts';
@@ -118,10 +120,44 @@ export class AccountProfiles {
     if (data.pending[provider]) fail('PROFILE_SWITCH_PENDING');
     return data.active[provider];
   }
+  remove(provider: Provider, id: string) {
+    this.assertIdle(provider);
+    this.find(provider, id); // Never remove the compatible default login.
+    const directory = this.directory(provider, id)!;
+    const inspect = (path: string) => {
+      for (const entry of readdirSync(path, { withFileTypes: true })) {
+        const child = join(path, entry.name);
+        if (lstatSync(child).isSymbolicLink()) fail('PROFILE_PATH_INVALID');
+        if (entry.isDirectory()) {
+          if (
+            !realpathSync(child)
+              .toLowerCase()
+              .startsWith(directory.toLowerCase() + sep)
+          )
+            fail('PROFILE_PATH_INVALID');
+          inspect(child);
+        }
+      }
+    };
+    inspect(directory);
+    try {
+      rmSync(directory, { recursive: true, force: false });
+    } catch {
+      fail('PROFILE_CLEANUP_FAILED');
+    }
+    this.data.profiles = this.data.profiles.filter((row) => row.id !== id);
+    if (this.data.active[provider] === id) {
+      this.data.active[provider] = 'default';
+      this.data.pending[provider] = null;
+    } else if (this.data.pending[provider] === id) this.data.pending[provider] = null;
+    this.save();
+    return this.list();
+  }
   directory(provider: Provider, id: string) {
     if (id === 'default') return undefined;
     this.find(provider, id);
     const path = join(this.root, id);
+    if (!existsSync(path)) mkdirSync(path);
     if (
       lstatSync(path).isSymbolicLink() ||
       realpathSync(path).toLowerCase() !== resolve(path).toLowerCase()

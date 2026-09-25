@@ -278,6 +278,49 @@ test('account routes pin requests, drain two unresolved jobs and isolate login p
   );
 });
 
+test('account removal requires logout, explicit local deletion and an idle recheck', async (t) => {
+  let authenticated = true,
+    inject;
+  const { api, app } = await fixture(t, {
+    providerFactory: () => ({
+      status: async () => {
+        inject?.();
+        return authenticated
+          ? { available: true }
+          : { available: false, reason: 'SUBSCRIPTION_LOGIN_REQUIRED' };
+      },
+    }),
+  });
+  const post = (path, body) => api(path, { method: 'POST', body });
+  const row = await (await post('/accounts', { provider: 'codex-cli', label: 'Remove' })).json();
+  const project = await (await post('/projects', { name: 'Removal' })).json();
+  const value = { provider: 'codex-cli', id: row.id, deleteLocalData: true };
+  const remove = async (input = value) => await (await post('/accounts/remove', input)).json();
+  assert.equal((await remove({ ...value, id: 'default' })).code, 'INVALID_INPUT');
+  assert.equal((await remove({ ...value, deleteLocalData: false })).code, 'INVALID_INPUT');
+  assert.equal((await remove()).code, 'PROFILE_LOGOUT_REQUIRED');
+  authenticated = false;
+  inject = () =>
+    app.store.db
+      .prepare('INSERT INTO workspace_requests VALUES(?,?,?,?,?,?)')
+      .run(
+        'late-job',
+        project.id,
+        JSON.stringify({ id: 'late-job', provider: 'codex-cli' }),
+        'unknown',
+        null,
+        new Date().toISOString(),
+      );
+  assert.equal((await remove()).code, 'PROFILE_IN_USE');
+  inject = undefined;
+  app.store.db.prepare("UPDATE workspace_requests SET state='failed' WHERE id='late-job'").run();
+  assert.deepEqual((await remove()).profiles, []);
+  assert.equal(
+    app.store.db.prepare('SELECT count(*) AS count FROM workspace_requests').get().count,
+    1,
+  );
+});
+
 test('managed login HTTP lifecycle blocks requests and selection until confirmed termination', async (t) => {
   let child,
     kills = 0;

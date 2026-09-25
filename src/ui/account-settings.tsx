@@ -136,6 +136,27 @@ export function AccountSettings({ provider }: { provider: Provider }) {
               >
                 로그아웃
               </button>
+              <button
+                disabled={busy || loggingIn}
+                onClick={() => {
+                  if (
+                    !window.confirm(
+                      `${row.label} 계정을 목록에서 제거하고 이 프로필의 로컬 CLI 설정·이력을 삭제할까요? 먼저 로그아웃해야 합니다. 프로젝트 작업 이력은 유지됩니다.`,
+                    )
+                  )
+                    return;
+                  void action(async () => {
+                    await api('/accounts/remove', 'POST', {
+                      provider,
+                      id: row.id,
+                      deleteLocalData: true,
+                    });
+                    setCommand('');
+                  });
+                }}
+              >
+                제거
+              </button>
               {login?.profileId === row.id && loggingIn && (
                 <button
                   disabled={busy || login.state === 'stopping'}

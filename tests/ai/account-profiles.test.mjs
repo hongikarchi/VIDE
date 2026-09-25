@@ -8,6 +8,7 @@ import {
   symlinkSync,
   mkdirSync,
   writeFileSync,
+  existsSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -31,6 +32,59 @@ test('profile metadata persists, provider identities stay separate and busy swit
     assert.equal(restored.directory('codex-cli', 'default'), undefined);
     assert.equal(restored.directory('codex-cli', a.id), join(root, a.id));
     assert.equal(readFileSync(join(root, 'profiles.json'), 'utf8').includes(root), false);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('removal cleans only an idle managed profile and persists default selection', () => {
+  const root = mkdtempSync(join(tmpdir(), 'vide-remove-profile-'));
+  let busy = false;
+  try {
+    const profiles = new AccountProfiles(root, () => busy);
+    const row = profiles.add('codex-cli', 'Remove');
+    const keep = profiles.add('claude-cli', 'Keep');
+    const directory = profiles.directory('codex-cli', row.id);
+    mkdirSync(join(directory, 'history'));
+    writeFileSync(join(directory, 'history', 'synthetic.txt'), 'test');
+    profiles.select('codex-cli', row.id);
+    busy = true;
+    assert.throws(() => profiles.remove('codex-cli', row.id), { code: 'PROFILE_IN_USE' });
+    assert.equal(existsSync(directory), true);
+    busy = false;
+    assert.throws(() => profiles.remove('codex-cli', 'default'), { code: 'PROFILE_NOT_FOUND' });
+    assert.throws(() => profiles.remove('codex-cli', keep.id), { code: 'PROFILE_NOT_FOUND' });
+    profiles.remove('codex-cli', row.id);
+    assert.equal(existsSync(directory), false);
+    const restored = new AccountProfiles(root, () => false);
+    assert.equal(restored.selected('codex-cli'), 'default');
+    assert.deepEqual(
+      restored.list().profiles.map((p) => p.id),
+      [keep.id],
+    );
+    assert.equal(existsSync(restored.directory('claude-cli', keep.id)), true);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('removal refuses nested junctions before deleting any profile content', () => {
+  const root = mkdtempSync(join(tmpdir(), 'vide-remove-junction-'));
+  try {
+    const profiles = new AccountProfiles(join(root, 'profiles'), () => false);
+    const row = profiles.add('codex-cli', 'Nested');
+    const directory = profiles.directory('codex-cli', row.id);
+    const outside = join(root, 'outside');
+    mkdirSync(outside);
+    writeFileSync(join(outside, 'keep.txt'), 'untouched');
+    symlinkSync(
+      outside,
+      join(directory, 'nested'),
+      process.platform === 'win32' ? 'junction' : 'dir',
+    );
+    assert.throws(() => profiles.remove('codex-cli', row.id), { code: 'PROFILE_PATH_INVALID' });
+    assert.equal(readFileSync(join(outside, 'keep.txt'), 'utf8'), 'untouched');
+    assert.equal(profiles.list().profiles.length, 1);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

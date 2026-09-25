@@ -73,6 +73,13 @@ try {
   loginProcess.emit('close', 0);
   await row.getByText('로그아웃 완료', { exact: true }).waitFor();
   assert.ok((await row.textContent()).includes('선택됨'));
+  page.once('dialog', (dialog) => dialog.dismiss());
+  await row.getByRole('button', { name: '제거', exact: true }).click();
+  assert.equal(await row.count(), 1);
+  page.once('dialog', (dialog) => dialog.accept());
+  await row.getByRole('button', { name: '제거', exact: true }).click();
+  await row.waitFor({ state: 'detached' });
+  assert.ok((await section.textContent()).includes('기존 CLI 로그인 · 선택됨'));
   console.log(
     'Account add/select/login instructions verified in Chromium; provider authentication mocked.',
   );
