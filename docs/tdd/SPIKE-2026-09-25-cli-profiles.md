@@ -2,7 +2,7 @@
 id: SPIKE-2026-09-25-cli-profiles
 title: CLI 계정 경로 격리 시험
 status: review
-version: 0.9
+version: 0.10
 updated: 2026-09-25
 owner: agent:codex
 related: [PLAN-06, SPEC-02, ARCH-01]
@@ -41,3 +41,7 @@ related: [PLAN-06, SPEC-02, ARCH-01]
 ## 모델 목록의 전환 완료 반영
 
 `browser-account-catalog.mjs`는 합성 두 계정의 서로 다른 모델 목록에서 전환 대기→실행 종료 후 활성 계정 변경→목록 재조회→이전 모델 재선택 요구를 실제 Chromium으로 검증했다. 초안과 명시 모델은 유지하고 미지원 모델 상태에서는 전송을 막는다. 입력창에서 다른 공급자를 선택한 동안의 대기 전환도 감시하고 설정 목록은 주기적으로 현재 선택/대기를 다시 읽는다. 다른 공급자 전환 회귀도 통과했다. `browser-accounts.mjs`는 로그아웃 종료 후 목록 재조회도 확인했다. 늦게 도착한 이전 목록은 최신 재조회 결과를 덮어쓰지 않는다. 실제 공급자가 제공하지 않은 모델 권한을 보장하거나 장기 인증 갱신 시험으로 해석하지 않는다.
+
+## 두 번째 계정의 실제 Rhino 도구 실행
+
+`browser-authenticated-accounts.mjs --host`는 별도 DB/메타데이터와 실제 두 번째 ChatGPT 관리 프로필을 사용했다. Chromium에서 해당 프로필을 선택한 뒤 실제 구독 요청 1회로 자체 Rhino SDK가 2×3×4m 박스 후보를 저장했고, 결과 체적 24m³·객체 1개·SDK 실행 표시·요청의 계정 고정을 확인했다. 서버 재시작 후 선택도 유지됐다. 인증 파일 복사·사용자 프로젝트/실제 활성 계정 변경은 하지 않았다. 증거: `.vide/account-roundtrip/40a507c0-a637-4e30-82e4-2841d32075b9/result.json`. 이 시험은 후보 생성까지이며 원본 적용이나 장기 인증 갱신 시험을 대신하지 않는다.

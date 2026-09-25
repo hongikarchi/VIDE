@@ -5,10 +5,12 @@ import { randomUUID } from 'node:crypto';
 import { chromium } from 'playwright';
 import { AccountProfiles } from '../../src/ai/account-profiles.ts';
 import { CodexCli } from '../../src/ai/codex-cli.ts';
+import { sdkOptions } from '../../src/server/sdk-options.ts';
 import { startServer } from '../../src/server/server.ts';
 
 // Real CLI calls; only the test profile's directory is mapped to an already authenticated
 // profile so the live project's database and selection remain untouched. No auth file copy.
+const native = process.argv.includes('--host');
 const existing = new AccountProfiles(
   join(process.env.LOCALAPPDATA, 'VIDE', 'cli-profiles'),
   () => true,
@@ -24,6 +26,7 @@ let app, browser;
 const invoked = [];
 const options = {
   filename,
+  ...(native ? { sdkOptions: sdkOptions(directory) } : {}),
   providerFactory: (settings) => {
     if (settings.provider !== 'codex-cli')
       return {
@@ -55,12 +58,14 @@ try {
   await page.waitForFunction(() => document.querySelector('#project-picker')?.value);
   const projectId = await page.locator('#project-picker').inputValue();
   await page.locator('#model').selectOption('codex-cli');
-  await page.locator('#permission').selectOption('review');
+  await page.locator('#permission').selectOption(native ? 'candidate' : 'review');
   const submit = async (count, profileId) => {
     await page
       .locator('#body')
       .fill(
-        '검토만 합니다. JSON message에는 VIDE_PROFILE_OK를, operations에는 빈 배열을 반환하세요.',
+        native
+          ? '원점에 폭 2 m, 깊이 3 m, 높이 4 m 박스 한 개를 만들어 주세요. VIDE 도구로 실제 작업 사본을 만들고 확인해 주세요. 이름은 Account test입니다.'
+          : '검토만 합니다. JSON message에는 VIDE_PROFILE_OK를, operations에는 빈 배열을 반환하세요.',
       );
     await page.locator('#request').click();
     let saved;
@@ -81,11 +86,16 @@ try {
     }
     assert.ok(saved, 'Request did not finish');
     assert.equal(saved.state, 'succeeded', JSON.stringify(saved.result));
-    assert.ok(saved.result.text.includes('VIDE_PROFILE_OK'));
+    if (native) {
+      assert.equal(saved.result.executionMode, 'sdk');
+      assert.equal(saved.result.objects.length, 1);
+      assert.deepEqual(saved.result.scene[0].boundsSize, [2, 3, 4]);
+      assert.ok(Math.abs(saved.result.scene[0].volume - 24) < 1e-8);
+    } else assert.ok(saved.result.text.includes('VIDE_PROFILE_OK'));
     assert.equal(saved.input.accountProfileId, profileId);
-    assert.equal(saved.result.hostExecuted, false);
+    assert.equal(saved.result.hostExecuted, native);
   };
-  await submit(1, 'default');
+  if (!native) await submit(1, 'default');
   await page.locator('#draft-menu summary').click();
   await page.locator('#ai-settings').click();
   const section = page
@@ -103,7 +113,7 @@ try {
   );
   const accounts = await page.evaluate(async () => await (await fetch('/api/v1/accounts')).json());
   await page.getByRole('button', { name: '닫기', exact: true }).click();
-  await submit(2, accounts.active['codex-cli']);
+  await submit(native ? 1 : 2, accounts.active['codex-cli']);
   await page.close();
   await app.close();
   app = await startServer(options);
@@ -112,14 +122,14 @@ try {
   await page.waitForFunction(() => document.querySelector('#project-picker')?.value);
   const restored = await page.evaluate(async () => await (await fetch('/api/v1/accounts')).json());
   assert.equal(restored.active['codex-cli'], accounts.active['codex-cli']);
-  assert.deepEqual(invoked, ['default', 'second']);
+  assert.deepEqual(invoked, native ? ['second'] : ['default', 'second']);
   const result = {
     passed: true,
     directory,
-    actualSubscriptionRequests: 2,
+    actualSubscriptionRequests: native ? 1 : 2,
     profileSelectionPersisted: true,
     credentialCopy: false,
-    hostWrites: 0,
+    verifiedHostCandidates: native ? 1 : 0,
   };
   await writeFile(join(directory, 'result.json'), JSON.stringify(result, null, 2));
   console.log(JSON.stringify(result));
