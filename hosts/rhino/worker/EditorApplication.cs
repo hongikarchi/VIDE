@@ -66,7 +66,8 @@ internal sealed class EditorApplication(RhinoDoc document, string directory, Fun
                 }
                 else if (!GeometryBase.GeometryEquals(original.Geometry, geometry) || WorkerReadback.Metadata(original) != item.Metadata)
                 {
-                    if (attributes.GroupCount > 0) throw new InvalidOperationException("UNSUPPORTED_NATIVE_TARGET");
+                    if (!(attributes.GetGroupList() ?? []).SequenceEqual(original.Attributes.GetGroupList() ?? []))
+                        throw new InvalidOperationException("UNSUPPORTED_NATIVE_TARGET");
                     plan.Updated.Add(id);
                 }
             }
@@ -75,7 +76,7 @@ internal sealed class EditorApplication(RhinoDoc document, string directory, Fun
                 if (!plan.Items.ContainsKey(entry.Key)) plan.Removed.Add(entry.Value.Id);
                 if ((!plan.Items.ContainsKey(entry.Key) || plan.Updated.Contains(entry.Key)) &&
                     (entry.Value.IsLocked || entry.Value.IsReference || entry.Value.IsInstanceDefinitionGeometry ||
-                     entry.Value.Attributes.GroupCount > 0 || entry.Value.HasHistoryRecord() || entry.Value.HistoryParents().Length > 0 || entry.Value.HistoryChildren().Length > 0))
+                     (entry.Value.Attributes.GroupCount > 0 && !plan.Items.ContainsKey(entry.Key)) || entry.Value.HasHistoryRecord() || entry.Value.HistoryParents().Length > 0 || entry.Value.HistoryChildren().Length > 0))
                     throw new InvalidOperationException("UNSUPPORTED_NATIVE_TARGET");
             }
             return plan;

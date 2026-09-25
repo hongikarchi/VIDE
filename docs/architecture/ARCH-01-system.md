@@ -2,7 +2,7 @@
 id: ARCH-01
 title: VIDE 기술 구조와 구현 계약
 status: review
-version: 0.26
+version: 0.27
 updated: 2026-09-25
 owner: agent:codex
 related: [SPEC-00, SPEC-02, SPEC-03, SPEC-04, PLAN, ADR-014, ADR-015, ADR-016, ADR-017]
@@ -587,3 +587,7 @@ PLAN-06의 프로필 실행은 서버가 선택한 절대 configDirectory를 Cli
 프로필 메타데이터는 로컬 데이터 루트의 cli-profiles/profiles.json에 원자적 교체로 저장하고, 공식 CLI 인증은 UUID 하위 경로에만 둔다. 모델 백업의 허용 디렉터리 밖이며 웹 게시에는 포함하지 않는다. Codex 관리 프로필은 로그인·상태·실행 모두 file 자격증명 저장소를 명시해 OS keyring 기본값의 공유를 피한다. 기본 호환 프로필의 저장 방식은 바꾸지 않는다.
 
 전환은 공급자별 활성/대기 ID를 저장한다. workspace_requests의 queued/running/unknown과 실제 Execution.active를 함께 확인하며 대기 전환 중 신규 접수를 거절한다. 별도 휘발성 카운터를 복제하지 않는다. 접수된 input.accountProfileId는 서버가 고정하며 클라이언트 지정은 거절한다. 개입은 원 프로필을 승계하고 다른 공급자로 바꾸지 않는다. 재시작 뒤 unknown은 전환 장벽을 유지한다. 계정 API는 기존 로컬 인증·Origin 검사를 그대로 따른다.
+
+### 그룹 소속을 보존하는 적용
+
+기존 객체 업데이트는 `GetGroupList()`를 원본과 비교하고 같은 그룹 목록이면 허용한다. 그룹 표 전체의 기존 서명 비교를 유지한다. 그룹 소속 신규 객체·그룹 구성원 삭제·소속 변경은 Prepare에서 거절한다. Replace/ModifyAttributes와 최종 Metadata 검증은 그대로 사용하며 대상 native ID·그룹 소속을 보존한다. 잠김·참조·이력 등 기존 보호는 해제하지 않는다.

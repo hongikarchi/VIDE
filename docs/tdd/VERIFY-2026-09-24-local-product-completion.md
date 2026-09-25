@@ -2,7 +2,7 @@
 id: VERIFY-2026-09-24-local-product-completion
 title: 로컬 제품 완결 · 실제 왕복 및 확장 검수
 status: review
-version: 0.21
+version: 0.22
 updated: 2026-09-25
 owner: agent:codex
 related: [PLAN-02, AC-07, AC-08, AC-09, AC-10, AC-24, AC-25, AC-32, AC-33, AC-34]
@@ -158,3 +158,13 @@ SDK 영수증으로 복구한 사본에 recovered 표시를 추가하고 목표 
 동일 기하의 최초 시험 파일을 `browser-large-native.mjs`로 가져와 실제 Chromium 표시·선택·객체 누락 없음·pageerror 0을 확인했다. 기동 포함 가져오기/표시 12.98초, JS heap 약 5.97→47.09 MB, 측정 시 Node RSS 약 181.14 MB. `.vide/browser-large-native/535e0fca-c509-488e-8717-994ff085b479/result.json`과 `dense-mesh.png`를 확인했다. `rhino-large-apply.mjs ... dense-mesh`는 메시 Z+5 후보 미리보기/적용 5.74초, 저장 사본 재열기 후 같은 native ID·변경 위치를 확인했다(`.vide/rhino-large-apply/e11a3930-4f4c-4f5d-976c-96cb97fe8588/result.json`). 사용자 문서·실제 AI 추론은 사용하지 않았다.
 
 각 Node RSS와 Rhino working/private/peak working set은 원시 결과에 남겼다. Rhino peak는 프로세스 전체 수명 값이며 브라우저 CDP JS heap은 GPU/전체 브라우저 메모리가 아니다. 단일 평면 격자 실증을 모든 복잡 BIM 모델·프레임 상한 초과·운영 메모리 보증으로 확대하지 않는다.
+
+## 그룹 객체 편집 확대 — L3
+
+그룹 표·객체별 소속을 유지한 기존 그룹 객체의 이동(Z+5)과 사용자 문자열(Level=L02) 수정 후보를 소유 편집 창에 적용하고 저장/재열기 후 동일 native ID·그룹 이름/2개 구성원·무관 객체 불변을 확인했다. 독립 객체 수정 회귀도 통과했다. 그룹 이름 변경·해제·구성원 삭제·신규 구성원 추가는 미리보기/적용 전에 거절하고 원본 지문 불변을 확인했다. `tests/integration/rhino-group-preservation.mjs`, `.vide/rhino-group-preservation/fe5b21f4-8cbe-4ca9-a55a-8bf6e955ab03/result.json`. C# 빌드 경고/오류 0. SDK `ObjectAttributes.GetGroupList()`는 설치 RhinoCommon.xml에서 null/그룹 인덱스 반환을 확인했다. 기존 검수의 그룹 이동 거절은 이전 구현 기준이며 현재 지원은 이 절과 호스트 지원표를 따른다.
+
+## SaveAs 경로 대조 추가 — L1 미해결
+
+`rhino-saveas-control.mjs --command --save-in-temp`로 저장소 밖 임시 경로와 기존 경로를 비교하려 했으나 현재 두 경로 모두 RunScript가 명령 이력 없이 Cancel/false로 끝났다. Idle 실행으로 옮겨도 동일했다(임시 경로 `6be9f3a4-1f81-4219-b153-f9c466a37644`, 기존 경로 `3ab36219-ec41-4b71-94ba-3d21da043d99`; `.vide/rhino-saveas-control/` 아래). 저장되지 않았으므로 경로별 읽기 전용 비교의 유효 표본이 아니다. 앞선 SaveAs 성공/읽기 전용 재현 기록을 대체하지 않는다.
+
+`--inspect`의 소유 합성 창을 Computer Use로 확인했을 때 차단 모달은 없었다. UI에서 SaveAs의 파일명 프롬프트는 열렸지만 텍스트 붙여넣기가 Rhino Paste 명령으로 해석돼 파일 저장 확인까지 가지 못했고, 120초 수명 종료로 시험 창이 닫혔다. 사용자 문서/설정은 변경하지 않았다. Rhino 공식 [SaveAs 문서](https://developer.rhino3d.com/api/rhinocommon/rhino.rhinodoc/saveas)는 API 기능 근거이며 이번 취소/읽기 전용 원인을 설명하는 증거는 아니다. 해결했다고 표시하지 않는다.
