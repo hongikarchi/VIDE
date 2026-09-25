@@ -79,3 +79,19 @@ export function linkedRequestDraft(state: DraftState, parent: UiRequest) {
     body: `두 대상의 현재 후보를 먼저 확인하고, 이미 완료된 작업을 반복하지 말고 아래 목표의 남은 부분을 수행하세요. 완료 여부를 판단할 수 없으면 확인할 사항을 알려주세요.\n\n[원 목표와 조건]\n${draft.body}`,
   };
 }
+
+/** A cleared composer can add text to the selected parent without reattaching both targets. */
+export function interventionTargetDraft(state: DraftState, parent: UiRequest): DraftState {
+  if (
+    parent.input.linkedTargets &&
+    !state.linkedTargets &&
+    (state.baseRequestId ?? null) === (parent.input.baseRequestId ?? null)
+  ) {
+    return {
+      ...state,
+      linkedTargets: parent.input.linkedTargets,
+      coordinateBasis: parent.input.coordinateBasis,
+    };
+  }
+  return state;
+}

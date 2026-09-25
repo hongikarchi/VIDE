@@ -16,6 +16,8 @@ const { launchRhinoWorker } = await import(
 const directory = resolve('.vide/browser-linked-hosts', randomUUID());
 const failRhino = process.argv.includes('--fail-rhino');
 const sameHost = process.argv.includes('--same-host');
+const intervene = process.argv.includes('--intervene');
+assert.ok(!intervene || (!sameHost && !failRhino));
 assert.ok(!(sameHost && failRhino));
 await mkdir(join(directory, 'zwcad-sdk-models'), { recursive: true });
 const cad = JSON.parse(await readFile(process.argv[2], 'utf8')).result;
@@ -61,7 +63,7 @@ try {
     sdkOptions: config,
     providerFactory: ({ agent }) => ({
       status: async () => ({ available: true }),
-      run: async (context) => {
+      run: async (context, { signal }) => {
         providerCalls++;
         const cadRef = context.goal.match(/zwcad:[a-f0-9-]+/)?.[0],
           rhinoRef = sameHost
@@ -141,11 +143,23 @@ try {
             assert.equal(JSON.parse(failed.content[0].text).code, 'HOST_RESULT_UNKNOWN');
             return { text: 'CAD 후보는 준비됐고 Rhino 쓰기는 결과 확인이 필요합니다.' };
           }
-          await call(
+          const writing = call(
             'execute',
             rhinoRef,
-            `var curve=new PolylineCurve(new[]{${points}});var shape=Extrusion.Create(curve,6,true);if(shape==null)throw new Exception("Invalid boundary");foreach(var obj in doc.Objects.GetObjectList(Rhino.DocObjects.ObjectType.AnyObject))doc.Objects.Replace(obj.Id,shape);`,
+            `var curve=new PolylineCurve(new[]{${points}});var shape=Extrusion.Create(curve,6,true);if(shape==null)throw new Exception("Invalid boundary");foreach(var obj in doc.Objects.GetObjectList(Rhino.DocObjects.ObjectType.AnyObject))doc.Objects.Replace(obj.Id,shape);${intervene ? 'var until=DateTime.UtcNow.AddSeconds(10);while(DateTime.UtcNow<until){var value=Math.Sqrt(12345.0);}' : ''}`,
           );
+          if (intervene) {
+            await Promise.race([
+              writing,
+              new Promise((_, reject) =>
+                signal.addEventListener(
+                  'abort',
+                  () => reject(Object.assign(new Error('Cancelled'), { code: 'CANCELLED' })),
+                  { once: true },
+                ),
+              ),
+            ]);
+          } else await writing;
           await call('query', rhinoRef);
           return { text: 'CAD 수정 경계로 Rhino 높이 6 m 후보를 만들었습니다.' };
         } finally {
@@ -218,6 +232,60 @@ try {
   const response = await submitted;
   assert.equal(response.status(), 202);
   const parent = await response.json();
+  let held;
+  if (intervene) {
+    const deadline = Date.now() + 180000;
+    let started = false;
+    while (Date.now() < deadline) {
+      const rows = app.store.db.prepare('SELECT * FROM workspace_requests').all();
+      const child = rows.find((row) => {
+        const input = JSON.parse(row.input);
+        return input.parentRequestId === parent.id && input.host === 'rhino';
+      });
+      const intent = child?.result && JSON.parse(child.result);
+      if (intent?.operationId) {
+        try {
+          const receipt = JSON.parse(
+            await readFile(join(intent.workerDirectory, intent.operationId + '.json'), 'utf8'),
+          );
+          if (receipt.result.code === 'HOST_RESULT_UNKNOWN') {
+            started = true;
+            break;
+          }
+        } catch (error) {
+          if (error.code !== 'ENOENT') throw error;
+        }
+      }
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+    assert.equal(started, true, 'Rhino native write must be active before intervention');
+    await page
+      .getByLabel('메시지', { exact: true })
+      .fill('높이는 4.5 m로 바꾸고 CAD 경계는 유지해 주세요.');
+    const add = page
+      .locator('#active-work')
+      .getByRole('button', { name: '추가 지시', exact: true })
+      .first();
+    assert.equal(await add.isDisabled(), false, await add.getAttribute('title'));
+    const accepted = page.waitForResponse(
+      (r) => r.request().method() === 'POST' && r.url().endsWith('/interventions'),
+    );
+    await page
+      .locator('#active-work')
+      .getByRole('button', { name: '추가 지시', exact: true })
+      .first()
+      .click();
+    const heldResponse = await accepted;
+    assert.equal(heldResponse.status(), 202);
+    held = await heldResponse.json();
+    assert.equal(held.state, 'queued');
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    assert.equal(providerCalls, 1);
+    const pending = app.store.db
+      .prepare('SELECT state FROM workspace_requests WHERE id=?')
+      .get(parent.id);
+    assert.equal(pending.state, 'running', 'Native completion must still be awaited');
+  }
   let done;
   const deadline = Date.now() + 240000;
   while (Date.now() < deadline) {
@@ -225,9 +293,52 @@ try {
     if (!['queued', 'running'].includes(done.state)) break;
     await new Promise((resolve) => setTimeout(resolve, 300));
   }
-  assert.equal(done.state, failRhino ? 'failed' : 'succeeded', JSON.stringify(done));
+  assert.equal(done.state, failRhino || intervene ? 'failed' : 'succeeded', JSON.stringify(done));
   assert.equal(providerCalls, 1);
   const outcomes = JSON.parse(done.result).targetResults;
+  if (intervene) {
+    for (const row of outcomes) {
+      assert.equal(row.state, 'unknown', 'Cancelled writes require explicit result confirmation');
+      const recovered = await page.request.post(
+        `${app.origin}/api/v1/projects/${project.id}/requests/${row.requestId}/reconcile`,
+        {
+          headers: { Origin: app.origin },
+          data: {},
+        },
+      );
+      assert.equal(recovered.status(), 200);
+      const value = await recovered.json();
+      assert.equal(value.state, 'succeeded', JSON.stringify(value));
+      assert.equal(value.result.recovered, true);
+      assert.equal(value.result.progress.attempts, 1);
+    }
+    const saved = app.store.db.prepare('SELECT * FROM workspace_requests WHERE id=?').get(held.id);
+    assert.equal(saved.state, 'interrupted');
+    assert.equal(JSON.parse(saved.result).code, 'INTERVENTION_REVIEW_REQUIRED');
+    assert.match(JSON.parse(saved.input).body, /4.5 m/);
+    assert.equal(providerCalls, 1);
+    await app.close();
+    app = await startServer({
+      filename: join(directory, 'test.sqlite'),
+      sdkOptions: config,
+      providerFactory: () => ({
+        status: async () => ({ available: true }),
+        run: async () => {
+          providerCalls++;
+          throw Error('Unexpected automatic replay');
+        },
+      }),
+    });
+    await page.goto(app.launchUrl);
+    await page.locator('#project-picker').selectOption(project.id);
+    await page
+      .locator(`[data-request-id="${held.id}"]`)
+      .getByRole('button', { name: '확인된 후보에서 이어가기', exact: true })
+      .click();
+    assert.match(await page.getByLabel('메시지', { exact: true }).inputValue(), /4.5 m/);
+    assert.equal(providerCalls, 1, 'Draft recovery must not execute the agent');
+    await page.screenshot({ path: join(directory, 'held-intervention.png'), fullPage: true });
+  }
   const results = outcomes.map((row) =>
     JSON.parse(
       app.store.db.prepare('SELECT result FROM workspace_requests WHERE id=?').get(row.requestId)
@@ -274,8 +385,10 @@ try {
         area: 260,
         volume: failRhino || sameHost ? null : 1560,
         sameHost,
-        partialUnknownPreserved: failRhino,
+        partialUnknownPreserved: failRhino || intervene,
         providerCalls,
+        nativeIntervention: intervene,
+        heldRequestId: held?.id,
         deterministicAgent: true,
         packagedApp: Boolean(process.env.VIDE_TEST_PACKAGE_APP),
       },

@@ -98,7 +98,11 @@ export interface WorkSummary {
   id: string;
   body: string;
   request?: {
-    input?: { executionLimits?: import('./execution-limits.ts').ExecutionLimits };
+    input?: {
+      executionLimits?: RequestInput['executionLimits'];
+      parentRequestId?: unknown;
+      linkedTargets?: RequestInput['linkedTargets'];
+    };
     state: RequestState;
     result?: { phase?: string; code?: string; progress?: ExecutionProgress } | null;
   };

@@ -86,13 +86,16 @@ function ActiveWork({ messages, reason, intervene }: ActiveProps) {
               </small>
             )}
             {intervene &&
+              !request.input?.parentRequestId &&
               ['queued', 'running'].includes(request.state) &&
               request.result?.phase !== 'waiting' && (
                 <button
                   disabled={!!reason?.(message.id)}
                   title={
                     reason?.(message.id) ||
-                    '현재 입력을 추가하고 이전 작업 종료 후 원 기준에서 다시 실행합니다.'
+                    (request.input?.linkedTargets
+                      ? '이 작업의 두 대상에 현재 입력을 추가합니다. 저장된 부분 결과가 있으면 확인 후 이어갑니다.'
+                      : '현재 입력을 추가하고 이전 작업 종료 후 원 기준에서 다시 실행합니다.')
                   }
                   onClick={() => intervene(message.id)}
                 >

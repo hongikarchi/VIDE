@@ -1,4 +1,4 @@
-import { linkedRequestDraft } from './linked-draft.ts';
+import { linkedRequestDraft, interventionTargetDraft } from './linked-draft.ts';
 import { accountIndicator } from './account-indicator.ts';
 import { executionLimits } from '../contracts/execution-limits.ts';
 import { showExecutionLimits } from './execution-limits.tsx';
@@ -574,14 +574,16 @@ $('body').oninput = () => {
 };
 function interventionReason(id: string): string | undefined {
   if (busy || !ready) return '현재 전송이 끝난 뒤 추가하세요.';
-  const original = state.messages.find((entry) => entry.id === id)?.request.input;
-  if (!original || original.parentRequestId) return '상위 작업에서 추가하세요.';
-  if (validate(state)) return validate(state);
+  const parent = state.messages.find((entry) => entry.id === id)?.request;
+  const original = parent?.input;
+  if (!parent || !original || original.parentRequestId) return '상위 작업에서 추가하세요.';
+  const draft = interventionTargetDraft(state, parent);
+  if (validate(draft)) return validate(draft);
   if (
     (original.host || 'rhino') !== state.host ||
     original.permission !== state.permission ||
     (original.baseRequestId ?? null) !== (state.baseRequestId ?? null) ||
-    JSON.stringify(original.linkedTargets) !== JSON.stringify(state.linkedTargets)
+    JSON.stringify(original.linkedTargets) !== JSON.stringify(draft.linkedTargets)
   )
     return '이 작업의 대상·기준·권한을 맞춘 뒤 추가하세요.';
   if (
@@ -601,7 +603,12 @@ async function submitRequest(predecessorId?: string) {
     return;
   busy = true;
   render();
-  const input = { ...packet(state), id: crypto.randomUUID() };
+  const predecessor =
+    predecessorId && state.messages.find((entry) => entry.id === predecessorId)?.request;
+  const input = {
+    ...packet(predecessor ? interventionTargetDraft(state, predecessor) : state),
+    id: crypto.randomUUID(),
+  };
   const projectId = currentProject().id,
     original = state;
   try {

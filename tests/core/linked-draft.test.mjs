@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { linkedRequestDraft } from '../../src/ui/linked-draft.ts';
+import { linkedRequestDraft, interventionTargetDraft } from '../../src/ui/linked-draft.ts';
 import { initial } from '../../src/ui/model.ts';
 import { draftSnapshot, restoreDraft } from '../../src/ui/draft-storage.ts';
 
@@ -130,4 +130,35 @@ test('held linked intervention reuses verified predecessors while retaining revi
   );
   parent.state = 'running';
   assert.throws(() => linkedRequestDraft(state, held));
+});
+
+test('text-only linked intervention inherits parent targets without changing explicit choices', () => {
+  const state = initial();
+  const parent = {
+    input: {
+      linkedTargets: [
+        { host: 'rhino', baseRequestId: 'a' },
+        { host: 'zwcad', baseRequestId: 'b' },
+      ],
+      coordinateBasis: 'shared-metre-axes',
+    },
+  };
+  const draft = interventionTargetDraft(state, parent);
+  assert.deepEqual(draft.linkedTargets, parent.input.linkedTargets);
+  assert.equal(draft.coordinateBasis, 'shared-metre-axes');
+  assert.equal(state.linkedTargets, undefined);
+  const existing = { ...state, baseRequestId: 'b' };
+  assert.deepEqual(
+    interventionTargetDraft(existing, { input: { ...parent.input, baseRequestId: 'b' } })
+      .linkedTargets,
+    parent.input.linkedTargets,
+  );
+  const other = { ...state, baseRequestId: 'different' };
+  assert.equal(interventionTargetDraft(other, parent), other);
+  const linked = { ...state, linkedTargets: [...parent.input.linkedTargets].reverse() };
+  assert.equal(interventionTargetDraft(linked, parent), linked);
+  assert.equal(interventionTargetDraft(state, { input: {} }), state);
+  const review = interventionTargetDraft({ ...state, permission: 'review', host: 'zwcad' }, parent);
+  assert.equal(review.permission, 'review');
+  assert.equal(review.host, 'zwcad');
 });
