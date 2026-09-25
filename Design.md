@@ -2,7 +2,7 @@
 id: DESIGN
 title: VIDE 시각·상호작용 기준
 status: review
-version: 0.39
+version: 0.40
 updated: 2026-09-25
 owner: user
 related: [FR-02, FR-03, FR-13, FR-16, FR-19, FR-22, AC-19, AC-22, AC-25, AC-33, AC-34, AC-35, AC-38, AC-39, OQ-04, ADR-003, ADR-004, ADR-009, ADR-010]
@@ -10,6 +10,8 @@ related: [FR-02, FR-03, FR-13, FR-16, FR-19, FR-22, AC-19, AC-22, AC-25, AC-33, 
 
 
 # VIDE · Design DNA와 프런트 표현 기준
+
+요청별 실행 상한(SPEC-02.6)은 오른쪽 초안 메뉴의 `작업 상한`에서 작은 모달로 조절한다. 도구 호출 수·대상별 호스트 실행 수·AI 응답 시간(초)을 표시하고 적용/취소를 제공한다. 실행 중인 작업의 값은 변경하지 않는다. ACTIVE WORK의 실행 횟수 분모는 해당 요청에 고정된 상한을 사용한다. 기본 화면에 상시 설명 문단을 추가하지 않는다.
 
 이 문서는 **화면의 시각 언어·배치·컴포넌트·조작 표현**을 소유한다. 기능 입력/결과·상태 전이·권한은 [SPEC](docs/specs/README.md), 기술 구조·저장/API는 [ARCH](docs/architecture/ARCH-01-system.md), 구현 순서·시험 방법은 [PLAN](docs/plans/PLAN.md)을 따른다. 기능을 설명하는 문장을 여기서 다시 확정하지 않는다. 문서별 판단 방법과 개발 진행은 [개발 가이드 §01·§12](DEVELOPMENT_GUIDE.md)에 있다.
 

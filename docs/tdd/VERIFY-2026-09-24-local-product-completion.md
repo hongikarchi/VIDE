@@ -2,7 +2,7 @@
 id: VERIFY-2026-09-24-local-product-completion
 title: 로컬 제품 완결 · 실제 왕복 및 확장 검수
 status: review
-version: 0.12
+version: 0.13
 updated: 2026-09-25
 owner: agent:codex
 related: [PLAN-02, AC-07, AC-08, AC-09, AC-10, AC-24, AC-25, AC-32, AC-33, AC-34]
@@ -106,6 +106,10 @@ SDK 영수증으로 복구한 사본에 recovered 표시를 추가하고 목표 
 - `rhino-measurement-undo.mjs`: 소유 Rhino 합성 문서에서 기본 `_Undo`/`_Redo` 명령으로 크기·속성 변경과 삭제를 되돌렸다. 체적 24→48→24→48, Level L01→L02→L01→L02, native ID 보존을 재열기로 확인했다. 변경/Undo/Redo마다 변경 객체 1개만 계산, 무변경 객체 1개 재사용. 삭제 시 계산 0개·재사용 1개, 삭제 취소 시 복원 객체 1개 계산. 증거: `.vide/measurement-undo/51e72daa-2bb5-47fc-ba1e-92524f6685a2/result.json`. 초기 직접 RhinoDoc.Undo 호출 시험은 Redo에서 실패해 실제 사용자 명령 경로로 검증했다. 일반 복잡한 Undo 이력 전체의 보증은 아니다.
 - `native-sdk-interruption.mjs`: 실제 Rhino의 4초 제한 연산에서 실행 직전 영수증을 확인하고 취소했다. 공급자 대역은 즉시 취소됐지만 네이티브 호출이 끝날 때까지 SDK 수명이 유지됐다. 결과는 성공/중단 확인으로 위장하지 않고 HOST_RESULT_UNKNOWN, 명시적 영수증 복구 뒤에만 체적 24 후보를 확인했다. 실행 1회·재전송 0회. 증거: `.vide/native-sdk-interruption/5fb6cfac-d575-4055-81cf-ebd14d086ab7/result.json`. 호스트 강제 중단이 아니라 종료 대기·늦은 결과 격리의 검증이다.
 - SDK 복구 결과에 마지막 관측 진행값을 보존하고 ZWCAD의 누락된 sourceDocument를 복원했다. ZWCAD 영수증 회귀에서 대상 문서·기준·진행 정보 보존 및 execute 0회 통과. 양쪽 SDK 계약 시험 15개 통과.
+
+## 요청별 실행 상한 — L6
+
+초안 메뉴의 작업 상한 모달에서 도구 호출 수·대상별 SDK 명령 수·AI 응답 시간을 설정하고 접수 입력에 고정한다. 이전 요청의 기본값은 유지하며 명시 설정은 초안 저장/재열기·실패 복원·개입에서 보존한다. 단일/연계 도구 라우터와 양쪽 SDK·공급자 timeout에 연결했다. `execution-limits.test.mjs`와 양쪽 SDK 시험에서 잘못된 경계 거절, 명령 상한 초과 시 추가 호스트 호출 0회, 이전 성공분 복구 가능 상태, 설정된 timeout 전달을 확인했다. `browser-execution-limits.mjs`는 Chromium 1440×900에서 모달 폭·설정·취소·초안 재열기·실제 접수 API/공급자 인수 연결을 통과했다. 공급자 응답은 대역이다. 상한 확대를 복잡한 과업 성공이나 네이티브 강제 중단 보증으로 해석하지 않는다.
 
 ## 남은 검증
 

@@ -930,6 +930,20 @@ body.left-hidden.right-hidden main {
 .quantity-dialog::backdrop {
   background: #25292a55;
 }
+.execution-limits {
+  width: min(440px, 94vw);
+}
+.execution-limits label {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  margin: 12px 0;
+}
+.execution-limits input {
+  width: 90px;
+  padding: 6px;
+}
 .quantity-head {
   display: flex;
   align-items: center;

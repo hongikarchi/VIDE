@@ -82,7 +82,7 @@ function ActiveWork({ messages, reason, intervene }: ActiveProps) {
               <small>
                 조회 {request.result.progress.queries}회
                 {request.result.progress.attempts > 0 &&
-                  ` · 실행 ${request.result.progress.attempts}/12 · 사본 저장 검증 ${request.result.progress.completed}단계`}
+                  ` · 실행 ${request.result.progress.attempts}/${request.input?.executionLimits?.maxHostCommands ?? 12} · 사본 저장 검증 ${request.result.progress.completed}단계`}
               </small>
             )}
             {intervene &&

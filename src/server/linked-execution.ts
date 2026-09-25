@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { executionLimits } from '../contracts/execution-limits.ts';
 import type { StoredWork } from '../contracts/stored-work.ts';
 import type { Workspace } from '../core/workspace.ts';
 import type { AgentTools } from './agent-tools.ts';
@@ -126,8 +127,8 @@ export async function runLinked(options: {
       targetRef: [...byTarget.keys()],
       handlers,
       isCurrent: () => !signal.aborted,
-      maxCalls: 60,
-      ttlMs: 240000,
+      maxCalls: executionLimits(request.input).maxToolCalls,
+      ttlMs: Math.min(600000, (executionLimits(request.input).timeoutSeconds + 60) * 1000),
     });
     response = await provider({
       url: connected[0].connection.url,

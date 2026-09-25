@@ -2,7 +2,7 @@
 id: ARCH-01
 title: VIDE 기술 구조와 구현 계약
 status: review
-version: 0.15
+version: 0.16
 updated: 2026-09-25
 owner: agent:codex
 related: [SPEC-00, SPEC-02, SPEC-03, SPEC-04, PLAN, ADR-014, ADR-015, ADR-016, ADR-017]
@@ -13,6 +13,8 @@ related: [SPEC-00, SPEC-02, SPEC-03, SPEC-04, PLAN, ADR-014, ADR-015, ADR-016, A
 이 문서는 구성요소 책임·스택·물리 저장/API·호스트 실행·공유 구조의 정본이다. 동작 의미는 SPEC, 작업 순서와 현재 상태는 PLAN, 선택 이유는 ADR, 조사 근거는 RESEARCH, 실측은 SPIKE/VERIFY가 소유한다. 설계된 구조가 모두 구현됐다는 뜻은 아니다.
 
 ## 1. 구조와 확정 스택
+
+요청 실행 상한은 선택적 `executionLimits: { maxToolCalls, maxHostCommands, timeoutSeconds }`로 접수·저장한다. 정수 범위는 각각 1~100, 1~48, 30~600이며 미지정 이전 요청은 PLAN-02의 기존 기본값을 사용한다. 연계 요청의 도구 호출은 공유 라우터 전체 상한, 호스트 명령은 대상별 상한이다. CLI 응답 시간 제한은 공급자 실행에 전달하고 도구 capability 유효 시간은 해당 시간에 60초를 더하되 600초를 넘기지 않는다. 대기/호스트 기동과 이미 시작된 네이티브 연산의 안전한 종료 대기는 AI 응답 시간과 구분한다. 초안·개입·복원은 명시한 값을 보존하고 기존 요청의 상한을 소급 변경하지 않는다.
 
 TypeScript·React·Vite·CSS와 Three.js, TypeScript·Node.js 로컬 제어 서버, C# 호스트 실행기를 사용한다(ADR-016·017). AI는 SDK 코드와 도구를 조합하고 VIDE가 대상·권한·기준·기록을 관리한다(ADR-014). Cloudflare 공유는 로컬 CAD 실행과 분리한다(ADR-015).
 

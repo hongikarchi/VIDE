@@ -1,6 +1,7 @@
 import { inspectorOptions } from '../../hosts/zwcad/inspector.ts';
 import { ZwcadEditors } from '../../hosts/zwcad/editor-sessions.ts';
 import { randomUUID } from 'node:crypto';
+import { executionLimits } from '../contracts/execution-limits.ts';
 import { access, mkdir, readFile } from 'node:fs/promises';
 import { join, resolve, relative, isAbsolute } from 'node:path';
 import { z } from 'zod';
@@ -138,7 +139,8 @@ export class ZwcadSdkExecution {
         handlers.execute = async ({ code }) => {
           if (signal.aborted) throw failure('CANCELLED');
           if (uncertain) throw failure('HOST_RESULT_UNKNOWN');
-          if (attempts >= 12) throw failure('HOST_REJECTED');
+          if (attempts >= executionLimits(input).maxHostCommands)
+            throw failure('HOST_COMMAND_LIMIT');
           attempts++;
           const operationId = randomUUID();
           currentOperation = operationId;
@@ -195,12 +197,13 @@ export class ZwcadSdkExecution {
         targetRef,
         handlers,
         isCurrent: () => !signal.aborted && !uncertain,
-        maxCalls: 30,
-        ttlMs: 240000,
+        maxCalls: executionLimits(input).maxToolCalls,
+        ttlMs: Math.min(600000, (executionLimits(input).timeoutSeconds + 60) * 1000),
       });
       const goal = `Target is ZWCAD 2023, dedicated work copy ${targetRef}. Native SDK coordinates are millimetres; attached UI geometry and sketches are metres, so convert explicitly. Permission: ${input.permission}.
 Use query to inspect objects and native handles. For candidate permission use execute with a C# method body. The wrapper imports System, System.Linq, ZwSoft.ZwCAD.DatabaseServices, ZwSoft.ZwCAD.Geometry and supplies Database db and Transaction tr. Use tr.GetObject and the model-space BlockTableRecord; append new entities and register with tr.AddNewlyCreatedDBObject. The controller owns transaction commit, saving and readback. Do not open/save files, commit transactions, invoke shell/network/reflection, or access active documents. Return only small JSON-serializable values, never SDK objects.
 The currently verified viewer supports independent planar XY straight LWPolylines. Unsupported geometry is rejected, not silently omitted. Use given dimensions and sketch coordinates; ask for missing critical values. Preserve existing handles, layers, colors and protected/reference objects; edit existing entities instead of replacing them unnecessarily. Other-host references are read-only. Query after success. Compilation/policy errors allow correction; an uncertain write forbids another execute. Respond in Korean with actual results.
+Limits: ${executionLimits(input).maxToolCalls} tool calls, ${executionLimits(input).maxHostCommands} host commands, ${executionLimits(input).timeoutSeconds} seconds for the AI response. Stop at the limit and report remaining work.
 User request: ${input.body || '첨부한 설계 문맥을 검토해 주세요.'}`;
       const response = await provider({
         url: options.origin() + '/mcp',

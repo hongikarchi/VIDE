@@ -1,4 +1,6 @@
 import { accountIndicator } from './account-indicator.ts';
+import { executionLimits } from '../contracts/execution-limits.ts';
+import { showExecutionLimits } from './execution-limits.tsx';
 import { requestConflict } from '../contracts/request-scope.ts';
 import { draftSnapshot, restoreDraft, restoreSavedDraft } from './draft-storage.ts';
 import { z } from 'zod';
@@ -60,6 +62,14 @@ function currentProject() {
   return project;
 }
 let state = initial();
+$('execution-limits').onclick = () => {
+  const targetProject = project?.id;
+  showExecutionLimits(executionLimits(state), (value) => {
+    if (project?.id !== targetProject) return;
+    state.executionLimits = value;
+    render();
+  });
+};
 const renderObjectList = createObjectList($('objects'), (id) => {
   state.selected = id;
   if (tool === 'pin') pinSelection(state);

@@ -70,6 +70,7 @@ const knownErrors = new Set([
   'HOST_UNAVAILABLE',
   'HOST_RESULT_UNKNOWN',
   'HOST_REJECTED',
+  'HOST_COMMAND_LIMIT',
   'EXECUTOR_NOT_READY',
   'CANCELLED',
 ]);

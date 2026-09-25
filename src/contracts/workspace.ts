@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { executionLimitsSchema } from './execution-limits.ts';
 
 export const requestStateSchema = z.enum([
   'queued',
@@ -32,6 +33,7 @@ export const sketchSchema = z
 export const requestInputSchema = z
   .object({
     id,
+    executionLimits: executionLimitsSchema.optional(),
     body: z.string().max(20000),
     permission: z.enum(['review', 'candidate']),
     provider: z.enum(['claude-cli', 'codex-cli', 'extension']),
@@ -84,9 +86,9 @@ export type RequestInput = z.infer<typeof requestInputSchema>;
 
 export const executionProgressSchema = z
   .object({
-    queries: z.number().int().min(0).max(30),
-    attempts: z.number().int().min(0).max(12),
-    completed: z.number().int().min(0).max(12),
+    queries: z.number().int().min(0).max(100),
+    attempts: z.number().int().min(0).max(48),
+    completed: z.number().int().min(0).max(48),
   })
   .refine((value) => value.completed <= value.attempts);
 export type ExecutionProgress = z.infer<typeof executionProgressSchema>;
@@ -96,6 +98,7 @@ export interface WorkSummary {
   id: string;
   body: string;
   request?: {
+    input?: { executionLimits?: import('./execution-limits.ts').ExecutionLimits };
     state: RequestState;
     result?: { phase?: string; code?: string; progress?: ExecutionProgress } | null;
   };

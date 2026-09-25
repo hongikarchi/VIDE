@@ -1,4 +1,5 @@
 import type { Review, ReviewNote } from '../contracts/reviews.ts';
+import { executionLimitsSchema, type ExecutionLimits } from '../contracts/execution-limits.ts';
 import type { UiMessage } from './workspace-data.ts';
 export interface DraftPin {
   id: string;
@@ -26,6 +27,7 @@ interface DraftObject {
   [key: string]: unknown;
 }
 export interface DraftState {
+  executionLimits?: ExecutionLimits;
   linkedTargets?: { baseRequestId: string; host: 'rhino' | 'zwcad' }[];
   coordinateBasis?: 'shared-metre-axes';
   selected: string | null;
@@ -43,6 +45,7 @@ export interface DraftState {
   drawingPlane?: 'XY' | 'XZ' | 'YZ';
 }
 interface RestoreInput {
+  executionLimits?: ExecutionLimits;
   linkedTargets?: DraftState['linkedTargets'];
   body: string;
   pins: DraftPin[];
@@ -145,6 +148,7 @@ export function failedRequestDraft(state: DraftState, request: RestoreRequest) {
     throw Error('저장된 입력을 확인할 수 없습니다.');
   return structuredClone({
     body: input.body,
+    executionLimits: input.executionLimits,
     linkedTargets: undefined,
     coordinateBasis: undefined,
     instructions: [],
@@ -196,6 +200,8 @@ export function pinSelection(s: DraftState) {
     s.pins.push({ id: o.id, name: o.name, role: 'target', basis: o.revision });
 }
 export function validate(s: DraftState) {
+  if (s.executionLimits && !executionLimitsSchema.safeParse(s.executionLimits).success)
+    return '작업 상한을 확인하세요.';
   if (
     s.linkedTargets &&
     (s.linkedTargets.length !== 2 ||
@@ -221,6 +227,7 @@ export function packet(s: DraftState) {
   if (error) throw Error(error);
   return structuredClone({
     host: s.host || 'rhino',
+    ...(s.executionLimits ? { executionLimits: s.executionLimits } : {}),
     ...(s.linkedTargets
       ? { linkedTargets: s.linkedTargets, coordinateBasis: s.coordinateBasis }
       : {}),

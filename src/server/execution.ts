@@ -1,4 +1,5 @@
 import type { AccountProfiles } from '../ai/account-profiles.ts';
+import { executionLimits } from '../contracts/execution-limits.ts';
 import { claudeEfforts } from './model-capabilities.ts';
 import { requestConflict } from '../contracts/request-scope.ts';
 import { z } from 'zod';
@@ -108,7 +109,10 @@ export class Execution {
     );
   }
   provider(
-    input: Pick<RequestInput, 'provider' | 'model' | 'effort' | 'accountProfileId'>,
+    input: Pick<
+      RequestInput,
+      'provider' | 'model' | 'effort' | 'accountProfileId' | 'executionLimits'
+    >,
     agent?: unknown,
   ) {
     const executable = this.executable(input.provider);
@@ -122,7 +126,7 @@ export class Execution {
               input.accountProfileId ?? this.profiles.list().active[input.provider],
             )
           : undefined,
-      timeoutMs: 180000,
+      timeoutMs: executionLimits(input).timeoutSeconds * 1000,
       agent,
       model: input.model && input.model !== input.provider ? input.model : undefined,
       effort: input.effort && input.effort !== 'default' ? input.effort : undefined,

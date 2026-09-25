@@ -35,6 +35,7 @@ export function interventionInput(original: RequestInput, value: unknown): Reque
   }
   const result = requestInputSchema.safeParse({
     ...next,
+    executionLimits: next.executionLimits ?? original.executionLimits,
     ...(original.accountProfileId ? { accountProfileId: original.accountProfileId } : {}),
     body: `${original.body}\n\n[추가 지시]\n${next.body}`,
     pins,

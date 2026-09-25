@@ -5,6 +5,7 @@ import type { DraftState } from './model.ts';
 
 // Drafts can be empty; execution input validation remains at submission time.
 const draftSchema = z.object({
+  executionLimits: requestInputSchema.shape.executionLimits,
   body: z.string().max(20000),
   instructions: z.array(z.string().max(20000)).max(100).default([]),
   host: z.enum(['rhino', 'zwcad']).default('rhino'),

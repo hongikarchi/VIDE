@@ -348,3 +348,33 @@ for (const failAfterWrite of [false, true])
         else assert.deepEqual((await running).progress, { queries: 2, attempts: 3, completed: 2 });
       }),
   );
+
+test('request command cap refuses an extra native write and preserves recovery intent', () =>
+  fixture(async ({ sdk, task, worker, scope }) => {
+    let calls = 0;
+    const original = worker.execute;
+    worker.execute = async (...args) => {
+      calls++;
+      return original(...args);
+    };
+    await assert.rejects(
+      sdk.run({
+        ...task,
+        input: {
+          ...task.input,
+          executionLimits: { maxToolCalls: 3, maxHostCommands: 1, timeoutSeconds: 30 },
+        },
+        provider: () => ({
+          run: async () => {
+            assert.equal(scope().maxCalls, 3);
+            assert.equal(scope().ttlMs, 90000);
+            await scope().handlers.execute({ code: 'one' });
+            await scope().handlers.execute({ code: 'must not execute' });
+            return { text: 'unreachable' };
+          },
+        }),
+      }),
+      (error) => error.code === 'HOST_RESULT_UNKNOWN' && error.cause.code === 'HOST_COMMAND_LIMIT',
+    );
+    assert.equal(calls, 1);
+  }));
