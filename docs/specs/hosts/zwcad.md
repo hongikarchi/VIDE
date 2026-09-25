@@ -2,7 +2,7 @@
 id: HOST-ZWCAD
 title: ZWCAD 호스트 계약과 검증 범위
 status: review
-version: 0.16
+version: 0.17
 updated: 2026-09-24
 owner: agent:codex
 related: [SPEC-01, SPEC-02, FR-03, FR-04, AC-24, AC-38, OQ-03, OQ-10]
@@ -11,6 +11,8 @@ related: [SPEC-01, SPEC-02, FR-03, FR-04, AC-24, AC-38, OQ-03, OQ-10]
 # ZWCAD 호스트 계약과 검증 범위
 
 사용자 지정 시험 버전은 현재 설치본 ZWCAD 2023, 실행 파일 버전 23.20.3.11이다. 이 문서는 §1의 현재 지원표가 정본이며, §2 이후는 날짜순 검증 이력이다. 이력의 "아직 미지원"은 그 날짜 기준이고 현재 상태는 §1로 읽는다.
+
+SDK의 AI query는 기본 50개·최대 100개/64 KiB 페이지와 ID 필터를 지원한다. 다음 페이지는 같은 revision을 요구한다. 소유 합성 문서 120개 실제 조회와 전체 후보 보존을 확인했다([검수](../../tdd/VERIFY-2026-09-24-local-product-completion.md)). 네이티브 가져오기 규모의 확대 검증과 구분한다.
 
 ## 1. 현재 지원 상태 — 2026-09-24 기준
 

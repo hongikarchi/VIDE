@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { executionLimits } from '../contracts/execution-limits.ts';
+import type { QueryPageOptions } from './query-page.ts';
 import type { StoredWork } from '../contracts/stored-work.ts';
 import type { Workspace } from '../core/workspace.ts';
 import type { AgentTools } from './agent-tools.ts';
@@ -118,7 +119,7 @@ export async function runLinked(options: {
       return value;
     };
     const handlers = {
-      query: (args: { targetRef: string }) => dispatch('query', args),
+      query: (args: { targetRef: string } & QueryPageOptions) => dispatch('query', args),
       ...(request.input.permission === 'candidate'
         ? { execute: (args: { targetRef: string; code: string }) => dispatch('execute', args) }
         : {}),

@@ -2,7 +2,7 @@
 id: ARCH-01
 title: VIDE 기술 구조와 구현 계약
 status: review
-version: 0.18
+version: 0.19
 updated: 2026-09-25
 owner: agent:codex
 related: [SPEC-00, SPEC-02, SPEC-03, SPEC-04, PLAN, ADR-014, ADR-015, ADR-016, ADR-017]
@@ -441,6 +441,8 @@ Rhino inspectEditor는 선택한 문서의 IsReadOnly를 readOnly로 반환해 �
 <a id="detail-4"></a>
 
 SDK 단일 대상 요청의 초기 모델 문맥은 `working-model`과 `measurements` 합계 64 KiB·최대 100객체로 제한한다. 핀 ID를 먼저 선정하고 객체의 ID·이름·유형·원점·native ID 및 기존 수량/경계/레이어만 전달한다. 메시·정점·임의 속성은 요약에 넣지 않는다. `model-context-summary`에 total/included/omitted와 불완전 요약 경고를 넣는다. 원본 입력과 핀 참조, 실행기 보호 검사는 별도로 유지한다. 기존 JSON 실행 경로에는 전체 기하 계약을 유지하며 SDK 조회 응답의 페이지화와 네이티브 지원 개수 확대는 별도 검증한다. 전체 패킷 256 KiB 검사도 유지한다.
+
+AI `query`는 선택적인 `offset`(기본 0), `limit`(기본 50, 최대 100), `expectedRevision`, `objectIds`(최대 100)를 받는다. offset>0은 expectedRevision을 요구한다. 제어기는 전체 호스트 스냅샷에서 ID 필터 후 64 KiB 이내의 객체/대응 scene 페이지를 반환하고 `page={offset,total,nextOffset}`를 덧붙인다. revision 불일치는 STALE_REFERENCE, 단일 행 초과는 QUERY_RESULT_TOO_LARGE이다. 전체 네이티브 검증·영수증·저장은 자르지 않는다. 이 단계는 AI 응답량만 제한하고 호스트 IPC/조회 계산의 페이지화는 아직 아니다.
 
 ## 5. 모델·데이터 저장
 

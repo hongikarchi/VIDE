@@ -2,7 +2,7 @@
 id: VERIFY-2026-09-24-local-product-completion
 title: 로컬 제품 완결 · 실제 왕복 및 확장 검수
 status: review
-version: 0.14
+version: 0.15
 updated: 2026-09-25
 owner: agent:codex
 related: [PLAN-02, AC-07, AC-08, AC-09, AC-10, AC-24, AC-25, AC-32, AC-33, AC-34]
@@ -41,6 +41,10 @@ related: [PLAN-02, AC-07, AC-08, AC-09, AC-10, AC-24, AC-25, AC-32, AC-33, AC-34
 ## 큰 모델 초기 AI 문맥 — L5 일부
 
 SDK 단일 대상의 초기 객체/수량 요약을 100개·64 KiB로 제한했다. 핀 대상 우선, 전체/포함/생략 수, 실제 정보 재조회 안내를 전달하고 실행기에는 전체 기준 모델과 보호 핀을 유지한다. `tests/server/model-context.test.mjs`의 합성 1만 객체·대형 정점 배열·다국어 byte 상한·빈 모델 및 `execution.test.mjs`의 실제 실행 제어기→SDK 대역 전달을 통과했다(관련 14시험, UI/서버 타입 검사 통과). 원본 자료나 보호 범위를 잘라내지 않으며 기존 JSON 경로는 그대로다. 이 시험은 초기 입력 크기의 검증이고 네이티브 가져오기 500개 상한 확대·조회 페이지화·실제 대형 호스트 지원 완료가 아니다.
+
+## 객체 페이지 조회 — L5 일부
+
+`query`의 offset/limit·objectIds·expectedRevision을 공통 도구와 양쪽 SDK·연계 라우터에 연결했다. 합성 1만 객체의 중복/누락 없는 페이지 순회, UTF-8 byte 제한, 과대 행 명시 실패, 낡은 revision 거절, 단위/대응 scene 보존 및 공식 MCP 클라이언트 인수 전달을 계약 검증했다. 실제 설치 Rhino와 ZWCAD에 각각 120개 합성 객체를 생성한 뒤 50/50/20개 3페이지와 마지막 ID 필터를 조회하고, 잘못된 revision 거절·최종 네이티브 후보 120개 보존을 확인했다. 재현: `tests/integration/native-query-pages.mjs`. 증거: `.vide/native-query-pages/1281b26a-6254-494c-8141-7beea48346c8/result.json`. 모델 추론 없는 결정적 SDK 시험이다. 페이지 제한은 AI query 응답에만 적용되며 native IPC, execute 반환/영수증, 호스트 가져오기 500개 제한은 이번에 확대하지 않았다.
 
 ## 큰 모델 뷰포트 측정 — L5 일부
 

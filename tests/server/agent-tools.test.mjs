@@ -30,6 +30,31 @@ async function fixture(t) {
 }
 const payload = (result) => JSON.parse(result.content[0].text);
 
+test('official MCP query transports page and object filter arguments', async (t) => {
+  const { app, connect } = await fixture(t);
+  let received;
+  const scope = app.agentTools.issue({
+    targetRef: 'synthetic:page',
+    isCurrent: () => true,
+    handlers: {
+      query: (args) => {
+        received = args;
+        return { revision: 3, objects: [], page: { offset: 50, total: 50, nextOffset: null } };
+      },
+    },
+  });
+  const client = await connect(scope.token);
+  const args = {
+    targetRef: 'synthetic:page',
+    offset: 50,
+    limit: 20,
+    expectedRevision: 3,
+    objectIds: ['a'],
+  };
+  assert.equal(payload(await client.callTool({ name: 'query', arguments: args })).revision, 3);
+  assert.deepEqual(received, args);
+});
+
 test('official MCP client lists only granted tools and cannot access another target or browser API', async (t) => {
   const { app, connect } = await fixture(t);
   let calls = 0;

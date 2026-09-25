@@ -4,14 +4,16 @@ import { createHash, randomBytes } from 'node:crypto';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { z } from 'zod';
+import { queryPageFields } from './query-page.ts';
 
 const digest = (token: string) => createHash('sha256').update(token).digest('hex');
 const failure = (code: string) => Object.assign(new Error(code), { code });
 const target = z.string().min(1).max(256);
 const definitions = {
   query: {
-    description: 'Read the current task target. Returns observed host data.',
-    schema: z.object({ targetRef: target }).strict(),
+    description:
+      'Read a bounded page of the current task target. Use page.nextOffset with expectedRevision for subsequent pages, or objectIds for specific objects. Never treat one page as the whole model.',
+    schema: z.object({ targetRef: target, ...queryPageFields }).strict(),
   },
   execute: {
     description:
@@ -64,6 +66,8 @@ function invoke(name: ToolName, handlers: Handlers, args: unknown, signal: Abort
   }
 }
 const knownErrors = new Set([
+  'INVALID_INPUT',
+  'QUERY_RESULT_TOO_LARGE',
   'STALE_REFERENCE',
   'HOST_OWNERSHIP_MISMATCH',
   'HOST_LEASE_EXPIRED',

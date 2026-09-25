@@ -2,6 +2,7 @@ import { inspectorOptions } from '../../hosts/zwcad/inspector.ts';
 import { ZwcadEditors } from '../../hosts/zwcad/editor-sessions.ts';
 import { randomUUID } from 'node:crypto';
 import { executionLimits } from '../contracts/execution-limits.ts';
+import { queryPage, type QueryPageOptions } from './query-page.ts';
 import { access, mkdir, readFile } from 'node:fs/promises';
 import { join, resolve, relative, isAbsolute } from 'node:path';
 import { z } from 'zod';
@@ -125,14 +126,14 @@ export class ZwcadSdkExecution {
       if (signal.aborted) throw failure('CANCELLED');
       const targetRef = 'zwcad:' + worker.identity.sessionId;
       const handlers: {
-        query: () => Promise<unknown>;
+        query: (args?: QueryPageOptions) => Promise<unknown>;
         execute?: (args: { code: string }) => Promise<unknown>;
       } = {
-        query: async () => {
+        query: async (args) => {
           const result = await worker!.query();
           queries++;
           update({ ...intent(), phase: last ? 'host' : 'query' });
-          return result;
+          return queryPage(result, args, revision);
         },
       };
       if (input.permission === 'candidate')

@@ -1,5 +1,6 @@
 import { randomUUID, createHash } from 'node:crypto';
 import { executionLimits } from '../contracts/execution-limits.ts';
+import { queryPage, type QueryPageOptions } from './query-page.ts';
 import { mkdir, readFile, access } from 'node:fs/promises';
 import { createReadStream } from 'node:fs';
 import { EditorSessions } from '../../hosts/rhino/editor-sessions.ts';
@@ -236,14 +237,14 @@ export class SdkExecution {
       if (signal.aborted) throw failure('CANCELLED');
       const targetRef = 'rhino:' + worker.identity.sessionId;
       const handlers: {
-        query: () => Promise<unknown>;
+        query: (args?: QueryPageOptions) => Promise<unknown>;
         execute?: (args: { code: string }) => Promise<unknown>;
       } = {
-        query: async () => {
+        query: async (args) => {
           const result = await worker!.query();
           queries++;
           update({ ...intent(), phase: last ? 'host' : 'query' });
-          return result;
+          return queryPage(result, args, revision);
         },
       };
       if (input.permission === 'candidate')
