@@ -1,3 +1,4 @@
+import type { AccountProfiles } from '../ai/account-profiles.ts';
 import { claudeEfforts } from './model-capabilities.ts';
 import { requestConflict } from '../contracts/request-scope.ts';
 import { z } from 'zod';
@@ -27,6 +28,7 @@ interface Host {
   ): Promise<unknown>;
 }
 interface Options {
+  profiles?: AccountProfiles;
   tools?: AgentTools;
   providerFactory?: (options: CliOptions & { provider: string }) => Provider;
   host?: Host;
@@ -61,6 +63,7 @@ import { geometryContract, interpret, protectGeometry } from '../core/geometry.t
 
 export class Execution {
   workspace: Workspace;
+  profiles?: AccountProfiles;
   providerFactory: NonNullable<Options['providerFactory']>;
   host?: Host;
   hosts: Partial<Record<'rhino' | 'zwcad', Host>>;
@@ -74,9 +77,19 @@ export class Execution {
   >();
   constructor(
     workspace: Workspace,
-    { providerFactory = createProvider, host, hosts, settings, sdk, zwcadSdk, tools }: Options = {},
+    {
+      providerFactory = createProvider,
+      host,
+      hosts,
+      settings,
+      sdk,
+      zwcadSdk,
+      tools,
+      profiles,
+    }: Options = {},
   ) {
     this.workspace = workspace;
+    this.profiles = profiles;
     this.providerFactory = providerFactory;
     this.host = host;
     this.active = new Map();
@@ -94,11 +107,21 @@ export class Execution {
         : process.env.VIDE_CODEX_PATH || installedCodex())
     );
   }
-  provider(input: Pick<RequestInput, 'provider' | 'model' | 'effort'>, agent?: unknown) {
+  provider(
+    input: Pick<RequestInput, 'provider' | 'model' | 'effort' | 'accountProfileId'>,
+    agent?: unknown,
+  ) {
     const executable = this.executable(input.provider);
     return this.providerFactory({
       provider: input.provider,
       executable,
+      configDirectory:
+        input.provider !== 'extension'
+          ? this.profiles?.directory(
+              input.provider,
+              input.accountProfileId ?? this.profiles.list().active[input.provider],
+            )
+          : undefined,
       timeoutMs: 180000,
       agent,
       model: input.model && input.model !== input.provider ? input.model : undefined,
@@ -135,7 +158,18 @@ export class Execution {
             )
             .optional(),
         })
-        .parse(JSON.parse(await readFile(join(homedir(), '.codex', 'models_cache.json'), 'utf8')));
+        .parse(
+          JSON.parse(
+            await readFile(
+              join(
+                this.profiles?.directory('codex-cli', this.profiles.list().active['codex-cli']) ??
+                  join(homedir(), '.codex'),
+                'models_cache.json',
+              ),
+              'utf8',
+            ),
+          ),
+        );
       for (const model of cache.models || [])
         if (model.visibility !== 'hide' && /^[a-zA-Z0-9._-]{1,100}$/.test(model.slug))
           catalog.push({
@@ -155,7 +189,18 @@ export class Execution {
     try {
       const settings = z
         .object({ model: z.string().optional() })
-        .parse(JSON.parse(await readFile(join(homedir(), '.claude', 'settings.json'), 'utf8')));
+        .parse(
+          JSON.parse(
+            await readFile(
+              join(
+                this.profiles?.directory('claude-cli', this.profiles.list().active['claude-cli']) ??
+                  join(homedir(), '.claude'),
+                'settings.json',
+              ),
+              'utf8',
+            ),
+          ),
+        );
       if (
         typeof settings.model === 'string' &&
         /^[a-zA-Z0-9._-]{1,100}(?:\[1m\])?$/.test(settings.model)

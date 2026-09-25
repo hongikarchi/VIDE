@@ -1,3 +1,4 @@
+import { AccountProfiles } from '../ai/account-profiles.ts';
 import { z } from 'zod';
 import type { IncomingMessage } from 'node:http';
 import type { StoredWork } from '../contracts/stored-work.ts';
@@ -145,7 +146,26 @@ export async function startServer({
           sdk.importFile(source, (intent) => workspace.update(projectId, id, 'running', intent)),
       }
     : host;
+  const profiles = new AccountProfiles(join(dirname(filename), 'cli-profiles'), (provider) => {
+    const persisted = store.db
+      .prepare(
+        "SELECT 1 FROM workspace_requests WHERE json_extract(input,'$.provider')=? AND state IN ('queued','running','unknown') LIMIT 1",
+      )
+      .get(provider);
+    return (
+      !!persisted ||
+      (typeof execution !== 'undefined' &&
+        [...execution.active.keys()].some((id) =>
+          store.db
+            .prepare(
+              "SELECT 1 FROM workspace_requests WHERE id=? AND json_extract(input,'$.provider')=?",
+            )
+            .get(id, provider),
+        ))
+    );
+  });
   const execution = new Execution(workspace, {
+    profiles,
     tools: agentTools,
     providerFactory,
     host,
@@ -421,6 +441,55 @@ export async function startServer({
           return;
         }
       }
+      if (url.pathname === '/api/v1/accounts') {
+        if (request.method === 'GET') {
+          send(200, profiles.list());
+          return;
+        }
+        if (request.method === 'POST') {
+          const input = z
+            .object({ provider: z.enum(['claude-cli', 'codex-cli']), label: z.string() })
+            .strict()
+            .parse(await body(request));
+          send(201, profiles.add(input.provider, input.label));
+          return;
+        }
+      }
+      if (url.pathname === '/api/v1/accounts/select' && request.method === 'POST') {
+        const input = z
+          .object({ provider: z.enum(['claude-cli', 'codex-cli']), id: z.string() })
+          .strict()
+          .parse(await body(request));
+        const status = await execution
+          .provider({ provider: input.provider, accountProfileId: input.id })
+          .status();
+        if (!status.available) throw new DomainError('SUBSCRIPTION_LOGIN_REQUIRED');
+        send(200, profiles.select(input.provider, input.id));
+        return;
+      }
+      if (url.pathname === '/api/v1/accounts/login-command' && request.method === 'POST') {
+        const input = z
+          .object({ provider: z.enum(['claude-cli', 'codex-cli']), id: z.string() })
+          .strict()
+          .parse(await body(request));
+        if (
+          store.db
+            .prepare(
+              "SELECT 1 FROM workspace_requests WHERE json_extract(input,'$.provider')=? AND state IN ('queued','running','unknown') LIMIT 1",
+            )
+            .get(input.provider) ||
+          execution.active.size
+        )
+          throw new DomainError('PROFILE_IN_USE');
+        const directory = profiles.directory(input.provider, input.id);
+        if (!directory) throw new DomainError('INVALID_INPUT');
+        const quote = (value: string) => "'" + value.replaceAll("'", "''") + "'";
+        const key = input.provider === 'codex-cli' ? 'CODEX_HOME' : 'CLAUDE_CONFIG_DIR';
+        send(200, {
+          command: `$env:${key}=${quote(directory)}; & ${quote(execution.executable(input.provider) ?? '')} ${input.provider === 'codex-cli' ? 'login -c \'cli_auth_credentials_store="file"\' -c \'forced_login_method="chatgpt"\'' : 'auth login --claudeai'}`,
+        });
+        return;
+      }
       if (url.pathname === '/api/v1/providers' && request.method === 'GET') {
         send(200, await execution.status());
         return;
@@ -685,6 +754,18 @@ export async function startServer({
         if (request.method === 'POST' && !id) {
           const input = await body(request);
           if (input.provider === 'extension') throw new DomainError('INVALID_INPUT');
+          if ('accountProfileId' in input) throw new DomainError('INVALID_INPUT');
+          const provider = z.enum(['claude-cli', 'codex-cli']).parse(input.provider);
+          const existing =
+            typeof input.id === 'string'
+              ? store.db
+                  .prepare('SELECT input FROM workspace_requests WHERE id=? AND projectId=?')
+                  .get(input.id, projectId)
+              : undefined;
+          if (existing && typeof existing.input === 'string') {
+            const old = JSON.parse(existing.input);
+            if (old.accountProfileId) input.accountProfileId = old.accountProfileId;
+          } else input.accountProfileId = profiles.selected(provider);
           const result = workspace.submit(projectId, input);
           if (result.created) execution.start(result.request);
           send(result.created ? 202 : 200, workspace.get(projectId, result.request.id));

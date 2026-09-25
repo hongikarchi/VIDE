@@ -2,7 +2,7 @@
 id: ARCH-01
 title: VIDE 기술 구조와 구현 계약
 status: review
-version: 0.14
+version: 0.15
 updated: 2026-09-25
 owner: agent:codex
 related: [SPEC-00, SPEC-02, SPEC-03, SPEC-04, PLAN, ADR-014, ADR-015, ADR-016, ADR-017]
@@ -557,3 +557,11 @@ R2 조건부 쓰기/체크섬은 [공식 Workers API](https://developers.cloudfl
 
 ### 로컬 세션의 다중 실행 격리
 같은 loopback 호스트의 쿠키는 포트별로 격리되지 않는다. 로컬 세션 쿠키 이름에 서버 포트를 포함해 다른 VIDE 인스턴스의 로그인이 덮어쓰지 않게 한다. 값·Host/Origin 검사·HttpOnly·SameSite=Strict는 유지하고 고정 이름의 이전 쿠키로 인증을 우회하지 않는다. UI는 인증 오류를 공통 API 경계에서 받아 연결 상실을 표시하며 자동 쓰기 재시도를 하지 않는다.
+
+### CLI 프로필 실행 경계
+
+PLAN-06의 프로필 실행은 서버가 선택한 절대 configDirectory를 CliOptions로 전달한다. 상속 인증 환경을 정리한 후 공급자별 CODEX_HOME 또는 CLAUDE_CONFIG_DIR만 주입하며 상태 조회와 실제 실행에서 같은 environment()를 사용한다. HTTP 입력의 임의 경로를 직접 전달하지 않는다. 경로에는 인증 파일 내용을 저장하거나 복사하지 않는다. 기본 프로필은 경로 옵션 없이 기존 동작을 유지한다.
+
+프로필 메타데이터는 로컬 데이터 루트의 cli-profiles/profiles.json에 원자적 교체로 저장하고, 공식 CLI 인증은 UUID 하위 경로에만 둔다. 모델 백업의 허용 디렉터리 밖이며 웹 게시에는 포함하지 않는다. Codex 관리 프로필은 로그인·상태·실행 모두 file 자격증명 저장소를 명시해 OS keyring 기본값의 공유를 피한다. 기본 호환 프로필의 저장 방식은 바꾸지 않는다.
+
+전환은 공급자별 활성/대기 ID를 저장한다. workspace_requests의 queued/running/unknown과 실제 Execution.active를 함께 확인하며 대기 전환 중 신규 접수를 거절한다. 별도 휘발성 카운터를 복제하지 않는다. 접수된 input.accountProfileId는 서버가 고정하며 클라이언트 지정은 거절한다. 개입은 원 프로필을 승계하고 다른 공급자로 바꾸지 않는다. 재시작 뒤 unknown은 전환 장벽을 유지한다. 계정 API는 기존 로컬 인증·Origin 검사를 그대로 따른다.

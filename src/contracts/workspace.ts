@@ -35,6 +35,10 @@ export const requestInputSchema = z
     body: z.string().max(20000),
     permission: z.enum(['review', 'candidate']),
     provider: z.enum(['claude-cli', 'codex-cli', 'extension']),
+    accountProfileId: z
+      .string()
+      .regex(/^(default|[0-9a-f-]{36})$/)
+      .optional(),
     // Pin identity and basis are checked against project data by Workspace.
     pins: z.array(z.unknown()).max(100),
     sketches: z.array(sketchSchema).max(100),

@@ -49,6 +49,7 @@ export interface ProviderResult {
 }
 export interface CliOptions {
   executable?: string;
+  configDirectory?: string;
   model?: string;
   effort?: string;
   agent?: unknown;
@@ -200,9 +201,11 @@ export class ClaudeCli {
   spawnProcess: typeof spawn;
   model?: string;
   effort?: string;
+  configDirectory?: string;
   agent?: AgentConnection;
   constructor({
     executable,
+    configDirectory,
     model,
     effort,
     agent,
@@ -218,6 +221,12 @@ export class ClaudeCli {
       stopGraceMs < 1
     )
       throw error('INVALID_LIMIT');
+    if (
+      configDirectory !== undefined &&
+      (!isAbsolute(configDirectory) || configDirectory.includes('\0'))
+    )
+      throw error('INVALID_PROFILE_DIRECTORY');
+    this.configDirectory = configDirectory;
     this.executable = executable;
     this.timeoutMs = timeoutMs;
     this.stopGraceMs = stopGraceMs;
@@ -234,7 +243,9 @@ export class ClaudeCli {
     this.agent = agentConnection(agent);
   }
   environment() {
-    return subscriptionEnvironment();
+    const env = subscriptionEnvironment();
+    if (this.configDirectory) env.CLAUDE_CONFIG_DIR = this.configDirectory;
+    return env;
   }
   arguments() {
     const args = cliArguments();
@@ -247,7 +258,7 @@ export class ClaudeCli {
   }
   async status(): Promise<ProviderStatus> {
     const child = this.spawnProcess(this.executable, ['auth', 'status', '--json'], {
-      env: subscriptionEnvironment(),
+      env: this.environment(),
       shell: false,
       windowsHide: true,
       stdio: ['ignore', 'pipe', 'pipe'],

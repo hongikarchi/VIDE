@@ -197,3 +197,81 @@ test('동일 호스트의 서로 다른 VIDE 포트가 세션 쿠키를 덮어�
     assert.equal((await instance.api('/projects', { headers: { Cookie: together } })).status, 200);
   assert.equal((await first.api('/projects', { headers: { Cookie: second.cookie } })).status, 401);
 });
+
+test('account routes pin requests, drain two unresolved jobs and isolate login paths', async (t) => {
+  const calls = [];
+  const { app, api } = await fixture(t, {
+    providerFactory: (options) => ({
+      status: async () => {
+        calls.push(options);
+        return { available: true };
+      },
+      run: async () => ({ text: '{}' }),
+    }),
+  });
+  const post = (path, body) => api(path, { method: 'POST', body });
+  const profile = await (
+    await post('/accounts', { provider: 'codex-cli', label: 'Second' })
+  ).json();
+  const project = await (await post('/projects', { name: 'Profiles' })).json();
+  const input = {
+    id: 'one',
+    body: 'Read',
+    provider: 'codex-cli',
+    permission: 'review',
+    pins: [],
+    sketches: [],
+    files: [],
+    accountProfileId: 'default',
+  };
+  for (const id of ['one', 'two'])
+    app.store.db
+      .prepare('INSERT INTO workspace_requests VALUES(?,?,?,?,?,?)')
+      .run(
+        id,
+        project.id,
+        JSON.stringify({ ...input, id }),
+        'unknown',
+        null,
+        new Date().toISOString(),
+      );
+  const pending = await (
+    await post('/accounts/select', { provider: 'codex-cli', id: profile.id })
+  ).json();
+  assert.equal(pending.active['codex-cli'], 'default');
+  assert.equal(pending.pending['codex-cli'], profile.id);
+  assert.ok(calls.at(-1).configDirectory.endsWith(profile.id));
+  const send = { ...input, id: 'three' };
+  delete send.accountProfileId;
+  assert.equal(
+    (await (await post(`/projects/${project.id}/requests`, send)).json()).code,
+    'PROFILE_SWITCH_PENDING',
+  );
+  assert.equal(
+    (
+      await (
+        await post('/accounts/login-command', { provider: 'codex-cli', id: profile.id })
+      ).json()
+    ).code,
+    'PROFILE_IN_USE',
+  );
+  app.store.db.prepare("UPDATE workspace_requests SET state='failed' WHERE id='one'").run();
+  assert.equal((await (await api('/accounts')).json()).active['codex-cli'], 'default');
+  app.store.db.prepare("UPDATE workspace_requests SET state='failed' WHERE id='two'").run();
+  assert.equal((await (await api('/accounts')).json()).active['codex-cli'], profile.id);
+  const submitted = await (await post(`/projects/${project.id}/requests`, send)).json();
+  assert.equal(submitted.input.accountProfileId, profile.id);
+  assert.equal((await post(`/projects/${project.id}/requests`, send)).status, 200);
+  assert.equal(
+    (
+      await (
+        await post(`/projects/${project.id}/requests`, {
+          ...send,
+          id: 'injected',
+          accountProfileId: 'default',
+        })
+      ).json()
+    ).code,
+    'INVALID_INPUT',
+  );
+});

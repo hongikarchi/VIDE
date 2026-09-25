@@ -82,21 +82,33 @@ export class CodexCli extends ClaudeCli {
     return 'codex';
   }
   environment() {
-    return codexEnvironment();
+    const env = codexEnvironment();
+    if (this.configDirectory) env.CODEX_HOME = this.configDirectory;
+    return env;
   }
   arguments() {
     const args = codexArguments(this.model);
     if (this.effort)
       args.splice(args.length - 1, 0, '-c', `model_reasoning_effort="${this.effort}"`);
+    if (this.configDirectory)
+      args.splice(args.length - 1, 0, '-c', 'cli_auth_credentials_store="file"');
     return args;
   }
   async status(): Promise<ProviderStatus> {
-    const child = this.spawnProcess(this.executable, ['login', 'status'], {
-      env: this.environment(),
-      shell: false,
-      windowsHide: true,
-      stdio: ['ignore', 'pipe', 'pipe'],
-    });
+    const child = this.spawnProcess(
+      this.executable,
+      [
+        'login',
+        'status',
+        ...(this.configDirectory ? ['-c', 'cli_auth_credentials_store="file"'] : []),
+      ],
+      {
+        env: this.environment(),
+        shell: false,
+        windowsHide: true,
+        stdio: ['ignore', 'pipe', 'pipe'],
+      },
+    );
     return new Promise<ProviderStatus>((resolve) => {
       let output = '',
         settled = false;

@@ -9,7 +9,9 @@ export function interventionInput(original: RequestInput, value: unknown): Reque
   if (
     next.supersedesRequestId !== undefined ||
     next.parentRequestId !== undefined ||
-    next.provider === 'extension'
+    next.provider === 'extension' ||
+    next.accountProfileId !== undefined ||
+    (original.accountProfileId !== undefined && next.provider !== original.provider)
   )
     throw new DomainError('INVALID_INPUT');
   if (
@@ -33,6 +35,7 @@ export function interventionInput(original: RequestInput, value: unknown): Reque
   }
   const result = requestInputSchema.safeParse({
     ...next,
+    ...(original.accountProfileId ? { accountProfileId: original.accountProfileId } : {}),
     body: `${original.body}\n\n[추가 지시]\n${next.body}`,
     pins,
     sketches: merged(original.sketches, next.sketches),

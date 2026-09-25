@@ -1,3 +1,4 @@
+import { AccountSettings } from './account-settings.tsx';
 import { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { api, errors } from './gateway.ts';
@@ -115,6 +116,7 @@ function Settings({ config, current, onStatus }: Props) {
               }
             />
             <p role="status">{states[provider] || '연결 확인 전'}</p>
+            <AccountSettings provider={provider} />
           </section>
         );
       })}
