@@ -2,7 +2,7 @@
 id: SPIKE-2026-09-25-cli-profiles
 title: CLI 계정 경로 격리 시험
 status: review
-version: 0.7
+version: 0.8
 updated: 2026-09-25
 owner: agent:codex
 related: [PLAN-06, SPEC-02, ARCH-01]
@@ -37,3 +37,7 @@ related: [PLAN-06, SPEC-02, ARCH-01]
 ## 관리 프로필 제거
 
 로그아웃 확인과 로컬 설정/이력 삭제 확인 뒤 관리 디렉터리/목록만 제거하도록 연결했다. 기본/다른 공급자/사용 중 거절, nested junction이 있으면 삭제 전 거절, 선택 기본 복원·재시작·다른 프로필 보존을 계약 검증했다. HTTP는 비동기 인증 확인 중 새 불명확 작업이 생기는 경우도 사용 중으로 거절했고 프로젝트 이력은 남았다. Chromium의 제거 확인 취소/수락과 목록 제거·기본 선택 복원 통과. 실제 사용자 프로필은 제거하지 않고 임시 합성 프로필로만 시험했다. 코드: `account-profiles.test.mjs`, `server.test.mjs`, `browser-accounts.mjs`.
+
+## 모델 목록의 전환 완료 반영
+
+`browser-account-catalog.mjs`는 합성 두 계정의 서로 다른 모델 목록에서 전환 대기→실행 종료 후 활성 계정 변경→목록 재조회→이전 모델 재선택 요구를 실제 Chromium으로 검증했다. 초안과 명시 모델은 유지하고 미지원 모델 상태에서는 전송을 막는다. `browser-accounts.mjs`는 로그아웃 종료 후 목록 재조회도 확인했다. 늦게 도착한 이전 목록은 최신 재조회 결과를 덮어쓰지 않는다. 실제 공급자가 제공하지 않은 모델 권한을 보장하거나 장기 인증 갱신 시험으로 해석하지 않는다.

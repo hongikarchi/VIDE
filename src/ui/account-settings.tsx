@@ -54,12 +54,24 @@ export function AccountSettings({ provider }: { provider: Provider }) {
     };
   }, []);
   useEffect(() => {
+    let previous: string | undefined;
     let alive = true,
       timer: ReturnType<typeof setTimeout>;
     const poll = async () => {
       try {
         const statuses = loginSchema.parse(await api('/accounts/login'));
-        if (alive) setLogin(statuses.find((row) => row.provider === provider));
+        if (alive) {
+          const status = statuses.find((row) => row.provider === provider);
+          setLogin(status);
+          if (
+            status &&
+            previous !== undefined &&
+            previous !== status.state &&
+            !['running', 'stopping'].includes(status.state)
+          )
+            window.dispatchEvent(new Event('vide-accounts-changed'));
+          previous = status?.state;
+        }
       } catch {
         if (alive) setMessage('로그인 상태를 확인하지 못했습니다. 새로고침하세요.');
       }

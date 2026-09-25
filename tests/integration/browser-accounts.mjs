@@ -32,6 +32,10 @@ try {
   browser = await chromium.launch({ channel: 'chrome', headless: true });
   const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
   page.setDefaultTimeout(10000);
+  let catalogReads = 0;
+  page.on('request', (request) => {
+    if (request.url().endsWith('/api/v1/models')) catalogReads++;
+  });
   await page.route('**/api/v1/host', (route) => route.fulfill({ json: { available: false } }));
   await page.goto(app.launchUrl);
   await page.locator('#draft-menu summary').click();
@@ -69,9 +73,12 @@ try {
   await row.getByRole('button', { name: '로그아웃', exact: true }).click();
   await row.getByText('로그아웃 진행 중', { exact: true }).waitFor();
   assert.equal(await row.getByRole('button', { name: '선택', exact: true }).isDisabled(), true);
+  const beforeLogout = catalogReads;
   authenticated = false;
   loginProcess.emit('close', 0);
   await row.getByText('로그아웃 완료', { exact: true }).waitFor();
+  await page.waitForTimeout(100);
+  assert.ok(catalogReads > beforeLogout, 'Terminal authentication state refreshes the catalog');
   assert.ok((await row.textContent()).includes('선택됨'));
   page.once('dialog', (dialog) => dialog.dismiss());
   await row.getByRole('button', { name: '제거', exact: true }).click();

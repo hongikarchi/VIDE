@@ -10,6 +10,7 @@ export function accountIndicator(parent: HTMLElement, provider: () => string) {
   const label = document.createElement('small');
   label.setAttribute('aria-label', '현재 AI 계정');
   parent.append(label);
+  let activeSignature: string | undefined;
   let generation = 0,
     timer: ReturnType<typeof setTimeout> | undefined;
   const refresh = async () => {
@@ -18,6 +19,10 @@ export function accountIndicator(parent: HTMLElement, provider: () => string) {
     try {
       const data = schema.parse(await api('/accounts'));
       if (current !== generation) return;
+      const signature = JSON.stringify(data.active);
+      const changed = activeSignature !== undefined && activeSignature !== signature;
+      activeSignature = signature;
+      if (changed) window.dispatchEvent(new Event('vide-accounts-changed'));
       const key = provider(),
         id = data.active[key];
       label.textContent =

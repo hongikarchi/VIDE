@@ -549,7 +549,7 @@ $('ai-settings').onclick = () => {
 };
 const refreshAccount = accountIndicator(
   $('model').parentElement!,
-  () => models.find((m) => m.id === state.model)?.provider ?? 'claude-cli',
+  () => models.find((m) => m.id === state.model)?.provider ?? '',
 );
 for (const model of models) el('option', model.name, $('model'), { value: model.id });
 $('model').onchange = () => {
@@ -1010,9 +1010,12 @@ for (const id of ['point-u', 'point-v'] as const)
     }
   };
 
+let catalogGeneration = 0;
 window.addEventListener('vide-accounts-changed', () => {
+  const current = ++catalogGeneration;
   void (async () => {
     const catalog = modelsSchema.parse(await api('/models'));
+    if (current !== catalogGeneration) return;
     models.splice(0, models.length, ...catalog);
     $('model').replaceChildren();
     for (const model of models) el('option', model.name, $('model'), { value: model.id });
