@@ -55,6 +55,9 @@ try {
   const edited = await worker.exportModel();
   assert.deepEqual(edited.measurementStats, { measuredObjects: 1, reusedObjects: 3 });
   assert.ok(Math.abs(edited.scene.find((row) => row.id === 'resize').volume - 48) < 1e-8);
+  const editedAgain = await worker.exportModel();
+  assert.deepEqual(editedAgain.measurementStats, { measuredObjects: 0, reusedObjects: 4 });
+  assert.deepEqual(editedAgain.scene, edited.scene);
   const moved = await worker.execute(
     randomUUID(),
     1,
@@ -66,7 +69,7 @@ try {
   );
   assert.equal(moved.ok, true, JSON.stringify(moved));
   const rigid = await worker.exportModel();
-  assert.deepEqual(rigid.measurementStats, { measuredObjects: 2, reusedObjects: 2 });
+  assert.deepEqual(rigid.measurementStats, { measuredObjects: 1, reusedObjects: 3 });
   assert.equal(moved.changes.modified.find((row) => row.id === 'keep').geometry, true);
   assert.equal(moved.changes.modified.find((row) => row.id === 'mesh').geometry, true);
   assert.ok(Math.abs(rigid.scene.find((row) => row.id === 'keep').volume - 24) < 1e-8);
@@ -80,7 +83,7 @@ try {
   );
   assert.equal(scaled.ok, true, JSON.stringify(scaled));
   const resized = await worker.exportModel();
-  assert.deepEqual(resized.measurementStats, { measuredObjects: 3, reusedObjects: 1 });
+  assert.deepEqual(resized.measurementStats, { measuredObjects: 1, reusedObjects: 3 });
   assert.ok(Math.abs(resized.scene.find((row) => row.id === 'keep').volume - 192) < 1e-7);
   const deleted = await worker.execute(
     randomUUID(),
@@ -96,7 +99,18 @@ try {
     removed.scene.some((row) => row.id === 'mesh'),
     false,
   );
-  assert.deepEqual(removed.measurementStats, { measuredObjects: 2, reusedObjects: 1 });
+  assert.deepEqual(removed.measurementStats, { measuredObjects: 0, reusedObjects: 3 });
+  const changedTolerance = await worker.execute(
+    randomUUID(),
+    4,
+    'doc.ModelAbsoluteTolerance = doc.ModelAbsoluteTolerance * 2;',
+  );
+  assert.equal(changedTolerance.ok, true, JSON.stringify(changedTolerance));
+  const toleranceModel = await worker.exportModel();
+  assert.deepEqual(toleranceModel.measurementStats, { measuredObjects: 3, reusedObjects: 0 });
+  const toleranceAgain = await worker.exportModel();
+  assert.deepEqual(toleranceAgain.measurementStats, { measuredObjects: 0, reusedObjects: 3 });
+  assert.deepEqual(toleranceAgain.scene, toleranceModel.scene);
   await worker.stop();
   worker = undefined;
   const sdk = new SdkExecution({
@@ -178,6 +192,9 @@ try {
     directory,
     unchangedCalculated: 0,
     changedCalculated: 1,
+    repeatedChangedCalculated: 0,
+    toleranceInvalidated: true,
+    repeatedToleranceCalculated: 0,
     renamedReused: true,
     closedMeshVolume: 24,
     translationReused: true,

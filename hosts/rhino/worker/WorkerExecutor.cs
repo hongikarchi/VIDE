@@ -13,7 +13,13 @@ internal sealed class WorkerExecutor(RhinoDoc document, string directory)
     private int revision;
     private bool uncertain;
     private readonly WorkerChanges modelBasis = new(document);
+    private readonly (UnitSystem, double, double, double) initialMeasurementContext = MeasurementContext(document);
+    private (UnitSystem, double, double, double) lastMeasurementContext = MeasurementContext(document);
+    private Dictionary<string, (string hash, WorkerScene.Measurements value)> lastMeasurements = new();
     private readonly Dictionary<string, (string hash, object result)> receipts = new();
+
+    private static (UnitSystem, double, double, double) MeasurementContext(RhinoDoc doc) =>
+        (doc.ModelUnitSystem, doc.ModelAbsoluteTolerance, doc.ModelRelativeTolerance, doc.ModelAngleToleranceRadians);
 
     public object Dispatch(JsonElement request)
     {
@@ -51,9 +57,20 @@ internal sealed class WorkerExecutor(RhinoDoc document, string directory)
                         throw new InvalidOperationException("INVALID_MEASUREMENT_CACHE");
                 }
             }
-            return WorkerScene.Export(document, (obj, geometryHash) =>
-                geometryCache.TryGetValue(WorkerScene.Id(obj), out var match) && match.hash == geometryHash ? match.value :
-                modelBasis.SameMeasurements(obj) && cached.TryGetValue(WorkerScene.Id(obj), out var value) ? value : null);
+            var context = MeasurementContext(document);
+            var nextMeasurements = new Dictionary<string, (string hash, WorkerScene.Measurements value)>();
+            var result = WorkerScene.Export(document, (obj, geometryHash) =>
+            {
+                var id = WorkerScene.Id(obj);
+                if (context == lastMeasurementContext && lastMeasurements.TryGetValue(id, out var prior) && prior.hash == geometryHash)
+                    return prior.value;
+                if (context != initialMeasurementContext) return null;
+                return geometryCache.TryGetValue(id, out var match) && match.hash == geometryHash ? match.value :
+                    modelBasis.SameMeasurements(obj) && cached.TryGetValue(id, out var value) ? value : null;
+            }, (obj, hash, value) => nextMeasurements.Add(WorkerScene.Id(obj), (hash, value)));
+            lastMeasurements = nextMeasurements;
+            lastMeasurementContext = context;
+            return result;
         }
         if (method != "execute") throw new InvalidOperationException("UNKNOWN_METHOD");
         var operation = request.GetProperty("operationId").GetString()!;

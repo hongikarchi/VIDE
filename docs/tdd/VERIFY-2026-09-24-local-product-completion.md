@@ -2,7 +2,7 @@
 id: VERIFY-2026-09-24-local-product-completion
 title: 로컬 제품 완결 · 실제 왕복 및 확장 검수
 status: review
-version: 0.31
+version: 0.32
 updated: 2026-09-25
 owner: agent:codex
 related: [PLAN-02, AC-07, AC-08, AC-09, AC-10, AC-24, AC-25, AC-32, AC-33, AC-34]
@@ -235,3 +235,9 @@ Rhino [파일 설정 설명](https://docs.mcneel.com/rhino/8/help/en-us/options/
 `rhino-safe-open.mjs`로 합성 파일 복사본만 `/safemode`로 열었다. `.vide/rhino-safe-open/9072529d-877f-4f52-bdd4-c3029d8f805f/process.json`의 소유 실행본에서 Enscape 자동 로드는 거절했고, 파일 열기 성공 및 제목에 읽기 전용 표시가 없는 것을 확인했다. D5 도구 창은 남아 있어 모든 외부 플러그인이 제외됐다고 판단하지 않는다.
 
 File → Save As 대화상자는 열렸으나 Computer Use의 파일명 요소가 cached app state에서 유효하지 않았고, 다시 관찰해도 입력 초점을 확정하지 못했다. 새 이름 입력·저장은 수행되지 않았으며 이 시험은 저장 성공/실패 판정의 증거가 아니다. 소유 실행본은 종료했다. 앞선 자동 대조의 저장 후 읽기 전용 현상은 미해결 상태를 유지한다. 이 관찰만으로 VIDE 또는 특정 설치 플러그인을 원인으로 확정하지 않는다.
+
+## 실행본 내 수정 후 반복 수량 조회 — L4
+
+`worker-measurements.mjs`에서 4개 객체 중 크기 변경 1개만 재계산한 뒤 반복 export의 계산 0개/재사용 4개를 확인했다. 이후 이동은 재사용, 회전은 첫 1개 재계산, 스케일은 해당 1개 재계산, 삭제 후 나머지 3개는 모두 재사용했다. 절대 tolerance 변경 뒤 3개 모두 무효화/재계산했고 같은 조건의 다음 조회는 계산 0개였다. 형상·수량·속성은 반복 조회에서 동일하며 재열기/Sync 해시 캐시 회귀도 통과했다.
+
+증거: `.vide/worker-measurements/a6bfceab-0132-4531-a245-54ebee4deff1/result.json`. 직전 성공 export의 ID/기하 해시/조건별 수량만 실행본 수명 동안 보존하며 삭제 항목을 누적하지 않는다. 기하 해시 및 표시 메시 생성은 계속 수행한다. 회전 자체의 수량 재사용이나 전체 export 비용 제거를 검증한 것은 아니다. C# 빌드 경고/오류 0개.

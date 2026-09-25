@@ -38,7 +38,8 @@ internal static class WorkerScene
     }
 
     // Detailed meshes/measurements are exported once for the candidate, not on every AI query.
-    internal static object Export(RhinoDoc doc, Func<RhinoObject, string, Measurements?>? cached = null)
+    internal static object Export(RhinoDoc doc, Func<RhinoObject, string, Measurements?>? cached = null,
+        Action<RhinoObject, string, Measurements>? observed = null)
     {
         var objects = new List<object>();
         var scene = new List<object>();
@@ -80,6 +81,7 @@ internal static class WorkerScene
                 measurements = new Measurements(area?.Area, volume?.Volume, curve?.GetLength());
                 measuredObjects++;
             }
+            observed?.Invoke(obj, geometryHash, measurements);
             var attributes = new List<string[]>(); var complete = true; var bytes = 0;
             var strings = obj.Attributes.GetUserStrings();
             foreach (var key in strings.AllKeys)
