@@ -8,12 +8,29 @@ const schema = z.object({
   active: z.record(z.string(), z.string()),
   pending: z.record(z.string(), z.string().nullable()),
 });
+const loginSchema = z.array(
+  z.object({
+    provider: z.enum(providers),
+    profileId: z.string(),
+    state: z.enum(['running', 'stopping', 'succeeded', 'failed', 'cancelled']),
+    reason: z.string().optional(),
+  }),
+);
+const loginLabels = {
+  running: '브라우저에서 인증하세요',
+  stopping: '로그인 종료 확인 중',
+  succeeded: '로그인 확인됨',
+  failed: '로그인 실패 · 다시 시도하세요',
+  cancelled: '로그인 취소됨',
+};
 export function AccountSettings({ provider }: { provider: Provider }) {
   const [data, setData] = useState<z.infer<typeof schema>>();
   const [label, setLabel] = useState('');
   const [message, setMessage] = useState('');
   const [command, setCommand] = useState('');
   const [busy, setBusy] = useState(false);
+  const [login, setLogin] = useState<z.infer<typeof loginSchema>[number]>();
+  const loggingIn = login?.state === 'running' || login?.state === 'stopping';
   const refresh = async () => setData(schema.parse(await api('/accounts')));
   useEffect(() => {
     let alive = true;
@@ -28,6 +45,24 @@ export function AccountSettings({ provider }: { provider: Provider }) {
       alive = false;
     };
   }, []);
+  useEffect(() => {
+    let alive = true,
+      timer: ReturnType<typeof setTimeout>;
+    const poll = async () => {
+      try {
+        const statuses = loginSchema.parse(await api('/accounts/login'));
+        if (alive) setLogin(statuses.find((row) => row.provider === provider));
+      } catch {
+        if (alive) setMessage('로그인 상태를 확인하지 못했습니다. 새로고침하세요.');
+      }
+      if (alive) timer = setTimeout(() => void poll(), 1000);
+    };
+    void poll();
+    return () => {
+      alive = false;
+      clearTimeout(timer);
+    };
+  }, [provider]);
   const action = async (task: () => Promise<void>) => {
     setBusy(true);
     setMessage('');
@@ -55,7 +90,7 @@ export function AccountSettings({ provider }: { provider: Provider }) {
             {data?.pending[provider] === row.id ? '· 전환 대기' : ''}
           </span>
           <button
-            disabled={busy}
+            disabled={busy || loggingIn}
             onClick={() =>
               void action(async () => {
                 await api('/accounts/select', 'POST', { provider, id: row.id });
@@ -65,19 +100,52 @@ export function AccountSettings({ provider }: { provider: Provider }) {
             선택
           </button>
           {row.id !== 'default' && (
-            <button
-              disabled={busy}
-              onClick={() =>
-                void action(async () => {
-                  const result = z
-                    .object({ command: z.string() })
-                    .parse(await api('/accounts/login-command', 'POST', { provider, id: row.id }));
-                  setCommand(result.command);
-                })
-              }
-            >
-              로그인 방법
-            </button>
+            <>
+              <button
+                disabled={busy || loggingIn}
+                onClick={() =>
+                  void action(async () => {
+                    const result = await api('/accounts/login', 'POST', { provider, id: row.id });
+                    setLogin(loginSchema.parse([result])[0]);
+                  })
+                }
+              >
+                로그인
+              </button>
+              {login?.profileId === row.id && (
+                <small role="status">{loginLabels[login.state]}</small>
+              )}
+              {login?.profileId === row.id && loggingIn && (
+                <button
+                  disabled={busy || login.state === 'stopping'}
+                  onClick={() =>
+                    void action(async () => {
+                      const result = loginSchema.parse(
+                        await api('/accounts/login/cancel', 'POST', { provider }),
+                      );
+                      setLogin(result.find((row) => row.provider === provider));
+                    })
+                  }
+                >
+                  로그인 취소
+                </button>
+              )}
+              <button
+                disabled={busy || loggingIn}
+                onClick={() =>
+                  void action(async () => {
+                    const result = z
+                      .object({ command: z.string() })
+                      .parse(
+                        await api('/accounts/login-command', 'POST', { provider, id: row.id }),
+                      );
+                    setCommand(result.command);
+                  })
+                }
+              >
+                로그인 방법
+              </button>
+            </>
           )}
         </div>
       ))}

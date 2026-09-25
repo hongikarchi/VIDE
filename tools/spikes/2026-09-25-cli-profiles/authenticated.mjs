@@ -13,7 +13,8 @@ const second = profiles.list().profiles.find(
   (row) => row.provider === 'codex-cli' && row.label === 'ChatGPT 2',
 );
 assert.ok(second, 'SECOND_PROFILE_REQUIRED');
-for (const id of ['default', second.id]) {
+const ids=process.argv.includes('--parallel') ? [second.id,second.id] : ['default',second.id];
+const run=async(id,index)=>{
   const cli = new CodexCli({
     executable: installedCodex(),
     configDirectory: profiles.directory('codex-cli', id),
@@ -21,16 +22,21 @@ for (const id of ['default', second.id]) {
   });
   const status = await cli.status();
   assert.equal(status.available, true, status.reason);
+  const marker='VIDE_PROFILE_OK_'+index;
   const result = await cli.run({
-    goal: 'Reply with exactly VIDE_PROFILE_OK. Do not use tools.',
+    goal: 'Reply with exactly '+marker+'. Do not use tools.',
     revision: 1,
     items: [],
     includedIds: [],
   });
-  assert.equal(result.text.trim(), 'VIDE_PROFILE_OK');
+  assert.equal(result.text.trim(), marker);
   console.log(JSON.stringify({
     profile: id === 'default' ? 'default' : 'second',
     authenticated: true,
     responseVerified: true,
+    parallel: process.argv.includes('--parallel'),
+    request: index,
   }));
-}
+};
+if(process.argv.includes('--parallel'))await Promise.all(ids.map(run));
+else for(const [index,id] of ids.entries())await run(id,index);

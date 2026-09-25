@@ -1,4 +1,5 @@
 import { AccountProfiles } from '../ai/account-profiles.ts';
+import { AccountLogin } from '../ai/account-login.ts';
 import { z } from 'zod';
 import type { IncomingMessage } from 'node:http';
 import type { StoredWork } from '../contracts/stored-work.ts';
@@ -9,6 +10,7 @@ interface ServerOptions {
   filename: string;
   port?: number;
   providerFactory?: ExecutionOptions['providerFactory'];
+  loginOptions?: ConstructorParameters<typeof AccountLogin>[0];
   host?: RhinoWorkspace;
   cadHost?: ZwcadWorkspace;
   applicationOptions?: ConstructorParameters<typeof Applications>[2];
@@ -83,6 +85,7 @@ export async function startServer({
   filename,
   port = 0,
   providerFactory,
+  loginOptions,
   host,
   cadHost,
   applicationOptions,
@@ -93,6 +96,7 @@ export async function startServer({
     bootstrap = randomBytes(32).toString('hex'),
     session = randomBytes(32).toString('hex');
   const agentTools = new AgentTools();
+  const accountLogin = new AccountLogin(loginOptions);
   const workspace = new Workspace(store),
     tableViews = new TableViews(store),
     reviews = new Reviews(store),
@@ -154,6 +158,7 @@ export async function startServer({
       .get(provider);
     return (
       !!persisted ||
+      accountLogin.busy(provider) ||
       (typeof execution !== 'undefined' &&
         [...execution.active.keys()].some((id) =>
           store.db
@@ -460,6 +465,7 @@ export async function startServer({
           .object({ provider: z.enum(['claude-cli', 'codex-cli']), id: z.string() })
           .strict()
           .parse(await body(request));
+        if (accountLogin.busy(input.provider)) throw new DomainError('PROFILE_LOGIN_IN_PROGRESS');
         const status = await execution
           .provider({ provider: input.provider, accountProfileId: input.id })
           .status();
@@ -480,6 +486,41 @@ export async function startServer({
         send(200, {
           command: `$env:${key}=${quote(directory)}; & ${quote(execution.executable(input.provider) ?? '')} ${input.provider === 'codex-cli' ? 'login -c \'cli_auth_credentials_store="file"\' -c \'forced_login_method="chatgpt"\'' : 'auth login --claudeai'}`,
         });
+        return;
+      }
+      if (url.pathname === '/api/v1/accounts/login' && request.method === 'GET') {
+        send(200, accountLogin.list());
+        return;
+      }
+      if (url.pathname === '/api/v1/accounts/login' && request.method === 'POST') {
+        const input = z
+          .object({ provider: z.enum(['claude-cli', 'codex-cli']), id: z.string() })
+          .strict()
+          .parse(await body(request));
+        profiles.assertIdle(input.provider);
+        const directory = profiles.directory(input.provider, input.id);
+        if (!directory) throw new DomainError('INVALID_INPUT');
+        const executable = execution.executable(input.provider);
+        if (!executable) throw new DomainError('CLI_UNAVAILABLE');
+        send(
+          202,
+          accountLogin.start({
+            provider: input.provider,
+            profileId: input.id,
+            directory,
+            executable,
+            verify: () =>
+              execution.provider({ provider: input.provider, accountProfileId: input.id }).status(),
+          }),
+        );
+        return;
+      }
+      if (url.pathname === '/api/v1/accounts/login/cancel' && request.method === 'POST') {
+        const input = z
+          .object({ provider: z.enum(['claude-cli', 'codex-cli']) })
+          .strict()
+          .parse(await body(request));
+        send(200, accountLogin.cancel(input.provider));
         return;
       }
       if (url.pathname === '/api/v1/providers' && request.method === 'GET') {
@@ -757,7 +798,10 @@ export async function startServer({
           if (existing && typeof existing.input === 'string') {
             const old = JSON.parse(existing.input);
             if (old.accountProfileId) input.accountProfileId = old.accountProfileId;
-          } else input.accountProfileId = profiles.selected(provider);
+          } else {
+            if (accountLogin.busy(provider)) throw new DomainError('PROFILE_LOGIN_IN_PROGRESS');
+            input.accountProfileId = profiles.selected(provider);
+          }
           const result = workspace.submit(projectId, input);
           if (result.created) execution.start(result.request);
           send(result.created ? 202 : 200, workspace.get(projectId, result.request.id));
@@ -841,6 +885,7 @@ export async function startServer({
     agentTools,
     close: async () => {
       stopping = true;
+      await accountLogin.close();
       agentTools.close();
       await execution.close();
       await Promise.allSettled([...importRecoveries.values()]);

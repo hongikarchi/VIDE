@@ -1,14 +1,25 @@
 import assert from 'node:assert/strict';
+import { EventEmitter } from 'node:events';
+import { PassThrough } from 'node:stream';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { chromium } from 'playwright';
 import { startServer } from '../../src/server/server.ts';
 const root = await mkdtemp(join(tmpdir(), 'vide-account-ui-'));
-let app, browser;
+let app, browser, loginProcess;
 try {
   app = await startServer({
     filename: join(root, 'test.sqlite'),
+    loginOptions: {
+      spawnProcess: () => {
+        loginProcess = new EventEmitter();
+        loginProcess.stdout = new PassThrough();
+        loginProcess.stderr = new PassThrough();
+        return loginProcess;
+      },
+      kill: async () => true,
+    },
     providerFactory: () => ({
       status: async () => ({ available: true }),
       run: async () => ({ text: '{}' }),
@@ -44,6 +55,13 @@ try {
   assert.ok(command.includes('CODEX_HOME'));
   assert.ok(command.includes('cli_auth_credentials_store'));
   assert.ok((await section.textContent()).includes('사용량 미확인'));
+  await row.getByRole('button', { name: '로그인', exact: true }).click();
+  await row.getByText('브라우저에서 인증하세요', { exact: true }).waitFor();
+  assert.equal(await row.getByRole('button', { name: '선택', exact: true }).isDisabled(), true);
+  await row.getByRole('button', { name: '로그인 취소', exact: true }).click();
+  await row.getByText('로그인 종료 확인 중', { exact: true }).waitFor();
+  loginProcess.emit('close', null);
+  await row.getByText('로그인 취소됨', { exact: true }).waitFor();
   console.log(
     'Account add/select/login instructions verified in Chromium; provider authentication mocked.',
   );

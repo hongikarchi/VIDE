@@ -1,4 +1,6 @@
 import test from 'node:test';
+import { EventEmitter } from 'node:events';
+import { PassThrough } from 'node:stream';
 import assert from 'node:assert/strict';
 import { request as httpRequest } from 'node:http';
 import { mkdtempSync, rmSync } from 'node:fs';
@@ -274,4 +276,73 @@ test('account routes pin requests, drain two unresolved jobs and isolate login p
     ).code,
     'INVALID_INPUT',
   );
+});
+
+test('managed login HTTP lifecycle blocks requests and selection until confirmed termination', async (t) => {
+  let child,
+    kills = 0;
+  const { api } = await fixture(t, {
+    providerFactory: () => ({
+      status: async () => ({ available: true }),
+      run: async () => ({ text: '{"message":"OK","operations":[]}' }),
+    }),
+    loginOptions: {
+      spawnProcess: () => {
+        child = new EventEmitter();
+        child.stdout = new PassThrough();
+        child.stderr = new PassThrough();
+        return child;
+      },
+      kill: async () => {
+        kills++;
+        return true;
+      },
+    },
+  });
+  const post = (path, body) => api(path, { method: 'POST', body });
+  const profile = await (
+    await post('/accounts', { provider: 'codex-cli', label: 'Managed' })
+  ).json();
+  const project = await (await post('/projects', { name: 'Login lease' })).json();
+  assert.equal(
+    (await (await post('/accounts/login', { provider: 'codex-cli', id: 'default' })).json()).code,
+    'INVALID_INPUT',
+  );
+  assert.equal(
+    (await post('/accounts/login', { provider: 'codex-cli', id: profile.id })).status,
+    202,
+  );
+  const input = {
+    id: 'during-login',
+    body: 'Review',
+    provider: 'codex-cli',
+    permission: 'review',
+    pins: [],
+    sketches: [],
+    files: [],
+  };
+  assert.equal(
+    (await (await post(`/projects/${project.id}/requests`, input)).json()).code,
+    'PROFILE_LOGIN_IN_PROGRESS',
+  );
+  assert.equal(
+    (await (await post('/accounts/select', { provider: 'codex-cli', id: profile.id })).json()).code,
+    'PROFILE_LOGIN_IN_PROGRESS',
+  );
+  assert.equal(
+    (await (await post('/accounts/login', { provider: 'codex-cli', id: profile.id })).json()).code,
+    'PROFILE_IN_USE',
+  );
+  await post('/accounts/login/cancel', { provider: 'codex-cli' });
+  assert.equal(kills, 1);
+  assert.equal((await (await api('/accounts/login')).json())[0].state, 'stopping');
+  assert.equal(
+    (await (await post(`/projects/${project.id}/requests`, input)).json()).code,
+    'PROFILE_LOGIN_IN_PROGRESS',
+  );
+  child.emit('close', null);
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal((await (await api('/accounts/login')).json())[0].state, 'cancelled');
+  assert.equal((await (await api('/accounts')).json()).active['codex-cli'], 'default');
+  assert.equal((await post(`/projects/${project.id}/requests`, input)).status, 202);
 });
