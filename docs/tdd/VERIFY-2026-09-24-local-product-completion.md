@@ -2,7 +2,7 @@
 id: VERIFY-2026-09-24-local-product-completion
 title: 로컬 제품 완결 · 실제 왕복 및 확장 검수
 status: review
-version: 0.20
+version: 0.21
 updated: 2026-09-25
 owner: agent:codex
 related: [PLAN-02, AC-07, AC-08, AC-09, AC-10, AC-24, AC-25, AC-32, AC-33, AC-34]
@@ -150,3 +150,11 @@ SDK 영수증으로 복구한 사본에 recovered 표시를 추가하고 목표 
 ## 남은 검증
 
 독립 실호스트 병렬은 위 합성 범위에서 통과했다. 네이티브 연산 중 중단·원본 충돌 및 개입 후 부분 완료분의 세밀한 재사용, Rhino Save As의 환경 원인 해소, L3~L6 전체는 완료 처리하지 않는다. 현재까지의 시험 성공을 전체 제품 완결로 해석하지 않는다. 후속 연구의 계획은 PLAN-05·06으로 분리하며, 그 작성으로 이 묶음의 미완료 검증을 완료 처리하지 않는다.
+
+## 조밀 네이티브 메시 — L5
+
+`rhino-dense-mesh.mjs`에서 256×256 격자 메시(66,049 정점·131,072 삼각형)를 실제 Rhino에 만들었다. 저장/재열기 후 ID·정점·인덱스·면적 65,536 m²가 일치했고 수량 캐시는 measured 0/reused 1이었다. 생성 3.12초·export 2.44초·재열기 6.60초·캐시 export 2.39초, JSON 약 2.90 MB다. 계측에서 메모리 조회 시간을 제외한 재시험 원시 자료는 `.vide/rhino-dense-mesh/c4f1c6f4-f41b-4b62-afca-d0ad2d72c79c/result.json`이다. 캐시는 수량 재계산을 줄였지만 전체 export 속도 향상은 입증하지 못했다.
+
+동일 기하의 최초 시험 파일을 `browser-large-native.mjs`로 가져와 실제 Chromium 표시·선택·객체 누락 없음·pageerror 0을 확인했다. 기동 포함 가져오기/표시 12.98초, JS heap 약 5.97→47.09 MB, 측정 시 Node RSS 약 181.14 MB. `.vide/browser-large-native/535e0fca-c509-488e-8717-994ff085b479/result.json`과 `dense-mesh.png`를 확인했다. `rhino-large-apply.mjs ... dense-mesh`는 메시 Z+5 후보 미리보기/적용 5.74초, 저장 사본 재열기 후 같은 native ID·변경 위치를 확인했다(`.vide/rhino-large-apply/e11a3930-4f4c-4f5d-976c-96cb97fe8588/result.json`). 사용자 문서·실제 AI 추론은 사용하지 않았다.
+
+각 Node RSS와 Rhino working/private/peak working set은 원시 결과에 남겼다. Rhino peak는 프로세스 전체 수명 값이며 브라우저 CDP JS heap은 GPU/전체 브라우저 메모리가 아니다. 단일 평면 격자 실증을 모든 복잡 BIM 모델·프레임 상한 초과·운영 메모리 보증으로 확대하지 않는다.

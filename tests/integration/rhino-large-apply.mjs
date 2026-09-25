@@ -6,7 +6,8 @@ import { launchRhinoWorker } from '../../hosts/rhino/worker-client.ts';
 import { sdkOptions } from '../../src/server/sdk-options.ts';
 
 const fixture = JSON.parse(await readFile(process.argv[2], 'utf8'));
-const source = fixture.evidence.find((row) => row.kind === 'points' && row.count === 10000);
+const source = fixture.evidence.find((row) => row.kind === (process.argv[3] || 'points'));
+assert.equal(fixture.passed, true);
 assert.ok(source);
 const directory = resolve('.vide/rhino-large-apply', randomUUID());
 await mkdir(directory, { recursive: true });
@@ -58,7 +59,7 @@ try {
     source: { filename: after.filename, fileHash: after.fileHash },
   });
   const restored = await worker.query();
-  assert.equal(restored.objects.length, 10000);
+  assert.equal(restored.objects.length, source.count);
   assert.deepEqual(
     restored.objects.map((o) => o.nativeId),
     initial.objects.map((o) => o.nativeId),
@@ -67,7 +68,8 @@ try {
   assert.equal(modified.bounds[0][2], first.bounds[0][2] + 5);
   const evidence = {
     passed: true,
-    count: 10000,
+    count: source.count,
+    kind: source.kind,
     updated: 1,
     identityPreserved: true,
     previewAndApplyMs: elapsed,

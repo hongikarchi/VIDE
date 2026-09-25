@@ -23,12 +23,25 @@ try {
   });
   const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
   page.setDefaultTimeout(120000);
+  const metrics = await page.context().newCDPSession(page);
+  await metrics.send('Performance.enable');
+  const memory = async () => {
+    const result = await metrics.send('Performance.getMetrics');
+    return Object.fromEntries(
+      result.metrics
+        .filter((row) =>
+          ['JSHeapUsedSize', 'JSHeapTotalSize', 'Nodes', 'Documents'].includes(row.name),
+        )
+        .map((row) => [row.name, row.value]),
+    );
+  };
   const errors = [];
   page.on('pageerror', (error) => errors.push(error.message));
   await page.goto(app.launchUrl);
   await page.waitForFunction(() => document.querySelector('#project-picker')?.value);
   const evidence = [];
   for (const sample of fixture.evidence) {
+    const beforeMemory = await memory();
     const start = performance.now();
     await page.locator('#model-file').setInputFiles(sample.filename);
     await page.waitForFunction(
@@ -55,6 +68,9 @@ try {
       count: sample.count,
       importAndUiMs: elapsed,
       lastObjectSelected: true,
+      memoryBefore: beforeMemory,
+      memoryAfter: await memory(),
+      nodeMemory: process.memoryUsage(),
     });
   }
   assert.deepEqual(errors, []);
