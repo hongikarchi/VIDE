@@ -2,7 +2,7 @@
 id: SPIKE-2026-09-25-cli-profiles
 title: CLI 계정 경로 격리 시험
 status: review
-version: 0.5
+version: 0.6
 updated: 2026-09-25
 owner: agent:codex
 related: [PLAN-06, SPEC-02, ARCH-01]
@@ -29,3 +29,7 @@ related: [PLAN-06, SPEC-02, ARCH-01]
 첫 시도에서는 제한 실행 환경에서 두 프로필 모두 미로그인으로 보였고 Windows 인증 접근 제한을 제거한 확인에서도 ChatGPT 2 관리 프로필은 SUBSCRIPTION_LOGIN_REQUIRED였다. 후속 재인증 뒤 `authenticated.mjs`의 프로필별 합성 읽기 요청 각 1회가 실제 응답을 반환했다. 브라우저 알림만으로 인증 성공을 판단하지 않았다.
 
 `tests/integration/browser-authenticated-accounts.mjs`는 실제 Chromium에서 기본 프로필 요청→두 번째 프로필 선택→실제 요청→서버 재시작→선택 복원을 통과했다. 별도 시험 DB/메타데이터를 쓰고 공급자 생성 경계에서 시험 프로필 경로를 이미 인증한 관리 프로필로 매핑했다. 제품의 실제 프로젝트·선택은 변경하지 않았고 인증 파일은 복사하지 않았다. 두 요청은 실제 구독 호출이며 호스트 쓰기는 0회다. 증거: `.vide/account-roundtrip/54e22852-04fc-4a28-b1e9-8a0c7e38459d/result.json`. 초기 시험은 비동기 완료 대기·응답 문자열의 과도한 일치 조건·재시작 세션 초기화 대기에서 실패했고 시험 코드를 수정했다. 이를 제품 기능 실패로 집계하지 않는다. 실제 재로그인 충돌·토큰 갱신 동시성·Claude 두 계정은 미시험이다.
+
+## 관리 프로필 로그아웃
+
+공식 CLI 로그아웃을 기존 인증 프로세스 수명 관리에 연결했다. 기본 프로필은 대상에서 제외하고 종료/검증 동안 새 요청·전환을 막는다. 성공 종료와 SUBSCRIPTION_LOGIN_REQUIRED 확인이 모두 필요하며 timeout/CLI 실행 실패는 성공이 아니다. 양쪽 명령/환경/확인 실패 계약 시험과 실제 Chromium 진행→완료/선택 유지 검증을 통과했다. 설치 Codex를 새 빈 임시 홈에서 실행한 `tools/spikes/2026-09-25-cli-profiles/logout.mjs`도 통과했고 기본 로그인 상태는 전후 동일했다. 실제 사용자 계정은 로그아웃하지 않았으며 Claude 실인증 로그아웃은 미검증이다. 근거: [Codex 명령](https://learn.chatgpt.com/docs/developer-commands?surface=cli), [Claude CLI](https://code.claude.com/docs/en/cli-reference).

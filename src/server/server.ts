@@ -492,7 +492,10 @@ export async function startServer({
         send(200, accountLogin.list());
         return;
       }
-      if (url.pathname === '/api/v1/accounts/login' && request.method === 'POST') {
+      if (
+        ['/api/v1/accounts/login', '/api/v1/accounts/logout'].includes(url.pathname) &&
+        request.method === 'POST'
+      ) {
         const input = z
           .object({ provider: z.enum(['claude-cli', 'codex-cli']), id: z.string() })
           .strict()
@@ -505,6 +508,7 @@ export async function startServer({
         send(
           202,
           accountLogin.start({
+            operation: url.pathname.endsWith('/logout') ? 'logout' : 'login',
             provider: input.provider,
             profileId: input.id,
             directory,

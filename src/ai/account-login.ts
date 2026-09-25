@@ -12,6 +12,7 @@ export interface LoginStatus {
   profileId: string;
   state: State;
   startedAt: string;
+  operation: 'login' | 'logout';
   reason?: string;
 }
 interface Job {
@@ -45,23 +46,27 @@ export class AccountLogin {
     profileId: string;
     directory: string;
     executable: string;
-    verify: () => Promise<{ available: boolean }>;
+    verify: () => Promise<{ available: boolean; reason?: string }>;
+    operation?: 'login' | 'logout';
   }) {
     if (this.busy(input.provider)) throw new DomainError('PROFILE_LOGIN_IN_PROGRESS');
     const codex = input.provider === 'codex-cli';
+    const logout = input.operation === 'logout';
     const env = codex ? codexEnvironment() : subscriptionEnvironment();
     env[codex ? 'CODEX_HOME' : 'CLAUDE_CONFIG_DIR'] = input.directory;
     const child = (this.options.spawnProcess ?? spawn)(
       input.executable,
       codex
         ? [
-            'login',
+            logout ? 'logout' : 'login',
             '-c',
             'cli_auth_credentials_store="file"',
             '-c',
             'forced_login_method="chatgpt"',
           ]
-        : ['auth', 'login', '--claudeai'],
+        : logout
+          ? ['auth', 'logout']
+          : ['auth', 'login', '--claudeai'],
       { env, shell: false, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] },
     );
     // Consume without buffering, forwarding or persisting authentication URLs / secrets.
@@ -78,6 +83,7 @@ export class AccountLogin {
         profileId: input.profileId,
         state: 'running',
         startedAt: new Date().toISOString(),
+        operation: input.operation ?? 'login',
       },
       child,
       done,
@@ -95,7 +101,10 @@ export class AccountLogin {
       let authenticated = false;
       if (code === 0 && !job.stopped) {
         try {
-          authenticated = (await input.verify()).available;
+          const status = await input.verify();
+          authenticated = logout
+            ? !status.available && status.reason === 'SUBSCRIPTION_LOGIN_REQUIRED'
+            : status.available;
         } catch {
           authenticated = false;
         }

@@ -14,6 +14,7 @@ const loginSchema = z.array(
     profileId: z.string(),
     state: z.enum(['running', 'stopping', 'succeeded', 'failed', 'cancelled']),
     reason: z.string().optional(),
+    operation: z.enum(['login', 'logout']).default('login'),
   }),
 );
 const loginLabels = {
@@ -22,6 +23,13 @@ const loginLabels = {
   succeeded: '로그인 확인됨',
   failed: '로그인 실패 · 다시 시도하세요',
   cancelled: '로그인 취소됨',
+};
+const logoutLabels = {
+  running: '로그아웃 진행 중',
+  stopping: '로그아웃 종료 확인 중',
+  succeeded: '로그아웃 완료',
+  failed: '로그아웃을 확인하지 못했습니다',
+  cancelled: '로그아웃 중단 · 인증 상태를 다시 확인하세요',
 };
 export function AccountSettings({ provider }: { provider: Provider }) {
   const [data, setData] = useState<z.infer<typeof schema>>();
@@ -113,8 +121,21 @@ export function AccountSettings({ provider }: { provider: Provider }) {
                 로그인
               </button>
               {login?.profileId === row.id && (
-                <small role="status">{loginLabels[login.state]}</small>
+                <small role="status">
+                  {(login.operation === 'logout' ? logoutLabels : loginLabels)[login.state]}
+                </small>
               )}
+              <button
+                disabled={busy || loggingIn}
+                onClick={() =>
+                  void action(async () => {
+                    const result = await api('/accounts/logout', 'POST', { provider, id: row.id });
+                    setLogin(loginSchema.parse([result])[0]);
+                  })
+                }
+              >
+                로그아웃
+              </button>
               {login?.profileId === row.id && loggingIn && (
                 <button
                   disabled={busy || login.state === 'stopping'}
@@ -127,7 +148,7 @@ export function AccountSettings({ provider }: { provider: Provider }) {
                     })
                   }
                 >
-                  로그인 취소
+                  {login.operation === 'logout' ? '로그아웃 중단' : '로그인 취소'}
                 </button>
               )}
               <button

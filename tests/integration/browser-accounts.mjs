@@ -8,6 +8,7 @@ import { chromium } from 'playwright';
 import { startServer } from '../../src/server/server.ts';
 const root = await mkdtemp(join(tmpdir(), 'vide-account-ui-'));
 let app, browser, loginProcess;
+let authenticated = true;
 try {
   app = await startServer({
     filename: join(root, 'test.sqlite'),
@@ -21,7 +22,10 @@ try {
       kill: async () => true,
     },
     providerFactory: () => ({
-      status: async () => ({ available: true }),
+      status: async () =>
+        authenticated
+          ? { available: true }
+          : { available: false, reason: 'SUBSCRIPTION_LOGIN_REQUIRED' },
       run: async () => ({ text: '{}' }),
     }),
   });
@@ -62,6 +66,13 @@ try {
   await row.getByText('로그인 종료 확인 중', { exact: true }).waitFor();
   loginProcess.emit('close', null);
   await row.getByText('로그인 취소됨', { exact: true }).waitFor();
+  await row.getByRole('button', { name: '로그아웃', exact: true }).click();
+  await row.getByText('로그아웃 진행 중', { exact: true }).waitFor();
+  assert.equal(await row.getByRole('button', { name: '선택', exact: true }).isDisabled(), true);
+  authenticated = false;
+  loginProcess.emit('close', 0);
+  await row.getByText('로그아웃 완료', { exact: true }).waitFor();
+  assert.ok((await row.textContent()).includes('선택됨'));
   console.log(
     'Account add/select/login instructions verified in Chromium; provider authentication mocked.',
   );

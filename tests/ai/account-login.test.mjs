@@ -90,3 +90,32 @@ test('server close waits for its login process, while providers have separate le
   await closing;
   assert.equal(done, true);
 });
+
+for (const provider of ['codex-cli', 'claude-cli'])
+  for (const reason of ['SUBSCRIPTION_LOGIN_REQUIRED', 'AUTH_TIMEOUT', 'CLI_UNAVAILABLE'])
+    test(`official ${provider} logout requires confirmed unauthenticated status: ${reason}`, async () => {
+      const { login, input, calls, children } = fixture();
+      let complete;
+      const status = login.start({
+        ...input,
+        provider,
+        operation: 'logout',
+        verify: () => new Promise((resolve) => (complete = resolve)),
+      });
+      assert.equal(status.operation, 'logout');
+      assert.equal(
+        calls[0].settings.env[provider === 'codex-cli' ? 'CODEX_HOME' : 'CLAUDE_CONFIG_DIR'],
+        input.directory,
+      );
+      assert.ok(calls[0].args.includes('logout'));
+      assert.equal(calls[0].args.includes('--claudeai'), false);
+      children[0].emit('close', 0);
+      assert.equal(login.busy(provider), true);
+      complete({ available: false, reason });
+      await tick();
+      assert.equal(
+        login.list()[0].state,
+        reason === 'SUBSCRIPTION_LOGIN_REQUIRED' ? 'succeeded' : 'failed',
+      );
+      await login.close();
+    });
