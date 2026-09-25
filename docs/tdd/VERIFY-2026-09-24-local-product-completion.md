@@ -2,7 +2,7 @@
 id: VERIFY-2026-09-24-local-product-completion
 title: 로컬 제품 완결 · 실제 왕복 및 확장 검수
 status: review
-version: 0.19
+version: 0.20
 updated: 2026-09-25
 owner: agent:codex
 related: [PLAN-02, AC-07, AC-08, AC-09, AC-10, AC-24, AC-25, AC-32, AC-33, AC-34]
@@ -37,6 +37,10 @@ related: [PLAN-02, AC-07, AC-08, AC-09, AC-10, AC-24, AC-25, AC-32, AC-33, AC-34
 
 - L2 추가 지시: 기존 조건/스케치/자료를 보존해 먼저 저장하고 이전 실행 실제 종료 뒤 새 조건을 실행하는 경로를 연결했다. 종료 전 호출 0회, 중복 요청/변경 요청 구분, 불명확 결과의 재실행 0회, 후속 취소, 다른 대상/권한 거절, 재시작 보존을 결정적 공급자로 검증했다. 전체 단위/계약 159개 통과.
 - `browser-intervention.mjs`는 실제 Chromium/로컬 API에서 “추가 지시”→접수/종료 대기 표시→초안 비우기→이전 요청 cancelled/후속 succeeded→새 조건 전달을 확인했다. 실제 장시간 네이티브 연산 중단의 증거는 아니며 중단 불가/결과 불명확은 보류한다. 후속은 원 기준 재실행이며 이전 후보의 부분 완료분을 자동 이어 붙이는 기능은 아니다.
+
+## 연계 후보 후속 초안 — L2
+
+`linkedRequestDraft`는 부모 이력의 오래된 상태 대신 하위 요청의 현재 상태·부모/기준/호스트 관계를 확인한다. 두 저장 후보만 새 기준으로 연결하고 원 핀의 논리/native ID 대응을 검사한다. 조건·권한·실행 상한·첨부를 유지하며 불명확/실패/실행 중 대상이나 대응 불일치는 거절한다. `tests/core/linked-draft.test.mjs`와 단일 복구 회귀 4시험 통과. `browser-linked-followup.mjs`는 실제 Chromium에서 실패한 부모의 두 확인 후보→초안 생성→새로고침 복원→명시 전송을 확인했고 초안 생성 시 실행은 없었다. `browser-recovered-followup.mjs` 회귀도 통과했다. UI 시험은 합성 API 응답이며 새 실제 AI/호스트 실행 증거가 아니다. 후보 없는 실패 대상의 자동 재실행은 여전히 하지 않는다.
 
 ## 큰 모델 초기 AI 문맥 — L5 일부
 

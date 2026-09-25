@@ -2,7 +2,7 @@
 id: ARCH-01
 title: VIDE 기술 구조와 구현 계약
 status: review
-version: 0.25
+version: 0.26
 updated: 2026-09-25
 owner: agent:codex
 related: [SPEC-00, SPEC-02, SPEC-03, SPEC-04, PLAN, ADR-014, ADR-015, ADR-016, ADR-017]
@@ -281,6 +281,8 @@ MCP endpoint는 loopback에만 바인딩하고 공식 SDK로 처리한다. 브�
 Rhino/ZWCAD SDK 실행은 기존 요청 result 안의 `progress`로 조회 완료 수(`queries`), 실행 시도 수(`attempts`), 호스트 영수증으로 확인한 저장 단계 수(`completed`)를 전달한다. 별도 DB 테이블이나 LLM 보고 수치는 사용하지 않는다. 실행 상한은 기존 12회이며 도구 전체 30회·도구 권한 유효시간 240초와 구별한다. 컴파일/정책 거절은 시도에만 포함하고 완료 수를 늘리지 않는다. 성공·불명확 결과에도 마지막 관측값을 보존한다. 첫 저장 이후의 후속 조회·모델 응답은 재시작 복구용 host phase와 operationId를 유지한다. UI는 이 정보를 짧은 보조 행으로 표시하며 백분율이나 원본 적용 성공으로 바꾸지 않는다.
 
 ### 복구 후보와 후속 초안
+
+연계 후속 초안은 부모의 `targetResults.requestId`를 현재 작업 목록에서 다시 조회한다. 각 하위 요청의 `parentRequestId`, 원 `baseRequestId`, host와 성공/hostExecuted를 확인하고 두 `linkedTargets`를 하위 후보 ID로 교체한다. 원 기준 핀은 논리 ID·nativeId 일치를 검증해 basis만 바꾼다. 다른 참조·좌표 확인·권한·실행 상한은 유지하며 저장/API는 기존 초안과 요청 계약을 사용한다.
 
 SDK 영수증 복구 결과에는 `recovered: true`를 둔다. 기존 succeeded는 사본의 저장·재읽기 확인으로 유지하되 UI는 전체 목표 완료와 구분한다. 후속 초안의 baseRequestId는 복구 요청 ID이며 원 입력의 조건·스케치·자료·권한을 유지한다. 원 기준의 핀은 두 결과의 논리 ID와 native ID가 일치할 때만 새 기준에 연결하고, 다른 기준의 참고 핀은 원 참조를 유지한다. 원 기준 또는 객체 대응이 사라지면 초안 생성 전체를 거절한다. 새 요청은 기존 파일 지문 검사와 문서별 경합 검사를 그대로 통과해야 한다.
 

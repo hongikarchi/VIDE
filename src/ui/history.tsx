@@ -356,6 +356,12 @@ function Card({
               불러오기 결과 확인
             </Action>
           ) : null}
+          {message.linkedTargets &&
+          ['succeeded', 'failed', 'cancelled', 'interrupted'].includes(request.state) ? (
+            <Action error={actions.error} run={() => actions.restore(request)}>
+              확인된 후보에서 이어가기
+            </Action>
+          ) : null}
           {request.state === 'succeeded' &&
           result?.recovered &&
           result.hostExecuted &&

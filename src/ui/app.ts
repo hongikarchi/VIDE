@@ -1,3 +1,4 @@
+import { linkedRequestDraft } from './linked-draft.ts';
 import { accountIndicator } from './account-indicator.ts';
 import { executionLimits } from '../contracts/execution-limits.ts';
 import { showExecutionLimits } from './execution-limits.tsx';
@@ -450,11 +451,14 @@ function renderMessages() {
   renderHistory($('conversation'), state.messages, models, project?.id, {
     restore: (request) => {
       if (busy) throw Error('현재 전송이 끝난 뒤 복원하세요.');
-      const draft = request.result?.recovered
-        ? recoveredRequestDraft(state, request)
-        : failedRequestDraft(state, request);
+      const draft = request.input.linkedTargets
+        ? linkedRequestDraft(state, request)
+        : request.result?.recovered
+          ? recoveredRequestDraft(state, request)
+          : failedRequestDraft(state, request);
       if (
-        (state.body.trim() ||
+        (state.linkedTargets?.length ||
+          state.body.trim() ||
           (state.instructions || []).length ||
           state.pins.length ||
           state.sketches.length ||

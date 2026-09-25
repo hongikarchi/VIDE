@@ -2,7 +2,7 @@
 id: PLAN
 title: VIDE 실행 로드맵
 status: review
-version: 0.185
+version: 0.186
 updated: 2026-09-25
 owner: agent:codex
 related: [ARCH-01, PLAN-02, PLAN-03, SPEC-00, SPEC-01, SPEC-02, SPEC-03, SPEC-04, SPEC-05]
@@ -75,7 +75,7 @@ T-001~018의 번호·지원 증거는 유지한다. 각 티켓의 현재 결과�
 
 ### 6.5 현재 티켓 현황과 이어갈 위치
 
-현재 작업은 사용자 지시대로 [PLAN-02 §6.2](PLAN-02-agent-host-versioning.md)와 [PLAN-06](PLAN-06-cli-account-profiles.md)의 남은 구현·검증이다. 로컬에서는 양쪽 구독/호스트 왕복, 대상별 병렬·개입, Undo/Redo 수량 캐시, 네이티브 취소 종료 대기/복구, 요청별 상한 설정을 검증했다. Rhino 자체 SDK의 1천 박스·1만 점 저장/재열기·브라우저 표시·단일 수정 적용, 변경 없는 그룹 보존 적용을 추가 검증했다. 초기 문맥/도구 응답 요약·페이지 조회·TCP 수신 복사도 개선했다. 실제 범위와 수치는 [로컬 완결 검수](../tdd/VERIFY-2026-09-24-local-product-completion.md)가 소유한다.
+현재 작업은 사용자 지시대로 [PLAN-02 §6.2](PLAN-02-agent-host-versioning.md)와 [PLAN-06](PLAN-06-cli-account-profiles.md)의 남은 구현·검증이다. 로컬에서는 양쪽 구독/호스트 왕복, 대상별 병렬·개입, Undo/Redo 수량 캐시, 네이티브 취소 종료 대기/복구, 요청별 상한 설정을 검증했다. Rhino 자체 SDK의 1천 박스·1만 점 저장/재열기·브라우저 표시·단일 수정 적용, 변경 없는 그룹 보존 적용을 추가 검증했다. 초기 문맥/도구 응답 요약·페이지 조회·TCP 수신 복사도 개선했다. 두 확인 후보를 사용하는 연계 후속 초안의 원 조건 유지·재열기·명시 전송도 검증했다. 실제 범위와 수치는 [로컬 완결 검수](../tdd/VERIFY-2026-09-24-local-product-completion.md)가 소유한다.
 
 계정은 기본/두 번째 ChatGPT의 실제 응답·브라우저 선택·재시작 복원과 짧은 병렬 요청을 통과했고, 공식 로그인/로그아웃 프로세스의 종료 대기·취소·실행 잠금과 로그아웃 후 관리 프로필 제거를 연결했다([계정 SPIKE](../tdd/SPIKE-2026-09-25-cli-profiles.md)). 다음은 PLAN-06의 계정 관리 잔여 기능·장기 인증 갱신 조건과 PLAN-02의 복합 개입/부분 결과 재사용, 그룹·층/자원 편집 확대, 조밀 네이티브 메시/메모리 계측, Save As 환경 원인이다. 기본 Undo와 단순 네이티브 취소 실증을 복합 과업 전체 완료로 확대하지 않는다. Claude 두 계정은 미검증이다.
 
