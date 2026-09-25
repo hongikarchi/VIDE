@@ -2,7 +2,7 @@
 id: ARCH-01
 title: VIDE 기술 구조와 구현 계약
 status: review
-version: 0.27
+version: 0.28
 updated: 2026-09-25
 owner: agent:codex
 related: [SPEC-00, SPEC-02, SPEC-03, SPEC-04, PLAN, ADR-014, ADR-015, ADR-016, ADR-017]
@@ -282,7 +282,7 @@ Rhino/ZWCAD SDK 실행은 기존 요청 result 안의 `progress`로 조회 완�
 
 ### 복구 후보와 후속 초안
 
-연계 후속 초안은 부모의 `targetResults.requestId`를 현재 작업 목록에서 다시 조회한다. 각 하위 요청의 `parentRequestId`, 원 `baseRequestId`, host와 성공/hostExecuted를 확인하고 두 `linkedTargets`를 하위 후보 ID로 교체한다. 원 기준 핀은 논리 ID·nativeId 일치를 검증해 basis만 바꾼다. 다른 참조·좌표 확인·권한·실행 상한은 유지하며 저장/API는 기존 초안과 요청 계약을 사용한다.
+연계 후속 초안은 부모의 `targetResults.requestId`를 현재 작업 목록에서 다시 조회한다. 각 하위 요청의 `parentRequestId`, 원 `baseRequestId`, host와 성공/hostExecuted를 확인하고 두 `linkedTargets`를 하위 후보 ID로 교체한다. 원 기준 핀은 논리 ID·nativeId 일치를 검증해 basis만 바꾼다. 다른 참조·좌표 확인·권한·실행 상한은 유지하며 저장/API는 기존 초안과 요청 계약을 사용한다. 보류된 개입 요청은 supersedesRequestId의 종료된 원 요청을 조회해 같은 대상/좌표/권한을 검증하고 그 하위 결과만 사용한다. 입력 조건·첨부는 개입 요청에서 가져온다. 새 실행 ID는 전송 때 부여하며 supersedes 관계를 임의 재전송하지 않는다.
 
 SDK 영수증 복구 결과에는 `recovered: true`를 둔다. 기존 succeeded는 사본의 저장·재읽기 확인으로 유지하되 UI는 전체 목표 완료와 구분한다. 후속 초안의 baseRequestId는 복구 요청 ID이며 원 입력의 조건·스케치·자료·권한을 유지한다. 원 기준의 핀은 두 결과의 논리 ID와 native ID가 일치할 때만 새 기준에 연결하고, 다른 기준의 참고 핀은 원 참조를 유지한다. 원 기준 또는 객체 대응이 사라지면 초안 생성 전체를 거절한다. 새 요청은 기존 파일 지문 검사와 문서별 경합 검사를 그대로 통과해야 한다.
 
@@ -452,7 +452,7 @@ Rhino 자체 SDK의 객체/측정 캐시 상한은 10,000개이며 호스트 요
 
 AI execute의 성공 응답은 Rhino snapshot 또는 ZWCAD model을 query의 첫 페이지로 제한한다. 단일 행이 64 KiB를 넘으면 목록 대신 생략 원인과 query 안내를 반환한다. Rhino 변경 ID는 종류별 최대 50개를 표시하고 전체 건수를 별도로 기록한다. 원래 receipt·last·최종 후보와 보호 검증은 전부 보존한다. 사용자 코드의 value 16 KiB 제한은 그대로다.
 
-Rhino 편집 적용은 그룹 표의 ID·이름·인덱스·사용자 문자열을 후보/대상 문서 간 비교하며 문서 지문에도 포함한다. 그룹 객체는 변하지 않은 경우에만 통과하고 추가·수정·삭제·그룹 해제/배정은 거절한다. 독립 객체의 적용 때문에 그룹을 재생성하거나 인덱스를 추정 매핑하지 않는다.
+Rhino 편집 적용은 그룹 표의 ID·이름·인덱스·사용자 문자열을 후보/대상 문서 간 비교하며 문서 지문에도 포함한다. 기존 객체 업데이트는 `GetGroupList()`를 원본과 비교하고 같은 그룹 목록이면 허용한다. 그룹 표 전체의 기존 서명 비교를 유지한다. 그룹 소속 신규 객체·그룹 구성원 삭제·소속 변경은 Prepare에서 거절한다. Replace/ModifyAttributes와 최종 Metadata 검증은 그대로 사용하며 대상 native ID·그룹 소속을 보존한다. 잠김·참조·이력 등 기존 보호는 해제하지 않는다. 독립 객체의 적용 때문에 그룹을 재생성하거나 인덱스를 추정 매핑하지 않는다.
 
 `POST /api/v1/accounts/logout`은 관리 profileId만 받고 기존 로그인 프로세스 수명 관리기를 `operation=logout`으로 재사용한다. Codex는 고정 file 저장소의 `logout`, Claude는 `auth logout`을 사용한다. exit0과 공식 status의 SUBSCRIPTION_LOGIN_REQUIRED를 모두 확인하며 AUTH_TIMEOUT/CLI_UNAVAILABLE는 성공이 아니다. 상태 API는 operation을 포함하고 공급자 lease는 종료/검증까지 유지한다. 프로필 디렉터리/인증 파일을 VIDE가 직접 파싱하거나 지우지 않는다.
 
@@ -587,7 +587,3 @@ PLAN-06의 프로필 실행은 서버가 선택한 절대 configDirectory를 Cli
 프로필 메타데이터는 로컬 데이터 루트의 cli-profiles/profiles.json에 원자적 교체로 저장하고, 공식 CLI 인증은 UUID 하위 경로에만 둔다. 모델 백업의 허용 디렉터리 밖이며 웹 게시에는 포함하지 않는다. Codex 관리 프로필은 로그인·상태·실행 모두 file 자격증명 저장소를 명시해 OS keyring 기본값의 공유를 피한다. 기본 호환 프로필의 저장 방식은 바꾸지 않는다.
 
 전환은 공급자별 활성/대기 ID를 저장한다. workspace_requests의 queued/running/unknown과 실제 Execution.active를 함께 확인하며 대기 전환 중 신규 접수를 거절한다. 별도 휘발성 카운터를 복제하지 않는다. 접수된 input.accountProfileId는 서버가 고정하며 클라이언트 지정은 거절한다. 개입은 원 프로필을 승계하고 다른 공급자로 바꾸지 않는다. 재시작 뒤 unknown은 전환 장벽을 유지한다. 계정 API는 기존 로컬 인증·Origin 검사를 그대로 따른다.
-
-### 그룹 소속을 보존하는 적용
-
-기존 객체 업데이트는 `GetGroupList()`를 원본과 비교하고 같은 그룹 목록이면 허용한다. 그룹 표 전체의 기존 서명 비교를 유지한다. 그룹 소속 신규 객체·그룹 구성원 삭제·소속 변경은 Prepare에서 거절한다. Replace/ModifyAttributes와 최종 Metadata 검증은 그대로 사용하며 대상 native ID·그룹 소속을 보존한다. 잠김·참조·이력 등 기존 보호는 해제하지 않는다.

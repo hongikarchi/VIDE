@@ -1,4 +1,6 @@
-﻿import test from 'node:test';
+import { linkedRequestDraft } from '../../src/ui/linked-draft.ts';
+import { initial } from '../../src/ui/model.ts';
+import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -279,4 +281,82 @@ test('linked target startup failure releases the ready target without calling th
     final.result.targetResults.map((row) => row.state),
     ['succeeded', 'failed'],
   );
+});
+
+test('linked policy correction and call limit preserve candidates for restart without replay', async (t) => {
+  const { workspace, tools, project, request } = await fixture(t);
+  request.executionLimits = { maxToolCalls: 4, maxHostCommands: 4, timeoutSeconds: 60 };
+  const parent = workspace.submit(project.id, request).request;
+  workspace.update(project.id, parent.id, 'running');
+  let writes = 0;
+  const driver = {
+    run: async (task) => {
+      const targetRef = task.previous.id;
+      const scope = tools.issue({
+        targetRef,
+        isCurrent: () => true,
+        handlers: {
+          query: () => ({ writes }),
+          execute: ({ code }) => {
+            if (code === 'unsafe') return { ok: false, code: 'CODE_POLICY_REJECTED' };
+            writes++;
+            return { ok: true };
+          },
+        },
+      });
+      try {
+        await task
+          .provider({
+            url: 'http://127.0.0.1:1/mcp',
+            token: scope.token,
+            targetRef,
+            tools: ['query', 'execute'],
+          })
+          .run(
+            { goal: targetRef, revision: 1, items: [], includedIds: [] },
+            { signal: task.signal, onProgress: () => {} },
+          );
+        return { host: task.input.host, hostExecuted: true, verified: true, objects: [] };
+      } finally {
+        scope.revoke();
+      }
+    },
+  };
+  await runLinked({
+    request: parent,
+    workspace,
+    tools,
+    drivers: { rhino: driver, zwcad: driver },
+    items: [],
+    signal: new AbortController().signal,
+    provider: (connection) => ({
+      run: async () => {
+        const call = (name, targetRef, code) =>
+          tools.call(connection.token, name, { targetRef, ...(code ? { code } : {}) });
+        assert.equal(payload(await call('query', 'a')).writes, 0);
+        assert.equal(payload(await call('execute', 'a', 'unsafe')).code, 'CODE_POLICY_REJECTED');
+        assert.equal(payload(await call('execute', 'a', 'valid')).ok, true);
+        assert.equal(payload(await call('query', 'a')).writes, 1);
+        const limited = payload(await call('execute', 'b', 'valid'));
+        assert.equal(limited.code, 'AGENT_CALL_LIMIT');
+        throw Object.assign(Error('limit'), { code: limited.code });
+      },
+    }),
+  });
+  const reopened = new Workspace(workspace.store);
+  const result = reopened.get(project.id, parent.id);
+  assert.equal(result.state, 'failed');
+  assert.equal(result.result.code, 'AGENT_CALL_LIMIT');
+  assert.equal(writes, 1);
+  assert.ok(result.result.targetResults.every((row) => row.candidate));
+  const state = initial();
+  state.messages = reopened.list(project.id).map((request) => ({ id: request.id, request }));
+  const draft = linkedRequestDraft(state, result);
+  assert.deepEqual(
+    draft.linkedTargets.map((t) => t.baseRequestId),
+    result.result.targetResults.map((r) => r.requestId),
+  );
+  assert.equal(writes, 1);
+  assert.equal(draft.permission, 'candidate');
+  assert.equal(draft.executionLimits.maxToolCalls, 4);
 });

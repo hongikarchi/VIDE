@@ -69,6 +69,20 @@ try {
       ],
     },
   });
+  if (process.argv.includes('--intervention')) {
+    const parent = requests.at(-1);
+    requests.push({
+      id: 'held',
+      state: 'interrupted',
+      input: {
+        ...structuredClone(parent.input),
+        id: 'held',
+        supersedesRequestId: parent.id,
+        body: parent.input.body + '\nUse height 4.5 m',
+      },
+      result: { code: 'INTERVENTION_REVIEW_REQUIRED' },
+    });
+  }
   let submitted;
   await page.route('**/api/v1/models', (route) =>
     route.fulfill({
@@ -91,7 +105,7 @@ try {
   const errors = [];
   page.on('pageerror', (error) => errors.push(error.message));
   await page.goto(app.launchUrl);
-  await page.getByRole('button', { name: '확인된 후보에서 이어가기' }).click();
+  await page.getByRole('button', { name: '확인된 후보에서 이어가기' }).last().click();
   await page.reload();
   await page.waitForFunction(() =>
     document.querySelector('#body')?.value.includes('Keep the wall'),
@@ -100,6 +114,8 @@ try {
   assert.equal(submitted, undefined, 'Preparing a follow-up must not execute it');
   await page.locator('#request').click();
   await page.waitForFunction(() => document.querySelector('#body').value === '');
+  if (process.argv.includes('--intervention')) assert.match(submitted.body, /Use height 4.5 m/);
+  assert.equal(submitted.supersedesRequestId, undefined);
   assert.equal(submitted.baseRequestId, null);
   assert.deepEqual(
     submitted.linkedTargets.map((t) => t.baseRequestId),

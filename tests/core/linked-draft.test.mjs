@@ -104,3 +104,30 @@ test('linked follow-up rejects incomplete state, wrong lineage and unproven iden
     assert.throws(() => linkedRequestDraft(f.state, f.parent), undefined, mutate.toString());
   }
 });
+
+test('held linked intervention reuses verified predecessors while retaining revised conditions', () => {
+  const { state, parent } = fixture();
+  const held = {
+    id: 'held',
+    state: 'interrupted',
+    input: {
+      ...structuredClone(parent.input),
+      id: 'held',
+      supersedesRequestId: parent.id,
+      body: parent.input.body + '\nHeight 4.5 m',
+    },
+    result: { code: 'INTERVENTION_REVIEW_REQUIRED' },
+  };
+  const draft = linkedRequestDraft(state, held);
+  assert.match(draft.body, /Height 4.5 m/);
+  assert.deepEqual(
+    draft.linkedTargets.map((t) => t.baseRequestId),
+    ['ca', 'cb'],
+  );
+  assert.equal(draft.supersedesRequestId, undefined);
+  assert.throws(() =>
+    linkedRequestDraft(state, { ...held, input: { ...held.input, permission: 'review' } }),
+  );
+  parent.state = 'running';
+  assert.throws(() => linkedRequestDraft(state, held));
+});

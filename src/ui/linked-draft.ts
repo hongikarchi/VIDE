@@ -4,21 +4,33 @@ import type { UiRequest } from './workspace-data.ts';
 /** Rebase only verified children; a missing result is never replaced with its old basis. */
 export function linkedRequestDraft(state: DraftState, parent: UiRequest) {
   const targets = parent.input.linkedTargets;
+  const origin =
+    parent.input.supersedesRequestId && !parent.result?.targetResults
+      ? state.messages.find((message) => message.id === parent.input.supersedesRequestId)?.request
+      : parent;
+  if (
+    !origin ||
+    !['succeeded', 'failed', 'cancelled', 'interrupted'].includes(origin.state) ||
+    JSON.stringify(origin.input.linkedTargets) !== JSON.stringify(targets) ||
+    origin.input.coordinateBasis !== parent.input.coordinateBasis ||
+    origin.input.permission !== parent.input.permission
+  )
+    throw Error('이전 연계 요청의 대상과 권한을 확인할 수 없습니다.');
   if (
     !['succeeded', 'failed', 'cancelled', 'interrupted'].includes(parent.state) ||
     targets?.length !== 2 ||
     parent.input.coordinateBasis !== 'shared-metre-axes' ||
     new Set(targets.map((target) => target.baseRequestId)).size !== 2 ||
-    parent.result?.targetResults?.length !== 2
+    origin.result?.targetResults?.length !== 2
   )
     throw Error('종료된 연계 요청의 두 대상을 확인할 수 없습니다.');
-  const children = parent.result.targetResults.map(
+  const children = origin.result.targetResults.map(
     (row) => state.messages.find((message) => message.id === row.requestId)?.request,
   );
   const replacements = targets.map((target) => {
     const matches = children.filter(
       (child) =>
-        child?.input.parentRequestId === parent.id &&
+        child?.input.parentRequestId === origin.id &&
         child.input.baseRequestId === target.baseRequestId &&
         child.input.host === target.host,
     );
