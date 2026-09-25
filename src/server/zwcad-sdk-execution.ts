@@ -221,6 +221,34 @@ User request: ${input.body || '첨부한 설계 문맥을 검토해 주세요.'}
       );
       if (uncertain) throw failure('HOST_RESULT_UNKNOWN');
       if (signal.aborted) throw failure(last ? 'HOST_RESULT_UNKNOWN' : 'CANCELLED');
+      if (
+        !last &&
+        source &&
+        previous?.result.verified === true &&
+        previous.result.hostExecuted === true &&
+        previous.result.executionMode === 'sdk' &&
+        typeof input.parentRequestId === 'string' &&
+        input.permission === 'candidate' &&
+        queries > 0 &&
+        attempts === 0
+      ) {
+        const model = modelSchema.parse(await worker.exportModel());
+        return {
+          ...response,
+          ...model,
+          filename: source.filename,
+          fileHash: source.fileHash,
+          progress: progress(),
+          changes: { added: [], removed: [], modified: [] },
+          unchanged: true,
+          verified: true,
+          hostExecuted: true,
+          host: 'zwcad',
+          executionMode: 'sdk',
+          baseRequestId: previous.id,
+          sourceDocument: previous.result.sourceDocument,
+        };
+      }
       if (!last)
         return { ...response, progress: progress(), hostExecuted: false, executionMode: 'sdk' };
       const model = modelSchema.parse(await worker.exportModel());

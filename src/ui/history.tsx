@@ -279,15 +279,17 @@ function Card({
       {request ? (
         <>
           <small>
-            {result?.recovered
-              ? '사본 복구됨 · 목표 완료 미확인'
-              : message.provider === 'extension' && request.state === 'succeeded'
-                ? '확장 완료'
-                : request.state === 'running' && result?.phase === 'host'
-                  ? '호스트 생성·저장 검증 중'
-                  : result?.phase === 'stopping'
-                    ? '중단 확인 중'
-                    : stateLabels[request.state] || request.state}
+            {result?.unchanged
+              ? '변경 없음 · 기존 후보 확인'
+              : result?.recovered
+                ? '사본 복구됨 · 목표 완료 미확인'
+                : message.provider === 'extension' && request.state === 'succeeded'
+                  ? '확장 완료'
+                  : request.state === 'running' && result?.phase === 'host'
+                    ? '호스트 생성·저장 검증 중'
+                    : result?.phase === 'stopping'
+                      ? '중단 확인 중'
+                      : stateLabels[request.state] || request.state}
           </small>
           {result?.text ? <p>{result.text}</p> : null}
           {result?.targetResults?.map((saved) => {
@@ -299,7 +301,9 @@ function Card({
               <div key={target.requestId}>
                 <span>
                   {target.host === 'zwcad' ? 'ZWCAD' : 'Rhino'} ·{' '}
-                  {stateLabels[target.state] || target.state}
+                  {current?.result?.unchanged
+                    ? '변경 없음 · 기존 후보 확인'
+                    : stateLabels[target.state] || target.state}
                 </span>
                 {target.state === 'succeeded' && target.candidate ? (
                   <button onClick={() => actions.candidate(target.requestId)}>

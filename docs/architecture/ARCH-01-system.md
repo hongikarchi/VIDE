@@ -2,7 +2,7 @@
 id: ARCH-01
 title: VIDE 기술 구조와 구현 계약
 status: review
-version: 0.29
+version: 0.30
 updated: 2026-09-25
 owner: agent:codex
 related: [SPEC-00, SPEC-02, SPEC-03, SPEC-04, PLAN, ADR-014, ADR-015, ADR-016, ADR-017]
@@ -281,6 +281,8 @@ MCP endpoint는 loopback에만 바인딩하고 공식 SDK로 처리한다. 브�
 Rhino/ZWCAD SDK 실행은 기존 요청 result 안의 `progress`로 조회 완료 수(`queries`), 실행 시도 수(`attempts`), 호스트 영수증으로 확인한 저장 단계 수(`completed`)를 전달한다. 별도 DB 테이블이나 LLM 보고 수치는 사용하지 않는다. 실행 상한은 기존 12회이며 도구 전체 30회·도구 권한 유효시간 240초와 구별한다. 컴파일/정책 거절은 시도에만 포함하고 완료 수를 늘리지 않는다. 성공·불명확 결과에도 마지막 관측값을 보존한다. 첫 저장 이후의 후속 조회·모델 응답은 재시작 복구용 host phase와 operationId를 유지한다. UI는 이 정보를 짧은 보조 행으로 표시하며 백분율이나 원본 적용 성공으로 바꾸지 않는다.
 
 ### 복구 후보와 후속 초안
+
+연계 하위 candidate 요청에서 source가 검증된 자체 SDK 후보이고 query>0/execute 시도=0이면 export로 현재 사본을 확인하고 기존 파일/해시를 그대로 참조한다. 결과에 `unchanged: true`, `baseRequestId`, 빈 changes와 실제 progress를 남기며 새 저장 영수증/쓰기를 만들지 않는다. 기존 `hostExecuted`는 실제 호스트에서 후보를 확인했다는 표시로 유지하고 완료 횟수는 0이다. 취소/불명확/컴파일 거절을 거친 요청은 이 경로에 들어가지 않는다. 읽기 실패는 성공으로 감추지 않는다.
 
 연계 후속 초안은 부모의 `targetResults.requestId`를 현재 작업 목록에서 다시 조회한다. 각 하위 요청의 `parentRequestId`, 원 `baseRequestId`, host와 성공/hostExecuted를 확인하고 두 `linkedTargets`를 하위 후보 ID로 교체한다. 원 기준 핀은 논리 ID·nativeId 일치를 검증해 basis만 바꾼다. 다른 참조·좌표 확인·권한·실행 상한은 유지하며 저장/API는 기존 초안과 요청 계약을 사용한다. 보류된 개입 요청은 supersedesRequestId의 종료된 원 요청을 조회해 같은 대상/좌표/권한을 검증하고 그 하위 결과만 사용한다. 입력 조건·첨부는 개입 요청에서 가져온다. 새 실행 ID는 전송 때 부여하며 supersedes 관계를 임의 재전송하지 않는다.
 

@@ -2,7 +2,7 @@
 id: VERIFY-2026-09-24-local-product-completion
 title: 로컬 제품 완결 · 실제 왕복 및 확장 검수
 status: review
-version: 0.28
+version: 0.29
 updated: 2026-09-25
 owner: agent:codex
 related: [PLAN-02, AC-07, AC-08, AC-09, AC-10, AC-24, AC-25, AC-32, AC-33, AC-34]
@@ -211,3 +211,10 @@ Rhino [파일 설정 설명](https://docs.mcneel.com/rhino/8/help/en-us/options/
 서버를 실제 종료/재시작한 뒤 보류된 요청의 “확인된 후보에서 이어가기”를 눌러 새 조건과 두 확인 후보를 초안으로 복원했다. 자동 실행 0회, `held-intervention.png`에서 원 조건/추가 지시/보류 이유/연계 첨부를 확인했다. 증거: `.vide/browser-linked-hosts/d0009fb6-bee7-40c3-94c9-c3206e9e0dd4/passed.json`. 이는 저장된 6m 후보의 복구이며 새 4.5m 목표를 수행한 결과가 아니다. 실제 구독 추론·원본 적용은 이 시험에 포함하지 않는다.
 
 첫 검수에서 연계 전송 후 입력창의 대상 첨부 초기화 때문에 추가 지시가 비활성화되는 결함을 찾았다. 별도 대상을 지정하지 않았고 기존 단일 기준이 같은 입력은 클릭한 상위 요청의 두 기준/좌표계를 이어받도록 수정했다. 다른 명시 대상·호스트·권한 거절과 서버의 원 조건/핀 보호는 유지한다. 하위 작업의 중복 추가 지시 버튼도 제거했다. 잘못된 시험 한글 선택자를 수정한 뒤 위 실검증이 통과했다. 관련 계약 시험 18개와 기존 단일 요청 브라우저 개입 회귀도 통과했다.
+
+
+## 복구 뒤 명시 후속과 변경 없는 대상 — L2·L6
+
+`browser-linked-native-followup.mjs`는 앞선 실제 개입 시험의 저장된 두 후보와 보류 조건을 별도 DB/합성 파일에 복사해 사용했다. 브라우저에서 확인된 후보 후속 초안을 열고 명시 전송한 뒤 ZWCAD 경계는 조회만, Rhino는 4.5m 돌출로 한 번 수정했다. 결과는 CAD 면적 260m²·execute 0회·같은 파일/해시, Rhino 체적 1170m³·execute 1회·기존 native ID 유지다. 앞선 입력 파일 해시는 모두 같았고 공급자 대역 호출 합계는 1회였다. 새 부모 결과에서 다시 두 확인 후보의 초안을 만들었으며 그 동작은 추가 실행을 하지 않았다. 증거: `.vide/browser-linked-native-followup/164f12ec-88b2-4552-bc2f-bae2fa1174fe/result.json`, 확인한 `followup.png`.
+
+양쪽 SDK는 검증된 기존 source의 연계 candidate 하위 요청이 query>0/execute 시도=0일 때만 현재 사본을 export 확인해 `unchanged` 결과로 연결한다. 새 파일 저장이나 의미 없는 빈 코드 실행은 하지 않는다. UI는 “변경 없음 · 기존 후보 확인”으로 구별한다. 조회 없음·단일 요청·검토 권한·미검증 source·컴파일 거절 뒤 변경 없음 위장은 계약 시험에서 제외했다. 관련 양쪽 SDK 시험 21개와 UI/서버 타입 검사를 통과했다. 실제 AI 추론이나 원본 적용을 검증한 것으로 확대하지 않는다.

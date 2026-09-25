@@ -412,3 +412,58 @@ test('request command cap refuses an extra native write and preserves recovery i
     );
     assert.equal(calls, 1);
   }));
+
+test('linked unchanged target retains a verified source without an empty write', () =>
+  fixture(async ({ sdk, task, scope, worker }) => {
+    worker.execute = async () => {
+      throw Error('No write expected');
+    };
+    const source = {
+      ...(await worker.exportModel()),
+      filename: 'basis.model',
+      fileHash: 'b'.repeat(64),
+      verified: true,
+      hostExecuted: true,
+      executionMode: 'sdk',
+    };
+    const run = async (input, query = true, previous = source) =>
+      sdk.run({
+        ...task,
+        input: { ...task.input, parentRequestId: 'parent', ...input },
+        previous: { id: 'basis', result: previous },
+        provider: () => ({
+          run: async () => {
+            if (query) await scope().handlers.query({});
+            return { text: 'Keep this target unchanged' };
+          },
+        }),
+      });
+    const result = await run({});
+    assert.equal(result.unchanged, true);
+    assert.equal(result.filename, source.filename);
+    assert.equal(result.fileHash, source.fileHash);
+    assert.equal(result.baseRequestId, 'basis');
+    assert.equal(result.hostExecuted, true);
+    assert.equal(result.progress.attempts, 0);
+    assert.equal(result.progress.completed, 0);
+    assert.deepEqual(result.changes, { added: [], removed: [], modified: [] });
+    assert.equal((await run({}, false)).hostExecuted, false);
+    assert.equal((await run({ permission: 'review' })).hostExecuted, false);
+    assert.equal((await run({ parentRequestId: undefined })).hostExecuted, false);
+    assert.equal((await run({}, true, { ...source, verified: false })).hostExecuted, false);
+    worker.execute = async () => ({ ok: false, code: 'COMPILE_ERROR', revision: 0 });
+    const refused = await sdk.run({
+      ...task,
+      input: { ...task.input, parentRequestId: 'parent' },
+      previous: { id: 'basis', result: source },
+      provider: () => ({
+        run: async () => {
+          await scope().handlers.query({});
+          await scope().handlers.execute({ code: 'invalid' });
+          return { text: 'Failed compilation' };
+        },
+      }),
+    });
+    assert.equal(refused.hostExecuted, false);
+    assert.equal(refused.unchanged, undefined);
+  }));
