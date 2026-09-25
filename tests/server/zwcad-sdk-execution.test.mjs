@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, rm, mkdir, writeFile } from 'node:fs/promises';
+import { randomUUID } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { ZwcadSdkExecution } from '../../src/server/zwcad-sdk-execution.ts';
@@ -67,6 +68,7 @@ async function fixture(run) {
   try {
     await run({
       sdk,
+      directory,
       task,
       worker,
       model,
@@ -77,6 +79,50 @@ async function fixture(run) {
     await rm(directory, { recursive: true, force: true });
   }
 }
+test('ZWCAD receipt recovery preserves the source document and observed progress without replay', () =>
+  fixture(async ({ sdk, directory, model, worker }) => {
+    const operationId = randomUUID();
+    const workerDirectory = join(directory, randomUUID());
+    await mkdir(workerDirectory);
+    const filename = join(workerDirectory, operationId + '.dwg');
+    await writeFile(
+      join(workerDirectory, operationId + '.receipt.json'),
+      JSON.stringify({
+        result: {
+          ok: true,
+          operationId,
+          revision: 2,
+          filename,
+          fileHash: 'a'.repeat(64),
+          model,
+          readbackVerified: true,
+        },
+      }),
+    );
+    let writes = 0;
+    worker.execute = async () => {
+      writes++;
+      throw Error('Must not replay');
+    };
+    const sourceDocument = {
+      instance: 'owned-editor',
+      documentId: 42,
+      documentHash: 'b'.repeat(64),
+    };
+    const progress = { queries: 3, attempts: 3, completed: 2 };
+    const recovered = await sdk.recover({
+      operationId,
+      workerDirectory,
+      sourceDocument,
+      progress,
+      baseRequestId: 'base',
+    });
+    assert.deepEqual(recovered.sourceDocument, sourceDocument);
+    assert.deepEqual(recovered.progress, progress);
+    assert.equal(recovered.baseRequestId, 'base');
+    assert.equal(recovered.recovered, true);
+    assert.equal(writes, 0);
+  }));
 test('ZWCAD SDK review never exposes execution', () =>
   fixture(async ({ sdk, task, scope, counts }) => {
     const result = await sdk.run({

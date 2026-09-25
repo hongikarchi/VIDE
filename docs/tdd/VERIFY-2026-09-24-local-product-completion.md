@@ -2,7 +2,7 @@
 id: VERIFY-2026-09-24-local-product-completion
 title: 로컬 제품 완결 · 실제 왕복 및 확장 검수
 status: review
-version: 0.11
+version: 0.12
 updated: 2026-09-25
 owner: agent:codex
 related: [PLAN-02, AC-07, AC-08, AC-09, AC-10, AC-24, AC-25, AC-32, AC-33, AC-34]
@@ -100,6 +100,12 @@ SDK 영수증으로 복구한 사본에 recovered 표시를 추가하고 목표 
 ## 객체 목록 갱신 — L5 일부
 
 `browser-object-list.mjs`의 실제 Chromium 합성 10,000행 시험: 최초 DOM 구성 16.1 ms, 100회 선택 갱신 합계 5.4 ms, 자식 노드 변경 0건. 포커스·행 동일성·단일 선택·클릭 대상·이름 변경·순서 변경·삭제·빈 목록을 확인했다. 시간은 한 번의 실행에서 측정한 JavaScript DOM 갱신 시간이며 paint·호스트 취득·전체 사용자 지연이나 성능 보장을 뜻하지 않는다. 타입 검사·웹 빌드 통과. 같은 목록도 비교는 O(n)이며 가상화는 아직 적용하지 않았다. 네이티브 500객체 한도는 별개다.
+
+## 실제 Undo/Redo 및 실행 중 취소 — 2026-09-25
+
+- `rhino-measurement-undo.mjs`: 소유 Rhino 합성 문서에서 기본 `_Undo`/`_Redo` 명령으로 크기·속성 변경과 삭제를 되돌렸다. 체적 24→48→24→48, Level L01→L02→L01→L02, native ID 보존을 재열기로 확인했다. 변경/Undo/Redo마다 변경 객체 1개만 계산, 무변경 객체 1개 재사용. 삭제 시 계산 0개·재사용 1개, 삭제 취소 시 복원 객체 1개 계산. 증거: `.vide/measurement-undo/51e72daa-2bb5-47fc-ba1e-92524f6685a2/result.json`. 초기 직접 RhinoDoc.Undo 호출 시험은 Redo에서 실패해 실제 사용자 명령 경로로 검증했다. 일반 복잡한 Undo 이력 전체의 보증은 아니다.
+- `native-sdk-interruption.mjs`: 실제 Rhino의 4초 제한 연산에서 실행 직전 영수증을 확인하고 취소했다. 공급자 대역은 즉시 취소됐지만 네이티브 호출이 끝날 때까지 SDK 수명이 유지됐다. 결과는 성공/중단 확인으로 위장하지 않고 HOST_RESULT_UNKNOWN, 명시적 영수증 복구 뒤에만 체적 24 후보를 확인했다. 실행 1회·재전송 0회. 증거: `.vide/native-sdk-interruption/5fb6cfac-d575-4055-81cf-ebd14d086ab7/result.json`. 호스트 강제 중단이 아니라 종료 대기·늦은 결과 격리의 검증이다.
+- SDK 복구 결과에 마지막 관측 진행값을 보존하고 ZWCAD의 누락된 sourceDocument를 복원했다. ZWCAD 영수증 회귀에서 대상 문서·기준·진행 정보 보존 및 execute 0회 통과. 양쪽 SDK 계약 시험 15개 통과.
 
 ## 남은 검증
 

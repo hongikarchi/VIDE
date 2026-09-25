@@ -278,6 +278,8 @@ User request: ${input.body || '첨부한 설계 문맥을 검토해 주세요.'}
         executionMode: 'sdk',
         workerDirectory: directory,
         baseRequestId: intent.baseRequestId,
+        sourceDocument: intent.sourceDocument,
+        progress: intent.progress,
         text: '저장된 ZWCAD 후보를 재확인했습니다. AI 응답은 복구되지 않았습니다.',
       };
     } finally {
