@@ -43,6 +43,7 @@ import {
   attachSketch,
   storageKey,
 } from './model.ts';
+import { createObjectList } from './object-list.ts';
 import { initializeWorkspacePanels } from './workspace-panels.ts';
 import { createViewport } from './viewport.ts';
 
@@ -58,6 +59,11 @@ function currentProject() {
   return project;
 }
 let state = initial();
+const renderObjectList = createObjectList($('objects'), (id) => {
+  state.selected = id;
+  if (tool === 'pin') pinSelection(state);
+  render();
+});
 let foregroundRequest: { id: string; selected: typeof selectedResult; draft: string } | undefined;
 const focusDraft = () => JSON.stringify({ draft: draftSnapshot(state), points });
 initializeWorkspacePanels();
@@ -243,18 +249,7 @@ function render(rebuildRequests = true) {
     } catch {
       draftSaved = false;
     }
-  $('objects').replaceChildren();
-  for (const o of objects) {
-    const b = el('button', o.name, $('objects'), {
-      class: 'object',
-      'aria-pressed': String(state.selected === o.id),
-    });
-    b.onclick = () => {
-      state.selected = o.id;
-      if (tool === 'pin') pinSelection(state);
-      render();
-    };
-  }
+  renderObjectList(objects, state.selected);
   viewport?.select(state.selected);
   $('selection').textContent = objects.find((o) => o.id === state.selected)?.name || '';
   $('selection-pin').hidden = !state.selected;
