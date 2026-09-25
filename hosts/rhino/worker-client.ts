@@ -10,6 +10,20 @@ import { sendHostCommand } from '../common/transport.ts';
 import { modelChangesSchema } from '../../src/contracts/model-changes.ts';
 import { nativeModelSchema } from '../../src/contracts/native-model.ts';
 
+// Preserve a bounded read failure without treating it as a malformed model.
+function readResponse(value: unknown) {
+  if (
+    value &&
+    typeof value === 'object' &&
+    'ok' in value &&
+    value.ok === false &&
+    'code' in value &&
+    value.code === 'HOST_RESULT_TOO_LARGE'
+  )
+    throw Object.assign(new Error('HOST_RESULT_TOO_LARGE'), { code: 'HOST_RESULT_TOO_LARGE' });
+  return value;
+}
+
 const readySchema = z.object({
   port: z.number().int().min(1).max(65535),
   pid: z.number().int().positive(),
@@ -212,18 +226,20 @@ export async function launchRhinoWorker({
         lease.detach();
       },
       async query() {
-        return workerSnapshotSchema.parse(await call('query'));
+        return workerSnapshotSchema.parse(readResponse(await call('query')));
       },
       async exportModel() {
         return nativeModelSchema.parse(
-          await call('export', {
-            ...(source?.measurements && !normalizeUnits
-              ? { measurementCache: source.measurements }
-              : {}),
-            ...(source?.geometryMeasurements
-              ? { geometryMeasurementCache: source.geometryMeasurements }
-              : {}),
-          }),
+          readResponse(
+            await call('export', {
+              ...(source?.measurements && !normalizeUnits
+                ? { measurementCache: source.measurements }
+                : {}),
+              ...(source?.geometryMeasurements
+                ? { geometryMeasurementCache: source.geometryMeasurements }
+                : {}),
+            }),
+          ),
         );
       },
       async execute(

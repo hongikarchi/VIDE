@@ -2,7 +2,7 @@
 id: VERIFY-2026-09-24-local-product-completion
 title: 로컬 제품 완결 · 실제 왕복 및 확장 검수
 status: review
-version: 0.24
+version: 0.25
 updated: 2026-09-25
 owner: agent:codex
 related: [PLAN-02, AC-07, AC-08, AC-09, AC-10, AC-24, AC-25, AC-32, AC-33, AC-34]
@@ -178,3 +178,11 @@ Python/Idle 안의 RunScript 취소와 분리하기 위해 `rhino-saveas-control
 임시 경로의 유효 결과는 `.vide/rhino-saveas-control/e2752874-60ea-4412-a411-9d00e75182c3/result.json`이다. Computer Use로 정보 안내만 확인했고 경고 비표시 설정은 변경하지 않았다. `saved=true`, `commandResult=Success`, `modified=false`, `Path` 일치, 파일 쓰기 가능을 확인했지만 문서는 `IsReadOnly=false→true`였다. VIDE 플러그인 없이 저장소 밖에서도 재현하므로 저장소 경로만의 문제나 VIDE 취득 코드만의 문제로 단정할 수 없다. 이 진단의 종료 성공은 정상 반복 저장 완료 판정이 아니다. 소유 시험 창은 종료했으며 사용자 문서와 설정은 변경하지 않았다.
 
 Rhino [파일 설정 설명](https://docs.mcneel.com/rhino/8/help/en-us/options/files.htm)은 잠금 파일과 읽기 전용 열기의 관계를 설명한다. 과거 [McNeel 재현 기록](https://discourse.mcneel.com/t/rhino-opening-every-file-as-read-only/104308)의 다른 버전 문제를 현재 원인으로 단정하지 않는다. 남은 진단은 설치 환경·파일 잠금 상태의 읽기 전용 확인이며, 사용자 설정이나 플러그인 비활성화를 자동 우회책으로 적용하지 않는다.
+
+추가로 저장 없는 설정 조회(`rhino-saveas-control.mjs --settings`)에서 `FileLockingEnabled=true`, `FileLockingOpenWarning=true`를 확인했다(`.vide/rhino-saveas-control/d8ac3faa-c7a0-43f8-ba47-16df43e14c19/result.json`). 파일 잠금이 꺼져 있기 때문이라고 결론 내릴 수 없다. 최초 설정 조회 스크립트의 괄호 오류를 수정한 뒤 얻은 결과이며 제품 저장 시험은 아니다.
+
+## 실제 응답 상한 초과와 재실행 방지 — L5
+
+`rhino-oversize-recovery.mjs`에서 640×640 격자(819,200 삼각형)를 자체 Rhino SDK로 한 번 생성/저장했다. 이어지는 export는 16 MiB 응답 제한으로 거절됐고, SDK 실행은 전체 결과가 확인되지 않은 `HOST_RESULT_UNKNOWN`으로 남았다. 내부 원인의 `HOST_RESULT_TOO_LARGE`가 모델 스키마 오류로 사라지지 않도록 읽기 응답 처리를 보완했다. 크기 제한을 늘리거나 부분 모델로 성공을 표시하지 않았다.
+
+복구는 저장 후보를 새 소유 Rhino에서 다시 읽기만 했고 같은 export 제한을 반환했다. 쓰기 호출은 전후 합계 1회, 양쪽 소유 프로세스 종료 2회, 저장 영수증 바이트와 3dm SHA-256 불변을 확인했다. 증거: `.vide/rhino-oversize-recovery/cc11958d-f193-4873-a81f-4315e877fa97/result.json`. 이는 초과 모델의 정상 표시 지원이나 자동 축소 복구의 완료를 뜻하지 않는다.

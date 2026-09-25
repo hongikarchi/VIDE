@@ -32,8 +32,10 @@ def run(sender, args):
         filename = ${JSON.stringify(join(saveDirectory, 'saved.3dm').replaceAll('\\', '/'))}
     
         historyBefore = Rhino.RhinoApp.CommandHistoryWindowText
-        ok = Rhino.RhinoApp.RunScript('_-SaveAs "' + filename + '" _Enter', False) if ${process.argv.includes('--command') ? 'True' : 'False'} else doc.SaveAs(filename)
-        result = dict(saved=ok, before=before, after=doc.IsReadOnly, modified=doc.Modified, path=doc.Path, fileWritable=os.access(filename, os.W_OK), history=Rhino.RhinoApp.CommandHistoryWindowText[len(historyBefore):], commandResult=str(Rhino.Commands.Command.LastCommandResult))
+        ok = False
+        if not ${process.argv.includes('--settings') ? 'True' : 'False'}:
+            ok = Rhino.RhinoApp.RunScript('_-SaveAs "' + filename + '" _Enter', False) if ${process.argv.includes('--command') ? 'True' : 'False'} else doc.SaveAs(filename)
+        result = dict(saved=ok, before=before, after=doc.IsReadOnly, modified=doc.Modified, path=doc.Path, fileWritable=os.access(filename, os.W_OK), history=Rhino.RhinoApp.CommandHistoryWindowText[len(historyBefore):], commandResult=str(Rhino.Commands.Command.LastCommandResult), fileLocking=Rhino.ApplicationSettings.FileSettings.FileLockingEnabled, lockWarning=Rhino.ApplicationSettings.FileSettings.FileLockingOpenWarning)
     except Exception as error:
         result = dict(error=str(error))
     with open(os.path.join(folder, 'result.json'), 'w') as output:
@@ -65,7 +67,7 @@ doc = Rhino.RhinoDoc.ActiveDoc
 with open(os.path.join(folder, 'before.json')) as input:
     before = json.load(input)['before']
 with open(os.path.join(folder, 'result.json'), 'w') as output:
-    json.dump(dict(saved=os.path.isfile(filename), before=before, after=doc.IsReadOnly, modified=doc.Modified, path=doc.Path, fileWritable=os.access(filename, os.W_OK), commandResult=str(Rhino.Commands.Command.LastCommandResult)), output)
+    json.dump(dict(saved=os.path.isfile(filename), before=before, after=doc.IsReadOnly, modified=doc.Modified, path=doc.Path, fileWritable=os.access(filename, os.W_OK), commandResult=str(Rhino.Commands.Command.LastCommandResult), fileLocking=Rhino.ApplicationSettings.FileSettings.FileLockingEnabled, lockWarning=Rhino.ApplicationSettings.FileSettings.FileLockingOpenWarning), output)
 `,
   );
 }
@@ -102,7 +104,7 @@ try {
     console.log('Owned SaveAs inspection window remains open for 120 seconds.');
     await new Promise((resolve) => setTimeout(resolve, 120000));
   }
-  assert.equal(evidence.saved, true);
+  if (!process.argv.includes('--settings')) assert.equal(evidence.saved, true);
 } finally {
   if (host) await host.stop();
 }
