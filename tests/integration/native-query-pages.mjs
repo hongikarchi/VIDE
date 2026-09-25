@@ -41,7 +41,11 @@ for (const host of ['rhino', 'zwcad']) {
           host === 'rhino'
             ? 'for(int i=0;i<120;i++)doc.Objects.AddPoint(new Point3d(i,0,0));'
             : 'var bt=(BlockTable)tr.GetObject(db.BlockTableId,OpenMode.ForRead);var ms=(BlockTableRecord)tr.GetObject(bt[BlockTableRecord.ModelSpace],OpenMode.ForWrite);for(int i=0;i<120;i++){var p=new Polyline();p.AddVertexAt(0,new Point2d(i*2000,0),0,0,0);p.AddVertexAt(1,new Point2d(i*2000+1000,0),0,0,0);ms.AppendEntity(p);tr.AddNewlyCreatedDBObject(p,true);}';
-        assert.equal((await handlers.execute({ code })).ok, true);
+        const written = await handlers.execute({ code });
+        assert.equal(written.ok, true);
+        const summary = host === 'rhino' ? written.snapshot : written;
+        assert.equal((summary.objects ?? summary.model.objects).length, 50);
+        assert.equal(summary.page.total, 120);
         let offset = 0;
         const ids = [];
         do {

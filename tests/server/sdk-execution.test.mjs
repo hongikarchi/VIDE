@@ -100,6 +100,40 @@ test('SDK review cannot acquire execute and closes its owned worker', () =>
     assert.equal(result.hostExecuted, false);
     assert.deepEqual(counts(), { stopped: 1, revoked: 1, calls: 0 });
   }));
+test('Rhino agent sees a bounded write summary while final candidate retains every change', () =>
+  fixture(async ({ sdk, task, scope, worker }) => {
+    const objects = Array.from({ length: 10000 }, (_, i) => ({ id: String(i) }));
+    const changes = { added: objects.map((o) => o.id), removed: [], modified: [] };
+    worker.execute = async () => ({
+      ok: true,
+      revision: 1,
+      operationId: 'write-1',
+      filename: 'saved.3dm',
+      fileHash: 'a'.repeat(64),
+      readbackVerified: true,
+      snapshot: { objects, revision: 1 },
+      changes,
+    });
+    worker.exportModel = async () => ({ objects, scene: [] });
+    const result = await sdk.run({
+      ...task,
+      provider: () => ({
+        run: async () => {
+          const reply = await scope().handlers.execute({ code: 'synthetic' });
+          assert.equal(reply.snapshot.objects.length, 50);
+          assert.equal(reply.snapshot.page.total, 10000);
+          assert.equal(reply.changes.added.length, 50);
+          assert.equal(reply.changes.counts.added, 10000);
+          assert.equal(reply.changes.complete, false);
+          assert.ok(Buffer.byteLength(JSON.stringify(reply)) < 65536);
+          return { text: 'Saved' };
+        },
+      }),
+    });
+    assert.equal(result.objects.length, 10000);
+    assert.equal(result.changes.added.length, 10000);
+  }));
+
 test('SDK saves host intent before execution and preserves protected IDs', () =>
   fixture(async ({ sdk, task, scope, worker, updates }) => {
     const changes = {

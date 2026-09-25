@@ -2,7 +2,7 @@
 id: VERIFY-2026-09-24-local-product-completion
 title: 로컬 제품 완결 · 실제 왕복 및 확장 검수
 status: review
-version: 0.17
+version: 0.18
 updated: 2026-09-25
 owner: agent:codex
 related: [PLAN-02, AC-07, AC-08, AC-09, AC-10, AC-24, AC-25, AC-32, AC-33, AC-34]
@@ -51,6 +51,10 @@ Rhino 자체 SDK/편집 창 및 TS native 모델의 상한을 1만 객체로 맞
 - `tests/integration/rhino-large-apply.mjs`: 1만 점 문서에서 한 객체만5m 이동하는 후보 preview/apply3.61초, 재취득/재열기 후 전체 ID와 좌표 일치. 증거 `.vide/rhino-large-apply/868c3878-33dd-4ac1-a9fa-e80c26fa9b9b/result.json`.
 
 단일 실행 측정이고 모든 하드웨어·복잡 메시의 성능 보증은 아니다. CPU/GPU/호스트 메모리 peak의 체계적 측정과 조밀 네이티브 메시의 전송 한도 대응은 남았다. 초기 시험 디렉터리 부모 누락은 호스트 실행 전 실패했고 하네스 수정 뒤 재실행했다. 원격 공유의 객체/용량 한도를 자동 확장하지 않았다.
+
+## 큰 실행 응답 요약 — L5
+
+Rhino/ZWCAD의 AI용 execute 응답을 첫 페이지로 제한하고 Rhino 변경 ID를 종류별50개/전체 건수로 요약했다. 영수증·후보·보호 비교는 전체 자료를 유지한다. 1만 객체/변경의 제한 응답과 최종 전체 보존, ZWCAD 단일 과대 객체의 저장 성공/생략 안내를 실행기 계약 시험으로 확인했다. 관련24시험·서버 타입 검사 통과. 실제 양쪽 호스트120개 생성에서 execute50개 요약→3페이지 조회→최종120개 후보 보존도 통과했다. 코드 `tests/integration/native-query-pages.mjs`, 최신 증거 `.vide/native-query-pages/4080e59b-dc09-402a-8c75-2701e68c5745/result.json`.
 
 ## 큰 TCP 결과 수신 — L5 일부
 

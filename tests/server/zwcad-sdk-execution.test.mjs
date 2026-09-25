@@ -79,6 +79,27 @@ async function fixture(run) {
     await rm(directory, { recursive: true, force: true });
   }
 }
+test('ZWCAD oversized write summary preserves verified success and complete candidate', () =>
+  fixture(async ({ sdk, task, scope, model }) => {
+    model.objects[0].name = '가'.repeat(65536);
+    const result = await sdk.run({
+      ...task,
+      provider: () => ({
+        run: async () => {
+          const reply = await scope().handlers.execute({ code: 'synthetic' });
+          assert.equal(reply.ok, true);
+          assert.equal(reply.readbackVerified, true);
+          assert.equal(reply.objectsOmitted, true);
+          assert.equal(reply.reason, 'QUERY_RESULT_TOO_LARGE');
+          assert.match(reply.instruction, /Do not replay/);
+          assert.ok(JSON.stringify(reply).length < 1024);
+          return { text: 'Saved' };
+        },
+      }),
+    });
+    assert.equal(result.objects[0].name.length, 65536);
+  }));
+
 test('ZWCAD receipt recovery preserves the source document and observed progress without replay', () =>
   fixture(async ({ sdk, directory, model, worker }) => {
     const operationId = randomUUID();

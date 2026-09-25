@@ -2,7 +2,7 @@
 id: ARCH-01
 title: VIDE 기술 구조와 구현 계약
 status: review
-version: 0.21
+version: 0.22
 updated: 2026-09-25
 owner: agent:codex
 related: [SPEC-00, SPEC-02, SPEC-03, SPEC-04, PLAN, ADR-014, ADR-015, ADR-016, ADR-017]
@@ -447,6 +447,8 @@ AI `query`는 선택적인 `offset`(기본 0), `limit`(기본 50, 최대 100), `
 공통 호스트 TCP 수신은 4바이트 프레임 길이를 먼저 검증하고 최대 16 MiB 본문을 한 번 할당한다. 분할된 헤더/UTF-8 본문은 바이트 기준으로 채우고 완성 후 한 번 파싱한다. 과대/빈/미완성 응답·timeout은 기존 오류 의미로 종료하며 쓰기 재전송은 하지 않는다.
 
 Rhino 자체 SDK의 객체/측정 캐시 상한은 10,000개이며 호스트 요청 프레임은 4 MiB다. 응답 프레임은 16 MiB를 유지한다. 기존 레거시 JSON/외부 MCP 경로는 500개 제한을 유지한다. 객체 수 이내여도 복잡한 형상으로 전송 한도를 넘으면 완료 후보로 채택하지 않고 기존 불명확/복구 절차를 따른다. 객체 개수 상한은 메모리/시간 성능 보증이 아니다.
+
+AI execute의 성공 응답은 Rhino snapshot 또는 ZWCAD model을 query의 첫 페이지로 제한한다. 단일 행이 64 KiB를 넘으면 목록 대신 생략 원인과 query 안내를 반환한다. Rhino 변경 ID는 종류별 최대 50개를 표시하고 전체 건수를 별도로 기록한다. 원래 receipt·last·최종 후보와 보호 검증은 전부 보존한다. 사용자 코드의 value 16 KiB 제한은 그대로다.
 
 ## 5. 모델·데이터 저장
 

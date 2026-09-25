@@ -1,6 +1,7 @@
 import { randomUUID, createHash } from 'node:crypto';
 import { executionLimits } from '../contracts/execution-limits.ts';
 import { queryPage, type QueryPageOptions } from './query-page.ts';
+import { writeChanges, writeSnapshot } from './write-context.ts';
 import { mkdir, readFile, access } from 'node:fs/promises';
 import { createReadStream } from 'node:fs';
 import { EditorSessions } from '../../hosts/rhino/editor-sessions.ts';
@@ -277,8 +278,8 @@ export class SdkExecution {
                 ok: true,
                 revision,
                 readbackVerified: true,
-                snapshot: receipt.snapshot,
-                changes: receipt.changes,
+                snapshot: writeSnapshot(receipt.snapshot, revision),
+                changes: writeChanges(receipt.changes),
                 ...(Buffer.byteLength(JSON.stringify(receipt.value ?? null)) <= 16384
                   ? { value: receipt.value }
                   : { valueOmitted: true }),

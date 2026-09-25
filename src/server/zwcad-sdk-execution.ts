@@ -3,6 +3,7 @@ import { ZwcadEditors } from '../../hosts/zwcad/editor-sessions.ts';
 import { randomUUID } from 'node:crypto';
 import { executionLimits } from '../contracts/execution-limits.ts';
 import { queryPage, type QueryPageOptions } from './query-page.ts';
+import { writeSnapshot } from './write-context.ts';
 import { access, mkdir, readFile } from 'node:fs/promises';
 import { join, resolve, relative, isAbsolute } from 'node:path';
 import { z } from 'zod';
@@ -165,10 +166,8 @@ export class ZwcadSdkExecution {
                 fileHash: receipt.fileHash,
               });
               return {
-                ok: true,
-                revision,
                 readbackVerified: true,
-                model: receipt.model,
+                ...writeSnapshot({ model: receipt.model }, revision),
                 ...(Buffer.byteLength(JSON.stringify(receipt.value ?? null)) <= 16384
                   ? { value: receipt.value }
                   : { valueOmitted: true }),
