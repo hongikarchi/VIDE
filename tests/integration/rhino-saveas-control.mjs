@@ -41,6 +41,34 @@ def run(sender, args):
 Rhino.RhinoApp.Idle += run
 `,
 );
+const inspectScript = join(directory, 'inspect.py');
+if (process.argv.includes('--macro')) {
+  assert.ok(!/\s/.test(saveDirectory), 'Macro diagnostic requires a path without whitespace');
+  await writeFile(
+    script,
+    `import Rhino, json, os
+folder = ${JSON.stringify(directory.replaceAll('\\', '/'))}
+doc = Rhino.RhinoDoc.ActiveDoc
+assert doc.Objects.Count == 0 and not doc.Modified
+doc.ModelUnitSystem = Rhino.UnitSystem.Meters
+doc.Objects.AddBox(Rhino.Geometry.Box(Rhino.Geometry.BoundingBox(0,0,0,2,3,4)))
+with open(os.path.join(folder, 'before.json'), 'w') as output:
+    json.dump(dict(before=doc.IsReadOnly), output)
+`,
+  );
+  await writeFile(
+    inspectScript,
+    `import Rhino, json, os
+folder = ${JSON.stringify(directory.replaceAll('\\', '/'))}
+filename = ${JSON.stringify(join(saveDirectory, 'saved.3dm').replaceAll('\\', '/'))}
+doc = Rhino.RhinoDoc.ActiveDoc
+with open(os.path.join(folder, 'before.json')) as input:
+    before = json.load(input)['before']
+with open(os.path.join(folder, 'result.json'), 'w') as output:
+    json.dump(dict(saved=os.path.isfile(filename), before=before, after=doc.IsReadOnly, modified=doc.Modified, path=doc.Path, fileWritable=os.access(filename, os.W_OK), commandResult=str(Rhino.Commands.Command.LastCommandResult)), output)
+`,
+  );
+}
 let host;
 try {
   host = await launchOwnedHost({
@@ -52,10 +80,12 @@ try {
       '/nosplash',
       '/notemplate',
       '/scheme=VIDE-Worker-Test',
-      `/runscript="_-RunPythonScript (${script})"`,
+      process.argv.includes('--macro')
+        ? `/runscript="_-RunPythonScript (${script}) _-SaveAs ${join(saveDirectory, 'saved.3dm')} _Enter _-RunPythonScript (${inspectScript})"`
+        : `/runscript="_-RunPythonScript (${script})"`,
     ],
   });
-  const deadline = Date.now() + 90000;
+  const deadline = Date.now() + (process.argv.includes('--macro') ? 180000 : 90000);
   let evidence;
   while (Date.now() < deadline) {
     try {

@@ -2,7 +2,7 @@
 id: VERIFY-2026-09-24-local-product-completion
 title: 로컬 제품 완결 · 실제 왕복 및 확장 검수
 status: review
-version: 0.23
+version: 0.24
 updated: 2026-09-25
 owner: agent:codex
 related: [PLAN-02, AC-07, AC-08, AC-09, AC-10, AC-24, AC-25, AC-32, AC-33, AC-34]
@@ -170,3 +170,11 @@ SDK 영수증으로 복구한 사본에 recovered 표시를 추가하고 목표 
 `rhino-saveas-control.mjs --command --save-in-temp`로 저장소 밖 임시 경로와 기존 경로를 비교하려 했으나 현재 두 경로 모두 RunScript가 명령 이력 없이 Cancel/false로 끝났다. Idle 실행으로 옮겨도 동일했다(임시 경로 `6be9f3a4-1f81-4219-b153-f9c466a37644`, 기존 경로 `3ab36219-ec41-4b71-94ba-3d21da043d99`; `.vide/rhino-saveas-control/` 아래). 저장되지 않았으므로 경로별 읽기 전용 비교의 유효 표본이 아니다. 앞선 SaveAs 성공/읽기 전용 재현 기록을 대체하지 않는다.
 
 `--inspect`의 소유 합성 창을 Computer Use로 확인했을 때 차단 모달은 없었다. UI에서 SaveAs의 파일명 프롬프트는 열렸지만 텍스트 붙여넣기가 Rhino Paste 명령으로 해석돼 파일 저장 확인까지 가지 못했고, 120초 수명 종료로 시험 창이 닫혔다. 사용자 문서/설정은 변경하지 않았다. Rhino 공식 [SaveAs 문서](https://developer.rhino3d.com/api/rhinocommon/rhino.rhinodoc/saveas)는 API 기능 근거이며 이번 취소/읽기 전용 원인을 설명하는 증거는 아니다. 해결했다고 표시하지 않는다.
+
+### SaveAs 시작 명령 대조 결과
+
+Python/Idle 안의 RunScript 취소와 분리하기 위해 `rhino-saveas-control.mjs --macro --save-in-temp`로 Rhino 시작 명령에서 직접 SaveAs를 실행했다. 명령 파일명은 Windows 역슬래시 경로를 사용한다. 괄호로 감싼 경로 및 슬래시 경로는 실제 명령 화면에서 디렉터리 오류가 확인되어 시험 코드를 수정했다. 저장소 경로에서는 파일 생성과 읽기 전용 경고까지 관찰했으나 안내 확인 전 90초 종료로 상태 JSON은 얻지 못했다(`83968298-b45d-41d6-9161-7cd9def7400b`).
+
+임시 경로의 유효 결과는 `.vide/rhino-saveas-control/e2752874-60ea-4412-a411-9d00e75182c3/result.json`이다. Computer Use로 정보 안내만 확인했고 경고 비표시 설정은 변경하지 않았다. `saved=true`, `commandResult=Success`, `modified=false`, `Path` 일치, 파일 쓰기 가능을 확인했지만 문서는 `IsReadOnly=false→true`였다. VIDE 플러그인 없이 저장소 밖에서도 재현하므로 저장소 경로만의 문제나 VIDE 취득 코드만의 문제로 단정할 수 없다. 이 진단의 종료 성공은 정상 반복 저장 완료 판정이 아니다. 소유 시험 창은 종료했으며 사용자 문서와 설정은 변경하지 않았다.
+
+Rhino [파일 설정 설명](https://docs.mcneel.com/rhino/8/help/en-us/options/files.htm)은 잠금 파일과 읽기 전용 열기의 관계를 설명한다. 과거 [McNeel 재현 기록](https://discourse.mcneel.com/t/rhino-opening-every-file-as-read-only/104308)의 다른 버전 문제를 현재 원인으로 단정하지 않는다. 남은 진단은 설치 환경·파일 잠금 상태의 읽기 전용 확인이며, 사용자 설정이나 플러그인 비활성화를 자동 우회책으로 적용하지 않는다.
