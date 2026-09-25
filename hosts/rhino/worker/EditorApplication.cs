@@ -32,6 +32,8 @@ internal sealed class EditorApplication(RhinoDoc document, string directory, Fun
         if (candidate.Strings.Count != document.Strings.Count || Enumerable.Range(0, candidate.Strings.Count).Any(i =>
             candidate.Strings.GetValue(i) != document.Strings.GetValue(candidate.Strings.GetKey(i))))
             throw new InvalidOperationException("UNSUPPORTED_APPLICATION");
+        if (GroupIdentity.Signature(candidate.AllGroups) != GroupIdentity.Signature(document.Groups))
+            throw new InvalidOperationException("UNSUPPORTED_APPLICATION");
         var current = document.Objects.GetObjectList(ObjectType.AnyObject).ToDictionary(WorkerScene.Id);
         var plan = new Plan();
         try
@@ -40,7 +42,7 @@ internal sealed class EditorApplication(RhinoDoc document, string directory, Fun
             foreach (var obj in candidate.Objects)
             {
                 var id = obj.Attributes.GetUserString("vide-id") ?? obj.Attributes.ObjectId.ToString();
-                if (plan.Items.ContainsKey(id) || obj.Attributes.GroupCount > 0 || obj.Attributes.MaterialIndex != -1 ||
+                if (plan.Items.ContainsKey(id) || obj.Attributes.MaterialIndex != -1 ||
                     !(obj.Geometry is Brep or Extrusion or Curve or Mesh or Point)) throw new InvalidOperationException("UNSUPPORTED_APPLICATION");
                 var layer = candidate.AllLayers.FirstOrDefault(layer => layer.Index == obj.Attributes.LayerIndex);
                 var targetLayer = layer == null ? null : document.Layers.FirstOrDefault(item => !item.IsDeleted && item.Id == layer.Id);
@@ -58,11 +60,15 @@ internal sealed class EditorApplication(RhinoDoc document, string directory, Fun
                     throw new InvalidOperationException("INVALID_GEOMETRY");
                 if (original == null)
                 {
+                    if (attributes.GroupCount > 0) throw new InvalidOperationException("UNSUPPORTED_NATIVE_TARGET");
                     if (document.Objects.FindId(item.NativeId) != null) throw new InvalidOperationException("TARGET_MISMATCH");
                     plan.Added.Add(id);
                 }
                 else if (!GeometryBase.GeometryEquals(original.Geometry, geometry) || WorkerReadback.Metadata(original) != item.Metadata)
+                {
+                    if (attributes.GroupCount > 0) throw new InvalidOperationException("UNSUPPORTED_NATIVE_TARGET");
                     plan.Updated.Add(id);
+                }
             }
             foreach (var entry in current)
             {

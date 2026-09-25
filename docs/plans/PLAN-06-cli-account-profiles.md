@@ -2,7 +2,7 @@
 id: PLAN-06
 title: 구독 CLI 계정 프로필과 안전한 전환 계획
 status: review
-version: 0.4
+version: 0.5
 updated: 2026-09-25
 owner: agent:codex
 related: [PLAN, PLAN-02, SPEC-02, ARCH-01, RESEARCH-03, T-004, T-018, FR-08, FR-18]
@@ -59,4 +59,4 @@ A3의 로그인 명령 안내를 보완해 VIDE가 공식 CLI 로그인 프로�
 
 2026-09-25 확인: [Codex 인증](https://developers.openai.com/codex/auth/)은 인증 캐시와 파일/OS 저장소 선택을 설명한다. [Claude Code 설정](https://code.claude.com/docs/en/settings)은 CLAUDE_CONFIG_DIR로 설정 위치 변경을 설명한다. 두 문서의 설정 위치 지원을 다중 계정 동시성·Windows 자격증명 격리 보장으로 확대 해석하지 않는다. 구현 직전 CLI 버전별 동작과 이용 조건을 다시 확인한다.
 
-A1 결과는 SPIKE, 채택한 저장/전환 구조는 ADR 및 ARCH, 제품 회귀는 VERIFY에 기록한다. 연구 원문을 계획에 복제하거나 연구 저장소를 제품 의존성으로 추가하지 않는다. 현재 A1 빈 프로필 상태 시험, A2 메타데이터 저장, A3 계정 추가·선택·공식 로그인 명령 UI와 요청 계정 고정, A4 미확인 사용량 표시를 구현했다. 두 ChatGPT 프로필의 실제 인증·채팅 왕복과 선택 재시작 복원은 통과했다. 실제 병렬·재로그인 충돌과 Claude 두 계정 시험은 미검증이며 제거/로그아웃 UI는 미구현이다. A5는 공식 사용량/소진 신호가 확인되지 않아 비활성 상태다. [증거](../tdd/SPIKE-2026-09-25-cli-profiles.md)를 따른다.
+A1 결과는 SPIKE, 채택한 저장/전환 구조는 ADR 및 ARCH, 제품 회귀는 VERIFY에 기록한다. 연구 원문을 계획에 복제하거나 연구 저장소를 제품 의존성으로 추가하지 않는다. 현재 A1 빈 프로필 상태 시험, A2 메타데이터 저장, A3 계정 추가·선택·공식 로그인 명령 UI와 요청 계정 고정, A4 미확인 사용량 표시를 구현했다. 두 ChatGPT 프로필의 실제 인증·채팅 왕복과 선택 재시작 복원은 통과했다. ChatGPT 2의 짧은 실제 병렬 요청은 통과했고 공식 재로그인도 확인했다. 장기 토큰 갱신 충돌과 Claude 두 계정 시험은 미검증이며 제거/로그아웃 UI는 미구현이다. A5는 공식 사용량/소진 신호가 확인되지 않아 비활성 상태다. [증거](../tdd/SPIKE-2026-09-25-cli-profiles.md)를 따른다.

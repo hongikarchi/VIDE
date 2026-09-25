@@ -2,7 +2,7 @@
 id: VERIFY-2026-09-24-local-product-completion
 title: 로컬 제품 완결 · 실제 왕복 및 확장 검수
 status: review
-version: 0.18
+version: 0.19
 updated: 2026-09-25
 owner: agent:codex
 related: [PLAN-02, AC-07, AC-08, AC-09, AC-10, AC-24, AC-25, AC-32, AC-33, AC-34]
@@ -51,6 +51,12 @@ Rhino 자체 SDK/편집 창 및 TS native 모델의 상한을 1만 객체로 맞
 - `tests/integration/rhino-large-apply.mjs`: 1만 점 문서에서 한 객체만5m 이동하는 후보 preview/apply3.61초, 재취득/재열기 후 전체 ID와 좌표 일치. 증거 `.vide/rhino-large-apply/868c3878-33dd-4ac1-a9fa-e80c26fa9b9b/result.json`.
 
 단일 실행 측정이고 모든 하드웨어·복잡 메시의 성능 보증은 아니다. CPU/GPU/호스트 메모리 peak의 체계적 측정과 조밀 네이티브 메시의 전송 한도 대응은 남았다. 초기 시험 디렉터리 부모 누락은 호스트 실행 전 실패했고 하네스 수정 뒤 재실행했다. 원격 공유의 객체/용량 한도를 자동 확장하지 않았다.
+
+## 변경 없는 그룹 보존 — L3 일부
+
+그룹 표(ID/이름/인덱스/사용자 문자열)를 비교하고 문서 지문에도 포함했다. 그룹 객체가 변하지 않으면 독립 객체 수정의 후보 적용을 허용한다. 실제 Rhino 합성 그룹2점+독립1점에서 독립 점5m 이동 적용·재취득/재열기, 그룹 이름/두 멤버의 위치 보존을 확인했다. 그룹 멤버 이동·그룹 이름 변경·그룹 해제 후보는 preview/apply에서 거절했고 매 거절 뒤 대상 지문이 최초 취득과 일치했다. C# 빌드 경고/오류0. `tests/integration/rhino-group-preservation.mjs`, 증거 `.vide/rhino-group-preservation/cb5f91c8-68ad-4d7a-8843-6f11db8f07d2/result.json`.
+
+그룹 생성/구성원 편집·일반 재질/층 편집을 지원 완료로 올리지 않는다. 미리보기 뒤 사람이 그룹을 바꾸는 UI 동시성 조작은 별도 미시험이다. 구현 근거는 설치 RhinoCommon8 XML과 [File3dmGroupTable](https://developer.rhino3d.com/api/rhinocommon/rhino.fileio.file3dmgrouptable?version=8.x), [RhinoDoc.Groups](https://developer.rhino3d.com/api/rhinocommon/rhino.rhinodoc/groups)이다.
 
 ## 큰 실행 응답 요약 — L5
 

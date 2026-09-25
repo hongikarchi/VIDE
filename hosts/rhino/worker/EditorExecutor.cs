@@ -74,7 +74,7 @@ internal sealed class EditorExecutor(RhinoDoc document, string directory)
         var serialization = new Rhino.FileIO.SerializationOptions { WriteUserData = true, WriteRenderMeshes = false, WriteAnalysisMeshes = false };
         var layers = string.Join("\n", document.Layers.Where(layer => !layer.IsDeleted).OrderBy(layer => layer.Id).Select(layer => layer.ToJSON(serialization)));
         var strings = JsonSerializer.Serialize(Enumerable.Range(0, document.Strings.Count).Select(i => new { key = document.Strings.GetKey(i), value = document.Strings.GetValue(i) }).OrderBy(item => item.key, StringComparer.Ordinal));
-        var values = strings + "\n" + layers + "\n" + document.ModelAbsoluteTolerance + "\n" + document.ModelUnitSystem.ToString() + "\n" + string.Join("\n", objects.Select(obj => obj.Id + ":" + WorkerScene.Fingerprint(obj)));
+        var values = strings + "\n" + layers + "\n" + GroupIdentity.Signature(document.Groups) + "\n" + document.ModelAbsoluteTolerance + "\n" + document.ModelUnitSystem.ToString() + "\n" + string.Join("\n", objects.Select(obj => obj.Id + ":" + WorkerScene.Fingerprint(obj)));
         return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(values))).ToLowerInvariant();
     }
 }
