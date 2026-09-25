@@ -42,15 +42,20 @@ export function AccountSettings({ provider }: { provider: Provider }) {
   const refresh = async () => setData(schema.parse(await api('/accounts')));
   useEffect(() => {
     let alive = true;
-    void api('/accounts')
-      .then((value) => {
-        if (alive) setData(schema.parse(value));
-      })
-      .catch(() => {
+    let timer: ReturnType<typeof setTimeout>;
+    const poll = async () => {
+      try {
+        const value = schema.parse(await api('/accounts'));
+        if (alive) setData(value);
+      } catch {
         if (alive) setMessage('계정 목록을 불러오지 못했습니다.');
-      });
+      }
+      if (alive) timer = setTimeout(() => void poll(), 2000);
+    };
+    void poll();
     return () => {
       alive = false;
+      clearTimeout(timer);
     };
   }, []);
   useEffect(() => {

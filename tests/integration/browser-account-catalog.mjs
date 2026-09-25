@@ -35,6 +35,22 @@ try {
   await page.route('**/api/v1/providers', (route) => route.fulfill({ json: [] }));
   await page.route('**/api/v1/host', (route) => route.fulfill({ json: { available: false } }));
   await page.goto(app.launchUrl);
+  await page.waitForFunction(() => !document.querySelector('#body').disabled);
+  // A deferred switch for the other provider must also finish refreshing its catalog.
+  data.pending['codex-cli'] = 'second';
+  await page.evaluate(() => window.dispatchEvent(new Event('vide-accounts-changed')));
+  await page.waitForTimeout(100);
+  data.active['codex-cli'] = 'second';
+  data.pending['codex-cli'] = null;
+  await page.waitForFunction(() =>
+    [...document.querySelector('#model').options].some((o) => o.value === 'new-model'),
+  );
+  assert.equal(await page.locator('#model').inputValue(), 'claude-cli');
+  data.active['codex-cli'] = 'default';
+  await page.evaluate(() => window.dispatchEvent(new Event('vide-accounts-changed')));
+  await page.waitForFunction(() =>
+    [...document.querySelector('#model').options].some((o) => o.value === 'old-model'),
+  );
   await page.locator('#model').selectOption('old-model');
   await page.locator('#body').fill('Keep my explicit model choice');
   await page.waitForFunction(

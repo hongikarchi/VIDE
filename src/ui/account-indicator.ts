@@ -30,7 +30,7 @@ export function accountIndicator(parent: HTMLElement, provider: () => string) {
           ? '기존 CLI 로그인'
           : (data.profiles.find((p) => p.id === id)?.label ?? '계정 확인 필요')) +
         (data.pending[key] ? ' · 전환 대기' : '');
-      if (data.pending[key]) timer = setTimeout(() => void refresh(), 2000);
+      if (Object.values(data.pending).some(Boolean)) timer = setTimeout(() => void refresh(), 2000);
     } catch {
       if (current === generation) label.textContent = '계정 확인 필요';
     }
