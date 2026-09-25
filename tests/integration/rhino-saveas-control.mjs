@@ -13,6 +13,9 @@ const saveDirectory = process.argv.includes('--save-in-temp')
   ? join(tmpdir(), 'vide-saveas-' + randomUUID())
   : directory;
 await mkdir(saveDirectory, { recursive: true });
+const scheme = process.argv.includes('--fresh-scheme')
+  ? 'VIDE-SaveAs-Control-' + randomUUID()
+  : 'VIDE-Worker-Test';
 const script = join(directory, 'control.py');
 const result = join(directory, 'result.json');
 await writeFile(
@@ -81,7 +84,7 @@ try {
     args: [
       '/nosplash',
       '/notemplate',
-      '/scheme=VIDE-Worker-Test',
+      '/scheme=' + scheme,
       process.argv.includes('--macro')
         ? `/runscript="_-RunPythonScript (${script}) _-SaveAs ${join(saveDirectory, 'saved.3dm')} _Enter _-RunPythonScript (${inspectScript})"`
         : `/runscript="_-RunPythonScript (${script})"`,
@@ -99,6 +102,8 @@ try {
     await new Promise((resolve) => setTimeout(resolve, 500));
   }
   assert.ok(evidence, 'Native SaveAs control did not finish');
+  evidence = { ...evidence, scheme };
+  await writeFile(result, JSON.stringify(evidence, null, 2));
   console.log(JSON.stringify({ directory, ...evidence }));
   if (process.argv.includes('--inspect')) {
     console.log('Owned SaveAs inspection window remains open for 120 seconds.');
