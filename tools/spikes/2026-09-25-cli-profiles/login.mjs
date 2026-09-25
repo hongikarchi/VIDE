@@ -6,11 +6,12 @@ import { codexEnvironment } from '../../../src/ai/codex-cli.ts';
 if (!process.env.LOCALAPPDATA) throw Error('LOCAL_APP_DATA_REQUIRED');
 const profiles = new AccountProfiles(
   join(process.env.LOCALAPPDATA, 'VIDE', 'cli-profiles'),
-  () => false,
+  () => true,
 );
-const row =
-  profiles.list().profiles.find((p) => p.provider === 'codex-cli' && p.label === 'ChatGPT 2') ??
-  profiles.add('codex-cli', 'ChatGPT 2');
+const row = profiles
+  .list()
+  .profiles.find((p) => p.provider === 'codex-cli' && p.label === 'ChatGPT 2');
+if (!row) throw Error('CREATE_PROFILE_IN_VIDE_FIRST');
 const directory = profiles.directory('codex-cli', row.id);
 const executable = installedCodex();
 if (!executable) throw Error('CLI_UNAVAILABLE');

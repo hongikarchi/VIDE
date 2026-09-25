@@ -472,15 +472,7 @@ export async function startServer({
           .object({ provider: z.enum(['claude-cli', 'codex-cli']), id: z.string() })
           .strict()
           .parse(await body(request));
-        if (
-          store.db
-            .prepare(
-              "SELECT 1 FROM workspace_requests WHERE json_extract(input,'$.provider')=? AND state IN ('queued','running','unknown') LIMIT 1",
-            )
-            .get(input.provider) ||
-          execution.active.size
-        )
-          throw new DomainError('PROFILE_IN_USE');
+        profiles.assertIdle(input.provider);
         const directory = profiles.directory(input.provider, input.id);
         if (!directory) throw new DomainError('INVALID_INPUT');
         const quote = (value: string) => "'" + value.replaceAll("'", "''") + "'";

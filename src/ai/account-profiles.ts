@@ -7,6 +7,7 @@ import {
   realpathSync,
   lstatSync,
   existsSync,
+  unlinkSync,
 } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
@@ -38,6 +39,7 @@ const fail = (code: string): never => {
 export class AccountProfiles {
   private root: string;
   private data: Data;
+  private saved: Data;
   private busy: (provider: Provider) => boolean;
   constructor(root: string, busy: (provider: Provider) => boolean) {
     this.busy = busy;
@@ -45,6 +47,8 @@ export class AccountProfiles {
     if (lstatSync(root).isSymbolicLink()) fail('PROFILE_PATH_INVALID');
     this.root = realpathSync(root);
     const file = join(this.root, 'profiles.json');
+    if (existsSync(file) && (lstatSync(file).isSymbolicLink() || lstatSync(file).size > 65536))
+      fail('PROFILE_PATH_INVALID');
     this.data = existsSync(file)
       ? schema.parse(JSON.parse(readFileSync(file, 'utf8')))
       : {
@@ -53,14 +57,24 @@ export class AccountProfiles {
           active: { 'claude-cli': 'default', 'codex-cli': 'default' },
           pending: { 'claude-cli': null, 'codex-cli': null },
         };
+    this.saved = structuredClone(this.data);
+    if (new Set(this.data.profiles.map((p) => p.id)).size !== this.data.profiles.length)
+      fail('INVALID_PROFILE_DATA');
     for (const provider of providers)
       for (const id of [this.data.active[provider], this.data.pending[provider]])
         if (id && id !== 'default') this.find(provider, id);
   }
   private save() {
-    const temporary = join(this.root, 'profiles.json.tmp');
-    writeFileSync(temporary, JSON.stringify(this.data), { mode: 0o600 });
-    renameSync(temporary, join(this.root, 'profiles.json'));
+    const temporary = join(this.root, 'profiles-' + randomUUID() + '.tmp');
+    try {
+      writeFileSync(temporary, JSON.stringify(this.data), { mode: 0o600, flag: 'wx' });
+      renameSync(temporary, join(this.root, 'profiles.json'));
+      this.saved = structuredClone(this.data);
+    } catch (error) {
+      this.data = structuredClone(this.saved);
+      if (existsSync(temporary)) unlinkSync(temporary);
+      throw error;
+    }
   }
   private find(provider: Provider, id: string) {
     return (
@@ -76,6 +90,9 @@ export class AccountProfiles {
         this.save();
       }
     return structuredClone(this.data);
+  }
+  assertIdle(provider: Provider) {
+    if (this.busy(provider)) fail('PROFILE_IN_USE');
   }
   add(provider: Provider, label: string) {
     if (this.data.profiles.length >= 30) fail('PROFILE_LIMIT');

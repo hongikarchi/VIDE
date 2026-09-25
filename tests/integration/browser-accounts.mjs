@@ -31,6 +31,13 @@ try {
   await page.waitForFunction(() =>
     document.querySelector('.ai-settings')?.textContent.includes('Second ChatGPT · 선택됨'),
   );
+  await page.getByRole('button', { name: '닫기', exact: true }).click();
+  await page.locator('#model').selectOption('codex-cli');
+  await page.waitForFunction(
+    () => document.querySelector('[aria-label="현재 AI 계정"]')?.textContent === 'Second ChatGPT',
+  );
+  await page.locator('#draft-menu summary').click();
+  await page.locator('#ai-settings').click();
   await row.getByRole('button', { name: '로그인 방법', exact: true }).click();
   await section.getByLabel('공식 CLI 로그인 명령').waitFor();
   const command = await section.getByLabel('공식 CLI 로그인 명령').inputValue();

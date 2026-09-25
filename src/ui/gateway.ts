@@ -54,6 +54,12 @@ export const labels: Record<string, string> = {
   unknown: '호스트 결과 확인 필요',
 };
 export const errors: Record<string, string> = {
+  PROFILE_SWITCH_PENDING: '계정 전환 대기 중입니다. 기존 작업이 끝난 뒤 보내세요.',
+  PROFILE_IN_USE: '이 공급자의 작업을 마친 뒤 로그인하세요.',
+  PROFILE_NOT_FOUND: '계정을 찾을 수 없습니다. 계정 목록을 새로고침하세요.',
+  PROFILE_PATH_INVALID: '계정 저장 경로를 확인할 수 없습니다. 실행을 중단했습니다.',
+  PROFILE_LIMIT: '계정 프로필은 최대 30개까지 등록할 수 있습니다.',
+
   UNSUPPORTED_DWG_EDIT:
     '이 DWG에서는 기존 독립 직선 경계의 이동·정점 수정만 가능합니다. 객체 추가·삭제 또는 관계가 있는 객체는 지원하지 않습니다.',
   HOST_RESULT_UNRESOLVED:

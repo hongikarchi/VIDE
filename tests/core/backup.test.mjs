@@ -29,7 +29,15 @@ test('offline backup preserves records and model files, excludes launch secrets,
   await assert.rejects(backupWorkspace(source, join(source, 'nested')), {
     code: 'BACKUP_LOCATION_INVALID',
   });
+  await mkdir(join(source, 'cli-profiles', 'test-profile'), { recursive: true });
+  await writeFile(
+    join(source, 'cli-profiles', 'test-profile', 'auth.json'),
+    'synthetic credential marker',
+  );
   const manifest = await backupWorkspace(source, destination);
+  await assert.rejects(readFile(join(destination, 'cli-profiles', 'test-profile', 'auth.json')), {
+    code: 'ENOENT',
+  });
   assert.equal(manifest.files.length, 4);
   assert.equal((await verifyBackup(destination)).source, source);
   assert.equal(

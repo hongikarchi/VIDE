@@ -34,6 +34,7 @@ export function AccountSettings({ provider }: { provider: Provider }) {
     try {
       await task();
       await refresh();
+      window.dispatchEvent(new Event('vide-accounts-changed'));
     } catch (error) {
       setMessage(error instanceof Error ? error.message : '계정 작업 실패');
     } finally {

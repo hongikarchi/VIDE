@@ -1,3 +1,4 @@
+import { accountIndicator } from './account-indicator.ts';
 import { requestConflict } from '../contracts/request-scope.ts';
 import { draftSnapshot, restoreDraft, restoreSavedDraft } from './draft-storage.ts';
 import { z } from 'zod';
@@ -532,9 +533,14 @@ $('ai-settings').onclick = () => {
       .join(' · ');
   }).catch((error) => message(error.message));
 };
+const refreshAccount = accountIndicator(
+  $('model').parentElement!,
+  () => models.find((m) => m.id === state.model)?.provider ?? 'claude-cli',
+);
 for (const model of models) el('option', model.name, $('model'), { value: model.id });
 $('model').onchange = () => {
   chooseModel(state, $('model').value);
+  void refreshAccount();
   render();
 };
 $('effort').oninput = () => {
@@ -990,6 +996,19 @@ for (const id of ['point-u', 'point-v'] as const)
     }
   };
 
+window.addEventListener('vide-accounts-changed', () => {
+  void (async () => {
+    const catalog = modelsSchema.parse(await api('/models'));
+    models.splice(0, models.length, ...catalog);
+    $('model').replaceChildren();
+    for (const model of models) el('option', model.name, $('model'), { value: model.id });
+    // Keep the explicit model if supported; require a fresh selection if absent.
+    $('model').value = state.model;
+    render();
+    void refreshAccount();
+  })().catch((error) => message(readableError(error).message));
+});
+
 async function initializeWorkspace() {
   try {
     const linked = await connect();
@@ -1022,6 +1041,7 @@ async function initializeWorkspace() {
     if (!restored)
       selectedResult = linked.requests.filter((request) => request.result?.hostExecuted).at(-1)?.id;
     ready = true;
+    void refreshAccount();
     render();
     renderMessages();
     for (const entry of state.messages)
