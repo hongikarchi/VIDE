@@ -2,7 +2,7 @@
 id: SPIKE-2026-09-25-decision-layer
 title: 판정 계층 오프라인 평가 도구
 status: review
-version: 0.2
+version: 0.3
 updated: 2026-09-25
 owner: agent:codex
 related: [PLAN-05, SPEC-02, T-004, T-018]
@@ -22,4 +22,6 @@ related: [PLAN-05, SPEC-02, T-004, T-018]
 
 ## 실제 접근 설정 확인
 
-2026-09-25 Aside에서 [TypeSafe 공식 사이트](https://typesafe.ai/)의 2026-09-24 공지 ‘NEW SIGNUPS PAUSED’를 확인했다. 이메일을 남겨 가입 재개 알림을 받는 경로와 기존 계정 로그인 경로가 표시된다. [콘솔](https://console.typesafe.ai/login)은 Google/이메일 로그인을 제공한다. 기존 계정 보유 여부를 사용자에게 확인 중이며 임의 계정 선택·대기 명단 제출·유료 결제·API 호출은 하지 않았다. 신규 가입 제한이 해제되거나 사용 가능한 기존 계정으로 로그인한 뒤 API 접근·잔액·키 발급·보관 조건을 확인한다. 로그인 화면에 도달한 것은 API 접근 확보가 아니다.
+2026-09-25 Aside에서 [TypeSafe 공식 사이트](https://typesafe.ai/)의 2026-09-24 공지 ‘NEW SIGNUPS PAUSED’를 확인했다. 이메일을 남겨 가입 재개 알림을 받는 경로와 기존 계정 로그인 경로가 표시된다. [콘솔](https://console.typesafe.ai/login)은 Google/이메일 로그인을 제공한다. 사용자가 기존 계정이 없고 가입 재개까지 보류한다고 확인했으며 임의 계정 선택·대기 명단 제출·유료 결제·API 호출은 하지 않았다. 신규 가입 제한이 해제되거나 사용 가능한 기존 계정으로 로그인한 뒤 API 접근·잔액·키 발급·보관 조건을 확인한다. 로그인 화면에 도달한 것은 API 접근 확보가 아니다.
+
+사용자 결정: 2026-09-25 Jev 접근 설정·외부 호출은 가입 재개까지 보류. 대기 명단 신청이나 자동 재확인은 예약하지 않았다. 로컬 평가 도구·PLAN-06의 개발 중단을 뜻하지 않는다.
