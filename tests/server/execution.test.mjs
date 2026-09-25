@@ -20,6 +20,51 @@ function fixture() {
   return { store, workspace, project, input };
 }
 
+test('SDK dispatch receives bounded metadata while retaining the full basis and protected pins', async () => {
+  const { store, workspace, project, input } = fixture();
+  const objects = Array.from({ length: 500 }, (_, i) => ({
+    id: `object-${i}`,
+    name: `Object ${i}`,
+    kind: 'native',
+    nativeId: `native-${i}`,
+    origin: [i, 0, 0],
+  }));
+  workspace.submit(project.id, input);
+  workspace.update(project.id, input.id, 'succeeded', {
+    host: 'rhino',
+    hostExecuted: true,
+    objects,
+    scene: [],
+  });
+  let task;
+  const execution = new Execution(workspace, {
+    sdk: {
+      run: async (value) => {
+        task = value;
+        return { text: 'Read only', hostExecuted: false };
+      },
+    },
+  });
+  try {
+    const pins = [{ id: 'object-499', name: 'Object 499', basis: input.id, role: 'preserve' }];
+    const request = workspace.submit(project.id, {
+      ...input,
+      id: 'sdk-context',
+      baseRequestId: input.id,
+      pins,
+    }).request;
+    execution.start(request);
+    await Promise.all([...execution.active.values()].map((item) => item.completion));
+    assert.equal(workspace.get(project.id, request.id).state, 'succeeded');
+    assert.equal(task.previous.result.objects.length, 500);
+    assert.deepEqual(task.input.pins, pins);
+    assert.equal(task.items.find((item) => item.id === 'working-model').data[0].id, 'object-499');
+    assert.equal(task.items.find((item) => item.id === 'model-context-summary').data.omitted, 400);
+  } finally {
+    store.close();
+  }
+});
+
 test('explicit empty basis never picks the latest model and refuses writable pins from an unselected basis', async () => {
   const { store, workspace, project, input } = fixture();
   let received;

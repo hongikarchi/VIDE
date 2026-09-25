@@ -1,5 +1,6 @@
 import type { AccountProfiles } from '../ai/account-profiles.ts';
 import { executionLimits } from '../contracts/execution-limits.ts';
+import { modelContext } from './model-context.ts';
 import { claudeEfforts } from './model-capabilities.ts';
 import { requestConflict } from '../contracts/request-scope.ts';
 import { z } from 'zod';
@@ -347,9 +348,17 @@ export class Execution {
         .map((r) => ({ request: r.input.body, response: r.result?.text }));
       if (conversation.length)
         items.push({ id: 'conversation', type: 'conversation', data: conversation });
-      if (host)
+      const sdk = target === 'rhino' ? this.sdk : this.zwcadSdk;
+      if (sdk)
+        items.push(
+          ...modelContext(
+            previous?.result,
+            pins.filter((pin) => pin.basis === previous?.id).map((pin) => pin.id),
+          ),
+        );
+      else if (host)
         items.push({ id: 'working-model', type: 'geometry', data: previous?.result.objects || [] });
-      if (previous?.result.scene)
+      if (!sdk && previous?.result.scene)
         items.push({
           id: 'measurements',
           type: 'native-measurements',
@@ -362,7 +371,6 @@ export class Execution {
             layer: layer64 ? Buffer.from(layer64, 'base64').toString('utf8') : null,
           })),
         });
-      const sdk = target === 'rhino' ? this.sdk : this.zwcadSdk;
       if (sdk) {
         const result = await sdk.run({
           input,
