@@ -159,6 +159,30 @@ export function failedRequestDraft(state: DraftState, request: RestoreRequest) {
     selected: null,
   });
 }
+export function recoveredRequestDraft(state: DraftState, request: UiMessage['request']) {
+  if (
+    request.state !== 'succeeded' ||
+    !request.result?.recovered ||
+    !request.result.hostExecuted ||
+    request.result.executionMode !== 'sdk' ||
+    !request.result.objects
+  )
+    throw Error('저장 검증된 복구 후보가 아닙니다.');
+  const draft = failedRequestDraft(state, { ...request, state: 'interrupted' });
+  const basis = state.messages.find((message) => message.id === request.input.baseRequestId)
+    ?.request?.result?.objects;
+  draft.pins = draft.pins.map((pin) => {
+    if (pin.basis !== request.input.baseRequestId) return pin;
+    const before = basis?.find((object) => object.id === pin.id);
+    const after = request.result!.objects!.find((object) => object.id === pin.id);
+    if (!before || !after || !before.nativeId || before.nativeId !== after.nativeId)
+      throw Error('복구 후보의 핀 대응을 확인할 수 없습니다. 객체를 다시 확인하세요.');
+    return { ...pin, basis: request.id };
+  });
+  draft.baseRequestId = request.id;
+  draft.body = `복구된 현재 후보를 먼저 확인하고, 이미 완료된 작업을 반복하지 말고 아래 목표의 남은 부분을 수행하세요. 완료 여부를 판단할 수 없으면 확인할 사항을 알려주세요.\n\n[원 목표와 조건]\n${draft.body}`;
+  return draft;
+}
 export function chooseModel(s: DraftState, id: string) {
   const model = models.find((m) => m.id === id);
   if (!model) throw Error('모델을 선택하세요.');

@@ -278,13 +278,15 @@ function Card({
       {request ? (
         <>
           <small>
-            {message.provider === 'extension' && request.state === 'succeeded'
-              ? '확장 완료'
-              : request.state === 'running' && result?.phase === 'host'
-                ? '호스트 생성·저장 검증 중'
-                : result?.phase === 'stopping'
-                  ? '중단 확인 중'
-                  : stateLabels[request.state] || request.state}
+            {result?.recovered
+              ? '사본 복구됨 · 목표 완료 미확인'
+              : message.provider === 'extension' && request.state === 'succeeded'
+                ? '확장 완료'
+                : request.state === 'running' && result?.phase === 'host'
+                  ? '호스트 생성·저장 검증 중'
+                  : result?.phase === 'stopping'
+                    ? '중단 확인 중'
+                    : stateLabels[request.state] || request.state}
           </small>
           {result?.text ? <p>{result.text}</p> : null}
           {result?.targetResults?.map((saved) => {
@@ -352,6 +354,15 @@ function Card({
               }}
             >
               불러오기 결과 확인
+            </Action>
+          ) : null}
+          {request.state === 'succeeded' &&
+          result?.recovered &&
+          result.hostExecuted &&
+          !request.input.linkedTargets &&
+          !imported ? (
+            <Action error={actions.error} run={() => actions.restore(request)}>
+              복구 후보에서 이어가기
             </Action>
           ) : null}
           {['failed', 'cancelled', 'interrupted'].includes(request.state) &&

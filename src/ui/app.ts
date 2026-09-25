@@ -36,6 +36,7 @@ import {
   attachHostSelection,
   attachReviewNote,
   failedRequestDraft,
+  recoveredRequestDraft,
   draftHasInput,
   validate,
   packet,
@@ -443,7 +444,9 @@ function renderMessages() {
   renderHistory($('conversation'), state.messages, models, project?.id, {
     restore: (request) => {
       if (busy) throw Error('현재 전송이 끝난 뒤 복원하세요.');
-      const draft = failedRequestDraft(state, request);
+      const draft = request.result?.recovered
+        ? recoveredRequestDraft(state, request)
+        : failedRequestDraft(state, request);
       if (
         (state.body.trim() ||
           (state.instructions || []).length ||

@@ -385,6 +385,7 @@ User request: ${input.body || '첨부한 설계 문맥을 검토해 주세요.'}
         filename: receipt.filename,
         fileHash: receipt.fileHash,
         verified: true,
+        recovered: true,
         hostExecuted: true,
         host: 'rhino',
         executionMode: 'sdk',
