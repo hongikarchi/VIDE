@@ -2,7 +2,7 @@
 id: VERIFY-2026-09-24-local-product-completion
 title: 로컬 제품 완결 · 실제 왕복 및 확장 검수
 status: review
-version: 0.30
+version: 0.31
 updated: 2026-09-25
 owner: agent:codex
 related: [PLAN-02, AC-07, AC-08, AC-09, AC-10, AC-24, AC-25, AC-32, AC-33, AC-34]
@@ -229,3 +229,9 @@ Rhino [파일 설정 설명](https://docs.mcneel.com/rhino/8/help/en-us/options/
 ## PolylineCurve 정점 변경·고정 적용 — L3·H-RHINO-04
 
 `rhino-boundary-edit.mjs`에서 12×8m 닫힌 PolylineCurve의 위쪽 두 정점을 y=10으로 바꿨다. 후보 면적 96→120m², 길이 44m, 기존 GUID·Role=Site·층과 무관 점의 전체 scene 보존을 확인했다. 고정 적용은 수정 1개/추가·삭제 0개였고 독립 재열기에서 후보 scene과 native ID가 일치했다. 낡은 기준 재적용은 거절됐고 원본 파일 SHA-256은 유지됐다. 증거: `.vide/rhino-boundary-edit/302d7a36-b51b-4436-8a81-f43d32649d17/result.json`. 실제 SDK 정점 수정과 적용/저장 검수이며 기본 호스트 제어점 UI 조작까지 검증한 것은 아니다.
+
+## 안전 모드 수동 저장 대조 — L1 미완료
+
+`rhino-safe-open.mjs`로 합성 파일 복사본만 `/safemode`로 열었다. `.vide/rhino-safe-open/9072529d-877f-4f52-bdd4-c3029d8f805f/process.json`의 소유 실행본에서 Enscape 자동 로드는 거절했고, 파일 열기 성공 및 제목에 읽기 전용 표시가 없는 것을 확인했다. D5 도구 창은 남아 있어 모든 외부 플러그인이 제외됐다고 판단하지 않는다.
+
+File → Save As 대화상자는 열렸으나 Computer Use의 파일명 요소가 cached app state에서 유효하지 않았고, 다시 관찰해도 입력 초점을 확정하지 못했다. 새 이름 입력·저장은 수행되지 않았으며 이 시험은 저장 성공/실패 판정의 증거가 아니다. 소유 실행본은 종료했다. 앞선 자동 대조의 저장 후 읽기 전용 현상은 미해결 상태를 유지한다. 이 관찰만으로 VIDE 또는 특정 설치 플러그인을 원인으로 확정하지 않는다.
