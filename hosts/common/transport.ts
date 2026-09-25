@@ -14,7 +14,10 @@ export function sendHostCommand(
 ): Promise<unknown> {
   return new Promise<unknown>((resolve, reject) => {
     const socket = createConnection({ host: '127.0.0.1', port });
-    let buffer = Buffer.alloc(0),
+    const responseHeader = Buffer.alloc(4);
+    let headerBytes = 0,
+      bodyBytes = 0,
+      body: Buffer | undefined,
       finished = false,
       sent = false;
     const finish = (error: unknown, value?: unknown) => {
@@ -45,14 +48,26 @@ export function sendHostCommand(
       socket.write(Buffer.concat([header, data]));
     });
     socket.on('data', (chunk) => {
+      if (finished) return;
       if (!sent) return fail('HOST_INVALID_RESPONSE');
-      buffer = Buffer.concat([buffer, chunk]);
-      if (buffer.length < 4) return;
-      const length = buffer.readUInt32BE();
-      if (length > 16 * 1024 * 1024) return fail('HOST_INVALID_RESPONSE');
-      if (buffer.length < length + 4) return;
+      let offset = 0;
+      if (headerBytes < 4) {
+        const count = Math.min(4 - headerBytes, chunk.length);
+        chunk.copy(responseHeader, headerBytes, 0, count);
+        headerBytes += count;
+        offset += count;
+        if (headerBytes < 4) return;
+        const length = responseHeader.readUInt32BE();
+        if (length < 1 || length > 16 * 1024 * 1024) return fail('HOST_INVALID_RESPONSE');
+        body = Buffer.allocUnsafe(length);
+      }
+      const buffer = body!;
+      const count = Math.min(buffer.length - bodyBytes, chunk.length - offset);
+      chunk.copy(buffer, bodyBytes, offset, offset + count);
+      bodyBytes += count;
+      if (bodyBytes < buffer.length) return;
       try {
-        const response = JSON.parse(buffer.subarray(4, length + 4).toString('utf8'));
+        const response = JSON.parse(buffer.toString('utf8'));
         if (response.status === 'error') return fail('HOST_REJECTED');
         finish(null, response.result ?? response);
       } catch {

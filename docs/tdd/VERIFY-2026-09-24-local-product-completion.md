@@ -2,7 +2,7 @@
 id: VERIFY-2026-09-24-local-product-completion
 title: 로컬 제품 완결 · 실제 왕복 및 확장 검수
 status: review
-version: 0.15
+version: 0.16
 updated: 2026-09-25
 owner: agent:codex
 related: [PLAN-02, AC-07, AC-08, AC-09, AC-10, AC-24, AC-25, AC-32, AC-33, AC-34]
@@ -41,6 +41,10 @@ related: [PLAN-02, AC-07, AC-08, AC-09, AC-10, AC-24, AC-25, AC-32, AC-33, AC-34
 ## 큰 모델 초기 AI 문맥 — L5 일부
 
 SDK 단일 대상의 초기 객체/수량 요약을 100개·64 KiB로 제한했다. 핀 대상 우선, 전체/포함/생략 수, 실제 정보 재조회 안내를 전달하고 실행기에는 전체 기준 모델과 보호 핀을 유지한다. `tests/server/model-context.test.mjs`의 합성 1만 객체·대형 정점 배열·다국어 byte 상한·빈 모델 및 `execution.test.mjs`의 실제 실행 제어기→SDK 대역 전달을 통과했다(관련 14시험, UI/서버 타입 검사 통과). 원본 자료나 보호 범위를 잘라내지 않으며 기존 JSON 경로는 그대로다. 이 시험은 초기 입력 크기의 검증이고 네이티브 가져오기 500개 상한 확대·조회 페이지화·실제 대형 호스트 지원 완료가 아니다.
+
+## 큰 TCP 결과 수신 — L5 일부
+
+공통 수신부의 청크별 전체 버퍼 재복사를 제거하고 길이 검증 뒤 본문 버퍼 1회 할당/조각별 복사로 바꿨다. `tests/core/host-frames.test.mjs`와 `owned-host.test.mjs` 11시험 통과: 분할 헤더·다국어 수 MB 본문·빈/16 MiB 초과 길이·미완성 종료·잘못된 JSON·호스트 거절·소유권 검사/timeout 뒤 전송 0회. 서버 타입 검사 통과. 실제 전송 시간 개선 수치는 측정하지 않았다.
 
 ## 객체 페이지 조회 — L5 일부
 
