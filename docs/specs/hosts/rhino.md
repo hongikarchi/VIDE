@@ -2,8 +2,8 @@
 id: HOST-RHINO
 title: Rhino 호스트 계약과 검증 범위
 status: review
-version: 0.28
-updated: 2026-09-25
+version: 0.29
+updated: 2026-09-28
 owner: agent:codex
 related: [SPEC-01, SPEC-02, FR-03, FR-04, AC-24, AC-38, OQ-03, OQ-10]
 ---
@@ -24,7 +24,7 @@ SDK의 AI query는 기본 50개·최대 100개/64 KiB 페이지와 ID 필터를 
 | H-RHINO-02 | 시험 객체의 Name·사용자 문자열 보존 | 실증. 사용자 문자열 읽기·첨부까지 제품 연결(§2.2) | 기존 레이어·그룹·블록·렌더 속성의 일반화, geometry dictionary·플러그인 UserData |
 | H-RHINO-03 | mm 단위·이동된 기하·객체 GUID의 저장 지속성 | 실증(§2.0). 취득 원본 이동 적용에서 GUID·속성 보존 확인(§2.2) | 다른 단위 환산·문서 간 복사·분할/합침 동일성 |
 | H-RHINO-04 | 평면 PolylineCurve 읽기·생성·정점 변경·이동·반복 복사 | 읽기·생성·이동·복사 실증(§2.1·2.2). 12×8→12×10m 정점 변경·고정 적용·재열기에서 GUID/속성/층·무관 객체 보존 실증([검수](../../tdd/VERIFY-2026-09-24-local-product-completion.md)) | 호스트 기본 제어점 편집 후 재열기 검수, 레이어·관계 |
-| H-RHINO-05 | 닫힌 평면 경계로 수직 돌출 후보 생성·높이/경계 변경 | 실증: CLI→XY 스케치→Extrusion 저장/재열기(§2.1), 편집 창 적용에서 높이 변경(체적 24→48, §2.3), 현재 UI의 Claude 생성/핀 높이 수정 체적 480→360·원본 보존 재검증([검수](../../tdd/VERIFY-2026-09-24-local-product-completion.md)), 한 요청의 CAD 수정 경계→Rhino 돌출과 부분 실패 보존([연계 검증](../../tdd/VERIFY-2026-09-24-linked-hosts.md)) | 생성 기준 없는 임의 솔리드의 파라메트릭 편집으로 일반화 금지, 기본 Move·Save As·재열기 검수 통과([검수](../../tdd/VERIFY-2026-09-24-local-product-completion.md)); 읽기 전용 안내는 VIDE 없는 기본 Save As 대조군에서도 재현; 환경 원인은 미해소 |
+| H-RHINO-05 | 닫힌 평면 경계로 수직 돌출 후보 생성·높이/경계 변경 | 실증: CLI→XY 스케치→Extrusion 저장/재열기(§2.1), 편집 창 적용에서 높이 변경(체적 24→48, §2.3), 현재 UI의 Claude 생성/핀 높이 수정 체적 480→360·원본 보존 재검증([검수](../../tdd/VERIFY-2026-09-24-local-product-completion.md)), 한 요청의 CAD 수정 경계→Rhino 돌출과 부분 실패 보존([연계 검증](../../tdd/VERIFY-2026-09-24-linked-hosts.md)) | 생성 기준 없는 임의 솔리드의 파라메트릭 편집으로 일반화 금지, 기본 Move·Save As·재열기 검수 통과([검수](../../tdd/VERIFY-2026-09-24-local-product-completion.md)); 읽기 전용 안내는 VIDE 없는 기본 Save As 대조군에서도 재현; 2026-09-28 사용자도 일반 Rhino에서 동일 안내 확인; 환경 원인·정상 반복 저장은 미해소 |
 
 그룹 보존 적용: 그룹 표(ID·이름·인덱스·사용자 문자열)와 각 객체의 그룹 소속을 유지하면 그룹 안 기존 객체의 형상·일반 속성 수정도 허용한다. 그룹 생성/이름 변경/해제/구성원 추가·삭제는 적용 전에 거절한다. 잠김·참조·이력·재질 등 다른 적용 제한은 유지한다. 실제 검증 상태는 [로컬 검수](../../tdd/VERIFY-2026-09-24-local-product-completion.md)를 따른다.
 

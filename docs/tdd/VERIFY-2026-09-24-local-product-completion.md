@@ -2,8 +2,8 @@
 id: VERIFY-2026-09-24-local-product-completion
 title: 로컬 제품 완결 · 실제 왕복 및 확장 검수
 status: review
-version: 0.33
-updated: 2026-09-25
+version: 0.34
+updated: 2026-09-28
 owner: agent:codex
 related: [PLAN-02, AC-07, AC-08, AC-09, AC-10, AC-24, AC-25, AC-32, AC-33, AC-34]
 ---
@@ -224,7 +224,7 @@ Rhino [파일 설정 설명](https://docs.mcneel.com/rhino/8/help/en-us/options/
 
 `rhino-saveas-control.mjs --macro --save-in-temp --fresh-scheme`도 저장 성공/파일 쓰기 가능/파일 잠금 활성 상태에서 IsReadOnly false→true였다. 증거: `.vide/rhino-saveas-control/d6e8b1ca-dca8-4894-812b-64fe57183079/result.json`. 소유 창의 정보 대화상자를 화면으로 확인하고 OK만 눌렀으며 경고 비표시 설정은 바꾸지 않았다. 시험 실행본 종료 후 이번에만 생성한 고유 scheme 폴더/XML 두 개를 절대 경로·재분석 지점 검사 후 정리했다. 기존 사용자/VIDE 시험 프로필은 유지했다.
 
-[Rhino 공식 실행 옵션](https://docs.mcneel.com/rhino/8/help/en-us/information/startingrhino.htm)에 따라 scheme은 별도 작업 환경이다. 새 scheme은 기존 시험 프로필 한정 문제를 배제하는 대조이며 모든 설치 플러그인을 제거한 환경을 뜻하지 않는다. `/safemode`는 시작 스크립트도 막으므로 같은 자동 시험의 대체로 사용하지 않았다. 현재 원인은 미확정이며 사용자의 일반 Rhino 저장에서도 같은 안내가 있는지 확인을 요청했다.
+[Rhino 공식 실행 옵션](https://docs.mcneel.com/rhino/8/help/en-us/information/startingrhino.htm)에 따라 scheme은 별도 작업 환경이다. 새 scheme은 기존 시험 프로필 한정 문제를 배제하는 대조이며 모든 설치 플러그인을 제거한 환경을 뜻하지 않는다. `/safemode`는 시작 스크립트도 막으므로 같은 자동 시험의 대체로 사용하지 않았다. 당시 일반 Rhino 사용에서의 재현 여부를 질문했으며, 2026-09-28 사용자 답변은 아래 사용자 확인 절에 반영했다. 원인은 미확정이다.
 
 ## PolylineCurve 정점 변경·고정 적용 — L3·H-RHINO-04
 
@@ -249,3 +249,9 @@ File → Save As 대화상자는 열렸으나 Computer Use의 파일명 요소�
 증거: `.vide/rhino-complex-brep/f2e87b34-ed8d-4577-80d4-9026e9a5d1be/result.json`. 최초 시험은 Replace 뒤 ModifyAttributes의 성공 반환에도 OpeningWidth가 4로 남아 실패했다. ID/속성을 교체 전에 확보하는 것만으로도 해결되지 않았다. 속성을 먼저 ModifyAttributes로 갱신한 뒤 Replace하고 재조회하는 순서로 위 검수가 통과했다. 이 실제 확인 순서를 제품 SDK 실행 안내에 반영했다. 특정 Rhino 내부 원인까지 확정한 것은 아니다.
 
 결정적 SDK 과업 검수다. 실제 구독 AI의 형상 설계 판단, 기본 Rhino UI로 개구부 수정, 임의 Boolean/곡면/이력·블록/렌더 자원의 일반 지원을 증명하지 않는다.
+
+## 일반 Rhino 사용의 동일 안내 — 2026-09-28 사용자 확인
+
+사용자는 VIDE 없이 Rhino를 직접 실행해 새 파일을 저장할 때도 “읽기 전용이므로 Save As를 사용하라”는 동일 안내가 평소 발생한다고 답했다. 이는 사용자 보고이며 이번에 새로 수행한 자동 시험은 아니다. 앞선 VIDE 플러그인 미로드·임시 경로·새 scheme 대조 결과와 함께, VIDE에만 한정된 재현이 아닌 기존 환경 증상으로 분류할 근거다.
+
+원인이나 설치 플러그인/설정의 책임을 확정하지 않는다. 정상 반복 저장은 여전히 미검증이고, 기존 파일 생성·독립 재열기·형상/속성 보존의 통과 범위만 유지한다. 기존 환경 증상 조사는 독립 개발을 차단하지 않으며, 새 진단 근거 없이 같은 대조를 반복하지 않는다. 경고를 숨기거나 사용자 설정을 바꾸지 않았다.
