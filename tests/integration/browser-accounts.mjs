@@ -38,7 +38,7 @@ try {
   });
   await page.route('**/api/v1/host', (route) => route.fulfill({ json: { available: false } }));
   await page.goto(app.launchUrl);
-  await page.locator('#draft-menu summary').click();
+  await page.locator('#workspace-settings').click();
   await page.locator('#ai-settings').click();
   const section = page
     .locator('section')
@@ -55,7 +55,7 @@ try {
   await page.waitForFunction(
     () => document.querySelector('[aria-label="현재 AI 계정"]')?.textContent === 'Second ChatGPT',
   );
-  await page.locator('#draft-menu summary').click();
+  await page.locator('#workspace-settings').click();
   await page.locator('#ai-settings').click();
   await row.getByRole('button', { name: '로그인 방법', exact: true }).click();
   await section.getByLabel('공식 CLI 로그인 명령').waitFor();

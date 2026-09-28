@@ -51,6 +51,7 @@ const runtimeOptions = {
           AUTH_MODE: { type: 'text', value: 'manual-approval' },
           AUTH_ORIGIN: { type: 'text', value: origin },
           AUTH_SECRET: { type: 'text', value: secret },
+          SIGNUP_CODE: { type: 'text', value: 'test-code' },
           EMAIL_FROM: { type: 'text', value: 'VIDE <noreply@example.com>' },
         },
       },
@@ -95,111 +96,45 @@ try {
     for (const statement of sql.split(';').filter((v) => v.trim()))
       await db.prepare(statement).run();
   }
+  const signUp = (username, password, code = 'test-code') =>
+    call('/api/account/sign-up', { method: 'POST', data: { username, password, code } });
   const account = async (name) => {
-    const email = name + '@example.com',
-      password = randomBytes(20).toString('hex');
-    await call('/api/auth/sign-up/email', { method: 'POST', data: { name, email, password } });
-    const response = await call('/api/auth/sign-in/email', {
+    const password = randomBytes(20).toString('hex');
+    assert.equal((await signUp(name, password)).status, 201);
+    const response = await call('/api/account/sign-in', {
       method: 'POST',
-      data: { email, password },
+      data: { username: name, password },
     });
     assert.equal(response.status, 200, JSON.stringify(response));
-    return { cookie: response.cookie };
+    return { cookie: response.cookie, password, id: response.value.user.id };
   };
-  const alice = await account('alice'),
-    eve = await account('eve');
-  // Pairing: a signed-in owner creates a one-time code; the desktop exchanges it for a host key.
-  const code = await call('/api/hosts/pairings', {
-    method: 'POST',
-    cookie: alice.cookie,
-    data: {},
-  });
-  assert.equal(code.status, 201);
-  assert.match(code.value.code, /^[A-Z2-9]{8}$/);
-  const device = (path, data, key) =>
-    mf.dispatchFetch(origin + path, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(key ? { Authorization: `Bearer ${key}` } : {}),
-      },
-      body: JSON.stringify(data),
-    });
-  let response = await device('/api/hosts/pair', { code: code.value.code, name: 'Studio PC' });
-  assert.equal(response.status, 201);
-  const pair = await response.json();
-  assert.match(pair.secret, /^[a-f0-9]{64}$/);
-  // A code works once.
-  response = await device('/api/hosts/pair', { code: code.value.code, name: 'Again' });
-  assert.equal(response.status, 404);
-  const key = `${pair.hostId}.${pair.secret}`;
-  // Only quick-tunnel addresses are accepted, so the list cannot point elsewhere.
-  response = await device(
-    '/api/hosts/heartbeat',
-    { url: 'https://evil.example.com', status: {} },
-    key,
-  );
-  assert.equal(response.status, 400);
-  response = await device(
-    '/api/hosts/heartbeat',
-    { url: 'https://a-b-c.trycloudflare.com', status: {} },
-    `${pair.hostId}.${'0'.repeat(64)}`,
-  );
-  assert.equal(response.status, 401);
-  // Offline until the first heartbeat.
-  let list = await call('/api/hosts', { cookie: alice.cookie });
-  assert.equal(list.value.hosts[0].online, false);
+  // Sign-up needs the owner's code; IDs are unique; the direct email route is closed.
+  assert.equal((await signUp('mallory', 'long-enough-pw', 'wrong')).status, 403);
   assert.equal(
     (
-      await call(`/api/hosts/${pair.hostId}/open`, {
+      await call('/api/auth/sign-up/email', {
         method: 'POST',
-        cookie: alice.cookie,
-        data: {},
+        data: { name: 'x', email: 'x@example.com', password: 'long-enough-pw' },
       })
     ).status,
-    409,
+    403,
   );
-  response = await device(
-    '/api/hosts/heartbeat',
-    {
-      url: 'https://a-b-c.trycloudflare.com',
-      status: { documents: [{ host: 'rhino', name: 'Tower', live: true }] },
-    },
-    key,
-  );
-  assert.equal(response.status, 200);
-  list = await call('/api/hosts', { cookie: alice.cookie });
-  assert.equal(list.value.hosts[0].online, true);
-  assert.equal(list.value.hosts[0].status.documents[0].name, 'Tower');
-  // Other accounts neither see nor open the host.
-  assert.deepEqual((await call('/api/hosts', { cookie: eve.cookie })).value.hosts, []);
+  const alice = await account('alice'),
+    eve = await account('eve');
+  assert.equal((await signUp('alice', 'another-password')).status, 409);
   assert.equal(
-    (await call(`/api/hosts/${pair.hostId}/open`, { method: 'POST', cookie: eve.cookie, data: {} }))
-      .status,
-    404,
+    (
+      await call('/api/account/sign-in', {
+        method: 'POST',
+        data: { username: 'alice', password: 'wrong-password' },
+      })
+    ).status,
+    401,
   );
-  const opened = await call(`/api/hosts/${pair.hostId}/open`, {
-    method: 'POST',
-    cookie: alice.cookie,
-    data: {},
-  });
-  assert.equal(opened.status, 200);
-  const link = new URL(opened.value.url);
-  assert.equal(link.origin, 'https://a-b-c.trycloudflare.com');
-  // The desktop verifies the Worker's token with the same key, once.
+  assert.equal((await call('/api/me', { cookie: alice.cookie })).value.username, 'alice');
+
+  // The work PC signs in with the same ID and password (no pairing code) and gets a host key.
   const { RemoteAccess } = await import('../../src/server/remote-access.ts');
-  const { writeFile: write } = await import('node:fs/promises');
-  const hostDirectory = join(directory, 'host');
-  await mkdir(hostDirectory, { recursive: true });
-  await write(
-    join(hostDirectory, 'remote-host.json'),
-    JSON.stringify({
-      workerOrigin: origin,
-      hostId: pair.hostId,
-      secret: pair.secret,
-      name: 'Studio PC',
-    }),
-  );
   const { EventEmitter } = await import('node:events');
   const fakeTunnel = () => {
     const child = new EventEmitter();
@@ -212,39 +147,170 @@ try {
     );
     return child;
   };
-  const remote = new RemoteAccess({
+  const hostDirectory = join(directory, 'host');
+  await mkdir(hostDirectory, { recursive: true });
+  const local = [{ id: 'aaaaaaaa-1111-4111-8111-111111111111', name: 'Tower' }];
+  const received = [];
+  const pc = new RemoteAccess({
     directory: hostDirectory,
     port: () => 1234,
-    status: async () => ({}),
+    status: async () => ({ documents: [{ host: 'rhino', name: 'Tower.3dm', live: true }] }),
+    projects: () => local,
+    activity: () => ({ [local[0].id]: Date.now() }),
+    onProjects: (projects) => received.push(projects),
     executable: 'cloudflared',
     spawnProcess: fakeTunnel,
     fetcher: (url, init) => mf.dispatchFetch(String(url), init),
+    heartbeatMs: 60_000,
   });
-  await remote.start();
-  assert.equal(remote.host, 'a-b-c.trycloudflare.com');
-  const token = link.hash.slice('#r='.length);
-  const session = await remote.login(token);
-  assert.equal(remote.authorized(session), true);
-  await assert.rejects(() => remote.login(token), { code: 'UNAUTHORIZED' });
-  await assert.rejects(() => remote.login(token.replace(/.$/, (c) => (c === 'a' ? 'b' : 'a'))), {
-    code: 'UNAUTHORIZED',
+  await assert.rejects(() => pc.link('alice', 'wrong-password', 'Studio PC', origin), {
+    code: 'INVALID_LOGIN',
   });
-  await remote.stop();
-  assert.equal(remote.authorized(session), false);
-  // Stopping reports the host offline.
-  list = await call('/api/hosts', { cookie: alice.cookie });
-  assert.equal(list.value.hosts[0].online, false);
+  let status = await pc.link('alice', alice.password, 'Studio PC', origin);
+  assert.equal(status.linked, true);
+  assert.equal(status.username, 'alice');
+  while (!(await pc.status()).running) await new Promise((r) => setTimeout(r, 10));
+  await pc.heartbeat();
+  // The check did not leave a browser session behind for the PC.
+  const sessions = await db
+    .prepare('SELECT COUNT(*) AS n FROM session WHERE userId=?')
+    .bind(alice.id)
+    .first();
+  assert.equal(sessions.n, 1);
+  // The PC's existing project joined alice's list, and the PC is listed as on (local + remote).
+  let projects = (await call('/api/projects', { cookie: alice.cookie })).value.projects;
+  assert.deepEqual(
+    projects.map((p) => p.name),
+    ['Tower'],
+  );
+  let hosts = (await call('/api/hosts', { cookie: alice.cookie })).value.hosts;
+  assert.equal(hosts.length, 1);
+  const hostId = hosts[0].id;
+  assert.equal(projects[0].host_id, hostId);
+  assert.equal(hosts[0].online, true);
+  assert.equal(hosts[0].remote, true);
+  assert.equal(hosts[0].local, 'http://127.0.0.1:1234');
+  assert.equal(hosts[0].status.documents[0].name, 'Tower.3dm');
+  // Other accounts see neither.
+  assert.deepEqual((await call('/api/hosts', { cookie: eve.cookie })).value.hosts, []);
+  assert.deepEqual((await call('/api/projects', { cookie: eve.cookie })).value.projects, []);
+
+  // A project made or renamed on the site reaches the PC with the next heartbeat.
+  const made = await call('/api/projects', {
+    method: 'POST',
+    cookie: alice.cookie,
+    data: { name: 'Web project' },
+  });
+  assert.equal(made.status, 201);
+  assert.equal(made.value.host_id, hostId);
   assert.equal(
-    (await call(`/api/hosts/${pair.hostId}`, { method: 'DELETE', cookie: alice.cookie })).status,
+    (
+      await call('/api/projects/' + local[0].id, {
+        method: 'PATCH',
+        cookie: alice.cookie,
+        data: { name: 'Tower B' },
+      })
+    ).status,
     200,
   );
+  await pc.heartbeat();
+  assert.deepEqual(
+    received
+      .at(-1)
+      .map((p) => p.name)
+      .sort(),
+    ['Tower B', 'Web project'],
+  );
+
+  // Opening a project returns one-minute links for this PC: local (same PC) and remote (tunnel).
+  const open = (id, user) =>
+    call(`/api/projects/${id}/open`, { method: 'POST', cookie: user.cookie, data: {} });
+  const opened = await open(made.value.id, alice);
+  assert.equal(opened.status, 200, JSON.stringify(opened));
+  const remoteLink = new URL(opened.value.remote),
+    localLink = new URL(opened.value.local);
+  assert.equal(remoteLink.origin, 'https://a-b-c.trycloudflare.com');
+  assert.equal(localLink.origin, 'http://127.0.0.1:1234');
+  assert.equal(remoteLink.searchParams.get('project'), made.value.id);
+  assert.equal((await open(made.value.id, eve)).status, 404);
+  // The PC verifies the site's tokens with the same key, once each.
+  const remoteToken = remoteLink.hash.slice('#r='.length),
+    localToken = localLink.hash.slice('#r='.length);
+  const session = await pc.login(remoteToken);
+  assert.equal(pc.authorized(session), true);
+  await assert.rejects(() => pc.login(remoteToken), { code: 'UNAUTHORIZED' });
+  await pc.verify(localToken);
+  await assert.rejects(() => pc.verify(localToken), { code: 'UNAUTHORIZED' });
+
+  // Only quick-tunnel and loopback addresses are accepted, and only with the host key.
+  const device = (path, data, key) =>
+    mf.dispatchFetch(origin + path, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(key ? { Authorization: `Bearer ${key}` } : {}),
+      },
+      body: JSON.stringify(data),
+    });
+  const key = JSON.parse(await readFile(join(hostDirectory, 'remote-host.json'), 'utf8'));
+  const hostKey = `${key.hostId}.${key.secret}`;
+  assert.equal(key.password, undefined);
+  let response = await device(
+    '/api/hosts/device/heartbeat',
+    { url: 'https://evil.example.com' },
+    hostKey,
+  );
+  assert.equal(response.status, 400);
+  response = await device('/api/hosts/device/heartbeat', { local: 'http://10.0.0.5:80' }, hostKey);
+  assert.equal(response.status, 400);
+  response = await device('/api/hosts/device/heartbeat', {}, `${key.hostId}.${'0'.repeat(64)}`);
+  assert.equal(response.status, 401);
+
+  // Project card image from the PC.
+  const jpeg = 'data:image/jpeg;base64,' + Buffer.from([0xff, 0xd8, 0xff, 0xd9]).toString('base64');
+  assert.equal(await pc.pushThumbnail(made.value.id, jpeg), true);
+  const image = await mf.dispatchFetch(`${origin}/api/projects/${made.value.id}/thumbnail`, {
+    headers: { Cookie: alice.cookie },
+  });
+  assert.equal(image.status, 200);
+  assert.equal(image.headers.get('content-type'), 'image/jpeg');
+
+  // Remote access off: still on for local use, but no remote link.
+  status = await pc.setRemote(false);
+  assert.equal(status.running, false);
+  hosts = (await call('/api/hosts', { cookie: alice.cookie })).value.hosts;
+  assert.equal(hosts[0].online, true);
+  assert.equal(hosts[0].remote, false);
+  assert.equal(pc.authorized(session), false);
+  // App closed: offline, and opening says so.
+  await pc.close();
+  hosts = (await call('/api/hosts', { cookie: alice.cookie })).value.hosts;
+  assert.equal(hosts[0].online, false);
+  assert.equal((await open(made.value.id, alice)).status, 409);
+  // Deleting leaves the account list only.
+  assert.equal(
+    (await call('/api/projects/' + made.value.id, { method: 'DELETE', cookie: alice.cookie }))
+      .status,
+    200,
+  );
+  projects = (await call('/api/projects', { cookie: alice.cookie })).value.projects;
+  assert.deepEqual(
+    projects.map((p) => p.name),
+    ['Tower B'],
+  );
+  // Signing the PC out removes it from the account.
+  await pc.unlink();
+  assert.deepEqual((await call('/api/hosts', { cookie: alice.cookie })).value.hosts, []);
   const result = {
     passed: true,
-    pairingOnce: true,
-    tunnelUrlRestricted: true,
-    ownerOnly: true,
-    signedTokenVerifiedOnce: true,
-    offlineOnStop: true,
+    signupCodeRequired: true,
+    idLogin: true,
+    pcLoginWithoutCode: true,
+    projectsShared: true,
+    localAndRemoteLinks: true,
+    signedTokensOnce: true,
+    addressesRestricted: true,
+    offlineOnClose: true,
     directory,
   };
   await writeFile(join(directory, 'hosts-result.json'), JSON.stringify(result, null, 2));

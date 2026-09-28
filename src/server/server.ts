@@ -23,7 +23,7 @@ interface ServerOptions {
   /** Test seams for the remote tunnel process and Worker calls. */
   remoteOptions?: Pick<
     ConstructorParameters<typeof RemoteAccess>[0],
-    'executable' | 'spawnProcess' | 'fetcher'
+    'executable' | 'spawnProcess' | 'fetcher' | 'heartbeatMs'
   >;
 }
 import { readWebAsset } from './web-assets.ts';
@@ -44,7 +44,7 @@ import { compareCandidates, relatedCandidates } from '../core/comparison.ts';
 import { quantities, quantitiesCsv } from '../core/quantities.ts';
 import { createServer } from 'node:http';
 import { randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
-import { readFile, unlink } from 'node:fs/promises';
+import { readFile, unlink, writeFile } from 'node:fs/promises';
 import { Store, DomainError } from '../core/store.ts';
 import { Workspace } from '../core/workspace.ts';
 import { Execution } from './execution.ts';
@@ -55,6 +55,19 @@ import { dirname, join } from 'node:path';
 import { importModel, captureModel, recoverDwgImport } from './import-model.ts';
 import { renderReport } from './report.ts';
 
+/** The local browser session survives restarts, so an open page keeps working after one. */
+async function localSession(directory: string) {
+  const file = join(directory, 'local-session.key');
+  try {
+    const saved = (await readFile(file, 'utf8')).trim();
+    if (/^[a-f0-9]{64}$/.test(saved)) return saved;
+  } catch {
+    /* First start: create one. */
+  }
+  const value = randomBytes(32).toString('hex');
+  await writeFile(file, value, { mode: 0o600 });
+  return value;
+}
 const equal = (a: unknown, b: string) =>
   typeof a === 'string' &&
   Buffer.byteLength(a) === Buffer.byteLength(b) &&
@@ -104,7 +117,7 @@ export async function startServer({
 }: ServerOptions) {
   const store = new Store(filename),
     bootstrap = randomBytes(32).toString('hex'),
-    session = randomBytes(32).toString('hex');
+    session = await localSession(dirname(filename));
   const agentTools = new AgentTools();
   const accountLogin = new AccountLogin(loginOptions);
   const workspace = new Workspace(store),
@@ -129,6 +142,18 @@ export async function startServer({
     ...remoteOptions,
     directory: dirname(filename),
     port: () => Number(new URL(origin).port),
+    projects: () => store.listProjects(),
+    activity: () => store.projectActivity(),
+    onProjects: (projects) => {
+      for (const project of projects)
+        if (!project.deleted) {
+          try {
+            store.ensureProject(project.id, project.name);
+          } catch {
+            /* A name the local store rejects keeps the local name. */
+          }
+        }
+    },
     status: async () => {
       const rhino = (await sdk?.editors.list(true)) || { documents: [] };
       const cad = (await zwcadSdk?.editors.attached.list()) || [];
@@ -267,14 +292,34 @@ export async function startServer({
       deliver(status, 'application/json; charset=utf-8', JSON.stringify(data));
     try {
       if (!remote && request.headers.host !== authority) throw new DomainError('FORBIDDEN');
+      // The account site asks whether this PC is the browser's own PC (answer: this host's id).
+      if (
+        !remote &&
+        request.url === '/api/v1/hello' &&
+        remoteAccess.site &&
+        request.headers.origin === remoteAccess.site
+      ) {
+        response.setHeader('Access-Control-Allow-Origin', remoteAccess.site);
+        response.setHeader('Vary', 'Origin');
+        if (request.method === 'OPTIONS') {
+          response.setHeader('Access-Control-Allow-Methods', 'GET');
+          response.setHeader('Access-Control-Allow-Private-Network', 'true');
+          response.writeHead(204);
+          response.end();
+          return;
+        }
+        if (request.method === 'GET') {
+          send(200, { hostId: remoteAccess.hostId });
+          return;
+        }
+      }
       if (request.headers.origin && request.headers.origin !== requestOrigin)
         throw new DomainError('FORBIDDEN');
       const url = new URL(request.url || '/', requestOrigin);
-      // The sharing site's "open" link navigates here cross-site; only that page load may be.
+      // The account site's "open" link navigates here cross-site; only that page load may be.
       if (
         request.headers['sec-fetch-site'] === 'cross-site' &&
         !(
-          remote &&
           request.method === 'GET' &&
           request.headers['sec-fetch-mode'] === 'navigate' &&
           !url.pathname.startsWith('/api/')
@@ -305,6 +350,8 @@ export async function startServer({
       if (remote && url.pathname === '/api/v1/session' && request.method === 'POST') {
         const input = await body(request);
         const remoteSession = await remoteAccess.login(input.remoteToken);
+        // Pick up projects just made or renamed on the account site before the page lists them.
+        await remoteAccess.heartbeat();
         response.setHeader(
           'Set-Cookie',
           `vide_remote=${remoteSession}; HttpOnly; Secure; SameSite=Strict; Path=/`,
@@ -314,7 +361,11 @@ export async function startServer({
       }
       if (url.pathname === '/api/v1/session' && request.method === 'POST') {
         const input = await body(request);
-        if (!equal(input.token, bootstrap)) throw new DomainError('UNAUTHORIZED');
+        // A launch link, or a one-minute token from the account site opening this PC locally.
+        if (input.remoteToken !== undefined) {
+          await remoteAccess.verify(input.remoteToken);
+          await remoteAccess.heartbeat();
+        } else if (!equal(input.token, bootstrap)) throw new DomainError('UNAUTHORIZED');
         response.setHeader(
           'Set-Cookie',
           `vide_session_${new URL(origin).port}=${session}; HttpOnly; SameSite=Strict; Path=/`,
@@ -337,7 +388,7 @@ export async function startServer({
         // Remote sessions do project work only: no app control, accounts, settings or extensions.
         if (
           url.pathname === '/api/v1/shutdown' ||
-          url.pathname.startsWith('/api/v1/remote') ||
+          (url.pathname.startsWith('/api/v1/remote') && request.method !== 'GET') ||
           (request.method !== 'GET' &&
             /^\/api\/v1\/(accounts|settings|extensions)(\/|$)/.test(url.pathname))
         )
@@ -348,24 +399,21 @@ export async function startServer({
         send(200, await remoteAccess.status());
         return;
       }
-      const remoteAction = /^\/api\/v1\/remote\/(pair|start|stop|unpair)$/.exec(url.pathname);
+      const remoteAction = /^\/api\/v1\/remote\/(link|unlink|remote)$/.exec(url.pathname);
       if (remoteAction && request.method === 'POST') {
         const input = await body(request);
-        if (remoteAction[1] === 'pair')
+        if (remoteAction[1] === 'link')
           send(
             200,
-            await remoteAccess.pair(
-              z.string().min(4).max(20).parse(input.code),
+            await remoteAccess.link(
+              z.string().min(1).max(254).parse(input.username),
+              z.string().min(1).max(128).parse(input.password),
               z.string().min(1).max(80).parse(input.name),
               input.origin === undefined ? undefined : z.string().url().parse(input.origin),
             ),
           );
-        else if (remoteAction[1] === 'start') send(200, await remoteAccess.start());
-        else {
-          if (remoteAction[1] === 'stop') await remoteAccess.stop();
-          else await remoteAccess.unpair();
-          send(200, await remoteAccess.status());
-        }
+        else if (remoteAction[1] === 'unlink') send(200, await remoteAccess.unlink());
+        else send(200, await remoteAccess.setRemote(z.boolean().parse(input.enabled)));
         return;
       }
       if (url.pathname === '/api/v1/shutdown' && request.method === 'POST' && onShutdown) {
@@ -1042,9 +1090,29 @@ export async function startServer({
           return;
         }
         if (request.method === 'POST') {
-          send(201, store.createProject((await body(request)).name));
+          const created = store.createProject((await body(request)).name);
+          await remoteAccess.pushProject(created);
+          send(201, created);
           return;
         }
+      }
+      const projectPath = /^\/api\/v1\/projects\/([^/]+)(\/thumbnail)?$/.exec(url.pathname);
+      if (projectPath && request.method === 'PUT' && !projectPath[2]) {
+        const renamed = store.renameProject(projectPath[1], (await body(request)).name);
+        await remoteAccess.pushProject(renamed);
+        send(200, renamed);
+        return;
+      }
+      if (projectPath && request.method === 'POST' && projectPath[2]) {
+        // A small viewport image for the project card on the account site.
+        store.project(projectPath[1]);
+        const image = z
+          .string()
+          .max(160_000)
+          .regex(/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/)
+          .parse((await body(request)).image);
+        send(200, { sent: await remoteAccess.pushThumbnail(projectPath[1], image) });
+        return;
       }
       const match = /^\/api\/v1\/projects\/([^/]+)\/inputs(?:\/([^/]+))?$/.exec(url.pathname);
       if (match) {
@@ -1106,6 +1174,7 @@ export async function startServer({
   if (!address || typeof address === 'string') throw Error('LISTEN_FAILED');
   authority = `127.0.0.1:${address.port}`;
   origin = `http://${authority}`;
+  void remoteAccess.init();
   return {
     origin,
     launchUrl: `${origin}/#${bootstrap}`,
@@ -1114,7 +1183,7 @@ export async function startServer({
     remoteAccess,
     close: async () => {
       stopping = true;
-      await remoteAccess.stop();
+      await remoteAccess.close();
       await accountLogin.close();
       agentTools.close();
       await execution.close();

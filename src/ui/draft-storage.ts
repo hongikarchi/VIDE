@@ -58,14 +58,3 @@ export function restoreDraft(value: unknown, messages: DraftState['messages']) {
     messages,
   };
 }
-
-export function restoreSavedDraft(
-  value: unknown,
-  projectId: string,
-  messages: DraftState['messages'],
-) {
-  const saved = z
-    .object({ version: z.literal(4), projectId: z.literal(projectId), state: z.unknown() })
-    .parse(value);
-  return restoreDraft(saved.state, messages);
-}

@@ -25,8 +25,7 @@ try {
   await page.waitForFunction(() => document.querySelector('#project-picker')?.value);
   await page.locator('#body').fill('Review with bounded execution');
   const open = async () => {
-    if (!(await page.locator('#draft-menu').evaluate((node) => node.open)))
-      await page.locator('#draft-menu summary').click();
+    await page.locator('#workspace-settings').click();
     await page.locator('#execution-limits').click();
   };
   await open();
@@ -45,8 +44,6 @@ try {
   const bounds = await page.getByRole('dialog', { name: '작업 상한', exact: true }).boundingBox();
   assert.ok(bounds.width <= 440 && bounds.x >= 0 && bounds.y >= 0);
   await page.getByRole('button', { name: '취소', exact: true }).click();
-  if (await page.locator('#draft-menu').evaluate((node) => node.open))
-    await page.locator('#draft-menu summary').click();
   await page.locator('#request').click();
   const deadline = Date.now() + 10000;
   let saved;

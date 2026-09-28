@@ -14,8 +14,16 @@ const errors: Record<string, string> = {
   SUBMISSION_CONFLICT: '같은 제출 번호로 다른 내용이 이미 접수되었습니다.',
   INVALID_EMAIL_OR_PASSWORD: '이메일 또는 비밀번호를 확인해 주세요.',
   EMAIL_NOT_VERIFIED: '이메일 확인 링크를 먼저 열어 주세요.',
-  HOST_OFFLINE: 'PC가 꺼져 있거나 원격 접속이 꺼져 있습니다.',
-  HOST_NOT_FOUND: '등록된 PC를 찾을 수 없습니다.',
+  HOST_OFFLINE: '이 프로젝트의 작업 PC가 꺼져 있습니다. PC에서 VIDE를 실행한 뒤 다시 여세요.',
+  HOST_NOT_FOUND: '이 프로젝트의 작업 PC가 계정에서 로그아웃됐습니다.',
+  HOST_CHOICE_REQUIRED: '프로젝트를 열 작업 PC를 켜 주세요.',
+  INVALID_LOGIN: '아이디 또는 비밀번호를 확인해 주세요.',
+  INVALID_SIGNUP_CODE: '가입 코드가 올바르지 않습니다.',
+  USERNAME_TAKEN: '이미 사용 중인 아이디입니다.',
+  INVALID_USERNAME: '아이디는 영문·숫자·_ . - 3~30자로 입력해 주세요.',
+  INVALID_PASSWORD: '비밀번호는 8자 이상이어야 합니다.',
+  SIGNUP_CLOSED: '지금은 가입을 받지 않습니다.',
+  SIGNUP_CODE_REQUIRED: '가입 코드가 필요합니다.',
 };
 export class ApiError extends Error {
   constructor(
@@ -42,7 +50,7 @@ export async function api(path: string, method = 'GET', data?: unknown): Promise
         code: z.string().optional(),
       })
       .safeParse(value);
-    if (response.status === 401 && !path.startsWith('/auth/'))
+    if (response.status === 401 && !path.startsWith('/auth/') && !path.startsWith('/account/'))
       window.dispatchEvent(new Event('vide-sharing-login-required'));
     throw new ApiError(
       response.status,
@@ -58,7 +66,15 @@ export const sessionSchema = z
 export type Session = NonNullable<z.infer<typeof sessionSchema>>;
 export const projectsSchema = z.object({
   projects: z.array(
-    z.object({ id: z.string(), name: z.string(), role: z.enum(['owner', 'viewer', 'commenter']) }),
+    z.object({
+      id: z.string(),
+      name: z.string(),
+      role: z.enum(['owner', 'viewer', 'commenter']),
+      created_at: z.number(),
+      updated_at: z.number().nullable().optional(),
+      host_id: z.string().nullable().optional(),
+      has_thumbnail: z.union([z.boolean(), z.number()]).optional(),
+    }),
   ),
 });
 export type Project = z.infer<typeof projectsSchema>['projects'][number];

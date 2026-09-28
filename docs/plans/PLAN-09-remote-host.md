@@ -2,7 +2,7 @@
 id: PLAN-09
 title: 원격 기기에서 작업 PC 열기 (iPad 스케치 → AI → Rhino)
 status: review
-version: 0.1
+version: 0.2
 updated: 2026-09-28
 owner: agent:claude
 related: [PLAN, PLAN-02, ARCH-01, T-009, T-010]
@@ -17,7 +17,7 @@ related: [PLAN, PLAN-02, ARCH-01, T-009, T-010]
 ## 구조
 
 1. 작업 PC의 VIDE가 공식 cloudflared로 임시 주소(`*.trycloudflare.com`)를 열고, 공유 Worker에 페어링된 기기 키로 15초마다 상태를 보낸다(주소, 연결된 Rhino/CAD 문서 이름·Live 여부).
-2. 기기 페어링은 공유 사이트에서 로그인한 소유자가 만든 10분짜리 일회용 코드를 PC의 설정 → 원격 접속에 입력해 한다.
+2. 기기 등록은 PC의 설정 → VIDE 계정에서 계정 아이디·비밀번호로 로그인해 한다(초기 판의 10분 등록 코드는 [PLAN-10](PLAN-10-account-workspace.md)에서 대체).
 3. 아이패드는 공유 사이트에 로그인해 "작업 PC" 목록을 본다. 45초 안에 상태를 보낸 PC만 켜짐이다. 열기를 누르면 Worker가 그 PC의 키로 서명한 60초짜리 일회용 토큰을 주고 PC 주소로 이동한다.
 4. PC 서버는 토큰을 한 번만 받아 원격 세션(Secure·HttpOnly 쿠키, 터널이 켜져 있는 동안 최대 12시간)을 연다. 원격 세션은 프로젝트 작업(모델 보기, 스케치, 요청, Live Sync, 원본 반영)을 하고 앱 종료·계정·설정·확장 등록·원격 제어·AI 도구 엔드포인트는 쓰지 못한다.
 5. 모바일 전송: 원격 응답은 gzip으로 보낸다. 요청 목록은 표시 메시를 빼고 보내며 화면에 띄울 결과만 받아 온다(로컬도 같은 효과).

@@ -51,6 +51,7 @@ const runtimeOptions = {
           AUTH_MODE: { type: 'text', value: 'manual-approval' },
           AUTH_ORIGIN: { type: 'text', value: origin },
           AUTH_SECRET: { type: 'text', value: secret },
+          SIGNUP_CODE: { type: 'text', value: 'test-code' },
           EMAIL_FROM: { type: 'text', value: 'VIDE <noreply@example.com>' },
         },
       },
@@ -96,20 +97,17 @@ try {
       await db.prepare(statement).run();
   }
   const account = async (name) => {
-    const email = name + '@example.com',
+    const email = name + '@users.vide.invalid',
       password = randomBytes(20).toString('hex');
-    let response = await call('/api/auth/sign-up/email', {
+    let response = await call('/api/account/sign-up', {
       method: 'POST',
-      data: { name, email, password },
+      data: { username: name, password, code: 'test-code' },
     });
-    assert.equal(response.status, 200, JSON.stringify(response));
-    // Keep the real unverified account state; no direct verification override.
-    assert.equal(
-      (await db.prepare('SELECT emailVerified FROM user WHERE email=?').bind(email).first())
-        .emailVerified,
-      0,
-    );
-    response = await call('/api/auth/sign-in/email', { method: 'POST', data: { email, password } });
+    assert.equal(response.status, 201, JSON.stringify(response));
+    response = await call('/api/account/sign-in', {
+      method: 'POST',
+      data: { username: name, password },
+    });
     assert.equal(response.status, 200, JSON.stringify(response));
     assert.ok(response.cookie);
     return { id: response.value.user.id, email, cookie: response.cookie, password };
@@ -219,10 +217,8 @@ try {
       ).status,
       403,
     );
-  assert.equal(
-    (await db.prepare('SELECT count(*) n FROM user WHERE emailVerified!=0').first()).n,
-    0,
-  );
+  // ID accounts are admitted by the sign-up code (no mailbox); email verification never ran.
+  assert.equal((await db.prepare('SELECT count(*) n FROM verification').first()).n, 0);
   await writeFile(
     join(directory, 'result.json'),
     JSON.stringify(

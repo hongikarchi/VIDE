@@ -123,7 +123,6 @@ export const initial = (): DraftState => ({
   permission: 'review',
   messages: [],
 });
-export const storageKey = 'vide:review:composer:v3';
 export function draftHasInput(state: DraftState) {
   return Boolean(
     state.linkedTargets?.length ||

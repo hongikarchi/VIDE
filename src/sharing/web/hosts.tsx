@@ -1,15 +1,17 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { z } from 'zod';
 import { api } from './api';
 
-// Work PCs paired with this account. An online PC runs VIDE with Rhino/CAD attached and does all
-// the work; opening it hands this device a one-minute login to that PC's workspace.
-const hostsSchema = z.object({
+// Work PCs signed in with this account. An online PC runs VIDE with Rhino/CAD attached and does
+// all the work. A browser on that same PC opens it locally; other devices go through its tunnel.
+export const hostsSchema = z.object({
   hosts: z.array(
     z.object({
       id: z.string(),
       name: z.string(),
       online: z.boolean(),
+      remote: z.boolean().default(false),
+      local: z.string().nullable().default(null),
       lastSeen: z.number().nullable(),
       status: z
         .object({
@@ -22,102 +24,112 @@ const hostsSchema = z.object({
     }),
   ),
 });
-type Host = z.infer<typeof hostsSchema>['hosts'][number];
-const message = (error: unknown) => (error instanceof Error ? error.message : '요청 실패');
+export type Host = z.infer<typeof hostsSchema>['hosts'][number];
 
-export function Hosts() {
+const THIS_PC = 'vide:this-pc';
+function remembered() {
+  try {
+    return sessionStorage.getItem(THIS_PC) || '';
+  } catch {
+    return '';
+  }
+}
+/** Ask a PC's local address whether it is this browser's own PC (it answers with its id). */
+async function probe(host: Host) {
+  if (!host.local) return false;
+  try {
+    const response = await fetch(host.local + '/api/v1/hello', {
+      signal: AbortSignal.timeout(4000),
+      credentials: 'omit',
+    });
+    const reply = z.object({ hostId: z.string() }).parse(await response.json());
+    return reply.hostId === host.id;
+  } catch {
+    return false;
+  }
+}
+
+/** PCs of this account, refreshed every 10 s, and which one (if any) is this browser's PC. */
+export function useHosts() {
   const [hosts, setHosts] = useState<Host[] | null>(null);
-  const [pairing, setPairing] = useState<{ code: string; expiresAt: number } | null>(null);
-  const [status, setStatus] = useState('');
-  const [busy, setBusy] = useState(false);
-  const refresh = () =>
-    api('/hosts')
-      .then((value) => setHosts(hostsSchema.parse(value).hosts))
-      .catch((error) => setStatus(message(error)));
+  const [thisPc, setThisPc] = useState(remembered);
+  const [error, setError] = useState('');
+  const probed = useRef(new Set<string>());
   useEffect(() => {
+    let active = true;
+    const refresh = () =>
+      api('/hosts')
+        .then((value) => {
+          if (!active) return;
+          const list = hostsSchema.parse(value).hosts;
+          setHosts(list);
+          setError('');
+          for (const host of list) {
+            const key = host.id + host.local;
+            if (!host.online || !host.local || probed.current.has(key)) continue;
+            probed.current.add(key);
+            void probe(host).then((mine) => {
+              if (!mine || !active) return;
+              setThisPc(host.id);
+              try {
+                sessionStorage.setItem(THIS_PC, host.id);
+              } catch {
+                /* Probe again next visit. */
+              }
+            });
+          }
+        })
+        .catch((cause) => {
+          if (active) setError(cause instanceof Error ? cause.message : '');
+        });
     void refresh();
     const timer = setInterval(() => void refresh(), 10_000);
-    return () => clearInterval(timer);
+    return () => {
+      active = false;
+      clearInterval(timer);
+    };
   }, []);
-  const open = async (host: Host) => {
-    setBusy(true);
-    setStatus(`${host.name}에 연결하는 중…`);
-    try {
-      const { url } = z
-        .object({ url: z.string().url() })
-        .parse(await api(`/hosts/${host.id}/open`, 'POST', {}));
-      location.href = url;
-    } catch (error) {
-      setStatus(message(error));
-      setBusy(false);
-      void refresh();
-    }
-  };
+  return { hosts, thisPc, error };
+}
+
+export function describeHost(host: Host) {
+  if (!host.online)
+    return host.lastSeen ? `꺼짐 · ${new Date(host.lastSeen).toLocaleString()}` : '꺼짐';
+  const documents = (host.status.documents ?? [])
+    .map(
+      (document) =>
+        `${document.host === 'zwcad' ? 'ZWCAD' : 'Rhino'} ${document.name}${document.live ? ' · Live' : ''}`,
+    )
+    .join(' / ');
+  return documents || '켜짐 · 연결된 문서 없음';
+}
+
+export function HostStrip({ hosts, thisPc }: { hosts: Host[] | null; thisPc: string }) {
+  if (hosts === null) return <p className="muted small">작업 PC 확인 중…</p>;
+  if (!hosts.length)
+    return (
+      <div className="pc-empty">
+        <strong>작업 PC가 아직 없습니다.</strong>
+        <span>
+          Rhino가 있는 PC에서 VIDE를 실행하고, 설정 → VIDE 계정에 이 아이디로 로그인하세요. 그 PC가
+          여기에 표시되고 프로젝트를 열 수 있습니다.
+        </span>
+      </div>
+    );
   return (
-    <section className="hosts" aria-label="작업 PC">
-      <h2>작업 PC</h2>
-      {hosts === null ? <p className="muted">확인 중…</p> : null}
-      {hosts?.length === 0 ? (
-        <p className="muted">등록된 PC가 없습니다. 아래에서 등록 코드를 만드세요.</p>
-      ) : null}
-      <ul>
-        {hosts?.map((host) => (
-          <li key={host.id} data-online={String(host.online)}>
-            <div>
-              <strong>
-                <span className="host-dot" aria-hidden="true" /> {host.name}
-              </strong>
-              <small>
-                {host.online
-                  ? (host.status.documents ?? [])
-                      .map(
-                        (document) =>
-                          `${document.host === 'zwcad' ? 'ZWCAD' : 'Rhino'} · ${document.name}${document.live ? ' · Live' : ''}`,
-                      )
-                      .join(' / ') || '온라인 · 연결된 문서 없음'
-                  : host.lastSeen
-                    ? `꺼짐 · 마지막 ${new Date(host.lastSeen).toLocaleString()}`
-                    : '꺼짐'}
-              </small>
-            </div>
-            <button
-              className="primary"
-              disabled={!host.online || busy}
-              onClick={() => {
-                void open(host);
-              }}
-            >
-              열기
-            </button>
-          </li>
-        ))}
-      </ul>
-      {pairing ? (
-        <p className="pairing">
-          등록 코드 <strong>{pairing.code}</strong>
-          <small>
-            PC의 VIDE → 설정 → 원격 접속에 입력하세요 ·{' '}
-            {new Date(pairing.expiresAt).toLocaleTimeString()}까지
-          </small>
-        </p>
-      ) : null}
-      <button
-        disabled={busy}
-        onClick={() => {
-          void api('/hosts/pairings', 'POST', {})
-            .then((value) =>
-              setPairing(z.object({ code: z.string(), expiresAt: z.number() }).parse(value)),
-            )
-            .catch((error) => setStatus(message(error)));
-        }}
-      >
-        PC 등록 코드 만들기
-      </button>
-      {status ? (
-        <p role="status" className="status">
-          {status}
-        </p>
-      ) : null}
-    </section>
+    <ul className="pcs" aria-label="작업 PC">
+      {hosts.map((host) => (
+        <li key={host.id} data-online={String(host.online)} title={describeHost(host)}>
+          <span className="host-dot" aria-hidden="true" />
+          <strong>{host.name}</strong>
+          {host.id === thisPc ? <span className="badge">이 PC</span> : null}
+          {host.online ? (
+            <small>{host.remote ? '원격 켜짐' : '원격 꺼짐'}</small>
+          ) : (
+            <small>꺼짐</small>
+          )}
+        </li>
+      ))}
+    </ul>
   );
 }

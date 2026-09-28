@@ -1,6 +1,8 @@
 import { manualApproval, type Env } from './auth';
 import { requestJoin, joinRoute } from './joins';
 import { HttpError, body, digest, json, role, text } from './http';
+import { hostView, online, openLinks, type HostRow } from './hosts';
+import { loginEmail } from './accounts';
 
 export interface Actor {
   id: string;
@@ -31,9 +33,14 @@ export async function projectRoute(
   const db = env.DB;
   if (path.length === 0) {
     if (request.method === 'GET') {
+      // Recent work first, like a file browser; the thumbnail itself is fetched separately.
       const rows = await db
         .prepare(
-          'SELECT p.id,p.name,p.created_at,m.role FROM projects p JOIN project_members m ON m.project_id=p.id WHERE m.user_id=? ORDER BY p.created_at DESC,p.id LIMIT 200',
+          `SELECT p.id,p.name,p.created_at,COALESCE(p.updated_at,p.created_at) AS updated_at,p.host_id,
+            p.thumbnail IS NOT NULL AS has_thumbnail,m.role
+          FROM projects p JOIN project_members m ON m.project_id=p.id
+          WHERE m.user_id=? AND p.deleted_at IS NULL
+          ORDER BY COALESCE(p.updated_at,p.created_at) DESC,p.id LIMIT 200`,
         )
         .bind(actor.id)
         .all();
@@ -42,16 +49,35 @@ export async function projectRoute(
     if (request.method === 'POST') {
       const input = await body(request),
         name = text(input.name),
-        id = crypto.randomUUID();
+        id = crypto.randomUUID(),
+        now = Date.now();
+      // A new project belongs to the chosen work PC (or the account's only PC).
+      let hostId: string | null = null;
+      if (typeof input.hostId === 'string') {
+        const host = await db
+          .prepare('SELECT id FROM remote_hosts WHERE id=? AND user_id=?')
+          .bind(input.hostId, actor.id)
+          .first<{ id: string }>();
+        if (!host) throw new HttpError(404, 'HOST_NOT_FOUND');
+        hostId = host.id;
+      } else {
+        const hosts = await db
+          .prepare('SELECT id FROM remote_hosts WHERE user_id=? LIMIT 2')
+          .bind(actor.id)
+          .all<{ id: string }>();
+        if (hosts.results.length === 1) hostId = hosts.results[0].id;
+      }
       await db.batch([
         db
-          .prepare('INSERT INTO projects(id,name,created_by,created_at) VALUES(?,?,?,?)')
-          .bind(id, name, actor.id, Date.now()),
+          .prepare(
+            'INSERT INTO projects(id,name,created_by,created_at,updated_at,host_id) VALUES(?,?,?,?,?,?)',
+          )
+          .bind(id, name, actor.id, now, now, hostId),
         db
           .prepare("INSERT INTO project_members(project_id,user_id,role) VALUES(?,?,'owner')")
           .bind(id, actor.id),
       ]);
-      return json({ id, name, role: 'owner' }, 201);
+      return json({ id, name, role: 'owner', host_id: hostId }, 201);
     }
     throw new HttpError(405, 'METHOD_NOT_ALLOWED');
   }
@@ -64,7 +90,69 @@ export async function projectRoute(
         .bind(projectId)
         .first(),
     );
+  if (path.length === 2 && path[1] === 'thumbnail' && request.method === 'GET') {
+    const row = await db
+      .prepare('SELECT thumbnail FROM projects WHERE id=?')
+      .bind(projectId)
+      .first<{ thumbnail: string | null }>();
+    const match = /^data:(image\/[a-z]+);base64,(.+)$/.exec(row?.thumbnail ?? '');
+    if (!match) throw new HttpError(404, 'THUMBNAIL_NOT_FOUND');
+    return new Response(
+      Uint8Array.from(atob(match[2]), (c) => c.charCodeAt(0)),
+      {
+        headers: { 'Content-Type': match[1], 'Cache-Control': 'private, max-age=60' },
+      },
+    );
+  }
   if (current !== 'owner') throw new HttpError(403, 'OWNER_REQUIRED');
+  if (path.length === 1 && request.method === 'PATCH') {
+    const name = text((await body(request)).name);
+    await db
+      .prepare('UPDATE projects SET name=? WHERE id=? AND deleted_at IS NULL')
+      .bind(name, projectId)
+      .run();
+    return json({ id: projectId, name });
+  }
+  if (path.length === 1 && request.method === 'DELETE') {
+    // Kept for shared reviews and the PC's own copy; it only leaves the account's list.
+    await db
+      .prepare('UPDATE projects SET deleted_at=? WHERE id=?')
+      .bind(Date.now(), projectId)
+      .run();
+    return json({ deleted: true });
+  }
+  if (path.length === 2 && path[1] === 'open' && request.method === 'POST') {
+    // The work PC holding the project; one that has none is claimed by the chosen online PC.
+    const input = await body(request);
+    const project = await db
+      .prepare('SELECT host_id FROM projects WHERE id=? AND deleted_at IS NULL')
+      .bind(projectId)
+      .first<{ host_id: string | null }>();
+    if (!project) throw new HttpError(404, 'PROJECT_NOT_FOUND');
+    const hosts = (
+      await db
+        .prepare('SELECT * FROM remote_hosts WHERE user_id=? ORDER BY created_at LIMIT 20')
+        .bind(actor.id)
+        .all<HostRow>()
+    ).results;
+    const wanted = project.host_id ?? (typeof input.hostId === 'string' ? input.hostId : null);
+    const host = wanted
+      ? hosts.find((row) => row.id === wanted)
+      : hosts.filter((row) => online(row)).length === 1
+        ? hosts.find((row) => online(row))
+        : undefined;
+    if (!host)
+      throw new HttpError(
+        project.host_id ? 404 : 409,
+        project.host_id ? 'HOST_NOT_FOUND' : 'HOST_CHOICE_REQUIRED',
+      );
+    if (!online(host)) throw new HttpError(409, 'HOST_OFFLINE');
+    await db
+      .prepare('UPDATE projects SET host_id=COALESCE(host_id,?),updated_at=? WHERE id=?')
+      .bind(host.id, Date.now(), projectId)
+      .run();
+    return json({ ...(await openLinks(host, projectId)), host: hostView(host) });
+  }
   if (path[1] === 'join-requests') return joinRoute(request, env, actor, projectId, path.slice(2));
   if (path[1] === 'members') {
     if (path.length === 2 && request.method === 'GET')
@@ -113,7 +201,8 @@ export async function projectRoute(
       });
     if (path.length === 2 && request.method === 'POST') {
       const input = await body(request),
-        email = text(input.email, 254).toLowerCase(),
+        // An ID (without "@") invites that ID account.
+        email = loginEmail(text(input.email, 254)),
         selectedRole = role(input.role);
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new HttpError(400, 'INVALID_EMAIL');
       const now = Date.now(),

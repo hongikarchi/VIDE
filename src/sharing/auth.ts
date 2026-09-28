@@ -10,6 +10,8 @@ export interface Env {
   AUTH_ORIGIN: string;
   AUTH_SECRET: string;
   EMAIL_FROM: string;
+  /** Owner-chosen code required to create an ID account; sign-up is closed without it. */
+  SIGNUP_CODE?: string;
 }
 
 export const manualApproval = (env: Env) => env.AUTH_MODE === 'manual-approval';

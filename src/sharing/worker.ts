@@ -4,6 +4,7 @@ import { acceptInvitation, projectRoute } from './projects';
 import { publicationRoute } from './publications';
 import { commentRoute, exportComment } from './comments';
 import { hostDeviceRoute, hostRoute } from './hosts';
+import { accountRoute, displayName } from './accounts';
 
 async function handle(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
   try {
@@ -31,15 +32,25 @@ async function handle(request: Request, env: Env, ctx: ExecutionContext): Promis
       ].includes(url.pathname)
     )
       throw new HttpError(403, 'AUTH_FEATURE_UNAVAILABLE');
+    // Accounts are created only through /api/account/sign-up, which checks the sign-up code.
+    if (url.pathname === '/api/auth/sign-up/email')
+      throw new HttpError(403, 'SIGNUP_CODE_REQUIRED');
     const auth = createAuth(env, ctx);
+    if (url.pathname.startsWith('/api/account/'))
+      return await accountRoute(request, env, auth, url.pathname);
     if (url.pathname.startsWith('/api/auth/')) return auth.handler(request);
     if (!url.pathname.startsWith('/api/')) {
       if (env.WEB && ['GET', 'HEAD'].includes(request.method)) return env.WEB.fetch(request);
       throw new HttpError(404, 'NOT_FOUND');
     }
-    // Desktop hosts authenticate with a pairing code or host key, not a browser session.
-    if (url.pathname === '/api/hosts/pair' || url.pathname === '/api/hosts/heartbeat')
-      return await hostDeviceRoute(request, env, url.pathname);
+    // Work PCs authenticate with the account login once, then their host key; no browser session.
+    if (url.pathname.startsWith('/api/hosts/device/'))
+      return await hostDeviceRoute(
+        request,
+        env,
+        auth,
+        url.pathname.slice('/api/hosts/device/'.length).split('/'),
+      );
     if (
       !['GET', 'HEAD'].includes(request.method) &&
       request.headers.get('Origin') !== env.AUTH_ORIGIN
@@ -55,6 +66,11 @@ async function handle(request: Request, env: Env, ctx: ExecutionContext): Promis
     )
       throw new HttpError(503, 'UPLOADS_DISABLED');
     const actor = { id: session.user.id, email: session.user.email };
+    if (url.pathname === '/api/me' && request.method === 'GET')
+      return json({
+        id: actor.id,
+        username: displayName(session.user.email, session.user.name),
+      });
     if (url.pathname === '/api/invitations/accept' && request.method === 'POST')
       return await acceptInvitation(request, env, actor);
     const path = url.pathname.split('/').filter(Boolean);
@@ -98,7 +114,7 @@ export default {
     response.headers.set('X-Content-Type-Options', 'nosniff');
     response.headers.set(
       'Content-Security-Policy',
-      "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'",
+      "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; connect-src 'self' http://127.0.0.1:*; frame-ancestors 'none'; base-uri 'none'; form-action 'self'",
     );
     return response;
   },

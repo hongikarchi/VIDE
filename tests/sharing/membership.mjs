@@ -90,6 +90,7 @@ const runtimeOptions = {
           EMAIL: { type: 'send-email', dev: { remote: false } },
           AUTH_ORIGIN: { type: 'text', value: origin },
           AUTH_SECRET: { type: 'text', value: secret },
+          SIGNUP_CODE: { type: 'text', value: 'test-code' },
           EMAIL_FROM: { type: 'text', value: 'VIDE <noreply@example.com>' },
         },
       },
@@ -159,16 +160,17 @@ try {
       await db.prepare(statement).run();
   }
   const account = async (name) => {
-    const email = name + '@example.com',
+    const email = name + '@users.vide.invalid',
       password = randomBytes(20).toString('hex');
-    let response = await call('/api/auth/sign-up/email', {
+    let response = await call('/api/account/sign-up', {
       method: 'POST',
-      data: { name, email, password },
+      data: { username: name, password, code: 'test-code' },
     });
-    assert.equal(response.status, 200, JSON.stringify(response));
-    // Account verification itself is covered by the auth spike. No test-only product route.
-    await db.prepare('UPDATE user SET emailVerified=1 WHERE email=?').bind(email).run();
-    response = await call('/api/auth/sign-in/email', { method: 'POST', data: { email, password } });
+    assert.equal(response.status, 201, JSON.stringify(response));
+    response = await call('/api/account/sign-in', {
+      method: 'POST',
+      data: { username: name, password },
+    });
     assert.equal(response.status, 200, JSON.stringify(response));
     assert.ok(response.cookie);
     return { id: response.value.user.id, email, cookie: response.cookie, password };

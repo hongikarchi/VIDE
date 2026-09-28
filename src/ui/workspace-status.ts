@@ -1,8 +1,20 @@
 import { element as $, append as el } from './elements.ts';
-import { attachRemotePanel, remoteSession } from './remote-panel.ts';
+import { attachAccountPanel, remoteSession } from './remote-panel.ts';
 
+interface Options {
+  openFailure: (id: string) => void;
+  openAiSettings: () => void;
+  openExecutionLimits: () => void;
+  /** Account site of this PC when it is signed in (for "all projects" links). */
+  onAccount: (site: string | undefined) => void;
+}
 /** Status uses observed facts. Installation readiness never implies a document connection. */
-export function initializeWorkspaceStatus(openFailure: (id: string) => void) {
+export function initializeWorkspaceStatus({
+  openFailure,
+  openAiSettings,
+  openExecutionLimits,
+  onAccount,
+}: Options) {
   const footer = document.querySelector<HTMLElement>('.statusbar')!;
   const dialog = document.createElement('dialog');
   dialog.className = 'workspace-status-dialog';
@@ -24,25 +36,33 @@ export function initializeWorkspaceStatus(openFailure: (id: string) => void) {
   const connection = $('connection-status');
   const host = $('host-status');
   const auth = $('auth-status');
+  // One settings place: the VIDE account, AI, work limits, then status and problems.
+  const account = attachAccountPanel(
+    el('section', '', content, { class: 'remote-panel' }),
+    dialog,
+    (status) => onAccount(status.linked ? status.site : undefined),
+  );
+  const ai = el('section', '', content, { class: 'settings-ai' });
+  el('h3', 'AI 작업', ai);
+  const actions = el('div', '', ai, { class: 'settings-actions' });
+  for (const [label, id, action] of [
+    ['AI 계정 · 연결 설정', 'ai-settings', openAiSettings],
+    ['작업 상한 설정', 'execution-limits', openExecutionLimits],
+  ] as const) {
+    el('button', label, actions, { id, type: 'button' }).onclick = () => {
+      close();
+      action();
+    };
+  }
   // Keep existing status writers, with their detail now in the status dialog.
   const facts = el('section', '', content);
+  el('h3', '연결 상태', facts);
   facts.append(connection, host, auth);
   const display = el('section', '', content);
   display.hidden = true;
   const problems = el('section', '', content);
-  const actions = el('div', '', content, { class: 'settings-actions' });
-  attachRemotePanel(el('section', '', content, { class: 'remote-panel' }), dialog);
   // Pages opened through the tunnel cannot control the app, accounts or settings.
   if (remoteSession()) document.documentElement.dataset.remote = 'true';
-  for (const [label, id] of [
-    ['AI 계정 · 연결 설정', 'ai-settings'],
-    ['작업 상한 설정', 'execution-limits'],
-  ]) {
-    el('button', label, actions).onclick = () => {
-      close();
-      $(id!).click();
-    };
-  }
   let failures: { id: string; label: string }[] = [];
   const notifications: string[] = [];
   const providerButton = el('button', 'AI · 확인 중', footer, { 'aria-label': 'AI 연결 상태' });
@@ -59,9 +79,7 @@ export function initializeWorkspaceStatus(openFailure: (id: string) => void) {
     title.textContent = heading;
     if (!dialog.open) dialog.showModal();
   };
-  accountButton.onclick = () => {
-    $('ai-settings').click();
-  };
+  accountButton.onclick = () => openAiSettings();
   displayButton.onclick = () => open(displayButton, '모델 표시 상태');
   providerButton.onclick = () => open(providerButton, 'AI 연결 상태');
   hostButton.onclick = () => open(hostButton, '호스트 준비 상태');
@@ -110,6 +128,7 @@ export function initializeWorkspaceStatus(openFailure: (id: string) => void) {
   window.addEventListener('pagehide', () => observer.disconnect());
   update();
   return {
+    refreshAccount: () => account.refresh(),
     setDisplayCoverage(coverage?: {
       total: number;
       displayed: number;

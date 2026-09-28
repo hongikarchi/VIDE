@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { initial } from '../../src/ui/model.ts';
-import { draftSnapshot, restoreDraft, restoreSavedDraft } from '../../src/ui/draft-storage.ts';
+import { draftSnapshot, restoreDraft } from '../../src/ui/draft-storage.ts';
 
 test('draft restore preserves empty basis, settings and instructions but ignores persisted runtime state', () => {
   const draft = {
@@ -21,9 +21,6 @@ test('draft restore preserves empty basis, settings and instructions but ignores
   assert.equal(restored.messages, messages);
   assert.deepEqual(restored.instructions, ['높이 유지']);
   assert.equal('messages' in draftSnapshot(draft), false);
-  assert.throws(() =>
-    restoreSavedDraft({ version: 4, projectId: 'other', state: draft }, 'current', messages),
-  );
 });
 
 test('draft restore rejects invalid geometry and missing pin basis without retargeting', () => {

@@ -1,20 +1,24 @@
 import { HttpError, body, digest, json, text } from './http';
 import type { Env } from './auth';
 import type { Actor } from './projects';
+import { signIn } from './accounts';
 
-// Remote hosts: a desktop VIDE (with Rhino/CAD attached) pairs once, then reports its temporary
-// tunnel address by heartbeat. The owner opens it from any device with a one-minute signed token
-// that only that desktop can verify. The desktop does all work; this Worker only relays presence.
+// Work PCs: a desktop VIDE (with Rhino/CAD attached) signs in once with the account's ID and
+// password and receives a host key. It then reports by heartbeat that it is on, its local address
+// (for a browser on the same PC) and, when remote access is on, its temporary tunnel address.
+// Opening a project hands the browser a one-minute token signed with that PC's key, which only
+// that PC can verify. The PC does all the work; this Worker keeps the project list and presence.
 const ONLINE_MS = 45_000;
 const TOKEN_MS = 60_000;
-const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+const THUMBNAIL_BYTES = 160_000;
 
-interface HostRow {
+export interface HostRow {
   id: string;
   user_id: string;
   name: string;
   secret: string;
   url: string | null;
+  local_url: string | null;
   status: string | null;
   last_seen: number;
 }
@@ -40,7 +44,25 @@ async function hmac(secret: string, value: string) {
 }
 /** Only Cloudflare quick-tunnel addresses may be advertised, so the list cannot redirect elsewhere. */
 function tunnelUrl(value: unknown): string | null {
-  if (value === null) return null;
+  if (value === null || value === undefined) return null;
+  const url = parseUrl(value);
+  if (
+    url.protocol !== 'https:' ||
+    !/^[a-z0-9-]+\.trycloudflare\.com$/.test(url.hostname) ||
+    url.port
+  )
+    throw new HttpError(400, 'INVALID_URL');
+  return url.origin;
+}
+/** The local address is loopback only: a browser on another device can never be sent there. */
+function localUrl(value: unknown): string | null {
+  if (value === null || value === undefined) return null;
+  const url = parseUrl(value);
+  if (url.protocol !== 'http:' || url.hostname !== '127.0.0.1' || !url.port)
+    throw new HttpError(400, 'INVALID_URL');
+  return url.origin;
+}
+function parseUrl(value: unknown) {
   if (typeof value !== 'string' || value.length > 200) throw new HttpError(400, 'INVALID_URL');
   let url: URL;
   try {
@@ -48,70 +70,185 @@ function tunnelUrl(value: unknown): string | null {
   } catch {
     throw new HttpError(400, 'INVALID_URL');
   }
-  if (
-    url.protocol !== 'https:' ||
-    !/^[a-z0-9-]+\.trycloudflare\.com$/.test(url.hostname) ||
-    url.port ||
-    url.username ||
-    url.password ||
-    url.pathname !== '/' ||
-    url.search ||
-    url.hash
-  )
+  if (url.username || url.password || url.pathname !== '/' || url.search || url.hash)
     throw new HttpError(400, 'INVALID_URL');
-  return url.origin;
+  return url;
 }
-const online = (row: HostRow, now = Date.now()) => !!row.url && now - row.last_seen < ONLINE_MS;
+export const online = (row: HostRow, now = Date.now()) => now - row.last_seen < ONLINE_MS;
+const projectId = (value: unknown) => {
+  if (typeof value !== 'string' || !/^[A-Za-z0-9-]{8,64}$/.test(value))
+    throw new HttpError(400, 'INVALID_INPUT');
+  return value;
+};
 
-/** Desktop-to-Worker calls: pairing by one-time code, heartbeat by host key. No browser session. */
-export async function hostDeviceRoute(request: Request, env: Env, pathname: string) {
-  if (request.method !== 'POST') throw new HttpError(405, 'METHOD_NOT_ALLOWED');
+/** A one-minute token for the host's workspace, opening `project` there. */
+export async function openLinks(row: HostRow, project: string) {
+  const link = async (base: string | null) => {
+    if (!base) return null;
+    const payload = base64url(
+      JSON.stringify({ h: row.id, n: random(16), e: Date.now() + TOKEN_MS }),
+    );
+    const token = payload + '.' + (await hmac(row.secret, payload));
+    return `${base}/?project=${encodeURIComponent(project)}#r=${token}`;
+  };
+  return { hostId: row.id, remote: await link(row.url), local: await link(row.local_url) };
+}
+
+async function authenticateHost(request: Request, db: D1Database) {
+  const [id, secret] = (request.headers.get('Authorization') ?? '')
+    .replace(/^Bearer /, '')
+    .split('.');
+  const row = id
+    ? await db.prepare('SELECT * FROM remote_hosts WHERE id=?').bind(id).first<HostRow>()
+    : null;
+  // Compare digests so the check does not depend on where the strings first differ.
+  if (!row || !secret || (await digest(secret)) !== (await digest(row.secret)))
+    throw new HttpError(401, 'HOST_UNAUTHORIZED');
+  return row;
+}
+
+interface AuthHandler {
+  handler: (request: Request) => Promise<Response>;
+}
+/** Desktop-to-Worker calls: account login, then the host key. No browser session. */
+export async function hostDeviceRoute(
+  request: Request,
+  env: Env,
+  auth: AuthHandler,
+  path: string[],
+) {
   const db = env.DB;
-  if (pathname === '/api/hosts/pair') {
+  if (path[0] === 'login' && path.length === 1 && request.method === 'POST') {
     const input = await body(request);
-    const code = text(input.code, 20)
-        .toUpperCase()
-        .replace(/[^A-Z0-9]/g, ''),
-      name = text(input.name, 80);
-    const pairing = await db
-      .prepare('SELECT user_id,expires_at FROM remote_host_pairings WHERE code_hash=?')
-      .bind(await digest(code))
-      .first<{ user_id: string; expires_at: number }>();
-    if (!pairing || pairing.expires_at < Date.now()) throw new HttpError(404, 'PAIRING_NOT_FOUND');
+    const name = text(input.name, 80);
+    const response = await signIn(auth, request, env, input.username, input.password);
+    if (!response.ok) throw new HttpError(401, 'INVALID_LOGIN');
+    const reply = (await response.json()) as { token?: string; user?: { id?: string } };
+    const userId = reply.user?.id;
+    if (!userId) throw new HttpError(401, 'INVALID_LOGIN');
+    // The PC keeps only its host key; the browser session made by the check is discarded.
+    if (reply.token) await db.prepare('DELETE FROM session WHERE token=?').bind(reply.token).run();
     const id = crypto.randomUUID(),
       secret = random(32);
-    await db.batch([
-      db.prepare('DELETE FROM remote_host_pairings WHERE code_hash=?').bind(await digest(code)),
-      db
-        .prepare('INSERT INTO remote_hosts(id,user_id,name,secret,created_at) VALUES(?,?,?,?,?)')
-        .bind(id, pairing.user_id, name, secret, Date.now()),
-    ]);
+    await db
+      .prepare('INSERT INTO remote_hosts(id,user_id,name,secret,created_at) VALUES(?,?,?,?,?)')
+      .bind(id, userId, name, secret, Date.now())
+      .run();
     return json({ hostId: id, secret }, 201);
   }
-  if (pathname === '/api/hosts/heartbeat') {
-    const [id, secret] = (request.headers.get('Authorization') ?? '')
-      .replace(/^Bearer /, '')
-      .split('.');
-    const row = id
-      ? await db.prepare('SELECT * FROM remote_hosts WHERE id=?').bind(id).first<HostRow>()
-      : null;
-    // Compare digests so the check does not depend on where the strings first differ.
-    if (!row || !secret || (await digest(secret)) !== (await digest(row.secret)))
-      throw new HttpError(401, 'HOST_UNAUTHORIZED');
-    const input = await body(request),
-      url = tunnelUrl(input.url);
+  const row = await authenticateHost(request, db);
+  if (path[0] === 'heartbeat' && path.length === 1 && request.method === 'POST') {
+    const input = await body(request, 65536);
+    const offline = input.offline === true;
+    const url = offline ? null : tunnelUrl(input.url),
+      local = offline ? null : localUrl(input.local);
     const status = JSON.stringify(input.status ?? {});
     if (status.length > 8192) throw new HttpError(413, 'INPUT_TOO_LARGE');
-    await db
-      .prepare('UPDATE remote_hosts SET url=?,status=?,last_seen=? WHERE id=?')
-      .bind(url, status, url ? Date.now() : 0, id)
+    const now = Date.now();
+    const statements = [
+      db
+        .prepare('UPDATE remote_hosts SET url=?,local_url=?,status=?,last_seen=? WHERE id=?')
+        .bind(url, local, status, offline ? 0 : now, row.id),
+    ];
+    // Last work time per project, so the list shows recent work first.
+    const activity = input.activity;
+    if (activity && typeof activity === 'object' && !Array.isArray(activity))
+      for (const [id, at] of Object.entries(activity).slice(0, 200))
+        if (typeof at === 'number' && at > 0 && at <= now + 60_000)
+          statements.push(
+            db
+              .prepare(
+                `UPDATE projects SET updated_at=MAX(COALESCE(updated_at,0),?) WHERE id=? AND host_id=?`,
+              )
+              .bind(Math.floor(at), id, row.id),
+          );
+    await db.batch(statements);
+    const projects = await db
+      .prepare(
+        'SELECT id,name,deleted_at FROM projects WHERE host_id=? AND created_by=? ORDER BY created_at LIMIT 500',
+      )
+      .bind(row.id, row.user_id)
+      .all<{ id: string; name: string; deleted_at: number | null }>();
+    return json({
+      ok: true,
+      projects: projects.results.map((p) => ({ id: p.id, name: p.name, deleted: !!p.deleted_at })),
+    });
+  }
+  if (path[0] === 'projects' && path.length === 1 && request.method === 'POST') {
+    // A project created or renamed on the PC joins the account's list, keeping the PC's id.
+    const input = await body(request);
+    const id = projectId(input.id),
+      name = text(input.name, 200),
+      now = Date.now();
+    const existing = await db
+      .prepare('SELECT created_by,deleted_at FROM projects WHERE id=?')
+      .bind(id)
+      .first<{ created_by: string; deleted_at: number | null }>();
+    if (existing) {
+      if (existing.created_by !== row.user_id) throw new HttpError(409, 'PROJECT_CONFLICT');
+      await db
+        .prepare('UPDATE projects SET name=?,host_id=COALESCE(host_id,?) WHERE id=?')
+        .bind(name, row.id, id)
+        .run();
+      return json({ id, name, deleted: !!existing.deleted_at });
+    }
+    await db.batch([
+      db
+        .prepare(
+          'INSERT INTO projects(id,name,created_by,created_at,updated_at,host_id) VALUES(?,?,?,?,?,?)',
+        )
+        .bind(id, name, row.user_id, now, now, row.id),
+      db
+        .prepare("INSERT INTO project_members(project_id,user_id,role) VALUES(?,?,'owner')")
+        .bind(id, row.user_id),
+    ]);
+    return json({ id, name, deleted: false }, 201);
+  }
+  if (path[0] === 'projects' && path[2] === 'thumbnail' && path.length === 3) {
+    const id = projectId(path[1]);
+    if (request.method !== 'PUT') throw new HttpError(405, 'METHOD_NOT_ALLOWED');
+    const input = await body(request, THUMBNAIL_BYTES + 1024);
+    const image = input.image;
+    if (
+      typeof image !== 'string' ||
+      image.length > THUMBNAIL_BYTES ||
+      !/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(image)
+    )
+      throw new HttpError(400, 'INVALID_INPUT');
+    const result = await db
+      .prepare('UPDATE projects SET thumbnail=? WHERE id=? AND host_id=? AND created_by=?')
+      .bind(image, id, row.id, row.user_id)
       .run();
+    if (!result.meta.changes) throw new HttpError(404, 'PROJECT_NOT_FOUND');
     return json({ ok: true });
+  }
+  if (path[0] === 'self' && path.length === 1 && request.method === 'DELETE') {
+    await db.prepare('DELETE FROM remote_hosts WHERE id=?').bind(row.id).run();
+    return json({ removed: true });
   }
   throw new HttpError(404, 'NOT_FOUND');
 }
 
-/** Owner calls from a signed-in browser: list hosts, create a pairing code, open, remove. */
+export function hostView(row: HostRow, now = Date.now()) {
+  let status: unknown = {};
+  try {
+    status = JSON.parse(row.status ?? '{}');
+  } catch {
+    /* Status is advisory display data. */
+  }
+  const on = online(row, now);
+  return {
+    id: row.id,
+    name: row.name,
+    online: on,
+    remote: on && !!row.url,
+    local: on ? row.local_url : null,
+    lastSeen: row.last_seen || null,
+    status,
+  };
+}
+
+/** Owner calls from a signed-in browser: list PCs, open one, remove one. */
 export async function hostRoute(request: Request, env: Env, actor: Actor, path: string[]) {
   const db = env.DB;
   if (path.length === 0 && request.method === 'GET') {
@@ -120,33 +257,7 @@ export async function hostRoute(request: Request, env: Env, actor: Actor, path: 
       .bind(actor.id)
       .all<HostRow>();
     const now = Date.now();
-    return json({
-      hosts: rows.results.map((row) => {
-        let status: unknown = {};
-        try {
-          status = JSON.parse(row.status ?? '{}');
-        } catch {
-          /* Status is advisory display data. */
-        }
-        return {
-          id: row.id,
-          name: row.name,
-          online: online(row, now),
-          lastSeen: row.last_seen || null,
-          status,
-        };
-      }),
-    });
-  }
-  if (path.length === 1 && path[0] === 'pairings' && request.method === 'POST') {
-    const bytes = crypto.getRandomValues(new Uint8Array(8));
-    const code = Array.from(bytes, (n) => CODE_ALPHABET[n % CODE_ALPHABET.length]).join('');
-    const expiresAt = Date.now() + 10 * 60_000;
-    await db
-      .prepare('INSERT INTO remote_host_pairings(code_hash,user_id,expires_at) VALUES(?,?,?)')
-      .bind(await digest(code), actor.id, expiresAt)
-      .run();
-    return json({ code, expiresAt }, 201);
+    return json({ hosts: rows.results.map((row) => hostView(row, now)) });
   }
   const row = path[0]
     ? await db
@@ -155,16 +266,11 @@ export async function hostRoute(request: Request, env: Env, actor: Actor, path: 
         .first<HostRow>()
     : null;
   if (!row) throw new HttpError(404, 'HOST_NOT_FOUND');
-  if (path.length === 2 && path[1] === 'open' && request.method === 'POST') {
-    if (!online(row)) throw new HttpError(409, 'HOST_OFFLINE');
-    const payload = base64url(
-      JSON.stringify({ h: row.id, n: random(16), e: Date.now() + TOKEN_MS }),
-    );
-    const token = payload + '.' + (await hmac(row.secret, payload));
-    return json({ url: `${row.url}/#r=${token}` });
-  }
   if (path.length === 1 && request.method === 'DELETE') {
-    await db.prepare('DELETE FROM remote_hosts WHERE id=?').bind(row.id).run();
+    await db.batch([
+      db.prepare('UPDATE projects SET host_id=NULL WHERE host_id=?').bind(row.id),
+      db.prepare('DELETE FROM remote_hosts WHERE id=?').bind(row.id),
+    ]);
     return json({ removed: true });
   }
   throw new HttpError(405, 'METHOD_NOT_ALLOWED');

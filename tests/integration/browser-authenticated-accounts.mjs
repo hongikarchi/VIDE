@@ -96,7 +96,7 @@ try {
     assert.equal(saved.result.hostExecuted, native);
   };
   if (!native) await submit(1, 'default');
-  await page.locator('#draft-menu summary').click();
+  await page.locator('#workspace-settings').click();
   await page.locator('#ai-settings').click();
   const section = page
     .locator('section')

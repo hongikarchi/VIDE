@@ -103,24 +103,13 @@ try {
   await page.waitForTimeout(500);
   assert.equal(await page.locator('[data-view="axon"]').getAttribute('aria-pressed'), 'true');
   assert.notDeepEqual(await canvas.screenshot(), beforePan);
+  // Drafts save automatically per project (no manual save/load menu): a reload restores them.
   await page.locator('#body').fill('Saved draft');
-  await page.locator('#draft-menu summary').click();
-  await page.locator('#save').click();
-  await page.locator('#body').fill('Unsaved edit');
+  await page.reload();
+  await page.waitForFunction(() => document.querySelector('#body')?.value === 'Saved draft');
+  assert.equal(await page.locator('#draft-menu').count(), 0);
+  assert.equal(await page.locator('#quit-app').count(), 0);
   await page.locator('[data-tool="sketch"]').click();
-  await page.locator('#sketch-coordinates').evaluate((node) => (node.open = true));
-  await page.locator('#point-u').fill('1');
-  await page.locator('#point-v').fill('2');
-  await page.locator('#add-point').click();
-  await page.locator('#draft-menu summary').click();
-  page.once('dialog', (dialog) => dialog.dismiss());
-  await page.locator('#load').click();
-  assert.equal(await page.locator('#body').inputValue(), 'Unsaved edit');
-  assert.match(await page.locator('#sketch-points').textContent(), /1/);
-  page.once('dialog', (dialog) => dialog.accept());
-  await page.locator('#load').click();
-  assert.equal(await page.locator('#body').inputValue(), 'Saved draft');
-  assert.equal(await page.locator('#sketch-points').textContent(), '');
   await page.locator('#cancel-sketch').click();
   await page.locator('[data-view="plan"]').click();
   assert.equal(await page.locator('[data-view="plan"]').getAttribute('aria-pressed'), 'true');
@@ -291,7 +280,7 @@ try {
   await page.route('**/api/v1/providers', (route) =>
     route.fulfill({ status: 401, json: { code: 'UNAUTHORIZED' } }),
   );
-  await page.locator('#draft-menu summary').click();
+  await page.locator('#workspace-settings').click();
   await page.locator('#ai-settings').click();
   await page.waitForFunction(() => !document.querySelector('#auth-status').hidden);
   assert.match(
@@ -301,6 +290,32 @@ try {
   assert.equal(await page.locator('#request').isDisabled(), true);
   assert.equal(await page.locator('#body').inputValue(), 'Saved draft');
   assert.deepEqual(errors, []);
+  await page.unrouteAll();
+  await page.keyboard.press('Escape');
+  // New projects and renames use an inline field (browser prompts are blocked in embedded views).
+  await page.locator('#new-project').click();
+  await page.locator('#project-name').fill('Second project');
+  await page.keyboard.press('Enter');
+  await page.waitForFunction(
+    () =>
+      document.querySelector('#project-picker')?.selectedOptions[0]?.textContent ===
+      'Second project',
+  );
+  await page.locator('#rename-project').click();
+  await page.locator('#project-name').fill('Renamed project');
+  await page.keyboard.press('Enter');
+  await page.waitForFunction(
+    () =>
+      document.querySelector('#project-picker')?.selectedOptions[0]?.textContent ===
+      'Renamed project',
+  );
+  await page.reload();
+  await page.waitForFunction(
+    () =>
+      document.querySelector('#project-picker')?.selectedOptions[0]?.textContent ===
+      'Renamed project',
+  );
+  assert.equal(await page.locator('#project-picker option').count(), 2);
   console.log(
     'Workspace controls passed: guards, restore cancel/accept, slider, camera, tabs, resize, files, auth loss.',
   );

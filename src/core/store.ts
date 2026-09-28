@@ -176,6 +176,32 @@ export class Store {
     this.db.prepare('INSERT INTO projects VALUES(?,?)').run(row.id, row.name);
     return row;
   }
+  renameProject(id: string, name: unknown) {
+    this.project(id);
+    const row = { id, name: text(name, 200) };
+    this.db.prepare('UPDATE projects SET name=? WHERE id=?').run(row.name, id);
+    return row;
+  }
+  /** A project listed for this PC on the account site: create it here, or follow its name. */
+  ensureProject(id: string, name: string) {
+    const row = { id, name: text(name, 200) };
+    const current = this.db.prepare('SELECT name FROM projects WHERE id=?').get(id);
+    if (!current) this.db.prepare('INSERT INTO projects VALUES(?,?)').run(id, row.name);
+    else if (current.name !== row.name)
+      this.db.prepare('UPDATE projects SET name=? WHERE id=?').run(row.name, id);
+    return !current || current.name !== row.name;
+  }
+  /** Last request time per project (ms), for recent-first listing on the account site. */
+  projectActivity() {
+    const activity: Record<string, number> = {};
+    for (const row of this.db
+      .prepare('SELECT projectId, MAX(createdAt) AS at FROM workspace_requests GROUP BY projectId')
+      .all()) {
+      const at = Date.parse(String(row.at));
+      if (Number.isFinite(at)) activity[String(row.projectId)] = at;
+    }
+    return activity;
+  }
   listProjects() {
     return this.db
       .prepare('SELECT * FROM projects ORDER BY rowid')

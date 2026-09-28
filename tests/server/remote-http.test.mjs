@@ -57,17 +57,31 @@ const sign = (secret, payload) => {
   return encoded + '.' + createHmac('sha256', secret).update(encoded).digest('hex');
 };
 
-test('tunnel requests need a Worker-signed session and cannot reach app control', async (t) => {
+test('site-signed tokens open local and tunnel sessions; tunnel cannot reach app control', async (t) => {
   const directory = await mkdtemp(join(tmpdir(), 'vide-remote-'));
   const heartbeats = [];
+  const secret = randomBytes(32).toString('hex'),
+    hostId = '356ff01d-b586-460c-8e2b-8c9f3c083e96';
+  // A PC already signed in to the account (remote access off until turned on).
+  await writeFile(
+    join(directory, 'remote-host.json'),
+    JSON.stringify({
+      workerOrigin: 'https://sharing.example',
+      hostId,
+      secret,
+      name: 'Studio PC',
+      username: 'studio',
+      remote: false,
+    }),
+  );
   const app = await startServer({
     filename: join(directory, 'workspace.sqlite'),
     remoteOptions: {
       executable: 'cloudflared',
       spawnProcess: fakeTunnel,
       fetcher: async (url, init) => {
-        heartbeats.push({ url: String(url), body: JSON.parse(init.body) });
-        return new Response('{"ok":true}', { status: 200 });
+        heartbeats.push({ url: String(url), body: init.body ? JSON.parse(init.body) : undefined });
+        return new Response('{"ok":true,"projects":[]}', { status: 200 });
       },
     },
   });
@@ -75,12 +89,6 @@ test('tunnel requests need a Worker-signed session and cannot reach app control'
     await app.close();
     await rm(directory, { recursive: true, force: true });
   });
-  const secret = randomBytes(32).toString('hex'),
-    hostId = '356ff01d-b586-460c-8e2b-8c9f3c083e96';
-  await writeFile(
-    join(directory, 'remote-host.json'),
-    JSON.stringify({ workerOrigin: 'https://sharing.example', hostId, secret, name: 'Studio PC' }),
-  );
   const launch = new URL(app.launchUrl),
     port = Number(launch.port),
     local = launch.host;
@@ -91,17 +99,66 @@ test('tunnel requests need a Worker-signed session and cannot reach app control'
     body: { token: launch.hash.slice(1) },
   });
   const localCookie = localSession.headers['set-cookie'][0].split(';')[0];
+  // A linked PC reports presence with its local address even without the tunnel.
+  while (!heartbeats.length) await new Promise((r) => setTimeout(r, 10));
+  assert.equal(heartbeats[0].url, 'https://sharing.example/api/hosts/device/heartbeat');
+  assert.equal(heartbeats[0].body.local, launch.origin);
+  assert.equal(heartbeats[0].body.url, null);
+  // The account site may ask (cross-origin) whether this is the browser's own PC; others may not.
+  const hello = await call(port, '/api/v1/hello', {
+    host: local,
+    origin: 'https://sharing.example',
+  });
+  assert.equal(hello.status, 200);
+  assert.equal(hello.headers['access-control-allow-origin'], 'https://sharing.example');
+  assert.equal(JSON.parse(hello.text).hostId, hostId);
+  assert.equal(
+    (await call(port, '/api/v1/hello', { host: local, origin: 'https://evil.example' })).status,
+    403,
+  );
+  // Opening this PC from the account site locally: a signed token gives a local session.
+  const localToken = sign(secret, {
+    h: hostId,
+    n: randomBytes(16).toString('hex'),
+    e: Date.now() + 60_000,
+  });
+  const siteLogin = await call(port, '/api/v1/session', {
+    method: 'POST',
+    host: local,
+    origin: launch.origin,
+    body: { remoteToken: localToken },
+  });
+  assert.equal(siteLogin.status, 200, siteLogin.text);
+  assert.equal(siteLogin.headers['set-cookie'][0].split(';')[0], localCookie);
+  assert.equal(
+    (
+      await call(port, '/api/v1/session', {
+        method: 'POST',
+        host: local,
+        origin: launch.origin,
+        body: { remoteToken: localToken },
+      })
+    ).status,
+    401,
+  );
   // Before the tunnel runs, its Host is just an unknown host.
   assert.equal((await call(port, '/api/v1/projects', { host: TUNNEL })).status, 403);
-  const started = await call(port, '/api/v1/remote/start', {
+  const started = await call(port, '/api/v1/remote/remote', {
     method: 'POST',
     host: local,
     origin: launch.origin,
     cookie: localCookie,
-    body: {},
+    body: { enabled: true },
   });
   assert.equal(started.status, 200, started.text);
-  assert.equal(JSON.parse(started.text).url, `https://${TUNNEL}`);
+  let status;
+  do {
+    await new Promise((r) => setTimeout(r, 10));
+    status = JSON.parse(
+      (await call(port, '/api/v1/remote', { host: local, cookie: localCookie })).text,
+    );
+  } while (!status.running);
+  assert.equal(status.url, `https://${TUNNEL}`);
   assert.equal(heartbeats.at(-1).body.url, `https://${TUNNEL}`);
   const remote = { host: TUNNEL, origin: `https://${TUNNEL}` };
   // The web page itself loads (compressed) before login; the API does not.
@@ -171,8 +228,8 @@ test('tunnel requests need a Worker-signed session and cannot reach app control'
   );
   for (const [path, method] of [
     ['/api/v1/shutdown', 'POST'],
-    ['/api/v1/remote/stop', 'POST'],
-    ['/api/v1/remote', 'GET'],
+    ['/api/v1/remote/remote', 'POST'],
+    ['/api/v1/remote/unlink', 'POST'],
     ['/api/v1/settings/ai', 'PUT'],
     ['/api/v1/accounts/select', 'POST'],
     ['/mcp', 'POST'],
@@ -193,13 +250,15 @@ test('tunnel requests need a Worker-signed session and cannot reach app control'
     body: { name: 'From iPad' },
   });
   assert.equal(created.status, 201, created.text);
-  // Stopping the tunnel ends remote sessions and reports offline.
-  await call(port, '/api/v1/remote/stop', {
+  // Remote status (no secrets) is readable from the remote page for its settings panel.
+  assert.equal((await call(port, '/api/v1/remote', { ...remote, cookie })).status, 200);
+  // Turning remote access off ends remote sessions; the PC stays listed for local use.
+  await call(port, '/api/v1/remote/remote', {
     method: 'POST',
     host: local,
     origin: launch.origin,
     cookie: localCookie,
-    body: {},
+    body: { enabled: false },
   });
   assert.equal(heartbeats.at(-1).body.url, null);
   assert.equal((await call(port, '/api/v1/projects', { ...remote, cookie })).status, 403);

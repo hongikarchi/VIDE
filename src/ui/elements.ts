@@ -12,7 +12,6 @@ interface Controls {
   'point-u': HTMLInputElement;
   'point-v': HTMLInputElement;
   'attach-menu': HTMLDetailsElement;
-  'draft-menu': HTMLDetailsElement;
   request: HTMLButtonElement;
   pin: HTMLButtonElement;
   'add-request': HTMLButtonElement;

@@ -2,47 +2,62 @@ import { z } from 'zod';
 import { append as el } from './elements.ts';
 import { api } from './gateway.ts';
 
-// Settings section: pair this PC with the sharing site once, then turn remote access on so a
-// signed-in owner can open this workspace from another device (e.g. an iPad).
-const SHARING_ORIGIN = 'https://vide-sharing-staging.archivibe.workers.dev';
-const statusSchema = z.object({
-  paired: z.boolean(),
+// Settings section "VIDE 계정": sign this PC in with the account's ID and password. A signed-in
+// PC appears on the account website; its projects are listed there and open here (on this PC
+// directly, on other devices through remote access).
+export const SITE_ORIGIN = 'https://vide-sharing-staging.archivibe.workers.dev';
+export const accountStatusSchema = z.object({
+  linked: z.boolean(),
+  username: z.string().optional(),
   name: z.string().optional(),
-  workerOrigin: z.string().optional(),
+  site: z.string().optional(),
+  remote: z.boolean(),
   running: z.boolean(),
+  starting: z.boolean().optional(),
   url: z.string().optional(),
   lastHeartbeat: z.string().optional(),
   error: z.string().optional(),
 });
-type Status = z.infer<typeof statusSchema>;
+export type AccountStatus = z.infer<typeof accountStatusSchema>;
 const errorText: Record<string, string> = {
-  CLOUDFLARED_MISSING: 'cloudflared가 설치되지 않았습니다.',
-  TUNNEL_START_TIMEOUT: '터널 주소를 받지 못했습니다. 인터넷 연결을 확인하세요.',
-  TUNNEL_EXITED: '터널이 종료됐습니다. 다시 켜세요.',
-  HEARTBEAT_FAILED: '공유 사이트에 상태를 보내지 못했습니다.',
-  REMOTE_UNPAIRED: '공유 사이트에서 이 PC 등록이 해제됐습니다. 다시 등록하세요.',
-  PAIRING_NOT_FOUND: '등록 코드가 없거나 만료됐습니다.',
+  CLOUDFLARED_MISSING: '원격 접속 도구(cloudflared)가 설치되지 않았습니다.',
+  TUNNEL_START_TIMEOUT: '원격 주소를 받지 못했습니다. 인터넷 연결을 확인하세요.',
+  TUNNEL_UNREACHABLE: '원격 주소가 응답하지 않습니다. 잠시 후 다시 켜세요.',
+  TUNNEL_EXITED: '원격 접속이 끊겼습니다. 다시 켜세요.',
+  HEARTBEAT_FAILED: '웹사이트에 이 PC 상태를 보내지 못했습니다. 인터넷 연결을 확인하세요.',
+  ACCOUNT_UNLINKED: '웹사이트에서 이 PC가 로그아웃됐습니다. 다시 로그인하세요.',
+  PROJECT_SYNC_FAILED:
+    '프로젝트 목록을 웹사이트에 올리지 못했습니다. 잠시 후 자동으로 다시 맞춥니다.',
+};
+const loginError: Record<string, string> = {
+  INVALID_LOGIN: '아이디 또는 비밀번호를 확인하세요.',
+  SITE_UNREACHABLE: '웹사이트에 연결하지 못했습니다. 인터넷 연결을 확인하세요.',
 };
 
 /** True when this page itself was opened through the remote tunnel. */
 export const remoteSession = () => location.protocol === 'https:';
 
-export function attachRemotePanel(section: HTMLElement, dialog: HTMLDialogElement) {
-  if (remoteSession()) {
-    section.hidden = true;
-    return;
-  }
-  let status: Status | undefined,
+export function attachAccountPanel(
+  section: HTMLElement,
+  dialog: HTMLDialogElement,
+  onStatus: (status: AccountStatus) => void,
+) {
+  let status: AccountStatus | undefined,
     busy = false,
+    failure = '',
+    confirmUnlink = false,
     timer: ReturnType<typeof setInterval> | undefined;
   const run = async (action: () => Promise<unknown>) => {
     if (busy) return;
     busy = true;
+    failure = '';
     draw();
     try {
-      status = statusSchema.parse(await action());
+      status = accountStatusSchema.parse(await action());
+      onStatus(status);
     } catch (error) {
-      if (status) status = { ...status, error: error instanceof Error ? error.message : '실패' };
+      const code = (error as { code?: string }).code ?? '';
+      failure = loginError[code] || (error instanceof Error ? error.message : '실패');
     } finally {
       busy = false;
       draw();
@@ -51,71 +66,112 @@ export function attachRemotePanel(section: HTMLElement, dialog: HTMLDialogElemen
   const refresh = () => run(() => api('/remote'));
   function draw() {
     section.replaceChildren();
-    el('h3', '원격 접속 (iPad 등)', section);
+    el('h3', 'VIDE 계정', section);
     if (!status) {
       el('p', '확인 중…', section);
       return;
     }
-    if (status.error)
-      el('p', errorText[status.error] || status.error, section, { class: 'remote-error' });
-    if (!status.paired) {
+    if (failure) el('p', failure, section, { class: 'remote-error', role: 'alert' });
+    if (!status.linked) {
+      if (remoteSession()) {
+        el('p', '이 PC는 계정에 로그인돼 있지 않습니다.', section);
+        return;
+      }
       el(
         'small',
-        `공유 사이트(${SHARING_ORIGIN.replace('https://', '')})에 로그인해 "PC 등록 코드"를 만든 뒤 입력하세요.`,
+        '로그인하면 웹사이트에서 이 PC의 프로젝트 목록을 보고 열 수 있습니다. 아이패드 등 다른 기기에서도 열 수 있습니다.',
         section,
       );
-      const form = el('form', '', section, { class: 'remote-pair' });
-      const code = el('input', '', form, {
-        placeholder: '등록 코드',
-        'aria-label': '등록 코드',
-        maxlength: '20',
+      const form = el('form', '', section, { class: 'account-login' });
+      const username = el('input', '', form, {
+        placeholder: '아이디',
+        'aria-label': '아이디',
+        autocomplete: 'username',
+        autocapitalize: 'none',
+        required: '',
       });
-      const name = el('input', '', form, { 'aria-label': 'PC 이름', maxlength: '80' });
+      const password = el('input', '', form, {
+        type: 'password',
+        placeholder: '비밀번호',
+        'aria-label': '비밀번호',
+        autocomplete: 'current-password',
+        required: '',
+      });
+      const name = el('input', '', form, {
+        'aria-label': 'PC 이름',
+        title: '웹사이트의 작업 PC 목록에 보일 이름',
+        maxlength: '80',
+      });
       name.value = 'VIDE PC';
-      el('button', busy ? '등록 중…' : '이 PC 등록', form, { type: 'submit' });
+      el('button', busy ? '로그인 중…' : '로그인', form, { type: 'submit' });
       form.onsubmit = (event) => {
         event.preventDefault();
         void run(() =>
-          api('/remote/pair', 'POST', {
-            code: code.value.trim(),
+          api('/remote/link', 'POST', {
+            username: username.value.trim(),
+            password: password.value,
             name: name.value.trim() || 'VIDE PC',
           }),
         );
       };
+      const site = el('small', '', section);
+      site.append('계정이 없으면 ');
+      el('a', '웹사이트', site, { href: SITE_ORIGIN, target: '_blank', rel: 'noopener' });
+      site.append('에서 가입 코드로 만드세요.');
       return;
     }
+    el('p', `${status.username ?? ''} · ${status.name ?? ''}`, section, { class: 'account-who' });
+    if (status.error)
+      el('p', errorText[status.error] || status.error, section, { class: 'remote-error' });
+    const links = el('div', '', section, { class: 'settings-actions' });
+    el('a', '웹사이트에서 모든 프로젝트 보기', links, {
+      href: status.site ?? SITE_ORIGIN,
+      target: '_blank',
+      rel: 'noopener',
+    });
+    if (remoteSession()) return;
+    const remote = el('label', '', section, { class: 'remote-toggle' });
+    const toggle = el('input', '', remote, { type: 'checkbox' });
+    toggle.checked = status.remote;
+    toggle.disabled = busy;
+    remote.append(' 다른 기기에서 열기 (원격 접속)');
+    toggle.onchange = () =>
+      void run(() => api('/remote/remote', 'POST', { enabled: toggle.checked }));
     el(
-      'p',
-      status.running
-        ? `켜짐 · ${status.name} · 공유 사이트의 호스트 PC 목록에서 열 수 있습니다.`
-        : `꺼짐 · ${status.name}`,
+      'small',
+      !status.remote
+        ? '꺼짐 · 이 PC의 브라우저에서만 열 수 있습니다.'
+        : status.running
+          ? '켜짐 · 아이패드 등에서 웹사이트에 로그인해 열 수 있습니다.'
+          : status.starting
+            ? '켜는 중…'
+            : '켜기 실패 · 위 안내를 확인하세요.',
       section,
     );
-    if (status.running && status.lastHeartbeat)
-      el(
-        'small',
-        `마지막 상태 전송 ${new Date(status.lastHeartbeat).toLocaleTimeString()}`,
-        section,
-      );
     const actions = el('div', '', section, { class: 'settings-actions' });
-    el(
-      'button',
-      busy ? '처리 중…' : status.running ? '원격 접속 끄기' : '원격 접속 켜기',
-      actions,
-    ).onclick = () =>
-      void run(() => api(status!.running ? '/remote/stop' : '/remote/start', 'POST', {}));
-    el('button', '등록 해제', actions).onclick = () => {
-      if (confirm('이 PC의 원격 접속 등록을 해제할까요?'))
-        void run(() => api('/remote/unpair', 'POST', {}));
+    el('button', confirmUnlink ? '로그아웃 확인' : '이 PC 로그아웃', actions, {
+      type: 'button',
+      ...(confirmUnlink ? { class: 'danger' } : {}),
+    }).onclick = () => {
+      if (!confirmUnlink) {
+        confirmUnlink = true;
+        draw();
+        return;
+      }
+      confirmUnlink = false;
+      void run(() => api('/remote/unlink', 'POST', {}));
     };
   }
-  // Refresh while the dialog is open (heartbeat time, tunnel exits).
+  // Refresh while the dialog is open (heartbeat, tunnel start/exit).
   new MutationObserver(() => {
     clearInterval(timer);
+    confirmUnlink = false;
     if (dialog.open) {
       void refresh();
-      timer = setInterval(() => void refresh(), 5000);
+      timer = setInterval(() => void refresh(), 3000);
     }
   }).observe(dialog, { attributes: true, attributeFilter: ['open'] });
   draw();
+  // Called once the page has its session (asking earlier would read as a lost connection).
+  return { refresh };
 }

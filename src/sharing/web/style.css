@@ -86,6 +86,14 @@ textarea:focus-visible {
   margin: 12vh auto;
   padding: 24px;
 }
+.account h1 {
+  margin: 4px 0 24px;
+  font-size: 24px;
+}
+.account .switch {
+  margin: 16px 0 0;
+  color: var(--muted);
+}
 .account form {
   display: grid;
   gap: 16px;
@@ -323,39 +331,98 @@ textarea:focus-visible {
   min-height: 38px;
 }
 
-/* Work PCs: online hosts open this device into that PC's workspace. */
-.hosts {
-  display: grid;
-  gap: 8px;
-  padding-bottom: 12px;
-  border-bottom: 1px solid #dfe4df;
-}
-.hosts h2 {
-  font-size: 13px;
+/* Account site: top bar, work PCs and the project grid. */
+.wordmark {
+  font-weight: 800;
+  letter-spacing: 0.08em;
   margin: 0;
-}
-.hosts ul {
-  list-style: none;
-  margin: 0;
+  border: 0;
+  background: none;
   padding: 0;
-  display: grid;
-  gap: 6px;
+  font-size: 15px;
 }
-.hosts li {
+button.link {
+  border: 0;
+  background: none;
+  padding: 0;
+  color: var(--coral);
+  font-weight: 600;
+}
+button.ghost {
+  border-color: transparent;
+}
+.small {
+  font-size: 12px;
+}
+.site {
+  min-height: 100dvh;
+  background: #f7f7f4;
+}
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 5;
   display: flex;
   align-items: center;
-  gap: 8px;
-  justify-content: space-between;
+  gap: 12px;
+  height: 56px;
+  padding: 0 24px;
+  background: #fff;
+  border-bottom: 1px solid var(--line);
 }
-.hosts li div {
-  display: grid;
-  min-width: 0;
+.topbar .spacer {
+  flex: 1;
 }
-.hosts li small {
-  color: #66706a;
+.topbar .crumb {
+  color: var(--muted);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.topbar .user {
+  color: var(--muted);
+}
+.banner {
+  margin: 12px 24px 0;
+  padding: 10px 14px;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+.home {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 20px 24px 48px;
+}
+.home-pcs {
+  margin-bottom: 20px;
+}
+.pcs {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.pcs li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+}
+.pcs small {
+  color: var(--muted);
+}
+.badge {
+  font-size: 11px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: #292c2d;
+  color: #fff;
 }
 .host-dot {
   display: inline-block;
@@ -364,15 +431,169 @@ textarea:focus-visible {
   border-radius: 50%;
   background: #b9c0bb;
 }
-.hosts li[data-online='true'] .host-dot {
+.pcs li[data-online='true'] .host-dot {
   background: #2e9b5b;
 }
-.pairing {
+.pc-empty {
+  display: grid;
+  gap: 4px;
+  padding: 14px 16px;
+  background: #fff;
+  border: 1px dashed #c9cdc9;
+  border-radius: 8px;
+  color: var(--muted);
+}
+.pc-empty strong {
+  color: #292c2d;
+}
+.home-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+.home-head h1 {
+  margin: 0;
+  font-size: 22px;
+}
+.new-project {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.new-project input {
+  width: min(320px, 100%);
+}
+.empty-projects {
+  padding: 32px 0;
+}
+.project-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 20px;
+}
+.project-card {
+  position: relative;
+  display: grid;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  overflow: visible;
+}
+.project-card:hover {
+  border-color: #c9cdc9;
+  box-shadow: 0 4px 16px rgb(0 0 0 / 6%);
+}
+.card-open {
+  display: block;
+  padding: 0;
+  border: 0;
+  border-radius: 10px 10px 0 0;
+  background: #eef0ec;
+  overflow: hidden;
+}
+.card-open:hover {
+  background: #e8ebe6;
+}
+.card-open:disabled {
+  cursor: progress;
+}
+.thumb {
+  position: relative;
+  display: grid;
+  place-items: center;
+  aspect-ratio: 16 / 10;
+}
+.thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.thumb-empty {
+  font-size: 34px;
+  font-weight: 700;
+  color: #b9c0bb;
+}
+.thumb-state {
+  position: absolute;
+  inset: auto 8px 8px auto;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #292c2d;
+  color: #fff;
+  font-size: 12px;
+}
+.card-meta {
   display: grid;
   gap: 2px;
-  margin: 0;
+  padding: 10px 40px 12px 12px;
+  min-width: 0;
 }
-.pairing strong {
-  font-size: 20px;
-  letter-spacing: 2px;
+.card-meta strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.card-meta small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.card-more {
+  position: absolute;
+  right: 6px;
+  bottom: 12px;
+  padding: 2px 8px;
+  border-color: transparent;
+  background: transparent;
+}
+.card-menu {
+  position: absolute;
+  right: 6px;
+  bottom: -4px;
+  transform: translateY(100%);
+  z-index: 3;
+  display: grid;
+  min-width: 170px;
+  padding: 4px;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 12%);
+}
+.card-menu button {
+  border: 0;
+  text-align: left;
+}
+.card-menu .danger {
+  color: #b3261e;
+  font-weight: 600;
+}
+.review-page {
+  height: calc(100dvh - 56px);
+  display: grid;
+  background: #fff;
+}
+@media (max-width: 560px) {
+  .topbar {
+    padding: 0 16px;
+  }
+  .home {
+    padding: 16px 16px 40px;
+  }
+  .project-grid {
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 12px;
+  }
+  .banner {
+    margin: 12px 16px 0;
+  }
+  .card-more {
+    min-height: 36px;
+  }
+  .review-page {
+    height: auto;
+  }
 }

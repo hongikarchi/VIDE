@@ -2,7 +2,7 @@
 id: ARCH-01
 title: VIDE 기술 구조와 구현 계약
 status: review
-version: 0.41
+version: 0.42
 updated: 2026-09-28
 owner: agent:codex
 related: [SPEC-00, SPEC-02, SPEC-03, SPEC-04, PLAN, ADR-014, ADR-015, ADR-016, ADR-017]
@@ -575,13 +575,16 @@ AI 과업 완료 또는 명시적 저장/체크포인트 시 .3dm/.dwg와 데이
 R2 조건부 쓰기/체크섬은 [공식 Workers API](https://developers.cloudflare.com/r2/api/workers/workers-api-reference/)를 따른다. manifest는 경로·임의 속성을 받지 않지만 바이너리 자산의 공개 범위 검증은 별도 로컬 allowlist 내보내기 책임이다. 기존 내부 검토본의 sourceDocument나 입력 자료 전체를 그대로 게시하지 않는다. 해당 내보내기와 화면을 연결하기 전에는 사용자 자료 업로드 완료로 집계하지 않는다. 현재 검증·미시험은 PLAN §6.5와 공유 VERIFY를 따른다.
 
 
-### 원격 기기에서 작업 PC 열기
+### 계정 웹사이트와 작업 PC
 
-[PLAN-09](../plans/PLAN-09-remote-host.md)의 물리 계약이다. 작업은 언제나 로컬 제어 서버가 하고, 공유 Worker는 존재·주소만 중계한다.
+[PLAN-09](../plans/PLAN-09-remote-host.md)·[PLAN-10](../plans/PLAN-10-account-workspace.md)의 물리 계약이다. 작업(대화·모델·AI 실행)은 언제나 작업 PC의 로컬 제어 서버가 하고, 계정 사이트(공유 Worker)는 계정·프로젝트 목록·PC 존재와 주소만 가진다.
 
-- 로컬: `src/server/remote-access.ts`가 `cloudflared tunnel --no-autoupdate --url http://127.0.0.1:<port>`를 실행한다. 출력의 `https://*.trycloudflare.com` 주소와 `Registered tunnel connection`을 확인하고, 주소가 실제로 응답한 뒤 15초 주기 heartbeat를 시작한다. 실행 파일은 `VIDE_CLOUDFLARED` → `<데이터>/bin/cloudflared.exe` → Program Files 순으로 찾는다. 기기 키는 `<데이터>/remote-host.json`(0600)에 둔다.
-- Worker: `0005-remote-hosts.sql`의 `remote_hosts(id,user_id,name,secret,url,status,last_seen)`와 `remote_host_pairings(code_hash,user_id,expires_at)`. `POST /api/hosts/pairings`(로그인)가 10분짜리 8자리 코드를 만든다. `POST /api/hosts/pair`(코드)는 기기 키를 한 번 발급한다. `POST /api/hosts/heartbeat`(Bearer `hostId.secret`)는 임시 터널 주소만 받는다. `GET /api/hosts`는 45초 안에 상태를 보낸 기기를 켜짐으로 표시한다. `POST /api/hosts/:id/open`은 `base64url({h,n,e})` + HMAC-SHA256(기기 키) 토큰(60초)을 붙인 `https://…/#r=<token>`을 돌려준다.
-- 원격 세션: 요청의 Host가 현재 터널 주소이면 원격 요청이며 Origin은 `https://<터널>`이어야 한다. `POST /api/v1/session {remoteToken}`이 서명·만료(2분 이내)·nonce 재사용을 검사하고 `vide_remote` 쿠키(HttpOnly·Secure·SameSite=Strict, 12시간, 터널 종료 시 폐기)를 준다. 원격 세션은 `/api/v1/shutdown`, `/api/v1/remote*`, `/mcp`, `accounts`·`settings`·`extensions`의 쓰기를 쓰지 못한다. 교차 사이트 요청은 원격의 GET 화면 이동만 허용한다.
+- 계정: 아이디·비밀번호. Better Auth의 이메일 계정에 `<아이디>@users.vide.invalid`를 대응시킨다(`@`가 있는 입력은 기존 이메일 계정). `POST /api/account/sign-up {username,password,code}`는 `SIGNUP_CODE` 비밀값과 일치할 때만 계정을 만들고 `emailVerified=1`로 둔다. `POST /api/account/sign-in`은 Better Auth 로그인(속도 제한·쿠키)으로 전달한다. `/api/auth/sign-up/email` 직접 호출은 403이다. `GET /api/me`는 표시용 아이디를 준다.
+- 프로젝트: `0006-accounts.sql`이 `projects`에 `updated_at`·`host_id`·`deleted_at`·`thumbnail`을, `remote_hosts`에 `local_url`을 더하고 페어링 표를 지운다. `GET /api/projects`는 최근 작업 순이다. `POST`(이름, 선택 `hostId`; PC가 하나면 그 PC), `PATCH /:id`(이름), `DELETE /:id`(목록에서만 제거), `GET /:id/thumbnail`. `POST /:id/open`은 프로젝트의 PC(없으면 켜진 PC를 지정)가 켜져 있을 때 `{hostId, local, remote}`를 준다. 각각 `<주소>/?project=<id>#r=<token>`이며 토큰은 `base64url({h,n,e})` + HMAC-SHA256(PC 키), 60초다.
+- 작업 PC: `POST /api/hosts/device/login {username,password,name}`이 계정을 확인하고(확인용 세션은 즉시 삭제) PC 키를 한 번 발급한다. 이후 `Bearer hostId.secret`로 `device/heartbeat`(15초; `local`은 `http://127.0.0.1:<port>`만, `url`은 `https://*.trycloudflare.com`만, 프로젝트별 마지막 작업 시각)를 보내고 응답으로 그 PC의 프로젝트 목록을 받는다. `device/projects`(로컬 프로젝트 추가·이름, id 유지), `device/projects/:id/thumbnail`(160 KB 이하 data URL), `DELETE device/self`(로그아웃). 45초 안에 heartbeat가 있으면 켜짐, 터널 주소가 있으면 원격 가능이다.
+- 로컬: `src/server/remote-access.ts`가 PC 키를 `<데이터>/remote-host.json`(0600, 비밀번호 미저장)에 두고 시작 시 heartbeat와(원격 접속이 켜져 있으면) `cloudflared tunnel --no-autoupdate --url http://127.0.0.1:<port>`를 재개한다. 터널 주소는 `Registered tunnel connection`과 실제 응답을 확인한 뒤 알린다. heartbeat 응답의 프로젝트는 같은 id로 로컬에 만들거나 이름을 맞춘다. 로컬에서 만든·바꾼 프로젝트는 즉시 올린다. 기본 포트는 47821(사용 중이면 임의 포트)이고 로컬 세션 값은 `<데이터>/local-session.key`에 두어 재시작 뒤에도 열린 화면이 이어진다.
+- 같은 PC 판별: 사이트는 켜진 PC의 `local` 주소에 `GET /api/v1/hello`를 보낸다. 서버는 Origin이 연결된 사이트일 때만 CORS로 `{hostId}`를 답한다(사설망 사전 요청 허용). 일치하면 그 브라우저는 로컬 링크로, 아니면 원격 링크로 연다.
+- 세션: `POST /api/v1/session {remoteToken}`은 로컬 요청이면 서명·만료(2분 이내)·nonce 재사용을 검사하고 로컬 세션 쿠키를, 터널 Host 요청이면 `vide_remote` 쿠키(HttpOnly·Secure·SameSite=Strict, 12시간, 터널 종료 시 폐기)를 준다. 두 경우 모두 응답 전에 heartbeat로 사이트의 새 프로젝트를 받는다. 원격 세션은 `/api/v1/shutdown`, `/api/v1/remote*` 쓰기, `/mcp`, `accounts`·`settings`·`extensions`의 쓰기를 쓰지 못한다. 교차 사이트 요청은 API가 아닌 GET 화면 이동만 허용한다.
 - 전송: 원격 응답은 16 KB를 넘으면 gzip(level 4)으로 보낸다. `GET /api/v1/projects/:id/requests` 목록은 결과의 `scene`·`definitions`를 빼고 `sceneOmitted: true`를 붙이며, 화면은 표시할 요청만 단건 조회로 받는다.
 
 ## 7. 개발 기반과 변경 경계

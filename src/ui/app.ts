@@ -5,7 +5,7 @@ import { accountIndicator } from './account-indicator.ts';
 import { executionLimits } from '../contracts/execution-limits.ts';
 import { showExecutionLimits } from './execution-limits.tsx';
 import { requestConflict } from '../contracts/request-scope.ts';
-import { draftSnapshot, restoreDraft, restoreSavedDraft } from './draft-storage.ts';
+import { draftSnapshot, restoreDraft } from './draft-storage.ts';
 import { z } from 'zod';
 import { hostDocumentsSchema, type HostTarget } from '../contracts/host-documents.ts';
 import { element as $, append as el, readableError } from './elements.ts';
@@ -50,7 +50,6 @@ import {
   packet,
   attachSketch,
   attachBrushSketch,
-  storageKey,
 } from './model.ts';
 import { createObjectList, type SelectMode } from './object-list.ts';
 import { attachPinTokens, tokenLabels } from './pin-tokens.ts';
@@ -71,20 +70,23 @@ let project: { id: string; name: string } | undefined,
   displayedResult: string | undefined,
   selectedResult: string | null | undefined,
   draftSaved = false,
-  unreadableDraft = false;
+  unreadableDraft = false,
+  // Projects for the heading, and the account website when this PC is signed in.
+  projects: { id: string; name: string }[] = [],
+  accountSite: string | undefined;
 function currentProject() {
   if (!project) throw Error('프로젝트를 먼저 여세요.');
   return project;
 }
 let state = initial();
-$('execution-limits').onclick = () => {
+function openExecutionLimits() {
   const targetProject = project?.id;
   showExecutionLimits(executionLimits(state), (value) => {
     if (project?.id !== targetProject) return;
     state.executionLimits = value;
     render();
   });
-};
+}
 let selectedIds: string[] = [];
 // Set once the inline pin composer exists; render() may run before that.
 let refreshPinComposer = () => {};
@@ -104,14 +106,22 @@ const renderObjectList = createObjectList($('objects'), (ids, mode) => {
 let foregroundRequest: { id: string; selected: typeof selectedResult; draft: string } | undefined;
 const focusDraft = () => JSON.stringify({ draft: draftSnapshot(state), points, strokes });
 initializeWorkspacePanels();
-const workspaceStatus = initializeWorkspaceStatus((id) => {
-  selectedResult = id;
-  renderMessages();
-  if ($('right').hidden) $('toggle-right').click();
-  setMobileView('input');
-  document
-    .querySelector<HTMLElement>(`[data-request-id="${CSS.escape(id)}"]`)
-    ?.scrollIntoView({ block: 'nearest' });
+const workspaceStatus = initializeWorkspaceStatus({
+  openFailure: (id) => {
+    selectedResult = id;
+    renderMessages();
+    if ($('right').hidden) $('toggle-right').click();
+    setMobileView('input');
+    document
+      .querySelector<HTMLElement>(`[data-request-id="${CSS.escape(id)}"]`)
+      ?.scrollIntoView({ block: 'nearest' });
+  },
+  openAiSettings: () => openAiSettings(),
+  openExecutionLimits: () => openExecutionLimits(),
+  onAccount: (site) => {
+    accountSite = site;
+    renderHeading();
+  },
 });
 let tool: 'select' | 'pin' | 'sketch' = 'select',
   points: Point2[] = [],
@@ -737,7 +747,39 @@ function showResult(latest: (typeof state.messages)[number], incremental: boolea
     else viewport?.replace(result.scene, result.definitions);
     displayedResult = latest.id;
     render();
+    scheduleThumbnail();
   }
+}
+let thumbnailTimer: ReturnType<typeof setTimeout> | undefined,
+  thumbnailSent = 0;
+/** A small viewport image for the project card on the account website (signed-in PCs only). */
+function scheduleThumbnail() {
+  if (!accountSite || !project) return;
+  clearTimeout(thumbnailTimer);
+  const wait = Date.now() - thumbnailSent > 60_000 ? 1500 : 60_000;
+  thumbnailTimer = setTimeout(() => void sendThumbnail().catch(() => {}), wait);
+}
+async function sendThumbnail() {
+  if (!viewport || !project || !objects.length) return;
+  const target = project.id,
+    source = new Image();
+  source.src = viewport.capture();
+  await source.decode();
+  const canvas = document.createElement('canvas');
+  canvas.width = 480;
+  canvas.height = 300;
+  const scale = Math.max(480 / source.width, 300 / source.height),
+    width = source.width * scale,
+    height = source.height * scale;
+  canvas.getContext('2d')?.drawImage(source, (480 - width) / 2, (300 - height) / 2, width, height);
+  if (project?.id !== target) return;
+  thumbnailSent = Date.now();
+  // Plain fetch: a missed card image is not a work error worth reporting.
+  await fetch(`/api/v1/projects/${encodeURIComponent(target)}/thumbnail`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ image: canvas.toDataURL('image/jpeg', 0.72) }),
+  });
 }
 function renderConversation() {
   renderHistory($('conversation'), state.messages, models, project?.id, {
@@ -802,23 +844,6 @@ function renderConversation() {
   });
 }
 
-$('quit-app').onclick = async () => {
-  if (!confirm('VIDE를 종료할까요? 진행 중인 작업은 마무리하거나 중단하고 기록을 보존합니다.'))
-    return;
-  try {
-    await api('/shutdown', 'POST', {});
-    clearTimeout(toastTimer);
-    viewport?.dispose();
-    viewport = undefined;
-    document.body.replaceChildren();
-    const text = document.createElement('p');
-    text.textContent = 'VIDE 종료 중입니다. 이 창을 닫아도 됩니다.';
-    document.body.append(text);
-  } catch (cause) {
-    const error = readableError(cause);
-    message(error.message);
-  }
-};
 $('extensions').onclick = () => {
   if (!project) return;
   void showExtensions(
@@ -837,8 +862,7 @@ $('extensions').onclick = () => {
     },
   ).catch((error) => message(error.message));
 };
-$('ai-settings').onclick = () => {
-  $('draft-menu').open = false;
+function openAiSettings() {
   void showAiSettings((rows) => {
     $('connection-status').textContent = rows
       .map(
@@ -847,7 +871,7 @@ $('ai-settings').onclick = () => {
       )
       .join(' · ');
   }).catch((error) => message(error.message));
-};
+}
 const refreshAccount = accountIndicator(
   $('status-account'),
   () => models.find((m) => m.id === state.model)?.provider ?? '',
@@ -876,7 +900,8 @@ $('body').oninput = () => {
   const labels = tokenLabels(state.body);
   state.pins = state.pins.filter((pin) => !pin.label || labels.has(pin.label));
   render();
-  $('saved').textContent = draftSaved ? '초안 저장됨' : '저장 실패';
+  // Drafts save automatically per project; only a failure is worth showing.
+  $('saved').textContent = draftSaved ? '' : '초안 저장 실패';
   if (state.body.endsWith('@')) $('attach-menu').open = true;
 };
 /** Selected objects of the displayed model that can be pinned (they belong to a request basis). */
@@ -1189,49 +1214,6 @@ $('projection').onchange = () => {
       ],
     );
 };
-$('save').onclick = () => {
-  if (!project || busy) return;
-  try {
-    localStorage.setItem(
-      storageKey + ':' + currentProject().id,
-      JSON.stringify({ version: 4, projectId: currentProject().id, state: draftSnapshot(state) }),
-    );
-    $('saved').textContent = '저장됨';
-    $('draft-menu').open = false;
-    message('이 프로젝트의 초안을 이 브라우저에 저장했습니다.');
-  } catch {
-    message('저장 실패. 초안은 유지됩니다.');
-  }
-};
-$('load').onclick = () => {
-  if (!project || busy) return;
-  try {
-    const restored = restoreSavedDraft(
-      JSON.parse(localStorage.getItem(storageKey + ':' + currentProject().id) ?? 'null'),
-      currentProject().id,
-      state.messages,
-    );
-    if (
-      (draftHasInput(state) || pendingSketch()) &&
-      !confirm('현재 입력과 미첨부 스케치를 저장본으로 바꿀까요? 취소하면 그대로 유지됩니다.')
-    )
-      return;
-    state = restored;
-    selectedResult = state.baseRequestId ?? null;
-    displayedResult = undefined;
-    objects.splice(0, objects.length);
-    viewport?.replace([]);
-    points = [];
-    strokes = [];
-    $('body').value = state.body;
-    $('draft-menu').open = false;
-    render();
-    renderMessages();
-    message('초안을 불러왔습니다.');
-  } catch {
-    message('이 프로젝트에서 읽을 수 있는 저장본이 없습니다.');
-  }
-};
 function mobileView(view: MobileView) {
   setMobileView(view);
 }
@@ -1318,7 +1300,6 @@ document.addEventListener('keydown', (e) => {
       setTool('select');
     }
     $('attach-menu').open = false;
-    $('draft-menu').open = false;
     const effortMenu = document.querySelector<HTMLDetailsElement>('#effort-menu')!;
     if (effortMenu.open) {
       effortMenu.open = false;
@@ -1331,7 +1312,7 @@ document.addEventListener('keydown', (e) => {
   }
 });
 document.addEventListener('pointerdown', (e) => {
-  for (const id of ['effort-menu', 'attach-menu', 'draft-menu']) {
+  for (const id of ['effort-menu', 'attach-menu']) {
     const menu = document.getElementById(id);
     if (menu instanceof HTMLDetailsElement && menu.open && !menu.contains(e.target as Node))
       menu.open = false;
@@ -1354,19 +1335,39 @@ render();
 function selectProject(id: string) {
   location.search = '?project=' + encodeURIComponent(id);
 }
-const createProject = async () => {
-  const name = prompt('프로젝트 이름');
-  if (!name?.trim()) return;
+async function createProject(name: string) {
   try {
-    const p = z
-      .object({ id: z.string() })
-      .parse(await api('/projects', 'POST', { name: name.trim() }));
+    const p = z.object({ id: z.string() }).parse(await api('/projects', 'POST', { name }));
     location.search = '?project=' + encodeURIComponent(p.id);
   } catch (cause) {
-    const error = readableError(cause);
-    message(error.message);
+    message(readableError(cause).message);
   }
-};
+}
+async function renameProject(name: string) {
+  if (!project) return;
+  try {
+    const renamed = z
+      .object({ id: z.string(), name: z.string() })
+      .parse(await api(`/projects/${project.id}`, 'PUT', { name }));
+    project = renamed;
+    projects = projects.map((entry) => (entry.id === renamed.id ? renamed : entry));
+    document.title = `${renamed.name} · VIDE`;
+    renderHeading();
+  } catch (cause) {
+    message(readableError(cause).message);
+  }
+}
+function renderHeading() {
+  if (!project) return;
+  renderProjectHeading({
+    projects,
+    selected: project.id,
+    select: selectProject,
+    create: createProject,
+    rename: renameProject,
+    site: accountSite,
+  });
+}
 
 $('import-model').onclick = () => {
   if (project && !busy) $('model-file').click();
@@ -1631,6 +1632,7 @@ $('panel-pin').onclick = async () => {
 async function initializeWorkspace() {
   try {
     const linked = await connect();
+    void workspaceStatus.refreshAccount();
     const catalog = modelsSchema.parse(await api('/models'));
     models.splice(0, models.length, ...catalog);
     $('model').replaceChildren();
@@ -1640,12 +1642,9 @@ async function initializeWorkspace() {
     const lastSync = state.messages.filter((entry) => entry.source === 'document').at(-1);
     if (lastSync?.request.state === 'failed') viewportEmpty.sync('failed');
     void reviews.refresh().catch((error) => message(error.message));
-    renderProjectHeading({
-      projects: linked.projects,
-      selected: project.id,
-      select: selectProject,
-      create: createProject,
-    });
+    projects = linked.projects;
+    document.title = `${project.name} · VIDE`;
+    renderHeading();
     let restored = false;
     try {
       const raw = localStorage.getItem('vide:draft:' + project.id);

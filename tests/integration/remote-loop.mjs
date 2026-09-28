@@ -1,6 +1,8 @@
-// Remote loop through a real Cloudflare quick tunnel and the deployed sharing Worker:
-// sign in on an emulated iPad → host list → open the PC → load the model → sketch → send.
-// Needs VIDE_SHARING_TEST_ORIGIN (e.g. the staging URL). Uses a synthetic account, an isolated
+// Account loop through a real Cloudflare quick tunnel and the deployed account site: the PC signs
+// in with the account → an emulated iPad signs in → project list → open → model → sketch → send;
+// then a browser on the PC itself opens the same project locally (no tunnel).
+// Needs VIDE_SHARING_TEST_ORIGIN (e.g. the staging URL) and VIDE_SIGNUP_CODE. Uses a synthetic
+// account, an isolated
 // local server and a mocked AI provider; the user's workspace is never exposed.
 import assert from 'node:assert/strict';
 import { mkdir, readFile, writeFile, readdir } from 'node:fs/promises';
@@ -14,6 +16,8 @@ import { captureInput } from '../../src/server/import-model.ts';
 
 const sharing = process.env.VIDE_SHARING_TEST_ORIGIN;
 assert.ok(sharing, 'Set VIDE_SHARING_TEST_ORIGIN to the sharing Worker origin.');
+const signupCode = process.env.VIDE_SIGNUP_CODE;
+assert.ok(signupCode, 'Set VIDE_SIGNUP_CODE to the site sign-up code.');
 process.env.VIDE_CLOUDFLARED ||= join(
   process.env.LOCALAPPDATA ?? '',
   'VIDE',
@@ -38,7 +42,7 @@ const app = await startServer({
     },
   }),
 });
-let browser, hostId, cookie;
+let browser, cookie, local;
 const remoteCall = async (path, { method = 'GET', data } = {}) => {
   const response = await fetch(sharing + path, {
     method,
@@ -103,52 +107,62 @@ try {
     },
   });
   result.modelObjects = display?.objects.length ?? 1;
-  // 1. Owner account on the sharing site and a pairing code.
-  const email = `vide-remote-${randomUUID()}@example.com`,
+  // 1. An ID account on the site (sign-up code), signed in like the website does.
+  const username = `rt-${randomBytes(4).toString('hex')}`,
     password = randomBytes(20).toString('hex');
-  await remoteCall('/api/auth/sign-up/email', {
+  const signup = await remoteCall('/api/account/sign-up', {
     method: 'POST',
-    data: { name: 'Remote test', email, password },
+    data: { username, password, code: signupCode },
   });
-  const login = await remoteCall('/api/auth/sign-in/email', {
+  assert.equal(signup.status, 201, JSON.stringify(signup));
+  const login = await remoteCall('/api/account/sign-in', {
     method: 'POST',
-    data: { email, password },
+    data: { username, password },
   });
   assert.equal(login.status, 200, JSON.stringify(login));
-  const pairing = await remoteCall('/api/hosts/pairings', { method: 'POST', data: {} });
-  assert.equal(pairing.status, 201, JSON.stringify(pairing));
-  // 2. The desktop pairs and turns remote access on (as the settings panel does).
+  // 2. The PC signs in with the same ID (settings → VIDE 계정); remote access starts with it.
   const launch = new URL(app.launchUrl);
-  const local = async (path, data) => {
-    const response = await fetch(launch.origin + '/api/v1' + path, {
-      method: 'POST',
-      headers: { Origin: launch.origin, 'Content-Type': 'application/json', Cookie: localCookie },
-      body: JSON.stringify(data),
-    });
-    const value = await response.json();
-    assert.equal(response.status, 200, JSON.stringify(value));
-    return value;
-  };
   const session = await fetch(launch.origin + '/api/v1/session', {
     method: 'POST',
     headers: { Origin: launch.origin, 'Content-Type': 'application/json' },
     body: JSON.stringify({ token: launch.hash.slice(1) }),
   });
   const localCookie = session.headers.getSetCookie()[0].split(';')[0];
-  await local('/remote/pair', { code: pairing.value.code, name: 'Test PC', origin: sharing });
+  local = async (path, data) => {
+    const response = await fetch(launch.origin + '/api/v1' + path, {
+      method: data === undefined ? 'GET' : 'POST',
+      headers: { Origin: launch.origin, 'Content-Type': 'application/json', Cookie: localCookie },
+      ...(data === undefined ? {} : { body: JSON.stringify(data) }),
+    });
+    const value = await response.json();
+    assert.equal(response.status, 200, JSON.stringify(value));
+    return value;
+  };
   let began = Date.now();
-  const started = await local('/remote/start', {});
+  await local('/remote/link', { username, password, name: 'Test PC', origin: sharing });
+  let status;
+  for (let i = 0; i < 90; i++) {
+    status = await local('/remote');
+    if (status.running || (!status.starting && status.error)) break;
+    await new Promise((r) => setTimeout(r, 1000));
+  }
+  assert.equal(status.running, true, JSON.stringify(status));
   result.tunnelStartMs = Date.now() - began;
-  result.tunnelHost = new URL(started.url).host;
-  // 3. The host shows online in the owner's list.
+  result.tunnelHost = new URL(status.url).host;
+  // 3. The PC is on (local + remote) and its project is in the account list.
   let hosts;
   for (let i = 0; i < 40; i++) {
     hosts = (await remoteCall('/api/hosts')).value.hosts;
-    if (hosts[0]?.online) break;
+    if (hosts[0]?.remote) break;
     await new Promise((r) => setTimeout(r, 1000));
   }
   assert.equal(hosts[0].online, true);
-  hostId = hosts[0].id;
+  assert.equal(hosts[0].remote, true);
+  const listed = (await remoteCall('/api/projects')).value.projects;
+  assert.deepEqual(
+    listed.map((p) => p.name),
+    ['iPad loop'],
+  );
   // 4. An emulated iPad signs in, opens the PC and loads the model through the tunnel.
   browser = await chromium.launch({ channel: 'chrome', headless: true });
   const context = await browser.newContext({ ...devices['iPad Pro 11 landscape'] });
@@ -159,6 +173,8 @@ try {
     }),
   );
   const page = await context.newPage();
+  // The test runs on the PC itself; the iPad cannot reach this PC's loopback address.
+  await page.route(/127\.0\.0\.1/, (route) => route.abort());
   const errors = [];
   page.on('pageerror', (error) => errors.push(error.message));
   const cdp = await context.newCDPSession(page);
@@ -166,11 +182,12 @@ try {
   let transferred = 0;
   cdp.on('Network.loadingFinished', (event) => (transferred += event.encodedDataLength));
   await page.goto(sharing + '/');
-  await page.getByRole('button', { name: '열기' }).first().waitFor();
-  await page.screenshot({ path: join(directory, 'ipad-hosts.png') });
+  const card = page.getByRole('button', { name: 'iPad loop 열기' });
+  await card.waitFor();
+  await page.screenshot({ path: join(directory, 'ipad-projects.png') });
   began = Date.now();
   transferred = 0;
-  await page.getByRole('button', { name: '열기' }).first().click();
+  await card.click();
   await page.waitForURL(/trycloudflare\.com/, { timeout: 60_000 });
   await page.waitForFunction(() => document.querySelector('#body')?.disabled === false, null, {
     timeout: 120_000,
@@ -266,16 +283,39 @@ try {
   assert.equal(result.sketchReceived, true);
   await page.screenshot({ path: join(directory, 'ipad-sent.png') });
   result.errors = errors;
-  // 6. Turning remote access off reports the PC offline and ends the tunnel session.
-  await local('/remote/stop', {});
+  // 6. A browser on the PC itself opens the same project locally (no tunnel).
+  const desktop = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+  await desktop.grantPermissions(['local-network-access'], { origin: sharing }).catch(() => {});
+  await desktop.addCookies(
+    cookie.split('; ').map((pair) => {
+      const [name, ...value] = pair.split('=');
+      return { name, value: value.join('='), url: sharing };
+    }),
+  );
+  const pc = await desktop.newPage();
+  await pc.goto(sharing + '/');
+  await pc.getByText('이 PC', { exact: true }).waitFor({ timeout: 15_000 });
+  await pc.screenshot({ path: join(directory, 'pc-projects.png') });
+  began = Date.now();
+  await pc.getByRole('button', { name: 'iPad loop 열기' }).click();
+  await pc.waitForURL(/^http:\/\/127\.0\.0\.1/, { timeout: 30_000 });
+  await pc.waitForFunction(() => document.querySelector('#body')?.disabled === false, null, {
+    timeout: 60_000,
+  });
+  result.localOpenMs = Date.now() - began;
+  result.localOpened = true;
+  await pc.screenshot({ path: join(directory, 'pc-workspace.png') });
+  // 7. Remote access off: the PC stays on for local use but has no remote link.
+  await local('/remote/remote', { enabled: false });
   hosts = (await remoteCall('/api/hosts')).value.hosts;
-  result.offlineAfterStop = hosts[0].online === false;
-  assert.equal(result.offlineAfterStop, true);
+  result.remoteOffAfterStop = hosts[0].online === true && hosts[0].remote === false;
+  assert.equal(result.remoteOffAfterStop, true);
   result.passed = true;
   await writeFile(join(directory, 'result.json'), JSON.stringify(result, null, 2));
   console.log(JSON.stringify(result, null, 2));
 } finally {
-  if (hostId) await remoteCall(`/api/hosts/${hostId}`, { method: 'DELETE' }).catch(() => {});
+  // Sign the test PC out (removes it from the synthetic account).
+  if (local) await local('/remote/unlink', {}).catch(() => {});
   await browser?.close();
   await app.close();
 }

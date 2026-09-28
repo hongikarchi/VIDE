@@ -9,6 +9,7 @@ import { spawn } from 'node:child_process';
 import { startServer } from './server.ts';
 import { liveLaunch } from './lifecycle.ts';
 import { sdkOptions } from './sdk-options.ts';
+const DEFAULT_PORT = 47821;
 const directory = resolve(
   process.env.VIDE_DATA_DIR || join(process.env.LOCALAPPDATA || homedir(), 'VIDE'),
 );
@@ -32,13 +33,20 @@ function open(url: string) {
 }
 try {
   await mkdir(directory, { recursive: true });
+  // A fixed port keeps this PC's address (and the browser's login cookie) across restarts, so
+  // the account website can open it and an open page reconnects. Busy port: any free port.
+  const options = {
+    filename: join(directory, 'vide.sqlite'),
+    onShutdown: () => void close(),
+    sdkOptions: sdkOptions(directory),
+  };
   try {
-    app = await startServer({
-      filename: join(directory, 'vide.sqlite'),
-      port: Number(process.env.VIDE_PORT || 0),
-      onShutdown: () => void close(),
-      sdkOptions: sdkOptions(directory),
-    });
+    try {
+      app = await startServer({ ...options, port: Number(process.env.VIDE_PORT ?? DEFAULT_PORT) });
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'EADDRINUSE') throw error;
+      app = await startServer({ ...options, port: 0 });
+    }
   } catch (error) {
     if (errorCode(error) !== 'CONTROLLER_BUSY' || !process.argv.includes('--open')) throw error;
     const url = await liveLaunch(directory);

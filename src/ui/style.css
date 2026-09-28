@@ -125,10 +125,36 @@ aside {
   background: transparent;
   font-weight: 600;
 }
-#new-project {
+#new-project,
+#rename-project,
+.project-home {
   border: 0;
   padding: 4px;
-  font-size: 20px;
+  font-size: 18px;
+  line-height: 1;
+  color: inherit;
+  text-decoration: none;
+}
+#rename-project {
+  font-size: 15px;
+  opacity: 0.6;
+}
+.project-edit {
+  display: flex;
+  gap: 4px;
+  width: 100%;
+}
+.project-edit input {
+  flex: 1;
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  padding: 5px 8px;
+  font-weight: 600;
+}
+.project-edit button {
+  border: 0;
+  padding: 4px 6px;
 }
 #host-target {
   margin-top: 20px;
@@ -457,23 +483,6 @@ aside {
   letter-spacing: 0.09em;
   font-weight: 600;
   margin: 0;
-}
-#draft-menu {
-  position: relative;
-  z-index: 10;
-}
-#draft-menu summary {
-  list-style: none;
-  font-size: 18px;
-  padding: 5px;
-}
-#draft-menu[open] {
-  background: white;
-}
-#draft-menu button {
-  display: block;
-  white-space: nowrap;
-  font-size: 11px;
 }
 #conversation {
   flex: 1;
@@ -1180,28 +1189,6 @@ body.left-hidden.right-hidden main {
 }
 .ai-settings p {
   overflow-wrap: anywhere;
-}
-
-#draft-menu {
-  position: relative;
-}
-#draft-menu .draft-actions {
-  position: absolute;
-  top: calc(100% + 8px);
-  right: 0;
-  z-index: 20;
-  min-width: 150px;
-  padding: 5px;
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  background: white;
-  box-shadow: 0 6px 20px #0002;
-}
-#draft-menu .draft-actions button {
-  display: block;
-  width: 100%;
-  text-align: left;
-  border: 0;
 }
 
 .publication-objects {
@@ -2227,7 +2214,6 @@ body.panel-mode .app-shell {
 :root[data-theme='dark'] .composer,
 :root[data-theme='dark'] .menu,
 :root[data-theme='dark'] .effort-popover,
-:root[data-theme='dark'] .draft-actions,
 :root[data-theme='dark'] dialog {
   background: #1d2120;
   color: #dde3df;
@@ -2481,23 +2467,39 @@ body.panel-mode .chat-heading h2 {
   }
 }
 
-/* Remote access settings; local-only controls are hidden on pages opened through the tunnel. */
-.remote-panel .remote-pair {
-  display: flex;
+/* VIDE account settings; local-only controls are hidden on pages opened through the tunnel. */
+.remote-panel .account-login {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
   gap: 6px;
-  flex-wrap: wrap;
+  margin: 8px 0;
 }
-.remote-panel input {
+.remote-panel .account-login button {
+  grid-column: 1 / -1;
+}
+.remote-panel input:not([type='checkbox']) {
   border: 1px solid var(--line);
   border-radius: 5px;
-  padding: 5px 8px;
+  padding: 6px 8px;
   min-width: 0;
+}
+.remote-panel .account-who {
+  font-weight: 600;
+  margin: 4px 0;
+}
+.remote-panel .remote-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 10px;
+}
+.remote-panel .danger {
+  color: #b3452c;
+  border-color: #b3452c;
 }
 .remote-error {
   color: #b3452c;
 }
-:root[data-remote='true'] #quit-app,
-:root[data-remote='true'] #ai-settings,
-:root[data-remote='true'] .settings-actions {
+:root[data-remote='true'] .settings-ai {
   display: none !important;
 }
