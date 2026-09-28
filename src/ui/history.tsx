@@ -77,9 +77,12 @@ function Candidate({
     extension = result.host === 'zwcad' ? 'dwg' : '3dm';
   const missing = scene.filter((object) => !sceneRepresentation(object));
   const apply =
+    !result.applicationId &&
     (host === 'Rhino' || result.executionMode === 'sdk') &&
     (result.executionMode === 'sdk'
-      ? result.sourceDocument?.connection === 'owned-editor' && message.source !== 'document'
+      ? (result.sourceDocument?.connection === 'owned-editor' ||
+          result.sourceDocument?.connection === 'attached-editor') &&
+        message.source !== 'document'
       : (!result.sourceDocument &&
           objects.every((object) => ['box', 'polyline', 'extrude'].includes(object.kind))) ||
         (result.sourceDocument &&
@@ -88,6 +91,9 @@ function Candidate({
   return (
     <>
       <button onClick={() => actions.candidate(message.id)}>이 후보 보기</button>
+      {result.syncState === 'failed' ? (
+        <small>Rhino 반영 완료 · Sync를 다시 실행하세요. 파일 저장은 별도입니다.</small>
+      ) : null}
       <small>
         {host} {['file', 'document'].includes(message.source ?? '') ? '작업 사본' : '후보'} ·
         저장·재열기 검증됨
@@ -178,6 +184,12 @@ function Candidate({
                     ),
                   ),
                 );
+                Object.assign(
+                  request,
+                  workspaceRequestSchema.parse(
+                    await api(`/projects/${projectId}/requests/${message.id}`),
+                  ),
+                );
                 actions.changed();
               }}
             >
@@ -236,7 +248,7 @@ function Card({
             ? 'ZWCAD 작업 사본'
             : 'ZWCAD 참고 도면'
           : 'Rhino 작업 사본'
-        : `${models.find((model) => model.id === message.model)?.name || message.model} · ${message.effort} · ${message.permission === 'review' ? '검토만' : '후보 작업 허용'}`;
+        : `${models.find((model) => model.id === message.model)?.name || message.model} · ${message.effort} · ${message.applyToSource ? '연결 Rhino 수정' : message.permission === 'review' ? '검토만' : '후보 작업 허용'}`;
   return (
     <article className="chat-message" data-request-id={message.id}>
       <p>{message.body || '첨부한 문맥 검토'}</p>
@@ -332,7 +344,9 @@ function Card({
             <Candidate message={message} projectId={projectId} actions={actions} />
           ) : null}
           {result?.code ? <p>{errorLabels[result.code] || result.code}</p> : null}
-          {request.state === 'unknown' && result?.executionMode === 'sdk' ? (
+          {request.state === 'unknown' &&
+          !result?.applicationId &&
+          result?.executionMode === 'sdk' ? (
             <Action
               error={actions.error}
               run={async () => {

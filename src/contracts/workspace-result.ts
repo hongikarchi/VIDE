@@ -27,6 +27,9 @@ export const applicationResultSchema = z
 export const workspaceResultSchema = z
   .object({
     hostExecuted: z.boolean().optional(),
+    applicationId: z.string().optional(),
+    applicationState: z.string().optional(),
+    syncState: z.string().optional(),
     recovered: z.boolean().optional(),
     unchanged: z.boolean().optional(),
     host: z.enum(['rhino', 'zwcad']).optional(),

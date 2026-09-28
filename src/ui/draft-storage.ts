@@ -15,6 +15,7 @@ const draftSchema = z.object({
   model: z.string().min(1).max(110),
   effort: z.string().min(1).max(30),
   permission: z.enum(['review', 'candidate']),
+  applyToSource: z.boolean().optional(),
   baseRequestId: z.string().nullable().optional(),
   linkedTargets: requestInputSchema.shape.linkedTargets,
   coordinateBasis: requestInputSchema.shape.coordinateBasis,
@@ -49,7 +50,13 @@ export function restoreDraft(value: unknown, messages: DraftState['messages']) {
     if (!basis?.hostExecuted || !basis.objects?.some((object) => object.id === pin.id))
       throw Error('초안에 첨부된 객체의 기준을 확인할 수 없습니다.');
   }
-  return { ...draft, selected: null, baseRequestId: draft.baseRequestId ?? undefined, messages };
+  return {
+    ...draft,
+    applyToSource: false,
+    selected: null,
+    baseRequestId: draft.baseRequestId ?? undefined,
+    messages,
+  };
 }
 
 export function restoreSavedDraft(

@@ -98,7 +98,7 @@ export class SdkExecution {
     const captured = await this.editors.capture(target);
     const sourceDocument = {
       ...target,
-      connection: 'owned-editor',
+      connection: await this.editors.connectionKind(target.instance),
       documentHash: captured.documentHash,
       name: captured.name,
       units: captured.units,

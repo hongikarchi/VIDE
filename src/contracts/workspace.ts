@@ -36,6 +36,7 @@ export const requestInputSchema = z
     executionLimits: executionLimitsSchema.optional(),
     body: z.string().max(20000),
     permission: z.enum(['review', 'candidate']),
+    applyToSource: z.boolean().optional(),
     provider: z.enum(['claude-cli', 'codex-cli', 'extension']),
     accountProfileId: z
       .string()
@@ -59,6 +60,18 @@ export const requestInputSchema = z
   })
   .passthrough()
   .superRefine((input, context) => {
+    if (
+      input.applyToSource &&
+      (input.permission !== 'candidate' ||
+        (input.host || 'rhino') !== 'rhino' ||
+        !input.baseRequestId ||
+        input.linkedTargets ||
+        input.provider === 'extension')
+    )
+      context.addIssue({
+        code: 'custom',
+        message: 'A single explicit Rhino basis and candidate permission are required',
+      });
     if (
       input.linkedTargets &&
       (input.coordinateBasis !== 'shared-metre-axes' ||

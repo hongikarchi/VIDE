@@ -72,7 +72,7 @@ public sealed class WorkerCommand : Command
         return Result.Failure;
     }
 
-    private static async Task Serve(TcpClient client, string token, string session, int pid, string ticks, Func<JsonElement, object> dispatch)
+    internal static async Task Serve(TcpClient client, string token, string session, int pid, string ticks, Func<JsonElement, object> dispatch)
     {
         using (client)
         using (var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(60)))

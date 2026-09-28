@@ -17,6 +17,7 @@ export function interventionInput(original: RequestInput, value: unknown): Reque
   if (
     (original.host || 'rhino') !== (next.host || 'rhino') ||
     original.permission !== next.permission ||
+    Boolean(original.applyToSource) !== Boolean(next.applyToSource) ||
     (original.baseRequestId ?? null) !== (next.baseRequestId ?? null) ||
     JSON.stringify(original.linkedTargets) !== JSON.stringify(next.linkedTargets)
   )

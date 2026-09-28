@@ -2,7 +2,7 @@
 id: HOST-RHINO
 title: Rhino 호스트 계약과 검증 범위
 status: review
-version: 0.29
+version: 0.30
 updated: 2026-09-28
 owner: agent:codex
 related: [SPEC-01, SPEC-02, FR-03, FR-04, AC-24, AC-38, OQ-03, OQ-10]
@@ -14,9 +14,11 @@ related: [SPEC-01, SPEC-02, FR-03, FR-04, AC-24, AC-38, OQ-03, OQ-10]
 
 SDK의 AI query는 기본 50개·최대 100개/64 KiB 페이지와 ID 필터를 지원한다. 다음 페이지는 같은 revision을 요구한다. 소유 합성 문서 120개 실제 조회와 전체 후보 보존을 확인했다([검수](../../tdd/VERIFY-2026-09-24-local-product-completion.md)). 네이티브 가져오기 규모의 확대 검증과 구분한다.
 
-## 1. 현재 지원 상태 — 2026-09-25 기준
+## 1. 현재 지원 상태 — 2026-09-28 기준
 
-제품 경로는 VIDE가 기동·소유한 별도 Rhino 실행본의 자체 .NET 8 플러그인(`hosts/rhino/worker/`)이다. AI 코드는 작업 사본에서 실행하고, 편집 창(VIDE가 복사해 연 문서)에는 검토한 후보를 적용하는 고정 메서드만 제공한다. 사용자가 직접 연 외부 실행본에는 기존 RhinoMCP 호환 어댑터(TCP 1999)가 남아 있으며 제품 지원 경로로 확대하지 않는다.
+제품 경로는 VIDE가 기동·소유한 별도 Rhino 실행본의 자체 .NET 8 플러그인(`hosts/rhino/worker/`)이다. AI 코드는 작업 사본에서 실행하고, 편집 창(VIDE가 복사해 연 문서)에는 검토한 후보를 적용하는 고정 메서드만 제공한다. 현재 문서의 VIDEConnect/VIDEDisconnect 및 VIDESync/VIDELiveSync 연결도 자체 채널을 사용한다. 기존 RhinoMCP 호환 어댑터(TCP 1999)는 호환 경로다. 새 연결은 포트 하나를 공유하지 않고 실행본·문서·세션을 구분한다.
+
+현재 문서 연결의 합성 실증: mm 원본 무변경 연결, 24→48 m³ 네이티브 수정과 Undo, 요청별 수정 위임 후 자동 읽기, 직접 Move 뒤 Live Sync, 토큰/문서 불일치·생성 코드 거절, 재연결 후 이전 대상 거절. [검증 기록](../../tdd/VERIFY-2026-09-28-rhino-attached-sync.md). 실제 사용자 대형 문서 연결/화면 검수는 별도이며 합성 통과로 일반 BIM 정보·대형 파일 지원을 선언하지 않는다.
 
 | ID | 계약 | 현재 상태 | 남은 조건 |
 |---|---|---|---|

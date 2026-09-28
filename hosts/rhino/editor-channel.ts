@@ -51,6 +51,22 @@ export function editorMethods(
   call: (method: string, extra?: Record<string, unknown>) => Promise<unknown>,
 ) {
   return {
+    async attachedStatus() {
+      return editorReply(
+        z.object({
+          ok: z.literal(true),
+          documentId: z.number().int().positive(),
+          name: z.string(),
+          units: z.string(),
+          objectCount: z.number().int().nonnegative(),
+          modified: z.boolean(),
+          generation: z.number().int().nonnegative(),
+          live: z.boolean(),
+          busy: z.boolean(),
+        }),
+        await call('attachedStatus'),
+      );
+    },
     async inspectEditor() {
       return editorReply(editorSnapshotSchema, await call('inspectEditor'));
     },

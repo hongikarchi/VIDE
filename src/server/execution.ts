@@ -31,6 +31,11 @@ interface Host {
   ): Promise<unknown>;
 }
 interface Options {
+  applyAttached?: (
+    request: StoredWork,
+    result: Record<string, unknown>,
+    signal: AbortSignal,
+  ) => Promise<unknown>;
   profiles?: AccountProfiles;
   tools?: AgentTools;
   providerFactory?: (options: CliOptions & { provider: string }) => Provider;
@@ -66,6 +71,7 @@ import { geometryContract, interpret, protectGeometry } from '../core/geometry.t
 
 export class Execution {
   workspace: Workspace;
+  applyAttached?: Options['applyAttached'];
   profiles?: AccountProfiles;
   providerFactory: NonNullable<Options['providerFactory']>;
   host?: Host;
@@ -89,9 +95,11 @@ export class Execution {
       zwcadSdk,
       tools,
       profiles,
+      applyAttached,
     }: Options = {},
   ) {
     this.workspace = workspace;
+    this.applyAttached = applyAttached;
     this.profiles = profiles;
     this.providerFactory = providerFactory;
     this.host = host;
@@ -301,6 +309,8 @@ export class Execution {
     this.workspace.update(projectId, id, 'running');
     let hostIntent: Record<string, unknown> | undefined;
     try {
+      if (input.applyToSource && (!this.sdk || !this.applyAttached))
+        throw { code: 'EXECUTOR_NOT_READY' };
       const pins = pinsSchema.parse(input.pins);
       const items: { id: string; type: string; data: unknown }[] = [
         ...pins.map((data, i) => ({ id: `pin-${i}`, type: 'object-reference', data })),
@@ -385,7 +395,9 @@ export class Execution {
             this.workspace.update(projectId, id, 'running', progress);
           },
         });
-        this.workspace.update(projectId, id, 'succeeded', result);
+        if (input.applyToSource && result.hostExecuted)
+          await this.applyAttached!(request, result, controller.signal);
+        else this.workspace.update(projectId, id, 'succeeded', result);
         return;
       }
       const targetContract =

@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
-import { join, resolve, relative, isAbsolute } from 'node:path';
+import { join, resolve, relative, isAbsolute, dirname } from 'node:path';
 import { z } from 'zod';
-import { mkdir, readFile, writeFile, rename } from 'node:fs/promises';
+import { mkdir, readFile, writeFile, rename, readdir, lstat } from 'node:fs/promises';
 import { editorConnectionSchema, resumeEditor } from './editor-channel.ts';
 import { launchRhinoWorker } from './worker-client.ts';
 import type { HostTarget, HostDocuments } from '../../src/contracts/host-documents.ts';
@@ -17,6 +17,7 @@ interface Options {
   bootstrap: string;
   launch?: typeof launchRhinoWorker;
   resume?: typeof resumeEditor;
+  connectionDirectory?: string;
 }
 const candidateSchema = z.object({
   filename: z.string(),
@@ -36,6 +37,7 @@ export class EditorSessions {
   private options: Options;
   private ready: Promise<void> | undefined;
   private writes = Promise.resolve();
+  private attached = new Map<string, Worker>();
   constructor(options: Options) {
     this.options = options;
   }
@@ -60,6 +62,43 @@ export class EditorSessions {
       this.sessions.set(worker.identity.pid + ':' + worker.identity.startTicks, worker);
     }
   }
+  private async discover() {
+    const directory =
+      this.options.connectionDirectory ||
+      join(dirname(this.options.directory), 'rhino-connections');
+    let files: string[];
+    try {
+      if ((await lstat(directory)).isSymbolicLink()) throw failure('EDITOR_REGISTRY_INVALID');
+      files = await readdir(directory);
+    } catch (error) {
+      if (error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT') {
+        this.attached.clear();
+        return;
+      }
+      throw error;
+    }
+    const next = new Map<string, Worker>();
+    for (const file of files.filter((name) => /^[a-f0-9-]{36}\.json$/.test(name)).slice(0, 100)) {
+      try {
+        const path = join(directory, file),
+          info = await lstat(path);
+        if (!info.isFile() || info.isSymbolicLink() || info.size > 8192) continue;
+        const connection = editorConnectionSchema.parse(JSON.parse(await readFile(path, 'utf8')));
+        if (file !== connection.identity.sessionId + '.json') continue;
+        const worker = (this.options.resume || resumeEditor)(connection, this.options.executable);
+        const instance =
+          worker.identity.pid + ':' + worker.identity.startTicks + ':' + worker.identity.sessionId;
+        next.set(instance, worker);
+      } catch {
+        /* Invalid or concurrently removed discovery files never become trusted channels. */
+      }
+    }
+    this.attached = next;
+  }
+  async connectionKind(instance: string) {
+    await this.discover();
+    return this.attached.has(instance) ? 'attached-editor' : 'owned-editor';
+  }
   private persist() {
     const save = async () => {
       const data = JSON.stringify(
@@ -74,7 +113,8 @@ export class EditorSessions {
   }
   async has(instance: string) {
     await this.restore();
-    return this.sessions.has(instance);
+    await this.discover();
+    return this.sessions.has(instance) || this.attached.has(instance);
   }
   async open(source: { filename: string; fileHash: string }) {
     await this.restore();
@@ -95,18 +135,21 @@ export class EditorSessions {
   }
   private async get(target: HostTarget) {
     await this.restore();
-    const worker = this.sessions.get(target.instance);
+    await this.discover();
+    const worker = this.sessions.get(target.instance) || this.attached.get(target.instance);
     if (!worker || worker.identity.documentId !== target.documentId)
       throw failure('STALE_CONNECTION');
     return worker;
   }
-  async list(): Promise<HostDocuments | null> {
+  async list(attachedOnly = false): Promise<HostDocuments | null> {
     await this.restore();
     const documents: HostDocuments['documents'] = [];
     let changed = false;
-    for (const [instance, worker] of this.sessions) {
+    await this.discover();
+    for (const [instance, worker] of [...(attachedOnly ? [] : this.sessions), ...this.attached]) {
       try {
-        const snapshot = await worker.inspectEditor();
+        const external = this.attached.has(instance);
+        const snapshot = external ? await worker.attachedStatus() : await worker.inspectEditor();
         documents.push({
           instance,
           id: snapshot.documentId,
@@ -114,6 +157,11 @@ export class EditorSessions {
           units: snapshot.units,
           objectCount: snapshot.objectCount,
           modified: snapshot.modified,
+          host: 'rhino',
+          connection: external ? 'attached-editor' : 'owned-editor',
+          ...('generation' in snapshot
+            ? { generation: snapshot.generation, live: snapshot.live, hostBusy: snapshot.busy }
+            : {}),
         });
       } catch (error) {
         if (

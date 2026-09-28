@@ -116,7 +116,16 @@ const reviews = initializeReviews(
 );
 initializeDocuments(
   message,
-  async (target) => {
+  async (target, automatic = false) => {
+    if (
+      automatic &&
+      (!project ||
+        busy ||
+        draftHasInput(state) ||
+        points.length ||
+        state.messages.some((m) => m.request && ['queued', 'running'].includes(m.request.state)))
+    )
+      return false;
     if (!project || busy) throw Error('현재 작업이 끝난 뒤 가져오세요.');
     busy = true;
     render();
@@ -126,8 +135,13 @@ initializeDocuments(
         ...target,
         id: crypto.randomUUID(),
       });
+      if (!request.result?.hostExecuted)
+        throw Error(errors[request.result?.code ?? ''] || 'Sync 실패');
       state.messages.push(requestMessage(request));
-      if (request.result?.hostExecuted) {
+      if (
+        request.result?.hostExecuted &&
+        (!automatic || (!draftHasInput(state) && !points.length))
+      ) {
         selectedResult = request.id;
         state.selected = null;
       }
@@ -245,7 +259,21 @@ function render(rebuildRequests = true) {
   $('body').disabled = !ready;
   for (const id of ['permission', 'model', 'effort'] as const) $(id).disabled = !ready;
   if (unreadableDraft && draftHasInput(state)) unreadableDraft = false;
-  if (!draftHasInput(state) && displayedResult) state.baseRequestId = displayedResult;
+  if (!draftHasInput(state) && displayedResult) {
+    const sourceOf = (id: string | null | undefined) =>
+      state.messages.find((m) => m.id === id)?.request.result?.sourceDocument;
+    const before = sourceOf(state.baseRequestId),
+      after = sourceOf(displayedResult);
+    if (
+      state.applyToSource &&
+      (!before ||
+        !after ||
+        before.instance !== after.instance ||
+        before.documentId !== after.documentId)
+    )
+      state.applyToSource = false;
+    state.baseRequestId = displayedResult;
+  }
   if (rebuildRequests) renderRequests(state, render);
   renderActiveWork(state.messages, interventionReason, (id) => {
     void submitRequest(id);
@@ -338,7 +366,7 @@ function render(rebuildRequests = true) {
   $('linked-hint').textContent =
     linkedCandidates(state).length < 2 ? '실행에 성공한 SDK 후보 2개가 필요합니다.' : '';
 
-  $('permission').value = state.permission;
+  $('permission').value = state.applyToSource ? 'apply' : state.permission;
   const active = state.messages.find((m) => m.id === displayedResult)?.request;
   renderInspector(
     objects.find((o) => o.id === state.selected),
@@ -563,7 +591,10 @@ $('effort').oninput = () => {
   render();
 };
 $('permission').onchange = () => {
-  state.permission = z.enum(['review', 'candidate']).parse($('permission').value);
+  state.applyToSource = $('permission').value === 'apply';
+  state.permission = state.applyToSource
+    ? 'candidate'
+    : z.enum(['review', 'candidate']).parse($('permission').value);
   render();
 };
 $('body').oninput = () => {
@@ -582,6 +613,7 @@ function interventionReason(id: string): string | undefined {
   if (
     (original.host || 'rhino') !== state.host ||
     original.permission !== state.permission ||
+    Boolean(original.applyToSource) !== Boolean(state.applyToSource) ||
     (original.baseRequestId ?? null) !== (state.baseRequestId ?? null) ||
     JSON.stringify(original.linkedTargets) !== JSON.stringify(draft.linkedTargets)
   )

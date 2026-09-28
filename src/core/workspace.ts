@@ -148,6 +148,23 @@ export class Workspace {
     const baseline = targets ? undefined : this.basis(projectId, input);
     if (!targets && input.baseRequestId && !baseline?.result?.hostExecuted) fail('STALE_REFERENCE');
     if (baseline && (baseline.result?.host || 'rhino') !== target) fail('TARGET_MISMATCH');
+    if (input.applyToSource) {
+      const source = z
+        .object({
+          connection: z.literal('attached-editor'),
+          instance: z.string(),
+          documentId: z.number(),
+          documentHash: z.string(),
+        })
+        .safeParse(baseline?.result?.sourceDocument);
+      if (
+        !source.success ||
+        baseline?.state !== 'succeeded' ||
+        !baseline.result?.verified ||
+        baseline.result.executionMode !== 'sdk'
+      )
+        fail('STALE_REFERENCE');
+    }
     for (const value of input.pins) {
       const parsedPin = pinSchema.safeParse(value);
       if (!parsedPin.success) fail('STALE_REFERENCE');

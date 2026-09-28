@@ -2,8 +2,8 @@
 id: ARCH-01
 title: VIDE 기술 구조와 구현 계약
 status: review
-version: 0.31
-updated: 2026-09-25
+version: 0.32
+updated: 2026-09-28
 owner: agent:codex
 related: [SPEC-00, SPEC-02, SPEC-03, SPEC-04, PLAN, ADR-014, ADR-015, ADR-016, ADR-017]
 ---
@@ -597,3 +597,13 @@ PLAN-06의 프로필 실행은 서버가 선택한 절대 configDirectory를 Cli
 ### ZWCAD의 평면 LINE 표현
 
 모델 공간 LINE은 기존 뷰어의 `kind=polyline` 두 점 표현으로 정규화하고 scene의 `nativeType=Line`으로 원래 유형을 보존한다. `area=null`, 길이는 원본 단위를 m로 환산한다. 편집 가능한 mm 문서가 LINE을 포함하면 `dwgEditMode=linear-entities-v1`, 기존 Polyline 전용 문서는 `polyline-vertices-v1`을 유지한다. 혼합 모드는 자체 SDK/고정 적용만 허용하고 레거시 정점 템플릿 계약은 바꾸지 않는다. 고정 적용은 같은 Handle의 Entity 타입이 달라졌으면 쓰기 전 거절한다. LINE은 시작/끝점, Polyline은 기존 정점 복사를 사용하고 공통 표시 속성은 Entity 단위로 보존한다.
+
+## 현재 Rhino 연결 채널
+
+기존 .NET 8 RHP에 VIDEConnect/VIDEDisconnect/VIDESync/VIDELiveSync 명령을 추가한다. Connect는 현재 RhinoDoc에만 인증된 loopback TCP의 고정 EditorExecutor를 붙이며 생성 코드를 실행하는 WorkerExecutor를 노출하지 않는다. 프로세스 시작 시각·실행 경로·리스너 PID·문서 serial·새 sessionId를 검증한다. 사용자의 Rhino를 채택하여 종료할 수 있는 핸들은 만들지 않는다.
+
+현재 사용자 LocalAppData/VIDE/rhino-connections 아래에 세션별 연결 기록을 원자적으로 등록한다. 토큰은 로컬 연결 기록에만 있으며 브라우저/AI/공유 응답에 전달하지 않는다. 제어기는 직접 실행 경로/소켓 소유를 검증한 기록만 발견하고 외부 연결은 소유 창 레지스트리에 복제하지 않는다. 외부 instance에는 새 sessionId도 포함하여 재연결 전 후보를 차단한다. 시험은 별도 연결 디렉터리를 환경 변수로 지정한다.
+
+플러그인 변경 이벤트는 1초 이상 idle 후 세대를 갱신하고, 제어 화면은 가벼운 연결 상태를 주기 조회한다. 전체 모델 취득은 Sync 요청 또는 Live Sync 변경 세대가 있을 때만 기존 capture/import 경로로 수행한다. 전체 기하 해시는 매 상태 조회마다 계산하지 않는다. 적용/명령 중 취득은 보류하고 자동 취득은 단일 실행·초안 보호·실패 후 수동 재개를 따른다.
+
+연결 Rhino 수정은 요청의 `applyToSource: true`와 `permission: candidate`로 기록한다. 명시적 baseRequestId의 attached-editor Rhino 캡처만 허용하고 개입 시 동일 권한을 유지한다. Execution은 검증 후보를 먼저 영속화하고 Applications.prepare/confirm을 호출한다. 적용 식별자와 결과를 남기고 성공 후 captureEditor로 갱신한다. 쓰기 결과 불명확 시 후보를 보존하고 동일 적용 영수증을 조회한다.

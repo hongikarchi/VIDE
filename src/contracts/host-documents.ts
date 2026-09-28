@@ -1,6 +1,6 @@
 import { z } from 'zod';
 export const hostTargetSchema = z.object({
-  instance: z.string().regex(/^\d+:\d+$/),
+  instance: z.string().regex(/^\d+:\d+(?::[a-f0-9-]{36})?$/),
   documentId: z.number().int().positive().max(4294967295),
 });
 export type HostTarget = z.infer<typeof hostTargetSchema>;
@@ -15,6 +15,10 @@ export const hostDocumentsSchema = z.object({
       objectCount: z.number().int().nonnegative(),
       modified: z.boolean().nullable(),
       host: z.enum(['rhino', 'zwcad']).optional(),
+      connection: z.enum(['attached-editor', 'owned-editor']).optional(),
+      generation: z.number().int().nonnegative().optional(),
+      live: z.boolean().optional(),
+      hostBusy: z.boolean().optional(),
     }),
   ),
 });

@@ -54,6 +54,10 @@ export const labels: Record<string, string> = {
   unknown: '호스트 결과 확인 필요',
 };
 export const errors: Record<string, string> = {
+  APPLIED_SYNC_FAILED:
+    'Rhino 반영은 완료됐습니다. Sync를 다시 실행하세요. 모델링을 다시 요청하지 않아도 됩니다.',
+  APPLICATION_FAILED: '원본 반영에 실패했습니다. 후보와 적용 결과를 확인하세요.',
+  HOST_BUSY: 'Rhino 명령이 끝난 뒤 다시 Sync하세요.',
   PROFILE_SWITCH_PENDING: '계정 전환 대기 중입니다. 기존 작업이 끝난 뒤 보내세요.',
   PROFILE_IN_USE: '이 공급자의 작업을 마친 뒤 계정을 변경하세요.',
   PROFILE_LOGOUT_REQUIRED: '먼저 이 계정을 로그아웃하고 완료 여부를 확인하세요.',

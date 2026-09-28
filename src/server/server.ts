@@ -1,3 +1,4 @@
+import { applyAttachedCandidate } from './attached-application.ts';
 import { AccountProfiles } from '../ai/account-profiles.ts';
 import { AccountLogin } from '../ai/account-login.ts';
 import { z } from 'zod';
@@ -170,6 +171,10 @@ export async function startServer({
     );
   });
   const execution = new Execution(workspace, {
+    applyAttached: sdk
+      ? (request, result, signal) =>
+          applyAttachedCandidate(workspace, applications, sdk, request, result, signal)
+      : undefined,
     profiles,
     tools: agentTools,
     providerFactory,
@@ -561,6 +566,10 @@ export async function startServer({
         send(200, await execution.models());
         return;
       }
+      if (url.pathname === '/api/v1/host/attached-documents' && request.method === 'GET') {
+        send(200, (await sdk?.editors.list(true)) || { instance: '1:1', documents: [] });
+        return;
+      }
       if (url.pathname === '/api/v1/host/documents' && request.method === 'GET') {
         const rhinoOwned = await sdk?.editors.list();
         const cadOwned = (await zwcadSdk?.editors.list()) || [];
@@ -635,7 +644,40 @@ export async function startServer({
         );
       if (application) {
         if (request.method === 'POST' && application[3]) {
-          send(200, await applications.recover(application[1], application[2]));
+          const outcome = await applications.recover(application[1], application[2]);
+          if (
+            sdk &&
+            outcome &&
+            typeof outcome.payload.requestId === 'string' &&
+            ['succeeded', 'failed'].includes(outcome.state)
+          ) {
+            const saved = workspace.get(application[1], outcome.payload.requestId);
+            if (saved.result?.applicationId === outcome.id && saved.state === 'unknown') {
+              let result: Record<string, unknown> = {
+                ...saved.result,
+                applicationState: outcome.state,
+                phase: 'complete',
+              };
+              if (outcome.state === 'succeeded') {
+                try {
+                  const synced = await sdk.captureEditor(
+                    hostTargetSchema.parse(outcome.payload),
+                    () => {},
+                  );
+                  result = { ...result, ...synced, syncState: 'succeeded', code: undefined };
+                } catch {
+                  result = { ...result, syncState: 'failed', code: 'APPLIED_SYNC_FAILED' };
+                }
+              }
+              workspace.update(
+                application[1],
+                saved.id,
+                outcome.state === 'succeeded' ? 'succeeded' : 'failed',
+                result,
+              );
+            }
+          }
+          send(200, outcome);
           return;
         }
         if (request.method === 'POST' && !application[2]) {
@@ -773,7 +815,12 @@ export async function startServer({
           return;
         }
         const recoverySdk = saved.result?.host === 'zwcad' ? zwcadSdk : sdk;
-        if (saved.state !== 'unknown' || saved.result?.executionMode !== 'sdk' || !recoverySdk)
+        if (
+          saved.state !== 'unknown' ||
+          saved.result?.applicationId ||
+          saved.result?.executionMode !== 'sdk' ||
+          !recoverySdk
+        )
           throw new DomainError('NOT_FOUND');
         const key = 'sdk:' + projectId + ':' + id;
         if (!importRecoveries.has(key)) {
