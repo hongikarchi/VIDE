@@ -39,8 +39,11 @@ internal static class WorkerScene
 
     // Detailed meshes/measurements are exported once for the candidate, not on every AI query.
     internal static object Export(RhinoDoc doc, Func<RhinoObject, string, Measurements?>? cached = null,
-        Action<RhinoObject, string, Measurements>? observed = null, int offset = 0, int limit = MaxObjects, int revision = 0)
+        Action<RhinoObject, string, Measurements>? observed = null, int offset = 0, int limit = MaxObjects, int revision = 0, bool displayOnly = false)
     {
+        var scale = displayOnly ? RhinoMath.UnitScale(doc.ModelUnitSystem, UnitSystem.Meters) : 1.0;
+        if (!double.IsFinite(scale) || scale <= 0 || (displayOnly && doc.ModelUnitSystem is UnitSystem.None or UnitSystem.CustomUnits))
+            throw new InvalidOperationException("UNKNOWN_UNITS");
         var ordered = doc.Objects.GetObjectList(ObjectType.AnyObject).OrderBy(obj => obj.Id).ToArray();
         if (ordered.Length > MaxObjects) throw new InvalidOperationException("IMPORT_LIMIT");
         if (offset < 0 || offset > ordered.Length || limit < 1 || limit > MaxObjects)
@@ -55,12 +58,12 @@ internal static class WorkerScene
             var geometry = obj.Geometry;
             var bounds = geometry.GetBoundingBox(true);
             if (!bounds.IsValid) throw new InvalidOperationException("INVALID_GEOMETRY");
-            var origin = new[] { bounds.Min.X, bounds.Min.Y, bounds.Min.Z };
+            var origin = new[] { bounds.Min.X * scale, bounds.Min.Y * scale, bounds.Min.Z * scale };
             var vertices = new List<double>(); var indices = new List<int>(); var line = new List<double>();
             using var converted = geometry is Extrusion extrusion ? extrusion.ToBrep() : null;
             var brep = geometry as Brep ?? converted;
             var curve = geometry as Curve;
-            if (brep != null)
+            if (brep != null && geometry.IsValid)
             {
                 using var local = brep.DuplicateBrep();
                 var center = bounds.Center;
@@ -68,16 +71,16 @@ internal static class WorkerScene
                 var meshes = Mesh.CreateFromBrep(local, MeshingParameters.FastRenderMesh) ?? [];
                 foreach (var mesh in meshes) { AddMesh(mesh, center, vertices, indices); mesh.Dispose(); }
             }
-            else if (geometry is Mesh nativeMesh) AddMesh(nativeMesh, Point3d.Origin, vertices, indices);
-            if (curve != null)
+            else if (geometry is Mesh nativeMesh && geometry.IsValid) AddMesh(nativeMesh, Point3d.Origin, vertices, indices);
+            if (curve != null && geometry.IsValid)
             {
                 if (curve.TryGetPolyline(out var polyline)) foreach (var point in polyline) AddPoint(point, line);
                 else foreach (var parameter in curve.DivideByCount(128, true) ?? []) AddPoint(curve.PointAt(parameter), line);
             }
             var geometryOptions = new Rhino.FileIO.SerializationOptions { WriteUserData = true, WriteRenderMeshes = false, WriteAnalysisMeshes = false };
             var geometryHash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(geometry.ToJSON(geometryOptions)))).ToLowerInvariant();
-            var measurements = cached?.Invoke(obj, geometryHash);
-            if (measurements != null) reusedObjects++;
+            var measurements = displayOnly ? new Measurements(null, null, null) : cached?.Invoke(obj, geometryHash);
+            if (measurements != null) { if (!displayOnly) reusedObjects++; }
             else
             {
                 using var area = brep != null ? AreaMassProperties.Compute(brep) : geometry is Mesh areaMesh ? AreaMassProperties.Compute(areaMesh) : curve?.IsClosed == true ? AreaMassProperties.Compute(curve) : null;
@@ -98,8 +101,8 @@ internal static class WorkerScene
             var id = Id(obj); var name = obj.Name ?? "Object";
             objects.Add(new { id, nativeId = obj.Id.ToString(), kind = "native", name, origin });
             scene.Add(new { id, nativeId = obj.Id.ToString(), nativeType = geometry.ObjectType.ToString(), geometryHash, name64 = Encode(name), origin,
-                boundsSize = new[] { bounds.Max.X - bounds.Min.X, bounds.Max.Y - bounds.Min.Y, bounds.Max.Z - bounds.Min.Z },
-                vertices, indices, line, area = measurements.Area, volume = measurements.Volume, length = measurements.Length,
+                boundsSize = new[] { (bounds.Max.X - bounds.Min.X) * scale, (bounds.Max.Y - bounds.Min.Y) * scale, (bounds.Max.Z - bounds.Min.Z) * scale },
+                vertices = vertices.Select(value => value * scale).ToArray(), indices, line = line.Select(value => value * scale).ToArray(), area = measurements.Area, volume = measurements.Volume, length = measurements.Length,
                 layer64 = Encode(doc.Layers[obj.Attributes.LayerIndex].FullPath), attributes64 = attributes, attributesComplete = complete, valid = geometry.IsValid });
         }
         return new { objects, scene, measurementVersion = 1, measurementStats = new { measuredObjects, reusedObjects },

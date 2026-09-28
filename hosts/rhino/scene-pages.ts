@@ -1,5 +1,9 @@
 import { z } from 'zod';
-import { nativeModelSchema, type NativeModel } from '../../src/contracts/native-model.ts';
+import {
+  nativeModelSchema,
+  displayModelSchema,
+  type NativeModel,
+} from '../../src/contracts/native-model.ts';
 import { sceneRepresentation } from '../../src/core/scene-representation.ts';
 
 const pageSchema = z.object({
@@ -15,7 +19,9 @@ export async function readScenePages(
   call: (params: Record<string, unknown>) => Promise<unknown>,
   caches: Record<string, unknown> = {},
   maxBytes = 32 * 1024 * 1024,
+  displayOnly = false,
 ): Promise<NativeModel> {
+  const schema = displayOnly ? displayModelSchema : nativeModelSchema;
   let offset = 0,
     limit = 1000,
     revision: number | undefined,
@@ -45,7 +51,7 @@ export async function readScenePages(
     bytes += Buffer.byteLength(JSON.stringify(raw));
     if (bytes > maxBytes) throw failure('HOST_RESULT_TOO_LARGE');
     const page = pageSchema.parse(z.object({ page: pageSchema }).parse(raw).page);
-    const model = nativeModelSchema.parse(raw);
+    const model = schema.parse(raw);
     if (
       page.offset !== offset ||
       page.nextOffset !== offset + model.objects.length ||
@@ -74,9 +80,10 @@ export async function readScenePages(
   for (const item of scene)
     if (!sceneRepresentation(item)) {
       omitted++;
-      omittedTypes[item.nativeType] = (omittedTypes[item.nativeType] ?? 0) + 1;
+      const type = item.valid ? item.nativeType : `${item.nativeType} (invalid)`;
+      omittedTypes[type] = (omittedTypes[type] ?? 0) + 1;
     }
-  return nativeModelSchema.parse({
+  return schema.parse({
     objects,
     scene,
     measurementVersion: 1,

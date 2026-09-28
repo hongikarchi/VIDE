@@ -7,8 +7,9 @@ interface Props {
   notify: (message: string) => void;
   onCapture: (target: HostTarget, automatic?: boolean) => Promise<boolean | void>;
   onSelection: (selection: HostSelection) => void;
+  onConnection?: (document?: { key: string; name: string }) => void;
 }
-function Documents({ notify, onCapture, onSelection }: Props) {
+function Documents({ notify, onCapture, onSelection, onConnection }: Props) {
   const [catalog, setCatalog] = useState<HostDocuments | null>(null);
   const [selected, setSelected] = useState('');
   const [busy, setBusy] = useState(false);
@@ -20,6 +21,10 @@ function Documents({ notify, onCapture, onSelection }: Props) {
   const key = (item: HostDocuments['documents'][number]) =>
     item.instance ? item.instance + '/' + item.id : String(item.id);
   const active = catalog?.documents.find((item) => key(item) === selected);
+  const connected = active ?? catalog?.documents[0];
+  useEffect(() => {
+    onConnection?.(connected ? { key: key(connected), name: connected.name } : undefined);
+  }, [connected?.instance, connected?.id, connected?.name, onConnection]);
   const run = async (action: () => Promise<void>) => {
     if (inFlight.current) return;
     inFlight.current = true;
@@ -65,6 +70,7 @@ function Documents({ notify, onCapture, onSelection }: Props) {
           setNotice('Sync 완료');
         }
       } catch (error) {
+        setNotice('Sync 실패 · 하단 오류 기록을 확인하세요.');
         notify(error instanceof Error ? error.message : '작업 사본을 가져오지 못했습니다.');
       }
     });
@@ -222,11 +228,19 @@ export function initializeDocuments(
   notify: Props['notify'],
   onCapture: Props['onCapture'],
   onSelection: Props['onSelection'],
+  onConnection?: Props['onConnection'],
 ): void {
   const element = document.getElementById('host-document-controls');
   if (!element) throw new Error('Host document mount is missing');
   const root = createRoot(element);
-  root.render(<Documents notify={notify} onCapture={onCapture} onSelection={onSelection} />);
+  root.render(
+    <Documents
+      notify={notify}
+      onCapture={onCapture}
+      onSelection={onSelection}
+      onConnection={onConnection}
+    />,
+  );
   window.addEventListener('pagehide', (event) => {
     if (!event.persisted) root.unmount();
   });

@@ -77,6 +77,7 @@ function Candidate({
     extension = result.host === 'zwcad' ? 'dwg' : '3dm';
   const missing = scene.filter((object) => !sceneRepresentation(object));
   const omitted = result.displayCoverage?.omitted ?? missing.length;
+  const displayOnly = result.displayOnly === true;
   const apply =
     !result.applicationId &&
     (host === 'Rhino' || result.executionMode === 'sdk') &&
@@ -91,13 +92,16 @@ function Candidate({
           message.source !== 'document'));
   return (
     <>
-      <button onClick={() => actions.candidate(message.id)}>이 후보 보기</button>
+      <button onClick={() => actions.candidate(message.id)}>
+        {displayOnly ? '이 모델 보기' : '이 후보 보기'}
+      </button>
       {result.syncState === 'failed' ? (
         <small>Rhino 반영 완료 · Sync를 다시 실행하세요. 파일 저장은 별도입니다.</small>
       ) : null}
       <small>
-        {host} {['file', 'document'].includes(message.source ?? '') ? '작업 사본' : '후보'} ·
-        저장·재열기 검증됨
+        {displayOnly
+          ? `${host} 화면 동기화 · 원본 변경 없음`
+          : `${host} ${['file', 'document'].includes(message.source ?? '') ? '작업 사본' : '후보'} · 저장·재열기 검증됨`}
       </small>
       {result.sourceDocument ? (
         <small>
@@ -106,35 +110,42 @@ function Candidate({
         </small>
       ) : null}
       {omitted > 0 ? (
-        <small>{omitted.toLocaleString()}개는 목록·네이티브 파일에 보존 · 화면 표현 미지원</small>
+        <small>
+          {omitted.toLocaleString()}개는{' '}
+          {displayOnly ? '원본 Rhino에 유지' : '목록·네이티브 파일에 보존'} · 화면 표현 미지원
+        </small>
       ) : null}
-      <a
-        href={`/api/v1/projects/${projectId}/requests/${message.id}/model`}
-        download={`VIDE-candidate.${extension}`}
-      >
-        {extension === 'dwg' ? 'DWG 내려받기' : '3dm 내려받기'}
-      </a>
-      <Action
-        error={actions.error}
-        run={async () => {
-          await api(`/projects/${projectId}/requests/${message.id}/open`, 'POST', {});
-        }}
-      >
-        {host + '에서 열기'}
-      </Action>
-      <Action error={actions.error} run={() => actions.saveReview(message.id)}>
-        검토본 저장
-      </Action>
-      <button onClick={() => actions.report(message.id)}>검토본 내려받기</button>
-      <Action
-        error={actions.error}
-        run={async () => {
-          const { showPublicationExport } = await import('./publication-export.tsx');
-          showPublicationExport(projectId, message.id, objects);
-        }}
-      >
-        공유 자료
-      </Action>
+      {!displayOnly ? (
+        <>
+          <a
+            href={`/api/v1/projects/${projectId}/requests/${message.id}/model`}
+            download={`VIDE-candidate.${extension}`}
+          >
+            {extension === 'dwg' ? 'DWG 내려받기' : '3dm 내려받기'}
+          </a>
+          <Action
+            error={actions.error}
+            run={async () => {
+              await api(`/projects/${projectId}/requests/${message.id}/open`, 'POST', {});
+            }}
+          >
+            {host + '에서 열기'}
+          </Action>
+          <Action error={actions.error} run={() => actions.saveReview(message.id)}>
+            검토본 저장
+          </Action>
+          <button onClick={() => actions.report(message.id)}>검토본 내려받기</button>
+          <Action
+            error={actions.error}
+            run={async () => {
+              const { showPublicationExport } = await import('./publication-export.tsx');
+              showPublicationExport(projectId, message.id, objects);
+            }}
+          >
+            공유 자료
+          </Action>
+        </>
+      ) : null}
       {apply ? (
         <Action
           error={actions.error}
@@ -244,7 +255,9 @@ function Card({
           ? isDwgSdkEditMode(result?.dwgEditMode)
             ? 'ZWCAD 작업 사본'
             : 'ZWCAD 참고 도면'
-          : 'Rhino 작업 사본'
+          : result?.displayOnly === true
+            ? 'Rhino 화면 동기화'
+            : 'Rhino 작업 사본'
         : `${models.find((model) => model.id === message.model)?.name || message.model} · ${message.effort} · ${message.applyToSource ? '연결 Rhino 수정' : message.permission === 'review' ? '검토만' : '후보 작업 허용'}`;
   return (
     <article className="chat-message" data-request-id={message.id}>

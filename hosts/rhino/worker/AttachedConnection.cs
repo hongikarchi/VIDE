@@ -20,6 +20,7 @@ internal sealed class AttachedConnection : IDisposable
     private readonly string session = Guid.NewGuid().ToString();
     private readonly EditorExecutor editor;
     private long generation;
+    private int readRevision;
     private bool live, dirty, disposed;
     private DateTime changedAt;
     internal uint DocumentId => document.RuntimeSerialNumber;
@@ -70,9 +71,19 @@ internal sealed class AttachedConnection : IDisposable
             return new { ok = true, documentId = DocumentId, name = document.Name ?? "Untitled", units = document.ModelUnitSystem.ToString(),
                 objectCount = document.Objects.Count, modified = document.Modified, generation, live, busy = RhinoApp.InCommand > 0 };
         if (RhinoApp.InCommand > 0) throw new InvalidOperationException("HOST_BUSY");
+        if (request.GetProperty("method").GetString() == "displayPage")
+        {
+            var offset = request.GetProperty("offset").GetInt32();
+            var limit = request.GetProperty("limit").GetInt32();
+            if (limit < 1 || limit > 1000) throw new InvalidOperationException("INVALID_PAGE");
+            if (request.TryGetProperty("revision", out var basis)) {
+                if (basis.GetInt32() != readRevision) throw new InvalidOperationException("SOURCE_CHANGED");
+            } else if (offset > 0) throw new InvalidOperationException("STALE_REFERENCE");
+            return WorkerScene.Export(document, offset: offset, limit: limit, revision: readRevision, displayOnly: true);
+        }
         return editor.Dispatch(request);
     }
-    private void Mark(RhinoDoc doc) { if (doc == document) { dirty = true; changedAt = DateTime.UtcNow; } }
+    private void Mark(RhinoDoc doc) { if (doc == document) { readRevision++; dirty = true; changedAt = DateTime.UtcNow; } }
     private void ChangedObject(object? sender, RhinoObjectEventArgs e) => Mark(e.TheObject.Document);
     private void ReplacedObject(object? sender, RhinoReplaceObjectEventArgs e) => Mark(e.Document);
     private void ChangedAttributes(object? sender, RhinoModifyObjectAttributesEventArgs e) => Mark(e.Document);

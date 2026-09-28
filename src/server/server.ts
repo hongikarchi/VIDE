@@ -292,7 +292,7 @@ export async function startServer({
               ? async () => zwcadSdk!.editors.capture(target)
               : own
                 ? async () =>
-                    sdk!.captureEditor(
+                    sdk!.syncEditor(
                       target,
                       (intent) => workspace.update(capture[1], target.id, 'running', intent),
                       captureMeasurements(workspace.list(capture[1]), target),

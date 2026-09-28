@@ -1,3 +1,4 @@
+import { initializeViewportEmpty } from './viewport-empty.ts';
 import { initializeWorkspaceStatus } from './workspace-status.ts';
 import { linkedRequestDraft, interventionTargetDraft } from './linked-draft.ts';
 import { accountIndicator } from './account-indicator.ts';
@@ -124,6 +125,7 @@ const reviews = initializeReviews(
     message('외부 의견의 원문과 공간 입력을 초안에 첨부했습니다. 확인한 뒤 보내세요.');
   },
 );
+const viewportEmpty = initializeViewportEmpty($('canvas').parentElement!);
 initializeDocuments(
   message,
   async (target, automatic = false) => {
@@ -138,8 +140,9 @@ initializeDocuments(
       return false;
     if (!project || busy) throw Error('현재 작업이 끝난 뒤 가져오세요.');
     busy = true;
+    viewportEmpty.sync('loading');
     render();
-    message('열린 호스트 문서의 작업 사본을 가져오고 있습니다.');
+    message('열린 호스트 문서의 모델을 가져오고 있습니다.');
     try {
       const request = await requestData(`/projects/${currentProject().id}/capture`, 'POST', {
         ...target,
@@ -150,6 +153,7 @@ initializeDocuments(
         renderMessages();
         throw Error(errors[request.result?.code ?? ''] || 'Sync 실패');
       }
+      viewportEmpty.sync('idle');
       if (
         request.result?.hostExecuted &&
         (!automatic || (!draftHasInput(state) && !points.length))
@@ -163,6 +167,9 @@ initializeDocuments(
           errors[request.result?.code ?? ''] ||
           '작업 사본을 가져오지 못했습니다.',
       );
+    } catch (error) {
+      viewportEmpty.sync('failed');
+      throw error;
     } finally {
       busy = false;
       render();
@@ -178,6 +185,7 @@ initializeDocuments(
         : 'Rhino에서 선택한 객체가 없습니다.',
     );
   },
+  (connection) => viewportEmpty.connection(connection),
 );
 let inspectorTab: NonNullable<Parameters<typeof renderInspector>[3]> = 'properties';
 initializeInspector((tab) => {
@@ -433,6 +441,7 @@ function render(rebuildRequests = true) {
       },
     },
   );
+  viewportEmpty.modelShown(Boolean(active?.result?.hostExecuted) || tool === 'sketch');
   workspaceStatus.setDisplayCoverage(active?.result?.displayCoverage);
   $('document-host').textContent =
     (active?.result?.host || state.host) === 'zwcad' ? 'ZWCAD' : 'Rhino';
@@ -1112,6 +1121,8 @@ async function initializeWorkspace() {
     for (const model of models) el('option', model.name, $('model'), { value: model.id });
     project = linked.project;
     state.messages = linked.requests.map(requestMessage);
+    const lastSync = state.messages.filter((entry) => entry.source === 'document').at(-1);
+    if (lastSync?.request.state === 'failed') viewportEmpty.sync('failed');
     void reviews.refresh().catch((error) => message(error.message));
     renderProjectHeading({
       projects: linked.projects,

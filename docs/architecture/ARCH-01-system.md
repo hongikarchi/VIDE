@@ -2,7 +2,7 @@
 id: ARCH-01
 title: VIDE 기술 구조와 구현 계약
 status: review
-version: 0.34
+version: 0.35
 updated: 2026-09-28
 owner: agent:codex
 related: [SPEC-00, SPEC-02, SPEC-03, SPEC-04, PLAN, ADR-014, ADR-015, ADR-016, ADR-017]
@@ -617,3 +617,5 @@ PLAN-06의 프로필 실행은 서버가 선택한 절대 configDirectory를 Cli
 격리 worker의 `exportPage`는 GUID 정렬 객체 목록의 offset·limit(최대 1,000)과 실행 revision을 받는다. 첫 페이지에서 revision·total을 고정하고 후속 페이지에 재전송한다. 응답은 기존 nativeModel 필드와 page `{offset,nextOffset,total,revision}`다. 배열 집합·GUID·다음 offset·revision을 제어기에서 검증한다. 16MiB 소켓 응답 한도는 유지하고 명시적 HOST_RESULT_TOO_LARGE에만 읽기 페이지를 절반으로 줄여 재조회한다. 1개 객체에서도 초과하면 중단한다. 연결 단절/불명확 응답에는 재조회하지 않는다. 합산 원시 JSON은 32MiB로 제한하고 완성 전 결과를 영속 성공으로 저장하지 않는다. 객체 상한은 네이티브·계약 모두 20,000이며 검증된 파일 크기나 BIM 지원 약속이 아니다. 측정 캐시 전달이 2MiB를 넘으면 해당 전달만 생략하며 worker 내부 동일 형상 캐시는 유지한다. 브라우저 API는 현재 완성 모델을 한 번에 받는다. 브라우저 스트리밍/LOD는 별도 후속이며 이 단계로 완료 처리하지 않는다.
 
 완성된 표시 응답은 `displayCoverage`에 total·displayed·omitted·omittedTypes를 담는다. 실제 sceneRepresentation으로 표시할 수 없는 객체를 집계하며 삭제로 표시하지 않는다. 블록 상세 메시 미지원은 이 범위에 포함한다. 네이티브 보존 검증과 화면 형상 지원은 분리한다.
+
+연결된 사용자 Rhino의 읽기 Sync는 고정 메서드 `displayPage`를 사용한다. 현재 문서의 보이는 객체를 조회하고 미터 단위 표시 좌표를 반환한다. 네이티브 파일 저장·별도 worker 실행·면적/체적 계산은 하지 않는다. 페이지 사이 변경은 읽기 revision과 전후 문서 지문으로 확인한다. 직접 표시 응답의 합산 예산은 128MiB이며 편집 worker의 기존 예산과 구분한다. 결과는 `displayOnly: true`, `verified: false`, 원본 식별자·지문을 담은 `sourceDocument`로 저장한다. 원래 유효하지 않은 객체는 `valid: false`로 기록하고 렌더링에서 제외한다. 엄격한 `nativeModelSchema`와 표시용 `displayModelSchema`를 분리하며 네이티브 편집 검증을 완화하지 않는다. 후속 SDK 편집에서만 같은 원본 지문을 확인하고 기존 `captureEditor`로 검증된 작업 사본을 준비한다.

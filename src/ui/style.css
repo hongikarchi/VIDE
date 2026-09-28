@@ -1444,3 +1444,32 @@ body.left-hidden.right-hidden main {
     flex-shrink: 0;
   }
 }
+
+.viewport-empty {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 9px;
+  padding: 60px;
+  text-align: center;
+  pointer-events: none;
+  color: #69736b;
+}
+.viewport-empty[hidden] {
+  display: none;
+}
+.viewport-empty strong {
+  font-size: 15px;
+  font-weight: 500;
+}
+.viewport-empty span {
+  font-size: 11px;
+  max-width: 300px;
+  line-height: 1.7;
+}
+.viewport-empty[data-state='failed'] strong {
+  color: #8a5b42;
+}

@@ -25,7 +25,9 @@ try {
   const instance = '42:100:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
   let generation = 0,
     captures = 0,
-    connected = true;
+    connected = true,
+    rejectCapture = true,
+    releaseCapture;
   const catalog = () => ({
     instance,
     documents: connected
@@ -65,10 +67,22 @@ try {
       host: 'rhino',
     };
     workspace.submit(projectId, input);
+    if (rejectCapture) {
+      await new Promise((resolve) => {
+        releaseCapture = resolve;
+      });
+      const failed = workspace.update(projectId, input.id, 'failed', {
+        hostExecuted: false,
+        code: 'IMPORT_LIMIT',
+      });
+      await route.fulfill({ json: failed });
+      return;
+    }
     const request = workspace.update(projectId, input.id, 'succeeded', {
       host: 'rhino',
       hostExecuted: true,
-      verified: true,
+      verified: false,
+      displayOnly: true,
       executionMode: 'sdk',
       text: 'Sync complete',
       sourceDocument: {
@@ -90,10 +104,46 @@ try {
   await page.waitForFunction(() => !document.querySelector('#body').disabled);
   await page.getByText('열린 호스트 문서', { exact: true }).click();
   await page.locator('#refresh-documents').click();
+  await page.waitForFunction(
+    () => document.querySelector('#viewport-empty').dataset.state === 'connected',
+  );
+  assert.equal(
+    await page.locator('#viewport-empty').evaluate((n) => getComputedStyle(n).pointerEvents),
+    'none',
+  );
+  await page.locator('#capture-document').click();
+  await page.waitForFunction(
+    () => document.querySelector('#viewport-empty').dataset.state === 'loading',
+  );
+  while (!releaseCapture) await new Promise((resolve) => setTimeout(resolve, 10));
+  releaseCapture();
+  await page.waitForFunction(
+    () => document.querySelector('#viewport-empty').dataset.state === 'failed',
+  );
+  assert.equal(await page.locator('#viewport-empty').isVisible(), true);
+  await page.screenshot({ path: join(directory, 'empty-sync-failed.png') });
+  await page.getByRole('button', { name: '오류 기록', exact: true }).click();
+  const status = page.getByRole('dialog', { name: '상태 및 설정', exact: true });
+  assert.match(await status.textContent(), /IMPORT_LIMIT/);
+  await status.getByRole('button', { name: '닫기', exact: true }).click();
+  await page.reload();
+  await page.waitForFunction(() => !document.querySelector('#body').disabled);
+  assert.equal(await page.locator('#viewport-empty').getAttribute('data-state'), 'failed');
+  await page.getByText('열린 호스트 문서', { exact: true }).click();
+  await page.locator('#refresh-documents').click();
+  rejectCapture = false;
+  captures = 0;
   await page.locator('#capture-document').click();
   await page.waitForFunction(
     () => document.querySelector('#host-document-info').textContent === 'Sync 완료',
   );
+  assert.equal(await page.locator('#viewport-empty').isVisible(), false);
+  assert.equal(
+    await page.getByText('Rhino 화면 동기화 · 원본 변경 없음', { exact: true }).count(),
+    1,
+  );
+  assert.equal(await page.getByRole('link', { name: '3dm 내려받기', exact: true }).count(), 0);
+  assert.equal(await page.getByRole('button', { name: 'Rhino에서 열기', exact: true }).count(), 0);
   assert.equal(captures, 1);
   await page.locator('#body').fill('Do not lose my draft');
   generation++;

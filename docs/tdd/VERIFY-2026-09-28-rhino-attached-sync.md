@@ -2,7 +2,7 @@
 id: VERIFY-2026-09-28-rhino-attached-sync
 title: 현재 Rhino 문서 연결·수정 위임·Live Sync 검증
 status: review
-version: 0.5
+version: 0.6
 updated: 2026-09-28
 owner: agent:codex
 related: [SPEC-01, SPEC-02, PLAN-02, H-RHINO-03, H-RHINO-05, AC-17, AC-38]
@@ -60,3 +60,13 @@ Fork 후 작업 트리와 서버 상태를 재확인했다. 소유 시험 Rhino�
 새 exportPage를 포함한 기존 연결/적용/Undo/블록 회귀는 `.vide/rhino-attached/a0a3f6c7-fbf0-4ebc-9769-a0a646116dab/result.json`에서 통과했다. 직전 실행은 시험 제어 파일 교체가 IronPython 읽기와 경합해 EPERM으로 중단됐으며, 같은 action ID의 파일 교체에 한해 짧은 재시도를 넣고 재실행했다. 제품 네이티브 쓰기를 재시도한 것이 아니다.
 
 사용자는 작업을 저장하고 Rhino를 종료했다. 새 개발 RHP와 제어기를 준비하고 같은 파일을 다시 열었으나 시작 인자의 연결 명령은 실행되지 않았다. 네이티브 입력 도구도 coordinate input geometry is unavailable을 반환하여 연결 스크립트 1회 수동 실행을 요청했다. 실제 문서 Sync는 재연결 뒤 검증 전까지 미완료다.
+
+## 직접 표시 Sync
+
+재연결 후 기존 사본 검증은 숨긴 객체를 제외해 count mismatch를 반환했다. 실제 파일은 블록 정의 포함 10,713개이고 기본 표시 열거는 8,000개였다. 보존/지문 열거에 HiddenObjects를 포함했다. 파일과 열린 문서의 Brep 표현·치수 캐시 차이도 발견했지만, 표시를 위해 편집 검증을 재설계하는 시도는 채택하지 않았다. 읽기 Sync를 현재 Rhino의 고정 `displayPage`로 분리했다.
+
+합성 실호스트 `.vide/rhino-attached/34a9d327-8e3d-456a-89c5-82d687b40edd/result.json`에서 직접 표시의 mm→m 크기, 수량 미계산, 새 3dm 저장 없음과 기존 적용·Undo·Live Sync 회귀를 통과했다. 실제 작업 문서의 기존 복사본을 별도 시험 Rhino에서 조회한 `.vide/display-preflight/fcd5b4f6-95b9-4a0d-a367-a9b3e74ee6a7/result.json`은 37.529초, 8,000개, 107,245,643바이트다. 표시 형상 7,431개와 누락 569개(블록 454·주석 102·Hatch 11·기존 비정상 Brep 2)를 확인했다. 이는 복사본 조회 결과이며 현재 사용자 창의 화면 표시 성공을 뜻하지 않는다. 시험 Rhino는 종료했다.
+
+타입 검사·웹 빌드·239개 자동 시험을 통과했다. 표시 모드에서 기존 비정상 객체 기록을 유지하면서 렌더링에서 제외하고, 편집용 모델 검증은 거절하는 회귀를 포함한다. 빈 뷰포트의 진행/실패 안내·재열기·수동/자동 Sync 브라우저 회귀도 통과했다(`.vide/browser-attached/13d35fff-6e57-45fb-9474-777747f401b8`). 현재 사용자 창에 새 플러그인을 로드한 뒤 실제 Aside 화면을 확인하는 단계가 남아 있다.
+
+복사본 조회 결과를 격리된 제품 저장소에 넣고 실제 Chromium 1440×900에서 건물·주변 형상 표시를 확인했다. 증거는 `.vide/display-preflight/95373982-3070-462e-8778-40223364bc7b/actual-copy-viewport.png`와 `browser-result.json`이다. 첫 시험 데이터에는 UI 필수 취득 시각이 빠져 초기화가 실패했으며, 시각을 채운 뒤 브라우저 오류 없이 표시됐다. 제품 `syncEditor` 응답에는 해당 시각이 이미 포함되어 있다. 이 화면 확인에서 발견한 직접 조회 결과의 잘못된 저장·재열기 완료 문구와 네이티브 파일 버튼을 수정했다. 사용자 실제 세션에서 Sync가 끝났다는 증거로는 집계하지 않는다.

@@ -87,3 +87,18 @@ test('native page aggregate budget and ambiguous reply do not retry', async () =
   );
   assert.equal(calls, 1);
 });
+
+test('display sync preserves invalid source records without claiming editable valid geometry', async () => {
+  const raw = page([object(), object()], 0, 2);
+  raw.scene[1].valid = false;
+  raw.scene[1].nativeType = 'Brep';
+  const display = await readScenePages(async () => raw, {}, 1024 * 1024, true);
+  assert.equal(display.objects.length, 2);
+  assert.deepEqual(display.displayCoverage, {
+    total: 2,
+    displayed: 1,
+    omitted: 1,
+    omittedTypes: { 'Brep (invalid)': 1 },
+  });
+  await assert.rejects(readScenePages(async () => raw));
+});

@@ -227,4 +227,9 @@ export class EditorSessions {
   async capture(target: HostTarget) {
     return (await this.get(target)).captureEditor(randomUUID());
   }
+  async display(target: HostTarget) {
+    if ((await this.connectionKind(target.instance)) !== 'attached-editor')
+      throw failure('TARGET_MISMATCH');
+    return (await this.get(target)).displayEditor();
+  }
 }

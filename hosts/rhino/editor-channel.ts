@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { resolve, isAbsolute } from 'node:path';
 import { inspectWindowsProcess } from '../common/owned-process.ts';
 import { sendHostCommand } from '../common/transport.ts';
+import { readScenePages } from './scene-pages.ts';
 const failure = (code: string) => Object.assign(new Error(code), { code });
 export const editorConnectionSchema = z.object({
   identity: z.object({
@@ -51,6 +52,18 @@ export function editorMethods(
   call: (method: string, extra?: Record<string, unknown>) => Promise<unknown>,
 ) {
   return {
+    async displayEditor() {
+      const before = editorReply(editorSnapshotSchema, await call('inspectEditor'));
+      const model = await readScenePages(
+        (params) => call('displayPage', params),
+        {},
+        128 * 1024 * 1024,
+        true,
+      );
+      const after = editorReply(editorSnapshotSchema, await call('inspectEditor'));
+      if (before.documentHash !== after.documentHash) throw failure('SOURCE_CHANGED');
+      return { ...model, source: after };
+    },
     async attachedStatus() {
       return editorReply(
         z.object({

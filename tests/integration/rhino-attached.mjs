@@ -165,6 +165,15 @@ try {
     'TARGET_MISMATCH',
   );
   const sdk = new SdkExecution({ ...options, tools: {}, origin: () => '' });
+  const direct = await sdk.syncEditor(target, () => {});
+  assert.equal(direct.displayOnly, true);
+  assert.equal(direct.verified, false);
+  assert.equal(direct.filename, undefined);
+  assert.equal(direct.scene[0].nativeId, ready.nativeId);
+  assert.deepEqual(direct.scene[0].boundsSize, [2, 3, 4]);
+  assert.equal(direct.scene[0].volume, null);
+  const originalFiles = await readdir(join(connectionDirectory, record.identity.sessionId));
+  assert.equal(originalFiles.filter((file) => file.endsWith('.3dm')).length, 0);
   const basis = await sdk.captureEditor(target, () => {});
   assert.equal(basis.sourceDocument.connection, 'attached-editor');
   assert.ok(Math.abs(basis.scene[0].volume - 24) < 1e-7);
@@ -291,6 +300,7 @@ try {
     passed: true,
     directory,
     existingDocumentAttached: true,
+    directDisplayWithoutNativeSave: true,
     unitsPreserved: true,
     applyUndoAndSync: true,
     authorizedApplicationAndReadback: true,

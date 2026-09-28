@@ -7,7 +7,7 @@ namespace Vide.Worker;
 
 internal static class BlockIdentity
 {
-    internal static RhinoObject[] Objects(RhinoDoc doc) => doc.Objects.GetObjectList(ObjectType.AnyObject)
+    internal static RhinoObject[] Objects(RhinoDoc doc) => doc.Objects.GetObjectList(new ObjectEnumeratorSettings { HiddenObjects = true })
         .Concat(doc.InstanceDefinitions.Where(definition => !definition.IsDeleted).SelectMany(definition => definition.GetObjects()))
         .DistinctBy(obj => obj.Id).OrderBy(obj => obj.Id).ToArray();
 

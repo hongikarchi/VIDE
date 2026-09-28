@@ -29,10 +29,10 @@ export const nativeSceneSchema = z.object({
   attributesComplete: z.boolean(),
   valid: z.literal(true),
 });
-export const nativeModelSchema = z
+export const displayModelSchema = z
   .object({
     objects: z.array(object).max(20000),
-    scene: z.array(nativeSceneSchema).max(20000),
+    scene: z.array(nativeSceneSchema.extend({ valid: z.boolean() })).max(20000),
     measurementVersion: z.literal(1).optional(),
     displayCoverage: z
       .object({
@@ -77,4 +77,14 @@ export const nativeModelSchema = z
         ctx.addIssue({ code: 'custom', message: 'Invalid display geometry' });
     }
   });
+export const nativeModelSchema = displayModelSchema.superRefine((model, ctx) => {
+  model.scene.forEach((scene, index) => {
+    if (!scene.valid)
+      ctx.addIssue({
+        code: 'custom',
+        path: ['scene', index, 'valid'],
+        message: 'Invalid native geometry',
+      });
+  });
+});
 export type NativeModel = z.infer<typeof nativeModelSchema>;

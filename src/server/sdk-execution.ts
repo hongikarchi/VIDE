@@ -125,6 +125,31 @@ export class SdkExecution {
     }
   }
 
+  async syncEditor(
+    target: HostTarget,
+    update: (intent: Record<string, unknown>) => void,
+    measurements: GeometryMeasurement[] = [],
+  ) {
+    if ((await this.editors.connectionKind(target.instance)) !== 'attached-editor')
+      return this.captureEditor(target, update, measurements);
+    const { source, ...model } = await this.editors.display(target);
+    return {
+      ...model,
+      displayOnly: true,
+      verified: false,
+      executionMode: 'sdk',
+      sourceDocument: {
+        ...target,
+        connection: 'attached-editor',
+        documentHash: source.documentHash,
+        name: source.name,
+        units: source.units,
+        selectedIds: source.selectedIds,
+        capturedAt: new Date().toISOString(),
+      },
+    };
+  }
+
   async importFile(
     filename: string,
     update: (intent: Record<string, unknown>) => void,
@@ -180,6 +205,17 @@ export class SdkExecution {
     }
   }
   async run({ input, previous, items, signal, provider, update }: Task) {
+    if (previous?.result.displayOnly === true) {
+      const basis = z
+        .object({ instance: z.string(), documentId: z.number(), documentHash: z.string() })
+        .parse(previous.result.sourceDocument);
+      const current = await this.editors.inspect(basis);
+      if (current.documentHash !== basis.documentHash) throw failure('SOURCE_CHANGED');
+      const prepared = await this.captureEditor(basis, update);
+      if (prepared.sourceDocument.documentHash !== basis.documentHash)
+        throw failure('SOURCE_CHANGED');
+      previous = { id: previous.id, result: prepared };
+    }
     const options = this.options;
     await mkdir(options.directory, { recursive: true });
     const directory = join(options.directory, randomUUID());

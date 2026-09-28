@@ -45,7 +45,7 @@ export async function inspectWindowsProcess(pid: number, port?: number): Promise
     );
     const { stdout } = await run(
       powershell,
-      ['-NoProfile', '-NonInteractive', '-Command', script],
+      ['-NoProfile', '-NonInteractive', '-WindowStyle', 'Hidden', '-Command', script],
       { windowsHide: true, timeout: 10000, maxBuffer: 16384, encoding: 'utf8' },
     );
     return JSON.parse(stdout);
