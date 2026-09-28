@@ -93,7 +93,7 @@ function Documents({ notify, onCapture, onSelection, onConnection }: Props) {
         const item = next.documents.find((doc) => key(doc) === selectedRef.current);
         if (!item) {
           if (generations.current.has(selectedRef.current))
-            setNotice('Rhino 연결 종료 · 기존 모델은 보존됩니다.');
+            setNotice('호스트 연결 종료 · 기존 모델은 보존됩니다.');
           return;
         }
         if (item.connection !== 'attached-editor' || item.generation === undefined) return;
@@ -155,11 +155,14 @@ function Documents({ notify, onCapture, onSelection, onConnection }: Props) {
   return (
     <>
       <small>
-        기존 Rhino에서 VIDEConnect 실행 후 문서 조회 · VIDESync로 갱신 · VIDELiveSync로 자동 갱신
+        Rhino/ZWCAD에서 VIDEConnect 실행 후 문서 조회 · VIDESync로 갱신 · VIDELiveSync로 자동 갱신
         켜기/끄기
       </small>
       {active?.connection === 'attached-editor' ? (
-        <small>현재 Rhino 문서 연결 · Live Sync {active.live ? '켜짐' : '꺼짐'}</small>
+        <small>
+          현재 {active.host === 'zwcad' ? 'ZWCAD' : 'Rhino'} 문서 연결 · Live Sync{' '}
+          {active.live ? '켜짐' : '꺼짐'}
+        </small>
       ) : null}
       <button
         id="refresh-documents"

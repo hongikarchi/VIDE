@@ -1,5 +1,6 @@
 import { randomUUID, createHash } from 'node:crypto';
-import { join, resolve, relative, isAbsolute } from 'node:path';
+import { join, resolve, relative, isAbsolute, dirname } from 'node:path';
+import { AttachedZwcadDocuments } from './attached-documents.ts';
 import { mkdir, readFile, writeFile, rename } from 'node:fs/promises';
 import { z } from 'zod';
 import { launchZwcadWorker } from './worker-client.ts';
@@ -42,8 +43,10 @@ export class ZwcadEditors {
   private loaded?: Promise<void>;
   private tail: Promise<unknown> = Promise.resolve();
   private directory: string;
+  readonly attached: AttachedZwcadDocuments;
   constructor(directory: string) {
     this.directory = directory;
+    this.attached = new AttachedZwcadDocuments(join(dirname(directory), 'zwcad-connections'));
   }
   private async load() {
     this.loaded ??= (async () => {
@@ -71,7 +74,7 @@ export class ZwcadEditors {
   }
   async has(instance: string) {
     await this.load();
-    return this.connections.has(instance);
+    return this.connections.has(instance) || (await this.attached.has(instance));
   }
   private async call(target: HostTarget, method: string, params: Record<string, unknown> = {}) {
     await this.load();
@@ -155,7 +158,7 @@ export class ZwcadEditors {
         /* Stale editor connections never trigger relaunch or process adoption. */
       }
     }
-    return documents;
+    return [...documents, ...(await this.attached.list())];
   }
   private candidate(value: unknown, target: HostTarget) {
     const parsed = z
@@ -218,6 +221,7 @@ export class ZwcadEditors {
     });
   }
   async inspect(target: HostTarget) {
+    if (await this.attached.has(target.instance)) return this.attached.inspect(target);
     const result = z
       .object({
         ok: z.literal(true),
@@ -233,6 +237,7 @@ export class ZwcadEditors {
     };
   }
   async capture(target: HostTarget) {
+    if (await this.attached.has(target.instance)) return this.attached.capture(target);
     const result = querySchema
       .extend({ filename: z.string(), fileHash: z.string().regex(/^[a-f0-9]{64}$/) })
       .parse(await this.call(target, 'capture'));

@@ -567,7 +567,9 @@ export async function startServer({
         return;
       }
       if (url.pathname === '/api/v1/host/attached-documents' && request.method === 'GET') {
-        send(200, (await sdk?.editors.list(true)) || { instance: '1:1', documents: [] });
+        const rhino = (await sdk?.editors.list(true)) || { instance: '1:1', documents: [] };
+        const cad = (await zwcadSdk?.editors.attached.list()) || [];
+        send(200, { ...rhino, documents: [...rhino.documents, ...cad] });
         return;
       }
       if (url.pathname === '/api/v1/host/documents' && request.method === 'GET') {

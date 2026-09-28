@@ -2,7 +2,7 @@
 id: ARCH-01
 title: VIDE 기술 구조와 구현 계약
 status: review
-version: 0.36
+version: 0.37
 updated: 2026-09-28
 owner: agent:codex
 related: [SPEC-00, SPEC-02, SPEC-03, SPEC-04, PLAN, ADR-014, ADR-015, ADR-016, ADR-017]
@@ -448,7 +448,7 @@ SDK 단일 대상 요청의 초기 모델 문맥은 `working-model`과 `measurem
 
 AI `query`는 선택적인 `offset`(기본 0), `limit`(기본 50, 최대 100), `expectedRevision`, `objectIds`(최대 100)를 받는다. offset>0은 expectedRevision을 요구한다. 제어기는 전체 호스트 스냅샷에서 ID 필터 후 64 KiB 이내의 객체/대응 scene 페이지를 반환하고 `page={offset,total,nextOffset}`를 덧붙인다. revision 불일치는 STALE_REFERENCE, 단일 행 초과는 QUERY_RESULT_TOO_LARGE이다. 전체 네이티브 검증·영수증·저장은 자르지 않는다. 이 단계는 AI 응답량만 제한하고 호스트 IPC/조회 계산의 페이지화는 아직 아니다.
 
-공통 호스트 TCP 수신은 4바이트 프레임 길이를 먼저 검증하고 최대 16 MiB 본문을 한 번 할당한다. 분할된 헤더/UTF-8 본문은 바이트 기준으로 채우고 완성 후 한 번 파싱한다. 과대/빈/미완성 응답·timeout은 기존 오류 의미로 종료하며 쓰기 재전송은 하지 않는다.
+공통 호스트 TCP 수신은 4바이트 프레임 길이를 먼저 검증하고 기본 최대 16 MiB 본문을 한 번 할당한다. CAD 읽기 표시 경로만 아래 별도 수신 크기를 사용한다. 분할된 헤더/UTF-8 본문은 바이트 기준으로 채우고 완성 후 한 번 파싱한다. 과대 응답은 `HOST_RESPONSE_TOO_LARGE`, 빈 응답은 `HOST_INVALID_RESPONSE`로 구분하며 쓰기 재전송은 하지 않는다.
 
 Rhino 자체 SDK의 객체/측정 캐시 상한은 10,000개이며 호스트 요청 프레임은 4 MiB다. 응답 프레임은 16 MiB를 유지한다. 기존 레거시 JSON/외부 MCP 경로는 500개 제한을 유지한다. 객체 수 이내여도 복잡한 형상으로 전송 한도를 넘으면 완료 후보로 채택하지 않고 기존 불명확/복구 절차를 따른다. 객체 개수 상한은 메모리/시간 성능 보증이 아니다.
 
@@ -621,3 +621,13 @@ Rhino 패널은 기존 RHP 안의 Eto `ConnectionPanel`을 `PanelType.PerDoc`로
 완성된 표시 응답은 `displayCoverage`에 total·displayed·omitted·omittedTypes를 담는다. 실제 sceneRepresentation으로 표시할 수 없는 객체를 집계하며 삭제로 표시하지 않는다. 블록 상세 메시 미지원은 이 범위에 포함한다. 네이티브 보존 검증과 화면 형상 지원은 분리한다.
 
 연결된 사용자 Rhino의 읽기 Sync는 고정 메서드 `displayPage`를 사용한다. 현재 문서의 보이는 객체를 조회하고 미터 단위 표시 좌표를 반환한다. 네이티브 파일 저장·별도 worker 실행·면적/체적 계산은 하지 않는다. 페이지 사이 변경은 읽기 revision과 전후 문서 지문으로 확인한다. 직접 표시 응답의 합산 예산은 128MiB이며 편집 worker의 기존 예산과 구분한다. 결과는 `displayOnly: true`, `verified: false`, 원본 식별자·지문을 담은 `sourceDocument`로 저장한다. 원래 유효하지 않은 객체는 `valid: false`로 기록하고 렌더링에서 제외한다. 엄격한 `nativeModelSchema`와 표시용 `displayModelSchema`를 분리하며 네이티브 편집 검증을 완화하지 않는다. 후속 SDK 편집에서만 같은 원본 지문을 확인하고 기존 `captureEditor`로 검증된 작업 사본을 준비한다.
+
+### 현재 ZWCAD의 읽기 연결
+
+`hosts/zwcad/connection/`은 설치된 ZWCAD 2023 SDK를 참조하는 .NET Framework 4.8 x64 DLL이다. AI 코드 실행기와 별도 어셈블리이며 Roslyn 또는 외부 MCP 설치가 필요 없다. `VIDECADConnect`·`VIDECADDisconnect`·`VIDECADSync`·`VIDECADLiveSync`·`VIDECADPanel`과 WinForms PaletteSet을 제공한다. 패널은 활성 도면을 보여 주되 이미 연결된 다른 도면의 대상을 바꾸지 않는다. 배포본에는 연결 DLL만 포함하고 ZWCAD SDK DLL은 설치본에서 사용한다.
+
+문서마다 인증된 loopback TCP 리스너를 만들고 `%LOCALAPPDATA%/VIDE/zwcad-connections/<sessionId>.json`에 기록한다. 시험은 `VIDE_ZWCAD_CONNECT_DIR`로 분리한다. public instance는 PID·시작 ticks·session UUID, public documentId는 1이다. native documentId는 session UUID로 고정한다. 제어기는 실행 경로·시작 시각·리스너 소유 PID를 대조한 뒤 고정 메서드 `attachedStatus`·`displayPage`·`selection`만 호출한다. 수신한 생성 코드를 실행하는 메서드는 없다. 문서 닫힘/Disconnect에서 이벤트와 리스너·기록을 폐기하며 사용자 프로세스를 종료하는 소유권은 만들지 않는다.
+
+SDK 조회는 Idle의 주 스레드와 문서 잠금에서 수행한다. ObjectAppended/Modified/Erased가 revision을 올리고 Live Sync가 켜졌으면 1초 안정화 후 generation을 올린다. Sync는 generation을 즉시 올린다. 지문은 연결 session·revision·단위이며 전체 기하를 매번 해시하지 않는다. `displayPage`의 offset·next·total·revision과 객체/scene ID 대응, 전후 지문을 검사한다. 원본 Handle에 대응하는 최상위 객체 한 개에 블록 내부 선분을 묶고 미터 좌표의 `scene.segments`(xyz 끝점 쌍)를 `THREE.LineSegments`로 표시한다. 네이티브 블록·곡선은 수정하지 않는다. 이 표현의 웹 공유 게시 지원은 별도이며 아직 허용하지 않는다.
+
+CAD 표시 응답은 최대 128MiB 수신을 명시한다. 실제 SDK 조회 실패 또는 프레임 초과만 읽기 범위를 이분하고 단일 객체까지 실패하면 `UnreadableObject`/`OversizedDisplay`로 누락을 기록한다. 인증·revision 변경·불명확 연결 오류는 재시도로 성공을 만들지 않는다. 표시되지 않은 객체는 원본에 남는다. 결과는 `displayOnly: true`, `verified: false`, `referenceOnly: true`이며 현재 문서용 AI 실행은 `ZWCAD_ATTACHED_EDIT_UNAVAILABLE`로 공급자 호출 전에 거절한다. 기존 별도 CAD 편집 사본 경로는 유지한다.

@@ -2,7 +2,7 @@
 id: PLAN
 title: VIDE 실행 로드맵
 status: review
-version: 0.210
+version: 0.211
 updated: 2026-09-28
 owner: agent:codex
 related: [ARCH-01, PLAN-02, PLAN-03, SPEC-00, SPEC-01, SPEC-02, SPEC-03, SPEC-04, SPEC-05]
@@ -74,6 +74,8 @@ T-001~018의 번호·지원 증거는 유지한다. 각 티켓의 현재 결과�
 현재 소스와 §6.5의 증거에서 이어간다. 과거 구현 일지는 [이행 기록](../tdd/VERIFY-2026-09-20-implementation-history.md)으로 옮겼다. 과거의 제한 JSON·MCP·ESM 설명을 현재 설계로 사용하지 않는다.
 
 ### 6.5 현재 티켓 현황과 이어갈 위치
+
+**병렬 CAD 연결:** [PLAN-07](PLAN-07-zwcad-attached-sync.md)의 별도 연결 플러그인·패널·읽기 Sync를 구현하고 합성 CAD의 브라우저 표시·Live Sync·다중 도면 검증을 통과했다. 실제 기본도면은 패널/연결을 확인했고 대형 외부참조 누락을 구분해 나머지 표시를 검증 중이다([검수](../tdd/VERIFY-2026-09-28-zwcad-attached-sync.md)). Rhino/UI와 별도 작업 트리를 사용하고 기존 서버와 사용자 원본은 유지한다.
 
 **오늘의 연결 왕복:** Rhino 문서별 패널을 구현했고 별도 시험 문서에서 실제 ChatGPT 구독 CLI → RhinoCommon 수정 → 같은 Rhino 반영 → VIDE 갱신·재열기를 통과했다(4m→5m, 동일 ID, mm 보존). 사용자 저장·종료 후 기본 경로에 새 RHP를 배치하고 작업 파일을 다시 열어 패널 표시·연결과 제품 Sync를 확인했다. 사용자 브라우저의 인증 복구와 화면 확인이 다음 행동이다. 근거·지원 범위는 [연결 검수](../tdd/VERIFY-2026-09-28-rhino-attached-sync.md). 현재 사용자 건축 문서의 일반 편집·CAD는 완료로 집계하지 않는다.
 

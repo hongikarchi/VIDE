@@ -78,6 +78,7 @@ export class ZwcadSdkExecution {
     return this.editors.open(sourceSchema.parse(result));
   }
   async run({ input, previous, items, signal, provider, update }: Task) {
+    if (previous?.result?.displayOnly === true) throw failure('ZWCAD_ATTACHED_EDIT_UNAVAILABLE');
     const options = this.options;
     await mkdir(options.directory, { recursive: true });
     const directory = join(options.directory, randomUUID());

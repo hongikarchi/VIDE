@@ -191,7 +191,7 @@ export async function captureModel(
       ...result,
       host: hostKind,
       hostExecuted: true,
-      text: '열린 문서를 Sync했습니다. 원본은 변경하지 않았습니다. 자동 갱신은 Rhino의 Live Sync 설정을 따릅니다.',
+      text: `열린 문서를 Sync했습니다. 원본은 변경하지 않았습니다. 자동 갱신은 ${hostKind === 'zwcad' ? 'ZWCAD' : 'Rhino'}의 Live Sync 설정을 따릅니다.`,
     });
   } catch (cause) {
     const error = errorData(cause);

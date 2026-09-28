@@ -9,6 +9,7 @@ const scene = z
     vertices: z.array(z.number()).optional(),
     indices: z.array(z.number()).optional(),
     line: z.array(z.number()).optional(),
+    segments: z.array(z.number()).optional(),
     origin: z.array(z.number()).optional(),
     boundsSize: z.array(z.number()).optional(),
     length: z.number().nullish(),

@@ -112,7 +112,13 @@ function Candidate({
       {omitted > 0 ? (
         <small>
           {omitted.toLocaleString()}개는{' '}
-          {displayOnly ? '원본 Rhino에 유지' : '목록·네이티브 파일에 보존'} · 화면 표현 미지원
+          {displayOnly ? `원본 ${host}에 유지` : '목록·네이티브 파일에 보존'} · 화면 표현 미지원
+        </small>
+      ) : null}
+      {host === 'ZWCAD' && displayOnly && result.displayCoverage?.omittedTypes.OversizedDisplay ? (
+        <small>
+          대형 블록 {result.displayCoverage.omittedTypes.OversizedDisplay}개는 아직 표시하지
+          못했습니다.
         </small>
       ) : null}
       {!displayOnly ? (

@@ -103,7 +103,9 @@ export function createViewport(
             new THREE.LineBasicMaterial({ color: 0x69766c }),
           ),
         );
-      } else mesh = new THREE.Line(geometry, new THREE.LineBasicMaterial({ color: 0x69766c }));
+      } else if (representation.type === 'segments')
+        mesh = new THREE.LineSegments(geometry, new THREE.LineBasicMaterial({ color: 0x69766c }));
+      else mesh = new THREE.Line(geometry, new THREE.LineBasicMaterial({ color: 0x69766c }));
       mesh.position.set(origin[0], origin[1], origin[2]);
       mesh.userData.id = object.id;
       scene.add(mesh);

@@ -40,8 +40,23 @@ test('fragmented header and multi-megabyte UTF-8 body decode one complete frame'
 for (const length of [0, 16 * 1024 * 1024 + 1])
   test(`invalid frame length ${length} closes without waiting for body`, async (t) => {
     const options = await reply(t, (socket) => socket.write(header(length)));
-    await assert.rejects(sendHostCommand('probe', {}, options), { code: 'HOST_INVALID_RESPONSE' });
+    await assert.rejects(sendHostCommand('probe', {}, options), {
+      code: length === 0 ? 'HOST_INVALID_RESPONSE' : 'HOST_RESPONSE_TOO_LARGE',
+    });
   });
+
+test('display readers can explicitly receive a larger frame while the default remains bounded', async (t) => {
+  const body = Buffer.from(JSON.stringify({ result: { text: 'x'.repeat(17 * 1024 * 1024) } }));
+  const options = await reply(t, (socket) =>
+    socket.end(Buffer.concat([header(body.length), body])),
+  );
+  const result = await sendHostCommand(
+    'displayPage',
+    {},
+    { ...options, maxResponseBytes: 20 * 1024 * 1024 },
+  );
+  assert.equal(result.text.length, 17 * 1024 * 1024);
+});
 test('incomplete body never parses uninitialized bytes or becomes a successful response', async (t) => {
   const options = await reply(t, (socket) =>
     socket.end(Buffer.concat([header(100), Buffer.from('{}')])),

@@ -55,6 +55,7 @@ export function createPublicationBundle(rawRequest: unknown, rawSelection: unkno
     const representation = sceneRepresentation(source);
     if (
       !representation ||
+      representation.type === 'segments' ||
       representation.positions.length % 3 ||
       !representation.positions.every(Number.isFinite)
     )

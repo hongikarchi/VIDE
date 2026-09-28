@@ -3,6 +3,7 @@ import { createConnection } from 'node:net';
 export interface HostTransportOptions {
   port: number;
   timeoutMs?: number;
+  maxResponseBytes?: number;
   beforeSend?: () => unknown | Promise<unknown>;
 }
 
@@ -10,7 +11,12 @@ export interface HostTransportOptions {
 export function sendHostCommand(
   type: string,
   params: Record<string, unknown>,
-  { port, timeoutMs = 30000, beforeSend }: HostTransportOptions,
+  {
+    port,
+    timeoutMs = 30000,
+    maxResponseBytes = 16 * 1024 * 1024,
+    beforeSend,
+  }: HostTransportOptions,
 ): Promise<unknown> {
   return new Promise<unknown>((resolve, reject) => {
     const socket = createConnection({ host: '127.0.0.1', port });
@@ -58,7 +64,14 @@ export function sendHostCommand(
         offset += count;
         if (headerBytes < 4) return;
         const length = responseHeader.readUInt32BE();
-        if (length < 1 || length > 16 * 1024 * 1024) return fail('HOST_INVALID_RESPONSE');
+        if (length < 1) return fail('HOST_INVALID_RESPONSE');
+        if (length > maxResponseBytes)
+          return finish(
+            Object.assign(new Error('HOST_RESPONSE_TOO_LARGE'), {
+              code: 'HOST_RESPONSE_TOO_LARGE',
+              responseBytes: length,
+            }),
+          );
         body = Buffer.allocUnsafe(length);
       }
       const buffer = body!;
