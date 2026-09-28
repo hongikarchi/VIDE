@@ -92,6 +92,7 @@ export class RemoteAccess {
   private used = new Map<string, number>();
   private sessions = new Map<string, number>();
   private closed = false;
+  private reopen: ReturnType<typeof setTimeout> | undefined;
   private options: Options;
   constructor(options: Options) {
     this.options = options;
@@ -266,6 +267,7 @@ export class RemoteAccess {
       this.url = undefined;
       this.error = 'TUNNEL_EXITED';
       void this.heartbeat();
+      this.reopenLater();
     });
     try {
       this.url = await found;
@@ -279,6 +281,19 @@ export class RemoteAccess {
     }
     await this.heartbeat();
     return this.status();
+  }
+  /**
+   * cloudflared ended on its own (network change, sleep): open a new tunnel. Other devices use the
+   * account site's fixed address, so their sessions carry on once the new address is reported.
+   */
+  private reopenLater(delay = 3000) {
+    if (this.closed || this.options.spawnProcess) return;
+    clearTimeout(this.reopen);
+    this.reopen = setTimeout(() => {
+      if (this.closed || this.tunnel || !this.device?.remote) return;
+      this.start().catch(() => this.reopenLater(Math.min(delay * 2, 60_000)));
+    }, delay);
+    this.reopen.unref?.();
   }
   /** A new quick-tunnel name takes a few seconds to resolve; advertise it only once it answers. */
   private async reachable(url: string) {
@@ -296,6 +311,7 @@ export class RemoteAccess {
   }
   /** Stop the tunnel; this PC stays listed (local use) while linked. */
   async stop() {
+    clearTimeout(this.reopen);
     const child = this.tunnel;
     this.tunnel = undefined;
     this.url = undefined;

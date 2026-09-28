@@ -74,6 +74,7 @@ const projects = await page.evaluate(async () => (await fetch('/api/v1/projects'
 result.projects = projects.length;
 await page.locator('#workspace-settings').click();
 const settings = page.getByRole('dialog', { name: '상태 및 설정', exact: true });
+await settings.getByRole('button', { name: 'PC 프로그램', exact: true }).click();
 await settings.getByRole('heading', { name: 'PC 프로그램' }).waitFor();
 assert.match(
   await settings.textContent(),
@@ -94,6 +95,7 @@ result.after = version();
 const after = await page.evaluate(async () => (await fetch('/api/v1/projects')).json());
 assert.equal(after.length, result.projects, 'projects kept');
 await page.locator('#workspace-settings').click();
+await page.locator('[data-tab="desktop"]').click();
 await page
   .getByRole('dialog', { name: '상태 및 설정', exact: true })
   .getByText(`VIDE ${result.after}`, { exact: true })

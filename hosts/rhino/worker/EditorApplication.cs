@@ -6,10 +6,37 @@ using Rhino.Geometry;
 
 namespace Vide.Worker;
 
-// Apply a verified candidate, never newly generated code, to its captured editing document.
+/// <summary>
+/// What the AI changed in its working copy (ids as WorkerScene.Id), and the per-object hashes of the
+/// live document when that copy was captured.
+/// </summary>
+internal sealed record ChangeSet(string[] Added, string[] Modified, string[] Removed, IReadOnlyDictionary<string, string> Captured)
+{
+    internal IEnumerable<string> Written => Added.Concat(Modified);
+
+    internal static ChangeSet Read(JsonElement request, string directory)
+    {
+        if (!request.TryGetProperty("changes", out var changes) || changes.ValueKind != JsonValueKind.Object)
+            throw new InvalidOperationException("UNSUPPORTED_APPLICATION");
+        string[] Ids(string name) => changes.TryGetProperty(name, out var list) && list.ValueKind == JsonValueKind.Array
+            ? list.EnumerateArray().Select(value => value.GetString() ?? throw new InvalidOperationException("INVALID_INPUT")).Distinct().ToArray() : [];
+        var capture = request.GetProperty("capture").GetString() ?? "";
+        var full = Path.GetFullPath(capture);
+        if (!full.StartsWith(Path.GetFullPath(directory) + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException("INVALID_ARTIFACT");
+        using var receipt = JsonDocument.Parse(File.ReadAllText(full + ".capture.json"));
+        if (!receipt.RootElement.TryGetProperty("objects", out var objects))
+            throw new InvalidOperationException("RESYNC_REQUIRED");
+        var captured = objects.EnumerateObject().ToDictionary(entry => entry.Name, entry => entry.Value.GetString() ?? "");
+        return new ChangeSet(Ids("added"), Ids("modified"), Ids("removed"), captured);
+    }
+}
+
+// Apply a verified candidate, never newly generated code, to its captured editing document. Only
+// the objects the AI added, modified or removed are written; every other object is left alone.
 internal sealed class EditorApplication(RhinoDoc document, string directory, Func<string> fingerprint)
 {
-    private sealed record Item(string Id, Guid NativeId, GeometryBase Geometry, ObjectAttributes Attributes, string Metadata) : IDisposable
+    private sealed record Item(string Id, Guid NativeId, GeometryBase Geometry, ObjectAttributes Attributes) : IDisposable
     {
         public void Dispose() { Geometry.Dispose(); Attributes.Dispose(); }
     }
@@ -19,98 +46,114 @@ internal sealed class EditorApplication(RhinoDoc document, string directory, Fun
         internal List<Guid> Removed = new();
         internal HashSet<string> Updated = new();
         internal HashSet<string> Added = new();
+        internal List<Layer> NewLayers = new();
         public void Dispose() { foreach (var item in Items.Values) item.Dispose(); }
     }
     private static string Hash(string path) => Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(path))).ToLowerInvariant();
 
-    private Plan Prepare(string filename, string hash)
+    private RhinoObject? Live(string id)
+    {
+        if (Guid.TryParse(id, out var guid) && document.Objects.FindId(guid) is { } direct && WorkerScene.Id(direct) == id) return direct;
+        return document.Objects.GetObjectList(new ObjectEnumeratorSettings { HiddenObjects = true, LockedObjects = true })
+            .FirstOrDefault(obj => WorkerScene.Id(obj) == id);
+    }
+
+    /// <summary>An object the application overwrites or removes must still be as it was captured.</summary>
+    private static void Unchanged(RhinoObject obj, string id, ChangeSet changes)
+    {
+        if (!changes.Captured.TryGetValue(id, out var before) || before != WorkerScene.Fingerprint(obj))
+            throw new InvalidOperationException("SOURCE_CHANGED");
+        if (obj.IsLocked || obj.IsReference || obj.IsInstanceDefinitionGeometry)
+            throw new InvalidOperationException("UNSUPPORTED_NATIVE_TARGET");
+    }
+
+    /// <summary>The live layer for a candidate layer: same id, else same full path, else a new one.</summary>
+    private int TargetLayer(Rhino.FileIO.File3dm candidate, int index, Plan plan)
+    {
+        var layer = candidate.AllLayers.FirstOrDefault(item => item.Index == index) ?? throw new InvalidOperationException("UNSUPPORTED_APPLICATION");
+        var existing = document.Layers.FirstOrDefault(item => !item.IsDeleted && item.Id == layer.Id) ??
+            document.Layers.FirstOrDefault(item => !item.IsDeleted && item.FullPath == layer.FullPath);
+        if (existing != null) return existing.Index;
+        var staged = plan.NewLayers.FirstOrDefault(item => item.Id == layer.Id);
+        if (staged == null)
+        {
+            staged = new Layer { Name = layer.Name, Color = layer.Color, Id = layer.Id };
+            var parent = layer.ParentLayerId == Guid.Empty ? null : candidate.AllLayers.FirstOrDefault(item => item.Id == layer.ParentLayerId);
+            if (parent != null) staged.ParentLayerId = document.Layers.FirstOrDefault(item => !item.IsDeleted && (item.Id == parent.Id || item.FullPath == parent.FullPath))?.Id ?? Guid.Empty;
+            plan.NewLayers.Add(staged);
+        }
+        return -1 - plan.NewLayers.IndexOf(staged);
+    }
+
+    private Plan Prepare(string filename, string hash, ChangeSet changes)
     {
         if (Hash(filename) != hash) throw new InvalidOperationException("SOURCE_CHANGED");
         using var candidate = Rhino.FileIO.File3dm.Read(filename);
         if (candidate == null || candidate.Settings.ModelUnitSystem != UnitSystem.Meters ||
             document.ModelUnitSystem is UnitSystem.None or UnitSystem.CustomUnits) throw new InvalidOperationException("UNSUPPORTED_APPLICATION");
-        if (candidate.Strings.Count != document.Strings.Count || Enumerable.Range(0, candidate.Strings.Count).Any(i =>
-            candidate.Strings.GetValue(i) != document.Strings.GetValue(candidate.Strings.GetKey(i))))
-            throw new InvalidOperationException("UNSUPPORTED_APPLICATION");
-        if (GroupIdentity.Signature(candidate.AllGroups) != GroupIdentity.Signature(document.Groups))
-            throw new InvalidOperationException("UNSUPPORTED_APPLICATION");
-        if (LayerIdentity.Signature(candidate.AllLayers) != LayerIdentity.Signature(document.Layers))
-            throw new InvalidOperationException("UNSUPPORTED_APPLICATION");
-        var current = document.Objects.GetObjectList(ObjectType.AnyObject).ToDictionary(WorkerScene.Id);
+        var written = candidate.Objects.GroupBy(obj => obj.Attributes.GetUserString("vide-id") ?? obj.Attributes.ObjectId.ToString())
+            .ToDictionary(group => group.Key, group => group.First());
+        var scale = RhinoMath.UnitScale(UnitSystem.Meters, document.ModelUnitSystem);
         var plan = new Plan();
         try
         {
-            if (candidate.Objects.Count > WorkerScene.MaxObjects) throw new InvalidOperationException("IMPORT_LIMIT");
-            foreach (var obj in candidate.Objects)
+            foreach (var id in changes.Written)
             {
-                var id = obj.Attributes.GetUserString("vide-id") ?? obj.Attributes.ObjectId.ToString();
-                if (plan.Items.ContainsKey(id) || obj.Attributes.MaterialIndex != -1 ||
-                    !(obj.Geometry is Brep or Extrusion or Curve or Mesh or Point)) throw new InvalidOperationException("UNSUPPORTED_APPLICATION");
-                var layer = candidate.AllLayers.FirstOrDefault(layer => layer.Index == obj.Attributes.LayerIndex);
-                var targetLayer = layer == null ? null : document.Layers.FirstOrDefault(item => !item.IsDeleted && item.Id == layer.Id);
-                if (targetLayer == null)
-                    throw new InvalidOperationException("UNSUPPORTED_APPLICATION");
+                if (!written.TryGetValue(id, out var obj)) throw new InvalidOperationException("INVALID_ARTIFACT");
+                if (obj.Geometry is InstanceReferenceGeometry) throw new InvalidOperationException("UNSUPPORTED_NATIVE_TARGET");
                 var geometry = obj.Geometry.Duplicate();
-                var attributes = obj.Attributes.Duplicate();
-                current.TryGetValue(id, out var original);
-                attributes.ObjectId = original?.Id ?? obj.Attributes.ObjectId;
-                attributes.LayerIndex = targetLayer.Index;
-                var item = new Item(id, attributes.ObjectId, geometry, attributes, WorkerReadback.Metadata(attributes, geometry));
-                plan.Items.Add(id, item);
-                var scale = RhinoMath.UnitScale(UnitSystem.Meters, document.ModelUnitSystem);
                 if (!geometry.Transform(Transform.Scale(Point3d.Origin, scale)) || !geometry.IsValid)
                     throw new InvalidOperationException("INVALID_GEOMETRY");
-                if (original == null)
+                var attributes = obj.Attributes.Duplicate();
+                attributes.LayerIndex = TargetLayer(candidate, obj.Attributes.LayerIndex, plan);
+                attributes.RemoveFromAllGroups();
+                var original = Live(id);
+                if (original != null)
                 {
-                    if (attributes.GroupCount > 0) throw new InvalidOperationException("UNSUPPORTED_NATIVE_TARGET");
-                    if (document.Objects.FindId(item.NativeId) != null) throw new InvalidOperationException("TARGET_MISMATCH");
-                    plan.Added.Add(id);
-                }
-                else if (!GeometryBase.GeometryEquals(original.Geometry, geometry) || WorkerReadback.Metadata(original) != item.Metadata)
-                {
-                    if (!(attributes.GetGroupList() ?? []).SequenceEqual(original.Attributes.GetGroupList() ?? []))
-                        throw new InvalidOperationException("UNSUPPORTED_NATIVE_TARGET");
+                    Unchanged(original, id, changes);
+                    // Materials and groups live in document tables the copy does not map; keep the live ones.
+                    attributes.ObjectId = original.Id;
+                    attributes.MaterialSource = original.Attributes.MaterialSource;
+                    attributes.MaterialIndex = original.Attributes.MaterialIndex;
+                    foreach (var group in original.Attributes.GetGroupList() ?? []) attributes.AddToGroup(group);
                     plan.Updated.Add(id);
                 }
+                else
+                {
+                    if (document.Objects.FindId(obj.Attributes.ObjectId) != null) attributes.ObjectId = Guid.NewGuid();
+                    attributes.MaterialSource = ObjectMaterialSource.MaterialFromLayer;
+                    attributes.MaterialIndex = -1;
+                    plan.Added.Add(id);
+                }
+                plan.Items.Add(id, new Item(id, attributes.ObjectId, geometry, attributes));
             }
-            foreach (var entry in current)
+            foreach (var id in changes.Removed)
             {
-                if (!plan.Items.ContainsKey(entry.Key)) plan.Removed.Add(entry.Value.Id);
-                if ((!plan.Items.ContainsKey(entry.Key) || plan.Updated.Contains(entry.Key)) &&
-                    (entry.Value.IsLocked || entry.Value.IsReference || entry.Value.IsInstanceDefinitionGeometry ||
-                     (entry.Value.Attributes.GroupCount > 0 && !plan.Items.ContainsKey(entry.Key)) || entry.Value.HasHistoryRecord() || entry.Value.HistoryParents().Length > 0 || entry.Value.HistoryChildren().Length > 0))
-                    throw new InvalidOperationException("UNSUPPORTED_NATIVE_TARGET");
+                var original = Live(id);
+                if (original == null) continue;
+                Unchanged(original, id, changes);
+                plan.Removed.Add(original.Id);
             }
             return plan;
         }
         catch { plan.Dispose(); throw; }
     }
 
-    private bool Matches(Plan plan)
-    {
-        var actual = document.Objects.GetObjectList(ObjectType.AnyObject).ToArray();
-        return actual.Length == plan.Items.Count && actual.All(obj => plan.Items.TryGetValue(WorkerScene.Id(obj), out var item) &&
-            obj.Id == item.NativeId && GeometryBase.GeometryEquals(obj.Geometry, item.Geometry) && WorkerReadback.Metadata(obj) == item.Metadata);
-    }
-
-    private string Difference(Plan plan)
+    private string? Difference(Plan plan)
     {
         foreach (var item in plan.Items.Values)
         {
             var obj = document.Objects.FindId(item.NativeId);
             if (obj == null) return "Missing target " + item.Id;
             if (!GeometryBase.GeometryEquals(obj.Geometry, item.Geometry)) return "Geometry mismatch " + item.Id;
-            var expected = item.Metadata;
-            var actual = WorkerReadback.Metadata(obj);
-            if (expected != actual) return "Attributes mismatch " + item.Id + ": " + string.Join(",", expected.Split('|').Except(actual.Split('|')).Select(value => value.Split('=')[0]));
         }
-        return "Object set mismatch";
+        foreach (var id in plan.Removed) if (document.Objects.FindId(id) != null) return "Not removed " + id;
+        return null;
     }
 
-    internal object Preview(string filename, string hash, string expected)
+    internal object Preview(string filename, string hash, string expected, ChangeSet changes)
     {
-        if (fingerprint() != expected) throw new InvalidOperationException("SOURCE_CHANGED");
-        using var plan = Prepare(filename, hash);
+        using var plan = Prepare(filename, hash, changes);
         return new { documentHash = expected, added = plan.Added.Count, updated = plan.Updated.Count, removed = plan.Removed.Count, mode = "sdk-native" };
     }
 
@@ -121,44 +164,43 @@ internal sealed class EditorApplication(RhinoDoc document, string directory, Fun
         File.Move(path + ".tmp", path, true);
     }
 
-    internal object Apply(string operation, string filename, string hash, string expected)
+    internal object Apply(string operation, string filename, string hash, string expected, ChangeSet changes)
     {
         if (!Guid.TryParseExact(operation, "D", out _)) throw new InvalidOperationException("INVALID_OPERATION");
         var receiptPath = Path.Combine(directory, operation + ".application.json");
-        if (File.Exists(receiptPath)) return Recover(operation, filename, hash, expected);
+        if (File.Exists(receiptPath)) return Recover(operation, filename, hash, expected, changes);
         var started = false;
         try
         {
-            if (fingerprint() != expected) return Outcome("failed", "SOURCE_CHANGED", false);
-            using var plan = Prepare(filename, hash);
-            Persist(receiptPath, new { operation, filename, hash, before = expected, mapping = plan.Items.ToDictionary(entry => entry.Key, entry => entry.Value.NativeId.ToString()), state = "unknown" });
-            var undo = document.BeginUndoRecord("VIDE candidate application");
+            using var plan = Prepare(filename, hash, changes);
+            Persist(receiptPath, new { operation, filename, hash, before = expected, mapping = plan.Items.ToDictionary(entry => entry.Key, entry => entry.Value.NativeId.ToString()), removed = plan.Removed, state = "unknown" });
+            var undo = document.BeginUndoRecord("VIDE AI 편집");
             try
             {
                 started = true;
+                var layers = new List<int>();
+                foreach (var layer in plan.NewLayers)
+                {
+                    var index = document.Layers.Add(layer);
+                    if (index < 0) throw new InvalidOperationException("Layer add failed: " + layer.Name);
+                    layers.Add(index);
+                }
+                foreach (var item in plan.Items.Values)
+                    if (item.Attributes.LayerIndex < 0) item.Attributes.LayerIndex = layers[-1 - item.Attributes.LayerIndex];
                 foreach (var id in plan.Removed) if (!document.Objects.Delete(id, true)) throw new InvalidOperationException("Delete failed");
                 foreach (var id in plan.Updated)
                 {
                     var item = plan.Items[id];
                     if (document.Objects.FindId(item.NativeId) == null || !item.Geometry.IsValid) throw new InvalidOperationException("Staged geometry or target missing");
                     if (!document.Objects.ModifyAttributes(item.NativeId, item.Attributes, true)) throw new InvalidOperationException("Attribute replace failed");
-                    var replaced = item.Geometry switch
-                    {
-                        Brep brep => document.Objects.Replace(item.NativeId, brep),
-                        Extrusion extrusion => document.Objects.Replace(item.NativeId, extrusion),
-                        Curve curve => document.Objects.Replace(item.NativeId, curve),
-                        Mesh mesh => document.Objects.Replace(item.NativeId, mesh),
-                        Point point => document.Objects.Replace(item.NativeId, point.Location),
-                        _ => false
-                    };
-                    if (!replaced) throw new InvalidOperationException("Geometry replace failed: " + item.Geometry.ObjectType);
+                    if (!document.Objects.Replace(item.NativeId, item.Geometry, true)) throw new InvalidOperationException("Geometry replace failed: " + item.Geometry.ObjectType);
                 }
                 foreach (var id in plan.Added)
                 {
                     var item = plan.Items[id];
                     if (document.Objects.Add(item.Geometry, item.Attributes) != item.NativeId) throw new InvalidOperationException("Add identity mismatch");
                 }
-                if (!Matches(plan)) throw new InvalidOperationException("Application verification failed: " + Difference(plan));
+                if (Difference(plan) is { } difference) throw new InvalidOperationException("Application verification failed: " + difference);
                 document.Views.Redraw();
                 Persist(receiptPath, new { operation, filename, hash, before = expected, after = fingerprint(), state = "succeeded" });
                 return Outcome("succeeded", "APPLIED", true);
@@ -170,7 +212,7 @@ internal sealed class EditorApplication(RhinoDoc document, string directory, Fun
         }
     }
 
-    internal object Recover(string operation, string filename, string hash, string expected)
+    internal object Recover(string operation, string filename, string hash, string expected, ChangeSet changes)
     {
         if (!Guid.TryParseExact(operation, "D", out _)) throw new InvalidOperationException("INVALID_OPERATION");
         try
@@ -180,10 +222,12 @@ internal sealed class EditorApplication(RhinoDoc document, string directory, Fun
             if (value.GetProperty("hash").GetString() != hash || value.GetProperty("before").GetString() != expected || value.GetProperty("filename").GetString() != filename)
                 return Outcome("unknown", "OPERATION_CONFLICT", false);
             if (value.GetProperty("state").GetString() == "succeeded") return Outcome("succeeded", "APPLIED", true);
-            using var plan = Prepare(filename, hash);
-            var mapping = value.GetProperty("mapping");
-            if (plan.Items.All(entry => mapping.TryGetProperty(entry.Key, out var nativeId) && nativeId.GetString() == entry.Value.NativeId.ToString()) && Matches(plan)) return Outcome("succeeded", "APPLIED", true);
             if (fingerprint() == expected) return Outcome("failed", "ORIGINAL_UNCHANGED", false);
+            // Every written object present and every removed one gone means the application completed.
+            var mapping = value.GetProperty("mapping");
+            var written = mapping.EnumerateObject().All(entry => Guid.TryParse(entry.Value.GetString(), out var id) && document.Objects.FindId(id) != null);
+            var removed = value.TryGetProperty("removed", out var gone) && gone.EnumerateArray().All(entry => document.Objects.FindId(entry.GetGuid()) == null);
+            if (written && removed && changes.Written.All(id => mapping.TryGetProperty(id, out _))) return Outcome("succeeded", "APPLIED", true);
         }
         catch { /* Unreadable receipt is not proof of success; report unknown below. */ }
         return Outcome("unknown", "HOST_RESULT_UNKNOWN", false);

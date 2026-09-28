@@ -16,7 +16,7 @@ import {
   providersSchema,
   hostStatusSchema,
 } from './workspace-data.ts';
-import type { Point2, DraftPin, DraftStroke } from './model.ts';
+import type { DraftPin, DraftStroke } from './model.ts';
 import type { MobileView } from './mobile-navigation.tsx';
 import { renderProjectHeading } from './project-heading.tsx';
 import { setMobileView } from './mobile-navigation.tsx';
@@ -30,10 +30,10 @@ import { attachSharedFeedback } from './shared-feedback.tsx';
 import { linkedCandidates, showLinkedTargets } from './linked-targets.tsx';
 import { renderHistory, expandAll, setExpandAll } from './history.tsx';
 import { initializeDocuments, attachConnectedSelection } from './documents.tsx';
-import { renderPoints, validCoordinate } from './sketch.tsx';
 import { renderRequests, renderActiveWork } from './requests.tsx';
 import { initializeInspector, renderInspector } from './inspector.ts';
 import { api, connect, errors } from './gateway.ts';
+import { remoteSession } from './remote-panel.ts';
 import { applyDisplayDelta } from '../core/display-delta.ts';
 import {
   objects,
@@ -48,7 +48,6 @@ import {
   draftHasInput,
   validate,
   packet,
-  attachSketch,
   attachBrushSketch,
 } from './model.ts';
 import { createObjectList, type SelectMode } from './object-list.ts';
@@ -104,7 +103,7 @@ const renderObjectList = createObjectList($('objects'), (ids, mode) => {
   if (ids.length === 1 && mode !== 'remove') viewport?.fit(ids[0]);
 });
 let foregroundRequest: { id: string; selected: typeof selectedResult; draft: string } | undefined;
-const focusDraft = () => JSON.stringify({ draft: draftSnapshot(state), points, strokes });
+const focusDraft = () => JSON.stringify({ draft: draftSnapshot(state), strokes });
 initializeWorkspacePanels();
 const workspaceStatus = initializeWorkspaceStatus({
   openFailure: (id) => {
@@ -124,7 +123,6 @@ const workspaceStatus = initializeWorkspaceStatus({
   },
 });
 let tool: 'select' | 'pin' | 'sketch' = 'select',
-  points: Point2[] = [],
   strokes: DraftStroke[] = [],
   toastTimer: ReturnType<typeof setTimeout> | undefined;
 const message = (text: string) => {
@@ -354,30 +352,21 @@ try {
 initializeDisplaySettings($('display-settings') as HTMLButtonElement, (settings) =>
   viewport?.display(settings),
 );
-function planeName() {
-  return z.enum(['XY', 'XZ', 'YZ']).parse($('plane').value);
-}
 function captureViewport() {
   if (!viewport) throw Error('3D 화면을 준비한 뒤 다시 시도하세요.');
   return viewport.capture();
 }
-/** Unattached brush strokes or numeric points. */
+/** Unattached brush strokes. */
 function pendingSketch() {
-  return points.length > 0 || strokes.length > 0;
-}
-function planeOffset() {
-  const value = $('plane-offset').valueAsNumber;
-  return Number.isFinite(value) ? value : 0;
+  return strokes.length > 0;
 }
 function draw() {
-  renderPoints(points, draw, message);
-  viewport?.sketches(state.sketches, strokes, points, planeName(), planeOffset());
-  $('finish-sketch').disabled = !strokes.length && points.length < 2;
+  viewport?.sketches(state.sketches, strokes);
+  $('finish-sketch').disabled = !strokes.length;
   $('undo-point').disabled = !pendingSketch();
   $('clear-sketch').disabled = !pendingSketch();
-  const placement = $('placement').value;
-  $('plane').hidden = $('plane-offset').hidden = placement !== 'plane';
 }
+const followSurface = () => $('brush-surface').getAttribute('aria-pressed') !== 'false';
 function brushSettings() {
   const width = $('brush-width').valueAsNumber || 4;
   $('brush-width-value').textContent = String(width);
@@ -386,9 +375,7 @@ function brushSettings() {
   viewport?.brush({
     color: $('brush-color').value,
     width,
-    placement: z.enum(['surface', 'view', 'plane']).parse($('placement').value),
-    plane: planeName(),
-    offset: planeOffset(),
+    surface: followSurface(),
     erase: $('brush-eraser').getAttribute('aria-pressed') === 'true',
   });
   draw();
@@ -397,11 +384,23 @@ function setEraser(on: boolean) {
   $('brush-eraser').setAttribute('aria-pressed', String(on));
   brushSettings();
 }
+/** Attach the drawn strokes to the message as one sketch. */
+function attachStrokes() {
+  if (!strokes.length) return;
+  attachBrushSketch(state, strokes, { placement: followSurface() ? 'surface' : 'view' });
+  strokes = [];
+  render();
+}
 function setTool(next: 'select' | 'pin' | 'sketch') {
-  if (tool === 'sketch' && next !== 'sketch' && pendingSketch()) {
-    message('그린 선을 첨부하거나 취소하세요.');
-    return;
-  }
+  // Leaving the sketch tool keeps what was drawn: the strokes join the message as a sketch.
+  if (tool === 'sketch' && next !== 'sketch' && pendingSketch())
+    try {
+      attachStrokes();
+      message('그린 선을 입력에 첨부했습니다.');
+    } catch (cause) {
+      message(readableError(cause).message);
+      return;
+    }
   tool = next;
   document
     .querySelectorAll<HTMLButtonElement>('[data-tool]')
@@ -411,7 +410,7 @@ function setTool(next: 'select' | 'pin' | 'sketch') {
   if (tool === 'sketch') brushSettings();
   $('tool-hint').textContent =
     tool === 'sketch'
-      ? '드래그로 그리기 · 우클릭 회전 · Shift+우클릭 이동 · 휠 확대 · E 지우개 · Esc 취소'
+      ? '펜·드래그로 그리기 · 손가락/우클릭 회전 · 두 손가락/Shift+우클릭 이동 · 휠·핀치 확대 · 위/앞/옆 보기는 그 평면에 그리기'
       : tool === 'pin'
         ? '객체를 누르면 입력에 첨부됩니다.'
         : '';
@@ -775,7 +774,7 @@ async function sendThumbnail() {
   if (project?.id !== target) return;
   thumbnailSent = Date.now();
   // Plain fetch: a missed card image is not a work error worth reporting.
-  await fetch(`/api/v1/projects/${encodeURIComponent(target)}/thumbnail`, {
+  await fetch(`api/v1/projects/${encodeURIComponent(target)}/thumbnail`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ image: canvas.toDataURL('image/jpeg', 0.72) }),
@@ -806,7 +805,6 @@ function renderConversation() {
       displayedResult = undefined;
       objects.splice(0, objects.length);
       viewport?.replace([]);
-      points = [];
       strokes = [];
       $('body').value = state.body;
       render();
@@ -876,7 +874,22 @@ const refreshAccount = accountIndicator(
   $('status-account'),
   () => models.find((m) => m.id === state.model)?.provider ?? '',
 );
-for (const model of models) el('option', model.name, $('model'), { value: model.id });
+/** Model menu grouped by service; an older draft's "CLI default" becomes that service's first model. */
+function fillModels() {
+  $('model').replaceChildren();
+  const labels: Record<string, string> = { 'claude-cli': 'Claude', 'codex-cli': 'ChatGPT' };
+  for (const provider of [...new Set(models.map((m) => m.provider))]) {
+    const group = el('optgroup', '', $('model'), { label: labels[provider] ?? provider });
+    for (const model of models.filter((m) => m.provider === provider))
+      el('option', model.name, group, { value: model.id });
+  }
+  if (!models.some((m) => m.id === state.model)) {
+    const first = models.find((m) => m.provider === state.model);
+    if (first) chooseModel(state, first.id);
+  }
+  $('model').value = state.model;
+}
+fillModels();
 $('model').onchange = () => {
   chooseModel(state, $('model').value);
   void refreshAccount();
@@ -1149,45 +1162,30 @@ $('selection-pin').onclick = () => {
 };
 for (const button of document.querySelectorAll<HTMLButtonElement>('[data-tool]'))
   button.onclick = () => setTool(z.enum(['select', 'pin', 'sketch']).parse(button.dataset.tool));
-$('plane').onchange = () => {
-  if (points.length) {
-    $('plane').value = state.drawingPlane || 'XY';
-    message('작성 중인 좌표 점을 첨부하거나 취소한 뒤 평면을 바꾸세요.');
-    return;
-  }
-  state.drawingPlane = planeName();
+for (const id of ['brush-color', 'brush-width'] as const)
+  $(id).addEventListener('input', brushSettings);
+$('brush-surface').onclick = () => {
+  $('brush-surface').setAttribute('aria-pressed', String(!followSurface()));
   brushSettings();
 };
-for (const id of ['placement', 'plane-offset', 'brush-color', 'brush-width'] as const)
-  $(id).addEventListener('input', brushSettings);
-$('placement').onchange = brushSettings;
-for (const swatch of document.querySelectorAll<HTMLButtonElement>('.swatch'))
+for (const swatch of document.querySelectorAll<HTMLButtonElement>('.swatch')) {
+  // The page CSP blocks inline style attributes; set each swatch's color through the CSSOM.
+  swatch.style.setProperty('--swatch', swatch.dataset.color ?? '#d0473a');
   swatch.onclick = () => {
     $('brush-color').value = swatch.dataset.color ?? '#d0473a';
     setEraser(false);
   };
+}
 $('brush-eraser').onclick = () =>
   setEraser($('brush-eraser').getAttribute('aria-pressed') !== 'true');
 $('clear-sketch').onclick = () => {
   strokes = [];
-  points = [];
   draw();
 };
 $('finish-sketch').onclick = () => {
   try {
-    if (strokes.length)
-      attachBrushSketch(state, strokes, {
-        placement: z.enum(['surface', 'view', 'plane']).parse($('placement').value),
-        role: $('line-role').value,
-        plane: $('plane').value,
-        planeOffset: planeOffset(),
-        points,
-      });
-    else attachSketch(state, points, $('plane').value, $('line-role').value);
-    points = [];
-    strokes = [];
+    attachStrokes();
     setTool('select');
-    render();
     mobileView('input');
     $('body').focus();
   } catch (cause) {
@@ -1195,13 +1193,11 @@ $('finish-sketch').onclick = () => {
   }
 };
 $('cancel-sketch').onclick = () => {
-  points = [];
   strokes = [];
   setTool('select');
 };
 $('undo-point').onclick = () => {
-  if (strokes.length) strokes.pop();
-  else points.pop();
+  strokes.pop();
   draw();
 };
 $('fit-view').onclick = () => viewport?.fit();
@@ -1239,6 +1235,10 @@ document.addEventListener('keydown', (e) => {
   if (tool === 'sketch' && !typing) {
     if (e.key === 'e' || e.key === 'E') {
       setEraser($('brush-eraser').getAttribute('aria-pressed') !== 'true');
+      return;
+    }
+    if (e.key === 's' || e.key === 'S') {
+      $('brush-surface').click();
       return;
     }
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
@@ -1295,7 +1295,6 @@ document.addEventListener('keydown', (e) => {
       render();
     }
     if (tool === 'sketch') {
-      points = [];
       strokes = [];
       setTool('select');
     }
@@ -1358,6 +1357,10 @@ async function renameProject(name: string) {
   }
 }
 function renderHeading() {
+  // Link back to the account site's project list when this PC is signed in.
+  const home = $('rail-home') as HTMLAnchorElement;
+  home.hidden = !accountSite;
+  if (accountSite) home.href = accountSite;
   if (!project) return;
   renderProjectHeading({
     projects,
@@ -1365,7 +1368,6 @@ function renderHeading() {
     select: selectProject,
     create: createProject,
     rename: renameProject,
-    site: accountSite,
   });
 }
 
@@ -1385,7 +1387,7 @@ $('model-file').onchange = async () => {
   message('모델 작업 사본을 읽고 있습니다.');
   try {
     const response = await fetch(
-      `/api/v1/projects/${currentProject().id}/import?name=${encodeURIComponent(file.name)}`,
+      `api/v1/projects/${currentProject().id}/import?name=${encodeURIComponent(file.name)}`,
       { method: 'POST', headers: { 'Content-Type': 'application/octet-stream' }, body: file },
     );
     const value: unknown = await response.json();
@@ -1417,7 +1419,7 @@ async function downloadReport(id: string) {
   try {
     selectedResult = id;
     renderMessages();
-    const response = await fetch(`/api/v1/projects/${currentProject().id}/requests/${id}/report`, {
+    const response = await fetch(`api/v1/projects/${currentProject().id}/requests/${id}/report`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ image: captureViewport() }),
@@ -1475,30 +1477,6 @@ $('add-request').onclick = () => {
   $('body').focus();
 };
 
-$('add-point').onclick = () => {
-  const point: Point2 = [$('point-u').valueAsNumber, $('point-v').valueAsNumber];
-  if (!point.every(validCoordinate)) {
-    message('U·V 좌표를 m 단위 숫자로 입력하세요.');
-    return;
-  }
-  if (points.length >= 1000) {
-    message('스케치 하나에 1,000점까지 입력할 수 있습니다.');
-    return;
-  }
-  points.push(point);
-  $('point-u').value = '';
-  $('point-v').value = '';
-  draw();
-  $('point-u').focus();
-};
-for (const id of ['point-u', 'point-v'] as const)
-  $(id).onkeydown = (e) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      $('add-point').click();
-    }
-  };
-
 let catalogGeneration = 0;
 window.addEventListener('vide-accounts-changed', () => {
   const current = ++catalogGeneration;
@@ -1506,10 +1484,8 @@ window.addEventListener('vide-accounts-changed', () => {
     const catalog = modelsSchema.parse(await api('/models'));
     if (current !== catalogGeneration) return;
     models.splice(0, models.length, ...catalog);
-    $('model').replaceChildren();
-    for (const model of models) el('option', model.name, $('model'), { value: model.id });
     // Keep the explicit model if supported; require a fresh selection if absent.
-    $('model').value = state.model;
+    fillModels();
     render();
     void refreshAccount();
   })().catch((error) => message(readableError(error).message));
@@ -1635,8 +1611,7 @@ async function initializeWorkspace() {
     void workspaceStatus.refreshAccount();
     const catalog = modelsSchema.parse(await api('/models'));
     models.splice(0, models.length, ...catalog);
-    $('model').replaceChildren();
-    for (const model of models) el('option', model.name, $('model'), { value: model.id });
+    fillModels();
     project = linked.project;
     state.messages = linked.requests.map(requestMessage);
     const lastSync = state.messages.filter((entry) => entry.source === 'document').at(-1);
@@ -1688,10 +1663,20 @@ async function initializeWorkspace() {
 window.addEventListener('vide:connection-lost', (event) => {
   ready = false;
   $('auth-status').hidden = false;
-  $('auth-status').textContent =
-    (event as CustomEvent<string>).detail === 'UNAUTHORIZED'
-      ? '로컬 인증이 만료됐습니다. VIDE 실행 링크로 다시 여세요. 초안은 유지됩니다.'
-      : '로컬 서버 연결이 끊겼습니다. 서버 확인 후 다시 여세요. 초안은 유지됩니다.';
+  const code = (event as CustomEvent<string>).detail;
+  if (remoteSession()) {
+    // Opened from another device: the PC restarted or went off. Reopen from the project list.
+    $('auth-status').textContent =
+      (code === 'UNAUTHORIZED'
+        ? '작업 PC 세션이 끝났습니다(PC 재시작 등).'
+        : errors[code] || '작업 PC 연결이 끊겼습니다.') + ' 초안은 유지됩니다. ';
+    el('a', '프로젝트 목록에서 다시 열기', $('auth-status'), { href: '/' });
+    message($('auth-status').textContent ?? '');
+  } else
+    $('auth-status').textContent =
+      code === 'UNAUTHORIZED'
+        ? '로컬 인증이 만료됐습니다. VIDE 실행 링크로 다시 여세요. 초안은 유지됩니다.'
+        : '로컬 서버 연결이 끊겼습니다. 서버 확인 후 다시 여세요. 초안은 유지됩니다.';
   $('connection-status').textContent = '연결 상태 확인 필요';
   $('host-status').textContent = '호스트 상태 확인 필요';
   render();

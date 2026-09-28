@@ -18,3 +18,20 @@ export function claudeEfforts(id: string): string[] {
     return ['default', 'low', 'medium', 'high', 'max'];
   return ['default'];
 }
+
+/** Current Claude family for the model menu (the Claude Code CLI keeps no model catalog). */
+export const CLAUDE_MODELS = [
+  ['claude-opus-5-5', 'Claude Opus 5.5'],
+  ['claude-fable-5-1', 'Claude Fable 5.1'],
+  ['claude-sonnet-5', 'Claude Sonnet 5'],
+  ['claude-haiku-4-5-20251001', 'Claude Haiku 4.5'],
+] as const;
+
+/** "claude-opus-5-5" → "Claude Opus 5.5" for IDs outside the list. */
+export function modelName(id: string) {
+  const known = CLAUDE_MODELS.find(([model]) => model === id);
+  if (known) return known[1];
+  const [, family, version] = /^claude-([a-z]+)-([\d-]+?)(?:-\d{8})?(\[1m\])?$/.exec(id) ?? [];
+  if (!family) return id;
+  return `Claude ${family[0].toUpperCase()}${family.slice(1)} ${version.replace(/-/g, '.')}`;
+}

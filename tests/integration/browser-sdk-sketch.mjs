@@ -25,32 +25,34 @@ try {
   await page.goto(app.launchUrl);
   await page.waitForFunction(() => document.querySelector('#project-picker')?.value);
   const projectId = await page.locator('#project-picker').inputValue();
-  await page.locator('#model').selectOption('claude-opus-4-6');
+  await page.locator('#model').selectOption('claude-opus-5-5');
   await page.locator('#effort').focus();
   await page.keyboard.press('Home');
   await page.keyboard.press('ArrowRight');
   assert.equal(await page.locator('#effort-label').textContent(), 'low');
   await page.locator('#permission').selectOption('candidate');
+  // A closed outline drawn by hand in the top view (on the XY plane through the orbit centre).
   await page.locator('[data-tool="sketch"]').click();
-  await page.locator('#sketch-coordinates').evaluate((node) => (node.open = true));
-  await page.locator('#line-role').selectOption('boundary');
-  const points = [
-    [0, 0],
-    [6, 0],
-    [6, 4],
-    [0, 4],
-    [0, 0],
-  ];
-  for (const [u, v] of points) {
-    await page.locator('#point-u').fill(String(u));
-    await page.locator('#point-v').fill(String(v));
-    await page.locator('#add-point').click();
-  }
+  await page.locator('[data-view="plan"]').click();
+  await page.locator('#brush-surface').click();
+  const box = await page.locator('#canvas canvas').boundingBox();
+  const cx = box.x + box.width / 2,
+    cy = box.y + box.height / 2;
+  await page.mouse.move(cx - 120, cy - 80);
+  await page.mouse.down();
+  for (const [x, y] of [
+    [120, -80],
+    [120, 80],
+    [-120, 80],
+    [-120, -80],
+  ])
+    await page.mouse.move(cx + x, cy + y, { steps: 10 });
+  await page.mouse.up();
   await page.locator('#finish-sketch').click();
   await page
     .locator('#body')
     .fill(
-      '첨부한 XY 경계 스케치 그대로 위로 3 m 돌출해서 닫힌 솔리드 하나를 만들어줘. 이름은 스케치 매스. 다른 객체는 만들지 마.',
+      '첨부한 스케치를 바닥 외곽선(직사각형으로 정리)으로 삼아 위로 3 m 돌출해서 닫힌 솔리드 하나를 만들어줘. 이름은 스케치 매스. 다른 객체는 만들지 마.',
     );
   await page.locator('#request').click();
   let saved;
@@ -70,8 +72,8 @@ try {
   assert.equal(saved.state, 'succeeded', JSON.stringify(saved.result));
   assert.equal(saved.result.executionMode, 'sdk');
   assert.equal(saved.result.hostExecuted, true);
-  assert.deepEqual(saved.input.sketches[0].points, points);
-  assert.equal(saved.input.sketches[0].role, 'boundary');
+  assert.equal(saved.input.sketches[0].placement, 'view');
+  assert.ok(saved.input.sketches[0].strokes[0].points.length >= 10);
   assert.equal(saved.result.objects.length, 1);
   const scene = saved.result.scene[0];
   assert.deepEqual(scene.boundsSize, [6, 4, 3]);

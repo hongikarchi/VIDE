@@ -66,7 +66,7 @@ function ReviewContent({
       <div className="quantity-head">
         <h2>{row.title}</h2>
         <a
-          href={`/api/v1/projects/${projectId}/reviews/${row.id}/download`}
+          href={`api/v1/projects/${projectId}/reviews/${row.id}/download`}
           download="VIDE-review.html"
         >
           HTML 내려받기
@@ -76,7 +76,7 @@ function ReviewContent({
       <iframe
         title="검토본 내용"
         sandbox=""
-        src={`/api/v1/projects/${projectId}/reviews/${row.id}/preview`}
+        src={`api/v1/projects/${projectId}/reviews/${row.id}/preview`}
       />
       <details className="review-notes">
         <summary>검토 의견</summary>

@@ -115,6 +115,7 @@ export class SdkExecution {
       name: captured.name,
       units: captured.units,
       selectedIds: captured.selectedIds,
+      capture: captured.filename,
       capturedAt: new Date().toISOString(),
     };
     try {
@@ -273,11 +274,10 @@ export class SdkExecution {
       const basis = z
         .object({ instance: z.string(), documentId: z.number(), documentHash: z.string() })
         .parse(previous.result.sourceDocument);
-      const current = await this.editors.inspect(basis);
-      if (current.documentHash !== basis.documentHash) throw failure('SOURCE_CHANGED');
+      // Edit the document as it is now. The Sync basis names the Rhino session and document; its
+      // revision also moves on material/property events and whenever the user keeps working in
+      // Rhino, so it cannot gate a request. Application checks this capture's content hash.
       const prepared = await this.captureEditor(basis, update);
-      if (prepared.sourceDocument.documentHash !== basis.documentHash)
-        throw failure('SOURCE_CHANGED');
       previous = { id: previous.id, result: prepared };
     }
     const options = this.options;
@@ -441,7 +441,7 @@ export class SdkExecution {
       });
       const goal = `Target is Rhino 8, dedicated working copy ${targetRef}, meters. Permission: ${input.permission}.
 Use query to observe current native IDs and bounds. For candidate permission, implement the user request with RhinoCommon SDK calls using execute. Send only a C# method body; the wrapper imports System, System.Linq, Rhino, Rhino.Geometry and supplies RhinoDoc doc. Do not declare a class or method. You may return a small JSON-serializable summary (numbers, strings, arrays, anonymous objects; at most 16 KiB) to observe calculated results. Do not return Rhino geometry/document instances. Example construction syntax: doc.Objects.AddBox(new Box(new BoundingBox(0,0,0,1,1,1))).
-Use supplied dimensions, sketches and pin roles. Sketch items: points are U/V metres on plane (XY/XZ/YZ through the origin); brush sketches carry strokes[].points as world XYZ polylines in metres drawn freehand by the user (placement surface=on model faces, view=screen plane, plane=axis plane at planeOffset), so treat them as approximate intent and snap to nearby geometry; color/width only distinguish strokes. role is reference, boundary, path or direction. Never invent a missing critical dimension; explain what is missing. Other-host references are read-only. Before replacing an object, retain its ID and duplicate its attributes; apply changed attributes with ModifyAttributes before typed Replace, then re-fetch the object and verify the requested attribute values after mutations. Keep vide-id on existing objects; copies need a new vide-id or removal of the inherited tag. Do not modify preserved/reference objects. Do not access files, processes, networking, other documents or application-wide state. The controller saves and reopens each successful edit. Never save/open documents yourself. Compilation diagnostics allow correction; after an uncertain result never execute again. Query after successful edits, then summarize actual results in Korean. For review permission only query is available; do not claim edits.
+Use supplied dimensions, sketches and pin roles. Sketch items: points are U/V metres on plane (XY/XZ/YZ through the origin); brush sketches carry strokes[].points as world XYZ polylines in metres drawn freehand by the user (placement surface=on model faces, view=a view plane, plane=axis plane at planeOffset), so treat them as approximate intent and snap to nearby geometry; color/width only distinguish strokes. What a sketch means (outline, path, direction, area) comes from the message text; an older sketch may also carry a role. When a dimension is missing but a standard or conventional value exists (e.g. a KS/JIS steel section table, typical thicknesses, the pinned objects' own dimensions), use the closest one, do the work and state the assumption in the reply; ask only when no reasonable value exists. Other-host references are read-only. Before replacing an object, retain its ID and duplicate its attributes; apply changed attributes with ModifyAttributes before typed Replace, then re-fetch the object and verify the requested attribute values after mutations. Keep vide-id on existing objects; copies need a new vide-id or removal of the inherited tag. Do not modify preserved/reference objects. Do not access files, processes, networking, other documents or application-wide state. The controller saves and reopens each successful edit. Never save/open documents yourself. Compilation diagnostics allow correction; after an uncertain result never execute again. Query after successful edits, then summarize actual results in Korean. For review permission only query is available; do not claim edits.
 Limits: ${executionLimits(input).maxToolCalls} tool calls, ${executionLimits(input).maxHostCommands} host commands, ${executionLimits(input).timeoutSeconds} seconds for the AI response. Stop at the limit and report remaining work.
 User request: ${input.body || '첨부한 설계 문맥을 검토해 주세요.'}`;
       activity.add('model', 'AI에 요청 전달 · 응답 대기');

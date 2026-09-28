@@ -82,7 +82,7 @@ const projectId = (value: unknown) => {
 };
 
 /** A one-minute token for the host's workspace, opening `project` there. */
-export async function openLinks(row: HostRow, project: string) {
+export async function openLinks(row: HostRow, project: string, site?: string) {
   const link = async (base: string | null) => {
     if (!base) return null;
     const payload = base64url(
@@ -91,7 +91,12 @@ export async function openLinks(row: HostRow, project: string) {
     const token = payload + '.' + (await hmac(row.secret, payload));
     return `${base}/?project=${encodeURIComponent(project)}#r=${token}`;
   };
-  return { hostId: row.id, remote: await link(row.url), local: await link(row.local_url) };
+  // Other devices open the PC through this site's fixed address; the tunnel behind it may change.
+  return {
+    hostId: row.id,
+    remote: await link(row.url ? (site ? `${site}/pc/${row.id}` : row.url) : null),
+    local: await link(row.local_url),
+  };
 }
 
 async function authenticateHost(request: Request, db: D1Database) {

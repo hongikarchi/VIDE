@@ -44,13 +44,27 @@ export async function applyAttachedCandidate(
       workspace.get(projectId, input.baseRequestId).result?.sourceDocument,
     );
     const returned = sourceSchema.parse(candidate.sourceDocument);
-    if (
-      source.instance !== returned.instance ||
-      source.documentId !== returned.documentId ||
-      source.documentHash !== returned.documentHash
-    )
+    // The candidate was made from a fresh capture of the same document (content hash checked at
+    // application), not necessarily from the Sync revision it was requested on.
+    if (source.instance !== returned.instance || source.documentId !== returned.documentId)
       throw { code: 'TARGET_MISMATCH' };
     if (signal.aborted) return finish('cancelled', { ...result, code: 'CANCELLED' });
+    // An answer or a question back to the user changes nothing: there is nothing to apply.
+    const changes = z
+      .object({
+        added: z.array(z.unknown()),
+        removed: z.array(z.unknown()),
+        modified: z.array(z.unknown()),
+      })
+      .safeParse(candidate.changes).data;
+    if (changes && !changes.added.length && !changes.removed.length && !changes.modified.length)
+      return finish('succeeded', {
+        ...result,
+        phase: 'complete',
+        hostExecuted: true,
+        applicationState: 'none',
+        activity: activity.entries,
+      });
     activity.add('host', '연결된 Rhino 문서에 적용 준비');
     finish('running', result);
     const prepared = await applications.prepare(projectId, id, source);

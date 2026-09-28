@@ -26,6 +26,7 @@ try {
   await page.locator('#body').fill('Review with bounded execution');
   const open = async () => {
     await page.locator('#workspace-settings').click();
+    await page.locator('[data-tab="ai"]').click();
     await page.locator('#execution-limits').click();
   };
   await open();

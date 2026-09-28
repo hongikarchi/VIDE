@@ -171,7 +171,10 @@ test('built UI assets load without exposing source files or build metadata', asy
   const { app } = await fixture(t);
   const page = await fetch(app.origin + '/');
   const html = await page.text();
-  const scripts = [...html.matchAll(/(?:src|href)="(\/assets\/[^" ]+)"/g)].map((match) => match[1]);
+  // Relative addresses: the same page is also served under the account site's /pc/<id>/ relay.
+  const scripts = [...html.matchAll(/(?:src|href)="\.(\/assets\/[^" ]+)"/g)].map(
+    (match) => match[1],
+  );
   assert.ok(scripts.length > 0);
   for (const path of scripts) {
     const response = await fetch(app.origin + path);

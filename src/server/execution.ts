@@ -2,7 +2,7 @@ import { isDwgSdkEditMode } from '../contracts/dwg-edit-mode.ts';
 import type { AccountProfiles } from '../ai/account-profiles.ts';
 import { executionLimits } from '../contracts/execution-limits.ts';
 import { modelContext } from './model-context.ts';
-import { claudeEfforts } from './model-capabilities.ts';
+import { CLAUDE_MODELS, claudeEfforts, modelName } from './model-capabilities.ts';
 import { requestConflict } from '../contracts/request-scope.ts';
 import { z } from 'zod';
 import { runLinked } from './linked-execution.ts';
@@ -143,63 +143,57 @@ export class Execution {
     });
   }
   async models() {
-    const catalog = [
-      {
-        id: 'claude-cli',
-        name: 'Claude · 기본 모델',
-        provider: 'claude-cli',
-        efforts: ['default'],
-      },
-      { id: 'codex-cli', name: 'ChatGPT · 기본 모델', provider: 'codex-cli', efforts: ['default'] },
-    ];
-    for (const [id, name] of [
-      ['claude-fable-5', 'Claude Fable 5'],
-      ['claude-opus-4-6', 'Claude Opus 4.6'],
-      ['claude-sonnet-4-6', 'Claude Sonnet 4.6'],
-    ])
+    // Explicit models only: a "CLI default" entry hid which model actually ran. ChatGPT models
+    // come from the Codex CLI's own catalog; Claude Code keeps none, so the current family is listed.
+    const catalog: { id: string; name: string; provider: string; efforts: string[] }[] = [];
+    for (const [id, name] of CLAUDE_MODELS)
       catalog.push({ id, name, provider: 'claude-cli', efforts: claudeEfforts(id) });
-    try {
-      const cache = z
-        .object({
-          models: z
-            .array(
-              z.object({
-                slug: z.string(),
-                visibility: z.string().optional(),
-                display_name: z.string().optional(),
-                supported_reasoning_levels: z.array(z.object({ effort: z.string() })).optional(),
-              }),
-            )
-            .optional(),
-        })
-        .parse(
-          JSON.parse(
-            await readFile(
-              join(
-                this.profiles?.directory('codex-cli', this.profiles.list().active['codex-cli']) ??
-                  join(homedir(), '.codex'),
-                'models_cache.json',
-              ),
-              'utf8',
-            ),
-          ),
+    // The Codex CLI keeps its model list per account folder; a newly added account has none until
+    // its first run, so fall back to the default folder, then to the CLI's own default model.
+    const codexCache = z.object({
+      models: z
+        .array(
+          z.object({
+            slug: z.string(),
+            visibility: z.string().optional(),
+            display_name: z.string().optional(),
+            supported_reasoning_levels: z.array(z.object({ effort: z.string() })).optional(),
+          }),
+        )
+        .optional(),
+    });
+    const active = this.profiles?.directory('codex-cli', this.profiles.list().active['codex-cli']);
+    const folders = [...(active ? [active] : []), join(homedir(), '.codex')];
+    for (const folder of folders) {
+      try {
+        const cache = codexCache.parse(
+          JSON.parse(await readFile(join(folder, 'models_cache.json'), 'utf8')),
         );
-      for (const model of cache.models || [])
-        if (model.visibility !== 'hide' && /^[a-zA-Z0-9._-]{1,100}$/.test(model.slug))
-          catalog.push({
-            id: model.slug,
-            name: model.display_name || model.slug,
-            provider: 'codex-cli',
-            efforts: [
-              'default',
-              ...(model.supported_reasoning_levels || [])
-                .map((x) => x.effort)
-                .filter((x) => ['low', 'medium', 'high', 'xhigh', 'max'].includes(x)),
-            ],
-          });
-    } catch {
-      /* Default model remains usable without a cached catalog. */
+        for (const model of cache.models || [])
+          if (model.visibility !== 'hide' && /^[a-zA-Z0-9._-]{1,100}$/.test(model.slug))
+            catalog.push({
+              id: model.slug,
+              name: model.display_name || model.slug,
+              provider: 'codex-cli',
+              efforts: [
+                'default',
+                ...(model.supported_reasoning_levels || [])
+                  .map((x) => x.effort)
+                  .filter((x) => ['low', 'medium', 'high', 'xhigh', 'max'].includes(x)),
+              ],
+            });
+      } catch {
+        /* No cached catalog in this folder. */
+      }
+      if (catalog.some((model) => model.provider === 'codex-cli')) break;
     }
+    if (!catalog.some((model) => model.provider === 'codex-cli'))
+      catalog.push({
+        id: 'codex-cli',
+        name: 'ChatGPT (CLI 기본 모델)',
+        provider: 'codex-cli',
+        efforts: ['default'],
+      });
     try {
       const settings = z
         .object({ model: z.string().optional() })
@@ -215,13 +209,15 @@ export class Execution {
             ),
           ),
         );
+      // Aliases (opus, sonnet…) name a listed model; only an explicit other ID is added.
       if (
         typeof settings.model === 'string' &&
+        settings.model.startsWith('claude-') &&
         /^[a-zA-Z0-9._-]{1,100}(?:\[1m\])?$/.test(settings.model)
       )
         catalog.push({
           id: settings.model,
-          name: settings.model,
+          name: modelName(settings.model),
           provider: 'claude-cli',
           efforts: claudeEfforts(settings.model),
         });

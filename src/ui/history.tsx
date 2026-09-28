@@ -11,6 +11,11 @@ import { applicationResultSchema } from '../contracts/workspace-result.ts';
 import { uiRequestSchema as workspaceRequestSchema } from './workspace-data.ts';
 import type { UiRequest as Request, UiMessage as Message } from './workspace-data.ts';
 import type { z } from 'zod';
+// Requests made before explicit models were listed ran each CLI's own default model.
+const legacyModels: Record<string, string> = {
+  'claude-cli': 'Claude (CLI 기본)',
+  'codex-cli': 'ChatGPT (CLI 기본)',
+};
 type Application = z.infer<typeof applicationResultSchema>;
 interface Actions {
   candidate: (id: string) => void;
@@ -190,7 +195,7 @@ function Candidate({
         {!displayOnly ? (
           <>
             <a
-              href={`/api/v1/projects/${projectId}/requests/${message.id}/model`}
+              href={`api/v1/projects/${projectId}/requests/${message.id}/model`}
               download={`VIDE-candidate.${extension}`}
             >
               {extension === 'dwg' ? 'DWG 내려받기' : '3dm 내려받기'}
@@ -277,7 +282,7 @@ function Card({
           : result?.displayOnly === true
             ? 'Rhino 화면 동기화'
             : 'Rhino 작업 사본'
-        : `${models.find((model) => model.id === message.model)?.name || message.model} · ${message.effort} · ${message.applyToSource ? 'Auto mode' : message.permission === 'review' ? 'Plan mode' : 'Accept edits'}`;
+        : `${models.find((model) => model.id === message.model)?.name || legacyModels[message.model] || message.model} · ${message.effort === 'default' ? '기본 강도' : message.effort} · ${message.applyToSource ? 'Auto mode' : message.permission === 'review' ? 'Plan mode' : 'Accept edits'}`;
   return (
     <article className="chat-message" data-request-id={message.id} data-open={String(open)}>
       {request && !['queued', 'running'].includes(request.state) ? (

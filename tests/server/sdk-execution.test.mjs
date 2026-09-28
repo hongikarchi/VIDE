@@ -100,7 +100,7 @@ test('SDK review cannot acquire execute and closes its owned worker', () =>
     assert.equal(result.hostExecuted, false);
     assert.deepEqual(counts(), { stopped: 1, revoked: 1, calls: 0 });
   }));
-test('display-only basis prepares a native copy before AI and stops on changed source', () =>
+test('display-only basis prepares a fresh native copy before AI, also after Rhino moved on', () =>
   fixture(async ({ sdk, task, launches, scope }) => {
     const sourceDocument = {
       instance: '1:2',
@@ -130,18 +130,15 @@ test('display-only basis prepares a native copy before AI and stops on changed s
         },
       }),
     });
+    // Rhino's revision moves on material/property events and ongoing work; the request edits the
+    // document as it is now (application checks each changed object against this capture).
     sdk.editors.inspect = async () => ({ documentHash: 'changed' });
-    await assert.rejects(
-      sdk.run({
-        ...task,
-        previous,
-        provider: () => {
-          throw Error('must not reach AI');
-        },
-      }),
-      { code: 'SOURCE_CHANGED' },
-    );
-    assert.equal(prepared, 1);
+    await sdk.run({
+      ...task,
+      previous,
+      provider: () => ({ run: async () => ({ text: 'Reviewed again' }) }),
+    });
+    assert.equal(prepared, 2);
     assert.equal(previous.result.displayOnly, true);
   }));
 

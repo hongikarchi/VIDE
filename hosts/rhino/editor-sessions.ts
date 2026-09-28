@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { join, resolve, relative, isAbsolute, dirname } from 'node:path';
 import { z } from 'zod';
 import { mkdir, readFile, writeFile, rename, readdir, lstat } from 'node:fs/promises';
-import { editorConnectionSchema, resumeEditor } from './editor-channel.ts';
+import { editorConnectionSchema, resumeEditor, type ChangeSet } from './editor-channel.ts';
 import { launchRhinoWorker } from './worker-client.ts';
 import type { HostTarget, HostDocuments } from '../../src/contracts/host-documents.ts';
 
@@ -28,7 +28,22 @@ const candidateSchema = z.object({
     documentHash: z.string(),
     /** Attached captures: full content hash (documentHash is the connection's revision token). */
     contentHash: z.string().optional(),
+    /** The captured copy (its receipt has the per-object hashes at capture time). */
+    capture: z.string(),
   }),
+  changes: z.object({
+    added: z.array(z.string()),
+    removed: z.array(z.string()),
+    modified: z.array(z.object({ id: z.string() })),
+  }),
+});
+const changeSet = (candidate: z.infer<typeof candidateSchema>): ChangeSet => ({
+  capture: candidate.sourceDocument.capture,
+  changes: {
+    added: candidate.changes.added,
+    removed: candidate.changes.removed,
+    modified: candidate.changes.modified.map((change) => change.id),
+  },
 });
 type ApplicationTarget = HostTarget & { documentHash: string; candidateHash: string };
 const failure = (code: string) => Object.assign(new Error(code), { code });
@@ -221,6 +236,7 @@ export class EditorSessions {
       candidate.filename,
       candidate.fileHash,
       candidate.sourceDocument.contentHash ?? candidate.sourceDocument.documentHash,
+      changeSet(candidate),
     );
   }
   async apply(id: string, value: unknown, target: ApplicationTarget) {
@@ -230,6 +246,7 @@ export class EditorSessions {
       candidate.filename,
       target.candidateHash,
       target.documentHash,
+      changeSet(candidate),
     );
   }
   async reconcile(id: string, value: unknown, target: ApplicationTarget) {
@@ -239,6 +256,7 @@ export class EditorSessions {
       candidate.filename,
       target.candidateHash,
       target.documentHash,
+      changeSet(candidate),
     );
   }
   async capture(target: HostTarget) {

@@ -1,6 +1,7 @@
 // Inline pins: "[고정1 · 6개]" tokens written into the message, each naming a set of pinned objects.
-// The textarea stays a plain textarea (IME-safe); a backdrop behind it paints tokens as chips and a
-// translucent ghost chip at the caret inserts the current viewport selection.
+// The textarea stays a plain textarea (IME-safe) with transparent text; a backdrop behind it, laid
+// out with the textarea's own metrics, paints the text and draws tokens as chips. A translucent
+// ghost chip at the caret inserts the current viewport selection.
 
 const TOKEN = /\[고정(\d+) · (\d+)개\]/g;
 
@@ -55,11 +56,42 @@ export function attachPinTokens(textarea: HTMLTextAreaElement, options: Options)
   field.append(backdrop, textarea, ghost);
   let caret = textarea.value.length;
 
+  // Same box and text metrics as the textarea, so painted glyphs sit exactly under its caret.
+  const METRICS = [
+    'boxSizing',
+    'paddingTop',
+    'paddingRight',
+    'paddingBottom',
+    'paddingLeft',
+    'borderTopWidth',
+    'borderRightWidth',
+    'borderBottomWidth',
+    'borderLeftWidth',
+    'fontFamily',
+    'fontSize',
+    'fontWeight',
+    'lineHeight',
+    'letterSpacing',
+    'wordSpacing',
+  ] as const;
+  const align = () => {
+    const style = getComputedStyle(textarea);
+    for (const key of METRICS) backdrop.style[key] = style[key];
+    backdrop.style.borderStyle = 'solid';
+    backdrop.style.borderColor = 'transparent';
+    backdrop.style.width = textarea.offsetWidth + 'px';
+    backdrop.style.height = textarea.offsetHeight + 'px';
+    // A textarea scrollbar narrows its text column; narrow the backdrop's the same way.
+    const borders = parseFloat(style.borderLeftWidth) + parseFloat(style.borderRightWidth);
+    const scrollbar = textarea.offsetWidth - textarea.clientWidth - borders;
+    backdrop.style.paddingRight = parseFloat(style.paddingRight) + scrollbar + 'px';
+  };
   const paint = () => {
     backdrop.innerHTML =
       escape(textarea.value).replace(
-        /\[고정(\d+) · (\d+)개\]/g,
-        (token) => `<mark class="pin-token">${token}</mark>`,
+        /\[(고정\d+ · \d+개)\]/g,
+        (_token, inner) =>
+          `<mark class="pin-token"><span class="pin-bracket">[</span>${inner}<span class="pin-bracket">]</span></mark>`,
       ) + '\n';
     backdrop.scrollTop = textarea.scrollTop;
   };
@@ -107,8 +139,14 @@ export function attachPinTokens(textarea: HTMLTextAreaElement, options: Options)
     ghost.hidden = count === 0 || textarea.disabled;
     if (ghost.hidden) return;
     ghost.textContent = `📌 고정 · ${count}개`;
-    const point = caretPoint();
     const maxLeft = Math.max(0, field.clientWidth - ghost.offsetWidth - 4);
+    // An empty field shows its placeholder at the caret; keep the chip clear of it, top right.
+    if (!textarea.value) {
+      ghost.style.left = `${maxLeft}px`;
+      ghost.style.top = '0px';
+      return;
+    }
+    const point = caretPoint();
     // Mid-sentence the chip drops one line so it does not cover the words after the caret.
     const midLine = caret < textarea.value.length && textarea.value[caret] !== '\n';
     const lineHeight = parseFloat(getComputedStyle(textarea).lineHeight) || 20;
@@ -174,9 +212,11 @@ export function attachPinTokens(textarea: HTMLTextAreaElement, options: Options)
       options.focusToken(token.label);
   });
   new ResizeObserver(() => {
+    align();
     paint();
     place();
   }).observe(textarea);
+  align();
   paint();
   return {
     /** Insert the current selection as a token at the last caret position. */

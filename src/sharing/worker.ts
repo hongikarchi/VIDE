@@ -5,6 +5,7 @@ import { publicationRoute } from './publications';
 import { commentRoute, exportComment } from './comments';
 import { hostDeviceRoute, hostRoute } from './hosts';
 import { accountRoute, displayName } from './accounts';
+import { PROXIED, isPcPath, pcProxy } from './pc-proxy';
 
 async function handle(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
   try {
@@ -39,6 +40,12 @@ async function handle(request: Request, env: Env, ctx: ExecutionContext): Promis
     if (url.pathname.startsWith('/api/account/'))
       return await accountRoute(request, env, auth, url.pathname);
     if (url.pathname.startsWith('/api/auth/')) return auth.handler(request);
+    // A signed-in user's own work PC, relayed under this site's address.
+    if (isPcPath(url.pathname)) {
+      const session = await auth.api.getSession({ headers: request.headers });
+      const allowed = session?.user && (manualApproval(env) || session.user.emailVerified);
+      return await pcProxy(request, env, allowed ? session.user.id : undefined);
+    }
     if (!url.pathname.startsWith('/api/')) {
       if (env.WEB && ['GET', 'HEAD'].includes(request.method)) return env.WEB.fetch(request);
       throw new HttpError(404, 'NOT_FOUND');
@@ -112,6 +119,11 @@ export default {
       response = new Response(result.body, result);
     response.headers.set('Referrer-Policy', 'no-referrer');
     response.headers.set('X-Content-Type-Options', 'nosniff');
+    // A relayed work PC page keeps the PC's own security policy.
+    if (response.headers.get(PROXIED)) {
+      response.headers.delete(PROXIED);
+      return response;
+    }
     response.headers.set(
       'Content-Security-Policy',
       "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; connect-src 'self' http://127.0.0.1:*; frame-ancestors 'none'; base-uri 'none'; form-action 'self'",

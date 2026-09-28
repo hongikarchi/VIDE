@@ -32,7 +32,12 @@ internal static class CodePolicy
                     var name = type?.ToDisplayString() ?? "";
                     // Rhino object tables inherit these read-only members from FileIO despite performing no file I/O.
                     var objectTableRead = ns == "Rhino.FileIO" && type?.OriginalDefinition.Name == "CommonComponentTable" && symbol.Name is "Count" or "GetEnumerator";
-                    if ((!objectTableRead && DeniedNamespaces.Any(prefix => ns == prefix || ns.StartsWith(prefix + ".", StringComparison.Ordinal))) ||
+                    // Reading a type's name (o.Geometry.GetType().Name) is common in queries and grants nothing;
+                    // every other Type/reflection member stays denied.
+                    var typeName = (symbol.Name == "GetType" && name == "object") ||
+                        (symbol.Name is "Name" or "FullName" && name is "System.Type" or "System.Reflection.MemberInfo");
+                    if (typeName) continue;
+                    if ((!objectTableRead &&DeniedNamespaces.Any(prefix => ns == prefix || ns.StartsWith(prefix + ".", StringComparison.Ordinal))) ||
                         name is "System.Environment" or "System.AppDomain" or "System.Type" or "System.Activator" or "System.Console" or "Rhino.RhinoApp" ||
                         symbol.Name == "GetType" && name == "object" ||
                         name == "Rhino.RhinoDoc" && (symbol.IsStatic || symbol.Name is "Dispose" or "Close" or "Write3dmFile" or "WriteFile" or "ReadFile" or "Import" or "Export"))

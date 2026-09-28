@@ -2,8 +2,8 @@
 id: ARCH-01
 title: VIDE 기술 구조와 구현 계약
 status: review
-version: 0.43
-updated: 2026-09-28
+version: 0.44
+updated: 2026-09-29
 owner: agent:codex
 related: [SPEC-00, SPEC-02, SPEC-03, SPEC-04, PLAN, ADR-014, ADR-015, ADR-016, ADR-017]
 ---
@@ -179,7 +179,7 @@ T-002의 첫 HTTP 구현은 프로젝트 목록·생성과 입력 목록·생성
 
 핀은 `{documentSessionId, basisId, nativeId, subRef?}` 또는 공간 위치다. 기하 스케치는 `{origin:[x,y,z], axisU:[x,y,z], axisV:[x,y,z], unit, points:[[u,v]], role}`이며 유한 수치·정규직교·알려진 단위를 검증한다. 화면 주석은 별도 kind와 assetId·2D 위치를 사용한다. 문서 간 변환은 source/target basis와 검증한 변환 행렬·단위를 포함한다.
 
-파라미터 전송은 `{targetRef, property, rawText, value, unit, provenance, conditionRevision}` 배열로 한다. 평면은 `{documentSessionId, basisId, kind: XY/XZ/YZ/face, origin, axisU, axisV, unit, confirmed}`이며 미확정은 초안 전용이다. 선 역할 값은 SPEC-01.5.3에 매핑한다. 초안 저장 검사와 실행 가능 검사를 분리하고, 누락 값을 기본 치수로 채우지 않는다. 실제 저장/API 구현은 T-013에서 진행한다.
+파라미터 전송은 `{targetRef, property, rawText, value, unit, provenance, conditionRevision}` 배열로 한다. 평면은 `{documentSessionId, basisId, kind: XY/XZ/YZ/face, origin, axisU, axisV, unit, confirmed}`이며 미확정은 초안 전용이다. 이전 스케치의 선 역할 값은 SPEC-01.5.3대로 보존만 한다(새 스케치는 역할 없음). 초안 저장 검사와 실행 가능 검사를 분리하고, 누락 값을 기본 치수로 채우지 않는다. 실제 저장/API 구현은 T-013에서 진행한다.
 
 마이그레이션은 schema 버전 확인→백업→트랜잭션 변경→무결성 확인 순서다. 과거 실험 run에 task가 없다면 보존된 기존 실행으로 읽고, 새로운 실행용 관계를 자동 사실로 꾸미지 않는다. 새 실행부터 필수 관계를 적용한다. 자산 쓰기 실패 때 DB가 없는 파일을 완료 자산으로 가리키지 않게 한다.
 
@@ -439,6 +439,8 @@ Rhino inspectEditor는 선택한 문서의 IsReadOnly를 readOnly로 반환해 �
 
 첫 이식 범위는 독립 형상과 검증된 속성이다. Rhino는 저장된 사본의 객체를 읽어 Add/Replace와 명시된 삭제를 수행하고 레이어·재질 참조를 매핑한다. ZWCAD는 설치 SDK의 객체 복제/수정 API(예: WblockCloneObjects 계열)의 실제 사용 가능성을 시험하고 ID/Handle 대응을 기록한다. API 이름이 같다는 이유로 호환성을 선언하지 않는다. 블록·그룹·외부 참조·문서 설정·플러그인 데이터는 각각 지원을 검증한다. 이식 불가 항목은 사본 열람/계속 편집만 가능하다고 표시하며 무손실 이식을 약속하지 않는다.
 
+**Rhino 변경분 적용(2026-09-29).** 연결 문서 요청은 Sync 기준의 revision 토큰이 아니라 요청 시점의 문서를 새로 캡처해 편집한다(revision은 재질·문서 속성 이벤트와 사용자의 계속된 작업으로 움직여 요청을 막았다). 캡처 영수증(`<연결 폴더>/<op>.3dm.capture.json`)은 객체별 지문 `objects{vide-id: WorkerScene.Fingerprint}`을 담고, 사본 검증은 파일이 열리는지만 본다(전체 readback 동일성·개수 비교는 하지 않는다). 후보의 `sourceDocument.capture`가 그 캡처를 가리킨다. 원본 적용(`previewEditorApplication`·`applyEditorCandidate`·`recoverEditorApplication`)은 `{capture, changes:{added, modified, removed}}`(작업 사본의 `WorkerChanges` 전체 목록)를 받아 **AI가 바꾼 객체만** 쓴다: 추가·수정 객체는 사본에서 읽어 문서 단위로 변환해 Add/`Replace(Guid, GeometryBase, true)`·ModifyAttributes, 삭제는 명시된 것만 지운다. 수정·삭제 대상은 현재 지문이 캡처 때와 같아야 하며(아니면 `SOURCE_CHANGED`) 잠김·참조·블록 정의 형상이면 `UNSUPPORTED_NATIVE_TARGET`이다. 레이어는 id→전체 경로 순으로 찾고 없으면 만든다. 기존 객체의 재질·그룹은 원본 것을 유지하고 새 객체는 레이어 재질·그룹 없음으로 둔다. 블록 인스턴스 쓰기는 지원하지 않는다. 바뀐 객체가 없는 응답(질문·설명)은 적용 없이 성공(`applicationState: none`)이다. 적용 확인은 쓴 객체의 형상과 삭제 결과만 다시 본다.
+
 원본의 관련 객체·보존 대상과 의존 자원 버전을 적용 직전에 검사한다. 변경을 확인 못 하면 관련 적용을 보류한다. 적용 전 전달 자료를 검증하고, 적용 뒤 실제 객체/속성/ID를 재조회해 기록한다. 일부 실패·응답 유실은 확인분과 불명확분을 분리하고 전체 Undo로 다른 편집을 지우지 않는다. 새 형상 생성→사본 추가 수정→원본 적용→호스트 직접 편집·저장·재열기를 검증한다.
 
 
@@ -585,6 +587,7 @@ R2 조건부 쓰기/체크섬은 [공식 Workers API](https://developers.cloudfl
 - 로컬: `src/server/remote-access.ts`가 PC 키를 `<데이터>/remote-host.json`(0600, 비밀번호 미저장)에 두고 시작 시 heartbeat와(원격 접속이 켜져 있으면) `cloudflared tunnel --no-autoupdate --url http://127.0.0.1:<port>`를 재개한다. 터널 주소는 `Registered tunnel connection`과 실제 응답을 확인한 뒤 알린다. heartbeat 응답의 프로젝트는 같은 id로 로컬에 만들거나 이름을 맞춘다. 로컬에서 만든·바꾼 프로젝트는 즉시 올린다. 기본 포트는 47821(사용 중이면 임의 포트)이고 로컬 세션 값은 `<데이터>/local-session.key`에 두어 재시작 뒤에도 열린 화면이 이어진다.
 - 같은 PC 판별: 사이트는 켜진 PC의 `local` 주소에 `GET /api/v1/hello`를 보낸다. 서버는 Origin이 연결된 사이트일 때만 CORS로 `{hostId}`를 답한다(사설망 사전 요청 허용). 일치하면 그 브라우저는 로컬 링크로, 아니면 원격 링크로 연다.
 - 세션: `POST /api/v1/session {remoteToken}`은 로컬 요청이면 서명·만료(2분 이내)·nonce 재사용을 검사하고 로컬 세션 쿠키를, 터널 Host 요청이면 `vide_remote` 쿠키(HttpOnly·Secure·SameSite=Strict, 12시간, 터널 종료 시 폐기)를 준다. 두 경우 모두 응답 전에 heartbeat로 사이트의 새 프로젝트를 받는다. 원격 세션은 `/api/v1/shutdown`, `/api/v1/remote*` 쓰기, `/mcp`, `accounts`·`settings`·`extensions`의 쓰기를 쓰지 못한다. 교차 사이트 요청은 API가 아닌 GET 화면 이동만 허용한다.
+- 사이트 중계(2026-09-29): 다른 기기의 열기 링크는 터널 주소가 아니라 `<사이트>/pc/<hostId>/?project=<id>#r=<token>`이다. Worker(`src/sharing/pc-proxy.ts`)는 로그인한 소유자의 PC가 켜져 있고 터널 주소가 있을 때 요청을 그 터널로 흘려보낸다. 사이트 쿠키·Referer는 빼고, 사이트 Origin만 받아 PC의 Origin(터널)으로 바꾸고, PC 세션 쿠키는 `vide_remote_<hostId 16진>`(Path=`/pc/<hostId>/`)으로 저장했다가 PC에는 `vide_remote`로 넘긴다. PC 응답의 보안 정책(CSP)은 그대로 둔다. PC가 꺼졌거나 원격이 꺼졌으면 503(`HOST_OFFLINE`·`HOST_REMOTE_OFF`, 화면 이동이면 안내 페이지), 터널 무응답은 502 `HOST_UNREACHABLE`이다. 작업 화면은 상대 주소(`api/v1/…`, Vite `base: './'`)만 써서 PC 루트와 `/pc/<id>/` 양쪽에서 같다. 터널이 다시 시작돼도 같은 주소로 다시 열린다. 사이트는 PWA 설정(`manifest.webmanifest`, 아이콘, iOS 메타)을 제공해 아이패드 홈 화면에 앱으로 추가할 수 있다. 모든 작업 요청이 Worker를 거치므로 Workers 요청 수(무료 10만/일)를 쓴다.
 - 버전: heartbeat 상태에 PC 프로그램 버전을 싣는다. `MIN_APP_VERSION`(선택)보다 낮은 PC는 목록에 "업데이트 필요"로 보이고 열기는 409 `HOST_UPDATE_REQUIRED`다. 비교는 점 구분 숫자이며 사이트↔PC 계약은 하위 호환으로만 바꾼다.
 
 ### PC 프로그램

@@ -74,17 +74,14 @@ try {
   await page.locator('#inspector-toggle').click();
   await page.locator('[data-tool=sketch]').click();
   assert.equal(await page.locator('#sketch-tools').isVisible(), true);
-  await page.fill('#point-u', '0');
-  await page.fill('#point-v', '0');
-  await page.locator('#add-point').click();
-  await page.fill('#point-u', '10');
-  await page.fill('#point-v', '5');
-  await page.locator('#add-point').click();
-  assert.equal(await page.locator('.coordinate-row').count(), 2);
-  await page.getByLabel('점 2 U', { exact: true }).fill('12');
-  await page.getByLabel('점 2 U', { exact: true }).press('Tab');
-  assert.equal(await page.getByLabel('점 2 U', { exact: true }).inputValue(), '12');
+  const canvasBox = await page.locator('#canvas canvas').boundingBox();
+  await page.mouse.move(canvasBox.x + 200, canvasBox.y + 200);
+  await page.mouse.down();
+  await page.mouse.move(canvasBox.x + 320, canvasBox.y + 260, { steps: 8 });
+  await page.mouse.up();
+  assert.equal(await page.locator('#finish-sketch').isDisabled(), false);
   await page.locator('#cancel-sketch').click();
+  assert.equal(await page.locator('#sketch-tools').isVisible(), false);
   await page.locator('[data-view=axon]').click();
   await page.locator('#projection-toggle').click();
   assert.equal(

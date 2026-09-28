@@ -9,6 +9,7 @@ import { mkdir, readFile, writeFile, readdir } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { randomUUID, randomBytes } from 'node:crypto';
+import { execFileSync } from 'node:child_process';
 import { chromium, devices } from 'playwright';
 import { startServer } from '../../src/server/server.ts';
 import { Workspace } from '../../src/core/workspace.ts';
@@ -188,7 +189,8 @@ try {
   began = Date.now();
   transferred = 0;
   await card.click();
-  await page.waitForURL(/trycloudflare\.com/, { timeout: 60_000 });
+  // The site's fixed address relays the PC; the page never sees the tunnel address.
+  await page.waitForURL((url) => url.href.startsWith(`${sharing}/pc/`), { timeout: 60_000 });
   await page.waitForFunction(() => document.querySelector('#body')?.disabled === false, null, {
     timeout: 120_000,
   });
@@ -228,8 +230,8 @@ try {
   await page.screenshot({ path: join(directory, 'ipad-model.png') });
   // 5. Sketch with touch on the model, attach it, and send a message.
   await page.locator('button[data-tool="sketch"]').tap();
-  // Draw on the screen plane so the stroke does not depend on hitting a surface.
-  await page.locator('#placement').selectOption('view');
+  // Draw on the view plane so the stroke does not depend on hitting a surface.
+  await page.locator('#brush-surface').tap();
   const canvas = await page.locator('#canvas canvas').boundingBox();
   const touch = (type, x, y) =>
     cdp.send('Input.dispatchTouchEvent', {
@@ -283,6 +285,52 @@ try {
   assert.equal(result.sketchReceived, true);
   await page.screenshot({ path: join(directory, 'ipad-sent.png') });
   result.errors = errors;
+  // cloudflared dies on its own (network change): the PC opens a new tunnel by itself and the
+  // same page address keeps working with the same session.
+  const before = (await local('/remote')).url;
+  const port = new URL(app.launchUrl).port;
+  execFileSync('powershell', [
+    '-NoProfile',
+    '-Command',
+    `Get-CimInstance Win32_Process -Filter "Name='cloudflared.exe'" | Where-Object { $_.CommandLine -like '*127.0.0.1:${port}*' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }`,
+  ]);
+  let reopened;
+  for (let i = 0; i < 120; i++) {
+    reopened = await local('/remote');
+    if (reopened.running && reopened.url && reopened.url !== before) break;
+    await new Promise((r) => setTimeout(r, 1000));
+  }
+  assert.notEqual(reopened.url, before, JSON.stringify(reopened));
+  // The relay's waiting page retries by itself until the site hears the new address.
+  began = Date.now();
+  const reloadResponses = [];
+  page.on('response', (response) =>
+    reloadResponses.push(`${response.status()} ${new URL(response.url()).pathname}`),
+  );
+  await page.reload();
+  try {
+    // Polled across the waiting page's own reloads.
+    let ready = false;
+    for (const end = Date.now() + 120_000; !ready && Date.now() < end; ) {
+      ready = await page
+        .evaluate(() => document.querySelector('#body')?.disabled === false)
+        .catch(() => false);
+      if (!ready) await new Promise((r) => setTimeout(r, 1000));
+    }
+    if (!ready) throw Error('Workspace did not reopen after the tunnel restart');
+  } catch (error) {
+    await page.screenshot({ path: join(directory, 'ipad-reopen-timeout.png') });
+    console.log(
+      JSON.stringify({
+        reopened,
+        text: (await page.locator('body').innerText()).slice(0, 600),
+        responses: reloadResponses.slice(-20),
+      }),
+    );
+    throw error;
+  }
+  result.reopenedAfterTunnelRestartMs = Date.now() - began;
+  assert.ok(page.url().startsWith(`${sharing}/pc/`));
   // 6. A browser on the PC itself opens the same project locally (no tunnel).
   const desktop = await browser.newContext({ viewport: { width: 1440, height: 900 } });
   await desktop.grantPermissions(['local-network-access'], { origin: sharing }).catch(() => {});

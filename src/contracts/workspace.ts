@@ -44,7 +44,8 @@ export const sketchStrokeSchema = z
 export const brushSketchSchema = z
   .object({
     unit: z.literal('m'),
-    role: sketchRole,
+    // What a sketch means (outline, path, direction) comes from the message; older ones name it.
+    role: sketchRole.optional(),
     placement: z.enum(['surface', 'view', 'plane']),
     plane: z.enum(['XY', 'XZ', 'YZ']).optional(),
     planeOffset: coordinate.optional(),

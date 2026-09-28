@@ -1,7 +1,7 @@
 import { sceneRepresentation } from '../core/scene-representation.ts';
 import { displayCoordinates } from '../core/display-coordinates.ts';
 import type { DisplayGeometry } from '../core/scene-representation.ts';
-import type { Point2, Point3, DraftStroke, SketchPlacement } from './model.ts';
+import type { Point2, Point3, DraftStroke } from './model.ts';
 import { planePoint } from './model.ts';
 import * as THREE from 'three';
 import { defaultDisplay, type DisplaySettings } from './display-settings.ts';
@@ -38,9 +38,8 @@ type ToolMode = 'select' | 'pin' | 'sketch';
 export interface BrushSettings {
   color: string;
   width: number;
-  placement: SketchPlacement;
-  plane: PlaneName;
-  offset: number;
+  /** Follow model surfaces under the pen; otherwise stay on the stroke's view plane. */
+  surface: boolean;
   erase: boolean;
 }
 export type SketchEvent =
@@ -723,11 +722,16 @@ export function createViewport(
   let brush: BrushSettings = {
     color: '#d0473a',
     width: 4,
-    placement: 'surface',
-    plane: 'XY',
-    offset: 0,
+    surface: true,
     erase: false,
   };
+  // Grease-Pencil-like depth: a stroke lies on the view plane through its anchor — the surface
+  // under its first point, else the last surface point drawn on (like Blender's 3D cursor), else
+  // the orbit centre. In top/front/side views that view plane is the axis plane itself.
+  let anchor: THREE.Vector3 | null = null;
+  // Apple Pencil: once a pen is seen, the pen draws and fingers only navigate.
+  let penSeen = false;
+  const touches = new Set<number>();
   // Screen-constant line widths need the drawing buffer size.
   const lineMaterials = new Set<LineMaterial>();
   function strokeLine(points: THREE.Vector3[], color: string, width: number) {
@@ -791,6 +795,11 @@ export function createViewport(
     controls.enableRotate = !standardView;
     controls.mouseButtons.LEFT = undefined;
     controls.mouseButtons.RIGHT = standardView ? THREE.MOUSE.PAN : THREE.MOUSE.ROTATE;
+    // Touch: one finger orbits (pans in top/front/side), two fingers zoom and pan. While
+    // sketching without a pen, one finger draws instead.
+    controls.touches.ONE =
+      mode === 'sketch' && !penSeen ? null : standardView ? THREE.TOUCH.PAN : THREE.TOUCH.ROTATE;
+    controls.touches.TWO = THREE.TOUCH.DOLLY_PAN;
   }
   function reportCamera() {
     dirty = true;
@@ -955,8 +964,22 @@ export function createViewport(
     return e.ctrlKey || e.metaKey ? 'remove' : e.shiftKey ? 'add' : 'replace';
   }
   function pointerDown(e: PointerEvent) {
+    if (e.pointerType === 'touch') touches.add(e.pointerId);
+    if (e.pointerType === 'pen' && !penSeen) {
+      penSeen = true;
+      configure();
+    }
     if (e.button !== 0) return;
     if (mode === 'sketch') {
+      // A second finger means navigation (pinch/pan): drop the stroke the first finger began.
+      if (e.pointerType === 'touch' && (penSeen || touches.size > 1)) {
+        if (drawing) {
+          drawing = null;
+          clearGroup(live);
+          dirty = true;
+        }
+        return;
+      }
       renderer.domElement.setPointerCapture?.(e.pointerId);
       if (brush.erase) {
         erasing = true;
@@ -973,31 +996,26 @@ export function createViewport(
     const normal = camera.getWorldDirection(new THREE.Vector3()).negate();
     return new THREE.Plane().setFromNormalAndCoplanarPoint(normal, through);
   }
-  function fixedPlane() {
-    const normal =
-      brush.plane === 'XY'
-        ? new THREE.Vector3(0, 0, 1)
-        : brush.plane === 'XZ'
-          ? new THREE.Vector3(0, 1, 0)
-          : new THREE.Vector3(1, 0, 0);
-    return new THREE.Plane(normal, -brush.offset);
-  }
-  /** Grease-Pencil-like placement: onto model surfaces, a view plane, or a fixed axis plane. */
-  function projectPoint(e: PointerEvent, fallback: THREE.Plane) {
+  const surfaceHit = (e: PointerEvent) => {
     rayAt(e);
-    if (brush.placement === 'surface') {
-      const hit = ray.intersectObjects(surfaceMeshes(), false)[0];
-      if (hit) {
-        // Continue off the edge of an object at the depth of the last surface point.
-        if (drawing) drawing.fallback = viewPlane(hit.point);
-        return hit.point.clone();
-      }
+    return ray.intersectObjects(surfaceMeshes(), false)[0];
+  };
+  /** Onto the surface under the pen (when following surfaces), else onto the stroke's plane. */
+  function projectPoint(e: PointerEvent, fallback: THREE.Plane) {
+    const hit = brush.surface ? surfaceHit(e) : undefined;
+    if (hit) {
+      // Continue off the edge of an object at the depth of the last surface point.
+      if (drawing) drawing.fallback = viewPlane(hit.point);
+      anchor = hit.point.clone();
+      return hit.point.clone();
     }
+    if (!brush.surface) rayAt(e);
     return ray.ray.intersectPlane(fallback, new THREE.Vector3());
   }
   function startStroke(e: PointerEvent) {
-    const fallback =
-      brush.placement === 'plane' ? fixedPlane() : viewPlane(controls.target.clone());
+    const hit = surfaceHit(e);
+    if (hit) anchor = hit.point.clone();
+    const fallback = viewPlane((anchor ?? controls.target).clone());
     drawing = {
       points: [],
       screen: { x: e.clientX, y: e.clientY },
@@ -1188,6 +1206,7 @@ export function createViewport(
     return picked;
   }
   function pointerUp(e: PointerEvent) {
+    touches.delete(e.pointerId);
     if (e.button === 0 && mode === 'sketch') {
       erasing = false;
       finishStroke();
@@ -1211,7 +1230,8 @@ export function createViewport(
     const id = ownerId(ray.intersectObjects(visibleMeshes(), true)[0]?.object);
     onPick(id ? [id] : [], selectionMode(e), mode === 'pin');
   }
-  function cancel() {
+  function cancel(e?: PointerEvent) {
+    if (e) touches.delete(e.pointerId);
     down = null;
     marquee.hidden = true;
     drawing = null;
@@ -1380,16 +1400,10 @@ export function createViewport(
       return hiddenIds.size;
     },
     projection,
-    /** Attached sketches, unattached brush strokes and numeric plane points. */
-    sketches(
-      attached: readonly DisplaySketch[],
-      draft: DraftStroke[],
-      draftPoints: Point2[],
-      plane: PlaneName,
-      offset = 0,
-    ) {
+    /** Attached sketches (older ones may be plane points) and the unattached brush strokes. */
+    sketches(attached: readonly DisplaySketch[], draft: DraftStroke[]) {
       draftStrokes = draft;
-      const signature = JSON.stringify([attached, draft, draftPoints, plane, offset]);
+      const signature = JSON.stringify([attached, draft]);
       if (signature === lineSignature) return;
       lineSignature = signature;
       dirty = true;
@@ -1413,8 +1427,6 @@ export function createViewport(
       for (const stroke of draft)
         if (stroke.points.length >= 2)
           lines.add(strokeLine(stroke.points.map(vector), stroke.color, stroke.width));
-      if (draftPoints.length >= 2)
-        lines.add(strokeLine(planeStroke(draftPoints, plane, offset), '#c5684b', 3));
     },
     dispose() {
       cancelAnimationFrame(frame);

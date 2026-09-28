@@ -103,7 +103,7 @@ function ReviewComparison({ projectId, rows }: { projectId: string; rows: Review
                 key={label}
                 title={label}
                 sandbox=""
-                src={`/api/v1/projects/${projectId}/reviews/${id}/preview`}
+                src={`api/v1/projects/${projectId}/reviews/${id}/preview`}
               />
             ))
           : null}

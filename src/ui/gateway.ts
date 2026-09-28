@@ -4,7 +4,7 @@ export const projectSchema = z.object({ id: z.string(), name: z.string() }).pass
 export async function api(path: string, method = 'GET', data?: unknown): Promise<unknown> {
   let response;
   try {
-    response = await fetch('/api/v1' + path, {
+    response = await fetch('api/v1' + path, {
       method,
       headers: data ? { 'Content-Type': 'application/json' } : {},
       body: data ? JSON.stringify(data) : undefined,
@@ -18,12 +18,13 @@ export async function api(path: string, method = 'GET', data?: unknown): Promise
   } catch {
     throw apiError('INVALID_RESPONSE');
   }
-  if (!response.ok)
-    throw apiError(
-      result && typeof result === 'object' && 'code' in result && typeof result.code === 'string'
-        ? result.code
-        : 'REQUEST_FAILED',
-    );
+  if (!response.ok) {
+    // The PC answers {code}; the account site relaying it answers {error} (PC off, unreachable).
+    const code = z
+      .union([z.object({ code: z.string() }), z.object({ error: z.string() })])
+      .safeParse(result).data;
+    throw apiError(code ? ('code' in code ? code.code : code.error) : 'REQUEST_FAILED');
+  }
   return result;
 }
 export async function connect() {
@@ -85,6 +86,10 @@ export const errors: Record<string, string> = {
   TIMEOUT: '응답 시간이 초과됐습니다.',
   PROVIDER_FAILED: 'AI 공급자가 요청을 완료하지 못했습니다.',
   UNAUTHORIZED: '서버가 표시한 실행 링크로 다시 열어 주세요.',
+  LOGIN_REQUIRED: '웹사이트 로그인이 끝났습니다. 다시 로그인한 뒤 여세요.',
+  HOST_OFFLINE: '작업 PC가 꺼졌습니다. PC에서 VIDE를 켠 뒤 다시 여세요.',
+  HOST_REMOTE_OFF: '작업 PC의 원격 접속이 꺼졌습니다.',
+  HOST_UNREACHABLE: '작업 PC가 응답하지 않습니다. 잠시 후 다시 여세요.',
 };
 Object.assign(errors, {
   HOST_UNAVAILABLE: 'Rhino 설치와 호스트 연결 상태를 확인하세요.',
@@ -151,7 +156,17 @@ Object.assign(errors, {
 function apiError(code: string) {
   if (typeof window !== 'undefined')
     window.dispatchEvent(new CustomEvent('vide:api-error', { detail: errors[code] || code }));
-  if (typeof window !== 'undefined' && ['UNAUTHORIZED', 'NETWORK_UNAVAILABLE'].includes(code))
+  if (
+    typeof window !== 'undefined' &&
+    [
+      'UNAUTHORIZED',
+      'NETWORK_UNAVAILABLE',
+      'LOGIN_REQUIRED',
+      'HOST_OFFLINE',
+      'HOST_REMOTE_OFF',
+      'HOST_UNREACHABLE',
+    ].includes(code)
+  )
     window.dispatchEvent(new CustomEvent('vide:connection-lost', { detail: code }));
   return Object.assign(new Error(errors[code] || `요청 처리 오류 (${code})`), { code });
 }

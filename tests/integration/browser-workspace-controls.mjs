@@ -54,15 +54,15 @@ try {
   assert.equal(await page.locator('#effort-label').textContent(), '기본값');
   await page.locator('#workspace-settings').click();
   const settings = page.getByRole('dialog', { name: '상태 및 설정', exact: true });
-  assert.equal(
-    await settings.getByRole('button', { name: 'AI 계정 · 연결 설정' }).isVisible(),
-    true,
-  );
-  await settings.getByRole('button', { name: 'AI 계정 · 연결 설정' }).click();
+  // Settings are tabs: account, AI, connected programs, (PC program), status.
+  await settings.getByRole('button', { name: 'AI', exact: true }).click();
+  assert.equal(await settings.getByRole('button', { name: 'AI 계정 관리' }).isVisible(), true);
+  await settings.getByRole('button', { name: 'AI 계정 관리' }).click();
   const aiSettings = page.getByRole('dialog', { name: 'AI 연결 설정', exact: true });
   await aiSettings.waitFor();
   await aiSettings.getByRole('button', { name: '닫기', exact: true }).click();
   await page.locator('#workspace-settings').click();
+  await settings.getByRole('button', { name: '계정 · 원격 접속', exact: true }).click();
   // VIDE account login: typed values survive the panel's status polling; password can be shown.
   await settings.getByLabel('아이디', { exact: true }).fill('studio');
   await settings.getByLabel('비밀번호', { exact: true }).fill('secret-pass');
@@ -289,6 +289,7 @@ try {
     route.fulfill({ status: 401, json: { code: 'UNAUTHORIZED' } }),
   );
   await page.locator('#workspace-settings').click();
+  await page.locator('[data-tab="ai"]').click();
   await page.locator('#ai-settings').click();
   await page.waitForFunction(() => !document.querySelector('#auth-status').hidden);
   assert.match(

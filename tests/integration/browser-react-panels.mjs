@@ -235,37 +235,21 @@ try {
   );
   await page.screenshot({ path: join(directory, 'react-quantities.png') });
   await quantities.getByRole('button', { name: '닫기', exact: true }).click();
+  // Sketch (Grease Pencil style): swatches show their colours, the top view draws on the XY
+  // plane, and switching to the select tool keeps the strokes by attaching them.
   await page.locator('[data-tool="sketch"]').click();
-  await page.locator('#sketch-coordinates').evaluate((node) => (node.open = true));
-  for (const [u, v] of [
-    ['0', '0'],
-    ['2', '3'],
-  ]) {
-    await page.locator('#point-u').fill(u);
-    await page.locator('#point-v').fill(v);
-    await page.locator('#add-point').click();
-  }
-  await page.getByLabel('점 2 U', { exact: true }).fill('4.5');
-  await page.getByLabel('점 2 U', { exact: true }).press('Enter');
-  await page.getByLabel('점 1 U', { exact: true }).fill('100001');
-  await page.getByLabel('점 1 U', { exact: true }).press('Tab');
-  assert.equal(await page.getByLabel('점 1 U', { exact: true }).inputValue(), '0');
-  await page.locator('#finish-sketch').click();
-  const sketch = await page.evaluate(
-    (id) => JSON.parse(localStorage.getItem('vide:draft:' + id)).sketches.at(-1),
-    first,
+  assert.equal(
+    await page
+      .locator('.swatch[data-color="#3c6fd0"]')
+      .evaluate((node) => getComputedStyle(node).backgroundColor),
+    'rgb(60, 111, 208)',
   );
-  assert.deepEqual(sketch.points, [
-    [0, 0],
-    [4.5, 3],
-  ]);
-  assert.equal(sketch.plane, 'XY');
-  assert.equal(sketch.role, 'reference');
-  // Free brush: drag on the canvas, projected onto the XY plane at a 2 m offset.
-  await page.locator('[data-tool="sketch"]').click();
-  await page.locator('#placement').selectOption('plane');
-  await page.locator('#plane-offset').fill('2');
-  await page.locator('#plane-offset').dispatchEvent('input');
+  assert.equal(await page.locator('#placement').count(), 0);
+  assert.equal(await page.locator('#point-u').count(), 0);
+  assert.equal(await page.locator('#line-role').count(), 0);
+  await page.locator('[data-view="plan"]').click();
+  await page.locator('#brush-surface').click();
+  assert.equal(await page.locator('#brush-surface').getAttribute('aria-pressed'), 'false');
   await page.locator('.swatch[data-color="#3c6fd0"]').click();
   const brushBox = await page.locator('#canvas canvas').boundingBox();
   const bx = brushBox.x + brushBox.width / 2,
@@ -278,17 +262,19 @@ try {
   await page.keyboard.press('e');
   assert.equal(await page.locator('#brush-eraser').getAttribute('aria-pressed'), 'true');
   await page.keyboard.press('e');
-  await page.locator('#finish-sketch').click();
+  await page.locator('[data-tool="select"]').click();
+  assert.equal(await page.locator('#sketch-tools').isHidden(), true);
   const brushSketch = await page.evaluate(
     (id) => JSON.parse(localStorage.getItem('vide:draft:' + id)).sketches.at(-1),
     first,
   );
-  assert.equal(brushSketch.placement, 'plane');
-  assert.equal(brushSketch.planeOffset, 2);
+  assert.equal(brushSketch.placement, 'view');
+  assert.equal(brushSketch.role, undefined);
   assert.equal(brushSketch.strokes.length, 1);
   assert.equal(brushSketch.strokes[0].color, '#3c6fd0');
   assert.ok(brushSketch.strokes[0].points.length >= 3);
-  assert.ok(brushSketch.strokes[0].points.every((point) => Math.abs(point[2] - 2) < 1e-6));
+  const z = brushSketch.strokes[0].points[0][2];
+  assert.ok(brushSketch.strokes[0].points.every((point) => Math.abs(point[2] - z) < 1e-6));
   await page.setViewportSize({ width: 390, height: 844 });
   await page.locator('button[data-mobile="input"]').click();
   assert.equal(await page.getByLabel('요청 1', { exact: true }).inputValue(), 'edited');

@@ -85,6 +85,7 @@ try {
   // Settings: the "PC 프로그램" section exists only inside the program window.
   await page.locator('#workspace-settings').click();
   const settings = page.getByRole('dialog', { name: '상태 및 설정', exact: true });
+  await settings.getByRole('button', { name: 'PC 프로그램', exact: true }).click();
   await settings.getByRole('heading', { name: 'PC 프로그램' }).waitFor();
   assert.match(await settings.textContent(), /VIDE \d+\.\d+\.\d+/);
   assert.match(await settings.textContent(), /설치된 프로그램이 아니어서/);

@@ -13,10 +13,8 @@ interface Props {
   select: (id: string) => void;
   create: (name: string) => Promise<void>;
   rename: (name: string) => Promise<void>;
-  /** Account website of this PC, when signed in: link back to all projects. */
-  site?: string;
 }
-function ProjectHeading({ projects, selected, select, create, rename, site }: Props) {
+function ProjectHeading({ projects, selected, select, create, rename }: Props) {
   const [editing, setEditing] = useState<'new' | 'rename' | null>(null),
     [value, setValue] = useState(''),
     [busy, setBusy] = useState(false);
@@ -57,16 +55,6 @@ function ProjectHeading({ projects, selected, select, create, rename, site }: Pr
     );
   return (
     <>
-      {site ? (
-        <a
-          className="project-home"
-          href={site}
-          title="모든 프로젝트 (웹사이트)"
-          aria-label="모든 프로젝트"
-        >
-          ⌂
-        </a>
-      ) : null}
       <select
         id="project-picker"
         aria-label="프로젝트"

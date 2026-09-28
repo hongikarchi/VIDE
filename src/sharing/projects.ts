@@ -154,7 +154,7 @@ export async function projectRoute(
       .bind(host.id, Date.now(), projectId)
       .run();
     return json({
-      ...(await openLinks(host, projectId)),
+      ...(await openLinks(host, projectId, env.AUTH_ORIGIN)),
       host: hostView(host, Date.now(), env.MIN_APP_VERSION),
     });
   }

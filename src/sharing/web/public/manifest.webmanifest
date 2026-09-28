@@ -1,0 +1,17 @@
+{
+  "name": "VIDE",
+  "short_name": "VIDE",
+  "description": "작업 PC의 VIDE 프로젝트를 열고 AI와 함께 모델을 다룹니다.",
+  "lang": "ko",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#292d2e",
+  "theme_color": "#292d2e",
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

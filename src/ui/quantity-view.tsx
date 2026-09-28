@@ -287,7 +287,7 @@ export function QuantityView({
       </div>
       <a
         download="VIDE-quantities.csv"
-        href={`/api/v1/projects/${projectId}/requests/${requestId}/quantities.csv?${new URLSearchParams(table.query)}`}
+        href={`api/v1/projects/${projectId}/requests/${requestId}/quantities.csv?${new URLSearchParams(table.query)}`}
       >
         CSV 내려받기
       </a>

@@ -4,13 +4,9 @@ interface Controls {
   model: HTMLSelectElement;
   effort: HTMLInputElement;
   permission: HTMLSelectElement;
-  plane: HTMLSelectElement;
-  'line-role': HTMLSelectElement;
   projection: HTMLSelectElement;
   files: HTMLInputElement;
   'model-file': HTMLInputElement;
-  'point-u': HTMLInputElement;
-  'point-v': HTMLInputElement;
   'attach-menu': HTMLDetailsElement;
   request: HTMLButtonElement;
   pin: HTMLButtonElement;
@@ -22,8 +18,6 @@ interface Controls {
   'brush-color': HTMLInputElement;
   'clear-sketch': HTMLButtonElement;
   'brush-width': HTMLInputElement;
-  'plane-offset': HTMLInputElement;
-  placement: HTMLSelectElement;
 }
 export function element<K extends keyof Controls>(id: K): Controls[K];
 export function element(id: string): HTMLElement;

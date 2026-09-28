@@ -30,6 +30,24 @@ class TestLog extends Log {
     logs += message + '\n';
   }
 }
+// The PC behind its quick tunnel, as the site's /pc/ relay reaches it.
+const relayed = [];
+const tunnel = async (request) => {
+  relayed.push({
+    url: request.url,
+    method: request.method,
+    origin: request.headers.get('Origin'),
+    cookie: request.headers.get('Cookie'),
+    body: request.method === 'GET' ? '' : await request.text(),
+  });
+  return new Response(JSON.stringify({ relayed: true }), {
+    headers: {
+      'Content-Type': 'application/json',
+      'Set-Cookie': 'vide_remote=session-1; HttpOnly; Secure; SameSite=Strict; Path=/',
+      'Content-Security-Policy': "default-src 'self'",
+    },
+  });
+};
 const runtimeOptions = {
   resourcePersistencePath: join(directory, 'state'),
   telemetry: { enabled: false },
@@ -56,6 +74,7 @@ const runtimeOptions = {
           EMAIL_FROM: { type: 'text', value: 'VIDE <noreply@example.com>' },
         },
       },
+      dev: { outboundService: { type: 'fetcher', handler: tunnel } },
     },
   ],
 };
@@ -236,10 +255,57 @@ try {
   assert.equal(opened.status, 200, JSON.stringify(opened));
   const remoteLink = new URL(opened.value.remote),
     localLink = new URL(opened.value.local);
-  assert.equal(remoteLink.origin, 'https://a-b-c.trycloudflare.com');
+  // Other devices open the PC through the site's fixed address, not the changing tunnel.
+  assert.equal(remoteLink.origin, origin);
+  assert.equal(remoteLink.pathname, `/pc/${hostId}/`);
   assert.equal(localLink.origin, 'http://127.0.0.1:1234');
   assert.equal(remoteLink.searchParams.get('project'), made.value.id);
   assert.equal((await open(made.value.id, eve)).status, 404);
+  // The relay: owner only; the PC sees its own origin and only its own cookie; the PC's session
+  // cookie comes back scoped to this PC's path; the PC's page keeps its own security policy.
+  const relay = (path, init = {}) =>
+    mf.dispatchFetch(origin + path, {
+      ...init,
+      headers: { Origin: origin, 'Content-Type': 'application/json', ...init.headers },
+    });
+  let relayedResponse = await relay(`/pc/${hostId}/api/v1/projects?x=1`, {
+    method: 'POST',
+    body: '{"name":"n"}',
+    headers: { Cookie: `${alice.cookie}; vide_remote_${hostId.replace(/-/g, '')}=session-0` },
+  });
+  assert.equal(relayedResponse.status, 200, await relayedResponse.clone().text());
+  assert.deepEqual(await relayedResponse.json(), { relayed: true });
+  assert.deepEqual(relayed.at(-1), {
+    url: 'https://a-b-c.trycloudflare.com/api/v1/projects?x=1',
+    method: 'POST',
+    origin: 'https://a-b-c.trycloudflare.com',
+    cookie: 'vide_remote=session-0',
+    body: '{"name":"n"}',
+  });
+  assert.match(
+    relayedResponse.headers.get('Set-Cookie'),
+    new RegExp(`^vide_remote_${hostId.replace(/-/g, '')}=session-1; .*Path=/pc/${hostId}/$`),
+  );
+  assert.equal(relayedResponse.headers.get('Content-Security-Policy'), "default-src 'self'");
+  const relayedCount = relayed.length;
+  relayedResponse = await relay(`/pc/${hostId}/api/v1/projects`, {
+    headers: { Cookie: eve.cookie },
+  });
+  assert.equal(relayedResponse.status, 404);
+  relayedResponse = await relay(`/pc/${hostId}/api/v1/projects`);
+  assert.equal(relayedResponse.status, 401);
+  relayedResponse = await relay(`/pc/${hostId}/api/v1/projects`, {
+    method: 'POST',
+    headers: { Cookie: alice.cookie, Origin: 'https://evil.example' },
+  });
+  assert.equal(relayedResponse.status, 403);
+  assert.equal(relayed.length, relayedCount);
+  relayedResponse = await relay(`/pc/${hostId}?project=p`, {
+    headers: { Cookie: alice.cookie },
+    redirect: 'manual',
+  });
+  assert.equal(relayedResponse.status, 302);
+  assert.equal(relayedResponse.headers.get('Location'), `${origin}/pc/${hostId}/?project=p`);
   // A PC below the site's minimum program version (numeric: 0.9 < 0.10) must update first.
   pcVersion = '0.9.3';
   await pc.heartbeat();

@@ -18,13 +18,13 @@ const connectorsSchema = z.array(
 type Connector = z.infer<typeof connectorsSchema>[number];
 const pluginText: Record<Connector['plugin'], string> = {
   none: '플러그인 미설치',
-  other: '다른 위치의 플러그인 사용 중(개발 빌드 등)',
+  other: '개발용 플러그인이 연결돼 있습니다',
   outdated: '새 플러그인 버전이 있습니다',
   current: '최신 플러그인 설치됨',
 };
 const actionText: Record<Connector['plugin'], string> = {
   none: '설치',
-  other: '이 버전으로 설치',
+  other: '설치 버전으로 바꾸기',
   outdated: '업데이트',
   current: '다시 설치',
 };
@@ -72,7 +72,7 @@ export function attachConnectorsPanel(section: HTMLElement, dialog: HTMLDialogEl
     el('h3', '연결 프로그램', section);
     el(
       'small',
-      'Rhino·CAD 등에서 VIDE와 연결하는 플러그인입니다. 프로그램별로 설치합니다.',
+      '각 프로그램 안에서 VIDE와 연결하는 플러그인입니다. 설치 후 프로그램을 다시 시작하면 VIDE 패널이 생깁니다.',
       section,
     );
     if (failure) el('p', failure, section, { class: 'remote-error', role: 'alert' });
@@ -91,9 +91,21 @@ export function attachConnectorsPanel(section: HTMLElement, dialog: HTMLDialogEl
         !row.available
           ? '이 PC에 설치되지 않음'
           : pluginText[row.plugin] +
-              (row.running ? ' · 실행 중 (종료 후 설치)' : '') +
+              (row.running ? ' · 실행 중이면 종료 후 설치' : '') +
               (row.version ? ` · ${row.version}` : ''),
         label,
+      );
+      el(
+        'span',
+        !row.available
+          ? '없음'
+          : row.plugin === 'current'
+            ? '연결됨'
+            : row.plugin === 'none'
+              ? '미설치'
+              : '확인 필요',
+        item,
+        { class: 'pill', 'data-ok': String(row.available && row.plugin === 'current') },
       );
       if (row.available)
         el('button', busy === row.id ? '설치 중…' : actionText[row.plugin], item, {

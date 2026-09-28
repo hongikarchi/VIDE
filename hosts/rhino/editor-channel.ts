@@ -92,6 +92,14 @@ const editorCaptureSchema = editorSnapshotSchema
       .regex(/^[a-f0-9]{64}$/)
       .nullish(),
   });
+/**
+ * What an application writes: the objects the AI added, modified or removed in its copy (by VIDE
+ * id), and the capture that copy came from (its receipt holds each object's hash at capture time).
+ */
+export interface ChangeSet {
+  capture: string;
+  changes: { added: string[]; modified: string[]; removed: string[] };
+}
 function editorReply<T>(schema: z.ZodType<T>, value: unknown): T {
   const error = z.object({ ok: z.literal(false), code: z.string() }).safeParse(value);
   if (error.success) throw failure(error.data.code);
@@ -193,10 +201,20 @@ export function editorMethods(
       );
       return editorReply(editorCaptureSchema, await call('verifyEditorCapture', { operationId }));
     },
-    async previewEditorApplication(filename: string, candidateHash: string, documentHash: string) {
+    async previewEditorApplication(
+      filename: string,
+      candidateHash: string,
+      documentHash: string,
+      change: ChangeSet,
+    ) {
       return editorReply(
         applicationPreviewSchema,
-        await call('previewEditorApplication', { filename, candidateHash, documentHash }),
+        await call('previewEditorApplication', {
+          filename,
+          candidateHash,
+          documentHash,
+          ...change,
+        }),
       );
     },
     async applyEditorCandidate(
@@ -204,10 +222,17 @@ export function editorMethods(
       filename: string,
       candidateHash: string,
       documentHash: string,
+      change: ChangeSet,
     ) {
       return editorReply(
         applicationOutcomeSchema,
-        await call('applyEditorCandidate', { operationId, filename, candidateHash, documentHash }),
+        await call('applyEditorCandidate', {
+          operationId,
+          filename,
+          candidateHash,
+          documentHash,
+          ...change,
+        }),
       );
     },
     async recoverEditorApplication(
@@ -215,6 +240,7 @@ export function editorMethods(
       filename: string,
       candidateHash: string,
       documentHash: string,
+      change: ChangeSet,
     ) {
       return editorReply(
         applicationOutcomeSchema,
@@ -223,6 +249,7 @@ export function editorMethods(
           filename,
           candidateHash,
           documentHash,
+          ...change,
         }),
       );
     },

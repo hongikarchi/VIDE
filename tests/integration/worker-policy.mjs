@@ -20,7 +20,8 @@ try {
     'System.Diagnostics.Process.Start("cmd.exe");',
     'new System.Net.WebClient();',
     'System.Environment.GetEnvironmentVariable("PATH");',
-    'var type=doc.GetType();',
+    // Reading a type name is allowed; anything else on Type (reflection) is not.
+    'var method=doc.GetType().GetMethod("Dispose");',
     'var type=typeof(RhinoDoc);',
     'dynamic value=doc; value.Dispose();',
     'Rhino.RhinoApp.RunScript("_New",false);',
@@ -39,7 +40,7 @@ try {
   const safe = await worker.execute(
     randomUUID(),
     0,
-    'var note="System.IO.File is harmless text"; doc.Objects.AddBox(new Box(new BoundingBox(0,0,0,2,3,4))); return new { count=doc.Objects.Count, note };',
+    'var note="System.IO.File is harmless text"; doc.Objects.AddBox(new Box(new BoundingBox(0,0,0,2,3,4))); return new { count=doc.Objects.Count, note, kinds=doc.Objects.Select(o=>o.Geometry.GetType().Name).ToArray() };',
   );
   assert.equal(safe.ok, true, JSON.stringify(safe));
   assert.equal((await worker.exportModel()).scene[0].volume, 24);

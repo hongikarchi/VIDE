@@ -96,18 +96,13 @@ interface HostSelection {
   selectedIds: string[];
 }
 export const objects: DraftObject[] = [];
+/** Replaced by the engine's catalog on connect; this entry only fills the menu before that. */
 export const models: ModelOption[] = [
   {
-    id: 'claude-cli',
-    name: 'Claude · 계정 기본 모델',
+    id: 'claude-opus-5-5',
+    name: 'Claude Opus 5.5',
     provider: 'claude-cli',
-    efforts: ['default'],
-  },
-  {
-    id: 'codex-cli',
-    name: 'ChatGPT · 계정 기본 모델',
-    provider: 'codex-cli',
-    efforts: ['default'],
+    efforts: ['default', 'low', 'medium', 'high', 'xhigh', 'max'],
   },
 ];
 export const initial = (): DraftState => ({
@@ -266,56 +261,15 @@ export function packet(s: DraftState) {
     ...(s.applyToSource ? { applyToSource: true } : {}),
   });
 }
-export function attachSketch(s: DraftState, points: Point2[], plane: string, role: string) {
-  if (points.length < 2) throw Error('두 점 이상 그리세요.');
-  if (
-    !['XY', 'XZ', 'YZ'].includes(plane) ||
-    !['reference', 'boundary', 'path', 'direction'].includes(role)
-  )
-    throw Error('평면과 역할을 확인하세요.');
-  if (role === 'direction' && points.length !== 2) throw Error('방향은 두 점으로 지정하세요.');
-  if (points.some((p) => p.length !== 2 || p.some((n) => !Number.isFinite(n))))
-    throw Error('좌표를 확인하세요.');
-  s.sketches.push({
-    id: crypto.randomUUID(),
-    name: `스케치 ${s.sketches.length + 1}`,
-    plane,
-    origin: [0, 0, 0],
-    axisU: plane === 'YZ' ? [0, 1, 0] : [1, 0, 0],
-    axisV: plane === 'XY' ? [0, 1, 0] : [0, 0, 1],
-    unit: 'm',
-    role,
-    points: structuredClone(points),
-  });
-}
-
-/** Attach free brush strokes (world XYZ metres) as one sketch; numeric points join as a stroke. */
+/** Attach free brush strokes (world XYZ metres) as one sketch. */
 export function attachBrushSketch(
   s: DraftState,
   strokes: DraftStroke[],
-  options: {
-    placement: SketchPlacement;
-    role: string;
-    plane: string;
-    planeOffset: number;
-    points?: Point2[];
-  },
+  options: { placement: SketchPlacement },
 ) {
-  const { placement, role, plane, planeOffset } = options;
-  if (
-    !['reference', 'boundary', 'path', 'direction'].includes(role) ||
-    !['XY', 'XZ', 'YZ'].includes(plane) ||
-    !Number.isFinite(planeOffset)
-  )
-    throw Error('평면과 역할을 확인하세요.');
-  const all = strokes.map((stroke) => structuredClone(stroke));
-  if (options.points && options.points.length >= 2)
-    all.push({
-      points: options.points.map(([u, v]) => planePoint(plane, [u, v], planeOffset)),
-      color: all.at(-1)?.color ?? '#c5684b',
-      width: 3,
-    });
-  const valid = all.filter((stroke) => stroke.points.length >= 2);
+  const valid = strokes
+    .filter((stroke) => stroke.points.length >= 2)
+    .map((stroke) => structuredClone(stroke));
   if (!valid.length) throw Error('선을 그리세요.');
   if (valid.length > 200) throw Error('스케치 하나에 200획까지 첨부할 수 있습니다.');
   if (valid.reduce((sum, stroke) => sum + stroke.points.length, 0) > 20000)
@@ -324,9 +278,7 @@ export function attachBrushSketch(
     id: crypto.randomUUID(),
     name: `스케치 ${s.sketches.length + 1}`,
     unit: 'm',
-    role,
-    placement,
-    ...(placement === 'plane' ? { plane, planeOffset } : {}),
+    placement: options.placement,
     strokes: valid,
   });
 }
