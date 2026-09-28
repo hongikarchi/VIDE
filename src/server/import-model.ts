@@ -161,16 +161,12 @@ export async function recoverDwgImport(
   return recovered;
 }
 
-export async function captureModel(
-  projectId: string,
+/** Request input of a host document Sync (manual, automatic or Live Sync). */
+export function captureInput(
   target: { id: string; instance: string; documentId: number },
-  workspace: Workspace,
-  host: ImportHost,
-  capture: typeof captureDocument = captureDocument,
   hostKind: 'rhino' | 'zwcad' = 'rhino',
 ) {
-  if (!hostTargetSchema.safeParse(target).success) throw new DomainError('INVALID_INPUT');
-  const input = {
+  return {
     id: target.id,
     provider: 'codex-cli',
     host: hostKind,
@@ -182,6 +178,17 @@ export async function captureModel(
     files: [],
     sourceDocument: { instance: target.instance, documentId: target.documentId },
   };
+}
+export async function captureModel(
+  projectId: string,
+  target: { id: string; instance: string; documentId: number },
+  workspace: Workspace,
+  host: ImportHost,
+  capture: typeof captureDocument = captureDocument,
+  hostKind: 'rhino' | 'zwcad' = 'rhino',
+) {
+  if (!hostTargetSchema.safeParse(target).success) throw new DomainError('INVALID_INPUT');
+  const input = captureInput(target, hostKind);
   const submitted = workspace.submit(projectId, input);
   if (!submitted.created) return submitted.request;
   workspace.update(projectId, input.id, 'running', { phase: 'capture', host: hostKind });

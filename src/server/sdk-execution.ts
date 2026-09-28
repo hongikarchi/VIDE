@@ -11,7 +11,12 @@ import { join, resolve, relative, isAbsolute } from 'node:path';
 import { z } from 'zod';
 import { launchRhinoWorker, workerResultSchema } from '../../hosts/rhino/worker-client.ts';
 import type { RequestInput } from '../contracts/workspace.ts';
-import { nativeModelSchema } from '../contracts/native-model.ts';
+import {
+  nativeModelSchema,
+  displayObjectSchema,
+  displaySceneSchema,
+} from '../contracts/native-model.ts';
+import { applyDisplayDelta, displayCoverage } from '../core/display-delta.ts';
 import { AgentTools } from './agent-tools.ts';
 import type { GeometryMeasurement } from '../core/measurement-cache.ts';
 
@@ -100,10 +105,12 @@ export class SdkExecution {
     measurements: GeometryMeasurement[] = [],
   ) {
     const captured = await this.editors.capture(target);
+    // Attached documents identify a basis by connection revision; the content hash guards application.
     const sourceDocument = {
       ...target,
       connection: await this.editors.connectionKind(target.instance),
-      documentHash: captured.documentHash,
+      documentHash: captured.revisionHash ?? captured.documentHash,
+      ...(captured.revisionHash ? { contentHash: captured.documentHash } : {}),
       name: captured.name,
       units: captured.units,
       selectedIds: captured.selectedIds,
@@ -146,10 +153,56 @@ export class SdkExecution {
         ...target,
         connection: 'attached-editor',
         documentHash: source.documentHash,
+        ...(source.revision === undefined ? {} : { revision: source.revision }),
         name: source.name,
         units: source.units,
         selectedIds: source.selectedIds,
         capturedAt: new Date().toISOString(),
+      },
+    };
+  }
+
+  /**
+   * Live Sync: objects changed since `since` on the same attached connection, merged into `basis`.
+   * RESYNC_REQUIRED means the caller must fall back to a full Sync.
+   */
+  async liveSync(
+    target: HostTarget,
+    basis: { objects: unknown[]; scene: unknown[]; sourceDocument: Record<string, unknown> },
+    since: number,
+  ) {
+    // The stored basis was validated when it was read from Rhino; only changed items are checked here.
+    if (
+      !Array.isArray(basis.objects) ||
+      !Array.isArray(basis.scene) ||
+      basis.sourceDocument.instance !== target.instance
+    )
+      throw failure('RESYNC_REQUIRED');
+    const delta = await this.editors.changes(target, since);
+    const merged = applyDisplayDelta(
+      basis as {
+        objects: z.infer<typeof displayObjectSchema>[];
+        scene: z.infer<typeof displaySceneSchema>[];
+      },
+      delta,
+    );
+    const source = delta.source;
+    return {
+      delta: { objects: delta.objects, scene: delta.scene, removed: delta.removed },
+      result: {
+        ...merged,
+        displayCoverage: displayCoverage(merged.scene),
+        sourceDocument: {
+          ...basis.sourceDocument,
+          ...target,
+          connection: 'attached-editor',
+          documentHash: source.documentHash,
+          revision: delta.revision,
+          name: source.name,
+          units: source.units,
+          selectedIds: source.selectedIds,
+          capturedAt: new Date().toISOString(),
+        },
       },
     };
   }

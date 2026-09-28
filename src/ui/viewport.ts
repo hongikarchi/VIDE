@@ -59,6 +59,8 @@ interface DisplaySketch {
  */
 interface DisplayObject extends DisplayGeometry {
   id: string;
+  /** Rhino display hash: equal hashes mean the displayed geometry is unchanged. */
+  geometryHash?: string;
   displayColor?: string;
   color?: number | string;
   colorIndex?: number;
@@ -172,22 +174,41 @@ export function createViewport(
   const meshes: RenderObject[] = [];
   const byId = new Map<string, RenderObject>();
   let atlas = new TextAtlas();
-  function replace(data: DisplayObject[]) {
+  /**
+   * Incremental (Live Sync): objects whose display hash is unchanged keep their GPU geometry and
+   * only refresh colours; the rest are rebuilt. A full replace rebuilds everything.
+   */
+  function replace(data: DisplayObject[], incremental = false) {
     dirty = true;
-    selectedIds = new Set();
-    byId.clear();
+    const next = new Map(data.map((object) => [object.id, object]));
+    const kept = new Set<string>();
     for (const mesh of meshes) {
+      const object = incremental ? next.get(mesh.userData.id) : undefined;
+      if (object?.geometryHash && object.geometryHash === mesh.userData.geometryHash) {
+        kept.add(object.id);
+        mesh.userData.colors = {
+          object: objectColor(object),
+          layer: hexColor(object.layerColor),
+          material: hexColor(object.materialColor),
+        };
+        continue;
+      }
       scene.remove(mesh);
       releasePlot(mesh);
       disposeObject(mesh);
+      byId.delete(mesh.userData.id);
     }
+    const survivors = meshes.filter((mesh) => kept.has(mesh.userData.id));
     meshes.length = 0;
+    for (const mesh of survivors) meshes.push(mesh);
+    selectedIds = incremental ? new Set([...selectedIds].filter((id) => next.has(id))) : new Set();
     // Strings are cached across Syncs; start a fresh atlas when it has grown large.
-    if (atlas.size > 6) {
+    if (!incremental && atlas.size > 6) {
       atlas.dispose();
       atlas = new TextAtlas();
     }
     for (const object of data) {
+      if (kept.has(object.id)) continue;
       const representation = sceneRepresentation(object);
       if (!representation) continue;
       const geometry = new THREE.BufferGeometry(),
@@ -249,6 +270,8 @@ export function createViewport(
         for (const text of buildTextMeshes(object.texts, anchor, atlas)) mesh.add(text);
       mesh.userData.cad = object.segmentStyles || object.fills || object.texts ? object : undefined;
       mesh.userData.id = object.id;
+      // CAD objects carry styles/annotations outside the hash; they are always rebuilt.
+      mesh.userData.geometryHash = mesh.userData.cad ? undefined : object.geometryHash;
       scene.add(mesh);
       meshes.push(mesh);
       byId.set(object.id, mesh);
@@ -1078,6 +1101,10 @@ export function createViewport(
     replace(data: DisplayObject[]) {
       replace(data);
       fit();
+    },
+    /** Live Sync: rebuild only changed objects and keep the camera. */
+    update(data: DisplayObject[]) {
+      replace(data, true);
     },
     select(ids: readonly string[]) {
       const next = new Set(ids);

@@ -84,7 +84,7 @@ public sealed class WorkerCommand : Command
     internal static async Task Serve(TcpClient client, string token, string session, int pid, string ticks, Func<JsonElement, object> dispatch)
     {
         using (client)
-        using (var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(60)))
+        using (var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(180)))
         {
             var stream = client.GetStream();
             try
@@ -111,6 +111,15 @@ public sealed class WorkerCommand : Command
                     catch (Exception error) { completion.TrySetException(error); }
                 }));
                 var result = await completion.Task.WaitAsync(timeout.Token);
+                // Heavy work that no longer touches the document runs off Rhino's UI thread.
+                if (result is Func<object> deferred) result = await Task.Run(deferred).WaitAsync(timeout.Token);
+                if (result is RawJson raw)
+                {
+                    var body = new byte[SuccessPrefix.Length + raw.Bytes.Length + 1];
+                    SuccessPrefix.CopyTo(body, 0); raw.Bytes.CopyTo(body, SuccessPrefix.Length); body[^1] = (byte)'}';
+                    await Reply(stream, body, timeout.Token);
+                    return;
+                }
                 await Reply(stream, new { status = "success", result }, timeout.Token);
             }
             catch (Exception error)
@@ -121,9 +130,12 @@ public sealed class WorkerCommand : Command
         }
     }
 
-    private static async Task Reply(NetworkStream stream, object result, CancellationToken cancel)
+    private static readonly byte[] SuccessPrefix = Encoding.UTF8.GetBytes("{\"status\":\"success\",\"result\":");
+    private static Task Reply(NetworkStream stream, object result, CancellationToken cancel) =>
+        Reply(stream, JsonSerializer.SerializeToUtf8Bytes(result), cancel);
+
+    private static async Task Reply(NetworkStream stream, byte[] body, CancellationToken cancel)
     {
-        var body = JsonSerializer.SerializeToUtf8Bytes(result);
         if (body.Length > 16 * 1024 * 1024) throw new InvalidOperationException("HOST_RESULT_TOO_LARGE");
         var header = new byte[4];
         System.Buffers.Binary.BinaryPrimitives.WriteInt32BigEndian(header, body.Length);

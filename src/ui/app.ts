@@ -34,6 +34,7 @@ import { renderPoints, validCoordinate } from './sketch.tsx';
 import { renderRequests, renderActiveWork } from './requests.tsx';
 import { initializeInspector, renderInspector } from './inspector.ts';
 import { api, connect, errors } from './gateway.ts';
+import { applyDisplayDelta } from '../core/display-delta.ts';
 import {
   objects,
   models,
@@ -147,6 +148,67 @@ const reviews = initializeReviews(
 );
 const viewportEmpty = initializeViewportEmpty($('canvas').parentElement!);
 let connectedTarget: HostTarget | undefined;
+// Request whose display is refreshed in place (Live Sync): keep the camera, rebuild only changes.
+let liveRefresh: string | undefined;
+const liveReplySchema = z.union([
+  z.object({ resync: z.literal(true) }),
+  z.object({ retry: z.string() }),
+  z.object({
+    requestId: z.string(),
+    basisId: z.string(),
+    request: z.record(z.string(), z.unknown()),
+    delta: z.object({
+      objects: z.array(z.object({ id: z.string(), nativeId: z.string() }).passthrough()),
+      scene: z.array(z.object({ id: z.string(), nativeId: z.string() }).passthrough()),
+      removed: z.array(z.string()),
+    }),
+  }),
+]);
+/** SPEC-01.9 Live Sync: apply only the objects Rhino changed to the latest display Sync. */
+async function liveSyncHostDocument(target: HostTarget): Promise<boolean | 'retry'> {
+  const basis = state.messages
+    .filter(
+      (entry) =>
+        entry.request?.state === 'succeeded' &&
+        entry.request.result?.displayOnly === true &&
+        entry.request.result.sourceDocument?.instance === target.instance &&
+        entry.request.result.sourceDocument.documentId === target.documentId,
+    )
+    .at(-1);
+  const result = basis?.request.result;
+  const revision = result?.sourceDocument?.revision;
+  if (!basis || !result?.objects || !result.scene || typeof revision !== 'number') return false;
+  const reply = liveReplySchema.parse(
+    await api(`/projects/${currentProject().id}/live-sync`, 'POST', {
+      ...target,
+      basisId: basis.id,
+      revision,
+    }),
+  );
+  if ('resync' in reply) return false;
+  if ('retry' in reply) return 'retry';
+  const merged = applyDisplayDelta(
+    { objects: result.objects, scene: result.scene },
+    reply.delta as unknown as {
+      objects: typeof result.objects;
+      scene: typeof result.scene;
+      removed: string[];
+    },
+  );
+  // The reply carries only the request summary; the merged arrays are attached after parsing.
+  const next = requestMessage(reply.request);
+  next.request.result = { ...next.request.result, ...merged };
+  const shown = displayedResult === basis.id || displayedResult === rhinoBasis(target)?.id;
+  const index = state.messages.findIndex((entry) => entry.id === reply.requestId);
+  if (index >= 0) state.messages[index] = next;
+  else state.messages.push(next);
+  if (shown) {
+    selectedResult = reply.requestId;
+    liveRefresh = reply.requestId;
+  }
+  renderMessages();
+  return true;
+}
 const captureHostDocument = async (target: HostTarget, automatic = false) => {
   if (
     automatic &&
@@ -157,6 +219,10 @@ const captureHostDocument = async (target: HostTarget, automatic = false) => {
       state.messages.some((m) => m.request && ['queued', 'running'].includes(m.request.state)))
   )
     return false;
+  if (automatic) {
+    const live = await liveSyncHostDocument(target);
+    if (live !== false) return live;
+  }
   if (!project || busy) throw Error('현재 작업이 끝난 뒤 가져오세요.');
   busy = true;
   viewportEmpty.sync('loading');
@@ -587,7 +653,9 @@ function renderMessages() {
               (m.request.result.host || 'rhino') === (state.host || 'rhino'),
           )
           .at(-1);
-  if (latest && latest.id !== displayedResult) {
+  const incremental = latest !== undefined && liveRefresh === latest.id && !!displayedResult;
+  liveRefresh = undefined;
+  if (latest && (latest.id !== displayedResult || incremental)) {
     const result = latest.request.result;
     if (!result?.hostExecuted || !result.objects || !result.scene) {
       message('후보 형상을 확인할 수 없습니다.');
@@ -620,7 +688,8 @@ function renderMessages() {
         };
       }),
     );
-    viewport?.replace(result.scene);
+    if (incremental) viewport?.update(result.scene);
+    else viewport?.replace(result.scene);
     displayedResult = latest.id;
     render();
   }
@@ -1357,9 +1426,12 @@ async function setHostPins(ids: string[]) {
   render();
   return true;
 }
+let hostLinkPolling = false;
 async function pollHostLink() {
   const target = connectedTarget;
-  if (!ready || !target || document.hidden) return;
+  // One status call at a time: a slow host must not pile up overlapping polls.
+  if (!ready || !target || document.hidden || hostLinkPolling) return;
+  hostLinkPolling = true;
   try {
     const catalog = hostDocumentsSchema.parse(await api('/host/attached-documents'));
     const item = catalog.documents.find(
@@ -1400,6 +1472,8 @@ async function pollHostLink() {
     }
   } catch {
     /* Transient; the next poll retries. */
+  } finally {
+    hostLinkPolling = false;
   }
 }
 setInterval(() => void pollHostLink(), 1200);

@@ -278,10 +278,13 @@ try {
   };
   await action('addBlock');
   const blockCapture = await sessions.capture(blockTarget);
+  // Attached basis identity is the connection revision token recorded at capture time.
+  assert.match(blockCapture.revisionHash, /^[a-f0-9]{64}$/);
+  assert.equal((await sessions.inspect(blockTarget)).documentHash, blockCapture.revisionHash);
   await action('VIDELiveSync');
   const blockGeneration = (await sessions.list(true)).documents[0].generation;
   await action('changeBlock');
-  assert.notEqual((await sessions.inspect(blockTarget)).documentHash, blockCapture.documentHash);
+  assert.notEqual((await sessions.inspect(blockTarget)).documentHash, blockCapture.revisionHash);
   await wait(async () => (await sessions.list(true)).documents[0].generation > blockGeneration);
   const updatedBlock = await sessions.capture(blockTarget);
   await action('damageCapture', { filename: updatedBlock.filename });

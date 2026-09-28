@@ -26,6 +26,8 @@ const candidateSchema = z.object({
     instance: z.string(),
     documentId: z.number(),
     documentHash: z.string(),
+    /** Attached captures: full content hash (documentHash is the connection's revision token). */
+    contentHash: z.string().optional(),
   }),
 });
 type ApplicationTarget = HostTarget & { documentHash: string; candidateHash: string };
@@ -214,10 +216,11 @@ export class EditorSessions {
   }
   async preview(target: HostTarget, value: unknown) {
     const candidate = this.candidate(value, target);
+    // Native application always verifies the document content, never the display revision token.
     return (await this.get(target)).previewEditorApplication(
       candidate.filename,
       candidate.fileHash,
-      candidate.sourceDocument.documentHash,
+      candidate.sourceDocument.contentHash ?? candidate.sourceDocument.documentHash,
     );
   }
   async apply(id: string, value: unknown, target: ApplicationTarget) {
@@ -245,5 +248,10 @@ export class EditorSessions {
     if ((await this.connectionKind(target.instance)) !== 'attached-editor')
       throw failure('TARGET_MISMATCH');
     return (await this.get(target)).displayEditor();
+  }
+  async changes(target: HostTarget, since: number) {
+    if ((await this.connectionKind(target.instance)) !== 'attached-editor')
+      throw failure('RESYNC_REQUIRED');
+    return (await this.get(target)).displayChanges(since);
   }
 }

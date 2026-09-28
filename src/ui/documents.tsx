@@ -5,7 +5,8 @@ import { hostDocumentsSchema, hostSelectionSchema } from '../contracts/host-docu
 import type { HostDocuments, HostTarget, HostSelection } from '../contracts/host-documents.ts';
 interface Props {
   notify: (message: string) => void;
-  onCapture: (target: HostTarget, automatic?: boolean) => Promise<boolean | void>;
+  /** false: held by a draft/running work; 'retry': Rhino changed while reading, try next poll. */
+  onCapture: (target: HostTarget, automatic?: boolean) => Promise<boolean | 'retry' | void>;
   onSelection: (selection: HostSelection) => void;
   onConnection?: (document?: { key: string; name: string; host: 'rhino' | 'zwcad' }) => void;
 }
@@ -112,6 +113,7 @@ function Documents({ notify, onCapture, onSelection, onConnection }: Props) {
           );
           if (captured === false)
             setNotice('자동 Sync 보류 · 초안 또는 진행 중 작업을 마친 뒤 갱신합니다.');
+          else if (captured === 'retry') setNotice('Rhino 변경 중 · 곧 다시 Sync합니다.');
           else {
             generations.current.set(key(item), item.generation);
             setNotice('Sync 완료');
@@ -133,7 +135,7 @@ function Documents({ notify, onCapture, onSelection, onConnection }: Props) {
     };
     const timer = setInterval(() => {
       void poll();
-    }, 2500);
+    }, 1000);
     return () => {
       disposed = true;
       clearInterval(timer);

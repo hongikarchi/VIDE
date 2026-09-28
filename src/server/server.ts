@@ -1,4 +1,5 @@
 import { applyAttachedCandidate } from './attached-application.ts';
+import { LiveSync } from './live-sync.ts';
 import { AccountProfiles } from '../ai/account-profiles.ts';
 import { AccountLogin } from '../ai/account-login.ts';
 import { z } from 'zod';
@@ -114,6 +115,7 @@ export async function startServer({
   const sdk = sdkOptions
     ? new SdkExecution({ ...sdkOptions, tools: agentTools, origin: () => origin })
     : undefined;
+  const liveSync = sdk ? new LiveSync(workspace, sdk) : undefined;
   const zwcadSdk = sdkOptions
     ? new ZwcadSdkExecution({
         directory: join(dirname(filename), 'zwcad-sdk-models'),
@@ -281,26 +283,34 @@ export async function startServer({
         const target = hostTargetSchema.extend({ id: z.string() }).parse(await body(request));
         const own = await sdk?.editors.has(target.instance);
         const cadOwn = await zwcadSdk?.editors.has(target.instance);
-        send(
-          200,
-          await captureModel(
-            capture[1],
-            target,
-            workspace,
-            own ? rhinoImport : host,
-            cadOwn
-              ? async () => zwcadSdk!.editors.capture(target)
-              : own
-                ? async () =>
-                    sdk!.syncEditor(
-                      target,
-                      (intent) => workspace.update(capture[1], target.id, 'running', intent),
-                      captureMeasurements(workspace.list(capture[1]), target),
-                    )
-                : undefined,
-            cadOwn ? 'zwcad' : 'rhino',
-          ),
+        const captured = await captureModel(
+          capture[1],
+          target,
+          workspace,
+          own ? rhinoImport : host,
+          cadOwn
+            ? async () => zwcadSdk!.editors.capture(target)
+            : own
+              ? async () =>
+                  sdk!.syncEditor(
+                    target,
+                    (intent) => workspace.update(capture[1], target.id, 'running', intent),
+                    // Attached display reads never measure; skip parsing every stored model.
+                    (await sdk!.editors.connectionKind(target.instance)) === 'attached-editor'
+                      ? []
+                      : captureMeasurements(workspace.list(capture[1]), target),
+                  )
+              : undefined,
+          cadOwn ? 'zwcad' : 'rhino',
         );
+        if (!cadOwn) liveSync?.record(capture[1], captured);
+        send(200, captured);
+        return;
+      }
+      const live = /^\/api\/v1\/projects\/([^/]+)\/live-sync$/.exec(url.pathname);
+      if (live && request.method === 'POST') {
+        if (!liveSync) throw new DomainError('RESYNC_REQUIRED');
+        send(200, await liveSync.run(live[1], await body(request)));
         return;
       }
       const reviewComparison = /^\/api\/v1\/projects\/([^/]+)\/review-comparison$/.exec(

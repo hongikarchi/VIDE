@@ -1,7 +1,7 @@
 import { z } from 'zod';
 const point = z.tuple([z.number(), z.number(), z.number()]);
 const hexColor = z.string().regex(/^#[0-9a-f]{6}$/);
-const object = z.object({
+export const displayObjectSchema = z.object({
   id: z.string(),
   nativeId: z.string().uuid(),
   kind: z.literal('native'),
@@ -34,10 +34,11 @@ export const nativeSceneSchema = z.object({
   attributesComplete: z.boolean(),
   valid: z.literal(true),
 });
+export const displaySceneSchema = nativeSceneSchema.extend({ valid: z.boolean() });
 export const displayModelSchema = z
   .object({
-    objects: z.array(object).max(20000),
-    scene: z.array(nativeSceneSchema.extend({ valid: z.boolean() })).max(20000),
+    objects: z.array(displayObjectSchema).max(20000),
+    scene: z.array(displaySceneSchema).max(20000),
     measurementVersion: z.literal(1).optional(),
     displayCoverage: z
       .object({

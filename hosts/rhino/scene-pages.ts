@@ -4,7 +4,7 @@ import {
   displayModelSchema,
   type NativeModel,
 } from '../../src/contracts/native-model.ts';
-import { sceneRepresentation } from '../../src/core/scene-representation.ts';
+import { displayCoverage } from '../../src/core/display-delta.ts';
 
 const pageSchema = z.object({
   offset: z.number().int().nonnegative(),
@@ -75,24 +75,11 @@ export async function readScenePages(
     measurementStats.reusedObjects += model.measurementStats?.reusedObjects ?? 0;
     offset = page.nextOffset;
   } while (total === undefined || offset < total);
-  const omittedTypes: Record<string, number> = Object.create(null);
-  let omitted = 0;
-  for (const item of scene)
-    if (!sceneRepresentation(item)) {
-      omitted++;
-      const type = item.valid ? item.nativeType : `${item.nativeType} (invalid)`;
-      omittedTypes[type] = (omittedTypes[type] ?? 0) + 1;
-    }
   return schema.parse({
     objects,
     scene,
     measurementVersion: 1,
     measurementStats,
-    displayCoverage: {
-      total: objects.length,
-      displayed: objects.length - omitted,
-      omitted,
-      omittedTypes,
-    },
+    displayCoverage: displayCoverage(scene),
   });
 }

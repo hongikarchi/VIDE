@@ -23,6 +23,9 @@ internal sealed class AttachedConnection : IDisposable
     private long selectionVersion;
     private readonly HashSet<Guid> pinned = new();
     private int readRevision;
+    // Last revision at which each object changed (UI thread only); lets a reader fetch only what changed.
+    private readonly Dictionary<Guid, int> objectRevisions = new();
+    private readonly DisplayScene display = new();
     private bool live, dirty, disposed;
     private DateTime changedAt;
     internal uint DocumentId => document.RuntimeSerialNumber;
@@ -55,7 +58,7 @@ internal sealed class AttachedConnection : IDisposable
         var directory = Path.Combine(root, session);
         Directory.CreateDirectory(directory);
         record = Path.Combine(root, session + ".json");
-        editor = new EditorExecutor(doc, directory);
+        editor = new EditorExecutor(doc, directory, RevisionHash);
         var process = Process.GetCurrentProcess();
         var ticks = process.StartTime.ToUniversalTime().Ticks.ToString();
         listener = new TcpListener(IPAddress.Loopback, 0);
@@ -71,12 +74,15 @@ internal sealed class AttachedConnection : IDisposable
             File.Move(record + ".tmp", record);
         } catch { listener.Stop(); throw; }
         RhinoDoc.AddRhinoObject += ChangedObject;
-        RhinoDoc.DeleteRhinoObject += ChangedObject;
+        RhinoDoc.DeleteRhinoObject += DeletedObject;
         RhinoDoc.UndeleteRhinoObject += ChangedObject;
         RhinoDoc.ReplaceRhinoObject += ReplacedObject;
         RhinoDoc.ModifyObjectAttributes += ChangedAttributes;
         RhinoDoc.LayerTableEvent += ChangedLayer;
         RhinoDoc.InstanceDefinitionTableEvent += ChangedDefinition;
+        RhinoDoc.MaterialTableEvent += ChangedMaterial;
+        RhinoDoc.GroupTableEvent += ChangedGroup;
+        RhinoDoc.DocumentPropertiesChanged += ChangedProperties;
         RhinoDoc.CloseDocument += Closed;
         RhinoDoc.SelectObjects += SelectionChanged;
         RhinoDoc.DeselectObjects += SelectionChanged;
@@ -107,32 +113,94 @@ internal sealed class AttachedConnection : IDisposable
             return new { ok = true, pinnedIds = Pinned.Select(id => id.ToString()).ToArray(), selectionVersion };
         }
         if (RhinoApp.InCommand > 0) throw new InvalidOperationException("HOST_BUSY");
-        if (request.GetProperty("method").GetString() == "displayPage")
+        var method = request.GetProperty("method").GetString();
+        // The display basis is this connection's session and change revision, not a full geometry hash.
+        // Candidate capture and native application still verify the full content fingerprint.
+        if (method == "inspectEditor")
+            return new { ok = true, documentId = DocumentId, name = document.Name ?? "Untitled", units = document.ModelUnitSystem.ToString(),
+                objectCount = document.Objects.GetObjectList(ObjectType.AnyObject).Count(), modified = document.Modified, readOnly = document.IsReadOnly,
+                documentHash = RevisionHash(), revision = readRevision,
+                selectedIds = document.Objects.GetSelectedObjects(false, false).Select(obj => obj.Id.ToString()).ToArray() };
+        if (method == "displayPage")
         {
             var offset = request.GetProperty("offset").GetInt32();
             var limit = request.GetProperty("limit").GetInt32();
-            if (limit < 1 || limit > 1000) throw new InvalidOperationException("INVALID_PAGE");
+            if (limit < 1 || limit > DisplayScene.MaxPageObjects) throw new InvalidOperationException("INVALID_PAGE");
             if (request.TryGetProperty("revision", out var basis)) {
                 if (basis.GetInt32() != readRevision) throw new InvalidOperationException("SOURCE_CHANGED");
             } else if (offset > 0) throw new InvalidOperationException("STALE_REFERENCE");
-            var result = WorkerScene.Export(document, offset: offset, limit: limit, revision: readRevision, displayOnly: true);
             LastDisplayRead = DateTime.Now;
-            return result;
+            return display.Page(document, offset, limit, readRevision);
+        }
+        if (method == "displayChanges")
+        {
+            var since = request.GetProperty("since").GetInt32();
+            var cursor = request.GetProperty("cursor").GetInt32();
+            if (since < 0 || since > readRevision) throw new InvalidOperationException("RESYNC_REQUIRED");
+            if (request.TryGetProperty("revision", out var basis)) {
+                if (basis.GetInt32() != readRevision) throw new InvalidOperationException("SOURCE_CHANGED");
+            } else if (cursor > 0) throw new InvalidOperationException("STALE_REFERENCE");
+            LastDisplayRead = DateTime.Now;
+            return display.Changes(document, objectRevisions, since, cursor, readRevision);
         }
         return editor.Dispatch(request);
     }
+    private string RevisionHash() => Convert.ToHexString(SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(
+        session + ":" + readRevision + ":" + document.ModelUnitSystem))).ToLowerInvariant();
     private void SelectionChanged(object? sender, RhinoObjectSelectionEventArgs e) { if (e.Document == document) selectionVersion++; }
     private void SelectionCleared(object? sender, RhinoDeselectAllObjectsEventArgs e) { if (e.Document == document) selectionVersion++; }
-    private void Mark(RhinoDoc doc) { if (doc == document) { readRevision++; dirty = true; changedAt = DateTime.UtcNow; } }
-    private void ChangedObject(object? sender, RhinoObjectEventArgs e) => Mark(e.TheObject.Document);
-    private void ReplacedObject(object? sender, RhinoReplaceObjectEventArgs e) => Mark(e.Document);
-    private void ChangedAttributes(object? sender, RhinoModifyObjectAttributesEventArgs e) => Mark(e.Document);
-    private void ChangedLayer(object? sender, Rhino.DocObjects.Tables.LayerTableEventArgs e) => Mark(e.Document);
-    private void ChangedDefinition(object? sender, Rhino.DocObjects.Tables.InstanceDefinitionTableEventArgs e) => Mark(e.Document);
+    private bool Mark(RhinoDoc doc)
+    {
+        if (doc != document) return false;
+        readRevision++; dirty = true; changedAt = DateTime.UtcNow;
+        return true;
+    }
+    private void MarkObjects(RhinoDoc doc, IEnumerable<Guid> ids) { if (Mark(doc)) foreach (var id in ids) objectRevisions[id] = readRevision; }
+    private IEnumerable<RhinoObject> AllObjects(Func<RhinoObject, bool> filter) => document.Objects.GetObjectList(new ObjectEnumeratorSettings
+        { NormalObjects = true, LockedObjects = true, HiddenObjects = true, DeletedObjects = false, ReferenceObjects = true }).Where(filter);
+    private void ChangedObject(object? sender, RhinoObjectEventArgs e) => MarkObjects(e.TheObject.Document, [e.ObjectId]);
+    private void DeletedObject(object? sender, RhinoObjectEventArgs e)
+    {
+        if (e.TheObject.Document == document) display.Forget(e.ObjectId);
+        MarkObjects(e.TheObject.Document, [e.ObjectId]);
+    }
+    private void ReplacedObject(object? sender, RhinoReplaceObjectEventArgs e) => MarkObjects(e.Document, [e.ObjectId]);
+    private void ChangedAttributes(object? sender, RhinoModifyObjectAttributesEventArgs e) => MarkObjects(e.Document, [e.RhinoObject.Id]);
+    // Current/sort changes do not alter objects. Other layer edits can change every object on the layer
+    // or on its sublayers (visibility, color, full path).
+    private void ChangedLayer(object? sender, Rhino.DocObjects.Tables.LayerTableEventArgs e)
+    {
+        if (e.EventType is Rhino.DocObjects.Tables.LayerTableEventType.Current or Rhino.DocObjects.Tables.LayerTableEventType.Sorted) return;
+        if (e.Document != document) return;
+        var affected = new HashSet<int>();
+        foreach (var layer in document.Layers)
+            for (var current = layer; current != null; current = current.ParentLayerId == Guid.Empty ? null : document.Layers.FindId(current.ParentLayerId))
+                if (current.Index == e.LayerIndex) { affected.Add(layer.Index); break; }
+        affected.Add(e.LayerIndex);
+        MarkObjects(e.Document, AllObjects(obj => affected.Contains(obj.Attributes.LayerIndex)).Select(obj => obj.Id).ToList());
+    }
+    private void ChangedDefinition(object? sender, Rhino.DocObjects.Tables.InstanceDefinitionTableEventArgs e)
+    {
+        if (e.Document != document) return;
+        MarkObjects(e.Document, AllObjects(obj => obj.ObjectType == ObjectType.InstanceReference).Select(obj => obj.Id).ToList());
+    }
+    private void ChangedMaterial(object? sender, Rhino.DocObjects.Tables.MaterialTableEventArgs e)
+    {
+        if (e.Document != document) return;
+        MarkObjects(e.Document, AllObjects(_ => true).Select(obj => obj.Id).ToList());
+    }
+    // Groups do not change display, but they are part of the document state a basis stands for.
+    private void ChangedGroup(object? sender, Rhino.DocObjects.Tables.GroupTableEventArgs e) => Mark(e.Document);
+    private void ChangedProperties(object? sender, DocumentEventArgs e)
+    {
+        if (e.Document != document) return;
+        display.Clear();
+        MarkObjects(e.Document, AllObjects(_ => true).Select(obj => obj.Id).ToList());
+    }
     private void Closed(object? sender, DocumentEventArgs e) { if (e.Document == document) { Dispose(); if (Current == this) Current = null; } }
     private void Idle(object? sender, EventArgs e)
     {
-        if (live && dirty && RhinoApp.InCommand == 0 && (DateTime.UtcNow - changedAt).TotalSeconds >= 1) { generation++; dirty = false; }
+        if (live && dirty && RhinoApp.InCommand == 0 && (DateTime.UtcNow - changedAt).TotalSeconds >= 0.5) { generation++; dirty = false; }
     }
     internal void Sync() { generation++; dirty = false; }
     internal bool ToggleLive() { live = !live; if (live) Sync(); return live; }
@@ -141,9 +209,11 @@ internal sealed class AttachedConnection : IDisposable
         if (disposed) return;
         disposed = true;
         listener.Stop();
-        RhinoDoc.AddRhinoObject -= ChangedObject; RhinoDoc.DeleteRhinoObject -= ChangedObject; RhinoDoc.UndeleteRhinoObject -= ChangedObject;
+        RhinoDoc.AddRhinoObject -= ChangedObject; RhinoDoc.DeleteRhinoObject -= DeletedObject; RhinoDoc.UndeleteRhinoObject -= ChangedObject;
         RhinoDoc.ReplaceRhinoObject -= ReplacedObject; RhinoDoc.ModifyObjectAttributes -= ChangedAttributes; RhinoDoc.LayerTableEvent -= ChangedLayer;
-        RhinoDoc.InstanceDefinitionTableEvent -= ChangedDefinition;
+        RhinoDoc.InstanceDefinitionTableEvent -= ChangedDefinition; RhinoDoc.MaterialTableEvent -= ChangedMaterial;
+        RhinoDoc.GroupTableEvent -= ChangedGroup; RhinoDoc.DocumentPropertiesChanged -= ChangedProperties;
+        display.Clear();
         RhinoDoc.CloseDocument -= Closed; RhinoApp.Idle -= Idle;
         RhinoDoc.SelectObjects -= SelectionChanged; RhinoDoc.DeselectObjects -= SelectionChanged; RhinoDoc.DeselectAllObjects -= SelectionCleared;
         try { File.Delete(record); } catch (IOException) { /* Dead socket and disposed dispatch revoke access even if cleanup fails. */ }

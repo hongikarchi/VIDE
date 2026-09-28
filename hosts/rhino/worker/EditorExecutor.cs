@@ -7,7 +7,8 @@ using Rhino.DocObjects;
 namespace Vide.Worker;
 
 // Fixed inspect/capture/candidate-application methods for a visible editing copy. Never executes agent code.
-internal sealed class EditorExecutor(RhinoDoc document, string directory)
+// An attached connection passes its revision token so a capture can be matched to the display basis.
+internal sealed class EditorExecutor(RhinoDoc document, string directory, Func<string>? revisionHash = null)
 {
     public object Dispatch(JsonElement request)
     {
@@ -43,7 +44,7 @@ internal sealed class EditorExecutor(RhinoDoc document, string directory)
         Stage("written");
         if (document.Path != originalPath || document.Name != originalName || document.Modified != modified || document.IsReadOnly != readOnly || Fingerprint() != fingerprint)
             throw new InvalidOperationException("HOST_RESULT_UNKNOWN");
-        File.WriteAllText(filename + ".capture.json", JsonSerializer.Serialize(new { operation, stage = "written", documentHash = fingerprint, name = originalName ?? "Untitled", units = document.ModelUnitSystem.ToString(), selectedIds }));
+        File.WriteAllText(filename + ".capture.json", JsonSerializer.Serialize(new { operation, stage = "written", documentHash = fingerprint, revisionHash = revisionHash?.Invoke(), name = originalName ?? "Untitled", units = document.ModelUnitSystem.ToString(), selectedIds }));
         return new { ok = true, pending = true };
     }
 
@@ -57,8 +58,9 @@ internal sealed class EditorExecutor(RhinoDoc document, string directory)
             if (copy == null) throw new InvalidOperationException("CAPTURE_FAILED");
             WorkerReadback.VerifyArchive(document, copy);
         }
+        var revision = receipt.RootElement.TryGetProperty("revisionHash", out var token) && token.ValueKind == JsonValueKind.String ? token.GetString() : null;
         return new { ok = true, filename, fileHash = Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(filename))).ToLowerInvariant(),
-            documentHash = fingerprint, documentId = document.RuntimeSerialNumber, name = receipt.RootElement.GetProperty("name").GetString(),
+            documentHash = fingerprint, revisionHash = revision, documentId = document.RuntimeSerialNumber, name = receipt.RootElement.GetProperty("name").GetString(),
             units = receipt.RootElement.GetProperty("units").GetString(), selectedIds = receipt.RootElement.GetProperty("selectedIds").EnumerateArray().Select(value => value.GetString()).ToArray() };
     }
 
