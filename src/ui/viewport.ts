@@ -200,6 +200,13 @@ export function createViewport(
   scene.add(light, light.target);
   const meshes: RenderObject[] = [];
   const byId = new Map<string, RenderObject>();
+  // Rhino-style Hide/Isolate: hidden objects are not drawn, picked or framed until Unhide.
+  const hiddenIds = new Set<string>();
+  const visibleMeshes = () => meshes.filter((mesh) => mesh.visible);
+  function applyHidden() {
+    for (const mesh of meshes) mesh.visible = !hiddenIds.has(mesh.userData.id);
+    dirty = true;
+  }
   let atlas = new TextAtlas();
   // Block definitions: one GPU geometry per definition hash, shared by every instance.
   const blockGeometry = new Map<string, SharedBlock>();
@@ -334,6 +341,7 @@ export function createViewport(
         instance.userData.id = object.id;
         instance.userData.geometryHash = object.geometryHash;
         scene.add(instance);
+        instance.visible = !hiddenIds.has(object.id);
         meshes.push(instance);
         byId.set(object.id, instance);
         continue;
@@ -402,6 +410,7 @@ export function createViewport(
       // CAD objects carry styles/annotations outside the hash; they are always rebuilt.
       mesh.userData.geometryHash = mesh.userData.cad ? undefined : object.geometryHash;
       scene.add(mesh);
+      mesh.visible = !hiddenIds.has(object.id);
       meshes.push(mesh);
       byId.set(object.id, mesh);
     }
@@ -818,8 +827,12 @@ export function createViewport(
       camera instanceof THREE.OrthographicCamera ? 'orthographic' : 'perspective';
     reportCamera();
   }
-  function fit(id?: string) {
-    const targets = id ? meshes.filter((m) => m.userData.id === id) : meshes;
+  /** Frame one object, several objects, or everything visible. */
+  function fit(id?: string | readonly string[]) {
+    const wanted = id === undefined ? undefined : new Set(typeof id === 'string' ? [id] : id);
+    const targets = wanted
+      ? meshes.filter((m) => wanted.has(m.userData.id))
+      : meshes.filter((m) => m.visible);
     if (!targets.length) return;
     const bounds = new THREE.Box3();
     targets.forEach((m) => bounds.expandByObject(m));
@@ -1105,6 +1118,7 @@ export function createViewport(
     };
     const picked: string[] = [];
     for (const object of meshes) {
+      if (!object.visible) continue;
       const id = object.userData.id;
       const position = object.geometry.getAttribute('position');
       if (typeof id !== 'string' || !position) continue;
@@ -1168,7 +1182,7 @@ export function createViewport(
       // A crossing window drawn entirely inside a large face still touches that face.
       mouse.set(((minX + maxX) / 2 / r.width) * 2 - 1, (-(minY + maxY) / 2 / r.height) * 2 + 1);
       ray.setFromCamera(mouse, camera);
-      const hit = ownerId(ray.intersectObjects(meshes, true)[0]?.object);
+      const hit = ownerId(ray.intersectObjects(visibleMeshes(), true)[0]?.object);
       if (hit && !picked.includes(hit)) picked.push(hit);
     }
     return picked;
@@ -1194,7 +1208,7 @@ export function createViewport(
       return;
     }
     rayAt(e);
-    const id = ownerId(ray.intersectObjects(meshes, true)[0]?.object);
+    const id = ownerId(ray.intersectObjects(visibleMeshes(), true)[0]?.object);
     onPick(id ? [id] : [], selectionMode(e), mode === 'pin');
   }
   function cancel() {
@@ -1343,6 +1357,28 @@ export function createViewport(
     plane: planeView,
     home,
     fit,
+    hide(ids: readonly string[]) {
+      for (const id of ids) hiddenIds.add(id);
+      applyHidden();
+    },
+    /** Hide everything except `ids`. */
+    isolate(ids: readonly string[]) {
+      const keep = new Set(ids);
+      for (const mesh of meshes) if (!keep.has(mesh.userData.id)) hiddenIds.add(mesh.userData.id);
+      for (const id of ids) hiddenIds.delete(id);
+      applyHidden();
+    },
+    unhide() {
+      hiddenIds.clear();
+      applyHidden();
+    },
+    /** IDs currently drawn (for select-all). */
+    visibleIds() {
+      return visibleMeshes().map((mesh) => mesh.userData.id as string);
+    },
+    hiddenCount() {
+      return hiddenIds.size;
+    },
     projection,
     /** Attached sketches, unattached brush strokes and numeric plane points. */
     sketches(

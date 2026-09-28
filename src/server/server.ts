@@ -820,6 +820,12 @@ export async function startServer({
         response.end(content);
         return;
       }
+      const hide = /^\/api\/v1\/projects\/([^/]+)\/requests\/([^/]+)\/hide$/.exec(url.pathname);
+      if (hide && request.method === 'POST') {
+        workspace.hide(hide[1], hide[2]);
+        send(200, { hidden: true });
+        return;
+      }
       const intervention = /^\/api\/v1\/projects\/([^/]+)\/requests\/([^/]+)\/interventions$/.exec(
         url.pathname,
       );
@@ -872,7 +878,14 @@ export async function startServer({
             200,
             id
               ? withApplications(workspace.get(projectId, id))
-              : workspace.list(projectId).map(withApplications),
+              : (() => {
+                  // Entries the user removed from the conversation are not listed.
+                  const hidden = workspace.hiddenIds(projectId);
+                  return workspace
+                    .list(projectId)
+                    .filter((row) => !hidden.has(row.id))
+                    .map(withApplications);
+                })(),
           );
           return;
         }

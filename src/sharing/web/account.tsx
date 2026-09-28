@@ -58,7 +58,6 @@ export function Account({ onLogin }: { onLogin: () => Promise<void> }) {
   }
   return (
     <main className="account">
-      <div className="brand">V.</div>
       <h1>VIDE 공유 검토</h1>
       {manual ? (
         <p className="muted">

@@ -353,9 +353,10 @@ export class Execution {
       });
       if (referenced.length)
         items.push({ id: 'referenced-geometry', type: 'geometry-reference', data: referenced });
+      const hidden = this.workspace.hiddenIds(projectId);
       const conversation = this.workspace
         .list(projectId)
-        .filter((r) => r.id !== id && r.state === 'succeeded')
+        .filter((r) => r.id !== id && r.state === 'succeeded' && !hidden.has(r.id))
         .slice(-6)
         .map((r) => ({ request: r.input.body, response: r.result?.text }));
       if (conversation.length)

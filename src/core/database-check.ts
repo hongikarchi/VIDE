@@ -24,7 +24,13 @@ export function checkDatabase(filename: string): number {
       .get();
     if (!table) fail('UNSUPPORTED_SCHEMA');
     const versions = db.prepare('SELECT version FROM schema_version').all();
-    if (versions.length !== 1 || ![1, schemaVersion].includes(Number(versions[0].version)))
+    const version = Number(versions[0]?.version);
+    if (
+      versions.length !== 1 ||
+      !Number.isInteger(version) ||
+      version < 1 ||
+      version > schemaVersion
+    )
       fail('UNSUPPORTED_SCHEMA');
     return Number(versions[0].version);
   } catch (error) {

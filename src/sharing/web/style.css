@@ -81,10 +81,6 @@ textarea:focus-visible {
   outline: 2px solid var(--coral);
   outline-offset: 2px;
 }
-.brand {
-  font-size: 32px;
-  font-weight: 800;
-}
 .account {
   max-width: 360px;
   margin: 12vh auto;
@@ -274,9 +270,6 @@ textarea:focus-visible {
   .review-center {
     height: 60vh;
   }
-  .brand {
-    font-size: 24px;
-  }
   .account {
     margin: 6vh auto;
   }
@@ -301,9 +294,6 @@ textarea:focus-visible {
   }
   .project-panel .status:empty {
     display: none;
-  }
-  .project-panel .brand {
-    flex-shrink: 0;
   }
 }
 

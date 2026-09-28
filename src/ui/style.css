@@ -81,11 +81,6 @@ small {
   gap: 9px;
   padding-top: 10px;
 }
-.rail-brand {
-  font-size: 23px;
-  margin-bottom: 18px;
-  color: white;
-}
 .rail button {
   width: 34px;
   height: 34px;
@@ -123,9 +118,6 @@ aside {
   align-items: center;
   border-bottom: 1px solid var(--line);
   flex-shrink: 0;
-}
-.project-heading .brand {
-  display: none;
 }
 #project-picker {
   width: 100%;
@@ -363,9 +355,34 @@ aside {
   white-space: nowrap;
   padding: 4px 7px;
 }
+/* The whole header bar opens/closes the panel; the chevron shows which way it will go. */
+.inspector-head {
+  cursor: pointer;
+  user-select: none;
+}
+.inspector-head:hover {
+  background: #f4f6f3;
+}
 #inspector-toggle {
   border: 0;
-  padding: 3px 7px;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+#inspector-toggle::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: translateY(2px) rotate(-135deg);
+  transition: transform 0.15s;
+}
+#inspector-toggle[aria-expanded='true']::before {
+  transform: translateY(-2px) rotate(45deg);
 }
 .inspector-body {
   height: 144px;
@@ -469,9 +486,8 @@ aside {
 }
 .chat-empty {
   margin: auto;
-  color: #cbd1cc;
-  font-size: 42px;
-  font-weight: 600;
+  color: var(--muted);
+  font-size: 12px;
 }
 .chat-message {
   border-bottom: 1px solid var(--line);
@@ -2279,9 +2295,6 @@ body.panel-mode .app-shell {
   color: #1d2120;
   border-color: #e6ebe8;
 }
-:root[data-theme='dark'] .chat-empty {
-  color: #3a4240;
-}
 :root[data-theme='dark'] .mode-select[data-mode='review'] {
   background: #1f2d48;
   color: #9dbbf2;
@@ -2382,4 +2395,88 @@ body.panel-mode .chat-heading h2 {
   overflow: hidden;
   clip-path: inset(50%);
   white-space: nowrap;
+}
+
+/* Inline pins: tokens painted behind the textarea, ghost chip at the caret. */
+.body-field {
+  position: relative;
+}
+.body-field #body {
+  position: relative;
+  z-index: 1;
+  scrollbar-gutter: stable;
+}
+.body-backdrop {
+  position: absolute;
+  inset: 0;
+  padding: 10px 3px;
+  font-size: 12px;
+  line-height: 1.7;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  overflow: hidden;
+  scrollbar-gutter: stable;
+  color: transparent;
+  pointer-events: none;
+}
+.pin-token {
+  color: transparent;
+  background: #f7ddd3;
+  border-radius: 4px;
+  box-shadow: 0 0 0 1px #e8b6a4;
+}
+.pin-ghost {
+  position: absolute;
+  z-index: 2;
+  margin-top: 3px;
+  padding: 0 6px;
+  font-size: 11px;
+  line-height: 18px;
+  white-space: nowrap;
+  border: 1px dashed var(--coral);
+  border-radius: 4px;
+  background: #fff4ef;
+  color: #9c4f36;
+  opacity: 0.55;
+}
+.pin-ghost:hover,
+.pin-ghost:focus-visible {
+  opacity: 1;
+  background: #ffe9e0;
+}
+:root[data-theme='dark'] .pin-token {
+  background: #4a2c22;
+  box-shadow: 0 0 0 1px #7a4636;
+}
+:root[data-theme='dark'] .pin-ghost {
+  background: #2d201b;
+  color: #f0b39d;
+}
+
+/* Conversation entries can be removed from view; the button appears on hover. */
+.chat-message {
+  position: relative;
+}
+.card-remove {
+  position: absolute;
+  top: 0;
+  right: 0;
+  z-index: 1;
+  border: 0;
+  padding: 0 6px;
+  line-height: 20px;
+  color: var(--muted);
+  opacity: 0;
+}
+.chat-message:hover .card-remove,
+.card-remove:focus-visible {
+  opacity: 1;
+}
+.chat-message:has(.card-remove) .card-state {
+  margin-right: 18px;
+}
+@media (hover: none) {
+  .card-remove {
+    opacity: 0.6;
+  }
 }

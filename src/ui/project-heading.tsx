@@ -13,9 +13,6 @@ interface Props {
 function ProjectHeading({ projects, selected, select, create }: Props) {
   return (
     <>
-      <strong className="brand">
-        V<span>.</span>
-      </strong>
       <select
         id="project-picker"
         aria-label="프로젝트"

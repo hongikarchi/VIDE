@@ -3,7 +3,7 @@ import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 
-export const schemaVersion = 2;
+export const schemaVersion = 3;
 export const baselineSchema = `
         CREATE TABLE IF NOT EXISTS projects(id TEXT PRIMARY KEY, name TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS connections(id TEXT PRIMARY KEY, projectId TEXT NOT NULL REFERENCES projects(id),
@@ -30,7 +30,13 @@ CREATE TABLE IF NOT EXISTS publication_exports(id TEXT PRIMARY KEY,projectId TEX
 CREATE TABLE IF NOT EXISTS table_views(id TEXT PRIMARY KEY,projectId TEXT NOT NULL REFERENCES projects(id),name TEXT NOT NULL,query TEXT NOT NULL,revision INTEGER NOT NULL,updatedAt TEXT NOT NULL);
 `;
 export type Migration = { version: number; sql: string };
-const migrations: Migration[] = [{ version: 2, sql: baselineSchema }];
+// Conversation entries a user removed from view; the request records themselves are kept.
+const hiddenRequests = `CREATE TABLE IF NOT EXISTS hidden_requests(projectId TEXT NOT NULL REFERENCES projects(id),
+  requestId TEXT NOT NULL REFERENCES workspace_requests(id), hiddenAt TEXT NOT NULL, PRIMARY KEY(projectId, requestId));`;
+const migrations: Migration[] = [
+  { version: 2, sql: baselineSchema },
+  { version: 3, sql: hiddenRequests },
+];
 
 /** Caller holds the exclusive controller lock. Never migrates user model files. */
 export function migrateDatabase(
@@ -40,7 +46,7 @@ export function migrateDatabase(
   steps: Migration[] = migrations,
 ) {
   if (current === schemaVersion) return;
-  if (![0, 1].includes(current))
+  if (current < 0 || current >= schemaVersion)
     throw Object.assign(Error('UNSUPPORTED_SCHEMA'), { code: 'UNSUPPORTED_SCHEMA' });
   let backup: string | undefined;
   if (current > 0 && filename !== ':memory:') {

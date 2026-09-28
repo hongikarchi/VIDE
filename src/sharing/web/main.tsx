@@ -127,7 +127,6 @@ function App() {
   return (
     <div className="shell">
       <aside className="project-panel">
-        <div className="brand">V.</div>
         <nav aria-label="프로젝트">
           {projects.map((project) => (
             <button

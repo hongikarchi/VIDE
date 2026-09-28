@@ -4,6 +4,7 @@ import { mkdir, readdir, lstat, realpath, copyFile, readFile, writeFile } from '
 import { resolve, join, relative, dirname, isAbsolute } from 'node:path';
 import { createHash } from 'node:crypto';
 import { checkDatabase } from './database-check.ts';
+import { schemaVersion } from './migrations.ts';
 
 function fail(code: string): never {
   throw Object.assign(new Error(code), { code });
@@ -100,7 +101,7 @@ export async function verifyBackup(directory: string) {
   const parsed = z
     .object({
       format: z.literal(1),
-      schema: z.union([z.literal(1), z.literal(2)]),
+      schema: z.number().int().min(1).max(schemaVersion),
       source: z.string(),
       createdAt: z.string(),
       files: z
@@ -110,12 +111,7 @@ export async function verifyBackup(directory: string) {
     .safeParse(JSON.parse(await readFile(join(directory, 'backup-manifest.json'), 'utf8')));
   if (!parsed.success) fail('BACKUP_INVALID');
   const manifest = parsed.data;
-  if (
-    manifest.format !== 1 ||
-    ![1, 2].includes(manifest.schema) ||
-    !Array.isArray(manifest.files) ||
-    !manifest.files.length
-  )
+  if (manifest.format !== 1 || !Array.isArray(manifest.files) || !manifest.files.length)
     fail('BACKUP_INVALID');
   const seen = new Set();
   for (const file of manifest.files) {

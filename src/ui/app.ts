@@ -53,6 +53,7 @@ import {
   storageKey,
 } from './model.ts';
 import { createObjectList, type SelectMode } from './object-list.ts';
+import { attachPinTokens, tokenLabels } from './pin-tokens.ts';
 import { initializeWorkspacePanels } from './workspace-panels.ts';
 import { createViewport } from './viewport.ts';
 import { initializeDisplaySettings } from './display-settings.ts';
@@ -85,6 +86,8 @@ $('execution-limits').onclick = () => {
   });
 };
 let selectedIds: string[] = [];
+// Set once the inline pin composer exists; render() may run before that.
+let refreshPinComposer = () => {};
 /** Rhino-style selection: replace by default, Shift adds, Ctrl removes. */
 function applySelection(ids: string[], mode: SelectMode, pin = false) {
   if (mode === 'replace') selectedIds = [...new Set(ids)];
@@ -458,6 +461,7 @@ function render(rebuildRequests = true) {
       : objects.find((o) => o.id === state.selected)?.name || '';
   $('selection-bar').hidden = !selectedIds.length;
   $('selection-count').textContent = `${selectedIds.length.toLocaleString()}개 선택`;
+  refreshPinComposer();
   $('context').replaceChildren();
   if (state.linkedTargets?.length)
     chip(
@@ -478,19 +482,21 @@ function render(rebuildRequests = true) {
       },
     );
   // One chip for the whole pinned set; Rhino-pinned objects outside the current Sync show as pending.
+  // Inline "[고정N · k개]" tokens carry their own pins; only unlabeled pins get a chip.
+  const loosePins = state.pins.filter((pin) => !pin.label);
   const pendingPins = hostPinned.filter((id) => !state.pins.some((pin) => pin.id === id)).length;
-  if (state.pins.length || pendingPins)
+  if (loosePins.length || pendingPins)
     chip(
-      `📌 고정 객체 ${state.pins.length}개${pendingPins ? ` · Sync 대기 ${pendingPins}개` : ''}`,
+      `📌 고정 객체 ${loosePins.length}개${pendingPins ? ` · Sync 대기 ${pendingPins}개` : ''}`,
       () => {
-        state.pins = [];
+        state.pins = state.pins.filter((pin) => pin.label);
         if (hostPinned.length) void setHostPins([]).catch(() => {});
         render();
       },
-      state.pins.map((pin) => pin.name || pin.id).join('\n') ||
+      loosePins.map((pin) => pin.name || pin.id).join('\n') ||
         'Rhino에서 고정했지만 아직 Sync 전인 객체',
       () => {
-        selectedIds = state.pins
+        selectedIds = loosePins
           .map((pin) => pin.id)
           .filter((id) => objects.some((o) => o.id === id));
         state.selected = selectedIds.at(-1) ?? null;
@@ -752,6 +758,14 @@ function renderMessages() {
     },
     changed: renderMessages,
     error: message,
+    hide: async (id) => {
+      await api(`/projects/${currentProject().id}/requests/${id}/hide`, 'POST', {});
+      const index = state.messages.findIndex((entry) => entry.id === id);
+      if (index >= 0) state.messages.splice(index, 1);
+      if (selectedResult === id) selectedResult = undefined;
+      renderMessages();
+      render();
+    },
   });
 }
 
@@ -825,10 +839,65 @@ $('permission').onchange = () => {
 };
 $('body').oninput = () => {
   state.body = $('body').value;
+  // Pins whose inline token was deleted from the message leave the request.
+  const labels = tokenLabels(state.body);
+  state.pins = state.pins.filter((pin) => !pin.label || labels.has(pin.label));
   render();
   $('saved').textContent = draftSaved ? '초안 저장됨' : '저장 실패';
   if (state.body.endsWith('@')) $('attach-menu').open = true;
 };
+/** Selected objects of the displayed model that can be pinned (they belong to a request basis). */
+function pinnable() {
+  return selectedIds.flatMap((id) => {
+    const object = objects.find((o) => o.id === id && o.revision);
+    return object ? [object] : [];
+  });
+}
+const pinComposer = attachPinTokens($('body'), {
+  selection: () => {
+    const chosen = pinnable(),
+      count = chosen.length;
+    // No ghost for a selection that is already exactly one token's objects.
+    const key = chosen
+      .map((object) => object.id)
+      .sort()
+      .join();
+    const labels = [...new Set(state.pins.map((pin) => pin.label).filter(Boolean))];
+    if (
+      labels.some(
+        (label) =>
+          state.pins
+            .filter((pin) => pin.label === label)
+            .map((pin) => pin.id)
+            .sort()
+            .join() === key,
+      )
+    )
+      return { count: 0 };
+    return { count: ready && !busy && count && state.pins.length + count <= 100 ? count : 0 };
+  },
+  insert: (label) => {
+    state.pins.push(
+      ...pinnable().map((object) => ({
+        id: object.id,
+        name: object.name,
+        role: 'target' as const,
+        basis: object.revision!,
+        label,
+      })),
+    );
+  },
+  focusToken: (label) => {
+    selectedIds = state.pins
+      .filter((pin) => pin.label === label)
+      .map((pin) => pin.id)
+      .filter((id) => objects.some((o) => o.id === id));
+    state.selected = selectedIds.at(-1) ?? null;
+    render();
+    if (selectedIds.length) viewport?.fit(selectedIds);
+  },
+});
+refreshPinComposer = () => pinComposer.refresh();
 function interventionReason(id: string): string | undefined {
   if (busy || !ready) return '현재 전송이 끝난 뒤 추가하세요.';
   const parent = state.messages.find((entry) => entry.id === id)?.request;
@@ -954,21 +1023,8 @@ $('body').onkeydown = (e) => {
   }
 };
 $('pin').onclick = () => {
-  const displayed = state.messages.find((entry) => entry.id === displayedResult)?.request.result
-    ?.sourceDocument;
-  // On the attached Rhino document, pins live in Rhino so the panel and browser share them.
-  if (
-    connectedTarget &&
-    displayed?.instance === connectedTarget.instance &&
-    displayed.documentId === connectedTarget.documentId
-  )
-    void setHostPins([...new Set([...hostPinned, ...selectedIds])]).catch((error) =>
-      message(readableError(error).message),
-    );
-  else pinSelection(state, selectedIds);
   $('attach-menu').open = false;
-  render();
-  $('body').focus();
+  pinComposer.insertSelection();
 };
 $('toggle-recent').onclick = () => {
   const open = $('recent-section').dataset.open !== 'true';
@@ -1032,11 +1088,6 @@ $('files').onchange = async () => {
 };
 $('selection-pin').onclick = () => {
   $('pin').click();
-};
-$('selection-clear').onclick = () => {
-  selectedIds = [];
-  state.selected = null;
-  render();
 };
 for (const button of document.querySelectorAll<HTMLButtonElement>('[data-tool]'))
   button.onclick = () => setTool(z.enum(['select', 'pin', 'sketch']).parse(button.dataset.tool));
@@ -1187,6 +1238,41 @@ document.addEventListener('keydown', (e) => {
       return;
     }
   }
+  if (!typing && tool !== 'sketch' && viewport && !e.altKey) {
+    const key = e.key.toLowerCase();
+    if ((e.ctrlKey || e.metaKey) && key === 'a') {
+      e.preventDefault();
+      const shown = new Set(viewport.visibleIds());
+      selectedIds = objects.map((o) => o.id).filter((id) => shown.has(id));
+      state.selected = selectedIds.at(-1) ?? null;
+      render();
+      return;
+    }
+    if (!e.ctrlKey && !e.metaKey && ['h', 'i', 'u', 'z'].includes(key)) {
+      e.preventDefault();
+      if (key === 'z') viewport.fit(selectedIds.length ? selectedIds : undefined);
+      else if (key === 'u') {
+        const count = viewport.hiddenCount();
+        viewport.unhide();
+        if (count) message(`숨긴 객체 ${count.toLocaleString()}개를 다시 표시했습니다.`);
+      } else if (!selectedIds.length) message('먼저 객체를 선택하세요.');
+      else {
+        if (key === 'h') viewport.hide(selectedIds);
+        else viewport.isolate(selectedIds);
+        message(
+          key === 'h'
+            ? `${selectedIds.length.toLocaleString()}개 숨김 · U로 모두 표시`
+            : `선택한 ${selectedIds.length.toLocaleString()}개만 표시 · U로 모두 표시`,
+        );
+        if (key === 'h') {
+          selectedIds = [];
+          state.selected = null;
+        }
+        render();
+      }
+      return;
+    }
+  }
   if (e.key === 'Escape') {
     if (tool !== 'sketch' && selectedIds.length && !(e.target instanceof HTMLTextAreaElement)) {
       selectedIds = [];
@@ -1209,6 +1295,13 @@ document.addEventListener('keydown', (e) => {
   if (e.altKey && e.shiftKey && ['KeyL', 'KeyR'].includes(e.code)) {
     e.preventDefault();
     $(`toggle-${e.code === 'KeyL' ? 'left' : 'right'}`).click();
+  }
+});
+document.addEventListener('pointerdown', (e) => {
+  for (const id of ['effort-menu', 'attach-menu', 'draft-menu']) {
+    const menu = document.getElementById(id);
+    if (menu instanceof HTMLDetailsElement && menu.open && !menu.contains(e.target as Node))
+      menu.open = false;
   }
 });
 window.addEventListener('beforeunload', (e) => {

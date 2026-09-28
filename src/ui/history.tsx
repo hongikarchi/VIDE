@@ -20,6 +20,8 @@ interface Actions {
   changed: () => void;
   restore: (request: Request) => void;
   error: (message: string) => void;
+  /** Remove a finished entry from the conversation (the record is kept). */
+  hide: (id: string) => Promise<void>;
 }
 const errorLabels: Record<string, string> = errors,
   stateLabels: Record<string, string> = labels;
@@ -278,6 +280,23 @@ function Card({
         : `${models.find((model) => model.id === message.model)?.name || message.model} · ${message.effort} · ${message.applyToSource ? 'Auto mode' : message.permission === 'review' ? 'Plan mode' : 'Accept edits'}`;
   return (
     <article className="chat-message" data-request-id={message.id} data-open={String(open)}>
+      {request && !['queued', 'running'].includes(request.state) ? (
+        <button
+          className="card-remove"
+          title="대화에서 지우기"
+          aria-label="대화에서 지우기"
+          onClick={() => {
+            if (confirm('이 대화를 목록에서 지울까요? 모델과 작업 기록은 보존됩니다.'))
+              void actions
+                .hide(message.id)
+                .catch((error: unknown) =>
+                  actions.error(error instanceof Error ? error.message : '지우지 못했습니다.'),
+                );
+          }}
+        >
+          ×
+        </button>
+      ) : null}
       <button
         className="card-head"
         aria-expanded={open}
@@ -542,7 +561,7 @@ function History({
       ))}
     </>
   ) : (
-    <div className="chat-empty">V.</div>
+    <div className="chat-empty">요청을 보내면 대화가 여기에 표시됩니다.</div>
   );
 }
 const roots = new Map<HTMLElement, Root>();

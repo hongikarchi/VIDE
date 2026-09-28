@@ -9,6 +9,7 @@ export const draftPinSchema = z
     basis: z.string(),
     role: z.enum(['target', 'preserve', 'reference']),
     name: z.string().optional(),
+    label: z.string().max(40).optional(),
   })
   .passthrough();
 export const uiInputSchema = requestInputSchema.safeExtend({

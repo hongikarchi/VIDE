@@ -58,12 +58,18 @@ function $<T extends HTMLElement = HTMLElement>(id: string): T {
   return element as T;
 }
 
-let expanded = false;
+// The panel stays as the user left it, with or without a selection, across reloads.
+let expanded = (() => {
+  try {
+    return localStorage.getItem('vide:inspector-open') === 'true';
+  } catch {
+    return false;
+  }
+})();
 const inspected = new WeakMap<HTMLElement, string>();
 function showInspector(open: boolean) {
   $('inspector').classList.toggle('collapsed', !open);
   $('inspector-toggle').setAttribute('aria-expanded', String(open));
-  $('inspector-toggle').textContent = open ? '⌄' : '⌃';
 }
 const paths: Record<string, string> = {
   extension: '<path d="M3 3h7v7H3V3Zm11 0h7v7h-7V3ZM3 14h7v7H3v-7Zm14 0v8m-4-4h8"/>',
@@ -128,10 +134,17 @@ export function initializeInspector(onTab: (tab: InspectorTab) => void) {
       );
     }
   };
-  $('inspector-toggle').onclick = () => {
+  // The whole header bar toggles the panel; the chevron button is its keyboard target.
+  $('inspector-toggle').closest<HTMLElement>('.inspector-head')!.onclick = () => {
     expanded = !expanded;
+    try {
+      localStorage.setItem('vide:inspector-open', String(expanded));
+    } catch {
+      /* Per-viewer convenience only. */
+    }
     showInspector(expanded);
   };
+  showInspector(expanded);
 }
 export function renderInspector(
   object: InspectorObject | undefined | null,
@@ -146,8 +159,7 @@ export function renderInspector(
     content.scrollTop = 0;
     inspected.set(content, key);
   }
-  showInspector(Boolean(object) && expanded);
-  $<HTMLButtonElement>('inspector-toggle').disabled = !object;
+  showInspector(expanded);
   $('selection').textContent = object?.name || '선택 없음';
   $('selection-kind').textContent = object
     ? `${result?.host === 'zwcad' ? 'ZWCAD' : 'Rhino'} · 작업 사본`

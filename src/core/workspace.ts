@@ -44,6 +44,22 @@ export class Workspace {
       .all(projectId)
       .map((row) => decode(row)!);
   }
+  /** Remove a finished request from the conversation view; the record and its links stay. */
+  hide(projectId: string, id: string) {
+    const request = this.get(projectId, id);
+    if (['queued', 'running'].includes(request.state)) fail('PROJECT_BUSY');
+    this.store.db
+      .prepare('INSERT OR IGNORE INTO hidden_requests VALUES(?,?,?)')
+      .run(projectId, id, new Date().toISOString());
+  }
+  hiddenIds(projectId: string) {
+    return new Set(
+      this.store.db
+        .prepare('SELECT requestId FROM hidden_requests WHERE projectId=?')
+        .all(projectId)
+        .map((row) => String(row.requestId)),
+    );
+  }
   get(projectId: string, id: string): StoredWork {
     return (
       decode(

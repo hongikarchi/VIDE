@@ -6,6 +6,8 @@ export interface DraftPin {
   basis: string;
   role: 'target' | 'preserve' | 'reference';
   name?: string;
+  /** Inline token ("고정N") in the message that names this pin group. */
+  label?: string;
 }
 export interface DraftFile {
   name: string;

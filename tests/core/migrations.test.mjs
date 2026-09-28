@@ -34,7 +34,7 @@ test('migration backs up committed WAL data and preserves records and relationsh
   copy.close();
   for (let i = 0; i < 2; i++) {
     const store = new Store(file);
-    assert.equal(store.db.prepare('SELECT version FROM schema_version').get().version, 2);
+    assert.equal(store.db.prepare('SELECT version FROM schema_version').get().version, 3);
     assert.equal(
       store.db.prepare('SELECT requestId FROM publication_exports').get().requestId,
       'w',
@@ -68,6 +68,33 @@ test('backup failure aborts before modification and fresh database creates the c
   assert.equal(db.prepare('SELECT version FROM schema_version').get().version, 1);
   db.close();
   const memory = new Store(':memory:');
-  assert.equal(memory.db.prepare('SELECT version FROM schema_version').get().version, 2);
+  assert.equal(memory.db.prepare('SELECT version FROM schema_version').get().version, 3);
   memory.close();
+});
+
+test('schema 3 keeps hidden conversation entries without deleting requests', async () => {
+  const { Workspace } = await import('../../src/core/workspace.ts');
+  const store = new Store(':memory:');
+  try {
+    const workspace = new Workspace(store),
+      project = store.createProject('hide');
+    const input = {
+      id: 'r1',
+      body: 'hello',
+      permission: 'review',
+      provider: 'codex-cli',
+      pins: [],
+      sketches: [],
+      files: [],
+    };
+    workspace.submit(project.id, input);
+    assert.throws(() => workspace.hide(project.id, 'r1'), { code: 'PROJECT_BUSY' });
+    workspace.update(project.id, 'r1', 'succeeded', { text: 'hi' });
+    workspace.hide(project.id, 'r1');
+    workspace.hide(project.id, 'r1');
+    assert.deepEqual([...workspace.hiddenIds(project.id)], ['r1']);
+    assert.equal(workspace.get(project.id, 'r1').state, 'succeeded');
+  } finally {
+    store.close();
+  }
 });
