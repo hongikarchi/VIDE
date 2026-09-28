@@ -95,28 +95,40 @@ function Settings({ config, current, onStatus }: Props) {
   return (
     <>
       <div className="quantity-head">
-        <h2>AI 연결 설정</h2>
+        <h2>AI 계정 · 연결</h2>
         <button disabled={saving} onClick={close}>
           닫기
         </button>
       </div>
-      <p>공식 CLI의 구독 로그인을 사용합니다. 경로를 비우면 자동 탐색합니다.</p>
+      <p className="ai-intro">
+        요청은 이 PC에서 공식 Claude Code·Codex CLI가 구독 계정으로 실행합니다. 서비스마다 계정을
+        여러 개 두고 골라 쓸 수 있습니다. 사용량과 자동 전환은 설정 → AI에서 봅니다.
+      </p>
       {providers.map((provider) => {
         const label = provider === 'claude-cli' ? 'Claude Code' : 'Codex · ChatGPT';
+        const connected = states[provider] === '구독 로그인 확인됨';
         return (
-          <section key={provider}>
-            <h3>{label}</h3>
-            <input
-              aria-label={`${label} 실행 경로`}
-              disabled={saving}
-              value={paths[provider] ?? ''}
-              placeholder={config.resolved[provider] || '실행 파일 전체 경로'}
-              onChange={(event) =>
-                setPaths((previous) => ({ ...previous, [provider]: event.target.value }))
-              }
-            />
-            <p role="status">{states[provider] || '연결 확인 전'}</p>
+          <section key={provider} className="ai-provider">
+            <div className="ai-provider-head">
+              <h3>{label}</h3>
+              <span className="pill" data-ok={String(connected)} role="status">
+                {states[provider] || '연결 확인 전'}
+              </span>
+            </div>
             <AccountSettings provider={provider} />
+            <details className="ai-advanced">
+              <summary>고급 · 실행 파일 경로</summary>
+              <input
+                aria-label={`${label} 실행 경로`}
+                disabled={saving}
+                value={paths[provider] ?? ''}
+                placeholder={config.resolved[provider] || '실행 파일 전체 경로'}
+                onChange={(event) =>
+                  setPaths((previous) => ({ ...previous, [provider]: event.target.value }))
+                }
+              />
+              <small>비워 두면 설치된 CLI를 자동으로 찾습니다.</small>
+            </details>
           </section>
         );
       })}
@@ -139,10 +151,7 @@ function Settings({ config, current, onStatus }: Props) {
         </button>
       </div>
       <p role="status">{status}</p>
-      <small>
-        로그인은 각 공식 CLI에서 진행합니다. 설정 변경은 다음 요청부터 적용되며 구독 잔여 사용량은
-        여기서 확인할 수 없습니다.
-      </small>
+      <small>로그인은 각 공식 CLI 창에서 진행합니다. 경로 변경은 다음 요청부터 적용됩니다.</small>
     </>
   );
 }

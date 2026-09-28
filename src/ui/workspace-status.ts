@@ -105,7 +105,14 @@ export function initializeWorkspaceStatus({
   tabs.get('desktop')!.button.hidden = !inDesktop();
   tabs.get('programs')!.button.hidden = tabs.get('ai')!.button.hidden = remoteSession();
   show('account');
-  let failures: { id: string; label: string }[] = [];
+  let failures: {
+    id: string;
+    label: string;
+    title?: string;
+    reason?: string;
+    code?: string;
+    at?: string;
+  }[] = [];
   const notifications: string[] = [];
   const providerButton = el('button', 'AI · 확인 중', footer, { 'aria-label': 'AI 연결 상태' });
   const hostButton = el('button', '호스트 · 확인 중', footer, { 'aria-label': '호스트 준비 상태' });
@@ -140,25 +147,54 @@ export function initializeWorkspaceStatus({
     hostButton.textContent = host.textContent?.split(' · 문서 연결')[0] || '호스트 · 확인 전';
     const rows = [...new Set(notifications)];
     if (!auth.hidden && auth.textContent) rows.unshift(auth.textContent);
-    problemButton.textContent = `오류 기록 ${rows.length + failures.length}`;
+    problemButton.textContent = `문제 ${rows.length + failures.length}`;
     problemButton.dataset.error = String(rows.length + failures.length > 0);
     problems.replaceChildren();
-    el('h3', '오류 기록', problems);
-    if (!rows.length && !failures.length) el('p', '확인된 오류 기록이 없습니다.', problems);
+    // What went wrong recently and where to look: failed requests (open them for the cause and a
+    // retry) and this session's connection notices. Solved problems simply stop appearing.
+    el('h3', '문제가 있었던 작업', problems);
+    el(
+      'small',
+      '실패했거나 결과를 확인하지 못한 요청입니다. 누르면 그 작업으로 이동해 원인과 다시 보내기를 볼 수 있습니다. 목록에서 지우려면 작업 이력의 ×를 누르세요.',
+      problems,
+    );
+    if (!failures.length)
+      el('p', '문제가 있었던 작업이 없습니다.', problems, { class: 'usage-note' });
     else {
-      el(
-        'small',
-        '기록 확인은 오류 해결을 의미하지 않습니다. 해당 작업에서 결과를 확인하세요.',
-        problems,
-      );
-      const list = el('ul', '', problems);
-      failures.slice(-20).forEach((row) => {
-        const action = el('button', row.label, el('li', '', list));
-        action.onclick = () => {
-          close();
-          openFailure(row.id);
-        };
-      });
+      const list = el('ul', '', problems, { class: 'settings-rows problem-list' });
+      failures
+        .slice(-20)
+        .reverse()
+        .forEach((row) => {
+          const item = el('li', '', list);
+          const text = el('div', '', item, { class: 'problem-text' });
+          el('strong', row.title ?? row.label, text);
+          el(
+            'small',
+            [
+              row.reason,
+              row.code,
+              row.at &&
+                new Date(row.at).toLocaleString('ko-KR', {
+                  month: 'numeric',
+                  day: 'numeric',
+                  hour: '2-digit',
+                  minute: '2-digit',
+                }),
+            ]
+              .filter(Boolean)
+              .join(' · '),
+            text,
+          );
+          el('button', '작업 보기', item, { type: 'button' }).onclick = () => {
+            close();
+            openFailure(row.id);
+          };
+        });
+    }
+    if (rows.length) {
+      el('h3', '이번 실행 중 알림', problems, { class: 'problem-notices' });
+      const list = el('ul', '', problems, { class: 'settings-rows problem-list' });
       rows.slice(-20).forEach((row) => el('li', row, list));
     }
   }
@@ -207,7 +243,7 @@ export function initializeWorkspaceStatus({
         );
       }
     },
-    setFailures(rows: { id: string; label: string }[]) {
+    setFailures(rows: typeof failures) {
       failures = rows;
       update();
     },

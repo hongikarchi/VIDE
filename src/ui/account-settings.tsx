@@ -40,6 +40,42 @@ export function AccountSettings({ provider }: { provider: Provider }) {
   const [login, setLogin] = useState<z.infer<typeof loginSchema>[number]>();
   const loggingIn = login?.state === 'running' || login?.state === 'stopping';
   const refresh = async () => setData(schema.parse(await api('/accounts')));
+  // Who is signed in to each account (email · plan) and the switching settings, from the usage view.
+  const [who, setWho] = useState<Record<string, string>>({});
+  const [usageOn, setUsageOn] = useState(false);
+  const [autoOn, setAutoOn] = useState(false);
+  useEffect(() => {
+    void api('/accounts/usage')
+      .then((value) => {
+        const usage = z
+          .object({
+            settings: z.object({ usageLookup: z.boolean(), autoSwitch: z.boolean() }),
+            accounts: z.array(
+              z.object({
+                provider: z.string(),
+                id: z.string(),
+                email: z.string().optional(),
+                plan: z.string().optional(),
+                signedIn: z.boolean(),
+              }),
+            ),
+          })
+          .parse(value);
+        setUsageOn(usage.settings.usageLookup);
+        setAutoOn(usage.settings.autoSwitch);
+        setWho(
+          Object.fromEntries(
+            usage.accounts
+              .filter((row) => row.provider === provider)
+              .map((row) => [
+                row.id,
+                row.signedIn ? [row.email, row.plan].filter(Boolean).join(' · ') : '로그인 필요',
+              ]),
+          ),
+        );
+      })
+      .catch(() => {});
+  }, [provider, data]);
   useEffect(() => {
     let alive = true;
     let timer: ReturnType<typeof setTimeout>;
@@ -107,12 +143,16 @@ export function AccountSettings({ provider }: { provider: Provider }) {
   ];
   return (
     <div className="account-settings">
-      <h4>구독 계정</h4>
       {rows.map((row) => (
-        <div key={row.id}>
-          <span>
+        <div
+          key={row.id}
+          className="account-row"
+          data-active={String(data?.active[provider] === row.id)}
+        >
+          <span className="account-name">
             {row.label} {data?.active[provider] === row.id ? '· 선택됨' : ''}{' '}
             {data?.pending[provider] === row.id ? '· 전환 대기' : ''}
+            {who[row.id] ? <small>{who[row.id]}</small> : null}
           </span>
           <button
             disabled={busy || loggingIn}
@@ -208,27 +248,29 @@ export function AccountSettings({ provider }: { provider: Provider }) {
           )}
         </div>
       ))}
-      <input
-        aria-label={`${provider} 계정 이름`}
-        value={label}
-        maxLength={80}
-        onChange={(e) => setLabel(e.target.value)}
-        placeholder="계정 이름"
-      />
-      <button
-        disabled={busy || !label.trim()}
-        onClick={() =>
-          void action(async () => {
-            await api('/accounts', 'POST', { provider, label });
-            setLabel('');
-          })
-        }
-      >
-        계정 추가
-      </button>
-      <button disabled={busy} onClick={() => void action(refresh)}>
-        새로고침
-      </button>
+      <div className="account-add">
+        <input
+          aria-label={`${provider} 계정 이름`}
+          value={label}
+          maxLength={80}
+          onChange={(e) => setLabel(e.target.value)}
+          placeholder="새 계정 이름 (예: 회사 ChatGPT)"
+        />
+        <button
+          disabled={busy || !label.trim()}
+          onClick={() =>
+            void action(async () => {
+              await api('/accounts', 'POST', { provider, label });
+              setLabel('');
+            })
+          }
+        >
+          계정 추가
+        </button>
+        <button disabled={busy} onClick={() => void action(refresh)}>
+          새로고침
+        </button>
+      </div>
       {command && (
         <div>
           <p>새 PowerShell 창에서 실행한 뒤 이 계정을 선택하세요.</p>
@@ -244,7 +286,10 @@ export function AccountSettings({ provider }: { provider: Provider }) {
           </button>
         </div>
       )}
-      <small>사용량 미확인 · 자동 계정 전환 꺼짐</small>
+      <small>
+        {usageOn ? '사용량 조회 켜짐' : '사용량 미확인'} ·{' '}
+        {autoOn ? '자동 계정 전환 켜짐' : '자동 계정 전환 꺼짐'} (설정 → AI)
+      </small>
       <p role="status">{message}</p>
     </div>
   );

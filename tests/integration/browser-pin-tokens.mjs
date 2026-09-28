@@ -139,6 +139,14 @@ try {
   await page.keyboard.press('End');
   await ghost.waitFor({ state: 'visible' });
   assert.equal(await ghost.textContent(), '📌 고정 · 2개');
+  // The ghost sits on the sentence's line right after the typed words, at the text's size.
+  const [line, chip] = [await body.boundingBox(), await ghost.boundingBox()];
+  assert.ok(chip.y - line.y < 30, 'ghost on the first line');
+  assert.equal(
+    await ghost.evaluate((node) => getComputedStyle(node).fontSize),
+    await body.evaluate((node) => getComputedStyle(node).fontSize),
+  );
+  await page.screenshot({ path: join(directory, 'pin-ghost.png') });
   await ghost.click();
   assert.equal(await body.inputValue(), '벽 [고정1 · 2개]');
   assert.equal(await page.locator('.body-backdrop mark.pin-token').count(), 1);

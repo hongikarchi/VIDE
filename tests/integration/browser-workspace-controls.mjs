@@ -121,10 +121,16 @@ try {
   await page.locator('#cancel-sketch').click();
   await page.locator('[data-view="plan"]').click();
   assert.equal(await page.locator('[data-view="plan"]').getAttribute('aria-pressed'), 'true');
-  assert.equal(await page.locator('#projection-toggle').textContent(), '직교');
+  assert.equal(
+    await page.locator('#projection-toggle').getAttribute('aria-label'),
+    '원근 투영으로 전환',
+  );
   await page.locator('#projection-toggle').click();
   assert.equal(await page.locator('[data-view="plan"]').getAttribute('aria-pressed'), 'false');
-  assert.equal(await page.locator('#projection-toggle').textContent(), '원근');
+  assert.equal(
+    await page.locator('#projection-toggle').getAttribute('aria-label'),
+    '평행 투영으로 전환',
+  );
   await page.locator('[data-view="front"]').click();
   assert.equal(
     await page.locator('#canvas canvas').getAttribute('data-projection'),
@@ -237,7 +243,11 @@ try {
   await page.reload();
   await page.waitForFunction(() => !document.querySelector('#body').disabled);
   await page.getByRole('button', { name: '오류 기록', exact: true }).click();
-  await settings.getByRole('button', { name: /failed-sync.*IMPORT_LIMIT/ }).click();
+  await settings
+    .locator('.problem-list li')
+    .filter({ hasText: 'IMPORT_LIMIT' })
+    .getByRole('button', { name: '작업 보기', exact: true })
+    .click();
   assert.equal(await settings.isVisible(), false);
   assert.equal(await page.locator('[data-request-id="failed-sync"]').isVisible(), true);
   await page.locator('#attach-menu summary').click();

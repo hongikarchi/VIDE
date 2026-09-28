@@ -86,75 +86,52 @@ export function attachPinTokens(textarea: HTMLTextAreaElement, options: Options)
     const scrollbar = textarea.offsetWidth - textarea.clientWidth - borders;
     backdrop.style.paddingRight = parseFloat(style.paddingRight) + scrollbar + 'px';
   };
+  const render = (text: string) =>
+    escape(text).replace(
+      /\[(고정\d+ · \d+개)\]/g,
+      (_token, inner) =>
+        `<mark class="pin-token"><span class="pin-bracket">[</span>${inner}<span class="pin-bracket">]</span></mark>`,
+    );
+  // The backdrop draws the text and carries a zero-width anchor at the caret: the chip is placed
+  // from the same layout the user sees, so it sits in the sentence exactly where it would go.
   const paint = () => {
+    const text = textarea.value;
+    let at = Math.min(caret, text.length);
+    const token = tokenAt(text, at);
+    if (token && at > token.start && at < token.end) at = token.end;
     backdrop.innerHTML =
-      escape(textarea.value).replace(
-        /\[(고정\d+ · \d+개)\]/g,
-        (_token, inner) =>
-          `<mark class="pin-token"><span class="pin-bracket">[</span>${inner}<span class="pin-bracket">]</span></mark>`,
-      ) + '\n';
+      render(text.slice(0, at)) + '<span class="pin-caret"></span>' + render(text.slice(at)) + '\n';
     backdrop.scrollTop = textarea.scrollTop;
   };
-  // Caret coordinates via a mirror with the textarea's text metrics.
   const caretPoint = () => {
-    const style = getComputedStyle(textarea);
-    const mirror = document.createElement('div');
-    for (const key of [
-      'boxSizing',
-      'width',
-      'paddingTop',
-      'paddingRight',
-      'paddingBottom',
-      'paddingLeft',
-      'borderTopWidth',
-      'borderRightWidth',
-      'borderBottomWidth',
-      'borderLeftWidth',
-      'fontFamily',
-      'fontSize',
-      'fontWeight',
-      'lineHeight',
-      'letterSpacing',
-    ] as const)
-      mirror.style[key] = style[key];
-    Object.assign(mirror.style, {
-      position: 'absolute',
-      visibility: 'hidden',
-      whiteSpace: 'pre-wrap',
-      overflowWrap: 'break-word',
-      top: '0',
-      left: '0',
-    });
-    mirror.textContent = textarea.value.slice(0, caret);
-    const marker = document.createElement('span');
-    marker.textContent = '​';
-    mirror.append(marker);
-    field.append(mirror);
-    const point = { left: marker.offsetLeft, top: marker.offsetTop - textarea.scrollTop };
-    mirror.remove();
-    return point;
+    const anchor = backdrop.querySelector<HTMLElement>('.pin-caret');
+    return anchor
+      ? { left: anchor.offsetLeft, top: anchor.offsetTop - backdrop.scrollTop }
+      : { left: 0, top: 0 };
   };
   const place = () => {
     const { count } = options.selection();
     ghost.hidden = count === 0 || textarea.disabled;
+    // With nothing typed yet, the chip takes the sentence's first place (placeholder hidden).
+    field.dataset.ghost = String(!ghost.hidden && !textarea.value);
     if (ghost.hidden) return;
     ghost.textContent = `📌 고정 · ${count}개`;
+    const style = getComputedStyle(textarea);
+    const lineHeight = parseFloat(style.lineHeight) || 20;
+    ghost.style.fontSize = style.fontSize;
+    ghost.style.height = `${lineHeight}px`;
+    ghost.style.lineHeight = `${lineHeight - 2}px`;
     const maxLeft = Math.max(0, field.clientWidth - ghost.offsetWidth - 4);
-    // An empty field shows its placeholder at the caret; keep the chip clear of it, top right.
-    if (!textarea.value) {
-      ghost.style.left = `${maxLeft}px`;
-      ghost.style.top = '0px';
-      return;
-    }
     const point = caretPoint();
     // Mid-sentence the chip drops one line so it does not cover the words after the caret.
     const midLine = caret < textarea.value.length && textarea.value[caret] !== '\n';
-    const lineHeight = parseFloat(getComputedStyle(textarea).lineHeight) || 20;
-    ghost.style.left = `${Math.min(point.left + 2, maxLeft)}px`;
-    ghost.style.top = `${Math.max(0, point.top + (midLine ? lineHeight : 0))}px`;
+    const room = !midLine && point.left + 4 + ghost.offsetWidth <= field.clientWidth;
+    ghost.style.left = `${Math.min(point.left + (textarea.value ? 4 : 0), maxLeft)}px`;
+    ghost.style.top = `${Math.max(0, point.top + (midLine || !room ? lineHeight : 0))}px`;
   };
   const remember = () => {
     caret = textarea.selectionEnd ?? textarea.value.length;
+    paint();
     place();
   };
   const commit = () => {

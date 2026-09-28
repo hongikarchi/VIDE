@@ -31,8 +31,8 @@ import { linkedCandidates, showLinkedTargets } from './linked-targets.tsx';
 import { renderHistory, expandAll, setExpandAll } from './history.tsx';
 import { initializeDocuments, attachConnectedSelection } from './documents.tsx';
 import { renderRequests, renderActiveWork } from './requests.tsx';
-import { initializeInspector, renderInspector } from './inspector.ts';
-import { api, connect, errors } from './gateway.ts';
+import { iconSvg, initializeInspector, renderInspector } from './inspector.ts';
+import { api, connect, errors, labels } from './gateway.ts';
 import { remoteSession } from './remote-panel.ts';
 import { applyDisplayDelta } from '../core/display-delta.ts';
 import {
@@ -339,10 +339,17 @@ try {
         );
       const toggle = $('projection-toggle');
       toggle.dataset.projection = camera.projection;
-      toggle.textContent = camera.projection === 'perspective' ? '원근' : '직교';
+      // The icon shows the current projection; the button switches to the other one.
+      toggle.innerHTML = iconSvg(
+        camera.projection === 'perspective' ? 'perspective' : 'orthographic',
+      );
+      toggle.title =
+        camera.projection === 'perspective'
+          ? '지금 원근 투영 · 눌러서 평행(직교) 투영'
+          : '지금 평행(직교) 투영 · 눌러서 원근 투영';
       toggle.setAttribute(
         'aria-label',
-        camera.projection === 'perspective' ? '직교 투영으로 전환' : '원근 투영으로 전환',
+        camera.projection === 'perspective' ? '평행 투영으로 전환' : '원근 투영으로 전환',
       );
     },
   );
@@ -630,7 +637,14 @@ function render(rebuildRequests = true) {
       .filter((entry) => ['failed', 'unknown', 'interrupted'].includes(entry.request?.state))
       .map((entry) => ({
         id: entry.id,
-        label: `${(entry.body || '작업').slice(0, 120)} · ${errors[entry.request?.result?.code || ''] || entry.request?.state}${entry.request?.result?.code ? ` (${entry.request.result.code})` : ''}`,
+        title: (entry.body || '작업').slice(0, 120),
+        reason:
+          errors[entry.request?.result?.code || ''] ||
+          labels[entry.request?.state ?? ''] ||
+          String(entry.request?.state),
+        code: entry.request?.result?.code,
+        at: entry.request?.createdAt,
+        label: `${(entry.body || '작업').slice(0, 120)} · ${entry.request?.result?.code ?? ''}`,
       })),
   );
   $('work-count').textContent = `${state.messages.length}개 작업`;
@@ -651,21 +665,80 @@ function render(rebuildRequests = true) {
   $('request').title = validate(state) || (conflict && errors[conflict]) || '보내기 · Ctrl+Enter';
   draw();
 }
+/** Remove a finished request from the conversation and history (its records are kept). */
+async function hideRequest(id: string) {
+  await api(`/projects/${currentProject().id}/requests/${id}/hide`, 'POST', {});
+  const index = state.messages.findIndex((entry) => entry.id === id);
+  if (index >= 0) state.messages.splice(index, 1);
+  if (selectedResult === id) selectedResult = undefined;
+  renderMessages();
+  render();
+}
+/** Work history: every request, newest first, with its state; opens it in the conversation. */
 function sidebar() {
   $('task-list').replaceChildren();
   if (!state.messages.length) el('small', '아직 요청이 없습니다.', $('task-list'));
-  state.messages.forEach((m, i) => {
-    const b = el('button', m.body || `첨부 검토 ${i + 1}`, $('task-list'));
-    b.onclick = () => {
+  [...state.messages].reverse().forEach((m, i) => {
+    const request = m.request;
+    const row = el('div', '', $('task-list'), { class: 'task-row', 'data-task-id': m.id });
+    const open = el('button', '', row, { class: 'task-open', type: 'button' });
+    el('span', m.body || `첨부 검토 ${state.messages.length - i}`, open, { class: 'task-title' });
+    const meta = el('span', '', open, { class: 'task-meta' });
+    if (request?.createdAt)
+      el(
+        'span',
+        new Date(request.createdAt).toLocaleString('ko-KR', {
+          month: 'numeric',
+          day: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit',
+        }),
+        meta,
+      );
+    el('span', m.host === 'zwcad' ? 'ZWCAD' : 'Rhino', meta);
+    if (request)
+      el('span', labels[request.state] || request.state, meta, {
+        class: 'card-state',
+        'data-state': request.state,
+      });
+    open.onclick = () => {
       if ($('right').hidden) $('toggle-right').click();
       mobileView('input');
-      document.querySelectorAll('.chat-message')[i]?.scrollIntoView({ block: 'nearest' });
+      const card = document.querySelector<HTMLElement>(`.chat-message[data-request-id="${m.id}"]`);
+      if (card?.dataset.open === 'false')
+        card.querySelector<HTMLButtonElement>('.card-head')?.click();
+      card?.scrollIntoView({ block: 'nearest' });
     };
+    if (request && !['queued', 'running'].includes(request.state)) {
+      const remove = el('button', '×', row, {
+        class: 'task-remove',
+        type: 'button',
+        title: '목록에서 지우기 (모델과 작업 기록은 보존)',
+        'aria-label': '목록에서 지우기',
+      });
+      remove.onclick = () => {
+        if (confirm('이 작업을 목록에서 지울까요? 모델과 작업 기록은 보존됩니다.'))
+          void hideRequest(m.id).catch((error: unknown) =>
+            message(error instanceof Error ? error.message : '지우지 못했습니다.'),
+          );
+      };
+    }
   });
   $('reference-list').replaceChildren();
+  // Reference files go with the next request (text formats; the AI reads their content).
+  const attach = el('button', '파일 첨부', $('reference-list'), {
+    type: 'button',
+    class: 'reference-attach',
+  });
+  attach.onclick = () => $('files').click();
+  el(
+    'small',
+    'TXT·MD·CSV·JSON, 파일당 50KB까지. 다음 요청에 함께 보내며 AI가 내용을 읽습니다.',
+    $('reference-list'),
+  );
   const files = [...state.messages.flatMap((m) => m.files), ...state.files];
   if (!files.length) el('small', '첨부한 파일이 없습니다.', $('reference-list'));
-  files.forEach((f) => el('small', f.name, $('reference-list')));
+  files.forEach((f) => el('small', f.name, $('reference-list'), { class: 'reference-file' }));
 }
 function renderMessages() {
   const latest =
@@ -831,14 +904,7 @@ function renderConversation() {
     },
     changed: renderMessages,
     error: message,
-    hide: async (id) => {
-      await api(`/projects/${currentProject().id}/requests/${id}/hide`, 'POST', {});
-      const index = state.messages.findIndex((entry) => entry.id === id);
-      if (index >= 0) state.messages.splice(index, 1);
-      if (selectedResult === id) selectedResult = undefined;
-      renderMessages();
-      render();
-    },
+    hide: hideRequest,
   });
 }
 

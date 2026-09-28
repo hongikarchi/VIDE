@@ -78,6 +78,10 @@ namespace Vide.Desktop
             core.NavigationStarting += (s, e) =>
             {
                 if (origin == null || e.Uri.StartsWith(origin + "/", StringComparison.Ordinal) || e.Uri == origin) return;
+                // The account site ("모든 프로젝트") opens in this window too; opening a project there
+                // comes back to this PC's work screen.
+                var site = SiteOrigin();
+                if (site != null && (e.Uri == site || e.Uri.StartsWith(site + "/", StringComparison.Ordinal))) return;
                 e.Cancel = true;
                 ShellContext.OpenExternal(e.Uri);
             };
@@ -96,6 +100,19 @@ namespace Vide.Desktop
             };
             ready = true;
             if (opened != null) Navigate(opened);
+        }
+
+        /// <summary>The account website this PC is signed in to (https only), if any.</summary>
+        private static string SiteOrigin()
+        {
+            try
+            {
+                var file = Path.Combine(Paths.Data, "remote-host.json");
+                if (!File.Exists(file)) return null;
+                var match = System.Text.RegularExpressions.Regex.Match(File.ReadAllText(file), @"""workerOrigin""\s*:\s*""(https://[^""/]+)""");
+                return match.Success ? match.Groups[1].Value : null;
+            }
+            catch { return null; }
         }
 
         /// <summary>Show the work screen (first time: the launch link that signs the window in).</summary>

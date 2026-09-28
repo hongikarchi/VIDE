@@ -73,6 +73,12 @@ function showInspector(open: boolean) {
 }
 const paths: Record<string, string> = {
   extension: '<path d="M3 3h7v7H3V3Zm11 0h7v7h-7V3ZM3 14h7v7H3v-7Zm14 0v8m-4-4h8"/>',
+  // View: perspective (converging frame) and parallel projection, fit selection, fit all.
+  perspective: '<path d="M3 5h18l-4 14H7L3 5Zm5 4h8l-1.5 6h-5L8 9Z"/>',
+  orthographic: '<path d="M4 7h11v11H4V7Zm5-4h11v11M4 7l5-4m6 4 5-4m-5 15 5-4"/>',
+  'fit-selection': '<path d="M4 9V4h5m6 0h5v5m0 6v5h-5m-6 0H4v-5"/><circle cx="12" cy="12" r="3"/>',
+  'fit-all':
+    '<path d="M9 4H4v5m11-5h5v5m0 6v5h-5M9 20H4v-5M8 8l-3-3m11 3 3-3m-3 11 3 3M8 16l-3 3"/>',
   home: '<path d="m3 11 9-8 9 8M5 9.5V21h5v-6h4v6h5V9.5"/>',
   layers: '<path d="m12 3 9 5-9 5-9-5 9-5Zm-9 9 9 5 9-5M3 16l9 5 9-5"/>',
   history: '<path d="M3 11a9 9 0 1 1 2 7M3 4v7h7m2-5v6l4 2"/>',
@@ -86,6 +92,10 @@ const paths: Record<string, string> = {
   send: '<path d="M12 19V5m-6.5 6.5L12 5l6.5 6.5"/>',
   'list-plus': '<path d="M4 6h12M4 11h12M4 16h7m6-2v7m-3.5-3.5h7"/>',
 };
+/** An inline icon (same set as the data-icon buttons). */
+export function iconSvg(name: string) {
+  return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths[name] ?? ''}</svg>`;
+}
 export function initializeInspector(onTab: (tab: InspectorTab) => void) {
   for (const node of document.querySelectorAll<HTMLElement>('[data-icon]')) {
     node.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths[node.dataset.icon ?? ''] ?? ''}</svg>`;

@@ -2404,19 +2404,24 @@ body.panel-mode .chat-heading h2 {
 .pin-bracket {
   color: transparent;
 }
+/* The pending pin: a translucent token in the sentence at the caret; click to insert. */
 .pin-ghost {
   position: absolute;
   z-index: 2;
-  margin-top: 3px;
-  padding: 0 6px;
-  font-size: 11px;
-  line-height: 18px;
+  padding: 0 5px;
   white-space: nowrap;
   border: 1px dashed var(--coral);
   border-radius: 4px;
   background: #fff4ef;
   color: #9c4f36;
-  opacity: 0.55;
+  opacity: 0.6;
+  cursor: pointer;
+}
+.body-field[data-ghost='true'] #body::placeholder {
+  color: transparent;
+}
+.pin-caret {
+  display: inline;
 }
 .pin-ghost:hover,
 .pin-ghost:focus-visible {
@@ -2439,30 +2444,77 @@ body.panel-mode .chat-heading h2 {
   color: #f0b39d;
 }
 
-/* Conversation entries can be removed from view; the button appears on hover. */
-.chat-message {
-  position: relative;
+/* Work history (left): every request with its time, host and state; × removes it from view. */
+#task-list {
+  display: grid;
+  gap: 2px;
 }
-.card-remove {
-  position: absolute;
-  top: 0;
-  right: 0;
-  z-index: 1;
+.task-row {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+  border-radius: 6px;
+}
+.task-row:hover {
+  background: var(--soft, #f3f5f1);
+}
+#task-list .task-open {
+  width: auto;
+  margin: 0;
+  white-space: normal;
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+  padding: 7px 8px;
   border: 0;
-  padding: 0 6px;
-  line-height: 20px;
+  background: transparent;
+  text-align: left;
+}
+.task-title {
+  font-size: 12px;
+  color: var(--ink, #292c2d);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.task-meta {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10px;
   color: var(--muted);
+}
+.task-meta .card-state {
+  margin-left: auto;
+}
+#task-list .task-remove {
+  flex: none;
+  margin: 0 4px 0 0;
+  align-self: center;
+  width: 24px;
+  height: 24px;
+  margin-right: 4px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 15px;
+  line-height: 1;
   opacity: 0;
 }
-.chat-message:hover .card-remove,
-.card-remove:focus-visible {
+.task-row:hover .task-remove,
+.task-remove:focus-visible {
   opacity: 1;
 }
-.chat-message:has(.card-remove) .card-state {
-  margin-right: 18px;
+.task-remove:hover {
+  background: #e7e9e4;
+  color: #b3452c;
 }
 @media (hover: none) {
-  .card-remove {
+  .task-remove {
     opacity: 0.6;
   }
 }
@@ -2808,4 +2860,119 @@ body.panel-mode #conversation {
   color: var(--muted);
   font-size: 12px;
   margin: 0;
+}
+.problem-list li {
+  justify-content: space-between;
+}
+.problem-text {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.problem-text strong {
+  font-size: 12px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.problem-notices {
+  margin-top: 18px !important;
+}
+
+/* AI accounts dialog: one card per service, one line per account, advanced paths folded. */
+.ai-settings {
+  width: min(680px, 94vw);
+  padding: 22px 24px;
+}
+.ai-settings .ai-intro {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.6;
+  margin: 6px 0 14px;
+}
+.ai-settings .ai-provider {
+  margin: 12px 0;
+  padding: 14px 16px;
+  border: 1px solid #e4e7df;
+  border-radius: 8px;
+}
+.ai-provider-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+.ai-provider-head h3 {
+  margin: 0;
+  font-size: 14px;
+}
+.account-settings {
+  display: grid;
+  gap: 6px;
+}
+.account-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: #f7f8f5;
+}
+.account-row[data-active='true'] {
+  background: #eef5f0;
+  box-shadow: inset 3px 0 0 #4f8a64;
+}
+.account-name {
+  flex: 1;
+  min-width: 160px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.account-name small {
+  display: block;
+  font-weight: 400;
+  color: var(--muted);
+  margin-top: 2px;
+}
+.account-row button,
+.account-add button {
+  padding: 3px 8px;
+  font-size: 11px;
+}
+.account-add {
+  display: flex;
+  gap: 6px;
+  margin-top: 4px;
+}
+.ai-settings .account-add input {
+  flex: 1;
+  min-height: 30px;
+}
+.account-settings > small {
+  color: var(--muted);
+  font-size: 11px;
+}
+.ai-advanced {
+  margin-top: 10px;
+  font-size: 12px;
+}
+.ai-advanced summary {
+  color: var(--muted);
+}
+.ai-advanced input {
+  margin-top: 6px;
+}
+.reference-attach {
+  justify-self: start;
+  margin-bottom: 6px;
+}
+#reference-list {
+  display: grid;
+  gap: 4px;
+}
+.reference-file {
+  font-size: 12px;
+  color: var(--ink, #292c2d);
 }
