@@ -1,3 +1,4 @@
+import { hostTargetSchema } from '../contracts/host-documents.ts';
 import { isDwgSdkEditMode } from '../contracts/dwg-edit-mode.ts';
 import { z } from 'zod';
 import type { IncomingMessage } from 'node:http';
@@ -168,14 +169,7 @@ export async function captureModel(
   capture: typeof captureDocument = captureDocument,
   hostKind: 'rhino' | 'zwcad' = 'rhino',
 ) {
-  if (
-    !target ||
-    !/^\d+:\d+$/.test(target.instance) ||
-    !Number.isInteger(target.documentId) ||
-    target.documentId <= 0 ||
-    target.documentId > 4294967295
-  )
-    throw new DomainError('INVALID_INPUT');
+  if (!hostTargetSchema.safeParse(target).success) throw new DomainError('INVALID_INPUT');
   const input = {
     id: target.id,
     provider: 'codex-cli',
@@ -197,7 +191,7 @@ export async function captureModel(
       ...result,
       host: hostKind,
       hostExecuted: true,
-      text: '열린 문서의 작업 사본을 가져왔습니다. 원본은 변경하지 않았으며 이후 변경은 자동 동기화하지 않습니다.',
+      text: '열린 문서를 Sync했습니다. 원본은 변경하지 않았습니다. 자동 갱신은 Rhino의 Live Sync 설정을 따릅니다.',
     });
   } catch (cause) {
     const error = errorData(cause);

@@ -89,3 +89,31 @@ test('uncertain SDK copy import retains its receipt and source for read-only rec
     store.close();
   }
 });
+
+test('current Rhino capture accepts a session-qualified identity without stripping it', async () => {
+  const store = new Store(':memory:');
+  try {
+    const workspace = new Workspace(store),
+      project = store.createProject('attached capture');
+    const target = {
+      id: 'capture-attached',
+      instance: '15516:639261500675422660:2a44fdda-af82-4886-967e-d6d3b10ed3c6',
+      documentId: 268435457,
+    };
+    const result = await captureModel(
+      project.id,
+      target,
+      workspace,
+      {},
+      async (_host, _project, _id, instance, documentId) => {
+        assert.equal(instance, target.instance);
+        assert.equal(documentId, target.documentId);
+        return { objects: [], scene: [], verified: true, sourceDocument: { instance, documentId } };
+      },
+    );
+    assert.equal(result.state, 'succeeded');
+    assert.equal(result.result.sourceDocument.instance, target.instance);
+  } finally {
+    store.close();
+  }
+});

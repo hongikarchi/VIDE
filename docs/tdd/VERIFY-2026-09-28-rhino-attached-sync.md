@@ -2,7 +2,7 @@
 id: VERIFY-2026-09-28-rhino-attached-sync
 title: 현재 Rhino 문서 연결·수정 위임·Live Sync 검증
 status: review
-version: 0.2
+version: 0.3
 updated: 2026-09-28
 owner: agent:codex
 related: [SPEC-01, SPEC-02, PLAN-02, H-RHINO-03, H-RHINO-05, AC-17, AC-38]
@@ -29,7 +29,7 @@ related: [SPEC-01, SPEC-02, PLAN-02, H-RHINO-03, H-RHINO-05, AC-17, AC-38]
 
 Rhino에서 빌드/배포된 VIDE.Worker.rhp를 로드하고 `VIDEConnect`를 실행한다. VIDE에서 열린 호스트 문서 → 문서 조회 → 대상 선택 → Sync. Rhino의 `VIDESync`는 수동 갱신 요청, `VIDELiveSync`는 선택형 자동 갱신 전환, `VIDEDisconnect`는 연결 해제다. 채팅의 `연결 Rhino 수정`은 명시적 Sync 기준 문서만 대상으로 하고, 파일 저장은 Rhino에서 따로 수행한다.
 
-현재 사용자 문서의 읽기/화면 검수는 진행 중이다. 9월 20일 잔류 숨은 Rhino가 MCP 1999를 점유하던 사실을 확인했고 사용자 명시 지시로 그 프로세스만 종료했다. 현재 사용자 Rhino의 형상·파일 저장에는 개입하지 않았다. Rhino 명령칸 자동 입력 도구 실패로 사용자가 한 번 연결 명령을 실행하는 단계가 남아 있다.
+현재 사용자 문서의 읽기/화면 검수는 진행 중이다. 9월 20일 잔류 숨은 Rhino가 MCP 1999를 점유하던 사실을 확인했고 사용자 명시 지시로 그 프로세스만 종료했다. 현재 사용자 Rhino의 형상·파일 저장에는 개입하지 않았다. Rhino 명령칸 자동 입력 도구 실패 후 사용자가 연결 명령을 실행했다. Aside 제품 화면에서 해당 사용자 Rhino 실행본·현재 문서·mm 단위·객체 수 10,713개를 확인했다.
 
 일반 UserData/BIM 관계, 대형 실무 파일 전체 표시, 모든 문서 설정 이벤트, 별도 PC 자동 설치는 미검증이다. 사용자 문서의 실제 채팅 수정은 이번 읽기 검증에 포함하지 않는다. 구독 AI가 이 새 연결 흐름을 끝까지 구동하는 통합 시험은 아직 별도이며, 기존 SDK AI 실행 검증과 이번 Applications 실증을 혼동하지 않는다.
 
@@ -39,3 +39,10 @@ Rhino에서 빌드/배포된 VIDE.Worker.rhp를 로드하고 `VIDEConnect`를 �
 Fork 후 작업 트리와 서버 상태를 재확인했다. 소유 시험 Rhino는 종료되어 있었고 사용 중인 Rhino 하나와 VIDE 서버만 유지됐다. 잔류 1999 포트는 해제됐다. 타입 검사, 전체 229건, 기존 React 패널 회귀와 새 연결 브라우저 회귀를 다시 통과했다. MD/HTML 재생성 및 변경 파일 포맷을 완료했다. 초안 복원이나 다른 문서로 기준 변경 시 원본 수정 위임을 자동 계승하지 않도록 보완했다.
 
 화면 도구를 초기화한 후에도 `window crop is outside captured monitor` 오류가 재현되어 현재 Rhino의 UI 입력을 자동 수행하지 않았다. 최근 3시간 Windows Application 로그에서 Codex/ChatGPT 충돌·응답 없음 기록은 발견되지 않았다. 이는 Codex 자체 문제가 없다는 증명이 아니며 정확한 중단 원인은 미확정이다. Aside의 접근 허용 폴더 차이 및 재시작 전 브라우저 인증 만료도 이전 도구 실패 원인이었다. 프로젝트·계정 설정 초기화나 사용자 Rhino 종료는 하지 않았다.
+
+
+## 실제 사용자 문서의 제품 경로
+
+1. 사용자 직접 연결 후 기존 Rhino 실행본이 VIDE 문서 목록에 표시됐다. 최초 Sync는 captureModel 내부의 구형 `pid:startTicks` 검사식 때문에 거절됐다. 공통 hostTargetSchema로 통일하고 세션 UUID를 포함한 대상 유지 시험을 추가했다. 네이티브 직접 호출과 모의 브라우저 API만으로 이 통합 누락을 놓친 것이므로 기존 합성 통과를 제품 전체 통과로 취급하지 않는다.
+2. 수정한 서버에서 다시 Sync한 결과 `IMPORT_LIMIT`을 확인했다. 현재 문서는 UI 조회 10,713개·약 386 MB이며 기존 WorkerScene의 10,000개 상한을 넘는다. 연결은 정상, 전체 모델 취득/뷰포트 표시는 미완료다. 파일/형상을 줄이거나 저장·편집하지 않았다.
+3. 실제 환경의 다음 작업은 PLAN-02의 대형 문서 Sync 경로다. 이 상한을 이유로 원본을 분할하거나 단순히 숫자를 올려 지원 완료로 선언하지 않는다. 현재 사용자 Rhino 연결은 유지한다.

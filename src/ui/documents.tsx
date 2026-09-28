@@ -177,6 +177,11 @@ function Documents({ notify, onCapture, onSelection }: Props) {
           setNotice('');
         }}
       >
+        {!active ? (
+          <option value="" disabled>
+            연결할 문서를 선택하세요
+          </option>
+        ) : null}
         {catalog?.documents.map((item) => (
           <option key={key(item)} value={key(item)}>
             {item.name}

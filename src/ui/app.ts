@@ -135,9 +135,11 @@ initializeDocuments(
         ...target,
         id: crypto.randomUUID(),
       });
-      if (!request.result?.hostExecuted)
-        throw Error(errors[request.result?.code ?? ''] || 'Sync 실패');
       state.messages.push(requestMessage(request));
+      if (!request.result?.hostExecuted) {
+        renderMessages();
+        throw Error(errors[request.result?.code ?? ''] || 'Sync 실패');
+      }
       if (
         request.result?.hostExecuted &&
         (!automatic || (!draftHasInput(state) && !points.length))
