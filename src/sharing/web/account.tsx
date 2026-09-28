@@ -8,6 +8,7 @@ export function Account({ onLogin }: { onLogin: () => Promise<void> }) {
   const [username, setUsername] = useState(''),
     [password, setPassword] = useState(''),
     [code, setCode] = useState(''),
+    [reveal, setReveal] = useState(false),
     [busy, setBusy] = useState(false),
     [status, setStatus] = useState('');
   async function submit(event: FormEvent) {
@@ -48,15 +49,26 @@ export function Account({ onLogin }: { onLogin: () => Promise<void> }) {
         </label>
         <label>
           비밀번호
-          <input
-            type="password"
-            minLength={8}
-            maxLength={128}
-            required
-            autoComplete={signup ? 'new-password' : 'current-password'}
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-          />
+          <span className="password-field">
+            <input
+              type={reveal ? 'text' : 'password'}
+              minLength={8}
+              maxLength={128}
+              required
+              autoComplete={signup ? 'new-password' : 'current-password'}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+            />
+            <button
+              type="button"
+              className="password-toggle"
+              aria-label={reveal ? '비밀번호 숨기기' : '비밀번호 보기'}
+              aria-pressed={reveal}
+              onClick={() => setReveal(!reveal)}
+            >
+              {reveal ? '숨기기' : '보기'}
+            </button>
+          </span>
         </label>
         {signup ? (
           <label>

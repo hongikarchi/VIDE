@@ -46,7 +46,10 @@ export function attachAccountPanel(
     busy = false,
     failure = '',
     confirmUnlink = false,
+    showPassword = false,
     timer: ReturnType<typeof setInterval> | undefined;
+  // Typed values survive redraws (status polling, errors).
+  const fields = { username: '', password: '', name: 'VIDE PC' };
   const run = async (action: () => Promise<unknown>) => {
     if (busy) return;
     busy = true;
@@ -64,6 +67,19 @@ export function attachAccountPanel(
     }
   };
   const refresh = () => run(() => api('/remote'));
+  // Background status check: redraw only on a change and never while the user is typing here.
+  const poll = async () => {
+    if (busy) return;
+    try {
+      const next = accountStatusSchema.parse(await api('/remote'));
+      if (JSON.stringify(next) === JSON.stringify(status)) return;
+      status = next;
+      onStatus(next);
+      if (!section.contains(document.activeElement)) draw();
+    } catch {
+      /* The next check or an action reports problems. */
+    }
+  };
   function draw() {
     section.replaceChildren();
     el('h3', 'VIDE 계정', section);
@@ -88,31 +104,54 @@ export function attachAccountPanel(
         'aria-label': '아이디',
         autocomplete: 'username',
         autocapitalize: 'none',
+        spellcheck: 'false',
         required: '',
       });
-      const password = el('input', '', form, {
-        type: 'password',
+      const secret = el('div', '', form, { class: 'password-field' });
+      const password = el('input', '', secret, {
+        type: showPassword ? 'text' : 'password',
         placeholder: '비밀번호',
         'aria-label': '비밀번호',
         autocomplete: 'current-password',
         required: '',
       });
+      const reveal = el('button', showPassword ? '숨기기' : '보기', secret, {
+        type: 'button',
+        class: 'password-toggle',
+        'aria-label': showPassword ? '비밀번호 숨기기' : '비밀번호 보기',
+        'aria-pressed': String(showPassword),
+      });
+      reveal.onclick = () => {
+        showPassword = !showPassword;
+        password.type = showPassword ? 'text' : 'password';
+        reveal.textContent = showPassword ? '숨기기' : '보기';
+        reveal.setAttribute('aria-pressed', String(showPassword));
+        reveal.setAttribute('aria-label', showPassword ? '비밀번호 숨기기' : '비밀번호 보기');
+        password.focus();
+      };
       const name = el('input', '', form, {
         'aria-label': 'PC 이름',
         title: '웹사이트의 작업 PC 목록에 보일 이름',
         maxlength: '80',
       });
-      name.value = 'VIDE PC';
+      username.value = fields.username;
+      password.value = fields.password;
+      name.value = fields.name;
+      username.oninput = () => (fields.username = username.value);
+      password.oninput = () => (fields.password = password.value);
+      name.oninput = () => (fields.name = name.value);
       el('button', busy ? '로그인 중…' : '로그인', form, { type: 'submit' });
       form.onsubmit = (event) => {
         event.preventDefault();
-        void run(() =>
-          api('/remote/link', 'POST', {
-            username: username.value.trim(),
-            password: password.value,
-            name: name.value.trim() || 'VIDE PC',
-          }),
-        );
+        void run(async () => {
+          const result = await api('/remote/link', 'POST', {
+            username: fields.username.trim(),
+            password: fields.password,
+            name: fields.name.trim() || 'VIDE PC',
+          });
+          fields.password = '';
+          return result;
+        });
       };
       const site = el('small', '', section);
       site.append('계정이 없으면 ');
@@ -167,8 +206,8 @@ export function attachAccountPanel(
     clearInterval(timer);
     confirmUnlink = false;
     if (dialog.open) {
-      void refresh();
-      timer = setInterval(() => void refresh(), 3000);
+      void poll();
+      timer = setInterval(() => void poll(), 3000);
     }
   }).observe(dialog, { attributes: true, attributeFilter: ['open'] });
   draw();

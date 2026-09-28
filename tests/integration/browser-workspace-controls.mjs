@@ -63,6 +63,14 @@ try {
   await aiSettings.waitFor();
   await aiSettings.getByRole('button', { name: '닫기', exact: true }).click();
   await page.locator('#workspace-settings').click();
+  // VIDE account login: typed values survive the panel's status polling; password can be shown.
+  await settings.getByLabel('아이디', { exact: true }).fill('studio');
+  await settings.getByLabel('비밀번호', { exact: true }).fill('secret-pass');
+  await page.waitForTimeout(3500);
+  assert.equal(await settings.getByLabel('아이디', { exact: true }).inputValue(), 'studio');
+  assert.equal(await settings.getByLabel('비밀번호', { exact: true }).inputValue(), 'secret-pass');
+  await settings.getByRole('button', { name: '비밀번호 보기' }).click();
+  assert.equal(await settings.getByLabel('비밀번호', { exact: true }).getAttribute('type'), 'text');
   await settings.getByRole('button', { name: '닫기', exact: true }).click();
   assert.equal(
     await page.locator('#workspace-settings').evaluate((node) => node === document.activeElement),

@@ -2474,8 +2474,27 @@ body.panel-mode .chat-heading h2 {
   gap: 6px;
   margin: 8px 0;
 }
-.remote-panel .account-login button {
+.remote-panel .account-login > button {
   grid-column: 1 / -1;
+}
+.password-field {
+  position: relative;
+  display: flex;
+}
+.password-field input {
+  flex: 1;
+  padding-right: 52px !important;
+}
+.password-toggle {
+  position: absolute;
+  right: 3px;
+  top: 50%;
+  transform: translateY(-50%);
+  border: 0;
+  background: transparent;
+  padding: 2px 6px;
+  font-size: 11px;
+  color: var(--muted, #626b6e);
 }
 .remote-panel input:not([type='checkbox']) {
   border: 1px solid var(--line);

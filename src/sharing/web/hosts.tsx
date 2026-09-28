@@ -109,11 +109,12 @@ export function HostStrip({ hosts, thisPc }: { hosts: Host[] | null; thisPc: str
   if (!hosts.length)
     return (
       <div className="pc-empty">
-        <strong>작업 PC가 아직 없습니다.</strong>
-        <span>
-          Rhino가 있는 PC에서 VIDE를 실행하고, 설정 → VIDE 계정에 이 아이디로 로그인하세요. 그 PC가
-          여기에 표시되고 프로젝트를 열 수 있습니다.
-        </span>
+        <strong>이 계정에 연결된 작업 PC가 아직 없습니다.</strong>
+        <ol>
+          <li>Rhino가 있는 PC에서 VIDE 작업 화면을 엽니다.</li>
+          <li>왼쪽 아래 ⚙ 설정 → VIDE 계정에 이 아이디와 비밀번호로 로그인합니다.</li>
+          <li>이 페이지에 그 PC가 표시되면, 프로젝트를 눌러 그 PC에서 엽니다.</li>
+        </ol>
       </div>
     );
   return (
