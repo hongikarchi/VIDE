@@ -113,7 +113,8 @@ try {
     const before = await page.evaluate(() => window.glClears);
     await page.evaluate(() => {
       window.largeView.select(['dense']);
-      window.largeView.lines(
+      window.largeView.sketches(
+        [],
         [],
         [
           [0, 0],
@@ -127,7 +128,8 @@ try {
     assert.ok(changed > before, 'Selection and sketch changes must redraw');
     await page.evaluate(() => {
       window.largeView.select(['dense']);
-      window.largeView.lines(
+      window.largeView.sketches(
+        [],
         [],
         [
           [0, 0],
@@ -138,7 +140,7 @@ try {
     });
     await page.waitForTimeout(100);
     assert.equal(await page.evaluate(() => window.glClears), changed);
-    await page.evaluate(() => window.largeView.lines([], [], 'XY'));
+    await page.evaluate(() => window.largeView.sketches([], [], [], 'XY'));
   }
   await page.locator('#large-fixture canvas').click();
   assert.equal((await page.evaluate(() => window.largePicks)).at(-1), 'dense');

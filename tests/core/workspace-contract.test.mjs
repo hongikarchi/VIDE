@@ -62,3 +62,58 @@ test('shared boundary preserves additive metadata and explicit new-work basis', 
     true,
   );
 });
+
+test('brush sketches carry world XYZ strokes while plane sketches stay valid', () => {
+  const sketches = requestInputSchema.shape.sketches;
+  const plane = {
+    plane: 'XY',
+    unit: 'm',
+    role: 'boundary',
+    points: [
+      [0, 0],
+      [1, 2],
+    ],
+  };
+  const stroke = {
+    points: [
+      [0, 0, 3],
+      [1, 2, 3.5],
+    ],
+    color: '#d0473a',
+    width: 4,
+  };
+  const brush = { unit: 'm', role: 'path', placement: 'surface', strokes: [stroke] };
+  assert.ok(sketches.safeParse([plane, brush]).success);
+  assert.ok(
+    sketches.safeParse([{ ...brush, placement: 'plane', plane: 'XZ', planeOffset: 2.5 }]).success,
+  );
+  const long = Array.from({ length: 2000 }, (_, i) => [i, 0, 0]);
+  for (const invalid of [
+    { ...brush, strokes: [] },
+    { ...brush, placement: 'free' },
+    { ...brush, strokes: [{ ...stroke, points: [[0, 0, 0]] }] },
+    { ...brush, strokes: [{ ...stroke, color: 'red' }] },
+    {
+      ...brush,
+      strokes: [
+        {
+          ...stroke,
+          points: [
+            [0, 0, Infinity],
+            [1, 1, 1],
+          ],
+        },
+      ],
+    },
+    { ...brush, strokes: Array.from({ length: 11 }, () => ({ ...stroke, points: long })) },
+    {
+      unit: 'm',
+      role: 'path',
+      points: [
+        [0, 0],
+        [1, 1],
+      ],
+    },
+  ])
+    assert.equal(sketches.safeParse([invalid]).success, false);
+});

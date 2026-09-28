@@ -8,7 +8,14 @@ const reportSchema = z.object({
     body: z.string(),
     pins: z.array(z.object({ name: z.string().optional(), role: z.string() })).optional(),
     sketches: z
-      .array(z.object({ name: z.string().optional(), plane: z.string(), role: z.string() }))
+      .array(
+        z.object({
+          name: z.string().optional(),
+          plane: z.string().optional(),
+          placement: z.string().optional(),
+          role: z.string(),
+        }),
+      )
       .optional(),
     files: z.array(z.object({ name: z.string() })).optional(),
   }),
@@ -73,7 +80,8 @@ export function renderReport(
     )
     .concat(
       (request.input.sketches || []).map(
-        (sketch) => `${sketch.name} · ${sketch.plane} · ${sketch.role}`,
+        (sketch) =>
+          `${sketch.name} · ${sketch.plane ?? (sketch.placement === 'surface' ? '표면' : sketch.placement === 'view' ? '화면' : '평면')} · ${sketch.role}`,
       ),
       (request.input.files || []).map((file) => file.name),
     )

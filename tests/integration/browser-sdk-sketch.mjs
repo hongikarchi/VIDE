@@ -32,6 +32,7 @@ try {
   assert.equal(await page.locator('#effort-label').textContent(), 'low');
   await page.locator('#permission').selectOption('candidate');
   await page.locator('[data-tool="sketch"]').click();
+  await page.locator('#sketch-coordinates').evaluate((node) => (node.open = true));
   await page.locator('#line-role').selectOption('boundary');
   const points = [
     [0, 0],

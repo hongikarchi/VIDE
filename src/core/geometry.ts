@@ -82,7 +82,7 @@ Available operations, all coordinates/dimensions in meters:
 {"kind":"copy","id":"new-id","sourceId":"existing-id","name":"copy name","delta":[x,y,z]} (box/polyline/extrusion or independent native geometry; repeat explicit copies up to the operation limit)
 {"kind":"remove","id":"existing-id"}
 Existing kind=native objects came from a user-selected 3dm. Their origin is the bounding box minimum. They support move/remove and copying independent geometry; native copies remain native, with no parametric height/vertices editing. Copying grouped, locked, referenced or history-linked native objects is unsupported; never reconstruct them as boxes or claim to know their topology. Their original geometry and attributes must be retained.
-Read-only requests: operations=[] and grounded answer. Missing required dimensions: operations=[] and ask a specific question. Never invent requested dimensions. Sketch points use plane XY/XZ/YZ, origin 0 and meters. Object pins identify targets. Existing geometry is supplied as context. Preserve unmentioned geometry. Only describe proposed changes; execution is verified separately by VIDE.`;
+Read-only requests: operations=[] and grounded answer. Missing required dimensions: operations=[] and ask a specific question. Never invent requested dimensions. Sketch points use plane XY/XZ/YZ, origin 0 and meters; brush sketches give strokes[].points as approximate world XYZ polylines in meters. Object pins identify targets. Existing geometry is supplied as context. Preserve unmentioned geometry. Only describe proposed changes; execution is verified separately by VIDE.`;
 
 export function interpret(text: string, existing: unknown[] = [], permission = 'review') {
   let raw: unknown;

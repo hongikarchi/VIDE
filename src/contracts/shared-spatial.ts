@@ -1,11 +1,11 @@
 import { z } from 'zod';
-import { sketchSchema } from './workspace.ts';
+import { planeSketchSchema } from './workspace.ts';
 
 const coordinate = z.number().finite().min(-100000).max(100000);
 export const sharedPinSchema = z
   .object({ unit: z.literal('m'), position: z.tuple([coordinate, coordinate, coordinate]) })
   .strict();
-export const sharedSketchSchema = sketchSchema.strict();
+export const sharedSketchSchema = planeSketchSchema.strict();
 export const sharedCommentInputSchema = z
   .object({
     submissionId: z.string().regex(/^[a-zA-Z0-9_-]{1,100}$/),

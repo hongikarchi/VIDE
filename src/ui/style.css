@@ -1890,3 +1890,86 @@ body.left-hidden.right-hidden main {
   letter-spacing: 0;
   color: var(--muted);
 }
+
+/* Brush sketch toolbar (Grease Pencil-style free strokes in 3D). */
+#sketch-tools {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+  box-shadow: 0 6px 20px #0000000f;
+}
+.brush-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.swatches {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+.swatch {
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border-radius: 50%;
+  border: 2px solid white;
+  background: var(--swatch);
+  box-shadow: 0 0 0 1px var(--line);
+}
+.swatch[aria-pressed='true'] {
+  box-shadow: 0 0 0 2px #292c2d;
+}
+#brush-color {
+  width: 26px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: white;
+}
+.brush-width {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--muted);
+}
+#brush-width {
+  width: 90px;
+}
+#brush-width-value {
+  min-width: 16px;
+  color: #292c2d;
+}
+#brush-eraser[aria-pressed='true'] {
+  background: #292f2e;
+  color: white;
+}
+.tool-sep {
+  width: 1px;
+  align-self: stretch;
+  background: var(--line);
+}
+#plane-offset {
+  width: 64px;
+  padding: 3px 5px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+}
+#sketch-tools .primary-button {
+  padding: 5px 9px;
+}
+#sketch-coordinates summary {
+  color: var(--muted);
+  font-size: 10px;
+}
+#sketch-coordinates[open] {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  align-items: center;
+}
+#canvas canvas[data-tool='sketch'][data-erase='true'] {
+  cursor: cell;
+}

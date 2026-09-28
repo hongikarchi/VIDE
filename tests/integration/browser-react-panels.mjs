@@ -236,6 +236,7 @@ try {
   await page.screenshot({ path: join(directory, 'react-quantities.png') });
   await quantities.getByRole('button', { name: '닫기', exact: true }).click();
   await page.locator('[data-tool="sketch"]').click();
+  await page.locator('#sketch-coordinates').evaluate((node) => (node.open = true));
   for (const [u, v] of [
     ['0', '0'],
     ['2', '3'],
@@ -260,6 +261,34 @@ try {
   ]);
   assert.equal(sketch.plane, 'XY');
   assert.equal(sketch.role, 'reference');
+  // Free brush: drag on the canvas, projected onto the XY plane at a 2 m offset.
+  await page.locator('[data-tool="sketch"]').click();
+  await page.locator('#placement').selectOption('plane');
+  await page.locator('#plane-offset').fill('2');
+  await page.locator('#plane-offset').dispatchEvent('input');
+  await page.locator('.swatch[data-color="#3c6fd0"]').click();
+  const brushBox = await page.locator('#canvas canvas').boundingBox();
+  const bx = brushBox.x + brushBox.width / 2,
+    by = brushBox.y + brushBox.height / 2;
+  await page.mouse.move(bx - 80, by);
+  await page.mouse.down();
+  await page.mouse.move(bx + 80, by + 40, { steps: 12 });
+  await page.mouse.up();
+  assert.equal(await page.locator('#finish-sketch').isDisabled(), false);
+  await page.keyboard.press('e');
+  assert.equal(await page.locator('#brush-eraser').getAttribute('aria-pressed'), 'true');
+  await page.keyboard.press('e');
+  await page.locator('#finish-sketch').click();
+  const brushSketch = await page.evaluate(
+    (id) => JSON.parse(localStorage.getItem('vide:draft:' + id)).sketches.at(-1),
+    first,
+  );
+  assert.equal(brushSketch.placement, 'plane');
+  assert.equal(brushSketch.planeOffset, 2);
+  assert.equal(brushSketch.strokes.length, 1);
+  assert.equal(brushSketch.strokes[0].color, '#3c6fd0');
+  assert.ok(brushSketch.strokes[0].points.length >= 3);
+  assert.ok(brushSketch.strokes[0].points.every((point) => Math.abs(point[2] - 2) < 1e-6));
   await page.setViewportSize({ width: 390, height: 844 });
   await page.locator('button[data-mobile="input"]').click();
   assert.equal(await page.getByLabel('요청 1', { exact: true }).inputValue(), 'edited');

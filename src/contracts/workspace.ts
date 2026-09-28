@@ -19,17 +19,43 @@ export const linkedTargetSchema = z
     host: z.enum(['rhino', 'zwcad']),
   })
   .strict();
-export const sketchSchema = z
+const sketchRole = z.enum(['reference', 'boundary', 'path', 'direction']);
+/** Plane polyline: U/V metres on XY/XZ/YZ through the origin (numeric entry, shared comments). */
+export const planeSketchSchema = z.object({
+  plane: z.enum(['XY', 'XZ', 'YZ']),
+  unit: z.literal('m'),
+  role: sketchRole,
+  points: z
+    .array(z.tuple([coordinate, coordinate]))
+    .min(2)
+    .max(1000),
+});
+export const sketchStrokeSchema = z
   .object({
-    plane: z.enum(['XY', 'XZ', 'YZ']),
-    unit: z.literal('m'),
-    role: z.enum(['reference', 'boundary', 'path', 'direction']),
     points: z
-      .array(z.tuple([coordinate, coordinate]))
+      .array(z.tuple([coordinate, coordinate, coordinate]))
       .min(2)
-      .max(1000),
+      .max(2000),
+    color: z.string().regex(/^#[0-9a-fA-F]{6}$/),
+    width: z.number().min(0.5).max(64),
   })
-  .passthrough();
+  .strict();
+/** Free brush sketch: world XYZ metre polylines projected onto a surface, the view or a plane. */
+export const brushSketchSchema = z
+  .object({
+    unit: z.literal('m'),
+    role: sketchRole,
+    placement: z.enum(['surface', 'view', 'plane']),
+    plane: z.enum(['XY', 'XZ', 'YZ']).optional(),
+    planeOffset: coordinate.optional(),
+    strokes: z.array(sketchStrokeSchema).min(1).max(200),
+  })
+  .passthrough()
+  .refine(
+    (value) => value.strokes.reduce((sum, stroke) => sum + stroke.points.length, 0) <= 20000,
+    'Sketch has too many points',
+  );
+export const sketchSchema = z.union([planeSketchSchema.passthrough(), brushSketchSchema]);
 export const requestInputSchema = z
   .object({
     id,

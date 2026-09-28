@@ -15,7 +15,7 @@ import {
   providersSchema,
   hostStatusSchema,
 } from './workspace-data.ts';
-import type { Point2, DraftPin } from './model.ts';
+import type { Point2, DraftPin, DraftStroke } from './model.ts';
 import type { MobileView } from './mobile-navigation.tsx';
 import { renderProjectHeading } from './project-heading.tsx';
 import { setMobileView } from './mobile-navigation.tsx';
@@ -47,6 +47,7 @@ import {
   validate,
   packet,
   attachSketch,
+  attachBrushSketch,
   storageKey,
 } from './model.ts';
 import { createObjectList, type SelectMode } from './object-list.ts';
@@ -94,7 +95,7 @@ const renderObjectList = createObjectList($('objects'), (ids, mode) => {
   if (ids.length === 1 && mode !== 'remove') viewport?.fit(ids[0]);
 });
 let foregroundRequest: { id: string; selected: typeof selectedResult; draft: string } | undefined;
-const focusDraft = () => JSON.stringify({ draft: draftSnapshot(state), points });
+const focusDraft = () => JSON.stringify({ draft: draftSnapshot(state), points, strokes });
 initializeWorkspacePanels();
 const workspaceStatus = initializeWorkspaceStatus((id) => {
   selectedResult = id;
@@ -107,6 +108,7 @@ const workspaceStatus = initializeWorkspaceStatus((id) => {
 });
 let tool: 'select' | 'pin' | 'sketch' = 'select',
   points: Point2[] = [],
+  strokes: DraftStroke[] = [],
   toastTimer: ReturnType<typeof setTimeout> | undefined;
 const message = (text: string) => {
   clearTimeout(toastTimer);
@@ -148,7 +150,7 @@ const captureHostDocument = async (target: BridgeTarget, automatic = false) => {
     (!project ||
       busy ||
       draftHasInput(state) ||
-      points.length ||
+      pendingSketch() ||
       state.messages.some((m) => m.request && ['queued', 'running'].includes(m.request.state)))
   )
     return false;
@@ -168,7 +170,10 @@ const captureHostDocument = async (target: BridgeTarget, automatic = false) => {
       throw Error(errors[request.result?.code ?? ''] || 'Sync 실패');
     }
     viewportEmpty.sync('idle');
-    if (request.result?.hostExecuted && (!automatic || (!draftHasInput(state) && !points.length))) {
+    if (
+      request.result?.hostExecuted &&
+      (!automatic || (!draftHasInput(state) && !pendingSketch()))
+    ) {
       selectedResult = request.id;
       state.selected = null;
     }
@@ -216,8 +221,14 @@ try {
     $('canvas'),
     objects,
     (ids, mode, pin) => applySelection(ids, mode, pin),
-    (point) => {
-      points.push(point);
+    (event) => {
+      if (event.type === 'stroke') {
+        if (strokes.length >= 200) {
+          message('스케치 하나에 200획까지 그릴 수 있습니다. 먼저 첨부하세요.');
+          return;
+        }
+        strokes.push(event.stroke);
+      } else strokes.splice(event.index, 1);
       draw();
     },
     (camera) => {
@@ -245,14 +256,44 @@ function captureViewport() {
   if (!viewport) throw Error('3D 화면을 준비한 뒤 다시 시도하세요.');
   return viewport.capture();
 }
+/** Unattached brush strokes or numeric points. */
+function pendingSketch() {
+  return points.length > 0 || strokes.length > 0;
+}
+function planeOffset() {
+  const value = $('plane-offset').valueAsNumber;
+  return Number.isFinite(value) ? value : 0;
+}
 function draw() {
   renderPoints(points, draw, message);
-  viewport?.lines(state.sketches, points, planeName());
-  $('finish-sketch').disabled = points.length < 2;
-  $('undo-point').disabled = !points.length;
+  viewport?.sketches(state.sketches, strokes, points, planeName(), planeOffset());
+  $('finish-sketch').disabled = !strokes.length && points.length < 2;
+  $('undo-point').disabled = !pendingSketch();
+  $('clear-sketch').disabled = !pendingSketch();
+  const placement = $('placement').value;
+  $('plane').hidden = $('plane-offset').hidden = placement !== 'plane';
+}
+function brushSettings() {
+  const width = $('brush-width').valueAsNumber || 4;
+  $('brush-width-value').textContent = String(width);
+  for (const swatch of document.querySelectorAll<HTMLButtonElement>('.swatch'))
+    swatch.setAttribute('aria-pressed', String(swatch.dataset.color === $('brush-color').value));
+  viewport?.brush({
+    color: $('brush-color').value,
+    width,
+    placement: z.enum(['surface', 'view', 'plane']).parse($('placement').value),
+    plane: planeName(),
+    offset: planeOffset(),
+    erase: $('brush-eraser').getAttribute('aria-pressed') === 'true',
+  });
+  draw();
+}
+function setEraser(on: boolean) {
+  $('brush-eraser').setAttribute('aria-pressed', String(on));
+  brushSettings();
 }
 function setTool(next: 'select' | 'pin' | 'sketch') {
-  if (tool === 'sketch' && next !== 'sketch' && points.length) {
+  if (tool === 'sketch' && next !== 'sketch' && pendingSketch()) {
     message('그린 선을 첨부하거나 취소하세요.');
     return;
   }
@@ -261,10 +302,11 @@ function setTool(next: 'select' | 'pin' | 'sketch') {
     .querySelectorAll<HTMLButtonElement>('[data-tool]')
     .forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.tool === tool)));
   $('sketch-tools').hidden = tool !== 'sketch';
-  viewport?.mode(tool, planeName());
+  viewport?.mode(tool);
+  if (tool === 'sketch') brushSettings();
   $('tool-hint').textContent =
     tool === 'sketch'
-      ? '평면에 점을 찍어 선을 그리세요. Esc 취소'
+      ? '드래그로 그리기 · 우클릭 회전 · Shift+우클릭 이동 · 휠 확대 · E 지우개 · Esc 취소'
       : tool === 'pin'
         ? '객체를 누르면 입력에 첨부됩니다.'
         : '';
@@ -577,7 +619,7 @@ function renderMessages() {
           state.pins.length ||
           state.sketches.length ||
           state.files.length ||
-          points.length) &&
+          pendingSketch()) &&
         !confirm('현재 작성 중인 초안을 저장된 요청 입력으로 바꿀까요?')
       )
         return;
@@ -587,6 +629,7 @@ function renderMessages() {
       objects.splice(0, objects.length);
       viewport?.replace([]);
       points = [];
+      strokes = [];
       $('body').value = state.body;
       render();
       renderMessages();
@@ -874,16 +917,40 @@ for (const button of document.querySelectorAll<HTMLButtonElement>('[data-tool]')
 $('plane').onchange = () => {
   if (points.length) {
     $('plane').value = state.drawingPlane || 'XY';
-    message('작성 중인 선을 첨부하거나 취소한 뒤 평면을 바꾸세요.');
+    message('작성 중인 좌표 점을 첨부하거나 취소한 뒤 평면을 바꾸세요.');
     return;
   }
   state.drawingPlane = planeName();
-  viewport?.plane(planeName());
+  brushSettings();
+};
+for (const id of ['placement', 'plane-offset', 'brush-color', 'brush-width'] as const)
+  $(id).addEventListener('input', brushSettings);
+$('placement').onchange = brushSettings;
+for (const swatch of document.querySelectorAll<HTMLButtonElement>('.swatch'))
+  swatch.onclick = () => {
+    $('brush-color').value = swatch.dataset.color ?? '#d0473a';
+    setEraser(false);
+  };
+$('brush-eraser').onclick = () =>
+  setEraser($('brush-eraser').getAttribute('aria-pressed') !== 'true');
+$('clear-sketch').onclick = () => {
+  strokes = [];
+  points = [];
+  draw();
 };
 $('finish-sketch').onclick = () => {
   try {
-    attachSketch(state, points, $('plane').value, $('line-role').value);
+    if (strokes.length)
+      attachBrushSketch(state, strokes, {
+        placement: z.enum(['surface', 'view', 'plane']).parse($('placement').value),
+        role: $('line-role').value,
+        plane: $('plane').value,
+        planeOffset: planeOffset(),
+        points,
+      });
+    else attachSketch(state, points, $('plane').value, $('line-role').value);
     points = [];
+    strokes = [];
     setTool('select');
     render();
     mobileView('input');
@@ -894,18 +961,16 @@ $('finish-sketch').onclick = () => {
 };
 $('cancel-sketch').onclick = () => {
   points = [];
+  strokes = [];
   setTool('select');
 };
 $('undo-point').onclick = () => {
-  points.pop();
+  if (strokes.length) strokes.pop();
+  else points.pop();
   draw();
 };
 $('fit-view').onclick = () => viewport?.fit();
 $('projection').onchange = () => {
-  if (tool === 'sketch') {
-    message('스케치를 마친 뒤 뷰를 바꿀 수 있습니다.');
-    return;
-  }
   if ($('projection').value === 'axon') viewport?.home();
   else
     viewport?.plane(
@@ -937,7 +1002,7 @@ $('load').onclick = () => {
       state.messages,
     );
     if (
-      (draftHasInput(state) || points.length) &&
+      (draftHasInput(state) || pendingSketch()) &&
       !confirm('현재 입력과 미첨부 스케치를 저장본으로 바꿀까요? 취소하면 그대로 유지됩니다.')
     )
       return;
@@ -947,6 +1012,7 @@ $('load').onclick = () => {
     objects.splice(0, objects.length);
     viewport?.replace([]);
     points = [];
+    strokes = [];
     $('body').value = state.body;
     $('draft-menu').open = false;
     render();
@@ -974,6 +1040,27 @@ for (const side of ['left', 'right'])
     $(`toggle-${side}`).focus();
   };
 document.addEventListener('keydown', (e) => {
+  const typing =
+    e.target instanceof HTMLInputElement ||
+    e.target instanceof HTMLTextAreaElement ||
+    e.target instanceof HTMLSelectElement;
+  if (tool === 'sketch' && !typing) {
+    if (e.key === 'e' || e.key === 'E') {
+      setEraser($('brush-eraser').getAttribute('aria-pressed') !== 'true');
+      return;
+    }
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
+      e.preventDefault();
+      $('undo-point').click();
+      return;
+    }
+    if (e.key === '[' || e.key === ']') {
+      const width = $('brush-width').valueAsNumber + (e.key === ']' ? 1 : -1);
+      $('brush-width').value = String(Math.min(24, Math.max(1, width)));
+      brushSettings();
+      return;
+    }
+  }
   if (e.key === 'Escape') {
     if (tool !== 'sketch' && selectedIds.length && !(e.target instanceof HTMLTextAreaElement)) {
       selectedIds = [];
@@ -982,6 +1069,7 @@ document.addEventListener('keydown', (e) => {
     }
     if (tool === 'sketch') {
       points = [];
+      strokes = [];
       setTool('select');
     }
     $('attach-menu').open = false;
@@ -999,7 +1087,7 @@ document.addEventListener('keydown', (e) => {
 });
 window.addEventListener('beforeunload', (e) => {
   if (
-    points.length ||
+    pendingSketch() ||
     (!draftSaved &&
       (state.body || state.instructions?.length || state.pins.length || state.sketches.length))
   ) {
@@ -1111,10 +1199,6 @@ $('host-target').onchange = () => {
 
 for (const button of document.querySelectorAll<HTMLButtonElement>('[data-view]'))
   button.onclick = () => {
-    if (tool === 'sketch') {
-      message('스케치를 마친 뒤 뷰를 바꿀 수 있습니다.');
-      return;
-    }
     $('projection').value = z.enum(['axon', 'plan', 'front', 'side']).parse(button.dataset.view);
     $('projection').dispatchEvent(new Event('change'));
   };
@@ -1123,10 +1207,6 @@ $('fit-selection').onclick = () => {
   else message('먼저 객체를 선택하세요.');
 };
 $('projection-toggle').onclick = () => {
-  if (tool === 'sketch') {
-    message('스케치를 마친 뒤 투영을 바꿀 수 있습니다.');
-    return;
-  }
   viewport?.projection(
     $('projection-toggle').dataset.projection === 'perspective' ? 'orthographic' : 'perspective',
   );
