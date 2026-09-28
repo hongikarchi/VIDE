@@ -65,8 +65,7 @@ try {
   assert.equal(first.result.objects[0].kind, 'native');
   if (rows.length === 1) {
     await page.locator('#document-tree').evaluate((node) => (node.open = true));
-    await page.locator('#object-tree').evaluate((node) => (node.open = true));
-    await page.locator('#objects button').first().click();
+    await page.locator('#objects .object').first().click();
     await page.locator('#selection-pin').click();
     const model = await page
       .locator('#model option')
@@ -106,7 +105,7 @@ try {
     assert.equal(object.nativeType, 'Extrusion');
     assert.ok(Math.abs(object.volume - 72) < 0.001);
   }
-  await page.waitForFunction(() => document.querySelectorAll('#objects button').length === 2);
+  await page.waitForFunction(() => document.querySelectorAll('#objects .object').length === 2);
   await page.screenshot({ path: 'docs/assets/native-workspace/native-copy.png' });
   console.log(
     JSON.stringify({

@@ -74,6 +74,10 @@ const paths: Record<string, string> = {
   pin: '<path d="m9 3 6 0-1 6 4 4H6l4-4-1-6Zm3 10v8"/>',
   pencil: '<path d="m15 4 5 5M4 20l5-1L21 7l-5-5L4 14v6Z"/>',
   cube: '<path d="m12 2 9 5v10l-9 5-9-5V7l9-5Zm0 10v10M3 7l9 5 9-5M12 2v10"/>',
+  paperclip:
+    '<path d="m20 11.5-8.2 8.2a5 5 0 0 1-7.1-7.1l8.5-8.5a3.3 3.3 0 0 1 4.7 4.7l-8.5 8.5a1.7 1.7 0 0 1-2.4-2.4l7.8-7.8"/>',
+  send: '<path d="M12 19V5m-6.5 6.5L12 5l6.5 6.5"/>',
+  'list-plus': '<path d="M4 6h12M4 11h12M4 16h7m6-2v7m-3.5-3.5h7"/>',
 };
 export function initializeInspector(onTab: (tab: InspectorTab) => void) {
   for (const node of document.querySelectorAll<HTMLElement>('[data-icon]')) {

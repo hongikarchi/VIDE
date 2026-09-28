@@ -1,5 +1,6 @@
 import { isDwgSdkEditMode } from '../contracts/dwg-edit-mode.ts';
 import { useLayoutEffect, useRef, useState } from 'react';
+import { ActivityLog, activityEntries } from './activity.tsx';
 import { createRoot } from 'react-dom/client';
 import type { Root } from 'react-dom/client';
 import { sceneRepresentation } from '../core/scene-representation.ts';
@@ -115,37 +116,6 @@ function Candidate({
           {displayOnly ? '원본 Rhino에 유지' : '목록·네이티브 파일에 보존'} · 화면 표현 미지원
         </small>
       ) : null}
-      {!displayOnly ? (
-        <>
-          <a
-            href={`/api/v1/projects/${projectId}/requests/${message.id}/model`}
-            download={`VIDE-candidate.${extension}`}
-          >
-            {extension === 'dwg' ? 'DWG 내려받기' : '3dm 내려받기'}
-          </a>
-          <Action
-            error={actions.error}
-            run={async () => {
-              await api(`/projects/${projectId}/requests/${message.id}/open`, 'POST', {});
-            }}
-          >
-            {host + '에서 열기'}
-          </Action>
-          <Action error={actions.error} run={() => actions.saveReview(message.id)}>
-            검토본 저장
-          </Action>
-          <button onClick={() => actions.report(message.id)}>검토본 내려받기</button>
-          <Action
-            error={actions.error}
-            run={async () => {
-              const { showPublicationExport } = await import('./publication-export.tsx');
-              showPublicationExport(projectId, message.id, objects);
-            }}
-          >
-            공유 자료
-          </Action>
-        </>
-      ) : null}
       {apply ? (
         <Action
           error={actions.error}
@@ -206,24 +176,58 @@ function Candidate({
           ) : null}
         </div>
       ))}
-      <Action
-        error={actions.error}
-        run={async () => {
-          await showQuantities(projectId, message.id, (id: string) =>
-            actions.selection(message.id, id),
-          );
-        }}
-      >
-        수량표
-      </Action>
-      <details>
-        <summary>측정값</summary>
-        {scene.map((object) => (
-          <p key={object.id}>
-            {objects.find((item) => item.id === object.id)?.name || object.id} · 기하 면적{' '}
-            {object.area?.toFixed(2) ?? '—'} m² · 체적 {object.volume?.toFixed(2) ?? '—'} m³
-          </p>
-        ))}
+      <details className="more-actions" open={expandAll() || undefined}>
+        <summary>더보기</summary>
+        {!displayOnly ? (
+          <>
+            <a
+              href={`/api/v1/projects/${projectId}/requests/${message.id}/model`}
+              download={`VIDE-candidate.${extension}`}
+            >
+              {extension === 'dwg' ? 'DWG 내려받기' : '3dm 내려받기'}
+            </a>
+            <Action
+              error={actions.error}
+              run={async () => {
+                await api(`/projects/${projectId}/requests/${message.id}/open`, 'POST', {});
+              }}
+            >
+              {host + '에서 열기'}
+            </Action>
+            <Action error={actions.error} run={() => actions.saveReview(message.id)}>
+              검토본 저장
+            </Action>
+            <button onClick={() => actions.report(message.id)}>검토본 내려받기</button>
+            <Action
+              error={actions.error}
+              run={async () => {
+                const { showPublicationExport } = await import('./publication-export.tsx');
+                showPublicationExport(projectId, message.id, objects);
+              }}
+            >
+              공유 자료
+            </Action>
+          </>
+        ) : null}
+        <Action
+          error={actions.error}
+          run={async () => {
+            await showQuantities(projectId, message.id, (id: string) =>
+              actions.selection(message.id, id),
+            );
+          }}
+        >
+          수량표
+        </Action>
+        <details>
+          <summary>측정값</summary>
+          {scene.map((object) => (
+            <p key={object.id}>
+              {objects.find((item) => item.id === object.id)?.name || object.id} · 기하 면적{' '}
+              {object.area?.toFixed(2) ?? '—'} m² · 체적 {object.volume?.toFixed(2) ?? '—'} m³
+            </p>
+          ))}
+        </details>
       </details>
     </>
   );
@@ -234,15 +238,21 @@ function Card({
   projectId,
   actions,
   related,
+  latest,
 }: {
   message: Message;
   models: { id: string; name: string }[];
   projectId: string;
   actions: Actions;
   related: Map<string, Request>;
+  latest: boolean;
 }) {
   const request = message.request,
     result = request?.result;
+  const [, redraw] = useState(0);
+  const running = Boolean(request && ['queued', 'running'].includes(request.state));
+  const open = expanded.get(message.id) ?? (expandAll() || latest || running);
+  const activity = activityEntries(result?.activity);
   const references = [...message.pins, ...message.sketches, ...message.files].map(
     (item) => item.name,
   );
@@ -260,177 +270,233 @@ function Card({
             : 'Rhino 작업 사본'
         : `${models.find((model) => model.id === message.model)?.name || message.model} · ${message.effort} · ${message.applyToSource ? '연결 Rhino 수정' : message.permission === 'review' ? '검토만' : '후보 작업 허용'}`;
   return (
-    <article className="chat-message" data-request-id={message.id}>
-      <p>{message.body || '첨부한 문맥 검토'}</p>
-      {references.length ? <small>{references.join(' · ')}</small> : null}
-      <small>{subtitle}</small>
-      <details>
-        <summary>요청 문맥</summary>
-        <p>
-          대상:{' '}
-          {request?.input?.linkedTargets?.length
-            ? request.input.linkedTargets
-                .map(
-                  (target) =>
-                    (target.host === 'zwcad' ? 'ZWCAD' : 'Rhino') +
-                    ' · ' +
-                    (related.get(target.baseRequestId)?.input.body || '기준 후보'),
-                )
-                .join(' ↔ ')
-            : (request?.input?.host || message.host) === 'zwcad'
-              ? 'ZWCAD'
-              : 'Rhino'}
-        </p>
-        {message.pins.length ? (
-          <ul>
-            {message.pins.map((pin, index) => (
-              <li key={index}>
-                {pin.name || pin.id} ·{' '}
-                {{ target: '변경', preserve: '유지', reference: '참고' }[pin.role]}
-              </li>
-            ))}
-          </ul>
-        ) : null}
-        <p>첨부: {references.length ? references.join(' · ') : '없음'}</p>
-        <p>조건: {message.body || '첨부한 문맥 검토'}</p>
-        <details>
-          <summary>진단용 원문</summary>
-          <pre>{JSON.stringify(request?.input || message, null, 2)}</pre>
-        </details>
-      </details>
-      {request ? (
+    <article className="chat-message" data-request-id={message.id} data-open={String(open)}>
+      <button
+        className="card-head"
+        aria-expanded={open}
+        onClick={() => {
+          expanded.set(message.id, !open);
+          redraw((value) => value + 1);
+        }}
+      >
+        <span className="card-title">{message.body || '첨부한 문맥 검토'}</span>
+        <span className="card-state" data-state={request?.state}>
+          {request ? stateLabels[request.state] || request.state : ''}
+        </span>
+      </button>
+      {!open ? null : (
         <>
-          <small>
-            {result?.unchanged
-              ? '변경 없음 · 기존 후보 확인'
-              : result?.recovered
-                ? '사본 복구됨 · 목표 완료 미확인'
-                : message.provider === 'extension' && request.state === 'succeeded'
-                  ? '확장 완료'
-                  : request.state === 'running' && result?.phase === 'host'
-                    ? '호스트 생성·저장 검증 중'
-                    : result?.phase === 'stopping'
-                      ? '중단 확인 중'
-                      : stateLabels[request.state] || request.state}
-          </small>
-          {result?.applicationState === 'succeeded' ? (
+          {references.length ? <small>{references.join(' · ')}</small> : null}
+          <small>{subtitle}</small>
+          <details>
+            <summary>요청 문맥</summary>
             <p>
-              연결 Rhino에 반영했습니다. 아래 AI 답변은 원본 반영 전에 작성된 작업 사본 설명입니다.
+              대상:{' '}
+              {request?.input?.linkedTargets?.length
+                ? request.input.linkedTargets
+                    .map(
+                      (target) =>
+                        (target.host === 'zwcad' ? 'ZWCAD' : 'Rhino') +
+                        ' · ' +
+                        (related.get(target.baseRequestId)?.input.body || '기준 후보'),
+                    )
+                    .join(' ↔ ')
+                : (request?.input?.host || message.host) === 'zwcad'
+                  ? 'ZWCAD'
+                  : 'Rhino'}
             </p>
-          ) : null}
-          {result?.text ? <p>{result.text}</p> : null}
-          {result?.targetResults?.map((saved) => {
-            const current = related.get(saved.requestId);
-            const target = current
-              ? { ...saved, state: current.state, candidate: current.result?.hostExecuted === true }
-              : saved;
-            return (
-              <div key={target.requestId}>
-                <span>
-                  {target.host === 'zwcad' ? 'ZWCAD' : 'Rhino'} ·{' '}
-                  {current?.result?.unchanged
-                    ? '변경 없음 · 기존 후보 확인'
-                    : stateLabels[target.state] || target.state}
-                </span>
-                {target.state === 'succeeded' && target.candidate ? (
-                  <button onClick={() => actions.candidate(target.requestId)}>
-                    대상 후보 보기
-                  </button>
-                ) : null}
-              </div>
-            );
-          })}
-          {result?.extensionResult?.rows.map((row, index) => (
-            <details key={index}>
-              <summary>
-                {row.type} · {row.layer || '레이어 미상'} · {row.count}개
-              </summary>
-              {row.objectIds.map((id) => (
-                <button
-                  key={id}
-                  onClick={() => actions.selection(message.baseRequestId ?? undefined, id)}
-                >
-                  {message.pins.find((pin) => pin.id === id)?.name || id}
-                </button>
-              ))}
+            {message.pins.length ? (
+              <ul>
+                {message.pins.map((pin, index) => (
+                  <li key={index}>
+                    {pin.name || pin.id} ·{' '}
+                    {{ target: '변경', preserve: '유지', reference: '참고' }[pin.role]}
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+            <p>첨부: {references.length ? references.join(' · ') : '없음'}</p>
+            <p>조건: {message.body || '첨부한 문맥 검토'}</p>
+            <details>
+              <summary>진단용 원문</summary>
+              <pre>{JSON.stringify(request?.input || message, null, 2)}</pre>
             </details>
-          ))}
-          {result?.hostExecuted ? (
-            <Candidate message={message} projectId={projectId} actions={actions} />
-          ) : null}
-          {result?.code ? <p>{errorLabels[result.code] || result.code}</p> : null}
-          {request.state === 'unknown' &&
-          !result?.applicationId &&
-          result?.executionMode === 'sdk' ? (
-            <Action
-              error={actions.error}
-              run={async () => {
-                message.request = workspaceRequestSchema.parse(
-                  await api(`/projects/${projectId}/requests/${message.id}/reconcile`, 'POST', {}),
+          </details>
+          {request ? (
+            <>
+              <small>
+                {result?.unchanged
+                  ? '변경 없음 · 기존 후보 확인'
+                  : result?.recovered
+                    ? '사본 복구됨 · 목표 완료 미확인'
+                    : message.provider === 'extension' && request.state === 'succeeded'
+                      ? '확장 완료'
+                      : request.state === 'running' && result?.phase === 'host'
+                        ? '호스트 생성·저장 검증 중'
+                        : result?.phase === 'stopping'
+                          ? '중단 확인 중'
+                          : stateLabels[request.state] || request.state}
+              </small>
+              {activity.length ? (
+                <details className="activity">
+                  <summary>
+                    작업 과정 · {activity.length}단계{running ? ' · 진행 중' : ''}
+                  </summary>
+                  <ActivityLog entries={activity} live={running} />
+                </details>
+              ) : null}
+              {result?.applicationState === 'succeeded' ? (
+                <p>
+                  연결 Rhino에 반영했습니다. 아래 AI 답변은 원본 반영 전에 작성된 작업 사본
+                  설명입니다.
+                </p>
+              ) : null}
+              {result?.text ? <p>{result.text}</p> : null}
+              {result?.targetResults?.map((saved) => {
+                const current = related.get(saved.requestId);
+                const target = current
+                  ? {
+                      ...saved,
+                      state: current.state,
+                      candidate: current.result?.hostExecuted === true,
+                    }
+                  : saved;
+                return (
+                  <div key={target.requestId}>
+                    <span>
+                      {target.host === 'zwcad' ? 'ZWCAD' : 'Rhino'} ·{' '}
+                      {current?.result?.unchanged
+                        ? '변경 없음 · 기존 후보 확인'
+                        : stateLabels[target.state] || target.state}
+                    </span>
+                    {target.state === 'succeeded' && target.candidate ? (
+                      <button onClick={() => actions.candidate(target.requestId)}>
+                        대상 후보 보기
+                      </button>
+                    ) : null}
+                  </div>
                 );
-                actions.changed();
-              }}
-            >
-              저장된 후보 다시 확인
-            </Action>
-          ) : null}
-          {request.state === 'unknown' &&
-          message.source === 'file' &&
-          message.host === 'zwcad' &&
-          result?.sourceHash ? (
-            <Action
-              error={actions.error}
-              run={async () => {
-                message.request = workspaceRequestSchema.parse(
-                  await api(`/projects/${projectId}/imports/${message.id}/reconcile`, 'POST', {}),
-                );
-                actions.changed();
-              }}
-            >
-              불러오기 결과 확인
-            </Action>
-          ) : null}
-          {message.linkedTargets &&
-          ['succeeded', 'failed', 'cancelled', 'interrupted'].includes(request.state) ? (
-            <Action error={actions.error} run={() => actions.restore(request)}>
-              확인된 후보에서 이어가기
-            </Action>
-          ) : null}
-          {request.state === 'succeeded' &&
-          result?.recovered &&
-          result.hostExecuted &&
-          !request.input.linkedTargets &&
-          !imported ? (
-            <Action error={actions.error} run={() => actions.restore(request)}>
-              복구 후보에서 이어가기
-            </Action>
-          ) : null}
-          {['failed', 'cancelled', 'interrupted'].includes(request.state) &&
-          message.provider !== 'extension' &&
-          !message.linkedTargets &&
-          !imported ? (
-            <Action error={actions.error} run={() => actions.restore(request)}>
-              입력을 초안으로 복원
-            </Action>
-          ) : null}
-          {message.provider !== 'extension' &&
-          ['queued', 'running'].includes(request.state) &&
-          !imported &&
-          result?.phase !== 'host' ? (
-            <Action
-              latch
-              error={actions.error}
-              run={async () => {
-                await api(`/projects/${projectId}/requests/${message.id}/cancel`, 'POST', {});
-              }}
-            >
-              중단
-            </Action>
+              })}
+              {result?.extensionResult?.rows.map((row, index) => (
+                <details key={index}>
+                  <summary>
+                    {row.type} · {row.layer || '레이어 미상'} · {row.count}개
+                  </summary>
+                  {row.objectIds.map((id) => (
+                    <button
+                      key={id}
+                      onClick={() => actions.selection(message.baseRequestId ?? undefined, id)}
+                    >
+                      {message.pins.find((pin) => pin.id === id)?.name || id}
+                    </button>
+                  ))}
+                </details>
+              ))}
+              {result?.hostExecuted ? (
+                <Candidate message={message} projectId={projectId} actions={actions} />
+              ) : null}
+              {result?.code ? <p>{errorLabels[result.code] || result.code}</p> : null}
+              {request.state === 'unknown' &&
+              !result?.applicationId &&
+              result?.executionMode === 'sdk' ? (
+                <Action
+                  error={actions.error}
+                  run={async () => {
+                    message.request = workspaceRequestSchema.parse(
+                      await api(
+                        `/projects/${projectId}/requests/${message.id}/reconcile`,
+                        'POST',
+                        {},
+                      ),
+                    );
+                    actions.changed();
+                  }}
+                >
+                  저장된 후보 다시 확인
+                </Action>
+              ) : null}
+              {request.state === 'unknown' &&
+              message.source === 'file' &&
+              message.host === 'zwcad' &&
+              result?.sourceHash ? (
+                <Action
+                  error={actions.error}
+                  run={async () => {
+                    message.request = workspaceRequestSchema.parse(
+                      await api(
+                        `/projects/${projectId}/imports/${message.id}/reconcile`,
+                        'POST',
+                        {},
+                      ),
+                    );
+                    actions.changed();
+                  }}
+                >
+                  불러오기 결과 확인
+                </Action>
+              ) : null}
+              {message.linkedTargets &&
+              ['succeeded', 'failed', 'cancelled', 'interrupted'].includes(request.state) ? (
+                <Action error={actions.error} run={() => actions.restore(request)}>
+                  확인된 후보에서 이어가기
+                </Action>
+              ) : null}
+              {request.state === 'succeeded' &&
+              result?.recovered &&
+              result.hostExecuted &&
+              !request.input.linkedTargets &&
+              !imported ? (
+                <Action error={actions.error} run={() => actions.restore(request)}>
+                  복구 후보에서 이어가기
+                </Action>
+              ) : null}
+              {['failed', 'cancelled', 'interrupted'].includes(request.state) &&
+              message.provider !== 'extension' &&
+              !message.linkedTargets &&
+              !imported ? (
+                <Action error={actions.error} run={() => actions.restore(request)}>
+                  입력을 초안으로 복원
+                </Action>
+              ) : null}
+              {message.provider !== 'extension' &&
+              ['queued', 'running'].includes(request.state) &&
+              !imported &&
+              result?.phase !== 'host' ? (
+                <Action
+                  latch
+                  error={actions.error}
+                  run={async () => {
+                    await api(`/projects/${projectId}/requests/${message.id}/cancel`, 'POST', {});
+                  }}
+                >
+                  중단
+                </Action>
+              ) : null}
+            </>
           ) : null}
         </>
-      ) : null}
+      )}
     </article>
   );
+}
+const expanded = new Map<string, boolean>();
+const expandKey = 'vide:history-expand';
+export function expandAll() {
+  try {
+    return localStorage.getItem(expandKey) === 'all';
+  } catch {
+    return false;
+  }
+}
+/** Toggle the remembered default for all cards and forget per-card choices. */
+export function setExpandAll(value: boolean) {
+  expanded.clear();
+  try {
+    if (value) localStorage.setItem(expandKey, 'all');
+    else localStorage.removeItem(expandKey);
+  } catch {
+    /* Preference only; cards still open individually. */
+  }
 }
 function History({
   element,
@@ -455,8 +521,9 @@ function History({
   const related = new Map(messages.map((message) => [message.id, message.request]));
   return messages.length ? (
     <>
-      {messages.map((message) => (
+      {messages.map((message, index) => (
         <Card
+          latest={index === messages.length - 1}
           key={message.id}
           message={message}
           models={models}

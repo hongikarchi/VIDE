@@ -196,10 +196,15 @@ export function chooseModel(s: DraftState, id: string) {
   if (!model.efforts.includes(s.effort))
     s.effort = model.efforts.includes('default') ? 'default' : model.efforts[0];
 }
-export function pinSelection(s: DraftState) {
-  const o = objects.find((o) => o.id === s.selected);
-  if (o && o.revision && !s.pins.some((p) => p.id === o.id && p.basis === o.revision))
-    s.pins.push({ id: o.id, name: o.name, role: 'target', basis: o.revision });
+export function pinSelection(
+  s: DraftState,
+  ids: readonly string[] = s.selected ? [s.selected] : [],
+) {
+  for (const id of ids) {
+    const o = objects.find((o) => o.id === id);
+    if (o && o.revision && !s.pins.some((p) => p.id === o.id && p.basis === o.revision))
+      s.pins.push({ id: o.id, name: o.name, role: 'target', basis: o.revision });
+  }
 }
 export function validate(s: DraftState) {
   if (s.executionLimits && !executionLimitsSchema.safeParse(s.executionLimits).success)

@@ -61,7 +61,7 @@ try {
   assert.equal(capture.result.sourceDocument.instance, instance);
   assert.equal(capture.result.sourceDocument.documentId, documentId);
   assert.ok(capture.result.objects.length);
-  assert.equal(await page.locator('#objects button').count(), capture.result.objects.length);
+  assert.equal(await page.locator('#objects .object').count(), capture.result.objects.length);
   assert.equal(capture.result.verified, true);
   const supported = capture.result.scene.find((object) => object.vertices.length);
   assert.ok(supported);

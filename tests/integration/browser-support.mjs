@@ -4,6 +4,10 @@ import { fileURLToPath } from 'node:url';
 let fixture;
 export async function installBrowserSupport(page, { fixtures = false } = {}) {
   await page.addInitScript(() => {
+    // Existing flows interact with earlier history cards; keep every card expanded.
+    try {
+      localStorage.setItem('vide:history-expand', 'all');
+    } catch {}
     window.testApi = async (path, method = 'GET', data) => {
       const response = await fetch('/api/v1' + path, {
         method,

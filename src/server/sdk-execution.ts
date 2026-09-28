@@ -2,6 +2,7 @@ import { randomUUID, createHash } from 'node:crypto';
 import { executionLimits } from '../contracts/execution-limits.ts';
 import { queryPage, type QueryPageOptions } from './query-page.ts';
 import { writeChanges, writeSnapshot } from './write-context.ts';
+import { activityLog } from './activity.ts';
 import { mkdir, readFile, access } from 'node:fs/promises';
 import { createReadStream } from 'node:fs';
 import { EditorSessions } from '../../hosts/rhino/editor-sessions.ts';
@@ -24,7 +25,10 @@ interface ContextItem {
 interface Provider {
   run(
     context: { goal: string; revision: number; items: ContextItem[]; includedIds: string[] },
-    options: { signal: AbortSignal; onProgress: (event: { state?: string }) => void },
+    options: {
+      signal: AbortSignal;
+      onProgress: (event: { state?: string; text?: string; kind?: 'thinking' | 'message' }) => void;
+    },
   ): Promise<{ text: string; [key: string]: unknown }>;
 }
 export interface AgentConnection {
@@ -250,9 +254,11 @@ export class SdkExecution {
       queries = 0,
       currentOperation: string | undefined;
     let diagnostic: { diagnosticId?: string; exceptionType?: string } = {};
+    const activity = activityLog();
     const progress = () => ({ queries, attempts, completed: revision });
     const intent = () => ({
       progress: progress(),
+      activity: activity.entries,
       ...diagnostic,
       phase: 'host',
       hostExecuted: false,
@@ -265,7 +271,8 @@ export class SdkExecution {
     });
     try {
       if (signal.aborted) throw failure('CANCELLED');
-      update({ phase: 'starting-host', hostExecuted: false });
+      activity.add('host', 'Rhino 작업 사본 준비');
+      update({ phase: 'starting-host', hostExecuted: false, activity: activity.entries });
       worker = await (options.launch || launchRhinoWorker)({
         ...options,
         directory,
@@ -280,6 +287,7 @@ export class SdkExecution {
         query: async (args) => {
           const result = await worker!.query();
           queries++;
+          activity.add('query', `모델 조회 ${queries}회차`);
           update({ ...intent(), phase: last ? 'host' : 'query' });
           return queryPage(result, args, revision);
         },
@@ -291,6 +299,7 @@ export class SdkExecution {
           if (attempts >= executionLimits(input).maxHostCommands)
             throw failure('HOST_COMMAND_LIMIT');
           attempts++;
+          activity.add('execute', `RhinoCommon 코드 실행 ${attempts}회차`, code);
           const operationId = randomUUID();
           currentOperation = operationId;
           // Persist intent before the controller sends a write. A crash cannot become a safe retry.
@@ -303,6 +312,13 @@ export class SdkExecution {
               last = receipt;
               revision = receipt.revision;
               uncertain = false;
+              const counts = writeChanges(receipt.changes)?.counts;
+              activity.add(
+                'result',
+                counts
+                  ? `실행 성공 · 추가 ${counts.added} · 수정 ${counts.modified} · 삭제 ${counts.removed} · 저장·재열기 검증`
+                  : '실행 성공 · 저장·재열기 검증',
+              );
               update({
                 ...intent(),
                 operationId,
@@ -327,6 +343,17 @@ export class SdkExecution {
               receipt.code === 'STALE_REFERENCE'
             ) {
               uncertain = false;
+              activity.add(
+                'error',
+                receipt.code === 'COMPILE_ERROR'
+                  ? '코드 컴파일 오류 · AI가 수정해 다시 시도'
+                  : receipt.code === 'CODE_POLICY_REJECTED'
+                    ? '허용되지 않은 코드 · AI가 수정해 다시 시도'
+                    : '기준이 바뀐 객체 참조 · 다시 조회 필요',
+                'diagnostics' in receipt && Array.isArray(receipt.diagnostics)
+                  ? receipt.diagnostics.join(' / ')
+                  : undefined,
+              );
               currentOperation = last?.operationId;
               update({ ...intent(), revision, phase: last ? 'host' : 'model' });
               return receipt;
@@ -335,6 +362,10 @@ export class SdkExecution {
               diagnosticId: receipt.diagnosticId,
               exceptionType: receipt.exceptionType,
             };
+            activity.add(
+              'error',
+              `호스트 실행 결과 미확인 · ${receipt.exceptionType ?? receipt.code}`,
+            );
             update(intent());
             throw failure('HOST_RESULT_UNKNOWN');
           } finally {
@@ -353,6 +384,8 @@ Use query to observe current native IDs and bounds. For candidate permission, im
 Use supplied dimensions, sketch plane/coordinates and pin roles. Never invent a missing critical dimension; explain what is missing. Other-host references are read-only. Before replacing an object, retain its ID and duplicate its attributes; apply changed attributes with ModifyAttributes before typed Replace, then re-fetch the object and verify the requested attribute values after mutations. Keep vide-id on existing objects; copies need a new vide-id or removal of the inherited tag. Do not modify preserved/reference objects. Do not access files, processes, networking, other documents or application-wide state. The controller saves and reopens each successful edit. Never save/open documents yourself. Compilation diagnostics allow correction; after an uncertain result never execute again. Query after successful edits, then summarize actual results in Korean. For review permission only query is available; do not claim edits.
 Limits: ${executionLimits(input).maxToolCalls} tool calls, ${executionLimits(input).maxHostCommands} host commands, ${executionLimits(input).timeoutSeconds} seconds for the AI response. Stop at the limit and report remaining work.
 User request: ${input.body || '첨부한 설계 문맥을 검토해 주세요.'}`;
+      activity.add('model', 'AI에 요청 전달 · 응답 대기');
+      update({ ...intent(), phase: 'model' });
       const response = await provider({
         url: options.origin() + '/mcp',
         targetRef,
@@ -362,7 +395,8 @@ User request: ${input.body || '첨부한 설계 문맥을 검토해 주세요.'}
         { goal, revision: 1, items, includedIds: items.map((item) => item.id) },
         {
           signal,
-          onProgress: () => {
+          onProgress: (event) => {
+            if (event.text) activity.add(event.kind ?? 'message', event.text);
             if (!uncertain) update({ ...intent(), phase: last ? 'host' : 'model' });
           },
         },
@@ -387,6 +421,7 @@ User request: ${input.body || '첨부한 설계 문맥을 검토해 주세요.'}
           filename: source.filename,
           fileHash: source.fileHash,
           progress: progress(),
+          activity: activity.entries,
           changes: { added: [], removed: [], modified: [] },
           unchanged: true,
           verified: true,
@@ -398,12 +433,19 @@ User request: ${input.body || '첨부한 설계 문맥을 검토해 주세요.'}
         };
       }
       if (!last)
-        return { ...response, progress: progress(), hostExecuted: false, executionMode: 'sdk' };
+        return {
+          ...response,
+          progress: progress(),
+          activity: activity.entries,
+          hostExecuted: false,
+          executionMode: 'sdk',
+        };
       const model = await worker.exportModel();
       return {
         ...response,
         ...model,
         progress: progress(),
+        activity: activity.entries,
         changes: last.changes,
         filename: last.filename,
         fileHash: last.fileHash,

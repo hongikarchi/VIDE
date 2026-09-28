@@ -45,16 +45,18 @@ try {
     const start = performance.now();
     await page.locator('#model-file').setInputFiles(sample.filename);
     await page.waitForFunction(
-      (count) => document.querySelectorAll('#objects button').length === count,
+      (count) => document.querySelectorAll('#objects .object').length === count,
       sample.count,
       { timeout: 120000 },
     );
     const elapsed = performance.now() - start;
     await page.locator('#document-tree').evaluate((node) => (node.open = true));
-    await page.locator('#object-tree').evaluate((node) => (node.open = true));
-    await page.locator('#objects button').last().click();
-    assert.equal(await page.locator('#objects button[aria-pressed="true"]').count(), 1);
-    assert.equal(await page.locator('#objects button').last().getAttribute('aria-pressed'), 'true');
+    await page.locator('#objects .object').last().click();
+    assert.equal(await page.locator('#objects .object[aria-pressed="true"]').count(), 1);
+    assert.equal(
+      await page.locator('#objects .object').last().getAttribute('aria-pressed'),
+      'true',
+    );
     const row = app.store.db
       .prepare('SELECT state,result FROM workspace_requests ORDER BY rowid DESC LIMIT 1')
       .get();

@@ -141,8 +141,7 @@ try {
   await page.locator('#project-picker').selectOption(project.id);
   await page.getByRole('button', { name: '이 후보 보기', exact: true }).click();
   await page.locator('#document-tree').evaluate((node) => (node.open = true));
-  await page.locator('#object-tree').evaluate((node) => (node.open = true));
-  await page.locator('#objects button').first().click();
+  await page.locator('#objects .object').first().click();
   await page.locator('#inspector-toggle').click();
   assert.match(await page.locator('#inspector-content').textContent(), /Study/);
   await page.locator('[data-inspect="geometry"]').click();

@@ -137,7 +137,10 @@ function Documents({ notify, onCapture, onSelection, onConnection }: Props) {
   }, [onCapture]);
   const selection = () =>
     run(async () => {
-      if (!catalog || !active) return;
+      if (!catalog || !active) {
+        notify('먼저 왼쪽 모델 연결에서 Rhino 문서를 연결하세요.');
+        return;
+      }
       const target = { instance: active.instance ?? catalog.instance, documentId: active.id };
       try {
         const result = hostSelectionSchema.parse(
@@ -152,77 +155,84 @@ function Documents({ notify, onCapture, onSelection, onConnection }: Props) {
         notify(error instanceof Error ? error.message : '선택을 조회하지 못했습니다.');
       }
     });
+  attachSelection.current = selection;
+  const live = active?.connection === 'attached-editor';
   return (
     <>
-      <small>
-        기존 Rhino에서 VIDEConnect 실행 후 문서 조회 · VIDESync로 갱신 · VIDELiveSync로 자동 갱신
-        켜기/끄기
-      </small>
-      {active?.connection === 'attached-editor' ? (
-        <small>현재 Rhino 문서 연결 · Live Sync {active.live ? '켜짐' : '꺼짐'}</small>
-      ) : null}
-      <button
-        id="refresh-documents"
-        disabled={busy}
-        onClick={() => {
-          void refresh();
-        }}
-      >
-        문서 조회
-      </button>
-      <select
-        id="host-documents"
-        aria-label="열린 호스트 문서"
-        hidden={!catalog?.documents.length}
-        disabled={busy}
-        value={selected}
-        onChange={(event) => {
-          selectedRef.current = event.target.value;
-          setSelected(event.target.value);
-          autoFailed.current = false;
-          setNotice('');
-        }}
-      >
-        {!active ? (
-          <option value="" disabled>
-            연결할 문서를 선택하세요
-          </option>
-        ) : null}
-        {catalog?.documents.map((item) => (
-          <option key={key(item)} value={key(item)}>
-            {item.name}
-            {item.instance
-              ? ` · ${item.host === 'zwcad' ? 'ZWCAD' : 'Rhino'} ${item.instance.split(':')[0]}`
-              : ''}
-          </option>
-        ))}
-      </select>
+      <div className="connection-row">
+        <select
+          id="host-documents"
+          aria-label="열린 호스트 문서"
+          disabled={busy || !catalog?.documents.length}
+          value={selected}
+          onChange={(event) => {
+            selectedRef.current = event.target.value;
+            setSelected(event.target.value);
+            autoFailed.current = false;
+            setNotice('');
+          }}
+        >
+          {!catalog?.documents.length ? <option value="">열린 문서 없음</option> : null}
+          {catalog?.documents.length && !active ? (
+            <option value="" disabled>
+              연결할 문서를 선택하세요
+            </option>
+          ) : null}
+          {catalog?.documents.map((item) => (
+            <option key={key(item)} value={key(item)}>
+              {item.name}
+              {item.instance
+                ? ` · ${item.host === 'zwcad' ? 'ZWCAD' : 'Rhino'} ${item.instance.split(':')[0]}`
+                : ''}
+            </option>
+          ))}
+        </select>
+        <button
+          id="refresh-documents"
+          className="icon-button"
+          disabled={busy}
+          title="열린 문서 다시 찾기"
+          aria-label="문서 조회"
+          onClick={() => {
+            void refresh();
+          }}
+        >
+          ⟳
+        </button>
+      </div>
+      <p className="connection-state" data-live={String(Boolean(live && active?.live))}>
+        <span className="dot" aria-hidden="true" />
+        {active
+          ? live
+            ? `Rhino 연결됨 · Live Sync ${active.live ? '켜짐' : '꺼짐'}`
+            : '호스트 문서'
+          : '연결 안 됨'}
+      </p>
       <small id="host-document-info">
         {notice ||
           (active
-            ? `${active.objectCount}개 객체 · ${active.units}${active.modified === null ? ' · 저장 상태 미확인' : active.modified ? ' · 저장되지 않은 변경' : ''}`
-            : '연결된 열린 문서가 없습니다.')}
+            ? `${active.objectCount.toLocaleString()}개 객체 · ${active.units}${active.modified === null ? '' : active.modified ? ' · 저장되지 않은 변경' : ''}`
+            : 'Rhino에서 VIDEConnect를 실행한 뒤 ⟳를 누르세요.')}
       </small>
       <button
         id="capture-document"
+        className="primary-button"
         disabled={busy || !active}
+        title="현재 Rhino 문서를 VIDE 화면으로 가져옵니다 (Rhino: VIDESync · 자동: VIDELiveSync)"
         onClick={() => {
           void capture();
         }}
       >
-        Sync · 현재 모델 가져오기
-      </button>
-      <button
-        id="inspect-selection"
-        disabled={busy || !active}
-        onClick={() => {
-          void selection();
-        }}
-      >
-        선택을 요청에 첨부
+        {busy ? 'Sync 중…' : 'Sync · 모델 가져오기'}
       </button>
     </>
   );
+}
+const attachSelection: { current?: () => Promise<void> } = {};
+/** Composer menu entry: attach the objects currently selected in the connected Rhino document. */
+export function attachConnectedSelection() {
+  if (!attachSelection.current) throw new Error('연결된 문서가 없습니다.');
+  return attachSelection.current();
 }
 export function initializeDocuments(
   notify: Props['notify'],

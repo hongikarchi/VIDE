@@ -3,6 +3,7 @@ import type { Applications } from './application.ts';
 import type { Workspace } from '../core/workspace.ts';
 import type { StoredWork } from '../contracts/stored-work.ts';
 import type { SdkExecution } from './sdk-execution.ts';
+import { activityLog, type ActivityEntry } from './activity.ts';
 
 const sourceSchema = z.object({
   connection: z.literal('attached-editor'),
@@ -25,7 +26,10 @@ export async function applyAttachedCandidate(
   const { projectId, id, input } = request;
   const finish = (state: StoredWork['state'], result: Record<string, unknown>) =>
     workspace.update(projectId, id, state, result);
-  let result = { ...candidate };
+  const activity = activityLog(
+    Array.isArray(candidate.activity) ? (candidate.activity as ActivityEntry[]) : [],
+  );
+  let result: Record<string, unknown> = { ...candidate, activity: activity.entries };
   let writing = false;
   try {
     if (
@@ -47,6 +51,7 @@ export async function applyAttachedCandidate(
     )
       throw { code: 'TARGET_MISMATCH' };
     if (signal.aborted) return finish('cancelled', { ...result, code: 'CANCELLED' });
+    activity.add('host', '연결된 Rhino 문서에 적용 준비');
     finish('running', result);
     const prepared = await applications.prepare(projectId, id, source);
     if (signal.aborted) return finish('cancelled', { ...result, code: 'CANCELLED' });
@@ -56,6 +61,12 @@ export async function applyAttachedCandidate(
     const outcome = await applications.confirm(projectId, prepared.id);
     if (!outcome) throw { code: 'HOST_RESULT_UNKNOWN' };
     result = { ...result, applicationState: outcome.state };
+    activity.add(
+      outcome.state === 'succeeded' ? 'result' : 'error',
+      outcome.state === 'succeeded'
+        ? '연결 Rhino에 반영 완료 · 화면 Sync 중'
+        : '연결 Rhino 반영 실패',
+    );
     if (outcome.state !== 'succeeded')
       return finish(outcome.state === 'failed' ? 'failed' : 'unknown', {
         ...result,
@@ -69,6 +80,7 @@ export async function applyAttachedCandidate(
         ...synced,
         phase: 'complete',
         hostExecuted: true,
+        activity: activity.entries,
         text: candidate.text,
         applicationState: 'succeeded',
         syncState: 'succeeded',

@@ -102,7 +102,6 @@ try {
   });
   await page.goto(app.launchUrl);
   await page.waitForFunction(() => !document.querySelector('#body').disabled);
-  await page.getByText('열린 호스트 문서', { exact: true }).click();
   await page.locator('#refresh-documents').click();
   await page.waitForFunction(
     () => document.querySelector('#viewport-empty').dataset.state === 'connected',
@@ -129,7 +128,6 @@ try {
   await page.reload();
   await page.waitForFunction(() => !document.querySelector('#body').disabled);
   assert.equal(await page.locator('#viewport-empty').getAttribute('data-state'), 'failed');
-  await page.getByText('열린 호스트 문서', { exact: true }).click();
   await page.locator('#refresh-documents').click();
   rejectCapture = false;
   captures = 0;

@@ -2,12 +2,7 @@ import { setMobileView } from './mobile-navigation.tsx';
 import { element as $ } from './elements.ts';
 export function initializeWorkspacePanels() {
   const groups = new Map<string, HTMLElement[]>();
-  const documents = [
-    $('host-target'),
-    $('host-document-controls').closest('details')!,
-    document.querySelector<HTMLElement>('.document-heading')!,
-    $('document-tree'),
-  ];
+  const documents = [$('connection-card'), $('document-tree')];
   groups.set('document-tree', documents);
   groups.set('task-list', [
     $('task-list').closest('details')!,

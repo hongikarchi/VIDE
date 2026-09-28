@@ -75,8 +75,7 @@ try {
   );
   await page.getByRole('button', { name: '이 후보 보기', exact: true }).click();
   await page.locator('#document-tree').evaluate((node) => (node.open = true));
-  await page.locator('#object-tree').evaluate((node) => (node.open = true));
-  await page.locator('#objects button').first().click();
+  await page.locator('#objects .object').first().click();
   await page.screenshot({ path: join(directory, 'import.png') });
   const rejected = await upload(unknown, 2);
   assert.equal(rejected.state, 'failed');
