@@ -92,8 +92,10 @@ try {
     model.scene.find((s) => s.nativeType === 'BlockReference').segments,
     [20, 0, 0, 21, 0, 0],
   );
-  assert.equal(model.displayCoverage.displayed, 3);
-  assert.equal(model.displayCoverage.omitted, 1);
+  // TEXT is now displayed as a label.
+  assert.equal(model.displayCoverage.displayed, 4);
+  assert.equal(model.displayCoverage.omitted, 0);
+  assert.equal(model.scene.find((s) => s.nativeType === 'DBText').texts[0].s, 'VIDE fixture');
   assert.equal((await adapter.list())[0].modified, doc.modified);
   let app, browser;
   const browserErrors = [];
@@ -177,7 +179,7 @@ try {
   );
   const large = await adapter.capture(target);
   assert.equal(large.displayCoverage.omittedTypes.OversizedDisplay, 1);
-  assert.equal(large.displayCoverage.displayed, 4);
+  assert.equal(large.displayCoverage.displayed, 5);
   assert.equal(large.displayCoverage.total, 6);
   assert.ok(
     large.scene.some((s) => JSON.stringify(s.segments) === JSON.stringify([0, 10, 0, 5, 10, 0])),
