@@ -75,6 +75,8 @@ T-001~018의 번호·지원 증거는 유지한다. 각 티켓의 현재 결과�
 
 ### 6.5 현재 티켓 현황과 이어갈 위치
 
+**제안 대기 · 프로젝트 지식 DB(2026-09-28 사용자 요청):** 메일·첨부·회의록 기반 지식 정리·질의·크리틱은 PRD C-02 첨삭 제안(R-74) 상태다. 파악은 [RESEARCH-06](../research/RESEARCH-06-project-knowledge.md), 단계 계획은 [PLAN-08](PLAN-08-project-knowledge.md)(draft)이며, C-02 채택과 RESEARCH-06 §9 결정 전에는 구현하지 않는다.
+
 **2026-09-28 Sync 성능·증분 Live Sync:** 실제 문서 사본(표시 10,086개)의 전체 Sync가 37.8초에서 4.4초(두 번째 1.9초)로 줄었다. Live Sync는 바뀐 객체만 받아 마지막 표시 Sync에 병합하며, 객체 1개 이동의 Rhino 조회는 34 ms이고 서버 병합·저장은 1~1.5초다. 사용자 Rhino는 새 RHP를 불러오도록 재시작해야 하며, 사용자 창의 체감 확인이 남았다([검수](../tdd/VERIFY-2026-09-28-sync-performance.md), [PLAN-02](PLAN-02-agent-host-versioning.md)).
 
 **2026-09-28 사용성 2차(구현 우선):** Rhino 패널은 VIDE 대화 열을 WebView로 띄워(`?panel=rhino`, Rhino 테마 dark/light) 같은 서버·이력을 쓴다. 대화는 이력·진행 중 작업·대기 요청이 한 흐름이며 모드는 Plan mode/Accept edits/Auto mode(Shift+Tab)다. 고정 객체는 칩 하나로 합치고 연결 Rhino가 고정 목록·선택을 보관해 브라우저·패널에 실시간 반영한다. 뷰포트는 Rhino식 음영·레이어/표시/재질 색·표시 설정·monochrome 출력 미리보기를 지원하고, ZWCAD 연결 Sync는 선분별 색·선 굵기(ByLayer/ByBlock/레이어 0), 문자·속성, 단색/패턴 해치, xref와 XCLIP 경계를 내보낸다(`zwcad-display-styles` 실측 통과). 실제 사용자 도면·Rhino WebView 패널의 화면 확인은 남았다.

@@ -81,6 +81,7 @@ internal sealed class AttachedConnection : IDisposable
         RhinoDoc.LayerTableEvent += ChangedLayer;
         RhinoDoc.InstanceDefinitionTableEvent += ChangedDefinition;
         RhinoDoc.MaterialTableEvent += ChangedMaterial;
+        RhinoDoc.DimensionStyleTableEvent += ChangedDimensionStyle;
         RhinoDoc.GroupTableEvent += ChangedGroup;
         RhinoDoc.DocumentPropertiesChanged += ChangedProperties;
         RhinoDoc.CloseDocument += Closed;
@@ -182,7 +183,17 @@ internal sealed class AttachedConnection : IDisposable
     private void ChangedDefinition(object? sender, Rhino.DocObjects.Tables.InstanceDefinitionTableEventArgs e)
     {
         if (e.Document != document) return;
+        display.ClearDefinitions();
         MarkObjects(e.Document, AllObjects(obj => obj.ObjectType == ObjectType.InstanceReference).Select(obj => obj.Id).ToList());
+    }
+    // Dimension styles drive annotation lines and text; definitions may contain annotations too.
+    private void ChangedDimensionStyle(object? sender, Rhino.DocObjects.Tables.DimStyleTableEventArgs e)
+    {
+        if (e.Document != document) return;
+        display.ClearDefinitions();
+        var affected = AllObjects(obj => obj.Geometry is Rhino.Geometry.AnnotationBase || obj.ObjectType == ObjectType.InstanceReference).Select(obj => obj.Id).ToList();
+        foreach (var id in affected) display.Forget(id);
+        MarkObjects(e.Document, affected);
     }
     private void ChangedMaterial(object? sender, Rhino.DocObjects.Tables.MaterialTableEventArgs e)
     {
@@ -212,6 +223,7 @@ internal sealed class AttachedConnection : IDisposable
         RhinoDoc.AddRhinoObject -= ChangedObject; RhinoDoc.DeleteRhinoObject -= DeletedObject; RhinoDoc.UndeleteRhinoObject -= ChangedObject;
         RhinoDoc.ReplaceRhinoObject -= ReplacedObject; RhinoDoc.ModifyObjectAttributes -= ChangedAttributes; RhinoDoc.LayerTableEvent -= ChangedLayer;
         RhinoDoc.InstanceDefinitionTableEvent -= ChangedDefinition; RhinoDoc.MaterialTableEvent -= ChangedMaterial;
+        RhinoDoc.DimensionStyleTableEvent -= ChangedDimensionStyle;
         RhinoDoc.GroupTableEvent -= ChangedGroup; RhinoDoc.DocumentPropertiesChanged -= ChangedProperties;
         display.Clear();
         RhinoDoc.CloseDocument -= Closed; RhinoApp.Idle -= Idle;

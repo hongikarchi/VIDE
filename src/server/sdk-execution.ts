@@ -15,6 +15,7 @@ import {
   nativeModelSchema,
   displayObjectSchema,
   displaySceneSchema,
+  displayDefinitionSchema,
 } from '../contracts/native-model.ts';
 import { applyDisplayDelta, displayCoverage } from '../core/display-delta.ts';
 import { AgentTools } from './agent-tools.ts';
@@ -183,15 +184,21 @@ export class SdkExecution {
       basis as {
         objects: z.infer<typeof displayObjectSchema>[];
         scene: z.infer<typeof displaySceneSchema>[];
+        definitions?: Record<string, z.infer<typeof displayDefinitionSchema>>;
       },
       delta,
     );
     const source = delta.source;
     return {
-      delta: { objects: delta.objects, scene: delta.scene, removed: delta.removed },
+      delta: {
+        objects: delta.objects,
+        scene: delta.scene,
+        removed: delta.removed,
+        definitions: delta.definitions,
+      },
       result: {
         ...merged,
-        displayCoverage: displayCoverage(merged.scene),
+        displayCoverage: displayCoverage(merged.scene, merged.definitions),
         sourceDocument: {
           ...basis.sourceDocument,
           ...target,

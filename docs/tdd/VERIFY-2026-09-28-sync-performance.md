@@ -2,7 +2,7 @@
 id: VERIFY-2026-09-28-sync-performance
 title: 연결 Rhino Sync 성능과 증분 Live Sync 검증
 status: review
-version: 0.1
+version: 0.2
 updated: 2026-09-28
 owner: agent:claude
 related: [SPEC-01, ARCH-01, PLAN-02, AC-39, AC-17, AC-38]
@@ -49,9 +49,23 @@ related: [SPEC-01, ARCH-01, PLAN-02, AC-39, AC-17, AC-38]
 - 합성 Rhino 연결 회귀 `tests/integration/rhino-attached.mjs` 통과(기본 경로의 새 RHP). 원본 적용·읽기, Undo, Live 세대 갱신, 재연결 거절, 블록 정의 변경 감지(캡처 토큰 비교로 보완)를 포함한다.
 - 브라우저: 새 `tests/integration/browser-live-sync.mjs` 통과. 세대 변경 때 전체 캡처 없이 같은 Sync를 제자리 갱신하고(다음 요청의 기준 revision 2 확인), 삭제를 목록에 반영하며, `resync` 응답이면 전체 Sync로 전환한다. 기존 `browser-attached-sync`(초안 보호·자동 Sync·수정 위임 패킷), `browser-rhino-panel`, `browser-viewport-display`, `browser-cad-display`, `browser-large-model`, `browser-object-list`도 통과했다.
 
+## 블록·주석·해치 표시
+
+같은 사본(블록 정의 52개·사용 40개, 최상위 인스턴스 1,269개(한 정의당 최대 268개)·중첩 2단계, 치수 78개·문자 24개, 선 패턴 해치 11개)에서 표시 미지원이 1,384개에서 2개(기존 비정상 Brep)로 줄었다. 인스턴스별로 전개하면 삼각형이 약 119만 개 늘어 표시 한도를 넘으므로 정의 형상은 한 번만 싣고 인스턴스는 변환만 싣는다([ARCH-01](../architecture/ARCH-01-system.md) 연결 채널).
+
+| 항목 | 블록 표시 전 | 후 |
+|---|---|---|
+| 표시 / 미지원 | 8,702 / 1,384 | 10,084 / 2 |
+| 전체 Sync(첫 회 / 두 번째) | 4.4 / 1.9초 | 5.0 / 2.0초 |
+| 표시 JSON | 76 MB | 81.6 MB |
+| 블록 인스턴스 1개 이동의 증분 조회 | — | 32 ms, 전체 Sync와 일치 |
+
+격리 저장소에 같은 결과를 넣어 Chromium 1600×1000에서 전체 모델, 블록 인스턴스(난간 패널), 한글 문자 주석, AR-PARQ1 해치를 확대해 표시·선택되는 것을 확인했다(`.vide/sync-perf/adfe7b87…/browser-a6f6d9bf…/*.png`, 페이지 오류 없음). 원자료는 `.vide/sync-perf/adfe7b87…/result.json`. 단위 시험에 정의 참조 검증·표시 집계·정의 병합을 추가했고(259건 통과), 기존 연결·브라우저 회귀를 다시 통과했다.
+
 ## 한계
 
-- 첫 전체 Sync는 모든 Brep을 새로 메싱하므로 캐시 후보다 느리다(4.4초). Rhino 재시작이나 재연결 때마다 캐시는 비워진다.
-- 표시 미지원 1,384개(블록 1,269·주석 102·Hatch 11·기존 비정상 Brep 2)는 그대로다.
+- 첫 전체 Sync는 모든 Brep을 새로 메싱하므로 캐시 후보다 느리다(5.0초). Rhino 재시작이나 재연결 때마다 캐시는 비워진다.
+- 문자·치수 문자는 XY 평면에 눕혀 그린다. 입면에 세운 문자는 방향이 다르게 보일 수 있다. 치수 화살촉과 문자 서식(글꼴·굵기)은 표시하지 않는다.
+- 블록 정의 안의 개별 객체는 따로 선택할 수 없고 인스턴스 단위로 선택된다. 블록 인스턴스는 웹 공유 게시 대상에 아직 포함되지 않는다.
 - 서버는 Live Sync마다 기준 결과 전체를 다시 저장한다. 요청 목록 조회가 모든 저장 결과를 내려받는 문제도 남아 있다.
 - 사용자 Rhino에서는 새 RHP를 불러오도록 Rhino를 재시작해야 한다. 사용자 창의 Live Sync 체감 시간은 아직 확인하지 않았다.

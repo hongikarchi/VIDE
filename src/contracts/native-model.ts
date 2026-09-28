@@ -8,6 +8,23 @@ export const displayObjectSchema = z.object({
   name: z.string(),
   origin: point,
 });
+/** Display label in display meters (same format as CAD `texts`). */
+export const displayTextSchema = z.object({
+  s: z.string().max(2000),
+  p: point,
+  h: z.number().nonnegative(),
+  r: z.number(),
+  ax: z.number().int().min(0).max(2),
+  ay: z.number().int().min(0).max(3),
+});
+/** Flattened block definition geometry in definition space, shared by its instances. */
+export const displayDefinitionSchema = z.object({
+  hash: z.string().regex(/^[a-f0-9]{64}$/),
+  vertices: z.array(z.number()),
+  indices: z.array(z.number().int().nonnegative()),
+  segments: z.array(z.number()),
+  texts: z.array(displayTextSchema).max(2000),
+});
 export const nativeSceneSchema = z.object({
   id: z.string(),
   nativeId: z.string().uuid(),
@@ -33,12 +50,19 @@ export const nativeSceneSchema = z.object({
   attributes64: z.array(z.tuple([z.string(), z.string()])),
   attributesComplete: z.boolean(),
   valid: z.literal(true),
+  // Annotations/hatches: wire segments (xyz pairs) and labels. Block instances: definition + transform.
+  segments: z.array(z.number()).optional(),
+  texts: z.array(displayTextSchema).max(2000).optional(),
+  block: z
+    .object({ definition: z.string().uuid(), transform: z.array(z.number()).length(16) })
+    .optional(),
 });
 export const displaySceneSchema = nativeSceneSchema.extend({ valid: z.boolean() });
 export const displayModelSchema = z
   .object({
     objects: z.array(displayObjectSchema).max(20000),
     scene: z.array(displaySceneSchema).max(20000),
+    definitions: z.record(z.string().uuid(), displayDefinitionSchema).optional(),
     measurementVersion: z.literal(1).optional(),
     displayCoverage: z
       .object({
@@ -78,10 +102,20 @@ export const displayModelSchema = z
         scene.vertices.length % 3 ||
         scene.indices.length % 3 ||
         scene.line.length % 3 ||
-        scene.indices.some((index) => index >= scene.vertices.length / 3)
+        (scene.segments?.length ?? 0) % 6 ||
+        scene.indices.some((index) => index >= scene.vertices.length / 3) ||
+        (scene.block && !model.definitions?.[scene.block.definition])
       )
         ctx.addIssue({ code: 'custom', message: 'Invalid display geometry' });
     }
+    for (const definition of Object.values(model.definitions ?? {}))
+      if (
+        definition.vertices.length % 3 ||
+        definition.indices.length % 3 ||
+        definition.segments.length % 6 ||
+        definition.indices.some((index) => index >= definition.vertices.length / 3)
+      )
+        ctx.addIssue({ code: 'custom', message: 'Invalid block definition geometry' });
   });
 export const nativeModelSchema = displayModelSchema.superRefine((model, ctx) => {
   model.scene.forEach((scene, index) => {

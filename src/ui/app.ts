@@ -161,6 +161,7 @@ const liveReplySchema = z.union([
       objects: z.array(z.object({ id: z.string(), nativeId: z.string() }).passthrough()),
       scene: z.array(z.object({ id: z.string(), nativeId: z.string() }).passthrough()),
       removed: z.array(z.string()),
+      definitions: z.record(z.string(), z.unknown()).optional(),
     }),
   }),
 ]);
@@ -187,12 +188,18 @@ async function liveSyncHostDocument(target: HostTarget): Promise<boolean | 'retr
   );
   if ('resync' in reply) return false;
   if ('retry' in reply) return 'retry';
-  const merged = applyDisplayDelta(
-    { objects: result.objects, scene: result.scene },
+  type Definitions = NonNullable<typeof result.definitions>;
+  const merged = applyDisplayDelta<
+    (typeof result.objects)[number],
+    (typeof result.scene)[number],
+    Definitions[string]
+  >(
+    { objects: result.objects, scene: result.scene, definitions: result.definitions },
     reply.delta as unknown as {
       objects: typeof result.objects;
       scene: typeof result.scene;
       removed: string[];
+      definitions?: Definitions;
     },
   );
   // The reply carries only the request summary; the merged arrays are attached after parsing.
@@ -688,8 +695,8 @@ function renderMessages() {
         };
       }),
     );
-    if (incremental) viewport?.update(result.scene);
-    else viewport?.replace(result.scene);
+    if (incremental) viewport?.update(result.scene, result.definitions);
+    else viewport?.replace(result.scene, result.definitions);
     displayedResult = latest.id;
     render();
   }

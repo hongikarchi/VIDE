@@ -3,7 +3,11 @@ import { resolve, isAbsolute } from 'node:path';
 import { inspectWindowsProcess } from '../common/owned-process.ts';
 import { sendHostCommand } from '../common/transport.ts';
 import { readScenePages } from './scene-pages.ts';
-import { displayObjectSchema, displaySceneSchema } from '../../src/contracts/native-model.ts';
+import {
+  displayObjectSchema,
+  displaySceneSchema,
+  displayDefinitionSchema,
+} from '../../src/contracts/native-model.ts';
 const failure = (code: string) => Object.assign(new Error(code), { code });
 export const editorConnectionSchema = z.object({
   identity: z.object({
@@ -35,6 +39,7 @@ const changesPageSchema = z.object({
   objects: z.array(displayObjectSchema).max(1000),
   scene: z.array(displaySceneSchema).max(1000),
   removed: z.array(z.string().uuid()),
+  definitions: z.record(z.string().uuid(), displayDefinitionSchema).optional(),
   page: z.object({
     cursor: z.number().int().nonnegative(),
     nextCursor: z.number().int().nonnegative(),
@@ -45,16 +50,23 @@ const changesPageSchema = z.object({
 });
 type ChangesPage = z.infer<typeof changesPageSchema>;
 // Same per-item checks as a full display model, applied to changed items only.
-function validChanges({ objects, scene }: ChangesPage) {
+function validChanges({ objects, scene, definitions = {} }: ChangesPage) {
+  const geometry = (item: { vertices: number[]; indices: number[] }) =>
+    item.vertices.length % 3 === 0 &&
+    item.indices.length % 3 === 0 &&
+    item.indices.every((index) => index < item.vertices.length / 3);
   return (
     objects.length === scene.length &&
     objects.every((object, index) => object.nativeId === scene[index].nativeId) &&
     scene.every(
       (item) =>
-        item.vertices.length % 3 === 0 &&
-        item.indices.length % 3 === 0 &&
+        geometry(item) &&
         item.line.length % 3 === 0 &&
-        item.indices.every((index) => index < item.vertices.length / 3),
+        (item.segments?.length ?? 0) % 6 === 0 &&
+        (!item.block || !!definitions[item.block.definition]),
+    ) &&
+    Object.values(definitions).every(
+      (definition) => geometry(definition) && definition.segments.length % 6 === 0,
     )
   );
 }
@@ -107,6 +119,7 @@ export function editorMethods(
       const objects: ChangesPage['objects'] = [],
         scene: ChangesPage['scene'] = [],
         removed: string[] = [];
+      const definitions: NonNullable<ChangesPage['definitions']> = {};
       let cursor = 0,
         revision: number | undefined,
         changes: number | undefined,
@@ -132,12 +145,13 @@ export function editorMethods(
         objects.push(...page.objects);
         scene.push(...page.scene);
         removed.push(...page.removed);
+        Object.assign(definitions, page.definitions);
         ({ revision, changes, total } = page.page);
         cursor = page.page.nextCursor;
       } while (cursor < changes!);
       const source = editorReply(editorSnapshotSchema, await call('inspectEditor'));
       if (source.revision !== revision) throw failure('SOURCE_CHANGED');
-      return { objects, scene, removed, total, revision: revision!, source };
+      return { objects, scene, removed, definitions, total, revision: revision!, source };
     },
     async attachedStatus() {
       return editorReply(

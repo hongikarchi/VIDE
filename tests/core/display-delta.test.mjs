@@ -78,3 +78,44 @@ test('display coverage counts omitted items per native type, invalid ones separa
     omittedTypes: { InstanceReference: 1, 'Brep (invalid)': 1 },
   });
 });
+
+test('block instances count as displayed only when their definition has content; deltas carry definitions', () => {
+  const instance = (nativeId, definition) => ({
+    id: nativeId,
+    nativeId,
+    nativeType: 'InstanceReference',
+    vertices: [],
+    indices: [],
+    line: [],
+    valid: true,
+    block: { definition, transform: [1, 0, 0, 5, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1] },
+  });
+  const definitions = {
+    rail: {
+      hash: 'r1',
+      vertices: [0, 0, 0, 1, 0, 0, 0, 1, 0],
+      indices: [0, 1, 2],
+      segments: [],
+      texts: [],
+    },
+    empty: { hash: 'e1', vertices: [], indices: [], segments: [], texts: [] },
+  };
+  assert.deepEqual(
+    displayCoverage(
+      [instance('a', 'rail'), instance('b', 'empty'), instance('c', 'missing')],
+      definitions,
+    ),
+    { total: 3, displayed: 1, omitted: 2, omittedTypes: { InstanceReference: 2 } },
+  );
+  const merged = applyDisplayDelta(
+    { objects: [object('a')], scene: [instance('a', 'rail')], definitions },
+    {
+      objects: [object('a')],
+      scene: [instance('a', 'rail')],
+      removed: [],
+      definitions: { rail: { ...definitions.rail, hash: 'r2' } },
+    },
+  );
+  assert.equal(merged.definitions.rail.hash, 'r2');
+  assert.equal(merged.definitions.empty, definitions.empty);
+});

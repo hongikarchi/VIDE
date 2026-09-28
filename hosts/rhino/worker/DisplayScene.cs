@@ -18,8 +18,18 @@ internal sealed class DisplayScene
     internal const int MaxPageObjects = 1000;
     // Below the 16 MiB reply cap, so a page never has to be discarded and recomputed.
     private const int PageBytes = 12 * 1024 * 1024;
+    private static readonly byte[] EmptyArray = "[]"u8.ToArray();
+    // Block instances carry only their definition and transform; annotations and hatches carry wire
+    // segments and text labels.
     private sealed record Shape(uint Serial, string NativeType, bool Valid, double[] Origin, double[] BoundsSize,
-        byte[] Vertices, byte[] Indices, byte[] Line, string Hash);
+        byte[] Vertices, byte[] Indices, byte[] Line, string Hash, byte[]? Segments = null, byte[]? Texts = null,
+        Guid? Definition = null, string? DefinitionHash = null, double[]? Transform = null);
+    /** Flattened block definition geometry in definition space (meters), shared by its instances. */
+    private sealed record Definition(string Hash, byte[] Vertices, byte[] Indices, byte[] Segments, byte[] Texts)
+    {
+        internal long Size => Vertices.Length + Indices.Length + Segments.Length + Texts.Length + 256;
+    }
+    private readonly Dictionary<Guid, Definition> definitions = new();
     private sealed class Item
     {
         internal Guid NativeId;
@@ -34,7 +44,9 @@ internal sealed class DisplayScene
     private readonly Dictionary<Guid, Shape> shapes = new();
 
     internal void Forget(Guid id) { lock (shapes) shapes.Remove(id); }
-    internal void Clear() { lock (shapes) shapes.Clear(); }
+    internal void Clear() { lock (shapes) shapes.Clear(); ClearDefinitions(); }
+    /** Any definition edit may change nested content; all definitions are rebuilt on demand. */
+    internal void ClearDefinitions() { lock (definitions) definitions.Clear(); }
 
     internal static RhinoObject[] Visible(RhinoDoc doc)
     {
@@ -59,7 +71,7 @@ internal sealed class DisplayScene
         if (offset < 0 || offset > ordered.Length || limit < 1 || limit > MaxPageObjects)
             throw new InvalidOperationException("INVALID_PAGE");
         var budget = 262144;
-        var items = ordered.Skip(offset).Take(limit).Select(obj => Snapshot(doc, obj, ref budget)).ToList();
+        var items = ordered.Skip(offset).Take(limit).Select(obj => Snapshot(doc, obj, scale, ref budget)).ToList();
         var total = ordered.Length;
         return () =>
         {
@@ -91,7 +103,7 @@ internal sealed class DisplayScene
             {
                 if (upserts == MaxPageObjects) break;
                 upserts++;
-                entries.Add((id, Snapshot(doc, obj, ref budget)));
+                entries.Add((id, Snapshot(doc, obj, scale, ref budget)));
             }
             else entries.Add((id, null));
         }
@@ -113,7 +125,7 @@ internal sealed class DisplayScene
         };
     }
 
-    private Item Snapshot(RhinoDoc doc, RhinoObject obj, ref int remainingAttributes)
+    private Item Snapshot(RhinoDoc doc, RhinoObject obj, double scale, ref int remainingAttributes)
     {
         var layer = doc.Layers[obj.Attributes.LayerIndex];
         var item = new Item
@@ -131,10 +143,92 @@ internal sealed class DisplayScene
             if (item.Attributes.Count >= 32 || bytes + size > 4096 || remainingAttributes < size || key.Length > 200 || value.Length > 4000) { item.AttributesComplete = false; continue; }
             item.Attributes.Add([Encode(key), Encode(value)]); bytes += size; remainingAttributes -= size;
         }
+        var geometry = obj.Geometry;
+        var definition = geometry is InstanceReferenceGeometry reference ? doc.InstanceDefinitions.FindId(reference.ParentIdefId) : null;
+        var definitionHash = definition == null || definition.IsDeleted ? null : DefinitionOf(doc, definition, scale).Hash;
         lock (shapes)
-            if (shapes.TryGetValue(obj.Id, out var cached) && cached.Serial == item.Serial) item.Shape = cached;
-        if (item.Shape == null) item.Work = obj.Geometry.Duplicate();
+            if (shapes.TryGetValue(obj.Id, out var cached) && cached.Serial == item.Serial && cached.DefinitionHash == definitionHash)
+                item.Shape = cached;
+        if (item.Shape != null) return item;
+        // Instances, annotations and hatches are cheap to build and need document tables: UI thread.
+        if (geometry is InstanceReferenceGeometry instance) item.Shape = Instance(obj, instance, definition, definitionHash, scale);
+        else if (geometry is AnnotationBase or Hatch) item.Shape = Annotation(doc, obj, scale);
+        else item.Work = geometry.Duplicate();
+        if (item.Shape != null) lock (shapes) shapes[obj.Id] = item.Shape;
         return item;
+    }
+
+    private Definition DefinitionOf(RhinoDoc doc, InstanceDefinition definition, double scale)
+    {
+        lock (definitions) if (definitions.TryGetValue(definition.Id, out var cached)) return cached;
+        var parts = new DisplayParts(doc, scale);
+        parts.AddDefinition(definition, Transform.Identity, 0, [definition.Id]);
+        var vertices = Numbers(parts.Vertices, 1); var indices = Integers(parts.Indices);
+        var segments = Numbers(parts.Segments, 1); var texts = TextsJson(parts.Texts);
+        var result = new Definition(Hash(definition.Id.ToString(), vertices, indices, segments, texts), vertices, indices, segments, texts);
+        lock (definitions) definitions[definition.Id] = result;
+        return result;
+    }
+
+    private static Shape Instance(RhinoObject obj, InstanceReferenceGeometry instance, InstanceDefinition? definition, string? definitionHash, double scale)
+    {
+        var bounds = instance.GetBoundingBox(true);
+        var valid = definitionHash != null && bounds.IsValid && instance.IsValid;
+        // Row-major 4x4 in display meters: the linear part is unit-free, the translation is scaled.
+        var x = instance.Xform;
+        var transform = new double[16];
+        for (var row = 0; row < 4; row++)
+            for (var column = 0; column < 4; column++)
+                transform[row * 4 + column] = x[row, column] * (column == 3 && row < 3 ? scale : 1);
+        var origin = bounds.IsValid ? new[] { bounds.Min.X * scale, bounds.Min.Y * scale, bounds.Min.Z * scale } : new[] { 0.0, 0, 0 };
+        var size = bounds.IsValid ? new[] { (bounds.Max.X - bounds.Min.X) * scale, (bounds.Max.Y - bounds.Min.Y) * scale, (bounds.Max.Z - bounds.Min.Z) * scale } : new[] { 0.0, 0, 0 };
+        var hash = Hash(definitionHash ?? "missing", Encoding.UTF8.GetBytes(string.Join(",", transform.Select(v => v.ToString("R", System.Globalization.CultureInfo.InvariantCulture)))));
+        return new Shape(obj.RuntimeSerialNumber, "InstanceReference", valid, origin, size, EmptyArray, EmptyArray, EmptyArray, hash,
+            Definition: valid ? definition!.Id : null, DefinitionHash: definitionHash, Transform: valid ? transform : null);
+    }
+
+    private static Shape Annotation(RhinoDoc doc, RhinoObject obj, double scale)
+    {
+        var geometry = obj.Geometry;
+        var bounds = geometry.GetBoundingBox(true);
+        if (!bounds.IsValid) throw new InvalidOperationException("INVALID_GEOMETRY");
+        var parts = new DisplayParts(doc, scale);
+        if (geometry.IsValid) parts.Add(geometry, Transform.Identity);
+        var vertices = Numbers(parts.Vertices, 1); var indices = Integers(parts.Indices);
+        var segments = Numbers(parts.Segments, 1); var texts = TextsJson(parts.Texts);
+        var type = geometry.ObjectType.ToString();
+        return new Shape(obj.RuntimeSerialNumber, type, geometry.IsValid,
+            [bounds.Min.X * scale, bounds.Min.Y * scale, bounds.Min.Z * scale],
+            [(bounds.Max.X - bounds.Min.X) * scale, (bounds.Max.Y - bounds.Min.Y) * scale, (bounds.Max.Z - bounds.Min.Z) * scale],
+            vertices, indices, EmptyArray, Hash(type, vertices, indices, segments, texts), Segments: segments, Texts: texts);
+    }
+
+    private static string Hash(string kind, params byte[][] parts)
+    {
+        using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+        hash.AppendData(Encoding.UTF8.GetBytes(kind));
+        foreach (var part in parts) hash.AppendData(part);
+        return Convert.ToHexString(hash.GetHashAndReset()).ToLowerInvariant();
+    }
+
+    private static byte[] TextsJson(List<DisplayText> texts)
+    {
+        var buffer = new ArrayBufferWriter<byte>(64 + texts.Count * 96);
+        using (var writer = new Utf8JsonWriter(buffer))
+        {
+            writer.WriteStartArray();
+            foreach (var text in texts)
+            {
+                writer.WriteStartObject();
+                writer.WriteString("s", text.S);
+                Point(writer, "p", [Math.Round(text.P[0], 6), Math.Round(text.P[1], 6), Math.Round(text.P[2], 6)]);
+                writer.WriteNumber("h", Math.Round(text.H, 6)); writer.WriteNumber("r", Math.Round(text.R, 6));
+                writer.WriteNumber("ax", text.Ax); writer.WriteNumber("ay", text.Ay);
+                writer.WriteEndObject();
+            }
+            writer.WriteEndArray();
+        }
+        return buffer.WrittenSpan.ToArray();
     }
 
     private void Build(List<Item> items, double scale)
@@ -194,20 +288,27 @@ internal sealed class DisplayScene
     }
 
     // Count of leading entries that fit the byte budget; always at least one.
-    private static int Fit(IEnumerable<Item?> entries)
+    private int Fit(IEnumerable<Item?> entries)
     {
         var bytes = 0L; var count = 0;
+        var included = new HashSet<Guid>();
         foreach (var item in entries)
         {
-            var size = item?.Shape == null ? 64 : item.Shape.Vertices.Length + item.Shape.Indices.Length + item.Shape.Line.Length
-                + 2 * (item.Name.Length + item.Layer.Length) + item.Attributes.Sum(pair => pair[0].Length + pair[1].Length + 8) + 1024;
+            var shape = item?.Shape;
+            long size = shape == null ? 64 : shape.Vertices.Length + shape.Indices.Length + shape.Line.Length
+                + (shape.Segments?.Length ?? 0) + (shape.Texts?.Length ?? 0)
+                + 2 * (item!.Name.Length + item.Layer.Length) + item.Attributes.Sum(pair => pair[0].Length + pair[1].Length + 8) + 1024;
+            // A definition travels once per page with the first instance that needs it.
+            if (shape?.Definition is { } id && !included.Contains(id))
+                lock (definitions) if (definitions.TryGetValue(id, out var definition)) size += definition.Size;
             if (count > 0 && bytes + size > PageBytes) break;
+            if (shape?.Definition is { } used) included.Add(used);
             bytes += size; count++;
         }
         return count;
     }
 
-    private static byte[] Write(IEnumerable<Item> items, IEnumerable<Guid> removed, Action<Utf8JsonWriter> page)
+    private byte[] Write(IEnumerable<Item> items, IEnumerable<Guid> removed, Action<Utf8JsonWriter> page)
     {
         var list = items.ToList();
         var buffer = new ArrayBufferWriter<byte>(1 << 20);
@@ -236,6 +337,17 @@ internal sealed class DisplayScene
                 writer.WritePropertyName("vertices"); writer.WriteRawValue(shape.Vertices, true);
                 writer.WritePropertyName("indices"); writer.WriteRawValue(shape.Indices, true);
                 writer.WritePropertyName("line"); writer.WriteRawValue(shape.Line, true);
+                if (shape.Segments != null) { writer.WritePropertyName("segments"); writer.WriteRawValue(shape.Segments, true); }
+                if (shape.Texts != null && shape.Texts.Length > 2) { writer.WritePropertyName("texts"); writer.WriteRawValue(shape.Texts, true); }
+                if (shape.Definition is { } definition && shape.Transform != null)
+                {
+                    writer.WriteStartObject("block");
+                    writer.WriteString("definition", definition.ToString());
+                    writer.WriteStartArray("transform");
+                    foreach (var value in shape.Transform) writer.WriteNumberValue(value);
+                    writer.WriteEndArray();
+                    writer.WriteEndObject();
+                }
                 writer.WriteNull("area"); writer.WriteNull("volume"); writer.WriteNull("length");
                 writer.WriteString("layer64", Encode(item.Layer));
                 writer.WriteStartArray("attributes64");
@@ -247,6 +359,21 @@ internal sealed class DisplayScene
                 writer.WriteEndObject();
             }
             writer.WriteEndArray();
+            writer.WriteStartObject("definitions");
+            foreach (var id in list.Select(item => item.Shape!.Definition).OfType<Guid>().Distinct())
+            {
+                Definition? definition;
+                lock (definitions) definitions.TryGetValue(id, out definition);
+                if (definition == null) continue;
+                writer.WriteStartObject(id.ToString());
+                writer.WriteString("hash", definition.Hash);
+                writer.WritePropertyName("vertices"); writer.WriteRawValue(definition.Vertices, true);
+                writer.WritePropertyName("indices"); writer.WriteRawValue(definition.Indices, true);
+                writer.WritePropertyName("segments"); writer.WriteRawValue(definition.Segments, true);
+                writer.WritePropertyName("texts"); writer.WriteRawValue(definition.Texts, true);
+                writer.WriteEndObject();
+            }
+            writer.WriteEndObject();
             writer.WriteStartArray("removed");
             foreach (var id in removed) writer.WriteStringValue(id.ToString());
             writer.WriteEndArray();

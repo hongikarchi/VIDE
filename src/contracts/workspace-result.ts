@@ -8,6 +8,18 @@ const cadStyle = {
   lw: z.number().nonnegative().optional(),
   layer: z.string().optional(),
 };
+const text = z
+  .object({
+    s: z.string().max(10000),
+    p: z.array(z.number()).length(3),
+    h: z.number().nonnegative(),
+    r: z.number(),
+    wf: z.number().positive().optional(),
+    ax: z.number().int().min(0).max(2),
+    ay: z.number().int().min(0).max(3),
+    ...cadStyle,
+  })
+  .passthrough();
 const scene = z
   .object({
     id: z.string(),
@@ -41,23 +53,21 @@ const scene = z
       )
       .max(10000)
       .optional(),
-    texts: z
-      .array(
-        z
-          .object({
-            s: z.string().max(10000),
-            p: z.array(z.number()).length(3),
-            h: z.number().nonnegative(),
-            r: z.number(),
-            wf: z.number().positive().optional(),
-            ax: z.number().int().min(0).max(2),
-            ay: z.number().int().min(0).max(3),
-            ...cadStyle,
-          })
-          .passthrough(),
-      )
-      .max(20000)
+    texts: z.array(text).max(20000).optional(),
+    // Rhino block instance: shared definition geometry placed by a row-major 4x4 transform.
+    block: z
+      .object({ definition: z.string(), transform: z.array(z.number()).length(16) })
       .optional(),
+  })
+  .passthrough();
+/** Rhino block definition display in definition space, shared by its instances. */
+const definition = z
+  .object({
+    hash: z.string(),
+    vertices: z.array(z.number()),
+    indices: z.array(z.number()),
+    segments: z.array(z.number()),
+    texts: z.array(text).max(20000).optional(),
   })
   .passthrough();
 export const applicationResultSchema = z
@@ -125,6 +135,7 @@ export const workspaceResultSchema = z
       )
       .optional(),
     scene: z.array(scene).optional(),
+    definitions: z.record(z.string(), definition).optional(),
     extensionResult: z
       .object({
         rows: z.array(

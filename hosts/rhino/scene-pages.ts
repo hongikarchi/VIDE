@@ -29,6 +29,7 @@ export async function readScenePages(
     bytes = 0;
   const objects: NativeModel['objects'] = [],
     scene: NativeModel['scene'] = [];
+  const definitions: NonNullable<NativeModel['definitions']> = {};
   const ids = new Set<string>(),
     nativeIds = new Set<string>();
   const measurementStats = { measuredObjects: 0, reusedObjects: 0 };
@@ -71,6 +72,7 @@ export async function readScenePages(
     }
     objects.push(...model.objects);
     scene.push(...model.scene);
+    Object.assign(definitions, model.definitions);
     measurementStats.measuredObjects += model.measurementStats?.measuredObjects ?? 0;
     measurementStats.reusedObjects += model.measurementStats?.reusedObjects ?? 0;
     offset = page.nextOffset;
@@ -78,8 +80,9 @@ export async function readScenePages(
   return schema.parse({
     objects,
     scene,
+    ...(Object.keys(definitions).length ? { definitions } : {}),
     measurementVersion: 1,
     measurementStats,
-    displayCoverage: displayCoverage(scene),
+    displayCoverage: displayCoverage(scene, definitions),
   });
 }

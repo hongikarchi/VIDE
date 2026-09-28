@@ -48,6 +48,9 @@ def idle(sender,args):
         if command=='move':
             obj=first(doc);extra['id']=str(obj.Id)
             assert doc.Objects.Transform(obj.Id,Rhino.Geometry.Transform.Translation(1000,0,0),True)!=System.Guid.Empty
+        elif command=='moveBlock':
+            obj=sorted(doc.Objects.GetObjectList(Rhino.DocObjects.ObjectType.InstanceReference),key=lambda o:str(o.Id))[0];extra['id']=str(obj.Id)
+            assert doc.Objects.Transform(obj.Id,Rhino.Geometry.Transform.Translation(0,2000,0),True)!=System.Guid.Empty
         elif command=='delete':
             obj=first(doc);extra['id']=str(obj.Id)
             assert doc.Objects.Delete(obj.Id,True)
@@ -174,6 +177,8 @@ try {
   // Product path first, while the plugin's display cache is still cold.
   identity.length = 0;
   const [display, productMs] = await time(() => sessions.display(target));
+  // Kept locally (never committed) for a browser check of the same display model.
+  await writeFile(join(directory, 'display.json'), JSON.stringify(display));
   result.productDisplay = {
     ms: productMs,
     objects: display.objects.length,
@@ -219,7 +224,7 @@ try {
     );
   let basis = display;
   const live = [];
-  for (const command of ['move', 'delete', 'add', 'layerColor', 'undo']) {
+  for (const command of ['move', 'moveBlock', 'delete', 'add', 'layerColor', 'undo']) {
     await action(command);
     let delta, deltaMs;
     try {

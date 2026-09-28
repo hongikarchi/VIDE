@@ -71,6 +71,8 @@ interface DisplayObject extends DisplayGeometry {
   segmentStyles?: StyleRun[];
   fills?: CadFill[];
   texts?: CadText[];
+  /** Rhino block instance: shared definition geometry and its row-major 4x4 transform. */
+  block?: { definition: string; transform: number[] };
 }
 const hexColor = (value: unknown) =>
   typeof value === 'string' && /^#[0-9a-f]{6}$/i.test(value) ? value : undefined;
@@ -102,10 +104,35 @@ type RenderObject =
   | THREE.Mesh<THREE.BufferGeometry, THREE.MeshStandardMaterial>
   | THREE.Line<THREE.BufferGeometry, THREE.LineBasicMaterial>
   | THREE.Points<THREE.BufferGeometry, THREE.PointsMaterial>;
+const surfaceMaterial = () =>
+  new THREE.MeshStandardMaterial({
+    color: SURFACE,
+    roughness: 0.92,
+    metalness: 0,
+    side: THREE.DoubleSide,
+    // Push faces back so crease edges draw cleanly on top.
+    polygonOffset: true,
+    polygonOffsetFactor: 1,
+    polygonOffsetUnits: 1,
+  });
+/** Rhino block definition display, in definition space (meters). */
+interface BlockDefinition {
+  hash: string;
+  vertices: number[];
+  indices: number[];
+  segments: number[];
+  texts?: CadText[];
+}
+interface SharedBlock {
+  origin: THREE.Vector3;
+  surface?: THREE.BufferGeometry;
+  wire?: THREE.BufferGeometry;
+}
 function disposeObject(object: THREE.Object3D) {
   object.traverse((item) => {
     if (item instanceof THREE.Mesh || item instanceof THREE.Line || item instanceof THREE.Points) {
-      item.geometry.dispose();
+      // Block definition geometry is shared by its instances and owned by the viewport cache.
+      if (!item.userData.sharedGeometry) item.geometry.dispose();
       // Text atlas page materials are shared across objects and owned by the atlas.
       if (item.userData.sharedMaterial) return;
       for (const material of Array.isArray(item.material) ? item.material : [item.material])
@@ -174,11 +201,89 @@ export function createViewport(
   const meshes: RenderObject[] = [];
   const byId = new Map<string, RenderObject>();
   let atlas = new TextAtlas();
+  // Block definitions: one GPU geometry per definition hash, shared by every instance.
+  const blockGeometry = new Map<string, SharedBlock>();
+  const sharedEdges = new WeakMap<THREE.BufferGeometry, THREE.EdgesGeometry>();
+  function sharedBlock(definition: BlockDefinition) {
+    let shared = blockGeometry.get(definition.hash);
+    if (shared) return shared;
+    // Local coordinates around the definition's first point keep float32 precision.
+    const anchor = (definition.vertices.length ? definition.vertices : definition.segments).slice(
+      0,
+      3,
+    );
+    const origin = new THREE.Vector3(anchor[0] ?? 0, anchor[1] ?? 0, anchor[2] ?? 0);
+    const local = (values: number[]) => {
+      const out = new Float32Array(values.length);
+      for (let i = 0; i < values.length; i += 3) {
+        out[i] = values[i] - origin.x;
+        out[i + 1] = values[i + 1] - origin.y;
+        out[i + 2] = values[i + 2] - origin.z;
+      }
+      return out;
+    };
+    shared = { origin };
+    if (definition.vertices.length && definition.indices.length) {
+      shared.surface = new THREE.BufferGeometry();
+      shared.surface.setAttribute(
+        'position',
+        new THREE.BufferAttribute(local(definition.vertices), 3),
+      );
+      shared.surface.setIndex(definition.indices);
+      shared.surface.computeVertexNormals();
+    }
+    if (definition.segments.length) {
+      shared.wire = new THREE.BufferGeometry();
+      shared.wire.setAttribute(
+        'position',
+        new THREE.BufferAttribute(local(definition.segments), 3),
+      );
+    }
+    blockGeometry.set(definition.hash, shared);
+    return shared;
+  }
+  /** A block instance: shared definition geometry placed by the instance transform. */
+  function blockInstance(object: DisplayObject, definition: BlockDefinition) {
+    const shared = sharedBlock(definition);
+    const texts = definition.texts ?? [];
+    let mesh: RenderObject;
+    if (shared.surface) mesh = new THREE.Mesh(shared.surface, surfaceMaterial());
+    else if (shared.wire)
+      mesh = new THREE.LineSegments(shared.wire, new THREE.LineBasicMaterial({ color: WIRE }));
+    else if (texts.length)
+      mesh = new THREE.LineSegments(
+        new THREE.BufferGeometry(),
+        new THREE.LineBasicMaterial({ color: WIRE }),
+      );
+    else return undefined;
+    mesh.userData.sharedGeometry = !!(shared.surface || shared.wire);
+    if (shared.surface && shared.wire) {
+      const wire = new THREE.LineSegments(
+        shared.wire,
+        new THREE.LineBasicMaterial({ color: WIRE }),
+      );
+      wire.userData.sharedGeometry = true;
+      mesh.add(wire);
+    }
+    if (texts.length)
+      for (const text of buildTextMeshes(texts, shared.origin, atlas)) mesh.add(text);
+    mesh.userData.cad = texts.length ? { texts } : undefined;
+    const transform = object.block!.transform;
+    mesh.matrixAutoUpdate = false;
+    mesh.matrix
+      .set(...(transform as Parameters<THREE.Matrix4['set']>))
+      .multiply(new THREE.Matrix4().makeTranslation(shared.origin));
+    return mesh;
+  }
   /**
    * Incremental (Live Sync): objects whose display hash is unchanged keep their GPU geometry and
    * only refresh colours; the rest are rebuilt. A full replace rebuilds everything.
    */
-  function replace(data: DisplayObject[], incremental = false) {
+  function replace(
+    data: DisplayObject[],
+    incremental = false,
+    definitions: Record<string, BlockDefinition> = {},
+  ) {
     dirty = true;
     const next = new Map(data.map((object) => [object.id, object]));
     const kept = new Set<string>();
@@ -207,8 +312,32 @@ export function createViewport(
       atlas.dispose();
       atlas = new TextAtlas();
     }
+    if (!incremental) {
+      for (const shared of blockGeometry.values()) {
+        shared.surface?.dispose();
+        shared.wire?.dispose();
+      }
+      blockGeometry.clear();
+    }
     for (const object of data) {
       if (kept.has(object.id)) continue;
+      if (object.block) {
+        const definition = definitions[object.block.definition];
+        const instance = definition && blockInstance(object, definition);
+        if (!instance) continue;
+        instance.userData.colors = {
+          object: objectColor(object),
+          layer: hexColor(object.layerColor),
+          material: hexColor(object.materialColor),
+        };
+        instance.userData.plot = { colorIndex: objectIndex(object), lineWeight: object.lineWeight };
+        instance.userData.id = object.id;
+        instance.userData.geometryHash = object.geometryHash;
+        scene.add(instance);
+        meshes.push(instance);
+        byId.set(object.id, instance);
+        continue;
+      }
       const representation = sceneRepresentation(object);
       if (!representation) continue;
       const geometry = new THREE.BufferGeometry(),
@@ -235,19 +364,7 @@ export function createViewport(
       else if (representation.type === 'mesh') {
         geometry.setIndex(representation.indices);
         geometry.computeVertexNormals();
-        mesh = new THREE.Mesh(
-          geometry,
-          new THREE.MeshStandardMaterial({
-            color: SURFACE,
-            roughness: 0.92,
-            metalness: 0,
-            side: THREE.DoubleSide,
-            // Push faces back so crease edges draw cleanly on top.
-            polygonOffset: true,
-            polygonOffsetFactor: 1,
-            polygonOffsetUnits: 1,
-          }),
-        );
+        mesh = new THREE.Mesh(geometry, surfaceMaterial());
       } else if (representation.type === 'segments' || annotationOnly)
         mesh = new THREE.LineSegments(geometry, new THREE.LineBasicMaterial({ color: WIRE }));
       else mesh = new THREE.Line(geometry, new THREE.LineBasicMaterial({ color: WIRE }));
@@ -258,6 +375,18 @@ export function createViewport(
       };
       mesh.userData.plot = { colorIndex: objectIndex(object), lineWeight: object.lineWeight };
       mesh.position.set(origin[0], origin[1], origin[2]);
+      // A surface that also carries wire segments (e.g. a solid hatch and its boundary).
+      if (representation.type === 'mesh' && object.segments?.length) {
+        const wire = new THREE.BufferGeometry();
+        const points = new Float32Array(object.segments.length);
+        for (let i = 0; i < points.length; i += 3) {
+          points[i] = object.segments[i] - origin[0];
+          points[i + 1] = object.segments[i + 1] - origin[1];
+          points[i + 2] = object.segments[i + 2] - origin[2];
+        }
+        wire.setAttribute('position', new THREE.BufferAttribute(points, 3));
+        mesh.add(new THREE.LineSegments(wire, new THREE.LineBasicMaterial({ color: WIRE })));
+      }
       // CAD: per-segment styles plus fills and texts as children of the same pickable object.
       if (object.segmentStyles?.length && mesh instanceof THREE.LineSegments && !annotationOnly)
         mesh.userData.styled = runStyles(object.segmentStyles, local.length / 6);
@@ -284,10 +413,14 @@ export function createViewport(
       | THREE.LineSegments<THREE.EdgesGeometry, THREE.LineBasicMaterial>
       | undefined;
     if (!edges) {
-      edges = new THREE.LineSegments(
-        new THREE.EdgesGeometry(mesh.geometry, CREASE_ANGLE),
-        new THREE.LineBasicMaterial({ color: EDGE }),
-      );
+      // Instances of one block share their crease edges as they share the surface.
+      let geometry = mesh.userData.sharedGeometry ? sharedEdges.get(mesh.geometry) : undefined;
+      if (!geometry) {
+        geometry = new THREE.EdgesGeometry(mesh.geometry, CREASE_ANGLE);
+        if (mesh.userData.sharedGeometry) sharedEdges.set(mesh.geometry, geometry);
+      }
+      edges = new THREE.LineSegments(geometry, new THREE.LineBasicMaterial({ color: EDGE }));
+      edges.userData.sharedGeometry = !!mesh.userData.sharedGeometry;
       edges.raycast = () => {};
       mesh.userData.edges = edges;
       mesh.add(edges);
@@ -1098,13 +1231,13 @@ export function createViewport(
       renderer.render(scene, camera);
       return renderer.domElement.toDataURL('image/png');
     },
-    replace(data: DisplayObject[]) {
-      replace(data);
+    replace(data: DisplayObject[], definitions?: Record<string, BlockDefinition>) {
+      replace(data, false, definitions);
       fit();
     },
     /** Live Sync: rebuild only changed objects and keep the camera. */
-    update(data: DisplayObject[]) {
-      replace(data, true);
+    update(data: DisplayObject[], definitions?: Record<string, BlockDefinition>) {
+      replace(data, true, definitions);
     },
     select(ids: readonly string[]) {
       const next = new Set(ids);

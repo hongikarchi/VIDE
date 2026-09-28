@@ -2,7 +2,7 @@
 id: ARCH-01
 title: VIDE 기술 구조와 구현 계약
 status: review
-version: 0.38
+version: 0.39
 updated: 2026-09-28
 owner: agent:codex
 related: [SPEC-00, SPEC-02, SPEC-03, SPEC-04, PLAN, ADR-014, ADR-015, ADR-016, ADR-017]
@@ -606,7 +606,7 @@ PLAN-06의 프로필 실행은 서버가 선택한 절대 configDirectory를 Cli
 
 Rhino 패널은 기존 RHP 안의 Eto `ConnectionPanel`을 `PanelType.PerDoc`로 등록하고 `VIDEPanel` 명령으로 연다. 어셈블리 GUID와 플러그인 GUID를 일치시킨다. 문서 런타임 번호로 기존 AttachedConnection을 조작하며 별도 MCP나 웹뷰를 추가하지 않는다. 사용자가 VIDE 열기를 누르면 LocalAppData/VIDE/launch.json의 loopback HTTP 주소를 기본 브라우저로 연다. 인증 주소는 로그/상태 텍스트에 출력하지 않는다. 패널 타이머는 연결·Live·조회 시각 표시만 갱신하고 형상을 조회하거나 저장하지 않는다.
 
-플러그인은 객체·속성·층·정의·재질 변경 이벤트마다 해당 객체의 변경 revision을 기록하고, Live Sync가 켜져 있으면 0.5초 idle 후 세대를 갱신한다. 제어 화면은 가벼운 연결 상태를 1초 주기로 조회한다. 세대가 바뀌면 마지막 표시 Sync의 revision 이후 변경·삭제된 객체만 `displayChanges`로 받아 그 Sync에 병합한다. 다른 요청이 참조한 Sync는 덮어쓰지 않고 병합한 새 기록을 만든다. 연결이 바뀌었거나 revision을 추적할 수 없으면 전체 표시 Sync(`displayPage`)로 돌아간다. 연결 문서의 표시 기준값(`documentHash`)은 연결 session·revision 토큰이며 표시 조회에서 전체 기하 해시를 계산하지 않는다. 후보 캡처는 이 토큰과 내용 지문(`contentHash`)을 함께 남기고, 원본 적용은 내용 지문으로 검증한다. 표시 형상은 객체 GUID·런타임 번호별로 캐시하고, 페이지는 12 MiB 예산으로 끊으며, 메싱·직렬화는 UI 스레드 밖에서 병렬로 한다. PowerShell 소유 확인은 연결별로 60초 재사용하되 매 호출 PID 생존을 확인하고 통신 실패 시 무효화한다. 적용/명령 중 취득은 보류하고 자동 취득은 단일 실행·초안 보호·실패 후 수동 재개를 따른다.
+플러그인은 객체·속성·층·정의·재질 변경 이벤트마다 해당 객체의 변경 revision을 기록하고, Live Sync가 켜져 있으면 0.5초 idle 후 세대를 갱신한다. 제어 화면은 가벼운 연결 상태를 1초 주기로 조회한다. 세대가 바뀌면 마지막 표시 Sync의 revision 이후 변경·삭제된 객체만 `displayChanges`로 받아 그 Sync에 병합한다. 다른 요청이 참조한 Sync는 덮어쓰지 않고 병합한 새 기록을 만든다. 연결이 바뀌었거나 revision을 추적할 수 없으면 전체 표시 Sync(`displayPage`)로 돌아간다. 연결 문서의 표시 기준값(`documentHash`)은 연결 session·revision 토큰이며 표시 조회에서 전체 기하 해시를 계산하지 않는다. 후보 캡처는 이 토큰과 내용 지문(`contentHash`)을 함께 남기고, 원본 적용은 내용 지문으로 검증한다. 표시 형상은 객체 GUID·런타임 번호별로 캐시하고, 페이지는 12 MiB 예산으로 끊으며, 메싱·직렬화는 UI 스레드 밖에서 병렬로 한다. 블록은 정의(중첩 전개 포함)의 메시·선분·문자를 표시 모델의 `definitions[정의 GUID]`에 한 번만 싣고, 인스턴스 항목은 `block.definition`과 미터 단위 행 우선 4×4 `block.transform`만 싣는다. 뷰포트는 정의별 GPU 형상을 인스턴스끼리 공유한다. 치수·문자는 `segments`(xyz 끝점 쌍)와 `texts`(CAD와 같은 문자 표시 형식, XY 평면), 해치는 패턴 선·경계를 `segments`로, 단색 채움은 메시로 싣는다. 증분 조회는 바뀐 인스턴스가 참조하는 정의를 함께 보내며, 정의·치수 스타일이 바뀌면 캐시를 비우고 해당 객체를 변경으로 기록한다. 네이티브 블록·주석은 수정하지 않는다. PowerShell 소유 확인은 연결별로 60초 재사용하되 매 호출 PID 생존을 확인하고 통신 실패 시 무효화한다. 적용/명령 중 취득은 보류하고 자동 취득은 단일 실행·초안 보호·실패 후 수동 재개를 따른다.
 
 연결 Rhino 수정은 요청의 `applyToSource: true`와 `permission: candidate`로 기록한다. 명시적 baseRequestId의 attached-editor Rhino 캡처만 허용하고 개입 시 동일 권한을 유지한다. Execution은 검증 후보를 먼저 영속화하고 Applications.prepare/confirm을 호출한다. 적용 식별자와 결과를 남기고 성공 후 captureEditor로 갱신한다. 쓰기 결과 불명확 시 후보를 보존하고 동일 적용 영수증을 조회한다.
 
