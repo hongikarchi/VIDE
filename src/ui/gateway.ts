@@ -85,6 +85,8 @@ export const errors: Record<string, string> = {
   CLI_UNAVAILABLE: 'AI 실행 파일을 찾을 수 없습니다.',
   TIMEOUT: '응답 시간이 초과됐습니다.',
   PROVIDER_FAILED: 'AI 공급자가 요청을 완료하지 못했습니다.',
+  PROVIDER_LIMIT:
+    '이 계정의 구독 사용 한도에 걸렸습니다. 설정 → AI에서 자동 전환을 켜 두면 다음 요청은 여유 있는 계정으로 보냅니다.',
   UNAUTHORIZED: '서버가 표시한 실행 링크로 다시 열어 주세요.',
   LOGIN_REQUIRED: '웹사이트 로그인이 끝났습니다. 다시 로그인한 뒤 여세요.',
   HOST_OFFLINE: '작업 PC가 꺼졌습니다. PC에서 VIDE를 켠 뒤 다시 여세요.',

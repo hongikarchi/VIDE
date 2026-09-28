@@ -120,6 +120,15 @@ test('도구 실행 이벤트·턴 실패·불완전 출력·잘못된 이벤트
       'UNEXPECTED_TOOL_CALL',
     ],
     [[success[0], { type: 'turn.failed' }], 'PROVIDER_FAILED'],
+    // A subscription limit is its own code so the next request can use another account.
+    [
+      [
+        success[0],
+        { type: 'error', message: "You've hit your usage limit. Try again later." },
+        { type: 'turn.failed', error: { message: 'usage_limit_reached' } },
+      ],
+      'PROVIDER_LIMIT',
+    ],
     [[success[0]], 'INCOMPLETE_RESULT'],
     [[null], 'INVALID_PROVIDER_OUTPUT'],
   ];

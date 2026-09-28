@@ -5,7 +5,23 @@ const schema = z.object({
   active: z.record(z.string(), z.string()),
   pending: z.record(z.string(), z.string().nullable()),
 });
-/** Display only metadata; no path, credential or inferred usage appears in the composer. */
+const window5 = z.object({ percent: z.number() }).optional();
+const usageSchema = z.object({
+  accounts: z.array(
+    z.object({
+      provider: z.string(),
+      id: z.string(),
+      email: z.string().optional(),
+      session: window5,
+      weekly: window5,
+      limitReached: z.boolean(),
+    }),
+  ),
+});
+/**
+ * The current account of the selected model's service: its name (or signed-in email) and, when
+ * usage lookup is on, its usage. Never paths or credentials.
+ */
 export function accountIndicator(parent: HTMLElement, provider: () => string) {
   const label = document.createElement('small');
   label.setAttribute('aria-label', '현재 AI 계정');
@@ -17,7 +33,12 @@ export function accountIndicator(parent: HTMLElement, provider: () => string) {
     const current = ++generation;
     clearTimeout(timer);
     try {
-      const data = schema.parse(await api('/accounts'));
+      const [data, usage] = await Promise.all([
+        api('/accounts').then((value) => schema.parse(value)),
+        api('/accounts/usage')
+          .then((value) => usageSchema.parse(value))
+          .catch(() => undefined),
+      ]);
       if (current !== generation) return;
       const signature = JSON.stringify(data.active);
       const changed = activeSignature !== undefined && activeSignature !== signature;
@@ -25,12 +46,25 @@ export function accountIndicator(parent: HTMLElement, provider: () => string) {
       if (changed) window.dispatchEvent(new Event('vide-accounts-changed'));
       const key = provider(),
         id = data.active[key];
-      label.textContent =
+      const row = usage?.accounts.find((account) => account.provider === key && account.id === id);
+      const name =
+        row?.email ??
         (id === 'default'
           ? '기존 CLI 로그인'
-          : (data.profiles.find((p) => p.id === id)?.label ?? '계정 확인 필요')) +
+          : (data.profiles.find((p) => p.id === id)?.label ?? '계정 확인 필요'));
+      const used = [
+        row?.session &&
+          `${key === 'claude-cli' ? '5시간' : '단기'} ${Math.round(row.session.percent)}%`,
+        row?.weekly && `7일 ${Math.round(row.weekly.percent)}%`,
+      ].filter(Boolean);
+      label.textContent =
+        name +
+        (row?.limitReached ? ' · 한도' : used.length ? ' · ' + used.join(' · ') : '') +
         (data.pending[key] ? ' · 전환 대기' : '');
-      if (Object.values(data.pending).some(Boolean)) timer = setTimeout(() => void refresh(), 2000);
+      timer = setTimeout(
+        () => void refresh(),
+        Object.values(data.pending).some(Boolean) ? 2000 : 120_000,
+      );
     } catch {
       if (current === generation) label.textContent = '계정 확인 필요';
     }

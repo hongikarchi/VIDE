@@ -84,16 +84,36 @@ const eventSchema = z
       .optional(),
     tools: z.array(z.string()).optional(),
     mcp_servers: z.array(z.object({ name: z.string(), status: z.string() })).optional(),
+    // Claude: the assistant message; Codex "error" events: the error text.
     message: z
-      .object({
-        content: z
-          .array(z.object({ type: z.string(), name: z.string().optional() }).passthrough())
-          .optional(),
-      })
-      .passthrough()
+      .union([
+        z
+          .object({
+            content: z
+              .array(z.object({ type: z.string(), name: z.string().optional() }).passthrough())
+              .optional(),
+          })
+          .passthrough(),
+        z.string(),
+      ])
       .optional(),
   })
   .passthrough();
+/** A subscription usage/rate limit, as the CLIs word it (Claude and Codex). */
+export const USAGE_LIMIT =
+  /usage limit|rate limit|rate_limit|limit reached|limit_reached|hit your (usage )?limit|quota|too many requests|\b429\b/i;
+const errorText = (event: Record<string, unknown>) => {
+  const parts: string[] = [];
+  const collect = (value: unknown, depth = 0) => {
+    if (typeof value === 'string') parts.push(value);
+    else if (value && typeof value === 'object' && depth < 3)
+      for (const [key, inner] of Object.entries(value))
+        if (['message', 'error', 'result', 'text', 'code', 'type'].includes(key))
+          collect(inner, depth + 1);
+  };
+  collect(event);
+  return parts.join(' ').slice(0, 2000);
+};
 type ProviderEvent = z.infer<typeof eventSchema>;
 
 /** Select only data explicitly included by the local controller; never attach project directories. */
@@ -348,7 +368,8 @@ export class ClaudeCli {
           grace: ReturnType<typeof setTimeout> | undefined;
         const processChild = child!;
         let codexText = '',
-          codexFailed = false;
+          codexFailed = false,
+          failureText = '';
         const progress = (event: Progress) => {
           try {
             onProgress(event);
@@ -423,7 +444,11 @@ export class ClaudeCli {
                   text: event.item.text,
                 });
             }
-            if (event.type === 'turn.failed' || event.type === 'error') codexFailed = true;
+            if (event.type === 'turn.failed' || event.type === 'error') {
+              codexFailed = true;
+              failureText += ' ' + errorText(event);
+            }
+            if (event.item?.type === 'error') failureText += ' ' + errorText(event.item);
             if (event.type === 'turn.completed')
               final = {
                 type: 'result',
@@ -454,7 +479,9 @@ export class ClaudeCli {
             progress({ state: 'running', phase: 'model' });
           }
           if (event.type === 'assistant')
-            for (const item of event.message?.content || []) {
+            for (const item of (typeof event.message === 'object'
+              ? event.message.content
+              : undefined) || []) {
               if (
                 (item.type === 'text' || item.type === 'thinking') &&
                 typeof (item.text ?? item.thinking) === 'string'
@@ -477,7 +504,10 @@ export class ClaudeCli {
                 });
               }
             }
-          if (event.type === 'result') final = event;
+          if (event.type === 'result') {
+            final = event;
+            if (event.is_error) failureText += ' ' + errorText(event);
+          }
         };
         processChild.stdout.on('data', (chunk) => {
           if (settled || stopReason) return;
@@ -501,7 +531,11 @@ export class ClaudeCli {
           const tail = buffer + decoder.end();
           if (!stopReason && tail.trim()) parse(tail);
           if (stopReason) return finish(error(stopReason));
-          if (code !== 0 || final?.is_error || codexFailed) return finish(error('PROVIDER_FAILED'));
+          if (code !== 0 || final?.is_error || codexFailed)
+            // A subscription limit is told apart so another account can take the next request.
+            return finish(
+              error(USAGE_LIMIT.test(failureText) ? 'PROVIDER_LIMIT' : 'PROVIDER_FAILED'),
+            );
           if (!initialized || final?.subtype !== 'success' || typeof final.result !== 'string')
             return finish(error('INCOMPLETE_RESULT'));
           finish(null, {

@@ -245,7 +245,8 @@ try {
   const linking = page.getByRole('dialog', { name: '연계 대상', exact: true });
   await linking.getByLabel('연계 대상 1', { exact: true }).selectOption('basis-one');
   await linking.getByLabel('연계 대상 2', { exact: true }).selectOption('basis-two');
-  await linking.getByRole('checkbox').check();
+  // The coordinate question defaults to "different or unknown (AI aligns)"; choose "same".
+  await linking.getByRole('radio', { name: /원점과 축이 같음/ }).check();
   await linking.getByRole('button', { name: '요청에 첨부', exact: true }).click();
   const linkedChip = page.locator('#context .chip').filter({ hasText: '연계 묶음' });
   assert.match(await linkedChip.textContent(), /basis-one.*basis-two/);

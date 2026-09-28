@@ -610,6 +610,8 @@ R2 조건부 쓰기/체크섬은 [공식 Workers API](https://developers.cloudfl
 
 ### CLI 프로필 실행 경계
 
+사용량(2026-09-29, [PLAN-13](../plans/PLAN-13-multi-account.md)): `AccountUsageService`가 계정 폴더(기본 로그인은 `~/.claude`·`~/.claude.json`·`~/.codex`)의 `.credentials.json`(`claudeAiOauth.accessToken·expiresAt·subscriptionType`), `.claude.json`(`oauthAccount.emailAddress`), `auth.json`(`tokens.access_token·account_id·id_token`의 email·`chatgpt_plan_type`)을 읽는다. 조회를 켜면 Claude는 `GET https://api.anthropic.com/api/oauth/usage`(`anthropic-beta: oauth-2025-04-20`, `five_hour`·`seven_day`의 `utilization`·`resets_at`), Codex는 `GET https://chatgpt.com/backend-api/wham/usage`(`ChatGPT-Account-Id`, `rate_limit.primary_window/secondary_window`의 `used_percent`·`limit_window_seconds`·`reset_at`, `limit_reached`)를 3분 간격으로 부른다. API: `GET /api/v1/accounts/usage[?refresh=1]` → `{settings, accounts[]}`, `POST /api/v1/accounts/usage-settings {usageLookup?, autoSwitch?, threshold?}`(원격 세션 불가). 요청 접수는 `choose(provider, 선택 계정)`으로 `accountProfileId`를 정하고 전환했으면 `accountSwitchedFrom`을 남긴다. CLI 결과의 한도 문구는 `PROVIDER_LIMIT`이고 실행기가 `markLimited`를 부른다.
+
 PLAN-06의 프로필 실행은 서버가 선택한 절대 configDirectory를 CliOptions로 전달한다. 상속 인증 환경을 정리한 후 공급자별 CODEX_HOME 또는 CLAUDE_CONFIG_DIR만 주입하며 상태 조회와 실제 실행에서 같은 environment()를 사용한다. HTTP 입력의 임의 경로를 직접 전달하지 않는다. 경로에는 인증 파일 내용을 저장하거나 복사하지 않는다. 기본 프로필은 경로 옵션 없이 기존 동작을 유지한다.
 
 프로필 메타데이터는 로컬 데이터 루트의 cli-profiles/profiles.json에 원자적 교체로 저장하고, 공식 CLI 인증은 UUID 하위 경로에만 둔다. 모델 백업의 허용 디렉터리 밖이며 웹 게시에는 포함하지 않는다. Codex 관리 프로필은 로그인·상태·실행 모두 file 자격증명 저장소를 명시해 OS keyring 기본값의 공유를 피한다. 기본 호환 프로필의 저장 방식은 바꾸지 않는다.

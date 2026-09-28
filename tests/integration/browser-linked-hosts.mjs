@@ -201,11 +201,12 @@ try {
   await page.getByRole('button', { name: '연계 대상', exact: true }).click();
   await page.getByLabel('연계 대상 1', { exact: true }).selectOption('cad-basis');
   await page.getByLabel('연계 대상 2', { exact: true }).selectOption('rhino-basis');
+  // Two targets are enough; the coordinates default to "different or unknown (AI aligns)".
   assert.equal(
     await page.getByRole('button', { name: '요청에 첨부', exact: true }).isEnabled(),
-    false,
+    true,
   );
-  await page.getByRole('checkbox').check();
+  await page.getByRole('radio', { name: /원점과 축이 같음/ }).check();
   await page.getByRole('button', { name: '요청에 첨부', exact: true }).click();
   console.log('linked: targets attached');
   await page.reload();

@@ -44,6 +44,8 @@ interface Options {
   settings?: { get: () => { paths: Partial<Record<string, string | null>> } };
   sdk?: SdkExecution;
   zwcadSdk?: ZwcadSdkExecution;
+  /** A request stopped on its account's subscription limit (so the next one can switch). */
+  onProviderLimit?: (provider: string, accountProfileId: string) => void;
 }
 const pinsSchema = z.array(
   z
@@ -72,6 +74,7 @@ import { geometryContract, interpret, protectGeometry } from '../core/geometry.t
 export class Execution {
   workspace: Workspace;
   applyAttached?: Options['applyAttached'];
+  onProviderLimit?: Options['onProviderLimit'];
   profiles?: AccountProfiles;
   providerFactory: NonNullable<Options['providerFactory']>;
   host?: Host;
@@ -96,9 +99,11 @@ export class Execution {
       tools,
       profiles,
       applyAttached,
+      onProviderLimit,
     }: Options = {},
   ) {
     this.workspace = workspace;
+    this.onProviderLimit = onProviderLimit;
     this.applyAttached = applyAttached;
     this.profiles = profiles;
     this.providerFactory = providerFactory;
@@ -494,6 +499,11 @@ export class Execution {
       } else this.workspace.update(projectId, id, 'succeeded', { ...result, hostExecuted: false });
     } catch (cause) {
       const error = errorData(cause);
+      if (error.code === 'PROVIDER_LIMIT')
+        this.onProviderLimit?.(
+          String(request.input.provider),
+          String(request.input.accountProfileId ?? 'default'),
+        );
       this.workspace.update(
         projectId,
         id,

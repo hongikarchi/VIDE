@@ -5,6 +5,7 @@ import { Connectors, type ConnectorOptions } from './connectors.ts';
 import { appVersion, defaultRhinoPlugin, defaultZwcadConnection } from './sdk-options.ts';
 import { gzip } from 'node:zlib';
 import { AccountProfiles } from '../ai/account-profiles.ts';
+import { AccountUsageService } from '../ai/account-usage.ts';
 import { AccountLogin } from '../ai/account-login.ts';
 import { z } from 'zod';
 import type { IncomingMessage } from 'node:http';
@@ -236,7 +237,13 @@ export async function startServer({
         ))
     );
   });
+  const accountUsage = new AccountUsageService({
+    profiles,
+    file: join(dirname(filename), 'cli-profiles', 'usage-settings.json'),
+  });
   const execution = new Execution(workspace, {
+    onProviderLimit: (provider, id) =>
+      accountUsage.markLimited(z.enum(['claude-cli', 'codex-cli']).parse(provider), id),
     applyAttached: sdk
       ? (request, result, signal) =>
           applyAttachedCandidate(workspace, applications, sdk, request, result, signal)
@@ -660,6 +667,26 @@ export async function startServer({
           send(201, profiles.add(input.provider, input.label));
           return;
         }
+      }
+      // Per-account sign-in, usage and reset times; switching settings.
+      if (url.pathname === '/api/v1/accounts/usage' && request.method === 'GET') {
+        send(200, {
+          settings: accountUsage.settings(),
+          accounts: await accountUsage.all(url.searchParams.get('refresh') === '1'),
+        });
+        return;
+      }
+      if (url.pathname === '/api/v1/accounts/usage-settings' && request.method === 'POST') {
+        const input = z
+          .object({
+            usageLookup: z.boolean().optional(),
+            autoSwitch: z.boolean().optional(),
+            threshold: z.number().int().min(50).max(100).optional(),
+          })
+          .strict()
+          .parse(await body(request));
+        send(200, { settings: accountUsage.setSettings(input) });
+        return;
       }
       if (url.pathname === '/api/v1/accounts/remove' && request.method === 'POST') {
         const input = z
@@ -1103,7 +1130,14 @@ export async function startServer({
             if (old.accountProfileId) input.accountProfileId = old.accountProfileId;
           } else {
             if (accountLogin.busy(provider)) throw new DomainError('PROFILE_LOGIN_IN_PROGRESS');
-            input.accountProfileId = profiles.selected(provider);
+            // Automatic switching (when on): an account near or at its limit hands the request to
+            // the signed-in account of the same service with the most headroom.
+            const chosen = await accountUsage.choose(provider, profiles.selected(provider));
+            input.accountProfileId = chosen.id;
+            if (chosen.switched) {
+              input.accountSwitchedFrom = chosen.from;
+              if (!profiles.list().pending[provider]) profiles.select(provider, chosen.id);
+            }
           }
           const result = workspace.submit(projectId, input);
           if (result.created) execution.start(result.request);

@@ -2,6 +2,7 @@ import { element as $, append as el } from './elements.ts';
 import { attachAccountPanel, remoteSession } from './remote-panel.ts';
 import { attachDesktopPanel, inDesktop } from './desktop-panel.ts';
 import { attachConnectorsPanel } from './connectors-panel.ts';
+import { attachAccountUsage } from './account-usage-panel.ts';
 
 interface Options {
   openFailure: (id: string) => void;
@@ -82,6 +83,7 @@ export function initializeWorkspaceStatus({
       action();
     };
   }
+  attachAccountUsage(el('section', '', ai.parentElement!), dialog);
   attachConnectorsPanel(
     el('section', '', tab('programs', '연결 프로그램'), { class: 'remote-panel' }),
     dialog,

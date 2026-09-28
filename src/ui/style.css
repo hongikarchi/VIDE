@@ -2745,3 +2745,67 @@ body.panel-mode .composer-settings #model {
 body.panel-mode #conversation {
   padding: 10px 12px;
 }
+
+/* Settings → AI: accounts with their usage (5-hour / 7-day) and reset times. */
+.usage-options {
+  display: grid;
+  gap: 4px;
+  margin-bottom: 12px;
+}
+.usage-threshold {
+  width: 56px;
+  margin-left: 6px;
+  padding: 2px 4px;
+}
+.usage-row {
+  display: grid !important;
+  gap: 6px;
+}
+.usage-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.usage-head small {
+  color: var(--muted);
+}
+.usage-line {
+  display: grid;
+  grid-template-columns: 64px 1fr auto;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+.usage-label,
+.usage-value {
+  color: var(--muted);
+}
+.usage-track {
+  height: 6px;
+  border-radius: 3px;
+  background: #eceee9;
+  overflow: hidden;
+}
+.usage-fill {
+  display: block;
+  height: 100%;
+  background: #4f8a64;
+}
+.usage-fill[data-level='mid'] {
+  background: #d09a3a;
+}
+.usage-fill[data-level='high'] {
+  background: #c9563a;
+}
+.usage-row > button {
+  justify-self: start;
+}
+.usage-refresh {
+  margin-top: 10px;
+}
+.usage-note {
+  color: var(--muted);
+  font-size: 12px;
+  margin: 0;
+}
