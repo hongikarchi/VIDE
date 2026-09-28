@@ -69,12 +69,17 @@ internal sealed class EditorExecutor(RhinoDoc document, string directory)
 
     private string Fingerprint()
     {
-        var objects = document.Objects.GetObjectList(ObjectType.AnyObject).OrderBy(obj => obj.Id).ToArray();
+        var objects = BlockIdentity.Objects(document);
         if (objects.Length > WorkerScene.MaxObjects) throw new InvalidOperationException("IMPORT_LIMIT");
         var serialization = new Rhino.FileIO.SerializationOptions { WriteUserData = true, WriteRenderMeshes = false, WriteAnalysisMeshes = false };
         var layers = string.Join("\n", document.Layers.Where(layer => !layer.IsDeleted).OrderBy(layer => layer.Id).Select(layer => layer.ToJSON(serialization)));
         var strings = JsonSerializer.Serialize(Enumerable.Range(0, document.Strings.Count).Select(i => new { key = document.Strings.GetKey(i), value = document.Strings.GetValue(i) }).OrderBy(item => item.key, StringComparer.Ordinal));
-        var values = strings + "\n" + layers + "\n" + GroupIdentity.Signature(document.Groups) + "\n" + document.ModelAbsoluteTolerance + "\n" + document.ModelUnitSystem.ToString() + "\n" + string.Join("\n", objects.Select(obj => obj.Id + ":" + WorkerScene.Fingerprint(obj)));
-        return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(values))).ToLowerInvariant();
+        using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+        void Add(string value) { hash.AppendData(Encoding.UTF8.GetBytes(value)); hash.AppendData([10]); }
+        Add(strings); Add(layers); Add(GroupIdentity.Signature(document.Groups)); Add(BlockIdentity.Signature(document));
+        Add(document.ModelAbsoluteTolerance.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        Add(document.ModelUnitSystem.ToString());
+        foreach (var obj in objects) Add(obj.Id + ":" + WorkerScene.Fingerprint(obj));
+        return Convert.ToHexString(hash.GetHashAndReset()).ToLowerInvariant();
     }
 }

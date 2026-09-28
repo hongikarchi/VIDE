@@ -17,10 +17,13 @@ const directory = resolve('.vide/rhino-attached', randomUUID());
 await mkdir(directory, { recursive: true });
 const options = sdkOptions(directory),
   connectionDirectory = join(directory, 'rhino-connections');
+if (process.env.VIDE_TEST_RHINO_PLUGIN)
+  options.plugin = resolve(process.env.VIDE_TEST_RHINO_PLUGIN);
 const script = join(directory, 'fixture.py');
 await writeFile(
   script,
   `import Rhino, System, json, os, traceback
+from System.Collections.Generic import List
 folder=${JSON.stringify(directory.replaceAll('\\', '/'))}
 plugin=${JSON.stringify(options.plugin.replaceAll('\\', '/'))}
 last=0
@@ -39,6 +42,21 @@ def idle(sender,args):
             obj=list(doc.Objects)[0]
             Rhino.RhinoApp.RunScript('_SelAll',False)
             assert Rhino.RhinoApp.RunScript('_Move 0,0,0 1000,0,0',False)
+        elif command=='addBlock' or command=='changeBlock':
+            geometry=List[Rhino.Geometry.GeometryBase]()
+            geometry.Add(Rhino.Geometry.Box(Rhino.Geometry.BoundingBox(0,0,0,1000,2000,3000 if command=='addBlock' else 5000)).ToBrep())
+            attributes=List[Rhino.DocObjects.ObjectAttributes]();attributes.Add(Rhino.DocObjects.ObjectAttributes())
+            if command=='addBlock':
+                idx=doc.InstanceDefinitions.Add('Test block','definition',Rhino.Geometry.Point3d.Origin,geometry,attributes)
+                assert idx>=0
+                doc.Objects.AddInstanceObject(idx,Rhino.Geometry.Transform.Identity)
+            else: assert doc.InstanceDefinitions.ModifyGeometry(doc.InstanceDefinitions.Find('Test block').Index,geometry,attributes)
+        elif command=='damageCapture':
+            copy=Rhino.FileIO.File3dm.Read(action['filename'])
+            definition=list(copy.AllInstanceDefinitions)[0]
+            copy.Objects.Delete(definition.GetObjectIds()[0])
+            assert copy.Write(action['filename'],8)
+            copy.Dispose()
         elif command=='undo': assert Rhino.RhinoApp.RunScript('_Undo',False)
         else: assert Rhino.RhinoApp.RunScript('_'+command,False)
         report('action-'+str(last),dict(ok=True))
@@ -92,9 +110,9 @@ try {
     JSON.parse(await readFile(join(directory, 'ready.json'), 'utf8')),
   );
   assert.equal(ready.ok, true, JSON.stringify(ready));
-  const action = async (command) => {
+  const action = async (command, extra = {}) => {
     step++;
-    await writeFile(join(directory, 'action.tmp'), JSON.stringify({ id: step, command }));
+    await writeFile(join(directory, 'action.tmp'), JSON.stringify({ id: step, command, ...extra }));
     await rename(join(directory, 'action.tmp'), join(directory, 'action.json'));
     const r = await wait(async () =>
       JSON.parse(await readFile(join(directory, 'action-' + step + '.json'), 'utf8')),
@@ -227,6 +245,39 @@ try {
   const reconnected = await sessions.list(true);
   assert.notEqual(reconnected.documents[0].instance, target.instance);
   await assert.rejects(() => sessions.capture(target), { code: 'STALE_CONNECTION' });
+  const blockTarget = {
+    instance: reconnected.documents[0].instance,
+    documentId: reconnected.documents[0].id,
+  };
+  await action('addBlock');
+  const blockCapture = await sessions.capture(blockTarget);
+  await action('VIDELiveSync');
+  const blockGeneration = (await sessions.list(true)).documents[0].generation;
+  await action('changeBlock');
+  assert.notEqual((await sessions.inspect(blockTarget)).documentHash, blockCapture.documentHash);
+  await wait(async () => (await sessions.list(true)).documents[0].generation > blockGeneration);
+  const updatedBlock = await sessions.capture(blockTarget);
+  await action('damageCapture', { filename: updatedBlock.filename });
+  const blockRecord = JSON.parse(
+    await readFile(
+      join(
+        connectionDirectory,
+        (await readdir(connectionDirectory)).find((n) => n.endsWith('.json')),
+      ),
+      'utf8',
+    ),
+  );
+  const damaged = await sendHostCommand(
+    'vide',
+    {
+      ...blockRecord.identity,
+      token: blockRecord.token,
+      method: 'verifyEditorCapture',
+      operationId: updatedBlock.filename.split(/[\\/]/).at(-1).replace('.3dm', ''),
+    },
+    { port: blockRecord.identity.port },
+  );
+  assert.equal(damaged.ok, false);
   const result = {
     passed: true,
     directory,
@@ -238,6 +289,10 @@ try {
     generatedCodeRefused: true,
     wrongTokenAndDocumentRefused: true,
     reconnectInvalidatesTarget: true,
+    blockCapturePreserved: true,
+    definitionOnlyChangeInvalidatesBasis: true,
+    blockDefinitionLiveSync: true,
+    missingDefinitionGeometryRejected: true,
   };
   await writeFile(join(directory, 'result.json'), JSON.stringify(result, null, 2));
   console.log(JSON.stringify(result));

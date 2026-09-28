@@ -2,7 +2,7 @@
 id: ARCH-01
 title: VIDE 기술 구조와 구현 계약
 status: review
-version: 0.32
+version: 0.33
 updated: 2026-09-28
 owner: agent:codex
 related: [SPEC-00, SPEC-02, SPEC-03, SPEC-04, PLAN, ADR-014, ADR-015, ADR-016, ADR-017]
@@ -607,3 +607,7 @@ PLAN-06의 프로필 실행은 서버가 선택한 절대 configDirectory를 Cli
 플러그인 변경 이벤트는 1초 이상 idle 후 세대를 갱신하고, 제어 화면은 가벼운 연결 상태를 주기 조회한다. 전체 모델 취득은 Sync 요청 또는 Live Sync 변경 세대가 있을 때만 기존 capture/import 경로로 수행한다. 전체 기하 해시는 매 상태 조회마다 계산하지 않는다. 적용/명령 중 취득은 보류하고 자동 취득은 단일 실행·초안 보호·실패 후 수동 재개를 따른다.
 
 연결 Rhino 수정은 요청의 `applyToSource: true`와 `permission: candidate`로 기록한다. 명시적 baseRequestId의 attached-editor Rhino 캡처만 허용하고 개입 시 동일 권한을 유지한다. Execution은 검증 후보를 먼저 영속화하고 Applications.prepare/confirm을 호출한다. 적용 식별자와 결과를 남기고 성공 후 captureEditor로 갱신한다. 쓰기 결과 불명확 시 후보를 보존하고 동일 적용 영수증을 조회한다.
+
+### Rhino 네이티브 취득의 블록 보존
+
+취득 지문과 저장 재검증은 일반 문서 객체와 삭제되지 않은 InstanceDefinition의 GetObjects 결과를 GUID로 중복 제거한 집합을 사용한다. 정의 ID·이름·설명·멤버 GUID·사용자 문자열도 비교한다. 화면 목록은 일반 객체 목록을 유지하며 정의 내부 객체를 별도 최상위 선택 대상으로 복제하지 않는다. Live Sync는 InstanceDefinitionTableEvent도 변경 세대에 포함한다. 연결 지문은 각 객체의 기존 기하/속성 해시를 순서대로 증분 SHA-256에 추가해 전체 연결 문자열의 중복 할당을 피한다. 현재 객체 수/표시 응답 상한은 별도이며 이 보존 수정만으로 해제하지 않는다.

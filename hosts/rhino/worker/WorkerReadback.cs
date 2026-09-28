@@ -12,8 +12,8 @@ internal static class WorkerReadback
     {
         if (actual.ModelUnitSystem != expected.ModelUnitSystem)
             throw new InvalidOperationException("Readback units mismatch");
-        var originals = expected.Objects.GetObjectList(ObjectType.AnyObject).ToArray();
-        if (actual.Objects.GetObjectList(ObjectType.AnyObject).Count() != originals.Length)
+        var originals = BlockIdentity.Objects(expected);
+        if (BlockIdentity.Objects(actual).Length != originals.Length || BlockIdentity.Signature(expected) != BlockIdentity.Signature(actual))
             throw new InvalidOperationException("Readback count mismatch");
         foreach (var original in originals)
         {
@@ -36,7 +36,9 @@ internal static class WorkerReadback
     internal static void VerifyArchive(RhinoDoc expected, Rhino.FileIO.File3dm actual)
     {
         if (actual.Settings.ModelUnitSystem != expected.ModelUnitSystem) throw new InvalidOperationException("Readback units mismatch");
-        var originals = expected.Objects.GetObjectList(ObjectType.AnyObject).ToArray();
+        var originals = BlockIdentity.Objects(expected);
+        if (BlockIdentity.Signature(expected) != BlockIdentity.Signature(actual.AllInstanceDefinitions))
+            throw new InvalidOperationException("Readback block definition mismatch");
         var restored = actual.Objects.ToDictionary(obj => obj.Attributes.ObjectId);
         if (restored.Count != originals.Length) throw new InvalidOperationException("Readback count mismatch");
         foreach (var obj in originals)

@@ -51,6 +51,7 @@ internal sealed class AttachedConnection : IDisposable
         RhinoDoc.ReplaceRhinoObject += ReplacedObject;
         RhinoDoc.ModifyObjectAttributes += ChangedAttributes;
         RhinoDoc.LayerTableEvent += ChangedLayer;
+        RhinoDoc.InstanceDefinitionTableEvent += ChangedDefinition;
         RhinoDoc.CloseDocument += Closed;
         RhinoApp.Idle += Idle;
         _ = Task.Run(async () => {
@@ -76,6 +77,7 @@ internal sealed class AttachedConnection : IDisposable
     private void ReplacedObject(object? sender, RhinoReplaceObjectEventArgs e) => Mark(e.Document);
     private void ChangedAttributes(object? sender, RhinoModifyObjectAttributesEventArgs e) => Mark(e.Document);
     private void ChangedLayer(object? sender, Rhino.DocObjects.Tables.LayerTableEventArgs e) => Mark(e.Document);
+    private void ChangedDefinition(object? sender, Rhino.DocObjects.Tables.InstanceDefinitionTableEventArgs e) => Mark(e.Document);
     private void Closed(object? sender, DocumentEventArgs e) { if (e.Document == document) { Dispose(); if (Current == this) Current = null; } }
     private void Idle(object? sender, EventArgs e)
     {
@@ -90,6 +92,7 @@ internal sealed class AttachedConnection : IDisposable
         listener.Stop();
         RhinoDoc.AddRhinoObject -= ChangedObject; RhinoDoc.DeleteRhinoObject -= ChangedObject; RhinoDoc.UndeleteRhinoObject -= ChangedObject;
         RhinoDoc.ReplaceRhinoObject -= ReplacedObject; RhinoDoc.ModifyObjectAttributes -= ChangedAttributes; RhinoDoc.LayerTableEvent -= ChangedLayer;
+        RhinoDoc.InstanceDefinitionTableEvent -= ChangedDefinition;
         RhinoDoc.CloseDocument -= Closed; RhinoApp.Idle -= Idle;
         try { File.Delete(record); } catch (IOException) { /* Dead socket and disposed dispatch revoke access even if cleanup fails. */ }
     }

@@ -2,7 +2,7 @@
 id: VERIFY-2026-09-28-rhino-attached-sync
 title: 현재 Rhino 문서 연결·수정 위임·Live Sync 검증
 status: review
-version: 0.3
+version: 0.4
 updated: 2026-09-28
 owner: agent:codex
 related: [SPEC-01, SPEC-02, PLAN-02, H-RHINO-03, H-RHINO-05, AC-17, AC-38]
@@ -46,3 +46,7 @@ Fork 후 작업 트리와 서버 상태를 재확인했다. 소유 시험 Rhino�
 1. 사용자 직접 연결 후 기존 Rhino 실행본이 VIDE 문서 목록에 표시됐다. 최초 Sync는 captureModel 내부의 구형 `pid:startTicks` 검사식 때문에 거절됐다. 공통 hostTargetSchema로 통일하고 세션 UUID를 포함한 대상 유지 시험을 추가했다. 네이티브 직접 호출과 모의 브라우저 API만으로 이 통합 누락을 놓친 것이므로 기존 합성 통과를 제품 전체 통과로 취급하지 않는다.
 2. 수정한 서버에서 다시 Sync한 결과 `IMPORT_LIMIT`을 확인했다. 현재 문서는 UI 조회 10,713개·약 386 MB이며 기존 WorkerScene의 10,000개 상한을 넘는다. 연결은 정상, 전체 모델 취득/뷰포트 표시는 미완료다. 파일/형상을 줄이거나 저장·편집하지 않았다.
 3. 실제 환경의 다음 작업은 PLAN-02의 대형 문서 Sync 경로다. 이 상한을 이유로 원본을 분할하거나 단순히 숫자를 올려 지원 완료로 선언하지 않는다. 현재 사용자 Rhino 연결은 유지한다.
+
+## 블록 보존 회귀
+
+별도 빌드 `.vide/build/rhino-worker-next/bin/VIDE.Worker.rhp`를 합성 Rhino에만 로드했다. `.vide/rhino-attached/39452021-afd0-42bc-8f20-cb462f40be14/result.json`에서 기존 적용/Undo/재연결 회귀와 블록 포함 네이티브 캡처, 정의만 변경했을 때 지문·Live Sync 세대 변경, 저장본의 정의 형상 삭제 시 재검증 거절을 통과했다. 사용자 Rhino가 이미 로드한 플러그인은 교체하지 않았다. 객체 수/표시 상한은 유지하며 실제 10,713개 문서의 전체 Sync는 여전히 미완료다.
