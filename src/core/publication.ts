@@ -56,6 +56,7 @@ export function createPublicationBundle(rawRequest: unknown, rawSelection: unkno
     if (
       !representation ||
       representation.type === 'segments' ||
+      representation.type === 'annotation' ||
       representation.positions.length % 3 ||
       !representation.positions.every(Number.isFinite)
     )

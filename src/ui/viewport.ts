@@ -18,6 +18,19 @@ import {
   plotStyleTable,
   type PlotStyleTable,
 } from './plot-style.ts';
+import {
+  TextAtlas,
+  annotationAnchor,
+  buildFillMesh,
+  buildTextMeshes,
+  paintVertices,
+  runStyles,
+  type CadFill,
+  type CadStyle,
+  type CadText,
+  type StyleRun,
+  type StyledGeometry,
+} from './cad-annotations.ts';
 
 type Camera = THREE.PerspectiveCamera | THREE.OrthographicCamera;
 type PlaneName = 'XY' | 'XZ' | 'YZ';
@@ -52,6 +65,10 @@ interface DisplayObject extends DisplayGeometry {
   layerColor?: string;
   materialColor?: string | null;
   lineWeight?: number;
+  /** CAD: per-segment style runs, solid fills and text annotations. */
+  segmentStyles?: StyleRun[];
+  fills?: CadFill[];
+  texts?: CadText[];
 }
 const hexColor = (value: unknown) =>
   typeof value === 'string' && /^#[0-9a-f]{6}$/i.test(value) ? value : undefined;
@@ -77,6 +94,8 @@ const SURFACE = 0xd6d9d3,
   SELECTED = 0xf0a37f,
   SELECTED_WIRE = 0xd9542c;
 const CREASE_ANGLE = 38;
+// Neutral fill for CAD solid hatches in the default colour source.
+const FILL = 0xb9c0ba;
 type RenderObject =
   | THREE.Mesh<THREE.BufferGeometry, THREE.MeshStandardMaterial>
   | THREE.Line<THREE.BufferGeometry, THREE.LineBasicMaterial>
@@ -85,10 +104,18 @@ function disposeObject(object: THREE.Object3D) {
   object.traverse((item) => {
     if (item instanceof THREE.Mesh || item instanceof THREE.Line || item instanceof THREE.Points) {
       item.geometry.dispose();
+      // Text atlas page materials are shared across objects and owned by the atlas.
+      if (item.userData.sharedMaterial) return;
       for (const material of Array.isArray(item.material) ? item.material : [item.material])
         material.dispose();
     }
   });
+}
+/** Walk from a raycast hit (fill/text child) up to the object that carries the scene id. */
+function ownerId(object: THREE.Object3D | undefined) {
+  for (let item = object; item; item = item.parent ?? undefined)
+    if (typeof item.userData.id === 'string') return item.userData.id as string;
+  return undefined;
 }
 export function createViewport(
   container: HTMLElement,
@@ -126,7 +153,15 @@ export function createViewport(
   controls.zoomToCursor = true;
   controls.minDistance = 4;
   controls.maxDistance = 180;
-  let grid = new THREE.GridHelper(100, 50, 0xb8c2b9, 0xe0e5dc);
+  /** The grid is a backdrop: drawn first and never occludes plan drawings lying on z = 0. */
+  const backdrop = (helper: THREE.GridHelper) => {
+    helper.renderOrder = -10;
+    for (const material of Array.isArray(helper.material) ? helper.material : [helper.material])
+      material.depthWrite = false;
+    helper.raycast = () => {};
+    return helper;
+  };
+  let grid = backdrop(new THREE.GridHelper(100, 50, 0xb8c2b9, 0xe0e5dc));
   grid.rotation.x = Math.PI / 2;
   scene.add(grid);
   // Soft sky fill plus a headlight that follows the camera, like Rhino's default lighting.
@@ -136,6 +171,7 @@ export function createViewport(
   scene.add(light, light.target);
   const meshes: RenderObject[] = [];
   const byId = new Map<string, RenderObject>();
+  let atlas = new TextAtlas();
   function replace(data: DisplayObject[]) {
     dirty = true;
     selectedIds = new Set();
@@ -146,13 +182,28 @@ export function createViewport(
       disposeObject(mesh);
     }
     meshes.length = 0;
+    // Strings are cached across Syncs; start a fresh atlas when it has grown large.
+    if (atlas.size > 6) {
+      atlas.dispose();
+      atlas = new TextAtlas();
+    }
     for (const object of data) {
       const representation = sceneRepresentation(object);
       if (!representation) continue;
       const geometry = new THREE.BufferGeometry(),
-        positions = representation.positions;
+        annotationOnly = representation.type === 'annotation',
+        positions = annotationOnly ? [] : representation.positions;
       // Keep small details near the geometry origin before uploading float32 GPU attributes.
-      const { origin, local } = displayCoordinates(positions);
+      const { origin, local } = annotationOnly
+        ? {
+            origin: (annotationAnchor(object) ?? new THREE.Vector3()).toArray() as [
+              number,
+              number,
+              number,
+            ],
+            local: new Float32Array(0),
+          }
+        : displayCoordinates(positions);
       geometry.setAttribute('position', new THREE.BufferAttribute(local, 3));
       let mesh: RenderObject;
       if (representation.type === 'point')
@@ -176,7 +227,7 @@ export function createViewport(
             polygonOffsetUnits: 1,
           }),
         );
-      } else if (representation.type === 'segments')
+      } else if (representation.type === 'segments' || annotationOnly)
         mesh = new THREE.LineSegments(geometry, new THREE.LineBasicMaterial({ color: WIRE }));
       else mesh = new THREE.Line(geometry, new THREE.LineBasicMaterial({ color: WIRE }));
       mesh.userData.colors = {
@@ -186,6 +237,17 @@ export function createViewport(
       };
       mesh.userData.plot = { colorIndex: objectIndex(object), lineWeight: object.lineWeight };
       mesh.position.set(origin[0], origin[1], origin[2]);
+      // CAD: per-segment styles plus fills and texts as children of the same pickable object.
+      if (object.segmentStyles?.length && mesh instanceof THREE.LineSegments && !annotationOnly)
+        mesh.userData.styled = runStyles(object.segmentStyles, local.length / 6);
+      const anchor = new THREE.Vector3(origin[0], origin[1], origin[2]);
+      if (object.fills?.length) {
+        const fill = buildFillMesh(object.fills, anchor);
+        if (fill) mesh.add(fill);
+      }
+      if (object.texts?.length)
+        for (const text of buildTextMeshes(object.texts, anchor, atlas)) mesh.add(text);
+      mesh.userData.cad = object.segmentStyles || object.fills || object.texts ? object : undefined;
       mesh.userData.id = object.id;
       scene.add(mesh);
       meshes.push(mesh);
@@ -220,6 +282,18 @@ export function createViewport(
     return new THREE.Color(object instanceof THREE.Mesh ? SURFACE : WIRE);
   }
   function releasePlot(object: RenderObject) {
+    const runs = object.userData.plotRuns as THREE.Group | undefined;
+    if (runs) {
+      object.remove(runs);
+      runs.traverse((item) => {
+        if (item instanceof LineSegments2) {
+          plotMaterials.delete(item.material);
+          item.geometry.dispose();
+          item.material.dispose();
+        }
+      });
+      object.userData.plotRuns = undefined;
+    }
     const fat = object.userData.plotLine as LineSegments2 | undefined;
     if (!fat) return;
     object.remove(fat);
@@ -256,6 +330,112 @@ export function createViewport(
     }
     return fat;
   }
+  /** Screen colour of one CAD style under the current colour source (ACI 7 = foreground). */
+  function styleColor(style: CadStyle, object: RenderObject, fallback: number) {
+    const cad = object.userData.cad as DisplayObject | undefined;
+    if (display.colorSource === 'layer') {
+      const layer = hexColor(style.layer) ?? hexColor(cad?.layerColor);
+      return new THREE.Color(layer ?? fallback);
+    }
+    if (display.colorSource === 'object') {
+      if (!hexColor(style.rgb) && style.ci === 7)
+        return new THREE.Color(darkBackground ? 0xffffff : 0x1f2421);
+      const own = hexColor(style.rgb) ?? (style.ci !== undefined ? aciColor(style.ci) : undefined);
+      if (own) return new THREE.Color(own);
+      return baseColor(object);
+    }
+    return new THREE.Color(fallback);
+  }
+  function stylePen(style: CadStyle, object: RenderObject) {
+    const cad = object.userData.cad as DisplayObject | undefined;
+    const screen =
+      hexColor(style.rgb) ??
+      (style.ci !== undefined ? aciColor(style.ci) : undefined) ??
+      '#' + baseColor(object).getHexString();
+    return plotPen(plotStyle, {
+      colorIndex: style.ci ?? (cad ? objectIndex(cad) : undefined),
+      screenColor: screen,
+      lineWeight: style.lw ?? cad?.lineWeight,
+    });
+  }
+  /** Fills and texts: vertex colours per style, following selection, plot and display mode. */
+  function paintAnnotations(object: RenderObject, selected: boolean) {
+    for (const child of object.children) {
+      const part = child.userData.part as string | undefined;
+      if (!part || !(child instanceof THREE.Mesh)) continue;
+      const styled = child.userData.styled as StyledGeometry;
+      const selectedColor = new THREE.Color(part === 'fill' ? SELECTED : SELECTED_WIRE);
+      paintVertices(child.geometry, styled, (style) =>
+        selected
+          ? selectedColor
+          : display.plot
+            ? new THREE.Color(stylePen(style, object).color)
+            : styleColor(style, object, part === 'fill' ? FILL : WIRE),
+      );
+      if (part === 'fill') {
+        const material = child.material as THREE.MeshBasicMaterial;
+        const ghosted = !display.plot && display.mode === 'ghosted';
+        child.visible = display.plot || display.mode !== 'wireframe';
+        material.transparent = ghosted;
+        material.opacity = ghosted ? 0.3 : 1;
+        material.depthWrite = !ghosted;
+      }
+    }
+  }
+  /** Plot preview for styled CAD segments: one fat-line batch per pen lineweight. */
+  function paintRunPlot(object: THREE.LineSegments, selected: boolean) {
+    const styled = object.userData.styled as StyledGeometry;
+    let group = object.userData.plotRuns as THREE.Group | undefined;
+    if (!group || group.userData.table !== plotStyle) {
+      releasePlot(object as unknown as RenderObject);
+      group = new THREE.Group();
+      group.userData.table = plotStyle;
+      const position = object.geometry.getAttribute('position');
+      const pens = styled.styles.map((style) => stylePen(style, object as unknown as RenderObject));
+      const batches = new Map<number, { points: number[]; colors: number[] }>();
+      for (let i = 0; i + 1 < position.count; i += 2) {
+        const pen = pens[styled.vertexStyle[i]] ?? pens[0];
+        const weight = lineWeightPixels(pen?.lineWeight ?? plotStyle.defaultLineWeight);
+        const batch = batches.get(weight) ?? { points: [], colors: [] };
+        batches.set(weight, batch);
+        const color = new THREE.Color(pen?.color ?? '#000000');
+        batch.points.push(
+          position.getX(i),
+          position.getY(i),
+          position.getZ(i),
+          position.getX(i + 1),
+          position.getY(i + 1),
+          position.getZ(i + 1),
+        );
+        batch.colors.push(color.r, color.g, color.b, color.r, color.g, color.b);
+      }
+      for (const [weight, batch] of batches) {
+        const geometry = new LineSegmentsGeometry();
+        geometry.setPositions(batch.points);
+        geometry.setColors(batch.colors);
+        const material = new LineMaterial({
+          color: 0xffffff,
+          linewidth: weight,
+          worldUnits: false,
+          vertexColors: true,
+        });
+        material.resolution.set(renderer.domElement.width, renderer.domElement.height);
+        plotMaterials.add(material);
+        const fat = new LineSegments2(geometry, material);
+        fat.userData.weight = weight;
+        fat.raycast = () => {};
+        group.add(fat);
+      }
+      object.userData.plotRuns = group;
+      object.add(group);
+    }
+    group.visible = true;
+    for (const fat of group.children as LineSegments2[]) {
+      fat.material.vertexColors = !selected;
+      fat.material.color.set(selected ? SELECTED_WIRE : 0xffffff);
+      fat.material.needsUpdate = true;
+    }
+  }
   /** Plot preview: CTB pen colours and lineweights on white paper; surfaces print white. */
   function paintPlot(object: RenderObject, selected: boolean) {
     const plot = object.userData.plot as { colorIndex?: number; lineWeight?: number };
@@ -272,6 +452,9 @@ export function createViewport(
       const edges = edgesOf(object);
       edges.visible = true;
       edges.material.color.copy(ink);
+    } else if (object instanceof THREE.LineSegments && object.userData.styled) {
+      object.material.visible = false;
+      paintRunPlot(object, selected);
     } else if (object instanceof THREE.Line) {
       object.material.visible = false;
       const fat = plotLineOf(object);
@@ -284,10 +467,28 @@ export function createViewport(
     const selected = selectedIds.has(object.userData.id);
     if (display.plot) {
       paintPlot(object, selected);
+      paintAnnotations(object, selected);
       return;
     }
     const fat = object.userData.plotLine as LineSegments2 | undefined;
     if (fat) fat.visible = false;
+    const runPlot = object.userData.plotRuns as THREE.Group | undefined;
+    if (runPlot) runPlot.visible = false;
+    paintAnnotations(object, selected);
+    const styled = object.userData.styled as StyledGeometry | undefined;
+    if (styled && object instanceof THREE.LineSegments) {
+      object.material.visible = true;
+      if (selected) {
+        object.material.vertexColors = false;
+        object.material.color.set(SELECTED_WIRE);
+      } else {
+        paintVertices(object.geometry, styled, (style) => styleColor(style, object, WIRE));
+        object.material.vertexColors = true;
+        object.material.color.set(0xffffff);
+      }
+      object.material.needsUpdate = true;
+      return;
+    }
     if (object instanceof THREE.Line) object.material.visible = true;
     const color = selected
       ? new THREE.Color(object instanceof THREE.Mesh ? SELECTED : SELECTED_WIRE)
@@ -328,9 +529,11 @@ export function createViewport(
     grid.geometry.dispose();
     for (const material of Array.isArray(grid.material) ? grid.material : [grid.material])
       material.dispose();
-    grid = dark
-      ? new THREE.GridHelper(100, 50, 0x4a5350, 0x33393a)
-      : new THREE.GridHelper(100, 50, 0xb8c2b9, 0xe0e5dc);
+    grid = backdrop(
+      dark
+        ? new THREE.GridHelper(100, 50, 0x4a5350, 0x33393a)
+        : new THREE.GridHelper(100, 50, 0xb8c2b9, 0xe0e5dc),
+    );
     grid.rotation.copy(rotation);
     grid.visible = !display.plot;
     scene.add(grid);
@@ -749,23 +952,38 @@ export function createViewport(
       const id = object.userData.id;
       const position = object.geometry.getAttribute('position');
       if (typeof id !== 'string' || !position) continue;
-      object.updateMatrixWorld();
+      object.updateMatrixWorld(true);
       const count = position.count,
         stride = Math.max(1, Math.floor(count / 4000));
       const screen: number[] = [];
       let all = true,
-        any = false;
-      for (let i = 0; i < count; i += stride) {
-        corner.fromBufferAttribute(position, i).applyMatrix4(object.matrixWorld).project(camera);
-        const x = ((corner.x + 1) / 2) * r.width,
-          y = ((1 - corner.y) / 2) * r.height;
-        screen.push(x, y);
-        if (corner.z <= 1 && inside(x, y)) any = true;
-        else all = false;
-        if (crossing ? any : !all) break;
-      }
+        any = false,
+        tested = 0;
+      const test = (
+        source: THREE.Object3D,
+        attribute: THREE.BufferAttribute | THREE.InterleavedBufferAttribute,
+        record: boolean,
+      ) => {
+        const n = attribute.count,
+          step = Math.max(1, Math.floor(n / 4000));
+        for (let i = 0; i < n; i += step) {
+          corner.fromBufferAttribute(attribute, i).applyMatrix4(source.matrixWorld).project(camera);
+          const x = ((corner.x + 1) / 2) * r.width,
+            y = ((1 - corner.y) / 2) * r.height;
+          if (record) screen.push(x, y);
+          tested++;
+          if (corner.z <= 1 && inside(x, y)) any = true;
+          else all = false;
+          if (crossing ? any : !all) return;
+        }
+      };
+      test(object, position, true);
+      // CAD fills and texts are part of the object for window/crossing selection.
+      for (const child of object.children)
+        if (child.userData.part && child instanceof THREE.Mesh && (crossing ? !any : all))
+          test(child, child.geometry.getAttribute('position'), false);
       if (!crossing) {
-        if (all && screen.length) picked.push(id);
+        if (all && tested) picked.push(id);
         continue;
       }
       if (!any && object instanceof THREE.Line)
@@ -794,8 +1012,8 @@ export function createViewport(
       // A crossing window drawn entirely inside a large face still touches that face.
       mouse.set(((minX + maxX) / 2 / r.width) * 2 - 1, (-(minY + maxY) / 2 / r.height) * 2 + 1);
       ray.setFromCamera(mouse, camera);
-      const hit = ray.intersectObjects(meshes, false)[0]?.object.userData.id;
-      if (typeof hit === 'string' && !picked.includes(hit)) picked.push(hit);
+      const hit = ownerId(ray.intersectObjects(meshes, true)[0]?.object);
+      if (hit && !picked.includes(hit)) picked.push(hit);
     }
     return picked;
   }
@@ -820,8 +1038,8 @@ export function createViewport(
       return;
     }
     rayAt(e);
-    const id = ray.intersectObjects(meshes, false)[0]?.object.userData.id;
-    onPick(typeof id === 'string' ? [id] : [], selectionMode(e), mode === 'pin');
+    const id = ownerId(ray.intersectObjects(meshes, true)[0]?.object);
+    onPick(id ? [id] : [], selectionMode(e), mode === 'pin');
   }
   function cancel() {
     down = null;
@@ -897,6 +1115,57 @@ export function createViewport(
         : object.material.color;
       return '#' + ink.getHexString();
     },
+    /** Diagnostics for CAD styles: distinct vertex colours per part and plot batches. */
+    cadInfo(id: string) {
+      const object = byId.get(id);
+      if (!object) return undefined;
+      const colors = (geometry: THREE.BufferGeometry, name = 'color') => {
+        const attribute = geometry.getAttribute(name);
+        const seen = new Set<string>();
+        if (attribute)
+          for (let i = 0; i < attribute.count; i++)
+            seen.add(
+              '#' +
+                new THREE.Color(
+                  attribute.getX(i),
+                  attribute.getY(i),
+                  attribute.getZ(i),
+                ).getHexString(),
+            );
+        return [...seen].sort();
+      };
+      const parts = object.children.filter((child) => child.userData.part) as THREE.Mesh[];
+      const runs = object.userData.plotRuns as THREE.Group | undefined;
+      return {
+        lineColors: object.userData.styled ? colors(object.geometry) : [],
+        vertexColors: (object.material as THREE.Material & { vertexColors?: boolean }).vertexColors,
+        fills: parts
+          .filter((p) => p.userData.part === 'fill')
+          .map((p) => ({
+            triangles: p.geometry.getAttribute('position').count / 3,
+            colors: colors(p.geometry),
+            visible: p.visible,
+          })),
+        texts: parts
+          .filter((p) => p.userData.part === 'text')
+          .map((p) => ({
+            quads: p.geometry.getAttribute('position').count / 6,
+            colors: colors(p.geometry),
+          })),
+        plot: runs?.visible
+          ? (runs.children as LineSegments2[]).map((fat) => ({
+              width: fat.material.linewidth,
+              colors: colors(fat.geometry as unknown as THREE.BufferGeometry, 'instanceColorStart'),
+            }))
+          : [],
+      };
+    },
+    /** Screen position (client px) of a world point, for pointer-driven tests. */
+    screenOf(point: [number, number, number]) {
+      const r = renderer.domElement.getBoundingClientRect();
+      const v = new THREE.Vector3(...point).project(camera);
+      return { x: r.left + ((v.x + 1) / 2) * r.width, y: r.top + ((1 - v.y) / 2) * r.height };
+    },
     plotWidthOf(id: string) {
       const fat = byId.get(id)?.userData.plotLine as LineSegments2 | undefined;
       return fat?.material.linewidth;
@@ -963,6 +1232,7 @@ export function createViewport(
       renderer.domElement.removeEventListener('pointercancel', cancel);
       renderer.domElement.removeEventListener('webglcontextrestored', contextRestored);
       disposeObject(scene);
+      atlas.dispose();
       renderer.dispose();
       renderer.domElement.remove();
     },

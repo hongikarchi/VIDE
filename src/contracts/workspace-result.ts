@@ -1,6 +1,13 @@
 import { z } from 'zod';
 import { requestStateSchema, executionProgressSchema } from './workspace.ts';
 // Fields consumed by the workspace UI. Unknown host metadata is preserved for later adapters.
+// CAD per-run/per-annotation display style: resolved ACI, true colour, lineweight (mm), layer colour.
+const cadStyle = {
+  ci: z.number().int().min(1).max(255).optional(),
+  rgb: z.string().optional(),
+  lw: z.number().nonnegative().optional(),
+  layer: z.string().optional(),
+};
 const scene = z
   .object({
     id: z.string(),
@@ -22,6 +29,35 @@ const scene = z
     materialColor: z.string().nullish(),
     colorIndex: z.number().int().min(0).max(256).optional(),
     lineWeight: z.number().nonnegative().optional(),
+    segmentStyles: z
+      .array(z.object({ n: z.number().int().nonnegative(), ...cadStyle }).passthrough())
+      .max(200000)
+      .optional(),
+    fills: z
+      .array(
+        z
+          .object({ loops: z.array(z.array(z.number()).max(300000)).max(10000), ...cadStyle })
+          .passthrough(),
+      )
+      .max(10000)
+      .optional(),
+    texts: z
+      .array(
+        z
+          .object({
+            s: z.string().max(10000),
+            p: z.array(z.number()).length(3),
+            h: z.number().nonnegative(),
+            r: z.number(),
+            wf: z.number().positive().optional(),
+            ax: z.number().int().min(0).max(2),
+            ay: z.number().int().min(0).max(3),
+            ...cadStyle,
+          })
+          .passthrough(),
+      )
+      .max(20000)
+      .optional(),
   })
   .passthrough();
 export const applicationResultSchema = z
