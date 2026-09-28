@@ -2,13 +2,21 @@
 id: VERIFY-2026-09-28-rhino-attached-sync
 title: 현재 Rhino 문서 연결·수정 위임·Live Sync 검증
 status: review
-version: 0.7
+version: 0.8
 updated: 2026-09-28
 owner: agent:codex
 related: [SPEC-01, SPEC-02, PLAN-02, H-RHINO-03, H-RHINO-05, AC-17, AC-38]
 ---
 
 # 현재 Rhino 연결 검증
+
+## 실제 구독 AI와 패널 왕복
+
+`tests/integration/rhino-attached-ai.mjs`에서 보이는 별도 Rhino 시험 문서와 제품 브라우저, 실제 ChatGPT 구독 CLI를 연결했다. 읽기 Sync 결과에서 명시적 연결 Rhino 수정 요청을 시작하고, AI가 RhinoCommon 작업 사본의 박스 높이를 4m→5m로 바꾼 뒤 같은 시험 Rhino 문서에 적용했다. 후속 취득에서 2×3×5m·30m³, 동일 네이티브 ID, 원본 mm 단위를 확인했고 브라우저 재열기에서도 모델을 복원했다. `.vide/rhino-attached-ai/6c222a05-76a3-480e-8741-8efe6a9feb2a/result.json`과 `ai-roundtrip-reloaded.png`가 증거다. 사용자 건축 파일은 이 수정 시험에 사용하지 않았다.
+
+첫 패널 로드는 어셈블리 GUID 누락으로 실패했다. 플러그인 클래스와 같은 어셈블리 GUID를 지정한 후 패널 로드와 위 왕복 시험을 통과했다. 시험 프로세스는 종료했다. UI/서버 타입 검사와 자동 시험 241개도 통과했다. 직접 표시 기준에서 AI 실행 직전에 작업 사본을 준비하며 원본 변경 시 AI 호출 전 중단하는 회귀를 포함한다. AI 답변이 원본 반영 전에 작성됐다는 점을 최종 적용 상태와 함께 표시한다.
+
+사용자 창의 기존 RHP가 잠겨 기본 빌드 경로 교체는 실패했으며, 검증 빌드는 `.vide/build/rhino-panel/bin/VIDE.Worker.rhp`에 준비돼 있다. 사용자 저장·Rhino 종료 후 배치와 실제 패널 사용 확인이 남아 있다. 패널의 인증 복구 버튼은 구현했으나 사용자 Aside의 인증 복구까지 완료했다고 집계하지 않는다. 복잡한 실제 건축 문서의 전체 AI 편집과 CAD 확대는 아직 별도다.
 
 기준은 SPEC-01.9·SPEC-02.16과 PLAN-02 현재 연결 작업이다. 현재 설치 Rhino 8.34에서 별도 소유 시험 프로세스의 합성 문서를 사용했다. 사용자 작업 문서는 모델 수정 시험에 사용하지 않았다.
 

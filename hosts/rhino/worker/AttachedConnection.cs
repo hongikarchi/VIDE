@@ -24,6 +24,15 @@ internal sealed class AttachedConnection : IDisposable
     private bool live, dirty, disposed;
     private DateTime changedAt;
     internal uint DocumentId => document.RuntimeSerialNumber;
+    internal bool Live => live;
+    internal DateTime? LastDisplayRead { get; private set; }
+    internal static void Connect(RhinoDoc doc)
+    {
+        if (doc.IsHeadless) throw new InvalidOperationException("A visible Rhino document is required.");
+        if (Current?.DocumentId == doc.RuntimeSerialNumber) return;
+        Current?.Dispose(); Current = null;
+        Current = new AttachedConnection(doc);
+    }
     internal AttachedConnection(RhinoDoc doc)
     {
         document = doc;
@@ -79,7 +88,9 @@ internal sealed class AttachedConnection : IDisposable
             if (request.TryGetProperty("revision", out var basis)) {
                 if (basis.GetInt32() != readRevision) throw new InvalidOperationException("SOURCE_CHANGED");
             } else if (offset > 0) throw new InvalidOperationException("STALE_REFERENCE");
-            return WorkerScene.Export(document, offset: offset, limit: limit, revision: readRevision, displayOnly: true);
+            var result = WorkerScene.Export(document, offset: offset, limit: limit, revision: readRevision, displayOnly: true);
+            LastDisplayRead = DateTime.Now;
+            return result;
         }
         return editor.Dispatch(request);
     }
@@ -114,9 +125,7 @@ public sealed class ConnectCommand : Command
     protected override Result RunCommand(RhinoDoc doc, RunMode mode)
     {
         if (doc.IsHeadless) return Result.Failure;
-        if (AttachedConnection.Current?.DocumentId == doc.RuntimeSerialNumber) return Result.Success;
-        AttachedConnection.Current?.Dispose(); AttachedConnection.Current = null;
-        AttachedConnection.Current = new AttachedConnection(doc);
+        AttachedConnection.Connect(doc);
         RhinoApp.WriteLine("VIDE connected to this document. In VIDE, select this document and Sync. VIDE never saves or closes this Rhino window.");
         return Result.Success;
     }

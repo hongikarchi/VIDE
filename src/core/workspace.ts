@@ -160,7 +160,7 @@ export class Workspace {
       if (
         !source.success ||
         baseline?.state !== 'succeeded' ||
-        !baseline.result?.verified ||
+        (!baseline.result?.verified && baseline.result?.displayOnly !== true) ||
         baseline.result.executionMode !== 'sdk'
       )
         fail('STALE_REFERENCE');

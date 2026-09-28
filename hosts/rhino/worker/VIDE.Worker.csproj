@@ -9,6 +9,7 @@
     <OutputPath>../../../.vide/build/rhino-worker/bin/</OutputPath>
   </PropertyGroup>
   <ItemGroup>
+    <Reference Include="Eto"><HintPath>$(RhinoSystem)\Eto.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="RhinoCommon"><HintPath>$(RhinoSystem)\RhinoCommon.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="Microsoft.CodeAnalysis"><HintPath>$(RhinoSystem)\Microsoft.CodeAnalysis.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="Microsoft.CodeAnalysis.CSharp"><HintPath>$(RhinoSystem)\Microsoft.CodeAnalysis.CSharp.dll</HintPath><Private>false</Private></Reference>

@@ -100,6 +100,51 @@ test('SDK review cannot acquire execute and closes its owned worker', () =>
     assert.equal(result.hostExecuted, false);
     assert.deepEqual(counts(), { stopped: 1, revoked: 1, calls: 0 });
   }));
+test('display-only basis prepares a native copy before AI and stops on changed source', () =>
+  fixture(async ({ sdk, task, launches, scope }) => {
+    const sourceDocument = {
+      instance: '1:2',
+      documentId: 7,
+      documentHash: 'before',
+      connection: 'attached-editor',
+    };
+    const previous = {
+      id: 'display',
+      result: { displayOnly: true, verified: false, sourceDocument },
+    };
+    let prepared = 0;
+    sdk.editors.inspect = async () => ({ documentHash: 'before' });
+    sdk.captureEditor = async () => {
+      prepared++;
+      return { filename: 'prepared.3dm', fileHash: 'a'.repeat(64), sourceDocument, verified: true };
+    };
+    await sdk.run({
+      ...task,
+      previous,
+      provider: () => ({
+        run: async () => {
+          assert.equal(prepared, 1);
+          assert.equal(launches.at(-1).source.filename, 'prepared.3dm');
+          await scope().handlers.query();
+          return { text: 'Reviewed' };
+        },
+      }),
+    });
+    sdk.editors.inspect = async () => ({ documentHash: 'changed' });
+    await assert.rejects(
+      sdk.run({
+        ...task,
+        previous,
+        provider: () => {
+          throw Error('must not reach AI');
+        },
+      }),
+      { code: 'SOURCE_CHANGED' },
+    );
+    assert.equal(prepared, 1);
+    assert.equal(previous.result.displayOnly, true);
+  }));
+
 test('Rhino agent sees a bounded write summary while final candidate retains every change', () =>
   fixture(async ({ sdk, task, scope, worker }) => {
     const objects = Array.from({ length: 10000 }, (_, i) => ({ id: String(i) }));

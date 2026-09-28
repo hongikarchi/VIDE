@@ -69,6 +69,20 @@ test('attached authority requires a verified attached basis and cannot be broade
   });
 });
 
+test('explicit attached edit accepts a display basis for deferred native preparation', (t) => {
+  const f = setup(t);
+  f.workspace.update(f.project.id, 'edit', 'cancelled', null);
+  f.workspace.update(f.project.id, 'basis', 'succeeded', {
+    ...f.candidate,
+    verified: false,
+    displayOnly: true,
+  });
+  assert.equal(
+    f.workspace.submit(f.project.id, { ...f.request.input, id: 'from-display' }).created,
+    true,
+  );
+});
+
 for (const scenario of [
   'success',
   'conflict',

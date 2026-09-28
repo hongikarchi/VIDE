@@ -2,7 +2,7 @@
 id: PLAN
 title: VIDE 실행 로드맵
 status: review
-version: 0.208
+version: 0.209
 updated: 2026-09-28
 owner: agent:codex
 related: [ARCH-01, PLAN-02, PLAN-03, SPEC-00, SPEC-01, SPEC-02, SPEC-03, SPEC-04, SPEC-05]
@@ -74,6 +74,8 @@ T-001~018의 번호·지원 증거는 유지한다. 각 티켓의 현재 결과�
 현재 소스와 §6.5의 증거에서 이어간다. 과거 구현 일지는 [이행 기록](../tdd/VERIFY-2026-09-20-implementation-history.md)으로 옮겼다. 과거의 제한 JSON·MCP·ESM 설명을 현재 설계로 사용하지 않는다.
 
 ### 6.5 현재 티켓 현황과 이어갈 위치
+
+**오늘의 연결 왕복:** Rhino 문서별 패널을 구현했고 별도 시험 문서에서 실제 ChatGPT 구독 CLI → RhinoCommon 수정 → 같은 Rhino 반영 → VIDE 갱신·재열기를 통과했다(4m→5m, 동일 ID, mm 보존). 사용자 창에 로드된 RHP 교체는 파일 잠금 때문에 저장·Rhino 종료 대기다. 검증 빌드 배치와 사용자 패널의 VIDE 열기/인증 복구가 다음 행동이다. 근거·지원 범위는 [연결 검수](../tdd/VERIFY-2026-09-28-rhino-attached-sync.md). 현재 사용자 건축 문서의 일반 편집·CAD는 완료로 집계하지 않는다.
 
 2026-09-28 프런트 조작 개선은 [PLAN-04 검수](../tdd/VERIFY-2026-09-28-workspace-polish.md)를 통과했다. 연결 오류 수정과 블록 정의 보존·변경 감지는 각각 자동/실제 합성 Rhino 회귀로 확인했으며, 10,713개 합성 혼합 모델의 분할 표시 취득도 검증했다. 다음은 PLAN-02의 실제 작업 문서 재연결/읽기 Sync다. 사용자 저장·종료 후 새 빌드를 준비해 파일을 다시 열었고 연결 명령 수동 실행을 기다린다.
 

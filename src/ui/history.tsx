@@ -313,6 +313,11 @@ function Card({
                       ? '중단 확인 중'
                       : stateLabels[request.state] || request.state}
           </small>
+          {result?.applicationState === 'succeeded' ? (
+            <p>
+              연결 Rhino에 반영했습니다. 아래 AI 답변은 원본 반영 전에 작성된 작업 사본 설명입니다.
+            </p>
+          ) : null}
           {result?.text ? <p>{result.text}</p> : null}
           {result?.targetResults?.map((saved) => {
             const current = related.get(saved.requestId);

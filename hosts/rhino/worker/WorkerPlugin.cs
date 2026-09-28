@@ -9,10 +9,19 @@ using Rhino;
 using Rhino.Commands;
 using Rhino.PlugIns;
 
+[assembly: Guid("6BDE756C-CB1F-45BC-90FA-784C098C2C38")]
+
 namespace Vide.Worker;
 
 [Guid("6BDE756C-CB1F-45BC-90FA-784C098C2C38")]
-public sealed class WorkerPlugin : PlugIn { }
+public sealed class WorkerPlugin : PlugIn
+{
+    protected override LoadReturnCode OnLoad(ref string errorMessage)
+    {
+        Rhino.UI.Panels.RegisterPanel(this, typeof(ConnectionPanel), "VIDE", GetType().Assembly, string.Empty, Rhino.UI.PanelType.PerDoc);
+        return LoadReturnCode.Success;
+    }
+}
 
 public sealed class WorkerCommand : Command
 {
