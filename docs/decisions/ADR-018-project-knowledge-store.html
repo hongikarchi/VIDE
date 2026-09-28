@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="description" content="PLAN-08 — 프로젝트 지식 DB"><meta name="generator" content="tools/docs/build.mjs — generated from docs/plans/PLAN-08-project-knowledge.md; do not edit"><title>VIDE · 프로젝트 지식 DB — 수집·정리·질의·크리틱·팀 공유 단계 계획</title><style>
+<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="description" content="ADR-018 · 프로젝트 지식은 쌓기만 하는 기록으로 저장하고, 지식만 팀이 함께 쌓는다"><meta name="generator" content="tools/docs/build.mjs — generated from docs/decisions/ADR-018-project-knowledge-store.md; do not edit"><title>VIDE · 프로젝트 지식의 저장 구조와 팀 공동 축적</title><style>
 :root{--ink:#292c2d;--muted:#626b6e;--line:#e1e3e1;--soft:#f5f5f1;--coral:#d97660;--paper:#fff;--font:"Pretendard","Noto Sans KR","Malgun Gothic",Arial,sans-serif}
 *{box-sizing:border-box}html{scroll-behavior:smooth;scroll-padding-top:92px}body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--font);letter-spacing:-.025em}a{color:inherit;text-underline-offset:4px}button,input,textarea,select{font:inherit;color:inherit}button{cursor:pointer;border:1px solid var(--line);border-radius:4px;background:var(--paper);padding:10px 15px;line-height:1.3}button:hover{background:var(--soft)}button:disabled{cursor:default;opacity:.6}button.primary{background:var(--ink);color:#fff;border-color:var(--ink)}button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible{outline:3px solid var(--coral);outline-offset:3px}textarea{resize:vertical}::selection{background:#f2d7ce}[hidden]{display:none!important}
 .skip{position:fixed;top:-80px;left:20px;z-index:100;background:white;padding:12px}.skip:focus{top:10px}
@@ -67,140 +67,74 @@ body.review-accepted ins{background:none;color:inherit;border:0;padding:0}
 body.review-accepted .toc-links a[data-reviews]::after{display:none}
 @media print{blockquote.review{break-inside:avoid;background:#eef3fc!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}ins,del{-webkit-print-color-adjust:exact;print-color-adjust:exact}.review-select{display:none}}
 </style></head><body>
-<!-- GENERATED FILE — source: docs/plans/PLAN-08-project-knowledge.md — run: npm --prefix tools/docs run build -->
+<!-- GENERATED FILE — source: docs/decisions/ADR-018-project-knowledge-store.md — run: npm --prefix tools/docs run build -->
 <a class="skip" href="#reading-main">본문으로 이동</a>
-<header class="topbar"><a class="brand" href="../../index.html" aria-label="VIDE 문서 모음"><b>V.</b><span>VIDE</span></a><nav class="doc-tabs" aria-label="문서 선택"><a class="doc-tab" href="../PRD.html">PRD</a><a class="doc-tab" href="../specs/README.html">SPEC</a><a class="doc-tab" href="../../Design.html">Design</a><a class="doc-tab" href="../architecture/ARCH-01-system.html">기술 설계</a><a class="doc-tab" href="PLAN.html">PLAN</a><a class="doc-tab" href="../../DEVELOPMENT_GUIDE.html">개발 가이드</a><a class="doc-tab" href="../../AI.html">AI 규약</a></nav><div class="top-actions"><button id="source-download" title="현재 문서의 Markdown 원문 저장">원문 ↓</button><button id="print-doc" title="현재 문서 인쇄">인쇄</button></div></header>
-<div class="layout"><aside class="toc-shell" id="toc-shell" aria-label="현재 문서의 목차"><div class="toc-title"><strong>CONTENTS</strong><span id="toc-count"></span><button id="toc-toggle" aria-expanded="false" aria-controls="toc-body">목차 열기</button></div><div class="toc-body" id="toc-body"><input class="toc-search" id="toc-search" type="search" placeholder="장 제목으로 찾기" aria-label="현재 문서 목차 검색"><p class="toc-hint" id="nav-hint" role="status">장 제목으로 찾아갑니다.</p><nav class="toc-links" id="toc-links" aria-label="본문 장 이동"></nav><div class="toc-next">다음 작성할 문서<br><b>다음 작업 · PLAN §6.5</b><br>현재 단계와 작업별 계획을 확인한 뒤 해당 범위에서 재개</div></div></aside><main id="reading-main" tabindex="-1"><article id="plan-08-project-knowledge" class="document"><header class="doc-hero"><div class="hero-label"><span class="eyebrow">PLAN</span><span><span class="pill">DRAFT · v0.2</span><span class="pill">5 CHAPTERS</span></span></div><h1 tabindex="-1">PLAN-08 — 프로젝트 지식 DB</h1><div class="hero-meta">
-<p>2026-09-28~29 사용자 요청의 단계 계획이다. 요청 내용은 메일·첨부·회의록을 모아 누가 무엇을 말했는지, 주요 쟁점, 진행 경과를 DB로 정리하고, 질문 답변·도면/모델 크리틱에 쓰며, 여러 팀원이 함께 쌓는 것까지 목표로 한다. 원본은 회사 서버에 있을 가능성이 높다. 파악과 선택 근거는 <a href="../research/RESEARCH-06-project-knowledge.html">RESEARCH-06</a>, 저장·공유 구조의 결정 초안은 <a href="../decisions/ADR-018-project-knowledge-store.html">ADR-018</a>이 소유한다.</p>
-</div></header><section class="doc-section" id="plan-08-project-knowledge-section-x0"><h2><span aria-hidden="true" class="section-num">00 /</span> 착수 조건</h2>
+<header class="topbar"><a class="brand" href="../../index.html" aria-label="VIDE 문서 모음"><b>V.</b><span>VIDE</span></a><nav class="doc-tabs" aria-label="문서 선택"><a class="doc-tab" href="../PRD.html">PRD</a><a class="doc-tab" href="../specs/README.html">SPEC</a><a class="doc-tab" href="../../Design.html">Design</a><a class="doc-tab" href="../architecture/ARCH-01-system.html">기술 설계</a><a class="doc-tab" href="../plans/PLAN.html">PLAN</a><a class="doc-tab" href="../../DEVELOPMENT_GUIDE.html">개발 가이드</a><a class="doc-tab" href="../../AI.html">AI 규약</a></nav><div class="top-actions"><button id="source-download" title="현재 문서의 Markdown 원문 저장">원문 ↓</button><button id="print-doc" title="현재 문서 인쇄">인쇄</button></div></header>
+<div class="layout"><aside class="toc-shell" id="toc-shell" aria-label="현재 문서의 목차"><div class="toc-title"><strong>CONTENTS</strong><span id="toc-count"></span><button id="toc-toggle" aria-expanded="false" aria-controls="toc-body">목차 열기</button></div><div class="toc-body" id="toc-body"><input class="toc-search" id="toc-search" type="search" placeholder="장 제목으로 찾기" aria-label="현재 문서 목차 검색"><p class="toc-hint" id="nav-hint" role="status">장 제목으로 찾아갑니다.</p><nav class="toc-links" id="toc-links" aria-label="본문 장 이동"></nav><div class="toc-next">다음 작성할 문서<br><b>다음 작업 · PLAN §6.5</b><br>현재 단계와 작업별 계획을 확인한 뒤 해당 범위에서 재개</div></div></aside><main id="reading-main" tabindex="-1"><article id="adr-018-project-knowledge-store" class="document"><header class="doc-hero"><div class="hero-label"><span class="eyebrow">DECISION RECORD</span><span><span class="pill">DRAFT · v0.1</span><span class="pill">4 CHAPTERS</span></span></div><h1 tabindex="-1">ADR-018 · 프로젝트 지식은 쌓기만 하는 기록으로 저장하고, 지식만 팀이 함께 쌓는다</h1><div class="hero-meta">
+<p><strong>상태: 초안. 사용자 결정 전이며 구현 근거가 아니다.</strong> PRD C-02(첨삭 R-74)가 채택될 때 함께 결정한다. 조사와 비교는 <a href="../research/RESEARCH-06-project-knowledge.html">RESEARCH-06</a>, 단계는 <a href="../plans/PLAN-08-project-knowledge.html">PLAN-08</a>을 따른다.</p>
+</div></header><section class="doc-section" id="adr-018-project-knowledge-store-section-1"><h2><span aria-hidden="true" class="section-num">01 /</span> 결정할 것</h2>
+<ol>
+<li>협의가 계속 바뀌고 기하 판단이 섞인 프로젝트 지식을 어떤 구조로 기록하는가.</li>
+<li>로컬 저장 엔진은 무엇인가.</li>
+<li>여러 팀원이 함께 자료를 쌓는 것(공동 축적)을 허용하는가. 허용한다면 PRD §14의 “프로젝트별 한 로컬 작업환경이 호스트 제어·원본 반영, 여러 PC 공동 제어는 후속” 원칙과 어떻게 구분하는가.</li>
+<li>팀 공용 원본을 어디에 두는가. 원본 자료(회사 서버)는 어떻게 다루는가.</li>
+</ol>
+</section><section class="doc-section" id="adr-018-project-knowledge-store-section-2"><h2><span aria-hidden="true" class="section-num">02 /</span> 제안</h2>
+<h3>2.1 기록 구조</h3>
 <ul>
-<li><strong>제품 결정:</strong> PRD §4.4 C-02 제안(첨삭 R-74)이 채택돼야 한다. 채택 전에는 구현하지 않는다.</li>
-<li><strong>구조 결정:</strong> ADR-018의 공동 축적 예외(지식 기록만 여러 PC)와 팀 공용 원본 위치. K5 착수 전까지 정하면 되고, K0~K4는 로컬만으로 진행할 수 있다.</li>
-<li><strong>RESEARCH-06 §12 결정:</strong> 회사 정책(외부 저장·외부 AI 처리), 역할과 공개 범위, 자료 폴더, 표본 자료.</li>
-<li><strong>동작 계약:</strong> 채택되면 K0 결과로 새 SPEC(가칭 SPEC-06 프로젝트 지식)을 먼저 쓴다. 출처·역할·상태 규칙은 SPEC-03.4를 확장한다.</li>
-<li><strong>진행 중 작업과의 관계:</strong> 현재 우선순위(Rhino·CAD 연결 왕복과 Sync 성능)를 막지 않는다. 아래 T-025~031은 제안 번호이며 채택 뒤 마스터 PLAN에 등록한다.</li>
+<li>근거 원문은 고치지 않는다.</li>
+<li>진술·확정·대체·관측은 고유 ID·작성자·기록 시각을 가진 사건으로 쌓기만 한다.</li>
+<li>진술은 유효 시간과 기록 시간의 두 시간축을 가진다.</li>
+<li>대상·관계는 BOT·IFC 어휘를 빌린 속성 그래프(노드·연결 표)로 둔다.</li>
+<li>기하는 형상 대신 모델 시점과 연결된 계산 관측으로 기록하고, 요구는 구조화된 조건으로도 저장한다.</li>
 </ul>
-</section><section class="doc-section" id="plan-08-project-knowledge-section-x1"><h2><span aria-hidden="true" class="section-num">01 /</span> 처음부터 지킬 기록 구조</h2>
-<p>K1부터 아래 규칙을 지키면 K5에서 데이터를 옮기지 않고 공동 축적으로 넓힐 수 있다. 물리 스키마는 ARCH-01에 정한다.</p>
+<h3>2.2 로컬 엔진</h3>
+<p>각 PC는 기존 SQLite(FTS5·R*Tree·JSON)를 쓴다. 그래프 DB·RDF·시간 DB·벡터 DB는 도입하지 않고, 부족함이 측정될 때 다시 검토한다.</p>
+<h3>2.3 공동 축적 예외</h3>
+<p>지식 기록(자료 등록·진술·확정)은 같은 프로젝트의 여러 PC가 함께 쓴다. <strong>호스트 제어와 원본 반영은 기존대로 한 작업환경만</strong> 한다(AC-37 유지). 지식 공동 축적은 호스트 공동 제어가 아니다.</p>
+<h3>2.4 팀 공용 원본과 동기화</h3>
+<p>팀 공용 원본은 사건을 모으는 중앙 저장소다. 각 PC는 로컬 사본과 사건 단위로 동기화한다. AI 정리·질문은 각자 PC의 구독 CLI로 하고, 서버 쪽 AI 실행은 두지 않는다. 동기화 방식은 저장소와 분리한다.</p>
+<h3>2.5 원본 자료</h3>
+<p>원본은 회사 서버에 그대로 둔다. VIDE는 복사·업로드하지 않고 위치 참조·내용 해시·추출 텍스트·근거 구간만 저장한다. 자료마다 공개 범위와 AI 전송 허용을 둔다.</p>
+</section><section class="doc-section" id="adr-018-project-knowledge-store-section-3"><h2><span aria-hidden="true" class="section-num">03 /</span> 팀 공용 원본 위치 — 사용자 결정 필요</h2>
+<div aria-label="ADR 표 1" class="table-scroll" role="region" tabindex="0"><table>
+<thead>
+<tr>
+<th>선택지</th>
+<th>맞는 조건</th>
+<th>대가</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>A. 사내 팀 서버(회사 서버·NAS의 VIDE 팀 서비스 + DB)</td>
+<td>사내 서버를 운영할 수 있고 외부 저장이 부담될 때</td>
+<td>운영(설치·업데이트·백업), 사외 접속은 VPN</td>
+</tr>
+<tr>
+<td>B. Cloudflare D1 + R2(기존 공유 기반)</td>
+<td>파생 데이터(진술·인용)의 외부 저장이 허용되고 운영 부담을 줄이려 할 때</td>
+<td>외부 저장, DB당 10GB, 동기화 직접 구현</td>
+</tr>
+<tr>
+<td>C. Supabase(PostgreSQL, 서울)</td>
+<td>서버 쪽 공간·벡터 검색과 행 단위 권한이 필요할 때</td>
+<td>공유 기반 이중화, 업체 추가</td>
+</tr>
+</tbody>
+</table></div>
+<p>에이전트 제안: <strong>회사 정책 확인 전에는 A를 기본 가정으로 설계하고, 동기화를 저장소와 분리해 B로도 옮길 수 있게 한다.</strong> 원본이 이미 회사 서버에 있고 팀원이 사내망에서 일한다는 조건에 가장 맞기 때문이다. 다만 AI 정리 단계에서 원문이 외부 AI 공급자로 가므로, “외부 저장 금지”와 “외부 AI 처리 허용”은 따로 확인해야 한다.</p>
+</section><section class="doc-section" id="adr-018-project-knowledge-store-section-4"><h2><span aria-hidden="true" class="section-num">04 /</span> 결과와 한계</h2>
 <ul>
-<li>모든 기록(자료 등록, 근거 구간, 진술, 확정·기각, 대체, 별칭 합치기, 관측)은 <strong>전역 고유 ID·작성자·기록 시각을 가진 사건</strong>으로 쌓기만 한다. 수정·삭제 대신 새 사건을 남긴다.</li>
-<li>진술은 유효 시작·끝과 기록 시각의 <strong>두 시간축</strong>을 가진다.</li>
-<li>원본은 복사하지 않고 <strong>위치 참조(UNC 또는 프로젝트 루트 상대 경로) + 내용 해시</strong>로 등록한다.</li>
-<li>자료마다 <strong>공개 범위</strong>(팀 / 특정 멤버 / 나만)와 <strong>AI 전송 허용</strong>을 가진다.</li>
-<li>기하 관측은 모델 Sync/체크포인트 ID와 계산 방법을 함께 저장한다.</li>
+<li>공동 축적의 충돌은 덮어쓰기 대신 나란한 판단으로 남아, 사람이 쟁점으로 정리한다.</li>
+<li>폴더 권한을 자동으로 따라가지 않는다. 제한 자료의 진술이 공용 원본으로 퍼지지 않도록 자료별 공개 범위를 사람이 정한다.</li>
+<li>여러 사람이 같은 SQLite 파일을 공유 폴더에서 직접 쓰는 방식은 채택하지 않는다.</li>
+<li>이 결정은 C-02 채택과 역할·공개 범위 결정 없이 확정할 수 없다.</li>
 </ul>
-</section><section class="doc-section" id="plan-08-project-knowledge-section-x2"><h2><span aria-hidden="true" class="section-num">02 /</span> 단계</h2>
-<p>각 단계는 앞 단계만으로도 쓸모가 있어야 하며, 다음 단계는 앞 단계의 실제 사용 결과를 보고 조정한다.</p>
-<h3>K0 · 표본 자료 조사(SPIKE) — T-025 제안</h3>
-<ul>
-<li><strong>목적:</strong> 실제 프로젝트 자료 1세트(사본, <code>.vide/knowledge-sample/</code>)의 형식 분포와 추출 가능성을 잰다. 회사 서버 원본은 사용자가 고른 사본만 쓴다.</li>
-<li><strong>내용:</strong>
-<ul>
-<li>형식별 개수·크기, 스캔 PDF 비율, 메일 형식(.eml/.msg), HWP 비중</li>
-<li>도면·모델의 문자 정보량, 회사 서버 경로 구조</li>
-<li>소표본(메일 20통·PDF 5개·회의록 3건 내외)으로 AI 진술 추출을 시험하고, 인용 일치율과 사람 판단과의 차이를 기록한다.</li>
-</ul>
-</li>
-<li><strong>산출:</strong> <code>docs/tdd/SPIKE-YYYY-MM-DD-project-knowledge.md</code>, 형식별 파서 선택, SPEC-06 초안 입력.</li>
-<li><strong>완료 기준:</strong> 형식별 “결정적 추출 가능 / AI 판독 필요 / 제외” 판정표와 추출 시험 결과가 기록된다.</li>
-</ul>
-<h3>K1 · 자료함과 원문 검색 — T-026 제안</h3>
-<ul>
-<li><strong>변경 범위:</strong>
-<ul>
-<li>위 기록 구조의 Source·Excerpt 저장(SQLite 마이그레이션)</li>
-<li>회사 서버 폴더 지정·감시(읽기 전용, 제외 규칙, 수집 전 확인)와 끌어 놓기</li>
-<li>형식별 텍스트 추출기(EML·PDF 텍스트·PPTX·DOCX·XLSX, K0 판정에 따라 HWP)</li>
-<li>FTS5 trigram 검색, 자료함 UI(목록·검색·원문 구간 열람·원본 열기)</li>
-</ul>
-</li>
-<li><strong>AI 사용:</strong> 없음.</li>
-<li><strong>검증:</strong>
-<ul>
-<li>형식별 추출 단위 시험(쪽·슬라이드·메일 헤더 보존)</li>
-<li>같은 파일 재수집·이동·이름 변경 시 해시로 중복 없음</li>
-<li>다른 드라이브 문자로 같은 자료 인식, 한국어 부분 검색</li>
-<li>원문 구간 열람 브라우저 시험, 원본 폴더에 쓰기 없음, 백업/복구 포함, 비밀값 검사</li>
-</ul>
-</li>
-<li><strong>완료 기준:</strong> 표본 자료에서 “기둥 간격”, “회의실” 같은 검색으로 해당 메일·쪽·슬라이드를 찾아 원문을 연다.</li>
-</ul>
-<h3>K2 · 진술·쟁점 정리와 검토 큐 — T-027 제안</h3>
-<ul>
-<li><strong>변경 범위:</strong>
-<ul>
-<li>Party·Subject·Statement·Issue·Milestone·Episode 저장</li>
-<li>AI 추출 작업: 구독 CLI, 도구 없는 JSON, 근거 구간 ID·원문 인용 필수, 대조 실패 시 폐기</li>
-<li>자료별 AI 전송 확인(FR-18), 진행률·중단·재개</li>
-<li>검토 큐(확정·수정·기각·별칭 합치기)와 대체·모순 후보 표시</li>
-<li>프로젝트 정보 탭: 브리핑·쟁점 표·타임라인·주체 목록</li>
-</ul>
-</li>
-<li><strong>검증:</strong> 가짜 인용·다른 자료 인용 거절, 확정 전 진술이 사실로 표시되지 않음, 대체가 이전 진술을 지우지 않음, 전송 거부 자료가 AI 입력에 들어가지 않음, 중단 뒤 재개 시 중복 없음, “특정 날짜 기준” 조회가 당시 유효 진술만 반환.</li>
-<li><strong>완료 기준:</strong> 표본 자료에서 주요 결정·요청·쟁점이 근거와 함께 목록화되고, 확정한 항목만 “확정”으로 보인다. 품질 기준은 K0 결과로 SPEC-06에서 정한다.</li>
-</ul>
-<h3>K3 · 질의응답과 요청 문맥 제안 — T-028 제안</h3>
-<ul>
-<li><strong>변경 범위:</strong>
-<ul>
-<li>AI 읽기 전용 MCP 도구: 자료 검색, 진술·쟁점 조회, 대상별 근거, 타임라인, 기준 날짜 조회</li>
-<li>채팅 답변의 인용 표시와 원문 열람</li>
-<li>모델 수정 요청 시 관련 필수조건·결정 칩 제안(자동 첨부 아님)</li>
-<li>Inspector에 객체의 연결 진술과 연결·끊김 표시</li>
-</ul>
-</li>
-<li><strong>검증:</strong> 근거 없는 질문에 “자료에 없음”, 대체된 결정보다 최신 결정을 날짜와 함께 답함, 다른 프로젝트·비공개 자료 접근 불가, 기존 AI 작업 권한이 넓어지지 않음.</li>
-<li><strong>완료 기준:</strong> 사용자가 고른 질문 목록에 인용이 붙은 답을 받고, 근거를 원문에서 확인한다.</li>
-</ul>
-<h3>K4 · 구조화된 조건과 크리틱 — T-029 제안</h3>
-<ul>
-<li><strong>변경 범위:</strong>
-<ul>
-<li>요구 진술의 구조화된 조건(대상·항목·조건·단위)과 확정</li>
-<li>모델 시점별 기하 관측(기본 집계 FR-22 재사용)</li>
-<li>조건-관측 대조로 쟁점 생성(AI가 숫자를 추측하지 않음), 시각 판단은 뷰포트 캡처</li>
-<li>결과는 “AI 추정” 쟁점으로 객체에 연결하고 채택·기각. 법규 해석은 FR-21로 넘긴다.</li>
-</ul>
-</li>
-<li><strong>검증:</strong> 요구와 어긋나게 만든 합성 모델에서 해당 객체·근거를 짚는지, 맞는 모델에서의 거짓 지적 비율, 모델 변경 시 관측이 오래됨으로 바뀌는지, 크리틱이 원본을 수정하지 않는지.</li>
-<li><strong>완료 기준:</strong> 대표 과업 수준의 모델 1건에서 채택할 만한 지적과 거짓 지적의 비율을 기록하고, 사용자가 계속 쓸지 판단한다.</li>
-</ul>
-<h3>K5 · 팀 공동 축적 — T-030 제안</h3>
-<ul>
-<li><strong>선행:</strong> ADR-018 승인(공동 축적 예외, 팀 공용 원본 위치: 사내 팀 서버 / D1 / Supabase), 역할·공개 범위 결정.</li>
-<li><strong>변경 범위:</strong>
-<ul>
-<li>사건 동기화(모르는 사건 가져오기·내 사건 보내기, 재시도 멱등)</li>
-<li>팀 공용 원본 서비스(선택한 위치), 멤버십·역할(관리자·편집·열람·외부)과 확정 권한</li>
-<li>자료별 공개 범위 적용, 동기화 상태·충돌(나란한 판단) 표시</li>
-<li>원본 파일은 업로드하지 않고, 다른 팀원이 원문을 열 때는 회사 서버 경로 사용</li>
-</ul>
-</li>
-<li><strong>검증:</strong>
-<ul>
-<li>두 PC가 오프라인에서 각자 기록한 뒤 동기화하면 양쪽 결과가 같음</li>
-<li>같은 자료를 두 사람이 넣어도 한 번만 저장, 비공개 자료의 진술이 다른 멤버에게 가지 않음</li>
-<li>권한 없는 확정 거절, 동기화 중단·재시작에도 중복 없음</li>
-<li>호스트 제어는 여전히 한 작업환경만 가능(AC-37)</li>
-</ul>
-</li>
-<li><strong>완료 기준:</strong> 2~3명이 같은 프로젝트에 자료를 넣고 확정한 결과를 서로의 VIDE에서 질문·조회한다.</li>
-</ul>
-<h3>K6 · (선택) 관계 보기</h3>
-<p>K2~K5의 표·타임라인·인용으로 부족하다는 실제 근거가 생길 때만 Obsidian 폴더 한 방향 내보내기나 한 쟁점 중심의 국소 그래프를 추가한다. 전체 그래프는 만들지 않는다. — T-031 제안</p>
-</section><section class="doc-section" id="plan-08-project-knowledge-section-x3"><h2><span aria-hidden="true" class="section-num">03 /</span> 기술 선택(초안)</h2>
-<ul>
-<li><strong>로컬:</strong> 기존 SQLite에 테이블 추가, FTS5 trigram, R*Tree 공간 색인, JSON. 벡터 검색은 부족함이 측정될 때 sqlite-vec(로컬 임베딩 모델 필요).</li>
-<li><strong>팀 공용 원본:</strong> ADR-018. 동기화 방식은 저장소와 분리해 사내 팀 서버·D1·PostgreSQL 어느 쪽으로도 옮길 수 있게 한다.</li>
-<li><strong>추출기:</strong> 표준 형식은 가벼운 파서 의존성을 추가한다. 스캔 PDF·이미지 판독은 AI 판독 선택 기능. 새 의존성은 PLAN-03의 추적·검사 규칙을 따른다.</li>
-<li><strong>AI:</strong> 각자 PC의 구독 CLI. 정리는 도구 없는 JSON 추출, 질의·크리틱은 읽기 전용 MCP 도구. 서버 쪽 AI 실행은 하지 않는다.</li>
-</ul>
-</section><section class="doc-section" id="plan-08-project-knowledge-section-x4"><h2><span aria-hidden="true" class="section-num">04 /</span> 비목표</h2>
-<p>문서 관리·결재·버전 관리 시스템, 메일 클라이언트, 녹음 전사(STT), 법규 자동 판정, 전체 관계 그래프, 사용자 확정 없는 결정 자동 확정, 원본 파일의 클라우드 업로드, 같은 프로젝트의 호스트 공동 제어.</p>
 </section><footer class="doc-footer"><span>VIDE / PLANNING DOCUMENTS</span><span>문서 열람용 · 실제 CAD/BIM 지원은 구현·검증 후 선언</span></footer></article></main></div>
 <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
-<script id="source-data" type="application/json">{"plan-08-project-knowledge":{"label":"프로젝트 지식 DB — 수집·정리·질의·크리틱·팀 공유 단계 계획","file":"PLAN-08-project-knowledge.md","markdown":"---\nid: PLAN-08\ntitle: 프로젝트 지식 DB — 수집·정리·질의·크리틱·팀 공유 단계 계획\nstatus: draft\nversion: 0.2\nupdated: 2026-09-29\nowner: agent:claude\nrelated: [RESEARCH-06, ADR-018, PRD, FR-08, FR-09, FR-18, FR-21, FR-22, SPEC-03, ARCH-01, AC-12, AC-14, AC-30, AC-37]\n---\n\n# PLAN-08 — 프로젝트 지식 DB\n\n2026-09-28~29 사용자 요청의 단계 계획이다. 요청 내용은 메일·첨부·회의록을 모아 누가 무엇을 말했는지, 주요 쟁점, 진행 경과를 DB로 정리하고, 질문 답변·도면/모델 크리틱에 쓰며, 여러 팀원이 함께 쌓는 것까지 목표로 한다. 원본은 회사 서버에 있을 가능성이 높다. 파악과 선택 근거는 [RESEARCH-06](../research/RESEARCH-06-project-knowledge.md), 저장·공유 구조의 결정 초안은 [ADR-018](../decisions/ADR-018-project-knowledge-store.md)이 소유한다.\n\n## 착수 조건\n\n- **제품 결정:** PRD §4.4 C-02 제안(첨삭 R-74)이 채택돼야 한다. 채택 전에는 구현하지 않는다.\n- **구조 결정:** ADR-018의 공동 축적 예외(지식 기록만 여러 PC)와 팀 공용 원본 위치. K5 착수 전까지 정하면 되고, K0~K4는 로컬만으로 진행할 수 있다.\n- **RESEARCH-06 §12 결정:** 회사 정책(외부 저장·외부 AI 처리), 역할과 공개 범위, 자료 폴더, 표본 자료.\n- **동작 계약:** 채택되면 K0 결과로 새 SPEC(가칭 SPEC-06 프로젝트 지식)을 먼저 쓴다. 출처·역할·상태 규칙은 SPEC-03.4를 확장한다.\n- **진행 중 작업과의 관계:** 현재 우선순위(Rhino·CAD 연결 왕복과 Sync 성능)를 막지 않는다. 아래 T-025~031은 제안 번호이며 채택 뒤 마스터 PLAN에 등록한다.\n\n## 처음부터 지킬 기록 구조\n\nK1부터 아래 규칙을 지키면 K5에서 데이터를 옮기지 않고 공동 축적으로 넓힐 수 있다. 물리 스키마는 ARCH-01에 정한다.\n\n- 모든 기록(자료 등록, 근거 구간, 진술, 확정·기각, 대체, 별칭 합치기, 관측)은 **전역 고유 ID·작성자·기록 시각을 가진 사건**으로 쌓기만 한다. 수정·삭제 대신 새 사건을 남긴다.\n- 진술은 유효 시작·끝과 기록 시각의 **두 시간축**을 가진다.\n- 원본은 복사하지 않고 **위치 참조(UNC 또는 프로젝트 루트 상대 경로) + 내용 해시**로 등록한다.\n- 자료마다 **공개 범위**(팀 / 특정 멤버 / 나만)와 **AI 전송 허용**을 가진다.\n- 기하 관측은 모델 Sync/체크포인트 ID와 계산 방법을 함께 저장한다.\n\n## 단계\n\n각 단계는 앞 단계만으로도 쓸모가 있어야 하며, 다음 단계는 앞 단계의 실제 사용 결과를 보고 조정한다.\n\n### K0 · 표본 자료 조사(SPIKE) — T-025 제안\n\n- **목적:** 실제 프로젝트 자료 1세트(사본, `.vide/knowledge-sample/`)의 형식 분포와 추출 가능성을 잰다. 회사 서버 원본은 사용자가 고른 사본만 쓴다.\n- **내용:**\n  - 형식별 개수·크기, 스캔 PDF 비율, 메일 형식(.eml/.msg), HWP 비중\n  - 도면·모델의 문자 정보량, 회사 서버 경로 구조\n  - 소표본(메일 20통·PDF 5개·회의록 3건 내외)으로 AI 진술 추출을 시험하고, 인용 일치율과 사람 판단과의 차이를 기록한다.\n- **산출:** `docs/tdd/SPIKE-YYYY-MM-DD-project-knowledge.md`, 형식별 파서 선택, SPEC-06 초안 입력.\n- **완료 기준:** 형식별 “결정적 추출 가능 / AI 판독 필요 / 제외” 판정표와 추출 시험 결과가 기록된다.\n\n### K1 · 자료함과 원문 검색 — T-026 제안\n\n- **변경 범위:**\n  - 위 기록 구조의 Source·Excerpt 저장(SQLite 마이그레이션)\n  - 회사 서버 폴더 지정·감시(읽기 전용, 제외 규칙, 수집 전 확인)와 끌어 놓기\n  - 형식별 텍스트 추출기(EML·PDF 텍스트·PPTX·DOCX·XLSX, K0 판정에 따라 HWP)\n  - FTS5 trigram 검색, 자료함 UI(목록·검색·원문 구간 열람·원본 열기)\n- **AI 사용:** 없음.\n- **검증:**\n  - 형식별 추출 단위 시험(쪽·슬라이드·메일 헤더 보존)\n  - 같은 파일 재수집·이동·이름 변경 시 해시로 중복 없음\n  - 다른 드라이브 문자로 같은 자료 인식, 한국어 부분 검색\n  - 원문 구간 열람 브라우저 시험, 원본 폴더에 쓰기 없음, 백업/복구 포함, 비밀값 검사\n- **완료 기준:** 표본 자료에서 “기둥 간격”, “회의실” 같은 검색으로 해당 메일·쪽·슬라이드를 찾아 원문을 연다.\n\n### K2 · 진술·쟁점 정리와 검토 큐 — T-027 제안\n\n- **변경 범위:**\n  - Party·Subject·Statement·Issue·Milestone·Episode 저장\n  - AI 추출 작업: 구독 CLI, 도구 없는 JSON, 근거 구간 ID·원문 인용 필수, 대조 실패 시 폐기\n  - 자료별 AI 전송 확인(FR-18), 진행률·중단·재개\n  - 검토 큐(확정·수정·기각·별칭 합치기)와 대체·모순 후보 표시\n  - 프로젝트 정보 탭: 브리핑·쟁점 표·타임라인·주체 목록\n- **검증:** 가짜 인용·다른 자료 인용 거절, 확정 전 진술이 사실로 표시되지 않음, 대체가 이전 진술을 지우지 않음, 전송 거부 자료가 AI 입력에 들어가지 않음, 중단 뒤 재개 시 중복 없음, “특정 날짜 기준” 조회가 당시 유효 진술만 반환.\n- **완료 기준:** 표본 자료에서 주요 결정·요청·쟁점이 근거와 함께 목록화되고, 확정한 항목만 “확정”으로 보인다. 품질 기준은 K0 결과로 SPEC-06에서 정한다.\n\n### K3 · 질의응답과 요청 문맥 제안 — T-028 제안\n\n- **변경 범위:**\n  - AI 읽기 전용 MCP 도구: 자료 검색, 진술·쟁점 조회, 대상별 근거, 타임라인, 기준 날짜 조회\n  - 채팅 답변의 인용 표시와 원문 열람\n  - 모델 수정 요청 시 관련 필수조건·결정 칩 제안(자동 첨부 아님)\n  - Inspector에 객체의 연결 진술과 연결·끊김 표시\n- **검증:** 근거 없는 질문에 “자료에 없음”, 대체된 결정보다 최신 결정을 날짜와 함께 답함, 다른 프로젝트·비공개 자료 접근 불가, 기존 AI 작업 권한이 넓어지지 않음.\n- **완료 기준:** 사용자가 고른 질문 목록에 인용이 붙은 답을 받고, 근거를 원문에서 확인한다.\n\n### K4 · 구조화된 조건과 크리틱 — T-029 제안\n\n- **변경 범위:**\n  - 요구 진술의 구조화된 조건(대상·항목·조건·단위)과 확정\n  - 모델 시점별 기하 관측(기본 집계 FR-22 재사용)\n  - 조건-관측 대조로 쟁점 생성(AI가 숫자를 추측하지 않음), 시각 판단은 뷰포트 캡처\n  - 결과는 “AI 추정” 쟁점으로 객체에 연결하고 채택·기각. 법규 해석은 FR-21로 넘긴다.\n- **검증:** 요구와 어긋나게 만든 합성 모델에서 해당 객체·근거를 짚는지, 맞는 모델에서의 거짓 지적 비율, 모델 변경 시 관측이 오래됨으로 바뀌는지, 크리틱이 원본을 수정하지 않는지.\n- **완료 기준:** 대표 과업 수준의 모델 1건에서 채택할 만한 지적과 거짓 지적의 비율을 기록하고, 사용자가 계속 쓸지 판단한다.\n\n### K5 · 팀 공동 축적 — T-030 제안\n\n- **선행:** ADR-018 승인(공동 축적 예외, 팀 공용 원본 위치: 사내 팀 서버 / D1 / Supabase), 역할·공개 범위 결정.\n- **변경 범위:**\n  - 사건 동기화(모르는 사건 가져오기·내 사건 보내기, 재시도 멱등)\n  - 팀 공용 원본 서비스(선택한 위치), 멤버십·역할(관리자·편집·열람·외부)과 확정 권한\n  - 자료별 공개 범위 적용, 동기화 상태·충돌(나란한 판단) 표시\n  - 원본 파일은 업로드하지 않고, 다른 팀원이 원문을 열 때는 회사 서버 경로 사용\n- **검증:**\n  - 두 PC가 오프라인에서 각자 기록한 뒤 동기화하면 양쪽 결과가 같음\n  - 같은 자료를 두 사람이 넣어도 한 번만 저장, 비공개 자료의 진술이 다른 멤버에게 가지 않음\n  - 권한 없는 확정 거절, 동기화 중단·재시작에도 중복 없음\n  - 호스트 제어는 여전히 한 작업환경만 가능(AC-37)\n- **완료 기준:** 2~3명이 같은 프로젝트에 자료를 넣고 확정한 결과를 서로의 VIDE에서 질문·조회한다.\n\n### K6 · (선택) 관계 보기\n\nK2~K5의 표·타임라인·인용으로 부족하다는 실제 근거가 생길 때만 Obsidian 폴더 한 방향 내보내기나 한 쟁점 중심의 국소 그래프를 추가한다. 전체 그래프는 만들지 않는다. — T-031 제안\n\n## 기술 선택(초안)\n\n- **로컬:** 기존 SQLite에 테이블 추가, FTS5 trigram, R*Tree 공간 색인, JSON. 벡터 검색은 부족함이 측정될 때 sqlite-vec(로컬 임베딩 모델 필요).\n- **팀 공용 원본:** ADR-018. 동기화 방식은 저장소와 분리해 사내 팀 서버·D1·PostgreSQL 어느 쪽으로도 옮길 수 있게 한다.\n- **추출기:** 표준 형식은 가벼운 파서 의존성을 추가한다. 스캔 PDF·이미지 판독은 AI 판독 선택 기능. 새 의존성은 PLAN-03의 추적·검사 규칙을 따른다.\n- **AI:** 각자 PC의 구독 CLI. 정리는 도구 없는 JSON 추출, 질의·크리틱은 읽기 전용 MCP 도구. 서버 쪽 AI 실행은 하지 않는다.\n\n## 비목표\n\n문서 관리·결재·버전 관리 시스템, 메일 클라이언트, 녹음 전사(STT), 법규 자동 판정, 전체 관계 그래프, 사용자 확정 없는 결정 자동 확정, 원본 파일의 클라우드 업로드, 같은 프로젝트의 호스트 공동 제어.\n"}}</script>
-<script id="reader-config" type="application/json">{"initial":"plan-08-project-knowledge","siteTitle":"VIDE"}</script>
+<script id="source-data" type="application/json">{"adr-018-project-knowledge-store":{"label":"프로젝트 지식의 저장 구조와 팀 공동 축적","file":"ADR-018-project-knowledge-store.md","markdown":"---\nid: ADR-018\ntitle: 프로젝트 지식의 저장 구조와 팀 공동 축적\nstatus: draft\nversion: 0.1\nupdated: 2026-09-29\nowner: agent:claude\nrelated: [RESEARCH-06, PLAN-08, PRD, FR-09, FR-18, ADR-009, ADR-010, ADR-015, AC-30, AC-37]\n---\n\n# ADR-018 · 프로젝트 지식은 쌓기만 하는 기록으로 저장하고, 지식만 팀이 함께 쌓는다\n\n**상태: 초안. 사용자 결정 전이며 구현 근거가 아니다.** PRD C-02(첨삭 R-74)가 채택될 때 함께 결정한다. 조사와 비교는 [RESEARCH-06](../research/RESEARCH-06-project-knowledge.md), 단계는 [PLAN-08](../plans/PLAN-08-project-knowledge.md)을 따른다.\n\n## 1. 결정할 것\n\n1. 협의가 계속 바뀌고 기하 판단이 섞인 프로젝트 지식을 어떤 구조로 기록하는가.\n2. 로컬 저장 엔진은 무엇인가.\n3. 여러 팀원이 함께 자료를 쌓는 것(공동 축적)을 허용하는가. 허용한다면 PRD §14의 “프로젝트별 한 로컬 작업환경이 호스트 제어·원본 반영, 여러 PC 공동 제어는 후속” 원칙과 어떻게 구분하는가.\n4. 팀 공용 원본을 어디에 두는가. 원본 자료(회사 서버)는 어떻게 다루는가.\n\n## 2. 제안\n\n### 2.1 기록 구조\n\n- 근거 원문은 고치지 않는다.\n- 진술·확정·대체·관측은 고유 ID·작성자·기록 시각을 가진 사건으로 쌓기만 한다.\n- 진술은 유효 시간과 기록 시간의 두 시간축을 가진다.\n- 대상·관계는 BOT·IFC 어휘를 빌린 속성 그래프(노드·연결 표)로 둔다.\n- 기하는 형상 대신 모델 시점과 연결된 계산 관측으로 기록하고, 요구는 구조화된 조건으로도 저장한다.\n\n### 2.2 로컬 엔진\n\n각 PC는 기존 SQLite(FTS5·R*Tree·JSON)를 쓴다. 그래프 DB·RDF·시간 DB·벡터 DB는 도입하지 않고, 부족함이 측정될 때 다시 검토한다.\n\n### 2.3 공동 축적 예외\n\n지식 기록(자료 등록·진술·확정)은 같은 프로젝트의 여러 PC가 함께 쓴다. **호스트 제어와 원본 반영은 기존대로 한 작업환경만** 한다(AC-37 유지). 지식 공동 축적은 호스트 공동 제어가 아니다.\n\n### 2.4 팀 공용 원본과 동기화\n\n팀 공용 원본은 사건을 모으는 중앙 저장소다. 각 PC는 로컬 사본과 사건 단위로 동기화한다. AI 정리·질문은 각자 PC의 구독 CLI로 하고, 서버 쪽 AI 실행은 두지 않는다. 동기화 방식은 저장소와 분리한다.\n\n### 2.5 원본 자료\n\n원본은 회사 서버에 그대로 둔다. VIDE는 복사·업로드하지 않고 위치 참조·내용 해시·추출 텍스트·근거 구간만 저장한다. 자료마다 공개 범위와 AI 전송 허용을 둔다.\n\n## 3. 팀 공용 원본 위치 — 사용자 결정 필요\n\n| 선택지 | 맞는 조건 | 대가 |\n|---|---|---|\n| A. 사내 팀 서버(회사 서버·NAS의 VIDE 팀 서비스 + DB) | 사내 서버를 운영할 수 있고 외부 저장이 부담될 때 | 운영(설치·업데이트·백업), 사외 접속은 VPN |\n| B. Cloudflare D1 + R2(기존 공유 기반) | 파생 데이터(진술·인용)의 외부 저장이 허용되고 운영 부담을 줄이려 할 때 | 외부 저장, DB당 10GB, 동기화 직접 구현 |\n| C. Supabase(PostgreSQL, 서울) | 서버 쪽 공간·벡터 검색과 행 단위 권한이 필요할 때 | 공유 기반 이중화, 업체 추가 |\n\n에이전트 제안: **회사 정책 확인 전에는 A를 기본 가정으로 설계하고, 동기화를 저장소와 분리해 B로도 옮길 수 있게 한다.** 원본이 이미 회사 서버에 있고 팀원이 사내망에서 일한다는 조건에 가장 맞기 때문이다. 다만 AI 정리 단계에서 원문이 외부 AI 공급자로 가므로, “외부 저장 금지”와 “외부 AI 처리 허용”은 따로 확인해야 한다.\n\n## 4. 결과와 한계\n\n- 공동 축적의 충돌은 덮어쓰기 대신 나란한 판단으로 남아, 사람이 쟁점으로 정리한다.\n- 폴더 권한을 자동으로 따라가지 않는다. 제한 자료의 진술이 공용 원본으로 퍼지지 않도록 자료별 공개 범위를 사람이 정한다.\n- 여러 사람이 같은 SQLite 파일을 공유 폴더에서 직접 쓰는 방식은 채택하지 않는다.\n- 이 결정은 C-02 채택과 역할·공개 범위 결정 없이 확정할 수 없다.\n"}}</script>
+<script id="reader-config" type="application/json">{"initial":"adr-018-project-knowledge-store","siteTitle":"VIDE"}</script>
 <script>
 (() => {
 'use strict';

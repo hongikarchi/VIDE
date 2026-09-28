@@ -85,7 +85,7 @@ T-001~018의 번호·지원 증거는 유지한다. 각 티켓의 현재 결과�
 
 **2026-09-28 사용성 3차(구현 우선):** 요청 고정은 메시지 문장 안의 `[고정N · k개]` 토큰으로 넣는다. 커서 위치의 반투명 칩을 누르면 현재 선택이 토큰이 되고, 토큰을 지우면 고정도 빠진다. 뷰포트 핀 도구·선택 해제 버튼·V. 로고를 없앴다. H 숨기기, I 분리 표시, U 모두 표시, Z 선택 확대, Ctrl+A 전체 선택을 추가했다. 대화 항목을 목록에서 지울 수 있다(기록은 보존, schema 3). effort·첨부 메뉴는 바깥을 누르면 닫히고, 하단 속성 패널은 머리줄 전체로 열고 닫으며 선택이 없어도 열린 상태를 유지한다. 자동·브라우저 회귀는 통과했고 실제 iPad 입력은 확인하지 않았다.
 
-**제안 대기 · 프로젝트 지식 DB(2026-09-28 사용자 요청):** 메일·첨부·회의록 기반 지식 정리·질의·크리틱은 PRD C-02 첨삭 제안(R-74) 상태다. 파악은 [RESEARCH-06](../research/RESEARCH-06-project-knowledge.md), 단계 계획은 [PLAN-08](PLAN-08-project-knowledge.md)(draft)이며, C-02 채택과 RESEARCH-06 §9 결정 전에는 구현하지 않는다.
+**제안 대기 · 프로젝트 지식 DB(2026-09-28 사용자 요청):** 메일·첨부·회의록 기반 지식 정리·질의·크리틱은 PRD C-02 첨삭 제안(R-74) 상태다. 파악은 [RESEARCH-06](../research/RESEARCH-06-project-knowledge.md), 단계 계획은 [PLAN-08](PLAN-08-project-knowledge.md)(draft), 저장·팀 공동 축적 구조는 [ADR-018](../decisions/ADR-018-project-knowledge-store.md)(초안)이며, C-02 채택과 RESEARCH-06 §12 결정 전에는 구현하지 않는다. 요청 처리 방식(의도 카드·검증·실제 수행 설명·편집 가능한 작업 이력)은 [RESEARCH-07](../research/RESEARCH-07-request-processing.md)에 정리했고, 작업 이력은 PRD C-03 제안(R-75) 상태다.
 
 **2026-09-28 Sync 성능·증분 Live Sync:** 실제 문서 사본(표시 10,086개)의 전체 Sync가 37.8초에서 4.4초(두 번째 1.9초)로 줄었다. Live Sync는 바뀐 객체만 받아 마지막 표시 Sync에 병합하며, 객체 1개 이동의 Rhino 조회는 34 ms이고 서버 병합·저장은 1~1.5초다. 사용자 Rhino는 새 RHP를 불러오도록 재시작해야 하며, 사용자 창의 체감 확인이 남았다([검수](../tdd/VERIFY-2026-09-28-sync-performance.md), [PLAN-02](PLAN-02-agent-host-versioning.md)).
 

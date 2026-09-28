@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="description" content="RESEARCH-06 — 프로젝트 지식 DB(온톨로지)"><meta name="generator" content="tools/docs/build.mjs — generated from docs/research/RESEARCH-06-project-knowledge.md; do not edit"><title>VIDE · 프로젝트 지식 DB(온톨로지) — 자료 수집·정리·질의·크리틱</title><style>
+<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="description" content="RESEARCH-06 — 프로젝트 지식 DB(온톨로지)"><meta name="generator" content="tools/docs/build.mjs — generated from docs/research/RESEARCH-06-project-knowledge.md; do not edit"><title>VIDE · 프로젝트 지식 DB(온톨로지) — 자료 수집·정리·질의·크리틱·팀 공유</title><style>
 :root{--ink:#292c2d;--muted:#626b6e;--line:#e1e3e1;--soft:#f5f5f1;--coral:#d97660;--paper:#fff;--font:"Pretendard","Noto Sans KR","Malgun Gothic",Arial,sans-serif}
 *{box-sizing:border-box}html{scroll-behavior:smooth;scroll-padding-top:92px}body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--font);letter-spacing:-.025em}a{color:inherit;text-underline-offset:4px}button,input,textarea,select{font:inherit;color:inherit}button{cursor:pointer;border:1px solid var(--line);border-radius:4px;background:var(--paper);padding:10px 15px;line-height:1.3}button:hover{background:var(--soft)}button:disabled{cursor:default;opacity:.6}button.primary{background:var(--ink);color:#fff;border-color:var(--ink)}button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible{outline:3px solid var(--coral);outline-offset:3px}textarea{resize:vertical}::selection{background:#f2d7ce}[hidden]{display:none!important}
 .skip{position:fixed;top:-80px;left:20px;z-index:100;background:white;padding:12px}.skip:focus{top:10px}
@@ -70,14 +70,21 @@ body.review-accepted .toc-links a[data-reviews]::after{display:none}
 <!-- GENERATED FILE — source: docs/research/RESEARCH-06-project-knowledge.md — run: npm --prefix tools/docs run build -->
 <a class="skip" href="#reading-main">본문으로 이동</a>
 <header class="topbar"><a class="brand" href="../../index.html" aria-label="VIDE 문서 모음"><b>V.</b><span>VIDE</span></a><nav class="doc-tabs" aria-label="문서 선택"><a class="doc-tab" href="../PRD.html">PRD</a><a class="doc-tab" href="../specs/README.html">SPEC</a><a class="doc-tab" href="../../Design.html">Design</a><a class="doc-tab" href="../architecture/ARCH-01-system.html">기술 설계</a><a class="doc-tab" href="../plans/PLAN.html">PLAN</a><a class="doc-tab" href="../../DEVELOPMENT_GUIDE.html">개발 가이드</a><a class="doc-tab" href="../../AI.html">AI 규약</a></nav><div class="top-actions"><button id="source-download" title="현재 문서의 Markdown 원문 저장">원문 ↓</button><button id="print-doc" title="현재 문서 인쇄">인쇄</button></div></header>
-<div class="layout"><aside class="toc-shell" id="toc-shell" aria-label="현재 문서의 목차"><div class="toc-title"><strong>CONTENTS</strong><span id="toc-count"></span><button id="toc-toggle" aria-expanded="false" aria-controls="toc-body">목차 열기</button></div><div class="toc-body" id="toc-body"><input class="toc-search" id="toc-search" type="search" placeholder="장 제목으로 찾기" aria-label="현재 문서 목차 검색"><p class="toc-hint" id="nav-hint" role="status">장 제목으로 찾아갑니다.</p><nav class="toc-links" id="toc-links" aria-label="본문 장 이동"></nav><div class="toc-next">다음 작성할 문서<br><b>다음 작업 · PLAN §6.5</b><br>현재 단계와 작업별 계획을 확인한 뒤 해당 범위에서 재개</div></div></aside><main id="reading-main" tabindex="-1"><article id="research-06-project-knowledge" class="document"><header class="doc-hero"><div class="hero-label"><span class="eyebrow">RESEARCH</span><span><span class="pill">DRAFT · v0.1</span><span class="pill">10 CHAPTERS</span></span></div><h1 tabindex="-1">RESEARCH-06 — 프로젝트 지식 DB(온톨로지)</h1><div class="hero-meta">
+<div class="layout"><aside class="toc-shell" id="toc-shell" aria-label="현재 문서의 목차"><div class="toc-title"><strong>CONTENTS</strong><span id="toc-count"></span><button id="toc-toggle" aria-expanded="false" aria-controls="toc-body">목차 열기</button></div><div class="toc-body" id="toc-body"><input class="toc-search" id="toc-search" type="search" placeholder="장 제목으로 찾기" aria-label="현재 문서 목차 검색"><p class="toc-hint" id="nav-hint" role="status">장 제목으로 찾아갑니다.</p><nav class="toc-links" id="toc-links" aria-label="본문 장 이동"></nav><div class="toc-next">다음 작성할 문서<br><b>다음 작업 · PLAN §6.5</b><br>현재 단계와 작업별 계획을 확인한 뒤 해당 범위에서 재개</div></div></aside><main id="reading-main" tabindex="-1"><article id="research-06-project-knowledge" class="document"><header class="doc-hero"><div class="hero-label"><span class="eyebrow">RESEARCH</span><span><span class="pill">DRAFT · v0.2</span><span class="pill">14 CHAPTERS</span></span></div><h1 tabindex="-1">RESEARCH-06 — 프로젝트 지식 DB(온톨로지)</h1><div class="hero-meta">
 </div></header><section class="doc-section" id="research-06-project-knowledge-section-0"><h2><span aria-hidden="true" class="section-num">00 /</span> 목적과 범위</h2>
-<h3>0.1 사용자 요청(2026-09-28)</h3>
-<p>메일·첨부파일(PDF·PPTX·CAD·Rhino 등)·회의록을 올리면 정보를 조합해 <strong>어느 회사(누가) 무슨 말을 했는지, 프로젝트의 주요 쟁점, 진행 경과</strong>를 파악해 DB로 정리한다. 이를 바탕으로 질문에 바로 답하고, 도면·모델 크리틱과 판단을 돕는 일종의 온톨로지를 만든다. 시각화 여부와 위치는 실무 효용을 따져 정한다. 이번 단계는 파악과 계획이며 구현은 하지 않는다.</p>
+<h3>0.1 사용자 요청(2026-09-28~29)</h3>
+<ul>
+<li>메일·첨부파일(PDF·PPTX·CAD·Rhino 등)·회의록을 모아 <strong>어느 회사(누가) 무슨 말을 했는지, 주요 쟁점, 진행 경과</strong>를 DB로 정리한다.</li>
+<li>이를 바탕으로 질문에 답하고, 도면·모델 크리틱과 판단을 돕는다.</li>
+<li>시각화 여부와 위치는 실무 효용을 따져 정한다.</li>
+<li>협의가 계속 오가고 기하학적 판단이 많은 방대한 정보를 어떤 구조와 DB에 담을지 정한다.</li>
+<li>공유 목표는 **여러 팀원이 함께 자료를 쌓고 질문하는 수준(아래 §5의 3단계)**이다.</li>
+<li>원본 자료는 <strong>회사 서버에 있을 가능성이 높다.</strong></li>
+</ul>
 <h3>0.2 이 문서가 하는 일과 안 하는 일</h3>
-<p>현재 제품 약속·코드와의 관계, 기능의 층 구분, 데이터 구조 초안, 형식별 수집 방법, 활용·시각화 판단, 위험과 사용자 결정 항목을 정리한다. 제품 범위 확정은 PRD(C-02 제안), 동작 계약은 후속 SPEC, 구현 순서는 <a href="../plans/PLAN-08-project-knowledge.html">PLAN-08</a>이 소유한다. 실제 프로젝트 자료로 추출 품질을 측정하지 않았으므로 품질 수치는 제시하지 않는다.</p>
+<p>현재 약속·코드와의 관계, 기능의 층, 데이터 구조, 저장소 비교, 공유 단계와 구성, 회사 서버 원본의 처리, 활용·시각화 판단, 위험과 사용자 결정 항목을 정리한다. 제품 범위는 PRD(C-02 제안), 저장·공유 구조의 결정은 <a href="../decisions/ADR-018-project-knowledge-store.html">ADR-018 초안</a>, 동작 계약은 후속 SPEC, 구현 순서는 <a href="../plans/PLAN-08-project-knowledge.html">PLAN-08</a>이 소유한다. 실제 프로젝트 자료로 추출 품질을 측정하지 않았으므로 품질 수치는 제시하지 않는다.</p>
 </section><section class="doc-section" id="research-06-project-knowledge-section-1"><h2><span aria-hidden="true" class="section-num">01 /</span> 이미 있는 약속·자산과의 관계</h2>
-<p>새 개념처럼 보이지만 PRD가 이미 뼈대를 약속하고 있다. 빠진 것은 <strong>외부 자료의 수집과 정리</strong>다.</p>
+<p>새 개념처럼 보이지만 PRD가 이미 뼈대를 약속하고 있다. 빠진 것은 <strong>외부 자료의 수집·정리와 여러 사람의 공동 축적</strong>이다.</p>
 <div aria-label="조사 표 1" class="table-scroll" role="region" tabindex="0"><table>
 <thead>
 <tr>
@@ -90,12 +97,12 @@ body.review-accepted .toc-links a[data-reviews]::after{display:none}
 <tr>
 <td>PRD §6.2</td>
 <td>근거·조건: “회의록·스케치·자료 위치, 적용 범위, 채택 여부”</td>
-<td>회의록·자료를 근거로 대상에 연결하는 요구가 이미 있다. 수집·정리 방법은 없다</td>
+<td>회의록·자료를 근거로 대상에 연결하는 요구가 이미 있다</td>
 </tr>
 <tr>
 <td>PRD §6.3</td>
 <td>원본에서 읽음 / 계산 / 사용자 확정 / AI 추정 구분, 추정의 자동 사실 승격 금지</td>
-<td>온톨로지의 모든 진술에 그대로 적용해야 하는 핵심 규칙</td>
+<td>모든 진술에 그대로 적용할 핵심 규칙</td>
 </tr>
 <tr>
 <td>PRD §6.4</td>
@@ -105,17 +112,17 @@ body.review-accepted .toc-links a[data-reviews]::after{display:none}
 <tr>
 <td>PRD §6.5</td>
 <td>전체 대화·회의록을 매 요청에 반복 입력하지 않음</td>
-<td>검색·도구 기반 조회 구조가 필요하다는 뜻</td>
+<td>검색·도구 기반 조회 구조가 필요</td>
 </tr>
 <tr>
 <td>FR-09·SPEC-03.4</td>
 <td>값의 출처(원본/계산/사용자/AI)와 역할(사실/가정/필수조건/참고), 근거↔대상 양방향 조회</td>
-<td>데이터 모델의 기준축. 새 모델은 이 축을 확장한다</td>
+<td>데이터 구조의 기준축</td>
 </tr>
 <tr>
 <td>FR-18·AC-30</td>
 <td>AI 전송·공개 범위 확인·제외</td>
-<td>메일·계약 자료를 AI에 보내는 범위 동의가 필수</td>
+<td>메일·계약 자료를 AI·클라우드에 보내는 범위 동의가 필수</td>
 </tr>
 <tr>
 <td>FR-21</td>
@@ -123,24 +130,37 @@ body.review-accepted .toc-links a[data-reviews]::after{display:none}
 <td>도면·모델 크리틱은 이쪽에 가깝다</td>
 </tr>
 <tr>
-<td>ADR-010</td>
-<td>첫 출시는 로컬 전용</td>
-<td>지식 DB도 로컬 저장이 기본. 웹 공유는 별도 결정</td>
+<td>PRD §14(범위) · AC-37</td>
+<td><strong>프로젝트별 한 로컬 작업환경</strong>이 호스트 제어·원본 반영을 맡고, 같은 프로젝트를 여러 PC에서 공동 제어하는 기능은 후속</td>
+<td>3단계 공동 축적과 부딪히는 원칙. 지식 공동 축적과 호스트 공동 제어를 구분하는 결정이 필요(ADR-018)</td>
+</tr>
+<tr>
+<td>ADR-010·ADR-015</td>
+<td>로컬 제어 + 웹 열람·의견. 공유 서버는 Cloudflare Workers + D1 + 비공개 R2, 계정·멤버십·프로젝트 권한 구현됨</td>
+<td>팀 공유 저장소 후보로 재사용 가능</td>
 </tr>
 <tr>
 <td>RESEARCH-04 J-08</td>
-<td>회의록 기능: 과거 형식·코드 없음, 회의 자료는 민감정보와 분리 불가, “열 수 없는 파일”로 취급돼 옴, 결정 이력 재구성이 어려웠던 실제 피해</td>
+<td>회의록: 과거 형식·코드 없음, 회의 자료는 민감정보와 분리 불가, 결정 이력 재구성이 어려웠던 실제 피해</td>
 <td>필요성과 위험을 동시에 보여주는 선례</td>
 </tr>
 </tbody>
 </table></div>
-<p>코드 자산은 다음과 같다.</p>
+<p>코드 자산(2026-09-28~29 확인):</p>
 <ul>
-<li>저장: 로컬 SQLite(<code>node:sqlite</code>, 3.51). <strong>FTS5 trigram 전문 검색이 추가 의존성 없이 동작</strong>해 한국어 부분 문자열 검색이 된다(2026-09-28 확인).</li>
-<li>첨부: 현재 요청 첨부는 TXT·MD·CSV·JSON, 파일당 50,000바이트, 요청 본문에 그대로 포함된다(SPEC-01). 프로젝트 단위 자료함은 없다.</li>
-<li>AI 실행: 구독 CLI(Claude Code·Codex)가 VIDE MCP 도구만 쓰는 구조(ARCH-01 §2·3). 지식 조회는 같은 방식의 <strong>읽기 전용 도구</strong>로 붙이면 기존 권한 경계를 유지한다.</li>
-<li>도면·모델: ZWCAD 연결 Sync가 문자·레이어·해치·xref를, Rhino Sync가 레이어·객체명·속성(user text)을 이미 읽는다. CAD/Rhino 첨부의 텍스트 정보 추출에 재사용할 수 있다.</li>
-<li>수량: 기본 집계(FR-22)가 면적·길이를 계산한다. 크리틱에서 AI가 숫자를 추측하지 않게 하는 근거가 된다.</li>
+<li><strong>로컬 저장:</strong> SQLite(<code>node:sqlite</code> 3.51). 추가 설치 없이 다음이 동작한다.
+<ul>
+<li>FTS5 trigram 전문 검색: 한국어 부분 문자열 검색</li>
+<li>R*Tree 공간 색인: 범위 상자 검색</li>
+<li>JSON 함수</li>
+<li>재귀 쿼리: 관계 따라가기</li>
+<li>확장 불러오기: Windows·Node 24에서 켜짐. 벡터 확장을 나중에 붙일 수 있다.</li>
+</ul>
+</li>
+<li><strong>첨부:</strong> 현재 요청 첨부는 TXT·MD·CSV·JSON, 파일당 50,000바이트이고 요청 본문에 그대로 들어간다(SPEC-01). 프로젝트 단위 자료함은 없다.</li>
+<li><strong>AI 실행:</strong> 구독 CLI(Claude Code·Codex)가 VIDE MCP 도구만 쓴다(ARCH-01 §2·3). 지식 조회는 같은 방식의 <strong>읽기 전용 도구</strong>로 붙이면 기존 권한 경계를 유지한다.</li>
+<li><strong>도면·모델:</strong> ZWCAD 연결 Sync가 문자·레이어·해치·xref를, Rhino Sync가 레이어·객체명·속성(user text)을 이미 읽는다.</li>
+<li><strong>수량:</strong> 기본 집계(FR-22)와 측정 캐시·체크포인트가 모델 시점별 계산 결과를 보존한다. 기하 판단을 계산으로 기록하는 기반이 된다.</li>
 </ul>
 </section><section class="doc-section" id="research-06-project-knowledge-section-2"><h2><span aria-hidden="true" class="section-num">02 /</span> 기능을 네 층으로 나눈다</h2>
 <div aria-label="조사 표 2" class="table-scroll" role="region" tabindex="0"><table>
@@ -155,13 +175,13 @@ body.review-accepted .toc-links a[data-reviews]::after{display:none}
 <tbody>
 <tr>
 <td>① 수집</td>
-<td>파일·메일을 원본 그대로 보관하고 텍스트·메타데이터를 뽑는다(보낸 사람·날짜·페이지·슬라이드)</td>
+<td>원본을 참조·해시로 등록하고 텍스트·메타데이터를 뽑는다(보낸 사람·날짜·쪽·슬라이드)</td>
 <td>대부분 불필요</td>
 <td>자료가 한곳에 모이고 원문 검색이 되는 순간</td>
 </tr>
 <tr>
 <td>② 정리</td>
-<td>원문에서 “누가·언제·무엇을(요구/결정/의견/질문/일정)”을 진술로 뽑고 사람·회사·공간·요소에 연결</td>
+<td>원문에서 “누가·언제·무엇을(요구/결정/의견/질문/일정)”을 진술로 뽑고 주체·대상에 연결</td>
 <td>필요(근거 구간 필수)</td>
 <td>브리핑·타임라인·쟁점 표</td>
 </tr>
@@ -179,10 +199,10 @@ body.review-accepted .toc-links a[data-reviews]::after{display:none}
 </tr>
 </tbody>
 </table></div>
-<p>①만으로도 “그 메일 어디 있었지”, “구조 협의에서 기둥 간격 얘기가 언제 나왔지”에 답할 수 있다. ②③은 ①의 원문 근거를 전제로 해야 환각을 통제할 수 있다. 따라서 <strong>수집 → 원문 검색 → 구조화 → AI 활용</strong> 순서가 맞다.</p>
-</section><section class="doc-section" id="research-06-project-knowledge-section-3"><h2><span aria-hidden="true" class="section-num">03 /</span> 데이터 구조(온톨로지) 초안</h2>
-<p>그래프 DB나 RDF를 도입하지 않고 SQLite의 관계 테이블로 시작한다. 건축 프로젝트의 질문 대부분은 “대상·주체·시점·상태로 거르고 원문을 인용”하는 형태여서 관계형 + 전문 검색으로 충분하고, 기존 저장·백업·마이그레이션 체계(T-023)를 그대로 쓸 수 있다.</p>
-<h3>3.1 개념</h3>
+<p>①만으로도 “그 메일 어디 있었지”에 답할 수 있다. ②③은 원문 근거가 있어야 환각을 통제할 수 있다. 따라서 <strong>수집 → 원문 검색 → 구조화 → AI 활용</strong> 순서가 맞다.</p>
+</section><section class="doc-section" id="research-06-project-knowledge-section-3"><h2><span aria-hidden="true" class="section-num">03 /</span> 데이터 구조 — 엔진보다 기록 방식이 핵심</h2>
+<p>정보가 방대하고, 협의가 계속 바뀌고, 기하 판단이 섞인다는 어려움은 DB 엔진을 바꿔서 풀리지 않는다. 다음 다섯 층의 <strong>기록 방식</strong>으로 푼다. 이 구조는 SQLite·PostgreSQL·그래프 DB 어디에도 올라간다.</p>
+<h3>3.1 근거(원문) — 고치지 않는다</h3>
 <div aria-label="조사 표 3" class="table-scroll" role="region" tabindex="0"><table>
 <thead>
 <tr>
@@ -195,52 +215,226 @@ body.review-accepted .toc-links a[data-reviews]::after{display:none}
 <tr>
 <td>Source(자료)</td>
 <td>메일, PDF, PPTX, 회의록, DWG, 3DM</td>
-<td>원본 해시, 형식, 받은/작성 시각, 보낸 사람·받는 사람, 원본 보관 위치, AI 전송 허용 여부</td>
+<td>원본 위치 참조(§6), 내용 해시, 형식, 작성·수신 시각, 보낸 사람·받는 사람, 공개 범위, AI 전송 허용 여부</td>
 </tr>
 <tr>
 <td>Excerpt(근거 구간)</td>
 <td>PDF 3쪽 두 번째 문단, 메일 본문 5–8행, 슬라이드 7, 도면의 문자 객체</td>
 <td>Source, 위치(쪽·슬라이드·행·CAD handle), 원문 텍스트</td>
 </tr>
+</tbody>
+</table></div>
+<p>모든 판단은 근거 구간으로 돌아와야 하며, 근거 구간은 수정하지 않는다.</p>
+<h3>3.2 진술 — 덮어쓰지 않고 쌓기만 한다(시간축 두 개)</h3>
+<ul>
+<li><strong>종류:</strong> 요구·결정·의견·질문·사실·일정·변경.</li>
+<li><strong>필수 속성:</strong> 말한 주체, 대상, 근거 구간(1개 이상), 출처 구분(원문 / AI 추정 / 사용자 확정), 역할(필수조건·결정·요청·의견·질문·참고).</li>
+<li><strong>두 시간축:</strong> “언제부터 유효한 내용인가”(유효 시간)와 “우리가 언제 알게 됐나”(기록 시간)를 따로 둔다. 그래야 “9월 10일 기준 합의 내용”, “그 모델을 만들 때 알고 있던 조건”에 답한다.</li>
+<li><strong>대체와 무효:</strong> 새 결정이 오면 이전 진술을 지우지 않고 “유효 종료 + 대체한 진술”로 연결한다. 모순은 자동 판정하지 않고 쟁점으로 올린다.</li>
+<li><strong>확정도 사건이다:</strong> 확정·기각·수정은 누가 언제 했는지를 새 기록으로 남긴다. 이전 상태를 덮어쓰지 않는다.</li>
+</ul>
+<p>이 방식은 시간축 지식 그래프(Graphiti)와 시간 여행 DB(XTDB, Datomic)가 쓰는 모델과 같다. 특정 엔진 없이 유효 시작·끝, 기록 시각, 대체 관계 열로 구현한다. 또한 §5의 공동 축적에서 <strong>동기화 충돌을 거의 없애는</strong> 핵심이다.</p>
+<h3>3.3 대상과 관계 — 표준 어휘를 빌린 이름 붙은 연결</h3>
+<div aria-label="조사 표 4" class="table-scroll" role="region" tabindex="0"><table>
+<thead>
+<tr>
+<th>개념</th>
+<th>예</th>
+</tr>
+</thead>
+<tbody>
 <tr>
 <td>Party(주체)</td>
-<td>발주처 한빛건설, 구조사무소, 김OO 소장</td>
-<td>조직/사람, 역할(발주처·설계·구조·설비·시공·인허가), 별칭</td>
+<td>발주처 한빛건설, 구조사무소, 김OO 소장(조직/사람, 역할, 별칭)</td>
 </tr>
 <tr>
 <td>Subject(대상)</td>
-<td>3층 회의실, 코어, 외벽, 주차 램프, 대지</td>
-<td>공간/요소/시스템/대지/문서 구분, 모델 객체 연결(선택)</td>
-</tr>
-<tr>
-<td>Statement(진술)</td>
-<td>“3층 회의실을 2개로 분리 요청”, “기둥 간격 8.4 m 유지 결정”</td>
-<td>종류(요구·결정·의견·질문·사실·일정·변경), 말한 주체, 시점, 대상, 근거 Excerpt(1개 이상 필수), 출처 구분, 상태</td>
+<td>대지·건물·층·공간·요소·시스템·도면</td>
 </tr>
 <tr>
 <td>Issue(쟁점)</td>
-<td>주차 대수 부족, 일조 사선 저촉</td>
-<td>관련 진술 묶음, 상태(열림·합의·보류·종결), 최신 결정</td>
+<td>주차 대수 부족, 일조 사선 저촉(관련 진술 묶음, 상태, 최신 결정)</td>
 </tr>
 <tr>
 <td>Milestone(일정)</td>
 <td>인허가 접수, 중간 보고</td>
-<td>날짜, 근거 진술</td>
+</tr>
+<tr>
+<td>Episode(묶음)</td>
+<td>회의 한 번, 메일 스레드 하나(그 안의 진술을 묶어 타임라인이 됨)</td>
 </tr>
 </tbody>
 </table></div>
-<h3>3.2 진술에 반드시 둘 축(PRD §6.3과 일치)</h3>
+<p>노드와 연결(요청했다, 결정했다, ~에 영향, ~에 포함, ~와 인접)을 표 두 개로 둔 속성 그래프다. 따라가기는 재귀 쿼리로 한다. 공간·요소 분류는 새로 만들지 않고 W3C 건물 위상 온톨로지(BOT: 대지·건물·층·공간·요소)와 IFC 분류명을 빌린다. RDF 저장소 전체를 도입하지는 않는다.</p>
+<h3>3.4 기하 — 형상은 넣지 않고 모델 시점과 연결된 계산 결과를 기록한다</h3>
 <ul>
-<li><strong>출처 구분:</strong> 원문에서 읽음(원문 인용과 일치) / AI 추정(요약·해석) / 사용자 확정. AI 추정은 사용자가 확정하기 전까지 사실로 표시하지 않는다.</li>
-<li><strong>역할:</strong> 필수조건 / 결정 / 요청 / 의견·제안 / 질문 / 참고 사실.</li>
-<li><strong>상태와 시간:</strong> 제안됨 → 합의됨 → 대체됨(더 최신 결정이 덮음) / 철회. “대체됨”은 이전 진술을 지우지 않고 연결한다. 모순이 보이면 자동 판정하지 않고 쟁점으로 올린다.</li>
-<li><strong>모델 연결:</strong> 진술·쟁점을 Rhino/CAD 객체(핀과 같은 식별 기준)에 연결할 수 있다. 객체가 삭제·재생성되면 연결 끊김을 표시하고 가까운 객체에 자동 재연결하지 않는다(AC-21과 같은 원칙).</li>
+<li><strong>형상 자체:</strong> 3dm/DWG와 기존 표시 캐시에 둔다. 지식 DB에는 “어느 모델 시점의 어느 객체”라는 참조(모델 Sync/체크포인트 ID + 네이티브 객체 ID)만 둔다.</li>
+<li><strong>기하 판단은 관측 기록:</strong> 예를 들어 “공간 S-301 면적 28.2㎡, 모델 Sync #12 기준, 기하 면적 계산”처럼 값·단위·계산 방법·모델 시점을 함께 남긴다. 모델이 바뀌면 그 관측만 오래됨으로 표시하고 다시 계산한다(측정 캐시·체크포인트 구조와 같음).</li>
+<li><strong>요구는 구조화된 조건으로도 저장:</strong> 예를 들어 <code>대상=3층 회의실, 항목=면적, 조건=≥30㎡</code>처럼 둔다. 그러면 “28.2 &lt; 30 → 쟁점”을 AI 추측이 아니라 계산으로 잡아낸다. 이것이 크리틱의 뼈대다.</li>
+<li><strong>공간 검색:</strong> “근처·안에 무엇이 있나”는 객체 범위 상자를 공간 색인(R*Tree)에 넣어 후보를 먼저 거르고, 정밀 판단은 호스트 기하 도구로 한다.</li>
 </ul>
-<h3>3.3 기존 기록과의 연결</h3>
-<p>요청 입력의 “참고 자료” 첨부를 Source 참조로 바꾸고, AI 작업 결과·검토본이 사용한 진술을 기록하면 SPEC-03.4의 “근거에서 대상으로, 대상에서 근거로” 조회가 외부 자료까지 확장된다.</p>
-</section><section class="doc-section" id="research-06-project-knowledge-section-4"><h2><span aria-hidden="true" class="section-num">04 /</span> 수집 방법</h2>
-<h3>4.1 들어오는 경로</h3>
-<div aria-label="조사 표 4" class="table-scroll" role="region" tabindex="0"><table>
+<h3>3.5 규모</h3>
+<p>큰 프로젝트라도 자료 수만 건, 진술 수십만~백만 건 수준이다. 부피가 큰 형상은 파일에 남으므로 저장 엔진의 규모 한계는 쟁점이 아니다.</p>
+</section><section class="doc-section" id="research-06-project-knowledge-section-4"><h2><span aria-hidden="true" class="section-num">04 /</span> 저장소(DB) 비교</h2>
+<div aria-label="조사 표 5" class="table-scroll" role="region" tabindex="0"><table>
+<thead>
+<tr>
+<th>방식</th>
+<th>좋은 점</th>
+<th>걸리는 점</th>
+<th>판단</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>SQLite</strong>(+FTS5, R*Tree, JSON)</td>
+<td>이미 제품 저장소, 설치·서버 불필요, §3 구조 전부 가능(확인)</td>
+<td>여러 PC가 공유 폴더의 같은 파일에 동시에 쓰면 손상 위험</td>
+<td><strong>각 PC의 로컬 사본으로 사용</strong></td>
+</tr>
+<tr>
+<td><strong>PostgreSQL</strong>(+PostGIS, pgvector)</td>
+<td>공간·벡터·전문 검색 한곳, 다중 사용자·행 단위 권한에 강함</td>
+<td>서버 필요(사내 설치 또는 호스팅)</td>
+<td><strong>팀 공용 원본 후보</strong>(§5.3)</td>
+</tr>
+<tr>
+<td><strong>Neo4j / AuraDB</strong>(그래프 DB)</td>
+<td>관계 따라가기 편함</td>
+<td>별도 Java 서버, Community판 GPLv3의 배포 문제, 실제 질문 대부분은 거르기+인용이라 효용 낮음</td>
+<td>보류</td>
+</tr>
+<tr>
+<td><strong>Kùzu</strong>(설치 없는 그래프 DB)</td>
+<td>앱 안에 넣는 그래프 DB</td>
+<td>2025-10 인수 뒤 개발 중단(저장소 보관), 커뮤니티 포크만 남음</td>
+<td>제외</td>
+</tr>
+<tr>
+<td><strong>RDF 저장소</strong>(Ontotext GraphDB 등)</td>
+<td>건축 표준 온톨로지(BOT·ifcOWL)와 추론</td>
+<td>무겁고 SPARQL, 무료판 동시 질의 2개·11.0부터 라이선스 키 필요</td>
+<td>어휘만 빌림</td>
+</tr>
+<tr>
+<td><strong>XTDB v2 / Datomic</strong>(시간 여행·불변 기록 DB)</td>
+<td>두 시간축 조회가 기본 기능, 무료 공개 라이선스</td>
+<td>Java 서버, 틈새 기술</td>
+<td>개념만 참고</td>
+</tr>
+<tr>
+<td><strong>Graphiti</strong>(시간축 지식 그래프 라이브러리)</td>
+<td>§3.2 구조를 이미 구현</td>
+<td>그래프 DB 서버와 자체 LLM API 키 필요 — 구독 CLI 방식과 맞지 않음</td>
+<td>설계만 빌림</td>
+</tr>
+<tr>
+<td><strong>Obsidian</strong></td>
+<td>사람이 읽는 Markdown, 링크·그래프 뷰, 2026-02부터 업무용 무료</td>
+<td>구조 강제·트랜잭션·동시 편집 처리 없음</td>
+<td><strong>DB가 아니라 한 방향 내보내기(보기 창)</strong></td>
+</tr>
+<tr>
+<td><strong>벡터 검색</strong>(sqlite-vec 등)</td>
+<td>의미 검색</td>
+<td>구독 CLI는 임베딩을 만들지 않음 — 로컬 모델이나 API 키 필요</td>
+<td>전문 검색 + 구조 조회 + AI 도구 검색으로 부족함이 측정될 때 추가</td>
+</tr>
+</tbody>
+</table></div>
+</section><section class="doc-section" id="research-06-project-knowledge-section-5"><h2><span aria-hidden="true" class="section-num">05 /</span> 공유 단계와 구성</h2>
+<h3>5.1 단계</h3>
+<div aria-label="조사 표 6" class="table-scroll" role="region" tabindex="0"><table>
+<thead>
+<tr>
+<th>단계</th>
+<th>무엇</th>
+<th>필요한 것</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>0. 나만</td>
+<td>내 PC에서 쌓고 질문</td>
+<td>현재 구조</td>
+</tr>
+<tr>
+<td>1. 결과 보여주기</td>
+<td>브리핑·쟁점표를 웹 게시본으로 열람·의견</td>
+<td>기존 웹 공유(SPEC-04) 확장</td>
+</tr>
+<tr>
+<td>2. 다른 사람도 질문</td>
+<td>팀원이 직접 질문</td>
+<td>지식 DB 공유 + 질문하는 사람의 AI 실행 경로</td>
+</tr>
+<tr>
+<td><strong>3. 같이 쌓기(목표)</strong></td>
+<td>여러 팀원이 자료를 넣고 진술을 확정·수정</td>
+<td>팀 공용 원본 + 동기화 + 역할·공개 범위</td>
+</tr>
+</tbody>
+</table></div>
+<h3>5.2 3단계 권장 구성 — 공용 원본 + 각자 로컬 사본 + 각자 AI</h3>
+<ul>
+<li><strong>팀 공용 원본:</strong> 모든 팀원의 기록(사건)이 모이는 중앙 저장소.</li>
+<li><strong>각 PC의 로컬 사본(SQLite):</strong> 검색·질문·모델 연결은 빠른 로컬 사본으로 하고 오프라인에서도 쓴다.</li>
+<li><strong>AI는 각자 PC에서:</strong> 자기가 넣은 자료의 정리와 자기 질문은 자기 구독 CLI로 처리한다. 서버 쪽 AI 실행(API 비용)은 필요하지 않다.</li>
+<li><strong>동기화:</strong> §3.2처럼 모든 기록을 고유 ID가 있는 사건으로 쌓기만 하므로, 동기화는 “모르는 사건 가져오기 + 내 새 사건 보내기”다. 두 사람의 다른 판단은 덮어쓰지 않고 나란히 남아 쟁점으로 보인다. 같은 자료를 두 사람이 넣어도 내용 해시로 한 번만 저장된다.</li>
+<li><strong>호스트 제어는 그대로 한 작업환경:</strong> 지식 공동 축적은 Rhino/CAD 원본 제어가 아니다. PRD §14의 “프로젝트별 한 로컬 작업환경이 호스트 제어·원본 반영” 원칙은 유지하고, 지식 기록만 여러 PC가 함께 쓴다(ADR-018에서 결정).</li>
+</ul>
+<h3>5.3 팀 공용 원본의 후보</h3>
+<div aria-label="조사 표 7" class="table-scroll" role="region" tabindex="0"><table>
+<thead>
+<tr>
+<th>후보</th>
+<th>좋은 점</th>
+<th>걸리는 점</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>A. 사내 팀 서버</strong>(회사 서버·NAS에서 VIDE 팀 서비스 + DB)</td>
+<td>원본 자료 옆에 두고 사내망 안에서 완결, 기존 사내 백업 체계, 외부 반출 없음</td>
+<td>누군가 운영(설치·업데이트·백업), 외부 접속은 VPN 필요, 새로 만들 서버 구성</td>
+</tr>
+<tr>
+<td><strong>B. Cloudflare D1 + R2</strong>(기존 웹 공유 기반)</td>
+<td>계정·멤버십·권한 이미 구현, D1이 SQLite라 로컬과 같은 구조, 한국어 FTS5 사례 확인, 운영 부담 적음</td>
+<td>파생 데이터(진술·인용)가 외부 클라우드로 감, DB당 10GB(조직·프로젝트별 분할), 동기화 직접 구현</td>
+</tr>
+<tr>
+<td><strong>C. Supabase</strong>(PostgreSQL, 서울 리전)</td>
+<td>행 단위 권한·공간·벡터·파일·인증이 한곳</td>
+<td>공유 시스템을 새 업체로 이중화, 무료 500MB</td>
+</tr>
+<tr>
+<td>(참고) Turso</td>
+<td>로컬 SQLite ↔ 클라우드 자동 동기화</td>
+<td>오프라인 쓰기 동기화 공개 베타, 인증·권한 별도, 업체 추가</td>
+</tr>
+</tbody>
+</table></div>
+<p><strong>동기화 방식을 저장소와 분리</strong>하면 A와 B를 나중에 바꾸거나 함께 쓸 수 있다(예: 사내는 A, 외부 협력사 게시본은 B).</p>
+</section><section class="doc-section" id="research-06-project-knowledge-section-6"><h2><span aria-hidden="true" class="section-num">06 /</span> 원본 자료가 회사 서버에 있는 경우</h2>
+<p>2026-09-29 사용자 의견: 원본 데이터는 회사 서버(파일 서버·NAS)에 있을 가능성이 높다.</p>
+<ul>
+<li><strong>원본은 옮기지 않는다:</strong> VIDE는 원본을 복사·업로드하지 않고 <strong>위치 참조 + 내용 해시 + 추출 텍스트·근거 구간</strong>만 저장한다. “원문 열기”는 회사 서버의 원본을 연다.</li>
+<li><strong>읽기 전용 접근:</strong> 사용자 계정의 권한으로 읽기만 한다. 원본 폴더에 쓰거나 이동하지 않는다.</li>
+<li><strong>경로 정규화:</strong> PC마다 드라이브 문자(Z: 등)가 달라도 같은 자료로 보도록 UNC 경로나 설정한 “프로젝트 루트” 기준 상대 경로로 저장한다. 파일이 옮겨지거나 이름이 바뀌어도 해시로 다시 찾는다.</li>
+<li><strong>공유 폴더에 SQLite 파일을 두지 않는다:</strong> 회사 서버의 공유 폴더에 지식 DB 파일 하나를 두고 여러 PC가 직접 쓰면 손상될 수 있다. 사내에 두려면 §5.3 A처럼 서비스를 거친다.</li>
+<li><strong>권한 누수:</strong> 제한된 폴더의 자료를 권한 있는 팀원이 정리하면 그 진술이 공용 원본을 통해 권한 없는 팀원에게 보일 수 있다. 자료별 공개 범위(팀 공개 / 특정 멤버 / 나만)를 두고 기본값을 정해야 한다. 폴더 권한을 자동으로 따라가는 방식은 구현이 어렵고 오판 위험이 있다.</li>
+<li><strong>사외 접속:</strong> 회사 밖에서는 원본을 열 수 없어도 로컬 사본의 근거 구간으로 답할 수 있다. 원문 열기만 VPN이 필요하다.</li>
+<li><strong>외부 전송 정책은 두 겹이다:</strong> 공용 원본을 사내에 두더라도, AI 정리 단계에서 원문이 AI 공급자(Anthropic·OpenAI)로 전송된다. 회사 정책에서 “외부 클라우드 저장 금지”와 “외부 AI 처리 허용”을 따로 확인해야 한다.</li>
+</ul>
+<p><strong>판단:</strong> 원본은 회사 서버에 그대로 두는 것을 기본으로 한다. 팀 공용 원본은 회사 정책에 따라 고른다.</p>
+<ul>
+<li>사내 서버를 운영할 수 있고 외부 저장이 부담되면 <strong>A(사내 팀 서버)</strong>.</li>
+<li>파생 데이터의 외부 저장이 허용되고 운영 부담을 줄이려면 <strong>B(D1)</strong>.</li>
+</ul>
+</section><section class="doc-section" id="research-06-project-knowledge-section-7"><h2><span aria-hidden="true" class="section-num">07 /</span> 수집 방법</h2>
+<h3>7.1 들어오는 경로</h3>
+<div aria-label="조사 표 8" class="table-scroll" role="region" tabindex="0"><table>
 <thead>
 <tr>
 <th>경로</th>
@@ -251,33 +445,33 @@ body.review-accepted .toc-links a[data-reviews]::after{display:none}
 </thead>
 <tbody>
 <tr>
+<td>회사 서버의 프로젝트 폴더 지정·감시</td>
+<td>원본이 이미 거기 있음, 새 파일 자동 수집</td>
+<td>민감 파일 혼입, 제외 규칙·수집 전 확인 필요</td>
+<td><strong>기본</strong></td>
+</tr>
+<tr>
 <td>자료함에 파일 끌어 놓기</td>
-<td>사용자가 범위를 직접 통제, 구현 단순</td>
+<td>사용자가 범위를 직접 통제</td>
 <td>매번 수동</td>
-<td>1단계 기본</td>
+<td>기본 보조</td>
 </tr>
 <tr>
-<td>프로젝트 폴더 지정·감시</td>
-<td>기존 폴더 구조 그대로 사용, 새 파일 자동 수집</td>
-<td>민감 파일까지 들어올 위험, 제외 규칙 필요</td>
-<td>1단계에 “제외 목록 + 수집 전 확인”과 함께</td>
-</tr>
-<tr>
-<td>메일 파일(.eml/.msg) 내보내기</td>
-<td>메일 헤더(보낸 사람·날짜·스레드)가 정확</td>
-<td>사용자가 내보내야 함</td>
+<td>메일 파일(.eml/.msg)</td>
+<td>헤더(보낸 사람·날짜·스레드)가 정확</td>
+<td>내보내기 필요</td>
 <td>1단계</td>
 </tr>
 <tr>
 <td>메일 계정 직접 연결(Outlook·Gmail)</td>
 <td>자동·완전</td>
-<td>계정 인증, 범위 제어, 개인 메일 혼입</td>
-<td>사용 패턴 확인 뒤 결정(OQ)</td>
+<td>인증, 범위 제어, 개인 메일 혼입</td>
+<td>사용 패턴 확인 뒤 결정</td>
 </tr>
 </tbody>
 </table></div>
-<h3>4.2 형식별 추출</h3>
-<div aria-label="조사 표 5" class="table-scroll" role="region" tabindex="0"><table>
+<h3>7.2 형식별 추출</h3>
+<div aria-label="조사 표 9" class="table-scroll" role="region" tabindex="0"><table>
 <thead>
 <tr>
 <th>형식</th>
@@ -289,32 +483,32 @@ body.review-accepted .toc-links a[data-reviews]::after{display:none}
 <tr>
 <td>EML</td>
 <td>헤더·본문·첨부 분리(표준 MIME)</td>
-<td>스레드·인용 부분 중복 제거 필요</td>
+<td>스레드·인용 부분 중복 제거</td>
 </tr>
 <tr>
 <td>MSG(Outlook)</td>
-<td>별도 파서 필요</td>
-<td>사무소 메일 환경 확인 필요</td>
+<td>별도 파서</td>
+<td>사무소 메일 환경 확인</td>
 </tr>
 <tr>
 <td>PDF</td>
 <td>텍스트 레이어 추출, 쪽 번호 유지</td>
-<td><strong>스캔 PDF는 OCR 또는 AI 이미지 판독 필요</strong></td>
+<td>스캔 PDF는 OCR 또는 AI 이미지 판독</td>
 </tr>
 <tr>
 <td>PPTX·DOCX·XLSX</td>
-<td>ZIP 안 XML에서 텍스트·슬라이드·표 추출</td>
+<td>ZIP 안 XML에서 텍스트·슬라이드·표</td>
 <td>이미지 속 글자는 제외 또는 AI 판독</td>
 </tr>
 <tr>
 <td>HWP·HWPX</td>
-<td>kordoc 등 한글 문서 도구</td>
-<td>공문서가 흔함. 도구 선택 필요</td>
+<td>한글 문서 도구(kordoc 등)</td>
+<td>공문서에 흔함</td>
 </tr>
 <tr>
 <td>DWG</td>
 <td>ZWCAD 연결 경로의 문자·레이어·도면 제목·블록 속성</td>
-<td>도면 “내용”은 선이 아닌 문자·표제란 위주</td>
+<td>표제란·주석 위주</td>
 </tr>
 <tr>
 <td>3DM</td>
@@ -329,21 +523,21 @@ body.review-accepted .toc-links a[data-reviews]::after{display:none}
 <tr>
 <td>녹음</td>
 <td>STT 없음(J-08)</td>
-<td>1단계 제외. 회의록 텍스트부터 받는다</td>
+<td>제외. 회의록 텍스트부터</td>
 </tr>
 </tbody>
 </table></div>
 <p>결정적 파서로 뽑을 수 있는 것은 AI를 쓰지 않는다. 같은 해시의 자료는 다시 처리하지 않는다.</p>
-</section><section class="doc-section" id="research-06-project-knowledge-section-5"><h2><span aria-hidden="true" class="section-num">05 /</span> 정리(구조화) 방법</h2>
+</section><section class="doc-section" id="research-06-project-knowledge-section-8"><h2><span aria-hidden="true" class="section-num">08 /</span> 정리(구조화) 방법</h2>
 <ul>
-<li><strong>추출 단위:</strong> Source를 근거 구간 단위로 나누고, AI가 각 구간에서 진술 후보를 JSON으로 뽑는다. 진술마다 <strong>근거 구간 ID와 원문 인용 문자열</strong>을 필수로 하고, 인용이 원문과 일치하지 않으면 버린다(RESEARCH-04의 “인용-원문 문자열 대조” 선례).</li>
-<li><strong>주체·대상 정규화:</strong> 같은 회사·사람의 다른 표기(“한빛”, “한빛건설(주)”)를 별칭으로 묶되, 확신이 없으면 후보로만 두고 사용자가 합친다.</li>
-<li><strong>검토 큐:</strong> 새 진술은 “AI 추정”으로 들어오고, 사용자가 확정·수정·기각한다. 결정·필수조건처럼 판단에 영향이 큰 종류만 확정을 요구하고, 의견·참고는 자동 목록화에 그친다.</li>
-<li><strong>증분 처리:</strong> 새 자료가 들어오면 관련 쟁점에 연결하고, 이전 결정을 대체할 가능성이 있으면 “대체 후보”로 표시한다. 자동으로 대체 확정하지 않는다.</li>
-<li><strong>실행 경로:</strong> 기존 구독 CLI 실행을 도구 없는 추출 작업으로 재사용한다. 비용·시간은 자료량에 비례하므로 진행률·중단·재개(FR-15·16)를 적용한다.</li>
+<li><strong>추출 단위:</strong> 근거 구간마다 AI가 진술 후보를 JSON으로 뽑는다. 진술마다 근거 구간 ID와 원문 인용을 필수로 하고, 인용이 원문과 일치하지 않으면 버린다(RESEARCH-04의 인용-원문 대조 선례).</li>
+<li><strong>주체·대상 정규화:</strong> 다른 표기(“한빛”, “한빛건설(주)”)는 별칭 후보로 두고 사람이 합친다.</li>
+<li><strong>검토 큐:</strong> 새 진술은 “AI 추정”으로 들어온다. 결정·필수조건처럼 판단에 영향이 큰 종류만 확정을 요구하고, 의견·참고는 목록화에 그친다. 3단계에서는 확정 권한을 역할로 제한한다.</li>
+<li><strong>증분 처리:</strong> 새 자료가 이전 결정을 대체할 가능성이 있으면 “대체 후보”로 표시하고 자동 확정하지 않는다.</li>
+<li><strong>실행 경로:</strong> 기존 구독 CLI를 도구 없는 추출 작업으로 재사용하고, 진행률·중단·재개(FR-15·16)를 적용한다.</li>
 </ul>
-</section><section class="doc-section" id="research-06-project-knowledge-section-6"><h2><span aria-hidden="true" class="section-num">06 /</span> 활용</h2>
-<div aria-label="조사 표 6" class="table-scroll" role="region" tabindex="0"><table>
+</section><section class="doc-section" id="research-06-project-knowledge-section-9"><h2><span aria-hidden="true" class="section-num">09 /</span> 활용</h2>
+<div aria-label="조사 표 10" class="table-scroll" role="region" tabindex="0"><table>
 <thead>
 <tr>
 <th>활용</th>
@@ -355,43 +549,42 @@ body.review-accepted .toc-links a[data-reviews]::after{display:none}
 <tr>
 <td>질의응답</td>
 <td>AI가 읽기 전용 도구(검색·진술 조회·타임라인·대상별 근거)로 찾아 답한다</td>
-<td>답의 문장마다 근거 인용. 근거가 없으면 “자료에 없음”</td>
+<td>문장마다 근거 인용, 근거가 없으면 “자료에 없음”, 답에 기준 날짜 표시</td>
 </tr>
 <tr>
 <td>요청 문맥 제안</td>
 <td>모델 수정 요청 시 대상·키워드에 걸리는 필수조건·결정을 칩으로 제안</td>
-<td>자동 첨부가 아니라 제안. 사용자가 고른다(FR-08)</td>
+<td>자동 첨부가 아니라 제안(FR-08)</td>
 </tr>
 <tr>
 <td>도면·모델 크리틱</td>
-<td>확정된 요구·결정과 현재 모델·도면을 대조. 치수·면적은 계산 도구로, 시각 판단은 화면 캡처로</td>
-<td>결과는 “AI 추정” 쟁점으로 객체에 연결. 법규 판단은 FR-21 범위</td>
+<td>구조화된 조건(§3.4)과 현재 모델의 계산 관측을 대조하고, 시각 판단은 화면 캡처로</td>
+<td>결과는 “AI 추정” 쟁점으로 객체에 연결. 법규 판단은 FR-21</td>
 </tr>
 <tr>
 <td>변경 영향</td>
-<td>“이 결정을 바꾸면?” → 연결된 대상·진술·과거 작업 목록</td>
-<td>연결된 것만 말하고, 연결이 없으면 모른다고 표시</td>
+<td>“이 결정을 바꾸면?” → 연결된 대상·진술·과거 작업</td>
+<td>연결된 것만 말하고 없으면 모른다고 표시</td>
 </tr>
 <tr>
 <td>브리핑</td>
-<td>프로젝트 첫 화면 요약: 주체, 열린 쟁점, 최근 결정, 다가오는 일정</td>
+<td>주체, 열린 쟁점, 최근 결정, 다가오는 일정</td>
 <td>요약 문장마다 근거 링크</td>
 </tr>
 </tbody>
 </table></div>
-<p>크리틱은 가치가 크지만 품질 편차도 가장 크다. 확정된 요구·결정이 쌓인 뒤에야 의미 있는 대조가 되므로 가장 뒤 단계에 둔다.</p>
-</section><section class="doc-section" id="research-06-project-knowledge-section-7"><h2><span aria-hidden="true" class="section-num">07 /</span> 시각화 판단</h2>
-<p>관계 그래프(노드-링크) 화면은 보기에는 좋지만 실무 질문에 직접 답하지 못한다. 노드가 수백 개를 넘으면 읽기 어렵고, 설계자가 실제로 찾는 것은 “이 대상에 걸린 조건”, “이 쟁점의 최신 결정”, “누가 언제 말했나”다. 그래서 다음 순서를 권한다.</p>
+<p>크리틱은 확정된 요구·결정이 쌓인 뒤에야 의미가 있으므로 가장 뒤 단계에 둔다.</p>
+</section><section class="doc-section" id="research-06-project-knowledge-section-10"><h2><span aria-hidden="true" class="section-num">10 /</span> 시각화 판단</h2>
+<p>전체 관계 그래프 화면은 보기에는 좋지만 실무 질문(“이 대상에 걸린 조건”, “이 쟁점의 최신 결정”, “누가 언제 말했나”)에 직접 답하지 못한다. 권하는 순서는 다음과 같다.</p>
 <ol>
-<li><strong>채팅 답변의 인용:</strong> 가장 자주 쓰는 경로. 인용을 누르면 원문 구간이 열린다.</li>
-<li><strong>Inspector의 근거 표시:</strong> 객체를 고르면 연결된 요구·결정·쟁점이 나온다. 기존 “관계” 탭의 확장이다.</li>
-<li><strong>프로젝트 정보 탭(왼쪽 레일 새 탭):</strong> 브리핑 카드, 쟁점 표(상태·최신 결정·근거), 타임라인(날짜별 자료·결정), 주체 목록, 자료함.</li>
-<li><strong>검토 큐:</strong> AI가 뽑은 진술을 확정·수정·기각하는 목록.</li>
-<li><strong>(선택) 관계 그래프:</strong> 한 쟁점이나 한 주체를 중심으로 1–2단계만 보여주는 국소 그래프. 전체 그래프는 만들지 않는다.</li>
+<li><strong>채팅 답변의 인용:</strong> 누르면 원문 구간이 열린다.</li>
+<li><strong>Inspector의 근거 표시:</strong> 객체를 고르면 연결된 요구·결정·쟁점·계산 관측이 나온다.</li>
+<li><strong>프로젝트 정보 탭(왼쪽 레일):</strong> 브리핑, 쟁점 표, 타임라인, 주체 목록, 자료함.</li>
+<li><strong>검토 큐:</strong> AI가 뽑은 진술의 확정·수정·기각.</li>
+<li><strong>(선택) Obsidian 내보내기 또는 국소 그래프:</strong> 전체 그래프는 VIDE에 만들지 않는다. 필요하면 쟁점·결정·주체 노트를 Obsidian 폴더로 한 방향 내보내 그 그래프 뷰를 쓴다.</li>
 </ol>
-<p>1–4는 실무 효용이 분명하고, 5는 사용 데이터가 쌓인 뒤 필요할 때 추가한다.</p>
-</section><section class="doc-section" id="research-06-project-knowledge-section-8"><h2><span aria-hidden="true" class="section-num">08 /</span> 위험과 대응</h2>
-<div aria-label="조사 표 7" class="table-scroll" role="region" tabindex="0"><table>
+</section><section class="doc-section" id="research-06-project-knowledge-section-11"><h2><span aria-hidden="true" class="section-num">11 /</span> 위험과 대응</h2>
+<div aria-label="조사 표 11" class="table-scroll" role="region" tabindex="0"><table>
 <thead>
 <tr>
 <th>위험</th>
@@ -402,49 +595,75 @@ body.review-accepted .toc-links a[data-reviews]::after{display:none}
 <tbody>
 <tr>
 <td>민감정보</td>
-<td>계약·견적·개인정보가 메일·회의록에 섞인다(J-08에서 실제로 “열 수 없는 파일”로 취급)</td>
-<td>로컬 저장 기본, 자료별 AI 전송 허용 표시, 폴더 수집 제외 규칙, 웹 공유 기본 제외, 비밀값 검사 재사용</td>
+<td>계약·견적·개인정보가 메일·회의록에 섞임(J-08)</td>
+<td>원본은 회사 서버에 그대로, 자료별 공개 범위·AI 전송 표시, 폴더 수집 제외 규칙, 웹 게시 기본 제외, 비밀값 검사 재사용</td>
 </tr>
 <tr>
-<td>AI 전송</td>
-<td>구독 CLI로 원문이 AI 공급자에 전달된다</td>
-<td>수집과 AI 정리를 분리하고, 정리 단계에서 전송 범위를 확인(FR-18·AC-30)</td>
+<td>권한 누수</td>
+<td>제한 폴더의 내용이 공용 원본으로 퍼짐</td>
+<td>자료별 공개 범위, 정리한 사람·범위 기록, 공개 범위 확대는 명시 행동</td>
+</tr>
+<tr>
+<td>외부 전송</td>
+<td>구독 CLI로 원문이 AI 공급자에 감, 공용 원본 위치에 따라 클라우드 저장</td>
+<td>회사 정책 두 겹 확인(§6), 자료별 전송 확인(FR-18·AC-30)</td>
 </tr>
 <tr>
 <td>환각·오연결</td>
-<td>없는 결정을 만들거나 다른 회사 발언으로 붙임</td>
+<td>없는 결정 생성, 다른 회사 발언으로 붙임</td>
 <td>근거 인용 필수·원문 대조, AI 추정 표시, 확정 전 사실 취급 금지</td>
 </tr>
 <tr>
 <td>낡은 정보</td>
 <td>이전 결정을 최신으로 답함</td>
-<td>진술 시점·대체 관계, 답변에 날짜 표시</td>
+<td>두 시간축·대체 관계, 답변에 날짜 표시</td>
+</tr>
+<tr>
+<td>동시 편집</td>
+<td>여러 사람이 같은 쟁점을 다르게 판단</td>
+<td>쌓기만 하는 기록, 판단을 나란히 보존, 확정 권한 역할 제한</td>
 </tr>
 <tr>
 <td>비용·시간</td>
-<td>큰 PDF·긴 메일 스레드</td>
+<td>큰 PDF·긴 스레드</td>
 <td>결정적 추출 우선, 해시 중복 제거, 진행률·중단, 쪽 범위 선택</td>
 </tr>
 <tr>
 <td>범위 팽창</td>
-<td>문서 관리 시스템 전체를 만드는 방향</td>
-<td>설계 판단에 쓰는 진술·쟁점까지로 한정, 버전 관리·결재는 비목표</td>
+<td>문서 관리·결재 시스템 전체로 커짐</td>
+<td>설계 판단에 쓰는 진술·쟁점까지로 한정</td>
 </tr>
 </tbody>
 </table></div>
-</section><section class="doc-section" id="research-06-project-knowledge-section-9"><h2><span aria-hidden="true" class="section-num">09 /</span> 사용자 결정이 필요한 항목</h2>
+</section><section class="doc-section" id="research-06-project-knowledge-section-12"><h2><span aria-hidden="true" class="section-num">12 /</span> 사용자 결정이 필요한 항목</h2>
 <ol>
-<li><strong>제품 범위:</strong> 이 기능을 후보 기능(C-02)으로 둘지, MVP 이후 확장으로 둘지, 현재 개발과 병행할지.</li>
-<li><strong>자료 입력 경로:</strong> 끌어 놓기·폴더 감시·메일 파일 중 무엇부터. 메일 환경(Outlook/Gmail, .msg 여부).</li>
-<li><strong>AI 전송 기본값:</strong> 수집한 자료를 AI 정리에 보내는 것을 자료별로 매번 확인할지, 프로젝트 단위로 허용할지.</li>
-<li><strong>확정 부담:</strong> 사용자가 확정해야 하는 진술 종류(결정·필수조건만 / 전부).</li>
-<li><strong>표본 자료:</strong> 품질 측정에 쓸 실제 프로젝트 자료 1세트(사본). 어떤 프로젝트를 쓸 수 있는지.</li>
-<li><strong>공유:</strong> 지식 DB를 웹 공유(팀·협력사)에 포함할지. 기본은 제외를 권한다.</li>
-<li><strong>크리틱 범위:</strong> 첫 크리틱을 “요구·결정 대비 모델 대조”로 한정할지, 도면 표현(표기·치수 누락)까지 볼지.</li>
+<li><strong>제품 범위:</strong> C-02 채택 여부와 시점(현재 개발과 병행 / MVP 이후).</li>
+<li><strong>공동 축적 허용:</strong> 호스트 제어는 한 작업환경으로 유지하고 지식 기록만 여러 PC가 함께 쓰는 예외를 둘지(ADR-018).</li>
+<li><strong>팀 공용 원본 위치:</strong> 사내 팀 서버(A) / Cloudflare D1(B) / Supabase(C). 회사 서버 운영 가능 여부와 외부 저장 정책에 달림.</li>
+<li><strong>회사 정책:</strong> 외부 클라우드 저장과 외부 AI 처리 각각의 허용 여부.</li>
+<li><strong>역할과 공개 범위:</strong> 관리자·편집(자료 추가·확정)·열람(질문)·외부 협력사의 권한, “결정”을 확정할 수 있는 사람, 자료 공개 범위 기본값.</li>
+<li><strong>범위:</strong> 사무소 내부 팀만인지, 협력사도 참여하는지.</li>
+<li><strong>자료 입력:</strong> 회사 서버 폴더 경로와 제외 규칙, 메일 환경(Outlook/Gmail, .msg 여부).</li>
+<li><strong>표본 자료:</strong> 품질 측정에 쓸 실제 프로젝트 자료 1세트(사본).</li>
+<li><strong>크리틱 범위:</strong> 첫 크리틱을 “구조화된 요구 대비 모델 대조”로 한정할지, 도면 표기 누락까지 볼지.</li>
 </ol>
+</section><section class="doc-section" id="research-06-project-knowledge-section-x13"><h2><span aria-hidden="true" class="section-num">13 /</span> 출처</h2>
+<ul>
+<li><a href="https://github.com/getzep/graphiti">Graphiti — getzep/graphiti</a> · <a href="https://neo4j.com/blog/developer/graphiti-knowledge-graph-memory/">Neo4j blog: Graphiti</a></li>
+<li><a href="https://github.com/xtdb/xtdb">XTDB</a> · <a href="https://blog.datomic.com/2023/04/datomic-is-free.html">Datomic is Free</a></li>
+<li><a href="https://biggo.com/news/202510130126_KuzuDB-embedded-graph-database-archived">KuzuDB archived — BigGo</a> · <a href="https://gdotv.com/blog/kuzu-legacy-embedded-graph-database-landscape/">Kuzu's legacy — gdotv</a></li>
+<li><a href="https://github.com/neo4j/neo4j">Neo4j (GPLv3 Community)</a> · <a href="https://graphdb.ontotext.com/documentation/11.4/licensing.html">GraphDB Licensing 11.4</a> · <a href="https://www.ontotext.com/blog/choosing-the-right-graphdb-editon-for-your-project/">Choosing the GraphDB edition</a></li>
+<li><a href="https://w3c-lbd-cg.github.io/bot/">Building Topology Ontology (W3C LBD)</a></li>
+<li><a href="https://obsidian.md/blog/free-for-work/">Obsidian is now free for work</a></li>
+<li><a href="https://alexgarcia.xyz/sqlite-vec/js.html">sqlite-vec in Node.js</a> · <a href="https://github.com/openclaw/openclaw/issues/66977">node:sqlite OMIT_LOAD_EXTENSION on macOS</a></li>
+<li><a href="https://neon.com/pricing">Neon pricing</a> · <a href="https://www.koyeb.com/blog/top-postgresql-database-free-tiers-in-2026">PostgreSQL free tiers 2026 — Koyeb</a></li>
+<li><a href="https://supabase.com/docs/guides/database/postgres/row-level-security">Supabase Row Level Security</a> · <a href="https://supabase.com/docs/guides/ai/rag-with-permissions">Supabase RAG with permissions</a></li>
+<li><a href="https://docs.turso.tech/features/embedded-replicas/introduction">Turso embedded replicas</a> · <a href="https://turso.tech/blog/turso-offline-sync-public-beta">Turso offline sync beta</a></li>
+<li><a href="https://dev.to/riversea/fts5-on-cloudflare-d1-cut-my-korean-keyword-search-from-220ms-to-22ms-heres-what-almost-broke-it-3l9p">FTS5 on Cloudflare D1 (Korean)</a> · <a href="https://developers.cloudflare.com/d1/sql-api/sql-statements/">D1 SQL statements</a></li>
+</ul>
 </section><footer class="doc-footer"><span>VIDE / PLANNING DOCUMENTS</span><span>문서 열람용 · 실제 CAD/BIM 지원은 구현·검증 후 선언</span></footer></article></main></div>
 <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
-<script id="source-data" type="application/json">{"research-06-project-knowledge":{"label":"프로젝트 지식 DB(온톨로지) — 자료 수집·정리·질의·크리틱","file":"RESEARCH-06-project-knowledge.md","markdown":"---\nid: RESEARCH-06\ntitle: 프로젝트 지식 DB(온톨로지) — 자료 수집·정리·질의·크리틱\nstatus: draft\nversion: 0.1\nupdated: 2026-09-28\nowner: agent:claude\nrelated: [PRD, FR-08, FR-09, FR-18, FR-21, FR-22, SPEC-03, ARCH-01, RESEARCH-04, PLAN-08, AC-12, AC-14, AC-30]\n---\n\n# RESEARCH-06 — 프로젝트 지식 DB(온톨로지)\n\n## 0. 목적과 범위\n\n### 0.1 사용자 요청(2026-09-28)\n\n메일·첨부파일(PDF·PPTX·CAD·Rhino 등)·회의록을 올리면 정보를 조합해 **어느 회사(누가) 무슨 말을 했는지, 프로젝트의 주요 쟁점, 진행 경과**를 파악해 DB로 정리한다. 이를 바탕으로 질문에 바로 답하고, 도면·모델 크리틱과 판단을 돕는 일종의 온톨로지를 만든다. 시각화 여부와 위치는 실무 효용을 따져 정한다. 이번 단계는 파악과 계획이며 구현은 하지 않는다.\n\n### 0.2 이 문서가 하는 일과 안 하는 일\n\n현재 제품 약속·코드와의 관계, 기능의 층 구분, 데이터 구조 초안, 형식별 수집 방법, 활용·시각화 판단, 위험과 사용자 결정 항목을 정리한다. 제품 범위 확정은 PRD(C-02 제안), 동작 계약은 후속 SPEC, 구현 순서는 [PLAN-08](../plans/PLAN-08-project-knowledge.md)이 소유한다. 실제 프로젝트 자료로 추출 품질을 측정하지 않았으므로 품질 수치는 제시하지 않는다.\n\n## 1. 이미 있는 약속·자산과의 관계\n\n새 개념처럼 보이지만 PRD가 이미 뼈대를 약속하고 있다. 빠진 것은 **외부 자료의 수집과 정리**다.\n\n| 기존 기준 | 내용 | 이 요청과의 관계 |\n|---|---|---|\n| PRD §6.2 | 근거·조건: “회의록·스케치·자료 위치, 적용 범위, 채택 여부” | 회의록·자료를 근거로 대상에 연결하는 요구가 이미 있다. 수집·정리 방법은 없다 |\n| PRD §6.3 | 원본에서 읽음 / 계산 / 사용자 확정 / AI 추정 구분, 추정의 자동 사실 승격 금지 | 온톨로지의 모든 진술에 그대로 적용해야 하는 핵심 규칙 |\n| PRD §6.4 | “이 부분을 유지하는 근거는?”, “이 관계는 사실인가 추정인가” | 질의응답의 목표 질문과 같다 |\n| PRD §6.5 | 전체 대화·회의록을 매 요청에 반복 입력하지 않음 | 검색·도구 기반 조회 구조가 필요하다는 뜻 |\n| FR-09·SPEC-03.4 | 값의 출처(원본/계산/사용자/AI)와 역할(사실/가정/필수조건/참고), 근거↔대상 양방향 조회 | 데이터 모델의 기준축. 새 모델은 이 축을 확장한다 |\n| FR-18·AC-30 | AI 전송·공개 범위 확인·제외 | 메일·계약 자료를 AI에 보내는 범위 동의가 필수 |\n| FR-21 | 법규·구조·도면 등 전문 스킬은 후속 확장 | 도면·모델 크리틱은 이쪽에 가깝다 |\n| ADR-010 | 첫 출시는 로컬 전용 | 지식 DB도 로컬 저장이 기본. 웹 공유는 별도 결정 |\n| RESEARCH-04 J-08 | 회의록 기능: 과거 형식·코드 없음, 회의 자료는 민감정보와 분리 불가, “열 수 없는 파일”로 취급돼 옴, 결정 이력 재구성이 어려웠던 실제 피해 | 필요성과 위험을 동시에 보여주는 선례 |\n\n코드 자산은 다음과 같다.\n\n- 저장: 로컬 SQLite(`node:sqlite`, 3.51). **FTS5 trigram 전문 검색이 추가 의존성 없이 동작**해 한국어 부분 문자열 검색이 된다(2026-09-28 확인).\n- 첨부: 현재 요청 첨부는 TXT·MD·CSV·JSON, 파일당 50,000바이트, 요청 본문에 그대로 포함된다(SPEC-01). 프로젝트 단위 자료함은 없다.\n- AI 실행: 구독 CLI(Claude Code·Codex)가 VIDE MCP 도구만 쓰는 구조(ARCH-01 §2·3). 지식 조회는 같은 방식의 **읽기 전용 도구**로 붙이면 기존 권한 경계를 유지한다.\n- 도면·모델: ZWCAD 연결 Sync가 문자·레이어·해치·xref를, Rhino Sync가 레이어·객체명·속성(user text)을 이미 읽는다. CAD/Rhino 첨부의 텍스트 정보 추출에 재사용할 수 있다.\n- 수량: 기본 집계(FR-22)가 면적·길이를 계산한다. 크리틱에서 AI가 숫자를 추측하지 않게 하는 근거가 된다.\n\n## 2. 기능을 네 층으로 나눈다\n\n| 층 | 하는 일 | AI 필요 | 먼저 쓸모가 생기는 시점 |\n|---|---|---|---|\n| ① 수집 | 파일·메일을 원본 그대로 보관하고 텍스트·메타데이터를 뽑는다(보낸 사람·날짜·페이지·슬라이드) | 대부분 불필요 | 자료가 한곳에 모이고 원문 검색이 되는 순간 |\n| ② 정리 | 원문에서 “누가·언제·무엇을(요구/결정/의견/질문/일정)”을 진술로 뽑고 사람·회사·공간·요소에 연결 | 필요(근거 구간 필수) | 브리핑·타임라인·쟁점 표 |\n| ③ 활용 | 질의응답(인용 포함), 모델 요청 시 관련 조건 제안, 도면·모델 크리틱, 변경 영향 확인 | 필요 | 실무 판단 보조 |\n| ④ 표시 | 목록·표·타임라인·객체의 근거 표시, (선택) 관계 그래프 | 불필요 | ②와 함께 |\n\n①만으로도 “그 메일 어디 있었지”, “구조 협의에서 기둥 간격 얘기가 언제 나왔지”에 답할 수 있다. ②③은 ①의 원문 근거를 전제로 해야 환각을 통제할 수 있다. 따라서 **수집 → 원문 검색 → 구조화 → AI 활용** 순서가 맞다.\n\n## 3. 데이터 구조(온톨로지) 초안\n\n그래프 DB나 RDF를 도입하지 않고 SQLite의 관계 테이블로 시작한다. 건축 프로젝트의 질문 대부분은 “대상·주체·시점·상태로 거르고 원문을 인용”하는 형태여서 관계형 + 전문 검색으로 충분하고, 기존 저장·백업·마이그레이션 체계(T-023)를 그대로 쓸 수 있다.\n\n### 3.1 개념\n\n| 개념 | 예 | 핵심 속성 |\n|---|---|---|\n| Source(자료) | 메일, PDF, PPTX, 회의록, DWG, 3DM | 원본 해시, 형식, 받은/작성 시각, 보낸 사람·받는 사람, 원본 보관 위치, AI 전송 허용 여부 |\n| Excerpt(근거 구간) | PDF 3쪽 두 번째 문단, 메일 본문 5–8행, 슬라이드 7, 도면의 문자 객체 | Source, 위치(쪽·슬라이드·행·CAD handle), 원문 텍스트 |\n| Party(주체) | 발주처 한빛건설, 구조사무소, 김OO 소장 | 조직/사람, 역할(발주처·설계·구조·설비·시공·인허가), 별칭 |\n| Subject(대상) | 3층 회의실, 코어, 외벽, 주차 램프, 대지 | 공간/요소/시스템/대지/문서 구분, 모델 객체 연결(선택) |\n| Statement(진술) | “3층 회의실을 2개로 분리 요청”, “기둥 간격 8.4 m 유지 결정” | 종류(요구·결정·의견·질문·사실·일정·변경), 말한 주체, 시점, 대상, 근거 Excerpt(1개 이상 필수), 출처 구분, 상태 |\n| Issue(쟁점) | 주차 대수 부족, 일조 사선 저촉 | 관련 진술 묶음, 상태(열림·합의·보류·종결), 최신 결정 |\n| Milestone(일정) | 인허가 접수, 중간 보고 | 날짜, 근거 진술 |\n\n### 3.2 진술에 반드시 둘 축(PRD §6.3과 일치)\n\n- **출처 구분:** 원문에서 읽음(원문 인용과 일치) / AI 추정(요약·해석) / 사용자 확정. AI 추정은 사용자가 확정하기 전까지 사실로 표시하지 않는다.\n- **역할:** 필수조건 / 결정 / 요청 / 의견·제안 / 질문 / 참고 사실.\n- **상태와 시간:** 제안됨 → 합의됨 → 대체됨(더 최신 결정이 덮음) / 철회. “대체됨”은 이전 진술을 지우지 않고 연결한다. 모순이 보이면 자동 판정하지 않고 쟁점으로 올린다.\n- **모델 연결:** 진술·쟁점을 Rhino/CAD 객체(핀과 같은 식별 기준)에 연결할 수 있다. 객체가 삭제·재생성되면 연결 끊김을 표시하고 가까운 객체에 자동 재연결하지 않는다(AC-21과 같은 원칙).\n\n### 3.3 기존 기록과의 연결\n\n요청 입력의 “참고 자료” 첨부를 Source 참조로 바꾸고, AI 작업 결과·검토본이 사용한 진술을 기록하면 SPEC-03.4의 “근거에서 대상으로, 대상에서 근거로” 조회가 외부 자료까지 확장된다.\n\n## 4. 수집 방법\n\n### 4.1 들어오는 경로\n\n| 경로 | 장점 | 부담 | 판단 |\n|---|---|---|---|\n| 자료함에 파일 끌어 놓기 | 사용자가 범위를 직접 통제, 구현 단순 | 매번 수동 | 1단계 기본 |\n| 프로젝트 폴더 지정·감시 | 기존 폴더 구조 그대로 사용, 새 파일 자동 수집 | 민감 파일까지 들어올 위험, 제외 규칙 필요 | 1단계에 “제외 목록 + 수집 전 확인”과 함께 |\n| 메일 파일(.eml/.msg) 내보내기 | 메일 헤더(보낸 사람·날짜·스레드)가 정확 | 사용자가 내보내야 함 | 1단계 |\n| 메일 계정 직접 연결(Outlook·Gmail) | 자동·완전 | 계정 인증, 범위 제어, 개인 메일 혼입 | 사용 패턴 확인 뒤 결정(OQ) |\n\n### 4.2 형식별 추출\n\n| 형식 | 추출 방법 | 비고 |\n|---|---|---|\n| EML | 헤더·본문·첨부 분리(표준 MIME) | 스레드·인용 부분 중복 제거 필요 |\n| MSG(Outlook) | 별도 파서 필요 | 사무소 메일 환경 확인 필요 |\n| PDF | 텍스트 레이어 추출, 쪽 번호 유지 | **스캔 PDF는 OCR 또는 AI 이미지 판독 필요** |\n| PPTX·DOCX·XLSX | ZIP 안 XML에서 텍스트·슬라이드·표 추출 | 이미지 속 글자는 제외 또는 AI 판독 |\n| HWP·HWPX | kordoc 등 한글 문서 도구 | 공문서가 흔함. 도구 선택 필요 |\n| DWG | ZWCAD 연결 경로의 문자·레이어·도면 제목·블록 속성 | 도면 “내용”은 선이 아닌 문자·표제란 위주 |\n| 3DM | Rhino worker의 레이어·객체명·user text | 모델 크리틱 입력과 공유 |\n| 이미지·스케치 | AI 이미지 판독(선택) | 전송 동의 대상 |\n| 녹음 | STT 없음(J-08) | 1단계 제외. 회의록 텍스트부터 받는다 |\n\n결정적 파서로 뽑을 수 있는 것은 AI를 쓰지 않는다. 같은 해시의 자료는 다시 처리하지 않는다.\n\n## 5. 정리(구조화) 방법\n\n- **추출 단위:** Source를 근거 구간 단위로 나누고, AI가 각 구간에서 진술 후보를 JSON으로 뽑는다. 진술마다 **근거 구간 ID와 원문 인용 문자열**을 필수로 하고, 인용이 원문과 일치하지 않으면 버린다(RESEARCH-04의 “인용-원문 문자열 대조” 선례).\n- **주체·대상 정규화:** 같은 회사·사람의 다른 표기(“한빛”, “한빛건설(주)”)를 별칭으로 묶되, 확신이 없으면 후보로만 두고 사용자가 합친다.\n- **검토 큐:** 새 진술은 “AI 추정”으로 들어오고, 사용자가 확정·수정·기각한다. 결정·필수조건처럼 판단에 영향이 큰 종류만 확정을 요구하고, 의견·참고는 자동 목록화에 그친다.\n- **증분 처리:** 새 자료가 들어오면 관련 쟁점에 연결하고, 이전 결정을 대체할 가능성이 있으면 “대체 후보”로 표시한다. 자동으로 대체 확정하지 않는다.\n- **실행 경로:** 기존 구독 CLI 실행을 도구 없는 추출 작업으로 재사용한다. 비용·시간은 자료량에 비례하므로 진행률·중단·재개(FR-15·16)를 적용한다.\n\n## 6. 활용\n\n| 활용 | 방식 | 필수 조건 |\n|---|---|---|\n| 질의응답 | AI가 읽기 전용 도구(검색·진술 조회·타임라인·대상별 근거)로 찾아 답한다 | 답의 문장마다 근거 인용. 근거가 없으면 “자료에 없음” |\n| 요청 문맥 제안 | 모델 수정 요청 시 대상·키워드에 걸리는 필수조건·결정을 칩으로 제안 | 자동 첨부가 아니라 제안. 사용자가 고른다(FR-08) |\n| 도면·모델 크리틱 | 확정된 요구·결정과 현재 모델·도면을 대조. 치수·면적은 계산 도구로, 시각 판단은 화면 캡처로 | 결과는 “AI 추정” 쟁점으로 객체에 연결. 법규 판단은 FR-21 범위 |\n| 변경 영향 | “이 결정을 바꾸면?” → 연결된 대상·진술·과거 작업 목록 | 연결된 것만 말하고, 연결이 없으면 모른다고 표시 |\n| 브리핑 | 프로젝트 첫 화면 요약: 주체, 열린 쟁점, 최근 결정, 다가오는 일정 | 요약 문장마다 근거 링크 |\n\n크리틱은 가치가 크지만 품질 편차도 가장 크다. 확정된 요구·결정이 쌓인 뒤에야 의미 있는 대조가 되므로 가장 뒤 단계에 둔다.\n\n## 7. 시각화 판단\n\n관계 그래프(노드-링크) 화면은 보기에는 좋지만 실무 질문에 직접 답하지 못한다. 노드가 수백 개를 넘으면 읽기 어렵고, 설계자가 실제로 찾는 것은 “이 대상에 걸린 조건”, “이 쟁점의 최신 결정”, “누가 언제 말했나”다. 그래서 다음 순서를 권한다.\n\n1. **채팅 답변의 인용:** 가장 자주 쓰는 경로. 인용을 누르면 원문 구간이 열린다.\n2. **Inspector의 근거 표시:** 객체를 고르면 연결된 요구·결정·쟁점이 나온다. 기존 “관계” 탭의 확장이다.\n3. **프로젝트 정보 탭(왼쪽 레일 새 탭):** 브리핑 카드, 쟁점 표(상태·최신 결정·근거), 타임라인(날짜별 자료·결정), 주체 목록, 자료함.\n4. **검토 큐:** AI가 뽑은 진술을 확정·수정·기각하는 목록.\n5. **(선택) 관계 그래프:** 한 쟁점이나 한 주체를 중심으로 1–2단계만 보여주는 국소 그래프. 전체 그래프는 만들지 않는다.\n\n1–4는 실무 효용이 분명하고, 5는 사용 데이터가 쌓인 뒤 필요할 때 추가한다.\n\n## 8. 위험과 대응\n\n| 위험 | 내용 | 대응 |\n|---|---|---|\n| 민감정보 | 계약·견적·개인정보가 메일·회의록에 섞인다(J-08에서 실제로 “열 수 없는 파일”로 취급) | 로컬 저장 기본, 자료별 AI 전송 허용 표시, 폴더 수집 제외 규칙, 웹 공유 기본 제외, 비밀값 검사 재사용 |\n| AI 전송 | 구독 CLI로 원문이 AI 공급자에 전달된다 | 수집과 AI 정리를 분리하고, 정리 단계에서 전송 범위를 확인(FR-18·AC-30) |\n| 환각·오연결 | 없는 결정을 만들거나 다른 회사 발언으로 붙임 | 근거 인용 필수·원문 대조, AI 추정 표시, 확정 전 사실 취급 금지 |\n| 낡은 정보 | 이전 결정을 최신으로 답함 | 진술 시점·대체 관계, 답변에 날짜 표시 |\n| 비용·시간 | 큰 PDF·긴 메일 스레드 | 결정적 추출 우선, 해시 중복 제거, 진행률·중단, 쪽 범위 선택 |\n| 범위 팽창 | 문서 관리 시스템 전체를 만드는 방향 | 설계 판단에 쓰는 진술·쟁점까지로 한정, 버전 관리·결재는 비목표 |\n\n## 9. 사용자 결정이 필요한 항목\n\n1. **제품 범위:** 이 기능을 후보 기능(C-02)으로 둘지, MVP 이후 확장으로 둘지, 현재 개발과 병행할지.\n2. **자료 입력 경로:** 끌어 놓기·폴더 감시·메일 파일 중 무엇부터. 메일 환경(Outlook/Gmail, .msg 여부).\n3. **AI 전송 기본값:** 수집한 자료를 AI 정리에 보내는 것을 자료별로 매번 확인할지, 프로젝트 단위로 허용할지.\n4. **확정 부담:** 사용자가 확정해야 하는 진술 종류(결정·필수조건만 / 전부).\n5. **표본 자료:** 품질 측정에 쓸 실제 프로젝트 자료 1세트(사본). 어떤 프로젝트를 쓸 수 있는지.\n6. **공유:** 지식 DB를 웹 공유(팀·협력사)에 포함할지. 기본은 제외를 권한다.\n7. **크리틱 범위:** 첫 크리틱을 “요구·결정 대비 모델 대조”로 한정할지, 도면 표현(표기·치수 누락)까지 볼지.\n"}}</script>
+<script id="source-data" type="application/json">{"research-06-project-knowledge":{"label":"프로젝트 지식 DB(온톨로지) — 자료 수집·정리·질의·크리틱·팀 공유","file":"RESEARCH-06-project-knowledge.md","markdown":"---\nid: RESEARCH-06\ntitle: 프로젝트 지식 DB(온톨로지) — 자료 수집·정리·질의·크리틱·팀 공유\nstatus: draft\nversion: 0.2\nupdated: 2026-09-29\nowner: agent:claude\nrelated: [PRD, FR-08, FR-09, FR-18, FR-21, FR-22, SPEC-03, ARCH-01, ADR-009, ADR-010, ADR-015, ADR-018, RESEARCH-04, PLAN-08, AC-12, AC-14, AC-30, AC-37]\n---\n\n# RESEARCH-06 — 프로젝트 지식 DB(온톨로지)\n\n## 0. 목적과 범위\n\n### 0.1 사용자 요청(2026-09-28~29)\n\n- 메일·첨부파일(PDF·PPTX·CAD·Rhino 등)·회의록을 모아 **어느 회사(누가) 무슨 말을 했는지, 주요 쟁점, 진행 경과**를 DB로 정리한다.\n- 이를 바탕으로 질문에 답하고, 도면·모델 크리틱과 판단을 돕는다.\n- 시각화 여부와 위치는 실무 효용을 따져 정한다.\n- 협의가 계속 오가고 기하학적 판단이 많은 방대한 정보를 어떤 구조와 DB에 담을지 정한다.\n- 공유 목표는 **여러 팀원이 함께 자료를 쌓고 질문하는 수준(아래 §5의 3단계)**이다.\n- 원본 자료는 **회사 서버에 있을 가능성이 높다.**\n\n### 0.2 이 문서가 하는 일과 안 하는 일\n\n현재 약속·코드와의 관계, 기능의 층, 데이터 구조, 저장소 비교, 공유 단계와 구성, 회사 서버 원본의 처리, 활용·시각화 판단, 위험과 사용자 결정 항목을 정리한다. 제품 범위는 PRD(C-02 제안), 저장·공유 구조의 결정은 [ADR-018 초안](../decisions/ADR-018-project-knowledge-store.md), 동작 계약은 후속 SPEC, 구현 순서는 [PLAN-08](../plans/PLAN-08-project-knowledge.md)이 소유한다. 실제 프로젝트 자료로 추출 품질을 측정하지 않았으므로 품질 수치는 제시하지 않는다.\n\n## 1. 이미 있는 약속·자산과의 관계\n\n새 개념처럼 보이지만 PRD가 이미 뼈대를 약속하고 있다. 빠진 것은 **외부 자료의 수집·정리와 여러 사람의 공동 축적**이다.\n\n| 기존 기준 | 내용 | 이 요청과의 관계 |\n|---|---|---|\n| PRD §6.2 | 근거·조건: “회의록·스케치·자료 위치, 적용 범위, 채택 여부” | 회의록·자료를 근거로 대상에 연결하는 요구가 이미 있다 |\n| PRD §6.3 | 원본에서 읽음 / 계산 / 사용자 확정 / AI 추정 구분, 추정의 자동 사실 승격 금지 | 모든 진술에 그대로 적용할 핵심 규칙 |\n| PRD §6.4 | “이 부분을 유지하는 근거는?”, “이 관계는 사실인가 추정인가” | 질의응답의 목표 질문과 같다 |\n| PRD §6.5 | 전체 대화·회의록을 매 요청에 반복 입력하지 않음 | 검색·도구 기반 조회 구조가 필요 |\n| FR-09·SPEC-03.4 | 값의 출처(원본/계산/사용자/AI)와 역할(사실/가정/필수조건/참고), 근거↔대상 양방향 조회 | 데이터 구조의 기준축 |\n| FR-18·AC-30 | AI 전송·공개 범위 확인·제외 | 메일·계약 자료를 AI·클라우드에 보내는 범위 동의가 필수 |\n| FR-21 | 법규·구조·도면 등 전문 스킬은 후속 확장 | 도면·모델 크리틱은 이쪽에 가깝다 |\n| PRD §14(범위) · AC-37 | **프로젝트별 한 로컬 작업환경**이 호스트 제어·원본 반영을 맡고, 같은 프로젝트를 여러 PC에서 공동 제어하는 기능은 후속 | 3단계 공동 축적과 부딪히는 원칙. 지식 공동 축적과 호스트 공동 제어를 구분하는 결정이 필요(ADR-018) |\n| ADR-010·ADR-015 | 로컬 제어 + 웹 열람·의견. 공유 서버는 Cloudflare Workers + D1 + 비공개 R2, 계정·멤버십·프로젝트 권한 구현됨 | 팀 공유 저장소 후보로 재사용 가능 |\n| RESEARCH-04 J-08 | 회의록: 과거 형식·코드 없음, 회의 자료는 민감정보와 분리 불가, 결정 이력 재구성이 어려웠던 실제 피해 | 필요성과 위험을 동시에 보여주는 선례 |\n\n코드 자산(2026-09-28~29 확인):\n\n- **로컬 저장:** SQLite(`node:sqlite` 3.51). 추가 설치 없이 다음이 동작한다.\n  - FTS5 trigram 전문 검색: 한국어 부분 문자열 검색\n  - R*Tree 공간 색인: 범위 상자 검색\n  - JSON 함수\n  - 재귀 쿼리: 관계 따라가기\n  - 확장 불러오기: Windows·Node 24에서 켜짐. 벡터 확장을 나중에 붙일 수 있다.\n- **첨부:** 현재 요청 첨부는 TXT·MD·CSV·JSON, 파일당 50,000바이트이고 요청 본문에 그대로 들어간다(SPEC-01). 프로젝트 단위 자료함은 없다.\n- **AI 실행:** 구독 CLI(Claude Code·Codex)가 VIDE MCP 도구만 쓴다(ARCH-01 §2·3). 지식 조회는 같은 방식의 **읽기 전용 도구**로 붙이면 기존 권한 경계를 유지한다.\n- **도면·모델:** ZWCAD 연결 Sync가 문자·레이어·해치·xref를, Rhino Sync가 레이어·객체명·속성(user text)을 이미 읽는다.\n- **수량:** 기본 집계(FR-22)와 측정 캐시·체크포인트가 모델 시점별 계산 결과를 보존한다. 기하 판단을 계산으로 기록하는 기반이 된다.\n\n## 2. 기능을 네 층으로 나눈다\n\n| 층 | 하는 일 | AI 필요 | 먼저 쓸모가 생기는 시점 |\n|---|---|---|---|\n| ① 수집 | 원본을 참조·해시로 등록하고 텍스트·메타데이터를 뽑는다(보낸 사람·날짜·쪽·슬라이드) | 대부분 불필요 | 자료가 한곳에 모이고 원문 검색이 되는 순간 |\n| ② 정리 | 원문에서 “누가·언제·무엇을(요구/결정/의견/질문/일정)”을 진술로 뽑고 주체·대상에 연결 | 필요(근거 구간 필수) | 브리핑·타임라인·쟁점 표 |\n| ③ 활용 | 질의응답(인용 포함), 모델 요청 시 관련 조건 제안, 도면·모델 크리틱, 변경 영향 확인 | 필요 | 실무 판단 보조 |\n| ④ 표시 | 목록·표·타임라인·객체의 근거 표시, (선택) 관계 그래프 | 불필요 | ②와 함께 |\n\n①만으로도 “그 메일 어디 있었지”에 답할 수 있다. ②③은 원문 근거가 있어야 환각을 통제할 수 있다. 따라서 **수집 → 원문 검색 → 구조화 → AI 활용** 순서가 맞다.\n\n## 3. 데이터 구조 — 엔진보다 기록 방식이 핵심\n\n정보가 방대하고, 협의가 계속 바뀌고, 기하 판단이 섞인다는 어려움은 DB 엔진을 바꿔서 풀리지 않는다. 다음 다섯 층의 **기록 방식**으로 푼다. 이 구조는 SQLite·PostgreSQL·그래프 DB 어디에도 올라간다.\n\n### 3.1 근거(원문) — 고치지 않는다\n\n| 개념 | 예 | 핵심 속성 |\n|---|---|---|\n| Source(자료) | 메일, PDF, PPTX, 회의록, DWG, 3DM | 원본 위치 참조(§6), 내용 해시, 형식, 작성·수신 시각, 보낸 사람·받는 사람, 공개 범위, AI 전송 허용 여부 |\n| Excerpt(근거 구간) | PDF 3쪽 두 번째 문단, 메일 본문 5–8행, 슬라이드 7, 도면의 문자 객체 | Source, 위치(쪽·슬라이드·행·CAD handle), 원문 텍스트 |\n\n모든 판단은 근거 구간으로 돌아와야 하며, 근거 구간은 수정하지 않는다.\n\n### 3.2 진술 — 덮어쓰지 않고 쌓기만 한다(시간축 두 개)\n\n- **종류:** 요구·결정·의견·질문·사실·일정·변경.\n- **필수 속성:** 말한 주체, 대상, 근거 구간(1개 이상), 출처 구분(원문 / AI 추정 / 사용자 확정), 역할(필수조건·결정·요청·의견·질문·참고).\n- **두 시간축:** “언제부터 유효한 내용인가”(유효 시간)와 “우리가 언제 알게 됐나”(기록 시간)를 따로 둔다. 그래야 “9월 10일 기준 합의 내용”, “그 모델을 만들 때 알고 있던 조건”에 답한다.\n- **대체와 무효:** 새 결정이 오면 이전 진술을 지우지 않고 “유효 종료 + 대체한 진술”로 연결한다. 모순은 자동 판정하지 않고 쟁점으로 올린다.\n- **확정도 사건이다:** 확정·기각·수정은 누가 언제 했는지를 새 기록으로 남긴다. 이전 상태를 덮어쓰지 않는다.\n\n이 방식은 시간축 지식 그래프(Graphiti)와 시간 여행 DB(XTDB, Datomic)가 쓰는 모델과 같다. 특정 엔진 없이 유효 시작·끝, 기록 시각, 대체 관계 열로 구현한다. 또한 §5의 공동 축적에서 **동기화 충돌을 거의 없애는** 핵심이다.\n\n### 3.3 대상과 관계 — 표준 어휘를 빌린 이름 붙은 연결\n\n| 개념 | 예 |\n|---|---|\n| Party(주체) | 발주처 한빛건설, 구조사무소, 김OO 소장(조직/사람, 역할, 별칭) |\n| Subject(대상) | 대지·건물·층·공간·요소·시스템·도면 |\n| Issue(쟁점) | 주차 대수 부족, 일조 사선 저촉(관련 진술 묶음, 상태, 최신 결정) |\n| Milestone(일정) | 인허가 접수, 중간 보고 |\n| Episode(묶음) | 회의 한 번, 메일 스레드 하나(그 안의 진술을 묶어 타임라인이 됨) |\n\n노드와 연결(요청했다, 결정했다, ~에 영향, ~에 포함, ~와 인접)을 표 두 개로 둔 속성 그래프다. 따라가기는 재귀 쿼리로 한다. 공간·요소 분류는 새로 만들지 않고 W3C 건물 위상 온톨로지(BOT: 대지·건물·층·공간·요소)와 IFC 분류명을 빌린다. RDF 저장소 전체를 도입하지는 않는다.\n\n### 3.4 기하 — 형상은 넣지 않고 모델 시점과 연결된 계산 결과를 기록한다\n\n- **형상 자체:** 3dm/DWG와 기존 표시 캐시에 둔다. 지식 DB에는 “어느 모델 시점의 어느 객체”라는 참조(모델 Sync/체크포인트 ID + 네이티브 객체 ID)만 둔다.\n- **기하 판단은 관측 기록:** 예를 들어 “공간 S-301 면적 28.2㎡, 모델 Sync #12 기준, 기하 면적 계산”처럼 값·단위·계산 방법·모델 시점을 함께 남긴다. 모델이 바뀌면 그 관측만 오래됨으로 표시하고 다시 계산한다(측정 캐시·체크포인트 구조와 같음).\n- **요구는 구조화된 조건으로도 저장:** 예를 들어 `대상=3층 회의실, 항목=면적, 조건=≥30㎡`처럼 둔다. 그러면 “28.2 \u003c 30 → 쟁점”을 AI 추측이 아니라 계산으로 잡아낸다. 이것이 크리틱의 뼈대다.\n- **공간 검색:** “근처·안에 무엇이 있나”는 객체 범위 상자를 공간 색인(R*Tree)에 넣어 후보를 먼저 거르고, 정밀 판단은 호스트 기하 도구로 한다.\n\n### 3.5 규모\n\n큰 프로젝트라도 자료 수만 건, 진술 수십만~백만 건 수준이다. 부피가 큰 형상은 파일에 남으므로 저장 엔진의 규모 한계는 쟁점이 아니다.\n\n## 4. 저장소(DB) 비교\n\n| 방식 | 좋은 점 | 걸리는 점 | 판단 |\n|---|---|---|---|\n| **SQLite**(+FTS5, R*Tree, JSON) | 이미 제품 저장소, 설치·서버 불필요, §3 구조 전부 가능(확인) | 여러 PC가 공유 폴더의 같은 파일에 동시에 쓰면 손상 위험 | **각 PC의 로컬 사본으로 사용** |\n| **PostgreSQL**(+PostGIS, pgvector) | 공간·벡터·전문 검색 한곳, 다중 사용자·행 단위 권한에 강함 | 서버 필요(사내 설치 또는 호스팅) | **팀 공용 원본 후보**(§5.3) |\n| **Neo4j / AuraDB**(그래프 DB) | 관계 따라가기 편함 | 별도 Java 서버, Community판 GPLv3의 배포 문제, 실제 질문 대부분은 거르기+인용이라 효용 낮음 | 보류 |\n| **Kùzu**(설치 없는 그래프 DB) | 앱 안에 넣는 그래프 DB | 2025-10 인수 뒤 개발 중단(저장소 보관), 커뮤니티 포크만 남음 | 제외 |\n| **RDF 저장소**(Ontotext GraphDB 등) | 건축 표준 온톨로지(BOT·ifcOWL)와 추론 | 무겁고 SPARQL, 무료판 동시 질의 2개·11.0부터 라이선스 키 필요 | 어휘만 빌림 |\n| **XTDB v2 / Datomic**(시간 여행·불변 기록 DB) | 두 시간축 조회가 기본 기능, 무료 공개 라이선스 | Java 서버, 틈새 기술 | 개념만 참고 |\n| **Graphiti**(시간축 지식 그래프 라이브러리) | §3.2 구조를 이미 구현 | 그래프 DB 서버와 자체 LLM API 키 필요 — 구독 CLI 방식과 맞지 않음 | 설계만 빌림 |\n| **Obsidian** | 사람이 읽는 Markdown, 링크·그래프 뷰, 2026-02부터 업무용 무료 | 구조 강제·트랜잭션·동시 편집 처리 없음 | **DB가 아니라 한 방향 내보내기(보기 창)** |\n| **벡터 검색**(sqlite-vec 등) | 의미 검색 | 구독 CLI는 임베딩을 만들지 않음 — 로컬 모델이나 API 키 필요 | 전문 검색 + 구조 조회 + AI 도구 검색으로 부족함이 측정될 때 추가 |\n\n## 5. 공유 단계와 구성\n\n### 5.1 단계\n\n| 단계 | 무엇 | 필요한 것 |\n|---|---|---|\n| 0. 나만 | 내 PC에서 쌓고 질문 | 현재 구조 |\n| 1. 결과 보여주기 | 브리핑·쟁점표를 웹 게시본으로 열람·의견 | 기존 웹 공유(SPEC-04) 확장 |\n| 2. 다른 사람도 질문 | 팀원이 직접 질문 | 지식 DB 공유 + 질문하는 사람의 AI 실행 경로 |\n| **3. 같이 쌓기(목표)** | 여러 팀원이 자료를 넣고 진술을 확정·수정 | 팀 공용 원본 + 동기화 + 역할·공개 범위 |\n\n### 5.2 3단계 권장 구성 — 공용 원본 + 각자 로컬 사본 + 각자 AI\n\n- **팀 공용 원본:** 모든 팀원의 기록(사건)이 모이는 중앙 저장소.\n- **각 PC의 로컬 사본(SQLite):** 검색·질문·모델 연결은 빠른 로컬 사본으로 하고 오프라인에서도 쓴다.\n- **AI는 각자 PC에서:** 자기가 넣은 자료의 정리와 자기 질문은 자기 구독 CLI로 처리한다. 서버 쪽 AI 실행(API 비용)은 필요하지 않다.\n- **동기화:** §3.2처럼 모든 기록을 고유 ID가 있는 사건으로 쌓기만 하므로, 동기화는 “모르는 사건 가져오기 + 내 새 사건 보내기”다. 두 사람의 다른 판단은 덮어쓰지 않고 나란히 남아 쟁점으로 보인다. 같은 자료를 두 사람이 넣어도 내용 해시로 한 번만 저장된다.\n- **호스트 제어는 그대로 한 작업환경:** 지식 공동 축적은 Rhino/CAD 원본 제어가 아니다. PRD §14의 “프로젝트별 한 로컬 작업환경이 호스트 제어·원본 반영” 원칙은 유지하고, 지식 기록만 여러 PC가 함께 쓴다(ADR-018에서 결정).\n\n### 5.3 팀 공용 원본의 후보\n\n| 후보 | 좋은 점 | 걸리는 점 |\n|---|---|---|\n| **A. 사내 팀 서버**(회사 서버·NAS에서 VIDE 팀 서비스 + DB) | 원본 자료 옆에 두고 사내망 안에서 완결, 기존 사내 백업 체계, 외부 반출 없음 | 누군가 운영(설치·업데이트·백업), 외부 접속은 VPN 필요, 새로 만들 서버 구성 |\n| **B. Cloudflare D1 + R2**(기존 웹 공유 기반) | 계정·멤버십·권한 이미 구현, D1이 SQLite라 로컬과 같은 구조, 한국어 FTS5 사례 확인, 운영 부담 적음 | 파생 데이터(진술·인용)가 외부 클라우드로 감, DB당 10GB(조직·프로젝트별 분할), 동기화 직접 구현 |\n| **C. Supabase**(PostgreSQL, 서울 리전) | 행 단위 권한·공간·벡터·파일·인증이 한곳 | 공유 시스템을 새 업체로 이중화, 무료 500MB |\n| (참고) Turso | 로컬 SQLite ↔ 클라우드 자동 동기화 | 오프라인 쓰기 동기화 공개 베타, 인증·권한 별도, 업체 추가 |\n\n**동기화 방식을 저장소와 분리**하면 A와 B를 나중에 바꾸거나 함께 쓸 수 있다(예: 사내는 A, 외부 협력사 게시본은 B).\n\n## 6. 원본 자료가 회사 서버에 있는 경우\n\n2026-09-29 사용자 의견: 원본 데이터는 회사 서버(파일 서버·NAS)에 있을 가능성이 높다.\n\n- **원본은 옮기지 않는다:** VIDE는 원본을 복사·업로드하지 않고 **위치 참조 + 내용 해시 + 추출 텍스트·근거 구간**만 저장한다. “원문 열기”는 회사 서버의 원본을 연다.\n- **읽기 전용 접근:** 사용자 계정의 권한으로 읽기만 한다. 원본 폴더에 쓰거나 이동하지 않는다.\n- **경로 정규화:** PC마다 드라이브 문자(Z: 등)가 달라도 같은 자료로 보도록 UNC 경로나 설정한 “프로젝트 루트” 기준 상대 경로로 저장한다. 파일이 옮겨지거나 이름이 바뀌어도 해시로 다시 찾는다.\n- **공유 폴더에 SQLite 파일을 두지 않는다:** 회사 서버의 공유 폴더에 지식 DB 파일 하나를 두고 여러 PC가 직접 쓰면 손상될 수 있다. 사내에 두려면 §5.3 A처럼 서비스를 거친다.\n- **권한 누수:** 제한된 폴더의 자료를 권한 있는 팀원이 정리하면 그 진술이 공용 원본을 통해 권한 없는 팀원에게 보일 수 있다. 자료별 공개 범위(팀 공개 / 특정 멤버 / 나만)를 두고 기본값을 정해야 한다. 폴더 권한을 자동으로 따라가는 방식은 구현이 어렵고 오판 위험이 있다.\n- **사외 접속:** 회사 밖에서는 원본을 열 수 없어도 로컬 사본의 근거 구간으로 답할 수 있다. 원문 열기만 VPN이 필요하다.\n- **외부 전송 정책은 두 겹이다:** 공용 원본을 사내에 두더라도, AI 정리 단계에서 원문이 AI 공급자(Anthropic·OpenAI)로 전송된다. 회사 정책에서 “외부 클라우드 저장 금지”와 “외부 AI 처리 허용”을 따로 확인해야 한다.\n\n**판단:** 원본은 회사 서버에 그대로 두는 것을 기본으로 한다. 팀 공용 원본은 회사 정책에 따라 고른다.\n- 사내 서버를 운영할 수 있고 외부 저장이 부담되면 **A(사내 팀 서버)**.\n- 파생 데이터의 외부 저장이 허용되고 운영 부담을 줄이려면 **B(D1)**.\n\n## 7. 수집 방법\n\n### 7.1 들어오는 경로\n\n| 경로 | 장점 | 부담 | 판단 |\n|---|---|---|---|\n| 회사 서버의 프로젝트 폴더 지정·감시 | 원본이 이미 거기 있음, 새 파일 자동 수집 | 민감 파일 혼입, 제외 규칙·수집 전 확인 필요 | **기본** |\n| 자료함에 파일 끌어 놓기 | 사용자가 범위를 직접 통제 | 매번 수동 | 기본 보조 |\n| 메일 파일(.eml/.msg) | 헤더(보낸 사람·날짜·스레드)가 정확 | 내보내기 필요 | 1단계 |\n| 메일 계정 직접 연결(Outlook·Gmail) | 자동·완전 | 인증, 범위 제어, 개인 메일 혼입 | 사용 패턴 확인 뒤 결정 |\n\n### 7.2 형식별 추출\n\n| 형식 | 추출 방법 | 비고 |\n|---|---|---|\n| EML | 헤더·본문·첨부 분리(표준 MIME) | 스레드·인용 부분 중복 제거 |\n| MSG(Outlook) | 별도 파서 | 사무소 메일 환경 확인 |\n| PDF | 텍스트 레이어 추출, 쪽 번호 유지 | 스캔 PDF는 OCR 또는 AI 이미지 판독 |\n| PPTX·DOCX·XLSX | ZIP 안 XML에서 텍스트·슬라이드·표 | 이미지 속 글자는 제외 또는 AI 판독 |\n| HWP·HWPX | 한글 문서 도구(kordoc 등) | 공문서에 흔함 |\n| DWG | ZWCAD 연결 경로의 문자·레이어·도면 제목·블록 속성 | 표제란·주석 위주 |\n| 3DM | Rhino worker의 레이어·객체명·user text | 모델 크리틱 입력과 공유 |\n| 이미지·스케치 | AI 이미지 판독(선택) | 전송 동의 대상 |\n| 녹음 | STT 없음(J-08) | 제외. 회의록 텍스트부터 |\n\n결정적 파서로 뽑을 수 있는 것은 AI를 쓰지 않는다. 같은 해시의 자료는 다시 처리하지 않는다.\n\n## 8. 정리(구조화) 방법\n\n- **추출 단위:** 근거 구간마다 AI가 진술 후보를 JSON으로 뽑는다. 진술마다 근거 구간 ID와 원문 인용을 필수로 하고, 인용이 원문과 일치하지 않으면 버린다(RESEARCH-04의 인용-원문 대조 선례).\n- **주체·대상 정규화:** 다른 표기(“한빛”, “한빛건설(주)”)는 별칭 후보로 두고 사람이 합친다.\n- **검토 큐:** 새 진술은 “AI 추정”으로 들어온다. 결정·필수조건처럼 판단에 영향이 큰 종류만 확정을 요구하고, 의견·참고는 목록화에 그친다. 3단계에서는 확정 권한을 역할로 제한한다.\n- **증분 처리:** 새 자료가 이전 결정을 대체할 가능성이 있으면 “대체 후보”로 표시하고 자동 확정하지 않는다.\n- **실행 경로:** 기존 구독 CLI를 도구 없는 추출 작업으로 재사용하고, 진행률·중단·재개(FR-15·16)를 적용한다.\n\n## 9. 활용\n\n| 활용 | 방식 | 필수 조건 |\n|---|---|---|\n| 질의응답 | AI가 읽기 전용 도구(검색·진술 조회·타임라인·대상별 근거)로 찾아 답한다 | 문장마다 근거 인용, 근거가 없으면 “자료에 없음”, 답에 기준 날짜 표시 |\n| 요청 문맥 제안 | 모델 수정 요청 시 대상·키워드에 걸리는 필수조건·결정을 칩으로 제안 | 자동 첨부가 아니라 제안(FR-08) |\n| 도면·모델 크리틱 | 구조화된 조건(§3.4)과 현재 모델의 계산 관측을 대조하고, 시각 판단은 화면 캡처로 | 결과는 “AI 추정” 쟁점으로 객체에 연결. 법규 판단은 FR-21 |\n| 변경 영향 | “이 결정을 바꾸면?” → 연결된 대상·진술·과거 작업 | 연결된 것만 말하고 없으면 모른다고 표시 |\n| 브리핑 | 주체, 열린 쟁점, 최근 결정, 다가오는 일정 | 요약 문장마다 근거 링크 |\n\n크리틱은 확정된 요구·결정이 쌓인 뒤에야 의미가 있으므로 가장 뒤 단계에 둔다.\n\n## 10. 시각화 판단\n\n전체 관계 그래프 화면은 보기에는 좋지만 실무 질문(“이 대상에 걸린 조건”, “이 쟁점의 최신 결정”, “누가 언제 말했나”)에 직접 답하지 못한다. 권하는 순서는 다음과 같다.\n\n1. **채팅 답변의 인용:** 누르면 원문 구간이 열린다.\n2. **Inspector의 근거 표시:** 객체를 고르면 연결된 요구·결정·쟁점·계산 관측이 나온다.\n3. **프로젝트 정보 탭(왼쪽 레일):** 브리핑, 쟁점 표, 타임라인, 주체 목록, 자료함.\n4. **검토 큐:** AI가 뽑은 진술의 확정·수정·기각.\n5. **(선택) Obsidian 내보내기 또는 국소 그래프:** 전체 그래프는 VIDE에 만들지 않는다. 필요하면 쟁점·결정·주체 노트를 Obsidian 폴더로 한 방향 내보내 그 그래프 뷰를 쓴다.\n\n## 11. 위험과 대응\n\n| 위험 | 내용 | 대응 |\n|---|---|---|\n| 민감정보 | 계약·견적·개인정보가 메일·회의록에 섞임(J-08) | 원본은 회사 서버에 그대로, 자료별 공개 범위·AI 전송 표시, 폴더 수집 제외 규칙, 웹 게시 기본 제외, 비밀값 검사 재사용 |\n| 권한 누수 | 제한 폴더의 내용이 공용 원본으로 퍼짐 | 자료별 공개 범위, 정리한 사람·범위 기록, 공개 범위 확대는 명시 행동 |\n| 외부 전송 | 구독 CLI로 원문이 AI 공급자에 감, 공용 원본 위치에 따라 클라우드 저장 | 회사 정책 두 겹 확인(§6), 자료별 전송 확인(FR-18·AC-30) |\n| 환각·오연결 | 없는 결정 생성, 다른 회사 발언으로 붙임 | 근거 인용 필수·원문 대조, AI 추정 표시, 확정 전 사실 취급 금지 |\n| 낡은 정보 | 이전 결정을 최신으로 답함 | 두 시간축·대체 관계, 답변에 날짜 표시 |\n| 동시 편집 | 여러 사람이 같은 쟁점을 다르게 판단 | 쌓기만 하는 기록, 판단을 나란히 보존, 확정 권한 역할 제한 |\n| 비용·시간 | 큰 PDF·긴 스레드 | 결정적 추출 우선, 해시 중복 제거, 진행률·중단, 쪽 범위 선택 |\n| 범위 팽창 | 문서 관리·결재 시스템 전체로 커짐 | 설계 판단에 쓰는 진술·쟁점까지로 한정 |\n\n## 12. 사용자 결정이 필요한 항목\n\n1. **제품 범위:** C-02 채택 여부와 시점(현재 개발과 병행 / MVP 이후).\n2. **공동 축적 허용:** 호스트 제어는 한 작업환경으로 유지하고 지식 기록만 여러 PC가 함께 쓰는 예외를 둘지(ADR-018).\n3. **팀 공용 원본 위치:** 사내 팀 서버(A) / Cloudflare D1(B) / Supabase(C). 회사 서버 운영 가능 여부와 외부 저장 정책에 달림.\n4. **회사 정책:** 외부 클라우드 저장과 외부 AI 처리 각각의 허용 여부.\n5. **역할과 공개 범위:** 관리자·편집(자료 추가·확정)·열람(질문)·외부 협력사의 권한, “결정”을 확정할 수 있는 사람, 자료 공개 범위 기본값.\n6. **범위:** 사무소 내부 팀만인지, 협력사도 참여하는지.\n7. **자료 입력:** 회사 서버 폴더 경로와 제외 규칙, 메일 환경(Outlook/Gmail, .msg 여부).\n8. **표본 자료:** 품질 측정에 쓸 실제 프로젝트 자료 1세트(사본).\n9. **크리틱 범위:** 첫 크리틱을 “구조화된 요구 대비 모델 대조”로 한정할지, 도면 표기 누락까지 볼지.\n\n## 출처\n\n- [Graphiti — getzep/graphiti](https://github.com/getzep/graphiti) · [Neo4j blog: Graphiti](https://neo4j.com/blog/developer/graphiti-knowledge-graph-memory/)\n- [XTDB](https://github.com/xtdb/xtdb) · [Datomic is Free](https://blog.datomic.com/2023/04/datomic-is-free.html)\n- [KuzuDB archived — BigGo](https://biggo.com/news/202510130126_KuzuDB-embedded-graph-database-archived) · [Kuzu's legacy — gdotv](https://gdotv.com/blog/kuzu-legacy-embedded-graph-database-landscape/)\n- [Neo4j (GPLv3 Community)](https://github.com/neo4j/neo4j) · [GraphDB Licensing 11.4](https://graphdb.ontotext.com/documentation/11.4/licensing.html) · [Choosing the GraphDB edition](https://www.ontotext.com/blog/choosing-the-right-graphdb-editon-for-your-project/)\n- [Building Topology Ontology (W3C LBD)](https://w3c-lbd-cg.github.io/bot/)\n- [Obsidian is now free for work](https://obsidian.md/blog/free-for-work/)\n- [sqlite-vec in Node.js](https://alexgarcia.xyz/sqlite-vec/js.html) · [node:sqlite OMIT_LOAD_EXTENSION on macOS](https://github.com/openclaw/openclaw/issues/66977)\n- [Neon pricing](https://neon.com/pricing) · [PostgreSQL free tiers 2026 — Koyeb](https://www.koyeb.com/blog/top-postgresql-database-free-tiers-in-2026)\n- [Supabase Row Level Security](https://supabase.com/docs/guides/database/postgres/row-level-security) · [Supabase RAG with permissions](https://supabase.com/docs/guides/ai/rag-with-permissions)\n- [Turso embedded replicas](https://docs.turso.tech/features/embedded-replicas/introduction) · [Turso offline sync beta](https://turso.tech/blog/turso-offline-sync-public-beta)\n- [FTS5 on Cloudflare D1 (Korean)](https://dev.to/riversea/fts5-on-cloudflare-d1-cut-my-korean-keyword-search-from-220ms-to-22ms-heres-what-almost-broke-it-3l9p) · [D1 SQL statements](https://developers.cloudflare.com/d1/sql-api/sql-statements/)\n"}}</script>
 <script id="reader-config" type="application/json">{"initial":"research-06-project-knowledge","siteTitle":"VIDE"}</script>
 <script>
 (() => {
