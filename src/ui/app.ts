@@ -50,6 +50,12 @@ import {
   storageKey,
 } from './model.ts';
 import { createObjectList, type SelectMode } from './object-list.ts';
+import {
+  bridgeState,
+  startRhinoBridge,
+  type BridgeMessage,
+  type BridgeTarget,
+} from './rhino-bridge.ts';
 import { initializeWorkspacePanels } from './workspace-panels.ts';
 import { createViewport } from './viewport.ts';
 
@@ -135,55 +141,54 @@ const reviews = initializeReviews(
   },
 );
 const viewportEmpty = initializeViewportEmpty($('canvas').parentElement!);
+let connectedTarget: BridgeTarget | undefined;
+const captureHostDocument = async (target: BridgeTarget, automatic = false) => {
+  if (
+    automatic &&
+    (!project ||
+      busy ||
+      draftHasInput(state) ||
+      points.length ||
+      state.messages.some((m) => m.request && ['queued', 'running'].includes(m.request.state)))
+  )
+    return false;
+  if (!project || busy) throw Error('현재 작업이 끝난 뒤 가져오세요.');
+  busy = true;
+  viewportEmpty.sync('loading');
+  render();
+  message('열린 호스트 문서의 모델을 가져오고 있습니다.');
+  try {
+    const request = await requestData(`/projects/${currentProject().id}/capture`, 'POST', {
+      ...target,
+      id: crypto.randomUUID(),
+    });
+    state.messages.push(requestMessage(request));
+    if (!request.result?.hostExecuted) {
+      renderMessages();
+      throw Error(errors[request.result?.code ?? ''] || 'Sync 실패');
+    }
+    viewportEmpty.sync('idle');
+    if (request.result?.hostExecuted && (!automatic || (!draftHasInput(state) && !points.length))) {
+      selectedResult = request.id;
+      state.selected = null;
+    }
+    renderMessages();
+    message(
+      request.result?.text ||
+        errors[request.result?.code ?? ''] ||
+        '작업 사본을 가져오지 못했습니다.',
+    );
+  } catch (error) {
+    viewportEmpty.sync('failed');
+    throw error;
+  } finally {
+    busy = false;
+    render();
+  }
+};
 initializeDocuments(
   message,
-  async (target, automatic = false) => {
-    if (
-      automatic &&
-      (!project ||
-        busy ||
-        draftHasInput(state) ||
-        points.length ||
-        state.messages.some((m) => m.request && ['queued', 'running'].includes(m.request.state)))
-    )
-      return false;
-    if (!project || busy) throw Error('현재 작업이 끝난 뒤 가져오세요.');
-    busy = true;
-    viewportEmpty.sync('loading');
-    render();
-    message('열린 호스트 문서의 모델을 가져오고 있습니다.');
-    try {
-      const request = await requestData(`/projects/${currentProject().id}/capture`, 'POST', {
-        ...target,
-        id: crypto.randomUUID(),
-      });
-      state.messages.push(requestMessage(request));
-      if (!request.result?.hostExecuted) {
-        renderMessages();
-        throw Error(errors[request.result?.code ?? ''] || 'Sync 실패');
-      }
-      viewportEmpty.sync('idle');
-      if (
-        request.result?.hostExecuted &&
-        (!automatic || (!draftHasInput(state) && !points.length))
-      ) {
-        selectedResult = request.id;
-        state.selected = null;
-      }
-      renderMessages();
-      message(
-        request.result?.text ||
-          errors[request.result?.code ?? ''] ||
-          '작업 사본을 가져오지 못했습니다.',
-      );
-    } catch (error) {
-      viewportEmpty.sync('failed');
-      throw error;
-    } finally {
-      busy = false;
-      render();
-    }
-  },
+  captureHostDocument,
   (selection) => {
     const request = state.messages.find((message) => message.id === displayedResult)?.request;
     const count = attachHostSelection(state, request, selection);
@@ -194,7 +199,11 @@ initializeDocuments(
         : 'Rhino에서 선택한 객체가 없습니다.',
     );
   },
-  (connection) => viewportEmpty.connection(connection),
+  (connection) => {
+    viewportEmpty.connection(connection);
+    const [instance, id] = connection?.key.split('/') ?? [];
+    connectedTarget = instance && id ? { instance, documentId: Number(id) } : undefined;
+  },
 );
 let inspectorTab: NonNullable<Parameters<typeof renderInspector>[3]> = 'properties';
 initializeInspector((tab) => {
@@ -1171,6 +1180,97 @@ window.addEventListener('vide-accounts-changed', () => {
     render();
     void refreshAccount();
   })().catch((error) => message(readableError(error).message));
+});
+
+// Rhino panel chat: messages typed in Rhino become ordinary VIDE requests on the synced basis.
+const rhinoOrigins = new Set<string>();
+const bridgeNotices: { id: string; text: string }[] = [];
+function rhinoBasis(target: BridgeTarget) {
+  return state.messages
+    .filter(
+      (entry) =>
+        entry.request?.result?.hostExecuted &&
+        entry.request.result.sourceDocument?.instance === target.instance &&
+        entry.request.result.sourceDocument.documentId === target.documentId &&
+        (entry.source === 'document' || entry.request.result.applicationState === 'succeeded'),
+    )
+    .at(-1);
+}
+async function submitFromRhino(incoming: BridgeMessage, target: BridgeTarget) {
+  try {
+    if (!project || !ready) throw Error('VIDE 작업 공간이 준비되지 않았습니다.');
+    if (state.messages.some((entry) => entry.id === incoming.id)) return;
+    const model =
+      models.find((option) => option.id === incoming.model) ??
+      models.find((option) => option.id === state.model) ??
+      models[0];
+    const effort = model.efforts.includes(incoming.effort) ? incoming.effort : model.efforts[0];
+    let basis = rhinoBasis(target);
+    if (!basis) {
+      message('Rhino에서 보낸 요청 · 먼저 현재 모델을 Sync합니다.');
+      await captureHostDocument(target);
+      basis = rhinoBasis(target);
+    }
+    if (!basis) throw Error('Sync 기준을 만들지 못했습니다. VIDE에서 Sync를 확인하세요.');
+    const available = basis.request.result?.objects ?? [];
+    const pins = incoming.pinIds.flatMap((id) => {
+      const object = available.find((item) => item.id === id);
+      return object ? [{ id, name: object.name, role: 'target' as const, basis: basis.id }] : [];
+    });
+    if (pins.length < incoming.pinIds.length)
+      bridgeNotices.push({
+        id: incoming.id,
+        text: `고정 객체 ${incoming.pinIds.length - pins.length}개가 현재 Sync 기준에 없어 제외했습니다. Sync 후 다시 고정하세요.`,
+      });
+    const draft = {
+      ...initial(),
+      messages: state.messages,
+      host: 'rhino' as const,
+      body: incoming.body,
+      model: model.id,
+      effort,
+      permission: incoming.permission === 'review' ? ('review' as const) : ('candidate' as const),
+      applyToSource: incoming.permission === 'apply',
+      baseRequestId: basis.id,
+      pins,
+    };
+    const projectId = project.id;
+    const request = await requestData(`/projects/${projectId}/requests`, 'POST', {
+      ...packet(draft),
+      id: incoming.id,
+    });
+    rhinoOrigins.add(request.id);
+    if (!state.messages.some((entry) => entry.id === request.id))
+      state.messages.push(requestMessage(request));
+    renderMessages();
+    render();
+    message('Rhino 패널의 요청을 실행합니다.');
+    void poll(request.id, projectId, state);
+  } catch (cause) {
+    const error = readableError(cause);
+    const text = errors[error.code ?? ''] || error.message;
+    bridgeNotices.push({ id: incoming.id, text: `요청을 실행하지 못했습니다 · ${text}` });
+    message('Rhino 요청 실패 · ' + text);
+  }
+}
+startRhinoBridge({
+  target: () => (ready ? connectedTarget : undefined),
+  state: () => {
+    const basis = connectedTarget && rhinoBasis(connectedTarget);
+    return bridgeState({
+      project: project?.name,
+      models,
+      model: state.model,
+      effort: state.effort,
+      basis: basis
+        ? `Sync ${basis.request.createdAt ? new Date(basis.request.createdAt).toLocaleTimeString() : ''}`.trim()
+        : '',
+      messages: state.messages,
+      origins: rhinoOrigins,
+      notices: bridgeNotices,
+    });
+  },
+  handle: submitFromRhino,
 });
 
 async function initializeWorkspace() {

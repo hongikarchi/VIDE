@@ -178,6 +178,13 @@ export class EditorSessions {
     if (changed) await this.persist();
     return documents.length ? { instance: documents[0].instance!, documents } : null;
   }
+  async chatBridge(target: HostTarget, payload: { ack: string[]; state: unknown }) {
+    await this.discover();
+    const worker = this.attached.get(target.instance);
+    if (!worker || worker.identity.documentId !== target.documentId)
+      throw failure('STALE_CONNECTION');
+    return worker.chatBridge(payload);
+  }
   async inspect(target: HostTarget) {
     const snapshot = await (await this.get(target)).inspectEditor();
     return {
