@@ -2,7 +2,7 @@
 id: HOST-ZWCAD
 title: ZWCAD 호스트 계약과 검증 범위
 status: review
-version: 0.19
+version: 0.20
 updated: 2026-09-28
 owner: agent:codex
 related: [SPEC-01, SPEC-02, FR-03, FR-04, AC-24, AC-38, OQ-03, OQ-10]
@@ -26,7 +26,7 @@ SDK의 AI query는 기본 50개·최대 100개/64 KiB 페이지와 ID 필터를 
 | H-ZWCAD-04 | 직선 세그먼트 평면 LWPolyline 읽기·정점 변경·이동 | 읽기·정점 변경·이동은 자체 SDK로 실증(§2.4·2.5). 범용 생성·후속 정점 수정, 소유 편집 문서의 기존 수정/새 객체 추가 적용·직접 이동/저장·재열기를 실증(§2.6·2.7). 현재 UI의 Codex 생성과 기본 이동/저장·미저장·Save As·닫힘 5종 재검증 통과([검수](../../tdd/VERIFY-2026-09-24-local-product-completion.md)) | 자체 SDK(읽기·생성·수정), 기존 COM(복사) | 일반 문서 복사, 다른 단위·블록·관계. 두 DWG의 직선 경계 정점 전달/새 객체 생성은 연계 검증 통과 |
 | H-ZWCAD-05 | CAD 경계를 연계 입력으로 읽고 같은 작업의 경계 수정 후보 생성 | CAD 경계→Rhino 돌출 실증(§2.1). 한 요청의 CAD 수정→실제 수정 경계 기반 Rhino 후보·부분 불명확 보존 실증([연계 검증](../../tdd/VERIFY-2026-09-24-linked-hosts.md)) | 자체 SDK 읽기 + Rhino 후보 | 다른 좌표 변환·일반 객체/관계의 연계 |
 | H-ZWCAD-06 | 평면 LINE과 LWPolyline 혼합 문서 | LINE 끝점/색 수정·추가·삭제, 고정 적용·Handle/유형 보존, 브라우저 가져오기/선택과 기본 Move·저장 재열기 실증 | 자체 SDK | 서로 다른 Z의 LINE·호·블록·관계, mm 외 편집 |
-| H-ZWCAD-07 | 현재 열린 도면의 명시적 연결·패널·읽기 Sync | 합성 CAD의 브라우저 표시·재열기·다중 도면·Live Sync 통과, 실제 작업 도면 연결/패널 확인([검수](../../tdd/VERIFY-2026-09-28-zwcad-attached-sync.md)) | 별도 자체 .NET 연결 DLL | 실제 대형 외부참조 표시·문자/해치·원본 AI 편집 |
+| H-ZWCAD-07 | 현재 열린 도면의 명시적 연결·패널·읽기 Sync | 합성 CAD의 브라우저 표시·재열기·다중 도면·Live Sync 통과, 실제 작업 도면 연결/패널·부분 Sync·재열기 확인(3,369개 표시, 472개 제외)([검수](../../tdd/VERIFY-2026-09-28-zwcad-attached-sync.md)) | 별도 자체 .NET 연결 DLL | 실제 대형 외부참조 표시·문자/해치·원본 AI 편집 |
 
 편집용 사본 읽기 지원 범위: 모델 공간의 mm(또는 정확히 환산되는 m) 독립 직선 XY LWPolyline과 같은 Z의 두 끝점을 가진 LINE. 그룹·확장 사전·XData·잠긴 레이어·선폭/두께를 확인하지 못하면 참고 전용이며, 단위 미상·bulge 호·지원 밖 객체가 있으면 일부만 성공으로 취득하지 않고 거절한다. 별도 읽기 표시는 §1.1을 따르며 새 지원을 과거 취득 자료에 소급하지 않는다.
 

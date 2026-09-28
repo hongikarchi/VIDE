@@ -2,7 +2,7 @@
 id: PLAN
 title: VIDE 실행 로드맵
 status: review
-version: 0.213
+version: 0.214
 updated: 2026-09-28
 owner: agent:codex
 related: [ARCH-01, PLAN-02, PLAN-03, SPEC-00, SPEC-01, SPEC-02, SPEC-03, SPEC-04, SPEC-05]
@@ -75,7 +75,7 @@ T-001~018의 번호·지원 증거는 유지한다. 각 티켓의 현재 결과�
 
 ### 6.5 현재 티켓 현황과 이어갈 위치
 
-**병렬 CAD 연결:** [PLAN-07](PLAN-07-zwcad-attached-sync.md)의 별도 연결 플러그인·패널·읽기 Sync를 구현하고 합성 CAD의 브라우저 표시·Live Sync·다중 도면 검증을 통과했다. 실제 기본도면은 패널/연결을 확인했으나 이전 DLL의 대형 외부참조 전송에서 실패했다. 객체별 예외/표시 데이터 폭증 처리 수정본은 큰 블록 뒤의 정상 객체 취득까지 통과했으며, 사용자 저장·ZWCAD 종료 후 DLL 교체와 실제 도면 Sync 재확인이 다음이다([검수](../tdd/VERIFY-2026-09-28-zwcad-attached-sync.md)). 최신 Rhino/UI/스케치 변경과 병합·관련 브라우저 회귀를 마쳤으며 기존 서버와 사용자 원본은 유지한다.
+**병렬 CAD 연결:** [PLAN-07](PLAN-07-zwcad-attached-sync.md)의 별도 연결 플러그인·패널·읽기 Sync와 합성 Live Sync·다중 도면 검증을 통과했다. 사용자 재시작 후 수정 DLL로 실제 기본도면 Sync와 브라우저 새로고침 후 표시 복원까지 확인했다. 3,841개 중 3,369개 표시, 472개 제외(대형 블록 14개 포함)로 부분 표시이며 전체 도면 재현은 아니다([검수](../tdd/VERIFY-2026-09-28-zwcad-attached-sync.md)). 별도 시험 포트 63703을 사용했고 기존 Rhino 서버·원본 도면은 유지했다. 다음은 대형 외부참조·문자/해치 표시 보완이며 현재 사용자 CAD AI 편집은 별도 남은 작업이다.
 
 **2026-09-28 사용성 묶음(사용자 지시, 구현 우선·문서 정리는 후속):** 뷰포트 관성 제거·커서 기준 줌, Rhino식 클릭/창(좌→우)/교차(우→좌) 다중 선택, 왼쪽 모델 연결 카드와 레이어→유형 객체 트리, 접는 REQUESTS/ACTIVE WORK/RECENT·요약 카드, AI 작업 과정 로그(추론·조회·실행 코드·검증 결과), 보내기 옆 요청 추가(Shift+Enter)를 구현했다. Rhino 패널 채팅(모델·effort·권한·선택 고정)은 연결된 Rhino가 메시지를 보관하고 열린 VIDE 화면이 가져가 같은 Sync 기준의 일반 요청으로 실행하며 진행 상황을 패널에 되돌린다(VIDE 화면이 열려 있어야 전달). 자동 회귀(단위·브라우저 전체, `browser-rhino-chat`)는 통과했고, 사용자 Rhino에서 새 RHP로 패널 채팅을 쓰려면 Rhino 재시작이 필요하다. 실제 건축 문서 대상 AI 편집 왕복과 SPEC·Design 반영은 후속이다.
 
