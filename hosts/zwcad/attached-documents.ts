@@ -139,6 +139,7 @@ export class AttachedZwcadDocuments {
     method: string,
     params: Record<string, unknown> = {},
     verify = true,
+    raw = false,
   ) {
     const connection = this.connections.get(target.instance);
     if (!connection || target.documentId !== 1) throw new DomainError('DOCUMENT_MISMATCH');
@@ -165,7 +166,7 @@ export class AttachedZwcadDocuments {
       },
     );
     const rejected = z.object({ ok: z.literal(false), code: z.string() }).safeParse(result);
-    if (rejected.success) throw new DomainError(rejected.data.code);
+    if (rejected.success && !raw) throw new DomainError(rejected.data.code);
     return result;
   }
   async list() {
@@ -205,6 +206,23 @@ export class AttachedZwcadDocuments {
       })
       .parse(await this.call(target, 'selection'));
     return { ...target, ...result, observedAt: new Date().toISOString() };
+  }
+  /** Entities of the open drawing, paged (AI query). */
+  async query(target: HostTarget, params: Record<string, unknown>) {
+    await this.discover();
+    return this.call(target, 'queryEntities', params, false);
+  }
+  /**
+   * Runs an AI method body on the open drawing: a read aborts its transaction; a write commits one
+   * transaction (one UNDO step in ZWCAD) and reports the handles it added, modified and erased.
+   */
+  async run(target: HostTarget, code: string, write: boolean) {
+    await this.discover();
+    // Compile, policy and runtime rejections come back as {ok:false} with diagnostics for the AI.
+    return (await this.call(target, 'runCode', { code, write }, false, true)) as Record<
+      string,
+      unknown
+    >;
   }
   async capture(target: HostTarget) {
     await this.discover();

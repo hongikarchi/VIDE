@@ -45,6 +45,16 @@ related: [PLAN, PLAN-10, PLAN-11, SPEC-01, SPEC-02, ARCH-01, Design, FR-05, FR-0
 - 설정은 계정·원격 접속 / AI / 연결 프로그램 / PC 프로그램 / 상태·오류 탭으로 나눈다.
 - Rhino 패널(좁은 폭): 빈 머리 띠 제거, 알림을 위로, 모드·모델 줄 바꿈.
 
-## 5. 마무리
+## 5. 내일 실무 준비 — CAD 반영과 Rhino↔CAD
+
+사용자의 다음 날 작업(철골보 중심선·전체 구조 곡선·단면 형식 라벨과 Brep·CAD 도면 반영·Rhino와 CAD 불일치 확인과 동기화)에 필요한 부족분을 먼저 채운다.
+
+- 열린 ZWCAD 도면의 AI 조회·직접 수정(`VIDEAIRUN` 명령 단위), 연결 프로그램의 ZWCAD 설치와 시작 시 자동 로드·패널.
+- Rhino+CAD 연계 요청에서 두 파일이 같은 원점을 쓴다고 가정하던 지시를 없애고, 대응 요소로 이동·회전·축척·잔차를 먼저 밝히게 했다.
+- 남은 것: 실제 ZWCAD 창에서 UNDO 한 번 되돌리기 확인, 정렬·차이·동기화를 반복 작업으로 만드는 sync jig(다음 작업).
+
+완료 기준: `tests/integration/zwcad-open-ai.mjs`(합성 도면, 실제 구독 AI)와 연결 프로그램 단위 시험 통과, 자동 로드 실험.
+
+## 6. 마무리
 
 `npm run verify` 해당 부분·표준 브라우저 시험·Rhino 정책 시험, staging 배포, 커밋·push, `npm run desktop:release -- 0.2.2`와 GitHub Releases 게시, 설치본 업데이트와 Rhino 플러그인 갱신 안내.

@@ -17,7 +17,7 @@ const definitions = {
   },
   execute: {
     description:
-      'Run SDK code in the task-owned working copy. Does not apply changes to the user document.',
+      'Run SDK code on the task target. The task goal says whether that is a working copy or the open user document.',
     schema: z.object({ targetRef: target, code: z.string().min(1).max(65536) }).strict(),
   },
   status: { description: 'Read the current task execution status.', schema: z.object({}).strict() },

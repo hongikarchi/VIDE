@@ -330,8 +330,15 @@ export class Execution {
       const previous = basis
         ? { ...basis, result: executionResultSchema.parse(basis.result) }
         : undefined;
+      // The drawing open in ZWCAD (connection plugin) is edited directly by its own path.
+      const openCadDrawing =
+        previous?.result.host === 'zwcad' &&
+        previous.result.displayOnly === true &&
+        (previous.result.sourceDocument as { connection?: string } | undefined)?.connection ===
+          'attached-editor';
       if (
         previous?.result.referenceOnly &&
+        !openCadDrawing &&
         (!isDwgSdkEditMode(previous.result.dwgEditMode) ||
           (previous.result.dwgEditMode === 'linear-entities-v1' && !this.zwcadSdk)) &&
         input.permission === 'candidate'
@@ -392,7 +399,7 @@ export class Execution {
             this.workspace.update(projectId, id, 'running', progress);
           },
         });
-        if (input.applyToSource && result.hostExecuted)
+        if (input.applyToSource && result.hostExecuted && target !== 'zwcad')
           await this.applyAttached!(request, result, controller.signal);
         else this.workspace.update(projectId, id, 'succeeded', result);
         return;

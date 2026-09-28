@@ -15,5 +15,11 @@
     <Reference Include="ZwManaged"><HintPath>$(ZwcadDirectory)\ZwManaged.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="ZwDatabaseMgd"><HintPath>$(ZwcadDirectory)\ZwDatabaseMgd.dll</HintPath><Private>false</Private></Reference>
     <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies.net48" Version="1.0.3" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.11.0" />
+  </ItemGroup>
+  <!-- AI code on the open drawing uses the work-copy worker's compiler and API policy. -->
+  <ItemGroup>
+    <Compile Include="..\worker\SdkCompiler.cs" Link="SdkCompiler.cs" />
+    <Compile Include="..\worker\CompilerDependencies.cs" Link="CompilerDependencies.cs" />
   </ItemGroup>
 </Project>

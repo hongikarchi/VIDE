@@ -7,7 +7,7 @@ import { remoteSession } from './remote-panel.ts';
 // this PC. Only on the PC itself (not on pages opened from other devices).
 const connectorsSchema = z.array(
   z.object({
-    id: z.string(),
+    id: z.enum(['rhino8', 'zwcad2023']),
     name: z.string(),
     available: z.boolean(),
     running: z.boolean(),
@@ -91,7 +91,7 @@ export function attachConnectorsPanel(section: HTMLElement, dialog: HTMLDialogEl
         !row.available
           ? '이 PC에 설치되지 않음'
           : pluginText[row.plugin] +
-              (row.running ? ' · 실행 중이면 종료 후 설치' : '') +
+              (row.running && row.id === 'rhino8' ? ' · 실행 중이면 종료 후 설치' : '') +
               (row.version ? ` · ${row.version}` : ''),
         label,
       );
@@ -110,10 +110,11 @@ export function attachConnectorsPanel(section: HTMLElement, dialog: HTMLDialogEl
       if (row.available)
         el('button', busy === row.id ? '설치 중…' : actionText[row.plugin], item, {
           type: 'button',
-          ...(busy || row.running ? { disabled: '' } : {}),
+          // Rhino rewrites its plugin registration on exit; ZWCAD picks up the new copy next start.
+          ...(busy || (row.running && row.id === 'rhino8') ? { disabled: '' } : {}),
         }).onclick = () => void install(row);
     }
-    el('small', 'ZWCAD·SketchUp·Revit은 순서대로 추가됩니다.', section);
+    el('small', 'SketchUp·Revit은 순서대로 추가됩니다.', section);
   }
   new MutationObserver(() => {
     if (dialog.open) {

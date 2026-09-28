@@ -101,6 +101,13 @@ namespace Vide.Zwcad.Connection
                 return new { ok = true, documentHash = Fingerprint(), selectedIds = selected.Status == ZwSoft.ZwCAD.EditorInput.PromptStatus.OK
                     ? selected.Value.GetObjectIds().Select(id => "cad-" + id.Handle.ToString()).ToArray() : new string[0] };
             }
+            if (method == "queryEntities") { using (Document.LockDocument()) return AttachedEdit.Query(Document, request); }
+            if (method == "runCode")
+            {
+                string code = Value(request, "code") ?? "";
+                return String.Equals(Value(request, "write"), "true", StringComparison.OrdinalIgnoreCase)
+                    ? (object)AttachedEdit.Queue(Document, code) : AttachedEdit.Run(Document, code, false);
+            }
             throw new InvalidOperationException("UNSUPPORTED_METHOD");
         }
         private void Listen()
@@ -125,7 +132,17 @@ namespace Vide.Zwcad.Connection
                         var completion = new TaskCompletionSource<object>();
                         pending.Enqueue(delegate {
                             if (completion.Task.IsCompleted) return;
-                            try { completion.TrySetResult(Dispatch(request)); } catch (System.Exception error) { completion.TrySetException(error); }
+                            try {
+                                var result = Dispatch(request);
+                                // An AI write runs later as a ZWCAD command (one UNDO step).
+                                if (result is Task<object> job)
+                                    job.ContinueWith(done => {
+                                        if (done.IsFaulted) completion.TrySetException(done.Exception.GetBaseException());
+                                        else if (done.IsCanceled) completion.TrySetCanceled();
+                                        else completion.TrySetResult(done.Result);
+                                    });
+                                else completion.TrySetResult(result);
+                            } catch (System.Exception error) { completion.TrySetException(error); }
                         });
                         if (!completion.Task.Wait(60000)) { completion.TrySetCanceled(); throw new InvalidOperationException("HOST_BUSY"); }
                         Reply(stream, completion.Task.Result);

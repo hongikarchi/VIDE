@@ -86,10 +86,16 @@ await exec(
 );
 const cadConnectionRuntime = join(directory, 'app', 'hosts', 'zwcad', 'connection', 'runtime');
 await mkdir(cadConnectionRuntime, { recursive: true });
-await copyFile(
-  join(root, '.vide/build/zwcad-connection/VIDE.Zwcad.Connection.dll'),
-  join(cadConnectionRuntime, 'VIDE.Zwcad.Connection.dll'),
-);
+// The connection plugin compiles AI code on the open drawing: it ships with the same compiler
+// assemblies as the worker (installed next to it by "연결 프로그램").
+for (const file of [
+  'VIDE.Zwcad.Connection.dll',
+  ...zwcadAssemblies.filter((name) => name !== 'VIDE.Zwcad.Worker.dll'),
+])
+  await copyFile(
+    join(root, '.vide/build/zwcad-connection', file),
+    join(cadConnectionRuntime, file),
+  );
 await writeFile(
   join(directory, 'app', 'package.json'),
   JSON.stringify({ ...pkg, version }, null, 2) + '\n',

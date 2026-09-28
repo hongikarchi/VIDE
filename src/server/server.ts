@@ -2,7 +2,7 @@ import { applyAttachedCandidate } from './attached-application.ts';
 import { LiveSync } from './live-sync.ts';
 import { RemoteAccess } from './remote-access.ts';
 import { Connectors, type ConnectorOptions } from './connectors.ts';
-import { appVersion, defaultRhinoPlugin } from './sdk-options.ts';
+import { appVersion, defaultRhinoPlugin, defaultZwcadConnection } from './sdk-options.ts';
 import { gzip } from 'node:zlib';
 import { AccountProfiles } from '../ai/account-profiles.ts';
 import { AccountLogin } from '../ai/account-login.ts';
@@ -146,6 +146,7 @@ export async function startServer({
   const connectors = new Connectors({
     directory: dirname(filename),
     bundledRhino: sdkOptions?.plugin ?? defaultRhinoPlugin(),
+    bundledZwcad: defaultZwcadConnection(),
     version: appVersion(),
     ...connectorOptions,
   });
@@ -415,6 +416,10 @@ export async function startServer({
       }
       if (url.pathname === '/api/v1/connectors/rhino8/install' && request.method === 'POST') {
         send(200, await connectors.installRhino());
+        return;
+      }
+      if (url.pathname === '/api/v1/connectors/zwcad2023/install' && request.method === 'POST') {
+        send(200, await connectors.installZwcad());
         return;
       }
       if (url.pathname === '/api/v1/remote' && request.method === 'GET') {

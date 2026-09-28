@@ -24,7 +24,17 @@ public sealed class ZwcadAttachedActions
         if (!File.Exists(path) || !String.IsNullOrEmpty(Application.DocumentManager.MdiActiveDocument.CommandInProgress)) return;
         string action = File.ReadAllText(path); File.Delete(path);
         try {
-            if (action == "move") {
+            if (action == "cmdline") {
+                // A line drawn by the LINE command itself (to compare UNDO behaviour).
+                first.SendStringToExecute("_.LINE 0,0 10,10  ", true, false, false);
+            } else if (action == "vars") {
+                File.WriteAllText(Path.Combine(folder, "vars.txt"), "UNDOCTL=" + Application.GetSystemVariable("UNDOCTL") + " UNDOMODE");
+            } else if (action == "undoon") {
+                first.SendStringToExecute("_.UNDO _A ", true, false, false);
+            } else if (action == "undo") {
+                // The user's UNDO (one step) in the drawing.
+                first.SendStringToExecute("_.UNDO 1 ", true, false, false);
+            } else if (action == "move") {
                 using (first.LockDocument())
                 using (var tx = first.Database.TransactionManager.StartTransaction()) {
                     var table = (BlockTable)tx.GetObject(first.Database.BlockTableId, OpenMode.ForRead);

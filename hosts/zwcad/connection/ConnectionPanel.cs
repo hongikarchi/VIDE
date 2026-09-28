@@ -8,8 +8,21 @@ using ZwSoft.ZwCAD.Runtime;
 using ZwSoft.ZwCAD.Windows;
 using Cad = ZwSoft.ZwCAD.ApplicationServices.Application;
 
+[assembly: ExtensionApplication(typeof(Vide.Zwcad.Connection.ConnectionStartup))]
 namespace Vide.Zwcad.Connection
 {
+    /// <summary>Loaded at ZWCAD startup ("연결 프로그램" install): open the VIDE CAD panel once.</summary>
+    public sealed class ConnectionStartup : IExtensionApplication
+    {
+        public void Initialize() { Cad.Idle += ShowOnce; }
+        private static void ShowOnce(object sender, EventArgs e)
+        {
+            Cad.Idle -= ShowOnce;
+            try { new ConnectionCommands().Show(); } catch { /* No UI yet; VIDECADPANEL opens it. */ }
+        }
+        public void Terminate() { }
+    }
+
     public sealed class ConnectionCommands
     {
         private static PaletteSet palette;
@@ -57,7 +70,7 @@ namespace Vide.Zwcad.Connection
                 if (uri.Scheme != "http" || uri.Host != "127.0.0.1" || uri.UserInfo.Length != 0) throw new InvalidOperationException("로컬 VIDE 주소를 확인하세요.");
                 Process.Start(new ProcessStartInfo(uri.AbsoluteUri) { UseShellExecute = true });
             });
-            notice.Text = "현재 도면의 읽기 연결입니다. 형상·파일 저장을 변경하지 않습니다.";
+            notice.Text = "VIDE의 수정 요청(Accept edits·Auto)은 연결한 도면에 바로 반영되며 U(UNDO) 한 번으로 되돌립니다. 파일 저장은 하지 않습니다.";
             layout.Controls.Add(notice); Controls.Add(layout);
             timer.Tick += (_, __) => RefreshState(); timer.Start(); RefreshState();
         }

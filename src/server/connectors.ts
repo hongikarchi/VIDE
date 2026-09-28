@@ -14,23 +14,31 @@ const exec = promisify(execFile);
 export const RHINO_PLUGIN_ID = '6bde756c-cb1f-45bc-90fa-784c098c2c38';
 const RHINO_INSTALL = 'HKLM\\SOFTWARE\\McNeel\\Rhinoceros\\8.0\\Install';
 const RHINO_PLUGIN_KEY = `HKCU\\Software\\McNeel\\Rhinoceros\\8.0\\Plug-ins\\${RHINO_PLUGIN_ID}`;
+// ZWCAD 2023 loads a managed DLL at startup from its per-user "Applications" registration.
+const ZWCAD_INSTALL = 'HKLM\\SOFTWARE\\ZWSOFT\\ZWCAD\\2023';
+const zwcadAppKey = (locale: string) =>
+  `HKCU\\Software\\ZWSOFT\\ZWCAD\\2023\\${locale}\\Applications\\VIDE`;
 
 export interface Registry {
   get(key: string, name: string): Promise<string | undefined>;
   set(key: string, name: string, value: string | number): Promise<void>;
+  /** Value names of a key (empty when it does not exist). */
+  names?(key: string): Promise<string[]>;
 }
 export interface ConnectorOptions {
   /** User data folder (plugins are installed under it). */
   directory: string;
   /** The plugin shipped with this program (VIDE.Worker.rhp next to its deps.json). */
   bundledRhino: string;
+  /** The ZWCAD connection plugin (VIDE.Zwcad.Connection.dll with its compiler assemblies). */
+  bundledZwcad?: string;
   version: string;
   registry?: Registry;
   /** Whether a process image (e.g. Rhino.exe) is running. */
   running?: (image: string) => Promise<boolean>;
 }
 export interface ConnectorStatus {
-  id: 'rhino8';
+  id: 'rhino8' | 'zwcad2023';
   name: string;
   /** The host program is installed on this PC. */
   available: boolean;
@@ -54,6 +62,16 @@ export const windowsRegistry: Registry = {
       /* Missing key or value. */
     }
     return undefined;
+  },
+  async names(key) {
+    try {
+      const { stdout } = await exec('reg', ['query', key], { windowsHide: true });
+      return text(stdout)
+        .map((line) => /^\s+(\S+)\s+REG_\w+/.exec(line)?.[1])
+        .filter((name): name is string => !!name);
+    } catch {
+      return [];
+    }
   },
   async set(key, name, value) {
     await exec(
@@ -98,8 +116,83 @@ export class Connectors {
     this.options = {
       registry: windowsRegistry,
       running: processRunning,
+      bundledZwcad: '',
       ...options,
     };
+  }
+  /** ZWCAD 2023's installed UI languages (its Applications registrations are per language). */
+  private async zwcadLocales() {
+    const names = (await this.options.registry.names?.(ZWCAD_INSTALL)) ?? [];
+    return names
+      .map((name) => /^ZWCAD\.([a-z]{2}-[A-Z]{2})\.Version$/.exec(name)?.[1])
+      .filter((locale): locale is string => !!locale);
+  }
+  private async zwcadBundle() {
+    const file = this.options.bundledZwcad;
+    if (!file || !existsSync(file)) return undefined;
+    const hash = await digest(file);
+    return { file, hash, folder: `${this.options.version}-${hash.slice(0, 8)}` };
+  }
+  private async zwcadStatus(): Promise<ConnectorStatus> {
+    const { registry, running } = this.options;
+    const locales = await this.zwcadLocales();
+    const available = locales.length > 0;
+    const path = available ? await registry.get(zwcadAppKey(locales[0]), 'LOADER') : undefined;
+    const bundled = await this.zwcadBundle();
+    const root = join(this.options.directory, 'plugins', 'zwcad');
+    let plugin: ConnectorStatus['plugin'] = 'none';
+    let version: string | undefined;
+    if (path) {
+      const inside = relative(root, resolve(path));
+      if (inside.startsWith('..') || inside.includes(':') || inside.split(sep).length !== 2)
+        plugin = 'other';
+      else {
+        version = inside.split(sep)[0];
+        plugin =
+          existsSync(path) && bundled && (await digest(path)) === bundled.hash
+            ? 'current'
+            : 'outdated';
+      }
+    }
+    return {
+      id: 'zwcad2023',
+      name: 'ZWCAD 2023',
+      available,
+      running: available && (await running('ZWCAD.exe')),
+      plugin,
+      version,
+      path,
+    };
+  }
+  /**
+   * Install or update the ZWCAD connection plugin (loads when ZWCAD starts; its "VIDE CAD" panel
+   * opens once). The DLL goes to a new versioned folder, so a running ZWCAD never blocks it.
+   */
+  async installZwcad() {
+    const { registry } = this.options;
+    const locales = await this.zwcadLocales();
+    if (!locales.length) throw new DomainError('HOST_NOT_INSTALLED');
+    const bundled = await this.zwcadBundle();
+    if (!bundled) throw new DomainError('PLUGIN_MISSING');
+    const root = join(this.options.directory, 'plugins', 'zwcad');
+    const target = join(root, bundled.folder);
+    await mkdir(target, { recursive: true });
+    for (const entry of await readdir(dirname(bundled.file), { withFileTypes: true }))
+      if (entry.isFile() && entry.name.endsWith('.dll'))
+        await copyFile(join(dirname(bundled.file), entry.name), join(target, entry.name));
+    const plugin = join(target, basename(bundled.file));
+    if ((await digest(plugin)) !== bundled.hash) throw new DomainError('PLUGIN_COPY_FAILED');
+    for (const locale of locales) {
+      const key = zwcadAppKey(locale);
+      await registry.set(key, 'DESCRIPTION', 'VIDE 연결');
+      await registry.set(key, 'LOADER', plugin);
+      await registry.set(key, 'LOADCTRLS', 2);
+      await registry.set(key, 'MANAGED', 1);
+    }
+    for (const entry of await readdir(root, { withFileTypes: true }).catch(() => []))
+      if (entry.isDirectory() && entry.name !== bundled.folder)
+        await rm(join(root, entry.name), { recursive: true, force: true }).catch(() => {});
+    return this.list();
   }
   private get pluginRoot() {
     return join(this.options.directory, 'plugins', 'rhino');
@@ -140,6 +233,7 @@ export class Connectors {
         version,
         path,
       },
+      await this.zwcadStatus(),
     ];
   }
   /** Install or update the Rhino plugin; takes effect when Rhino starts next. */

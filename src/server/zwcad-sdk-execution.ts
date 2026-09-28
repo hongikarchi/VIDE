@@ -77,7 +77,159 @@ export class ZwcadSdkExecution {
   async open(result: Record<string, unknown>) {
     return this.editors.open(sourceSchema.parse(result));
   }
-  async run({ input, previous, items, signal, provider, update }: Task) {
+  /**
+   * The drawing open in the user's ZWCAD (connection plugin): the AI queries its entities and runs
+   * method bodies on it directly. Plan mode only reads (every transaction is aborted); the other
+   * modes commit one transaction per execute, which ZWCAD's UNDO reverts in one step.
+   */
+  private async runAttached({ input, previous, items, signal, provider, update }: Task) {
+    const basis = z
+      .object({ instance: z.string(), documentId: z.number() })
+      .parse(previous!.result.sourceDocument);
+    const attached = this.editors.attached;
+    const write = input.permission !== 'review';
+    const targetRef = 'zwcad-open:' + basis.instance;
+    const activity: { at: string; kind: string; text: string; detail?: string }[] = [];
+    const changes = {
+      added: new Set<string>(),
+      modified: new Set<string>(),
+      erased: new Set<string>(),
+    };
+    let attempts = 0,
+      queries = 0,
+      writes = 0;
+    const progress = () => ({ queries, attempts, completed: writes });
+    const report = (kind: string, text: string, detail?: string) => {
+      activity.push({ at: new Date().toISOString(), kind, text, ...(detail ? { detail } : {}) });
+      update({
+        phase: 'host',
+        host: 'zwcad',
+        hostExecuted: writes > 0,
+        progress: progress(),
+        activity: [...activity],
+      });
+    };
+    const handlers: {
+      query: (args?: QueryPageOptions) => Promise<unknown>;
+      execute: (args: { code: string }) => Promise<unknown>;
+    } = {
+      query: async (args = {}) => {
+        queries++;
+        report('query', `도면 조회 ${queries}회차`);
+        return attached.query(basis, {
+          offset: args.offset ?? 0,
+          limit: args.limit ?? 100,
+          handles: args.objectIds?.map((id) => id.replace(/^cad-/, '')),
+        });
+      },
+      execute: async ({ code }) => {
+        if (signal.aborted) throw failure('CANCELLED');
+        if (attempts >= executionLimits(input).maxHostCommands) throw failure('HOST_COMMAND_LIMIT');
+        attempts++;
+        report('execute', `${write ? 'ZWCAD 도면 수정' : 'ZWCAD 도면 읽기'} ${attempts}회차`, code);
+        const result = await attached.run(basis, code, write);
+        const outcome = z
+          .object({
+            ok: z.boolean(),
+            code: z.string().optional(),
+            diagnostics: z.array(z.string()).optional(),
+            changes: z
+              .object({
+                added: z.array(z.string()),
+                modified: z.array(z.string()),
+                erased: z.array(z.string()),
+              })
+              .optional(),
+          })
+          .passthrough()
+          .parse(result);
+        if (!outcome.ok) {
+          report(
+            'error',
+            '실행 거절 · AI가 수정해 다시 시도',
+            (outcome.diagnostics ?? []).join('\n'),
+          );
+          return result;
+        }
+        if (write && outcome.changes) {
+          writes++;
+          for (const id of outcome.changes.added) changes.added.add(id);
+          for (const id of outcome.changes.modified)
+            if (!changes.added.has(id)) changes.modified.add(id);
+          for (const id of outcome.changes.erased) {
+            changes.added.delete(id);
+            changes.modified.delete(id);
+            changes.erased.add(id);
+          }
+          report(
+            'result',
+            `도면에 반영 · 추가 ${outcome.changes.added.length} · 수정 ${outcome.changes.modified.length} · 삭제 ${outcome.changes.erased.length}`,
+          );
+        }
+        return result;
+      },
+    };
+    const scope = this.options.tools.issue({
+      targetRef,
+      handlers,
+      isCurrent: () => !signal.aborted,
+      maxCalls: executionLimits(input).maxToolCalls,
+      ttlMs: Math.min(600000, (executionLimits(input).timeoutSeconds + 60) * 1000),
+    });
+    const goal = `Target is the drawing open in the user's ZWCAD 2023 (${targetRef}). It is NOT a copy: ${write ? 'every successful execute is committed to that drawing immediately as one UNDO step' : 'this is Plan mode, so execute runs read-only (its transaction is always discarded)'}.
+Native coordinates are drawing units (usually millimetres; query returns "units"). Other hosts' geometry and sketches are metres, so convert explicitly.
+Use query (offset/limit pages, objectIds = entity handles) to inspect entities: handle, type, layer, colour, bounds and type-specific data (line ends, polyline vertices, text, block name/attributes, dimension values). Its "layers" lists every layer with its entity count.
+execute takes a C# method body. The wrapper imports System, System.Linq, ZwSoft.ZwCAD.DatabaseServices, ZwSoft.ZwCAD.Geometry and supplies Database db and Transaction tr. Use tr.GetObject and the model-space BlockTableRecord; create layers in db.LayerTableId when needed; append new entities and register them with tr.AddNewlyCreatedDBObject. The controller commits or discards the transaction; never call Commit/Abort, open or save files, use shell/network/reflection or active documents. Return small JSON-serializable values (numbers, strings, arrays, anonymous objects), never SDK objects.
+Keep existing handles, layers and colours unless the request changes them; edit entities in place rather than erasing and redrawing. Do not touch protected/reference objects. Work in few, complete executes; query after writing to confirm. When a dimension is missing but a standard or conventional value exists, use it and say so.
+Limits: ${executionLimits(input).maxToolCalls} tool calls, ${executionLimits(input).maxHostCommands} executes, ${executionLimits(input).timeoutSeconds} seconds. Reply in Korean with what actually changed in the drawing (and that ZWCAD's UNDO reverts it).
+User request: ${input.body || '첨부한 설계 문맥을 검토해 주세요.'}`;
+    try {
+      report('host', '열린 ZWCAD 도면에 연결');
+      const response = await provider({
+        url: this.options.origin() + '/mcp',
+        targetRef,
+        token: scope.token,
+        tools: Object.keys(handlers),
+      }).run(
+        { goal, revision: 1, items, includedIds: items.map((item) => item.id) },
+        {
+          signal,
+          onProgress: () => update({ phase: writes ? 'host' : 'model', progress: progress() }),
+        },
+      );
+      const changed = {
+        added: [...changes.added],
+        modified: [...changes.modified],
+        removed: [...changes.erased],
+      };
+      // Show the drawing as it is now (a fresh read-only Sync of the open drawing).
+      const model = writes ? await attached.capture(basis).catch(() => undefined) : undefined;
+      return {
+        ...(model ?? {}),
+        ...response,
+        progress: progress(),
+        activity,
+        changes: changed,
+        appliedDirectly: writes > 0,
+        hostExecuted: writes > 0,
+        host: 'zwcad',
+        executionMode: 'sdk',
+        baseRequestId: model ? undefined : previous?.id,
+        sourceDocument: model?.sourceDocument ?? previous?.result.sourceDocument,
+      };
+    } finally {
+      scope.revoke();
+    }
+  }
+  async run(task: Task) {
+    const { input, previous, items, signal, provider, update } = task;
+    if (
+      previous?.result?.displayOnly === true &&
+      z
+        .object({ connection: z.literal('attached-editor') })
+        .safeParse(previous.result.sourceDocument).success
+    )
+      return this.runAttached(task);
     if (previous?.result?.displayOnly === true) throw failure('ZWCAD_ATTACHED_EDIT_UNAVAILABLE');
     const options = this.options;
     await mkdir(options.directory, { recursive: true });

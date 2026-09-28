@@ -108,3 +108,50 @@ test('fresh PC: registers the plugin the way Rhino does for a dragged-in plugin'
   assert.equal((await none.list())[0].available, false);
   await assert.rejects(() => none.installRhino(), { code: 'HOST_NOT_INSTALLED' });
 });
+
+test('ZWCAD connection plugin installs with its compiler assemblies and loads at startup', async (t) => {
+  const directory = await mkdtemp(join(tmpdir(), 'vide-connectors-'));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  const program = join(directory, 'program');
+  await mkdir(program, { recursive: true });
+  const bundled = join(program, 'VIDE.Zwcad.Connection.dll');
+  await writeFile(bundled, 'cad plugin v1');
+  await writeFile(join(program, 'Microsoft.CodeAnalysis.dll'), 'roslyn');
+  const install = String.raw`HKLM\SOFTWARE\ZWSOFT\ZWCAD\2023`;
+  const registry = fakeRegistry({ [`${install}|ZWCAD.ko-KR.Version`]: '23.20.3.11' });
+  registry.names = async (k) =>
+    [...registry.values.keys()]
+      .filter((entry) => entry.startsWith(k + '|'))
+      .map((e) => e.split('|')[1]);
+  const data = join(directory, 'data');
+  const connectors = new Connectors({
+    directory: data,
+    bundledRhino: join(program, 'missing.rhp'),
+    bundledZwcad: bundled,
+    version: '0.2.3',
+    registry,
+    // A running ZWCAD does not block it: the copy goes to a new folder, loaded at next start.
+    running: async () => true,
+  });
+  let cad = (await connectors.list()).find((row) => row.id === 'zwcad2023');
+  assert.equal(cad.available, true);
+  assert.equal(cad.plugin, 'none');
+  cad = (await connectors.installZwcad()).find((row) => row.id === 'zwcad2023');
+  assert.equal(cad.plugin, 'current');
+  const app = String.raw`HKCU\Software\ZWSOFT\ZWCAD\2023\ko-KR\Applications\VIDE`;
+  const loader = registry.values.get(`${app}|LOADER`);
+  assert.ok(loader.startsWith(join(data, 'plugins', 'zwcad')));
+  assert.ok(existsSync(join(loader, '..', 'Microsoft.CodeAnalysis.dll')));
+  assert.equal(registry.values.get(`${app}|LOADCTRLS`), 2);
+  assert.equal(registry.values.get(`${app}|MANAGED`), 1);
+  // Without ZWCAD on the PC there is nothing to install.
+  const none = new Connectors({
+    directory: data,
+    bundledRhino: bundled,
+    bundledZwcad: bundled,
+    version: '0.2.3',
+    registry: { ...fakeRegistry(), names: async () => [] },
+    running: async () => false,
+  });
+  await assert.rejects(() => none.installZwcad(), { code: 'HOST_NOT_INSTALLED' });
+});

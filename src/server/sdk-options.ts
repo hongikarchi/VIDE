@@ -10,6 +10,14 @@ export function defaultRhinoPlugin() {
     ? bundled
     : join(root, '.vide/build/rhino-worker/bin/net8.0-windows/VIDE.Worker.rhp');
 }
+/** The ZWCAD connection plugin: bundled with the PC program, else the development build. */
+export function defaultZwcadConnection() {
+  const root = fileURLToPath(packageRoot),
+    bundled = join(root, 'hosts/zwcad/connection/runtime/VIDE.Zwcad.Connection.dll');
+  return existsSync(bundled)
+    ? bundled
+    : join(root, '.vide/build/zwcad-connection/VIDE.Zwcad.Connection.dll');
+}
 let version: string | undefined;
 /** Program version: the PC program's, else package.json's. */
 export function appVersion() {
