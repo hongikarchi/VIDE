@@ -1,5 +1,7 @@
 import { applyAttachedCandidate } from './attached-application.ts';
 import { LiveSync } from './live-sync.ts';
+import { RemoteAccess } from './remote-access.ts';
+import { gzip } from 'node:zlib';
 import { AccountProfiles } from '../ai/account-profiles.ts';
 import { AccountLogin } from '../ai/account-login.ts';
 import { z } from 'zod';
@@ -18,6 +20,11 @@ interface ServerOptions {
   applicationOptions?: ConstructorParameters<typeof Applications>[2];
   onShutdown?: () => void;
   sdkOptions?: Omit<ConstructorParameters<typeof SdkExecution>[0], 'tools' | 'origin'>;
+  /** Test seams for the remote tunnel process and Worker calls. */
+  remoteOptions?: Pick<
+    ConstructorParameters<typeof RemoteAccess>[0],
+    'executable' | 'spawnProcess' | 'fetcher'
+  >;
 }
 import { readWebAsset } from './web-assets.ts';
 import { Extensions } from '../core/extensions.ts';
@@ -93,6 +100,7 @@ export async function startServer({
   applicationOptions,
   onShutdown,
   sdkOptions,
+  remoteOptions,
 }: ServerOptions) {
   const store = new Store(filename),
     bootstrap = randomBytes(32).toString('hex'),
@@ -116,6 +124,23 @@ export async function startServer({
     ? new SdkExecution({ ...sdkOptions, tools: agentTools, origin: () => origin })
     : undefined;
   const liveSync = sdk ? new LiveSync(workspace, sdk) : undefined;
+  // Other devices reach this server only through the paired tunnel (see remote-access.ts).
+  const remoteAccess = new RemoteAccess({
+    ...remoteOptions,
+    directory: dirname(filename),
+    port: () => Number(new URL(origin).port),
+    status: async () => {
+      const rhino = (await sdk?.editors.list(true)) || { documents: [] };
+      const cad = (await zwcadSdk?.editors.attached.list()) || [];
+      return {
+        documents: [...rhino.documents, ...cad].slice(0, 20).map((item) => ({
+          host: item.host ?? 'rhino',
+          name: item.name,
+          live: item.live ?? false,
+        })),
+      };
+    },
+  });
   const zwcadSdk = sdkOptions
     ? new ZwcadSdkExecution({
         directory: join(dirname(filename), 'zwcad-sdk-models'),
@@ -210,17 +235,55 @@ export async function startServer({
       'Content-Security-Policy',
       "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'",
     );
-    const send = (status: number, data: unknown) => {
-      response.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8' });
-      response.end(JSON.stringify(data));
+    // Requests through the tunnel carry its public Host; they get their own origin and sessions.
+    const remote = !!remoteAccess.host && request.headers.host === remoteAccess.host;
+    const requestOrigin = remote ? `https://${remoteAccess.host}` : origin;
+    // Remote clients are on mobile networks: compress large bodies when they accept gzip.
+    const deliver = (status: number, contentType: string, payload: string | Buffer) => {
+      if (
+        remote &&
+        payload.length > 16384 &&
+        /\bgzip\b/.test(String(request.headers['accept-encoding'] ?? ''))
+      ) {
+        gzip(payload, { level: 4 }, (error, packed) => {
+          if (error) {
+            response.writeHead(status, { 'Content-Type': contentType });
+            response.end(payload);
+            return;
+          }
+          response.writeHead(status, {
+            'Content-Type': contentType,
+            'Content-Encoding': 'gzip',
+            Vary: 'Accept-Encoding',
+          });
+          response.end(packed);
+        });
+        return;
+      }
+      response.writeHead(status, { 'Content-Type': contentType });
+      response.end(payload);
     };
+    const send = (status: number, data: unknown) =>
+      deliver(status, 'application/json; charset=utf-8', JSON.stringify(data));
     try {
-      if (request.headers.host !== authority) throw new DomainError('FORBIDDEN');
-      if (request.headers.origin && request.headers.origin !== origin)
+      if (!remote && request.headers.host !== authority) throw new DomainError('FORBIDDEN');
+      if (request.headers.origin && request.headers.origin !== requestOrigin)
         throw new DomainError('FORBIDDEN');
-      if (request.headers['sec-fetch-site'] === 'cross-site') throw new DomainError('FORBIDDEN');
-      const url = new URL(request.url || '/', origin);
+      const url = new URL(request.url || '/', requestOrigin);
+      // The sharing site's "open" link navigates here cross-site; only that page load may be.
+      if (
+        request.headers['sec-fetch-site'] === 'cross-site' &&
+        !(
+          remote &&
+          request.method === 'GET' &&
+          request.headers['sec-fetch-mode'] === 'navigate' &&
+          !url.pathname.startsWith('/api/')
+        )
+      )
+        throw new DomainError('FORBIDDEN');
       if (url.pathname === '/mcp') {
+        // The agent tool endpoint serves local AI processes only.
+        if (remote) throw new DomainError('FORBIDDEN');
         if (stopping) throw new DomainError('APP_STOPPING');
         await agentTools.handle(request, response, body);
         return;
@@ -228,8 +291,7 @@ export async function startServer({
       if (request.method === 'GET') {
         const asset = await readWebAsset(url.pathname);
         if (asset) {
-          response.writeHead(200, { 'Content-Type': asset.contentType });
-          response.end(asset.body);
+          deliver(200, asset.contentType, asset.body);
           return;
         }
       }
@@ -238,8 +300,18 @@ export async function startServer({
         send(405, { code: 'METHOD_NOT_ALLOWED', requestId });
         return;
       }
-      if (request.method !== 'GET' && request.headers.origin !== origin)
+      if (request.method !== 'GET' && request.headers.origin !== requestOrigin)
         throw new DomainError('FORBIDDEN');
+      if (remote && url.pathname === '/api/v1/session' && request.method === 'POST') {
+        const input = await body(request);
+        const remoteSession = await remoteAccess.login(input.remoteToken);
+        response.setHeader(
+          'Set-Cookie',
+          `vide_remote=${remoteSession}; HttpOnly; Secure; SameSite=Strict; Path=/`,
+        );
+        send(200, { authenticated: true, remote: true });
+        return;
+      }
       if (url.pathname === '/api/v1/session' && request.method === 'POST') {
         const input = await body(request);
         if (!equal(input.token, bootstrap)) throw new DomainError('UNAUTHORIZED');
@@ -255,8 +327,47 @@ export async function startServer({
         .map((s) => s.trim())
         .find((s) => s.startsWith(`vide_session_${new URL(origin).port}=`))
         ?.split('=')[1];
-      if (!equal(cookie, session)) throw new DomainError('UNAUTHORIZED');
+      if (remote) {
+        const remoteCookie = request.headers.cookie
+          ?.split(';')
+          .map((s) => s.trim())
+          .find((s) => s.startsWith('vide_remote='))
+          ?.split('=')[1];
+        if (!remoteAccess.authorized(remoteCookie)) throw new DomainError('UNAUTHORIZED');
+        // Remote sessions do project work only: no app control, accounts, settings or extensions.
+        if (
+          url.pathname === '/api/v1/shutdown' ||
+          url.pathname.startsWith('/api/v1/remote') ||
+          (request.method !== 'GET' &&
+            /^\/api\/v1\/(accounts|settings|extensions)(\/|$)/.test(url.pathname))
+        )
+          throw new DomainError('FORBIDDEN');
+      } else if (!equal(cookie, session)) throw new DomainError('UNAUTHORIZED');
       if (stopping && request.method !== 'GET') throw new DomainError('APP_STOPPING');
+      if (url.pathname === '/api/v1/remote' && request.method === 'GET') {
+        send(200, await remoteAccess.status());
+        return;
+      }
+      const remoteAction = /^\/api\/v1\/remote\/(pair|start|stop|unpair)$/.exec(url.pathname);
+      if (remoteAction && request.method === 'POST') {
+        const input = await body(request);
+        if (remoteAction[1] === 'pair')
+          send(
+            200,
+            await remoteAccess.pair(
+              z.string().min(4).max(20).parse(input.code),
+              z.string().min(1).max(80).parse(input.name),
+              input.origin === undefined ? undefined : z.string().url().parse(input.origin),
+            ),
+          );
+        else if (remoteAction[1] === 'start') send(200, await remoteAccess.start());
+        else {
+          if (remoteAction[1] === 'stop') await remoteAccess.stop();
+          else await remoteAccess.unpair();
+          send(200, await remoteAccess.status());
+        }
+        return;
+      }
       if (url.pathname === '/api/v1/shutdown' && request.method === 'POST' && onShutdown) {
         stopping = true;
         send(200, { stopping: true });
@@ -881,10 +992,18 @@ export async function startServer({
               : (() => {
                   // Entries the user removed from the conversation are not listed.
                   const hidden = workspace.hiddenIds(projectId);
+                  // The list carries no display meshes (tens of MB per Sync); the UI fetches one
+                  // request in full when it shows that model.
                   return workspace
                     .list(projectId)
                     .filter((row) => !hidden.has(row.id))
-                    .map(withApplications);
+                    .map(withApplications)
+                    .map((row) => {
+                      const result = row.result;
+                      if (!result || !Array.isArray(result.scene)) return row;
+                      const { scene: _scene, definitions: _definitions, ...rest } = result;
+                      return { ...row, result: { ...rest, sceneOmitted: true } };
+                    });
                 })(),
           );
           return;
@@ -992,8 +1111,10 @@ export async function startServer({
     launchUrl: `${origin}/#${bootstrap}`,
     store,
     agentTools,
+    remoteAccess,
     close: async () => {
       stopping = true;
+      await remoteAccess.stop();
       await accountLogin.close();
       agentTools.close();
       await execution.close();

@@ -2480,3 +2480,24 @@ body.panel-mode .chat-heading h2 {
     opacity: 0.6;
   }
 }
+
+/* Remote access settings; local-only controls are hidden on pages opened through the tunnel. */
+.remote-panel .remote-pair {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.remote-panel input {
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  padding: 5px 8px;
+  min-width: 0;
+}
+.remote-error {
+  color: #b3452c;
+}
+:root[data-remote='true'] #quit-app,
+:root[data-remote='true'] #ai-settings,
+:root[data-remote='true'] .settings-actions {
+  display: none !important;
+}

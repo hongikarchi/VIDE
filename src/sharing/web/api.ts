@@ -14,6 +14,8 @@ const errors: Record<string, string> = {
   SUBMISSION_CONFLICT: '같은 제출 번호로 다른 내용이 이미 접수되었습니다.',
   INVALID_EMAIL_OR_PASSWORD: '이메일 또는 비밀번호를 확인해 주세요.',
   EMAIL_NOT_VERIFIED: '이메일 확인 링크를 먼저 열어 주세요.',
+  HOST_OFFLINE: 'PC가 꺼져 있거나 원격 접속이 꺼져 있습니다.',
+  HOST_NOT_FOUND: '등록된 PC를 찾을 수 없습니다.',
 };
 export class ApiError extends Error {
   constructor(

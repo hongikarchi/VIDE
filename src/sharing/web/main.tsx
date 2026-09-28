@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { Hosts } from './hosts';
 import { createRoot } from 'react-dom/client';
 import { z } from 'zod';
 import { api, sessionSchema, projectsSchema, message, type Session, type Project } from './api';
@@ -127,6 +128,7 @@ function App() {
   return (
     <div className="shell">
       <aside className="project-panel">
+        <Hosts />
         <nav aria-label="프로젝트">
           {projects.map((project) => (
             <button

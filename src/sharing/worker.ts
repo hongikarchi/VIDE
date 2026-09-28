@@ -3,6 +3,7 @@ import { HttpError, json } from './http';
 import { acceptInvitation, projectRoute } from './projects';
 import { publicationRoute } from './publications';
 import { commentRoute, exportComment } from './comments';
+import { hostDeviceRoute, hostRoute } from './hosts';
 
 async function handle(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
   try {
@@ -36,6 +37,9 @@ async function handle(request: Request, env: Env, ctx: ExecutionContext): Promis
       if (env.WEB && ['GET', 'HEAD'].includes(request.method)) return env.WEB.fetch(request);
       throw new HttpError(404, 'NOT_FOUND');
     }
+    // Desktop hosts authenticate with a pairing code or host key, not a browser session.
+    if (url.pathname === '/api/hosts/pair' || url.pathname === '/api/hosts/heartbeat')
+      return await hostDeviceRoute(request, env, url.pathname);
     if (
       !['GET', 'HEAD'].includes(request.method) &&
       request.headers.get('Origin') !== env.AUTH_ORIGIN
@@ -77,6 +81,7 @@ async function handle(request: Request, env: Env, ctx: ExecutionContext): Promis
     if (path[1] === 'projects' && path[2] && path[3] === 'publications')
       return await publicationRoute(request, env, actor, path[2], path.slice(4));
     if (path[1] === 'projects') return await projectRoute(request, env, actor, path.slice(2));
+    if (path[1] === 'hosts') return await hostRoute(request, env, actor, path.slice(2));
     throw new HttpError(404, 'NOT_FOUND');
   } catch (error) {
     if (error instanceof HttpError) return json({ error: error.code }, error.status);

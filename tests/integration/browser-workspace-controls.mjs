@@ -275,10 +275,10 @@ try {
     .locator('[data-request-id="basis-two"]')
     .getByRole('button', { name: '이 후보 보기', exact: true })
     .click();
-  assert.equal(
-    await page.getByRole('button', { name: '모델 표시 상태', exact: true }).isVisible(),
-    false,
-  );
+  // The request list omits display meshes; the shown result is fetched before it is drawn.
+  await page
+    .getByRole('button', { name: '모델 표시 상태', exact: true })
+    .waitFor({ state: 'hidden' });
   await card.getByText('요청 문맥', { exact: true }).click();
   assert.equal(await card.locator('pre').isVisible(), false);
   assert.match(await card.textContent(), /대상: Rhino/);

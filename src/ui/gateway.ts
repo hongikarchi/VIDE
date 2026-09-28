@@ -29,7 +29,12 @@ export async function api(path: string, method = 'GET', data?: unknown): Promise
 export async function connect() {
   const token = location.hash.slice(1);
   if (token) {
-    await api('/session', 'POST', { token });
+    // "#r=…" is a one-minute token from the sharing site's host list (remote devices).
+    await api(
+      '/session',
+      'POST',
+      token.startsWith('r=') ? { remoteToken: token.slice(2) } : { token },
+    );
     history.replaceState(null, '', location.pathname + location.search);
   }
   const projects = z.array(projectSchema).parse(await api('/projects'));

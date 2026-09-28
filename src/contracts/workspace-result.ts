@@ -136,6 +136,8 @@ export const workspaceResultSchema = z
       .optional(),
     scene: z.array(scene).optional(),
     definitions: z.record(z.string(), definition).optional(),
+    /** List responses leave display meshes out; fetch the request to show it. */
+    sceneOmitted: z.boolean().optional(),
     extensionResult: z
       .object({
         rows: z.array(

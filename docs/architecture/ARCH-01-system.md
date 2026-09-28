@@ -2,7 +2,7 @@
 id: ARCH-01
 title: VIDE 기술 구조와 구현 계약
 status: review
-version: 0.40
+version: 0.41
 updated: 2026-09-28
 owner: agent:codex
 related: [SPEC-00, SPEC-02, SPEC-03, SPEC-04, PLAN, ADR-014, ADR-015, ADR-016, ADR-017]
@@ -574,6 +574,15 @@ AI 과업 완료 또는 명시적 저장/체크포인트 시 .3dm/.dwg와 데이
 
 R2 조건부 쓰기/체크섬은 [공식 Workers API](https://developers.cloudflare.com/r2/api/workers/workers-api-reference/)를 따른다. manifest는 경로·임의 속성을 받지 않지만 바이너리 자산의 공개 범위 검증은 별도 로컬 allowlist 내보내기 책임이다. 기존 내부 검토본의 sourceDocument나 입력 자료 전체를 그대로 게시하지 않는다. 해당 내보내기와 화면을 연결하기 전에는 사용자 자료 업로드 완료로 집계하지 않는다. 현재 검증·미시험은 PLAN §6.5와 공유 VERIFY를 따른다.
 
+
+### 원격 기기에서 작업 PC 열기
+
+[PLAN-09](../plans/PLAN-09-remote-host.md)의 물리 계약이다. 작업은 언제나 로컬 제어 서버가 하고, 공유 Worker는 존재·주소만 중계한다.
+
+- 로컬: `src/server/remote-access.ts`가 `cloudflared tunnel --no-autoupdate --url http://127.0.0.1:<port>`를 실행한다. 출력의 `https://*.trycloudflare.com` 주소와 `Registered tunnel connection`을 확인하고, 주소가 실제로 응답한 뒤 15초 주기 heartbeat를 시작한다. 실행 파일은 `VIDE_CLOUDFLARED` → `<데이터>/bin/cloudflared.exe` → Program Files 순으로 찾는다. 기기 키는 `<데이터>/remote-host.json`(0600)에 둔다.
+- Worker: `0005-remote-hosts.sql`의 `remote_hosts(id,user_id,name,secret,url,status,last_seen)`와 `remote_host_pairings(code_hash,user_id,expires_at)`. `POST /api/hosts/pairings`(로그인)가 10분짜리 8자리 코드를 만든다. `POST /api/hosts/pair`(코드)는 기기 키를 한 번 발급한다. `POST /api/hosts/heartbeat`(Bearer `hostId.secret`)는 임시 터널 주소만 받는다. `GET /api/hosts`는 45초 안에 상태를 보낸 기기를 켜짐으로 표시한다. `POST /api/hosts/:id/open`은 `base64url({h,n,e})` + HMAC-SHA256(기기 키) 토큰(60초)을 붙인 `https://…/#r=<token>`을 돌려준다.
+- 원격 세션: 요청의 Host가 현재 터널 주소이면 원격 요청이며 Origin은 `https://<터널>`이어야 한다. `POST /api/v1/session {remoteToken}`이 서명·만료(2분 이내)·nonce 재사용을 검사하고 `vide_remote` 쿠키(HttpOnly·Secure·SameSite=Strict, 12시간, 터널 종료 시 폐기)를 준다. 원격 세션은 `/api/v1/shutdown`, `/api/v1/remote*`, `/mcp`, `accounts`·`settings`·`extensions`의 쓰기를 쓰지 못한다. 교차 사이트 요청은 원격의 GET 화면 이동만 허용한다.
+- 전송: 원격 응답은 16 KB를 넘으면 gzip(level 4)으로 보낸다. `GET /api/v1/projects/:id/requests` 목록은 결과의 `scene`·`definitions`를 빼고 `sceneOmitted: true`를 붙이며, 화면은 표시할 요청만 단건 조회로 받는다.
 
 ## 7. 개발 기반과 변경 경계
 

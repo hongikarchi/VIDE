@@ -179,6 +179,10 @@ async function liveSyncHostDocument(target: HostTarget): Promise<boolean | 'retr
         entry.request.result.sourceDocument.documentId === target.documentId,
     )
     .at(-1);
+  if (basis?.request.result?.sceneOmitted && !basis.request.result.scene) {
+    await loadFullResult(basis.id);
+    return liveSyncHostDocument(target);
+  }
   const result = basis?.request.result;
   const revision = result?.sourceDocument?.revision;
   if (!basis || !result?.objects || !result.scene || typeof revision !== 'number') return false;
@@ -668,8 +672,36 @@ function renderMessages() {
           .at(-1);
   const incremental = latest !== undefined && liveRefresh === latest.id && !!displayedResult;
   liveRefresh = undefined;
-  if (latest && (latest.id !== displayedResult || incremental)) {
+  if (latest && (latest.id !== displayedResult || incremental)) showResult(latest, incremental);
+  sidebar();
+  renderConversation();
+}
+/** The request list omits display meshes; fetch one request in full when it is shown. */
+const loadingResults = new Set<string>();
+async function loadFullResult(id: string) {
+  if (loadingResults.has(id) || !project) return;
+  loadingResults.add(id);
+  viewportEmpty.sync('loading');
+  try {
+    const full = requestMessage(await api(`/projects/${currentProject().id}/requests/${id}`));
+    const index = state.messages.findIndex((entry) => entry.id === id);
+    if (index >= 0) state.messages[index] = full;
+    viewportEmpty.sync('idle');
+    renderMessages();
+  } catch (error) {
+    viewportEmpty.sync('failed');
+    message(readableError(error).message);
+  } finally {
+    loadingResults.delete(id);
+  }
+}
+function showResult(latest: (typeof state.messages)[number], incremental: boolean) {
+  {
     const result = latest.request.result;
+    if (result?.hostExecuted && !result.scene && result.sceneOmitted) {
+      void loadFullResult(latest.id);
+      return;
+    }
     if (!result?.hostExecuted || !result.objects || !result.scene) {
       message('후보 형상을 확인할 수 없습니다.');
       return;
@@ -706,7 +738,8 @@ function renderMessages() {
     displayedResult = latest.id;
     render();
   }
-  sidebar();
+}
+function renderConversation() {
   renderHistory($('conversation'), state.messages, models, project?.id, {
     restore: (request) => {
       if (busy) throw Error('현재 전송이 끝난 뒤 복원하세요.');

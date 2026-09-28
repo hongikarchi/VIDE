@@ -1,4 +1,5 @@
 import { element as $, append as el } from './elements.ts';
+import { attachRemotePanel, remoteSession } from './remote-panel.ts';
 
 /** Status uses observed facts. Installation readiness never implies a document connection. */
 export function initializeWorkspaceStatus(openFailure: (id: string) => void) {
@@ -30,6 +31,9 @@ export function initializeWorkspaceStatus(openFailure: (id: string) => void) {
   display.hidden = true;
   const problems = el('section', '', content);
   const actions = el('div', '', content, { class: 'settings-actions' });
+  attachRemotePanel(el('section', '', content, { class: 'remote-panel' }), dialog);
+  // Pages opened through the tunnel cannot control the app, accounts or settings.
+  if (remoteSession()) document.documentElement.dataset.remote = 'true';
   for (const [label, id] of [
     ['AI 계정 · 연결 설정', 'ai-settings'],
     ['작업 상한 설정', 'execution-limits'],
