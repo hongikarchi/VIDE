@@ -20,6 +20,11 @@ interface Controls {
   'finish-sketch': HTMLButtonElement;
   'undo-point': HTMLButtonElement;
   'import-model': HTMLButtonElement;
+  'brush-color': HTMLInputElement;
+  'clear-sketch': HTMLButtonElement;
+  'brush-width': HTMLInputElement;
+  'plane-offset': HTMLInputElement;
+  placement: HTMLSelectElement;
 }
 export function element<K extends keyof Controls>(id: K): Controls[K];
 export function element(id: string): HTMLElement;

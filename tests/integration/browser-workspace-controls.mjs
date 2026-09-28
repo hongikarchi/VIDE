@@ -108,6 +108,7 @@ try {
   await page.locator('#save').click();
   await page.locator('#body').fill('Unsaved edit');
   await page.locator('[data-tool="sketch"]').click();
+  await page.locator('#sketch-coordinates').evaluate((node) => (node.open = true));
   await page.locator('#point-u').fill('1');
   await page.locator('#point-v').fill('2');
   await page.locator('#add-point').click();

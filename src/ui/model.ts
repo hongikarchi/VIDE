@@ -13,8 +13,18 @@ export interface DraftFile {
   [key: string]: unknown;
 }
 export type Point2 = [number, number];
+export type Point3 = [number, number, number];
+export type SketchPlacement = 'surface' | 'view' | 'plane';
+export interface DraftStroke {
+  points: Point3[];
+  color: string;
+  width: number;
+}
 export interface DraftSketch {
-  points: Point2[];
+  points?: Point2[];
+  strokes?: DraftStroke[];
+  placement?: SketchPlacement;
+  planeOffset?: number;
   id?: string;
   name?: string;
   plane?: string;
@@ -276,6 +286,52 @@ export function attachSketch(s: DraftState, points: Point2[], plane: string, rol
     role,
     points: structuredClone(points),
   });
+}
+
+/** Attach free brush strokes (world XYZ metres) as one sketch; numeric points join as a stroke. */
+export function attachBrushSketch(
+  s: DraftState,
+  strokes: DraftStroke[],
+  options: {
+    placement: SketchPlacement;
+    role: string;
+    plane: string;
+    planeOffset: number;
+    points?: Point2[];
+  },
+) {
+  const { placement, role, plane, planeOffset } = options;
+  if (
+    !['reference', 'boundary', 'path', 'direction'].includes(role) ||
+    !['XY', 'XZ', 'YZ'].includes(plane) ||
+    !Number.isFinite(planeOffset)
+  )
+    throw Error('평면과 역할을 확인하세요.');
+  const all = strokes.map((stroke) => structuredClone(stroke));
+  if (options.points && options.points.length >= 2)
+    all.push({
+      points: options.points.map(([u, v]) => planePoint(plane, [u, v], planeOffset)),
+      color: all.at(-1)?.color ?? '#c5684b',
+      width: 3,
+    });
+  const valid = all.filter((stroke) => stroke.points.length >= 2);
+  if (!valid.length) throw Error('선을 그리세요.');
+  if (valid.length > 200) throw Error('스케치 하나에 200획까지 첨부할 수 있습니다.');
+  if (valid.reduce((sum, stroke) => sum + stroke.points.length, 0) > 20000)
+    throw Error('스케치 점이 너무 많습니다. 나누어 첨부하세요.');
+  s.sketches.push({
+    id: crypto.randomUUID(),
+    name: `스케치 ${s.sketches.length + 1}`,
+    unit: 'm',
+    role,
+    placement,
+    ...(placement === 'plane' ? { plane, planeOffset } : {}),
+    strokes: valid,
+  });
+}
+/** U/V on XY/XZ/YZ at an offset along the plane normal, in world metres. */
+export function planePoint(plane: string, [u, v]: Point2, offset = 0): Point3 {
+  return plane === 'XY' ? [u, v, offset] : plane === 'XZ' ? [u, offset, v] : [offset, u, v];
 }
 
 export function requestBody(s: Pick<DraftState, 'body' | 'instructions'>) {

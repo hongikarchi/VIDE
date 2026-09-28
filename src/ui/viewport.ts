@@ -1,13 +1,34 @@
 import { sceneRepresentation } from '../core/scene-representation.ts';
 import { displayCoordinates } from '../core/display-coordinates.ts';
 import type { DisplayGeometry } from '../core/scene-representation.ts';
-import type { Point2 } from './model.ts';
+import type { Point2, Point3, DraftStroke, SketchPlacement } from './model.ts';
+import { planePoint } from './model.ts';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+import { Line2 } from 'three/examples/jsm/lines/Line2.js';
+import { LineGeometry } from 'three/examples/jsm/lines/LineGeometry.js';
+import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js';
 
 type Camera = THREE.PerspectiveCamera | THREE.OrthographicCamera;
 type PlaneName = 'XY' | 'XZ' | 'YZ';
 type ToolMode = 'select' | 'pin' | 'sketch';
+export interface BrushSettings {
+  color: string;
+  width: number;
+  placement: SketchPlacement;
+  plane: PlaneName;
+  offset: number;
+  erase: boolean;
+}
+export type SketchEvent =
+  | { type: 'stroke'; stroke: DraftStroke }
+  | { type: 'erase'; index: number };
+interface DisplaySketch {
+  points?: Point2[];
+  plane?: string;
+  planeOffset?: number;
+  strokes?: DraftStroke[];
+}
 interface DisplayObject extends DisplayGeometry {
   id: string;
 }
@@ -28,7 +49,7 @@ export function createViewport(
   container: HTMLElement,
   objects: DisplayObject[],
   onPick: (ids: string[], mode: 'replace' | 'add' | 'remove', pin: boolean) => void,
-  onPoint: (point: Point2) => void,
+  onSketch: (event: SketchEvent) => void,
   onCamera?: (state: { view: string; projection: 'orthographic' | 'perspective' }) => void,
 ) {
   let dirty = true;
@@ -119,9 +140,58 @@ export function createViewport(
   const ray = new THREE.Raycaster(),
     mouse = new THREE.Vector2();
   let mode: ToolMode = 'select',
-    planeName: PlaneName = 'XY',
     down: { x: number; y: number } | null = null,
     frame: number;
+  let brush: BrushSettings = {
+    color: '#d0473a',
+    width: 4,
+    placement: 'surface',
+    plane: 'XY',
+    offset: 0,
+    erase: false,
+  };
+  // Screen-constant line widths need the drawing buffer size.
+  const lineMaterials = new Set<LineMaterial>();
+  function strokeLine(points: THREE.Vector3[], color: string, width: number) {
+    const origin = points[0].clone();
+    const geometry = new LineGeometry();
+    geometry.setPositions(points.flatMap((p) => [p.x - origin.x, p.y - origin.y, p.z - origin.z]));
+    const material = new LineMaterial({
+      color: new THREE.Color(color).getHex(),
+      linewidth: width,
+      worldUnits: false,
+      depthTest: false,
+      transparent: true,
+      opacity: 0.95,
+    });
+    material.resolution.set(renderer.domElement.width, renderer.domElement.height);
+    lineMaterials.add(material);
+    const line = new Line2(geometry, material);
+    line.position.copy(origin);
+    line.renderOrder = 10;
+    return line;
+  }
+  function clearGroup(group: THREE.Group) {
+    while (group.children.length) {
+      const child = group.children[0];
+      group.remove(child);
+      child.traverse((item) => {
+        if (item instanceof Line2) lineMaterials.delete(item.material);
+      });
+      disposeObject(child);
+    }
+  }
+  const live = new THREE.Group();
+  scene.add(live);
+  let drawing: {
+    points: THREE.Vector3[];
+    screen: { x: number; y: number };
+    pressure: number[];
+    pen: boolean;
+    fallback: THREE.Plane;
+  } | null = null;
+  let erasing = false;
+  let draftStrokes: DraftStroke[] = [];
   function sizing() {
     dirty = true;
     const w = container.clientWidth,
@@ -135,12 +205,14 @@ export function createViewport(
     orthographic.top = viewSpan / 2;
     orthographic.bottom = -viewSpan / 2;
     orthographic.updateProjectionMatrix();
+    for (const material of lineMaterials)
+      material.resolution.set(renderer.domElement.width, renderer.domElement.height);
   }
   function configure() {
-    controls.enableRotate = !standardView && mode !== 'sketch';
+    // Sketching keeps 3D navigation: left draws, right orbits, Shift+right pans, wheel zooms.
+    controls.enableRotate = !standardView;
     controls.mouseButtons.LEFT = undefined;
-    controls.mouseButtons.RIGHT =
-      standardView || mode === 'sketch' ? THREE.MOUSE.PAN : THREE.MOUSE.ROTATE;
+    controls.mouseButtons.RIGHT = standardView ? THREE.MOUSE.PAN : THREE.MOUSE.ROTATE;
   }
   function reportCamera() {
     dirty = true;
@@ -233,7 +305,6 @@ export function createViewport(
   home();
   function planeView(name: PlaneName) {
     standardView = true;
-    planeName = name;
     orthographic.zoom = 1;
     orthographic.up.set(0, 0, 1);
     if (name === 'XY') {
@@ -289,8 +360,8 @@ export function createViewport(
     ray.params.Points.threshold = ray.params.Line.threshold = (span / Math.max(r.height, 1)) * 6;
   }
   function cameraPointerDown(e: PointerEvent) {
-    // OrbitControls swaps ROTATE/PAN for Shift. Keep both gestures planar in standard/sketch views.
-    if (e.button === 2 && (standardView || mode === 'sketch'))
+    // OrbitControls swaps ROTATE/PAN for Shift. Keep both gestures planar in standard views.
+    if (e.button === 2 && standardView)
       controls.mouseButtons.RIGHT =
         e.shiftKey || e.ctrlKey || e.metaKey ? THREE.MOUSE.ROTATE : THREE.MOUSE.PAN;
   }
@@ -302,10 +373,128 @@ export function createViewport(
     return e.ctrlKey || e.metaKey ? 'remove' : e.shiftKey ? 'add' : 'replace';
   }
   function pointerDown(e: PointerEvent) {
-    if (e.button === 0) down = { x: e.clientX, y: e.clientY };
+    if (e.button !== 0) return;
+    if (mode === 'sketch') {
+      renderer.domElement.setPointerCapture?.(e.pointerId);
+      if (brush.erase) {
+        erasing = true;
+        erase(e);
+        return;
+      }
+      startStroke(e);
+      return;
+    }
+    down = { x: e.clientX, y: e.clientY };
+  }
+  const surfaceMeshes = () => meshes.filter((m) => m instanceof THREE.Mesh);
+  function viewPlane(through: THREE.Vector3) {
+    const normal = camera.getWorldDirection(new THREE.Vector3()).negate();
+    return new THREE.Plane().setFromNormalAndCoplanarPoint(normal, through);
+  }
+  function fixedPlane() {
+    const normal =
+      brush.plane === 'XY'
+        ? new THREE.Vector3(0, 0, 1)
+        : brush.plane === 'XZ'
+          ? new THREE.Vector3(0, 1, 0)
+          : new THREE.Vector3(1, 0, 0);
+    return new THREE.Plane(normal, -brush.offset);
+  }
+  /** Grease-Pencil-like placement: onto model surfaces, a view plane, or a fixed axis plane. */
+  function projectPoint(e: PointerEvent, fallback: THREE.Plane) {
+    rayAt(e);
+    if (brush.placement === 'surface') {
+      const hit = ray.intersectObjects(surfaceMeshes(), false)[0];
+      if (hit) {
+        // Continue off the edge of an object at the depth of the last surface point.
+        if (drawing) drawing.fallback = viewPlane(hit.point);
+        return hit.point.clone();
+      }
+    }
+    return ray.ray.intersectPlane(fallback, new THREE.Vector3());
+  }
+  function startStroke(e: PointerEvent) {
+    const fallback =
+      brush.placement === 'plane' ? fixedPlane() : viewPlane(controls.target.clone());
+    drawing = {
+      points: [],
+      screen: { x: e.clientX, y: e.clientY },
+      pressure: [],
+      pen: e.pointerType === 'pen',
+      fallback,
+    };
+    const point = projectPoint(e, fallback);
+    if (point) drawing.points.push(point);
+    drawing.pressure.push(e.pressure || 0.5);
+  }
+  function extendStroke(e: PointerEvent) {
+    if (!drawing || drawing.points.length >= 2000) return;
+    // Keep strokes light: sample only after the pointer moves a few screen pixels.
+    if (Math.hypot(e.clientX - drawing.screen.x, e.clientY - drawing.screen.y) < 3) return;
+    const point = projectPoint(e, drawing.fallback);
+    if (!point) return;
+    drawing.screen = { x: e.clientX, y: e.clientY };
+    drawing.points.push(point);
+    drawing.pressure.push(e.pressure || 0.5);
+    clearGroup(live);
+    if (drawing.points.length >= 2)
+      live.add(strokeLine(drawing.points, brush.color, strokeWidth(drawing)));
+    dirty = true;
+  }
+  function strokeWidth(stroke: NonNullable<typeof drawing>) {
+    if (!stroke.pen) return brush.width;
+    const average = stroke.pressure.reduce((sum, value) => sum + value, 0) / stroke.pressure.length;
+    return Math.min(64, Math.max(0.5, brush.width * Math.min(2, Math.max(0.3, average * 2))));
+  }
+  function finishStroke() {
+    const stroke = drawing;
+    drawing = null;
+    clearGroup(live);
+    dirty = true;
+    if (!stroke || stroke.points.length < 2) return;
+    const round = (value: number) => Math.round(value * 1000) / 1000;
+    onSketch({
+      type: 'stroke',
+      stroke: {
+        points: stroke.points.map((p): Point3 => [round(p.x), round(p.y), round(p.z)]),
+        color: brush.color,
+        width: Math.round(strokeWidth(stroke) * 10) / 10,
+      },
+    });
+  }
+  function erase(e: PointerEvent) {
+    const r = renderer.domElement.getBoundingClientRect();
+    const x = e.clientX - r.left,
+      y = e.clientY - r.top;
+    const screen = ([px, py, pz]: Point3) => {
+      const v = new THREE.Vector3(px, py, pz).project(camera);
+      return [((v.x + 1) / 2) * r.width, ((1 - v.y) / 2) * r.height] as const;
+    };
+    const near = (a: readonly [number, number], b: readonly [number, number]) => {
+      const dx = b[0] - a[0],
+        dy = b[1] - a[1];
+      const t = Math.max(
+        0,
+        Math.min(1, ((x - a[0]) * dx + (y - a[1]) * dy) / (dx * dx + dy * dy || 1)),
+      );
+      return Math.hypot(a[0] + t * dx - x, a[1] + t * dy - y) < 10;
+    };
+    for (let index = draftStrokes.length - 1; index >= 0; index--) {
+      const points = draftStrokes[index].points.map(screen);
+      if (points.some((point, i) => i > 0 && near(points[i - 1], point))) {
+        onSketch({ type: 'erase', index });
+        return;
+      }
+    }
   }
   function pointerMove(e: PointerEvent) {
-    if (!down || mode === 'sketch' || !(e.buttons & 1)) return;
+    if (mode === 'sketch') {
+      if (!(e.buttons & 1)) return;
+      if (drawing) extendStroke(e);
+      else if (erasing) erase(e);
+      return;
+    }
+    if (!down || !(e.buttons & 1)) return;
     if (Math.hypot(e.clientX - down.x, e.clientY - down.y) <= 5) return;
     const r = container.getBoundingClientRect();
     marquee.hidden = false;
@@ -401,6 +590,11 @@ export function createViewport(
     return picked;
   }
   function pointerUp(e: PointerEvent) {
+    if (e.button === 0 && mode === 'sketch') {
+      erasing = false;
+      finishStroke();
+      return;
+    }
     if (e.button !== 0 || !down) return;
     const start = down;
     const moved = Math.hypot(e.clientX - start.x, e.clientY - start.y);
@@ -416,31 +610,15 @@ export function createViewport(
       return;
     }
     rayAt(e);
-    if (mode === 'sketch') {
-      const normal =
-        planeName === 'XY'
-          ? new THREE.Vector3(0, 0, 1)
-          : planeName === 'XZ'
-            ? new THREE.Vector3(0, 1, 0)
-            : new THREE.Vector3(1, 0, 0);
-      const hit = ray.ray.intersectPlane(new THREE.Plane(normal, 0), new THREE.Vector3());
-      if (hit) {
-        const uv =
-          planeName === 'XY'
-            ? [hit.x, hit.y]
-            : planeName === 'XZ'
-              ? [hit.x, hit.z]
-              : [hit.y, hit.z];
-        onPoint([Math.round(uv[0] * 100) / 100, Math.round(uv[1] * 100) / 100]);
-      }
-    } else {
-      const id = ray.intersectObjects(meshes, false)[0]?.object.userData.id;
-      onPick(typeof id === 'string' ? [id] : [], selectionMode(e), mode === 'pin');
-    }
+    const id = ray.intersectObjects(meshes, false)[0]?.object.userData.id;
+    onPick(typeof id === 'string' ? [id] : [], selectionMode(e), mode === 'pin');
   }
   function cancel() {
     down = null;
     marquee.hidden = true;
+    drawing = null;
+    erasing = false;
+    clearGroup(live);
   }
   renderer.domElement.addEventListener('pointerdown', cameraPointerDown, true);
   renderer.domElement.addEventListener('pointerdown', pointerDown);
@@ -483,42 +661,55 @@ export function createViewport(
       selectedIds = next;
       dirty = true;
     },
-    mode(next: ToolMode, plane: PlaneName = 'XY') {
+    mode(next: ToolMode) {
       mode = next;
+      if (next !== 'sketch') cancel();
       configure();
       renderer.domElement.dataset.tool = next;
-      if (next === 'sketch') planeView(plane);
+    },
+    brush(next: Partial<BrushSettings>) {
+      brush = { ...brush, ...next };
+      renderer.domElement.dataset.erase = String(brush.erase);
     },
     plane: planeView,
     home,
     fit,
     projection,
-    lines(sketches: { points: Point2[]; plane?: string }[], draft: Point2[], plane: PlaneName) {
-      const signature = JSON.stringify([sketches, draft, plane]);
+    /** Attached sketches, unattached brush strokes and numeric plane points. */
+    sketches(
+      attached: readonly DisplaySketch[],
+      draft: DraftStroke[],
+      draftPoints: Point2[],
+      plane: PlaneName,
+      offset = 0,
+    ) {
+      draftStrokes = draft;
+      const signature = JSON.stringify([attached, draft, draftPoints, plane, offset]);
       if (signature === lineSignature) return;
       lineSignature = signature;
       dirty = true;
-      while (lines.children.length) {
-        const l = lines.children[0];
-        lines.remove(l);
-        disposeObject(l);
+      clearGroup(lines);
+      const vector = ([x, y, z]: Point3) => new THREE.Vector3(x, y, z);
+      const planeStroke = (points: Point2[], name: string, planeOffset = 0) =>
+        points.map((point) => vector(planePoint(name, point, planeOffset)));
+      for (const sketch of attached) {
+        if (sketch.points && sketch.points.length >= 2)
+          lines.add(
+            strokeLine(
+              planeStroke(sketch.points, sketch.plane ?? 'XY', sketch.planeOffset),
+              '#c5684b',
+              3,
+            ),
+          );
+        for (const stroke of sketch.strokes ?? [])
+          if (stroke.points.length >= 2)
+            lines.add(strokeLine(stroke.points.map(vector), stroke.color, stroke.width));
       }
-      for (const s of [...sketches, { points: draft, plane }]) {
-        if (s.points.length < 2) continue;
-        const points = s.points.map(([u, v]) =>
-          s.plane === 'XY'
-            ? new THREE.Vector3(u, v, 0.02)
-            : s.plane === 'XZ'
-              ? new THREE.Vector3(u, -0.02, v)
-              : new THREE.Vector3(0.02, u, v),
-        );
-        const l = new THREE.Line(
-          new THREE.BufferGeometry().setFromPoints(points),
-          new THREE.LineBasicMaterial({ color: 0xc5684b, depthTest: false }),
-        );
-        l.renderOrder = 10;
-        lines.add(l);
-      }
+      for (const stroke of draft)
+        if (stroke.points.length >= 2)
+          lines.add(strokeLine(stroke.points.map(vector), stroke.color, stroke.width));
+      if (draftPoints.length >= 2)
+        lines.add(strokeLine(planeStroke(draftPoints, plane, offset), '#c5684b', 3));
     },
     dispose() {
       cancelAnimationFrame(frame);
