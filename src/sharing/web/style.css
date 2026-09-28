@@ -621,3 +621,6 @@ button.ghost {
   padding-left: 20px;
   line-height: 1.7;
 }
+.badge.warn {
+  background: #b3452c;
+}

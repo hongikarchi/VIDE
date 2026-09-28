@@ -52,6 +52,7 @@ const runtimeOptions = {
           AUTH_ORIGIN: { type: 'text', value: origin },
           AUTH_SECRET: { type: 'text', value: secret },
           SIGNUP_CODE: { type: 'text', value: 'test-code' },
+          MIN_APP_VERSION: { type: 'text', value: '0.10.0' },
           EMAIL_FROM: { type: 'text', value: 'VIDE <noreply@example.com>' },
         },
       },
@@ -151,10 +152,14 @@ try {
   await mkdir(hostDirectory, { recursive: true });
   const local = [{ id: 'aaaaaaaa-1111-4111-8111-111111111111', name: 'Tower' }];
   const received = [];
+  let pcVersion = '0.10.1';
   const pc = new RemoteAccess({
     directory: hostDirectory,
     port: () => 1234,
-    status: async () => ({ documents: [{ host: 'rhino', name: 'Tower.3dm', live: true }] }),
+    status: async () => ({
+      version: pcVersion,
+      documents: [{ host: 'rhino', name: 'Tower.3dm', live: true }],
+    }),
     projects: () => local,
     activity: () => ({ [local[0].id]: Date.now() }),
     onProjects: (projects) => received.push(projects),
@@ -191,6 +196,8 @@ try {
   assert.equal(hosts[0].remote, true);
   assert.equal(hosts[0].local, 'http://127.0.0.1:1234');
   assert.equal(hosts[0].status.documents[0].name, 'Tower.3dm');
+  assert.equal(hosts[0].version, '0.10.1');
+  assert.equal(hosts[0].updateRequired, false);
   // Other accounts see neither.
   assert.deepEqual((await call('/api/hosts', { cookie: eve.cookie })).value.hosts, []);
   assert.deepEqual((await call('/api/projects', { cookie: eve.cookie })).value.projects, []);
@@ -233,6 +240,16 @@ try {
   assert.equal(localLink.origin, 'http://127.0.0.1:1234');
   assert.equal(remoteLink.searchParams.get('project'), made.value.id);
   assert.equal((await open(made.value.id, eve)).status, 404);
+  // A PC below the site's minimum program version (numeric: 0.9 < 0.10) must update first.
+  pcVersion = '0.9.3';
+  await pc.heartbeat();
+  assert.equal(
+    (await call('/api/hosts', { cookie: alice.cookie })).value.hosts[0].updateRequired,
+    true,
+  );
+  assert.equal((await open(made.value.id, alice)).value.error, 'HOST_UPDATE_REQUIRED');
+  pcVersion = '0.10.1';
+  await pc.heartbeat();
   // The PC verifies the site's tokens with the same key, once each.
   const remoteToken = remoteLink.hash.slice('#r='.length),
     localToken = localLink.hash.slice('#r='.length);

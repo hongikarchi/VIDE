@@ -11,8 +11,10 @@ const exec = promisify(execFile),
   source = join(root, 'src', 'desktop');
 if (process.platform !== 'win32' || process.arch !== 'x64' || process.version !== 'v24.15.0')
   throw Error('Build requires the verified Windows x64 Node.js v24.15.0 runtime.');
-const pkg = JSON.parse(await readFile(join(root, 'package.json'), 'utf8')),
-  version = process.argv[2] || pkg.version;
+const args = process.argv.slice(2),
+  installer = args.includes('--installer'),
+  pkg = JSON.parse(await readFile(join(root, 'package.json'), 'utf8')),
+  version = args.find((arg) => !arg.startsWith('--')) || pkg.version;
 if (!/^\d+\.\d+\.\d+(?:-[a-z0-9.-]+)?$/.test(version)) throw Error('Invalid package version');
 const releases = join(root, '.vide', 'releases'),
   directory = join(releases, 'VIDE-' + version + '-windows-x64');
@@ -121,29 +123,30 @@ await copyFile(
   join(root, 'node_modules', 'three', 'LICENSE'),
   join(directory, 'licenses', 'three.txt'),
 );
-const compiler = join(
-  process.env.WINDIR || 'C:\\Windows',
-  'Microsoft.NET',
-  'Framework64',
-  'v4.0.30319',
-  'csc.exe',
-);
+// PC program shell (own window, tray, autostart, updates); see src/desktop/shell.
 await exec(
-  compiler,
-  [
-    '/nologo',
-    '/target:winexe',
-    '/platform:x64',
-    '/codepage:65001',
-    '/reference:System.Windows.Forms.dll',
-    '/out:' + join(directory, 'VIDE.exe'),
-    join(source, 'Launcher.cs'),
-  ],
+  'dotnet',
+  ['build', join(source, 'shell', 'VIDE.Desktop.csproj'), '-c', 'Release', '-p:Version=' + version],
   { windowsHide: true },
 );
+const shellOutput = join(root, '.vide', 'build', 'desktop-shell', 'bin');
+for (const entry of await readdir(shellOutput, { withFileTypes: true }))
+  if (!entry.name.endsWith('.pdb'))
+    await cp(join(shellOutput, entry.name), join(directory, entry.name), { recursive: true });
 await writeFile(
   join(directory, 'START-HERE.txt'),
-  `VIDE ${version} · Windows x64 개발 검수용\n\n압축을 모두 푼 뒤 VIDE.exe를 실행하세요. Node/npm을 별도로 실행할 필요가 없습니다.\n두 번 실행하면 이미 열린 작업 공간을 사용합니다. AI WORK 메뉴의 앱 종료로 종료하세요.\n사용자 데이터: %LOCALAPPDATA%\\VIDE (VIDE_DATA_DIR 환경 변수로 별도 지정 가능).\n이 폴더를 지워도 사용자 데이터는 자동 삭제하지 않습니다.\nRhino/ZWCAD와 공식 Claude Code/Codex CLI는 별도 설치본을 사용합니다. AI 연결 설정에서 경로와 로그인을 확인하세요.\nRhino 후보 생성과 3dm 파일 가져오기는 포함된 VIDE worker를 사용하며 외부 MCP 설치가 필요하지 않습니다. VIDE에서 연 Rhino 편집 사본은 자체 채널의 취득·후보 적용·제어기 재시작 후 재연결을 사용합니다. 별도로 열린 Rhino에서는 app/hosts/rhino/worker/runtime/VIDE.Worker.rhp를 Rhino 화면에 끌어 놓아 한 번 로드하고 VIDEConnect를 실행하세요. VIDE 문서 조회에서 해당 문서를 선택하고 Sync하세요. VIDESync는 수동 갱신, VIDELiveSync는 자동 갱신 전환, VIDEDisconnect는 연결 해제입니다. 채팅 권한의 연결 Rhino 수정은 현재 Sync 기준의 문서에 검증된 결과를 반영합니다. 저장은 Rhino에서 별도로 하세요. ZWCAD의 독립 mm XY LWPolyline 생성·수정과 VIDE가 연 편집 사본의 취득·후보 적용은 포함된 자체 SDK 도구를 사용합니다. 별도로 열린 ZWCAD에서는 NETLOAD로 app/hosts/zwcad/connection/runtime/VIDE.Zwcad.Connection.dll을 로드하고 VIDECADConnect를 실행하세요. VIDECADPanel 패널에서 연결·Sync·Live Sync를 설정합니다. 현재 문서의 곡선·블록은 읽기 표시하며 표시하지 못한 항목은 개수로 알립니다. 일반 DWG 객체·별도로 열린 기존 사용자 문서의 AI 적용은 아직 지원하지 않습니다.\n\n포함 런타임: Node.js ${process.version}, Three.js ${pkg.dependencies.three}. 고지는 licenses 폴더에 있습니다.\n백업(앱 종료 후): runtime\\node.exe app\\src\\desktop\\backup.mjs create <데이터 폴더> <새 백업 폴더>\n백업 확인: runtime\\node.exe app\\src\\desktop\\backup.mjs verify <백업 폴더>\n복원은 자동 덮어쓰기를 제공하지 않습니다. 기존 자료를 보존하고 동일 데이터 경로로 복구해야 합니다.\n\n개발 도구가 없는 별도 Windows PC 검수·서명·설치 프로그램·외부 배포 검수는 아직 완료되지 않았습니다.\n`,
+  `VIDE ${version} · Windows x64
+
+설치본(VIDE.App-win-Setup.exe)으로 설치하면 시작 메뉴·바탕화면에 VIDE가 생기고 자동 업데이트를 받습니다. 이 폴더(ZIP)는 설치 없이 VIDE.exe를 바로 실행하는 검수용입니다.
+창을 닫으면 설정에 따라 트레이에 남거나 종료합니다. 트레이 메뉴의 종료로 끝냅니다.
+사용자 데이터: %LOCALAPPDATA%\VIDE (설치·업데이트·제거가 지우지 않습니다).
+Rhino·ZWCAD와 공식 Claude Code/Codex CLI는 별도 설치본을 사용합니다. Rhino 플러그인은 VIDE 설정 → 연결 프로그램에서 설치합니다.
+
+포함 런타임: Node.js ${process.version}, Three.js ${pkg.dependencies.three}. 고지는 licenses 폴더에 있습니다.
+백업(앱 종료 후): runtime\node.exe app\src\desktop\backup.mjs create <데이터 폴더> <새 백업 폴더>
+
+실행 파일은 아직 코드 서명 전입니다. Windows 경고가 뜨면 \"추가 정보 → 실행\"을 누르세요.
+`,
   'utf8',
 );
 async function inventory(folder) {
@@ -167,8 +170,49 @@ await writeFile(
   JSON.stringify({ version, runtime: process.version, platform: 'windows-x64', files }, null, 2) +
     '\n',
 );
-await exec('tar.exe', ['-a', '-c', '-f', directory + '.zip', '-C', releases, basename(directory)], {
-  windowsHide: true,
-  timeout: 180000,
-});
-console.log(JSON.stringify({ directory, archive: directory + '.zip', files: files.length }));
+// Windows' own tar (bsdtar); a Git Bash tar on PATH treats "C:" as a remote host.
+await exec(
+  join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'tar.exe'),
+  ['-a', '-c', '-f', directory + '.zip', '-C', releases, basename(directory)],
+  {
+    windowsHide: true,
+    timeout: 180000,
+  },
+);
+// Installer and update packages (Velopack): per-user install, no administrator rights.
+let installerOutput;
+if (installer) {
+  installerOutput = join(releases, 'installer');
+  await exec(
+    'dotnet',
+    [
+      'vpk',
+      'pack',
+      '--packId',
+      'VIDE.App',
+      '--packVersion',
+      version,
+      '--packDir',
+      directory,
+      '--mainExe',
+      'VIDE.exe',
+      '--packTitle',
+      'VIDE',
+      '--packAuthors',
+      'VIDE',
+      '--icon',
+      join(source, 'shell', 'vide.ico'),
+      '--outputDir',
+      installerOutput,
+    ],
+    { cwd: root, windowsHide: true, timeout: 600000, maxBuffer: 64 * 1024 * 1024 },
+  );
+}
+console.log(
+  JSON.stringify({
+    directory,
+    archive: directory + '.zip',
+    installer: installerOutput,
+    files: files.length,
+  }),
+);

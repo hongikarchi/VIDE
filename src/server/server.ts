@@ -1,6 +1,8 @@
 import { applyAttachedCandidate } from './attached-application.ts';
 import { LiveSync } from './live-sync.ts';
 import { RemoteAccess } from './remote-access.ts';
+import { Connectors, type ConnectorOptions } from './connectors.ts';
+import { appVersion, defaultRhinoPlugin } from './sdk-options.ts';
 import { gzip } from 'node:zlib';
 import { AccountProfiles } from '../ai/account-profiles.ts';
 import { AccountLogin } from '../ai/account-login.ts';
@@ -20,6 +22,8 @@ interface ServerOptions {
   applicationOptions?: ConstructorParameters<typeof Applications>[2];
   onShutdown?: () => void;
   sdkOptions?: Omit<ConstructorParameters<typeof SdkExecution>[0], 'tools' | 'origin'>;
+  /** Test seams for host plugin installation (registry, running processes, bundled plugin). */
+  connectorOptions?: Partial<ConnectorOptions>;
   /** Test seams for the remote tunnel process and Worker calls. */
   remoteOptions?: Pick<
     ConstructorParameters<typeof RemoteAccess>[0],
@@ -102,6 +106,7 @@ const statuses: Record<string, number> = {
   PROJECT_BUSY: 409,
   WORKSPACE_CAPACITY: 409,
   STALE_REFERENCE: 409,
+  HOST_RUNNING: 409,
 };
 export async function startServer({
   filename,
@@ -114,6 +119,7 @@ export async function startServer({
   onShutdown,
   sdkOptions,
   remoteOptions,
+  connectorOptions,
 }: ServerOptions) {
   const store = new Store(filename),
     bootstrap = randomBytes(32).toString('hex'),
@@ -137,6 +143,12 @@ export async function startServer({
     ? new SdkExecution({ ...sdkOptions, tools: agentTools, origin: () => origin })
     : undefined;
   const liveSync = sdk ? new LiveSync(workspace, sdk) : undefined;
+  const connectors = new Connectors({
+    directory: dirname(filename),
+    bundledRhino: sdkOptions?.plugin ?? defaultRhinoPlugin(),
+    version: appVersion(),
+    ...connectorOptions,
+  });
   // Other devices reach this server only through the paired tunnel (see remote-access.ts).
   const remoteAccess = new RemoteAccess({
     ...remoteOptions,
@@ -158,6 +170,7 @@ export async function startServer({
       const rhino = (await sdk?.editors.list(true)) || { documents: [] };
       const cad = (await zwcadSdk?.editors.attached.list()) || [];
       return {
+        version: appVersion(),
         documents: [...rhino.documents, ...cad].slice(0, 20).map((item) => ({
           host: item.host ?? 'rhino',
           name: item.name,
@@ -389,12 +402,21 @@ export async function startServer({
         if (
           url.pathname === '/api/v1/shutdown' ||
           (url.pathname.startsWith('/api/v1/remote') && request.method !== 'GET') ||
+          url.pathname.startsWith('/api/v1/connectors') ||
           (request.method !== 'GET' &&
             /^\/api\/v1\/(accounts|settings|extensions)(\/|$)/.test(url.pathname))
         )
           throw new DomainError('FORBIDDEN');
       } else if (!equal(cookie, session)) throw new DomainError('UNAUTHORIZED');
       if (stopping && request.method !== 'GET') throw new DomainError('APP_STOPPING');
+      if (url.pathname === '/api/v1/connectors' && request.method === 'GET') {
+        send(200, await connectors.list());
+        return;
+      }
+      if (url.pathname === '/api/v1/connectors/rhino8/install' && request.method === 'POST') {
+        send(200, await connectors.installRhino());
+        return;
+      }
       if (url.pathname === '/api/v1/remote' && request.method === 'GET') {
         send(200, await remoteAccess.status());
         return;

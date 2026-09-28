@@ -1,5 +1,7 @@
 import { element as $, append as el } from './elements.ts';
 import { attachAccountPanel, remoteSession } from './remote-panel.ts';
+import { attachDesktopPanel } from './desktop-panel.ts';
+import { attachConnectorsPanel } from './connectors-panel.ts';
 
 interface Options {
   openFailure: (id: string) => void;
@@ -42,6 +44,8 @@ export function initializeWorkspaceStatus({
     dialog,
     (status) => onAccount(status.linked ? status.site : undefined),
   );
+  attachDesktopPanel(el('section', '', content, { class: 'remote-panel' }), dialog);
+  attachConnectorsPanel(el('section', '', content, { class: 'remote-panel' }), dialog);
   const ai = el('section', '', content, { class: 'settings-ai' });
   el('h3', 'AI 작업', ai);
   const actions = el('div', '', ai, { class: 'settings-actions' });

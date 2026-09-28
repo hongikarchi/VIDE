@@ -147,11 +147,16 @@ export async function projectRoute(
         project.host_id ? 'HOST_NOT_FOUND' : 'HOST_CHOICE_REQUIRED',
       );
     if (!online(host)) throw new HttpError(409, 'HOST_OFFLINE');
+    if (hostView(host, Date.now(), env.MIN_APP_VERSION).updateRequired)
+      throw new HttpError(409, 'HOST_UPDATE_REQUIRED');
     await db
       .prepare('UPDATE projects SET host_id=COALESCE(host_id,?),updated_at=? WHERE id=?')
       .bind(host.id, Date.now(), projectId)
       .run();
-    return json({ ...(await openLinks(host, projectId)), host: hostView(host) });
+    return json({
+      ...(await openLinks(host, projectId)),
+      host: hostView(host, Date.now(), env.MIN_APP_VERSION),
+    });
   }
   if (path[1] === 'join-requests') return joinRoute(request, env, actor, projectId, path.slice(2));
   if (path[1] === 'members') {

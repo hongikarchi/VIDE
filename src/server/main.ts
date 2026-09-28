@@ -9,9 +9,13 @@ import { spawn } from 'node:child_process';
 import { startServer } from './server.ts';
 import { liveLaunch } from './lifecycle.ts';
 import { sdkOptions } from './sdk-options.ts';
-const DEFAULT_PORT = 47821;
+// Work engine (installed program): the user's data, port 47821. Development server (--dev):
+// separate data and port, so restarting it never touches the work engine or its open pages.
+const dev = process.argv.includes('--dev');
+const DEFAULT_PORT = dev ? 47831 : 47821;
 const directory = resolve(
-  process.env.VIDE_DATA_DIR || join(process.env.LOCALAPPDATA || homedir(), 'VIDE'),
+  process.env.VIDE_DATA_DIR ||
+    (dev ? join('.vide', 'dev-data') : join(process.env.LOCALAPPDATA || homedir(), 'VIDE')),
 );
 let app: Awaited<ReturnType<typeof startServer>> | undefined,
   closing = false;
@@ -62,6 +66,12 @@ try {
     if (process.argv.includes('--open')) open(app.launchUrl);
     process.on('SIGINT', close);
     process.on('SIGTERM', close);
+    // Started by the PC program: it closes our standard input to stop us cleanly.
+    if (process.argv.includes('--parent-stdin')) {
+      process.stdin.on('end', () => void close());
+      process.stdin.on('close', () => void close());
+      process.stdin.resume();
+    }
   }
 } catch (error) {
   if (app) await app.close().catch(() => {});

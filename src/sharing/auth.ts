@@ -12,6 +12,8 @@ export interface Env {
   EMAIL_FROM: string;
   /** Owner-chosen code required to create an ID account; sign-up is closed without it. */
   SIGNUP_CODE?: string;
+  /** Oldest PC program version the site still opens (PCs below it must update first). */
+  MIN_APP_VERSION?: string;
 }
 
 export const manualApproval = (env: Env) => env.AUTH_MODE === 'manual-approval';

@@ -13,6 +13,8 @@ export const hostsSchema = z.object({
       remote: z.boolean().default(false),
       local: z.string().nullable().default(null),
       lastSeen: z.number().nullable(),
+      version: z.string().nullable().default(null),
+      updateRequired: z.boolean().default(false),
       status: z
         .object({
           documents: z
@@ -125,10 +127,16 @@ export function HostStrip({ hosts, thisPc }: { hosts: Host[] | null; thisPc: str
           <strong>{host.name}</strong>
           {host.id === thisPc ? <span className="badge">이 PC</span> : null}
           {host.online ? (
-            <small>{host.remote ? '원격 켜짐' : '원격 꺼짐'}</small>
+            <small>
+              {host.remote ? '원격 켜짐' : '원격 꺼짐'}
+              {host.version ? ` · v${host.version}` : ''}
+            </small>
           ) : (
             <small>꺼짐</small>
           )}
+          {host.online && host.updateRequired ? (
+            <span className="badge warn">업데이트 필요</span>
+          ) : null}
         </li>
       ))}
     </ul>

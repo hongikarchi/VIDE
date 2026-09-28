@@ -229,14 +229,27 @@ export async function hostDeviceRoute(
   throw new HttpError(404, 'NOT_FOUND');
 }
 
-export function hostView(row: HostRow, now = Date.now()) {
-  let status: unknown = {};
+/** Numeric comparison of dotted versions ("0.10.0" > "0.9.3"); pre-release tags are ignored. */
+export function olderThan(version: string, minimum: string) {
+  const parts = (value: string) =>
+    value
+      .split(/[-+]/)[0]
+      .split('.')
+      .map((n) => Number(n) || 0);
+  const [a, b] = [parts(version), parts(minimum)];
+  for (let i = 0; i < Math.max(a.length, b.length); i++)
+    if ((a[i] ?? 0) !== (b[i] ?? 0)) return (a[i] ?? 0) < (b[i] ?? 0);
+  return false;
+}
+export function hostView(row: HostRow, now = Date.now(), minimum?: string) {
+  let status: { version?: unknown } = {};
   try {
     status = JSON.parse(row.status ?? '{}');
   } catch {
     /* Status is advisory display data. */
   }
   const on = online(row, now);
+  const version = typeof status.version === 'string' ? status.version : null;
   return {
     id: row.id,
     name: row.name,
@@ -244,6 +257,9 @@ export function hostView(row: HostRow, now = Date.now()) {
     remote: on && !!row.url,
     local: on ? row.local_url : null,
     lastSeen: row.last_seen || null,
+    version,
+    // PCs older than the site's minimum program version cannot be opened until they update.
+    updateRequired: !!minimum && (!version || olderThan(version, minimum)),
     status,
   };
 }
@@ -257,7 +273,7 @@ export async function hostRoute(request: Request, env: Env, actor: Actor, path: 
       .bind(actor.id)
       .all<HostRow>();
     const now = Date.now();
-    return json({ hosts: rows.results.map((row) => hostView(row, now)) });
+    return json({ hosts: rows.results.map((row) => hostView(row, now, env.MIN_APP_VERSION)) });
   }
   const row = path[0]
     ? await db

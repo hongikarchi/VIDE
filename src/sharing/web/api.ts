@@ -17,6 +17,8 @@ const errors: Record<string, string> = {
   HOST_OFFLINE: '이 프로젝트의 작업 PC가 꺼져 있습니다. PC에서 VIDE를 실행한 뒤 다시 여세요.',
   HOST_NOT_FOUND: '이 프로젝트의 작업 PC가 계정에서 로그아웃됐습니다.',
   HOST_CHOICE_REQUIRED: '프로젝트를 열 작업 PC를 켜 주세요.',
+  HOST_UPDATE_REQUIRED:
+    '작업 PC의 VIDE를 업데이트해야 합니다. PC의 VIDE 설정 → PC 프로그램에서 업데이트하세요.',
   INVALID_LOGIN: '아이디 또는 비밀번호를 확인해 주세요.',
   INVALID_SIGNUP_CODE: '가입 코드가 올바르지 않습니다.',
   USERNAME_TAKEN: '이미 사용 중인 아이디입니다.',

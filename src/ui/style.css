@@ -2522,3 +2522,22 @@ body.panel-mode .chat-heading h2 {
 :root[data-remote='true'] .settings-ai {
   display: none !important;
 }
+
+/* Connected programs (host plugins) in settings. */
+.connector-list {
+  list-style: none;
+  margin: 8px 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+.connector-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.connector-list li div {
+  display: grid;
+  gap: 2px;
+}

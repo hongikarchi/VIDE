@@ -2,7 +2,7 @@
 id: ARCH-01
 title: VIDE 기술 구조와 구현 계약
 status: review
-version: 0.42
+version: 0.43
 updated: 2026-09-28
 owner: agent:codex
 related: [SPEC-00, SPEC-02, SPEC-03, SPEC-04, PLAN, ADR-014, ADR-015, ADR-016, ADR-017]
@@ -585,6 +585,11 @@ R2 조건부 쓰기/체크섬은 [공식 Workers API](https://developers.cloudfl
 - 로컬: `src/server/remote-access.ts`가 PC 키를 `<데이터>/remote-host.json`(0600, 비밀번호 미저장)에 두고 시작 시 heartbeat와(원격 접속이 켜져 있으면) `cloudflared tunnel --no-autoupdate --url http://127.0.0.1:<port>`를 재개한다. 터널 주소는 `Registered tunnel connection`과 실제 응답을 확인한 뒤 알린다. heartbeat 응답의 프로젝트는 같은 id로 로컬에 만들거나 이름을 맞춘다. 로컬에서 만든·바꾼 프로젝트는 즉시 올린다. 기본 포트는 47821(사용 중이면 임의 포트)이고 로컬 세션 값은 `<데이터>/local-session.key`에 두어 재시작 뒤에도 열린 화면이 이어진다.
 - 같은 PC 판별: 사이트는 켜진 PC의 `local` 주소에 `GET /api/v1/hello`를 보낸다. 서버는 Origin이 연결된 사이트일 때만 CORS로 `{hostId}`를 답한다(사설망 사전 요청 허용). 일치하면 그 브라우저는 로컬 링크로, 아니면 원격 링크로 연다.
 - 세션: `POST /api/v1/session {remoteToken}`은 로컬 요청이면 서명·만료(2분 이내)·nonce 재사용을 검사하고 로컬 세션 쿠키를, 터널 Host 요청이면 `vide_remote` 쿠키(HttpOnly·Secure·SameSite=Strict, 12시간, 터널 종료 시 폐기)를 준다. 두 경우 모두 응답 전에 heartbeat로 사이트의 새 프로젝트를 받는다. 원격 세션은 `/api/v1/shutdown`, `/api/v1/remote*` 쓰기, `/mcp`, `accounts`·`settings`·`extensions`의 쓰기를 쓰지 못한다. 교차 사이트 요청은 API가 아닌 GET 화면 이동만 허용한다.
+- 버전: heartbeat 상태에 PC 프로그램 버전을 싣는다. `MIN_APP_VERSION`(선택)보다 낮은 PC는 목록에 "업데이트 필요"로 보이고 열기는 409 `HOST_UPDATE_REQUIRED`다. 비교는 점 구분 숫자이며 사이트↔PC 계약은 하위 호환으로만 바꾼다.
+
+### PC 프로그램
+
+[PLAN-11](../plans/PLAN-11-desktop-app.md)의 물리 계약이다. `src/desktop/shell`(.NET Framework 4.8 WinForms, WebView2, Velopack)의 `VIDE.exe`가 `runtime\node.exe app\src\server\main.ts --parent-stdin --no-browser`를 자식으로 띄우고 출력의 실행 주소를 창에 연다. 표준 입력을 닫으면 엔진이 정상 종료한다. 설치 루트는 `%LOCALAPPDATA%\VIDE.App`(`current\`, `packages\`, `Update.exe`, 고정 실행 스텁 `VIDE.exe`), 데이터는 `%LOCALAPPDATA%\VIDE`, 창 저장소는 `<데이터>\webview`, 셸 설정은 `<데이터>\desktop.json`이다. 단일 실행은 `Local\VIDE.Desktop` 뮤텍스와 Show/Quit 이벤트로 한다. 자동 실행은 `HKCU\…\Run\VIDE = "<스텁>" --background`다. 창의 설정 화면과 셸은 WebView2 메시지(`desktop:get|set`, `update:check|apply` ↔ `desktop:state`)로만 통신하고 로컬 주소 외의 이동은 기본 브라우저로 연다. 업데이트는 `UpdateSource`(폴더·URL) 또는 GitHub Releases(`hongikarchi/VIDE`)를 쓴다. 엔진의 `GET /api/v1/connectors`, `POST /api/v1/connectors/rhino8/install`(원격 세션 차단)은 포함된 `VIDE.Worker.rhp`를 `<데이터>\plugins\rhino\<버전>-<해시8>\`에 복사하고 `HKCU\Software\McNeel\Rhinoceros\8.0\Plug-ins\6bde756c-…\PlugIn\FileName`을 바꾼다(Rhino 실행 중 409 `HOST_RUNNING`). 개발 서버 `--dev`는 `.vide/dev-data`와 47831을 쓴다.
 - 전송: 원격 응답은 16 KB를 넘으면 gzip(level 4)으로 보낸다. `GET /api/v1/projects/:id/requests` 목록은 결과의 `scene`·`definitions`를 빼고 `sceneOmitted: true`를 붙이며, 화면은 표시할 요청만 단건 조회로 받는다.
 
 ## 7. 개발 기반과 변경 경계
