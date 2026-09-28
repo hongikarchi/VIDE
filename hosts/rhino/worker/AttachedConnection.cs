@@ -79,6 +79,7 @@ internal sealed class AttachedConnection : IDisposable
         if (request.GetProperty("method").GetString() == "attachedStatus")
             return new { ok = true, documentId = DocumentId, name = document.Name ?? "Untitled", units = document.ModelUnitSystem.ToString(),
                 objectCount = document.Objects.Count, modified = document.Modified, generation, live, busy = RhinoApp.InCommand > 0 };
+        if (request.GetProperty("method").GetString() == "chatBridge") return ChatBridge.Exchange(DocumentId, request);
         if (RhinoApp.InCommand > 0) throw new InvalidOperationException("HOST_BUSY");
         if (request.GetProperty("method").GetString() == "displayPage")
         {

@@ -29,6 +29,11 @@ try {
   await page.route('**/api/v1/host', (route) =>
     route.fulfill({ json: { available: false, zwcadAvailable: true } }),
   );
+  await page.addInitScript(() => {
+    try {
+      localStorage.setItem('vide:history-expand', 'all');
+    } catch {}
+  });
   await page.goto(app.launchUrl);
   await page.waitForFunction(() => !document.querySelector('#body').disabled);
   assert.equal(await page.locator('#add-request').isDisabled(), true);
@@ -255,8 +260,6 @@ try {
   assert.match(await settings.textContent(), /전체 1개 · 화면 표시 0개 · 표현 미지원 1개/);
   assert.match(await settings.textContent(), /InstanceReference 1개/);
   await settings.getByRole('button', { name: '닫기', exact: true }).click();
-  await page.locator('#document-tree > summary').click();
-  await page.locator('#object-tree > summary').click();
   await page
     .locator('#objects')
     .getByRole('button', { name: 'Preserved block', exact: true })

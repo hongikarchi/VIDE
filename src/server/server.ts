@@ -609,6 +609,20 @@ export async function startServer({
         }
         return;
       }
+      if (url.pathname === '/api/v1/host/attached-bridge' && request.method === 'POST') {
+        const input = hostTargetSchema
+          .extend({ ack: z.array(z.string().uuid()).max(100), state: z.unknown() })
+          .parse(await body(request));
+        if (!sdk) throw Object.assign(new Error('STALE_CONNECTION'), { code: 'STALE_CONNECTION' });
+        send(
+          200,
+          await sdk.editors.chatBridge(
+            { instance: input.instance, documentId: input.documentId },
+            { ack: input.ack, state: input.state },
+          ),
+        );
+        return;
+      }
       if (url.pathname === '/api/v1/host/selection' && request.method === 'GET') {
         const target = hostTargetSchema.parse({
           instance: url.searchParams.get('instance'),

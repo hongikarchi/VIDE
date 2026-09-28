@@ -27,12 +27,12 @@ function disposeObject(object: THREE.Object3D) {
 export function createViewport(
   container: HTMLElement,
   objects: DisplayObject[],
-  onPick: (id: string, pin: boolean) => void,
+  onPick: (ids: string[], mode: 'replace' | 'add' | 'remove', pin: boolean) => void,
   onPoint: (point: Point2) => void,
   onCamera?: (state: { view: string; projection: 'orthographic' | 'perspective' }) => void,
 ) {
   let dirty = true;
-  let selectedId: string | null = null;
+  let selectedIds = new Set<string>();
   let lineSignature = '';
   const scene = new THREE.Scene();
   scene.background = new THREE.Color('#edf0ec');
@@ -51,7 +51,9 @@ export function createViewport(
   renderer.domElement.tabIndex = 0;
   container.append(renderer.domElement);
   let controls: OrbitControls<Camera> = new OrbitControls(camera, renderer.domElement);
-  controls.enableDamping = true;
+  // Rhino-style navigation: camera stops with the pointer, zoom follows the cursor.
+  controls.enableDamping = false;
+  controls.zoomToCursor = true;
   controls.minDistance = 4;
   controls.maxDistance = 180;
   const grid = new THREE.GridHelper(100, 50, 0xb8c2b9, 0xe0e5dc);
@@ -65,7 +67,7 @@ export function createViewport(
   const byId = new Map<string, RenderObject>();
   function replace(data: DisplayObject[]) {
     dirty = true;
-    selectedId = null;
+    selectedIds = new Set();
     byId.clear();
     for (const mesh of meshes) {
       scene.remove(mesh);
@@ -162,7 +164,8 @@ export function createViewport(
     camera = next;
     camera.lookAt(target);
     controls = new OrbitControls(camera, renderer.domElement);
-    controls.enableDamping = true;
+    controls.enableDamping = false;
+    controls.zoomToCursor = true;
     controls.minDistance = 4;
     controls.maxDistance = 180;
     controls.minZoom = 0.2;
@@ -293,14 +296,127 @@ export function createViewport(
       controls.mouseButtons.RIGHT =
         e.shiftKey || e.ctrlKey || e.metaKey ? THREE.MOUSE.ROTATE : THREE.MOUSE.PAN;
   }
+  const marquee = document.createElement('div');
+  marquee.className = 'selection-marquee';
+  marquee.hidden = true;
+  container.append(marquee);
+  function selectionMode(e: PointerEvent | MouseEvent) {
+    return e.ctrlKey || e.metaKey ? 'remove' : e.shiftKey ? 'add' : 'replace';
+  }
   function pointerDown(e: PointerEvent) {
     if (e.button === 0) down = { x: e.clientX, y: e.clientY };
   }
+  function pointerMove(e: PointerEvent) {
+    if (!down || mode === 'sketch' || !(e.buttons & 1)) return;
+    if (Math.hypot(e.clientX - down.x, e.clientY - down.y) <= 5) return;
+    const r = container.getBoundingClientRect();
+    marquee.hidden = false;
+    // Rhino: left-to-right selects enclosed objects (solid), right-to-left selects crossing (dashed).
+    marquee.dataset.crossing = String(e.clientX < down.x);
+    Object.assign(marquee.style, {
+      left: Math.min(down.x, e.clientX) - r.left + 'px',
+      top: Math.min(down.y, e.clientY) - r.top + 'px',
+      width: Math.abs(e.clientX - down.x) + 'px',
+      height: Math.abs(e.clientY - down.y) + 'px',
+    });
+  }
+  const corner = new THREE.Vector3();
+  function boxSelect(x0: number, y0: number, x1: number, y1: number, crossing: boolean) {
+    const r = renderer.domElement.getBoundingClientRect();
+    const minX = Math.min(x0, x1) - r.left,
+      maxX = Math.max(x0, x1) - r.left,
+      minY = Math.min(y0, y1) - r.top,
+      maxY = Math.max(y0, y1) - r.top;
+    camera.updateMatrixWorld();
+    const inside = (x: number, y: number) => x >= minX && x <= maxX && y >= minY && y <= maxY;
+    const cross = (px: number, py: number, qx: number, qy: number, rx: number, ry: number) =>
+      (qx - px) * (ry - py) - (qy - py) * (rx - px);
+    const edges: [number, number, number, number][] = [
+      [minX, minY, maxX, minY],
+      [maxX, minY, maxX, maxY],
+      [maxX, maxY, minX, maxY],
+      [minX, maxY, minX, minY],
+    ];
+    const segmentHits = (ax: number, ay: number, bx: number, by: number) => {
+      if (inside(ax, ay) || inside(bx, by)) return true;
+      if (Math.max(ax, bx) < minX || Math.min(ax, bx) > maxX) return false;
+      if (Math.max(ay, by) < minY || Math.min(ay, by) > maxY) return false;
+      return edges.some(
+        ([cx, cy, dx, dy]) =>
+          cross(ax, ay, bx, by, cx, cy) * cross(ax, ay, bx, by, dx, dy) <= 0 &&
+          cross(cx, cy, dx, dy, ax, ay) * cross(cx, cy, dx, dy, bx, by) <= 0,
+      );
+    };
+    const picked: string[] = [];
+    for (const object of meshes) {
+      const id = object.userData.id;
+      const position = object.geometry.getAttribute('position');
+      if (typeof id !== 'string' || !position) continue;
+      object.updateMatrixWorld();
+      const count = position.count,
+        stride = Math.max(1, Math.floor(count / 4000));
+      const screen: number[] = [];
+      let all = true,
+        any = false;
+      for (let i = 0; i < count; i += stride) {
+        corner.fromBufferAttribute(position, i).applyMatrix4(object.matrixWorld).project(camera);
+        const x = ((corner.x + 1) / 2) * r.width,
+          y = ((1 - corner.y) / 2) * r.height;
+        screen.push(x, y);
+        if (corner.z <= 1 && inside(x, y)) any = true;
+        else all = false;
+        if (crossing ? any : !all) break;
+      }
+      if (!crossing) {
+        if (all && screen.length) picked.push(id);
+        continue;
+      }
+      if (!any && object instanceof THREE.Line)
+        for (let i = 2; i + 1 < screen.length && !any; i += 2)
+          any = segmentHits(screen[i - 2], screen[i - 1], screen[i], screen[i + 1]);
+      if (!any && object instanceof THREE.Mesh && stride === 1 && screen.length === count * 2) {
+        const index = object.geometry.getIndex();
+        if (index)
+          for (let t = 0; t + 2 < index.count && !any; t += 3)
+            for (const [a, b] of [
+              [0, 1],
+              [1, 2],
+              [2, 0],
+            ]) {
+              const p = index.getX(t + a) * 2,
+                q = index.getX(t + b) * 2;
+              if (segmentHits(screen[p], screen[p + 1], screen[q], screen[q + 1])) {
+                any = true;
+                break;
+              }
+            }
+      }
+      if (any) picked.push(id);
+    }
+    if (crossing) {
+      // A crossing window drawn entirely inside a large face still touches that face.
+      mouse.set(((minX + maxX) / 2 / r.width) * 2 - 1, (-(minY + maxY) / 2 / r.height) * 2 + 1);
+      ray.setFromCamera(mouse, camera);
+      const hit = ray.intersectObjects(meshes, false)[0]?.object.userData.id;
+      if (typeof hit === 'string' && !picked.includes(hit)) picked.push(hit);
+    }
+    return picked;
+  }
   function pointerUp(e: PointerEvent) {
     if (e.button !== 0 || !down) return;
-    const moved = Math.hypot(e.clientX - down.x, e.clientY - down.y);
+    const start = down;
+    const moved = Math.hypot(e.clientX - start.x, e.clientY - start.y);
     down = null;
-    if (moved > 5) return;
+    marquee.hidden = true;
+    if (moved > 5) {
+      if (mode !== 'sketch')
+        onPick(
+          boxSelect(start.x, start.y, e.clientX, e.clientY, e.clientX < start.x),
+          selectionMode(e),
+          mode === 'pin',
+        );
+      return;
+    }
     rayAt(e);
     if (mode === 'sketch') {
       const normal =
@@ -320,16 +436,17 @@ export function createViewport(
         onPoint([Math.round(uv[0] * 100) / 100, Math.round(uv[1] * 100) / 100]);
       }
     } else {
-      const hit = ray.intersectObjects(meshes, false)[0];
-      if (hit && typeof hit.object.userData.id === 'string')
-        onPick(hit.object.userData.id, mode === 'pin');
+      const id = ray.intersectObjects(meshes, false)[0]?.object.userData.id;
+      onPick(typeof id === 'string' ? [id] : [], selectionMode(e), mode === 'pin');
     }
   }
   function cancel() {
     down = null;
+    marquee.hidden = true;
   }
   renderer.domElement.addEventListener('pointerdown', cameraPointerDown, true);
   renderer.domElement.addEventListener('pointerdown', pointerDown);
+  renderer.domElement.addEventListener('pointermove', pointerMove);
   renderer.domElement.addEventListener('pointerup', pointerUp);
   renderer.domElement.addEventListener('pointercancel', cancel);
   const contextRestored = () => {
@@ -356,12 +473,16 @@ export function createViewport(
       replace(data);
       fit();
     },
-    select(id: string | null) {
-      if (id === selectedId) return;
-      const previous = selectedId ? byId.get(selectedId) : undefined;
-      previous?.material.color.setHex(previous instanceof THREE.Mesh ? 0xd7ded4 : 0x69766c);
-      if (id) byId.get(id)?.material.color.setHex(0xe4bca6);
-      selectedId = id;
+    select(ids: readonly string[]) {
+      const next = new Set(ids);
+      if (next.size === selectedIds.size && ids.every((id) => selectedIds.has(id))) return;
+      for (const id of selectedIds)
+        if (!next.has(id)) {
+          const previous = byId.get(id);
+          previous?.material.color.setHex(previous instanceof THREE.Mesh ? 0xd7ded4 : 0x69766c);
+        }
+      for (const id of next) byId.get(id)?.material.color.setHex(0xe4bca6);
+      selectedIds = next;
       dirty = true;
     },
     mode(next: ToolMode, plane: PlaneName = 'XY') {
@@ -407,7 +528,9 @@ export function createViewport(
       controls.dispose();
       renderer.domElement.removeEventListener('pointerdown', cameraPointerDown, true);
       renderer.domElement.removeEventListener('pointerdown', pointerDown);
+      renderer.domElement.removeEventListener('pointermove', pointerMove);
       renderer.domElement.removeEventListener('pointerup', pointerUp);
+      marquee.remove();
       renderer.domElement.removeEventListener('pointercancel', cancel);
       renderer.domElement.removeEventListener('webglcontextrestored', contextRestored);
       disposeObject(scene);

@@ -72,8 +72,7 @@ try {
     .digest('hex');
   await page.getByRole('button', { name: '이 후보 보기', exact: true }).last().click();
   await page.locator('#document-tree').evaluate((node) => (node.open = true));
-  await page.locator('#object-tree').evaluate((node) => (node.open = true));
-  await page.locator('#objects button').first().click();
+  await page.locator('#objects .object').first().click();
   await page.locator('#selection-pin').click();
   const second =
     existing[1] ||
@@ -119,8 +118,7 @@ try {
   assert.equal(recovered.result.objects[0].id, first.result.objects[0].id);
   await page.getByRole('button', { name: '이 후보 보기', exact: true }).last().click();
   await page.locator('#document-tree').evaluate((node) => (node.open = true));
-  await page.locator('#object-tree').evaluate((node) => (node.open = true));
-  await page.locator('#objects button').first().click();
+  await page.locator('#objects .object').first().click();
   await page.screenshot({ path: join(directory, 'viewport.png') });
   const evidence = {
     passed: true,

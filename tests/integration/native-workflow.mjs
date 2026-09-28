@@ -85,7 +85,7 @@ try {
   assert.deepEqual(first.result.objects[0].size, [8, 6, 6]);
   await page.locator('#document-tree').evaluate((n) => (n.open = true));
   await page.locator('#object-tree').evaluate((n) => (n.open = true));
-  await page.locator('#objects button').first().click();
+  await page.locator('#objects .object').first().click();
   await page.locator('#selection-pin').click();
   console.log('Verifying pinned follow-up');
   const second =

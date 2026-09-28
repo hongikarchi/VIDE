@@ -25,8 +25,7 @@ try {
     pin = candidate.input.pins[0];
   assert.equal(candidate.result.host, 'rhino');
   await page.locator('#document-tree').evaluate((node) => (node.open = true));
-  await page.locator('#object-tree').evaluate((node) => (node.open = true));
-  await page.locator('#objects button').first().click();
+  await page.locator('#objects .object').first().click();
   await page.locator('#inspector-toggle').click();
   await page.locator('[data-inspect="relations"]').click();
   await page.locator('#body').fill('Keep editing this Rhino candidate');

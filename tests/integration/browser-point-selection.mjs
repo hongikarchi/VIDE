@@ -30,7 +30,7 @@ try {
     window.pointView = createViewport(
       container,
       [],
-      (id, pin) => window.pointPicks.push({ id, pin }),
+      (ids, _mode, pin) => ids.length && window.pointPicks.push({ id: ids[0], pin }),
       () => {},
     );
     window.pointView.replace([

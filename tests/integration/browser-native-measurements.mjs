@@ -37,8 +37,7 @@ try {
   assert.deepEqual(circle.boundsSize, [4, 4, 0]);
   assert.ok(Math.abs(circle.length - 4 * Math.PI) / (4 * Math.PI) < 1e-8);
   await page.locator('#document-tree').evaluate((node) => (node.open = true));
-  await page.locator('#object-tree').evaluate((node) => (node.open = true));
-  await page.locator('#objects button').first().click();
+  await page.locator('#objects .object').first().click();
   await page.locator('#inspector-toggle').click();
   assert.ok((await page.locator('#inspector-content').innerText()).includes('Site'));
   await page.locator('[data-inspect="geometry"]').click();

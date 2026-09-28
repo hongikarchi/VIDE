@@ -57,7 +57,7 @@ try {
     window.largeView = createViewport(
       container,
       [],
-      (id) => window.largePicks.push(id),
+      (ids) => ids.length && window.largePicks.push(ids[0]),
       () => {},
     );
   });
@@ -112,7 +112,7 @@ try {
     await page.waitForTimeout(100);
     const before = await page.evaluate(() => window.glClears);
     await page.evaluate(() => {
-      window.largeView.select('dense');
+      window.largeView.select(['dense']);
       window.largeView.lines(
         [],
         [
@@ -126,7 +126,7 @@ try {
     const changed = await page.evaluate(() => window.glClears);
     assert.ok(changed > before, 'Selection and sketch changes must redraw');
     await page.evaluate(() => {
-      window.largeView.select('dense');
+      window.largeView.select(['dense']);
       window.largeView.lines(
         [],
         [

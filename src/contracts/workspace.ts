@@ -117,6 +117,11 @@ export interface WorkSummary {
       linkedTargets?: RequestInput['linkedTargets'];
     };
     state: RequestState;
-    result?: { phase?: string; code?: string; progress?: ExecutionProgress } | null;
+    result?: {
+      phase?: string;
+      code?: string;
+      progress?: ExecutionProgress;
+      activity?: unknown;
+    } | null;
   };
 }

@@ -28,7 +28,7 @@ try {
     window.precisionView = createViewport(
       container,
       [],
-      (id) => window.precisionPicks.push(id),
+      (ids) => ids.length && window.precisionPicks.push(ids[0]),
       () => {},
     );
     const x = 90000.001,

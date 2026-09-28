@@ -39,6 +39,9 @@ export interface Progress {
   phase?: string;
   reason?: string;
   tool?: string;
+  /** Visible model text (reasoning summary or intermediate message) for the activity log. */
+  text?: string;
+  kind?: 'thinking' | 'message';
 }
 export interface ProviderResult {
   text: string;
@@ -408,6 +411,17 @@ export class ClaudeCli {
               if (event.item?.type === 'error') progress({ state: 'provider-warning' });
               if (event.type === 'item.completed' && event.item?.type === 'agent_message')
                 codexText = event.item.text ?? '';
+              if (
+                event.type === 'item.completed' &&
+                ['agent_message', 'reasoning'].includes(event.item?.type ?? '') &&
+                event.item?.text
+              )
+                progress({
+                  state: 'running',
+                  phase: 'model',
+                  kind: event.item.type === 'reasoning' ? 'thinking' : 'message',
+                  text: event.item.text,
+                });
             }
             if (event.type === 'turn.failed' || event.type === 'error') codexFailed = true;
             if (event.type === 'turn.completed')
@@ -440,7 +454,17 @@ export class ClaudeCli {
             progress({ state: 'running', phase: 'model' });
           }
           if (event.type === 'assistant')
-            for (const item of event.message?.content || [])
+            for (const item of event.message?.content || []) {
+              if (
+                (item.type === 'text' || item.type === 'thinking') &&
+                typeof (item.text ?? item.thinking) === 'string'
+              )
+                progress({
+                  state: 'running',
+                  phase: 'model',
+                  kind: item.type === 'thinking' ? 'thinking' : 'message',
+                  text: String(item.text ?? item.thinking),
+                });
               if (item.type === 'tool_use') {
                 if (!allowedAgentEvent(item, 'claude', this.agent)) {
                   stop('UNEXPECTED_TOOL_CALL');
@@ -452,6 +476,7 @@ export class ClaudeCli {
                   tool: item.name?.slice('mcp__vide__'.length),
                 });
               }
+            }
           if (event.type === 'result') final = event;
         };
         processChild.stdout.on('data', (chunk) => {

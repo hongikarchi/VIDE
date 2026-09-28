@@ -62,10 +62,9 @@ try {
   await page.getByRole('button', { name: '이 후보 보기', exact: true }).first().click();
   const firstNative = records.find((r) => r.result?.hostExecuted);
   await page.locator('#document-tree').evaluate((node) => (node.open = true));
-  await page.locator('#object-tree').evaluate((node) => (node.open = true));
-  assert.equal(await page.locator('#objects button').count(), firstNative.result.objects.length);
+  assert.equal(await page.locator('#objects .object').count(), firstNative.result.objects.length);
   await page.getByRole('button', { name: '이 후보 보기', exact: true }).last().click();
-  await page.locator('#objects button').first().click();
+  await page.locator('#objects .object').first().click();
   await page.locator('#inspector-toggle').click();
   assert.ok((await page.locator('#inspector-content').innerText()).includes('네이티브 ID'));
   await page.locator('[data-inspect=geometry]').click();
@@ -135,8 +134,7 @@ try {
   assert.equal(await page.locator('#body').inputValue(), '초안 복구 검증');
   await page.fill('#body', before);
   await page.locator('#document-tree').evaluate((node) => (node.open = true));
-  await page.locator('#object-tree').evaluate((node) => (node.open = true));
-  await page.locator('#objects button').first().click();
+  await page.locator('#objects .object').first().click();
   await page.locator('#inspector-toggle').click();
   await page.locator('[data-inspect=geometry]').click();
   await page.getByRole('button', { name: '수량표', exact: true }).last().click();

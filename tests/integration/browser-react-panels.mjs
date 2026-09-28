@@ -13,6 +13,11 @@ try {
   const page = await browser.newPage({ viewport: { width: 1440, height: 900 } }),
     errors = [];
   page.setDefaultTimeout(10000);
+  await page.addInitScript(() => {
+    try {
+      localStorage.setItem('vide:history-expand', 'all');
+    } catch {}
+  });
   page.on('pageerror', (error) => errors.push(error.message));
   await page.route('**/api/v1/host', (route) => route.fulfill({ json: { available: false } }));
   await page.route('**/api/v1/providers', (route) =>
@@ -95,9 +100,9 @@ try {
       },
     });
   });
-  await page.getByText('열린 호스트 문서', { exact: true }).click();
   await page.locator('#refresh-documents').click();
   await page.locator('#host-documents').selectOption('2');
+  await page.locator('#attach-menu summary').click();
   await page.locator('#inspect-selection').click();
   assert.equal(await page.locator('#host-documents').isDisabled(), true);
   assert.equal(await page.locator('#capture-document').isDisabled(), true);
@@ -153,10 +158,9 @@ try {
     );
   await page.reload();
   await page.getByRole('button', { name: '이 후보 보기', exact: true }).click();
-  await page.waitForFunction(() => document.querySelector('#objects button'));
+  await page.waitForFunction(() => document.querySelector('#objects .object'));
   await page.locator('#document-tree').evaluate((node) => (node.open = true));
-  await page.locator('#object-tree').evaluate((node) => (node.open = true));
-  await page.locator('#objects button').first().click();
+  await page.locator('#objects .object').first().click();
   await page.locator('#inspector-toggle').click();
   await page.getByText('표시 속성을 요청에 첨부', { exact: true }).click();
   assert.equal(await page.evaluate(() => window.injected === true), false);

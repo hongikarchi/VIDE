@@ -1,6 +1,7 @@
 import { errors } from './gateway.ts';
 import { createRoot } from 'react-dom/client';
 import type { WorkSummary } from '../contracts/workspace.ts';
+import { ActivityLog, activityEntries } from './activity.tsx';
 
 interface Draft {
   instructions?: string[];
@@ -85,6 +86,7 @@ function ActiveWork({ messages, reason, intervene }: ActiveProps) {
                   ` · 실행 ${request.result.progress.attempts}/${request.input?.executionLimits?.maxHostCommands ?? 12} · 사본 저장 검증 ${request.result.progress.completed}단계`}
               </small>
             )}
+            <ActivityLog entries={activityEntries(request.result?.activity).slice(-8)} live />
             {intervene &&
               !request.input?.parentRequestId &&
               ['queued', 'running'].includes(request.state) &&

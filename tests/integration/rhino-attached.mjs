@@ -134,6 +134,12 @@ try {
   const target = { instance: catalog.documents[0].instance, documentId: catalog.documents[0].id };
   assert.equal(catalog.documents[0].connection, 'attached-editor');
   assert.equal(catalog.documents[0].units, 'Millimeters');
+  // Panel chat bridge accepts VIDE state and returns an empty outbox without touching the model.
+  const bridged = await sessions.chatBridge(target, {
+    ack: [],
+    state: { project: 'test', models: [], recent: [], notices: [] },
+  });
+  assert.deepEqual(bridged.outbox, []);
   const record = JSON.parse(
     await readFile(
       join(
