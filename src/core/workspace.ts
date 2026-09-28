@@ -137,9 +137,16 @@ export class Workspace {
       const documentKeys = new Set<string>();
       for (const item of targets) {
         const source = this.get(projectId, item.baseRequestId);
+        // A Sync of a document open in Rhino/ZWCAD is a valid target too: Rhino captures a work
+        // copy when the request runs, ZWCAD is edited in place.
+        const openDocument =
+          source.result?.displayOnly === true &&
+          z
+            .object({ connection: z.literal('attached-editor') })
+            .safeParse(source.result.sourceDocument).success;
         if (
           source.state !== 'succeeded' ||
-          !source.result?.verified ||
+          (!source.result?.verified && !openDocument) ||
           !source.result?.hostExecuted
         )
           fail('STALE_REFERENCE');
@@ -148,6 +155,7 @@ export class Workspace {
         if (
           input.permission === 'candidate' &&
           source.result.referenceOnly &&
+          !openDocument &&
           !isDwgSdkEditMode(source.result.dwgEditMode)
         )
           fail('ZWCAD_REFERENCE_ONLY');

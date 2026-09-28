@@ -163,8 +163,21 @@ internal sealed class WorkerExecutor(RhinoDoc document, string directory)
     }
 
     private object Snapshot(bool? uncertainty = null) => new { ok = true, revision, uncertain = uncertainty ?? uncertain, units = document.ModelUnitSystem.ToString(),
-        objects = document.Objects.GetObjectList(Rhino.DocObjects.ObjectType.AnyObject).Select(obj => new {
-            id = WorkerScene.Id(obj), nativeId = obj.Id, name = obj.Name ?? "Object", type = obj.ObjectType.ToString(), bounds = Bounds(obj.Geometry.GetBoundingBox(true)) }).ToArray() };
+        objects = document.Objects.GetObjectList(Rhino.DocObjects.ObjectType.AnyObject).Select(Row).ToArray() };
+    // Query rows: identity, layer and bounds; curves add their ends, length and straightness so
+    // alignment and comparison (e.g. against a CAD drawing) do not need extra code runs.
+    private object Row(Rhino.DocObjects.RhinoObject obj)
+    {
+        var curve = obj.Geometry as Rhino.Geometry.Curve;
+        double[] P(Rhino.Geometry.Point3d p) => [p.X, p.Y, p.Z];
+        return new {
+            id = WorkerScene.Id(obj), nativeId = obj.Id, name = obj.Name ?? "Object", type = obj.ObjectType.ToString(),
+            layer = obj.Attributes.LayerIndex >= 0 && obj.Attributes.LayerIndex < document.Layers.Count ? document.Layers[obj.Attributes.LayerIndex].FullPath : null,
+            bounds = Bounds(obj.Geometry.GetBoundingBox(true)),
+            start = curve == null ? null : P(curve.PointAtStart), end = curve == null ? null : P(curve.PointAtEnd),
+            length = curve?.GetLength(), linear = curve?.IsLinear(document.ModelAbsoluteTolerance), closed = curve?.IsClosed,
+        };
+    }
     private static double[][] Bounds(Rhino.Geometry.BoundingBox bounds) =>
         [[bounds.Min.X, bounds.Min.Y, bounds.Min.Z], [bounds.Max.X, bounds.Max.Y, bounds.Max.Z]];
     private void Persist(string operation, string hash, object result)

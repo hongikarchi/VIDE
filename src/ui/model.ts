@@ -41,7 +41,7 @@ interface DraftObject {
 export interface DraftState {
   executionLimits?: ExecutionLimits;
   linkedTargets?: { baseRequestId: string; host: 'rhino' | 'zwcad' }[];
-  coordinateBasis?: 'shared-metre-axes';
+  coordinateBasis?: 'shared-metre-axes' | 'align-by-features';
   selected: string | null;
   host: 'rhino' | 'zwcad';
   body: string;
@@ -219,7 +219,7 @@ export function validate(s: DraftState) {
     s.linkedTargets &&
     (s.linkedTargets.length !== 2 ||
       new Set(s.linkedTargets.map((target) => target.baseRequestId)).size !== 2 ||
-      s.coordinateBasis !== 'shared-metre-axes')
+      !s.coordinateBasis)
   )
     return '연계 대상 두 개와 좌표 기준을 확인하세요.';
   if (

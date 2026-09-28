@@ -30,7 +30,7 @@ export function showLinkedTargets(state: DraftState, changed: () => void) {
       state.linkedTargets?.[0]?.baseRequestId || '',
       state.linkedTargets?.[1]?.baseRequestId || '',
     ]);
-    const [confirmed, setConfirmed] = useState(false),
+    const [shared, setShared] = useState(false),
       [error, setError] = useState('');
     return (
       <>
@@ -47,7 +47,7 @@ export function showLinkedTargets(state: DraftState, changed: () => void) {
               value={selected[index]}
               onChange={(event) => {
                 setSelected(selected.map((value, i) => (i === index ? event.target.value : value)));
-                setConfirmed(false);
+                setShared(false);
               }}
             >
               <option value="">기준 후보 선택</option>
@@ -60,21 +60,31 @@ export function showLinkedTargets(state: DraftState, changed: () => void) {
             </select>
           </label>
         ))}
-        <label>
-          <input
-            type="checkbox"
-            checked={confirmed}
-            onChange={(event) => setConfirmed(event.target.checked)}
-          />
-          두 문서의 좌표를 m로 환산했을 때 원점과 축이 같습니다.
-        </label>
-        <p>
-          배치 기준이 다른 문서는 먼저 좌표를 맞춰야 합니다. 원본 적용은 후보 확인 후 별도로
-          진행합니다.
-        </p>
+        <fieldset>
+          <legend>두 문서의 좌표</legend>
+          <label>
+            <input
+              type="radio"
+              name="coordinate-basis"
+              checked={!shared}
+              onChange={() => setShared(false)}
+            />
+            원점·축이 다르거나 모름 — AI가 그리드·기둥 중심 등 대응 요소로 위치
+            관계(이동·회전·축척·오차)를 먼저 구해 알려 줍니다.
+          </label>
+          <label>
+            <input
+              type="radio"
+              name="coordinate-basis"
+              checked={shared}
+              onChange={() => setShared(true)}
+            />
+            m로 환산했을 때 원점과 축이 같음
+          </label>
+        </fieldset>
         {error && <p role="alert">{error}</p>}
         <button
-          disabled={!confirmed || !selected.every(Boolean) || selected[0] === selected[1]}
+          disabled={!selected.every(Boolean) || selected[0] === selected[1]}
           onClick={() => {
             try {
               state.linkedTargets = selected.map((baseRequestId) => ({
@@ -84,7 +94,7 @@ export function showLinkedTargets(state: DraftState, changed: () => void) {
                     ? 'zwcad'
                     : 'rhino',
               }));
-              state.coordinateBasis = 'shared-metre-axes';
+              state.coordinateBasis = shared ? 'shared-metre-axes' : 'align-by-features';
               changed();
               close();
             } catch (error) {

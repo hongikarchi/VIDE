@@ -137,7 +137,11 @@ export async function runLinked(options: {
       tools: Object.keys(handlers),
     }).run(
       {
-        goal: `The user explicitly selected BOTH targets below. Each target keeps its own coordinates and units: a CAD drawing and a Rhino model of one project often use different origins (offsets, sometimes rotation or scale, and small decimal drifts). Before comparing or transferring geometry, establish the relation from matching features (grid lines, column centres, outlines) and state it (translation, rotation, scale, residual error); never assume shared coordinates. Query the modified source candidate before constructing the dependent target. Preserve each target's protected objects. Do not infer original application permission. If one target fails, report it without replaying another target's successful writes.\n${connected.map((item, index) => `Target ${index + 1}, basis ${targets[index].baseRequestId}:\n${item.context.goal}`).join('\n\n')}`,
+        goal: `The user explicitly selected BOTH targets below. ${
+          request.input.coordinateBasis === 'shared-metre-axes'
+            ? 'The user confirmed both share one origin and axes once converted to metres; still report any feature that does not match.'
+            : 'Each target keeps its own coordinates and units: a CAD drawing and a Rhino model of one project often use different origins (offsets, sometimes rotation or scale, and small decimal drifts). Before comparing or transferring geometry, establish the relation from matching features (grid lines, column centres, outlines) and state it (translation, rotation, scale, residual error); never assume shared coordinates.'
+        } Query the modified source candidate before constructing the dependent target. Preserve each target's protected objects. Do not infer original application permission. If one target fails, report it without replaying another target's successful writes.\n${connected.map((item, index) => `Target ${index + 1}, basis ${targets[index].baseRequestId}:\n${item.context.goal}`).join('\n\n')}`,
         revision: 1,
         items,
         includedIds: items.map((item) => item.id),

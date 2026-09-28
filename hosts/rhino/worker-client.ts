@@ -44,7 +44,14 @@ export const workerSnapshotSchema = z.object({
       nativeId: z.string().uuid(),
       name: z.string(),
       type: z.string(),
+      layer: z.string().nullish(),
       bounds: z.tuple([point, point]),
+      // Curves: ends, length and straightness (for alignment and comparison without extra code).
+      start: point.nullish(),
+      end: point.nullish(),
+      length: z.number().nullish(),
+      linear: z.boolean().nullish(),
+      closed: z.boolean().nullish(),
     }),
   ),
 });

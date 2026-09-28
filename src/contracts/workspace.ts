@@ -78,7 +78,9 @@ export const requestInputSchema = z
     host: z.enum(['rhino', 'zwcad']).optional(),
     baseRequestId: id.nullable().optional(),
     linkedTargets: z.array(linkedTargetSchema).length(2).optional(),
-    coordinateBasis: z.literal('shared-metre-axes').optional(),
+    // shared-metre-axes: the user confirmed one origin and axes; align-by-features: the files are
+    // placed differently and the AI establishes the relation from matching features first.
+    coordinateBasis: z.enum(['shared-metre-axes', 'align-by-features']).optional(),
     model: z
       .string()
       .regex(/^[a-zA-Z0-9._-]{1,100}(?:\[1m\])?$/)
@@ -101,7 +103,7 @@ export const requestInputSchema = z
       });
     if (
       input.linkedTargets &&
-      (input.coordinateBasis !== 'shared-metre-axes' ||
+      (!input.coordinateBasis ||
         new Set(input.linkedTargets.map((target) => target.baseRequestId)).size !== 2 ||
         input.provider === 'extension')
     )

@@ -19,7 +19,7 @@ export function linkedRequestDraft(state: DraftState, parent: UiRequest) {
   if (
     !['succeeded', 'failed', 'cancelled', 'interrupted'].includes(parent.state) ||
     targets?.length !== 2 ||
-    parent.input.coordinateBasis !== 'shared-metre-axes' ||
+    !parent.input.coordinateBasis ||
     new Set(targets.map((target) => target.baseRequestId)).size !== 2 ||
     origin.result?.targetResults?.length !== 2
   )
