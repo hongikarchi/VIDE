@@ -60,6 +60,13 @@ export async function readDisplayPages(
     const code = error && typeof error === 'object' && 'code' in error ? error.code : undefined;
     if (code !== 'HOST_READ_FAILED' && code !== 'HOST_RESPONSE_TOO_LARGE') throw error;
     if (count > 1) {
+      if (code === 'HOST_RESPONSE_TOO_LARGE') {
+        // Do not serialize the same enormous block again at every binary split.
+        const pages: z.infer<typeof pageSchema>[] = [];
+        for (let offset = start; offset < start + count; offset++)
+          pages.push(...(await readDisplayPages(read, offset, 1, total, revision)));
+        return pages;
+      }
       const half = Math.floor(count / 2);
       return [
         ...(await readDisplayPages(read, start, half, total, revision)),

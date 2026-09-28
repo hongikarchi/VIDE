@@ -80,13 +80,23 @@ for (const code of ['HOST_READ_FAILED', 'HOST_RESPONSE_TOO_LARGE']) {
       pages[1].omittedTypes[code === 'HOST_READ_FAILED' ? 'UnreadableObject' : 'OversizedDisplay'],
       1,
     );
-    assert.deepEqual(calls, [
-      [0, 3],
-      [0, 1],
-      [1, 2],
-      [1, 1],
-      [2, 1],
-    ]);
+    assert.deepEqual(
+      calls,
+      code === 'HOST_RESPONSE_TOO_LARGE'
+        ? [
+            [0, 3],
+            [0, 1],
+            [1, 1],
+            [2, 1],
+          ]
+        : [
+            [0, 3],
+            [0, 1],
+            [1, 2],
+            [1, 1],
+            [2, 1],
+          ],
+    );
   });
 }
 for (const code of ['UNAUTHORIZED', 'SOURCE_CHANGED', 'HOST_RESULT_UNKNOWN']) {

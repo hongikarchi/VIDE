@@ -110,7 +110,6 @@ try {
     const attachedResponse = await page.request.get(app.origin + '/api/v1/host/attached-documents');
     const attachedCatalog = await attachedResponse.json();
     console.log(JSON.stringify({ attachedStatus: attachedResponse.status(), attachedCatalog }));
-    await page.getByText('열린 호스트 문서', { exact: true }).click();
     await page.locator('#host-documents').selectOption(`${target.instance}/1`, { timeout: 20000 });
     await page.locator('#capture-document').click();
     await page.waitForFunction(
@@ -171,13 +170,26 @@ try {
   const moved = await adapter.capture(target);
   assert.deepEqual(moved.scene.find((s) => s.nativeType === 'Line').segments, [1, 0, 0, 4, 4, 0]);
   assert.notEqual(moved.sourceDocument.documentHash, model.sourceDocument.documentHash);
+  await writeFile(join(directory, 'action.txt'), 'large');
+  await until(
+    () => adapter.list(),
+    (docs) => docs[0]?.objectCount === 6,
+  );
+  const large = await adapter.capture(target);
+  assert.equal(large.displayCoverage.omittedTypes.OversizedDisplay, 1);
+  assert.equal(large.displayCoverage.displayed, 4);
+  assert.equal(large.displayCoverage.total, 6);
+  assert.ok(
+    large.scene.some((s) => JSON.stringify(s.segments) === JSON.stringify([0, 10, 0, 5, 10, 0])),
+    'Geometry after the enormous block is preserved',
+  );
   await writeFile(join(directory, 'action.txt'), 'second');
   const both = await until(
     () => adapter.list(),
     (docs) => docs.length === 2,
   );
   assert.notEqual(both[0].instance, both[1].instance);
-  assert.equal((await adapter.capture(target)).objects.length, moved.objects.length);
+  assert.equal((await adapter.capture(target)).objects.length, large.objects.length);
   const other = both.find((d) => d.instance !== target.instance);
   assert.equal(
     (await adapter.capture({ instance: other.instance, documentId: 1 })).objects.length,
@@ -196,7 +208,11 @@ try {
   );
   await writeFile(
     join(directory, 'result.json'),
-    JSON.stringify({ directory, doc, model, before, after }, null, 2),
+    JSON.stringify(
+      { directory, doc, model, before, after, largeCoverage: large.displayCoverage },
+      null,
+      2,
+    ),
   );
   console.log(JSON.stringify({ directory, passed: true, coverage: model.displayCoverage }));
 } finally {

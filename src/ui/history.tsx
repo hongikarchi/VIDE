@@ -113,7 +113,8 @@ function Candidate({
       {omitted > 0 ? (
         <small>
           {omitted.toLocaleString()}개는{' '}
-          {displayOnly ? `원본 ${host}에 유지` : '목록·네이티브 파일에 보존'} · 화면 표현 미지원
+          {displayOnly ? `원본 ${host}에 유지` : '목록·네이티브 파일에 보존'} ·{' '}
+          {host === 'ZWCAD' && displayOnly ? '표시 제외 (숨김·미지원 포함)' : '화면 표현 미지원'}
         </small>
       ) : null}
       {host === 'ZWCAD' && displayOnly && result.displayCoverage?.omittedTypes.OversizedDisplay ? (

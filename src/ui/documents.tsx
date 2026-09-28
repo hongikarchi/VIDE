@@ -7,7 +7,7 @@ interface Props {
   notify: (message: string) => void;
   onCapture: (target: HostTarget, automatic?: boolean) => Promise<boolean | void>;
   onSelection: (selection: HostSelection) => void;
-  onConnection?: (document?: { key: string; name: string }) => void;
+  onConnection?: (document?: { key: string; name: string; host: 'rhino' | 'zwcad' }) => void;
 }
 function Documents({ notify, onCapture, onSelection, onConnection }: Props) {
   const [catalog, setCatalog] = useState<HostDocuments | null>(null);
@@ -23,8 +23,12 @@ function Documents({ notify, onCapture, onSelection, onConnection }: Props) {
   const active = catalog?.documents.find((item) => key(item) === selected);
   const connected = active ?? catalog?.documents[0];
   useEffect(() => {
-    onConnection?.(connected ? { key: key(connected), name: connected.name } : undefined);
-  }, [connected?.instance, connected?.id, connected?.name, onConnection]);
+    onConnection?.(
+      connected
+        ? { key: key(connected), name: connected.name, host: connected.host ?? 'rhino' }
+        : undefined,
+    );
+  }, [connected?.instance, connected?.id, connected?.name, connected?.host, onConnection]);
   const run = async (action: () => Promise<void>) => {
     if (inFlight.current) return;
     inFlight.current = true;
@@ -204,7 +208,7 @@ function Documents({ notify, onCapture, onSelection, onConnection }: Props) {
         <span className="dot" aria-hidden="true" />
         {active
           ? live
-            ? `Rhino 연결됨 · Live Sync ${active.live ? '켜짐' : '꺼짐'}`
+            ? `${active.host === 'zwcad' ? 'ZWCAD' : 'Rhino'} 연결됨 · Live Sync ${active.live ? '켜짐' : '꺼짐'}`
             : '호스트 문서'
           : '연결 안 됨'}
       </p>
@@ -212,13 +216,13 @@ function Documents({ notify, onCapture, onSelection, onConnection }: Props) {
         {notice ||
           (active
             ? `${active.objectCount.toLocaleString()}개 객체 · ${active.units}${active.modified === null ? '' : active.modified ? ' · 저장되지 않은 변경' : ''}`
-            : 'Rhino에서 VIDEConnect를 실행한 뒤 ⟳를 누르세요.')}
+            : 'Rhino는 VIDEConnect, ZWCAD는 VIDECADConnect 실행 후 ⟳를 누르세요.')}
       </small>
       <button
         id="capture-document"
         className="primary-button"
         disabled={busy || !active}
-        title="현재 Rhino 문서를 VIDE 화면으로 가져옵니다 (Rhino: VIDESync · 자동: VIDELiveSync)"
+        title="현재 호스트 문서를 VIDE로 가져옵니다. 호스트 패널에서 Sync / Live Sync를 설정하세요."
         onClick={() => {
           void capture();
         }}

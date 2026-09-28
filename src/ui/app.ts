@@ -201,13 +201,16 @@ initializeDocuments(
     message(
       selection.selectedIds.length
         ? `${count}개 객체를 요청에 첨부했습니다.`
-        : 'Rhino에서 선택한 객체가 없습니다.',
+        : '호스트에서 선택한 객체가 없습니다.',
     );
   },
   (connection) => {
     viewportEmpty.connection(connection);
     const [instance, id] = connection?.key.split('/') ?? [];
-    connectedTarget = instance && id ? { instance, documentId: Number(id) } : undefined;
+    connectedTarget =
+      connection?.host === 'rhino' && instance && id
+        ? { instance, documentId: Number(id) }
+        : undefined;
   },
 );
 let inspectorTab: NonNullable<Parameters<typeof renderInspector>[3]> = 'properties';

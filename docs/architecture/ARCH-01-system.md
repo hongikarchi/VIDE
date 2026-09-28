@@ -630,4 +630,6 @@ Rhino 패널은 기존 RHP 안의 Eto `ConnectionPanel`을 `PanelType.PerDoc`로
 
 SDK 조회는 Idle의 주 스레드와 문서 잠금에서 수행한다. ObjectAppended/Modified/Erased가 revision을 올리고 Live Sync가 켜졌으면 1초 안정화 후 generation을 올린다. Sync는 generation을 즉시 올린다. 지문은 연결 session·revision·단위이며 전체 기하를 매번 해시하지 않는다. `displayPage`의 offset·next·total·revision과 객체/scene ID 대응, 전후 지문을 검사한다. 원본 Handle에 대응하는 최상위 객체 한 개에 블록 내부 선분을 묶고 미터 좌표의 `scene.segments`(xyz 끝점 쌍)를 `THREE.LineSegments`로 표시한다. 네이티브 블록·곡선은 수정하지 않는다. 이 표현의 웹 공유 게시 지원은 별도이며 아직 허용하지 않는다.
 
-CAD 표시 응답은 최대 128MiB 수신을 명시한다. 실제 SDK 조회 실패 또는 프레임 초과만 읽기 범위를 이분하고 단일 객체까지 실패하면 `UnreadableObject`/`OversizedDisplay`로 누락을 기록한다. 인증·revision 변경·불명확 연결 오류는 재시도로 성공을 만들지 않는다. 표시되지 않은 객체는 원본에 남는다. 결과는 `displayOnly: true`, `verified: false`, `referenceOnly: true`이며 현재 문서용 AI 실행은 `ZWCAD_ATTACHED_EDIT_UNAVAILABLE`로 공급자 호출 전에 거절한다. 기존 별도 CAD 편집 사본 경로는 유지한다.
+CAD 표시 응답은 최대 128MiB 수신을 명시한다. 실제 도면의 722MB 단일 블록 응답과 시간 초과를 확인해, 플러그인은 객체 하나의 표시 좌표 수가 2,000,000개를 넘으면 직렬화 전에 `OversizedDisplay`로 제외한다. SDK 객체 읽기 예외도 `UnreadableObject`로 해당 객체만 기록한다. 페이지 누적 좌표가 같은 기준을 넘으면 그 객체까지 반환하고 `next`부터 이어 읽는다. 총 도면 객체 수를 잘라내는 한도는 아니다. 큰 블록의 공유 기하/인스턴싱 지원 전까지의 부분 표시이며 이 제외 수를 화면에 알린다.
+
+이전 플러그인의 실제 SDK 조회 실패는 범위를 이분한다. 프레임 초과는 동일한 큰 블록을 매 이분 단계에서 재직렬화하지 않도록 그 범위를 개별 객체로 조회하고 단일 객체도 실패하면 위 누락 유형으로 기록한다. 인증·revision 변경·불명확 연결 오류는 재시도로 성공을 만들지 않는다. 표시되지 않은 객체는 원본에 남는다. 결과는 `displayOnly: true`, `verified: false`, `referenceOnly: true`이며 현재 문서용 AI 실행은 `ZWCAD_ATTACHED_EDIT_UNAVAILABLE`로 공급자 호출 전에 거절한다. 기존 별도 CAD 편집 사본 경로는 유지한다.

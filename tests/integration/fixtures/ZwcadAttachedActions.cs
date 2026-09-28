@@ -35,6 +35,23 @@ public sealed class ZwcadAttachedActions
                     }
                     tx.Commit();
                 }
+            } else if (action == "large") {
+                using (first.LockDocument())
+                using (var tx = first.Database.TransactionManager.StartTransaction()) {
+                    var table = (BlockTable)tx.GetObject(first.Database.BlockTableId, OpenMode.ForWrite);
+                    var definition = new BlockTableRecord { Name = "VIDE_LARGE_TEST" };
+                    var definitionId = table.Add(definition); tx.AddNewlyCreatedDBObject(definition, true);
+                    for (int i = 0; i < 5000; i++) {
+                        var circle = new Circle(new Point3d(i * 10, 0, 0), Vector3d.ZAxis, 5);
+                        definition.AppendEntity(circle); tx.AddNewlyCreatedDBObject(circle, true);
+                    }
+                    var space = (BlockTableRecord)tx.GetObject(table[BlockTableRecord.ModelSpace], OpenMode.ForWrite);
+                    var block = new BlockReference(Point3d.Origin, definitionId);
+                    space.AppendEntity(block); tx.AddNewlyCreatedDBObject(block, true);
+                    var line = new Line(new Point3d(0, 10000, 0), new Point3d(5000, 10000, 0));
+                    space.AppendEntity(line); tx.AddNewlyCreatedDBObject(line, true);
+                    tx.Commit();
+                }
             } else if (action == "second") {
                 second = Application.DocumentManager.Add("");
                 second.Database.Insunits = UnitsValue.Millimeters;
