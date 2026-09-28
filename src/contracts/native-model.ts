@@ -31,9 +31,17 @@ export const nativeSceneSchema = z.object({
 });
 export const nativeModelSchema = z
   .object({
-    objects: z.array(object).max(10000),
-    scene: z.array(nativeSceneSchema).max(10000),
+    objects: z.array(object).max(20000),
+    scene: z.array(nativeSceneSchema).max(20000),
     measurementVersion: z.literal(1).optional(),
+    displayCoverage: z
+      .object({
+        total: z.number().int().nonnegative(),
+        displayed: z.number().int().nonnegative(),
+        omitted: z.number().int().nonnegative(),
+        omittedTypes: z.record(z.string(), z.number().int().nonnegative()),
+      })
+      .optional(),
     measurementStats: z
       .object({
         measuredObjects: z.number().int().nonnegative(),
@@ -42,6 +50,15 @@ export const nativeModelSchema = z
       .optional(),
   })
   .superRefine((model, ctx) => {
+    if (
+      model.displayCoverage &&
+      (model.displayCoverage.total !== model.objects.length ||
+        model.displayCoverage.displayed + model.displayCoverage.omitted !==
+          model.displayCoverage.total ||
+        Object.values(model.displayCoverage.omittedTypes).reduce((sum, count) => sum + count, 0) !==
+          model.displayCoverage.omitted)
+    )
+      ctx.addIssue({ code: 'custom', message: 'Invalid display coverage' });
     const objects = new Map(model.objects.map((object) => [object.id, object]));
     if (
       objects.size !== model.objects.length ||

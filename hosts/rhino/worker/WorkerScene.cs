@@ -9,7 +9,7 @@ namespace Vide.Worker;
 
 internal static class WorkerScene
 {
-    internal const int MaxObjects = 10000;
+    internal const int MaxObjects = 20000;
     internal sealed record Measurements(double? Area, double? Volume, double? Length);
     internal static string Id(RhinoObject obj) => obj.Attributes.GetUserString("vide-id") ?? obj.Id.ToString();
     internal static string Fingerprint(RhinoObject obj)
@@ -39,14 +39,18 @@ internal static class WorkerScene
 
     // Detailed meshes/measurements are exported once for the candidate, not on every AI query.
     internal static object Export(RhinoDoc doc, Func<RhinoObject, string, Measurements?>? cached = null,
-        Action<RhinoObject, string, Measurements>? observed = null)
+        Action<RhinoObject, string, Measurements>? observed = null, int offset = 0, int limit = MaxObjects, int revision = 0)
     {
+        var ordered = doc.Objects.GetObjectList(ObjectType.AnyObject).OrderBy(obj => obj.Id).ToArray();
+        if (ordered.Length > MaxObjects) throw new InvalidOperationException("IMPORT_LIMIT");
+        if (offset < 0 || offset > ordered.Length || limit < 1 || limit > MaxObjects)
+            throw new InvalidOperationException("INVALID_PAGE");
         var objects = new List<object>();
         var scene = new List<object>();
         var remainingAttributes = 262144;
         var measuredObjects = 0;
         var reusedObjects = 0;
-        foreach (var obj in doc.Objects.GetObjectList(ObjectType.AnyObject))
+        foreach (var obj in ordered.Skip(offset).Take(limit))
         {
             var geometry = obj.Geometry;
             var bounds = geometry.GetBoundingBox(true);
@@ -98,7 +102,8 @@ internal static class WorkerScene
                 vertices, indices, line, area = measurements.Area, volume = measurements.Volume, length = measurements.Length,
                 layer64 = Encode(doc.Layers[obj.Attributes.LayerIndex].FullPath), attributes64 = attributes, attributesComplete = complete, valid = geometry.IsValid });
         }
-        return new { objects, scene, measurementVersion = 1, measurementStats = new { measuredObjects, reusedObjects } };
+        return new { objects, scene, measurementVersion = 1, measurementStats = new { measuredObjects, reusedObjects },
+            page = new { offset, nextOffset = offset + objects.Count, total = ordered.Length, revision } };
     }
 
     private static string Encode(string value) => Convert.ToBase64String(Encoding.UTF8.GetBytes(value));

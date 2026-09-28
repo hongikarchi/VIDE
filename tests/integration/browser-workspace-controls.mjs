@@ -207,8 +207,16 @@ try {
       hostExecuted: true,
       executionMode: 'sdk',
       host: 'rhino',
-      objects: [],
-      scene: [],
+      objects:
+        id === 'basis-one' ? [{ id: 'native-block', name: 'Preserved block', kind: 'native' }] : [],
+      scene:
+        id === 'basis-one'
+          ? [{ id: 'native-block', nativeType: 'InstanceReference', nativeId: 'block-guid' }]
+          : [],
+      displayCoverage:
+        id === 'basis-one'
+          ? { total: 1, displayed: 0, omitted: 1, omittedTypes: { InstanceReference: 1 } }
+          : { total: 0, displayed: 0, omitted: 0, omittedTypes: {} },
     };
     app.store.db
       .prepare('INSERT INTO workspace_requests VALUES(?,?,?,?,?,?)')
@@ -241,6 +249,32 @@ try {
   await linkedChip.getByRole('button').click();
   assert.equal(await page.locator('#context .chip').filter({ hasText: '연계 묶음' }).count(), 0);
   const card = page.locator('[data-request-id="basis-one"]');
+  assert.match(await card.textContent(), /1개는 목록·네이티브 파일에 보존 · 화면 표현 미지원/);
+  await card.getByRole('button', { name: '이 후보 보기', exact: true }).click();
+  await page.getByRole('button', { name: '모델 표시 상태', exact: true }).click();
+  assert.match(await settings.textContent(), /전체 1개 · 화면 표시 0개 · 표현 미지원 1개/);
+  assert.match(await settings.textContent(), /InstanceReference 1개/);
+  await settings.getByRole('button', { name: '닫기', exact: true }).click();
+  await page.locator('#document-tree > summary').click();
+  await page.locator('#object-tree > summary').click();
+  await page
+    .locator('#objects')
+    .getByRole('button', { name: 'Preserved block', exact: true })
+    .click();
+  await page.locator('#inspector-toggle').click();
+  await page.waitForFunction(() =>
+    document
+      .querySelector('#inspector-content')
+      .textContent.includes('미지원 · 목록·네이티브 파일에 보존'),
+  );
+  await page
+    .locator('[data-request-id="basis-two"]')
+    .getByRole('button', { name: '이 후보 보기', exact: true })
+    .click();
+  assert.equal(
+    await page.getByRole('button', { name: '모델 표시 상태', exact: true }).isVisible(),
+    false,
+  );
   await card.getByText('요청 문맥', { exact: true }).click();
   assert.equal(await card.locator('pre').isVisible(), false);
   assert.match(await card.textContent(), /대상: Rhino/);

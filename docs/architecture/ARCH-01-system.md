@@ -2,7 +2,7 @@
 id: ARCH-01
 title: VIDE 기술 구조와 구현 계약
 status: review
-version: 0.33
+version: 0.34
 updated: 2026-09-28
 owner: agent:codex
 related: [SPEC-00, SPEC-02, SPEC-03, SPEC-04, PLAN, ADR-014, ADR-015, ADR-016, ADR-017]
@@ -611,3 +611,9 @@ PLAN-06의 프로필 실행은 서버가 선택한 절대 configDirectory를 Cli
 ### Rhino 네이티브 취득의 블록 보존
 
 취득 지문과 저장 재검증은 일반 문서 객체와 삭제되지 않은 InstanceDefinition의 GetObjects 결과를 GUID로 중복 제거한 집합을 사용한다. 정의 ID·이름·설명·멤버 GUID·사용자 문자열도 비교한다. 화면 목록은 일반 객체 목록을 유지하며 정의 내부 객체를 별도 최상위 선택 대상으로 복제하지 않는다. Live Sync는 InstanceDefinitionTableEvent도 변경 세대에 포함한다. 연결 지문은 각 객체의 기존 기하/속성 해시를 순서대로 증분 SHA-256에 추가해 전체 연결 문자열의 중복 할당을 피한다. 현재 객체 수/표시 응답 상한은 별도이며 이 보존 수정만으로 해제하지 않는다.
+
+### Rhino 표시 페이지 취득
+
+격리 worker의 `exportPage`는 GUID 정렬 객체 목록의 offset·limit(최대 1,000)과 실행 revision을 받는다. 첫 페이지에서 revision·total을 고정하고 후속 페이지에 재전송한다. 응답은 기존 nativeModel 필드와 page `{offset,nextOffset,total,revision}`다. 배열 집합·GUID·다음 offset·revision을 제어기에서 검증한다. 16MiB 소켓 응답 한도는 유지하고 명시적 HOST_RESULT_TOO_LARGE에만 읽기 페이지를 절반으로 줄여 재조회한다. 1개 객체에서도 초과하면 중단한다. 연결 단절/불명확 응답에는 재조회하지 않는다. 합산 원시 JSON은 32MiB로 제한하고 완성 전 결과를 영속 성공으로 저장하지 않는다. 객체 상한은 네이티브·계약 모두 20,000이며 검증된 파일 크기나 BIM 지원 약속이 아니다. 측정 캐시 전달이 2MiB를 넘으면 해당 전달만 생략하며 worker 내부 동일 형상 캐시는 유지한다. 브라우저 API는 현재 완성 모델을 한 번에 받는다. 브라우저 스트리밍/LOD는 별도 후속이며 이 단계로 완료 처리하지 않는다.
+
+완성된 표시 응답은 `displayCoverage`에 total·displayed·omitted·omittedTypes를 담는다. 실제 sceneRepresentation으로 표시할 수 없는 객체를 집계하며 삭제로 표시하지 않는다. 블록 상세 메시 미지원은 이 범위에 포함한다. 네이티브 보존 검증과 화면 형상 지원은 분리한다.

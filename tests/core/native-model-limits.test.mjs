@@ -3,8 +3,8 @@ import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { nativeModelSchema } from '../../src/contracts/native-model.ts';
 
-test('native model admits 10000 matched identities and rejects oversized or incomplete models', () => {
-  const objects = Array.from({ length: 10000 }, (_, i) => ({
+test('native model admits 20000 matched identities and rejects oversized or incomplete models', () => {
+  const objects = Array.from({ length: 20000 }, (_, i) => ({
     id: String(i),
     nativeId: randomUUID(),
     kind: 'native',

@@ -113,7 +113,16 @@ try {
   const action = async (command, extra = {}) => {
     step++;
     await writeFile(join(directory, 'action.tmp'), JSON.stringify({ id: step, command, ...extra }));
-    await rename(join(directory, 'action.tmp'), join(directory, 'action.json'));
+    // Rhino may still hold the preceding file for its brief read. The action ID prevents replay.
+    for (let attempt = 0; ; attempt++) {
+      try {
+        await rename(join(directory, 'action.tmp'), join(directory, 'action.json'));
+        break;
+      } catch (error) {
+        if (error.code !== 'EPERM' || attempt === 19) throw error;
+        await new Promise((accept) => setTimeout(accept, 50));
+      }
+    }
     const r = await wait(async () =>
       JSON.parse(await readFile(join(directory, 'action-' + step + '.json'), 'utf8')),
     );

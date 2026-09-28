@@ -26,6 +26,8 @@ export function initializeWorkspaceStatus(openFailure: (id: string) => void) {
   // Keep existing status writers, with their detail now in the status dialog.
   const facts = el('section', '', content);
   facts.append(connection, host, auth);
+  const display = el('section', '', content);
+  display.hidden = true;
   const problems = el('section', '', content);
   const actions = el('div', '', content, { class: 'settings-actions' });
   for (const [label, id] of [
@@ -41,6 +43,8 @@ export function initializeWorkspaceStatus(openFailure: (id: string) => void) {
   const notifications: string[] = [];
   const providerButton = el('button', 'AI · 확인 중', footer, { 'aria-label': 'AI 연결 상태' });
   const hostButton = el('button', '호스트 · 확인 중', footer, { 'aria-label': '호스트 준비 상태' });
+  const displayButton = el('button', '', footer, { 'aria-label': '모델 표시 상태' });
+  displayButton.hidden = true;
   const accountButton = el('button', '', footer, {
     id: 'status-account',
     'aria-label': '현재 AI 계정 설정',
@@ -54,6 +58,7 @@ export function initializeWorkspaceStatus(openFailure: (id: string) => void) {
   accountButton.onclick = () => {
     $('ai-settings').click();
   };
+  displayButton.onclick = () => open(displayButton, '모델 표시 상태');
   providerButton.onclick = () => open(providerButton, 'AI 연결 상태');
   hostButton.onclick = () => open(hostButton, '호스트 준비 상태');
   problemButton.onclick = () => open(problemButton, '오류 기록');
@@ -101,6 +106,34 @@ export function initializeWorkspaceStatus(openFailure: (id: string) => void) {
   window.addEventListener('pagehide', () => observer.disconnect());
   update();
   return {
+    setDisplayCoverage(coverage?: {
+      total: number;
+      displayed: number;
+      omitted: number;
+      omittedTypes: Record<string, number>;
+    }) {
+      display.replaceChildren();
+      display.hidden = !coverage;
+      displayButton.hidden = !coverage || coverage.omitted === 0;
+      if (!coverage) return;
+      displayButton.textContent = `표시 미지원 ${coverage.omitted.toLocaleString()}`;
+      el('h3', '현재 모델 표시', display);
+      el(
+        'p',
+        `전체 ${coverage.total.toLocaleString()}개 · 화면 표시 ${coverage.displayed.toLocaleString()}개 · 표현 미지원 ${coverage.omitted.toLocaleString()}개`,
+        display,
+      );
+      if (coverage.omitted) {
+        el('p', '화면 표현 미지원 객체도 목록·네이티브 파일에 보존됩니다.', display);
+        el(
+          'small',
+          Object.entries(coverage.omittedTypes)
+            .map(([kind, count]) => `${kind} ${count.toLocaleString()}개`)
+            .join(' · '),
+          display,
+        );
+      }
+    },
     setFailures(rows: { id: string; label: string }[]) {
       failures = rows;
       update();

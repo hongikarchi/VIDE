@@ -256,6 +256,14 @@ export function renderInspector(
       ['상태', '저장된 후보'],
     ];
   }
+  if (
+    (tab === 'properties' || tab === 'geometry') &&
+    native?.nativeType &&
+    native.nativeType !== 'Point' &&
+    !native.vertices?.length &&
+    !native.line?.length
+  )
+    properties.push(['화면 표현', '미지원 · 목록·네이티브 파일에 보존']);
   const attributes = tab === 'properties' ? nativeAttributes(native) : null;
   renderInspectorContent(content, {
     rows: properties,

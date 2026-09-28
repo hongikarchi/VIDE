@@ -2,7 +2,7 @@
 id: VERIFY-2026-09-28-rhino-attached-sync
 title: 현재 Rhino 문서 연결·수정 위임·Live Sync 검증
 status: review
-version: 0.4
+version: 0.5
 updated: 2026-09-28
 owner: agent:codex
 related: [SPEC-01, SPEC-02, PLAN-02, H-RHINO-03, H-RHINO-05, AC-17, AC-38]
@@ -50,3 +50,13 @@ Fork 후 작업 트리와 서버 상태를 재확인했다. 소유 시험 Rhino�
 ## 블록 보존 회귀
 
 별도 빌드 `.vide/build/rhino-worker-next/bin/VIDE.Worker.rhp`를 합성 Rhino에만 로드했다. `.vide/rhino-attached/39452021-afd0-42bc-8f20-cb462f40be14/result.json`에서 기존 적용/Undo/재연결 회귀와 블록 포함 네이티브 캡처, 정의만 변경했을 때 지문·Live Sync 세대 변경, 저장본의 정의 형상 삭제 시 재검증 거절을 통과했다. 사용자 Rhino가 이미 로드한 플러그인은 교체하지 않았다. 객체 수/표시 상한은 유지하며 실제 10,713개 문서의 전체 Sync는 여전히 미완료다.
+
+## 큰 모델 표시 페이지
+
+새 빌드에서 10,713개(점·Brep·곡선·메시·블록) 네이티브 보존·저장 재열기 및 11개 표시 페이지 합산을 검증했다. 결과 `.vide/rhino-large-import/5eff997f-4cc4-4beb-b6e6-4ba8be42f7c0/result.json`: 28.661초, 표시 JSON 6,918,453바이트, 표시 10,700개/미지원 블록 13개. 실제 사용자 386MB 파일의 성능으로 일반화하지 않는다.
+
+새 페이지의 단일 응답 축소 재조회·전체 예산·중복/누락·revision/total 변경·불명확 응답 비재시도 8개 자동 회귀를 통과했다. 초기 구현의 첫 페이지 초과 재조회가 빈 결과를 반환하던 루프 조건은 이 회귀에서 발견해 수정했다. 네이티브 계약 상한 시험도 20,000개로 갱신했다.
+
+새 exportPage를 포함한 기존 연결/적용/Undo/블록 회귀는 `.vide/rhino-attached/a0a3f6c7-fbf0-4ebc-9769-a0a646116dab/result.json`에서 통과했다. 직전 실행은 시험 제어 파일 교체가 IronPython 읽기와 경합해 EPERM으로 중단됐으며, 같은 action ID의 파일 교체에 한해 짧은 재시도를 넣고 재실행했다. 제품 네이티브 쓰기를 재시도한 것이 아니다.
+
+사용자는 작업을 저장하고 Rhino를 종료했다. 새 개발 RHP와 제어기를 준비하고 같은 파일을 다시 열었으나 시작 인자의 연결 명령은 실행되지 않았다. 네이티브 입력 도구도 coordinate input geometry is unavailable을 반환하여 연결 스크립트 1회 수동 실행을 요청했다. 실제 문서 Sync는 재연결 뒤 검증 전까지 미완료다.

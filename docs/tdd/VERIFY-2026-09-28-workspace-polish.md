@@ -2,7 +2,7 @@
 id: VERIFY-2026-09-28-workspace-polish
 title: 작성기·카메라·상태줄 조작 검증
 status: review
-version: 0.1
+version: 0.2
 updated: 2026-09-28
 owner: agent:codex
 related: [PLAN-04, T-010, T-004, SPEC-01, SPEC-05, SCR-10]
@@ -24,3 +24,5 @@ related: [PLAN-04, T-010, T-004, SPEC-01, SPEC-05, SCR-10]
 실행 명령: `npm run typecheck`, `npm run build:web`, `node tests/integration/browser-workspace-controls.mjs`, `node tests/integration/browser-react-panels.mjs`, `node tests/integration/browser-accounts.mjs`, `node tests/integration/browser-attached-sync.mjs`.
 
 렌더 증거는 로컬 `.vide/ui-audit/controls-1440.png`, `effort-1440.png`, `settings-1440.png`, `controls-800.png`이다. 테스트 스크립트가 재생성한다. 800px에서는 기존 모바일 탭과 가로 스크롤 가능한 상태줄을 유지한다. 공급자·호스트 응답은 mock이며 실제 사용자 모델 Sync나 실제 AI 실행 성공의 증거가 아니다. 빌드의 기존 500kB 청크 경고는 남아 있다.
+
+추가 검증: 화면 기하가 없는 합성 InstanceReference 1개를 저장한 결과에서 카드의 표시 미지원·네이티브 보존 문구, 하단 표시 상태 팝업의 전체/표시/미지원 개수·유형, 목록 선택 후 inspector의 미지원 행을 확인했다. 표시 누락 없는 다른 결과로 바꾸면 하단 미지원 버튼이 사라진다. `browser-workspace-controls.mjs` 회귀와 typecheck·build가 통과했다.

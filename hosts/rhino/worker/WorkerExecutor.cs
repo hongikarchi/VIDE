@@ -28,9 +28,16 @@ internal sealed class WorkerExecutor(RhinoDoc document, string directory)
             throw new InvalidOperationException("TARGET_MISMATCH");
         var method = request.GetProperty("method").GetString();
         if (method == "query") return Snapshot();
-        if (method == "export")
+        if (method is "export" or "exportPage")
         {
             if (uncertain) throw new InvalidOperationException("HOST_RESULT_UNKNOWN");
+            var offset = method == "exportPage" ? request.GetProperty("offset").GetInt32() : 0;
+            var limit = method == "exportPage" ? request.GetProperty("limit").GetInt32() : WorkerScene.MaxObjects;
+            if (offset < 0 || limit < 1 || (method == "exportPage" && limit > 1000))
+                throw new InvalidOperationException("INVALID_PAGE");
+            if (request.TryGetProperty("revision", out var exportRevision)) {
+                if (exportRevision.GetInt32() != revision) throw new InvalidOperationException("STALE_REFERENCE");
+            } else if (offset > 0) throw new InvalidOperationException("STALE_REFERENCE");
             var cached = new Dictionary<string, WorkerScene.Measurements>();
             if (request.TryGetProperty("measurementCache", out var values))
             {
@@ -58,7 +65,9 @@ internal sealed class WorkerExecutor(RhinoDoc document, string directory)
                 }
             }
             var context = MeasurementContext(document);
-            var nextMeasurements = new Dictionary<string, (string hash, WorkerScene.Measurements value)>();
+            var nextMeasurements = context == lastMeasurementContext
+                ? new Dictionary<string, (string hash, WorkerScene.Measurements value)>(lastMeasurements)
+                : new Dictionary<string, (string hash, WorkerScene.Measurements value)>();
             var result = WorkerScene.Export(document, (obj, geometryHash) =>
             {
                 var id = WorkerScene.Id(obj);
@@ -67,7 +76,9 @@ internal sealed class WorkerExecutor(RhinoDoc document, string directory)
                 if (context != initialMeasurementContext) return null;
                 return geometryCache.TryGetValue(id, out var match) && match.hash == geometryHash ? match.value :
                     modelBasis.SameMeasurements(obj) && cached.TryGetValue(id, out var value) ? value : null;
-            }, (obj, hash, value) => nextMeasurements.Add(WorkerScene.Id(obj), (hash, value)));
+            }, (obj, hash, value) => nextMeasurements[WorkerScene.Id(obj)] = (hash, value), offset, limit, revision);
+            var currentIds = document.Objects.GetObjectList(Rhino.DocObjects.ObjectType.AnyObject).Select(WorkerScene.Id).ToHashSet();
+            foreach (var id in nextMeasurements.Keys.Where(id => !currentIds.Contains(id)).ToArray()) nextMeasurements.Remove(id);
             lastMeasurements = nextMeasurements;
             lastMeasurementContext = context;
             return result;

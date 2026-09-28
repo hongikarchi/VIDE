@@ -26,6 +26,14 @@ export const applicationResultSchema = z
   .passthrough();
 export const workspaceResultSchema = z
   .object({
+    displayCoverage: z
+      .object({
+        total: z.number().int().nonnegative(),
+        displayed: z.number().int().nonnegative(),
+        omitted: z.number().int().nonnegative(),
+        omittedTypes: z.record(z.string(), z.number().int().nonnegative()),
+      })
+      .optional(),
     hostExecuted: z.boolean().optional(),
     applicationId: z.string().optional(),
     applicationState: z.string().optional(),

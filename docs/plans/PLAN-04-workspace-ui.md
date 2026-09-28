@@ -2,7 +2,7 @@
 id: PLAN-04
 title: 작업 공간 UI 점검 반영
 status: approved
-version: 0.2
+version: 0.3
 updated: 2026-09-28
 owner: agent:codex
 related: [T-010, T-004, SPEC-01, SPEC-05, DESIGN, ARCH-01]
@@ -40,3 +40,5 @@ T-010·T-004, PRD FR-05·08·15·16, SPEC-01 입력 보호 및 SPEC-05.2·5, Des
 격리 브라우저에서 정상/오류/1440×900/좁은 화면을 확인하고 typecheck 및 기존 UI 회귀를 실행한다. 사용자 Rhino 모델에는 테스트 명령을 보내지 않는다.
 
 검증: [작성기·카메라·상태줄 VERIFY](../tdd/VERIFY-2026-09-28-workspace-polish.md). 위 5항목은 구현 및 격리 브라우저 검증 완료다. 실제 사용자 모델 연결 검증은 PLAN-02의 별도 범위를 따른다.
+
+표시 범위 후속: PLAN-02의 분할 Sync 결과에 포함된 displayCoverage를 결과 카드·현재 모델 상태 상세에서 읽는다. 블록 등 화면 기하가 없는 객체를 목록에서 선택하면 속성에 미지원 표시를 둔다. 합성 네이티브 블록 1개가 보존된 결과와 표시 가능한 결과 전환으로 누락 표시·초기화를 검증한다.

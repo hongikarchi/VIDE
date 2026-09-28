@@ -76,6 +76,7 @@ function Candidate({
   const host = result.host === 'zwcad' ? 'ZWCAD' : 'Rhino',
     extension = result.host === 'zwcad' ? 'dwg' : '3dm';
   const missing = scene.filter((object) => !sceneRepresentation(object));
+  const omitted = result.displayCoverage?.omitted ?? missing.length;
   const apply =
     !result.applicationId &&
     (host === 'Rhino' || result.executionMode === 'sdk') &&
@@ -104,12 +105,8 @@ function Candidate({
           {new Date(result.sourceDocument.capturedAt).toLocaleString()} 취득 · 현재 상태 미확인
         </small>
       ) : null}
-      {missing.length ? (
-        <small>
-          3D 표시 미지원 {missing.length}개 (
-          {[...new Set(missing.map((object) => object.nativeType))].join(', ')}) · 파일과 객체
-          목록에는 보존됨
-        </small>
+      {omitted > 0 ? (
+        <small>{omitted.toLocaleString()}개는 목록·네이티브 파일에 보존 · 화면 표현 미지원</small>
       ) : null}
       <a
         href={`/api/v1/projects/${projectId}/requests/${message.id}/model`}

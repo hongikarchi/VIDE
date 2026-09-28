@@ -433,6 +433,7 @@ function render(rebuildRequests = true) {
       },
     },
   );
+  workspaceStatus.setDisplayCoverage(active?.result?.displayCoverage);
   $('document-host').textContent =
     (active?.result?.host || state.host) === 'zwcad' ? 'ZWCAD' : 'Rhino';
   workspaceStatus.setFailures(

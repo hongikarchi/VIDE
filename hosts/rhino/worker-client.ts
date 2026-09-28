@@ -1,4 +1,5 @@
 import { editorMethods } from './editor-channel.ts';
+import { readScenePages } from './scene-pages.ts';
 import { spawn } from 'node:child_process';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { constants, createReadStream } from 'node:fs';
@@ -8,7 +9,6 @@ import { z } from 'zod';
 import { launchOwnedHost } from '../common/owned-process.ts';
 import { sendHostCommand } from '../common/transport.ts';
 import { modelChangesSchema } from '../../src/contracts/model-changes.ts';
-import { nativeModelSchema } from '../../src/contracts/native-model.ts';
 
 // Preserve a bounded read failure without treating it as a malformed model.
 function readResponse(value: unknown) {
@@ -229,18 +229,14 @@ export async function launchRhinoWorker({
         return workerSnapshotSchema.parse(readResponse(await call('query')));
       },
       async exportModel() {
-        return nativeModelSchema.parse(
-          readResponse(
-            await call('export', {
-              ...(source?.measurements && !normalizeUnits
-                ? { measurementCache: source.measurements }
-                : {}),
-              ...(source?.geometryMeasurements
-                ? { geometryMeasurementCache: source.geometryMeasurements }
-                : {}),
-            }),
-          ),
-        );
+        return readScenePages((params) => call('exportPage', params), {
+          ...(source?.measurements && !normalizeUnits
+            ? { measurementCache: source.measurements }
+            : {}),
+          ...(source?.geometryMeasurements
+            ? { geometryMeasurementCache: source.geometryMeasurements }
+            : {}),
+        });
       },
       async execute(
         operationId: string,
