@@ -34,5 +34,5 @@ related: [PLAN-11, ARCH-01, T-010, T-020]
 
 - 새 PC(개발 도구 없음)에서의 설치와 SmartScreen 경고 화면은 확인하지 않았다. 미서명이라 경고가 뜨는 것이 정상이다.
 - Rhino 플러그인 등록이 없던 PC의 신규 등록은 Rhino가 끌어 놓기로 만드는 값과 같게 쓰지만 실제 새 PC에서는 확인하지 않았다.
-- GitHub Releases 배포처는 첫 공개 게시 전이라 확인하지 않았다(폴더 배포처로 검증).
+- GitHub Releases `v0.2.1`(2026-09-29 게시)의 `releases/latest/download/releases.win.json`과 설치본 내려받기는 확인했다. 그 배포처로 설치된 프로그램의 실제 업데이트는 다음 게시 때 확인한다(이 PC는 폴더 배포처를 쓴다).
 - Windows 시작 시 실제 자동 실행(재부팅)은 레지스트리 값까지만 확인했다.

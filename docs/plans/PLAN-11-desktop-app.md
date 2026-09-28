@@ -44,7 +44,7 @@ related: [PLAN, PLAN-10, ARCH-01, T-010, T-020]
 ## ② 업데이트
 
 - **도구**: Velopack. 사용자 범위 설치, 관리자 권한 없음, 차등 패키지, 재시작 시 교체를 쓴다.
-- **배포처**: 공개 저장소 `hongikarchi/VIDE`의 GitHub Releases(`releases.win.json`, 전체·차등 `.nupkg`, `VIDE.App-win-Setup.exe`). 첫 공개 게시는 사용자 확인 뒤에 한다. 시험과 개인 배포에는 폴더 배포처(`desktop.json`의 `updateSource` 또는 `VIDE_UPDATE_SOURCE`)를 쓴다.
+- **배포처**: 공개 저장소 `hongikarchi/VIDE`의 GitHub Releases(`releases.win.json`, 전체·차등 `.nupkg`, `VIDE.App-win-Setup.exe`). 2026-09-29 사용자 확인으로 `v0.2.1`을 게시했다. 게시는 `npm run desktop:release -- <버전>` 뒤 `dotnet vpk upload github --outputDir .vide/releases/installer --repoUrl https://github.com/hongikarchi/VIDE --token <gh 토큰> --publish --tag v<버전> --targetCommitish <전체 SHA>`로 한다(짧은 SHA는 거부됨). 시험과 개인 배포에는 폴더 배포처(`desktop.json`의 `updateSource` 또는 `VIDE_UPDATE_SOURCE`)를 쓴다.
 - **흐름**: 시작 1분 뒤와 6시간마다 새 버전을 확인하고 백그라운드로 내려받는다. 준비되면 설정과 트레이에 "재시작하여 업데이트"를 표시한다. 누르면 엔진을 정상 종료하고 교체한 뒤 다시 실행한다. 누르지 않으면 다음 종료 때 적용한다. 재시작 때 엔진은 정상 종료 절차로 진행 중 작업을 중단 기록으로 남긴다.
 - **무결성**: Velopack이 패키지의 SHA 해시를 확인한다. 서명 인증서가 생기면 `vpk pack`의 서명 옵션으로 실행 파일과 설치본을 서명한다.
 - **되돌리기**: 문제가 있는 버전은 더 높은 버전 번호로 이전 코드를 다시 게시한다(Velopack은 설치된 앱의 하위 버전 자동 전환을 하지 않는다). 사용자 데이터는 버전과 무관하게 유지되며 DB 마이그레이션은 앞으로만 진행하므로, 스키마를 바꾸는 버전은 백업 후 적용한다(기존 `backup.mjs`).
@@ -68,5 +68,5 @@ related: [PLAN, PLAN-10, ARCH-01, T-010, T-020]
 ## 남은 일
 
 - [ ] 코드 서명 인증서(예: Azure Trusted Signing, 월 약 10달러): 외부 배포 전 결정. 그때까지 미서명 설치본은 "추가 정보 → 실행"으로 설치.
-- [ ] 업데이트 파일의 첫 공개 게시(GitHub Releases, 사용자 확인 후) — 다른 PC가 자동 업데이트를 받으려면 필요.
+- [x] 업데이트 파일의 첫 공개 게시: GitHub Releases `v0.2.1`(2026-09-29). 다른 PC는 Releases의 `VIDE.App-win-Setup.exe`로 설치하고 이후 자동 업데이트를 받는다.
 - ZWCAD·SketchUp·Revit 연결 프로그램, macOS 미지원.
