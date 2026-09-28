@@ -19,6 +19,9 @@ export const hostDocumentsSchema = z.object({
       generation: z.number().int().nonnegative().optional(),
       live: z.boolean().optional(),
       hostBusy: z.boolean().optional(),
+      selectionVersion: z.number().int().nonnegative().optional(),
+      selectedIds: z.array(z.string()).max(2000).optional(),
+      pinnedIds: z.array(z.string()).max(5000).optional(),
     }),
   ),
 });

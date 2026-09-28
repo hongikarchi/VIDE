@@ -1,5 +1,6 @@
 import { z } from 'zod';
 const point = z.tuple([z.number(), z.number(), z.number()]);
+const hexColor = z.string().regex(/^#[0-9a-f]{6}$/);
 const object = z.object({
   id: z.string(),
   nativeId: z.string().uuid(),
@@ -25,6 +26,10 @@ export const nativeSceneSchema = z.object({
   volume: z.number().nonnegative().nullable(),
   length: z.number().nonnegative().nullable(),
   layer64: z.string(),
+  // Optional display colors (#rrggbb); absent from older captures.
+  displayColor: hexColor.optional(),
+  layerColor: hexColor.optional(),
+  materialColor: hexColor.nullish(),
   attributes64: z.array(z.tuple([z.string(), z.string()])),
   attributesComplete: z.boolean(),
   valid: z.literal(true),

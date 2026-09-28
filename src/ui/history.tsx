@@ -275,7 +275,7 @@ function Card({
           : result?.displayOnly === true
             ? 'Rhino 화면 동기화'
             : 'Rhino 작업 사본'
-        : `${models.find((model) => model.id === message.model)?.name || message.model} · ${message.effort} · ${message.applyToSource ? '연결 Rhino 수정' : message.permission === 'review' ? '검토만' : '후보 작업 허용'}`;
+        : `${models.find((model) => model.id === message.model)?.name || message.model} · ${message.effort} · ${message.applyToSource ? 'Auto mode' : message.permission === 'review' ? 'Plan mode' : 'Accept edits'}`;
   return (
     <article className="chat-message" data-request-id={message.id} data-open={String(open)}>
       <button
@@ -523,7 +523,8 @@ function History({
   scroll: number;
 }) {
   useLayoutEffect(() => {
-    element.scrollTop = follow ? element.scrollHeight : scroll;
+    const scroller = scrollerOf(element);
+    scroller.scrollTop = follow ? scroller.scrollHeight : scroll;
   });
   const related = new Map(messages.map((message) => [message.id, message.request]));
   return messages.length ? (
@@ -545,6 +546,8 @@ function History({
   );
 }
 const roots = new Map<HTMLElement, Root>();
+/** The chat thread scrolls as one surface: history, live work and queued requests. */
+const scrollerOf = (element: HTMLElement) => element.closest<HTMLElement>('#thread') ?? element;
 export function renderHistory(
   element: HTMLElement,
   messages: Message[],
@@ -564,8 +567,13 @@ export function renderHistory(
       models={models}
       projectId={projectId ?? ''}
       actions={actions}
-      follow={element.scrollHeight - element.scrollTop - element.clientHeight < 60}
-      scroll={element.scrollTop}
+      follow={
+        scrollerOf(element).scrollHeight -
+          scrollerOf(element).scrollTop -
+          scrollerOf(element).clientHeight <
+        60
+      }
+      scroll={scrollerOf(element).scrollTop}
     />,
   );
 }

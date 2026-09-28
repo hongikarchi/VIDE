@@ -12,7 +12,7 @@ interface RequestProps {
 }
 function PendingRequests({ state, onChange }: RequestProps) {
   const items = state.instructions ?? [];
-  if (!items.length) return <small>입력한 요청을 모아서 실행할 수 있습니다.</small>;
+  if (!items.length) return null;
   return (
     <>
       {items.map((text, index) => (
@@ -52,7 +52,7 @@ function ActiveWork({ messages, reason, intervene }: ActiveProps) {
       message.request &&
       ['queued', 'running', 'unknown', 'interrupted'].includes(message.request.state),
   );
-  if (!active.length) return <>진행 중인 작업 없음</>;
+  if (!active.length) return <span className="sr-only">진행 중인 작업 없음</span>;
   return (
     <>
       {active.map((message) => {
@@ -76,8 +76,17 @@ function ActiveWork({ messages, reason, intervene }: ActiveProps) {
                         ? '작업 사본 준비'
                         : 'AI 요청 처리';
         return (
-          <div key={message.id}>
-            <strong>{message.body || '첨부 문맥 검토'}</strong>
+          <div key={message.id} className="live-turn" data-state={request.state}>
+            <div className="live-head">
+              {['queued', 'running'].includes(request.state) ? (
+                <span className="spinner" aria-hidden="true" />
+              ) : (
+                <span className="live-alert" aria-hidden="true">
+                  !
+                </span>
+              )}
+              <strong>{message.body || '첨부 문맥 검토'}</strong>
+            </div>
             <small>{phase}</small>
             {request.result?.progress && (
               <small>

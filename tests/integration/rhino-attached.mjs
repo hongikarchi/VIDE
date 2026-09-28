@@ -134,12 +134,15 @@ try {
   const target = { instance: catalog.documents[0].instance, documentId: catalog.documents[0].id };
   assert.equal(catalog.documents[0].connection, 'attached-editor');
   assert.equal(catalog.documents[0].units, 'Millimeters');
-  // Panel chat bridge accepts VIDE state and returns an empty outbox without touching the model.
-  const bridged = await sessions.chatBridge(target, {
-    ack: [],
-    state: { project: 'test', models: [], recent: [], notices: [] },
-  });
-  assert.deepEqual(bridged.outbox, []);
+  // Shared pins round-trip through the attached connection without touching the model.
+  const noPins = await sessions.list(true);
+  assert.deepEqual(noPins.documents[0].pinnedIds, []);
+  const firstId = (await sessions.list(true)).documents[0];
+  assert.ok(Array.isArray(firstId.selectedIds));
+  const pinId = randomUUID();
+  assert.deepEqual((await sessions.setPins(target, [pinId])).pinnedIds, [pinId]);
+  assert.deepEqual((await sessions.list(true)).documents[0].pinnedIds, [pinId]);
+  await sessions.setPins(target, []);
   const record = JSON.parse(
     await readFile(
       join(

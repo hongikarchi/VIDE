@@ -160,7 +160,14 @@ export class EditorSessions {
           host: 'rhino',
           connection: external ? 'attached-editor' : 'owned-editor',
           ...('generation' in snapshot
-            ? { generation: snapshot.generation, live: snapshot.live, hostBusy: snapshot.busy }
+            ? {
+                generation: snapshot.generation,
+                live: snapshot.live,
+                hostBusy: snapshot.busy,
+                selectionVersion: snapshot.selectionVersion,
+                selectedIds: snapshot.selectedIds,
+                pinnedIds: snapshot.pinnedIds,
+              }
             : {}),
         });
       } catch (error) {
@@ -178,12 +185,12 @@ export class EditorSessions {
     if (changed) await this.persist();
     return documents.length ? { instance: documents[0].instance!, documents } : null;
   }
-  async chatBridge(target: HostTarget, payload: { ack: string[]; state: unknown }) {
+  async setPins(target: HostTarget, ids: string[]) {
     await this.discover();
     const worker = this.attached.get(target.instance);
     if (!worker || worker.identity.documentId !== target.documentId)
       throw failure('STALE_CONNECTION');
-    return worker.chatBridge(payload);
+    return worker.setPins(ids);
   }
   async inspect(target: HostTarget) {
     const snapshot = await (await this.get(target)).inspectEditor();

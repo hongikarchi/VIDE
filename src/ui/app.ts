@@ -7,6 +7,7 @@ import { showExecutionLimits } from './execution-limits.tsx';
 import { requestConflict } from '../contracts/request-scope.ts';
 import { draftSnapshot, restoreDraft, restoreSavedDraft } from './draft-storage.ts';
 import { z } from 'zod';
+import { hostDocumentsSchema, type HostTarget } from '../contracts/host-documents.ts';
 import { element as $, append as el, readableError } from './elements.ts';
 import {
   requestData,
@@ -51,15 +52,17 @@ import {
   storageKey,
 } from './model.ts';
 import { createObjectList, type SelectMode } from './object-list.ts';
-import {
-  bridgeState,
-  startRhinoBridge,
-  type BridgeMessage,
-  type BridgeTarget,
-} from './rhino-bridge.ts';
 import { initializeWorkspacePanels } from './workspace-panels.ts';
 import { createViewport } from './viewport.ts';
+import { initializeDisplaySettings } from './display-settings.ts';
 
+// Rhino panel mode (?panel=rhino): the chat column only, bound to one attached document.
+const panelParams = new URLSearchParams(location.search);
+const panelMode = panelParams.get('panel') === 'rhino';
+// Rhino's shared pinned set for the attached document, mirrored from the Rhino plugin.
+let hostPinned: string[] = [],
+  hostSelectionVersion = -1,
+  hostPinBasis: string | undefined;
 let project: { id: string; name: string } | undefined,
   ready = false,
   busy = false,
@@ -143,8 +146,8 @@ const reviews = initializeReviews(
   },
 );
 const viewportEmpty = initializeViewportEmpty($('canvas').parentElement!);
-let connectedTarget: BridgeTarget | undefined;
-const captureHostDocument = async (target: BridgeTarget, automatic = false) => {
+let connectedTarget: HostTarget | undefined;
+const captureHostDocument = async (target: HostTarget, automatic = false) => {
   if (
     automatic &&
     (!project ||
@@ -206,6 +209,12 @@ initializeDocuments(
   },
   (connection) => {
     viewportEmpty.connection(connection);
+    if (panelMode) return;
+    // The work target follows the chosen document (Rhino or ZWCAD); no separate host switch.
+    if (connection && connection.host !== state.host && !draftHasInput(state)) {
+      $('host-target').value = connection.host;
+      $('host-target').dispatchEvent(new Event('change'));
+    }
     const [instance, id] = connection?.key.split('/') ?? [];
     connectedTarget =
       connection?.host === 'rhino' && instance && id
@@ -252,6 +261,9 @@ try {
 } catch {
   message('3D 뷰포트를 열 수 없습니다. WebGL 지원을 확인하세요.');
 }
+initializeDisplaySettings($('display-settings') as HTMLButtonElement, (settings) =>
+  viewport?.display(settings),
+);
 function planeName() {
   return z.enum(['XY', 'XZ', 'YZ']).parse($('plane').value);
 }
@@ -315,24 +327,17 @@ function setTool(next: 'select' | 'pin' | 'sketch') {
         : '';
   draw();
 }
-function chip(text: string, remove: () => void, pin?: DraftPin) {
+function chip(text: string, remove: () => void, title?: string, select?: () => void) {
   const span = el('span', text, $('context'), { class: 'chip' });
-  const b = el('button', '×', span, { 'aria-label': `${text} 제외` });
-  b.onclick = remove;
-  if (pin) {
-    const role = el('select', '', span, { 'aria-label': pin.name + ' 역할' });
-    for (const [value, label] of [
-      ['target', '변경'],
-      ['preserve', '유지'],
-      ['reference', '참고'],
-    ])
-      el('option', label, role, { value });
-    role.value = pin.role;
-    role.onchange = () => {
-      pin.role = z.enum(['target', 'preserve', 'reference']).parse(role.value);
-      render();
+  if (title) span.title = title;
+  if (select) {
+    span.classList.add('chip-action');
+    span.onclick = (event) => {
+      if (event.target === span) select();
     };
   }
+  const b = el('button', '×', span, { 'aria-label': `${text} 제외` });
+  b.onclick = remove;
 }
 function render(rebuildRequests = true) {
   $('body').disabled = !ready;
@@ -378,7 +383,8 @@ function render(rebuildRequests = true) {
     selectedIds.length > 1
       ? `${selectedIds.length.toLocaleString()}개 객체 선택`
       : objects.find((o) => o.id === state.selected)?.name || '';
-  $('selection-pin').hidden = !selectedIds.length;
+  $('selection-bar').hidden = !selectedIds.length;
+  $('selection-count').textContent = `${selectedIds.length.toLocaleString()}개 선택`;
   $('context').replaceChildren();
   if (state.linkedTargets?.length)
     chip(
@@ -398,16 +404,27 @@ function render(rebuildRequests = true) {
         render();
       },
     );
-  state.pins.forEach((p, i) =>
+  // One chip for the whole pinned set; Rhino-pinned objects outside the current Sync show as pending.
+  const pendingPins = hostPinned.filter((id) => !state.pins.some((pin) => pin.id === id)).length;
+  if (state.pins.length || pendingPins)
     chip(
-      '@ ' + p.name,
+      `📌 고정 객체 ${state.pins.length}개${pendingPins ? ` · Sync 대기 ${pendingPins}개` : ''}`,
       () => {
-        state.pins.splice(i, 1);
+        state.pins = [];
+        if (hostPinned.length) void setHostPins([]).catch(() => {});
         render();
       },
-      p,
-    ),
-  );
+      state.pins.map((pin) => pin.name || pin.id).join('\n') ||
+        'Rhino에서 고정했지만 아직 Sync 전인 객체',
+      () => {
+        selectedIds = state.pins
+          .map((pin) => pin.id)
+          .filter((id) => objects.some((o) => o.id === id));
+        state.selected = selectedIds.at(-1) ?? null;
+        render();
+        if (state.selected) viewport?.fit(state.selected);
+      },
+    );
   state.sketches.forEach((s, i) =>
     chip('⌁ ' + s.name, () => {
       state.sketches.splice(i, 1);
@@ -467,6 +484,7 @@ function render(rebuildRequests = true) {
     linkedCandidates(state).length < 2 ? '실행에 성공한 SDK 후보 2개가 필요합니다.' : '';
 
   $('permission').value = state.applyToSource ? 'apply' : state.permission;
+  $('permission').dataset.mode = $('permission').value;
   const active = state.messages.find((m) => m.id === displayedResult)?.request;
   renderInspector(
     objects.find((o) => o.id === state.selected),
@@ -835,7 +853,20 @@ async function poll(id: string, projectId = currentProject().id, original = stat
     message('작업 상태 연결이 끊겼습니다. 새로고침하면 저장된 기록을 다시 읽습니다.');
   }
 }
+/** Shift+Tab cycles Plan → Accept edits → Auto, like Claude Code. */
+function cycleMode() {
+  const order = ['review', 'candidate', 'apply'];
+  $('permission').value = order[(order.indexOf($('permission').value) + 1) % order.length];
+  $('permission').dispatchEvent(new Event('change'));
+  const label = $('permission').selectedOptions[0];
+  message(`${label.textContent} · ${label.title}`);
+}
 $('body').onkeydown = (e) => {
+  if (e.key === 'Tab' && e.shiftKey && !e.isComposing) {
+    e.preventDefault();
+    cycleMode();
+    return;
+  }
   if (e.key !== 'Enter' || e.isComposing) return;
   if (e.ctrlKey || e.metaKey) {
     e.preventDefault();
@@ -847,7 +878,18 @@ $('body').onkeydown = (e) => {
   }
 };
 $('pin').onclick = () => {
-  pinSelection(state, selectedIds);
+  const displayed = state.messages.find((entry) => entry.id === displayedResult)?.request.result
+    ?.sourceDocument;
+  // On the attached Rhino document, pins live in Rhino so the panel and browser share them.
+  if (
+    connectedTarget &&
+    displayed?.instance === connectedTarget.instance &&
+    displayed.documentId === connectedTarget.documentId
+  )
+    void setHostPins([...new Set([...hostPinned, ...selectedIds])]).catch((error) =>
+      message(readableError(error).message),
+    );
+  else pinSelection(state, selectedIds);
   $('attach-menu').open = false;
   render();
   $('body').focus();
@@ -914,6 +956,11 @@ $('files').onchange = async () => {
 };
 $('selection-pin').onclick = () => {
   $('pin').click();
+};
+$('selection-clear').onclick = () => {
+  selectedIds = [];
+  state.selected = null;
+  render();
 };
 for (const button of document.querySelectorAll<HTMLButtonElement>('[data-tool]'))
   button.onclick = () => setTool(z.enum(['select', 'pin', 'sketch']).parse(button.dataset.tool));
@@ -1099,7 +1146,7 @@ window.addEventListener('beforeunload', (e) => {
   }
 });
 window.addEventListener('pagehide', () => viewport?.dispose(), { once: true });
-mobileView('model');
+mobileView(panelMode ? 'input' : 'model');
 render();
 
 function selectProject(id: string) {
@@ -1265,10 +1312,8 @@ window.addEventListener('vide-accounts-changed', () => {
   })().catch((error) => message(readableError(error).message));
 });
 
-// Rhino panel chat: messages typed in Rhino become ordinary VIDE requests on the synced basis.
-const rhinoOrigins = new Set<string>();
-const bridgeNotices: { id: string; text: string }[] = [];
-function rhinoBasis(target: BridgeTarget) {
+// Rhino link: panel mode, shared pins and live selection for the attached Rhino document.
+function rhinoBasis(target: HostTarget) {
   return state.messages
     .filter(
       (entry) =>
@@ -1279,82 +1324,102 @@ function rhinoBasis(target: BridgeTarget) {
     )
     .at(-1);
 }
-async function submitFromRhino(incoming: BridgeMessage, target: BridgeTarget) {
-  try {
-    if (!project || !ready) throw Error('VIDE 작업 공간이 준비되지 않았습니다.');
-    if (state.messages.some((entry) => entry.id === incoming.id)) return;
-    const model =
-      models.find((option) => option.id === incoming.model) ??
-      models.find((option) => option.id === state.model) ??
-      models[0];
-    const effort = model.efforts.includes(incoming.effort) ? incoming.effort : model.efforts[0];
-    let basis = rhinoBasis(target);
-    if (!basis) {
-      message('Rhino에서 보낸 요청 · 먼저 현재 모델을 Sync합니다.');
-      await captureHostDocument(target);
-      basis = rhinoBasis(target);
-    }
-    if (!basis) throw Error('Sync 기준을 만들지 못했습니다. VIDE에서 Sync를 확인하세요.');
-    const available = basis.request.result?.objects ?? [];
-    const pins = incoming.pinIds.flatMap((id) => {
+if (panelMode) {
+  document.body.classList.add('panel-mode');
+  document.documentElement.dataset.theme = panelParams.get('theme') === 'dark' ? 'dark' : 'light';
+  const documentId = Number(panelParams.get('document'));
+  const instance = panelParams.get('instance') ?? '';
+  if (instance && documentId > 0) connectedTarget = { instance, documentId };
+  $('panel-header').hidden = false;
+}
+/** Rhino's pinned set is the source of truth while a Rhino document is attached. */
+function applyHostPins(ids: string[]) {
+  hostPinned = ids;
+  const target = connectedTarget,
+    basis = target && rhinoBasis(target);
+  hostPinBasis = basis?.id;
+  if (!basis) return;
+  const available = basis.request.result?.objects ?? [];
+  state.pins = [
+    ...state.pins.filter((pin) => pin.basis !== basis.id),
+    ...ids.flatMap((id) => {
       const object = available.find((item) => item.id === id);
       return object ? [{ id, name: object.name, role: 'target' as const, basis: basis.id }] : [];
-    });
-    if (pins.length < incoming.pinIds.length)
-      bridgeNotices.push({
-        id: incoming.id,
-        text: `고정 객체 ${incoming.pinIds.length - pins.length}개가 현재 Sync 기준에 없어 제외했습니다. Sync 후 다시 고정하세요.`,
-      });
-    const draft = {
-      ...initial(),
-      messages: state.messages,
-      host: 'rhino' as const,
-      body: incoming.body,
-      model: model.id,
-      effort,
-      permission: incoming.permission === 'review' ? ('review' as const) : ('candidate' as const),
-      applyToSource: incoming.permission === 'apply',
-      baseRequestId: basis.id,
-      pins,
-    };
-    const projectId = project.id;
-    const request = await requestData(`/projects/${projectId}/requests`, 'POST', {
-      ...packet(draft),
-      id: incoming.id,
-    });
-    rhinoOrigins.add(request.id);
-    if (!state.messages.some((entry) => entry.id === request.id))
-      state.messages.push(requestMessage(request));
-    renderMessages();
-    render();
-    message('Rhino 패널의 요청을 실행합니다.');
-    void poll(request.id, projectId, state);
-  } catch (cause) {
-    const error = readableError(cause);
-    const text = errors[error.code ?? ''] || error.message;
-    bridgeNotices.push({ id: incoming.id, text: `요청을 실행하지 못했습니다 · ${text}` });
-    message('Rhino 요청 실패 · ' + text);
+    }),
+  ];
+}
+async function setHostPins(ids: string[]) {
+  if (!connectedTarget) return false;
+  const reply = z
+    .object({ pinnedIds: z.array(z.string()) })
+    .parse(await api('/host/pins', 'POST', { ...connectedTarget, ids }));
+  applyHostPins(reply.pinnedIds);
+  render();
+  return true;
+}
+async function pollHostLink() {
+  const target = connectedTarget;
+  if (!ready || !target || document.hidden) return;
+  try {
+    const catalog = hostDocumentsSchema.parse(await api('/host/attached-documents'));
+    const item = catalog.documents.find(
+      (doc) =>
+        (doc.instance ?? catalog.instance) === target.instance && doc.id === target.documentId,
+    );
+    if (!item) {
+      if (panelMode) $('panel-state').textContent = 'Rhino 연결이 끊겼습니다 · Rhino 패널에서 연결';
+      return;
+    }
+    const basis = rhinoBasis(target);
+    if (panelMode) {
+      $('panel-doc').textContent = item.name;
+      $('panel-state').textContent = [
+        item.live ? 'Live Sync' : '연결됨',
+        basis?.request.createdAt
+          ? 'Sync ' + new Date(basis.request.createdAt).toLocaleTimeString()
+          : 'Sync 필요',
+        `${item.objectCount.toLocaleString()}개 객체`,
+      ].join(' · ');
+    }
+    const pinned = item.pinnedIds ?? [];
+    // Re-resolve when Rhino's pins change or a new Sync basis arrives.
+    if (pinned.join() !== hostPinned.join() || (pinned.length && basis?.id !== hostPinBasis)) {
+      applyHostPins(pinned);
+      render();
+    }
+    if (item.selectionVersion !== undefined && item.selectionVersion !== hostSelectionVersion) {
+      hostSelectionVersion = item.selectionVersion;
+      // Mirror Rhino's selection in the viewport when this document is the one on screen.
+      const shown = new Set(objects.map((object) => object.id));
+      const mirrored = (item.selectedIds ?? []).filter((id) => shown.has(id));
+      if (mirrored.length || selectedIds.length) {
+        selectedIds = mirrored;
+        state.selected = mirrored.at(-1) ?? null;
+        render();
+      }
+    }
+  } catch {
+    /* Transient; the next poll retries. */
   }
 }
-startRhinoBridge({
-  target: () => (ready ? connectedTarget : undefined),
-  state: () => {
-    const basis = connectedTarget && rhinoBasis(connectedTarget);
-    return bridgeState({
-      project: project?.name,
-      models,
-      model: state.model,
-      effort: state.effort,
-      basis: basis
-        ? `Sync ${basis.request.createdAt ? new Date(basis.request.createdAt).toLocaleTimeString() : ''}`.trim()
-        : '',
-      messages: state.messages,
-      origins: rhinoOrigins,
-      notices: bridgeNotices,
-    });
-  },
-  handle: submitFromRhino,
-});
+setInterval(() => void pollHostLink(), 1200);
+$('panel-sync').onclick = () => {
+  if (!connectedTarget) return;
+  void captureHostDocument(connectedTarget).catch((error) => message(readableError(error).message));
+};
+$('panel-pin').onclick = async () => {
+  try {
+    if (!connectedTarget) throw Error('Rhino 문서가 연결되지 않았습니다.');
+    const catalog = hostDocumentsSchema.parse(await api('/host/attached-documents'));
+    const item = catalog.documents.find((doc) => doc.id === connectedTarget?.documentId);
+    const selection = item?.selectedIds ?? [];
+    if (!selection.length) throw Error('Rhino에서 고정할 객체를 먼저 선택하세요.');
+    await setHostPins([...new Set([...hostPinned, ...selection])]);
+    if (!rhinoBasis(connectedTarget)) message('고정했습니다. 요청에 포함하려면 먼저 Sync 하세요.');
+  } catch (cause) {
+    message(readableError(cause).message);
+  }
+};
 
 async function initializeWorkspace() {
   try {

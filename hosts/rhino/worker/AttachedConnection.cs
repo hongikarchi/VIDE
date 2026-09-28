@@ -20,10 +20,23 @@ internal sealed class AttachedConnection : IDisposable
     private readonly string session = Guid.NewGuid().ToString();
     private readonly EditorExecutor editor;
     private long generation;
+    private long selectionVersion;
+    private readonly HashSet<Guid> pinned = new();
     private int readRevision;
     private bool live, dirty, disposed;
     private DateTime changedAt;
     internal uint DocumentId => document.RuntimeSerialNumber;
+    internal string Instance { get; }
+    internal int Port { get; }
+    internal IReadOnlyCollection<Guid> Pinned { get { lock (pinned) return pinned.ToArray(); } }
+    internal event Action? PinsChanged;
+    /** Pins are shared by every VIDE view of this document (browser and Rhino panel). */
+    internal void SetPins(IEnumerable<Guid> ids)
+    {
+        lock (pinned) { pinned.Clear(); foreach (var id in ids.Take(5000)) pinned.Add(id); }
+        selectionVersion++;
+        PinsChanged?.Invoke();
+    }
     internal bool Live => live;
     internal DateTime? LastDisplayRead { get; private set; }
     internal static void Connect(RhinoDoc doc)
@@ -48,6 +61,8 @@ internal sealed class AttachedConnection : IDisposable
         listener = new TcpListener(IPAddress.Loopback, 0);
         listener.Start();
         var port = ((IPEndPoint)listener.LocalEndpoint).Port;
+        Port = port;
+        Instance = process.Id + ":" + ticks + ":" + session;
         try {
             File.WriteAllText(record + ".tmp", JsonSerializer.Serialize(new {
                 identity = new { port, pid = process.Id, startTicks = ticks, sessionId = session, documentId = doc.RuntimeSerialNumber, revision = 0 },
@@ -63,6 +78,9 @@ internal sealed class AttachedConnection : IDisposable
         RhinoDoc.LayerTableEvent += ChangedLayer;
         RhinoDoc.InstanceDefinitionTableEvent += ChangedDefinition;
         RhinoDoc.CloseDocument += Closed;
+        RhinoDoc.SelectObjects += SelectionChanged;
+        RhinoDoc.DeselectObjects += SelectionChanged;
+        RhinoDoc.DeselectAllObjects += SelectionCleared;
         RhinoApp.Idle += Idle;
         _ = Task.Run(async () => {
             while (!disposed) {
@@ -78,8 +96,16 @@ internal sealed class AttachedConnection : IDisposable
             throw new InvalidOperationException("TARGET_MISMATCH");
         if (request.GetProperty("method").GetString() == "attachedStatus")
             return new { ok = true, documentId = DocumentId, name = document.Name ?? "Untitled", units = document.ModelUnitSystem.ToString(),
-                objectCount = document.Objects.Count, modified = document.Modified, generation, live, busy = RhinoApp.InCommand > 0 };
-        if (request.GetProperty("method").GetString() == "chatBridge") return ChatBridge.Exchange(DocumentId, request);
+                objectCount = document.Objects.Count, modified = document.Modified, generation, live, busy = RhinoApp.InCommand > 0,
+                selectionVersion,
+                selectedIds = document.Objects.GetSelectedObjects(false, false).Take(2000).Select(o => o.Id.ToString()).ToArray(),
+                pinnedIds = Pinned.Select(id => id.ToString()).ToArray() };
+        if (request.GetProperty("method").GetString() == "setPins")
+        {
+            var ids = request.GetProperty("ids").EnumerateArray().Select(e => Guid.Parse(e.GetString()!)).ToArray();
+            SetPins(ids);
+            return new { ok = true, pinnedIds = Pinned.Select(id => id.ToString()).ToArray(), selectionVersion };
+        }
         if (RhinoApp.InCommand > 0) throw new InvalidOperationException("HOST_BUSY");
         if (request.GetProperty("method").GetString() == "displayPage")
         {
@@ -95,6 +121,8 @@ internal sealed class AttachedConnection : IDisposable
         }
         return editor.Dispatch(request);
     }
+    private void SelectionChanged(object? sender, RhinoObjectSelectionEventArgs e) { if (e.Document == document) selectionVersion++; }
+    private void SelectionCleared(object? sender, RhinoDeselectAllObjectsEventArgs e) { if (e.Document == document) selectionVersion++; }
     private void Mark(RhinoDoc doc) { if (doc == document) { readRevision++; dirty = true; changedAt = DateTime.UtcNow; } }
     private void ChangedObject(object? sender, RhinoObjectEventArgs e) => Mark(e.TheObject.Document);
     private void ReplacedObject(object? sender, RhinoReplaceObjectEventArgs e) => Mark(e.Document);
@@ -117,6 +145,7 @@ internal sealed class AttachedConnection : IDisposable
         RhinoDoc.ReplaceRhinoObject -= ReplacedObject; RhinoDoc.ModifyObjectAttributes -= ChangedAttributes; RhinoDoc.LayerTableEvent -= ChangedLayer;
         RhinoDoc.InstanceDefinitionTableEvent -= ChangedDefinition;
         RhinoDoc.CloseDocument -= Closed; RhinoApp.Idle -= Idle;
+        RhinoDoc.SelectObjects -= SelectionChanged; RhinoDoc.DeselectObjects -= SelectionChanged; RhinoDoc.DeselectAllObjects -= SelectionCleared;
         try { File.Delete(record); } catch (IOException) { /* Dead socket and disposed dispatch revoke access even if cleanup fails. */ }
     }
 }

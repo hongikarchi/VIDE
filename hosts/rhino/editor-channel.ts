@@ -42,19 +42,6 @@ const applicationOutcomeSchema = z.object({
 const editorCaptureSchema = editorSnapshotSchema
   .omit({ objectCount: true, modified: true })
   .extend({ filename: z.string(), fileHash: z.string().regex(/^[a-f0-9]{64}$/) });
-export const chatBridgeMessageSchema = z.object({
-  id: z.string().uuid(),
-  body: z.string().max(20000),
-  model: z.string().max(200),
-  effort: z.string().max(100),
-  permission: z.enum(['review', 'candidate', 'apply']),
-  pinIds: z.array(z.string().uuid()).max(5000),
-  createdAt: z.string(),
-});
-const chatBridgeReplySchema = z.object({
-  ok: z.literal(true),
-  outbox: z.array(chatBridgeMessageSchema).max(50),
-});
 function editorReply<T>(schema: z.ZodType<T>, value: unknown): T {
   const error = z.object({ ok: z.literal(false), code: z.string() }).safeParse(value);
   if (error.success) throw failure(error.data.code);
@@ -89,13 +76,23 @@ export function editorMethods(
           generation: z.number().int().nonnegative(),
           live: z.boolean(),
           busy: z.boolean(),
+          selectionVersion: z.number().int().nonnegative().optional(),
+          selectedIds: z.array(z.string().uuid()).max(2000).optional(),
+          pinnedIds: z.array(z.string().uuid()).max(5000).optional(),
         }),
         await call('attachedStatus'),
       );
     },
-    /** Rhino panel chat: deliver VIDE's view state and collect queued panel messages. */
-    async chatBridge(payload: { ack: string[]; state: unknown }) {
-      return editorReply(chatBridgeReplySchema, await call('chatBridge', payload));
+    /** Replace the document's shared pinned object set (browser and Rhino panel). */
+    async setPins(ids: string[]) {
+      return editorReply(
+        z.object({
+          ok: z.literal(true),
+          pinnedIds: z.array(z.string().uuid()),
+          selectionVersion: z.number().int().nonnegative(),
+        }),
+        await call('setPins', { ids }),
+      );
     },
     async inspectEditor() {
       return editorReply(editorSnapshotSchema, await call('inspectEditor'));

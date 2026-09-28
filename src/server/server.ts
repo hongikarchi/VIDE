@@ -609,16 +609,16 @@ export async function startServer({
         }
         return;
       }
-      if (url.pathname === '/api/v1/host/attached-bridge' && request.method === 'POST') {
+      if (url.pathname === '/api/v1/host/pins' && request.method === 'POST') {
         const input = hostTargetSchema
-          .extend({ ack: z.array(z.string().uuid()).max(100), state: z.unknown() })
+          .extend({ ids: z.array(z.string().uuid()).max(5000) })
           .parse(await body(request));
         if (!sdk) throw Object.assign(new Error('STALE_CONNECTION'), { code: 'STALE_CONNECTION' });
         send(
           200,
-          await sdk.editors.chatBridge(
+          await sdk.editors.setPins(
             { instance: input.instance, documentId: input.documentId },
-            { ack: input.ack, state: input.state },
+            input.ids,
           ),
         );
         return;

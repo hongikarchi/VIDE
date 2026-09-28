@@ -4,10 +4,20 @@ import type { DisplayGeometry } from '../core/scene-representation.ts';
 import type { Point2, Point3, DraftStroke, SketchPlacement } from './model.ts';
 import { planePoint } from './model.ts';
 import * as THREE from 'three';
+import { defaultDisplay, type DisplaySettings } from './display-settings.ts';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { Line2 } from 'three/examples/jsm/lines/Line2.js';
 import { LineGeometry } from 'three/examples/jsm/lines/LineGeometry.js';
 import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js';
+import { LineSegments2 } from 'three/examples/jsm/lines/LineSegments2.js';
+import { LineSegmentsGeometry } from 'three/examples/jsm/lines/LineSegmentsGeometry.js';
+import {
+  aciColor,
+  lineWeightPixels,
+  plotPen,
+  plotStyleTable,
+  type PlotStyleTable,
+} from './plot-style.ts';
 
 type Camera = THREE.PerspectiveCamera | THREE.OrthographicCamera;
 type PlaneName = 'XY' | 'XZ' | 'YZ';
@@ -29,9 +39,44 @@ interface DisplaySketch {
   planeOffset?: number;
   strokes?: DraftStroke[];
 }
+/**
+ * Host-agnostic display colours. `displayColor` is the resolved screen colour (#rrggbb);
+ * `colorIndex` is a resolved ACI 1–255; legacy CAD `color` is a raw ACI (0 ByBlock, 256 ByLayer);
+ * `lineWeight` is in mm (resolved, > 0).
+ */
 interface DisplayObject extends DisplayGeometry {
   id: string;
+  displayColor?: string;
+  color?: number | string;
+  colorIndex?: number;
+  layerColor?: string;
+  materialColor?: string | null;
+  lineWeight?: number;
 }
+const hexColor = (value: unknown) =>
+  typeof value === 'string' && /^#[0-9a-f]{6}$/i.test(value) ? value : undefined;
+/** Screen colour of the object itself (Rhino display colour, CAD true colour or ACI). */
+function objectColor(object: DisplayObject) {
+  return (
+    hexColor(object.displayColor) ??
+    hexColor(object.color) ??
+    (object.colorIndex !== undefined ? aciColor(object.colorIndex) : undefined) ??
+    (typeof object.color === 'number' ? aciColor(object.color) : undefined)
+  );
+}
+function objectIndex(object: DisplayObject) {
+  if (object.colorIndex !== undefined) return object.colorIndex;
+  return typeof object.color === 'number' && object.color >= 1 && object.color <= 255
+    ? object.color
+    : undefined;
+}
+// Rhino shaded palette: light neutral surfaces, darker crease edges, warm selection.
+const SURFACE = 0xd6d9d3,
+  WIRE = 0x4c5650,
+  EDGE = 0x3d4540,
+  SELECTED = 0xf0a37f,
+  SELECTED_WIRE = 0xd9542c;
+const CREASE_ANGLE = 38;
 type RenderObject =
   | THREE.Mesh<THREE.BufferGeometry, THREE.MeshStandardMaterial>
   | THREE.Line<THREE.BufferGeometry, THREE.LineBasicMaterial>
@@ -57,6 +102,10 @@ export function createViewport(
   let lineSignature = '';
   const scene = new THREE.Scene();
   scene.background = new THREE.Color('#edf0ec');
+  let display: DisplaySettings = { ...defaultDisplay };
+  let plotStyle: PlotStyleTable = plotStyleTable();
+  let darkBackground = false;
+  const plotMaterials = new Set<LineMaterial>();
   const perspective = new THREE.PerspectiveCamera(40, 1, 0.1, 1000);
   const orthographic = new THREE.OrthographicCamera(-25, 25, 25, -25, 0.1, 1000);
   let viewSpan = 50;
@@ -77,13 +126,14 @@ export function createViewport(
   controls.zoomToCursor = true;
   controls.minDistance = 4;
   controls.maxDistance = 180;
-  const grid = new THREE.GridHelper(100, 50, 0xb8c2b9, 0xe0e5dc);
+  let grid = new THREE.GridHelper(100, 50, 0xb8c2b9, 0xe0e5dc);
   grid.rotation.x = Math.PI / 2;
   scene.add(grid);
-  scene.add(new THREE.HemisphereLight(0xffffff, 0x9caaa1, 2.4));
-  const light = new THREE.DirectionalLight(0xffffff, 3);
-  light.position.set(-12, -16, 30);
-  scene.add(light);
+  // Soft sky fill plus a headlight that follows the camera, like Rhino's default lighting.
+  const sky = new THREE.HemisphereLight(0xffffff, 0xaab2aa, 1.9);
+  scene.add(sky);
+  const light = new THREE.DirectionalLight(0xffffff, 1.9);
+  scene.add(light, light.target);
   const meshes: RenderObject[] = [];
   const byId = new Map<string, RenderObject>();
   function replace(data: DisplayObject[]) {
@@ -92,6 +142,7 @@ export function createViewport(
     byId.clear();
     for (const mesh of meshes) {
       scene.remove(mesh);
+      releasePlot(mesh);
       disposeObject(mesh);
     }
     meshes.length = 0;
@@ -115,26 +166,183 @@ export function createViewport(
         mesh = new THREE.Mesh(
           geometry,
           new THREE.MeshStandardMaterial({
-            color: 0xd7ded4,
-            roughness: 0.85,
+            color: SURFACE,
+            roughness: 0.92,
+            metalness: 0,
             side: THREE.DoubleSide,
+            // Push faces back so crease edges draw cleanly on top.
+            polygonOffset: true,
+            polygonOffsetFactor: 1,
+            polygonOffsetUnits: 1,
           }),
         );
-        mesh.add(
-          new THREE.LineSegments(
-            new THREE.EdgesGeometry(geometry),
-            new THREE.LineBasicMaterial({ color: 0x69766c }),
-          ),
-        );
       } else if (representation.type === 'segments')
-        mesh = new THREE.LineSegments(geometry, new THREE.LineBasicMaterial({ color: 0x69766c }));
-      else mesh = new THREE.Line(geometry, new THREE.LineBasicMaterial({ color: 0x69766c }));
+        mesh = new THREE.LineSegments(geometry, new THREE.LineBasicMaterial({ color: WIRE }));
+      else mesh = new THREE.Line(geometry, new THREE.LineBasicMaterial({ color: WIRE }));
+      mesh.userData.colors = {
+        object: objectColor(object),
+        layer: hexColor(object.layerColor),
+        material: hexColor(object.materialColor),
+      };
+      mesh.userData.plot = { colorIndex: objectIndex(object), lineWeight: object.lineWeight };
       mesh.position.set(origin[0], origin[1], origin[2]);
       mesh.userData.id = object.id;
       scene.add(mesh);
       meshes.push(mesh);
       byId.set(object.id, mesh);
     }
+    applyDisplay();
+  }
+  /** Crease edges are built lazily (only when shown) so large models stay cheap. */
+  function edgesOf(mesh: THREE.Mesh) {
+    let edges = mesh.userData.edges as
+      | THREE.LineSegments<THREE.EdgesGeometry, THREE.LineBasicMaterial>
+      | undefined;
+    if (!edges) {
+      edges = new THREE.LineSegments(
+        new THREE.EdgesGeometry(mesh.geometry, CREASE_ANGLE),
+        new THREE.LineBasicMaterial({ color: EDGE }),
+      );
+      edges.raycast = () => {};
+      mesh.userData.edges = edges;
+      mesh.add(edges);
+    }
+    return edges;
+  }
+  function baseColor(object: RenderObject) {
+    const colors = object.userData.colors as Record<string, string | undefined> | undefined;
+    const source = display.colorSource === 'default' ? undefined : colors?.[display.colorSource];
+    // ACI 7 is "foreground": white on dark screens, near-black on light ones.
+    const plot = object.userData.plot as { colorIndex?: number } | undefined;
+    if (display.colorSource === 'object' && plot?.colorIndex === 7)
+      return new THREE.Color(darkBackground ? 0xffffff : 0x1f2421);
+    if (source) return new THREE.Color(source);
+    return new THREE.Color(object instanceof THREE.Mesh ? SURFACE : WIRE);
+  }
+  function releasePlot(object: RenderObject) {
+    const fat = object.userData.plotLine as LineSegments2 | undefined;
+    if (!fat) return;
+    object.remove(fat);
+    plotMaterials.delete(fat.material);
+    fat.geometry.dispose();
+    fat.material.dispose();
+    object.userData.plotLine = undefined;
+  }
+  /** Fat line for plot preview (WebGL lines are always 1 px), built lazily per line object. */
+  function plotLineOf(object: THREE.Line) {
+    let fat = object.userData.plotLine as LineSegments2 | undefined;
+    if (!fat) {
+      const position = object.geometry.getAttribute('position');
+      const points: number[] = [];
+      const step = object instanceof THREE.LineSegments ? 2 : 1;
+      for (let i = 0; i + 1 < position.count; i += step)
+        points.push(
+          position.getX(i),
+          position.getY(i),
+          position.getZ(i),
+          position.getX(i + 1),
+          position.getY(i + 1),
+          position.getZ(i + 1),
+        );
+      const geometry = new LineSegmentsGeometry();
+      geometry.setPositions(points);
+      const material = new LineMaterial({ color: 0x000000, linewidth: 1, worldUnits: false });
+      material.resolution.set(renderer.domElement.width, renderer.domElement.height);
+      plotMaterials.add(material);
+      fat = new LineSegments2(geometry, material);
+      fat.raycast = () => {};
+      object.userData.plotLine = fat;
+      object.add(fat);
+    }
+    return fat;
+  }
+  /** Plot preview: CTB pen colours and lineweights on white paper; surfaces print white. */
+  function paintPlot(object: RenderObject, selected: boolean) {
+    const plot = object.userData.plot as { colorIndex?: number; lineWeight?: number };
+    const screen = '#' + baseColor(object).getHexString();
+    const pen = plotPen(plotStyle, { ...plot, screenColor: screen });
+    const ink = new THREE.Color(selected ? SELECTED_WIRE : pen.color);
+    if (object instanceof THREE.Mesh) {
+      object.material.color.set(selected ? SELECTED : 0xffffff);
+      object.material.visible = true;
+      object.material.transparent = false;
+      object.material.opacity = 1;
+      object.material.depthWrite = true;
+      object.material.needsUpdate = true;
+      const edges = edgesOf(object);
+      edges.visible = true;
+      edges.material.color.copy(ink);
+    } else if (object instanceof THREE.Line) {
+      object.material.visible = false;
+      const fat = plotLineOf(object);
+      fat.visible = true;
+      fat.material.color.copy(ink);
+      fat.material.linewidth = lineWeightPixels(pen.lineWeight);
+    } else object.material.color.copy(ink);
+  }
+  function paint(object: RenderObject) {
+    const selected = selectedIds.has(object.userData.id);
+    if (display.plot) {
+      paintPlot(object, selected);
+      return;
+    }
+    const fat = object.userData.plotLine as LineSegments2 | undefined;
+    if (fat) fat.visible = false;
+    if (object instanceof THREE.Line) object.material.visible = true;
+    const color = selected
+      ? new THREE.Color(object instanceof THREE.Mesh ? SELECTED : SELECTED_WIRE)
+      : baseColor(object);
+    object.material.color.copy(color);
+    if (object instanceof THREE.Mesh) {
+      const material = object.material;
+      const ghosted = display.mode === 'ghosted';
+      material.visible = display.mode !== 'wireframe';
+      material.transparent = ghosted;
+      material.opacity = ghosted ? (selected ? 0.7 : 0.28) : 1;
+      material.depthWrite = !ghosted;
+      material.needsUpdate = true;
+      const showEdges = display.mode !== 'shaded' || display.edges;
+      const existing = object.userData.edges as THREE.LineSegments | undefined;
+      if (showEdges) {
+        const edges = edgesOf(object);
+        edges.visible = true;
+        // Wireframe edges take the object colour; shaded edges stay a dark outline.
+        edges.material.color.copy(
+          selected
+            ? new THREE.Color(SELECTED_WIRE)
+            : display.mode === 'shaded'
+              ? new THREE.Color(EDGE)
+              : color.clone().multiplyScalar(display.colorSource === 'default' ? 1 : 0.8),
+        );
+      } else if (existing) existing.visible = false;
+    }
+  }
+  function applyBackground() {
+    const dark =
+      !display.plot &&
+      (display.background === 'dark' ||
+        (display.background === 'auto' && matchMedia('(prefers-color-scheme: dark)').matches));
+    (scene.background as THREE.Color).set(display.plot ? '#ffffff' : dark ? '#23272a' : '#edf0ec');
+    const rotation = grid.rotation.clone();
+    scene.remove(grid);
+    grid.geometry.dispose();
+    for (const material of Array.isArray(grid.material) ? grid.material : [grid.material])
+      material.dispose();
+    grid = dark
+      ? new THREE.GridHelper(100, 50, 0x4a5350, 0x33393a)
+      : new THREE.GridHelper(100, 50, 0xb8c2b9, 0xe0e5dc);
+    grid.rotation.copy(rotation);
+    grid.visible = !display.plot;
+    scene.add(grid);
+    renderer.domElement.dataset.background = dark ? 'dark' : 'light';
+    darkBackground = dark;
+  }
+  function applyDisplay() {
+    for (const object of meshes) paint(object);
+    renderer.domElement.dataset.display = display.mode;
+    renderer.domElement.dataset.colorSource = display.colorSource;
+    renderer.domElement.dataset.plot = String(display.plot);
+    dirty = true;
   }
   replace(objects);
   const lines = new THREE.Group();
@@ -207,7 +415,7 @@ export function createViewport(
     orthographic.top = viewSpan / 2;
     orthographic.bottom = -viewSpan / 2;
     orthographic.updateProjectionMatrix();
-    for (const material of lineMaterials)
+    for (const material of [...lineMaterials, ...plotMaterials])
       material.resolution.set(renderer.domElement.width, renderer.domElement.height);
   }
   function configure() {
@@ -637,6 +845,8 @@ export function createViewport(
     frame = requestAnimationFrame(animate);
     controls.update();
     if (dirty) {
+      light.position.copy(camera.position);
+      light.target.position.copy(controls.target);
       renderer.render(scene, camera);
       dirty = false;
     }
@@ -654,14 +864,42 @@ export function createViewport(
     select(ids: readonly string[]) {
       const next = new Set(ids);
       if (next.size === selectedIds.size && ids.every((id) => selectedIds.has(id))) return;
-      for (const id of selectedIds)
-        if (!next.has(id)) {
-          const previous = byId.get(id);
-          previous?.material.color.setHex(previous instanceof THREE.Mesh ? 0xd7ded4 : 0x69766c);
-        }
-      for (const id of next) byId.get(id)?.material.color.setHex(0xe4bca6);
+      const changed = [...selectedIds].filter((id) => !next.has(id));
       selectedIds = next;
+      for (const id of [...changed, ...next]) {
+        const object = byId.get(id);
+        if (object) paint(object);
+      }
       dirty = true;
+    },
+    /** Shading mode, colour source, crease edges and background. */
+    display(next: DisplaySettings) {
+      const background = next.background !== display.background || next.plot !== display.plot;
+      display = { ...next };
+      if (background || next.background === 'auto') applyBackground();
+      applyDisplay();
+    },
+    /** Replace the plot style table (e.g. a parsed .ctb); monochrome is the default. */
+    plotStyle(table?: PlotStyleTable) {
+      plotStyle = plotStyleTable(table);
+      applyDisplay();
+    },
+    /** Test/diagnostic hook: rendered colour (lines: plot ink in plot mode) and plot width. */
+    colorOf(id: string) {
+      const object = byId.get(id);
+      if (!object) return undefined;
+      const fat = object.userData.plotLine as LineSegments2 | undefined;
+      const edges = object.userData.edges as
+        | THREE.LineSegments<THREE.BufferGeometry, THREE.LineBasicMaterial>
+        | undefined;
+      const ink = display.plot
+        ? (fat?.material.color ?? edges?.material.color ?? object.material.color)
+        : object.material.color;
+      return '#' + ink.getHexString();
+    },
+    plotWidthOf(id: string) {
+      const fat = byId.get(id)?.userData.plotLine as LineSegments2 | undefined;
+      return fat?.material.linewidth;
     },
     mode(next: ToolMode) {
       mode = next;

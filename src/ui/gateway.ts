@@ -89,7 +89,8 @@ Object.assign(errors, {
   AGENT_CALL_LIMIT: '설정한 도구 호출 횟수에 도달했습니다.',
   PROFILE_LOGIN_IN_PROGRESS: '계정 로그인 종료를 기다린 뒤 요청하세요.',
   INVALID_GEOMETRY: 'AI의 형상 제안이 검증을 통과하지 못했습니다.',
-  WRITE_NOT_ALLOWED: '검토 권한으로는 형상을 변경하지 않습니다. 후보 작업 허용으로 전환하세요.',
+  WRITE_NOT_ALLOWED:
+    'Plan mode에서는 형상을 변경하지 않습니다. Shift+Tab으로 Accept edits 또는 Auto mode로 바꾸세요.',
   PROJECT_BUSY: '같은 대상의 작업이 진행 중입니다. 다른 문서를 선택하거나 완료를 기다리세요.',
   INTERVENTION_REVIEW_REQUIRED:
     '이전 작업의 부분 결과 또는 불명확 상태를 확인해야 합니다. 추가 지시는 보존했습니다.',

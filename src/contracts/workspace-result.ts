@@ -16,6 +16,12 @@ const scene = z
     area: z.number().nullish(),
     volume: z.number().nullish(),
     layer64: z.string().optional(),
+    // Host-agnostic display colours: resolved #rrggbb, ACI 1–255, lineweight in mm.
+    displayColor: z.string().optional(),
+    layerColor: z.string().optional(),
+    materialColor: z.string().nullish(),
+    colorIndex: z.number().int().min(0).max(256).optional(),
+    lineWeight: z.number().nonnegative().optional(),
   })
   .passthrough();
 export const applicationResultSchema = z

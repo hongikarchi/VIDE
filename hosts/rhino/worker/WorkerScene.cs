@@ -103,13 +103,21 @@ internal static class WorkerScene
             scene.Add(new { id, nativeId = obj.Id.ToString(), nativeType = geometry.ObjectType.ToString(), geometryHash, name64 = Encode(name), origin,
                 boundsSize = new[] { (bounds.Max.X - bounds.Min.X) * scale, (bounds.Max.Y - bounds.Min.Y) * scale, (bounds.Max.Z - bounds.Min.Z) * scale },
                 vertices = vertices.Select(value => value * scale).ToArray(), indices, line = line.Select(value => value * scale).ToArray(), area = measurements.Area, volume = measurements.Volume, length = measurements.Length,
-                layer64 = Encode(doc.Layers[obj.Attributes.LayerIndex].FullPath), attributes64 = attributes, attributesComplete = complete, valid = geometry.IsValid });
+                layer64 = Encode(doc.Layers[obj.Attributes.LayerIndex].FullPath), attributes64 = attributes, attributesComplete = complete, valid = geometry.IsValid,
+                displayColor = Hex(obj.Attributes.DrawColor(doc)), layerColor = Hex(doc.Layers[obj.Attributes.LayerIndex].Color), materialColor = MaterialColor(obj) });
         }
         return new { objects, scene, measurementVersion = 1, measurementStats = new { measuredObjects, reusedObjects },
             page = new { offset, nextOffset = offset + objects.Count, total = ordered.Length, revision } };
     }
 
     private static string Encode(string value) => Convert.ToBase64String(Encoding.UTF8.GetBytes(value));
+    // Display colors resolve Rhino's ColorSource (layer/object/material/parent); render material diffuse is optional.
+    private static string Hex(System.Drawing.Color color) => "#" + color.R.ToString("x2") + color.G.ToString("x2") + color.B.ToString("x2");
+    private static string? MaterialColor(RhinoObject obj)
+    {
+        try { var material = obj.GetMaterial(true); return material == null ? null : Hex(material.DiffuseColor); }
+        catch (Exception) { return null; }
+    }
     private static void AddPoint(Point3d point, List<double> vertices) { vertices.Add(point.X); vertices.Add(point.Y); vertices.Add(point.Z); }
     private static void AddMesh(Mesh mesh, Point3d origin, List<double> vertices, List<int> indices)
     {
