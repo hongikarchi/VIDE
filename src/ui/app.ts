@@ -23,6 +23,7 @@ import { setMobileView } from './mobile-navigation.tsx';
 import { showQuantities } from './quantities.tsx';
 import { attachNativeAttributes } from './native-attributes.ts';
 import { showExtensions } from './extensions.tsx';
+import { hideJigs, showJigs } from './jigs.tsx';
 const showAiSettings: typeof import('./ai-settings.tsx').showAiSettings = async (onStatus) =>
   (await import('./ai-settings.tsx')).showAiSettings(onStatus);
 import { initializeReviews } from './reviews.tsx';
@@ -908,8 +909,9 @@ function renderConversation() {
   });
 }
 
-$('extensions').onclick = () => {
+function openExtensions() {
   if (!project) return;
+  hideJigs();
   void showExtensions(
     {
       projectId: project.id,
@@ -925,6 +927,55 @@ $('extensions').onclick = () => {
       mobileView('input');
     },
   ).catch((error) => message(error.message));
+}
+// JIG tab: the jig gallery and the Sync jig (relation and differences of a Rhino and a CAD Sync).
+$('jigs').onclick = () => {
+  if (!project) return;
+  showJigs({
+    projectId: project.id,
+    sources: linkedCandidates(state).map((entry) => ({
+      id: entry.id,
+      host: entry.request.result?.host === 'zwcad' ? 'zwcad' : 'rhino',
+      label:
+        (entry.request.result?.sourceDocument?.name || entry.body.slice(0, 60)) +
+        (entry.request.createdAt
+          ? ' · ' +
+            new Date(entry.request.createdAt).toLocaleString('ko-KR', {
+              month: 'numeric',
+              day: 'numeric',
+              hour: '2-digit',
+              minute: '2-digit',
+            })
+          : ''),
+    })),
+    show: (requestId, objectId) => {
+      hideJigs();
+      selectedResult = requestId;
+      renderMessages();
+      state.selected = objectId;
+      render();
+      // The Sync's scene loads with the selection; frame it once it is shown.
+      setTimeout(() => viewport?.fit(objectId), 400);
+      mobileView('model');
+    },
+    send: async (extra) => {
+      const projectId = currentProject().id;
+      const input = {
+        ...packet({ ...state, body: extra.body, pins: [], sketches: [], files: [] }),
+        id: crypto.randomUUID(),
+        ...extra,
+      };
+      if (!extra.host) delete (input as Record<string, unknown>).host;
+      if (!extra.baseRequestId) delete (input as Record<string, unknown>).baseRequestId;
+      const request = await requestData(`/projects/${projectId}/requests`, 'POST', input);
+      if (!state.messages.some((entry) => entry.id === request.id))
+        state.messages.push(requestMessage(request));
+      renderMessages();
+      if ($('right').hidden) $('toggle-right').click();
+      void poll(request.id, projectId, state);
+    },
+    extensions: openExtensions,
+  });
 };
 function openAiSettings() {
   void showAiSettings((rows) => {

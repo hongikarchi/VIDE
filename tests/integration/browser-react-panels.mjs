@@ -422,7 +422,8 @@ try {
     /원본 적용 결과 미확인/,
   );
   await page.getByRole('button', { name: '이 후보 보기', exact: true }).click();
-  await page.getByRole('button', { name: '확장', exact: true }).click();
+  await page.getByRole('button', { name: 'JIG', exact: true }).click();
+  await page.getByRole('button', { name: /개발용 확장/ }).click();
   const extension = page.getByRole('dialog', { name: '확장', exact: true });
   await extension.getByRole('button', { name: '등록', exact: true }).click();
   const submissions = [];

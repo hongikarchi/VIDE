@@ -6,6 +6,8 @@ import { appVersion, defaultRhinoPlugin, defaultZwcadConnection } from './sdk-op
 import { gzip } from 'node:zlib';
 import { AccountProfiles } from '../ai/account-profiles.ts';
 import { AccountUsageService } from '../ai/account-usage.ts';
+import { JIGS } from '../jigs/catalog.ts';
+import { runSync } from '../jigs/sync.ts';
 import { AccountLogin } from '../ai/account-login.ts';
 import { z } from 'zod';
 import type { IncomingMessage } from 'node:http';
@@ -667,6 +669,52 @@ export async function startServer({
           send(201, profiles.add(input.provider, input.label));
           return;
         }
+      }
+      // JIG tab: the catalogue, and the Sync jig (relation and differences of two Syncs).
+      if (url.pathname === '/api/v1/jigs' && request.method === 'GET') {
+        send(200, JIGS);
+        return;
+      }
+      const syncJig = /^\/api\/v1\/projects\/([^/]+)\/jigs\/sync$/.exec(url.pathname);
+      if (syncJig && request.method === 'POST') {
+        const point = z.number().finite();
+        const input = z
+          .object({
+            rhino: z.string(),
+            cad: z.string(),
+            tolerance: z.number().positive().max(1).optional(),
+            search: z.number().positive().max(10).optional(),
+            rhinoLayers: z.array(z.string()).max(500).optional(),
+            cadLayers: z.array(z.string()).max(500).optional(),
+            anchor: z.object({ rhino: z.string(), cad: z.string() }).optional(),
+            candidate: z
+              .object({ rotation: point, translation: z.tuple([point, point]), dz: point })
+              .optional(),
+          })
+          .strict()
+          .parse(await body(request));
+        const source = (id: string, host: 'rhino' | 'zwcad') => {
+          const saved = workspace.get(syncJig[1], id);
+          if (saved.state !== 'succeeded' || !saved.result || !Array.isArray(saved.result.scene))
+            throw new DomainError('STALE_REFERENCE');
+          if ((saved.result.host || 'rhino') !== host) throw new DomainError('TARGET_MISMATCH');
+          return saved.result as Record<string, unknown>;
+        };
+        const cad = source(input.cad, 'zwcad');
+        const result = runSync(source(input.rhino, 'rhino'), cad, input);
+        const document = z.object({ units: z.string() }).safeParse(cad.sourceDocument);
+        send(200, {
+          ...result,
+          rows: result.rows.slice(0, 5000),
+          totalRows: result.rows.length,
+          cadUnits:
+            typeof cad.sourceUnits === 'string'
+              ? cad.sourceUnits
+              : document.success
+                ? document.data.units
+                : 'Millimeters',
+        });
+        return;
       }
       // Per-account sign-in, usage and reset times; switching settings.
       if (url.pathname === '/api/v1/accounts/usage' && request.method === 'GET') {

@@ -2976,3 +2976,153 @@ body.panel-mode #conversation {
   font-size: 12px;
   color: var(--ink, #292c2d);
 }
+
+/* JIG tab: jig gallery and the Sync jig. */
+.jig-dialog {
+  width: min(1040px, 96vw);
+}
+.jig-intro {
+  color: var(--muted);
+  margin: 8px 0 14px;
+}
+.jig-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: 10px;
+}
+.jig-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 12px;
+  background: #fff;
+}
+.jig-card[data-status='planned'] {
+  background: var(--soft);
+  color: #5d6466;
+}
+.jig-card p {
+  margin: 0;
+  line-height: 1.45;
+}
+.jig-card small {
+  color: var(--muted);
+}
+.jig-card button {
+  align-self: flex-start;
+  margin-top: auto;
+}
+.jig-card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+.jig-dialog > .link-button {
+  margin-top: 14px;
+}
+.jig-inputs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 10px;
+  margin: 10px 0;
+}
+.jig-inputs label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: var(--muted);
+}
+.jig-inputs select {
+  min-width: 220px;
+  max-width: 320px;
+  padding: 5px;
+}
+.jig-inputs input {
+  width: 90px;
+  padding: 5px;
+}
+.jig-layer-pickers {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.jig-layers label {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  padding: 2px 0;
+}
+.jig-layers[open] {
+  max-height: 220px;
+  overflow: auto;
+}
+.jig-relation {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin: 10px 0;
+}
+.jig-relation h3 {
+  font-size: 13px;
+  margin: 0 0 6px;
+}
+.jig-relation p {
+  margin: 4px 0;
+}
+.jig-ambiguous {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  background: #fbf1e6;
+  border-radius: 6px;
+  padding: 8px;
+  margin: 6px 0;
+}
+.jig-filter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 8px 0;
+}
+.jig-filter button[aria-pressed='true'] {
+  background: #292c2d;
+  color: #fff;
+}
+.jig-table-wrap {
+  max-height: 42dvh;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+.jig-table-wrap thead th {
+  position: sticky;
+  top: 0;
+  background: #fff;
+}
+.jig-table tr[data-state='offset'] td:nth-child(3) {
+  color: #b7632a;
+}
+.jig-table tr[data-state='rhino-only'] td:nth-child(3),
+.jig-table tr[data-state='cad-only'] td:nth-child(3) {
+  color: #b33a2e;
+}
+.jig-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 10px 0 6px;
+}
+@media (max-width: 600px) {
+  .jig-inputs select {
+    min-width: 0;
+    width: 100%;
+  }
+  .jig-inputs label {
+    flex: 1 1 100%;
+  }
+}

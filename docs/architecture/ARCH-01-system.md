@@ -646,6 +646,12 @@ Rhino 패널은 기존 RHP 안의 Eto `ConnectionPanel`을 `PanelType.PerDoc`로
 
 연결된 사용자 Rhino의 읽기 Sync는 고정 메서드 `displayPage`를 사용한다. 현재 문서의 보이는 객체를 조회하고 미터 단위 표시 좌표를 반환한다. 네이티브 파일 저장·별도 worker 실행·면적/체적 계산은 하지 않는다. 페이지 사이 변경은 읽기 revision과 전후 문서 지문으로 확인한다. 직접 표시 응답의 합산 예산은 128MiB이며 편집 worker의 기존 예산과 구분한다. 결과는 `displayOnly: true`, `verified: false`, 원본 식별자·지문을 담은 `sourceDocument`로 저장한다. 원래 유효하지 않은 객체는 `valid: false`로 기록하고 렌더링에서 제외한다. 엄격한 `nativeModelSchema`와 표시용 `displayModelSchema`를 분리하며 네이티브 편집 검증을 완화하지 않는다. 후속 SDK 편집에서만 같은 원본 지문을 확인하고 기존 `captureEditor`로 검증된 작업 사본을 준비한다.
 
+### JIG 탭과 Sync jig
+
+`src/jigs/catalog.ts`가 공식 jig 목록, `src/jigs/sync.ts`가 Sync jig 계산을 소유한다(SPEC-05.8). `GET /api/v1/jigs`는 목록, `POST /api/v1/projects/:id/jigs/sync`는 저장된 두 Sync 결과의 `scene`(Rhino `line`/`points`, CAD `segments`, 미터)로 계산해 관계·행(최대 5,000행과 `totalRows`)·레이어 대응·CAD 단위(`sourceUnits`)를 돌려준다. 관계는 Rhino→CAD `rotation`(라디안)·`translation`·`dz`이며, 방향 후보(주 방향 차)마다 길이 버킷이 같은 선분 쌍의 이동량을 투표하고 대응 쌍의 중앙값으로 다듬는다. 행의 `ends`는 CAD 좌표, `inRhino`는 역변환한 모델 좌표다.
+
+AI 검토 요청은 `jig: { kind: 'sync-review', rows }`와 `sync-jig.json` 첨부로 만든다. 실행기는 이 요청에 호스트·기준 문서·모델 문맥을 붙이지 않고, 답의 `R숫자` 인용을 `rows`와 대조해 `jigCheck`를 결과에 남긴다. 반영 요청은 `jig: { kind: 'sync-apply' }`와 `sync-edits.json`으로 기존 ZWCAD 열린 도면 수정·Rhino 원본 적용 경로를 쓴다.
+
 ### 현재 ZWCAD의 읽기 연결
 
 `hosts/zwcad/connection/`은 설치된 ZWCAD 2023 SDK를 참조하는 .NET Framework 4.8 x64 DLL이다. AI 코드 실행기와 별도 어셈블리이며 Roslyn 또는 외부 MCP 설치가 필요 없다. `VIDECADConnect`·`VIDECADDisconnect`·`VIDECADSync`·`VIDECADLiveSync`·`VIDECADPanel`과 WinForms PaletteSet을 제공한다. 패널은 활성 도면을 보여 주되 이미 연결된 다른 도면의 대상을 바꾸지 않는다. 배포본에는 연결 DLL만 포함하고 ZWCAD SDK DLL은 설치본에서 사용한다.

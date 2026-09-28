@@ -22,7 +22,8 @@ try {
   await page.waitForFunction(() =>
     document.querySelector('#connection-status').textContent.includes('연결됨'),
   );
-  await page.getByRole('button', { name: '확장', exact: true }).click();
+  await page.getByRole('button', { name: 'JIG', exact: true }).click();
+  await page.getByRole('button', { name: /개발용 확장/ }).click();
   const dialog = page.getByRole('dialog', { name: '확장', exact: true });
   await dialog.waitFor();
   const enable = dialog.getByRole('button', { name: /^(등록|활성화)$/ });
@@ -49,7 +50,8 @@ try {
   await card.getByRole('button', { name: objectName, exact: true }).click();
   assert.equal(await page.locator('#selection').innerText(), objectName);
   await page.screenshot({ path: 'docs/assets/native-workspace/extension-summary.png' });
-  await page.getByRole('button', { name: '확장', exact: true }).click();
+  await page.getByRole('button', { name: 'JIG', exact: true }).click();
+  await page.getByRole('button', { name: /개발용 확장/ }).click();
   await dialog.getByRole('button', { name: '비활성화', exact: true }).click();
   assert.equal(await dialog.getByRole('button', { name: '실행', exact: true }).isDisabled(), true);
   const checks = await page.evaluate(

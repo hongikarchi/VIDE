@@ -47,6 +47,29 @@ interface Options {
   /** A request stopped on its account's subscription limit (so the next one can switch). */
   onProviderLimit?: (provider: string, accountProfileId: string) => void;
 }
+/**
+ * Jig review gate (RESEARCH-05 standard gates): an AI review of a Sync jig table may cite only the
+ * table's rows. Unknown row ids are reported with the answer instead of being passed silently.
+ */
+function jigCheck(input: Record<string, unknown>, text: string) {
+  const jig = z
+    .object({ kind: z.literal('sync-review'), rows: z.array(z.string()).max(20000) })
+    .safeParse(input.jig);
+  if (!jig.success) return {};
+  const known = new Set(jig.data.rows);
+  const cited = [...new Set(text.match(/\bR\d+\b/g) ?? [])];
+  const unknown = cited.filter((row) => !known.has(row));
+  return {
+    jigCheck: { gate: 'ref-whitelist', cited: cited.length, unknown },
+    ...(unknown.length
+      ? {
+          text:
+            text +
+            `\n\n⚠ 검증: 표에 없는 행 ${unknown.join(', ')}을(를) 인용했습니다. 해당 부분은 근거가 없는 내용이니 확인하세요.`,
+        }
+      : {}),
+  };
+}
 const pinsSchema = z.array(
   z
     .object({
@@ -305,8 +328,10 @@ export class Execution {
   }
   async run(request: StoredWork, controller: AbortController) {
     const { projectId, id, input } = request;
+    // A jig's AI review reads only the attached jig table: no host, no document context.
+    const jigReview = z.object({ kind: z.literal('sync-review') }).safeParse(input.jig).success;
     const target = input.host || 'rhino',
-      host = this.hosts[target];
+      host = jigReview ? undefined : this.hosts[target];
     this.workspace.update(projectId, id, 'running');
     let hostIntent: Record<string, unknown> | undefined;
     try {
@@ -331,7 +356,7 @@ export class Execution {
         });
         return;
       }
-      const basis = this.workspace.basis(projectId, input);
+      const basis = jigReview ? undefined : this.workspace.basis(projectId, input);
       const previous = basis
         ? { ...basis, result: executionResultSchema.parse(basis.result) }
         : undefined;
@@ -369,7 +394,7 @@ export class Execution {
         .map((r) => ({ request: r.input.body, response: r.result?.text }));
       if (conversation.length)
         items.push({ id: 'conversation', type: 'conversation', data: conversation });
-      const sdk = target === 'rhino' ? this.sdk : this.zwcadSdk;
+      const sdk = jigReview ? undefined : target === 'rhino' ? this.sdk : this.zwcadSdk;
       if (sdk)
         items.push(
           ...modelContext(
@@ -496,7 +521,12 @@ export class Execution {
             text: proposal.message,
             hostExecuted: false,
           });
-      } else this.workspace.update(projectId, id, 'succeeded', { ...result, hostExecuted: false });
+      } else
+        this.workspace.update(projectId, id, 'succeeded', {
+          ...result,
+          ...jigCheck(input, result.text),
+          hostExecuted: false,
+        });
     } catch (cause) {
       const error = errorData(cause);
       if (error.code === 'PROVIDER_LIMIT')

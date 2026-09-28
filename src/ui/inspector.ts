@@ -73,6 +73,7 @@ function showInspector(open: boolean) {
 }
 const paths: Record<string, string> = {
   extension: '<path d="M3 3h7v7H3V3Zm11 0h7v7h-7V3ZM3 14h7v7H3v-7Zm14 0v8m-4-4h8"/>',
+  jig: '<path d="M4 20 14 10m2-6 4 4-3 3-4-4 3-3ZM4 4h5v5H4zM15 15h5v5h-5z"/>',
   // View: perspective (converging frame) and parallel projection, fit selection, fit all.
   perspective: '<path d="M3 5h18l-4 14H7L3 5Zm5 4h8l-1.5 6h-5L8 9Z"/>',
   orthographic: '<path d="M4 7h11v11H4V7Zm5-4h11v11M4 7l5-4m6 4 5-4m-5 15 5-4"/>',
