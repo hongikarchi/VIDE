@@ -39,12 +39,65 @@ try {
   await page.locator('#attach-menu summary').click();
   assert.match(await page.locator('#host-status').textContent(), /ZWCAD 실행 준비/);
   await page.locator('#model').selectOption('test-model');
+  await page.locator('#effort-menu summary').click();
   await page.locator('#effort').focus();
   await page.keyboard.press('End');
   assert.equal(await page.locator('#effort-label').textContent(), 'high');
+  await page.locator('#effort-menu summary').click();
   await page.locator('#model').selectOption('claude-cli');
   assert.equal(await page.locator('#effort').isDisabled(), true);
   assert.equal(await page.locator('#effort-label').textContent(), '기본값');
+  await page.locator('#workspace-settings').click();
+  const settings = page.getByRole('dialog', { name: '상태 및 설정', exact: true });
+  assert.equal(
+    await settings.getByRole('button', { name: 'AI 계정 · 연결 설정' }).isVisible(),
+    true,
+  );
+  await settings.getByRole('button', { name: 'AI 계정 · 연결 설정' }).click();
+  const aiSettings = page.getByRole('dialog', { name: 'AI 연결 설정', exact: true });
+  await aiSettings.waitFor();
+  await aiSettings.getByRole('button', { name: '닫기', exact: true }).click();
+  await page.locator('#workspace-settings').click();
+  await settings.getByRole('button', { name: '닫기', exact: true }).click();
+  assert.equal(
+    await page.locator('#workspace-settings').evaluate((node) => node === document.activeElement),
+    true,
+  );
+  const originalHeight = (await page.locator('#body').boundingBox()).height;
+  const handle = await page.locator('#composer-resize').boundingBox();
+  await page.mouse.move(handle.x + 30, handle.y + 4);
+  await page.mouse.down();
+  await page.mouse.move(handle.x + 30, handle.y - 76);
+  await page.mouse.up();
+  assert.equal((await page.locator('#body').boundingBox()).height, originalHeight + 80);
+  await page.locator('#composer-resize').focus();
+  await page.keyboard.press('Home');
+  assert.equal((await page.locator('#body').boundingBox()).height, 96);
+  await page.locator('[data-view="axon"]').click();
+  const canvas = page.locator('#canvas canvas');
+  const canvasBox = await canvas.boundingBox();
+  const x = canvasBox.x + canvasBox.width / 2,
+    y = canvasBox.y + canvasBox.height / 2;
+  const initialCamera = await canvas.screenshot();
+  await page.mouse.move(x, y);
+  await page.mouse.down({ button: 'right' });
+  await page.mouse.move(x + 75, y + 30, { steps: 10 });
+  await page.mouse.up({ button: 'right' });
+  await page.waitForTimeout(500);
+  assert.equal(await page.locator('[data-view="axon"]').getAttribute('aria-pressed'), 'false');
+  assert.notDeepEqual(await canvas.screenshot(), initialCamera);
+  await page.locator('[data-view="axon"]').click();
+  await page.waitForTimeout(500);
+  const beforePan = await canvas.screenshot();
+  await page.keyboard.down('Shift');
+  await page.mouse.move(x, y);
+  await page.mouse.down({ button: 'right' });
+  await page.mouse.move(x + 75, y + 30, { steps: 10 });
+  await page.mouse.up({ button: 'right' });
+  await page.keyboard.up('Shift');
+  await page.waitForTimeout(500);
+  assert.equal(await page.locator('[data-view="axon"]').getAttribute('aria-pressed'), 'true');
+  assert.notDeepEqual(await canvas.screenshot(), beforePan);
   await page.locator('#body').fill('Saved draft');
   await page.locator('#draft-menu summary').click();
   await page.locator('#save').click();
@@ -74,6 +127,16 @@ try {
     await page.locator('#canvas canvas').getAttribute('data-projection'),
     'orthographic',
   );
+  const orthoBefore = await canvas.screenshot();
+  await page.keyboard.down('Shift');
+  await page.mouse.move(x, y);
+  await page.mouse.down({ button: 'right' });
+  await page.mouse.move(x + 60, y + 20, { steps: 8 });
+  await page.mouse.up({ button: 'right' });
+  await page.keyboard.up('Shift');
+  await page.waitForTimeout(500);
+  assert.equal(await page.locator('[data-view="front"]').getAttribute('aria-pressed'), 'true');
+  assert.notDeepEqual(await canvas.screenshot(), orthoBefore);
   await page.locator('[data-section="task-list"]').click();
   assert.equal(await page.locator('#document-tree').isVisible(), false);
   assert.equal(await page.locator('#task-list').isVisible(), true);
@@ -111,14 +174,23 @@ try {
   const evidence = resolve('.vide/ui-audit');
   await mkdir(evidence, { recursive: true });
   await page.screenshot({ path: join(evidence, 'controls-1440.png') });
+  await page.locator('#model').selectOption('test-model');
+  await page.locator('#effort-menu summary').click();
+  await page.screenshot({ path: join(evidence, 'effort-1440.png') });
+  await page.keyboard.press('Escape');
+  assert.equal(await page.locator('#effort-menu').getAttribute('open'), null);
+  await page.locator('#workspace-settings').click();
+  await page.screenshot({ path: join(evidence, 'settings-1440.png') });
+  await settings.getByRole('button', { name: '닫기', exact: true }).click();
   await page.setViewportSize({ width: 800, height: 900 });
   await page.locator('[data-mobile="model"]').click();
   await page.locator('#toggle-left').click();
   await page.locator('.left-panel-tabs').getByRole('button', { name: '작업 이력' }).click();
   assert.equal(await page.locator('#review-list').isVisible(), true);
+  await page.screenshot({ path: join(evidence, 'controls-800.png') });
   await page.setViewportSize({ width: 1440, height: 900 });
   const project = await page.locator('#project-picker').inputValue();
-  for (const id of ['basis-one', 'basis-two']) {
+  for (const id of ['basis-one', 'basis-two', 'failed-sync']) {
     const input = {
       id,
       body: id,
@@ -144,13 +216,19 @@ try {
         id,
         project,
         JSON.stringify(input),
-        'succeeded',
-        JSON.stringify(result),
+        id === 'failed-sync' ? 'failed' : 'succeeded',
+        JSON.stringify(
+          id === 'failed-sync' ? { code: 'IMPORT_LIMIT', hostExecuted: false } : result,
+        ),
         new Date().toISOString(),
       );
   }
   await page.reload();
   await page.waitForFunction(() => !document.querySelector('#body').disabled);
+  await page.getByRole('button', { name: '오류 기록', exact: true }).click();
+  await settings.getByRole('button', { name: /failed-sync.*IMPORT_LIMIT/ }).click();
+  assert.equal(await settings.isVisible(), false);
+  assert.equal(await page.locator('[data-request-id="failed-sync"]').isVisible(), true);
   await page.locator('#attach-menu summary').click();
   await page.locator('#linked-targets').click();
   const linking = page.getByRole('dialog', { name: '연계 대상', exact: true });
@@ -178,6 +256,10 @@ try {
   await page.locator('#draft-menu summary').click();
   await page.locator('#ai-settings').click();
   await page.waitForFunction(() => !document.querySelector('#auth-status').hidden);
+  assert.match(
+    await page.getByRole('button', { name: '오류 기록', exact: true }).textContent(),
+    /[1-9]/,
+  );
   assert.equal(await page.locator('#request').isDisabled(), true);
   assert.equal(await page.locator('#body').inputValue(), 'Saved draft');
   assert.deepEqual(errors, []);

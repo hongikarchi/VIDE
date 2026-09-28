@@ -44,7 +44,10 @@ export function createViewport(
   camera.up.set(0, 0, 1);
   const renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
-  renderer.domElement.setAttribute('aria-label', '3D 모델 · 드래그 회전, 휠 확대, 우클릭 이동');
+  renderer.domElement.setAttribute(
+    'aria-label',
+    '3D 모델 · 우클릭 회전, Shift 우클릭 이동, 휠 확대',
+  );
   renderer.domElement.tabIndex = 0;
   container.append(renderer.domElement);
   let controls: OrbitControls<Camera> = new OrbitControls(camera, renderer.domElement);
@@ -133,8 +136,9 @@ export function createViewport(
   }
   function configure() {
     controls.enableRotate = !standardView && mode !== 'sketch';
-    controls.mouseButtons.LEFT =
-      mode === 'sketch' ? undefined : standardView ? THREE.MOUSE.PAN : THREE.MOUSE.ROTATE;
+    controls.mouseButtons.LEFT = undefined;
+    controls.mouseButtons.RIGHT =
+      standardView || mode === 'sketch' ? THREE.MOUSE.PAN : THREE.MOUSE.ROTATE;
   }
   function reportCamera() {
     dirty = true;
@@ -281,6 +285,12 @@ export function createViewport(
           Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
     ray.params.Points.threshold = ray.params.Line.threshold = (span / Math.max(r.height, 1)) * 6;
   }
+  function cameraPointerDown(e: PointerEvent) {
+    // OrbitControls swaps ROTATE/PAN for Shift. Keep both gestures planar in standard/sketch views.
+    if (e.button === 2 && (standardView || mode === 'sketch'))
+      controls.mouseButtons.RIGHT =
+        e.shiftKey || e.ctrlKey || e.metaKey ? THREE.MOUSE.ROTATE : THREE.MOUSE.PAN;
+  }
   function pointerDown(e: PointerEvent) {
     if (e.button === 0) down = { x: e.clientX, y: e.clientY };
   }
@@ -316,6 +326,7 @@ export function createViewport(
   function cancel() {
     down = null;
   }
+  renderer.domElement.addEventListener('pointerdown', cameraPointerDown, true);
   renderer.domElement.addEventListener('pointerdown', pointerDown);
   renderer.domElement.addEventListener('pointerup', pointerUp);
   renderer.domElement.addEventListener('pointercancel', cancel);
@@ -392,6 +403,7 @@ export function createViewport(
       cancelAnimationFrame(frame);
       resize.disconnect();
       controls.dispose();
+      renderer.domElement.removeEventListener('pointerdown', cameraPointerDown, true);
       renderer.domElement.removeEventListener('pointerdown', pointerDown);
       renderer.domElement.removeEventListener('pointerup', pointerUp);
       renderer.domElement.removeEventListener('pointercancel', cancel);

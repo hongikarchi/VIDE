@@ -1,3 +1,4 @@
+import { initializeWorkspaceStatus } from './workspace-status.ts';
 import { linkedRequestDraft, interventionTargetDraft } from './linked-draft.ts';
 import { accountIndicator } from './account-indicator.ts';
 import { executionLimits } from '../contracts/execution-limits.ts';
@@ -79,6 +80,15 @@ const renderObjectList = createObjectList($('objects'), (id) => {
 let foregroundRequest: { id: string; selected: typeof selectedResult; draft: string } | undefined;
 const focusDraft = () => JSON.stringify({ draft: draftSnapshot(state), points });
 initializeWorkspacePanels();
+const workspaceStatus = initializeWorkspaceStatus((id) => {
+  selectedResult = id;
+  renderMessages();
+  if ($('right').hidden) $('toggle-right').click();
+  setMobileView('input');
+  document
+    .querySelector<HTMLElement>(`[data-request-id="${CSS.escape(id)}"]`)
+    ?.scrollIntoView({ block: 'nearest' });
+});
 let tool: 'select' | 'pin' | 'sketch' = 'select',
   points: Point2[] = [],
   toastTimer: ReturnType<typeof setTimeout> | undefined;
@@ -357,6 +367,18 @@ function render(rebuildRequests = true) {
   $('effort-label').textContent = effortLabel;
   $('effort').setAttribute('aria-valuetext', effortLabel);
   $('effort').title = efforts.join(' → ');
+  $('effort').style.setProperty(
+    '--effort-fill',
+    `${efforts.length > 1 ? (efforts.indexOf(state.effort) / (efforts.length - 1)) * 100 : 0}%`,
+  );
+  $('effort-steps').replaceChildren(
+    ...efforts.map((effort) => {
+      const step = document.createElement('span');
+      step.textContent = effort === 'default' ? '기본' : effort;
+      step.dataset.active = String(effort === state.effort);
+      return step;
+    }),
+  );
   $('pin').disabled =
     !ready ||
     busy ||
@@ -413,6 +435,14 @@ function render(rebuildRequests = true) {
   );
   $('document-host').textContent =
     (active?.result?.host || state.host) === 'zwcad' ? 'ZWCAD' : 'Rhino';
+  workspaceStatus.setFailures(
+    state.messages
+      .filter((entry) => ['failed', 'unknown', 'interrupted'].includes(entry.request?.state))
+      .map((entry) => ({
+        id: entry.id,
+        label: `${(entry.body || '작업').slice(0, 120)} · ${errors[entry.request?.result?.code || ''] || entry.request?.state}${entry.request?.result?.code ? ` (${entry.request.result.code})` : ''}`,
+      })),
+  );
   $('work-count').textContent = `${state.messages.length}개 작업`;
   $('workspace-status').textContent = state.messages.some((m) =>
     ['queued', 'running'].includes(m.request?.state),
@@ -578,7 +608,7 @@ $('ai-settings').onclick = () => {
   }).catch((error) => message(error.message));
 };
 const refreshAccount = accountIndicator(
-  $('model').parentElement!,
+  $('status-account'),
   () => models.find((m) => m.id === state.model)?.provider ?? '',
 );
 for (const model of models) el('option', model.name, $('model'), { value: model.id });
@@ -876,6 +906,11 @@ document.addEventListener('keydown', (e) => {
     }
     $('attach-menu').open = false;
     $('draft-menu').open = false;
+    const effortMenu = document.querySelector<HTMLDetailsElement>('#effort-menu')!;
+    if (effortMenu.open) {
+      effortMenu.open = false;
+      effortMenu.querySelector<HTMLElement>('summary')?.focus();
+    }
   }
   if (e.altKey && e.shiftKey && ['KeyL', 'KeyR'].includes(e.code)) {
     e.preventDefault();

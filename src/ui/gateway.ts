@@ -100,7 +100,7 @@ Object.assign(errors, {
 Object.assign(errors, {
   SOURCE_CHANGED:
     '기준 Rhino 파일이 외부에서 변경됐습니다. 수정된 파일을 다시 불러와 이어서 작업하세요.',
-  IMPORT_LIMIT: '현재 연결 경로의 객체 수 한도를 넘었습니다. 문서를 나누어 불러와 주세요.',
+  IMPORT_LIMIT: '현재 연결 경로의 객체 수 한도를 넘어 가져오지 못했습니다. 기존 표시를 유지합니다.',
   IMPORT_FAILED: '파일을 불러오지 못했습니다.',
 });
 
@@ -141,6 +141,8 @@ Object.assign(errors, {
     '이 후보는 현재 원본 적용을 지원하지 않습니다. 후보 파일을 내려받거나 별도 Rhino 문서로 열어 작업을 이어가세요.',
 });
 function apiError(code: string) {
+  if (typeof window !== 'undefined')
+    window.dispatchEvent(new CustomEvent('vide:api-error', { detail: errors[code] || code }));
   if (typeof window !== 'undefined' && ['UNAUTHORIZED', 'NETWORK_UNAVAILABLE'].includes(code))
     window.dispatchEvent(new CustomEvent('vide:connection-lost', { detail: code }));
   return Object.assign(new Error(errors[code] || `요청 처리 오류 (${code})`), { code });
