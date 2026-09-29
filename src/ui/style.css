@@ -2058,36 +2058,11 @@ body.panel-mode .app-shell {
   height: 100vh;
 }
 .panel-header {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 12px;
-  border-bottom: 1px solid var(--line);
   flex-shrink: 0;
+  border-bottom: 1px solid var(--line);
 }
 .panel-header[hidden] {
   display: none;
-}
-.panel-title {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-}
-.panel-title strong {
-  font-size: 12px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.panel-title small {
-  font-size: 10px;
-  color: var(--muted);
-}
-.panel-header button {
-  font-size: 11px;
-  padding: 5px 9px;
-  white-space: nowrap;
 }
 
 /* Dark theme (Rhino panel follows Rhino's appearance). */
@@ -3888,4 +3863,333 @@ body.panel-mode #conversation {
 #request[aria-busy='true'] {
   opacity: 0.55;
   cursor: progress;
+}
+
+/* Host panel (Design SCR-12): one web page for the Rhino panel and the ZWCAD palette. */
+.host-panel-head {
+  position: relative;
+  display: grid;
+  gap: 4px;
+  padding: 10px 12px 9px;
+}
+.host-panel-file {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+}
+.host-panel-file strong {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+}
+.host-badge {
+  flex-shrink: 0;
+  display: inline-grid;
+  place-items: center;
+  min-width: 20px;
+  height: 18px;
+  padding: 0 4px;
+  border-radius: 4px;
+  background: #e5ebe6;
+  color: #3d4d44;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+.host-badge[data-host='zwcad'] {
+  background: #fbe6de;
+  color: #9a4a33;
+}
+.host-panel-more {
+  flex-shrink: 0;
+  width: 26px;
+  height: 24px;
+  padding: 0 !important;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 16px;
+  line-height: 1;
+}
+.host-panel-more:hover,
+.host-panel-more[aria-expanded='true'] {
+  background: var(--soft);
+  color: inherit;
+}
+.host-panel-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  color: var(--muted);
+}
+.host-panel-status small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+}
+.host-dot {
+  flex-shrink: 0;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #b3b9b5;
+}
+.host-panel-head[data-state='connected'] .host-dot {
+  background: #3f8f5a;
+}
+.host-panel-head[data-state='live'] .host-dot {
+  background: #3f8f5a;
+  box-shadow: 0 0 0 3px rgba(63, 143, 90, 0.2);
+}
+.host-panel-head[data-state='lost'] .host-dot {
+  background: #c9604a;
+}
+.host-panel-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 3px;
+}
+.host-panel-project {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  color: var(--muted);
+}
+.host-panel-project:not(:empty)::before {
+  content: '프로젝트 · ';
+}
+.host-sync {
+  padding: 4px 12px !important;
+  border: 0;
+  border-radius: 5px;
+  background: #292f2e;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+}
+.host-sync:hover:not(:disabled) {
+  background: #46564c;
+}
+.host-sync:disabled {
+  opacity: 0.6;
+}
+.host-live {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 4px !important;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 11px;
+}
+.host-live-track {
+  position: relative;
+  width: 26px;
+  height: 15px;
+  border-radius: 8px;
+  background: #cfd5d1;
+  transition: background 0.15s;
+}
+.host-live-track span {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: #fff;
+  transition: transform 0.15s;
+}
+.host-live[aria-checked='true'] {
+  color: #2f7a4a;
+  font-weight: 600;
+}
+.host-live[aria-checked='true'] .host-live-track {
+  background: #3f8f5a;
+}
+.host-live[aria-checked='true'] .host-live-track span {
+  transform: translateX(11px);
+}
+.host-panel-menu {
+  position: absolute;
+  top: 36px;
+  right: 10px;
+  z-index: 20;
+  display: grid;
+  min-width: 180px;
+  padding: 4px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: #fff;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+}
+.host-panel-menu button {
+  padding: 7px 10px !important;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  text-align: left;
+  font-size: 12px;
+}
+.host-panel-menu button:hover {
+  background: var(--soft);
+}
+#panel-card[hidden] {
+  display: none;
+}
+.host-panel-card {
+  display: grid;
+  justify-items: start;
+  gap: 8px;
+  margin: 16px 12px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--soft);
+  font-size: 12px;
+  line-height: 1.55;
+}
+.host-panel-card > strong {
+  font-size: 14px;
+}
+.host-panel-card p {
+  margin: 0;
+  color: var(--muted);
+}
+.host-panel-card small {
+  color: var(--muted);
+  font-size: 10px;
+}
+.host-panel-primary {
+  padding: 8px 14px !important;
+  border: 0;
+  border-radius: 6px;
+  background: #2f5aa8;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+}
+.host-panel-primary:hover {
+  background: #264c8f;
+}
+body.panel-unlinked #recent-section,
+body.panel-unlinked .composer-wrap,
+body.panel-unlinked .chat-heading {
+  display: none !important;
+}
+#panel-footer {
+  flex-shrink: 0;
+  padding: 6px 12px 8px;
+  border-top: 1px solid var(--line);
+}
+#panel-footer[hidden] {
+  display: none;
+}
+.selection-chip {
+  border-color: #b9c9e8 !important;
+  background: #edf2fb !important;
+  color: #2f5aa8 !important;
+  font-weight: 600;
+}
+
+/* Account usage bars (panel footer and the app status bar). */
+/* The panel has no work-history column; its footer stays at the bottom. */
+body.panel-mode .chat-empty-history {
+  display: none;
+}
+body.panel-mode #permission {
+  min-width: 0;
+  max-width: none;
+  width: auto;
+}
+#panel-footer {
+  margin-top: auto;
+}
+.usage-bars {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+  font-size: 10px;
+}
+.usage-service {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.usage-service b {
+  font-weight: 600;
+}
+.usage-meter {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.usage-track {
+  position: relative;
+  width: 38px;
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(127, 136, 131, 0.28);
+  overflow: hidden;
+}
+.usage-track i {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: #3f8f5a;
+}
+.usage-meter[data-level='high'] .usage-track i {
+  background: #d08a2e;
+}
+.usage-meter[data-level='full'] .usage-track i {
+  background: #c9604a;
+}
+.usage-meter small,
+.usage-off {
+  color: var(--muted);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+.usage-limit {
+  color: #c9604a;
+  font-weight: 700;
+}
+.statusbar .usage-bars:empty {
+  display: none;
+}
+
+:root[data-theme='dark'] .host-badge {
+  background: #2c3531;
+  color: #b9cbbf;
+}
+:root[data-theme='dark'] .host-badge[data-host='zwcad'] {
+  background: #3a2a24;
+  color: #e7a58f;
+}
+:root[data-theme='dark'] .host-sync {
+  background: #dde3df;
+  color: #1c201f;
+}
+:root[data-theme='dark'] .host-panel-menu {
+  background: #232827;
+}
+:root[data-theme='dark'] .host-live-track {
+  background: #3b4441;
+}
+:root[data-theme='dark'] .selection-chip {
+  border-color: #3a4a6a !important;
+  background: #1f2633 !important;
+  color: #8fb0f0 !important;
 }

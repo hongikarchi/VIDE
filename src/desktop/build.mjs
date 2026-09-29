@@ -94,11 +94,19 @@ await mkdir(cadConnectionRuntime, { recursive: true });
 for (const file of [
   'VIDE.Zwcad.Connection.dll',
   ...zwcadAssemblies.filter((name) => name !== 'VIDE.Zwcad.Worker.dll'),
+  // The palette's web view (Design SCR-12).
+  'Microsoft.Web.WebView2.Core.dll',
+  'Microsoft.Web.WebView2.WinForms.dll',
 ])
   await copyFile(
     join(root, '.vide/build/zwcad-connection', file),
     join(cadConnectionRuntime, file),
   );
+// The native WebView2 loader sits next to the plugin ("연결 프로그램" copies the folder's DLLs only).
+await copyFile(
+  join(root, '.vide/build/zwcad-connection/runtimes/win-x64/native/WebView2Loader.dll'),
+  join(cadConnectionRuntime, 'WebView2Loader.dll'),
+);
 // Structure analysis core (Rust Node-API addon, PLAN-17 T-039): ship only the built library and the
 // licence texts of the crates compiled into it.
 const cargo = existsSync(join(homedir(), '.cargo', 'bin', 'cargo.exe'))

@@ -29,3 +29,4 @@
 {"request":"그러면 일단 계획만 적어놓고, 지금 구조 jig를 만지면서 아예 jig랑 우리 패널 layout 자체에 대한 설계 + ai와의 소통 방식 등을 만지고 있어서 거기에서 한번에 마무리하는게 나아보인다","files":["docs/plans/PLAN-08-project-knowledge.md"]}
 {"request":"jev 판단으로 끝낼지, AI에 보낼지를 그냥 jev가 판정하면 안되나? 규칙으로 하니까 칩을 눌러야 하는 횟수가 너무 많아.","files":["src/ai/request-router.ts","src/server/server.ts","src/ui/request-route.ts","src/ui/app.ts","src/ui/style.css"]}
 {"request":"JIG에서 왼쪽 아래에 개발용 확장은 뭔 버튼인겨 / 버튼을 빼는거는 맞는 것 같고","files":["src/ui/jigs.tsx","src/ui/app.ts","src/ui/extensions.tsx"]}
+{"request":"rhino panel 디자인도 좀 필요할 듯. UI가 vino때보다 왤케 구려진거지 … cad도 마찬가지 / cad 패널도 웹 화면으로, 계정 사용량 막대를 vide app 상태창에도","files":["src/ui/host-panel.tsx","src/ui/usage-bars.ts","src/ui/app.ts","src/ui/index.html","src/ui/style.css","hosts/common/PanelPage.cs","hosts/rhino/worker/ConnectionPanel.cs","hosts/zwcad/connection/ConnectionPanel.cs","src/desktop/build.mjs"]}

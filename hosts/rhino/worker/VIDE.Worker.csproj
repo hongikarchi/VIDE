@@ -14,4 +14,8 @@
     <Reference Include="Microsoft.CodeAnalysis"><HintPath>$(RhinoSystem)\Microsoft.CodeAnalysis.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="Microsoft.CodeAnalysis.CSharp"><HintPath>$(RhinoSystem)\Microsoft.CodeAnalysis.CSharp.dll</HintPath><Private>false</Private></Reference>
   </ItemGroup>
+  <!-- The host panel page helpers, shared with the ZWCAD palette (Design SCR-12). -->
+  <ItemGroup>
+    <Compile Include="..\..\common\PanelPage.cs" Link="PanelPage.cs" />
+  </ItemGroup>
 </Project>

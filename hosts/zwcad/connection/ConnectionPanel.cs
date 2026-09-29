@@ -6,6 +6,9 @@ using System.Collections.Generic;
 using System.Windows.Forms;
 using ZwSoft.ZwCAD.Runtime;
 using ZwSoft.ZwCAD.Windows;
+using Microsoft.Web.WebView2.Core;
+using Microsoft.Web.WebView2.WinForms;
+using Vide.HostPanel;
 using Cad = ZwSoft.ZwCAD.ApplicationServices.Application;
 
 [assembly: ExtensionApplication(typeof(Vide.Zwcad.Connection.ConnectionStartup))]
@@ -43,59 +46,112 @@ namespace Vide.Zwcad.Connection
         {
             if (palette == null) {
                 palette = new PaletteSet("VIDE CAD", new Guid("7393E7C2-156D-46DB-8898-B8DF5F1BBBD6"));
-                palette.MinimumSize = new System.Drawing.Size(260, 280);
-                palette.Size = new System.Drawing.Size(300, 360);
+                palette.MinimumSize = new System.Drawing.Size(300, 420);
+                palette.Size = new System.Drawing.Size(380, 760);
                 palette.Add("연결", new ConnectionView());
             }
             palette.Visible = true;
         }
     }
+    /// <summary>
+    /// The palette shows VIDE's panel page (Design SCR-12) for the active drawing in WebView2: the
+    /// drawing, its connection, Sync, Live Sync, the work and the composer are on that page. The page
+    /// asks for plugin actions with "vide://action" navigations (Link dialog, Unlink, Live, reload,
+    /// open VIDE), handled here.
+    /// </summary>
     internal sealed class ConnectionView : UserControl
     {
-        private readonly Label status = new Label { AutoSize = true, MaximumSize = new System.Drawing.Size(270, 0) };
-        private readonly Label notice = new Label { AutoSize = true, MaximumSize = new System.Drawing.Size(270, 0) };
-        private readonly Button connect, live;
+        private readonly WebView2 web = new WebView2 { Dock = DockStyle.Fill };
+        private readonly Label fallback = new Label { Dock = DockStyle.Fill, Padding = new Padding(12), Visible = false };
         private readonly Timer timer = new Timer { Interval = 1000 };
+        private bool ready;
+        private string loaded = "";
         internal ConnectionView()
         {
             Dock = DockStyle.Fill;
-            var layout = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown, WrapContents = false, AutoScroll = true, Padding = new Padding(12) };
-            layout.Controls.Add(status);
-            // Link chooses a VIDE project and links this drawing; Unlink ends this window's connection only.
-            connect = Add(layout, "Link", () => {
-                var doc = Cad.DocumentManager.MdiActiveDocument; AttachedDocument connection;
-                if (doc == null) throw new InvalidOperationException("열린 도면이 없습니다.");
-                if (AttachedDocument.Connections.TryGetValue(doc, out connection)) connection.Dispose(); else EngineLink.LinkDocument(doc, RefreshState);
-            });
-            Add(layout, "지금 Sync", () => {
-                AttachedDocument c; var doc = Cad.DocumentManager.MdiActiveDocument;
-                if (doc == null || !AttachedDocument.Connections.TryGetValue(doc, out c)) throw new InvalidOperationException("먼저 Link로 이 도면을 VIDE 프로젝트에 연결하세요.");
-                c.Sync(); notice.Text = "VIDE로 Sync를 요청했습니다.";
-            });
-            live = Add(layout, "Live Sync 켜기", () => { var c = Current(); c.Live = !c.Live; if (c.Live) c.Sync(); });
-            Add(layout, "VIDE 열기 / 인증 복구", () => {
-                var path = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "VIDE", "launch.json");
-                var launch = new JavaScriptSerializer().Deserialize<Dictionary<string, object>>(File.ReadAllText(path));
-                var uri = new Uri(Convert.ToString(launch["url"]));
-                if (uri.Scheme != "http" || uri.Host != "127.0.0.1" || uri.UserInfo.Length != 0) throw new InvalidOperationException("로컬 VIDE 주소를 확인하세요.");
-                Process.Start(new ProcessStartInfo(uri.AbsoluteUri) { UseShellExecute = true });
-            });
-            notice.Text = "VIDE의 수정 요청(Accept edits·Auto)은 연결한 도면에 바로 반영되며 U(UNDO) 한 번으로 되돌립니다. 파일 저장은 하지 않습니다.";
-            layout.Controls.Add(notice); Controls.Add(layout);
-            timer.Tick += (_, __) => RefreshState(); timer.Start(); RefreshState();
+            Controls.Add(web);
+            Controls.Add(fallback);
+            timer.Tick += (_, __) => RefreshState();
+            Start();
         }
-        private AttachedDocument Current() { var doc = Cad.DocumentManager.MdiActiveDocument; if (doc == null) throw new InvalidOperationException("열린 도면이 없습니다."); return AttachedDocument.Connect(doc); }
-        private Button Add(Control layout, string text, Action action) {
-            var button = new Button { Text = text, Width = 250, Height = 32 };
-            button.Click += (_, __) => { try { action(); RefreshState(); } catch (System.Exception error) { notice.Text = error.Message; } };
-            layout.Controls.Add(button); return button;
+        private async void Start()
+        {
+            try
+            {
+                // The WebView2 loader ships next to this plugin; its data stays in VIDE's folder.
+                var folder = Path.GetDirectoryName(typeof(ConnectionView).Assembly.Location);
+                var native = Path.Combine(folder, "runtimes", "win-x64", "native");
+                CoreWebView2Environment.SetLoaderDllFolderPath(
+                    File.Exists(Path.Combine(folder, "WebView2Loader.dll")) ? folder : native);
+                var data = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "VIDE", "webview-zwcad");
+                var environment = await CoreWebView2Environment.CreateAsync(null, data);
+                await web.EnsureCoreWebView2Async(environment);
+                web.CoreWebView2.Settings.AreDefaultContextMenusEnabled = false;
+                web.CoreWebView2.NavigationStarting += (_, e) =>
+                {
+                    Uri uri;
+                    var action = Uri.TryCreate(e.Uri, UriKind.Absolute, out uri) ? PanelPage.Action(uri) : null;
+                    if (action == null) return;
+                    e.Cancel = true;
+                    BeginInvoke((Action)(() => Run(action)));
+                };
+                ready = true;
+                RefreshState();
+                timer.Start();
+            }
+            catch (System.Exception error)
+            {
+                web.Visible = false;
+                fallback.Visible = true;
+                fallback.Text = "이 PC에서 웹 패널을 열 수 없습니다(" + error.Message + "). 명령 VIDECADLink로 연결하고 VIDE 창에서 작업하세요.";
+            }
         }
-        private void RefreshState() {
-            var doc = Cad.DocumentManager.MdiActiveDocument; AttachedDocument c = null;
-            if (doc != null) AttachedDocument.Connections.TryGetValue(doc, out c);
-            status.Text = (doc == null ? "열린 도면 없음" : Path.GetFileName(doc.Name)) + "\n" + (c == null ? "연결 안 됨" : "연결됨" + (c.LinkedProject != null ? " · " + c.LinkedProject.Name : "")) + "\n" + (c?.LastRead == null ? "아직 모델 조회 없음" : "마지막 조회 " + c.LastRead.Value.ToString("HH:mm:ss"));
-            connect.Text = c == null ? "Link" : "Unlink"; live.Text = c != null && c.Live ? "Live Sync 끄기" : "Live Sync 켜기";
+        /// <summary>An action the panel page asked for.</summary>
+        private void Run(string action)
+        {
+            try
+            {
+                var doc = Cad.DocumentManager.MdiActiveDocument;
+                AttachedDocument connection = null;
+                if (doc != null) AttachedDocument.Connections.TryGetValue(doc, out connection);
+                switch (action)
+                {
+                    case "link":
+                        if (doc == null) throw new InvalidOperationException("열린 도면이 없습니다.");
+                        EngineLink.LinkDocument(doc, () => { loaded = ""; RefreshState(); });
+                        break;
+                    case "unlink": if (connection != null) connection.Dispose(); break;
+                    case "live":
+                        if (connection != null) { connection.Live = !connection.Live; if (connection.Live) connection.Sync(); }
+                        break;
+                    case "open-vide": PanelPage.OpenVide(); break;
+                }
+            }
+            catch (System.Exception error) { MessageBox.Show(this, error.Message, "VIDE"); }
+            if (action == "link" || action == "unlink" || action == "reload") loaded = "";
+            RefreshState();
         }
-        protected override void Dispose(bool disposing) { if (disposing) timer.Dispose(); base.Dispose(disposing); }
+        private bool Dark()
+        {
+            var color = BackColor;
+            return color.R * 0.299 + color.G * 0.587 + color.B * 0.114 < 128;
+        }
+        private void RefreshState()
+        {
+            if (!ready) return;
+            var doc = Cad.DocumentManager.MdiActiveDocument;
+            AttachedDocument connection = null;
+            if (doc != null) AttachedDocument.Connections.TryGetValue(doc, out connection);
+            var launch = PanelPage.LaunchUrl();
+            var dark = Dark();
+            var target = launch == null
+                ? "about:vide-offline"
+                : PanelPage.Url(launch, "zwcad", doc == null ? "" : Path.GetFileName(doc.Name), connection?.Instance, 1, connection?.LinkedProject?.Id, dark);
+            if (target == loaded) return;
+            loaded = target;
+            if (launch == null) web.CoreWebView2.NavigateToString(PanelPage.Offline(dark));
+            else web.CoreWebView2.Navigate(target);
+        }
+        protected override void Dispose(bool disposing) { if (disposing) { timer.Dispose(); web.Dispose(); } base.Dispose(disposing); }
     }
 }

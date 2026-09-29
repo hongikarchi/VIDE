@@ -41,6 +41,8 @@ import {
   type LinkRow,
   type OfflineStatus,
 } from './links.tsx';
+import { renderLinkCard, renderPanelHeader, type PanelState } from './host-panel.tsx';
+import { mountUsageBars } from './usage-bars.ts';
 import { composeLayers, displayIdOf, layerSignature, sourceIdOf } from './layers.ts';
 import { jevRoute, routeRequest, routeSubjects, type Route } from './request-route.ts';
 import { renderRequests } from './requests.tsx';
@@ -69,9 +71,18 @@ import { initializeWorkspacePanels } from './workspace-panels.ts';
 import { createViewport } from './viewport.ts';
 import { initializeDisplaySettings } from './display-settings.ts';
 
-// Rhino panel mode (?panel=rhino): the chat column only, bound to one attached document.
+// Host panel mode (?panel=rhino|zwcad, Design SCR-12): the chat column only, bound to one
+// attached document of the Rhino panel or the ZWCAD palette.
 const panelParams = new URLSearchParams(location.search);
-const panelMode = panelParams.get('panel') === 'rhino';
+const panelHost = (['rhino', 'zwcad'] as const).find((host) => host === panelParams.get('panel'));
+const panelMode = panelHost !== undefined;
+/** What the panel header shows; refreshed by the host poll. */
+const panelView: {
+  file: string;
+  state: PanelState;
+  detail: string;
+  selection: string[];
+} = { file: panelParams.get('name') ?? '', state: 'checking', detail: '', selection: [] };
 // Rhino's shared pinned set for the attached document, mirrored from the Rhino plugin.
 let hostPinned: string[] = [],
   hostSelectionVersion = -1,
@@ -454,6 +465,18 @@ async function pollLinks() {
     if (project?.id !== projectId) return;
     links = next;
     linksLoaded = true;
+    // The host panel works on its own file: requests from it target that file.
+    if (panelMode && connectedTarget) {
+      const own = links.find(
+        (link) =>
+          link.connection?.instance === connectedTarget?.instance &&
+          link.connection?.documentId === connectedTarget?.documentId,
+      );
+      if (own && activeLayer !== own.id) {
+        activeLayer = own.id;
+        applyActiveLayer();
+      }
+    }
     if (offlineAsked !== projectId) {
       offlineAsked = projectId;
       void pollOffline();
@@ -535,6 +558,7 @@ function dismissInboxItem(item: InboxItem) {
   );
 }
 function renderLinkPanel() {
+  renderPanel();
   renderLinks($('host-document-controls'), {
     links,
     projectName: project?.name,
@@ -842,6 +866,20 @@ function render(rebuildRequests = true) {
       render();
     }),
   );
+  // Host panel: what is selected in Rhino/CAD right now, one click to attach (Design SCR-12).
+  if (panelMode && panelView.selection.length) {
+    const chip = el(
+      'button',
+      `${panelHost === 'zwcad' ? 'CAD' : 'Rhino'} 선택 ${panelView.selection.length}개 첨부`,
+      $('context'),
+      {
+        type: 'button',
+        class: 'chip selection-chip',
+        title: '지금 고른 객체를 이 요청의 대상으로 첨부합니다',
+      },
+    );
+    chip.onclick = () => void attachPanelSelection();
+  }
   // Several files on screen: say which one this request changes (SPEC-01.11 요청 대상).
   const target = currentLayers.find(
     (layer) => layer.requestId === (state.baseRequestId ?? displayedResult),
@@ -1947,6 +1985,7 @@ async function renameProject(name: string) {
   }
 }
 function renderHeading() {
+  renderPanel();
   // Link back to the account site's project list when this PC is signed in.
   const home = $('rail-home') as HTMLAnchorElement;
   home.hidden = !accountSite;
@@ -2101,7 +2140,62 @@ if (panelMode) {
   const documentId = Number(panelParams.get('document'));
   const instance = panelParams.get('instance') ?? '';
   if (instance && documentId > 0) connectedTarget = { instance, documentId };
+  else {
+    // Not linked yet: one card with the Link action; nothing to send a request about.
+    panelView.state = 'unlinked';
+    document.body.classList.add('panel-unlinked');
+    renderLinkCard($('panel-card'), panelHost!, panelView.file);
+    $('panel-card').hidden = false;
+  }
   $('panel-header').hidden = false;
+  $('panel-footer').hidden = false;
+  renderPanel();
+}
+function renderPanel() {
+  if (!panelMode) return;
+  renderPanelHeader($('panel-header'), {
+    host: panelHost!,
+    file: panelView.file,
+    state: panelView.state,
+    detail: panelView.detail,
+    project: project?.name,
+    syncing: linkSyncing,
+    onSync: () => {
+      const target = connectedTarget;
+      const link = links.find(
+        (entry) =>
+          entry.connection?.instance === target?.instance &&
+          entry.connection?.documentId === target?.documentId,
+      );
+      if (link) void syncLink(link, 'manual');
+      else
+        message(
+          '이 파일이 아직 이 프로젝트의 연결 파일 목록에 없습니다. ⋯ → 다른 프로젝트에 연결로 다시 연결하세요.',
+        );
+    },
+  });
+}
+/** The panel's "선택 N개 첨부": Rhino keeps them as its pinned set; CAD attaches them to the draft. */
+async function attachPanelSelection() {
+  try {
+    const target = connectedTarget;
+    if (!target) throw Error('파일이 연결되지 않았습니다.');
+    if (panelHost === 'rhino') {
+      await setHostPins([...new Set([...hostPinned, ...panelView.selection])]);
+      if (!rhinoBasis(target)) message('첨부했습니다. 요청에 포함하려면 먼저 Sync 하세요.');
+      return;
+    }
+    const selection = hostSelectionSchema.parse(
+      await api(
+        `/host/selection?instance=${encodeURIComponent(target.instance)}&document=${target.documentId}`,
+      ),
+    );
+    const count = attachHostSelection(state, rhinoBasis(target)?.request, selection);
+    render();
+    message(count ? `${count}개 객체를 요청에 첨부했습니다.` : '먼저 Sync 하세요.');
+  } catch (cause) {
+    message(readableError(cause).message);
+  }
 }
 /** Rhino's pinned set is the source of truth while a Rhino document is attached. */
 function applyHostPins(ids: string[]) {
@@ -2146,19 +2240,39 @@ async function pollHostLink() {
         (doc.instance ?? catalog.instance) === target.instance && doc.id === target.documentId,
     );
     if (!item) {
-      if (panelMode) $('panel-state').textContent = 'Rhino 연결이 끊겼습니다 · Rhino 패널에서 연결';
+      if (panelMode && panelView.state !== 'lost') {
+        panelView.state = 'lost';
+        renderPanel();
+      }
       return;
     }
     const basis = rhinoBasis(target);
     if (panelMode) {
-      $('panel-doc').textContent = item.name;
-      $('panel-state').textContent = [
-        item.live ? 'Live Sync' : '연결됨',
+      panelView.file = item.name;
+      panelView.state = item.live ? 'live' : 'connected';
+      panelView.detail = [
         basis?.request.createdAt
-          ? 'Sync ' + new Date(basis.request.createdAt).toLocaleTimeString()
+          ? 'Sync ' +
+            new Date(basis.request.createdAt).toLocaleTimeString('ko-KR', {
+              hour: '2-digit',
+              minute: '2-digit',
+            })
           : 'Sync 필요',
-        `${item.objectCount.toLocaleString()}개 객체`,
+        `${item.objectCount.toLocaleString()}개`,
       ].join(' · ');
+      // Rhino reports its selection with the document; CAD is asked separately.
+      const selection =
+        panelHost === 'rhino'
+          ? (item.selectedIds ?? []).filter((id) => !(item.pinnedIds ?? []).includes(id))
+          : await api(
+              `/host/selection?instance=${encodeURIComponent(target.instance)}&document=${target.documentId}`,
+            )
+              .then((value) => hostSelectionSchema.parse(value).selectedIds)
+              .catch(() => panelView.selection);
+      const changed = selection.join() !== panelView.selection.join();
+      panelView.selection = selection;
+      renderPanel();
+      if (changed) render();
     }
     const pinned = item.pinnedIds ?? [];
     // Re-resolve when Rhino's pins change or a new Sync basis arrives.
@@ -2186,33 +2300,11 @@ async function pollHostLink() {
   }
 }
 setInterval(() => void pollHostLink(), 1200);
-$('panel-sync').onclick = () => {
-  const target = connectedTarget;
-  const link = links.find(
-    (entry) =>
-      entry.connection?.instance === target?.instance &&
-      entry.connection?.documentId === target?.documentId,
-  );
-  if (link) void syncLink(link, 'manual');
-  else message('이 문서를 먼저 Rhino 패널의 Link로 프로젝트에 연결하세요.');
-};
-$('panel-pin').onclick = async () => {
-  try {
-    if (!connectedTarget) throw Error('Rhino 문서가 연결되지 않았습니다.');
-    const catalog = hostDocumentsSchema.parse(await api('/host/attached-documents'));
-    const item = catalog.documents.find((doc) => doc.id === connectedTarget?.documentId);
-    const selection = item?.selectedIds ?? [];
-    if (!selection.length) throw Error('Rhino에서 고정할 객체를 먼저 선택하세요.');
-    await setHostPins([...new Set([...hostPinned, ...selection])]);
-    if (!rhinoBasis(connectedTarget)) message('고정했습니다. 요청에 포함하려면 먼저 Sync 하세요.');
-  } catch (cause) {
-    message(readableError(cause).message);
-  }
-};
-
 async function initializeWorkspace() {
   try {
     const linked = await connect();
+    // Usage needs the session that connect() just opened.
+    mountUsageBars(panelMode ? $('panel-footer') : $('usage-bars'));
     void workspaceStatus.refreshAccount();
     const catalog = modelsSchema.parse(await api('/models'));
     models.splice(0, models.length, ...catalog);

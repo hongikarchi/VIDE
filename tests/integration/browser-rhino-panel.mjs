@@ -144,11 +144,11 @@ try {
   assert.equal(await page.locator('#canvas').isVisible(), false);
   assert.equal(await page.evaluate(() => document.documentElement.dataset.theme), 'dark');
   await page.waitForFunction(() =>
-    document.querySelector('#panel-doc').textContent.includes('Panel test'),
+    document.querySelector('.host-panel-head strong')?.textContent.includes('Panel test'),
   );
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
-  // Pin Rhino's selection before any Sync: it is pending until the basis exists.
-  await page.locator('#panel-pin').click();
+  // Attach Rhino's selection (the composer chip) before any Sync: pending until the basis exists.
+  await page.locator('#context .selection-chip').filter({ hasText: 'Rhino 선택 1개 첨부' }).click();
   await page.waitForFunction(() =>
     document.querySelector('#context').textContent.includes('Sync 대기 1개'),
   );
@@ -159,7 +159,7 @@ try {
     document.querySelector('#context').textContent.includes('고정 객체 1개'),
   );
   // The panel's Sync button forces another Sync of the same linked file.
-  await page.locator('#panel-sync').click();
+  await page.locator('.host-panel-head').getByRole('button', { name: 'Sync', exact: true }).click();
   await page.waitForFunction(() => document.querySelector('#right'));
   while (captures < 2) await new Promise((resolve) => setTimeout(resolve, 20));
   // Pins changed in Rhino (another client) appear in the panel without a reload.

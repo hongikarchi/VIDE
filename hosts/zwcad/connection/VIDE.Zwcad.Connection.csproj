@@ -17,10 +17,13 @@
     <Reference Include="ZwDatabaseMgd"><HintPath>$(ZwcadDirectory)\ZwDatabaseMgd.dll</HintPath><Private>false</Private></Reference>
     <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies.net48" Version="1.0.3" PrivateAssets="all" />
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.11.0" />
+    <!-- The palette shows VIDE's panel page (Design SCR-12). -->
+    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.2903.40" />
   </ItemGroup>
   <!-- AI code on the open drawing uses the work-copy worker's compiler and API policy. -->
   <ItemGroup>
     <Compile Include="..\worker\SdkCompiler.cs" Link="SdkCompiler.cs" />
     <Compile Include="..\worker\CompilerDependencies.cs" Link="CompilerDependencies.cs" />
+    <Compile Include="..\..\common\PanelPage.cs" Link="PanelPage.cs" />
   </ItemGroup>
 </Project>

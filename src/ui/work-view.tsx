@@ -500,7 +500,8 @@ export function renderWork(
       />
     ) : (
       <div className="chat-empty">
-        요청을 보내면 진행 단계와 결과가 여기에 표시됩니다. 지난 작업은 왼쪽 작업 이력에서 엽니다.
+        요청을 보내면 진행 단계와 결과가 여기에 표시됩니다.
+        <span className="chat-empty-history"> 지난 작업은 왼쪽 작업 이력에서 엽니다.</span>
       </div>
     ),
   );
