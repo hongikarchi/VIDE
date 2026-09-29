@@ -1,0 +1,466 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>S-06 골조 배치 검토</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  /* app tokens (src/ui/style.css) — values unchanged */
+  --line:#dde1de; --muted:#737b7d; --coral:#d97660; --soft:#f6f7f4;
+  /* new names (RESEARCH-10 §6.1) */
+  --ink:#292c2d; --paper:#ffffff; --rail:#25292a;
+  --bar-base:#dfe2df; --bar-alt:#a9c4ad; --bar-strong:#4f7a60; --bar-actual:#d97660; --bar-na:#c9cecb;
+  --ok:#6f9a7a; --warn:#c9a24a; --ng:#c8553d; --na:#b8bdbb;
+  --zone-ok:#e3ede5; --zone-warn:#f3e7c6; --zone-no:#f2d3cc;
+  --fs-eyebrow:11px; --fs-small:12px; --fs-body:14px; --fs-lede:15px; --fs-h3:20px;
+  --fs-claim:28px; --fs-kpi:32px; --fs-headline:44px; --track-eyebrow:0.16em;
+  --s1:4px; --s2:8px; --s3:12px; --s4:16px; --s6:24px; --s8:32px; --s12:48px;
+  --radius:4px;
+  --font:'Pretendard','Noto Sans KR','Malgun Gothic',Arial,sans-serif;
+  --mono:'IBM Plex Mono',ui-monospace,Consolas,monospace;
+}
+* { box-sizing:border-box; }
+html { scroll-behavior:smooth; scroll-padding-top:80px; }
+body { margin:0; background:var(--paper); color:var(--ink); font:var(--fs-body)/1.6 var(--font); -webkit-font-smoothing:antialiased; font-variant-numeric:tabular-nums; word-break:keep-all; overflow-wrap:break-word; }
+.wrap { max-width:1344px; margin:0 auto; padding:0 24px; }
+b, strong { font-weight:700; }
+code, .mono { font-family:var(--mono); font-size:11.5px; }
+.nw { white-space:nowrap; }
+.sub { color:var(--muted); font-size:var(--fs-small); font-weight:400; }
+
+/* top bar */
+.top { position:sticky; top:0; z-index:5; background:var(--paper); border-bottom:1px solid var(--line); }
+.top .wrap { height:64px; display:flex; align-items:center; gap:var(--s6); }
+.brand { display:flex; align-items:center; gap:var(--s3); min-width:0; flex:1 1 0; }
+.brand .no { font-size:20px; font-weight:700; letter-spacing:-0.01em; }
+.brand .sep { width:1px; height:24px; background:var(--line); }
+.brand .nm { font-size:13px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.nav { display:flex; gap:22px; font-size:13px; }
+.nav a { color:var(--ink); text-decoration:none; white-space:nowrap; padding:4px 0; border-bottom:2px solid transparent; }
+.nav a:hover { border-bottom-color:var(--coral); }
+.nav a span { color:var(--muted); margin-right:4px; }
+.acts { display:flex; gap:var(--s2); flex:1 1 0; justify-content:flex-end; }
+.btn { display:inline-flex; align-items:center; gap:6px; height:34px; padding:0 12px; border:1px solid var(--line); border-radius:var(--radius); background:var(--paper); color:var(--ink); font:13px var(--font); text-decoration:none; cursor:pointer; white-space:nowrap; }
+.btn:hover { border-color:var(--ink); }
+.btn.primary { background:var(--ink); border-color:var(--ink); color:#fff; }
+
+/* hero */
+.hero { padding:56px 0 0; }
+.eyebrow { font-size:var(--fs-eyebrow); letter-spacing:var(--track-eyebrow); text-transform:uppercase; color:var(--muted); margin:0; }
+h1 { font-size:var(--fs-headline); line-height:1.2; letter-spacing:-0.025em; font-weight:700; margin:14px 0 18px; }
+.hero-grid { display:grid; grid-template-columns:minmax(0, 1fr) auto; gap:var(--s8); align-items:end; }
+.lede { font-size:var(--fs-lede); color:#565e60; max-width:600px; margin:0; }
+.lede b { color:var(--ink); }
+.src { display:flex; flex-wrap:wrap; gap:6px 20px; margin-top:18px; font-size:var(--fs-small); color:var(--muted); }
+.src span { display:inline-flex; align-items:center; gap:6px; }
+.src i { width:6px; height:6px; border-radius:50%; display:inline-block; }
+.toc-sum { text-align:right; font-size:var(--fs-small); color:var(--muted); line-height:1.75; }
+.toc-sum .ink { color:var(--ink); }
+.caveat { margin:28px 0 0; display:grid; grid-template-columns:auto minmax(0,1fr); gap:var(--s4); align-items:start; padding:14px 16px; background:var(--soft); border-left:2px solid var(--ink); font-size:13px; color:#454c4e; }
+.caveat .tag { background:var(--paper); }
+
+/* KPI strip */
+.kpis { display:grid; grid-template-columns:repeat(5, minmax(0, 1fr)); border-top:2px solid var(--ink); margin-top:36px; }
+.kpi { padding:18px 24px 20px 0; }
+.kpi + .kpi { padding-left:24px; border-left:1px solid var(--line); }
+.kpi h3 { font-size:var(--fs-small); font-weight:400; color:var(--muted); margin:0; }
+.kpi .v { font-size:var(--fs-kpi); font-weight:500; letter-spacing:-0.02em; line-height:1.25; margin:8px 0 8px; }
+.kpi .v small { font-size:13px; color:var(--muted); font-weight:400; margin-left:4px; letter-spacing:0; }
+.kpi .v.claim { color:var(--bar-actual); }
+.kpi p { font-size:var(--fs-small); color:var(--muted); margin:0; line-height:1.55; }
+
+/* sections */
+section.sec { border-top:1px solid var(--line); margin-top:72px; padding-top:64px; }
+.sec-head { display:grid; grid-template-columns:minmax(0, 1fr) auto; gap:var(--s6); align-items:end; margin-bottom:var(--s8); }
+h2 { font-size:var(--fs-claim); line-height:1.35; letter-spacing:-0.02em; font-weight:700; margin:12px 0 12px; max-width:880px; }
+.sec-lede { font-size:var(--fs-body); color:#565e60; max-width:680px; margin:0; }
+.sec-lede b { color:var(--ink); }
+.sec-meta { font-size:var(--fs-small); color:var(--muted); text-align:right; }
+h3.sub-h { font-size:var(--fs-h3); letter-spacing:-0.01em; margin:0 0 6px; font-weight:700; }
+.subsec { margin-top:56px; }
+
+/* verdict chips & tags */
+.vd { display:inline-flex; align-items:center; height:20px; padding:0 6px; border-radius:3px; font-size:11.5px; white-space:nowrap; color:var(--ink); }
+.vd-ng { background:var(--zone-no); } .vd-warn { background:var(--zone-warn); } .vd-ask { background:#e9ecea; }
+.vd-talk { background:#eef0ed; } .vd-ok { background:var(--zone-ok); } .vd-mid { background:#f6efdc; }
+.tag { display:inline-flex; align-items:center; height:22px; padding:0 8px; border:1px solid var(--ink); border-radius:2px; font-size:11.5px; white-space:nowrap; }
+.tag-block { border-color:var(--ng); color:var(--ng); }
+
+/* 01 plan + issues */
+.plan-grid { display:grid; grid-template-columns:minmax(0, 1.5fr) minmax(0, 1fr); gap:40px; align-items:start; }
+.plan { width:100%; height:auto; display:block; }
+.plan .pl-ax { font:10px var(--font); fill:#8a9396; }
+.plan .pl-note { font:10.5px var(--font); fill:#737b7d; }
+.plan .pl-zone { font:11px var(--font); fill:#3f6650; }
+.plan .pl-tag { font:10.5px var(--font); fill:#292c2d; paint-order:stroke; stroke:#fff; stroke-width:3px; }
+.plan .pl-len { font:600 10.5px var(--font); fill:#b4543f; paint-order:stroke; stroke:#fff; stroke-width:3px; }
+.plan .pl-row { font:700 11px var(--font); fill:#292c2d; }
+.plan .pl-no text { font:700 9.5px var(--font); fill:#fff; }
+.legend { display:flex; flex-wrap:wrap; gap:8px 18px; margin-top:14px; font-size:var(--fs-small); color:#565e60; }
+.legend span { display:inline-flex; align-items:center; gap:6px; }
+.legend svg { width:18px; height:14px; flex:none; }
+.fig-cap { font-size:var(--fs-small); color:var(--muted); margin:10px 0 0; }
+table { border-collapse:collapse; width:100%; }
+.tbl th { font-size:11.5px; font-weight:400; color:var(--muted); text-align:left; padding:8px 8px; border-bottom:1px solid var(--ink); white-space:nowrap; vertical-align:bottom; }
+.tbl td { padding:7px 8px; border-bottom:1px solid var(--line); vertical-align:middle; font-size:13px; }
+.tbl .num { text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; }
+.tbl th.num { text-align:right; }
+.tbl td.bad { font-weight:700; }
+.tbl td.no { width:28px; }
+.dot-no { display:inline-grid; place-items:center; width:18px; height:18px; border-radius:50%; background:var(--ink); color:#fff; font-size:10px; font-weight:700; }
+.tbl-cap { display:flex; justify-content:space-between; align-items:baseline; margin-bottom:8px; }
+.tbl-cap h4 { margin:0; font-size:14px; }
+.tbl-cap span { font-size:var(--fs-small); color:var(--muted); }
+.tbl tfoot td { border-top:1px solid var(--ink); border-bottom:0; font-weight:700; }
+
+/* 01·A cards */
+.alt-key { display:flex; gap:18px; flex-wrap:wrap; font-size:var(--fs-small); color:#565e60; margin:0 0 20px; }
+.alt-key span { display:inline-flex; align-items:center; gap:6px; }
+.alt-key i { width:12px; height:12px; border-radius:2px; display:inline-block; }
+.cards { display:grid; grid-template-columns:repeat(4, minmax(0, 1fr)); gap:0; }
+.card { padding:0 24px; border-left:1px solid var(--line); }
+.card:first-child { padding-left:0; border-left:0; }
+.card header { display:flex; justify-content:space-between; align-items:baseline; gap:8px; }
+.card h4 { font-size:16px; margin:0; font-weight:700; white-space:nowrap; }
+.card .meta { font-size:11.5px; color:var(--muted); text-align:right; }
+.card .tag { margin:10px 0 16px; }
+.cb-row { display:grid; grid-template-columns:92px minmax(0, 1fr); align-items:center; gap:10px; height:30px; }
+.cb-l { font-size:var(--fs-small); color:#565e60; text-align:right; white-space:nowrap; }
+.cb-track { position:relative; height:18px; margin-right:34px; }
+.cb-bar { position:absolute; left:0; top:0; bottom:0; border-radius:0 2px 2px 0; }
+.cb-v { position:absolute; top:50%; transform:translate(6px, -50%); font-size:13px; font-weight:700; }
+.cb-v.zero { color:var(--muted); font-weight:400; transform:translate(0, -50%); }
+.b-base { background:var(--bar-base); } .b-alt { background:var(--bar-alt); } .b-strong { background:var(--bar-strong); } .b-actual { background:var(--bar-actual); } .b-na { background:var(--bar-na); }
+
+/* 02 spans */
+.span-grid { display:grid; grid-template-columns:minmax(0, 1.55fr) minmax(0, 1fr); gap:56px; align-items:start; }
+.sp { position:relative; }
+.sp-axis { display:grid; grid-template-columns:168px minmax(0, 1fr) 64px; gap:12px; font-size:11px; color:var(--muted); margin-bottom:6px; }
+.sp-axis .ax { position:relative; height:14px; }
+.sp-axis .ax span { position:absolute; transform:translateX(-50%); }
+.sp-row { display:grid; grid-template-columns:168px minmax(0, 1fr) 64px; gap:12px; align-items:center; height:32px; }
+.sp-l { display:flex; flex-direction:column; line-height:1.2; font-size:13px; }
+.sp-l .sub { font-size:11px; }
+.sp-track { position:relative; height:20px; }
+.sp-bar { position:absolute; left:0; top:0; bottom:0; border-radius:0 2px 2px 0; display:flex; align-items:center; justify-content:flex-end; }
+.sp-v { position:absolute; top:50%; transform:translate(6px, -50%); font-size:12.5px; font-weight:700; color:var(--ink); background:var(--paper); padding:0 2px; }
+.sp-limit { position:absolute; top:-4px; bottom:-4px; border-left:1.5px dashed var(--ink); pointer-events:none; }
+.sp-limit span { position:absolute; bottom:-22px; left:0; transform:translateX(-50%); font-size:11px; white-space:nowrap; color:var(--ink); background:var(--paper); padding:0 4px; }
+.sp-lines { position:absolute; left:180px; right:76px; top:20px; bottom:0; pointer-events:none; }
+.side h4 { font-size:14px; margin:0 0 4px; }
+.side p { font-size:13px; color:#565e60; margin:0 0 16px; }
+.ratio { margin:0 0 22px; }
+.ratio .lab { display:flex; justify-content:space-between; font-size:var(--fs-small); color:#565e60; margin-bottom:6px; }
+.ratio .lab b { color:var(--ink); font-size:20px; font-weight:500; }
+.ratio .bar { display:flex; height:14px; gap:2px; }
+.ratio .bar span { display:block; height:100%; }
+.callout { border:1px solid var(--line); border-radius:var(--radius); padding:16px 18px; }
+.callout .tag { margin-bottom:10px; }
+.callout p { margin:0; font-size:13px; color:#454c4e; }
+
+/* 03 checks */
+.combo { display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); border-top:1px solid var(--ink); border-bottom:1px solid var(--line); margin-bottom:40px; }
+.combo > div { padding:14px 20px 16px 0; }
+.combo > div + div { padding-left:20px; border-left:1px solid var(--line); }
+.combo h4 { font-size:var(--fs-small); color:var(--muted); font-weight:400; margin:0 0 6px; }
+.combo ul { margin:0; padding:0; list-style:none; font-size:13px; }
+.combo li { display:flex; justify-content:space-between; gap:12px; padding:2px 0; }
+.combo li span:last-child { color:var(--muted); font-size:11.5px; white-space:nowrap; }
+.combo .unchecked li::before { content:'—'; color:var(--muted); margin-right:8px; }
+.combo .unchecked li { justify-content:flex-start; }
+.check-grid { display:grid; grid-template-columns:minmax(0, 1fr) minmax(0, 1.25fr); gap:56px; align-items:start; }
+.hg { display:grid; grid-template-columns:repeat(7, minmax(0, 1fr)); gap:8px; height:240px; align-items:end; position:relative; padding-top:18px; border-bottom:1px solid var(--ink); }
+.hg-col { display:flex; flex-direction:column; align-items:stretch; justify-content:flex-end; height:100%; position:relative; }
+.hg-bar { display:block; border-radius:2px 2px 0 0; }
+.hg-n { text-align:center; font-size:12.5px; font-weight:700; margin-bottom:4px; }
+.hg-l { position:absolute; bottom:-22px; left:0; right:0; text-align:center; font-size:11px; color:var(--muted); white-space:nowrap; }
+.hg-target { position:absolute; top:0; bottom:0; border-left:1.5px dashed var(--ink); }
+.hg-target span { position:absolute; top:-2px; left:6px; font-size:11px; white-space:nowrap; }
+.hg-foot { margin-top:34px; display:flex; flex-wrap:wrap; gap:6px 18px; font-size:var(--fs-small); color:#565e60; }
+.hg-foot span { display:inline-flex; align-items:center; gap:6px; }
+.hg-foot i { width:12px; height:12px; border-radius:2px; display:inline-block; }
+.mini { display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:0; margin-bottom:24px; border-top:1px solid var(--line); }
+.mini > div { padding:12px 16px 0 0; }
+.mini > div + div { padding-left:16px; border-left:1px solid var(--line); }
+.mini h4 { font-size:var(--fs-small); color:var(--muted); font-weight:400; margin:0; }
+.mini .v { font-size:24px; font-weight:500; letter-spacing:-0.01em; margin:4px 0 2px; }
+.mini p { margin:0; font-size:11.5px; color:var(--muted); }
+.mk { font-weight:700; white-space:nowrap; }
+.mk i { font-style:normal; font-weight:400; color:var(--muted); }
+
+/* 04 schedule */
+.cp { margin:0 0 36px; }
+.cp-bar { display:flex; gap:2px; height:22px; }
+.cp-seg { display:block; }
+.cp-seg:first-child { border-radius:2px 0 0 2px; } .cp-seg:last-child { border-radius:0 2px 2px 0; }
+.cp-labs { display:flex; gap:2px; margin-top:8px; }
+.cp-lab { display:flex; flex-direction:column; font-size:12px; min-width:0; padding-right:8px; overflow:hidden; }
+.cp-lab b { font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.cp-lab span { color:var(--muted); font-size:11.5px; white-space:nowrap; }
+.tbl td.note { color:var(--muted); font-size:12px; }
+.mark-rule { font-size:var(--fs-small); color:var(--muted); margin:12px 0 0; }
+
+/* 05 ledger */
+.ledger td { vertical-align:top; padding-top:11px; padding-bottom:11px; }
+.ledger td.q { font-weight:500; max-width:300px; }
+.ledger .ev { font-size:12px; color:#565e60; }
+.ledger .evi { display:block; white-space:nowrap; }
+.ledger .evi code { color:var(--muted); margin-left:2px; }
+.ledger td.no { color:var(--muted); font-size:12px; }
+.not-reviewed { margin-top:40px; display:grid; grid-template-columns:220px minmax(0, 1fr); gap:24px; border-top:1px solid var(--ink); padding-top:16px; }
+.not-reviewed h4 { margin:0; font-size:14px; }
+.not-reviewed p { margin:4px 0 0; font-size:12px; color:var(--muted); }
+.chips { display:flex; flex-wrap:wrap; gap:8px; align-items:flex-start; align-content:flex-start; }
+.chips span { border:1px solid var(--line); border-radius:2px; padding:3px 10px; font-size:12.5px; }
+
+/* footer */
+.foot { margin-top:96px; background:var(--rail); color:#c9cecc; }
+.foot .wrap { padding-top:32px; padding-bottom:36px; display:grid; grid-template-columns:minmax(0, 1.4fr) minmax(0, 1fr); gap:40px; }
+.foot h4 { color:#fff; font-size:13px; margin:0 0 8px; font-weight:700; }
+.foot p { margin:0; font-size:12.5px; line-height:1.7; }
+.foot .gates { display:flex; flex-direction:column; gap:4px; font-size:12.5px; }
+.foot .gates span::before { content:'✓'; color:#a9c4ad; margin-right:8px; }
+.foot .open-in { margin-top:14px; font-size:12px; color:#8a9396; }
+
+@media (max-width: 1100px) {
+  .nav { display:none; }
+  .plan-grid, .span-grid, .check-grid { grid-template-columns:minmax(0, 1fr); }
+  .cards { grid-template-columns:repeat(2, minmax(0, 1fr)); row-gap:32px; }
+  .card:nth-child(3) { padding-left:0; border-left:0; }
+  .kpis { grid-template-columns:repeat(3, minmax(0, 1fr)); }
+  .kpi:nth-child(4) { padding-left:0; border-left:0; }
+}
+@media (max-width: 700px) {
+  .wrap { padding:0 16px; }
+  h1 { font-size:32px; } h2 { font-size:22px; }
+  .hero-grid, .sec-head, .foot .wrap, .not-reviewed { grid-template-columns:minmax(0, 1fr); }
+  .toc-sum, .sec-meta { text-align:left; }
+  .kpis { grid-template-columns:repeat(2, minmax(0, 1fr)); }
+  .kpi { padding-left:0 !important; border-left:0 !important; }
+  .cards, .combo, .mini { grid-template-columns:minmax(0, 1fr); }
+  .card { padding-left:0; border-left:0; }
+  .combo > div + div, .mini > div + div { padding-left:0; border-left:0; }
+  .acts .btn:first-child { display:none; }
+  .cp-labs { flex-direction:column; gap:4px; }
+  .cp-lab { flex:none !important; flex-direction:row; gap:8px; }
+  .tbl-wrap { overflow-x:auto; }
+}
+@page { size:A3 landscape; margin:14mm; }
+@media print {
+  .top { position:static; }
+  .nav, .acts { display:none; }
+  section.sec { break-before:page; margin-top:0; }
+  .foot { background:none; color:var(--ink); border-top:1px solid var(--ink); }
+  .foot h4 { color:var(--ink); }
+  * { -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+}
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="wrap">
+    <div class="brand"><span class="no">S-06</span><span class="sep"></span><span class="nm">철골 골조 배치 검토 · 기본안 v0.1</span></div>
+    <nav class="nav" aria-label="절">
+      <a href="#s01"><span>01</span>배치·기초</a><a href="#s02"><span>02</span>경간</a><a href="#s03"><span>03</span>부재 검정</a><a href="#s04"><span>04</span>일람표</a><a href="#s05"><span>05</span>남은 조건</a>
+    </nav>
+    <div class="acts"><a class="btn" href="#s05" title="VIDE의 S-06 골조 배치 설정값으로 돌아간다">조건 조정 ↗</a><button class="btn" type="button" onclick="window.print()">인쇄 / PDF ↗</button></div>
+  </div>
+</header>
+
+<main class="wrap">
+  <section class="hero" aria-labelledby="h1">
+    <p class="eyebrow">S-06 / Steel layout review</p>
+    <h1 id="h1">기둥 34개, 경간과 기초 간섭은<br>어디서 부딪히나.</h1>
+    <div class="hero-grid">
+      <div>
+        <p class="lede">현재 구조 모델의 신설 철골 기둥 34개와 거더를 기존 기초·유수지 보 띠와 겹쳐 보고, 기둥 위에서 끊은 경간과 중력 조합 검정비로 사전 점검했다. <b>파일캡 간섭 9곳 중 5곳과 12 m 초과 경간 9곳 중 5곳이 모두 N5 줄에 몰려 있다</b> — 경간과 기초 간섭이 부딪히는 곳은 이 한 줄이다.</p>
+        <div class="src">
+          <span><i style="background:var(--coral)"></i>구조 모델 · Live · Sync 14:10 · 기둥 34 · 거더 곡선 41</span>
+          <span><i style="background:var(--bar-strong)"></i>토목 모델 사본 08-27판 · 기존 기초 176</span>
+          <span>설정값 38개 · 근거 있음 21 · 가정 17</span>
+        </div>
+      </div>
+      <div class="toc-sum">
+        <div class="ink">01 — 05</div>
+        <div>LAYOUT / SPAN / MEMBERS / SCHEDULE / OPEN</div>
+        <div>중력 조합 · 탐색용 예비값</div>
+        <div>2026-09-29</div>
+      </div>
+    </div>
+    <div class="caveat" role="note"><span class="tag">예비 검토</span><div>이 보고서는 설계팀의 배치 탐색·사전 점검 결과다. <b>모든 수치는 탐색용 예비값이며 구조기술사의 구조 검토와 구조 계산을 대신하지 않는다.</b> 공식 해석·부재 설계·접합부 상세는 구조사무소가 한다. 검토하지 않은 항목은 03절 첫머리에 적었다.</div></div>
+
+    <div class="kpis">
+      <div class="kpi"><h3>기둥</h3><div class="v">34<small>개</small></div><p>현재 구조 모델. 파일캡 간섭을 없앤 대안 A는 38개, 대안 B는 36개</p></div>
+      <div class="kpi"><h3>파일캡 ↔ 기존 기초</h3><div class="v claim">9<small>곳</small></div><p>겹치거나 여유 0.2&nbsp;m 미만(불가). 오픈컷 협의는 33곳</p></div>
+      <div class="kpi"><h3>경간 초과</h3><div class="v claim">9<small>곳</small></div><p>기둥에서 끊은 경간 55개 중. 최대 14.6&nbsp;m, 상한 12.0&nbsp;m</p></div>
+      <div class="kpi"><h3>중력 조합 최대 검정비</h3><div class="v">0.94</div><p>목표 0.90을 넘는 부재 2개. 횡하중 설계는 검토하지 않음</p></div>
+      <div class="kpi"><h3>강재</h3><div class="v">333<small>t</small></div><p>예비 단면 기준 부재 314개 · ㎡당 89 kg (데크 3,755 ㎡)</p></div>
+    </div>
+  </section>
+
+  <section class="sec" id="s01" aria-labelledby="h01">
+    <div class="sec-head">
+      <div>
+        <p class="eyebrow">01 / Layout &amp; foundation</p>
+        <h2 id="h01">파일캡 9곳이 기존 기초에 걸리고,<br>오픈컷은 한 곳을 빼고 모두 협의 대상이다.</h2>
+        <p class="sec-lede">기존 기초는 토목 모델 블록(2.7 × 2.7 m, −21.0°)을 그대로 썼다. 두 사각형은 <b>u·v 중 한 방향으로만 떨어져도 겹치지 않으므로</b>, 파일캡(2.0 m)은 기초 축에서 한 방향으로 2.55 m 이상 떨어지면 된다. 오픈컷(3.6 m)은 3.15 m가 필요한데 6 m 칸에서는 반 칸이 3.0 m라 <b>기초가 없는 자리가 아니면 늘 겹친다</b>.</p>
+      </div>
+      <div class="sec-meta">배치 우선순위<br>경간 &gt; 파일캡 &gt; 유수지 보 &gt; 오픈컷 &gt; 기둥 수</div>
+    </div>
+    <div class="plan-grid">
+      <figure style="margin:0">
+        <svg class="plan" viewBox="0 0 790 529" role="img" aria-label="현재 배치 평면: 신설 기둥 34개, 파일캡 간섭 9곳, 경간 초과 9곳"><defs>
+  <pattern id="hb" width="5" height="5" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="5" height="5" fill="#eceeeb"/><line x1="0" y1="0" x2="0" y2="5" stroke="#c9cecb" stroke-width="1.2"/></pattern>
+  <pattern id="hv" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(-45)"><rect width="6" height="6" fill="#fff"/><line x1="0" y1="0" x2="0" y2="6" stroke="#8a9396" stroke-width="0.9"/></pattern>
+</defs><rect x="50.4" y="21" width="659.4" height="483.0" fill="#f6f7f4" stroke="#dde1de" stroke-dasharray="3 3"/><rect x="75.6" y="470.4" width="604.8" height="16.8" fill="url(#hb)"/><rect x="75.6" y="420" width="604.8" height="16.8" fill="url(#hb)"/><rect x="75.6" y="369.6" width="604.8" height="16.8" fill="url(#hb)"/><rect x="75.6" y="319.2" width="604.8" height="16.8" fill="url(#hb)"/><rect x="75.6" y="285.6" width="604.8" height="16.8" fill="url(#hb)"/><rect x="75.6" y="235.2" width="604.8" height="16.8" fill="url(#hb)"/><rect x="75.6" y="184.8" width="604.8" height="16.8" fill="url(#hb)"/><rect x="75.6" y="134.4" width="604.8" height="16.8" fill="url(#hb)"/><rect x="75.6" y="84" width="604.8" height="16.8" fill="url(#hb)"/><rect x="75.6" y="33.6" width="604.8" height="16.8" fill="url(#hb)"/><rect x="64.3" y="467.5" width="22.7" height="22.7" fill="#d6dad7" stroke="#b7bcb9" stroke-width="0.7"/><rect x="64.3" y="417.1" width="22.7" height="22.7" fill="#d6dad7" stroke="#b7bcb9" stroke-width="0.7"/><rect x="64.3" y="366.7" width="22.7" height="22.7" fill="#d6dad7" stroke="#b7bcb9" stroke-width="0.7"/><rect x="64.3" y="316.3" width="22.7" height="22.7" fill="#d6dad7" stroke="#b7bcb9" stroke-width="0.7"/><rect x="64.3" y="282.7" width="22.7" height="22.7" fill="#d6dad7" stroke="#b7bcb9" stroke-width="0.7"/><rect x="64.3" y="232.3" width="22.7" height="22.7" fill="#d6dad7" stroke="#b7bcb9" stroke-width="0.7"/><rect x="64.3" y="181.9" width="22.7" height="22.7" fill="#d6dad7" stroke="#b7bcb9" stroke-width="0.7"/><rect x="64.3" y="131.5" width="22.7" height="22.7" fill="#d6dad7" stroke="#b7bcb9" stroke-width="0.7"/><rect x="64.3" y="81.1" width="22.7" height="22.7" fill="#d6dad7" stroke="#b7bcb9" stroke-width="0.7"/><rect x="64.3" y="30.7" width="22.7" height="22.7" fill="#d6dad7" stroke="#b7bcb9" stroke-width="0.7"/><rect x="114.7" y="467.5" width="22.7" height="22.7" fill="#d6dad7" stroke="#b7bcb9" stroke-width="0.7"/><rect x="114.7" y="417.1" width="22.7" height="22.7" fill="#d6dad7" stroke="#b7bcb9" stroke-width="0.7"/><rect x="114.7" y="366.7" width="22.7" height="22.7" fill="#d6dad7" stroke="#b7bcb9" stroke-width="0.7"/><rect x="114.7" y="316.3" width="22.7" height="22.7" fill="#d6dad7" stroke="#b7bcb9" stroke-width="0.7"/><rect x="114.7" y="282.7" width="22.7" height="22.7" fill="#d6dad7" stroke="#b7bcb9" stroke-width="0.7"/><rect x="114.7" y="232.3" width="22.7" height="22.7" fill="#d6dad7" stroke="#b7bcb9" stroke-width="0.7"/><rect x="114.7" y="181.9" width="22.7" height="22.7" fill="#d6dad7" stroke="#b7bcb9" stroke-width="0.7"/><rect x="114.7" y="131.5" width="22.7" height="22.7" fill="#d6dad7" stroke="#b7bcb9" stroke-width="0.7"/><rect x="114.7" y="81.1" width="22.7" height="22.7" fill="#d6dad7" stroke="#b7bcb9" stroke-width="0.7"/><rect x="114.7" y="30.7" width="22.7" height="22.7" fill="#d6dad7" stroke="#b7bcb9" stroke-width="0.7"/><rect x="165.1" y="467.5" width="22.7" height="22.7" fill="#d6dad7" stroke="#b7bcb9" stroke-width="0.7"/><rect x="165.1" y="417.1" width="22.7" height="22.7" fill="#d6dad7" stroke="#b7bcb9" stroke-width="0.7"/><rect x="165.1" y="366.7" width="22.7" height="22.7" fill="#d6dad7" stroke="#b7bcb9" stroke-width="0.7"/><rect x="165.1" y="316.3" width="22.7" height="22.7" fill="#d6dad7" stroke="#b7bcb9" stroke-width="0.7"/><rect x="165.1" y="282.7" width="22.7" height="22.7" fill="#d6dad7" stroke="#b7bcb9" stroke-width="0.7"/><rect x="165.1" y="232.3" width="22.7" height="22.7" fill="#d6dad7" stroke="#b7bcb9" stroke-width="0.7"/><rect x="165.1" y="181.9" width="22.7" height="22.7" fill="#d6dad7" stroke="#b7bcb9" stroke-width="0.7"/><rect x="165.1" y="131.5" width="22.7" height="22.7" fill="#d6dad7" stroke="#b7bcb9" stroke-width="0.7"/><rect x="165.1" y="81.1" width="22.7" height="22.7" fill="#d6dad7" stroke="#b7bcb9" stroke-width="0.7"/><rect x="165.1" y="30.7" width="22.7" height="22.7" fill="#d6dad7" stroke="#b7bcb9" stroke-width="0.7"/><rect x="215.5" y="467.5" width="22.7" height="22.7" fill="#d6dad7" stroke="#b7bcb9" stroke-width="0.7"/><rect x="215.5" y="417.1" width="22.7" height="22.7" fill="#d6dad7" stroke="#b7bcb9" stroke-width="0.7"/><rect x="215.5" y="366.7" width="22.7" height="22.7" fill="#d6dad7" stroke="#b7bcb9" stroke-width="0.7"/><rect x="215.5" y="316.3" width="22.7" height="22.7" fill="#d6dad7" stroke="#b7bcb9" stroke-width="0.7"/><rect x="215.5" y="282.7" width="22.7" height="22.7" fill="#d6dad7" stroke="#b7bcb9" stroke-width="0.7"/><rect x="215.5" y="232.3" width="22.7" height="22.7" fill="#d6dad7" stroke="#b7bcb9" stroke-width="0.7"/><rect x="215.5" y="181.9" width="22.7" height="22.7" fill="#d6dad7" stroke="#b7bcb9" stroke-width="0.7"/><rect x="215.5" y="131.5" width="22.7" height="22.7" fill="#d6dad7" stroke="#b7bcb9" stroke-width="0.7"/><rect x="215.5" y="81.1" width="22.7" height="22.7" fill="#d6dad7" stroke="#b7bcb9" stroke-width="0.7"/><rect x="215.5" y="30.7" width="22.7" height="22.7" fill="#d6dad7" stroke="#b7bcb9" stroke-width="0.7"/><rect x="265.9" y="467.5" width="22.7" height="22.7" fill="#d6dad7" stroke="#b7bcb9" stroke-width="0.7"/><rect x="265.9" y="417.1" width="22.7" height="22.7" fill="#d6dad7" stroke="#b7bcb9" stroke-width="0.7"/><rect x="265.9" y="366.7" width="22.7" height="22.7" fill="#d6dad7" stroke="#b7bcb9" stroke-width="0.7"/><rect x="265.9" y="316.3" width="22.7" height="22.7" fill="#d6dad7" stroke="#b7bcb9" stroke-width="0.7"/><rect x="265.9" y="282.7" width="22.7" height="22.7" fill="none" stroke="#8a9396" stroke-width="1" stroke-dasharray="2.5 2"/><rect x="265.9" y="232.3" width="22.7" height="22.7" fill="#d6dad7" stroke="#b7bcb9" stroke-width="0.7"/><rect x="265.9" y="181.9" width="22.7" height="22.7" fill="#d6dad7" stroke="#b7bcb9" stroke-width="0.7"/><rect x="265.9" y="131.5" width="22.7" height="22.7" fill="#d6dad7" stroke="#b7bcb9" stroke-width="0.7"/><rect x="265.9" y="81.1" width="22.7" height="22.7" fill="#d6dad7" stroke="#b7bcb9" stroke-width="0.7"/><rect x="265.9" y="30.7" width="22.7" height="22.7" fill="#d6dad7" stroke="#b7bcb9" stroke-width="0.7"/><rect x="316.3" y="467.5" width="22.7" height="22.7" fill="#d6dad7" stroke="#b7bcb9" stroke-width="0.7"/><rect x="316.3" y="417.1" width="22.7" height="22.7" fill="#d6dad7" stroke="#b7bcb9" stroke-width="0.7"/><rect x="316.3" y="366.7" width="22.7" height="22.7" fill="#d6dad7" stroke="#b7bcb9" stroke-width="0.7"/><rect x="316.3" y="316.3" width="22.7" height="22.7" fill="#d6dad7" stroke="#b7bcb9" stroke-width="0.7"/><rect x="316.3" y="282.7" width="22.7" height="22.7" fill="#d6dad7" stroke="#b7bcb9" stroke-width="0.7"/><rect x="316.3" y="232.3" width="22.7" height="22.7" fill="#d6dad7" stroke="#b7bcb9" stroke-width="0.7"/><rect x="316.3" y="181.9" width="22.7" height="22.7" fill="#d6dad7" stroke="#b7bcb9" stroke-width="0.7"/><rect x="316.3" y="131.5" width="22.7" height="22.7" fill="#d6dad7" stroke="#b7bcb9" stroke-width="0.7"/><rect x="316.3" y="81.1" width="22.7" height="22.7" fill="#d6dad7" stroke="#b7bcb9" stroke-width="0.7"/><rect x="316.3" y="30.7" width="22.7" height="22.7" fill="#d6dad7" stroke="#b7bcb9" stroke-width="0.7"/><rect x="366.7" y="467.5" width="22.7" height="22.7" fill="#d6dad7" stroke="#b7bcb9" stroke-width="0.7"/><rect x="366.7" y="417.1" width="22.7" height="22.7" fill="#d6dad7" stroke="#b7bcb9" stroke-width="0.7"/><rect x="366.7" y="366.7" width="22.7" height="22.7" fill="#d6dad7" stroke="#b7bcb9" stroke-width="0.7"/><rect x="366.7" y="316.3" width="22.7" height="22.7" fill="#d6dad7" stroke="#b7bcb9" stroke-width="0.7"/><rect x="366.7" y="282.7" width="22.7" height="22.7" fill="#d6dad7" stroke="#b7bcb9" stroke-width="0.7"/><rect x="366.7" y="232.3" width="22.7" height="22.7" fill="#d6dad7" stroke="#b7bcb9" stroke-width="0.7"/><rect x="366.7" y="181.9" width="22.7" height="22.7" fill="#d6dad7" stroke="#b7bcb9" stroke-width="0.7"/><rect x="366.7" y="131.5" width="22.7" height="22.7" fill="#d6dad7" stroke="#b7bcb9" stroke-width="0.7"/><rect x="366.7" y="81.1" width="22.7" height="22.7" fill="#d6dad7" stroke="#b7bcb9" stroke-width="0.7"/><rect x="366.7" y="30.7" width="22.7" height="22.7" fill="#d6dad7" stroke="#b7bcb9" stroke-width="0.7"/><rect x="417.1" y="467.5" width="22.7" height="22.7" fill="#d6dad7" stroke="#b7bcb9" stroke-width="0.7"/><rect x="417.1" y="417.1" width="22.7" height="22.7" fill="#d6dad7" stroke="#b7bcb9" stroke-width="0.7"/><rect x="417.1" y="366.7" width="22.7" height="22.7" fill="#d6dad7" stroke="#b7bcb9" stroke-width="0.7"/><rect x="417.1" y="316.3" width="22.7" height="22.7" fill="#d6dad7" stroke="#b7bcb9" stroke-width="0.7"/><rect x="417.1" y="282.7" width="22.7" height="22.7" fill="#d6dad7" stroke="#b7bcb9" stroke-width="0.7"/><rect x="417.1" y="232.3" width="22.7" height="22.7" fill="#d6dad7" stroke="#b7bcb9" stroke-width="0.7"/><rect x="417.1" y="181.9" width="22.7" height="22.7" fill="#d6dad7" stroke="#b7bcb9" stroke-width="0.7"/><rect x="417.1" y="131.5" width="22.7" height="22.7" fill="#d6dad7" stroke="#b7bcb9" stroke-width="0.7"/><rect x="417.1" y="81.1" width="22.7" height="22.7" fill="#d6dad7" stroke="#b7bcb9" stroke-width="0.7"/><rect x="417.1" y="30.7" width="22.7" height="22.7" fill="#d6dad7" stroke="#b7bcb9" stroke-width="0.7"/><rect x="467.5" y="467.5" width="22.7" height="22.7" fill="#d6dad7" stroke="#b7bcb9" stroke-width="0.7"/><rect x="467.5" y="417.1" width="22.7" height="22.7" fill="#d6dad7" stroke="#b7bcb9" stroke-width="0.7"/><rect x="467.5" y="366.7" width="22.7" height="22.7" fill="#d6dad7" stroke="#b7bcb9" stroke-width="0.7"/><rect x="467.5" y="316.3" width="22.7" height="22.7" fill="#d6dad7" stroke="#b7bcb9" stroke-width="0.7"/><rect x="467.5" y="282.7" width="22.7" height="22.7" fill="#d6dad7" stroke="#b7bcb9" stroke-width="0.7"/><rect x="467.5" y="232.3" width="22.7" height="22.7" fill="#d6dad7" stroke="#b7bcb9" stroke-width="0.7"/><rect x="467.5" y="181.9" width="22.7" height="22.7" fill="#d6dad7" stroke="#b7bcb9" stroke-width="0.7"/><rect x="467.5" y="131.5" width="22.7" height="22.7" fill="#d6dad7" stroke="#b7bcb9" stroke-width="0.7"/><rect x="467.5" y="81.1" width="22.7" height="22.7" fill="#d6dad7" stroke="#b7bcb9" stroke-width="0.7"/><rect x="467.5" y="30.7" width="22.7" height="22.7" fill="#d6dad7" stroke="#b7bcb9" stroke-width="0.7"/><rect x="517.9" y="467.5" width="22.7" height="22.7" fill="#d6dad7" stroke="#b7bcb9" stroke-width="0.7"/><rect x="517.9" y="417.1" width="22.7" height="22.7" fill="#d6dad7" stroke="#b7bcb9" stroke-width="0.7"/><rect x="517.9" y="366.7" width="22.7" height="22.7" fill="#d6dad7" stroke="#b7bcb9" stroke-width="0.7"/><rect x="517.9" y="316.3" width="22.7" height="22.7" fill="#d6dad7" stroke="#b7bcb9" stroke-width="0.7"/><rect x="517.9" y="282.7" width="22.7" height="22.7" fill="#d6dad7" stroke="#b7bcb9" stroke-width="0.7"/><rect x="517.9" y="232.3" width="22.7" height="22.7" fill="#d6dad7" stroke="#b7bcb9" stroke-width="0.7"/><rect x="517.9" y="181.9" width="22.7" height="22.7" fill="#d6dad7" stroke="#b7bcb9" stroke-width="0.7"/><rect x="517.9" y="131.5" width="22.7" height="22.7" fill="#d6dad7" stroke="#b7bcb9" stroke-width="0.7"/><rect x="517.9" y="81.1" width="22.7" height="22.7" fill="#d6dad7" stroke="#b7bcb9" stroke-width="0.7"/><rect x="517.9" y="30.7" width="22.7" height="22.7" fill="#d6dad7" stroke="#b7bcb9" stroke-width="0.7"/><rect x="568.3" y="467.5" width="22.7" height="22.7" fill="#d6dad7" stroke="#b7bcb9" stroke-width="0.7"/><rect x="568.3" y="417.1" width="22.7" height="22.7" fill="#d6dad7" stroke="#b7bcb9" stroke-width="0.7"/><rect x="568.3" y="366.7" width="22.7" height="22.7" fill="#d6dad7" stroke="#b7bcb9" stroke-width="0.7"/><rect x="568.3" y="316.3" width="22.7" height="22.7" fill="#d6dad7" stroke="#b7bcb9" stroke-width="0.7"/><rect x="568.3" y="282.7" width="22.7" height="22.7" fill="#d6dad7" stroke="#b7bcb9" stroke-width="0.7"/><rect x="568.3" y="232.3" width="22.7" height="22.7" fill="#d6dad7" stroke="#b7bcb9" stroke-width="0.7"/><rect x="568.3" y="181.9" width="22.7" height="22.7" fill="#d6dad7" stroke="#b7bcb9" stroke-width="0.7"/><rect x="568.3" y="131.5" width="22.7" height="22.7" fill="#d6dad7" stroke="#b7bcb9" stroke-width="0.7"/><rect x="568.3" y="81.1" width="22.7" height="22.7" fill="#d6dad7" stroke="#b7bcb9" stroke-width="0.7"/><rect x="568.3" y="30.7" width="22.7" height="22.7" fill="#d6dad7" stroke="#b7bcb9" stroke-width="0.7"/><rect x="618.7" y="467.5" width="22.7" height="22.7" fill="#d6dad7" stroke="#b7bcb9" stroke-width="0.7"/><rect x="618.7" y="417.1" width="22.7" height="22.7" fill="#d6dad7" stroke="#b7bcb9" stroke-width="0.7"/><rect x="618.7" y="366.7" width="22.7" height="22.7" fill="#d6dad7" stroke="#b7bcb9" stroke-width="0.7"/><rect x="618.7" y="316.3" width="22.7" height="22.7" fill="#d6dad7" stroke="#b7bcb9" stroke-width="0.7"/><rect x="618.7" y="282.7" width="22.7" height="22.7" fill="#d6dad7" stroke="#b7bcb9" stroke-width="0.7"/><rect x="618.7" y="232.3" width="22.7" height="22.7" fill="#d6dad7" stroke="#b7bcb9" stroke-width="0.7"/><rect x="618.7" y="181.9" width="22.7" height="22.7" fill="#d6dad7" stroke="#b7bcb9" stroke-width="0.7"/><rect x="618.7" y="131.5" width="22.7" height="22.7" fill="#d6dad7" stroke="#b7bcb9" stroke-width="0.7"/><rect x="618.7" y="81.1" width="22.7" height="22.7" fill="#d6dad7" stroke="#b7bcb9" stroke-width="0.7"/><rect x="618.7" y="30.7" width="22.7" height="22.7" fill="#d6dad7" stroke="#b7bcb9" stroke-width="0.7"/><rect x="669.1" y="467.5" width="22.7" height="22.7" fill="#d6dad7" stroke="#b7bcb9" stroke-width="0.7"/><rect x="669.1" y="417.1" width="22.7" height="22.7" fill="#d6dad7" stroke="#b7bcb9" stroke-width="0.7"/><rect x="669.1" y="366.7" width="22.7" height="22.7" fill="#d6dad7" stroke="#b7bcb9" stroke-width="0.7"/><rect x="669.1" y="316.3" width="22.7" height="22.7" fill="#d6dad7" stroke="#b7bcb9" stroke-width="0.7"/><rect x="669.1" y="282.7" width="22.7" height="22.7" fill="#d6dad7" stroke="#b7bcb9" stroke-width="0.7"/><rect x="669.1" y="232.3" width="22.7" height="22.7" fill="#d6dad7" stroke="#b7bcb9" stroke-width="0.7"/><rect x="669.1" y="181.9" width="22.7" height="22.7" fill="#d6dad7" stroke="#b7bcb9" stroke-width="0.7"/><rect x="669.1" y="131.5" width="22.7" height="22.7" fill="#d6dad7" stroke="#b7bcb9" stroke-width="0.7"/><rect x="669.1" y="81.1" width="22.7" height="22.7" fill="#d6dad7" stroke="#b7bcb9" stroke-width="0.7"/><rect x="669.1" y="30.7" width="22.7" height="22.7" fill="#d6dad7" stroke="#b7bcb9" stroke-width="0.7"/><text x="75.6" y="11.8" class="pl-ax" text-anchor="middle">X1</text><text x="126" y="11.8" class="pl-ax" text-anchor="middle">X2</text><text x="176.4" y="11.8" class="pl-ax" text-anchor="middle">X3</text><text x="226.8" y="11.8" class="pl-ax" text-anchor="middle">X4</text><text x="277.2" y="11.8" class="pl-ax" text-anchor="middle">X5</text><text x="327.6" y="11.8" class="pl-ax" text-anchor="middle">X6</text><text x="378" y="11.8" class="pl-ax" text-anchor="middle">X7</text><text x="428.4" y="11.8" class="pl-ax" text-anchor="middle">X8</text><text x="478.8" y="11.8" class="pl-ax" text-anchor="middle">X9</text><text x="529.2" y="11.8" class="pl-ax" text-anchor="middle">X10</text><text x="579.6" y="11.8" class="pl-ax" text-anchor="middle">X11</text><text x="630" y="11.8" class="pl-ax" text-anchor="middle">X12</text><text x="680.4" y="11.8" class="pl-ax" text-anchor="middle">X13</text><text x="40.3" y="482.3" class="pl-ax" text-anchor="end">Y1</text><text x="40.3" y="431.9" class="pl-ax" text-anchor="end">Y2</text><text x="40.3" y="381.5" class="pl-ax" text-anchor="end">Y3</text><text x="40.3" y="331.1" class="pl-ax" text-anchor="end">Y4</text><text x="40.3" y="297.5" class="pl-ax" text-anchor="end">Y5</text><text x="40.3" y="247.1" class="pl-ax" text-anchor="end">Y6</text><text x="40.3" y="196.7" class="pl-ax" text-anchor="end">Y7</text><text x="40.3" y="146.3" class="pl-ax" text-anchor="end">Y8</text><text x="40.3" y="95.9" class="pl-ax" text-anchor="end">Y9</text><text x="40.3" y="45.5" class="pl-ax" text-anchor="end">Y10</text><polygon points="71.4,487.2 735,487.2 735,159.6 680.4,58.8 210,58.8 210,155.4 71.4,155.4" fill="#ffffff" fill-opacity="0.55" stroke="#292c2d" stroke-width="1.6" stroke-linejoin="round"/><polygon points="495.6,226.8 735,226.8 735,159.6 680.4,58.8 495.6,58.8" fill="#a9c4ad" fill-opacity="0.22" stroke="#4f7a60" stroke-width="1.1" stroke-dasharray="5 3"/><text x="729.1" y="220.1" class="pl-zone" text-anchor="end">줄돔 구역 · 가정(D1)</text><polygon points="336,336 394.8,336 394.8,281.4 336,281.4" fill="url(#hv)" stroke="#292c2d" stroke-width="1"/><text x="365.4" y="312.2" class="pl-tag" text-anchor="middle">보이드</text><rect x="85.7" y="446.9" width="30.2" height="30.2" fill="none" stroke="#8a9396" stroke-width="0.7" stroke-dasharray="2 2" opacity="0.9"/><rect x="182.3" y="446.9" width="30.2" height="30.2" fill="none" stroke="#8a9396" stroke-width="0.7" stroke-dasharray="2 2" opacity="0.9"/><rect x="287.3" y="446.9" width="30.2" height="30.2" fill="none" stroke="#8a9396" stroke-width="0.7" stroke-dasharray="2 2" opacity="0.9"/><rect x="388.1" y="446.9" width="30.2" height="30.2" fill="none" stroke="#8a9396" stroke-width="0.7" stroke-dasharray="2 2" opacity="0.9"/><rect x="488.9" y="446.9" width="30.2" height="30.2" fill="none" stroke="#8a9396" stroke-width="0.7" stroke-dasharray="2 2" opacity="0.9"/><rect x="589.7" y="446.9" width="30.2" height="30.2" fill="none" stroke="#8a9396" stroke-width="0.7" stroke-dasharray="2 2" opacity="0.9"/><rect x="690.5" y="446.9" width="30.2" height="30.2" fill="none" stroke="#8a9396" stroke-width="0.7" stroke-dasharray="2 2" opacity="0.9"/><rect x="85.7" y="349.4" width="30.2" height="30.2" fill="none" stroke="#8a9396" stroke-width="0.7" stroke-dasharray="2 2" opacity="0.9"/><rect x="186.5" y="349.4" width="30.2" height="30.2" fill="none" stroke="#8a9396" stroke-width="0.7" stroke-dasharray="2 2" opacity="0.9"/><rect x="283.1" y="349.4" width="30.2" height="30.2" fill="none" stroke="#8a9396" stroke-width="0.7" stroke-dasharray="2 2" opacity="0.9"/><rect x="383.9" y="349.4" width="30.2" height="30.2" fill="none" stroke="#8a9396" stroke-width="0.7" stroke-dasharray="2 2" opacity="0.9"/><rect x="476.3" y="349.4" width="30.2" height="30.2" fill="none" stroke="#8a9396" stroke-width="0.7" stroke-dasharray="2 2" opacity="0.9"/><rect x="589.7" y="349.4" width="30.2" height="30.2" fill="none" stroke="#8a9396" stroke-width="0.7" stroke-dasharray="2 2" opacity="0.9"/><rect x="690.5" y="349.4" width="30.2" height="30.2" fill="none" stroke="#8a9396" stroke-width="0.7" stroke-dasharray="2 2" opacity="0.9"/><rect x="85.7" y="253.7" width="30.2" height="30.2" fill="none" stroke="#8a9396" stroke-width="0.7" stroke-dasharray="2 2" opacity="0.9"/><rect x="178.1" y="253.7" width="30.2" height="30.2" fill="none" stroke="#8a9396" stroke-width="0.7" stroke-dasharray="2 2" opacity="0.9"/><rect x="278.9" y="253.7" width="30.2" height="30.2" fill="none" stroke="#8a9396" stroke-width="0.7" stroke-dasharray="2 2" opacity="0.9"/><rect x="401.5" y="253.7" width="30.2" height="30.2" fill="none" stroke="#8a9396" stroke-width="0.7" stroke-dasharray="2 2" opacity="0.9"/><rect x="488.9" y="253.7" width="30.2" height="30.2" fill="none" stroke="#8a9396" stroke-width="0.7" stroke-dasharray="2 2" opacity="0.9"/><rect x="589.7" y="253.7" width="30.2" height="30.2" fill="none" stroke="#8a9396" stroke-width="0.7" stroke-dasharray="2 2" opacity="0.9"/><rect x="690.5" y="253.7" width="30.2" height="30.2" fill="none" stroke="#8a9396" stroke-width="0.7" stroke-dasharray="2 2" opacity="0.9"/><rect x="85.7" y="169.7" width="30.2" height="30.2" fill="none" stroke="#8a9396" stroke-width="0.7" stroke-dasharray="2 2" opacity="0.9"/><rect x="186.5" y="169.7" width="30.2" height="30.2" fill="none" stroke="#8a9396" stroke-width="0.7" stroke-dasharray="2 2" opacity="0.9"/><rect x="287.3" y="169.7" width="30.2" height="30.2" fill="none" stroke="#8a9396" stroke-width="0.7" stroke-dasharray="2 2" opacity="0.9"/><rect x="388.1" y="169.7" width="30.2" height="30.2" fill="none" stroke="#8a9396" stroke-width="0.7" stroke-dasharray="2 2" opacity="0.9"/><rect x="488.9" y="169.7" width="30.2" height="30.2" fill="none" stroke="#8a9396" stroke-width="0.7" stroke-dasharray="2 2" opacity="0.9"/><rect x="589.7" y="169.7" width="30.2" height="30.2" fill="none" stroke="#8a9396" stroke-width="0.7" stroke-dasharray="2 2" opacity="0.9"/><rect x="703.1" y="169.7" width="30.2" height="30.2" fill="none" stroke="#8a9396" stroke-width="0.7" stroke-dasharray="2 2" opacity="0.45"/><rect x="221.8" y="66.4" width="30.2" height="30.2" fill="none" stroke="#8a9396" stroke-width="0.7" stroke-dasharray="2 2" opacity="0.9"/><rect x="312.5" y="66.4" width="30.2" height="30.2" fill="none" stroke="#8a9396" stroke-width="0.7" stroke-dasharray="2 2" opacity="0.9"/><rect x="404.9" y="66.4" width="30.2" height="30.2" fill="none" stroke="#8a9396" stroke-width="0.7" stroke-dasharray="2 2" opacity="0.9"/><rect x="499.8" y="66.4" width="30.2" height="30.2" fill="none" stroke="#8a9396" stroke-width="0.7" stroke-dasharray="2 2" opacity="0.9"/><rect x="589.7" y="66.4" width="30.2" height="30.2" fill="none" stroke="#8a9396" stroke-width="0.7" stroke-dasharray="2 2" opacity="0.9"/><rect x="658.6" y="66.4" width="30.2" height="30.2" fill="none" stroke="#8a9396" stroke-width="0.7" stroke-dasharray="2 2" opacity="0.9"/><line x1="100.8" y1="462" x2="197.4" y2="462" stroke="#292c2d" stroke-width="1.1" stroke-opacity="0.55"><title>C01–C02 · 11.5 m</title></line><line x1="302.4" y1="462" x2="403.2" y2="462" stroke="#292c2d" stroke-width="1.1" stroke-opacity="0.55"><title>C03–C04 · 12.0 m</title></line><line x1="403.2" y1="462" x2="504" y2="462" stroke="#292c2d" stroke-width="1.1" stroke-opacity="0.55"><title>C04–C05 · 12.0 m</title></line><line x1="504" y1="462" x2="604.8" y2="462" stroke="#292c2d" stroke-width="1.1" stroke-opacity="0.55"><title>C05–C06 · 12.0 m</title></line><line x1="604.8" y1="462" x2="705.6" y2="462" stroke="#292c2d" stroke-width="1.1" stroke-opacity="0.55"><title>C06–C07 · 12.0 m</title></line><line x1="100.8" y1="364.6" x2="201.6" y2="364.6" stroke="#292c2d" stroke-width="1.1" stroke-opacity="0.55"><title>C08–C09 · 12.0 m</title></line><line x1="201.6" y1="364.6" x2="298.2" y2="364.6" stroke="#292c2d" stroke-width="1.1" stroke-opacity="0.55"><title>C09–C10 · 11.5 m</title></line><line x1="298.2" y1="364.6" x2="399" y2="364.6" stroke="#292c2d" stroke-width="1.1" stroke-opacity="0.55"><title>C10–C11 · 12.0 m</title></line><line x1="399" y1="364.6" x2="491.4" y2="364.6" stroke="#292c2d" stroke-width="1.1" stroke-opacity="0.55"><title>C11–C12 · 11.0 m</title></line><line x1="604.8" y1="364.6" x2="705.6" y2="364.6" stroke="#292c2d" stroke-width="1.1" stroke-opacity="0.55"><title>C13–C14 · 12.0 m</title></line><line x1="100.8" y1="268.8" x2="193.2" y2="268.8" stroke="#292c2d" stroke-width="1.1" stroke-opacity="0.55"><title>C15–C16 · 11.0 m</title></line><line x1="193.2" y1="268.8" x2="294" y2="268.8" stroke="#292c2d" stroke-width="1.1" stroke-opacity="0.55"><title>C16–C17 · 12.0 m</title></line><line x1="416.6" y1="268.8" x2="504" y2="268.8" stroke="#292c2d" stroke-width="1.1" stroke-opacity="0.55"><title>C18–C19 · 10.4 m</title></line><line x1="504" y1="268.8" x2="604.8" y2="268.8" stroke="#292c2d" stroke-width="1.1" stroke-opacity="0.55"><title>C19–C20 · 12.0 m</title></line><line x1="604.8" y1="268.8" x2="705.6" y2="268.8" stroke="#292c2d" stroke-width="1.1" stroke-opacity="0.55"><title>C20–C21 · 12.0 m</title></line><line x1="100.8" y1="184.8" x2="201.6" y2="184.8" stroke="#292c2d" stroke-width="1.1" stroke-opacity="0.55"><title>C22–C23 · 12.0 m</title></line><line x1="201.6" y1="184.8" x2="302.4" y2="184.8" stroke="#292c2d" stroke-width="1.1" stroke-opacity="0.55"><title>C23–C24 · 12.0 m</title></line><line x1="302.4" y1="184.8" x2="403.2" y2="184.8" stroke="#292c2d" stroke-width="1.1" stroke-opacity="0.55"><title>C24–C25 · 12.0 m</title></line><line x1="403.2" y1="184.8" x2="504" y2="184.8" stroke="#292c2d" stroke-width="1.1" stroke-opacity="0.55"><title>C25–C26 · 12.0 m</title></line><line x1="504" y1="184.8" x2="604.8" y2="184.8" stroke="#292c2d" stroke-width="1.1" stroke-opacity="0.55" stroke-dasharray="7 2"><title>C26–C27 · 12.0 m</title></line><line x1="236.9" y1="81.5" x2="327.6" y2="81.5" stroke="#292c2d" stroke-width="1.1" stroke-opacity="0.55"><title>C29–C30 · 10.8 m</title></line><line x1="327.6" y1="81.5" x2="420" y2="81.5" stroke="#292c2d" stroke-width="1.1" stroke-opacity="0.55"><title>C30–C31 · 11.0 m</title></line><line x1="420" y1="81.5" x2="514.9" y2="81.5" stroke="#292c2d" stroke-width="1.1" stroke-opacity="0.55"><title>C31–C32 · 11.3 m</title></line><line x1="514.9" y1="81.5" x2="604.8" y2="81.5" stroke="#292c2d" stroke-width="1.1" stroke-opacity="0.55" stroke-dasharray="7 2"><title>C32–C33 · 10.7 m</title></line><line x1="604.8" y1="81.5" x2="673.7" y2="81.5" stroke="#292c2d" stroke-width="1.1" stroke-opacity="0.55" stroke-dasharray="7 2"><title>C33–C34 · 8.2 m</title></line><line x1="100.8" y1="462" x2="100.8" y2="364.6" stroke="#292c2d" stroke-width="1.1" stroke-opacity="0.55"><title>C01–C08 · 11.6 m</title></line><line x1="197.4" y1="462" x2="201.6" y2="364.6" stroke="#292c2d" stroke-width="1.1" stroke-opacity="0.55"><title>C02–C09 · 11.6 m</title></line><line x1="302.4" y1="462" x2="298.2" y2="364.6" stroke="#292c2d" stroke-width="1.1" stroke-opacity="0.55"><title>C03–C10 · 11.6 m</title></line><line x1="403.2" y1="462" x2="399" y2="364.6" stroke="#292c2d" stroke-width="1.1" stroke-opacity="0.55"><title>C04–C11 · 11.6 m</title></line><line x1="504" y1="462" x2="491.4" y2="364.6" stroke="#292c2d" stroke-width="1.1" stroke-opacity="0.55"><title>C05–C12 · 11.7 m</title></line><line x1="604.8" y1="462" x2="604.8" y2="364.6" stroke="#292c2d" stroke-width="1.1" stroke-opacity="0.55"><title>C06–C13 · 11.6 m</title></line><line x1="705.6" y1="462" x2="705.6" y2="364.6" stroke="#292c2d" stroke-width="1.1" stroke-opacity="0.55"><title>C07–C14 · 11.6 m</title></line><line x1="100.8" y1="364.6" x2="100.8" y2="268.8" stroke="#292c2d" stroke-width="1.1" stroke-opacity="0.55"><title>C08–C15 · 11.4 m</title></line><line x1="201.6" y1="364.6" x2="193.2" y2="268.8" stroke="#292c2d" stroke-width="1.1" stroke-opacity="0.55"><title>C09–C16 · 11.4 m</title></line><line x1="298.2" y1="364.6" x2="294" y2="268.8" stroke="#292c2d" stroke-width="1.1" stroke-opacity="0.55"><title>C10–C17 · 11.4 m</title></line><line x1="399" y1="364.6" x2="416.6" y2="268.8" stroke="#292c2d" stroke-width="1.1" stroke-opacity="0.55"><title>C11–C18 · 11.6 m</title></line><line x1="491.4" y1="364.6" x2="504" y2="268.8" stroke="#292c2d" stroke-width="1.1" stroke-opacity="0.55"><title>C12–C19 · 11.5 m</title></line><line x1="604.8" y1="364.6" x2="604.8" y2="268.8" stroke="#292c2d" stroke-width="1.1" stroke-opacity="0.55"><title>C13–C20 · 11.4 m</title></line><line x1="705.6" y1="364.6" x2="705.6" y2="268.8" stroke="#292c2d" stroke-width="1.1" stroke-opacity="0.55"><title>C14–C21 · 11.4 m</title></line><line x1="100.8" y1="268.8" x2="100.8" y2="184.8" stroke="#292c2d" stroke-width="1.1" stroke-opacity="0.55"><title>C15–C22 · 10.0 m</title></line><line x1="193.2" y1="268.8" x2="201.6" y2="184.8" stroke="#292c2d" stroke-width="1.1" stroke-opacity="0.55"><title>C16–C23 · 10.0 m</title></line><line x1="294" y1="268.8" x2="302.4" y2="184.8" stroke="#292c2d" stroke-width="1.1" stroke-opacity="0.55"><title>C17–C24 · 10.0 m</title></line><line x1="416.6" y1="268.8" x2="403.2" y2="184.8" stroke="#292c2d" stroke-width="1.1" stroke-opacity="0.55"><title>C18–C25 · 10.1 m</title></line><line x1="504" y1="268.8" x2="504" y2="184.8" stroke="#292c2d" stroke-width="1.1" stroke-opacity="0.55"><title>C19–C26 · 10.0 m</title></line><line x1="604.8" y1="268.8" x2="604.8" y2="184.8" stroke="#292c2d" stroke-width="1.1" stroke-opacity="0.55"><title>C20–C27 · 10.0 m</title></line><line x1="705.6" y1="268.8" x2="718.2" y2="184.8" stroke="#292c2d" stroke-width="1.1" stroke-opacity="0.55"><title>C21–C28 · 10.1 m</title></line><line x1="197.4" y1="462" x2="302.4" y2="462" stroke="#d97660" stroke-width="3.4" stroke-linecap="round"><title>C02–C03 · 12.5 m · 상한 12.0 m 초과</title></line><line x1="491.4" y1="364.6" x2="604.8" y2="364.6" stroke="#d97660" stroke-width="3.4" stroke-linecap="round"><title>C12–C13 · 13.5 m · 상한 12.0 m 초과</title></line><line x1="294" y1="268.8" x2="416.6" y2="268.8" stroke="#d97660" stroke-width="3.4" stroke-linecap="round"><title>C17–C18 · 14.6 m · 상한 12.0 m 초과</title></line><line x1="604.8" y1="184.8" x2="718.2" y2="184.8" stroke="#d97660" stroke-width="3.4" stroke-linecap="round"><title>C27–C28 · 13.5 m · 상한 12.0 m 초과</title></line><line x1="201.6" y1="184.8" x2="236.9" y2="81.5" stroke="#d97660" stroke-width="3.4" stroke-linecap="round"><title>C23–C29 · 13.0 m · 상한 12.0 m 초과</title></line><line x1="302.4" y1="184.8" x2="327.6" y2="81.5" stroke="#d97660" stroke-width="3.4" stroke-linecap="round"><title>C24–C30 · 12.7 m · 상한 12.0 m 초과</title></line><line x1="403.2" y1="184.8" x2="420" y2="81.5" stroke="#d97660" stroke-width="3.4" stroke-linecap="round"><title>C25–C31 · 12.5 m · 상한 12.0 m 초과</title></line><line x1="504" y1="184.8" x2="514.9" y2="81.5" stroke="#d97660" stroke-width="3.4" stroke-linecap="round"><title>C26–C32 · 12.4 m · 상한 12.0 m 초과</title></line><line x1="604.8" y1="184.8" x2="604.8" y2="81.5" stroke="#d97660" stroke-width="3.4" stroke-linecap="round"><title>C27–C33 · 12.3 m · 상한 12.0 m 초과</title></line><text x="355.3" y="262.8" class="pl-len" text-anchor="middle">14.6</text><text x="548.1" y="358.6" class="pl-len" text-anchor="middle">13.5</text><text x="661.5" y="178.8" class="pl-len" text-anchor="middle">13.5</text><text x="233.2" y="136.6" class="pl-len" text-anchor="start">13.0</text><text x="329" y="136.6" class="pl-len" text-anchor="start">12.7</text><text x="249.9" y="456" class="pl-len" text-anchor="middle">12.5</text><text x="425.6" y="136.6" class="pl-len" text-anchor="start">12.5</text><text x="523.5" y="136.6" class="pl-len" text-anchor="start">12.4</text><text x="618.8" y="136.6" class="pl-len" text-anchor="start">12.3</text><rect x="92.4" y="453.6" width="16.8" height="16.8" fill="#ffffff" stroke="#292c2d" stroke-width="1.1"/><rect x="98.3" y="459.5" width="5.0" height="5.0" fill="#292c2d"/><rect x="189" y="453.6" width="16.8" height="16.8" fill="#c8553d" stroke="#c8553d" stroke-width="1.1"/><rect x="194.9" y="459.5" width="5.0" height="5.0" fill="#ffffff"/><rect x="294" y="453.6" width="16.8" height="16.8" fill="#ffffff" stroke="#292c2d" stroke-width="1.1"/><rect x="299.9" y="459.5" width="5.0" height="5.0" fill="#292c2d"/><rect x="394.8" y="453.6" width="16.8" height="16.8" fill="#ffffff" stroke="#292c2d" stroke-width="1.1"/><rect x="400.7" y="459.5" width="5.0" height="5.0" fill="#292c2d"/><rect x="495.6" y="453.6" width="16.8" height="16.8" fill="#ffffff" stroke="#292c2d" stroke-width="1.1"/><rect x="501.5" y="459.5" width="5.0" height="5.0" fill="#292c2d"/><rect x="596.4" y="453.6" width="16.8" height="16.8" fill="#ffffff" stroke="#292c2d" stroke-width="1.1"/><rect x="602.3" y="459.5" width="5.0" height="5.0" fill="#292c2d"/><rect x="697.2" y="453.6" width="16.8" height="16.8" fill="#ffffff" stroke="#292c2d" stroke-width="1.1"/><rect x="703.1" y="459.5" width="5.0" height="5.0" fill="#292c2d"/><rect x="92.4" y="356.2" width="16.8" height="16.8" fill="#ffffff" stroke="#292c2d" stroke-width="1.1"/><rect x="98.3" y="362" width="5.0" height="5.0" fill="#292c2d"/><rect x="193.2" y="356.2" width="16.8" height="16.8" fill="#ffffff" stroke="#292c2d" stroke-width="1.1"/><rect x="199.1" y="362" width="5.0" height="5.0" fill="#292c2d"/><rect x="289.8" y="356.2" width="16.8" height="16.8" fill="#c8553d" stroke="#c8553d" stroke-width="1.1"/><rect x="295.7" y="362" width="5.0" height="5.0" fill="#ffffff"/><rect x="390.6" y="356.2" width="16.8" height="16.8" fill="#c8553d" stroke="#c8553d" stroke-width="1.1"/><rect x="396.5" y="362" width="5.0" height="5.0" fill="#ffffff"/><rect x="483" y="356.2" width="16.8" height="16.8" fill="#c8553d" stroke="#c8553d" stroke-width="1.1"/><rect x="488.9" y="362" width="5.0" height="5.0" fill="#ffffff"/><rect x="596.4" y="356.2" width="16.8" height="16.8" fill="#ffffff" stroke="#292c2d" stroke-width="1.1"/><rect x="602.3" y="362" width="5.0" height="5.0" fill="#292c2d"/><rect x="697.2" y="356.2" width="16.8" height="16.8" fill="#ffffff" stroke="#292c2d" stroke-width="1.1"/><rect x="703.1" y="362" width="5.0" height="5.0" fill="#292c2d"/><rect x="92.4" y="260.4" width="16.8" height="16.8" fill="#ffffff" stroke="#292c2d" stroke-width="1.1"/><rect x="98.3" y="266.3" width="5.0" height="5.0" fill="#292c2d"/><rect x="184.8" y="260.4" width="16.8" height="16.8" fill="#ffffff" stroke="#292c2d" stroke-width="1.1"/><rect x="190.7" y="266.3" width="5.0" height="5.0" fill="#292c2d"/><rect x="285.6" y="260.4" width="16.8" height="16.8" fill="#ffffff" stroke="#292c2d" stroke-width="1.1"/><rect x="291.5" y="266.3" width="5.0" height="5.0" fill="#292c2d"/><rect x="408.2" y="260.4" width="16.8" height="16.8" fill="#ffffff" stroke="#292c2d" stroke-width="1.1"/><rect x="414.1" y="266.3" width="5.0" height="5.0" fill="#292c2d"/><rect x="495.6" y="260.4" width="16.8" height="16.8" fill="#ffffff" stroke="#292c2d" stroke-width="1.1"/><rect x="501.5" y="266.3" width="5.0" height="5.0" fill="#292c2d"/><rect x="596.4" y="260.4" width="16.8" height="16.8" fill="#ffffff" stroke="#292c2d" stroke-width="1.1"/><rect x="602.3" y="266.3" width="5.0" height="5.0" fill="#292c2d"/><rect x="697.2" y="260.4" width="16.8" height="16.8" fill="#ffffff" stroke="#292c2d" stroke-width="1.1"/><rect x="703.1" y="266.3" width="5.0" height="5.0" fill="#292c2d"/><rect x="92.4" y="176.4" width="16.8" height="16.8" fill="#ffffff" stroke="#292c2d" stroke-width="1.1"/><circle cx="100.8" cy="184.8" r="14.7" fill="none" stroke="#c9a24a" stroke-width="1.8"/><rect x="98.3" y="182.3" width="5.0" height="5.0" fill="#292c2d"/><rect x="193.2" y="176.4" width="16.8" height="16.8" fill="#ffffff" stroke="#292c2d" stroke-width="1.1"/><circle cx="201.6" cy="184.8" r="14.7" fill="none" stroke="#c9a24a" stroke-width="1.8"/><rect x="199.1" y="182.3" width="5.0" height="5.0" fill="#292c2d"/><rect x="294" y="176.4" width="16.8" height="16.8" fill="#ffffff" stroke="#292c2d" stroke-width="1.1"/><circle cx="302.4" cy="184.8" r="14.7" fill="none" stroke="#c9a24a" stroke-width="1.8"/><rect x="299.9" y="182.3" width="5.0" height="5.0" fill="#292c2d"/><rect x="394.8" y="176.4" width="16.8" height="16.8" fill="#ffffff" stroke="#292c2d" stroke-width="1.1"/><circle cx="403.2" cy="184.8" r="14.7" fill="none" stroke="#c9a24a" stroke-width="1.8"/><rect x="400.7" y="182.3" width="5.0" height="5.0" fill="#292c2d"/><rect x="495.6" y="176.4" width="16.8" height="16.8" fill="#ffffff" stroke="#292c2d" stroke-width="1.1"/><circle cx="504" cy="184.8" r="14.7" fill="none" stroke="#c9a24a" stroke-width="1.8"/><rect x="501.5" y="182.3" width="5.0" height="5.0" fill="#292c2d"/><rect x="596.4" y="176.4" width="16.8" height="16.8" fill="#ffffff" stroke="#292c2d" stroke-width="1.1"/><circle cx="604.8" cy="184.8" r="14.7" fill="none" stroke="#c9a24a" stroke-width="1.8"/><rect x="602.3" y="182.3" width="5.0" height="5.0" fill="#292c2d"/><rect x="709.8" y="176.4" width="16.8" height="16.8" fill="#ffffff" stroke="#292c2d" stroke-width="1.1"/><rect x="715.7" y="182.3" width="5.0" height="5.0" fill="#292c2d"/><rect x="228.5" y="73.1" width="16.8" height="16.8" fill="#c8553d" stroke="#c8553d" stroke-width="1.1"/><rect x="234.4" y="79" width="5.0" height="5.0" fill="#ffffff"/><rect x="319.2" y="73.1" width="16.8" height="16.8" fill="#c8553d" stroke="#c8553d" stroke-width="1.1"/><rect x="325.1" y="79" width="5.0" height="5.0" fill="#ffffff"/><rect x="411.6" y="73.1" width="16.8" height="16.8" fill="#c8553d" stroke="#c8553d" stroke-width="1.1"/><rect x="417.5" y="79" width="5.0" height="5.0" fill="#ffffff"/><rect x="506.5" y="73.1" width="16.8" height="16.8" fill="#c8553d" stroke="#c8553d" stroke-width="1.1"/><rect x="512.4" y="79" width="5.0" height="5.0" fill="#ffffff"/><rect x="596.4" y="73.1" width="16.8" height="16.8" fill="#ffffff" stroke="#292c2d" stroke-width="1.1"/><rect x="602.3" y="79" width="5.0" height="5.0" fill="#292c2d"/><rect x="665.3" y="73.1" width="16.8" height="16.8" fill="#c8553d" stroke="#c8553d" stroke-width="1.1"/><rect x="671.2" y="79" width="5.0" height="5.0" fill="#ffffff"/><g class="pl-no"><circle cx="210.4" cy="449" r="7.5" fill="#292c2d"/><text x="210.4" y="452.3" text-anchor="middle">1</text></g><g class="pl-no"><circle cx="311.2" cy="351.6" r="7.5" fill="#292c2d"/><text x="311.2" y="354.90000000000003" text-anchor="middle">2</text></g><g class="pl-no"><circle cx="412" cy="351.6" r="7.5" fill="#292c2d"/><text x="412" y="354.90000000000003" text-anchor="middle">3</text></g><g class="pl-no"><circle cx="504.4" cy="351.6" r="7.5" fill="#292c2d"/><text x="504.4" y="354.90000000000003" text-anchor="middle">4</text></g><g class="pl-no"><circle cx="249.9" cy="68.5" r="7.5" fill="#292c2d"/><text x="249.9" y="71.8" text-anchor="middle">5</text></g><g class="pl-no"><circle cx="340.6" cy="68.5" r="7.5" fill="#292c2d"/><text x="340.6" y="71.8" text-anchor="middle">6</text></g><g class="pl-no"><circle cx="433" cy="68.5" r="7.5" fill="#292c2d"/><text x="433" y="71.8" text-anchor="middle">7</text></g><g class="pl-no"><circle cx="527.9" cy="68.5" r="7.5" fill="#292c2d"/><text x="527.9" y="71.8" text-anchor="middle">8</text></g><g class="pl-no"><circle cx="686.7" cy="68.5" r="7.5" fill="#292c2d"/><text x="686.7" y="71.8" text-anchor="middle">9</text></g><g class="pl-no"><circle cx="113.8" cy="171.8" r="7.5" fill="#292c2d"/><text x="113.8" y="175.10000000000002" text-anchor="middle">10</text></g><g class="pl-no"><circle cx="214.6" cy="171.8" r="7.5" fill="#292c2d"/><text x="214.6" y="175.10000000000002" text-anchor="middle">11</text></g><g class="pl-no"><circle cx="315.4" cy="171.8" r="7.5" fill="#292c2d"/><text x="315.4" y="175.10000000000002" text-anchor="middle">12</text></g><g class="pl-no"><circle cx="416.2" cy="171.8" r="7.5" fill="#292c2d"/><text x="416.2" y="175.10000000000002" text-anchor="middle">13</text></g><g class="pl-no"><circle cx="517" cy="171.8" r="7.5" fill="#292c2d"/><text x="517" y="175.10000000000002" text-anchor="middle">14</text></g><g class="pl-no"><circle cx="617.8" cy="171.8" r="7.5" fill="#292c2d"/><text x="617.8" y="175.10000000000002" text-anchor="middle">15</text></g><g class="pl-no"><circle cx="307" cy="255.8" r="7.5" fill="#292c2d"/><text x="307" y="259.1" text-anchor="middle">16</text></g><text x="261.2" y="297.5" class="pl-tag" text-anchor="end">누락 가능</text><text x="757.7" y="465.5" class="pl-row">N1</text><text x="757.7" y="368.1" class="pl-row">N2</text><text x="757.7" y="272.3" class="pl-row">N3</text><text x="757.7" y="188.3" class="pl-row">N4</text><text x="757.7" y="85" class="pl-row">N5</text><g transform="translate(760.2 26.8) rotate(21)"><line x1="0" y1="10" x2="0" y2="-10" stroke="#292c2d" stroke-width="1.2"/><path d="M0 -13 L4 -5 L-4 -5 Z" fill="#292c2d"/><text x="0" y="22" text-anchor="middle" class="pl-ax">N</text></g><g class="pl-scale"><rect x="50.4" y="515.8" width="42" height="4" fill="#292c2d"/><rect x="92.4" y="515.8" width="42" height="4" fill="#fff" stroke="#292c2d" stroke-width="0.8"/><text x="50.4" y="530.8" class="pl-ax">0</text><text x="92.4" y="530.8" class="pl-ax" text-anchor="middle">5</text><text x="134.4" y="530.8" class="pl-ax" text-anchor="middle">10 m</text></g><text x="786.2" y="528.8" class="pl-note" text-anchor="end">기존 기초 축(−21.0°)에 맞춰 돌려 그림</text></svg>
+        <div class="legend">
+          <span><svg viewBox="0 0 18 14"><rect x="1" y="1" width="16" height="12" fill="#f6f7f4" stroke="#c9cecb" stroke-dasharray="3 2"/></svg>기존 유수지 범위</span>
+          <span><svg viewBox="0 0 18 14"><rect x="3" y="1" width="12" height="12" fill="#d6dad7" stroke="#b7bcb9"/></svg>기존 기초(토목 모델)</span>
+          <span><svg viewBox="0 0 18 14"><rect x="3" y="1" width="12" height="12" fill="none" stroke="#8a9396" stroke-dasharray="2.5 2"/></svg>모델 누락 가능</span>
+          <span><svg viewBox="0 0 18 14"><rect x="0" y="4" width="18" height="6" fill="url(#hb)"/><rect x="0" y="4" width="18" height="6" fill="#e3e6e3"/></svg>유수지 보 띠</span>
+          <span><svg viewBox="0 0 18 14"><rect x="3" y="1" width="12" height="12" fill="#fff" stroke="#292c2d" stroke-width="1.2"/><rect x="7" y="5" width="4" height="4" fill="#292c2d"/></svg>신설 기둥·파일캡</span>
+          <span><svg viewBox="0 0 18 14"><rect x="3" y="1" width="12" height="12" fill="#c8553d"/><rect x="7" y="5" width="4" height="4" fill="#fff"/></svg>파일캡 간섭</span>
+          <span><svg viewBox="0 0 18 14"><circle cx="9" cy="7" r="6" fill="none" stroke="#c9a24a" stroke-width="1.8"/></svg>유수지 보 간섭</span>
+          <span><svg viewBox="0 0 18 14"><rect x="1" y="1" width="16" height="12" fill="none" stroke="#8a9396" stroke-dasharray="2 2"/></svg>오픈컷 3.6 m</span>
+          <span><svg viewBox="0 0 18 14"><line x1="0" y1="7" x2="18" y2="7" stroke="#d97660" stroke-width="3.4"/></svg>경간 12 m 초과</span>
+        </div>
+      </figure>
+      <div>
+        <div class="tbl-cap"><h4>간섭·확인 위치 16곳</h4><span>여유(m) · 음수 = 겹침</span></div>
+        <div class="tbl-wrap"><table class="tbl">
+          <thead><tr><th></th><th>기둥</th><th class="num">파일캡↔기초<br><span class="sub">0.2 필요</span></th><th class="num">오픈컷↔기초</th><th class="num">기둥↔보 띠</th><th>판정</th></tr></thead>
+          <tbody><tr><td class="no"><span class="dot-no">1</span></td><td><b>C02</b> <span class="sub">N1</span></td><td class="num bad">+0.15</td><td class="num bad">−0.65</td><td class="num">+0.75</td><td><span class="vd vd-ng">✕ 불가</span></td></tr><tr><td class="no"><span class="dot-no">2</span></td><td><b>C10</b> <span class="sub">N2</span></td><td class="num bad">+0.15</td><td class="num bad">−0.65</td><td class="num">+0.35</td><td><span class="vd vd-ng">✕ 불가</span></td></tr><tr><td class="no"><span class="dot-no">3</span></td><td><b>C11</b> <span class="sub">N2</span></td><td class="num bad">+0.15</td><td class="num bad">−0.65</td><td class="num">+0.35</td><td><span class="vd vd-ng">✕ 불가</span></td></tr><tr><td class="no"><span class="dot-no">4</span></td><td><b>C12</b> <span class="sub">N2</span></td><td class="num bad">−0.75</td><td class="num bad">−1.55</td><td class="num">+0.35</td><td><span class="vd vd-ng">✕ 불가</span></td></tr><tr><td class="no"><span class="dot-no">5</span></td><td><b>C29</b> <span class="sub">N5</span></td><td class="num bad">−1.05</td><td class="num bad">−1.85</td><td class="num">+0.05</td><td><span class="vd vd-ng">✕ 불가</span></td></tr><tr><td class="no"><span class="dot-no">6</span></td><td><b>C30</b> <span class="sub">N5</span></td><td class="num bad">−1.05</td><td class="num bad">−1.85</td><td class="num">+0.05</td><td><span class="vd vd-ng">✕ 불가</span></td></tr><tr><td class="no"><span class="dot-no">7</span></td><td><b>C31</b> <span class="sub">N5</span></td><td class="num bad">−1.05</td><td class="num bad">−1.85</td><td class="num">+0.05</td><td><span class="vd vd-ng">✕ 불가</span></td></tr><tr><td class="no"><span class="dot-no">8</span></td><td><b>C32</b> <span class="sub">N5</span></td><td class="num bad">−0.65</td><td class="num bad">−1.45</td><td class="num">+0.05</td><td><span class="vd vd-ng">✕ 불가</span></td></tr><tr><td class="no"><span class="dot-no">9</span></td><td><b>C34</b> <span class="sub">N5</span></td><td class="num bad">−1.05</td><td class="num bad">−1.85</td><td class="num">+0.05</td><td><span class="vd vd-ng">✕ 불가</span></td></tr><tr><td class="no"><span class="dot-no">10</span></td><td><b>C22</b> <span class="sub">N4</span></td><td class="num">+0.65</td><td class="num bad">−0.15</td><td class="num bad">−0.25</td><td><span class="vd vd-warn">! 경고</span></td></tr><tr><td class="no"><span class="dot-no">11</span></td><td><b>C23</b> <span class="sub">N4</span></td><td class="num">+0.65</td><td class="num bad">−0.15</td><td class="num bad">−0.25</td><td><span class="vd vd-warn">! 경고</span></td></tr><tr><td class="no"><span class="dot-no">12</span></td><td><b>C24</b> <span class="sub">N4</span></td><td class="num">+0.65</td><td class="num bad">−0.15</td><td class="num bad">−0.25</td><td><span class="vd vd-warn">! 경고</span></td></tr><tr><td class="no"><span class="dot-no">13</span></td><td><b>C25</b> <span class="sub">N4</span></td><td class="num">+0.65</td><td class="num bad">−0.15</td><td class="num bad">−0.25</td><td><span class="vd vd-warn">! 경고</span></td></tr><tr><td class="no"><span class="dot-no">14</span></td><td><b>C26</b> <span class="sub">N4</span></td><td class="num">+0.65</td><td class="num bad">−0.15</td><td class="num bad">−0.25</td><td><span class="vd vd-warn">! 경고</span></td></tr><tr><td class="no"><span class="dot-no">15</span></td><td><b>C27</b> <span class="sub">N4</span></td><td class="num">+0.65</td><td class="num bad">−0.15</td><td class="num bad">−0.25</td><td><span class="vd vd-warn">! 경고</span></td></tr><tr><td class="no"><span class="dot-no">16</span></td><td><b>C17</b> <span class="sub">N3</span></td><td class="num">+0.65</td><td class="num bad">−0.15</td><td class="num">+1.75</td><td><span class="vd vd-ask">? 확인</span></td></tr></tbody>
+        </table></div>
+        <p class="fig-cap">오픈컷 ↔ 기존 기초는 33곳 모두 <span class="vd vd-talk">~ 협의</span>(토목사무소). 겹침이 없는 곳은 기초 범위 밖의 C28뿐이다. C17 근처는 격자 교점에 기초가 없는 <b>모델 누락 가능</b> 위치다.</p>
+      </div>
+    </div>
+
+    <div class="subsec">
+      <p class="eyebrow">01·A / Alternatives</p>
+      <h3 class="sub-h">대안 두 개는 파일캡 간섭을 0으로 만들지만, 기둥이 2~4개 늘어난다.</h3>
+      <p class="sec-lede" style="margin-bottom:24px">같은 우선순위로 배치를 다시 만든 두 안을 비교했다. 대안 A는 직교 격자, 대안 B는 이웃 줄을 반 칸씩 엇갈린 격자다. <b>오픈컷 협의는 어느 안도 크게 줄지 않는다</b> — 기초 격자가 6 m인 한 피할 수 없는 조건이다.</p>
+      <div class="alt-key"><span><i class="b-actual"></i>현재 모델 · 기둥 34</span><span><i class="b-strong"></i>대안 A · 직교 · 기둥 38</span><span><i class="b-alt"></i>대안 B · 엇갈림 · 기둥 36</span></div>
+      <div class="cards"><article class="card"><header><h4>경간 초과</h4><span class="meta">거더 경간 > 12.0 m</span></header><span class="tag">초과</span><div class="cb"><div class="cb-row"><span class="cb-l">현재 모델</span><span class="cb-track"><span class="cb-bar b-actual" style="width:100%" title="현재 모델 · 9곳"></span><span class="cb-v" style="left:100%">9</span></span></div><div class="cb-row"><span class="cb-l">대안 A · 직교</span><span class="cb-track"><span class="cb-bar b-strong" style="width:0%" title="대안 A · 직교 · 0곳"></span><span class="cb-v zero" style="left:0%">0</span></span></div><div class="cb-row"><span class="cb-l">대안 B · 엇갈림</span><span class="cb-track"><span class="cb-bar b-alt" style="width:0%" title="대안 B · 엇갈림 · 0곳"></span><span class="cb-v zero" style="left:0%">0</span></span></div></div></article><article class="card"><header><h4>파일캡 ↔ 기존 기초</h4><span class="meta">캡 2.0 m + 여유 0.2 m</span></header><span class="tag">불가</span><div class="cb"><div class="cb-row"><span class="cb-l">현재 모델</span><span class="cb-track"><span class="cb-bar b-actual" style="width:100%" title="현재 모델 · 9곳"></span><span class="cb-v" style="left:100%">9</span></span></div><div class="cb-row"><span class="cb-l">대안 A · 직교</span><span class="cb-track"><span class="cb-bar b-strong" style="width:0%" title="대안 A · 직교 · 0곳"></span><span class="cb-v zero" style="left:0%">0</span></span></div><div class="cb-row"><span class="cb-l">대안 B · 엇갈림</span><span class="cb-track"><span class="cb-bar b-alt" style="width:0%" title="대안 B · 엇갈림 · 0곳"></span><span class="cb-v zero" style="left:0%">0</span></span></div></div></article><article class="card"><header><h4>기둥 ↔ 유수지 보</h4><span class="meta">보 띠 폭 2.0 m(모델)</span></header><span class="tag">경고</span><div class="cb"><div class="cb-row"><span class="cb-l">현재 모델</span><span class="cb-track"><span class="cb-bar b-actual" style="width:100%" title="현재 모델 · 6곳"></span><span class="cb-v" style="left:100%">6</span></span></div><div class="cb-row"><span class="cb-l">대안 A · 직교</span><span class="cb-track"><span class="cb-bar b-strong" style="width:50%" title="대안 A · 직교 · 3곳"></span><span class="cb-v" style="left:50%">3</span></span></div><div class="cb-row"><span class="cb-l">대안 B · 엇갈림</span><span class="cb-track"><span class="cb-bar b-alt" style="width:66.66666666666666%" title="대안 B · 엇갈림 · 4곳"></span><span class="cb-v" style="left:66.66666666666666%">4</span></span></div></div></article><article class="card"><header><h4>오픈컷 ↔ 기존 기초</h4><span class="meta">오픈컷 3.6 m</span></header><span class="tag">협의</span><div class="cb"><div class="cb-row"><span class="cb-l">현재 모델</span><span class="cb-track"><span class="cb-bar b-actual" style="width:91.66666666666666%" title="현재 모델 · 33곳"></span><span class="cb-v" style="left:91.66666666666666%">33</span></span></div><div class="cb-row"><span class="cb-l">대안 A · 직교</span><span class="cb-track"><span class="cb-bar b-strong" style="width:100%" title="대안 A · 직교 · 36곳"></span><span class="cb-v" style="left:100%">36</span></span></div><div class="cb-row"><span class="cb-l">대안 B · 엇갈림</span><span class="cb-track"><span class="cb-bar b-alt" style="width:86.11111111111111%" title="대안 B · 엇갈림 · 31곳"></span><span class="cb-v" style="left:86.11111111111111%">31</span></span></div></div></article></div>
+    </div>
+  </section>
+
+  <section class="sec" id="s02" aria-labelledby="h02">
+    <div class="sec-head">
+      <div>
+        <p class="eyebrow">02 / Span</p>
+        <h2 id="h02">12 m를 넘는 경간 9곳 중 5곳은<br>N4–N5 줄 사이 세로 거더다.</h2>
+        <p class="sec-lede">N4–N5 줄 간격은 12.3 m이고 기둥이 줄마다 최대 4.2 m 엇갈려 있다. N5 줄은 기존 기초 Y9 줄에서 1.3 m 떨어져 파일캡 5곳이 이미 걸려 있어, <b>경간과 기초 간섭이 이 한 줄에서 부딪힌다</b>. 나머지 4곳은 보이드 옆 <span class="nw">C17–C18(14.6 m)</span>과 N1·N2·N4 줄의 넓은 칸이다.</p>
+      </div>
+      <div class="sec-meta">경간 = 거더를 기둥 상단점(허용 0.3 m)에서 끊은 구간<br>대각·엇갈린 거더에도 12 m 적용(질문 01)</div>
+    </div>
+    <div class="span-grid">
+      <div class="sp">
+        <div class="sp-axis"><span></span><span class="ax"><span style="left:0%">0</span><span style="left:25%">4</span><span style="left:50%">8</span><span style="left:75%">12</span><span style="left:100%">16</span></span><span>판정</span></div>
+        <div style="position:relative">
+          <div class="sp-row"><span class="sp-l"><b>C17–C18</b><span class="sub">N3 줄 · 보이드 옆</span></span><span class="sp-track"><span class="sp-bar b-actual" style="width:91.25000000000001%" title="C17–C18 · 14.6 m"></span><span class="sp-v" style="left:91.25000000000001%">14.6</span></span><span class="sp-j"><span class="vd vd-ng">✕ 초과</span></span></div><div class="sp-row"><span class="sp-l"><b>C12–C13</b><span class="sub">N2 줄</span></span><span class="sp-track"><span class="sp-bar b-actual" style="width:84.375%" title="C12–C13 · 13.5 m"></span><span class="sp-v" style="left:84.375%">13.5</span></span><span class="sp-j"><span class="vd vd-ng">✕ 초과</span></span></div><div class="sp-row"><span class="sp-l"><b>C27–C28</b><span class="sub">N4 줄 · 줄돔</span></span><span class="sp-track"><span class="sp-bar b-actual" style="width:84.375%" title="C27–C28 · 13.5 m"></span><span class="sp-v" style="left:84.375%">13.5</span></span><span class="sp-j"><span class="vd vd-ng">✕ 초과</span></span></div><div class="sp-row"><span class="sp-l"><b>C23–C29</b><span class="sub">N4–N5 세로</span></span><span class="sp-track"><span class="sp-bar b-actual" style="width:81.23317133412924%" title="C23–C29 · 13.0 m"></span><span class="sp-v" style="left:81.23317133412924%">13.0</span></span><span class="sp-j"><span class="vd vd-ng">✕ 초과</span></span></div><div class="sp-row"><span class="sp-l"><b>C24–C30</b><span class="sub">N4–N5 세로</span></span><span class="sp-track"><span class="sp-bar b-actual" style="width:79.12855442253446%" title="C24–C30 · 12.7 m"></span><span class="sp-v" style="left:79.12855442253446%">12.7</span></span><span class="sp-j"><span class="vd vd-ng">✕ 초과</span></span></div><div class="sp-row"><span class="sp-l"><b>C02–C03</b><span class="sub">N1 줄</span></span><span class="sp-track"><span class="sp-bar b-actual" style="width:78.125%" title="C02–C03 · 12.5 m"></span><span class="sp-v" style="left:78.125%">12.5</span></span><span class="sp-j"><span class="vd vd-ng">✕ 초과</span></span></div><div class="sp-row"><span class="sp-l"><b>C25–C31</b><span class="sub">N4–N5 세로</span></span><span class="sp-track"><span class="sp-bar b-actual" style="width:77.88463022317046%" title="C25–C31 · 12.5 m"></span><span class="sp-v" style="left:77.88463022317046%">12.5</span></span><span class="sp-j"><span class="vd vd-ng">✕ 초과</span></span></div><div class="sp-row"><span class="sp-l"><b>C26–C32</b><span class="sub">N4–N5 세로 · 줄돔</span></span><span class="sp-track"><span class="sp-bar b-actual" style="width:77.30317748967373%" title="C26–C32 · 12.4 m"></span><span class="sp-v" style="left:77.30317748967373%">12.4</span></span><span class="sp-j"><span class="vd vd-ng">✕ 초과</span></span></div><div class="sp-row"><span class="sp-l"><b>C27–C33</b><span class="sub">N4–N5 세로 · 줄돔</span></span><span class="sp-track"><span class="sp-bar b-actual" style="width:76.87499999999999%" title="C27–C33 · 12.3 m"></span><span class="sp-v" style="left:76.87499999999999%">12.3</span></span><span class="sp-j"><span class="vd vd-ng">✕ 초과</span></span></div><div class="sp-row"><span class="sp-l"><b>C03–C04</b><span class="sub">N1 줄</span></span><span class="sp-track"><span class="sp-bar b-base" style="width:75%" title="C03–C04 · 12.0 m"></span><span class="sp-v" style="left:75%">12.0</span></span><span class="sp-j"><span class="vd vd-ok">✓</span></span></div><div class="sp-row"><span class="sp-l"><b>C04–C05</b><span class="sub">N1 줄</span></span><span class="sp-track"><span class="sp-bar b-base" style="width:75%" title="C04–C05 · 12.0 m"></span><span class="sp-v" style="left:75%">12.0</span></span><span class="sp-j"><span class="vd vd-ok">✓</span></span></div><div class="sp-row"><span class="sp-l"><b>C05–C06</b><span class="sub">N1 줄</span></span><span class="sp-track"><span class="sp-bar b-base" style="width:75%" title="C05–C06 · 12.0 m"></span><span class="sp-v" style="left:75%">12.0</span></span><span class="sp-j"><span class="vd vd-ok">✓</span></span></div><div class="sp-row"><span class="sp-l"><b>C06–C07</b><span class="sub">N1 줄</span></span><span class="sp-track"><span class="sp-bar b-base" style="width:75%" title="C06–C07 · 12.0 m"></span><span class="sp-v" style="left:75%">12.0</span></span><span class="sp-j"><span class="vd vd-ok">✓</span></span></div><div class="sp-row"><span class="sp-l"><b>C08–C09</b><span class="sub">N2 줄</span></span><span class="sp-track"><span class="sp-bar b-base" style="width:75%" title="C08–C09 · 12.0 m"></span><span class="sp-v" style="left:75%">12.0</span></span><span class="sp-j"><span class="vd vd-ok">✓</span></span></div>
+          <div class="sp-lines"><div class="sp-limit" style="left:75%"><span>상한 12.0 m</span></div></div>
+        </div>
+        <p class="fig-cap" style="margin-top:30px">긴 경간 상위 14개 · 막대 끝 숫자는 평면 경간(m)</p>
+      </div>
+      <aside class="side">
+        <h4>곡선 길이는 경간이 아니다</h4>
+        <p>모델의 거더 곡선은 기둥 하나를 넘어 이어진 것이 많아, 곡선 길이로 세면 초과가 두 배 넘게 부풀려진다.</p>
+        <div class="ratio"><div class="lab"><span>거더 곡선 41개 중 평면 길이 12 m 초과</span><b>19</b></div><div class="bar"><span class="b-base" style="flex:22"></span><span class="b-strong" style="flex:19"></span></div></div>
+        <div class="ratio"><div class="lab"><span>기둥에서 끊은 경간 55개 중 12 m 초과</span><b>9</b></div><div class="bar"><span class="b-base" style="flex:46"></span><span class="b-actual" style="flex:9"></span></div></div>
+        <div class="callout"><span class="tag">경간 ↔ 기초 간섭</span><p>N5의 파일캡이 한 방향 분리 창(2.55 m)을 되찾으려면 줄을 Y9에서 2.55 m 이상 떼야 한다. <b>올리면</b>(v ≥ 48.6) N4–N5 경간이 13.6 m 이상으로 늘고, <b>내리면</b>(v ≤ 43.4) 경간은 풀리지만 데크 끝까지 내민 길이가 6.6 m로 캔틸레버 한도 3.5 m를 넘는다. 대안 A·B는 가장자리에 기둥을 더해 이 충돌을 푼다.</p></div>
+      </aside>
+    </div>
+  </section>
+
+  <section class="sec" id="s03" aria-labelledby="h03">
+    <div class="sec-head">
+      <div>
+        <p class="eyebrow">03 / Member check</p>
+        <h2 id="h03">검정비는 대부분 0.7 아래이고,<br>목표 0.90을 넘는 2개는 보이드 옆과 줄돔 구역 거더다.</h2>
+        <p class="sec-lede">부재 314개를 중력 조합과 명목 수평하중으로 계산했다. 목표를 넘는 것은 <b><span class="nw">C17–C18(14.6 m, 0.94)</span>과 <span class="nw">C27–C28(13.5 m, 0.92)</span></b>이며, 보 춤 상한 900 mm 안에서는 목표를 맞추는 단면 후보가 없다. 경간을 줄이는 것이 단면을 키우는 것보다 먼저다.</p>
+      </div>
+      <div class="sec-meta">판정 경계 0.7 · 1.0(모델 설정)<br>단면 선정 목표 0.90</div>
+    </div>
+    <div class="combo">
+      <div><h4>하중 조합</h4><ul><li><span>1.2D + 1.6L</span><span>강도</span></li><li><span>1.0D + 1.0L</span><span>사용성 · 참고 처짐</span></li><li><span>명목 수평 X · Y 0.002</span><span>가정 · 질문 06</span></li></ul></div>
+      <div><h4>주요 가정</h4><ul><li><span>기둥 하단 고정, 기존 슬래브 레벨 수평 구속</span><span>가정</span></li><li><span>상단선 기준 · 편심 무시</span><span>설계팀 결정</span></li><li><span>강재 SS275 · 활하중 5.0 kN/㎡ · 조경 데크 12.4 kN/㎡</span><span>가정 · DB</span></li></ul></div>
+      <div class="unchecked"><h4>검토하지 않은 항목</h4><ul><li>횡하중(풍·지진) 설계</li><li>접합부 · 데크 · 진동 · 내화</li><li>기초 내력 · 기존 유수지 보강</li></ul></div>
+    </div>
+    <div class="check-grid">
+      <div>
+        <div class="tbl-cap"><h4>검정비 분포</h4><span>부재 312개 · 미완 2개(Lb·K 미입력)</span></div>
+        <div class="hg"><div class="hg-col"><span class="hg-n">25</span><span class="hg-bar b-base" style="height:23.58490566037736%" title="검정비 0–0.3 · 25개"></span><span class="hg-l">0–0.3</span></div><div class="hg-col"><span class="hg-n">106</span><span class="hg-bar b-base" style="height:100%" title="검정비 0.3–0.5 · 106개"></span><span class="hg-l">0.3–0.5</span></div><div class="hg-col"><span class="hg-n">94</span><span class="hg-bar b-base" style="height:88.67924528301887%" title="검정비 0.5–0.7 · 94개"></span><span class="hg-l">0.5–0.7</span></div><div class="hg-col"><span class="hg-n">60</span><span class="hg-bar b-strong" style="height:56.60377358490566%" title="검정비 0.7–0.8 · 60개"></span><span class="hg-l">0.7–0.8</span></div><div class="hg-col"><span class="hg-n">25</span><span class="hg-bar b-strong" style="height:23.58490566037736%" title="검정비 0.8–0.9 · 25개"></span><span class="hg-l">0.8–0.9</span></div><div class="hg-col"><span class="hg-n">2</span><span class="hg-bar b-actual" style="height:2%" title="검정비 0.9–1.0 · 2개"></span><span class="hg-l">0.9–1.0</span></div><div class="hg-col"><span class="hg-n">0</span><span class="hg-bar b-actual" style="height:0%" title="검정비 1.0 이상 · 0개"></span><span class="hg-l">1.0 이상</span></div><div class="hg-target" style="left:calc(71.42857142857143% + 1px)"><span>목표 0.90</span></div></div>
+        <div class="hg-foot"><span><i class="b-base"></i>0.7 미만 ✓</span><span><i class="b-strong"></i>0.7–0.9 ! 주의</span><span><i class="b-actual"></i>0.9 이상 ! 목표 초과</span></div>
+      </div>
+      <div>
+        <div class="mini">
+          <div><h4>최대 검정비</h4><div class="v">0.94</div><p>C17–C18 · 휨·횡좌굴</p></div>
+          <div><h4>참고 처짐</h4><div class="v">L/386</div><p>C17–C18 · 1.0D + 1.0L</p></div>
+          <div><h4>수평 구속 반력</h4><div class="v">42<small class="sub"> kN</small></div><p>C32 · 명목 수평 X</p></div>
+        </div>
+        <div class="tbl-cap"><h4>지배 부재</h4><span>검정비 상위 6</span></div>
+        <div class="tbl-wrap"><table class="tbl"><thead><tr><th>부호</th><th>위치</th><th class="num">검정비</th><th>지배 조항</th><th class="num">Lb · K</th><th>판정</th></tr></thead><tbody><tr><td><span class="mk"><i>S06-</i>SG4</span></td><td>C17–C18 <span class="sub">14.6 m</span></td><td class="num"><b>0.94</b></td><td>휨 · 횡좌굴</td><td class="num">Lb 2.5 m</td><td><span class="vd vd-warn">! 목표 초과</span></td></tr><tr><td><span class="mk"><i>S06-</i>SG5</span></td><td>C27–C28 <span class="sub">13.5 m</span></td><td class="num"><b>0.92</b></td><td>휨 + 축력(곡선)</td><td class="num">Lb 2.5 m</td><td><span class="vd vd-warn">! 목표 초과</span></td></tr><tr><td><span class="mk"><i>S06-</i>SG4</span></td><td>C12–C13 <span class="sub">13.5 m</span></td><td class="num"><b>0.89</b></td><td>휨 · 횡좌굴</td><td class="num">Lb 2.5 m</td><td><span class="vd vd-mid">! 주의</span></td></tr><tr><td><span class="mk"><i>S06-</i>SG3</span></td><td>C23–C29 <span class="sub">13.0 m</span></td><td class="num"><b>0.86</b></td><td>휨 · 횡좌굴</td><td class="num">Lb 2.5 m</td><td><span class="vd vd-mid">! 주의</span></td></tr><tr><td><span class="mk"><i>S06-</i>SG5</span></td><td>C26–C32 <span class="sub">12.4 m</span></td><td class="num"><b>0.86</b></td><td>휨 + 축력(곡선)</td><td class="num">Lb 2.5 m</td><td><span class="vd vd-mid">! 주의</span></td></tr><tr><td><span class="mk"><i>S06-</i>SG5</span></td><td>C27–C33 <span class="sub">12.3 m</span></td><td class="num"><b>0.86</b></td><td>휨 + 축력(곡선)</td><td class="num">Lb 2.5 m</td><td><span class="vd vd-mid">! 주의</span></td></tr></tbody></table></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="sec" id="s04" aria-labelledby="h04">
+    <div class="sec-head">
+      <div>
+        <p class="eyebrow">04 / Member schedule</p>
+        <h2 id="h04">예비 단면은 부호 12종, 강재 333 t이고<br>36%가 거더다.</h2>
+        <p class="sec-lede">부재를 역할·단면·곡선 여부로 묶어 부호를 붙였다. <b>SG4·SG5는 보 춤 상한에 걸린 묶음</b>이라 경간이 줄면 SG3 이하로 내려간다. 무게는 KS H 단위중량 × 총길이이며 접합부·스티프너·받침은 넣지 않았다.</p>
+      </div>
+      <div class="sec-meta"><a class="btn" href="#s04">CSV ↓</a></div>
+    </div>
+    <div class="cp">
+      <div class="cp-bar"><span class="cp-seg b-strong" style="flex:118.7" title="거더 118.7 t"></span><span class="cp-seg b-alt" style="flex:103.6" title="작은보 103.6 t"></span><span class="cp-seg b-base" style="flex:74.7" title="기둥 74.7 t"></span><span class="cp-seg b-na" style="flex:36.4" title="테두리·내민·둘레 보 36.4 t"></span></div>
+      <div class="cp-labs"><span class="cp-lab" style="flex:118.7"><b>거더</b><span>118.7 t · 36%</span></span><span class="cp-lab" style="flex:103.6"><b>작은보</b><span>103.6 t · 31%</span></span><span class="cp-lab" style="flex:74.7"><b>기둥</b><span>74.7 t · 22%</span></span><span class="cp-lab" style="flex:36.4"><b>테두리·내민·둘레 보</b><span>36.4 t · 11%</span></span></div>
+    </div>
+    <div class="tbl-wrap"><table class="tbl">
+      <thead><tr><th>부호</th><th>부재</th><th>단면(KS H)</th><th class="num">개수</th><th class="num">총길이 m</th><th class="num">kg/m</th><th class="num">중량 t</th><th class="num">최대 검정비</th><th>비고</th></tr></thead>
+      <tbody><tr><td><span class="mk"><i>S06-</i>SC1</span></td><td>기둥</td><td class="mono">H-400×400×13×21</td><td class="num">17</td><td class="num">156</td><td class="num">172.0</td><td class="num"><b>26.8</b></td><td class="num">0.66</td><td class="note"></td></tr><tr><td><span class="mk"><i>S06-</i>SC2</span></td><td>기둥</td><td class="mono">H-428×407×20×35</td><td class="num">17</td><td class="num">169</td><td class="num">283.0</td><td class="num"><b>47.8</b></td><td class="num">0.77</td><td class="note">12 m 초과 경간을 받는 기둥</td></tr><tr><td><span class="mk"><i>S06-</i>SG1</span></td><td>거더</td><td class="mono">H-600×200×11×17</td><td class="num">8</td><td class="num">81</td><td class="num">106.0</td><td class="num"><b>8.6</b></td><td class="num">0.73</td><td class="note"></td></tr><tr><td><span class="mk"><i>S06-</i>SG2</span></td><td>거더</td><td class="mono">H-700×300×13×24</td><td class="num">35</td><td class="num">408</td><td class="num">185.0</td><td class="num"><b>75.4</b></td><td class="num">0.81</td><td class="note"></td></tr><tr><td><span class="mk"><i>S06-</i>SG3</span></td><td>거더</td><td class="mono">H-800×300×14×26</td><td class="num">4</td><td class="num">51</td><td class="num">210.0</td><td class="num"><b>10.6</b></td><td class="num">0.86</td><td class="note"></td></tr><tr><td><span class="mk"><i>S06-</i>SG4</span></td><td>거더</td><td class="mono">H-900×300×16×28</td><td class="num">2</td><td class="num">28</td><td class="num">243.0</td><td class="num"><b>6.8</b></td><td class="num">0.94 <span class="vd vd-warn">!</span></td><td class="note">춤 상한 900 mm · 목표를 맞추는 후보 없음</td></tr><tr><td><span class="mk"><i>S06-</i>SG5</span></td><td>거더(곡선)</td><td class="mono">H-900×300×16×28</td><td class="num">6</td><td class="num">71</td><td class="num">243.0</td><td class="num"><b>17.2</b></td><td class="num">0.92 <span class="vd vd-warn">!</span></td><td class="note">연직면 원호 · 솟음 1/10 · 춤 상한</td></tr><tr><td><span class="mk"><i>S06-</i>SB1</span></td><td>작은보</td><td class="mono">H-400×200×8×13</td><td class="num">97</td><td class="num">1,051</td><td class="num">66.0</td><td class="num"><b>69.4</b></td><td class="num">0.80</td><td class="note"></td></tr><tr><td><span class="mk"><i>S06-</i>SB2</span></td><td>작은보</td><td class="mono">H-450×200×9×14</td><td class="num">37</td><td class="num">451</td><td class="num">76.0</td><td class="num"><b>34.2</b></td><td class="num">0.83</td><td class="note"></td></tr><tr><td><span class="mk"><i>S06-</i>SEG1</span></td><td>테두리보</td><td class="mono">H-500×200×10×16</td><td class="num">46</td><td class="num">255</td><td class="num">89.6</td><td class="num"><b>22.9</b></td><td class="num">0.54</td><td class="note"></td></tr><tr><td><span class="mk"><i>S06-</i>SCB1</span></td><td>내민 보</td><td class="mono">H-600×200×11×17</td><td class="num">41</td><td class="num">115</td><td class="num">106.0</td><td class="num"><b>12.2</b></td><td class="num">0.70</td><td class="note">데크 내민 1.0 m 초과 구간</td></tr><tr><td><span class="mk"><i>S06-</i>STB1</span></td><td>보이드 둘레 보</td><td class="mono">H-350×175×7×11</td><td class="num">4</td><td class="num">27</td><td class="num">49.6</td><td class="num"><b>1.3</b></td><td class="num">0.35</td><td class="note">Lb·K 미완 2개</td></tr></tbody>
+      <tfoot><tr><td>합계</td><td></td><td></td><td class="num">314</td><td class="num">2,862</td><td></td><td class="num">333.3</td><td class="num">0.94</td><td class="note">㎡당 89 kg</td></tr></tfoot>
+    </table></div>
+    <p class="mark-rule">부호 = 프로젝트 접두 <b>S06-</b> + 부재 종류(SC 기둥 · SG 거더 · SB 작은보 · SEG 테두리보 · SCB 내민 보 · STB 보이드 둘레 보) + 1부터 번호. 종류 약어는 부호 표준 파일 확인 전 가정이다(질문 10).</p>
+  </section>
+
+  <section class="sec" id="s05" aria-labelledby="h05">
+    <div class="sec-head">
+      <div>
+        <p class="eyebrow">05 / Open conditions</p>
+        <h2 id="h05">답이 없는 조건 10개 중 4개는 단계를 막고,<br>나머지는 가정값으로 계산했다.</h2>
+        <p class="sec-lede">각 조건에는 지금 계산에 쓴 값과 그 근거 진술을 함께 적었다. 근거는 <b>누가·언제</b>를 먼저, 진술 번호를 뒤에 둔다. 답이 오면 해당 설정값만 바꿔 다시 계산하며, 이 보고서의 수치도 그때 달라진다.</p>
+      </div>
+      <div class="sec-meta">막힘 4 · 가정으로 계산 6<br>구조사무소 5 · 토목사무소 3</div>
+    </div>
+    <div class="tbl-wrap"><table class="tbl ledger">
+      <thead><tr><th></th><th>조건</th><th>지금 계산에 쓴 값</th><th>근거</th><th>누가 답하나</th><th>막는 단계</th><th>상태</th></tr></thead>
+      <tbody><tr><td class="no">01</td><td class="q">12 m 상한을 대각·엇갈린 거더에도 적용하나</td><td>모든 거더에 적용</td><td class="ev"><span class="evi">설계팀 결정 · 09-29 <code>F2.4</code></span><span class="evi">구조사무소 서면 · 07-31 <code>S1782</code></span></td><td>설계팀 → 구조사무소</td><td>② 배치 · ⑤ 거더망</td><td><span class="tag tag-block">막힘</span></td></tr><tr><td class="no">02</td><td class="q">파일 배치·캡 크기·연단 거리</td><td>캡 2.0 × 2.0 m(모델 블록) + 여유 0.2 m</td><td class="ev"><span class="evi">모델 블록 판독 · 09-26 <code>CR-C5</code></span><span class="evi">설계팀 메모 · 08-14 <code>S1692</code></span></td><td>구조사무소</td><td>④ 기초 간섭</td><td><span class="tag tag-block">막힘</span></td></tr><tr><td class="no">03</td><td class="q">기존 기초 위치·형식과 모델 누락 가능 1곳(C17 근처)</td><td>토목 모델 블록 176개 그대로</td><td class="ev"><span class="evi">현장 조사 기록 · 미조사 <code>S580</code></span><span class="evi">설계팀 메모 · 06-02 <code>E171</code></span></td><td>토목사무소</td><td>④ 기초 간섭</td><td><span class="tag tag-block">막힘</span></td></tr><tr><td class="no">04</td><td class="q">오픈컷 간섭을 벌점으로 둘지 제약으로 둘지</td><td>벌점(배치 우선순위 4)</td><td class="ev"><span class="evi">토목 협의 기록 · 08-21 <code>S1693</code></span></td><td>설계팀 → 토목사무소</td><td>② 배치</td><td><span class="tag">가정으로 계산</span></td></tr><tr><td class="no">05</td><td class="q">강재 등급</td><td>SS275(보수적 가정)</td><td class="ev"><span class="evi">자료 DB에 근거 없음 <code>D3</code></span></td><td>구조사무소</td><td>⑧ 해석 확정 표기</td><td><span class="tag tag-block">막힘</span></td></tr><tr><td class="no">06</td><td class="q">횡하중(풍·지진) 조합과 기준</td><td>검토하지 않음 · 명목 수평 0.002만</td><td class="ev"><span class="evi">구조 협의 기록 · 07-10 <code>S297</code></span><span class="evi">구조 협의 기록 · 09-22 <code>S1786</code></span></td><td>구조사무소</td><td>— 예비값으로 표기</td><td><span class="tag">가정으로 계산</span></td></tr><tr><td class="no">07</td><td class="q">수평 구속 강성과 기둥별 구속 반력의 철물</td><td>기존 슬래브 레벨 완전 구속</td><td class="ev"><span class="evi">토목 협의 기록 · 08-05 <code>S552</code></span><span class="evi">설계팀 메모 · 09-01 <code>S1382</code></span></td><td>토목사무소</td><td>⑧ 해석</td><td><span class="tag">가정으로 계산</span></td></tr><tr><td class="no">08</td><td class="q">줄돔 구역의 위치·범위</td><td>평면의 가정 구역(스케치)</td><td class="ev"><span class="evi">구조 협의 기록 · 09-12 <code>S1672</code></span></td><td>설계팀</td><td>⑥ 줄돔</td><td><span class="tag">가정으로 계산</span></td></tr><tr><td class="no">09</td><td class="q">테두리보 지지: 내민 보 / 기둥 추가</td><td>내민 보</td><td class="ev"><span class="evi">구조 협의 기록 · 07-18 <code>S542</code></span></td><td>설계팀 → 구조사무소</td><td>⑤ 거더망</td><td><span class="tag">가정으로 계산</span></td></tr><tr><td class="no">10</td><td class="q">부재 부호 체계(SG 번호 충돌)</td><td>S06- 접두 + SC·SG·SB·SEG·SCB·STB(가정)</td><td class="ev"><span class="evi">협력 건축사무소 도면 · 09-15 <code>E17062</code></span></td><td>협력 건축사무소</td><td>⑪ 일람표</td><td><span class="tag">가정으로 계산</span></td></tr></tbody>
+    </table></div>
+    <div class="not-reviewed">
+      <div><h4>이 보고서가 다루지 않는 것</h4><p>구조사무소의 공식 해석 범위</p></div>
+      <div class="chips"><span>횡하중(풍·지진) 설계</span><span>접합부 상세</span><span>데크플레이트</span><span>진동</span><span>내화</span><span>기초 내력</span><span>기존 유수지 보강</span><span>시공 순서·가설</span></div>
+    </div>
+  </section>
+</main>
+
+<footer class="foot">
+  <div class="wrap">
+    <div>
+      <h4>예비값 · 구조 검토를 대신하지 않음</h4>
+      <p>이 보고서의 모든 수치는 설계팀의 배치 탐색용 예비값이다. 구조 안전의 판단과 부재 설계는 구조기술사가 수행하는 구조 검토와 구조 계산으로만 확정된다. 보고서의 배치·단면을 그대로 시공 도면이나 구조 계산서에 옮기지 않는다.</p>
+      <p class="open-in">VIDE에서 열기: 프로젝트 S-06 · S-06 골조 배치 · 기본안 · v0.1 — 2026-09-29 14:22 내보냄</p>
+    </div>
+    <div>
+      <h4>보고서 점검</h4>
+      <div class="gates"><span>주장 문장과 수치가 계산 결과와 일치</span><span>모든 수치의 출처가 이 작업본에 있음</span><span>검토하지 않은 항목을 인쇄함</span></div>
+    </div>
+  </div>
+</footer>
+</body>
+</html>

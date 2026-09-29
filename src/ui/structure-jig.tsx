@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import { api } from './gateway.ts';
 import type { JigContext } from './jigs.tsx';
+import { S06Diagnose } from './s06-diagnose.tsx';
 
 // Structure analysis jig (J-09, SPEC-06): pick Syncs → draft (computed + AI help) → check and fix →
 // confirm & analyse → member table and verdict colours. Results are exploratory, never sign-off.
+// A second view, '배치 진단' (PLAN-23 T-044), reads the drawn layout without building a model.
 
 type Level = 'error' | 'warning' | 'info';
 interface Issue {
@@ -120,6 +122,8 @@ export function StructureJig({ context }: { context: JigContext }) {
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState('');
   const [filter, setFilter] = useState<'problems' | 'all'>('problems');
+  const [view, setView] = useState<'analysis' | 'diagnose'>('analysis');
+  const [diagnoseOpened, setDiagnoseOpened] = useState(false);
   const base = `/projects/${context.projectId}/jigs/structure`;
 
   const call = async (path: string, method: 'GET' | 'POST', body?: unknown) => {
@@ -294,277 +298,320 @@ export function StructureJig({ context }: { context: JigContext }) {
       <p className="jig-structure-warning">
         탐색용 예비값입니다. 구조계산서와 구조기술사의 최종 검토를 대체하지 않습니다.
       </p>
-      <div className="jig-inputs">
-        <label>
-          입력 Sync
-          <select aria-label="입력 Sync" value={syncId} onChange={(e) => setSyncId(e.target.value)}>
-            {!context.sources.length ? <option value="">Sync가 없습니다</option> : null}
-            {[...rhino, ...cad].map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.host === 'zwcad' ? 'CAD · ' : 'Rhino · '}
-                {s.label}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          입력 형태
-          <select
-            aria-label="입력 형태"
-            value={mode}
-            onChange={(e) => setMode(e.target.value as typeof mode)}
-          >
-            {hostOf(syncId) === 'zwcad' ? (
-              <option value="cad">CAD 평면(보·기둥 레이어)</option>
-            ) : (
-              <>
-                <option value="curves">중심선 곡선</option>
-                <option value="breps">부재 솔리드</option>
-              </>
-            )}
-          </select>
-        </label>
-        {mode === 'cad' ? (
-          <>
-            <label>
-              보 레벨 m (쉼표)
-              <input
-                aria-label="보 레벨"
-                value={levels}
-                onChange={(e) => setLevels(e.target.value)}
-              />
-            </label>
-            <label>
-              보 레이어
-              <input
-                aria-label="보 레이어"
-                value={beamLayers}
-                onChange={(e) => setBeamLayers(e.target.value)}
-              />
-            </label>
-            <label>
-              기둥 레이어
-              <input
-                aria-label="기둥 레이어"
-                value={columnLayers}
-                onChange={(e) => setColumnLayers(e.target.value)}
-              />
-            </label>
-          </>
-        ) : null}
-        <label>
-          기둥 하단
-          <select
-            aria-label="기둥 하단"
-            value={baseFixity}
-            onChange={(e) => setBaseFixity(e.target.value as 'pin' | 'fixed')}
-          >
-            <option value="pin">핀</option>
-            <option value="fixed">고정</option>
-          </select>
-        </label>
+      <div className="jig-filter jig-mode" role="group" aria-label="구조 jig 보기">
         <button
           type="button"
-          className="primary-button"
-          disabled={busy || !syncId}
-          onClick={() => void makeDraft()}
+          aria-pressed={view === 'analysis'}
+          onClick={() => setView('analysis')}
         >
-          {busy ? '처리 중…' : '초안 만들기'}
+          해석 모델
+        </button>
+        <button
+          type="button"
+          aria-pressed={view === 'diagnose'}
+          onClick={() => {
+            setView('diagnose');
+            setDiagnoseOpened(true);
+          }}
+        >
+          배치 진단
         </button>
       </div>
-      {notice ? <p className="jig-structure-notice">{notice}</p> : null}
-
-      {draft ? (
-        <section className="jig-relation" aria-label="해석 모델 초안">
-          <h3>
-            해석 모델 초안 · 절점 {draft.model.nodes.length} · 부재 {draft.model.members.length}
-            {state?.draftStale ? <span className="pill"> 입력 Sync가 더 새것으로 바뀜</span> : null}
-          </h3>
-          {issues.length ? (
-            <ul className="jig-structure-issues">
-              {issues.map((issue, k) => (
-                <li key={k} data-level={issue.level}>
-                  <strong>
-                    {issue.level === 'error' ? '오류' : issue.level === 'warning' ? '경고' : '참고'}
-                  </strong>{' '}
-                  {issue.message}
-                </li>
-              ))}
-            </ul>
-          ) : null}
-          <div className="jig-table-wrap">
-            <table className="jig-table" aria-label="부재 그룹">
-              <thead>
-                <tr>
-                  <th>역할</th>
-                  <th>단면</th>
-                  <th>부재 수</th>
-                  <th>단면 지정</th>
-                </tr>
-              </thead>
-              <tbody>
-                {groups.map((g) => (
-                  <GroupRow
-                    key={`${g.role}|${g.section}`}
-                    group={g}
-                    name={draft.model.sections.find((s) => s.id === g.section)?.name ?? g.section}
-                    apply={(name) => void edit({ sections: [{ members: g.members, name }] })}
-                  />
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <div className="jig-inputs">
-            <label>
-              지붕 고정하중 kN/㎡
-              <input
-                type="number"
-                step="0.1"
-                aria-label="지붕 고정하중"
-                value={load.dead}
-                onChange={(e) => setLoad({ ...load, dead: Number(e.target.value) })}
-              />
-            </label>
-            <label>
-              지붕 활하중 kN/㎡
-              <input
-                type="number"
-                step="0.1"
-                aria-label="지붕 활하중"
-                value={load.live}
-                onChange={(e) => setLoad({ ...load, live: Number(e.target.value) })}
-              />
-            </label>
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => void edit({ areaLoads: roofArea() })}
-            >
-              최상층 면하중 적용
-            </button>
-            <button type="button" disabled={busy} onClick={() => void askAi()}>
-              AI에게 초안 검토 요청
-            </button>
-          </div>
-          <small>
-            면하중 {draft.model.areaLoads?.length ?? 0}개 · 하중조합{' '}
-            {draft.model.combinations.map((c) => c.id).join(', ')} · 자중 포함
-          </small>
-          <div className="jig-actions">
-            <button
-              type="button"
-              className="primary-button"
-              disabled={busy || blocking}
-              onClick={() => void analyse()}
-            >
-              확정하고 해석
-            </button>
-            {blocking ? <small>오류를 고친 뒤 확정할 수 있습니다.</small> : null}
-          </div>
-        </section>
+      {/* Both views stay mounted once opened, so switching keeps their inputs and results. */}
+      {diagnoseOpened ? (
+        <div hidden={view !== 'diagnose'}>
+          <S06Diagnose context={context} />
+        </div>
       ) : null}
-
-      {confirmed ? (
-        <section className="jig-relation" aria-label="해석 결과">
-          <h3>
-            결과 · {new Date(confirmed.confirmedAt).toLocaleString('ko-KR')}
-            {state?.stale ? <span className="pill"> 오래된 결과 — 입력이 바뀜</span> : null}
-          </h3>
-          {confirmed.result.status === 'error' ? (
-            <p>
-              해석 실패: {confirmed.result.error}
-              {confirmed.result.diagnostics.mechanisms.length
-                ? ` · 구속되지 않은 절점 ${[...new Set(confirmed.result.diagnostics.mechanisms.map((m) => m.node))].join(', ')}`
-                : ''}
-            </p>
-          ) : (
+      <div hidden={view !== 'analysis'}>
+        <div className="jig-inputs">
+          <label>
+            입력 Sync
+            <select
+              aria-label="입력 Sync"
+              value={syncId}
+              onChange={(e) => setSyncId(e.target.value)}
+            >
+              {!context.sources.length ? <option value="">Sync가 없습니다</option> : null}
+              {[...rhino, ...cad].map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.host === 'zwcad' ? 'CAD · ' : 'Rhino · '}
+                  {s.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            입력 형태
+            <select
+              aria-label="입력 형태"
+              value={mode}
+              onChange={(e) => setMode(e.target.value as typeof mode)}
+            >
+              {hostOf(syncId) === 'zwcad' ? (
+                <option value="cad">CAD 평면(보·기둥 레이어)</option>
+              ) : (
+                <>
+                  <option value="curves">중심선 곡선</option>
+                  <option value="breps">부재 솔리드</option>
+                </>
+              )}
+            </select>
+          </label>
+          {mode === 'cad' ? (
             <>
-              <p className="jig-structure-summary">
-                강재 {fmt(confirmed.result.summary.steel_kN / 9.80665, 1)} t · 최대 검정비{' '}
-                {fmt(confirmed.result.summary.maxRatio)} · 초과 {confirmed.result.summary.failCount}{' '}
-                · 미완 {confirmed.result.summary.incompleteCount}
-              </p>
-              {confirmed.ledger.map((row) => (
-                <small key={row.area}>
-                  면하중 {row.area}({row.pattern}) 입력 {fmt(row.input_kN, 1)} kN → 부재 전달{' '}
-                  {fmt(row.delivered_kN, 1)} kN
-                  {Math.abs(row.undelivered_kN) > 0.01 * Math.abs(row.input_kN)
-                    ? ` · 미전달 ${fmt(row.undelivered_kN, 1)} kN`
-                    : ''}
-                </small>
-              ))}
-              <div className="jig-filter">
-                <button
-                  type="button"
-                  aria-pressed={filter === 'problems'}
-                  onClick={() => setFilter('problems')}
-                >
-                  확인할 것
-                </button>
-                <button
-                  type="button"
-                  aria-pressed={filter === 'all'}
-                  onClick={() => setFilter('all')}
-                >
-                  전체
-                </button>{' '}
-                {context.tint ? (
-                  <button type="button" onClick={tint}>
-                    모델에 판정색
-                  </button>
-                ) : null}
-              </div>
-              <div className="jig-table-wrap">
-                <table className="jig-table" aria-label="부재 검정">
-                  <thead>
-                    <tr>
-                      <th>부재</th>
-                      <th>역할</th>
-                      <th>단면</th>
-                      <th>검정비</th>
-                      <th>지배</th>
-                      <th>판정</th>
-                      <th>원인·메모</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {checks.slice(0, 500).map((c) => {
-                      const m = memberOf(c.member);
-                      return (
-                        <tr key={c.member} data-status={c.status} onClick={() => show(c.member)}>
-                          <td>{c.member}</td>
-                          <td>{ROLE[m?.role ?? 'other']}</td>
-                          <td>{m ? sectionName(m.section) : ''}</td>
-                          <td>
-                            <span
-                              className="jig-structure-swatch"
-                              style={{ background: verdictColor(c) }}
-                            />
-                            {fmt(c.ratio)}
-                          </td>
-                          <td>
-                            {c.governing ? `${c.governing.clause} · ${c.governing.combo}` : '—'}
-                          </td>
-                          <td>{STATUS[c.status]}</td>
-                          <td>
-                            {c.cause === 'input-suspect'
-                              ? '입력·모델 의심 · '
-                              : c.cause === 'member'
-                                ? '부재 부족 · '
-                                : ''}
-                            {c.notes.join(' · ')}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-              <small>검토하지 않음: {confirmed.result.notChecked.join(' · ')}</small>
+              <label>
+                보 레벨 m (쉼표)
+                <input
+                  aria-label="보 레벨"
+                  value={levels}
+                  onChange={(e) => setLevels(e.target.value)}
+                />
+              </label>
+              <label>
+                보 레이어
+                <input
+                  aria-label="보 레이어"
+                  value={beamLayers}
+                  onChange={(e) => setBeamLayers(e.target.value)}
+                />
+              </label>
+              <label>
+                기둥 레이어
+                <input
+                  aria-label="기둥 레이어"
+                  value={columnLayers}
+                  onChange={(e) => setColumnLayers(e.target.value)}
+                />
+              </label>
             </>
-          )}
-        </section>
-      ) : null}
+          ) : null}
+          <label>
+            기둥 하단
+            <select
+              aria-label="기둥 하단"
+              value={baseFixity}
+              onChange={(e) => setBaseFixity(e.target.value as 'pin' | 'fixed')}
+            >
+              <option value="pin">핀</option>
+              <option value="fixed">고정</option>
+            </select>
+          </label>
+          <button
+            type="button"
+            className="primary-button"
+            disabled={busy || !syncId}
+            onClick={() => void makeDraft()}
+          >
+            {busy ? '처리 중…' : '초안 만들기'}
+          </button>
+        </div>
+        {notice ? <p className="jig-structure-notice">{notice}</p> : null}
+
+        {draft ? (
+          <section className="jig-relation" aria-label="해석 모델 초안">
+            <h3>
+              해석 모델 초안 · 절점 {draft.model.nodes.length} · 부재 {draft.model.members.length}
+              {state?.draftStale ? (
+                <span className="pill"> 입력 Sync가 더 새것으로 바뀜</span>
+              ) : null}
+            </h3>
+            {issues.length ? (
+              <ul className="jig-structure-issues">
+                {issues.map((issue, k) => (
+                  <li key={k} data-level={issue.level}>
+                    <strong>
+                      {issue.level === 'error'
+                        ? '오류'
+                        : issue.level === 'warning'
+                          ? '경고'
+                          : '참고'}
+                    </strong>{' '}
+                    {issue.message}
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+            <div className="jig-table-wrap">
+              <table className="jig-table" aria-label="부재 그룹">
+                <thead>
+                  <tr>
+                    <th>역할</th>
+                    <th>단면</th>
+                    <th>부재 수</th>
+                    <th>단면 지정</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {groups.map((g) => (
+                    <GroupRow
+                      key={`${g.role}|${g.section}`}
+                      group={g}
+                      name={draft.model.sections.find((s) => s.id === g.section)?.name ?? g.section}
+                      apply={(name) => void edit({ sections: [{ members: g.members, name }] })}
+                    />
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="jig-inputs">
+              <label>
+                지붕 고정하중 kN/㎡
+                <input
+                  type="number"
+                  step="0.1"
+                  aria-label="지붕 고정하중"
+                  value={load.dead}
+                  onChange={(e) => setLoad({ ...load, dead: Number(e.target.value) })}
+                />
+              </label>
+              <label>
+                지붕 활하중 kN/㎡
+                <input
+                  type="number"
+                  step="0.1"
+                  aria-label="지붕 활하중"
+                  value={load.live}
+                  onChange={(e) => setLoad({ ...load, live: Number(e.target.value) })}
+                />
+              </label>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => void edit({ areaLoads: roofArea() })}
+              >
+                최상층 면하중 적용
+              </button>
+              <button type="button" disabled={busy} onClick={() => void askAi()}>
+                AI에게 초안 검토 요청
+              </button>
+            </div>
+            <small>
+              면하중 {draft.model.areaLoads?.length ?? 0}개 · 하중조합{' '}
+              {draft.model.combinations.map((c) => c.id).join(', ')} · 자중 포함
+            </small>
+            <div className="jig-actions">
+              <button
+                type="button"
+                className="primary-button"
+                disabled={busy || blocking}
+                onClick={() => void analyse()}
+              >
+                확정하고 해석
+              </button>
+              {blocking ? <small>오류를 고친 뒤 확정할 수 있습니다.</small> : null}
+            </div>
+          </section>
+        ) : null}
+
+        {confirmed ? (
+          <section className="jig-relation" aria-label="해석 결과">
+            <h3>
+              결과 · {new Date(confirmed.confirmedAt).toLocaleString('ko-KR')}
+              {state?.stale ? <span className="pill"> 오래된 결과 — 입력이 바뀜</span> : null}
+            </h3>
+            {confirmed.result.status === 'error' ? (
+              <p>
+                해석 실패: {confirmed.result.error}
+                {confirmed.result.diagnostics.mechanisms.length
+                  ? ` · 구속되지 않은 절점 ${[...new Set(confirmed.result.diagnostics.mechanisms.map((m) => m.node))].join(', ')}`
+                  : ''}
+              </p>
+            ) : (
+              <>
+                <p className="jig-structure-summary">
+                  강재 {fmt(confirmed.result.summary.steel_kN / 9.80665, 1)} t · 최대 검정비{' '}
+                  {fmt(confirmed.result.summary.maxRatio)} · 초과{' '}
+                  {confirmed.result.summary.failCount} · 미완{' '}
+                  {confirmed.result.summary.incompleteCount}
+                </p>
+                {confirmed.ledger.map((row) => (
+                  <small key={row.area}>
+                    면하중 {row.area}({row.pattern}) 입력 {fmt(row.input_kN, 1)} kN → 부재 전달{' '}
+                    {fmt(row.delivered_kN, 1)} kN
+                    {Math.abs(row.undelivered_kN) > 0.01 * Math.abs(row.input_kN)
+                      ? ` · 미전달 ${fmt(row.undelivered_kN, 1)} kN`
+                      : ''}
+                  </small>
+                ))}
+                <div className="jig-filter">
+                  <button
+                    type="button"
+                    aria-pressed={filter === 'problems'}
+                    onClick={() => setFilter('problems')}
+                  >
+                    확인할 것
+                  </button>
+                  <button
+                    type="button"
+                    aria-pressed={filter === 'all'}
+                    onClick={() => setFilter('all')}
+                  >
+                    전체
+                  </button>{' '}
+                  {context.tint ? (
+                    <>
+                      <button type="button" onClick={tint}>
+                        모델에 판정색
+                      </button>
+                      <button type="button" onClick={context.clearTint}>
+                        판정색 끄기
+                      </button>
+                    </>
+                  ) : null}
+                </div>
+                <div className="jig-table-wrap">
+                  <table className="jig-table" aria-label="부재 검정">
+                    <thead>
+                      <tr>
+                        <th>부재</th>
+                        <th>역할</th>
+                        <th>단면</th>
+                        <th>검정비</th>
+                        <th>지배</th>
+                        <th>판정</th>
+                        <th>원인·메모</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {checks.slice(0, 500).map((c) => {
+                        const m = memberOf(c.member);
+                        return (
+                          <tr key={c.member} data-status={c.status} onClick={() => show(c.member)}>
+                            <td>{c.member}</td>
+                            <td>{ROLE[m?.role ?? 'other']}</td>
+                            <td>{m ? sectionName(m.section) : ''}</td>
+                            <td>
+                              <span
+                                className="jig-structure-swatch"
+                                style={{ background: verdictColor(c) }}
+                              />
+                              {fmt(c.ratio)}
+                            </td>
+                            <td>
+                              {c.governing ? `${c.governing.clause} · ${c.governing.combo}` : '—'}
+                            </td>
+                            <td>{STATUS[c.status]}</td>
+                            <td>
+                              {c.cause === 'input-suspect'
+                                ? '입력·모델 의심 · '
+                                : c.cause === 'member'
+                                  ? '부재 부족 · '
+                                  : ''}
+                              {c.notes.join(' · ')}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+                <small>검토하지 않음: {confirmed.result.notChecked.join(' · ')}</small>
+              </>
+            )}
+          </section>
+        ) : null}
+      </div>
     </div>
   );
 }

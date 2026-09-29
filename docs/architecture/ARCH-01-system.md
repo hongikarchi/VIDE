@@ -2,10 +2,10 @@
 id: ARCH-01
 title: VIDE 기술 구조와 구현 계약
 status: review
-version: 0.49
+version: 0.50
 updated: 2026-09-29
 owner: agent:codex
-related: [SPEC-00, SPEC-02, SPEC-03, SPEC-04, PLAN, PLAN-20, ADR-014, ADR-015, ADR-016, ADR-017]
+related: [SPEC-00, SPEC-02, SPEC-03, SPEC-04, PLAN, PLAN-20, PLAN-24, ADR-014, ADR-015, ADR-016, ADR-017, ADR-021, ARCH-03]
 ---
 
 # VIDE 기술 구조와 구현 계약
@@ -296,6 +296,17 @@ SDK 영수증 복구 결과에는 `recovered: true`를 둔다. 기존 succeeded�
 - 작업 지침은 함수 선택·조회 순서·예제·검증 기준을 담는다. 라이브러리와 지침 버전을 실행 기록에 남긴다. 전문 스킬 전체 구현(FR-21)을 첫 출시 필수로 추가하지 않는다.
 - 임의 호스트 코드는 같은 프로세스의 다른 문서/API에 접근할 수 있다. 대상 필드·코드 문자열 검사·Undo는 보안 샌드박스가 아니다. 조회 권한에는 고정 조회 도구만 허용하고 임의 코드 도구를 주지 않는다. 임의 후보 코드는 종료 권한이 있는 VIDE 소유 테스트/작업 실행본의 사본에서 검증한다. 전용 실행본은 재사용하며 매 도구 호출마다 새 호스트를 띄우지 않는다. 사용자 작업 실행본을 강제 종료하지 않는다. 실문서 적용은 이 문서 §4의 변경 집합 전달을 새로 구현해 기존 적용 계약과 연결한다. 이 경계의 검증 전 임의 코드의 원본 접근을 제품 지원으로 열지 않는다.
 
+### 대화 세션의 CLI 실행(잠정)
+
+[ADR-021](../decisions/ADR-021-conversation-sessions.md)의 목적별 대화(SPEC-02.19)를 실행하는 CLI 쪽 계약이다. 대화·공급자 세션·원장의 저장은 [ARCH-03](ARCH-03-jig-runtime.md) §10이 소유한다. 아래 인자와 경로는 PLAN-24의 SPIKE(ADR-021 표의 0·①~⑨) 결과로 확정할 때 고친다.
+
+- **턴 하나 = CLI 실행 하나.** Claude는 대화의 첫 턴에 `--session-id <UUID>`, 이후 턴에 `--resume <UUID>`로 실행한다. 매 턴 인자는 현행 격리 인자(도구 없는 턴·도구 있는 턴 각각)에서 `--no-session-persistence`만 뺀 것이고, 시작 이벤트의 도구·MCP 목록이 그 턴의 허용 목록과 다르면 실행하지 않는다. Codex는 SPIKE ④ 통과 전까지 원장 방식(턴마다 단발 실행 + 원장)이다. 세션 이어 실행이 막힌 공급자·항목도 원장 방식으로 돈다.
+- **시스템 프롬프트:** 대화마다 중립 시스템 프롬프트 하나를 쓰고, 턴마다 달라지는 범위·대상·권한·상한은 요청 자료의 '이번 턴 규칙'으로 보낸다. 기록된 프롬프트를 쓰지 않게 하는 옵션(`--system-prompt-snapshot off`)은 SPIKE ⑦ 뒤에 쓰고, 통하지 않으면 한 대화 아래 도구 없는 세션과 도구 있는 세션을 따로 둔다.
+- **작업 폴더:** 매 턴 저장소·데이터 폴더 밖의 빈 임시 폴더다. jig 만들기 대화만 초안 폴더를 붙인다(ARCH-03 §2.3).
+- **CLI 판 확인:** 실행 전 `--version`(60초 캐시)을 검증한 판 범위(`cli-compat.json`)와 비교해 밖이면 실행을 거절하고 안내한다. `--bare` 기본화 같은 인증 방식 전환의 실패 신호는 `CLI_MODE_CHANGED`로 분류하고 멈춘다. 가능하면 검증한 판의 실행 파일 경로를 고정한다.
+- **한 세션을 두 실행이 쓰지 않는다.** 종료를 확인하지 못한 턴 뒤에는 그 세션을 `lost`로 두고, 이전 프로세스의 종료를 확인한 뒤 인계 자료로 새 세션을 연다.
+- **공급자 기록 관리:** 대화를 닫고 30일 뒤 `provider_sessions`의 세션 ID로 해당 계정 프로필의 공급자 기록을 지우고, 버린 jig 초안의 기록은 바로 지운다. 공급자 기록은 백업 대상이 아니다. 기본 로그인 프로필의 설정 경로는 바꾸지 않는다(「CLI 프로필 실행 경계」).
+
 ### ZWCAD 범용 실행기의 물리 계약
 
 PLAN-02 §6.1의 3a는 ZWCAD 2023의 .NET Framework 4.8 애드인에서 실행한다. `Microsoft.CodeAnalysis.CSharp` 4.11.0의 .NET Standard 2.0 자산을 고정하고 의존 DLL은 자체 플러그인과 함께 배포한다. 설치 SDK DLL은 참조만 하고 복사하지 않는다. [공식 패키지 호환 정보](https://www.nuget.org/packages/Microsoft.CodeAnalysis.CSharp/4.11.0)와 설치 런타임 확인이 빌드 선택의 근거이며 실제 로드는 별도로 검증한다.
@@ -369,6 +380,8 @@ VIDE 내부에서 protocolVersion, operationId, taskId, 실제 대상(hostSessio
 
 major 불일치는 연결 거절, minor 추가 필드는 협상된 능력 안에서 허용한다. 요청 ID는 통신 응답 대응, operationId는 재접속 후 작업 식별이다. 같은 operationId+동일 payload는 기존 상태를 반환하고 다른 payload는 거절한다. 호스트에도 실행 전 접수·시작 저널을 기록한다. CAD 변경과 저널을 하나의 원자 트랜잭션으로 만들 수 없으므로 exactly-once를 주장하지 않는다. 변경 후 응답/기록 유실은 unknown으로 조사하며 자동 재실행하지 않는다.
 
+목적별 대화(SPEC-02.19)에서는 도구 범위를 대화 종류 × jig 출처로 턴마다 발급하고 턴이 끝나면 회수한다. jig·구조·자료 도구(이름 초안은 RESEARCH-10 §8.4)는 PLAN-24의 대화 도구 작업에서 입출력과 함께 이 절에 정하며, 그 전에는 위의 현행 도구만 발급한다.
+
 ### 한 요청의 복수 대상 실행
 
 SPEC-02.14·15의 구현 입력은 `linkedTargets` 배열로 명시한다. 각 항목은 같은 프로젝트의 성공한 `baseRequestId`와 해당 `host`이며 제어기가 source artifact/문서 기준을 고정한다. 첫 UI는 기준 후보 두 개를 선택하고 `coordinateBasis: "shared-metre-axes"`를 명시 확인한 경우를 지원한다. 서로 다른 원점/축 변환을 이 값으로 대신하지 않으며 미확인 변환은 실행 전에 거절한다. Rhino 작업 사본은 m로 정규화하고 ZWCAD의 mm 변환은 기존 SDK 계약을 따른다. 참고 핀만 추가해 다른 문서를 쓰기 대상으로 승격하지 않는다.
@@ -419,7 +432,7 @@ VIDE가 직접 기동한 기록(프로세스 ID·시작 시각·실행 세션)�
 
 documentSessionId는 열릴 때마다 새 값, documentId는 VIDE 논리 문서 ID다. 경로 변경(Save As), 동일 파일의 동시 열기, 외부 복사로 내부 ID가 중복된 경우를 매핑 기록으로 구분한다. readonly 취득만으로 사용자 파일에 ID를 쓰지 않는다. 식별 불명은 재연결 대상으로 제시하고 활성 문서에 자동 대체하지 않는다.
 
-접수 경합 키는 host와 sourceDocument의 instance/documentId, 또는 baseRequestId 계보의 최초 후보 ID로 만든다. baseRequestId=null은 요청 ID별 새 독립 후보, 필드 생략/계보 식별 실패는 해당 host 전체 키다. 연계 요청은 두 대상 키를 모두 점유하고 자식 작업을 중복 집계하지 않는다. 실행 중 독립 부모 요청은 프로젝트당 2개까지 접수한다(초기 자원 상한이며 성능 보증이 아님). 기존 PROJECT_BUSY는 대상 경합, WORKSPACE_CAPACITY는 상한 초과, HOST_RESULT_UNRESOLVED는 해당 대상 불명확 쓰기에 사용한다. 동일 JSON 재접수의 기존 직렬화·멱등성 계약은 유지한다. UI와 서버가 같은 순수 경합 판정을 사용하며 서버가 최종 확인한다. `POST /api/v1/projects/:project/requests/:request/interventions`는 추가 입력을 받아 원본 조건과 합친 새 workspace_requests 행을 queued로 저장하고 서버가 supersedesRequestId를 부여한다. 일반 submit에서 이 필드를 받지 않는다. 별도 스키마/테이블을 추가하지 않는다. 기존 요청 하나에 대기 후속은 하나만 허용하고 후속 대기는 독립 슬롯을 추가 점유하지 않는다. 입력/권한/대상과 직렬화 멱등성을 확인한 뒤 이전 실행을 abort하고 completion을 기다린다. 불명확 결과 또는 확인되지 않은 연계 부분 결과는 후속을 interrupted로 남긴다. 종료 후 실행 직전에 다른 작업과의 충돌을 다시 검사한다. 후속 취소는 이전 실행 종료 대기 후 cancelled로 기록하며 종료 확인 전 완료라고 표시하지 않는다.
+접수 경합 키는 host와 sourceDocument의 instance/documentId, 또는 baseRequestId 계보의 최초 후보 ID로 만든다. baseRequestId=null은 요청 ID별 새 독립 후보, 필드 생략/계보 식별 실패는 해당 host 전체 키다. 연계 요청은 두 대상 키를 모두 점유하고 자식 작업을 중복 집계하지 않는다. 실행 중 독립 부모 요청은 프로젝트당 2개까지 접수한다(초기 자원 상한이며 성능 보증이 아님). 기존 PROJECT_BUSY는 대상 경합, WORKSPACE_CAPACITY는 상한 초과, HOST_RESULT_UNRESOLVED는 해당 대상 불명확 쓰기에 사용한다. 2026-09-29 SPEC-02.9의 동시 접수 개정에 따라 이 거절·상한 규칙은 PLAN-24의 접수 규칙 작업에서 호스트 사용 구분·문서별 대기열·프로젝트 AI 턴 상한 N(기본 3)으로 바뀌며, 대기 상태와 필드는 [ARCH-03](ARCH-03-jig-runtime.md) §10.3이 정한다. 동일 JSON 재접수의 기존 직렬화·멱등성 계약은 유지한다. UI와 서버가 같은 순수 경합 판정을 사용하며 서버가 최종 확인한다. `POST /api/v1/projects/:project/requests/:request/interventions`는 추가 입력을 받아 원본 조건과 합친 새 workspace_requests 행을 queued로 저장하고 서버가 supersedesRequestId를 부여한다. 일반 submit에서 이 필드를 받지 않는다. 별도 스키마/테이블을 추가하지 않는다. 기존 요청 하나에 대기 후속은 하나만 허용하고 후속 대기는 독립 슬롯을 추가 점유하지 않는다. 입력/권한/대상과 직렬화 멱등성을 확인한 뒤 이전 실행을 abort하고 completion을 기다린다. 불명확 결과 또는 확인되지 않은 연계 부분 결과는 후속을 interrupted로 남긴다. 종료 후 실행 직전에 다른 작업과의 충돌을 다시 검사한다. 후속 취소는 이전 실행 종료 대기 후 cancelled로 기록하며 종료 확인 전 완료라고 표시하지 않는다.
 
 UI polling은 시작 프로젝트와 작업 공간 인스턴스를 고정하고 프로젝트 전환 후 결과를 다른 화면에 넣지 않는다. 자동 후보 전환은 마지막으로 보낸 요청이고 선택 후보·초안·미완성 스케치가 제출 후 바뀌지 않은 경우만 허용한다. 그 외 완료 결과는 이력에 보존하고 명시적으로 열 수 있다.
 
@@ -664,6 +677,8 @@ SPEC-01.11. 스키마 v4의 `document_links(id, projectId, host, name, path, ins
 `src/jigs/catalog.ts`가 공식 jig 목록, `src/jigs/sync.ts`가 Sync jig 계산을 소유한다(SPEC-05.8). `GET /api/v1/jigs`는 목록, `POST /api/v1/projects/:id/jigs/sync`는 저장된 두 Sync 결과의 `scene`(Rhino `line`/`points`, CAD `segments`, 미터)로 계산해 관계·행(최대 5,000행과 `totalRows`)·레이어 대응·CAD 단위(`sourceUnits`)를 돌려준다. 관계는 Rhino→CAD `rotation`(라디안)·`translation`·`dz`이며, 방향 후보(주 방향 차)마다 길이 버킷이 같은 선분 쌍의 이동량을 투표하고 대응 쌍의 중앙값으로 다듬는다. 행의 `ends`는 CAD 좌표, `inRhino`는 역변환한 모델 좌표다.
 
 AI 검토 요청은 `jig: { kind: 'sync-review', rows }`와 `sync-jig.json` 첨부로 만든다. 실행기는 이 요청에 호스트·기준 문서·모델 문맥을 붙이지 않고, 답의 `R숫자` 인용을 `rows`와 대조해 `jigCheck`를 결과에 남긴다. 반영 요청은 `jig: { kind: 'sync-apply' }`와 `sync-edits.json`으로 기존 ZWCAD 열린 도면 수정·Rhino 원본 적용 경로를 쓴다.
+
+jig 플랫폼(패키지 형식 v3, 작업본, 출처별 실행기, `src/server/jig-routes.ts`의 jig 경로, jig 입력 읽기, 공식 틀과 데이터 블록으로 하는 Rhino에 만들기 `jig: { kind: 'jig-bake' }`, 스키마 v5)의 물리 계약은 [ARCH-03](ARCH-03-jig-runtime.md)이 소유한다. 이 절의 Sync jig·구조 jig 경로와 저장은 그대로 두며, `GET /api/v1/jigs`는 ARCH-03 §7에 따라 공식 목록에 설치된 jig 버전을 더한 등록부로 넓어진다.
 
 ### 현재 ZWCAD의 읽기 연결
 

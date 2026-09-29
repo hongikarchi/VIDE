@@ -1,0 +1,267 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="description" content="ADR-020 · jig 플랫폼: 설명서 한 장, 코드 출처별 실행, 고정 틀로 Rhino에 만들기"><meta name="generator" content="tools/docs/build.mjs — generated from docs/decisions/ADR-020-jig-platform.md; do not edit"><title>VIDE · jig 플랫폼 — 설명서 한 장, 코드 출처별 실행, 고정 틀로 Rhino에 만들기</title><style>
+:root{--ink:#292c2d;--muted:#626b6e;--line:#e1e3e1;--soft:#f5f5f1;--coral:#d97660;--paper:#fff;--font:"Pretendard","Noto Sans KR","Malgun Gothic",Arial,sans-serif}
+*{box-sizing:border-box}html{scroll-behavior:smooth;scroll-padding-top:92px}body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--font);letter-spacing:-.025em}a{color:inherit;text-underline-offset:4px}button,input,textarea,select{font:inherit;color:inherit}button{cursor:pointer;border:1px solid var(--line);border-radius:4px;background:var(--paper);padding:10px 15px;line-height:1.3}button:hover{background:var(--soft)}button:disabled{cursor:default;opacity:.6}button.primary{background:var(--ink);color:#fff;border-color:var(--ink)}button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible{outline:3px solid var(--coral);outline-offset:3px}textarea{resize:vertical}::selection{background:#f2d7ce}[hidden]{display:none!important}
+.skip{position:fixed;top:-80px;left:20px;z-index:100;background:white;padding:12px}.skip:focus{top:10px}
+.topbar{height:68px;position:sticky;top:0;z-index:30;border-bottom:1px solid var(--line);background:#fffffff7;display:flex;align-items:center;justify-content:space-between;gap:24px;padding:0 max(24px,calc((100vw - 1450px)/2))}.brand{text-decoration:none;display:flex;align-items:center;gap:15px;white-space:nowrap}.brand b{font-size:29px;letter-spacing:-.08em}.brand span{border-left:1px solid var(--line);padding-left:15px;font-size:11px;letter-spacing:.08em}.doc-tabs{display:flex;height:100%;gap:25px;align-items:stretch;min-width:0;overflow-x:auto}.doc-tab{flex-shrink:0}.doc-tab{display:flex;align-items:center;position:relative;text-decoration:none;font-size:13px;color:var(--muted);white-space:nowrap}.doc-tab.active{color:var(--ink);font-weight:650}.doc-tab.active:after{content:"";position:absolute;bottom:0;left:0;right:0;height:3px;background:var(--coral)}.top-actions{display:flex;gap:8px}.top-actions button{padding:8px 11px;font-size:12px;white-space:nowrap}
+.layout{max-width:1450px;margin:auto;padding:0 30px;display:grid;grid-template-columns:218px minmax(0,1fr);gap:55px}.toc-shell{align-self:start;position:sticky;top:99px;padding-top:15px;max-height:calc(100vh - 120px)}.eyebrow{font-size:10px;line-height:1.6;letter-spacing:.16em;font-weight:500;color:var(--muted)}.toc-title{display:flex;justify-content:space-between;align-items:center;margin-bottom:15px}.toc-title strong{font-size:12px;font-weight:500}.toc-title span{font-size:10px;color:var(--muted)}#toc-toggle{display:none}.toc-search{width:100%;padding:10px 12px;border:1px solid var(--line);background:var(--paper);border-radius:4px;font-size:12px}.toc-hint{font-size:10px;color:var(--muted);margin:8px 0 15px;line-height:1.6}.toc-links{max-height:calc(100vh - 323px);overflow-y:auto;padding:0 8px 8px 0}.toc-links a{display:block;padding:8px 10px;margin:2px 0;border-left:2px solid transparent;border-radius:0 3px 3px 0;text-decoration:none;font-size:12px;line-height:1.65;color:var(--muted);word-break:keep-all;overflow-wrap:anywhere}.toc-links a:hover{background:var(--soft)}.toc-links a.active{border-color:var(--coral);background:var(--soft);color:var(--ink)}.toc-next{border-top:1px solid var(--line);padding-top:13px;margin-top:14px;font-size:11px;color:var(--muted);line-height:1.7}.toc-next b{font-weight:500;color:var(--ink)}
+main{min-width:0;max-width:1040px;padding-bottom:70px}.doc-hero{padding:55px 0 32px;border-bottom:1px solid var(--line)}.hero-label{display:flex;justify-content:space-between;gap:20px;align-items:center}.doc-hero h1{font-size:clamp(32px,3.15vw,48px);line-height:1.22;letter-spacing:-.065em;font-weight:550;margin:20px 0 18px;max-width:900px;word-break:keep-all;overflow-wrap:anywhere}.doc-description{font-size:14px;color:var(--muted);line-height:1.8;margin:0}.pill{display:inline-block;font-size:10px;letter-spacing:.01em;padding:5px 9px;border:1px solid var(--line);border-radius:3px;white-space:nowrap}.hero-meta{margin-top:22px;font-size:12px;color:var(--muted);line-height:1.9}.hero-meta p{font-size:12px;line-height:1.9;margin:8px 0}.hero-meta strong{font-weight:600}.hero-meta blockquote{margin:25px 0 0;padding:20px 22px;background:var(--soft);border-left:3px solid var(--coral);color:var(--ink)}.hero-meta blockquote p{word-break:keep-all;overflow-wrap:anywhere;font-size:18px;line-height:1.8;letter-spacing:-.03em;margin:0}.doc-section{padding:44px 0;border-bottom:1px solid var(--line);scroll-margin-top:93px;min-width:0}.doc-section h2{font-size:28px;font-weight:550;letter-spacing:-.055em;line-height:1.4;margin:0 0 24px;word-break:keep-all;overflow-wrap:anywhere}.section-num{font-weight:400;color:var(--coral);margin-right:10px;font-size:.75em;letter-spacing:-.02em}.doc-section h3{font-size:19px;font-weight:600;line-height:1.5;margin:32px 0 14px;letter-spacing:-.04em}.doc-section h4{font-size:16px;line-height:1.5;margin:25px 0 12px}.doc-section p{font-size:15px;line-height:1.92;margin:13px 0;word-break:keep-all;overflow-wrap:anywhere}.doc-section strong{font-weight:650}.doc-section ul,.doc-section ol{padding-left:22px;font-size:15px;line-height:1.85}.doc-section li{margin:7px 0}.doc-section blockquote{border-left:3px solid var(--coral);background:var(--soft);margin:23px 0;padding:15px 22px}.doc-section blockquote p{margin:0;font-size:16px;line-height:1.85}.doc-section hr{border:0;border-top:1px solid var(--line);margin:28px 0}.doc-section code:not(pre code){font-family:Consolas,"Liberation Mono",monospace;font-size:.91em;background:var(--soft);padding:2px 5px;border-radius:3px;overflow-wrap:anywhere}
+.table-scroll{overflow-x:auto;overscroll-behavior-x:contain;margin:22px 0;border-top:1px solid var(--ink);border-bottom:1px solid var(--line);width:100%}table{border-collapse:collapse;width:100%;font-size:12.5px;line-height:1.75;table-layout:auto}th,td{padding:13px 14px;vertical-align:top;text-align:left;border-bottom:1px solid var(--line);word-break:keep-all;overflow-wrap:anywhere}th{background:var(--soft);font-weight:600;font-size:11.5px}tr:last-child td{border-bottom:0}td:first-child{font-weight:550;min-width:125px}td{min-width:145px}.table-scroll table:has(th:nth-child(2)){min-width:410px}.table-scroll table:has(th:nth-child(3)){min-width:585px}.table-scroll table:has(th:nth-child(4)){min-width:710px}.table-scroll table:has(th:nth-child(5)){min-width:840px}.code-frame{position:relative;margin:23px 0;border:1px solid var(--line);border-radius:4px;overflow:hidden;background:#f8f8f5}.code-frame pre{margin:0;padding:49px 20px 19px;overflow:auto;max-height:680px;font-family:Consolas,"Liberation Mono",monospace;font-size:12px;line-height:1.9;white-space:pre;letter-spacing:-.01em}.copy-code{position:absolute;top:9px;right:10px;font-size:10px;padding:5px 9px;background:#fff}.code-frame .code-label{position:absolute;left:18px;top:15px;font-size:9px;color:var(--muted);letter-spacing:.12em}.doc-footer{margin-top:30px;display:flex;justify-content:space-between;gap:24px;font-size:10px;color:var(--muted);line-height:1.8}
+.review-workspace{background:var(--soft);border:1px solid var(--line);padding:27px;margin:30px 0 5px;border-radius:4px}.workspace-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:15px}.workspace-heading h3{margin:6px 0 10px}.workspace-heading p{font-size:12px;margin:0 0 20px}.checks{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}.check-group{min-width:0;margin:0;padding:14px 15px;border:1px solid var(--line);background:#fff;border-radius:3px}.check-group legend{padding:0 7px;font-size:12px;font-weight:600}.check-line{display:flex;gap:9px;align-items:flex-start;font-size:12px;line-height:1.7;margin:9px 0;cursor:pointer}.check-line input{accent-color:var(--coral);margin:3px 0 0;flex:none;width:15px;height:15px}.stage-field{display:flex;align-items:center;gap:15px;font-size:12px;margin:26px 0 20px}.stage-field select{background:#fff;border:1px solid var(--line);padding:9px 12px;max-width:100%;font-size:12px;border-radius:3px}.note-grid{display:grid;grid-template-columns:1fr 1fr;gap:18px}.note-field{display:block;min-width:0}.note-field>span{display:block;margin-bottom:8px;font-size:12px}.note-field textarea{width:100%;min-height:96px;border:1px solid var(--line);border-radius:3px;padding:12px;background:#fff;font-size:13px;line-height:1.8}.note-field:last-child{grid-column:1/-1}.note-actions{display:flex;gap:9px;flex-wrap:wrap;margin-top:20px}.note-actions button{font-size:12px}.review-workspace p.save-status{font-size:11px;margin:15px 0 5px;color:var(--muted)}.review-workspace p.micro{font-size:10px;line-height:1.8;color:var(--muted);margin:0}.toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);background:var(--ink);color:white;padding:12px 18px;border-radius:4px;font-size:12px;z-index:60;max-width:90vw;box-shadow:0 5px 24px #0002;line-height:1.6}.empty-nav{font-size:12px;color:var(--muted);padding:15px 5px;line-height:1.7}
+@media(min-width:1600px){.layout{gap:65px}}
+@media(max-width:1100px){.layout{grid-template-columns:188px minmax(0,1fr);gap:30px;padding:0 24px}.topbar{gap:18px}.brand span{display:none}.doc-hero h1{font-size:38px}.doc-section p{font-size:14px}.doc-section h2{font-size:26px}.doc-tabs{gap:23px}.review-workspace{padding:22px}.checks{grid-template-columns:1fr}}
+@media(max-width:820px){html{scroll-padding-top:84px}.topbar{height:60px;padding:0 18px;gap:14px}.brand b{font-size:27px}.doc-tabs{gap:18px}.doc-tab{font-size:12px}.top-actions{gap:6px}.top-actions button{font-size:10px;padding:7px 9px}.layout{display:block;padding:0 22px}.toc-shell{position:relative;top:auto;max-height:none;padding-top:18px;border-bottom:1px solid var(--line)}.toc-title{margin:0;padding-bottom:14px}.toc-title strong{font-size:11px}.toc-title>span{display:none}#toc-toggle{display:block;font-size:11px;padding:7px 11px}.toc-body{display:none}.toc-shell.open .toc-body{display:block}.toc-links{max-height:240px;margin-bottom:12px}.toc-next{display:none}.doc-hero{padding:34px 0 27px}.doc-hero h1{font-size:35px;max-width:600px}.hero-label{align-items:flex-start;gap:10px;flex-wrap:wrap}.hero-label .pill{font-size:9px}.doc-section{padding:34px 0;scroll-margin-top:80px}.doc-section h2{font-size:25px;line-height:1.45}.doc-section p{font-size:14px;line-height:1.95}.hero-meta blockquote p{font-size:16px}.note-grid{grid-template-columns:1fr}.stage-field{flex-wrap:wrap}.note-field:last-child{grid-column:auto}.workspace-heading{display:block}.workspace-heading .pill{margin-bottom:17px}.doc-footer{flex-direction:column;gap:5px}}
+@media(max-width:480px){.topbar{gap:10px;padding:0 16px}.doc-tabs{gap:15px}.top-actions button#source-download{display:none}.brand b{font-size:25px}.doc-hero h1{font-size:31px;line-height:1.3}.doc-hero .eyebrow{font-size:9px}.doc-description{font-size:12px}.hero-meta{font-size:11px}.hero-meta p{font-size:11px;line-height:1.9}.hero-meta blockquote{padding:16px 16px}.hero-meta blockquote p{font-size:15px}.doc-section h2{font-size:23px}.doc-section h3{font-size:18px}.doc-section p{font-size:14px}.table-scroll{margin:20px 0}td,th{padding:11px 12px}.code-frame pre{font-size:11px;padding-left:15px}.review-workspace{padding:18px}.note-actions{gap:8px}.note-actions button{padding:9px 10px;font-size:11px}.check-line{font-size:12px}.top-actions button{padding:7px 9px}}
+@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}*{transition:none!important}}
+@media print{@page{margin:15mm}.topbar,.toc-shell,.skip,.copy-code,.toast,.review-workspace,.doc-footer{display:none!important}.layout{display:block;padding:0;max-width:none}main{max-width:none;padding:0}.doc-hero{padding:0 0 18px}.doc-hero h1{font-size:27px}.doc-section{padding:22px 0;break-inside:auto}.doc-section h2{font-size:21px;break-after:avoid}.doc-section h3{font-size:16px;break-after:avoid}.doc-section p{font-size:11px;line-height:1.75}.table-scroll{overflow:visible;break-inside:auto}table{min-width:0!important;font-size:9px;table-layout:fixed}td,th{min-width:0;font-size:9px;word-break:normal;padding:7px}tr{break-inside:avoid}.code-frame pre{white-space:pre-wrap;max-height:none;font-size:9px;padding:16px;overflow:visible;word-break:break-word}.code-label{display:none}.hero-meta blockquote p{font-size:14px}}
+
+/* ---- 작성자별 첨삭 표기 (AI.md §5) -------------------------------------
+   ins  = 추가·교체 제안 (초록)   del = 삭제·교체 대상 (빨강 취소선)
+   blockquote.review = 검토 코멘트 (파란 상자)   .review-appendix = 검토 요약 부록
+   body.review-original  → 원문만 (제안·코멘트 숨김)
+   body.review-accepted  → 인라인 제안 미리보기 (코멘트 대안은 적용하지 않음)
+------------------------------------------------------------------------- */
+ins{background:#dff3e4;color:#17512a;text-decoration:none;border-bottom:2px solid #4f9d63;padding:0 3px;border-radius:2px}
+del{background:#fbe4e0;color:#8f3324;text-decoration:line-through;text-decoration-color:#c9573f;text-decoration-thickness:1.5px;padding:0 3px;border-radius:2px}
+h1 ins,h1 del,h2 ins,h2 del,h3 ins,h3 del{border-bottom-width:3px}
+blockquote.review{margin:14px 0 24px;padding:12px 16px 12px 18px;border:0;border-left:4px solid #3b6fd6;background:#eef3fc;border-radius:0 6px 6px 0;font-size:14px;line-height:1.75;color:#24303f}
+blockquote.review p{margin:0}
+blockquote.review p+p{margin-top:9px;padding-top:9px;border-top:1px dashed #c3d2ef}
+.review-label{display:inline-flex;gap:6px;align-items:center;margin-right:8px;font-weight:600;font-size:11.5px;vertical-align:1px;white-space:nowrap}
+.review-agent{color:#3b6fd6;text-transform:uppercase;letter-spacing:.09em}
+.review-id{background:#3b6fd6;color:#fff;border-radius:3px;padding:1px 7px;font-weight:600}
+.review-sev{border-radius:3px;padding:1px 7px;font-weight:600}
+.review-sev[data-sev="높음"]{background:#c9573f;color:#fff}
+.review-sev[data-sev="중간"]{background:#f0c14b;color:#3a2a00}
+.review-sev[data-sev="낮음"]{background:#d9dfe2;color:#3d484d}
+.doc-section.review-appendix{margin-top:60px;padding-top:28px;border-top:3px solid #3b6fd6}
+.doc-section.review-appendix h2 .section-num{color:#3b6fd6}
+.review-pill{border-color:#3b6fd6;color:#3b6fd6;text-decoration:none}
+.review-pill:hover{background:#eef3fc}
+.review-legend{margin:12px 0 0;font-size:12px;color:var(--muted);line-height:1.8}
+.review-legend span{margin-right:12px;white-space:nowrap}
+.review-select{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);white-space:nowrap}
+.review-select select{padding:7px 9px;border:1px solid var(--line);border-radius:4px;background:var(--paper);font-size:12px}
+blockquote.review[data-review-agent="codex"]{border-left-color:#7250a0;background:#f4effa;color:#352b46}
+[data-review-agent="codex"] .review-agent{color:#7250a0}
+[data-review-agent="codex"] .review-id{background:#7250a0}
+.review-pill[data-review-agent="codex"]{border-color:#7250a0;color:#7250a0}
+.review-pill[data-review-agent="codex"]:hover{background:#f4effa}
+.review-appendix[data-review-agent="codex"]{border-top-color:#7250a0}
+.review-appendix[data-review-agent="codex"] h2 .section-num{color:#7250a0}
+.review-label[id]{scroll-margin-top:110px}
+.review-label[id]:target{outline:2px solid currentColor;outline-offset:4px}
+.review-legend p{margin:5px 0}
+.review-select select:disabled{opacity:.6}
+.top-actions{flex-wrap:wrap}
+[hidden]{display:none!important}
+@media(max-width:1100px){.topbar{height:auto;min-height:68px;flex-wrap:wrap;padding-top:8px;padding-bottom:8px;gap:8px 18px}.doc-tabs{height:34px;flex:1;justify-content:flex-end}.top-actions{flex-basis:100%;justify-content:flex-end}.review-select select{max-width:185px}}
+@media(min-width:821px) and (max-width:1100px){.toc-shell{top:135px;max-height:calc(100vh - 155px)}}
+.toc-links a[data-reviews]{display:flex;justify-content:space-between;gap:8px;align-items:center}
+.toc-links a[data-reviews]::after{content:attr(data-reviews);flex:none;min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:#3b6fd6;color:#fff;font-size:10px;line-height:18px;text-align:center}
+body.review-original ins,body.review-original blockquote.review,body.review-original .review-appendix,body.review-original .review-legend{display:none}
+body.review-original del{background:none;color:inherit;text-decoration:none;padding:0}
+body.review-original .toc-links a[data-reviews]::after{display:none}
+body.review-accepted del,body.review-accepted blockquote.review,body.review-accepted .review-appendix,body.review-accepted .review-legend{display:none}
+body.review-accepted ins{background:none;color:inherit;border:0;padding:0}
+body.review-accepted .toc-links a[data-reviews]::after{display:none}
+@media print{blockquote.review{break-inside:avoid;background:#eef3fc!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}ins,del{-webkit-print-color-adjust:exact;print-color-adjust:exact}.review-select{display:none}}
+</style></head><body>
+<!-- GENERATED FILE — source: docs/decisions/ADR-020-jig-platform.md — run: npm --prefix tools/docs run build -->
+<a class="skip" href="#reading-main">본문으로 이동</a>
+<header class="topbar"><a class="brand" href="../../index.html" aria-label="VIDE 문서 모음"><b>V.</b><span>VIDE</span></a><nav class="doc-tabs" aria-label="문서 선택"><a class="doc-tab" href="../PRD.html">PRD</a><a class="doc-tab" href="../specs/README.html">SPEC</a><a class="doc-tab" href="../../Design.html">Design</a><a class="doc-tab" href="../architecture/ARCH-01-system.html">기술 설계</a><a class="doc-tab" href="../plans/PLAN.html">PLAN</a><a class="doc-tab" href="../../DEVELOPMENT_GUIDE.html">개발 가이드</a><a class="doc-tab" href="../../AI.html">AI 규약</a></nav><div class="top-actions"><button id="source-download" title="현재 문서의 Markdown 원문 저장">원문 ↓</button><button id="print-doc" title="현재 문서 인쇄">인쇄</button></div></header>
+<div class="layout"><aside class="toc-shell" id="toc-shell" aria-label="현재 문서의 목차"><div class="toc-title"><strong>CONTENTS</strong><span id="toc-count"></span><button id="toc-toggle" aria-expanded="false" aria-controls="toc-body">목차 열기</button></div><div class="toc-body" id="toc-body"><input class="toc-search" id="toc-search" type="search" placeholder="장 제목으로 찾기" aria-label="현재 문서 목차 검색"><p class="toc-hint" id="nav-hint" role="status">장 제목으로 찾아갑니다.</p><nav class="toc-links" id="toc-links" aria-label="본문 장 이동"></nav><div class="toc-next">다음 작성할 문서<br><b>다음 작업 · PLAN §6.5</b><br>현재 단계와 작업별 계획을 확인한 뒤 해당 범위에서 재개</div></div></aside><main id="reading-main" tabindex="-1"><article id="adr-020-jig-platform" class="document"><header class="doc-hero"><div class="hero-label"><span class="eyebrow">DECISION RECORD</span><span><span class="pill">REVIEW · v0.1</span><span class="pill">6 CHAPTERS</span></span></div><h1 tabindex="-1">ADR-020 · jig 플랫폼: 설명서 한 장, 코드 출처별 실행, 고정 틀로 Rhino에 만들기</h1><div class="hero-meta">
+<p>동작 의미는 <a href="../specs/SPEC-07-jig-platform.html">SPEC-07</a>, 물리 계약은 <a href="../architecture/ARCH-03-jig-runtime.html">ARCH-03</a>, 구현 순서·검증은 <a href="../plans/PLAN-22-jig-platform.html">PLAN-22</a>(플랫폼 1차)·<a href="../plans/PLAN-23-s06-frame-jig.html">PLAN-23</a>(S-06 골조 jig)이 소유한다. 조사와 대안 비교는 <a href="../research/RESEARCH-10-vide-restructure.html">RESEARCH-10</a> §3~§5·§9.6·§14, 형식 선택지의 앞선 조사는 <a href="../research/RESEARCH-05-jig-format-options.html">RESEARCH-05</a>에 있다.</p>
+</div></header><section class="doc-section" id="adr-020-jig-platform-section-x0"><h2><span aria-hidden="true" class="section-num">00 /</span> 결정</h2>
+<ol>
+<li>
+<p><strong>단위와 정본.</strong> jig는 한 가지 건축 작업을 위해 만들어 쓰는 작은 작업 도구다. 패키지의 <code>jig.json</code>(계약 버전 3) 한 장이 정본이며 입력(연결된 여러 파일에서 역할별로 조립하는 입력 포함)·설정값·단계·출력·화면·보고서·Rhino에 만들기·자체 시험·AI 설명서를 선언한다. 단계를 맡는 주체(계산 코드·라이브러리 jig·공식 틀·AI 1회 호출·사람 확정)는 설명서에 드러난다. 한 프로젝트에서 jig를 쓰는 기록(작업본: 입력 조립·설정값·수정 사항·결과·만들기 기록)은 VIDE가 jig 버전을 고정해 저장한다. 설정값이 바뀌면 AI를 부르지 않고 바뀐 단계와 그 뒤만 다시 계산한다.</p>
+</li>
+<li>
+<p><strong>수명 다섯 단계 중 1차는 셋.</strong> 초안 → 프로젝트 jig → 공유 → 검증(AI 도구로 등록) → 공식. 1차는 초안·프로젝트 jig·공식만 연다. 게시·설치한 버전은 바꾸지 않고, 고치면 사본이 새 초안이 된다. 다른 jig가 부를 수 있는 것은 공식 단계의 라이브러리 jig뿐이다. 공유·보관소·검증·AI 도구 등록과 다른 PC에서 만든 jig의 설치는 공유 범위 결정(RESEARCH-10 §16 C1) 전까지 하지 않는다. 1차 가져오기는 이 PC 설치본의 키로 서명한 묶음만 받는다.</p>
+</li>
+<li>
+<p><strong>코드가 도는 곳은 코드의 출처로 정한다.</strong></p>
+<ul>
+<li>공식 jig·라이브러리(저장소 코드): 엔진. 수십 ms 이상 걸리는 계산은 작업 스레드에서 돈다.</li>
+<li>개발자가 저장소에서 작성하고 이 PC에서 서명한 묶음: 최소 환경의 Node 자식 프로세스.</li>
+<li>AI가 쓴 코드(초안, 초안에서 고정한 프로젝트 jig): 파일·네트워크·프로세스·환경 변수 API가 없는 계산 상자(엔진 안 wasm JS 실행기).</li>
+<li>선언형 화면·보고서: 코드 없이 데이터만.</li>
+<li>남이 만든 jig의 실행 환경은 C1 뒤에 정한다.</li>
+</ul>
+<p>jig 코드는 스스로 파일·API를 열지 않고 엔진이 권한을 검사한 뒤 넘긴 입력만 받는다. 유효 권한은 선언한 능력(닫힌 어휘) ∩ 수명 단계·실행 위치가 허용하는 것 ∩ 사용자 승인 ∩ 프로젝트 권한이며, 화면이 아니라 서버 명령 경계에서 검사한다.</p>
+</li>
+<li>
+<p><strong>Rhino에 만들기는 VIDE 소유 고정 틀과 데이터 블록 하나로 한다.</strong> 공식이 아닌 jig는 호스트 C#을 담지 않는다. 호스트에 객체를 만드는 단계는 공식 만들기 틀을 이름으로 부르고, 값은 데이터 블록 하나로만 넘긴다(C# 문자열에 값을 끼워 넣지 않는다). 실행은 AI를 부르지 않고 기존 작업 사본 → 후보 → 사용자의 원본 반영을 거친다. jig는 원본에 직접 쓰지 않는다. 이 범위에서 <a href="ADR-014-sdk-agent-execution.html">ADR-014</a>의 &quot;고정 편집 템플릿을 최종 실행 방식으로 사용하지 않는다&quot;를 좁히며, AI 편집 경로는 ADR-014 그대로다. 1차 틀은 곡선·H 단면 스윕·기둥 압출·부호 문자 네 가지다. 기존 객체를 고치는 공식 호스트 조작 틀은 RESEARCH-10 §16 B14 결정 뒤에 더하고, 그 전에는 기존 객체 수정을 AI 편집 경로로 한다.</p>
+</li>
+<li>
+<p><strong>교체 대상은 만들기 기록으로 정한다.</strong> 교체·삭제 대상은 태그가 아니라 만들기 기록에 적힌 객체 ID와 지문으로 정한다. 기록 지문(원본 반영 직후 읽은 값)과 만들기 직전 호스트 읽기(숨긴 객체 포함)의 지문이 같은 객체만 교체한다. 태그(UserString)는 표시·검색용이다. 틀은 VIDE가 넘긴 객체 ID 목록만 지운다.</p>
+</li>
+<li>
+<p><strong>사람의 수정이 우선한다.</strong> 지문이 달라진 객체(사람이 고친 것)는 교체하지 않고 따로 보여 사람이 고르게 한다. 기록에 없는 태그 객체(사람이 만든 복사본)와 태그 없는 객체는 건드리지 않는다. 사람이 지운 객체는 다시 만들지 않는다. 레이어를 끈 것은 삭제로 판정하지 않는다. 사람이 받아들인 수정은 수정 사항으로 저장해 다시 계산해도 유지한다.</p>
+</li>
+<li>
+<p><strong>화면은 선언형 패널과 공식 부품으로 만든다.</strong> 새 jig 화면은 <code>panel.json</code>으로 공식 부품 목록 안의 부품을 배치하고 단계 출력·설정값에만 연결한다. 식·코드·임의 색은 넣지 않는다. 표현이 모자라면 부품 목록에 먼저 더한다. 격리 커스텀 뷰는 RESEARCH-10 §16 B13 결정 뒤다. 기존 구조·Sync·자료 jig 화면은 그대로 둔다.</p>
+</li>
+<li>
+<p><strong>구조 해석은 라이브러리 jig다.</strong> 구조 분석 jig(J-09)의 계산을 공식 라이브러리 <code>vide/structure-analysis</code>로 두고 범용 구조 화면과 S-06 골조 jig가 함께 쓴다. 기하 도구 <code>vide/geometry-kit</code>과 프로젝트 자료 <code>vide/project-facts</code>도 공식 라이브러리다. <a href="ADR-019-structure-jig-rust-core.html">ADR-019</a>의 Rust 해석 코어와 <a href="../architecture/ARCH-02-structure-model.html">ARCH-02</a> 계약은 바뀌지 않는다.</p>
+</li>
+<li>
+<p><strong>S-06 골조 jig의 자리와 소스.</strong> S-06 구조 jig는 프로젝트 jig <code>project/s06-frame</code>이다. S-06 고유 규칙은 이 jig 안에만 두고 일반 기능은 라이브러리로 올린다. 소스는 저장소 <code>extensions/jigs/s06-frame/</code>에 두되 단계 코드·틀·합성 시험 자료만 넣는다(검증용 샘플 규칙). S-06의 실제 설정값·근거·입력 조립·구역·수정 사항은 사용자 데이터 폴더의 작업본에만 두고, 설치본 빌드에는 넣지 않는다. jig 만들기의 시작 본은 공식 일반 예제이며 S-06 jig를 다른 프로젝트의 본으로 싣지 않는다.</p>
+</li>
+<li>
+<p><strong>jig 시스템은 S-06 jig로 시험한다.</strong> S-06 본체는 에이전트가 저장소에서 jig 형식대로 작성하되, 채팅 제작 루프와 같은 점검(<code>jig:validate</code>·<code>jig:test</code>)을 통과해야 들어간다. 채팅으로 jig를 만드는 경로는 1차 끝에 S-06 보조 jig(신설 E.J.마다 양쪽 기둥과 공통 파일캡이 있는지 보는 도구)를 만드는 것으로 시험한다.</p>
+</li>
+</ol>
+<p><strong>용어.</strong> 화면과 AI의 말은 실무어(Rhino에 만들기·수정 사항·이 프로젝트의 jig·AI 도구로 등록·버전·설정값)를 쓰고, 화면 문구의 정본은 Design이다. 문서에서 '작업본'은 한 프로젝트에서 jig 한 버전을 쓰는 기록(화면 이름 '이 프로젝트의 jig')을 뜻하며, 코드 식별자(<code>bake</code>, <code>override</code>, <code>instance</code>)는 ARCH-03을 따른다.</p>
+</section><section class="doc-section" id="adr-020-jig-platform-section-x1"><h2><span aria-hidden="true" class="section-num">01 /</span> 이유</h2>
+<ul>
+<li>사용자 요구는 S-06 구조 jig를 만들면서 jig 시스템을 시험하고, 구조 해석은 라이브러리처럼 미리 만들어 두며, 한 프로젝트의 흐름을 일반화하지 않는 것이다. 공식 라이브러리와 프로젝트 jig를 나누면 세 가지를 함께 지킨다.</li>
+<li>설명서 한 장이 정본이면 화면·계산·점검·AI 설명이 같은 선언에서 나오고, 조건을 바꿀 때 AI 없이 다시 계산할 수 있다.</li>
+<li>설치된 Node 24의 권한 모델은 네트워크를 막지 못한다. AI는 오염될 수 있는 자료(자료 DB 진술·CAD 문자)를 읽고 코드를 쓰므로, 그 코드는 밖으로 보낼 길이 없는 실행기에서 돌려야 한다. 엔진 프로세스는 CLI 로그인 폴더와 DB에 닿으므로 개발자 묶음도 엔진 안에서 돌리지 않는다.</li>
+<li>AI가 매번 호스트 C#을 쓰면 느리고 같은 결과를 보장하지 못한다. 틀이 고정되고 값이 데이터 블록으로만 들어가면 값에 <code>&quot;</code>나 줄바꿈이 섞여도 코드가 되지 않고, 결과가 입력에 대해 결정적이다.</li>
+<li>Rhino의 복사·배열·대칭은 UserString을 그대로 복제하므로 태그로 찾아 교체하면 사람이 복사해 둔 객체까지 지운다. Live Sync는 꺼진 레이어의 객체를 사라진 것으로 보고하므로, 이를 삭제로 읽으면 레이어를 끄기만 해도 결과가 지워진다.</li>
+<li>AI가 만드는 화면을 공식 부품으로 제한하면 쓰는 코드 양과 디자인 흔들림이 줄고, 목록 밖 부품·색을 점검에서 막을 수 있다.</li>
+</ul>
+</section><section class="doc-section" id="adr-020-jig-platform-section-x2"><h2><span aria-hidden="true" class="section-num">02 /</span> 대안과 대가</h2>
+<div aria-label="ADR 표 1" class="table-scroll" role="region" tabindex="0"><table>
+<thead>
+<tr>
+<th>대안</th>
+<th>채택하지 않은 이유</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>jig가 호스트 C#을 직접 담거나 AI가 매번 만들기 코드를 씀</td>
+<td>결과가 매번 같다는 보장이 없고, 건축가가 검토할 수 없는 코드가 원본 쓰기 경로에 들어간다</td>
+</tr>
+<tr>
+<td>태그(UserString)로 찾아 교체</td>
+<td>사람이 복사한 객체와 꺼진 레이어에서 고친 객체가 지워진다</td>
+</tr>
+<tr>
+<td>jig 출력 레이어에는 원본에 직접 쓰고 되돌리기로 보호</td>
+<td>작업 사본·저장 재열기 확인·후보 보호를 우회한다</td>
+</tr>
+<tr>
+<td>모든 jig 코드를 엔진 프로세스나 Node 권한 플래그 아래에서 실행</td>
+<td>엔진은 로그인 폴더·DB에 닿고, Node 권한 모델은 네트워크를 막지 않는다</td>
+</tr>
+<tr>
+<td>jig마다 자유 React 화면</td>
+<td>AI가 쓰는 코드와 디자인 편차가 커지고 점검할 수 없다</td>
+</tr>
+<tr>
+<td>S-06 규칙을 범용 구조 jig에 넣음</td>
+<td>한 프로젝트의 흐름을 일반화한다</td>
+</tr>
+</tbody>
+</table></div>
+<p>대가: 계산 상자는 V8보다 느리므로 무거운 기하는 공식 라이브러리 단계로 넘겨야 한다. 1차 만들기 틀은 C# 메서드 본문을 기존 <code>worker.execute</code>로 보내므로 본문 길이 한도 때문에 큰 만들기를 여러 번 나누어 실행하고, 실행마다 저장·재열기 시간이 든다. 틀 종류가 적어 기존 객체 일괄 수정은 1차에 AI 편집 경로로 한다. 플러그인 내장 틀, CAD에 그리기, 호스트 조작 틀은 2차 이후다.</p>
+</section><section class="doc-section" id="adr-020-jig-platform-section-x3"><h2><span aria-hidden="true" class="section-num">03 /</span> 영향</h2>
+<ul>
+<li><strong>ADR-014:</strong> 결정 4가 적용 범위를 좁힌다. ADR-014 끝의 '후속 결정'에 적었다.</li>
+<li><strong>ADR-008·SPEC-05:</strong> ADR-008 §1의 최소 확장 실행은 jig 형식이 잇는다(SPEC-05.8의 JIG 탭이 확장 입구를 대신한다). 신뢰하지 않는 업로드 코드를 등록하지 않는다는 SPEC-05.4와 PRD §14.2의 공개 마켓·임의 비신뢰 코드 실행 제외는 그대로다. 1차에 실행되는 코드는 저장소 공식 코드, 이 PC에서 서명한 개발자 묶음, 사용자의 제작 대화에서 AI가 쓴 코드(계산 상자)뿐이다.</li>
+<li><strong>ADR-019·ARCH-02:</strong> Rust 코어와 해석 계약을 유지한다. 부재 만들기 앞의 해석 확정 점검과 확정 전 미리보기 해석의 범위는 SPEC-06·ADR-019가 정한다.</li>
+<li><strong><a href="ADR-021-conversation-sessions.html">ADR-021</a>:</strong> 제작 대화(초안 폴더 한정 파일 도구)와 jig 안 대화의 세션 방식은 ADR-021이 정한다.</li>
+<li><strong>AI.md §2 <code>extensions/</code>:</strong> <code>extensions/jigs/&lt;name&gt;/</code>는 검증용 샘플 자리로 쓰며 실무 자료를 넣지 않는다.</li>
+<li>패키지 폴더·타입·실행기 규약·서버 경로·스키마 v5·데이터 블록 형식은 ARCH-03이 소유한다.</li>
+</ul>
+</section><section class="doc-section" id="adr-020-jig-platform-section-x4"><h2><span aria-hidden="true" class="section-num">04 /</span> 승인 범위와 남은 검증</h2>
+<ul>
+<li><strong>사용자 결정(2026-09-29):</strong> 구조 jig와 S-06 전용 구조 jig 구현(FR-23 확장, FR-24), jig 시스템 시험 방식(결정 10), 입력은 연결된 CAD·Rhino 전부에서 AI가 조립하고 사람이 확인(SPEC-07).</li>
+<li><strong>에이전트 권고에 사용자 이의가 없어 적용한 기본값:</strong> 결정 4(ADR-014 범위 좁힘), 결정 9(S-06 소스 위치와 시작 본), 화면 용어.</li>
+<li><strong>이 ADR이 정하지 않는 것:</strong> 공유 범위·비신뢰 코드 실행 폭(C1), 격리 커스텀 뷰(B13), 공식 호스트 조작 틀(B14), skill 용어(B11). 결정 전까지 1차 범위 밖이다.</li>
+<li>이 ADR은 방향 결정이며 구현 완료가 아니다. 남은 기술 검증(계산 상자 실행기, 자식 프로세스 격리, 만들기 틀의 코드 검사 통과·웨브 연직 스윕·본문 크기 분할, 원본 반영 뒤 객체 ID 대응)은 PLAN-22가, S-06 수용 검증은 PLAN-23과 VERIFY가 소유한다. 검증이 실패하면 해당 실행 위치나 틀을 쓰지 않고 이 ADR을 다시 연다.</li>
+</ul>
+</section><section class="doc-section" id="adr-020-jig-platform-section-x5"><h2><span aria-hidden="true" class="section-num">05 /</span> 근거</h2>
+<p>2026-09-29 사용자 지시: &quot;구조 jig도 만들어야 하고… S-06 전용 구조 해석 jig도 구현해야해&quot;, 프로젝트에 특별하게 쓰이는 jig를 빠르게 구성할 수 있는 틀과 &quot;skill이나 library처럼&quot; 미리 만든 구조 해석, &quot;S-06 구조 JIG를 만들면서 JIG 시스템 구축을 테스트&quot;. jig가 플러그인·위젯을 대신하는 용어이자 공유 단위라는 2026-09-25 결정(RESEARCH-10 §3.1). 2026-09-29 결정 목록의 A1·A7·A11·A12·A13. 조사·대안 비교는 RESEARCH-10 §3~§5·§9.6·§14·§16.</p>
+</section><footer class="doc-footer"><span>VIDE / PLANNING DOCUMENTS</span><span>문서 열람용 · 실제 CAD/BIM 지원은 구현·검증 후 선언</span></footer></article></main></div>
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+<script id="source-data" type="application/json">{"adr-020-jig-platform":{"label":"jig 플랫폼 — 설명서 한 장, 코드 출처별 실행, 고정 틀로 Rhino에 만들기","file":"ADR-020-jig-platform.md","markdown":"---\nid: ADR-020\ntitle: jig 플랫폼 — 설명서 한 장, 코드 출처별 실행, 고정 틀로 Rhino에 만들기\nstatus: review\nversion: 0.1\nupdated: 2026-09-29\nowner: agent:claude\nrelated: [FR-13, FR-23, FR-24, OQ-07, ADR-008, ADR-014, ADR-019, ADR-021, SPEC-05, SPEC-06, SPEC-07, ARCH-02, ARCH-03, PLAN-22, PLAN-23, RESEARCH-05, RESEARCH-10]\n---\n\n# ADR-020 · jig 플랫폼: 설명서 한 장, 코드 출처별 실행, 고정 틀로 Rhino에 만들기\n\n동작 의미는 [SPEC-07](../specs/SPEC-07-jig-platform.md), 물리 계약은 [ARCH-03](../architecture/ARCH-03-jig-runtime.md), 구현 순서·검증은 [PLAN-22](../plans/PLAN-22-jig-platform.md)(플랫폼 1차)·[PLAN-23](../plans/PLAN-23-s06-frame-jig.md)(S-06 골조 jig)이 소유한다. 조사와 대안 비교는 [RESEARCH-10](../research/RESEARCH-10-vide-restructure.md) §3~§5·§9.6·§14, 형식 선택지의 앞선 조사는 [RESEARCH-05](../research/RESEARCH-05-jig-format-options.md)에 있다.\n\n## 결정\n\n1. **단위와 정본.** jig는 한 가지 건축 작업을 위해 만들어 쓰는 작은 작업 도구다. 패키지의 `jig.json`(계약 버전 3) 한 장이 정본이며 입력(연결된 여러 파일에서 역할별로 조립하는 입력 포함)·설정값·단계·출력·화면·보고서·Rhino에 만들기·자체 시험·AI 설명서를 선언한다. 단계를 맡는 주체(계산 코드·라이브러리 jig·공식 틀·AI 1회 호출·사람 확정)는 설명서에 드러난다. 한 프로젝트에서 jig를 쓰는 기록(작업본: 입력 조립·설정값·수정 사항·결과·만들기 기록)은 VIDE가 jig 버전을 고정해 저장한다. 설정값이 바뀌면 AI를 부르지 않고 바뀐 단계와 그 뒤만 다시 계산한다.\n2. **수명 다섯 단계 중 1차는 셋.** 초안 → 프로젝트 jig → 공유 → 검증(AI 도구로 등록) → 공식. 1차는 초안·프로젝트 jig·공식만 연다. 게시·설치한 버전은 바꾸지 않고, 고치면 사본이 새 초안이 된다. 다른 jig가 부를 수 있는 것은 공식 단계의 라이브러리 jig뿐이다. 공유·보관소·검증·AI 도구 등록과 다른 PC에서 만든 jig의 설치는 공유 범위 결정(RESEARCH-10 §16 C1) 전까지 하지 않는다. 1차 가져오기는 이 PC 설치본의 키로 서명한 묶음만 받는다.\n3. **코드가 도는 곳은 코드의 출처로 정한다.**\n   - 공식 jig·라이브러리(저장소 코드): 엔진. 수십 ms 이상 걸리는 계산은 작업 스레드에서 돈다.\n   - 개발자가 저장소에서 작성하고 이 PC에서 서명한 묶음: 최소 환경의 Node 자식 프로세스.\n   - AI가 쓴 코드(초안, 초안에서 고정한 프로젝트 jig): 파일·네트워크·프로세스·환경 변수 API가 없는 계산 상자(엔진 안 wasm JS 실행기).\n   - 선언형 화면·보고서: 코드 없이 데이터만.\n   - 남이 만든 jig의 실행 환경은 C1 뒤에 정한다.\n\n   jig 코드는 스스로 파일·API를 열지 않고 엔진이 권한을 검사한 뒤 넘긴 입력만 받는다. 유효 권한은 선언한 능력(닫힌 어휘) ∩ 수명 단계·실행 위치가 허용하는 것 ∩ 사용자 승인 ∩ 프로젝트 권한이며, 화면이 아니라 서버 명령 경계에서 검사한다.\n4. **Rhino에 만들기는 VIDE 소유 고정 틀과 데이터 블록 하나로 한다.** 공식이 아닌 jig는 호스트 C#을 담지 않는다. 호스트에 객체를 만드는 단계는 공식 만들기 틀을 이름으로 부르고, 값은 데이터 블록 하나로만 넘긴다(C# 문자열에 값을 끼워 넣지 않는다). 실행은 AI를 부르지 않고 기존 작업 사본 → 후보 → 사용자의 원본 반영을 거친다. jig는 원본에 직접 쓰지 않는다. 이 범위에서 [ADR-014](ADR-014-sdk-agent-execution.md)의 \"고정 편집 템플릿을 최종 실행 방식으로 사용하지 않는다\"를 좁히며, AI 편집 경로는 ADR-014 그대로다. 1차 틀은 곡선·H 단면 스윕·기둥 압출·부호 문자 네 가지다. 기존 객체를 고치는 공식 호스트 조작 틀은 RESEARCH-10 §16 B14 결정 뒤에 더하고, 그 전에는 기존 객체 수정을 AI 편집 경로로 한다.\n5. **교체 대상은 만들기 기록으로 정한다.** 교체·삭제 대상은 태그가 아니라 만들기 기록에 적힌 객체 ID와 지문으로 정한다. 기록 지문(원본 반영 직후 읽은 값)과 만들기 직전 호스트 읽기(숨긴 객체 포함)의 지문이 같은 객체만 교체한다. 태그(UserString)는 표시·검색용이다. 틀은 VIDE가 넘긴 객체 ID 목록만 지운다.\n6. **사람의 수정이 우선한다.** 지문이 달라진 객체(사람이 고친 것)는 교체하지 않고 따로 보여 사람이 고르게 한다. 기록에 없는 태그 객체(사람이 만든 복사본)와 태그 없는 객체는 건드리지 않는다. 사람이 지운 객체는 다시 만들지 않는다. 레이어를 끈 것은 삭제로 판정하지 않는다. 사람이 받아들인 수정은 수정 사항으로 저장해 다시 계산해도 유지한다.\n7. **화면은 선언형 패널과 공식 부품으로 만든다.** 새 jig 화면은 `panel.json`으로 공식 부품 목록 안의 부품을 배치하고 단계 출력·설정값에만 연결한다. 식·코드·임의 색은 넣지 않는다. 표현이 모자라면 부품 목록에 먼저 더한다. 격리 커스텀 뷰는 RESEARCH-10 §16 B13 결정 뒤다. 기존 구조·Sync·자료 jig 화면은 그대로 둔다.\n8. **구조 해석은 라이브러리 jig다.** 구조 분석 jig(J-09)의 계산을 공식 라이브러리 `vide/structure-analysis`로 두고 범용 구조 화면과 S-06 골조 jig가 함께 쓴다. 기하 도구 `vide/geometry-kit`과 프로젝트 자료 `vide/project-facts`도 공식 라이브러리다. [ADR-019](ADR-019-structure-jig-rust-core.md)의 Rust 해석 코어와 [ARCH-02](../architecture/ARCH-02-structure-model.md) 계약은 바뀌지 않는다.\n9. **S-06 골조 jig의 자리와 소스.** S-06 구조 jig는 프로젝트 jig `project/s06-frame`이다. S-06 고유 규칙은 이 jig 안에만 두고 일반 기능은 라이브러리로 올린다. 소스는 저장소 `extensions/jigs/s06-frame/`에 두되 단계 코드·틀·합성 시험 자료만 넣는다(검증용 샘플 규칙). S-06의 실제 설정값·근거·입력 조립·구역·수정 사항은 사용자 데이터 폴더의 작업본에만 두고, 설치본 빌드에는 넣지 않는다. jig 만들기의 시작 본은 공식 일반 예제이며 S-06 jig를 다른 프로젝트의 본으로 싣지 않는다.\n10. **jig 시스템은 S-06 jig로 시험한다.** S-06 본체는 에이전트가 저장소에서 jig 형식대로 작성하되, 채팅 제작 루프와 같은 점검(`jig:validate`·`jig:test`)을 통과해야 들어간다. 채팅으로 jig를 만드는 경로는 1차 끝에 S-06 보조 jig(신설 E.J.마다 양쪽 기둥과 공통 파일캡이 있는지 보는 도구)를 만드는 것으로 시험한다.\n\n**용어.** 화면과 AI의 말은 실무어(Rhino에 만들기·수정 사항·이 프로젝트의 jig·AI 도구로 등록·버전·설정값)를 쓰고, 화면 문구의 정본은 Design이다. 문서에서 '작업본'은 한 프로젝트에서 jig 한 버전을 쓰는 기록(화면 이름 '이 프로젝트의 jig')을 뜻하며, 코드 식별자(`bake`, `override`, `instance`)는 ARCH-03을 따른다.\n\n## 이유\n\n- 사용자 요구는 S-06 구조 jig를 만들면서 jig 시스템을 시험하고, 구조 해석은 라이브러리처럼 미리 만들어 두며, 한 프로젝트의 흐름을 일반화하지 않는 것이다. 공식 라이브러리와 프로젝트 jig를 나누면 세 가지를 함께 지킨다.\n- 설명서 한 장이 정본이면 화면·계산·점검·AI 설명이 같은 선언에서 나오고, 조건을 바꿀 때 AI 없이 다시 계산할 수 있다.\n- 설치된 Node 24의 권한 모델은 네트워크를 막지 못한다. AI는 오염될 수 있는 자료(자료 DB 진술·CAD 문자)를 읽고 코드를 쓰므로, 그 코드는 밖으로 보낼 길이 없는 실행기에서 돌려야 한다. 엔진 프로세스는 CLI 로그인 폴더와 DB에 닿으므로 개발자 묶음도 엔진 안에서 돌리지 않는다.\n- AI가 매번 호스트 C#을 쓰면 느리고 같은 결과를 보장하지 못한다. 틀이 고정되고 값이 데이터 블록으로만 들어가면 값에 `\"`나 줄바꿈이 섞여도 코드가 되지 않고, 결과가 입력에 대해 결정적이다.\n- Rhino의 복사·배열·대칭은 UserString을 그대로 복제하므로 태그로 찾아 교체하면 사람이 복사해 둔 객체까지 지운다. Live Sync는 꺼진 레이어의 객체를 사라진 것으로 보고하므로, 이를 삭제로 읽으면 레이어를 끄기만 해도 결과가 지워진다.\n- AI가 만드는 화면을 공식 부품으로 제한하면 쓰는 코드 양과 디자인 흔들림이 줄고, 목록 밖 부품·색을 점검에서 막을 수 있다.\n\n## 대안과 대가\n\n| 대안 | 채택하지 않은 이유 |\n|---|---|\n| jig가 호스트 C#을 직접 담거나 AI가 매번 만들기 코드를 씀 | 결과가 매번 같다는 보장이 없고, 건축가가 검토할 수 없는 코드가 원본 쓰기 경로에 들어간다 |\n| 태그(UserString)로 찾아 교체 | 사람이 복사한 객체와 꺼진 레이어에서 고친 객체가 지워진다 |\n| jig 출력 레이어에는 원본에 직접 쓰고 되돌리기로 보호 | 작업 사본·저장 재열기 확인·후보 보호를 우회한다 |\n| 모든 jig 코드를 엔진 프로세스나 Node 권한 플래그 아래에서 실행 | 엔진은 로그인 폴더·DB에 닿고, Node 권한 모델은 네트워크를 막지 않는다 |\n| jig마다 자유 React 화면 | AI가 쓰는 코드와 디자인 편차가 커지고 점검할 수 없다 |\n| S-06 규칙을 범용 구조 jig에 넣음 | 한 프로젝트의 흐름을 일반화한다 |\n\n대가: 계산 상자는 V8보다 느리므로 무거운 기하는 공식 라이브러리 단계로 넘겨야 한다. 1차 만들기 틀은 C# 메서드 본문을 기존 `worker.execute`로 보내므로 본문 길이 한도 때문에 큰 만들기를 여러 번 나누어 실행하고, 실행마다 저장·재열기 시간이 든다. 틀 종류가 적어 기존 객체 일괄 수정은 1차에 AI 편집 경로로 한다. 플러그인 내장 틀, CAD에 그리기, 호스트 조작 틀은 2차 이후다.\n\n## 영향\n\n- **ADR-014:** 결정 4가 적용 범위를 좁힌다. ADR-014 끝의 '후속 결정'에 적었다.\n- **ADR-008·SPEC-05:** ADR-008 §1의 최소 확장 실행은 jig 형식이 잇는다(SPEC-05.8의 JIG 탭이 확장 입구를 대신한다). 신뢰하지 않는 업로드 코드를 등록하지 않는다는 SPEC-05.4와 PRD §14.2의 공개 마켓·임의 비신뢰 코드 실행 제외는 그대로다. 1차에 실행되는 코드는 저장소 공식 코드, 이 PC에서 서명한 개발자 묶음, 사용자의 제작 대화에서 AI가 쓴 코드(계산 상자)뿐이다.\n- **ADR-019·ARCH-02:** Rust 코어와 해석 계약을 유지한다. 부재 만들기 앞의 해석 확정 점검과 확정 전 미리보기 해석의 범위는 SPEC-06·ADR-019가 정한다.\n- **[ADR-021](ADR-021-conversation-sessions.md):** 제작 대화(초안 폴더 한정 파일 도구)와 jig 안 대화의 세션 방식은 ADR-021이 정한다.\n- **AI.md §2 `extensions/`:** `extensions/jigs/\u003cname>/`는 검증용 샘플 자리로 쓰며 실무 자료를 넣지 않는다.\n- 패키지 폴더·타입·실행기 규약·서버 경로·스키마 v5·데이터 블록 형식은 ARCH-03이 소유한다.\n\n## 승인 범위와 남은 검증\n\n- **사용자 결정(2026-09-29):** 구조 jig와 S-06 전용 구조 jig 구현(FR-23 확장, FR-24), jig 시스템 시험 방식(결정 10), 입력은 연결된 CAD·Rhino 전부에서 AI가 조립하고 사람이 확인(SPEC-07).\n- **에이전트 권고에 사용자 이의가 없어 적용한 기본값:** 결정 4(ADR-014 범위 좁힘), 결정 9(S-06 소스 위치와 시작 본), 화면 용어.\n- **이 ADR이 정하지 않는 것:** 공유 범위·비신뢰 코드 실행 폭(C1), 격리 커스텀 뷰(B13), 공식 호스트 조작 틀(B14), skill 용어(B11). 결정 전까지 1차 범위 밖이다.\n- 이 ADR은 방향 결정이며 구현 완료가 아니다. 남은 기술 검증(계산 상자 실행기, 자식 프로세스 격리, 만들기 틀의 코드 검사 통과·웨브 연직 스윕·본문 크기 분할, 원본 반영 뒤 객체 ID 대응)은 PLAN-22가, S-06 수용 검증은 PLAN-23과 VERIFY가 소유한다. 검증이 실패하면 해당 실행 위치나 틀을 쓰지 않고 이 ADR을 다시 연다.\n\n## 근거\n\n2026-09-29 사용자 지시: \"구조 jig도 만들어야 하고… S-06 전용 구조 해석 jig도 구현해야해\", 프로젝트에 특별하게 쓰이는 jig를 빠르게 구성할 수 있는 틀과 \"skill이나 library처럼\" 미리 만든 구조 해석, \"S-06 구조 JIG를 만들면서 JIG 시스템 구축을 테스트\". jig가 플러그인·위젯을 대신하는 용어이자 공유 단위라는 2026-09-25 결정(RESEARCH-10 §3.1). 2026-09-29 결정 목록의 A1·A7·A11·A12·A13. 조사·대안 비교는 RESEARCH-10 §3~§5·§9.6·§14·§16.\n"}}</script>
+<script id="reader-config" type="application/json">{"initial":"adr-020-jig-platform","siteTitle":"VIDE"}</script>
+<script>
+(() => {
+'use strict';
+const sourceData=JSON.parse(document.getElementById('source-data').textContent);
+const config=JSON.parse(document.getElementById('reader-config').textContent);
+const esc=s=>String(s);
+let activeDoc=config.initial;
+let observer;
+let toastTimer;
+const $=s=>document.querySelector(s);
+function notify(message){const t=$('#toast');t.textContent=message;t.hidden=false;clearTimeout(toastTimer);toastTimer=setTimeout(()=>{t.hidden=true;},3400);}
+function renderToc(){const links=$('#toc-links');links.replaceChildren();const nodes=document.querySelectorAll('#'+activeDoc+' .doc-section');nodes.forEach(section=>{const a=document.createElement('a');a.href='#'+section.id;a.textContent=section.querySelector('h2').textContent;a.dataset.title=a.textContent;a.addEventListener('click',()=>{$('#toc-shell').classList.remove('open');$('#toc-toggle').setAttribute('aria-expanded','false');});links.appendChild(a);});$('#toc-count').textContent=nodes.length+' CHAPTERS';$('#toc-search').value='';$('#nav-hint').textContent='章 제목으로 찾아갑니다.'.replace('章','장');if(observer)observer.disconnect();observer=new IntersectionObserver(entries=>{const visible=entries.filter(e=>e.isIntersecting).sort((a,b)=>a.boundingClientRect.top-b.boundingClientRect.top);if(!visible.length)return;document.querySelectorAll('#toc-links a').forEach(a=>a.classList.toggle('active',a.hash==='#'+visible[0].target.id));},{rootMargin:'-90px 0px -64% 0px',threshold:0});nodes.forEach(n=>observer.observe(n));}
+function showDoc(name,reset){if(!sourceData[name])name=config.initial;activeDoc=name;document.querySelectorAll('.document').forEach(d=>d.hidden=d.id!==name);document.querySelectorAll('.doc-tab').forEach(a=>{a.classList.toggle('active',a.dataset.doc===name);if(a.dataset.doc===name)a.setAttribute('aria-current','page');else a.removeAttribute('aria-current');});renderToc();document.title=(config.siteTitle||'VIDE')+' · '+sourceData[name].label;if(reset)window.scrollTo({top:0,behavior:'instant'});}
+function useHash(){let raw=decodeURIComponent(location.hash.slice(1)||config.initial);let name=raw.split('-section-')[0];if(!sourceData[name])name=config.initial;if(name!==activeDoc||!$('#toc-links').children.length)showDoc(name,false);const el=document.getElementById(raw);if(el&&!el.hidden){requestAnimationFrame(()=>el.scrollIntoView({block:'start',behavior:'instant'}));}}
+window.addEventListener('hashchange',useHash);
+document.querySelectorAll('.doc-tab[data-doc]').forEach(a=>a.addEventListener('click',e=>{e.preventDefault();const name=a.dataset.doc;showDoc(name,true);history.replaceState(null,'','#'+name);}));
+$('#toc-toggle').addEventListener('click',()=>{const on=$('#toc-shell').classList.toggle('open');$('#toc-toggle').setAttribute('aria-expanded',String(on));});
+$('#toc-search').addEventListener('input',()=>{const q=$('#toc-search').value.trim().toLocaleLowerCase();let n=0;document.querySelectorAll('#toc-links a').forEach(a=>{a.hidden=!a.dataset.title.toLocaleLowerCase().includes(q);if(!a.hidden)n++;});$('#nav-hint').textContent=q?(n?'일치하는 장 '+n+'개':'일치하는 장 제목이 없습니다.'):'장 제목으로 찾아갑니다.';});
+function download(name,contents,type){const blob=new Blob([contents],{type});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),2500);}
+$('#source-download').addEventListener('click',()=>download(sourceData[activeDoc].file,sourceData[activeDoc].markdown,'text/markdown;charset=utf-8'));
+$('#print-doc').addEventListener('click',()=>window.print());
+async function copy(text){try{if(navigator.clipboard&&navigator.clipboard.writeText){await navigator.clipboard.writeText(text);return true;}}catch(e){}const t=document.createElement('textarea');t.value=text;t.style.position='fixed';t.style.left='-9999px';document.body.appendChild(t);t.select();let ok=false;try{ok=document.execCommand('copy');}catch(e){}t.remove();return ok;}
+document.querySelectorAll('.copy-code').forEach(b=>b.addEventListener('click',async()=>{const text=b.parentElement.querySelector('pre').textContent;const ok=await copy(text);if(ok){b.textContent='복사됨';notify('텍스트를 복사했습니다.');setTimeout(()=>b.textContent='복사',1800);}else{const range=document.createRange();range.selectNodeContents(b.parentElement.querySelector('pre'));const sel=window.getSelection();sel.removeAllRanges();sel.addRange(range);notify('자동 복사가 제한됩니다. 선택된 텍스트를 직접 복사하세요.');}}));
+showDoc(config.initial,false);useHash();
+})();
+</script>
+<script>
+(() => {
+'use strict';
+const KEY = 'vide-docs-review-mode';
+const AUTHOR_KEY = 'vide-docs-review-author';
+const sel = document.getElementById('review-mode');
+if (!sel) return;
+const authorSel = document.getElementById('review-author');
+let mode = 'marked';
+let author = 'all';
+try { mode = localStorage.getItem(KEY) || 'marked'; } catch (e) {}
+try { author = localStorage.getItem(AUTHOR_KEY) || 'all'; } catch (e) {}
+if (!['marked', 'original', 'accepted'].includes(mode)) mode = 'marked';
+if (!authorSel || !Array.from(authorSel.options).some(o => o.value === author)) author = 'all';
+const matches = el => author === 'all' || el.dataset.reviewAgent === author;
+const decorate = () => {
+const query = (document.getElementById('toc-search')?.value || '').trim().toLocaleLowerCase();
+let visible = 0;
+document.querySelectorAll('#toc-links a').forEach(a => {
+  const section = document.getElementById(decodeURIComponent(a.hash.slice(1)));
+  if (!section) return;
+  a.hidden = !a.dataset.title.toLocaleLowerCase().includes(query) || (section.classList.contains('review-appendix') && (mode !== 'marked' || !matches(section)));
+  if (!a.hidden) visible += 1;
+  const n = Array.from(section.querySelectorAll('.review-label[data-rid]')).filter(matches).length;
+  if (n && mode === 'marked') a.dataset.reviews = String(n); else delete a.dataset.reviews;
+});
+if (query) document.getElementById('nav-hint').textContent = visible ? `일치하는 장 ${visible}개` : '일치하는 장 제목이 없습니다.';
+};
+const apply = () => {
+  sel.value = mode;
+  if (authorSel) { authorSel.value = author; authorSel.disabled = mode !== 'marked'; }
+  document.body.classList.toggle('review-original', mode === 'original');
+  document.body.classList.toggle('review-accepted', mode === 'accepted');
+  document.querySelectorAll('blockquote.review, .review-appendix').forEach(el => { el.hidden = !matches(el); });
+  decorate();
+  try { localStorage.setItem(KEY, mode); localStorage.setItem(AUTHOR_KEY, author); } catch (e) {}
+};
+apply();
+const toc = document.getElementById('toc-links');
+if (toc) new MutationObserver(decorate).observe(toc, { childList: true });
+document.getElementById('toc-search')?.addEventListener('input', decorate);
+sel.addEventListener('change', () => { mode = sel.value; apply(); });
+if (authorSel) authorSel.addEventListener('change', () => { author = authorSel.value; apply(); });
+const revealHash = () => {
+  let id;
+  try { id = decodeURIComponent(location.hash.slice(1)); } catch (e) { return; }
+  const target = document.getElementById(id);
+  if (!target || !target.dataset.reviewAgent) return;
+  mode = 'marked';
+  if (!matches(target)) author = 'all';
+  apply();
+  target.scrollIntoView({ block: 'center' });
+};
+window.addEventListener('hashchange', revealHash);
+revealHash();
+})();
+</script>
+</body></html>

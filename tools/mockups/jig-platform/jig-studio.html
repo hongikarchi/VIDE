@@ -1,0 +1,817 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>JIG 만들기</title>
+<meta name="description" content="VIDE JIG 만들기 작업공간 정적 목업 — 개요, 화면 미리보기, 시험·점검 결과, 제작 대화, 보고서 틀 미리보기">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  /* existing VIDE tokens (values unchanged, src/ui/style.css) */
+  --line:#dde1de; --muted:#737b7d; --coral:#d97660; --soft:#f6f7f4;
+  /* names added per RESEARCH-10 §6.1 (Design draft input) */
+  --ink:#292c2d; --paper:#ffffff; --canvas:#edf0ec; --rail:#25292a;
+  --bar-base:#dfe2df; --bar-alt:#a9c4ad; --bar-strong:#4f7a60; --bar-actual:#d97660;
+  --ok:#6f9a7a; --warn:#c9a24a; --ng:#c8553d; --na:#b8bdbb;
+  --zone-ok:#e3ede5; --zone-warn:#f3e7c6; --zone-no:#f2d3cc;
+  --ov-grid:#8a9396; --ov-new:#292c2d; --ov-existing:#b7bcb9; --ov-clash:#c8553d;
+  --fs-eyebrow:11px; --fs-small:12px; --fs-body:14px; --fs-lede:15px; --fs-h3:20px;
+  --fs-claim:28px; --fs-kpi:32px; --fs-headline:44px; --track-eyebrow:0.16em;
+  --s1:4px; --s2:8px; --s3:12px; --s4:16px; --s6:24px; --s8:32px; --s12:48px;
+  --hit:36px; --radius:4px;
+  --font:'Pretendard','Noto Sans KR','Malgun Gothic',Arial,sans-serif;
+  --mono:'IBM Plex Mono',Consolas,monospace;
+  font:12px/1.5 var(--font); color:var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+* { box-sizing:border-box; }
+html, body { margin:0; background:var(--canvas); }
+body { min-width:1440px; }
+button { font:inherit; color:inherit; border:1px solid var(--line); border-radius:var(--radius); background:var(--paper); padding:5px 9px; cursor:pointer; }
+svg { display:block; }
+.ic svg, .rail svg { width:18px; height:18px; }
+.mono { font-family:var(--mono); font-size:11px; }
+.muted { color:var(--muted); }
+
+/* ================= A. app artboard ================= */
+.app { width:1440px; height:900px; display:flex; flex-direction:column; overflow:hidden; }
+.shell { display:flex; height:872px; min-height:0; }
+.rail { width:48px; flex-shrink:0; background:var(--rail); color:#c9cecc; display:flex; flex-direction:column; align-items:center; gap:9px; padding:10px 0 12px; }
+.rail .home { width:34px; height:34px; display:grid; place-items:center; margin-bottom:4px; color:#fff; }
+.rail button { width:34px; height:34px; border:0; border-radius:6px; background:transparent; color:inherit; padding:0; display:grid; place-items:center; position:relative; }
+.rail button[aria-pressed="true"] { background:#434948; color:#fff; }
+.rail button[aria-pressed="true"]::before { content:""; position:absolute; left:-7px; top:8px; bottom:8px; width:2px; background:var(--coral); border-radius:1px; }
+.rail .spacer { flex:1; }
+main.grid { flex:1; min-width:0; display:grid; grid-template-columns:266px minmax(0,1fr) 370px; }
+
+/* ---- left: jig outline ---- */
+#left { background:var(--paper); border-right:1px solid var(--line); display:flex; flex-direction:column; min-height:0; }
+.project-heading { height:46px; flex-shrink:0; display:flex; align-items:center; gap:6px; padding:0 12px; border-bottom:1px solid var(--line); }
+.project-heading .pick { flex:1; min-width:0; display:flex; align-items:center; gap:6px; font-weight:600; font-size:13px; }
+.project-heading .pick small { font-weight:400; color:var(--muted); font-size:11px; }
+.project-heading .pick svg { width:14px; height:14px; color:var(--muted); }
+.icon-btn { width:28px; height:28px; padding:0; display:grid; place-items:center; border-color:transparent; color:var(--muted); background:transparent; }
+.icon-btn svg { width:16px; height:16px; }
+.jig-head { padding:12px 12px 12px; border-bottom:1px solid var(--line); }
+.jig-kicker { display:flex; align-items:center; gap:6px; font-size:11px; color:var(--muted); }
+.pill { display:inline-flex; align-items:center; height:18px; padding:0 6px; border-radius:9px; font-size:11px; background:var(--soft); border:1px solid var(--line); color:var(--ink); white-space:nowrap; }
+.pill.draft { background:#fbeee9; border-color:#f0d3c9; }
+.jig-head h1 { margin:6px 0 4px; font-size:17px; line-height:1.3; font-weight:700; letter-spacing:-0.01em; }
+.jig-head p { margin:0; font-size:12px; color:var(--muted); line-height:1.55; }
+.jig-head .inputs { margin-top:8px; display:flex; flex-wrap:wrap; gap:4px 10px; font-size:11px; }
+.jig-head .inputs b { font-weight:500; color:var(--muted); margin-right:2px; }
+.ok-t { color:#4f7a60; } .ng-t { color:var(--ng); } .warn-t { color:#9a7a2a; }
+.outline { flex:1; min-height:0; overflow:hidden; padding:4px 0 8px; }
+.ol-sec { padding:8px 12px 4px; }
+.ol-h { display:flex; align-items:center; justify-content:space-between; height:22px; font-size:11px; font-weight:600; letter-spacing:0.04em; color:var(--muted); }
+.ol-h .count { font-weight:500; letter-spacing:0; }
+.ol-row { display:flex; align-items:center; gap:7px; height:26px; padding:0 6px 0 8px; margin:0 -6px 0 -8px; border-left:2px solid transparent; font-size:12px; min-width:0; }
+.ol-row .num { width:16px; height:16px; flex-shrink:0; border-radius:50%; border:1px solid var(--ink); display:grid; place-items:center; font-size:10px; line-height:1; font-weight:600; }
+.ol-row .name { flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.ol-row .kind { font-size:11px; color:var(--muted); white-space:nowrap; }
+.ol-row .st { width:62px; text-align:right; font-size:11px; white-space:nowrap; }
+.ol-row.cur { border-left-color:var(--coral); background:#fbf3f0; }
+.ol-row .val { width:46px; text-align:right; font-size:12px; white-space:nowrap; }
+.ol-row .val i { font-style:normal; color:var(--muted); font-size:11px; margin-left:1px; }
+.ol-row .src { width:66px; text-align:right; font-size:11px; color:var(--muted); white-space:nowrap; }
+.src.ask { color:#8a6b1f; }
+.g-ok::before { content:"✓"; color:#4f7a60; font-weight:700; margin-right:3px; }
+.g-ng::before { content:"✕"; color:var(--ng); font-weight:700; margin-right:3px; }
+.g-warn::before { content:"!"; color:#9a7a2a; font-weight:700; margin-right:3px; }
+.g-run::before { content:"●"; color:var(--coral); margin-right:3px; font-size:9px; vertical-align:1px; }
+.g-ask::before { content:"?"; color:#9a7a2a; font-weight:700; margin-right:3px; }
+.parts { display:flex; flex-wrap:wrap; gap:4px; padding:4px 0 2px; }
+.part { font-size:11px; padding:2px 7px; border:1px solid var(--line); border-radius:var(--radius); background:var(--paper); white-space:nowrap; }
+.part.rep { background:var(--soft); }
+.ol-note { font-size:11px; color:var(--muted); margin-top:4px; }
+.files { flex-shrink:0; border-top:1px solid var(--line); padding:8px 12px 10px; }
+.files .ol-h { height:18px; }
+.files ul { list-style:none; margin:2px 0 0; padding:0; display:grid; grid-template-columns:1fr 1fr; gap:1px 8px; }
+.files li { font-family:var(--mono); font-size:11px; color:#4a5254; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.files li span { color:var(--muted); }
+.files li.edit { color:var(--ink); }
+.files li.edit::before { content:"● "; color:var(--coral); font-size:9px; }
+
+/* ---- center ---- */
+#center { display:flex; flex-direction:column; min-width:0; min-height:0; background:var(--canvas); }
+.ws-tabs { height:32px; flex-shrink:0; display:flex; align-items:stretch; background:var(--paper); border-bottom:1px solid var(--line); padding:0 8px; gap:2px; }
+.ws-tab { display:flex; align-items:center; gap:6px; padding:0 10px; font-size:12px; color:var(--muted); border-bottom:2px solid transparent; margin-bottom:-1px; white-space:nowrap; }
+.ws-tab.on { color:var(--ink); font-weight:600; border-bottom-color:var(--coral); }
+.ws-tab .x { font-weight:400; color:var(--muted); font-size:11px; }
+.ws-tabs .kbd { margin-left:auto; align-self:center; font-size:11px; color:var(--muted); }
+.studio-head { height:44px; flex-shrink:0; display:flex; align-items:center; gap:12px; padding:0 12px; background:var(--paper); border-bottom:1px solid var(--line); }
+.seg { display:inline-flex; border:1px solid var(--line); border-radius:var(--radius); overflow:hidden; background:var(--soft); }
+.seg span { padding:5px 12px; font-size:12px; color:var(--muted); border-right:1px solid var(--line); white-space:nowrap; }
+.seg span:last-child { border-right:0; }
+.seg span.on { background:var(--paper); color:var(--ink); font-weight:600; box-shadow:inset 0 -2px 0 var(--coral); }
+.seg span small { font-size:10.5px; color:var(--muted); font-weight:400; margin-left:3px; }
+.fixture { margin-left:auto; display:flex; align-items:center; gap:6px; font-size:12px; white-space:nowrap; }
+.fixture .sel { display:inline-flex; align-items:center; gap:4px; border:1px solid var(--line); border-radius:var(--radius); padding:4px 6px 4px 9px; background:var(--paper); }
+.fixture .sel svg { width:14px; height:14px; color:var(--muted); }
+.preview-wrap { flex:1; min-height:0; padding:12px; }
+.pv { height:100%; background:var(--paper); border:1px solid var(--line); border-radius:var(--radius); display:flex; flex-direction:column; overflow:hidden; }
+.pv-bar { height:30px; flex-shrink:0; display:flex; align-items:center; gap:8px; padding:0 12px; border-bottom:1px dashed var(--line); font-size:11px; color:var(--muted); background:#fbfbfa; }
+.pv-bar b { color:var(--ink); font-weight:600; }
+.pv-bar .right { margin-left:auto; display:flex; align-items:center; gap:10px; }
+.seg.sm span { padding:2px 9px; font-size:11px; }
+.pv-main { flex:1; min-height:0; padding:12px 16px 0; display:flex; flex-direction:column; }
+.eyebrow { font-size:var(--fs-eyebrow); letter-spacing:var(--track-eyebrow); text-transform:uppercase; color:var(--muted); }
+.pv-claim h2 { margin:4px 0 0; font-size:19px; line-height:1.35; font-weight:600; letter-spacing:-0.015em; }
+.kpis { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); border-top:2px solid var(--ink); margin-top:10px; flex-shrink:0; }
+.kpi { padding:7px 10px 8px; border-right:1px solid var(--line); min-width:0; }
+.kpi:first-child { padding-left:0; }
+.kpi:last-child { border-right:0; }
+.kpi .k { font-size:11px; color:var(--muted); white-space:nowrap; }
+.kpi .v { font-size:26px; line-height:1.15; font-weight:500; letter-spacing:-0.02em; white-space:nowrap; }
+.kpi .v i { font-style:normal; font-size:12px; color:var(--muted); margin-left:3px; letter-spacing:0; }
+.kpi .v.ng { color:var(--ng); }
+.kpi .v.none { color:var(--na); }
+.kpi .n { font-size:11px; color:var(--muted); line-height:1.4; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.pv-body { flex:1; min-height:0; display:grid; grid-template-columns:auto minmax(0,1fr); gap:16px; border-top:1px solid var(--line); padding-top:10px; }
+.plan-cell { position:relative; }
+.plan-cell .tag { position:absolute; left:0; top:0; font-size:11px; color:var(--muted); }
+.side { min-width:0; display:flex; flex-direction:column; gap:10px; }
+.board { border:1px solid var(--line); border-radius:var(--radius); padding:8px 10px 6px; }
+.board-h { display:flex; justify-content:space-between; align-items:baseline; font-size:11px; color:var(--muted); margin-bottom:2px; }
+.board-h b { color:var(--ink); font-weight:600; font-size:12px; }
+.sl { padding:6px 0 5px; border-top:1px solid #eef0ed; }
+.sl:first-of-type { border-top:0; }
+.sl-top { display:flex; align-items:center; gap:6px; height:18px; }
+.sl-name { flex:1; min-width:0; font-size:12px; white-space:nowrap; }
+.sl-row { display:flex; align-items:center; gap:5px; height:24px; }
+.sl-row .mm { font-size:10.5px; color:var(--muted); min-width:14px; text-align:center; }
+.sl-val { min-width:52px; text-align:center; border:1px solid var(--line); border-radius:3px; font-size:12px; font-weight:600; padding:0 4px; line-height:20px; }
+.sl-val i { font-style:normal; font-weight:400; color:var(--muted); font-size:11px; margin-left:2px; }
+.sl-step { width:18px; height:20px; display:grid; place-items:center; color:var(--muted); border:1px solid var(--line); border-radius:3px; font-size:12px; line-height:1; }
+.sl-track { position:relative; flex:1; min-width:0; height:6px; border-radius:3px; background:var(--soft); margin:0 8px; }
+.zone { position:absolute; top:0; bottom:0; }
+.zone.ok { background:var(--zone-ok); } .zone.warn { background:var(--zone-warn); } .zone.no { background:var(--zone-no); }
+.zone:first-child { border-radius:3px 0 0 3px; } .zone:last-of-type { border-radius:0 3px 3px 0; }
+.knob { position:absolute; top:50%; width:14px; height:14px; margin:-7px 0 0 -7px; border-radius:50%; background:var(--ink); border:2px solid var(--paper); box-shadow:0 0 0 1px var(--ink); }
+.basis { font-size:11px; padding:0 6px; border-radius:9px; background:var(--soft); color:#4a5254; white-space:nowrap; line-height:17px; }
+.basis.ask { background:var(--zone-warn); color:#6f5516; }
+.legend { border:1px solid var(--line); border-radius:var(--radius); padding:8px 10px; }
+.legend .board-h { margin-bottom:4px; }
+.legend .board-h a { font-size:11px; color:var(--muted); text-decoration:underline dotted; }
+.lg { display:grid; grid-template-columns:12px 14px minmax(0,1fr) auto; align-items:center; gap:6px; font-size:12px; height:20px; }
+.lg .sw { width:12px; height:10px; border-radius:2px; }
+.lg .sy { font-weight:700; text-align:center; font-size:11px; }
+.lg .t { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.lg .c { font-weight:600; }
+.drawer-row { height:30px; flex-shrink:0; display:flex; align-items:center; gap:10px; margin:6px -16px 0; padding:0 16px; border-top:1px solid var(--line); background:#fbfbfa; font-size:11px; color:var(--muted); white-space:nowrap; }
+.drawer-row b { color:var(--ink); font-weight:600; }
+.drawer-row .tabs { display:flex; gap:12px; }
+.drawer-row .tabs span.on { color:var(--ink); }
+.drawer-row .right { margin-left:auto; display:flex; gap:6px; align-items:center; }
+.mini-btn { font-size:11px; padding:2px 8px; border:1px solid var(--line); border-radius:3px; background:var(--paper); color:var(--ink); }
+.mini-btn.off { color:var(--na); background:var(--soft); }
+
+/* plan svg */
+.plan text { font-family:var(--font); }
+.p-slab { fill:#fff; stroke:var(--ink); stroke-width:1.4; }
+.p-foot { fill:#eceeec; stroke:var(--ov-existing); stroke-width:0.8; }
+.p-foot.hit { stroke:var(--ng); stroke-width:1; }
+.p-axis { stroke:var(--ov-grid); stroke-width:0.7; stroke-dasharray:5 3 1 3; }
+.p-bub { fill:#fff; stroke:var(--ink); stroke-width:0.8; }
+.p-bubt { font-size:7.5px; font-weight:600; text-anchor:middle; dominant-baseline:central; fill:var(--ink); }
+.p-beam { stroke:#a9b2ae; stroke-width:0.6; }
+.p-girder { stroke:var(--ok); stroke-width:1.8; }
+.p-girder.over { stroke:var(--bar-actual); }
+.p-cap { fill:none; stroke:var(--ink); stroke-width:0.7; }
+.p-cap.hit { fill:rgba(200,85,61,.28); stroke:var(--ng); stroke-width:1.2; }
+.p-col { fill:var(--ink); }
+.p-mark rect { fill:var(--ng); }
+.p-mark text { fill:#fff; font-size:9.5px; font-weight:700; text-anchor:middle; dominant-baseline:central; }
+.p-sel { fill:none; stroke:var(--coral); stroke-width:1.4; stroke-dasharray:4 2; }
+.p-dim, .p-tick { stroke:#6d7577; stroke-width:0.7; }
+.p-dimt { font-size:9.5px; fill:#4a5254; text-anchor:middle; }
+.p-dimt.v { text-anchor:start; dominant-baseline:central; }
+.plan.mini .p-girder { stroke-width:1.2; }
+.plan.mini .p-slab { stroke-width:1.1; }
+
+/* console */
+.console { height:192px; flex-shrink:0; background:var(--paper); border-top:1px solid var(--line); display:flex; flex-direction:column; }
+.con-h { height:34px; flex-shrink:0; display:flex; align-items:center; gap:14px; padding:0 12px; border-bottom:1px solid var(--line); }
+.con-h h3 { margin:0; font-size:12px; font-weight:600; white-space:nowrap; }
+.con-tabs { display:flex; gap:2px; }
+.con-tabs span { font-size:12px; color:var(--muted); padding:3px 8px; border-radius:3px; white-space:nowrap; }
+.con-tabs span.on { background:var(--soft); color:var(--ink); font-weight:600; }
+.con-h .right { margin-left:auto; display:flex; align-items:center; gap:10px; font-size:11px; color:var(--muted); white-space:nowrap; }
+.con-body { flex:1; min-height:0; display:grid; grid-template-columns:minmax(0,0.92fr) minmax(0,1.08fr); }
+.con-col { min-width:0; padding:6px 12px 6px; overflow:hidden; }
+.con-col + .con-col { border-left:1px solid var(--line); }
+.con-col h4 { margin:0 0 2px; font-size:11px; font-weight:600; color:var(--muted); letter-spacing:0.04em; display:flex; justify-content:space-between; }
+.cr { display:grid; grid-template-columns:14px minmax(0,1fr) auto; gap:6px; align-items:baseline; font-size:12px; line-height:21px; }
+.cr .g { font-weight:700; text-align:center; }
+.cr .t { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.cr .t em { font-style:normal; color:var(--muted); }
+.cr .id { font-family:var(--mono); font-size:10.5px; color:var(--muted); }
+.cr.fail { background:#fcf1ee; margin:0 -12px; padding:0 12px; }
+.cr-detail { margin:0 0 0 20px; padding:3px 0 4px 8px; border-left:2px solid var(--zone-no); font-size:11px; line-height:1.55; color:#4a5254; }
+.cr-detail .mono { font-size:10.5px; }
+.cr-detail .del { color:var(--ng); } .cr-detail .add { color:#4f7a60; }
+
+/* ---- right: authoring conversation ---- */
+#right { background:var(--paper); border-left:1px solid var(--line); display:flex; flex-direction:column; min-height:0; min-width:0; }
+.conv-chips { height:40px; flex-shrink:0; display:flex; align-items:center; gap:5px; padding:0 10px; border-bottom:1px solid var(--line); }
+.cchip { display:inline-flex; align-items:center; gap:5px; height:26px; padding:0 9px; border:1px solid var(--line); border-radius:var(--radius); font-size:12px; white-space:nowrap; color:var(--muted); }
+.cchip.on { border-color:var(--coral); color:var(--ink); font-weight:600; box-shadow:inset 0 0 0 0.5px var(--coral); }
+.cchip .dot { width:6px; height:6px; border-radius:50%; background:var(--ink); }
+.cchip .ring { width:7px; height:7px; border-radius:50%; border:1.5px solid var(--muted); }
+.cchip.add { width:26px; padding:0; justify-content:center; }
+.cchip.add svg { width:14px; height:14px; }
+.conv-head { flex-shrink:0; height:30px; display:flex; align-items:center; gap:8px; padding:0 8px 0 12px; }
+.conv-head .t { flex:1; min-width:0; font-size:11px; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.conv-head .t b { color:var(--ink); font-size:12px; font-weight:600; }
+.loop { flex-shrink:0; height:32px; display:flex; align-items:center; gap:5px; margin:0 12px; border-top:1px solid #eef0ed; border-bottom:1px solid var(--line); }
+.lsep { flex:1; height:1px; background:var(--line); min-width:4px; }
+.lp { display:inline-flex; align-items:center; gap:4px; font-size:11px; color:var(--muted); white-space:nowrap; }
+.lp .b { width:15px; height:15px; border-radius:50%; background:var(--paper); border:1px solid var(--na); display:grid; place-items:center; font-size:9px; font-weight:700; line-height:1; }
+.lp.done .b { background:var(--ok); border-color:var(--ok); color:#fff; }
+.lp.half .b { border-color:var(--ok); background:linear-gradient(90deg,var(--ok) 50%,#fff 50%); }
+.lp.cur { color:var(--ink); font-weight:600; }
+.lp.cur .b { border:2px solid var(--coral); background:#fff; color:var(--coral); }
+#thread { flex:1; min-height:0; overflow:hidden; padding:10px 12px 10px; display:flex; flex-direction:column; justify-content:flex-end; gap:8px; }
+.msg { font-size:12px; line-height:1.7; }
+.msg .who { font-size:11px; color:var(--muted); margin-bottom:2px; }
+.msg.me p { margin:0; font-weight:600; border-left:2px solid var(--coral); padding-left:9px; }
+.msg.ai p { margin:0; }
+.plan-card { margin-top:8px; border:1px solid var(--line); border-radius:var(--radius); background:#fbfbfa; }
+.plan-card .h { display:flex; justify-content:space-between; align-items:center; padding:5px 10px; border-bottom:1px solid var(--line); font-size:12px; font-weight:600; }
+.plan-card .h small { font-weight:400; color:var(--muted); font-size:11px; }
+.plan-card ul { list-style:none; margin:0; padding:4px 10px 6px; }
+.plan-card li { display:grid; grid-template-columns:14px minmax(0,1fr); gap:6px; font-size:12px; line-height:1.5; padding:0; }
+.plan-card li > span:last-child { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.plan-card li .c { font-weight:700; text-align:center; font-size:11px; line-height:18px; }
+.plan-card li b { font-weight:600; }
+.plan-card li span.d { color:var(--muted); }
+.plan-card li.now { background:#fcf1ee; margin:0 -10px; padding:2px 10px; }
+.qcard { border:1px solid var(--line); border-top:2px solid var(--coral); border-radius:var(--radius); background:var(--paper); box-shadow:0 1px 0 rgba(0,0,0,.02); }
+.qcard .qh { display:flex; align-items:center; gap:6px; padding:7px 12px 0; font-size:11px; color:var(--muted); }
+.qcard .qh .n { margin-left:auto; }
+.qcard h3 { margin:3px 12px 2px; font-size:15px; line-height:1.4; font-weight:700; letter-spacing:-0.01em; }
+.qcard .why { margin:0 12px 4px; font-size:12px; line-height:1.6; color:#4a5254; }
+.opt { display:grid; grid-template-columns:16px minmax(0,1fr); gap:8px; padding:6px 12px; border-top:1px solid #eef0ed; }
+.opt .r { width:14px; height:14px; border-radius:50%; border:1.5px solid #9aa2a0; margin-top:2px; }
+.opt.on { background:#fbf6f4; }
+.opt.on .r { border:4px solid var(--ink); }
+.opt .l { display:flex; align-items:center; gap:6px; font-size:13px; font-weight:600; min-height:22px; }
+.opt .l .rec { font-size:11px; font-weight:500; padding:0 6px; border-radius:9px; background:var(--zone-ok); color:#3d6a4b; line-height:17px; }
+.opt .c { font-size:11.5px; color:#4a5254; line-height:1.5; }
+.opt .c .bad { color:var(--ng); }
+.opt .src { margin-left:auto; font-size:11px; font-weight:400; color:var(--muted); white-space:nowrap; }
+.opt .inp { display:inline-flex; align-items:center; gap:4px; margin-left:4px; }
+.opt .inp span { display:inline-block; width:52px; height:22px; border:1px solid #c8ceca; border-radius:3px; font-weight:400; font-size:12px; color:var(--na); padding:1px 6px; line-height:18px; }
+.qact { display:flex; gap:6px; align-items:center; padding:6px 12px 8px; border-top:1px solid #eef0ed; }
+.btn-primary { background:#292f2e; border-color:#292f2e; color:#fff; font-size:12px; padding:6px 12px; font-weight:600; white-space:nowrap; }
+.btn-ghost { font-size:12px; padding:6px 10px; white-space:nowrap; }
+.btn-primary[disabled] { opacity:.4; cursor:default; }
+.draft-bar { flex-shrink:0; display:flex; align-items:center; gap:8px; padding:8px 12px; border-top:1px solid var(--line); }
+.draft-bar .t { flex:1; min-width:0; font-size:11px; color:var(--muted); line-height:1.4; }
+.draft-bar .t b { display:block; color:var(--ink); font-weight:500; font-size:12px; }
+.composer-wrap { flex-shrink:0; padding:10px 12px 12px; border-top:1px solid var(--line); background:#fafbf9; }
+.composer { border:1px solid #c8ceca; border-radius:7px; padding:7px 8px; background:var(--paper); }
+.chip { display:inline-flex; align-items:center; gap:5px; padding:3px 7px; background:#f6e4df; border-radius:var(--radius); font-size:11px; }
+.chip .x { color:var(--muted); }
+.ta { min-height:26px; padding:5px 3px 2px; font-size:12px; color:var(--na); line-height:1.6; }
+.cmp-row { display:flex; align-items:center; gap:10px; font-size:11px; color:#4a5254; }
+.cmp-row .ic svg { width:17px; height:17px; color:var(--muted); }
+.cmp-row .opt2 { display:inline-flex; align-items:center; gap:2px; white-space:nowrap; }
+.cmp-row .opt2 svg { width:12px; height:12px; color:var(--muted); }
+.send { margin-left:auto; width:30px; height:30px; padding:0; border:0; border-radius:5px; background:#292f2e; color:#fff; display:grid; place-items:center; }
+.send svg { width:16px; height:16px; }
+
+/* status bar */
+.statusbar { height:28px; flex-shrink:0; background:var(--rail); color:#cbd0cd; display:flex; align-items:center; gap:3px; padding:0 7px; font-size:11px; }
+.statusbar > span { padding:0 8px; white-space:nowrap; display:inline-flex; align-items:center; gap:6px; }
+.statusbar .live::before { content:""; width:7px; height:7px; border-radius:50%; background:#7fb08d; }
+.statusbar .sep { width:1px; height:12px; background:#454b4b; padding:0; }
+.statusbar .usage { margin-left:auto; }
+.ubar { width:54px; height:5px; border-radius:3px; background:#3d4343; overflow:hidden; display:inline-block; }
+.ubar i { display:block; height:100%; background:#4f8a64; }
+
+/* ================= B. report artboard ================= */
+.caption { width:1440px; margin-top:24px; padding:10px 72px; background:#e3e7e2; border-top:1px solid #d3d8d2; border-bottom:1px solid #d3d8d2; font-size:12px; color:#4a5254; display:flex; gap:14px; align-items:center; }
+.caption b { color:var(--ink); }
+.report { width:1440px; background:var(--paper); padding-bottom:64px; }
+.rp-top { position:relative; height:66px; display:flex; align-items:center; padding:0 58px; border-bottom:1px solid var(--line); background:var(--paper); }
+.rp-top .no { font-size:20px; font-weight:700; letter-spacing:-0.02em; padding-right:12px; margin-right:12px; border-right:1px solid var(--line); line-height:34px; }
+.rp-top .nm { font-size:12px; }
+.rp-nav { position:absolute; left:50%; transform:translateX(-50%); display:flex; gap:22px; font-size:12px; }
+.rp-nav span { white-space:nowrap; }
+.rp-nav span.on { box-shadow:inset 0 -2px 0 var(--coral); padding-bottom:3px; }
+.rp-btns { margin-left:auto; display:flex; gap:8px; }
+.rp-btn { border:1px solid var(--line); border-radius:var(--radius); padding:8px 12px; font-size:12px; white-space:nowrap; }
+.rp-wrap { padding:0 72px; }
+.hero { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:end; padding:54px 0 38px; }
+.hero h1 { margin:10px 0 18px; font-size:var(--fs-headline); line-height:1.24; font-weight:600; letter-spacing:-0.03em; }
+.hero .lede { max-width:600px; font-size:var(--fs-lede); line-height:1.75; color:#5c6466; margin:0; }
+.dots { display:flex; gap:22px; margin-top:22px; font-size:11.5px; color:#5c6466; flex-wrap:wrap; }
+.dots span { display:inline-flex; align-items:center; gap:6px; }
+.dots i { width:5px; height:5px; border-radius:50%; background:var(--coral); display:inline-block; }
+.dots i.s { background:var(--bar-strong); }
+.hero-meta { text-align:right; font-size:12px; color:#5c6466; line-height:1.9; padding-bottom:4px; }
+.rp-kpis { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); border-top:1px solid var(--ink); }
+.rp-kpi { padding:20px 24px 26px; border-right:1px solid var(--line); }
+.rp-kpi:first-child { padding-left:0; }
+.rp-kpi:last-child { border-right:0; }
+.rp-kpi .k { font-size:12px; color:#5c6466; }
+.rp-kpi .v { font-size:var(--fs-kpi); font-weight:500; letter-spacing:-0.02em; margin:10px 0 8px; line-height:1.1; }
+.rp-kpi .v i { font-style:normal; font-size:13px; color:var(--muted); margin-left:4px; letter-spacing:0; }
+.rp-kpi .v.ng { color:var(--ng); }
+.rp-kpi .v.none { color:var(--na); }
+.rp-kpi .n { font-size:12px; line-height:1.65; color:#5c6466; }
+.steps { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); border-top:1px solid var(--line); border-bottom:1px solid var(--line); margin-top:40px; }
+.step { padding:20px 18px 24px; border-right:1px solid var(--line); min-height:94px; }
+.step:first-child { padding-left:0; }
+.step:last-child { border-right:0; }
+.step b { display:block; font-size:12px; letter-spacing:0.08em; margin-bottom:8px; }
+.step span { font-size:13px; color:#4a5254; line-height:1.6; }
+.step small { display:block; margin-top:6px; font-size:11px; color:var(--muted); }
+.rsec { border-top:1px solid var(--line); margin-top:64px; padding-top:64px; }
+.rsec h2 { margin:10px 0 14px; font-size:var(--fs-claim); line-height:1.38; font-weight:600; letter-spacing:-0.02em; }
+.rsec .lede { max-width:640px; font-size:13.5px; line-height:1.8; color:#5c6466; margin:0; }
+.rsec .lede b { color:var(--ink); font-weight:600; }
+.rsec-head { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:end; gap:24px; }
+.rsec-head .unit { font-size:12px; color:#5c6466; }
+.cards { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); margin-top:36px; }
+.card { padding:0 32px; border-right:1px solid var(--line); min-width:0; }
+.card:first-child { padding-left:0; }
+.card:last-child { border-right:0; padding-right:0; }
+.card-h { display:flex; justify-content:space-between; align-items:baseline; gap:10px; }
+.card-h h3 { margin:0; font-size:var(--fs-h3); font-weight:600; letter-spacing:-0.01em; white-space:nowrap; }
+.card-h small { font-size:12px; color:#5c6466; white-space:nowrap; }
+.card .sub { font-size:12px; color:#5c6466; margin:4px 0 10px; }
+.card .tagbox { display:inline-block; border:1px solid var(--ink); padding:3px 8px; font-size:11.5px; margin-bottom:12px; }
+.card .tagbox.cur { border-color:var(--coral); color:#9b4a36; }
+.card .thumb { margin:0 0 14px; }
+.bars { position:relative; padding-top:22px; }
+.bar-row { display:grid; grid-template-columns:78px minmax(0,1fr); align-items:center; gap:8px; height:31px; }
+.bar-row .lab { font-size:12.5px; color:#4a5254; text-align:right; }
+.bar-track { position:relative; height:21px; }
+.bar { position:absolute; left:0; top:0; bottom:0; display:flex; align-items:center; justify-content:flex-end; padding-right:6px; font-size:13px; font-weight:500; }
+.bar.base { background:var(--bar-base); color:#4a5254; }
+.bar.alt { background:var(--bar-alt); color:#2f4a38; }
+.bar.act { background:var(--bar-actual); color:#fff; font-weight:600; }
+.limit { position:absolute; top:0; bottom:0; border-left:1.5px dashed #9aa2a0; }
+.limit-lab { position:absolute; top:0; font-size:11.5px; color:#5c6466; transform:translateX(-50%); white-space:nowrap; }
+.card .stats { display:grid; grid-template-columns:1fr 1fr; gap:0; margin-top:16px; border-top:1px solid var(--line); }
+.card .stats div { padding:10px 0 0; font-size:12px; color:#5c6466; }
+.card .stats b { display:block; font-size:22px; font-weight:500; color:var(--ink); letter-spacing:-0.02em; }
+.card .stats b i { font-style:normal; font-size:12px; color:var(--muted); margin-left:2px; }
+.card .stats b.ng { color:var(--ng); }
+.card p.note { font-size:12.5px; line-height:1.75; color:#4a5254; margin:14px 0 0; }
+.found { display:grid; grid-template-columns:auto minmax(0,1fr); gap:48px; margin-top:36px; align-items:start; }
+.found .plan-l { border:1px solid var(--line); padding:14px; }
+.found h4 { margin:0 0 4px; font-size:13px; font-weight:600; }
+.found .hint { font-size:12px; color:#5c6466; margin:0 0 6px; }
+.cl-bars .bar-row { grid-template-columns:96px minmax(0,1fr) 92px; height:36px; }
+.cl-bars .bar-row .res { font-size:12px; white-space:nowrap; }
+.legend-inline { display:flex; flex-wrap:wrap; gap:14px; font-size:12px; color:#5c6466; margin-top:14px; }
+.legend-inline span { display:inline-flex; align-items:center; gap:6px; }
+.legend-inline i { display:inline-block; width:14px; height:10px; }
+.callout { margin-top:22px; border-left:2px solid var(--ink); padding:4px 0 4px 14px; font-size:13px; line-height:1.75; color:#4a5254; }
+.callout b { color:var(--ink); }
+.ledger { width:100%; border-collapse:collapse; margin-top:32px; font-size:13px; }
+.ledger th { text-align:left; font-size:11.5px; font-weight:500; color:var(--muted); padding:0 12px 10px 0; border-bottom:1px solid var(--ink); }
+.ledger td { padding:14px 12px 14px 0; border-bottom:1px solid var(--line); vertical-align:top; line-height:1.6; }
+.ledger td.k { color:#5c6466; width:220px; }
+.ledger td.src { font-size:12px; color:var(--muted); width:250px; }
+.ledger td.who { width:130px; }
+.ledger td.blk { width:150px; }
+.st-chip { display:inline-block; font-size:11.5px; padding:0 7px; border-radius:9px; line-height:19px; margin-left:6px; }
+.st-chip.ask { background:var(--zone-warn); color:#6f5516; }
+.st-chip.ng { background:var(--zone-no); color:#8f3a28; }
+.st-chip.as { background:var(--soft); color:#4a5254; border:1px solid var(--line); }
+.kv { width:100%; border-collapse:collapse; margin-top:28px; font-size:13px; }
+.kv td { padding:12px 12px 12px 0; border-bottom:1px solid var(--line); vertical-align:top; }
+.kv td.k { color:#5c6466; width:220px; }
+.kv td.src { text-align:right; font-size:12px; color:var(--muted); width:360px; padding-right:0; }
+.kv tr:first-child td { border-top:1px solid var(--ink); }
+.kv tr.grp td { font-size:11.5px; color:var(--muted); padding:18px 0 6px; letter-spacing:0.04em; }
+.rsec.appx h2 { font-size:22px; }
+.rp-foot { margin-top:48px; padding-top:16px; border-top:1px solid var(--line); display:flex; justify-content:space-between; font-size:12px; color:var(--muted); }
+</style>
+</head>
+<body>
+
+<!-- ================= A. JIG 만들기 작업공간 (1440 × 900) ================= -->
+<div class="app">
+  <div class="shell">
+    <nav class="rail" aria-label="탐색">
+      <span class="home" title="VIDE"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 5l8 14 8-14"/><path d="M8.5 5h7"/></svg></span>
+      <button title="작업 문서"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/></svg></button>
+      <button title="작업 이력"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9 6h11M9 12h11M9 18h11"/><path d="M4 6h1M4 12h1M4 18h1"/></svg></button>
+      <button title="참고 자료"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M5 4h10a3 3 0 013 3v13H8a3 3 0 01-3-3z"/><path d="M5 17a3 3 0 013-3h10"/></svg></button>
+      <button title="JIG" aria-pressed="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 20V9h6v5h10v6z"/><path d="M10 9V4h4v10"/></svg></button>
+      <button title="보고서"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M5 3h14v18H5z"/><path d="M9 16v-3M12 16V9M15 16v-5"/></svg></button>
+      <span class="spacer"></span>
+      <button title="설정"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="3"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1"/></svg></button>
+    </nav>
+
+    <main class="grid">
+      <!-- ---------- left: jig outline ---------- -->
+      <aside id="left" aria-label="만들 것 개요">
+        <div class="project-heading">
+          <span class="pick">P-03 <small>주차장 상부 데크</small><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M7 10l5 5 5-5"/></svg></span>
+          <button class="icon-btn" title="왼쪽 접기"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 4h16v16H4z"/><path d="M9 4v16"/></svg></button>
+        </div>
+        <div class="jig-head">
+          <div class="jig-kicker">새 도구 <span class="pill draft">초안 v0.2</span><span class="pill">내 것</span></div>
+          <h1>격자 골조 배치</h1>
+          <p>슬래브 안에 축선·기둥·거더·작은보를 두고, 파일캡이 기존 기초와 겹치는지 본다.</p>
+          <div class="inputs"><span><b>입력</b></span><span class="g-ok">슬래브 경계</span><span class="g-ok">기존 기초 20</span></div>
+        </div>
+        <div class="outline">
+          <section class="ol-sec">
+            <div class="ol-h"><span>단계</span><span class="count">5</span></div>
+            <div class="ol-row cur"><span class="num">1</span><span class="name">축선 배치</span><span class="kind">계산</span><span class="st g-run">고치는 중</span></div>
+            <div class="ol-row"><span class="num">2</span><span class="name">기둥</span><span class="kind">계산</span><span class="st g-ok">통과</span></div>
+            <div class="ol-row"><span class="num">3</span><span class="name">기초 간섭</span><span class="kind">라이브러리</span><span class="st g-ok">통과</span></div>
+            <div class="ol-row"><span class="num">4</span><span class="name">거더망</span><span class="kind">라이브러리</span><span class="st g-ok">가정</span></div>
+            <div class="ol-row"><span class="num">5</span><span class="name">작은보</span><span class="kind">라이브러리</span><span class="st g-ok">통과</span></div>
+          </section>
+          <section class="ol-sec">
+            <div class="ol-h"><span>매개변수</span><span class="count">4 · 근거 있음 3</span></div>
+            <div class="ol-row"><span class="name">기둥 간격 상한</span><span class="val">12.0<i>m</i></span><span class="src ask g-ask">물어볼 것</span></div>
+            <div class="ol-row"><span class="name">작은보 간격</span><span class="val">2.5<i>m</i></span><span class="src">사용자 요구</span></div>
+            <div class="ol-row"><span class="name">파일캡</span><span class="val">2.0<i>m</i></span><span class="src">모델 블록</span></div>
+            <div class="ol-row"><span class="name">비켜 두기 한도</span><span class="val">0.6<i>m</i></span><span class="src">가정</span></div>
+          </section>
+          <section class="ol-sec">
+            <div class="ol-h"><span>화면</span><span class="count ok-t">부품 6 · 목록 밖 0</span></div>
+            <div class="parts">
+              <span class="part">핵심 수치 띠</span><span class="part">평면 지도</span><span class="part">슬라이더 판</span>
+              <span class="part">판정 범례</span><span class="part">간섭 목록</span><span class="part">일람표</span>
+              <span class="part rep">보고서 틀 · 배치 점검</span>
+            </div>
+          </section>
+          <section class="ol-sec">
+            <div class="ol-h"><span>시험</span><span class="count">1 / 2 통과</span></div>
+            <div class="ol-row"><span class="name g-ok">격자 기본 52 × 39 m</span><span class="kind">22 ms</span></div>
+            <div class="ol-row"><span class="name g-ng">직교 칸 ±1 mm 이동</span><span class="kind">시도 2 / 3</span></div>
+            <div class="ol-note">합성 시험 자료만 씀 · 프로젝트 원본 없음</div>
+          </section>
+        </div>
+        <div class="files">
+          <div class="ol-h"><span>초안 폴더</span><span class="count">저장 14:22</span></div>
+          <ul>
+            <li>jig.json</li><li>panel.json</li>
+            <li class="edit">steps/axes.ts</li><li>steps/ <span>외 4</span></li>
+            <li>fixtures/ <span>2</span></li><li>skill.md</li>
+          </ul>
+        </div>
+      </aside>
+
+      <!-- ---------- center: preview + console ---------- -->
+      <section id="center" aria-label="만들기 작업 영역">
+        <div class="ws-tabs" role="tablist">
+          <span class="ws-tab">모델</span>
+          <span class="ws-tab">자료</span>
+          <span class="ws-tab">JIG</span>
+          <span class="ws-tab on">만들기 · 격자 골조 <span class="x">×</span></span>
+          <span class="ws-tab">보고서</span>
+          <span class="kbd">Ctrl+1 – 5</span>
+        </div>
+        <div class="studio-head">
+          <div class="seg" role="tablist"><span class="on">화면 미리보기</span><span title="읽기 전용">흐름</span><span title="읽기 전용">코드</span></div>
+          <div class="fixture"><span class="muted">시험 자료</span><span class="sel">격자 기본 · 52 × 39 m <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M7 10l5 5 5-5"/></svg></span><button class="icon-btn" title="다시 계산" style="border-color:var(--line);background:var(--paper)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 12a8 8 0 1014-5.3"/><path d="M18 3v4h-4"/></svg></button></div>
+        </div>
+        <div class="preview-wrap">
+          <div class="pv">
+            <div class="pv-bar">
+              <b>미리보기</b><span>실제 실행 화면을 시험 자료로 돌린 것 · 계산 22 ms</span>
+              <span class="right"><span>미리보기 선만 · Rhino에 쓰지 않음</span><span class="seg sm"><span class="on">작업 화면</span><span>보고서</span></span></span>
+            </div>
+            <div class="pv-main">
+              <div class="pv-claim">
+                <div class="eyebrow">Grid frame / Preview</div>
+                <h2>기둥 30개로 경간은 모두 12 m 안에 들고,<br>파일캡 2곳이 기존 기초와 겹친다.</h2>
+              </div>
+              <div class="kpis">
+                <div class="kpi"><div class="k">기둥</div><div class="v">30<i>개</i></div><div class="n">상한 12 m 가정 기준</div></div>
+                <div class="kpi"><div class="k">최대 경간</div><div class="v">10.2<i>m</i></div><div class="n">상한 12.0 m · 여유 1.8</div></div>
+                <div class="kpi"><div class="k">파일캡 간섭</div><div class="v ng">2<i>곳</i></div><div class="n">N2-NB · N3-NB</div></div>
+                <div class="kpi"><div class="k">거더 · 작은보</div><div class="v">49<i> / </i>60</div><div class="n">작은보 간격 2.4 m</div></div>
+                <div class="kpi"><div class="k">부재 검정</div><div class="v none">—</div><div class="n">해석 단계 없음</div></div>
+              </div>
+              <div class="pv-body">
+                <div class="plan-cell"><svg class="plan " viewBox="0 0 406 313" width="406" height="313" role="img" aria-label="격자 골조 평면 미리보기"><rect x="32.5" y="32.5" width="338.0" height="253.5" class="p-slab"/><rect x="51.4" y="246.3" width="17.6" height="17.6" class="p-foot"/><rect x="51.4" y="207.3" width="17.6" height="17.6" class="p-foot"/><rect x="51.4" y="168.3" width="17.6" height="17.6" class="p-foot"/><rect x="51.4" y="129.3" width="17.6" height="17.6" class="p-foot"/><rect x="90.4" y="246.3" width="17.6" height="17.6" class="p-foot"/><rect x="90.4" y="207.3" width="17.6" height="17.6" class="p-foot hit"/><rect x="90.4" y="168.3" width="17.6" height="17.6" class="p-foot"/><rect x="90.4" y="129.3" width="17.6" height="17.6" class="p-foot"/><rect x="129.3" y="246.3" width="17.6" height="17.6" class="p-foot"/><rect x="129.3" y="207.3" width="17.6" height="17.6" class="p-foot"/><rect x="129.3" y="168.3" width="17.6" height="17.6" class="p-foot"/><rect x="129.3" y="129.3" width="17.6" height="17.6" class="p-foot"/><rect x="168.3" y="246.3" width="17.6" height="17.6" class="p-foot"/><rect x="168.3" y="207.3" width="17.6" height="17.6" class="p-foot hit"/><rect x="168.3" y="168.3" width="17.6" height="17.6" class="p-foot"/><rect x="168.3" y="129.3" width="17.6" height="17.6" class="p-foot"/><rect x="207.3" y="246.3" width="17.6" height="17.6" class="p-foot"/><rect x="207.3" y="207.3" width="17.6" height="17.6" class="p-foot"/><rect x="207.3" y="168.3" width="17.6" height="17.6" class="p-foot"/><rect x="207.3" y="129.3" width="17.6" height="17.6" class="p-foot"/><line x1="35.8" y1="18.2" x2="35.8" y2="296.4" class="p-axis"/><circle cx="35.8" cy="10.2" r="8" class="p-bub"/><text x="35.8" y="10.2" class="p-bubt">N1</text><line x1="102" y1="18.2" x2="102" y2="296.4" class="p-axis"/><circle cx="102" cy="10.2" r="8" class="p-bub"/><text x="102" y="10.2" class="p-bubt">N2</text><line x1="168.3" y1="18.2" x2="168.3" y2="296.4" class="p-axis"/><circle cx="168.3" cy="10.2" r="8" class="p-bub"/><text x="168.3" y="10.2" class="p-bubt">N3</text><line x1="234.6" y1="18.2" x2="234.6" y2="296.4" class="p-axis"/><circle cx="234.6" cy="10.2" r="8" class="p-bub"/><text x="234.6" y="10.2" class="p-bubt">N4</text><line x1="300.9" y1="18.2" x2="300.9" y2="296.4" class="p-axis"/><circle cx="300.9" cy="10.2" r="8" class="p-bub"/><text x="300.9" y="10.2" class="p-bubt">N5</text><line x1="367.3" y1="18.2" x2="367.3" y2="296.4" class="p-axis"/><circle cx="367.3" cy="10.2" r="8" class="p-bub"/><text x="367.3" y="10.2" class="p-bubt">N6</text><line x1="18.2" y1="282.8" x2="380.9" y2="282.8" class="p-axis"/><circle cx="10.2" cy="282.8" r="8" class="p-bub"/><text x="10.2" y="282.8" class="p-bubt">NA</text><line x1="18.2" y1="221" x2="380.9" y2="221" class="p-axis"/><circle cx="10.2" cy="221" r="8" class="p-bub"/><text x="10.2" y="221" class="p-bubt">NB</text><line x1="18.2" y1="159.3" x2="380.9" y2="159.3" class="p-axis"/><circle cx="10.2" cy="159.3" r="8" class="p-bub"/><text x="10.2" y="159.3" class="p-bubt">NC</text><line x1="18.2" y1="97.5" x2="380.9" y2="97.5" class="p-axis"/><circle cx="10.2" cy="97.5" r="8" class="p-bub"/><text x="10.2" y="97.5" class="p-bubt">ND</text><line x1="18.2" y1="35.8" x2="380.9" y2="35.8" class="p-axis"/><circle cx="10.2" cy="35.8" r="8" class="p-bub"/><text x="10.2" y="35.8" class="p-bubt">NE</text><line x1="35.8" y1="267.3" x2="102" y2="267.3" class="p-beam"/><line x1="35.8" y1="251.9" x2="102" y2="251.9" class="p-beam"/><line x1="35.8" y1="236.4" x2="102" y2="236.4" class="p-beam"/><line x1="35.8" y1="205.6" x2="102" y2="205.6" class="p-beam"/><line x1="35.8" y1="190.1" x2="102" y2="190.1" class="p-beam"/><line x1="35.8" y1="174.7" x2="102" y2="174.7" class="p-beam"/><line x1="35.8" y1="143.8" x2="102" y2="143.8" class="p-beam"/><line x1="35.8" y1="128.4" x2="102" y2="128.4" class="p-beam"/><line x1="35.8" y1="112.9" x2="102" y2="112.9" class="p-beam"/><line x1="35.8" y1="82.1" x2="102" y2="82.1" class="p-beam"/><line x1="35.8" y1="66.6" x2="102" y2="66.6" class="p-beam"/><line x1="35.8" y1="51.2" x2="102" y2="51.2" class="p-beam"/><line x1="102" y1="267.3" x2="168.3" y2="267.3" class="p-beam"/><line x1="102" y1="251.9" x2="168.3" y2="251.9" class="p-beam"/><line x1="102" y1="236.4" x2="168.3" y2="236.4" class="p-beam"/><line x1="102" y1="205.6" x2="168.3" y2="205.6" class="p-beam"/><line x1="102" y1="190.1" x2="168.3" y2="190.1" class="p-beam"/><line x1="102" y1="174.7" x2="168.3" y2="174.7" class="p-beam"/><line x1="102" y1="143.8" x2="168.3" y2="143.8" class="p-beam"/><line x1="102" y1="128.4" x2="168.3" y2="128.4" class="p-beam"/><line x1="102" y1="112.9" x2="168.3" y2="112.9" class="p-beam"/><line x1="102" y1="82.1" x2="168.3" y2="82.1" class="p-beam"/><line x1="102" y1="66.6" x2="168.3" y2="66.6" class="p-beam"/><line x1="102" y1="51.2" x2="168.3" y2="51.2" class="p-beam"/><line x1="168.3" y1="267.3" x2="234.6" y2="267.3" class="p-beam"/><line x1="168.3" y1="251.9" x2="234.6" y2="251.9" class="p-beam"/><line x1="168.3" y1="236.4" x2="234.6" y2="236.4" class="p-beam"/><line x1="168.3" y1="205.6" x2="234.6" y2="205.6" class="p-beam"/><line x1="168.3" y1="190.1" x2="234.6" y2="190.1" class="p-beam"/><line x1="168.3" y1="174.7" x2="234.6" y2="174.7" class="p-beam"/><line x1="168.3" y1="143.8" x2="234.6" y2="143.8" class="p-beam"/><line x1="168.3" y1="128.4" x2="234.6" y2="128.4" class="p-beam"/><line x1="168.3" y1="112.9" x2="234.6" y2="112.9" class="p-beam"/><line x1="168.3" y1="82.1" x2="234.6" y2="82.1" class="p-beam"/><line x1="168.3" y1="66.6" x2="234.6" y2="66.6" class="p-beam"/><line x1="168.3" y1="51.2" x2="234.6" y2="51.2" class="p-beam"/><line x1="234.6" y1="267.3" x2="300.9" y2="267.3" class="p-beam"/><line x1="234.6" y1="251.9" x2="300.9" y2="251.9" class="p-beam"/><line x1="234.6" y1="236.4" x2="300.9" y2="236.4" class="p-beam"/><line x1="234.6" y1="205.6" x2="300.9" y2="205.6" class="p-beam"/><line x1="234.6" y1="190.1" x2="300.9" y2="190.1" class="p-beam"/><line x1="234.6" y1="174.7" x2="300.9" y2="174.7" class="p-beam"/><line x1="234.6" y1="143.8" x2="300.9" y2="143.8" class="p-beam"/><line x1="234.6" y1="128.4" x2="300.9" y2="128.4" class="p-beam"/><line x1="234.6" y1="112.9" x2="300.9" y2="112.9" class="p-beam"/><line x1="234.6" y1="82.1" x2="300.9" y2="82.1" class="p-beam"/><line x1="234.6" y1="66.6" x2="300.9" y2="66.6" class="p-beam"/><line x1="234.6" y1="51.2" x2="300.9" y2="51.2" class="p-beam"/><line x1="300.9" y1="267.3" x2="367.3" y2="267.3" class="p-beam"/><line x1="300.9" y1="251.9" x2="367.3" y2="251.9" class="p-beam"/><line x1="300.9" y1="236.4" x2="367.3" y2="236.4" class="p-beam"/><line x1="300.9" y1="205.6" x2="367.3" y2="205.6" class="p-beam"/><line x1="300.9" y1="190.1" x2="367.3" y2="190.1" class="p-beam"/><line x1="300.9" y1="174.7" x2="367.3" y2="174.7" class="p-beam"/><line x1="300.9" y1="143.8" x2="367.3" y2="143.8" class="p-beam"/><line x1="300.9" y1="128.4" x2="367.3" y2="128.4" class="p-beam"/><line x1="300.9" y1="112.9" x2="367.3" y2="112.9" class="p-beam"/><line x1="300.9" y1="82.1" x2="367.3" y2="82.1" class="p-beam"/><line x1="300.9" y1="66.6" x2="367.3" y2="66.6" class="p-beam"/><line x1="300.9" y1="51.2" x2="367.3" y2="51.2" class="p-beam"/><line x1="35.8" y1="282.8" x2="102" y2="282.8" class="p-girder"/><line x1="102" y1="282.8" x2="168.3" y2="282.8" class="p-girder"/><line x1="168.3" y1="282.8" x2="234.6" y2="282.8" class="p-girder"/><line x1="234.6" y1="282.8" x2="300.9" y2="282.8" class="p-girder"/><line x1="300.9" y1="282.8" x2="367.3" y2="282.8" class="p-girder"/><line x1="35.8" y1="221" x2="102" y2="221" class="p-girder"/><line x1="102" y1="221" x2="168.3" y2="221" class="p-girder"/><line x1="168.3" y1="221" x2="234.6" y2="221" class="p-girder"/><line x1="234.6" y1="221" x2="300.9" y2="221" class="p-girder"/><line x1="300.9" y1="221" x2="367.3" y2="221" class="p-girder"/><line x1="35.8" y1="159.3" x2="102" y2="159.3" class="p-girder"/><line x1="102" y1="159.3" x2="168.3" y2="159.3" class="p-girder"/><line x1="168.3" y1="159.3" x2="234.6" y2="159.3" class="p-girder"/><line x1="234.6" y1="159.3" x2="300.9" y2="159.3" class="p-girder"/><line x1="300.9" y1="159.3" x2="367.3" y2="159.3" class="p-girder"/><line x1="35.8" y1="97.5" x2="102" y2="97.5" class="p-girder"/><line x1="102" y1="97.5" x2="168.3" y2="97.5" class="p-girder"/><line x1="168.3" y1="97.5" x2="234.6" y2="97.5" class="p-girder"/><line x1="234.6" y1="97.5" x2="300.9" y2="97.5" class="p-girder"/><line x1="300.9" y1="97.5" x2="367.3" y2="97.5" class="p-girder"/><line x1="35.8" y1="35.8" x2="102" y2="35.8" class="p-girder"/><line x1="102" y1="35.8" x2="168.3" y2="35.8" class="p-girder"/><line x1="168.3" y1="35.8" x2="234.6" y2="35.8" class="p-girder"/><line x1="234.6" y1="35.8" x2="300.9" y2="35.8" class="p-girder"/><line x1="300.9" y1="35.8" x2="367.3" y2="35.8" class="p-girder"/><line x1="35.8" y1="282.8" x2="35.8" y2="221" class="p-girder"/><line x1="35.8" y1="221" x2="35.8" y2="159.3" class="p-girder"/><line x1="35.8" y1="159.3" x2="35.8" y2="97.5" class="p-girder"/><line x1="35.8" y1="97.5" x2="35.8" y2="35.8" class="p-girder"/><line x1="102" y1="282.8" x2="102" y2="221" class="p-girder"/><line x1="102" y1="221" x2="102" y2="159.3" class="p-girder"/><line x1="102" y1="159.3" x2="102" y2="97.5" class="p-girder"/><line x1="102" y1="97.5" x2="102" y2="35.8" class="p-girder"/><line x1="168.3" y1="282.8" x2="168.3" y2="221" class="p-girder"/><line x1="168.3" y1="221" x2="168.3" y2="159.3" class="p-girder"/><line x1="168.3" y1="159.3" x2="168.3" y2="97.5" class="p-girder"/><line x1="168.3" y1="97.5" x2="168.3" y2="35.8" class="p-girder"/><line x1="234.6" y1="282.8" x2="234.6" y2="221" class="p-girder"/><line x1="234.6" y1="221" x2="234.6" y2="159.3" class="p-girder"/><line x1="234.6" y1="159.3" x2="234.6" y2="97.5" class="p-girder"/><line x1="234.6" y1="97.5" x2="234.6" y2="35.8" class="p-girder"/><line x1="300.9" y1="282.8" x2="300.9" y2="221" class="p-girder"/><line x1="300.9" y1="221" x2="300.9" y2="159.3" class="p-girder"/><line x1="300.9" y1="159.3" x2="300.9" y2="97.5" class="p-girder"/><line x1="300.9" y1="97.5" x2="300.9" y2="35.8" class="p-girder"/><line x1="367.3" y1="282.8" x2="367.3" y2="221" class="p-girder"/><line x1="367.3" y1="221" x2="367.3" y2="159.3" class="p-girder"/><line x1="367.3" y1="159.3" x2="367.3" y2="97.5" class="p-girder"/><line x1="367.3" y1="97.5" x2="367.3" y2="35.8" class="p-girder"/><rect x="29.3" y="276.3" width="13.0" height="13.0" class="p-cap"/><rect x="33.8" y="280.9" width="3.9" height="3.9" class="p-col"/><rect x="29.3" y="214.5" width="13.0" height="13.0" class="p-cap"/><rect x="33.8" y="219.1" width="3.9" height="3.9" class="p-col"/><rect x="29.3" y="152.8" width="13.0" height="13.0" class="p-cap"/><rect x="33.8" y="157.4" width="3.9" height="3.9" class="p-col"/><rect x="29.3" y="91" width="13.0" height="13.0" class="p-cap"/><rect x="33.8" y="95.5" width="3.9" height="3.9" class="p-col"/><rect x="29.3" y="29.3" width="13.0" height="13.0" class="p-cap"/><rect x="33.8" y="33.8" width="3.9" height="3.9" class="p-col"/><rect x="95.5" y="276.3" width="13.0" height="13.0" class="p-cap"/><rect x="100.0" y="280.9" width="3.9" height="3.9" class="p-col"/><rect x="95.5" y="214.5" width="13.0" height="13.0" class="p-cap hit"/><rect x="100.0" y="219.1" width="3.9" height="3.9" class="p-col"/><rect x="95.5" y="152.8" width="13.0" height="13.0" class="p-cap"/><rect x="100.0" y="157.4" width="3.9" height="3.9" class="p-col"/><rect x="95.5" y="91" width="13.0" height="13.0" class="p-cap"/><rect x="100.0" y="95.5" width="3.9" height="3.9" class="p-col"/><rect x="95.5" y="29.3" width="13.0" height="13.0" class="p-cap"/><rect x="100.0" y="33.8" width="3.9" height="3.9" class="p-col"/><rect x="161.8" y="276.3" width="13.0" height="13.0" class="p-cap"/><rect x="166.4" y="280.9" width="3.9" height="3.9" class="p-col"/><rect x="161.8" y="214.5" width="13.0" height="13.0" class="p-cap hit"/><rect x="166.4" y="219.1" width="3.9" height="3.9" class="p-col"/><rect x="161.8" y="152.8" width="13.0" height="13.0" class="p-cap"/><rect x="166.4" y="157.4" width="3.9" height="3.9" class="p-col"/><rect x="161.8" y="91" width="13.0" height="13.0" class="p-cap"/><rect x="166.4" y="95.5" width="3.9" height="3.9" class="p-col"/><rect x="161.8" y="29.3" width="13.0" height="13.0" class="p-cap"/><rect x="166.4" y="33.8" width="3.9" height="3.9" class="p-col"/><rect x="228.1" y="276.3" width="13.0" height="13.0" class="p-cap"/><rect x="232.7" y="280.9" width="3.9" height="3.9" class="p-col"/><rect x="228.1" y="214.5" width="13.0" height="13.0" class="p-cap"/><rect x="232.7" y="219.1" width="3.9" height="3.9" class="p-col"/><rect x="228.1" y="152.8" width="13.0" height="13.0" class="p-cap"/><rect x="232.7" y="157.4" width="3.9" height="3.9" class="p-col"/><rect x="228.1" y="91" width="13.0" height="13.0" class="p-cap"/><rect x="232.7" y="95.5" width="3.9" height="3.9" class="p-col"/><rect x="228.1" y="29.3" width="13.0" height="13.0" class="p-cap"/><rect x="232.7" y="33.8" width="3.9" height="3.9" class="p-col"/><rect x="294.4" y="276.3" width="13.0" height="13.0" class="p-cap"/><rect x="298.9" y="280.9" width="3.9" height="3.9" class="p-col"/><rect x="294.4" y="214.5" width="13.0" height="13.0" class="p-cap"/><rect x="298.9" y="219.1" width="3.9" height="3.9" class="p-col"/><rect x="294.4" y="152.8" width="13.0" height="13.0" class="p-cap"/><rect x="298.9" y="157.4" width="3.9" height="3.9" class="p-col"/><rect x="294.4" y="91" width="13.0" height="13.0" class="p-cap"/><rect x="298.9" y="95.5" width="3.9" height="3.9" class="p-col"/><rect x="294.4" y="29.3" width="13.0" height="13.0" class="p-cap"/><rect x="298.9" y="33.8" width="3.9" height="3.9" class="p-col"/><rect x="360.8" y="276.3" width="13.0" height="13.0" class="p-cap"/><rect x="365.4" y="280.9" width="3.9" height="3.9" class="p-col"/><rect x="360.8" y="214.5" width="13.0" height="13.0" class="p-cap"/><rect x="365.4" y="219.1" width="3.9" height="3.9" class="p-col"/><rect x="360.8" y="152.8" width="13.0" height="13.0" class="p-cap"/><rect x="365.4" y="157.4" width="3.9" height="3.9" class="p-col"/><rect x="360.8" y="91" width="13.0" height="13.0" class="p-cap"/><rect x="365.4" y="95.5" width="3.9" height="3.9" class="p-col"/><rect x="360.8" y="29.3" width="13.0" height="13.0" class="p-cap"/><rect x="365.4" y="33.8" width="3.9" height="3.9" class="p-col"/><g class="p-mark"><rect x="112.5" y="204.5" width="15" height="14" rx="2"/><text x="120" y="212">1</text></g><g class="p-mark"><rect x="178.8" y="204.5" width="15" height="14" rx="2"/><text x="186.3" y="212">2</text></g><rect x="88.4" y="207.3" width="27.3" height="27.3" class="p-sel"/><line x1="35.8" y1="302.9" x2="367.3" y2="302.9" class="p-dim"/><line x1="32.8" y1="305.9" x2="38.8" y2="299.9" class="p-tick"/><line x1="99" y1="305.9" x2="105" y2="299.9" class="p-tick"/><line x1="165.3" y1="305.9" x2="171.3" y2="299.9" class="p-tick"/><line x1="231.6" y1="305.9" x2="237.6" y2="299.9" class="p-tick"/><line x1="297.9" y1="305.9" x2="303.9" y2="299.9" class="p-tick"/><line x1="364.3" y1="305.9" x2="370.3" y2="299.9" class="p-tick"/><text x="68.9" y="296.9" class="p-dimt">10.2</text><text x="135.2" y="296.9" class="p-dimt">10.2</text><text x="201.4" y="296.9" class="p-dimt">10.2</text><text x="267.8" y="296.9" class="p-dimt">10.2</text><text x="334.1" y="296.9" class="p-dimt">10.2</text><line x1="386.1" y1="282.8" x2="386.1" y2="35.8" class="p-dim"/><line x1="383.1" y1="285.8" x2="389.1" y2="279.8" class="p-tick"/><line x1="383.1" y1="224" x2="389.1" y2="218" class="p-tick"/><line x1="383.1" y1="162.3" x2="389.1" y2="156.3" class="p-tick"/><line x1="383.1" y1="100.5" x2="389.1" y2="94.5" class="p-tick"/><line x1="383.1" y1="38.8" x2="389.1" y2="32.8" class="p-tick"/><text x="392.1" y="251.9" class="p-dimt v">9.5</text><text x="392.1" y="190.2" class="p-dimt v">9.5</text><text x="392.1" y="128.4" class="p-dimt v">9.5</text><text x="392.1" y="66.7" class="p-dimt v">9.5</text></svg></div>
+                <div class="side">
+                  <div class="board">
+                    <div class="board-h"><b>슬라이더 판</b><span>손을 떼면 다시 계산</span></div>
+                    <div class="sl">
+    <div class="sl-top"><span class="sl-name">기둥 간격 상한</span><span class="basis ask">? 물어볼 것 · 가정</span></div>
+    <div class="sl-row"><span class="mm">8</span><div class="sl-track"><span class="zone ok" style="left:0.00%;width:33.33%"></span><span class="zone warn" style="left:33.33%;width:12.50%"></span><span class="zone no" style="left:45.83%;width:54.17%"></span><span class="knob" style="left:33.33%"></span></div><span class="mm">20</span><span class="sl-step" aria-hidden="true">−</span><span class="sl-val">12.0<i>m</i></span><span class="sl-step" aria-hidden="true">+</span></div>
+  </div>
+                    <div class="sl">
+    <div class="sl-top"><span class="sl-name">작은보 간격</span><span class="basis ">사용자 요구 · 2~3 m</span></div>
+    <div class="sl-row"><span class="mm">2.0</span><div class="sl-track"><span class="zone ok" style="left:0.00%;width:100.00%"></span><span class="knob" style="left:50.00%"></span></div><span class="mm">3.0</span><span class="sl-step" aria-hidden="true">−</span><span class="sl-val">2.5<i>m</i></span><span class="sl-step" aria-hidden="true">+</span></div>
+  </div>
+                    <div class="sl">
+    <div class="sl-top"><span class="sl-name">파일캡</span><span class="basis ">모델 블록 · 구조 확인 전</span></div>
+    <div class="sl-row"><span class="mm">2.0</span><div class="sl-track"><span class="zone ok" style="left:0.00%;width:50.00%"></span><span class="zone warn" style="left:50.00%;width:50.00%"></span><span class="knob" style="left:0.00%"></span></div><span class="mm">3.0</span><span class="sl-step" aria-hidden="true">−</span><span class="sl-val">2.0<i>m</i></span><span class="sl-step" aria-hidden="true">+</span></div>
+  </div>
+                  </div>
+                  <div class="legend">
+                    <div class="board-h"><b>판정</b><a>판정색 끄기</a></div>
+                    <div class="lg"><span class="sw" style="background:var(--ok)"></span><span class="sy ok-t">✓</span><span class="t">거더 경간 12 m 이하</span><span class="c">49</span></div>
+                    <div class="lg"><span class="sw" style="background:var(--ng)"></span><span class="sy ng-t">✕</span><span class="t">파일캡↔기존 기초 겹침</span><span class="c ng-t">2</span></div>
+                    <div class="lg"><span class="sw" style="background:var(--warn)"></span><span class="sy warn-t">!</span><span class="t">비켜 두기(0.6 m)로 풀림</span><span class="c">0</span></div>
+                    <div class="lg"><span class="sw" style="background:var(--na)"></span><span class="sy muted">?</span><span class="t">부재 검정 · 이 도구에 없음</span><span class="c muted">—</span></div>
+                  </div>
+                </div>
+              </div>
+              <div class="drawer-row">
+                <b>서랍 ▴</b>
+                <span class="tabs"><span class="on">간섭 2</span><span>경간 49</span><span>일람표</span><span>조건 원장</span></span>
+                <span class="right"><span class="mini-btn">CSV</span><span class="mini-btn">보고서</span><span class="mini-btn off" title="초안에서는 미리보기 선만 그린다">Rhino에 만들기</span></span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- console -->
+        <section class="console" aria-label="시험·점검 결과">
+          <div class="con-h">
+            <h3>시험·점검 결과</h3>
+            <div class="con-tabs"><span class="on">모두</span><span>점검 7/8</span><span>시험 1/2</span><span>작성 기록 12</span></div>
+            <div class="right"><span>14:22:08 · 계산 상자 · 22 ms</span><button class="mini-btn">다시 시험</button></div>
+          </div>
+          <div class="con-body">
+            <div class="con-col">
+              <h4><span>점검</span><span>7 / 8</span></h4>
+              <div class="cr"><span class="g ok-t">✓</span><span class="t">형식 · 설명서 v3 · 길이 m 소수 1자리</span><span class="id">schema</span></div>
+              <div class="cr"><span class="g ok-t">✓</span><span class="t">화면 부품 6 · 목록 밖 0 · 색은 토큰만</span><span class="id">parts</span></div>
+              <div class="cr"><span class="g ok-t">✓</span><span class="t">할 수 있는 일 · 레이어 읽기, 라이브러리 호출</span><span class="id">caps</span></div>
+              <div class="cr"><span class="g warn-t">!</span><span class="t">근거 없는 매개변수 1 · 기둥 간격 상한 <em>→ 질문으로</em></span><span class="id">basis</span></div>
+              <div class="cr"><span class="g ok-t">✓</span><span class="t">금지 파일 없음 · 외 3 통과</span><span class="id">files</span></div>
+            </div>
+            <div class="con-col">
+              <h4><span>시험</span><span>1 / 2</span></h4>
+              <div class="cr"><span class="g ok-t">✓</span><span class="t">격자 기본 52 × 39 m <em>· 기둥 30 · 거더 49 · 작은보 60</em></span><span class="id">22 ms</span></div>
+              <div class="cr fail"><span class="g ng-t">✕</span><span class="t">직교 칸 ±1 mm 이동 · 거더 이름 2개가 바뀜</span><span class="id">ids-stable</span></div>
+              <div class="cr-detail">
+                <div class="mono"><span class="del">− G:N2-NB&gt;N3-NB</span> &nbsp; <span class="add">+ G:N2-NB&gt;N3-NC</span></div>
+                축선 위치를 0.001 m에서 반올림하지 않아 같은 축선이 둘로 읽혔습니다.<br>
+                AI가 <span class="mono">steps/axes.ts</span>의 반올림 규칙을 고치는 중 · 시도 2 / 3 (3회 실패하면 멈추고 묻습니다)
+              </div>
+            </div>
+          </div>
+        </section>
+      </section>
+
+      <!-- ---------- right: authoring conversation ---------- -->
+      <aside id="right" aria-label="제작 대화">
+        <div class="conv-chips">
+          <span class="cchip on"><span class="dot"></span>격자 골조 · 만들기</span>
+          <span class="cchip">모델 편집</span>
+          <span class="cchip"><span class="ring"></span>법규 질문</span>
+          <span class="cchip add" title="새 대화"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 5v14M5 12h14"/></svg></span>
+        </div>
+        <div class="conv-head">
+          <div class="t"><b>제작 대화</b> · Claude · 계정 1 · 6턴 / 20</div>
+          <button class="icon-btn" title="더보기"><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="6" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="18" cy="12" r="1.5"/></svg></button>
+        </div>
+        <div class="loop" aria-label="만들기 순서">
+          <span class="lp done"><span class="b">✓</span>계획</span><span class="lsep"></span>
+          <span class="lp cur"><span class="b">1</span>질문</span><span class="lsep"></span>
+          <span class="lp done"><span class="b">✓</span>작성</span><span class="lsep"></span>
+          <span class="lp half"><span class="b"></span>시험 1/2</span><span class="lsep"></span>
+          <span class="lp done"><span class="b">✓</span>미리보기</span><span class="lsep"></span>
+          <span class="lp"><span class="b"></span>고정</span>
+        </div>
+        <div id="thread">
+          <div class="msg me">
+            <div class="who">나 · 14:12</div>
+            <p>주차장 상부 데크용 격자 골조 배치 도구를 만들어 줘. 기둥 간격 12 m 안쪽, 작은보 2~3 m.</p>
+          </div>
+          <div class="msg ai">
+            <div class="who">AI · 14:13 – 14:22</div>
+            <p>공식 예제 ‘격자 골조 배치’를 본으로 삼았습니다. 새로 쓰는 계산은 축선 배치 한 단계뿐입니다.</p>
+            <div class="plan-card">
+              <div class="h">계획 <small>4 / 6 완료</small></div>
+              <ul>
+                <li><span class="c ok-t">✓</span><span><b>입력 2</b> <span class="d">슬래브 경계, 기존 기초 · 역할 확인됨</span></span></li>
+                <li><span class="c ok-t">✓</span><span><b>단계 5</b> <span class="d">축선 → 기둥 → 기초 간섭 → 거더망 → 작은보</span></span></li>
+                <li><span class="c ok-t">✓</span><span><b>매개변수 4</b> <span class="d">근거 있음 3 · 물어볼 것 1</span></span></li>
+                <li><span class="c ok-t">✓</span><span><b>화면 · 점검</b> <span class="d">부품 6 · 점검 7/8, 남은 1은 아래 질문</span></span></li>
+                <li class="now"><span class="c ng-t">◐</span><span><b>시험 1 / 2</b> <span class="d">±1 mm 이동 시 거더 이름 유지 · 고치는 중</span></span></li>
+                <li><span class="c muted">○</span><span><b>프로젝트 jig로 고정</b> <span class="d">사람이 누름</span></span></li>
+              </ul>
+            </div>
+          </div>
+          <div class="qcard" role="group" aria-label="질문">
+            <div class="qh"><span>질문 · 답 전까지 12 m 가정으로 계산</span><span class="n">1 / 1</span></div>
+            <h3>기둥 간격 상한을 얼마로 둘까요?</h3>
+            <p class="why">상한에 따라 기둥 수와 경간이 달라집니다. 시험 자료(52 × 39 m)로 미리 계산했습니다.</p>
+            <div class="opt on"><span class="r"></span><div><div class="l">12 m <span class="rec">권장</span><span class="src">구조 협의 회신(서면)</span></div><div class="c">기둥 30 · 최대 경간 10.2 m · 파일캡 간섭 2</div></div></div>
+            <div class="opt"><span class="r"></span><div><div class="l">13 m <span class="src">협의 중 제안 · 미확정</span></div><div class="c">기둥 20 · 경간 12.8 m · 간섭 1 · <span class="bad">보 춤 900 필요(예비값)</span></div></div></div>
+            <div class="opt"><span class="r"></span><div><div class="l">직접 입력 <span class="inp"><span>11.0</span> m</span><span class="src">8 – 20 m, 0.5 m 단위</span></div></div></div>
+            <div class="qact"><button class="btn-primary">12 m로 정하기</button><button class="btn-ghost">권장값으로 진행 · 가정으로 기록</button></div>
+          </div>
+        </div>
+        <div class="draft-bar">
+          <div class="t"><b>작성 중 <span class="mono">steps/axes.ts</span></b>질문 1 · 시험 1 남음</div>
+          <button class="btn-ghost">버리기</button>
+          <button class="btn-primary" disabled>프로젝트 jig로 고정</button>
+        </div>
+        <div class="composer-wrap">
+          <div class="composer">
+            <span class="chip">격자 골조 · 초안 v0.2 <span class="x">×</span></span>
+            <div class="ta">답하거나 고칠 점을 말하세요 — 예: 작은보를 더 촘촘히</div>
+            <div class="cmp-row">
+              <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M20 11l-8 8a5 5 0 01-7-7l8-8a3.5 3.5 0 015 5l-8 8a2 2 0 01-3-3l7-7"/></svg></span>
+              <span class="opt2">Claude Opus <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M7 10l5 5 5-5"/></svg></span>
+              <span class="opt2">보통 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M7 10l5 5 5-5"/></svg></span>
+              <span class="opt2">초안 폴더만 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M7 10l5 5 5-5"/></svg></span>
+              <button class="send" title="보내기"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 19V5M6 11l6-6 6 6"/></svg></button>
+            </div>
+          </div>
+        </div>
+      </aside>
+    </main>
+  </div>
+  <footer class="statusbar">
+    <span class="live">Live · 연결 파일 2</span><span class="sep"></span>
+    <span>초안 v0.2 저장됨 14:22</span><span class="sep"></span>
+    <span>계산 상자 · 22 ms</span><span class="sep"></span>
+    <span>호스트 쓰기 없음</span>
+    <span class="usage">5시간 <span class="ubar"><i style="width:38%"></i></span> 38%</span>
+    <span>주간 <span class="ubar"><i style="width:12%"></i></span> 12%</span>
+  </footer>
+</div>
+
+<!-- ================= B. 보고서 틀 미리보기 ================= -->
+<div class="caption"><b>B · 보고서 미리보기</b><span>가운데 [화면 미리보기 › 보고서]를 누르면 같은 시험 자료로 이 판형이 그려진다. 여기서는 전체 폭으로 보인다. 인쇄 판형 A3 가로 · A4.</span></div>
+<article class="report">
+  <header class="rp-top">
+    <span class="no">P-03</span><span class="nm">격자 골조 배치 · 초안 v0.2 · 시험 자료</span>
+    <nav class="rp-nav"><span class="on">01 경간</span><span>02 기초 간섭</span><span>03 미결</span><span>부록 매개변수</span></nav>
+    <div class="rp-btns"><span class="rp-btn">조건 조정 ↗</span><span class="rp-btn">인쇄 / PDF ↗</span></div>
+  </header>
+  <div class="rp-wrap">
+    <section class="hero">
+      <div>
+        <div class="eyebrow">P-03 / Grid frame study</div>
+        <h1>기둥 30개로 경간은 모두 12 m 안에 들고,<br>파일캡 2곳이 기존 기초와 겹친다.</h1>
+        <p class="lede">슬래브 52 × 39 m 시험 자료에 격자 골조를 두고, 기존 기초 20개와의 거리를 본 초안 결과다. 기둥 간격 상한은 답을 받기 전이라 12 m를 가정으로 두었다. 모든 수치는 탐색용 예비값이다.</p>
+        <div class="dots"><span><i></i>시험 자료 격자 기본 · 합성 · 원본 없음</span><span><i class="s"></i>매개변수 4개 중 근거 있음 3</span><span>부재 검정은 이 도구에서 하지 않는다</span></div>
+      </div>
+      <div class="hero-meta">01 — 03<br>SPAN / FOUNDATION / OPEN<br>초안 v0.2 · 계산 22 ms<br>2026-09-29</div>
+    </section>
+
+    <div class="rp-kpis">
+      <div class="rp-kpi"><div class="k">기둥</div><div class="v">30<i>개</i></div><div class="n">긴 변 5칸 · 짧은 변 4칸.<br>상한 13 m면 20개</div></div>
+      <div class="rp-kpi"><div class="k">최대 경간</div><div class="v">10.2<i>m</i></div><div class="n">상한 12.0 m 대비 여유 1.8 m.<br>짧은 변 경간 9.5 m</div></div>
+      <div class="rp-kpi"><div class="k">파일캡 간섭</div><div class="v ng">2<i>곳</i></div><div class="n">N2-NB, N3-NB.<br>비켜 두기 0.6 m로 풀리지 않음</div></div>
+      <div class="rp-kpi"><div class="k">거더 · 작은보</div><div class="v">49<i> / </i>60<i>개</i></div><div class="n">작은보는 칸의 긴 변과 평행,<br>간격 2.4 m</div></div>
+      <div class="rp-kpi"><div class="k">부재 검정</div><div class="v none">—</div><div class="n">해석 단계 없음.<br>구조 해석 jig로 넘긴다</div></div>
+    </div>
+
+    <div class="steps">
+      <div class="step"><b>01</b><span>슬래브 끝에서 0.5 m 안쪽에 축선을 긋는다</span><small>계산 · 축선 배치</small></div>
+      <div class="step"><b>02</b><span>축선 교점마다 기둥과 파일캡을 둔다</span><small>계산 · 기둥</small></div>
+      <div class="step"><b>03</b><span>파일캡과 기존 기초의 거리를 잰다</span><small>라이브러리 · 기하 도구</small></div>
+      <div class="step"><b>04</b><span>이웃한 기둥을 거더로 잇는다</span><small>라이브러리 · 기하 도구</small></div>
+      <div class="step"><b>05</b><span>칸마다 작은보를 2.5 m 이하로 채운다</span><small>라이브러리 · 기하 도구</small></div>
+    </div>
+
+    <!-- 01 SPAN -->
+    <section class="rsec">
+      <div class="rsec-head">
+        <div>
+          <div class="eyebrow">01 / Span</div>
+          <h2>상한을 13 m로 올리면 기둥은 10개 줄고,<br>경간은 12.8 m로 늘어난다.</h2>
+          <p class="lede">기둥 수는 상한 값이 아니라 슬래브를 몇 칸으로 나누느냐로 정해진다. 축선 사이 51 m를 12 m 이하로 나누면 5칸(10.2 m), 13 m 이하로 나누면 4칸(12.8 m)이다. <b>10 m와 12 m 사이에서는 짧은 변이 4칸 그대로여서</b> 기둥 수가 긴 변에서만 바뀐다.</p>
+        </div>
+        <div class="unit">길이 m · 축선은 슬래브 끝에서 0.5 m 안쪽</div>
+      </div>
+      <div class="cards">
+        <div class="card">
+          <div class="card-h"><h3>상한 10 m</h3><small>기둥 35 · 거더 58</small></div>
+          <div class="sub">긴 변 6칸 × 짧은 변 4칸</div>
+          <span class="tagbox">기둥 수 늘어남</span>
+          <div class="thumb"><svg class="plan mini" viewBox="0 0 298 225" width="298" height="225" role="img" aria-label="상한 10 m 배치"><rect x="3.4" y="3.4" width="291.2" height="218.4" class="p-slab"/><rect x="19.6" y="187.6" width="15.1" height="15.1" class="p-foot"/><rect x="19.6" y="154" width="15.1" height="15.1" class="p-foot"/><rect x="19.6" y="120.4" width="15.1" height="15.1" class="p-foot"/><rect x="19.6" y="86.8" width="15.1" height="15.1" class="p-foot"/><rect x="53.2" y="187.6" width="15.1" height="15.1" class="p-foot"/><rect x="53.2" y="154" width="15.1" height="15.1" class="p-foot hit"/><rect x="53.2" y="120.4" width="15.1" height="15.1" class="p-foot"/><rect x="53.2" y="86.8" width="15.1" height="15.1" class="p-foot"/><rect x="86.8" y="187.6" width="15.1" height="15.1" class="p-foot"/><rect x="86.8" y="154" width="15.1" height="15.1" class="p-foot hit"/><rect x="86.8" y="120.4" width="15.1" height="15.1" class="p-foot"/><rect x="86.8" y="86.8" width="15.1" height="15.1" class="p-foot"/><rect x="120.4" y="187.6" width="15.1" height="15.1" class="p-foot"/><rect x="120.4" y="154" width="15.1" height="15.1" class="p-foot"/><rect x="120.4" y="120.4" width="15.1" height="15.1" class="p-foot"/><rect x="120.4" y="86.8" width="15.1" height="15.1" class="p-foot"/><rect x="154" y="187.6" width="15.1" height="15.1" class="p-foot"/><rect x="154" y="154" width="15.1" height="15.1" class="p-foot hit"/><rect x="154" y="120.4" width="15.1" height="15.1" class="p-foot"/><rect x="154" y="86.8" width="15.1" height="15.1" class="p-foot"/><line x1="18.1" y1="219" x2="18.1" y2="165.8" class="p-beam"/><line x1="30" y1="219" x2="30" y2="165.8" class="p-beam"/><line x1="41.9" y1="219" x2="41.9" y2="165.8" class="p-beam"/><line x1="18.1" y1="165.8" x2="18.1" y2="112.6" class="p-beam"/><line x1="30" y1="165.8" x2="30" y2="112.6" class="p-beam"/><line x1="41.9" y1="165.8" x2="41.9" y2="112.6" class="p-beam"/><line x1="18.1" y1="112.6" x2="18.1" y2="59.4" class="p-beam"/><line x1="30" y1="112.6" x2="30" y2="59.4" class="p-beam"/><line x1="41.9" y1="112.6" x2="41.9" y2="59.4" class="p-beam"/><line x1="18.1" y1="59.4" x2="18.1" y2="6.2" class="p-beam"/><line x1="30" y1="59.4" x2="30" y2="6.2" class="p-beam"/><line x1="41.9" y1="59.4" x2="41.9" y2="6.2" class="p-beam"/><line x1="65.7" y1="219" x2="65.7" y2="165.8" class="p-beam"/><line x1="77.6" y1="219" x2="77.6" y2="165.8" class="p-beam"/><line x1="89.5" y1="219" x2="89.5" y2="165.8" class="p-beam"/><line x1="65.7" y1="165.8" x2="65.7" y2="112.6" class="p-beam"/><line x1="77.6" y1="165.8" x2="77.6" y2="112.6" class="p-beam"/><line x1="89.5" y1="165.8" x2="89.5" y2="112.6" class="p-beam"/><line x1="65.7" y1="112.6" x2="65.7" y2="59.4" class="p-beam"/><line x1="77.6" y1="112.6" x2="77.6" y2="59.4" class="p-beam"/><line x1="89.5" y1="112.6" x2="89.5" y2="59.4" class="p-beam"/><line x1="65.7" y1="59.4" x2="65.7" y2="6.2" class="p-beam"/><line x1="77.6" y1="59.4" x2="77.6" y2="6.2" class="p-beam"/><line x1="89.5" y1="59.4" x2="89.5" y2="6.2" class="p-beam"/><line x1="113.3" y1="219" x2="113.3" y2="165.8" class="p-beam"/><line x1="125.2" y1="219" x2="125.2" y2="165.8" class="p-beam"/><line x1="137.1" y1="219" x2="137.1" y2="165.8" class="p-beam"/><line x1="113.3" y1="165.8" x2="113.3" y2="112.6" class="p-beam"/><line x1="125.2" y1="165.8" x2="125.2" y2="112.6" class="p-beam"/><line x1="137.1" y1="165.8" x2="137.1" y2="112.6" class="p-beam"/><line x1="113.3" y1="112.6" x2="113.3" y2="59.4" class="p-beam"/><line x1="125.2" y1="112.6" x2="125.2" y2="59.4" class="p-beam"/><line x1="137.1" y1="112.6" x2="137.1" y2="59.4" class="p-beam"/><line x1="113.3" y1="59.4" x2="113.3" y2="6.2" class="p-beam"/><line x1="125.2" y1="59.4" x2="125.2" y2="6.2" class="p-beam"/><line x1="137.1" y1="59.4" x2="137.1" y2="6.2" class="p-beam"/><line x1="160.9" y1="219" x2="160.9" y2="165.8" class="p-beam"/><line x1="172.8" y1="219" x2="172.8" y2="165.8" class="p-beam"/><line x1="184.7" y1="219" x2="184.7" y2="165.8" class="p-beam"/><line x1="160.9" y1="165.8" x2="160.9" y2="112.6" class="p-beam"/><line x1="172.8" y1="165.8" x2="172.8" y2="112.6" class="p-beam"/><line x1="184.7" y1="165.8" x2="184.7" y2="112.6" class="p-beam"/><line x1="160.9" y1="112.6" x2="160.9" y2="59.4" class="p-beam"/><line x1="172.8" y1="112.6" x2="172.8" y2="59.4" class="p-beam"/><line x1="184.7" y1="112.6" x2="184.7" y2="59.4" class="p-beam"/><line x1="160.9" y1="59.4" x2="160.9" y2="6.2" class="p-beam"/><line x1="172.8" y1="59.4" x2="172.8" y2="6.2" class="p-beam"/><line x1="184.7" y1="59.4" x2="184.7" y2="6.2" class="p-beam"/><line x1="208.5" y1="219" x2="208.5" y2="165.8" class="p-beam"/><line x1="220.4" y1="219" x2="220.4" y2="165.8" class="p-beam"/><line x1="232.3" y1="219" x2="232.3" y2="165.8" class="p-beam"/><line x1="208.5" y1="165.8" x2="208.5" y2="112.6" class="p-beam"/><line x1="220.4" y1="165.8" x2="220.4" y2="112.6" class="p-beam"/><line x1="232.3" y1="165.8" x2="232.3" y2="112.6" class="p-beam"/><line x1="208.5" y1="112.6" x2="208.5" y2="59.4" class="p-beam"/><line x1="220.4" y1="112.6" x2="220.4" y2="59.4" class="p-beam"/><line x1="232.3" y1="112.6" x2="232.3" y2="59.4" class="p-beam"/><line x1="208.5" y1="59.4" x2="208.5" y2="6.2" class="p-beam"/><line x1="220.4" y1="59.4" x2="220.4" y2="6.2" class="p-beam"/><line x1="232.3" y1="59.4" x2="232.3" y2="6.2" class="p-beam"/><line x1="256.1" y1="219" x2="256.1" y2="165.8" class="p-beam"/><line x1="268" y1="219" x2="268" y2="165.8" class="p-beam"/><line x1="279.9" y1="219" x2="279.9" y2="165.8" class="p-beam"/><line x1="256.1" y1="165.8" x2="256.1" y2="112.6" class="p-beam"/><line x1="268" y1="165.8" x2="268" y2="112.6" class="p-beam"/><line x1="279.9" y1="165.8" x2="279.9" y2="112.6" class="p-beam"/><line x1="256.1" y1="112.6" x2="256.1" y2="59.4" class="p-beam"/><line x1="268" y1="112.6" x2="268" y2="59.4" class="p-beam"/><line x1="279.9" y1="112.6" x2="279.9" y2="59.4" class="p-beam"/><line x1="256.1" y1="59.4" x2="256.1" y2="6.2" class="p-beam"/><line x1="268" y1="59.4" x2="268" y2="6.2" class="p-beam"/><line x1="279.9" y1="59.4" x2="279.9" y2="6.2" class="p-beam"/><line x1="6.2" y1="219" x2="53.8" y2="219" class="p-girder"/><line x1="53.8" y1="219" x2="101.4" y2="219" class="p-girder"/><line x1="101.4" y1="219" x2="149" y2="219" class="p-girder"/><line x1="149" y1="219" x2="196.6" y2="219" class="p-girder"/><line x1="196.6" y1="219" x2="244.2" y2="219" class="p-girder"/><line x1="244.2" y1="219" x2="291.8" y2="219" class="p-girder"/><line x1="6.2" y1="165.8" x2="53.8" y2="165.8" class="p-girder"/><line x1="53.8" y1="165.8" x2="101.4" y2="165.8" class="p-girder"/><line x1="101.4" y1="165.8" x2="149" y2="165.8" class="p-girder"/><line x1="149" y1="165.8" x2="196.6" y2="165.8" class="p-girder"/><line x1="196.6" y1="165.8" x2="244.2" y2="165.8" class="p-girder"/><line x1="244.2" y1="165.8" x2="291.8" y2="165.8" class="p-girder"/><line x1="6.2" y1="112.6" x2="53.8" y2="112.6" class="p-girder"/><line x1="53.8" y1="112.6" x2="101.4" y2="112.6" class="p-girder"/><line x1="101.4" y1="112.6" x2="149" y2="112.6" class="p-girder"/><line x1="149" y1="112.6" x2="196.6" y2="112.6" class="p-girder"/><line x1="196.6" y1="112.6" x2="244.2" y2="112.6" class="p-girder"/><line x1="244.2" y1="112.6" x2="291.8" y2="112.6" class="p-girder"/><line x1="6.2" y1="59.4" x2="53.8" y2="59.4" class="p-girder"/><line x1="53.8" y1="59.4" x2="101.4" y2="59.4" class="p-girder"/><line x1="101.4" y1="59.4" x2="149" y2="59.4" class="p-girder"/><line x1="149" y1="59.4" x2="196.6" y2="59.4" class="p-girder"/><line x1="196.6" y1="59.4" x2="244.2" y2="59.4" class="p-girder"/><line x1="244.2" y1="59.4" x2="291.8" y2="59.4" class="p-girder"/><line x1="6.2" y1="6.2" x2="53.8" y2="6.2" class="p-girder"/><line x1="53.8" y1="6.2" x2="101.4" y2="6.2" class="p-girder"/><line x1="101.4" y1="6.2" x2="149" y2="6.2" class="p-girder"/><line x1="149" y1="6.2" x2="196.6" y2="6.2" class="p-girder"/><line x1="196.6" y1="6.2" x2="244.2" y2="6.2" class="p-girder"/><line x1="244.2" y1="6.2" x2="291.8" y2="6.2" class="p-girder"/><line x1="6.2" y1="219" x2="6.2" y2="165.8" class="p-girder"/><line x1="6.2" y1="165.8" x2="6.2" y2="112.6" class="p-girder"/><line x1="6.2" y1="112.6" x2="6.2" y2="59.4" class="p-girder"/><line x1="6.2" y1="59.4" x2="6.2" y2="6.2" class="p-girder"/><line x1="53.8" y1="219" x2="53.8" y2="165.8" class="p-girder"/><line x1="53.8" y1="165.8" x2="53.8" y2="112.6" class="p-girder"/><line x1="53.8" y1="112.6" x2="53.8" y2="59.4" class="p-girder"/><line x1="53.8" y1="59.4" x2="53.8" y2="6.2" class="p-girder"/><line x1="101.4" y1="219" x2="101.4" y2="165.8" class="p-girder"/><line x1="101.4" y1="165.8" x2="101.4" y2="112.6" class="p-girder"/><line x1="101.4" y1="112.6" x2="101.4" y2="59.4" class="p-girder"/><line x1="101.4" y1="59.4" x2="101.4" y2="6.2" class="p-girder"/><line x1="149" y1="219" x2="149" y2="165.8" class="p-girder"/><line x1="149" y1="165.8" x2="149" y2="112.6" class="p-girder"/><line x1="149" y1="112.6" x2="149" y2="59.4" class="p-girder"/><line x1="149" y1="59.4" x2="149" y2="6.2" class="p-girder"/><line x1="196.6" y1="219" x2="196.6" y2="165.8" class="p-girder"/><line x1="196.6" y1="165.8" x2="196.6" y2="112.6" class="p-girder"/><line x1="196.6" y1="112.6" x2="196.6" y2="59.4" class="p-girder"/><line x1="196.6" y1="59.4" x2="196.6" y2="6.2" class="p-girder"/><line x1="244.2" y1="219" x2="244.2" y2="165.8" class="p-girder"/><line x1="244.2" y1="165.8" x2="244.2" y2="112.6" class="p-girder"/><line x1="244.2" y1="112.6" x2="244.2" y2="59.4" class="p-girder"/><line x1="244.2" y1="59.4" x2="244.2" y2="6.2" class="p-girder"/><line x1="291.8" y1="219" x2="291.8" y2="165.8" class="p-girder"/><line x1="291.8" y1="165.8" x2="291.8" y2="112.6" class="p-girder"/><line x1="291.8" y1="112.6" x2="291.8" y2="59.4" class="p-girder"/><line x1="291.8" y1="59.4" x2="291.8" y2="6.2" class="p-girder"/><rect x="0.6" y="213.4" width="11.2" height="11.2" class="p-cap"/><rect x="4.5" y="217.3" width="3.4" height="3.4" class="p-col"/><rect x="0.6" y="160.2" width="11.2" height="11.2" class="p-cap"/><rect x="4.5" y="164.1" width="3.4" height="3.4" class="p-col"/><rect x="0.6" y="107" width="11.2" height="11.2" class="p-cap"/><rect x="4.5" y="110.9" width="3.4" height="3.4" class="p-col"/><rect x="0.6" y="53.8" width="11.2" height="11.2" class="p-cap"/><rect x="4.5" y="57.7" width="3.4" height="3.4" class="p-col"/><rect x="0.6" y="0.6" width="11.2" height="11.2" class="p-cap"/><rect x="4.5" y="4.5" width="3.4" height="3.4" class="p-col"/><rect x="48.2" y="213.4" width="11.2" height="11.2" class="p-cap"/><rect x="52.1" y="217.3" width="3.4" height="3.4" class="p-col"/><rect x="48.2" y="160.2" width="11.2" height="11.2" class="p-cap hit"/><rect x="52.1" y="164.1" width="3.4" height="3.4" class="p-col"/><rect x="48.2" y="107" width="11.2" height="11.2" class="p-cap"/><rect x="52.1" y="110.9" width="3.4" height="3.4" class="p-col"/><rect x="48.2" y="53.8" width="11.2" height="11.2" class="p-cap"/><rect x="52.1" y="57.7" width="3.4" height="3.4" class="p-col"/><rect x="48.2" y="0.6" width="11.2" height="11.2" class="p-cap"/><rect x="52.1" y="4.5" width="3.4" height="3.4" class="p-col"/><rect x="95.8" y="213.4" width="11.2" height="11.2" class="p-cap"/><rect x="99.7" y="217.3" width="3.4" height="3.4" class="p-col"/><rect x="95.8" y="160.2" width="11.2" height="11.2" class="p-cap hit"/><rect x="99.7" y="164.1" width="3.4" height="3.4" class="p-col"/><rect x="95.8" y="107" width="11.2" height="11.2" class="p-cap"/><rect x="99.7" y="110.9" width="3.4" height="3.4" class="p-col"/><rect x="95.8" y="53.8" width="11.2" height="11.2" class="p-cap"/><rect x="99.7" y="57.7" width="3.4" height="3.4" class="p-col"/><rect x="95.8" y="0.6" width="11.2" height="11.2" class="p-cap"/><rect x="99.7" y="4.5" width="3.4" height="3.4" class="p-col"/><rect x="143.4" y="213.4" width="11.2" height="11.2" class="p-cap"/><rect x="147.3" y="217.3" width="3.4" height="3.4" class="p-col"/><rect x="143.4" y="160.2" width="11.2" height="11.2" class="p-cap hit"/><rect x="147.3" y="164.1" width="3.4" height="3.4" class="p-col"/><rect x="143.4" y="107" width="11.2" height="11.2" class="p-cap"/><rect x="147.3" y="110.9" width="3.4" height="3.4" class="p-col"/><rect x="143.4" y="53.8" width="11.2" height="11.2" class="p-cap"/><rect x="147.3" y="57.7" width="3.4" height="3.4" class="p-col"/><rect x="143.4" y="0.6" width="11.2" height="11.2" class="p-cap"/><rect x="147.3" y="4.5" width="3.4" height="3.4" class="p-col"/><rect x="191" y="213.4" width="11.2" height="11.2" class="p-cap"/><rect x="194.9" y="217.3" width="3.4" height="3.4" class="p-col"/><rect x="191" y="160.2" width="11.2" height="11.2" class="p-cap"/><rect x="194.9" y="164.1" width="3.4" height="3.4" class="p-col"/><rect x="191" y="107" width="11.2" height="11.2" class="p-cap"/><rect x="194.9" y="110.9" width="3.4" height="3.4" class="p-col"/><rect x="191" y="53.8" width="11.2" height="11.2" class="p-cap"/><rect x="194.9" y="57.7" width="3.4" height="3.4" class="p-col"/><rect x="191" y="0.6" width="11.2" height="11.2" class="p-cap"/><rect x="194.9" y="4.5" width="3.4" height="3.4" class="p-col"/><rect x="238.6" y="213.4" width="11.2" height="11.2" class="p-cap"/><rect x="242.5" y="217.3" width="3.4" height="3.4" class="p-col"/><rect x="238.6" y="160.2" width="11.2" height="11.2" class="p-cap"/><rect x="242.5" y="164.1" width="3.4" height="3.4" class="p-col"/><rect x="238.6" y="107" width="11.2" height="11.2" class="p-cap"/><rect x="242.5" y="110.9" width="3.4" height="3.4" class="p-col"/><rect x="238.6" y="53.8" width="11.2" height="11.2" class="p-cap"/><rect x="242.5" y="57.7" width="3.4" height="3.4" class="p-col"/><rect x="238.6" y="0.6" width="11.2" height="11.2" class="p-cap"/><rect x="242.5" y="4.5" width="3.4" height="3.4" class="p-col"/><rect x="286.2" y="213.4" width="11.2" height="11.2" class="p-cap"/><rect x="290.1" y="217.3" width="3.4" height="3.4" class="p-col"/><rect x="286.2" y="160.2" width="11.2" height="11.2" class="p-cap"/><rect x="290.1" y="164.1" width="3.4" height="3.4" class="p-col"/><rect x="286.2" y="107" width="11.2" height="11.2" class="p-cap"/><rect x="290.1" y="110.9" width="3.4" height="3.4" class="p-col"/><rect x="286.2" y="53.8" width="11.2" height="11.2" class="p-cap"/><rect x="290.1" y="57.7" width="3.4" height="3.4" class="p-col"/><rect x="286.2" y="0.6" width="11.2" height="11.2" class="p-cap"/><rect x="290.1" y="4.5" width="3.4" height="3.4" class="p-col"/></svg></div>
+          <div class="bars">
+            <span class="limit-lab" style="left:calc(86px + (100% - 86px) * 0.8571)">협의 회신 12.0</span>
+            <div class="bar-row"><span class="lab">상한</span><div class="bar-track"><span class="bar base" style="width:71.43%">10.0</span><span class="limit" style="left:85.71%"></span></div></div>
+            <div class="bar-row"><span class="lab">짧은 변 경간</span><div class="bar-track"><span class="bar alt" style="width:67.86%">9.5</span><span class="limit" style="left:85.71%"></span></div></div>
+            <div class="bar-row"><span class="lab">긴 변 경간</span><div class="bar-track"><span class="bar act" style="width:60.71%">8.5</span><span class="limit" style="left:85.71%"></span></div></div>
+          </div>
+          <div class="stats"><div>파일캡 간섭<b class="ng">3<i>곳</i></b></div><div>작은보<b>72<i>개</i></b></div></div>
+          <p class="note">긴 변을 6칸으로 나눠 경간은 8.5 m까지 준다. 기둥 5개가 더 들고, 기존 기초와 겹치는 파일캡은 3곳으로 늘어난다.</p>
+        </div><div class="card">
+          <div class="card-h"><h3>상한 12 m</h3><small>기둥 30 · 거더 49</small></div>
+          <div class="sub">긴 변 5칸 × 짧은 변 4칸</div>
+          <span class="tagbox cur">현재 가정 · 질문 중</span>
+          <div class="thumb"><svg class="plan mini" viewBox="0 0 298 225" width="298" height="225" role="img" aria-label="상한 12 m 배치"><rect x="3.4" y="3.4" width="291.2" height="218.4" class="p-slab"/><rect x="19.6" y="187.6" width="15.1" height="15.1" class="p-foot"/><rect x="19.6" y="154" width="15.1" height="15.1" class="p-foot"/><rect x="19.6" y="120.4" width="15.1" height="15.1" class="p-foot"/><rect x="19.6" y="86.8" width="15.1" height="15.1" class="p-foot"/><rect x="53.2" y="187.6" width="15.1" height="15.1" class="p-foot"/><rect x="53.2" y="154" width="15.1" height="15.1" class="p-foot hit"/><rect x="53.2" y="120.4" width="15.1" height="15.1" class="p-foot"/><rect x="53.2" y="86.8" width="15.1" height="15.1" class="p-foot"/><rect x="86.8" y="187.6" width="15.1" height="15.1" class="p-foot"/><rect x="86.8" y="154" width="15.1" height="15.1" class="p-foot"/><rect x="86.8" y="120.4" width="15.1" height="15.1" class="p-foot"/><rect x="86.8" y="86.8" width="15.1" height="15.1" class="p-foot"/><rect x="120.4" y="187.6" width="15.1" height="15.1" class="p-foot"/><rect x="120.4" y="154" width="15.1" height="15.1" class="p-foot hit"/><rect x="120.4" y="120.4" width="15.1" height="15.1" class="p-foot"/><rect x="120.4" y="86.8" width="15.1" height="15.1" class="p-foot"/><rect x="154" y="187.6" width="15.1" height="15.1" class="p-foot"/><rect x="154" y="154" width="15.1" height="15.1" class="p-foot"/><rect x="154" y="120.4" width="15.1" height="15.1" class="p-foot"/><rect x="154" y="86.8" width="15.1" height="15.1" class="p-foot"/><line x1="6.2" y1="205.7" x2="63.3" y2="205.7" class="p-beam"/><line x1="6.2" y1="192.4" x2="63.3" y2="192.4" class="p-beam"/><line x1="6.2" y1="179.1" x2="63.3" y2="179.1" class="p-beam"/><line x1="6.2" y1="152.5" x2="63.3" y2="152.5" class="p-beam"/><line x1="6.2" y1="139.2" x2="63.3" y2="139.2" class="p-beam"/><line x1="6.2" y1="125.9" x2="63.3" y2="125.9" class="p-beam"/><line x1="6.2" y1="99.3" x2="63.3" y2="99.3" class="p-beam"/><line x1="6.2" y1="86" x2="63.3" y2="86" class="p-beam"/><line x1="6.2" y1="72.7" x2="63.3" y2="72.7" class="p-beam"/><line x1="6.2" y1="46.1" x2="63.3" y2="46.1" class="p-beam"/><line x1="6.2" y1="32.8" x2="63.3" y2="32.8" class="p-beam"/><line x1="6.2" y1="19.5" x2="63.3" y2="19.5" class="p-beam"/><line x1="63.3" y1="205.7" x2="120.4" y2="205.7" class="p-beam"/><line x1="63.3" y1="192.4" x2="120.4" y2="192.4" class="p-beam"/><line x1="63.3" y1="179.1" x2="120.4" y2="179.1" class="p-beam"/><line x1="63.3" y1="152.5" x2="120.4" y2="152.5" class="p-beam"/><line x1="63.3" y1="139.2" x2="120.4" y2="139.2" class="p-beam"/><line x1="63.3" y1="125.9" x2="120.4" y2="125.9" class="p-beam"/><line x1="63.3" y1="99.3" x2="120.4" y2="99.3" class="p-beam"/><line x1="63.3" y1="86" x2="120.4" y2="86" class="p-beam"/><line x1="63.3" y1="72.7" x2="120.4" y2="72.7" class="p-beam"/><line x1="63.3" y1="46.1" x2="120.4" y2="46.1" class="p-beam"/><line x1="63.3" y1="32.8" x2="120.4" y2="32.8" class="p-beam"/><line x1="63.3" y1="19.5" x2="120.4" y2="19.5" class="p-beam"/><line x1="120.4" y1="205.7" x2="177.5" y2="205.7" class="p-beam"/><line x1="120.4" y1="192.4" x2="177.5" y2="192.4" class="p-beam"/><line x1="120.4" y1="179.1" x2="177.5" y2="179.1" class="p-beam"/><line x1="120.4" y1="152.5" x2="177.5" y2="152.5" class="p-beam"/><line x1="120.4" y1="139.2" x2="177.5" y2="139.2" class="p-beam"/><line x1="120.4" y1="125.9" x2="177.5" y2="125.9" class="p-beam"/><line x1="120.4" y1="99.3" x2="177.5" y2="99.3" class="p-beam"/><line x1="120.4" y1="86" x2="177.5" y2="86" class="p-beam"/><line x1="120.4" y1="72.7" x2="177.5" y2="72.7" class="p-beam"/><line x1="120.4" y1="46.1" x2="177.5" y2="46.1" class="p-beam"/><line x1="120.4" y1="32.8" x2="177.5" y2="32.8" class="p-beam"/><line x1="120.4" y1="19.5" x2="177.5" y2="19.5" class="p-beam"/><line x1="177.5" y1="205.7" x2="234.6" y2="205.7" class="p-beam"/><line x1="177.5" y1="192.4" x2="234.6" y2="192.4" class="p-beam"/><line x1="177.5" y1="179.1" x2="234.6" y2="179.1" class="p-beam"/><line x1="177.5" y1="152.5" x2="234.6" y2="152.5" class="p-beam"/><line x1="177.5" y1="139.2" x2="234.6" y2="139.2" class="p-beam"/><line x1="177.5" y1="125.9" x2="234.6" y2="125.9" class="p-beam"/><line x1="177.5" y1="99.3" x2="234.6" y2="99.3" class="p-beam"/><line x1="177.5" y1="86" x2="234.6" y2="86" class="p-beam"/><line x1="177.5" y1="72.7" x2="234.6" y2="72.7" class="p-beam"/><line x1="177.5" y1="46.1" x2="234.6" y2="46.1" class="p-beam"/><line x1="177.5" y1="32.8" x2="234.6" y2="32.8" class="p-beam"/><line x1="177.5" y1="19.5" x2="234.6" y2="19.5" class="p-beam"/><line x1="234.6" y1="205.7" x2="291.8" y2="205.7" class="p-beam"/><line x1="234.6" y1="192.4" x2="291.8" y2="192.4" class="p-beam"/><line x1="234.6" y1="179.1" x2="291.8" y2="179.1" class="p-beam"/><line x1="234.6" y1="152.5" x2="291.8" y2="152.5" class="p-beam"/><line x1="234.6" y1="139.2" x2="291.8" y2="139.2" class="p-beam"/><line x1="234.6" y1="125.9" x2="291.8" y2="125.9" class="p-beam"/><line x1="234.6" y1="99.3" x2="291.8" y2="99.3" class="p-beam"/><line x1="234.6" y1="86" x2="291.8" y2="86" class="p-beam"/><line x1="234.6" y1="72.7" x2="291.8" y2="72.7" class="p-beam"/><line x1="234.6" y1="46.1" x2="291.8" y2="46.1" class="p-beam"/><line x1="234.6" y1="32.8" x2="291.8" y2="32.8" class="p-beam"/><line x1="234.6" y1="19.5" x2="291.8" y2="19.5" class="p-beam"/><line x1="6.2" y1="219" x2="63.3" y2="219" class="p-girder"/><line x1="63.3" y1="219" x2="120.4" y2="219" class="p-girder"/><line x1="120.4" y1="219" x2="177.5" y2="219" class="p-girder"/><line x1="177.5" y1="219" x2="234.6" y2="219" class="p-girder"/><line x1="234.6" y1="219" x2="291.8" y2="219" class="p-girder"/><line x1="6.2" y1="165.8" x2="63.3" y2="165.8" class="p-girder"/><line x1="63.3" y1="165.8" x2="120.4" y2="165.8" class="p-girder"/><line x1="120.4" y1="165.8" x2="177.5" y2="165.8" class="p-girder"/><line x1="177.5" y1="165.8" x2="234.6" y2="165.8" class="p-girder"/><line x1="234.6" y1="165.8" x2="291.8" y2="165.8" class="p-girder"/><line x1="6.2" y1="112.6" x2="63.3" y2="112.6" class="p-girder"/><line x1="63.3" y1="112.6" x2="120.4" y2="112.6" class="p-girder"/><line x1="120.4" y1="112.6" x2="177.5" y2="112.6" class="p-girder"/><line x1="177.5" y1="112.6" x2="234.6" y2="112.6" class="p-girder"/><line x1="234.6" y1="112.6" x2="291.8" y2="112.6" class="p-girder"/><line x1="6.2" y1="59.4" x2="63.3" y2="59.4" class="p-girder"/><line x1="63.3" y1="59.4" x2="120.4" y2="59.4" class="p-girder"/><line x1="120.4" y1="59.4" x2="177.5" y2="59.4" class="p-girder"/><line x1="177.5" y1="59.4" x2="234.6" y2="59.4" class="p-girder"/><line x1="234.6" y1="59.4" x2="291.8" y2="59.4" class="p-girder"/><line x1="6.2" y1="6.2" x2="63.3" y2="6.2" class="p-girder"/><line x1="63.3" y1="6.2" x2="120.4" y2="6.2" class="p-girder"/><line x1="120.4" y1="6.2" x2="177.5" y2="6.2" class="p-girder"/><line x1="177.5" y1="6.2" x2="234.6" y2="6.2" class="p-girder"/><line x1="234.6" y1="6.2" x2="291.8" y2="6.2" class="p-girder"/><line x1="6.2" y1="219" x2="6.2" y2="165.8" class="p-girder"/><line x1="6.2" y1="165.8" x2="6.2" y2="112.6" class="p-girder"/><line x1="6.2" y1="112.6" x2="6.2" y2="59.4" class="p-girder"/><line x1="6.2" y1="59.4" x2="6.2" y2="6.2" class="p-girder"/><line x1="63.3" y1="219" x2="63.3" y2="165.8" class="p-girder"/><line x1="63.3" y1="165.8" x2="63.3" y2="112.6" class="p-girder"/><line x1="63.3" y1="112.6" x2="63.3" y2="59.4" class="p-girder"/><line x1="63.3" y1="59.4" x2="63.3" y2="6.2" class="p-girder"/><line x1="120.4" y1="219" x2="120.4" y2="165.8" class="p-girder"/><line x1="120.4" y1="165.8" x2="120.4" y2="112.6" class="p-girder"/><line x1="120.4" y1="112.6" x2="120.4" y2="59.4" class="p-girder"/><line x1="120.4" y1="59.4" x2="120.4" y2="6.2" class="p-girder"/><line x1="177.5" y1="219" x2="177.5" y2="165.8" class="p-girder"/><line x1="177.5" y1="165.8" x2="177.5" y2="112.6" class="p-girder"/><line x1="177.5" y1="112.6" x2="177.5" y2="59.4" class="p-girder"/><line x1="177.5" y1="59.4" x2="177.5" y2="6.2" class="p-girder"/><line x1="234.6" y1="219" x2="234.6" y2="165.8" class="p-girder"/><line x1="234.6" y1="165.8" x2="234.6" y2="112.6" class="p-girder"/><line x1="234.6" y1="112.6" x2="234.6" y2="59.4" class="p-girder"/><line x1="234.6" y1="59.4" x2="234.6" y2="6.2" class="p-girder"/><line x1="291.8" y1="219" x2="291.8" y2="165.8" class="p-girder"/><line x1="291.8" y1="165.8" x2="291.8" y2="112.6" class="p-girder"/><line x1="291.8" y1="112.6" x2="291.8" y2="59.4" class="p-girder"/><line x1="291.8" y1="59.4" x2="291.8" y2="6.2" class="p-girder"/><rect x="0.6" y="213.4" width="11.2" height="11.2" class="p-cap"/><rect x="4.5" y="217.3" width="3.4" height="3.4" class="p-col"/><rect x="0.6" y="160.2" width="11.2" height="11.2" class="p-cap"/><rect x="4.5" y="164.1" width="3.4" height="3.4" class="p-col"/><rect x="0.6" y="107" width="11.2" height="11.2" class="p-cap"/><rect x="4.5" y="110.9" width="3.4" height="3.4" class="p-col"/><rect x="0.6" y="53.8" width="11.2" height="11.2" class="p-cap"/><rect x="4.5" y="57.7" width="3.4" height="3.4" class="p-col"/><rect x="0.6" y="0.6" width="11.2" height="11.2" class="p-cap"/><rect x="4.5" y="4.5" width="3.4" height="3.4" class="p-col"/><rect x="57.7" y="213.4" width="11.2" height="11.2" class="p-cap"/><rect x="61.6" y="217.3" width="3.4" height="3.4" class="p-col"/><rect x="57.7" y="160.2" width="11.2" height="11.2" class="p-cap hit"/><rect x="61.6" y="164.1" width="3.4" height="3.4" class="p-col"/><rect x="57.7" y="107" width="11.2" height="11.2" class="p-cap"/><rect x="61.6" y="110.9" width="3.4" height="3.4" class="p-col"/><rect x="57.7" y="53.8" width="11.2" height="11.2" class="p-cap"/><rect x="61.6" y="57.7" width="3.4" height="3.4" class="p-col"/><rect x="57.7" y="0.6" width="11.2" height="11.2" class="p-cap"/><rect x="61.6" y="4.5" width="3.4" height="3.4" class="p-col"/><rect x="114.8" y="213.4" width="11.2" height="11.2" class="p-cap"/><rect x="118.7" y="217.3" width="3.4" height="3.4" class="p-col"/><rect x="114.8" y="160.2" width="11.2" height="11.2" class="p-cap hit"/><rect x="118.7" y="164.1" width="3.4" height="3.4" class="p-col"/><rect x="114.8" y="107" width="11.2" height="11.2" class="p-cap"/><rect x="118.7" y="110.9" width="3.4" height="3.4" class="p-col"/><rect x="114.8" y="53.8" width="11.2" height="11.2" class="p-cap"/><rect x="118.7" y="57.7" width="3.4" height="3.4" class="p-col"/><rect x="114.8" y="0.6" width="11.2" height="11.2" class="p-cap"/><rect x="118.7" y="4.5" width="3.4" height="3.4" class="p-col"/><rect x="171.9" y="213.4" width="11.2" height="11.2" class="p-cap"/><rect x="175.8" y="217.3" width="3.4" height="3.4" class="p-col"/><rect x="171.9" y="160.2" width="11.2" height="11.2" class="p-cap"/><rect x="175.8" y="164.1" width="3.4" height="3.4" class="p-col"/><rect x="171.9" y="107" width="11.2" height="11.2" class="p-cap"/><rect x="175.8" y="110.9" width="3.4" height="3.4" class="p-col"/><rect x="171.9" y="53.8" width="11.2" height="11.2" class="p-cap"/><rect x="175.8" y="57.7" width="3.4" height="3.4" class="p-col"/><rect x="171.9" y="0.6" width="11.2" height="11.2" class="p-cap"/><rect x="175.8" y="4.5" width="3.4" height="3.4" class="p-col"/><rect x="229" y="213.4" width="11.2" height="11.2" class="p-cap"/><rect x="232.9" y="217.3" width="3.4" height="3.4" class="p-col"/><rect x="229" y="160.2" width="11.2" height="11.2" class="p-cap"/><rect x="232.9" y="164.1" width="3.4" height="3.4" class="p-col"/><rect x="229" y="107" width="11.2" height="11.2" class="p-cap"/><rect x="232.9" y="110.9" width="3.4" height="3.4" class="p-col"/><rect x="229" y="53.8" width="11.2" height="11.2" class="p-cap"/><rect x="232.9" y="57.7" width="3.4" height="3.4" class="p-col"/><rect x="229" y="0.6" width="11.2" height="11.2" class="p-cap"/><rect x="232.9" y="4.5" width="3.4" height="3.4" class="p-col"/><rect x="286.2" y="213.4" width="11.2" height="11.2" class="p-cap"/><rect x="290.1" y="217.3" width="3.4" height="3.4" class="p-col"/><rect x="286.2" y="160.2" width="11.2" height="11.2" class="p-cap"/><rect x="290.1" y="164.1" width="3.4" height="3.4" class="p-col"/><rect x="286.2" y="107" width="11.2" height="11.2" class="p-cap"/><rect x="290.1" y="110.9" width="3.4" height="3.4" class="p-col"/><rect x="286.2" y="53.8" width="11.2" height="11.2" class="p-cap"/><rect x="290.1" y="57.7" width="3.4" height="3.4" class="p-col"/><rect x="286.2" y="0.6" width="11.2" height="11.2" class="p-cap"/><rect x="290.1" y="4.5" width="3.4" height="3.4" class="p-col"/></svg></div>
+          <div class="bars">
+            <span class="limit-lab" style="left:calc(86px + (100% - 86px) * 0.8571)">협의 회신 12.0</span>
+            <div class="bar-row"><span class="lab">상한</span><div class="bar-track"><span class="bar base" style="width:85.71%">12.0</span><span class="limit" style="left:85.71%"></span></div></div>
+            <div class="bar-row"><span class="lab">짧은 변 경간</span><div class="bar-track"><span class="bar alt" style="width:67.86%">9.5</span><span class="limit" style="left:85.71%"></span></div></div>
+            <div class="bar-row"><span class="lab">긴 변 경간</span><div class="bar-track"><span class="bar act" style="width:72.86%">10.2</span><span class="limit" style="left:85.71%"></span></div></div>
+          </div>
+          <div class="stats"><div>파일캡 간섭<b class="ng">2<i>곳</i></b></div><div>작은보<b>60<i>개</i></b></div></div>
+          <p class="note">구조 협의 회신의 서면 값이다. 긴 변 경간 10.2 m로 상한까지 1.8 m 남는다. 겹침 2곳은 모두 NB 축선 위에 있다.</p>
+        </div><div class="card">
+          <div class="card-h"><h3>상한 13 m</h3><small>기둥 20 · 거더 31</small></div>
+          <div class="sub">긴 변 4칸 × 짧은 변 3칸</div>
+          <span class="tagbox">구조 협의 확인 필요</span>
+          <div class="thumb"><svg class="plan mini" viewBox="0 0 298 225" width="298" height="225" role="img" aria-label="상한 13 m 배치"><rect x="3.4" y="3.4" width="291.2" height="218.4" class="p-slab"/><rect x="19.6" y="187.6" width="15.1" height="15.1" class="p-foot"/><rect x="19.6" y="154" width="15.1" height="15.1" class="p-foot"/><rect x="19.6" y="120.4" width="15.1" height="15.1" class="p-foot"/><rect x="19.6" y="86.8" width="15.1" height="15.1" class="p-foot"/><rect x="53.2" y="187.6" width="15.1" height="15.1" class="p-foot"/><rect x="53.2" y="154" width="15.1" height="15.1" class="p-foot"/><rect x="53.2" y="120.4" width="15.1" height="15.1" class="p-foot"/><rect x="53.2" y="86.8" width="15.1" height="15.1" class="p-foot"/><rect x="86.8" y="187.6" width="15.1" height="15.1" class="p-foot"/><rect x="86.8" y="154" width="15.1" height="15.1" class="p-foot"/><rect x="86.8" y="120.4" width="15.1" height="15.1" class="p-foot"/><rect x="86.8" y="86.8" width="15.1" height="15.1" class="p-foot"/><rect x="120.4" y="187.6" width="15.1" height="15.1" class="p-foot"/><rect x="120.4" y="154" width="15.1" height="15.1" class="p-foot"/><rect x="120.4" y="120.4" width="15.1" height="15.1" class="p-foot"/><rect x="120.4" y="86.8" width="15.1" height="15.1" class="p-foot"/><rect x="154" y="187.6" width="15.1" height="15.1" class="p-foot"/><rect x="154" y="154" width="15.1" height="15.1" class="p-foot hit"/><rect x="154" y="120.4" width="15.1" height="15.1" class="p-foot"/><rect x="154" y="86.8" width="15.1" height="15.1" class="p-foot"/><line x1="6.2" y1="207.1" x2="77.6" y2="207.1" class="p-beam"/><line x1="6.2" y1="195.3" x2="77.6" y2="195.3" class="p-beam"/><line x1="6.2" y1="183.5" x2="77.6" y2="183.5" class="p-beam"/><line x1="6.2" y1="171.7" x2="77.6" y2="171.7" class="p-beam"/><line x1="6.2" y1="159.8" x2="77.6" y2="159.8" class="p-beam"/><line x1="6.2" y1="136.2" x2="77.6" y2="136.2" class="p-beam"/><line x1="6.2" y1="124.4" x2="77.6" y2="124.4" class="p-beam"/><line x1="6.2" y1="112.6" x2="77.6" y2="112.6" class="p-beam"/><line x1="6.2" y1="100.7" x2="77.6" y2="100.7" class="p-beam"/><line x1="6.2" y1="88.9" x2="77.6" y2="88.9" class="p-beam"/><line x1="6.2" y1="65.3" x2="77.6" y2="65.3" class="p-beam"/><line x1="6.2" y1="53.4" x2="77.6" y2="53.4" class="p-beam"/><line x1="6.2" y1="41.6" x2="77.6" y2="41.6" class="p-beam"/><line x1="6.2" y1="29.8" x2="77.6" y2="29.8" class="p-beam"/><line x1="6.2" y1="18" x2="77.6" y2="18" class="p-beam"/><line x1="77.6" y1="207.1" x2="149" y2="207.1" class="p-beam"/><line x1="77.6" y1="195.3" x2="149" y2="195.3" class="p-beam"/><line x1="77.6" y1="183.5" x2="149" y2="183.5" class="p-beam"/><line x1="77.6" y1="171.7" x2="149" y2="171.7" class="p-beam"/><line x1="77.6" y1="159.8" x2="149" y2="159.8" class="p-beam"/><line x1="77.6" y1="136.2" x2="149" y2="136.2" class="p-beam"/><line x1="77.6" y1="124.4" x2="149" y2="124.4" class="p-beam"/><line x1="77.6" y1="112.6" x2="149" y2="112.6" class="p-beam"/><line x1="77.6" y1="100.7" x2="149" y2="100.7" class="p-beam"/><line x1="77.6" y1="88.9" x2="149" y2="88.9" class="p-beam"/><line x1="77.6" y1="65.3" x2="149" y2="65.3" class="p-beam"/><line x1="77.6" y1="53.4" x2="149" y2="53.4" class="p-beam"/><line x1="77.6" y1="41.6" x2="149" y2="41.6" class="p-beam"/><line x1="77.6" y1="29.8" x2="149" y2="29.8" class="p-beam"/><line x1="77.6" y1="18" x2="149" y2="18" class="p-beam"/><line x1="149" y1="207.1" x2="220.4" y2="207.1" class="p-beam"/><line x1="149" y1="195.3" x2="220.4" y2="195.3" class="p-beam"/><line x1="149" y1="183.5" x2="220.4" y2="183.5" class="p-beam"/><line x1="149" y1="171.7" x2="220.4" y2="171.7" class="p-beam"/><line x1="149" y1="159.8" x2="220.4" y2="159.8" class="p-beam"/><line x1="149" y1="136.2" x2="220.4" y2="136.2" class="p-beam"/><line x1="149" y1="124.4" x2="220.4" y2="124.4" class="p-beam"/><line x1="149" y1="112.6" x2="220.4" y2="112.6" class="p-beam"/><line x1="149" y1="100.7" x2="220.4" y2="100.7" class="p-beam"/><line x1="149" y1="88.9" x2="220.4" y2="88.9" class="p-beam"/><line x1="149" y1="65.3" x2="220.4" y2="65.3" class="p-beam"/><line x1="149" y1="53.4" x2="220.4" y2="53.4" class="p-beam"/><line x1="149" y1="41.6" x2="220.4" y2="41.6" class="p-beam"/><line x1="149" y1="29.8" x2="220.4" y2="29.8" class="p-beam"/><line x1="149" y1="18" x2="220.4" y2="18" class="p-beam"/><line x1="220.4" y1="207.1" x2="291.8" y2="207.1" class="p-beam"/><line x1="220.4" y1="195.3" x2="291.8" y2="195.3" class="p-beam"/><line x1="220.4" y1="183.5" x2="291.8" y2="183.5" class="p-beam"/><line x1="220.4" y1="171.7" x2="291.8" y2="171.7" class="p-beam"/><line x1="220.4" y1="159.8" x2="291.8" y2="159.8" class="p-beam"/><line x1="220.4" y1="136.2" x2="291.8" y2="136.2" class="p-beam"/><line x1="220.4" y1="124.4" x2="291.8" y2="124.4" class="p-beam"/><line x1="220.4" y1="112.6" x2="291.8" y2="112.6" class="p-beam"/><line x1="220.4" y1="100.7" x2="291.8" y2="100.7" class="p-beam"/><line x1="220.4" y1="88.9" x2="291.8" y2="88.9" class="p-beam"/><line x1="220.4" y1="65.3" x2="291.8" y2="65.3" class="p-beam"/><line x1="220.4" y1="53.4" x2="291.8" y2="53.4" class="p-beam"/><line x1="220.4" y1="41.6" x2="291.8" y2="41.6" class="p-beam"/><line x1="220.4" y1="29.8" x2="291.8" y2="29.8" class="p-beam"/><line x1="220.4" y1="18" x2="291.8" y2="18" class="p-beam"/><line x1="6.2" y1="219" x2="77.6" y2="219" class="p-girder over"/><line x1="77.6" y1="219" x2="149" y2="219" class="p-girder over"/><line x1="149" y1="219" x2="220.4" y2="219" class="p-girder over"/><line x1="220.4" y1="219" x2="291.8" y2="219" class="p-girder over"/><line x1="6.2" y1="148" x2="77.6" y2="148" class="p-girder over"/><line x1="77.6" y1="148" x2="149" y2="148" class="p-girder over"/><line x1="149" y1="148" x2="220.4" y2="148" class="p-girder over"/><line x1="220.4" y1="148" x2="291.8" y2="148" class="p-girder over"/><line x1="6.2" y1="77.1" x2="77.6" y2="77.1" class="p-girder over"/><line x1="77.6" y1="77.1" x2="149" y2="77.1" class="p-girder over"/><line x1="149" y1="77.1" x2="220.4" y2="77.1" class="p-girder over"/><line x1="220.4" y1="77.1" x2="291.8" y2="77.1" class="p-girder over"/><line x1="6.2" y1="6.2" x2="77.6" y2="6.2" class="p-girder over"/><line x1="77.6" y1="6.2" x2="149" y2="6.2" class="p-girder over"/><line x1="149" y1="6.2" x2="220.4" y2="6.2" class="p-girder over"/><line x1="220.4" y1="6.2" x2="291.8" y2="6.2" class="p-girder over"/><line x1="6.2" y1="219" x2="6.2" y2="148" class="p-girder over"/><line x1="6.2" y1="148" x2="6.2" y2="77.1" class="p-girder over"/><line x1="6.2" y1="77.1" x2="6.2" y2="6.2" class="p-girder over"/><line x1="77.6" y1="219" x2="77.6" y2="148" class="p-girder over"/><line x1="77.6" y1="148" x2="77.6" y2="77.1" class="p-girder over"/><line x1="77.6" y1="77.1" x2="77.6" y2="6.2" class="p-girder over"/><line x1="149" y1="219" x2="149" y2="148" class="p-girder over"/><line x1="149" y1="148" x2="149" y2="77.1" class="p-girder over"/><line x1="149" y1="77.1" x2="149" y2="6.2" class="p-girder over"/><line x1="220.4" y1="219" x2="220.4" y2="148" class="p-girder over"/><line x1="220.4" y1="148" x2="220.4" y2="77.1" class="p-girder over"/><line x1="220.4" y1="77.1" x2="220.4" y2="6.2" class="p-girder over"/><line x1="291.8" y1="219" x2="291.8" y2="148" class="p-girder over"/><line x1="291.8" y1="148" x2="291.8" y2="77.1" class="p-girder over"/><line x1="291.8" y1="77.1" x2="291.8" y2="6.2" class="p-girder over"/><rect x="0.6" y="213.4" width="11.2" height="11.2" class="p-cap"/><rect x="4.5" y="217.3" width="3.4" height="3.4" class="p-col"/><rect x="0.6" y="142.4" width="11.2" height="11.2" class="p-cap"/><rect x="4.5" y="146.3" width="3.4" height="3.4" class="p-col"/><rect x="0.6" y="71.5" width="11.2" height="11.2" class="p-cap"/><rect x="4.5" y="75.4" width="3.4" height="3.4" class="p-col"/><rect x="0.6" y="0.6" width="11.2" height="11.2" class="p-cap"/><rect x="4.5" y="4.5" width="3.4" height="3.4" class="p-col"/><rect x="72" y="213.4" width="11.2" height="11.2" class="p-cap"/><rect x="75.9" y="217.3" width="3.4" height="3.4" class="p-col"/><rect x="72" y="142.4" width="11.2" height="11.2" class="p-cap"/><rect x="75.9" y="146.3" width="3.4" height="3.4" class="p-col"/><rect x="72" y="71.5" width="11.2" height="11.2" class="p-cap"/><rect x="75.9" y="75.4" width="3.4" height="3.4" class="p-col"/><rect x="72" y="0.6" width="11.2" height="11.2" class="p-cap"/><rect x="75.9" y="4.5" width="3.4" height="3.4" class="p-col"/><rect x="143.4" y="213.4" width="11.2" height="11.2" class="p-cap"/><rect x="147.3" y="217.3" width="3.4" height="3.4" class="p-col"/><rect x="143.4" y="142.4" width="11.2" height="11.2" class="p-cap hit"/><rect x="147.3" y="146.3" width="3.4" height="3.4" class="p-col"/><rect x="143.4" y="71.5" width="11.2" height="11.2" class="p-cap"/><rect x="147.3" y="75.4" width="3.4" height="3.4" class="p-col"/><rect x="143.4" y="0.6" width="11.2" height="11.2" class="p-cap"/><rect x="147.3" y="4.5" width="3.4" height="3.4" class="p-col"/><rect x="214.8" y="213.4" width="11.2" height="11.2" class="p-cap"/><rect x="218.7" y="217.3" width="3.4" height="3.4" class="p-col"/><rect x="214.8" y="142.4" width="11.2" height="11.2" class="p-cap"/><rect x="218.7" y="146.3" width="3.4" height="3.4" class="p-col"/><rect x="214.8" y="71.5" width="11.2" height="11.2" class="p-cap"/><rect x="218.7" y="75.4" width="3.4" height="3.4" class="p-col"/><rect x="214.8" y="0.6" width="11.2" height="11.2" class="p-cap"/><rect x="218.7" y="4.5" width="3.4" height="3.4" class="p-col"/><rect x="286.2" y="213.4" width="11.2" height="11.2" class="p-cap"/><rect x="290.1" y="217.3" width="3.4" height="3.4" class="p-col"/><rect x="286.2" y="142.4" width="11.2" height="11.2" class="p-cap"/><rect x="290.1" y="146.3" width="3.4" height="3.4" class="p-col"/><rect x="286.2" y="71.5" width="11.2" height="11.2" class="p-cap"/><rect x="290.1" y="75.4" width="3.4" height="3.4" class="p-col"/><rect x="286.2" y="0.6" width="11.2" height="11.2" class="p-cap"/><rect x="290.1" y="4.5" width="3.4" height="3.4" class="p-col"/></svg></div>
+          <div class="bars">
+            <span class="limit-lab" style="left:calc(86px + (100% - 86px) * 0.8571)">협의 회신 12.0</span>
+            <div class="bar-row"><span class="lab">상한</span><div class="bar-track"><span class="bar base" style="width:92.86%">13.0</span><span class="limit" style="left:85.71%"></span></div></div>
+            <div class="bar-row"><span class="lab">짧은 변 경간</span><div class="bar-track"><span class="bar alt" style="width:90.48%">12.7</span><span class="limit" style="left:85.71%"></span></div></div>
+            <div class="bar-row"><span class="lab">긴 변 경간</span><div class="bar-track"><span class="bar act" style="width:91.07%">12.8</span><span class="limit" style="left:85.71%"></span></div></div>
+          </div>
+          <div class="stats"><div>파일캡 간섭<b class="ng">1<i>곳</i></b></div><div>작은보<b>60<i>개</i></b></div></div>
+          <p class="note">두 방향 모두 12.8 m 안팎으로 벌어져 12 m 선을 넘는다. 보 춤 900이 가능하다는 회신이 오기 전까지는 예비값이다.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- 02 FOUNDATION -->
+    <section class="rsec">
+      <div class="rsec-head">
+        <div>
+          <div class="eyebrow">02 / Foundation</div>
+          <h2>겹치는 2곳은 모두 NB 축선 위에 있고,<br>0.6 m 비켜 두기로는 풀리지 않는다.</h2>
+          <p class="lede">파일캡(2.0 m)과 기존 기초(2.7 m)가 겹치지 않으려면 <b>어느 한 방향으로 2.55 m 이상</b> 떨어져야 한다(추가 여유 0.2 m 포함). NB 축선은 기존 기초 열과 0.75 m밖에 떨어지지 않아, 그 위의 기둥은 다른 방향으로 떨어지지 않으면 겹친다.</p>
+        </div>
+        <div class="unit">거리 m · 두 방향 중 먼 쪽</div>
+      </div>
+      <div class="found">
+        <div class="plan-l"><svg class="plan " viewBox="0 0 655 506" width="655" height="506" role="img" aria-label="기초 간섭 평면"><rect x="52.5" y="52.5" width="546.0" height="409.5" class="p-slab"/><rect x="83" y="397.9" width="28.4" height="28.4" class="p-foot"/><rect x="83" y="334.9" width="28.4" height="28.4" class="p-foot"/><rect x="83" y="271.9" width="28.4" height="28.4" class="p-foot"/><rect x="83" y="208.9" width="28.4" height="28.4" class="p-foot"/><rect x="146" y="397.9" width="28.4" height="28.4" class="p-foot"/><rect x="146" y="334.9" width="28.4" height="28.4" class="p-foot hit"/><rect x="146" y="271.9" width="28.4" height="28.4" class="p-foot"/><rect x="146" y="208.9" width="28.4" height="28.4" class="p-foot"/><rect x="208.9" y="397.9" width="28.4" height="28.4" class="p-foot"/><rect x="208.9" y="334.9" width="28.4" height="28.4" class="p-foot"/><rect x="208.9" y="271.9" width="28.4" height="28.4" class="p-foot"/><rect x="208.9" y="208.9" width="28.4" height="28.4" class="p-foot"/><rect x="271.9" y="397.9" width="28.4" height="28.4" class="p-foot"/><rect x="271.9" y="334.9" width="28.4" height="28.4" class="p-foot hit"/><rect x="271.9" y="271.9" width="28.4" height="28.4" class="p-foot"/><rect x="271.9" y="208.9" width="28.4" height="28.4" class="p-foot"/><rect x="334.9" y="397.9" width="28.4" height="28.4" class="p-foot"/><rect x="334.9" y="334.9" width="28.4" height="28.4" class="p-foot"/><rect x="334.9" y="271.9" width="28.4" height="28.4" class="p-foot"/><rect x="334.9" y="208.9" width="28.4" height="28.4" class="p-foot"/><line x1="57.8" y1="29.4" x2="57.8" y2="478.8" class="p-axis"/><circle cx="57.8" cy="21.4" r="8" class="p-bub"/><text x="57.8" y="21.4" class="p-bubt">N1</text><line x1="164.8" y1="29.4" x2="164.8" y2="478.8" class="p-axis"/><circle cx="164.8" cy="21.4" r="8" class="p-bub"/><text x="164.8" y="21.4" class="p-bubt">N2</text><line x1="271.9" y1="29.4" x2="271.9" y2="478.8" class="p-axis"/><circle cx="271.9" cy="21.4" r="8" class="p-bub"/><text x="271.9" y="21.4" class="p-bubt">N3</text><line x1="379" y1="29.4" x2="379" y2="478.8" class="p-axis"/><circle cx="379" cy="21.4" r="8" class="p-bub"/><text x="379" y="21.4" class="p-bubt">N4</text><line x1="486.1" y1="29.4" x2="486.1" y2="478.8" class="p-axis"/><circle cx="486.1" cy="21.4" r="8" class="p-bub"/><text x="486.1" y="21.4" class="p-bubt">N5</text><line x1="593.3" y1="29.4" x2="593.3" y2="478.8" class="p-axis"/><circle cx="593.3" cy="21.4" r="8" class="p-bub"/><text x="593.3" y="21.4" class="p-bubt">N6</text><line x1="29.4" y1="456.8" x2="615.3" y2="456.8" class="p-axis"/><circle cx="21.4" cy="456.8" r="8" class="p-bub"/><text x="21.4" y="456.8" class="p-bubt">NA</text><line x1="29.4" y1="357" x2="615.3" y2="357" class="p-axis"/><circle cx="21.4" cy="357" r="8" class="p-bub"/><text x="21.4" y="357" class="p-bubt">NB</text><line x1="29.4" y1="257.3" x2="615.3" y2="257.3" class="p-axis"/><circle cx="21.4" cy="257.3" r="8" class="p-bub"/><text x="21.4" y="257.3" class="p-bubt">NC</text><line x1="29.4" y1="157.5" x2="615.3" y2="157.5" class="p-axis"/><circle cx="21.4" cy="157.5" r="8" class="p-bub"/><text x="21.4" y="157.5" class="p-bubt">ND</text><line x1="29.4" y1="57.8" x2="615.3" y2="57.8" class="p-axis"/><circle cx="21.4" cy="57.8" r="8" class="p-bub"/><text x="21.4" y="57.8" class="p-bubt">NE</text><line x1="57.8" y1="431.8" x2="164.8" y2="431.8" class="p-beam"/><line x1="57.8" y1="406.9" x2="164.8" y2="406.9" class="p-beam"/><line x1="57.8" y1="381.9" x2="164.8" y2="381.9" class="p-beam"/><line x1="57.8" y1="332.1" x2="164.8" y2="332.1" class="p-beam"/><line x1="57.8" y1="307.1" x2="164.8" y2="307.1" class="p-beam"/><line x1="57.8" y1="282.2" x2="164.8" y2="282.2" class="p-beam"/><line x1="57.8" y1="232.3" x2="164.8" y2="232.3" class="p-beam"/><line x1="57.8" y1="207.4" x2="164.8" y2="207.4" class="p-beam"/><line x1="57.8" y1="182.4" x2="164.8" y2="182.4" class="p-beam"/><line x1="57.8" y1="132.6" x2="164.8" y2="132.6" class="p-beam"/><line x1="57.8" y1="107.6" x2="164.8" y2="107.6" class="p-beam"/><line x1="57.8" y1="82.7" x2="164.8" y2="82.7" class="p-beam"/><line x1="164.8" y1="431.8" x2="271.9" y2="431.8" class="p-beam"/><line x1="164.8" y1="406.9" x2="271.9" y2="406.9" class="p-beam"/><line x1="164.8" y1="381.9" x2="271.9" y2="381.9" class="p-beam"/><line x1="164.8" y1="332.1" x2="271.9" y2="332.1" class="p-beam"/><line x1="164.8" y1="307.1" x2="271.9" y2="307.1" class="p-beam"/><line x1="164.8" y1="282.2" x2="271.9" y2="282.2" class="p-beam"/><line x1="164.8" y1="232.3" x2="271.9" y2="232.3" class="p-beam"/><line x1="164.8" y1="207.4" x2="271.9" y2="207.4" class="p-beam"/><line x1="164.8" y1="182.4" x2="271.9" y2="182.4" class="p-beam"/><line x1="164.8" y1="132.6" x2="271.9" y2="132.6" class="p-beam"/><line x1="164.8" y1="107.6" x2="271.9" y2="107.6" class="p-beam"/><line x1="164.8" y1="82.7" x2="271.9" y2="82.7" class="p-beam"/><line x1="271.9" y1="431.8" x2="379" y2="431.8" class="p-beam"/><line x1="271.9" y1="406.9" x2="379" y2="406.9" class="p-beam"/><line x1="271.9" y1="381.9" x2="379" y2="381.9" class="p-beam"/><line x1="271.9" y1="332.1" x2="379" y2="332.1" class="p-beam"/><line x1="271.9" y1="307.1" x2="379" y2="307.1" class="p-beam"/><line x1="271.9" y1="282.2" x2="379" y2="282.2" class="p-beam"/><line x1="271.9" y1="232.3" x2="379" y2="232.3" class="p-beam"/><line x1="271.9" y1="207.4" x2="379" y2="207.4" class="p-beam"/><line x1="271.9" y1="182.4" x2="379" y2="182.4" class="p-beam"/><line x1="271.9" y1="132.6" x2="379" y2="132.6" class="p-beam"/><line x1="271.9" y1="107.6" x2="379" y2="107.6" class="p-beam"/><line x1="271.9" y1="82.7" x2="379" y2="82.7" class="p-beam"/><line x1="379" y1="431.8" x2="486.1" y2="431.8" class="p-beam"/><line x1="379" y1="406.9" x2="486.1" y2="406.9" class="p-beam"/><line x1="379" y1="381.9" x2="486.1" y2="381.9" class="p-beam"/><line x1="379" y1="332.1" x2="486.1" y2="332.1" class="p-beam"/><line x1="379" y1="307.1" x2="486.1" y2="307.1" class="p-beam"/><line x1="379" y1="282.2" x2="486.1" y2="282.2" class="p-beam"/><line x1="379" y1="232.3" x2="486.1" y2="232.3" class="p-beam"/><line x1="379" y1="207.4" x2="486.1" y2="207.4" class="p-beam"/><line x1="379" y1="182.4" x2="486.1" y2="182.4" class="p-beam"/><line x1="379" y1="132.6" x2="486.1" y2="132.6" class="p-beam"/><line x1="379" y1="107.6" x2="486.1" y2="107.6" class="p-beam"/><line x1="379" y1="82.7" x2="486.1" y2="82.7" class="p-beam"/><line x1="486.1" y1="431.8" x2="593.3" y2="431.8" class="p-beam"/><line x1="486.1" y1="406.9" x2="593.3" y2="406.9" class="p-beam"/><line x1="486.1" y1="381.9" x2="593.3" y2="381.9" class="p-beam"/><line x1="486.1" y1="332.1" x2="593.3" y2="332.1" class="p-beam"/><line x1="486.1" y1="307.1" x2="593.3" y2="307.1" class="p-beam"/><line x1="486.1" y1="282.2" x2="593.3" y2="282.2" class="p-beam"/><line x1="486.1" y1="232.3" x2="593.3" y2="232.3" class="p-beam"/><line x1="486.1" y1="207.4" x2="593.3" y2="207.4" class="p-beam"/><line x1="486.1" y1="182.4" x2="593.3" y2="182.4" class="p-beam"/><line x1="486.1" y1="132.6" x2="593.3" y2="132.6" class="p-beam"/><line x1="486.1" y1="107.6" x2="593.3" y2="107.6" class="p-beam"/><line x1="486.1" y1="82.7" x2="593.3" y2="82.7" class="p-beam"/><line x1="57.8" y1="456.8" x2="164.8" y2="456.8" class="p-girder"/><line x1="164.8" y1="456.8" x2="271.9" y2="456.8" class="p-girder"/><line x1="271.9" y1="456.8" x2="379" y2="456.8" class="p-girder"/><line x1="379" y1="456.8" x2="486.1" y2="456.8" class="p-girder"/><line x1="486.1" y1="456.8" x2="593.3" y2="456.8" class="p-girder"/><line x1="57.8" y1="357" x2="164.8" y2="357" class="p-girder"/><line x1="164.8" y1="357" x2="271.9" y2="357" class="p-girder"/><line x1="271.9" y1="357" x2="379" y2="357" class="p-girder"/><line x1="379" y1="357" x2="486.1" y2="357" class="p-girder"/><line x1="486.1" y1="357" x2="593.3" y2="357" class="p-girder"/><line x1="57.8" y1="257.3" x2="164.8" y2="257.3" class="p-girder"/><line x1="164.8" y1="257.3" x2="271.9" y2="257.3" class="p-girder"/><line x1="271.9" y1="257.3" x2="379" y2="257.3" class="p-girder"/><line x1="379" y1="257.3" x2="486.1" y2="257.3" class="p-girder"/><line x1="486.1" y1="257.3" x2="593.3" y2="257.3" class="p-girder"/><line x1="57.8" y1="157.5" x2="164.8" y2="157.5" class="p-girder"/><line x1="164.8" y1="157.5" x2="271.9" y2="157.5" class="p-girder"/><line x1="271.9" y1="157.5" x2="379" y2="157.5" class="p-girder"/><line x1="379" y1="157.5" x2="486.1" y2="157.5" class="p-girder"/><line x1="486.1" y1="157.5" x2="593.3" y2="157.5" class="p-girder"/><line x1="57.8" y1="57.8" x2="164.8" y2="57.8" class="p-girder"/><line x1="164.8" y1="57.8" x2="271.9" y2="57.8" class="p-girder"/><line x1="271.9" y1="57.8" x2="379" y2="57.8" class="p-girder"/><line x1="379" y1="57.8" x2="486.1" y2="57.8" class="p-girder"/><line x1="486.1" y1="57.8" x2="593.3" y2="57.8" class="p-girder"/><line x1="57.8" y1="456.8" x2="57.8" y2="357" class="p-girder"/><line x1="57.8" y1="357" x2="57.8" y2="257.3" class="p-girder"/><line x1="57.8" y1="257.3" x2="57.8" y2="157.5" class="p-girder"/><line x1="57.8" y1="157.5" x2="57.8" y2="57.8" class="p-girder"/><line x1="164.8" y1="456.8" x2="164.8" y2="357" class="p-girder"/><line x1="164.8" y1="357" x2="164.8" y2="257.3" class="p-girder"/><line x1="164.8" y1="257.3" x2="164.8" y2="157.5" class="p-girder"/><line x1="164.8" y1="157.5" x2="164.8" y2="57.8" class="p-girder"/><line x1="271.9" y1="456.8" x2="271.9" y2="357" class="p-girder"/><line x1="271.9" y1="357" x2="271.9" y2="257.3" class="p-girder"/><line x1="271.9" y1="257.3" x2="271.9" y2="157.5" class="p-girder"/><line x1="271.9" y1="157.5" x2="271.9" y2="57.8" class="p-girder"/><line x1="379" y1="456.8" x2="379" y2="357" class="p-girder"/><line x1="379" y1="357" x2="379" y2="257.3" class="p-girder"/><line x1="379" y1="257.3" x2="379" y2="157.5" class="p-girder"/><line x1="379" y1="157.5" x2="379" y2="57.8" class="p-girder"/><line x1="486.1" y1="456.8" x2="486.1" y2="357" class="p-girder"/><line x1="486.1" y1="357" x2="486.1" y2="257.3" class="p-girder"/><line x1="486.1" y1="257.3" x2="486.1" y2="157.5" class="p-girder"/><line x1="486.1" y1="157.5" x2="486.1" y2="57.8" class="p-girder"/><line x1="593.3" y1="456.8" x2="593.3" y2="357" class="p-girder"/><line x1="593.3" y1="357" x2="593.3" y2="257.3" class="p-girder"/><line x1="593.3" y1="257.3" x2="593.3" y2="157.5" class="p-girder"/><line x1="593.3" y1="157.5" x2="593.3" y2="57.8" class="p-girder"/><rect x="47.3" y="446.3" width="21.0" height="21.0" class="p-cap"/><rect x="54.6" y="453.7" width="6.3" height="6.3" class="p-col"/><rect x="47.3" y="346.5" width="21.0" height="21.0" class="p-cap"/><rect x="54.6" y="353.9" width="6.3" height="6.3" class="p-col"/><rect x="47.3" y="246.8" width="21.0" height="21.0" class="p-cap"/><rect x="54.6" y="254.2" width="6.3" height="6.3" class="p-col"/><rect x="47.3" y="147" width="21.0" height="21.0" class="p-cap"/><rect x="54.6" y="154.3" width="6.3" height="6.3" class="p-col"/><rect x="47.3" y="47.3" width="21.0" height="21.0" class="p-cap"/><rect x="54.6" y="54.6" width="6.3" height="6.3" class="p-col"/><rect x="154.3" y="446.3" width="21.0" height="21.0" class="p-cap"/><rect x="161.7" y="453.7" width="6.3" height="6.3" class="p-col"/><rect x="154.3" y="346.5" width="21.0" height="21.0" class="p-cap hit"/><rect x="161.7" y="353.9" width="6.3" height="6.3" class="p-col"/><rect x="154.3" y="246.8" width="21.0" height="21.0" class="p-cap"/><rect x="161.7" y="254.2" width="6.3" height="6.3" class="p-col"/><rect x="154.3" y="147" width="21.0" height="21.0" class="p-cap"/><rect x="161.7" y="154.3" width="6.3" height="6.3" class="p-col"/><rect x="154.3" y="47.3" width="21.0" height="21.0" class="p-cap"/><rect x="161.7" y="54.6" width="6.3" height="6.3" class="p-col"/><rect x="261.4" y="446.3" width="21.0" height="21.0" class="p-cap"/><rect x="268.8" y="453.7" width="6.3" height="6.3" class="p-col"/><rect x="261.4" y="346.5" width="21.0" height="21.0" class="p-cap hit"/><rect x="268.8" y="353.9" width="6.3" height="6.3" class="p-col"/><rect x="261.4" y="246.8" width="21.0" height="21.0" class="p-cap"/><rect x="268.8" y="254.2" width="6.3" height="6.3" class="p-col"/><rect x="261.4" y="147" width="21.0" height="21.0" class="p-cap"/><rect x="268.8" y="154.3" width="6.3" height="6.3" class="p-col"/><rect x="261.4" y="47.3" width="21.0" height="21.0" class="p-cap"/><rect x="268.8" y="54.6" width="6.3" height="6.3" class="p-col"/><rect x="368.5" y="446.3" width="21.0" height="21.0" class="p-cap"/><rect x="375.9" y="453.7" width="6.3" height="6.3" class="p-col"/><rect x="368.5" y="346.5" width="21.0" height="21.0" class="p-cap"/><rect x="375.9" y="353.9" width="6.3" height="6.3" class="p-col"/><rect x="368.5" y="246.8" width="21.0" height="21.0" class="p-cap"/><rect x="375.9" y="254.2" width="6.3" height="6.3" class="p-col"/><rect x="368.5" y="147" width="21.0" height="21.0" class="p-cap"/><rect x="375.9" y="154.3" width="6.3" height="6.3" class="p-col"/><rect x="368.5" y="47.3" width="21.0" height="21.0" class="p-cap"/><rect x="375.9" y="54.6" width="6.3" height="6.3" class="p-col"/><rect x="475.6" y="446.3" width="21.0" height="21.0" class="p-cap"/><rect x="483.0" y="453.7" width="6.3" height="6.3" class="p-col"/><rect x="475.6" y="346.5" width="21.0" height="21.0" class="p-cap"/><rect x="483.0" y="353.9" width="6.3" height="6.3" class="p-col"/><rect x="475.6" y="246.8" width="21.0" height="21.0" class="p-cap"/><rect x="483.0" y="254.2" width="6.3" height="6.3" class="p-col"/><rect x="475.6" y="147" width="21.0" height="21.0" class="p-cap"/><rect x="483.0" y="154.3" width="6.3" height="6.3" class="p-col"/><rect x="475.6" y="47.3" width="21.0" height="21.0" class="p-cap"/><rect x="483.0" y="54.6" width="6.3" height="6.3" class="p-col"/><rect x="582.8" y="446.3" width="21.0" height="21.0" class="p-cap"/><rect x="590.1" y="453.7" width="6.3" height="6.3" class="p-col"/><rect x="582.8" y="346.5" width="21.0" height="21.0" class="p-cap"/><rect x="590.1" y="353.9" width="6.3" height="6.3" class="p-col"/><rect x="582.8" y="246.8" width="21.0" height="21.0" class="p-cap"/><rect x="590.1" y="254.2" width="6.3" height="6.3" class="p-col"/><rect x="582.8" y="147" width="21.0" height="21.0" class="p-cap"/><rect x="590.1" y="154.3" width="6.3" height="6.3" class="p-col"/><rect x="582.8" y="47.3" width="21.0" height="21.0" class="p-cap"/><rect x="590.1" y="54.6" width="6.3" height="6.3" class="p-col"/><g class="p-mark"><rect x="179.3" y="336.5" width="15" height="14" rx="2"/><text x="186.8" y="344">1</text></g><g class="p-mark"><rect x="286.4" y="336.5" width="15" height="14" rx="2"/><text x="293.9" y="344">2</text></g><line x1="57.8" y1="489.3" x2="593.3" y2="489.3" class="p-dim"/><line x1="54.8" y1="492.3" x2="60.8" y2="486.3" class="p-tick"/><line x1="161.8" y1="492.3" x2="167.8" y2="486.3" class="p-tick"/><line x1="268.9" y1="492.3" x2="274.9" y2="486.3" class="p-tick"/><line x1="376" y1="492.3" x2="382" y2="486.3" class="p-tick"/><line x1="483.1" y1="492.3" x2="489.1" y2="486.3" class="p-tick"/><line x1="590.3" y1="492.3" x2="596.3" y2="486.3" class="p-tick"/><text x="111.3" y="483.3" class="p-dimt">10.2</text><text x="218.3" y="483.3" class="p-dimt">10.2</text><text x="325.4" y="483.3" class="p-dimt">10.2</text><text x="432.6" y="483.3" class="p-dimt">10.2</text><text x="539.7" y="483.3" class="p-dimt">10.2</text><line x1="623.7" y1="456.8" x2="623.7" y2="57.8" class="p-dim"/><line x1="620.7" y1="459.8" x2="626.7" y2="453.8" class="p-tick"/><line x1="620.7" y1="360" x2="626.7" y2="354" class="p-tick"/><line x1="620.7" y1="260.3" x2="626.7" y2="254.3" class="p-tick"/><line x1="620.7" y1="160.5" x2="626.7" y2="154.5" class="p-tick"/><line x1="620.7" y1="60.8" x2="626.7" y2="54.8" class="p-tick"/><text x="629.7" y="406.9" class="p-dimt v">9.5</text><text x="629.7" y="307.1" class="p-dimt v">9.5</text><text x="629.7" y="207.4" class="p-dimt v">9.5</text><text x="629.7" y="107.7" class="p-dimt v">9.5</text></svg>
+          <div class="legend-inline">
+            <span><i style="background:#eceeec;border:1px solid var(--ov-existing)"></i>기존 기초 2.7 m</span>
+            <span><i style="border:1px solid var(--ink)"></i>파일캡 2.0 m</span>
+            <span><i style="background:rgba(200,85,61,.28);border:1px solid var(--ng)"></i>겹침</span>
+            <span><i style="height:2px;background:var(--ok)"></i>거더</span>
+            <span><i style="height:1px;background:#a9b2ae"></i>작은보</span>
+          </div>
+        </div>
+        <div>
+          <h4>기존 기초에 가장 가까운 기둥 4개</h4>
+          <p class="hint">회색은 필요한 거리, 막대는 실제로 떨어진 거리. 점선에 못 미치면 겹침이다.</p>
+          <div class="bars cl-bars">
+            <span class="limit-lab" style="left:calc(104px + (100% - 204px) * 0.7969)">필요 2.55</span><div class="bar-row"><span class="lab">N2-NB</span><div class="bar-track"><span class="bar base" style="width:79.69%;opacity:.55"></span><span class="bar act" style="width:23.44%;top:5px;bottom:5px">0.75</span><span class="limit" style="left:79.69%"></span></div><span class="res ng-t">✕ 1.80 모자람</span></div><div class="bar-row"><span class="lab">N3-NB</span><div class="bar-track"><span class="bar base" style="width:79.69%;opacity:.55"></span><span class="bar act" style="width:42.19%;top:5px;bottom:5px">1.35</span><span class="limit" style="left:79.69%"></span></div><span class="res ng-t">✕ 1.20 모자람</span></div><div class="bar-row"><span class="lab">N2-NC</span><div class="bar-track"><span class="bar base" style="width:79.69%;opacity:.55"></span><span class="bar alt" style="width:85.94%;top:5px;bottom:5px">2.75</span><span class="limit" style="left:79.69%"></span></div><span class="res ok-t">✓ 0.20 여유</span></div><div class="bar-row"><span class="lab">N3-NC</span><div class="bar-track"><span class="bar base" style="width:79.69%;opacity:.55"></span><span class="bar alt" style="width:85.94%;top:5px;bottom:5px">2.75</span><span class="limit" style="left:79.69%"></span></div><span class="res ok-t">✓ 0.20 여유</span></div>
+          </div>
+          <div class="callout"><b>판단이 필요한 것.</b> 겹침을 풀려면 NB 축선을 1.80 m 이상 옮기거나(짧은 변 경간이 늘어남), 그 두 곳만 파일캡 형식을 바꿔야 한다. 이 도구는 자동으로 옮기지 않고 보고서 03 미결에 올린다.</div>
+          <div class="legend-inline"><span class="tagbox" style="border:1px solid var(--ink);padding:3px 8px;font-size:11.5px">구조사무소 확인 필요</span><span>파일 배치 · 캡 크기 · 기존 기초 위치</span></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 03 OPEN -->
+    <section class="rsec">
+      <div class="rsec-head">
+        <div>
+          <div class="eyebrow">03 / Open questions</div>
+          <h2>답을 기다리는 질문은 하나이고,<br>고정을 막는 시험이 하나 남았다.</h2>
+          <p class="lede">초안은 두 가지가 풀려야 프로젝트 jig로 고정할 수 있다. 나머지는 가정으로 기록되어 결과와 함께 인쇄된다.</p>
+        </div>
+        <div class="unit">질문 · 지금 쓰는 값 · 누가 답하나 · 막는 것 · 근거</div>
+      </div>
+      <table class="ledger">
+        <thead><tr><th>질문</th><th>지금 쓰는 값</th><th>누가 답하나</th><th>막는 것</th><th>근거</th></tr></thead>
+        <tbody>
+          <tr><td class="k">기둥 간격 상한</td><td>12 m<span class="st-chip ask">물어볼 것</span></td><td class="who">사용자</td><td class="blk">프로젝트 jig로 고정</td><td class="src">구조 협의 회신(서면) 12 m · 협의 중 13 m 제안(미확정)</td></tr>
+          <tr><td class="k">직교 칸 ±1 mm 이동에도 거더 이름 유지</td><td>시험 실패 · 고치는 중 2 / 3<span class="st-chip ng">시험</span></td><td class="who">AI</td><td class="blk">프로젝트 jig로 고정</td><td class="src">시험 자료 ‘직교 칸 ±1 mm 이동’</td></tr>
+          <tr><td class="k">NB 축선 파일캡 2곳</td><td>겹침 1.80 · 1.20 m 모자람</td><td class="who">구조사무소</td><td class="blk">— 판정만</td><td class="src">기존 기초 블록 20 · 모델</td></tr>
+          <tr><td class="k">작은보 방향</td><td>칸의 긴 변과 평행<span class="st-chip as">가정</span></td><td class="who">사용자</td><td class="blk">—</td><td class="src">데크 골 방향 자료 없음</td></tr>
+          <tr><td class="k">부재 검정 · 처짐</td><td>이 도구에서 하지 않음</td><td class="who">—</td><td class="blk">—</td><td class="src">구조 해석 jig로 넘김 · 탐색용 예비값</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <!-- APPENDIX -->
+    <section class="rsec appx">
+      <div class="rsec-head">
+        <div>
+          <div class="eyebrow">부록 / Parameters</div>
+          <h2>매개변수 4개 중 근거가 없는 것은 기둥 간격 상한 하나다.</h2>
+          <p class="lede">회색 글자는 확정되지 않은 근거다. 내부 기본값은 화면의 ‘자세히’에서만 바꾼다.</p>
+        </div>
+        <div class="unit">항목 · 값 · 근거</div>
+      </div>
+      <table class="kv">
+        <tbody>
+          <tr><td class="k">기둥 간격 상한</td><td>12.0 m <span class="st-chip ask">물어볼 것</span></td><td class="src">구조 협의 회신(서면) · 답 전까지 가정</td></tr>
+          <tr><td class="k">작은보 간격</td><td>2.5 m 이하, 칸의 긴 변과 평행</td><td class="src">사용자 요구 2~3 m · 방향은 가정</td></tr>
+          <tr><td class="k">파일캡</td><td>2.0 × 2.0 m</td><td class="src">구조 모델 블록 · 구조사무소 확인 전</td></tr>
+          <tr><td class="k">비켜 두기 한도</td><td>0.6 m</td><td class="src">가정</td></tr>
+          <tr class="grp"><td colspan="3">내부 기본값 · ‘자세히’에서만</td></tr>
+          <tr><td class="k">축선 들임</td><td>슬래브 끝에서 0.5 m</td><td class="src">가정</td></tr>
+          <tr><td class="k">파일캡 추가 여유</td><td>0.2 m (필요 거리 2.55 m)</td><td class="src">가정 · 기존 기초 위치 불확실</td></tr>
+        </tbody>
+      </table>
+      <div class="rp-foot"><span>VIDE · 격자 골조 배치 초안 v0.2 · 시험 자료로 그린 미리보기</span><span>인쇄 판형 A3 가로 · 절마다 쪽 나눔 · 2026-09-29 14:22</span></div>
+    </section>
+  </div>
+</article>
+</body>
+</html>

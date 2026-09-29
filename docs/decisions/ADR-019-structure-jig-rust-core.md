@@ -2,10 +2,10 @@
 id: ADR-019
 title: 구조 분석 jig의 첫 출시 포함과 Rust 해석 코어
 status: approved
-version: 0.1
+version: 0.2
 updated: 2026-09-29
 owner: user
-related: [OQ-07, FR-21, FR-23, AC-40, RESEARCH-08, RESEARCH-09, SPEC-06, ARCH-02, PLAN-17]
+related: [OQ-07, FR-21, FR-23, AC-40, RESEARCH-08, RESEARCH-09, RESEARCH-10, SPEC-06, ARCH-02, PLAN-17, PLAN-23, ADR-020]
 ---
 
 # 구조 분석 jig의 첫 출시 포함과 Rust 해석 코어
@@ -28,6 +28,11 @@ related: [OQ-07, FR-21, FR-23, AC-40, RESEARCH-08, RESEARCH-09, SPEC-06, ARCH-02
 - 해석 모델 계약은 언어와 무관한 JSON으로 ARCH-02가 소유한다. 코어를 바꿔도 계약과 검증 시험 자료는 유지된다.
 - 개발 환경에 Rust 도구(rustup·cargo)와 MSVC 빌드 도구가 필요하다. 설치본에는 빌드된 코어 산출물만 들어가며 Python은 넣지 않는다. PyNite 등 Python 기준 해석기는 개발용 교차 검증에만 쓴다.
 - 결과는 탐색용 예비값이며 구조계산서·구조기술사의 최종 검토를 대체하지 않는다.
+
+## 후속 결정 (2026-09-29)
+
+- **결정 3의 좁힘 — 확정 전 미리보기 해석:** 설정값 슬라이더를 움직이는 동안에는 확정 전 모델도 해석해 보여 줄 수 있다. 이 결과는 '미확정 미리보기'로 표시하고 저장하지 않으며, 보고서·일람표·AI 설명에서 확정 결과로 쓰지 않는다. 점검 오류가 있는 모델은 미리보기하지 않고, 부재를 Rhino에 만들기 전에는 같은 입력의 확정 해석이 있어야 한다(`analysis-confirmed`). 동작 정본은 [SPEC-06](../specs/SPEC-06-structure-analysis.md) .3·.13이다. 근거는 사용자 요청 "grasshopper에서 슬라이더로 보여주는 것들… 직관적"과 RESEARCH-10 결정 A6.
+- **결정 2 유지 — 설계 부재 처짐:** 지지점 사이의 실제 부재(설계 부재) 기준 처짐은 1차에서 TypeScript로 '참고 처짐'만 계산해 따로 보이고, 부재 판정에는 합치지 않는다. 판정에 합치는 것은 Rust 코어를 확장할 때(PLAN-23 T-067)다. RESEARCH-10 결정 A8.
 
 ## 근거
 

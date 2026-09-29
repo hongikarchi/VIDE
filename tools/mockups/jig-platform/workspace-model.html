@@ -1,0 +1,796 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>VIDE 모델 작업공간</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* Mockup: VIDE default "모델" workspace with workspace tabs (RESEARCH-10 §7.2), right AI column with
+   conversation chips (§7.7), jig card (§8.8) and question cards (§8.6). Tokens: Design §02 + RESEARCH-10 §6.1. */
+:root {
+  --ink: #292c2d;
+  --muted: #626b6e;
+  --line: #dde1de;
+  --soft: #f6f7f4;
+  --ground: #edf0ec;
+  --coral: #d97660;
+  --coral-tint: #f6e4df;
+  --paper: #ffffff;
+  --rail: #25292a;
+  --bar-base: #dfe2df;
+  --bar-alt: #a9c4ad;
+  --bar-strong: #4f7a60;
+  --bar-actual: #d97660;
+  --ok: #6f9a7a;
+  --warn: #c9a24a;
+  --ng: #c8553d;
+  --na: #b8bdbb;
+  --live: #4f9a6a;
+  --connected: #6b8fd6;
+  --s1: 4px; --s2: 8px; --s3: 12px; --s4: 16px; --s6: 24px; --s8: 32px; --s12: 48px;
+  --radius: 4px;
+  --font: 'Pretendard', 'Noto Sans KR', 'Malgun Gothic', Arial, sans-serif;
+  color-scheme: light;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  font: 12px/1.5 var(--font);
+  color: var(--ink);
+  background: var(--ground);
+  -webkit-font-smoothing: antialiased;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+button { font: inherit; color: inherit; cursor: pointer; }
+.num { font-variant-numeric: tabular-nums; }
+svg.icon { width: 18px; height: 18px; display: block; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+
+/* ───────────── App frame (exactly one screen) ───────────── */
+.app { height: 100vh; min-height: 820px; display: flex; flex-direction: column; }
+.app-shell { flex: 1; min-height: 0; display: flex; }
+
+.rail {
+  width: 48px; flex-shrink: 0; background: var(--rail); color: #c9cecc;
+  display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 10px 0 12px;
+}
+.rail .logo {
+  width: 30px; height: 30px; border-radius: var(--radius); background: #f1f3f0; color: var(--rail);
+  display: grid; place-items: center; font-weight: 700; font-size: 13px; letter-spacing: -0.02em; margin-bottom: 8px;
+}
+.rail button { width: 34px; height: 34px; border: 0; border-radius: 6px; background: transparent; display: grid; place-items: center; padding: 0; color: inherit; }
+.rail button[aria-pressed='true'] { background: #434948; color: #fff; }
+.rail .spacer { flex: 1; }
+
+/* Left: project / linked files / work history */
+.left {
+  width: 266px; flex-shrink: 0; background: var(--paper); border-right: 1px solid var(--line);
+  display: flex; flex-direction: column; min-height: 0;
+}
+.project-heading {
+  height: 46px; flex-shrink: 0; display: flex; align-items: center; gap: var(--s2);
+  padding: 0 var(--s3); border-bottom: 1px solid var(--line);
+}
+.project-heading b { font-size: 13px; font-weight: 600; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.project-heading .caret { color: var(--muted); font-size: 10px; }
+.left-body { flex: 1; min-height: 0; overflow: hidden; padding: 0 var(--s3) var(--s3); }
+.caption-row { display: flex; align-items: center; justify-content: space-between; margin: var(--s4) 0 var(--s2); }
+.caption { font-size: 10px; letter-spacing: 0.08em; color: var(--muted); font-weight: 600; }
+.caption-row button { border: 1px solid var(--line); background: var(--paper); border-radius: var(--radius); font-size: 10.5px; padding: 3px 7px; color: var(--muted); }
+
+.link-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.link-row { display: grid; grid-template-columns: 22px 1fr 22px; align-items: center; gap: 4px; border-radius: 6px; padding: 5px 4px 5px 2px; }
+.link-row[aria-current='true'] { background: #eef2ee; box-shadow: inset 2px 0 0 var(--coral); }
+.link-eye { color: #4f5c55; display: grid; place-items: center; }
+.link-eye svg { width: 15px; height: 15px; }
+.link-name { display: flex; align-items: center; gap: 5px; font-size: 11.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.host { flex-shrink: 0; font-size: 9px; font-weight: 700; padding: 0 4px; border-radius: 3px; background: var(--soft); color: var(--muted); border: 1px solid var(--line); line-height: 14px; }
+.host.zw { background: #fbeee9; color: #9a5a45; border-color: #f0d6cc; }
+.host.copy { background: #eceeed; }
+.link-meta { display: flex; align-items: center; gap: 5px; font-size: 10.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dot { width: 7px; height: 7px; border-radius: 50%; background: #b7bfba; flex-shrink: 0; display: inline-block; }
+.dot.live { background: var(--live); box-shadow: 0 0 0 3px #4f9a6a26; }
+.dot.connected { background: var(--connected); }
+.dot.file { border-radius: 1px; background: #9aa19d; }
+.link-sync { color: #6c7571; font-size: 12px; text-align: center; }
+
+.tree { margin: var(--s2) 0 0; padding: 0; list-style: none; font-size: 11.5px; }
+.tree > li > .tree-head { display: flex; align-items: center; gap: 6px; padding: 5px 4px; color: var(--ink); font-weight: 600; }
+.tree .tw { color: var(--muted); font-size: 9px; width: 10px; }
+.tree ul { list-style: none; margin: 0 0 0 16px; padding: 0; border-left: 1px solid var(--line); }
+.tree ul li { display: flex; justify-content: space-between; padding: 3px 8px 3px 10px; color: #3c4143; }
+.tree ul li span:last-child { color: var(--muted); font-variant-numeric: tabular-nums; }
+.tree .collapsed { color: var(--muted); font-weight: 400; }
+
+.history { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.history li { padding: 6px 8px; border-radius: 6px; display: grid; gap: 2px; }
+.history li[aria-current='true'] { background: #eef2ee; box-shadow: inset 2px 0 0 var(--coral); }
+.history .h-title { font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.history li[aria-current='true'] .h-title { font-weight: 600; }
+.history .h-meta { font-size: 10.5px; color: var(--muted); display: flex; gap: 6px; align-items: center; }
+.state { display: inline-flex; align-items: center; gap: 4px; font-size: 10.5px; }
+.state.ask { color: #8c4a39; font-weight: 600; }
+.state.ask::before { content: '?'; display: inline-grid; place-items: center; width: 13px; height: 13px; border-radius: 50%; border: 1px solid #c98b78; font-size: 9px; font-weight: 700; }
+.state.done::before { content: '✓'; color: var(--ok); font-weight: 700; }
+
+.refs { list-style: none; margin: 0; padding: 0; font-size: 11.5px; }
+.refs li { display: flex; justify-content: space-between; gap: 8px; padding: 5px 4px; border-bottom: 1px solid #eef0ed; }
+.refs li span:last-child { color: var(--muted); font-size: 10.5px; white-space: nowrap; }
+
+/* Center: workspace tabs + viewport + inspector */
+.center { flex: 1; min-width: 0; display: flex; flex-direction: column; background: var(--paper); }
+.ws-tabs {
+  height: 32px; flex-shrink: 0; display: flex; align-items: stretch; gap: 0; padding: 0 var(--s2);
+  border-bottom: 1px solid var(--line); background: var(--paper);
+}
+.ws-tab {
+  border: 0; background: transparent; padding: 0 var(--s3); font-size: 12px; color: var(--muted);
+  display: flex; align-items: center; gap: 6px; position: relative; white-space: nowrap;
+}
+.ws-tab kbd { font: 10px var(--font); color: #9aa1a3; }
+.ws-tab[aria-selected='true'] { color: var(--ink); font-weight: 600; }
+.ws-tab[aria-selected='true']::after { content: ''; position: absolute; left: var(--s2); right: var(--s2); bottom: -1px; height: 2px; background: var(--coral); }
+.ws-sep { width: 1px; background: var(--line); margin: 8px var(--s2); }
+.ws-tab.context { padding-right: 6px; color: var(--ink); }
+.ws-tab.context .ctx-mark { font-size: 9.5px; font-weight: 700; letter-spacing: 0.04em; color: #4f5c55; border: 1px solid #c9d3cc; border-radius: 3px; padding: 0 4px; line-height: 14px; background: #f1f5f1; }
+.ws-tab.context .close { width: 18px; height: 18px; display: grid; place-items: center; border-radius: 3px; color: var(--muted); font-size: 13px; }
+.ws-tab .run-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--bar-strong); }
+.ws-right { margin-left: auto; display: flex; align-items: center; gap: var(--s2); font-size: 10.5px; color: var(--muted); padding-right: var(--s1); }
+
+.viewport { position: relative; flex: 1; min-height: 0; overflow: hidden; background: #f4f6f3; }
+.viewport > svg.scene { position: absolute; inset: 0; width: 100%; height: 100%; }
+.scene .g { stroke: #e2e7e2; stroke-width: 1; }
+.scene .slab-top { fill: #e7eae6; stroke: #b9c0bb; stroke-width: 1; }
+.scene .slab-side-r { fill: #d3d8d4; stroke: #b9c0bb; stroke-width: 1; }
+.scene .slab-side-l { fill: #dde1dd; stroke: #b9c0bb; stroke-width: 1; }
+.scene .void { fill: #f4f6f3; stroke: #9aa39e; stroke-width: 1; stroke-dasharray: 3 3; }
+.scene .axis { stroke: var(--ov-grid, #8a9396); stroke-width: 0.8; stroke-dasharray: 8 4 2 4; opacity: 0.8; }
+.scene .bubble { fill: #fff; stroke: #8a9396; stroke-width: 1; }
+.scene .bubble-t { font: 600 9px var(--font); fill: #4c5456; text-anchor: middle; }
+.scene .plate { fill: #b7bcb9; stroke: #8f9794; stroke-width: 0.6; }
+.scene .beam { stroke: #9aa29e; stroke-width: 1; }
+.scene .col { stroke: var(--ink); stroke-width: 2.6; stroke-linecap: square; }
+.scene .girder { stroke: #3a3f40; stroke-width: 2; stroke-linecap: round; }
+.scene .lvl { font: 500 10px var(--font); fill: #5d6668; }
+.scene .lvl.end { text-anchor: end; }
+
+.edge-toggle { position: absolute; top: 8px; z-index: 8; width: 24px; height: 24px; border: 0; background: transparent; color: var(--muted); display: grid; place-items: center; padding: 0; }
+.edge-toggle.l { left: 12px; } .edge-toggle.r { right: 12px; }
+.edge-toggle svg { width: 16px; height: 16px; }
+.floating {
+  position: absolute; z-index: 5; display: flex; flex-direction: column; gap: 4px; padding: 5px;
+  background: #ffffffee; border: 1px solid var(--line); border-radius: 7px; box-shadow: 0 5px 16px #1c211f0c;
+}
+.floating.l { left: 14px; top: 42px; } .floating.r { right: 14px; top: 42px; }
+.floating button { width: 32px; height: 32px; border: 0; border-radius: 5px; background: transparent; padding: 0; display: grid; place-items: center; font-size: 11.5px; font-weight: 500; }
+.floating button[aria-pressed='true'] { background: #292f2e; color: #fff; }
+.floating hr { border: 0; border-top: 1px solid var(--line); margin: 2px 4px; }
+.view-context {
+  position: absolute; z-index: 5; top: 10px; left: 50%; transform: translateX(-50%);
+  display: flex; align-items: center; gap: var(--s2); padding: 4px 10px; font-size: 11px;
+  background: #fffffff2; border: 1px solid var(--line); border-radius: 999px; white-space: nowrap;
+}
+.view-context .muted { color: var(--muted); }
+.view-context .sep { width: 1px; height: 12px; background: var(--line); }
+.gizmo { position: absolute; left: 16px; bottom: 14px; z-index: 5; width: 64px; height: 64px; }
+.gizmo text { font: 600 9px var(--font); }
+.scale-note { position: absolute; right: 16px; bottom: 14px; z-index: 5; font-size: 10.5px; color: var(--muted); background: #ffffffd9; padding: 3px 8px; border-radius: var(--radius); border: 1px solid var(--line); }
+.tool-hint { position: absolute; bottom: 14px; left: 50%; transform: translateX(-50%); z-index: 5; font-size: 11px; background: #fffffff0; border-radius: var(--radius); padding: 5px 10px; color: #4c5456; border: 1px solid var(--line); white-space: nowrap; }
+
+.inspector { height: 38px; flex-shrink: 0; border-top: 1px solid var(--line); display: flex; align-items: center; gap: 10px; padding: 0 var(--s3); background: var(--paper); }
+.inspector b { font-size: 12px; font-weight: 600; }
+.inspector .muted { color: var(--muted); font-size: 11px; margin-right: auto; }
+.inspector .chev { width: 20px; height: 20px; display: grid; place-items: center; color: var(--muted); }
+.inspector .pin-btn { font-size: 10.5px; padding: 3px 8px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--paper); color: var(--muted); }
+
+/* Right: AI column */
+.right { width: 370px; flex-shrink: 0; background: var(--paper); border-left: 1px solid var(--line); display: flex; flex-direction: column; min-height: 0; }
+.chat-head { flex-shrink: 0; border-bottom: 1px solid var(--line); padding: 0 var(--s3); }
+.chat-head .row1 { height: 45px; display: flex; align-items: center; gap: 6px; }
+.chat-head .title { font-size: 10.5px; letter-spacing: 0.09em; font-weight: 700; margin-right: 4px; white-space: nowrap; }
+.conv-chip {
+  height: 26px; display: inline-flex; align-items: center; gap: 6px; padding: 0 9px; border-radius: var(--radius);
+  border: 1px solid var(--line); background: var(--paper); font-size: 11px; color: #3c4143; white-space: nowrap;
+}
+.conv-chip[aria-selected='true'] { border-color: var(--ink); color: var(--ink); font-weight: 600; box-shadow: inset 0 -2px 0 var(--coral); }
+.conv-chip .run { width: 6px; height: 6px; border-radius: 50%; background: var(--bar-strong); }
+.conv-chip .unread { width: 7px; height: 7px; border-radius: 50%; border: 1.5px solid var(--coral); }
+.conv-chip.add { width: 26px; padding: 0; justify-content: center; color: var(--muted); font-size: 14px; }
+.chat-head .row2 { height: 28px; display: flex; align-items: center; justify-content: space-between; font-size: 10.5px; color: var(--muted); }
+.chat-head .row2 b { color: var(--ink); font-weight: 600; }
+
+.conversation { flex: 1; min-height: 0; overflow: hidden; padding: var(--s3); display: flex; flex-direction: column; gap: 10px; }
+.req { padding: 0 0 var(--s3); border-bottom: 1px solid var(--line); }
+.req p { margin: 0; font-size: 13px; font-weight: 600; border-left: 2px solid var(--coral); padding-left: 9px; line-height: 1.5; }
+.req .meta { margin-top: 5px; padding-left: 11px; font-size: 10.5px; color: var(--muted); display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.route { display: inline-flex; align-items: center; gap: 4px; color: #4f5c55; }
+.route svg { width: 12px; height: 12px; }
+.ai-text { margin: 0; font-size: 12px; line-height: 1.7; color: #2f3334; }
+.ai-text b { font-weight: 600; }
+
+.jig-card { border: 1px solid var(--line); border-radius: var(--radius); background: var(--paper); }
+.jig-card .jc-top { padding: 9px 12px 8px; }
+.eyebrow { font-size: 9.5px; letter-spacing: 0.14em; color: var(--muted); font-weight: 600; text-transform: uppercase; display: flex; justify-content: space-between; gap: 8px; }
+.eyebrow .tier { letter-spacing: 0.02em; text-transform: none; font-weight: 500; }
+.jc-title { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 3px 0 1px; }
+.jig-card h3 { margin: 0; font-size: 15px; font-weight: 600; letter-spacing: -0.01em; }
+.jig-card p { margin: 0; font-size: 11.5px; color: #4c5456; line-height: 1.6; }
+.steps { list-style: none; margin: 0; padding: 7px 12px 8px; display: flex; border-top: 1px solid var(--line); font-size: 11px; color: var(--muted); }
+.steps li { flex: 1; display: flex; align-items: baseline; gap: 4px; white-space: nowrap; }
+.steps .sn { font-size: 9.5px; font-variant-numeric: tabular-nums; color: #9aa1a3; }
+.steps .ss { font-size: 10px; }
+.steps li.active { color: var(--ink); font-weight: 600; }
+.steps li.active .ss { display: inline-grid; place-items: center; width: 13px; height: 13px; border-radius: 50%; border: 1px solid #c98b78; color: #8c4a39; font-size: 9px; font-weight: 700; align-self: center; }
+.btn { height: 28px; padding: 0 10px; border-radius: var(--radius); border: 1px solid var(--line); background: var(--paper); font-size: 11px; white-space: nowrap; display: inline-flex; align-items: center; gap: 5px; }
+.btn.primary { background: var(--ink); border-color: var(--ink); color: #fff; }
+.btn.ghost { border-color: transparent; color: var(--muted); }
+
+.q-card { border: 1px solid #d6dbd7; border-radius: var(--radius); background: var(--paper); padding: 10px 12px 10px; }
+.q-card .eyebrow { letter-spacing: 0.04em; }
+.q-card .q-text { margin: 5px 0 3px; font-size: 13.5px; font-weight: 600; line-height: 1.45; letter-spacing: -0.01em; }
+.q-card .why { margin: 0 0 8px; font-size: 11px; color: #555d60; line-height: 1.6; }
+.q-card .blocks { color: #8c4a39; letter-spacing: 0; text-transform: none; font-weight: 600; }
+.choices { display: grid; gap: 4px; }
+.choices.two { grid-template-columns: 1fr 1fr; }
+.choices:not(.two) .choice { display: flex; align-items: center; gap: 8px; padding-top: 7px; padding-bottom: 7px; }
+.choices:not(.two) .choice::before { top: 50%; margin-top: -6px; }
+.choices:not(.two) .c-d { margin-left: auto; }
+.choice { text-align: left; border: 1px solid var(--line); border-radius: var(--radius); background: var(--paper); padding: 6px 9px 6px 30px; position: relative; display: grid; gap: 1px; }
+.choice::before { content: ''; position: absolute; left: 10px; top: 9px; width: 11px; height: 11px; border-radius: 50%; border: 1.5px solid #9aa29e; }
+.choice .c-l { font-size: 12px; font-weight: 600; display: flex; align-items: center; gap: 6px; }
+.choice .c-d { font-size: 10.5px; color: var(--muted); line-height: 1.45; }
+.choice .c-src { margin-left: auto; font-size: 10px; font-weight: 400; color: var(--muted); }
+.tag { font-size: 9.5px; font-weight: 600; border: 1px solid var(--ink); border-radius: 2px; padding: 0 4px; line-height: 14px; color: var(--ink); background: var(--paper); }
+.choice.rec { border-color: #b8c2bb; background: #fbfcfa; }
+.q-foot { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
+.fact { display: inline-flex; align-items: center; gap: 5px; font-size: 10px; color: #4c5456; border: 1px solid var(--line); border-radius: 999px; padding: 1px 8px 1px 6px; background: var(--soft); white-space: nowrap; }
+.fact i { width: 6px; height: 6px; border-radius: 50%; background: var(--na); display: inline-block; }
+.q-foot .btn { margin-left: auto; height: 26px; }
+.ai-text a { text-decoration: underline; text-underline-offset: 2px; font-weight: 600; color: var(--ink); }
+.fact i.live { background: var(--live); }
+.assume { font-size: 10.5px; color: var(--muted); line-height: 1.6; border-top: 1px dashed var(--line); padding-top: 8px; }
+.assume b { color: var(--ink); font-weight: 600; }
+.assume a { color: var(--ink); text-decoration: underline; text-underline-offset: 2px; }
+
+.composer-wrap { flex-shrink: 0; padding: var(--s3); border-top: 1px solid var(--line); background: #fafbf9; }
+.composer { border: 1px solid #c8ceca; border-radius: 7px; padding: 8px; background: var(--paper); }
+.chips { display: flex; gap: 5px; flex-wrap: wrap; }
+.chip { display: inline-flex; align-items: center; gap: 5px; padding: 3px 7px; background: var(--coral-tint); border-radius: var(--radius); font-size: 10.5px; color: #6f3e31; }
+.chip.file { background: #eef2ee; color: #3e4a44; }
+.chip .x { color: #a0705f; }
+.composer .ta { min-height: 30px; padding: 8px 3px 4px; font-size: 12px; color: #9aa1a3; line-height: 1.6; }
+.compose-actions { display: flex; align-items: center; gap: 6px; }
+.compose-actions .plus { width: 26px; height: 26px; border: 0; background: transparent; font-size: 18px; color: var(--muted); padding: 0; }
+.compose-actions .speak { flex-shrink: 0; white-space: nowrap; height: 26px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--paper); font-size: 11px; display: inline-flex; align-items: center; gap: 4px; padding: 0 8px; }
+.compose-actions .speak svg { width: 13px; height: 13px; }
+.settings-inline { margin-left: auto; display: flex; gap: 10px; font-size: 10.5px; color: var(--muted); white-space: nowrap; }
+.settings-inline span::after { content: ' ▾'; font-size: 8px; }
+.settings-inline .model { color: var(--ink); }
+.send { margin-left: 4px; width: 30px; height: 30px; border: 0; border-radius: 5px; background: #292f2e; color: #fff; display: grid; place-items: center; padding: 0; }
+.send svg { width: 15px; height: 15px; }
+.composer-settings { display: flex; gap: 12px; margin-top: 8px; font-size: 10.5px; color: var(--muted); padding: 0 2px; }
+.composer-settings span::after { content: ' ▾'; font-size: 8px; }
+.composer-settings .model { margin-left: auto; color: var(--ink); }
+
+.statusbar { height: 28px; flex-shrink: 0; background: var(--rail); color: #cbd0cd; display: flex; align-items: center; gap: 3px; padding: 0 7px; font-size: 10.5px; }
+.statusbar > span { padding: 0 8px; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; }
+.statusbar .sb-sep { width: 1px; height: 12px; background: #3d4443; padding: 0; }
+.statusbar .push { margin-left: auto; }
+.usage-track { position: relative; width: 38px; height: 4px; border-radius: 2px; background: rgba(127, 136, 131, 0.35); overflow: hidden; display: inline-block; }
+.usage-track i { position: absolute; inset: 0 auto 0 0; background: #3f8f5a; }
+.statusbar b { font-weight: 600; color: #e7ebe8; }
+
+/* ───────────── Notes (S-04 report language) ───────────── */
+.notes { background: var(--paper); border-top: 1px solid var(--line); }
+.r-top { height: 66px; display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; padding: 0 58px; border-bottom: 1px solid #e6e8e6; }
+.r-brand { display: flex; align-items: center; gap: 14px; }
+.r-brand b { font-size: 20px; font-weight: 700; letter-spacing: -0.02em; }
+.r-brand span { border-left: 1px solid var(--line); padding-left: 12px; font-size: 12px; color: #3c4143; }
+.r-nav { display: flex; gap: 22px; font-size: 12px; color: #3c4143; }
+.r-nav span b { font-weight: 500; margin-right: 4px; }
+.r-actions { justify-self: end; display: flex; gap: 8px; }
+.r-actions .rbtn { height: 34px; padding: 0 12px; border: 1px solid #cfd4d1; border-radius: var(--radius); background: var(--paper); font-size: 12px; display: inline-flex; align-items: center; gap: 6px; }
+.r-wrap { max-width: 1440px; margin: 0 auto; padding: 0 72px; }
+.r-hero { padding: 54px 0 36px; display: grid; grid-template-columns: 1fr auto; gap: 24px; align-items: end; }
+.r-eyebrow { font-size: 11px; letter-spacing: 0.16em; color: #4c5456; text-transform: uppercase; }
+.r-headline { margin: 12px 0 18px; font-size: 44px; line-height: 1.22; font-weight: 600; letter-spacing: -0.03em; }
+.r-lede { margin: 0; max-width: 560px; font-size: 14px; line-height: 1.75; color: #555d60; }
+.r-sources { margin-top: 18px; display: flex; gap: 18px; font-size: 11px; color: #555d60; flex-wrap: wrap; }
+.r-sources span { display: inline-flex; align-items: center; gap: 6px; }
+.r-sources i { width: 5px; height: 5px; border-radius: 50%; background: var(--coral); display: inline-block; }
+.r-sources i.b { background: #6b8fd6; }
+.r-sources i.g { background: #9aa29e; }
+.r-toc { text-align: right; font-size: 11px; color: #4c5456; line-height: 1.9; }
+.kpis { display: grid; grid-template-columns: repeat(5, 1fr); border-top: 2px solid var(--ink); }
+.kpi { padding: 22px 20px 26px 0; border-right: 1px solid var(--line); margin-right: 0; }
+.kpi + .kpi { padding-left: 24px; }
+.kpi:last-child { border-right: 0; }
+.kpi .k-t { font-size: 11.5px; color: #4c5456; }
+.kpi .k-v { margin: 10px 0 8px; font-size: 32px; font-weight: 600; letter-spacing: -0.02em; line-height: 1; font-variant-numeric: tabular-nums; }
+.kpi .k-v small { font-size: 12px; font-weight: 400; color: var(--muted); margin-left: 3px; letter-spacing: 0; }
+.kpi .k-d { font-size: 11.5px; line-height: 1.6; color: #555d60; }
+.r-section { padding: 64px 0 8px; border-top: 1px solid var(--line); margin-top: 56px; }
+.r-section + .r-section { margin-top: 48px; }
+.r-claim { margin: 10px 0 14px; font-size: 28px; line-height: 1.35; font-weight: 600; letter-spacing: -0.02em; }
+.r-body { max-width: 600px; font-size: 13px; line-height: 1.8; color: #555d60; margin: 0 0 28px; }
+.r-body b { color: var(--ink); font-weight: 600; }
+
+.width-bar { display: flex; height: 30px; border-radius: 2px; overflow: hidden; font-size: 11px; }
+.width-bar div { display: flex; align-items: center; padding: 0 10px; white-space: nowrap; }
+.wb-rail { background: #b7bcb9; width: 3.33%; justify-content: center; padding: 0 !important; }
+.wb-left { background: var(--bar-base); width: 18.47%; }
+.wb-center { background: var(--bar-alt); width: 52.5%; }
+.wb-right { background: var(--bar-actual); width: 25.7%; color: #fff; font-weight: 600; }
+.width-scale { display: flex; justify-content: space-between; font-size: 10.5px; color: var(--muted); margin-top: 6px; }
+.ledger { width: 100%; border-collapse: collapse; margin-top: 28px; font-size: 12.5px; }
+.ledger td { padding: 10px 10px; border-bottom: 1px solid #e8ebe8; vertical-align: top; }
+.ledger td:first-child { color: var(--muted); width: 150px; }
+.ledger td:last-child { text-align: right; color: var(--muted); font-size: 11px; width: 220px; }
+
+.step-cards { display: grid; grid-template-columns: repeat(5, 1fr); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.step-cards div { padding: 22px 18px 28px 0; border-right: 1px solid var(--line); }
+.step-cards div + div { padding-left: 18px; }
+.step-cards div:last-child { border-right: 0; }
+.step-cards b { display: block; font-size: 11px; letter-spacing: 0.08em; margin-bottom: 8px; }
+.step-cards span { font-size: 12.5px; color: #3c4143; line-height: 1.6; }
+
+.bars { display: grid; grid-template-columns: 110px 1fr; gap: 10px 14px; align-items: center; max-width: 720px; position: relative; }
+.bars .lab { text-align: right; font-size: 12px; color: #3c4143; }
+.bars .track { position: relative; height: 22px; }
+.bars .fill { height: 100%; display: flex; align-items: center; justify-content: flex-end; padding-right: 8px; font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.bars .fill.base { background: var(--bar-base); color: #3c4143; }
+.bars .fill.alt { background: var(--bar-alt); color: #26402f; }
+.bars .fill.act { background: var(--bar-actual); color: #fff; }
+.bars .limit { position: absolute; top: -18px; bottom: -6px; border-left: 1px dashed #7d8588; }
+.bars .limit span { position: absolute; top: -2px; left: 6px; font-size: 11px; color: #4c5456; white-space: nowrap; }
+
+.swatches { display: grid; grid-template-columns: repeat(8, 1fr); gap: 0; border-top: 1px solid var(--line); }
+.sw { padding: 14px 12px 18px 0; }
+.sw i { display: block; height: 36px; border-radius: 2px; border: 1px solid #0000000f; margin-bottom: 8px; }
+.sw b { display: block; font-size: 11.5px; font-weight: 600; }
+.sw span { font-size: 10.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.spacing { display: flex; align-items: flex-end; gap: 28px; margin-top: 28px; }
+.spacing div { display: grid; gap: 6px; justify-items: start; font-size: 10.5px; color: var(--muted); }
+.spacing i { display: block; background: var(--bar-alt); height: 12px; }
+.r-foot { padding: 56px 0 72px; font-size: 11px; color: var(--muted); display: flex; justify-content: space-between; }
+</style>
+</head>
+<body>
+
+<div class="app" role="application" aria-label="VIDE 모델 작업공간">
+  <div class="app-shell">
+
+    <!-- Rail -->
+    <nav class="rail" aria-label="탐색 레일">
+      <div class="logo" title="VIDE">V</div>
+      <button aria-pressed="true" title="문서 (연결 파일·객체)"><svg class="icon" viewBox="0 0 24 24"><path d="M7 3h7l4 4v14H7z"/><path d="M14 3v4h4"/></svg></button>
+      <button title="작업 이력"><svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/></svg></button>
+      <button title="참고 자료"><svg class="icon" viewBox="0 0 24 24"><path d="M5 5h6a2 2 0 0 1 2 2v12a2 2 0 0 0-2-2H5z"/><path d="M19 5h-4a2 2 0 0 0-2 2v12a2 2 0 0 1 2-2h4z"/></svg></button>
+      <button title="검색"><svg class="icon" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6"/><path d="m16 16 4 4"/></svg></button>
+      <div class="spacer"></div>
+      <button title="AI 연결 설정"><svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/></svg></button>
+    </nav>
+
+    <!-- Left -->
+    <aside class="left" aria-label="프로젝트">
+      <div class="project-heading">
+        <b>상부 증축 계획</b><span class="caret">▾</span>
+      </div>
+      <div class="left-body">
+        <div class="caption-row"><span class="caption">연결 파일</span><button>파일에서 열기</button></div>
+        <ul class="link-list">
+          <li class="link-row" aria-current="true">
+            <span class="link-eye"><svg class="icon" viewBox="0 0 24 24"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg></span>
+            <div style="min-width:0"><div class="link-name"><span class="host">RH</span>구조 모델.3dm</div>
+              <div class="link-meta"><span class="dot live"></span>Live · 14:10 · 객체 55</div></div>
+            <span class="link-sync">⟳</span>
+          </li>
+          <li class="link-row">
+            <span class="link-eye"><svg class="icon" viewBox="0 0 24 24"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg></span>
+            <div style="min-width:0"><div class="link-name"><span class="host copy">RH</span>건축 모델.3dm</div>
+              <div class="link-meta"><span class="dot file"></span>파일에서 연 사본 · 객체 1,208</div></div>
+            <span class="link-sync"></span>
+          </li>
+          <li class="link-row">
+            <span class="link-eye"><svg class="icon" viewBox="0 0 24 24"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg></span>
+            <div style="min-width:0"><div class="link-name"><span class="host zw">ZW</span>기본도면.dwg</div>
+              <div class="link-meta"><span class="dot connected"></span>연결됨 · 13:52 · 객체 3,410</div></div>
+            <span class="link-sync">⟳</span>
+          </li>
+        </ul>
+
+        <ul class="tree">
+          <li>
+            <div class="tree-head"><span class="tw">▾</span>구조 모델</div>
+            <ul>
+              <li><span>기둥</span><span>12</span></li>
+              <li><span>거더</span><span>17</span></li>
+              <li><span>작은보</span><span>18</span></li>
+              <li><span>슬래브</span><span>1</span></li>
+              <li><span>축선</span><span>7</span></li>
+            </ul>
+          </li>
+          <li><div class="tree-head collapsed"><span class="tw">▸</span>건축 모델</div></li>
+          <li><div class="tree-head collapsed"><span class="tw">▸</span>기본도면</div></li>
+        </ul>
+
+        <div class="caption-row"><span class="caption">작업 이력</span></div>
+        <ul class="history">
+          <li aria-current="true">
+            <span class="h-title">구조 검토하고 싶어</span>
+            <span class="h-meta"><span class="state ask">질문 2 대기</span><span>· 14:12 · 구조 해석</span></span>
+          </li>
+          <li>
+            <span class="h-title">슬래브 개구부 위치를 표시해 줘</span>
+            <span class="h-meta"><span class="state done">완료</span><span>· 13:40 · 구조 모델</span></span>
+          </li>
+          <li>
+            <span class="h-title">축선 이름을 X·Y로 정리해 줘</span>
+            <span class="h-meta"><span class="state done">완료</span><span>· 11:05 · 기본도면</span></span>
+          </li>
+        </ul>
+
+        <div class="caption-row"><span class="caption">참고 자료</span></div>
+        <ul class="refs">
+          <li><span>구조 협의 메모</span><span>09-22 · 미확정</span></li>
+          <li><span>하중 조건표</span><span>가정 3</span></li>
+        </ul>
+      </div>
+    </aside>
+
+    <!-- Center -->
+    <section class="center" aria-label="작업 영역">
+      <div class="ws-tabs" role="tablist" aria-label="작업공간">
+        <button class="ws-tab" role="tab" aria-selected="true" title="Ctrl+1">모델</button>
+        <button class="ws-tab" role="tab" title="Ctrl+2">자료</button>
+        <button class="ws-tab" role="tab" title="Ctrl+3">JIG</button>
+        <button class="ws-tab" role="tab" title="Ctrl+4">만들기</button>
+        <button class="ws-tab" role="tab" title="Ctrl+5">보고서</button>
+        <span class="ws-sep" aria-hidden="true"></span>
+        <button class="ws-tab context" role="tab" title="Ctrl+6 · jig를 열면 생기는 문맥 탭">
+          <span class="run-dot" aria-hidden="true"></span>구조 해석<span class="ctx-mark">JIG</span><span class="close" aria-label="닫기">×</span>
+        </button>
+      </div>
+
+      <div class="viewport">
+        <svg class="scene" viewBox="0 0 756 802" preserveAspectRatio="xMidYMid slice" aria-label="3D 뷰포트: 슬래브 위 철골 골조">
+          <g transform="translate(0,-30)">
+<line class="g" x1="309" y1="204" x2="-72.1" y2="424"/>
+<line class="g" x1="361" y1="234" x2="-20.1" y2="454"/>
+<line class="g" x1="412.9" y1="264" x2="31.9" y2="484"/>
+<line class="g" x1="464.9" y1="294" x2="83.8" y2="514"/>
+<line class="g" x1="516.8" y1="324" x2="135.8" y2="544"/>
+<line class="g" x1="568.8" y1="354" x2="187.8" y2="574"/>
+<line class="g" x1="620.8" y1="384" x2="239.7" y2="604"/>
+<line class="g" x1="672.7" y1="414" x2="291.7" y2="634"/>
+<line class="g" x1="724.7" y1="444" x2="343.6" y2="664"/>
+<line class="g" x1="776.7" y1="474" x2="395.6" y2="694"/>
+<line class="g" x1="828.6" y1="504" x2="447.6" y2="724"/>
+<line class="g" x1="309" y1="204" x2="828.6" y2="504"/>
+<line class="g" x1="257" y1="234" x2="776.7" y2="534"/>
+<line class="g" x1="205.1" y1="264" x2="724.7" y2="564"/>
+<line class="g" x1="153.1" y1="294" x2="672.7" y2="594"/>
+<line class="g" x1="101.2" y1="324" x2="620.8" y2="624"/>
+<line class="g" x1="49.2" y1="354" x2="568.8" y2="654"/>
+<line class="g" x1="-2.8" y1="384" x2="516.8" y2="684"/>
+<line class="g" x1="-54.7" y1="414" x2="464.9" y2="714"/>
+<polygon class="slab-side-r" points="672.7,498 447.6,628 447.6,634 672.7,504"/>
+<polygon class="slab-side-l" points="83.8,418 447.6,628 447.6,634 83.8,424"/>
+<polygon class="slab-top" points="309,288 672.7,498 447.6,628 83.8,418"/>
+<polygon class="void" points="438.9,512.9 490.9,542.9 447.6,567.9 395.6,537.9"/>
+<line class="axis" x1="335" y1="303" x2="83.8" y2="448"/>
+<circle class="bubble" cx="73.4" cy="454" r="9"/><text class="bubble-t" x="73.4" y="457.5">X1</text>
+<line class="axis" x1="438.9" y1="363" x2="187.8" y2="508"/>
+<circle class="bubble" cx="177.4" cy="514" r="9"/><text class="bubble-t" x="177.4" y="517.5">X2</text>
+<line class="axis" x1="542.8" y1="423" x2="291.7" y2="568"/>
+<circle class="bubble" cx="281.3" cy="574" r="9"/><text class="bubble-t" x="281.3" y="577.5">X3</text>
+<line class="axis" x1="646.7" y1="483" x2="395.6" y2="628"/>
+<circle class="bubble" cx="385.2" cy="634" r="9"/><text class="bubble-t" x="385.2" y="637.5">X4</text>
+<line class="axis" x1="283" y1="303" x2="672.7" y2="528"/>
+<circle class="bubble" cx="683.1" cy="534" r="9"/><text class="bubble-t" x="683.1" y="537.5">Y1</text>
+<line class="axis" x1="196.4" y1="353" x2="586.1" y2="578"/>
+<circle class="bubble" cx="596.5" cy="584" r="9"/><text class="bubble-t" x="596.5" y="587.5">Y2</text>
+<line class="axis" x1="109.8" y1="403" x2="499.5" y2="628"/>
+<circle class="bubble" cx="509.9" cy="634" r="9"/><text class="bubble-t" x="509.9" y="637.5">Y3</text>
+<polygon class="plate" points="309,309.8 322.9,317.8 309,325.8 295.1,317.8"/>
+<polygon class="plate" points="222.4,359.8 236.3,367.8 222.4,375.8 208.5,367.8"/>
+<polygon class="plate" points="135.8,409.8 149.7,417.8 135.8,425.8 121.9,417.8"/>
+<polygon class="plate" points="412.9,369.8 426.8,377.8 412.9,385.8 399.1,377.8"/>
+<polygon class="plate" points="326.3,419.8 340.2,427.8 326.3,435.8 312.5,427.8"/>
+<polygon class="plate" points="239.7,469.8 253.6,477.8 239.7,485.8 225.9,477.8"/>
+<polygon class="plate" points="516.8,429.8 530.7,437.8 516.8,445.8 503,437.8"/>
+<polygon class="plate" points="430.2,479.8 444.1,487.8 430.2,495.8 416.4,487.8"/>
+<polygon class="plate" points="343.6,529.8 357.5,537.8 343.6,545.8 329.8,537.8"/>
+<polygon class="plate" points="620.8,489.8 634.6,497.8 620.8,505.8 606.9,497.8"/>
+<polygon class="plate" points="534.2,539.8 548,547.8 534.2,555.8 520.3,547.8"/>
+<polygon class="plate" points="447.6,589.8 461.4,597.8 447.6,605.8 433.7,597.8"/>
+<line class="beam" x1="335" y1="243" x2="248.4" y2="293"/>
+<line class="beam" x1="248.4" y1="293" x2="161.8" y2="343"/>
+<line class="beam" x1="361" y1="258" x2="274.4" y2="308"/>
+<line class="beam" x1="274.4" y1="308" x2="187.8" y2="358"/>
+<line class="beam" x1="386.9" y1="273" x2="300.3" y2="323"/>
+<line class="beam" x1="300.3" y1="323" x2="213.7" y2="373"/>
+<line class="beam" x1="438.9" y1="303" x2="352.3" y2="353"/>
+<line class="beam" x1="352.3" y1="353" x2="265.7" y2="403"/>
+<line class="beam" x1="464.9" y1="318" x2="378.3" y2="368"/>
+<line class="beam" x1="378.3" y1="368" x2="291.7" y2="418"/>
+<line class="beam" x1="490.9" y1="333" x2="404.3" y2="383"/>
+<line class="beam" x1="404.3" y1="383" x2="317.7" y2="433"/>
+<line class="beam" x1="542.8" y1="363" x2="456.2" y2="413"/>
+<line class="beam" x1="456.2" y1="413" x2="369.6" y2="463"/>
+<line class="beam" x1="568.8" y1="378" x2="482.2" y2="428"/>
+<line class="beam" x1="482.2" y1="428" x2="395.6" y2="478"/>
+<line class="beam" x1="594.8" y1="393" x2="508.2" y2="443"/>
+<line class="beam" x1="508.2" y1="443" x2="421.6" y2="493"/>
+<line class="col" x1="309" y1="318" x2="309" y2="228"/>
+<line class="col" x1="222.4" y1="368" x2="222.4" y2="278"/>
+<line class="col" x1="412.9" y1="378" x2="412.9" y2="288"/>
+<line class="col" x1="135.8" y1="418" x2="135.8" y2="328"/>
+<line class="col" x1="326.3" y1="428" x2="326.3" y2="338"/>
+<line class="col" x1="516.8" y1="438" x2="516.8" y2="348"/>
+<line class="col" x1="239.7" y1="478" x2="239.7" y2="388"/>
+<line class="col" x1="430.2" y1="488" x2="430.2" y2="398"/>
+<line class="col" x1="620.8" y1="498" x2="620.8" y2="408"/>
+<line class="col" x1="343.6" y1="538" x2="343.6" y2="448"/>
+<line class="col" x1="534.2" y1="548" x2="534.2" y2="458"/>
+<line class="col" x1="447.6" y1="598" x2="447.6" y2="508"/>
+<line class="girder" x1="309" y1="228" x2="620.8" y2="408"/>
+<line class="girder" x1="222.4" y1="278" x2="534.2" y2="458"/>
+<line class="girder" x1="135.8" y1="328" x2="447.6" y2="508"/>
+<line class="girder" x1="309" y1="228" x2="135.8" y2="328"/>
+<line class="girder" x1="412.9" y1="288" x2="239.7" y2="388"/>
+<line class="girder" x1="516.8" y1="348" x2="343.6" y2="448"/>
+<line class="girder" x1="620.8" y1="408" x2="447.6" y2="508"/>
+<text class="lvl end" x="127.8" y="332">FL +9,000</text>
+<text class="lvl end" x="77.8" y="422">FL ±0</text>
+          </g>
+        </svg>
+
+        <button class="edge-toggle l" title="왼쪽 패널 접기"><svg class="icon" viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg></button>
+        <button class="edge-toggle r" title="오른쪽 패널 접기"><svg class="icon" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></button>
+
+        <div class="view-context" aria-label="보는 파일">
+          <span class="muted">보는 파일 3</span><span class="sep"></span>
+          <span><span class="dot live" style="margin-right:5px"></span>구조 모델</span>
+          <span class="muted">건축 모델 · 기본도면</span>
+        </div>
+
+        <div class="floating l" aria-label="공간 도구">
+          <button aria-pressed="true" title="선택"><svg class="icon" viewBox="0 0 24 24"><path d="M6 4l12 7-5.5 1.5L10 18z"/></svg></button>
+          <button title="핀"><svg class="icon" viewBox="0 0 24 24"><path d="M12 21s-6-6.2-6-11a6 6 0 0 1 12 0c0 4.8-6 11-6 11z"/><circle cx="12" cy="10" r="2"/></svg></button>
+          <button title="스케치"><svg class="icon" viewBox="0 0 24 24"><path d="M4 20l4-1 11-11-3-3L5 16z"/><path d="M14 7l3 3"/></svg></button>
+        </div>
+        <div class="floating r" aria-label="카메라">
+          <button aria-pressed="true">3D</button>
+          <button>위</button>
+          <button>앞</button>
+          <button>옆</button>
+          <hr>
+          <button title="전체 보기"><svg class="icon" viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
+        </div>
+
+        <svg class="gizmo" viewBox="0 0 64 64" aria-hidden="true">
+          <line x1="32" y1="40" x2="52" y2="51.5" stroke="#c8553d" stroke-width="1.6"/>
+          <line x1="32" y1="40" x2="12" y2="51.5" stroke="#4f7a60" stroke-width="1.6"/>
+          <line x1="32" y1="40" x2="32" y2="14" stroke="#6b8fd6" stroke-width="1.6"/>
+          <text x="55" y="56" fill="#c8553d">X</text><text x="3" y="56" fill="#4f7a60">Y</text><text x="29" y="10" fill="#6b8fd6">Z</text>
+        </svg>
+        <div class="tool-hint">객체를 누르면 선택 · 끌면 회전 · 휠로 확대</div>
+        <div class="scale-note num">축선 간격 12.0 m · 10.0 m</div>
+      </div>
+
+      <div class="inspector" aria-label="객체 검사기">
+        <b>선택 없음</b>
+        <span class="muted">객체를 누르면 속성·형상·이력이 열립니다</span>
+        <span class="pin-btn">요청에 첨부</span>
+        <span class="chev" aria-hidden="true">▴</span>
+      </div>
+    </section>
+
+    <!-- Right: AI -->
+    <aside class="right" aria-label="AI 작업">
+      <div class="chat-head">
+        <div class="row1" role="tablist" aria-label="대화">
+          <span class="title">AI 작업</span>
+          <button class="conv-chip" role="tab" aria-selected="true"><span class="run" aria-label="진행 중"></span>구조 해석</button>
+          <button class="conv-chip" role="tab">기본 대화</button>
+          <button class="conv-chip" role="tab"><span class="unread" aria-label="답 도착"></span>법규 질문</button>
+          <button class="conv-chip add" title="새 대화">+</button>
+        </div>
+      </div>
+
+      <div class="conversation">
+        <div class="req">
+          <p>구조 검토하고 싶어</p>
+          <div class="meta">
+            <span>14:12 · 대상 파일 구조 모델</span>
+            <span class="route"><svg class="icon" viewBox="0 0 24 24"><path d="M5 12h12M13 7l5 5-5 5"/></svg>구조 해석으로 보냄</span>
+          </div>
+        </div>
+
+        <div class="jig-card">
+          <div class="jc-top">
+            <div class="eyebrow"><span>JIG / STRUCTURE ANALYSIS</span><span class="tier">공식 · v0.3 · 탐색용 예비값</span></div>
+            <div class="jc-title"><h3>구조 해석</h3><button class="btn primary">탭에서 보기</button></div>
+            <p>배치를 점검하고 중력 하중으로 부재를 검정합니다.</p>
+          </div>
+          <ol class="steps" aria-label="단계">
+            <li class="active"><span class="sn">01</span>입력<span class="ss" title="확인 필요">?</span></li>
+            <li><span class="sn">02</span>진단<span class="ss">○</span></li>
+            <li><span class="sn">03</span>배치<span class="ss">○</span></li>
+            <li><span class="sn">04</span>해석<span class="ss">○</span></li>
+            <li><span class="sn">05</span>보고서<span class="ss">○</span></li>
+          </ol>
+        </div>
+
+        <p class="ai-text">파일 3개에서 <b>기둥 12, 거더 17, 슬래브 1</b>을 찾았습니다. 두 가지만 묻고, 나머지는 <a class="assume-link">가정 3개</a>로 적었습니다.</p>
+
+        <div class="q-card">
+          <div class="eyebrow"><span>질문 1 / 2 · 입력</span><span class="blocks">답 전까지 진단 대기</span></div>
+          <p class="q-text">어느 파일을 기준으로 할까요?</p>
+          <p class="why">두 모델의 기둥 수가 달라(12 · 14) 경간과 높이가 바뀝니다.</p>
+          <div class="choices">
+            <button class="choice rec"><span class="c-l">구조 모델<span class="tag">권장</span></span><span class="c-d">기둥 12 · 레벨 FL 기준</span></button>
+            <button class="choice"><span class="c-l">건축 모델</span><span class="c-d">기둥 14 · 경간 0.3 m 짧게</span></button>
+            <button class="choice"><span class="c-l">겹쳐 보기</span><span class="c-d">다른 기둥 5곳을 표로</span></button>
+          </div>
+          <div class="q-foot">
+            <span class="fact"><i class="live"></i>연결 파일 · 14:10</span>
+            <button class="btn">권장값으로 진행</button>
+          </div>
+        </div>
+
+        <div class="q-card">
+          <div class="eyebrow"><span>질문 2 / 2 · 해석 조건</span><span class="blocks">답 전까지 해석 대기</span></div>
+          <p class="q-text">기둥 하단은 핀으로 볼까요?</p>
+          <p class="why">기초 상세가 아직 없습니다. 고정이면 기초가 휨을 받습니다.</p>
+          <div class="choices two">
+            <button class="choice rec"><span class="c-l">핀<span class="tag">권장</span></span><span class="c-d">기초는 축력만 · 보수적</span></button>
+            <button class="choice"><span class="c-l">고정</span><span class="c-d">하단 휨을 기초가 받음</span></button>
+          </div>
+          <div class="q-foot">
+            <span class="fact"><i></i>구조 협의 메모 · 09-22 · 미확정</span>
+            <button class="btn">권장값으로 진행</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="composer-wrap">
+        <div class="composer">
+          <div class="chips">
+            <span class="chip">구조 해석 <span class="x">×</span></span>
+            <span class="chip file">대상 파일 · 구조 모델 <span class="x">×</span></span>
+          </div>
+          <div class="ta">말로 답해도 됩니다 — 예: 기둥 하단은 핀으로</div>
+          <div class="compose-actions">
+            <button class="plus" title="첨부">+</button>
+            <button class="speak"><svg class="icon" viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>말하기</button>
+            <span class="settings-inline"><span>보통</span><span>작업 사본만</span><span class="model" title="이 대화에 고정">Claude</span></span>
+            <button class="send" title="보내기"><svg class="icon" viewBox="0 0 24 24"><path d="M12 19V5M6 11l6-6 6 6"/></svg></button>
+          </div>
+        </div>
+      </div>
+    </aside>
+  </div>
+
+  <footer class="statusbar" aria-label="시스템 상태">
+    <span><span class="dot live"></span><b>Live</b> 구조 모델 · 14:10</span>
+    <span class="sb-sep"></span>
+    <span><span class="dot connected"></span>ZWCAD 연결됨</span>
+    <span class="sb-sep"></span>
+    <span>구조 해석 · 입력 조립 · 질문 2</span>
+    <span class="push">Claude <span class="usage-track"><i style="width:42%"></i></span> 42%</span>
+    <span>Codex <span class="usage-track"><i style="width:18%"></i></span> 18%</span>
+    <span class="sb-sep"></span>
+    <span>작업 1 진행</span>
+  </footer>
+</div>
+
+<!-- Notes in the S-04 report language (below the fold; appears in the full-page capture) -->
+<section class="notes" aria-label="화면 설명">
+  <header class="r-top">
+    <div class="r-brand"><b>M1</b><span>모델 작업공간</span></div>
+    <nav class="r-nav"><span><b>01</b>탭</span><span><b>02</b>말로</span><span><b>03</b>질문</span><span><b>04</b>토큰</span></nav>
+    <div class="r-actions"><button class="rbtn">조건 조정 ↗</button><button class="rbtn">인쇄 / PDF ↗</button></div>
+  </header>
+
+  <div class="r-wrap">
+    <div class="r-hero">
+      <div>
+        <div class="r-eyebrow">VIDE / MODEL WORKSPACE</div>
+        <h1 class="r-headline">말 한마디로 구조 검토가 열리고,<br>모델 화면은 그대로 남는다.</h1>
+        <p class="r-lede">기본 탭 '모델'에서 "구조 검토하고 싶어"라고 말하면, 모델 선택 없이 구조 해석 jig가 준비되고 문맥 탭이 생긴다. AI는 결과를 가르는 두 가지만 건축 용어로 묻고, 나머지는 권장값과 가정 목록으로 진행한다.</p>
+        <div class="r-sources">
+          <span><i></i>설계안 §6 토큰·부품 · §7 화면 구성 (제안)</span>
+          <span><i class="b"></i>Design §01–§03 · 치수 §12.9</span>
+          <span><i class="g"></i>화면 1440 × 900 · 모든 수치는 예시</span>
+        </div>
+      </div>
+      <div class="r-toc">01 — 04<br>TABS / WORDS / QUESTIONS / TOKENS<br>모델 탭 · 기본 상태<br>2026-09-29</div>
+    </div>
+
+    <div class="kpis">
+      <div class="kpi"><div class="k-t">작업공간 탭</div><div class="k-v">5<small>+ 문맥 1</small></div><div class="k-d">고정 탭 다섯. jig를 열면 문맥 탭이 생기고 ×로 닫는다</div></div>
+      <div class="kpi"><div class="k-t">탭 줄 높이</div><div class="k-v">32<small>px</small></div><div class="k-d">가운데 열 위에만 둔다. AI 열 위로 넘어가지 않는다</div></div>
+      <div class="kpi"><div class="k-t">AI 열</div><div class="k-v">370<small>px</small></div><div class="k-d">어느 탭에서도 같은 자리, 같은 작성기</div></div>
+      <div class="kpi"><div class="k-t">이번 턴의 질문</div><div class="k-v">2<small>/ 3개</small></div><div class="k-d">한 턴 상한 3개 중 결과를 가르는 것만</div></div>
+      <div class="kpi"><div class="k-t">가정으로 진행</div><div class="k-v">3<small>개</small></div><div class="k-d">권장값으로 두고 가정 목록에 적는다. 나중에 말로 바꾼다</div></div>
+    </div>
+
+    <div class="r-section">
+      <div class="r-eyebrow">01 / WORKSPACE TABS</div>
+      <h2 class="r-claim">탭은 가운데 열 위에만 있고,<br>AI 열은 움직이지 않는다.</h2>
+      <p class="r-body">전체 폭 상단 바를 두지 않는다는 원칙을 지키려고 탭 줄을 <b>가운데 열 위 32 px</b>에 둔다. 탭을 바꾸면 왼쪽·가운데·아래 서랍의 구성이 바뀌지만, 오른쪽 대화와 작성 중인 글은 그대로다. 자유 도킹은 없다.</p>
+      <div class="width-bar" aria-label="1440 px에서 열 폭">
+        <div class="wb-rail">48</div>
+        <div class="wb-left">왼쪽 266</div>
+        <div class="wb-center">가운데 756 — 탭 줄 · 3D · 검사기</div>
+        <div class="wb-right">AI 370 · 고정</div>
+      </div>
+      <div class="width-scale num"><span>0</span><span>1440 px</span></div>
+      <table class="ledger">
+        <tr><td>모델 (기본)</td><td>왼쪽 연결 파일·객체·작업 이력 / 가운데 3D / 아래 검사기</td><td>현행 배치 유지</td></tr>
+        <tr><td>자료 · JIG · 보고서</td><td>왼쪽 목록과 가운데 표현만 바뀐다. 오른쪽은 늘 대화</td><td>설계안 §7.2</td></tr>
+        <tr><td>문맥 탭 '구조 해석'</td><td>jig를 열면 생긴다. 탭을 닫아도 작업본과 대화는 남는다</td><td>설계안 §7.2 · §7.7</td></tr>
+      </table>
+    </div>
+
+    <div class="r-section">
+      <div class="r-eyebrow">02 / EVERYTHING BY WORDS</div>
+      <h2 class="r-claim">"구조 검토하고 싶어"는<br>모델을 고르지 않고 구조 해석으로 간다.</h2>
+      <p class="r-body">요청 경로는 보낸 뒤에 정해지고, 요청 줄 아래에 <b>'구조 해석으로 보냄'</b> 한 줄로만 남는다. jig 카드는 무엇을 하는지 한 문장, 다섯 단계와 막힌 곳, 탭으로 가는 행동 하나를 보인다.</p>
+      <div class="step-cards">
+        <div><b>01</b><span>작성기에 말한다</span></div>
+        <div><b>02</b><span>Jev가 구조 해석 jig를 고른다</span></div>
+        <div><b>03</b><span>연결 파일에서 기둥·거더·슬래브를 찾는다</span></div>
+        <div><b>04</b><span>결과를 가르는 것만 질문 카드로 묻는다</span></div>
+        <div><b>05</b><span>답하면 진단과 해석이 이어서 돈다</span></div>
+      </div>
+    </div>
+
+    <div class="r-section">
+      <div class="r-eyebrow">03 / QUESTION CARDS</div>
+      <h2 class="r-claim">질문은 두 개뿐이고,<br>나머지는 가정으로 적는다.</h2>
+      <p class="r-body">질문 카드는 <b>건축 용어 한 문장 → 왜 묻는지 → 선택지와 결과 차이 → 권장값으로 진행</b> 순서다. 답 전까지 막히는 단계를 오른쪽 위에 적고, 근거는 역할·날짜를 먼저 쓴다.</p>
+      <div class="bars" aria-label="조건 처리">
+        <span class="lab">확인할 조건</span><div class="track"><div class="fill base" style="width:100%">5</div></div>
+        <span class="lab">가정으로 진행</span><div class="track"><div class="fill alt" style="width:60%">3</div></div>
+        <span class="lab">질문 카드</span><div class="track"><div class="fill act" style="width:40%">2</div></div>
+        <div class="limit" style="left:calc(110px + 14px + (100% - 124px) * 0.6)"><span>한 턴 상한 3</span></div>
+      </div>
+    </div>
+
+    <div class="r-section">
+      <div class="r-eyebrow">04 / TOKENS</div>
+      <h2 class="r-claim">코랄은 현재 위치에만,<br>자료 막대는 회색·세이지·코랄 세 색까지.</h2>
+      <p class="r-body">기본 행동은 잉크 바탕 흰 글자다. 판정색은 선택 경계의 코랄과 구분되는 채움색이고, 늘 숫자와 기호를 함께 둔다. 간격은 4·8·12·16·24, 모서리는 4 px.</p>
+      <div class="swatches">
+        <div class="sw"><i style="background:#292c2d"></i><b>ink</b><span>#292c2d</span></div>
+        <div class="sw"><i style="background:#626b6e"></i><b>muted</b><span>#626b6e</span></div>
+        <div class="sw"><i style="background:#dde1de"></i><b>line</b><span>#dde1de</span></div>
+        <div class="sw"><i style="background:#f6f7f4"></i><b>soft</b><span>#f6f7f4</span></div>
+        <div class="sw"><i style="background:#d97660"></i><b>coral</b><span>#d97660</span></div>
+        <div class="sw"><i style="background:#dfe2df"></i><b>bar-base</b><span>#dfe2df</span></div>
+        <div class="sw"><i style="background:#a9c4ad"></i><b>bar-alt</b><span>#a9c4ad</span></div>
+        <div class="sw"><i style="background:#4f7a60"></i><b>bar-strong</b><span>#4f7a60</span></div>
+      </div>
+      <div class="spacing num">
+        <div><i style="width:4px"></i>4</div>
+        <div><i style="width:8px"></i>8</div>
+        <div><i style="width:12px"></i>12</div>
+        <div><i style="width:16px"></i>16</div>
+        <div><i style="width:24px"></i>24</div>
+        <div><i style="width:32px"></i>32</div>
+        <div><i style="width:48px"></i>48</div>
+      </div>
+    </div>
+
+    <div class="r-foot"><span>정적 목업 · 동작하지 않음 · 수치는 예시</span><span>VIDE · 모델 작업공간 · 2026-09-29</span></div>
+  </div>
+</section>
+
+</body>
+</html>

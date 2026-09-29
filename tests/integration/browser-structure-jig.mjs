@@ -152,17 +152,49 @@ try {
   assert.match(await result.textContent(), /검토하지 않음: 풍하중/);
   if (shot) await page.screenshot({ path: join(shot, 'structure-jig-result.png') });
 
-  // A row selects its Rhino object; verdict colours paint the model.
+  // A row selects its Rhino object while the jig stays open beside the model (non-modal).
+  const rowCount = await rows.count();
   await rows.first().click();
-  await page.waitForFunction(() => !document.querySelector('dialog.jig-dialog')?.open);
-  await page.getByRole('button', { name: 'JIG', exact: true }).click();
-  await dialog
-    .locator('.jig-card', { hasText: '구조 분석' })
-    .getByRole('button', { name: '열기' })
-    .click();
+  await page.waitForFunction(
+    () => document.querySelector('#selection-count')?.textContent === '1개 선택',
+  );
+  assert.ok(await result.isVisible(), 'the jig keeps its result while the model is shown');
+  assert.equal(await dialog.evaluate((node) => node.matches(':modal')), false);
+  // Verdict colours paint the model and can be switched off again; the jig stays open.
+  const verdicts = ['#3a9d5d', '#8a8f8c', '#d8a31a', '#d0453a'];
+  const painted = () =>
+    page.evaluate(
+      (colors) =>
+        window.videViewport
+          .visibleIds()
+          .filter((id) => colors.includes(window.videViewport.colorOf(id))).length,
+      verdicts,
+    );
   await result.getByRole('button', { name: '모델에 판정색' }).click();
-  await page.waitForFunction(() => !document.querySelector('dialog.jig-dialog')?.open);
+  await page.waitForFunction(
+    (colors) =>
+      window.videViewport
+        .visibleIds()
+        .some((id) => colors.includes(window.videViewport.colorOf(id))),
+    verdicts,
+  );
+  assert.ok((await painted()) >= 10, 'members carry verdict colours');
   if (shot) await page.screenshot({ path: join(shot, 'structure-jig-tint.png') });
+  // A look around the 3D view (orbit) leaves the jig as it was.
+  const canvas = await page.locator('#canvas canvas').boundingBox();
+  await page.mouse.move(canvas.x + canvas.width / 2, canvas.y + canvas.height / 2);
+  await page.mouse.down({ button: 'right' });
+  await page.mouse.move(canvas.x + canvas.width / 2 + 80, canvas.y + canvas.height / 2 + 30, {
+    steps: 5,
+  });
+  await page.mouse.up({ button: 'right' });
+  await result.getByRole('button', { name: '판정색 끄기' }).click();
+  assert.equal(await painted(), 0, 'verdict colours are cleared');
+  assert.equal(await rows.count(), rowCount);
+  assert.equal(
+    await result.getByRole('button', { name: '전체' }).getAttribute('aria-pressed'),
+    'true',
+  );
   assert.deepEqual(errors, []);
   console.log('structure jig browser checks passed');
 } finally {

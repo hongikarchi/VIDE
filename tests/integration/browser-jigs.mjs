@@ -193,9 +193,24 @@ try {
     ],
   });
   await page.screenshot({ path: join(directory, 'jigs.png') });
-  // A row opens its object in the viewport.
+  // A row opens its object in the viewport; the panel is non-modal and stays open beside the model.
   await rows.nth(0).getByRole('button', { name: /B3/ }).click();
+  await page.waitForFunction(
+    () => document.querySelector('#selection-count')?.textContent === '1개 선택',
+  );
+  assert.equal(await page.locator('#selection').textContent(), 'B3');
+  assert.ok(await dialog.isVisible(), 'the jig stays open while the model is shown');
+  assert.equal(await dialog.evaluate((node) => node.matches(':modal')), false);
+  const canvas = await page.locator('#canvas canvas').boundingBox();
+  const panel = await dialog.boundingBox();
+  assert.ok(canvas.x + canvas.width <= panel.x + 1, 'the 3D view sits beside the panel');
+  assert.ok(await dialog.getByLabel('R1 선택').isChecked(), 'the jig keeps its state');
+  // Closing and opening the tab again brings back the same jig and result.
+  await dialog.getByRole('button', { name: '닫기' }).click();
   await dialog.waitFor({ state: 'hidden' });
+  await page.getByRole('button', { name: 'JIG', exact: true }).click();
+  await dialog.locator('.jig-relation').waitFor();
+  assert.ok(await dialog.getByLabel('R1 선택').isChecked());
   assert.deepEqual(errors, []);
   console.log('JIG tab checks passed');
 } finally {

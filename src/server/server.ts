@@ -12,6 +12,7 @@ import { AccountProfiles } from '../ai/account-profiles.ts';
 import { AccountUsageService } from '../ai/account-usage.ts';
 import { JIGS } from '../jigs/catalog.ts';
 import { runSync } from '../jigs/sync.ts';
+import { jigRoutes } from './jig-routes.ts';
 import {
   analyzeConfirmed,
   applyEdits,
@@ -1007,6 +1008,7 @@ export async function startServer({
         });
         return;
       }
+      if (await jigRoutes(url, request, { workspace, body, send })) return;
       // Structure analysis jig (J-09, SPEC-06): draft from Syncs → small edits → confirm & analyse.
       const structureJig =
         /^\/api\/v1\/projects\/([^/]+)\/jigs\/structure(?:\/(draft|edit|analyze))?$/.exec(

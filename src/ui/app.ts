@@ -26,7 +26,7 @@ import { renderProjectHeading } from './project-heading.tsx';
 import { setMobileView } from './mobile-navigation.tsx';
 import { showQuantities } from './quantities.tsx';
 import { attachNativeAttributes } from './native-attributes.ts';
-import { hideJigs, showJigs } from './jigs.tsx';
+import { overlayPicked, showJigs } from './jigs.tsx';
 const showAiSettings: typeof import('./ai-settings.tsx').showAiSettings = async (onStatus) =>
   (await import('./ai-settings.tsx')).showAiSettings(onStatus);
 import { initializeReviews } from './reviews.tsx';
@@ -653,7 +653,8 @@ try {
   viewport = createViewport(
     $('canvas'),
     objects,
-    (ids, mode, pin) => applySelection(ids, mode, pin),
+    (ids, mode, pin, source) =>
+      source.source === 'overlay' ? overlayPicked(source) : applySelection(ids, mode, pin),
     (event) => {
       if (event.type === 'stroke') {
         if (strokes.length >= 200) {
@@ -1338,7 +1339,6 @@ $('jigs').onclick = () => {
           : ''),
     })),
     show: (requestId, objectId) => {
-      hideJigs();
       const shown = selectInResult(requestId, objectId);
       // The Sync's scene loads with the selection; frame it once it is shown.
       setTimeout(() => viewport?.fit(displayIdOf(objects, requestId, objectId) ?? shown), 400);
@@ -1352,9 +1352,16 @@ $('jigs').onclick = () => {
         if (id) mapped[id] = color;
       }
       viewport?.tint(Object.keys(mapped).length ? mapped : null);
-      hideJigs();
       mobileView('model');
     },
+    clearTint: () => viewport?.clearTint(),
+    overlay: (key, items) => viewport?.overlay(key, items),
+    focus: (target) =>
+      viewport?.focus(
+        'requestId' in target
+          ? target.ids.flatMap((id) => displayIdOf(objects, target.requestId, id) ?? [])
+          : target,
+      ),
     send: async (extra) => {
       const projectId = currentProject().id;
       const input = {

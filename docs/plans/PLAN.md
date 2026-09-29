@@ -2,10 +2,10 @@
 id: PLAN
 title: VIDE 실행 로드맵
 status: review
-version: 0.214
-updated: 2026-09-28
+version: 0.215
+updated: 2026-09-29
 owner: agent:codex
-related: [ARCH-01, PLAN-02, PLAN-03, SPEC-00, SPEC-01, SPEC-02, SPEC-03, SPEC-04, SPEC-05]
+related: [ARCH-01, PLAN-02, PLAN-03, PLAN-22, PLAN-23, PLAN-24, SPEC-00, SPEC-01, SPEC-02, SPEC-03, SPEC-04, SPEC-05, SPEC-06, SPEC-07]
 ---
 
 # VIDE 실행 로드맵
@@ -59,11 +59,26 @@ related: [ARCH-01, PLAN-02, PLAN-03, SPEC-00, SPEC-01, SPEC-02, SPEC-03, SPEC-04
 | 공유 | T-009·017 | 무료 시험 조건 내 실제 게시·의견·로컬 채택 왕복 |
 | 제품 수용 | T-010·011·012 및 §6.6 | 대표 실무 과업·기준선·실기기·별도 PC 검수 |
 
+**VIDE 재구성 1차(2026-09-29 등록).** jig 플랫폼([PLAN-22](PLAN-22-jig-platform.md)), S-06 골조 jig와 구조 라이브러리([PLAN-23](PLAN-23-s06-frame-jig.md)), AI 대화·경로([PLAN-24](PLAN-24-ai-conversations.md))를 마일스톤 순서로 진행한다. 마일스톤은 S-06 결과를 먼저 보이는 순서이며, 선행이 갖춰진 티켓(특히 PLAN-24)은 먼저 해도 된다.
+
+| 마일스톤 | 티켓 | 다음 단계로 넘어갈 조건 |
+|---|---|---|
+| M0 진단 | T-041·042·043 → T-044 | S-06 사본에서 기존 간이 검사 기준선 재현 + 기둥 위에서 끊은 경간 표(VERIFY) |
+| M1 입력 조립·축선·기둥·간섭 | T-045 → T-046 → T-047·048, T-049, T-050 → T-051 | 형식 v3 작업본에서 ⓪~④ 계산, `jig:validate`·`jig:test` 통과, 실데이터 M1 기록 |
+| M2 거더·작은보·해석 | T-052 → T-053 | 참고 처짐·Lb·K 시험, 미확정 미리보기와 [해석 확정] 구분, M2 기록 |
+| M3 단면·일람표·Rhino에 만들기 | T-054, T-055 → T-056 | 사본 문서에 두 번 만들기 중복 없음·사람 수정 보존, 일람표 CSV |
+| M4 보고서 | T-057 → T-058 | 보고서 게이트 통과, 미검토 항목 인쇄 |
+| M5 대화·채팅으로 jig 만들기 | T-059·060 → T-061 → T-062 → T-063 → T-064 | 대화 3개 동시 진행, S-06 보조 jig를 대화로 만들어 ③ 결과와 일치 |
+| 독립 | T-065(자료 1차), T-066(공유 스냅샷 결함) | 각 계획의 완료 기준 |
+| 2차 | T-067(구조 코어 확장) | 2차 착수 지시 뒤 |
+
+Rhino 플러그인 재빌드는 T-043 한 번이다. 완료 기준은 개발 빌드와 `.vide/` 합성 문서까지이며, 설치본 반영은 사용자가 요청할 때 묶음 릴리스로 한다.
+
 대표 과업은 기능 개발 초기에 선정하고 각 단계에서 반복 검증한다. 공유의 외부 제약으로 독립 로컬 작업을 중단하지 않는다. 후속 Jev 조사는 §9.4 조건을 따른다.
 
 ### 6.2 티켓 소유와 상세 계획
 
-T-001~018의 번호·지원 증거는 유지한다. 각 티켓의 현재 결과와 남은 조건은 §6.5, 상세 구현·시험 절차는 PLAN-02와 §7을 따른다. T-019~024의 구체 작업은 PLAN-03이 소유한다. 하위 계획에 별도 현황표를 복제하지 않는다.
+T-001~018의 번호·지원 증거는 유지한다. 각 티켓의 현재 결과와 남은 조건은 §6.5, 상세 구현·시험 절차는 PLAN-02와 §7을 따른다. T-019~024의 구체 작업은 PLAN-03이 소유한다. T-041~067은 PLAN-22·23·24가 소유하며, RESEARCH-10 작업 묶음(WP)과의 대응표는 각 계획에 있다. T-025~031은 PLAN-08의 예약 번호다. 하위 계획에 별도 현황표를 복제하지 않는다.
 
 ### 6.3 착수 조건
 
@@ -74,6 +89,8 @@ T-001~018의 번호·지원 증거는 유지한다. 각 티켓의 현재 결과�
 현재 소스와 §6.5의 증거에서 이어간다. 과거 구현 일지는 [이행 기록](../tdd/VERIFY-2026-09-20-implementation-history.md)으로 옮겼다. 과거의 제한 JSON·MCP·ESM 설명을 현재 설계로 사용하지 않는다.
 
 ### 6.5 현재 티켓 현황과 이어갈 위치
+
+**2026-09-29 VIDE 재구성 설계(1차 결정 반영):** jig 정의·패키지 형식·실행 권한, 작업공간 탭, 모든 대화의 세션화와 동시 진행, 말로 하는 앱 조작, 구조 해석 라이브러리 결함 수정, 프로젝트 자료·Sync 발전, 공유·내보내기, S-06 구조 jig(사용자 결정 반영)를 한 문서로 설계했다. [RESEARCH-10](../research/RESEARCH-10-vide-restructure.md)(draft), 화면 목업 `tools/mockups/jig-platform/`([검수](../tdd/VERIFY-2026-09-29-jig-platform-mockups.md)). 조사 중 확인한 결함: 구조 jig 처짐·비지지 길이가 분할 부재 기준(비보수), 수평 구속이 지붕 전 절점을 잡음, Sync가 꺼진 레이어를 빼고도 누락 0으로 표시, 접수 규칙이 겹치는 요청을 거절(동시 대화 불가). 같은 날 사용자가 §16의 1차 항목(A·D)을 결정했고, B·C는 2·3차 전으로 미뤘다. 결정은 PRD(FR-23 확장·FR-24·FR-25, C-02 채택), [ADR-020](../decisions/ADR-020-jig-platform.md)(jig 플랫폼)·[ADR-021](../decisions/ADR-021-conversation-sessions.md)(AI 대화 세션), [SPEC-07](../specs/SPEC-07-jig-platform.md)·[ARCH-03](../architecture/ARCH-03-jig-runtime.md)과 해당 SPEC·Design에 반영한다. 1차 작업은 [PLAN-22](PLAN-22-jig-platform.md)(jig 플랫폼)·[PLAN-23](PLAN-23-s06-frame-jig.md)(S-06 골조 jig·구조 라이브러리)·[PLAN-24](PLAN-24-ai-conversations.md)(AI 대화·경로)에 T-041~067로 등록했다(순서 §6.1). 다음: M0 — T-041·T-042·T-043 → T-044(S-06 사본에서 기준선 재현). T-059(CLI 버전 점검·세션 SPIKE)와 T-066은 병행할 수 있다.
 
 **2026-09-29 구조 분석 jig(J-09):** 사용자 결정으로 첫 출시 범위에 넣었다(PRD FR-23·AC-40, [ADR-019](../decisions/ADR-019-structure-jig-rust-core.md)). 해석·검정 코어는 Rust, 입력은 CAD·Rhino Brep·중심선에서 AI가 초안을 만들고 사용자가 확정한다. 1단계는 계획 단계 중력 검토(선형 정적, KDS 14 31 10 부재 검정·B1, 4상태 판정, NG 원인 분류). 동작 [SPEC-06](../specs/SPEC-06-structure-analysis.md), 계약 [ARCH-02](../architecture/ARCH-02-structure-model.md), 계획·완료 기준 [PLAN-17](PLAN-17-structure-jig.md)(T-033~039). T-033~038 1차 완료(코어·입력·화면, 시험 통과). 다음: T-039 설치본 빌드(커밋 후)와 실제 입력 검수.
 
@@ -101,7 +118,7 @@ T-001~018의 번호·지원 증거는 유지한다. 각 티켓의 현재 결과�
 
 **2026-09-28 사용성 3차(구현 우선):** 요청 고정은 메시지 문장 안의 `[고정N · k개]` 토큰으로 넣는다. 커서 위치의 반투명 칩을 누르면 현재 선택이 토큰이 되고, 토큰을 지우면 고정도 빠진다. 뷰포트 핀 도구·선택 해제 버튼·V. 로고를 없앴다. H 숨기기, I 분리 표시, U 모두 표시, Z 선택 확대, Ctrl+A 전체 선택을 추가했다. 대화 항목을 목록에서 지울 수 있다(기록은 보존, schema 3). effort·첨부 메뉴는 바깥을 누르면 닫히고, 하단 속성 패널은 머리줄 전체로 열고 닫으며 선택이 없어도 열린 상태를 유지한다. 자동·브라우저 회귀는 통과했고 실제 iPad 입력은 확인하지 않았다.
 
-**제안 대기 · 프로젝트 지식 DB(2026-09-28 사용자 요청):** 메일·첨부·회의록 기반 지식 정리·질의·크리틱은 PRD C-02 첨삭 제안(R-74) 상태다. 파악은 [RESEARCH-06](../research/RESEARCH-06-project-knowledge.md), 단계 계획은 [PLAN-08](PLAN-08-project-knowledge.md)(draft), 저장·팀 공동 축적 구조는 [ADR-018](../decisions/ADR-018-project-knowledge-store.md)(초안)이며, C-02 채택과 RESEARCH-06 §12 결정 전에는 구현하지 않는다. 요청 처리 방식(의도 카드·검증·실제 수행 설명·편집 가능한 작업 이력)은 [RESEARCH-07](../research/RESEARCH-07-request-processing.md)에 정리했고, 작업 이력은 PRD C-03 제안(R-75) 상태다.
+**프로젝트 지식 DB(2026-09-28 사용자 요청):** 메일·첨부·회의록 기반 지식 정리·질의·크리틱은 PRD C-02이며 2026-09-29 채택됐다(결정 A9). 파악은 [RESEARCH-06](../research/RESEARCH-06-project-knowledge.md), 단계 계획은 [PLAN-08](PLAN-08-project-knowledge.md)(draft), 저장·팀 공동 축적 구조는 [ADR-018](../decisions/ADR-018-project-knowledge-store.md)(초안)이다. 1차 제품 작업은 검색·검토 기록·근거 칩([PLAN-22](PLAN-22-jig-platform.md) T-065)과 AI 자료 도구([PLAN-24](PLAN-24-ai-conversations.md) T-062)이며 프로젝트 지식 SPEC 초안 뒤 시작한다. RESEARCH-06 §12의 나머지 결정(회사 정책·공개 범위 등)은 PLAN-08의 해당 단계 전에 확인한다. 요청 처리 방식(의도 카드·검증·실제 수행 설명·편집 가능한 작업 이력)은 [RESEARCH-07](../research/RESEARCH-07-request-processing.md)에 정리했고, 작업 이력은 PRD C-03 제안(R-75) 상태다.
 
 **2026-09-28 Sync 성능·증분 Live Sync:** 실제 문서 사본(표시 10,086개)의 전체 Sync가 37.8초에서 4.4초(두 번째 1.9초)로 줄었다. Live Sync는 바뀐 객체만 받아 마지막 표시 Sync에 병합하며, 객체 1개 이동의 Rhino 조회는 34 ms이고 서버 병합·저장은 1~1.5초다. 사용자 Rhino는 새 RHP를 불러오도록 재시작해야 하며, 사용자 창의 체감 확인이 남았다([검수](../tdd/VERIFY-2026-09-28-sync-performance.md), [PLAN-02](PLAN-02-agent-host-versioning.md)).
 
@@ -171,6 +188,9 @@ Jev는 기존 계정이 없다는 사용자 확인에 따라 가입 재개까지
 | T-024 · 호스트 의존 경계 | 중립 경로·공통 literal·예외 점검 완료 | [PLAN-03](PLAN-03-development-foundation.md#t-024) |
 | T-032 · Jev 수정 위치 찾기(개발 도구) | `npm run locate` 사용 가능. 실측 정답 파일 5위 안 영어 100%·한국어 100%([SPIKE](../tdd/SPIKE-2026-09-29-jev-locate.md)). 표본 확대·에이전트 비교 남음. 제품 이식은 [PLAN-05 §7](PLAN-05-decision-layer-evaluation.md) 계획만 | [PLAN-03](PLAN-03-development-foundation.md#t-032) |
 | T-033~039 · 구조 분석 jig 1단계 | T-033 완료(애드온). T-034~036 코어(선형 해석·기구 탐지·KDS/AISC 검정·E7), T-037 입력(곡선·솔리드·CAD → 초안·점검·확정), T-038 화면(JIG 탭 구조 분석·판정색) 1차 완료: `npm run test:structure`(Rust 9·노드 28)와 `browser-structure-jig.mjs` 통과. T-039: 설치본 포함 코드 추가, 전체 빌드는 커밋 후, 실제 입력 검수 남음. 남음: AISC E·G·H 예제, KDS 조항 대응, 한국 고유 fixture 검토 | [PLAN-17](PLAN-17-structure-jig.md) |
+| T-041·043·045~048·055·057·063~066 · jig 플랫폼 1차 | T-041 완료(겹침 층·비모달 JIG 패널, `browser-jig-overlay.mjs` 통과). 나머지 착수 전. T-043은 Rhino 플러그인 재빌드 | [PLAN-22](PLAN-22-jig-platform.md) |
+| T-042·044·050~054·056·058·067 · S-06 골조 jig·구조 라이브러리 | M0 완료: T-042 geometry-kit 진단 함수, T-044 진단 경로·화면과 실데이터 기준선 재현(9/33/6/곡선 19, [VERIFY](../tdd/VERIFY-2026-09-29-s06-frame.md)). 남음은 PLAN-23 현황. M1(T-050 → T-051)부터 착수 전, T-067은 2차 | [PLAN-23](PLAN-23-s06-frame-jig.md) |
+| T-049·059~062 · AI 대화·경로 | 계획(2026-09-29), 착수 전. T-059는 바로 시작 가능 | [PLAN-24](PLAN-24-ai-conversations.md) |
 
 ### 6.6 전체 완료 관문
 

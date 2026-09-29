@@ -3,7 +3,9 @@ import { createRoot } from 'react-dom/client';
 import { z } from 'zod';
 import { api } from './gateway.ts';
 import { KnowledgeJig } from './knowledge-jig.tsx';
+import type { Point3 } from './model.ts';
 import { StructureJig } from './structure-jig.tsx';
+import type { OverlayItem } from './viewport.ts';
 
 // The JIG tab: a gallery of jigs (working tools for one kind of task) and the Sync jig — the
 // relation between a Rhino model and a CAD drawing, their differences, an AI review of what the
@@ -80,6 +82,11 @@ export interface SyncSource {
   host: 'rhino' | 'zwcad';
   label: string;
 }
+/** What a jig frames: objects of a Sync, a box in metres, or an overlay layer or item. */
+export type JigFocus =
+  | { requestId: string; ids: string[] }
+  | { min: Point3; max: Point3 }
+  | { overlay: string; itemId?: string };
 export interface JigContext {
   projectId: string;
   sources: SyncSource[];
@@ -87,6 +94,18 @@ export interface JigContext {
   show: (requestId: string, objectId: string) => void;
   /** Colour objects of a Sync in the viewport (structure verdicts); omitted when unsupported. */
   tint?: (requestId: string, colors: Record<string, string>) => void;
+  /** Back to the model's own colours. */
+  clearTint: () => void;
+  /**
+   * Draw a jig result as an overlay layer over the model (null removes it). Overlays are display
+   * only: never selected, saved, synced or sent. They leave the model while the panel is closed
+   * and go for good when another jig is opened.
+   */
+  overlay: (key: string, items: OverlayItem[] | null) => void;
+  /** Frame part of the model without changing the selection. */
+  focus: (target: JigFocus) => void;
+  /** Overlay items clicked in the viewport (e.g. to move to the table row); returns unsubscribe. */
+  onOverlayPick?: (listener: (hit: { key: string; itemId: string }) => void) => () => void;
   /** Send a request made by a jig (AI review or edits) into the conversation. */
   send: (input: {
     body: string;
@@ -99,13 +118,43 @@ export interface JigContext {
   }) => Promise<void>;
 }
 
+// The JIG panel is docked beside the 3D view (Design SCR-13) and non-modal: the model stays usable
+// while a jig is open, and the jig keeps its inputs and results while folded or closed.
+const workspace = document.querySelector('.workspace') ?? document.body;
 const dialog = document.createElement('dialog');
 dialog.className = 'quantity-dialog jig-dialog';
 dialog.setAttribute('aria-label', 'JIG');
-document.body.append(dialog);
+workspace.append(dialog);
 const root = createRoot(dialog);
+let current: JigContext | undefined;
+let collapsed = false;
+/**
+ * Overlay layers drawn by the open jig. Closing the panel takes them off the model and opening it
+ * again puts them back with the jig's state; they are forgotten when another jig is opened.
+ */
+const drawn = new Map<string, OverlayItem[]>();
+const narrow = () => matchMedia('(max-width: 850px)').matches;
+function hideOverlays() {
+  for (const key of drawn.keys()) current?.overlay(key, null);
+}
+function forgetOverlays() {
+  hideOverlays();
+  drawn.clear();
+}
+function render() {
+  workspace.classList.toggle('jig-open', dialog.open);
+  workspace.classList.toggle('jig-collapsed', collapsed);
+  dialog.toggleAttribute('data-collapsed', collapsed);
+  if (current) root.render(<Jigs context={current} collapsed={collapsed} />);
+}
+const fold = (value: boolean) => {
+  collapsed = value;
+  render();
+};
 const close = () => {
+  hideOverlays();
   dialog.close();
+  render();
 };
 const mm = (metres: number) => `${Math.round(metres * 10000) / 10} mm`;
 const stateText: Record<Row['state'], string> = {
@@ -603,48 +652,108 @@ function SyncJig({ context }: { context: JigContext }) {
   );
 }
 
-function Jigs({ context }: { context: JigContext }) {
+function Jigs({ context, collapsed }: { context: JigContext; collapsed: boolean }) {
   const [open, setOpen] = useState<string>();
+  useEffect(() => forgetOverlays, [open]);
+  const jig = useMemo<JigContext>(() => {
+    const tint = context.tint;
+    return {
+      ...context,
+      // On a phone the panel covers the model: fold it so the shown result is visible.
+      show: (requestId, objectId) => {
+        if (narrow()) fold(true);
+        context.show(requestId, objectId);
+      },
+      tint:
+        tint &&
+        ((requestId, colors) => {
+          if (narrow()) fold(true);
+          tint(requestId, colors);
+        }),
+      overlay: (key, items) => {
+        if (items) drawn.set(key, items);
+        else drawn.delete(key);
+        // A result that lands after the panel was closed waits for the next opening.
+        if (dialog.open) context.overlay(key, items);
+      },
+      onOverlayPick: (listener) => {
+        const handle = (event: Event) =>
+          listener((event as CustomEvent<{ key: string; itemId: string }>).detail);
+        dialog.addEventListener('overlaypick', handle);
+        return () => dialog.removeEventListener('overlaypick', handle);
+      },
+    };
+  }, [context]);
+  const title =
+    open === 'sync'
+      ? 'Sync · 도면↔모델'
+      : open === 'knowledge'
+        ? '프로젝트 자료 · 시험판'
+        : open === 'structure'
+          ? '구조 분석'
+          : 'JIG';
   return (
     <>
-      <div className="quantity-head">
-        <h2>
-          {open === 'sync'
-            ? 'Sync · 도면↔모델'
-            : open === 'knowledge'
-              ? '프로젝트 자료 · 시험판'
-              : open === 'structure'
-                ? '구조 분석'
-                : 'JIG'}
-        </h2>
-        <div>
-          {open ? (
-            <button type="button" onClick={() => setOpen(undefined)}>
-              목록
-            </button>
-          ) : null}{' '}
-          <button type="button" onClick={close}>
-            닫기
-          </button>
-        </div>
-      </div>
-      {open === 'sync' ? (
-        <SyncJig context={context} />
-      ) : open === 'knowledge' ? (
-        <KnowledgeJig projectId={context.projectId} />
-      ) : open === 'structure' ? (
-        <StructureJig context={context} />
+      {collapsed ? (
+        <button
+          type="button"
+          className="jig-expand"
+          aria-label={`${title} 펼치기`}
+          title="JIG 펼치기"
+          onClick={() => fold(false)}
+        >
+          <span>{title}</span>
+        </button>
       ) : (
-        <Gallery context={context} open={setOpen} />
+        <div className="quantity-head">
+          <h2>{title}</h2>
+          <div>
+            {open ? (
+              <button type="button" onClick={() => setOpen(undefined)}>
+                목록
+              </button>
+            ) : null}{' '}
+            <button
+              type="button"
+              title="3D를 넓게 보기 · 입력과 결과는 그대로 둡니다"
+              onClick={() => fold(true)}
+            >
+              접기
+            </button>{' '}
+            <button type="button" onClick={close}>
+              닫기
+            </button>
+          </div>
+        </div>
       )}
+      {/* Folding hides the jig without unmounting it, so its inputs and results stay. */}
+      <div className="jig-body" hidden={collapsed}>
+        {open === 'sync' ? (
+          <SyncJig context={jig} />
+        ) : open === 'knowledge' ? (
+          <KnowledgeJig projectId={context.projectId} />
+        ) : open === 'structure' ? (
+          <StructureJig context={jig} />
+        ) : (
+          <Gallery context={jig} open={setOpen} />
+        )}
+      </div>
     </>
   );
 }
-let generation = 0;
+/** Open (or unfold) the JIG panel. The same jig and its state come back until the page reloads. */
 export function showJigs(context: JigContext) {
-  root.render(<Jigs key={++generation} context={context} />);
-  if (!dialog.open) dialog.showModal();
+  current = context;
+  collapsed = false;
+  if (!dialog.open) {
+    dialog.show();
+    for (const [key, items] of drawn) context.overlay(key, items);
+  }
+  render();
 }
-export function hideJigs() {
-  if (dialog.open) dialog.close();
+/** The viewport reports a click on an overlay item; the open jig may follow it. */
+export function overlayPicked(hit: { key: string; itemId: string }) {
+  dialog.dispatchEvent(
+    new CustomEvent('overlaypick', { detail: { key: hit.key, itemId: hit.itemId } }),
+  );
 }

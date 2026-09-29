@@ -46,6 +46,57 @@ export interface BrushSettings {
 export type SketchEvent =
   | { type: 'stroke'; stroke: DraftStroke }
   | { type: 'erase'; index: number };
+/** Overlay colours are Design §02 token names; the viewport resolves them to screen colours. */
+export type OverlayTone =
+  | 'ov-grid'
+  | 'ov-new'
+  | 'ov-existing'
+  | 'ov-clash'
+  | 'ok'
+  | 'warn'
+  | 'ng'
+  | 'na';
+/**
+ * One display primitive of a jig overlay layer (SPEC-07.10), in world metres. Polygons lie in
+ * plan at height `z`; `label` draws a small tag (e.g. the issue number of a table row).
+ */
+export type OverlayItem = { id: string; tone?: OverlayTone; label?: string } & (
+  | { kind: 'polygon'; points: readonly Point2[]; z: number; fill?: boolean }
+  | {
+      kind: 'polyline';
+      points: readonly Point3[];
+      closed?: boolean;
+      dashed?: boolean;
+      /** Screen pixels. */
+      width?: number;
+    }
+  | { kind: 'point'; at: Point3 }
+);
+export interface OverlayStyle {
+  visible?: boolean;
+  /** 0–1, multiplies the primitives' own opacity. */
+  opacity?: number;
+}
+/** What a click hit: document objects, or one item of an overlay layer. */
+export type PickSource =
+  | { source: 'document' }
+  | { source: 'overlay'; key: string; itemId: string };
+/** Frame document objects (display ids), a box in metres, or an overlay layer or item. */
+export type FocusTarget =
+  | readonly string[]
+  | { min: Point3; max: Point3 }
+  | { overlay: string; itemId?: string };
+// Design §02 values of the overlay tokens, used until the stylesheet defines the tokens.
+const OVERLAY_TONES: Record<OverlayTone, string> = {
+  'ov-grid': '#8a9396',
+  'ov-new': '#292c2d',
+  'ov-existing': '#b7bcb9',
+  'ov-clash': '#c8553d',
+  ok: '#6f9a7a',
+  warn: '#c9a24a',
+  ng: '#c8553d',
+  na: '#b8bdbb',
+};
 interface DisplaySketch {
   points?: Point2[];
   plane?: string;
@@ -149,7 +200,12 @@ function ownerId(object: THREE.Object3D | undefined) {
 export function createViewport(
   container: HTMLElement,
   objects: DisplayObject[],
-  onPick: (ids: string[], mode: 'replace' | 'add' | 'remove', pin: boolean) => void,
+  onPick: (
+    ids: string[],
+    mode: 'replace' | 'add' | 'remove',
+    pin: boolean,
+    source: PickSource,
+  ) => void,
   onSketch: (event: SketchEvent) => void,
   onCamera?: (state: { view: string; projection: 'orthographic' | 'perspective' }) => void,
 ) {
@@ -952,6 +1008,8 @@ export function createViewport(
     mouse = new THREE.Vector2();
   // Batched objects are drawn through merged geometry but still picked one by one.
   ray.layers.enableAll();
+  // Overlay fat lines are picked within a few pixels of their drawn width.
+  (ray.params as unknown as Record<string, unknown>).Line2 = { threshold: 4 };
   let mode: ToolMode = 'select',
     down: { x: number; y: number } | null = null,
     frame: number;
@@ -998,6 +1056,231 @@ export function createViewport(
       });
       disposeObject(child);
     }
+  }
+  /*
+   * Jig overlay layers (SPEC-07.10, PLAN-22 T-041): display primitives keyed by layer, in a group
+   * of their own. They are never in `meshes`, so selection, hiding, batching, "fit all", select-all
+   * and requests never see them. Drawn over the document (no depth test) and under sketches.
+   */
+  const overlayRoot = new THREE.Group();
+  scene.add(overlayRoot);
+  const overlays = new Map<string, { group: THREE.Group; style: Required<OverlayStyle> }>();
+  // Resolved once per layer build: a layer can hold thousands of items of a few tones.
+  let tones: Map<OverlayTone, string> | undefined;
+  function toneColor(tone: OverlayTone = 'ov-new') {
+    let color = tones?.get(tone);
+    if (color) return color;
+    // The stylesheet's token wins once it is defined; the defaults are the Design §02 values.
+    const css = getComputedStyle(document.documentElement).getPropertyValue(`--${tone}`).trim();
+    color = hexColor(css) ?? OVERLAY_TONES[tone] ?? OVERLAY_TONES['ov-new'];
+    tones?.set(tone, color);
+    return color;
+  }
+  /** A screen-constant tag; its scale follows the camera (see scaleLabels). */
+  function overlayLabel(text: string, color: string) {
+    const k = 2,
+      font = `600 ${11 * k}px Pretendard, 'Noto Sans KR', 'Malgun Gothic', sans-serif`;
+    const canvas = document.createElement('canvas');
+    const context = canvas.getContext('2d')!;
+    context.font = font;
+    const width = Math.ceil(context.measureText(text).width) + 12 * k,
+      height = 18 * k;
+    canvas.width = width;
+    canvas.height = height;
+    context.font = font;
+    context.fillStyle = '#ffffffee';
+    context.strokeStyle = color;
+    context.lineWidth = k;
+    context.beginPath();
+    context.roundRect(k / 2, k / 2, width - k, height - k, 4 * k);
+    context.fill();
+    context.stroke();
+    context.fillStyle = '#292c2d';
+    context.textAlign = 'center';
+    context.textBaseline = 'middle';
+    context.fillText(text, width / 2, height / 2 + k / 2);
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    const sprite = new THREE.Sprite(
+      new THREE.SpriteMaterial({
+        map: texture,
+        sizeAttenuation: false,
+        depthTest: false,
+        depthWrite: false,
+        transparent: true,
+      }),
+    );
+    sprite.userData.labelSize = [width / k, height / k];
+    sprite.renderOrder = 8;
+    return sprite;
+  }
+  function overlayItem(item: OverlayItem) {
+    const color = toneColor(item.tone);
+    const finite = (values: readonly number[]) => values.every(Number.isFinite);
+    const group = new THREE.Group();
+    const part = (object: THREE.Object3D, name: string, opacity: number) => {
+      object.userData.overlayPart = name;
+      object.userData.baseOpacity = opacity;
+      group.add(object);
+    };
+    let labelAt: THREE.Vector3 | undefined;
+    if (item.kind === 'point') {
+      if (!finite(item.at)) return undefined;
+      const geometry = new THREE.BufferGeometry();
+      geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(3), 3));
+      const point = new THREE.Points(
+        geometry,
+        new THREE.PointsMaterial({
+          color,
+          size: 10,
+          sizeAttenuation: false,
+          depthTest: false,
+          depthWrite: false,
+          transparent: true,
+        }),
+      );
+      point.position.set(...item.at);
+      point.renderOrder = 7;
+      part(point, 'point', 1);
+      labelAt = point.position.clone();
+    } else {
+      const points =
+        item.kind === 'polygon'
+          ? item.points.map(([x, y]) => new THREE.Vector3(x, y, item.z))
+          : item.points.map(([x, y, z]) => new THREE.Vector3(x, y, z));
+      if (points.length < 2 || !points.every((p) => finite(p.toArray()))) return undefined;
+      const closed = item.kind === 'polygon' || item.closed;
+      const line = strokeLine(
+        closed ? [...points, points[0]] : points,
+        color,
+        item.kind === 'polyline' ? (item.width ?? 2) : 1.5,
+      );
+      line.renderOrder = 6;
+      if (item.kind === 'polyline' && item.dashed) {
+        line.material.dashed = true;
+        line.material.dashSize = 0.6;
+        line.material.gapSize = 0.35;
+        line.computeLineDistances();
+      }
+      part(line, 'line', 1);
+      if (item.kind === 'polygon' && item.fill && points.length >= 3) {
+        const origin = points[0];
+        const shape = new THREE.Shape(
+          points.map((p) => new THREE.Vector2(p.x - origin.x, p.y - origin.y)),
+        );
+        const fill = new THREE.Mesh(
+          new THREE.ShapeGeometry(shape),
+          new THREE.MeshBasicMaterial({
+            color,
+            side: THREE.DoubleSide,
+            depthTest: false,
+            depthWrite: false,
+            transparent: true,
+          }),
+        );
+        fill.position.copy(origin);
+        fill.renderOrder = 5;
+        part(fill, 'fill', 0.32);
+      }
+      labelAt =
+        item.kind === 'polygon'
+          ? points.reduce((sum, p) => sum.add(p), new THREE.Vector3()).divideScalar(points.length)
+          : points[Math.floor((points.length - 1) / 2)]
+              .clone()
+              .lerp(points[Math.ceil((points.length - 1) / 2)], 0.5);
+    }
+    if (item.label && labelAt) {
+      const label = overlayLabel(item.label, color);
+      label.position.copy(labelAt);
+      // Tags sit above points; on areas and lines they are centred on the anchor.
+      if (item.kind === 'point') label.center.set(0.5, -0.35);
+      part(label, 'label', 1);
+    }
+    return group;
+  }
+  function disposeOverlay(group: THREE.Group) {
+    group.traverse((item) => {
+      if (item instanceof Line2) lineMaterials.delete(item.material);
+      if (item instanceof THREE.Sprite) {
+        // Sprites share one quad geometry; only the tag texture and material are their own.
+        item.material.map?.dispose();
+        item.material.dispose();
+      } else if (item instanceof THREE.Mesh || item instanceof THREE.Points) {
+        item.geometry.dispose();
+        (item.material as THREE.Material).dispose();
+      }
+    });
+  }
+  function applyOverlayStyle(key: string) {
+    const layer = overlays.get(key);
+    if (!layer) return;
+    layer.group.visible = layer.style.visible;
+    layer.group.traverse((item) => {
+      const base = item.userData.baseOpacity as number | undefined;
+      if (base === undefined) return;
+      const material = (item as THREE.Mesh).material as THREE.Material;
+      material.opacity = base * layer.style.opacity;
+    });
+    dirty = true;
+  }
+  /** Replace one overlay layer's items; null removes the layer. The layer's style is kept. */
+  function setOverlay(key: string, items: readonly OverlayItem[] | null) {
+    const previous = overlays.get(key);
+    if (previous) {
+      overlayRoot.remove(previous.group);
+      disposeOverlay(previous.group);
+      overlays.delete(key);
+    }
+    dirty = true;
+    if (!items) return;
+    const group = new THREE.Group();
+    tones = new Map();
+    try {
+      for (const item of items) {
+        const built = overlayItem(item);
+        if (!built) continue;
+        built.userData.overlayItem = { key, itemId: item.id };
+        group.add(built);
+      }
+    } finally {
+      tones = undefined;
+    }
+    overlays.set(key, { group, style: previous?.style ?? { visible: true, opacity: 1 } });
+    overlayRoot.add(group);
+    applyOverlayStyle(key);
+  }
+  /** Tags keep their pixel size: scale = 2·px / (P₁₁·height) for both projections. */
+  function scaleLabels() {
+    const k =
+      2 / (camera.projectionMatrix.elements[5] * Math.max(1, renderer.domElement.clientHeight));
+    overlayRoot.traverse((item) => {
+      if (!(item instanceof THREE.Sprite)) return;
+      const [w, h] = item.userData.labelSize as [number, number];
+      item.scale.set(w * k, h * k, 1);
+    });
+  }
+  /** Frame document objects, a box, or an overlay layer or item; small targets get room. */
+  function focus(target: FocusTarget) {
+    const bounds = new THREE.Box3();
+    if ('overlay' in target) {
+      const group = overlays.get(target.overlay)?.group;
+      if (!group) return;
+      group.updateMatrixWorld(true);
+      for (const item of group.children)
+        if (target.itemId === undefined || item.userData.overlayItem?.itemId === target.itemId)
+          for (const child of item.children)
+            if (!(child instanceof THREE.Sprite)) bounds.expandByObject(child);
+    } else if ('min' in target) {
+      bounds.set(new THREE.Vector3(...target.min), new THREE.Vector3(...target.max));
+    } else {
+      const wanted = new Set(target);
+      for (const mesh of meshes) if (wanted.has(mesh.userData.id)) bounds.expandByObject(mesh);
+    }
+    if (bounds.isEmpty()) return;
+    const size = bounds.getSize(new THREE.Vector3());
+    const span = Math.max(size.x, size.y, size.z);
+    if (span < 3) bounds.expandByScalar((3 - span) / 2);
+    frameBox(bounds);
   }
   const live = new THREE.Group();
   scene.add(live);
@@ -1081,6 +1364,9 @@ export function createViewport(
     if (!targets.length) return;
     const bounds = new THREE.Box3();
     targets.forEach((m) => bounds.expandByObject(m));
+    frameBox(bounds);
+  }
+  function frameBox(bounds: THREE.Box3) {
     const center = bounds.getCenter(new THREE.Vector3());
     const sceneRadius = Math.max(bounds.getBoundingSphere(new THREE.Sphere()).radius, 0.1);
     camera.near = Math.max(sceneRadius / 10000, 0.001);
@@ -1174,7 +1460,7 @@ export function createViewport(
     next.far = camera.far;
     activate(next, target);
   }
-  function rayAt(e: PointerEvent) {
+  function rayAt(e: { clientX: number; clientY: number }) {
     const r = renderer.domElement.getBoundingClientRect();
     mouse.set(((e.clientX - r.left) / r.width) * 2 - 1, (-(e.clientY - r.top) / r.height) * 2 + 1);
     ray.setFromCamera(mouse, camera);
@@ -1459,12 +1745,38 @@ export function createViewport(
           boxSelect(start.x, start.y, e.clientX, e.clientY, e.clientX < start.x),
           selectionMode(e),
           mode === 'pin',
+          { source: 'document' },
         );
       return;
     }
-    rayAt(e);
+    const pick = pickAt(e.clientX, e.clientY);
+    onPick(pick.ids, selectionMode(e), mode === 'pin', pick.source);
+  }
+  /**
+   * A click: overlay marks (points, labels, lines) first as they are drawn on top, then document
+   * objects, then overlay fills — a large fill never hides the objects under it.
+   */
+  function pickAt(x: number, y: number): { ids: string[]; source: PickSource } {
+    rayAt({ clientX: x, clientY: y });
+    const overlayAt = (parts: string[]) => {
+      if (mode !== 'select') return undefined;
+      const targets: THREE.Object3D[] = [];
+      for (const { group } of overlays.values())
+        if (group.visible)
+          group.traverse((item) => {
+            if (parts.includes(item.userData.overlayPart)) targets.push(item);
+          });
+      const hit = targets.length ? ray.intersectObjects(targets, false)[0] : undefined;
+      const item = hit?.object.parent;
+      return item?.userData.overlayItem as { key: string; itemId: string } | undefined;
+    };
+    const mark = overlayAt(['point', 'label', 'line']);
+    if (mark) return { ids: [], source: { source: 'overlay', ...mark } };
     const id = ownerId(ray.intersectObjects(visibleMeshes(), true)[0]?.object);
-    onPick(id ? [id] : [], selectionMode(e), mode === 'pin');
+    if (id) return { ids: [id], source: { source: 'document' } };
+    const area = overlayAt(['fill']);
+    if (area) return { ids: [], source: { source: 'overlay', ...area } };
+    return { ids: [], source: { source: 'document' } };
   }
   function cancel(e?: PointerEvent) {
     if (e) touches.delete(e.pointerId);
@@ -1489,6 +1801,7 @@ export function createViewport(
     frame = requestAnimationFrame(animate);
     controls.update();
     if (dirty) {
+      if (overlays.size) scaleLabels();
       light.position.copy(camera.position);
       light.target.position.copy(controls.target);
       renderer.render(scene, camera);
@@ -1532,12 +1845,21 @@ export function createViewport(
         points,
         objects: meshes.length,
         geometries: renderer.info.memory.geometries,
+        textures: renderer.info.memory.textures,
         frameMs,
       };
     },
+    /** The model as shown, without jig overlays: review snapshots and thumbnails keep only it. */
     capture() {
-      renderer.render(scene, camera);
-      return renderer.domElement.toDataURL('image/png');
+      const shown = overlayRoot.visible;
+      overlayRoot.visible = false;
+      try {
+        renderer.render(scene, camera);
+        return renderer.domElement.toDataURL('image/png');
+      } finally {
+        overlayRoot.visible = shown;
+        dirty = true;
+      }
     },
     replace(data: DisplayObject[], definitions?: Record<string, BlockDefinition>) {
       replace(data, false, definitions);
@@ -1552,6 +1874,34 @@ export function createViewport(
       tints = colors ? new Map(Object.entries(colors)) : null;
       applyDisplay();
     },
+    /** Back to the display's own colours. */
+    clearTint() {
+      if (!tints) return;
+      tints = null;
+      applyDisplay();
+    },
+    /** Draw one overlay layer of display primitives over the model; null removes it. */
+    overlay: setOverlay,
+    /** Show or hide an overlay layer and set its opacity. */
+    overlayStyle(key: string, style: OverlayStyle) {
+      const layer = overlays.get(key);
+      if (!layer) return;
+      if (style.visible !== undefined) layer.style.visible = style.visible;
+      if (style.opacity !== undefined)
+        layer.style.opacity = Math.min(1, Math.max(0, Number(style.opacity) || 0));
+      applyOverlayStyle(key);
+    },
+    /** Test/diagnostic hook: the overlay layers and their item counts. */
+    overlayInfo() {
+      return [...overlays].map(([key, { group, style }]) => ({
+        key,
+        items: group.children.map((item) => item.userData.overlayItem.itemId as string),
+        ...style,
+      }));
+    },
+    focus,
+    /** Test/diagnostic hook: what a click at this screen point (client px) would pick. */
+    pickAt,
     select(ids: readonly string[]) {
       const next = new Set(ids);
       if (next.size === selectedIds.size && ids.every((id) => selectedIds.has(id))) return;
@@ -1719,6 +2069,7 @@ export function createViewport(
       marquee.remove();
       renderer.domElement.removeEventListener('pointercancel', cancel);
       renderer.domElement.removeEventListener('webglcontextrestored', contextRestored);
+      for (const key of [...overlays.keys()]) setOverlay(key, null);
       disposeObject(scene);
       atlas.dispose();
       renderer.dispose();

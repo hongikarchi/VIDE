@@ -2,7 +2,7 @@
 id: INDEX-SPECS
 title: VIDE 기능 명세 · 사용자 작업과 기능 목록
 status: review
-version: 0.9
+version: 0.10
 updated: 2026-09-29
 owner: user
 related: []
@@ -25,6 +25,9 @@ VIDE에서 설계자는 Rhino·ZWCAD의 모델과 도면을 보고, 객체를 �
 | 외부 의견으로 실제 설계 수정 | [SPEC-04](SPEC-04-web-review.md) · SPEC-04.7 | 웹 의견이 로컬 작업과 수정 결과까지 연결되는가 |
 | 설치·AI 연결·확장 사용·재개 | [SPEC-05](SPEC-05-extensions-install.md) · SPEC-05.7 | 같은 작업환경에서 AI와 추가 기능을 실제로 사용할 수 있는가 |
 | 받은 강구조를 계획 단계에서 검토 | [SPEC-06](SPEC-06-structure-analysis.md) · SPEC-06.8 | 입력에서 확정한 해석 모델로 부재 검정과 근거·미검토 항목을 보이는가 |
+| 프로젝트 골조를 배치·점검해 Rhino에 만들기 | [SPEC-06](SPEC-06-structure-analysis.md) · SPEC-06.10~14 | 연결 파일에서 조립·확인한 입력으로 진단·배치·간섭·단면·일람표를 만들고, 확정 해석을 거친 부재만 후보로 만드는가 |
+| 작은 작업 도구(jig)로 조건을 바꿔 보며 계산·만들기 | [SPEC-07](SPEC-07-jig-platform.md) · SPEC-07.1 | 설정값을 바꾸면 AI 없이 다시 계산되고, 다시 만들 때 사람이 고친 객체가 보존되는가 |
+| 목적별 대화 여러 개를 동시에 진행 | [SPEC-02](SPEC-02-execution-candidates.md) · SPEC-02.19 | 대화가 앞 턴을 이어가고, 목적이 다른 대화가 서로 막지 않으며, 같은 문서 쓰기는 차례를 기다리는가 |
 
 ## 구체적인 첫 지원안과 확인된 사실
 
@@ -58,7 +61,9 @@ VIDE에서 설계자는 Rhino·ZWCAD의 모델과 도면을 보고, 객체를 �
 | FR-20 | 후속 확장 | PRD §14의 이번 범위 밖 |
 | FR-21 | 후속 확장 | PRD §14의 이번 범위 밖(구조 분석은 FR-23) |
 | FR-22 | [SPEC-03](SPEC-03-data-history-export.md) | — |
-| FR-23 | [SPEC-06](SPEC-06-structure-analysis.md) | 구조 분석 jig |
+| FR-23 | [SPEC-06](SPEC-06-structure-analysis.md) | 구조 분석 jig와 프로젝트 구조 jig(입력 조립·진단·배치·간섭·단면·일람표·Rhino에 만들기) |
+| FR-24 | [SPEC-07](SPEC-07-jig-platform.md) · [SPEC-05](SPEC-05-extensions-install.md)(SPEC-05.8) | jig 플랫폼: 작업본·형식·실행·Rhino에 만들기·만들기 대화 |
+| FR-25 | [SPEC-02](SPEC-02-execution-candidates.md)(SPEC-02.9·17·19) | 대화 세션·동시 진행·말로 하는 경로 판정 |
 
 호스트 계약·실험 범위: [Rhino](hosts/rhino.md) · [ZWCAD](hosts/zwcad.md).
 

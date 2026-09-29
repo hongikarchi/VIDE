@@ -2,10 +2,10 @@
 id: PLAN-17
 title: 구조 분석 jig(J-09) 1단계 — 계획 단계 중력 검토
 status: review
-version: 0.1
+version: 0.2
 updated: 2026-09-29
 owner: agent:claude
-related: [PLAN, SPEC-06, ARCH-02, ADR-019, FR-23, AC-40, RESEARCH-08, RESEARCH-09]
+related: [PLAN, PLAN-22, PLAN-23, SPEC-06, ARCH-02, ADR-019, FR-23, AC-40, RESEARCH-08, RESEARCH-09, RESEARCH-10]
 ---
 
 # 구조 분석 jig(J-09) 1단계 — 계획 단계 중력 검토
@@ -14,7 +14,7 @@ related: [PLAN, SPEC-06, ARCH-02, ADR-019, FR-23, AC-40, RESEARCH-08, RESEARCH-0
 
 CAD·Rhino로 받은 강구조를 해석 모델로 구성·확정하고, 선형 정적 해석과 KDS 14 31 10 부재 검정 결과를 근거와 함께 보이는 흐름을 실제 입력에서 끝까지 연결한다. 동작은 [SPEC-06](../specs/SPEC-06-structure-analysis.md), 계약은 [ARCH-02](../architecture/ARCH-02-structure-model.md), 결정은 [ADR-019](../decisions/ADR-019-structure-jig-rust-core.md), 자산과 검증 근거는 [RESEARCH-08](../research/RESEARCH-08-structure-analysis-jig.md)·[RESEARCH-09](../research/RESEARCH-09-structure-analysis-methods.md)를 따른다.
 
-**제외(SPEC-06 §9):** 배치 → 구조 자동 생성, 가새·지붕 수평가새 배치 규칙, 최종 점검 모드(풍·지진·전체 조합·P-Δ·모드 해석), 편집 재검토·영향 전파, 강재량 대안 비교·최적화, 계산서·일람표 문서, 프로젝트별 교환 형식(MGT 등), EJ·기초.
+**제외(이 계획 1단계 기준. 현행 범위 밖 목록은 SPEC-06 §14, 이어지는 작업은 아래 절):** 배치 → 구조 자동 생성, 가새·지붕 수평가새 배치 규칙, 최종 점검 모드(풍·지진·전체 조합·P-Δ·모드 해석), 편집 재검토·영향 전파, 강재량 대안 비교·최적화, 계산서·일람표 문서, 프로젝트별 교환 형식(MGT 등), EJ·기초.
 
 **선행 조건:** Rust stable(1.98.1, rustup, 2026-09-29 설치)과 VS Build Tools 2026의 MSVC·Windows SDK. Node 24.15.0. 데스크톱 패키지는 Python을 포함하지 않는다.
 
@@ -85,6 +85,17 @@ CAD·Rhino로 받은 강구조를 해석 모델로 구성·확정하고, 선형 
 - **T-038 화면 1차 완료:** JIG 탭의 구조 분석(J-09 사용 가능), 초안 그룹별 단면 지정·최상층 면하중·AI 초안 검토 요청·확정·결과 표·모델 선택·판정색. `tests/integration/browser-structure-jig.mjs` 통과(합성 2경간 골조). 이 과정에서 H-400×200 거더가 압축 세장판으로 모두 미완이 되는 문제를 발견해 E7 유효 단면적을 구현했다.
 - **T-039 진행:** 데스크톱 빌드가 코어를 빌드해 `app/src/native/structure/vide_structure.node`로 넣고 Rust crate 라이선스(161개, 허용형)를 `licenses/structure-core/`에 모으도록 추가했다(수집 부분 단독 실행 확인). 설치본 전체 빌드는 새 파일이 git에 추적된 뒤 가능하다(패키지는 추적 파일만 복사). 실제 Rhino·CAD 입력 검수는 사용자 문서 사본 또는 합성 문서로 남음.
 - **남은 개선:** AI 초안 검토의 제안을 수정 목록으로 바로 적용하는 경로(지금은 사용자가 그룹별로 적용), 역할·지점·접합 예외의 화면 편집, 층이 여러 개인 면하중, 부재 솔리드의 H/박스 구분.
+
+## 이어지는 작업(2026-09-29)
+
+FR-23 확장(결정 A1)과 RESEARCH-10 §10의 결함 조사에 따라 구조 해석의 다음 작업은 새 계획의 티켓으로 옮긴다. 이 계획은 T-033~039만 추적한다.
+
+- **[PLAN-23](PLAN-23-s06-frame-jig.md):**
+  - J-09의 라이브러리화와 결함 수정은 T-052다. 설계 부재 기준 Lb·K와 참고 처짐(결정 A8), 수평 구속 절점 지정, 곡선만 분할, 요약·미확정 미리보기(결정 A6), 작업 스레드 실행, 강재 자중, `structure-draft-review` 인용 검사가 들어간다.
+  - 단면 선정·단면 성질·부호·일람표·CSV는 T-054다.
+  - Rust 코어 확장(설계 부재 판정, 여러 조합의 한 번 분해 등)은 2차 T-067이다.
+  - 위 제외 목록 가운데 배치 자동 생성·단면 선정·일람표·기초 간섭·E.J. 분절은 FR-23 확장 범위로 S-06 골조 jig(T-044·051·053·056)와 T-054가 맡는다.
+- **[PLAN-22](PLAN-22-jig-platform.md):** 작업본·화면 부품·겹침 층·Rhino에 만들기 같은 jig 공통 기능을 맡는다.
 
 ## 순서와 의존
 

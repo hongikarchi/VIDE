@@ -1,0 +1,319 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="description" content="AI 대화를 목적별 세션으로 잇는다"><meta name="generator" content="tools/docs/build.mjs — generated from docs/decisions/ADR-021-conversation-sessions.md; do not edit"><title>VIDE · AI 대화를 목적별 세션으로 잇는다</title><style>
+:root{--ink:#292c2d;--muted:#626b6e;--line:#e1e3e1;--soft:#f5f5f1;--coral:#d97660;--paper:#fff;--font:"Pretendard","Noto Sans KR","Malgun Gothic",Arial,sans-serif}
+*{box-sizing:border-box}html{scroll-behavior:smooth;scroll-padding-top:92px}body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--font);letter-spacing:-.025em}a{color:inherit;text-underline-offset:4px}button,input,textarea,select{font:inherit;color:inherit}button{cursor:pointer;border:1px solid var(--line);border-radius:4px;background:var(--paper);padding:10px 15px;line-height:1.3}button:hover{background:var(--soft)}button:disabled{cursor:default;opacity:.6}button.primary{background:var(--ink);color:#fff;border-color:var(--ink)}button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible{outline:3px solid var(--coral);outline-offset:3px}textarea{resize:vertical}::selection{background:#f2d7ce}[hidden]{display:none!important}
+.skip{position:fixed;top:-80px;left:20px;z-index:100;background:white;padding:12px}.skip:focus{top:10px}
+.topbar{height:68px;position:sticky;top:0;z-index:30;border-bottom:1px solid var(--line);background:#fffffff7;display:flex;align-items:center;justify-content:space-between;gap:24px;padding:0 max(24px,calc((100vw - 1450px)/2))}.brand{text-decoration:none;display:flex;align-items:center;gap:15px;white-space:nowrap}.brand b{font-size:29px;letter-spacing:-.08em}.brand span{border-left:1px solid var(--line);padding-left:15px;font-size:11px;letter-spacing:.08em}.doc-tabs{display:flex;height:100%;gap:25px;align-items:stretch;min-width:0;overflow-x:auto}.doc-tab{flex-shrink:0}.doc-tab{display:flex;align-items:center;position:relative;text-decoration:none;font-size:13px;color:var(--muted);white-space:nowrap}.doc-tab.active{color:var(--ink);font-weight:650}.doc-tab.active:after{content:"";position:absolute;bottom:0;left:0;right:0;height:3px;background:var(--coral)}.top-actions{display:flex;gap:8px}.top-actions button{padding:8px 11px;font-size:12px;white-space:nowrap}
+.layout{max-width:1450px;margin:auto;padding:0 30px;display:grid;grid-template-columns:218px minmax(0,1fr);gap:55px}.toc-shell{align-self:start;position:sticky;top:99px;padding-top:15px;max-height:calc(100vh - 120px)}.eyebrow{font-size:10px;line-height:1.6;letter-spacing:.16em;font-weight:500;color:var(--muted)}.toc-title{display:flex;justify-content:space-between;align-items:center;margin-bottom:15px}.toc-title strong{font-size:12px;font-weight:500}.toc-title span{font-size:10px;color:var(--muted)}#toc-toggle{display:none}.toc-search{width:100%;padding:10px 12px;border:1px solid var(--line);background:var(--paper);border-radius:4px;font-size:12px}.toc-hint{font-size:10px;color:var(--muted);margin:8px 0 15px;line-height:1.6}.toc-links{max-height:calc(100vh - 323px);overflow-y:auto;padding:0 8px 8px 0}.toc-links a{display:block;padding:8px 10px;margin:2px 0;border-left:2px solid transparent;border-radius:0 3px 3px 0;text-decoration:none;font-size:12px;line-height:1.65;color:var(--muted);word-break:keep-all;overflow-wrap:anywhere}.toc-links a:hover{background:var(--soft)}.toc-links a.active{border-color:var(--coral);background:var(--soft);color:var(--ink)}.toc-next{border-top:1px solid var(--line);padding-top:13px;margin-top:14px;font-size:11px;color:var(--muted);line-height:1.7}.toc-next b{font-weight:500;color:var(--ink)}
+main{min-width:0;max-width:1040px;padding-bottom:70px}.doc-hero{padding:55px 0 32px;border-bottom:1px solid var(--line)}.hero-label{display:flex;justify-content:space-between;gap:20px;align-items:center}.doc-hero h1{font-size:clamp(32px,3.15vw,48px);line-height:1.22;letter-spacing:-.065em;font-weight:550;margin:20px 0 18px;max-width:900px;word-break:keep-all;overflow-wrap:anywhere}.doc-description{font-size:14px;color:var(--muted);line-height:1.8;margin:0}.pill{display:inline-block;font-size:10px;letter-spacing:.01em;padding:5px 9px;border:1px solid var(--line);border-radius:3px;white-space:nowrap}.hero-meta{margin-top:22px;font-size:12px;color:var(--muted);line-height:1.9}.hero-meta p{font-size:12px;line-height:1.9;margin:8px 0}.hero-meta strong{font-weight:600}.hero-meta blockquote{margin:25px 0 0;padding:20px 22px;background:var(--soft);border-left:3px solid var(--coral);color:var(--ink)}.hero-meta blockquote p{word-break:keep-all;overflow-wrap:anywhere;font-size:18px;line-height:1.8;letter-spacing:-.03em;margin:0}.doc-section{padding:44px 0;border-bottom:1px solid var(--line);scroll-margin-top:93px;min-width:0}.doc-section h2{font-size:28px;font-weight:550;letter-spacing:-.055em;line-height:1.4;margin:0 0 24px;word-break:keep-all;overflow-wrap:anywhere}.section-num{font-weight:400;color:var(--coral);margin-right:10px;font-size:.75em;letter-spacing:-.02em}.doc-section h3{font-size:19px;font-weight:600;line-height:1.5;margin:32px 0 14px;letter-spacing:-.04em}.doc-section h4{font-size:16px;line-height:1.5;margin:25px 0 12px}.doc-section p{font-size:15px;line-height:1.92;margin:13px 0;word-break:keep-all;overflow-wrap:anywhere}.doc-section strong{font-weight:650}.doc-section ul,.doc-section ol{padding-left:22px;font-size:15px;line-height:1.85}.doc-section li{margin:7px 0}.doc-section blockquote{border-left:3px solid var(--coral);background:var(--soft);margin:23px 0;padding:15px 22px}.doc-section blockquote p{margin:0;font-size:16px;line-height:1.85}.doc-section hr{border:0;border-top:1px solid var(--line);margin:28px 0}.doc-section code:not(pre code){font-family:Consolas,"Liberation Mono",monospace;font-size:.91em;background:var(--soft);padding:2px 5px;border-radius:3px;overflow-wrap:anywhere}
+.table-scroll{overflow-x:auto;overscroll-behavior-x:contain;margin:22px 0;border-top:1px solid var(--ink);border-bottom:1px solid var(--line);width:100%}table{border-collapse:collapse;width:100%;font-size:12.5px;line-height:1.75;table-layout:auto}th,td{padding:13px 14px;vertical-align:top;text-align:left;border-bottom:1px solid var(--line);word-break:keep-all;overflow-wrap:anywhere}th{background:var(--soft);font-weight:600;font-size:11.5px}tr:last-child td{border-bottom:0}td:first-child{font-weight:550;min-width:125px}td{min-width:145px}.table-scroll table:has(th:nth-child(2)){min-width:410px}.table-scroll table:has(th:nth-child(3)){min-width:585px}.table-scroll table:has(th:nth-child(4)){min-width:710px}.table-scroll table:has(th:nth-child(5)){min-width:840px}.code-frame{position:relative;margin:23px 0;border:1px solid var(--line);border-radius:4px;overflow:hidden;background:#f8f8f5}.code-frame pre{margin:0;padding:49px 20px 19px;overflow:auto;max-height:680px;font-family:Consolas,"Liberation Mono",monospace;font-size:12px;line-height:1.9;white-space:pre;letter-spacing:-.01em}.copy-code{position:absolute;top:9px;right:10px;font-size:10px;padding:5px 9px;background:#fff}.code-frame .code-label{position:absolute;left:18px;top:15px;font-size:9px;color:var(--muted);letter-spacing:.12em}.doc-footer{margin-top:30px;display:flex;justify-content:space-between;gap:24px;font-size:10px;color:var(--muted);line-height:1.8}
+.review-workspace{background:var(--soft);border:1px solid var(--line);padding:27px;margin:30px 0 5px;border-radius:4px}.workspace-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:15px}.workspace-heading h3{margin:6px 0 10px}.workspace-heading p{font-size:12px;margin:0 0 20px}.checks{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}.check-group{min-width:0;margin:0;padding:14px 15px;border:1px solid var(--line);background:#fff;border-radius:3px}.check-group legend{padding:0 7px;font-size:12px;font-weight:600}.check-line{display:flex;gap:9px;align-items:flex-start;font-size:12px;line-height:1.7;margin:9px 0;cursor:pointer}.check-line input{accent-color:var(--coral);margin:3px 0 0;flex:none;width:15px;height:15px}.stage-field{display:flex;align-items:center;gap:15px;font-size:12px;margin:26px 0 20px}.stage-field select{background:#fff;border:1px solid var(--line);padding:9px 12px;max-width:100%;font-size:12px;border-radius:3px}.note-grid{display:grid;grid-template-columns:1fr 1fr;gap:18px}.note-field{display:block;min-width:0}.note-field>span{display:block;margin-bottom:8px;font-size:12px}.note-field textarea{width:100%;min-height:96px;border:1px solid var(--line);border-radius:3px;padding:12px;background:#fff;font-size:13px;line-height:1.8}.note-field:last-child{grid-column:1/-1}.note-actions{display:flex;gap:9px;flex-wrap:wrap;margin-top:20px}.note-actions button{font-size:12px}.review-workspace p.save-status{font-size:11px;margin:15px 0 5px;color:var(--muted)}.review-workspace p.micro{font-size:10px;line-height:1.8;color:var(--muted);margin:0}.toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);background:var(--ink);color:white;padding:12px 18px;border-radius:4px;font-size:12px;z-index:60;max-width:90vw;box-shadow:0 5px 24px #0002;line-height:1.6}.empty-nav{font-size:12px;color:var(--muted);padding:15px 5px;line-height:1.7}
+@media(min-width:1600px){.layout{gap:65px}}
+@media(max-width:1100px){.layout{grid-template-columns:188px minmax(0,1fr);gap:30px;padding:0 24px}.topbar{gap:18px}.brand span{display:none}.doc-hero h1{font-size:38px}.doc-section p{font-size:14px}.doc-section h2{font-size:26px}.doc-tabs{gap:23px}.review-workspace{padding:22px}.checks{grid-template-columns:1fr}}
+@media(max-width:820px){html{scroll-padding-top:84px}.topbar{height:60px;padding:0 18px;gap:14px}.brand b{font-size:27px}.doc-tabs{gap:18px}.doc-tab{font-size:12px}.top-actions{gap:6px}.top-actions button{font-size:10px;padding:7px 9px}.layout{display:block;padding:0 22px}.toc-shell{position:relative;top:auto;max-height:none;padding-top:18px;border-bottom:1px solid var(--line)}.toc-title{margin:0;padding-bottom:14px}.toc-title strong{font-size:11px}.toc-title>span{display:none}#toc-toggle{display:block;font-size:11px;padding:7px 11px}.toc-body{display:none}.toc-shell.open .toc-body{display:block}.toc-links{max-height:240px;margin-bottom:12px}.toc-next{display:none}.doc-hero{padding:34px 0 27px}.doc-hero h1{font-size:35px;max-width:600px}.hero-label{align-items:flex-start;gap:10px;flex-wrap:wrap}.hero-label .pill{font-size:9px}.doc-section{padding:34px 0;scroll-margin-top:80px}.doc-section h2{font-size:25px;line-height:1.45}.doc-section p{font-size:14px;line-height:1.95}.hero-meta blockquote p{font-size:16px}.note-grid{grid-template-columns:1fr}.stage-field{flex-wrap:wrap}.note-field:last-child{grid-column:auto}.workspace-heading{display:block}.workspace-heading .pill{margin-bottom:17px}.doc-footer{flex-direction:column;gap:5px}}
+@media(max-width:480px){.topbar{gap:10px;padding:0 16px}.doc-tabs{gap:15px}.top-actions button#source-download{display:none}.brand b{font-size:25px}.doc-hero h1{font-size:31px;line-height:1.3}.doc-hero .eyebrow{font-size:9px}.doc-description{font-size:12px}.hero-meta{font-size:11px}.hero-meta p{font-size:11px;line-height:1.9}.hero-meta blockquote{padding:16px 16px}.hero-meta blockquote p{font-size:15px}.doc-section h2{font-size:23px}.doc-section h3{font-size:18px}.doc-section p{font-size:14px}.table-scroll{margin:20px 0}td,th{padding:11px 12px}.code-frame pre{font-size:11px;padding-left:15px}.review-workspace{padding:18px}.note-actions{gap:8px}.note-actions button{padding:9px 10px;font-size:11px}.check-line{font-size:12px}.top-actions button{padding:7px 9px}}
+@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}*{transition:none!important}}
+@media print{@page{margin:15mm}.topbar,.toc-shell,.skip,.copy-code,.toast,.review-workspace,.doc-footer{display:none!important}.layout{display:block;padding:0;max-width:none}main{max-width:none;padding:0}.doc-hero{padding:0 0 18px}.doc-hero h1{font-size:27px}.doc-section{padding:22px 0;break-inside:auto}.doc-section h2{font-size:21px;break-after:avoid}.doc-section h3{font-size:16px;break-after:avoid}.doc-section p{font-size:11px;line-height:1.75}.table-scroll{overflow:visible;break-inside:auto}table{min-width:0!important;font-size:9px;table-layout:fixed}td,th{min-width:0;font-size:9px;word-break:normal;padding:7px}tr{break-inside:avoid}.code-frame pre{white-space:pre-wrap;max-height:none;font-size:9px;padding:16px;overflow:visible;word-break:break-word}.code-label{display:none}.hero-meta blockquote p{font-size:14px}}
+
+/* ---- 작성자별 첨삭 표기 (AI.md §5) -------------------------------------
+   ins  = 추가·교체 제안 (초록)   del = 삭제·교체 대상 (빨강 취소선)
+   blockquote.review = 검토 코멘트 (파란 상자)   .review-appendix = 검토 요약 부록
+   body.review-original  → 원문만 (제안·코멘트 숨김)
+   body.review-accepted  → 인라인 제안 미리보기 (코멘트 대안은 적용하지 않음)
+------------------------------------------------------------------------- */
+ins{background:#dff3e4;color:#17512a;text-decoration:none;border-bottom:2px solid #4f9d63;padding:0 3px;border-radius:2px}
+del{background:#fbe4e0;color:#8f3324;text-decoration:line-through;text-decoration-color:#c9573f;text-decoration-thickness:1.5px;padding:0 3px;border-radius:2px}
+h1 ins,h1 del,h2 ins,h2 del,h3 ins,h3 del{border-bottom-width:3px}
+blockquote.review{margin:14px 0 24px;padding:12px 16px 12px 18px;border:0;border-left:4px solid #3b6fd6;background:#eef3fc;border-radius:0 6px 6px 0;font-size:14px;line-height:1.75;color:#24303f}
+blockquote.review p{margin:0}
+blockquote.review p+p{margin-top:9px;padding-top:9px;border-top:1px dashed #c3d2ef}
+.review-label{display:inline-flex;gap:6px;align-items:center;margin-right:8px;font-weight:600;font-size:11.5px;vertical-align:1px;white-space:nowrap}
+.review-agent{color:#3b6fd6;text-transform:uppercase;letter-spacing:.09em}
+.review-id{background:#3b6fd6;color:#fff;border-radius:3px;padding:1px 7px;font-weight:600}
+.review-sev{border-radius:3px;padding:1px 7px;font-weight:600}
+.review-sev[data-sev="높음"]{background:#c9573f;color:#fff}
+.review-sev[data-sev="중간"]{background:#f0c14b;color:#3a2a00}
+.review-sev[data-sev="낮음"]{background:#d9dfe2;color:#3d484d}
+.doc-section.review-appendix{margin-top:60px;padding-top:28px;border-top:3px solid #3b6fd6}
+.doc-section.review-appendix h2 .section-num{color:#3b6fd6}
+.review-pill{border-color:#3b6fd6;color:#3b6fd6;text-decoration:none}
+.review-pill:hover{background:#eef3fc}
+.review-legend{margin:12px 0 0;font-size:12px;color:var(--muted);line-height:1.8}
+.review-legend span{margin-right:12px;white-space:nowrap}
+.review-select{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);white-space:nowrap}
+.review-select select{padding:7px 9px;border:1px solid var(--line);border-radius:4px;background:var(--paper);font-size:12px}
+blockquote.review[data-review-agent="codex"]{border-left-color:#7250a0;background:#f4effa;color:#352b46}
+[data-review-agent="codex"] .review-agent{color:#7250a0}
+[data-review-agent="codex"] .review-id{background:#7250a0}
+.review-pill[data-review-agent="codex"]{border-color:#7250a0;color:#7250a0}
+.review-pill[data-review-agent="codex"]:hover{background:#f4effa}
+.review-appendix[data-review-agent="codex"]{border-top-color:#7250a0}
+.review-appendix[data-review-agent="codex"] h2 .section-num{color:#7250a0}
+.review-label[id]{scroll-margin-top:110px}
+.review-label[id]:target{outline:2px solid currentColor;outline-offset:4px}
+.review-legend p{margin:5px 0}
+.review-select select:disabled{opacity:.6}
+.top-actions{flex-wrap:wrap}
+[hidden]{display:none!important}
+@media(max-width:1100px){.topbar{height:auto;min-height:68px;flex-wrap:wrap;padding-top:8px;padding-bottom:8px;gap:8px 18px}.doc-tabs{height:34px;flex:1;justify-content:flex-end}.top-actions{flex-basis:100%;justify-content:flex-end}.review-select select{max-width:185px}}
+@media(min-width:821px) and (max-width:1100px){.toc-shell{top:135px;max-height:calc(100vh - 155px)}}
+.toc-links a[data-reviews]{display:flex;justify-content:space-between;gap:8px;align-items:center}
+.toc-links a[data-reviews]::after{content:attr(data-reviews);flex:none;min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:#3b6fd6;color:#fff;font-size:10px;line-height:18px;text-align:center}
+body.review-original ins,body.review-original blockquote.review,body.review-original .review-appendix,body.review-original .review-legend{display:none}
+body.review-original del{background:none;color:inherit;text-decoration:none;padding:0}
+body.review-original .toc-links a[data-reviews]::after{display:none}
+body.review-accepted del,body.review-accepted blockquote.review,body.review-accepted .review-appendix,body.review-accepted .review-legend{display:none}
+body.review-accepted ins{background:none;color:inherit;border:0;padding:0}
+body.review-accepted .toc-links a[data-reviews]::after{display:none}
+@media print{blockquote.review{break-inside:avoid;background:#eef3fc!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}ins,del{-webkit-print-color-adjust:exact;print-color-adjust:exact}.review-select{display:none}}
+</style></head><body>
+<!-- GENERATED FILE — source: docs/decisions/ADR-021-conversation-sessions.md — run: npm --prefix tools/docs run build -->
+<a class="skip" href="#reading-main">본문으로 이동</a>
+<header class="topbar"><a class="brand" href="../../index.html" aria-label="VIDE 문서 모음"><b>V.</b><span>VIDE</span></a><nav class="doc-tabs" aria-label="문서 선택"><a class="doc-tab" href="../PRD.html">PRD</a><a class="doc-tab" href="../specs/README.html">SPEC</a><a class="doc-tab" href="../../Design.html">Design</a><a class="doc-tab" href="../architecture/ARCH-01-system.html">기술 설계</a><a class="doc-tab" href="../plans/PLAN.html">PLAN</a><a class="doc-tab" href="../../DEVELOPMENT_GUIDE.html">개발 가이드</a><a class="doc-tab" href="../../AI.html">AI 규약</a></nav><div class="top-actions"><button id="source-download" title="현재 문서의 Markdown 원문 저장">원문 ↓</button><button id="print-doc" title="현재 문서 인쇄">인쇄</button></div></header>
+<div class="layout"><aside class="toc-shell" id="toc-shell" aria-label="현재 문서의 목차"><div class="toc-title"><strong>CONTENTS</strong><span id="toc-count"></span><button id="toc-toggle" aria-expanded="false" aria-controls="toc-body">목차 열기</button></div><div class="toc-body" id="toc-body"><input class="toc-search" id="toc-search" type="search" placeholder="장 제목으로 찾기" aria-label="현재 문서 목차 검색"><p class="toc-hint" id="nav-hint" role="status">장 제목으로 찾아갑니다.</p><nav class="toc-links" id="toc-links" aria-label="본문 장 이동"></nav><div class="toc-next">다음 작성할 문서<br><b>다음 작업 · PLAN §6.5</b><br>현재 단계와 작업별 계획을 확인한 뒤 해당 범위에서 재개</div></div></aside><main id="reading-main" tabindex="-1"><article id="adr-021-conversation-sessions" class="document"><header class="doc-hero"><div class="hero-label"><span class="eyebrow">DECISION RECORD</span><span><span class="pill">APPROVED · v0.1</span><span class="pill">7 CHAPTERS</span></span></div><h1 tabindex="-1">AI 대화를 목적별 세션으로 잇는다</h1><div class="hero-meta">
+</div></header><section class="doc-section" id="adr-021-conversation-sessions-section-x0"><h2><span aria-hidden="true" class="section-num">00 /</span> 맥락</h2>
+<p><strong>단발 실행이 생긴 이유.</strong> <a href="ADR-013-local-coordinator-cli.html">ADR-013</a>(2026-09-20, 지금은 superseded)은 매 호출 도구 없는 새 CLI 실행으로 구조화 제안을 받고, 이전 실행의 재개는 VIDE의 확인된 기록에서 새 호출로 시작하며, CLI 세션 ID를 제품 기록의 정본으로 쓰지 않기로 했다. 세션 재사용과 장기 프로세스(app-server)는 &quot;현재 경로가 아니다&quot;로 두고, 나중에 채택하려면 도구 차단, 문맥 격리, 취소와 늦은 결과, 재시작 복구, 전송 범위 검증과 ADR 변경이 필요하다고 적었다. 현행 <a href="ADR-014-sdk-agent-execution.html">ADR-014</a>는 도구 없는 단발 응답 제한을 SDK 도구 실행으로 대체했지만, 실행 단위는 그대로 남았다. 지금 코드는 요청 하나에 CLI 프로세스 하나를 띄우고 공급자 기록을 남기지 않으며(<code>--no-session-persistence</code>), 대상 참조·기준 판·호출 상한·토큰을 요청 단위로 발급·회수하고, 다음 요청에는 이전 요청과 답의 잘린 글만 다시 보낸다(SPEC-02.17의 이전 판 (5)). 그 결과 AI가 쓴 코드·도구 호출·오류·질문은 다음 턴에 넘어가지 않고, 편집 한 건에 입력 약 159k 토큰을 쓴 기록이 있다(2026-09-29 로그, <a href="../research/RESEARCH-10-vide-restructure.html">RESEARCH-10 §1.1</a>).</p>
+<p><strong>세션을 쓰지 않은 근거의 재평가</strong>(<a href="../research/RESEARCH-10-vide-restructure.html">RESEARCH-10 §1.2~1.4</a>). 제품 기록의 정본이 VIDE라는 점과 개인 설정·전역 MCP를 막아야 한다는 점은 지금도 맞다. 요청마다 Jev가 공급자를 바꾸는 것은 정책일 뿐이고, 요청 단위 안전장치는 턴마다 새 프로세스를 띄우면 그대로 다시 발급할 수 있다. 작업 폴더를 지우면 기록이 고아가 된다는 추론은 틀렸다(설치된 CLI는 세션 ID로 이 PC의 어느 폴더에서나 기록을 찾는다). 공급자 기록 폴더에 프로젝트 자료가 쌓이는 문제는 VIDE가 관리할 비용으로 남는다. 대화형 화면(TUI)을 쓰지 않는 이유는 기계가 읽을 이벤트 규약이 없다는 것 하나이며, 원하는 것은 TUI 화면이 아니라 이어지는 대화다.</p>
+<p><strong>바뀐 요구.</strong> 2026-09-29 사용자 결정: 모든 대화를 세션으로 잇는다. 대화를 시작할 때 Jev가 공급자·모델을 정해 그 대화가 끝날 때까지 고정하고, 모델 편집·CAD 편집·법규 질문처럼 목적이 다른 대화를 동시에 진행한다. 동시 진행을 실제로 막는 것은 세션 여부보다 대화 개념이 없는 저장 구조와 겹치는 요청을 거절하는 접수 규칙이었으므로, 접수 규칙도 같은 날 함께 정했다(SPEC-02.9).</p>
+</section><section class="doc-section" id="adr-021-conversation-sessions-section-x1"><h2><span aria-hidden="true" class="section-num">01 /</span> 선택지</h2>
+<div aria-label="ADR 표 1" class="table-scroll" role="region" tabindex="0"><table>
+<thead>
+<tr>
+<th></th>
+<th>A. 단발 + VIDE 대화 원장</th>
+<th>B. 대화별 공급자 세션, 턴마다 새 프로세스</th>
+<th>C. 장기 프로세스</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>방식</td>
+<td>지금처럼 턴마다 새로 실행하고, 대화 원장(가정·질문·답·결정·결과 참조)을 요청 자료에 싣는다</td>
+<td>첫 턴에 세션을 만들고 다음 턴부터 그 세션을 이어 실행한다. 턴마다 지금과 같은 격리 인자를 다시 넘기고 기록 끄기만 뺀다</td>
+<td>대화마다 CLI 프로세스를 띄워 두고 입력을 흘려 넣는다</td>
+</tr>
+<tr>
+<td>AI 작업 기억</td>
+<td>원장에 적힌 것만</td>
+<td>쓴 코드·오류·질문까지</td>
+<td>B와 같고, 턴 중간 지시가 가능</td>
+</tr>
+<tr>
+<td>요청 단위 안전장치</td>
+<td>그대로</td>
+<td>턴마다 다시 발급해 유지</td>
+<td>프로세스를 띄울 때 권한이 고정되어 턴마다 다시 묶는 장치가 새로 필요</td>
+</tr>
+<tr>
+<td>턴당 입력</td>
+<td>매번 새로 만든 문맥</td>
+<td>누적 이력(짧은 간격은 캐시 이득, 긴 대화는 손해)</td>
+<td>B와 같음</td>
+</tr>
+<tr>
+<td>재시작·중단</td>
+<td>안전</td>
+<td>기록이 남고, 호스트 쓰기 보호는 그대로 필요</td>
+<td>엔진 재시작과 함께 끊김</td>
+</tr>
+<tr>
+<td>이용 조건</td>
+<td>현행과 같음</td>
+<td>현행과 같음(수정하지 않은 공식 CLI를 사용자 구독으로 실행)</td>
+<td>원시 CLI 입력 흐름은 현행 범주이나, 공급자 SDK 패키지를 구독 로그인과 함께 쓰는 쪽은 위험</td>
+</tr>
+</tbody>
+</table></div>
+</section><section class="doc-section" id="adr-021-conversation-sessions-section-x2"><h2><span aria-hidden="true" class="section-num">02 /</span> 결정</h2>
+<ol>
+<li><strong>모든 대화에 B를 쓴다.</strong> 턴 하나 = CLI 실행 하나, 대화 하나 = 공급자 세션 하나다. 매 턴의 인자는 현행 격리 인자(도구 없는 턴과 도구 있는 턴 각각)에서 기록 끄기만 뺀 것이며, 대상·기준 판·허용 도구·권한·상한·토큰은 턴마다 발급하고 턴이 끝나면 회수한다. 동작 의미는 <a href="../specs/SPEC-02-execution-candidates.html">SPEC-02.19</a>, CLI 인자와 공급자 기록 관리는 <a href="../architecture/ARCH-01-system.html">ARCH-01</a> §2, 저장 구조는 <a href="../architecture/ARCH-03-jig-runtime.html">ARCH-03</a> §10이 소유한다.</li>
+<li><strong>공급자·모델·계정은 대화를 열 때 정해 고정한다.</strong> 같은 공급자 안에서 effort만 턴마다 바꿀 수 있다. 계정 한도·공급자 바꾸기·세션 잃음은 원장 기반 인계로 새 세션을 연다(SPEC-02.19의 5).</li>
+<li><strong>Codex 대화는 SPIKE ④가 통과할 때까지 원장 방식(A)으로 둔다.</strong> 사용자에게는 같은 대화로 보인다.</li>
+<li><strong>한 대화 안에서 도구 없는 턴과 도구 있는 턴을 섞는 방법:</strong> 대화마다 도구 유무를 주장하지 않는 중립 시스템 프롬프트 하나를 쓰고, 턴마다 달라지는 범위·대상·권한·상한·금지는 그 턴의 요청 자료('이번 턴 규칙')로 보낸다. 기록된 시스템 프롬프트를 쓰지 않게 하는 옵션은 SPIKE ⑦에서 확인한다. 둘 다 통하지 않으면 한 대화 아래 도구 없는 세션과 도구 있는 세션을 따로 연다.</li>
+<li><strong>정본은 VIDE다.</strong> 대화 원장·jig 작업본·초안 파일이 정본이고 공급자 세션은 어느 정본도 대체하지 않는다(ADR-013의 원칙과 ARCH-01 §1.1 유지). 세션을 잃어도 작업을 잃지 않는다.</li>
+<li><strong>C는 지금 채택하지 않는다.</strong> 턴 중간 지시는 SPIKE 결과를 본 뒤 따로 판단한다.</li>
+<li><strong>SPIKE에서 떨어진 항목은 그 항목만 되돌린다.</strong> 격리·권한 항목(①②⑤⑥)이 떨어진 공급자는 원장 방식으로, ⑦이 떨어지면 형제 세션 방식으로 간다. 모델 편집 대화는 세션의 이득이 작으므로 하나라도 떨어지면 원장 방식으로 둔다.</li>
+</ol>
+</section><section class="doc-section" id="adr-021-conversation-sessions-section-x3"><h2><span aria-hidden="true" class="section-num">03 /</span> 구현 전 통과해야 할 SPIKE</h2>
+<p>결정은 승인되었고, <strong>공급자별 세션 이어 실행은 아래 SPIKE가 통과한 뒤에만</strong> 켠다. 대화·원장·접수 규칙과 원장 방식의 대화는 SPIKE를 기다리지 않는다. 작업 순서와 기록 위치는 <a href="../plans/PLAN-24-ai-conversations.html">PLAN-24</a>가 소유하며, 기록은 <code>docs/tdd/SPIKE-YYYY-MM-DD-cli-session-resume.md</code>로 남긴다. 합격 기준은 실험 전에 적는다.</p>
+<div aria-label="ADR 표 2" class="table-scroll" role="region" tabindex="0"><table>
+<thead>
+<tr>
+<th>#</th>
+<th>질문</th>
+<th>합격 기준</th>
+<th>ADR-013의 조건</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>0</td>
+<td>CLI 판 확인</td>
+<td>실행 전 설치된 CLI 판이 검증한 범위 안인지 확인하고 밖이면 실행을 거절한다. 인증 방식 전환(<code>--bare</code> 기본화) 때 나오는 실패 신호를 미리 채집해 분류한다. 가능하면 검증한 판의 실행 파일 경로를 고정한다</td>
+<td>—(세션 방식의 전제)</td>
+</tr>
+<tr>
+<td>①</td>
+<td>세션을 이어 실행할 때 격리 인자를 다시 넘기면 매 턴 시작 이벤트의 도구·MCP 목록이 허용 목록과 같은가</td>
+<td>3턴 연속 일치</td>
+<td>도구 차단</td>
+</tr>
+<tr>
+<td>②</td>
+<td>파일 도구를 준 턴에서 작업 폴더와 붙인 폴더 밖으로 나갈 수 없는가</td>
+<td>밖 읽기·쓰기 시도가 거부됨</td>
+<td>문맥 격리</td>
+</tr>
+<tr>
+<td>③</td>
+<td>다른 계정 프로필에서 같은 세션을 이어 갈 수 있는가</td>
+<td>성공이나 실패가 재현됨(실패면 인계 자료만 씀)</td>
+<td>전송 범위</td>
+</tr>
+<tr>
+<td>④</td>
+<td>Codex 세션 이어 실행에서 샌드박스·MCP 설정이 적용되는가</td>
+<td>읽기 전용과 허용 MCP만 보임. 통과 전에는 Codex 원장 방식</td>
+<td>도구 차단</td>
+</tr>
+<tr>
+<td>⑤</td>
+<td>취소 뒤 늦은 결과가 무시되는가, 종료를 확인하지 못한 프로세스 뒤의 재개는 어떻게 되는가</td>
+<td>늦은 결과가 후보를 만들지 않음. 종료 미확인이면 세션을 잃은 것으로 두고 새 세션이나 인계로 시작</td>
+<td>취소·늦은 결과, 재시작 복구</td>
+</tr>
+<tr>
+<td>⑥</td>
+<td>기록 삭제가 다른 대화·계정에 영향을 주지 않는가</td>
+<td>지운 대화만 이어 갈 수 없음</td>
+<td>문맥 격리</td>
+</tr>
+<tr>
+<td>⑦</td>
+<td>한 세션에서 도구 없는 턴과 도구 있는 턴을 번갈아 돌리면 도구·MCP 목록과 시스템 프롬프트가 턴 인자를 따르는가</td>
+<td>턴마다 도구·MCP가 그 턴 인자와 같음. 프롬프트 반영 여부를 기록</td>
+<td>도구 차단</td>
+</tr>
+<tr>
+<td>⑧</td>
+<td>제작 대화에 붙인 초안 폴더와 그 상위의 <code>CLAUDE.md</code> 같은 지시 파일이 읽히는가</td>
+<td>시작 이벤트·첫 응답에 지시 파일이 없음. 읽히면 초안 폴더를 저장소 밖에 두고 금지 파일 검사를 유지</td>
+<td>문맥 격리</td>
+</tr>
+<tr>
+<td>⑨</td>
+<td>같은 작업을 A와 B로 돌렸을 때 턴별 입력·캐시 토큰</td>
+<td>5턴 대화 두 종류의 수치 기록(캐시 토큰 계측을 먼저 고친다)</td>
+<td>—</td>
+</tr>
+</tbody>
+</table></div>
+</section><section class="doc-section" id="adr-021-conversation-sessions-section-x4"><h2><span aria-hidden="true" class="section-num">04 /</span> 영향</h2>
+<ul>
+<li><strong>공급자 기록 보존은 VIDE가 관리한다.</strong> 대화를 닫고 30일 뒤 세션 ID로 공급자 기록을 지우고, 버린 jig 초안의 기록은 바로 지우며, 백업 대상에서 뺀다(SPEC-02.19의 1). 기본 로그인 프로필의 설정 경로는 바꾸지 않는다(ARCH-01 「CLI 프로필 실행 경계」 유지).</li>
+<li><strong>동시 진행은 접수 규칙이 받친다.</strong> 호스트 없는 턴은 호스트 경합에서 빼고, 읽기는 문서 단위로 보고 상한에서 빼며, 같은 문서 쓰기는 문서별 대기열, 프로젝트 AI 턴은 N개(기본 3)로 둔다(SPEC-02.9).</li>
+<li><strong>CLI 판 확인이 세션 방식의 전제다(에이전트 권고, 사용자 이의 없음).</strong> 판 범위 밖이면 경고만 하지 않고 실행을 거절한다. 사용자가 직접 쓰는 CLI가 같은 실행 파일을 갱신하므로 자식 프로세스의 자동 업데이트를 끄는 것만으로는 부족하다.</li>
+<li><strong>비용.</strong> 이어 실행은 매 턴 누적 이력을 다시 보내므로 긴 대화일수록 턴당 입력이 커지고, 동시에 도는 대화 수만큼 같은 구독 사용량을 쓴다. 길어진 대화는 원장으로 새 세션을 연다(SPEC-02.19의 5). 기준값은 SPIKE ⑨ 측정 뒤 정한다.</li>
+<li><strong>한 세션을 두 실행이 쓰지 않는다.</strong> 종료를 확인하지 못한 턴 뒤에는 그 세션을 이어 쓰지 않는다.</li>
+<li><strong>작업 폴더는 매 턴 저장소·데이터 폴더 밖의 빈 임시 폴더다.</strong> 세션은 ID로 이어지므로 폴더를 고정하지 않는다. jig 만들기 대화의 초안 폴더만 따로 붙이며, 그 범위와 금지 파일 검사는 SPEC-07.16·ARCH-03이 소유한다.</li>
+<li><strong>저장 구조가 바뀐다.</strong> 대화·공급자 세션·대화 원장을 저장하고 기존 요청은 프로젝트 기본 대화로 본다. 이 판 이후 설치본은 이전 판으로 되돌릴 수 없음을 배포 안내에 적는다(ARCH-03 §10).</li>
+</ul>
+</section><section class="doc-section" id="adr-021-conversation-sessions-section-x5"><h2><span aria-hidden="true" class="section-num">05 /</span> 이 결정이 고치는 기준</h2>
+<ul>
+<li><strong>ADR-014:</strong> 결정 문구는 세션을 금하지 않으므로 바꾸지 않는다. ADR-014의 책임(대상·권한·기준·결과 기록을 VIDE가 소유)은 턴 단위로 그대로 적용한다. ADR-014에서 이 ADR로 가는 역링크가 필요하다.</li>
+<li><strong>ADR-013(superseded):</strong> 세션 채택에 요구한 조건(도구 차단, 문맥 격리, 취소·늦은 결과, 재시작 복구, 전송 범위 검증, ADR 변경)을 위 SPIKE 표와 이 ADR로 충족한다.</li>
+<li><strong>PLAN-02 §2와 그 기술 정본 ARCH-01 §3(메시지와 도구):</strong> &quot;새 에이전트 세션&quot;의 단위를 턴으로 읽는다. 세션 이어 실행의 CLI 인자·공급자 기록 관리는 ARCH-01 §2에, 대화·세션·원장 저장은 ARCH-03 §10에 적는다. 구현·검증 작업은 PLAN-24가 소유한다. ARCH-01 §3 개입 표의 '세션 내 메시지 주입' 행은 C를 위한 예비 칸으로 남는다.</li>
+<li><strong>SPEC-02.17의 이전 판 (5):</strong> &quot;요청마다 새 CLI가 실행되므로 … 압축되지 않는다&quot;는 약속을 거두고, 대화마다 시작 때 정한 공급자 세션 하나를 이어 가며 VIDE 원장이 정본이라는 규칙으로 바꿨다(SPEC-02.17의 6).</li>
+<li><strong>SPEC-02.18:</strong> 계정을 요청 접수 때 고정하던 규칙을 대화를 열 때 고정하는 것으로 적용한다(SPEC-02.19의 2).</li>
+</ul>
+</section><section class="doc-section" id="adr-021-conversation-sessions-section-x6"><h2><span aria-hidden="true" class="section-num">06 /</span> 근거</h2>
+<p>2026-09-29 사용자 결정: 모든 대화를 세션으로 잇고, 대화 시작 때 Jev가 공급자·모델을 정해 그 대화 끝까지 고정하며, 목적별 여러 대화를 동시에 진행한다(모델 편집·CAD 편집·법규 질문 병렬). 적용 방식은 권고안(모든 대화 세션, Codex는 SPIKE ④ 통과 전까지 원장 방식, 한 대화의 도구 유무 섞기는 중립 프롬프트 + 이번 턴 규칙)을 사용자가 결정으로 받았다. 동시 접수 규칙도 같은 날 결정했다. CLI 판 확인은 에이전트 권고를 사용자가 이의 없이 받은 기본값이다. 조사·대안 비교·실측은 <a href="../research/RESEARCH-10-vide-restructure.html">RESEARCH-10 §1·§8.3</a>.</p>
+<p>이 승인은 방향과 규칙의 승인이며 구현 완료가 아니다. 제품 코드의 이행 상태는 PLAN §6.5가 소유한다.</p>
+</section><footer class="doc-footer"><span>VIDE / PLANNING DOCUMENTS</span><span>문서 열람용 · 실제 CAD/BIM 지원은 구현·검증 후 선언</span></footer></article></main></div>
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+<script id="source-data" type="application/json">{"adr-021-conversation-sessions":{"label":"AI 대화를 목적별 세션으로 잇는다","file":"ADR-021-conversation-sessions.md","markdown":"---\nid: ADR-021\ntitle: AI 대화를 목적별 세션으로 잇는다\nstatus: approved\nversion: 0.1\nupdated: 2026-09-29\nowner: user\nrelated: [FR-08, FR-18, FR-25, AC-46, AC-47, AC-48, ADR-013, ADR-014, SPEC-02, PLAN-02, PLAN-24, ARCH-01, ARCH-03, RESEARCH-10]\n---\n\n# AI 대화를 목적별 세션으로 잇는다\n\n## 맥락\n\n**단발 실행이 생긴 이유.** [ADR-013](ADR-013-local-coordinator-cli.md)(2026-09-20, 지금은 superseded)은 매 호출 도구 없는 새 CLI 실행으로 구조화 제안을 받고, 이전 실행의 재개는 VIDE의 확인된 기록에서 새 호출로 시작하며, CLI 세션 ID를 제품 기록의 정본으로 쓰지 않기로 했다. 세션 재사용과 장기 프로세스(app-server)는 \"현재 경로가 아니다\"로 두고, 나중에 채택하려면 도구 차단, 문맥 격리, 취소와 늦은 결과, 재시작 복구, 전송 범위 검증과 ADR 변경이 필요하다고 적었다. 현행 [ADR-014](ADR-014-sdk-agent-execution.md)는 도구 없는 단발 응답 제한을 SDK 도구 실행으로 대체했지만, 실행 단위는 그대로 남았다. 지금 코드는 요청 하나에 CLI 프로세스 하나를 띄우고 공급자 기록을 남기지 않으며(`--no-session-persistence`), 대상 참조·기준 판·호출 상한·토큰을 요청 단위로 발급·회수하고, 다음 요청에는 이전 요청과 답의 잘린 글만 다시 보낸다(SPEC-02.17의 이전 판 (5)). 그 결과 AI가 쓴 코드·도구 호출·오류·질문은 다음 턴에 넘어가지 않고, 편집 한 건에 입력 약 159k 토큰을 쓴 기록이 있다(2026-09-29 로그, [RESEARCH-10 §1.1](../research/RESEARCH-10-vide-restructure.md)).\n\n**세션을 쓰지 않은 근거의 재평가**([RESEARCH-10 §1.2~1.4](../research/RESEARCH-10-vide-restructure.md)). 제품 기록의 정본이 VIDE라는 점과 개인 설정·전역 MCP를 막아야 한다는 점은 지금도 맞다. 요청마다 Jev가 공급자를 바꾸는 것은 정책일 뿐이고, 요청 단위 안전장치는 턴마다 새 프로세스를 띄우면 그대로 다시 발급할 수 있다. 작업 폴더를 지우면 기록이 고아가 된다는 추론은 틀렸다(설치된 CLI는 세션 ID로 이 PC의 어느 폴더에서나 기록을 찾는다). 공급자 기록 폴더에 프로젝트 자료가 쌓이는 문제는 VIDE가 관리할 비용으로 남는다. 대화형 화면(TUI)을 쓰지 않는 이유는 기계가 읽을 이벤트 규약이 없다는 것 하나이며, 원하는 것은 TUI 화면이 아니라 이어지는 대화다.\n\n**바뀐 요구.** 2026-09-29 사용자 결정: 모든 대화를 세션으로 잇는다. 대화를 시작할 때 Jev가 공급자·모델을 정해 그 대화가 끝날 때까지 고정하고, 모델 편집·CAD 편집·법규 질문처럼 목적이 다른 대화를 동시에 진행한다. 동시 진행을 실제로 막는 것은 세션 여부보다 대화 개념이 없는 저장 구조와 겹치는 요청을 거절하는 접수 규칙이었으므로, 접수 규칙도 같은 날 함께 정했다(SPEC-02.9).\n\n## 선택지\n\n| | A. 단발 + VIDE 대화 원장 | B. 대화별 공급자 세션, 턴마다 새 프로세스 | C. 장기 프로세스 |\n|---|---|---|---|\n| 방식 | 지금처럼 턴마다 새로 실행하고, 대화 원장(가정·질문·답·결정·결과 참조)을 요청 자료에 싣는다 | 첫 턴에 세션을 만들고 다음 턴부터 그 세션을 이어 실행한다. 턴마다 지금과 같은 격리 인자를 다시 넘기고 기록 끄기만 뺀다 | 대화마다 CLI 프로세스를 띄워 두고 입력을 흘려 넣는다 |\n| AI 작업 기억 | 원장에 적힌 것만 | 쓴 코드·오류·질문까지 | B와 같고, 턴 중간 지시가 가능 |\n| 요청 단위 안전장치 | 그대로 | 턴마다 다시 발급해 유지 | 프로세스를 띄울 때 권한이 고정되어 턴마다 다시 묶는 장치가 새로 필요 |\n| 턴당 입력 | 매번 새로 만든 문맥 | 누적 이력(짧은 간격은 캐시 이득, 긴 대화는 손해) | B와 같음 |\n| 재시작·중단 | 안전 | 기록이 남고, 호스트 쓰기 보호는 그대로 필요 | 엔진 재시작과 함께 끊김 |\n| 이용 조건 | 현행과 같음 | 현행과 같음(수정하지 않은 공식 CLI를 사용자 구독으로 실행) | 원시 CLI 입력 흐름은 현행 범주이나, 공급자 SDK 패키지를 구독 로그인과 함께 쓰는 쪽은 위험 |\n\n## 결정\n\n1. **모든 대화에 B를 쓴다.** 턴 하나 = CLI 실행 하나, 대화 하나 = 공급자 세션 하나다. 매 턴의 인자는 현행 격리 인자(도구 없는 턴과 도구 있는 턴 각각)에서 기록 끄기만 뺀 것이며, 대상·기준 판·허용 도구·권한·상한·토큰은 턴마다 발급하고 턴이 끝나면 회수한다. 동작 의미는 [SPEC-02.19](../specs/SPEC-02-execution-candidates.md), CLI 인자와 공급자 기록 관리는 [ARCH-01](../architecture/ARCH-01-system.md) §2, 저장 구조는 [ARCH-03](../architecture/ARCH-03-jig-runtime.md) §10이 소유한다.\n2. **공급자·모델·계정은 대화를 열 때 정해 고정한다.** 같은 공급자 안에서 effort만 턴마다 바꿀 수 있다. 계정 한도·공급자 바꾸기·세션 잃음은 원장 기반 인계로 새 세션을 연다(SPEC-02.19의 5).\n3. **Codex 대화는 SPIKE ④가 통과할 때까지 원장 방식(A)으로 둔다.** 사용자에게는 같은 대화로 보인다.\n4. **한 대화 안에서 도구 없는 턴과 도구 있는 턴을 섞는 방법:** 대화마다 도구 유무를 주장하지 않는 중립 시스템 프롬프트 하나를 쓰고, 턴마다 달라지는 범위·대상·권한·상한·금지는 그 턴의 요청 자료('이번 턴 규칙')로 보낸다. 기록된 시스템 프롬프트를 쓰지 않게 하는 옵션은 SPIKE ⑦에서 확인한다. 둘 다 통하지 않으면 한 대화 아래 도구 없는 세션과 도구 있는 세션을 따로 연다.\n5. **정본은 VIDE다.** 대화 원장·jig 작업본·초안 파일이 정본이고 공급자 세션은 어느 정본도 대체하지 않는다(ADR-013의 원칙과 ARCH-01 §1.1 유지). 세션을 잃어도 작업을 잃지 않는다.\n6. **C는 지금 채택하지 않는다.** 턴 중간 지시는 SPIKE 결과를 본 뒤 따로 판단한다.\n7. **SPIKE에서 떨어진 항목은 그 항목만 되돌린다.** 격리·권한 항목(①②⑤⑥)이 떨어진 공급자는 원장 방식으로, ⑦이 떨어지면 형제 세션 방식으로 간다. 모델 편집 대화는 세션의 이득이 작으므로 하나라도 떨어지면 원장 방식으로 둔다.\n\n## 구현 전 통과해야 할 SPIKE\n\n결정은 승인되었고, **공급자별 세션 이어 실행은 아래 SPIKE가 통과한 뒤에만** 켠다. 대화·원장·접수 규칙과 원장 방식의 대화는 SPIKE를 기다리지 않는다. 작업 순서와 기록 위치는 [PLAN-24](../plans/PLAN-24-ai-conversations.md)가 소유하며, 기록은 `docs/tdd/SPIKE-YYYY-MM-DD-cli-session-resume.md`로 남긴다. 합격 기준은 실험 전에 적는다.\n\n| # | 질문 | 합격 기준 | ADR-013의 조건 |\n|---|---|---|---|\n| 0 | CLI 판 확인 | 실행 전 설치된 CLI 판이 검증한 범위 안인지 확인하고 밖이면 실행을 거절한다. 인증 방식 전환(`--bare` 기본화) 때 나오는 실패 신호를 미리 채집해 분류한다. 가능하면 검증한 판의 실행 파일 경로를 고정한다 | —(세션 방식의 전제) |\n| ① | 세션을 이어 실행할 때 격리 인자를 다시 넘기면 매 턴 시작 이벤트의 도구·MCP 목록이 허용 목록과 같은가 | 3턴 연속 일치 | 도구 차단 |\n| ② | 파일 도구를 준 턴에서 작업 폴더와 붙인 폴더 밖으로 나갈 수 없는가 | 밖 읽기·쓰기 시도가 거부됨 | 문맥 격리 |\n| ③ | 다른 계정 프로필에서 같은 세션을 이어 갈 수 있는가 | 성공이나 실패가 재현됨(실패면 인계 자료만 씀) | 전송 범위 |\n| ④ | Codex 세션 이어 실행에서 샌드박스·MCP 설정이 적용되는가 | 읽기 전용과 허용 MCP만 보임. 통과 전에는 Codex 원장 방식 | 도구 차단 |\n| ⑤ | 취소 뒤 늦은 결과가 무시되는가, 종료를 확인하지 못한 프로세스 뒤의 재개는 어떻게 되는가 | 늦은 결과가 후보를 만들지 않음. 종료 미확인이면 세션을 잃은 것으로 두고 새 세션이나 인계로 시작 | 취소·늦은 결과, 재시작 복구 |\n| ⑥ | 기록 삭제가 다른 대화·계정에 영향을 주지 않는가 | 지운 대화만 이어 갈 수 없음 | 문맥 격리 |\n| ⑦ | 한 세션에서 도구 없는 턴과 도구 있는 턴을 번갈아 돌리면 도구·MCP 목록과 시스템 프롬프트가 턴 인자를 따르는가 | 턴마다 도구·MCP가 그 턴 인자와 같음. 프롬프트 반영 여부를 기록 | 도구 차단 |\n| ⑧ | 제작 대화에 붙인 초안 폴더와 그 상위의 `CLAUDE.md` 같은 지시 파일이 읽히는가 | 시작 이벤트·첫 응답에 지시 파일이 없음. 읽히면 초안 폴더를 저장소 밖에 두고 금지 파일 검사를 유지 | 문맥 격리 |\n| ⑨ | 같은 작업을 A와 B로 돌렸을 때 턴별 입력·캐시 토큰 | 5턴 대화 두 종류의 수치 기록(캐시 토큰 계측을 먼저 고친다) | — |\n\n## 영향\n\n- **공급자 기록 보존은 VIDE가 관리한다.** 대화를 닫고 30일 뒤 세션 ID로 공급자 기록을 지우고, 버린 jig 초안의 기록은 바로 지우며, 백업 대상에서 뺀다(SPEC-02.19의 1). 기본 로그인 프로필의 설정 경로는 바꾸지 않는다(ARCH-01 「CLI 프로필 실행 경계」 유지).\n- **동시 진행은 접수 규칙이 받친다.** 호스트 없는 턴은 호스트 경합에서 빼고, 읽기는 문서 단위로 보고 상한에서 빼며, 같은 문서 쓰기는 문서별 대기열, 프로젝트 AI 턴은 N개(기본 3)로 둔다(SPEC-02.9).\n- **CLI 판 확인이 세션 방식의 전제다(에이전트 권고, 사용자 이의 없음).** 판 범위 밖이면 경고만 하지 않고 실행을 거절한다. 사용자가 직접 쓰는 CLI가 같은 실행 파일을 갱신하므로 자식 프로세스의 자동 업데이트를 끄는 것만으로는 부족하다.\n- **비용.** 이어 실행은 매 턴 누적 이력을 다시 보내므로 긴 대화일수록 턴당 입력이 커지고, 동시에 도는 대화 수만큼 같은 구독 사용량을 쓴다. 길어진 대화는 원장으로 새 세션을 연다(SPEC-02.19의 5). 기준값은 SPIKE ⑨ 측정 뒤 정한다.\n- **한 세션을 두 실행이 쓰지 않는다.** 종료를 확인하지 못한 턴 뒤에는 그 세션을 이어 쓰지 않는다.\n- **작업 폴더는 매 턴 저장소·데이터 폴더 밖의 빈 임시 폴더다.** 세션은 ID로 이어지므로 폴더를 고정하지 않는다. jig 만들기 대화의 초안 폴더만 따로 붙이며, 그 범위와 금지 파일 검사는 SPEC-07.16·ARCH-03이 소유한다.\n- **저장 구조가 바뀐다.** 대화·공급자 세션·대화 원장을 저장하고 기존 요청은 프로젝트 기본 대화로 본다. 이 판 이후 설치본은 이전 판으로 되돌릴 수 없음을 배포 안내에 적는다(ARCH-03 §10).\n\n## 이 결정이 고치는 기준\n\n- **ADR-014:** 결정 문구는 세션을 금하지 않으므로 바꾸지 않는다. ADR-014의 책임(대상·권한·기준·결과 기록을 VIDE가 소유)은 턴 단위로 그대로 적용한다. ADR-014에서 이 ADR로 가는 역링크가 필요하다.\n- **ADR-013(superseded):** 세션 채택에 요구한 조건(도구 차단, 문맥 격리, 취소·늦은 결과, 재시작 복구, 전송 범위 검증, ADR 변경)을 위 SPIKE 표와 이 ADR로 충족한다.\n- **PLAN-02 §2와 그 기술 정본 ARCH-01 §3(메시지와 도구):** \"새 에이전트 세션\"의 단위를 턴으로 읽는다. 세션 이어 실행의 CLI 인자·공급자 기록 관리는 ARCH-01 §2에, 대화·세션·원장 저장은 ARCH-03 §10에 적는다. 구현·검증 작업은 PLAN-24가 소유한다. ARCH-01 §3 개입 표의 '세션 내 메시지 주입' 행은 C를 위한 예비 칸으로 남는다.\n- **SPEC-02.17의 이전 판 (5):** \"요청마다 새 CLI가 실행되므로 … 압축되지 않는다\"는 약속을 거두고, 대화마다 시작 때 정한 공급자 세션 하나를 이어 가며 VIDE 원장이 정본이라는 규칙으로 바꿨다(SPEC-02.17의 6).\n- **SPEC-02.18:** 계정을 요청 접수 때 고정하던 규칙을 대화를 열 때 고정하는 것으로 적용한다(SPEC-02.19의 2).\n\n## 근거\n\n2026-09-29 사용자 결정: 모든 대화를 세션으로 잇고, 대화 시작 때 Jev가 공급자·모델을 정해 그 대화 끝까지 고정하며, 목적별 여러 대화를 동시에 진행한다(모델 편집·CAD 편집·법규 질문 병렬). 적용 방식은 권고안(모든 대화 세션, Codex는 SPIKE ④ 통과 전까지 원장 방식, 한 대화의 도구 유무 섞기는 중립 프롬프트 + 이번 턴 규칙)을 사용자가 결정으로 받았다. 동시 접수 규칙도 같은 날 결정했다. CLI 판 확인은 에이전트 권고를 사용자가 이의 없이 받은 기본값이다. 조사·대안 비교·실측은 [RESEARCH-10 §1·§8.3](../research/RESEARCH-10-vide-restructure.md).\n\n이 승인은 방향과 규칙의 승인이며 구현 완료가 아니다. 제품 코드의 이행 상태는 PLAN §6.5가 소유한다.\n"}}</script>
+<script id="reader-config" type="application/json">{"initial":"adr-021-conversation-sessions","siteTitle":"VIDE"}</script>
+<script>
+(() => {
+'use strict';
+const sourceData=JSON.parse(document.getElementById('source-data').textContent);
+const config=JSON.parse(document.getElementById('reader-config').textContent);
+const esc=s=>String(s);
+let activeDoc=config.initial;
+let observer;
+let toastTimer;
+const $=s=>document.querySelector(s);
+function notify(message){const t=$('#toast');t.textContent=message;t.hidden=false;clearTimeout(toastTimer);toastTimer=setTimeout(()=>{t.hidden=true;},3400);}
+function renderToc(){const links=$('#toc-links');links.replaceChildren();const nodes=document.querySelectorAll('#'+activeDoc+' .doc-section');nodes.forEach(section=>{const a=document.createElement('a');a.href='#'+section.id;a.textContent=section.querySelector('h2').textContent;a.dataset.title=a.textContent;a.addEventListener('click',()=>{$('#toc-shell').classList.remove('open');$('#toc-toggle').setAttribute('aria-expanded','false');});links.appendChild(a);});$('#toc-count').textContent=nodes.length+' CHAPTERS';$('#toc-search').value='';$('#nav-hint').textContent='章 제목으로 찾아갑니다.'.replace('章','장');if(observer)observer.disconnect();observer=new IntersectionObserver(entries=>{const visible=entries.filter(e=>e.isIntersecting).sort((a,b)=>a.boundingClientRect.top-b.boundingClientRect.top);if(!visible.length)return;document.querySelectorAll('#toc-links a').forEach(a=>a.classList.toggle('active',a.hash==='#'+visible[0].target.id));},{rootMargin:'-90px 0px -64% 0px',threshold:0});nodes.forEach(n=>observer.observe(n));}
+function showDoc(name,reset){if(!sourceData[name])name=config.initial;activeDoc=name;document.querySelectorAll('.document').forEach(d=>d.hidden=d.id!==name);document.querySelectorAll('.doc-tab').forEach(a=>{a.classList.toggle('active',a.dataset.doc===name);if(a.dataset.doc===name)a.setAttribute('aria-current','page');else a.removeAttribute('aria-current');});renderToc();document.title=(config.siteTitle||'VIDE')+' · '+sourceData[name].label;if(reset)window.scrollTo({top:0,behavior:'instant'});}
+function useHash(){let raw=decodeURIComponent(location.hash.slice(1)||config.initial);let name=raw.split('-section-')[0];if(!sourceData[name])name=config.initial;if(name!==activeDoc||!$('#toc-links').children.length)showDoc(name,false);const el=document.getElementById(raw);if(el&&!el.hidden){requestAnimationFrame(()=>el.scrollIntoView({block:'start',behavior:'instant'}));}}
+window.addEventListener('hashchange',useHash);
+document.querySelectorAll('.doc-tab[data-doc]').forEach(a=>a.addEventListener('click',e=>{e.preventDefault();const name=a.dataset.doc;showDoc(name,true);history.replaceState(null,'','#'+name);}));
+$('#toc-toggle').addEventListener('click',()=>{const on=$('#toc-shell').classList.toggle('open');$('#toc-toggle').setAttribute('aria-expanded',String(on));});
+$('#toc-search').addEventListener('input',()=>{const q=$('#toc-search').value.trim().toLocaleLowerCase();let n=0;document.querySelectorAll('#toc-links a').forEach(a=>{a.hidden=!a.dataset.title.toLocaleLowerCase().includes(q);if(!a.hidden)n++;});$('#nav-hint').textContent=q?(n?'일치하는 장 '+n+'개':'일치하는 장 제목이 없습니다.'):'장 제목으로 찾아갑니다.';});
+function download(name,contents,type){const blob=new Blob([contents],{type});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),2500);}
+$('#source-download').addEventListener('click',()=>download(sourceData[activeDoc].file,sourceData[activeDoc].markdown,'text/markdown;charset=utf-8'));
+$('#print-doc').addEventListener('click',()=>window.print());
+async function copy(text){try{if(navigator.clipboard&&navigator.clipboard.writeText){await navigator.clipboard.writeText(text);return true;}}catch(e){}const t=document.createElement('textarea');t.value=text;t.style.position='fixed';t.style.left='-9999px';document.body.appendChild(t);t.select();let ok=false;try{ok=document.execCommand('copy');}catch(e){}t.remove();return ok;}
+document.querySelectorAll('.copy-code').forEach(b=>b.addEventListener('click',async()=>{const text=b.parentElement.querySelector('pre').textContent;const ok=await copy(text);if(ok){b.textContent='복사됨';notify('텍스트를 복사했습니다.');setTimeout(()=>b.textContent='복사',1800);}else{const range=document.createRange();range.selectNodeContents(b.parentElement.querySelector('pre'));const sel=window.getSelection();sel.removeAllRanges();sel.addRange(range);notify('자동 복사가 제한됩니다. 선택된 텍스트를 직접 복사하세요.');}}));
+showDoc(config.initial,false);useHash();
+})();
+</script>
+<script>
+(() => {
+'use strict';
+const KEY = 'vide-docs-review-mode';
+const AUTHOR_KEY = 'vide-docs-review-author';
+const sel = document.getElementById('review-mode');
+if (!sel) return;
+const authorSel = document.getElementById('review-author');
+let mode = 'marked';
+let author = 'all';
+try { mode = localStorage.getItem(KEY) || 'marked'; } catch (e) {}
+try { author = localStorage.getItem(AUTHOR_KEY) || 'all'; } catch (e) {}
+if (!['marked', 'original', 'accepted'].includes(mode)) mode = 'marked';
+if (!authorSel || !Array.from(authorSel.options).some(o => o.value === author)) author = 'all';
+const matches = el => author === 'all' || el.dataset.reviewAgent === author;
+const decorate = () => {
+const query = (document.getElementById('toc-search')?.value || '').trim().toLocaleLowerCase();
+let visible = 0;
+document.querySelectorAll('#toc-links a').forEach(a => {
+  const section = document.getElementById(decodeURIComponent(a.hash.slice(1)));
+  if (!section) return;
+  a.hidden = !a.dataset.title.toLocaleLowerCase().includes(query) || (section.classList.contains('review-appendix') && (mode !== 'marked' || !matches(section)));
+  if (!a.hidden) visible += 1;
+  const n = Array.from(section.querySelectorAll('.review-label[data-rid]')).filter(matches).length;
+  if (n && mode === 'marked') a.dataset.reviews = String(n); else delete a.dataset.reviews;
+});
+if (query) document.getElementById('nav-hint').textContent = visible ? `일치하는 장 ${visible}개` : '일치하는 장 제목이 없습니다.';
+};
+const apply = () => {
+  sel.value = mode;
+  if (authorSel) { authorSel.value = author; authorSel.disabled = mode !== 'marked'; }
+  document.body.classList.toggle('review-original', mode === 'original');
+  document.body.classList.toggle('review-accepted', mode === 'accepted');
+  document.querySelectorAll('blockquote.review, .review-appendix').forEach(el => { el.hidden = !matches(el); });
+  decorate();
+  try { localStorage.setItem(KEY, mode); localStorage.setItem(AUTHOR_KEY, author); } catch (e) {}
+};
+apply();
+const toc = document.getElementById('toc-links');
+if (toc) new MutationObserver(decorate).observe(toc, { childList: true });
+document.getElementById('toc-search')?.addEventListener('input', decorate);
+sel.addEventListener('change', () => { mode = sel.value; apply(); });
+if (authorSel) authorSel.addEventListener('change', () => { author = authorSel.value; apply(); });
+const revealHash = () => {
+  let id;
+  try { id = decodeURIComponent(location.hash.slice(1)); } catch (e) { return; }
+  const target = document.getElementById(id);
+  if (!target || !target.dataset.reviewAgent) return;
+  mode = 'marked';
+  if (!matches(target)) author = 'all';
+  apply();
+  target.scrollIntoView({ block: 'center' });
+};
+window.addEventListener('hashchange', revealHash);
+revealHash();
+})();
+</script>
+</body></html>
