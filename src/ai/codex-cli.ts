@@ -7,7 +7,7 @@ export function codexEnvironment(source = process.env) {
   const env = { ...source };
   for (const key of Object.keys(env)) {
     if (
-      /^(OPENAI_|CODEX_API_KEY$|CODEX_ACCESS_TOKEN$|CODEX_AUTH_|CODEX_THREAD_ID$|CODEX_INTERNAL_|CODEX_HOME$|CODEX_CONFIG_)/i.test(
+      /^(OPENAI_|CODEX_API_KEY$|CODEX_ACCESS_TOKEN$|CODEX_AUTH_|CODEX_THREAD_ID$|CODEX_INTERNAL_|CODEX_HOME$|CODEX_CONFIG_|TYPESAFE_)/i.test(
         key,
       )
     )

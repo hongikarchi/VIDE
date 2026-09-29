@@ -70,7 +70,7 @@ body.review-accepted .toc-links a[data-reviews]::after{display:none}
 <!-- GENERATED FILE — source: docs/plans/PLAN-05-decision-layer-evaluation.md — run: npm --prefix tools/docs run build -->
 <a class="skip" href="#reading-main">본문으로 이동</a>
 <header class="topbar"><a class="brand" href="../../index.html" aria-label="VIDE 문서 모음"><b>V.</b><span>VIDE</span></a><nav class="doc-tabs" aria-label="문서 선택"><a class="doc-tab" href="../PRD.html">PRD</a><a class="doc-tab" href="../specs/README.html">SPEC</a><a class="doc-tab" href="../../Design.html">Design</a><a class="doc-tab" href="../architecture/ARCH-01-system.html">기술 설계</a><a class="doc-tab" href="PLAN.html">PLAN</a><a class="doc-tab" href="../../DEVELOPMENT_GUIDE.html">개발 가이드</a><a class="doc-tab" href="../../AI.html">AI 규약</a></nav><div class="top-actions"><button id="source-download" title="현재 문서의 Markdown 원문 저장">원문 ↓</button><button id="print-doc" title="현재 문서 인쇄">인쇄</button></div></header>
-<div class="layout"><aside class="toc-shell" id="toc-shell" aria-label="현재 문서의 목차"><div class="toc-title"><strong>CONTENTS</strong><span id="toc-count"></span><button id="toc-toggle" aria-expanded="false" aria-controls="toc-body">목차 열기</button></div><div class="toc-body" id="toc-body"><input class="toc-search" id="toc-search" type="search" placeholder="장 제목으로 찾기" aria-label="현재 문서 목차 검색"><p class="toc-hint" id="nav-hint" role="status">장 제목으로 찾아갑니다.</p><nav class="toc-links" id="toc-links" aria-label="본문 장 이동"></nav><div class="toc-next">다음 작성할 문서<br><b>다음 작업 · PLAN §6.5</b><br>현재 단계와 작업별 계획을 확인한 뒤 해당 범위에서 재개</div></div></aside><main id="reading-main" tabindex="-1"><article id="plan-05-decision-layer-evaluation" class="document"><header class="doc-hero"><div class="hero-label"><span class="eyebrow">PLAN</span><span><span class="pill">REVIEW · v0.5</span><span class="pill">8 CHAPTERS</span></span></div><h1 tabindex="-1">판정 계층의 실효성 평가 계획</h1><div class="hero-meta">
+<div class="layout"><aside class="toc-shell" id="toc-shell" aria-label="현재 문서의 목차"><div class="toc-title"><strong>CONTENTS</strong><span id="toc-count"></span><button id="toc-toggle" aria-expanded="false" aria-controls="toc-body">목차 열기</button></div><div class="toc-body" id="toc-body"><input class="toc-search" id="toc-search" type="search" placeholder="장 제목으로 찾기" aria-label="현재 문서 목차 검색"><p class="toc-hint" id="nav-hint" role="status">장 제목으로 찾아갑니다.</p><nav class="toc-links" id="toc-links" aria-label="본문 장 이동"></nav><div class="toc-next">다음 작성할 문서<br><b>다음 작업 · PLAN §6.5</b><br>현재 단계와 작업별 계획을 확인한 뒤 해당 범위에서 재개</div></div></aside><main id="reading-main" tabindex="-1"><article id="plan-05-decision-layer-evaluation" class="document"><header class="doc-hero"><div class="hero-label"><span class="eyebrow">PLAN</span><span><span class="pill">REVIEW · v0.6</span><span class="pill">8 CHAPTERS</span></span></div><h1 tabindex="-1">판정 계층의 실효성 평가 계획</h1><div class="hero-meta">
 </div></header><section class="doc-section" id="plan-05-decision-layer-evaluation-section-1"><h2><span aria-hidden="true" class="section-num">01 /</span> 목적과 현재 결정</h2>
 <p>기존 구독 AI 실행보다 사용자 체감 지연을 줄이면서 작업 품질을 유지할 수 있는지 확인한다. Jev 도입이나 한국어 인코더 학습을 확정한 계획이 아니다. 제품 기준은 PRD FR-08·FR-18, 실행·전송 범위는 SPEC-02, 현재 구조는 ARCH-01을 따른다. 2026-09-25 사용자 구현 지시에 따라 로컬 평가 도구부터 구현한다. 외부 호출과 제품 라우팅 채택은 아래 실험 조건을 따른다.</p>
 <p><a href="../research/RESEARCH-02-decision-layer.html">RESEARCH-02</a>의 타입 있는 판정·대체 경로·한국어 검증 필요성은 채택한다. 서로 다른 과제의 인코더 F1과 Jev 점수를 직접 비교해 기본 모델을 고르는 결론은 채택하지 않는다. 커뮤니티 사례와 벤더 벤치마크는 후보 선정의 단서이며 VIDE 실측이 아니다. 실행 로그는 표본 자료이지 난이도나 올바른 행동의 정답이 아니다. 별도 학습·런타임·서버 추가는 이득을 확인한 뒤 결정한다.</p>
@@ -169,6 +169,124 @@ body.review-accepted .toc-links a[data-reviews]::after{display:none}
 <li><strong>제안 모드:</strong> 기준을 넘으면 기본 꺼짐 설정으로 “추천 + 사용자 확인”을 연다. 모델 추천은 선택 칸의 추천 표시, 대상 찾기는 의도 카드의 대상 후보다. 실패·시간 초과·저신뢰는 기존 경로로 넘긴다.</li>
 <li><strong>기본값 검토:</strong> 실사용 비교 뒤에만 기본값 적용을 사용자와 정한다.</li>
 </ol>
+<h3>7.2a 모델·effort 자동 선택 — 2026-09-29 구현</h3>
+<p>사용자 결정(2026-09-29): 섀도 모드를 거치지 않고 바로 구현한다. 가설이 맞는지는 이후 로그를 보고 표를 고친다.</p>
+<p><strong>가설:</strong> 좋은 모델 + 낮은 effort가 낮은 모델 + 높은 effort보다 빠르고 결과가 좋다. 코드를 생성해 실행하는 작업은 실패·재시도가 시간을 좌우하기 때문이다.</p>
+<ul>
+<li>
+<p><strong>선택 방식:</strong> 모델 목록 끝에 <strong>“자동 (Jev)”</strong> 하나를 둔다. 켜는 것은 사용자가 모델 칸에서 고를 때뿐이다. 서비스(Claude·ChatGPT)도 서버가 정한다.</p>
+</li>
+<li>
+<p><strong>판정과 우선순위(<code>src/ai/model-router.ts</code>):</strong> 제출 시 서버가 두 가지를 동시에 확인한다.</p>
+<ul>
+<li>Jev Choice로 작업 유형과 분야를 판정한다. 분야는 3D(모델·도면·형상)와 데이터(문서·표·정보 해석·코드·JIG 제작) 둘이다.</li>
+<li>로그인된 서비스를 확인한다. CLI로 확인하므로 결과를 60초간 재사용한다.</li>
+</ul>
+<p>분야·작업 유형의 우선순위 목록에서 로그인된 첫 후보를 고른다. 사용자 결정(2026-09-29): 모든 로그인 조합을 따지고, 둘 다 로그인돼 있으면 3D는 ChatGPT, 데이터·정보 해석·JIG 제작은 Claude를 쓴다.</p>
+<div aria-label="PLAN 표 3" class="table-scroll" role="region" tabindex="0"><table>
+<thead>
+<tr>
+<th>분야 · 작업 유형</th>
+<th>둘 다 로그인</th>
+<th>ChatGPT만</th>
+<th>Claude만</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>3D · 조회</td>
+<td>GPT-6-Luna · low</td>
+<td>GPT-6-Luna · low</td>
+<td>Sonnet 5 · low</td>
+</tr>
+<tr>
+<td>3D · 단순 수정</td>
+<td>GPT-6-Astra · low</td>
+<td>GPT-6-Astra · low</td>
+<td>Opus 5.5 · low</td>
+</tr>
+<tr>
+<td>3D · 복합 생성</td>
+<td>GPT-6-Astra · medium</td>
+<td>GPT-6-Astra · medium</td>
+<td>Opus 5.5 · medium</td>
+</tr>
+<tr>
+<td>3D · 해석</td>
+<td>GPT-6-Astra · high</td>
+<td>GPT-6-Astra · high</td>
+<td>Opus 5.5 · high</td>
+</tr>
+<tr>
+<td>데이터 · 조회</td>
+<td>Sonnet 5 · low</td>
+<td>GPT-6-Luna · low</td>
+<td>Sonnet 5 · low</td>
+</tr>
+<tr>
+<td>데이터 · 단순 수정</td>
+<td>Opus 5.5 · low</td>
+<td>GPT-6-Astra · low</td>
+<td>Opus 5.5 · low</td>
+</tr>
+<tr>
+<td>데이터 · 복합(JIG 제작 등)</td>
+<td>Opus 5.5 · medium</td>
+<td>GPT-6-Astra · medium</td>
+<td>Opus 5.5 · medium</td>
+</tr>
+<tr>
+<td>데이터 · 해석</td>
+<td>Opus 5.5 · high</td>
+<td>GPT-6-Astra · high</td>
+<td>Opus 5.5 · high</td>
+</tr>
+</tbody>
+</table></div>
+<ul>
+<li>분야 판정 확신이 0.5 미만이면 3D로 본다.</li>
+<li>목록에 없는 모델은 건너뛴다. 모델 목록이 없는 서비스는 그 CLI의 기본 모델을 쓴다.</li>
+<li>모델이 지원하지 않는 effort는 가까운 낮은 단계로 내린다.</li>
+<li>아무 서비스도 로그인되어 있지 않으면 요청에 온 서비스를 유지하고 사유 <code>NO_SERVICE</code>를 남긴다.</li>
+<li>요청에는 실제 서비스·모델과 판정(작업 유형·분야·확신)이 저장된다.</li>
+</ul>
+</li>
+<li>
+<p><strong>대체:</strong> 다음 경우에는 “복합 생성” 줄을 쓰고 사유를 기록한다.</p>
+<ul>
+<li>키 없음</li>
+<li>확신 0.5 미만</li>
+<li>HTTP 오류, 시간 초과(5초)</li>
+</ul>
+</li>
+<li>
+<p><strong>로그:</strong> <code>&lt;데이터 폴더&gt;/logs/model-routing.jsonl</code></p>
+<ul>
+<li>제출 때 <code>routed</code> 줄: 작업 유형, 확신, 모델, effort, 판정 시간</li>
+<li>끝날 때 <code>finished</code> 줄: 상태, 입력·출력 토큰</li>
+<li>같은 요청을 다시 보내면 처음 선택을 유지한다.</li>
+</ul>
+</li>
+<li>
+<p><strong>키(지금은 개인 PC용):</strong> 환경 변수 <code>TYPESAFE_API_KEY</code> 또는 데이터 폴더의 <code>typesafe.env</code>를 쓴다.</p>
+<ul>
+<li>2026-09-29 이 PC에 사용자 요청으로 복사했다.</li>
+<li>데이터 폴더는 Codex 샌드박스 계정들이 물려받은 수정 권한을 갖고 있어서, 이 파일만 상속을 끊고 사용자·SYSTEM·관리자 전용으로 좁혔다.</li>
+<li>배포물에는 키를 넣지 않고, CLI 자식 프로세스 환경에서는 <code>TYPESAFE_*</code>를 지운다.</li>
+<li><strong>다른 사용자에게 배포하기 전에 §7.3의 서버 중계로 바꾼다.</strong> 키는 VIDE 서버에만 두고, 각 사용자는 로그인한 VIDE로 서버를 거쳐 Jev를 부르며, 호출 한도는 서버가 건다.</li>
+</ul>
+</li>
+<li>
+<p><strong>검증:</strong></p>
+<ul>
+<li><code>tests/ai/model-router.test.mjs</code>: 표, effort 내림, 대체 사유, 로그, 키 읽기, CLI 환경에서 키 제거</li>
+<li><code>tests/server/model-routing-http.test.mjs</code>: 자동 항목이 구체 모델로 바뀜, 재전송 유지</li>
+</ul>
+</li>
+<li>
+<p><strong>다음:</strong> 실사용 로그가 쌓이면 작업 유형 × 조합별 성공률·소요 시간·토큰을 비교해 표와 확신 기준을 고친다. 결과·진행 기록에 완료 시각이 없어서, 소요 시간은 로그의 <code>at</code>과 <code>finishedAt</code>으로 잰다.</p>
+</li>
+</ul>
 <h3>7.3 이식 전에 정할 것</h3>
 <ul>
 <li><strong>키 중계:</strong> 배포물에 키를 넣지 않는다(§5-4). 기존 Cloudflare 구성의 중계와 호출량 상한을 설계한다.</li>
@@ -179,7 +297,7 @@ body.review-accepted .toc-links a[data-reviews]::after{display:none}
 </ul>
 </section><footer class="doc-footer"><span>VIDE / PLANNING DOCUMENTS</span><span>문서 열람용 · 실제 CAD/BIM 지원은 구현·검증 후 선언</span></footer></article></main></div>
 <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
-<script id="source-data" type="application/json">{"plan-05-decision-layer-evaluation":{"label":"판정 계층의 실효성 평가 계획","file":"PLAN-05-decision-layer-evaluation.md","markdown":"---\nid: PLAN-05\ntitle: 판정 계층의 실효성 평가 계획\nstatus: review\nversion: 0.5\nupdated: 2026-09-29\nowner: agent:codex\nrelated: [PLAN, PLAN-02, SPEC-02, ARCH-01, RESEARCH-02, RESEARCH-07, T-004, T-018, T-032, FR-08, FR-18]\n---\n\n# 판정 계층의 실효성 평가 계획\n\n## 1. 목적과 현재 결정\n\n기존 구독 AI 실행보다 사용자 체감 지연을 줄이면서 작업 품질을 유지할 수 있는지 확인한다. Jev 도입이나 한국어 인코더 학습을 확정한 계획이 아니다. 제품 기준은 PRD FR-08·FR-18, 실행·전송 범위는 SPEC-02, 현재 구조는 ARCH-01을 따른다. 2026-09-25 사용자 구현 지시에 따라 로컬 평가 도구부터 구현한다. 외부 호출과 제품 라우팅 채택은 아래 실험 조건을 따른다.\n\n[RESEARCH-02](../research/RESEARCH-02-decision-layer.md)의 타입 있는 판정·대체 경로·한국어 검증 필요성은 채택한다. 서로 다른 과제의 인코더 F1과 Jev 점수를 직접 비교해 기본 모델을 고르는 결론은 채택하지 않는다. 커뮤니티 사례와 벤더 벤치마크는 후보 선정의 단서이며 VIDE 실측이 아니다. 실행 로그는 표본 자료이지 난이도나 올바른 행동의 정답이 아니다. 별도 학습·런타임·서버 추가는 이득을 확인한 뒤 결정한다.\n\n## 2. 범위와 선행 조건\n\n첫 실험은 요청의 effort **추천** 하나로 제한한다. 사용자 모델·effort 선택은 항상 우선하며, 실험 추천은 실제 요청에 적용하지 않는다. 권한·문서 선택·수치/단위 검증·원본 적용·재실행 안전성은 기존 코드가 계속 소유한다. 분류 결과로 필수 질문이나 안전 검사를 생략하지 않는다.\n\nPLAN-02 L1~L6의 남은 제품 검증을 이 연구로 대체하지 않는다. 합성 평가셋·규칙 기준선 준비는 독립 가능하다. 실제 제품 경로 비교는 재현 가능한 성공/실패 기준선과 실행 로그가 확보된 범위에서만 한다. 외부 Jev 시험은 사용 가능한 접근 수단, 비용 상한, 합성 입력의 전송 범위, 보관/학습 정책을 확인한 뒤 시작한다. 실제 사용자 자료 전송은 별도 범위 확인 전 수행하지 않는다.\n\n## 3. 후보와 실험 순서\n\n| 단계 | 작업 | 산출물·종료 기준 |\n|---|---|---|\n| J1 | 기존 effort 경로의 품질·전체 지연 측정, 합성 한국어 CAD 요청 120건 작성 | 단순 수정·보존/부정·다중 문서·모호한 목표·긴 문맥·적대 문구를 각 20건. SPEC 근거와 기대 행동/허용 추천을 기록 |\n| J2 | 60건 개발/60건 고정 평가로 분리, 중복·의미상 변형의 교차 유입 방지 | 판정 불가 항목은 보류 정답으로 남김. LLM 자동 생성 라벨을 그대로 정답으로 사용하지 않음 |\n| J3 | 기존 경로와 결정적 코드 규칙 비교 | 핀/대상 수 등 이미 가진 정보 사용. 추천 실패·시간 초과는 기존 경로 유지 |\n| J4 | Jev를 동일 입력의 비적용 비교로 실행 | 호출마다 모델 버전·지연·결과·오류·과금 단위 기록. 고정 평가 60건 1회와 20건 3회 반복: 최대 120호출, 자동 무한 재시도 금지 |\n| J5 | 품질·지연·비용·운영 부담 비교 | 채택/미채택 ADR과 SPIKE 증거. 이득 없으면 기존 실행 유지 |\n\nJev와 별도 소형 구독 모델의 분류 호출은 모두 추가 왕복 비용을 포함한다. 소형 모델 후보는 현재 계정에서 지원되는 것이 확인될 때만 같은 상한으로 비교한다. 한국어 인코더는 규칙의 반복적인 오분류와 충분한 라벨 자료가 확인된 경우 후속 후보로 추가하며 이번에 학습부터 시작하지 않는다. 평가 품질이 불명확하면 데이터 보완을 먼저 하고 모델 수를 늘리지 않는다.\n\n## 4. 측정과 선택 기준\n\n추천 일치율뿐 아니라 위험한 낮은 effort 추천, 보류율, 반복 응답 변화, 실패/시간 초과율, 실제 과업 성공률, 전체 처리 시간 p50/p95와 추가 호출 지연을 기록한다. 구독 사용량을 확인할 수 없으면 비용 0으로 환산하지 않고 호출·시간·확인 가능한 사용량을 따로 기록한다. 신뢰도는 정확도와 같지 않으며 임계값은 개발셋에서 정한 뒤 평가셋에서 바꾸지 않는다.\n\n진입 기준은 보존 조건·권한·대상 안전 실패 0건, 고정 평가의 과업 실패가 기준선보다 늘지 않음, 전체 p95 지연 10% 이상 감소를 목표로 한다. 표본이 작거나 측정 변동이 이득보다 크면 통과로 단정하지 않는다. 10%는 실험의 실용적 선택 기준이며 제품 성능 약속이 아니다. 외부 장애 시 기존 경로로 복귀하는 비용까지 포함한다. 호출을 추가하면서 기존 작업을 줄이지 못하면 빠른 단일 응답만으로 채택하지 않는다.\n\n## 5. 채택될 때의 구현 순서\n\n1. SPIKE에 실제 입력 범위·측정 조건·원시 결과 위치·한계를 남기고 ADR로 채택 여부를 결정한다.\n2. 동작/실패/사용자 우선권은 SPEC-02, 최소 결과 타입과 설정·버전·타임아웃은 ARCH-01에 먼저 반영한다. Choice/Score/Noul 전체를 복제하는 프레임워크는 만들지 않는다.\n3. 추천 하나의 어댑터와 기본 꺼짐 설정, 실패 시 기존 실행 유지, 공급자 전송 고지를 구현한다. Jev Score는 가중 점수로 소수가 가능하므로 정수라고 가정하지 않는다.\n4. 외부 키를 제품에 번들하지 않는다. 서비스 중계가 필요하다고 결정된 경우 기존 Cloudflare 구성을 우선 검토하고 별도 플랫폼을 미리 추가하지 않는다.\n5. 계약/타임아웃/429·인증 실패/잘못된 응답/비활성화 회귀와 제한된 실사용 비교 후 확대한다. 자동 모델 교체나 문맥 삭제는 이 첫 실험의 완료 범위가 아니다.\n\n## 6. 공식 근거와 미확인 항목\n\n2026-09-25 확인: [TypeSafe 소개](https://docs.typesafe.ai/introduction), [API](https://docs.typesafe.ai/api), [Jev 모델 한계](https://docs.typesafe.ai/model-jaggedness/jev-1.13). 타입 있는 결과·응답 모델 버전은 활용 후보지만 한국어 CAD 정확도나 보안 승인을 보장하지 않는다. 실제 접근 가능 모델·가격·데이터 보관/학습 조건은 호출 직전 다시 확인한다. 이번 계획에서 연구의 법률 단정이나 벤더 간 수치 우열을 검증된 사실로 확정하지 않는다.\n\n## 현재 구현과 다음 실험\n\n오프라인 추천·입력 분리 검사·실측 결과 비교 집계기를 구현했다([SPIKE](../tdd/SPIKE-2026-09-25-decision-layer.md)). 120개 서로 다른 요청 문장을 준비했지만 독립 라벨 검수·실제 긴 문맥·과업 기준선이 부족해 최종 평가셋 품질 기준은 아직 미충족이다. 집계기 합성 시험을 Jev 성능으로 보고하지 않는다. 다음은 독립 과업과 검수된 라벨로 평가셋을 보완하고, 실제 과업 기준선·접근/예산이 확보된 외부 후보를 비교하는 것이다. 제품 자동 라우팅 채택은 하지 않았다.\n\n외부 접근 조건: 2026-09-25 공식 사이트의 신규 가입 중단 공지를 확인했고, 사용자가 기존 계정이 없으므로 가입 재개까지 보류한다고 결정했다. 접근 설정·Jev 외부 호출(J4)은 재개 전 수행하지 않는다. 대기 명단 신청·결제·자동 재시도도 하지 않는다. 가입이 재개되면 공식 콘솔에서 가입·API 접근·데이터 취급 조건·시험 예산을 확인한 후 J4를 진행한다. 로컬 평가셋·기준선 준비와 PLAN-06은 독립적으로 진행할 수 있다.\n\n## 7. 2026-09-29 제품 이식 계획(계획만)\n\n2026-09-29 사용자가 Jev API 키를 발급받아 외부 접근 보류(§현재 구현과 다음 실험의 외부 접근 조건)가 해소됐다. 사용자 지시에 따라 **개발 도구(T-032)를 먼저 쓰고, 제품 쪽은 계획만 세운 뒤 더 조사한 다음 이식**한다. 공식 문서 대조와 용도별 판단은 [RESEARCH-02 2026-09-29 보강](../research/RESEARCH-02-decision-layer.md)이 소유한다. 아래는 §5 구현 순서를 두 용도에 적용한 계획이며 구현 착수가 아니다.\n\n### 7.1 대상 용도\n\n| 용도 | 입력(state) | 질문 | 결과 사용 | 쓰지 않는 곳 |\n|---|---|---|---|---|\n| 모델·effort 추천 | 요청 문장, 첨부 종류·수, 대상 호스트, 모드 | Choice: 작업 유형(조회·단순 수정·복합 생성·해석/최적화), Score: 복잡도 | 계정의 모델·effort 선택 추천. 신뢰도가 낮으면 사용자 기본값 | 계정·사용량 한도 기반 전환(수치 판단, 코드가 담당) |\n| 수정 대상 찾기(sync jig 포함) | 요청 문장 + 레이어·블록·그룹 이름, 객체 이름·속성 텍스트 요약(결정적 공간 필터 뒤 후보만) | Choice: 레이어/그룹 → 객체 후보, 후보별 Noul 검증 | [RESEARCH-07](../research/RESEARCH-07-request-processing.md) 의도 카드의 “대상” 제안. 사용자·결정적 조회가 확정 | 대상 확정, 쓰기 권한, 기하·치수 판정 |\n\n### 7.2 순서\n\n1. **T-032 실측에서 배우기:** 개발 도구의 한국어·혼합 텍스트 신뢰도 분포, 지연, 토큰, 실패 유형을 기록해 제품 임계값의 출발점으로 쓴다. 첫 실측([SPIKE](../tdd/SPIKE-2026-09-29-jev-locate.md))에서 한국어 요청도 영어 대상 이름에 잘 매칭됐고(정답 5위 안 100%, 단어 일치 기준선 14%), **입력 요약의 품질이 정확도를 가장 크게 좌우**했다. 제품 대상 찾기에서도 레이어·객체 이름·속성 요약 설계를 먼저 한다.\n2. **평가셋:** §3·§4의 기준(검수된 라벨, 과업 기준선)에 두 용도의 사례를 추가한다. 모델 추천은 실제 요청과 사후 결과(성공·실패·재시도·소요 시간), 대상 찾기는 합성 도면·모델 사본의 요청 ↔ 정답 객체를 쓴다. 사용자 원본은 쓰지 않는다.\n3. **섀도 모드:** 실제 선택·대상은 기존 경로대로 두고 Jev 추천만 기록한다. 추천과 실제의 차이, 추천대로였다면의 예상 결과를 비교한다(§4 측정 기준).\n4. **제안 모드:** 기준을 넘으면 기본 꺼짐 설정으로 “추천 + 사용자 확인”을 연다. 모델 추천은 선택 칸의 추천 표시, 대상 찾기는 의도 카드의 대상 후보다. 실패·시간 초과·저신뢰는 기존 경로로 넘긴다.\n5. **기본값 검토:** 실사용 비교 뒤에만 기본값 적용을 사용자와 정한다.\n\n### 7.3 이식 전에 정할 것\n\n- **키 중계:** 배포물에 키를 넣지 않는다(§5-4). 기존 Cloudflare 구성의 중계와 호출량 상한을 설계한다.\n- **전송 고지·동의·끄기:** 요청 문장과 객체 이름이 TypeSafe로 전송된다(FR-18). 국외 이전 동의, 끄기 옵션, 끈 상태의 동작을 SPEC-02에 쓴다.\n- **자식 프로세스 환경:** 제품이 키를 서버 환경에 둘 경우 CLI·호스트 자식 프로세스에서 `TYPESAFE_*`를 지운다(RESEARCH-02 보안 항목).\n- **버전 고정:** `jev-1.13.0` 고정, `jev-latest` 변경 추적.\n- **벤더 중립:** 추천 결과 타입은 Choice/Score/Noul 최소 형태로 두어 코드 규칙·다른 모델로 바꿀 수 있게 한다(§5-2).\n"}}</script>
+<script id="source-data" type="application/json">{"plan-05-decision-layer-evaluation":{"label":"판정 계층의 실효성 평가 계획","file":"PLAN-05-decision-layer-evaluation.md","markdown":"---\nid: PLAN-05\ntitle: 판정 계층의 실효성 평가 계획\nstatus: review\nversion: 0.6\nupdated: 2026-09-29\nowner: agent:codex\nrelated: [PLAN, PLAN-02, SPEC-02, ARCH-01, RESEARCH-02, RESEARCH-07, T-004, T-018, T-032, FR-08, FR-18]\n---\n\n# 판정 계층의 실효성 평가 계획\n\n## 1. 목적과 현재 결정\n\n기존 구독 AI 실행보다 사용자 체감 지연을 줄이면서 작업 품질을 유지할 수 있는지 확인한다. Jev 도입이나 한국어 인코더 학습을 확정한 계획이 아니다. 제품 기준은 PRD FR-08·FR-18, 실행·전송 범위는 SPEC-02, 현재 구조는 ARCH-01을 따른다. 2026-09-25 사용자 구현 지시에 따라 로컬 평가 도구부터 구현한다. 외부 호출과 제품 라우팅 채택은 아래 실험 조건을 따른다.\n\n[RESEARCH-02](../research/RESEARCH-02-decision-layer.md)의 타입 있는 판정·대체 경로·한국어 검증 필요성은 채택한다. 서로 다른 과제의 인코더 F1과 Jev 점수를 직접 비교해 기본 모델을 고르는 결론은 채택하지 않는다. 커뮤니티 사례와 벤더 벤치마크는 후보 선정의 단서이며 VIDE 실측이 아니다. 실행 로그는 표본 자료이지 난이도나 올바른 행동의 정답이 아니다. 별도 학습·런타임·서버 추가는 이득을 확인한 뒤 결정한다.\n\n## 2. 범위와 선행 조건\n\n첫 실험은 요청의 effort **추천** 하나로 제한한다. 사용자 모델·effort 선택은 항상 우선하며, 실험 추천은 실제 요청에 적용하지 않는다. 권한·문서 선택·수치/단위 검증·원본 적용·재실행 안전성은 기존 코드가 계속 소유한다. 분류 결과로 필수 질문이나 안전 검사를 생략하지 않는다.\n\nPLAN-02 L1~L6의 남은 제품 검증을 이 연구로 대체하지 않는다. 합성 평가셋·규칙 기준선 준비는 독립 가능하다. 실제 제품 경로 비교는 재현 가능한 성공/실패 기준선과 실행 로그가 확보된 범위에서만 한다. 외부 Jev 시험은 사용 가능한 접근 수단, 비용 상한, 합성 입력의 전송 범위, 보관/학습 정책을 확인한 뒤 시작한다. 실제 사용자 자료 전송은 별도 범위 확인 전 수행하지 않는다.\n\n## 3. 후보와 실험 순서\n\n| 단계 | 작업 | 산출물·종료 기준 |\n|---|---|---|\n| J1 | 기존 effort 경로의 품질·전체 지연 측정, 합성 한국어 CAD 요청 120건 작성 | 단순 수정·보존/부정·다중 문서·모호한 목표·긴 문맥·적대 문구를 각 20건. SPEC 근거와 기대 행동/허용 추천을 기록 |\n| J2 | 60건 개발/60건 고정 평가로 분리, 중복·의미상 변형의 교차 유입 방지 | 판정 불가 항목은 보류 정답으로 남김. LLM 자동 생성 라벨을 그대로 정답으로 사용하지 않음 |\n| J3 | 기존 경로와 결정적 코드 규칙 비교 | 핀/대상 수 등 이미 가진 정보 사용. 추천 실패·시간 초과는 기존 경로 유지 |\n| J4 | Jev를 동일 입력의 비적용 비교로 실행 | 호출마다 모델 버전·지연·결과·오류·과금 단위 기록. 고정 평가 60건 1회와 20건 3회 반복: 최대 120호출, 자동 무한 재시도 금지 |\n| J5 | 품질·지연·비용·운영 부담 비교 | 채택/미채택 ADR과 SPIKE 증거. 이득 없으면 기존 실행 유지 |\n\nJev와 별도 소형 구독 모델의 분류 호출은 모두 추가 왕복 비용을 포함한다. 소형 모델 후보는 현재 계정에서 지원되는 것이 확인될 때만 같은 상한으로 비교한다. 한국어 인코더는 규칙의 반복적인 오분류와 충분한 라벨 자료가 확인된 경우 후속 후보로 추가하며 이번에 학습부터 시작하지 않는다. 평가 품질이 불명확하면 데이터 보완을 먼저 하고 모델 수를 늘리지 않는다.\n\n## 4. 측정과 선택 기준\n\n추천 일치율뿐 아니라 위험한 낮은 effort 추천, 보류율, 반복 응답 변화, 실패/시간 초과율, 실제 과업 성공률, 전체 처리 시간 p50/p95와 추가 호출 지연을 기록한다. 구독 사용량을 확인할 수 없으면 비용 0으로 환산하지 않고 호출·시간·확인 가능한 사용량을 따로 기록한다. 신뢰도는 정확도와 같지 않으며 임계값은 개발셋에서 정한 뒤 평가셋에서 바꾸지 않는다.\n\n진입 기준은 보존 조건·권한·대상 안전 실패 0건, 고정 평가의 과업 실패가 기준선보다 늘지 않음, 전체 p95 지연 10% 이상 감소를 목표로 한다. 표본이 작거나 측정 변동이 이득보다 크면 통과로 단정하지 않는다. 10%는 실험의 실용적 선택 기준이며 제품 성능 약속이 아니다. 외부 장애 시 기존 경로로 복귀하는 비용까지 포함한다. 호출을 추가하면서 기존 작업을 줄이지 못하면 빠른 단일 응답만으로 채택하지 않는다.\n\n## 5. 채택될 때의 구현 순서\n\n1. SPIKE에 실제 입력 범위·측정 조건·원시 결과 위치·한계를 남기고 ADR로 채택 여부를 결정한다.\n2. 동작/실패/사용자 우선권은 SPEC-02, 최소 결과 타입과 설정·버전·타임아웃은 ARCH-01에 먼저 반영한다. Choice/Score/Noul 전체를 복제하는 프레임워크는 만들지 않는다.\n3. 추천 하나의 어댑터와 기본 꺼짐 설정, 실패 시 기존 실행 유지, 공급자 전송 고지를 구현한다. Jev Score는 가중 점수로 소수가 가능하므로 정수라고 가정하지 않는다.\n4. 외부 키를 제품에 번들하지 않는다. 서비스 중계가 필요하다고 결정된 경우 기존 Cloudflare 구성을 우선 검토하고 별도 플랫폼을 미리 추가하지 않는다.\n5. 계약/타임아웃/429·인증 실패/잘못된 응답/비활성화 회귀와 제한된 실사용 비교 후 확대한다. 자동 모델 교체나 문맥 삭제는 이 첫 실험의 완료 범위가 아니다.\n\n## 6. 공식 근거와 미확인 항목\n\n2026-09-25 확인: [TypeSafe 소개](https://docs.typesafe.ai/introduction), [API](https://docs.typesafe.ai/api), [Jev 모델 한계](https://docs.typesafe.ai/model-jaggedness/jev-1.13). 타입 있는 결과·응답 모델 버전은 활용 후보지만 한국어 CAD 정확도나 보안 승인을 보장하지 않는다. 실제 접근 가능 모델·가격·데이터 보관/학습 조건은 호출 직전 다시 확인한다. 이번 계획에서 연구의 법률 단정이나 벤더 간 수치 우열을 검증된 사실로 확정하지 않는다.\n\n## 현재 구현과 다음 실험\n\n오프라인 추천·입력 분리 검사·실측 결과 비교 집계기를 구현했다([SPIKE](../tdd/SPIKE-2026-09-25-decision-layer.md)). 120개 서로 다른 요청 문장을 준비했지만 독립 라벨 검수·실제 긴 문맥·과업 기준선이 부족해 최종 평가셋 품질 기준은 아직 미충족이다. 집계기 합성 시험을 Jev 성능으로 보고하지 않는다. 다음은 독립 과업과 검수된 라벨로 평가셋을 보완하고, 실제 과업 기준선·접근/예산이 확보된 외부 후보를 비교하는 것이다. 제품 자동 라우팅 채택은 하지 않았다.\n\n외부 접근 조건: 2026-09-25 공식 사이트의 신규 가입 중단 공지를 확인했고, 사용자가 기존 계정이 없으므로 가입 재개까지 보류한다고 결정했다. 접근 설정·Jev 외부 호출(J4)은 재개 전 수행하지 않는다. 대기 명단 신청·결제·자동 재시도도 하지 않는다. 가입이 재개되면 공식 콘솔에서 가입·API 접근·데이터 취급 조건·시험 예산을 확인한 후 J4를 진행한다. 로컬 평가셋·기준선 준비와 PLAN-06은 독립적으로 진행할 수 있다.\n\n## 7. 2026-09-29 제품 이식 계획(계획만)\n\n2026-09-29 사용자가 Jev API 키를 발급받아 외부 접근 보류(§현재 구현과 다음 실험의 외부 접근 조건)가 해소됐다. 사용자 지시에 따라 **개발 도구(T-032)를 먼저 쓰고, 제품 쪽은 계획만 세운 뒤 더 조사한 다음 이식**한다. 공식 문서 대조와 용도별 판단은 [RESEARCH-02 2026-09-29 보강](../research/RESEARCH-02-decision-layer.md)이 소유한다. 아래는 §5 구현 순서를 두 용도에 적용한 계획이며 구현 착수가 아니다.\n\n### 7.1 대상 용도\n\n| 용도 | 입력(state) | 질문 | 결과 사용 | 쓰지 않는 곳 |\n|---|---|---|---|---|\n| 모델·effort 추천 | 요청 문장, 첨부 종류·수, 대상 호스트, 모드 | Choice: 작업 유형(조회·단순 수정·복합 생성·해석/최적화), Score: 복잡도 | 계정의 모델·effort 선택 추천. 신뢰도가 낮으면 사용자 기본값 | 계정·사용량 한도 기반 전환(수치 판단, 코드가 담당) |\n| 수정 대상 찾기(sync jig 포함) | 요청 문장 + 레이어·블록·그룹 이름, 객체 이름·속성 텍스트 요약(결정적 공간 필터 뒤 후보만) | Choice: 레이어/그룹 → 객체 후보, 후보별 Noul 검증 | [RESEARCH-07](../research/RESEARCH-07-request-processing.md) 의도 카드의 “대상” 제안. 사용자·결정적 조회가 확정 | 대상 확정, 쓰기 권한, 기하·치수 판정 |\n\n### 7.2 순서\n\n1. **T-032 실측에서 배우기:** 개발 도구의 한국어·혼합 텍스트 신뢰도 분포, 지연, 토큰, 실패 유형을 기록해 제품 임계값의 출발점으로 쓴다. 첫 실측([SPIKE](../tdd/SPIKE-2026-09-29-jev-locate.md))에서 한국어 요청도 영어 대상 이름에 잘 매칭됐고(정답 5위 안 100%, 단어 일치 기준선 14%), **입력 요약의 품질이 정확도를 가장 크게 좌우**했다. 제품 대상 찾기에서도 레이어·객체 이름·속성 요약 설계를 먼저 한다.\n2. **평가셋:** §3·§4의 기준(검수된 라벨, 과업 기준선)에 두 용도의 사례를 추가한다. 모델 추천은 실제 요청과 사후 결과(성공·실패·재시도·소요 시간), 대상 찾기는 합성 도면·모델 사본의 요청 ↔ 정답 객체를 쓴다. 사용자 원본은 쓰지 않는다.\n3. **섀도 모드:** 실제 선택·대상은 기존 경로대로 두고 Jev 추천만 기록한다. 추천과 실제의 차이, 추천대로였다면의 예상 결과를 비교한다(§4 측정 기준).\n4. **제안 모드:** 기준을 넘으면 기본 꺼짐 설정으로 “추천 + 사용자 확인”을 연다. 모델 추천은 선택 칸의 추천 표시, 대상 찾기는 의도 카드의 대상 후보다. 실패·시간 초과·저신뢰는 기존 경로로 넘긴다.\n5. **기본값 검토:** 실사용 비교 뒤에만 기본값 적용을 사용자와 정한다.\n\n### 7.2a 모델·effort 자동 선택 — 2026-09-29 구현\n\n사용자 결정(2026-09-29): 섀도 모드를 거치지 않고 바로 구현한다. 가설이 맞는지는 이후 로그를 보고 표를 고친다.\n\n**가설:** 좋은 모델 + 낮은 effort가 낮은 모델 + 높은 effort보다 빠르고 결과가 좋다. 코드를 생성해 실행하는 작업은 실패·재시도가 시간을 좌우하기 때문이다.\n\n- **선택 방식:** 모델 목록 끝에 **“자동 (Jev)”** 하나를 둔다. 켜는 것은 사용자가 모델 칸에서 고를 때뿐이다. 서비스(Claude·ChatGPT)도 서버가 정한다.\n- **판정과 우선순위(`src/ai/model-router.ts`):** 제출 시 서버가 두 가지를 동시에 확인한다.\n  - Jev Choice로 작업 유형과 분야를 판정한다. 분야는 3D(모델·도면·형상)와 데이터(문서·표·정보 해석·코드·JIG 제작) 둘이다.\n  - 로그인된 서비스를 확인한다. CLI로 확인하므로 결과를 60초간 재사용한다.\n\n  분야·작업 유형의 우선순위 목록에서 로그인된 첫 후보를 고른다. 사용자 결정(2026-09-29): 모든 로그인 조합을 따지고, 둘 다 로그인돼 있으면 3D는 ChatGPT, 데이터·정보 해석·JIG 제작은 Claude를 쓴다.\n\n  | 분야 · 작업 유형 | 둘 다 로그인 | ChatGPT만 | Claude만 |\n  |---|---|---|---|\n  | 3D · 조회 | GPT-6-Luna · low | GPT-6-Luna · low | Sonnet 5 · low |\n  | 3D · 단순 수정 | GPT-6-Astra · low | GPT-6-Astra · low | Opus 5.5 · low |\n  | 3D · 복합 생성 | GPT-6-Astra · medium | GPT-6-Astra · medium | Opus 5.5 · medium |\n  | 3D · 해석 | GPT-6-Astra · high | GPT-6-Astra · high | Opus 5.5 · high |\n  | 데이터 · 조회 | Sonnet 5 · low | GPT-6-Luna · low | Sonnet 5 · low |\n  | 데이터 · 단순 수정 | Opus 5.5 · low | GPT-6-Astra · low | Opus 5.5 · low |\n  | 데이터 · 복합(JIG 제작 등) | Opus 5.5 · medium | GPT-6-Astra · medium | Opus 5.5 · medium |\n  | 데이터 · 해석 | Opus 5.5 · high | GPT-6-Astra · high | Opus 5.5 · high |\n\n  - 분야 판정 확신이 0.5 미만이면 3D로 본다.\n  - 목록에 없는 모델은 건너뛴다. 모델 목록이 없는 서비스는 그 CLI의 기본 모델을 쓴다.\n  - 모델이 지원하지 않는 effort는 가까운 낮은 단계로 내린다.\n  - 아무 서비스도 로그인되어 있지 않으면 요청에 온 서비스를 유지하고 사유 `NO_SERVICE`를 남긴다.\n  - 요청에는 실제 서비스·모델과 판정(작업 유형·분야·확신)이 저장된다.\n- **대체:** 다음 경우에는 “복합 생성” 줄을 쓰고 사유를 기록한다.\n  - 키 없음\n  - 확신 0.5 미만\n  - HTTP 오류, 시간 초과(5초)\n- **로그:** `\u003c데이터 폴더>/logs/model-routing.jsonl`\n  - 제출 때 `routed` 줄: 작업 유형, 확신, 모델, effort, 판정 시간\n  - 끝날 때 `finished` 줄: 상태, 입력·출력 토큰\n  - 같은 요청을 다시 보내면 처음 선택을 유지한다.\n- **키(지금은 개인 PC용):** 환경 변수 `TYPESAFE_API_KEY` 또는 데이터 폴더의 `typesafe.env`를 쓴다.\n  - 2026-09-29 이 PC에 사용자 요청으로 복사했다.\n  - 데이터 폴더는 Codex 샌드박스 계정들이 물려받은 수정 권한을 갖고 있어서, 이 파일만 상속을 끊고 사용자·SYSTEM·관리자 전용으로 좁혔다.\n  - 배포물에는 키를 넣지 않고, CLI 자식 프로세스 환경에서는 `TYPESAFE_*`를 지운다.\n  - **다른 사용자에게 배포하기 전에 §7.3의 서버 중계로 바꾼다.** 키는 VIDE 서버에만 두고, 각 사용자는 로그인한 VIDE로 서버를 거쳐 Jev를 부르며, 호출 한도는 서버가 건다.\n- **검증:**\n  - `tests/ai/model-router.test.mjs`: 표, effort 내림, 대체 사유, 로그, 키 읽기, CLI 환경에서 키 제거\n  - `tests/server/model-routing-http.test.mjs`: 자동 항목이 구체 모델로 바뀜, 재전송 유지\n- **다음:** 실사용 로그가 쌓이면 작업 유형 × 조합별 성공률·소요 시간·토큰을 비교해 표와 확신 기준을 고친다. 결과·진행 기록에 완료 시각이 없어서, 소요 시간은 로그의 `at`과 `finishedAt`으로 잰다.\n\n### 7.3 이식 전에 정할 것\n\n- **키 중계:** 배포물에 키를 넣지 않는다(§5-4). 기존 Cloudflare 구성의 중계와 호출량 상한을 설계한다.\n- **전송 고지·동의·끄기:** 요청 문장과 객체 이름이 TypeSafe로 전송된다(FR-18). 국외 이전 동의, 끄기 옵션, 끈 상태의 동작을 SPEC-02에 쓴다.\n- **자식 프로세스 환경:** 제품이 키를 서버 환경에 둘 경우 CLI·호스트 자식 프로세스에서 `TYPESAFE_*`를 지운다(RESEARCH-02 보안 항목).\n- **버전 고정:** `jev-1.13.0` 고정, `jev-latest` 변경 추적.\n- **벤더 중립:** 추천 결과 타입은 Choice/Score/Noul 최소 형태로 두어 코드 규칙·다른 모델로 바꿀 수 있게 한다(§5-2).\n"}}</script>
 <script id="reader-config" type="application/json">{"initial":"plan-05-decision-layer-evaluation","siteTitle":"VIDE"}</script>
 <script>
 (() => {

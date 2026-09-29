@@ -9,6 +9,7 @@ import { spawn } from 'node:child_process';
 import { startServer } from './server.ts';
 import { liveLaunch } from './lifecycle.ts';
 import { sdkOptions } from './sdk-options.ts';
+import { Diagnostics } from './diagnostics.ts';
 // Work engine (installed program): the user's data, port 47821. Development server (--dev):
 // separate data and port, so restarting it never touches the work engine or its open pages.
 const dev = process.argv.includes('--dev');
@@ -39,6 +40,11 @@ try {
   await mkdir(directory, { recursive: true });
   // A fixed port keeps this PC's address (and the browser's login cookie) across restarts, so
   // the account website can open it and an open page reconnects. Busy port: any free port.
+  // A crash is recorded before Node ends the process (behaviour unchanged).
+  const crashLog = new Diagnostics({ directory });
+  process.on('uncaughtExceptionMonitor', (error, origin) =>
+    crashLog.write('engine-crash', { origin, ...Diagnostics.error(error) }),
+  );
   const options = {
     filename: join(directory, 'vide.sqlite'),
     onShutdown: () => void close(),
@@ -80,6 +86,7 @@ try {
     join(directory, 'startup-error.json'),
     JSON.stringify({ code, at: new Date().toISOString() }),
   ).catch(() => {});
+  new Diagnostics({ directory }).write('startup-failed', { code, ...Diagnostics.error(error) });
   console.error('VIDE_STARTUP_FAILED ' + code);
   process.exitCode = 1;
 }

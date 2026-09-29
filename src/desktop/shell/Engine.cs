@@ -50,7 +50,9 @@ namespace Vide.Desktop
                     ready.TrySetResult(Url);
                 }
             };
-            process.ErrorDataReceived += (s, e) => { };
+            // The engine's error output (warnings, crash traces) goes to the diagnostic logs folder
+            // instead of being dropped: logs\engine-stderr-YYYY-MM-DD.log, pruned with the JSON logs.
+            process.ErrorDataReceived += (s, e) => AppendError(e.Data);
             var own = process;
             process.Exited += (s, e) =>
             {
@@ -75,6 +77,27 @@ namespace Vide.Desktop
             process.BeginOutputReadLine();
             process.BeginErrorReadLine();
             return ready.Task;
+        }
+
+        private static readonly object ErrorLock = new object();
+        private static void AppendError(string line)
+        {
+            if (string.IsNullOrEmpty(line)) return;
+            try
+            {
+                string folder = Path.Combine(Paths.Data, "logs");
+                lock (ErrorLock)
+                {
+                    Directory.CreateDirectory(folder);
+                    File.AppendAllText(
+                        Path.Combine(folder, "engine-stderr-" + DateTime.UtcNow.ToString("yyyy-MM-dd") + ".log"),
+                        DateTime.UtcNow.ToString("o") + " " + line + Environment.NewLine);
+                }
+            }
+            catch
+            {
+                // Logging never stops the program.
+            }
         }
 
         public void Stop()

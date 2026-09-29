@@ -171,7 +171,10 @@ export function subscriptionEnvironment(source = process.env) {
   const env = { ...source };
   for (const key of Object.keys(env)) {
     if (
-      /^(ANTHROPIC_|CLAUDE_CODE_|CLAUDE_CONFIG_DIR$|CLAUDE_AGENT_SDK_|CLAUDE_ENV_FILE$)/i.test(key)
+      // TYPESAFE_*: the Jev key is VIDE's own and never reaches the CLI.
+      /^(ANTHROPIC_|CLAUDE_CODE_|CLAUDE_CONFIG_DIR$|CLAUDE_AGENT_SDK_|CLAUDE_ENV_FILE$|TYPESAFE_)/i.test(
+        key,
+      )
     )
       delete env[key];
   }

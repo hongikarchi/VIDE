@@ -46,6 +46,8 @@ interface Options {
   zwcadSdk?: ZwcadSdkExecution;
   /** A request stopped on its account's subscription limit (so the next one can switch). */
   onProviderLimit?: (provider: string, accountProfileId: string) => void;
+  /** Start/end, duration and failure code of every run (diagnostic log). */
+  diagnostics?: Diagnostics;
 }
 /**
  * Jig review gate (RESEARCH-05 standard gates): an AI review of a Sync jig table may cite only the
@@ -93,6 +95,7 @@ import { join } from 'node:path';
 import { homedir } from 'node:os';
 import { readFile } from 'node:fs/promises';
 import { geometryContract, interpret, protectGeometry } from '../core/geometry.ts';
+import { Diagnostics } from './diagnostics.ts';
 
 export class Execution {
   workspace: Workspace;
@@ -106,6 +109,7 @@ export class Execution {
   sdk?: SdkExecution;
   zwcadSdk?: ZwcadSdkExecution;
   tools?: AgentTools;
+  diagnostics?: Diagnostics;
   active = new Map<
     string,
     { controller: AbortController; completion: Promise<void>; projectId: string }
@@ -123,6 +127,7 @@ export class Execution {
       profiles,
       applyAttached,
       onProviderLimit,
+      diagnostics,
     }: Options = {},
   ) {
     this.workspace = workspace;
@@ -137,6 +142,7 @@ export class Execution {
     this.sdk = sdk;
     this.zwcadSdk = zwcadSdk;
     this.tools = tools;
+    this.diagnostics = diagnostics;
   }
   executable(provider: string) {
     return (
@@ -274,8 +280,46 @@ export class Execution {
   start(request: StoredWork) {
     if (this.active.has(request.id)) return;
     const controller = new AbortController();
-    const completion = this.run(request, controller).finally(() => this.active.delete(request.id));
+    const completion = this.traced(request, this.run(request, controller)).finally(() =>
+      this.active.delete(request.id),
+    );
     this.active.set(request.id, { controller, completion, projectId: request.projectId });
+  }
+  /** Diagnostic start/end lines around one run: IDs, model, duration, final state and code. */
+  private traced<T>(request: StoredWork, run: Promise<T>) {
+    const started = performance.now();
+    const input = request.input as Record<string, unknown>;
+    const base = { requestId: request.id, projectId: request.projectId };
+    this.diagnostics?.write('request-start', {
+      ...base,
+      provider: input.provider,
+      model: input.model ?? null,
+      effort: input.effort ?? null,
+      host: input.host ?? 'rhino',
+      permission: input.permission,
+    });
+    return run
+      .catch((error: unknown) => {
+        this.diagnostics?.write('request-crash', { ...base, ...Diagnostics.error(error) });
+        throw error;
+      })
+      .finally(() => {
+        let state = 'unknown',
+          code: unknown = null;
+        try {
+          const done = this.workspace.get(request.projectId, request.id);
+          state = done.state;
+          code = (done.result as { code?: unknown } | null)?.code ?? null;
+        } catch {
+          /* The request may be gone (project removed). */
+        }
+        this.diagnostics?.write('request-end', {
+          ...base,
+          state,
+          code,
+          ms: Math.round(performance.now() - started),
+        });
+      });
   }
   intervene(projectId: string, predecessorId: string, value: unknown) {
     const saved = this.workspace.intervene(projectId, predecessorId, value);
@@ -314,7 +358,7 @@ export class Execution {
         this.workspace.update(projectId, request.id, 'interrupted', { code: conflict });
         return;
       }
-      await this.run(request, controller);
+      await this.traced(request, this.run(request, controller));
     })()
       .catch(() => {
         this.workspace.update(projectId, request.id, 'interrupted', {
@@ -551,6 +595,10 @@ export class Execution {
         },
       );
     }
+  }
+  /** Settles when the request's run ends (undefined when it is not running here). */
+  completion(id: string): Promise<unknown> | undefined {
+    return this.active.get(id)?.completion;
   }
   cancel(projectId: string, id: string) {
     const active = this.active.get(id);

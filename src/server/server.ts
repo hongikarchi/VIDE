@@ -18,6 +18,8 @@ import {
   draftStructure,
   StructureStore,
 } from '../jigs/structure/index.ts';
+import { AUTO_MODELS, ModelRouter, isAutoModel } from '../ai/model-router.ts';
+import { Diagnostics } from './diagnostics.ts';
 import {
   knowledgeEvidence,
   knowledgeFile,
@@ -278,7 +280,11 @@ export async function startServer({
     profiles,
     file: join(dirname(filename), 'cli-profiles', 'usage-settings.json'),
   });
+  const diagnostics = new Diagnostics({
+    directory: filename === ':memory:' ? undefined : dirname(filename),
+  });
   const execution = new Execution(workspace, {
+    diagnostics,
     onProviderLimit: (provider, id) =>
       accountUsage.markLimited(z.enum(['claude-cli', 'codex-cli']).parse(provider), id),
     applyAttached: sdk
@@ -293,6 +299,22 @@ export async function startServer({
     settings: aiSettings,
     sdk,
     zwcadSdk,
+  });
+  // Signed-in services for automatic model choice; each check runs the CLIs, so it is reused briefly.
+  let signedIn: { at: number; value: Promise<('claude-cli' | 'codex-cli')[]> } | undefined;
+  const signedInServices = () => {
+    if (!signedIn || Date.now() - signedIn.at > 60_000)
+      signedIn = {
+        at: Date.now(),
+        value: execution
+          .status()
+          .then((rows) => rows.filter((row) => row.available).map((row) => row.id)),
+      };
+    return signedIn.value;
+  };
+  const modelRouter = new ModelRouter({
+    dataDirectory: dirname(filename),
+    log: filename !== ':memory:',
   });
   const withApplications = (request: StoredWork) => ({
     ...request,
@@ -1231,7 +1253,8 @@ export async function startServer({
         return;
       }
       if (url.pathname === '/api/v1/models' && request.method === 'GET') {
-        send(200, await execution.models());
+        // Automatic choice (Jev) is listed last so an existing preference stays the default.
+        send(200, [...(await execution.models()), ...AUTO_MODELS]);
         return;
       }
       if (url.pathname === '/api/v1/host/attached-documents' && request.method === 'GET') {
@@ -1572,15 +1595,43 @@ export async function startServer({
           const input = await body(request);
           if (input.provider === 'extension') throw new DomainError('INVALID_INPUT');
           if ('accountProfileId' in input) throw new DomainError('INVALID_INPUT');
-          const provider = z.enum(['claude-cli', 'codex-cli']).parse(input.provider);
           const existing =
             typeof input.id === 'string'
               ? store.db
                   .prepare('SELECT input FROM workspace_requests WHERE id=? AND projectId=?')
                   .get(input.id, projectId)
               : undefined;
-          if (existing && typeof existing.input === 'string') {
-            const old = JSON.parse(existing.input);
+          const old =
+            existing && typeof existing.input === 'string' ? JSON.parse(existing.input) : undefined;
+          if (old && isAutoModel(input.model) && old.routing) {
+            // A retried automatic request keeps the service and model chosen the first time.
+            input.provider = old.provider;
+            input.model = old.model;
+            input.effort = old.effort;
+            input.routing = old.routing;
+          } else if (!old && isAutoModel(input.model)) {
+            const decision = await modelRouter.route(
+              {
+                body: typeof input.body === 'string' ? input.body : '',
+                host: typeof input.host === 'string' ? input.host : undefined,
+                permission: typeof input.permission === 'string' ? input.permission : undefined,
+                files: Array.isArray(input.files) ? input.files : undefined,
+                pins: Array.isArray(input.pins) ? input.pins : undefined,
+                sketches: Array.isArray(input.sketches) ? input.sketches : undefined,
+                linkedTargets: Array.isArray(input.linkedTargets) ? input.linkedTargets : undefined,
+              },
+              await execution.models(),
+              signedInServices(),
+              input.provider === 'codex-cli' ? 'codex-cli' : 'claude-cli',
+            );
+            input.provider = decision.provider;
+            if (decision.model) input.model = decision.model;
+            else delete input.model;
+            input.effort = decision.effort;
+            input.routing = decision;
+          }
+          const provider = z.enum(['claude-cli', 'codex-cli']).parse(input.provider);
+          if (old) {
             if (old.accountProfileId) input.accountProfileId = old.accountProfileId;
           } else {
             if (accountLogin.busy(provider)) throw new DomainError('PROFILE_LOGIN_IN_PROGRESS');
@@ -1595,6 +1646,26 @@ export async function startServer({
           }
           const result = workspace.submit(projectId, input);
           if (result.created) execution.start(result.request);
+          const routing = result.created
+            ? (result.request.input.routing as Record<string, unknown> | undefined)
+            : undefined;
+          if (routing) {
+            const { id: requestId, projectId: requestProject } = result.request;
+            const entry = { requestId, projectId: requestProject, ...routing };
+            modelRouter.record({ event: 'routed', ...entry });
+            void execution.completion(requestId)?.finally(() => {
+              const done = workspace.get(requestProject, requestId);
+              const usage = (done.result as { usage?: Record<string, unknown> } | null)?.usage;
+              modelRouter.record({
+                event: 'finished',
+                ...entry,
+                state: done.state,
+                finishedAt: new Date().toISOString(),
+                inputTokens: usage?.inputTokens ?? null,
+                outputTokens: usage?.outputTokens ?? null,
+              });
+            });
+          }
           send(result.created ? 202 : 200, workspace.get(projectId, result.request.id));
           return;
         }
@@ -1656,6 +1727,13 @@ export async function startServer({
       }
       throw new DomainError('NOT_FOUND');
     } catch (error) {
+      if (!(error instanceof DomainError) && !(error instanceof z.ZodError))
+        diagnostics.write('server-error', {
+          requestId,
+          method: request.method,
+          path: (request.url || '').split('?')[0],
+          ...Diagnostics.error(error),
+        });
       if (!response.headersSent)
         send(
           error instanceof DomainError
@@ -1690,14 +1768,21 @@ export async function startServer({
   authority = `127.0.0.1:${address.port}`;
   origin = `http://${authority}`;
   void remoteAccess.init();
+  diagnostics.write('engine-start', {
+    port: address.port,
+    pid: process.pid,
+    version: appVersion(),
+  });
   return {
     origin,
+    diagnostics,
     launchUrl: `${origin}/#${bootstrap}`,
     store,
     agentTools,
     remoteAccess,
     close: async () => {
       stopping = true;
+      diagnostics.write('engine-stop');
       await remoteAccess.close();
       await accountLogin.close();
       agentTools.close();
