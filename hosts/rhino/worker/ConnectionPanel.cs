@@ -15,8 +15,9 @@ public sealed class ConnectionPanel : Panel
 {
     private readonly uint serial;
     private readonly Label status = new() { VerticalAlignment = VerticalAlignment.Center };
-    private readonly Button connect = new() { Text = "연결" };
+    private readonly Button connect = new() { Text = "Link" };
     private readonly Button live = new() { Text = "Live" };
+    private readonly Button sync = new() { Text = "Sync", ToolTip = "지금 VIDE로 Sync" };
     private readonly Button reload = new() { Text = "⟳", ToolTip = "VIDE 다시 불러오기" };
     private readonly UITimer timer = new() { Interval = 1 };
     private readonly WebView? web;
@@ -27,11 +28,13 @@ public sealed class ConnectionPanel : Panel
     public ConnectionPanel(uint documentSerialNumber)
     {
         serial = documentSerialNumber;
+        // Link: choose a VIDE project and link this document; Unlink ends this window's connection only.
         connect.Click += (_, _) => Act(() => {
             if (Connection is { } current) { current.Dispose(); AttachedConnection.Current = null; }
-            else AttachedConnection.Connect(RhinoDoc.FromRuntimeSerialNumber(serial) ?? throw new InvalidOperationException("문서가 닫혔습니다."));
+            else EngineLink.LinkDocument(RhinoDoc.FromRuntimeSerialNumber(serial) ?? throw new InvalidOperationException("문서가 닫혔습니다."));
         });
         live.Click += (_, _) => Act(() => Connection?.ToggleLive());
+        sync.Click += (_, _) => Act(() => Connection?.Sync());
         reload.Click += (_, _) => { loaded = ""; RefreshState(); };
         Control body;
         try
@@ -48,7 +51,7 @@ public sealed class ConnectionPanel : Panel
         {
             Padding = new Padding(8, 6),
             Spacing = new Size(4, 0),
-            Rows = { new TableRow(new TableCell(status, true), connect, live, reload) },
+            Rows = { new TableRow(new TableCell(status, true), connect, live, sync, reload) },
         };
         Content = new TableLayout { Rows = { bar, new TableRow(new TableCell(body, true)) { ScaleHeight = true } } };
         timer.Elapsed += (_, _) => RefreshState();
@@ -86,10 +89,11 @@ public sealed class ConnectionPanel : Panel
     {
         var doc = RhinoDoc.FromRuntimeSerialNumber(serial);
         var connection = Connection;
-        status.Text = (doc?.Name ?? "제목 없는 문서") + (connection == null ? "  ○ 연결 안 됨" : connection.Live ? "  ● Live Sync" : "  ● 연결됨");
-        connect.Text = connection == null ? "연결" : "해제";
+        status.Text = (doc?.Name ?? "제목 없는 문서") + (connection == null ? "  ○ 연결 안 됨" : (connection.Live ? "  ● Live Sync" : "  ● 연결됨") + (connection.LinkedProject is { } linked ? " · " + linked.Name : ""));
+        connect.Text = connection == null ? "Link" : "Unlink";
         connect.Enabled = doc != null;
         live.Enabled = connection != null;
+        sync.Enabled = connection != null;
         live.Text = connection?.Live == true ? "Live 끄기" : "Live 켜기";
         if (web == null) return;
         var launch = LaunchUrl();
@@ -99,14 +103,15 @@ public sealed class ConnectionPanel : Panel
         else
         {
             var uri = new Uri(launch);
-            target = $"{uri.GetLeftPart(UriPartial.Path)}?panel=rhino&instance={Uri.EscapeDataString(connection.Instance)}&document={connection.DocumentId}&theme={(Dark() ? "dark" : "light")}{uri.Fragment}";
+            var project = connection.LinkedProject is { } chosen ? "&project=" + Uri.EscapeDataString(chosen.Id) : "";
+            target = $"{uri.GetLeftPart(UriPartial.Path)}?panel=rhino{project}&instance={Uri.EscapeDataString(connection.Instance)}&document={connection.DocumentId}&theme={(Dark() ? "dark" : "light")}{uri.Fragment}";
         }
         if (target == loaded) return;
         loaded = target;
         if (target.StartsWith("about:"))
             web.LoadHtml(Placeholder(target == "about:vide-offline"
                 ? "VIDE가 실행되고 있지 않습니다. VIDE를 실행한 뒤 ⟳를 누르세요."
-                : "위의 <b>연결</b>을 누르면 이 문서의 VIDE 대화가 여기에 열립니다."));
+                : "위의 <b>Link</b>를 누르고 VIDE 프로젝트를 고르면 이 문서가 연결되어 바로 Sync되고, VIDE 작업이 여기에 열립니다."));
         else web.Url = new Uri(target);
     }
 

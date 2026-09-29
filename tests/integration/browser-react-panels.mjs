@@ -68,6 +68,7 @@ try {
   await page.waitForFunction(
     () => document.querySelector('#pending-requests textarea')?.value === 'edited',
   );
+  // Open host documents, offered by the apply dialog below.
   await page.route('**/api/v1/host/documents', (route) =>
     route.fulfill({
       json: {
@@ -79,33 +80,12 @@ try {
       },
     }),
   );
-  let release;
-  const delayed = new Promise((resolve) => {
-    release = resolve;
-  });
-  await page.route('**/api/v1/host/selection?*', async (route) => {
-    await delayed;
-    await route.fulfill({
-      json: {
-        instance: '1:2',
-        documentId: 1,
-        documentHash: 'a'.repeat(64),
-        selectedIds: [],
-        observedAt: 'test',
-      },
-    });
-  });
-  await page.locator('#refresh-documents').click();
-  await page.locator('#host-documents').selectOption('2');
+  // Reading the host selection needs a linked, open file as the target; nothing is guessed.
   await page.locator('#attach-menu summary').click();
   await page.locator('#inspect-selection').click();
-  assert.equal(await page.locator('#host-documents').isDisabled(), true);
-  assert.equal(await page.locator('#capture-document').isDisabled(), true);
-  release();
   await page.waitForFunction(() =>
-    document.querySelector('#message').textContent.includes('문서 연결이 바뀌었습니다'),
+    document.querySelector('#message').textContent.includes('연결 파일 목록에서 고르세요'),
   );
-  assert.equal(await page.locator('#host-documents').inputValue(), '2');
   const fixtureInput = {
     id: 'inspector-fixture',
     body: 'Inspector fixture',

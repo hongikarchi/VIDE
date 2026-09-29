@@ -163,10 +163,12 @@ export async function recoverDwgImport(
 
 /** Request input of a host document Sync (manual, automatic or Live Sync). */
 export function captureInput(
-  target: { id: string; instance: string; documentId: number },
+  target: { id: string; instance: string; documentId: number; linkId?: string },
   hostKind: 'rhino' | 'zwcad' = 'rhino',
 ) {
   return {
+    // The project link file this Sync belongs to (SPEC-01.9).
+    ...(target.linkId ? { linkId: target.linkId } : {}),
     id: target.id,
     provider: 'codex-cli',
     host: hostKind,
@@ -181,7 +183,7 @@ export function captureInput(
 }
 export async function captureModel(
   projectId: string,
-  target: { id: string; instance: string; documentId: number },
+  target: { id: string; instance: string; documentId: number; linkId?: string },
   workspace: Workspace,
   host: ImportHost,
   capture: typeof captureDocument = captureDocument,

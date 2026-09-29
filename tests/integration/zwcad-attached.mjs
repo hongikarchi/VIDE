@@ -10,6 +10,7 @@ import { sendHostCommand } from '../../hosts/common/transport.ts';
 import { chromium } from 'playwright';
 import { startServer } from '../../src/server/server.ts';
 import { sdkOptions } from '../../src/server/sdk-options.ts';
+import { linkOpenDocument } from './link-helper.mjs';
 
 const directory = resolve('.vide/zwcad-attached', randomUUID());
 const registry = join(directory, 'zwcad-connections');
@@ -112,11 +113,10 @@ try {
     const attachedResponse = await page.request.get(app.origin + '/api/v1/host/attached-documents');
     const attachedCatalog = await attachedResponse.json();
     console.log(JSON.stringify({ attachedStatus: attachedResponse.status(), attachedCatalog }));
-    await page.locator('#host-documents').selectOption(`${target.instance}/1`, { timeout: 20000 });
-    await page.locator('#capture-document').click();
-    await page.waitForFunction(
-      () => document.querySelector('#host-document-info')?.textContent.includes('Sync 완료'),
-      { timeout: 30000 },
+    await linkOpenDocument(
+      page,
+      { host: 'zwcad', instance: target.instance, documentId: 1 },
+      30000,
     );
     await page.getByRole('button', { name: '위 · 직교', exact: true }).click();
     await page.screenshot({ path: join(directory, 'browser-sync.png') });

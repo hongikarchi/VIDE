@@ -178,6 +178,7 @@ export class EditorSessions {
           connection: external ? 'attached-editor' : 'owned-editor',
           ...('generation' in snapshot
             ? {
+                ...(snapshot.path ? { path: snapshot.path } : {}),
                 generation: snapshot.generation,
                 live: snapshot.live,
                 hostBusy: snapshot.busy,

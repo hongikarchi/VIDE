@@ -85,8 +85,10 @@ try {
     captures++;
     const target = route.request().postDataJSON(),
       projectId = new URL(route.request().url()).pathname.split('/')[4];
+    assert.equal(target.linkId, 'link-a');
     workspace.submit(projectId, {
       id: target.id,
+      linkId: target.linkId,
       body: 'Sync',
       permission: 'candidate',
       provider: 'codex-cli',
@@ -124,6 +126,7 @@ try {
     id: syncId,
     input: {
       id: syncId,
+      linkId: 'link-a',
       body: 'Sync',
       permission: 'candidate',
       provider: 'codex-cli',
@@ -146,10 +149,34 @@ try {
   });
   await page.goto(app.launchUrl);
   await page.waitForFunction(() => !document.querySelector('#body').disabled);
-  await page.locator('#refresh-documents').click();
-  await page.locator('#capture-document').click();
-  await page.waitForFunction(
-    () => document.querySelector('#host-document-info').textContent === 'Sync 완료',
+  // The Rhino document is linked to the project; the open connection is added to the list here.
+  const projectId = await page.locator('#project-picker').inputValue();
+  const now = new Date().toISOString();
+  app.store.db
+    .prepare('INSERT INTO document_links VALUES(?,?,?,?,?,?,?,0,?,?)')
+    .run('link-a', projectId, 'rhino', 'Attached test', null, instance, 7, now, now);
+  await page.route('**/api/v1/projects/*/links', async (route) => {
+    if (route.request().method() !== 'GET') return route.continue();
+    const rows = await (await route.fetch()).json();
+    await route.fulfill({
+      json: rows.map((row) => ({
+        ...row,
+        connection: {
+          instance,
+          documentId: 7,
+          live: true,
+          generation,
+          objectCount: 2,
+          units: 'Millimeters',
+          modified: true,
+          hostBusy: false,
+        },
+      })),
+    });
+  });
+  // The first Sync of a linked file needs no click.
+  await page.waitForFunction(() =>
+    document.querySelector('.object-summary')?.textContent?.startsWith('2개 객체'),
   );
   const objectSummary = () => page.locator('.object-summary').first().textContent();
   assert.match(await objectSummary(), /^2개 객체/);
@@ -169,7 +196,7 @@ try {
   while (lives.length < 1) await new Promise((r) => setTimeout(r, 50));
   assert.deepEqual(lives[0], { instance, documentId: 7, basisId: syncId, revision: 1 });
   await page.waitForFunction(
-    () => document.querySelector('#host-document-info').textContent === 'Sync 완료',
+    () => !document.querySelector('.link-row')?.textContent.includes('Sync 중'),
   );
   assert.match(await objectSummary(), /^2개 객체/);
   assert.equal(captures, 1);

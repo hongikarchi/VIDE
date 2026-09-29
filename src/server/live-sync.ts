@@ -111,7 +111,8 @@ export class LiveSync {
     if (!referenced) saved = this.workspace.update(projectId, basis.id, 'succeeded', result);
     else {
       const id = randomUUID();
-      this.workspace.submit(projectId, captureInput({ id, ...target }));
+      const linkId = typeof basis.input.linkId === 'string' ? basis.input.linkId : undefined;
+      this.workspace.submit(projectId, captureInput({ id, ...target, linkId }));
       saved = this.workspace.update(projectId, id, 'succeeded', result);
     }
     this.latest.set(key, saved.id);

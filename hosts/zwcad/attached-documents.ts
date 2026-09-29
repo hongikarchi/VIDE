@@ -23,6 +23,7 @@ type Connection = z.infer<typeof connectionSchema>;
 const statusSchema = z.object({
   ok: z.literal(true),
   name: z.string(),
+  path: z.string().optional(),
   units: z.string(),
   objectCount: z.number().int().nonnegative(),
   modified: z.boolean().nullable(),
@@ -183,6 +184,7 @@ export class AttachedZwcadDocuments {
           host: 'zwcad' as const,
           connection: 'attached-editor' as const,
           name: status.name,
+          ...(status.path ? { path: status.path } : {}),
           units: status.units,
           objectCount: status.objectCount,
           modified: status.modified,

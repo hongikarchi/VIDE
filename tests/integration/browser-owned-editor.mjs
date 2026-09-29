@@ -5,6 +5,14 @@ import { randomUUID } from 'node:crypto';
 import { chromium } from 'playwright';
 import { launchRhinoWorker } from '../../hosts/rhino/worker-client.ts';
 import { startServer } from '../../src/server/server.ts';
+// The work history opens a work; the linked files list forces a Sync of the work copy.
+const openWork = async (page, id) => {
+  await page.locator('button[data-section="task-list"]').click();
+  await page.locator(`[data-task-id="${id}"] .task-open`).click();
+  await page.locator('button[data-section="document-tree"]').click();
+};
+const syncWorkCopy = (page) =>
+  page.locator('.link-row').filter({ hasText: '작업 사본' }).locator('.link-sync').click();
 const directory = resolve('.vide/browser-owned-editor', randomUUID());
 await mkdir(directory, { recursive: true });
 const options = {
@@ -80,22 +88,20 @@ try {
   const response = await opened;
   assert.equal(response.status(), 200);
   const target = await response.json();
-  await page.getByText('열린 호스트 문서', { exact: true }).click();
-  await page.locator('#refresh-documents').click();
-  await page.locator('#host-documents').selectOption(target.instance + '/' + target.documentId);
+  // The opened work copy is a linked file of the project; its first Sync starts by itself.
   const capturing = page.waitForResponse(
     (response) =>
       response.url().endsWith(`/projects/${project.id}/capture`) &&
       response.request().method() === 'POST',
   );
-  await page.locator('#capture-document').click();
   const result = await (await capturing).json();
   assert.equal(result.state, 'succeeded', JSON.stringify(result));
   assert.equal(result.result.executionMode, 'sdk');
   assert.equal(result.result.sourceDocument.instance, target.instance);
   assert.equal(result.result.scene[0].volume, 24);
+  await openWork(page, result.id);
   await page
-    .locator(`[data-request-id="${result.id}"]`)
+    .locator('.work-view')
     .getByRole('button', { name: '이 후보 보기', exact: true })
     .click();
   await page.screenshot({ path: join(directory, 'recaptured.png') });
@@ -192,15 +198,12 @@ try {
   await dialog.getByRole('button', { name: '검토한 변경 적용', exact: true }).click();
   await dialog.getByRole('status').filter({ hasText: '문서 반영 완료' }).waitFor();
   await dialog.getByRole('button', { name: '닫기', exact: true }).click();
-  await page.getByText('열린 호스트 문서', { exact: true }).click();
-  await page.locator('#refresh-documents').click();
-  await page.locator('#host-documents').selectOption(target.instance + '/' + target.documentId);
   const finalCapture = page.waitForResponse(
     (response) =>
       response.url().endsWith(`/projects/${project.id}/capture`) &&
       response.request().method() === 'POST',
   );
-  await page.locator('#capture-document').click();
+  await syncWorkCopy(page);
   const final = await (await finalCapture).json();
   assert.equal(final.state, 'succeeded', JSON.stringify(final));
   assert.ok(Math.abs(final.result.scene[0].volume - 48) < 1e-8);
@@ -214,8 +217,9 @@ try {
           Buffer.from(value, 'base64').toString() === 'L02',
       ),
     );
+  await openWork(page, final.id);
   await page
-    .locator(`[data-request-id="${final.id}"]`)
+    .locator('.work-view')
     .getByRole('button', { name: '이 후보 보기', exact: true })
     .click();
   await page.screenshot({ path: join(directory, 'applied.png') });
@@ -227,15 +231,12 @@ try {
     });
     await page.goto(app.launchUrl);
     await page.locator('#project-picker').selectOption(project.id);
-    await page.getByText('열린 호스트 문서', { exact: true }).click();
-    await page.locator('#refresh-documents').click();
-    await page.locator('#host-documents').selectOption(target.instance + '/' + target.documentId);
     const recapturing = page.waitForResponse(
       (response) =>
         response.url().endsWith(`/projects/${project.id}/capture`) &&
         response.request().method() === 'POST',
     );
-    await page.locator('#capture-document').click();
+    await syncWorkCopy(page);
     const unchanged = await (await recapturing).json();
     assert.equal(unchanged.state, 'succeeded', JSON.stringify(unchanged));
     assert.deepEqual(unchanged.result.measurementStats, { measuredObjects: 0, reusedObjects: 1 });

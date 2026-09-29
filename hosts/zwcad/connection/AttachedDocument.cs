@@ -21,6 +21,10 @@ namespace Vide.Zwcad.Connection
         internal readonly Document Document;
         internal bool Live;
         internal DateTime? LastRead;
+        /// <summary>The VIDE project this drawing was linked to from this window (SPEC-01.9).</summary>
+        internal EngineProject LinkedProject;
+        /// <summary>The engine's key for this connection (process, start time, session).</summary>
+        internal string Instance => pid + ":" + ticks + ":" + session;
         private readonly string session = Guid.NewGuid().ToString(), token, ticks, record;
         private readonly int pid;
         private readonly TcpListener listener;
@@ -83,7 +87,7 @@ namespace Vide.Zwcad.Connection
                     var space = (BlockTableRecord)tx.GetObject(table[BlockTableRecord.ModelSpace], OpenMode.ForRead);
                     bool? modified = null;
                     if (Application.DocumentManager.MdiActiveDocument == Document) modified = Convert.ToInt32(Application.GetSystemVariable("DBMOD")) != 0;
-                    return new { ok = true, name = Path.GetFileName(Document.Name), units = Document.Database.Insunits.ToString(),
+                    return new { ok = true, name = Path.GetFileName(Document.Name), path = Document.Name, units = Document.Database.Insunits.ToString(),
                         objectCount = space.Cast<ObjectId>().Count(), documentHash = Fingerprint(), revision, generation, live = Live, modified, hostBusy = Busy };
                 }
             }

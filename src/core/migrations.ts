@@ -3,7 +3,7 @@ import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 
-export const schemaVersion = 3;
+export const schemaVersion = 4;
 export const baselineSchema = `
         CREATE TABLE IF NOT EXISTS projects(id TEXT PRIMARY KEY, name TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS connections(id TEXT PRIMARY KEY, projectId TEXT NOT NULL REFERENCES projects(id),
@@ -33,9 +33,16 @@ export type Migration = { version: number; sql: string };
 // Conversation entries a user removed from view; the request records themselves are kept.
 const hiddenRequests = `CREATE TABLE IF NOT EXISTS hidden_requests(projectId TEXT NOT NULL REFERENCES projects(id),
   requestId TEXT NOT NULL REFERENCES workspace_requests(id), hiddenAt TEXT NOT NULL, PRIMARY KEY(projectId, requestId));`;
+// Files linked to a project from a host plugin (SPEC-01.9); Sync records stay in workspace_requests.
+const documentLinks = `CREATE TABLE IF NOT EXISTS document_links(id TEXT PRIMARY KEY,
+  projectId TEXT NOT NULL REFERENCES projects(id), host TEXT NOT NULL, name TEXT NOT NULL, path TEXT,
+  instance TEXT NOT NULL, documentId INTEGER NOT NULL, hidden INTEGER NOT NULL, linkedAt TEXT NOT NULL,
+  updatedAt TEXT NOT NULL);
+CREATE INDEX IF NOT EXISTS document_links_project ON document_links(projectId);`;
 const migrations: Migration[] = [
   { version: 2, sql: baselineSchema },
   { version: 3, sql: hiddenRequests },
+  { version: 4, sql: documentLinks },
 ];
 
 /** Caller holds the exclusive controller lock. Never migrates user model files. */

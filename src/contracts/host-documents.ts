@@ -11,6 +11,8 @@ export const hostDocumentsSchema = z.object({
       instance: hostTargetSchema.shape.instance.optional(),
       id: z.number().int().positive().max(4294967295),
       name: z.string(),
+      /** Full file path when the document is saved (identifies a project link file). */
+      path: z.string().optional(),
       units: z.string(),
       objectCount: z.number().int().nonnegative(),
       modified: z.boolean().nullable(),

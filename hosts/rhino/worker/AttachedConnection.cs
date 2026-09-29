@@ -41,6 +41,8 @@ internal sealed class AttachedConnection : IDisposable
         PinsChanged?.Invoke();
     }
     internal bool Live => live;
+    /** The VIDE project this document was linked to from this window (SPEC-01.9). */
+    internal EngineProject? LinkedProject { get; set; }
     internal DateTime? LastDisplayRead { get; private set; }
     internal static void Connect(RhinoDoc doc)
     {
@@ -102,7 +104,7 @@ internal sealed class AttachedConnection : IDisposable
         if (disposed || RhinoDoc.FromRuntimeSerialNumber(DocumentId) != document || request.GetProperty("documentId").GetUInt32() != DocumentId)
             throw new InvalidOperationException("TARGET_MISMATCH");
         if (request.GetProperty("method").GetString() == "attachedStatus")
-            return new { ok = true, documentId = DocumentId, name = document.Name ?? "Untitled", units = document.ModelUnitSystem.ToString(),
+            return new { ok = true, documentId = DocumentId, name = document.Name ?? "Untitled", path = document.Path ?? "", units = document.ModelUnitSystem.ToString(),
                 objectCount = document.Objects.Count, modified = document.Modified, generation, live, busy = RhinoApp.InCommand > 0,
                 selectionVersion,
                 selectedIds = document.Objects.GetSelectedObjects(false, false).Take(2000).Select(o => o.Id.ToString()).ToArray(),
@@ -231,14 +233,25 @@ internal sealed class AttachedConnection : IDisposable
         try { File.Delete(record); } catch (IOException) { /* Dead socket and disposed dispatch revoke access even if cleanup fails. */ }
     }
 }
+/// <summary>Link: connect this document, choose a VIDE project, and VIDE syncs it at once.</summary>
+public sealed class LinkCommand : Command
+{
+    public override string EnglishName => "VIDELink";
+    protected override Result RunCommand(RhinoDoc doc, RunMode mode)
+    {
+        if (doc.IsHeadless) return Result.Failure;
+        EngineLink.LinkDocument(doc);
+        return Result.Success;
+    }
+}
+/// <summary>Earlier name of Link; the same behaviour.</summary>
 public sealed class ConnectCommand : Command
 {
     public override string EnglishName => "VIDEConnect";
     protected override Result RunCommand(RhinoDoc doc, RunMode mode)
     {
         if (doc.IsHeadless) return Result.Failure;
-        AttachedConnection.Connect(doc);
-        RhinoApp.WriteLine("VIDE connected to this document. In VIDE, select this document and Sync. VIDE never saves or closes this Rhino window.");
+        EngineLink.LinkDocument(doc);
         return Result.Success;
     }
 }
@@ -251,7 +264,7 @@ public sealed class SyncCommand : Command
 {
     public override string EnglishName => "VIDESync";
     protected override Result RunCommand(RhinoDoc doc, RunMode mode) {
-        if (AttachedConnection.Current?.DocumentId != doc.RuntimeSerialNumber) { RhinoApp.WriteLine("Run VIDEConnect first."); return Result.Failure; }
+        if (AttachedConnection.Current?.DocumentId != doc.RuntimeSerialNumber) { RhinoApp.WriteLine("먼저 VIDELink로 이 문서를 VIDE 프로젝트에 연결하세요."); return Result.Failure; }
         AttachedConnection.Current.Sync(); RhinoApp.WriteLine("VIDE Sync requested. Keep the connected document selected in VIDE."); return Result.Success;
     }
 }

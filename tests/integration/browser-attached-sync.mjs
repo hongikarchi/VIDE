@@ -6,6 +6,8 @@ import { chromium } from 'playwright';
 import { startServer } from '../../src/server/server.ts';
 import { Workspace } from '../../src/core/workspace.ts';
 
+// A Rhino document linked to the project (SPEC-01.9): first Sync without a click, failure display,
+// draft protection of automatic Sync, the explicit apply packet, and a closed file.
 const directory = resolve('.vide/browser-attached', randomUUID());
 await mkdir(directory, { recursive: true });
 let app, browser;
@@ -28,35 +30,61 @@ try {
     connected = true,
     rejectCapture = true,
     releaseCapture;
-  const catalog = () => ({
+  const document = {
     instance,
-    documents: connected
-      ? [
-          {
-            instance,
-            id: 7,
-            name: 'Attached test',
-            units: 'Millimeters',
-            objectCount: 1,
-            modified: true,
-            host: 'rhino',
-            connection: 'attached-editor',
-            generation,
-            live: true,
-            hostBusy: false,
-          },
-        ]
-      : [],
+    id: 7,
+    name: 'Attached test',
+    units: 'Millimeters',
+    objectCount: 1,
+    modified: true,
+    host: 'rhino',
+    connection: 'attached-editor',
+    live: true,
+    hostBusy: false,
+  };
+  await page.route('**/api/v1/host/attached-documents', (route) =>
+    route.fulfill({
+      json: { instance, documents: connected ? [{ ...document, generation }] : [] },
+    }),
+  );
+  // The file is linked; the test engine has no host, so the open connection is added here.
+  await page.goto(app.launchUrl);
+  await page.waitForFunction(() => !window.document.querySelector('#body').disabled);
+  const projectId = await page.locator('#project-picker').inputValue();
+  const now = new Date().toISOString();
+  app.store.db
+    .prepare('INSERT INTO document_links VALUES(?,?,?,?,?,?,?,0,?,?)')
+    .run('link-a', projectId, 'rhino', 'Attached test', null, instance, 7, now, now);
+  await page.route('**/api/v1/projects/*/links', async (route) => {
+    if (route.request().method() !== 'GET') return route.continue();
+    const rows = await (await route.fetch()).json();
+    await route.fulfill({
+      json: rows.map((row) => ({
+        ...row,
+        connection: connected
+          ? {
+              instance,
+              documentId: 7,
+              live: true,
+              generation,
+              objectCount: 1,
+              units: 'Millimeters',
+              modified: true,
+              hostBusy: false,
+            }
+          : null,
+      })),
+    });
   });
-  for (const path of ['documents', 'attached-documents'])
-    await page.route(`**/api/v1/host/${path}`, (route) => route.fulfill({ json: catalog() }));
   await page.route('**/api/v1/projects/*/capture', async (route) => {
     captures++;
     const target = route.request().postDataJSON(),
-      projectId = new URL(route.request().url()).pathname.split('/')[4];
+      project = new URL(route.request().url()).pathname.split('/')[4];
     assert.equal(target.instance, instance);
+    assert.equal(target.linkId, 'link-a');
     const input = {
       id: target.id,
+      linkId: target.linkId,
       body: 'Sync',
       permission: 'review',
       provider: 'codex-cli',
@@ -66,19 +94,19 @@ try {
       source: 'document',
       host: 'rhino',
     };
-    workspace.submit(projectId, input);
+    workspace.submit(project, input);
     if (rejectCapture) {
       await new Promise((resolve) => {
         releaseCapture = resolve;
       });
-      const failed = workspace.update(projectId, input.id, 'failed', {
+      const failed = workspace.update(project, input.id, 'failed', {
         hostExecuted: false,
         code: 'IMPORT_LIMIT',
       });
       await route.fulfill({ json: failed });
       return;
     }
-    const request = workspace.update(projectId, input.id, 'succeeded', {
+    const request = workspace.update(project, input.id, 'succeeded', {
       host: 'rhino',
       hostExecuted: true,
       verified: false,
@@ -100,24 +128,18 @@ try {
     });
     await route.fulfill({ json: request });
   });
-  await page.goto(app.launchUrl);
-  await page.waitForFunction(() => !document.querySelector('#body').disabled);
-  await page.locator('#refresh-documents').click();
+  // The linked open file syncs without any click.
   await page.waitForFunction(
-    () => document.querySelector('#viewport-empty').dataset.state === 'connected',
+    () => window.document.querySelector('#viewport-empty').dataset.state === 'loading',
   );
   assert.equal(
     await page.locator('#viewport-empty').evaluate((n) => getComputedStyle(n).pointerEvents),
     'none',
   );
-  await page.locator('#capture-document').click();
-  await page.waitForFunction(
-    () => document.querySelector('#viewport-empty').dataset.state === 'loading',
-  );
   while (!releaseCapture) await new Promise((resolve) => setTimeout(resolve, 10));
   releaseCapture();
   await page.waitForFunction(
-    () => document.querySelector('#viewport-empty').dataset.state === 'failed',
+    () => window.document.querySelector('#viewport-empty').dataset.state === 'failed',
   );
   assert.equal(await page.locator('#viewport-empty').isVisible(), true);
   await page.screenshot({ path: join(directory, 'empty-sync-failed.png') });
@@ -125,17 +147,18 @@ try {
   const status = page.getByRole('dialog', { name: '상태 및 설정', exact: true });
   assert.match(await status.textContent(), /IMPORT_LIMIT/);
   await status.getByRole('button', { name: '닫기', exact: true }).click();
-  await page.reload();
-  await page.waitForFunction(() => !document.querySelector('#body').disabled);
-  assert.equal(await page.locator('#viewport-empty').getAttribute('data-state'), 'failed');
-  await page.locator('#refresh-documents').click();
+  // After a reload the file syncs again (first Sync not yet done).
   rejectCapture = false;
   captures = 0;
-  await page.locator('#capture-document').click();
+  await page.reload();
+  const row = page.locator('.link-row[data-link-id="link-a"]');
   await page.waitForFunction(
-    () => document.querySelector('#host-document-info').textContent === 'Sync 완료',
+    () => !window.document.querySelector('.link-row')?.textContent.includes('Sync 전'),
   );
-  assert.equal(await page.locator('#viewport-empty').isVisible(), false);
+  assert.match(await row.textContent(), /Live · Sync/);
+  await page.waitForFunction(
+    () => !window.document.querySelector('#viewport-empty').checkVisibility(),
+  );
   assert.equal(
     await page.getByText('Rhino 화면 동기화 · 원본 변경 없음', { exact: true }).count(),
     1,
@@ -143,16 +166,17 @@ try {
   assert.equal(await page.getByRole('link', { name: '3dm 내려받기', exact: true }).count(), 0);
   assert.equal(await page.getByRole('button', { name: 'Rhino에서 열기', exact: true }).count(), 0);
   assert.equal(captures, 1);
+  // A draft based on this file holds its automatic Sync; other input is kept.
   await page.locator('#body').fill('Do not lose my draft');
   generation++;
   await page.waitForFunction(() =>
-    document.querySelector('#host-document-info').textContent.includes('보류'),
+    window.document.querySelector('.link-row')?.textContent.includes('보류'),
   );
   assert.equal(captures, 1);
   assert.equal(await page.locator('#body').inputValue(), 'Do not lose my draft');
   await page.locator('#body').fill('');
   await page.waitForFunction(
-    () => document.querySelector('#host-document-info').textContent === 'Sync 완료',
+    () => !window.document.querySelector('.link-row')?.textContent.includes('보류'),
   );
   assert.equal(captures, 2);
   await page.locator('#model').selectOption('codex-cli');
@@ -177,12 +201,14 @@ try {
     });
   });
   await page.locator('#request').click();
-  await page.waitForFunction(() => document.querySelector('#body').value === '');
+  await page.waitForFunction(() => window.document.querySelector('#body').value === '');
   assert.equal(sent.applyToSource, true);
   assert.equal(sent.permission, 'candidate');
   assert.ok(sent.baseRequestId);
+  // A closed file stays listed with its last Sync; forced Sync needs the open file.
   connected = false;
-  await page.waitForFunction(() => document.querySelector('#capture-document').disabled);
+  await page.waitForFunction(() => window.document.querySelector('.link-sync').disabled);
+  assert.match(await row.textContent(), /닫힘 · Sync/);
   assert.deepEqual(errors, []);
   await page.screenshot({ path: join(directory, 'attached-sync.png') });
   console.log(

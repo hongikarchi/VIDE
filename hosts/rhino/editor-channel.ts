@@ -167,6 +167,7 @@ export function editorMethods(
           ok: z.literal(true),
           documentId: z.number().int().positive(),
           name: z.string(),
+          path: z.string().optional(),
           units: z.string(),
           objectCount: z.number().int().nonnegative(),
           modified: z.boolean(),

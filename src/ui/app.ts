@@ -7,7 +7,11 @@ import { showExecutionLimits } from './execution-limits.tsx';
 import { requestConflict } from '../contracts/request-scope.ts';
 import { draftSnapshot, restoreDraft } from './draft-storage.ts';
 import { z } from 'zod';
-import { hostDocumentsSchema, type HostTarget } from '../contracts/host-documents.ts';
+import {
+  hostDocumentsSchema,
+  hostSelectionSchema,
+  type HostTarget,
+} from '../contracts/host-documents.ts';
 import { element as $, append as el, readableError } from './elements.ts';
 import {
   requestData,
@@ -30,7 +34,8 @@ import { initializeReviews } from './reviews.tsx';
 import { attachSharedFeedback } from './shared-feedback.tsx';
 import { linkedCandidates, showLinkedTargets } from './linked-targets.tsx';
 import { renderWork } from './work-view.tsx';
-import { initializeDocuments, attachConnectedSelection } from './documents.tsx';
+import { linkRowSchema, renderLinks, type LinkRow } from './links.tsx';
+import { composeLayers, displayIdOf, layerSignature, sourceIdOf } from './layers.ts';
 import { renderRequests } from './requests.tsx';
 import { iconSvg, initializeInspector, renderInspector } from './inspector.ts';
 import { api, connect, errors, labels } from './gateway.ts';
@@ -96,8 +101,25 @@ function applySelection(ids: string[], mode: SelectMode, pin = false) {
   else if (mode === 'add') selectedIds = [...new Set([...selectedIds, ...ids])];
   else selectedIds = selectedIds.filter((id) => !ids.includes(id));
   state.selected = selectedIds.at(-1) ?? null;
+  const picked = objects.find((object) => object.id === state.selected);
+  if (typeof picked?.documentKey === 'string' && picked.documentKey !== activeLayer) {
+    activeLayer = picked.documentKey;
+    applyActiveLayer();
+    renderLinkPanel();
+  }
   if (pin) pinSelection(state, ids);
   render();
+}
+/** Show a result and select one of its objects by the object's own id. */
+function selectInResult(requestId: string | undefined, id: string) {
+  if (requestId) {
+    selectedResult = requestId;
+    appliedSelection = undefined;
+    renderMessages();
+  }
+  state.selected = (requestId && displayIdOf(objects, requestId, id)) || id;
+  render();
+  return state.selected;
 }
 const renderObjectList = createObjectList($('objects'), (ids, mode) => {
   applySelection(ids, mode, tool === 'pin');
@@ -219,96 +241,319 @@ async function liveSyncHostDocument(target: HostTarget): Promise<boolean | 'retr
   // The reply carries only the request summary; the merged arrays are attached after parsing.
   const next = requestMessage(reply.request);
   next.request.result = { ...next.request.result, ...merged };
-  const shown = displayedResult === basis.id || displayedResult === rhinoBasis(target)?.id;
   const index = state.messages.findIndex((entry) => entry.id === reply.requestId);
   if (index >= 0) state.messages[index] = next;
   else state.messages.push(next);
-  if (shown) {
-    selectedResult = reply.requestId;
-    liveRefresh = reply.requestId;
+  const link = links.find((entry) => entry.id === basis.request.input.linkId);
+  if (reply.requestId !== basis.id) {
+    if (link) {
+      link.lastSync = { requestId: reply.requestId, at: new Date().toISOString() };
+      if (layerOverride.get(link.id) === basis.id) layerOverride.delete(link.id);
+    } else if (transientResult === basis.id) transientResult = reply.requestId;
   }
+  liveRefresh = reply.requestId;
   renderMessages();
   return true;
 }
-const captureHostDocument = async (target: HostTarget, automatic = false) => {
-  if (
-    automatic &&
-    (!project ||
-      busy ||
-      draftHasInput(state) ||
-      pendingSketch() ||
-      state.messages.some((m) => m.request && ['queued', 'running'].includes(m.request.state)))
-  )
-    return false;
-  if (automatic) {
-    const live = await liveSyncHostDocument(target);
-    if (live !== false) return live;
+// Linked files (SPEC-01.9): files linked from the host plugins, drawn together as layers. No file
+// is the main one; the composer targets the file of the last picked object (or the chosen row).
+let links: LinkRow[] = [],
+  linksLoaded = false,
+  linkSignature = '',
+  linksPolling = false,
+  linkSyncing = false;
+const linkNotes = new Map<string, string>();
+/** A candidate (or older Sync) shown in a file's place instead of its latest Sync. */
+const layerOverride = new Map<string, string>();
+/** A result shown that belongs to no linked file (file import, older work). */
+let transientResult: string | undefined;
+let activeLayer: string | undefined;
+let shownSignature = '',
+  fitNext = true;
+interface Layer {
+  key: string;
+  requestId: string;
+  name: string;
+  link?: LinkRow;
+}
+let currentLayers: Layer[] = [];
+const seenGeneration = new Map<string, number>();
+/** The linked file a request belongs to: its own link, or the link of its basis chain. */
+function linkOfRequest(id: string | null | undefined): string | undefined {
+  let current = id ? state.messages.find((entry) => entry.id === id) : undefined;
+  for (let depth = 0; current && depth < 30; depth++) {
+    const linkId = current.request.input.linkId;
+    if (typeof linkId === 'string' && links.some((link) => link.id === linkId)) return linkId;
+    const base = current.request.input.baseRequestId ?? current.request.result?.baseRequestId;
+    current =
+      typeof base === 'string' ? state.messages.find((entry) => entry.id === base) : undefined;
   }
-  if (!project || busy) throw Error('현재 작업이 끝난 뒤 가져오세요.');
-  busy = true;
-  viewportEmpty.sync('loading');
-  render();
-  message('열린 호스트 문서의 모델을 가져오고 있습니다.');
+  return undefined;
+}
+function visibleLayers(): Layer[] {
+  const layers: Layer[] = [];
+  for (const link of links) {
+    if (link.hidden) continue;
+    const requestId = layerOverride.get(link.id) ?? link.lastSync?.requestId;
+    if (requestId && state.messages.some((entry) => entry.id === requestId))
+      layers.push({ key: link.id, requestId, name: link.name, link });
+  }
+  const entry = transientResult
+    ? state.messages.find((item) => item.id === transientResult)
+    : undefined;
+  if (entry && !layers.some((layer) => layer.requestId === entry.id))
+    layers.push({
+      key: 'result:' + entry.id,
+      requestId: entry.id,
+      name: entry.request.result?.sourceDocument?.name || entry.body.slice(0, 40) || '결과',
+    });
+  return layers;
+}
+/** Open a result: a linked file's candidate takes that file's place; anything else shows beside. */
+function showRequest(id: string) {
+  const link = links.find((entry) => entry.id === linkOfRequest(id));
+  if (link) {
+    if (link.lastSync?.requestId === id) layerOverride.delete(link.id);
+    else layerOverride.set(link.id, id);
+    if (link.hidden) void setLinkHidden(link, false);
+    transientResult = undefined;
+    activeLayer = link.id;
+  } else {
+    transientResult = id;
+    activeLayer = 'result:' + id;
+  }
+  fitNext = true;
+}
+/** The composer's target follows the active layer (SPEC-01.9 요청 대상). */
+function applyActiveLayer() {
+  if (!currentLayers.some((layer) => layer.key === activeLayer)) {
+    const newest = [...currentLayers].sort((a, b) =>
+      String(
+        state.messages.find((entry) => entry.id === a.requestId)?.request.createdAt ?? '',
+      ).localeCompare(
+        String(state.messages.find((entry) => entry.id === b.requestId)?.request.createdAt ?? ''),
+      ),
+    );
+    activeLayer = newest.at(-1)?.key;
+  }
+  const active = currentLayers.find((layer) => layer.key === activeLayer);
+  displayedResult = active?.requestId;
+  const result = state.messages.find((entry) => entry.id === displayedResult)?.request.result;
+  if (result && !draftHasInput(state)) {
+    state.host = result.host || 'rhino';
+    $('host-target').value = state.host;
+  }
+  const connection = active?.link?.connection;
+  if (!panelMode)
+    connectedTarget =
+      connection && active?.link?.host === 'rhino'
+        ? { instance: connection.instance, documentId: connection.documentId }
+        : undefined;
+  viewportEmpty.connection(
+    links.find((link) => link.connection)
+      ? {
+          key: links.find((link) => link.connection)!.id,
+          name: links.find((link) => link.connection)!.name,
+          host: links.find((link) => link.connection)!.host,
+        }
+      : undefined,
+  );
+}
+async function setLinkHidden(link: LinkRow, hidden: boolean) {
+  link.hidden = hidden;
+  renderMessages();
+  renderLinkPanel();
   try {
-    const request = await requestData(`/projects/${currentProject().id}/capture`, 'POST', {
+    await api(`/projects/${currentProject().id}/links/${link.id}`, 'PUT', { hidden });
+  } catch (error) {
+    message(readableError(error).message);
+  }
+}
+/** Draft or running work based on this file holds its automatic updates (SPEC-01.9 보류). */
+function syncHeld(link: LinkRow) {
+  const uses = (id?: string | null) => !!id && linkOfRequest(id) === link.id;
+  if (
+    (draftHasInput(state) || pendingSketch()) &&
+    (uses(state.baseRequestId) || state.pins.some((pin) => uses(pin.basis)))
+  )
+    return true;
+  return state.messages.some(
+    (entry) =>
+      ['queued', 'running'].includes(entry.request?.state) &&
+      (uses(entry.request.input.baseRequestId) ||
+        (entry.request.input.linkedTargets ?? []).some((target) => uses(target.baseRequestId))),
+  );
+}
+async function syncLink(link: LinkRow, mode: 'first' | 'auto' | 'manual') {
+  const connection = link.connection;
+  if (!connection || !project || linkSyncing) return;
+  const projectId = project.id,
+    target = { instance: connection.instance, documentId: connection.documentId };
+  linkSyncing = true;
+  linkNotes.set(link.id, 'Sync 중');
+  renderLinkPanel();
+  if (!currentLayers.length) viewportEmpty.sync('loading');
+  try {
+    if (mode === 'auto' && link.host === 'rhino' && link.lastSync) {
+      const live = await liveSyncHostDocument(target);
+      if (live === 'retry') {
+        linkNotes.set(link.id, '변경 중 · 곧 다시 Sync');
+        return;
+      }
+      if (live) {
+        linkNotes.delete(link.id);
+        viewportEmpty.sync('idle');
+        return;
+      }
+    }
+    const request = await requestData(`/projects/${projectId}/capture`, 'POST', {
       ...target,
       id: crypto.randomUUID(),
+      linkId: link.id,
     });
-    state.messages.push(requestMessage(request));
-    if (!request.result?.hostExecuted) {
-      renderMessages();
-      throw Error(errors[request.result?.code ?? ''] || 'Sync 실패');
+    if (project?.id !== projectId) return;
+    if (!state.messages.some((entry) => entry.id === request.id))
+      state.messages.push(requestMessage(request));
+    if (request.result?.hostExecuted) {
+      link.lastSync = { requestId: request.id, at: request.createdAt ?? new Date().toISOString() };
+      if (mode === 'manual') layerOverride.delete(link.id);
+      if (mode === 'first') fitNext = true;
+      linkNotes.delete(link.id);
+      viewportEmpty.sync('idle');
+    } else {
+      linkNotes.set(link.id, errors[request.result?.code ?? ''] || 'Sync 실패');
+      viewportEmpty.sync(currentLayers.length ? 'idle' : 'failed');
     }
-    viewportEmpty.sync('idle');
-    if (
-      request.result?.hostExecuted &&
-      (!automatic || (!draftHasInput(state) && !pendingSketch()))
-    ) {
-      selectedResult = request.id;
-      state.selected = null;
-    }
-    renderMessages();
-    message(
-      request.result?.text ||
-        errors[request.result?.code ?? ''] ||
-        '작업 사본을 가져오지 못했습니다.',
-    );
   } catch (error) {
-    viewportEmpty.sync('failed');
-    throw error;
+    linkNotes.set(link.id, readableError(error).message);
+    viewportEmpty.sync(currentLayers.length ? 'idle' : 'failed');
   } finally {
-    busy = false;
-    render();
-  }
-};
-initializeDocuments(
-  message,
-  captureHostDocument,
-  (selection) => {
-    const request = state.messages.find((message) => message.id === displayedResult)?.request;
-    const count = attachHostSelection(state, request, selection);
-    render();
-    message(
-      selection.selectedIds.length
-        ? `${count}개 객체를 요청에 첨부했습니다.`
-        : '호스트에서 선택한 객체가 없습니다.',
-    );
-  },
-  (connection) => {
-    viewportEmpty.connection(connection);
-    if (panelMode) return;
-    // The work target follows the chosen document (Rhino or ZWCAD); no separate host switch.
-    if (connection && connection.host !== state.host && !draftHasInput(state)) {
-      $('host-target').value = connection.host;
-      $('host-target').dispatchEvent(new Event('change'));
+    linkSyncing = false;
+    if (project?.id === projectId) {
+      renderMessages();
+      render();
+      renderLinkPanel();
     }
-    const [instance, id] = connection?.key.split('/') ?? [];
-    connectedTarget =
-      connection?.host === 'rhino' && instance && id
-        ? { instance, documentId: Number(id) }
-        : undefined;
-  },
-);
+  }
+}
+async function pollLinks() {
+  if (!project || !ready || document.hidden || linksPolling) return;
+  linksPolling = true;
+  const projectId = project.id;
+  try {
+    const next = z.array(linkRowSchema).parse(await api(`/projects/${projectId}/links`));
+    if (project?.id !== projectId) return;
+    links = next;
+    linksLoaded = true;
+    // Syncs made elsewhere (another window, the Rhino panel) are fetched once.
+    for (const link of links) {
+      const id = link.lastSync?.requestId;
+      if (id && !state.messages.some((entry) => entry.id === id))
+        state.messages.push(requestMessage(await api(`/projects/${projectId}/requests/${id}`)));
+    }
+    const signature = JSON.stringify(links.map((link) => [link.id, link.hidden, link.lastSync]));
+    if (signature !== linkSignature) {
+      linkSignature = signature;
+      renderMessages();
+    } else applyActiveLayer();
+    renderLinkPanel();
+    for (const link of links) {
+      const connection = link.connection;
+      if (linkSyncing || !connection || connection.hostBusy) continue;
+      const seen = seenGeneration.get(link.id);
+      const first = !link.lastSync && seen === undefined;
+      const changed = seen !== undefined && connection.generation > seen;
+      // Opened again while VIDE was closed: a Live file catches up once.
+      const reopened = seen === undefined && !!link.lastSync && connection.live;
+      if (!first && !changed && !reopened) {
+        if (seen === undefined) seenGeneration.set(link.id, connection.generation);
+        continue;
+      }
+      if (!first && syncHeld(link)) {
+        linkNotes.set(link.id, '자동 Sync 보류 · 이 파일 기준 작업 중');
+        continue;
+      }
+      seenGeneration.set(link.id, connection.generation);
+      await syncLink(link, first ? 'first' : 'auto');
+      break;
+    }
+  } catch {
+    /* Transient; the next poll retries and the last display stays. */
+  } finally {
+    linksPolling = false;
+  }
+}
+setInterval(() => void pollLinks(), 1500);
+function renderLinkPanel() {
+  renderLinks($('host-document-controls'), {
+    links,
+    active: activeLayer,
+    notes: linkNotes,
+    candidates: new Set(
+      [...layerOverride]
+        .filter(
+          ([id, request]) => links.find((link) => link.id === id)?.lastSync?.requestId !== request,
+        )
+        .map(([id]) => id),
+    ),
+    loaded: linksLoaded,
+    onToggle: (link) => void setLinkHidden(link, !link.hidden),
+    onSync: (link) => void syncLink(link, 'manual'),
+    onRemove: (link) => {
+      if (
+        !confirm(
+          `${link.name}을(를) 이 프로젝트의 연결 목록에서 뺄까요? 파일과 Sync 기록은 그대로입니다.`,
+        )
+      )
+        return;
+      void api(`/projects/${currentProject().id}/links/${link.id}/remove`, 'POST', {})
+        .then(() => {
+          links = links.filter((entry) => entry.id !== link.id);
+          layerOverride.delete(link.id);
+          renderMessages();
+          renderLinkPanel();
+        })
+        .catch((error: unknown) => message(readableError(error).message));
+    },
+    onFocus: (link) => {
+      if (link.hidden) void setLinkHidden(link, false);
+      activeLayer = link.id;
+      applyActiveLayer();
+      render();
+      renderLinkPanel();
+      const ids = objects
+        .filter((object) => object.documentKey === link.id)
+        .map((object) => object.id);
+      if (ids.length) viewport?.fit(ids);
+      else if (!link.lastSync) message('아직 Sync 전입니다. 파일이 열려 있으면 곧 표시됩니다.');
+    },
+    onBackToSync: (link) => {
+      layerOverride.delete(link.id);
+      renderMessages();
+      renderLinkPanel();
+    },
+  });
+}
+/** Composer menu entry: attach the objects selected in the target file's host window. */
+async function attachConnectedSelection() {
+  const layer = currentLayers.find((entry) => entry.key === activeLayer);
+  const connection = layer?.link?.connection;
+  if (!layer || !connection)
+    throw Error('선택을 가져올 파일을 연결 파일 목록에서 고르세요 (파일이 열려 있어야 합니다).');
+  const selection = hostSelectionSchema.parse(
+    await api(
+      `/host/selection?instance=${encodeURIComponent(connection.instance)}&document=${connection.documentId}`,
+    ),
+  );
+  const request = state.messages.find((entry) => entry.id === layer.requestId)?.request;
+  const count = attachHostSelection(state, request, selection);
+  render();
+  message(
+    selection.selectedIds.length
+      ? `${count}개 객체를 요청에 첨부했습니다.`
+      : '호스트에서 선택한 객체가 없습니다.',
+  );
+}
 let inspectorTab: NonNullable<Parameters<typeof renderInspector>[3]> = 'properties';
 initializeInspector((tab) => {
   inspectorTab = tab;
@@ -514,9 +759,7 @@ function render(rebuildRequests = true) {
       loosePins.map((pin) => pin.name || pin.id).join('\n') ||
         'Rhino에서 고정했지만 아직 Sync 전인 객체',
       () => {
-        selectedIds = loosePins
-          .map((pin) => pin.id)
-          .filter((id) => objects.some((o) => o.id === id));
+        selectedIds = loosePins.flatMap((pin) => displayIdOf(objects, pin.basis, pin.id) ?? []);
         state.selected = selectedIds.at(-1) ?? null;
         render();
         if (state.selected) viewport?.fit(state.selected);
@@ -534,7 +777,23 @@ function render(rebuildRequests = true) {
       render();
     }),
   );
-  if (draftHasInput(state) && displayedResult && state.baseRequestId !== displayedResult) {
+  // Several files on screen: say which one this request changes (SPEC-01.9 요청 대상).
+  const target = currentLayers.find(
+    (layer) => layer.requestId === (state.baseRequestId ?? displayedResult),
+  );
+  if (currentLayers.length > 1 && target)
+    el('span', '대상 파일 · ' + target.name, $('context'), {
+      class: 'chip target-file',
+      title:
+        '변경 핀이 있는 파일, 없으면 마지막으로 고른 객체의 파일입니다. 다른 파일의 객체를 누르면 바뀝니다.',
+    });
+  // With several files the target chip already names the basis when it is on screen.
+  if (
+    draftHasInput(state) &&
+    displayedResult &&
+    state.baseRequestId !== displayedResult &&
+    !(currentLayers.length > 1 && target)
+  ) {
     if (state.baseRequestId) {
       const basis = el('button', '입력 기준 보기', $('context'));
       basis.onclick = () => {
@@ -570,10 +829,13 @@ function render(rebuildRequests = true) {
   $('pin').disabled =
     !ready ||
     busy ||
-    !selectedIds.some(
-      (id) =>
-        objects.some((o) => o.id === id && o.revision) && !state.pins.some((p) => p.id === id),
-    );
+    !selectedIds.some((id) => {
+      const object = objects.find((o) => o.id === id && o.revision);
+      return (
+        !!object &&
+        !state.pins.some((p) => p.id === sourceIdOf(object) && p.basis === object.revision)
+      );
+    });
   $('pin').title = '현재 후보에서 첨부하지 않은 객체를 선택하세요.';
   $('add-request').disabled = !ready || busy || !state.body.trim();
   $('linked-targets').disabled = !ready || busy || linkedCandidates(state).length < 2;
@@ -582,9 +844,13 @@ function render(rebuildRequests = true) {
 
   $('permission').value = state.applyToSource ? 'apply' : state.permission;
   $('permission').dataset.mode = $('permission').value;
-  const active = state.messages.find((m) => m.id === displayedResult)?.request;
+  const inspected = objects.find((o) => o.id === state.selected);
+  const active = state.messages.find(
+    (m) =>
+      m.id === (typeof inspected?.revision === 'string' ? inspected.revision : displayedResult),
+  )?.request;
   renderInspector(
-    objects.find((o) => o.id === state.selected),
+    inspected && { ...inspected, id: sourceIdOf(inspected) },
     active?.result,
     active,
     inspectorTab,
@@ -595,10 +861,7 @@ function render(rebuildRequests = true) {
           currentProject().id,
           request.id,
           (id) => {
-            selectedResult = request.id;
-            renderMessages();
-            state.selected = id;
-            render();
+            selectInResult(request.id, id);
           },
           object.id,
         ).catch((error) => message(error.message));
@@ -617,10 +880,14 @@ function render(rebuildRequests = true) {
       },
       get: (id) => state.messages.find((message) => message.id === id)?.request,
       open: (id, objectId) => {
-        selectedResult = id;
-        renderMessages();
-        state.selected = objectId || null;
-        render();
+        if (objectId) selectInResult(id, objectId);
+        else {
+          selectedResult = id;
+          appliedSelection = undefined;
+          renderMessages();
+          state.selected = null;
+          render();
+        }
       },
     },
   );
@@ -733,21 +1000,26 @@ function sidebar() {
   if (!files.length) el('small', '첨부한 파일이 없습니다.', $('reference-list'));
   files.forEach((f) => el('small', f.name, $('reference-list'), { class: 'reference-file' }));
 }
+let appliedSelection: string | null | undefined;
 function renderMessages() {
-  const latest =
-    selectedResult === null
-      ? undefined
-      : state.messages.find((m) => m.id === selectedResult) ||
-        state.messages
-          .filter(
-            (m) =>
-              m.request?.result?.hostExecuted &&
-              (m.request.result.host || 'rhino') === (state.host || 'rhino'),
-          )
-          .at(-1);
-  const incremental = latest !== undefined && liveRefresh === latest.id && !!displayedResult;
-  liveRefresh = undefined;
-  if (latest && (latest.id !== displayedResult || incremental)) showResult(latest, incremental);
+  if (selectedResult !== appliedSelection) {
+    appliedSelection = selectedResult;
+    if (selectedResult) showRequest(selectedResult);
+    else if (selectedResult === null) {
+      transientResult = undefined;
+      activeLayer = undefined;
+    }
+  }
+  // A project without linked files shows its latest result, as before links existed.
+  if (!links.length && selectedResult === undefined)
+    transientResult = state.messages
+      .filter(
+        (entry) =>
+          entry.request?.result?.hostExecuted &&
+          (entry.request.result.host || 'rhino') === (state.host || 'rhino'),
+      )
+      .at(-1)?.id;
+  showLayers();
   sidebar();
   renderConversation();
 }
@@ -770,50 +1042,69 @@ async function loadFullResult(id: string) {
     loadingResults.delete(id);
   }
 }
-function showResult(latest: (typeof state.messages)[number], incremental: boolean) {
-  {
-    const result = latest.request.result;
+/** Draw every visible layer together (SPEC-01.9); rebuild only when the layer set changed. */
+function showLayers() {
+  const layers = visibleLayers();
+  for (const layer of layers) {
+    const result = state.messages.find((entry) => entry.id === layer.requestId)?.request.result;
     if (result?.hostExecuted && !result.scene && result.sceneOmitted) {
-      void loadFullResult(latest.id);
+      void loadFullResult(layer.requestId);
       return;
     }
-    if (!result?.hostExecuted || !result.objects || !result.scene) {
-      message('후보 형상을 확인할 수 없습니다.');
-      return;
-    }
-    if (!draftHasInput(state)) {
-      state.host = result.host || 'rhino';
-      $('host-target').value = state.host;
-    }
-    const native = new Map(result.scene.map((item) => [item.id, item]));
-    const decoder = new TextDecoder();
-    const layerOf = (value?: string) => {
-      if (!value) return undefined;
-      try {
-        return decoder.decode(Uint8Array.from(atob(value), (c) => c.charCodeAt(0)));
-      } catch {
-        return undefined;
-      }
-    };
-    objects.splice(
-      0,
-      objects.length,
-      ...result.objects.map((o) => {
-        const item = native.get(o.id);
-        return {
-          ...o,
-          revision: latest.id,
-          layer: layerOf(item?.layer64),
-          type: item?.nativeType || o.kind,
-        };
-      }),
-    );
-    if (incremental) viewport?.update(result.scene, result.definitions);
-    else viewport?.replace(result.scene, result.definitions);
-    displayedResult = latest.id;
-    render();
-    scheduleThumbnail();
   }
+  const drawable = layers.flatMap((layer) => {
+    const result = state.messages.find((entry) => entry.id === layer.requestId)?.request.result;
+    return result?.hostExecuted && result.objects && result.scene ? [{ layer, result }] : [];
+  });
+  currentLayers = drawable.map(({ layer }) => layer);
+  const signature = layerSignature(currentLayers);
+  const refresh =
+    liveRefresh !== undefined && currentLayers.some((layer) => layer.requestId === liveRefresh);
+  liveRefresh = undefined;
+  if (signature === shownSignature && !refresh && !fitNext) {
+    applyActiveLayer();
+    return;
+  }
+  const decoder = new TextDecoder();
+  const layerOf = (value?: string) => {
+    if (!value) return undefined;
+    try {
+      return decoder.decode(Uint8Array.from(atob(value), (c) => c.charCodeAt(0)));
+    } catch {
+      return undefined;
+    }
+  };
+  const many = drawable.length > 1;
+  const composed = composeLayers(
+    drawable.map(({ layer, result }) => {
+      const native = new Map(result.scene!.map((item) => [item.id, item]));
+      return {
+        key: layer.key,
+        name: layer.name,
+        requestId: layer.requestId,
+        objects: result.objects!.map((o) => {
+          const item = native.get(o.id);
+          const name = layerOf(item?.layer64);
+          return {
+            ...o,
+            // Several files: the object tree groups by file, then by layer.
+            layer: many ? `${layer.name} › ${name ?? '레이어 없음'}` : name,
+            type: item?.nativeType || o.kind,
+          };
+        }),
+        scene: result.scene!,
+        definitions: result.definitions,
+      };
+    }),
+  );
+  objects.splice(0, objects.length, ...(composed.objects as unknown as typeof objects));
+  if (!shownSignature || fitNext) viewport?.replace(composed.scene, composed.definitions);
+  else viewport?.update(composed.scene, composed.definitions);
+  shownSignature = signature;
+  fitNext = false;
+  applyActiveLayer();
+  render();
+  if (drawable.length) scheduleThumbnail();
 }
 let thumbnailTimer: ReturnType<typeof setTimeout> | undefined,
   thumbnailSent = 0;
@@ -885,7 +1176,9 @@ function renderConversation() {
         return;
       Object.assign(state, draft);
       selectedResult = draft.baseRequestId ?? null;
+      appliedSelection = undefined;
       displayedResult = undefined;
+      shownSignature = '';
       objects.splice(0, objects.length);
       viewport?.replace([]);
       strokes = [];
@@ -898,13 +1191,11 @@ function renderConversation() {
     },
     candidate: (id) => {
       selectedResult = id;
+      appliedSelection = undefined;
       renderMessages();
     },
     selection: (requestId, id) => {
-      selectedResult = requestId;
-      renderMessages();
-      state.selected = id;
-      render();
+      selectInResult(requestId, id);
     },
     report: downloadReport,
     saveReview: async (id) => {
@@ -964,12 +1255,9 @@ $('jigs').onclick = () => {
     })),
     show: (requestId, objectId) => {
       hideJigs();
-      selectedResult = requestId;
-      renderMessages();
-      state.selected = objectId;
-      render();
+      const shown = selectInResult(requestId, objectId);
       // The Sync's scene loads with the selection; frame it once it is shown.
-      setTimeout(() => viewport?.fit(objectId), 400);
+      setTimeout(() => viewport?.fit(displayIdOf(objects, requestId, objectId) ?? shown), 400);
       mobileView('model');
     },
     send: async (extra) => {
@@ -1062,7 +1350,7 @@ const pinComposer = attachPinTokens($('body'), {
       count = chosen.length;
     // No ghost for a selection that is already exactly one token's objects.
     const key = chosen
-      .map((object) => object.id)
+      .map((object) => sourceIdOf(object))
       .sort()
       .join();
     const labels = [...new Set(state.pins.map((pin) => pin.label).filter(Boolean))];
@@ -1082,9 +1370,13 @@ const pinComposer = attachPinTokens($('body'), {
   insert: (label) => {
     state.pins.push(
       ...pinnable().map((object) => ({
-        id: object.id,
+        id: sourceIdOf(object),
         name: object.name,
-        role: 'target' as const,
+        // Objects of another file than the composer's target are references (SPEC-01.9).
+        role:
+          state.baseRequestId && object.revision !== state.baseRequestId
+            ? ('reference' as const)
+            : ('target' as const),
         basis: object.revision!,
         label,
       })),
@@ -1093,8 +1385,7 @@ const pinComposer = attachPinTokens($('body'), {
   focusToken: (label) => {
     selectedIds = state.pins
       .filter((pin) => pin.label === label)
-      .map((pin) => pin.id)
-      .filter((id) => objects.some((o) => o.id === id));
+      .flatMap((pin) => displayIdOf(objects, pin.basis, pin.id) ?? []);
     state.selected = selectedIds.at(-1) ?? null;
     render();
     if (selectedIds.length) viewport?.fit(selectedIds);
@@ -1572,7 +1863,9 @@ $('host-target').onchange = () => {
   state.baseRequestId = undefined;
   state.selected = null;
   selectedResult = undefined;
+  appliedSelection = undefined;
   displayedResult = undefined;
+  shownSignature = '';
   objects.splice(0, objects.length);
   viewport?.replace([]);
   renderMessages();
@@ -1646,8 +1939,13 @@ function applyHostPins(ids: string[]) {
   hostPinBasis = basis?.id;
   if (!basis) return;
   const available = basis.request.result?.objects ?? [];
+  // Rhino's set replaces the pins of every Sync of this document, not only the newest one.
+  const sameDocument = (id: string) => {
+    const source = state.messages.find((entry) => entry.id === id)?.request.result?.sourceDocument;
+    return source?.instance === target.instance && source.documentId === target.documentId;
+  };
   state.pins = [
-    ...state.pins.filter((pin) => pin.basis !== basis.id),
+    ...state.pins.filter((pin) => pin.basis !== basis.id && !sameDocument(pin.basis)),
     ...ids.flatMap((id) => {
       const object = available.find((item) => item.id === id);
       return object ? [{ id, name: object.name, role: 'target' as const, basis: basis.id }] : [];
@@ -1699,8 +1997,10 @@ async function pollHostLink() {
     if (item.selectionVersion !== undefined && item.selectionVersion !== hostSelectionVersion) {
       hostSelectionVersion = item.selectionVersion;
       // Mirror Rhino's selection in the viewport when this document is the one on screen.
-      const shown = new Set(objects.map((object) => object.id));
-      const mirrored = (item.selectedIds ?? []).filter((id) => shown.has(id));
+      const basis = displayedResult ?? rhinoBasis(target)?.id;
+      const mirrored = basis
+        ? (item.selectedIds ?? []).flatMap((id) => displayIdOf(objects, basis, id) ?? [])
+        : [];
       if (mirrored.length || selectedIds.length) {
         selectedIds = mirrored;
         state.selected = mirrored.at(-1) ?? null;
@@ -1715,8 +2015,14 @@ async function pollHostLink() {
 }
 setInterval(() => void pollHostLink(), 1200);
 $('panel-sync').onclick = () => {
-  if (!connectedTarget) return;
-  void captureHostDocument(connectedTarget).catch((error) => message(readableError(error).message));
+  const target = connectedTarget;
+  const link = links.find(
+    (entry) =>
+      entry.connection?.instance === target?.instance &&
+      entry.connection?.documentId === target?.documentId,
+  );
+  if (link) void syncLink(link, 'manual');
+  else message('이 문서를 먼저 Rhino 패널의 Link로 프로젝트에 연결하세요.');
 };
 $('panel-pin').onclick = async () => {
   try {

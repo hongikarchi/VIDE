@@ -208,8 +208,16 @@ export function pinSelection(
 ) {
   for (const id of ids) {
     const o = objects.find((o) => o.id === id);
-    if (o && o.revision && !s.pins.some((p) => p.id === o.id && p.basis === o.revision))
-      s.pins.push({ id: o.id, name: o.name, role: 'target', basis: o.revision });
+    // Shown objects of several files carry their own id; pins always use the file's id.
+    const own = typeof o?.sourceId === 'string' ? o.sourceId : o?.id;
+    if (o && own && o.revision && !s.pins.some((p) => p.id === own && p.basis === o.revision))
+      s.pins.push({
+        id: own,
+        name: o.name,
+        // Objects of another file than the request's basis are references (SPEC-01.9).
+        role: s.baseRequestId && o.revision !== s.baseRequestId ? 'reference' : 'target',
+        basis: o.revision,
+      });
   }
 }
 export function validate(s: DraftState) {

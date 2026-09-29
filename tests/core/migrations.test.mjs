@@ -34,7 +34,7 @@ test('migration backs up committed WAL data and preserves records and relationsh
   copy.close();
   for (let i = 0; i < 2; i++) {
     const store = new Store(file);
-    assert.equal(store.db.prepare('SELECT version FROM schema_version').get().version, 3);
+    assert.equal(store.db.prepare('SELECT version FROM schema_version').get().version, 4);
     assert.equal(
       store.db.prepare('SELECT requestId FROM publication_exports').get().requestId,
       'w',
@@ -68,7 +68,7 @@ test('backup failure aborts before modification and fresh database creates the c
   assert.equal(db.prepare('SELECT version FROM schema_version').get().version, 1);
   db.close();
   const memory = new Store(':memory:');
-  assert.equal(memory.db.prepare('SELECT version FROM schema_version').get().version, 3);
+  assert.equal(memory.db.prepare('SELECT version FROM schema_version').get().version, 4);
   memory.close();
 });
 
@@ -97,4 +97,46 @@ test('schema 3 keeps hidden conversation entries without deleting requests', asy
   } finally {
     store.close();
   }
+});
+
+test('schema 4 keeps linked files per project, one link per file, hidden and removal', async () => {
+  const { DocumentLinks } = await import('../../src/core/document-links.ts');
+  const store = new Store(':memory:');
+  const links = new DocumentLinks(store.db);
+  const a = store.db.prepare("INSERT INTO projects VALUES('a','A')").run() && 'a';
+  store.db.prepare("INSERT INTO projects VALUES('b','B')").run();
+  const model = {
+    host: 'rhino',
+    name: 'm.3dm',
+    path: 'C:\p\m.3dm',
+    instance: '1:2:x',
+    documentId: 1,
+  };
+  const first = links.link(a, model);
+  // Linking the same file again (another Rhino session) updates the link instead of adding one.
+  const again = links.link(a, { ...model, path: 'c:\P\m.3dm', instance: '9:9:y', documentId: 3 });
+  assert.equal(again.id, first.id);
+  assert.equal(again.instance, '9:9:y');
+  const drawing = links.link(a, { host: 'zwcad', name: 'd.dwg', instance: '5:6:z', documentId: 1 });
+  assert.deepEqual(
+    links.list(a).map((link) => link.name),
+    ['m.3dm', 'd.dwg'],
+  );
+  assert.equal(links.list('b').length, 0);
+  assert.equal(links.setHidden(a, drawing.id, true).hidden, true);
+  // Linking a hidden file again shows it.
+  assert.equal(
+    links.link(a, { host: 'zwcad', name: 'd.dwg', instance: '5:6:z', documentId: 1 }).hidden,
+    false,
+  );
+  assert.throws(() => links.setHidden('b', drawing.id, true), { code: 'NOT_FOUND' });
+  links.remove(a, first.id);
+  assert.deepEqual(
+    links.list(a).map((link) => link.name),
+    ['d.dwg'],
+  );
+  assert.throws(() =>
+    links.link(a, { host: 'rhino', name: 'x', instance: '1', documentId: 1, extra: 1 }),
+  );
+  store.close();
 });

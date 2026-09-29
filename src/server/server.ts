@@ -8,6 +8,7 @@ import { AccountProfiles } from '../ai/account-profiles.ts';
 import { AccountUsageService } from '../ai/account-usage.ts';
 import { JIGS } from '../jigs/catalog.ts';
 import { runSync } from '../jigs/sync.ts';
+import { DocumentLinks } from '../core/document-links.ts';
 import { AccountLogin } from '../ai/account-login.ts';
 import { z } from 'zod';
 import type { IncomingMessage } from 'node:http';
@@ -130,6 +131,7 @@ export async function startServer({
   const agentTools = new AgentTools();
   const accountLogin = new AccountLogin(loginOptions);
   const workspace = new Workspace(store),
+    links = new DocumentLinks(store.db),
     tableViews = new TableViews(store),
     reviews = new Reviews(store),
     reviewNotes = new ReviewNotes(store, reviews);
@@ -473,9 +475,122 @@ export async function startServer({
         );
         return;
       }
+      // Project link files (SPEC-01.9): linked from a host plugin, listed with live status.
+      const linkList = /^\/api\/v1\/projects\/([^/]+)\/links$/.exec(url.pathname);
+      const linkItem = /^\/api\/v1\/projects\/([^/]+)\/links\/([^/]+)$/.exec(url.pathname);
+      if (linkList && request.method === 'GET') {
+        store.project(linkList[1]);
+        const open = [
+          ...((await sdk?.editors.list(true).catch(() => null))?.documents ?? []),
+          ...((await zwcadSdk?.editors.attached.list().catch(() => [])) ?? []),
+        ];
+        const requests = workspace.list(linkList[1]);
+        // Work copies VIDE opened itself answer only whether their window is still open.
+        const ownedOpen = new Set<string>();
+        for (const link of links.list(linkList[1]))
+          if (
+            !open.some((item) => item.instance === link.instance) &&
+            (link.host === 'rhino'
+              ? await sdk?.editors.has(link.instance).catch(() => false)
+              : await zwcadSdk?.editors.has(link.instance).catch(() => false))
+          )
+            ownedOpen.add(link.id);
+        send(
+          200,
+          links.list(linkList[1]).map((link) => {
+            const doc = open.find(
+              (item) =>
+                (item.host ?? 'rhino') === link.host &&
+                (link.path && item.path
+                  ? item.path.toLowerCase() === link.path.toLowerCase()
+                  : item.instance === link.instance && item.id === link.documentId),
+            );
+            const syncs = requests.filter((entry) => entry.input.linkId === link.id);
+            const last = syncs.filter((entry) => entry.state === 'succeeded').at(-1);
+            const latest = syncs.at(-1);
+            return {
+              ...link,
+              connection: ownedOpen.has(link.id)
+                ? {
+                    instance: link.instance,
+                    documentId: link.documentId,
+                    live: false,
+                    generation: 0,
+                    objectCount: 0,
+                    units: '',
+                    modified: null,
+                    hostBusy: false,
+                  }
+                : doc
+                  ? {
+                      instance: doc.instance,
+                      documentId: doc.id,
+                      live: doc.live ?? false,
+                      generation: doc.generation ?? 0,
+                      objectCount: doc.objectCount,
+                      units: doc.units,
+                      modified: doc.modified,
+                      hostBusy: doc.hostBusy ?? false,
+                    }
+                  : null,
+              lastSync: last ? { requestId: last.id, at: last.createdAt } : null,
+              ...(latest && latest !== last && ['failed', 'unknown'].includes(latest.state)
+                ? { lastError: latest.result?.code ?? latest.state }
+                : {}),
+            };
+          }),
+        );
+        return;
+      }
+      if (linkList && request.method === 'POST') {
+        store.project(linkList[1]);
+        const target = hostTargetSchema
+          .extend({ host: z.enum(['rhino', 'zwcad']) })
+          .strict()
+          .parse(await body(request));
+        // Attached (plugin) documents and work copies VIDE opened itself can both be linked.
+        const open =
+          target.host === 'rhino'
+            ? ((await sdk?.editors.list())?.documents ?? [])
+            : ((await zwcadSdk?.editors.list()) ?? []);
+        const doc = open.find(
+          (item) => item.instance === target.instance && item.id === target.documentId,
+        );
+        if (!doc) throw new DomainError('STALE_CONNECTION');
+        send(
+          201,
+          links.link(linkList[1], {
+            host: target.host,
+            name: doc.name,
+            ...('path' in doc && doc.path ? { path: doc.path } : {}),
+            instance: target.instance,
+            documentId: target.documentId,
+          }),
+        );
+        return;
+      }
+      if (linkItem && request.method === 'PUT') {
+        const { hidden } = z
+          .object({ hidden: z.boolean() })
+          .strict()
+          .parse(await body(request));
+        send(200, links.setHidden(linkItem[1], linkItem[2], hidden));
+        return;
+      }
+      const linkRemove = /^\/api\/v1\/projects\/([^/]+)\/links\/([^/]+)\/remove$/.exec(
+        url.pathname,
+      );
+      if (linkRemove && request.method === 'POST') {
+        links.remove(linkRemove[1], linkRemove[2]);
+        send(200, { ok: true });
+        return;
+      }
       const capture = /^\/api\/v1\/projects\/([^/]+)\/capture$/.exec(url.pathname);
       if (capture && request.method === 'POST') {
-        const target = hostTargetSchema.extend({ id: z.string() }).parse(await body(request));
+        const target = hostTargetSchema
+          .extend({ id: z.string(), linkId: z.string().uuid().optional() })
+          .parse(await body(request));
+        if (target.linkId) links.get(capture[1], target.linkId);
         const own = await sdk?.editors.has(target.instance);
         const cadOwn = await zwcadSdk?.editors.has(target.instance);
         const captured = await captureModel(
@@ -1061,16 +1176,25 @@ export async function startServer({
         if (!saved.result?.hostExecuted || !saved.result.filename)
           throw new DomainError('NOT_FOUND');
         if (artifact[3] === 'open') {
-          send(
-            200,
-            saved.result.executionMode === 'sdk' && saved.result.host === 'zwcad' && zwcadSdk
+          const host = saved.result.host === 'zwcad' ? 'zwcad' : 'rhino';
+          const opened =
+            saved.result.executionMode === 'sdk' && host === 'zwcad' && zwcadSdk
               ? await zwcadSdk.open(saved.result)
               : saved.result.executionMode === 'sdk' && sdk
                 ? await sdk.open(saved.result)
-                : await hosts[z.enum(['rhino', 'zwcad']).parse(saved.result.host || 'rhino')].open(
-                    z.string().parse(saved.result.filename),
-                  ),
-          );
+                : await hosts[host].open(z.string().parse(saved.result.filename));
+          // A work copy opened in its program is a linked file of the project (SPEC-01.9).
+          const window = z
+            .object({ instance: z.string(), documentId: z.number().int().positive() })
+            .safeParse(opened);
+          if (window.success)
+            links.link(artifact[1], {
+              host,
+              name: `${z.object({ name: z.string() }).safeParse(saved.result.sourceDocument).data?.name ?? (saved.input.body.slice(0, 40) || 'VIDE')} · 작업 사본`,
+              path: z.string().parse(saved.result.filename),
+              ...window.data,
+            });
+          send(200, opened);
           return;
         }
         const content = await readFile(z.string().parse(saved.result.filename));

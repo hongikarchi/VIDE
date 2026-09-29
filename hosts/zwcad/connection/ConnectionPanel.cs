@@ -26,8 +26,12 @@ namespace Vide.Zwcad.Connection
     public sealed class ConnectionCommands
     {
         private static PaletteSet palette;
+        /// <summary>Link: connect this drawing, choose a VIDE project, and VIDE syncs it at once.</summary>
+        [CommandMethod("VIDECADLink", CommandFlags.Session)]
+        public void Link() { Show(); EngineLink.LinkDocument(Cad.DocumentManager.MdiActiveDocument, null); }
+        /// <summary>Earlier name of Link; the same behaviour.</summary>
         [CommandMethod("VIDECADConnect", CommandFlags.Session)]
-        public void Connect() { AttachedDocument.Connect(Cad.DocumentManager.MdiActiveDocument); Show(); }
+        public void Connect() => Link();
         [CommandMethod("VIDECADDisconnect", CommandFlags.Session)]
         public void Disconnect() { AttachedDocument connection; if (AttachedDocument.Connections.TryGetValue(Cad.DocumentManager.MdiActiveDocument, out connection)) connection.Dispose(); }
         [CommandMethod("VIDECADSync", CommandFlags.Session)]
@@ -57,11 +61,17 @@ namespace Vide.Zwcad.Connection
             Dock = DockStyle.Fill;
             var layout = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown, WrapContents = false, AutoScroll = true, Padding = new Padding(12) };
             layout.Controls.Add(status);
-            connect = Add(layout, "연결", () => {
+            // Link chooses a VIDE project and links this drawing; Unlink ends this window's connection only.
+            connect = Add(layout, "Link", () => {
                 var doc = Cad.DocumentManager.MdiActiveDocument; AttachedDocument connection;
-                if (AttachedDocument.Connections.TryGetValue(doc, out connection)) connection.Dispose(); else AttachedDocument.Connect(doc);
+                if (doc == null) throw new InvalidOperationException("열린 도면이 없습니다.");
+                if (AttachedDocument.Connections.TryGetValue(doc, out connection)) connection.Dispose(); else EngineLink.LinkDocument(doc, RefreshState);
             });
-            Add(layout, "지금 Sync", () => { var c = Current(); c.Sync(); notice.Text = "VIDE에서 같은 도면을 선택하면 갱신됩니다."; });
+            Add(layout, "지금 Sync", () => {
+                AttachedDocument c; var doc = Cad.DocumentManager.MdiActiveDocument;
+                if (doc == null || !AttachedDocument.Connections.TryGetValue(doc, out c)) throw new InvalidOperationException("먼저 Link로 이 도면을 VIDE 프로젝트에 연결하세요.");
+                c.Sync(); notice.Text = "VIDE로 Sync를 요청했습니다.";
+            });
             live = Add(layout, "Live Sync 켜기", () => { var c = Current(); c.Live = !c.Live; if (c.Live) c.Sync(); });
             Add(layout, "VIDE 열기 / 인증 복구", () => {
                 var path = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "VIDE", "launch.json");
@@ -83,8 +93,8 @@ namespace Vide.Zwcad.Connection
         private void RefreshState() {
             var doc = Cad.DocumentManager.MdiActiveDocument; AttachedDocument c = null;
             if (doc != null) AttachedDocument.Connections.TryGetValue(doc, out c);
-            status.Text = (doc == null ? "열린 도면 없음" : Path.GetFileName(doc.Name)) + "\n" + (c == null ? "연결 안 됨" : "ZWCAD 연결됨") + "\n" + (c?.LastRead == null ? "아직 모델 조회 없음" : "마지막 조회 " + c.LastRead.Value.ToString("HH:mm:ss"));
-            connect.Text = c == null ? "연결" : "연결 해제"; live.Text = c != null && c.Live ? "Live Sync 끄기" : "Live Sync 켜기";
+            status.Text = (doc == null ? "열린 도면 없음" : Path.GetFileName(doc.Name)) + "\n" + (c == null ? "연결 안 됨" : "연결됨" + (c.LinkedProject != null ? " · " + c.LinkedProject.Name : "")) + "\n" + (c?.LastRead == null ? "아직 모델 조회 없음" : "마지막 조회 " + c.LastRead.Value.ToString("HH:mm:ss"));
+            connect.Text = c == null ? "Link" : "Unlink"; live.Text = c != null && c.Live ? "Live Sync 끄기" : "Live Sync 켜기";
         }
         protected override void Dispose(bool disposing) { if (disposing) timer.Dispose(); base.Dispose(disposing); }
     }

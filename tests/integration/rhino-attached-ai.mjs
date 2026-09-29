@@ -8,6 +8,7 @@ import { chromium } from 'playwright';
 import { launchOwnedHost } from '../../hosts/common/owned-process.ts';
 import { startServer } from '../../src/server/server.ts';
 import { sdkOptions } from '../../src/server/sdk-options.ts';
+import { linkOpenDocument } from './link-helper.mjs';
 const directory = resolve('.vide/rhino-attached-ai', randomUUID());
 await mkdir(directory, { recursive: true });
 const options = sdkOptions(directory);
@@ -67,14 +68,15 @@ try {
   page.on('pageerror', (error) => errors.push(error.message));
   await page.goto(app.launchUrl);
   await page.waitForFunction(() => !document.querySelector('#body').disabled);
-  await page.getByText('열린 호스트 문서', { exact: true }).click();
-  await page.locator('#refresh-documents').click();
-  await page.locator('#capture-document').click();
-  await page.waitForFunction(
-    () => document.querySelector('#host-document-info').textContent === 'Sync 완료',
-    {},
-    { timeout: 90000 },
-  );
+  // Link the attached document to the project as the plugin's Link does; it syncs by itself.
+  const attached = (
+    await (await page.request.get(app.origin + '/api/v1/host/attached-documents')).json()
+  ).documents[0];
+  await linkOpenDocument(page, {
+    host: 'rhino',
+    instance: attached.instance,
+    documentId: attached.id,
+  });
   const project = app.store.listProjects()[0];
   const rows = () =>
     app.store.db

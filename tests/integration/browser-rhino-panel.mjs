@@ -60,11 +60,20 @@ try {
     selectionVersion++;
     await route.fulfill({ json: { ok: true, pinnedIds: pinned, selectionVersion } });
   });
+  let release;
+  const held = new Promise((resolve) => {
+    release = resolve;
+  });
+  let captures = 0;
   await page.route('**/api/v1/projects/*/capture', async (route) => {
+    captures++;
+    // The first Sync of the linked file waits so a pin can be made before any Sync exists.
+    await held;
     const target = route.request().postDataJSON(),
       projectId = new URL(route.request().url()).pathname.split('/')[4];
     const input = {
       id: target.id,
+      linkId: target.linkId,
       body: 'Sync',
       permission: 'review',
       provider: 'codex-cli',
@@ -98,9 +107,35 @@ try {
       }),
     });
   });
+  // The plugin linked this document to the project and opened the panel for it.
+  const projectId = 'panel-project';
+  app.store.db.prepare("INSERT INTO projects(id, name) VALUES(?, 'Panel')").run(projectId);
+  const now = new Date().toISOString();
+  app.store.db
+    .prepare('INSERT INTO document_links VALUES(?,?,?,?,?,?,?,0,?,?)')
+    .run('link-panel', projectId, 'rhino', 'Panel test.3dm', null, instance, 7, now, now);
+  await page.route('**/api/v1/projects/*/links', async (route) => {
+    if (route.request().method() !== 'GET') return route.continue();
+    const rows = await (await route.fetch()).json();
+    await route.fulfill({
+      json: rows.map((row) => ({
+        ...row,
+        connection: {
+          instance,
+          documentId: 7,
+          live: true,
+          generation: 0,
+          objectCount: 2,
+          units: 'Millimeters',
+          modified: false,
+          hostBusy: false,
+        },
+      })),
+    });
+  });
   const launch = new URL(app.launchUrl);
   await page.goto(
-    `${launch.origin}/?panel=rhino&instance=${encodeURIComponent(instance)}&document=7&theme=dark${launch.hash}`,
+    `${launch.origin}/?panel=rhino&project=${projectId}&instance=${encodeURIComponent(instance)}&document=7&theme=dark${launch.hash}`,
   );
   await page.waitForFunction(() => !document.querySelector('#body').disabled);
   // Only the chat column is visible; the theme follows Rhino.
@@ -118,11 +153,15 @@ try {
     document.querySelector('#context').textContent.includes('Sync 대기 1개'),
   );
   assert.deepEqual(pinPosts.at(-1).ids, [wall]);
-  // Sync resolves the pending pin into the request draft.
-  await page.locator('#panel-sync').click();
+  // The linked file's Sync resolves the pending pin into the request draft.
+  release();
   await page.waitForFunction(() =>
     document.querySelector('#context').textContent.includes('고정 객체 1개'),
   );
+  // The panel's Sync button forces another Sync of the same linked file.
+  await page.locator('#panel-sync').click();
+  await page.waitForFunction(() => document.querySelector('#right'));
+  while (captures < 2) await new Promise((resolve) => setTimeout(resolve, 20));
   // Pins changed in Rhino (another client) appear in the panel without a reload.
   pinned = [wall, slab];
   selectionVersion++;

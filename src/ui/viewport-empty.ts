@@ -23,10 +23,11 @@ export function initializeViewportEmpty(container: HTMLElement) {
       detail.textContent = 'Sync 실패 · 하단 오류 기록에서 원인을 확인하세요.';
     } else if (connection) {
       title.textContent = host + ' 연결됨';
-      detail.textContent = '왼쪽 문서에서 Sync를 실행하면 모델이 표시됩니다.';
+      detail.textContent =
+        '첫 Sync를 기다리는 중입니다. 연결 파일 목록의 ⟳로 바로 가져올 수 있습니다.';
     } else {
       title.textContent = '아직 가져온 모델이 없습니다';
-      detail.textContent = 'Rhino/ZWCAD 문서를 연결하거나 모델 파일을 불러오세요.';
+      detail.textContent = 'Rhino·ZWCAD 플러그인 패널에서 Link를 누르거나 모델 파일을 불러오세요.';
     }
   }
   update();

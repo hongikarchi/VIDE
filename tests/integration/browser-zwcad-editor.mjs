@@ -54,13 +54,10 @@ try {
   assert.equal(opened.status(), 200);
   const target = await opened.json();
   owned.push(target.instance);
-  await page.getByText('열린 호스트 문서', { exact: true }).click();
-  await page.locator('#refresh-documents').click();
-  await page.locator('#host-documents').selectOption(target.instance + '/1');
+  // The opened work copy is a linked file of the project; its first Sync starts by itself.
   const capturing = page.waitForResponse((r) =>
     r.url().endsWith(`/projects/${project.id}/capture`),
   );
-  await page.locator('#capture-document').click();
   const captured = await (await capturing).json();
   assert.equal(captured.state, 'succeeded', JSON.stringify(captured));
   assert.equal(captured.result.host, 'zwcad');

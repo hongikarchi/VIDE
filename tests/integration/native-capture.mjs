@@ -41,10 +41,20 @@ try {
   await page.waitForFunction(() =>
     document.querySelector('#connection-status').textContent.includes('연결됨'),
   );
-  await page.getByText('열린 호스트 문서', { exact: true }).click();
-  await page.locator('#refresh-documents').click();
-  await page.locator('#host-documents').selectOption(String(documentId));
-  await page.locator('#capture-document').click();
+  // This legacy (MCP) document is captured through the capture API; linked files cover plugin documents.
+  await page.evaluate(
+    async ({ id, documentId }) => {
+      const api = window.testApi;
+      const catalog = await api('/host/documents');
+      const doc = catalog.documents.find((item) => item.id === documentId);
+      return api(`/projects/${id}/capture`, 'POST', {
+        id: crypto.randomUUID(),
+        instance: doc.instance ?? catalog.instance,
+        documentId,
+      });
+    },
+    { id: project.id, documentId },
+  );
   await page.waitForFunction(
     () =>
       document.querySelectorAll('.chat-message').length === 1 &&
