@@ -1,3 +1,4 @@
+import { creaseEdges } from './crease-edges.ts';
 import { sceneRepresentation } from '../core/scene-representation.ts';
 import { displayCoordinates } from '../core/display-coordinates.ts';
 import type { DisplayGeometry } from '../core/scene-representation.ts';
@@ -211,7 +212,7 @@ export function createViewport(
   let atlas = new TextAtlas();
   // Block definitions: one GPU geometry per definition hash, shared by every instance.
   const blockGeometry = new Map<string, SharedBlock>();
-  const sharedEdges = new WeakMap<THREE.BufferGeometry, THREE.EdgesGeometry>();
+  const sharedEdges = new WeakMap<THREE.BufferGeometry, THREE.BufferGeometry>();
   function sharedBlock(definition: BlockDefinition) {
     let shared = blockGeometry.get(definition.hash);
     if (shared) return shared;
@@ -420,13 +421,24 @@ export function createViewport(
   /** Crease edges are built lazily (only when shown) so large models stay cheap. */
   function edgesOf(mesh: THREE.Mesh) {
     let edges = mesh.userData.edges as
-      | THREE.LineSegments<THREE.EdgesGeometry, THREE.LineBasicMaterial>
+      | THREE.LineSegments<THREE.BufferGeometry, THREE.LineBasicMaterial>
       | undefined;
     if (!edges) {
       // Instances of one block share their crease edges as they share the surface.
       let geometry = mesh.userData.sharedGeometry ? sharedEdges.get(mesh.geometry) : undefined;
       if (!geometry) {
-        geometry = new THREE.EdgesGeometry(mesh.geometry, CREASE_ANGLE);
+        geometry = new THREE.BufferGeometry();
+        geometry.setAttribute(
+          'position',
+          new THREE.BufferAttribute(
+            creaseEdges(
+              mesh.geometry.getAttribute('position').array,
+              mesh.geometry.index?.array ?? null,
+              CREASE_ANGLE,
+            ),
+            3,
+          ),
+        );
         if (mesh.userData.sharedGeometry) sharedEdges.set(mesh.geometry, geometry);
       }
       edges = new THREE.LineSegments(geometry, new THREE.LineBasicMaterial({ color: EDGE }));
@@ -802,12 +814,18 @@ export function createViewport(
           base = v;
         for (let i = 0; i < position.count; i++, v++) {
           point.fromBufferAttribute(position, i).applyMatrix4(mesh.matrixWorld).sub(batch.origin);
-          positions.set([point.x, point.y, point.z], v * 3);
+          positions[v * 3] = point.x;
+          positions[v * 3 + 1] = point.y;
+          positions[v * 3 + 2] = point.z;
           if (normalAttribute) {
             normal.fromBufferAttribute(normalAttribute, i).applyNormalMatrix(normalMatrix);
-            normals.set([normal.x, normal.y, normal.z], v * 3);
+            normals[v * 3] = normal.x;
+            normals[v * 3 + 1] = normal.y;
+            normals[v * 3 + 2] = normal.z;
           }
-          colors.set([color.r, color.g, color.b], v * 3);
+          colors[v * 3] = color.r;
+          colors[v * 3 + 1] = color.g;
+          colors[v * 3 + 2] = color.b;
         }
         const index = mesh.geometry.index;
         if (index) for (let i = 0; i < index.count; i++) indices[n++] = base + index.getX(i);
@@ -848,9 +866,12 @@ export function createViewport(
           color = (line.material as THREE.LineBasicMaterial).color;
         const put = (i: number) => {
           point.fromBufferAttribute(position, i).applyMatrix4(line.matrixWorld).sub(batch.origin);
-          positions.set([point.x, point.y, point.z], v * 3);
-          if (painted) colors.set([painted.getX(i), painted.getY(i), painted.getZ(i)], v * 3);
-          else colors.set([color.r, color.g, color.b], v * 3);
+          positions[v * 3] = point.x;
+          positions[v * 3 + 1] = point.y;
+          positions[v * 3 + 2] = point.z;
+          colors[v * 3] = painted ? painted.getX(i) : color.r;
+          colors[v * 3 + 1] = painted ? painted.getY(i) : color.g;
+          colors[v * 3 + 2] = painted ? painted.getZ(i) : color.b;
           v++;
         };
         if (line instanceof THREE.LineSegments) for (let i = 0; i < position.count; i++) put(i);

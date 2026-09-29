@@ -2,7 +2,7 @@
 id: PLAN-18
 title: 큰 모델 표시·Sync 성능
 status: review
-version: 0.1
+version: 0.2
 updated: 2026-09-29
 owner: agent:claude
 related: [PLAN, SPEC-01, ARCH-01, FR-02, FR-03, SPIKE-2026-09-29-render-perf]
@@ -18,14 +18,17 @@ related: [PLAN, SPEC-01, ARCH-01, FR-02, FR-03, SPIKE-2026-09-29-render-perf]
 - 결과: 객체 18,000개에서 그리기 호출 27,001 → 74, 프레임 83 ms → 9.7 ms.
 - 검증: `tests/integration/browser-batching.mjs`(1,800개가 8번 호출, 측량 좌표에서 클릭 선택, 선택 강조는 따로, 숨기면 삼각형 감소), 기존 화면 시험 16개 통과.
 
-## 2단계 — 이진 전송·저장 (다음)
+## 2단계 — 여는 시간과 전송 (완료)
 
-- Sync 결과의 좌표·인덱스를 JSON 숫자 대신 이진(Float32/Uint32)으로 저장·전송하고, 해석은 백그라운드 작업자에서 한다. 꺼진 PC용 보기 사본(사이트 업로드)도 같은 형식으로 압축한다.
-- 완료 기준: 18,000개 모델의 전송 크기·열기 시간 절반 이하, 기존 결과 읽기 호환.
+- 측정(CPU 프로필)으로 여는 시간 4.5초 중 2.1초가 면 모서리(crease edge) 계산이었다. `src/ui/crease-edges.ts`가 three.js `EdgesGeometry`와 같은 선(1e-4 반올림 용접, 38°)을 숫자 해시로 구한다(9,000개 0.25초). 묶음 생성의 정점별 임시 배열도 없앴다.
+- 전송: 한 요청을 표시용으로 받을 때 좌표·인덱스를 이진으로 보낸다(`src/contracts/geometry-transfer.ts`, `Accept: application/vnd.vide.geometry`). 좌표는 배열 첫 점 기준 float32(원점은 float64), 인덱스는 Uint16/Uint32이며 받는 쪽에서 보통 숫자 배열로 되돌린다. 저장 형식(JSON)은 그대로라 기존 결과와 호환된다. 해석 비용이 작아(수십 ms) 백그라운드 작업자는 두지 않았다.
+- 결과(객체 18,000개, [SPIKE](../tdd/SPIKE-2026-09-29-render-perf.md)): 여는 시간 4.5 → 1.84초, 전송 68.5 → 34.9 MB(받기 608 → 316 ms), 한 프레임 약 7~9 ms.
+- 검증: `tests/core/crease-edges.test.mjs`(상자·원통·열린 면·측량 좌표에서 three.js와 같은 선, 속도), `tests/core/geometry-transfer.test.mjs`(측량 좌표 정밀도, 인덱스, 블록 정의, 다른 필드 보존), 화면 시험(묶음·표시·CAD·경로).
 
-## 3단계 — 호스트 Sync 구간 측정
+## 3단계 — 호스트 Sync 구간 기록 (완료, 실측 대기)
 
-- 사용자 모델 사본으로 Rhino 메시 생성·페이지 읽기·저장 구간을 나눠 재고, 느린 구간만 고친다.
+- 에이전트가 사용자 모델을 열지 않으므로, 실제 Sync마다 진단 기록(`<데이터>/logs/engine-*.jsonl`)에 `sync`(전체 ms, 호스트 읽기 ms, 객체 수, 상태)와 `live-sync`(ms)를 남긴다. 파일 이름·요청 글은 남기지 않는다.
+- 사용자가 평소처럼 Sync한 뒤 기록을 보고 느린 구간(호스트 메시·페이지 읽기 / 검사·저장)을 고친다.
 
 ## 남은 것
 

@@ -136,10 +136,8 @@ const renderObjectList = createObjectList($('objects'), (ids, mode) => {
 let foregroundRequest: { id: string; selected: typeof selectedResult; draft: string } | undefined;
 /** The work opened in the work view (work history row or the latest request sent). */
 let focusedWork: string | undefined;
-// Request routing (SPEC-02.15): a flipped route chip and the automatic model choice.
-let routeOverride: 'view' | 'document' | undefined,
-  autoModel = true,
-  autoModelReason = '';
+// Request routing (SPEC-02.17): a flipped route chip. The model is chosen by the "자동 (Jev)" entry.
+let routeOverride: 'view' | 'document' | undefined;
 const focusDraft = () => JSON.stringify({ draft: draftSnapshot(state), strokes });
 initializeWorkspacePanels();
 const workspaceStatus = initializeWorkspaceStatus({
@@ -527,7 +525,6 @@ function useInboxItem(item: InboxItem) {
     activeLayer = item.linkId;
     applyActiveLayer();
   }
-  applyAutoModel();
   render();
   $('body').focus();
   message('사이트에서 남긴 요청을 작성기에 넣었습니다. 내용을 확인하고 보내세요.');
@@ -843,7 +840,7 @@ function render(rebuildRequests = true) {
       render();
     }),
   );
-  // Where this request goes and which model it uses (SPEC-02.15), changeable before sending.
+  // Where this request goes (SPEC-02.17), changeable before sending.
   const route = state.body.trim() ? currentRoute() : undefined;
   // Ordinary file work needs no chip; show where it goes when screen words or a flip are involved.
   if (route && (route.target === 'view' || route.viewWords || routeOverride)) {
@@ -866,17 +863,6 @@ function render(rebuildRequests = true) {
       render();
     };
   }
-  if (route?.target === 'document' && autoModelReason)
-    el(
-      'span',
-      `모델 자동 · ${models.find((m) => m.id === state.model)?.name ?? state.model} (${autoModelReason})`,
-      $('context'),
-      {
-        class: 'chip model-chip',
-        title:
-          '모델링은 GPT-6-Astra, 프로그램 작업은 Claude Opus 5.5를 고릅니다. 모델을 직접 고르면 자동 선택을 멈춥니다.',
-      },
-    );
   // Several files on screen: say which one this request changes (SPEC-01.9 요청 대상).
   const target = currentLayers.find(
     (layer) => layer.requestId === (state.baseRequestId ?? displayedResult),
@@ -1423,9 +1409,6 @@ function fillModels() {
 }
 fillModels();
 $('model').onchange = () => {
-  // The user's own choice wins over the automatic one until the next request.
-  autoModel = false;
-  autoModelReason = '';
   chooseModel(state, $('model').value);
   void refreshAccount();
   render();
@@ -1444,7 +1427,6 @@ $('permission').onchange = () => {
 };
 $('body').oninput = () => {
   state.body = $('body').value;
-  applyAutoModel();
   // Pins whose inline token was deleted from the message leave the request.
   const labels = tokenLabels(state.body);
   state.pins = state.pins.filter((pin) => !pin.label || labels.has(pin.label));
@@ -1533,7 +1515,7 @@ function interventionReason(id: string): string | undefined {
   )
     return '이미 추가 지시가 대기 중입니다.';
 }
-/** Request routing (SPEC-02.15): the rule result, unless the user flipped the chip. */
+/** Request routing (SPEC-02.17): the rule result, unless the user flipped the chip. */
 function currentRoute(): Route {
   const route = routeRequest(
     state.body,
@@ -1543,7 +1525,6 @@ function currentRoute(): Route {
       layer: object.layerName ?? object.layer,
       name: object.name,
     })),
-    models,
     selectedIds,
   );
   if (!routeOverride || routeOverride === route.target) return route;
@@ -1559,21 +1540,6 @@ function currentRoute(): Route {
     },
     reason: '사용자가 VIDE 화면만으로 바꿨습니다',
   };
-}
-/** Modeling → GPT-6-Astra, programming → Claude Opus 5.5, while the user has not chosen. */
-function applyAutoModel() {
-  if (!autoModel) return;
-  const route = currentRoute();
-  if (route.target !== 'document' || !route.model) {
-    autoModelReason = '';
-    return;
-  }
-  if (route.model !== state.model) {
-    chooseModel(state, route.model);
-    $('model').value = state.model;
-    void refreshAccount();
-  }
-  autoModelReason = route.task === 'programming' ? '프로그램 작업' : '모델링';
 }
 /** A screen-only request changes the VIDE view; the file and AI are not involved. */
 function runViewRequest(route: Route) {
@@ -1608,8 +1574,6 @@ function runViewRequest(route: Route) {
   state.body = '';
   $('body').value = '';
   routeOverride = undefined;
-  autoModel = true;
-  autoModelReason = '';
   render();
 }
 $('request').onclick = () => {
@@ -1651,8 +1615,6 @@ async function submitRequest(predecessorId?: string) {
     if (selectedResult === undefined) selectedResult = displayedResult ?? null;
     foregroundRequest = { id: request.id, selected: selectedResult, draft: focusDraft() };
     routeOverride = undefined;
-    autoModel = true;
-    autoModelReason = '';
     focusedWork = request.id;
     renderMessages();
     void poll(request.id, projectId, original);

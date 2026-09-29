@@ -1,7 +1,7 @@
-// Where a request goes before it is sent (SPEC-02.15): the VIDE screen only (hide, isolate,
-// show, select, zoom — nothing in the file changes) or the file itself, and which model suits the
-// task (modeling → GPT-6-Astra, programming → Claude Opus 5.5, when available). Code rules come
-// first; the user sees the result as chips and can change it before sending.
+// Where a request goes before it is sent (SPEC-02.17): the VIDE screen only (hide, isolate,
+// show, select, zoom — nothing in the file changes) or the file itself. Code rules come first; the
+// user sees the result as a chip and can change it before sending. The model is chosen by the
+// server's "자동 (Jev)" routing (src/ai/model-router.ts), not here.
 
 export type ViewAction = 'hide' | 'isolate' | 'unhide' | 'select' | 'fit';
 export interface RouteObject {
@@ -15,11 +15,8 @@ export interface Route {
   view?: { action: ViewAction; ids: string[]; subject: string };
   /** The request uses screen-action words (worth showing where it goes, even to the file). */
   viewWords?: boolean;
-  task?: 'modeling' | 'programming';
-  model?: string;
   reason: string;
 }
-export const MODEL_FOR = { modeling: 'gpt-6-astra', programming: 'claude-opus-5-5' } as const;
 
 // Words that name the file itself or change it: these requests always go to the file.
 const documentWords =
@@ -55,13 +52,6 @@ const kinds: [RegExp, RegExp, string][] = [
   ],
   [new RegExp(`(${alone('점')}|point)`, 'i'), /point/i, '점'],
 ];
-const programming =
-  /(코드|프로그램|스크립트|플러그인|함수|jig\s*(만들|개발)|개발|자동화\s*도구|python|파이썬|c#|grasshopper\s*컴포넌트)/i;
-const modeling = new RegExp(
-  `(모델링|만들어|그려|생성|배치|돌출|곡선|곡면|철골보|${alone('보')}|기둥|슬래브|벽|브렙|brep|서피스|메시|오프셋|offset|수정|옮겨|이동|늘려|줄여|복사|회전|중심선)`,
-  'i',
-);
-
 const text = (value: unknown) => (typeof value === 'string' ? value : '');
 
 /** Objects named by the request: by kind words, then layer names, then object names. */
@@ -92,16 +82,8 @@ function subjectOf(body: string, objects: readonly RouteObject[]) {
 export function routeRequest(
   body: string,
   objects: readonly RouteObject[],
-  models: readonly { id: string }[],
   selected: readonly string[] = [],
 ): Route {
-  const has = (id: string) => models.some((model) => model.id === id);
-  const task = programming.test(body)
-    ? 'programming'
-    : modeling.test(body)
-      ? 'modeling'
-      : undefined;
-  const model = task && has(MODEL_FOR[task]) ? MODEL_FOR[task] : undefined;
   const found = viewActions.find(([, pattern]) => pattern.test(body));
   if (found && !documentWords.test(body)) {
     const [action] = found;
@@ -131,9 +113,6 @@ export function routeRequest(
   return {
     target: 'document',
     ...(found ? { viewWords: true } : {}),
-    ...(task ? { task } : {}),
-    ...(model ? { model } : {}),
-    reason:
-      task === 'programming' ? '프로그램 작업' : task === 'modeling' ? '모델링 작업' : '파일 작업',
+    reason: '파일 작업',
   };
 }

@@ -1,5 +1,5 @@
-// Request routing (SPEC-02.15): screen-only requests change the VIDE view without any AI or file
-// work; file work picks the model for the task; the chip can flip the route before sending.
+// Request routing (SPEC-02.17): screen-only requests change the VIDE view without any AI or file
+// work; the chip can flip the route before sending.
 import assert from 'node:assert/strict';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -100,25 +100,6 @@ try {
       ],
     }),
   );
-  await page.route('**/api/v1/models', (route) =>
-    route.fulfill({
-      json: [
-        {
-          id: 'claude-sonnet-5',
-          name: 'Claude Sonnet 5',
-          provider: 'claude-cli',
-          efforts: ['default'],
-        },
-        {
-          id: 'claude-opus-5-5',
-          name: 'Claude Opus 5.5',
-          provider: 'claude-cli',
-          efforts: ['default'],
-        },
-        { id: 'gpt-6-astra', name: 'GPT-6-Astra', provider: 'codex-cli', efforts: ['default'] },
-      ],
-    }),
-  );
   await page.goto(app.launchUrl);
   await page.waitForFunction(() =>
     document.querySelector('.object-summary')?.textContent.startsWith('8개'),
@@ -142,18 +123,6 @@ try {
   assert.equal(await chip.count(), 0);
   await page.locator('#body').fill('CAD에서 해치 숨겨줘');
   await chip.filter({ hasText: '파일 작업' }).waitFor();
-  // Modeling picks GPT-6-Astra; programming picks Claude Opus 5.5.
-  await page.locator('#body').fill('보를 그려줘');
-  await page.waitForFunction(() => document.querySelector('#model').value === 'gpt-6-astra');
-  await page.locator('#context .model-chip').filter({ hasText: 'GPT-6-Astra (모델링)' }).waitFor();
-  await page.locator('#body').fill('이 도면을 정리하는 파이썬 스크립트를 개발해줘');
-  await page.waitForFunction(() => document.querySelector('#model').value === 'claude-opus-5-5');
-  // Choosing a model by hand stops the automatic choice.
-  await page.locator('#model').selectOption('claude-sonnet-5');
-  await page.locator('#body').fill('보를 그려줘');
-  await page.waitForTimeout(200);
-  assert.equal(await page.locator('#model').inputValue(), 'claude-sonnet-5');
-  assert.equal(await page.locator('#context .model-chip').count(), 0);
   // The chip flips a screen request to file work.
   await page.locator('#body').fill('해치 숨겨줘');
   await chip.filter({ hasText: 'VIDE 화면만 · 해치 1개' }).click();

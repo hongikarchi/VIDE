@@ -1,3 +1,9 @@
+import {
+  CONTEXT_LIMIT,
+  selectContext,
+  type ContextCandidate,
+  type ContextChoice,
+} from '../ai/context-selector.ts';
 import { isDwgSdkEditMode } from '../contracts/dwg-edit-mode.ts';
 import type { AccountProfiles } from '../ai/account-profiles.ts';
 import { executionLimits } from '../contracts/execution-limits.ts';
@@ -48,6 +54,8 @@ interface Options {
   onProviderLimit?: (provider: string, accountProfileId: string) => void;
   /** Start/end, duration and failure code of every run (diagnostic log). */
   diagnostics?: Diagnostics;
+  /** Which earlier exchanges go with a request (Jev when a key is set; else the last six). */
+  selectContext?: (body: string, candidates: ContextCandidate[]) => Promise<ContextChoice>;
 }
 /**
  * Jig review gate (RESEARCH-05 standard gates): an AI review of a Sync jig table may cite only the
@@ -110,6 +118,7 @@ export class Execution {
   zwcadSdk?: ZwcadSdkExecution;
   tools?: AgentTools;
   diagnostics?: Diagnostics;
+  selectContext: NonNullable<Options['selectContext']>;
   active = new Map<
     string,
     { controller: AbortController; completion: Promise<void>; projectId: string }
@@ -128,6 +137,8 @@ export class Execution {
       applyAttached,
       onProviderLimit,
       diagnostics,
+      selectContext: choose = (body, candidates) =>
+        selectContext(body, candidates, { key: () => '' }),
     }: Options = {},
   ) {
     this.workspace = workspace;
@@ -143,6 +154,7 @@ export class Execution {
     this.zwcadSdk = zwcadSdk;
     this.tools = tools;
     this.diagnostics = diagnostics;
+    this.selectContext = choose;
   }
   executable(provider: string) {
     return (
@@ -433,11 +445,31 @@ export class Execution {
       if (referenced.length)
         items.push({ id: 'referenced-geometry', type: 'geometry-reference', data: referenced });
       const hidden = this.workspace.hiddenIds(projectId);
-      const conversation = this.workspace
+      const earlier = this.workspace
         .list(projectId)
         .filter((r) => r.id !== id && r.state === 'succeeded' && !hidden.has(r.id))
-        .slice(-6)
-        .map((r) => ({ request: r.input.body, response: r.result?.text }));
+        .map((r) => ({
+          id: r.id,
+          request: r.input.body,
+          response: typeof r.result?.text === 'string' ? r.result.text : undefined,
+        }));
+      // Six or fewer all go without a Jev call (and without an extra wait before the run).
+      const context =
+        earlier.length <= CONTEXT_LIMIT
+          ? { ids: earlier.map((entry) => entry.id), by: 'all' as const, ms: 0 }
+          : await this.selectContext(input.body, earlier);
+      this.diagnostics?.write('context', {
+        request: id,
+        by: context.by,
+        ms: context.ms,
+        sent: context.ids.length,
+        of: earlier.length,
+        ...(context.reason ? { reason: context.reason } : {}),
+      });
+      const chosen = new Set(context.ids);
+      const conversation = earlier
+        .filter((entry) => chosen.has(entry.id))
+        .map((entry) => ({ request: entry.request, response: entry.response }));
       if (conversation.length)
         items.push({ id: 'conversation', type: 'conversation', data: conversation });
       const sdk = jigReview ? undefined : target === 'rhino' ? this.sdk : this.zwcadSdk;

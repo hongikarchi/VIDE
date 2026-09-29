@@ -1,12 +1,18 @@
 import { z } from 'zod';
 import { workspaceRequestSchema } from '../contracts/workspace-result.ts';
+import { GEOMETRY_TYPE, decodeGeometry } from '../contracts/geometry-transfer.ts';
 export const projectSchema = z.object({ id: z.string(), name: z.string() }).passthrough();
 export async function api(path: string, method = 'GET', data?: unknown): Promise<unknown> {
   let response;
+  // One request in full carries its display geometry as binary (PLAN-18); errors stay JSON.
+  const geometry = method === 'GET' && /^\/projects\/[^/]+\/requests\/[^/?]+$/.test(path);
   try {
     response = await fetch('api/v1' + path, {
       method,
-      headers: data ? { 'Content-Type': 'application/json' } : {},
+      headers: {
+        ...(data ? { 'Content-Type': 'application/json' } : {}),
+        ...(geometry ? { Accept: `${GEOMETRY_TYPE}, application/json` } : {}),
+      },
       body: data ? JSON.stringify(data) : undefined,
     });
   } catch {
@@ -14,7 +20,9 @@ export async function api(path: string, method = 'GET', data?: unknown): Promise
   }
   let result;
   try {
-    result = await response.json();
+    result = response.headers?.get('Content-Type')?.startsWith(GEOMETRY_TYPE)
+      ? decodeGeometry(await response.arrayBuffer())
+      : await response.json();
   } catch {
     throw apiError('INVALID_RESPONSE');
   }

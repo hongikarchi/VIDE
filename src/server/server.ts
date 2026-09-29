@@ -1,3 +1,5 @@
+import { selectContext } from '../ai/context-selector.ts';
+import { GEOMETRY_TYPE, encodeGeometry } from '../contracts/geometry-transfer.ts';
 import { applyAttachedCandidate } from './attached-application.ts';
 import { LiveSync } from './live-sync.ts';
 import { RemoteAccess } from './remote-access.ts';
@@ -285,6 +287,8 @@ export async function startServer({
   });
   const execution = new Execution(workspace, {
     diagnostics,
+    selectContext: (text, candidates) =>
+      selectContext(text, candidates, { dataDirectory: dirname(filename) }),
     onProviderLimit: (provider, id) =>
       accountUsage.markLimited(z.enum(['claude-cli', 'codex-cli']).parse(provider), id),
     applyAttached: sdk
@@ -370,6 +374,7 @@ export async function startServer({
     };
     const send = (status: number, data: unknown) =>
       deliver(status, 'application/json; charset=utf-8', JSON.stringify(data));
+    const accepts = (type: string) => String(request.headers.accept ?? '').includes(type);
     try {
       if (!remote && request.headers.host !== authority) throw new DomainError('FORBIDDEN');
       // The account site asks whether this PC is the browser's own PC (answer: this host's id).
@@ -671,15 +676,28 @@ export async function startServer({
         if (target.linkId) links.get(capture[1], target.linkId);
         const own = await sdk?.editors.has(target.instance);
         const cadOwn = await zwcadSdk?.editors.has(target.instance);
+        // Sync timing (PLAN-18 step 3): the host read (meshing, pages) and the rest (checks, storing).
+        const began = performance.now();
+        let hostMs: number | undefined;
+        const timed =
+          <T>(read: () => Promise<T>) =>
+          async () => {
+            const start = performance.now();
+            try {
+              return await read();
+            } finally {
+              hostMs = Math.round(performance.now() - start);
+            }
+          };
         const captured = await captureModel(
           capture[1],
           target,
           workspace,
           own ? rhinoImport : host,
           cadOwn
-            ? async () => zwcadSdk!.editors.capture(target)
+            ? timed(async () => zwcadSdk!.editors.capture(target))
             : own
-              ? async () =>
+              ? timed(async () =>
                   sdk!.syncEditor(
                     target,
                     (intent) => workspace.update(capture[1], target.id, 'running', intent),
@@ -687,10 +705,20 @@ export async function startServer({
                     (await sdk!.editors.connectionKind(target.instance)) === 'attached-editor'
                       ? []
                       : captureMeasurements(workspace.list(capture[1]), target),
-                  )
+                  ),
+                )
               : undefined,
           cadOwn ? 'zwcad' : 'rhino',
         );
+        const scene = (captured.result as { scene?: unknown[] } | null)?.scene;
+        diagnostics.write('sync', {
+          request: target.id,
+          host: cadOwn ? 'zwcad' : 'rhino',
+          state: captured.state,
+          ms: Math.round(performance.now() - began),
+          hostMs,
+          objects: Array.isArray(scene) ? scene.length : undefined,
+        });
         if (!cadOwn) liveSync?.record(capture[1], captured);
         send(200, captured);
         return;
@@ -698,7 +726,10 @@ export async function startServer({
       const live = /^\/api\/v1\/projects\/([^/]+)\/live-sync$/.exec(url.pathname);
       if (live && request.method === 'POST') {
         if (!liveSync) throw new DomainError('RESYNC_REQUIRED');
-        send(200, await liveSync.run(live[1], await body(request)));
+        const began = performance.now();
+        const synced = await liveSync.run(live[1], await body(request));
+        diagnostics.write('live-sync', { ms: Math.round(performance.now() - began) });
+        send(200, synced);
         return;
       }
       const reviewComparison = /^\/api\/v1\/projects\/([^/]+)\/review-comparison$/.exec(
@@ -1563,6 +1594,15 @@ export async function startServer({
       }
       if (job) {
         const [, projectId, id, cancel] = job;
+        // One request in full as binary geometry when the workspace asks for it (PLAN-18).
+        if (request.method === 'GET' && id && accepts(GEOMETRY_TYPE)) {
+          deliver(
+            200,
+            GEOMETRY_TYPE,
+            Buffer.from(encodeGeometry(withApplications(workspace.get(projectId, id)))),
+          );
+          return;
+        }
         if (request.method === 'GET') {
           send(
             200,

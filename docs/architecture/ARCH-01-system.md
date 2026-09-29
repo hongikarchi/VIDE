@@ -2,7 +2,7 @@
 id: ARCH-01
 title: VIDE 기술 구조와 구현 계약
 status: review
-version: 0.45
+version: 0.46
 updated: 2026-09-29
 owner: agent:codex
 related: [SPEC-00, SPEC-02, SPEC-03, SPEC-04, PLAN, PLAN-20, ADR-014, ADR-015, ADR-016, ADR-017]
@@ -597,6 +597,8 @@ R2 조건부 쓰기/체크섬은 [공식 Workers API](https://developers.cloudfl
 
 [PLAN-11](../plans/PLAN-11-desktop-app.md)의 물리 계약이다. `src/desktop/shell`(.NET Framework 4.8 WinForms, WebView2, Velopack)의 `VIDE.exe`가 `runtime\node.exe app\src\server\main.ts --parent-stdin --no-browser`를 자식으로 띄우고 출력의 실행 주소를 창에 연다. 표준 입력을 닫으면 엔진이 정상 종료한다. 설치 루트는 `%LOCALAPPDATA%\VIDE.App`(`current\`, `packages\`, `Update.exe`, 고정 실행 스텁 `VIDE.exe`), 데이터는 `%LOCALAPPDATA%\VIDE`, 창 저장소는 `<데이터>\webview`, 셸 설정은 `<데이터>\desktop.json`이다. 단일 실행은 `Local\VIDE.Desktop` 뮤텍스와 Show/Quit 이벤트로 한다. 자동 실행은 `HKCU\…\Run\VIDE = "<스텁>" --background`다. 창의 설정 화면과 셸은 WebView2 메시지(`desktop:get|set`, `update:check|apply` ↔ `desktop:state`)로만 통신하고 로컬 주소 외의 이동은 기본 브라우저로 연다. 업데이트는 `UpdateSource`(폴더·URL) 또는 GitHub Releases(`hongikarchi/VIDE`)를 쓴다. 엔진의 `GET /api/v1/connectors`, `POST /api/v1/connectors/rhino8/install`(원격 세션 차단)은 포함된 `VIDE.Worker.rhp`를 `<데이터>\plugins\rhino\<버전>-<해시8>\`에 복사하고 `HKCU\Software\McNeel\Rhinoceros\8.0\Plug-ins\6bde756c-…\PlugIn\FileName`을 바꾼다(Rhino 실행 중 409 `HOST_RUNNING`). 개발 서버 `--dev`는 `.vide/dev-data`와 47831을 쓴다.
 - 전송: 원격 응답은 16 KB를 넘으면 gzip(level 4)으로 보낸다. `GET /api/v1/projects/:id/requests` 목록은 결과의 `scene`·`definitions`를 빼고 `sceneOmitted: true`를 붙이며, 화면은 표시할 요청만 단건 조회로 받는다.
+- 표시용 이진 전송(2026-09-29, [PLAN-18](../plans/PLAN-18-render-performance.md)): `GET /api/v1/projects/:id/requests/:rid`에 `Accept: application/vnd.vide.geometry`가 있으면 같은 내용을 `VGT1` 컨테이너로 준다(`src/contracts/geometry-transfer.ts`): `VGT1` + u32 머리 길이 + JSON 머리 + 4바이트 정렬 버퍼. `result.scene[]`와 `result.definitions{}` 항목의 `vertices`·`line`·`segments`는 `{"$bin":[offset,length,"f",ox,oy,oz]}`(첫 점 기준 float32, 원점 float64), `indices`는 `"u16"`/`"u32"`로 바뀐다. 오류 응답은 JSON이다. 작업 화면(`src/ui/gateway.ts`)은 단건 조회에 이 헤더를 붙이고 숫자 배열로 되돌린다. 저장은 JSON 그대로다.
+- 이전 대화 선별(2026-09-29, [PLAN-19](../plans/PLAN-19-request-routing.md)): `src/ai/context-selector.ts`가 이전 대화 6개 초과 시 Jev System One(`jev-1.13.0`, 최근 20개 각각 Noul, 5초)으로 고른다. 키는 `readJevKey`(환경 `TYPESAFE_API_KEY` 또는 `<데이터>/typesafe.env`). 진단 기록 `context {request, by: all|jev|fallback, ms, sent, of, reason?}`. Sync 진단 `sync {request, host, state, ms, hostMs, objects}`, `live-sync {ms}`.
 
 ## 7. 개발 기반과 변경 경계
 

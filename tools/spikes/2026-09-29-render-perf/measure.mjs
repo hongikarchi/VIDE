@@ -149,13 +149,32 @@ try {
     const text = await response.text();
     const fetched = performance.now();
     JSON.parse(text);
-    return { bytes: text.length, fetchMs: fetched - began, parseMs: performance.now() - fetched };
+    const parsed = performance.now();
+    // The same request as binary geometry (PLAN-18 step 2), as the workspace now fetches it.
+    const binary = await fetch(`/api/v1/projects/${id}/requests/perf-sync`, {
+      headers: { Accept: 'application/vnd.vide.geometry' },
+    });
+    const buffer = await binary.arrayBuffer();
+    return {
+      bytes: text.length,
+      fetchMs: fetched - began,
+      parseMs: parsed - fetched,
+      binaryBytes: buffer.byteLength,
+      binaryFetchMs: performance.now() - parsed,
+    };
   }, projectId);
   // End to end: reload until the object list shows every object.
   // A fresh browser (no saved draft) opens the project and shows its latest Sync.
   const fresh = await browser.newContext({ viewport: { width: 1600, height: 1000 } });
   const view = await fresh.newPage();
   await view.route('**/api/v1/host', (route) => route.fulfill({ json: { available: false } }));
+  // PROFILE=1: CPU profile of opening, top functions by own time.
+  const cdp = process.env.PROFILE ? await fresh.newCDPSession(view) : undefined;
+  if (cdp) {
+    await cdp.send('Profiler.enable');
+    await cdp.send('Profiler.setSamplingInterval', { interval: 200 });
+    await cdp.send('Profiler.start');
+  }
   const began = Date.now();
   await view.goto(app.launchUrl);
   await view.waitForFunction(
@@ -167,6 +186,24 @@ try {
     { timeout: 180000 },
   );
   const shownMs = Date.now() - began;
+  if (cdp) {
+    const { profile } = await cdp.send('Profiler.stop');
+    const self = new Map();
+    const deltas = profile.timeDeltas;
+    const byId = new Map(profile.nodes.map((node) => [node.id, node]));
+    profile.samples.forEach((id, i) => {
+      const frame = byId.get(id).callFrame;
+      const key = `${frame.functionName || '(anon)'} ${frame.url.split('/').pop()}:${frame.lineNumber}`;
+      self.set(key, (self.get(key) ?? 0) + (deltas[i] ?? 0) / 1000);
+    });
+    console.log(
+      [...self]
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 25)
+        .map(([key, ms]) => `${ms.toFixed(0).padStart(6)} ms  ${key}`)
+        .join('\n'),
+    );
+  }
   if (process.env.SHOT) {
     await view.locator('#fit-view').click();
     await view.waitForTimeout(500);
@@ -183,6 +220,8 @@ try {
           MB: +(transfer.bytes / 1e6).toFixed(1),
           fetchMs: Math.round(transfer.fetchMs),
           parseMs: Math.round(transfer.parseMs),
+          binaryMB: +(transfer.binaryBytes / 1e6).toFixed(1),
+          binaryFetchMs: Math.round(transfer.binaryFetchMs),
         },
         reloadUntilShownMs: shownMs,
         render: { ...render, frameMs: +render.frameMs.toFixed(2) },
