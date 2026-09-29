@@ -163,3 +163,16 @@ test('the key comes from the environment or the data folder, and never reaches t
   assert.deepEqual(subscriptionEnvironment(source), { PATH: 'p' });
   assert.deepEqual(codexEnvironment(source), { PATH: 'p' });
 });
+
+// SPEC-02.17 2 (PLAN-24 T-049): screen, setting, app and jig routes run without the AI.
+test('no model is chosen for routes VIDE carries out itself', async () => {
+  const { needsModel } = await import('../../src/ai/model-router.ts');
+  assert.deepEqual(['view', 'param', 'app', 'jig'].map(needsModel), [false, false, false, false]);
+  assert.deepEqual(['ask', 'document', 'make', null, undefined].map(needsModel), [
+    true,
+    true,
+    true,
+    true,
+    true,
+  ]);
+});

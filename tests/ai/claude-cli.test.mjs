@@ -2,7 +2,14 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
 import { PassThrough } from 'node:stream';
-import { ClaudeCli, buildPacket, subscriptionEnvironment } from '../../src/ai/claude-cli.ts';
+import { resolve } from 'node:path';
+import {
+  ClaudeCli,
+  buildPacket,
+  subscriptionEnvironment,
+  compareVersions,
+  supportedCliVersion,
+} from '../../src/ai/claude-cli.ts';
 
 const context = () => ({
   goal: '선택 자료를 설명',
@@ -37,7 +44,7 @@ test('malformed nested provider output is rejected instead of throwing from a st
     );
   }
 });
-function transport(events, { neverClose = false } = {}) {
+function transport(events, { neverClose = false, version = '2.1.284 (Claude Code)' } = {}) {
   const calls = [];
   const spawnProcess = (executable, args, options) => {
     const child = new EventEmitter();
@@ -57,7 +64,12 @@ function transport(events, { neverClose = false } = {}) {
       child.emit('exit', 0);
       child.emit('close', 0);
     };
-    if (args[0] === 'auth')
+    if (args[0] === '--version')
+      queueMicrotask(() => {
+        child.stdout.write(version + '\n');
+        close();
+      });
+    else if (args[0] === 'auth')
       queueMicrotask(() => {
         child.stdout.write(
           JSON.stringify({ loggedIn: true, authMethod: 'claude.ai', email: 'not-for-output' }),
@@ -78,7 +90,7 @@ test('전송 자료 제외는 실제 stdin에서도 유지되고 파일 경로�
   const fake = transport([init, result]);
   const cli = new ClaudeCli({ executable: process.execPath, spawnProcess: fake.spawnProcess });
   const value = await cli.run(context());
-  const call = fake.calls[1];
+  const call = fake.calls.find((entry) => entry.args[0] === '-p');
   assert.equal(value.text, '분석 응답');
   assert.equal(value.usage.subscriptionRemaining, null);
   assert.ok(call.input.includes('public'));
@@ -175,4 +187,113 @@ test('최종 응답 누락과 공급자 오류를 성공으로 반환하지 않�
       ['INCOMPLETE_RESULT', 'PROVIDER_FAILED'].includes(error.code),
     );
   }
+});
+
+test('검증한 판 범위(cli-compat.json)와 판 비교', () => {
+  assert.ok(supportedCliVersion('claude-cli', '2.1.284 (Claude Code)'));
+  assert.ok(supportedCliVersion('claude-cli', '2.1.300'));
+  assert.ok(!supportedCliVersion('claude-cli', '2.1.283'));
+  assert.ok(!supportedCliVersion('claude-cli', '2.2.0'));
+  assert.ok(!supportedCliVersion('claude-cli', '2.2.0-beta.1'));
+  assert.ok(supportedCliVersion('codex-cli', 'codex-cli 0.157.1'));
+  assert.ok(!supportedCliVersion('codex-cli', '0.157.0-alpha.3'));
+  assert.ok(!supportedCliVersion('codex-cli', '0.158.0-alpha.1'));
+  assert.ok(!supportedCliVersion('codex-cli', 'unknown'));
+  assert.equal(compareVersions('0.154.0-alpha.6.2', '0.154.0'), -1);
+  assert.equal(compareVersions('0.154.0-alpha.10', '0.154.0-alpha.6.2'), 1);
+  assert.equal(compareVersions('1.2.3', '1.2.3'), 0);
+});
+
+test('범위 밖·읽을 수 없는 판이면 로그인 확인과 실행 전에 거절한다', async () => {
+  for (const [name, version] of [
+    ['newer', '2.2.0 (Claude Code)'],
+    ['older', '2.1.200 (Claude Code)'],
+    ['garbled', 'Claude Code'],
+  ]) {
+    const fake = transport([init, result], { version });
+    const cli = new ClaudeCli({
+      executable: resolve(`fake-claude-${name}.exe`),
+      spawnProcess: fake.spawnProcess,
+    });
+    await assert.rejects(cli.run(context()), (error) => {
+      assert.equal(error.code, 'CLI_VERSION_UNSUPPORTED');
+      if (name !== 'garbled') assert.equal(error.supported, '>=2.1.284 <2.2.0');
+      return true;
+    });
+    assert.deepEqual(
+      fake.calls.map((call) => call.args[0]),
+      ['--version'],
+    );
+  }
+});
+
+test('판 확인은 실행 파일별로 60초 동안 다시 하지 않는다', async () => {
+  const fake = transport([init, result]);
+  const cli = new ClaudeCli({
+    executable: resolve('fake-claude-cached.exe'),
+    spawnProcess: fake.spawnProcess,
+  });
+  await cli.run(context());
+  await cli.run(context());
+  assert.equal(fake.calls.filter((call) => call.args[0] === '--version').length, 1);
+  assert.equal(fake.calls.filter((call) => call.args[0] === '-p').length, 2);
+});
+
+test('로그인 방식이 바뀐 신호(--bare 기본화)는 CLI_MODE_CHANGED로 멈춘다', async () => {
+  // Shape collected from `claude -p --bare` on 2.1.284 (SPIKE-2026-09-30-cli-session-resume §0).
+  const bare = {
+    type: 'result',
+    subtype: 'success',
+    is_error: true,
+    result: 'Not logged in · Please run /login',
+    terminal_reason: 'api_error',
+    usage: { input_tokens: 0, output_tokens: 0 },
+  };
+  const fake = transport([init, bare]);
+  const cli = new ClaudeCli({ executable: process.execPath, spawnProcess: fake.spawnProcess });
+  await assert.rejects(cli.run(context()), { code: 'CLI_MODE_CHANGED' });
+  // An ordinary API error is still a provider failure, not a mode change.
+  const other = transport([
+    init,
+    { ...bare, result: 'API Error: 500 Internal server error', terminal_reason: 'api_error' },
+  ]);
+  await assert.rejects(
+    new ClaudeCli({ executable: process.execPath, spawnProcess: other.spawnProcess }).run(
+      context(),
+    ),
+    { code: 'PROVIDER_FAILED' },
+  );
+});
+
+test('캐시 읽기·생성 토큰을 사용량에 기록한다', async () => {
+  const fake = transport([
+    init,
+    {
+      ...result,
+      usage: {
+        input_tokens: 10,
+        output_tokens: 174,
+        cache_read_input_tokens: 6638,
+        cache_creation_input_tokens: 251,
+      },
+    },
+  ]);
+  const value = await new ClaudeCli({
+    executable: process.execPath,
+    spawnProcess: fake.spawnProcess,
+  }).run(context());
+  assert.deepEqual(value.usage, {
+    inputTokens: 10,
+    outputTokens: 174,
+    cacheReadTokens: 6638,
+    cacheCreationTokens: 251,
+    subscriptionRemaining: null,
+  });
+  const plain = transport([init, result]);
+  const unknown = await new ClaudeCli({
+    executable: process.execPath,
+    spawnProcess: plain.spawnProcess,
+  }).run(context());
+  assert.equal(unknown.usage.cacheReadTokens, null);
+  assert.equal(unknown.usage.cacheCreationTokens, null);
 });

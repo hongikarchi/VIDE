@@ -3,7 +3,8 @@ import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 
-export const schemaVersion = 4;
+/** v5 and later cannot be opened by an older installation (UNSUPPORTED_SCHEMA); see ARCH-03 §10.1. */
+export const schemaVersion = 5;
 export const baselineSchema = `
         CREATE TABLE IF NOT EXISTS projects(id TEXT PRIMARY KEY, name TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS connections(id TEXT PRIMARY KEY, projectId TEXT NOT NULL REFERENCES projects(id),
@@ -39,10 +40,68 @@ const documentLinks = `CREATE TABLE IF NOT EXISTS document_links(id TEXT PRIMARY
   instance TEXT NOT NULL, documentId INTEGER NOT NULL, hidden INTEGER NOT NULL, linkedAt TEXT NOT NULL,
   updatedAt TEXT NOT NULL);
 CREATE INDEX IF NOT EXISTS document_links_project ON document_links(projectId);`;
-const migrations: Migration[] = [
+// Conversations, jig platform and project knowledge review (ARCH-03 §10.2), in one step so parallel
+// work does not claim the same number. Existing request rows are never rewritten: a request's
+// conversation is `input.conversationId`, exposed as a virtual column (NULL = the project's default
+// conversation). A plain column would break every positional `INSERT INTO workspace_requests
+// VALUES(...)`, and one stored after `result` would read the large Sync overflow pages. No index.
+const conversationsAndJigs = `
+CREATE TABLE IF NOT EXISTS conversations(id TEXT PRIMARY KEY,
+  projectId TEXT NOT NULL REFERENCES projects(id), kind TEXT NOT NULL, title TEXT NOT NULL,
+  provider TEXT NOT NULL, model TEXT, effort TEXT, accountProfileId TEXT,
+  mode TEXT NOT NULL DEFAULT 'session', jigInstanceId TEXT, draftId TEXT, targets TEXT,
+  state TEXT NOT NULL, createdAt TEXT NOT NULL, updatedAt TEXT NOT NULL, closedAt TEXT);
+CREATE INDEX IF NOT EXISTS conversations_project ON conversations(projectId, state);
+ALTER TABLE workspace_requests ADD COLUMN conversationId TEXT
+  GENERATED ALWAYS AS (json_extract(input, '$.conversationId')) VIRTUAL;
+CREATE TABLE IF NOT EXISTS provider_sessions(conversationId TEXT NOT NULL REFERENCES conversations(id),
+  provider TEXT NOT NULL, accountProfileId TEXT NOT NULL, sessionId TEXT NOT NULL,
+  promptMode TEXT NOT NULL, cliVersion TEXT NOT NULL,
+  turns INTEGER NOT NULL DEFAULT 0, inputTokens INTEGER NOT NULL DEFAULT 0, lastTurnAt TEXT,
+  state TEXT NOT NULL, PRIMARY KEY(conversationId, provider, accountProfileId, sessionId));
+CREATE TABLE IF NOT EXISTS ledger_items(id TEXT PRIMARY KEY,
+  conversationId TEXT NOT NULL REFERENCES conversations(id), kind TEXT NOT NULL, body TEXT NOT NULL,
+  requestId TEXT, createdAt TEXT NOT NULL, supersededBy TEXT);
+CREATE INDEX IF NOT EXISTS ledger_items_conversation ON ledger_items(conversationId, createdAt);
+CREATE TABLE IF NOT EXISTS jig_packages(id TEXT NOT NULL, version TEXT NOT NULL,
+  stage TEXT NOT NULL, source TEXT NOT NULL, digest TEXT NOT NULL, signer TEXT, path TEXT NOT NULL,
+  approvedCaps TEXT NOT NULL, installedAt TEXT NOT NULL, PRIMARY KEY(id, version));
+CREATE TABLE IF NOT EXISTS project_jigs(projectId TEXT NOT NULL REFERENCES projects(id),
+  jigId TEXT NOT NULL, version TEXT NOT NULL, pinnedAt TEXT NOT NULL, PRIMARY KEY(projectId, jigId));
+CREATE TABLE IF NOT EXISTS jig_drafts(id TEXT PRIMARY KEY, projectId TEXT NOT NULL REFERENCES projects(id),
+  conversationId TEXT, path TEXT NOT NULL, state TEXT NOT NULL,
+  createdAt TEXT NOT NULL, openedAt TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS jig_instances(id TEXT PRIMARY KEY, projectId TEXT NOT NULL REFERENCES projects(id),
+  jigId TEXT NOT NULL, version TEXT NOT NULL, title TEXT NOT NULL, body TEXT NOT NULL,
+  status TEXT NOT NULL, createdAt TEXT NOT NULL, updatedAt TEXT NOT NULL);
+CREATE INDEX IF NOT EXISTS jig_instances_project ON jig_instances(projectId);
+CREATE TABLE IF NOT EXISTS jig_param_log(instanceId TEXT NOT NULL REFERENCES jig_instances(id),
+  seq INTEGER NOT NULL, key TEXT NOT NULL, old TEXT, new TEXT NOT NULL, by TEXT NOT NULL, reason TEXT,
+  requestId TEXT, at TEXT NOT NULL, PRIMARY KEY(instanceId, seq));
+CREATE TABLE IF NOT EXISTS jig_runs(instanceId TEXT NOT NULL REFERENCES jig_instances(id),
+  stepId TEXT NOT NULL, inputHash TEXT NOT NULL, outputRef TEXT, ms INTEGER, status TEXT NOT NULL,
+  gates TEXT, at TEXT NOT NULL, PRIMARY KEY(instanceId, stepId));
+CREATE TABLE IF NOT EXISTS jig_reads(id TEXT PRIMARY KEY, instanceId TEXT NOT NULL REFERENCES jig_instances(id),
+  linkId TEXT NOT NULL, revisionKey TEXT NOT NULL, layers TEXT NOT NULL, includeHidden INTEGER NOT NULL,
+  purpose TEXT NOT NULL, ref TEXT NOT NULL, at TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS jig_bakes(id TEXT PRIMARY KEY, instanceId TEXT NOT NULL REFERENCES jig_instances(id),
+  bakeId TEXT NOT NULL, linkId TEXT NOT NULL, requestId TEXT NOT NULL, runId TEXT NOT NULL,
+  items TEXT NOT NULL, baselineReadId TEXT, appliedAt TEXT);
+CREATE INDEX IF NOT EXISTS jig_bakes_instance ON jig_bakes(instanceId, bakeId, linkId);
+CREATE TABLE IF NOT EXISTS knowledge_reviews(projectId TEXT NOT NULL REFERENCES projects(id),
+  statementId INTEGER NOT NULL,
+  verdict TEXT NOT NULL CHECK(verdict IN ('confirmed','rejected','contaminated','superseded','corrected')),
+  correction TEXT, supersededBy INTEGER, reason TEXT, by TEXT NOT NULL, at TEXT NOT NULL,
+  PRIMARY KEY(projectId, statementId));
+CREATE TABLE IF NOT EXISTS knowledge_source_rules(projectId TEXT NOT NULL REFERENCES projects(id),
+  pattern TEXT NOT NULL, reason TEXT, PRIMARY KEY(projectId, pattern));
+CREATE TABLE IF NOT EXISTS project_roots(projectId TEXT PRIMARY KEY REFERENCES projects(id),
+  kdbRoot TEXT, localRoot TEXT);`;
+export const migrations: Migration[] = [
   { version: 2, sql: baselineSchema },
   { version: 3, sql: hiddenRequests },
   { version: 4, sql: documentLinks },
+  { version: 5, sql: conversationsAndJigs },
 ];
 
 /** Caller holds the exclusive controller lock. Never migrates user model files. */

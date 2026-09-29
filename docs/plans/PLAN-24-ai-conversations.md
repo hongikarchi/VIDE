@@ -116,6 +116,12 @@ related: [PLAN, PLAN-22, PLAN-23, PLAN-02, PLAN-05, PLAN-08, PLAN-19, FR-25, FR-
 - **선행:** 없음. 바로 시작할 수 있다.
 - **검증:** 정상 — 범위 안 버전 실행, 캐시 토큰 기록. 실패 — 범위 밖 버전 거부·안내, `--bare` 신호 모의 → `CLI_MODE_CHANGED`로 멈춤. SPIKE는 합성 짧은 요청으로 한다.
 - **완료:** 시험 통과와 SPIKE 합격 여부 기록. 떨어진 항목은 ADR-021 결정 7대로 T-061에서 그 항목만 원장 방식이나 형제 세션으로 되돌린다.
+- **상태(2026-09-30):** 구현·검증 완료. 판 범위 밖 거절(`CLI_VERSION_UNSUPPORTED`), `CLI_MODE_CHANGED`, 캐시 토큰 기록이 단위 시험과 설치본 실행을 통과했다. SPIKE 결과([SPIKE-2026-09-30-cli-session-resume](../tdd/SPIKE-2026-09-30-cli-session-resume.md)):
+  - 합격: ①②⑤⑥⑦(`--system-prompt-snapshot off`)⑧
+  - ③ 실패 재현 → 인계만
+  - ④ 조건부: 중립 `developer_instructions`와 `-c sandbox_mode`가 필요해 Codex는 원장 방식 유지
+  - ⑨ 한 종류만 기록
+  - 두 오류 코드의 화면 문구는 코드 검토(2026-09-30)에서 `src/ui/gateway.ts`에 넣었다. 확인한 판 범위는 `src/ai/cli-compat.json`(Claude ≥ 2.1.284 < 2.2.0, Codex ≥ 0.157.0 < 0.158.0)이며, CLI가 그 위로 자동 갱신되면 SPIKE를 다시 돌려 범위를 넓히기 전까지 AI 실행이 거절된다
 
 ### T-060 · 동시 접수 규칙 개정 {#t-060}
 
@@ -200,6 +206,11 @@ related: [PLAN, PLAN-22, PLAN-23, PLAN-02, PLAN-05, PLAN-08, PLAN-19, FR-25, FR-
 - T-061은 T-060·PLAN-22 T-045 뒤다(세션 이어 실행은 T-059 합격 항목만). T-062는 T-061 뒤다. PLAN-22 T-063(만들기 대화)이 이 둘을 쓴다.
 - 마일스톤 표기는 S-06 결과를 먼저 보이는 순서(M5)이지만, 선행이 갖춰진 티켓은 먼저 해도 된다.
 
-## 현황(2026-09-29)
+## 현황(2026-09-30)
 
-계획만 있다. 구현은 착수하지 않았다.
+- **T-049 · 경로 판정 확장·값 추출·단발 입력 제안·전송 고지 — 서버·판정 코드 완료, 작성기 연결 남음(2026-09-30, 코드 검토 2026-09-30).** `src/ui/request-route.ts`(일곱 경로, `decisiveRoute`: 로그인 → Sync → jig 부름말 → 만들기 → 설정값 핵심어+숫자 → 파일 말; `quantities`·`convert`·`paramChange`: 긴 단위 우선·영문자 경계·표시 단위·상대어는 선언 `words` 방향·두 배·반·범위 밖 거절·`fixedAtPin`; `routeCard` 등급 R/T1/T2/auto; `routeAnswer`), `src/ai/request-router.ts`(`judgeRoute`: 한 호출에 target·action·subject·param·app_action·provider·link·jig·jig_fit(Noul ≥ 0.30)·same_conversation·대화를 열 때만 task·domain, `redact`로 경로·파일 이름 제거, `RouteSettings`(FR-18 스위치 `<data>/route-settings.json`), 입력 조립 단발 단계 `inputRolesRequest`·`checkInputRoles`(`ref-whitelist`)), `src/ai/model-router.ts` `needsModel`, `src/server/server.ts`(`/route` 확장·`/route/revert`·`/settings/routing`(원격 PUT 차단), 진단에 본문 없음), `src/ui/ai-settings.tsx`(전송 고지·끄기), `execution.ts`(`input-roles`는 호스트 없음). 검토에서 고친 것: 객체·파일·화면 동작 말이나 한계 말(넘는·이상인 등)이 있으면 설정값 핵심어+숫자 규칙을 쓰지 않는다("경간 12m 넘는 거더 숨겨"가 설정값 변경으로 실행되던 오판). 증거: `tests/core/request-route.test.mjs` 16건, `tests/ai/request-router.test.mjs` 8건(고정 항목만 전송·스위치·키 없음·지연·실패·역할 제안 게이트), `tests/ai/route-http.test.mjs`, `browser-route.mjs` 통과.
+- T-049 남음: 작성기(`src/ui/app.ts` `decideRoute`)는 서버 답을 `view|document`로만 읽어 `param`·`app`·`jig`·`ask`·`make` 답이 규칙으로 떨어지며, 카드·설정값 자동 적용·'AI 작업으로 보내기'·되돌림 기록이 화면에 없다("경간 11로"가 아직 AI로 간다). 실제 Jev 정확도 기록(PLAN-19 방식)은 하지 않았다. 입력 조립 단계는 T-051이 부른다.
+- **T-059 · CLI 버전 점검·캐시 토큰·세션 SPIKE — 완료(2026-09-30).** 상세는 티켓의 상태 항목. `tests/ai/claude-cli.test.mjs`·`codex-cli.test.mjs`(판 범위 밖 거절, `CLI_MODE_CHANGED`, 캐시 토큰) 통과.
+- **T-060 · 동시 접수 규칙 개정 — 구현·검증 완료(2026-09-30, 코드 검토 2026-09-30).** `src/contracts/request-scope.ts`(`hostUse` none/read/write와 추론, `requestAdmission`: 같은 문서 쓰기는 문서별 대기열, 읽기는 같은 문서의 원본 반영(ZWCAD 직접 편집 포함)만 기다림, 문서를 알 수 없는 호스트 요청은 그 호스트의 모든 쓰기 뒤, AI 턴 상한 3(설정 2~4), 불명확 결과는 `HOST_RESULT_UNRESOLVED`, 쓰기 경합을 건너뛰는 선언은 `INVALID_INPUT`), `src/core/workspace.ts`(`phase: 'queue'`·`waitingFor` 저장, `admission`·`wait`·`release`), `src/server/execution.ts`(`pump`: 실행이 끝날 때마다 다음을 꺼냄, 대기 중 취소·개입, 호스트 없는 턴에는 호스트 도구 없음), `src/ui/app.ts`(보내기를 끄지 않고 대기 수·순서 표시, `waitingText`). Sync·가져오기·확장은 기다리지 않고 `PROJECT_BUSY`다. 증거: `tests/core/request-scope.test.mjs` 9건, `tests/server/concurrent-intake.test.mjs` 7건(대화 3개 동시, 같은 문서 두 쓰기 대기→실행, 읽기·검토 비거절, 대기 취소·승격, 4번째 AI 턴 대기, 개입의 자리 유지), `browser-concurrent-work.mjs`·`browser-intervention.mjs`·`browser-host-panel.mjs` 통과.
+- T-060 남음: 재시작 때 대기 요청은 `interrupted`로 바뀌고 `waitingFor`만 남는다(자동 실행 없음, 화면 문구는 일반 중단). `STALE_REFERENCE`의 [다시 기준 잡기] 카드는 하지 않았다. `WORKSPACE_CAPACITY`는 더 이상 나오지 않는다(문구만 새 규칙에 맞춤). 개입(`[멈추고 이걸로]`)의 대기 처리는 단위 시험만 했다.
+- T-061·T-062는 착수 전이다. T-061은 요청 입력에 `conversationId`를 넣고 `src/contracts/workspace.ts`의 `requestInputSchema`에 더한다.

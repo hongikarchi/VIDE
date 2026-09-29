@@ -10,11 +10,19 @@ export interface SplitOptions {
    * end sits on the end (m, default 0.001).
    */
   merge?: number;
+  /**
+   * When set, a support that carries a z (third number) only counts if its z is within this of
+   * the curve at the nearest point (m); a column of another floor under the girder in plan does
+   * not cut it. Supports without a z always count.
+   */
+  zTolerance?: number;
 }
 
 export interface Station {
   /** Indices into the support list that landed here, ascending. */
   supports: number[];
+  /** Support z minus curve z at the station for the first support here; null without a z. */
+  dz: number | null;
   /** Distance from the curve start along the curve (3D) and in plan. */
   at: number;
   planAt: number;
@@ -65,8 +73,11 @@ export function splitAtSupports(
   assertPoints(polyline, 'polyline');
   assertPoints(supports, 'supports');
   const merge = options.merge ?? 0.001;
+  const zTolerance = options.zTolerance;
   if (!Number.isFinite(tol) || tol < 0) throw new GeometryError('no-nan', `tolerance ${tol}`);
   if (!Number.isFinite(merge) || merge < 0) throw new GeometryError('no-nan', `merge ${merge}`);
+  if (zTolerance !== undefined && (!Number.isFinite(zTolerance) || zTolerance < 0))
+    throw new GeometryError('no-nan', `zTolerance ${String(zTolerance)}`);
   const points: Vec3[] = polyline.map((p) => {
     const z = p.length > 2 ? p[2] : 0;
     if (!Number.isFinite(z)) throw new GeometryError('no-nan', 'polyline z is not finite');
@@ -127,6 +138,11 @@ export function splitAtSupports(
     if (best > tol) continue;
     let at = along(segment, t);
     let point = lerp(points[segment], points[segment + 1], t);
+    let dz: number | null = null;
+    if (s.length > 2 && Number.isFinite(s[2])) {
+      dz = s[2] - point[2];
+      if (zTolerance !== undefined && Math.abs(dz) > zTolerance) continue;
+    }
     // Near an end: the support is the end (no sliver overhang, no sliver span).
     if (at <= merge) {
       segment = 0;
@@ -141,6 +157,7 @@ export function splitAtSupports(
     }
     found.push({
       supports: [k],
+      dz,
       at,
       planAt: alongPlan(segment, t),
       offset: best,
@@ -200,8 +217,9 @@ export function splitAtSupports(
     if (last.at < length) overhangs.push(piece('overhang', last, end, stations.length - 1, null));
   }
   return {
-    stations: stations.map(({ supports, at, planAt, offset, point }) => ({
+    stations: stations.map(({ supports, dz, at, planAt, offset, point }) => ({
       supports,
+      dz,
       at,
       planAt,
       offset,

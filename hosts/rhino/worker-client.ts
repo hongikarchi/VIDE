@@ -9,6 +9,7 @@ import { z } from 'zod';
 import { launchOwnedHost } from '../common/owned-process.ts';
 import { sendHostCommand } from '../common/transport.ts';
 import { modelChangesSchema } from '../../src/contracts/model-changes.ts';
+import type { ReadScope } from '../../src/contracts/native-model.ts';
 
 // Preserve a bounded read failure without treating it as a malformed model.
 function readResponse(value: unknown) {
@@ -104,6 +105,8 @@ interface Options {
     }[];
   };
   normalizeUnits?: boolean;
+  /** Export arguments of `exportModel`: layer filter and hidden objects (files opened in VIDE, ARCH-03 §8). */
+  exportScope?: ReadScope;
 }
 const failure = (code: string) => Object.assign(new Error(code), { code });
 async function fingerprint(filename: string) {
@@ -121,6 +124,7 @@ export async function launchRhinoWorker({
   startupTimeoutMs = 90000,
   source,
   normalizeUnits = false,
+  exportScope = {},
 }: Options) {
   if (
     ![directory, executable, plugin, bootstrap].every(isAbsolute) ||
@@ -236,14 +240,20 @@ export async function launchRhinoWorker({
         return workerSnapshotSchema.parse(readResponse(await call('query')));
       },
       async exportModel() {
-        return readScenePages((params) => call('exportPage', params), {
-          ...(source?.measurements && !normalizeUnits
-            ? { measurementCache: source.measurements }
-            : {}),
-          ...(source?.geometryMeasurements
-            ? { geometryMeasurementCache: source.geometryMeasurements }
-            : {}),
-        });
+        return readScenePages(
+          (params) => call('exportPage', params),
+          {
+            ...(source?.measurements && !normalizeUnits
+              ? { measurementCache: source.measurements }
+              : {}),
+            ...(source?.geometryMeasurements
+              ? { geometryMeasurementCache: source.geometryMeasurements }
+              : {}),
+          },
+          undefined,
+          false,
+          exportScope,
+        );
       },
       async execute(
         operationId: string,

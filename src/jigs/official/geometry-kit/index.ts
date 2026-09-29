@@ -1,8 +1,9 @@
 // Official library `vide/geometry-kit` (ADR-020 결정 8, ARCH-03): general plan geometry shared by
 // structure jigs. Pure TypeScript without node: imports, so the engine can call it as a `library`
-// step and a step-runner bundle can carry a copy. Project-specific rules do not belong here.
+// step and a step-runner bundle can carry a copy (with `delaunator` and `@kninnug/constrainautor`,
+// its only dependencies). Project-specific rules do not belong here.
 
-export const library = { id: 'vide/geometry-kit', version: '0.1.0' } as const;
+export const library = { id: 'vide/geometry-kit', version: '0.2.0' } as const;
 
 export {
   GeometryError,
@@ -10,6 +11,7 @@ export {
   convexHull,
   counterClockwise,
   cross,
+  extent,
   minAreaRect,
   orientation,
   planLength,
@@ -34,3 +36,41 @@ export type {
 } from './footprint.ts';
 export { splitAtSupports } from './split.ts';
 export type { CurvePiece, SplitOptions, SplitResult, Station } from './split.ts';
+export {
+  boundaryDistance,
+  clipLineConvex,
+  insetPolygon,
+  lineCircle,
+  lineCrossings,
+  longestEdge,
+  minkowskiSum,
+  negate,
+  pointInRegion,
+  rayHits,
+  segmentsCross,
+} from './polygon.ts';
+export type { Region } from './polygon.ts';
+export { cellPolygon, triangulate, triangulateRegion } from './triangulate.ts';
+export type {
+  DiagonalRule,
+  RemovedReason,
+  TriCell,
+  TriEdge,
+  TriangulateOptions,
+  Triangulation,
+} from './triangulate.ts';
+export { outlineFromMesh } from './outline.ts';
+export type { MeshOutline, OutlineOptions } from './outline.ts';
+export { allowedWindows, inWindows } from './window.ts';
+export type { WindowLine, WindowOptions, Windows } from './window.ts';
+export { cantileverBeams, cellInfill } from './infill.ts';
+export type {
+  CantileverArm,
+  CantileverOptions,
+  Cantilevers,
+  Infill,
+  InfillBeam,
+  InfillOptions,
+} from './infill.ts';
+export { arcPoint, arcThrough, fitArc, segmentArc, segmentPolyline, verticalArc } from './arc.ts';
+export type { Arc, ArcFit, SegmentOptions } from './arc.ts';

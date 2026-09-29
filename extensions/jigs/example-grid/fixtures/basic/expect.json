@@ -1,0 +1,17 @@
+{
+  "tolerance": { "length": 0.001, "ratio": 0.001 },
+  "steps": {
+    "grid": {
+      "axes": { "x": [-12, -6, 0, 6, 12], "y": [-7.5, -2.5, 2.5, 7.5] },
+      "angle_deg": 0,
+      "site": { "area_m2": 600 }
+    },
+    "summary": {
+      "columns": 18,
+      "beams": 24,
+      "maxSpan_m": 6,
+      "area_m2": 600
+    }
+  },
+  "statuses": { "confirmInputs": "confirmed" }
+}

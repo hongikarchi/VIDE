@@ -26,9 +26,14 @@ export const coreCandidates = [
 
 let binding: CoreBinding | undefined;
 
+/** The first built core on disk, or undefined when none is built. */
+export function corePath(): string | undefined {
+  return coreCandidates.find((candidate) => existsSync(candidate));
+}
+
 export function loadCore(): CoreBinding {
   if (binding) return binding;
-  const path = coreCandidates.find((candidate) => existsSync(candidate));
+  const path = corePath();
   if (!path)
     throw Object.assign(new Error('Structure core is not built (npm run build:structure)'), {
       code: 'STRUCTURE_CORE_MISSING',

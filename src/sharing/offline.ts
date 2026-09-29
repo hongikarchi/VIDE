@@ -6,9 +6,11 @@ import { membership } from './projects';
 
 // PLAN-20: the account site while the work PC is off. The PC uploads the last Sync of each linked
 // file as a small view-only snapshot (geometry, no source file) when its owner turned that on for
-// the project, and picks up requests left on the site when it comes back. Storage stays inside the
-// free Cloudflare tier: one snapshot per linked file (replaced, never versioned), a per-account
-// and a site-wide byte cap, and a per-snapshot size well under the 100 MB request limit.
+// the project, and picks up requests left on the site when it comes back. One snapshot per linked
+// file (replaced, never versioned), a per-account and a site-wide byte cap, and a per-snapshot
+// size well under the 100 MB request limit. The account's R2 is already past the free 10 GB, so
+// every stored byte is billed: the site-wide cap defaults to 0 (off) until paying for storage is
+// an approved decision (RESEARCH-10 §13.6, §16 C3). The upload pause is applied in worker.ts.
 const SNAPSHOT_MAX_BYTES = 50 * 1024 * 1024;
 const QUEUE_BODY = 4000;
 const QUEUE_OPEN_PER_PROJECT = 20;
@@ -18,6 +20,10 @@ const limitMb = (value: string | undefined, fallback: number) => {
   const n = Number(value);
   return (Number.isFinite(n) && n > 0 ? n : fallback) * MB;
 };
+/** Site-wide snapshot bytes; unset or 0 means snapshots are off. */
+const siteLimit = (env: Env) => limitMb(env.SNAPSHOT_TOTAL_MB, 0);
+/** Whether this site stores snapshots at all (switch on and a site-wide cap set). */
+export const snapshotsOn = (env: Env) => env.SNAPSHOTS_ENABLED !== 'false' && siteLimit(env) > 0;
 const snapshotKey = (projectId: string, linkId: string) => `snapshots/${projectId}/${linkId}`;
 const uuid = (value: unknown) => {
   if (typeof value !== 'string' || !/^[0-9a-f-]{36}$/i.test(value))
@@ -85,7 +91,7 @@ export async function offlineDeviceRoute(
       return json({ removed: true });
     }
     if (request.method !== 'PUT') throw new HttpError(405, 'METHOD_NOT_ALLOWED');
-    if (env.SNAPSHOTS_ENABLED === 'false') throw new HttpError(503, 'SNAPSHOTS_DISABLED');
+    if (!snapshotsOn(env)) throw new HttpError(503, 'SNAPSHOTS_DISABLED');
     const url = new URL(request.url);
     const name = text(url.searchParams.get('name'), 260),
       host = url.searchParams.get('host'),
@@ -115,8 +121,7 @@ export async function offlineDeviceRoute(
       .first<{ mine: number; total: number }>();
     if ((usage?.mine ?? 0) + size > limitMb(env.SNAPSHOT_QUOTA_MB, 500))
       throw new HttpError(507, 'SNAPSHOT_QUOTA');
-    if ((usage?.total ?? 0) + size > limitMb(env.SNAPSHOT_TOTAL_MB, 8000))
-      throw new HttpError(507, 'SNAPSHOT_SITE_FULL');
+    if ((usage?.total ?? 0) + size > siteLimit(env)) throw new HttpError(507, 'SNAPSHOT_SITE_FULL');
     let stored: R2Object | null;
     try {
       stored = await env.ASSETS.put(key, request.body, {

@@ -264,15 +264,19 @@ test('cross-host references are read-only input and cannot become the wrong outp
       ...input,
       id: 'rhino-request',
       host: 'rhino',
+      permission: 'candidate',
       pins: [{ id: 'boundary', basis: input.id, role: 'target' }],
     };
     assert.throws(() => workspace.submit(project.id, { ...cross, baseRequestId: input.id }), {
       code: 'TARGET_MISMATCH',
     });
     assert.equal(workspace.submit(project.id, cross).created, true);
-    assert.throws(() => workspace.submit(project.id, { ...input, id: 'overlap' }), {
-      code: 'PROJECT_BUSY',
-    });
+    // SPEC-02.9: a later write of that host waits behind it instead of being refused.
+    assert.equal(
+      workspace.submit(project.id, { ...cross, id: 'overlap', pins: [] }).request.result.waitingFor
+        .after,
+      'rhino-request',
+    );
   } finally {
     store.close();
   }

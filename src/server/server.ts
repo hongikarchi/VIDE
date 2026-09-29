@@ -1,4 +1,10 @@
-import { decideRoute } from '../ai/request-router.ts';
+import {
+  hasJevKey,
+  judgeRoute,
+  linkLabels,
+  officialJigs,
+  routeSettingsFor,
+} from '../ai/request-router.ts';
 import { selectContext } from '../ai/context-selector.ts';
 import { GEOMETRY_TYPE, encodeGeometry } from '../contracts/geometry-transfer.ts';
 import { applyAttachedCandidate } from './attached-application.ts';
@@ -12,7 +18,8 @@ import { AccountProfiles } from '../ai/account-profiles.ts';
 import { AccountUsageService } from '../ai/account-usage.ts';
 import { JIGS } from '../jigs/catalog.ts';
 import { runSync } from '../jigs/sync.ts';
-import { jigRoutes } from './jig-routes.ts';
+import { jigRoutes, jigStatuses } from './jig-routes.ts';
+import { syncReadRoutes } from './sync-reads.ts';
 import {
   analyzeConfirmed,
   applyEdits,
@@ -140,6 +147,7 @@ const statuses: Record<string, number> = {
   STRUCTURE_MODEL_INVALID: 422,
   STRUCTURE_CORE_MISSING: 503,
   HOST_RUNNING: 409,
+  ...jigStatuses,
 };
 export async function startServer({
   filename,
@@ -481,7 +489,11 @@ export async function startServer({
           (url.pathname.startsWith('/api/v1/remote') && request.method !== 'GET') ||
           url.pathname.startsWith('/api/v1/connectors') ||
           (request.method !== 'GET' &&
-            /^\/api\/v1\/(accounts|settings|extensions)(\/|$)/.test(url.pathname))
+            /^\/api\/v1\/(accounts|settings|extensions)(\/|$)/.test(url.pathname)) ||
+          // jig import and pinning are this PC's actions (ARCH-03 §7).
+          /^\/api\/v1\/(jigs\/import|projects\/[^/]+\/(jigs|jig-drafts)\/[^/]+\/pin)$/.test(
+            url.pathname,
+          )
         )
           throw new DomainError('FORBIDDEN');
       } else if (!equal(cookie, session)) throw new DomainError('UNAUTHORIZED');
@@ -670,7 +682,15 @@ export async function startServer({
         send(200, links.setHidden(linkItem[1], linkItem[2], hidden));
         return;
       }
-      // Where a request goes (SPEC-02.17): Jev judges view-only vs file work at send time.
+      // Where a request goes (SPEC-02.17): words decided without Jev, then Jev when a key is set
+      // and the user has not turned it off (FR-18). Only the fixed items reach Jev: the request,
+      // open-jig setting titles, jig intents, link role labels and app action names — the server
+      // builds the jig and link lists itself, so no file name or path can come in (T-049).
+      const routeSettings = () =>
+        routeSettingsFor(
+          store,
+          filename === ':memory:' ? undefined : join(dirname(filename), 'route-settings.json'),
+        );
       const routeQuery = /^\/api\/v1\/projects\/([^/]+)\/route$/.exec(url.pathname);
       if (routeQuery && request.method === 'POST') {
         store.project(routeQuery[1]);
@@ -680,18 +700,69 @@ export async function startServer({
             subjects: z
               .array(z.object({ id: z.string().max(200), label: z.string().max(300) }))
               .max(60),
+            params: z
+              .array(
+                z
+                  .object({
+                    key: z.string().max(100),
+                    title: z.string().max(200),
+                    help: z.string().max(500).optional(),
+                  })
+                  .strict(),
+              )
+              .max(60)
+              .optional(),
+            conversation: z.string().max(60).optional(),
+            opening: z.boolean().optional(),
           })
           .strict()
           .parse(await body(request));
-        const decision = await decideRoute(query, { dataDirectory: dirname(filename) });
+        const judged = await judgeRoute(
+          { ...query, jigs: officialJigs(JIGS), links: linkLabels(links.list(routeQuery[1])) },
+          { dataDirectory: dirname(filename), enabled: routeSettings().get().jev },
+        );
+        const decision = judged.decision;
+        // Result, method and time only; never the request text (SPEC-02.17 4).
         diagnostics.write('route', {
-          by: decision ? 'jev' : 'rules',
-          ...(decision
-            ? { target: decision.target, action: decision.action, ms: decision.ms }
-            : {}),
+          by: decision?.by ?? 'rules',
+          target: decision?.target ?? null,
+          ...(decision?.action ? { action: decision.action } : {}),
+          ...(decision?.app ? { action: decision.app } : {}),
+          ...(decision?.param ? { param: decision.param } : {}),
+          ...(decision?.jig ? { jig: decision.jig } : {}),
+          ...(judged.reason ? { reason: judged.reason } : {}),
+          ms: judged.ms,
         });
         send(200, decision ?? { target: null });
         return;
+      }
+      // 'AI 작업으로 보내기' after a route without the AI: counted to tune the rules and Jev.
+      const routeRevert = /^\/api\/v1\/projects\/([^/]+)\/route\/revert$/.exec(url.pathname);
+      if (routeRevert && request.method === 'POST') {
+        store.project(routeRevert[1]);
+        const reverted = z
+          .object({
+            target: z.enum(['view', 'param', 'app', 'jig', 'ask', 'document', 'make']),
+            by: z.enum(['jev', 'rules']),
+          })
+          .strict()
+          .parse(await body(request));
+        diagnostics.write('route-revert', reverted);
+        send(200, { ok: true });
+        return;
+      }
+      if (url.pathname === '/api/v1/settings/routing') {
+        if (request.method === 'PUT')
+          routeSettings().set(
+            z
+              .object({ jev: z.boolean() })
+              .strict()
+              .parse(await body(request)),
+          );
+        if (request.method === 'PUT' || request.method === 'GET') {
+          send(200, { ...routeSettings().get(), key: hasJevKey(dirname(filename)) });
+          return;
+        }
       }
       // Offline view on the account site and requests left there (PLAN-20).
       const offline = /^\/api\/v1\/projects\/([^/]+)\/offline-view$/.exec(url.pathname);
@@ -1008,7 +1079,19 @@ export async function startServer({
         });
         return;
       }
-      if (await jigRoutes(url, request, { workspace, body, send })) return;
+      if (
+        await jigRoutes(url, request, {
+          workspace,
+          body,
+          send,
+          remote,
+          dataDirectory: dirname(filename),
+          links,
+          sdk,
+        })
+      )
+        return;
+      if (await syncReadRoutes(url, request, { links, workspace, sdk, body, send })) return;
       // Structure analysis jig (J-09, SPEC-06): draft from Syncs → small edits → confirm & analyse.
       const structureJig =
         /^\/api\/v1\/projects\/([^/]+)\/jigs\/structure(?:\/(draft|edit|analyze))?$/.exec(

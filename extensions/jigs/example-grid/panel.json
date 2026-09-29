@@ -1,0 +1,36 @@
+{
+  "layout": "jig-run",
+  "left": [
+    { "part": "step-rail" },
+    { "part": "input-assembly", "input": "inputs.site" },
+    { "part": "param-list", "bind": "params" }
+  ],
+  "center": {
+    "views": [
+      {
+        "part": "plan-view",
+        "points": "step.grid.columns",
+        "lines": "step.beams.beams",
+        "boundary": "step.grid.site.polygon"
+      }
+    ],
+    "board": { "part": "param-board", "bind": "params" },
+    "kpis": {
+      "part": "kpi-strip",
+      "items": [
+        { "label": "기둥", "value": "step.summary.columns" },
+        { "label": "보", "value": "step.summary.beams" },
+        { "label": "최대 경간", "value": "step.summary.maxSpan_m", "unit": "m" },
+        { "label": "기둥당 면적", "value": "step.summary.areaPerColumn_m2", "unit": "m²" }
+      ]
+    }
+  },
+  "drawer": {
+    "part": "result-tabs",
+    "tabs": [
+      { "title": "기둥", "part": "table", "rows": "step.grid.columns" },
+      { "title": "보", "part": "table", "rows": "step.beams.beams" }
+    ]
+  },
+  "actions": [{ "id": "recompute", "label": "다시 계산", "step": "summary", "tier": "T1" }]
+}

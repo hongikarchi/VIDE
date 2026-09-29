@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["columns", "beams", "maxSpan_m", "avgSpan_m", "area_m2"],
+  "properties": {
+    "columns": { "type": "integer" },
+    "beams": { "type": "integer" },
+    "maxSpan_m": { "type": "number" },
+    "avgSpan_m": { "type": "number" },
+    "area_m2": { "type": "number" },
+    "areaPerColumn_m2": { "type": "number" }
+  },
+  "additionalProperties": false
+}

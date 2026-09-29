@@ -4,7 +4,8 @@ import { linkedRequestDraft, interventionTargetDraft } from './linked-draft.ts';
 import { accountIndicator } from './account-indicator.ts';
 import { executionLimits } from '../contracts/execution-limits.ts';
 import { showExecutionLimits } from './execution-limits.tsx';
-import { requestConflict } from '../contracts/request-scope.ts';
+import { requestAdmission, waitingOf } from '../contracts/request-scope.ts';
+import { waitingText } from './request-scope.ts';
 import { draftSnapshot, restoreDraft } from './draft-storage.ts';
 import { z } from 'zod';
 import {
@@ -150,6 +151,40 @@ let focusedWork: string | undefined;
 let routing = false;
 const focusDraft = () => JSON.stringify({ draft: draftSnapshot(state), strokes });
 initializeWorkspacePanels();
+/**
+ * Sync coverage badge (SPEC-01.2, T-043): what the host left out of the current model before any
+ * row existed — hidden layers, hidden objects, block-definition geometry. Beside the host name.
+ */
+function syncCoverageBadge(coverage?: {
+  omittedHidden?: number;
+  omittedFiltered?: number;
+  omittedBlockInternal?: number;
+  hiddenLayers?: { path: string; count: number }[];
+}) {
+  let badge = document.getElementById('sync-coverage');
+  if (!badge) {
+    badge = document.createElement('small');
+    badge.id = 'sync-coverage';
+    badge.className = 'coverage-badge';
+    $('document-host').after(badge);
+  }
+  const layers = coverage?.hiddenLayers ?? [];
+  const onLayers = layers.reduce((sum, layer) => sum + layer.count, 0);
+  const hidden = (coverage?.omittedHidden ?? 0) - onLayers;
+  const parts = [
+    layers.length
+      ? `꺼진 레이어 ${layers.length.toLocaleString()}개(${onLayers.toLocaleString()}개)`
+      : '',
+    hidden > 0 ? `숨긴 객체 ${hidden.toLocaleString()}개` : '',
+    coverage?.omittedBlockInternal
+      ? `블록 내부 ${coverage.omittedBlockInternal.toLocaleString()}개`
+      : '',
+    coverage?.omittedFiltered ? `레이어 밖 ${coverage.omittedFiltered.toLocaleString()}개` : '',
+  ].filter(Boolean);
+  badge.hidden = parts.length === 0;
+  badge.textContent = parts.length ? `${parts.join('·')}는 가져오지 않았습니다` : '';
+  badge.title = layers.map((layer) => `${layer.path} (${layer.count})`).join('\n');
+}
 const workspaceStatus = initializeWorkspaceStatus({
   openFailure: (id) => {
     selectedResult = id;
@@ -1001,6 +1036,7 @@ function render(rebuildRequests = true) {
   workspaceStatus.setDisplayCoverage(active?.result?.displayCoverage);
   $('document-host').textContent =
     (active?.result?.host || state.host) === 'zwcad' ? 'ZWCAD' : 'Rhino';
+  syncCoverageBadge(active?.result?.displayCoverage);
   workspaceStatus.setFailures(
     state.messages
       .filter((entry) => ['failed', 'unknown', 'interrupted'].includes(entry.request?.state))
@@ -1017,20 +1053,29 @@ function render(rebuildRequests = true) {
       })),
   );
   $('work-count').textContent = `${state.messages.length}개 작업`;
+  const waitingCount = state.messages.filter((m) => waitingOf(m.request)).length;
   $('workspace-status').textContent = state.messages.some((m) =>
     ['queued', 'running'].includes(m.request?.state),
   )
-    ? '작업 진행 중'
+    ? '작업 진행 중' + (waitingCount ? ` · 대기 ${waitingCount}` : '')
     : project
       ? '로컬 작업 공간 · ' + project.name
       : '연결 중';
   sidebar();
-  const conflict = requestConflict(
+  // SPEC-02.9: overlapping work waits its turn instead of being refused, so sending stays on and
+  // the title tells where the request would wait. Only an unresolved result stops it.
+  const admission = requestAdmission(
     { ...state, id: '__draft__', baseRequestId: state.baseRequestId ?? null },
     state.messages.map((entry) => entry.request),
   );
+  const conflict = admission.code;
   $('request').disabled = !ready || !project || busy || !!conflict || !!validate(state);
-  $('request').title = validate(state) || (conflict && errors[conflict]) || '보내기 · Ctrl+Enter';
+  $('request').title =
+    validate(state) ||
+    (conflict && errors[conflict]) ||
+    (admission.waitingFor
+      ? `보내면 대기합니다: ${waitingText(admission.waitingFor)} · Ctrl+Enter`
+      : '보내기 · Ctrl+Enter');
   draw();
 }
 /** Remove a finished request from the conversation and history (its records are kept). */
@@ -1670,6 +1715,8 @@ async function submitRequest(predecessorId?: string) {
     focusedWork = request.id;
     renderMessages();
     void poll(request.id, projectId, original);
+    const waiting = waitingOf(request);
+    if (waiting) message(`${waitingText(waiting)} · 앞 작업이 끝나면 자동으로 시작합니다.`);
   } catch (cause) {
     const error = readableError(cause);
     message(errors[error.code ?? ''] || error.message);

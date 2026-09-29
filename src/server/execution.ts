@@ -9,7 +9,7 @@ import type { AccountProfiles } from '../ai/account-profiles.ts';
 import { executionLimits } from '../contracts/execution-limits.ts';
 import { modelContext } from './model-context.ts';
 import { CLAUDE_MODELS, claudeEfforts, modelName } from './model-capabilities.ts';
-import { requestConflict } from '../contracts/request-scope.ts';
+import { hostUse, waitingOf } from '../contracts/request-scope.ts';
 import { z } from 'zod';
 import { runLinked } from './linked-execution.ts';
 import type { AgentTools } from './agent-tools.ts';
@@ -289,13 +289,31 @@ export class Execution {
       }),
     );
   }
+  /** Runs the request now, or leaves a waiting one in line (SPEC-02.9): `pump` starts it in turn. */
   start(request: StoredWork) {
     if (this.active.has(request.id)) return;
+    if (waitingOf(request)) {
+      this.pump(request.projectId);
+      return;
+    }
     const controller = new AbortController();
-    const completion = this.traced(request, this.run(request, controller)).finally(() =>
-      this.active.delete(request.id),
-    );
+    const completion = this.traced(request, this.run(request, controller)).finally(() => {
+      this.active.delete(request.id);
+      this.pump(request.projectId);
+    });
     this.active.set(request.id, { controller, completion, projectId: request.projectId });
+  }
+  private closing = false;
+  /** Starts the waiting requests whose turn has come (after any run ends or a wait is cancelled). */
+  private pump(projectId: string) {
+    if (this.closing) return;
+    try {
+      for (const next of this.workspace.release(projectId))
+        if (!this.active.has(next.id)) this.start({ ...next, result: null });
+    } catch (error) {
+      // The project may be gone; a failed hand-over leaves the requests waiting, never running.
+      this.diagnostics?.write('queue-failed', { projectId, ...Diagnostics.error(error) });
+    }
   }
   /** Diagnostic start/end lines around one run: IDs, model, duration, final state and code. */
   private traced<T>(request: StoredWork, run: Promise<T>) {
@@ -338,10 +356,28 @@ export class Execution {
     if (!saved.created) return saved.request;
     const predecessor = this.active.get(predecessorId);
     const { request } = saved;
-    if (!predecessor || predecessor.projectId !== projectId)
-      return this.workspace.update(projectId, request.id, 'interrupted', {
-        code: 'PREDECESSOR_UNAVAILABLE',
+    if (!predecessor || predecessor.projectId !== projectId) {
+      const waiting = this.workspace.get(projectId, predecessorId);
+      if (!waitingOf(waiting))
+        return this.workspace.update(projectId, request.id, 'interrupted', {
+          code: 'PREDECESSOR_UNAVAILABLE',
+        });
+      // The predecessor was still waiting in line: it is withdrawn and the new condition takes a
+      // place of its own.
+      this.workspace.update(projectId, predecessorId, 'cancelled', {
+        ...waiting.result,
+        code: 'CANCELLED',
       });
+      const admission = this.workspace.admission(projectId, request.id);
+      if (admission.code)
+        return this.workspace.update(projectId, request.id, 'interrupted', {
+          code: admission.code,
+        });
+      if (admission.waitingFor) this.workspace.wait(projectId, request.id, admission.waitingFor);
+      else this.start(this.workspace.get(projectId, request.id));
+      this.pump(projectId);
+      return this.workspace.get(projectId, request.id);
+    }
     const controller = new AbortController();
     const completion = (async () => {
       await predecessor.completion;
@@ -362,12 +398,15 @@ export class Execution {
         });
         return;
       }
-      const conflict = requestConflict(
-        request.input,
-        this.workspace.list(projectId).filter((row) => row.id !== request.id),
-      );
-      if (conflict) {
-        this.workspace.update(projectId, request.id, 'interrupted', { code: conflict });
+      // Its own turn now (SPEC-02.9): an unresolved result stops it, a busy document or a full
+      // AI turn limit puts it in line (started by `pump`).
+      const admission = this.workspace.admission(projectId, request.id);
+      if (admission.code) {
+        this.workspace.update(projectId, request.id, 'interrupted', { code: admission.code });
+        return;
+      }
+      if (admission.waitingFor) {
+        this.workspace.wait(projectId, request.id, admission.waitingFor);
         return;
       }
       await this.traced(request, this.run(request, controller));
@@ -377,7 +416,10 @@ export class Execution {
           code: 'INTERVENTION_REVIEW_REQUIRED',
         });
       })
-      .finally(() => this.active.delete(request.id));
+      .finally(() => {
+        this.active.delete(request.id);
+        this.pump(projectId);
+      });
     this.active.set(request.id, { controller, completion, projectId });
     predecessor.controller.abort();
     return request;
@@ -385,9 +427,11 @@ export class Execution {
   async run(request: StoredWork, controller: AbortController) {
     const { projectId, id, input } = request;
     // A jig's AI review reads only the attached jig table: no host, no document context.
-    const jigReview = z
-      .object({ kind: z.enum(['sync-review', 'structure-draft-review']) })
-      .safeParse(input.jig).success;
+    // A turn taken without the host (SPEC-02.9 1) gets none either.
+    const jigReview =
+      z
+        .object({ kind: z.enum(['sync-review', 'structure-draft-review', 'input-roles']) })
+        .safeParse(input.jig).success || hostUse(input) === 'none';
     const target = input.host || 'rhino',
       host = jigReview ? undefined : this.hosts[target];
     this.workspace.update(projectId, id, 'running');
@@ -641,9 +685,21 @@ export class Execution {
   cancel(projectId: string, id: string) {
     const active = this.active.get(id);
     if (active?.projectId === projectId) active.controller.abort();
+    else {
+      // A request waiting in line is withdrawn; the ones behind it move up.
+      const request = this.workspace.get(projectId, id);
+      if (waitingOf(request)) {
+        this.workspace.update(projectId, id, 'cancelled', {
+          ...request.result,
+          code: 'CANCELLED',
+        });
+        this.pump(projectId);
+      }
+    }
     return this.workspace.get(projectId, id);
   }
   async close() {
+    this.closing = true;
     const active = [...this.active.values()];
     active.forEach((x) => x.controller.abort());
     await Promise.all(active.map((x) => x.completion));

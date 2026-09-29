@@ -13,6 +13,13 @@ export const AUTO_MODELS = [
   { id: 'auto', name: '자동 (Jev)', provider: 'claude-cli', efforts: ['default'] },
 ] as const;
 export const isAutoModel = (model: unknown) => AUTO_MODELS.some((entry) => entry.id === model);
+/**
+ * Routes VIDE carries out without the AI (SPEC-02.17 2, PLAN-24 T-049): no model is chosen for them,
+ * so neither this router nor the task and area questions of the route call are used.
+ */
+const ROUTES_WITHOUT_MODEL: readonly string[] = ['view', 'param', 'app', 'jig'];
+export const needsModel = (target: string | null | undefined) =>
+  !target || !ROUTES_WITHOUT_MODEL.includes(target);
 
 export const TASKS = {
   lookup:

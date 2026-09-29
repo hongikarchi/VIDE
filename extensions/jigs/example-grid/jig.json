@@ -1,0 +1,203 @@
+{
+  "contractVersion": 3,
+  "id": "project/example-grid",
+  "version": "0.1.0",
+  "kind": "tool",
+  "name": "격자 골조 배치 예제",
+  "summary": "슬래브 외곽선 안에 격자 간격·각도로 기둥을 놓고 이웃 기둥을 보로 잇는 일반 예제(합성 자료용). jig 형식 v3의 본보기이며 실제 프로젝트 값을 담지 않는다.",
+  "hosts": { "rhino": "optional" },
+  "inputs": [
+    {
+      "key": "site",
+      "title": "대지·슬래브",
+      "kind": "assembly",
+      "roles": [
+        {
+          "role": "outline",
+          "title": "슬래브 외곽선",
+          "shape": "polygon",
+          "many": false,
+          "required": true,
+          "hints": { "layers": ["*슬래브*", "*외곽*", "*outline*"], "words": ["슬래브", "외곽"] },
+          "extract": "rows"
+        },
+        {
+          "role": "voids",
+          "title": "보이드",
+          "shape": "polygon",
+          "many": true,
+          "required": false,
+          "hints": { "layers": ["*보이드*", "*void*"], "words": ["보이드", "개구"] },
+          "extract": "rows"
+        }
+      ]
+    },
+    {
+      "key": "keepOut",
+      "title": "기둥 금지 구역",
+      "kind": "zone",
+      "shape": "polygon",
+      "meaning": "이 구역 안에는 기둥을 두지 않는다",
+      "required": false
+    }
+  ],
+  "params": [
+    {
+      "key": "spacingX",
+      "title": "격자 간격 X",
+      "group": "격자",
+      "type": "length",
+      "unit": "m",
+      "display": { "unit": "m", "decimals": 1 },
+      "default": 8,
+      "range": { "min": 4, "max": 16, "step": 0.5 },
+      "words": { "more": ["넓게"], "less": ["촘촘히", "좁게"], "sign": 1 },
+      "basis": { "status": "assumed", "note": "일반 사무소 경간 가정" },
+      "affects": ["grid"],
+      "board": true
+    },
+    {
+      "key": "spacingY",
+      "title": "격자 간격 Y",
+      "group": "격자",
+      "type": "length",
+      "unit": "m",
+      "display": { "unit": "m", "decimals": 1 },
+      "default": 8,
+      "range": { "min": 4, "max": 16, "step": 0.5 },
+      "words": { "more": ["넓게"], "less": ["촘촘히", "좁게"], "sign": 1 },
+      "basis": { "status": "assumed" },
+      "affects": ["grid"],
+      "board": true
+    },
+    {
+      "key": "angle",
+      "title": "격자 각도",
+      "group": "격자",
+      "type": "angle",
+      "unit": "deg",
+      "default": 0,
+      "range": { "min": -45, "max": 45, "step": 1 },
+      "affects": ["grid"],
+      "board": true
+    },
+    {
+      "key": "columnSize",
+      "title": "기둥 크기",
+      "group": "부재",
+      "type": "length",
+      "unit": "m",
+      "display": { "unit": "mm", "decimals": 0 },
+      "default": 0.6,
+      "range": { "min": 0.3, "max": 1.2, "step": 0.05 },
+      "affects": ["beams"]
+    },
+    {
+      "key": "beamDepthRatio",
+      "title": "보 춤 비(춤/경간)",
+      "group": "부재",
+      "type": "ratio",
+      "display": { "unit": "%", "decimals": 1 },
+      "default": 0.07,
+      "range": { "min": 0.04, "max": 0.12, "step": 0.005 },
+      "affects": ["beams"]
+    },
+    {
+      "key": "markPrefix",
+      "title": "기둥 부호 접두",
+      "group": "출력",
+      "type": "choice",
+      "default": "C",
+      "choices": [
+        { "value": "C", "label": "C (기둥)" },
+        { "value": "P", "label": "P (필로티 기둥)" }
+      ],
+      "affects": ["grid"],
+      "fixedAtPin": true
+    }
+  ],
+  "steps": [
+    {
+      "id": "grid",
+      "title": "격자 기둥 배치",
+      "kind": "code",
+      "entry": "steps/grid.ts#grid",
+      "reads": [
+        "input.site.outline",
+        "input.site.voids",
+        "input.keepOut",
+        "param.spacingX",
+        "param.spacingY",
+        "param.angle",
+        "param.markPrefix"
+      ],
+      "writes": "grid",
+      "speed": "live",
+      "gates": [
+        { "use": "inputs-present" },
+        { "use": "stale-input" },
+        { "use": "non-empty" },
+        { "use": "no-nan" },
+        { "use": "ids-stable", "args": { "items": "columns", "key": "key" } },
+        {
+          "use": "inside-boundary",
+          "level": "isolate",
+          "args": {
+            "items": "columns",
+            "key": "key",
+            "field": "at",
+            "boundary": "output.site.polygon"
+          }
+        }
+      ],
+      "budget": { "wallClockMs": 2000 }
+    },
+    {
+      "id": "confirmInputs",
+      "title": "입력 확인",
+      "kind": "human",
+      "slot": "confirm-inputs",
+      "reads": ["input.site.outline", "step.grid"],
+      "writes": "confirmation",
+      "speed": "confirm",
+      "blocks": ["beams"],
+      "gates": [{ "use": "inputs-confirmed", "level": "warn" }]
+    },
+    {
+      "id": "beams",
+      "title": "보 연결",
+      "kind": "code",
+      "entry": "steps/beams.ts#beams",
+      "needs": ["grid"],
+      "reads": ["step.grid", "param.columnSize", "param.beamDepthRatio"],
+      "writes": "beams",
+      "speed": "release",
+      "gates": [
+        { "use": "non-empty" },
+        { "use": "no-nan" },
+        { "use": "ids-stable", "args": { "items": "beams", "key": "key" } },
+        {
+          "use": "span-max",
+          "args": { "items": "beams", "key": "key", "field": "span_m", "max": 12 }
+        }
+      ],
+      "budget": { "wallClockMs": 2000 }
+    },
+    {
+      "id": "summary",
+      "title": "요약",
+      "kind": "code",
+      "entry": "steps/summary.ts#summary",
+      "reads": ["step.grid", "step.beams"],
+      "writes": "summary",
+      "speed": "release",
+      "gates": [{ "use": "no-nan" }]
+    }
+  ],
+  "panel": "panel.json",
+  "capabilities": [
+    { "name": "sync.read", "reason": "슬래브 외곽선·보이드 레이어의 곡선을 읽습니다" }
+  ],
+  "selftest": { "fixtures": "fixtures", "requiresHost": false },
+  "skill": "skill.md"
+}

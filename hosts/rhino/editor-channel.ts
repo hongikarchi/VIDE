@@ -7,6 +7,9 @@ import {
   displayObjectSchema,
   displaySceneSchema,
   displayDefinitionSchema,
+  displayLayerSchema,
+  sourceCoverageSchema,
+  type ReadScope,
 } from '../../src/contracts/native-model.ts';
 const failure = (code: string) => Object.assign(new Error(code), { code });
 export const editorConnectionSchema = z.object({
@@ -40,6 +43,9 @@ const changesPageSchema = z.object({
   scene: z.array(displaySceneSchema).max(1000),
   removed: z.array(z.string().uuid()),
   definitions: z.record(z.string().uuid(), displayDefinitionSchema).optional(),
+  // The document survey after the change (T-043 plugin); absent from an older plugin.
+  coverage: sourceCoverageSchema.optional(),
+  layers: z.array(displayLayerSchema).max(20000).optional(),
   page: z.object({
     cursor: z.number().int().nonnegative(),
     nextCursor: z.number().int().nonnegative(),
@@ -110,13 +116,15 @@ export function editorMethods(
   call: (method: string, extra?: Record<string, unknown>) => Promise<unknown>,
 ) {
   return {
-    async displayEditor() {
+    /** The display Sync, or with `scope` a layer-limited read (hidden objects too when asked). */
+    async displayEditor(scope: ReadScope = {}) {
       const before = editorReply(editorSnapshotSchema, await call('inspectEditor'));
       const model = await readScenePages(
         (params) => call('displayPage', params),
         {},
         128 * 1024 * 1024,
         true,
+        scope,
       );
       const after = editorReply(editorSnapshotSchema, await call('inspectEditor'));
       if (before.documentHash !== after.documentHash) throw failure('SOURCE_CHANGED');
@@ -131,7 +139,8 @@ export function editorMethods(
       let cursor = 0,
         revision: number | undefined,
         changes: number | undefined,
-        total = 0;
+        total = 0,
+        survey: Pick<ChangesPage, 'coverage' | 'layers'> = {};
       do {
         const page = editorReply(
           changesPageSchema,
@@ -154,12 +163,22 @@ export function editorMethods(
         scene.push(...page.scene);
         removed.push(...page.removed);
         Object.assign(definitions, page.definitions);
+        if (cursor === 0) survey = { coverage: page.coverage, layers: page.layers };
         ({ revision, changes, total } = page.page);
         cursor = page.page.nextCursor;
       } while (cursor < changes!);
       const source = editorReply(editorSnapshotSchema, await call('inspectEditor'));
       if (source.revision !== revision) throw failure('SOURCE_CHANGED');
-      return { objects, scene, removed, definitions, total, revision: revision!, source };
+      return {
+        objects,
+        scene,
+        removed,
+        definitions,
+        total,
+        revision: revision!,
+        source,
+        ...survey,
+      };
     },
     async attachedStatus() {
       return editorReply(

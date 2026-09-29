@@ -56,13 +56,17 @@ try {
     document.querySelector('.work-stages')?.textContent.includes('검증 성공 2회'),
   );
   assert.match(await page.locator('.work-stages').textContent(), /조회 2회.*실행 3\/12회/s);
-  await page.locator('#body').fill('Second independent document');
-  assert.equal(await page.locator('#request').isEnabled(), true);
-  await page.locator('#request').click();
-  await page.waitForFunction(() => document.querySelector('#body').value === '');
+  // SPEC-02.9: three AI turns run at once in a project.
+  for (const body of ['Second independent document', 'Third independent document']) {
+    await page.locator('#body').fill(body);
+    assert.equal(await page.locator('#request').isEnabled(), true);
+    await page.locator('#request').click();
+    await page.waitForFunction(() => document.querySelector('#body').value === '');
+  }
+  // A fourth is not refused: sending stays on and tells where it would wait.
   await page.locator('#body').fill('New condition must survive');
-  assert.equal(await page.locator('#request').isDisabled(), true);
-  assert.match(await page.locator('#request').getAttribute('title'), /두 개/);
+  assert.equal(await page.locator('#request').isEnabled(), true);
+  assert.match(await page.locator('#request').getAttribute('title'), /대기 1번째/);
   for (const request of pending.values()) {
     request.state = 'succeeded';
     request.result = {
@@ -73,7 +77,11 @@ try {
       scene: [],
     };
   }
-  await page.waitForFunction(() => !document.querySelector('#request').disabled);
+  // Once the turns end the draft no longer waits.
+  await page.waitForFunction(
+    () => !document.querySelector('#request').getAttribute('title')?.includes('대기'),
+  );
+  assert.equal(await page.locator('#request').isEnabled(), true);
   assert.equal(await page.locator('#body').inputValue(), 'New condition must survive');
   // A late result must not silently become the basis of the new condition.
   await page.locator('#request').click();
@@ -81,7 +89,7 @@ try {
   assert.equal([...pending.values()].at(-1).input.baseRequestId, null);
   assert.deepEqual(pageErrors, []);
   console.log(
-    'Concurrent browser requests: independent admission, capacity, late-result draft/basis preservation passed.',
+    'Concurrent browser requests: three AI turns, waiting place for the fourth, late-result draft/basis preservation passed.',
   );
 } finally {
   await browser?.close();

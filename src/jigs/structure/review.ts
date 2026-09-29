@@ -1,6 +1,10 @@
 // Model checks before confirmation (SPEC-06.2) and cause of failures after analysis (SPEC-06.7).
 
-import type { StructureModel, StructureResult } from '../../contracts/structure-model.ts';
+import type {
+  StructureModel,
+  StructureModelInput,
+  StructureResult,
+} from '../../contracts/structure-model.ts';
 import { structureModelSchema } from '../../contracts/structure-model.ts';
 import { analyzeStructure } from './core.ts';
 import type { DraftIssue } from './input.ts';
@@ -11,6 +15,56 @@ const dist = (a: Pt, b: Pt) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2])
 
 /** Deterministic checks plus a stability probe with unit loads through the core. */
 export function checkModel(input: unknown): { issues: DraftIssue[]; model?: StructureModel } {
+  const { issues, model } = checkModelStatic(input);
+  if (model && !issues.some((i) => i.level === 'error'))
+    issues.push(...probeIssues(analyzeStructure(stabilityProbe(model))));
+  return { issues, model };
+}
+
+/** The probe model: unit loads in X, Y and −Z at every node, one combination (SPEC-06.2). */
+export function stabilityProbe(model: StructureModel): StructureModelInput {
+  return {
+    ...model,
+    loadPatterns: [{ id: 'P', nature: 'D', selfWeight: false }],
+    loads: (['+X', '+Y', '-Z'] as const).map((direction, k) => ({
+      id: `probe${k}`,
+      pattern: 'P',
+      type: 'nodePoint' as const,
+      targets: model.nodes.map((n) => n.id),
+      direction,
+      value_kN: 1,
+    })),
+    areaLoads: [],
+    combinations: [{ id: 'P', terms: [{ pattern: 'P', factor: 1 }], limitState: 'strength' }],
+  };
+}
+
+/** Issues from a probe (or any) result: a mechanism, a core failure, or auto-restrained DOFs. */
+export function probeIssues(result: StructureResult): DraftIssue[] {
+  if (result.status === 'error')
+    return [
+      {
+        level: 'error',
+        code: result.diagnostics.mechanisms.length ? 'MECHANISM' : 'ANALYSIS',
+        message: result.diagnostics.mechanisms.length
+          ? `불안정(기구) — ${result.diagnostics.mechanisms.length}개 자유도가 구속되지 않음`
+          : `해석 실패: ${result.error}`,
+        nodes: [...new Set(result.diagnostics.mechanisms.map((m) => m.node))],
+      },
+    ];
+  if (result.diagnostics.autoRestrained.length)
+    return [
+      {
+        level: 'info',
+        code: 'AUTO_RESTRAINED',
+        message: `강성이 없는 자유도 ${result.diagnostics.autoRestrained.length}개를 자동 구속(트러스 절점 회전 등)`,
+      },
+    ];
+  return [];
+}
+
+/** Deterministic checks only (no core call): contract, near nodes, short members, units, supports, sections. */
+export function checkModelStatic(input: unknown): { issues: DraftIssue[]; model?: StructureModel } {
   const parsed = structureModelSchema.safeParse(input);
   if (!parsed.success)
     return {
@@ -84,41 +138,6 @@ export function checkModel(input: unknown): { issues: DraftIssue[]; model?: Stru
       message: `가정으로 표시된 항목 ${assumed}개 — 확인 후 확정`,
     });
 
-  // Stability probe: unit loads in X, Y and −Z at every node, one combination.
-  if (!issues.some((i) => i.level === 'error')) {
-    const probe = {
-      ...model,
-      loadPatterns: [{ id: 'P', nature: 'D' as const, selfWeight: false }],
-      loads: (['+X', '+Y', '-Z'] as const).map((direction, k) => ({
-        id: `probe${k}`,
-        pattern: 'P',
-        type: 'nodePoint' as const,
-        targets: model.nodes.map((n) => n.id),
-        direction,
-        value_kN: 1,
-      })),
-      areaLoads: [],
-      combinations: [
-        { id: 'P', terms: [{ pattern: 'P', factor: 1 }], limitState: 'strength' as const },
-      ],
-    };
-    const result = analyzeStructure(probe);
-    if (result.status === 'error')
-      issues.push({
-        level: 'error',
-        code: result.diagnostics.mechanisms.length ? 'MECHANISM' : 'ANALYSIS',
-        message: result.diagnostics.mechanisms.length
-          ? `불안정(기구) — ${result.diagnostics.mechanisms.length}개 자유도가 구속되지 않음`
-          : `해석 실패: ${result.error}`,
-        nodes: [...new Set(result.diagnostics.mechanisms.map((m) => m.node))],
-      });
-    else if (result.diagnostics.autoRestrained.length)
-      issues.push({
-        level: 'info',
-        code: 'AUTO_RESTRAINED',
-        message: `강성이 없는 자유도 ${result.diagnostics.autoRestrained.length}개를 자동 구속(트러스 절점 회전 등)`,
-      });
-  }
   return { issues, model };
 }
 

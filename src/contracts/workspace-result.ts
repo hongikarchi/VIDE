@@ -85,6 +85,13 @@ export const workspaceResultSchema = z
         displayed: z.number().int().nonnegative(),
         omitted: z.number().int().nonnegative(),
         omittedTypes: z.record(z.string(), z.number().int().nonnegative()),
+        // Rhino reads (T-043): what the host left out before any row existed.
+        omittedHidden: z.number().int().nonnegative().optional(),
+        omittedFiltered: z.number().int().nonnegative().optional(),
+        omittedBlockInternal: z.number().int().nonnegative().optional(),
+        hiddenLayers: z
+          .array(z.object({ path: z.string(), count: z.number().int().nonnegative() }))
+          .optional(),
       })
       .optional(),
     hostExecuted: z.boolean().optional(),

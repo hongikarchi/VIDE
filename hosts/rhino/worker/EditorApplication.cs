@@ -46,7 +46,8 @@ internal sealed class EditorApplication(RhinoDoc document, string directory, Fun
         internal List<Guid> Removed = new();
         internal HashSet<string> Updated = new();
         internal HashSet<string> Added = new();
-        internal List<Layer> NewLayers = new();
+        /** Layers to add in order; Parent is the staged index of a new parent, or -1 (live parent or root). */
+        internal List<(Layer Layer, int Parent)> NewLayers = new();
         public void Dispose() { foreach (var item in Items.Values) item.Dispose(); }
     }
     private static string Hash(string path) => Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(path))).ToLowerInvariant();
@@ -67,22 +68,30 @@ internal sealed class EditorApplication(RhinoDoc document, string directory, Fun
             throw new InvalidOperationException("UNSUPPORTED_NATIVE_TARGET");
     }
 
-    /// <summary>The live layer for a candidate layer: same id, else same full path, else a new one.</summary>
+    /// <summary>
+    /// The live layer for a candidate layer: same id, else same full path, else a new one (index -1-n into
+    /// the staged list). A new layer's parent is found the same way, recursively, so a new sublayer of a
+    /// new parent is staged after its parent and never lands in the root.
+    /// </summary>
     private int TargetLayer(Rhino.FileIO.File3dm candidate, int index, Plan plan)
     {
         var layer = candidate.AllLayers.FirstOrDefault(item => item.Index == index) ?? throw new InvalidOperationException("UNSUPPORTED_APPLICATION");
         var existing = document.Layers.FirstOrDefault(item => !item.IsDeleted && item.Id == layer.Id) ??
             document.Layers.FirstOrDefault(item => !item.IsDeleted && item.FullPath == layer.FullPath);
         if (existing != null) return existing.Index;
-        var staged = plan.NewLayers.FirstOrDefault(item => item.Id == layer.Id);
-        if (staged == null)
+        var stagedAt = plan.NewLayers.FindIndex(item => item.Layer.Id == layer.Id);
+        if (stagedAt >= 0) return -1 - stagedAt;
+        var staged = new Layer { Name = layer.Name, Color = layer.Color, Id = layer.Id };
+        var stagedParent = -1;
+        var parent = layer.ParentLayerId == Guid.Empty ? null : candidate.AllLayers.FirstOrDefault(item => item.Id == layer.ParentLayerId);
+        if (parent != null)
         {
-            staged = new Layer { Name = layer.Name, Color = layer.Color, Id = layer.Id };
-            var parent = layer.ParentLayerId == Guid.Empty ? null : candidate.AllLayers.FirstOrDefault(item => item.Id == layer.ParentLayerId);
-            if (parent != null) staged.ParentLayerId = document.Layers.FirstOrDefault(item => !item.IsDeleted && (item.Id == parent.Id || item.FullPath == parent.FullPath))?.Id ?? Guid.Empty;
-            plan.NewLayers.Add(staged);
+            var target = TargetLayer(candidate, parent.Index, plan);
+            if (target >= 0) staged.ParentLayerId = document.Layers[target].Id;
+            else stagedParent = -1 - target;
         }
-        return -1 - plan.NewLayers.IndexOf(staged);
+        plan.NewLayers.Add((staged, stagedParent));
+        return -1 - (plan.NewLayers.Count - 1);
     }
 
     private Plan Prepare(string filename, string hash, ChangeSet changes)
@@ -179,8 +188,10 @@ internal sealed class EditorApplication(RhinoDoc document, string directory, Fun
             {
                 started = true;
                 var layers = new List<int>();
-                foreach (var layer in plan.NewLayers)
+                foreach (var (layer, parent) in plan.NewLayers)
                 {
+                    // Parents are staged before their sublayers, so a staged parent already has its live index.
+                    if (parent >= 0) layer.ParentLayerId = document.Layers[layers[parent]].Id;
                     var index = document.Layers.Add(layer);
                     if (index < 0) throw new InvalidOperationException("Layer add failed: " + layer.Name);
                     layers.Add(index);

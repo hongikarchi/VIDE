@@ -4,7 +4,7 @@ import { Store } from '../../src/core/store.ts';
 import { Workspace } from '../../src/core/workspace.ts';
 import { Execution } from '../../src/server/execution.ts';
 import { interventionInput } from '../../src/core/intervention.ts';
-import { requestConflict } from '../../src/contracts/request-scope.ts';
+import { requestAdmission, requestConflict } from '../../src/contracts/request-scope.ts';
 
 function fixture(t, code = 'CANCELLED') {
   const store = new Store(':memory:'),
@@ -177,14 +177,15 @@ test('an intervention never silently downgrades a preservation pin', () => {
   );
 });
 
-test('waiting intervention does not consume a third independent slot', (t) => {
+test('waiting intervention does not consume an AI turn of its own', (t) => {
   const { workspace, project, execution, next } = fixture(t);
   execution.intervene(project.id, 'first', next);
   const other = { ...next, id: 'independent', host: 'zwcad' };
   assert.equal(requestConflict(other, workspace.list(project.id)), undefined);
   assert.equal(workspace.submit(project.id, other).created, true);
-  assert.equal(
-    requestConflict({ ...other, id: 'third' }, workspace.list(project.id)),
-    'WORKSPACE_CAPACITY',
-  );
+  assert.equal(workspace.submit(project.id, { ...other, id: 'third' }).request.result, null);
+  // SPEC-02.9 4: three AI turns run at once; the next one waits in line instead of being refused.
+  const fourth = requestAdmission({ ...other, id: 'fourth' }, workspace.list(project.id));
+  assert.equal(fourth.code, undefined);
+  assert.equal(fourth.waitingFor.kind, 'project');
 });

@@ -58,20 +58,63 @@ export const nativeSceneSchema = z.object({
     .optional(),
 });
 export const displaySceneSchema = nativeSceneSchema.extend({ valid: z.boolean() });
+const count = z.number().int().nonnegative();
+/**
+ * What a read lists (ARCH-03 §8): only the named layers (exact full paths), and hidden objects or
+ * objects on hidden layers when asked. Absent: the display Sync (every visible object).
+ */
+export const readScopeSchema = z
+  .object({
+    layers: z.array(z.string().min(1).max(1000)).max(2000).optional(),
+    includeHidden: z.boolean().optional(),
+  })
+  .strict();
+export type ReadScope = z.infer<typeof readScopeSchema>;
+/** The host's own count of what a read left out of the document (every page repeats it). */
+export const sourceCoverageSchema = z.object({
+  /** Top-level objects in the document (hidden included, block definition geometry excluded). */
+  total: count,
+  /** Objects the read lists (equals the page total). */
+  displayed: count,
+  /** Hidden objects and objects on hidden layers that the read did not list. */
+  omittedHidden: count,
+  /** Objects outside the read's layer filter (0 for a display Sync). */
+  omittedFiltered: count,
+  /** Objects inside block definitions; they travel with the definitions, never as objects. */
+  omittedBlockInternal: count,
+  /** Hidden layers with the number of objects each one kept out of the read. */
+  hiddenLayers: z.array(z.object({ path: z.string(), count })).max(20000),
+});
+/** One layer of the document, empty layers included; `order` is the layer panel order. */
+export const displayLayerSchema = z.object({
+  id: z.string().uuid(),
+  parentId: z.string().uuid().nullable(),
+  fullPath: z.string(),
+  visible: z.boolean(),
+  locked: z.boolean(),
+  color: hexColor,
+  order: z.number().int(),
+  objectCount: count,
+});
+export const displayCoverageSchema = z.object({
+  total: count,
+  displayed: count,
+  omitted: count,
+  omittedTypes: z.record(z.string(), count),
+  // From the host's read (absent in older captures and on other hosts): what never became a row.
+  omittedHidden: count.optional(),
+  omittedFiltered: count.optional(),
+  omittedBlockInternal: count.optional(),
+  hiddenLayers: sourceCoverageSchema.shape.hiddenLayers.optional(),
+});
 export const displayModelSchema = z
   .object({
     objects: z.array(displayObjectSchema).max(20000),
     scene: z.array(displaySceneSchema).max(20000),
     definitions: z.record(z.string().uuid(), displayDefinitionSchema).optional(),
+    layers: z.array(displayLayerSchema).max(20000).optional(),
     measurementVersion: z.literal(1).optional(),
-    displayCoverage: z
-      .object({
-        total: z.number().int().nonnegative(),
-        displayed: z.number().int().nonnegative(),
-        omitted: z.number().int().nonnegative(),
-        omittedTypes: z.record(z.string(), z.number().int().nonnegative()),
-      })
-      .optional(),
+    displayCoverage: displayCoverageSchema.optional(),
     measurementStats: z
       .object({
         measuredObjects: z.number().int().nonnegative(),
@@ -86,7 +129,9 @@ export const displayModelSchema = z
         model.displayCoverage.displayed + model.displayCoverage.omitted !==
           model.displayCoverage.total ||
         Object.values(model.displayCoverage.omittedTypes).reduce((sum, count) => sum + count, 0) !==
-          model.displayCoverage.omitted)
+          model.displayCoverage.omitted ||
+        (model.displayCoverage.hiddenLayers ?? []).reduce((sum, layer) => sum + layer.count, 0) >
+          (model.displayCoverage.omittedHidden ?? 0))
     )
       ctx.addIssue({ code: 'custom', message: 'Invalid display coverage' });
     const objects = new Map(model.objects.map((object) => [object.id, object]));

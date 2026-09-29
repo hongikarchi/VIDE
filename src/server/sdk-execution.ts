@@ -16,8 +16,10 @@ import {
   displayObjectSchema,
   displaySceneSchema,
   displayDefinitionSchema,
+  type ReadScope,
 } from '../contracts/native-model.ts';
-import { applyDisplayDelta, displayCoverage } from '../core/display-delta.ts';
+import { applyDisplayDelta } from '../core/display-delta.ts';
+import { withSurvey } from '../../hosts/rhino/scene-pages.ts';
 import { AgentTools } from './agent-tools.ts';
 import type { GeometryMeasurement } from '../core/measurement-cache.ts';
 
@@ -165,6 +167,26 @@ export class SdkExecution {
   }
 
   /**
+   * A layer-limited read of an attached document (ARCH-03 §8): only the named layers, hidden objects
+   * too when asked. Same display page method, but the caller keeps it out of the Sync history.
+   */
+  async readLayers(target: HostTarget, scope: ReadScope) {
+    const { source, ...model } = await this.editors.display(target, scope);
+    return {
+      ...model,
+      sourceDocument: {
+        ...target,
+        connection: 'attached-editor' as const,
+        documentHash: source.documentHash,
+        ...(source.revision === undefined ? {} : { revision: source.revision }),
+        name: source.name,
+        units: source.units,
+        capturedAt: new Date().toISOString(),
+      },
+    };
+  }
+
+  /**
    * Live Sync: objects changed since `since` on the same attached connection, merged into `basis`.
    * RESYNC_REQUIRED means the caller must fall back to a full Sync.
    */
@@ -198,8 +220,8 @@ export class SdkExecution {
         definitions: delta.definitions,
       },
       result: {
-        ...merged,
-        displayCoverage: displayCoverage(merged.scene, merged.definitions),
+        // The plugin surveys the document with every change page; an older plugin sends none.
+        ...withSurvey(merged, { coverage: delta.coverage, layers: delta.layers }),
         sourceDocument: {
           ...basis.sourceDocument,
           ...target,
@@ -215,10 +237,12 @@ export class SdkExecution {
     };
   }
 
+  /** Opens a file in a work copy; `scope` limits the exported model to layers or adds hidden objects. */
   async importFile(
     filename: string,
     update: (intent: Record<string, unknown>) => void,
     measurements: GeometryMeasurement[] = [],
+    scope: ReadScope = {},
   ) {
     const options = this.options;
     await mkdir(options.directory, { recursive: true });
@@ -243,6 +267,7 @@ export class SdkExecution {
         directory,
         source,
         normalizeUnits: true,
+        exportScope: scope,
       });
       update(intent);
       writing = true;

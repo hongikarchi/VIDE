@@ -1,11 +1,23 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { DatabaseSync } from 'node:sqlite';
-import { mkdtempSync, rmSync, readdirSync, writeFileSync } from 'node:fs';
+import {
+  copyFileSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { Store } from '../../src/core/store.ts';
-import { baselineSchema, migrateDatabase } from '../../src/core/migrations.ts';
+import {
+  baselineSchema,
+  migrateDatabase,
+  migrations,
+  schemaVersion,
+} from '../../src/core/migrations.ts';
 function fixture(t) {
   const root = mkdtempSync(join(tmpdir(), 'vide-migration-'));
   t.after(() => rmSync(root, { recursive: true, force: true }));
@@ -34,7 +46,10 @@ test('migration backs up committed WAL data and preserves records and relationsh
   copy.close();
   for (let i = 0; i < 2; i++) {
     const store = new Store(file);
-    assert.equal(store.db.prepare('SELECT version FROM schema_version').get().version, 4);
+    assert.equal(
+      store.db.prepare('SELECT version FROM schema_version').get().version,
+      schemaVersion,
+    );
     assert.equal(
       store.db.prepare('SELECT requestId FROM publication_exports').get().requestId,
       'w',
@@ -68,7 +83,10 @@ test('backup failure aborts before modification and fresh database creates the c
   assert.equal(db.prepare('SELECT version FROM schema_version').get().version, 1);
   db.close();
   const memory = new Store(':memory:');
-  assert.equal(memory.db.prepare('SELECT version FROM schema_version').get().version, 4);
+  assert.equal(
+    memory.db.prepare('SELECT version FROM schema_version').get().version,
+    schemaVersion,
+  );
   memory.close();
 });
 
@@ -139,4 +157,158 @@ test('schema 4 keeps linked files per project, one link per file, hidden and rem
     links.link(a, { host: 'rhino', name: 'x', instance: '1', documentId: 1, extra: 1 }),
   );
   store.close();
+});
+
+// A schema 4 database as the previous release left it (T-045 · ARCH-03 §10).
+function schema4(t) {
+  const root = mkdtempSync(join(tmpdir(), 'vide-schema4-'));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const file = join(root, 'vide.sqlite');
+  const db = new DatabaseSync(file);
+  db.exec(
+    'CREATE TABLE schema_version(version INTEGER NOT NULL); INSERT INTO schema_version VALUES(4);' +
+      migrations
+        .filter((step) => step.version <= 4)
+        .map((step) => step.sql)
+        .join('\n'),
+  );
+  db.exec("PRAGMA journal_mode=WAL; INSERT INTO projects VALUES('p','existing')");
+  const insert = db.prepare('INSERT INTO workspace_requests VALUES(?,?,?,?,?,?)');
+  // One large Sync row (overflow pages) and ordinary requests.
+  insert.run(
+    'sync',
+    'p',
+    '{"kind":"sync"}',
+    'succeeded',
+    JSON.stringify({ scene: 'x'.repeat(300000) }),
+    't1',
+  );
+  for (let i = 0; i < 20; i++)
+    insert.run(
+      'r' + i,
+      'p',
+      JSON.stringify({ body: '요청 ' + i }),
+      'succeeded',
+      '{"text":"ok"}',
+      't2',
+    );
+  db.exec("INSERT INTO hidden_requests VALUES('p','r1','t3')");
+  return { root, file, db };
+}
+const requestRows = (db) =>
+  db
+    .prepare(
+      'SELECT id,projectId,input,state,result,createdAt,octet_length(input)+octet_length(result) AS bytes FROM workspace_requests ORDER BY rowid',
+    )
+    .all()
+    .map((row) => ({ ...row }));
+const tableNames = (db) =>
+  db
+    .prepare("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")
+    .all()
+    .map((row) => row.name);
+
+test('schema 5 migrates a schema 4 database after a backup without rewriting request rows', (t) => {
+  const { file, db } = schema4(t);
+  const before = requestRows(db);
+  db.close();
+  const store = new Store(file);
+  try {
+    assert.equal(store.db.prepare('SELECT version FROM schema_version').get().version, 5);
+    // Request rows keep their count, content and size; old requests belong to the default conversation.
+    assert.deepEqual(requestRows(store.db), before);
+    assert.equal(
+      store.db
+        .prepare('SELECT count(*) AS n FROM workspace_requests WHERE conversationId IS NULL')
+        .get().n,
+      21,
+    );
+    assert.equal(store.db.prepare('SELECT count(*) AS n FROM hidden_requests').get().n, 1);
+    for (const table of [
+      'conversations',
+      'provider_sessions',
+      'ledger_items',
+      'jig_packages',
+      'project_jigs',
+      'jig_drafts',
+      'jig_instances',
+      'jig_param_log',
+      'jig_runs',
+      'jig_reads',
+      'jig_bakes',
+      'knowledge_reviews',
+      'knowledge_source_rules',
+      'project_roots',
+    ])
+      assert.ok(tableNames(store.db).includes(table), table);
+    // conversationId is not indexed (ARCH-03 §10.1).
+    assert.equal(
+      store.db
+        .prepare(
+          "SELECT count(*) AS n FROM sqlite_master WHERE type='index' AND tbl_name='workspace_requests' AND sql IS NOT NULL",
+        )
+        .get().n,
+      0,
+    );
+    // Positional inserts of six values keep working, and the conversation comes from the input.
+    store.db
+      .prepare('INSERT INTO workspace_requests VALUES(?,?,?,?,?,?)')
+      .run('new', 'p', JSON.stringify({ body: 'x', conversationId: 'c1' }), 'draft', null, 't4');
+    assert.equal(
+      store.db.prepare("SELECT conversationId FROM workspace_requests WHERE id='new'").get()
+        .conversationId,
+      'c1',
+    );
+  } finally {
+    store.close();
+  }
+  // The pre-migration backup is a readable schema 4 copy with the same requests.
+  const [backup] = readdirSync(file + '.backups');
+  assert.match(backup, /^schema-4-/);
+  const copy = new DatabaseSync(join(file + '.backups', backup), { readOnly: true });
+  assert.equal(copy.prepare('SELECT version FROM schema_version').get().version, 4);
+  assert.deepEqual(requestRows(copy), before);
+  copy.close();
+});
+
+test('an interrupted schema 5 migration leaves schema 4 and its requests, and the backup migrates later', (t) => {
+  const { root, file, db } = schema4(t);
+  const before = requestRows(db);
+  const failing = migrations.map((step) =>
+    step.version === 5 ? { ...step, sql: step.sql + '\nSELECT * FROM missing_table;' } : step,
+  );
+  assert.throws(() => migrateDatabase(db, file, 4, failing), { code: 'DATABASE_MIGRATION_FAILED' });
+  assert.equal(db.prepare('SELECT version FROM schema_version').get().version, 4);
+  assert.deepEqual(requestRows(db), before);
+  assert.ok(!tableNames(db).includes('conversations'));
+  assert.ok(
+    !db
+      .prepare('PRAGMA table_xinfo(workspace_requests)')
+      .all()
+      .some((column) => column.name === 'conversationId'),
+  );
+  db.close();
+  // Recovery: a copy of the retained backup opens and migrates normally.
+  const [backup] = readdirSync(file + '.backups');
+  const restored = join(root, 'restored.sqlite');
+  copyFileSync(join(file + '.backups', backup), restored);
+  const store = new Store(restored);
+  try {
+    assert.equal(store.db.prepare('SELECT version FROM schema_version').get().version, 5);
+    assert.deepEqual(requestRows(store.db), before);
+  } finally {
+    store.close();
+  }
+});
+
+test('a database newer than this code is refused unchanged, as an older release refuses schema 5', (t) => {
+  const { file, db } = schema4(t);
+  db.close();
+  new Store(file).close();
+  const newer = new DatabaseSync(file);
+  newer.exec(`PRAGMA journal_mode=DELETE; UPDATE schema_version SET version=${schemaVersion + 1}`);
+  newer.close();
+  const bytes = readFileSync(file);
+  assert.throws(() => new Store(file), { code: 'UNSUPPORTED_SCHEMA' });
+  assert.deepEqual(readFileSync(file), bytes);
 });

@@ -44,10 +44,15 @@
     "locate": "node tools/locate/locate.mjs",
     "locate:eval": "node tools/locate/eval.mjs",
     "build:structure": "node tools/structure/cargo.mjs build --release --lib",
-    "test:structure": "npm run build:structure && node tools/structure/cargo.mjs test --no-default-features --lib && node --test tests/structure/*.test.mjs"
+    "test:structure": "npm run build:structure && node tools/structure/cargo.mjs test --no-default-features --lib && node --test tests/structure/*.test.mjs",
+    "jig:validate": "node tools/jig/validate.mjs",
+    "jig:test": "node tools/jig/test.mjs",
+    "jig:pack": "node tools/jig/pack.mjs"
   },
   "dependencies": {
+    "@kninnug/constrainautor": "4.1.0",
     "@modelcontextprotocol/sdk": "1.30.0",
+    "delaunator": "5.1.0",
     "react": "19.3.0",
     "react-dom": "19.3.0",
     "three": "0.186.0",

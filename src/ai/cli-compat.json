@@ -1,0 +1,5 @@
+{
+  "$comment": "Verified CLI version ranges (PLAN-24 T-059). VIDE does not run a CLI outside its range: an update can change login or isolation. Widen a range only after repeating docs/tdd/SPIKE-2026-09-30-cli-session-resume.md.",
+  "claude-cli": { "minimum": "2.1.284", "below": "2.2.0", "verified": ["2.1.284"] },
+  "codex-cli": { "minimum": "0.157.0", "below": "0.158.0", "verified": ["0.157.1"] }
+}

@@ -129,6 +129,8 @@ try {
   // Jev is shown the object groups on screen: kinds and layers.
   const ids = asked[0].subjects.map((subject) => subject.id);
   assert.ok(ids.includes('kind:문자') && ids.includes('layer:A-HATCH'), ids.join());
+  // Only the request and object groups leave the screen: no file name (SPEC-02.17 4, T-049).
+  assert.ok(!JSON.stringify(asked).includes('plan.dwg'));
   // Unsure Jev (null): the rules still handle plain view words.
   await page.locator('#body').fill('모두 다시 보여줘');
   await page.keyboard.press('Control+Enter');

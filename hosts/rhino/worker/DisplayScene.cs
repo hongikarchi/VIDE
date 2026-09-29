@@ -11,6 +11,90 @@ namespace Vide.Worker;
 /** Pre-serialized JSON sent as the reply result without re-serialization. */
 internal sealed record RawJson(byte[] Bytes);
 
+/**
+ * What one read lists (ARCH-03 §8): only the layers named (exact full paths), and hidden objects or
+ * objects on hidden layers when asked. The display Sync lists every visible object on every layer.
+ */
+internal sealed record ReadScope(HashSet<string>? Layers, bool IncludeHidden)
+{
+    internal const int MaxLayers = 2000;
+    internal static readonly ReadScope Display = new(null, false);
+    internal static ReadScope From(JsonElement request)
+    {
+        HashSet<string>? layers = null;
+        if (request.TryGetProperty("layers", out var list) && list.ValueKind != JsonValueKind.Null)
+        {
+            if (list.ValueKind != JsonValueKind.Array || list.GetArrayLength() > MaxLayers) throw new InvalidOperationException("INVALID_INPUT");
+            layers = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var item in list.EnumerateArray())
+            {
+                var path = item.ValueKind == JsonValueKind.String ? item.GetString() : null;
+                if (string.IsNullOrEmpty(path) || path.Length > 1000) throw new InvalidOperationException("INVALID_INPUT");
+                layers.Add(path);
+            }
+        }
+        var hidden = request.TryGetProperty("includeHidden", out var flag) && flag.ValueKind == JsonValueKind.True;
+        return new ReadScope(layers, hidden);
+    }
+}
+
+/**
+ * Document survey of a read: how many objects it lists, how many it leaves out and why (hidden, on a
+ * hidden layer, outside the layer filter, inside a block definition), and the layer table with the
+ * top-level object count per layer. Serialized as `coverage` and `layers` on every page.
+ */
+internal sealed class ReadSurvey
+{
+    internal object Coverage { get; }
+    internal object Layers { get; }
+    private ReadSurvey(object coverage, object layers) { Coverage = coverage; Layers = layers; }
+
+    internal static ReadSurvey Of(RhinoDoc doc, RhinoObject[] listed, ReadScope scope)
+    {
+        var ids = listed.Select(obj => obj.Id).ToHashSet();
+        // Top-level objects, hidden ones and those on hidden layers included (the enumerator's
+        // IdefObjects flag lists nothing here; definition geometry is counted from the definitions).
+        var everything = doc.Objects.GetObjectList(new ObjectEnumeratorSettings { HiddenObjects = true, ObjectTypeFilter = ObjectType.AnyObject });
+        var blockInternal = doc.InstanceDefinitions.Where(definition => !definition.IsDeleted)
+            .SelectMany(definition => definition.GetObjectIds()).Distinct().Count();
+        var perLayer = new Dictionary<int, int>();
+        var hiddenPerLayer = new Dictionary<int, int>();
+        int total = 0, hidden = 0, filtered = 0;
+        foreach (var obj in everything)
+        {
+            if (obj.IsInstanceDefinitionGeometry) continue;
+            total++;
+            var layerIndex = obj.Attributes.LayerIndex;
+            perLayer[layerIndex] = perLayer.GetValueOrDefault(layerIndex) + 1;
+            if (ids.Contains(obj.Id)) continue;
+            // Not listed: either outside the layer filter, or hidden (the only other reason).
+            if (scope.Layers != null && !scope.Layers.Contains(doc.Layers[layerIndex].FullPath)) filtered++;
+            else { hidden++; hiddenPerLayer[layerIndex] = hiddenPerLayer.GetValueOrDefault(layerIndex) + 1; }
+        }
+        var layers = new List<object>();
+        var hiddenLayers = new List<object>();
+        foreach (var layer in doc.Layers)
+        {
+            if (layer.IsDeleted) continue;
+            layers.Add(new
+            {
+                id = layer.Id.ToString(), parentId = layer.ParentLayerId == Guid.Empty ? null : layer.ParentLayerId.ToString(),
+                fullPath = layer.FullPath, visible = layer.IsVisible, locked = layer.IsLocked, color = Hex(layer.Color),
+                order = layer.SortIndex >= 0 ? layer.SortIndex : layer.Index, objectCount = perLayer.GetValueOrDefault(layer.Index),
+            });
+            if (!layer.IsVisible && hiddenPerLayer.TryGetValue(layer.Index, out var count))
+                hiddenLayers.Add(new { path = layer.FullPath, count });
+        }
+        return new ReadSurvey(new
+        {
+            total, displayed = listed.Length, omittedHidden = hidden, omittedFiltered = filtered,
+            omittedBlockInternal = blockInternal, hiddenLayers,
+        }, layers);
+    }
+
+    private static string Hex(System.Drawing.Color color) => "#" + color.R.ToString("x2") + color.G.ToString("x2") + color.B.ToString("x2");
+}
+
 // Display-only reads of an attached document. Meshes are cached per object until Rhino replaces it; the UI
 // thread only snapshots attributes and duplicates uncached geometry, meshing runs in parallel off it.
 internal sealed class DisplayScene
@@ -48,11 +132,29 @@ internal sealed class DisplayScene
     /** Any definition edit may change nested content; all definitions are rebuilt on demand. */
     internal void ClearDefinitions() { lock (definitions) definitions.Clear(); }
 
-    internal static RhinoObject[] Visible(RhinoDoc doc)
+    internal static RhinoObject[] Visible(RhinoDoc doc) => Listed(doc, ReadScope.Display);
+
+    /** The objects a read lists, in GUID order: visible ones (hidden too when asked), on the named layers only. */
+    internal static RhinoObject[] Listed(RhinoDoc doc, ReadScope scope)
     {
-        var ordered = doc.Objects.GetObjectList(ObjectType.AnyObject).OrderBy(obj => obj.Id).ToArray();
+        IEnumerable<RhinoObject> objects = scope.IncludeHidden
+            ? doc.Objects.GetObjectList(new ObjectEnumeratorSettings { HiddenObjects = true, ObjectTypeFilter = ObjectType.AnyObject })
+            : doc.Objects.GetObjectList(ObjectType.AnyObject);
+        if (scope.Layers is { } layers)
+            objects = objects.Where(obj => layers.Contains(doc.Layers[obj.Attributes.LayerIndex].FullPath));
+        var ordered = objects.OrderBy(obj => obj.Id).ToArray();
         if (ordered.Length > WorkerScene.MaxObjects) throw new InvalidOperationException("IMPORT_LIMIT");
         return ordered;
+    }
+
+    /** Row-major 4x4 in display meters: the linear part is unit-free, the translation is scaled. */
+    internal static double[] TransformOf(Transform x, double scale)
+    {
+        var transform = new double[16];
+        for (var row = 0; row < 4; row++)
+            for (var column = 0; column < 4; column++)
+                transform[row * 4 + column] = x[row, column] * (column == 3 && row < 3 ? scale : 1);
+        return transform;
     }
 
     private static double Scale(RhinoDoc doc)
@@ -63,21 +165,22 @@ internal sealed class DisplayScene
         return scale;
     }
 
-    /** UI thread: page of the full visible list. The returned work runs on a pool thread. */
-    internal Func<object> Page(RhinoDoc doc, int offset, int limit, int revision)
+    /** UI thread: page of the listed objects (the display Sync, or a layer-limited read). The returned work runs on a pool thread. */
+    internal Func<object> Page(RhinoDoc doc, int offset, int limit, int revision, ReadScope scope)
     {
         var scale = Scale(doc);
-        var ordered = Visible(doc);
+        var ordered = Listed(doc, scope);
         if (offset < 0 || offset > ordered.Length || limit < 1 || limit > MaxPageObjects)
             throw new InvalidOperationException("INVALID_PAGE");
         var budget = 262144;
         var items = ordered.Skip(offset).Take(limit).Select(obj => Snapshot(doc, obj, scale, ref budget)).ToList();
         var total = ordered.Length;
+        var survey = ReadSurvey.Of(doc, ordered, scope);
         return () =>
         {
             Build(items, scale);
             var count = Fit(items.Select(item => (Item?)item));
-            return new RawJson(Write(items.Take(count), [], writer =>
+            return new RawJson(Write(items.Take(count), [], survey, writer =>
             {
                 writer.WriteStartObject("page");
                 writer.WriteNumber("offset", offset); writer.WriteNumber("nextOffset", offset + count);
@@ -91,7 +194,8 @@ internal sealed class DisplayScene
     internal Func<object> Changes(RhinoDoc doc, IReadOnlyDictionary<Guid, int> changedAt, int since, int cursor, int revision)
     {
         var scale = Scale(doc);
-        var visible = Visible(doc).ToDictionary(obj => obj.Id);
+        var listed = Visible(doc);
+        var visible = listed.ToDictionary(obj => obj.Id);
         var ids = changedAt.Where(entry => entry.Value > since).Select(entry => entry.Key).OrderBy(id => id).ToArray();
         if (cursor < 0 || cursor > ids.Length) throw new InvalidOperationException("INVALID_PAGE");
         var budget = 262144;
@@ -108,13 +212,14 @@ internal sealed class DisplayScene
             else entries.Add((id, null));
         }
         var total = visible.Count;
+        var survey = ReadSurvey.Of(doc, listed, ReadScope.Display);
         return () =>
         {
             Build(entries.Where(entry => entry.Item != null).Select(entry => entry.Item!).ToList(), scale);
             var consumed = Fit(entries.Select(entry => entry.Item));
             var taken = entries.Take(consumed).ToList();
             return new RawJson(Write(taken.Where(entry => entry.Item != null).Select(entry => entry.Item!),
-                taken.Where(entry => entry.Item == null).Select(entry => entry.Id), writer =>
+                taken.Where(entry => entry.Item == null).Select(entry => entry.Id), survey, writer =>
                 {
                     writer.WriteStartObject("page");
                     writer.WriteNumber("cursor", cursor); writer.WriteNumber("nextCursor", cursor + consumed);
@@ -174,12 +279,7 @@ internal sealed class DisplayScene
     {
         var bounds = instance.GetBoundingBox(true);
         var valid = definitionHash != null && bounds.IsValid && instance.IsValid;
-        // Row-major 4x4 in display meters: the linear part is unit-free, the translation is scaled.
-        var x = instance.Xform;
-        var transform = new double[16];
-        for (var row = 0; row < 4; row++)
-            for (var column = 0; column < 4; column++)
-                transform[row * 4 + column] = x[row, column] * (column == 3 && row < 3 ? scale : 1);
+        var transform = TransformOf(instance.Xform, scale);
         var origin = bounds.IsValid ? new[] { bounds.Min.X * scale, bounds.Min.Y * scale, bounds.Min.Z * scale } : new[] { 0.0, 0, 0 };
         var size = bounds.IsValid ? new[] { (bounds.Max.X - bounds.Min.X) * scale, (bounds.Max.Y - bounds.Min.Y) * scale, (bounds.Max.Z - bounds.Min.Z) * scale } : new[] { 0.0, 0, 0 };
         var hash = Hash(definitionHash ?? "missing", Encoding.UTF8.GetBytes(string.Join(",", transform.Select(v => v.ToString("R", System.Globalization.CultureInfo.InvariantCulture)))));
@@ -308,7 +408,7 @@ internal sealed class DisplayScene
         return count;
     }
 
-    private byte[] Write(IEnumerable<Item> items, IEnumerable<Guid> removed, Action<Utf8JsonWriter> page)
+    private byte[] Write(IEnumerable<Item> items, IEnumerable<Guid> removed, ReadSurvey survey, Action<Utf8JsonWriter> page)
     {
         var list = items.ToList();
         var buffer = new ArrayBufferWriter<byte>(1 << 20);
@@ -379,6 +479,8 @@ internal sealed class DisplayScene
             writer.WriteEndArray();
             writer.WriteNumber("measurementVersion", 1);
             writer.WriteStartObject("measurementStats"); writer.WriteNumber("measuredObjects", 0); writer.WriteNumber("reusedObjects", 0); writer.WriteEndObject();
+            writer.WritePropertyName("coverage"); writer.WriteRawValue(JsonSerializer.SerializeToUtf8Bytes(survey.Coverage), true);
+            writer.WritePropertyName("layers"); writer.WriteRawValue(JsonSerializer.SerializeToUtf8Bytes(survey.Layers), true);
             page(writer);
             writer.WriteEndObject();
         }

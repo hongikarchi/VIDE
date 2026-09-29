@@ -68,6 +68,8 @@ internal sealed class WorkerExecutor(RhinoDoc document, string directory)
             var nextMeasurements = context == lastMeasurementContext
                 ? new Dictionary<string, (string hash, WorkerScene.Measurements value)>(lastMeasurements)
                 : new Dictionary<string, (string hash, WorkerScene.Measurements value)>();
+            // Export arguments (layer filter, hidden objects) come from the controller per read.
+            var scope = ReadScope.From(request);
             var result = WorkerScene.Export(document, (obj, geometryHash) =>
             {
                 var id = WorkerScene.Id(obj);
@@ -76,7 +78,7 @@ internal sealed class WorkerExecutor(RhinoDoc document, string directory)
                 if (context != initialMeasurementContext) return null;
                 return geometryCache.TryGetValue(id, out var match) && match.hash == geometryHash ? match.value :
                     modelBasis.SameMeasurements(obj) && cached.TryGetValue(id, out var value) ? value : null;
-            }, (obj, hash, value) => nextMeasurements[WorkerScene.Id(obj)] = (hash, value), offset, limit, revision);
+            }, (obj, hash, value) => nextMeasurements[WorkerScene.Id(obj)] = (hash, value), offset, limit, revision, scope: scope);
             var currentIds = document.Objects.GetObjectList(Rhino.DocObjects.ObjectType.AnyObject).Select(WorkerScene.Id).ToHashSet();
             foreach (var id in nextMeasurements.Keys.Where(id => !currentIds.Contains(id)).ToArray()) nextMeasurements.Remove(id);
             lastMeasurements = nextMeasurements;

@@ -11,6 +11,89 @@ import {
 import type { AiSettingsResponse, ProviderStatus, Provider } from '../contracts/ai-settings.ts';
 
 const errorLabels: Record<string, string> = errors;
+/**
+ * FR-18 notice and switch for sending route questions to Jev (SPEC-02.17 4, PLAN-24 T-049): what
+ * leaves this PC before a request is sent, and the switch that leaves only the rules. The engine
+ * enforces the list (src/ai/request-router.ts); this text must say the same.
+ */
+function RoutingSection() {
+  const [state, setState] = useState<{ jev: boolean; key: boolean }>();
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState('');
+  const read = (value: unknown) => {
+    const row = (value ?? {}) as { jev?: unknown; key?: unknown };
+    return { jev: row.jev === true, key: row.key === true };
+  };
+  useEffect(() => {
+    let live = true;
+    api('/settings/routing')
+      .then((value) => live && setState(read(value)))
+      .catch(() => live && setMessage('경로 판정 설정을 읽지 못했습니다.'));
+    return () => {
+      live = false;
+    };
+  }, []);
+  const toggle = async (jev: boolean) => {
+    setSaving(true);
+    try {
+      setState(read(await api('/settings/routing', 'PUT', { jev })));
+      setMessage(
+        jev ? '다음 요청부터 Jev에 경로 판정을 보냅니다.' : '다음 요청부터 규칙으로만 판정합니다.',
+      );
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : '설정을 바꾸지 못했습니다.');
+    } finally {
+      setSaving(false);
+    }
+  };
+  const status = !state
+    ? '확인 중'
+    : !state.jev
+      ? '꺼짐 · 규칙만'
+      : state.key
+        ? '켜짐'
+        : '이 PC에 키 없음 · 규칙만';
+  return (
+    <section className="ai-provider ai-routing" aria-label="요청 경로 판정">
+      <div className="ai-provider-head">
+        <h3>요청 경로 판정 · Jev</h3>
+        <span className="pill" data-ok={String(Boolean(state?.jev && state.key))} role="status">
+          {status}
+        </span>
+      </div>
+      <p className="ai-intro">
+        요청을 보낼 때 화면 표시·설정값·앱 동작·jig 열기로 AI 없이 처리할지 TypeSafe의 Jev가
+        판정합니다. 이 PC에 Jev 키가 있을 때만 보냅니다.
+      </p>
+      <p className="ai-intro">
+        보내는 것: 요청 글(2,000자까지, 글 속 경로·파일 이름은 지움), 화면의 객체 묶음
+        이름(종류·레이어), 열린 jig의 설정값 이름·설명, jig 설명, 연결 파일의 역할 이름(Rhino 모델
+        1·CAD 1), 앱 동작 이름.
+      </p>
+      <p className="ai-intro">
+        보내지 않는 것: 파일 이름·경로·폴더 이름, 프로젝트 자료 본문, 형상, 계정 주소, 로그인 코드.
+        판정 기록에는 결과·방법·시간만 남고 글은 남지 않습니다.
+      </p>
+      <label>
+        <input
+          type="checkbox"
+          aria-label="Jev에 경로 판정 보내기"
+          checked={state?.jev ?? false}
+          disabled={!state || saving}
+          onChange={(event) => {
+            void toggle(event.target.checked);
+          }}
+        />{' '}
+        Jev에 경로 판정 보내기
+      </label>
+      <small>
+        끄면 Jev를 부르지 않고 규칙으로만 판정합니다. 잘못 판정된 요청은 알림의 'AI 작업으로
+        보내기'로 보냅니다.
+      </small>
+      {message && <p role="status">{message}</p>}
+    </section>
+  );
+}
 const dialog = document.createElement('dialog');
 dialog.className = 'quantity-dialog ai-settings';
 dialog.setAttribute('aria-label', 'AI 연결 설정');
@@ -132,6 +215,7 @@ function Settings({ config, current, onStatus }: Props) {
           </section>
         );
       })}
+      <RoutingSection />
       <div className="table-controls">
         <button
           disabled={saving || checking}

@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["beams"],
+  "properties": {
+    "beams": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["key", "from", "to", "span_m", "depth_m", "width_m"],
+        "properties": {
+          "key": { "type": "string" },
+          "span_m": { "type": "number" },
+          "depth_m": { "type": "number" },
+          "width_m": { "type": "number" },
+          "direction": { "enum": ["x", "y"] }
+        }
+      }
+    }
+  }
+}

@@ -14,7 +14,7 @@ related: [PLAN, PLAN-10, SPEC-04, ARCH-01, FR-18, FR-19]
 
 ## 용량 판단
 
-Cloudflare 무료 한도(R2 10 GB·쓰기 100만 회/월, Worker 요청 본문 100 MB, D1 5 GB) 안에 들도록 정했다.
+<del>Cloudflare 무료 한도(R2 10 GB·쓰기 100만 회/월, Worker 요청 본문 100 MB, D1 5 GB) 안에 들도록 정했다.</del><ins>한도는 Cloudflare 무료 제공량(R2 10 GB·쓰기 100만 회/월, Worker 요청 본문 100 MB, D1 5 GB)을 기준으로 잡았다. 그러나 계정 R2는 이미 약 11.2 GB로 무료 제공량을 넘었으므로, 스냅샷을 켜면 올리는 바이트가 모두 과금되고 ADR-015의 무료 범위 조건과 부딪힌다([RESEARCH-10 §13.6](../research/RESEARCH-10-vide-restructure.md)). 그래서 과금 수용 결정(RESEARCH-10 §16 C3)이 승인 ADR로 기록되기 전까지 스냅샷은 꺼 둔다(2026-09-30, [T-066](PLAN-22-jig-platform.md#t-066)). 사이트 전체 한도 `SNAPSHOT_TOTAL_MB`의 기본값은 0(꺼짐)이고 아래 8,000 MB는 켤 때 환경값으로 정하는 예시다. staging은 `SNAPSHOTS_ENABLED=false`·`SNAPSHOT_TOTAL_MB=0`이며, 업로드 차단(`UPLOADS_ENABLED=false`)이 PC 스냅샷 쓰기에도 걸리고, 배포 점검은 결정 기록 없이 켠 설정을 막는다.</ins>
 
 - 파일마다 저장본은 하나(교체)이고 이력을 쌓지 않는다. 파일당 10분에 한 번까지만 올려 R2 쓰기는 파일당 시간당 6회 이하다.
 - 저장본은 원본이 아니라 병합한 형상이다. 18,000객체 합성 모델(Sync JSON 68.5 MB, [SPIKE render-perf](../tdd/SPIKE-2026-09-29-render-perf.md))도 float32·gzip으로 수 MB 수준이다. 한 파일 50 MB, 계정 500 MB, 사이트 전체 8,000 MB에서 막는다(환경값으로 조정).

@@ -132,8 +132,10 @@ internal sealed class AttachedConnection : IDisposable
             if (request.TryGetProperty("revision", out var basis)) {
                 if (basis.GetInt32() != readRevision) throw new InvalidOperationException("SOURCE_CHANGED");
             } else if (offset > 0) throw new InvalidOperationException("STALE_REFERENCE");
+            // A layer-limited or hidden-inclusive read (jig input, ARCH-03 §8) uses the same method and revision.
+            var scope = ReadScope.From(request);
             LastDisplayRead = DateTime.Now;
-            return display.Page(document, offset, limit, readRevision);
+            return display.Page(document, offset, limit, readRevision, scope);
         }
         if (method == "displayChanges")
         {

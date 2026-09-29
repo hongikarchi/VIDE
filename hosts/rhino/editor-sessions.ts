@@ -5,6 +5,7 @@ import { mkdir, readFile, writeFile, rename, readdir, lstat } from 'node:fs/prom
 import { editorConnectionSchema, resumeEditor, type ChangeSet } from './editor-channel.ts';
 import { launchRhinoWorker } from './worker-client.ts';
 import type { HostTarget, HostDocuments } from '../../src/contracts/host-documents.ts';
+import type { ReadScope } from '../../src/contracts/native-model.ts';
 
 type Resumed = ReturnType<typeof resumeEditor>;
 type Worker = Omit<Resumed, 'editorConnection'> & {
@@ -263,10 +264,10 @@ export class EditorSessions {
   async capture(target: HostTarget) {
     return (await this.get(target)).captureEditor(randomUUID());
   }
-  async display(target: HostTarget) {
+  async display(target: HostTarget, scope: ReadScope = {}) {
     if ((await this.connectionKind(target.instance)) !== 'attached-editor')
       throw failure('TARGET_MISMATCH');
-    return (await this.get(target)).displayEditor();
+    return (await this.get(target)).displayEditor(scope);
   }
   async changes(target: HostTarget, since: number) {
     if ((await this.connectionKind(target.instance)) !== 'attached-editor')

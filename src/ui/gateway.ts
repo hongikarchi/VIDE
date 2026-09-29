@@ -91,6 +91,10 @@ export const errors: Record<string, string> = {
   SUBSCRIPTION_LOGIN_REQUIRED: '구독 계정으로 CLI에 로그인하세요.',
   CLI_PATH_REQUIRED: 'Codex 실행 경로를 설정하세요.',
   CLI_UNAVAILABLE: 'AI 실행 파일을 찾을 수 없습니다.',
+  CLI_VERSION_UNSUPPORTED:
+    'AI CLI의 판이 VIDE가 확인한 범위 밖이라 실행하지 않았습니다. 확인된 판을 설치하거나 VIDE 업데이트를 기다리세요.',
+  CLI_MODE_CHANGED:
+    'AI CLI의 로그인 방식이 바뀌어 요청이 인증 없이 나갔습니다. 실행을 멈췄고 다른 계정으로 넘기지 않았습니다. CLI 판을 확인하세요.',
   TIMEOUT: '응답 시간이 초과됐습니다.',
   PROVIDER_FAILED: 'AI 공급자가 요청을 완료하지 못했습니다.',
   PROVIDER_LIMIT:
@@ -115,7 +119,8 @@ Object.assign(errors, {
   INTERVENTION_REVIEW_REQUIRED:
     '이전 작업의 부분 결과 또는 불명확 상태를 확인해야 합니다. 추가 지시는 보존했습니다.',
   PREDECESSOR_UNAVAILABLE: '이전 실행 연결을 확인할 수 없어 추가 지시를 보류했습니다.',
-  WORKSPACE_CAPACITY: '독립 작업 두 개가 진행 중입니다. 하나가 끝난 뒤 보내세요.',
+  WORKSPACE_CAPACITY:
+    '프로젝트의 AI 작업 상한(기본 3개)에 도달했습니다. 요청은 대기열에 서서 앞 작업이 끝나면 시작합니다.',
   STALE_REFERENCE: '첨부한 객체가 이전 후보 기준입니다. 현재 모델에서 다시 첨부해 주세요.',
   HOST_RESULT_UNKNOWN: '호스트 응답을 확인하지 못했습니다. 자동 재실행하지 않았습니다.',
 });

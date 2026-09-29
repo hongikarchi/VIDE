@@ -140,10 +140,19 @@ export function roleRows(
 
 // First guesses from layer names and object kinds. They are suggestions the person checks on the
 // screen; nothing is silently merged. `other` says whether a role lives in another document than
-// the columns (true: the civil/basin model) or in the same one (false).
+// the columns (true: the civil/basin model) or in the same one (false). `alt` is a weaker second
+// rule that only applies in another document than the columns: a basin model draws its footing
+// and column as one block on a layer named after the column, so that layer may still be picked.
 const RULES: Record<
   RoleKey,
-  { words: RegExp; prefer?: RegExp; avoid?: RegExp; kinds: ObjectKind[]; other?: boolean }
+  {
+    words: RegExp;
+    prefer?: RegExp;
+    avoid?: RegExp;
+    kinds: ObjectKind[];
+    other?: boolean;
+    alt?: { words: RegExp; avoid?: RegExp; kinds: ObjectKind[] };
+  }
 > = {
   columns: {
     words: /기둥|column|\bcol\b|^c\d/i,
@@ -170,6 +179,11 @@ const RULES: Record<
     avoid: /신설|new|파일\s*캡|pile/i,
     kinds: ['block', 'mesh'],
     other: true,
+    alt: {
+      words: /기둥|column|\bcol\b/i,
+      avoid: /신설|new|파일\s*캡|pile|보|girder|beam/i,
+      kinds: ['block'],
+    },
   },
   basinGirders: {
     words: /유수지|basin|보|girder|beam/i,
@@ -191,11 +205,26 @@ export function guessRoles(sources: readonly SourceLayers[]): Record<RoleKey, Ro
     for (const source of sources)
       for (const layer of source.layers) {
         const id = `${source.syncId}\u0000${layer.name}`;
-        if (used.has(id) || !rule.words.test(layer.name)) continue;
-        let score = 10;
-        if (rule.prefer?.test(layer.name)) score += 5;
-        if (rule.avoid?.test(layer.name)) score -= 20;
-        const fitting = rule.kinds.reduce((sum, kind) => sum + (layer.kinds[kind] ?? 0), 0);
+        if (used.has(id)) continue;
+        let score: number;
+        let kinds: ObjectKind[];
+        if (rule.words.test(layer.name)) {
+          score = 10;
+          kinds = rule.kinds;
+          if (rule.prefer?.test(layer.name)) score += 5;
+          if (rule.avoid?.test(layer.name)) score -= 20;
+        } else if (
+          rule.alt &&
+          home &&
+          source.syncId !== home &&
+          rule.alt.words.test(layer.name) &&
+          !rule.alt.avoid?.test(layer.name)
+        ) {
+          // Below any layer the main words match, above nothing.
+          score = 4;
+          kinds = rule.alt.kinds;
+        } else continue;
+        const fitting = kinds.reduce((sum, kind) => sum + (layer.kinds[kind] ?? 0), 0);
         score += fitting * 2 >= layer.count ? 4 : fitting ? 1 : -20;
         if (home && rule.other !== undefined)
           score += (source.syncId !== home) === rule.other ? 3 : -3;

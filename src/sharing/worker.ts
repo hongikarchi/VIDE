@@ -6,11 +6,13 @@ import { commentRoute, exportComment } from './comments';
 import { hostDeviceRoute, hostRoute } from './hosts';
 import { accountRoute, displayName } from './accounts';
 import { PROXIED, isPcPath, pcProxy } from './pc-proxy';
-import { offlineRoute } from './offline';
+import { offlineRoute, snapshotsOn } from './offline';
 
 async function handle(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
   try {
     const url = new URL(request.url);
+    // The free-only pause: no new stored files from a browser (publications) or a PC (snapshots).
+    const uploadsPaused = env.UPLOADS_ENABLED === 'false';
     if (
       !env.AUTH_SECRET ||
       env.AUTH_SECRET.length < 32 ||
@@ -21,8 +23,8 @@ async function handle(request: Request, env: Env, ctx: ExecutionContext): Promis
     if (url.pathname === '/api/config' && request.method === 'GET')
       return json({
         manualApproval: manualApproval(env),
-        uploadsEnabled: env.UPLOADS_ENABLED !== 'false',
-        snapshotsEnabled: env.SNAPSHOTS_ENABLED !== 'false',
+        uploadsEnabled: !uploadsPaused,
+        snapshotsEnabled: !uploadsPaused && snapshotsOn(env),
       });
     if (
       manualApproval(env) &&
@@ -53,13 +55,18 @@ async function handle(request: Request, env: Env, ctx: ExecutionContext): Promis
       throw new HttpError(404, 'NOT_FOUND');
     }
     // Work PCs authenticate with the account login once, then their host key; no browser session.
-    if (url.pathname.startsWith('/api/hosts/device/'))
-      return await hostDeviceRoute(
-        request,
-        env,
-        auth,
-        url.pathname.slice('/api/hosts/device/'.length).split('/'),
-      );
+    if (url.pathname.startsWith('/api/hosts/device/')) {
+      const devicePath = url.pathname.slice('/api/hosts/device/'.length).split('/');
+      // A PC's snapshot is an upload too (RESEARCH-10 §13.6); removing one stays allowed.
+      if (
+        uploadsPaused &&
+        devicePath[0] === 'projects' &&
+        devicePath[2] === 'snapshots' &&
+        !['GET', 'HEAD', 'DELETE'].includes(request.method)
+      )
+        throw new HttpError(503, 'SNAPSHOTS_DISABLED');
+      return await hostDeviceRoute(request, env, auth, devicePath);
+    }
     if (
       !['GET', 'HEAD'].includes(request.method) &&
       request.headers.get('Origin') !== env.AUTH_ORIGIN
@@ -69,7 +76,7 @@ async function handle(request: Request, env: Env, ctx: ExecutionContext): Promis
     if (!session?.user || (!manualApproval(env) && !session.user.emailVerified))
       throw new HttpError(401, 'LOGIN_REQUIRED');
     if (
-      env.UPLOADS_ENABLED === 'false' &&
+      uploadsPaused &&
       url.pathname.includes('/publications') &&
       !['GET', 'HEAD'].includes(request.method)
     )

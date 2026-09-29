@@ -230,3 +230,222 @@ test('새 전송 연결로 바꿔도 같은 네이티브 문서의 불명확 쓰
     code: 'WRITE_UNCERTAIN',
   });
 });
+
+// Schema 5 store modules (T-045): data access for conversations, jigs and knowledge reviews.
+test('대화·공급자 세션·원장 행은 재열기 뒤 보존되고 다른 프로젝트와 격리된다', async (t) => {
+  const { ConversationStore } = await import('../../src/core/conversation-store.ts');
+  const f = fixture(t);
+  let s = f.open();
+  const p = s.createProject('대화'),
+    other = s.createProject('다른');
+  let conversations = new ConversationStore(s.db);
+  const c = conversations.create(p.id, {
+    kind: 'model-edit',
+    title: '기둥 옮기기',
+    provider: 'claude-cli',
+    model: 'opus',
+    targets: ['link-a'],
+  });
+  assert.equal(c.state, 'open');
+  assert.equal(c.mode, 'session');
+  assert.deepEqual(c.targets, ['link-a']);
+  assert.throws(() => conversations.get(other.id, c.id), { code: 'NOT_FOUND' });
+  assert.throws(() =>
+    conversations.create('missing', { kind: 'ask', title: 'x', provider: 'claude-cli' }),
+  );
+  assert.throws(() =>
+    conversations.create(p.id, { kind: 'chat', title: 'x', provider: 'claude-cli' }),
+  );
+  assert.equal(conversations.update(p.id, c.id, { effort: 'high', targets: null }).effort, 'high');
+  const key = {
+    conversationId: c.id,
+    provider: 'claude-cli',
+    accountProfileId: 'a1',
+    sessionId: 's1',
+  };
+  conversations.addSession({ ...key, promptMode: 'neutral', cliVersion: '2.1.0' });
+  conversations.recordTurn(key, 1200);
+  conversations.recordTurn(key, 800);
+  const q = conversations.addLedgerItem(c.id, { kind: 'question', body: { text: '층고?' } });
+  const a = conversations.addLedgerItem(c.id, {
+    kind: 'answer',
+    body: { text: '4.2 m' },
+    requestId: 'r1',
+  });
+  conversations.supersede(c.id, q.id, a.id);
+  // Requests carry their conversation in the input; the others are the default conversation.
+  const insert = s.db.prepare('INSERT INTO workspace_requests VALUES(?,?,?,?,?,?)');
+  insert.run('r0', p.id, '{}', 'succeeded', null, 't0');
+  insert.run('r1', p.id, JSON.stringify({ conversationId: c.id }), 'succeeded', null, 't1');
+  s.close();
+  s = f.open();
+  conversations = new ConversationStore(s.db);
+  const saved = conversations.get(p.id, c.id);
+  assert.equal(saved.effort, 'high');
+  assert.equal(saved.targets, null);
+  assert.equal(conversations.setState(p.id, c.id, 'closed').state, 'closed');
+  assert.ok(conversations.get(p.id, c.id).closedAt);
+  assert.deepEqual(conversations.list(p.id, 'open'), []);
+  assert.equal(conversations.list(other.id).length, 0);
+  const session = conversations.session(key);
+  assert.equal(session.turns, 2);
+  assert.equal(session.inputTokens, 2000);
+  assert.equal(conversations.setSessionState(key, 'handed-off').state, 'handed-off');
+  assert.deepEqual(conversations.sessions(c.id, 'active'), []);
+  assert.deepEqual(
+    conversations.ledger(c.id, { current: true }).map((item) => item.body),
+    [{ text: '4.2 m' }],
+  );
+  assert.equal(conversations.ledger(c.id).length, 2);
+  assert.deepEqual(conversations.requestIds(p.id, c.id), ['r1']);
+  assert.deepEqual(conversations.requestIds(p.id, null), ['r0']);
+  assert.throws(() => conversations.addLedgerItem('missing', { kind: 'code', body: '' }));
+});
+
+test('jig 설치·고정·작업본·설정값 기록·단계·읽기·만들기 기록 행을 읽고 쓴다', async (t) => {
+  const { JigStore } = await import('../../src/core/jig-store.ts');
+  const f = fixture(t);
+  let s = f.open();
+  const p = s.createProject('jig'),
+    other = s.createProject('다른');
+  let jigs = new JigStore(s.db);
+  const pack = {
+    id: 'project/s06-frame',
+    version: '0.1.0',
+    stage: 'project',
+    source: 'dev-pack',
+    digest: 'a'.repeat(64),
+    path: 'jigs/installed/project/s06-frame@0.1.0',
+    approvedCaps: ['host.read'],
+  };
+  jigs.addPackage(pack);
+  assert.throws(() => jigs.addPackage({ ...pack, digest: 'b'.repeat(64) }), {
+    code: 'JIG_VERSION_EXISTS',
+  });
+  jigs.pin(p.id, 'project/s06-frame', '0.1.0');
+  assert.equal(jigs.pin(p.id, 'project/s06-frame', '0.1.1').version, '0.1.1');
+  assert.equal(jigs.pinned(p.id).length, 1);
+  const draft = jigs.createDraft(p.id, { path: 'jigs/drafts/d1', conversationId: 'c1' });
+  assert.equal(jigs.updateDraft(p.id, draft.id, { state: 'archived' }).state, 'archived');
+  const instance = jigs.createInstance(p.id, {
+    jigId: 'project/s06-frame',
+    version: '0.1.1',
+    title: '골조',
+    body: { layerRoot: 'VIDE', params: { spanMax: { value: 12, by: 'default' } } },
+  });
+  assert.equal(instance.status, 'new');
+  assert.throws(() => jigs.instance(other.id, instance.id), { code: 'NOT_FOUND' });
+  const first = jigs.appendParam(instance.id, { key: 'spanMax', old: 12, new: 10, by: 'user' });
+  const second = jigs.appendParam(instance.id, {
+    key: 'spanMax',
+    old: 10,
+    new: 9,
+    by: 'ai',
+    reason: '근거',
+    requestId: 'r1',
+  });
+  assert.deepEqual([first.seq, second.seq], [1, 2]);
+  jigs.saveRun(instance.id, 'grid', { inputHash: 'h1', status: 'done', ms: 12, gates: [] });
+  jigs.saveRun(instance.id, 'grid', { inputHash: 'h2', status: 'done', outputRef: 'o2' });
+  jigs.saveRun(instance.id, 'columns', { inputHash: 'h3', status: 'done' });
+  jigs.setRunStatus(instance.id, ['grid', 'columns'], 'stale');
+  const read = jigs.addRead(instance.id, {
+    linkId: 'link-a',
+    revisionKey: 'rhino:1|1|7',
+    layers: ['구조::기둥'],
+    includeHidden: false,
+    purpose: 'assembly',
+    ref: 'jigs/reads/x.json.gz',
+  });
+  const bake = jigs.addBake(instance.id, {
+    bakeId: 'columns',
+    linkId: 'link-a',
+    requestId: 'r2',
+    runId: 'run-1',
+    items: {
+      'col:1-A': { nativeId: null, hash: null, layer: '기둥', runId: 'run-1', state: 'jig' },
+    },
+  });
+  jigs.updateBake(instance.id, bake.id, { appliedAt: 't9', baselineReadId: read.id });
+  jigs.updateInstance(p.id, instance.id, { status: 'computed', body: { layerRoot: 'VIDE' } });
+  s.close();
+  s = f.open();
+  jigs = new JigStore(s.db);
+  assert.deepEqual(jigs.package('project/s06-frame', '0.1.0').approvedCaps, ['host.read']);
+  const saved = jigs.instance(p.id, instance.id);
+  assert.equal(saved.status, 'computed');
+  assert.deepEqual(saved.body, { layerRoot: 'VIDE' });
+  assert.deepEqual(
+    jigs.paramLog(instance.id).map((entry) => [entry.seq, entry.old, entry.new, entry.by]),
+    [
+      [1, 12, 10, 'user'],
+      [2, 10, 9, 'ai'],
+    ],
+  );
+  assert.equal(jigs.paramEntry(instance.id, 2).reason, '근거');
+  assert.deepEqual(
+    jigs.runs(instance.id).map((run) => [run.stepId, run.inputHash, run.status]),
+    [
+      ['grid', 'h2', 'stale'],
+      ['columns', 'h3', 'stale'],
+    ],
+  );
+  assert.equal(jigs.run(instance.id, 'grid').gates, null);
+  const savedRead = jigs.read(instance.id, read.id);
+  assert.equal(savedRead.includeHidden, false);
+  assert.deepEqual(savedRead.layers, ['구조::기둥']);
+  assert.equal(jigs.reads(instance.id, 'link-b').length, 0);
+  const [savedBake] = jigs.bakes(instance.id, 'columns', 'link-a');
+  assert.equal(savedBake.appliedAt, 't9');
+  assert.equal(savedBake.baselineReadId, read.id);
+  assert.equal(savedBake.items['col:1-A'].state, 'jig');
+  assert.equal(jigs.drafts(p.id, 'archived').length, 1);
+  assert.equal(jigs.instances(other.id).length, 0);
+  // Rows of a missing instance or project are refused by the schema.
+  assert.throws(() => jigs.appendParam('missing', { key: 'k', new: 1, by: 'user' }));
+  assert.throws(() =>
+    jigs.createInstance('missing', { jigId: 'j', version: '1', title: 't', body: {} }),
+  );
+  jigs.unpin(p.id, 'project/s06-frame');
+  assert.deepEqual(jigs.pinned(p.id), []);
+});
+
+test('자료 검토·제외 규칙·프로젝트 루트는 프로젝트별 한 행이다', async (t) => {
+  const { KnowledgeReviewStore } = await import('../../src/core/knowledge-review-store.ts');
+  const s = fixture(t).open();
+  const p = s.createProject('자료'),
+    other = s.createProject('다른');
+  const reviews = new KnowledgeReviewStore(s.db);
+  reviews.setReview(p.id, 17, { verdict: 'confirmed', by: 'user' });
+  const replaced = reviews.setReview(p.id, 17, {
+    verdict: 'contaminated',
+    reason: '다른 프로젝트 자료',
+    by: 'user',
+  });
+  assert.equal(replaced.verdict, 'contaminated');
+  reviews.setReview(p.id, 18, { verdict: 'superseded', supersededBy: 19, by: 'user' });
+  assert.throws(() => reviews.setReview(p.id, 20, { verdict: 'maybe', by: 'user' }));
+  assert.deepEqual(
+    reviews.reviews(p.id).map((row) => [row.statementId, row.verdict]),
+    [
+      [17, 'contaminated'],
+      [18, 'superseded'],
+    ],
+  );
+  assert.equal(reviews.reviews(p.id, 'superseded')[0].supersededBy, 19);
+  assert.throws(() => reviews.review(other.id, 17), { code: 'NOT_FOUND' });
+  reviews.removeReview(p.id, 18);
+  assert.equal(reviews.reviews(p.id).length, 1);
+  reviews.addSourceRule(p.id, '*/archive/*', '옛 자료');
+  reviews.addSourceRule(p.id, '*/archive/*', '보관');
+  assert.deepEqual(reviews.sourceRules(p.id), [{ pattern: '*/archive/*', reason: '보관' }]);
+  reviews.removeSourceRule(p.id, '*/archive/*');
+  assert.deepEqual(reviews.sourceRules(p.id), []);
+  assert.equal(reviews.roots(p.id), null);
+  reviews.setRoots(p.id, { kdbRoot: 'D:/kdb' });
+  assert.deepEqual(reviews.setRoots(p.id, { localRoot: 'D:/local' }), {
+    kdbRoot: 'D:/kdb',
+    localRoot: 'D:/local',
+  });
+  assert.equal(reviews.roots(other.id), null);
+});

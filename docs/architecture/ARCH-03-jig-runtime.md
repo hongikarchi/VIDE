@@ -79,7 +79,7 @@ related: [FR-23, FR-24, FR-25, SPEC-02, SPEC-05, SPEC-06, SPEC-07, ADR-014, ADR-
 
 - `id` = `<이름공간>/<이름>`, ASCII kebab. `vide/*` = 공식, `project/*` = 프로젝트 jig. 초안은 `draftId`(UUID)로만 식별하고 고정할 때 `project/<이름>`과 버전을 받는다.
 - `version`은 semver. 설치된 `id@version`은 바꾸지 않는다. 작업본은 버전을 고정하며 올리기는 명시적이다.
-- 출처 `source`: `builtin`(공식) · `dev-pack`(저장소에서 작성해 이 PC에서 서명) · `ai-draft`(제작 대화의 초안에서 고정) · `foreign`(다른 PC). 1차는 `foreign`을 거절한다.
+- 출처 `source`: `builtin`(공식) · `dev-pack`(저장소에서 작성해 이 PC에서 서명) · `ai-draft`(제작 대화의 초안에서 고정) · `foreign`(다른 PC). 1차는 `foreign`을 거절한다. 저장소 체크아웃의 `extensions/jigs/*`는 묶기 전에도 개발 엔진이 `dev-source`로 적재한다(등록부 `stage: dev`, 실행 위치는 `dev-pack`과 같은 자식 프로세스, 설치본에는 없음).
 
 ## 3. `jig.json` v3 타입
 
@@ -105,8 +105,13 @@ export interface JigManifest {
   capabilities: { name: Capability; scope?: string; reason: string }[];
   selftest: { fixtures: string; requiresHost: false };
   skill: string;                     // 'skill.md'
-  // 파생 값(ai.required, ai.steps, runtimes)은 코어가 다시 계산하고, 선언과 다르면 등록을 거절한다
+  // 파생 값은 코어가 다시 계산하고, 선언과 다르면 등록을 거절한다(JIG_DERIVED_MISMATCH)
+  derived?: { ai?: { required: boolean; steps: string[] };
+              runtimes?: Record<string, 'engine' | 'child' | 'box' | 'bake' | 'cli' | 'screen'> };
 }
+// RoleDecl.extract는 'rows'(읽은 레이어 행 그대로) 또는 'vide/<라이브러리>#<함수>'다.
+// 자체 시험 자료: fixtures/<case>/input.json은 입력 키별 값(assembly는 { <role>: { rows, definitions } }),
+// params.json은 저장 단위의 { key: value }, expect.json은 { steps: { <id>: 부분 일치 }, statuses?, tolerance? }.
 
 export type Capability =
   | 'links.list' | 'sync.read' | 'facts.read' | 'jig.read' | 'library.call'
@@ -293,8 +298,8 @@ export type Binding = `step.${string}` | `$${string}` | 'params' | `inputs.${str
 
 ```ts
 export type RunnerIn =
-  | { t: 'load'; jig: string; version: string; dir: string; digest: string }
-  | { t: 'run'; runId: string; step: string; input: unknown; params: Record<string, unknown>;
+  | { t: 'load'; jig: string; version: string; dir: string; digest: string; bundled: boolean }
+  | { t: 'run'; runId: string; step: string; entry: string; input: unknown; params: Record<string, unknown>;
       overrides: Override[]; budgetMs: number }
   | { t: 'cancel'; runId: string };
 export type RunnerOut =
@@ -306,7 +311,8 @@ export type RunnerOut =
 - 단계 함수의 서명은 `(inputs, params, overrides) → output`이다.
 - 입력 바이트는 엔진이 권한을 검사한 뒤 넘긴다. 넘기는 것은 조립된 역할 형상과 앞 단계 출력이지 원본 Sync 행이 아니다.
 - 출력은 엔진이 단계 출력 스키마로 검사한 뒤에만 다음 단계·화면으로 간다. `budgetMs`를 넘으면 끊고 `BUDGET`으로 기록한다.
-- TS 단계는 묶을 때(`jig:pack`, 초안은 `jig_test`) esbuild로 만든 `dist/steps.mjs`를 쓴다.
+- TS 단계는 묶을 때(`jig:pack`) Vite의 `build` API(이미 devDependency, esbuild는 별도 의존성이 아니다)로 만든 `dist/steps.mjs`(모든 `code` 단계 함수를 `steps[<entry>]`로 내보내는 한 파일)를 쓴다. `dist/steps.mjs`가 없으면(저장소 소스, 묶지 않은 시험 묶음) Node의 타입 제거로 `.ts` 진입 파일을 직접 적재한다.
+- 단계 함수의 `inputs`는 선언한 `reads`만 담는다: `input.<key>` → `inputs[key]`, `input.<key>.<role>` → `inputs[key][role]`, `step.<id>` → `inputs.steps[id]`. `params`는 읽는다고 선언한 설정값의 저장 단위 값이다. 사람 단계의 지문에는 수정 사항이 들어가지 않는다.
 
 ### 6.3 엔진 단계 실행기
 
@@ -318,7 +324,7 @@ export type RunnerOut =
 ### 6.4 Node 자식 프로세스(`dev-pack`)
 
 - 띄우기: `node --permission --allow-fs-read=<패키지 폴더> --allow-fs-read=<geometry-kit 묶음 폴더> --allow-fs-read=<runner.mjs 폴더> runner.mjs`. 경로마다 `--allow-fs-read`를 따로 준다(쉼표로 이으면 한 경로로 해석된다). 쓰기·자식 프로세스·addon·worker 허용 플래그는 주지 않는다. 런타임은 설치본의 Node 24.15다.
-- `env`에는 `PATH`, `SystemRoot`만 넘긴다(부모 환경의 키가 보이지 않게).
+- `env`에는 `PATH`, `SystemRoot`만 넘긴다(부모 환경의 키가 보이지 않게). Windows에서는 libuv가 자식 환경에 고정 필수 변수(`HOMEDRIVE`·`HOMEPATH`·`LOGONSERVER`·`SYSTEMDRIVE`·`TEMP`·`USERDOMAIN`·`USERNAME`·`USERPROFILE`·`WINDIR`)를 더하며 그 밖의 변수는 없다(기동 시험이 확인). 묶기 전 저장소 소스(`dev-source`)는 상대 import를 위해 `src/jigs/official`과 `node_modules` 읽기를 추가로 허용한다.
 - 설치된 Node의 권한 모델에는 네트워크 제한이 없다. 이 실행기는 저장소에서 사람이 검토하고 이 PC에서 서명한 코드만 올린다.
 - 작업본마다 하나를 띄워 두고 유휴 5분 뒤 끝낸다.
 
@@ -359,7 +365,8 @@ export type RunnerOut =
 | `POST /api/v1/projects/:id/jig-drafts`, `POST …/jig-drafts/:did/validate·test·preview`, `POST …/jig-drafts/:did/pin`, `DELETE …/jig-drafts/:did` | — | 제작 최소판(잠정). `pin`은 확인 필요 동작, 원격 세션 403 |
 
 - 기존 `POST /api/v1/projects/:id/jigs/sync`와 구조 jig 경로(ARCH-02 §1)는 그대로다.
-- 오류 코드(잠정): `JIG_INVALID`(형식·금지 파일·부품), `JIG_SIGNATURE`(서명), `PARAM_FIXED`, `GATE_BLOCKED`(막은 점검 이름 목록 포함), `STALE_INPUT`(읽은 문서 버전이 현재와 다름). 상태 번호는 ARCH-01 §1.3 매핑(400·403·404·409·422)을 따른다.
+- 오류 코드(잠정): `JIG_INVALID`(형식·금지 파일·부품, 응답에 `issues[]`), `JIG_SIGNATURE`(서명), `JIG_VERSION_EXISTS`(같은 id·버전, 다른 내용, 409), `PARAM_FIXED`, `OUT_OF_RANGE`, `GATE_BLOCKED`(막은 점검 이름 목록 포함), `STALE_INPUT`(읽은 문서 버전이 현재와 다름), `LAYER_ROOT_MISSING`(저장된 Sync 레이어 표가 있는데 출력 레이어가 없음), `CONFIRMATION_REQUIRED`(확인 없는 가져오기·고정). 상태 번호는 ARCH-01 §1.3 매핑(400·403·404·409·422)을 따르며 `src/server/jig-routes.ts`의 `jigStatuses`가 정본이다.
+- 1차 구현(T-046)의 세부: 가져오기 확인은 `?confirm=true`, 고정 확인은 본문 `confirm: true`다. 등록부는 `GET /api/v1/jigs/packages`(공식 라이브러리 + 설치 + 저장소 소스)이며 기존 `GET /api/v1/jigs`의 확장은 T-047이 한다. `POST …/reads`는 `linkId` 대신 `syncId`를 받아 저장된 Sync를 서버에서 레이어로 거를 수 있다(ZWCAD·호스트 없는 시험). `GET …/params/log`(변경 이력)·`GET …/steps/:stepId/output`(보관된 결과)이 있다. `stale-input`의 현재 판 비교값(`currentRevisions`)은 아직 경로가 채우지 않는다(연결 판 조회는 후속).
 - 능력 검사는 화면이 아니라 이 경로들, 만들기 경로, AI 도구 발급에서 한다. 원격 세션 차단 정규식에 `jigs/import`, `jigs/[^/]+/pin`, `jig-drafts/[^/]+/pin`을 더한다(원격 세션의 앱·확장 제어 금지와 같은 범위).
 
 ## 8. jig 입력 읽기
@@ -454,6 +461,8 @@ Item
 
 - 대화·원장·공급자 세션 표, jig 표, 자료 검토 표를 **마이그레이션 v5 하나**로 만든다. 번호는 엄격히 연속이어야 하므로(`Non-sequential migration`) 병행 작업이 각자 v5를 만들지 않는다. 한 번에 합칠 수 없으면 들어가는 순서대로 v5·v6·v7을 배정하고 이 절을 고친다.
 - `workspace_requests`에는 `conversationId`를 `ADD COLUMN`만 하고 기존 행을 `UPDATE`하지 않는다. `NULL`은 프로젝트 기본 대화다. 큰 Sync 행 때문에 이 열에 색인을 만들지 않는다(행마다 넘침 페이지를 읽게 되어 시작이 느려진다). 필요하면 측정 뒤 더한다.
+- 이 열은 요청 입력 JSON의 `conversationId`(§10.3)에서 계산하는 가상 생성 열이다. 저장하는 일반 열이면 기존 코드·시험의 위치 기반 `INSERT INTO workspace_requests VALUES(?,?,?,?,?,?)`가 모두 깨지고, 행 끝(`result` 뒤)에 저장되어 큰 Sync 행에서 넘침 페이지를 읽게 된다. 가상 열은 `input`만 읽는다. 요청의 대화는 제출 때 입력에 넣고 나중에 바꾸지 않는다.
+- 데이터 접근은 `src/core/conversation-store.ts`(대화·공급자 세션·원장), `src/core/jig-store.ts`(jig 표), `src/core/knowledge-review-store.ts`(자료 검토 표)가 맡는다. 동작 규칙은 이 모듈을 쓰는 쪽(PLAN-22·24)이 정한다.
 - Sync 캡처·jig 입력 읽기·만들기 행은 대화에 속하지 않는다.
 - 이관 절차는 ARCH-01 §1.3(버전 확인 → 백업 → 트랜잭션 변경 → 무결성 확인)을 따른다. v5 이후에는 이전 설치본으로 되돌릴 수 없으며(`UNSUPPORTED_SCHEMA`), 배포 안내에 적는다.
 
@@ -473,7 +482,8 @@ CREATE TABLE IF NOT EXISTS conversations(id TEXT PRIMARY KEY,
   state TEXT NOT NULL,             -- open|closed
   createdAt TEXT NOT NULL, updatedAt TEXT NOT NULL, closedAt TEXT);
 CREATE INDEX IF NOT EXISTS conversations_project ON conversations(projectId, state);
-ALTER TABLE workspace_requests ADD COLUMN conversationId TEXT;
+ALTER TABLE workspace_requests ADD COLUMN conversationId TEXT
+  GENERATED ALWAYS AS (json_extract(input, '$.conversationId')) VIRTUAL;   -- §10.1, 색인 없음
 
 CREATE TABLE IF NOT EXISTS provider_sessions(conversationId TEXT NOT NULL REFERENCES conversations(id),
   provider TEXT NOT NULL, accountProfileId TEXT NOT NULL, sessionId TEXT NOT NULL,
@@ -539,6 +549,7 @@ CREATE TABLE IF NOT EXISTS project_roots(projectId TEXT PRIMARY KEY REFERENCES p
 
 ### 10.3 요청 JSON에 더하는 필드(열 추가 없음, 잠정)
 
+- `input.conversationId`: 요청이 속한 대화 ID. 없으면 프로젝트 기본 대화이고, `workspace_requests.conversationId` 가상 열이 이 값을 읽는다(§10.1). Sync 캡처·만들기 요청에는 넣지 않는다.
 - `input.hostUse`: `'none' | 'read' | 'write'`. `none`이면 호스트 경합 대상 목록이 비고, `read`는 문서 키만 가진다(SPEC-02.9).
 - 차례를 기다리는 요청은 거절하지 않고 `state: 'queued'`로 두고, 결과 JSON에 `waitingFor: { kind: 'document' | 'conversation' | 'project', key, position }`을 적는다. `document`는 같은 문서 쓰기의 대기열, `conversation`은 한 대화에서 진행 중인 턴 뒤에 덧붙인 말, `project`는 프로젝트 AI 턴 상한(기본 3)이다. 앞 작업이 끝나면 실행기가 다음을 꺼낸다. 재시작 뒤 `queued` 요청은 보존하되 자동으로 실행하지 않는다(SPEC-02.9).
 - 요청 자료의 원장 항목은 `{ kind: 'ledger', items: [...] }` 하나이며 `supersededBy`가 없는 최신 항목만 넣고 8 KB를 넘으면 오래된 것부터 요약한다.
@@ -553,6 +564,7 @@ CREATE TABLE IF NOT EXISTS project_roots(projectId TEXT PRIMARY KEY REFERENCES p
 |---|---|---|
 | before-run | `inputs-present`, `units-si`, `stale-input`, `fact-valid` | block(`fact-valid`는 미확정 근거면 warn) |
 | before-run | `inputs-confirmed` | warn(만들기 전에는 block) |
+| before-run | `basis-required` | warn(근거가 '물어볼 것'인 설정값이 기본값 그대로임) |
 | after-run | `non-empty`, `no-nan`, `ids-stable`, `ring-orientation`, `polygon-valid` | block |
 | after-run | `inside-boundary`, `no-overlap`, `planar-curve` | block 또는 isolate(jig가 고름) |
 | after-run | `span-max`, `cantilever-max` | 판정(결과 표에 '초과'로 올림) |
@@ -561,14 +573,14 @@ CREATE TABLE IF NOT EXISTS project_roots(projectId TEXT PRIMARY KEY REFERENCES p
 | before-render | `claim-consistent` | block(틀 문장으로 되돌림) |
 | before-bake | `solid-closed`, `tag-scope`, `count-match`, `layer-scope`, `hidden-target`, `bake-args-safe`, `inputs-confirmed`, `analysis-confirmed` | block |
 
-`analysis-confirmed`는 부재 만들기에 같은 입력 지문의 확정 해석이 있어야 통과한다(SPEC-06). 점검 실패 이유는 단계 레일에 건축 문장으로 보인다(문구는 Design).
+`analysis-confirmed`는 부재 만들기에 같은 입력 지문의 확정 해석이 있어야 통과한다(SPEC-06). 점검 실패 이유는 단계 레일에 건축 문장으로 보인다(문구는 Design). 목록에 있으나 아직 구현되지 않은 점검은 선언한 수준으로 실패한다(fail closed)—설명서 검사가 `JIG_GATE_PENDING` 경고로 알린다. 항목 점검의 인자는 `items`(출력 안 배열 경로)·`key`(안정 키 필드)·`field`(다각형·점 필드)·`boundary`(입력 경로 또는 `output.` 접두 출력 경로)다.
 
 ## 12. 가져오기와 서명(1차)
 
 - **설치 키:** 설치본이 처음 켜질 때 32바이트 난수 키를 설치본 데이터 폴더(`%LOCALAPPDATA%\VIDE\jig-signing.key`, 이름 잠정)에 만든다. 백업·내보내기·공유 대상이 아니다.
 - **묶기:** `npm run jig:pack -- <소스 폴더> --data-dir <설치본 데이터 폴더>`. 개발 서버의 `.vide/dev-data`와 다른 폴더이므로 키 위치를 명시한다. 묶기 전에 `jig:validate`·`jig:test`를 통과해야 한다.
 - **digest:** 패키지 파일을 경로순으로 정렬해 `경로\0sha256(파일)\n`을 이은 문자열의 SHA-256.
-- **`.vjig` 형식(잠정):** gzip JSON `{ format: 'vide.jig.pack/1', id, version, files: { <경로>: <base64> }, digest, sig: { alg: 'HMAC-SHA256', keyId, mac } }`. `keyId`는 키 SHA-256의 앞 16자.
+- **`.vjig` 형식(잠정):** gzip JSON `{ format: 'vide.jig.pack/1', id, version, files: { <경로>: <base64> }, digest, sig: { alg: 'HMAC-SHA256', keyId, mac } }`. `keyId`는 키 SHA-256의 앞 16자, `mac`은 `HMAC-SHA256(key, "<id>@<version>\n<digest>")`, 파일 이름은 `<id의 /를 ~로>@<version>.vjig`(기본 출력 `.vide/jig-packs/`). 키 파일은 32바이트를 hex로 적는다. 같은 digest를 다시 가져오면 아무것도 바꾸지 않고 `installed: false`로 답한다.
 - **가져오기:** digest를 다시 계산하고 HMAC를 확인한 뒤 형식·금지 파일·부품·능력 어휘를 점검하고, `<data>/jigs/installed/<id>@<version>/`에 읽기 전용으로 풀고 `jig_packages`(`source: dev-pack`)에 적는다. 서명이 없거나 맞지 않으면 422 `JIG_SIGNATURE`로 거절한다. 이미 설치된 `id@version`과 digest가 다르면 409로 거절한다(같은 버전을 다른 내용으로 덮지 않는다).
 - **초안 고정:** 엔진이 만든 초안을 고정할 때는 서명 대신 엔진이 digest를 기록하고 `source: ai-draft`로 적는다.
 - 보관소 API·원격 설치·다른 PC 묶음은 C1 결정 뒤 이 문서에 더한다.

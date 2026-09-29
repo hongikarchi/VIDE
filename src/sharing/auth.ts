@@ -18,7 +18,7 @@ export interface Env {
   SNAPSHOTS_ENABLED?: string;
   /** Snapshot bytes one account may keep (MB, default 500). */
   SNAPSHOT_QUOTA_MB?: string;
-  /** Snapshot bytes the whole site may keep (MB, default 8000 of the 10 GB free R2). */
+  /** Snapshot bytes the whole site may keep (MB, default 0 = off until R2 charges are accepted). */
   SNAPSHOT_TOTAL_MB?: string;
 }
 

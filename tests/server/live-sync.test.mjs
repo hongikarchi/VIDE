@@ -97,8 +97,10 @@ test('a display Sync referenced by another request is kept; the merge becomes a 
     sketches: [],
     files: [],
     baseRequestId: 'sync',
+    applyToSource: true,
   });
-  // While that request is queued, the update waits instead of racing it.
+  // While a source apply of that document is queued, the update waits instead of racing it
+  // (SPEC-02.9 2: a read waits only for a write to the same user document).
   assert.deepEqual(await live.run(project.id, { ...target, basisId: 'sync', revision: 2 }), {
     retry: 'PROJECT_BUSY',
   });

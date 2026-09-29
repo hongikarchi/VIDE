@@ -59,9 +59,16 @@ internal sealed class EditorExecutor(RhinoDoc document, string directory, Func<s
         if (Fingerprint() != fingerprint) throw new InvalidOperationException("SOURCE_CHANGED");
         // The copy only needs to open. Objects that do not round-trip exactly (or are not written,
         // e.g. worksession references) are simply not editable in it; application touches only the
-        // objects the AI changed, so they are never overwritten or removed.
-        using (var copy = Rhino.FileIO.File3dm.Read(filename))
-            if (copy == null) throw new InvalidOperationException("CAPTURE_FAILED");
+        // objects the AI changed, so they are never overwritten or removed. A file written a moment
+        // ago can still be held by an on-access scanner, so the read is retried briefly.
+        Rhino.FileIO.File3dm? copy = null;
+        for (var attempt = 0; attempt < 8 && copy == null; attempt++)
+        {
+            if (attempt > 0) Thread.Sleep(250);
+            copy = Rhino.FileIO.File3dm.Read(filename);
+        }
+        if (copy == null) throw new InvalidOperationException("CAPTURE_FAILED");
+        copy.Dispose();
         var revision = receipt.RootElement.TryGetProperty("revisionHash", out var token) && token.ValueKind == JsonValueKind.String ? token.GetString() : null;
         return new { ok = true, filename, fileHash = Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(filename))).ToLowerInvariant(),
             documentHash = fingerprint, revisionHash = revision, documentId = document.RuntimeSerialNumber, name = receipt.RootElement.GetProperty("name").GetString(),

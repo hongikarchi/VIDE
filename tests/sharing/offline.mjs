@@ -65,35 +65,45 @@ const bridge = createServer(async (request, response) => {
 });
 await new Promise((done) => bridge.listen(0, '127.0.0.1', done));
 const origin = 'http://127.0.0.1:' + bridge.address().port;
-mf = new Miniflare({
-  resourcePersistencePath: join(directory, 'state'),
-  telemetry: { enabled: false },
-  log: new Log(LogLevel.NONE),
-  workers: [
-    {
-      config: {
-        name: 'vide-sharing-offline-test',
-        compatibilityDate: '2026-09-22',
-        compatibilityFlags: ['nodejs_compat'],
-        manifest: {
-          mainModule: 'worker.js',
-          modules: { 'worker.js': { type: 'esm', contents: bundled.outputFiles[0].text } },
-        },
-        env: {
-          DB: { type: 'd1', id: 'test-db', dev: { remote: false } },
-          ASSETS: { type: 'r2', name: 'test-assets', dev: { remote: false } },
-          AUTH_MODE: { type: 'text', value: 'manual-approval' },
-          AUTH_ORIGIN: { type: 'text', value: origin },
-          AUTH_SECRET: { type: 'text', value: randomBytes(32).toString('hex') },
-          SIGNUP_CODE: { type: 'text', value: 'test-code' },
-          EMAIL_FROM: { type: 'text', value: '' },
-          // A tiny account quota so the limit is reachable in a test.
-          SNAPSHOT_QUOTA_MB: { type: 'text', value: '0.05' },
+const secret = randomBytes(32).toString('hex');
+// Site settings on top of the defaults; a null value leaves the setting out.
+const options = (settings = {}) => {
+  const text = Object.entries({
+    AUTH_MODE: 'manual-approval',
+    AUTH_ORIGIN: origin,
+    AUTH_SECRET: secret,
+    SIGNUP_CODE: 'test-code',
+    EMAIL_FROM: '',
+    // A tiny account quota so the limit is reachable in a test; the site cap turns snapshots on.
+    SNAPSHOT_QUOTA_MB: '0.05',
+    SNAPSHOT_TOTAL_MB: '1',
+    ...settings,
+  }).filter(([, value]) => value !== null);
+  return {
+    resourcePersistencePath: join(directory, 'state'),
+    telemetry: { enabled: false },
+    log: new Log(LogLevel.NONE),
+    workers: [
+      {
+        config: {
+          name: 'vide-sharing-offline-test',
+          compatibilityDate: '2026-09-22',
+          compatibilityFlags: ['nodejs_compat'],
+          manifest: {
+            mainModule: 'worker.js',
+            modules: { 'worker.js': { type: 'esm', contents: bundled.outputFiles[0].text } },
+          },
+          env: {
+            DB: { type: 'd1', id: 'test-db', dev: { remote: false } },
+            ASSETS: { type: 'r2', name: 'test-assets', dev: { remote: false } },
+            ...Object.fromEntries(text.map(([key, value]) => [key, { type: 'text', value }])),
+          },
         },
       },
-    },
-  ],
-});
+    ],
+  };
+};
+mf = new Miniflare(options());
 const call = async (path, { method = 'GET', data, cookie } = {}) => {
   const response = await mf.dispatchFetch(origin + path, {
     method,
@@ -243,6 +253,43 @@ try {
   );
   // Replacing the same file's snapshot does not count twice.
   assert.equal(await pc.uploadSnapshot(project.id, linkId, meta, bytes), undefined);
+  const config = async () => (await call('/api/config')).value;
+  assert.equal((await config()).snapshotsEnabled, true);
+
+  // RESEARCH-10 §13.6: the upload pause stops PC snapshot writes too, and snapshots stay off
+  // unless the site sets a site-wide cap (default 0) and leaves the switch on.
+  const spare = randomUUID();
+  assert.equal(await pc.uploadSnapshot(project.id, spare, meta, bytes), undefined);
+  for (const settings of [
+    { UPLOADS_ENABLED: 'false' },
+    { SNAPSHOTS_ENABLED: 'false' },
+    { SNAPSHOT_TOTAL_MB: null },
+    { SNAPSHOT_TOTAL_MB: '0' },
+  ]) {
+    await mf.setOptions(options(settings));
+    assert.equal(
+      await pc.uploadSnapshot(project.id, randomUUID(), meta, bytes),
+      'SNAPSHOTS_DISABLED',
+      JSON.stringify(settings),
+    );
+    assert.equal((await config()).snapshotsEnabled, false, JSON.stringify(settings));
+  }
+  // While uploads are paused, the owner still reads and the PC still removes snapshots.
+  await mf.setOptions(options({ UPLOADS_ENABLED: 'false' }));
+  assert.equal((await config()).uploadsEnabled, false);
+  assert.equal(
+    (await call(`/api/projects/${project.id}/snapshots/${linkId}`, { cookie: alice.cookie }))
+      .status,
+    200,
+  );
+  assert.equal(await pc.deleteSnapshot(project.id, spare), true);
+  assert.deepEqual(
+    (
+      await call(`/api/projects/${project.id}/snapshots`, { cookie: alice.cookie })
+    ).value.snapshots.map((s) => s.linkId),
+    [linkId],
+  );
+  await mf.setOptions(options());
 
   // Requests left on the site wait for the PC, can be taken back until then, and arrive once.
   const queued = await call(`/api/projects/${project.id}/queue`, {
@@ -389,6 +436,7 @@ try {
       passed: true,
       snapshots: true,
       quota: true,
+      uploadPause: true,
       ownerOnly: true,
       queue: true,
       browser,

@@ -1,5 +1,6 @@
 import { isDwgSdkEditMode } from '../contracts/dwg-edit-mode.ts';
-import { requestConflict } from '../contracts/request-scope.ts';
+import { AI_TURN_LIMIT, requestAdmission, waitingOf } from '../contracts/request-scope.ts';
+import type { WaitingFor } from '../contracts/request-scope.ts';
 import { interventionInput } from './intervention.ts';
 import { requestInputSchema, requestStateSchema } from '../contracts/workspace.ts';
 import { DomainError } from './store.ts';
@@ -241,15 +242,18 @@ export class Workspace {
       )
         fail('STALE_REFERENCE');
     }
-    const conflict = requestConflict(
+    // SPEC-02.9: overlapping work is stored to wait its turn, not refused. An intervention waits
+    // for its predecessor first; its own turn is checked when that one ends (Execution).
+    const admission = requestAdmission(
       input,
       this.list(projectId).filter(
         (row) =>
           !predecessorId ||
           (row.id !== predecessorId && row.input.parentRequestId !== predecessorId),
       ),
+      { aiTurns: this.aiTurns },
     );
-    if (conflict) fail(conflict);
+    if (admission.code) fail(admission.code);
     this.store.db
       .prepare('INSERT INTO workspace_requests VALUES(?,?,?,?,?,?)')
       .run(
@@ -257,10 +261,74 @@ export class Workspace {
         projectId,
         serialized,
         'queued',
-        predecessorId ? JSON.stringify({ phase: 'waiting' }) : null,
+        predecessorId
+          ? JSON.stringify({ phase: 'waiting' })
+          : admission.waitingFor
+            ? JSON.stringify({ phase: 'queue', waitingFor: admission.waitingFor })
+            : null,
         new Date().toISOString(),
       );
     return { request: this.get(projectId, input.id), created: true };
+  }
+  /** AI turns running at once in a project (SPEC-02.9 4; setting 2-4). */
+  aiTurns = AI_TURN_LIMIT;
+  /**
+   * Admission of a stored request against the requests ahead of it: those running and those
+   * waiting before it. Later waiting requests stand behind it; an intervention keeps the place of
+   * the request it replaces.
+   */
+  admission(projectId: string, id: string, rows = this.list(projectId)) {
+    const index = rows.findIndex((row) => row.id === id);
+    if (index < 0) fail('NOT_FOUND');
+    const placeOf = (at: number) => {
+      const replaced = rows.findIndex((row) => row.id === rows[at].input.supersedesRequestId);
+      return replaced >= 0 ? Math.min(replaced, at) : at;
+    };
+    const place = placeOf(index);
+    return requestAdmission(
+      rows[index].input,
+      rows.filter((row, at) => at !== index && !(waitingOf(row) && placeOf(at) > place)),
+      { aiTurns: this.aiTurns },
+    );
+  }
+  /** Keep a queued request waiting with its current place in line (never a running one). */
+  wait(projectId: string, id: string, waitingFor: WaitingFor) {
+    this.store.db
+      .prepare(
+        `UPDATE workspace_requests SET result=? WHERE projectId=? AND id=? AND state='queued'`,
+      )
+      .run(JSON.stringify({ phase: 'queue', waitingFor }), projectId, id);
+    this.light.delete(id);
+    return this.get(projectId, id);
+  }
+  /**
+   * The waiting requests whose turn has come, in order (the executor starts them now). The rest
+   * keep an up-to-date place in line; one behind an unresolved result stops with that reason
+   * (SPEC-02.9 5) and is kept, not run.
+   */
+  release(projectId: string): StoredWork[] {
+    const rows = this.list(projectId);
+    const ready: StoredWork[] = [];
+    for (let index = 0; index < rows.length; index++) {
+      const row = rows[index];
+      const waiting = waitingOf(row);
+      if (!waiting) continue;
+      const admission = this.admission(projectId, row.id, rows);
+      if (admission.code) {
+        rows[index] = this.update(projectId, row.id, 'interrupted', {
+          ...row.result,
+          code: admission.code,
+        });
+      } else if (admission.waitingFor) {
+        if (JSON.stringify(admission.waitingFor) !== JSON.stringify(waiting))
+          rows[index] = this.wait(projectId, row.id, admission.waitingFor);
+      } else {
+        ready.push(row);
+        // Counted as running for the requests behind it.
+        rows[index] = { ...row, state: 'running', result: null };
+      }
+    }
+    return ready;
   }
   update(projectId: string, id: string, state: RequestState, result: unknown = null): StoredWork {
     if (state === 'queued' || !requestStateSchema.safeParse(state).success) fail('INVALID_INPUT');

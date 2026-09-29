@@ -1,7 +1,8 @@
 // geometry-kit plan basics (official library `vide/geometry-kit`, ARCH-03 §2.3, PLAN-23 T-042).
 // Pure plan (XY) geometry in metres. No node: imports: the engine, the step runner bundle and the
 // browser all load this. Invalid input throws GeometryError carrying the after-run gate it fails
-// ('no-nan' | 'polygon-valid', SPEC-07 계산 뒤 점검); validatePolygon returns the same as a value.
+// ('no-nan' | 'polygon-valid' | 'planar-curve', SPEC-07 계산 뒤 점검); validatePolygon returns the
+// same as a value.
 
 export type Vec2 = [number, number];
 export type Vec3 = [number, number, number];
@@ -10,7 +11,7 @@ export type PlanPoint = readonly number[];
 /** A plan ring without the closing repeat of its first point. */
 export type Polygon = Vec2[];
 
-export type GeometryErrorCode = 'no-nan' | 'polygon-valid';
+export type GeometryErrorCode = 'no-nan' | 'polygon-valid' | 'planar-curve';
 export class GeometryError extends Error {
   code: GeometryErrorCode;
   constructor(code: GeometryErrorCode, message: string) {
@@ -59,7 +60,8 @@ export function cross(o: PlanPoint, a: PlanPoint, b: PlanPoint) {
   return (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
 }
 
-function extent(points: readonly PlanPoint[]) {
+/** Largest side of the axis-aligned box around the points (the shape's own scale). */
+export function extent(points: readonly PlanPoint[]) {
   let minX = Infinity,
     minY = Infinity,
     maxX = -Infinity,

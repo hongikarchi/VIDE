@@ -38,18 +38,24 @@ internal static class WorkerScene
     }
 
     // Detailed meshes/measurements are exported once for the candidate, not on every AI query.
+    // Block instances carry their definition (flattened, in definition space) once per page and a
+    // row-major transform, the same shape as DisplayScene; `scope` limits the read to layers and
+    // includes hidden objects when asked (files opened in VIDE, ARCH-03 §8).
     internal static object Export(RhinoDoc doc, Func<RhinoObject, string, Measurements?>? cached = null,
-        Action<RhinoObject, string, Measurements>? observed = null, int offset = 0, int limit = MaxObjects, int revision = 0, bool displayOnly = false)
+        Action<RhinoObject, string, Measurements>? observed = null, int offset = 0, int limit = MaxObjects, int revision = 0, bool displayOnly = false,
+        ReadScope? scope = null)
     {
         var scale = displayOnly ? RhinoMath.UnitScale(doc.ModelUnitSystem, UnitSystem.Meters) : 1.0;
         if (!double.IsFinite(scale) || scale <= 0 || (displayOnly && doc.ModelUnitSystem is UnitSystem.None or UnitSystem.CustomUnits))
             throw new InvalidOperationException("UNKNOWN_UNITS");
-        var ordered = doc.Objects.GetObjectList(ObjectType.AnyObject).OrderBy(obj => obj.Id).ToArray();
-        if (ordered.Length > MaxObjects) throw new InvalidOperationException("IMPORT_LIMIT");
+        scope ??= ReadScope.Display;
+        var ordered = DisplayScene.Listed(doc, scope);
         if (offset < 0 || offset > ordered.Length || limit < 1 || limit > MaxObjects)
             throw new InvalidOperationException("INVALID_PAGE");
+        var survey = ReadSurvey.Of(doc, ordered, scope);
         var objects = new List<object>();
         var scene = new List<object>();
+        var definitions = new Dictionary<string, object>();
         var remainingAttributes = 262144;
         var measuredObjects = 0;
         var reusedObjects = 0;
@@ -63,6 +69,13 @@ internal static class WorkerScene
             using var converted = geometry is Extrusion extrusion ? extrusion.ToBrep() : null;
             var brep = geometry as Brep ?? converted;
             var curve = geometry as Curve;
+            object? block = null;
+            if (geometry is InstanceReferenceGeometry reference && doc.InstanceDefinitions.FindId(reference.ParentIdefId) is { IsDeleted: false } definition)
+            {
+                var key = definition.Id.ToString();
+                if (!definitions.ContainsKey(key)) definitions[key] = DefinitionJson(doc, definition, scale);
+                block = new { definition = key, transform = DisplayScene.TransformOf(reference.Xform, scale) };
+            }
             if (brep != null && geometry.IsValid)
             {
                 using var local = brep.DuplicateBrep();
@@ -100,14 +113,39 @@ internal static class WorkerScene
             }
             var id = Id(obj); var name = obj.Name ?? "Object";
             objects.Add(new { id, nativeId = obj.Id.ToString(), kind = "native", name, origin });
-            scene.Add(new { id, nativeId = obj.Id.ToString(), nativeType = geometry.ObjectType.ToString(), geometryHash, name64 = Encode(name), origin,
-                boundsSize = new[] { (bounds.Max.X - bounds.Min.X) * scale, (bounds.Max.Y - bounds.Min.Y) * scale, (bounds.Max.Z - bounds.Min.Z) * scale },
-                vertices = vertices.Select(value => value * scale).ToArray(), indices, line = line.Select(value => value * scale).ToArray(), area = measurements.Area, volume = measurements.Volume, length = measurements.Length,
-                layer64 = Encode(doc.Layers[obj.Attributes.LayerIndex].FullPath), attributes64 = attributes, attributesComplete = complete, valid = geometry.IsValid,
-                displayColor = Hex(obj.Attributes.DrawColor(doc)), layerColor = Hex(doc.Layers[obj.Attributes.LayerIndex].Color), materialColor = MaterialColor(obj) });
+            var row = new Dictionary<string, object?>
+            {
+                ["id"] = id, ["nativeId"] = obj.Id.ToString(), ["nativeType"] = geometry.ObjectType.ToString(), ["geometryHash"] = geometryHash,
+                ["name64"] = Encode(name), ["origin"] = origin,
+                ["boundsSize"] = new[] { (bounds.Max.X - bounds.Min.X) * scale, (bounds.Max.Y - bounds.Min.Y) * scale, (bounds.Max.Z - bounds.Min.Z) * scale },
+                ["vertices"] = vertices.Select(value => value * scale).ToArray(), ["indices"] = indices, ["line"] = line.Select(value => value * scale).ToArray(),
+                ["area"] = measurements.Area, ["volume"] = measurements.Volume, ["length"] = measurements.Length,
+                ["layer64"] = Encode(doc.Layers[obj.Attributes.LayerIndex].FullPath), ["attributes64"] = attributes, ["attributesComplete"] = complete, ["valid"] = geometry.IsValid,
+                ["displayColor"] = Hex(obj.Attributes.DrawColor(doc)), ["layerColor"] = Hex(doc.Layers[obj.Attributes.LayerIndex].Color), ["materialColor"] = MaterialColor(obj),
+            };
+            if (block != null) row["block"] = block;
+            scene.Add(row);
         }
-        return new { objects, scene, measurementVersion = 1, measurementStats = new { measuredObjects, reusedObjects },
+        return new { objects, scene, definitions, coverage = survey.Coverage, layers = survey.Layers, measurementVersion = 1,
+            measurementStats = new { measuredObjects, reusedObjects },
             page = new { offset, nextOffset = offset + objects.Count, total = ordered.Length, revision } };
+    }
+
+    /** Flattened block definition (nested references included) in definition space, hashed like DisplayScene's. */
+    private static object DefinitionJson(RhinoDoc doc, InstanceDefinition definition, double scale)
+    {
+        var parts = new DisplayParts(doc, scale);
+        parts.AddDefinition(definition, Transform.Identity, 0, [definition.Id]);
+        var texts = parts.Texts.Select(text => new { s = text.S, p = text.P, h = text.H, r = text.R, ax = text.Ax, ay = text.Ay }).ToArray();
+        var options = new System.Text.Json.JsonSerializerOptions();
+        using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+        hash.AppendData(Encoding.UTF8.GetBytes(definition.Id.ToString()));
+        hash.AppendData(System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(parts.Vertices, options));
+        hash.AppendData(System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(parts.Indices, options));
+        hash.AppendData(System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(parts.Segments, options));
+        hash.AppendData(System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(texts, options));
+        return new { hash = Convert.ToHexString(hash.GetHashAndReset()).ToLowerInvariant(),
+            vertices = parts.Vertices, indices = parts.Indices, segments = parts.Segments, texts };
     }
 
     private static string Encode(string value) => Convert.ToBase64String(Encoding.UTF8.GetBytes(value));

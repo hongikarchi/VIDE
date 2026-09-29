@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["columns", "axes", "angle_deg", "site"],
+  "properties": {
+    "columns": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["key", "mark", "at"],
+        "properties": {
+          "key": { "type": "string" },
+          "mark": { "type": "string" },
+          "i": { "type": "integer" },
+          "j": { "type": "integer" },
+          "at": { "type": "array", "items": { "type": "number" } }
+        }
+      }
+    },
+    "axes": { "type": "object", "required": ["x", "y"] },
+    "angle_deg": { "type": "number" },
+    "site": { "type": "object", "required": ["polygon", "area_m2"] }
+  }
+}

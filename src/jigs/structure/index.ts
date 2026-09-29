@@ -18,10 +18,29 @@ import {
   type DraftSource,
 } from './input.ts';
 import { distributeAreaLoads, type LedgerRow } from './loads.ts';
-import { checkModel, classifyFailures } from './review.ts';
+import { checkModel, checkModelStatic, classifyFailures } from './review.ts';
 
-export { buildDraft, checkModel };
+export { buildDraft, checkModel, checkModelStatic };
 export type { DraftIssue, DraftOptions, DraftSource };
+// The library both structure jigs share (T-052): model assembly, summary and preview analysis in a
+// worker thread, reference deflection and the structure gates.
+export {
+  analyzeSummary,
+  analysisConfirmed,
+  buildFrameModel,
+  closeAnalysisWorker,
+  comboEcho,
+  memberMapFrom,
+  referenceDeflection,
+  uncheckedListed,
+} from '../official/structure-analysis/index.ts';
+export type {
+  AnalyzeOptions,
+  AnalyzeOutcome,
+  FrameBuild,
+  FramePlan,
+  MemberMap,
+} from '../official/structure-analysis/index.ts';
 
 /** Identity of the document a Sync result came from, to tell a newer Sync of the same document. */
 export function documentKey(result: Record<string, unknown>): string {

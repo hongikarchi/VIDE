@@ -1,8 +1,33 @@
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { resolve } from 'node:path';
+import { join, resolve } from 'node:path';
 
-export function verifyStaging(config, accountOverride = process.env.CLOUDFLARE_ACCOUNT_ID) {
+const decisionsDir = fileURLToPath(new URL('../../docs/decisions/', import.meta.url));
+
+/**
+ * Whether `id` names an approved ADR that records accepting R2 charges for snapshots
+ * (RESEARCH-10 §16 C3). The ADR must mention C3 so an unrelated approved ADR cannot stand in.
+ */
+export function billingDecisionRecorded(id, dir = decisionsDir) {
+  if (typeof id !== 'string' || !/^ADR-\d{3}$/.test(id)) return false;
+  let names;
+  try {
+    names = readdirSync(dir);
+  } catch {
+    return false;
+  }
+  const name = names.find((n) => n.startsWith(id + '-') && n.endsWith('.md'));
+  if (!name) return false;
+  const text = readFileSync(join(dir, name), 'utf8').replace(/\r\n/g, '\n');
+  const head = /^---\n([\s\S]*?)\n---/.exec(text)?.[1] ?? '';
+  return /^status:\s*approved\s*(#.*)?$/m.test(head) && /\bC3\b/.test(text);
+}
+
+export function verifyStaging(
+  config,
+  accountOverride = process.env.CLOUDFLARE_ACCOUNT_ID,
+  decisionRecorded = billingDecisionRecorded,
+) {
   const expected = 'vide-sharing-staging';
   if (
     config.name !== expected ||
@@ -31,6 +56,21 @@ export function verifyStaging(config, accountOverride = process.env.CLOUDFLARE_A
     config.routes?.length
   )
     throw Error('DEPLOYMENT_FREE_TRIAL_POLICY_MISMATCH');
+  // PC snapshots store bytes in R2, which is already past the free 10 GB. Both settings must be
+  // written out (the Worker treats a missing switch as on), and turning either on needs an
+  // approved billing decision named in SNAPSHOT_BILLING_DECISION (RESEARCH-10 §13.6).
+  const { SNAPSHOTS_ENABLED: enabled, SNAPSHOT_TOTAL_MB: totalMb } = config.vars ?? {};
+  if (
+    (enabled !== 'true' && enabled !== 'false') ||
+    typeof totalMb !== 'string' ||
+    !/^\d+(\.\d+)?$/.test(totalMb)
+  )
+    throw Error('DEPLOYMENT_SNAPSHOT_POLICY_MISMATCH');
+  if (
+    (enabled === 'true' || Number(totalMb) > 0) &&
+    !decisionRecorded(config.vars.SNAPSHOT_BILLING_DECISION)
+  )
+    throw Error('DEPLOYMENT_SNAPSHOT_BILLING_UNDECIDED');
 }
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   // Current config uses line comments only; reject unsupported JSONC instead of guessing.
@@ -39,6 +79,6 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
   );
   verifyStaging(config);
   console.log(
-    'Staging configuration matches the approved account, D1, R2 and free-only policy. This is not a live account/billing check.',
+    'Staging configuration matches the approved account, D1, R2 and free-only policy (uploads and snapshots off). This is not a live account/billing check.',
   );
 }
