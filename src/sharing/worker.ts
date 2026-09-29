@@ -6,6 +6,7 @@ import { commentRoute, exportComment } from './comments';
 import { hostDeviceRoute, hostRoute } from './hosts';
 import { accountRoute, displayName } from './accounts';
 import { PROXIED, isPcPath, pcProxy } from './pc-proxy';
+import { offlineRoute } from './offline';
 
 async function handle(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
   try {
@@ -21,6 +22,7 @@ async function handle(request: Request, env: Env, ctx: ExecutionContext): Promis
       return json({
         manualApproval: manualApproval(env),
         uploadsEnabled: env.UPLOADS_ENABLED !== 'false',
+        snapshotsEnabled: env.SNAPSHOTS_ENABLED !== 'false',
       });
     if (
       manualApproval(env) &&
@@ -103,6 +105,8 @@ async function handle(request: Request, env: Env, ctx: ExecutionContext): Promis
       return await commentRoute(request, env, actor, path[2], path[4]);
     if (path[1] === 'projects' && path[2] && path[3] === 'publications')
       return await publicationRoute(request, env, actor, path[2], path.slice(4));
+    if (path[1] === 'projects' && path[2] && (path[3] === 'snapshots' || path[3] === 'queue'))
+      return await offlineRoute(request, env, actor, path[2], path.slice(3));
     if (path[1] === 'projects') return await projectRoute(request, env, actor, path.slice(2));
     if (path[1] === 'hosts') return await hostRoute(request, env, actor, path.slice(2));
     throw new HttpError(404, 'NOT_FOUND');

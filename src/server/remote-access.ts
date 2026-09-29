@@ -34,6 +34,17 @@ const cloudProjectsSchema = z.array(
   z.object({ id: z.string(), name: z.string(), deleted: z.boolean().default(false) }),
 );
 export type CloudProject = z.infer<typeof cloudProjectsSchema>[number];
+/** A request left on the account site while this PC was off (PLAN-20). */
+const queuedSchema = z.array(
+  z.object({
+    id: z.string().uuid(),
+    projectId: z.string(),
+    linkId: z.string().nullable(),
+    body: z.string().max(4000),
+    createdAt: z.number(),
+  }),
+);
+export type QueuedRequest = z.infer<typeof queuedSchema>[number];
 const failure = (code: string) => new DomainError(code);
 
 export interface RemoteStatus {
@@ -59,6 +70,10 @@ interface Options {
   activity?: () => Record<string, number>;
   /** Projects of this PC in the account list (created or renamed on the site). */
   onProjects?: (projects: CloudProject[]) => void;
+  /** Requests left on the site; returns the ids kept, which the site then marks delivered. */
+  onQueue?: (items: QueuedRequest[]) => Promise<string[]> | string[];
+  /** Runs after each successful heartbeat (offline view uploads). */
+  afterHeartbeat?: () => void;
   executable?: string;
   fetcher?: typeof fetch;
   spawnProcess?: typeof spawn;
@@ -358,13 +373,26 @@ export class RemoteAccess {
       if (!response.ok)
         throw failure(response.status === 401 ? 'ACCOUNT_UNLINKED' : 'HEARTBEAT_FAILED');
       const reply = z
-        .object({ projects: cloudProjectsSchema.default([]) })
+        .object({
+          projects: cloudProjectsSchema.default([]),
+          queue: queuedSchema.catch([]).default([]),
+        })
         .passthrough()
         .parse(await response.json());
       this.lastHeartbeat = new Date().toISOString();
       if (this.error?.startsWith('HEARTBEAT') || this.error === 'ACCOUNT_UNLINKED')
         this.error = undefined;
-      if (!offline) this.options.onProjects?.(reply.projects);
+      if (!offline) {
+        this.options.onProjects?.(reply.projects);
+        if (reply.queue.length && this.options.onQueue) {
+          const kept = await this.options.onQueue(reply.queue);
+          if (kept.length)
+            await this.request('/api/hosts/device/queue/delivered', 'POST', { ids: kept }).catch(
+              () => undefined,
+            );
+        }
+        this.options.afterHeartbeat?.();
+      }
     } catch (error) {
       this.error = error instanceof DomainError ? error.code : 'HEARTBEAT_FAILED';
     }
@@ -388,6 +416,55 @@ export class RemoteAccess {
       `/api/hosts/device/projects/${encodeURIComponent(projectId)}/thumbnail`,
       'PUT',
       { image },
+    ).catch(() => undefined);
+    return !!response?.ok;
+  }
+  /**
+   * Store a linked file's offline view on the account site (PLAN-20). Returns an error code, or
+   * undefined when stored.
+   */
+  async uploadSnapshot(
+    projectId: string,
+    linkId: string,
+    meta: { name: string; host: 'rhino' | 'zwcad'; objects: number; capturedAt: number },
+    bytes: Uint8Array,
+  ): Promise<string | undefined> {
+    await this.load();
+    const device = this.device;
+    if (!device) return 'ACCOUNT_UNLINKED';
+    const query = new URLSearchParams({
+      name: meta.name,
+      host: meta.host,
+      objects: String(meta.objects),
+      captured: String(Math.floor(meta.capturedAt)),
+    });
+    try {
+      const response = await this.fetcher(
+        `${device.workerOrigin}/api/hosts/device/projects/${encodeURIComponent(projectId)}/snapshots/${encodeURIComponent(linkId)}?${query}`,
+        {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/octet-stream',
+            'Content-Length': String(bytes.byteLength),
+            Authorization: `Bearer ${device.hostId}.${device.secret}`,
+          },
+          body: bytes,
+          signal: AbortSignal.timeout(120_000),
+        },
+      );
+      if (response.ok) return undefined;
+      const reply = (await response.json().catch(() => ({}))) as { error?: unknown };
+      return typeof reply.error === 'string' ? reply.error : 'SNAPSHOT_UPLOAD_FAILED';
+    } catch {
+      return 'SNAPSHOT_UPLOAD_FAILED';
+    }
+  }
+  async deleteSnapshot(projectId: string, linkId: string) {
+    await this.load();
+    if (!this.device) return false;
+    const response = await this.request(
+      `/api/hosts/device/projects/${encodeURIComponent(projectId)}/snapshots/${encodeURIComponent(linkId)}`,
+      'DELETE',
     ).catch(() => undefined);
     return !!response?.ok;
   }

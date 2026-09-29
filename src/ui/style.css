@@ -3701,3 +3701,51 @@ body.panel-mode #conversation {
   background: #2e2a22;
   color: #d9c08f;
 }
+/* PLAN-20: requests left on the account site and the saved-view switch */
+.link-inbox {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 6px;
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  border-left: 3px solid #d97660;
+  border-radius: 4px;
+  font-size: 11px;
+}
+.link-inbox-item {
+  display: grid;
+  gap: 1px;
+  padding-top: 4px;
+  border-top: 1px dashed var(--line);
+}
+.link-inbox-body {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.link-inbox-item small {
+  color: var(--muted);
+  font-size: 10px;
+}
+.link-inbox-actions {
+  display: flex;
+  gap: 10px;
+}
+.link-offline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  margin-top: 6px;
+  font-size: 11px;
+  color: var(--muted);
+  cursor: pointer;
+}
+.link-offline input {
+  margin: 0;
+}
+.link-offline small {
+  flex-basis: 100%;
+  padding-left: 17px;
+  font-size: 10px;
+}

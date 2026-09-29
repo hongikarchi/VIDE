@@ -25,6 +25,34 @@ export const linkRowSchema = z.object({
   lastError: z.string().optional(),
 });
 export type LinkRow = z.infer<typeof linkRowSchema>;
+/** PLAN-20: saved views on the account site and requests left there. */
+export const offlineStatusSchema = z.object({
+  enabled: z.boolean(),
+  linked: z.boolean(),
+  files: z.array(
+    z.object({
+      linkId: z.string(),
+      name: z.string(),
+      uploadedAt: z.string().nullable(),
+      size: z.number().nullable(),
+      upToDate: z.boolean(),
+      synced: z.boolean(),
+      error: z.string().nullable(),
+    }),
+  ),
+  inbox: z.array(
+    z.object({
+      id: z.string(),
+      projectId: z.string(),
+      linkId: z.string().nullable(),
+      body: z.string(),
+      createdAt: z.string(),
+      receivedAt: z.string(),
+    }),
+  ),
+});
+export type OfflineStatus = z.infer<typeof offlineStatusSchema>;
+export type InboxItem = OfflineStatus['inbox'][number];
 
 interface Props {
   links: LinkRow[];
@@ -40,11 +68,111 @@ interface Props {
   onRemove: (link: LinkRow) => void;
   onFocus: (link: LinkRow) => void;
   onBackToSync: (link: LinkRow) => void;
+  offline?: OfflineStatus;
+  onOffline: (enabled: boolean) => void;
+  onInboxUse: (item: InboxItem) => void;
+  onInboxDismiss: (item: InboxItem) => void;
 }
 const time = (value?: string) =>
   value ? new Date(value).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }) : '';
 
+const OFFLINE_ERRORS: Record<string, string> = {
+  SNAPSHOT_QUOTA: '계정 저장 용량 초과',
+  SNAPSHOT_SITE_FULL: '사이트 저장 용량 초과',
+  SNAPSHOT_TOO_LARGE: '모델이 너무 큼(50 MB)',
+  SNAPSHOTS_DISABLED: '사이트에서 꺼짐',
+  PROJECT_NOT_FOUND: '계정 목록에 없는 프로젝트',
+  NOT_FOUND: '사이트 업데이트 전',
+};
+const size = (bytes: number) =>
+  bytes < 1048576
+    ? `${Math.max(1, Math.round(bytes / 1024))} KB`
+    : `${(bytes / 1048576).toFixed(1)} MB`;
+
+/** Requests left on the account site while this PC was off; the user reads and sends them. */
+function Inbox(props: Props) {
+  const items = props.offline?.inbox ?? [];
+  if (!items.length) return null;
+  return (
+    <section className="link-inbox" aria-label="사이트에서 남긴 요청">
+      <strong>사이트에서 남긴 요청 {items.length}</strong>
+      {items.map((item) => (
+        <div key={item.id} className="link-inbox-item">
+          <span className="link-inbox-body">{item.body}</span>
+          <small>
+            {new Date(item.createdAt).toLocaleString('ko-KR', {
+              month: 'numeric',
+              day: 'numeric',
+              hour: '2-digit',
+              minute: '2-digit',
+            })}
+            {item.linkId
+              ? ` · ${props.links.find((link) => link.id === item.linkId)?.name ?? '연결 파일'}`
+              : ''}
+          </small>
+          <span className="link-inbox-actions">
+            <button type="button" className="link-button" onClick={() => props.onInboxUse(item)}>
+              작성기로
+            </button>
+            <button
+              type="button"
+              className="link-button"
+              onClick={() => props.onInboxDismiss(item)}
+            >
+              지우기
+            </button>
+          </span>
+        </div>
+      ))}
+    </section>
+  );
+}
+
+/** The per-project switch for the saved view on the account site, with its state. */
+function OfflineSwitch(props: Props) {
+  const offline = props.offline;
+  if (!offline?.linked || !props.links.length) return null;
+  const files = offline.files;
+  const failed = files.find((file) => file.error);
+  const saved = files.filter((file) => file.uploadedAt);
+  const waiting = files.some((file) => file.synced && !file.upToDate && !file.error);
+  const total = saved.reduce((sum, file) => sum + (file.size ?? 0), 0);
+  return (
+    <label
+      className="link-offline"
+      title="켜면 각 연결 파일의 마지막 Sync를 보기 전용 모델(형상·레이어·문자, 원본 파일 아님)로 계정 사이트에 저장합니다. 끄면 사이트의 저장본을 지웁니다."
+    >
+      <input
+        type="checkbox"
+        checked={offline.enabled}
+        onChange={(event) => props.onOffline(event.target.checked)}
+      />
+      PC가 꺼져도 사이트에서 보기
+      {offline.enabled ? (
+        <small>
+          {failed
+            ? `저장 실패: ${OFFLINE_ERRORS[failed.error!] ?? failed.error}`
+            : waiting
+              ? '저장 대기'
+              : saved.length
+                ? `${saved.length}개 저장 · ${size(total)}`
+                : 'Sync 후 저장'}
+        </small>
+      ) : null}
+    </label>
+  );
+}
+
 function Links(props: Props) {
+  return (
+    <>
+      <Inbox {...props} />
+      <LinkList {...props} />
+      <OfflineSwitch {...props} />
+    </>
+  );
+}
+function LinkList(props: Props) {
   if (!props.loaded) return <small className="link-empty">연결 파일 확인 중…</small>;
   if (!props.links.length)
     return (

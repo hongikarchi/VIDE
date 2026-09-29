@@ -1,6 +1,7 @@
 import { applyAttachedCandidate } from './attached-application.ts';
 import { LiveSync } from './live-sync.ts';
 import { RemoteAccess } from './remote-access.ts';
+import { OfflineView } from './offline-view.ts';
 import { Connectors, type ConnectorOptions } from './connectors.ts';
 import { appVersion, defaultRhinoPlugin, defaultZwcadConnection } from './sdk-options.ts';
 import { gzip } from 'node:zlib';
@@ -184,6 +185,8 @@ export async function startServer({
     port: () => Number(new URL(origin).port),
     projects: () => store.listProjects(),
     activity: () => store.projectActivity(),
+    onQueue: (items) => offlineView.receive(items),
+    afterHeartbeat: () => void offlineView.tick().catch(() => {}),
     onProjects: (projects) => {
       for (const project of projects)
         if (!project.deleted) {
@@ -206,6 +209,14 @@ export async function startServer({
         })),
       };
     },
+  });
+  // Offline view and site request inbox (PLAN-20).
+  const offlineView = new OfflineView({
+    directory: filename === ':memory:' ? undefined : dirname(filename),
+    store,
+    workspace,
+    links,
+    remote: remoteAccess,
   });
   const zwcadSdk = sdkOptions
     ? new ZwcadSdkExecution({
@@ -597,6 +608,29 @@ export async function startServer({
           .strict()
           .parse(await body(request));
         send(200, links.setHidden(linkItem[1], linkItem[2], hidden));
+        return;
+      }
+      // Offline view on the account site and requests left there (PLAN-20).
+      const offline = /^\/api\/v1\/projects\/([^/]+)\/offline-view$/.exec(url.pathname);
+      if (offline && request.method === 'GET') {
+        store.project(offline[1]);
+        send(200, await offlineView.status(offline[1]));
+        return;
+      }
+      if (offline && request.method === 'PUT') {
+        const { enabled } = z
+          .object({ enabled: z.boolean() })
+          .strict()
+          .parse(await body(request));
+        await offlineView.setEnabled(offline[1], enabled);
+        send(200, await offlineView.status(offline[1]));
+        return;
+      }
+      const offlineDismiss =
+        /^\/api\/v1\/projects\/([^/]+)\/offline-view\/inbox\/([^/]+)\/dismiss$/.exec(url.pathname);
+      if (offlineDismiss && request.method === 'POST') {
+        await offlineView.dismiss(offlineDismiss[1], offlineDismiss[2]);
+        send(200, await offlineView.status(offlineDismiss[1]));
         return;
       }
       const linkRemove = /^\/api\/v1\/projects\/([^/]+)\/links\/([^/]+)\/remove$/.exec(

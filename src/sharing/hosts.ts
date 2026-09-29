@@ -2,6 +2,7 @@ import { HttpError, body, digest, json, text } from './http';
 import type { Env } from './auth';
 import type { Actor } from './projects';
 import { signIn } from './accounts';
+import { offlineDeviceRoute, pendingQueue } from './offline';
 
 // Work PCs: a desktop VIDE (with Rhino/CAD attached) signs in once with the account's ID and
 // password and receives a host key. It then reports by heartbeat that it is on, its local address
@@ -177,6 +178,8 @@ export async function hostDeviceRoute(
     return json({
       ok: true,
       projects: projects.results.map((p) => ({ id: p.id, name: p.name, deleted: !!p.deleted_at })),
+      // Requests left on the site while the PC was off (PLAN-20).
+      queue: offline ? [] : await pendingQueue(db, row),
     });
   }
   if (path[0] === 'projects' && path.length === 1 && request.method === 'POST') {
@@ -227,6 +230,8 @@ export async function hostDeviceRoute(
     if (!result.meta.changes) throw new HttpError(404, 'PROJECT_NOT_FOUND');
     return json({ ok: true });
   }
+  const offlineReply = await offlineDeviceRoute(request, env, row, path);
+  if (offlineReply) return offlineReply;
   if (path[0] === 'self' && path.length === 1 && request.method === 'DELETE') {
     await db.prepare('DELETE FROM remote_hosts WHERE id=?').bind(row.id).run();
     return json({ removed: true });

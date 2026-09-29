@@ -34,7 +34,14 @@ import { initializeReviews } from './reviews.tsx';
 import { attachSharedFeedback } from './shared-feedback.tsx';
 import { linkedCandidates, showLinkedTargets } from './linked-targets.tsx';
 import { renderWork } from './work-view.tsx';
-import { linkRowSchema, renderLinks, type LinkRow } from './links.tsx';
+import {
+  linkRowSchema,
+  offlineStatusSchema,
+  renderLinks,
+  type InboxItem,
+  type LinkRow,
+  type OfflineStatus,
+} from './links.tsx';
 import { composeLayers, displayIdOf, layerSignature, sourceIdOf } from './layers.ts';
 import { routeRequest, type Route } from './request-route.ts';
 import { renderRequests } from './requests.tsx';
@@ -450,6 +457,10 @@ async function pollLinks() {
     if (project?.id !== projectId) return;
     links = next;
     linksLoaded = true;
+    if (offlineAsked !== projectId) {
+      offlineAsked = projectId;
+      void pollOffline();
+    }
     // Syncs made elsewhere (another window, the Rhino panel) are fetched once.
     for (const link of links) {
       const id = link.lastSync?.requestId;
@@ -489,6 +500,44 @@ async function pollLinks() {
   }
 }
 setInterval(() => void pollLinks(), 1500);
+// Offline view on the account site and requests left there (PLAN-20).
+let offlineState: { projectId: string; status: OfflineStatus } | undefined,
+  offlineAsked = '';
+async function pollOffline(change?: Promise<unknown>) {
+  if (!project || !ready) return;
+  const projectId = project.id;
+  try {
+    const status = offlineStatusSchema.parse(
+      (await change) ?? (await api(`/projects/${projectId}/offline-view`)),
+    );
+    if (project?.id !== projectId) return;
+    offlineState = { projectId, status };
+    renderLinkPanel();
+  } catch (error) {
+    if (change) message(readableError(error).message);
+  }
+}
+setInterval(() => {
+  if (!document.hidden) void pollOffline();
+}, 15_000);
+function useInboxItem(item: InboxItem) {
+  state.body = item.body;
+  $('body').value = item.body;
+  if (item.linkId && links.some((link) => link.id === item.linkId)) {
+    activeLayer = item.linkId;
+    applyActiveLayer();
+  }
+  applyAutoModel();
+  render();
+  $('body').focus();
+  message('사이트에서 남긴 요청을 작성기에 넣었습니다. 내용을 확인하고 보내세요.');
+  dismissInboxItem(item);
+}
+function dismissInboxItem(item: InboxItem) {
+  void pollOffline(
+    api(`/projects/${item.projectId}/offline-view/inbox/${item.id}/dismiss`, 'POST', {}),
+  );
+}
 function renderLinkPanel() {
   renderLinks($('host-document-controls'), {
     links,
@@ -537,6 +586,18 @@ function renderLinkPanel() {
       renderMessages();
       renderLinkPanel();
     },
+    offline: offlineState?.projectId === project?.id ? offlineState?.status : undefined,
+    onOffline: (enabled) => {
+      const projectId = currentProject().id;
+      // The switch moves at once; the PC's answer then fills in the saved state.
+      if (offlineState?.projectId === projectId) {
+        offlineState = { projectId, status: { ...offlineState.status, enabled } };
+        renderLinkPanel();
+      }
+      void pollOffline(api(`/projects/${projectId}/offline-view`, 'PUT', { enabled }));
+    },
+    onInboxUse: useInboxItem,
+    onInboxDismiss: dismissInboxItem,
   });
 }
 /** Composer menu entry: attach the objects selected in the target file's host window. */

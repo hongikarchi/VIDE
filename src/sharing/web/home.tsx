@@ -28,8 +28,10 @@ interface Props {
   thisPc: string;
   refresh: () => Promise<void>;
   review: (project: Project) => void;
+  /** The saved model and requests for the PC (PLAN-20). */
+  offline: (project: Project) => void;
 }
-export function Home({ projects, hosts, thisPc, refresh, review }: Props) {
+export function Home({ projects, hosts, thisPc, refresh, review, offline }: Props) {
   const [creating, setCreating] = useState(false),
     [name, setName] = useState(''),
     [renaming, setRenaming] = useState(''),
@@ -88,6 +90,12 @@ export function Home({ projects, hosts, thisPc, refresh, review }: Props) {
     if (opening) return;
     if (project.role !== 'owner') {
       review(project);
+      return;
+    }
+    // The PC is off: show the saved model and let requests wait for it.
+    const pc = hostOf(project);
+    if (pc && !pc.online) {
+      offline(project);
       return;
     }
     setOpening(project.id);
@@ -240,6 +248,17 @@ export function Home({ projects, hosts, thisPc, refresh, review }: Props) {
                       }}
                     >
                       이름 바꾸기
+                    </button>
+                  ) : null}
+                  {!shared ? (
+                    <button
+                      role="menuitem"
+                      onClick={() => {
+                        setMenu('');
+                        offline(project);
+                      }}
+                    >
+                      저장된 모델·요청 남기기
                     </button>
                   ) : null}
                   <button

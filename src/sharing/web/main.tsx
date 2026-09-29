@@ -6,6 +6,7 @@ import { Account } from './account';
 import { Home } from './home';
 import { useHosts } from './hosts';
 import { Review } from './review';
+import { OfflineProject } from './offline';
 import './style.css';
 
 const displayName = (session: Session) =>
@@ -17,6 +18,9 @@ function Signed({ session, signOut }: { session: Session; signOut: () => void })
   const [projects, setProjects] = useState<Project[] | null>(null),
     [reviewing, setReviewing] = useState(
       () => new URL(location.href).searchParams.get('review') || '',
+    ),
+    [offlineId, setOfflineId] = useState(
+      () => new URL(location.href).searchParams.get('offline') || '',
     ),
     [status, setStatus] = useState('');
   const { hosts, thisPc } = useHosts();
@@ -50,7 +54,11 @@ function Signed({ session, signOut }: { session: Session; signOut: () => void })
     return () => clearInterval(timer);
   }, [refresh]);
   useEffect(() => {
-    const back = () => setReviewing(new URL(location.href).searchParams.get('review') || '');
+    const back = () => {
+      const params = new URL(location.href).searchParams;
+      setReviewing(params.get('review') || '');
+      setOfflineId(params.get('offline') || '');
+    };
     window.addEventListener('popstate', back);
     return () => window.removeEventListener('popstate', back);
   }, []);
@@ -76,6 +84,7 @@ function Signed({ session, signOut }: { session: Session; signOut: () => void })
     }
   }
   const review = projects?.find((project) => project.id === reviewing);
+  const offline = review ? undefined : projects?.find((project) => project.id === offlineId);
   return (
     <div className="site">
       <header className="topbar">
@@ -83,12 +92,14 @@ function Signed({ session, signOut }: { session: Session; signOut: () => void })
           className="wordmark"
           onClick={() => {
             setReviewing('');
+            setOfflineId('');
             history.pushState(null, '', '/');
           }}
         >
           VIDE
         </button>
         {review ? <span className="crumb">/ {review.name} · 공유 검토</span> : null}
+        {offline ? <span className="crumb">/ {offline.name} · 저장된 모델</span> : null}
         <span className="spacer" />
         <span className="user">{displayName(session)}</span>
         <button className="ghost" onClick={signOut}>
@@ -112,6 +123,12 @@ function Signed({ session, signOut }: { session: Session; signOut: () => void })
         <div className="review-page">
           <Review key={review.id} project={review} session={session} />
         </div>
+      ) : offline ? (
+        <OfflineProject
+          key={offline.id}
+          project={offline}
+          pcOnline={!!hosts?.find((host) => host.id === offline.host_id)?.online}
+        />
       ) : (
         <Home
           projects={projects}
@@ -121,6 +138,10 @@ function Signed({ session, signOut }: { session: Session; signOut: () => void })
           review={(project) => {
             setReviewing(project.id);
             history.pushState(null, '', '/?review=' + encodeURIComponent(project.id));
+          }}
+          offline={(project) => {
+            setOfflineId(project.id);
+            history.pushState(null, '', '/?offline=' + encodeURIComponent(project.id));
           }}
         />
       )}

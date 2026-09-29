@@ -14,6 +14,12 @@ export interface Env {
   SIGNUP_CODE?: string;
   /** Oldest PC program version the site still opens (PCs below it must update first). */
   MIN_APP_VERSION?: string;
+  /** Saved views of linked files for when the work PC is off (PLAN-20); 'false' stops uploads. */
+  SNAPSHOTS_ENABLED?: string;
+  /** Snapshot bytes one account may keep (MB, default 500). */
+  SNAPSHOT_QUOTA_MB?: string;
+  /** Snapshot bytes the whole site may keep (MB, default 8000 of the 10 GB free R2). */
+  SNAPSHOT_TOTAL_MB?: string;
 }
 
 export const manualApproval = (env: Env) => env.AUTH_MODE === 'manual-approval';

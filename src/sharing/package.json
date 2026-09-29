@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "typecheck": "tsc -p tsconfig.json",
-    "test": "node ../../tests/sharing/membership.mjs && node ../../tests/sharing/hosts.mjs"
+    "test": "node ../../tests/sharing/membership.mjs && node ../../tests/sharing/hosts.mjs && node ../../tests/sharing/offline.mjs"
   },
   "dependencies": {
     "better-auth": "1.7.5",

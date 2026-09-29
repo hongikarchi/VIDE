@@ -2,10 +2,10 @@
 id: ARCH-01
 title: VIDE 기술 구조와 구현 계약
 status: review
-version: 0.44
+version: 0.45
 updated: 2026-09-29
 owner: agent:codex
-related: [SPEC-00, SPEC-02, SPEC-03, SPEC-04, PLAN, ADR-014, ADR-015, ADR-016, ADR-017]
+related: [SPEC-00, SPEC-02, SPEC-03, SPEC-04, PLAN, PLAN-20, ADR-014, ADR-015, ADR-016, ADR-017]
 ---
 
 # VIDE 기술 구조와 구현 계약
@@ -591,6 +591,7 @@ R2 조건부 쓰기/체크섬은 [공식 Workers API](https://developers.cloudfl
 - ZWCAD 열린 도면 수정(2026-09-29): 연결 DLL(`hosts/zwcad/connection`)은 `queryEntities{offset,limit≤200,handles,layers,types}`(핸들·유형·레이어·색·범위와 유형별 값, 레이어별 개수)와 `runCode{code,write}`를 받는다. 코드는 작업 사본 worker의 `SdkCompiler`(같은 API 정책)로 컴파일한다. `write=false`는 잠금·트랜잭션 후 항상 Abort, `write=true`는 `SendStringToExecute("_VIDEAIRUN")`로 명령 안에서 실행·Commit하고 Entity의 추가·수정·삭제 핸들을 돌려준다. 서버(`ZwcadSdkExecution.runAttached`)는 표시 Sync 기준(`sourceDocument.connection = attached-editor`)이면 이 경로를 쓰고, 쓰기가 있으면 도면을 다시 읽어 결과로 둔다(`appliedDirectly`). 연결 프로그램의 ZWCAD 설치는 DLL과 컴파일러 어셈블리를 `<데이터>\plugins\zwcad\<버전>-<해시8>\`에 복사하고 `HKCU\Software\ZWSOFT\ZWCAD\2023\<언어>\Applications\VIDE`(`LOADER`, `LOADCTRLS=2`, `MANAGED=1`)를 쓴다. 시작 시 `VIDE CAD` 패널을 한 번 연다.
 - 사이트 중계(2026-09-29): 다른 기기의 열기 링크는 터널 주소가 아니라 `<사이트>/pc/<hostId>/?project=<id>#r=<token>`이다. Worker(`src/sharing/pc-proxy.ts`)는 로그인한 소유자의 PC가 켜져 있고 터널 주소가 있을 때 요청을 그 터널로 흘려보낸다. 사이트 쿠키·Referer는 빼고, 사이트 Origin만 받아 PC의 Origin(터널)으로 바꾸고, PC 세션 쿠키는 `vide_remote_<hostId 16진>`(Path=`/pc/<hostId>/`)으로 저장했다가 PC에는 `vide_remote`로 넘긴다. PC 응답의 보안 정책(CSP)은 그대로 둔다. PC가 꺼졌거나 원격이 꺼졌으면 503(`HOST_OFFLINE`·`HOST_REMOTE_OFF`, 화면 이동이면 안내 페이지), 터널 무응답은 502 `HOST_UNREACHABLE`이다. 작업 화면은 상대 주소(`api/v1/…`, Vite `base: './'`)만 써서 PC 루트와 `/pc/<id>/` 양쪽에서 같다. 터널이 다시 시작돼도 같은 주소로 다시 열린다. 사이트는 PWA 설정(`manifest.webmanifest`, 아이콘, iOS 메타)을 제공해 아이패드 홈 화면에 앱으로 추가할 수 있다. 모든 작업 요청이 Worker를 거치므로 Workers 요청 수(무료 10만/일)를 쓴다.
 - 버전: heartbeat 상태에 PC 프로그램 버전을 싣는다. `MIN_APP_VERSION`(선택)보다 낮은 PC는 목록에 "업데이트 필요"로 보이고 열기는 409 `HOST_UPDATE_REQUIRED`다. 비교는 점 구분 숫자이며 사이트↔PC 계약은 하위 호환으로만 바꾼다.
+- 저장된 모델·요청 대기(2026-09-29, [PLAN-20](../plans/PLAN-20-offline-view.md)): `0007-offline-view.sql`이 `project_snapshots(project_id, link_id, user_id, name, host, size, object_count, captured_at, updated_at)`와 `queued_requests(id, project_id, user_id, host_id, link_id, body, created_at, delivered_at, canceled_at)`를 만든다. PC는 `PUT device/projects/:id/snapshots/:linkId?name&host&objects&captured`(본문은 gzip된 `vide-snapshot-v1`, `Content-Length` 필수, 50 MB 이하)로 R2 `snapshots/<project>/<link>`를 덮어쓰고 `DELETE` 같은 경로로 지운다. 한도는 계정 `SNAPSHOT_QUOTA_MB`(기본 500)·사이트 전체 `SNAPSHOT_TOTAL_MB`(기본 8000, R2 무료 10 GB 안)이며 넘으면 507 `SNAPSHOT_QUOTA`·`SNAPSHOT_SITE_FULL`, `SNAPSHOTS_ENABLED=false`면 503이다. heartbeat 응답의 `queue[]`(미전달·미취소 50개까지)를 받은 PC는 보관한 id를 `POST device/queue/delivered {ids}`로 알린다. 브라우저(소유자만): `GET /api/projects/:id/snapshots`, `GET …/snapshots/:linkId`(바이트, `no-store`), `GET|POST /api/projects/:id/queue`(본문 4000자, 미전달 20개까지, 넘으면 429 `QUEUE_FULL`), `DELETE …/queue/:id`(전달 전만, 이후 409). 형식(`src/contracts/offline-snapshot.ts`): `VSN1` + u32 머리 길이 + JSON 머리 + 4바이트 정렬 버퍼. 레이어×종류(mesh·lines·points) 묶음마다 원점 기준 float32 좌표, 정점별 uint8 RGB, uint32 색인이고 문자는 20,000개(각 200자)까지다. PC(`src/server/offline-view.ts`)는 `<데이터>/offline-view.json`에 프로젝트별 켜짐, 파일별 올린 Sync id·시각·크기·오류, 받은 요청(200개)을 둔다. heartbeat 뒤 켜진 프로젝트의 보이는 연결 파일마다 마지막 성공 Sync가 바뀌었으면 파일당 10분에 한 번까지 올린다. 로컬 API: `GET|PUT /api/v1/projects/:id/offline-view {enabled}`, `POST …/offline-view/inbox/:id/dismiss`. 사이트 화면은 `DecompressionStream('gzip')`으로 풀어 묶음마다 한 번 그린다.
 
 ### PC 프로그램
 
