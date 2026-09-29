@@ -3673,3 +3673,31 @@ body.panel-mode #conversation {
     max-height: none;
   }
 }
+
+/* Request routing chips (SPEC-02.15): where the request goes and the automatic model. */
+.route-chip {
+  cursor: pointer;
+  border: 1px solid var(--line);
+}
+.route-chip[data-target='view'] {
+  background: #e6eefc;
+  border-color: #b9c9ec;
+  color: #2f5aa8;
+}
+.route-chip[data-target='document'] {
+  background: var(--soft);
+  color: #4f5c55;
+}
+.model-chip {
+  background: #f3efe6;
+  color: #7a5b2c;
+}
+:root[data-theme='dark'] .route-chip[data-target='view'] {
+  background: #1f2633;
+  border-color: #3a4a6a;
+  color: #8fb0f0;
+}
+:root[data-theme='dark'] .model-chip {
+  background: #2e2a22;
+  color: #d9c08f;
+}

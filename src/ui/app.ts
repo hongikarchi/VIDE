@@ -36,6 +36,7 @@ import { linkedCandidates, showLinkedTargets } from './linked-targets.tsx';
 import { renderWork } from './work-view.tsx';
 import { linkRowSchema, renderLinks, type LinkRow } from './links.tsx';
 import { composeLayers, displayIdOf, layerSignature, sourceIdOf } from './layers.ts';
+import { routeRequest, type Route } from './request-route.ts';
 import { renderRequests } from './requests.tsx';
 import { iconSvg, initializeInspector, renderInspector } from './inspector.ts';
 import { api, connect, errors, labels } from './gateway.ts';
@@ -128,6 +129,10 @@ const renderObjectList = createObjectList($('objects'), (ids, mode) => {
 let foregroundRequest: { id: string; selected: typeof selectedResult; draft: string } | undefined;
 /** The work opened in the work view (work history row or the latest request sent). */
 let focusedWork: string | undefined;
+// Request routing (SPEC-02.15): a flipped route chip and the automatic model choice.
+let routeOverride: 'view' | 'document' | undefined,
+  autoModel = true,
+  autoModelReason = '';
 const focusDraft = () => JSON.stringify({ draft: draftSnapshot(state), strokes });
 initializeWorkspacePanels();
 const workspaceStatus = initializeWorkspaceStatus({
@@ -777,6 +782,40 @@ function render(rebuildRequests = true) {
       render();
     }),
   );
+  // Where this request goes and which model it uses (SPEC-02.15), changeable before sending.
+  const route = state.body.trim() ? currentRoute() : undefined;
+  // Ordinary file work needs no chip; show where it goes when screen words or a flip are involved.
+  if (route && (route.target === 'view' || route.viewWords || routeOverride)) {
+    const view = route.target === 'view';
+    const routeChip = el(
+      'button',
+      view
+        ? `🖥 VIDE 화면만 · ${route.view?.subject ? `${route.view.subject} ${route.view.ids.length}개` : route.view?.action === 'unhide' ? '모두 보이기' : '대상 확인 필요'}`
+        : '📄 파일 작업',
+      $('context'),
+      {
+        type: 'button',
+        class: 'chip route-chip',
+        'data-target': route.target,
+        title: `${route.reason}. 누르면 ${view ? '파일 작업(AI가 원본 작업 사본을 고침)' : 'VIDE 화면만(원본은 그대로)'}으로 바꿉니다.`,
+      },
+    );
+    routeChip.onclick = () => {
+      routeOverride = view ? 'document' : 'view';
+      render();
+    };
+  }
+  if (route?.target === 'document' && autoModelReason)
+    el(
+      'span',
+      `모델 자동 · ${models.find((m) => m.id === state.model)?.name ?? state.model} (${autoModelReason})`,
+      $('context'),
+      {
+        class: 'chip model-chip',
+        title:
+          '모델링은 GPT-6-Astra, 프로그램 작업은 Claude Opus 5.5를 고릅니다. 모델을 직접 고르면 자동 선택을 멈춥니다.',
+      },
+    );
   // Several files on screen: say which one this request changes (SPEC-01.9 요청 대상).
   const target = currentLayers.find(
     (layer) => layer.requestId === (state.baseRequestId ?? displayedResult),
@@ -1089,6 +1128,7 @@ function showLayers() {
             ...o,
             // Several files: the object tree groups by file, then by layer.
             layer: many ? `${layer.name} › ${name ?? '레이어 없음'}` : name,
+            layerName: name,
             type: item?.nativeType || o.kind,
           };
         }),
@@ -1311,6 +1351,9 @@ function fillModels() {
 }
 fillModels();
 $('model').onchange = () => {
+  // The user's own choice wins over the automatic one until the next request.
+  autoModel = false;
+  autoModelReason = '';
   chooseModel(state, $('model').value);
   void refreshAccount();
   render();
@@ -1329,6 +1372,7 @@ $('permission').onchange = () => {
 };
 $('body').oninput = () => {
   state.body = $('body').value;
+  applyAutoModel();
   // Pins whose inline token was deleted from the message leave the request.
   const labels = tokenLabels(state.body);
   state.pins = state.pins.filter((pin) => !pin.label || labels.has(pin.label));
@@ -1417,7 +1461,91 @@ function interventionReason(id: string): string | undefined {
   )
     return '이미 추가 지시가 대기 중입니다.';
 }
+/** Request routing (SPEC-02.15): the rule result, unless the user flipped the chip. */
+function currentRoute(): Route {
+  const route = routeRequest(
+    state.body,
+    objects.map((object) => ({
+      id: object.id,
+      type: object.type,
+      layer: object.layerName ?? object.layer,
+      name: object.name,
+    })),
+    models,
+    selectedIds,
+  );
+  if (!routeOverride || routeOverride === route.target) return route;
+  if (routeOverride === 'document')
+    return { target: 'document', reason: '사용자가 파일 작업으로 바꿨습니다' };
+  // Flipped to the screen: act on the selection, or say that objects are needed.
+  return {
+    target: 'view',
+    view: route.view ?? {
+      action: 'isolate',
+      ids: [...selectedIds],
+      subject: selectedIds.length ? '선택한 객체' : '',
+    },
+    reason: '사용자가 VIDE 화면만으로 바꿨습니다',
+  };
+}
+/** Modeling → GPT-6-Astra, programming → Claude Opus 5.5, while the user has not chosen. */
+function applyAutoModel() {
+  if (!autoModel) return;
+  const route = currentRoute();
+  if (route.target !== 'document' || !route.model) {
+    autoModelReason = '';
+    return;
+  }
+  if (route.model !== state.model) {
+    chooseModel(state, route.model);
+    $('model').value = state.model;
+    void refreshAccount();
+  }
+  autoModelReason = route.task === 'programming' ? '프로그램 작업' : '모델링';
+}
+/** A screen-only request changes the VIDE view; the file and AI are not involved. */
+function runViewRequest(route: Route) {
+  const view = route.view!;
+  if (view.action !== 'unhide' && !view.ids.length) {
+    message(
+      '화면에서 어떤 객체인지 찾지 못했습니다. 객체를 고르거나, 파일 작업으로 보내려면 "VIDE 화면만" 칩을 누르세요.',
+    );
+    return;
+  }
+  const count = view.ids.length.toLocaleString();
+  if (view.action === 'hide') viewport?.hide(view.ids);
+  else if (view.action === 'isolate') viewport?.isolate(view.ids);
+  else if (view.action === 'unhide') viewport?.unhide();
+  else if (view.action === 'fit') viewport?.fit(view.ids);
+  else {
+    selectedIds = [...view.ids];
+    state.selected = selectedIds.at(-1) ?? null;
+  }
+  const verb = {
+    hide: '숨김',
+    isolate: '만 표시',
+    unhide: '모두 보이기',
+    select: '선택',
+    fit: '확대',
+  }[view.action];
+  message(
+    view.action === 'unhide'
+      ? '숨긴 객체를 모두 다시 보입니다 · 원본은 그대로입니다.'
+      : `화면에서 ${view.subject} ${count}개 ${verb} · 원본은 그대로입니다. 다시 보이게 하려면 U.`,
+  );
+  state.body = '';
+  $('body').value = '';
+  routeOverride = undefined;
+  autoModel = true;
+  autoModelReason = '';
+  render();
+}
 $('request').onclick = () => {
+  const route = state.body.trim() ? currentRoute() : undefined;
+  if (route?.target === 'view' && !state.linkedTargets) {
+    runViewRequest(route);
+    return;
+  }
   void submitRequest();
 };
 async function submitRequest(predecessorId?: string) {
@@ -1450,6 +1578,9 @@ async function submitRequest(predecessorId?: string) {
     $('body').value = '';
     if (selectedResult === undefined) selectedResult = displayedResult ?? null;
     foregroundRequest = { id: request.id, selected: selectedResult, draft: focusDraft() };
+    routeOverride = undefined;
+    autoModel = true;
+    autoModelReason = '';
     focusedWork = request.id;
     renderMessages();
     void poll(request.id, projectId, original);
