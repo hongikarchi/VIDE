@@ -204,6 +204,7 @@ export function createViewport(
   const visibleMeshes = () => meshes.filter((mesh) => mesh.visible);
   function applyHidden() {
     for (const mesh of meshes) mesh.visible = !hiddenIds.has(mesh.userData.id);
+    rebatchAll();
     dirty = true;
   }
   let atlas = new TextAtlas();
@@ -706,9 +707,218 @@ export function createViewport(
   }
   function applyDisplay() {
     for (const object of meshes) paint(object);
+    rebatchAll();
     renderer.domElement.dataset.display = display.mode;
     renderer.domElement.dataset.colorSource = display.colorSource;
     renderer.domElement.dataset.plot = String(display.plot);
+    dirty = true;
+  }
+  /*
+   * Draw batching. Per-object meshes stay the source of truth for picking, selection, hiding and
+   * colours, but plain surfaces, their crease edges and plain lines are drawn through merged
+   * geometry: objects are grouped in spatial chunks (up to CHUNK objects, local origin per cell so
+   * survey coordinates keep millimetres) with per-vertex colours. A batched object sits on the
+   * PICK layer (raycast only); selected, hidden and specially drawn parts stay individually drawn.
+   * Changing the selection rebuilds only the chunks involved.
+   */
+  const RENDER_LAYER = 0,
+    PICK_LAYER = 1,
+    CHUNK = 400,
+    CELL = 250;
+  const batchRoot = new THREE.Group();
+  scene.add(batchRoot);
+  interface Batch {
+    members: RenderObject[];
+    origin: THREE.Vector3;
+    drawn: THREE.Object3D[];
+  }
+  let batches = new Map<string, Batch>();
+  let batchOfId = new Map<string, string>();
+  const onLayer = (object: THREE.Object3D, layer: number) => object.layers.set(layer);
+  /** The parts of an object that a chunk may draw; empty when it must be drawn by itself. */
+  function batchParts(object: RenderObject) {
+    if (display.plot || !object.visible || selectedIds.has(object.userData.id)) return undefined;
+    if (object instanceof THREE.Points) return undefined;
+    if (object instanceof THREE.Mesh) {
+      const edges = object.userData.edges as THREE.LineSegments | undefined;
+      return {
+        surface: object.material.visible ? object : undefined,
+        edges: edges?.visible ? edges : undefined,
+      };
+    }
+    if (object.userData.plotRuns || object.userData.plotLine || !object.material.visible)
+      return undefined;
+    return { line: object };
+  }
+  function disposeBatch(batch: Batch) {
+    for (const drawn of batch.drawn) {
+      batchRoot.remove(drawn);
+      disposeObject(drawn);
+    }
+    batch.drawn = [];
+  }
+  function buildBatch(batch: Batch) {
+    disposeBatch(batch);
+    const surfaces: THREE.Mesh[] = [],
+      wires: THREE.Line[] = [];
+    for (const member of batch.members) {
+      const parts = batchParts(member);
+      const surface = parts && 'surface' in parts ? parts.surface : undefined;
+      const edges = parts && 'edges' in parts ? parts.edges : undefined;
+      const line = parts && 'line' in parts ? parts.line : undefined;
+      onLayer(member, surface || line ? PICK_LAYER : RENDER_LAYER);
+      const own = member.userData.edges as THREE.LineSegments | undefined;
+      if (own) onLayer(own, edges ? PICK_LAYER : RENDER_LAYER);
+      if (surface) surfaces.push(surface as THREE.Mesh);
+      if (edges) wires.push(edges);
+      if (line) wires.push(line as THREE.Line);
+    }
+    const point = new THREE.Vector3(),
+      normal = new THREE.Vector3(),
+      normalMatrix = new THREE.Matrix3();
+    if (surfaces.length) {
+      let vertexCount = 0,
+        indexCount = 0;
+      for (const mesh of surfaces) {
+        const count = mesh.geometry.getAttribute('position').count;
+        vertexCount += count;
+        indexCount += mesh.geometry.index?.count ?? count;
+      }
+      const positions = new Float32Array(vertexCount * 3),
+        normals = new Float32Array(vertexCount * 3),
+        colors = new Float32Array(vertexCount * 3),
+        indices = new Uint32Array(indexCount);
+      let v = 0,
+        n = 0;
+      for (const mesh of surfaces) {
+        mesh.updateWorldMatrix(true, false);
+        normalMatrix.getNormalMatrix(mesh.matrixWorld);
+        const position = mesh.geometry.getAttribute('position'),
+          normalAttribute = mesh.geometry.getAttribute('normal'),
+          color = (mesh.material as THREE.MeshStandardMaterial).color,
+          base = v;
+        for (let i = 0; i < position.count; i++, v++) {
+          point.fromBufferAttribute(position, i).applyMatrix4(mesh.matrixWorld).sub(batch.origin);
+          positions.set([point.x, point.y, point.z], v * 3);
+          if (normalAttribute) {
+            normal.fromBufferAttribute(normalAttribute, i).applyNormalMatrix(normalMatrix);
+            normals.set([normal.x, normal.y, normal.z], v * 3);
+          }
+          colors.set([color.r, color.g, color.b], v * 3);
+        }
+        const index = mesh.geometry.index;
+        if (index) for (let i = 0; i < index.count; i++) indices[n++] = base + index.getX(i);
+        else for (let i = 0; i < position.count; i++) indices[n++] = base + i;
+      }
+      const geometry = new THREE.BufferGeometry();
+      geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+      geometry.setAttribute('normal', new THREE.BufferAttribute(normals, 3));
+      geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+      geometry.setIndex(new THREE.BufferAttribute(indices, 1));
+      const sample = surfaces[0].material as THREE.MeshStandardMaterial;
+      const material = surfaceMaterial();
+      material.vertexColors = true;
+      material.color.set(0xffffff);
+      material.transparent = sample.transparent;
+      material.opacity = sample.opacity;
+      material.depthWrite = sample.depthWrite;
+      const merged = new THREE.Mesh(geometry, material);
+      merged.position.copy(batch.origin);
+      merged.raycast = () => {};
+      batch.drawn.push(merged);
+    }
+    if (wires.length) {
+      let count = 0;
+      for (const line of wires) {
+        const vertices = line.geometry.getAttribute('position').count;
+        count += line instanceof THREE.LineSegments ? vertices : Math.max(0, vertices - 1) * 2;
+      }
+      const positions = new Float32Array(count * 3),
+        colors = new Float32Array(count * 3);
+      let v = 0;
+      for (const line of wires) {
+        line.updateWorldMatrix(true, false);
+        const position = line.geometry.getAttribute('position'),
+          painted = (line.material as THREE.LineBasicMaterial).vertexColors
+            ? line.geometry.getAttribute('color')
+            : undefined,
+          color = (line.material as THREE.LineBasicMaterial).color;
+        const put = (i: number) => {
+          point.fromBufferAttribute(position, i).applyMatrix4(line.matrixWorld).sub(batch.origin);
+          positions.set([point.x, point.y, point.z], v * 3);
+          if (painted) colors.set([painted.getX(i), painted.getY(i), painted.getZ(i)], v * 3);
+          else colors.set([color.r, color.g, color.b], v * 3);
+          v++;
+        };
+        if (line instanceof THREE.LineSegments) for (let i = 0; i < position.count; i++) put(i);
+        else
+          for (let i = 0; i + 1 < position.count; i++) {
+            put(i);
+            put(i + 1);
+          }
+      }
+      const geometry = new THREE.BufferGeometry();
+      geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+      geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+      const merged = new THREE.LineSegments(
+        geometry,
+        new THREE.LineBasicMaterial({ vertexColors: true }),
+      );
+      merged.position.copy(batch.origin);
+      merged.raycast = () => {};
+      batch.drawn.push(merged);
+    }
+    for (const drawn of batch.drawn) batchRoot.add(drawn);
+  }
+  /** Regroup every object into chunks and rebuild all merged geometry. */
+  function rebatchAll() {
+    for (const batch of batches.values()) disposeBatch(batch);
+    batches = new Map();
+    batchOfId = new Map();
+    const open = new Map<string, number>();
+    for (const object of meshes) {
+      object.updateWorldMatrix(true, false);
+      const at = new THREE.Vector3().setFromMatrixPosition(object.matrixWorld);
+      const cell = `${Math.floor(at.x / CELL)}:${Math.floor(at.y / CELL)}:${Math.floor(at.z / CELL)}`;
+      const kind = object instanceof THREE.Mesh ? 'm' : 'l';
+      const group = kind + '|' + cell;
+      const index = open.get(group) ?? 0;
+      let key = group + '|' + index;
+      let batch = batches.get(key);
+      if (batch && batch.members.length >= CHUNK) {
+        open.set(group, index + 1);
+        key = group + '|' + (index + 1);
+        batch = undefined;
+      }
+      if (!batch) {
+        batch = {
+          members: [],
+          drawn: [],
+          origin: new THREE.Vector3(
+            Math.floor(at.x / CELL) * CELL,
+            Math.floor(at.y / CELL) * CELL,
+            Math.floor(at.z / CELL) * CELL,
+          ),
+        };
+        batches.set(key, batch);
+      }
+      batch.members.push(object);
+      batchOfId.set(object.userData.id, key);
+    }
+    for (const batch of batches.values()) buildBatch(batch);
+    dirty = true;
+  }
+  /** Rebuild only the chunks holding these objects (selection changes). */
+  function rebatchIds(ids: Iterable<string>) {
+    const keys = new Set<string>();
+    for (const id of ids) {
+      const key = batchOfId.get(id);
+      if (key) keys.add(key);
+    }
+    for (const key of keys) {
+      const batch = batches.get(key);
+      if (batch) buildBatch(batch);
+    }
     dirty = true;
   }
   replace(objects);
@@ -716,6 +926,8 @@ export function createViewport(
   scene.add(lines);
   const ray = new THREE.Raycaster(),
     mouse = new THREE.Vector2();
+  // Batched objects are drawn through merged geometry but still picked one by one.
+  ray.layers.enableAll();
   let mode: ToolMode = 'select',
     down: { x: number; y: number } | null = null,
     frame: number;
@@ -1260,7 +1472,45 @@ export function createViewport(
     }
   }
   animate();
-  return {
+  const api = {
+    /**
+     * Rendering cost of the current scene (measurement only): draw calls and primitives of one
+     * frame, and the average time to render and finish `frames` frames while orbiting.
+     */
+    benchmark(frames = 60) {
+      const gl = renderer.getContext();
+      const start = camera.position.clone();
+      const pivot = controls.target.clone();
+      const offset = start.clone().sub(pivot);
+      renderer.info.autoReset = false;
+      renderer.info.reset();
+      renderer.render(scene, camera);
+      const { calls, triangles, lines, points } = renderer.info.render;
+      renderer.info.autoReset = true;
+      const began = performance.now();
+      for (let i = 0; i < frames; i++) {
+        const turn = offset
+          .clone()
+          .applyAxisAngle(new THREE.Vector3(0, 0, 1), (i / frames) * Math.PI * 2);
+        camera.position.copy(pivot).add(turn);
+        camera.lookAt(pivot);
+        renderer.render(scene, camera);
+        gl.finish();
+      }
+      const frameMs = (performance.now() - began) / frames;
+      camera.position.copy(start);
+      camera.lookAt(pivot);
+      dirty = true;
+      return {
+        calls,
+        triangles,
+        lines,
+        points,
+        objects: meshes.length,
+        geometries: renderer.info.memory.geometries,
+        frameMs,
+      };
+    },
     capture() {
       renderer.render(scene, camera);
       return renderer.domElement.toDataURL('image/png');
@@ -1282,6 +1532,7 @@ export function createViewport(
         const object = byId.get(id);
         if (object) paint(object);
       }
+      rebatchIds([...changed, ...next]);
       dirty = true;
     },
     /** Shading mode, colour source, crease edges and background. */
@@ -1445,4 +1696,7 @@ export function createViewport(
       renderer.domElement.remove();
     },
   };
+  // Measurement hook for performance spikes and tests (read-only numbers, see benchmark()).
+  (window as unknown as { videViewport?: typeof api }).videViewport = api;
+  return api;
 }
