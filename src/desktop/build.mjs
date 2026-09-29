@@ -30,6 +30,7 @@ await copyPackageSources(root, join(directory, 'app'), tracked.split('\0').filte
   'src/server',
   'src/ui',
   'src/contracts',
+  'src/jigs',
   'hosts',
   'extensions',
 ]);
@@ -115,6 +116,13 @@ for (const [packagePath, metadata] of Object.entries(lock.packages)) {
 }
 await mkdir(join(directory, 'runtime'));
 await copyFile(process.execPath, join(directory, 'runtime', 'node.exe'));
+// The packaged engine must resolve all of its modules (a source folder missing from the list
+// above would only fail when the installed app starts).
+await exec(
+  join(directory, 'runtime', 'node.exe'),
+  ['--input-type=module', '-e', "await import('./src/server/server.ts')"],
+  { cwd: join(directory, 'app'), windowsHide: true },
+);
 await mkdir(join(directory, 'licenses'));
 await copyZwcadNotices(
   root,
