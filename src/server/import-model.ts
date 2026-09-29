@@ -1,3 +1,4 @@
+import type { DocumentLinks } from '../core/document-links.ts';
 import { hostTargetSchema } from '../contracts/host-documents.ts';
 import { isDwgSdkEditMode } from '../contracts/dwg-edit-mode.ts';
 import { z } from 'zod';
@@ -31,6 +32,7 @@ export async function importModel(
   workspace: Workspace,
   host: ImportHost,
   cadHost?: CadImportHost,
+  links?: DocumentLinks,
 ) {
   workspace.store.project(projectId);
   if (
@@ -60,8 +62,12 @@ export async function importModel(
       : !bytes.subarray(0, 32).toString().startsWith('3D Geometry File Format')
   )
     throw new DomainError('INVALID_INPUT');
+  // The opened file joins the project's linked files (SPEC-01.11), shown and removable there.
+  const link = links?.fileLink(projectId, cad ? 'zwcad' : 'rhino', name);
+  if (link?.hidden) links!.setHidden(projectId, link.id, false);
   const id = randomUUID(),
     input = {
+      ...(link ? { linkId: link.id } : {}),
       id,
       provider: 'codex-cli',
       host: cad ? 'zwcad' : 'rhino',

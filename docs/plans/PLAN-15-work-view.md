@@ -2,7 +2,7 @@
 id: PLAN-15
 title: 작업 이력과 우측 작업 보기(진행·개입)
 status: review
-version: 0.1
+version: 0.2
 updated: 2026-09-29
 owner: agent:claude
 related: [PLAN, SPEC-02, DESIGN, FR-10, FR-11, AC-08]
@@ -33,3 +33,8 @@ related: [PLAN, SPEC-02, DESIGN, FR-10, FR-11, AC-08]
 ## 남은 것
 
 - 작업 도중의 중간 후보 형상 보기(현재는 검증된 변경 수만), 연계 작업의 호스트별 단계.
+
+## 2026-09-29 보완 (사용자 요청)
+
+- 진행 단계마다 걸린 시간 표시("기준 준비 (5.2s)", 진행 중인 단계는 0.1초마다 증가). 동작 SPEC-02.11. 검증 `tests/core/work-stages.test.mjs`.
+- 작업 이력의 지우기 버튼을 늘 흐리게 보이게 했다(가리키기 전 투명해 없는 것처럼 보였다).

@@ -29,6 +29,14 @@ const decode = (row: unknown): StoredWork | null => {
   return decoded as StoredWork;
 };
 
+/** A listed request without its display geometry (see `Workspace.list`). */
+function withoutGeometry(work: StoredWork): StoredWork {
+  const result = work.result;
+  if (!result || (!('scene' in result) && !('definitions' in result))) return work;
+  const { scene: _scene, definitions: _definitions, ...rest } = result as Record<string, unknown>;
+  return { ...work, result: { ...rest, sceneOmitted: true } as StoredWork['result'] };
+}
+
 /** Durable browser jobs, separate from the host command queue. */
 export class Workspace {
   readonly store: Store;
@@ -37,13 +45,35 @@ export class Workspace {
     store.db.exec(`
       UPDATE workspace_requests SET state=CASE WHEN state='running' AND json_extract(result,'$.phase')='host' THEN 'unknown' ELSE 'interrupted' END WHERE state IN ('queued','running');`);
   }
-  list(projectId: string): StoredWork[] {
+  /**
+   * Every request of the project, without display geometry (`scene`, `definitions`; marked
+   * `sceneOmitted`). A display Sync holds tens of MB; parsing them all on each call (the linked
+   * file list polls every 1.5 s) saturated the engine. Rows are decoded once and reused while their
+   * state and stored sizes are unchanged; writes through this class drop them at once. Use
+   * `get(id)` for one request with its geometry, or `{ full: true }` when every model is needed.
+   */
+  list(projectId: string, options: { full?: boolean } = {}): StoredWork[] {
     this.store.project(projectId);
-    return this.store.db
-      .prepare('SELECT * FROM workspace_requests WHERE projectId=? ORDER BY rowid')
-      .all(projectId)
-      .map((row) => decode(row)!);
+    if (options.full)
+      return this.store.db
+        .prepare('SELECT * FROM workspace_requests WHERE projectId=? ORDER BY rowid')
+        .all(projectId)
+        .map((row) => decode(row)!);
+    const rows = this.store.db
+      .prepare(
+        'SELECT id,state,octet_length(input) AS i,octet_length(result) AS r FROM workspace_requests WHERE projectId=? ORDER BY rowid',
+      )
+      .all(projectId) as { id: string; state: string; i: number; r: number | null }[];
+    return rows.map((row) => {
+      const key = `${row.state}|${row.i}|${row.r ?? -1}`;
+      const known = this.light.get(row.id);
+      if (known?.key === key && known.projectId === projectId) return known.work;
+      const work = withoutGeometry(this.get(projectId, row.id));
+      this.light.set(row.id, { key, projectId, work });
+      return work;
+    });
   }
+  private light = new Map<string, { key: string; projectId: string; work: StoredWork }>();
   /** Remove a finished request from the conversation view; the record and its links stay. */
   hide(projectId: string, id: string) {
     const request = this.get(projectId, id);
@@ -75,7 +105,7 @@ export class Workspace {
   ): StoredWork | undefined {
     if (input.baseRequestId === null) return undefined;
     if (input.baseRequestId) return this.get(projectId, input.baseRequestId);
-    return this.list(projectId)
+    const latest = this.list(projectId)
       .filter(
         (request) =>
           request.id !== input.id &&
@@ -83,6 +113,7 @@ export class Workspace {
           (request.result.host || 'rhino') === (input.host || 'rhino'),
       )
       .at(-1);
+    return latest && this.get(projectId, latest.id);
   }
   submit(projectId: string, value: unknown) {
     return this.insert(projectId, value);
@@ -233,12 +264,19 @@ export class Workspace {
   }
   update(projectId: string, id: string, state: RequestState, result: unknown = null): StoredWork {
     if (state === 'queued' || !requestStateSchema.safeParse(state).success) fail('INVALID_INPUT');
-    this.get(projectId, id);
+    // Existence only: decoding the stored result (a whole model for a Sync) is not needed here.
+    if (
+      !this.store.db
+        .prepare('SELECT 1 FROM workspace_requests WHERE projectId=? AND id=?')
+        .get(projectId, id)
+    )
+      fail('NOT_FOUND');
     if (result !== null && !storedResultSchema.safeParse(result).success)
       fail('INVALID_HOST_RESULT');
     this.store.db
       .prepare('UPDATE workspace_requests SET state=?,result=? WHERE id=? AND projectId=?')
       .run(state, result === null ? null : JSON.stringify(result), id, projectId);
+    this.light.delete(id);
     const updated = this.get(projectId, id);
     if (typeof updated.input.parentRequestId === 'string') {
       const parent = this.get(projectId, updated.input.parentRequestId);
@@ -261,6 +299,7 @@ export class Workspace {
         this.store.db
           .prepare('UPDATE workspace_requests SET result=? WHERE id=? AND projectId=?')
           .run(JSON.stringify(next), parent.id, projectId);
+        this.light.delete(parent.id);
       }
     }
     return updated;

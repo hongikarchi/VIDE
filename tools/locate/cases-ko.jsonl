@@ -19,3 +19,9 @@
 {"request":"모델 자동 선택도 그쪽에서 commit했으니까 그쪽 규칙으로 통일하는걸로 하자","files":["src/ui/request-route.ts","src/ui/app.ts","src/ui/style.css"]}
 {"request":"3번은 구현하는게 좋을 것 같고 (어떤 최근 요청을 보낼건지는 맥락 상 비슷한거를 보내는거니까 jev가 처리)","files":["src/ai/context-selector.ts","src/server/execution.ts","src/server/server.ts"]}
 {"request":"4번도 마저 끝내버리자 (렌더링·Sync 성능: 이진 전송, 호스트 Sync 구간 측정)","files":["src/ui/crease-edges.ts","src/ui/viewport.ts","src/contracts/geometry-transfer.ts","src/ui/gateway.ts","src/server/server.ts"]}
+{"request":"Rhino·ZWCAD 플러그인 패널에서 Link를 누르고 이 프로젝트를 고르면 여기에 연결됩니다 이 부분 너무 대충 만들었다. 좀 그럴듯하게 바꿔라","files":["src/ui/links.tsx","src/ui/style.css","src/ui/app.ts"]}
+{"request":"model에서 자동(Jev)는 claude 하위에 있는게 아니라, 제일 위에 있어야지","files":["src/ui/app.ts"]}
+{"request":"진행 단계에서 각 단계별로 오른쪽에 시간 카운트되면 좋을 듯. 기준준비(5.2s) 이런 식으로. 숫자는 실시간으로 계속 올라가는거지","files":["src/ui/work-stages.ts","src/ui/work-view.tsx","src/ui/style.css"]}
+{"request":"livesync를 켰는데, 작동을 안 해. 채팅창도 버그 걸린 것처럼 입력이 안되네. 상태 오류가 떠서 로컬 서버 연결이 끊겼다고 뜨네","files":["src/core/workspace.ts","src/server/server.ts"]}
+{"request":"연결 파일의 경우 지금 live-sync 된 것 뿐만 아니라 파일에서 열은 것도 리스트로 보여야 하는거 아니야? 삭제하거나 unlink할 수 있어야지","files":["src/core/document-links.ts","src/server/import-model.ts","src/server/server.ts","src/ui/links.tsx","src/ui/style.css"]}
+{"request":"작업 이력 지우기 버튼은 보이지 않는데 누르면 있는 느낌?","files":["src/ui/style.css"]}

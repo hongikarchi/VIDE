@@ -2,7 +2,7 @@
 id: PLAN-18
 title: 큰 모델 표시·Sync 성능
 status: review
-version: 0.2
+version: 0.3
 updated: 2026-09-29
 owner: agent:claude
 related: [PLAN, SPEC-01, ARCH-01, FR-02, FR-03, SPIKE-2026-09-29-render-perf]
@@ -33,3 +33,10 @@ related: [PLAN, SPEC-01, ARCH-01, FR-02, FR-03, SPIKE-2026-09-29-render-perf]
 ## 남은 것
 
 - 매우 큰 블록의 인스턴싱(같은 정의 반복을 한 번에 그리기), 먼 객체 단순화(LOD), WebGPU 선택지.
+
+## 2026-09-29 실사용 문제 — Live Sync 중 엔진 멈춤
+
+- 증상(0.2.9 설치본): Live Sync를 켜면 갱신이 안 되고 작성기 입력이 막히며 '로컬 서버 연결 끊김'이 뜬다. 엔진이 한 번 비정상 재시작했다.
+- 원인: 요청 목록(`Workspace.list`)이 부를 때마다 프로젝트의 모든 결과를 모델 형상까지 해석했다. 연결 파일 목록(1.5초마다)·작업 목록·실행 준비가 모두 이를 불러, 사용자 DB(342 MB, 요청 26개)에서 한 번에 약 1.1초씩 엔진을 붙잡았다(가벼운 `hello`도 0.75초).
+- 수정: 목록은 형상(`scene`·`definitions`)을 뺀 행을 한 번 해석해 두고 상태·저장 크기가 같으면 다시 쓴다(`Workspace`를 통한 쓰기는 즉시 비움). 형상이 필요한 곳(작업 기준, 측정 재사용)은 개별 조회나 `{ full: true }`. 결과 저장(`update`)의 불필요한 전체 해석도 없앴다.
+- 측정(사용자 DB 사본, 측정 뒤 삭제): 반복 목록 1,087 ms → 0 ms. 검증 `tests/core/workspace-list.test.mjs`.

@@ -156,7 +156,7 @@ try {
   );
   await page.screenshot({ path: join(directory, 'links.png') });
   // Removing a file from the list keeps its Sync record.
-  await page.getByRole('button', { name: 'model.3dm 목록에서 빼기' }).click();
+  await page.getByRole('button', { name: 'model.3dm 연결 해제' }).click();
   await page.waitForFunction(() => document.querySelectorAll('.link-row').length === 2);
   assert.equal(
     app.store.db.prepare("SELECT count(*) AS n FROM workspace_requests WHERE id='sync-rhino'").get()

@@ -2,7 +2,7 @@
 id: PLAN-16
 title: 프로젝트 연결 파일(Link)과 여러 파일의 한 공간
 status: review
-version: 0.1
+version: 0.2
 updated: 2026-09-29
 owner: agent:claude
 related: [PLAN, SPEC-01, DESIGN, ARCH-01, FR-01, FR-02, FR-03, FR-16]
@@ -29,3 +29,10 @@ related: [PLAN, SPEC-01, DESIGN, ARCH-01, FR-01, FR-02, FR-03, FR-16]
 ## 남은 것
 
 - 두 파일에 걸친 변경 핀을 연계 요청으로 자동 전환, 다른 파일 객체를 수정 대상으로 쓰는 흐름.
+
+## 2026-09-29 보완 (사용자 지적)
+
+- 빈 목록 안내를 세 단계 카드로 바꿨다(프로젝트 이름 표시, 명령·파일에서 열기 안내).
+- '파일에서 열기'로 연 파일을 목록의 '파일' 항목으로 넣었다(`DocumentLinks.fileLink`, 이름 기준, 이전 불러오기는 숨김으로 한 번). 빼면 불러오기 기록을 작업 이력에서 내려 다시 생기지 않는다. 플러그인 파일은 '연결 해제'로 표기했다.
+- 빼기 버튼이 가리키기 전에는 투명해 없는 것처럼 보였다 → 늘 흐리게 보인다.
+- 검증: `tests/server/file-links.test.mjs`(파일 항목·같은 이름·이전 불러오기 1회 숨김·빼기 유지), `browser-links.mjs`.

@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import type { Root } from 'react-dom/client';
 import { isDwgSdkEditMode } from '../contracts/dwg-edit-mode.ts';
@@ -12,7 +13,7 @@ import {
   stateLabels,
   type Actions,
 } from './history.tsx';
-import { workStages, type Stage } from './work-stages.ts';
+import { formatElapsed, workStages, type Stage } from './work-stages.ts';
 import { uiRequestSchema as workspaceRequestSchema } from './workspace-data.ts';
 import type { UiMessage as Message } from './workspace-data.ts';
 
@@ -46,10 +47,13 @@ const jigOf = (message: Message) => {
   const jig = (message.request?.input as { jig?: { kind?: unknown } } | undefined)?.jig;
   return typeof jig?.kind === 'string' ? jig.kind : undefined;
 };
-export function stagesOf(message: Message) {
+export function stagesOf(message: Message, now = Date.now()) {
   const request = message.request,
     result = request?.result;
+  const started = request?.createdAt ? Date.parse(request.createdAt) : NaN;
   return workStages({
+    ...(Number.isFinite(started) ? { startedAt: started } : {}),
+    now,
     state: request?.state ?? 'queued',
     provider: message.provider,
     source: message.source,
@@ -124,7 +128,14 @@ function StageList({
 }) {
   const request = message.request;
   const running = Boolean(request && ['queued', 'running'].includes(request.state));
-  const stages = stagesOf(message);
+  // The stage in progress counts up while the request runs.
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!running) return;
+    const timer = setInterval(() => setNow(Date.now()), 100);
+    return () => clearInterval(timer);
+  }, [running]);
+  const stages = stagesOf(message, now);
   const active = stages.findIndex((stage) => stage.state === 'active');
   const here = active < 0 ? 0 : active;
   const waiting = request?.result?.phase === 'waiting';
@@ -141,7 +152,12 @@ function StageList({
             <span className="stage-mark" aria-hidden="true">
               {marks[stage.state]}
             </span>
-            <span className="stage-label">{stage.label}</span>
+            <span className="stage-label">
+              {stage.label}
+              {stage.elapsedMs !== undefined ? (
+                <span className="stage-time"> ({formatElapsed(stage.elapsedMs)})</span>
+              ) : null}
+            </span>
             <span className="stage-detail">
               {stage.detail || (stage.state === 'active' ? stageText.active : '')}
             </span>

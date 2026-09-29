@@ -2408,7 +2408,8 @@ body.panel-mode .chat-heading h2 {
   color: var(--muted);
   font-size: 15px;
   line-height: 1;
-  opacity: 0;
+  /* Always visible (a hidden button that works when clicked felt like a bug); stronger on hover. */
+  opacity: 0.45;
 }
 .task-row:hover .task-remove,
 .task-remove:focus-visible {
@@ -3374,7 +3375,8 @@ body.panel-mode #conversation {
   color: #6c7571;
 }
 .link-remove {
-  opacity: 0;
+  /* Always visible (a hidden button that works when clicked felt like a bug); stronger on hover. */
+  opacity: 0.45;
 }
 .link-row:hover .link-remove,
 .link-remove:focus-visible {
@@ -3740,4 +3742,75 @@ body.panel-mode #conversation {
   flex-basis: 100%;
   padding-left: 17px;
   font-size: 10px;
+}
+/* Time spent per work stage ("기준 준비 (5.2s)"), counting up on the stage in progress. */
+.stage-time {
+  color: var(--muted);
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+}
+/* Linked files: first-use steps when nothing is linked yet, and files opened in VIDE. */
+.link-start {
+  display: grid;
+  gap: 6px;
+  padding: 10px 12px;
+  border: 1px dashed var(--line);
+  border-radius: 6px;
+  background: var(--soft);
+  font-size: 11px;
+  line-height: 1.55;
+}
+.link-start > strong {
+  font-size: 12px;
+}
+.link-start p {
+  margin: 0;
+  color: var(--muted);
+}
+.link-steps {
+  display: grid;
+  gap: 5px;
+  margin: 2px 0;
+  padding: 0;
+  list-style: none;
+}
+.link-steps li {
+  display: grid;
+  grid-template-columns: 18px 1fr;
+  align-items: start;
+  gap: 6px;
+}
+.link-step-no {
+  display: inline-grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #2f5aa8;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1;
+  margin-top: 1px;
+}
+.link-project {
+  white-space: nowrap;
+  padding: 0 4px;
+  border-radius: 3px;
+  background: #e8eefb;
+  color: #2f5aa8;
+}
+.link-hint code {
+  font-size: 10px;
+}
+:root[data-theme='dark'] .link-project {
+  background: #1f2633;
+  color: #8fb0f0;
+}
+.link-row[data-state='file'] .link-sync {
+  visibility: hidden;
+}
+.link-row[data-state='file'] .dot {
+  background: #9aa39f;
+  border-radius: 2px;
 }

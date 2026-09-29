@@ -30,7 +30,7 @@ import {
   knowledgeSummary,
   openKnowledgeSource,
 } from '../jigs/knowledge.ts';
-import { DocumentLinks } from '../core/document-links.ts';
+import { DocumentLinks, isFileLink } from '../core/document-links.ts';
 import { AccountLogin } from '../ai/account-login.ts';
 import { z } from 'zod';
 import type { IncomingMessage } from 'node:http';
@@ -84,6 +84,9 @@ import { ZwcadWorkspace } from '../../hosts/zwcad/workspace.ts';
 import { dirname, join } from 'node:path';
 import { importModel, captureModel, recoverDwgImport } from './import-model.ts';
 import { renderReport } from './report.ts';
+
+/** The file name of an import request ("plan.dwg 불러오기"). */
+const importedName = (body: string) => body.replace(/ 불러오기$/, '');
 
 /** The local browser session survives restarts, so an open page keeps working after one. */
 async function localSession(directory: string) {
@@ -531,6 +534,7 @@ export async function startServer({
             workspace,
             rhinoImport,
             hosts.zwcad,
+            links,
           ),
         );
         return;
@@ -545,10 +549,27 @@ export async function startServer({
           ...((await zwcadSdk?.editors.attached.list().catch(() => [])) ?? []),
         ];
         const requests = workspace.list(linkList[1]);
+        // Files opened in VIDE before they were listed join the list once, hidden. A removed file
+        // hides its imports, so it does not come back.
+        const hiddenRequests = workspace.hiddenIds(linkList[1]);
+        for (const entry of requests)
+          if (
+            entry.input.source === 'file' &&
+            !entry.input.linkId &&
+            entry.state === 'succeeded' &&
+            !hiddenRequests.has(entry.id)
+          )
+            links.fileLink(
+              linkList[1],
+              entry.input.host === 'zwcad' ? 'zwcad' : 'rhino',
+              importedName(entry.input.body),
+              true,
+            );
         // Work copies VIDE opened itself answer only whether their window is still open.
         const ownedOpen = new Set<string>();
         for (const link of links.list(linkList[1]))
           if (
+            !isFileLink(link) &&
             !open.some((item) => item.instance === link.instance) &&
             (link.host === 'rhino'
               ? await sdk?.editors.has(link.instance).catch(() => false)
@@ -565,11 +586,21 @@ export async function startServer({
                   ? item.path.toLowerCase() === link.path.toLowerCase()
                   : item.instance === link.instance && item.id === link.documentId),
             );
-            const syncs = requests.filter((entry) => entry.input.linkId === link.id);
+            const file = isFileLink(link);
+            const syncs = requests.filter(
+              (entry) =>
+                entry.input.linkId === link.id ||
+                (file &&
+                  !entry.input.linkId &&
+                  entry.input.source === 'file' &&
+                  entry.input.host === link.host &&
+                  importedName(entry.input.body).toLowerCase() === link.name.toLowerCase()),
+            );
             const last = syncs.filter((entry) => entry.state === 'succeeded').at(-1);
             const latest = syncs.at(-1);
             return {
               ...link,
+              kind: file ? 'file' : 'host',
               connection: ownedOpen.has(link.id)
                 ? {
                     instance: link.instance,
@@ -664,6 +695,18 @@ export async function startServer({
         url.pathname,
       );
       if (linkRemove && request.method === 'POST') {
+        const removed = links.get(linkRemove[1], linkRemove[2]);
+        // A file opened in VIDE also leaves the work history (records kept), so it stays removed.
+        if (isFileLink(removed))
+          for (const entry of workspace.list(linkRemove[1]))
+            if (
+              entry.input.source === 'file' &&
+              !['queued', 'running'].includes(entry.state) &&
+              (entry.input.linkId === removed.id ||
+                (!entry.input.linkId &&
+                  importedName(entry.input.body).toLowerCase() === removed.name.toLowerCase()))
+            )
+              workspace.hide(linkRemove[1], entry.id);
         links.remove(linkRemove[1], linkRemove[2]);
         send(200, { ok: true });
         return;
@@ -704,7 +747,7 @@ export async function startServer({
                     // Attached display reads never measure; skip parsing every stored model.
                     (await sdk!.editors.connectionKind(target.instance)) === 'attached-editor'
                       ? []
-                      : captureMeasurements(workspace.list(capture[1]), target),
+                      : captureMeasurements(workspace.list(capture[1], { full: true }), target),
                   ),
                 )
               : undefined,
@@ -964,7 +1007,7 @@ export async function startServer({
               (row) =>
                 row.state === 'succeeded' &&
                 !!row.result &&
-                Array.isArray(row.result.scene) &&
+                (Array.isArray(row.result.scene) || row.result.sceneOmitted === true) &&
                 row.createdAt > saved.createdAt &&
                 structureDocumentKey(row.result) === source.documentKey,
             );

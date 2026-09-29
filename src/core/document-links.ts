@@ -31,6 +31,9 @@ interface Row extends Omit<DocumentLink, 'hidden'> {
   hidden: number;
 }
 const toLink = (row: Row): DocumentLink => ({ ...row, hidden: row.hidden === 1 });
+/** Files opened in VIDE have no host window; their entry is keyed by the file name. */
+export const fileInstance = (name: string) => 'file:' + name.toLowerCase();
+export const isFileLink = (link: { instance: string }) => link.instance.startsWith('file:');
 
 export class DocumentLinks {
   private readonly db: DatabaseSync;
@@ -89,6 +92,19 @@ export class DocumentLinks {
       .prepare('UPDATE document_links SET hidden=?, updatedAt=? WHERE projectId=? AND id=?')
       .run(hidden ? 1 : 0, new Date().toISOString(), projectId, id);
     return this.get(projectId, id);
+  }
+  /**
+   * A file opened in VIDE ("파일에서 열기"): listed like a linked document, keyed by its file name so
+   * opening the same file again updates the same entry. Existing entries keep their visibility.
+   */
+  fileLink(projectId: string, host: 'rhino' | 'zwcad', name: string, hidden = false) {
+    const instance = fileInstance(name);
+    const existing = this.db
+      .prepare('SELECT id FROM document_links WHERE projectId=? AND host=? AND instance=?')
+      .get(projectId, host, instance) as { id: string } | undefined;
+    if (existing) return this.get(projectId, existing.id);
+    const link = this.link(projectId, { host, name, instance, documentId: 1 });
+    return hidden ? this.setHidden(projectId, link.id, true) : link;
   }
   /** Removes the file from the project's list; its Sync records and results are kept. */
   remove(projectId: string, id: string) {

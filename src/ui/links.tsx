@@ -9,6 +9,8 @@ export const linkRowSchema = z.object({
   name: z.string(),
   path: z.string().nullable(),
   hidden: z.boolean(),
+  /** "file": opened in VIDE from a 3DM/DWG file; "host": linked from a Rhino/ZWCAD window. */
+  kind: z.enum(['host', 'file']).default('host'),
   connection: z
     .object({
       instance: z.string(),
@@ -56,6 +58,8 @@ export type InboxItem = OfflineStatus['inbox'][number];
 
 interface Props {
   links: LinkRow[];
+  /** The current project's name, shown in the connection steps. */
+  projectName?: string;
   /** The file the composer targets. */
   active?: string;
   /** Per-link notes of the Sync driver (syncing, held, failed). */
@@ -176,16 +180,54 @@ function LinkList(props: Props) {
   if (!props.loaded) return <small className="link-empty">연결 파일 확인 중…</small>;
   if (!props.links.length)
     return (
-      <p className="link-empty">
-        Rhino·ZWCAD 플러그인 패널에서 <b>Link</b>를 누르고 이 프로젝트를 고르면 여기에 연결됩니다.
-        (명령: Rhino <code>VIDELink</code>, ZWCAD <code>VIDECADLink</code>)
-      </p>
+      <section className="link-start" aria-label="파일 연결 방법">
+        <strong>아직 연결된 파일이 없습니다</strong>
+        <p>
+          작업 중인 Rhino 모델이나 CAD 도면을 연결하면 여기서 함께 보고 AI에게 작업을 맡길 수
+          있습니다.
+        </p>
+        <ol className="link-steps">
+          <li>
+            <span className="link-step-no">1</span>
+            <span>
+              <b>Rhino</b> 또는 <b>ZWCAD</b>에서 파일을 엽니다
+            </span>
+          </li>
+          <li>
+            <span className="link-step-no">2</span>
+            <span>
+              VIDE 패널에서 <b>Link</b>를 누르고{' '}
+              {props.projectName ? (
+                <b className="link-project">{props.projectName}</b>
+              ) : (
+                '이 프로젝트'
+              )}
+              를 고릅니다
+            </span>
+          </li>
+          <li>
+            <span className="link-step-no">3</span>
+            <span>첫 Sync가 끝나면 이 목록과 화면에 나타납니다</span>
+          </li>
+        </ol>
+        <p className="link-hint">
+          패널이 보이지 않으면 명령창에 <code>VIDELink</code>(Rhino) · <code>VIDECADLink</code>
+          (ZWCAD)를 입력하세요. 파일만 볼 때는 아래 <b>파일에서 열기</b>를 쓰면 됩니다.
+        </p>
+      </section>
     );
   return (
     <ul className="link-list" aria-label="연결 파일">
       {props.links.map((link) => {
         const connection = link.connection;
-        const state = connection ? (connection.live ? 'live' : 'connected') : 'closed';
+        const file = link.kind === 'file';
+        const state = file
+          ? 'file'
+          : connection
+            ? connection.live
+              ? 'live'
+              : 'connected'
+            : 'closed';
         const note = props.notes.get(link.id);
         return (
           <li
@@ -218,8 +260,20 @@ function LinkList(props: Props) {
               </span>
               <span className="link-meta">
                 <span className="dot" aria-hidden="true" />
-                {state === 'live' ? 'Live' : state === 'connected' ? '연결됨' : '닫힘'}
-                {link.lastSync ? ` · Sync ${time(link.lastSync.at)}` : ' · Sync 전'}
+                {file
+                  ? '파일에서 연 사본'
+                  : state === 'live'
+                    ? 'Live'
+                    : state === 'connected'
+                      ? '연결됨'
+                      : '닫힘'}
+                {file
+                  ? link.lastSync
+                    ? ` · ${time(link.lastSync.at)}`
+                    : ''
+                  : link.lastSync
+                    ? ` · Sync ${time(link.lastSync.at)}`
+                    : ' · Sync 전'}
                 {connection ? ` · ${connection.objectCount.toLocaleString()}개` : ''}
                 {note ? ` · ${note}` : link.lastError ? ` · Sync 실패` : ''}
               </span>
@@ -228,6 +282,8 @@ function LinkList(props: Props) {
               type="button"
               className="icon-button link-sync"
               disabled={!connection}
+              tabIndex={file ? -1 : undefined}
+              aria-hidden={file || undefined}
               title={connection ? '지금 Sync' : '파일이 열려 있지 않습니다'}
               aria-label={`${link.name} Sync`}
               onClick={() => props.onSync(link)}
@@ -237,8 +293,12 @@ function LinkList(props: Props) {
             <button
               type="button"
               className="icon-button link-remove"
-              title="프로젝트 목록에서 빼기 (Sync 기록과 파일은 그대로)"
-              aria-label={`${link.name} 목록에서 빼기`}
+              title={
+                file
+                  ? '목록에서 빼기 (불러온 기록은 작업 이력에서 내리고 보존, 원본 파일은 그대로)'
+                  : '연결 해제 · 목록에서 빼기 (Sync 기록과 파일은 그대로)'
+              }
+              aria-label={`${link.name} ${file ? '목록에서 빼기' : '연결 해제'}`}
               onClick={() => props.onRemove(link)}
             >
               ×

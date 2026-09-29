@@ -538,6 +538,7 @@ function dismissInboxItem(item: InboxItem) {
 function renderLinkPanel() {
   renderLinks($('host-document-controls'), {
     links,
+    projectName: project?.name,
     active: activeLayer,
     notes: linkNotes,
     candidates: new Set(
@@ -553,7 +554,9 @@ function renderLinkPanel() {
     onRemove: (link) => {
       if (
         !confirm(
-          `${link.name}을(를) 이 프로젝트의 연결 목록에서 뺄까요? 파일과 Sync 기록은 그대로입니다.`,
+          link.kind === 'file'
+            ? `${link.name}을(를) 목록에서 뺄까요? 불러온 기록은 작업 이력에서 내려가지만 보존되고, 원본 파일은 그대로입니다.`
+            : `${link.name}의 연결을 해제할까요? 파일과 Sync 기록은 그대로이고, 다시 연결하려면 플러그인에서 Link를 누르세요.`,
         )
       )
         return;
@@ -1396,9 +1399,14 @@ const refreshAccount = accountIndicator(
 function fillModels() {
   $('model').replaceChildren();
   const labels: Record<string, string> = { 'claude-cli': 'Claude', 'codex-cli': 'ChatGPT' };
-  for (const provider of [...new Set(models.map((m) => m.provider))]) {
+  // "자동 (Jev)" picks the service itself, so it sits first, outside the service groups.
+  const automatic = (model: { id: string }) => model.id === 'auto';
+  for (const model of models.filter(automatic))
+    el('option', model.name, $('model'), { value: model.id });
+  const listed = models.filter((m) => !automatic(m));
+  for (const provider of [...new Set(listed.map((m) => m.provider))]) {
     const group = el('optgroup', '', $('model'), { label: labels[provider] ?? provider });
-    for (const model of models.filter((m) => m.provider === provider))
+    for (const model of listed.filter((m) => m.provider === provider))
       el('option', model.name, group, { value: model.id });
   }
   if (!models.some((m) => m.id === state.model)) {
