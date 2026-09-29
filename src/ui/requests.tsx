@@ -1,7 +1,4 @@
-import { errors } from './gateway.ts';
 import { createRoot } from 'react-dom/client';
-import type { WorkSummary } from '../contracts/workspace.ts';
-import { ActivityLog, activityEntries } from './activity.tsx';
 
 interface Draft {
   instructions?: string[];
@@ -41,107 +38,20 @@ function PendingRequests({ state, onChange }: RequestProps) {
     </>
   );
 }
-interface ActiveProps {
-  messages: WorkSummary[];
-  reason?: (id: string) => string | undefined;
-  intervene?: (id: string) => void;
-}
-function ActiveWork({ messages, reason, intervene }: ActiveProps) {
-  const active = messages.filter(
-    (message) =>
-      message.request &&
-      ['queued', 'running', 'unknown', 'interrupted'].includes(message.request.state),
-  );
-  if (!active.length) return <span className="sr-only">진행 중인 작업 없음</span>;
-  return (
-    <>
-      {active.map((message) => {
-        const request = message.request!;
-        const phase =
-          request.state === 'unknown'
-            ? '호스트 결과 확인 필요 · 새 후보 보류'
-            : request.state === 'interrupted'
-              ? errors[request.result?.code || ''] || '연결 종료로 중단됨 · 자동 재실행 없음'
-              : request.state === 'queued'
-                ? request.result?.phase === 'waiting'
-                  ? '추가 지시 접수 · 이전 작업 종료 대기'
-                  : '대기'
-                : request.result?.phase === 'host'
-                  ? '호스트 생성·저장 검증'
-                  : request.result?.phase === 'stopping'
-                    ? '중단 확인 중'
-                    : request.result?.phase === 'query'
-                      ? '호스트 조회 완료 · 다음 단계 처리'
-                      : request.result?.phase === 'starting-host'
-                        ? '작업 사본 준비'
-                        : 'AI 요청 처리';
-        return (
-          <div key={message.id} className="live-turn" data-state={request.state}>
-            <div className="live-head">
-              {['queued', 'running'].includes(request.state) ? (
-                <span className="spinner" aria-hidden="true" />
-              ) : (
-                <span className="live-alert" aria-hidden="true">
-                  !
-                </span>
-              )}
-              <strong>{message.body || '첨부 문맥 검토'}</strong>
-            </div>
-            <small>{phase}</small>
-            {request.result?.progress && (
-              <small>
-                조회 {request.result.progress.queries}회
-                {request.result.progress.attempts > 0 &&
-                  ` · 실행 ${request.result.progress.attempts}/${request.input?.executionLimits?.maxHostCommands ?? 12} · 사본 저장 검증 ${request.result.progress.completed}단계`}
-              </small>
-            )}
-            <ActivityLog entries={activityEntries(request.result?.activity).slice(-8)} live />
-            {intervene &&
-              !request.input?.parentRequestId &&
-              ['queued', 'running'].includes(request.state) &&
-              request.result?.phase !== 'waiting' && (
-                <button
-                  disabled={!!reason?.(message.id)}
-                  title={
-                    reason?.(message.id) ||
-                    (request.input?.linkedTargets
-                      ? '이 작업의 두 대상에 현재 입력을 추가합니다. 저장된 부분 결과가 있으면 확인 후 이어갑니다.'
-                      : '현재 입력을 추가하고 이전 작업 종료 후 원 기준에서 다시 실행합니다.')
-                  }
-                  onClick={() => intervene(message.id)}
-                >
-                  추가 지시
-                </button>
-              )}
-          </div>
-        );
-      })}
-    </>
-  );
-}
 function mount(id: string) {
   const element = document.getElementById(id);
   if (!element) throw new Error(`Missing panel: ${id}`);
   return createRoot(element);
 }
 const pendingRoot = mount('pending-requests');
-const activeRoot = mount('active-work');
 const countRoot = mount('request-count');
 export function renderRequests(state: Draft, onChange: (rebuild: boolean) => void): void {
   countRoot.render(String(state.instructions?.length ?? 0));
   pendingRoot.render(<PendingRequests state={state} onChange={onChange} />);
 }
-export function renderActiveWork(
-  messages: WorkSummary[],
-  reason?: ActiveProps['reason'],
-  intervene?: ActiveProps['intervene'],
-): void {
-  activeRoot.render(<ActiveWork messages={messages} reason={reason} intervene={intervene} />);
-}
 window.addEventListener('pagehide', (event) => {
   if (!event.persisted) {
     pendingRoot.unmount();
-    activeRoot.unmount();
     countRoot.unmount();
   }
 });

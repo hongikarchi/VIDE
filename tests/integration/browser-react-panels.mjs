@@ -13,11 +13,6 @@ try {
   const page = await browser.newPage({ viewport: { width: 1440, height: 900 } }),
     errors = [];
   page.setDefaultTimeout(10000);
-  await page.addInitScript(() => {
-    try {
-      localStorage.setItem('vide:history-expand', 'all');
-    } catch {}
-  });
   page.on('pageerror', (error) => errors.push(error.message));
   await page.route('**/api/v1/host', (route) => route.fulfill({ json: { available: false } }));
   await page.route('**/api/v1/providers', (route) =>
@@ -313,12 +308,25 @@ try {
     );
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto(app.origin + '/?project=' + second);
+  // The work history lists requests; a row opens that work on the right.
+  const openWork = async (id) => {
+    await page.locator('button[data-section="task-list"]').click();
+    await page.locator(`[data-task-id="${id}"] .task-open`).click();
+  };
+
+  await openWork('unknown-history');
+  const unknownCard = page.locator('.work-view[data-request-id="unknown-history"]');
+  await unknownCard.waitFor();
+  assert.match(await unknownCard.textContent(), /호스트 결과 확인 필요/);
+  assert.equal(
+    await page.getByRole('button', { name: '입력을 초안으로 복원', exact: true }).count(),
+    0,
+  );
+  await openWork('failed-history');
   const restore = page.getByRole('button', { name: '입력을 초안으로 복원', exact: true });
   await restore.waitFor();
   assert.equal(await restore.count(), 1);
   assert.equal(await page.getByRole('button', { name: '중단', exact: true }).count(), 0);
-  const unknownCard = page.locator('.chat-message').filter({ hasText: 'Uncertain host action' });
-  assert.match(await unknownCard.textContent(), /호스트 결과 확인 필요/);
   await restore.click();
   await page.waitForFunction(
     () => document.querySelector('#body').value === 'Restore exact original',
@@ -418,7 +426,7 @@ try {
   );
   await application.getByRole('button', { name: '닫기', exact: true }).click();
   assert.match(
-    await page.locator('.chat-message').filter({ hasText: 'Apply fixture' }).textContent(),
+    await page.locator('.work-view[data-request-id="application-fixture"]').textContent(),
     /원본 적용 결과 미확인/,
   );
   await page.getByRole('button', { name: '이 후보 보기', exact: true }).click();
@@ -457,6 +465,9 @@ try {
   assert.equal(completed[0].id, submissions[0].id);
   assert.equal(completed[0].state, 'succeeded');
   await page.getByText('확장 완료', { exact: true }).waitFor();
+  // The extension run opened as the current work; go back to the candidate's work.
+  await openWork('application-fixture');
+  await page.locator('.work-view .more-actions > summary').click();
   await page.getByRole('button', { name: '검토본 저장', exact: true }).click();
   const saveReview = page.getByRole('dialog', { name: '검토본 저장', exact: true });
   await saveReview.getByLabel('검토본 제목', { exact: true }).fill('Fixture review');
@@ -564,7 +575,9 @@ try {
   await comparison.getByRole('button', { name: '비교', exact: true }).click();
   await comparison.getByRole('status').filter({ hasText: '표시·속성 동일' }).waitFor();
   await comparison.getByRole('button', { name: '닫기', exact: true }).click();
-  const nextCard = page.locator('.chat-message').filter({ hasText: 'Comparison fixture' });
+  await openWork('comparison-fixture');
+  const nextCard = page.locator('.work-view[data-request-id="comparison-fixture"]');
+  await nextCard.locator('.more-actions > summary').click();
   await nextCard.getByRole('button', { name: '수량표', exact: true }).click();
   await quantities.getByLabel('비교할 이전 후보', { exact: true }).selectOption(applicable.id);
   await quantities.getByRole('button', { name: '현재 후보와 비교', exact: true }).click();

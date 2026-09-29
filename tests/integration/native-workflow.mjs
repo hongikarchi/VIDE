@@ -103,13 +103,10 @@ try {
   assert.equal(comparison.compatible, true);
   assert.equal(comparison.rows[0].status, 'changed');
   assert.ok(Math.abs(comparison.rows[0].delta.volume + 72) < 0.001);
-  await page.waitForFunction(
-    () =>
-      [...document.querySelectorAll('.chat-message button')].filter(
-        (b) => b.textContent === '수량표',
-      ).length === 2,
-  );
-  await page.getByRole('button', { name: '수량표', exact: true }).last().click();
+  // Both candidates are in the work history; the latest one is open in the work view.
+  await page.waitForFunction(() => document.querySelectorAll('#task-list .task-row').length >= 2);
+  await page.locator('.work-view .more-actions > summary').click();
+  await page.getByRole('button', { name: '수량표', exact: true }).click();
   await page
     .getByRole('dialog', { name: '후보 수량표', exact: true })
     .waitFor({ state: 'visible' });

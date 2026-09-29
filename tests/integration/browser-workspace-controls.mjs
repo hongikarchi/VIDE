@@ -29,11 +29,6 @@ try {
   await page.route('**/api/v1/host', (route) =>
     route.fulfill({ json: { available: false, zwcadAvailable: true } }),
   );
-  await page.addInitScript(() => {
-    try {
-      localStorage.setItem('vide:history-expand', 'all');
-    } catch {}
-  });
   await page.goto(app.launchUrl);
   await page.waitForFunction(() => !document.querySelector('#body').disabled);
   assert.equal(await page.locator('#add-request').isDisabled(), true);
@@ -262,13 +257,20 @@ try {
   assert.match(await linkedChip.textContent(), /basis-one.*basis-two/);
   await linkedChip.getByRole('button').click();
   assert.equal(await page.locator('#context .chip').filter({ hasText: '연계 묶음' }).count(), 0);
-  const card = page.locator('[data-request-id="basis-one"]');
+  // The work history lists the requests; a row opens that work on the right.
+  const openWork = async (id) => {
+    await page.locator('button[data-section="task-list"]').click();
+    await page.locator(`[data-task-id="${id}"] .task-open`).click();
+  };
+  await openWork('basis-one');
+  const card = page.locator('.work-view[data-request-id="basis-one"]');
   assert.match(await card.textContent(), /1개는 목록·네이티브 파일에 보존 · 화면 표현 미지원/);
   await card.getByRole('button', { name: '이 후보 보기', exact: true }).click();
   await page.getByRole('button', { name: '모델 표시 상태', exact: true }).click();
   assert.match(await settings.textContent(), /전체 1개 · 화면 표시 0개 · 표현 미지원 1개/);
   assert.match(await settings.textContent(), /InstanceReference 1개/);
   await settings.getByRole('button', { name: '닫기', exact: true }).click();
+  await page.locator('button[data-section="document-tree"]').click();
   await page
     .locator('#objects')
     .getByRole('button', { name: 'Preserved block', exact: true })
@@ -279,18 +281,19 @@ try {
       .querySelector('#inspector-content')
       .textContent.includes('미지원 · 목록·네이티브 파일에 보존'),
   );
+  await openWork('basis-two');
   await page
-    .locator('[data-request-id="basis-two"]')
+    .locator('.work-view[data-request-id="basis-two"]')
     .getByRole('button', { name: '이 후보 보기', exact: true })
     .click();
   // The request list omits display meshes; the shown result is fetched before it is drawn.
   await page
     .getByRole('button', { name: '모델 표시 상태', exact: true })
     .waitFor({ state: 'hidden' });
-  await card.getByText('요청 문맥', { exact: true }).click();
+  await openWork('basis-one');
   assert.equal(await card.locator('pre').isVisible(), false);
-  assert.match(await card.textContent(), /대상: Rhino/);
-  await card.getByText('진단용 원문', { exact: true }).click();
+  assert.match(await card.locator('.work-conditions').textContent(), /대상Rhino/);
+  await card.getByText('요청 원문', { exact: true }).click();
   assert.equal(await card.locator('pre').isVisible(), true);
   await page.route('**/api/v1/ai-settings', (route) =>
     route.fulfill({ status: 401, json: { code: 'UNAUTHORIZED' } }),

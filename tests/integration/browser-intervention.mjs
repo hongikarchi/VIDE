@@ -49,13 +49,16 @@ try {
   await page.locator('#permission').selectOption('review');
   await page.locator('#body').fill('Keep the boundary');
   await page.locator('#request').click();
-  const add = page.locator('#active-work').getByRole('button', { name: '추가 지시', exact: true });
+  const add = page
+    .locator('.work-intervene')
+    .getByRole('button', { name: '추가 지시', exact: true });
   await add.waitFor();
   assert.equal(await add.isDisabled(), true);
   await page.locator('#body').fill('Use height 4.5 m');
   await add.click();
+  // The added instruction opens as the current work, waiting for the previous one to stop.
   await page.waitForFunction(() =>
-    document.querySelector('#active-work').textContent.includes('이전 작업 종료 대기'),
+    document.querySelector('.work-view').textContent.includes('이전 작업 종료 대기'),
   );
   assert.equal(received.length, 1);
   assert.equal(await page.locator('#body').inputValue(), '');
@@ -63,8 +66,10 @@ try {
   assert.equal(rows().length, 2);
   assert.match(JSON.parse(rows()[1].input).body, /Keep the boundary[\s\S]*Use height 4.5 m/);
   release();
-  await page.waitForFunction(() =>
-    document.querySelector('#active-work').textContent.includes('진행 중인 작업 없음'),
+  await page.waitForFunction(
+    () =>
+      document.querySelector('.work-view')?.dataset.state === 'succeeded' &&
+      !document.querySelector('.work-others'),
   );
   assert.deepEqual(
     rows().map((row) => row.state),

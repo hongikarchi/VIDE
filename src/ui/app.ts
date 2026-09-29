@@ -29,9 +29,9 @@ const showAiSettings: typeof import('./ai-settings.tsx').showAiSettings = async 
 import { initializeReviews } from './reviews.tsx';
 import { attachSharedFeedback } from './shared-feedback.tsx';
 import { linkedCandidates, showLinkedTargets } from './linked-targets.tsx';
-import { renderHistory, expandAll, setExpandAll } from './history.tsx';
+import { renderWork } from './work-view.tsx';
 import { initializeDocuments, attachConnectedSelection } from './documents.tsx';
-import { renderRequests, renderActiveWork } from './requests.tsx';
+import { renderRequests } from './requests.tsx';
 import { iconSvg, initializeInspector, renderInspector } from './inspector.ts';
 import { api, connect, errors, labels } from './gateway.ts';
 import { remoteSession } from './remote-panel.ts';
@@ -104,17 +104,15 @@ const renderObjectList = createObjectList($('objects'), (ids, mode) => {
   if (ids.length === 1 && mode !== 'remove') viewport?.fit(ids[0]);
 });
 let foregroundRequest: { id: string; selected: typeof selectedResult; draft: string } | undefined;
+/** The work opened in the work view (work history row or the latest request sent). */
+let focusedWork: string | undefined;
 const focusDraft = () => JSON.stringify({ draft: draftSnapshot(state), strokes });
 initializeWorkspacePanels();
 const workspaceStatus = initializeWorkspaceStatus({
   openFailure: (id) => {
     selectedResult = id;
     renderMessages();
-    if ($('right').hidden) $('toggle-right').click();
-    setMobileView('input');
-    document
-      .querySelector<HTMLElement>(`[data-request-id="${CSS.escape(id)}"]`)
-      ?.scrollIntoView({ block: 'nearest' });
+    focusWork(id);
   },
   openAiSettings: () => openAiSettings(),
   openExecutionLimits: () => openExecutionLimits(),
@@ -456,9 +454,8 @@ function render(rebuildRequests = true) {
     state.baseRequestId = displayedResult;
   }
   if (rebuildRequests) renderRequests(state, render);
-  renderActiveWork(state.messages, interventionReason, (id) => {
-    void submitRequest(id);
-  });
+  // Intervention availability follows the composer, so the work view follows every render.
+  if (project) renderConversation();
   $('host-target').value = state.host || 'rhino';
   if (project && !unreadableDraft)
     try {
@@ -649,7 +646,6 @@ function render(rebuildRequests = true) {
       })),
   );
   $('work-count').textContent = `${state.messages.length}개 작업`;
-  $('recent-count').textContent = state.messages.length ? String(state.messages.length) : '';
   $('workspace-status').textContent = state.messages.some((m) =>
     ['queued', 'running'].includes(m.request?.state),
   )
@@ -679,11 +675,14 @@ async function hideRequest(id: string) {
 function sidebar() {
   $('task-list').replaceChildren();
   if (!state.messages.length) el('small', '아직 요청이 없습니다.', $('task-list'));
-  [...state.messages].reverse().forEach((m, i) => {
+  const shown = focusedMessage();
+  const listed = state.messages.filter((m) => !m.request?.input?.parentRequestId);
+  [...listed].reverse().forEach((m, i) => {
     const request = m.request;
     const row = el('div', '', $('task-list'), { class: 'task-row', 'data-task-id': m.id });
+    if (m.id === shown?.id) row.setAttribute('aria-current', 'true');
     const open = el('button', '', row, { class: 'task-open', type: 'button' });
-    el('span', m.body || `첨부 검토 ${state.messages.length - i}`, open, { class: 'task-title' });
+    el('span', m.body || `첨부 검토 ${listed.length - i}`, open, { class: 'task-title' });
     const meta = el('span', '', open, { class: 'task-meta' });
     if (request?.createdAt)
       el(
@@ -702,14 +701,7 @@ function sidebar() {
         class: 'card-state',
         'data-state': request.state,
       });
-    open.onclick = () => {
-      if ($('right').hidden) $('toggle-right').click();
-      mobileView('input');
-      const card = document.querySelector<HTMLElement>(`.chat-message[data-request-id="${m.id}"]`);
-      if (card?.dataset.open === 'false')
-        card.querySelector<HTMLButtonElement>('.card-head')?.click();
-      card?.scrollIntoView({ block: 'nearest' });
-    };
+    open.onclick = () => focusWork(m.id);
     if (request && !['queued', 'running'].includes(request.state)) {
       const remove = el('button', '×', row, {
         class: 'task-remove',
@@ -854,8 +846,25 @@ async function sendThumbnail() {
     body: JSON.stringify({ image: canvas.toDataURL('image/jpeg', 0.72) }),
   });
 }
+/** The work shown on the right: the one chosen in the work history, else the newest running. */
+function focusedMessage() {
+  const listed = state.messages.filter((m) => !m.request?.input?.parentRequestId);
+  return (
+    listed.find((m) => m.id === focusedWork) ??
+    [...listed].reverse().find((m) => ['queued', 'running'].includes(m.request?.state)) ??
+    listed.at(-1)
+  );
+}
+function focusWork(id: string) {
+  focusedWork = id;
+  if ($('right').hidden) $('toggle-right').click();
+  mobileView('input');
+  sidebar();
+  renderConversation();
+  $('thread').scrollTop = 0;
+}
 function renderConversation() {
-  renderHistory($('conversation'), state.messages, models, project?.id, {
+  renderWork($('conversation'), focusedMessage(), state.messages, models, project?.id, {
     restore: (request) => {
       if (busy) throw Error('현재 전송이 끝난 뒤 복원하세요.');
       const draft = request.input.linkedTargets
@@ -905,7 +914,11 @@ function renderConversation() {
     },
     changed: renderMessages,
     error: message,
-    hide: hideRequest,
+    focus: focusWork,
+    intervene: (id) => {
+      void submitRequest(id);
+    },
+    interventionReason: (id) => interventionReason(id),
   });
 }
 
@@ -922,6 +935,7 @@ function openExtensions() {
     (request) => {
       if (!state.messages.some((message) => message.id === request.id))
         state.messages.push(requestMessage(request));
+      focusedWork = request.id;
       renderMessages();
       render();
       mobileView('input');
@@ -970,6 +984,7 @@ $('jigs').onclick = () => {
       const request = await requestData(`/projects/${projectId}/requests`, 'POST', input);
       if (!state.messages.some((entry) => entry.id === request.id))
         state.messages.push(requestMessage(request));
+      focusedWork = request.id;
       renderMessages();
       if ($('right').hidden) $('toggle-right').click();
       void poll(request.id, projectId, state);
@@ -1091,6 +1106,7 @@ function interventionReason(id: string): string | undefined {
   const parent = state.messages.find((entry) => entry.id === id)?.request;
   const original = parent?.input;
   if (!parent || !original || original.parentRequestId) return '상위 작업에서 추가하세요.';
+  if (!draftHasInput(state)) return '작성기에 바꿀 조건을 쓰면 추가 지시를 보낼 수 있습니다.';
   const draft = interventionTargetDraft(state, parent);
   if (validate(draft)) return validate(draft);
   if (
@@ -1143,6 +1159,7 @@ async function submitRequest(predecessorId?: string) {
     $('body').value = '';
     if (selectedResult === undefined) selectedResult = displayedResult ?? null;
     foregroundRequest = { id: request.id, selected: selectedResult, draft: focusDraft() };
+    focusedWork = request.id;
     renderMessages();
     void poll(request.id, projectId, original);
   } catch (cause) {
@@ -1218,13 +1235,6 @@ $('toggle-recent').onclick = () => {
   const open = $('recent-section').dataset.open !== 'true';
   $('recent-section').dataset.open = String(open);
   $('toggle-recent').setAttribute('aria-expanded', String(open));
-};
-$('expand-history').textContent = expandAll() ? '모두 접기' : '모두 펼치기';
-$('expand-history').onclick = (event) => {
-  event.preventDefault();
-  setExpandAll(!expandAll());
-  $('expand-history').textContent = expandAll() ? '모두 접기' : '모두 펼치기';
-  renderMessages();
 };
 $('inspect-selection').onclick = () => {
   $('attach-menu').open = false;

@@ -2014,67 +2014,6 @@ body.left-hidden.right-hidden main {
 #thread #conversation:has(.chat-empty) {
   flex: 1;
 }
-.thread-live {
-  padding: 0 14px;
-}
-.thread-live:has(.live-turn) {
-  padding-bottom: 12px;
-}
-.live-turn {
-  border-left: 2px solid #3c6fd0;
-  padding: 6px 0 6px 10px;
-  margin-bottom: 10px;
-  font-size: 11px;
-}
-.live-turn[data-state='unknown'],
-.live-turn[data-state='interrupted'] {
-  border-left-color: #a2462f;
-}
-.live-head {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.live-head strong {
-  font-weight: 600;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.live-turn > small {
-  display: block;
-  color: var(--muted);
-  padding-top: 3px;
-}
-.live-turn button {
-  margin-top: 6px;
-  font-size: 10px;
-  padding: 4px 8px;
-}
-.spinner {
-  flex-shrink: 0;
-  width: 11px;
-  height: 11px;
-  border-radius: 50%;
-  border: 2px solid #3c6fd033;
-  border-top-color: #3c6fd0;
-  animation: spin 0.8s linear infinite;
-}
-.live-alert {
-  flex-shrink: 0;
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
-  background: #a2462f;
-  color: white;
-  font-size: 10px;
-  display: grid;
-  place-items: center;
-}
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
 .thread-queue {
   margin: 0 14px 12px;
   padding: 8px;
@@ -3125,4 +3064,235 @@ body.panel-mode #conversation {
   .jig-inputs label {
     flex: 1 1 100%;
   }
+}
+
+/* Work view (Design §06 SCR-03): one work's conditions, stages, result and checks. */
+.work-view {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  border-bottom: 0;
+}
+.work-view h4 {
+  margin: 0 0 6px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+.work-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  border-left: 2px solid var(--coral);
+  padding: 2px 0 2px 9px;
+}
+.work-head h3 {
+  margin: 0;
+  font-size: 13px;
+}
+.work-others {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  font-size: 10px;
+  color: var(--muted);
+  background: var(--soft);
+  border-radius: 6px;
+  padding: 6px 8px;
+}
+.work-others button {
+  font-size: 10px;
+  padding: 2px 6px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: #fff;
+}
+.work-conditions dl {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 4px 10px;
+  margin: 0;
+  font-size: 11px;
+}
+.work-conditions dt {
+  color: var(--muted);
+}
+.work-conditions dd {
+  margin: 0;
+  min-width: 0;
+}
+.work-conditions .link-button {
+  font-size: 11px;
+  padding: 0;
+  text-align: left;
+}
+.work-pins {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.work-pins span {
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 9px;
+  background: var(--soft);
+}
+.work-pins span[data-role='preserve'] {
+  background: #e7f3ea;
+}
+.work-pins span[data-role='target'] {
+  background: #fbeee9;
+}
+.work-stages {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border-left: 1px solid var(--line);
+  margin-left: 6px;
+}
+.work-stages li {
+  position: relative;
+  padding: 3px 0 3px 14px;
+}
+.stage-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 11px;
+}
+.stage-mark {
+  position: absolute;
+  left: -6px;
+  width: 12px;
+  text-align: center;
+  background: #fff;
+  color: var(--muted);
+}
+.stage-detail {
+  margin-left: auto;
+  font-size: 10px;
+  color: var(--muted);
+  text-align: right;
+}
+.work-stages li[data-state='pending'] .stage-label,
+.work-stages li[data-state='skipped'] .stage-label {
+  color: #a3aaa8;
+}
+.work-stages li[data-state='active'] .stage-label {
+  font-weight: 600;
+  color: #2f5aa8;
+}
+.work-stages li[data-state='active'] .stage-mark {
+  color: #2f5aa8;
+}
+.work-stages li[data-state='done'] .stage-mark {
+  color: #3f9b5c;
+}
+.work-stages li[data-state='failed'] .stage-mark,
+.work-stages li[data-state='failed'] .stage-label {
+  color: #b33a2e;
+}
+.work-intervene {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: 6px 0 2px;
+  padding: 6px 8px;
+  border: 1px dashed #b9c7e6;
+  border-radius: 6px;
+  background: #f5f8fe;
+}
+.work-intervene button {
+  font-size: 11px;
+  padding: 3px 9px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: #fff;
+}
+.work-intervene small {
+  flex-basis: 100%;
+  margin: 0;
+}
+.stage-note {
+  color: #2f5aa8;
+}
+.work-targets {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  font-size: 11px;
+}
+.work-targets li {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 3px 0;
+}
+.work-result > button,
+.work-result > a,
+.work-result .more-actions button,
+.work-result .more-actions a {
+  display: inline-block;
+  font-size: 10px;
+  margin: 6px 5px 0 0;
+  padding: 5px 7px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  color: #4f5c55;
+  text-decoration: none;
+  background: #fff;
+}
+.work-result > button:first-of-type {
+  background: var(--soft);
+}
+.work-muted {
+  color: var(--muted);
+}
+.work-checks ul {
+  margin: 0;
+  padding-left: 16px;
+  font-size: 11px;
+  color: #81553e;
+}
+#task-list .task-row[aria-current='true'] {
+  background: #eef2ee;
+  box-shadow: inset 2px 0 0 var(--coral);
+}
+:root[data-theme='dark'] .stage-mark,
+:root[data-theme='dark'] .work-others button,
+:root[data-theme='dark'] .work-intervene button,
+:root[data-theme='dark'] .work-result > button,
+:root[data-theme='dark'] .work-result > a,
+:root[data-theme='dark'] .work-result .more-actions button,
+:root[data-theme='dark'] .work-result .more-actions a {
+  background: #1d2120;
+  color: inherit;
+}
+:root[data-theme='dark'] .work-intervene {
+  background: #1f2633;
+  border-color: #3a4a6a;
+}
+:root[data-theme='dark'] .work-pins span[data-role='preserve'] {
+  background: #203127;
+}
+:root[data-theme='dark'] .work-pins span[data-role='target'] {
+  background: #3a2822;
+}
+:root[data-theme='dark'] #task-list .task-row[aria-current='true'] {
+  background: #262c2b;
+}
+:root[data-theme='dark'] .work-stages li[data-state='active'] .stage-label,
+:root[data-theme='dark'] .work-stages li[data-state='active'] .stage-mark,
+:root[data-theme='dark'] .stage-note {
+  color: #8fb0f0;
+}
+.stage-ai {
+  margin: 4px 0 0;
+  font-size: 11px;
+  line-height: 1.5;
+  color: #4f5c55;
+  white-space: pre-wrap;
 }

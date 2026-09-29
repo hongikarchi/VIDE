@@ -51,10 +51,11 @@ try {
   await page.locator('#body').fill('First independent document');
   await page.locator('#request').click();
   await page.waitForFunction(() => document.querySelector('#body').value === '');
+  // The work view shows the running work's stages with real counts.
   await page.waitForFunction(() =>
-    document.querySelector('#active-work').textContent.includes('사본 저장 검증 2단계'),
+    document.querySelector('.work-stages')?.textContent.includes('검증 성공 2회'),
   );
-  assert.match(await page.locator('#active-work').textContent(), /조회 2회.*실행 3\/12/s);
+  assert.match(await page.locator('.work-stages').textContent(), /조회 2회.*실행 3\/12회/s);
   await page.locator('#body').fill('Second independent document');
   assert.equal(await page.locator('#request').isEnabled(), true);
   await page.locator('#request').click();

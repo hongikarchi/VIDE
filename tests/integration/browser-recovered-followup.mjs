@@ -69,7 +69,7 @@ try {
   page.on('pageerror', (error) => errors.push(error.message));
   await page.goto(app.launchUrl);
   await page.getByRole('button', { name: '복구 후보에서 이어가기' }).click();
-  assert.match(await page.locator('#conversation').textContent(), /목표 완료 미확인/);
+  assert.match(await page.locator('.work-view').textContent(), /목표 완료 미확인/);
   assert.match(await page.locator('#body').inputValue(), /Keep the wall and finish the roof/);
   assert.equal(submitted, undefined, 'Preparing a follow-up must not execute it');
   await page.locator('#request').click();

@@ -96,7 +96,7 @@ try {
     sourceDocument: { name: 'plan.dwg', capturedAt: 'test', instance: '2', documentId: 1 },
   });
   await page.reload();
-  await page.waitForFunction(() => document.querySelectorAll('.chat-message').length === 2);
+  await page.waitForFunction(() => document.querySelectorAll('#task-list .task-row').length === 2);
   await page.evaluate(() => {
     const model = document.querySelector('#model');
     model.value = 'codex-cli';

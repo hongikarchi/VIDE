@@ -256,16 +256,13 @@ try {
     // The outcome travels back to the iPad; the mocked AI's reply content is not under test.
     await page.waitForFunction(
       () =>
-        [...document.querySelectorAll('.chat-message .card-state')].some((node) =>
-          ['succeeded', 'failed'].includes(node.getAttribute('data-state') ?? ''),
-        ) && document.querySelectorAll('.chat-message').length >= 2,
+        ['succeeded', 'failed'].includes(
+          document.querySelector('.work-view .card-state')?.getAttribute('data-state') ?? '',
+        ) && document.querySelectorAll('#task-list .task-row').length >= 2,
       null,
       { timeout: 60_000 },
     );
-    result.requestState = await page
-      .locator('.chat-message .card-state')
-      .last()
-      .getAttribute('data-state');
+    result.requestState = await page.locator('.work-view .card-state').getAttribute('data-state');
   } catch (error) {
     await page.screenshot({ path: join(directory, 'ipad-send-timeout.png') });
     console.log(

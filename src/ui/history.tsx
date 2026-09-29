@@ -1,8 +1,4 @@
-import { isDwgSdkEditMode } from '../contracts/dwg-edit-mode.ts';
-import { useLayoutEffect, useRef, useState } from 'react';
-import { ActivityLog, activityEntries } from './activity.tsx';
-import { createRoot } from 'react-dom/client';
-import type { Root } from 'react-dom/client';
+import { useRef, useState } from 'react';
 import { sceneRepresentation } from '../core/scene-representation.ts';
 import { api, labels, errors } from './gateway.ts';
 import { showApplication } from './application.tsx';
@@ -11,13 +7,14 @@ import { applicationResultSchema } from '../contracts/workspace-result.ts';
 import { uiRequestSchema as workspaceRequestSchema } from './workspace-data.ts';
 import type { UiRequest as Request, UiMessage as Message } from './workspace-data.ts';
 import type { z } from 'zod';
+// Result actions shared by the work view: candidate display, application, downloads.
 // Requests made before explicit models were listed ran each CLI's own default model.
-const legacyModels: Record<string, string> = {
+export const legacyModels: Record<string, string> = {
   'claude-cli': 'Claude (CLI 기본)',
   'codex-cli': 'ChatGPT (CLI 기본)',
 };
 type Application = z.infer<typeof applicationResultSchema>;
-interface Actions {
+export interface Actions {
   candidate: (id: string) => void;
   selection: (requestId: string | undefined, id: string) => void;
   saveReview: (id: string) => Promise<void>;
@@ -25,12 +22,15 @@ interface Actions {
   changed: () => void;
   restore: (request: Request) => void;
   error: (message: string) => void;
-  /** Remove a finished entry from the conversation (the record is kept). */
-  hide: (id: string) => Promise<void>;
+  /** Open another work in the work view. */
+  focus: (id: string) => void;
+  /** Add the composer's input to running work (SPEC-02.8); a reason means it is not possible now. */
+  intervene: (id: string) => void;
+  interventionReason: (id: string) => string | undefined;
 }
-const errorLabels: Record<string, string> = errors,
+export const errorLabels: Record<string, string> = errors,
   stateLabels: Record<string, string> = labels;
-function Action({
+export function Action({
   children,
   run,
   error,
@@ -68,7 +68,7 @@ function Action({
     </button>
   );
 }
-function Candidate({
+export function Candidate({
   message,
   projectId,
   actions,
@@ -190,7 +190,7 @@ function Candidate({
           ) : null}
         </div>
       ))}
-      <details className="more-actions" open={expandAll() || undefined}>
+      <details className="more-actions">
         <summary>더보기</summary>
         {!displayOnly ? (
           <>
@@ -246,347 +246,3 @@ function Candidate({
     </>
   );
 }
-function Card({
-  message,
-  models,
-  projectId,
-  actions,
-  related,
-  latest,
-}: {
-  message: Message;
-  models: { id: string; name: string }[];
-  projectId: string;
-  actions: Actions;
-  related: Map<string, Request>;
-  latest: boolean;
-}) {
-  const request = message.request,
-    result = request?.result;
-  const [, redraw] = useState(0);
-  const running = Boolean(request && ['queued', 'running'].includes(request.state));
-  const open = expanded.get(message.id) ?? (expandAll() || latest || running);
-  const activity = activityEntries(result?.activity);
-  const references = [...message.pins, ...message.sketches, ...message.files].map(
-    (item) => item.name,
-  );
-  const imported = ['file', 'document'].includes(message.source ?? '');
-  const subtitle =
-    message.provider === 'extension'
-      ? '확장 · ' + message.extensionVersion
-      : imported
-        ? message.host === 'zwcad'
-          ? isDwgSdkEditMode(result?.dwgEditMode)
-            ? 'ZWCAD 작업 사본'
-            : 'ZWCAD 참고 도면'
-          : result?.displayOnly === true
-            ? 'Rhino 화면 동기화'
-            : 'Rhino 작업 사본'
-        : `${models.find((model) => model.id === message.model)?.name || legacyModels[message.model] || message.model} · ${message.effort === 'default' ? '기본 강도' : message.effort} · ${message.applyToSource ? 'Auto mode' : message.permission === 'review' ? 'Plan mode' : 'Accept edits'}`;
-  return (
-    <article className="chat-message" data-request-id={message.id} data-open={String(open)}>
-      <button
-        className="card-head"
-        aria-expanded={open}
-        onClick={() => {
-          expanded.set(message.id, !open);
-          redraw((value) => value + 1);
-        }}
-      >
-        <span className="card-title">{message.body || '첨부한 문맥 검토'}</span>
-        <span className="card-state" data-state={request?.state}>
-          {request ? stateLabels[request.state] || request.state : ''}
-        </span>
-      </button>
-      {!open ? null : (
-        <>
-          {references.length ? <small>{references.join(' · ')}</small> : null}
-          <small>{subtitle}</small>
-          <details>
-            <summary>요청 문맥</summary>
-            <p>
-              대상:{' '}
-              {request?.input?.linkedTargets?.length
-                ? request.input.linkedTargets
-                    .map(
-                      (target) =>
-                        (target.host === 'zwcad' ? 'ZWCAD' : 'Rhino') +
-                        ' · ' +
-                        (related.get(target.baseRequestId)?.input.body || '기준 후보'),
-                    )
-                    .join(' ↔ ')
-                : (request?.input?.host || message.host) === 'zwcad'
-                  ? 'ZWCAD'
-                  : 'Rhino'}
-            </p>
-            {message.pins.length ? (
-              <ul>
-                {message.pins.map((pin, index) => (
-                  <li key={index}>
-                    {pin.name || pin.id} ·{' '}
-                    {{ target: '변경', preserve: '유지', reference: '참고' }[pin.role]}
-                  </li>
-                ))}
-              </ul>
-            ) : null}
-            <p>첨부: {references.length ? references.join(' · ') : '없음'}</p>
-            <p>조건: {message.body || '첨부한 문맥 검토'}</p>
-            <details>
-              <summary>진단용 원문</summary>
-              <pre>{JSON.stringify(request?.input || message, null, 2)}</pre>
-            </details>
-          </details>
-          {request ? (
-            <>
-              <small>
-                {result?.unchanged
-                  ? '변경 없음 · 기존 후보 확인'
-                  : result?.recovered
-                    ? '사본 복구됨 · 목표 완료 미확인'
-                    : message.provider === 'extension' && request.state === 'succeeded'
-                      ? '확장 완료'
-                      : request.state === 'running' && result?.phase === 'host'
-                        ? '호스트 생성·저장 검증 중'
-                        : result?.phase === 'stopping'
-                          ? '중단 확인 중'
-                          : stateLabels[request.state] || request.state}
-              </small>
-              {activity.length ? (
-                <details className="activity">
-                  <summary>
-                    작업 과정 · {activity.length}단계{running ? ' · 진행 중' : ''}
-                  </summary>
-                  <ActivityLog entries={activity} live={running} />
-                </details>
-              ) : null}
-              {result?.applicationState === 'succeeded' ? (
-                <p>
-                  연결 Rhino에 반영했습니다. 아래 AI 답변은 원본 반영 전에 작성된 작업 사본
-                  설명입니다.
-                </p>
-              ) : null}
-              {result?.text ? <p>{result.text}</p> : null}
-              {result?.targetResults?.map((saved) => {
-                const current = related.get(saved.requestId);
-                const target = current
-                  ? {
-                      ...saved,
-                      state: current.state,
-                      candidate: current.result?.hostExecuted === true,
-                    }
-                  : saved;
-                return (
-                  <div key={target.requestId}>
-                    <span>
-                      {target.host === 'zwcad' ? 'ZWCAD' : 'Rhino'} ·{' '}
-                      {current?.result?.unchanged
-                        ? '변경 없음 · 기존 후보 확인'
-                        : stateLabels[target.state] || target.state}
-                    </span>
-                    {target.state === 'succeeded' && target.candidate ? (
-                      <button onClick={() => actions.candidate(target.requestId)}>
-                        대상 후보 보기
-                      </button>
-                    ) : null}
-                  </div>
-                );
-              })}
-              {result?.extensionResult?.rows.map((row, index) => (
-                <details key={index}>
-                  <summary>
-                    {row.type} · {row.layer || '레이어 미상'} · {row.count}개
-                  </summary>
-                  {row.objectIds.map((id) => (
-                    <button
-                      key={id}
-                      onClick={() => actions.selection(message.baseRequestId ?? undefined, id)}
-                    >
-                      {message.pins.find((pin) => pin.id === id)?.name || id}
-                    </button>
-                  ))}
-                </details>
-              ))}
-              {result?.hostExecuted ? (
-                <Candidate message={message} projectId={projectId} actions={actions} />
-              ) : null}
-              {result?.code ? <p>{errorLabels[result.code] || result.code}</p> : null}
-              {request.state === 'unknown' &&
-              !result?.applicationId &&
-              result?.executionMode === 'sdk' ? (
-                <Action
-                  error={actions.error}
-                  run={async () => {
-                    message.request = workspaceRequestSchema.parse(
-                      await api(
-                        `/projects/${projectId}/requests/${message.id}/reconcile`,
-                        'POST',
-                        {},
-                      ),
-                    );
-                    actions.changed();
-                  }}
-                >
-                  저장된 후보 다시 확인
-                </Action>
-              ) : null}
-              {request.state === 'unknown' &&
-              message.source === 'file' &&
-              message.host === 'zwcad' &&
-              result?.sourceHash ? (
-                <Action
-                  error={actions.error}
-                  run={async () => {
-                    message.request = workspaceRequestSchema.parse(
-                      await api(
-                        `/projects/${projectId}/imports/${message.id}/reconcile`,
-                        'POST',
-                        {},
-                      ),
-                    );
-                    actions.changed();
-                  }}
-                >
-                  불러오기 결과 확인
-                </Action>
-              ) : null}
-              {message.linkedTargets &&
-              ['succeeded', 'failed', 'cancelled', 'interrupted'].includes(request.state) ? (
-                <Action error={actions.error} run={() => actions.restore(request)}>
-                  확인된 후보에서 이어가기
-                </Action>
-              ) : null}
-              {request.state === 'succeeded' &&
-              result?.recovered &&
-              result.hostExecuted &&
-              !request.input.linkedTargets &&
-              !imported ? (
-                <Action error={actions.error} run={() => actions.restore(request)}>
-                  복구 후보에서 이어가기
-                </Action>
-              ) : null}
-              {['failed', 'cancelled', 'interrupted'].includes(request.state) &&
-              message.provider !== 'extension' &&
-              !message.linkedTargets &&
-              !imported ? (
-                <Action error={actions.error} run={() => actions.restore(request)}>
-                  입력을 초안으로 복원
-                </Action>
-              ) : null}
-              {message.provider !== 'extension' &&
-              ['queued', 'running'].includes(request.state) &&
-              !imported &&
-              result?.phase !== 'host' ? (
-                <Action
-                  latch
-                  error={actions.error}
-                  run={async () => {
-                    await api(`/projects/${projectId}/requests/${message.id}/cancel`, 'POST', {});
-                  }}
-                >
-                  중단
-                </Action>
-              ) : null}
-            </>
-          ) : null}
-        </>
-      )}
-    </article>
-  );
-}
-const expanded = new Map<string, boolean>();
-const expandKey = 'vide:history-expand';
-export function expandAll() {
-  try {
-    return localStorage.getItem(expandKey) === 'all';
-  } catch {
-    return false;
-  }
-}
-/** Toggle the remembered default for all cards and forget per-card choices. */
-export function setExpandAll(value: boolean) {
-  expanded.clear();
-  try {
-    if (value) localStorage.setItem(expandKey, 'all');
-    else localStorage.removeItem(expandKey);
-  } catch {
-    /* Preference only; cards still open individually. */
-  }
-}
-function History({
-  element,
-  messages,
-  models,
-  projectId,
-  actions,
-  follow,
-  scroll,
-}: {
-  element: HTMLElement;
-  messages: Message[];
-  models: { id: string; name: string }[];
-  projectId: string;
-  actions: Actions;
-  follow: boolean;
-  scroll: number;
-}) {
-  useLayoutEffect(() => {
-    const scroller = scrollerOf(element);
-    scroller.scrollTop = follow ? scroller.scrollHeight : scroll;
-  });
-  const related = new Map(messages.map((message) => [message.id, message.request]));
-  return messages.length ? (
-    <>
-      {messages.map((message, index) => (
-        <Card
-          latest={index === messages.length - 1}
-          key={message.id}
-          message={message}
-          models={models}
-          projectId={projectId}
-          actions={actions}
-          related={related}
-        />
-      ))}
-    </>
-  ) : (
-    <div className="chat-empty">요청을 보내면 대화가 여기에 표시됩니다.</div>
-  );
-}
-const roots = new Map<HTMLElement, Root>();
-/** The chat thread scrolls as one surface: history, live work and queued requests. */
-const scrollerOf = (element: HTMLElement) => element.closest<HTMLElement>('#thread') ?? element;
-export function renderHistory(
-  element: HTMLElement,
-  messages: Message[],
-  models: { id: string; name: string }[],
-  projectId: string | undefined,
-  actions: Actions,
-): void {
-  let root = roots.get(element);
-  if (!root) {
-    root = createRoot(element);
-    roots.set(element, root);
-  }
-  root.render(
-    <History
-      element={element}
-      messages={messages}
-      models={models}
-      projectId={projectId ?? ''}
-      actions={actions}
-      follow={
-        scrollerOf(element).scrollHeight -
-          scrollerOf(element).scrollTop -
-          scrollerOf(element).clientHeight <
-        60
-      }
-      scroll={scrollerOf(element).scrollTop}
-    />,
-  );
-}
-window.addEventListener('pagehide', (event) => {
-  if (!event.persisted) {
-    for (const root of roots.values()) root.unmount();
-    roots.clear();
-  }
-});

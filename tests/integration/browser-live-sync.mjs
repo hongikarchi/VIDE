@@ -153,7 +153,7 @@ try {
   );
   const objectSummary = () => page.locator('.object-summary').first().textContent();
   assert.match(await objectSummary(), /^2개 객체/);
-  const messages = await page.locator('.chat-message').count();
+  const messages = await page.locator('#task-list .task-row').count();
 
   // One object moved in Rhino: only it is fetched and the same Sync is updated in place.
   liveReply = (body) => ({
@@ -173,7 +173,7 @@ try {
   );
   assert.match(await objectSummary(), /^2개 객체/);
   assert.equal(captures, 1);
-  assert.equal(await page.locator('.chat-message').count(), messages);
+  assert.equal(await page.locator('#task-list .task-row').count(), messages);
 
   // A deletion reported by Rhino removes the object from the list and the viewport.
   liveReply = (body) => {

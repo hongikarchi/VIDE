@@ -34,7 +34,7 @@ export function MobileNavigation() {
         aria-pressed={view === 'input'}
         onClick={() => setMobileView('input')}
       >
-        대화
+        작업
       </button>
     </>
   );

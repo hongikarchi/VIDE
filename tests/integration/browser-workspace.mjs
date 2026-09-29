@@ -45,7 +45,11 @@ try {
     records.some((r) => r.input.sketches.length),
     'Expected sketch request',
   );
-  assert.equal(await page.locator('.chat-message').count(), records.length);
+  // Every request is listed once in the work history; the right shows one work at a time.
+  assert.equal(
+    await page.locator('#task-list .task-row').count(),
+    records.filter((r) => !r.input.parentRequestId).length,
+  );
   await page.locator('[data-view=front]').click();
   assert.equal(
     await page.locator('#canvas canvas').getAttribute('data-projection'),
@@ -155,7 +159,7 @@ try {
   await mkdir('docs/assets/native-workspace', { recursive: true });
   await page.screenshot({ path: 'docs/assets/native-workspace/desktop.png' });
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.getByRole('button', { name: '대화', exact: true }).click();
+  await page.getByRole('button', { name: '작업', exact: true }).click();
   assert.equal(await page.locator('#body').isVisible(), true);
   assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
   await page.screenshot({ path: 'docs/assets/native-workspace/mobile.png' });

@@ -43,9 +43,9 @@ try {
     result.result.extensionResult.rows.reduce((sum, row) => sum + row.count, 0),
     2,
   );
-  const card = page.locator('.chat-message').last();
+  const card = page.locator('.work-view');
   await card.getByText('확장 완료', { exact: true }).waitFor();
-  await card.locator('details').last().locator('summary').click();
+  await card.locator('.work-result details').last().locator('summary').click();
   const objectName = result.input.pins[0].name;
   await card.getByRole('button', { name: objectName, exact: true }).click();
   assert.equal(await page.locator('#selection').innerText(), objectName);

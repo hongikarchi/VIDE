@@ -85,7 +85,7 @@ try {
   assert.ok(
     Math.abs(comparison.rows.reduce((sum, row) => sum + (row.delta.volume || 0), 0) + 40) < 0.001,
   );
-  await page.waitForFunction(() => document.querySelectorAll('.chat-message').length >= 2);
+  await page.waitForFunction(() => document.querySelectorAll('#task-list .task-row').length >= 2);
   await page.screenshot({ path: 'docs/assets/native-workspace/multilevel-candidate.png' });
   console.log(
     JSON.stringify({
