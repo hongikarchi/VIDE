@@ -154,6 +154,7 @@ export function createViewport(
 ) {
   let dirty = true;
   let selectedIds = new Set<string>();
+  let tints: Map<string, string> | null = null;
   let lineSignature = '';
   const scene = new THREE.Scene();
   scene.background = new THREE.Color('#edf0ec');
@@ -437,6 +438,8 @@ export function createViewport(
     return edges;
   }
   function baseColor(object: RenderObject) {
+    const tinted = tints?.get(object.userData.id as string);
+    if (tinted) return new THREE.Color(tinted);
     const colors = object.userData.colors as Record<string, string | undefined> | undefined;
     const source = display.colorSource === 'default' ? undefined : colors?.[display.colorSource];
     // ACI 7 is "foreground": white on dark screens, near-black on light ones.
@@ -1522,6 +1525,11 @@ export function createViewport(
     /** Live Sync: rebuild only changed objects and keep the camera. */
     update(data: DisplayObject[], definitions?: Record<string, BlockDefinition>) {
       replace(data, true, definitions);
+    },
+    /** Override colours per object id (e.g. structure verdicts); null clears them. */
+    tint(colors: Record<string, string> | null) {
+      tints = colors ? new Map(Object.entries(colors)) : null;
+      applyDisplay();
     },
     select(ids: readonly string[]) {
       const next = new Set(ids);

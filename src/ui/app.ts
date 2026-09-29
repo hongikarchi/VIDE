@@ -1300,6 +1300,17 @@ $('jigs').onclick = () => {
       setTimeout(() => viewport?.fit(displayIdOf(objects, requestId, objectId) ?? shown), 400);
       mobileView('model');
     },
+    tint: (requestId, colors) => {
+      // Sync object ids → displayed ids; the verdict colours stay until the display is reset.
+      const mapped: Record<string, string> = {};
+      for (const [objectId, color] of Object.entries(colors)) {
+        const id = displayIdOf(objects, requestId, objectId);
+        if (id) mapped[id] = color;
+      }
+      viewport?.tint(Object.keys(mapped).length ? mapped : null);
+      hideJigs();
+      mobileView('model');
+    },
     send: async (extra) => {
       const projectId = currentProject().id;
       const input = {

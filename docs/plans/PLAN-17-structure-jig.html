@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="description" content="기능 명세 목록 · 공통 규칙과 기능별 상세"><meta name="generator" content="tools/docs/build.mjs — generated from docs/specs/README.md; do not edit"><title>VIDE · SPEC</title><style>
+<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="description" content="구조 분석 jig(J-09) 1단계 — 계획 단계 중력 검토"><meta name="generator" content="tools/docs/build.mjs — generated from docs/plans/PLAN-17-structure-jig.md; do not edit"><title>VIDE · 구조 분석 jig(J-09) 1단계 — 계획 단계 중력 검토</title><style>
 :root{--ink:#292c2d;--muted:#626b6e;--line:#e1e3e1;--soft:#f5f5f1;--coral:#d97660;--paper:#fff;--font:"Pretendard","Noto Sans KR","Malgun Gothic",Arial,sans-serif}
 *{box-sizing:border-box}html{scroll-behavior:smooth;scroll-padding-top:92px}body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--font);letter-spacing:-.025em}a{color:inherit;text-underline-offset:4px}button,input,textarea,select{font:inherit;color:inherit}button{cursor:pointer;border:1px solid var(--line);border-radius:4px;background:var(--paper);padding:10px 15px;line-height:1.3}button:hover{background:var(--soft)}button:disabled{cursor:default;opacity:.6}button.primary{background:var(--ink);color:#fff;border-color:var(--ink)}button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible{outline:3px solid var(--coral);outline-offset:3px}textarea{resize:vertical}::selection{background:#f2d7ce}[hidden]{display:none!important}
 .skip{position:fixed;top:-80px;left:20px;z-index:100;background:white;padding:12px}.skip:focus{top:10px}
@@ -67,199 +67,99 @@ body.review-accepted ins{background:none;color:inherit;border:0;padding:0}
 body.review-accepted .toc-links a[data-reviews]::after{display:none}
 @media print{blockquote.review{break-inside:avoid;background:#eef3fc!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}ins,del{-webkit-print-color-adjust:exact;print-color-adjust:exact}.review-select{display:none}}
 </style></head><body>
-<!-- GENERATED FILE — source: docs/specs/README.md — run: npm --prefix tools/docs run build -->
+<!-- GENERATED FILE — source: docs/plans/PLAN-17-structure-jig.md — run: npm --prefix tools/docs run build -->
 <a class="skip" href="#reading-main">본문으로 이동</a>
-<header class="topbar"><a class="brand" href="../../index.html" aria-label="VIDE 문서 모음"><b>V.</b><span>VIDE</span></a><nav class="doc-tabs" aria-label="문서 선택"><a class="doc-tab" href="../PRD.html">PRD</a><a class="doc-tab active" aria-current="page" data-doc="readme" href="#readme">SPEC</a><a class="doc-tab" href="../../Design.html">Design</a><a class="doc-tab" href="../architecture/ARCH-01-system.html">기술 설계</a><a class="doc-tab" href="../plans/PLAN.html">PLAN</a><a class="doc-tab" href="../../DEVELOPMENT_GUIDE.html">개발 가이드</a><a class="doc-tab" href="../../AI.html">AI 규약</a></nav><div class="top-actions"><button id="source-download" title="현재 문서의 Markdown 원문 저장">원문 ↓</button><button id="print-doc" title="현재 문서 인쇄">인쇄</button></div></header>
-<div class="layout"><aside class="toc-shell" id="toc-shell" aria-label="현재 문서의 목차"><div class="toc-title"><strong>CONTENTS</strong><span id="toc-count"></span><button id="toc-toggle" aria-expanded="false" aria-controls="toc-body">목차 열기</button></div><div class="toc-body" id="toc-body"><input class="toc-search" id="toc-search" type="search" placeholder="장 제목으로 찾기" aria-label="현재 문서 목차 검색"><p class="toc-hint" id="nav-hint" role="status">장 제목으로 찾아갑니다.</p><nav class="toc-links" id="toc-links" aria-label="본문 장 이동"></nav><div class="toc-next">다음 작성할 문서<br><b>다음 작업 · PLAN §6.5</b><br>현재 단계와 작업별 계획을 확인한 뒤 해당 범위에서 재개</div></div></aside><main id="reading-main" tabindex="-1"><article id="readme" class="document"><header class="doc-hero"><div class="hero-label"><span class="eyebrow">SPEC</span><span><span class="pill">REVIEW · v0.9</span><span class="pill">4 CHAPTERS</span></span></div><h1 tabindex="-1">VIDE 기능 명세</h1><p class="doc-description">기능 명세 목록 · 공통 규칙과 기능별 상세</p><div class="hero-meta">
-<p>VIDE에서 설계자는 Rhino·ZWCAD의 모델과 도면을 보고, 객체를 가리키고 선을 그려 AI에 작업을 맡긴다. 실제 후보를 보며 수정 지시하고, 검토한 결과를 호스트에서 계속 편집할 수 있는 형태로 반영한다. 표·검토본·웹 의견은 이 설계 작업의 근거와 후속 검토를 연결한다. 제품 범위의 기준은 <a href="../PRD.html">PRD</a>다.</p>
-</div></header><section class="doc-section" id="readme-section-x0"><h2><span aria-hidden="true" class="section-num">00 /</span> 먼저 읽을 사용자 작업</h2>
-<p><a href="SPEC-00-common.html">전체 사용자 여정 — SPEC-00의 ‘VIDE에서 완결할 세 가지 작업’</a>부터 읽는다. 이 부분에서 프로그램의 흐름을 확인한 다음, 아래 기능 문서의 앞부분에서 사용자 입력·프로그램 동작·결과를 읽는다. 상태·권한·저장·실패 규칙은 각 기능 문서 뒷부분에 연결했다. 기존 ID는 다른 문서의 참조를 유지하기 위해 그대로 두었다.</p>
-<div aria-label="SPEC 표 1" class="table-scroll" role="region" tabindex="0"><table>
-<thead>
-<tr>
-<th>사용자가 하려는 일</th>
-<th>기능 문서의 정상 흐름</th>
-<th>읽고 판단할 것</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>모델·도면에서 대상을 찾아 의도 전달</td>
-<td><a href="SPEC-01-project-input-sync.html">SPEC-01</a> · SPEC-01.9·10</td>
-<td>형상을 탐색하고 핀·스케치·치수·자료를 한 요청에 넣을 수 있는가</td>
-</tr>
-<tr>
-<td>AI에게 만들기/수정 맡기고 결과 조정</td>
-<td><a href="SPEC-02-execution-candidates.html">SPEC-02</a> · SPEC-02.11~13</td>
-<td>실제 후보를 만들고 추가 지시→반영→호스트 재편집으로 이어지는가</td>
-</tr>
-<tr>
-<td>CAD 도면과 Rhino 모델 연결</td>
-<td><a href="SPEC-02-execution-candidates.html">SPEC-02</a> · SPEC-02.14</td>
-<td>한 요청의 실제 데이터가 양쪽 결과에 사용되는가</td>
-</tr>
-<tr>
-<td>변경 이유·수량 확인, 비교·전달</td>
-<td><a href="SPEC-03-data-history-export.html">SPEC-03</a> · SPEC-03.8</td>
-<td>대상/근거/표를 오가고 수정 전후 결과를 남길 수 있는가</td>
-</tr>
-<tr>
-<td>외부 의견으로 실제 설계 수정</td>
-<td><a href="SPEC-04-web-review.html">SPEC-04</a> · SPEC-04.7</td>
-<td>웹 의견이 로컬 작업과 수정 결과까지 연결되는가</td>
-</tr>
-<tr>
-<td>설치·AI 연결·확장 사용·재개</td>
-<td><a href="SPEC-05-extensions-install.html">SPEC-05</a> · SPEC-05.7</td>
-<td>같은 작업환경에서 AI와 추가 기능을 실제로 사용할 수 있는가</td>
-</tr>
-<tr>
-<td>받은 강구조를 계획 단계에서 검토</td>
-<td><a href="SPEC-06-structure-analysis.html">SPEC-06</a> · SPEC-06.8</td>
-<td>입력에서 확정한 해석 모델로 부재 검정과 근거·미검토 항목을 보이는가</td>
-</tr>
-</tbody>
-</table></div>
-</section><section class="doc-section" id="readme-section-x1"><h2><span aria-hidden="true" class="section-num">01 /</span> 구체적인 첫 지원안과 확인된 사실</h2>
-<p>경계 생성/수정·이동/복사와 Rhino 돌출 후보를 첫 기능 지원안으로 제안했다. 상세는 <a href="hosts/rhino.html">Rhino 지원표</a>와 <a href="hosts/zwcad.html">ZWCAD 지원표</a>다. <strong>구현 목표 제안과 이미 확인한 네이티브 실험을 구분한다.</strong> 특정 예제만 되는 제품이나 폴리라인 도구로 범위를 확정한 것이 아니다. OQ-03·10의 지원안 채택과 실증을 거쳐야 한다.</p>
-</section><section class="doc-section" id="readme-section-x2"><h2><span aria-hidden="true" class="section-num">02 /</span> PRD 요구와 기능 명세 대응</h2>
-<p>이 표가 FR → SPEC 대응의 원본이다(AI.md §7). 기능 서술의 정본은 각 SPEC이고 제품 약속은 PRD가 소유한다.</p>
-<div aria-label="SPEC 표 2" class="table-scroll" role="region" tabindex="0"><table>
-<thead>
-<tr>
-<th>FR</th>
-<th>SPEC</th>
-<th>비고</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>FR-01</td>
-<td><a href="SPEC-00-common.html">SPEC-00</a> · <a href="SPEC-01-project-input-sync.html">SPEC-01</a></td>
-<td>—</td>
-</tr>
-<tr>
-<td>FR-02</td>
-<td><a href="SPEC-00-common.html">SPEC-00</a> · <a href="SPEC-01-project-input-sync.html">SPEC-01</a> · <a href="SPEC-02-execution-candidates.html">SPEC-02</a></td>
-<td>—</td>
-</tr>
-<tr>
-<td>FR-03</td>
-<td><a href="SPEC-01-project-input-sync.html">SPEC-01</a></td>
-<td>—</td>
-</tr>
-<tr>
-<td>FR-04</td>
-<td><a href="SPEC-02-execution-candidates.html">SPEC-02</a></td>
-<td>—</td>
-</tr>
-<tr>
-<td>FR-05</td>
-<td><a href="SPEC-00-common.html">SPEC-00</a> · <a href="SPEC-01-project-input-sync.html">SPEC-01</a></td>
-<td>—</td>
-</tr>
-<tr>
-<td>FR-06</td>
-<td><a href="SPEC-01-project-input-sync.html">SPEC-01</a> · <a href="SPEC-04-web-review.html">SPEC-04</a></td>
-<td>—</td>
-</tr>
-<tr>
-<td>FR-07</td>
-<td><a href="SPEC-01-project-input-sync.html">SPEC-01</a> · <a href="SPEC-04-web-review.html">SPEC-04</a></td>
-<td>—</td>
-</tr>
-<tr>
-<td>FR-08</td>
-<td><a href="SPEC-02-execution-candidates.html">SPEC-02</a> · <a href="SPEC-05-extensions-install.html">SPEC-05</a></td>
-<td>—</td>
-</tr>
-<tr>
-<td>FR-09</td>
-<td><a href="SPEC-03-data-history-export.html">SPEC-03</a></td>
-<td>—</td>
-</tr>
-<tr>
-<td>FR-10</td>
-<td><a href="SPEC-02-execution-candidates.html">SPEC-02</a></td>
-<td>—</td>
-</tr>
-<tr>
-<td>FR-11</td>
-<td><a href="SPEC-00-common.html">SPEC-00</a> · <a href="SPEC-02-execution-candidates.html">SPEC-02</a></td>
-<td>—</td>
-</tr>
-<tr>
-<td>FR-12</td>
-<td><a href="SPEC-02-execution-candidates.html">SPEC-02</a> · <a href="SPEC-03-data-history-export.html">SPEC-03</a></td>
-<td>—</td>
-</tr>
-<tr>
-<td>FR-13</td>
-<td><a href="SPEC-05-extensions-install.html">SPEC-05</a></td>
-<td>—</td>
-</tr>
-<tr>
-<td>FR-14</td>
-<td><a href="SPEC-03-data-history-export.html">SPEC-03</a></td>
-<td>—</td>
-</tr>
-<tr>
-<td>FR-15</td>
-<td><a href="SPEC-02-execution-candidates.html">SPEC-02</a> · <a href="SPEC-05-extensions-install.html">SPEC-05</a></td>
-<td>—</td>
-</tr>
-<tr>
-<td>FR-16</td>
-<td><a href="SPEC-00-common.html">SPEC-00</a> · <a href="SPEC-01-project-input-sync.html">SPEC-01</a> · <a href="SPEC-02-execution-candidates.html">SPEC-02</a> · <a href="SPEC-03-data-history-export.html">SPEC-03</a> · <a href="SPEC-04-web-review.html">SPEC-04</a> · <a href="SPEC-05-extensions-install.html">SPEC-05</a></td>
-<td>—</td>
-</tr>
-<tr>
-<td>FR-17</td>
-<td><a href="SPEC-05-extensions-install.html">SPEC-05</a></td>
-<td>—</td>
-</tr>
-<tr>
-<td>FR-18</td>
-<td><a href="SPEC-00-common.html">SPEC-00</a> · <a href="SPEC-02-execution-candidates.html">SPEC-02</a> · <a href="SPEC-03-data-history-export.html">SPEC-03</a> · <a href="SPEC-04-web-review.html">SPEC-04</a> · <a href="SPEC-05-extensions-install.html">SPEC-05</a></td>
-<td>—</td>
-</tr>
-<tr>
-<td>FR-19</td>
-<td><a href="SPEC-04-web-review.html">SPEC-04</a></td>
-<td>—</td>
-</tr>
-<tr>
-<td>FR-20</td>
-<td>후속 확장</td>
-<td>PRD §14의 이번 범위 밖</td>
-</tr>
-<tr>
-<td>FR-21</td>
-<td>후속 확장</td>
-<td>PRD §14의 이번 범위 밖(구조 분석은 FR-23)</td>
-</tr>
-<tr>
-<td>FR-22</td>
-<td><a href="SPEC-03-data-history-export.html">SPEC-03</a></td>
-<td>—</td>
-</tr>
-<tr>
-<td>FR-23</td>
-<td><a href="SPEC-06-structure-analysis.html">SPEC-06</a></td>
-<td>구조 분석 jig</td>
-</tr>
-</tbody>
-</table></div>
-<p>호스트 계약·실험 범위: <a href="hosts/rhino.html">Rhino</a> · <a href="hosts/zwcad.html">ZWCAD</a>.</p>
-</section><section class="doc-section" id="readme-section-x3"><h2><span aria-hidden="true" class="section-num">03 /</span> 기능 검토 다음에 읽을 문서</h2>
-<p><a href="../plans/PLAN.html">PLAN</a> §1·§5.2·§6·§7.2에서 이 경험을 무엇으로 연결하고 어떤 순서로 검증할지 읽는다. 첫 프런트 흐름을 확인한 뒤 실제 호스트 후보를 연결하며, 전체 모의 화면을 먼저 완성하는 것을 제품 완료로 삼지 않는다.</p>
-<p><a href="../../Design.html">Design</a> 0.9은 디자인 DNA와 화면 표현을 소유하며 §12에서 기능 SPEC을 참조한다. <a href="../plans/PLAN.html">PLAN</a> §6.3~4에서 첫 구현 묶음과 기존 코드 이행을, §9.2에서 단계별 미결 의존성을 확인한다. <a href="../tdd/VERIFY-2026-09-20-preimplementation.html">구현 전 문서 검수</a>는 문서 대조 결과와 실제 미시험을 구분한다.</p>
-<p>문서 상세화·사용자 검토·실제 구현·지원 검수는 서로 다르다. 미결 의존성은 PLAN §9.1, 첫 과업의 구체 시험은 PLAN §7.2에 있다. 이번 수정은 사용자가 요청한 기능 해석의 보강이며 PRD의 제품 범위나 기존 검토 스레드의 수락을 대신하지 않는다.</p>
-<p>개발 재개는 <a href="../../DEVELOPMENT_GUIDE.html">개발 가이드 §12</a>를 따른다. 기능 동작은 이 명세에서 판단하고, 작업 순서/진행 현황은 PLAN §6.3·6.5를 사용한다. 기존 검토 부록을 별도 실행 지침으로 사용하지 않는다.</p>
+<header class="topbar"><a class="brand" href="../../index.html" aria-label="VIDE 문서 모음"><b>V.</b><span>VIDE</span></a><nav class="doc-tabs" aria-label="문서 선택"><a class="doc-tab" href="../PRD.html">PRD</a><a class="doc-tab" href="../specs/README.html">SPEC</a><a class="doc-tab" href="../../Design.html">Design</a><a class="doc-tab" href="../architecture/ARCH-01-system.html">기술 설계</a><a class="doc-tab" href="PLAN.html">PLAN</a><a class="doc-tab" href="../../DEVELOPMENT_GUIDE.html">개발 가이드</a><a class="doc-tab" href="../../AI.html">AI 규약</a></nav><div class="top-actions"><button id="source-download" title="현재 문서의 Markdown 원문 저장">원문 ↓</button><button id="print-doc" title="현재 문서 인쇄">인쇄</button></div></header>
+<div class="layout"><aside class="toc-shell" id="toc-shell" aria-label="현재 문서의 목차"><div class="toc-title"><strong>CONTENTS</strong><span id="toc-count"></span><button id="toc-toggle" aria-expanded="false" aria-controls="toc-body">목차 열기</button></div><div class="toc-body" id="toc-body"><input class="toc-search" id="toc-search" type="search" placeholder="장 제목으로 찾기" aria-label="현재 문서 목차 검색"><p class="toc-hint" id="nav-hint" role="status">장 제목으로 찾아갑니다.</p><nav class="toc-links" id="toc-links" aria-label="본문 장 이동"></nav><div class="toc-next">다음 작성할 문서<br><b>다음 작업 · PLAN §6.5</b><br>현재 단계와 작업별 계획을 확인한 뒤 해당 범위에서 재개</div></div></aside><main id="reading-main" tabindex="-1"><article id="plan-17-structure-jig" class="document"><header class="doc-hero"><div class="hero-label"><span class="eyebrow">PLAN</span><span><span class="pill">REVIEW · v0.1</span><span class="pill">5 CHAPTERS</span></span></div><h1 tabindex="-1">구조 분석 jig(J-09) 1단계 — 계획 단계 중력 검토</h1><div class="hero-meta">
+</div></header><section class="doc-section" id="plan-17-structure-jig-section-x0"><h2><span aria-hidden="true" class="section-num">00 /</span> 목적과 기준</h2>
+<p>CAD·Rhino로 받은 강구조를 해석 모델로 구성·확정하고, 선형 정적 해석과 KDS 14 31 10 부재 검정 결과를 근거와 함께 보이는 흐름을 실제 입력에서 끝까지 연결한다. 동작은 <a href="../specs/SPEC-06-structure-analysis.html">SPEC-06</a>, 계약은 <a href="../architecture/ARCH-02-structure-model.html">ARCH-02</a>, 결정은 <a href="../decisions/ADR-019-structure-jig-rust-core.html">ADR-019</a>, 자산과 검증 근거는 <a href="../research/RESEARCH-08-structure-analysis-jig.html">RESEARCH-08</a>·<a href="../research/RESEARCH-09-structure-analysis-methods.html">RESEARCH-09</a>를 따른다.</p>
+<p><strong>제외(SPEC-06 §9):</strong> 배치 → 구조 자동 생성, 가새·지붕 수평가새 배치 규칙, 최종 점검 모드(풍·지진·전체 조합·P-Δ·모드 해석), 편집 재검토·영향 전파, 강재량 대안 비교·최적화, 계산서·일람표 문서, 프로젝트별 교환 형식(MGT 등), EJ·기초.</p>
+<p><strong>선행 조건:</strong> Rust stable(1.98.1, rustup, 2026-09-29 설치)과 VS Build Tools 2026의 MSVC·Windows SDK. Node 24.15.0. 데스크톱 패키지는 Python을 포함하지 않는다.</p>
+</section><section class="doc-section" id="plan-17-structure-jig-section-x1"><h2><span aria-hidden="true" class="section-num">01 /</span> 티켓</h2>
+<h3>T-033 · 코어 구동 방식 실험 {#t-033}</h3>
+<ul>
+<li><strong>질문:</strong> Rust 코어를 Node 24 서버에서 어떻게 부르는가 — Node-API 네이티브 애드온(기본 후보)과 같은 crate의 실행 파일(대체)의 빌드·로드·속도·설치본 포함 가능성.</li>
+<li><strong>방법:</strong> <code>src/native/structure/</code>에 최소 crate를 만들고 faer 희소 분해로 합성 3D 골조(약 12,000 자유도, 조합 23개 우변)를 푼다. 애드온 로드와 exe 호출을 각각 재고, 데스크톱 빌드가 산출물을 포함할 수 있는지 확인한다.</li>
+<li><strong>기록:</strong> <code>docs/tdd/SPIKE-2026-09-29-structure-core-binding.md</code>.</li>
+<li><strong>종료 조건:</strong> 애드온이 빌드·로드되고 풀이가 대칭 모델에서 평형을 만족하면 애드온으로 확정하고 ARCH-02 §1을 갱신한다. 막히면 exe로 전환한다.</li>
+</ul>
+<h3>T-034 · 해석 모델 계약과 검증 자료 {#t-034}</h3>
+<ul>
+<li><strong>변경:</strong> <code>src/contracts/structure-model.ts</code>(모델·결과 zod 스키마), <code>tests/structure/fixtures/</code>.</li>
+<li><strong>fixture 1차 목록(허용오차):</strong>
+<ul>
+<li>단순보 등분포 중앙 처짐 5wL⁴/384EI·모멘트 wL²/8 (1e-6 상대)</li>
+<li>캔틸레버 끝 집중하중 처짐 PL³/3EI (1e-6)</li>
+<li>양단 고정보 등분포 단부 모멘트 wL²/12 (1e-6)</li>
+<li>문형 라멘 수평 하중(단부해제 조합 포함), 3D 입체 골조의 비틀림 — PyNite 차분 값(1e-6, <code>tools/structure/</code>로 생성해 출처 기록)</li>
+<li>불변량: 반력 합 + 하중 합 = 0(1e-8), 대칭 모델 대칭 결과, 절점 순서·전체 회전 불변, 선형 중첩 = 조합 결과</li>
+<li>기구 탐지: 지점 누락·양단 핀 기둥 모델이 <code>mechanisms</code>를 돌려줌</li>
+<li>KS H형강 단면 성질(A·I·Z·J) — KS D 3502 표 대조(0.5%)</li>
+<li>보 횡비틀림좌굴: AISC 설계 예제 F.1-2B 공개 대조값(Lp·Lr·Cb·φMn, 0.5~1%)</li>
+<li>B1: 닫힌 식과 대조(1%)</li>
+</ul>
+</li>
+<li><strong>완료:</strong> 스키마가 fixture 모델을 모두 받아들이고, 잘못된 단위·누락 필드를 거절하는 시험이 있다.</li>
+</ul>
+<h3>T-035 · Rust 코어: 선형 정적 해석 {#t-035}</h3>
+<ul>
+<li><strong>변경:</strong> <code>src/native/structure/</code>(조립·단부해제 응축·트러스·인장 전용 반복·희소 분해·기구 탐지·부재력 5점), <code>src/jigs/structure/core.ts</code>(연결).</li>
+<li><strong>시험:</strong> <code>cargo test</code>(요소 강성 단위 시험)와 <code>tests/structure/core.test.mjs</code>(T-034 해석 fixture 전부).</li>
+<li><strong>완료:</strong> 해석 fixture 전부 통과, 약 12,000 자유도 합성 모델에서 시간 기록.</li>
+</ul>
+<h3>T-036 · 부재 검정·판정 {#t-036}</h3>
+<ul>
+<li><strong>변경:</strong> 코어의 KDS 14 31 10 검정(E3·F2·F3·G2·H1-1·세장비)·B1·처짐, 4상태 판정, 중간값·조항 기록, NG 원인 분류(하중 장부 불일치·가정값 지배·점검 경고 관련·비정상 크기 → 입력 의심).</li>
+<li><strong>시험:</strong> T-034 검정 fixture, 두께별 항복강도, 미지정 단면 → <code>incomplete</code>.</li>
+<li><strong>완료:</strong> 검정 fixture 통과, 판정이 일부 검사만으로 통과가 되지 않음을 시험으로 확인.</li>
+</ul>
+<h3>T-037 · 입력 구성·점검·확정 {#t-037}</h3>
+<ul>
+<li><strong>변경:</strong> <code>src/jigs/structure/input/</code>(Rhino 중심선 곡선 → 절점·부재, Brep → 축·단면 치수 추정, CAD Sync 선·문자 → 후보), 접합 규칙과 예외표, 면하중 분배와 하중 장부, 모델 점검(SPEC-06.2), AI 초안 요청(표·요약만 보냄, 결과는 계약 스키마로 검증), 확정과 모델 해시, 서버 경로와 저장.</li>
+<li><strong>시험:</strong> 합성 Rhino·CAD Sync 입력의 초안·점검 결과 단위 시험, 잘못된 AI 초안 거절, 확정 전 해석 거절, 입력 변경 시 결과 오래됨 표시.</li>
+<li><strong>완료:</strong> 합성 입력 세 형태 모두 초안 → 점검 → 확정까지 동작.</li>
+</ul>
+<h3>T-038 · 화면과 카탈로그 {#t-038}</h3>
+<ul>
+<li><strong>변경:</strong> <code>src/ui/structure-jig.tsx</code>(입력 선택, 초안 표·출처·가정 표시, 점검 목록, 확정, 결과 표·요약·미검토 항목·탐색용 문구, 행 선택 → 뷰포트 찾아가기, 검정비 색), <code>src/jigs/catalog.ts</code>의 J-09를 사용 가능으로, 이름을 &quot;구조 분석&quot;으로 통일.</li>
+<li><strong>시험:</strong> 브라우저 통합 시험(<code>tests/integration/browser-structure-jig.mjs</code>)과 실제 화면 확인.</li>
+<li><strong>완료:</strong> 브라우저에서 합성 프로젝트로 전체 흐름이 보이고 기존 jig 시험이 유지된다.</li>
+</ul>
+<h3>T-039 · 실제 입력 검수와 설치본 {#t-039}</h3>
+<ul>
+<li><strong>변경:</strong> 데스크톱 빌드에 코어 산출물 포함, 실제 입력 검수 기록.</li>
+<li><strong>검수:</strong> 사용자 원본이 아닌 사본(<code>.vide/</code> 아래) 또는 합성 문서로, Rhino 중심선 모델·Brep 모델·CAD 도면 각 하나 이상에서 전체 흐름을 확인한다. 결과는 <code>docs/tdd/VERIFY-YYYY-MM-DD-structure-jig.md</code>.</li>
+<li><strong>완료:</strong> AC-40의 항목별 통과/미시험을 VERIFY에 기록하고, 설치본에서 코어가 로드된다.</li>
+</ul>
+</section><section class="doc-section" id="plan-17-structure-jig-section-x2"><h2><span aria-hidden="true" class="section-num">02 /</span> 현황(2026-09-29)</h2>
+<ul>
+<li><strong>T-033 완료:</strong> Node-API 애드온 채택(<a href="../tdd/SPIKE-2026-09-29-structure-core-binding.html">SPIKE</a>).</li>
+<li><strong>T-034·035·036 코어 1차 완료:</strong> <code>npm run test:structure</code> = Rust 단위 시험 8건 + 노드 시험 19건 통과.
+<ul>
+<li>닫힌 해 8건: 단순보·캔틸레버·양단 고정보·단부해제·방향각·트러스·인장 전용 가새·기구 탐지.</li>
+<li>PyNite 3.0.0 교차 3건(문형 라멘·2층 입체·경사 부재 골조, 변위·반력 1e-6).</li>
+<li>불변량 4건: 중첩·절점 순서·전체 회전·대칭.</li>
+<li>검정: KS H형강 2종 단면 성질(1%), AISC F.1-2B 횡비틀림좌굴 Lp·Lr(0.5%)·φMn(1%), B1 닫힌 식, 미완·실패 판정, 계약의 참조 오류 거절.</li>
+<li><strong>남은 것:</strong> AISC 설계 예제 E·G·H장 fixture(aisc.org 수동 내려받기 필요), KDS 14 31 10 조항 번호 대응(현재 조항 표기는 AISC 장 기호), 두께별 항복강도·KDS 하중계수의 한국 고유 fixture와 구조기술사 검토, NG 원인 분류(서버 쪽, T-037과 함께).</li>
+</ul>
+</li>
+<li><strong>T-037 입력 구성·점검·확정 1차 완료:</strong> 중심선 곡선·부재 솔리드·CAD 평면 → 초안, 끝점 병합·T자 접합·교차 분할, 역할(원래 곡선의 양 끝이 기둥이면 거더)·접합 규칙(기둥 단부 강접, 거더 위 작은 보 핀)·기둥 하단 지점, 면하중 한 방향 분배와 장부, 모델 점검(근접 절점·지점 없음·단면 미지정·기구), 실패 원인 분류, 수정 목록 적용, 프로젝트별 저장과 오래됨 판정. <code>tests/structure/input.test.mjs</code> 8건, <code>server.test.mjs</code> 1건.</li>
+<li><strong>T-038 화면 1차 완료:</strong> JIG 탭의 구조 분석(J-09 사용 가능), 초안 그룹별 단면 지정·최상층 면하중·AI 초안 검토 요청·확정·결과 표·모델 선택·판정색. <code>tests/integration/browser-structure-jig.mjs</code> 통과(합성 2경간 골조). 이 과정에서 H-400×200 거더가 압축 세장판으로 모두 미완이 되는 문제를 발견해 E7 유효 단면적을 구현했다.</li>
+<li><strong>T-039 진행:</strong> 데스크톱 빌드가 코어를 빌드해 <code>app/src/native/structure/vide_structure.node</code>로 넣고 Rust crate 라이선스(161개, 허용형)를 <code>licenses/structure-core/</code>에 모으도록 추가했다(수집 부분 단독 실행 확인). 설치본 전체 빌드는 새 파일이 git에 추적된 뒤 가능하다(패키지는 추적 파일만 복사). 실제 Rhino·CAD 입력 검수는 사용자 문서 사본 또는 합성 문서로 남음.</li>
+<li><strong>남은 개선:</strong> AI 초안 검토의 제안을 수정 목록으로 바로 적용하는 경로(지금은 사용자가 그룹별로 적용), 역할·지점·접합 예외의 화면 편집, 층이 여러 개인 면하중, 부재 솔리드의 H/박스 구분.</li>
+</ul>
+</section><section class="doc-section" id="plan-17-structure-jig-section-x3"><h2><span aria-hidden="true" class="section-num">03 /</span> 순서와 의존</h2>
+<p>T-033 → T-034 → T-035 → T-036 순서로 코어를 먼저 완성한다. T-037의 입력 구성과 T-038 화면은 T-034 계약이 정해지면 코어와 병행할 수 있다. T-039는 앞의 티켓이 끝난 뒤 한다.</p>
+</section><section class="doc-section" id="plan-17-structure-jig-section-x4"><h2><span aria-hidden="true" class="section-num">04 /</span> 검증 원칙</h2>
+<ul>
+<li>수치는 fixture로만 통과를 판정한다. 기대값은 교과서·공개 벤치마크 값을 스스로 다시 유도해 넣고 출처를 적는다(저작권 문서 복사 금지).</li>
+<li>PyNite 교차 검증은 개발 전용이다. 생성한 기대값 파일에 PyNite 버전과 생성일을 적는다.</li>
+<li>사용자 원본 문서를 호스트로 열지 않는다(AI.md §8).</li>
+</ul>
 </section><footer class="doc-footer"><span>VIDE / PLANNING DOCUMENTS</span><span>문서 열람용 · 실제 CAD/BIM 지원은 구현·검증 후 선언</span></footer></article></main></div>
 <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
-<script id="source-data" type="application/json">{"readme":{"label":"SPEC","file":"README.md","markdown":"---\nid: INDEX-SPECS\ntitle: VIDE 기능 명세 · 사용자 작업과 기능 목록\nstatus: review\nversion: 0.9\nupdated: 2026-09-29\nowner: user\nrelated: []\n---\n\n# VIDE 기능 명세\n\nVIDE에서 설계자는 Rhino·ZWCAD의 모델과 도면을 보고, 객체를 가리키고 선을 그려 AI에 작업을 맡긴다. 실제 후보를 보며 수정 지시하고, 검토한 결과를 호스트에서 계속 편집할 수 있는 형태로 반영한다. 표·검토본·웹 의견은 이 설계 작업의 근거와 후속 검토를 연결한다. 제품 범위의 기준은 [PRD](../PRD.md)다.\n\n## 먼저 읽을 사용자 작업\n\n[전체 사용자 여정 — SPEC-00의 ‘VIDE에서 완결할 세 가지 작업’](SPEC-00-common.md)부터 읽는다. 이 부분에서 프로그램의 흐름을 확인한 다음, 아래 기능 문서의 앞부분에서 사용자 입력·프로그램 동작·결과를 읽는다. 상태·권한·저장·실패 규칙은 각 기능 문서 뒷부분에 연결했다. 기존 ID는 다른 문서의 참조를 유지하기 위해 그대로 두었다.\n\n| 사용자가 하려는 일 | 기능 문서의 정상 흐름 | 읽고 판단할 것 |\n|---|---|---|\n| 모델·도면에서 대상을 찾아 의도 전달 | [SPEC-01](SPEC-01-project-input-sync.md) · SPEC-01.9·10 | 형상을 탐색하고 핀·스케치·치수·자료를 한 요청에 넣을 수 있는가 |\n| AI에게 만들기/수정 맡기고 결과 조정 | [SPEC-02](SPEC-02-execution-candidates.md) · SPEC-02.11~13 | 실제 후보를 만들고 추가 지시→반영→호스트 재편집으로 이어지는가 |\n| CAD 도면과 Rhino 모델 연결 | [SPEC-02](SPEC-02-execution-candidates.md) · SPEC-02.14 | 한 요청의 실제 데이터가 양쪽 결과에 사용되는가 |\n| 변경 이유·수량 확인, 비교·전달 | [SPEC-03](SPEC-03-data-history-export.md) · SPEC-03.8 | 대상/근거/표를 오가고 수정 전후 결과를 남길 수 있는가 |\n| 외부 의견으로 실제 설계 수정 | [SPEC-04](SPEC-04-web-review.md) · SPEC-04.7 | 웹 의견이 로컬 작업과 수정 결과까지 연결되는가 |\n| 설치·AI 연결·확장 사용·재개 | [SPEC-05](SPEC-05-extensions-install.md) · SPEC-05.7 | 같은 작업환경에서 AI와 추가 기능을 실제로 사용할 수 있는가 |\n| 받은 강구조를 계획 단계에서 검토 | [SPEC-06](SPEC-06-structure-analysis.md) · SPEC-06.8 | 입력에서 확정한 해석 모델로 부재 검정과 근거·미검토 항목을 보이는가 |\n\n## 구체적인 첫 지원안과 확인된 사실\n\n경계 생성/수정·이동/복사와 Rhino 돌출 후보를 첫 기능 지원안으로 제안했다. 상세는 [Rhino 지원표](hosts/rhino.md)와 [ZWCAD 지원표](hosts/zwcad.md)다. **구현 목표 제안과 이미 확인한 네이티브 실험을 구분한다.** 특정 예제만 되는 제품이나 폴리라인 도구로 범위를 확정한 것이 아니다. OQ-03·10의 지원안 채택과 실증을 거쳐야 한다.\n\n## PRD 요구와 기능 명세 대응\n\n이 표가 FR → SPEC 대응의 원본이다(AI.md §7). 기능 서술의 정본은 각 SPEC이고 제품 약속은 PRD가 소유한다.\n\n| FR | SPEC | 비고 |\n|---|---|---|\n| FR-01 | [SPEC-00](SPEC-00-common.md) · [SPEC-01](SPEC-01-project-input-sync.md) | — |\n| FR-02 | [SPEC-00](SPEC-00-common.md) · [SPEC-01](SPEC-01-project-input-sync.md) · [SPEC-02](SPEC-02-execution-candidates.md) | — |\n| FR-03 | [SPEC-01](SPEC-01-project-input-sync.md) | — |\n| FR-04 | [SPEC-02](SPEC-02-execution-candidates.md) | — |\n| FR-05 | [SPEC-00](SPEC-00-common.md) · [SPEC-01](SPEC-01-project-input-sync.md) | — |\n| FR-06 | [SPEC-01](SPEC-01-project-input-sync.md) · [SPEC-04](SPEC-04-web-review.md) | — |\n| FR-07 | [SPEC-01](SPEC-01-project-input-sync.md) · [SPEC-04](SPEC-04-web-review.md) | — |\n| FR-08 | [SPEC-02](SPEC-02-execution-candidates.md) · [SPEC-05](SPEC-05-extensions-install.md) | — |\n| FR-09 | [SPEC-03](SPEC-03-data-history-export.md) | — |\n| FR-10 | [SPEC-02](SPEC-02-execution-candidates.md) | — |\n| FR-11 | [SPEC-00](SPEC-00-common.md) · [SPEC-02](SPEC-02-execution-candidates.md) | — |\n| FR-12 | [SPEC-02](SPEC-02-execution-candidates.md) · [SPEC-03](SPEC-03-data-history-export.md) | — |\n| FR-13 | [SPEC-05](SPEC-05-extensions-install.md) | — |\n| FR-14 | [SPEC-03](SPEC-03-data-history-export.md) | — |\n| FR-15 | [SPEC-02](SPEC-02-execution-candidates.md) · [SPEC-05](SPEC-05-extensions-install.md) | — |\n| FR-16 | [SPEC-00](SPEC-00-common.md) · [SPEC-01](SPEC-01-project-input-sync.md) · [SPEC-02](SPEC-02-execution-candidates.md) · [SPEC-03](SPEC-03-data-history-export.md) · [SPEC-04](SPEC-04-web-review.md) · [SPEC-05](SPEC-05-extensions-install.md) | — |\n| FR-17 | [SPEC-05](SPEC-05-extensions-install.md) | — |\n| FR-18 | [SPEC-00](SPEC-00-common.md) · [SPEC-02](SPEC-02-execution-candidates.md) · [SPEC-03](SPEC-03-data-history-export.md) · [SPEC-04](SPEC-04-web-review.md) · [SPEC-05](SPEC-05-extensions-install.md) | — |\n| FR-19 | [SPEC-04](SPEC-04-web-review.md) | — |\n| FR-20 | 후속 확장 | PRD §14의 이번 범위 밖 |\n| FR-21 | 후속 확장 | PRD §14의 이번 범위 밖(구조 분석은 FR-23) |\n| FR-22 | [SPEC-03](SPEC-03-data-history-export.md) | — |\n| FR-23 | [SPEC-06](SPEC-06-structure-analysis.md) | 구조 분석 jig |\n\n호스트 계약·실험 범위: [Rhino](hosts/rhino.md) · [ZWCAD](hosts/zwcad.md).\n\n## 기능 검토 다음에 읽을 문서\n\n[PLAN](../plans/PLAN.md) §1·§5.2·§6·§7.2에서 이 경험을 무엇으로 연결하고 어떤 순서로 검증할지 읽는다. 첫 프런트 흐름을 확인한 뒤 실제 호스트 후보를 연결하며, 전체 모의 화면을 먼저 완성하는 것을 제품 완료로 삼지 않는다.\n\n[Design](../../Design.md) 0.9은 디자인 DNA와 화면 표현을 소유하며 §12에서 기능 SPEC을 참조한다. [PLAN](../plans/PLAN.md) §6.3~4에서 첫 구현 묶음과 기존 코드 이행을, §9.2에서 단계별 미결 의존성을 확인한다. [구현 전 문서 검수](../tdd/VERIFY-2026-09-20-preimplementation.md)는 문서 대조 결과와 실제 미시험을 구분한다.\n\n문서 상세화·사용자 검토·실제 구현·지원 검수는 서로 다르다. 미결 의존성은 PLAN §9.1, 첫 과업의 구체 시험은 PLAN §7.2에 있다. 이번 수정은 사용자가 요청한 기능 해석의 보강이며 PRD의 제품 범위나 기존 검토 스레드의 수락을 대신하지 않는다.\n\n개발 재개는 [개발 가이드 §12](../../DEVELOPMENT_GUIDE.md)를 따른다. 기능 동작은 이 명세에서 판단하고, 작업 순서/진행 현황은 PLAN §6.3·6.5를 사용한다. 기존 검토 부록을 별도 실행 지침으로 사용하지 않는다.\n"}}</script>
-<script id="reader-config" type="application/json">{"initial":"readme","siteTitle":"VIDE"}</script>
+<script id="source-data" type="application/json">{"plan-17-structure-jig":{"label":"구조 분석 jig(J-09) 1단계 — 계획 단계 중력 검토","file":"PLAN-17-structure-jig.md","markdown":"---\nid: PLAN-17\ntitle: 구조 분석 jig(J-09) 1단계 — 계획 단계 중력 검토\nstatus: review\nversion: 0.1\nupdated: 2026-09-29\nowner: agent:claude\nrelated: [PLAN, SPEC-06, ARCH-02, ADR-019, FR-23, AC-40, RESEARCH-08, RESEARCH-09]\n---\n\n# 구조 분석 jig(J-09) 1단계 — 계획 단계 중력 검토\n\n## 목적과 기준\n\nCAD·Rhino로 받은 강구조를 해석 모델로 구성·확정하고, 선형 정적 해석과 KDS 14 31 10 부재 검정 결과를 근거와 함께 보이는 흐름을 실제 입력에서 끝까지 연결한다. 동작은 [SPEC-06](../specs/SPEC-06-structure-analysis.md), 계약은 [ARCH-02](../architecture/ARCH-02-structure-model.md), 결정은 [ADR-019](../decisions/ADR-019-structure-jig-rust-core.md), 자산과 검증 근거는 [RESEARCH-08](../research/RESEARCH-08-structure-analysis-jig.md)·[RESEARCH-09](../research/RESEARCH-09-structure-analysis-methods.md)를 따른다.\n\n**제외(SPEC-06 §9):** 배치 → 구조 자동 생성, 가새·지붕 수평가새 배치 규칙, 최종 점검 모드(풍·지진·전체 조합·P-Δ·모드 해석), 편집 재검토·영향 전파, 강재량 대안 비교·최적화, 계산서·일람표 문서, 프로젝트별 교환 형식(MGT 등), EJ·기초.\n\n**선행 조건:** Rust stable(1.98.1, rustup, 2026-09-29 설치)과 VS Build Tools 2026의 MSVC·Windows SDK. Node 24.15.0. 데스크톱 패키지는 Python을 포함하지 않는다.\n\n## 티켓\n\n### T-033 · 코어 구동 방식 실험 {#t-033}\n\n- **질문:** Rust 코어를 Node 24 서버에서 어떻게 부르는가 — Node-API 네이티브 애드온(기본 후보)과 같은 crate의 실행 파일(대체)의 빌드·로드·속도·설치본 포함 가능성.\n- **방법:** `src/native/structure/`에 최소 crate를 만들고 faer 희소 분해로 합성 3D 골조(약 12,000 자유도, 조합 23개 우변)를 푼다. 애드온 로드와 exe 호출을 각각 재고, 데스크톱 빌드가 산출물을 포함할 수 있는지 확인한다.\n- **기록:** `docs/tdd/SPIKE-2026-09-29-structure-core-binding.md`.\n- **종료 조건:** 애드온이 빌드·로드되고 풀이가 대칭 모델에서 평형을 만족하면 애드온으로 확정하고 ARCH-02 §1을 갱신한다. 막히면 exe로 전환한다.\n\n### T-034 · 해석 모델 계약과 검증 자료 {#t-034}\n\n- **변경:** `src/contracts/structure-model.ts`(모델·결과 zod 스키마), `tests/structure/fixtures/`.\n- **fixture 1차 목록(허용오차):**\n  - 단순보 등분포 중앙 처짐 5wL⁴/384EI·모멘트 wL²/8 (1e-6 상대)\n  - 캔틸레버 끝 집중하중 처짐 PL³/3EI (1e-6)\n  - 양단 고정보 등분포 단부 모멘트 wL²/12 (1e-6)\n  - 문형 라멘 수평 하중(단부해제 조합 포함), 3D 입체 골조의 비틀림 — PyNite 차분 값(1e-6, `tools/structure/`로 생성해 출처 기록)\n  - 불변량: 반력 합 + 하중 합 = 0(1e-8), 대칭 모델 대칭 결과, 절점 순서·전체 회전 불변, 선형 중첩 = 조합 결과\n  - 기구 탐지: 지점 누락·양단 핀 기둥 모델이 `mechanisms`를 돌려줌\n  - KS H형강 단면 성질(A·I·Z·J) — KS D 3502 표 대조(0.5%)\n  - 보 횡비틀림좌굴: AISC 설계 예제 F.1-2B 공개 대조값(Lp·Lr·Cb·φMn, 0.5~1%)\n  - B1: 닫힌 식과 대조(1%)\n- **완료:** 스키마가 fixture 모델을 모두 받아들이고, 잘못된 단위·누락 필드를 거절하는 시험이 있다.\n\n### T-035 · Rust 코어: 선형 정적 해석 {#t-035}\n\n- **변경:** `src/native/structure/`(조립·단부해제 응축·트러스·인장 전용 반복·희소 분해·기구 탐지·부재력 5점), `src/jigs/structure/core.ts`(연결).\n- **시험:** `cargo test`(요소 강성 단위 시험)와 `tests/structure/core.test.mjs`(T-034 해석 fixture 전부).\n- **완료:** 해석 fixture 전부 통과, 약 12,000 자유도 합성 모델에서 시간 기록.\n\n### T-036 · 부재 검정·판정 {#t-036}\n\n- **변경:** 코어의 KDS 14 31 10 검정(E3·F2·F3·G2·H1-1·세장비)·B1·처짐, 4상태 판정, 중간값·조항 기록, NG 원인 분류(하중 장부 불일치·가정값 지배·점검 경고 관련·비정상 크기 → 입력 의심).\n- **시험:** T-034 검정 fixture, 두께별 항복강도, 미지정 단면 → `incomplete`.\n- **완료:** 검정 fixture 통과, 판정이 일부 검사만으로 통과가 되지 않음을 시험으로 확인.\n\n### T-037 · 입력 구성·점검·확정 {#t-037}\n\n- **변경:** `src/jigs/structure/input/`(Rhino 중심선 곡선 → 절점·부재, Brep → 축·단면 치수 추정, CAD Sync 선·문자 → 후보), 접합 규칙과 예외표, 면하중 분배와 하중 장부, 모델 점검(SPEC-06.2), AI 초안 요청(표·요약만 보냄, 결과는 계약 스키마로 검증), 확정과 모델 해시, 서버 경로와 저장.\n- **시험:** 합성 Rhino·CAD Sync 입력의 초안·점검 결과 단위 시험, 잘못된 AI 초안 거절, 확정 전 해석 거절, 입력 변경 시 결과 오래됨 표시.\n- **완료:** 합성 입력 세 형태 모두 초안 → 점검 → 확정까지 동작.\n\n### T-038 · 화면과 카탈로그 {#t-038}\n\n- **변경:** `src/ui/structure-jig.tsx`(입력 선택, 초안 표·출처·가정 표시, 점검 목록, 확정, 결과 표·요약·미검토 항목·탐색용 문구, 행 선택 → 뷰포트 찾아가기, 검정비 색), `src/jigs/catalog.ts`의 J-09를 사용 가능으로, 이름을 \"구조 분석\"으로 통일.\n- **시험:** 브라우저 통합 시험(`tests/integration/browser-structure-jig.mjs`)과 실제 화면 확인.\n- **완료:** 브라우저에서 합성 프로젝트로 전체 흐름이 보이고 기존 jig 시험이 유지된다.\n\n### T-039 · 실제 입력 검수와 설치본 {#t-039}\n\n- **변경:** 데스크톱 빌드에 코어 산출물 포함, 실제 입력 검수 기록.\n- **검수:** 사용자 원본이 아닌 사본(`.vide/` 아래) 또는 합성 문서로, Rhino 중심선 모델·Brep 모델·CAD 도면 각 하나 이상에서 전체 흐름을 확인한다. 결과는 `docs/tdd/VERIFY-YYYY-MM-DD-structure-jig.md`.\n- **완료:** AC-40의 항목별 통과/미시험을 VERIFY에 기록하고, 설치본에서 코어가 로드된다.\n\n## 현황(2026-09-29)\n\n- **T-033 완료:** Node-API 애드온 채택([SPIKE](../tdd/SPIKE-2026-09-29-structure-core-binding.md)).\n- **T-034·035·036 코어 1차 완료:** `npm run test:structure` = Rust 단위 시험 8건 + 노드 시험 19건 통과.\n  - 닫힌 해 8건: 단순보·캔틸레버·양단 고정보·단부해제·방향각·트러스·인장 전용 가새·기구 탐지.\n  - PyNite 3.0.0 교차 3건(문형 라멘·2층 입체·경사 부재 골조, 변위·반력 1e-6).\n  - 불변량 4건: 중첩·절점 순서·전체 회전·대칭.\n  - 검정: KS H형강 2종 단면 성질(1%), AISC F.1-2B 횡비틀림좌굴 Lp·Lr(0.5%)·φMn(1%), B1 닫힌 식, 미완·실패 판정, 계약의 참조 오류 거절.\n  - **남은 것:** AISC 설계 예제 E·G·H장 fixture(aisc.org 수동 내려받기 필요), KDS 14 31 10 조항 번호 대응(현재 조항 표기는 AISC 장 기호), 두께별 항복강도·KDS 하중계수의 한국 고유 fixture와 구조기술사 검토, NG 원인 분류(서버 쪽, T-037과 함께).\n- **T-037 입력 구성·점검·확정 1차 완료:** 중심선 곡선·부재 솔리드·CAD 평면 → 초안, 끝점 병합·T자 접합·교차 분할, 역할(원래 곡선의 양 끝이 기둥이면 거더)·접합 규칙(기둥 단부 강접, 거더 위 작은 보 핀)·기둥 하단 지점, 면하중 한 방향 분배와 장부, 모델 점검(근접 절점·지점 없음·단면 미지정·기구), 실패 원인 분류, 수정 목록 적용, 프로젝트별 저장과 오래됨 판정. `tests/structure/input.test.mjs` 8건, `server.test.mjs` 1건.\n- **T-038 화면 1차 완료:** JIG 탭의 구조 분석(J-09 사용 가능), 초안 그룹별 단면 지정·최상층 면하중·AI 초안 검토 요청·확정·결과 표·모델 선택·판정색. `tests/integration/browser-structure-jig.mjs` 통과(합성 2경간 골조). 이 과정에서 H-400×200 거더가 압축 세장판으로 모두 미완이 되는 문제를 발견해 E7 유효 단면적을 구현했다.\n- **T-039 진행:** 데스크톱 빌드가 코어를 빌드해 `app/src/native/structure/vide_structure.node`로 넣고 Rust crate 라이선스(161개, 허용형)를 `licenses/structure-core/`에 모으도록 추가했다(수집 부분 단독 실행 확인). 설치본 전체 빌드는 새 파일이 git에 추적된 뒤 가능하다(패키지는 추적 파일만 복사). 실제 Rhino·CAD 입력 검수는 사용자 문서 사본 또는 합성 문서로 남음.\n- **남은 개선:** AI 초안 검토의 제안을 수정 목록으로 바로 적용하는 경로(지금은 사용자가 그룹별로 적용), 역할·지점·접합 예외의 화면 편집, 층이 여러 개인 면하중, 부재 솔리드의 H/박스 구분.\n\n## 순서와 의존\n\nT-033 → T-034 → T-035 → T-036 순서로 코어를 먼저 완성한다. T-037의 입력 구성과 T-038 화면은 T-034 계약이 정해지면 코어와 병행할 수 있다. T-039는 앞의 티켓이 끝난 뒤 한다.\n\n## 검증 원칙\n\n- 수치는 fixture로만 통과를 판정한다. 기대값은 교과서·공개 벤치마크 값을 스스로 다시 유도해 넣고 출처를 적는다(저작권 문서 복사 금지).\n- PyNite 교차 검증은 개발 전용이다. 생성한 기대값 파일에 PyNite 버전과 생성일을 적는다.\n- 사용자 원본 문서를 호스트로 열지 않는다(AI.md §8).\n"}}</script>
+<script id="reader-config" type="application/json">{"initial":"plan-17-structure-jig","siteTitle":"VIDE"}</script>
 <script>
 (() => {
 'use strict';

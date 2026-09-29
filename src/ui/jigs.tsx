@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { z } from 'zod';
 import { api } from './gateway.ts';
 import { KnowledgeJig } from './knowledge-jig.tsx';
+import { StructureJig } from './structure-jig.tsx';
 
 // The JIG tab: a gallery of jigs (working tools for one kind of task) and the Sync jig — the
 // relation between a Rhino model and a CAD drawing, their differences, an AI review of what the
@@ -84,6 +85,8 @@ export interface JigContext {
   sources: SyncSource[];
   /** Show one object of a Sync in the viewport (selected and framed). */
   show: (requestId: string, objectId: string) => void;
+  /** Colour objects of a Sync in the viewport (structure verdicts); omitted when unsupported. */
+  tint?: (requestId: string, colors: Record<string, string>) => void;
   /** Send a request made by a jig (AI review or edits) into the conversation. */
   send: (input: {
     body: string;
@@ -615,7 +618,9 @@ function Jigs({ context }: { context: JigContext }) {
             ? 'Sync · 도면↔모델'
             : open === 'knowledge'
               ? '프로젝트 자료 · 시험판'
-              : 'JIG'}
+              : open === 'structure'
+                ? '구조 분석'
+                : 'JIG'}
         </h2>
         <div>
           {open ? (
@@ -632,6 +637,8 @@ function Jigs({ context }: { context: JigContext }) {
         <SyncJig context={context} />
       ) : open === 'knowledge' ? (
         <KnowledgeJig projectId={context.projectId} />
+      ) : open === 'structure' ? (
+        <StructureJig context={context} />
       ) : (
         <Gallery context={context} open={setOpen} />
       )}

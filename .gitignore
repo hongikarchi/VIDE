@@ -57,3 +57,6 @@ cli-profiles/
 # Deliberately reviewed synthetic test fixtures may be committed.
 !tests/fixtures/**/*.3dm
 !tests/fixtures/**/*.dwg
+
+# Rust build output (structure core, PLAN-17)
+src/native/**/target/

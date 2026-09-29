@@ -329,7 +329,9 @@ export class Execution {
   async run(request: StoredWork, controller: AbortController) {
     const { projectId, id, input } = request;
     // A jig's AI review reads only the attached jig table: no host, no document context.
-    const jigReview = z.object({ kind: z.literal('sync-review') }).safeParse(input.jig).success;
+    const jigReview = z
+      .object({ kind: z.enum(['sync-review', 'structure-draft-review']) })
+      .safeParse(input.jig).success;
     const target = input.host || 'rhino',
       host = jigReview ? undefined : this.hosts[target];
     this.workspace.update(projectId, id, 'running');

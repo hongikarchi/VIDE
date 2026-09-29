@@ -34,11 +34,12 @@ export const JIGS: JigEntry[] = [
   {
     id: 'structure',
     code: 'J-09',
-    name: '구조 검토',
-    summary: '부재·단면 형식 정리, 간섭 확인, 구조 해석 연계(ground structure·FEA).',
-    inputs: ['Rhino Sync'],
-    status: 'planned',
-    basis: 'S-05·S-06·S-08',
+    name: '구조 분석',
+    summary:
+      'CAD 도면이나 Rhino 모델(중심선·부재 솔리드)로 해석 모델을 만들고, 확정한 모델을 해석해 KDS 강구조 부재 검정비와 근거를 표와 모델 색으로 보여 줍니다. 탐색용 예비값입니다.',
+    inputs: ['Rhino Sync', 'ZWCAD Sync'],
+    status: 'available',
+    basis: 'S-18·S-10·S-05 · SPEC-06',
   },
   {
     id: 'site-modeling',

@@ -1,0 +1,229 @@
+{
+  "source": "PyNite 3.0.0 (MIT), generated 2026-09-29 by tools/structure/pynite_ref.py",
+  "model": {
+    "schema": "vide.structure.model/1",
+    "meta": {
+      "name": "skew"
+    },
+    "materials": [
+      {
+        "id": "S",
+        "grade": "SM355",
+        "E_MPa": 205000.0,
+        "G_MPa": 79000.0,
+        "density_kNpm3": 0,
+        "Fy_MPa": 355,
+        "Fu_MPa": 490
+      }
+    ],
+    "sections": [
+      {
+        "id": "BOX",
+        "name": "equal-I box",
+        "shape": "BOX",
+        "dims_mm": {
+          "h": 300,
+          "b": 300,
+          "t": 12
+        },
+        "source": "user",
+        "props": {
+          "A_mm2": 12000.0,
+          "I2_mm4": 180000000.0,
+          "I3_mm4": 180000000.0,
+          "J_mm4": 290000000.0
+        }
+      }
+    ],
+    "nodes": [
+      {
+        "id": "A",
+        "xyz_m": [0, 0, 0],
+        "support": {
+          "dx": true,
+          "dy": true,
+          "dz": true,
+          "rx": true,
+          "ry": true,
+          "rz": true
+        }
+      },
+      {
+        "id": "B",
+        "xyz_m": [5, 1, 0],
+        "support": {
+          "dx": true,
+          "dy": true,
+          "dz": true,
+          "rx": true,
+          "ry": true,
+          "rz": true
+        }
+      },
+      {
+        "id": "C",
+        "xyz_m": [1, 4, 0],
+        "support": {
+          "dx": true,
+          "dy": true,
+          "dz": true,
+          "rx": true,
+          "ry": true,
+          "rz": true
+        }
+      },
+      {
+        "id": "D",
+        "xyz_m": [2.2, 1.5, 3.5]
+      },
+      {
+        "id": "E",
+        "xyz_m": [4.0, 2.5, 3.0]
+      }
+    ],
+    "members": [
+      {
+        "id": "AD",
+        "i": "A",
+        "j": "D",
+        "section": "BOX",
+        "material": "S",
+        "role": "column",
+        "kind": "frame",
+        "betaDeg": 0
+      },
+      {
+        "id": "BE",
+        "i": "B",
+        "j": "E",
+        "section": "BOX",
+        "material": "S",
+        "role": "column",
+        "kind": "frame",
+        "betaDeg": 0
+      },
+      {
+        "id": "CD",
+        "i": "C",
+        "j": "D",
+        "section": "BOX",
+        "material": "S",
+        "role": "brace",
+        "kind": "frame",
+        "betaDeg": 0
+      },
+      {
+        "id": "CE",
+        "i": "C",
+        "j": "E",
+        "section": "BOX",
+        "material": "S",
+        "role": "brace",
+        "kind": "frame",
+        "betaDeg": 0
+      },
+      {
+        "id": "DE",
+        "i": "D",
+        "j": "E",
+        "section": "BOX",
+        "material": "S",
+        "role": "beam",
+        "kind": "frame",
+        "betaDeg": 0
+      }
+    ],
+    "loadPatterns": [
+      {
+        "id": "D",
+        "nature": "D"
+      }
+    ],
+    "loads": [
+      {
+        "id": "p1",
+        "pattern": "D",
+        "type": "nodePoint",
+        "targets": ["D"],
+        "direction": "-Z",
+        "value_kN": 30
+      },
+      {
+        "id": "p2",
+        "pattern": "D",
+        "type": "nodePoint",
+        "targets": ["E"],
+        "direction": "+Y",
+        "value_kN": 6
+      },
+      {
+        "id": "q",
+        "pattern": "D",
+        "type": "memberUniform",
+        "targets": ["DE"],
+        "direction": "-Z",
+        "value_kNpm": 4
+      }
+    ],
+    "combinations": [
+      {
+        "id": "C1",
+        "terms": [
+          {
+            "pattern": "D",
+            "factor": 1.0
+          }
+        ],
+        "limitState": "strength"
+      }
+    ],
+    "analysis": {
+      "kind": "linearStatic"
+    }
+  },
+  "expected": {
+    "disp": {
+      "A": {
+        "C1": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+      },
+      "B": {
+        "C1": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+      },
+      "C": {
+        "C1": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+      },
+      "D": {
+        "C1": [
+          0.0006001083596696335, -0.00014540563401311705, -0.0003428660310879256,
+          0.0001919190383890289, 8.692459035001102e-5, 0.00025053901953183354
+        ]
+      },
+      "E": {
+        "C1": [
+          0.0003315882519793272, 0.00043483701125464786, -0.00012700224318278345,
+          -5.971072506641044e-6, 5.936516065394537e-6, 0.00019328605856322662
+        ]
+      }
+    },
+    "reaction": {
+      "A": {
+        "C1": [
+          2.861021475766381, 4.65118984589997, 11.855118795706025, -0.3412827949001749,
+          -8.410499887199716, 1.6913148833635692
+        ]
+      },
+      "B": {
+        "C1": [
+          -8.240898895598827, -0.279705689780382, 11.529561120494055, 8.935621388520193,
+          -6.368065397532826, 4.8649201662955255
+        ]
+      },
+      "C": {
+        "C1": [
+          5.379877419832326, -10.371484156119603, 15.09116812396677, -0.5368761296473968,
+          -4.757589913348054, -5.507611660906919
+        ]
+      }
+    }
+  }
+}

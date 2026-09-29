@@ -1,7 +1,9 @@
 import { copyZwcadNotices } from './package-licenses.mjs';
 import { copyPackageSources } from './package-source.mjs';
 import { cp, mkdir, readFile, writeFile, readdir, copyFile } from 'node:fs/promises';
-import { join, resolve, relative, basename } from 'node:path';
+import { join, resolve, relative, basename, dirname } from 'node:path';
+import { existsSync } from 'node:fs';
+import { homedir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
@@ -97,6 +99,41 @@ for (const file of [
     join(root, '.vide/build/zwcad-connection', file),
     join(cadConnectionRuntime, file),
   );
+// Structure analysis core (Rust Node-API addon, PLAN-17 T-039): ship only the built library and the
+// licence texts of the crates compiled into it.
+const cargo = existsSync(join(homedir(), '.cargo', 'bin', 'cargo.exe'))
+  ? join(homedir(), '.cargo', 'bin', 'cargo.exe')
+  : 'cargo';
+const structureManifest = join(root, 'src', 'native', 'structure', 'Cargo.toml');
+await exec(cargo, ['build', '--release', '--lib', '--manifest-path', structureManifest], {
+  windowsHide: true,
+});
+const structureRuntime = join(directory, 'app', 'src', 'native', 'structure');
+await mkdir(structureRuntime, { recursive: true });
+await copyFile(
+  join(root, 'src', 'native', 'structure', 'target', 'release', 'vide_structure.dll'),
+  join(structureRuntime, 'vide_structure.node'),
+);
+const { stdout: cargoMetadata } = await exec(
+  cargo,
+  ['metadata', '--format-version', '1', '--manifest-path', structureManifest],
+  { windowsHide: true, maxBuffer: 64 * 1024 * 1024 },
+);
+const crateNotices = join(directory, 'licenses', 'structure-core');
+await mkdir(crateNotices, { recursive: true });
+const crateList = [];
+for (const crate of JSON.parse(cargoMetadata).packages) {
+  if (crate.name === 'vide-structure') continue;
+  crateList.push(`${crate.name} ${crate.version} — ${crate.license ?? 'see files'}`);
+  const folder = dirname(crate.manifest_path);
+  for (const entry of await readdir(folder))
+    if (/^(licen[cs]e|copying|notice)/i.test(entry))
+      await copyFile(
+        join(folder, entry),
+        join(crateNotices, `${crate.name}-${crate.version}-${entry}`),
+      );
+}
+await writeFile(join(crateNotices, 'CRATES.txt'), crateList.sort().join('\n') + '\n');
 await writeFile(
   join(directory, 'app', 'package.json'),
   JSON.stringify({ ...pkg, version }, null, 2) + '\n',
@@ -123,7 +160,7 @@ await exec(
   ['--input-type=module', '-e', "await import('./src/server/server.ts')"],
   { cwd: join(directory, 'app'), windowsHide: true },
 );
-await mkdir(join(directory, 'licenses'));
+await mkdir(join(directory, 'licenses'), { recursive: true });
 await copyZwcadNotices(
   root,
   join(directory, 'licenses', 'zwcad-runtime'),

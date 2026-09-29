@@ -9,6 +9,15 @@ import { AccountUsageService } from '../ai/account-usage.ts';
 import { JIGS } from '../jigs/catalog.ts';
 import { runSync } from '../jigs/sync.ts';
 import {
+  analyzeConfirmed,
+  applyEdits,
+  checkModel as checkStructureModel,
+  documentKey as structureDocumentKey,
+  draftEditsSchema,
+  draftStructure,
+  StructureStore,
+} from '../jigs/structure/index.ts';
+import {
   knowledgeEvidence,
   knowledgeFile,
   knowledgeIssue,
@@ -118,6 +127,8 @@ const statuses: Record<string, number> = {
   PROJECT_BUSY: 409,
   WORKSPACE_CAPACITY: 409,
   STALE_REFERENCE: 409,
+  STRUCTURE_MODEL_INVALID: 422,
+  STRUCTURE_CORE_MISSING: 503,
   HOST_RUNNING: 409,
 };
 export async function startServer({
@@ -141,6 +152,9 @@ export async function startServer({
   const workspace = new Workspace(store),
     links = new DocumentLinks(store.db),
     tableViews = new TableViews(store),
+    structures = new StructureStore(
+      filename === ':memory:' ? null : join(dirname(filename), 'structure'),
+    ),
     reviews = new Reviews(store),
     reviewNotes = new ReviewNotes(store, reviews);
   const sharedFeedback = new SharedFeedback(store, workspace);
@@ -838,6 +852,164 @@ export async function startServer({
                 : 'Millimeters',
         });
         return;
+      }
+      // Structure analysis jig (J-09, SPEC-06): draft from Syncs → small edits → confirm & analyse.
+      const structureJig =
+        /^\/api\/v1\/projects\/([^/]+)\/jigs\/structure(?:\/(draft|edit|analyze))?$/.exec(
+          url.pathname,
+        );
+      if (structureJig) {
+        const projectId = structureJig[1];
+        const action = structureJig[2];
+        const syncResult = (id: string) => {
+          const saved = workspace.get(projectId, id);
+          if (saved.state !== 'succeeded' || !saved.result || !Array.isArray(saved.result.scene))
+            throw new DomainError('STALE_REFERENCE');
+          return saved;
+        };
+        // A result is out of date when its Sync is gone or a newer Sync of the same document exists.
+        const stale = (sources: { syncId: string; documentKey: string }[]) => {
+          const rows = workspace.list(projectId);
+          return sources.some((source) => {
+            const saved = rows.find((row) => row.id === source.syncId);
+            if (!saved) return true;
+            return rows.some(
+              (row) =>
+                row.state === 'succeeded' &&
+                !!row.result &&
+                Array.isArray(row.result.scene) &&
+                row.createdAt > saved.createdAt &&
+                structureDocumentKey(row.result) === source.documentKey,
+            );
+          });
+        };
+        if (!action && request.method === 'GET') {
+          const record = structures.get(projectId);
+          send(200, {
+            draft: record.draft ?? null,
+            confirmed: record.confirmed ?? null,
+            draftStale: record.draft ? stale(record.draft.sources) : false,
+            stale: record.confirmed ? stale(record.confirmed.sources) : false,
+          });
+          return;
+        }
+        if (action === 'draft' && request.method === 'POST') {
+          const role = z.enum(['column', 'girder', 'beam', 'brace', 'other']);
+          const input = z
+            .object({
+              sources: z
+                .array(
+                  z
+                    .object({
+                      syncId: z.string(),
+                      mode: z.enum(['curves', 'breps', 'cad']),
+                      layers: z.array(z.string()).max(500).optional(),
+                      objectIds: z.array(z.string()).max(20000).optional(),
+                      cad: z
+                        .object({
+                          levels_m: z.array(z.number().finite()).min(1).max(50),
+                          base_m: z.number().finite().optional(),
+                          beamLayers: z.array(z.string()).max(200),
+                          columnLayers: z.array(z.string()).max(200),
+                        })
+                        .strict()
+                        .optional(),
+                    })
+                    .strict(),
+                )
+                .min(1)
+                .max(8),
+              options: z
+                .object({
+                  mergeTolerance_m: z.number().positive().max(0.5).optional(),
+                  snap_m: z.number().positive().max(2).optional(),
+                  baseFixity: z.enum(['pin', 'fixed']).optional(),
+                  layerHints: z
+                    .record(
+                      z.string(),
+                      z
+                        .object({ role: role.optional(), section: z.string().max(60).optional() })
+                        .strict(),
+                    )
+                    .optional(),
+                })
+                .strict()
+                .optional(),
+            })
+            .strict()
+            .parse(await body(request));
+          const sources = input.sources.map((source) => {
+            const result = syncResult(source.syncId).result as Record<string, unknown>;
+            return {
+              ...source,
+              host: result.host === 'zwcad' ? ('zwcad' as const) : ('rhino' as const),
+              documentId: structureDocumentKey(result),
+              result,
+            };
+          });
+          const draft = draftStructure(sources, input.options);
+          const record = {
+            ...structures.get(projectId),
+            draft: {
+              createdAt: new Date().toISOString(),
+              model: draft.model,
+              issues: draft.issues,
+              checks: draft.checks,
+              sources: sources.map((s) => ({
+                syncId: s.syncId,
+                documentKey: s.documentId,
+                mode: s.mode,
+              })),
+            },
+          };
+          structures.save(projectId, record);
+          send(200, record.draft);
+          return;
+        }
+        if (action === 'edit' && request.method === 'POST') {
+          const edits = draftEditsSchema.parse(await body(request));
+          const record = structures.get(projectId);
+          if (!record.draft) throw new DomainError('NOT_FOUND');
+          const model = applyEdits(record.draft.model, edits);
+          record.draft = { ...record.draft, model, checks: checkStructureModel(model).issues };
+          structures.save(projectId, record);
+          send(200, record.draft);
+          return;
+        }
+        if (action === 'analyze' && request.method === 'POST') {
+          z.object({ confirm: z.literal(true) })
+            .strict()
+            .parse(await body(request));
+          const record = structures.get(projectId);
+          if (!record.draft) throw new DomainError('NOT_FOUND');
+          let out: ReturnType<typeof analyzeConfirmed>;
+          try {
+            out = analyzeConfirmed(record.draft.model);
+          } catch (error) {
+            const code = (error as { code?: string }).code;
+            if (code === 'STRUCTURE_MODEL_INVALID') {
+              send(422, { error: code, issues: (error as { issues?: unknown }).issues ?? [] });
+              return;
+            }
+            if (code === 'STRUCTURE_CORE_MISSING') throw new DomainError('STRUCTURE_CORE_MISSING');
+            throw error;
+          }
+          record.confirmed = {
+            confirmedAt: new Date().toISOString(),
+            modelHash: out.result.modelHash,
+            model: out.model,
+            sources: record.draft.sources.map(({ syncId, documentKey }) => ({
+              syncId,
+              documentKey,
+            })),
+            ledger: out.ledger,
+            issues: out.issues,
+            result: out.result,
+          };
+          structures.save(projectId, record);
+          send(200, { ...record.confirmed, stale: false });
+          return;
+        }
       }
       // Project knowledge jig (trial, read-only): issue notes, search and evidence of one project's DB.
       const knowledge =

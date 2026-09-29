@@ -1,0 +1,284 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="description" content="구조 분석 jig의 해석 모델 계약과 Rust 코어"><meta name="generator" content="tools/docs/build.mjs — generated from docs/architecture/ARCH-02-structure-model.md; do not edit"><title>VIDE · 구조 분석 jig의 해석 모델 계약과 Rust 코어</title><style>
+:root{--ink:#292c2d;--muted:#626b6e;--line:#e1e3e1;--soft:#f5f5f1;--coral:#d97660;--paper:#fff;--font:"Pretendard","Noto Sans KR","Malgun Gothic",Arial,sans-serif}
+*{box-sizing:border-box}html{scroll-behavior:smooth;scroll-padding-top:92px}body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--font);letter-spacing:-.025em}a{color:inherit;text-underline-offset:4px}button,input,textarea,select{font:inherit;color:inherit}button{cursor:pointer;border:1px solid var(--line);border-radius:4px;background:var(--paper);padding:10px 15px;line-height:1.3}button:hover{background:var(--soft)}button:disabled{cursor:default;opacity:.6}button.primary{background:var(--ink);color:#fff;border-color:var(--ink)}button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible{outline:3px solid var(--coral);outline-offset:3px}textarea{resize:vertical}::selection{background:#f2d7ce}[hidden]{display:none!important}
+.skip{position:fixed;top:-80px;left:20px;z-index:100;background:white;padding:12px}.skip:focus{top:10px}
+.topbar{height:68px;position:sticky;top:0;z-index:30;border-bottom:1px solid var(--line);background:#fffffff7;display:flex;align-items:center;justify-content:space-between;gap:24px;padding:0 max(24px,calc((100vw - 1450px)/2))}.brand{text-decoration:none;display:flex;align-items:center;gap:15px;white-space:nowrap}.brand b{font-size:29px;letter-spacing:-.08em}.brand span{border-left:1px solid var(--line);padding-left:15px;font-size:11px;letter-spacing:.08em}.doc-tabs{display:flex;height:100%;gap:25px;align-items:stretch;min-width:0;overflow-x:auto}.doc-tab{flex-shrink:0}.doc-tab{display:flex;align-items:center;position:relative;text-decoration:none;font-size:13px;color:var(--muted);white-space:nowrap}.doc-tab.active{color:var(--ink);font-weight:650}.doc-tab.active:after{content:"";position:absolute;bottom:0;left:0;right:0;height:3px;background:var(--coral)}.top-actions{display:flex;gap:8px}.top-actions button{padding:8px 11px;font-size:12px;white-space:nowrap}
+.layout{max-width:1450px;margin:auto;padding:0 30px;display:grid;grid-template-columns:218px minmax(0,1fr);gap:55px}.toc-shell{align-self:start;position:sticky;top:99px;padding-top:15px;max-height:calc(100vh - 120px)}.eyebrow{font-size:10px;line-height:1.6;letter-spacing:.16em;font-weight:500;color:var(--muted)}.toc-title{display:flex;justify-content:space-between;align-items:center;margin-bottom:15px}.toc-title strong{font-size:12px;font-weight:500}.toc-title span{font-size:10px;color:var(--muted)}#toc-toggle{display:none}.toc-search{width:100%;padding:10px 12px;border:1px solid var(--line);background:var(--paper);border-radius:4px;font-size:12px}.toc-hint{font-size:10px;color:var(--muted);margin:8px 0 15px;line-height:1.6}.toc-links{max-height:calc(100vh - 323px);overflow-y:auto;padding:0 8px 8px 0}.toc-links a{display:block;padding:8px 10px;margin:2px 0;border-left:2px solid transparent;border-radius:0 3px 3px 0;text-decoration:none;font-size:12px;line-height:1.65;color:var(--muted);word-break:keep-all;overflow-wrap:anywhere}.toc-links a:hover{background:var(--soft)}.toc-links a.active{border-color:var(--coral);background:var(--soft);color:var(--ink)}.toc-next{border-top:1px solid var(--line);padding-top:13px;margin-top:14px;font-size:11px;color:var(--muted);line-height:1.7}.toc-next b{font-weight:500;color:var(--ink)}
+main{min-width:0;max-width:1040px;padding-bottom:70px}.doc-hero{padding:55px 0 32px;border-bottom:1px solid var(--line)}.hero-label{display:flex;justify-content:space-between;gap:20px;align-items:center}.doc-hero h1{font-size:clamp(32px,3.15vw,48px);line-height:1.22;letter-spacing:-.065em;font-weight:550;margin:20px 0 18px;max-width:900px;word-break:keep-all;overflow-wrap:anywhere}.doc-description{font-size:14px;color:var(--muted);line-height:1.8;margin:0}.pill{display:inline-block;font-size:10px;letter-spacing:.01em;padding:5px 9px;border:1px solid var(--line);border-radius:3px;white-space:nowrap}.hero-meta{margin-top:22px;font-size:12px;color:var(--muted);line-height:1.9}.hero-meta p{font-size:12px;line-height:1.9;margin:8px 0}.hero-meta strong{font-weight:600}.hero-meta blockquote{margin:25px 0 0;padding:20px 22px;background:var(--soft);border-left:3px solid var(--coral);color:var(--ink)}.hero-meta blockquote p{word-break:keep-all;overflow-wrap:anywhere;font-size:18px;line-height:1.8;letter-spacing:-.03em;margin:0}.doc-section{padding:44px 0;border-bottom:1px solid var(--line);scroll-margin-top:93px;min-width:0}.doc-section h2{font-size:28px;font-weight:550;letter-spacing:-.055em;line-height:1.4;margin:0 0 24px;word-break:keep-all;overflow-wrap:anywhere}.section-num{font-weight:400;color:var(--coral);margin-right:10px;font-size:.75em;letter-spacing:-.02em}.doc-section h3{font-size:19px;font-weight:600;line-height:1.5;margin:32px 0 14px;letter-spacing:-.04em}.doc-section h4{font-size:16px;line-height:1.5;margin:25px 0 12px}.doc-section p{font-size:15px;line-height:1.92;margin:13px 0;word-break:keep-all;overflow-wrap:anywhere}.doc-section strong{font-weight:650}.doc-section ul,.doc-section ol{padding-left:22px;font-size:15px;line-height:1.85}.doc-section li{margin:7px 0}.doc-section blockquote{border-left:3px solid var(--coral);background:var(--soft);margin:23px 0;padding:15px 22px}.doc-section blockquote p{margin:0;font-size:16px;line-height:1.85}.doc-section hr{border:0;border-top:1px solid var(--line);margin:28px 0}.doc-section code:not(pre code){font-family:Consolas,"Liberation Mono",monospace;font-size:.91em;background:var(--soft);padding:2px 5px;border-radius:3px;overflow-wrap:anywhere}
+.table-scroll{overflow-x:auto;overscroll-behavior-x:contain;margin:22px 0;border-top:1px solid var(--ink);border-bottom:1px solid var(--line);width:100%}table{border-collapse:collapse;width:100%;font-size:12.5px;line-height:1.75;table-layout:auto}th,td{padding:13px 14px;vertical-align:top;text-align:left;border-bottom:1px solid var(--line);word-break:keep-all;overflow-wrap:anywhere}th{background:var(--soft);font-weight:600;font-size:11.5px}tr:last-child td{border-bottom:0}td:first-child{font-weight:550;min-width:125px}td{min-width:145px}.table-scroll table:has(th:nth-child(2)){min-width:410px}.table-scroll table:has(th:nth-child(3)){min-width:585px}.table-scroll table:has(th:nth-child(4)){min-width:710px}.table-scroll table:has(th:nth-child(5)){min-width:840px}.code-frame{position:relative;margin:23px 0;border:1px solid var(--line);border-radius:4px;overflow:hidden;background:#f8f8f5}.code-frame pre{margin:0;padding:49px 20px 19px;overflow:auto;max-height:680px;font-family:Consolas,"Liberation Mono",monospace;font-size:12px;line-height:1.9;white-space:pre;letter-spacing:-.01em}.copy-code{position:absolute;top:9px;right:10px;font-size:10px;padding:5px 9px;background:#fff}.code-frame .code-label{position:absolute;left:18px;top:15px;font-size:9px;color:var(--muted);letter-spacing:.12em}.doc-footer{margin-top:30px;display:flex;justify-content:space-between;gap:24px;font-size:10px;color:var(--muted);line-height:1.8}
+.review-workspace{background:var(--soft);border:1px solid var(--line);padding:27px;margin:30px 0 5px;border-radius:4px}.workspace-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:15px}.workspace-heading h3{margin:6px 0 10px}.workspace-heading p{font-size:12px;margin:0 0 20px}.checks{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}.check-group{min-width:0;margin:0;padding:14px 15px;border:1px solid var(--line);background:#fff;border-radius:3px}.check-group legend{padding:0 7px;font-size:12px;font-weight:600}.check-line{display:flex;gap:9px;align-items:flex-start;font-size:12px;line-height:1.7;margin:9px 0;cursor:pointer}.check-line input{accent-color:var(--coral);margin:3px 0 0;flex:none;width:15px;height:15px}.stage-field{display:flex;align-items:center;gap:15px;font-size:12px;margin:26px 0 20px}.stage-field select{background:#fff;border:1px solid var(--line);padding:9px 12px;max-width:100%;font-size:12px;border-radius:3px}.note-grid{display:grid;grid-template-columns:1fr 1fr;gap:18px}.note-field{display:block;min-width:0}.note-field>span{display:block;margin-bottom:8px;font-size:12px}.note-field textarea{width:100%;min-height:96px;border:1px solid var(--line);border-radius:3px;padding:12px;background:#fff;font-size:13px;line-height:1.8}.note-field:last-child{grid-column:1/-1}.note-actions{display:flex;gap:9px;flex-wrap:wrap;margin-top:20px}.note-actions button{font-size:12px}.review-workspace p.save-status{font-size:11px;margin:15px 0 5px;color:var(--muted)}.review-workspace p.micro{font-size:10px;line-height:1.8;color:var(--muted);margin:0}.toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);background:var(--ink);color:white;padding:12px 18px;border-radius:4px;font-size:12px;z-index:60;max-width:90vw;box-shadow:0 5px 24px #0002;line-height:1.6}.empty-nav{font-size:12px;color:var(--muted);padding:15px 5px;line-height:1.7}
+@media(min-width:1600px){.layout{gap:65px}}
+@media(max-width:1100px){.layout{grid-template-columns:188px minmax(0,1fr);gap:30px;padding:0 24px}.topbar{gap:18px}.brand span{display:none}.doc-hero h1{font-size:38px}.doc-section p{font-size:14px}.doc-section h2{font-size:26px}.doc-tabs{gap:23px}.review-workspace{padding:22px}.checks{grid-template-columns:1fr}}
+@media(max-width:820px){html{scroll-padding-top:84px}.topbar{height:60px;padding:0 18px;gap:14px}.brand b{font-size:27px}.doc-tabs{gap:18px}.doc-tab{font-size:12px}.top-actions{gap:6px}.top-actions button{font-size:10px;padding:7px 9px}.layout{display:block;padding:0 22px}.toc-shell{position:relative;top:auto;max-height:none;padding-top:18px;border-bottom:1px solid var(--line)}.toc-title{margin:0;padding-bottom:14px}.toc-title strong{font-size:11px}.toc-title>span{display:none}#toc-toggle{display:block;font-size:11px;padding:7px 11px}.toc-body{display:none}.toc-shell.open .toc-body{display:block}.toc-links{max-height:240px;margin-bottom:12px}.toc-next{display:none}.doc-hero{padding:34px 0 27px}.doc-hero h1{font-size:35px;max-width:600px}.hero-label{align-items:flex-start;gap:10px;flex-wrap:wrap}.hero-label .pill{font-size:9px}.doc-section{padding:34px 0;scroll-margin-top:80px}.doc-section h2{font-size:25px;line-height:1.45}.doc-section p{font-size:14px;line-height:1.95}.hero-meta blockquote p{font-size:16px}.note-grid{grid-template-columns:1fr}.stage-field{flex-wrap:wrap}.note-field:last-child{grid-column:auto}.workspace-heading{display:block}.workspace-heading .pill{margin-bottom:17px}.doc-footer{flex-direction:column;gap:5px}}
+@media(max-width:480px){.topbar{gap:10px;padding:0 16px}.doc-tabs{gap:15px}.top-actions button#source-download{display:none}.brand b{font-size:25px}.doc-hero h1{font-size:31px;line-height:1.3}.doc-hero .eyebrow{font-size:9px}.doc-description{font-size:12px}.hero-meta{font-size:11px}.hero-meta p{font-size:11px;line-height:1.9}.hero-meta blockquote{padding:16px 16px}.hero-meta blockquote p{font-size:15px}.doc-section h2{font-size:23px}.doc-section h3{font-size:18px}.doc-section p{font-size:14px}.table-scroll{margin:20px 0}td,th{padding:11px 12px}.code-frame pre{font-size:11px;padding-left:15px}.review-workspace{padding:18px}.note-actions{gap:8px}.note-actions button{padding:9px 10px;font-size:11px}.check-line{font-size:12px}.top-actions button{padding:7px 9px}}
+@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}*{transition:none!important}}
+@media print{@page{margin:15mm}.topbar,.toc-shell,.skip,.copy-code,.toast,.review-workspace,.doc-footer{display:none!important}.layout{display:block;padding:0;max-width:none}main{max-width:none;padding:0}.doc-hero{padding:0 0 18px}.doc-hero h1{font-size:27px}.doc-section{padding:22px 0;break-inside:auto}.doc-section h2{font-size:21px;break-after:avoid}.doc-section h3{font-size:16px;break-after:avoid}.doc-section p{font-size:11px;line-height:1.75}.table-scroll{overflow:visible;break-inside:auto}table{min-width:0!important;font-size:9px;table-layout:fixed}td,th{min-width:0;font-size:9px;word-break:normal;padding:7px}tr{break-inside:avoid}.code-frame pre{white-space:pre-wrap;max-height:none;font-size:9px;padding:16px;overflow:visible;word-break:break-word}.code-label{display:none}.hero-meta blockquote p{font-size:14px}}
+
+/* ---- 작성자별 첨삭 표기 (AI.md §5) -------------------------------------
+   ins  = 추가·교체 제안 (초록)   del = 삭제·교체 대상 (빨강 취소선)
+   blockquote.review = 검토 코멘트 (파란 상자)   .review-appendix = 검토 요약 부록
+   body.review-original  → 원문만 (제안·코멘트 숨김)
+   body.review-accepted  → 인라인 제안 미리보기 (코멘트 대안은 적용하지 않음)
+------------------------------------------------------------------------- */
+ins{background:#dff3e4;color:#17512a;text-decoration:none;border-bottom:2px solid #4f9d63;padding:0 3px;border-radius:2px}
+del{background:#fbe4e0;color:#8f3324;text-decoration:line-through;text-decoration-color:#c9573f;text-decoration-thickness:1.5px;padding:0 3px;border-radius:2px}
+h1 ins,h1 del,h2 ins,h2 del,h3 ins,h3 del{border-bottom-width:3px}
+blockquote.review{margin:14px 0 24px;padding:12px 16px 12px 18px;border:0;border-left:4px solid #3b6fd6;background:#eef3fc;border-radius:0 6px 6px 0;font-size:14px;line-height:1.75;color:#24303f}
+blockquote.review p{margin:0}
+blockquote.review p+p{margin-top:9px;padding-top:9px;border-top:1px dashed #c3d2ef}
+.review-label{display:inline-flex;gap:6px;align-items:center;margin-right:8px;font-weight:600;font-size:11.5px;vertical-align:1px;white-space:nowrap}
+.review-agent{color:#3b6fd6;text-transform:uppercase;letter-spacing:.09em}
+.review-id{background:#3b6fd6;color:#fff;border-radius:3px;padding:1px 7px;font-weight:600}
+.review-sev{border-radius:3px;padding:1px 7px;font-weight:600}
+.review-sev[data-sev="높음"]{background:#c9573f;color:#fff}
+.review-sev[data-sev="중간"]{background:#f0c14b;color:#3a2a00}
+.review-sev[data-sev="낮음"]{background:#d9dfe2;color:#3d484d}
+.doc-section.review-appendix{margin-top:60px;padding-top:28px;border-top:3px solid #3b6fd6}
+.doc-section.review-appendix h2 .section-num{color:#3b6fd6}
+.review-pill{border-color:#3b6fd6;color:#3b6fd6;text-decoration:none}
+.review-pill:hover{background:#eef3fc}
+.review-legend{margin:12px 0 0;font-size:12px;color:var(--muted);line-height:1.8}
+.review-legend span{margin-right:12px;white-space:nowrap}
+.review-select{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);white-space:nowrap}
+.review-select select{padding:7px 9px;border:1px solid var(--line);border-radius:4px;background:var(--paper);font-size:12px}
+blockquote.review[data-review-agent="codex"]{border-left-color:#7250a0;background:#f4effa;color:#352b46}
+[data-review-agent="codex"] .review-agent{color:#7250a0}
+[data-review-agent="codex"] .review-id{background:#7250a0}
+.review-pill[data-review-agent="codex"]{border-color:#7250a0;color:#7250a0}
+.review-pill[data-review-agent="codex"]:hover{background:#f4effa}
+.review-appendix[data-review-agent="codex"]{border-top-color:#7250a0}
+.review-appendix[data-review-agent="codex"] h2 .section-num{color:#7250a0}
+.review-label[id]{scroll-margin-top:110px}
+.review-label[id]:target{outline:2px solid currentColor;outline-offset:4px}
+.review-legend p{margin:5px 0}
+.review-select select:disabled{opacity:.6}
+.top-actions{flex-wrap:wrap}
+[hidden]{display:none!important}
+@media(max-width:1100px){.topbar{height:auto;min-height:68px;flex-wrap:wrap;padding-top:8px;padding-bottom:8px;gap:8px 18px}.doc-tabs{height:34px;flex:1;justify-content:flex-end}.top-actions{flex-basis:100%;justify-content:flex-end}.review-select select{max-width:185px}}
+@media(min-width:821px) and (max-width:1100px){.toc-shell{top:135px;max-height:calc(100vh - 155px)}}
+.toc-links a[data-reviews]{display:flex;justify-content:space-between;gap:8px;align-items:center}
+.toc-links a[data-reviews]::after{content:attr(data-reviews);flex:none;min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:#3b6fd6;color:#fff;font-size:10px;line-height:18px;text-align:center}
+body.review-original ins,body.review-original blockquote.review,body.review-original .review-appendix,body.review-original .review-legend{display:none}
+body.review-original del{background:none;color:inherit;text-decoration:none;padding:0}
+body.review-original .toc-links a[data-reviews]::after{display:none}
+body.review-accepted del,body.review-accepted blockquote.review,body.review-accepted .review-appendix,body.review-accepted .review-legend{display:none}
+body.review-accepted ins{background:none;color:inherit;border:0;padding:0}
+body.review-accepted .toc-links a[data-reviews]::after{display:none}
+@media print{blockquote.review{break-inside:avoid;background:#eef3fc!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}ins,del{-webkit-print-color-adjust:exact;print-color-adjust:exact}.review-select{display:none}}
+</style></head><body>
+<!-- GENERATED FILE — source: docs/architecture/ARCH-02-structure-model.md — run: npm --prefix tools/docs run build -->
+<a class="skip" href="#reading-main">본문으로 이동</a>
+<header class="topbar"><a class="brand" href="../../index.html" aria-label="VIDE 문서 모음"><b>V.</b><span>VIDE</span></a><nav class="doc-tabs" aria-label="문서 선택"><a class="doc-tab" href="../PRD.html">PRD</a><a class="doc-tab" href="../specs/README.html">SPEC</a><a class="doc-tab" href="../../Design.html">Design</a><a class="doc-tab" href="ARCH-01-system.html">기술 설계</a><a class="doc-tab" href="../plans/PLAN.html">PLAN</a><a class="doc-tab" href="../../DEVELOPMENT_GUIDE.html">개발 가이드</a><a class="doc-tab" href="../../AI.html">AI 규약</a></nav><div class="top-actions"><button id="source-download" title="현재 문서의 Markdown 원문 저장">원문 ↓</button><button id="print-doc" title="현재 문서 인쇄">인쇄</button></div></header>
+<div class="layout"><aside class="toc-shell" id="toc-shell" aria-label="현재 문서의 목차"><div class="toc-title"><strong>CONTENTS</strong><span id="toc-count"></span><button id="toc-toggle" aria-expanded="false" aria-controls="toc-body">목차 열기</button></div><div class="toc-body" id="toc-body"><input class="toc-search" id="toc-search" type="search" placeholder="장 제목으로 찾기" aria-label="현재 문서 목차 검색"><p class="toc-hint" id="nav-hint" role="status">장 제목으로 찾아갑니다.</p><nav class="toc-links" id="toc-links" aria-label="본문 장 이동"></nav><div class="toc-next">다음 작성할 문서<br><b>다음 작업 · PLAN §6.5</b><br>현재 단계와 작업별 계획을 확인한 뒤 해당 범위에서 재개</div></div></aside><main id="reading-main" tabindex="-1"><article id="arch-02-structure-model" class="document"><header class="doc-hero"><div class="hero-label"><span class="eyebrow">ARCHITECTURE</span><span><span class="pill">REVIEW · v0.1</span><span class="pill">6 CHAPTERS</span></span></div><h1 tabindex="-1">구조 분석 jig의 해석 모델 계약과 Rust 코어</h1><div class="hero-meta">
+<p>SPEC-06이 정한 동작을 구현하는 물리 계약과 구성요소 경계를 정한다. 공통 서버·저장·호스트 경계는 <a href="ARCH-01-system.html">ARCH-01</a>을 따른다. 필드 후보와 선례는 <a href="../research/RESEARCH-09-structure-analysis-methods.html">RESEARCH-09 §3</a>에 있다.</p>
+</div></header><section class="doc-section" id="arch-02-structure-model-section-1"><h2><span aria-hidden="true" class="section-num">01 /</span> 구성요소와 위치</h2>
+<div aria-label="ARCH 표 1" class="table-scroll" role="region" tabindex="0"><table>
+<thead>
+<tr>
+<th>구성요소</th>
+<th>위치</th>
+<th>책임</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>해석 모델 계약</td>
+<td><code>src/contracts/structure-model.ts</code></td>
+<td>모델·결과 JSON의 zod 스키마와 타입. 서버·UI·시험이 공유</td>
+</tr>
+<tr>
+<td>입력 구성</td>
+<td><code>src/jigs/structure/input.ts</code>, <code>sections.ts</code></td>
+<td>Rhino 중심선(scene <code>line</code>)·부재 솔리드(메시 주축·외곽 치수 → KS H형강 대조)·CAD Sync(보·기둥 레이어와 레벨) → 모델 초안. 끝점 병합·T자 접합·교차 분할, 역할·접합 규칙·지점, 레이어·이름·UserString의 역할·단면 힌트</td>
+</tr>
+<tr>
+<td>점검·하중 전처리</td>
+<td><code>src/jigs/structure/review.ts</code>, <code>loads.ts</code></td>
+<td>모델 점검(SPEC-06.2, 단위 하중으로 코어를 돌려 기구 확인), 실패 원인 분류(06.7), 면하중 한 방향 분배와 하중 장부</td>
+</tr>
+<tr>
+<td>진입·저장</td>
+<td><code>src/jigs/structure/index.ts</code></td>
+<td>초안·수정(작은 수정 목록 <code>draftEditsSchema</code>)·확정 해석, 프로젝트별 기록 <code>&lt;데이터&gt;/structure/&lt;프로젝트&gt;.json</code>(초안 + 확정 결과). 오래됨 = 원래 Sync가 없거나 같은 문서(<code>sourceDocument.documentId</code>)의 더 새 Sync가 있음</td>
+</tr>
+<tr>
+<td>해석·검정 코어</td>
+<td><code>src/native/structure/</code> (Rust crate <code>vide-structure</code>)</td>
+<td>강성 조립·풀이·부재력, KDS 부재 검정·B1·처짐, 판정. 입력 JSON 외 I/O 없음</td>
+</tr>
+<tr>
+<td>코어 연결</td>
+<td><code>src/jigs/structure/core.ts</code></td>
+<td>빌드된 코어를 불러 <code>analyze(model) → result</code> 제공</td>
+</tr>
+<tr>
+<td>서버 경로</td>
+<td><code>src/server/server.ts</code></td>
+<td><code>GET /projects/:id/jigs/structure</code>(초안·확정·오래됨), <code>POST …/draft</code>(Sync와 입력 형태), <code>POST …/edit</code>(수정 목록), <code>POST …/analyze</code>(<code>confirm: true</code>, 차단 오류면 422). 요청 본문 1 MB 한도 때문에 모델 전체는 서버에만 둠</td>
+</tr>
+<tr>
+<td>화면</td>
+<td><code>src/ui/structure-jig.tsx</code>, 뷰포트 <code>tint</code></td>
+<td>입력 선택·초안 그룹별 단면 지정·면하중·AI 초안 검토 요청(<code>jig.kind = structure-draft-review</code>, 첨부만 보고 판정)·확정·결과 표·행 선택 → 모델 선택·판정색</td>
+</tr>
+<tr>
+<td>검증 자료</td>
+<td><code>tests/structure/fixtures/</code>, <code>tests/structure/*.test.mjs</code></td>
+<td>닫힌 해·공개 벤치마크·불변량 fixture</td>
+</tr>
+<tr>
+<td>개발용 기준 해석기</td>
+<td><code>tools/structure/</code></td>
+<td>PyNite 교차 검증 스크립트(개발 전용, 배포 제외)</td>
+</tr>
+</tbody>
+</table></div>
+<p><strong>코어 구동 방식: Node-API 네이티브 애드온</strong>(napi-rs, <a href="../tdd/SPIKE-2026-09-29-structure-core-binding.html">SPIKE</a>). <code>cargo build --release --lib</code>의 <code>vide_structure.dll</code>을 <code>process.dlopen</code>으로 로드한다. 같은 crate의 실행 파일(<code>src/bin/vide-structure.rs</code>, 반드시 별도 <code>--target-dir</code>로 빌드)은 코어 오류를 서버와 격리해야 할 때의 대체 경로다. crate 빌드 산출물(<code>target/</code>)은 저장소에 넣지 않으며, 데스크톱 패키지는 빌드된 코어 파일만 명시 경로로 포함한다.</p>
+</section><section class="doc-section" id="arch-02-structure-model-section-2"><h2><span aria-hidden="true" class="section-num">02 /</span> 단위·좌표·축 규약</h2>
+<ul>
+<li><strong>단위는 필드 이름에 붙인다.</strong> 좌표·길이 <code>_m</code>, 힘 <code>_kN</code>, 모멘트 <code>_kNm</code>, 선하중 <code>_kNpm</code>(kN/m), 면하중 <code>_kPa</code>(kN/㎡), 탄성계수·강도 <code>_MPa</code>, 단면 치수 <code>_mm</code>, 단면 성질 <code>_mm2</code>·<code>_mm4</code>·<code>_mm3</code>. 코어는 내부에서 한 단위계로 환산한다. 호스트 문서 단위(mm 등)는 입력 구성 단계에서 m로 바꾼다.</li>
+<li>연직축은 전역 +Z.</li>
+<li><strong>부재 국부축(1·2·3):</strong> 1축은 i → j. 2축은 단면의 웨브 방향이며, 연직이 아닌 부재는 1축을 포함하는 연직면 안에서 +Z 쪽을 향한다. 연직 부재(1축과 Z의 방향 코사인 절댓값 ≥ 0.9999)는 2축이 전역 +X다. 3축 = 1 × 2. <code>betaDeg</code>는 1축을 중심으로 2·3축을 오른손 방향으로 돌린다. 강축 휨은 3축에 대한 모멘트 <code>M3</code>, 약축 휨은 <code>M2</code>다.</li>
+<li>부재 단부해제와 지점은 같은 6자유도 표기(<code>dx dy dz rx ry rz</code>)를 쓰되, 지점은 전역축, 단부해제는 부재 국부축(1·2·3 → <code>dx dy dz rx ry rz</code> 순서) 기준이다. 값은 <code>true</code>(구속·해제)/<code>false</code>로만 쓴다.</li>
+</ul>
+</section><section class="doc-section" id="arch-02-structure-model-section-3"><h2><span aria-hidden="true" class="section-num">03 /</span> 해석 모델(<code>vide.structure.model/1</code>)</h2>
+<div class="code-frame"><span class="code-label">COPYABLE TEXT</span><button aria-label="이 텍스트 복사" class="copy-code" type="button">복사</button><pre><code class="language-text">StructureModel
+  schema: &quot;vide.structure.model/1&quot;
+  meta: { name, sources[{ kind: &quot;rhino&quot;|&quot;cad&quot;|&quot;layout&quot;, documentId, syncId }], mergeTolerance_m, createdAt }
+  materials[]: { id, grade, E_MPa, G_MPa, density_kNpm3, Fy_MPa, Fu_MPa, fyByThickness?[{ tMax_mm, Fy_MPa }] }
+  sections[]:  { id, name, shape: &quot;H&quot;|&quot;BH&quot;|&quot;BOX&quot;|&quot;PIPE&quot;|&quot;L&quot;|&quot;C&quot;|&quot;ROD&quot;,
+                 dims_mm{...}, source: &quot;KS D 3502&quot;|&quot;user&quot;|&quot;ai&quot;, props?{ A_mm2, I2_mm4, I3_mm4, J_mm4, Z2_mm3, Z3_mm3, S2_mm3, S3_mm3, Cw_mm6 } }
+  nodes[]:     { id, xyz_m[3], support?{ dx,dy,dz,rx,ry,rz: bool }, provenance }
+  members[]:   { id, i, j, section, material, role: &quot;column&quot;|&quot;girder&quot;|&quot;beam&quot;|&quot;brace&quot;|&quot;other&quot;,
+                 kind: &quot;frame&quot;|&quot;truss&quot;|&quot;tensionOnly&quot;, betaDeg, releases?{ i{…}, j{…} },
+                 source?{ documentId, objectId }, design?{ Lb_m, K2, K3, Cb } (값마다 auto/user), provenance }
+  loadPatterns[]: { id, nature: &quot;D&quot;|&quot;L&quot;|&quot;Lr&quot;|&quot;S&quot;|&quot;W&quot;|&quot;E&quot;, selfWeight: bool }
+  loads[]:     { id, pattern, type: &quot;memberUniform&quot;|&quot;memberPoint&quot;|&quot;nodePoint&quot;,
+                 targets[], direction: &quot;-Z&quot;|&quot;+X&quot;|…|&quot;local-2&quot;…, value_kN / value_kNpm, position?, provenance }
+  areaLoads[]: { id, pattern, polygon_m[[x,y,z]…], value_kPa, spanDirection?, provenance }
+  combinations[]: { id, terms[{ pattern, factor }], limitState: &quot;strength&quot;|&quot;service&quot; }
+  analysis:    { kind: &quot;linearStatic&quot;, lateralRestraint?{ nodes[] | aboveZ_m, dofs[&quot;dx&quot;,&quot;dy&quot;] } }
+  checkSettings: { code: &quot;KDS 14 31 10&quot;, deflectionLimits{ role → n (L/n) }, colorBands[0.7, 1.0] }
+  jointRules:  { default: &quot;column-rigid,beam-on-girder-pin,brace-pin,column-base-pin&quot;, exceptions[{ member, end, value, by, note }] }
+
+provenance = { by: &quot;auto&quot;|&quot;ai&quot;|&quot;user&quot;, assumed: bool, note? }
+</code></pre></div>
+<ul>
+<li><code>areaLoads</code>는 코어에 넘기기 전에 <code>src/jigs/structure/</code>가 한 방향 분배로 부재 선하중으로 바꾸고, &quot;입력 = 전달 + 미전달&quot; 하중 장부를 결과에 붙인다.</li>
+<li>물리 부재(Rhino 곡선 하나)가 여러 해석 부재로 나뉘면 <code>source.objectId</code>를 공유하고, 결과는 그 객체로 되돌려 찾아간다.</li>
+<li>모델 해시(정렬된 JSON의 SHA-256)가 확정·결과·유효성(SPEC-06.3)의 기준이다.</li>
+</ul>
+</section><section class="doc-section" id="arch-02-structure-model-section-4"><h2><span aria-hidden="true" class="section-num">04 /</span> 결과(<code>vide.structure.result/1</code>)</h2>
+<div class="code-frame"><span class="code-label">COPYABLE TEXT</span><button aria-label="이 텍스트 복사" class="copy-code" type="button">복사</button><pre><code class="language-text">StructureResult
+  schema, modelHash, coreVersion, elapsed_ms
+  diagnostics: { mergedNodes[], mechanisms[{ node, dof }], equilibrium[{ combo, error_rel }], warnings[] }
+  nodes:   { [id]: { disp_m_rad{ combo → [6] }, reaction_kN_kNm?{ combo → [6] } } }
+  members: { [id]: { stations[0, .25, .5, .75, 1], forces{ combo → [{ N, V2, V3, T, M2, M3 }…] } } }
+  checks[]: { member, status: &quot;pass&quot;|&quot;fail&quot;|&quot;incomplete&quot;|&quot;error&quot;, ratio, governing{ combo, clause },
+              parts[{ clause, ratio, values{…} }], B1?, slender?, deflection?{ value_mm, limit_mm, ratio },
+              cause?: &quot;member&quot;|&quot;input-suspect&quot;, causeNotes[] }
+  summary: { steel_kN, steel_t, maxRatio, failCount, incompleteCount, loadLedger? }
+  notChecked[]: 문자열(횡력·접합부·기초·EJ 등)
+</code></pre></div>
+<p><strong>부재력 부호:</strong> 부재 위치 x(i 끝 0 → j 끝 1)에서 자른 면에 <strong>j 쪽 부분이 i 쪽 부분에 가하는 힘·모멘트</strong>를 국부축 성분으로 보고한다. 따라서 N은 인장이 양수, 압축이 음수다. 연직 하중을 받는 수평 단순보는 중앙 M3가 양수(처짐 모멘트)이고, 이때 V2 = −dM3/dx다. 절점 변위·반력은 전역축 성분이다. 반력은 지점이 구조물에 가하는 힘이다.</p>
+<p><strong>부재 처짐:</strong> 양 끝 변위의 Hermite 보간에 양단 고정보의 하중 특수해를 더한 값에서 두 끝을 잇는 현을 뺀 상대 처짐이다. 캔틸레버의 끝 처짐 판정은 이번 범위 밖이며 <code>notChecked</code>에 남긴다.</p>
+<p>판정 <code>incomplete</code>는 입력이 모자라 검정하지 못한 경우, <code>error</code>는 계산 실패다.</p>
+</section><section class="doc-section" id="arch-02-structure-model-section-5"><h2><span aria-hidden="true" class="section-num">05 /</span> 코어 내부</h2>
+<ul>
+<li>3D 12자유도 보 요소(전단변형 무시), 단부해제는 정적 응축, 트러스는 축력만, <code>tensionOnly</code>는 반복 비활성화(최대 반복 수 초과 시 경고).</li>
+<li>전체 강성은 희소 대칭 행렬로 조립하고 faer의 희소 분해로 푼다. 지점 누락·기구는 분해 중 0 피벗으로 찾아 해당 절점·자유도를 <code>mechanisms</code>로 돌려준다.</li>
+<li>조합은 선형 중첩으로 계산한다. 2차 해석(P-Δ)은 이번 범위 밖이며, 기둥의 부재 2차 효과는 검정 단계의 B1으로 반영한다.</li>
+<li>부재 검정: KDS 14 31 10(압축 E3, 휨 F2·F3, 전단 G2, 조합 H1-1, 세장비), B1 = Cm / (1 − Pr/Pe1) ≥ 1, 처짐은 부재 현 기준 상대 처짐. 조항 표기는 KDS 14 31 10이 따르는 AISC 360의 장 기호(E3·F2·F6·G2·H1-1·D2)로 두며, KDS 조항 번호 대응은 원문 확인 뒤 추가한다. H형강의 세장판 압축은 E7 유효 단면적(웨브 c1 0.18·c2 1.31, 플랜지 c1 0.22·c2 1.49)으로 계산한다. 인장 파단·블록 전단, 비조밀 웨브 휨(F4·F5), 각형·원형 강관의 비조밀 휨은 구현하지 않았고 해당하면 <code>incomplete</code>와 메모로 표시한다.</li>
+<li>결정성: 같은 입력이면 같은 결과(정렬·반올림 규칙 고정).</li>
+</ul>
+</section><section class="doc-section" id="arch-02-structure-model-section-6"><h2><span aria-hidden="true" class="section-num">06 /</span> 검증 자료</h2>
+<p><code>tests/structure/fixtures/</code>의 fixture는 {출처, 단위, 입력 모델, 기대값과 값별 허용오차, 가정}을 담는다. 교과서·공개 벤치마크의 &quot;정답&quot; fixture와 회귀용 골든 출력은 분리한다. 1차 목록은 RESEARCH-09 §4.1의 BM-03(닫힌 해), BM-06(보 횡비틀림좌굴), BM-10(PyNite 차분), BM-11(불변량), BM-12(KS 단면 성질)와 닫힌 해 보·골조이며, 구체 목록과 허용오차는 PLAN-17이 소유한다.</p>
+</section><footer class="doc-footer"><span>VIDE / PLANNING DOCUMENTS</span><span>문서 열람용 · 실제 CAD/BIM 지원은 구현·검증 후 선언</span></footer></article></main></div>
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+<script id="source-data" type="application/json">{"arch-02-structure-model":{"label":"구조 분석 jig의 해석 모델 계약과 Rust 코어","file":"ARCH-02-structure-model.md","markdown":"---\nid: ARCH-02\ntitle: 구조 분석 jig의 해석 모델 계약과 Rust 코어\nstatus: review\nversion: 0.1\nupdated: 2026-09-29\nowner: agent:claude\nrelated: [FR-23, SPEC-06, ADR-019, RESEARCH-09, ARCH-01, PLAN-17]\n---\n\n# 구조 분석 jig의 해석 모델 계약과 Rust 코어\n\nSPEC-06이 정한 동작을 구현하는 물리 계약과 구성요소 경계를 정한다. 공통 서버·저장·호스트 경계는 [ARCH-01](ARCH-01-system.md)을 따른다. 필드 후보와 선례는 [RESEARCH-09 §3](../research/RESEARCH-09-structure-analysis-methods.md)에 있다.\n\n## 1. 구성요소와 위치\n\n| 구성요소 | 위치 | 책임 |\n|---|---|---|\n| 해석 모델 계약 | `src/contracts/structure-model.ts` | 모델·결과 JSON의 zod 스키마와 타입. 서버·UI·시험이 공유 |\n| 입력 구성 | `src/jigs/structure/input.ts`, `sections.ts` | Rhino 중심선(scene `line`)·부재 솔리드(메시 주축·외곽 치수 → KS H형강 대조)·CAD Sync(보·기둥 레이어와 레벨) → 모델 초안. 끝점 병합·T자 접합·교차 분할, 역할·접합 규칙·지점, 레이어·이름·UserString의 역할·단면 힌트 |\n| 점검·하중 전처리 | `src/jigs/structure/review.ts`, `loads.ts` | 모델 점검(SPEC-06.2, 단위 하중으로 코어를 돌려 기구 확인), 실패 원인 분류(06.7), 면하중 한 방향 분배와 하중 장부 |\n| 진입·저장 | `src/jigs/structure/index.ts` | 초안·수정(작은 수정 목록 `draftEditsSchema`)·확정 해석, 프로젝트별 기록 `\u003c데이터>/structure/\u003c프로젝트>.json`(초안 + 확정 결과). 오래됨 = 원래 Sync가 없거나 같은 문서(`sourceDocument.documentId`)의 더 새 Sync가 있음 |\n| 해석·검정 코어 | `src/native/structure/` (Rust crate `vide-structure`) | 강성 조립·풀이·부재력, KDS 부재 검정·B1·처짐, 판정. 입력 JSON 외 I/O 없음 |\n| 코어 연결 | `src/jigs/structure/core.ts` | 빌드된 코어를 불러 `analyze(model) → result` 제공 |\n| 서버 경로 | `src/server/server.ts` | `GET /projects/:id/jigs/structure`(초안·확정·오래됨), `POST …/draft`(Sync와 입력 형태), `POST …/edit`(수정 목록), `POST …/analyze`(`confirm: true`, 차단 오류면 422). 요청 본문 1 MB 한도 때문에 모델 전체는 서버에만 둠 |\n| 화면 | `src/ui/structure-jig.tsx`, 뷰포트 `tint` | 입력 선택·초안 그룹별 단면 지정·면하중·AI 초안 검토 요청(`jig.kind = structure-draft-review`, 첨부만 보고 판정)·확정·결과 표·행 선택 → 모델 선택·판정색 |\n| 검증 자료 | `tests/structure/fixtures/`, `tests/structure/*.test.mjs` | 닫힌 해·공개 벤치마크·불변량 fixture |\n| 개발용 기준 해석기 | `tools/structure/` | PyNite 교차 검증 스크립트(개발 전용, 배포 제외) |\n\n**코어 구동 방식: Node-API 네이티브 애드온**(napi-rs, [SPIKE](../tdd/SPIKE-2026-09-29-structure-core-binding.md)). `cargo build --release --lib`의 `vide_structure.dll`을 `process.dlopen`으로 로드한다. 같은 crate의 실행 파일(`src/bin/vide-structure.rs`, 반드시 별도 `--target-dir`로 빌드)은 코어 오류를 서버와 격리해야 할 때의 대체 경로다. crate 빌드 산출물(`target/`)은 저장소에 넣지 않으며, 데스크톱 패키지는 빌드된 코어 파일만 명시 경로로 포함한다.\n\n## 2. 단위·좌표·축 규약\n\n- **단위는 필드 이름에 붙인다.** 좌표·길이 `_m`, 힘 `_kN`, 모멘트 `_kNm`, 선하중 `_kNpm`(kN/m), 면하중 `_kPa`(kN/㎡), 탄성계수·강도 `_MPa`, 단면 치수 `_mm`, 단면 성질 `_mm2`·`_mm4`·`_mm3`. 코어는 내부에서 한 단위계로 환산한다. 호스트 문서 단위(mm 등)는 입력 구성 단계에서 m로 바꾼다.\n- 연직축은 전역 +Z.\n- **부재 국부축(1·2·3):** 1축은 i → j. 2축은 단면의 웨브 방향이며, 연직이 아닌 부재는 1축을 포함하는 연직면 안에서 +Z 쪽을 향한다. 연직 부재(1축과 Z의 방향 코사인 절댓값 ≥ 0.9999)는 2축이 전역 +X다. 3축 = 1 × 2. `betaDeg`는 1축을 중심으로 2·3축을 오른손 방향으로 돌린다. 강축 휨은 3축에 대한 모멘트 `M3`, 약축 휨은 `M2`다.\n- 부재 단부해제와 지점은 같은 6자유도 표기(`dx dy dz rx ry rz`)를 쓰되, 지점은 전역축, 단부해제는 부재 국부축(1·2·3 → `dx dy dz rx ry rz` 순서) 기준이다. 값은 `true`(구속·해제)/`false`로만 쓴다.\n\n## 3. 해석 모델(`vide.structure.model/1`)\n\n```text\nStructureModel\n  schema: \"vide.structure.model/1\"\n  meta: { name, sources[{ kind: \"rhino\"|\"cad\"|\"layout\", documentId, syncId }], mergeTolerance_m, createdAt }\n  materials[]: { id, grade, E_MPa, G_MPa, density_kNpm3, Fy_MPa, Fu_MPa, fyByThickness?[{ tMax_mm, Fy_MPa }] }\n  sections[]:  { id, name, shape: \"H\"|\"BH\"|\"BOX\"|\"PIPE\"|\"L\"|\"C\"|\"ROD\",\n                 dims_mm{...}, source: \"KS D 3502\"|\"user\"|\"ai\", props?{ A_mm2, I2_mm4, I3_mm4, J_mm4, Z2_mm3, Z3_mm3, S2_mm3, S3_mm3, Cw_mm6 } }\n  nodes[]:     { id, xyz_m[3], support?{ dx,dy,dz,rx,ry,rz: bool }, provenance }\n  members[]:   { id, i, j, section, material, role: \"column\"|\"girder\"|\"beam\"|\"brace\"|\"other\",\n                 kind: \"frame\"|\"truss\"|\"tensionOnly\", betaDeg, releases?{ i{…}, j{…} },\n                 source?{ documentId, objectId }, design?{ Lb_m, K2, K3, Cb } (값마다 auto/user), provenance }\n  loadPatterns[]: { id, nature: \"D\"|\"L\"|\"Lr\"|\"S\"|\"W\"|\"E\", selfWeight: bool }\n  loads[]:     { id, pattern, type: \"memberUniform\"|\"memberPoint\"|\"nodePoint\",\n                 targets[], direction: \"-Z\"|\"+X\"|…|\"local-2\"…, value_kN / value_kNpm, position?, provenance }\n  areaLoads[]: { id, pattern, polygon_m[[x,y,z]…], value_kPa, spanDirection?, provenance }\n  combinations[]: { id, terms[{ pattern, factor }], limitState: \"strength\"|\"service\" }\n  analysis:    { kind: \"linearStatic\", lateralRestraint?{ nodes[] | aboveZ_m, dofs[\"dx\",\"dy\"] } }\n  checkSettings: { code: \"KDS 14 31 10\", deflectionLimits{ role → n (L/n) }, colorBands[0.7, 1.0] }\n  jointRules:  { default: \"column-rigid,beam-on-girder-pin,brace-pin,column-base-pin\", exceptions[{ member, end, value, by, note }] }\n\nprovenance = { by: \"auto\"|\"ai\"|\"user\", assumed: bool, note? }\n```\n\n- `areaLoads`는 코어에 넘기기 전에 `src/jigs/structure/`가 한 방향 분배로 부재 선하중으로 바꾸고, \"입력 = 전달 + 미전달\" 하중 장부를 결과에 붙인다.\n- 물리 부재(Rhino 곡선 하나)가 여러 해석 부재로 나뉘면 `source.objectId`를 공유하고, 결과는 그 객체로 되돌려 찾아간다.\n- 모델 해시(정렬된 JSON의 SHA-256)가 확정·결과·유효성(SPEC-06.3)의 기준이다.\n\n## 4. 결과(`vide.structure.result/1`)\n\n```text\nStructureResult\n  schema, modelHash, coreVersion, elapsed_ms\n  diagnostics: { mergedNodes[], mechanisms[{ node, dof }], equilibrium[{ combo, error_rel }], warnings[] }\n  nodes:   { [id]: { disp_m_rad{ combo → [6] }, reaction_kN_kNm?{ combo → [6] } } }\n  members: { [id]: { stations[0, .25, .5, .75, 1], forces{ combo → [{ N, V2, V3, T, M2, M3 }…] } } }\n  checks[]: { member, status: \"pass\"|\"fail\"|\"incomplete\"|\"error\", ratio, governing{ combo, clause },\n              parts[{ clause, ratio, values{…} }], B1?, slender?, deflection?{ value_mm, limit_mm, ratio },\n              cause?: \"member\"|\"input-suspect\", causeNotes[] }\n  summary: { steel_kN, steel_t, maxRatio, failCount, incompleteCount, loadLedger? }\n  notChecked[]: 문자열(횡력·접합부·기초·EJ 등)\n```\n\n**부재력 부호:** 부재 위치 x(i 끝 0 → j 끝 1)에서 자른 면에 **j 쪽 부분이 i 쪽 부분에 가하는 힘·모멘트**를 국부축 성분으로 보고한다. 따라서 N은 인장이 양수, 압축이 음수다. 연직 하중을 받는 수평 단순보는 중앙 M3가 양수(처짐 모멘트)이고, 이때 V2 = −dM3/dx다. 절점 변위·반력은 전역축 성분이다. 반력은 지점이 구조물에 가하는 힘이다.\n\n**부재 처짐:** 양 끝 변위의 Hermite 보간에 양단 고정보의 하중 특수해를 더한 값에서 두 끝을 잇는 현을 뺀 상대 처짐이다. 캔틸레버의 끝 처짐 판정은 이번 범위 밖이며 `notChecked`에 남긴다.\n\n판정 `incomplete`는 입력이 모자라 검정하지 못한 경우, `error`는 계산 실패다.\n\n## 5. 코어 내부\n\n- 3D 12자유도 보 요소(전단변형 무시), 단부해제는 정적 응축, 트러스는 축력만, `tensionOnly`는 반복 비활성화(최대 반복 수 초과 시 경고).\n- 전체 강성은 희소 대칭 행렬로 조립하고 faer의 희소 분해로 푼다. 지점 누락·기구는 분해 중 0 피벗으로 찾아 해당 절점·자유도를 `mechanisms`로 돌려준다.\n- 조합은 선형 중첩으로 계산한다. 2차 해석(P-Δ)은 이번 범위 밖이며, 기둥의 부재 2차 효과는 검정 단계의 B1으로 반영한다.\n- 부재 검정: KDS 14 31 10(압축 E3, 휨 F2·F3, 전단 G2, 조합 H1-1, 세장비), B1 = Cm / (1 − Pr/Pe1) ≥ 1, 처짐은 부재 현 기준 상대 처짐. 조항 표기는 KDS 14 31 10이 따르는 AISC 360의 장 기호(E3·F2·F6·G2·H1-1·D2)로 두며, KDS 조항 번호 대응은 원문 확인 뒤 추가한다. H형강의 세장판 압축은 E7 유효 단면적(웨브 c1 0.18·c2 1.31, 플랜지 c1 0.22·c2 1.49)으로 계산한다. 인장 파단·블록 전단, 비조밀 웨브 휨(F4·F5), 각형·원형 강관의 비조밀 휨은 구현하지 않았고 해당하면 `incomplete`와 메모로 표시한다.\n- 결정성: 같은 입력이면 같은 결과(정렬·반올림 규칙 고정).\n\n## 6. 검증 자료\n\n`tests/structure/fixtures/`의 fixture는 {출처, 단위, 입력 모델, 기대값과 값별 허용오차, 가정}을 담는다. 교과서·공개 벤치마크의 \"정답\" fixture와 회귀용 골든 출력은 분리한다. 1차 목록은 RESEARCH-09 §4.1의 BM-03(닫힌 해), BM-06(보 횡비틀림좌굴), BM-10(PyNite 차분), BM-11(불변량), BM-12(KS 단면 성질)와 닫힌 해 보·골조이며, 구체 목록과 허용오차는 PLAN-17이 소유한다.\n"}}</script>
+<script id="reader-config" type="application/json">{"initial":"arch-02-structure-model","siteTitle":"VIDE"}</script>
+<script>
+(() => {
+'use strict';
+const sourceData=JSON.parse(document.getElementById('source-data').textContent);
+const config=JSON.parse(document.getElementById('reader-config').textContent);
+const esc=s=>String(s);
+let activeDoc=config.initial;
+let observer;
+let toastTimer;
+const $=s=>document.querySelector(s);
+function notify(message){const t=$('#toast');t.textContent=message;t.hidden=false;clearTimeout(toastTimer);toastTimer=setTimeout(()=>{t.hidden=true;},3400);}
+function renderToc(){const links=$('#toc-links');links.replaceChildren();const nodes=document.querySelectorAll('#'+activeDoc+' .doc-section');nodes.forEach(section=>{const a=document.createElement('a');a.href='#'+section.id;a.textContent=section.querySelector('h2').textContent;a.dataset.title=a.textContent;a.addEventListener('click',()=>{$('#toc-shell').classList.remove('open');$('#toc-toggle').setAttribute('aria-expanded','false');});links.appendChild(a);});$('#toc-count').textContent=nodes.length+' CHAPTERS';$('#toc-search').value='';$('#nav-hint').textContent='章 제목으로 찾아갑니다.'.replace('章','장');if(observer)observer.disconnect();observer=new IntersectionObserver(entries=>{const visible=entries.filter(e=>e.isIntersecting).sort((a,b)=>a.boundingClientRect.top-b.boundingClientRect.top);if(!visible.length)return;document.querySelectorAll('#toc-links a').forEach(a=>a.classList.toggle('active',a.hash==='#'+visible[0].target.id));},{rootMargin:'-90px 0px -64% 0px',threshold:0});nodes.forEach(n=>observer.observe(n));}
+function showDoc(name,reset){if(!sourceData[name])name=config.initial;activeDoc=name;document.querySelectorAll('.document').forEach(d=>d.hidden=d.id!==name);document.querySelectorAll('.doc-tab').forEach(a=>{a.classList.toggle('active',a.dataset.doc===name);if(a.dataset.doc===name)a.setAttribute('aria-current','page');else a.removeAttribute('aria-current');});renderToc();document.title=(config.siteTitle||'VIDE')+' · '+sourceData[name].label;if(reset)window.scrollTo({top:0,behavior:'instant'});}
+function useHash(){let raw=decodeURIComponent(location.hash.slice(1)||config.initial);let name=raw.split('-section-')[0];if(!sourceData[name])name=config.initial;if(name!==activeDoc||!$('#toc-links').children.length)showDoc(name,false);const el=document.getElementById(raw);if(el&&!el.hidden){requestAnimationFrame(()=>el.scrollIntoView({block:'start',behavior:'instant'}));}}
+window.addEventListener('hashchange',useHash);
+document.querySelectorAll('.doc-tab[data-doc]').forEach(a=>a.addEventListener('click',e=>{e.preventDefault();const name=a.dataset.doc;showDoc(name,true);history.replaceState(null,'','#'+name);}));
+$('#toc-toggle').addEventListener('click',()=>{const on=$('#toc-shell').classList.toggle('open');$('#toc-toggle').setAttribute('aria-expanded',String(on));});
+$('#toc-search').addEventListener('input',()=>{const q=$('#toc-search').value.trim().toLocaleLowerCase();let n=0;document.querySelectorAll('#toc-links a').forEach(a=>{a.hidden=!a.dataset.title.toLocaleLowerCase().includes(q);if(!a.hidden)n++;});$('#nav-hint').textContent=q?(n?'일치하는 장 '+n+'개':'일치하는 장 제목이 없습니다.'):'장 제목으로 찾아갑니다.';});
+function download(name,contents,type){const blob=new Blob([contents],{type});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),2500);}
+$('#source-download').addEventListener('click',()=>download(sourceData[activeDoc].file,sourceData[activeDoc].markdown,'text/markdown;charset=utf-8'));
+$('#print-doc').addEventListener('click',()=>window.print());
+async function copy(text){try{if(navigator.clipboard&&navigator.clipboard.writeText){await navigator.clipboard.writeText(text);return true;}}catch(e){}const t=document.createElement('textarea');t.value=text;t.style.position='fixed';t.style.left='-9999px';document.body.appendChild(t);t.select();let ok=false;try{ok=document.execCommand('copy');}catch(e){}t.remove();return ok;}
+document.querySelectorAll('.copy-code').forEach(b=>b.addEventListener('click',async()=>{const text=b.parentElement.querySelector('pre').textContent;const ok=await copy(text);if(ok){b.textContent='복사됨';notify('텍스트를 복사했습니다.');setTimeout(()=>b.textContent='복사',1800);}else{const range=document.createRange();range.selectNodeContents(b.parentElement.querySelector('pre'));const sel=window.getSelection();sel.removeAllRanges();sel.addRange(range);notify('자동 복사가 제한됩니다. 선택된 텍스트를 직접 복사하세요.');}}));
+showDoc(config.initial,false);useHash();
+})();
+</script>
+<script>
+(() => {
+'use strict';
+const KEY = 'vide-docs-review-mode';
+const AUTHOR_KEY = 'vide-docs-review-author';
+const sel = document.getElementById('review-mode');
+if (!sel) return;
+const authorSel = document.getElementById('review-author');
+let mode = 'marked';
+let author = 'all';
+try { mode = localStorage.getItem(KEY) || 'marked'; } catch (e) {}
+try { author = localStorage.getItem(AUTHOR_KEY) || 'all'; } catch (e) {}
+if (!['marked', 'original', 'accepted'].includes(mode)) mode = 'marked';
+if (!authorSel || !Array.from(authorSel.options).some(o => o.value === author)) author = 'all';
+const matches = el => author === 'all' || el.dataset.reviewAgent === author;
+const decorate = () => {
+const query = (document.getElementById('toc-search')?.value || '').trim().toLocaleLowerCase();
+let visible = 0;
+document.querySelectorAll('#toc-links a').forEach(a => {
+  const section = document.getElementById(decodeURIComponent(a.hash.slice(1)));
+  if (!section) return;
+  a.hidden = !a.dataset.title.toLocaleLowerCase().includes(query) || (section.classList.contains('review-appendix') && (mode !== 'marked' || !matches(section)));
+  if (!a.hidden) visible += 1;
+  const n = Array.from(section.querySelectorAll('.review-label[data-rid]')).filter(matches).length;
+  if (n && mode === 'marked') a.dataset.reviews = String(n); else delete a.dataset.reviews;
+});
+if (query) document.getElementById('nav-hint').textContent = visible ? `일치하는 장 ${visible}개` : '일치하는 장 제목이 없습니다.';
+};
+const apply = () => {
+  sel.value = mode;
+  if (authorSel) { authorSel.value = author; authorSel.disabled = mode !== 'marked'; }
+  document.body.classList.toggle('review-original', mode === 'original');
+  document.body.classList.toggle('review-accepted', mode === 'accepted');
+  document.querySelectorAll('blockquote.review, .review-appendix').forEach(el => { el.hidden = !matches(el); });
+  decorate();
+  try { localStorage.setItem(KEY, mode); localStorage.setItem(AUTHOR_KEY, author); } catch (e) {}
+};
+apply();
+const toc = document.getElementById('toc-links');
+if (toc) new MutationObserver(decorate).observe(toc, { childList: true });
+document.getElementById('toc-search')?.addEventListener('input', decorate);
+sel.addEventListener('change', () => { mode = sel.value; apply(); });
+if (authorSel) authorSel.addEventListener('change', () => { author = authorSel.value; apply(); });
+const revealHash = () => {
+  let id;
+  try { id = decodeURIComponent(location.hash.slice(1)); } catch (e) { return; }
+  const target = document.getElementById(id);
+  if (!target || !target.dataset.reviewAgent) return;
+  mode = 'marked';
+  if (!matches(target)) author = 'all';
+  apply();
+  target.scrollIntoView({ block: 'center' });
+};
+window.addEventListener('hashchange', revealHash);
+revealHash();
+})();
+</script>
+</body></html>

@@ -107,10 +107,10 @@ try {
   await dialog.waitFor();
   // The gallery lists the working Sync jig and planned jigs.
   await dialog.locator('.jig-card').first().waitFor();
-  assert.equal(await dialog.locator('.jig-card').count(), 10);
-  assert.equal(await dialog.locator('.jig-card[data-status="planned"]').count(), 9);
+  assert.equal(await dialog.locator('.jig-card').count(), 11);
+  assert.equal(await dialog.locator('.jig-card[data-status="planned"]').count(), 8);
   await dialog
-    .locator('.jig-card[data-status="available"]')
+    .locator('.jig-card[data-status="available"]', { hasText: 'Sync · 도면↔모델' })
     .getByRole('button', { name: '열기' })
     .click();
   assert.match(

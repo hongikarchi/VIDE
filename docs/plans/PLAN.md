@@ -75,6 +75,8 @@ T-001~018의 번호·지원 증거는 유지한다. 각 티켓의 현재 결과�
 
 ### 6.5 현재 티켓 현황과 이어갈 위치
 
+**2026-09-29 구조 분석 jig(J-09):** 사용자 결정으로 첫 출시 범위에 넣었다(PRD FR-23·AC-40, [ADR-019](../decisions/ADR-019-structure-jig-rust-core.md)). 해석·검정 코어는 Rust, 입력은 CAD·Rhino Brep·중심선에서 AI가 초안을 만들고 사용자가 확정한다. 1단계는 계획 단계 중력 검토(선형 정적, KDS 14 31 10 부재 검정·B1, 4상태 판정, NG 원인 분류). 동작 [SPEC-06](../specs/SPEC-06-structure-analysis.md), 계약 [ARCH-02](../architecture/ARCH-02-structure-model.md), 계획·완료 기준 [PLAN-17](PLAN-17-structure-jig.md)(T-033~039). T-033~038 1차 완료(코어·입력·화면, 시험 통과). 다음: T-039 설치본 빌드(커밋 후)와 실제 입력 검수.
+
 **2026-09-29 연결 파일:** 플러그인 Link(프로젝트 고르기+첫 Sync), 프로젝트별 연결 파일 목록(보이기·강제 Sync), 여러 파일을 주종 없이 한 공간에 표시. 계획·완료 기준은 [PLAN-16](PLAN-16-document-links.md).
 
 **2026-09-29 작업 보기:** 요청 목록을 왼쪽 작업 이력으로 모으고, 오른쪽을 선택한 작업 하나의 진행 화면(조건·단계·결과·확인할 것·단계별 개입)으로 바꾼다. 계획·완료 기준은 [PLAN-15](PLAN-15-work-view.md).
@@ -160,6 +162,7 @@ Jev는 기존 계정이 없다는 사용자 확인에 따라 가입 재개까지
 | T-023 · DB 마이그레이션 | schema 2·백업·실패 복구 검증 | [PLAN-03](PLAN-03-development-foundation.md#t-023) |
 | T-024 · 호스트 의존 경계 | 중립 경로·공통 literal·예외 점검 완료 | [PLAN-03](PLAN-03-development-foundation.md#t-024) |
 | T-032 · Jev 수정 위치 찾기(개발 도구) | `npm run locate` 사용 가능. 실측 정답 파일 5위 안 영어 100%·한국어 100%([SPIKE](../tdd/SPIKE-2026-09-29-jev-locate.md)). 표본 확대·에이전트 비교 남음. 제품 이식은 [PLAN-05 §7](PLAN-05-decision-layer-evaluation.md) 계획만 | [PLAN-03](PLAN-03-development-foundation.md#t-032) |
+| T-033~039 · 구조 분석 jig 1단계 | T-033 완료(애드온). T-034~036 코어(선형 해석·기구 탐지·KDS/AISC 검정·E7), T-037 입력(곡선·솔리드·CAD → 초안·점검·확정), T-038 화면(JIG 탭 구조 분석·판정색) 1차 완료: `npm run test:structure`(Rust 9·노드 28)와 `browser-structure-jig.mjs` 통과. T-039: 설치본 포함 코드 추가, 전체 빌드는 커밋 후, 실제 입력 검수 남음. 남음: AISC E·G·H 예제, KDS 조항 대응, 한국 고유 fixture 검토 | [PLAN-17](PLAN-17-structure-jig.md) |
 
 ### 6.6 전체 완료 관문
 

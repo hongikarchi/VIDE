@@ -1,0 +1,976 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="description" content="구조해석 프로그램 방식과 해석 코어 구현 언어 조사"><meta name="generator" content="tools/docs/build.mjs — generated from docs/research/RESEARCH-09-structure-analysis-methods.md; do not edit"><title>VIDE · 구조해석 프로그램 방식과 해석 코어 구현 언어 조사</title><style>
+:root{--ink:#292c2d;--muted:#626b6e;--line:#e1e3e1;--soft:#f5f5f1;--coral:#d97660;--paper:#fff;--font:"Pretendard","Noto Sans KR","Malgun Gothic",Arial,sans-serif}
+*{box-sizing:border-box}html{scroll-behavior:smooth;scroll-padding-top:92px}body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--font);letter-spacing:-.025em}a{color:inherit;text-underline-offset:4px}button,input,textarea,select{font:inherit;color:inherit}button{cursor:pointer;border:1px solid var(--line);border-radius:4px;background:var(--paper);padding:10px 15px;line-height:1.3}button:hover{background:var(--soft)}button:disabled{cursor:default;opacity:.6}button.primary{background:var(--ink);color:#fff;border-color:var(--ink)}button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible{outline:3px solid var(--coral);outline-offset:3px}textarea{resize:vertical}::selection{background:#f2d7ce}[hidden]{display:none!important}
+.skip{position:fixed;top:-80px;left:20px;z-index:100;background:white;padding:12px}.skip:focus{top:10px}
+.topbar{height:68px;position:sticky;top:0;z-index:30;border-bottom:1px solid var(--line);background:#fffffff7;display:flex;align-items:center;justify-content:space-between;gap:24px;padding:0 max(24px,calc((100vw - 1450px)/2))}.brand{text-decoration:none;display:flex;align-items:center;gap:15px;white-space:nowrap}.brand b{font-size:29px;letter-spacing:-.08em}.brand span{border-left:1px solid var(--line);padding-left:15px;font-size:11px;letter-spacing:.08em}.doc-tabs{display:flex;height:100%;gap:25px;align-items:stretch;min-width:0;overflow-x:auto}.doc-tab{flex-shrink:0}.doc-tab{display:flex;align-items:center;position:relative;text-decoration:none;font-size:13px;color:var(--muted);white-space:nowrap}.doc-tab.active{color:var(--ink);font-weight:650}.doc-tab.active:after{content:"";position:absolute;bottom:0;left:0;right:0;height:3px;background:var(--coral)}.top-actions{display:flex;gap:8px}.top-actions button{padding:8px 11px;font-size:12px;white-space:nowrap}
+.layout{max-width:1450px;margin:auto;padding:0 30px;display:grid;grid-template-columns:218px minmax(0,1fr);gap:55px}.toc-shell{align-self:start;position:sticky;top:99px;padding-top:15px;max-height:calc(100vh - 120px)}.eyebrow{font-size:10px;line-height:1.6;letter-spacing:.16em;font-weight:500;color:var(--muted)}.toc-title{display:flex;justify-content:space-between;align-items:center;margin-bottom:15px}.toc-title strong{font-size:12px;font-weight:500}.toc-title span{font-size:10px;color:var(--muted)}#toc-toggle{display:none}.toc-search{width:100%;padding:10px 12px;border:1px solid var(--line);background:var(--paper);border-radius:4px;font-size:12px}.toc-hint{font-size:10px;color:var(--muted);margin:8px 0 15px;line-height:1.6}.toc-links{max-height:calc(100vh - 323px);overflow-y:auto;padding:0 8px 8px 0}.toc-links a{display:block;padding:8px 10px;margin:2px 0;border-left:2px solid transparent;border-radius:0 3px 3px 0;text-decoration:none;font-size:12px;line-height:1.65;color:var(--muted);word-break:keep-all;overflow-wrap:anywhere}.toc-links a:hover{background:var(--soft)}.toc-links a.active{border-color:var(--coral);background:var(--soft);color:var(--ink)}.toc-next{border-top:1px solid var(--line);padding-top:13px;margin-top:14px;font-size:11px;color:var(--muted);line-height:1.7}.toc-next b{font-weight:500;color:var(--ink)}
+main{min-width:0;max-width:1040px;padding-bottom:70px}.doc-hero{padding:55px 0 32px;border-bottom:1px solid var(--line)}.hero-label{display:flex;justify-content:space-between;gap:20px;align-items:center}.doc-hero h1{font-size:clamp(32px,3.15vw,48px);line-height:1.22;letter-spacing:-.065em;font-weight:550;margin:20px 0 18px;max-width:900px;word-break:keep-all;overflow-wrap:anywhere}.doc-description{font-size:14px;color:var(--muted);line-height:1.8;margin:0}.pill{display:inline-block;font-size:10px;letter-spacing:.01em;padding:5px 9px;border:1px solid var(--line);border-radius:3px;white-space:nowrap}.hero-meta{margin-top:22px;font-size:12px;color:var(--muted);line-height:1.9}.hero-meta p{font-size:12px;line-height:1.9;margin:8px 0}.hero-meta strong{font-weight:600}.hero-meta blockquote{margin:25px 0 0;padding:20px 22px;background:var(--soft);border-left:3px solid var(--coral);color:var(--ink)}.hero-meta blockquote p{word-break:keep-all;overflow-wrap:anywhere;font-size:18px;line-height:1.8;letter-spacing:-.03em;margin:0}.doc-section{padding:44px 0;border-bottom:1px solid var(--line);scroll-margin-top:93px;min-width:0}.doc-section h2{font-size:28px;font-weight:550;letter-spacing:-.055em;line-height:1.4;margin:0 0 24px;word-break:keep-all;overflow-wrap:anywhere}.section-num{font-weight:400;color:var(--coral);margin-right:10px;font-size:.75em;letter-spacing:-.02em}.doc-section h3{font-size:19px;font-weight:600;line-height:1.5;margin:32px 0 14px;letter-spacing:-.04em}.doc-section h4{font-size:16px;line-height:1.5;margin:25px 0 12px}.doc-section p{font-size:15px;line-height:1.92;margin:13px 0;word-break:keep-all;overflow-wrap:anywhere}.doc-section strong{font-weight:650}.doc-section ul,.doc-section ol{padding-left:22px;font-size:15px;line-height:1.85}.doc-section li{margin:7px 0}.doc-section blockquote{border-left:3px solid var(--coral);background:var(--soft);margin:23px 0;padding:15px 22px}.doc-section blockquote p{margin:0;font-size:16px;line-height:1.85}.doc-section hr{border:0;border-top:1px solid var(--line);margin:28px 0}.doc-section code:not(pre code){font-family:Consolas,"Liberation Mono",monospace;font-size:.91em;background:var(--soft);padding:2px 5px;border-radius:3px;overflow-wrap:anywhere}
+.table-scroll{overflow-x:auto;overscroll-behavior-x:contain;margin:22px 0;border-top:1px solid var(--ink);border-bottom:1px solid var(--line);width:100%}table{border-collapse:collapse;width:100%;font-size:12.5px;line-height:1.75;table-layout:auto}th,td{padding:13px 14px;vertical-align:top;text-align:left;border-bottom:1px solid var(--line);word-break:keep-all;overflow-wrap:anywhere}th{background:var(--soft);font-weight:600;font-size:11.5px}tr:last-child td{border-bottom:0}td:first-child{font-weight:550;min-width:125px}td{min-width:145px}.table-scroll table:has(th:nth-child(2)){min-width:410px}.table-scroll table:has(th:nth-child(3)){min-width:585px}.table-scroll table:has(th:nth-child(4)){min-width:710px}.table-scroll table:has(th:nth-child(5)){min-width:840px}.code-frame{position:relative;margin:23px 0;border:1px solid var(--line);border-radius:4px;overflow:hidden;background:#f8f8f5}.code-frame pre{margin:0;padding:49px 20px 19px;overflow:auto;max-height:680px;font-family:Consolas,"Liberation Mono",monospace;font-size:12px;line-height:1.9;white-space:pre;letter-spacing:-.01em}.copy-code{position:absolute;top:9px;right:10px;font-size:10px;padding:5px 9px;background:#fff}.code-frame .code-label{position:absolute;left:18px;top:15px;font-size:9px;color:var(--muted);letter-spacing:.12em}.doc-footer{margin-top:30px;display:flex;justify-content:space-between;gap:24px;font-size:10px;color:var(--muted);line-height:1.8}
+.review-workspace{background:var(--soft);border:1px solid var(--line);padding:27px;margin:30px 0 5px;border-radius:4px}.workspace-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:15px}.workspace-heading h3{margin:6px 0 10px}.workspace-heading p{font-size:12px;margin:0 0 20px}.checks{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}.check-group{min-width:0;margin:0;padding:14px 15px;border:1px solid var(--line);background:#fff;border-radius:3px}.check-group legend{padding:0 7px;font-size:12px;font-weight:600}.check-line{display:flex;gap:9px;align-items:flex-start;font-size:12px;line-height:1.7;margin:9px 0;cursor:pointer}.check-line input{accent-color:var(--coral);margin:3px 0 0;flex:none;width:15px;height:15px}.stage-field{display:flex;align-items:center;gap:15px;font-size:12px;margin:26px 0 20px}.stage-field select{background:#fff;border:1px solid var(--line);padding:9px 12px;max-width:100%;font-size:12px;border-radius:3px}.note-grid{display:grid;grid-template-columns:1fr 1fr;gap:18px}.note-field{display:block;min-width:0}.note-field>span{display:block;margin-bottom:8px;font-size:12px}.note-field textarea{width:100%;min-height:96px;border:1px solid var(--line);border-radius:3px;padding:12px;background:#fff;font-size:13px;line-height:1.8}.note-field:last-child{grid-column:1/-1}.note-actions{display:flex;gap:9px;flex-wrap:wrap;margin-top:20px}.note-actions button{font-size:12px}.review-workspace p.save-status{font-size:11px;margin:15px 0 5px;color:var(--muted)}.review-workspace p.micro{font-size:10px;line-height:1.8;color:var(--muted);margin:0}.toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);background:var(--ink);color:white;padding:12px 18px;border-radius:4px;font-size:12px;z-index:60;max-width:90vw;box-shadow:0 5px 24px #0002;line-height:1.6}.empty-nav{font-size:12px;color:var(--muted);padding:15px 5px;line-height:1.7}
+@media(min-width:1600px){.layout{gap:65px}}
+@media(max-width:1100px){.layout{grid-template-columns:188px minmax(0,1fr);gap:30px;padding:0 24px}.topbar{gap:18px}.brand span{display:none}.doc-hero h1{font-size:38px}.doc-section p{font-size:14px}.doc-section h2{font-size:26px}.doc-tabs{gap:23px}.review-workspace{padding:22px}.checks{grid-template-columns:1fr}}
+@media(max-width:820px){html{scroll-padding-top:84px}.topbar{height:60px;padding:0 18px;gap:14px}.brand b{font-size:27px}.doc-tabs{gap:18px}.doc-tab{font-size:12px}.top-actions{gap:6px}.top-actions button{font-size:10px;padding:7px 9px}.layout{display:block;padding:0 22px}.toc-shell{position:relative;top:auto;max-height:none;padding-top:18px;border-bottom:1px solid var(--line)}.toc-title{margin:0;padding-bottom:14px}.toc-title strong{font-size:11px}.toc-title>span{display:none}#toc-toggle{display:block;font-size:11px;padding:7px 11px}.toc-body{display:none}.toc-shell.open .toc-body{display:block}.toc-links{max-height:240px;margin-bottom:12px}.toc-next{display:none}.doc-hero{padding:34px 0 27px}.doc-hero h1{font-size:35px;max-width:600px}.hero-label{align-items:flex-start;gap:10px;flex-wrap:wrap}.hero-label .pill{font-size:9px}.doc-section{padding:34px 0;scroll-margin-top:80px}.doc-section h2{font-size:25px;line-height:1.45}.doc-section p{font-size:14px;line-height:1.95}.hero-meta blockquote p{font-size:16px}.note-grid{grid-template-columns:1fr}.stage-field{flex-wrap:wrap}.note-field:last-child{grid-column:auto}.workspace-heading{display:block}.workspace-heading .pill{margin-bottom:17px}.doc-footer{flex-direction:column;gap:5px}}
+@media(max-width:480px){.topbar{gap:10px;padding:0 16px}.doc-tabs{gap:15px}.top-actions button#source-download{display:none}.brand b{font-size:25px}.doc-hero h1{font-size:31px;line-height:1.3}.doc-hero .eyebrow{font-size:9px}.doc-description{font-size:12px}.hero-meta{font-size:11px}.hero-meta p{font-size:11px;line-height:1.9}.hero-meta blockquote{padding:16px 16px}.hero-meta blockquote p{font-size:15px}.doc-section h2{font-size:23px}.doc-section h3{font-size:18px}.doc-section p{font-size:14px}.table-scroll{margin:20px 0}td,th{padding:11px 12px}.code-frame pre{font-size:11px;padding-left:15px}.review-workspace{padding:18px}.note-actions{gap:8px}.note-actions button{padding:9px 10px;font-size:11px}.check-line{font-size:12px}.top-actions button{padding:7px 9px}}
+@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}*{transition:none!important}}
+@media print{@page{margin:15mm}.topbar,.toc-shell,.skip,.copy-code,.toast,.review-workspace,.doc-footer{display:none!important}.layout{display:block;padding:0;max-width:none}main{max-width:none;padding:0}.doc-hero{padding:0 0 18px}.doc-hero h1{font-size:27px}.doc-section{padding:22px 0;break-inside:auto}.doc-section h2{font-size:21px;break-after:avoid}.doc-section h3{font-size:16px;break-after:avoid}.doc-section p{font-size:11px;line-height:1.75}.table-scroll{overflow:visible;break-inside:auto}table{min-width:0!important;font-size:9px;table-layout:fixed}td,th{min-width:0;font-size:9px;word-break:normal;padding:7px}tr{break-inside:avoid}.code-frame pre{white-space:pre-wrap;max-height:none;font-size:9px;padding:16px;overflow:visible;word-break:break-word}.code-label{display:none}.hero-meta blockquote p{font-size:14px}}
+
+/* ---- 작성자별 첨삭 표기 (AI.md §5) -------------------------------------
+   ins  = 추가·교체 제안 (초록)   del = 삭제·교체 대상 (빨강 취소선)
+   blockquote.review = 검토 코멘트 (파란 상자)   .review-appendix = 검토 요약 부록
+   body.review-original  → 원문만 (제안·코멘트 숨김)
+   body.review-accepted  → 인라인 제안 미리보기 (코멘트 대안은 적용하지 않음)
+------------------------------------------------------------------------- */
+ins{background:#dff3e4;color:#17512a;text-decoration:none;border-bottom:2px solid #4f9d63;padding:0 3px;border-radius:2px}
+del{background:#fbe4e0;color:#8f3324;text-decoration:line-through;text-decoration-color:#c9573f;text-decoration-thickness:1.5px;padding:0 3px;border-radius:2px}
+h1 ins,h1 del,h2 ins,h2 del,h3 ins,h3 del{border-bottom-width:3px}
+blockquote.review{margin:14px 0 24px;padding:12px 16px 12px 18px;border:0;border-left:4px solid #3b6fd6;background:#eef3fc;border-radius:0 6px 6px 0;font-size:14px;line-height:1.75;color:#24303f}
+blockquote.review p{margin:0}
+blockquote.review p+p{margin-top:9px;padding-top:9px;border-top:1px dashed #c3d2ef}
+.review-label{display:inline-flex;gap:6px;align-items:center;margin-right:8px;font-weight:600;font-size:11.5px;vertical-align:1px;white-space:nowrap}
+.review-agent{color:#3b6fd6;text-transform:uppercase;letter-spacing:.09em}
+.review-id{background:#3b6fd6;color:#fff;border-radius:3px;padding:1px 7px;font-weight:600}
+.review-sev{border-radius:3px;padding:1px 7px;font-weight:600}
+.review-sev[data-sev="높음"]{background:#c9573f;color:#fff}
+.review-sev[data-sev="중간"]{background:#f0c14b;color:#3a2a00}
+.review-sev[data-sev="낮음"]{background:#d9dfe2;color:#3d484d}
+.doc-section.review-appendix{margin-top:60px;padding-top:28px;border-top:3px solid #3b6fd6}
+.doc-section.review-appendix h2 .section-num{color:#3b6fd6}
+.review-pill{border-color:#3b6fd6;color:#3b6fd6;text-decoration:none}
+.review-pill:hover{background:#eef3fc}
+.review-legend{margin:12px 0 0;font-size:12px;color:var(--muted);line-height:1.8}
+.review-legend span{margin-right:12px;white-space:nowrap}
+.review-select{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);white-space:nowrap}
+.review-select select{padding:7px 9px;border:1px solid var(--line);border-radius:4px;background:var(--paper);font-size:12px}
+blockquote.review[data-review-agent="codex"]{border-left-color:#7250a0;background:#f4effa;color:#352b46}
+[data-review-agent="codex"] .review-agent{color:#7250a0}
+[data-review-agent="codex"] .review-id{background:#7250a0}
+.review-pill[data-review-agent="codex"]{border-color:#7250a0;color:#7250a0}
+.review-pill[data-review-agent="codex"]:hover{background:#f4effa}
+.review-appendix[data-review-agent="codex"]{border-top-color:#7250a0}
+.review-appendix[data-review-agent="codex"] h2 .section-num{color:#7250a0}
+.review-label[id]{scroll-margin-top:110px}
+.review-label[id]:target{outline:2px solid currentColor;outline-offset:4px}
+.review-legend p{margin:5px 0}
+.review-select select:disabled{opacity:.6}
+.top-actions{flex-wrap:wrap}
+[hidden]{display:none!important}
+@media(max-width:1100px){.topbar{height:auto;min-height:68px;flex-wrap:wrap;padding-top:8px;padding-bottom:8px;gap:8px 18px}.doc-tabs{height:34px;flex:1;justify-content:flex-end}.top-actions{flex-basis:100%;justify-content:flex-end}.review-select select{max-width:185px}}
+@media(min-width:821px) and (max-width:1100px){.toc-shell{top:135px;max-height:calc(100vh - 155px)}}
+.toc-links a[data-reviews]{display:flex;justify-content:space-between;gap:8px;align-items:center}
+.toc-links a[data-reviews]::after{content:attr(data-reviews);flex:none;min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:#3b6fd6;color:#fff;font-size:10px;line-height:18px;text-align:center}
+body.review-original ins,body.review-original blockquote.review,body.review-original .review-appendix,body.review-original .review-legend{display:none}
+body.review-original del{background:none;color:inherit;text-decoration:none;padding:0}
+body.review-original .toc-links a[data-reviews]::after{display:none}
+body.review-accepted del,body.review-accepted blockquote.review,body.review-accepted .review-appendix,body.review-accepted .review-legend{display:none}
+body.review-accepted ins{background:none;color:inherit;border:0;padding:0}
+body.review-accepted .toc-links a[data-reviews]::after{display:none}
+@media print{blockquote.review{break-inside:avoid;background:#eef3fc!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}ins,del{-webkit-print-color-adjust:exact;print-color-adjust:exact}.review-select{display:none}}
+</style></head><body>
+<!-- GENERATED FILE — source: docs/research/RESEARCH-09-structure-analysis-methods.md — run: npm --prefix tools/docs run build -->
+<a class="skip" href="#reading-main">본문으로 이동</a>
+<header class="topbar"><a class="brand" href="../../index.html" aria-label="VIDE 문서 모음"><b>V.</b><span>VIDE</span></a><nav class="doc-tabs" aria-label="문서 선택"><a class="doc-tab" href="../PRD.html">PRD</a><a class="doc-tab" href="../specs/README.html">SPEC</a><a class="doc-tab" href="../../Design.html">Design</a><a class="doc-tab" href="../architecture/ARCH-01-system.html">기술 설계</a><a class="doc-tab" href="../plans/PLAN.html">PLAN</a><a class="doc-tab" href="../../DEVELOPMENT_GUIDE.html">개발 가이드</a><a class="doc-tab" href="../../AI.html">AI 규약</a></nav><div class="top-actions"><button id="source-download" title="현재 문서의 Markdown 원문 저장">원문 ↓</button><button id="print-doc" title="현재 문서 인쇄">인쇄</button></div></header>
+<div class="layout"><aside class="toc-shell" id="toc-shell" aria-label="현재 문서의 목차"><div class="toc-title"><strong>CONTENTS</strong><span id="toc-count"></span><button id="toc-toggle" aria-expanded="false" aria-controls="toc-body">목차 열기</button></div><div class="toc-body" id="toc-body"><input class="toc-search" id="toc-search" type="search" placeholder="장 제목으로 찾기" aria-label="현재 문서 목차 검색"><p class="toc-hint" id="nav-hint" role="status">장 제목으로 찾아갑니다.</p><nav class="toc-links" id="toc-links" aria-label="본문 장 이동"></nav><div class="toc-next">다음 작성할 문서<br><b>다음 작업 · PLAN §6.5</b><br>현재 단계와 작업별 계획을 확인한 뒤 해당 범위에서 재개</div></div></aside><main id="reading-main" tabindex="-1"><article id="research-09-structure-analysis-methods" class="document"><header class="doc-hero"><div class="hero-label"><span class="eyebrow">RESEARCH</span><span><span class="pill">REVIEW · v0.1</span><span class="pill">7 CHAPTERS</span></span></div><h1 tabindex="-1">구조해석 프로그램 방식과 해석 코어 구현 언어 조사</h1><div class="hero-meta">
+</div></header><section class="doc-section" id="research-09-structure-analysis-methods-section-1"><h2><span aria-hidden="true" class="section-num">01 /</span> 목적과 결론 요약</h2>
+<p>J-09 구조 분석 jig의 PLAN을 쓰기 전에 세 가지를 정리한다. 첫째, 상용·공개 구조해석 프로그램이 해석 모델·강구조 설계 검토·교환 형식·검증을 어떻게 다루는지 보고, VIDE가 둘 <strong>해석 모델 계약</strong>(해석기에 넘기는 모델 데이터의 약속된 형식)을 정한다. 둘째, midas 라이선스 없이 해석기·KDS 강구조 부재 검정·하중조합을 검증할 <strong>구체 시험 케이스</strong>를 고른다. 셋째, 해석 코어(3D 골조 유한요소 해석, 희소 행렬 해법, P-Δ, 이후 모드 해석)를 어떤 언어로 만들지 권고한다. RESEARCH-08의 자산(S-18 해석기·검정식·검증 체계)과 사용자 결정(도메인 지식 반입, midas 없음, 성능 우선, 언어 난이도는 고려하지 않음)을 전제로 한다.</p>
+<p><strong>결론은 세 줄이다.</strong> (1) midas·SAP2000/ETABS·RFEM·Karamba3D·PyNite·OpenSees·BHoM·IFC는 모두 같은 골격으로 수렴한다. 절점(지점)과 부재(재료·단면·방향각·단부해제·강체 오프셋)가 있고, 하중은 <strong>하중 패턴 → 해석 경우 → 하중조합</strong>의 세 층으로 나뉜다. 그 위에 비지지 길이·K·Cb를 &quot;자동값 + 사용자 덮어쓰기&quot;로 갖는 <strong>설계 부재 층</strong>이 얹힌다. VIDE는 이 골격을 평면 배열 JSON 계약으로 두고, 방향각 규약·오프셋 좌표계·단위·&quot;P-Δ 결과는 합산 불가&quot;를 명시해야 한다. (2) midas 없이도 해석기는 AISC 해설 C장 2차해석 벤치마크, CSI 공개 검증 예제, OpenSees 포털 골조 주기, PyNite 차분 시험으로 검증할 수 있다. 부재 검정은 AISC 설계 예제(STAAD 공개 대조 페이지가 중간값까지 제공)로 검증할 수 있다. 한국 고유 부분(KS 단면, 강재 등급별 항복강도, KDS 41 하중조합)은 공개 정답집이 없다. 이 부분은 손계산, 구조기술사 검토, 일회성 midas 체험판 또는 대학·사무소 협력으로 채운다. (3) 성능 우선이면 <strong>Rust(faer 선형대수 라이브러리) 코어를 napi-rs 네이티브 애드온으로 Node 서버에 붙이는 안</strong>을 권고한다. C# Native AOT 자식 프로세스(기존 MstCore2 재사용)는 차선, 순수 TypeScript(RESEARCH-08 A안)는 배포는 가장 쉽지만 해석 코어로는 권하지 않는다. 확정 전에 같은 S-18 모델로 후보를 재는 SPIKE를 한 번 한다(§5.5).</p>
+<div aria-label="조사 표 1" class="table-scroll" role="region" tabindex="0"><table>
+<thead>
+<tr>
+<th>질문</th>
+<th>답</th>
+<th>근거 절</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>해석 모델을 어떻게 둘까</td>
+<td>해석(이상화) 수준의 언어 중립 JSON 계약. 물리 부재와 해석 요소를 분리하고, 설계 부재 층은 해석 모델 위에 얹는다</td>
+<td>§2.1, §3</td>
+</tr>
+<tr>
+<td>midas 없이 무엇으로 검증하나</td>
+<td>닫힌 해 → 공개 벤치마크 → PyNite 차분 → 불변량 → 한국 고유 손계산 → (선택) 상용 교차</td>
+<td>§4</td>
+</tr>
+<tr>
+<td>어떤 언어로 만드나</td>
+<td>Rust + faer, napi-rs 애드온. SPIKE로 확정</td>
+<td>§5</td>
+</tr>
+</tbody>
+</table></div>
+</section><section class="doc-section" id="research-09-structure-analysis-methods-section-2"><h2><span aria-hidden="true" class="section-num">02 /</span> 상용·공개 프로그램 비교</h2>
+<h3>2.1 해석 모델은 여덟 개 도구 모두 같은 골격이다</h3>
+<p>아래 표는 해석 모델의 핵심 개념이 각 도구에서 어떻게 표현되는지 비교한다. 용어부터 풀면 다음과 같다. <strong>단부해제</strong>는 부재 끝의 특정 자유도(회전 등)를 풀어 핀처럼 만드는 것이다. <strong>강체 오프셋</strong>은 절점과 부재 끝 사이의 강한 구간이다. **방향각(beta angle)**은 부재 축을 중심으로 단면이 돌아간 각도다.</p>
+<div aria-label="조사 표 2" class="table-scroll" role="region" tabindex="0"><table>
+<thead>
+<tr>
+<th>개념</th>
+<th>midas Gen (MGT)</th>
+<th>SAP2000/ETABS</th>
+<th>RFEM 6</th>
+<th>Karamba3D</th>
+<th>공개 모델(PyNite·OpenSees·BHoM·IFC)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>절점·지점</td>
+<td><code>*NODE</code>, <code>*CONSTRAINT</code> 6자리 1/0 코드 (<a href="http://manual.midasuser.com/EN_Common/Gen/891/Start/14_Appendix/MGT_File_Quick_Reference.htm">MGT Quick Reference</a>)</td>
+<td>joint + restraint (<a href="https://docs.csiamerica.com/manuals/sap2000/CSiRefer.pdf">CSiRefer</a>)</td>
+<td>절점 → 선 → 부재 (<a href="https://www.dlubal.com/en/downloads-and-information/documents/online-manuals/rfem-6/000037">Nodes</a>)</td>
+<td>조립 시 5 mm 안의 점을 한 절점으로 병합 (<a href="https://manual.karamba3d.com/3-in-depth-component-reference/3.1-model/3.1.1-assemble-model.md">Assemble Model</a>)</td>
+<td>BHoM <code>Constraint6DOF</code>는 자유도마다 Free/Fixed/Spring+강성 (<a href="https://github.com/BHoM/BHoM/blob/main/Structure_oM/Constraints/Constraint6DOF.cs">Constraint6DOF.cs</a>), IFC는 Boolean 또는 강성값 (<a href="https://github.com/buildingSMART/IFC4.3.x-development/blob/master/docs/schemas/resource/IfcStructuralLoadResource/Entities/IfcBoundaryNodeCondition.md">IfcBoundaryNodeCondition</a>)</td>
+</tr>
+<tr>
+<td>부재 방향</td>
+<td><code>*ELEMENT</code>의 <code>ANGLE</code>(beta)</td>
+<td>FRAME LOCAL AXES 표 (<a href="https://www.strand7.com/strand7r3help/Content/Topics/FileFormats/FileFormatsSAP2000FileDefinitionTables.htm?TocPath=File+Formats%7CSAP2000+File%7C_____2">Strand7의 SAP2000 표 목록</a>)</td>
+<td>시작→끝 절점 방향 (<a href="https://www.dlubal.com/en/downloads-and-information/documents/online-manuals/rfem-6/000039">Members</a>)</td>
+<td>국부 Y를 전역 XY에 평행하게 두고, 연직 판정 임계값을 문서화 (<a href="https://manual.karamba3d.com/3-in-depth-component-reference/3.1-model/3.1.14-orientate-element">Orientate Element</a>)</td>
+<td>OpenSees <code>vecxz</code> 벡터 (<a href="https://openseespydoc.readthedocs.io/en/latest/src/LinearTransf.html">LinearTransf</a>), PyNite <code>rotation</code>(도) (<a href="https://github.com/JWock82/Pynite/blob/main/Pynite/FEModel3D.py">FEModel3D.py</a>), BHoM <code>OrientationAngle</code> (<a href="https://github.com/BHoM/BHoM/blob/main/Structure_oM/Elements/Bar.cs">Bar.cs</a>) — 규약이 서로 다름</td>
+</tr>
+<tr>
+<td>단부해제</td>
+<td><code>*FRAME-RLS</code> 양단 6자유도, 부분 고정값 허용</td>
+<td>releases</td>
+<td>부재 힌지. 트러스 = 양단 모멘트 힌지 보 (<a href="https://www.dlubal.com/en/downloads-and-information/documents/online-manuals/rfem-6/006106">Main | Members</a>, 스니펫)</td>
+<td>굽힘 강성 끄기로 트러스 (<a href="https://manual.karamba3d.com/3-in-depth-component-reference/3.1-model/3.1.6-create-linear-element/3.1.6-line-to-beam.md">LineToBeam</a>)</td>
+<td>PyNite 12개 플래그 <code>def_releases</code>, BHoM <code>BarRelease</code> = 양단 <code>Constraint6DOF</code> (<a href="https://github.com/BHoM/BHoM/blob/main/Structure_oM/Constraints/BarRelease.cs">BarRelease.cs</a>)</td>
+</tr>
+<tr>
+<td>강체 오프셋</td>
+<td><code>*OFFSET</code> GLOBAL/ELEMENT 선택</td>
+<td>insertion point / end offset</td>
+<td>—</td>
+<td>편심 표시</td>
+<td>OpenSees <code>-jntOffset</code>는 <strong>전역</strong>, BHoM <code>Offset</code>은 <strong>국부</strong> 좌표</td>
+</tr>
+<tr>
+<td>물리 부재 vs 해석 요소</td>
+<td>Member Assignment</td>
+<td>비지지 길이를 골조에서 자동 계산</td>
+<td>부재 = 선 위의 물리 객체, member set = 설계 단위 (<a href="https://www.dlubal.com/en/downloads-and-information/documents/online-manuals/rfem-6/000044">Member Sets</a>)</td>
+<td>식별 문자열·정규식으로 부재 선택</td>
+<td>PyNite <code>PhysMember</code>가 내부 절점에서 자동 분할 (<a href="https://github.com/JWock82/Pynite/blob/main/Pynite/PhysMember.py">PhysMember.py</a>), Speckle v2 <code>parent</code> 연결 (<a href="https://github.com/specklesystems/speckle-sharp/blob/main/Objects/Objects/Structural/Geometry/Element1D.cs">Element1D.cs</a>)</td>
+</tr>
+<tr>
+<td>하중 분류</td>
+<td><code>*STLDCASE</code> 유형 코드(D, L, W, E…)가 조합 자동 생성의 입력</td>
+<td>load pattern → load case → combination (<a href="https://web.wiki.csiamerica.com/wiki/spaces/kb/pages/2005362">CSI KB Load case</a>)</td>
+<td>load case → action → design situation → 조합 (<a href="https://www.dlubal.com/en/downloads-and-information/documents/online-manuals/rfem-6/000256">Combination Wizards</a>)</td>
+<td>하중 경우 + 조합 컴포넌트</td>
+<td>IFC LOAD_GROUP → LOAD_CASE → LOAD_COMBINATION, 경우-조합 쌍마다 계수 (<a href="https://github.com/buildingSMART/IFC4.3.x-development/blob/master/docs/schemas/domain/IfcStructuralAnalysisDomain/Entities/IfcStructuralLoadGroup.md">IfcStructuralLoadGroup</a>)</td>
+</tr>
+<tr>
+<td>조합</td>
+<td><code>*LOADCOMB</code> KIND(GEN/STEEL/CONC…), 선형합·SRSS (<a href="https://manual.midasuser.com/EN_Common/Gen/865/Start/07_Results/Combinations.htm">Combinations</a>)</td>
+<td>합·포락 (<a href="https://web.wiki.csiamerica.com/wiki/spaces/kb/pages/2003069">Load combination</a>)</td>
+<td>하중조합(비선형용) / 결과조합(중첩) 구분</td>
+<td>3.1부터 포락 조합 (<a href="https://manual.karamba3d.com/new-in-karamba3d-3.1">New in 3.1</a>)</td>
+<td>BHoM <code>(계수, 경우)</code> 목록, 조합이 다른 조합을 참조 가능 (<a href="https://github.com/BHoM/BHoM/blob/main/Structure_oM/Loads/LoadCombination.cs">LoadCombination.cs</a>)</td>
+</tr>
+<tr>
+<td>P-Δ</td>
+<td>해석 제어 <code>PDEL-CTRL</code> (<a href="http://manual.midasuser.com/EN_Common/Gen/891/Start/14_Appendix/MGT_Command_List.htm">MGT Command List</a>)</td>
+<td>질량 기반 비반복 / 하중 조합 기반 반복, 선형 경우 전체에 적용 (<a href="https://docs.csiamerica.com/help-files/etabs/Menus/Define/Preset_P_Delta_Options.htm">Preset P-Delta Options</a>)</td>
+<td>조합 마법사가 불완전성 경우 생성</td>
+<td><code>AnalyzeThII</code>: 모든 경우의 최대 압축력 하나로 강성 1회(보수적) 또는 경우별 (<a href="https://manual.karamba3d.com/3-in-depth-component-reference/3.5-algorithms/3.5.2-analyzethii">AnalyzeThII</a>)</td>
+<td>PyNite는 <strong>조합마다</strong> 반복 (<a href="https://github.com/JWock82/Pynite/blob/main/Pynite/FEModel3D.py">FEModel3D.py</a>), OpenSees는 요소별 좌표변환 선택 (<a href="https://openseespydoc.readthedocs.io/en/latest/src/geomTransf.html">geomTransf</a>)</td>
+</tr>
+<tr>
+<td>질량</td>
+<td><code>*LOADTOMASS</code>(하중 경우 → 질량)</td>
+<td>mass source</td>
+<td>—</td>
+<td>질량·무게중심 출력</td>
+<td>PyNite <code>mass_combo_name</code></td>
+</tr>
+<tr>
+<td>단위</td>
+<td>파일 머리 <code>*UNIT</code> 한 번</td>
+<td>PROGRAM CONTROL 표</td>
+<td>—</td>
+<td>형상 단위와 입출력 단위가 따로 (<a href="https://manual.karamba3d.com/2-getting-started/2-getting-started-1/2.3-physical-units.md">Physical Units</a>)</td>
+<td>PyNite는 단위 체계가 없고 중력 기본값 1.0</td>
+</tr>
+<tr>
+<td>결과</td>
+<td>표·그림</td>
+<td>표</td>
+<td>결과 트리</td>
+<td>모델에 결과를 붙여 다음 단계로 전달 (<a href="https://manual.karamba3d.com/3-in-depth-component-reference/3.5-algorithms/3.5.1-analyze">Analyze</a>)</td>
+<td>IFC 결과 묶음에 이론 차수와 <code>IsLinear</code>(중첩 가능 여부) (<a href="https://github.com/buildingSMART/IFC4.3.x-development/blob/master/docs/schemas/domain/IfcStructuralAnalysisDomain/Entities/IfcStructuralResultGroup.md">IfcStructuralResultGroup</a>), BHoM <code>BarForce</code>는 (부재, 경우, 모드, 위치)로 키 (<a href="https://github.com/BHoM/BHoM/blob/main/Structure_oM/Results/Bar%20Results/BarForce.cs">BarForce.cs</a>)</td>
+</tr>
+</tbody>
+</table></div>
+<p><strong>가장 중요한 교훈은 CSI의 세 층 분리다.</strong> 하중 패턴은 공간 분포, 해석 경우는 패턴을 가해 실제로 푸는 해석, 조합은 경우 결과의 합이나 포락이다 (<a href="https://web.wiki.csiamerica.com/wiki/spaces/kb/pages/2011279/Load+combination+FAQ">CSI KB Load combination FAQ</a>). 결과 합산은 선형 해석에서만 성립한다. P-Δ처럼 비선형인 해석은 조합마다 따로 풀어야 한다. PyNite도 P-Δ를 조합 단위로 반복하고 (<a href="https://github.com/JWock82/Pynite/blob/main/Pynite/FEModel3D.py">FEModel3D.py</a>), IFC는 결과 묶음에 <code>IsLinear</code>를 붙여 이 구분을 데이터로 남긴다. S-18의 LRFD 조합은 23개이므로, 계약이 이 구분을 담지 않으면 P-Δ 결과를 잘못 합산하는 오류가 구조적으로 생길 수 있다(추론).</p>
+<p><strong>둘째 교훈은 해석 모델의 수준이다.</strong> Awatif는 데이터를 의미(파라메트릭 구성요소) → 이상화(곡선·면) → 이산(유한요소 메시)의 세 층으로 나누고, 이 절차가 대부분의 FEM 프로그램에 공통이라고 설명한다 (<a href="https://awatif.co/blog/awatif-new-data-structure-for-structural-engineering/">Awatif 블로그</a>). VIDE 계약은 가운데 층(해석선·절점)에 두고, 요소 분할은 해석 어댑터가 맡는 것이 맞다(추론).</p>
+<h3>2.2 설계 검토 흐름은 자동값과 사용자 덮어쓰기를 함께 저장한다</h3>
+<div aria-label="조사 표 3" class="table-scroll" role="region" tabindex="0"><table>
+<thead>
+<tr>
+<th>프로그램</th>
+<th>설계 단위</th>
+<th>비지지 길이·K·Cb</th>
+<th>결과 표시</th>
+<th>한국 기준</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>midas Gen</td>
+<td>Member Assignment로 여러 해석 요소를 한 부재로 묶음</td>
+<td>Ly·Lz를 입력하지 않으면 요소 길이 사용 (<a href="https://support.midasuser.com/hc/en-us/articles/24505746832025-Unbraced-Length">Unbraced Length</a>, 스니펫). K는 입력 또는 자동 계산 (<a href="https://gtc.midasuser.com/helpdesk/KB/View/10333732--design-how-is-effective-length-factor-calculated-">midas KB</a>)</td>
+<td>OK / OK*(강도 만족, 세장비 초과) / NG / NG*. 최대 검정비와 지배 조합, 전단비, 표에 Ly·Lz·Lb·Ky·Kz·Cmy·Cmz·Cb (<a href="http://manual.midasuser.com/EN_Common/Gen/885/Start/08_Design/Steel_Code_Check.htm">Steel Code Check</a>)</td>
+<td>구판 매뉴얼은 KSSC-LSD09 등. NX는 &quot;KDS 41 30:2022&quot; 설계표가 있음(제목만 확인, <a href="https://support.midasuser.com/hc/en-us/articles/57474427261465-DESIGN-STEEL-KDS-41-30-2022-TABLE-Steel-Member-Design-Forces">MIDAS Support</a>)</td>
+</tr>
+<tr>
+<td>SAP2000/ETABS</td>
+<td>프레임 객체</td>
+<td>비지지 길이 비(기본은 프로그램 계산 = 1), K, Cb 덮어쓰기(overwrite) (<a href="https://wiki.csiamerica.com/display/kb/Effective+length+factor">Effective length factor</a>)</td>
+<td>코드별 설계 매뉴얼 공개 (<a href="https://docs.csiamerica.com/manuals/sap2000/Design/SFD-AISC-360-05.pdf">SFD-AISC-360-05</a>)</td>
+<td>ETABS KBC 2016 강골조(v18+). KDS 강구조 항목은 요약 문구가 뒤섞여 있어 미확인 (<a href="https://www.csiamerica.com/products/etabs/enhancements">ETABS enhancements</a>)</td>
+</tr>
+<tr>
+<td>RFEM 6</td>
+<td>member set</td>
+<td>설계 add-on에서 지정</td>
+<td>&quot;Design Check Details&quot; 트리: 입력 → 중간값 → 조항 결과 (<a href="https://www.dlubal.com/en/downloads-and-information/documents/online-manuals/rfem-6-steel-design/000286">Design Check Details</a>)</td>
+<td>KDS 지원 미확인</td>
+</tr>
+<tr>
+<td>Karamba3D</td>
+<td>요소·그룹</td>
+<td>끝에서 세 개 이상 부재가 모이는 절점까지 걸어 좌굴 길이를 추정. 매뉴얼 스스로 트러스 현재 등에서 **&quot;unsafe&quot;**라고 경고 (<a href="https://manual.karamba3d.com/3-in-depth-component-reference/3.5-algorithms/3.5.8-optimize-cross-section">Optimize Cross Section</a>)</td>
+<td>Util 합계와 N·V·M별 분해, 지배 하중 경우, 부재당 기본 3점 표본. EC3만 지원 (<a href="https://manual.karamba3d.com/3-in-depth-component-reference/3.6-results/3.7.1-general-results/3.6.6-utilization-of-elements">Utilization</a>)</td>
+<td>없음</td>
+</tr>
+</tbody>
+</table></div>
+<p>공통 원칙은 <strong>설계 변수를 해석 모델 위의 덮어쓰기 층으로 두는 것</strong>이다. 기하에서 자동값을 만들고, 사용자가 값별로 덮어쓰며, 보고서는 둘을 구분해 보인다. Karamba의 &quot;unsafe&quot; 경고는 건축가용 도구의 가장 큰 위험이 <strong>자동 추정한 K·Lb</strong>라는 점을 보여 준다. 따라서 이 값은 항상 보이고, 편집할 수 있고, &quot;가정&quot;으로 표시돼야 한다. 단면 최적화에서 Karamba는 &quot;순서 목록에서 처음 만족하는 단면&quot;을 기본 5회 반복한다. S-18에서는 무게순 첫 만족 단면이 최경량이 아니었던 결함이 있었다(RESEARCH-08 §4). 따라서 VIDE는 전수 비교를 기본으로 해야 한다.</p>
+<h3>2.3 교환 형식</h3>
+<div aria-label="조사 표 4" class="table-scroll" role="region" tabindex="0"><table>
+<thead>
+<tr>
+<th>형식</th>
+<th>형태</th>
+<th>공개·안정성</th>
+<th>VIDE 용도</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>midas MGT/MCT</td>
+<td><code>*KEYWORD</code> 블록 + <code>;</code> 주석 필드 순서 + 쉼표 행. 공식 Command List·Quick Reference가 있으나 판 번호가 붙은 스키마는 없음 (<a href="http://manual.midasuser.com/EN_Common/Gen/891/Start/14_Appendix/MGT_Command_List.htm">MGT Command List</a>). 가져올 때 하중·지점은 <strong>누적</strong>되고 기하는 <strong>교체</strong>됨 (<a href="http://manual.midasuser.com/EN_Common/Gen/925/Start/11_Tools/MGT_Command_Shell.htm">MGT Command Shell</a>)</td>
+<td>내보낸 파일에 흔한 <code>*USE-STLD</code>는 공식 페이지에서 미확인</td>
+<td><strong>쓰기 전용 부분집합</strong> 우선: UNIT, NODE, ELEMENT, MATERIAL, SECTION, CONSTRAINT, FRAME-RLS, OFFSET, STLDCASE, SELFWEIGHT, CONLOAD, BEAMLOAD, LOADCOMB, LOADTOMASS, STORY. 가져오기는 판 차이 위험으로 후순위</td>
+</tr>
+<tr>
+<td>MIDAS API (NX)</td>
+<td>JSON REST. 중계 서버 → WebSocket → 실행 중인 GEN/CIVIL NX. 사용자별 MAPI-Key (<a href="https://support.midasuser.com/hc/en-us/articles/30212837484441-How-to-work-MIDAS-CIVIL-NX-Open-API">How to work MIDAS CIVIL NX Open API?</a>, 스니펫). <code>/db/NODE</code>, <code>/db/ELEM</code>, <code>/db/STLD</code>, <code>/db/LCOM</code> 등 (<a href="https://midas-rnd.github.io/midasapi-python/">MIDAS Python docs</a>)</td>
+<td>NX 설치·라이선스가 필요. 약관 미확인</td>
+<td>지금은 쓸 수 없음. 4글자 키는 계약의 이름 선례</td>
+</tr>
+<tr>
+<td>CSI .s2k/.e2k</td>
+<td>이름 붙은 표의 집합(JOINT COORDINATES, CONNECTIVITY - FRAME, LOAD PATTERN DEFINITIONS …) (<a href="https://www.strand7.com/strand7r3help/Content/Topics/FileFormats/FileFormatsSAP2000FileDefinitionTables.htm?TocPath=File+Formats%7CSAP2000+File%7C_____2">Strand7 목록</a>)</td>
+<td>행 문법은 이번 조사에서 미확인</td>
+<td>후순위</td>
+</tr>
+<tr>
+<td>RFEM 6 API</td>
+<td>SOAP 웹서비스(구) / gRPC Dlubal API(신, 초기 시험 약 15배 빠르다는 업체 주장) (<a href="https://www.dlubal.com/en/support-and-learning/support/product-features/002956">Dlubal API</a>)</td>
+<td>업체 자체 보고</td>
+<td>해당 없음</td>
+</tr>
+<tr>
+<td>IFC 구조해석 뷰(SAV)</td>
+<td>해석 모델·곡선 부재·점 연결·편심·하중 묶음·결과 묶음</td>
+<td>채택이 약함. Archicad에서는 &quot;실험 기능&quot; (<a href="https://community.graphisoft.com/t5/Collaboration-with-other/Structural-Analytical-Model-Exchange/ta-p/304054">Graphisoft</a>), CAD는 보통 물리 형상 뷰만 내보냄 (<a href="https://www.dlubal.com/en/support-and-learning/support/knowledge-base/001472">Dlubal KB 001472</a>)</td>
+<td>의미 정의만 참고</td>
+</tr>
+<tr>
+<td>Speckle</td>
+<td>v2 <code>Objects.Structural</code>은 저장소 보관(archived) (<a href="https://github.com/specklesystems/speckle-sharp">speckle-sharp</a>). v3 SDK에는 Structural 네임스페이스가 없고 <code>EtabsObject</code> 같은 호스트별 객체로 바뀜 (<a href="https://github.com/specklesystems/speckle-sharp-sdk">speckle-sharp-sdk</a>, <a href="https://docs.speckle.systems/developers/data-schema/connectors/etabs-schema">ETABS schema</a>)</td>
+<td>공통 구조 스키마를 사실상 포기</td>
+<td>전송·뷰어 선택지일 뿐 계약으로 쓰지 않음</td>
+</tr>
+<tr>
+<td>BHoM 어댑터</td>
+<td>ETABS·SAP2000·Robot·GSA·RFEM6·<strong>MidasCivil</strong> 어댑터, 모두 LGPL-3 (<a href="https://github.com/BHoM/MidasCivil_Toolkit">MidasCivil_Toolkit</a>)</td>
+<td>유지 중(같은 날 일괄 갱신, 기능 범위는 미확인)</td>
+<td>MCT 쓰기 구현 참고</td>
+</tr>
+<tr>
+<td>OpenSees <code>print -JSON</code></td>
+<td>모델 덤프 (<a href="https://openseespydoc.readthedocs.io/en/latest/src/printModel.html">printModel</a>)</td>
+<td>출력 형식일 뿐 판이 붙은 입력 스키마가 아님</td>
+<td>쓰지 않음</td>
+</tr>
+</tbody>
+</table></div>
+<p>Karamba 3.1은 ETABS E2K·SAP2000 S2K·SAF·IFC 내보내기를 둔다 (<a href="https://manual.karamba3d.com/new-in-karamba3d-3.1">New in 3.1</a>). 초기 설계 도구가 최종 검토는 상용 프로그램에 넘기는 것이 업계 관행이다. 한국에서 그 대상은 흔히 midas다. 다만 사용자 확인(2026-09-29)으로는 구조사무소와 보통 <strong>CAD·Rhino 파일</strong>로 주고받으며, MGT로 넘겨 midas에서 바로 검토한 것은 S-18의 고유 방식이다. 따라서 VIDE의 기본 교환은 CAD·Rhino 파일이고, MGT 쓰기는 프로젝트별 선택 내보내기로 둔다.</p>
+<h3>2.4 검증 공개 수준은 도구마다 크게 다르다</h3>
+<p>CSI는 예제별 검증 PDF를 공개한다. 각 PDF에는 입력, 독립 해(교과서 값), 차이 %가 모두 있다 (<a href="https://web.wiki.csiamerica.com/wiki/spaces/doc/pages/1245534/Verification+examples">CSI Verification examples</a>). Bentley STAAD.Pro는 AISC 설계 예제를 다시 풀어 중간값까지 공개한다. Dlubal도 검증 예제 목록을 공개하지만 스크립트로는 페이지가 렌더링되지 않았다 (<a href="https://www.dlubal.com/en/downloads-and-information/examples-and-tutorials/verification-examples">Dlubal Verification Examples</a>). midas의 &quot;Benchmarks &amp; Verification Manuals&quot; 항목은 조사 시점에 404였다 (<a href="https://globalsupport.midasuser.com/helpdesk/KB/View/5944326-benchmarks--verification-manuals">midas KB</a>). Karamba는 공식 검증 문서 없이 2018년 석사논문(EC3 검정의 RFEM 비교)을 안내할 뿐이다 (<a href="https://discourse.mcneel.com/t/validation-reports/73781">McNeel 포럼</a>). PyNite는 교과서 문제를 CI에서 매번 돌린다 (<a href="https://github.com/JWock82/Pynite">PyNite</a>). 파라메트릭 도구 생태계에서 검증 자료의 부족은 알려진 신뢰도 약점이다. VIDE는 첫 단계부터 자체 검증 목록을 함께 배포하는 것으로 이를 차별점으로 삼을 수 있다(추론).</p>
+</section><section class="doc-section" id="research-09-structure-analysis-methods-section-3"><h2><span aria-hidden="true" class="section-num">03 /</span> 해석 모델 계약 제안</h2>
+<p>계약의 물리 필드는 ARCH가 소유한다(AI.md §1). 여기서는 필드 후보와 각 필드가 따른 선례만 제안한다. 형태는 <strong>문자열 ID를 가진 평면 배열</strong>이다. 하중은 부재 밑에 넣지 않고 대상 집합을 참조한다(BHoM 방식). 이렇게 하면 약 2,000부재에서도 JSON이 작고 차분(diff)하기 쉽다(추론).</p>
+<div aria-label="조사 표 5" class="table-scroll" role="region" tabindex="0"><table>
+<thead>
+<tr>
+<th>묶음</th>
+<th>핵심 필드</th>
+<th>따른 선례</th>
+<th>계약에서 정할 것</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>meta</code></td>
+<td><code>schemaVersion</code>, <code>units</code>{length, force, angle, temperature}, <code>gravity</code> 벡터, <code>modelType</code>, <code>source</code>(Rhino 문서·객체 GUID)</td>
+<td>Speckle ModelUnits (<a href="https://github.com/specklesystems/speckle-sharp/tree/main/Objects/Objects/Structural/Analysis">Analysis</a>), IFC <code>SelfWeightCoefficients</code> (<a href="https://github.com/buildingSMART/IFC4.3.x-development/blob/master/docs/schemas/domain/IfcStructuralAnalysisDomain/Entities/IfcStructuralLoadCase.md">IfcStructuralLoadCase</a>), midas <code>*UNIT</code></td>
+<td>내부 단위 하나와 표시 단위를 분리. 연직축을 명시</td>
+</tr>
+<tr>
+<td><code>nodes[]</code></td>
+<td><code>id</code>, <code>xyz</code>, <code>support</code>{dx…rz: <code>true</code>/<code>false</code>/강성값}, <code>supportAxes?</code>(경사 지점), <code>mass?</code></td>
+<td>BHoM Constraint6DOF, IFC BoundaryNodeCondition·ConditionCoordinateSystem (<a href="https://github.com/buildingSMART/IFC4.3.x-development/blob/master/docs/schemas/domain/IfcStructuralAnalysisDomain/Entities/IfcStructuralPointConnection.md">IfcStructuralPointConnection</a>)</td>
+<td>-1 같은 특수값 금지</td>
+</tr>
+<tr>
+<td><code>materials[]</code></td>
+<td><code>id</code>, <code>grade</code>(SS275·SM355 등), <code>E</code>, <code>G</code> 또는 <code>nu</code>, <code>density</code>, <code>Fy</code>, <code>Fu</code></td>
+<td>PyNite <code>add_material</code>, midas <code>*MATERIAL</code></td>
+<td>두께별 Fy 저감은 검정 층에서</td>
+</tr>
+<tr>
+<td><code>sections[]</code></td>
+<td><code>id</code>, <code>source</code>(KS 표/사용자), <code>shape</code>(H·BH·박스·강관·L·C) + 치수, 계산 성질 A·Iy·Iz·J·Zy·Zz·Avy·Avz·Cw</td>
+<td>PyNite <code>add_steel_section</code>, midas <code>*SECTION DBUSER</code>, BHoM SectionProperties (<a href="https://github.com/BHoM/BHoM/tree/main/Structure_oM/SectionProperties">폴더</a>)</td>
+<td>성질은 치수에서 엔진이 계산하고 KS 표와 대조</td>
+</tr>
+<tr>
+<td><code>members[]</code>(해석 요소)</td>
+<td><code>id</code>, <code>i</code>, <code>j</code>, <code>material</code>, <code>section</code>, <code>orientation</code>{<code>angle</code> 또는 <code>vector</code>}, <code>releases</code>{i[6], j[6]}, <code>offsets</code>{i, j, <code>frame</code>: global/local}, <code>kind</code>(flexural/truss/tensionOnly/compressionOnly), <code>parent</code></td>
+<td>midas <code>*ELEMENT</code>·<code>*FRAME-RLS</code>·<code>*OFFSET</code>, OpenSees <code>vecxz</code>·<code>-jntOffset</code>, BHoM Bar, Speckle v2 Element1D</td>
+<td>방향 규약 하나, 연직 부재 예외, 오프셋 좌표계</td>
+</tr>
+<tr>
+<td><code>physicalMembers[]</code></td>
+<td><code>id</code>(Rhino GUID 기반 안정 ID), 절점열, <code>role</code>(보·기둥·가새), <code>autoSplit</code></td>
+<td>PyNite PhysMember, RFEM 선 위 부재, GSA &quot;Members&quot; (<a href="https://github.com/arup-group/GSA-Grasshopper">GsaGH</a>)</td>
+<td>재분할 뒤에도 결과를 Rhino 객체로 되돌림</td>
+</tr>
+<tr>
+<td><code>stories[]</code>, <code>rigidLinks[]</code>, <code>diaphragms[]</code></td>
+<td>층 이름·높이, 주·종 절점과 자유도, 강막 여부</td>
+<td>midas <code>*STORY bFLDIAP</code>·<code>*RIGIDLINK</code></td>
+<td>강막은 지진·모드 단계에서</td>
+</tr>
+<tr>
+<td><code>loadPatterns[]</code></td>
+<td><code>id</code>, <code>nature</code>(D, L, Lr, S, W, E…), <code>actionType</code>(영구/변동/우발), <code>selfWeight</code> 벡터</td>
+<td>CSI load pattern, midas <code>LCTYPE</code>, IFC <code>IfcActionTypeEnum</code> (<a href="https://github.com/buildingSMART/IFC4.3.x-development/blob/master/docs/schemas/domain/IfcStructuralAnalysisDomain/Types/IfcActionTypeEnum.md">md</a>), BHoM Loadcase.Nature</td>
+<td><code>nature</code>가 KDS 41 10 15 조합 생성의 입력</td>
+</tr>
+<tr>
+<td><code>loads[]</code></td>
+<td><code>pattern</code>, <code>type</code>(절점·부재 집중·부재 분포·면·강제 변위), <code>targets[]</code>, <code>axis</code>(global/local), <code>projected</code>, 값과 위치(상대/절대)</td>
+<td>BHoM BarVaryingDistributedLoad (<a href="https://github.com/BHoM/BHoM/blob/main/Structure_oM/Loads/BarVaryingDistributedLoad.cs">file</a>), midas <code>*BEAMLOAD</code>, PyNite <code>FX</code>(전역)/<code>Fx</code>(국부)</td>
+<td>좌표축 표기를 대소문자에 맡기지 않음</td>
+</tr>
+<tr>
+<td><code>analysisCases[]</code></td>
+<td><code>id</code>, <code>kind</code>(linearStatic, pDelta, modal, 이후 responseSpectrum), <code>patterns[{id, factor}]</code> 또는 대상 조합, P-Δ{방법, 허용치, 최대 반복}</td>
+<td>CSI load case, midas <code>PDEL-CTRL</code>, Karamba AnalyzeThII</td>
+<td>P-Δ는 조합마다 풀어야 함</td>
+</tr>
+<tr>
+<td><code>massSource</code></td>
+<td>자중 포함, 패턴·계수, 방향</td>
+<td>midas <code>*LOADTOMASS</code>, PyNite <code>analyze_modal</code></td>
+<td>모드 단계에서 사용</td>
+</tr>
+<tr>
+<td><code>combinations[]</code></td>
+<td><code>id</code>, <code>kind</code>(add, envelope, abs, srss), <code>terms[{ref, factor}]</code>, <code>limitState</code>(강도/사용성), <code>generatedBy</code>(KDS 규칙 ID 또는 user), <code>tags</code></td>
+<td>BHoM (계수, 경우) 쌍, IFC 쌍별 계수, midas <code>KIND</code>, PyNite <code>combo_tags</code></td>
+<td>Speckle v2의 병렬 배열(경우 목록 + 계수 목록)은 어긋나기 쉬워 피함</td>
+</tr>
+<tr>
+<td><code>designMembers[]</code></td>
+<td><code>elements[]</code>, <code>Ly</code>·<code>Lz</code>·<code>Lb</code>·<code>Ky</code>·<code>Kz</code>·<code>Cb</code>·<code>Cm</code>, 값마다 {auto, user, 근거}</td>
+<td>midas Member Assignment, CSI overwrite, RFEM member set</td>
+<td>자동값은 &quot;가정&quot; 표시</td>
+</tr>
+<tr>
+<td><code>results</code></td>
+<td>결과 묶음{대상, <code>theory</code>(1차/2차), <code>isLinear</code>}, 절점 변위·반력, 부재력(부재, 경우, 모드, 위치), 모드 주기·참여율</td>
+<td>IFC StructuralResultGroup, BHoM BarForce</td>
+<td>2차 결과에는 합산 금지 표시</td>
+</tr>
+<tr>
+<td><code>checks</code></td>
+<td>부재별 검정비, 지배 조합, 조항, 중간값 트리, 상태(pass/fail/incomplete/error), 세장비 초과 별도 표시</td>
+<td>RFEM Design Check Details, midas OK*·NG*, Karamba Util 분해, S-18 <code>assessment</code> 4상태(RESEARCH-08 §3.7)</td>
+<td>검토하지 않은 항목을 명시</td>
+</tr>
+</tbody>
+</table></div>
+<p>계약에서 피해야 할 함정은 모두 출처에 증거가 있다.</p>
+<div aria-label="조사 표 6" class="table-scroll" role="region" tabindex="0"><table>
+<thead>
+<tr>
+<th>함정</th>
+<th>증거</th>
+<th>계약 규칙</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>방향각 규약 불일치</td>
+<td>BHoM은 &quot;국부 z = 전역 Z&quot;에서 회전하고 연직 부재는 별도 규약 (<a href="https://github.com/BHoM/BHoM/blob/main/Structure_oM/Elements/Bar.cs">Bar.cs</a>). IFC는 <code>Axis</code> 방향 (<a href="https://github.com/buildingSMART/IFC4.3.x-development/blob/master/docs/schemas/domain/IfcStructuralAnalysisDomain/Entities/IfcStructuralCurveMember.md">IfcStructuralCurveMember</a>). OpenSees는 <code>vecxz</code>, PyNite는 자체 기준의 <code>rotation</code></td>
+<td>규약 하나와 연직 예외를 정하고, 엔진 간 회전 시험을 둠(PyNite <code>test_member_rotation</code> 선례)</td>
+</tr>
+<tr>
+<td>오프셋 좌표계</td>
+<td>OpenSees는 전역, BHoM은 국부. IFC는 편심 모델이 둘이고 &quot;지역 합의&quot;에 맡김 (<a href="https://github.com/buildingSMART/IFC4.3.x-development/blob/master/docs/schemas/domain/IfcStructuralAnalysisDomain/Entities/IfcRelConnectsWithEccentricity.md">IfcRelConnectsWithEccentricity</a>)</td>
+<td><code>frame</code> 필드 필수</td>
+</tr>
+<tr>
+<td>지점과 단부해제 혼동</td>
+<td>BHoM이 &quot;Releases와 혼동하지 말 것&quot;이라고 명시. IFC 단부해제는 부재 국부축 기준 (<a href="https://github.com/buildingSMART/IFC4.3.x-development/blob/master/docs/schemas/domain/IfcStructuralAnalysisDomain/Entities/IfcRelConnectsStructuralMember.md">IfcRelConnectsStructuralMember</a>)</td>
+<td>같은 6자유도 타입을 쓰되 소속을 분리</td>
+</tr>
+<tr>
+<td>단위</td>
+<td>PyNite는 단위 체계가 없고 중력 기본값이 1.0 (<a href="https://github.com/JWock82/Pynite/blob/main/Pynite/FEModel3D.py">FEModel3D.py</a>). Karamba는 단위 체계가 둘</td>
+<td>모델 수준에서 한 번 선언. Rhino 문서(보통 mm)와 분리</td>
+</tr>
+<tr>
+<td>P-Δ 결과 합산</td>
+<td>PyNite는 조합별 반복, IFC <code>IsLinear</code></td>
+<td>2차 결과는 조합으로 풀고 합산하지 않음</td>
+</tr>
+<tr>
+<td>병합 허용오차</td>
+<td>Karamba 기본 5 mm 병합과 중복선 제거 정보 출력 (<a href="https://manual.karamba3d.com/3-in-depth-component-reference/3.1-model/3.1.6-create-linear-element/3.1.6-line-to-beam.md">LineToBeam</a>), PyNite <code>merge_duplicate_nodes(tolerance=0.001)</code></td>
+<td>허용오차를 사용자에게 보이고, 병합·제거 목록을 결과에 남김</td>
+</tr>
+<tr>
+<td>기구(불안정) 모델</td>
+<td>Karamba 문제 해결 목록: 지점 누락, 회전 지점 옆 힌지, 축 회전 부재, 트러스 절점 회전 (<a href="https://manual.karamba3d.com/troubleshooting/4.3.-miscellaneous-problems/4.1.5-definitions-and-components">Troubleshooting</a>)</td>
+<td>해석 전 모델 점검에서 해당 자유도를 뷰포트에 표시(S-18 기구 탐지 이식)</td>
+</tr>
+</tbody>
+</table></div>
+</section><section class="doc-section" id="research-09-structure-analysis-methods-section-4"><h2><span aria-hidden="true" class="section-num">04 /</span> midas 없는 검증 계획</h2>
+<p>검증은 여섯 층으로 쌓는다. 순서는 ① 닫힌 해, ② 공개 벤치마크(AISC·CSI·OpenSees), ③ PyNite 차분 시험, ④ 불변량, ⑤ 한국 고유 손계산과 전문가 검토, ⑥ 선택적 상용 교차다. S-18은 이미 ①③과 MGT 왕복을 갖췄다(닫힌 해 43건, PyNite 대비 변위 차 ≤ 3e-10 mm, RESEARCH-08 §3.1). 이 절은 거기에 ②④⑤를 더한다. 아래 BM 번호는 이 문서 안의 표기이며 제품 ID가 아니다.</p>
+<h3>4.1 시험 케이스</h3>
+<div aria-label="조사 표 7" class="table-scroll" role="region" tabindex="0"><table>
+<thead>
+<tr>
+<th>번호</th>
+<th>이름</th>
+<th>출처</th>
+<th>입력</th>
+<th>기대값</th>
+<th>허용오차</th>
+<th>단계</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>BM-01</td>
+<td>AISC 2차해석 벤치마크 Case 1(횡지지 보-기둥)</td>
+<td><a href="https://www.mastan2.com/stabilityfun/7_SecondOrderEffects.pdf">MASTAN2 LM7</a>, <a href="https://raw.githubusercontent.com/JWock82/PyNite/main/Testing/test_AISC_PDelta_benchmarks.py">PyNite 시험</a>, <a href="https://web.wiki.csiamerica.com/wiki/spaces/etabs/pages/1474593/AISC+stability+benchmark+problems+P-+and+P-+effect">CSI ETABS KB</a></td>
+<td>W14x48 강축, 핀-핀 L = 28 ft(336 in), E = 29,000 ksi, I = 484 in⁴, 등분포 0.2 kip/ft, P = 0·150·300·450 kip, 중간 절점 1개 이상, 전단변형 제외</td>
+<td>중앙 M = 235·269·313·375 kip-in, 중앙 Δ = 0.197·0.224·0.261·0.311 in</td>
+<td>AISC 기준 모멘트 3%·처짐 5%. 닫힌 식 대비 1%(추론)</td>
+<td>1(P-Δ)</td>
+</tr>
+<tr>
+<td>BM-02</td>
+<td>같은 벤치마크 Case 2(캔틸레버)</td>
+<td>위와 같음</td>
+<td>같은 단면, L = 28 ft 캔틸레버, 끝 수평 1.0 kip, P = 0·100·150·200 kip, 중간 절점 2개</td>
+<td>기부 M = 336·469·598·848 kip-in, 끝 Δ = 0.901·1.33·1.75·2.56 in</td>
+<td>같음</td>
+<td>1</td>
+</tr>
+<tr>
+<td>BM-03</td>
+<td>닫힌 해 캔틸레버 P-Δ</td>
+<td><a href="https://raw.githubusercontent.com/JWock82/PyNite/main/Testing/test_AISC_PDelta_benchmarks.py">PyNite 시험</a></td>
+<td>L = 20 ft, H = 5 kip, P = 100 kip, I = 100 in⁴</td>
+<td>M = HL·tanα/α, y = (HL³/3EI)·3(tanα−α)/α³, α = √(PL²/EI)</td>
+<td>1%</td>
+<td>1</td>
+</tr>
+<tr>
+<td>BM-04</td>
+<td>CSI 1-019 강접 골조 좌굴</td>
+<td><a href="https://docs.csiamerica.com/manuals/sap2000/Verification/Analysis/Frames/Problem%201-019.pdf">CSI Problem 1-019</a></td>
+<td>1층 1경간 144×144 in, W8X31(A = 9.12 in², I = 110 in⁴), E = 29,900 ksi, 휨변형만(면적 배율 100,000, 전단면적 0), 면내 좌굴</td>
+<td>임계하중 280.19 kip(고전 안정 교과서 1961). 부재당 요소 1·2·4개에서 CSI 결과 280.98·280.24·280.19</td>
+<td>요소 4개 기준 0.1%, 요소 수에 따라 단조 수렴(추론)</td>
+<td>좌굴(2)</td>
+</tr>
+<tr>
+<td>BM-05</td>
+<td>OpenSees 2D 포털 골조 주기</td>
+<td><a href="https://openseespydoc.readthedocs.io/en/latest/src/PortalFrame2d.html">OpenSeesPy Portal Frame 2d</a>, <a href="https://github.com/OpenSees/OpenSees/blob/master/EXAMPLES/verification/PortalFrame2d.tcl">PortalFrame2d.tcl</a></td>
+<td>2경간 7층, E = 29,500, W24 보, 층고 162/156 in, 집중 질량</td>
+<td>주기 1.27321, 0.43128, 0.24204, 0.16018, 0.11899, 0.09506, 0.07951 s(SAP2000과 동일)</td>
+<td>1%(추론)</td>
+<td>모드(2)</td>
+</tr>
+<tr>
+<td>BM-06</td>
+<td>AISC 설계 예제 F.1-2B(3등분점 횡지지 보 LTB)</td>
+<td><a href="https://docs.bentley.com/LiveContent/web/STAAD.Pro%20Help-v2024/en/topics/Verification/Design%20Steel%20AISC%20360/v-stpst_AISC_360-16_W_LTB_Test_F.1-2B.html">STAAD 검증 페이지</a></td>
+<td>W18×50, 단순 경간 35 ft, A992 Fy = 50 ksi, 양단·3등분점 횡지지(Lb = 11.7 ft)</td>
+<td>Cb = 1.01(중앙 구간, 지배)·1.45(끝 구간), Mp = 5,050 kip-in, Lp = 5.8339 ft, Lr = 16.964 ft, rts = 0.16521 ft, φbMn = 304.7 kip-ft(STAAD 305.5), 지배 조항 F2.2</td>
+<td>중간값 0.5~1%(설계 예제의 반올림 고려, 추론), 지배 조항 일치</td>
+<td>1(검정)</td>
+</tr>
+<tr>
+<td>BM-07</td>
+<td>같은 계열 LTB·Cb 풀이(AISC 360-22)</td>
+<td><a href="https://www.dlubal.com/en/support-and-learning/support/knowledge-base/001884">Dlubal KB 001884</a>, <a href="https://www.dlubal.com/en/support-and-learning/support/knowledge-base/001679">KB 001679</a></td>
+<td>W18X50, 등분포, 양단·3등분점 횡지지, A992</td>
+<td>수치 미추출 — 수동 확인 필요</td>
+<td>BM-06과 같음</td>
+<td>1</td>
+</tr>
+<tr>
+<td>BM-08</td>
+<td>AISC 설계 예제 E.1·F.1-1·F.1-3·F.2·G.1·H.1</td>
+<td><a href="https://www.aisc.org/aisc/publications/steel-construction-manual/manual-companion-for-16th-edition/">AISC Manual Companion</a> (aisc.org는 스크립트 접근 403, 브라우저로 수동 내려받기)</td>
+<td>압축 E3, 휨 F2·F3, 채널, 전단 G2, 조합 H1-1</td>
+<td>예제 번호는 장 체계로 추정한 것이며 미확인. 내려받은 뒤 채움</td>
+<td>중간값 0.5~1%, 판정 완전 일치</td>
+<td>1</td>
+</tr>
+<tr>
+<td>BM-09</td>
+<td>B1 증폭계수 연구</td>
+<td><a href="https://www.mastan2.com/stabilityfun/7_SecondOrderEffects.pdf">MASTAN2 LM7</a></td>
+<td>M1/M2 = +0.75·0·−0.75, P/Pe = 0~0.9</td>
+<td>엄밀 2차해석 결과 대 부록 8 식 A-8-3의 B1(동봉 스프레드시트)</td>
+<td>3%(추론)</td>
+<td>2</td>
+</tr>
+<tr>
+<td>BM-10</td>
+<td>PyNite 차분 시험</td>
+<td><a href="https://github.com/JWock82/Pynite">PyNite</a>(MIT, <a href="https://raw.githubusercontent.com/JWock82/PyNite/main/LICENSE">LICENSE</a>)</td>
+<td>무작위 소형 3D 골조: 단부해제, 회전한 국부축, 혼합 하중, 선형·P-Δ</td>
+<td>PyNite 결과</td>
+<td>선형 1e-6 상대(추론. S-18 선례는 3e-10 mm)</td>
+<td>1</td>
+</tr>
+<tr>
+<td>BM-11</td>
+<td>불변량</td>
+<td>표준 유한요소 관행(개별 출처 없음). PyNite 시험 폴더의 평형·침하·단부해제·회전·불안정 시험을 본뜸 (<a href="https://github.com/JWock82/PyNite/tree/main/Testing">Testing</a>)</td>
+<td>모든 fixture 모델</td>
+<td>Σ반력 + Σ하중 = 0, 전체 강체 회전 불변, 대칭 모델 → 대칭 결과, 선형 중첩 = 조합 결과, 단위계 불변, 절점 순서 불변, 기구 탐지</td>
+<td>평형 1e-8 상대(추론)</td>
+<td>1</td>
+</tr>
+<tr>
+<td>BM-12</td>
+<td>KS 단면 성질</td>
+<td>KS D 3502 무료 원문 보기 (<a href="https://standard.go.kr/KSCI/standardIntro/getStandardSearchView.do?menuId=919&amp;topMenuId=502&amp;upperMenuId=503&amp;ksNo=KSD3502&amp;tmprKsNo=KSD3502&amp;reformNo=15">e나라표준인증</a>)</td>
+<td>치수(h, b, t1, t2, r)</td>
+<td>엔진이 계산한 A·I·Z·J·Cw를 KS 표 값과 대조(S-18 H 34종, S-10 H 53종)</td>
+<td>0.5%(필렛 근사 차이, 추론)</td>
+<td>1</td>
+</tr>
+<tr>
+<td>BM-13</td>
+<td>KDS 하중조합 생성</td>
+<td>KDS 원문(<a href="https://www.kcsc.re.kr/standardCode/list">KCSC 목록</a>, 웹 뷰어) + S-18 LRFD 조합 23개</td>
+<td>하중 패턴 <code>nature</code> 집합</td>
+<td>조합 목록과 계수</td>
+<td>완전 일치, 구조기술사 검토</td>
+<td>1</td>
+</tr>
+<tr>
+<td>BM-14</td>
+<td>MGT 왕복·반입</td>
+<td>S-18 <code>mgt_roundtrip.py</code>(RESEARCH-08 §3.8)</td>
+<td>내보낸 MGT</td>
+<td>다시 읽은 모델 = 원 모델. midas에서 실제로 불러 해석 결과를 대조(§4.3)</td>
+<td>필드 완전 일치</td>
+<td>3</td>
+</tr>
+</tbody>
+</table></div>
+<p>CSI·AISC 문서는 저작권 문서다. 따라서 저장소에는 PDF를 복사하지 않고 입력과 독립 해 값만 식으로 다시 유도해 넣는다. 예제 ID와 URL은 인용으로 남긴다(추론). BM-01·02의 PyNite 값은 AISC 해설 그림의 &quot;전단변형 제외&quot; 값이다. 조사 노트에서 닫힌 식으로 같은 값을 재현했으므로(Case 2 기부 M 336.0·469.1·598.7·849.0), fixture는 AISC 그림을 베끼지 않고 기대값을 스스로 계산할 수 있다. 부재 검정 fixture는 최종 검정비만이 아니라 λ, λp, λr, Fcr, Lp, Lr, Cb, Mn, Vn, H1-1 비까지 <strong>중간값 단위로</strong> 단언해야 실패 위치를 좁힐 수 있다(추론).</p>
+<h3>4.2 한국 고유 부분은 공개 정답집이 없다</h3>
+<p>KDS 본문은 국가건설기준센터 웹 뷰어와 법령 포털에서 무료로 읽을 수 있다 (<a href="https://www.kcsc.re.kr/standardCode/viewer/KDS%2014%2031%2005:2024-05-03">KCSC 뷰어 예</a>, <a href="https://www.law.go.kr/%ED%96%89%EC%A0%95%EA%B7%9C%EC%B9%99/%EA%B1%B4%EC%B6%95%EA%B5%AC%EC%A1%B0%EA%B8%B0%EC%A4%80">law.go.kr 건축구조기준</a>). 뷰어가 JS 앱이라 자동 수집은 어렵다. 그래서 본문 대신 <strong>조항 번호를 저장</strong>하는 방식이 맞다. 2017년 KDS 14 31 10 등의 신구조문 대비표 (<a href="https://www.codil.or.kr/filebank/moct2014//201902/MOCT1998_2.PDF?nserialno=1998">CODIL</a>)와 구 LRFD 강구조설계기준 전문(2009, <a href="https://www.codil.or.kr/filebank/construction/DC/CIGCDCD90150/CIGCDCD90150.pdf">CODIL PDF</a>)은 공개돼 있다. 그러나 AISC 설계 예제에 해당하는 <strong>무료 한국 풀이집은 찾지 못했다</strong>. 학회 해설서는 상용 도서다 (<a href="https://dl.nanet.go.kr/SearchDetailView.do?cn=MONO1201867856">국회도서관</a>). 따라서 검증은 이렇게 나눈다. 식의 구조는 AISC fixture로 검증한다. 한국 고유 값(SS275·SM355의 두께별 항복강도, KS H형강, KDS 하중계수)은 소수의 손계산 fixture로 만들고, 한국 구조기술사가 검토한다. KDS 14 31 10이 AISC 360 식 체계를 따르므로 이 분할이 성립한다(추론). RESEARCH-08 §3.2가 남긴 &quot;E = 205,000/210,000 조문 확인&quot;도 이 검토에 포함한다.</p>
+<h3>4.3 상용 프로그램 교차는 무료 경로가 있지만 내부 기록으로만 쓴다</h3>
+<div aria-label="조사 표 8" class="table-scroll" role="region" tabindex="0"><table>
+<thead>
+<tr>
+<th>경로</th>
+<th>내용</th>
+<th>제약</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>midas 체험판</td>
+<td>Gen·Civil 무료 체험, &quot;1인 1회&quot; 발급 (<a href="https://landing.midasuser.com/en/gate/building/trials/gen/step1">midas Gen trial</a>, <a href="https://resource.midasuser.com/en/free-trial">Civil free trial</a>)</td>
+<td>기간·벤치마크 공개 조항 미확인</td>
+</tr>
+<tr>
+<td>midas 학교 라이선스</td>
+<td>기증 계약 학교는 무료 (<a href="https://educenter.midasuser.com/download">EduCenter</a>)</td>
+<td>교육용</td>
+</tr>
+<tr>
+<td>Dlubal 학생 라이선스</td>
+<td>RFEM 6/RSTAB 9 전체 기능 1년, 재학 증명으로 갱신 (<a href="https://www.dlubal.com/en/support-and-learning/support/faq/005613">Dlubal FAQ 005613</a>)</td>
+<td>재학 중인 팀원 필요</td>
+</tr>
+<tr>
+<td>CSI</td>
+<td>2024년 1월부터 무료 학생 데모 중단, 교육용도 연구 라이선스 가격 (<a href="https://tech.coe.drexel.edu/software/csi/">Drexel 안내</a>), 체험판은 있음 (<a href="https://www.csiamerica.com/products/sap2000/trial">SAP2000 trial</a>)</td>
+<td>교육 라이선스는 영리 사용 제외</td>
+</tr>
+</tbody>
+</table></div>
+<p>현실적인 조합은 다음과 같다. midas 체험판 1회로 BM-14와 fixture 모델 10~20개를 실행해 결과를 기록한다. 부족하면 기증 라이선스가 있는 대학 연구실이나 구조사무소에 같은 모델 실행을 의뢰한다. 체험·교육 라이선스는 비상업·교육 용도로 제한되고, 상용 약관은 흔히 벤치마크 공개를 제한한다. 따라서 이 결과는 <strong>내부 교차 기록</strong>으로만 두고, 저장소에 배포하는 기대값은 공개 교과서·AISC·CSI 값으로 한정한다(추론).</p>
+<h3>4.4 fixture 형식</h3>
+<p>사례마다 JSON 하나를 둔다. 필드는 {출처(문서, 예제 ID, 쪽), 단위, 입력 모델(§3 계약 형식), 기대값과 값별 허용오차, 가정(전단변형 제외 등)}이다. 회귀용 골든 출력은 &quot;정답&quot; fixture와 분리한다. 그래야 다시 생성한 골든 파일이 교과서 값을 조용히 덮어쓰지 않는다(추론). 허용오차는 두 단계로 둔다. 정확 해가 있는 선형 사례는 엄격하게, 2차·근사 사례는 벤치마크가 정한 값(AISC 3%/5%, PyNite 닫힌 식 1%)을 쓴다. 두 단계 기준은 PyNite와 CSI 관행을 따른다 (<a href="https://raw.githubusercontent.com/JWock82/PyNite/main/Testing/test_AISC_PDelta_benchmarks.py">PyNite 시험</a>, <a href="https://docs.csiamerica.com/manuals/sap2000/Verification/Analysis/Frames/Problem%201-019.pdf">CSI 1-019</a>). PyNite는 Python 3.11 이상이 필요하다 (<a href="https://github.com/JWock82/Pynite">PyNite</a>). VIDE 배포본에는 Python이 없으므로 PyNite는 <strong>개발·CI 전용 기준 해석기</strong>로만 쓴다.</p>
+</section><section class="doc-section" id="research-09-structure-analysis-methods-section-5"><h2><span aria-hidden="true" class="section-num">05 /</span> 구현 언어 비교와 권고</h2>
+<h3>5.1 문제 크기가 요구하는 성능</h3>
+<p>목표는 약 2,000부재, 약 12,000자유도(DOF: 절점이 움직일 수 있는 방향 수), LRFD 조합 23개와 반복 단면 조정이다. 선형 해석은 강성 행렬을 <strong>한 번 분해(LDLᵀ: 대칭 행렬을 삼각 행렬로 나누는 직접 해법)</strong> 하고 23개 우변을 푸는 것으로 끝난다. P-Δ는 조합마다 기하강성을 더해 <strong>다시 분해하며 반복</strong>한다. 단면 조정 반복이 이를 곱하고, 이후 모드 해석은 희소 일반화 고유값 문제(K x = λ M x)를 푼다. 이 크기에서 분해 결과는 수십 MB 이하다. 따라서 wasm32의 4 GB 메모리 한도는 문제되지 않는다(추론). S-18 기록에서 C# 포팅(MstCore2, 스카이라인 LDLᵀ, 중력만)은 0.3초, 순수 Python은 26초, numpy/scipy는 검정 포함 약 4.3초였다(내부 기록, 이번 재현 아님). 즉 네이티브 언어라면 한 번의 해석은 1초 이하다. 언어 간 성능 차이가 드러나는 곳은 <strong>P-Δ × 조합 × 단면 조정 반복</strong>의 곱과 대화형 재검토 응답, 모드 해석, 이후 더 큰 모델이다(추론).</p>
+<h3>5.2 언어 비교</h3>
+<div aria-label="조사 표 9" class="table-scroll" role="region" tabindex="0"><table>
+<thead>
+<tr>
+<th>안</th>
+<th>성능</th>
+<th>희소 해법·고유값</th>
+<th>구조 코드 재사용</th>
+<th>Node 통합</th>
+<th>Windows 배포</th>
+<th>라이선스</th>
+<th>AI 에이전트 작성 품질</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Rust + faer</strong></td>
+<td>네이티브. Rust 희소 커널이 Eigen·PSBLAS와 비슷하다는 2026 학술 연구가 있음(크레이트 이름은 초록에 없음, <a href="https://arxiv.org/abs/2606.19213">arXiv 2606.19213</a>)</td>
+<td>faer 0.24.4: 희소 Cholesky·LDLT(Bunch-Kaufman)·LU·QR, 밀집 대칭 고유값 (<a href="https://docs.rs/faer/latest/faer/">docs.rs faer</a>). 희소 일반화 고유값은 작은 크레이트의 shift-invert Lanczos 정도 (<a href="https://docs.rs/tpt-fem-eigen/latest/tpt_fem_eigen/">tpt-fem-eigen</a>, 스니펫). nalgebra-sparse는 &quot;초기 단계&quot; (<a href="https://docs.rs/nalgebra-sparse/latest/nalgebra_sparse/">docs.rs</a>)</td>
+<td>성숙한 Rust 골조 FE 없음(교육용 크레이트뿐, <a href="https://lib.rs/crates/finite_element_method">lib.rs</a>). S-18 Python·C#을 명세로 재작성</td>
+<td>napi-rs 애드온(인프로세스, 네이티브 스레드) 또는 wasm 또는 별도 exe</td>
+<td>win-x64용 <code>.node</code> 하나</td>
+<td>faer MIT</td>
+<td>SWE-bench Multilingual 최고 58.14% (<a href="https://www.swebench.com/multilingual.html">swebench</a>)</td>
+</tr>
+<tr>
+<td>Rust → wasm</td>
+<td>네이티브보다 평균 45~55% 느림, 최대 2.5배(2019, 구 V8, <a href="https://www.usenix.org/conference/atc19/presentation/jangda">USENIX ATC'19</a>)</td>
+<td>같음. faer의 wasm 컴파일·SIMD 성능은 미확인</td>
+<td>같음</td>
+<td>인프로세스. 스레드는 Worker + SharedArrayBuffer 필요 (<a href="https://github.com/piotr-roslaniec/wasm-bindgen-rayon">wasm-bindgen-rayon</a>). threads와 memory64 동시 사용 불가 (<a href="https://github.com/wasm-bindgen/wasm-bindgen/issues/5330">wasm-bindgen #5330</a>)</td>
+<td><code>.wasm</code> 하나, 플랫폼별 빌드 없음</td>
+<td>같음</td>
+<td>같음</td>
+</tr>
+<tr>
+<td>C# .NET 8 Native AOT + CSparse.NET</td>
+<td>네이티브급. MstCore2가 0.3초(S-18)</td>
+<td>CSparse.NET 4.3.0: 희소 LU·Cholesky·QR·LDL', 의존성 없음. Interop로 MKL·SuiteSparse·ARPACK 연결 (<a href="https://github.com/wo80/CSparse.NET">CSparse.NET</a>). Math.NET 직접 분해는 밀집 전용 (<a href="https://numerics.mathdotnet.com/Matrix">Math.NET</a>)</td>
+<td><strong>MstCore2 재사용</strong>. BFE.NET은 선형 정적만(LGPL-3, <a href="https://github.com/BriefFiniteElementNet/BriefFiniteElement.Net">GitHub</a>). Rhino 8(.NET 8) 플러그인과 코드 공유 가능</td>
+<td>자식 프로세스(stdin/stdout JSON·명명 파이프)</td>
+<td>런타임 설치 없는 단일 exe. 빌드에 VS &quot;C++ 데스크톱 개발&quot; 필요 (<a href="https://learn.microsoft.com/en-us/dotnet/core/deploying/native-aot/">Native AOT</a>). hello world 약 1.2~2 MB, 시작 5 ms 미만(2차 블로그 스니펫)</td>
+<td>CSparse.NET 라이선스는 이번 조사에서 <strong>미확인</strong>(확인 필요)</td>
+<td>에이전트형 다언어 벤치에 C# 없음. 함수 단위 MultiPL-E에서 TS·JS와 비슷(구 모델, <a href="https://arxiv.org/pdf/2208.08227">arXiv 2208.08227</a>)</td>
+</tr>
+<tr>
+<td>C++ (Eigen + Spectra)</td>
+<td>네이티브. 라이브러리 성숙도 최고. CHOLMOD 초절점 해법이 Eigen 기본 해법보다 크게 빠르다는 보고 (<a href="https://github.com/IntelVCL/Open3D/issues/405">Open3D #405</a>, 스니펫)</td>
+<td>Spectra: 일반화 대칭 고유값 <code>SymGEigsSolver</code>, shift-invert, MPL-2.0 (<a href="https://spectralib.org/">Spectra</a>)</td>
+<td>OpenSees는 상업 배포에 UC 허가 필요 (<a href="https://github.com/OpenSees/OpenSees/blob/master/COPYRIGHT">COPYRIGHT</a>). Frame3DD는 GPL-3 (<a href="https://frame3dd.sourceforge.net/">Frame3DD</a>)</td>
+<td>N-API 애드온 또는 emscripten wasm (<a href="https://emscripten.org/docs/compiling/WebAssembly.html">Emscripten</a>). Awatif가 C++/wasm 선형 해법을 씀 (<a href="https://github.com/madil4/awatif">Awatif</a>)</td>
+<td>node-gyp + MSVC. SuiteSparse는 BLAS/LAPACK 의존(추론)</td>
+<td>Eigen·Spectra는 허용적. 구조 코드는 제약</td>
+<td>C/C++ 28.57%로 최저 (<a href="https://www.swebench.com/multilingual.html">swebench</a>)</td>
+</tr>
+<tr>
+<td>순수 TypeScript</td>
+<td>가장 느림. 수치 배열 코드 벤치마크는 없음</td>
+<td>npm에는 &quot;[WIP]&quot; <code>cholesky-solve</code> 정도 (<a href="https://github.com/scijs/cholesky-solve">scijs</a>). 희소 고유값 없음</td>
+<td>없음(Awatif도 해법은 C++/wasm)</td>
+<td>서버와 같은 프로세스, 추가 비용 없음</td>
+<td>추가 비용 없음</td>
+<td>—</td>
+<td>JS/TS 34.88% (<a href="https://www.swebench.com/multilingual.html">swebench</a>). Multi-SWE-bench에서도 TS·JS가 최저권 (<a href="https://arxiv.org/html/2504.02605v1">arXiv 2504.02605</a>, 스니펫)</td>
+</tr>
+<tr>
+<td>Julia (juliac)</td>
+<td>빠름</td>
+<td>SparseArrays/CHOLMOD·Arpack(생태계 양호)</td>
+<td>InstantFrame.jl(3D 골조, 2차·모드, 스니펫, 라이선스 미확인, <a href="https://github.com/runtosolve/InstantFrame.jl">GitHub</a>)</td>
+<td>자식 프로세스</td>
+<td>trim은 Julia 1.12부터 새 기능. 라이브러리 포함 번들 약 93 MB 사례 (<a href="https://lwn.net/Articles/1044280/">LWN</a>, 스니펫)</td>
+<td>—</td>
+<td>벤치마크 없음</td>
+</tr>
+<tr>
+<td>Go</td>
+<td>네이티브</td>
+<td>gonum 직접 분해는 밀집 전용. 희소 Cholesky는 소형 패키지뿐 (<a href="https://github.com/james-bowman/sparse">james-bowman/sparse</a>)</td>
+<td>없음</td>
+<td>자식 프로세스</td>
+<td>단일 정적 exe</td>
+<td>—</td>
+<td>30.95%</td>
+</tr>
+</tbody>
+</table></div>
+<p>에이전트 작성 품질 근거는 이슈 해결형 벤치마크이며, 수치 코드 전용 벤치마크는 찾지 못했다. 따라서 이 근거로 말할 수 있는 것은 &quot;Rust와 C#은 에이전트에게 불리하지 않고 C++는 불리하다&quot;까지다. 정밀한 순위를 매기는 근거는 아니다. Rust는 컴파일러가 엄격해 에이전트가 빠르고 정확한 피드백을 받는다. 이는 Rust가 높은 해결률을 보이는 것과 부합한다(추론).</p>
+<h3>5.3 Node 통합 방식</h3>
+<div aria-label="조사 표 10" class="table-scroll" role="region" tabindex="0"><table>
+<thead>
+<tr>
+<th>방식</th>
+<th>속도</th>
+<th>격리</th>
+<th>배포</th>
+<th>비고</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>wasm 인프로세스</td>
+<td>네이티브의 약 0.5~0.7배(2019 연구). 2021 비공식 측정에서도 네이티브 애드온이 약 45% 빠름 (<a href="https://kudmitry.com/articles/native-rust-wasm/">kudmitry.com</a>, 실험실 수준 아님)</td>
+<td>샌드박스. 메모리 오류가 서버를 깨지 않음(추론)</td>
+<td>가장 단순</td>
+<td>가상 메모리가 제한된 환경에서 실패하는 Node 이슈가 있음 (<a href="https://github.com/nodejs/node/issues/56596">nodejs #56596</a>). 브라우저 미리보기 해석에도 재사용 가능</td>
+</tr>
+<tr>
+<td>네이티브 애드온(Node-API)</td>
+<td>네이티브, 스레드 사용 가능, 결과 직렬화 비용 없음(추론)</td>
+<td>코어가 비정상 종료하면 서버 프로세스도 함께 종료(추론)</td>
+<td>win-x64 <code>.node</code> 하나. Node-API는 Node 판이 바뀌어도 ABI 안정 (<a href="https://napi.rs/">napi.rs</a>, 스니펫)</td>
+<td>napi-rs는 WASI 대체 빌드를 함께 낼 수 있음</td>
+</tr>
+<tr>
+<td>자식 프로세스</td>
+<td>네이티브 + JSON/파이프 직렬화. 12k DOF 결과면 작음(추론)</td>
+<td>가장 강함</td>
+<td>exe 하나</td>
+<td>C#·Julia·Go의 유일한 경로. Rust도 같은 코드로 exe를 낼 수 있음(추론)</td>
+</tr>
+</tbody>
+</table></div>
+<h3>5.4 권고</h3>
+<p><strong>장기 권고는 Rust + faer다.</strong> 사용자가 성능을 우선하고 언어 난이도를 따지지 않는다는 전제에서 Rust가 가장 많은 조건을 함께 만족한다. 우선 네이티브 속도가 C++급이고, 희소 직접 해법(Cholesky·LDLT)이 MIT 라이선스 한 라이브러리에 모여 있다. 또 한 코드베이스에서 애드온·wasm·exe 세 방식이 모두 가능하다. 에이전트형 벤치마크에서 해결률이 가장 높고, 메모리 안전성으로 C++의 가장 큰 위험도 피한다. 위험은 두 가지다. 첫째, 재사용할 Rust 구조 FE가 없어 S-18의 Python(<code>Frame</code>·P-Δ 약 250줄, 검정부)과 C#(MstCore2)을 명세로 삼아 재작성해야 한다. 규모는 작고 §4의 fixture가 이식 정확도를 수치로 검증한다. 둘째, 모드 해석용 희소 일반화 고유값 해법은 검증된 순수 Rust 구현이 없다. 이것은 faer의 희소 LDLT 위에 shift-invert Lanczos를 직접 쓰는 일이 되며, 모드 단계에서 BM-05와 개발 전용 기준 해석기로 검증한다. 통합은 <strong>napi-rs 애드온을 기본</strong>으로 둔다. 서버 안정성이 문제로 드러나면 같은 코드를 exe로 빌드해 자식 프로세스로 돌린다.</p>
+<p><strong>차선은 C# Native AOT 자식 프로세스다.</strong> 기존 MstCore2를 바로 쓰므로 출시가 가장 빠르다. Rhino 8 플러그인과 코드를 공유할 수 있는 유일한 안이기도 하다. 다만 CSparse.NET은 SuiteSparse 계열 CSparse의 C# 포팅이라 초절점 해법이 아니다. 이 규모에서는 충분하지만, 큰 모델·모드 해석에서는 ARPACK 같은 네이티브 의존을 다시 들여야 한다(추론). 라이선스도 확인해야 한다. **순수 TypeScript(RESEARCH-08 §7.2 A안)**는 배포 비용이 0이다. 그러나 순서화·피벗 LDLT·Lanczos를 참고 라이브러리 없이 손으로 짜야 하고 가장 느리다. 성능 우선 기준에서는 해석 코어로 권하지 않는다. 대신 조합 생성·파라미터 확정 화면·보고처럼 반복이 적은 층은 TS 서버에 두는 것이 자연스럽다(추론). **C++**는 라이브러리가 가장 성숙하지만 에이전트 작성 품질이 가장 낮고, Windows 빌드가 가장 무거우며, 재사용할 구조 코드는 라이선스로 묶여 있다. <strong>Julia·Go</strong>는 배포(Julia) 또는 수치 생태계(Go)에서 탈락한다.</p>
+<p><strong>부재 검정식은 코어에 둔다(추론).</strong> 단면 조정 반복은 해석 → 검정 → 단면 교체의 반복이다. 검정이 TS 쪽에 있으면 반복마다 경계를 건너야 한다. 하중조합 생성 규칙(KDS 41 10 15)과 <code>PARAMS</code> 형태의 파라미터·근거·상태 관리, 보고서·계산서는 TS에 둔다. 코어는 계약(§3) 입력을 받아 결과·검정을 돌려주는 순수 계산기로 유지한다. 계약이 언어 중립이므로 나중에 코어를 바꿔도 계약과 fixture는 그대로 남는다.</p>
+<p><strong>단기 권고:</strong> C#을 거쳐 Rust로 가는 이중 작업은 피한다. SPIKE 한 번으로 Rust의 실측 성능과 Windows 빌드·설치 경로를 확인한 뒤 바로 Rust로 간다. SPIKE에서 Rust 빌드나 설치가 막히면 C# 자식 프로세스로 전환한다.</p>
+<h3>5.5 결정 전 SPIKE 제안</h3>
+<div aria-label="조사 표 11" class="table-scroll" role="region" tabindex="0"><table>
+<thead>
+<tr>
+<th>항목</th>
+<th>내용</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>기록·코드 위치</td>
+<td><code>docs/tdd/SPIKE-YYYY-MM-DD-frame-core-language.md</code>, <code>tools/spikes/&lt;date&gt;-frame-core-language/</code></td>
+</tr>
+<tr>
+<td>질문</td>
+<td>같은 모델에서 후보별 실행 시간·메모리·설치 크기·통합 난점은 얼마인가</td>
+</tr>
+<tr>
+<td>모델</td>
+<td>S-18 규모 골조(약 12k DOF, 조합 23개)의 합성 사본. 원본 프로젝트 파일은 열지 않는다</td>
+</tr>
+<tr>
+<td>후보</td>
+<td>① Rust + faer napi-rs 애드온 ② 같은 코드의 wasm ③ C# MstCore2(스카이라인) 및 CSparse.NET Native AOT exe ④ TS Float64Array 스카이라인 LDLᵀ(MstCore2 이식)</td>
+</tr>
+<tr>
+<td>정확도 관문</td>
+<td>시간 측정 전에 BM-01~03, BM-11, PyNite 차분(BM-10)을 통과해야 함</td>
+</tr>
+<tr>
+<td>측정</td>
+<td>조립 + 분해 + 23개 우변 풀이, 조합별 P-Δ 수렴까지(③은 중력 선형만 있으므로 선형 시간만 비교), 단면 조정 5회 반복, 첫 호출 지연, 최대 메모리, 설치 산출물 크기, Windows 설치본에서의 로드 성공 여부</td>
+</tr>
+<tr>
+<td>종료 조건</td>
+<td>①이 정확도 관문을 통과하고 설치본에서 로드되면 Rust 확정. 막히면 ③으로 결정. ②와 ①의 차이로 브라우저 미리보기용 wasm 병행 여부를 판단</td>
+</tr>
+</tbody>
+</table></div>
+</section><section class="doc-section" id="research-09-structure-analysis-methods-section-6"><h2><span aria-hidden="true" class="section-num">06 /</span> 사용자 결정이 필요한 항목</h2>
+<div aria-label="조사 표 12" class="table-scroll" role="region" tabindex="0"><table>
+<thead>
+<tr>
+<th>번호</th>
+<th>결정</th>
+<th>선택지</th>
+<th>권고</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>해석 코어 언어·구동 방식(RESEARCH-05 결정 11, RESEARCH-08 §8-1)</td>
+<td>Rust 애드온 / Rust exe / C# AOT exe / 순수 TS</td>
+<td><strong>결정(2026-09-29 사용자): Rust.</strong> 구동 방식(애드온·exe·wasm)은 §5.5 SPIKE로 확정</td>
+</tr>
+<tr>
+<td>2</td>
+<td>부재 검정식 위치</td>
+<td>코어 / TS 서버</td>
+<td>코어. 조합 생성·파라미터·보고는 TS</td>
+</tr>
+<tr>
+<td>3</td>
+<td>P-Δ 방식</td>
+<td>조합별 반복(정확, PyNite·CSI 반복식) / 모든 조합의 최대 압축력으로 1회(Karamba 방식, 보수적·빠름)</td>
+<td>조합별 기본, 포락 1회는 빠른 미리보기 선택지</td>
+</tr>
+<tr>
+<td>4</td>
+<td>부재 방향각 규약</td>
+<td>midas beta 규약 / BHoM식 / 방향 벡터</td>
+<td>MGT 내보내기와 같은 규약을 정본으로 하고 벡터 입력을 허용. 엔진 간 회전 시험</td>
+</tr>
+<tr>
+<td>5</td>
+<td>물리 부재 자동 분할</td>
+<td>포함 / 해석 요소만</td>
+<td>포함. Rhino 선 모델 입력과 결과 역연결에 필요</td>
+</tr>
+<tr>
+<td>6</td>
+<td>MGT 범위</td>
+<td>쓰기 부분집합 / 읽기까지</td>
+<td><strong>결정(2026-09-29 사용자): 일반 요구가 아님.</strong> 기본 교환은 CAD·Rhino 파일, MGT 쓰기는 프로젝트별 선택</td>
+</tr>
+<tr>
+<td>7</td>
+<td>상용 교차 경로</td>
+<td>midas 체험판 1회 / 대학 기증 라이선스 협력 / 구조사무소 의뢰 / 하지 않음</td>
+<td>체험판 1회 + 필요 시 협력. 결과는 내부 기록만</td>
+</tr>
+<tr>
+<td>8</td>
+<td>한국 고유 fixture 검토자</td>
+<td>구조기술사 검토 / 내부 검토만</td>
+<td>구조기술사 검토. &quot;탐색용 예비값&quot; 표시는 어느 경우든 유지</td>
+</tr>
+<tr>
+<td>9</td>
+<td>적용 기준 판과 재료 상수</td>
+<td>KDS 14 31 10 판, E = 205,000 또는 210,000 MPa</td>
+<td>조문 확인 후 fixture에 판·조항을 기록</td>
+</tr>
+</tbody>
+</table></div>
+</section><section class="doc-section" id="research-09-structure-analysis-methods-section-7"><h2><span aria-hidden="true" class="section-num">07 /</span> 확인 한계</h2>
+<p>midas 지원 포털(Zendesk)의 여러 문서는 자동 접근에서 403/404가 났다. 따라서 MIDAS API 구조, 비지지 길이 기본값, NX의 KDS 코드 목록은 검색 스니펫과 제목 수준이다. MGT 필드 순서는 소형 모델의 페이지 요약이라 파서 명세로 쓰기 전에 원문과 실제 내보낸 파일로 다시 확인해야 한다. CSI <code>.s2k</code> 행 문법, OAPI 약관, CSparse.NET·InstantFrame.jl·MIDAS API·Dlubal API의 라이선스는 확인하지 못했다. aisc.org는 스크립트 접근을 막아 설계 예제 번호(BM-08)와 해설 그림의 &quot;전단변형 포함&quot; 값은 얻지 못했다. Dlubal·CSI 색인 페이지는 JS 렌더링이라 목록 전체를 세지 못했다. 공개 midas 검증 매뉴얼과 무료 한국 강구조 풀이집은 찾지 못했다. 성능 근거는 2019년 wasm 연구와 2021년 비공식 측정, 2026년 희소 커널 연구 초록에 기대고 있다. faer 희소 분해와 CHOLMOD·CSparse.NET의 직접 비교, 12k DOF 골조의 실측은 없다. 이 공백은 §5.5 SPIKE가 메운다. 에이전트 작성 품질 벤치마크에는 C#·Julia가 없고 수치 코드 전용 벤치마크도 없다. S-18 성능 수치(0.3초, 26초, 약 4.3초)는 내부 기록이며 이번에 재현하지 않았다. 허용오차 가운데 &quot;(추론)&quot;으로 표시한 값은 공개 기준이 아닌 공학적 판단이다.</p>
+</section><footer class="doc-footer"><span>VIDE / PLANNING DOCUMENTS</span><span>문서 열람용 · 실제 CAD/BIM 지원은 구현·검증 후 선언</span></footer></article></main></div>
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+<script id="source-data" type="application/json">{"research-09-structure-analysis-methods":{"label":"구조해석 프로그램 방식과 해석 코어 구현 언어 조사","file":"RESEARCH-09-structure-analysis-methods.md","markdown":"---\nid: RESEARCH-09\ntitle: 구조해석 프로그램 방식과 해석 코어 구현 언어 조사\nstatus: review\nversion: 0.1\nupdated: 2026-09-29\nowner: agent:claude\nrelated: [RESEARCH-08, RESEARCH-05, RESEARCH-04, FR-21, OQ-07]\n---\n\n# 구조해석 프로그램 방식과 해석 코어 구현 언어 조사\n\n## 1. 목적과 결론 요약\n\nJ-09 구조 분석 jig의 PLAN을 쓰기 전에 세 가지를 정리한다. 첫째, 상용·공개 구조해석 프로그램이 해석 모델·강구조 설계 검토·교환 형식·검증을 어떻게 다루는지 보고, VIDE가 둘 **해석 모델 계약**(해석기에 넘기는 모델 데이터의 약속된 형식)을 정한다. 둘째, midas 라이선스 없이 해석기·KDS 강구조 부재 검정·하중조합을 검증할 **구체 시험 케이스**를 고른다. 셋째, 해석 코어(3D 골조 유한요소 해석, 희소 행렬 해법, P-Δ, 이후 모드 해석)를 어떤 언어로 만들지 권고한다. RESEARCH-08의 자산(S-18 해석기·검정식·검증 체계)과 사용자 결정(도메인 지식 반입, midas 없음, 성능 우선, 언어 난이도는 고려하지 않음)을 전제로 한다.\n\n**결론은 세 줄이다.** (1) midas·SAP2000/ETABS·RFEM·Karamba3D·PyNite·OpenSees·BHoM·IFC는 모두 같은 골격으로 수렴한다. 절점(지점)과 부재(재료·단면·방향각·단부해제·강체 오프셋)가 있고, 하중은 **하중 패턴 → 해석 경우 → 하중조합**의 세 층으로 나뉜다. 그 위에 비지지 길이·K·Cb를 \"자동값 + 사용자 덮어쓰기\"로 갖는 **설계 부재 층**이 얹힌다. VIDE는 이 골격을 평면 배열 JSON 계약으로 두고, 방향각 규약·오프셋 좌표계·단위·\"P-Δ 결과는 합산 불가\"를 명시해야 한다. (2) midas 없이도 해석기는 AISC 해설 C장 2차해석 벤치마크, CSI 공개 검증 예제, OpenSees 포털 골조 주기, PyNite 차분 시험으로 검증할 수 있다. 부재 검정은 AISC 설계 예제(STAAD 공개 대조 페이지가 중간값까지 제공)로 검증할 수 있다. 한국 고유 부분(KS 단면, 강재 등급별 항복강도, KDS 41 하중조합)은 공개 정답집이 없다. 이 부분은 손계산, 구조기술사 검토, 일회성 midas 체험판 또는 대학·사무소 협력으로 채운다. (3) 성능 우선이면 **Rust(faer 선형대수 라이브러리) 코어를 napi-rs 네이티브 애드온으로 Node 서버에 붙이는 안**을 권고한다. C# Native AOT 자식 프로세스(기존 MstCore2 재사용)는 차선, 순수 TypeScript(RESEARCH-08 A안)는 배포는 가장 쉽지만 해석 코어로는 권하지 않는다. 확정 전에 같은 S-18 모델로 후보를 재는 SPIKE를 한 번 한다(§5.5).\n\n| 질문 | 답 | 근거 절 |\n|---|---|---|\n| 해석 모델을 어떻게 둘까 | 해석(이상화) 수준의 언어 중립 JSON 계약. 물리 부재와 해석 요소를 분리하고, 설계 부재 층은 해석 모델 위에 얹는다 | §2.1, §3 |\n| midas 없이 무엇으로 검증하나 | 닫힌 해 → 공개 벤치마크 → PyNite 차분 → 불변량 → 한국 고유 손계산 → (선택) 상용 교차 | §4 |\n| 어떤 언어로 만드나 | Rust + faer, napi-rs 애드온. SPIKE로 확정 | §5 |\n\n## 2. 상용·공개 프로그램 비교\n\n### 2.1 해석 모델은 여덟 개 도구 모두 같은 골격이다\n\n아래 표는 해석 모델의 핵심 개념이 각 도구에서 어떻게 표현되는지 비교한다. 용어부터 풀면 다음과 같다. **단부해제**는 부재 끝의 특정 자유도(회전 등)를 풀어 핀처럼 만드는 것이다. **강체 오프셋**은 절점과 부재 끝 사이의 강한 구간이다. **방향각(beta angle)**은 부재 축을 중심으로 단면이 돌아간 각도다.\n\n| 개념 | midas Gen (MGT) | SAP2000/ETABS | RFEM 6 | Karamba3D | 공개 모델(PyNite·OpenSees·BHoM·IFC) |\n|---|---|---|---|---|---|\n| 절점·지점 | `*NODE`, `*CONSTRAINT` 6자리 1/0 코드 ([MGT Quick Reference](http://manual.midasuser.com/EN_Common/Gen/891/Start/14_Appendix/MGT_File_Quick_Reference.htm)) | joint + restraint ([CSiRefer](https://docs.csiamerica.com/manuals/sap2000/CSiRefer.pdf)) | 절점 → 선 → 부재 ([Nodes](https://www.dlubal.com/en/downloads-and-information/documents/online-manuals/rfem-6/000037)) | 조립 시 5 mm 안의 점을 한 절점으로 병합 ([Assemble Model](https://manual.karamba3d.com/3-in-depth-component-reference/3.1-model/3.1.1-assemble-model.md)) | BHoM `Constraint6DOF`는 자유도마다 Free/Fixed/Spring+강성 ([Constraint6DOF.cs](https://github.com/BHoM/BHoM/blob/main/Structure_oM/Constraints/Constraint6DOF.cs)), IFC는 Boolean 또는 강성값 ([IfcBoundaryNodeCondition](https://github.com/buildingSMART/IFC4.3.x-development/blob/master/docs/schemas/resource/IfcStructuralLoadResource/Entities/IfcBoundaryNodeCondition.md)) |\n| 부재 방향 | `*ELEMENT`의 `ANGLE`(beta) | FRAME LOCAL AXES 표 ([Strand7의 SAP2000 표 목록](https://www.strand7.com/strand7r3help/Content/Topics/FileFormats/FileFormatsSAP2000FileDefinitionTables.htm?TocPath=File+Formats%7CSAP2000+File%7C_____2)) | 시작→끝 절점 방향 ([Members](https://www.dlubal.com/en/downloads-and-information/documents/online-manuals/rfem-6/000039)) | 국부 Y를 전역 XY에 평행하게 두고, 연직 판정 임계값을 문서화 ([Orientate Element](https://manual.karamba3d.com/3-in-depth-component-reference/3.1-model/3.1.14-orientate-element)) | OpenSees `vecxz` 벡터 ([LinearTransf](https://openseespydoc.readthedocs.io/en/latest/src/LinearTransf.html)), PyNite `rotation`(도) ([FEModel3D.py](https://github.com/JWock82/Pynite/blob/main/Pynite/FEModel3D.py)), BHoM `OrientationAngle` ([Bar.cs](https://github.com/BHoM/BHoM/blob/main/Structure_oM/Elements/Bar.cs)) — 규약이 서로 다름 |\n| 단부해제 | `*FRAME-RLS` 양단 6자유도, 부분 고정값 허용 | releases | 부재 힌지. 트러스 = 양단 모멘트 힌지 보 ([Main \\| Members](https://www.dlubal.com/en/downloads-and-information/documents/online-manuals/rfem-6/006106), 스니펫) | 굽힘 강성 끄기로 트러스 ([LineToBeam](https://manual.karamba3d.com/3-in-depth-component-reference/3.1-model/3.1.6-create-linear-element/3.1.6-line-to-beam.md)) | PyNite 12개 플래그 `def_releases`, BHoM `BarRelease` = 양단 `Constraint6DOF` ([BarRelease.cs](https://github.com/BHoM/BHoM/blob/main/Structure_oM/Constraints/BarRelease.cs)) |\n| 강체 오프셋 | `*OFFSET` GLOBAL/ELEMENT 선택 | insertion point / end offset | — | 편심 표시 | OpenSees `-jntOffset`는 **전역**, BHoM `Offset`은 **국부** 좌표 |\n| 물리 부재 vs 해석 요소 | Member Assignment | 비지지 길이를 골조에서 자동 계산 | 부재 = 선 위의 물리 객체, member set = 설계 단위 ([Member Sets](https://www.dlubal.com/en/downloads-and-information/documents/online-manuals/rfem-6/000044)) | 식별 문자열·정규식으로 부재 선택 | PyNite `PhysMember`가 내부 절점에서 자동 분할 ([PhysMember.py](https://github.com/JWock82/Pynite/blob/main/Pynite/PhysMember.py)), Speckle v2 `parent` 연결 ([Element1D.cs](https://github.com/specklesystems/speckle-sharp/blob/main/Objects/Objects/Structural/Geometry/Element1D.cs)) |\n| 하중 분류 | `*STLDCASE` 유형 코드(D, L, W, E…)가 조합 자동 생성의 입력 | load pattern → load case → combination ([CSI KB Load case](https://web.wiki.csiamerica.com/wiki/spaces/kb/pages/2005362)) | load case → action → design situation → 조합 ([Combination Wizards](https://www.dlubal.com/en/downloads-and-information/documents/online-manuals/rfem-6/000256)) | 하중 경우 + 조합 컴포넌트 | IFC LOAD_GROUP → LOAD_CASE → LOAD_COMBINATION, 경우-조합 쌍마다 계수 ([IfcStructuralLoadGroup](https://github.com/buildingSMART/IFC4.3.x-development/blob/master/docs/schemas/domain/IfcStructuralAnalysisDomain/Entities/IfcStructuralLoadGroup.md)) |\n| 조합 | `*LOADCOMB` KIND(GEN/STEEL/CONC…), 선형합·SRSS ([Combinations](https://manual.midasuser.com/EN_Common/Gen/865/Start/07_Results/Combinations.htm)) | 합·포락 ([Load combination](https://web.wiki.csiamerica.com/wiki/spaces/kb/pages/2003069)) | 하중조합(비선형용) / 결과조합(중첩) 구분 | 3.1부터 포락 조합 ([New in 3.1](https://manual.karamba3d.com/new-in-karamba3d-3.1)) | BHoM `(계수, 경우)` 목록, 조합이 다른 조합을 참조 가능 ([LoadCombination.cs](https://github.com/BHoM/BHoM/blob/main/Structure_oM/Loads/LoadCombination.cs)) |\n| P-Δ | 해석 제어 `PDEL-CTRL` ([MGT Command List](http://manual.midasuser.com/EN_Common/Gen/891/Start/14_Appendix/MGT_Command_List.htm)) | 질량 기반 비반복 / 하중 조합 기반 반복, 선형 경우 전체에 적용 ([Preset P-Delta Options](https://docs.csiamerica.com/help-files/etabs/Menus/Define/Preset_P_Delta_Options.htm)) | 조합 마법사가 불완전성 경우 생성 | `AnalyzeThII`: 모든 경우의 최대 압축력 하나로 강성 1회(보수적) 또는 경우별 ([AnalyzeThII](https://manual.karamba3d.com/3-in-depth-component-reference/3.5-algorithms/3.5.2-analyzethii)) | PyNite는 **조합마다** 반복 ([FEModel3D.py](https://github.com/JWock82/Pynite/blob/main/Pynite/FEModel3D.py)), OpenSees는 요소별 좌표변환 선택 ([geomTransf](https://openseespydoc.readthedocs.io/en/latest/src/geomTransf.html)) |\n| 질량 | `*LOADTOMASS`(하중 경우 → 질량) | mass source | — | 질량·무게중심 출력 | PyNite `mass_combo_name` |\n| 단위 | 파일 머리 `*UNIT` 한 번 | PROGRAM CONTROL 표 | — | 형상 단위와 입출력 단위가 따로 ([Physical Units](https://manual.karamba3d.com/2-getting-started/2-getting-started-1/2.3-physical-units.md)) | PyNite는 단위 체계가 없고 중력 기본값 1.0 |\n| 결과 | 표·그림 | 표 | 결과 트리 | 모델에 결과를 붙여 다음 단계로 전달 ([Analyze](https://manual.karamba3d.com/3-in-depth-component-reference/3.5-algorithms/3.5.1-analyze)) | IFC 결과 묶음에 이론 차수와 `IsLinear`(중첩 가능 여부) ([IfcStructuralResultGroup](https://github.com/buildingSMART/IFC4.3.x-development/blob/master/docs/schemas/domain/IfcStructuralAnalysisDomain/Entities/IfcStructuralResultGroup.md)), BHoM `BarForce`는 (부재, 경우, 모드, 위치)로 키 ([BarForce.cs](https://github.com/BHoM/BHoM/blob/main/Structure_oM/Results/Bar%20Results/BarForce.cs)) |\n\n**가장 중요한 교훈은 CSI의 세 층 분리다.** 하중 패턴은 공간 분포, 해석 경우는 패턴을 가해 실제로 푸는 해석, 조합은 경우 결과의 합이나 포락이다 ([CSI KB Load combination FAQ](https://web.wiki.csiamerica.com/wiki/spaces/kb/pages/2011279/Load+combination+FAQ)). 결과 합산은 선형 해석에서만 성립한다. P-Δ처럼 비선형인 해석은 조합마다 따로 풀어야 한다. PyNite도 P-Δ를 조합 단위로 반복하고 ([FEModel3D.py](https://github.com/JWock82/Pynite/blob/main/Pynite/FEModel3D.py)), IFC는 결과 묶음에 `IsLinear`를 붙여 이 구분을 데이터로 남긴다. S-18의 LRFD 조합은 23개이므로, 계약이 이 구분을 담지 않으면 P-Δ 결과를 잘못 합산하는 오류가 구조적으로 생길 수 있다(추론).\n\n**둘째 교훈은 해석 모델의 수준이다.** Awatif는 데이터를 의미(파라메트릭 구성요소) → 이상화(곡선·면) → 이산(유한요소 메시)의 세 층으로 나누고, 이 절차가 대부분의 FEM 프로그램에 공통이라고 설명한다 ([Awatif 블로그](https://awatif.co/blog/awatif-new-data-structure-for-structural-engineering/)). VIDE 계약은 가운데 층(해석선·절점)에 두고, 요소 분할은 해석 어댑터가 맡는 것이 맞다(추론).\n\n### 2.2 설계 검토 흐름은 자동값과 사용자 덮어쓰기를 함께 저장한다\n\n| 프로그램 | 설계 단위 | 비지지 길이·K·Cb | 결과 표시 | 한국 기준 |\n|---|---|---|---|---|\n| midas Gen | Member Assignment로 여러 해석 요소를 한 부재로 묶음 | Ly·Lz를 입력하지 않으면 요소 길이 사용 ([Unbraced Length](https://support.midasuser.com/hc/en-us/articles/24505746832025-Unbraced-Length), 스니펫). K는 입력 또는 자동 계산 ([midas KB](https://gtc.midasuser.com/helpdesk/KB/View/10333732--design-how-is-effective-length-factor-calculated-)) | OK / OK*(강도 만족, 세장비 초과) / NG / NG*. 최대 검정비와 지배 조합, 전단비, 표에 Ly·Lz·Lb·Ky·Kz·Cmy·Cmz·Cb ([Steel Code Check](http://manual.midasuser.com/EN_Common/Gen/885/Start/08_Design/Steel_Code_Check.htm)) | 구판 매뉴얼은 KSSC-LSD09 등. NX는 \"KDS 41 30:2022\" 설계표가 있음(제목만 확인, [MIDAS Support](https://support.midasuser.com/hc/en-us/articles/57474427261465-DESIGN-STEEL-KDS-41-30-2022-TABLE-Steel-Member-Design-Forces)) |\n| SAP2000/ETABS | 프레임 객체 | 비지지 길이 비(기본은 프로그램 계산 = 1), K, Cb 덮어쓰기(overwrite) ([Effective length factor](https://wiki.csiamerica.com/display/kb/Effective+length+factor)) | 코드별 설계 매뉴얼 공개 ([SFD-AISC-360-05](https://docs.csiamerica.com/manuals/sap2000/Design/SFD-AISC-360-05.pdf)) | ETABS KBC 2016 강골조(v18+). KDS 강구조 항목은 요약 문구가 뒤섞여 있어 미확인 ([ETABS enhancements](https://www.csiamerica.com/products/etabs/enhancements)) |\n| RFEM 6 | member set | 설계 add-on에서 지정 | \"Design Check Details\" 트리: 입력 → 중간값 → 조항 결과 ([Design Check Details](https://www.dlubal.com/en/downloads-and-information/documents/online-manuals/rfem-6-steel-design/000286)) | KDS 지원 미확인 |\n| Karamba3D | 요소·그룹 | 끝에서 세 개 이상 부재가 모이는 절점까지 걸어 좌굴 길이를 추정. 매뉴얼 스스로 트러스 현재 등에서 **\"unsafe\"**라고 경고 ([Optimize Cross Section](https://manual.karamba3d.com/3-in-depth-component-reference/3.5-algorithms/3.5.8-optimize-cross-section)) | Util 합계와 N·V·M별 분해, 지배 하중 경우, 부재당 기본 3점 표본. EC3만 지원 ([Utilization](https://manual.karamba3d.com/3-in-depth-component-reference/3.6-results/3.7.1-general-results/3.6.6-utilization-of-elements)) | 없음 |\n\n공통 원칙은 **설계 변수를 해석 모델 위의 덮어쓰기 층으로 두는 것**이다. 기하에서 자동값을 만들고, 사용자가 값별로 덮어쓰며, 보고서는 둘을 구분해 보인다. Karamba의 \"unsafe\" 경고는 건축가용 도구의 가장 큰 위험이 **자동 추정한 K·Lb**라는 점을 보여 준다. 따라서 이 값은 항상 보이고, 편집할 수 있고, \"가정\"으로 표시돼야 한다. 단면 최적화에서 Karamba는 \"순서 목록에서 처음 만족하는 단면\"을 기본 5회 반복한다. S-18에서는 무게순 첫 만족 단면이 최경량이 아니었던 결함이 있었다(RESEARCH-08 §4). 따라서 VIDE는 전수 비교를 기본으로 해야 한다.\n\n### 2.3 교환 형식\n\n| 형식 | 형태 | 공개·안정성 | VIDE 용도 |\n|---|---|---|---|\n| midas MGT/MCT | `*KEYWORD` 블록 + `;` 주석 필드 순서 + 쉼표 행. 공식 Command List·Quick Reference가 있으나 판 번호가 붙은 스키마는 없음 ([MGT Command List](http://manual.midasuser.com/EN_Common/Gen/891/Start/14_Appendix/MGT_Command_List.htm)). 가져올 때 하중·지점은 **누적**되고 기하는 **교체**됨 ([MGT Command Shell](http://manual.midasuser.com/EN_Common/Gen/925/Start/11_Tools/MGT_Command_Shell.htm)) | 내보낸 파일에 흔한 `*USE-STLD`는 공식 페이지에서 미확인 | **쓰기 전용 부분집합** 우선: UNIT, NODE, ELEMENT, MATERIAL, SECTION, CONSTRAINT, FRAME-RLS, OFFSET, STLDCASE, SELFWEIGHT, CONLOAD, BEAMLOAD, LOADCOMB, LOADTOMASS, STORY. 가져오기는 판 차이 위험으로 후순위 |\n| MIDAS API (NX) | JSON REST. 중계 서버 → WebSocket → 실행 중인 GEN/CIVIL NX. 사용자별 MAPI-Key ([How to work MIDAS CIVIL NX Open API?](https://support.midasuser.com/hc/en-us/articles/30212837484441-How-to-work-MIDAS-CIVIL-NX-Open-API), 스니펫). `/db/NODE`, `/db/ELEM`, `/db/STLD`, `/db/LCOM` 등 ([MIDAS Python docs](https://midas-rnd.github.io/midasapi-python/)) | NX 설치·라이선스가 필요. 약관 미확인 | 지금은 쓸 수 없음. 4글자 키는 계약의 이름 선례 |\n| CSI .s2k/.e2k | 이름 붙은 표의 집합(JOINT COORDINATES, CONNECTIVITY - FRAME, LOAD PATTERN DEFINITIONS …) ([Strand7 목록](https://www.strand7.com/strand7r3help/Content/Topics/FileFormats/FileFormatsSAP2000FileDefinitionTables.htm?TocPath=File+Formats%7CSAP2000+File%7C_____2)) | 행 문법은 이번 조사에서 미확인 | 후순위 |\n| RFEM 6 API | SOAP 웹서비스(구) / gRPC Dlubal API(신, 초기 시험 약 15배 빠르다는 업체 주장) ([Dlubal API](https://www.dlubal.com/en/support-and-learning/support/product-features/002956)) | 업체 자체 보고 | 해당 없음 |\n| IFC 구조해석 뷰(SAV) | 해석 모델·곡선 부재·점 연결·편심·하중 묶음·결과 묶음 | 채택이 약함. Archicad에서는 \"실험 기능\" ([Graphisoft](https://community.graphisoft.com/t5/Collaboration-with-other/Structural-Analytical-Model-Exchange/ta-p/304054)), CAD는 보통 물리 형상 뷰만 내보냄 ([Dlubal KB 001472](https://www.dlubal.com/en/support-and-learning/support/knowledge-base/001472)) | 의미 정의만 참고 |\n| Speckle | v2 `Objects.Structural`은 저장소 보관(archived) ([speckle-sharp](https://github.com/specklesystems/speckle-sharp)). v3 SDK에는 Structural 네임스페이스가 없고 `EtabsObject` 같은 호스트별 객체로 바뀜 ([speckle-sharp-sdk](https://github.com/specklesystems/speckle-sharp-sdk), [ETABS schema](https://docs.speckle.systems/developers/data-schema/connectors/etabs-schema)) | 공통 구조 스키마를 사실상 포기 | 전송·뷰어 선택지일 뿐 계약으로 쓰지 않음 |\n| BHoM 어댑터 | ETABS·SAP2000·Robot·GSA·RFEM6·**MidasCivil** 어댑터, 모두 LGPL-3 ([MidasCivil_Toolkit](https://github.com/BHoM/MidasCivil_Toolkit)) | 유지 중(같은 날 일괄 갱신, 기능 범위는 미확인) | MCT 쓰기 구현 참고 |\n| OpenSees `print -JSON` | 모델 덤프 ([printModel](https://openseespydoc.readthedocs.io/en/latest/src/printModel.html)) | 출력 형식일 뿐 판이 붙은 입력 스키마가 아님 | 쓰지 않음 |\n\nKaramba 3.1은 ETABS E2K·SAP2000 S2K·SAF·IFC 내보내기를 둔다 ([New in 3.1](https://manual.karamba3d.com/new-in-karamba3d-3.1)). 초기 설계 도구가 최종 검토는 상용 프로그램에 넘기는 것이 업계 관행이다. 한국에서 그 대상은 흔히 midas다. 다만 사용자 확인(2026-09-29)으로는 구조사무소와 보통 **CAD·Rhino 파일**로 주고받으며, MGT로 넘겨 midas에서 바로 검토한 것은 S-18의 고유 방식이다. 따라서 VIDE의 기본 교환은 CAD·Rhino 파일이고, MGT 쓰기는 프로젝트별 선택 내보내기로 둔다.\n\n### 2.4 검증 공개 수준은 도구마다 크게 다르다\n\nCSI는 예제별 검증 PDF를 공개한다. 각 PDF에는 입력, 독립 해(교과서 값), 차이 %가 모두 있다 ([CSI Verification examples](https://web.wiki.csiamerica.com/wiki/spaces/doc/pages/1245534/Verification+examples)). Bentley STAAD.Pro는 AISC 설계 예제를 다시 풀어 중간값까지 공개한다. Dlubal도 검증 예제 목록을 공개하지만 스크립트로는 페이지가 렌더링되지 않았다 ([Dlubal Verification Examples](https://www.dlubal.com/en/downloads-and-information/examples-and-tutorials/verification-examples)). midas의 \"Benchmarks & Verification Manuals\" 항목은 조사 시점에 404였다 ([midas KB](https://globalsupport.midasuser.com/helpdesk/KB/View/5944326-benchmarks--verification-manuals)). Karamba는 공식 검증 문서 없이 2018년 석사논문(EC3 검정의 RFEM 비교)을 안내할 뿐이다 ([McNeel 포럼](https://discourse.mcneel.com/t/validation-reports/73781)). PyNite는 교과서 문제를 CI에서 매번 돌린다 ([PyNite](https://github.com/JWock82/Pynite)). 파라메트릭 도구 생태계에서 검증 자료의 부족은 알려진 신뢰도 약점이다. VIDE는 첫 단계부터 자체 검증 목록을 함께 배포하는 것으로 이를 차별점으로 삼을 수 있다(추론).\n\n## 3. 해석 모델 계약 제안\n\n계약의 물리 필드는 ARCH가 소유한다(AI.md §1). 여기서는 필드 후보와 각 필드가 따른 선례만 제안한다. 형태는 **문자열 ID를 가진 평면 배열**이다. 하중은 부재 밑에 넣지 않고 대상 집합을 참조한다(BHoM 방식). 이렇게 하면 약 2,000부재에서도 JSON이 작고 차분(diff)하기 쉽다(추론).\n\n| 묶음 | 핵심 필드 | 따른 선례 | 계약에서 정할 것 |\n|---|---|---|---|\n| `meta` | `schemaVersion`, `units`{length, force, angle, temperature}, `gravity` 벡터, `modelType`, `source`(Rhino 문서·객체 GUID) | Speckle ModelUnits ([Analysis](https://github.com/specklesystems/speckle-sharp/tree/main/Objects/Objects/Structural/Analysis)), IFC `SelfWeightCoefficients` ([IfcStructuralLoadCase](https://github.com/buildingSMART/IFC4.3.x-development/blob/master/docs/schemas/domain/IfcStructuralAnalysisDomain/Entities/IfcStructuralLoadCase.md)), midas `*UNIT` | 내부 단위 하나와 표시 단위를 분리. 연직축을 명시 |\n| `nodes[]` | `id`, `xyz`, `support`{dx…rz: `true`/`false`/강성값}, `supportAxes?`(경사 지점), `mass?` | BHoM Constraint6DOF, IFC BoundaryNodeCondition·ConditionCoordinateSystem ([IfcStructuralPointConnection](https://github.com/buildingSMART/IFC4.3.x-development/blob/master/docs/schemas/domain/IfcStructuralAnalysisDomain/Entities/IfcStructuralPointConnection.md)) | -1 같은 특수값 금지 |\n| `materials[]` | `id`, `grade`(SS275·SM355 등), `E`, `G` 또는 `nu`, `density`, `Fy`, `Fu` | PyNite `add_material`, midas `*MATERIAL` | 두께별 Fy 저감은 검정 층에서 |\n| `sections[]` | `id`, `source`(KS 표/사용자), `shape`(H·BH·박스·강관·L·C) + 치수, 계산 성질 A·Iy·Iz·J·Zy·Zz·Avy·Avz·Cw | PyNite `add_steel_section`, midas `*SECTION DBUSER`, BHoM SectionProperties ([폴더](https://github.com/BHoM/BHoM/tree/main/Structure_oM/SectionProperties)) | 성질은 치수에서 엔진이 계산하고 KS 표와 대조 |\n| `members[]`(해석 요소) | `id`, `i`, `j`, `material`, `section`, `orientation`{`angle` 또는 `vector`}, `releases`{i[6], j[6]}, `offsets`{i, j, `frame`: global/local}, `kind`(flexural/truss/tensionOnly/compressionOnly), `parent` | midas `*ELEMENT`·`*FRAME-RLS`·`*OFFSET`, OpenSees `vecxz`·`-jntOffset`, BHoM Bar, Speckle v2 Element1D | 방향 규약 하나, 연직 부재 예외, 오프셋 좌표계 |\n| `physicalMembers[]` | `id`(Rhino GUID 기반 안정 ID), 절점열, `role`(보·기둥·가새), `autoSplit` | PyNite PhysMember, RFEM 선 위 부재, GSA \"Members\" ([GsaGH](https://github.com/arup-group/GSA-Grasshopper)) | 재분할 뒤에도 결과를 Rhino 객체로 되돌림 |\n| `stories[]`, `rigidLinks[]`, `diaphragms[]` | 층 이름·높이, 주·종 절점과 자유도, 강막 여부 | midas `*STORY bFLDIAP`·`*RIGIDLINK` | 강막은 지진·모드 단계에서 |\n| `loadPatterns[]` | `id`, `nature`(D, L, Lr, S, W, E…), `actionType`(영구/변동/우발), `selfWeight` 벡터 | CSI load pattern, midas `LCTYPE`, IFC `IfcActionTypeEnum` ([md](https://github.com/buildingSMART/IFC4.3.x-development/blob/master/docs/schemas/domain/IfcStructuralAnalysisDomain/Types/IfcActionTypeEnum.md)), BHoM Loadcase.Nature | `nature`가 KDS 41 10 15 조합 생성의 입력 |\n| `loads[]` | `pattern`, `type`(절점·부재 집중·부재 분포·면·강제 변위), `targets[]`, `axis`(global/local), `projected`, 값과 위치(상대/절대) | BHoM BarVaryingDistributedLoad ([file](https://github.com/BHoM/BHoM/blob/main/Structure_oM/Loads/BarVaryingDistributedLoad.cs)), midas `*BEAMLOAD`, PyNite `FX`(전역)/`Fx`(국부) | 좌표축 표기를 대소문자에 맡기지 않음 |\n| `analysisCases[]` | `id`, `kind`(linearStatic, pDelta, modal, 이후 responseSpectrum), `patterns[{id, factor}]` 또는 대상 조합, P-Δ{방법, 허용치, 최대 반복} | CSI load case, midas `PDEL-CTRL`, Karamba AnalyzeThII | P-Δ는 조합마다 풀어야 함 |\n| `massSource` | 자중 포함, 패턴·계수, 방향 | midas `*LOADTOMASS`, PyNite `analyze_modal` | 모드 단계에서 사용 |\n| `combinations[]` | `id`, `kind`(add, envelope, abs, srss), `terms[{ref, factor}]`, `limitState`(강도/사용성), `generatedBy`(KDS 규칙 ID 또는 user), `tags` | BHoM (계수, 경우) 쌍, IFC 쌍별 계수, midas `KIND`, PyNite `combo_tags` | Speckle v2의 병렬 배열(경우 목록 + 계수 목록)은 어긋나기 쉬워 피함 |\n| `designMembers[]` | `elements[]`, `Ly`·`Lz`·`Lb`·`Ky`·`Kz`·`Cb`·`Cm`, 값마다 {auto, user, 근거} | midas Member Assignment, CSI overwrite, RFEM member set | 자동값은 \"가정\" 표시 |\n| `results` | 결과 묶음{대상, `theory`(1차/2차), `isLinear`}, 절점 변위·반력, 부재력(부재, 경우, 모드, 위치), 모드 주기·참여율 | IFC StructuralResultGroup, BHoM BarForce | 2차 결과에는 합산 금지 표시 |\n| `checks` | 부재별 검정비, 지배 조합, 조항, 중간값 트리, 상태(pass/fail/incomplete/error), 세장비 초과 별도 표시 | RFEM Design Check Details, midas OK*·NG*, Karamba Util 분해, S-18 `assessment` 4상태(RESEARCH-08 §3.7) | 검토하지 않은 항목을 명시 |\n\n계약에서 피해야 할 함정은 모두 출처에 증거가 있다.\n\n| 함정 | 증거 | 계약 규칙 |\n|---|---|---|\n| 방향각 규약 불일치 | BHoM은 \"국부 z = 전역 Z\"에서 회전하고 연직 부재는 별도 규약 ([Bar.cs](https://github.com/BHoM/BHoM/blob/main/Structure_oM/Elements/Bar.cs)). IFC는 `Axis` 방향 ([IfcStructuralCurveMember](https://github.com/buildingSMART/IFC4.3.x-development/blob/master/docs/schemas/domain/IfcStructuralAnalysisDomain/Entities/IfcStructuralCurveMember.md)). OpenSees는 `vecxz`, PyNite는 자체 기준의 `rotation` | 규약 하나와 연직 예외를 정하고, 엔진 간 회전 시험을 둠(PyNite `test_member_rotation` 선례) |\n| 오프셋 좌표계 | OpenSees는 전역, BHoM은 국부. IFC는 편심 모델이 둘이고 \"지역 합의\"에 맡김 ([IfcRelConnectsWithEccentricity](https://github.com/buildingSMART/IFC4.3.x-development/blob/master/docs/schemas/domain/IfcStructuralAnalysisDomain/Entities/IfcRelConnectsWithEccentricity.md)) | `frame` 필드 필수 |\n| 지점과 단부해제 혼동 | BHoM이 \"Releases와 혼동하지 말 것\"이라고 명시. IFC 단부해제는 부재 국부축 기준 ([IfcRelConnectsStructuralMember](https://github.com/buildingSMART/IFC4.3.x-development/blob/master/docs/schemas/domain/IfcStructuralAnalysisDomain/Entities/IfcRelConnectsStructuralMember.md)) | 같은 6자유도 타입을 쓰되 소속을 분리 |\n| 단위 | PyNite는 단위 체계가 없고 중력 기본값이 1.0 ([FEModel3D.py](https://github.com/JWock82/Pynite/blob/main/Pynite/FEModel3D.py)). Karamba는 단위 체계가 둘 | 모델 수준에서 한 번 선언. Rhino 문서(보통 mm)와 분리 |\n| P-Δ 결과 합산 | PyNite는 조합별 반복, IFC `IsLinear` | 2차 결과는 조합으로 풀고 합산하지 않음 |\n| 병합 허용오차 | Karamba 기본 5 mm 병합과 중복선 제거 정보 출력 ([LineToBeam](https://manual.karamba3d.com/3-in-depth-component-reference/3.1-model/3.1.6-create-linear-element/3.1.6-line-to-beam.md)), PyNite `merge_duplicate_nodes(tolerance=0.001)` | 허용오차를 사용자에게 보이고, 병합·제거 목록을 결과에 남김 |\n| 기구(불안정) 모델 | Karamba 문제 해결 목록: 지점 누락, 회전 지점 옆 힌지, 축 회전 부재, 트러스 절점 회전 ([Troubleshooting](https://manual.karamba3d.com/troubleshooting/4.3.-miscellaneous-problems/4.1.5-definitions-and-components)) | 해석 전 모델 점검에서 해당 자유도를 뷰포트에 표시(S-18 기구 탐지 이식) |\n\n## 4. midas 없는 검증 계획\n\n검증은 여섯 층으로 쌓는다. 순서는 ① 닫힌 해, ② 공개 벤치마크(AISC·CSI·OpenSees), ③ PyNite 차분 시험, ④ 불변량, ⑤ 한국 고유 손계산과 전문가 검토, ⑥ 선택적 상용 교차다. S-18은 이미 ①③과 MGT 왕복을 갖췄다(닫힌 해 43건, PyNite 대비 변위 차 ≤ 3e-10 mm, RESEARCH-08 §3.1). 이 절은 거기에 ②④⑤를 더한다. 아래 BM 번호는 이 문서 안의 표기이며 제품 ID가 아니다.\n\n### 4.1 시험 케이스\n\n| 번호 | 이름 | 출처 | 입력 | 기대값 | 허용오차 | 단계 |\n|---|---|---|---|---|---|---|\n| BM-01 | AISC 2차해석 벤치마크 Case 1(횡지지 보-기둥) | [MASTAN2 LM7](https://www.mastan2.com/stabilityfun/7_SecondOrderEffects.pdf), [PyNite 시험](https://raw.githubusercontent.com/JWock82/PyNite/main/Testing/test_AISC_PDelta_benchmarks.py), [CSI ETABS KB](https://web.wiki.csiamerica.com/wiki/spaces/etabs/pages/1474593/AISC+stability+benchmark+problems+P-+and+P-+effect) | W14x48 강축, 핀-핀 L = 28 ft(336 in), E = 29,000 ksi, I = 484 in⁴, 등분포 0.2 kip/ft, P = 0·150·300·450 kip, 중간 절점 1개 이상, 전단변형 제외 | 중앙 M = 235·269·313·375 kip-in, 중앙 Δ = 0.197·0.224·0.261·0.311 in | AISC 기준 모멘트 3%·처짐 5%. 닫힌 식 대비 1%(추론) | 1(P-Δ) |\n| BM-02 | 같은 벤치마크 Case 2(캔틸레버) | 위와 같음 | 같은 단면, L = 28 ft 캔틸레버, 끝 수평 1.0 kip, P = 0·100·150·200 kip, 중간 절점 2개 | 기부 M = 336·469·598·848 kip-in, 끝 Δ = 0.901·1.33·1.75·2.56 in | 같음 | 1 |\n| BM-03 | 닫힌 해 캔틸레버 P-Δ | [PyNite 시험](https://raw.githubusercontent.com/JWock82/PyNite/main/Testing/test_AISC_PDelta_benchmarks.py) | L = 20 ft, H = 5 kip, P = 100 kip, I = 100 in⁴ | M = HL·tanα/α, y = (HL³/3EI)·3(tanα−α)/α³, α = √(PL²/EI) | 1% | 1 |\n| BM-04 | CSI 1-019 강접 골조 좌굴 | [CSI Problem 1-019](https://docs.csiamerica.com/manuals/sap2000/Verification/Analysis/Frames/Problem%201-019.pdf) | 1층 1경간 144×144 in, W8X31(A = 9.12 in², I = 110 in⁴), E = 29,900 ksi, 휨변형만(면적 배율 100,000, 전단면적 0), 면내 좌굴 | 임계하중 280.19 kip(고전 안정 교과서 1961). 부재당 요소 1·2·4개에서 CSI 결과 280.98·280.24·280.19 | 요소 4개 기준 0.1%, 요소 수에 따라 단조 수렴(추론) | 좌굴(2) |\n| BM-05 | OpenSees 2D 포털 골조 주기 | [OpenSeesPy Portal Frame 2d](https://openseespydoc.readthedocs.io/en/latest/src/PortalFrame2d.html), [PortalFrame2d.tcl](https://github.com/OpenSees/OpenSees/blob/master/EXAMPLES/verification/PortalFrame2d.tcl) | 2경간 7층, E = 29,500, W24 보, 층고 162/156 in, 집중 질량 | 주기 1.27321, 0.43128, 0.24204, 0.16018, 0.11899, 0.09506, 0.07951 s(SAP2000과 동일) | 1%(추론) | 모드(2) |\n| BM-06 | AISC 설계 예제 F.1-2B(3등분점 횡지지 보 LTB) | [STAAD 검증 페이지](https://docs.bentley.com/LiveContent/web/STAAD.Pro%20Help-v2024/en/topics/Verification/Design%20Steel%20AISC%20360/v-stpst_AISC_360-16_W_LTB_Test_F.1-2B.html) | W18×50, 단순 경간 35 ft, A992 Fy = 50 ksi, 양단·3등분점 횡지지(Lb = 11.7 ft) | Cb = 1.01(중앙 구간, 지배)·1.45(끝 구간), Mp = 5,050 kip-in, Lp = 5.8339 ft, Lr = 16.964 ft, rts = 0.16521 ft, φbMn = 304.7 kip-ft(STAAD 305.5), 지배 조항 F2.2 | 중간값 0.5~1%(설계 예제의 반올림 고려, 추론), 지배 조항 일치 | 1(검정) |\n| BM-07 | 같은 계열 LTB·Cb 풀이(AISC 360-22) | [Dlubal KB 001884](https://www.dlubal.com/en/support-and-learning/support/knowledge-base/001884), [KB 001679](https://www.dlubal.com/en/support-and-learning/support/knowledge-base/001679) | W18X50, 등분포, 양단·3등분점 횡지지, A992 | 수치 미추출 — 수동 확인 필요 | BM-06과 같음 | 1 |\n| BM-08 | AISC 설계 예제 E.1·F.1-1·F.1-3·F.2·G.1·H.1 | [AISC Manual Companion](https://www.aisc.org/aisc/publications/steel-construction-manual/manual-companion-for-16th-edition/) (aisc.org는 스크립트 접근 403, 브라우저로 수동 내려받기) | 압축 E3, 휨 F2·F3, 채널, 전단 G2, 조합 H1-1 | 예제 번호는 장 체계로 추정한 것이며 미확인. 내려받은 뒤 채움 | 중간값 0.5~1%, 판정 완전 일치 | 1 |\n| BM-09 | B1 증폭계수 연구 | [MASTAN2 LM7](https://www.mastan2.com/stabilityfun/7_SecondOrderEffects.pdf) | M1/M2 = +0.75·0·−0.75, P/Pe = 0~0.9 | 엄밀 2차해석 결과 대 부록 8 식 A-8-3의 B1(동봉 스프레드시트) | 3%(추론) | 2 |\n| BM-10 | PyNite 차분 시험 | [PyNite](https://github.com/JWock82/Pynite)(MIT, [LICENSE](https://raw.githubusercontent.com/JWock82/PyNite/main/LICENSE)) | 무작위 소형 3D 골조: 단부해제, 회전한 국부축, 혼합 하중, 선형·P-Δ | PyNite 결과 | 선형 1e-6 상대(추론. S-18 선례는 3e-10 mm) | 1 |\n| BM-11 | 불변량 | 표준 유한요소 관행(개별 출처 없음). PyNite 시험 폴더의 평형·침하·단부해제·회전·불안정 시험을 본뜸 ([Testing](https://github.com/JWock82/PyNite/tree/main/Testing)) | 모든 fixture 모델 | Σ반력 + Σ하중 = 0, 전체 강체 회전 불변, 대칭 모델 → 대칭 결과, 선형 중첩 = 조합 결과, 단위계 불변, 절점 순서 불변, 기구 탐지 | 평형 1e-8 상대(추론) | 1 |\n| BM-12 | KS 단면 성질 | KS D 3502 무료 원문 보기 ([e나라표준인증](https://standard.go.kr/KSCI/standardIntro/getStandardSearchView.do?menuId=919&topMenuId=502&upperMenuId=503&ksNo=KSD3502&tmprKsNo=KSD3502&reformNo=15)) | 치수(h, b, t1, t2, r) | 엔진이 계산한 A·I·Z·J·Cw를 KS 표 값과 대조(S-18 H 34종, S-10 H 53종) | 0.5%(필렛 근사 차이, 추론) | 1 |\n| BM-13 | KDS 하중조합 생성 | KDS 원문([KCSC 목록](https://www.kcsc.re.kr/standardCode/list), 웹 뷰어) + S-18 LRFD 조합 23개 | 하중 패턴 `nature` 집합 | 조합 목록과 계수 | 완전 일치, 구조기술사 검토 | 1 |\n| BM-14 | MGT 왕복·반입 | S-18 `mgt_roundtrip.py`(RESEARCH-08 §3.8) | 내보낸 MGT | 다시 읽은 모델 = 원 모델. midas에서 실제로 불러 해석 결과를 대조(§4.3) | 필드 완전 일치 | 3 |\n\nCSI·AISC 문서는 저작권 문서다. 따라서 저장소에는 PDF를 복사하지 않고 입력과 독립 해 값만 식으로 다시 유도해 넣는다. 예제 ID와 URL은 인용으로 남긴다(추론). BM-01·02의 PyNite 값은 AISC 해설 그림의 \"전단변형 제외\" 값이다. 조사 노트에서 닫힌 식으로 같은 값을 재현했으므로(Case 2 기부 M 336.0·469.1·598.7·849.0), fixture는 AISC 그림을 베끼지 않고 기대값을 스스로 계산할 수 있다. 부재 검정 fixture는 최종 검정비만이 아니라 λ, λp, λr, Fcr, Lp, Lr, Cb, Mn, Vn, H1-1 비까지 **중간값 단위로** 단언해야 실패 위치를 좁힐 수 있다(추론).\n\n### 4.2 한국 고유 부분은 공개 정답집이 없다\n\nKDS 본문은 국가건설기준센터 웹 뷰어와 법령 포털에서 무료로 읽을 수 있다 ([KCSC 뷰어 예](https://www.kcsc.re.kr/standardCode/viewer/KDS%2014%2031%2005:2024-05-03), [law.go.kr 건축구조기준](https://www.law.go.kr/%ED%96%89%EC%A0%95%EA%B7%9C%EC%B9%99/%EA%B1%B4%EC%B6%95%EA%B5%AC%EC%A1%B0%EA%B8%B0%EC%A4%80)). 뷰어가 JS 앱이라 자동 수집은 어렵다. 그래서 본문 대신 **조항 번호를 저장**하는 방식이 맞다. 2017년 KDS 14 31 10 등의 신구조문 대비표 ([CODIL](https://www.codil.or.kr/filebank/moct2014//201902/MOCT1998_2.PDF?nserialno=1998))와 구 LRFD 강구조설계기준 전문(2009, [CODIL PDF](https://www.codil.or.kr/filebank/construction/DC/CIGCDCD90150/CIGCDCD90150.pdf))은 공개돼 있다. 그러나 AISC 설계 예제에 해당하는 **무료 한국 풀이집은 찾지 못했다**. 학회 해설서는 상용 도서다 ([국회도서관](https://dl.nanet.go.kr/SearchDetailView.do?cn=MONO1201867856)). 따라서 검증은 이렇게 나눈다. 식의 구조는 AISC fixture로 검증한다. 한국 고유 값(SS275·SM355의 두께별 항복강도, KS H형강, KDS 하중계수)은 소수의 손계산 fixture로 만들고, 한국 구조기술사가 검토한다. KDS 14 31 10이 AISC 360 식 체계를 따르므로 이 분할이 성립한다(추론). RESEARCH-08 §3.2가 남긴 \"E = 205,000/210,000 조문 확인\"도 이 검토에 포함한다.\n\n### 4.3 상용 프로그램 교차는 무료 경로가 있지만 내부 기록으로만 쓴다\n\n| 경로 | 내용 | 제약 |\n|---|---|---|\n| midas 체험판 | Gen·Civil 무료 체험, \"1인 1회\" 발급 ([midas Gen trial](https://landing.midasuser.com/en/gate/building/trials/gen/step1), [Civil free trial](https://resource.midasuser.com/en/free-trial)) | 기간·벤치마크 공개 조항 미확인 |\n| midas 학교 라이선스 | 기증 계약 학교는 무료 ([EduCenter](https://educenter.midasuser.com/download)) | 교육용 |\n| Dlubal 학생 라이선스 | RFEM 6/RSTAB 9 전체 기능 1년, 재학 증명으로 갱신 ([Dlubal FAQ 005613](https://www.dlubal.com/en/support-and-learning/support/faq/005613)) | 재학 중인 팀원 필요 |\n| CSI | 2024년 1월부터 무료 학생 데모 중단, 교육용도 연구 라이선스 가격 ([Drexel 안내](https://tech.coe.drexel.edu/software/csi/)), 체험판은 있음 ([SAP2000 trial](https://www.csiamerica.com/products/sap2000/trial)) | 교육 라이선스는 영리 사용 제외 |\n\n현실적인 조합은 다음과 같다. midas 체험판 1회로 BM-14와 fixture 모델 10~20개를 실행해 결과를 기록한다. 부족하면 기증 라이선스가 있는 대학 연구실이나 구조사무소에 같은 모델 실행을 의뢰한다. 체험·교육 라이선스는 비상업·교육 용도로 제한되고, 상용 약관은 흔히 벤치마크 공개를 제한한다. 따라서 이 결과는 **내부 교차 기록**으로만 두고, 저장소에 배포하는 기대값은 공개 교과서·AISC·CSI 값으로 한정한다(추론).\n\n### 4.4 fixture 형식\n\n사례마다 JSON 하나를 둔다. 필드는 {출처(문서, 예제 ID, 쪽), 단위, 입력 모델(§3 계약 형식), 기대값과 값별 허용오차, 가정(전단변형 제외 등)}이다. 회귀용 골든 출력은 \"정답\" fixture와 분리한다. 그래야 다시 생성한 골든 파일이 교과서 값을 조용히 덮어쓰지 않는다(추론). 허용오차는 두 단계로 둔다. 정확 해가 있는 선형 사례는 엄격하게, 2차·근사 사례는 벤치마크가 정한 값(AISC 3%/5%, PyNite 닫힌 식 1%)을 쓴다. 두 단계 기준은 PyNite와 CSI 관행을 따른다 ([PyNite 시험](https://raw.githubusercontent.com/JWock82/PyNite/main/Testing/test_AISC_PDelta_benchmarks.py), [CSI 1-019](https://docs.csiamerica.com/manuals/sap2000/Verification/Analysis/Frames/Problem%201-019.pdf)). PyNite는 Python 3.11 이상이 필요하다 ([PyNite](https://github.com/JWock82/Pynite)). VIDE 배포본에는 Python이 없으므로 PyNite는 **개발·CI 전용 기준 해석기**로만 쓴다.\n\n## 5. 구현 언어 비교와 권고\n\n### 5.1 문제 크기가 요구하는 성능\n\n목표는 약 2,000부재, 약 12,000자유도(DOF: 절점이 움직일 수 있는 방향 수), LRFD 조합 23개와 반복 단면 조정이다. 선형 해석은 강성 행렬을 **한 번 분해(LDLᵀ: 대칭 행렬을 삼각 행렬로 나누는 직접 해법)** 하고 23개 우변을 푸는 것으로 끝난다. P-Δ는 조합마다 기하강성을 더해 **다시 분해하며 반복**한다. 단면 조정 반복이 이를 곱하고, 이후 모드 해석은 희소 일반화 고유값 문제(K x = λ M x)를 푼다. 이 크기에서 분해 결과는 수십 MB 이하다. 따라서 wasm32의 4 GB 메모리 한도는 문제되지 않는다(추론). S-18 기록에서 C# 포팅(MstCore2, 스카이라인 LDLᵀ, 중력만)은 0.3초, 순수 Python은 26초, numpy/scipy는 검정 포함 약 4.3초였다(내부 기록, 이번 재현 아님). 즉 네이티브 언어라면 한 번의 해석은 1초 이하다. 언어 간 성능 차이가 드러나는 곳은 **P-Δ × 조합 × 단면 조정 반복**의 곱과 대화형 재검토 응답, 모드 해석, 이후 더 큰 모델이다(추론).\n\n### 5.2 언어 비교\n\n| 안 | 성능 | 희소 해법·고유값 | 구조 코드 재사용 | Node 통합 | Windows 배포 | 라이선스 | AI 에이전트 작성 품질 |\n|---|---|---|---|---|---|---|---|\n| **Rust + faer** | 네이티브. Rust 희소 커널이 Eigen·PSBLAS와 비슷하다는 2026 학술 연구가 있음(크레이트 이름은 초록에 없음, [arXiv 2606.19213](https://arxiv.org/abs/2606.19213)) | faer 0.24.4: 희소 Cholesky·LDLT(Bunch-Kaufman)·LU·QR, 밀집 대칭 고유값 ([docs.rs faer](https://docs.rs/faer/latest/faer/)). 희소 일반화 고유값은 작은 크레이트의 shift-invert Lanczos 정도 ([tpt-fem-eigen](https://docs.rs/tpt-fem-eigen/latest/tpt_fem_eigen/), 스니펫). nalgebra-sparse는 \"초기 단계\" ([docs.rs](https://docs.rs/nalgebra-sparse/latest/nalgebra_sparse/)) | 성숙한 Rust 골조 FE 없음(교육용 크레이트뿐, [lib.rs](https://lib.rs/crates/finite_element_method)). S-18 Python·C#을 명세로 재작성 | napi-rs 애드온(인프로세스, 네이티브 스레드) 또는 wasm 또는 별도 exe | win-x64용 `.node` 하나 | faer MIT | SWE-bench Multilingual 최고 58.14% ([swebench](https://www.swebench.com/multilingual.html)) |\n| Rust → wasm | 네이티브보다 평균 45~55% 느림, 최대 2.5배(2019, 구 V8, [USENIX ATC'19](https://www.usenix.org/conference/atc19/presentation/jangda)) | 같음. faer의 wasm 컴파일·SIMD 성능은 미확인 | 같음 | 인프로세스. 스레드는 Worker + SharedArrayBuffer 필요 ([wasm-bindgen-rayon](https://github.com/piotr-roslaniec/wasm-bindgen-rayon)). threads와 memory64 동시 사용 불가 ([wasm-bindgen #5330](https://github.com/wasm-bindgen/wasm-bindgen/issues/5330)) | `.wasm` 하나, 플랫폼별 빌드 없음 | 같음 | 같음 |\n| C# .NET 8 Native AOT + CSparse.NET | 네이티브급. MstCore2가 0.3초(S-18) | CSparse.NET 4.3.0: 희소 LU·Cholesky·QR·LDL', 의존성 없음. Interop로 MKL·SuiteSparse·ARPACK 연결 ([CSparse.NET](https://github.com/wo80/CSparse.NET)). Math.NET 직접 분해는 밀집 전용 ([Math.NET](https://numerics.mathdotnet.com/Matrix)) | **MstCore2 재사용**. BFE.NET은 선형 정적만(LGPL-3, [GitHub](https://github.com/BriefFiniteElementNet/BriefFiniteElement.Net)). Rhino 8(.NET 8) 플러그인과 코드 공유 가능 | 자식 프로세스(stdin/stdout JSON·명명 파이프) | 런타임 설치 없는 단일 exe. 빌드에 VS \"C++ 데스크톱 개발\" 필요 ([Native AOT](https://learn.microsoft.com/en-us/dotnet/core/deploying/native-aot/)). hello world 약 1.2~2 MB, 시작 5 ms 미만(2차 블로그 스니펫) | CSparse.NET 라이선스는 이번 조사에서 **미확인**(확인 필요) | 에이전트형 다언어 벤치에 C# 없음. 함수 단위 MultiPL-E에서 TS·JS와 비슷(구 모델, [arXiv 2208.08227](https://arxiv.org/pdf/2208.08227)) |\n| C++ (Eigen + Spectra) | 네이티브. 라이브러리 성숙도 최고. CHOLMOD 초절점 해법이 Eigen 기본 해법보다 크게 빠르다는 보고 ([Open3D #405](https://github.com/IntelVCL/Open3D/issues/405), 스니펫) | Spectra: 일반화 대칭 고유값 `SymGEigsSolver`, shift-invert, MPL-2.0 ([Spectra](https://spectralib.org/)) | OpenSees는 상업 배포에 UC 허가 필요 ([COPYRIGHT](https://github.com/OpenSees/OpenSees/blob/master/COPYRIGHT)). Frame3DD는 GPL-3 ([Frame3DD](https://frame3dd.sourceforge.net/)) | N-API 애드온 또는 emscripten wasm ([Emscripten](https://emscripten.org/docs/compiling/WebAssembly.html)). Awatif가 C++/wasm 선형 해법을 씀 ([Awatif](https://github.com/madil4/awatif)) | node-gyp + MSVC. SuiteSparse는 BLAS/LAPACK 의존(추론) | Eigen·Spectra는 허용적. 구조 코드는 제약 | C/C++ 28.57%로 최저 ([swebench](https://www.swebench.com/multilingual.html)) |\n| 순수 TypeScript | 가장 느림. 수치 배열 코드 벤치마크는 없음 | npm에는 \"[WIP]\" `cholesky-solve` 정도 ([scijs](https://github.com/scijs/cholesky-solve)). 희소 고유값 없음 | 없음(Awatif도 해법은 C++/wasm) | 서버와 같은 프로세스, 추가 비용 없음 | 추가 비용 없음 | — | JS/TS 34.88% ([swebench](https://www.swebench.com/multilingual.html)). Multi-SWE-bench에서도 TS·JS가 최저권 ([arXiv 2504.02605](https://arxiv.org/html/2504.02605v1), 스니펫) |\n| Julia (juliac) | 빠름 | SparseArrays/CHOLMOD·Arpack(생태계 양호) | InstantFrame.jl(3D 골조, 2차·모드, 스니펫, 라이선스 미확인, [GitHub](https://github.com/runtosolve/InstantFrame.jl)) | 자식 프로세스 | trim은 Julia 1.12부터 새 기능. 라이브러리 포함 번들 약 93 MB 사례 ([LWN](https://lwn.net/Articles/1044280/), 스니펫) | — | 벤치마크 없음 |\n| Go | 네이티브 | gonum 직접 분해는 밀집 전용. 희소 Cholesky는 소형 패키지뿐 ([james-bowman/sparse](https://github.com/james-bowman/sparse)) | 없음 | 자식 프로세스 | 단일 정적 exe | — | 30.95% |\n\n에이전트 작성 품질 근거는 이슈 해결형 벤치마크이며, 수치 코드 전용 벤치마크는 찾지 못했다. 따라서 이 근거로 말할 수 있는 것은 \"Rust와 C#은 에이전트에게 불리하지 않고 C++는 불리하다\"까지다. 정밀한 순위를 매기는 근거는 아니다. Rust는 컴파일러가 엄격해 에이전트가 빠르고 정확한 피드백을 받는다. 이는 Rust가 높은 해결률을 보이는 것과 부합한다(추론).\n\n### 5.3 Node 통합 방식\n\n| 방식 | 속도 | 격리 | 배포 | 비고 |\n|---|---|---|---|---|\n| wasm 인프로세스 | 네이티브의 약 0.5~0.7배(2019 연구). 2021 비공식 측정에서도 네이티브 애드온이 약 45% 빠름 ([kudmitry.com](https://kudmitry.com/articles/native-rust-wasm/), 실험실 수준 아님) | 샌드박스. 메모리 오류가 서버를 깨지 않음(추론) | 가장 단순 | 가상 메모리가 제한된 환경에서 실패하는 Node 이슈가 있음 ([nodejs #56596](https://github.com/nodejs/node/issues/56596)). 브라우저 미리보기 해석에도 재사용 가능 |\n| 네이티브 애드온(Node-API) | 네이티브, 스레드 사용 가능, 결과 직렬화 비용 없음(추론) | 코어가 비정상 종료하면 서버 프로세스도 함께 종료(추론) | win-x64 `.node` 하나. Node-API는 Node 판이 바뀌어도 ABI 안정 ([napi.rs](https://napi.rs/), 스니펫) | napi-rs는 WASI 대체 빌드를 함께 낼 수 있음 |\n| 자식 프로세스 | 네이티브 + JSON/파이프 직렬화. 12k DOF 결과면 작음(추론) | 가장 강함 | exe 하나 | C#·Julia·Go의 유일한 경로. Rust도 같은 코드로 exe를 낼 수 있음(추론) |\n\n### 5.4 권고\n\n**장기 권고는 Rust + faer다.** 사용자가 성능을 우선하고 언어 난이도를 따지지 않는다는 전제에서 Rust가 가장 많은 조건을 함께 만족한다. 우선 네이티브 속도가 C++급이고, 희소 직접 해법(Cholesky·LDLT)이 MIT 라이선스 한 라이브러리에 모여 있다. 또 한 코드베이스에서 애드온·wasm·exe 세 방식이 모두 가능하다. 에이전트형 벤치마크에서 해결률이 가장 높고, 메모리 안전성으로 C++의 가장 큰 위험도 피한다. 위험은 두 가지다. 첫째, 재사용할 Rust 구조 FE가 없어 S-18의 Python(`Frame`·P-Δ 약 250줄, 검정부)과 C#(MstCore2)을 명세로 삼아 재작성해야 한다. 규모는 작고 §4의 fixture가 이식 정확도를 수치로 검증한다. 둘째, 모드 해석용 희소 일반화 고유값 해법은 검증된 순수 Rust 구현이 없다. 이것은 faer의 희소 LDLT 위에 shift-invert Lanczos를 직접 쓰는 일이 되며, 모드 단계에서 BM-05와 개발 전용 기준 해석기로 검증한다. 통합은 **napi-rs 애드온을 기본**으로 둔다. 서버 안정성이 문제로 드러나면 같은 코드를 exe로 빌드해 자식 프로세스로 돌린다.\n\n**차선은 C# Native AOT 자식 프로세스다.** 기존 MstCore2를 바로 쓰므로 출시가 가장 빠르다. Rhino 8 플러그인과 코드를 공유할 수 있는 유일한 안이기도 하다. 다만 CSparse.NET은 SuiteSparse 계열 CSparse의 C# 포팅이라 초절점 해법이 아니다. 이 규모에서는 충분하지만, 큰 모델·모드 해석에서는 ARPACK 같은 네이티브 의존을 다시 들여야 한다(추론). 라이선스도 확인해야 한다. **순수 TypeScript(RESEARCH-08 §7.2 A안)**는 배포 비용이 0이다. 그러나 순서화·피벗 LDLT·Lanczos를 참고 라이브러리 없이 손으로 짜야 하고 가장 느리다. 성능 우선 기준에서는 해석 코어로 권하지 않는다. 대신 조합 생성·파라미터 확정 화면·보고처럼 반복이 적은 층은 TS 서버에 두는 것이 자연스럽다(추론). **C++**는 라이브러리가 가장 성숙하지만 에이전트 작성 품질이 가장 낮고, Windows 빌드가 가장 무거우며, 재사용할 구조 코드는 라이선스로 묶여 있다. **Julia·Go**는 배포(Julia) 또는 수치 생태계(Go)에서 탈락한다.\n\n**부재 검정식은 코어에 둔다(추론).** 단면 조정 반복은 해석 → 검정 → 단면 교체의 반복이다. 검정이 TS 쪽에 있으면 반복마다 경계를 건너야 한다. 하중조합 생성 규칙(KDS 41 10 15)과 `PARAMS` 형태의 파라미터·근거·상태 관리, 보고서·계산서는 TS에 둔다. 코어는 계약(§3) 입력을 받아 결과·검정을 돌려주는 순수 계산기로 유지한다. 계약이 언어 중립이므로 나중에 코어를 바꿔도 계약과 fixture는 그대로 남는다.\n\n**단기 권고:** C#을 거쳐 Rust로 가는 이중 작업은 피한다. SPIKE 한 번으로 Rust의 실측 성능과 Windows 빌드·설치 경로를 확인한 뒤 바로 Rust로 간다. SPIKE에서 Rust 빌드나 설치가 막히면 C# 자식 프로세스로 전환한다.\n\n### 5.5 결정 전 SPIKE 제안\n\n| 항목 | 내용 |\n|---|---|\n| 기록·코드 위치 | `docs/tdd/SPIKE-YYYY-MM-DD-frame-core-language.md`, `tools/spikes/\u003cdate>-frame-core-language/` |\n| 질문 | 같은 모델에서 후보별 실행 시간·메모리·설치 크기·통합 난점은 얼마인가 |\n| 모델 | S-18 규모 골조(약 12k DOF, 조합 23개)의 합성 사본. 원본 프로젝트 파일은 열지 않는다 |\n| 후보 | ① Rust + faer napi-rs 애드온 ② 같은 코드의 wasm ③ C# MstCore2(스카이라인) 및 CSparse.NET Native AOT exe ④ TS Float64Array 스카이라인 LDLᵀ(MstCore2 이식) |\n| 정확도 관문 | 시간 측정 전에 BM-01~03, BM-11, PyNite 차분(BM-10)을 통과해야 함 |\n| 측정 | 조립 + 분해 + 23개 우변 풀이, 조합별 P-Δ 수렴까지(③은 중력 선형만 있으므로 선형 시간만 비교), 단면 조정 5회 반복, 첫 호출 지연, 최대 메모리, 설치 산출물 크기, Windows 설치본에서의 로드 성공 여부 |\n| 종료 조건 | ①이 정확도 관문을 통과하고 설치본에서 로드되면 Rust 확정. 막히면 ③으로 결정. ②와 ①의 차이로 브라우저 미리보기용 wasm 병행 여부를 판단 |\n\n## 6. 사용자 결정이 필요한 항목\n\n| 번호 | 결정 | 선택지 | 권고 |\n|---|---|---|---|\n| 1 | 해석 코어 언어·구동 방식(RESEARCH-05 결정 11, RESEARCH-08 §8-1) | Rust 애드온 / Rust exe / C# AOT exe / 순수 TS | **결정(2026-09-29 사용자): Rust.** 구동 방식(애드온·exe·wasm)은 §5.5 SPIKE로 확정 |\n| 2 | 부재 검정식 위치 | 코어 / TS 서버 | 코어. 조합 생성·파라미터·보고는 TS |\n| 3 | P-Δ 방식 | 조합별 반복(정확, PyNite·CSI 반복식) / 모든 조합의 최대 압축력으로 1회(Karamba 방식, 보수적·빠름) | 조합별 기본, 포락 1회는 빠른 미리보기 선택지 |\n| 4 | 부재 방향각 규약 | midas beta 규약 / BHoM식 / 방향 벡터 | MGT 내보내기와 같은 규약을 정본으로 하고 벡터 입력을 허용. 엔진 간 회전 시험 |\n| 5 | 물리 부재 자동 분할 | 포함 / 해석 요소만 | 포함. Rhino 선 모델 입력과 결과 역연결에 필요 |\n| 6 | MGT 범위 | 쓰기 부분집합 / 읽기까지 | **결정(2026-09-29 사용자): 일반 요구가 아님.** 기본 교환은 CAD·Rhino 파일, MGT 쓰기는 프로젝트별 선택 |\n| 7 | 상용 교차 경로 | midas 체험판 1회 / 대학 기증 라이선스 협력 / 구조사무소 의뢰 / 하지 않음 | 체험판 1회 + 필요 시 협력. 결과는 내부 기록만 |\n| 8 | 한국 고유 fixture 검토자 | 구조기술사 검토 / 내부 검토만 | 구조기술사 검토. \"탐색용 예비값\" 표시는 어느 경우든 유지 |\n| 9 | 적용 기준 판과 재료 상수 | KDS 14 31 10 판, E = 205,000 또는 210,000 MPa | 조문 확인 후 fixture에 판·조항을 기록 |\n\n## 7. 확인 한계\n\nmidas 지원 포털(Zendesk)의 여러 문서는 자동 접근에서 403/404가 났다. 따라서 MIDAS API 구조, 비지지 길이 기본값, NX의 KDS 코드 목록은 검색 스니펫과 제목 수준이다. MGT 필드 순서는 소형 모델의 페이지 요약이라 파서 명세로 쓰기 전에 원문과 실제 내보낸 파일로 다시 확인해야 한다. CSI `.s2k` 행 문법, OAPI 약관, CSparse.NET·InstantFrame.jl·MIDAS API·Dlubal API의 라이선스는 확인하지 못했다. aisc.org는 스크립트 접근을 막아 설계 예제 번호(BM-08)와 해설 그림의 \"전단변형 포함\" 값은 얻지 못했다. Dlubal·CSI 색인 페이지는 JS 렌더링이라 목록 전체를 세지 못했다. 공개 midas 검증 매뉴얼과 무료 한국 강구조 풀이집은 찾지 못했다. 성능 근거는 2019년 wasm 연구와 2021년 비공식 측정, 2026년 희소 커널 연구 초록에 기대고 있다. faer 희소 분해와 CHOLMOD·CSparse.NET의 직접 비교, 12k DOF 골조의 실측은 없다. 이 공백은 §5.5 SPIKE가 메운다. 에이전트 작성 품질 벤치마크에는 C#·Julia가 없고 수치 코드 전용 벤치마크도 없다. S-18 성능 수치(0.3초, 26초, 약 4.3초)는 내부 기록이며 이번에 재현하지 않았다. 허용오차 가운데 \"(추론)\"으로 표시한 값은 공개 기준이 아닌 공학적 판단이다.\n"}}</script>
+<script id="reader-config" type="application/json">{"initial":"research-09-structure-analysis-methods","siteTitle":"VIDE"}</script>
+<script>
+(() => {
+'use strict';
+const sourceData=JSON.parse(document.getElementById('source-data').textContent);
+const config=JSON.parse(document.getElementById('reader-config').textContent);
+const esc=s=>String(s);
+let activeDoc=config.initial;
+let observer;
+let toastTimer;
+const $=s=>document.querySelector(s);
+function notify(message){const t=$('#toast');t.textContent=message;t.hidden=false;clearTimeout(toastTimer);toastTimer=setTimeout(()=>{t.hidden=true;},3400);}
+function renderToc(){const links=$('#toc-links');links.replaceChildren();const nodes=document.querySelectorAll('#'+activeDoc+' .doc-section');nodes.forEach(section=>{const a=document.createElement('a');a.href='#'+section.id;a.textContent=section.querySelector('h2').textContent;a.dataset.title=a.textContent;a.addEventListener('click',()=>{$('#toc-shell').classList.remove('open');$('#toc-toggle').setAttribute('aria-expanded','false');});links.appendChild(a);});$('#toc-count').textContent=nodes.length+' CHAPTERS';$('#toc-search').value='';$('#nav-hint').textContent='章 제목으로 찾아갑니다.'.replace('章','장');if(observer)observer.disconnect();observer=new IntersectionObserver(entries=>{const visible=entries.filter(e=>e.isIntersecting).sort((a,b)=>a.boundingClientRect.top-b.boundingClientRect.top);if(!visible.length)return;document.querySelectorAll('#toc-links a').forEach(a=>a.classList.toggle('active',a.hash==='#'+visible[0].target.id));},{rootMargin:'-90px 0px -64% 0px',threshold:0});nodes.forEach(n=>observer.observe(n));}
+function showDoc(name,reset){if(!sourceData[name])name=config.initial;activeDoc=name;document.querySelectorAll('.document').forEach(d=>d.hidden=d.id!==name);document.querySelectorAll('.doc-tab').forEach(a=>{a.classList.toggle('active',a.dataset.doc===name);if(a.dataset.doc===name)a.setAttribute('aria-current','page');else a.removeAttribute('aria-current');});renderToc();document.title=(config.siteTitle||'VIDE')+' · '+sourceData[name].label;if(reset)window.scrollTo({top:0,behavior:'instant'});}
+function useHash(){let raw=decodeURIComponent(location.hash.slice(1)||config.initial);let name=raw.split('-section-')[0];if(!sourceData[name])name=config.initial;if(name!==activeDoc||!$('#toc-links').children.length)showDoc(name,false);const el=document.getElementById(raw);if(el&&!el.hidden){requestAnimationFrame(()=>el.scrollIntoView({block:'start',behavior:'instant'}));}}
+window.addEventListener('hashchange',useHash);
+document.querySelectorAll('.doc-tab[data-doc]').forEach(a=>a.addEventListener('click',e=>{e.preventDefault();const name=a.dataset.doc;showDoc(name,true);history.replaceState(null,'','#'+name);}));
+$('#toc-toggle').addEventListener('click',()=>{const on=$('#toc-shell').classList.toggle('open');$('#toc-toggle').setAttribute('aria-expanded',String(on));});
+$('#toc-search').addEventListener('input',()=>{const q=$('#toc-search').value.trim().toLocaleLowerCase();let n=0;document.querySelectorAll('#toc-links a').forEach(a=>{a.hidden=!a.dataset.title.toLocaleLowerCase().includes(q);if(!a.hidden)n++;});$('#nav-hint').textContent=q?(n?'일치하는 장 '+n+'개':'일치하는 장 제목이 없습니다.'):'장 제목으로 찾아갑니다.';});
+function download(name,contents,type){const blob=new Blob([contents],{type});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),2500);}
+$('#source-download').addEventListener('click',()=>download(sourceData[activeDoc].file,sourceData[activeDoc].markdown,'text/markdown;charset=utf-8'));
+$('#print-doc').addEventListener('click',()=>window.print());
+async function copy(text){try{if(navigator.clipboard&&navigator.clipboard.writeText){await navigator.clipboard.writeText(text);return true;}}catch(e){}const t=document.createElement('textarea');t.value=text;t.style.position='fixed';t.style.left='-9999px';document.body.appendChild(t);t.select();let ok=false;try{ok=document.execCommand('copy');}catch(e){}t.remove();return ok;}
+document.querySelectorAll('.copy-code').forEach(b=>b.addEventListener('click',async()=>{const text=b.parentElement.querySelector('pre').textContent;const ok=await copy(text);if(ok){b.textContent='복사됨';notify('텍스트를 복사했습니다.');setTimeout(()=>b.textContent='복사',1800);}else{const range=document.createRange();range.selectNodeContents(b.parentElement.querySelector('pre'));const sel=window.getSelection();sel.removeAllRanges();sel.addRange(range);notify('자동 복사가 제한됩니다. 선택된 텍스트를 직접 복사하세요.');}}));
+showDoc(config.initial,false);useHash();
+})();
+</script>
+<script>
+(() => {
+'use strict';
+const KEY = 'vide-docs-review-mode';
+const AUTHOR_KEY = 'vide-docs-review-author';
+const sel = document.getElementById('review-mode');
+if (!sel) return;
+const authorSel = document.getElementById('review-author');
+let mode = 'marked';
+let author = 'all';
+try { mode = localStorage.getItem(KEY) || 'marked'; } catch (e) {}
+try { author = localStorage.getItem(AUTHOR_KEY) || 'all'; } catch (e) {}
+if (!['marked', 'original', 'accepted'].includes(mode)) mode = 'marked';
+if (!authorSel || !Array.from(authorSel.options).some(o => o.value === author)) author = 'all';
+const matches = el => author === 'all' || el.dataset.reviewAgent === author;
+const decorate = () => {
+const query = (document.getElementById('toc-search')?.value || '').trim().toLocaleLowerCase();
+let visible = 0;
+document.querySelectorAll('#toc-links a').forEach(a => {
+  const section = document.getElementById(decodeURIComponent(a.hash.slice(1)));
+  if (!section) return;
+  a.hidden = !a.dataset.title.toLocaleLowerCase().includes(query) || (section.classList.contains('review-appendix') && (mode !== 'marked' || !matches(section)));
+  if (!a.hidden) visible += 1;
+  const n = Array.from(section.querySelectorAll('.review-label[data-rid]')).filter(matches).length;
+  if (n && mode === 'marked') a.dataset.reviews = String(n); else delete a.dataset.reviews;
+});
+if (query) document.getElementById('nav-hint').textContent = visible ? `일치하는 장 ${visible}개` : '일치하는 장 제목이 없습니다.';
+};
+const apply = () => {
+  sel.value = mode;
+  if (authorSel) { authorSel.value = author; authorSel.disabled = mode !== 'marked'; }
+  document.body.classList.toggle('review-original', mode === 'original');
+  document.body.classList.toggle('review-accepted', mode === 'accepted');
+  document.querySelectorAll('blockquote.review, .review-appendix').forEach(el => { el.hidden = !matches(el); });
+  decorate();
+  try { localStorage.setItem(KEY, mode); localStorage.setItem(AUTHOR_KEY, author); } catch (e) {}
+};
+apply();
+const toc = document.getElementById('toc-links');
+if (toc) new MutationObserver(decorate).observe(toc, { childList: true });
+document.getElementById('toc-search')?.addEventListener('input', decorate);
+sel.addEventListener('change', () => { mode = sel.value; apply(); });
+if (authorSel) authorSel.addEventListener('change', () => { author = authorSel.value; apply(); });
+const revealHash = () => {
+  let id;
+  try { id = decodeURIComponent(location.hash.slice(1)); } catch (e) { return; }
+  const target = document.getElementById(id);
+  if (!target || !target.dataset.reviewAgent) return;
+  mode = 'marked';
+  if (!matches(target)) author = 'all';
+  apply();
+  target.scrollIntoView({ block: 'center' });
+};
+window.addEventListener('hashchange', revealHash);
+revealHash();
+})();
+</script>
+</body></html>

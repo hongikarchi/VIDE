@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="description" content="기능 명세 목록 · 공통 규칙과 기능별 상세"><meta name="generator" content="tools/docs/build.mjs — generated from docs/specs/README.md; do not edit"><title>VIDE · SPEC</title><style>
+<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="description" content="구조 코어(Rust)를 Node 서버에서 부르는 방식"><meta name="generator" content="tools/docs/build.mjs — generated from docs/tdd/SPIKE-2026-09-29-structure-core-binding.md; do not edit"><title>VIDE · 구조 코어(Rust)를 Node 서버에서 부르는 방식</title><style>
 :root{--ink:#292c2d;--muted:#626b6e;--line:#e1e3e1;--soft:#f5f5f1;--coral:#d97660;--paper:#fff;--font:"Pretendard","Noto Sans KR","Malgun Gothic",Arial,sans-serif}
 *{box-sizing:border-box}html{scroll-behavior:smooth;scroll-padding-top:92px}body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--font);letter-spacing:-.025em}a{color:inherit;text-underline-offset:4px}button,input,textarea,select{font:inherit;color:inherit}button{cursor:pointer;border:1px solid var(--line);border-radius:4px;background:var(--paper);padding:10px 15px;line-height:1.3}button:hover{background:var(--soft)}button:disabled{cursor:default;opacity:.6}button.primary{background:var(--ink);color:#fff;border-color:var(--ink)}button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible{outline:3px solid var(--coral);outline-offset:3px}textarea{resize:vertical}::selection{background:#f2d7ce}[hidden]{display:none!important}
 .skip{position:fixed;top:-80px;left:20px;z-index:100;background:white;padding:12px}.skip:focus{top:10px}
@@ -67,199 +67,93 @@ body.review-accepted ins{background:none;color:inherit;border:0;padding:0}
 body.review-accepted .toc-links a[data-reviews]::after{display:none}
 @media print{blockquote.review{break-inside:avoid;background:#eef3fc!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}ins,del{-webkit-print-color-adjust:exact;print-color-adjust:exact}.review-select{display:none}}
 </style></head><body>
-<!-- GENERATED FILE — source: docs/specs/README.md — run: npm --prefix tools/docs run build -->
+<!-- GENERATED FILE — source: docs/tdd/SPIKE-2026-09-29-structure-core-binding.md — run: npm --prefix tools/docs run build -->
 <a class="skip" href="#reading-main">본문으로 이동</a>
-<header class="topbar"><a class="brand" href="../../index.html" aria-label="VIDE 문서 모음"><b>V.</b><span>VIDE</span></a><nav class="doc-tabs" aria-label="문서 선택"><a class="doc-tab" href="../PRD.html">PRD</a><a class="doc-tab active" aria-current="page" data-doc="readme" href="#readme">SPEC</a><a class="doc-tab" href="../../Design.html">Design</a><a class="doc-tab" href="../architecture/ARCH-01-system.html">기술 설계</a><a class="doc-tab" href="../plans/PLAN.html">PLAN</a><a class="doc-tab" href="../../DEVELOPMENT_GUIDE.html">개발 가이드</a><a class="doc-tab" href="../../AI.html">AI 규약</a></nav><div class="top-actions"><button id="source-download" title="현재 문서의 Markdown 원문 저장">원문 ↓</button><button id="print-doc" title="현재 문서 인쇄">인쇄</button></div></header>
-<div class="layout"><aside class="toc-shell" id="toc-shell" aria-label="현재 문서의 목차"><div class="toc-title"><strong>CONTENTS</strong><span id="toc-count"></span><button id="toc-toggle" aria-expanded="false" aria-controls="toc-body">목차 열기</button></div><div class="toc-body" id="toc-body"><input class="toc-search" id="toc-search" type="search" placeholder="장 제목으로 찾기" aria-label="현재 문서 목차 검색"><p class="toc-hint" id="nav-hint" role="status">장 제목으로 찾아갑니다.</p><nav class="toc-links" id="toc-links" aria-label="본문 장 이동"></nav><div class="toc-next">다음 작성할 문서<br><b>다음 작업 · PLAN §6.5</b><br>현재 단계와 작업별 계획을 확인한 뒤 해당 범위에서 재개</div></div></aside><main id="reading-main" tabindex="-1"><article id="readme" class="document"><header class="doc-hero"><div class="hero-label"><span class="eyebrow">SPEC</span><span><span class="pill">REVIEW · v0.9</span><span class="pill">4 CHAPTERS</span></span></div><h1 tabindex="-1">VIDE 기능 명세</h1><p class="doc-description">기능 명세 목록 · 공통 규칙과 기능별 상세</p><div class="hero-meta">
-<p>VIDE에서 설계자는 Rhino·ZWCAD의 모델과 도면을 보고, 객체를 가리키고 선을 그려 AI에 작업을 맡긴다. 실제 후보를 보며 수정 지시하고, 검토한 결과를 호스트에서 계속 편집할 수 있는 형태로 반영한다. 표·검토본·웹 의견은 이 설계 작업의 근거와 후속 검토를 연결한다. 제품 범위의 기준은 <a href="../PRD.html">PRD</a>다.</p>
-</div></header><section class="doc-section" id="readme-section-x0"><h2><span aria-hidden="true" class="section-num">00 /</span> 먼저 읽을 사용자 작업</h2>
-<p><a href="SPEC-00-common.html">전체 사용자 여정 — SPEC-00의 ‘VIDE에서 완결할 세 가지 작업’</a>부터 읽는다. 이 부분에서 프로그램의 흐름을 확인한 다음, 아래 기능 문서의 앞부분에서 사용자 입력·프로그램 동작·결과를 읽는다. 상태·권한·저장·실패 규칙은 각 기능 문서 뒷부분에 연결했다. 기존 ID는 다른 문서의 참조를 유지하기 위해 그대로 두었다.</p>
-<div aria-label="SPEC 표 1" class="table-scroll" role="region" tabindex="0"><table>
+<header class="topbar"><a class="brand" href="../../index.html" aria-label="VIDE 문서 모음"><b>V.</b><span>VIDE</span></a><nav class="doc-tabs" aria-label="문서 선택"><a class="doc-tab" href="../PRD.html">PRD</a><a class="doc-tab" href="../specs/README.html">SPEC</a><a class="doc-tab" href="../../Design.html">Design</a><a class="doc-tab" href="../architecture/ARCH-01-system.html">기술 설계</a><a class="doc-tab" href="../plans/PLAN.html">PLAN</a><a class="doc-tab" href="../../DEVELOPMENT_GUIDE.html">개발 가이드</a><a class="doc-tab" href="../../AI.html">AI 규약</a></nav><div class="top-actions"><button id="source-download" title="현재 문서의 Markdown 원문 저장">원문 ↓</button><button id="print-doc" title="현재 문서 인쇄">인쇄</button></div></header>
+<div class="layout"><aside class="toc-shell" id="toc-shell" aria-label="현재 문서의 목차"><div class="toc-title"><strong>CONTENTS</strong><span id="toc-count"></span><button id="toc-toggle" aria-expanded="false" aria-controls="toc-body">목차 열기</button></div><div class="toc-body" id="toc-body"><input class="toc-search" id="toc-search" type="search" placeholder="장 제목으로 찾기" aria-label="현재 문서 목차 검색"><p class="toc-hint" id="nav-hint" role="status">장 제목으로 찾아갑니다.</p><nav class="toc-links" id="toc-links" aria-label="본문 장 이동"></nav><div class="toc-next">다음 작성할 문서<br><b>다음 작업 · PLAN §6.5</b><br>현재 단계와 작업별 계획을 확인한 뒤 해당 범위에서 재개</div></div></aside><main id="reading-main" tabindex="-1"><article id="spike-2026-09-29-structure-core-binding" class="document"><header class="doc-hero"><div class="hero-label"><span class="eyebrow">VERIFICATION</span><span><span class="pill">REVIEW · v0.1</span><span class="pill">6 CHAPTERS</span></span></div><h1 tabindex="-1">구조 코어(Rust)를 Node 서버에서 부르는 방식</h1><div class="hero-meta">
+<p>PLAN-17 T-033의 실험 기록이다.</p>
+</div></header><section class="doc-section" id="spike-2026-09-29-structure-core-binding-section-x0"><h2><span aria-hidden="true" class="section-num">00 /</span> 질문</h2>
+<p>Rust로 만든 해석 코어를 Node 24 서버에서 Node-API 애드온으로 부를 수 있는가? 약 12,000 자유도 골조에서 속도·정확도는 어떤가? 대체안인 실행 파일 방식과는 무엇이 다른가?</p>
+</section><section class="doc-section" id="spike-2026-09-29-structure-core-binding-section-x1"><h2><span aria-hidden="true" class="section-num">01 /</span> 방법과 환경</h2>
+<ul>
+<li>Windows 11 Pro, Node 24.15.0, Rust 1.98.1(rustup stable, x86_64-pc-windows-msvc), VS Build Tools 2026(MSVC, Windows SDK 10.0.26100).</li>
+<li>crate <code>src/native/structure/</code>(<code>vide-structure</code> 0.1.0): faer 0.24.4(희소 Cholesky), napi 3·napi-derive 3(Node-API 4 기능). 요소 강성은 ARCH-02 §2 규약의 3D 12자유도 보 요소(<code>src/frame.rs</code>).</li>
+<li>합성 모델(<code>src/bench.rs</code>): 6 m 격자·층고 4 m의 기둥 + 양방향 보, 기초 고정, 모든 절점 연직 하중 + 조합별 수평 성분. 한 번 분해하고 우변 23개를 푼다.</li>
+<li>애드온: <code>cargo build --release --lib</code> → <code>vide_structure.dll</code>을 <code>process.dlopen</code>으로 로드(확장자 무관). 실행 파일: <code>cargo build --release --bin vide-structure --no-default-features --target-dir target/exe</code>.</li>
+</ul>
+</section><section class="doc-section" id="spike-2026-09-29-structure-core-binding-section-x2"><h2><span aria-hidden="true" class="section-num">02 /</span> 결과</h2>
+<div aria-label="검증 표 1" class="table-scroll" role="region" tabindex="0"><table>
 <thead>
 <tr>
-<th>사용자가 하려는 일</th>
-<th>기능 문서의 정상 흐름</th>
-<th>읽고 판단할 것</th>
+<th>모델</th>
+<th>자유도</th>
+<th>비영 항목</th>
+<th>조립</th>
+<th>분해</th>
+<th>23개 풀이</th>
+<th>합계(애드온 호출)</th>
+<th>잔차</th>
+<th>반력 평형 오차</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td>모델·도면에서 대상을 찾아 의도 전달</td>
-<td><a href="SPEC-01-project-input-sync.html">SPEC-01</a> · SPEC-01.9·10</td>
-<td>형상을 탐색하고 핀·스케치·치수·자료를 한 요청에 넣을 수 있는가</td>
+<td>3×3×3</td>
+<td>108</td>
+<td>984</td>
+<td>0.1 ms</td>
+<td>0.6 ms</td>
+<td>0.01 ms</td>
+<td>0.7 ms</td>
+<td>1.0e-15</td>
+<td>0</td>
 </tr>
 <tr>
-<td>AI에게 만들기/수정 맡기고 결과 조정</td>
-<td><a href="SPEC-02-execution-candidates.html">SPEC-02</a> · SPEC-02.11~13</td>
-<td>실제 후보를 만들고 추가 지시→반영→호스트 재편집으로 이어지는가</td>
+<td>20×20×6</td>
+<td>12,000</td>
+<td>144,000</td>
+<td>13 ms</td>
+<td>119~193 ms</td>
+<td>55~94 ms</td>
+<td>230~265 ms</td>
+<td>6.9e-15</td>
+<td>3.6e-16</td>
 </tr>
 <tr>
-<td>CAD 도면과 Rhino 모델 연결</td>
-<td><a href="SPEC-02-execution-candidates.html">SPEC-02</a> · SPEC-02.14</td>
-<td>한 요청의 실제 데이터가 양쪽 결과에 사용되는가</td>
-</tr>
-<tr>
-<td>변경 이유·수량 확인, 비교·전달</td>
-<td><a href="SPEC-03-data-history-export.html">SPEC-03</a> · SPEC-03.8</td>
-<td>대상/근거/표를 오가고 수정 전후 결과를 남길 수 있는가</td>
-</tr>
-<tr>
-<td>외부 의견으로 실제 설계 수정</td>
-<td><a href="SPEC-04-web-review.html">SPEC-04</a> · SPEC-04.7</td>
-<td>웹 의견이 로컬 작업과 수정 결과까지 연결되는가</td>
-</tr>
-<tr>
-<td>설치·AI 연결·확장 사용·재개</td>
-<td><a href="SPEC-05-extensions-install.html">SPEC-05</a> · SPEC-05.7</td>
-<td>같은 작업환경에서 AI와 추가 기능을 실제로 사용할 수 있는가</td>
-</tr>
-<tr>
-<td>받은 강구조를 계획 단계에서 검토</td>
-<td><a href="SPEC-06-structure-analysis.html">SPEC-06</a> · SPEC-06.8</td>
-<td>입력에서 확정한 해석 모델로 부재 검정과 근거·미검토 항목을 보이는가</td>
+<td>30×30×6</td>
+<td>27,000</td>
+<td>327,000</td>
+<td>32 ms</td>
+<td>245 ms</td>
+<td>178 ms</td>
+<td>466 ms</td>
+<td>7.0e-15</td>
+<td>1.6e-16</td>
 </tr>
 </tbody>
 </table></div>
-</section><section class="doc-section" id="readme-section-x1"><h2><span aria-hidden="true" class="section-num">01 /</span> 구체적인 첫 지원안과 확인된 사실</h2>
-<p>경계 생성/수정·이동/복사와 Rhino 돌출 후보를 첫 기능 지원안으로 제안했다. 상세는 <a href="hosts/rhino.html">Rhino 지원표</a>와 <a href="hosts/zwcad.html">ZWCAD 지원표</a>다. <strong>구현 목표 제안과 이미 확인한 네이티브 실험을 구분한다.</strong> 특정 예제만 되는 제품이나 폴리라인 도구로 범위를 확정한 것이 아니다. OQ-03·10의 지원안 채택과 실증을 거쳐야 한다.</p>
-</section><section class="doc-section" id="readme-section-x2"><h2><span aria-hidden="true" class="section-num">02 /</span> PRD 요구와 기능 명세 대응</h2>
-<p>이 표가 FR → SPEC 대응의 원본이다(AI.md §7). 기능 서술의 정본은 각 SPEC이고 제품 약속은 PRD가 소유한다.</p>
-<div aria-label="SPEC 표 2" class="table-scroll" role="region" tabindex="0"><table>
-<thead>
-<tr>
-<th>FR</th>
-<th>SPEC</th>
-<th>비고</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>FR-01</td>
-<td><a href="SPEC-00-common.html">SPEC-00</a> · <a href="SPEC-01-project-input-sync.html">SPEC-01</a></td>
-<td>—</td>
-</tr>
-<tr>
-<td>FR-02</td>
-<td><a href="SPEC-00-common.html">SPEC-00</a> · <a href="SPEC-01-project-input-sync.html">SPEC-01</a> · <a href="SPEC-02-execution-candidates.html">SPEC-02</a></td>
-<td>—</td>
-</tr>
-<tr>
-<td>FR-03</td>
-<td><a href="SPEC-01-project-input-sync.html">SPEC-01</a></td>
-<td>—</td>
-</tr>
-<tr>
-<td>FR-04</td>
-<td><a href="SPEC-02-execution-candidates.html">SPEC-02</a></td>
-<td>—</td>
-</tr>
-<tr>
-<td>FR-05</td>
-<td><a href="SPEC-00-common.html">SPEC-00</a> · <a href="SPEC-01-project-input-sync.html">SPEC-01</a></td>
-<td>—</td>
-</tr>
-<tr>
-<td>FR-06</td>
-<td><a href="SPEC-01-project-input-sync.html">SPEC-01</a> · <a href="SPEC-04-web-review.html">SPEC-04</a></td>
-<td>—</td>
-</tr>
-<tr>
-<td>FR-07</td>
-<td><a href="SPEC-01-project-input-sync.html">SPEC-01</a> · <a href="SPEC-04-web-review.html">SPEC-04</a></td>
-<td>—</td>
-</tr>
-<tr>
-<td>FR-08</td>
-<td><a href="SPEC-02-execution-candidates.html">SPEC-02</a> · <a href="SPEC-05-extensions-install.html">SPEC-05</a></td>
-<td>—</td>
-</tr>
-<tr>
-<td>FR-09</td>
-<td><a href="SPEC-03-data-history-export.html">SPEC-03</a></td>
-<td>—</td>
-</tr>
-<tr>
-<td>FR-10</td>
-<td><a href="SPEC-02-execution-candidates.html">SPEC-02</a></td>
-<td>—</td>
-</tr>
-<tr>
-<td>FR-11</td>
-<td><a href="SPEC-00-common.html">SPEC-00</a> · <a href="SPEC-02-execution-candidates.html">SPEC-02</a></td>
-<td>—</td>
-</tr>
-<tr>
-<td>FR-12</td>
-<td><a href="SPEC-02-execution-candidates.html">SPEC-02</a> · <a href="SPEC-03-data-history-export.html">SPEC-03</a></td>
-<td>—</td>
-</tr>
-<tr>
-<td>FR-13</td>
-<td><a href="SPEC-05-extensions-install.html">SPEC-05</a></td>
-<td>—</td>
-</tr>
-<tr>
-<td>FR-14</td>
-<td><a href="SPEC-03-data-history-export.html">SPEC-03</a></td>
-<td>—</td>
-</tr>
-<tr>
-<td>FR-15</td>
-<td><a href="SPEC-02-execution-candidates.html">SPEC-02</a> · <a href="SPEC-05-extensions-install.html">SPEC-05</a></td>
-<td>—</td>
-</tr>
-<tr>
-<td>FR-16</td>
-<td><a href="SPEC-00-common.html">SPEC-00</a> · <a href="SPEC-01-project-input-sync.html">SPEC-01</a> · <a href="SPEC-02-execution-candidates.html">SPEC-02</a> · <a href="SPEC-03-data-history-export.html">SPEC-03</a> · <a href="SPEC-04-web-review.html">SPEC-04</a> · <a href="SPEC-05-extensions-install.html">SPEC-05</a></td>
-<td>—</td>
-</tr>
-<tr>
-<td>FR-17</td>
-<td><a href="SPEC-05-extensions-install.html">SPEC-05</a></td>
-<td>—</td>
-</tr>
-<tr>
-<td>FR-18</td>
-<td><a href="SPEC-00-common.html">SPEC-00</a> · <a href="SPEC-02-execution-candidates.html">SPEC-02</a> · <a href="SPEC-03-data-history-export.html">SPEC-03</a> · <a href="SPEC-04-web-review.html">SPEC-04</a> · <a href="SPEC-05-extensions-install.html">SPEC-05</a></td>
-<td>—</td>
-</tr>
-<tr>
-<td>FR-19</td>
-<td><a href="SPEC-04-web-review.html">SPEC-04</a></td>
-<td>—</td>
-</tr>
-<tr>
-<td>FR-20</td>
-<td>후속 확장</td>
-<td>PRD §14의 이번 범위 밖</td>
-</tr>
-<tr>
-<td>FR-21</td>
-<td>후속 확장</td>
-<td>PRD §14의 이번 범위 밖(구조 분석은 FR-23)</td>
-</tr>
-<tr>
-<td>FR-22</td>
-<td><a href="SPEC-03-data-history-export.html">SPEC-03</a></td>
-<td>—</td>
-</tr>
-<tr>
-<td>FR-23</td>
-<td><a href="SPEC-06-structure-analysis.html">SPEC-06</a></td>
-<td>구조 분석 jig</td>
-</tr>
-</tbody>
-</table></div>
-<p>호스트 계약·실험 범위: <a href="hosts/rhino.html">Rhino</a> · <a href="hosts/zwcad.html">ZWCAD</a>.</p>
-</section><section class="doc-section" id="readme-section-x3"><h2><span aria-hidden="true" class="section-num">03 /</span> 기능 검토 다음에 읽을 문서</h2>
-<p><a href="../plans/PLAN.html">PLAN</a> §1·§5.2·§6·§7.2에서 이 경험을 무엇으로 연결하고 어떤 순서로 검증할지 읽는다. 첫 프런트 흐름을 확인한 뒤 실제 호스트 후보를 연결하며, 전체 모의 화면을 먼저 완성하는 것을 제품 완료로 삼지 않는다.</p>
-<p><a href="../../Design.html">Design</a> 0.9은 디자인 DNA와 화면 표현을 소유하며 §12에서 기능 SPEC을 참조한다. <a href="../plans/PLAN.html">PLAN</a> §6.3~4에서 첫 구현 묶음과 기존 코드 이행을, §9.2에서 단계별 미결 의존성을 확인한다. <a href="../tdd/VERIFY-2026-09-20-preimplementation.html">구현 전 문서 검수</a>는 문서 대조 결과와 실제 미시험을 구분한다.</p>
-<p>문서 상세화·사용자 검토·실제 구현·지원 검수는 서로 다르다. 미결 의존성은 PLAN §9.1, 첫 과업의 구체 시험은 PLAN §7.2에 있다. 이번 수정은 사용자가 요청한 기능 해석의 보강이며 PRD의 제품 범위나 기존 검토 스레드의 수락을 대신하지 않는다.</p>
-<p>개발 재개는 <a href="../../DEVELOPMENT_GUIDE.html">개발 가이드 §12</a>를 따른다. 기능 동작은 이 명세에서 판단하고, 작업 순서/진행 현황은 PLAN §6.3·6.5를 사용한다. 기존 검토 부록을 별도 실행 지침으로 사용하지 않는다.</p>
+<ul>
+<li>실행 파일로 같은 12,000 자유도를 풀면 232~265 ms였고, Node에서 <code>execFileSync</code>로 부르면 프로세스 시작을 포함해 286 ms였다.</li>
+<li>산출물 크기: 애드온 2.96 MB, 실행 파일 2.83 MB.</li>
+<li><code>cargo test --no-default-features</code>: 요소 축 규약·대칭·강체 이동 무응력·작은 격자 평형 4개 통과.</li>
+</ul>
+</section><section class="doc-section" id="spike-2026-09-29-structure-core-binding-section-x3"><h2><span aria-hidden="true" class="section-num">03 /</span> 발견한 함정</h2>
+<ul>
+<li>같은 crate에서 Node 기능 없이 실행 파일을 빌드하면 공유되는 <code>target/release/vide_structure.dll</code>이 덮어써진다. 그 뒤 애드온을 로드하면 &quot;Module did not self-register&quot; 오류가 난다. 실행 파일은 별도 <code>--target-dir</code>로 빌드해야 한다.</li>
+<li>faer 0.24의 <code>solve</code>는 <code>faer::prelude::Solve</code> 트레이트를 가져와야 쓸 수 있다.</li>
+</ul>
+</section><section class="doc-section" id="spike-2026-09-29-structure-core-binding-section-x4"><h2><span aria-hidden="true" class="section-num">04 /</span> 결론</h2>
+<p>애드온 방식을 채택한다. 설치 없이 Node 24에서 로드되고, 한 번의 호출로 12,000 자유도·23개 조합을 약 0.25초에 정확하게 푼다. 실행 파일 방식도 동작해서, 코어 오류가 서버를 흔드는 문제가 생기면 대체 경로로 쓸 수 있다. 설치본 포함은 기존 호스트 플러그인처럼 빌드 후 명시 경로로 복사하는 방식(<code>src/desktop/build.mjs</code>)을 따르며, T-039에서 실제 설치본 로드로 확인한다(이번 실험에서는 미시험).</p>
+</section><section class="doc-section" id="spike-2026-09-29-structure-core-binding-section-x5"><h2><span aria-hidden="true" class="section-num">05 /</span> 한계</h2>
+<ul>
+<li>합성 격자 모델이며 단부해제·트러스·하중 분배는 없다. 기구(불안정) 탐지는 T-035 범위다.</li>
+<li>설치본에서의 로드와 다른 PC에서의 실행은 확인하지 않았다.</li>
+<li>wasm 빌드는 이번 범위에서 측정하지 않았다.</li>
+</ul>
 </section><footer class="doc-footer"><span>VIDE / PLANNING DOCUMENTS</span><span>문서 열람용 · 실제 CAD/BIM 지원은 구현·검증 후 선언</span></footer></article></main></div>
 <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
-<script id="source-data" type="application/json">{"readme":{"label":"SPEC","file":"README.md","markdown":"---\nid: INDEX-SPECS\ntitle: VIDE 기능 명세 · 사용자 작업과 기능 목록\nstatus: review\nversion: 0.9\nupdated: 2026-09-29\nowner: user\nrelated: []\n---\n\n# VIDE 기능 명세\n\nVIDE에서 설계자는 Rhino·ZWCAD의 모델과 도면을 보고, 객체를 가리키고 선을 그려 AI에 작업을 맡긴다. 실제 후보를 보며 수정 지시하고, 검토한 결과를 호스트에서 계속 편집할 수 있는 형태로 반영한다. 표·검토본·웹 의견은 이 설계 작업의 근거와 후속 검토를 연결한다. 제품 범위의 기준은 [PRD](../PRD.md)다.\n\n## 먼저 읽을 사용자 작업\n\n[전체 사용자 여정 — SPEC-00의 ‘VIDE에서 완결할 세 가지 작업’](SPEC-00-common.md)부터 읽는다. 이 부분에서 프로그램의 흐름을 확인한 다음, 아래 기능 문서의 앞부분에서 사용자 입력·프로그램 동작·결과를 읽는다. 상태·권한·저장·실패 규칙은 각 기능 문서 뒷부분에 연결했다. 기존 ID는 다른 문서의 참조를 유지하기 위해 그대로 두었다.\n\n| 사용자가 하려는 일 | 기능 문서의 정상 흐름 | 읽고 판단할 것 |\n|---|---|---|\n| 모델·도면에서 대상을 찾아 의도 전달 | [SPEC-01](SPEC-01-project-input-sync.md) · SPEC-01.9·10 | 형상을 탐색하고 핀·스케치·치수·자료를 한 요청에 넣을 수 있는가 |\n| AI에게 만들기/수정 맡기고 결과 조정 | [SPEC-02](SPEC-02-execution-candidates.md) · SPEC-02.11~13 | 실제 후보를 만들고 추가 지시→반영→호스트 재편집으로 이어지는가 |\n| CAD 도면과 Rhino 모델 연결 | [SPEC-02](SPEC-02-execution-candidates.md) · SPEC-02.14 | 한 요청의 실제 데이터가 양쪽 결과에 사용되는가 |\n| 변경 이유·수량 확인, 비교·전달 | [SPEC-03](SPEC-03-data-history-export.md) · SPEC-03.8 | 대상/근거/표를 오가고 수정 전후 결과를 남길 수 있는가 |\n| 외부 의견으로 실제 설계 수정 | [SPEC-04](SPEC-04-web-review.md) · SPEC-04.7 | 웹 의견이 로컬 작업과 수정 결과까지 연결되는가 |\n| 설치·AI 연결·확장 사용·재개 | [SPEC-05](SPEC-05-extensions-install.md) · SPEC-05.7 | 같은 작업환경에서 AI와 추가 기능을 실제로 사용할 수 있는가 |\n| 받은 강구조를 계획 단계에서 검토 | [SPEC-06](SPEC-06-structure-analysis.md) · SPEC-06.8 | 입력에서 확정한 해석 모델로 부재 검정과 근거·미검토 항목을 보이는가 |\n\n## 구체적인 첫 지원안과 확인된 사실\n\n경계 생성/수정·이동/복사와 Rhino 돌출 후보를 첫 기능 지원안으로 제안했다. 상세는 [Rhino 지원표](hosts/rhino.md)와 [ZWCAD 지원표](hosts/zwcad.md)다. **구현 목표 제안과 이미 확인한 네이티브 실험을 구분한다.** 특정 예제만 되는 제품이나 폴리라인 도구로 범위를 확정한 것이 아니다. OQ-03·10의 지원안 채택과 실증을 거쳐야 한다.\n\n## PRD 요구와 기능 명세 대응\n\n이 표가 FR → SPEC 대응의 원본이다(AI.md §7). 기능 서술의 정본은 각 SPEC이고 제품 약속은 PRD가 소유한다.\n\n| FR | SPEC | 비고 |\n|---|---|---|\n| FR-01 | [SPEC-00](SPEC-00-common.md) · [SPEC-01](SPEC-01-project-input-sync.md) | — |\n| FR-02 | [SPEC-00](SPEC-00-common.md) · [SPEC-01](SPEC-01-project-input-sync.md) · [SPEC-02](SPEC-02-execution-candidates.md) | — |\n| FR-03 | [SPEC-01](SPEC-01-project-input-sync.md) | — |\n| FR-04 | [SPEC-02](SPEC-02-execution-candidates.md) | — |\n| FR-05 | [SPEC-00](SPEC-00-common.md) · [SPEC-01](SPEC-01-project-input-sync.md) | — |\n| FR-06 | [SPEC-01](SPEC-01-project-input-sync.md) · [SPEC-04](SPEC-04-web-review.md) | — |\n| FR-07 | [SPEC-01](SPEC-01-project-input-sync.md) · [SPEC-04](SPEC-04-web-review.md) | — |\n| FR-08 | [SPEC-02](SPEC-02-execution-candidates.md) · [SPEC-05](SPEC-05-extensions-install.md) | — |\n| FR-09 | [SPEC-03](SPEC-03-data-history-export.md) | — |\n| FR-10 | [SPEC-02](SPEC-02-execution-candidates.md) | — |\n| FR-11 | [SPEC-00](SPEC-00-common.md) · [SPEC-02](SPEC-02-execution-candidates.md) | — |\n| FR-12 | [SPEC-02](SPEC-02-execution-candidates.md) · [SPEC-03](SPEC-03-data-history-export.md) | — |\n| FR-13 | [SPEC-05](SPEC-05-extensions-install.md) | — |\n| FR-14 | [SPEC-03](SPEC-03-data-history-export.md) | — |\n| FR-15 | [SPEC-02](SPEC-02-execution-candidates.md) · [SPEC-05](SPEC-05-extensions-install.md) | — |\n| FR-16 | [SPEC-00](SPEC-00-common.md) · [SPEC-01](SPEC-01-project-input-sync.md) · [SPEC-02](SPEC-02-execution-candidates.md) · [SPEC-03](SPEC-03-data-history-export.md) · [SPEC-04](SPEC-04-web-review.md) · [SPEC-05](SPEC-05-extensions-install.md) | — |\n| FR-17 | [SPEC-05](SPEC-05-extensions-install.md) | — |\n| FR-18 | [SPEC-00](SPEC-00-common.md) · [SPEC-02](SPEC-02-execution-candidates.md) · [SPEC-03](SPEC-03-data-history-export.md) · [SPEC-04](SPEC-04-web-review.md) · [SPEC-05](SPEC-05-extensions-install.md) | — |\n| FR-19 | [SPEC-04](SPEC-04-web-review.md) | — |\n| FR-20 | 후속 확장 | PRD §14의 이번 범위 밖 |\n| FR-21 | 후속 확장 | PRD §14의 이번 범위 밖(구조 분석은 FR-23) |\n| FR-22 | [SPEC-03](SPEC-03-data-history-export.md) | — |\n| FR-23 | [SPEC-06](SPEC-06-structure-analysis.md) | 구조 분석 jig |\n\n호스트 계약·실험 범위: [Rhino](hosts/rhino.md) · [ZWCAD](hosts/zwcad.md).\n\n## 기능 검토 다음에 읽을 문서\n\n[PLAN](../plans/PLAN.md) §1·§5.2·§6·§7.2에서 이 경험을 무엇으로 연결하고 어떤 순서로 검증할지 읽는다. 첫 프런트 흐름을 확인한 뒤 실제 호스트 후보를 연결하며, 전체 모의 화면을 먼저 완성하는 것을 제품 완료로 삼지 않는다.\n\n[Design](../../Design.md) 0.9은 디자인 DNA와 화면 표현을 소유하며 §12에서 기능 SPEC을 참조한다. [PLAN](../plans/PLAN.md) §6.3~4에서 첫 구현 묶음과 기존 코드 이행을, §9.2에서 단계별 미결 의존성을 확인한다. [구현 전 문서 검수](../tdd/VERIFY-2026-09-20-preimplementation.md)는 문서 대조 결과와 실제 미시험을 구분한다.\n\n문서 상세화·사용자 검토·실제 구현·지원 검수는 서로 다르다. 미결 의존성은 PLAN §9.1, 첫 과업의 구체 시험은 PLAN §7.2에 있다. 이번 수정은 사용자가 요청한 기능 해석의 보강이며 PRD의 제품 범위나 기존 검토 스레드의 수락을 대신하지 않는다.\n\n개발 재개는 [개발 가이드 §12](../../DEVELOPMENT_GUIDE.md)를 따른다. 기능 동작은 이 명세에서 판단하고, 작업 순서/진행 현황은 PLAN §6.3·6.5를 사용한다. 기존 검토 부록을 별도 실행 지침으로 사용하지 않는다.\n"}}</script>
-<script id="reader-config" type="application/json">{"initial":"readme","siteTitle":"VIDE"}</script>
+<script id="source-data" type="application/json">{"spike-2026-09-29-structure-core-binding":{"label":"구조 코어(Rust)를 Node 서버에서 부르는 방식","file":"SPIKE-2026-09-29-structure-core-binding.md","markdown":"---\nid: SPIKE-2026-09-29-structure-core-binding\ntitle: 구조 코어(Rust)를 Node 서버에서 부르는 방식\nstatus: review\nversion: 0.1\nupdated: 2026-09-29\nowner: agent:claude\nrelated: [PLAN-17, ARCH-02, ADR-019]\n---\n\n# 구조 코어(Rust)를 Node 서버에서 부르는 방식\n\nPLAN-17 T-033의 실험 기록이다.\n\n## 질문\n\nRust로 만든 해석 코어를 Node 24 서버에서 Node-API 애드온으로 부를 수 있는가? 약 12,000 자유도 골조에서 속도·정확도는 어떤가? 대체안인 실행 파일 방식과는 무엇이 다른가?\n\n## 방법과 환경\n\n- Windows 11 Pro, Node 24.15.0, Rust 1.98.1(rustup stable, x86_64-pc-windows-msvc), VS Build Tools 2026(MSVC, Windows SDK 10.0.26100).\n- crate `src/native/structure/`(`vide-structure` 0.1.0): faer 0.24.4(희소 Cholesky), napi 3·napi-derive 3(Node-API 4 기능). 요소 강성은 ARCH-02 §2 규약의 3D 12자유도 보 요소(`src/frame.rs`).\n- 합성 모델(`src/bench.rs`): 6 m 격자·층고 4 m의 기둥 + 양방향 보, 기초 고정, 모든 절점 연직 하중 + 조합별 수평 성분. 한 번 분해하고 우변 23개를 푼다.\n- 애드온: `cargo build --release --lib` → `vide_structure.dll`을 `process.dlopen`으로 로드(확장자 무관). 실행 파일: `cargo build --release --bin vide-structure --no-default-features --target-dir target/exe`.\n\n## 결과\n\n| 모델 | 자유도 | 비영 항목 | 조립 | 분해 | 23개 풀이 | 합계(애드온 호출) | 잔차 | 반력 평형 오차 |\n|---|---|---|---|---|---|---|---|---|\n| 3×3×3 | 108 | 984 | 0.1 ms | 0.6 ms | 0.01 ms | 0.7 ms | 1.0e-15 | 0 |\n| 20×20×6 | 12,000 | 144,000 | 13 ms | 119~193 ms | 55~94 ms | 230~265 ms | 6.9e-15 | 3.6e-16 |\n| 30×30×6 | 27,000 | 327,000 | 32 ms | 245 ms | 178 ms | 466 ms | 7.0e-15 | 1.6e-16 |\n\n- 실행 파일로 같은 12,000 자유도를 풀면 232~265 ms였고, Node에서 `execFileSync`로 부르면 프로세스 시작을 포함해 286 ms였다.\n- 산출물 크기: 애드온 2.96 MB, 실행 파일 2.83 MB.\n- `cargo test --no-default-features`: 요소 축 규약·대칭·강체 이동 무응력·작은 격자 평형 4개 통과.\n\n## 발견한 함정\n\n- 같은 crate에서 Node 기능 없이 실행 파일을 빌드하면 공유되는 `target/release/vide_structure.dll`이 덮어써진다. 그 뒤 애드온을 로드하면 \"Module did not self-register\" 오류가 난다. 실행 파일은 별도 `--target-dir`로 빌드해야 한다.\n- faer 0.24의 `solve`는 `faer::prelude::Solve` 트레이트를 가져와야 쓸 수 있다.\n\n## 결론\n\n애드온 방식을 채택한다. 설치 없이 Node 24에서 로드되고, 한 번의 호출로 12,000 자유도·23개 조합을 약 0.25초에 정확하게 푼다. 실행 파일 방식도 동작해서, 코어 오류가 서버를 흔드는 문제가 생기면 대체 경로로 쓸 수 있다. 설치본 포함은 기존 호스트 플러그인처럼 빌드 후 명시 경로로 복사하는 방식(`src/desktop/build.mjs`)을 따르며, T-039에서 실제 설치본 로드로 확인한다(이번 실험에서는 미시험).\n\n## 한계\n\n- 합성 격자 모델이며 단부해제·트러스·하중 분배는 없다. 기구(불안정) 탐지는 T-035 범위다.\n- 설치본에서의 로드와 다른 PC에서의 실행은 확인하지 않았다.\n- wasm 빌드는 이번 범위에서 측정하지 않았다.\n"}}</script>
+<script id="reader-config" type="application/json">{"initial":"spike-2026-09-29-structure-core-binding","siteTitle":"VIDE"}</script>
 <script>
 (() => {
 'use strict';
