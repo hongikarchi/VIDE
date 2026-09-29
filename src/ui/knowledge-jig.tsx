@@ -1,0 +1,384 @@
+import { useEffect, useState } from 'react';
+import { z } from 'zod';
+import { api } from './gateway.ts';
+
+// Project knowledge jig (trial): issue notes by discipline, like meeting minutes, with evidence shown
+// only on request. Read-only; the DB is built outside the app for now (PLAN-08 K0).
+const statementSchema = z.object({
+  id: z.number(),
+  kind: z.string(),
+  party: z.string().nullable(),
+  subject: z.string().nullable(),
+  content: z.string(),
+  saidOn: z.string().nullable(),
+  quote: z.string().nullable(),
+  sourceId: z.number(),
+  path: z.string(),
+  locator: z.string(),
+});
+type Statement = z.infer<typeof statementSchema>;
+const item = z.object({ text: z.string().default(''), cite: z.array(z.number()).default([]) });
+const issueSchema = z.object({
+  id: z.number(),
+  title: z.string(),
+  label: z.string(),
+  status: z.string(),
+  summary: z.string(),
+  note: z.object({
+    conclusions: z.array(item).default([]),
+    conditions: z.array(item).default([]),
+    open: z.array(item).default([]),
+    history: z
+      .array(
+        item.extend({
+          date: z.string().nullable().default(''),
+          party: z.string().nullable().default(''),
+        }),
+      )
+      .default([]),
+  }),
+  statements: z.array(statementSchema),
+});
+type Issue = z.infer<typeof issueSchema>;
+const summarySchema = z.union([
+  z.object({ available: z.literal(false) }),
+  z.object({
+    available: z.literal(true),
+    builtAt: z.string().nullable(),
+    counts: z.object({
+      files: z.number(),
+      excerpts: z.number(),
+      statements: z.number(),
+      issues: z.number(),
+      mails: z.number(),
+    }),
+    disciplines: z.array(
+      z.object({
+        key: z.string(),
+        label: z.string(),
+        issues: z.array(
+          z.object({
+            id: z.number(),
+            title: z.string(),
+            status: z.string(),
+            summary: z.string(),
+            statements: z.number(),
+            open: z.number(),
+          }),
+        ),
+      }),
+    ),
+  }),
+]);
+type Summary = z.infer<typeof summarySchema>;
+const evidenceSchema = z.object({
+  text: z.string(),
+  locator: z.string(),
+  path: z.string(),
+  sourceId: z.number(),
+  root: z.string().nullable(),
+});
+const KIND: Record<string, string> = {
+  decision: '결정',
+  request: '요청',
+  condition: '조건',
+  opinion: '의견',
+  info: '정보',
+};
+
+/** A statement with its evidence behind a button: excerpt text and the original file. */
+function StatementRow({ projectId, statement }: { projectId: string; statement: Statement }) {
+  const [evidence, setEvidence] = useState<z.infer<typeof evidenceSchema>>();
+  const [message, setMessage] = useState('');
+  const base = (path: string) => path.split('/').at(-1);
+  return (
+    <li className="knowledge-statement">
+      <div>
+        <span className="pill">{KIND[statement.kind] ?? statement.kind}</span>{' '}
+        <small className="knowledge-meta">
+          {statement.saidOn ?? '날짜 없음'} · {statement.party || '주체 미상'}
+        </small>
+      </div>
+      <p>{statement.content}</p>
+      <small className="knowledge-meta" title={statement.path}>
+        {base(statement.path)} · {statement.locator}{' '}
+        <button
+          type="button"
+          className="link-button"
+          onClick={async () =>
+            setEvidence(
+              evidence
+                ? undefined
+                : evidenceSchema.parse(
+                    await api(`/projects/${projectId}/jigs/knowledge/statements/${statement.id}`),
+                  ),
+            )
+          }
+        >
+          {evidence ? '원문 닫기' : '원문'}
+        </button>{' '}
+        <button
+          type="button"
+          className="link-button"
+          onClick={async () => {
+            try {
+              await api(
+                `/projects/${projectId}/jigs/knowledge/sources/${statement.sourceId}/open`,
+                'POST',
+                {},
+              );
+              setMessage('');
+            } catch {
+              setMessage('원본을 열 수 없습니다(서버 연결·경로 확인).');
+            }
+          }}
+        >
+          원본 열기
+        </button>
+      </small>
+      {message ? <small className="knowledge-meta">{message}</small> : null}
+      {evidence ? (
+        <blockquote className="knowledge-evidence">
+          <small className="knowledge-meta">{evidence.path}</small>
+          {highlight(evidence.text, statement.quote ?? '')}
+        </blockquote>
+      ) : null}
+    </li>
+  );
+}
+
+function highlight(text: string, quote: string) {
+  const at = quote ? text.indexOf(quote) : -1;
+  if (at < 0) return <p>{text}</p>;
+  return (
+    <p>
+      {text.slice(0, at)}
+      <mark>{quote}</mark>
+      {text.slice(at + quote.length)}
+    </p>
+  );
+}
+
+function NoteSection({
+  projectId,
+  title,
+  items,
+  statements,
+}: {
+  projectId: string;
+  title: string;
+  items: { text: string; cite: number[]; date?: string | null; party?: string | null }[];
+  statements: Map<number, Statement>;
+}) {
+  const [open, setOpen] = useState<number>();
+  if (!items.length) return null;
+  return (
+    <section className="knowledge-section">
+      <h4>{title}</h4>
+      <ul>
+        {items.map((entry, index) => (
+          <li key={index}>
+            {entry.date ? (
+              <small className="knowledge-meta">
+                {entry.date} · {entry.party || ''}{' '}
+              </small>
+            ) : null}
+            {entry.text}{' '}
+            {entry.cite.length ? (
+              <button
+                type="button"
+                className="link-button"
+                onClick={() => setOpen(open === index ? undefined : index)}
+              >
+                근거 {entry.cite.length}
+              </button>
+            ) : null}
+            {open === index ? (
+              <ul className="knowledge-cites">
+                {entry.cite
+                  .map((id) => statements.get(id))
+                  .filter((s): s is Statement => !!s)
+                  .map((s) => (
+                    <StatementRow key={s.id} projectId={projectId} statement={s} />
+                  ))}
+              </ul>
+            ) : null}
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+function IssueNote({ projectId, issue }: { projectId: string; issue: Issue }) {
+  const statements = new Map(issue.statements.map((s) => [s.id, s]));
+  const [all, setAll] = useState(false);
+  return (
+    <article className="knowledge-note">
+      <h3>
+        {issue.label} · {issue.title}{' '}
+        <span className="pill" data-ok={String(issue.status === 'settled')}>
+          {issue.status === 'settled' ? '정리됨' : '진행 중'}
+        </span>
+      </h3>
+      {issue.summary ? <p className="knowledge-summary">{issue.summary}</p> : null}
+      <NoteSection
+        projectId={projectId}
+        title="현재 결론"
+        items={issue.note.conclusions}
+        statements={statements}
+      />
+      <NoteSection
+        projectId={projectId}
+        title="조건"
+        items={issue.note.conditions}
+        statements={statements}
+      />
+      <NoteSection
+        projectId={projectId}
+        title="미결·확인 필요"
+        items={issue.note.open}
+        statements={statements}
+      />
+      <NoteSection
+        projectId={projectId}
+        title="경과"
+        items={issue.note.history}
+        statements={statements}
+      />
+      <button type="button" className="link-button" onClick={() => setAll(!all)}>
+        {all ? '관련 진술 닫기' : `관련 진술 ${issue.statements.length}개 모두 보기`}
+      </button>
+      {all ? (
+        <ul className="knowledge-cites">
+          {issue.statements.map((s) => (
+            <StatementRow key={s.id} projectId={projectId} statement={s} />
+          ))}
+        </ul>
+      ) : null}
+      <small className="knowledge-meta">
+        AI가 자료에서 정리한 초안입니다. 확정 전에는 근거로 확인하세요.
+      </small>
+    </article>
+  );
+}
+
+export function KnowledgeJig({ projectId }: { projectId: string }) {
+  const [summary, setSummary] = useState<Summary>();
+  const [error, setError] = useState('');
+  const [issue, setIssue] = useState<Issue>();
+  const [query, setQuery] = useState('');
+  const [kind, setKind] = useState('');
+  const [results, setResults] = useState<Statement[]>();
+  useEffect(() => {
+    api(`/projects/${projectId}/jigs/knowledge`)
+      .then((value) => setSummary(summarySchema.parse(value)))
+      .catch(() => setError('자료 DB를 읽지 못했습니다.'));
+  }, [projectId]);
+  const openIssue = async (id: number) => {
+    setResults(undefined);
+    setIssue(issueSchema.parse(await api(`/projects/${projectId}/jigs/knowledge/issues/${id}`)));
+  };
+  const search = async () => {
+    const params = new URLSearchParams({ q: query, ...(kind ? { kind } : {}) });
+    setIssue(undefined);
+    setResults(
+      z
+        .array(statementSchema)
+        .parse(await api(`/projects/${projectId}/jigs/knowledge/search?${params}`)),
+    );
+  };
+  if (error) return <p className="jig-intro">{error}</p>;
+  if (!summary) return <p className="jig-intro">불러오는 중…</p>;
+  if (!summary.available)
+    return (
+      <p className="jig-intro">
+        이 프로젝트에는 아직 자료 DB가 없습니다. 시험판에서는 수집을 앱 밖에서 실행합니다(PLAN-08
+        K0).
+      </p>
+    );
+  return (
+    <div className="knowledge-jig">
+      <p className="jig-intro">
+        파일 {summary.counts.files.toLocaleString()}개 · 메일 {summary.counts.mails}통 · 진술{' '}
+        {summary.counts.statements.toLocaleString()}개 · 이슈 {summary.counts.issues}개
+        {summary.builtAt ? ` · 정리 ${summary.builtAt.slice(0, 10)}` : ''}
+      </p>
+      <form
+        className="knowledge-search"
+        onSubmit={(event) => {
+          event.preventDefault();
+          void search();
+        }}
+      >
+        <input
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          placeholder="검색 (예: 스팬, 허용하중, 소방차)"
+          aria-label="자료 검색"
+        />
+        <select value={kind} onChange={(event) => setKind(event.target.value)} aria-label="종류">
+          <option value="">모든 종류</option>
+          {Object.entries(KIND).map(([key, label]) => (
+            <option key={key} value={key}>
+              {label}
+            </option>
+          ))}
+        </select>
+        <button type="submit" disabled={!query.trim()}>
+          검색
+        </button>
+      </form>
+      <div className="knowledge-body">
+        <nav className="knowledge-issues" aria-label="분야별 이슈">
+          {summary.disciplines.map((discipline) => (
+            <details key={discipline.key} open={discipline.key === 'structure'}>
+              <summary>
+                {discipline.label} <small>{discipline.issues.length}</small>
+              </summary>
+              <ul>
+                {discipline.issues.map((entry) => (
+                  <li key={entry.id}>
+                    <button
+                      type="button"
+                      aria-pressed={issue?.id === entry.id}
+                      title={entry.summary}
+                      onClick={() => void openIssue(entry.id)}
+                    >
+                      {entry.title}
+                      <small>
+                        {entry.statements}
+                        {entry.open ? ` · 미결 ${entry.open}` : ''}
+                      </small>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </details>
+          ))}
+        </nav>
+        <div className="knowledge-main">
+          {results ? (
+            <>
+              <h3>
+                검색 결과 {results.length}개{' '}
+                <small className="knowledge-meta">
+                  (내용에 검색어가 있는 것 먼저, 최신순, 최대 100개)
+                </small>
+              </h3>
+              <ul className="knowledge-cites">
+                {results.map((s) => (
+                  <StatementRow key={s.id} projectId={projectId} statement={s} />
+                ))}
+              </ul>
+            </>
+          ) : issue ? (
+            <IssueNote key={issue.id} projectId={projectId} issue={issue} />
+          ) : (
+            <p className="jig-intro">왼쪽에서 이슈를 고르거나 검색하세요.</p>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}

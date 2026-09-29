@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { z } from 'zod';
 import { api } from './gateway.ts';
+import { KnowledgeJig } from './knowledge-jig.tsx';
 
 // The JIG tab: a gallery of jigs (working tools for one kind of task) and the Sync jig — the
 // relation between a Rhino model and a CAD drawing, their differences, an AI review of what the
@@ -609,7 +610,13 @@ function Jigs({ context }: { context: JigContext }) {
   return (
     <>
       <div className="quantity-head">
-        <h2>{open === 'sync' ? 'Sync · 도면↔모델' : 'JIG'}</h2>
+        <h2>
+          {open === 'sync'
+            ? 'Sync · 도면↔모델'
+            : open === 'knowledge'
+              ? '프로젝트 자료 · 시험판'
+              : 'JIG'}
+        </h2>
         <div>
           {open ? (
             <button type="button" onClick={() => setOpen(undefined)}>
@@ -623,6 +630,8 @@ function Jigs({ context }: { context: JigContext }) {
       </div>
       {open === 'sync' ? (
         <SyncJig context={context} />
+      ) : open === 'knowledge' ? (
+        <KnowledgeJig projectId={context.projectId} />
       ) : (
         <Gallery context={context} open={setOpen} />
       )}

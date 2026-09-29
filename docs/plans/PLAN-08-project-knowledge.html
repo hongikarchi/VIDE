@@ -70,14 +70,19 @@ body.review-accepted .toc-links a[data-reviews]::after{display:none}
 <!-- GENERATED FILE — source: docs/plans/PLAN-08-project-knowledge.md — run: npm --prefix tools/docs run build -->
 <a class="skip" href="#reading-main">본문으로 이동</a>
 <header class="topbar"><a class="brand" href="../../index.html" aria-label="VIDE 문서 모음"><b>V.</b><span>VIDE</span></a><nav class="doc-tabs" aria-label="문서 선택"><a class="doc-tab" href="../PRD.html">PRD</a><a class="doc-tab" href="../specs/README.html">SPEC</a><a class="doc-tab" href="../../Design.html">Design</a><a class="doc-tab" href="../architecture/ARCH-01-system.html">기술 설계</a><a class="doc-tab" href="PLAN.html">PLAN</a><a class="doc-tab" href="../../DEVELOPMENT_GUIDE.html">개발 가이드</a><a class="doc-tab" href="../../AI.html">AI 규약</a></nav><div class="top-actions"><button id="source-download" title="현재 문서의 Markdown 원문 저장">원문 ↓</button><button id="print-doc" title="현재 문서 인쇄">인쇄</button></div></header>
-<div class="layout"><aside class="toc-shell" id="toc-shell" aria-label="현재 문서의 목차"><div class="toc-title"><strong>CONTENTS</strong><span id="toc-count"></span><button id="toc-toggle" aria-expanded="false" aria-controls="toc-body">목차 열기</button></div><div class="toc-body" id="toc-body"><input class="toc-search" id="toc-search" type="search" placeholder="장 제목으로 찾기" aria-label="현재 문서 목차 검색"><p class="toc-hint" id="nav-hint" role="status">장 제목으로 찾아갑니다.</p><nav class="toc-links" id="toc-links" aria-label="본문 장 이동"></nav><div class="toc-next">다음 작성할 문서<br><b>다음 작업 · PLAN §6.5</b><br>현재 단계와 작업별 계획을 확인한 뒤 해당 범위에서 재개</div></div></aside><main id="reading-main" tabindex="-1"><article id="plan-08-project-knowledge" class="document"><header class="doc-hero"><div class="hero-label"><span class="eyebrow">PLAN</span><span><span class="pill">DRAFT · v0.2</span><span class="pill">5 CHAPTERS</span></span></div><h1 tabindex="-1">PLAN-08 — 프로젝트 지식 DB</h1><div class="hero-meta">
+<div class="layout"><aside class="toc-shell" id="toc-shell" aria-label="현재 문서의 목차"><div class="toc-title"><strong>CONTENTS</strong><span id="toc-count"></span><button id="toc-toggle" aria-expanded="false" aria-controls="toc-body">목차 열기</button></div><div class="toc-body" id="toc-body"><input class="toc-search" id="toc-search" type="search" placeholder="장 제목으로 찾기" aria-label="현재 문서 목차 검색"><p class="toc-hint" id="nav-hint" role="status">장 제목으로 찾아갑니다.</p><nav class="toc-links" id="toc-links" aria-label="본문 장 이동"></nav><div class="toc-next">다음 작성할 문서<br><b>다음 작업 · PLAN §6.5</b><br>현재 단계와 작업별 계획을 확인한 뒤 해당 범위에서 재개</div></div></aside><main id="reading-main" tabindex="-1"><article id="plan-08-project-knowledge" class="document"><header class="doc-hero"><div class="hero-label"><span class="eyebrow">PLAN</span><span><span class="pill">DRAFT · v0.3</span><span class="pill">5 CHAPTERS</span></span></div><h1 tabindex="-1">PLAN-08 — 프로젝트 지식 DB</h1><div class="hero-meta">
 <p>2026-09-28~29 사용자 요청의 단계 계획이다. 요청 내용은 메일·첨부·회의록을 모아 누가 무엇을 말했는지, 주요 쟁점, 진행 경과를 DB로 정리하고, 질문 답변·도면/모델 크리틱에 쓰며, 여러 팀원이 함께 쌓는 것까지 목표로 한다. 원본은 회사 서버에 있을 가능성이 높다. 파악과 선택 근거는 <a href="../research/RESEARCH-06-project-knowledge.html">RESEARCH-06</a>, 저장·공유 구조의 결정 초안은 <a href="../decisions/ADR-018-project-knowledge-store.html">ADR-018</a>이 소유한다.</p>
+<p>2026-09-29 추가 요청과 판단:</p>
+<ul>
+<li><strong>경로 하나로 구축:</strong> 사용자가 회사 서버의 프로젝트 폴더 경로만 주면, 규칙·파서·Jev가 먼저 거르고 LLM은 선별된 구간에만 쓴다(RESEARCH-06 §7.5의 ①~⑦ 층). 도면 안의 표기와 “어느 파일이 무엇을 말했나”를 근거 구간 단위로 남긴다(§7.4).</li>
+<li><strong>위치:</strong> 모든 프로젝트에 들어가는 기본 기능이므로 JIG가 아니라 왼쪽 레일의 “프로젝트 자료”로 둔다(§7.6). JIG는 이 DB를 읽기만 한다.</li>
+</ul>
 </div></header><section class="doc-section" id="plan-08-project-knowledge-section-x0"><h2><span aria-hidden="true" class="section-num">00 /</span> 착수 조건</h2>
 <ul>
 <li><strong>제품 결정:</strong> PRD §4.4 C-02 제안(첨삭 R-74)이 채택돼야 한다. 채택 전에는 구현하지 않는다.</li>
 <li><strong>구조 결정:</strong> ADR-018의 공동 축적 예외(지식 기록만 여러 PC)와 팀 공용 원본 위치. K5 착수 전까지 정하면 되고, K0~K4는 로컬만으로 진행할 수 있다.</li>
 <li><strong>RESEARCH-06 §12 결정:</strong> 회사 정책(외부 저장·외부 AI 처리), 역할과 공개 범위, 자료 폴더, 표본 자료.</li>
-<li><strong>동작 계약:</strong> 채택되면 K0 결과로 새 SPEC(가칭 SPEC-06 프로젝트 지식)을 먼저 쓴다. 출처·역할·상태 규칙은 SPEC-03.4를 확장한다.</li>
+<li><strong>동작 계약:</strong> 채택되면 K0 결과로 새 SPEC(프로젝트 지식, 번호는 작성 시 다음 빈 번호. SPEC-06은 구조 해석이 사용)을 먼저 쓴다. 출처·역할·상태 규칙은 SPEC-03.4를 확장한다.</li>
 <li><strong>진행 중 작업과의 관계:</strong> 현재 우선순위(Rhino·CAD 연결 왕복과 Sync 성능)를 막지 않는다. 아래 T-025~031은 제안 번호이며 채택 뒤 마스터 PLAN에 등록한다.</li>
 </ul>
 </section><section class="doc-section" id="plan-08-project-knowledge-section-x1"><h2><span aria-hidden="true" class="section-num">01 /</span> 처음부터 지킬 기록 구조</h2>
@@ -91,30 +96,210 @@ body.review-accepted .toc-links a[data-reviews]::after{display:none}
 </ul>
 </section><section class="doc-section" id="plan-08-project-knowledge-section-x2"><h2><span aria-hidden="true" class="section-num">02 /</span> 단계</h2>
 <p>각 단계는 앞 단계만으로도 쓸모가 있어야 하며, 다음 단계는 앞 단계의 실제 사용 결과를 보고 조정한다.</p>
-<h3>K0 · 표본 자료 조사(SPIKE) — T-025 제안</h3>
+<h3>K0 · 실제 프로젝트 1건으로 DB 구축(SPIKE) — T-025 제안</h3>
+<p>2026-09-29 사용자 요청: S-06 프로젝트의 회사 서버 폴더 전체를 실제로 SQLite DB로 만들어 보고, 그 과정을 정리해 VIDE 기능(K1·K2)으로 옮긴다. 이 단계는 제품 코드가 아닌 실험이며, 같은 과정에서 Jev의 효과를 잰다.</p>
+<p><strong>지금까지 확인한 것(RESEARCH-06 §7.3)</strong></p>
 <ul>
-<li><strong>목적:</strong> 실제 프로젝트 자료 1세트(사본, <code>.vide/knowledge-sample/</code>)의 형식 분포와 추출 가능성을 잰다. 회사 서버 원본은 사용자가 고른 사본만 쓴다.</li>
-<li><strong>내용:</strong>
+<li>서버 폴더 전체 목록은 Jev 없이 파일 시스템만으로 25.6초에 읽혔다. 파일 6,286개, 61.5GB, 문자 정보가 많은 형식 약 450개.</li>
+<li>메일 백업 EML 97통은 표준 MIME 처리만으로 모두 해독된다.</li>
+<li>Office 메모는 0건이고, PDF 주석은 사각형 도형뿐이다.</li>
+<li><strong>Jev가 빠르거나 싸다는 것은 아직 측정하지 않았다.</strong> 이 단계가 그 측정이다.</li>
+</ul>
+<p><strong>경계</strong></p>
+<div aria-label="PLAN 표 1" class="table-scroll" role="region" tabindex="0"><table>
+<thead>
+<tr>
+<th>항목</th>
+<th>규칙</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>원본</td>
+<td>서버 폴더는 읽기만 한다. 쓰기·이동·이름 변경을 하지 않는다.</td>
+</tr>
+<tr>
+<td>DWG</td>
+<td>ZWCAD로 읽을 파일은 <code>.vide/knowledge-crawl/dwg/</code>에 복사한 사본만 연다(AI.md §8). 에이전트가 띄운 ZWCAD는 끝나면 종료한다.</td>
+</tr>
+<tr>
+<td>DB 파일</td>
+<td>사용자가 VIDE에 만든 이 프로젝트에 붙인다. VIDE는 프로젝트별 폴더 없이 데이터 폴더(<code>%LOCALAPPDATA%\VIDE</code>)의 <code>vide.sqlite</code> 하나를 쓰므로, 작업 엔진 DB는 건드리지 않고 <code>knowledge\&lt;프로젝트 ID&gt;.sqlite</code>를 따로 만든다. 저장소·회사 서버 공유 폴더에는 두지 않는다(RESEARCH-06 §6). 제품에서 같은 DB에 넣을지 파일을 나눌지는 ARCH-01에서 정한다.</td>
+</tr>
+<tr>
+<td>원본 참조</td>
+<td>DB는 원본을 복사하지 않는다. 서버 루트 기준 상대 경로와 해시만 가진다.</td>
+</tr>
+<tr>
+<td>제외</td>
+<td>사용자 결정(2026-09-29): 계약·회계·제안서도 포함한다. 백업·캐시·렌더 자산 같은 자동 생성 파일만 뺀다. DB는 로컬에만 있다.</td>
+</tr>
+<tr>
+<td>외부 전송</td>
+<td>파일 경로·구간 문장은 Jev(TypeSafe)로, 선별된 구간은 Claude(구독 CLI)로 간다. 사용자 허용(2026-09-29).</td>
+</tr>
+<tr>
+<td>저장소 기록</td>
+<td>실험 코드와 SPIKE 문서에는 발주처·사업명을 쓰지 않는다. 경로는 실행 인자로만 받는다.</td>
+</tr>
+</tbody>
+</table></div>
+<p><strong>단계</strong></p>
+<p>각 단계의 시간·호출 수·토큰은 DB의 실행 기록 표에 남긴다.</p>
+<div aria-label="PLAN 표 2" class="table-scroll" role="region" tabindex="0"><table>
+<thead>
+<tr>
+<th>#</th>
+<th>단계</th>
+<th>방법</th>
+<th>Jev 효과 측정</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>목록</td>
+<td>경로·크기·날짜 수집, 제외 규칙, 같은 문서의 다른 형식 묶기. 해시는 문자 정보가 많은 형식과 메일 첨부만 계산한다(3dm·렌더 자산 28GB+를 네트워크로 해시하지 않음).</td>
+<td>—</td>
+</tr>
+<tr>
+<td>2</td>
+<td>이름 해석</td>
+<td>날짜·상대 기관·자료 종류·판 사슬을 규칙으로 뽑고, 남는 것만 Jev로 분류한다.</td>
+<td>규칙만 / 규칙+Jev / Claude 분류를 무작위 100개 경로에서 비교(맞은 비율·시간·토큰)</td>
+</tr>
+<tr>
+<td>3</td>
+<td>추출</td>
+<td>형식별 추출기로 근거 구간을 만든다. EML(헤더·본문·첨부 해시), DOCX·PPTX·XLSX(ZIP 안 XML), PDF 텍스트·주석(PyMuPDF), HWP(kordoc, 가능하면), DWG 문자·지시선·구름(ZWCAD, 사본). 3DM은 이번에 제외한다.</td>
+<td>—</td>
+</tr>
+<tr>
+<td>4</td>
+<td>연결</td>
+<td>메일 첨부와 서버 파일을 해시·이름으로 잇고, 스레드를 묶는다. 회의·메일을 Episode로 만든다.</td>
+<td>—</td>
+</tr>
+<tr>
+<td>5</td>
+<td>선별</td>
+<td>Jev가 구간마다 “결정·요청·조건·의견이 있는가, 종류는 무엇인가”를 확률과 함께 판정한다. 확신 높음은 그대로 채택, 확신 낮음(중간 구간)만 Claude가 다시 본다.</td>
+<td>확신 구간별 Claude 대조 표본(아래)으로 숨은 오류율, Claude로 넘어간 비율, 시간·토큰</td>
+</tr>
+<tr>
+<td>6</td>
+<td>진술 추출</td>
+<td>선별된 구간만 Claude가 진술 JSON을 만든다. 인용 문자열이 원문과 일치하지 않으면 버린다.</td>
+<td>전체 구간을 Claude로 처리할 때와 비교한 환산 비용</td>
+</tr>
+<tr>
+<td>7</td>
+<td>검증·정리</td>
+<td>인용-진술 일치(Jev Noul), 주체 별칭 합치기 후보</td>
+<td>Jev 판정과 사람 확인 비교</td>
+</tr>
+<tr>
+<td>8</td>
+<td>질의 시험</td>
+<td>사용자 지정 주제: <strong>구조 설계에서 고려해야 할 조건</strong>. 경간·기둥 위치·하중·기존 구조물·브릿지·심의 지적·법규 등 조건을 근거와 함께 목록으로 뽑고, 사용자가 빠짐·오류를 판정한다.</td>
+<td>—</td>
+</tr>
+</tbody>
+</table></div>
 <ul>
-<li>형식별 개수·크기, 스캔 PDF 비율, 메일 형식(.eml/.msg), HWP 비중</li>
-<li>도면·모델의 문자 정보량, 회사 서버 경로 구조</li>
-<li>소표본(메일 20통·PDF 5개·회의록 3건 내외)으로 AI 진술 추출을 시험하고, 인용 일치율과 사람 판단과의 차이를 기록한다.</li>
+<li><strong>확신도 기준 나누기(5단계):</strong> 사용자 제안대로 Jev의 확률로 나눈다. 다만 “확신이 높다”가 “맞다”는 보장은 아니다(T-032에서도 Jev 확률의 순위와 정답이 어긋난 경우가 있었다). 그래서 확신 높음·낮음 판정에서 각 30개 안팎을 뽑아 Claude가 대조한다. 이 표본의 오류율로 경계값을 정하고, “Jev만 믿어도 되는 구간”의 오류율을 숫자로 남긴다. 사람이 미리 표시하는 작업은 하지 않는다.</li>
+<li><strong>DB 구조(실험용):</strong> 자료(Source), 같은 문서 묶음, Episode, 근거 구간(Excerpt, FTS5 trigram), 메일·첨부 연결, 진술(Statement, AI 추정/확정), 주체·별칭, 실행 기록(단계·호출·토큰·시간)을 둔다. 제품의 물리 스키마는 실험 결과를 보고 ARCH-01에 정한다.</li>
+<li><strong>다시 실행:</strong> 같은 명령을 다시 돌리면 바뀐 파일만 처리한다. 실험 중에도 이 증분 동작을 한 번 확인한다.</li>
+</ul>
+<p><strong>코드 위치</strong></p>
+<p><code>tools/spikes/2026-09-29-knowledge-crawl/</code>에 둔다.</p>
+<ul>
+<li>Node: 목록·메일·DB·Jev 호출. <code>tools/locate/jev.mjs</code>를 재사용한다.</li>
+<li>Python: PDF, PyMuPDF가 설치돼 있다.</li>
+<li>ZWCAD: 기존 헤드리스 읽기 경로를 쓴다.</li>
+</ul>
+<p><strong>산출</strong></p>
+<ul>
+<li>DB 파일(VIDE 데이터 폴더의 <code>knowledge\&lt;프로젝트 ID&gt;.sqlite</code>)</li>
+<li><code>docs/tdd/SPIKE-2026-09-29-knowledge-crawl.md</code>: 단계별 시간·양·비용, Jev 비교표, 형식별 판정표, 질의 시험 결과, 한계</li>
+<li>제품으로 옮길 목록: 프로젝트 지식 SPEC 초안에 들어갈 동작, ARCH-01 스키마 입력, K1·K2 변경 범위 조정, Design의 “프로젝트 자료” SCR 입력</li>
+</ul>
+<p><strong>완료 기준</strong></p>
+<ul>
+<li>구조 설계 조건 목록이 근거와 함께 나오고, 사용자가 쓸 만한지 판정한다.</li>
+<li>5단계의 Jev 대 Claude 비교가 수치로 나온다.</li>
+<li>두 번째 실행이 바뀐 파일만 처리한다.</li>
+</ul>
+<p><strong>VIDE 기능으로 옮기는 순서(K0 뒤)</strong></p>
+<ol>
+<li>PRD C-02(R-74)를 채택으로 반영한다. 사용자는 이 작업이 C-02에 해당한다고 확인했다(2026-09-29).</li>
+<li>프로젝트 지식 SPEC 초안</li>
+<li>ARCH-01 스키마</li>
+<li>Design SCR</li>
+<li>K1: 자료함·검색, AI 없음</li>
+<li>K2: 선별·진술·검토 큐</li>
+</ol>
+<p>실험 코드는 그대로 옮기지 않고, 측정으로 남긴 단계만 <code>src/</code>의 서버 작업으로 다시 작성한다.</p>
+<p><strong>K0 실행 결과(2026-09-29)</strong></p>
+<p>전 단계를 실제로 실행했다. 수치는 <a href="../tdd/SPIKE-2026-09-29-knowledge-crawl.html">SPIKE-2026-09-29-knowledge-crawl</a>에 있다. K1·K2에 반영할 점은 다음과 같다.</p>
+<ul>
+<li><strong>해시를 미루기:</strong> 첫 목록에서 문서 전체를 해시하면 네트워크 속도(약 11MB/s) 때문에 9분이 걸렸다. 변경 판단은 크기·수정 시각으로 하고, 해시는 추출할 때 읽는 김에 계산한다.</li>
+<li><strong>DWG는 ZWCAD 한 번 실행으로 충분:</strong> 도면 156개를 29초에 읽었다. ZWCAD가 없는 PC의 대안은 ODA 변환기로 남긴다.</li>
+<li><strong>이름 규칙이 먼저:</strong> 폴더 규칙만으로 문서 종류의 95%가 풀렸다. 규칙은 프로젝트마다 다를 수 있으니 규칙표를 설정으로 두고, 남는 것만 Jev로 판정한다.</li>
+<li><strong>Jev의 역할을 좁히기:</strong>
+<ul>
+<li>Jev가 확신한 “내용 없음”은 표본에서 놓침이 없었다. 이것만 버리는 필터로 쓴다.</li>
+<li>확신한 “내용 있음”은 넓게 잡힌다. 판정을 그대로 믿지 않고 다음 단계로 넘긴다.</li>
+<li>한국어 발췌에서 Jev가 확신한 비율은 44%였다. LLM 사용 절감도 판정 단계에서 약 43% 수준이다.</li>
 </ul>
 </li>
-<li><strong>산출:</strong> <code>docs/tdd/SPIKE-YYYY-MM-DD-project-knowledge.md</code>, 형식별 파서 선택, SPEC-06 초안 입력.</li>
-<li><strong>완료 기준:</strong> 형식별 “결정적 추출 가능 / AI 판독 필요 / 제외” 판정표와 추출 시험 결과가 기록된다.</li>
+<li><strong>같은 문장 합치기:</strong> 같은 문장을 한 번만 판정하면 발췌 약 2만 개가 약 5천 개로 줄었다. 도면 판·중복 파일이 많아서다. 모든 AI 단계에 적용한다.</li>
+<li><strong>외부 전송 표시:</strong> Jev와 Claude로 간 발췌 수를 실행 기록에 남기고 화면에 표시한다(FR-18).</li>
+</ul>
+<h3>K0-T · 보기 JIG 시험판 — 2026-09-29 구현</h3>
+<p>사용자 결정(2026-09-29): 수집을 앱으로 옮기기 전에, K0에서 만든 DB를 VIDE에서 보고 피드백을 받는다. 수집기는 계획만 둔다(아래 기술 선택). 최종 위치는 왼쪽 레일(RESEARCH-06 §7.6)이며, JIG는 시험용 전달 수단이다.</p>
+<ul>
+<li><strong>변경 범위:</strong>
+<ul>
+<li><code>src/jigs/knowledge.ts</code>: 프로젝트의 지식 DB(<code>&lt;데이터 폴더&gt;/knowledge/&lt;프로젝트 ID&gt;.sqlite</code>)를 읽기 전용으로 연다. 요약, 분야별 이슈 목록, 이슈 노트와 소속 진술, 검색(내용 일치 우선·최신순), 진술의 원문 구간, 원본 열기를 제공한다.</li>
+<li>원본 열기는 DB에 기록된 루트 아래 경로만 기본 프로그램으로 연다.</li>
+<li><code>src/server/server.ts</code>의 <code>/api/v1/projects/:id/jigs/knowledge[...]</code> 경로</li>
+<li>JIG 목록 <code>J-DATA 프로젝트 자료 · 시험판</code></li>
+<li><code>src/ui/knowledge-jig.tsx</code>: 분야별 이슈 목록 → 회의록형 노트(현재 결론·조건·미결·경과). 근거는 항목마다 “근거 N”을 눌렀을 때만, 원문은 “원문”을 눌렀을 때만 보인다.</li>
+<li>이슈 노트 생성은 K0 실험 스크립트의 <code>issues</code> 단계가 한다. 검증된 진술을 분야 11개로 나누고, 분야별로 이슈 제목을 합친 뒤 이슈마다 노트를 쓴다.</li>
+</ul>
+</li>
+<li><strong>제외:</strong> 앱 안 수집, 채팅의 DB 사용, 검토 요청 대조, 확정·수정(K2 검토 큐)</li>
+<li><strong>검증:</strong>
+<ul>
+<li><code>tests/server/knowledge-jig.test.mjs</code>
+<ul>
+<li>DB가 없으면 <code>available: false</code></li>
+<li>검증 실패 진술 제외, 별칭 반영</li>
+<li>검색 순서</li>
+<li>원문 구간, 없는 이슈 404</li>
+<li>원본이 없으면 <code>SOURCE_UNAVAILABLE</code></li>
+<li>루트 밖 경로 거부</li>
+</ul>
+</li>
+<li>전체 core·ai·server 시험 통과, 웹 빌드 통과</li>
+<li>별도 데이터 폴더의 개발 서버에서 K0 DB 사본으로 화면(이슈 노트·근거·검색)을 확인했다.</li>
+</ul>
+</li>
+<li><strong>완료 기준:</strong> 사용자가 설치된 VIDE에서 K0 DB를 열어 보고 이슈 구성·노트 품질·근거 확인 방식에 대한 피드백을 준다.</li>
 </ul>
 <h3>K1 · 자료함과 원문 검색 — T-026 제안</h3>
 <ul>
 <li><strong>변경 범위:</strong>
 <ul>
 <li>위 기록 구조의 Source·Excerpt 저장(SQLite 마이그레이션)</li>
-<li>회사 서버 폴더 지정·감시(읽기 전용, 제외 규칙, 수집 전 확인)와 끌어 놓기</li>
-<li>형식별 텍스트 추출기(EML·PDF 텍스트·PPTX·DOCX·XLSX, K0 판정에 따라 HWP)</li>
-<li>FTS5 trigram 검색, 자료함 UI(목록·검색·원문 구간 열람·원본 열기)</li>
+<li>회사 서버 폴더 지정·감시(읽기 전용, 제외 규칙)와 끌어 놓기. 폴더를 지정하면 ①② 결과(종류별 개수, 제외 폴더, 예상 시간·전송량)를 먼저 보여 주고 확인 뒤 추출한다.</li>
+<li>이름 해석(날짜·상대 기관·판 사슬·같은 자료의 다른 형식 묶기)</li>
+<li>형식별 텍스트 추출기(EML·PDF 텍스트·주석·PPTX·DOCX·XLSX, K0 판정에 따라 HWP), DWG 문자·지시선·구름(ZWCAD 읽기 경로), 3DM 문자(rhino3dm)</li>
+<li>FTS5 trigram 검색, 왼쪽 레일 “프로젝트 자료”의 자료함(목록·검색·원문 구간 열람·원본 열기). 화면 배치는 Design에 먼저 SCR로 정한다</li>
 </ul>
 </li>
-<li><strong>AI 사용:</strong> 없음.</li>
+<li><strong>AI 사용:</strong> 없음. 이름 해석에서 규칙으로 안 풀리는 것만 Jev(선택, 없으면 “미분류”).</li>
 <li><strong>검증:</strong>
 <ul>
 <li>형식별 추출 단위 시험(쪽·슬라이드·메일 헤더 보존)</li>
@@ -130,27 +315,28 @@ body.review-accepted .toc-links a[data-reviews]::after{display:none}
 <li><strong>변경 범위:</strong>
 <ul>
 <li>Party·Subject·Statement·Issue·Milestone·Episode 저장</li>
-<li>AI 추출 작업: 구독 CLI, 도구 없는 JSON, 근거 구간 ID·원문 인용 필수, 대조 실패 시 폐기</li>
-<li>자료별 AI 전송 확인(FR-18), 진행률·중단·재개</li>
+<li>구간 선별: Jev로 진술이 있을 구간과 관련 대상만 골라 LLM에 넘긴다(K0 결과가 기준 미달이면 규칙+LLM)</li>
+<li>AI 추출 작업: 구독 CLI, 도구 없는 JSON, 근거 구간 ID·원문 인용 필수, 대조 실패 시 폐기, Jev로 인용-진술 일치 재확인</li>
+<li>자료별 AI 전송 확인(FR-18, TypeSafe·AI 공급자 모두), 진행률·중단·재개</li>
 <li>검토 큐(확정·수정·기각·별칭 합치기)와 대체·모순 후보 표시</li>
 <li>프로젝트 정보 탭: 브리핑·쟁점 표·타임라인·주체 목록</li>
 </ul>
 </li>
 <li><strong>검증:</strong> 가짜 인용·다른 자료 인용 거절, 확정 전 진술이 사실로 표시되지 않음, 대체가 이전 진술을 지우지 않음, 전송 거부 자료가 AI 입력에 들어가지 않음, 중단 뒤 재개 시 중복 없음, “특정 날짜 기준” 조회가 당시 유효 진술만 반환.</li>
-<li><strong>완료 기준:</strong> 표본 자료에서 주요 결정·요청·쟁점이 근거와 함께 목록화되고, 확정한 항목만 “확정”으로 보인다. 품질 기준은 K0 결과로 SPEC-06에서 정한다.</li>
+<li><strong>완료 기준:</strong> 표본 자료에서 주요 결정·요청·쟁점이 근거와 함께 목록화되고, 확정한 항목만 “확정”으로 보인다. 품질 기준은 K0 결과로 프로젝트 지식 SPEC에서 정한다.</li>
 </ul>
-<h3>K3 · 질의응답과 요청 문맥 제안 — T-028 제안</h3>
+<h3>K3 · 질의응답과 검토 요청 — T-028 제안</h3>
 <ul>
 <li><strong>변경 범위:</strong>
 <ul>
-<li>AI 읽기 전용 MCP 도구: 자료 검색, 진술·쟁점 조회, 대상별 근거, 타임라인, 기준 날짜 조회</li>
-<li>채팅 답변의 인용 표시와 원문 열람</li>
-<li>모델 수정 요청 시 관련 필수조건·결정 칩 제안(자동 첨부 아님)</li>
+<li>AI 읽기 전용 찾기 도구: 코드 필터(분야·이슈·종류·주체·기간·FTS) → Jev 순위 → 상위 진술만 LLM에 전달(RESEARCH-06 §9 “찾기”)</li>
+<li>근거 표시는 판단이 애매할 때와 사용자가 요청할 때만, 원문 열람 포함</li>
+<li>검토 요청과 JIG 빌드 때만 관련 조건을 찾아 대조한다. 모델·설계 수정 요청마다 자동 검토하지 않는다(2026-09-29 사용자 결정).</li>
 <li>Inspector에 객체의 연결 진술과 연결·끊김 표시</li>
 </ul>
 </li>
 <li><strong>검증:</strong> 근거 없는 질문에 “자료에 없음”, 대체된 결정보다 최신 결정을 날짜와 함께 답함, 다른 프로젝트·비공개 자료 접근 불가, 기존 AI 작업 권한이 넓어지지 않음.</li>
-<li><strong>완료 기준:</strong> 사용자가 고른 질문 목록에 인용이 붙은 답을 받고, 근거를 원문에서 확인한다.</li>
+<li><strong>완료 기준:</strong> 사용자가 고른 질문 목록에 답하고, 요청하면 근거를 원문에서 확인할 수 있다. 찾기 단계의 Jev 순위 정확도(상위 20개 안에 필요한 진술이 드는 비율)를 기록한다.</li>
 </ul>
 <h3>K4 · 구조화된 조건과 크리틱 — T-029 제안</h3>
 <ul>
@@ -192,14 +378,36 @@ body.review-accepted .toc-links a[data-reviews]::after{display:none}
 <ul>
 <li><strong>로컬:</strong> 기존 SQLite에 테이블 추가, FTS5 trigram, R*Tree 공간 색인, JSON. 벡터 검색은 부족함이 측정될 때 sqlite-vec(로컬 임베딩 모델 필요).</li>
 <li><strong>팀 공용 원본:</strong> ADR-018. 동기화 방식은 저장소와 분리해 사내 팀 서버·D1·PostgreSQL 어느 쪽으로도 옮길 수 있게 한다.</li>
-<li><strong>추출기:</strong> 표준 형식은 가벼운 파서 의존성을 추가한다. 스캔 PDF·이미지 판독은 AI 판독 선택 기능. 새 의존성은 PLAN-03의 추적·검사 규칙을 따른다.</li>
+<li><strong>구현 언어(2026-09-29 사용자 결정):</strong> TypeScript(VIDE Node 서버의 백그라운드 작업)와 C#(ZWCAD·Rhino 플러그인)만 쓴다. K0의 Python 추출기(PyMuPDF·pyhwp는 AGPL)는 제품에 옮기지 않는다.</li>
+<li><strong>추출기:</strong>
+<ul>
+<li>PDF: pdf.js</li>
+<li>DOCX·PPTX·XLSX·HWPX: ZIP 해제 + XML 읽기</li>
+<li>메일: K0 파서 이식</li>
+<li>3DM: rhino3dm.js</li>
+<li>DWG: K0의 ZWCAD 명령을 <code>hosts/zwcad</code> 빌드에 편입하고, 숨은 ZWCAD 일괄 실행을 유지</li>
+<li>HWP(옛 형식): 라이선스를 확인한 뒤 결정</li>
+<li>스캔 PDF·이미지: AI 판독 선택 기능</li>
+<li>새 의존성은 PLAN-03의 추적·검사 규칙을 따른다. pdf.js의 속도·품질은 K0 결과와 비교한다.</li>
+</ul>
+</li>
+<li><strong>폴더 구조 파악:</strong> 경로를 코드에 고정하지 않는다.
+<ul>
+<li>코드가 폴더마다 날짜·번호 접두·괄호 안 이름 같은 후보를 뽑는다.</li>
+<li>Jev가 폴더의 역할(보낸 자료·받은 자료·회의록·도면·계약·참고 등)과 상대 후보를 고른다.</li>
+<li>결과 규칙 표는 사용자가 확인·수정하고, 같은 사무소의 다음 프로젝트에 재사용한다.</li>
+<li>LLM은 Jev 확신이 낮은 폴더에만 쓴다.</li>
+</ul>
+</li>
+<li><strong>업데이트:</strong> 실시간 감시는 하지 않는다(네트워크 드라이브 변경 감시가 불안정). 프로젝트를 열 때와 “자료 새로 고침”에서 증분 수집한다(K0 재실행 약 30초).</li>
+<li><strong>Jev(TypeSafe):</strong> 폴더 역할·상대 판정, 빈 구간 버리기, 근거 확인, 별칭 후보, 찾기 순위, 새 진술의 이슈 배정. 개발 중에는 <code>.env</code> 키, 제품에서는 서버 중계(PLAN-05 §7). 숫자·날짜 판단에는 쓰지 않는다.</li>
 <li><strong>AI:</strong> 각자 PC의 구독 CLI. 정리는 도구 없는 JSON 추출, 질의·크리틱은 읽기 전용 MCP 도구. 서버 쪽 AI 실행은 하지 않는다.</li>
 </ul>
 </section><section class="doc-section" id="plan-08-project-knowledge-section-x4"><h2><span aria-hidden="true" class="section-num">04 /</span> 비목표</h2>
-<p>문서 관리·결재·버전 관리 시스템, 메일 클라이언트, 녹음 전사(STT), 법규 자동 판정, 전체 관계 그래프, 사용자 확정 없는 결정 자동 확정, 원본 파일의 클라우드 업로드, 같은 프로젝트의 호스트 공동 제어.</p>
+<p>JIG로 따로 설치하는 형태, 문서 관리·결재·버전 관리 시스템, 메일 클라이언트, 녹음 전사(STT), 법규 자동 판정, 전체 관계 그래프, 사용자 확정 없는 결정 자동 확정, 원본 파일의 클라우드 업로드, 같은 프로젝트의 호스트 공동 제어.</p>
 </section><footer class="doc-footer"><span>VIDE / PLANNING DOCUMENTS</span><span>문서 열람용 · 실제 CAD/BIM 지원은 구현·검증 후 선언</span></footer></article></main></div>
 <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
-<script id="source-data" type="application/json">{"plan-08-project-knowledge":{"label":"프로젝트 지식 DB — 수집·정리·질의·크리틱·팀 공유 단계 계획","file":"PLAN-08-project-knowledge.md","markdown":"---\nid: PLAN-08\ntitle: 프로젝트 지식 DB — 수집·정리·질의·크리틱·팀 공유 단계 계획\nstatus: draft\nversion: 0.2\nupdated: 2026-09-29\nowner: agent:claude\nrelated: [RESEARCH-06, ADR-018, PRD, FR-08, FR-09, FR-18, FR-21, FR-22, SPEC-03, ARCH-01, AC-12, AC-14, AC-30, AC-37]\n---\n\n# PLAN-08 — 프로젝트 지식 DB\n\n2026-09-28~29 사용자 요청의 단계 계획이다. 요청 내용은 메일·첨부·회의록을 모아 누가 무엇을 말했는지, 주요 쟁점, 진행 경과를 DB로 정리하고, 질문 답변·도면/모델 크리틱에 쓰며, 여러 팀원이 함께 쌓는 것까지 목표로 한다. 원본은 회사 서버에 있을 가능성이 높다. 파악과 선택 근거는 [RESEARCH-06](../research/RESEARCH-06-project-knowledge.md), 저장·공유 구조의 결정 초안은 [ADR-018](../decisions/ADR-018-project-knowledge-store.md)이 소유한다.\n\n## 착수 조건\n\n- **제품 결정:** PRD §4.4 C-02 제안(첨삭 R-74)이 채택돼야 한다. 채택 전에는 구현하지 않는다.\n- **구조 결정:** ADR-018의 공동 축적 예외(지식 기록만 여러 PC)와 팀 공용 원본 위치. K5 착수 전까지 정하면 되고, K0~K4는 로컬만으로 진행할 수 있다.\n- **RESEARCH-06 §12 결정:** 회사 정책(외부 저장·외부 AI 처리), 역할과 공개 범위, 자료 폴더, 표본 자료.\n- **동작 계약:** 채택되면 K0 결과로 새 SPEC(가칭 SPEC-06 프로젝트 지식)을 먼저 쓴다. 출처·역할·상태 규칙은 SPEC-03.4를 확장한다.\n- **진행 중 작업과의 관계:** 현재 우선순위(Rhino·CAD 연결 왕복과 Sync 성능)를 막지 않는다. 아래 T-025~031은 제안 번호이며 채택 뒤 마스터 PLAN에 등록한다.\n\n## 처음부터 지킬 기록 구조\n\nK1부터 아래 규칙을 지키면 K5에서 데이터를 옮기지 않고 공동 축적으로 넓힐 수 있다. 물리 스키마는 ARCH-01에 정한다.\n\n- 모든 기록(자료 등록, 근거 구간, 진술, 확정·기각, 대체, 별칭 합치기, 관측)은 **전역 고유 ID·작성자·기록 시각을 가진 사건**으로 쌓기만 한다. 수정·삭제 대신 새 사건을 남긴다.\n- 진술은 유효 시작·끝과 기록 시각의 **두 시간축**을 가진다.\n- 원본은 복사하지 않고 **위치 참조(UNC 또는 프로젝트 루트 상대 경로) + 내용 해시**로 등록한다.\n- 자료마다 **공개 범위**(팀 / 특정 멤버 / 나만)와 **AI 전송 허용**을 가진다.\n- 기하 관측은 모델 Sync/체크포인트 ID와 계산 방법을 함께 저장한다.\n\n## 단계\n\n각 단계는 앞 단계만으로도 쓸모가 있어야 하며, 다음 단계는 앞 단계의 실제 사용 결과를 보고 조정한다.\n\n### K0 · 표본 자료 조사(SPIKE) — T-025 제안\n\n- **목적:** 실제 프로젝트 자료 1세트(사본, `.vide/knowledge-sample/`)의 형식 분포와 추출 가능성을 잰다. 회사 서버 원본은 사용자가 고른 사본만 쓴다.\n- **내용:**\n  - 형식별 개수·크기, 스캔 PDF 비율, 메일 형식(.eml/.msg), HWP 비중\n  - 도면·모델의 문자 정보량, 회사 서버 경로 구조\n  - 소표본(메일 20통·PDF 5개·회의록 3건 내외)으로 AI 진술 추출을 시험하고, 인용 일치율과 사람 판단과의 차이를 기록한다.\n- **산출:** `docs/tdd/SPIKE-YYYY-MM-DD-project-knowledge.md`, 형식별 파서 선택, SPEC-06 초안 입력.\n- **완료 기준:** 형식별 “결정적 추출 가능 / AI 판독 필요 / 제외” 판정표와 추출 시험 결과가 기록된다.\n\n### K1 · 자료함과 원문 검색 — T-026 제안\n\n- **변경 범위:**\n  - 위 기록 구조의 Source·Excerpt 저장(SQLite 마이그레이션)\n  - 회사 서버 폴더 지정·감시(읽기 전용, 제외 규칙, 수집 전 확인)와 끌어 놓기\n  - 형식별 텍스트 추출기(EML·PDF 텍스트·PPTX·DOCX·XLSX, K0 판정에 따라 HWP)\n  - FTS5 trigram 검색, 자료함 UI(목록·검색·원문 구간 열람·원본 열기)\n- **AI 사용:** 없음.\n- **검증:**\n  - 형식별 추출 단위 시험(쪽·슬라이드·메일 헤더 보존)\n  - 같은 파일 재수집·이동·이름 변경 시 해시로 중복 없음\n  - 다른 드라이브 문자로 같은 자료 인식, 한국어 부분 검색\n  - 원문 구간 열람 브라우저 시험, 원본 폴더에 쓰기 없음, 백업/복구 포함, 비밀값 검사\n- **완료 기준:** 표본 자료에서 “기둥 간격”, “회의실” 같은 검색으로 해당 메일·쪽·슬라이드를 찾아 원문을 연다.\n\n### K2 · 진술·쟁점 정리와 검토 큐 — T-027 제안\n\n- **변경 범위:**\n  - Party·Subject·Statement·Issue·Milestone·Episode 저장\n  - AI 추출 작업: 구독 CLI, 도구 없는 JSON, 근거 구간 ID·원문 인용 필수, 대조 실패 시 폐기\n  - 자료별 AI 전송 확인(FR-18), 진행률·중단·재개\n  - 검토 큐(확정·수정·기각·별칭 합치기)와 대체·모순 후보 표시\n  - 프로젝트 정보 탭: 브리핑·쟁점 표·타임라인·주체 목록\n- **검증:** 가짜 인용·다른 자료 인용 거절, 확정 전 진술이 사실로 표시되지 않음, 대체가 이전 진술을 지우지 않음, 전송 거부 자료가 AI 입력에 들어가지 않음, 중단 뒤 재개 시 중복 없음, “특정 날짜 기준” 조회가 당시 유효 진술만 반환.\n- **완료 기준:** 표본 자료에서 주요 결정·요청·쟁점이 근거와 함께 목록화되고, 확정한 항목만 “확정”으로 보인다. 품질 기준은 K0 결과로 SPEC-06에서 정한다.\n\n### K3 · 질의응답과 요청 문맥 제안 — T-028 제안\n\n- **변경 범위:**\n  - AI 읽기 전용 MCP 도구: 자료 검색, 진술·쟁점 조회, 대상별 근거, 타임라인, 기준 날짜 조회\n  - 채팅 답변의 인용 표시와 원문 열람\n  - 모델 수정 요청 시 관련 필수조건·결정 칩 제안(자동 첨부 아님)\n  - Inspector에 객체의 연결 진술과 연결·끊김 표시\n- **검증:** 근거 없는 질문에 “자료에 없음”, 대체된 결정보다 최신 결정을 날짜와 함께 답함, 다른 프로젝트·비공개 자료 접근 불가, 기존 AI 작업 권한이 넓어지지 않음.\n- **완료 기준:** 사용자가 고른 질문 목록에 인용이 붙은 답을 받고, 근거를 원문에서 확인한다.\n\n### K4 · 구조화된 조건과 크리틱 — T-029 제안\n\n- **변경 범위:**\n  - 요구 진술의 구조화된 조건(대상·항목·조건·단위)과 확정\n  - 모델 시점별 기하 관측(기본 집계 FR-22 재사용)\n  - 조건-관측 대조로 쟁점 생성(AI가 숫자를 추측하지 않음), 시각 판단은 뷰포트 캡처\n  - 결과는 “AI 추정” 쟁점으로 객체에 연결하고 채택·기각. 법규 해석은 FR-21로 넘긴다.\n- **검증:** 요구와 어긋나게 만든 합성 모델에서 해당 객체·근거를 짚는지, 맞는 모델에서의 거짓 지적 비율, 모델 변경 시 관측이 오래됨으로 바뀌는지, 크리틱이 원본을 수정하지 않는지.\n- **완료 기준:** 대표 과업 수준의 모델 1건에서 채택할 만한 지적과 거짓 지적의 비율을 기록하고, 사용자가 계속 쓸지 판단한다.\n\n### K5 · 팀 공동 축적 — T-030 제안\n\n- **선행:** ADR-018 승인(공동 축적 예외, 팀 공용 원본 위치: 사내 팀 서버 / D1 / Supabase), 역할·공개 범위 결정.\n- **변경 범위:**\n  - 사건 동기화(모르는 사건 가져오기·내 사건 보내기, 재시도 멱등)\n  - 팀 공용 원본 서비스(선택한 위치), 멤버십·역할(관리자·편집·열람·외부)과 확정 권한\n  - 자료별 공개 범위 적용, 동기화 상태·충돌(나란한 판단) 표시\n  - 원본 파일은 업로드하지 않고, 다른 팀원이 원문을 열 때는 회사 서버 경로 사용\n- **검증:**\n  - 두 PC가 오프라인에서 각자 기록한 뒤 동기화하면 양쪽 결과가 같음\n  - 같은 자료를 두 사람이 넣어도 한 번만 저장, 비공개 자료의 진술이 다른 멤버에게 가지 않음\n  - 권한 없는 확정 거절, 동기화 중단·재시작에도 중복 없음\n  - 호스트 제어는 여전히 한 작업환경만 가능(AC-37)\n- **완료 기준:** 2~3명이 같은 프로젝트에 자료를 넣고 확정한 결과를 서로의 VIDE에서 질문·조회한다.\n\n### K6 · (선택) 관계 보기\n\nK2~K5의 표·타임라인·인용으로 부족하다는 실제 근거가 생길 때만 Obsidian 폴더 한 방향 내보내기나 한 쟁점 중심의 국소 그래프를 추가한다. 전체 그래프는 만들지 않는다. — T-031 제안\n\n## 기술 선택(초안)\n\n- **로컬:** 기존 SQLite에 테이블 추가, FTS5 trigram, R*Tree 공간 색인, JSON. 벡터 검색은 부족함이 측정될 때 sqlite-vec(로컬 임베딩 모델 필요).\n- **팀 공용 원본:** ADR-018. 동기화 방식은 저장소와 분리해 사내 팀 서버·D1·PostgreSQL 어느 쪽으로도 옮길 수 있게 한다.\n- **추출기:** 표준 형식은 가벼운 파서 의존성을 추가한다. 스캔 PDF·이미지 판독은 AI 판독 선택 기능. 새 의존성은 PLAN-03의 추적·검사 규칙을 따른다.\n- **AI:** 각자 PC의 구독 CLI. 정리는 도구 없는 JSON 추출, 질의·크리틱은 읽기 전용 MCP 도구. 서버 쪽 AI 실행은 하지 않는다.\n\n## 비목표\n\n문서 관리·결재·버전 관리 시스템, 메일 클라이언트, 녹음 전사(STT), 법규 자동 판정, 전체 관계 그래프, 사용자 확정 없는 결정 자동 확정, 원본 파일의 클라우드 업로드, 같은 프로젝트의 호스트 공동 제어.\n"}}</script>
+<script id="source-data" type="application/json">{"plan-08-project-knowledge":{"label":"프로젝트 지식 DB — 수집·정리·질의·크리틱·팀 공유 단계 계획","file":"PLAN-08-project-knowledge.md","markdown":"---\nid: PLAN-08\ntitle: 프로젝트 지식 DB — 수집·정리·질의·크리틱·팀 공유 단계 계획\nstatus: draft\nversion: 0.3\nupdated: 2026-09-29\nowner: agent:claude\nrelated: [RESEARCH-06, T-032, PLAN-05, ADR-018, PRD, FR-08, FR-09, FR-18, FR-21, FR-22, SPEC-03, ARCH-01, AC-12, AC-14, AC-30, AC-37]\n---\n\n# PLAN-08 — 프로젝트 지식 DB\n\n2026-09-28~29 사용자 요청의 단계 계획이다. 요청 내용은 메일·첨부·회의록을 모아 누가 무엇을 말했는지, 주요 쟁점, 진행 경과를 DB로 정리하고, 질문 답변·도면/모델 크리틱에 쓰며, 여러 팀원이 함께 쌓는 것까지 목표로 한다. 원본은 회사 서버에 있을 가능성이 높다. 파악과 선택 근거는 [RESEARCH-06](../research/RESEARCH-06-project-knowledge.md), 저장·공유 구조의 결정 초안은 [ADR-018](../decisions/ADR-018-project-knowledge-store.md)이 소유한다.\n\n2026-09-29 추가 요청과 판단:\n\n- **경로 하나로 구축:** 사용자가 회사 서버의 프로젝트 폴더 경로만 주면, 규칙·파서·Jev가 먼저 거르고 LLM은 선별된 구간에만 쓴다(RESEARCH-06 §7.5의 ①~⑦ 층). 도면 안의 표기와 “어느 파일이 무엇을 말했나”를 근거 구간 단위로 남긴다(§7.4).\n- **위치:** 모든 프로젝트에 들어가는 기본 기능이므로 JIG가 아니라 왼쪽 레일의 “프로젝트 자료”로 둔다(§7.6). JIG는 이 DB를 읽기만 한다.\n\n## 착수 조건\n\n- **제품 결정:** PRD §4.4 C-02 제안(첨삭 R-74)이 채택돼야 한다. 채택 전에는 구현하지 않는다.\n- **구조 결정:** ADR-018의 공동 축적 예외(지식 기록만 여러 PC)와 팀 공용 원본 위치. K5 착수 전까지 정하면 되고, K0~K4는 로컬만으로 진행할 수 있다.\n- **RESEARCH-06 §12 결정:** 회사 정책(외부 저장·외부 AI 처리), 역할과 공개 범위, 자료 폴더, 표본 자료.\n- **동작 계약:** 채택되면 K0 결과로 새 SPEC(프로젝트 지식, 번호는 작성 시 다음 빈 번호. SPEC-06은 구조 해석이 사용)을 먼저 쓴다. 출처·역할·상태 규칙은 SPEC-03.4를 확장한다.\n- **진행 중 작업과의 관계:** 현재 우선순위(Rhino·CAD 연결 왕복과 Sync 성능)를 막지 않는다. 아래 T-025~031은 제안 번호이며 채택 뒤 마스터 PLAN에 등록한다.\n\n## 처음부터 지킬 기록 구조\n\nK1부터 아래 규칙을 지키면 K5에서 데이터를 옮기지 않고 공동 축적으로 넓힐 수 있다. 물리 스키마는 ARCH-01에 정한다.\n\n- 모든 기록(자료 등록, 근거 구간, 진술, 확정·기각, 대체, 별칭 합치기, 관측)은 **전역 고유 ID·작성자·기록 시각을 가진 사건**으로 쌓기만 한다. 수정·삭제 대신 새 사건을 남긴다.\n- 진술은 유효 시작·끝과 기록 시각의 **두 시간축**을 가진다.\n- 원본은 복사하지 않고 **위치 참조(UNC 또는 프로젝트 루트 상대 경로) + 내용 해시**로 등록한다.\n- 자료마다 **공개 범위**(팀 / 특정 멤버 / 나만)와 **AI 전송 허용**을 가진다.\n- 기하 관측은 모델 Sync/체크포인트 ID와 계산 방법을 함께 저장한다.\n\n## 단계\n\n각 단계는 앞 단계만으로도 쓸모가 있어야 하며, 다음 단계는 앞 단계의 실제 사용 결과를 보고 조정한다.\n\n### K0 · 실제 프로젝트 1건으로 DB 구축(SPIKE) — T-025 제안\n\n2026-09-29 사용자 요청: S-06 프로젝트의 회사 서버 폴더 전체를 실제로 SQLite DB로 만들어 보고, 그 과정을 정리해 VIDE 기능(K1·K2)으로 옮긴다. 이 단계는 제품 코드가 아닌 실험이며, 같은 과정에서 Jev의 효과를 잰다.\n\n**지금까지 확인한 것(RESEARCH-06 §7.3)**\n\n- 서버 폴더 전체 목록은 Jev 없이 파일 시스템만으로 25.6초에 읽혔다. 파일 6,286개, 61.5GB, 문자 정보가 많은 형식 약 450개.\n- 메일 백업 EML 97통은 표준 MIME 처리만으로 모두 해독된다.\n- Office 메모는 0건이고, PDF 주석은 사각형 도형뿐이다.\n- **Jev가 빠르거나 싸다는 것은 아직 측정하지 않았다.** 이 단계가 그 측정이다.\n\n**경계**\n\n| 항목 | 규칙 |\n|---|---|\n| 원본 | 서버 폴더는 읽기만 한다. 쓰기·이동·이름 변경을 하지 않는다. |\n| DWG | ZWCAD로 읽을 파일은 `.vide/knowledge-crawl/dwg/`에 복사한 사본만 연다(AI.md §8). 에이전트가 띄운 ZWCAD는 끝나면 종료한다. |\n| DB 파일 | 사용자가 VIDE에 만든 이 프로젝트에 붙인다. VIDE는 프로젝트별 폴더 없이 데이터 폴더(`%LOCALAPPDATA%\\VIDE`)의 `vide.sqlite` 하나를 쓰므로, 작업 엔진 DB는 건드리지 않고 `knowledge\\\u003c프로젝트 ID>.sqlite`를 따로 만든다. 저장소·회사 서버 공유 폴더에는 두지 않는다(RESEARCH-06 §6). 제품에서 같은 DB에 넣을지 파일을 나눌지는 ARCH-01에서 정한다. |\n| 원본 참조 | DB는 원본을 복사하지 않는다. 서버 루트 기준 상대 경로와 해시만 가진다. |\n| 제외 | 사용자 결정(2026-09-29): 계약·회계·제안서도 포함한다. 백업·캐시·렌더 자산 같은 자동 생성 파일만 뺀다. DB는 로컬에만 있다. |\n| 외부 전송 | 파일 경로·구간 문장은 Jev(TypeSafe)로, 선별된 구간은 Claude(구독 CLI)로 간다. 사용자 허용(2026-09-29). |\n| 저장소 기록 | 실험 코드와 SPIKE 문서에는 발주처·사업명을 쓰지 않는다. 경로는 실행 인자로만 받는다. |\n\n**단계**\n\n각 단계의 시간·호출 수·토큰은 DB의 실행 기록 표에 남긴다.\n\n| # | 단계 | 방법 | Jev 효과 측정 |\n|---|---|---|---|\n| 1 | 목록 | 경로·크기·날짜 수집, 제외 규칙, 같은 문서의 다른 형식 묶기. 해시는 문자 정보가 많은 형식과 메일 첨부만 계산한다(3dm·렌더 자산 28GB+를 네트워크로 해시하지 않음). | — |\n| 2 | 이름 해석 | 날짜·상대 기관·자료 종류·판 사슬을 규칙으로 뽑고, 남는 것만 Jev로 분류한다. | 규칙만 / 규칙+Jev / Claude 분류를 무작위 100개 경로에서 비교(맞은 비율·시간·토큰) |\n| 3 | 추출 | 형식별 추출기로 근거 구간을 만든다. EML(헤더·본문·첨부 해시), DOCX·PPTX·XLSX(ZIP 안 XML), PDF 텍스트·주석(PyMuPDF), HWP(kordoc, 가능하면), DWG 문자·지시선·구름(ZWCAD, 사본). 3DM은 이번에 제외한다. | — |\n| 4 | 연결 | 메일 첨부와 서버 파일을 해시·이름으로 잇고, 스레드를 묶는다. 회의·메일을 Episode로 만든다. | — |\n| 5 | 선별 | Jev가 구간마다 “결정·요청·조건·의견이 있는가, 종류는 무엇인가”를 확률과 함께 판정한다. 확신 높음은 그대로 채택, 확신 낮음(중간 구간)만 Claude가 다시 본다. | 확신 구간별 Claude 대조 표본(아래)으로 숨은 오류율, Claude로 넘어간 비율, 시간·토큰 |\n| 6 | 진술 추출 | 선별된 구간만 Claude가 진술 JSON을 만든다. 인용 문자열이 원문과 일치하지 않으면 버린다. | 전체 구간을 Claude로 처리할 때와 비교한 환산 비용 |\n| 7 | 검증·정리 | 인용-진술 일치(Jev Noul), 주체 별칭 합치기 후보 | Jev 판정과 사람 확인 비교 |\n| 8 | 질의 시험 | 사용자 지정 주제: **구조 설계에서 고려해야 할 조건**. 경간·기둥 위치·하중·기존 구조물·브릿지·심의 지적·법규 등 조건을 근거와 함께 목록으로 뽑고, 사용자가 빠짐·오류를 판정한다. | — |\n\n- **확신도 기준 나누기(5단계):** 사용자 제안대로 Jev의 확률로 나눈다. 다만 “확신이 높다”가 “맞다”는 보장은 아니다(T-032에서도 Jev 확률의 순위와 정답이 어긋난 경우가 있었다). 그래서 확신 높음·낮음 판정에서 각 30개 안팎을 뽑아 Claude가 대조한다. 이 표본의 오류율로 경계값을 정하고, “Jev만 믿어도 되는 구간”의 오류율을 숫자로 남긴다. 사람이 미리 표시하는 작업은 하지 않는다.\n- **DB 구조(실험용):** 자료(Source), 같은 문서 묶음, Episode, 근거 구간(Excerpt, FTS5 trigram), 메일·첨부 연결, 진술(Statement, AI 추정/확정), 주체·별칭, 실행 기록(단계·호출·토큰·시간)을 둔다. 제품의 물리 스키마는 실험 결과를 보고 ARCH-01에 정한다.\n- **다시 실행:** 같은 명령을 다시 돌리면 바뀐 파일만 처리한다. 실험 중에도 이 증분 동작을 한 번 확인한다.\n\n**코드 위치**\n\n`tools/spikes/2026-09-29-knowledge-crawl/`에 둔다.\n- Node: 목록·메일·DB·Jev 호출. `tools/locate/jev.mjs`를 재사용한다.\n- Python: PDF, PyMuPDF가 설치돼 있다.\n- ZWCAD: 기존 헤드리스 읽기 경로를 쓴다.\n\n**산출**\n\n- DB 파일(VIDE 데이터 폴더의 `knowledge\\\u003c프로젝트 ID>.sqlite`)\n- `docs/tdd/SPIKE-2026-09-29-knowledge-crawl.md`: 단계별 시간·양·비용, Jev 비교표, 형식별 판정표, 질의 시험 결과, 한계\n- 제품으로 옮길 목록: 프로젝트 지식 SPEC 초안에 들어갈 동작, ARCH-01 스키마 입력, K1·K2 변경 범위 조정, Design의 “프로젝트 자료” SCR 입력\n\n**완료 기준**\n\n- 구조 설계 조건 목록이 근거와 함께 나오고, 사용자가 쓸 만한지 판정한다.\n- 5단계의 Jev 대 Claude 비교가 수치로 나온다.\n- 두 번째 실행이 바뀐 파일만 처리한다.\n\n**VIDE 기능으로 옮기는 순서(K0 뒤)**\n\n1. PRD C-02(R-74)를 채택으로 반영한다. 사용자는 이 작업이 C-02에 해당한다고 확인했다(2026-09-29).\n2. 프로젝트 지식 SPEC 초안\n3. ARCH-01 스키마\n4. Design SCR\n5. K1: 자료함·검색, AI 없음\n6. K2: 선별·진술·검토 큐\n\n실험 코드는 그대로 옮기지 않고, 측정으로 남긴 단계만 `src/`의 서버 작업으로 다시 작성한다.\n\n**K0 실행 결과(2026-09-29)**\n\n전 단계를 실제로 실행했다. 수치는 [SPIKE-2026-09-29-knowledge-crawl](../tdd/SPIKE-2026-09-29-knowledge-crawl.md)에 있다. K1·K2에 반영할 점은 다음과 같다.\n\n- **해시를 미루기:** 첫 목록에서 문서 전체를 해시하면 네트워크 속도(약 11MB/s) 때문에 9분이 걸렸다. 변경 판단은 크기·수정 시각으로 하고, 해시는 추출할 때 읽는 김에 계산한다.\n- **DWG는 ZWCAD 한 번 실행으로 충분:** 도면 156개를 29초에 읽었다. ZWCAD가 없는 PC의 대안은 ODA 변환기로 남긴다.\n- **이름 규칙이 먼저:** 폴더 규칙만으로 문서 종류의 95%가 풀렸다. 규칙은 프로젝트마다 다를 수 있으니 규칙표를 설정으로 두고, 남는 것만 Jev로 판정한다.\n- **Jev의 역할을 좁히기:**\n  - Jev가 확신한 “내용 없음”은 표본에서 놓침이 없었다. 이것만 버리는 필터로 쓴다.\n  - 확신한 “내용 있음”은 넓게 잡힌다. 판정을 그대로 믿지 않고 다음 단계로 넘긴다.\n  - 한국어 발췌에서 Jev가 확신한 비율은 44%였다. LLM 사용 절감도 판정 단계에서 약 43% 수준이다.\n- **같은 문장 합치기:** 같은 문장을 한 번만 판정하면 발췌 약 2만 개가 약 5천 개로 줄었다. 도면 판·중복 파일이 많아서다. 모든 AI 단계에 적용한다.\n- **외부 전송 표시:** Jev와 Claude로 간 발췌 수를 실행 기록에 남기고 화면에 표시한다(FR-18).\n\n### K0-T · 보기 JIG 시험판 — 2026-09-29 구현\n\n사용자 결정(2026-09-29): 수집을 앱으로 옮기기 전에, K0에서 만든 DB를 VIDE에서 보고 피드백을 받는다. 수집기는 계획만 둔다(아래 기술 선택). 최종 위치는 왼쪽 레일(RESEARCH-06 §7.6)이며, JIG는 시험용 전달 수단이다.\n\n- **변경 범위:**\n  - `src/jigs/knowledge.ts`: 프로젝트의 지식 DB(`\u003c데이터 폴더>/knowledge/\u003c프로젝트 ID>.sqlite`)를 읽기 전용으로 연다. 요약, 분야별 이슈 목록, 이슈 노트와 소속 진술, 검색(내용 일치 우선·최신순), 진술의 원문 구간, 원본 열기를 제공한다.\n  - 원본 열기는 DB에 기록된 루트 아래 경로만 기본 프로그램으로 연다.\n  - `src/server/server.ts`의 `/api/v1/projects/:id/jigs/knowledge[...]` 경로\n  - JIG 목록 `J-DATA 프로젝트 자료 · 시험판`\n  - `src/ui/knowledge-jig.tsx`: 분야별 이슈 목록 → 회의록형 노트(현재 결론·조건·미결·경과). 근거는 항목마다 “근거 N”을 눌렀을 때만, 원문은 “원문”을 눌렀을 때만 보인다.\n  - 이슈 노트 생성은 K0 실험 스크립트의 `issues` 단계가 한다. 검증된 진술을 분야 11개로 나누고, 분야별로 이슈 제목을 합친 뒤 이슈마다 노트를 쓴다.\n- **제외:** 앱 안 수집, 채팅의 DB 사용, 검토 요청 대조, 확정·수정(K2 검토 큐)\n- **검증:**\n  - `tests/server/knowledge-jig.test.mjs`\n    - DB가 없으면 `available: false`\n    - 검증 실패 진술 제외, 별칭 반영\n    - 검색 순서\n    - 원문 구간, 없는 이슈 404\n    - 원본이 없으면 `SOURCE_UNAVAILABLE`\n    - 루트 밖 경로 거부\n  - 전체 core·ai·server 시험 통과, 웹 빌드 통과\n  - 별도 데이터 폴더의 개발 서버에서 K0 DB 사본으로 화면(이슈 노트·근거·검색)을 확인했다.\n- **완료 기준:** 사용자가 설치된 VIDE에서 K0 DB를 열어 보고 이슈 구성·노트 품질·근거 확인 방식에 대한 피드백을 준다.\n\n### K1 · 자료함과 원문 검색 — T-026 제안\n\n- **변경 범위:**\n  - 위 기록 구조의 Source·Excerpt 저장(SQLite 마이그레이션)\n  - 회사 서버 폴더 지정·감시(읽기 전용, 제외 규칙)와 끌어 놓기. 폴더를 지정하면 ①② 결과(종류별 개수, 제외 폴더, 예상 시간·전송량)를 먼저 보여 주고 확인 뒤 추출한다.\n  - 이름 해석(날짜·상대 기관·판 사슬·같은 자료의 다른 형식 묶기)\n  - 형식별 텍스트 추출기(EML·PDF 텍스트·주석·PPTX·DOCX·XLSX, K0 판정에 따라 HWP), DWG 문자·지시선·구름(ZWCAD 읽기 경로), 3DM 문자(rhino3dm)\n  - FTS5 trigram 검색, 왼쪽 레일 “프로젝트 자료”의 자료함(목록·검색·원문 구간 열람·원본 열기). 화면 배치는 Design에 먼저 SCR로 정한다\n- **AI 사용:** 없음. 이름 해석에서 규칙으로 안 풀리는 것만 Jev(선택, 없으면 “미분류”).\n- **검증:**\n  - 형식별 추출 단위 시험(쪽·슬라이드·메일 헤더 보존)\n  - 같은 파일 재수집·이동·이름 변경 시 해시로 중복 없음\n  - 다른 드라이브 문자로 같은 자료 인식, 한국어 부분 검색\n  - 원문 구간 열람 브라우저 시험, 원본 폴더에 쓰기 없음, 백업/복구 포함, 비밀값 검사\n- **완료 기준:** 표본 자료에서 “기둥 간격”, “회의실” 같은 검색으로 해당 메일·쪽·슬라이드를 찾아 원문을 연다.\n\n### K2 · 진술·쟁점 정리와 검토 큐 — T-027 제안\n\n- **변경 범위:**\n  - Party·Subject·Statement·Issue·Milestone·Episode 저장\n  - 구간 선별: Jev로 진술이 있을 구간과 관련 대상만 골라 LLM에 넘긴다(K0 결과가 기준 미달이면 규칙+LLM)\n  - AI 추출 작업: 구독 CLI, 도구 없는 JSON, 근거 구간 ID·원문 인용 필수, 대조 실패 시 폐기, Jev로 인용-진술 일치 재확인\n  - 자료별 AI 전송 확인(FR-18, TypeSafe·AI 공급자 모두), 진행률·중단·재개\n  - 검토 큐(확정·수정·기각·별칭 합치기)와 대체·모순 후보 표시\n  - 프로젝트 정보 탭: 브리핑·쟁점 표·타임라인·주체 목록\n- **검증:** 가짜 인용·다른 자료 인용 거절, 확정 전 진술이 사실로 표시되지 않음, 대체가 이전 진술을 지우지 않음, 전송 거부 자료가 AI 입력에 들어가지 않음, 중단 뒤 재개 시 중복 없음, “특정 날짜 기준” 조회가 당시 유효 진술만 반환.\n- **완료 기준:** 표본 자료에서 주요 결정·요청·쟁점이 근거와 함께 목록화되고, 확정한 항목만 “확정”으로 보인다. 품질 기준은 K0 결과로 프로젝트 지식 SPEC에서 정한다.\n\n### K3 · 질의응답과 검토 요청 — T-028 제안\n\n- **변경 범위:**\n  - AI 읽기 전용 찾기 도구: 코드 필터(분야·이슈·종류·주체·기간·FTS) → Jev 순위 → 상위 진술만 LLM에 전달(RESEARCH-06 §9 “찾기”)\n  - 근거 표시는 판단이 애매할 때와 사용자가 요청할 때만, 원문 열람 포함\n  - 검토 요청과 JIG 빌드 때만 관련 조건을 찾아 대조한다. 모델·설계 수정 요청마다 자동 검토하지 않는다(2026-09-29 사용자 결정).\n  - Inspector에 객체의 연결 진술과 연결·끊김 표시\n- **검증:** 근거 없는 질문에 “자료에 없음”, 대체된 결정보다 최신 결정을 날짜와 함께 답함, 다른 프로젝트·비공개 자료 접근 불가, 기존 AI 작업 권한이 넓어지지 않음.\n- **완료 기준:** 사용자가 고른 질문 목록에 답하고, 요청하면 근거를 원문에서 확인할 수 있다. 찾기 단계의 Jev 순위 정확도(상위 20개 안에 필요한 진술이 드는 비율)를 기록한다.\n\n### K4 · 구조화된 조건과 크리틱 — T-029 제안\n\n- **변경 범위:**\n  - 요구 진술의 구조화된 조건(대상·항목·조건·단위)과 확정\n  - 모델 시점별 기하 관측(기본 집계 FR-22 재사용)\n  - 조건-관측 대조로 쟁점 생성(AI가 숫자를 추측하지 않음), 시각 판단은 뷰포트 캡처\n  - 결과는 “AI 추정” 쟁점으로 객체에 연결하고 채택·기각. 법규 해석은 FR-21로 넘긴다.\n- **검증:** 요구와 어긋나게 만든 합성 모델에서 해당 객체·근거를 짚는지, 맞는 모델에서의 거짓 지적 비율, 모델 변경 시 관측이 오래됨으로 바뀌는지, 크리틱이 원본을 수정하지 않는지.\n- **완료 기준:** 대표 과업 수준의 모델 1건에서 채택할 만한 지적과 거짓 지적의 비율을 기록하고, 사용자가 계속 쓸지 판단한다.\n\n### K5 · 팀 공동 축적 — T-030 제안\n\n- **선행:** ADR-018 승인(공동 축적 예외, 팀 공용 원본 위치: 사내 팀 서버 / D1 / Supabase), 역할·공개 범위 결정.\n- **변경 범위:**\n  - 사건 동기화(모르는 사건 가져오기·내 사건 보내기, 재시도 멱등)\n  - 팀 공용 원본 서비스(선택한 위치), 멤버십·역할(관리자·편집·열람·외부)과 확정 권한\n  - 자료별 공개 범위 적용, 동기화 상태·충돌(나란한 판단) 표시\n  - 원본 파일은 업로드하지 않고, 다른 팀원이 원문을 열 때는 회사 서버 경로 사용\n- **검증:**\n  - 두 PC가 오프라인에서 각자 기록한 뒤 동기화하면 양쪽 결과가 같음\n  - 같은 자료를 두 사람이 넣어도 한 번만 저장, 비공개 자료의 진술이 다른 멤버에게 가지 않음\n  - 권한 없는 확정 거절, 동기화 중단·재시작에도 중복 없음\n  - 호스트 제어는 여전히 한 작업환경만 가능(AC-37)\n- **완료 기준:** 2~3명이 같은 프로젝트에 자료를 넣고 확정한 결과를 서로의 VIDE에서 질문·조회한다.\n\n### K6 · (선택) 관계 보기\n\nK2~K5의 표·타임라인·인용으로 부족하다는 실제 근거가 생길 때만 Obsidian 폴더 한 방향 내보내기나 한 쟁점 중심의 국소 그래프를 추가한다. 전체 그래프는 만들지 않는다. — T-031 제안\n\n## 기술 선택(초안)\n\n- **로컬:** 기존 SQLite에 테이블 추가, FTS5 trigram, R*Tree 공간 색인, JSON. 벡터 검색은 부족함이 측정될 때 sqlite-vec(로컬 임베딩 모델 필요).\n- **팀 공용 원본:** ADR-018. 동기화 방식은 저장소와 분리해 사내 팀 서버·D1·PostgreSQL 어느 쪽으로도 옮길 수 있게 한다.\n- **구현 언어(2026-09-29 사용자 결정):** TypeScript(VIDE Node 서버의 백그라운드 작업)와 C#(ZWCAD·Rhino 플러그인)만 쓴다. K0의 Python 추출기(PyMuPDF·pyhwp는 AGPL)는 제품에 옮기지 않는다.\n- **추출기:**\n  - PDF: pdf.js\n  - DOCX·PPTX·XLSX·HWPX: ZIP 해제 + XML 읽기\n  - 메일: K0 파서 이식\n  - 3DM: rhino3dm.js\n  - DWG: K0의 ZWCAD 명령을 `hosts/zwcad` 빌드에 편입하고, 숨은 ZWCAD 일괄 실행을 유지\n  - HWP(옛 형식): 라이선스를 확인한 뒤 결정\n  - 스캔 PDF·이미지: AI 판독 선택 기능\n  - 새 의존성은 PLAN-03의 추적·검사 규칙을 따른다. pdf.js의 속도·품질은 K0 결과와 비교한다.\n- **폴더 구조 파악:** 경로를 코드에 고정하지 않는다.\n  - 코드가 폴더마다 날짜·번호 접두·괄호 안 이름 같은 후보를 뽑는다.\n  - Jev가 폴더의 역할(보낸 자료·받은 자료·회의록·도면·계약·참고 등)과 상대 후보를 고른다.\n  - 결과 규칙 표는 사용자가 확인·수정하고, 같은 사무소의 다음 프로젝트에 재사용한다.\n  - LLM은 Jev 확신이 낮은 폴더에만 쓴다.\n- **업데이트:** 실시간 감시는 하지 않는다(네트워크 드라이브 변경 감시가 불안정). 프로젝트를 열 때와 “자료 새로 고침”에서 증분 수집한다(K0 재실행 약 30초).\n- **Jev(TypeSafe):** 폴더 역할·상대 판정, 빈 구간 버리기, 근거 확인, 별칭 후보, 찾기 순위, 새 진술의 이슈 배정. 개발 중에는 `.env` 키, 제품에서는 서버 중계(PLAN-05 §7). 숫자·날짜 판단에는 쓰지 않는다.\n- **AI:** 각자 PC의 구독 CLI. 정리는 도구 없는 JSON 추출, 질의·크리틱은 읽기 전용 MCP 도구. 서버 쪽 AI 실행은 하지 않는다.\n\n## 비목표\n\nJIG로 따로 설치하는 형태, 문서 관리·결재·버전 관리 시스템, 메일 클라이언트, 녹음 전사(STT), 법규 자동 판정, 전체 관계 그래프, 사용자 확정 없는 결정 자동 확정, 원본 파일의 클라우드 업로드, 같은 프로젝트의 호스트 공동 제어.\n"}}</script>
 <script id="reader-config" type="application/json">{"initial":"plan-08-project-knowledge","siteTitle":"VIDE"}</script>
 <script>
 (() => {

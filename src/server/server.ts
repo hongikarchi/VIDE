@@ -8,6 +8,14 @@ import { AccountProfiles } from '../ai/account-profiles.ts';
 import { AccountUsageService } from '../ai/account-usage.ts';
 import { JIGS } from '../jigs/catalog.ts';
 import { runSync } from '../jigs/sync.ts';
+import {
+  knowledgeEvidence,
+  knowledgeFile,
+  knowledgeIssue,
+  knowledgeSearch,
+  knowledgeSummary,
+  openKnowledgeSource,
+} from '../jigs/knowledge.ts';
 import { DocumentLinks } from '../core/document-links.ts';
 import { AccountLogin } from '../ai/account-login.ts';
 import { z } from 'zod';
@@ -830,6 +838,43 @@ export async function startServer({
                 : 'Millimeters',
         });
         return;
+      }
+      // Project knowledge jig (trial, read-only): issue notes, search and evidence of one project's DB.
+      const knowledge =
+        /^\/api\/v1\/projects\/([^/]+)\/jigs\/knowledge(?:\/(issues|statements|sources)\/(\d+)(\/open)?|\/(search))?$/.exec(
+          url.pathname,
+        );
+      if (knowledge) {
+        store.project(knowledge[1]);
+        const file = knowledgeFile(dirname(filename), knowledge[1]);
+        const [, , kind, id, openPath, search] = knowledge;
+        if (request.method === 'GET' && !kind && !search) {
+          send(200, knowledgeSummary(file));
+          return;
+        }
+        if (request.method === 'GET' && search) {
+          const params = url.searchParams;
+          send(
+            200,
+            knowledgeSearch(file, params.get('q') ?? '', {
+              kind: params.get('kind') || undefined,
+              discipline: params.get('discipline') || undefined,
+            }),
+          );
+          return;
+        }
+        if (request.method === 'GET' && kind === 'issues' && !openPath) {
+          send(200, knowledgeIssue(file, Number(id)));
+          return;
+        }
+        if (request.method === 'GET' && kind === 'statements' && !openPath) {
+          send(200, knowledgeEvidence(file, Number(id)));
+          return;
+        }
+        if (request.method === 'POST' && kind === 'sources' && openPath) {
+          send(200, openKnowledgeSource(file, Number(id)));
+          return;
+        }
       }
       // Per-account sign-in, usage and reset times; switching settings.
       if (url.pathname === '/api/v1/accounts/usage' && request.method === 'GET') {

@@ -12,3 +12,4 @@
 {"request": "계정이 여러 개일 때 계정별 사용량과 초기화 시간을 보여주고 한도가 차면 자동으로 다른 계정으로 바꿔줘", "files": ["src/ai/account-usage.ts", "src/ui/account-usage-panel.ts", "src/server/execution.ts"], "commit": "9841ccd"}
 {"request": "ZWCAD에서 열려 있는 도면을 AI가 직접 수정할 수 있게 하고 ZWCAD 플러그인 설치도 넣어줘", "files": ["hosts/zwcad/connection/AttachedEdit.cs", "hosts/zwcad/attached-documents.ts", "src/server/connectors.ts"], "commit": "958a366"}
 {"request": "열려 있는 Rhino와 CAD 문서를 한 요청으로 같이 수정하는 연계 작업을 되게 해줘", "files": ["src/server/linked-execution.ts", "src/ui/linked-targets.tsx", "src/ui/linked-draft.ts"], "commit": "98ce065"}
+{"request": "일단 지금 작업을 JIG로 구현하고, DB를 프로젝트 폴더에 넣은 다음에 다음 release에서 vide app에서 확인해보고 피드백 주는거는 어떨까?", "files": ["src/jigs/knowledge.ts", "src/ui/knowledge-jig.tsx", "src/server/server.ts", "src/ui/jigs.tsx", "src/jigs/catalog.ts"], "commit": ""}

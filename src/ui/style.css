@@ -3570,3 +3570,106 @@ body.panel-mode #conversation {
   background: #203127;
   color: #9fd3b0;
 }
+
+/* Project knowledge jig (trial): issue list by discipline, minutes-style note, evidence on request. */
+.knowledge-search {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+.knowledge-search input {
+  flex: 1;
+  min-width: 0;
+  padding: 6px 8px;
+}
+.knowledge-body {
+  display: grid;
+  grid-template-columns: minmax(200px, 260px) 1fr;
+  gap: 14px;
+  min-height: 0;
+  max-height: 64dvh;
+}
+.knowledge-issues,
+.knowledge-main {
+  overflow: auto;
+  min-height: 0;
+}
+.knowledge-issues summary small,
+.knowledge-issues li small,
+.knowledge-section small {
+  display: inline;
+}
+.knowledge-issues summary {
+  cursor: pointer;
+  font-weight: 600;
+  padding: 4px 0;
+}
+.knowledge-issues ul,
+.knowledge-cites,
+.knowledge-section ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.knowledge-issues li button {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  border: 0;
+  border-radius: 6px;
+  padding: 5px 8px;
+  text-align: left;
+  background: transparent;
+}
+.knowledge-issues li button[aria-pressed='true'] {
+  background: var(--soft);
+  font-weight: 600;
+}
+.knowledge-issues li small,
+.knowledge-meta {
+  color: var(--muted);
+}
+.knowledge-note h3 {
+  font-size: 15px;
+  margin: 0 0 6px;
+}
+.knowledge-summary {
+  margin: 0 0 10px;
+}
+.knowledge-section h4 {
+  font-size: 13px;
+  margin: 12px 0 4px;
+}
+.knowledge-section > ul > li {
+  padding: 4px 0;
+  line-height: 1.5;
+  border-bottom: 1px solid var(--line);
+}
+.knowledge-statement {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 8px 10px;
+  margin: 6px 0;
+}
+.knowledge-statement p {
+  margin: 4px 0;
+}
+.knowledge-evidence {
+  margin: 6px 0 0;
+  padding: 6px 10px;
+  border-left: 3px solid var(--line);
+  background: var(--soft);
+  white-space: pre-wrap;
+  max-height: 240px;
+  overflow: auto;
+}
+.knowledge-evidence mark {
+  background: #f4d9a8;
+}
+@media (max-width: 720px) {
+  .knowledge-body {
+    grid-template-columns: 1fr;
+    max-height: none;
+  }
+}

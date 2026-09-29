@@ -22,6 +22,16 @@ export const JIGS: JigEntry[] = [
     status: 'available',
   },
   {
+    id: 'knowledge',
+    code: 'J-DATA',
+    name: '프로젝트 자료 · 시험판',
+    summary:
+      '회사 서버의 프로젝트 폴더(메일·회의록·문서·도면)에서 누가 언제 무엇을 말했는지 정리한 DB를 분야별 이슈 노트로 봅니다. 검색하고, 각 내용의 원문 근거와 원본 파일을 엽니다.',
+    inputs: ['프로젝트 지식 DB'],
+    status: 'available',
+    basis: 'PLAN-08 K0',
+  },
+  {
     id: 'structure',
     code: 'J-09',
     name: '구조 검토',
