@@ -40,7 +40,9 @@
     "verify:all": "npm run security:check && npm run security:selftest && npm run verify && npm run test:browser",
     "format:check": "prettier --check \"{src,hosts,extensions,tests,tools/checks}/**/*.{ts,tsx,js,mjs,css,json,jsonc}\" \"*.{json,ts}\"",
     "format": "prettier --write \"{src,hosts,extensions,tests,tools/checks}/**/*.{ts,tsx,js,mjs,css,json,jsonc}\" \"*.{json,ts}\"",
-    "deployment:check": "node tools/checks/deployment.mjs"
+    "deployment:check": "node tools/checks/deployment.mjs",
+    "locate": "node tools/locate/locate.mjs",
+    "locate:eval": "node tools/locate/eval.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.30.0",

@@ -10,6 +10,23 @@ function run(command, args) {
   if (result.error || result.status !== 0) process.exit(1);
 }
 run(process.execPath, ['tools/checks/secrets.mjs', 'staged']);
+// Example env files are tracked: secret-like variables must stay empty (real values go to .env).
+// Deleted example files have no staged content to inspect.
+const present = new Set(git(['diff', '--cached', '--name-only', '--diff-filter=ACMR', '-z']));
+for (const name of staged.filter(
+  (file) => present.has(file) && /(^|\/)\.[\w.-]*\.example$|\.env\.example$/.test(file),
+)) {
+  const text = execFileSync('git', ['show', ':' + name], { encoding: 'utf8' });
+  const filled = text
+    .split(/\r?\n/)
+    .filter((line) => /^\s*[\w.]*(KEY|TOKEN|SECRET|PASSWORD)[\w.]*\s*=\s*\S/i.test(line));
+  if (filled.length) {
+    console.error(
+      `${name}에 비밀값이 들어 있습니다. 실제 값은 .env(Git 무시)에 넣고 예시 파일은 비워 두세요.`,
+    );
+    process.exit(1);
+  }
+}
 if (staged.some(code)) {
   const unstaged = git(['diff', '--name-only', '-z']).filter(code);
   const untracked = git(['ls-files', '--others', '--exclude-standard', '-z']).filter(code);

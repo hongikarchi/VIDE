@@ -1,0 +1,14 @@
+{"request": "vide 뷰포트에서 관성 때문에 카메라가 미끄러지는데 Rhino처럼 딱딱 멈추게 해줘", "files": ["src/ui/viewport.ts"], "commit": "2927ccd"}
+{"request": "뷰포트에서 드래그로 객체를 선택할 때 왼쪽에서 오른쪽은 창 선택, 반대는 교차 선택이 되게 해줘", "files": ["src/ui/viewport.ts", "src/ui/app.ts"], "commit": "2927ccd"}
+{"request": "작업 모델 객체가 무작위로 쭉 뜨는데 레이어별로 트리로 정리해서 보여줘", "files": ["src/ui/object-list.ts", "src/ui/app.ts"], "commit": "2927ccd"}
+{"request": "AI가 지금 무엇을 하는지(조회, 실행한 코드, 결과) 작업 과정 로그로 보여줘", "files": ["src/server/sdk-execution.ts", "src/server/activity.ts", "src/ui/activity.tsx", "src/ai/claude-cli.ts"], "commit": "2927ccd"}
+{"request": "스케치를 포토샵 브러시처럼 색상이랑 굵기 조절하면서 3D에서 자유롭게 그리게 해줘", "files": ["src/ui/viewport.ts", "src/ui/app.ts", "src/contracts/shared-spatial.ts"], "commit": "64dc2f7"}
+{"request": "Rhino에서 선택 고정한 객체가 VIDE에도 바로 반영되게 해줘", "files": ["hosts/rhino/worker/AttachedConnection.cs", "hosts/rhino/editor-channel.ts", "hosts/rhino/editor-sessions.ts", "src/contracts/host-documents.ts", "src/ui/app.ts"], "commit": "648389a"}
+{"request": "Rhino 객체가 자잘한 선으로 다 보이는게 어색한데 Rhino shaded view처럼 보이게 하고 레이어 색도 지원해줘", "files": ["src/ui/viewport.ts", "src/ui/display-settings.ts", "hosts/rhino/worker/WorkerScene.cs"], "commit": "648389a"}
+{"request": "CAD 불러오기에서 문자, 해치, xref 클립 경계가 안 보이는 문제 고쳐줘", "files": ["hosts/zwcad/connection/AttachedDisplay.cs"], "commit": "4aeb536"}
+{"request": "CAD 레이어 색상이랑 선 굵기를 뷰포트에서 그대로 그리고 해치 채움과 글자도 표시해줘", "files": ["src/ui/cad-annotations.ts", "src/ui/viewport.ts", "src/core/scene-representation.ts"], "commit": "1dc2639"}
+{"request": "작업 이력 목록이랑 문장 안에 핀 칩이 들어가게 하고 설정 화면을 더 알기 쉽게 바꿔줘", "files": ["src/ui/history.tsx", "src/ui/pin-tokens.ts", "src/ui/app.ts", "src/ui/ai-settings.tsx"], "commit": "032c0e1"}
+{"request": "PC 계정 패널에서 로그인 입력값이 지워지지 않게 하고 비밀번호 보기 토글을 넣어줘", "files": ["src/sharing/web/account.tsx", "src/ui/remote-panel.ts"], "commit": "eaea369"}
+{"request": "계정이 여러 개일 때 계정별 사용량과 초기화 시간을 보여주고 한도가 차면 자동으로 다른 계정으로 바꿔줘", "files": ["src/ai/account-usage.ts", "src/ui/account-usage-panel.ts", "src/server/execution.ts"], "commit": "9841ccd"}
+{"request": "ZWCAD에서 열려 있는 도면을 AI가 직접 수정할 수 있게 하고 ZWCAD 플러그인 설치도 넣어줘", "files": ["hosts/zwcad/connection/AttachedEdit.cs", "hosts/zwcad/attached-documents.ts", "src/server/connectors.ts"], "commit": "958a366"}
+{"request": "열려 있는 Rhino와 CAD 문서를 한 요청으로 같이 수정하는 연계 작업을 되게 해줘", "files": ["src/server/linked-execution.ts", "src/ui/linked-targets.tsx", "src/ui/linked-draft.ts"], "commit": "98ce065"}

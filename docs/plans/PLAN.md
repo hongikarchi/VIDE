@@ -155,6 +155,7 @@ Jev는 기존 계정이 없다는 사용자 확인에 따라 가입 재개까지
 | T-022 · 포맷 | 포맷 별도 커밋·재검사 통과 | [PLAN-03](PLAN-03-development-foundation.md#t-022) |
 | T-023 · DB 마이그레이션 | schema 2·백업·실패 복구 검증 | [PLAN-03](PLAN-03-development-foundation.md#t-023) |
 | T-024 · 호스트 의존 경계 | 중립 경로·공통 literal·예외 점검 완료 | [PLAN-03](PLAN-03-development-foundation.md#t-024) |
+| T-032 · Jev 수정 위치 찾기(개발 도구) | `npm run locate` 사용 가능. 실측 정답 파일 5위 안 영어 100%·한국어 100%([SPIKE](../tdd/SPIKE-2026-09-29-jev-locate.md)). 표본 확대·에이전트 비교 남음. 제품 이식은 [PLAN-05 §7](PLAN-05-decision-layer-evaluation.md) 계획만 | [PLAN-03](PLAN-03-development-foundation.md#t-032) |
 
 ### 6.6 전체 완료 관문
 
