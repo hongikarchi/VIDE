@@ -7,6 +7,8 @@ Desktop.ini
 
 # Claude Code local settings (machine-specific)
 .claude/settings.local.json
+# Agent worktrees created by Claude Code sessions
+.claude/worktrees/
 
 # private visual references (site / legal data) — keep out of the repo
 docs/assets/reference/*.html
@@ -29,6 +31,8 @@ obj/
 *.sqlite-shm
 *.sqlite.controller
 *.sqlite.controller-journal
+# Managed CLI account profiles (may hold subscription logins) when a workspace DB sits in the repo root
+cli-profiles/
 
 # Local cloud tooling, credentials and diagnostics
 .wrangler/

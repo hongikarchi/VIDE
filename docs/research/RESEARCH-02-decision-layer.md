@@ -2,10 +2,10 @@
 id: RESEARCH-02
 title: 판정 계층 조사 — Jev와 대안의 VIDE 적용 가능성
 status: review
-version: 0.1
-updated: 2026-09-24
+version: 0.2
+updated: 2026-09-29
 owner: agent:claude
-related: [PLAN, PLAN-02, ARCH-01, SPEC-02, FR-08, FR-18, OQ-04]
+related: [PLAN, PLAN-02, PLAN-05, ARCH-01, SPEC-02, FR-08, FR-18, OQ-04, RESEARCH-04, RESEARCH-06, RESEARCH-07]
 ---
 
 # 판정 계층 조사 — Jev와 대안의 VIDE 적용 가능성
@@ -54,6 +54,70 @@ Cloudflare Workers를 통한 Jev 릴레이는 기술적으로는 무리가 없�
 **그럼에도 완전히 배제할 이유는 없다.** 지연·비용(벤더 주장 70–500ms, $0.042/M)이 사실이라면 대화형 CLI의 판정 계층에는 10–60초짜리 전체 LLM 세션보다 훨씬 적합하고, 닫힌 스키마 출력이라는 특성은 Rebuff류 LLM 스캐너가 취약한 "스캐너 자체를 겨냥한 주입" 회피 유형에 구조적으로 더 강할 가능성이 있다(단, 검증되지 않은 추론). 판정 계층 인터페이스를 벤더 중립적으로 설계하면 Jev를 배제하지 않고도 위 리스크를 관리할 수 있다.
 
 **권고:** 지금 시점에는 Jev를 판정 계층의 기본/단독 백엔드로 채택하지 말 것. 대신 (1) 판정 계층을 Choice/Score/Noul 형태의 벤더 중립 인터페이스로 설계해 코드 규칙·소형 한국어 인코더·소형 LLM·Jev를 상호 교체 가능하게 하고, (2) 기본 경로는 코드 규칙 + 자체 학습/파인튜닝한 소형 한국어 인코더로 시작하며, (3) Jev는 실제 판정을 게이팅하지 않는 섀도(비교) 모드로만 파일럿에 투입해 VIDE 자체 한국어 CAD 골든셋으로 정확도·캘리브레이션·flip rate를 직접 재측정한 뒤 재검토한다.
+
+## 2026-09-29 보강 — 공식 문서 확인과 용도별 적용
+
+2026-09-29 사용자가 Jev API 키를 발급받았다(2026-09-25의 가입 보류 해소). 사용자는 두 관점의 용도를 제시했다.
+- **제품:** 요청에 따른 모델 선택(모델 라우팅), sync jig처럼 정해진 부분을 빠르게 찾아 수정할 대상 찾기.
+- **개발:** 개발 요청을 넣으면 어느 파일의 어느 부분을 고쳐야 하는지 찾기.
+
+이 절은 [공식 문서](https://docs.typesafe.ai/introduction)로 위 조사의 3자 출처 수치를 대조하고, 용도별 적용을 판단한다. 실제 API 호출·측정은 하지 않았다.
+
+### 공식 문서로 확인한 사실
+
+| 항목 | 확인 내용 | 출처 |
+|---|---|---|
+| 모델 | Jev 1.13(`jev-1.13.0`), 별칭 `jev-latest`(안정)·`jev-preview`(최신 빌드, 현재 동일). 계정별 파인튜닝 없이 요청의 `state`·`instructions`·`criteria`로 맞춤 | [Models](https://docs.typesafe.ai/models) |
+| API | `POST https://api.typesafe.ai/v1/systemone`, `Authorization: Bearer`, 본문 `state`·`model`·`questions`, 응답 `answers`·`usage`. 오류 401·422·429·529, 429는 지수 백오프 재시도 | [API](https://docs.typesafe.ai/api.md) |
+| 질문 유형 | Choice(선택, 확률·신뢰도, **옵션 최대 255개**), Score(루브릭 점수·신뢰도), Noul(참/거짓 0~1). 한 요청에 섞어 병렬·독립 평가, 질문을 늘려도 응답 시간은 거의 늘지 않음. 질문은 원자적으로 좁게 쓰고 조합은 코드에서 | [Introduction](https://docs.typesafe.ai/introduction), [Line-by-line search](https://docs.typesafe.ai/cookbooks/semantic_find) |
+| 한도·요금 | 요청당 64k 토큰(`state` 32k + 가장 긴 질문), 입력 100만 토큰당 $0.042(출력 무료), 25만 토큰/초·1,200 요청/분. **텍스트만**(이미지 불가) | [Models](https://docs.typesafe.ai/models) |
+| 한국어 | 영어가 최적이며 CJK 등 다른 언어는 **신뢰도가 낮다**고 명시. 도입 전 자체 콘텐츠로 시험 권고 | [Models](https://docs.typesafe.ai/models) |
+| 약점(공식) | 계산기가 아님(수치 추론·세기 불안정, 두 값이 가까운지 판단 불가), 날짜를 텍스트로 읽음(선후·간격 불안정), 간접 참조·이중 부정에 약하고 문자 그대로 이해함, **상태에 무관한 내용이 늘면 정확도 하락**, 상태 안의 적대적 콘텐츠에 취약, 생성 불가 | [Jev 1.13 jaggedness](https://docs.typesafe.ai/model-jaggedness/jev-1.13.md) |
+| 코딩 에이전트 | Jev는 Claude Code·Codex 등의 LLM을 **대체하지 않는다**. 코딩 에이전트가 Jev를 쓰는 코드를 짜게 할 수 있고, 연동 작성을 돕는 에이전트 스킬 제공 | [Coding agents](https://docs.typesafe.ai/introduction/coding-agents.md) |
+| SDK | JavaScript·Python SDK. JS SDK는 환경 변수 `TYPESAFE_API_KEY`·`TYPESAFE_BASE_URL`·`TYPESAFE_LOG_LEVEL`·`TYPESAFE_DEFAULT_MODEL`을 읽음 | [JS SDK ENV](https://docs.typesafe.ai/sdk/javascript/api/variables/ENV.md) |
+| 데이터 | 개인정보처리방침에 “사용자 데이터로 모델을 학습하지 않는다”, ZDR(영구 미보관)은 **엔터프라이즈 고객만**. DPA의 보관 기간은 “목적에 필요한 기간”으로 구체 기간 없음. 하위 처리자는 Trust Center 목록 | [Legal](https://docs.typesafe.ai/legal.md), [DPA](https://typesafe.ai/legal/data-processing) |
+
+위 확인으로 아래 “PLAN·TDD 착수 전 확인 목록” 중 API 세부사항·요금·속도제한은 1차 문서로 확인됐고, ZDR은 “엔터프라이즈 한정”으로 정리됐다. 한국어 정확도·캘리브레이션·SLA는 여전히 미확인이다.
+
+### 관련 공식 패턴·레시피
+
+| 레시피 | 내용 | VIDE 관련 |
+|---|---|---|
+| [Intent routing](https://docs.typesafe.ai/patterns/intent-routing.md)·Confidence-gated routing | 요청을 결정적 코드·전문 LLM·사람 중 어디로 보낼지 분류. 신뢰도가 낮으면 사람에게 넘김 | 모델 라우팅 |
+| [Skill suggestion](https://docs.typesafe.ai/cookbooks/skill_suggestion) | 182개 스킬 중 하나를 2단계(짧은 설명으로 순위 → 상위 3개를 긴 설명으로 검증)로 선택. 틀린 선택 16.8% → 7.3%, 불필요한 로드 9.8% → 4.0%, 결정당 약 0.2~0.4초. 해당 없음 판정 임계값 0.30 | jig·스킬 선택, 파일 찾기 |
+| [Line-by-line search](https://docs.typesafe.ai/cookbooks/semantic_find) | 줄마다 ID를 붙여 상태에 넣고, Choice로 가장 관련 있는 줄을, Noul로 “답이 있기는 한가”를 함께 판정. Choice는 확률 합이 1이라 답이 없어도 1등이 생기므로 Noul이 필요 | 파일 안 위치 찾기, 대상 찾기 |
+| [Function calling](https://docs.typesafe.ai/cookbooks/function_calling) | 자연어 요청을 신뢰도 기반으로 타입 있는 함수에 매핑 | 정해진 동작 어휘 선택(RESEARCH-07) |
+| [Hierarchical classification](https://docs.typesafe.ai/cookbooks/hierarchical_classification) | 깊은 분류 계층을 병렬 빔 탐색으로 | 255개를 넘는 후보(파일·객체)의 단계적 좁히기 |
+| [Entity alignment](https://docs.typesafe.ai/cookbooks/entity_alignment)·[Citation check](https://docs.typesafe.ai/cookbooks/citation_check)·[RAG passage 분류](https://docs.typesafe.ai/cookbooks/classifying_rag_passages) | 후보 대응, 인용이 원문을 뒷받침하는지 검증, 검색 결과 걸러내기 | 프로젝트 지식 DB(RESEARCH-06) |
+| [LLM guardrails](https://docs.typesafe.ai/cookbooks/llm_guardrails) | 위험도 임계값으로 통과·검토·차단·전환 | 외부 텍스트 주입 의심(단독 차단 금지) |
+
+### 용도별 적용 판단
+
+공통 원칙(RESEARCH-02 권고와 2026-09-22 사용자 결정 유지): Jev는 **권한·원본 적용·대상 확정·기하 검증에 단독으로 쓰지 않는다.** 제안·선별·순서 정하기에 쓰고, 신뢰도가 낮으면 기존 경로로 넘긴다. 벤더 중립 판정 인터페이스(Choice/Score/Noul)와 섀도 비교(PLAN-05)를 유지한다.
+
+| 용도 | 방식 | 기대 이득 | 위험·제약 | 판단 |
+|---|---|---|---|---|
+| **개발: 수정할 파일·위치 찾기** | ① 파일 목록(경로 + 한 줄 설명)을 폴더 단위로 나눠 Choice로 좁힘(255개 한도, 계층 분류) → ② 상위 파일의 줄에 ID를 붙여 Choice로 위치 + Noul로 “여기에 있는가” 판정 → ③ 결과(파일·줄·신뢰도)를 코딩 에이전트에게 “참고 후보”로 전달 | 에이전트가 넓게 훑는 탐색을 줄여 착수 시간·토큰 절감 가능 | 코드 대부분이 영어 식별자, 요청은 한국어(언어 혼합). 상태가 커지면 정확도 하락 → 파일 전체가 아니라 설명·시그니처를 먼저 넣어야 함. 에이전트의 grep 검색보다 나은지 불확실. 저장소 코드가 외부로 전송됨 | **가장 먼저 시도.** 제품이 아니라 개발 도구라 위험이 낮고, 실제 한국어·혼합 텍스트에서 Jev의 성능을 빨리 배울 수 있음. 에이전트 검색 대비 적중률(top-k)·시간으로 비교 |
+| **제품: 모델·effort 라우팅** | 요청 + 첨부 요약을 상태로, Choice(작업 유형: 조회·단순 수정·복잡 생성·해석/최적화)와 Score(복잡도)로 모델·effort 선택. 신뢰도가 낮으면 사용자 기본 설정 | 단순 요청은 빠른 모델, 복잡한 요청은 높은 effort → 체감 지연·사용량 절감 | 잘못 낮춰 보내면 실패 후 재시도로 더 느려짐. 모델 능력 설명은 사람이 criteria로 써 줘야 함. 계정·사용량 한도 기반 전환은 수치 판단이라 Jev가 아니라 코드로(다른 세션의 계정별 사용량·자동 전환과 분리) | **섀도 모드부터.** 실제 선택은 기존대로 두고 Jev 추천만 기록 → 실패율·지연 비교 뒤 “추천 + 사용자 확인” → 기본값 순서 |
+| **제품: 수정 대상 찾기(sync jig 등)** | 요청 문장(“북측 창호”, “3층 회의실 벽”)을 레이어·블록·그룹·객체 이름·속성 텍스트 후보에 매핑. ① 레이어/그룹 Choice(≤255) → ② 후보 객체 Choice + 후보별 Noul 검증 → ③ **의도 카드의 대상 제안**(RESEARCH-07) | AI가 모델 전체를 조회하며 대상을 찾는 왕복을 줄임. 정해진 수정(sync jig)에서 즉시 대상 제시 | 텍스트만 가능 — 공간 관계(“북측”, “3층”)는 이름·속성에 없으면 못 찾음 → 결정적 공간 필터(층 높이·방위·범위 상자)와 조합해야 함. 수치·위치 판단 약점. 대상 확정은 사용자·결정적 조회가 함 | **제안 전용으로 적합.** 의도 카드의 “대상” 후보를 먼저 채우고 사용자가 확인. 대상 확정·쓰기 권한에는 쓰지 않음 |
+| jig·스킬 선택 | skill suggestion 레시피 그대로(짧은 설명 순위 → 상위 3개 검증, 해당 없음 판정) | jig 수가 늘어도 빠르게 고름 | jig 설명 품질에 좌우 | jig가 여러 개 생기면 적용(RESEARCH-04·05) |
+| 요청 처리 검증 보조 | “실제 수행 설명이 실행된 단계와 일치하는가”, “의도 카드 항목이 충족됐다고 결과 텍스트가 주장하는가”를 Noul로(문자 그대로 이해하는 성질이 오히려 유리) | 자기 보고와 실제의 불일치 탐지 | 수치 검사는 계산으로(RESEARCH-07) | RESEARCH-07 구현 시 보조 |
+| 지식 DB | 인용 검증, 검색 결과 걸러내기, 별칭(한빛/한빛건설) 대응, 진행 중 개입의 관련성 | 추출 품질·질의 속도 | 날짜 선후 판단 약함 → 날짜는 코드로 | C-02 채택 시 |
+| 외부 텍스트 주입 의심 | guardrails 레시피 | 빠른 선별 | 적대적 콘텐츠에 취약(공식) | 사용자 확인 트리거로만, 단독 차단 금지 |
+
+### 키 관리와 보안
+
+- **개발용:** 저장소 루트 `.env`에 `TYPESAFE_API_KEY=...`(JS SDK 기본 이름). `.gitignore`의 `.env`·`.env.*`가 막고, 배포 ZIP은 Git이 추적하는 파일만 담으므로(`src/desktop/build.mjs`) 포함되지 않는다. 커밋 전 비밀정보 검사(gitleaks)가 스테이징된 키를 잡는다.
+- **제품용:** 2026-09-22 결정대로 배포물에 키를 넣지 않고, 우리 서버(Cloudflare Workers 등) 중계로 호출한다. 사용자 요청·객체 이름이 TypeSafe로 전송되므로 FR-18 전송 고지·끄기 옵션과 국외 이전 동의가 필요하다. 오프라인·장애 시 기존 경로로 넘어간다.
+- **환경 변수 전파(2026-09-29 확인):** VIDE는 서버 환경을 자식 프로세스에 넘긴다. Claude/Codex CLI 자식 환경은 알려진 AI 공급자 키만 지우는 방식이라 `TYPESAFE_API_KEY`가 전달된다(CLI는 VIDE MCP 도구만 허용돼 직접 읽을 경로는 제한적). Rhino 작업 프로세스도 서버 환경을 물려받지만, 생성 코드 검사가 `System.Environment` 접근을 막아 AI 생성 코드가 읽을 수는 없다. 방어를 한 겹 더 두려면 자식 프로세스 환경에서 `TYPESAFE_*`와 알려진 비밀 변수를 지우거나 허용 목록 방식으로 바꾸는 것이 안전하다.
+- **데이터:** 개발 용도는 저장소 코드와 개발 요청이, 제품 용도는 사용자 요청·객체 이름이 전송된다. 학습 미사용은 명시돼 있으나 보관 기간은 불특정이고 ZDR은 엔터프라이즈 한정이다.
+
+### 다음 단계 제안
+
+1. 개발 도구로 “수정 위치 찾기”를 먼저 만든다(`tools/` 아래, 제품 코드 아님). 최근 개발 요청 20~30건과 실제 수정 파일(Git 이력)로 적중률·시간을 측정하고, 코딩 에이전트의 자체 탐색과 비교한다.
+2. 이 과정에서 한국어·혼합 텍스트에서의 신뢰도 분포를 기록해 제품 용도의 임계값 근거로 쓴다.
+3. 제품의 모델 라우팅·대상 찾기는 PLAN-05의 섀도 비교(벤더 중립 인터페이스, 실측 평가셋) 절차로 진행한다. 키 중계와 전송 동의는 제품 적용 전에 정한다.
+4. 버전은 재현성을 위해 `jev-1.13.0`으로 고정하고 `jev-latest` 변경을 추적한다.
 
 ## PLAN·TDD 착수 전 확인 목록
 
