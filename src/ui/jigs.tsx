@@ -97,8 +97,6 @@ export interface JigContext {
     applyToSource?: boolean;
     jig: Record<string, unknown>;
   }) => Promise<void>;
-  /** The development extensions dialog (the previous "확장" tab). */
-  extensions: () => void;
 }
 
 const dialog = document.createElement('dialog');
@@ -159,9 +157,6 @@ function Gallery({ context, open }: { context: JigContext; open: (id: string) =>
           </article>
         ))}
       </div>
-      <button type="button" className="link-button" onClick={context.extensions}>
-        개발용 확장 (이전 "확장" 탭)
-      </button>
     </>
   );
 }

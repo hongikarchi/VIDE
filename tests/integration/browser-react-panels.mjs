@@ -410,42 +410,6 @@ try {
     /원본 적용 결과 미확인/,
   );
   await page.getByRole('button', { name: '이 후보 보기', exact: true }).click();
-  await page.getByRole('button', { name: 'JIG', exact: true }).click();
-  await page.getByRole('button', { name: /개발용 확장/ }).click();
-  const extension = page.getByRole('dialog', { name: '확장', exact: true });
-  await extension.getByRole('button', { name: '등록', exact: true }).click();
-  const submissions = [];
-  await page.route('**/api/v1/projects/*/extensions/object-summary/run', async (route) => {
-    submissions.push(route.request().postDataJSON());
-    if (submissions.length === 1) {
-      await route.fetch();
-      await route.fulfill({ status: 502, json: { code: 'TEST_RESPONSE_LOST' } });
-    } else await route.continue();
-  });
-  await extension.getByRole('button', { name: '실행', exact: true }).click();
-  await extension.getByRole('button', { name: '같은 실행 다시 확인', exact: true }).waitFor();
-  await extension.getByRole('status').filter({ hasText: 'TEST_RESPONSE_LOST' }).waitFor();
-  assert.equal(await extension.getByLabel('확장 대상', { exact: true }).isDisabled(), true);
-  await extension.getByRole('button', { name: '비활성화', exact: true }).click();
-  await extension.getByRole('status').filter({ hasText: '새 실행을 비활성화했습니다.' }).waitFor();
-  assert.equal(
-    await extension.getByRole('button', { name: '같은 실행 다시 확인', exact: true }).isDisabled(),
-    false,
-  );
-  await extension.getByRole('button', { name: '같은 실행 다시 확인', exact: true }).click();
-  await extension.waitFor({ state: 'hidden' });
-  assert.equal(submissions.length, 2);
-  assert.deepEqual(submissions[0], submissions[1]);
-  const completed = app.store.db
-    .prepare(
-      "SELECT * FROM workspace_requests WHERE projectId=? AND json_extract(input,'$.provider')='extension'",
-    )
-    .all(second);
-  assert.equal(completed.length, 1);
-  assert.equal(completed[0].id, submissions[0].id);
-  assert.equal(completed[0].state, 'succeeded');
-  await page.getByText('확장 완료', { exact: true }).waitFor();
-  // The extension run opened as the current work; go back to the candidate's work.
   await openWork('application-fixture');
   await page.locator('.work-view .more-actions > summary').click();
   await page.getByRole('button', { name: '검토본 저장', exact: true }).click();
@@ -577,7 +541,6 @@ try {
       historyRestore: true,
       applicationTargetGuard: true,
       applicationUnknownNoReplay: true,
-      extensionLostResponseRetry: true,
       reviewNoteRecovery: true,
       reviewComparison: true,
       candidateComparison: true,

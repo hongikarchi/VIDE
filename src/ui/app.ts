@@ -26,7 +26,6 @@ import { renderProjectHeading } from './project-heading.tsx';
 import { setMobileView } from './mobile-navigation.tsx';
 import { showQuantities } from './quantities.tsx';
 import { attachNativeAttributes } from './native-attributes.ts';
-import { showExtensions } from './extensions.tsx';
 import { hideJigs, showJigs } from './jigs.tsx';
 const showAiSettings: typeof import('./ai-settings.tsx').showAiSettings = async (onStatus) =>
   (await import('./ai-settings.tsx')).showAiSettings(onStatus);
@@ -1280,26 +1279,6 @@ function renderConversation() {
   });
 }
 
-function openExtensions() {
-  if (!project) return;
-  hideJigs();
-  void showExtensions(
-    {
-      projectId: project.id,
-      requestId: displayedResult,
-      selected: state.selected,
-      objects: structuredClone(objects),
-    },
-    (request) => {
-      if (!state.messages.some((message) => message.id === request.id))
-        state.messages.push(requestMessage(request));
-      focusedWork = request.id;
-      renderMessages();
-      render();
-      mobileView('input');
-    },
-  ).catch((error) => message(error.message));
-}
 // JIG tab: the jig gallery and the Sync jig (relation and differences of a Rhino and a CAD Sync).
 $('jigs').onclick = () => {
   if (!project) return;
@@ -1355,7 +1334,6 @@ $('jigs').onclick = () => {
       if ($('right').hidden) $('toggle-right').click();
       void poll(request.id, projectId, state);
     },
-    extensions: openExtensions,
   });
 };
 function openAiSettings() {

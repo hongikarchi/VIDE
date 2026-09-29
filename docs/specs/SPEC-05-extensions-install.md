@@ -2,7 +2,7 @@
 id: SPEC-05
 title: 확장·AI 설정·설치·복구
 status: review
-version: 0.8
+version: 0.9
 updated: 2026-09-29
 owner: agent:codex
 related: [FR-13, FR-15, FR-16, FR-17, FR-18, AC-26, AC-27, AC-30]
@@ -29,7 +29,7 @@ related: [FR-13, FR-15, FR-16, FR-17, FR-18, AC-26, AC-27, AC-30]
 
 ## 1.1 JIG 탭과 Sync jig — SPEC-05.8
 
-근거: FR-13·18, [RESEARCH-05](../research/RESEARCH-05-jig-format-options.md)의 표준 관문. jig는 한 가지 건축 작업을 위한 도구이며, 단계마다 계산·AI·사람 중 누가 맡는지 정해 둔다. JIG 탭은 공식 jig 목록(사용 가능/준비 중, 필요한 입력, 과거 작업 출처)을 보여 주고 사용 가능한 jig를 연다. 개발용 확장은 JIG 탭 안의 별도 입구로 남는다.
+근거: FR-13·18, [RESEARCH-05](../research/RESEARCH-05-jig-format-options.md)의 표준 관문. jig는 한 가지 건축 작업을 위한 도구이며, 단계마다 계산·AI·사람 중 누가 맡는지 정해 둔다. JIG 탭은 공식 jig 목록(사용 가능/준비 중, 필요한 입력, 과거 작업 출처)을 보여 주고 사용 가능한 jig를 연다. 개발용 확장의 화면 입구는 두지 않는다(2026-09-29 사용자 결정: JIG가 그 역할을 이어받아 지금 쓸 일이 없다). 확장 등록·실행의 서버 계약과 이미 실행된 확장 결과의 표시는 유지하며, 외부 jig를 받는 구조를 만들 때 다시 쓴다.
 
 **Sync jig(도면↔모델):** 같은 프로젝트의 Rhino Sync 하나와 ZWCAD Sync 하나를 입력으로 받는다.
 
