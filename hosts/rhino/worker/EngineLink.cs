@@ -10,7 +10,7 @@ namespace Vide.Worker;
 
 internal sealed record EngineProject(string Id, string Name);
 
-// Link (SPEC-01.9): the plugin asks the local VIDE engine for its projects and links this document to
+// Link (SPEC-01.11): the plugin asks the local VIDE engine for its projects and links this document to
 // the chosen one. The engine's launch address (127.0.0.1) and token come from the user's own
 // launch.json; nothing leaves this PC. Calls run off the Rhino UI thread (awaited, never blocking).
 internal static class EngineLink

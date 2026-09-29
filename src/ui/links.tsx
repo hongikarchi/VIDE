@@ -1,7 +1,7 @@
 import { createRoot } from 'react-dom/client';
 import { z } from 'zod';
 
-// The project's linked files (SPEC-01.9, Design §03): files linked from the Rhino/ZWCAD plugins,
+// The project's linked files (SPEC-01.11, Design §03): files linked from the Rhino/ZWCAD plugins,
 // shown together in one space. Each row: visibility, status, last Sync, forced Sync, removal.
 export const linkRowSchema = z.object({
   id: z.string(),

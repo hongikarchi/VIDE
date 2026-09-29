@@ -1,5 +1,5 @@
 // Link an open host document to the page's project the way the host plugin's Link does
-// (SPEC-01.9), then wait for its first Sync to finish in the browser.
+// (SPEC-01.11), then wait for its first Sync to finish in the browser.
 export async function linkOpenDocument(
   page,
   { host = 'rhino', instance, documentId },

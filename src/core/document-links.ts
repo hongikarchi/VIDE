@@ -3,7 +3,7 @@ import type { DatabaseSync } from 'node:sqlite';
 import { z } from 'zod';
 import { DomainError } from './store.ts';
 
-// Project link files (SPEC-01.9): the documents a user linked to a project from a host plugin.
+// Project link files (SPEC-01.11): the documents a user linked to a project from a host plugin.
 // A link survives the host window closing; its display comes from the latest Sync of that link.
 export const linkInputSchema = z
   .object({

@@ -167,7 +167,7 @@ export function captureInput(
   hostKind: 'rhino' | 'zwcad' = 'rhino',
 ) {
   return {
-    // The project link file this Sync belongs to (SPEC-01.9).
+    // The project link file this Sync belongs to (SPEC-01.11).
     ...(target.linkId ? { linkId: target.linkId } : {}),
     id: target.id,
     provider: 'codex-cli',

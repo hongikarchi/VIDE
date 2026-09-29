@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { startServer } from '../../src/server/server.ts';
 
-// The HTTP sequence a host plugin uses for Link (SPEC-01.9): a session from the launch token with an
+// The HTTP sequence a host plugin uses for Link (SPEC-01.11): a session from the launch token with an
 // Origin header, the project list, and Link; then the project's list, visibility and removal.
 test('plugins link documents to a chosen project; links stay per project with their last Sync', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'vide-links-http-'));

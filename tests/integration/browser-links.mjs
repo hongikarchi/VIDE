@@ -1,4 +1,4 @@
-// Linked files (SPEC-01.9): several files in one space, visibility, target file, pins by the file's
+// Linked files (SPEC-01.11): several files in one space, visibility, target file, pins by the file's
 // own id, removal, and the first Sync of a newly linked file. No real host or AI.
 import assert from 'node:assert/strict';
 import { mkdtemp, rm } from 'node:fs/promises';

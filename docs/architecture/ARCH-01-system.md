@@ -2,7 +2,7 @@
 id: ARCH-01
 title: VIDE 기술 구조와 구현 계약
 status: review
-version: 0.46
+version: 0.47
 updated: 2026-09-29
 owner: agent:codex
 related: [SPEC-00, SPEC-02, SPEC-03, SPEC-04, PLAN, PLAN-20, ADR-014, ADR-015, ADR-016, ADR-017]
@@ -651,7 +651,7 @@ Rhino 패널은 기존 RHP 안의 Eto `ConnectionPanel`을 `PanelType.PerDoc`로
 
 ### 프로젝트 연결 파일(Link)
 
-SPEC-01.9. 스키마 v4의 `document_links(id, projectId, host, name, path, instance, documentId, hidden, linkedAt, updatedAt)`가 프로젝트별 연결 파일을 소유한다. 같은 프로젝트·호스트에서 `path`(없으면 `instance`+`documentId`)가 같으면 한 연결로 본다. `GET /api/v1/projects/:id/links`는 연결 행에 현재 연결 상태(열린 문서 목록과 대조한 live·generation·objectCount)와 마지막 Sync(`input.linkId`가 그 연결인 가장 최근 성공 Sync)를 붙여 돌려준다. `POST .../links`(플러그인), `PUT .../links/:linkId`(hidden), `POST .../links/:linkId/remove`(목록에서 빼기, Sync 기록 보존). Sync·Live Sync 요청 본문의 `linkId`가 결과를 연결에 묶는다.
+SPEC-01.11. 스키마 v4의 `document_links(id, projectId, host, name, path, instance, documentId, hidden, linkedAt, updatedAt)`가 프로젝트별 연결 파일을 소유한다. 같은 프로젝트·호스트에서 `path`(없으면 `instance`+`documentId`)가 같으면 한 연결로 본다. `GET /api/v1/projects/:id/links`는 연결 행에 현재 연결 상태(열린 문서 목록과 대조한 live·generation·objectCount)와 마지막 Sync(`input.linkId`가 그 연결인 가장 최근 성공 Sync)를 붙여 돌려준다. `POST .../links`(플러그인), `PUT .../links/:linkId`(hidden), `POST .../links/:linkId/remove`(목록에서 빼기, Sync 기록 보존). Sync·Live Sync 요청 본문의 `linkId`가 결과를 연결에 묶는다.
 
 플러그인은 사용자 권한으로 `%LOCALAPPDATA%/VIDE/launch.json`의 실행 주소(127.0.0.1)와 실행 토큰으로 `/api/v1/session`에 세션을 만든 뒤(Origin 헤더 포함) 프로젝트 목록 조회·Link를 호출한다. 호출은 호스트 UI 스레드 밖에서 하며, VIDE는 Link 응답을 바로 돌려주고 첫 Sync는 화면(연결 목록 폴링)이 수행한다. VIDE가 연 작업 사본 창(`/requests/:id/open`)도 같은 연결로 등록하며, 그 창은 열림 여부만 확인한다(자동 갱신 없음, ⟳로 Sync). 엔진이 플러그인 문서에 다시 요청하는 동안 플러그인이 UI 스레드에서 기다리지 않는다.
 

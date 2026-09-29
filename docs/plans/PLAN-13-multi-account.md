@@ -10,7 +10,7 @@ related: [PLAN, SPEC-02, ARCH-01, FR-08, FR-18]
 
 # 다중 AI 계정 — 사용량·초기화 시각·자동 전환
 
-2026-09-29 사용자 요청("cswap·multi-auth급 다중 계정")의 작업이다. 동작은 [SPEC-02.14](../specs/SPEC-02-execution-candidates.md), 물리 계약은 [ARCH-01](../architecture/ARCH-01-system.md) §7 "CLI 프로필 실행 경계"가 소유한다.
+2026-09-29 사용자 요청("cswap·multi-auth급 다중 계정")의 작업이다. 동작은 [SPEC-02.18](../specs/SPEC-02-execution-candidates.md), 물리 계약은 [ARCH-01](../architecture/ARCH-01-system.md) §7 "CLI 프로필 실행 경계"가 소유한다.
 
 ## 조사 요약
 

@@ -33,7 +33,7 @@ export type Migration = { version: number; sql: string };
 // Conversation entries a user removed from view; the request records themselves are kept.
 const hiddenRequests = `CREATE TABLE IF NOT EXISTS hidden_requests(projectId TEXT NOT NULL REFERENCES projects(id),
   requestId TEXT NOT NULL REFERENCES workspace_requests(id), hiddenAt TEXT NOT NULL, PRIMARY KEY(projectId, requestId));`;
-// Files linked to a project from a host plugin (SPEC-01.9); Sync records stay in workspace_requests.
+// Files linked to a project from a host plugin (SPEC-01.11); Sync records stay in workspace_requests.
 const documentLinks = `CREATE TABLE IF NOT EXISTS document_links(id TEXT PRIMARY KEY,
   projectId TEXT NOT NULL REFERENCES projects(id), host TEXT NOT NULL, name TEXT NOT NULL, path TEXT,
   instance TEXT NOT NULL, documentId INTEGER NOT NULL, hidden INTEGER NOT NULL, linkedAt TEXT NOT NULL,

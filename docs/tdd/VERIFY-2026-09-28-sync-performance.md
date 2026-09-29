@@ -10,7 +10,7 @@ related: [SPEC-01, ARCH-01, PLAN-02, AC-39, AC-17, AC-38]
 
 # 연결 Rhino Sync 성능과 증분 Live Sync 검증
 
-[PLAN-02 현재 작업](../plans/PLAN-02-agent-host-versioning.md)의 계측·변경·검증 결과다. 기준은 SPEC-01.9(Live Sync는 변경을 모아 마지막 성공 취득 기준을 갱신)와 AC-39(수동 Sync 뒤 표시 갱신, 원본·파일 무변경)이다. 동작 계약은 [ARCH-01](../architecture/ARCH-01-system.md) 연결 채널 절에 반영했다.
+[PLAN-02 현재 작업](../plans/PLAN-02-agent-host-versioning.md)의 계측·변경·검증 결과다. 기준은 SPEC-01.11(Live Sync는 변경을 모아 마지막 성공 취득 기준을 갱신)와 AC-39(수동 Sync 뒤 표시 갱신, 원본·파일 무변경)이다. 동작 계약은 [ARCH-01](../architecture/ARCH-01-system.md) 연결 채널 절에 반영했다.
 
 ## 환경과 방법
 

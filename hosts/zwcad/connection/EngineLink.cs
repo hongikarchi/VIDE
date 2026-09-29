@@ -21,7 +21,7 @@ namespace Vide.Zwcad.Connection
     }
 
     /// <summary>
-    /// Link (SPEC-01.9): ask the local VIDE engine for its projects and link this drawing to the chosen
+    /// Link (SPEC-01.11): ask the local VIDE engine for its projects and link this drawing to the chosen
     /// one. The engine address (127.0.0.1) and token come from the user's own launch.json; nothing leaves
     /// this PC. Calls are awaited so ZWCAD's UI thread never blocks while the engine reads the drawing.
     /// </summary>

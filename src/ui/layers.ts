@@ -1,4 +1,4 @@
-// Several files in one space (SPEC-01.9): every visible linked file (and a result opened on its own)
+// Several files in one space (SPEC-01.11): every visible linked file (and a result opened on its own)
 // is a layer. Layers are drawn together; no file is the main one. With more than one layer, object and
 // scene ids are prefixed by the layer so equal ids of different files (e.g. CAD handles) stay apart,
 // and each object keeps its own id (`sourceId`) and basis request (`revision`) for pins and inspection.

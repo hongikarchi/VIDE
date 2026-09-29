@@ -6,7 +6,7 @@ import { chromium } from 'playwright';
 import { startServer } from '../../src/server/server.ts';
 import { Workspace } from '../../src/core/workspace.ts';
 
-// A Rhino document linked to the project (SPEC-01.9): first Sync without a click, failure display,
+// A Rhino document linked to the project (SPEC-01.11): first Sync without a click, failure display,
 // draft protection of automatic Sync, the explicit apply packet, and a closed file.
 const directory = resolve('.vide/browser-attached', randomUUID());
 await mkdir(directory, { recursive: true });

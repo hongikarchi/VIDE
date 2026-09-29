@@ -207,7 +207,7 @@ const liveReplySchema = z.union([
     }),
   }),
 ]);
-/** SPEC-01.9 Live Sync: apply only the objects Rhino changed to the latest display Sync. */
+/** SPEC-01.11 Live Sync: apply only the objects Rhino changed to the latest display Sync. */
 async function liveSyncHostDocument(target: HostTarget): Promise<boolean | 'retry'> {
   const basis = state.messages
     .filter(
@@ -265,7 +265,7 @@ async function liveSyncHostDocument(target: HostTarget): Promise<boolean | 'retr
   renderMessages();
   return true;
 }
-// Linked files (SPEC-01.9): files linked from the host plugins, drawn together as layers. No file
+// Linked files (SPEC-01.11): files linked from the host plugins, drawn together as layers. No file
 // is the main one; the composer targets the file of the last picked object (or the chosen row).
 let links: LinkRow[] = [],
   linksLoaded = false,
@@ -334,7 +334,7 @@ function showRequest(id: string) {
   }
   fitNext = true;
 }
-/** The composer's target follows the active layer (SPEC-01.9 요청 대상). */
+/** The composer's target follows the active layer (SPEC-01.11 요청 대상). */
 function applyActiveLayer() {
   if (!currentLayers.some((layer) => layer.key === activeLayer)) {
     const newest = [...currentLayers].sort((a, b) =>
@@ -379,7 +379,7 @@ async function setLinkHidden(link: LinkRow, hidden: boolean) {
     message(readableError(error).message);
   }
 }
-/** Draft or running work based on this file holds its automatic updates (SPEC-01.9 보류). */
+/** Draft or running work based on this file holds its automatic updates (SPEC-01.11 보류). */
 function syncHeld(link: LinkRow) {
   const uses = (id?: string | null) => !!id && linkOfRequest(id) === link.id;
   if (
@@ -863,7 +863,7 @@ function render(rebuildRequests = true) {
       render();
     };
   }
-  // Several files on screen: say which one this request changes (SPEC-01.9 요청 대상).
+  // Several files on screen: say which one this request changes (SPEC-01.11 요청 대상).
   const target = currentLayers.find(
     (layer) => layer.requestId === (state.baseRequestId ?? displayedResult),
   );
@@ -1128,7 +1128,7 @@ async function loadFullResult(id: string) {
     loadingResults.delete(id);
   }
 }
-/** Draw every visible layer together (SPEC-01.9); rebuild only when the layer set changed. */
+/** Draw every visible layer together (SPEC-01.11); rebuild only when the layer set changed. */
 function showLayers() {
   const layers = visibleLayers();
   for (const layer of layers) {
@@ -1470,7 +1470,7 @@ const pinComposer = attachPinTokens($('body'), {
       ...pinnable().map((object) => ({
         id: sourceIdOf(object),
         name: object.name,
-        // Objects of another file than the composer's target are references (SPEC-01.9).
+        // Objects of another file than the composer's target are references (SPEC-01.11).
         role:
           state.baseRequestId && object.revision !== state.baseRequestId
             ? ('reference' as const)

@@ -535,7 +535,7 @@ export async function startServer({
         );
         return;
       }
-      // Project link files (SPEC-01.9): linked from a host plugin, listed with live status.
+      // Project link files (SPEC-01.11): linked from a host plugin, listed with live status.
       const linkList = /^\/api\/v1\/projects\/([^/]+)\/links$/.exec(url.pathname);
       const linkItem = /^\/api\/v1\/projects\/([^/]+)\/links\/([^/]+)$/.exec(url.pathname);
       if (linkList && request.method === 'GET') {
@@ -1519,7 +1519,7 @@ export async function startServer({
               : saved.result.executionMode === 'sdk' && sdk
                 ? await sdk.open(saved.result)
                 : await hosts[host].open(z.string().parse(saved.result.filename));
-          // A work copy opened in its program is a linked file of the project (SPEC-01.9).
+          // A work copy opened in its program is a linked file of the project (SPEC-01.11).
           const window = z
             .object({ instance: z.string(), documentId: z.number().int().positive() })
             .safeParse(opened);

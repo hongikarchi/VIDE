@@ -21,7 +21,7 @@ namespace Vide.Zwcad.Connection
         internal readonly Document Document;
         internal bool Live;
         internal DateTime? LastRead;
-        /// <summary>The VIDE project this drawing was linked to from this window (SPEC-01.9).</summary>
+        /// <summary>The VIDE project this drawing was linked to from this window (SPEC-01.11).</summary>
         internal EngineProject LinkedProject;
         /// <summary>The engine's key for this connection (process, start time, session).</summary>
         internal string Instance => pid + ":" + ticks + ":" + session;

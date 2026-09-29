@@ -41,7 +41,7 @@ internal sealed class AttachedConnection : IDisposable
         PinsChanged?.Invoke();
     }
     internal bool Live => live;
-    /** The VIDE project this document was linked to from this window (SPEC-01.9). */
+    /** The VIDE project this document was linked to from this window (SPEC-01.11). */
     internal EngineProject? LinkedProject { get; set; }
     internal DateTime? LastDisplayRead { get; private set; }
     internal static void Connect(RhinoDoc doc)

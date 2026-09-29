@@ -34,7 +34,7 @@ const errorCode = (error: unknown) =>
     : undefined;
 
 /**
- * SPEC-01.9 Live Sync: merges only the objects Rhino reports as changed into the latest display
+ * SPEC-01.11 Live Sync: merges only the objects Rhino reports as changed into the latest display
  * Sync of the document. A Sync that other requests already reference is never rewritten; a merged
  * copy becomes the new basis instead. Unknown state means RESYNC_REQUIRED (a full Sync).
  */
@@ -69,7 +69,7 @@ export class LiveSync {
         // Expected outcomes, not failures: fall back to a full Sync, or retry on the next change.
         const code = errorCode(error);
         if (code === 'RESYNC_REQUIRED') return { resync: true as const };
-        // Work queued on this document holds the update until it finishes (SPEC-01.9).
+        // Work queued on this document holds the update until it finishes (SPEC-01.11).
         if (['SOURCE_CHANGED', 'HOST_BUSY', 'PROJECT_BUSY', 'WORKSPACE_CAPACITY'].includes(code!))
           return { retry: code! };
         throw error;

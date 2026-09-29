@@ -214,7 +214,7 @@ export function pinSelection(
       s.pins.push({
         id: own,
         name: o.name,
-        // Objects of another file than the request's basis are references (SPEC-01.9).
+        // Objects of another file than the request's basis are references (SPEC-01.11).
         role: s.baseRequestId && o.revision !== s.baseRequestId ? 'reference' : 'target',
         basis: o.revision,
       });
