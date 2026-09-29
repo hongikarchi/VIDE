@@ -94,6 +94,27 @@ try {
   await row.getByRole('button', { name: '제거', exact: true }).click();
   await row.waitFor({ state: 'detached' });
   assert.ok((await section.textContent()).includes('기존 CLI 로그인 · 선택됨'));
+  // The existing CLI login can be renamed too; an empty name restores the standard name.
+  const standard = section.locator('.account-settings > div').first();
+  await standard.getByRole('button', { name: '이름 변경', exact: true }).click();
+  await standard.getByLabel('기존 CLI 로그인 새 이름').fill('개인 ChatGPT');
+  await standard.getByRole('button', { name: '저장', exact: true }).click();
+  await page.waitForFunction(() =>
+    document.querySelector('.ai-settings')?.textContent.includes('개인 ChatGPT · 선택됨'),
+  );
+  await page.getByRole('button', { name: '닫기', exact: true }).click();
+  await page.waitForFunction(
+    () => document.querySelector('[aria-label="현재 AI 계정"]')?.textContent === '개인 ChatGPT',
+  );
+  await page.locator('#workspace-settings').click();
+  await page.locator('[data-tab="ai"]').click();
+  await page.locator('#ai-settings').click();
+  await standard.getByRole('button', { name: '이름 변경', exact: true }).click();
+  await standard.getByLabel('개인 ChatGPT 새 이름').fill('');
+  await standard.getByRole('button', { name: '저장', exact: true }).click();
+  await page.waitForFunction(() =>
+    document.querySelector('.ai-settings')?.textContent.includes('기존 CLI 로그인 · 선택됨'),
+  );
   console.log(
     'Account add/select/login instructions verified in Chromium; provider authentication mocked.',
   );

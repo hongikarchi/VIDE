@@ -870,6 +870,18 @@ export async function startServer({
         send(200, profiles.remove(input.provider, input.id));
         return;
       }
+      if (url.pathname === '/api/v1/accounts/rename' && request.method === 'POST') {
+        const input = z
+          .object({
+            provider: z.enum(['claude-cli', 'codex-cli']),
+            id: z.string(),
+            label: z.string().max(80),
+          })
+          .strict()
+          .parse(await body(request));
+        send(200, profiles.rename(input.provider, input.id, input.label));
+        return;
+      }
       if (url.pathname === '/api/v1/accounts/select' && request.method === 'POST') {
         const input = z
           .object({ provider: z.enum(['claude-cli', 'codex-cli']), id: z.string() })

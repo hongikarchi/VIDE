@@ -2841,6 +2841,18 @@ body.panel-mode #conversation {
   color: var(--muted);
   margin-top: 2px;
 }
+.account-rename {
+  flex: 1;
+  min-width: 200px;
+  display: flex;
+  gap: 4px;
+}
+.account-rename input {
+  flex: 1;
+  min-width: 0;
+  padding: 4px 6px;
+  font-size: 12px;
+}
 .account-row button,
 .account-add button {
   padding: 3px 8px;

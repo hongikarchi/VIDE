@@ -31,6 +31,14 @@ const schema = z
     pending: z
       .object({ 'claude-cli': z.string().nullable(), 'codex-cli': z.string().nullable() })
       .strict(),
+    /** User-chosen names of the default (existing CLI) logins. */
+    defaultLabels: z
+      .object({
+        'claude-cli': z.string().trim().min(1).max(80).optional(),
+        'codex-cli': z.string().trim().min(1).max(80).optional(),
+      })
+      .strict()
+      .optional(),
   })
   .strict();
 type Data = z.infer<typeof schema>;
@@ -103,6 +111,22 @@ export class AccountProfiles {
     this.data.profiles.push(row);
     this.save();
     return row;
+  }
+  /** Rename an account; an empty name gives the default login its standard name back. */
+  rename(provider: Provider, id: string, label: string) {
+    const name = label.trim();
+    if (name.length > 80) fail('INVALID_INPUT');
+    if (id === 'default') {
+      const labels = { ...this.data.defaultLabels };
+      if (name) labels[provider] = name;
+      else delete labels[provider];
+      this.data.defaultLabels = labels;
+    } else {
+      if (!name) fail('INVALID_INPUT');
+      this.find(provider, id).label = name;
+    }
+    this.save();
+    return this.list();
   }
   select(provider: Provider, id: string) {
     if (id !== 'default') this.find(provider, id);

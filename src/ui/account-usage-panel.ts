@@ -27,6 +27,7 @@ const usageSchema = z.object({
 const profilesSchema = z.object({
   profiles: z.array(z.object({ id: z.string(), provider: z.string(), label: z.string() })),
   active: z.record(z.string(), z.string()),
+  defaultLabels: z.record(z.string(), z.string()).optional(),
 });
 type Usage = z.infer<typeof usageSchema>;
 const service = { 'claude-cli': 'Claude', 'codex-cli': 'ChatGPT' } as const;
@@ -129,7 +130,7 @@ export function attachAccountUsage(section: HTMLElement, dialog: HTMLDialogEleme
     for (const account of data.accounts) {
       const label =
         account.id === 'default'
-          ? '기존 CLI 로그인'
+          ? (profiles?.defaultLabels?.[account.provider] ?? '기존 CLI 로그인')
           : (profiles?.profiles.find((p) => p.id === account.id)?.label ?? '추가 계정');
       const active = profiles?.active[account.provider] === account.id;
       const row = el('li', '', list, { class: 'usage-row' });

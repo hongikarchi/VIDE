@@ -2,7 +2,7 @@
 id: PLAN-13
 title: 다중 AI 계정 — 사용량·초기화 시각·자동 전환
 status: review
-version: 0.1
+version: 0.2
 updated: 2026-09-29
 owner: agent:claude
 related: [PLAN, SPEC-02, ARCH-01, FR-08, FR-18]
@@ -23,6 +23,7 @@ related: [PLAN, SPEC-02, ARCH-01, FR-08, FR-18]
 1. `src/ai/account-usage.ts`: 계정별 로그인 정보(이메일·요금제)는 로컬 파일에서 읽고, 조회를 켜면 사용량 주소를 부른다(3분 캐시·중복 방지). 만료 토큰은 갱신하지 않고 마지막 값을 보인다. 설정은 `<데이터>/cli-profiles/usage-settings.json`.
 2. 요청 접수 때 자동 전환(`choose`). 한도 실패는 `PROVIDER_LIMIT`로 구분(Claude·Codex CLI 출력)하고 그 계정을 건너뛴다.
 3. 설정 → AI: 계정별 이메일·요금제·사용 중 표시·5시간/7일 막대·초기화 시각·"이 계정 사용", 조회·자동 전환 스위치와 기준. 상태 표시줄에 현재 계정의 이메일과 사용률.
+4. (2026-09-29 사용자 요청) 계정 이름 변경: 기존 CLI 로그인을 포함한 모든 계정의 "이름 변경"(`POST /api/v1/accounts/rename`, 기존 로그인 이름은 `profiles.json`의 `defaultLabels`). 상태 표시줄은 사용자가 붙인 이름을 먼저 보인다. 검증: `tests/ai/account-profiles.test.mjs`(이름 변경·저장·비우면 기본 이름·잘못된 이름 거절), `browser-accounts`(기존 로그인 이름 변경과 상태 표시줄 반영).
 
 ## 검증
 

@@ -106,3 +106,34 @@ test('managed profile rejects junction redirection and malformed metadata', () =
     rmSync(root, { recursive: true, force: true });
   }
 });
+
+test('accounts can be renamed, including the existing CLI login, even while busy', () => {
+  const root = mkdtempSync(join(tmpdir(), 'vide-profiles-'));
+  try {
+    const profiles = new AccountProfiles(root, () => true);
+    const work = profiles.add('claude-cli', 'Claude 2');
+    // Renaming changes only the shown name; it never touches logins or running work.
+    assert.equal(
+      profiles.rename('claude-cli', work.id, ' 회사 Claude ').profiles[0].label,
+      '회사 Claude',
+    );
+    assert.equal(
+      profiles.rename('claude-cli', 'default', '개인 Claude').defaultLabels['claude-cli'],
+      '개인 Claude',
+    );
+    assert.equal(profiles.list().defaultLabels['codex-cli'], undefined);
+    const restored = new AccountProfiles(root, () => false);
+    assert.equal(restored.list().defaultLabels['claude-cli'], '개인 Claude');
+    assert.equal(restored.list().profiles[0].label, '회사 Claude');
+    // An empty name gives the default login its standard name back; a profile needs a name.
+    assert.equal(
+      restored.rename('claude-cli', 'default', '').defaultLabels['claude-cli'],
+      undefined,
+    );
+    assert.throws(() => restored.rename('claude-cli', work.id, '  '), /INVALID_INPUT/);
+    assert.throws(() => restored.rename('codex-cli', work.id, 'x'), /NOT_FOUND/);
+    assert.throws(() => restored.rename('claude-cli', 'default', 'x'.repeat(81)), /INVALID_INPUT/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});

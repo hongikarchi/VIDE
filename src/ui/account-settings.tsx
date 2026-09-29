@@ -7,6 +7,7 @@ const schema = z.object({
   profiles: z.array(z.object({ id: z.string(), provider: z.enum(providers), label: z.string() })),
   active: z.record(z.string(), z.string()),
   pending: z.record(z.string(), z.string().nullable()),
+  defaultLabels: z.record(z.string(), z.string()).optional(),
 });
 const loginSchema = z.array(
   z.object({
@@ -38,6 +39,9 @@ export function AccountSettings({ provider }: { provider: Provider }) {
   const [command, setCommand] = useState('');
   const [busy, setBusy] = useState(false);
   const [login, setLogin] = useState<z.infer<typeof loginSchema>[number]>();
+  // Inline rename of one account row (the name only; the login is not touched).
+  const [renaming, setRenaming] = useState<string>();
+  const [newName, setNewName] = useState('');
   const loggingIn = login?.state === 'running' || login?.state === 'stopping';
   const refresh = async () => setData(schema.parse(await api('/accounts')));
   // Who is signed in to each account (email · plan) and the switching settings, from the usage view.
@@ -138,7 +142,7 @@ export function AccountSettings({ provider }: { provider: Provider }) {
     }
   };
   const rows = [
-    { id: 'default', label: '기존 CLI 로그인' },
+    { id: 'default', label: data?.defaultLabels?.[provider] ?? '기존 CLI 로그인' },
     ...(data?.profiles.filter((p) => p.provider === provider) ?? []),
   ];
   return (
@@ -149,11 +153,56 @@ export function AccountSettings({ provider }: { provider: Provider }) {
           className="account-row"
           data-active={String(data?.active[provider] === row.id)}
         >
-          <span className="account-name">
-            {row.label} {data?.active[provider] === row.id ? '· 선택됨' : ''}{' '}
-            {data?.pending[provider] === row.id ? '· 전환 대기' : ''}
-            {who[row.id] ? <small>{who[row.id]}</small> : null}
-          </span>
+          {renaming === row.id ? (
+            <form
+              className="account-rename"
+              onSubmit={(event) => {
+                event.preventDefault();
+                void action(async () => {
+                  await api('/accounts/rename', 'POST', { provider, id: row.id, label: newName });
+                  setRenaming(undefined);
+                });
+              }}
+            >
+              <input
+                aria-label={`${row.label} 새 이름`}
+                value={newName}
+                maxLength={80}
+                autoFocus
+                placeholder={row.id === 'default' ? '비우면 기존 CLI 로그인' : '계정 이름'}
+                onChange={(event) => setNewName(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Escape') setRenaming(undefined);
+                }}
+              />
+              <button type="submit" disabled={busy || (row.id !== 'default' && !newName.trim())}>
+                저장
+              </button>
+              <button type="button" onClick={() => setRenaming(undefined)}>
+                취소
+              </button>
+            </form>
+          ) : (
+            <span className="account-name">
+              {row.label} {data?.active[provider] === row.id ? '· 선택됨' : ''}{' '}
+              {data?.pending[provider] === row.id ? '· 전환 대기' : ''}
+              {who[row.id] ? <small>{who[row.id]}</small> : null}
+            </span>
+          )}
+          {renaming !== row.id && (
+            <button
+              disabled={busy}
+              title="표시 이름만 바꿉니다. 로그인은 그대로입니다."
+              onClick={() => {
+                setRenaming(row.id);
+                setNewName(
+                  row.id === 'default' ? (data?.defaultLabels?.[provider] ?? '') : row.label,
+                );
+              }}
+            >
+              이름 변경
+            </button>
+          )}
           <button
             disabled={busy || loggingIn}
             onClick={() =>

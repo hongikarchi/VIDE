@@ -4,6 +4,7 @@ const schema = z.object({
   profiles: z.array(z.object({ id: z.string(), label: z.string() })),
   active: z.record(z.string(), z.string()),
   pending: z.record(z.string(), z.string().nullable()),
+  defaultLabels: z.record(z.string(), z.string()).optional(),
 });
 const window5 = z.object({ percent: z.number() }).optional();
 const usageSchema = z.object({
@@ -47,11 +48,13 @@ export function accountIndicator(parent: HTMLElement, provider: () => string) {
       const key = provider(),
         id = data.active[key];
       const row = usage?.accounts.find((account) => account.provider === key && account.id === id);
-      const name =
-        row?.email ??
-        (id === 'default'
-          ? '기존 CLI 로그인'
-          : (data.profiles.find((p) => p.id === id)?.label ?? '계정 확인 필요'));
+      // A name the user gave the account comes first; otherwise the signed-in email.
+      const given =
+        id === 'default'
+          ? data.defaultLabels?.[key]
+          : data.profiles.find((p) => p.id === id)?.label;
+      const name = given ?? row?.email ?? (id === 'default' ? '기존 CLI 로그인' : '계정 확인 필요');
+      label.title = [given, row?.email].filter(Boolean).join(' · ');
       const used = [
         row?.session &&
           `${key === 'claude-cli' ? '5시간' : '단기'} ${Math.round(row.session.percent)}%`,
