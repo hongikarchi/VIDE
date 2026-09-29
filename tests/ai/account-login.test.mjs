@@ -14,6 +14,7 @@ function fixture(options = {}) {
       const child = new EventEmitter();
       child.stdout = new PassThrough();
       child.stderr = new PassThrough();
+      child.stdin = settings.stdio?.[0] === 'pipe' ? new PassThrough() : null;
       children.push(child);
       return child;
     },
@@ -119,3 +120,72 @@ for (const provider of ['codex-cli', 'claude-cli'])
       );
       await login.close();
     });
+
+test('Codex address mode shows the device link and one-time code, and nothing else', async () => {
+  const { login, input, calls, children } = fixture();
+  login.start(input);
+  assert.ok(calls[0].args.includes('--device-auth'));
+  children[0].stdout.write(
+    '\x1b[1mWelcome\x1b[0m SENSITIVE_TEST_OUTPUT\n1. Open this link\n   https://auth.openai.com/codex/device\n',
+  );
+  children[0].stdout.write('2. Enter this one-time code\n   ABCD-12345\n');
+  await tick();
+  const [status] = login.list();
+  assert.equal(status.mode, 'address');
+  assert.deepEqual(status.prompt, {
+    url: 'https://auth.openai.com/codex/device',
+    code: 'ABCD-12345',
+    needsCode: false,
+  });
+  assert.equal(JSON.stringify(status).includes('SENSITIVE_TEST_OUTPUT'), false);
+  assert.ok(Date.parse(status.expiresAt) - Date.parse(status.startedAt) >= 599000);
+  assert.throws(() => login.submitCode('codex-cli', 'x-1234'), { code: 'LOGIN_NOT_WAITING' });
+  children[0].emit('close', 0);
+  await tick();
+  // The address and code are gone once the login ends.
+  assert.equal(login.list()[0].state, 'succeeded');
+  assert.equal(login.list()[0].prompt, undefined);
+});
+
+test('Claude address mode opens no browser, shows the address and passes the pasted code', async () => {
+  const { login, input, calls, children } = fixture({ systemRoot: 'C:\\Win' });
+  login.start({ ...input, provider: 'claude-cli' });
+  assert.equal(calls[0].settings.env.BROWSER, 'C:\\Win\\System32\\where.exe');
+  assert.equal(calls[0].settings.stdio[0], 'pipe');
+  const written = [];
+  children[0].stdin.on('data', (chunk) => written.push(String(chunk)));
+  // The address arrives wrapped in a terminal hyperlink; a foreign address is never shown.
+  children[0].stdout.write('see https://evil.example/login\n');
+  const url = 'https://claude.com/cai/oauth/authorize?code=true&state=s';
+  children[0].stdout.write(
+    `If the browser didn't open, visit: \x1b]8;;${url}\x07${url}\x1b]8;;\x07\nPaste code here if prompted > `,
+  );
+  await tick();
+  assert.equal(login.list()[0].prompt.url, url);
+  assert.equal(login.list()[0].prompt.needsCode, true);
+  assert.throws(() => login.submitCode('claude-cli', 'has space'), { code: 'INVALID_INPUT' });
+  assert.equal(login.submitCode('claude-cli', '  abcDEF123#state  ').prompt.codeSent, true);
+  await tick();
+  assert.deepEqual(written, ['abcDEF123#state\n']);
+  children[0].emit('close', 0);
+  await tick();
+  assert.equal(login.list()[0].prompt, undefined);
+});
+
+test('browser mode is the earlier way; a closed device login says so', async () => {
+  const { login, input, calls, children } = fixture();
+  login.start({ ...input, provider: 'claude-cli', browser: true });
+  assert.equal(calls[0].settings.env.BROWSER, undefined);
+  assert.equal(calls[0].settings.stdio[0], 'ignore');
+  assert.equal(login.list()[0].mode, 'browser');
+  children[0].emit('close', 0);
+  await tick();
+  login.start({ ...input, verify: async () => ({ available: false }) });
+  children[1].stderr.write('device code login is not enabled for this Codex server.');
+  await tick();
+  children[1].emit('close', 1);
+  await tick();
+  const codex = login.list().find((row) => row.provider === 'codex-cli');
+  assert.equal(codex.reason, 'DEVICE_LOGIN_DISABLED');
+  await login.close();
+});

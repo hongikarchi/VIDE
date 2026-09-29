@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { z } from 'zod';
 import { api } from './gateway.ts';
 import { providers } from '../contracts/ai-settings.ts';
@@ -11,41 +11,184 @@ const schema = z.object({
 });
 const loginSchema = z.array(
   z.object({
+    id: z.string().optional(),
     provider: z.enum(providers),
     profileId: z.string(),
     state: z.enum(['running', 'stopping', 'succeeded', 'failed', 'cancelled']),
     reason: z.string().optional(),
     operation: z.enum(['login', 'logout']).default('login'),
+    mode: z.enum(['address', 'browser']).optional(),
+    expiresAt: z.string().optional(),
+    prompt: z
+      .object({
+        url: z.string().optional(),
+        code: z.string().optional(),
+        needsCode: z.boolean(),
+        codeSent: z.boolean().optional(),
+      })
+      .optional(),
   }),
 );
-const loginLabels = {
-  running: '브라우저에서 인증하세요',
-  stopping: '로그인 종료 확인 중',
-  succeeded: '로그인 확인됨',
-  failed: '로그인 실패 · 다시 시도하세요',
-  cancelled: '로그인 취소됨',
+type Login = z.infer<typeof loginSchema>[number];
+const failures: Record<string, string> = {
+  LOGIN_TIMEOUT: '10분 안에 로그인을 마치지 못했습니다.',
+  DEVICE_LOGIN_DISABLED:
+    '이 계정은 코드로 로그인하는 방식이 막혀 있습니다. 브라우저 로그인으로 다시 시도하세요.',
+  LOGIN_FAILED: '로그인을 확인하지 못했습니다.',
 };
-const logoutLabels = {
-  running: '로그아웃 진행 중',
-  stopping: '로그아웃 종료 확인 중',
-  succeeded: '로그아웃 완료',
-  failed: '로그아웃을 확인하지 못했습니다',
-  cancelled: '로그아웃 중단 · 인증 상태를 다시 확인하세요',
-};
+const service = { 'claude-cli': 'Claude', 'codex-cli': 'ChatGPT' } as const;
+
+function remaining(expiresAt?: string) {
+  if (!expiresAt) return '';
+  const seconds = Math.max(0, Math.round((Date.parse(expiresAt) - Date.now()) / 1000));
+  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
+}
+function copy(text: string, done: (message: string) => void) {
+  void navigator.clipboard
+    .writeText(text)
+    .then(() => done('복사했습니다.'))
+    .catch(() => done('직접 선택해 복사하세요.'));
+}
+
+/** The steps to finish a login in a browser of the user's choice (address mode). */
+function LoginPanel({
+  login,
+  provider,
+  cancel,
+  notify,
+}: {
+  login: Login;
+  provider: Provider;
+  cancel: () => void;
+  notify: (message: string) => void;
+}) {
+  const [code, setCode] = useState('');
+  const [, tick] = useState(0);
+  useEffect(() => {
+    const timer = setInterval(() => tick((value) => value + 1), 1000);
+    return () => clearInterval(timer);
+  }, []);
+  const prompt = login.prompt;
+  const stopping = login.state === 'stopping';
+  if (login.operation === 'logout')
+    return (
+      <div className="login-panel" role="status">
+        로그아웃하는 중…
+      </div>
+    );
+  const address = prompt?.url ? (
+    <span className="login-actions">
+      <button type="button" onClick={() => copy(prompt.url!, notify)}>
+        주소 복사
+      </button>
+      <a href={prompt.url} target="_blank" rel="noreferrer">
+        기본 브라우저로 열기
+      </a>
+    </span>
+  ) : (
+    <small>주소를 준비하는 중…</small>
+  );
+  return (
+    <div className="login-panel" aria-label={`${service[provider]} 로그인`}>
+      <div className="login-head">
+        <strong>
+          {login.mode === 'browser'
+            ? '기본 브라우저에서 로그인하세요'
+            : '브라우저에서 로그인하세요'}
+        </strong>
+        <small>{stopping ? '멈추는 중…' : `남은 시간 ${remaining(login.expiresAt)}`}</small>
+        <button type="button" className="link-button" disabled={stopping} onClick={cancel}>
+          취소
+        </button>
+      </div>
+      {login.mode === 'browser' ? (
+        prompt?.url ? (
+          <p>브라우저가 열리지 않았으면 {address}</p>
+        ) : null
+      ) : (
+        <ol>
+          <li>
+            <span>로그인할 계정의 브라우저에 이 주소를 붙여 넣으세요.</span>
+            {address}
+          </li>
+          {provider === 'codex-cli' ? (
+            <li>
+              <span>화면의 안내대로 이 코드를 입력하세요. 입력하면 자동으로 완료됩니다.</span>
+              {prompt?.code ? (
+                <span className="login-actions">
+                  <code className="login-code">{prompt.code}</code>
+                  <button type="button" onClick={() => copy(prompt.code!, notify)}>
+                    코드 복사
+                  </button>
+                </span>
+              ) : (
+                <small>코드를 받는 중…</small>
+              )}
+            </li>
+          ) : (
+            <li>
+              <span>승인하면 화면에 코드가 나옵니다. 그 코드를 붙여 넣으세요.</span>
+              {prompt?.codeSent ? (
+                <small role="status">코드를 확인하는 중…</small>
+              ) : (
+                <form
+                  className="login-actions"
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    void api('/accounts/login/code', 'POST', { provider, code }).catch(
+                      (error: unknown) =>
+                        notify(
+                          error instanceof Error ? error.message : '코드를 보내지 못했습니다.',
+                        ),
+                    );
+                  }}
+                >
+                  <input
+                    aria-label="승인 코드"
+                    value={code}
+                    onChange={(event) => setCode(event.target.value)}
+                    placeholder="승인 코드"
+                    autoComplete="off"
+                  />
+                  <button type="submit" disabled={!code.trim()}>
+                    확인
+                  </button>
+                </form>
+              )}
+            </li>
+          )}
+        </ol>
+      )}
+      {provider === 'claude-cli' && login.mode !== 'browser' ? (
+        <small>
+          인증 메일이 오면 메일의 버튼 대신 링크를 복사해, 이 주소를 연 브라우저에 붙여 넣으세요.
+        </small>
+      ) : null}
+    </div>
+  );
+}
+
 export function AccountSettings({ provider }: { provider: Provider }) {
   const [data, setData] = useState<z.infer<typeof schema>>();
   const [label, setLabel] = useState('');
   const [message, setMessage] = useState('');
   const [command, setCommand] = useState('');
   const [busy, setBusy] = useState(false);
-  const [login, setLogin] = useState<z.infer<typeof loginSchema>[number]>();
-  // Inline rename of one account row (the name only; the login is not touched).
+  const [login, setLogin] = useState<Login>();
+  // A failed login stays until dismissed or retried; success and cancel leave nothing behind.
+  const [dismissed, setDismissed] = useState<string>();
   const [renaming, setRenaming] = useState<string>();
   const [newName, setNewName] = useState('');
   const loggingIn = login?.state === 'running' || login?.state === 'stopping';
   const refresh = async () => setData(schema.parse(await api('/accounts')));
+  const noticeTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const notify = (text: string) => {
+    setMessage(text);
+    clearTimeout(noticeTimer.current);
+    noticeTimer.current = setTimeout(() => setMessage(''), 5000);
+  };
   // Who is signed in to each account (email · plan) and the switching settings, from the usage view.
-  const [who, setWho] = useState<Record<string, string>>({});
+  const [who, setWho] = useState<Record<string, { text: string; signedIn: boolean }>>({});
   const [usageOn, setUsageOn] = useState(false);
   const [autoOn, setAutoOn] = useState(false);
   useEffect(() => {
@@ -73,7 +216,12 @@ export function AccountSettings({ provider }: { provider: Provider }) {
               .filter((row) => row.provider === provider)
               .map((row) => [
                 row.id,
-                row.signedIn ? [row.email, row.plan].filter(Boolean).join(' · ') : '로그인 필요',
+                {
+                  signedIn: row.signedIn,
+                  text: row.signedIn
+                    ? [row.email, row.plan].filter(Boolean).join(' · ')
+                    : '로그인 필요',
+                },
               ]),
           ),
         );
@@ -98,8 +246,9 @@ export function AccountSettings({ provider }: { provider: Provider }) {
       clearTimeout(timer);
     };
   }, []);
+  // The login or logout this screen is following, so its end is noticed even between polls.
+  const watching = useRef<string>(undefined);
   useEffect(() => {
-    let previous: string | undefined;
     let alive = true,
       timer: ReturnType<typeof setTimeout>;
     const poll = async () => {
@@ -108,14 +257,18 @@ export function AccountSettings({ provider }: { provider: Provider }) {
         if (alive) {
           const status = statuses.find((row) => row.provider === provider);
           setLogin(status);
-          if (
+          if (status && ['running', 'stopping'].includes(status.state))
+            watching.current = status.id;
+          const ended =
             status &&
-            previous !== undefined &&
-            previous !== status.state &&
-            !['running', 'stopping'].includes(status.state)
-          )
+            status.id === watching.current &&
+            !['running', 'stopping'].includes(status.state);
+          if (ended) {
+            watching.current = undefined;
             window.dispatchEvent(new Event('vide-accounts-changed'));
-          previous = status?.state;
+            if (status.state === 'succeeded')
+              notify(status.operation === 'logout' ? '로그아웃했습니다.' : '로그인했습니다.');
+          }
         }
       } catch {
         if (alive) setMessage('로그인 상태를 확인하지 못했습니다. 새로고침하세요.');
@@ -141,162 +294,218 @@ export function AccountSettings({ provider }: { provider: Provider }) {
       setBusy(false);
     }
   };
+  const startLogin = (id: string, operation: 'login' | 'logout', browser = false) =>
+    void action(async () => {
+      setDismissed(undefined);
+      const result = await api(`/accounts/${operation}`, 'POST', {
+        provider,
+        id,
+        ...(browser ? { browser: true } : {}),
+      });
+      const started = loginSchema.parse([result])[0];
+      watching.current = started.id;
+      setLogin(started);
+    });
+  const cancelLogin = () =>
+    void action(async () => {
+      const result = loginSchema.parse(await api('/accounts/login/cancel', 'POST', { provider }));
+      setLogin(result.find((row) => row.provider === provider));
+    });
   const rows = [
     { id: 'default', label: data?.defaultLabels?.[provider] ?? '기존 CLI 로그인' },
     ...(data?.profiles.filter((p) => p.provider === provider) ?? []),
   ];
+  const failed =
+    login?.state === 'failed' && login.id !== dismissed && login.operation === 'login'
+      ? login
+      : undefined;
   return (
     <div className="account-settings">
-      {rows.map((row) => (
-        <div
-          key={row.id}
-          className="account-row"
-          data-active={String(data?.active[provider] === row.id)}
-        >
-          {renaming === row.id ? (
-            <form
-              className="account-rename"
-              onSubmit={(event) => {
-                event.preventDefault();
-                void action(async () => {
-                  await api('/accounts/rename', 'POST', { provider, id: row.id, label: newName });
-                  setRenaming(undefined);
-                });
-              }}
-            >
-              <input
-                aria-label={`${row.label} 새 이름`}
-                value={newName}
-                maxLength={80}
-                autoFocus
-                placeholder={row.id === 'default' ? '비우면 기존 CLI 로그인' : '계정 이름'}
-                onChange={(event) => setNewName(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === 'Escape') setRenaming(undefined);
-                }}
-              />
-              <button type="submit" disabled={busy || (row.id !== 'default' && !newName.trim())}>
-                저장
-              </button>
-              <button type="button" onClick={() => setRenaming(undefined)}>
-                취소
-              </button>
-            </form>
-          ) : (
-            <span className="account-name">
-              {row.label} {data?.active[provider] === row.id ? '· 선택됨' : ''}{' '}
-              {data?.pending[provider] === row.id ? '· 전환 대기' : ''}
-              {who[row.id] ? <small>{who[row.id]}</small> : null}
-            </span>
-          )}
-          {renaming !== row.id && (
-            <button
-              disabled={busy}
-              title="표시 이름만 바꿉니다. 로그인은 그대로입니다."
-              onClick={() => {
-                setRenaming(row.id);
-                setNewName(
-                  row.id === 'default' ? (data?.defaultLabels?.[provider] ?? '') : row.label,
-                );
-              }}
-            >
-              이름 변경
-            </button>
-          )}
-          <button
-            disabled={busy || loggingIn}
-            onClick={() =>
-              void action(async () => {
-                await api('/accounts/select', 'POST', { provider, id: row.id });
-              })
-            }
-          >
-            선택
-          </button>
-          {row.id !== 'default' && (
-            <>
-              <button
-                disabled={busy || loggingIn}
-                onClick={() =>
-                  void action(async () => {
-                    const result = await api('/accounts/login', 'POST', { provider, id: row.id });
-                    setLogin(loginSchema.parse([result])[0]);
-                  })
-                }
-              >
-                로그인
-              </button>
-              {login?.profileId === row.id && (
-                <small role="status">
-                  {(login.operation === 'logout' ? logoutLabels : loginLabels)[login.state]}
-                </small>
-              )}
-              <button
-                disabled={busy || loggingIn}
-                onClick={() =>
-                  void action(async () => {
-                    const result = await api('/accounts/logout', 'POST', { provider, id: row.id });
-                    setLogin(loginSchema.parse([result])[0]);
-                  })
-                }
-              >
-                로그아웃
-              </button>
-              <button
-                disabled={busy || loggingIn}
-                onClick={() => {
-                  if (
-                    !window.confirm(
-                      `${row.label} 계정을 목록에서 제거하고 이 프로필의 로컬 CLI 설정·이력을 삭제할까요? 먼저 로그아웃해야 합니다. 프로젝트 작업 이력은 유지됩니다.`,
-                    )
-                  )
-                    return;
-                  void action(async () => {
-                    await api('/accounts/remove', 'POST', {
-                      provider,
-                      id: row.id,
-                      deleteLocalData: true,
-                    });
-                    setCommand('');
-                  });
-                }}
-              >
-                제거
-              </button>
-              {login?.profileId === row.id && loggingIn && (
-                <button
-                  disabled={busy || login.state === 'stopping'}
-                  onClick={() =>
+      {rows.map((row) => {
+        const active = data?.active[provider] === row.id;
+        const signedIn = who[row.id]?.signedIn;
+        const mine = login?.profileId === row.id;
+        const menu = (task: () => void) => (event: React.MouseEvent<HTMLButtonElement>) => {
+          event.currentTarget.closest('details')?.removeAttribute('open');
+          task();
+        };
+        return (
+          <div key={row.id} className="account-block">
+            <div className="account-row" data-active={String(active)}>
+              {renaming === row.id ? (
+                <form
+                  className="account-rename"
+                  onSubmit={(event) => {
+                    event.preventDefault();
                     void action(async () => {
-                      const result = loginSchema.parse(
-                        await api('/accounts/login/cancel', 'POST', { provider }),
-                      );
-                      setLogin(result.find((row) => row.provider === provider));
-                    })
-                  }
+                      await api('/accounts/rename', 'POST', {
+                        provider,
+                        id: row.id,
+                        label: newName,
+                      });
+                      setRenaming(undefined);
+                    });
+                  }}
                 >
-                  {login.operation === 'logout' ? '로그아웃 중단' : '로그인 취소'}
-                </button>
+                  <input
+                    aria-label={`${row.label} 새 이름`}
+                    value={newName}
+                    maxLength={80}
+                    autoFocus
+                    placeholder={row.id === 'default' ? '비우면 기존 CLI 로그인' : '계정 이름'}
+                    onChange={(event) => setNewName(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Escape') setRenaming(undefined);
+                    }}
+                  />
+                  <button
+                    type="submit"
+                    disabled={busy || (row.id !== 'default' && !newName.trim())}
+                  >
+                    저장
+                  </button>
+                  <button type="button" onClick={() => setRenaming(undefined)}>
+                    취소
+                  </button>
+                </form>
+              ) : (
+                <span className="account-name">
+                  {row.label}
+                  {active ? <span className="account-badge">사용 중</span> : null}
+                  {data?.pending[provider] === row.id ? (
+                    <span className="account-badge">전환 대기</span>
+                  ) : null}
+                  {who[row.id] ? <small>{who[row.id].text}</small> : null}
+                </span>
               )}
-              <button
-                disabled={busy || loggingIn}
-                onClick={() =>
-                  void action(async () => {
-                    const result = z
-                      .object({ command: z.string() })
-                      .parse(
-                        await api('/accounts/login-command', 'POST', { provider, id: row.id }),
-                      );
-                    setCommand(result.command);
-                  })
-                }
-              >
-                로그인 방법
-              </button>
-            </>
-          )}
-        </div>
-      ))}
+              {renaming !== row.id && (
+                <span className="account-actions">
+                  {row.id !== 'default' && signedIn === false && !(mine && loggingIn) ? (
+                    <button
+                      className="primary-button"
+                      disabled={busy || loggingIn}
+                      onClick={() => startLogin(row.id, 'login')}
+                    >
+                      로그인
+                    </button>
+                  ) : null}
+                  {!active ? (
+                    <button
+                      disabled={busy || loggingIn}
+                      onClick={() =>
+                        void action(async () => {
+                          await api('/accounts/select', 'POST', { provider, id: row.id });
+                        })
+                      }
+                    >
+                      사용
+                    </button>
+                  ) : null}
+                  <details className="account-more">
+                    <summary aria-label={`${row.label} 더보기`}>⋯</summary>
+                    <div className="account-menu">
+                      <button
+                        onClick={menu(() => {
+                          setRenaming(row.id);
+                          setNewName(
+                            row.id === 'default'
+                              ? (data?.defaultLabels?.[provider] ?? '')
+                              : row.label,
+                          );
+                        })}
+                      >
+                        이름 변경
+                      </button>
+                      {row.id !== 'default' && (
+                        <>
+                          <button
+                            disabled={busy || loggingIn}
+                            onClick={menu(() => startLogin(row.id, 'login'))}
+                          >
+                            {signedIn ? '다시 로그인' : '로그인'}
+                          </button>
+                          <button
+                            disabled={busy || loggingIn}
+                            onClick={menu(() => startLogin(row.id, 'login', true))}
+                          >
+                            기본 브라우저로 로그인
+                          </button>
+                          <button
+                            disabled={busy || loggingIn}
+                            onClick={menu(
+                              () =>
+                                void action(async () => {
+                                  const result = z.object({ command: z.string() }).parse(
+                                    await api('/accounts/login-command', 'POST', {
+                                      provider,
+                                      id: row.id,
+                                    }),
+                                  );
+                                  setCommand(result.command);
+                                }),
+                            )}
+                          >
+                            명령으로 로그인
+                          </button>
+                          <button
+                            disabled={busy || loggingIn}
+                            onClick={menu(() => startLogin(row.id, 'logout'))}
+                          >
+                            로그아웃
+                          </button>
+                          <button
+                            className="danger"
+                            disabled={busy || loggingIn}
+                            onClick={menu(() => {
+                              if (
+                                !window.confirm(
+                                  `${row.label} 계정을 목록에서 제거하고 이 프로필의 로컬 CLI 설정·이력을 삭제할까요? 먼저 로그아웃해야 합니다. 프로젝트 작업 이력은 유지됩니다.`,
+                                )
+                              )
+                                return;
+                              void action(async () => {
+                                await api('/accounts/remove', 'POST', {
+                                  provider,
+                                  id: row.id,
+                                  deleteLocalData: true,
+                                });
+                                setCommand('');
+                              });
+                            })}
+                          >
+                            제거
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  </details>
+                </span>
+              )}
+            </div>
+            {mine && loggingIn && login ? (
+              <LoginPanel login={login} provider={provider} cancel={cancelLogin} notify={notify} />
+            ) : null}
+            {mine && failed ? (
+              <div className="login-failed" role="alert">
+                <span>{failures[failed.reason ?? ''] ?? failures.LOGIN_FAILED}</span>
+                <button onClick={() => startLogin(row.id, 'login')}>다시 시도</button>
+                {failed.reason === 'DEVICE_LOGIN_DISABLED' ? (
+                  <button onClick={() => startLogin(row.id, 'login', true)}>
+                    기본 브라우저로 로그인
+                  </button>
+                ) : null}
+                <button
+                  className="link-button"
+                  aria-label="알림 닫기"
+                  onClick={() => setDismissed(failed.id)}
+                >
+                  ×
+                </button>
+              </div>
+            ) : null}
+          </div>
+        );
+      })}
       <div className="account-add">
         <input
           aria-label={`${provider} 계정 이름`}
@@ -316,30 +525,28 @@ export function AccountSettings({ provider }: { provider: Provider }) {
         >
           계정 추가
         </button>
-        <button disabled={busy} onClick={() => void action(refresh)}>
-          새로고침
-        </button>
       </div>
       {command && (
-        <div>
-          <p>새 PowerShell 창에서 실행한 뒤 이 계정을 선택하세요.</p>
+        <div className="login-command">
+          <p>새 PowerShell 창에서 실행한 뒤 이 계정을 사용하세요.</p>
           <textarea aria-label="공식 CLI 로그인 명령" readOnly value={command} />
-          <button
-            onClick={() =>
-              void navigator.clipboard
-                .writeText(command)
-                .catch(() => setMessage('명령을 직접 선택해 복사하세요.'))
-            }
-          >
-            명령 복사
-          </button>
+          <span className="login-actions">
+            <button onClick={() => copy(command, notify)}>명령 복사</button>
+            <button className="link-button" onClick={() => setCommand('')}>
+              명령 닫기
+            </button>
+          </span>
         </div>
       )}
-      <small>
-        {usageOn ? '사용량 조회 켜짐' : '사용량 미확인'} ·{' '}
-        {autoOn ? '자동 계정 전환 켜짐' : '자동 계정 전환 꺼짐'} (설정 → AI)
+      <small className="account-foot">
+        {usageOn ? '사용량 조회 켜짐' : '사용량 조회 꺼짐'} ·{' '}
+        {autoOn ? '자동 계정 전환 켜짐' : '자동 계정 전환 꺼짐'}
       </small>
-      <p role="status">{message}</p>
+      {message ? (
+        <p role="status" className="account-message">
+          {message}
+        </p>
+      ) : null}
     </div>
   );
 }

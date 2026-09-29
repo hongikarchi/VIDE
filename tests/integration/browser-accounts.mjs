@@ -46,11 +46,21 @@ try {
     .filter({ has: page.getByRole('heading', { name: 'Codex · ChatGPT', exact: true }) });
   await section.getByLabel('codex-cli 계정 이름').fill('Second ChatGPT');
   await section.getByRole('button', { name: '계정 추가', exact: true }).click();
-  const row = section.locator('.account-settings > div').filter({ hasText: 'Second ChatGPT' });
-  await row.getByRole('button', { name: '선택', exact: true }).click();
-  await page.waitForFunction(() =>
-    document.querySelector('.ai-settings')?.textContent.includes('Second ChatGPT · 선택됨'),
-  );
+  const row = section.locator('.account-block').filter({ hasText: 'Second ChatGPT' });
+  const inUse = (name) =>
+    page.waitForFunction(
+      (text) =>
+        [...document.querySelectorAll('.ai-settings .account-row[data-active="true"]')].some(
+          (node) => node.textContent.startsWith(text) && node.textContent.includes('사용 중'),
+        ),
+      name,
+    );
+  const more = async (block, name, item) => {
+    await block.getByLabel(`${name} 더보기`).click();
+    await block.getByRole('button', { name: item, exact: true }).click();
+  };
+  await row.getByRole('button', { name: '사용', exact: true }).click();
+  await inUse('Second ChatGPT');
   await page.getByRole('button', { name: '닫기', exact: true }).click();
   // Any ChatGPT model (the list comes from the installed Codex CLI).
   await page
@@ -64,44 +74,58 @@ try {
   await page.locator('#workspace-settings').click();
   await page.locator('[data-tab="ai"]').click();
   await page.locator('#ai-settings').click();
-  await row.getByRole('button', { name: '로그인 방법', exact: true }).click();
+  // The official command stays available under ⋯.
+  await more(row, 'Second ChatGPT', '명령으로 로그인');
   await section.getByLabel('공식 CLI 로그인 명령').waitFor();
   const command = await section.getByLabel('공식 CLI 로그인 명령').inputValue();
   assert.ok(command.includes('CODEX_HOME'));
   assert.ok(command.includes('cli_auth_credentials_store'));
-  assert.ok((await section.textContent()).includes('사용량 미확인'));
+  await section.getByRole('button', { name: '명령 닫기', exact: true }).click();
+  assert.ok((await section.textContent()).includes('사용량 조회 꺼짐'));
+  // Login shows the device link and one-time code to use in any browser; no browser opens.
   await row.getByRole('button', { name: '로그인', exact: true }).click();
-  await row.getByText('브라우저에서 인증하세요', { exact: true }).waitFor();
-  assert.equal(await row.getByRole('button', { name: '선택', exact: true }).isDisabled(), true);
-  await row.getByRole('button', { name: '로그인 취소', exact: true }).click();
-  await row.getByText('로그인 종료 확인 중', { exact: true }).waitFor();
+  const panel = row.getByLabel('ChatGPT 로그인');
+  await panel.getByText('코드를 받는 중…', { exact: true }).waitFor();
+  loginProcess.stdout.write(
+    '1. Open this link\n   https://auth.openai.com/codex/device\n2. Enter this one-time code\n   WXYZ-12345\n',
+  );
+  await panel.locator('.login-code').filter({ hasText: 'WXYZ-12345' }).waitFor();
+  assert.equal(
+    await panel.getByRole('link', { name: '기본 브라우저로 열기' }).getAttribute('href'),
+    'https://auth.openai.com/codex/device',
+  );
+  const standardRow = section.locator('.account-block').first();
+  assert.equal(
+    await standardRow.getByRole('button', { name: '사용', exact: true }).isDisabled(),
+    true,
+  );
+  // Cancelling leaves nothing behind in the list.
+  await panel.getByRole('button', { name: '취소', exact: true }).click();
+  await panel.getByText('멈추는 중…', { exact: true }).waitFor();
   loginProcess.emit('close', null);
-  await row.getByText('로그인 취소됨', { exact: true }).waitFor();
-  await row.getByRole('button', { name: '로그아웃', exact: true }).click();
-  await row.getByText('로그아웃 진행 중', { exact: true }).waitFor();
-  assert.equal(await row.getByRole('button', { name: '선택', exact: true }).isDisabled(), true);
+  await panel.waitFor({ state: 'detached' });
+  assert.equal((await section.textContent()).includes('취소'), false);
+  await more(row, 'Second ChatGPT', '로그아웃');
+  await row.getByText('로그아웃하는 중…', { exact: true }).waitFor();
   const beforeLogout = catalogReads;
   authenticated = false;
   loginProcess.emit('close', 0);
-  await row.getByText('로그아웃 완료', { exact: true }).waitFor();
+  await section.getByText('로그아웃했습니다.', { exact: true }).waitFor();
   await page.waitForTimeout(100);
   assert.ok(catalogReads > beforeLogout, 'Terminal authentication state refreshes the catalog');
-  assert.ok((await row.textContent()).includes('선택됨'));
+  await inUse('Second ChatGPT');
   page.once('dialog', (dialog) => dialog.dismiss());
-  await row.getByRole('button', { name: '제거', exact: true }).click();
+  await more(row, 'Second ChatGPT', '제거');
   assert.equal(await row.count(), 1);
   page.once('dialog', (dialog) => dialog.accept());
-  await row.getByRole('button', { name: '제거', exact: true }).click();
+  await more(row, 'Second ChatGPT', '제거');
   await row.waitFor({ state: 'detached' });
-  assert.ok((await section.textContent()).includes('기존 CLI 로그인 · 선택됨'));
+  await inUse('기존 CLI 로그인');
   // The existing CLI login can be renamed too; an empty name restores the standard name.
-  const standard = section.locator('.account-settings > div').first();
-  await standard.getByRole('button', { name: '이름 변경', exact: true }).click();
-  await standard.getByLabel('기존 CLI 로그인 새 이름').fill('개인 ChatGPT');
-  await standard.getByRole('button', { name: '저장', exact: true }).click();
-  await page.waitForFunction(() =>
-    document.querySelector('.ai-settings')?.textContent.includes('개인 ChatGPT · 선택됨'),
-  );
+  await more(standardRow, '기존 CLI 로그인', '이름 변경');
+  await standardRow.getByLabel('기존 CLI 로그인 새 이름').fill('개인 ChatGPT');
+  await standardRow.getByRole('button', { name: '저장', exact: true }).click();
+  await inUse('개인 ChatGPT');
   await page.getByRole('button', { name: '닫기', exact: true }).click();
   await page.waitForFunction(
     () => document.querySelector('[aria-label="현재 AI 계정"]')?.textContent === '개인 ChatGPT',
@@ -109,12 +133,10 @@ try {
   await page.locator('#workspace-settings').click();
   await page.locator('[data-tab="ai"]').click();
   await page.locator('#ai-settings').click();
-  await standard.getByRole('button', { name: '이름 변경', exact: true }).click();
-  await standard.getByLabel('개인 ChatGPT 새 이름').fill('');
-  await standard.getByRole('button', { name: '저장', exact: true }).click();
-  await page.waitForFunction(() =>
-    document.querySelector('.ai-settings')?.textContent.includes('기존 CLI 로그인 · 선택됨'),
-  );
+  await more(standardRow, '개인 ChatGPT', '이름 변경');
+  await standardRow.getByLabel('개인 ChatGPT 새 이름').fill('');
+  await standardRow.getByRole('button', { name: '저장', exact: true }).click();
+  await inUse('기존 CLI 로그인');
   console.log(
     'Account add/select/login instructions verified in Chromium; provider authentication mocked.',
   );

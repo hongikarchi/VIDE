@@ -911,7 +911,21 @@ export async function startServer({
         return;
       }
       if (url.pathname === '/api/v1/accounts/login' && request.method === 'GET') {
-        send(200, accountLogin.list());
+        // Sign-in addresses and codes are for this PC's screen only, never a remote device.
+        send(
+          200,
+          accountLogin
+            .list()
+            .map(({ prompt, ...status }) => (remote ? status : { ...status, prompt })),
+        );
+        return;
+      }
+      if (url.pathname === '/api/v1/accounts/login/code' && request.method === 'POST') {
+        const input = z
+          .object({ provider: z.enum(['claude-cli', 'codex-cli']), code: z.string().max(2048) })
+          .strict()
+          .parse(await body(request));
+        send(200, accountLogin.submitCode(input.provider, input.code));
         return;
       }
       if (
@@ -919,7 +933,11 @@ export async function startServer({
         request.method === 'POST'
       ) {
         const input = z
-          .object({ provider: z.enum(['claude-cli', 'codex-cli']), id: z.string() })
+          .object({
+            provider: z.enum(['claude-cli', 'codex-cli']),
+            id: z.string(),
+            browser: z.boolean().optional(),
+          })
           .strict()
           .parse(await body(request));
         profiles.assertIdle(input.provider);
@@ -935,6 +953,7 @@ export async function startServer({
             profileId: input.id,
             directory,
             executable,
+            browser: input.browser,
             verify: () =>
               execution.provider({ provider: input.provider, accountProfileId: input.id }).status(),
           }),

@@ -2,7 +2,7 @@
 id: PLAN-13
 title: 다중 AI 계정 — 사용량·초기화 시각·자동 전환
 status: review
-version: 0.2
+version: 0.3
 updated: 2026-09-29
 owner: agent:claude
 related: [PLAN, SPEC-02, ARCH-01, FR-08, FR-18]
@@ -24,6 +24,7 @@ related: [PLAN, SPEC-02, ARCH-01, FR-08, FR-18]
 2. 요청 접수 때 자동 전환(`choose`). 한도 실패는 `PROVIDER_LIMIT`로 구분(Claude·Codex CLI 출력)하고 그 계정을 건너뛴다.
 3. 설정 → AI: 계정별 이메일·요금제·사용 중 표시·5시간/7일 막대·초기화 시각·"이 계정 사용", 조회·자동 전환 스위치와 기준. 상태 표시줄에 현재 계정의 이메일과 사용률.
 4. (2026-09-29 사용자 요청) 계정 이름 변경: 기존 CLI 로그인을 포함한 모든 계정의 "이름 변경"(`POST /api/v1/accounts/rename`, 기존 로그인 이름은 `profiles.json`의 `defaultLabels`). 상태 표시줄은 사용자가 붙인 이름을 먼저 보인다. 검증: `tests/ai/account-profiles.test.mjs`(이름 변경·저장·비우면 기본 이름·잘못된 이름 거절), `browser-accounts`(기존 로그인 이름 변경과 상태 표시줄 반영).
+5. (2026-09-29 사용자 요청) 브라우저를 자동으로 열지 않는 로그인: Claude는 `BROWSER`를 아무 일도 하지 않는 `where.exe`로 두어 브라우저 대신 주소를 출력하게 하고, 승인 코드를 CLI 입력으로 전달(`POST /api/v1/accounts/login/code`). ChatGPT는 `codex login --device-auth`의 주소·일회용 코드. 출력에서 공식 로그인 호스트의 주소와 코드만 메모리에 두고 끝나면 지운다. 원격 세션 응답에서는 뺀다. "기본 브라우저로 로그인"은 이전 방식(`browser: true`). 계정 행은 사용·로그인만 두고 나머지는 ⋯ 메뉴, 로그인 중에는 단계 패널, 취소는 흔적 없음·실패는 닫을 때까지. 조사: Claude Code 2.1.284·Codex 0.157.1을 임시 설정 폴더로 실행해 주소 출력과 기기 코드 발급을 확인. 검증: `tests/ai/account-login.test.mjs`(두 방식의 주소·코드, 다른 호스트 주소 차단, 코드 전달, 종료 후 삭제, 기기 코드 차단 사유), `browser-accounts`(코드 표시·취소 흔적 없음·로그아웃·제거·이름 변경). 실제 계정의 끝까지 로그인은 사용자 확인이 남았다.
 
 ## 검증
 
