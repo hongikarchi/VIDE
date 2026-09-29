@@ -13,7 +13,7 @@ if (!root || !project) {
   console.error('Usage: crawl.mjs --root <folder> --project <VIDE project id|name> [--stages a,b]');
   process.exit(2);
 }
-const ALL = ['inventory', 'names', 'extract', 'dwg', 'link', 'select', 'audit', 'statements', 'verify', 'query', 'issues'];
+const ALL = ['inventory', 'names', 'extract', 'dwg', 'link', 'select', 'audit', 'statements', 'verify', 'query', 'issues', 'brief'];
 const stages = (option('--stages') ?? ALL.join(',')).split(',');
 const { id, name } = findProject(project);
 const path = knowledgePath(id);

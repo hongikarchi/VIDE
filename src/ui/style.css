@@ -3675,6 +3675,79 @@ body.panel-mode #conversation {
     max-height: none;
   }
 }
+/* Status report (PLAN-08 K0-T2): decided, blocked, recently changed; disciplines folded below. */
+.knowledge-tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 10px;
+  border-bottom: 1px solid var(--line);
+}
+.knowledge-tabs button {
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  padding: 6px 10px;
+}
+.knowledge-tabs button[aria-selected='true'] {
+  border-bottom-color: currentColor;
+  font-weight: 600;
+}
+.knowledge-report {
+  max-width: 820px;
+  max-height: 68dvh;
+  overflow: auto;
+}
+.knowledge-report h3 {
+  font-size: 14px;
+  margin: 18px 0 6px;
+}
+.knowledge-report > .knowledge-summary {
+  font-size: 14px;
+  line-height: 1.6;
+}
+.knowledge-brief-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  border: 0;
+  border-radius: 6px;
+  padding: 4px 6px;
+  text-align: left;
+  background: transparent;
+  line-height: 1.5;
+}
+.knowledge-brief-item:hover {
+  background: var(--soft);
+}
+.knowledge-section[data-list='blocked'] h4 {
+  color: #b4532a;
+}
+.knowledge-discipline {
+  border-bottom: 1px solid var(--line);
+  padding: 6px 0;
+}
+.knowledge-discipline > summary {
+  cursor: pointer;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 8px;
+}
+.knowledge-discipline > summary .knowledge-meta {
+  flex-basis: 100%;
+  line-height: 1.5;
+}
+.knowledge-discipline .knowledge-brief-lists {
+  padding-left: 12px;
+}
+.knowledge-section details > summary {
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  margin: 12px 0 4px;
+}
 
 /* Request routing chips (SPEC-02.15): where the request goes and the automatic model. */
 /* PLAN-20: requests left on the account site and the saved-view switch */

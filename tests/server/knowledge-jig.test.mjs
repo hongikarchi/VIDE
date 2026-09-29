@@ -90,6 +90,30 @@ test('knowledge jig reads one project DB: summary, issue note, search, evidence;
     assert.equal(summary.counts.statements, 2, 'unsupported statements are not counted');
     assert.equal(summary.disciplines[0].label, '구조');
     assert.equal(summary.disciplines[0].issues[0].open, 1);
+    assert.equal(summary.brief, null, 'a DB without the status brief shows the issue list only');
+    assert.equal(summary.disciplines[0].brief, null);
+    const writable = new DatabaseSync(join(directory, 'knowledge', project.id + '.sqlite'));
+    writable.exec('create table brief(scope text primary key, body text, built_at text)');
+    const decided = { text: '스팬 13m 이하', issue: 1, cite: [1], discipline: 'structure' };
+    writable.prepare('insert into brief values(?, ?, ?), (?, ?, ?)').run(
+      'project',
+      JSON.stringify({ overview: '개요', decided: [decided], blocked: [], changed: [] }),
+      'now',
+      'structure',
+      JSON.stringify({
+        label: '구조',
+        state: '정리 중',
+        decided: [decided],
+        blocked: [],
+        changed: [],
+      }),
+      'now',
+    );
+    writable.close();
+    const briefed = (await api(`/projects/${project.id}/jigs/knowledge`)).body;
+    assert.equal(briefed.brief.overview, '개요');
+    assert.equal(briefed.brief.decided[0].issue, 1);
+    assert.equal(briefed.disciplines[0].brief.state, '정리 중');
 
     const issue = (await api(`/projects/${project.id}/jigs/knowledge/issues/1`)).body;
     assert.equal(issue.note.conclusions[0].cite[0], 1);

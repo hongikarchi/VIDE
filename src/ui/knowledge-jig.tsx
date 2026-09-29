@@ -2,8 +2,9 @@ import { useEffect, useState } from 'react';
 import { z } from 'zod';
 import { api } from './gateway.ts';
 
-// Project knowledge jig (trial): issue notes by discipline, like meeting minutes, with evidence shown
-// only on request. Read-only; the DB is built outside the app for now (PLAN-08 K0).
+// Project knowledge jig (trial): a status report first (decided, blocked, recently changed — project
+// page, then each discipline), issue notes like meeting minutes behind it, evidence only on request.
+// Read-only; the DB is built outside the app for now (PLAN-08 K0, K0-T2).
 const statementSchema = z.object({
   id: z.number(),
   kind: z.string(),
@@ -40,11 +41,34 @@ const issueSchema = z.object({
   statements: z.array(statementSchema),
 });
 type Issue = z.infer<typeof issueSchema>;
+const briefItem = z.object({
+  text: z.string(),
+  issue: z.number(),
+  cite: z.array(z.number()).default([]),
+  date: z.string().nullish(),
+  since: z.string().nullish(),
+  waiting: z.string().nullish(),
+  discipline: z.string().nullish(),
+});
+type BriefItem = z.infer<typeof briefItem>;
+const briefLists = {
+  decided: z.array(briefItem).default([]),
+  blocked: z.array(briefItem).default([]),
+  changed: z.array(briefItem).default([]),
+};
+const projectBrief = z.object({
+  overview: z.string().default(''),
+  asOf: z.string().nullish(),
+  since: z.string().nullish(),
+  ...briefLists,
+});
+const disciplineBrief = z.object({ state: z.string().default(''), ...briefLists });
 const summarySchema = z.union([
   z.object({ available: z.literal(false) }),
   z.object({
     available: z.literal(true),
     builtAt: z.string().nullable(),
+    brief: projectBrief.nullish(),
     counts: z.object({
       files: z.number(),
       excerpts: z.number(),
@@ -56,6 +80,7 @@ const summarySchema = z.union([
       z.object({
         key: z.string(),
         label: z.string(),
+        brief: disciplineBrief.nullish(),
         issues: z.array(
           z.object({
             id: z.number(),
@@ -164,48 +189,64 @@ function NoteSection({
   title,
   items,
   statements,
+  folded = false,
 }: {
   projectId: string;
   title: string;
+  folded?: boolean;
   items: { text: string; cite: number[]; date?: string | null; party?: string | null }[];
   statements: Map<number, Statement>;
 }) {
   const [open, setOpen] = useState<number>();
   if (!items.length) return null;
+  const list = (
+    <ul>
+      {items.map((entry, index) => (
+        <li key={index}>
+          {entry.date ? (
+            <small className="knowledge-meta">
+              {entry.date} · {entry.party || ''}{' '}
+            </small>
+          ) : null}
+          {entry.text}{' '}
+          {entry.cite.length ? (
+            <button
+              type="button"
+              className="link-button"
+              onClick={() => setOpen(open === index ? undefined : index)}
+            >
+              근거 {entry.cite.length}
+            </button>
+          ) : null}
+          {open === index ? (
+            <ul className="knowledge-cites">
+              {entry.cite
+                .map((id) => statements.get(id))
+                .filter((s): s is Statement => !!s)
+                .map((s) => (
+                  <StatementRow key={s.id} projectId={projectId} statement={s} />
+                ))}
+            </ul>
+          ) : null}
+        </li>
+      ))}
+    </ul>
+  );
   return (
     <section className="knowledge-section">
-      <h4>{title}</h4>
-      <ul>
-        {items.map((entry, index) => (
-          <li key={index}>
-            {entry.date ? (
-              <small className="knowledge-meta">
-                {entry.date} · {entry.party || ''}{' '}
-              </small>
-            ) : null}
-            {entry.text}{' '}
-            {entry.cite.length ? (
-              <button
-                type="button"
-                className="link-button"
-                onClick={() => setOpen(open === index ? undefined : index)}
-              >
-                근거 {entry.cite.length}
-              </button>
-            ) : null}
-            {open === index ? (
-              <ul className="knowledge-cites">
-                {entry.cite
-                  .map((id) => statements.get(id))
-                  .filter((s): s is Statement => !!s)
-                  .map((s) => (
-                    <StatementRow key={s.id} projectId={projectId} statement={s} />
-                  ))}
-              </ul>
-            ) : null}
-          </li>
-        ))}
-      </ul>
+      {folded ? (
+        <details>
+          <summary>
+            {title} <small className="knowledge-meta">{items.length}</small>
+          </summary>
+          {list}
+        </details>
+      ) : (
+        <>
+          <h4>{title}</h4>
+          {list}
+        </>
+      )}
     </section>
   );
 }
@@ -230,21 +271,23 @@ function IssueNote({ projectId, issue }: { projectId: string; issue: Issue }) {
       />
       <NoteSection
         projectId={projectId}
-        title="조건"
-        items={issue.note.conditions}
-        statements={statements}
-      />
-      <NoteSection
-        projectId={projectId}
         title="미결·확인 필요"
         items={issue.note.open}
         statements={statements}
       />
       <NoteSection
         projectId={projectId}
+        title="조건"
+        items={issue.note.conditions}
+        statements={statements}
+        folded
+      />
+      <NoteSection
+        projectId={projectId}
         title="경과"
         items={issue.note.history}
         statements={statements}
+        folded
       />
       <button type="button" className="link-button" onClick={() => setAll(!all)}>
         {all ? '관련 진술 닫기' : `관련 진술 ${issue.statements.length}개 모두 보기`}
@@ -263,6 +306,112 @@ function IssueNote({ projectId, issue }: { projectId: string; issue: Issue }) {
   );
 }
 
+const LISTS = [
+  ['decided', '정해진 것'],
+  ['blocked', '막힌 것'],
+  ['changed', '최근 바뀐 것'],
+] as const;
+type Lists = Record<(typeof LISTS)[number][0], BriefItem[]>;
+
+/** One brief line; the issue note behind it opens on click. */
+function BriefLine({
+  item,
+  label,
+  onOpen,
+}: {
+  item: BriefItem;
+  label?: string;
+  onOpen: (issue: number) => void;
+}) {
+  const meta = [item.date || item.since, label, item.waiting ? '기다리는 곳: ' + item.waiting : '']
+    .filter(Boolean)
+    .join(' · ');
+  return (
+    <li>
+      <button type="button" className="knowledge-brief-item" onClick={() => onOpen(item.issue)}>
+        {meta ? <small className="knowledge-meta">{meta}</small> : null}
+        <span>{item.text}</span>
+      </button>
+    </li>
+  );
+}
+
+function BriefLists({
+  brief,
+  labels,
+  onOpen,
+}: {
+  brief: Lists;
+  labels?: Map<string, string>;
+  onOpen: (issue: number) => void;
+}) {
+  return (
+    <div className="knowledge-brief-lists">
+      {LISTS.map(([key, title]) =>
+        brief[key].length ? (
+          <section key={key} className="knowledge-section" data-list={key}>
+            <h4>{title}</h4>
+            <ul>
+              {brief[key].map((item, index) => (
+                <BriefLine
+                  key={index}
+                  item={item}
+                  label={item.discipline ? labels?.get(item.discipline) : undefined}
+                  onOpen={onOpen}
+                />
+              ))}
+            </ul>
+          </section>
+        ) : null,
+      )}
+    </div>
+  );
+}
+
+/** Status report: the project page, then one folded status per discipline. */
+function Report({
+  summary,
+  onOpen,
+}: {
+  summary: Extract<Summary, { available: true }>;
+  onOpen: (issue: number) => void;
+}) {
+  const labels = new Map(summary.disciplines.map((d) => [d.key, d.label]));
+  const brief = summary.brief;
+  if (!brief)
+    return (
+      <p className="jig-intro">
+        이 DB에는 현황 요약이 없습니다. “이슈 전체”에서 분야별 이슈를 보세요.
+      </p>
+    );
+  return (
+    <article className="knowledge-report">
+      <p className="knowledge-meta">
+        자료의 마지막 날짜 {brief.asOf ?? '미상'} 기준
+        {brief.since ? ' · 최근 = ' + brief.since + ' 이후' : ''} · 항목을 누르면 이슈 노트와 근거가
+        열립니다.
+      </p>
+      {brief.overview ? <p className="knowledge-summary">{brief.overview}</p> : null}
+      <BriefLists brief={brief} labels={labels} onOpen={onOpen} />
+      <h3>분야별 현황</h3>
+      {summary.disciplines.map((d) =>
+        d.brief ? (
+          <details key={d.key} className="knowledge-discipline">
+            <summary>
+              <strong>{d.label}</strong>
+              {d.brief.blocked.length ? (
+                <span className="pill">막힘 {d.brief.blocked.length}</span>
+              ) : null}
+              <span className="knowledge-meta">{d.brief.state}</span>
+            </summary>
+            <BriefLists brief={d.brief} onOpen={onOpen} />
+          </details>
+        ) : null,
+      )}
+    </article>
+  );
+}
+
 export function KnowledgeJig({ projectId }: { projectId: string }) {
   const [summary, setSummary] = useState<Summary>();
   const [error, setError] = useState('');
@@ -270,6 +419,7 @@ export function KnowledgeJig({ projectId }: { projectId: string }) {
   const [query, setQuery] = useState('');
   const [kind, setKind] = useState('');
   const [results, setResults] = useState<Statement[]>();
+  const [view, setView] = useState<'report' | 'issues'>('report');
   useEffect(() => {
     api(`/projects/${projectId}/jigs/knowledge`)
       .then((value) => setSummary(summarySchema.parse(value)))
@@ -277,11 +427,13 @@ export function KnowledgeJig({ projectId }: { projectId: string }) {
   }, [projectId]);
   const openIssue = async (id: number) => {
     setResults(undefined);
+    setView('issues');
     setIssue(issueSchema.parse(await api(`/projects/${projectId}/jigs/knowledge/issues/${id}`)));
   };
   const search = async () => {
     const params = new URLSearchParams({ q: query, ...(kind ? { kind } : {}) });
     setIssue(undefined);
+    setView('issues');
     setResults(
       z
         .array(statementSchema)
@@ -329,56 +481,81 @@ export function KnowledgeJig({ projectId }: { projectId: string }) {
           검색
         </button>
       </form>
-      <div className="knowledge-body">
-        <nav className="knowledge-issues" aria-label="분야별 이슈">
-          {summary.disciplines.map((discipline) => (
-            <details key={discipline.key} open={discipline.key === 'structure'}>
-              <summary>
-                {discipline.label} <small>{discipline.issues.length}</small>
-              </summary>
-              <ul>
-                {discipline.issues.map((entry) => (
-                  <li key={entry.id}>
-                    <button
-                      type="button"
-                      aria-pressed={issue?.id === entry.id}
-                      title={entry.summary}
-                      onClick={() => void openIssue(entry.id)}
-                    >
-                      {entry.title}
-                      <small>
-                        {entry.statements}
-                        {entry.open ? ` · 미결 ${entry.open}` : ''}
-                      </small>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </details>
-          ))}
-        </nav>
-        <div className="knowledge-main">
-          {results ? (
-            <>
-              <h3>
-                검색 결과 {results.length}개{' '}
-                <small className="knowledge-meta">
-                  (내용에 검색어가 있는 것 먼저, 최신순, 최대 100개)
-                </small>
-              </h3>
-              <ul className="knowledge-cites">
-                {results.map((s) => (
-                  <StatementRow key={s.id} projectId={projectId} statement={s} />
-                ))}
-              </ul>
-            </>
-          ) : issue ? (
-            <IssueNote key={issue.id} projectId={projectId} issue={issue} />
-          ) : (
-            <p className="jig-intro">왼쪽에서 이슈를 고르거나 검색하세요.</p>
-          )}
-        </div>
+      <div className="knowledge-tabs" role="tablist">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={view === 'report'}
+          onClick={() => setView('report')}
+        >
+          현황 보고서
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={view === 'issues'}
+          onClick={() => setView('issues')}
+        >
+          이슈 전체
+        </button>
       </div>
+      {view === 'report' ? (
+        <Report summary={summary} onOpen={(id) => void openIssue(id)} />
+      ) : (
+        <div className="knowledge-body">
+          <nav className="knowledge-issues" aria-label="분야별 이슈">
+            {summary.disciplines.map((discipline) => (
+              <details
+                key={discipline.key}
+                open={issue ? discipline.label === issue.label : discipline.key === 'structure'}
+              >
+                <summary>
+                  {discipline.label} <small>{discipline.issues.length}</small>
+                </summary>
+                <ul>
+                  {discipline.issues.map((entry) => (
+                    <li key={entry.id}>
+                      <button
+                        type="button"
+                        aria-pressed={issue?.id === entry.id}
+                        title={entry.summary}
+                        onClick={() => void openIssue(entry.id)}
+                      >
+                        {entry.title}
+                        <small>
+                          {entry.statements}
+                          {entry.open ? ` · 미결 ${entry.open}` : ''}
+                        </small>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </details>
+            ))}
+          </nav>
+          <div className="knowledge-main">
+            {results ? (
+              <>
+                <h3>
+                  검색 결과 {results.length}개{' '}
+                  <small className="knowledge-meta">
+                    (내용에 검색어가 있는 것 먼저, 최신순, 최대 100개)
+                  </small>
+                </h3>
+                <ul className="knowledge-cites">
+                  {results.map((s) => (
+                    <StatementRow key={s.id} projectId={projectId} statement={s} />
+                  ))}
+                </ul>
+              </>
+            ) : issue ? (
+              <IssueNote key={issue.id} projectId={projectId} issue={issue} />
+            ) : (
+              <p className="jig-intro">왼쪽에서 이슈를 고르거나 검색하세요.</p>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -83,10 +83,20 @@ export function knowledgeSummary(file: string) {
           note: string;
         }[])
       : [];
+    // Status brief (PLAN-08 K0-T2): decided, blocked and recently changed, for the project and each
+    // discipline. Older DBs without it show the issue list only.
+    const briefs = hasTable(db, 'brief')
+      ? Object.fromEntries(
+          (
+            db.prepare('select scope, body from brief').all() as { scope: string; body: string }[]
+          ).map((row) => [row.scope, JSON.parse(row.body)]),
+        )
+      : {};
     const disciplines = Object.entries(DISCIPLINES)
       .map(([key, label]) => ({
         key,
         label,
+        brief: briefs[key] ?? null,
         issues: issues
           .filter((i) => i.discipline === key)
           .map(({ note, ...issue }) => ({
@@ -107,6 +117,7 @@ export function knowledgeSummary(file: string) {
         issues: issues.length,
         mails: count(db, 'select count(*) as n from mail'),
       },
+      brief: briefs.project ?? null,
       disciplines,
     };
   });

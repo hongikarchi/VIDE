@@ -25,4 +25,6 @@
 {"request":"livesync를 켰는데, 작동을 안 해. 채팅창도 버그 걸린 것처럼 입력이 안되네. 상태 오류가 떠서 로컬 서버 연결이 끊겼다고 뜨네","files":["src/core/workspace.ts","src/server/server.ts"]}
 {"request":"연결 파일의 경우 지금 live-sync 된 것 뿐만 아니라 파일에서 열은 것도 리스트로 보여야 하는거 아니야? 삭제하거나 unlink할 수 있어야지","files":["src/core/document-links.ts","src/server/import-model.ts","src/server/server.ts","src/ui/links.tsx","src/ui/style.css"]}
 {"request":"작업 이력 지우기 버튼은 보이지 않는데 누르면 있는 느낌?","files":["src/ui/style.css"]}
+{"request":"\"지금 뭐가 정해졌고, 뭐가 막혀 있고, 최근 뭐가 바뀌었나\" 이거 정확해. 결국 이 정보를 쓰는 방법은 1. 보고서 형식으로 쭉 읽는거 2. AI랑 대화하면서 물어보기 3. AI에게 지금 설계에 대한 검토 부탁하기. 그거에 맞춰서 보여지는 방식을 만들어야겠지","files":["tools/spikes/2026-09-29-knowledge-crawl/brief.mjs","tools/spikes/2026-09-29-knowledge-crawl/crawl.mjs","src/jigs/knowledge.ts","src/jigs/catalog.ts","src/ui/knowledge-jig.tsx","src/ui/style.css","tests/server/knowledge-jig.test.mjs","docs/plans/PLAN-08-project-knowledge.md"]}
+{"request":"그러면 일단 계획만 적어놓고, 지금 구조 jig를 만지면서 아예 jig랑 우리 패널 layout 자체에 대한 설계 + ai와의 소통 방식 등을 만지고 있어서 거기에서 한번에 마무리하는게 나아보인다","files":["docs/plans/PLAN-08-project-knowledge.md"]}
 {"request":"jev 판단으로 끝낼지, AI에 보낼지를 그냥 jev가 판정하면 안되나? 규칙으로 하니까 칩을 눌러야 하는 횟수가 너무 많아.","files":["src/ai/request-router.ts","src/server/server.ts","src/ui/request-route.ts","src/ui/app.ts","src/ui/style.css"]}
