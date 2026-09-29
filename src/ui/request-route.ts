@@ -116,3 +116,86 @@ export function routeRequest(
     reason: '파일 작업',
   };
 }
+
+/** Object groups offered to Jev: kinds, layers and the current selection (SPEC-02.17). */
+export interface Subject {
+  id: string;
+  label: string;
+  ids: string[];
+  subject: string;
+}
+const KIND_NAMES: Record<string, string> = {
+  문자: 'text annotations',
+  치수: 'dimensions',
+  해치: 'hatches',
+  블록: 'blocks',
+  면: 'surfaces, solids, meshes',
+  선: 'lines and curves',
+  점: 'points',
+};
+export function routeSubjects(
+  objects: readonly RouteObject[],
+  selected: readonly string[] = [],
+): Subject[] {
+  const out: Subject[] = [];
+  if (selected.length)
+    out.push({
+      id: 'selection',
+      label: `the objects the user selected (이것, 선택한 것), ${selected.length} objects`,
+      ids: [...selected],
+      subject: '선택한 객체',
+    });
+  for (const [, types, label] of kinds) {
+    const ids = objects.filter((o) => types.test(text(o.type))).map((o) => o.id);
+    if (ids.length)
+      out.push({
+        id: 'kind:' + label,
+        label: `${label} (${KIND_NAMES[label] ?? label}), ${ids.length} objects`,
+        ids,
+        subject: label,
+      });
+  }
+  const layers = new Map<string, string[]>();
+  for (const o of objects) {
+    const layer = text(o.layer);
+    if (layer) layers.set(layer, [...(layers.get(layer) ?? []), o.id]);
+  }
+  for (const [layer, ids] of [...layers].sort((a, b) => b[1].length - a[1].length).slice(0, 30))
+    out.push({
+      id: 'layer:' + layer,
+      label: `layer "${layer}", ${ids.length} objects`,
+      ids,
+      subject: '레이어 ' + layer,
+    });
+  return out;
+}
+
+/**
+ * Jev's answer as a route; undefined keeps the rules' route. When Jev names no objects, the ones
+ * the rules found (e.g. "이거" → the selection) are used.
+ */
+export function jevRoute(
+  decision: { target: 'view' | 'document' | null; action?: ViewAction; subject?: string },
+  subjects: readonly Subject[],
+  rules?: Route,
+): Route | undefined {
+  if (decision.target === 'document') return { target: 'document', reason: 'Jev · 파일 작업' };
+  if (decision.target !== 'view' || !decision.action) return undefined;
+  if (decision.action === 'unhide')
+    return {
+      target: 'view',
+      view: { action: 'unhide', ids: [], subject: '숨긴 객체' },
+      reason: 'Jev · 화면 표시만',
+    };
+  const chosen = subjects.find((subject) => subject.id === decision.subject);
+  const found = rules?.view?.ids.length ? rules.view : undefined;
+  return {
+    target: 'view',
+    view: chosen
+      ? { action: decision.action, ids: chosen.ids, subject: chosen.subject }
+      : found
+        ? { action: decision.action, ids: found.ids, subject: found.subject }
+        : { action: decision.action, ids: [], subject: '' },
+    reason: 'Jev · 화면 표시만',
+  };
+}

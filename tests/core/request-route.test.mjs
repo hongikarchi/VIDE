@@ -41,3 +41,35 @@ test('short kind words do not match inside other words', () => {
   assert.equal(routeRequest('면 숨겨줘', objects).view?.subject, '면');
   assert.equal(routeRequest('평면에서 해치 숨겨줘', objects).view?.subject, '해치');
 });
+
+test('Jev answers map to view routes over kinds, layers and the selection', async () => {
+  const { routeSubjects, jevRoute } = await import('../../src/ui/request-route.ts');
+  const subjects = routeSubjects(objects, ['l1']);
+  assert.deepEqual(
+    subjects.map((subject) => subject.id),
+    [
+      'selection',
+      'kind:문자',
+      'kind:해치',
+      'kind:면',
+      'kind:선',
+      'layer:A-ANNO',
+      'layer:S-BEAM',
+      'layer:A-HATCH',
+      'layer:구조::보',
+    ],
+  );
+  assert.deepEqual(
+    jevRoute({ target: 'view', action: 'isolate', subject: 'kind:문자' }, subjects).view,
+    {
+      action: 'isolate',
+      ids: ['t1', 't2'],
+      subject: '문자',
+    },
+  );
+  assert.equal(jevRoute({ target: 'document' }, subjects).target, 'document');
+  assert.equal(jevRoute({ target: null }, subjects), undefined);
+  // No objects named by Jev: the ones the rules found ("이거" → the selection).
+  const rules = routeRequest('이거 숨겨', objects, ['l1']);
+  assert.deepEqual(jevRoute({ target: 'view', action: 'hide' }, subjects, rules).view.ids, ['l1']);
+});

@@ -2,7 +2,7 @@
 id: ARCH-01
 title: VIDE 기술 구조와 구현 계약
 status: review
-version: 0.47
+version: 0.48
 updated: 2026-09-29
 owner: agent:codex
 related: [SPEC-00, SPEC-02, SPEC-03, SPEC-04, PLAN, PLAN-20, ADR-014, ADR-015, ADR-016, ADR-017]
@@ -599,6 +599,7 @@ R2 조건부 쓰기/체크섬은 [공식 Workers API](https://developers.cloudfl
 - 전송: 원격 응답은 16 KB를 넘으면 gzip(level 4)으로 보낸다. `GET /api/v1/projects/:id/requests` 목록은 결과의 `scene`·`definitions`를 빼고 `sceneOmitted: true`를 붙이며, 화면은 표시할 요청만 단건 조회로 받는다.
 - 표시용 이진 전송(2026-09-29, [PLAN-18](../plans/PLAN-18-render-performance.md)): `GET /api/v1/projects/:id/requests/:rid`에 `Accept: application/vnd.vide.geometry`가 있으면 같은 내용을 `VGT1` 컨테이너로 준다(`src/contracts/geometry-transfer.ts`): `VGT1` + u32 머리 길이 + JSON 머리 + 4바이트 정렬 버퍼. `result.scene[]`와 `result.definitions{}` 항목의 `vertices`·`line`·`segments`는 `{"$bin":[offset,length,"f",ox,oy,oz]}`(첫 점 기준 float32, 원점 float64), `indices`는 `"u16"`/`"u32"`로 바뀐다. 오류 응답은 JSON이다. 작업 화면(`src/ui/gateway.ts`)은 단건 조회에 이 헤더를 붙이고 숫자 배열로 되돌린다. 저장은 JSON 그대로다.
 - 이전 대화 선별(2026-09-29, [PLAN-19](../plans/PLAN-19-request-routing.md)): `src/ai/context-selector.ts`가 이전 대화 6개 초과 시 Jev System One(`jev-1.13.0`, 최근 20개 각각 Noul, 5초)으로 고른다. 키는 `readJevKey`(환경 `TYPESAFE_API_KEY` 또는 `<데이터>/typesafe.env`). 진단 기록 `context {request, by: all|jev|fallback, ms, sent, of, reason?}`. Sync 진단 `sync {request, host, state, ms, hostMs, objects}`, `live-sync {ms}`.
+- 요청 경로 판정(2026-09-29, PLAN-19): `POST /api/v1/projects/:id/route {body ≤4000, subjects[≤60]{id,label}}` → `{target: view|document, action?, subject?, confidence, ms}` 또는 `{target: null}`(규칙으로). `src/ai/request-router.ts`가 Jev System One에 `target`·`action`(hide·isolate·unhide·select·fit)·`subject`(s0…·none) 세 Choice를 3초 제한으로 묻고, 확신 0.6 미만·오류는 null. 파일·프로그램 말은 호출 없이 document. 화면(`src/ui/request-route.ts`)은 대상 묶음 id를 `selection`·`kind:<종류>`·`layer:<이름>`(객체 수 순 30개)로 만든다. 진단 `route {by: jev|rules, target?, action?, ms?}`. 보내는 이전 대화는 하나당 요청 2,000자·답 6,000자로 자른다.
 
 ## 7. 개발 기반과 변경 경계
 

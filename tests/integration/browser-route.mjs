@@ -1,5 +1,5 @@
-// Request routing (SPEC-02.17): screen-only requests change the VIDE view without any AI or file
-// work; the chip can flip the route before sending.
+// Request routing (SPEC-02.17): Jev decides at send time whether a request only changes the VIDE
+// view (done here, nothing sent) or goes to the AI; a view-only result can still be sent to the AI.
 import assert from 'node:assert/strict';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -85,12 +85,9 @@ try {
   const context = await browser.newContext({ viewport: { width: 1400, height: 900 } });
   const page = await context.newPage();
   const errors = [],
-    posted = [];
+    posted = [],
+    asked = [];
   page.on('pageerror', (error) => errors.push(error.message));
-  page.on('request', (request) => {
-    if (request.method() === 'POST' && /\/requests$/.test(request.url()))
-      posted.push(request.url());
-  });
   await page.route('**/api/v1/host', (route) => route.fulfill({ json: { available: false } }));
   await page.route('**/api/v1/providers', (route) =>
     route.fulfill({
@@ -100,33 +97,58 @@ try {
       ],
     }),
   );
+  // Sending to the AI is only recorded here (no CLI runs in this test).
+  await page.route(/\/requests$/, (route) => {
+    if (route.request().method() !== 'POST') return route.continue();
+    posted.push(JSON.parse(route.request().postData()).body);
+    return route.fulfill({ status: 409, json: { code: 'PROJECT_BUSY' } });
+  });
+  // Jev's judgement (the server's /route), scripted per request text; null = leave it to the rules.
+  const jev = {
+    '텍스트만 남기고 숨겨줘': { target: 'view', action: 'isolate', subject: 'kind:문자' },
+    '해치 지워줘': { target: 'document' },
+    'A-HATCH 꺼줘': { target: 'view', action: 'hide', subject: 'layer:A-HATCH' },
+  };
+  await page.route('**/route', async (route) => {
+    const sent = JSON.parse(route.request().postData());
+    asked.push(sent);
+    await route.fulfill({ json: jev[sent.body] ?? { target: null } });
+  });
   await page.goto(app.launchUrl);
   await page.waitForFunction(() =>
     document.querySelector('.object-summary')?.textContent.startsWith('8개'),
   );
-  const chip = page.locator('#context .route-chip');
-  // "Keep only the text": the VIDE view only; nothing is sent and the file is untouched.
+  // No route chip before sending; Jev decides when the request is sent.
   await page.locator('#body').fill('텍스트만 남기고 숨겨줘');
-  await chip.filter({ hasText: 'VIDE 화면만 · 문자 3개' }).waitFor();
+  await page.waitForTimeout(100);
+  assert.equal(await page.locator('#context .route-chip').count(), 0);
   await page.locator('#request').click();
   await page.waitForFunction(() => window.videViewport.hiddenCount() === 5);
   assert.match(await page.locator('#message').textContent(), /문자 3개 만 표시 · 원본은 그대로/);
   assert.equal(await page.locator('#body').inputValue(), '');
+  // Jev is shown the object groups on screen: kinds and layers.
+  const ids = asked[0].subjects.map((subject) => subject.id);
+  assert.ok(ids.includes('kind:문자') && ids.includes('layer:A-HATCH'), ids.join());
+  // Unsure Jev (null): the rules still handle plain view words.
   await page.locator('#body').fill('모두 다시 보여줘');
   await page.keyboard.press('Control+Enter');
   await page.waitForFunction(() => window.videViewport.hiddenCount() === 0);
-  assert.equal(posted.length, 0);
-  // Words that change the file send it to the file (as AI work).
-  // Plain file work shows no route chip; a screen word aimed at the file shows "file work".
+  assert.deepEqual(posted, []);
+  // A layer turned off: rules would have sent this to the AI ("꺼" is no view word); Jev keeps it.
+  await page.locator('#body').fill('A-HATCH 꺼줘');
+  await page.locator('#request').click();
+  await page.waitForFunction(() => window.videViewport.hiddenCount() === 1);
+  assert.deepEqual(posted, []);
+  // Wrong call? One button undoes the view change and sends the same words to the AI.
+  await page.locator('#message .message-action').filter({ hasText: 'AI 작업으로 보내기' }).click();
+  await page.waitForFunction(() => window.videViewport.hiddenCount() === 0);
+  for (let i = 0; i < 40 && !posted.length; i++) await page.waitForTimeout(50);
+  assert.deepEqual(posted, ['A-HATCH 꺼줘']);
+  // File work goes to the AI.
   await page.locator('#body').fill('해치 지워줘');
-  await page.waitForTimeout(100);
-  assert.equal(await chip.count(), 0);
-  await page.locator('#body').fill('CAD에서 해치 숨겨줘');
-  await chip.filter({ hasText: '파일 작업' }).waitFor();
-  // The chip flips a screen request to file work.
-  await page.locator('#body').fill('해치 숨겨줘');
-  await chip.filter({ hasText: 'VIDE 화면만 · 해치 1개' }).click();
-  await chip.filter({ hasText: '파일 작업' }).waitFor();
+  await page.locator('#request').click();
+  for (let i = 0; i < 40 && posted.length < 2; i++) await page.waitForTimeout(50);
+  assert.deepEqual(posted, ['A-HATCH 꺼줘', '해치 지워줘']);
   assert.deepEqual(errors, []);
   console.log('Request routing checks passed');
 } finally {

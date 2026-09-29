@@ -467,9 +467,15 @@ export class Execution {
         ...(context.reason ? { reason: context.reason } : {}),
       });
       const chosen = new Set(context.ids);
+      // Each exchange is clipped so a few long answers cannot push the packet past its 256 KB cap.
+      const clip = (text: string | undefined, max: number) =>
+        text && text.length > max ? text.slice(0, max) + ' …(생략)' : text;
       const conversation = earlier
         .filter((entry) => chosen.has(entry.id))
-        .map((entry) => ({ request: entry.request, response: entry.response }));
+        .map((entry) => ({
+          request: clip(entry.request, 2000),
+          response: clip(entry.response, 6000),
+        }));
       if (conversation.length)
         items.push({ id: 'conversation', type: 'conversation', data: conversation });
       const sdk = jigReview ? undefined : target === 'rhino' ? this.sdk : this.zwcadSdk;

@@ -43,7 +43,7 @@ import {
   type OfflineStatus,
 } from './links.tsx';
 import { composeLayers, displayIdOf, layerSignature, sourceIdOf } from './layers.ts';
-import { routeRequest, type Route } from './request-route.ts';
+import { jevRoute, routeRequest, routeSubjects, type Route } from './request-route.ts';
 import { renderRequests } from './requests.tsx';
 import { iconSvg, initializeInspector, renderInspector } from './inspector.ts';
 import { api, connect, errors, labels } from './gateway.ts';
@@ -136,8 +136,8 @@ const renderObjectList = createObjectList($('objects'), (ids, mode) => {
 let foregroundRequest: { id: string; selected: typeof selectedResult; draft: string } | undefined;
 /** The work opened in the work view (work history row or the latest request sent). */
 let focusedWork: string | undefined;
-// Request routing (SPEC-02.17): a flipped route chip. The model is chosen by the "자동 (Jev)" entry.
-let routeOverride: 'view' | 'document' | undefined;
+// Request routing (SPEC-02.17): Jev judges view-only or file work when the request is sent.
+let routing = false;
 const focusDraft = () => JSON.stringify({ draft: draftSnapshot(state), strokes });
 initializeWorkspacePanels();
 const workspaceStatus = initializeWorkspaceStatus({
@@ -843,29 +843,6 @@ function render(rebuildRequests = true) {
       render();
     }),
   );
-  // Where this request goes (SPEC-02.17), changeable before sending.
-  const route = state.body.trim() ? currentRoute() : undefined;
-  // Ordinary file work needs no chip; show where it goes when screen words or a flip are involved.
-  if (route && (route.target === 'view' || route.viewWords || routeOverride)) {
-    const view = route.target === 'view';
-    const routeChip = el(
-      'button',
-      view
-        ? `🖥 VIDE 화면만 · ${route.view?.subject ? `${route.view.subject} ${route.view.ids.length}개` : route.view?.action === 'unhide' ? '모두 보이기' : '대상 확인 필요'}`
-        : '📄 파일 작업',
-      $('context'),
-      {
-        type: 'button',
-        class: 'chip route-chip',
-        'data-target': route.target,
-        title: `${route.reason}. 누르면 ${view ? '파일 작업(AI가 원본 작업 사본을 고침)' : 'VIDE 화면만(원본은 그대로)'}으로 바꿉니다.`,
-      },
-    );
-    routeChip.onclick = () => {
-      routeOverride = view ? 'document' : 'view';
-      render();
-    };
-  }
   // Several files on screen: say which one this request changes (SPEC-01.11 요청 대상).
   const target = currentLayers.find(
     (layer) => layer.requestId === (state.baseRequestId ?? displayedResult),
@@ -1523,42 +1500,69 @@ function interventionReason(id: string): string | undefined {
   )
     return '이미 추가 지시가 대기 중입니다.';
 }
-/** Request routing (SPEC-02.17): the rule result, unless the user flipped the chip. */
-function currentRoute(): Route {
-  const route = routeRequest(
-    state.body,
-    objects.map((object) => ({
-      id: object.id,
-      type: object.type,
-      layer: object.layerName ?? object.layer,
-      name: object.name,
-    })),
-    selectedIds,
-  );
-  if (!routeOverride || routeOverride === route.target) return route;
-  if (routeOverride === 'document')
-    return { target: 'document', reason: '사용자가 파일 작업으로 바꿨습니다' };
-  // Flipped to the screen: act on the selection, or say that objects are needed.
-  return {
-    target: 'view',
-    view: route.view ?? {
-      action: 'isolate',
-      ids: [...selectedIds],
-      subject: selectedIds.length ? '선택한 객체' : '',
-    },
-    reason: '사용자가 VIDE 화면만으로 바꿨습니다',
+const routeObjects = () =>
+  objects.map((object) => ({
+    id: object.id,
+    type: object.type,
+    layer: object.layerName ?? object.layer,
+    name: object.name,
+  }));
+/** Request routing (SPEC-02.17): Jev decides; without a key or on failure, the rules. */
+async function decideRoute(body: string): Promise<Route> {
+  const rules = routeRequest(body, routeObjects(), selectedIds);
+  const subjects = routeSubjects(routeObjects(), selectedIds);
+  try {
+    const decision = z
+      .object({
+        target: z.enum(['view', 'document']).nullable(),
+        action: z.enum(['hide', 'isolate', 'unhide', 'select', 'fit']).optional(),
+        subject: z.string().optional(),
+      })
+      .parse(
+        await api(`/projects/${currentProject().id}/route`, 'POST', {
+          body,
+          subjects: subjects.map(({ id, label }) => ({ id, label })),
+        }),
+      );
+    return jevRoute(decision, subjects, rules) ?? rules;
+  } catch {
+    return rules;
+  }
+}
+/** A notice with one action button (e.g. send a view-only request to the AI after all). */
+function messageWithAction(text: string, label: string, action: () => void) {
+  clearTimeout(toastTimer);
+  const box = $('message');
+  box.replaceChildren(text + ' ');
+  const button = el('button', label, box, { type: 'button', class: 'message-action' });
+  button.onclick = () => {
+    box.hidden = true;
+    action();
   };
+  box.hidden = false;
+  toastTimer = setTimeout(() => (box.hidden = true), 9000);
 }
 /** A screen-only request changes the VIDE view; the file and AI are not involved. */
-function runViewRequest(route: Route) {
+function runViewRequest(route: Route, body: string) {
   const view = route.view!;
+  // Sending it to the AI after all: undo the view change and send the same words.
+  const toAi = (undo: () => void) => () => {
+    undo();
+    state.body = body;
+    $('body').value = body;
+    render();
+    void submitRequest();
+  };
   if (view.action !== 'unhide' && !view.ids.length) {
-    message(
-      '화면에서 어떤 객체인지 찾지 못했습니다. 객체를 고르거나, 파일 작업으로 보내려면 "VIDE 화면만" 칩을 누르세요.',
+    messageWithAction(
+      '화면에서 어떤 객체인지 찾지 못했습니다. 객체를 고른 뒤 다시 보내거나, AI에게 맡기세요.',
+      'AI 작업으로 보내기',
+      toAi(() => {}),
     );
     return;
   }
   const count = view.ids.length.toLocaleString();
+  const before = [...selectedIds];
   if (view.action === 'hide') viewport?.hide(view.ids);
   else if (view.action === 'isolate') viewport?.isolate(view.ids);
   else if (view.action === 'unhide') viewport?.unhide();
@@ -1574,23 +1578,41 @@ function runViewRequest(route: Route) {
     select: '선택',
     fit: '확대',
   }[view.action];
-  message(
+  state.body = '';
+  $('body').value = '';
+  render();
+  messageWithAction(
     view.action === 'unhide'
       ? '숨긴 객체를 모두 다시 보입니다 · 원본은 그대로입니다.'
       : `화면에서 ${view.subject} ${count}개 ${verb} · 원본은 그대로입니다. 다시 보이게 하려면 U.`,
+    'AI 작업으로 보내기',
+    toAi(() => {
+      if (view.action === 'hide' || view.action === 'isolate') viewport?.unhide();
+      if (view.action === 'select') {
+        selectedIds = before;
+        state.selected = selectedIds.at(-1) ?? null;
+      }
+    }),
   );
-  state.body = '';
-  $('body').value = '';
-  routeOverride = undefined;
-  render();
 }
 $('request').onclick = () => {
-  const route = state.body.trim() ? currentRoute() : undefined;
-  if (route?.target === 'view' && !state.linkedTargets) {
-    runViewRequest(route);
+  if (!state.body.trim() || state.linkedTargets || busy) {
+    void submitRequest();
     return;
   }
-  void submitRequest();
+  if (routing) return;
+  routing = true;
+  const body = state.body;
+  $('request').setAttribute('aria-busy', 'true');
+  void decideRoute(body)
+    .then((route) => {
+      if (route.target === 'view') runViewRequest(route, body);
+      else void submitRequest();
+    })
+    .finally(() => {
+      routing = false;
+      $('request').removeAttribute('aria-busy');
+    });
 };
 async function submitRequest(predecessorId?: string) {
   if (validate(state) || busy || !project || (predecessorId && interventionReason(predecessorId)))
@@ -1622,7 +1644,6 @@ async function submitRequest(predecessorId?: string) {
     $('body').value = '';
     if (selectedResult === undefined) selectedResult = displayedResult ?? null;
     foregroundRequest = { id: request.id, selected: selectedResult, draft: focusDraft() };
-    routeOverride = undefined;
     focusedWork = request.id;
     renderMessages();
     void poll(request.id, projectId, original);

@@ -3677,24 +3677,6 @@ body.panel-mode #conversation {
 }
 
 /* Request routing chips (SPEC-02.15): where the request goes and the automatic model. */
-.route-chip {
-  cursor: pointer;
-  border: 1px solid var(--line);
-}
-.route-chip[data-target='view'] {
-  background: #e6eefc;
-  border-color: #b9c9ec;
-  color: #2f5aa8;
-}
-.route-chip[data-target='document'] {
-  background: var(--soft);
-  color: #4f5c55;
-}
-:root[data-theme='dark'] .route-chip[data-target='view'] {
-  background: #1f2633;
-  border-color: #3a4a6a;
-  color: #8fb0f0;
-}
 /* PLAN-20: requests left on the account site and the saved-view switch */
 .link-inbox {
   display: flex;
@@ -3813,4 +3795,24 @@ body.panel-mode #conversation {
 .link-row[data-state='file'] .dot {
   background: #9aa39f;
   border-radius: 2px;
+}
+/* One action inside a notice (e.g. "AI 작업으로 보내기" after a view-only request). */
+.toast .message-action {
+  margin-left: 8px;
+  padding: 3px 9px;
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+.toast .message-action:hover {
+  background: rgba(255, 255, 255, 0.14);
+}
+/* Jev is judging where the request goes (a moment before it is sent). */
+#request[aria-busy='true'] {
+  opacity: 0.55;
+  cursor: progress;
 }

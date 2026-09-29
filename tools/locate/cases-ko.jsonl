@@ -25,3 +25,4 @@
 {"request":"livesync를 켰는데, 작동을 안 해. 채팅창도 버그 걸린 것처럼 입력이 안되네. 상태 오류가 떠서 로컬 서버 연결이 끊겼다고 뜨네","files":["src/core/workspace.ts","src/server/server.ts"]}
 {"request":"연결 파일의 경우 지금 live-sync 된 것 뿐만 아니라 파일에서 열은 것도 리스트로 보여야 하는거 아니야? 삭제하거나 unlink할 수 있어야지","files":["src/core/document-links.ts","src/server/import-model.ts","src/server/server.ts","src/ui/links.tsx","src/ui/style.css"]}
 {"request":"작업 이력 지우기 버튼은 보이지 않는데 누르면 있는 느낌?","files":["src/ui/style.css"]}
+{"request":"jev 판단으로 끝낼지, AI에 보낼지를 그냥 jev가 판정하면 안되나? 규칙으로 하니까 칩을 눌러야 하는 횟수가 너무 많아.","files":["src/ai/request-router.ts","src/server/server.ts","src/ui/request-route.ts","src/ui/app.ts","src/ui/style.css"]}

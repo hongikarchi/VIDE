@@ -1,3 +1,4 @@
+import { decideRoute } from '../ai/request-router.ts';
 import { selectContext } from '../ai/context-selector.ts';
 import { GEOMETRY_TYPE, encodeGeometry } from '../contracts/geometry-transfer.ts';
 import { applyAttachedCandidate } from './attached-application.ts';
@@ -666,6 +667,29 @@ export async function startServer({
           .strict()
           .parse(await body(request));
         send(200, links.setHidden(linkItem[1], linkItem[2], hidden));
+        return;
+      }
+      // Where a request goes (SPEC-02.17): Jev judges view-only vs file work at send time.
+      const routeQuery = /^\/api\/v1\/projects\/([^/]+)\/route$/.exec(url.pathname);
+      if (routeQuery && request.method === 'POST') {
+        store.project(routeQuery[1]);
+        const query = z
+          .object({
+            body: z.string().max(4000),
+            subjects: z
+              .array(z.object({ id: z.string().max(200), label: z.string().max(300) }))
+              .max(60),
+          })
+          .strict()
+          .parse(await body(request));
+        const decision = await decideRoute(query, { dataDirectory: dirname(filename) });
+        diagnostics.write('route', {
+          by: decision ? 'jev' : 'rules',
+          ...(decision
+            ? { target: decision.target, action: decision.action, ms: decision.ms }
+            : {}),
+        });
+        send(200, decision ?? { target: null });
         return;
       }
       // Offline view on the account site and requests left there (PLAN-20).

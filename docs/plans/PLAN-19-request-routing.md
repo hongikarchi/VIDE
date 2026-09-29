@@ -2,7 +2,7 @@
 id: PLAN-19
 title: 요청 경로(VIDE 화면 / 파일)와 함께 보낼 이전 대화
 status: review
-version: 0.2
+version: 0.3
 updated: 2026-09-29
 owner: agent:claude
 related: [PLAN, SPEC-02, DESIGN, RESEARCH-02, FR-04, FR-08]
@@ -19,15 +19,19 @@ related: [PLAN, SPEC-02, DESIGN, RESEARCH-02, FR-04, FR-08]
 3. 모델 자동 선택은 작성기 규칙(모델링 → GPT-6-Astra, 프로그램 → Opus 5.5)을 지우고 서버의 "자동 (Jev)"([PLAN-05 §7.2a](PLAN-05-decision-layer-evaluation.md), `src/ai/model-router.ts`) 하나로 통일했다(사용자 결정 2026-09-29).
 4. 이전 대화 선별: `src/ai/context-selector.ts`가 이전 대화가 6개를 넘으면 Jev(Noul 질문, 최근 20개)로 관련 대화를 고르고 바로 앞 대화를 늘 넣는다. `src/server/execution.ts`가 이를 써서 `conversation` 항목을 만들고 진단 기록에 `context`(방법·개수·시간)를 남긴다. 키는 모델 선택과 같은 곳(`TYPESAFE_API_KEY` 또는 `<데이터>/typesafe.env`)에서 읽는다.
 
+5. 경로 판정을 Jev로(2026-09-29 사용자 요청 "규칙으로 하니까 칩을 눌러야 하는 횟수가 너무 많아"): `src/ai/request-router.ts`, 서버 `POST …/route`, 화면은 보낼 때 판정(칩 제거)하고 화면만 처리 알림에 'AI 작업으로 보내기'. 키 없음·실패·확신 낮음은 규칙. 보내는 대화 하나당 길이 제한.
+
 ## 검증
 
 - 단위(`tests/core/request-route.test.mjs`): 종류·레이어·이름·선택 대상, 찾지 못한 대상, 파일 말 우선, "선택"과 "선", "평면"과 "면" 구분.
 - 단위(`tests/ai/context-selector.test.mjs`): 6개 이하는 Jev 없이 모두, Jev가 고른 것과 바로 앞 대화를 순서대로, 최대 6개, 키 없음·HTTP 실패·오류는 최근 6개.
 - 실제 Jev(합성 대화 8개, 2026-09-29): "아까 X3열 보를 X4열로 옮겨줘" → X3열 보 대화 2개 + 바로 앞, "창호 목록을 표로 정리해줘" → 창호 개수 대화 + 바로 앞. 호출 0.2~0.3초.
-- 브라우저(`tests/integration/browser-route.mjs`): "텍스트만 남기고 숨겨줘"가 보내지 않고 문자만 남김, 다시 보이기, 지우기 요청은 파일 작업, 칩으로 경로 전환.
+- 단위(`tests/ai/request-router.test.mjs`): Jev 판정의 경로·동작·대상, 파일 말은 호출 없이 파일 작업, 키 없음·확신 낮음·모르는 동작·HTTP 실패·오류는 규칙.
+- 실제 Jev(합성 대상 묶음, 2026-09-29): 1차 12문장 8/12 → 질문에 한국어 표현·파일 말 규칙을 넣어 12/12, 처음 보는 10문장 8/10(나머지 2개는 대상 누락 → 규칙 대상으로 보완, 확신 낮음 → 규칙이 맞게 처리). 판정 0.2초 안팎.
+- 브라우저(`tests/integration/browser-route.mjs`): 보내기 전 칩 없음, Jev 판정으로 문자만 남김, Jev가 모르면 규칙으로 다시 보이기, "A-HATCH 꺼줘"(규칙으로는 AI로 갔던 문장)를 화면에서 처리, 'AI 작업으로 보내기'가 되돌리고 같은 글을 AI로 보냄, 지우기는 AI로.
 
 ## 다음
 
-- 규칙으로 애매한 요청의 경로 판정도 Jev 후보다. 실제 사용 기록(진단 로그)을 보고 필요하면 더한다.
+- 실제 사용의 경로 판정은 진단 기록 `route`로 모은다. 잘못 판정해 'AI 작업으로 보내기'를 누른 경우를 따로 세는 기록은 다음에 더한다.
 - 화면에서의 색 바꿔 보기(객체별 표시 색)는 뷰포트 기능이 생기면 화면 동작에 더한다. 지금 색 요청은 파일 작업이다.
 - 다른 사용자 PC는 Jev 키가 없으므로 최근 6개로 동작한다. 서버 중계가 생기면 같은 판단을 중계로 받는다.
