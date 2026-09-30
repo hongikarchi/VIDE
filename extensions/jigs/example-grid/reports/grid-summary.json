@@ -1,0 +1,57 @@
+{
+  "template": "study",
+  "title": "격자 골조 배치 요약",
+  "eyebrow": "격자 골조 배치 예제",
+  "headline": {
+    "cases": [
+      {
+        "when": "step.summary.maxSpan_m > 10",
+        "template": "최대 보 경간 {step.summary.maxSpan_m:1} m가 경간 기준을 넘습니다.",
+        "tone": "ng"
+      },
+      {
+        "when": "step.summary.columns > 0",
+        "template": "기둥 {step.summary.columns}개와 보 {step.summary.beams}개로 최대 경간 {step.summary.maxSpan_m:1} m입니다.",
+        "tone": "ok"
+      },
+      {
+        "template": "아직 계산한 결과가 없습니다. 입력을 확인하고 단계를 실행하면 채워집니다.",
+        "tone": "na"
+      }
+    ]
+  },
+  "kpis": [
+    { "label": "기둥", "from": "step.summary.columns", "unit": "개" },
+    { "label": "보", "from": "step.summary.beams", "unit": "개" },
+    { "label": "최대 경간", "from": "step.summary.maxSpan_m", "unit": "m", "decimals": 1 },
+    { "label": "기둥당 면적", "from": "step.summary.areaPerColumn_m2", "unit": "m²", "decimals": 1 }
+  ],
+  "sections": [
+    {
+      "id": "beams",
+      "from": ["step.beams.beams", "step.summary.avgSpan_m"],
+      "title": {
+        "cases": [
+          {
+            "when": "step.summary.avgSpan_m > 0",
+            "template": "보 경간 평균은 {step.summary.avgSpan_m:1} m입니다"
+          },
+          { "template": "보 경간" }
+        ]
+      },
+      "blocks": [
+        {
+          "kind": "table",
+          "from": "step.beams.beams",
+          "columns": [
+            { "field": "key", "label": "부호" },
+            { "field": "span_m", "label": "경간", "unit": "m", "decimals": 2 },
+            { "field": "depth_m", "label": "보 춤", "unit": "m", "decimals": 2 }
+          ],
+          "max": 50
+        }
+      ]
+    }
+  ],
+  "unchecked": ["부재 검정", "하중·기초 검토"]
+}

@@ -280,8 +280,15 @@ export class JigStore {
       projectId,
     ) as { jigId: string; version: string; pinnedAt: string }[];
   }
+  /** Takes the jig off the project's list; false when it was not pinned there. */
   unpin(projectId: string, jigId: string) {
-    this.db.prepare('DELETE FROM project_jigs WHERE projectId=? AND jigId=?').run(projectId, jigId);
+    return (
+      Number(
+        this.db
+          .prepare('DELETE FROM project_jigs WHERE projectId=? AND jigId=?')
+          .run(projectId, jigId).changes,
+      ) > 0
+    );
   }
 
   // Drafts made in a make-conversation (PLAN-22 T-063).

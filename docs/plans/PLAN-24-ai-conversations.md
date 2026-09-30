@@ -2,10 +2,10 @@
 id: PLAN-24
 title: AI 대화 세션·동시 진행·말로 하는 경로 판정 1차
 status: review
-version: 0.1
-updated: 2026-09-29
+version: 0.2
+updated: 2026-09-30
 owner: agent:claude
-related: [PLAN, PLAN-22, PLAN-23, PLAN-02, PLAN-05, PLAN-08, PLAN-19, FR-25, FR-24, FR-18, AC-46, AC-47, AC-48, SPEC-02, SPEC-07, ARCH-01, ARCH-03, ADR-021, ADR-014, RESEARCH-10]
+related: [PLAN, PLAN-22, PLAN-23, PLAN-02, PLAN-05, PLAN-08, PLAN-19, FR-25, FR-24, FR-18, FR-10, FR-11, FR-12, AC-46, AC-47, AC-48, AC-38, SPEC-02, SPEC-07, ARCH-01, ARCH-03, ADR-021, ADR-014, ADR-022, RESEARCH-10, RESEARCH-11]
 ---
 
 # AI 대화 세션·동시 진행·말로 하는 경로 판정 1차
@@ -210,12 +210,58 @@ related: [PLAN, PLAN-22, PLAN-23, PLAN-02, PLAN-05, PLAN-08, PLAN-19, FR-25, FR-
   - 비교: RESEARCH-11 §4의 A/B(합성 요청 5개, 성공·수정 요청 수·소요 시간·토큰)를 Rhino가 비어 있을 때 돌려 `docs/tdd/VERIFY-YYYY-MM-DD-ai-parity.md`에 남김
 - **완료:** 위 단위·계약 시험 통과, A/B 한 번 기록. A/B 합격 기준(B 성공 수 ≥ A, 수정 요청 수 중앙값 ≤ A + 1, 소요 시간 중앙값 ≤ A의 1.5배)에 못 미치는 요청은 원인 행과 후속 조치를 현황에 적는다.
 
+## 바로 적용·계획/자동 모드 {#direct-apply}
+
+사용자 결정(2026-09-30, [ADR-022](../decisions/ADR-022-direct-apply-plan-auto.md))으로 AI 편집은 연결된 Rhino·ZWCAD 문서에서 실행 하나당 되돌리기 기록 하나로 바로 실행하고, 권한 선택(검토/후보/적용)은 계획·자동 두 모드로 바뀐다. 사본 → 후보 → 적용 경로(ADR-014)는 제품 흐름에서 빠진다. 기준: PRD §11.2·FR-10~12·AC-38, SPEC-02.11·.13·.20, ARCH-01 §4 「바로 적용 경로」. 공통 검증: 정상 실행·보호 동작·되돌리기(최신 기록만)·응답 잃음의 네 경우를 단위 시험으로, 실제 호스트 확인은 플러그인 설치 뒤 한다.
+
+### T-069 · 문서 기준 정리 {#t-069}
+
+- **변경 범위:** ADR-022 새로 씀, PRD·SPEC-02·ARCH-01을 바로 적용과 두 모드 기준으로 고침, ADR-003·011·014에 후속 결정 메모.
+- **완료:** `npm run docs:check` 통과, 문서 사이와 코드의 보호 판정이 일치.
+
+### T-070 · Rhino 바로 실행·되돌리기·보호 {#t-070}
+
+- **변경 범위:** `hosts/rhino/worker/DirectExecution.cs`(`direct-execute`·`direct-undo`·`fingerprint`), `AttachedConnection.cs`·`CodePolicy.cs`(생성 코드의 되돌리기 제어 금지, purge 사전 판정), `application-contract.ts`·`editor-channel.ts`·`editor-sessions.ts`.
+- **검증:** 계약 시험(`tests/core/host-documents-contract.test.mjs`), 스크래치 폴더 빌드. 실제 Rhino에서 대량 삭제·레이어 삭제 보호, Ctrl+Z 뒤 [되돌리기], 빈 실행.
+- **완료:** 위 실제 Rhino 확인까지.
+
+### T-071 · ZWCAD 바로 실행·되돌리기·보호 {#t-071}
+
+- **변경 범위:** `hosts/zwcad/connection/AttachedEdit.cs`(한 UNDO 단계 실행, 변경 추적, `Guard()`), `AttachedDocument.cs`(`fingerprint`·`direct-execute`·`direct-undo`), `hosts/zwcad/attached-documents.ts`.
+- **검증:** `tests/core/zwcad-direct.test.mjs`, 스크래치 빌드, 실제 ZWCAD 왕복.
+- **완료:** 실제 ZWCAD 확인까지.
+
+### T-072 · 서버 계획/자동 모드와 실행 기록 {#t-072}
+
+- **변경 범위:** `src/contracts/workspace.ts`(`mode`, 이전 권한 값 변환, `needs-confirmation`, 보호 해제 필드 거부), `src/server/direct-mode.ts`(`runDirectTurn`·`takePlan`·실행 기록), `execution.ts`(모드 분기·`undo`·`confirm`·`continue`), `sdk-execution.ts`·`zwcad-sdk-execution.ts`·`server.ts`(경로 3개, 원격 확인 차단)·`agent-tools.ts`, `request-scope.ts`의 `hostUse`가 `requestMode`를 읽음.
+- **검증:** `tests/server/direct-mode.test.mjs`·`direct-mode-e2e.test.mjs`, `tests/core/workspace-contract.test.mjs`.
+- **완료:** 위 시험과 실제 호스트 한 번 왕복.
+
+### T-073 · 화면: 모드 토글·실행 행·확인 카드·계획 카드 {#t-073}
+
+- **변경 범위:** `src/ui/index.html`·`app.ts`(계획/자동 토글, 기본 자동, Shift+Tab, '계획부터' 제안 카드), `work-view.tsx`(실행별 변경 행과 [되돌리기], 진행 확인 카드, 계획 카드 [진행]), `gateway.ts`(오류 문구).
+- **검증:** `tests/integration/browser-direct-mode.mjs`.
+- **완료:** 브라우저 시험 통과.
+
+### T-074 · jig 만들기의 바로 적용 {#t-074}
+
+- **변경 범위:** `src/jigs/bake/bake.ts`(`runDirectBake`·`undoBake`, 기록된 객체만 바꿈), `src/server/jig-routes.ts`(연결 Rhino는 바로 적용, 없으면 작업 사본).
+- **검증:** `tests/core/bake.test.mjs`, 실제 Rhino에서 두 번 만들기·되돌리기.
+- **완료:** 실제 Rhino 확인까지.
+
+### T-075 · 공급자 자체 질문 기능 SPIKE와 어댑터 {#t-075}
+
+- **변경 범위:** Claude `AskUserQuestion`을 stream-json 제어 요청으로 받는 `claude-cli.ts` `nativeQuestions`, Codex `codex app-server` 어댑터 `src/ai/codex-app-server.ts`(`VIDE_CODEX_APP_SERVER=1`). 질문 카드 화면은 그대로 둔다(SPEC-02.19).
+- **검증:** [SPIKE-2026-09-30-native-questions-claude](../tdd/SPIKE-2026-09-30-native-questions-claude.md)·[SPIKE-2026-09-30-codex-app-server](../tdd/SPIKE-2026-09-30-codex-app-server.md), `tests/ai/native-questions.test.mjs`·`codex-app-server.test.mjs`.
+- **완료:** SPIKE 판정 기록. 기본값으로 켜는 것은 사용자 결정 뒤다.
+
 ## 순서와 의존
 
 - T-049는 M1에서 PLAN-22 T-046과 함께 한다.
 - T-059와 T-060은 바로 시작할 수 있다. T-060은 세션과 독립이다.
 - T-061은 T-060·PLAN-22 T-045 뒤다(세션 이어 실행은 T-059 합격 항목만). T-062는 T-061 뒤다. PLAN-22 T-063(만들기 대화)이 이 둘을 쓴다.
 - 마일스톤 표기는 S-06 결과를 먼저 보이는 순서(M5)이지만, 선행이 갖춰진 티켓은 먼저 해도 된다.
+- 바로 적용: T-069 → T-070·T-071 → T-072 → T-073·T-074. T-075는 독립이다. 실제 호스트 확인은 플러그인 재빌드·설치 뒤 묶어서 한다.
 
 ## 현황(2026-09-30)
 
@@ -234,3 +280,12 @@ related: [PLAN, PLAN-22, PLAN-23, PLAN-02, PLAN-05, PLAN-08, PLAN-19, FR-25, FR-
 - **T-062 4차 물결(2026-09-30).** `server.ts`가 `AgentTools`에 엔진 `origin`을 넘겨 설치본에서도 대화 턴이 도구를 받는다(`tests/server/agent-tools-origin.test.mjs`). 사용자 결정(2026-09-30)으로 대화 안의 AI는 그 대화에 열린 jig에 한해 `jig_set`(되돌릴 수 있는 T1, 원장 + [되돌리기])·`jig_run`(계산 단계만)을 확인 없이 실행하며 해석 확정·Rhino 만들기·반영·계정 동작은 사람이 누른다(SPEC-02.19 0.34). 자료 도구 `project_*`는 PLAN-22 T-065에 있다. 남음: 대화 읽기 도구(`jig_list`·`jig_state`·`jig_output` 등)가 요구하는 `targetRef`를 모델이 받을 경로가 없다(턴 규칙에 싣는 방안, VERIFY-2026-09-30-jig-authoring-m5). 실제 CLI 구조화 출력 확인, `browser-conversations.mjs` 실행.
 - **T-061·T-062 5차 물결(2026-09-30).** 대화 대상(`targetRef`·열린 jig·연결 id와 호스트)을 `scopeRules`로 턴 규칙에 싣고, 대상이 하나뿐이면 대화 도구가 `targetRef` 없이, jig 도구가 `instanceId` 없이 호출돼도 받는다(`query`·`execute`는 여전히 필수). 대화 길이 기준(12턴·150,000 토큰)을 설정값(`GET/PUT /api/v1/settings/conversations`, 원격 PUT 차단)으로 바꾸고, 기준을 넘으면 새 세션을 **제안**하는 카드(`…/renew`)를 둔다. 계정 한도 카드는 서버 상태로 그리고 `…/account`가 남은 계정을 고른다. 증거: 관련 단위 시험 45건, `npm run typecheck`. 남음: SPEC-02.19 표의 '대화가 길어짐' 행은 자동으로 새 세션을 연다고 적혀 있어 제안 방식과 어긋난다(사용자 확인 필요). `browser-conversations.mjs`는 고치기만 하고 돌리지 않았다. 실제 CLI 5턴 토큰 기록.
 - **지침 묶음·AI 동등성 — 구현·단위 검증, Claude 실호출 확인, 실호스트·A/B 남음(2026-09-30 5차).** `src/ai/instructions/`(`common`·`modeling`·`modeling-rhino`·`modeling-cad`·`data`·`make`·`index.ts` `bundleFor(mode, addendum?, {host})`, 묶음 20,000자·추가분 8 KB, 추가분은 제어·방향 문자 제거 뒤 `<project-notes>` 자료 블록, Codex 명령줄 비용으로 잘라 Windows 32,767자 상한 안), `project-store.ts`와 `GET/PUT /api/v1/projects/:id/ai-instructions`, AI 설정의 추가 지침 편집. Claude는 매 턴 `--append-system-prompt`(`--system-prompt` 없음), Codex는 `developer_instructions`로 같은 본문을 받고 격리 인자는 전과 같다. 보기 도구 `capture_view`(PNG ≤ 1 MB, 카메라·레이어 복원)·`measure`(`hosts/rhino/worker/ViewTools.cs`, `hosts/rhino/view-tools.ts`, `agent-tools.ts` `visionHandlers`)와 요청 이미지(최대 3개·각 1 MB, data URL만). 대화 턴 상한 `conversationTurnLimits` 100회·48 명령·600초(답 턴·만들기 포함)와 `query` 커서(`"<revision>:<offset>"`). 조사·비교 방법은 [RESEARCH-11](../research/RESEARCH-11-ai-parity.md), A/B 도구 `tools/ab/`(요청 5개·판정·SVG, 시험 7건). 증거: `tests/ai/instructions.test.mjs`(10건, 따옴표 많은 추가분 포함)·`cli-images.test.mjs`, `tests/server/agent-tools-vision.test.mjs`·`query-page.test.mjs`, `tests/core/execution-limits.test.mjs`, 기존 `tests/ai` 통과, [SPIKE-2026-09-30-instruction-bundle](../tdd/SPIKE-2026-09-30-instruction-bundle.md)(Claude 2턴: 묶음 도달·세션 이어 실행·기록 파일 삭제, 고친 통합 문제 2건). 남음: **Rhino 플러그인 재빌드**(실행 중인 Rhino가 `VIDE.Worker.rhp`를 잠가 복사 실패, 컴파일은 오류 0)와 실제 캡처·측정 확인, **A/B 실행**([SPIKE-2026-09-30-ai-parity-ab](../tdd/SPIKE-2026-09-30-ai-parity-ab.md), 사용자가 `tools/ab/fixture.py`로 합성 문서를 만든 뒤), Codex·모델링 모드 실호출, SPEC-02.6이 적은 호스트 모델링 턴의 `links_layers`·`sync_sample`·`project_*` 발급(코드 미반영), 원격 기기의 추가 지침 PUT 허용 여부(SPEC-02 결정).
+- **바로 적용·계획/자동 6차 물결(2026-09-30).** 사용자 결정 ADR-022를 문서와 코드에 반영했다. 증거는 단위 시험과 스크래치 폴더 빌드까지이고, 실제 Rhino·ZWCAD·브라우저 시험은 돌리지 않았다.
+  - **T-069 — 완료.** ADR-022(approved), PRD 0.13, SPEC-02 0.36(§02.20 계획과 자동 추가), ARCH-01 0.53. 점검에서 보호 목록을 PRD §11.2 한 곳으로 모으고, 판정 방식(Rhino purge는 실행 전 코드 판정, ZWCAD는 실행 뒤 개수, 저장·내보내기는 AI 코드에서 컴파일 때 거절)을 SPEC-02.13 표에 맞췄다.
+  - **T-070 — 코드 완료, 실호스트 남음.** Rhino `direct-execute`(되돌리기 기록 하나, 변경 목록, 삭제 50개 초과·레이어 삭제는 기록을 되돌리고 `guarded`, purge는 실행 전 거절, 같은 `requestId` 재전송은 이전 결과), `direct-undo`(최신 기록만, 아니면 `not-latest`), `fingerprint`. 스크래치 빌드 경고·오류 0. 남음: 플러그인 재빌드·설치(로드된 `.rhp` 잠김)와 실제 Rhino 확인.
+  - **T-071 — 코드 완료, 실호스트 남음.** ZWCAD 한 UNDO 단계 실행과 보호(레이어 삭제 → purge → 대량 삭제 순), `direct-undo`는 `_.U` 뒤 `VIDEAIUNDONE`으로 확인. 스크래치 빌드 0/0, `tests/core/zwcad-direct.test.mjs` 4건. 남음: 플러그인 재빌드·설치와 실제 ZWCAD 확인.
+  - **T-072 — 구현·단위 검증.** 자동은 연결 문서에 바로 실행하고 `executions[]`(적용·되돌림·보호·확인)를 남기며, 계획은 읽기 도구(`query`·`capture_view`·`measure`)만 받고 계획 카드로 끝난다. 경로 `POST …/requests/:rid/undo|confirm|continue`. 안전 점검에서 고친 것: 되돌리지 못한 실패·보호 실행은 결과 불명(`unknown`)으로 턴을 막음, 실행마다 문서 판 기록, 실행 중 [되돌리기]는 `REVISION_CONFLICT`, 요청에 보호 해제 필드를 넣으면 `INVALID_INPUT`, 원격 세션의 확인은 `FORBIDDEN`, ZWCAD 실행마다 새 id·보호 걸린 실행 하나만 재실행·부분 결과 보존, 삭제된 질문 요청에 답해도 답이 취소되지 않음. 증거: `tests/server/direct-mode.test.mjs`·`direct-mode-e2e.test.mjs`, `tests/core/workspace-contract.test.mjs`, `npm run typecheck`. 남음: 실제 호스트 왕복.
+  - **T-073 — 구현, 브라우저 시험 남음.** 모드 토글(기본 자동, 프로젝트별 기억, Shift+Tab), 실행 행과 [되돌리기](최신 기록이 아니면 Ctrl+Z 안내), 진행 확인 카드, 계획 카드 [진행], '계획부터' 제안 카드. 예전 결과는 기존 후보 화면으로 보인다. 남음: `tests/integration/browser-direct-mode.mjs` 실행.
+  - **T-074 — 구현·단위 검증, 실호스트 남음.** 연결 Rhino의 jig 만들기는 본문마다 되돌리기 기록 하나로 바로 적용하고, 기록되지 않은 객체를 지우면 되돌리고 `BAKE_GUARDED`, 마지막 만들기의 [되돌리기]를 둔다. 엔진의 `runDirect`·`undoDirect`로 연결했다. 남음: 되돌리기 id는 엔진 메모리에만 있어 재시작 뒤에는 Rhino Ctrl+Z만 된다(`BAKE_UNDO_UNAVAILABLE`), 실제 Rhino 확인.
+  - **T-075 — SPIKE 합격, 어댑터는 꺼 둠.** Claude는 `--permission-prompt-tool stdio`로 `AskUserQuestion`을 같은 실행 안에서 받는다(실제 CLI 합성 턴, 150초 지연 통과). Codex는 `app-server`의 `requestUserInput`을 턴 중에 받고 프로세스를 대화 사이에 유지한다(격리는 스레드 설정·응답·MCP 상태로 확인). 서버는 Claude `nativeQuestions`를 넘기지 않고, Codex는 `VIDE_CODEX_APP_SERVER=1`일 때만 켠다(엔진을 닫을 때 프로세스 정리). 남음: 기본값으로 켤지 사용자 결정, 실제 대화에서 장시간 사용.
+- **5차 남은 것 정리(2026-09-30 6차).** SPEC-02.19 '대화가 길어짐' 행을 제안 방식([새 세션으로 이어가기] 카드, 누르기 전에는 지금 세션)으로 고쳤다. 원격 세션의 추가 지침 변경(`ai-instructions` GET 외)을 막았다. 멈춘 만들기 대화에는 파일 도구를 주지 않는다(`makeStopped`, PLAN-22 T-063). 남음: 호스트 모델링 턴의 `links_layers`·`sync_sample`·`project_*`는 `execution.ts`의 `HOST_TURN_PROJECT_TOOLS`·`hostTurnProjectHandlers`만 있고 호스트 도구 목록에 연결하지 않았다.

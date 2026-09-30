@@ -108,8 +108,21 @@ try {
   assert.notDeepEqual(await canvas.screenshot(), beforePan);
   // Drafts save automatically per project (no manual save/load menu): a reload restores them.
   await page.locator('#body').fill('Saved draft');
+  // The work mode toggle (계획 / 자동) replaced the permission select: 자동 is the default, the
+  // choice is remembered per project, Shift+Tab switches it, and no candidate/apply menu is left.
+  assert.equal(await page.locator('#permission').count(), 0);
+  const modeButton = (value) => page.locator(`#mode-toggle [data-mode="${value}"]`);
+  assert.equal(await modeButton('auto').getAttribute('aria-checked'), 'true');
+  assert.match(await page.locator('#mode-status').textContent(), /자동/);
+  await modeButton('plan').click();
+  assert.equal(await modeButton('plan').getAttribute('aria-checked'), 'true');
   await page.reload();
   await page.waitForFunction(() => document.querySelector('#body')?.value === 'Saved draft');
+  assert.equal(await modeButton('plan').getAttribute('aria-checked'), 'true');
+  await page.locator('#body').focus();
+  await page.keyboard.press('Shift+Tab');
+  assert.equal(await modeButton('auto').getAttribute('aria-checked'), 'true');
+  assert.match(await page.locator('#mode-status').textContent(), /자동/);
   assert.equal(await page.locator('#draft-menu').count(), 0);
   assert.equal(await page.locator('#quit-app').count(), 0);
   await page.locator('[data-tool="sketch"]').click();

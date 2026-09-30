@@ -4,6 +4,8 @@
  * refused. Scheduling identity only; this never authorizes native writes or resolves unknown results.
  */
 
+import { requestMode } from './workspace.ts';
+
 /** How a request uses the host: not at all, reading a document, or writing one. */
 export type HostUse = 'none' | 'read' | 'write';
 /** AI turns running at once in one project (SPEC-02.9 4): default 3, setting 2-4. */
@@ -16,7 +18,9 @@ interface ScopeInput {
   host?: string;
   baseRequestId?: string | null;
   linkedTargets?: readonly { host: string; baseRequestId: string }[];
-  permission: string;
+  permission?: string;
+  /** Plan / Auto (ADR-022); a Plan turn only reads. */
+  mode?: unknown;
   provider?: string;
   applyToSource?: boolean;
   parentRequestId?: unknown;
@@ -91,7 +95,7 @@ export function hostUse(input: ScopeInput): HostUse | undefined {
     kind === 'structure-draft-review' ||
     kind === 'input-roles'
       ? 'none'
-      : input.source === 'document' || input.permission === 'review'
+      : input.source === 'document' || requestMode(input) === 'plan'
         ? 'read'
         : 'write';
   if (input.hostUse === undefined || input.hostUse === inferred || input.hostUse === 'write')

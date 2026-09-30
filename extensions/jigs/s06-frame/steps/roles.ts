@@ -315,7 +315,42 @@ export function slabOf(
   const voidRead = voids ? ringsOf('voids', voids) : { shapes: [], unreadable: [] };
   if (voidRead.unreadable.length)
     notes.push(`보이드 ${voidRead.unreadable.length}개는 읽지 못했습니다.`);
-  for (const shape of voidRead.shapes) holes.push([...shape.outer].reverse());
+  // A void drawn on the void layer over a hole the slab already has (a slab solid with the opening
+  // cut and its outline drawn too) is that hole; one wholly outside the slab frames nothing.
+  let same = 0,
+    outside = 0;
+  const areaCentroid = (ring: readonly Vec2[]): Vec2 => {
+    let a = 0,
+      x = 0,
+      y = 0;
+    ring.forEach((p, i) => {
+      const q = ring[(i + 1) % ring.length];
+      const w = p[0] * q[1] - q[0] * p[1];
+      a += w;
+      x += (p[0] + q[0]) * w;
+      y += (p[1] + q[1]) * w;
+    });
+    return Math.abs(a) > 1e-12 ? [x / (3 * a), y / (3 * a)] : centroid(ring);
+  };
+  for (const shape of voidRead.shapes) {
+    const c = areaCentroid(shape.outer);
+    if (!shape.outer.some((q) => pointInPolygon(q, main.outer, 0))) {
+      outside++;
+      continue;
+    }
+    const twin = holes.some((h) => {
+      const a = polygonArea(h);
+      const d = areaCentroid(h);
+      return (
+        Math.abs(a - shape.area) <= Math.max(0.01, a * 0.02) &&
+        Math.hypot(d[0] - c[0], d[1] - c[1]) <= 0.05
+      );
+    });
+    if (twin) same++;
+    else holes.push([...shape.outer].reverse());
+  }
+  if (same) notes.push(`보이드 ${same}개는 슬래브에 이미 뚫린 구멍과 같아 한 번만 셉니다.`);
+  if (outside) notes.push(`보이드 ${outside}개는 슬래브 밖에 있어 뺐습니다.`);
   if (others)
     notes.push(`슬래브 경계가 ${others + 1}조각입니다. 가장 큰 조각만 배치 범위로 씁니다.`);
   let area = main.area;

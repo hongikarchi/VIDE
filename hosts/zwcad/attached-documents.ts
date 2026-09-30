@@ -46,6 +46,51 @@ const pageSchema = z.object({
   omittedTypes: z.record(z.string(), z.number().int().nonnegative()),
   displayWarnings: z.record(z.string(), z.number().int().nonnegative()),
 });
+const guardKind = z.enum(['bulk-delete', 'layer-delete', 'purge', 'save-as', 'export', 'publish']);
+const changedRow = z
+  .object({ nativeId: z.string(), hash: z.string(), layer: z.string() })
+  .passthrough();
+/** Host answer to 'direct-execute' (direct-mode contract, user decision 2026-09-30). */
+export const directExecuteResultSchema = z.union([
+  z
+    .object({
+      ok: z.literal(true),
+      undoId: z.string().nullable(),
+      requestId: z.string().nullable().optional(),
+      changes: z.object({
+        added: z.array(changedRow),
+        changed: z.array(changedRow),
+        removed: z.array(z.object({ nativeId: z.string(), layer: z.string() }).passthrough()),
+        layersRemoved: z.array(z.string()).optional(),
+        purged: z.array(z.string()).optional(),
+      }),
+      confirmedGuard: z.object({ kind: guardKind, detail: z.string() }).passthrough().optional(),
+      log: z.array(z.string()),
+      documentHash: z.string().optional(),
+      revision: z.number().int().nonnegative().optional(),
+    })
+    .passthrough(),
+  z
+    .object({
+      ok: z.literal(false),
+      code: z.string(),
+      diagnostics: z.array(z.string()).nullable().optional(),
+      guarded: z.object({ kind: guardKind, detail: z.string() }).passthrough().optional(),
+      log: z.array(z.string()).optional(),
+    })
+    .passthrough(),
+]);
+export type DirectExecuteResult = z.infer<typeof directExecuteResultSchema>;
+export interface DirectExecuteInput {
+  requestId: string;
+  code: string;
+  label: string;
+  guard?: { confirmed?: boolean; maxDeletes?: number };
+}
+export const directUndoResultSchema = z.union([
+  z.object({ ok: z.literal(true) }).passthrough(),
+  z.object({ ok: z.literal(false), reason: z.string() }).passthrough(),
+]);
 export async function readDisplayPages(
   read: (offset: number, limit: number) => Promise<unknown>,
   start: number,
@@ -225,6 +270,44 @@ export class AttachedZwcadDocuments {
       string,
       unknown
     >;
+  }
+  /**
+   * Direct mode: runs one AI method body in the open drawing as one ZWCAD UNDO step. Guarded
+   * effects (bulk erase above guard.maxDeletes, layer deletion, purge) are not applied unless
+   * guard.confirmed; the host then answers {ok:false, code:'GUARD_CONFIRMATION_REQUIRED', guarded}.
+   */
+  async directExecute(target: HostTarget, input: DirectExecuteInput): Promise<DirectExecuteResult> {
+    await this.discover();
+    const guard = {
+      confirmed: input.guard?.confirmed === true,
+      maxDeletes: input.guard?.maxDeletes ?? 50,
+    };
+    return directExecuteResultSchema.parse(
+      await this.call(
+        target,
+        'direct-execute',
+        { requestId: input.requestId, code: input.code, label: input.label, guard },
+        false,
+        true,
+      ),
+    );
+  }
+  /** ZWCAD's U for that execute, only while it is still the drawing's latest change. */
+  async directUndo(target: HostTarget, undoId: string) {
+    await this.discover();
+    return directUndoResultSchema.parse(
+      await this.call(target, 'direct-undo', { undoId }, false, true),
+    );
+  }
+  async fingerprint(target: HostTarget) {
+    await this.discover();
+    return z
+      .object({
+        ok: z.literal(true),
+        documentHash: z.string().regex(/^[a-f0-9]{64}$/),
+        revision: z.number().int().nonnegative(),
+      })
+      .parse(await this.call(target, 'fingerprint', {}, false));
   }
   async capture(target: HostTarget) {
     await this.discover();

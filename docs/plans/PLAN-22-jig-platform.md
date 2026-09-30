@@ -2,10 +2,10 @@
 id: PLAN-22
 title: jig 플랫폼 1차 — 작업본·형식·실행·Rhino에 만들기·만들기 대화
 status: review
-version: 0.1
-updated: 2026-09-29
+version: 0.2
+updated: 2026-09-30
 owner: agent:claude
-related: [PLAN, PLAN-23, PLAN-24, FR-24, FR-23, FR-18, AC-41, AC-43, AC-44, AC-45, SPEC-07, SPEC-05, SPEC-01, SPEC-06, ARCH-03, ARCH-01, ADR-020, ADR-021, ADR-014, RESEARCH-10]
+related: [PLAN, PLAN-23, PLAN-24, ADR-022, FR-24, FR-23, FR-18, AC-41, AC-43, AC-44, AC-45, SPEC-07, SPEC-05, SPEC-01, SPEC-06, ARCH-03, ARCH-01, ADR-020, ADR-021, ADR-014, RESEARCH-10]
 ---
 
 # jig 플랫폼 1차 — 작업본·형식·실행·Rhino에 만들기·만들기 대화
@@ -349,3 +349,4 @@ RESEARCH-10 §15.2의 임시 표지 가운데 이 계획이 맡는 것이다. �
 - **T-065 · 자료 1차·자료 탭 — 구현·단위 검증(2026-09-30 4차).** [SPEC-08](../specs/SPEC-08-project-facts.md) 0.1(draft)을 새로 쓰고 색인(FR-09·18·24·25)에 올렸다. `src/jigs/knowledge.ts`(3글자 이상 `excerpt_fts` trigram·bm25, 짧은 말·색인 없는 DB는 LIKE, 검토 층: 확정·미확정·대체·기각·오염·제외 출처, 출처 규칙, 근거 검사), 경로 `src/server/facts-routes.ts`(`…/facts[/search|rules|refs]`, `…/facts/(issues|statements|sources)/:id[/review|open]`), 도구 `project_brief`·`project_search`·`project_issue`·`project_statement`·`project_checks`, 인용 게이트 `factCitations`(`jig-gates.ts`, 대화 턴 답 끝에 '확인되지 않은 인용' 표시), 자료 탭 `src/ui/facts-tab.tsx`·`facts-api.ts`(SCR-19 배치), 근거 칩 → 진술 창(`jig-panel/basis-parts.tsx`·`registry.ts`, `kit/settings.tsx`의 `FactBadge`가 칩 속성을 붙임). 크롤러 DB는 읽기 전용, 검토는 작업환경 DB에만. 증거: `tests/core/knowledge-facts.test.mjs`, `tests/server/{facts-routes,fact-citations}.test.mjs`. 남음: `browser-facts.mjs`는 돌리지 않았다. 실제 자료 DB로 화면 확인은 하지 않았다.
 - **T-063 5차 물결 — 만들기 잔여(2026-09-30).** `drafts.ts` `deleteFile`(쓰기와 같은 경로·링크 검사, `jig.json`·폴더 거절, 빈 폴더 정리)과 도구 `jig_delete_file`, 고정 때 빈 `steps/*` 제외, `failureReason`. `make-routes.ts`: 기본 예산 `MAKE_LIMITS`(도구 100회·호스트 명령 12·600초, 답 턴 포함), `MakeTurnGuard`(같은 이유로 점검·시험 세 번 잇달아 실패하거나 21·41…번째 턴이면 멈춤, 도구는 `MAKE_STOPPED` 409, 턴은 멈춤 카드). Codex 만들기 턴은 출력 `files`로 파일을 내고(파일마다 금지 이름·경로·링크 검사, 4 MB·최대 50개) 쓴 뒤 점검·시험을 돌려 `makeFiles`로 알리며 원장에 `code` 항목을 남긴다. 형식에 맞지 않는 `files`는 아무것도 쓰지 않고 `MAKE_FILES_INVALID`로 알린다. `make.md`는 두 공급자에 맞게 고쳤다. 증거: `tests/core/drafts.test.mjs`·`tests/server/make-routes.test.mjs` 등 19건과 관련 94건, `npm run typecheck`. 남음: 멈춘 턴에서도 Claude 파일 도구로 초안에 쓸 수 있다. 실제 Codex 만들기 턴, `browser-make.mjs`.
 - **T-048·T-055·T-057 5차 물결 — 패널 잔여(2026-09-30).** `panel.tsx`: 보존 객체 [보기](`focusObject`: 프로젝트 Rhino Sync를 최근 것부터 찾아 선택·화면 맞춤, 없으면 이유 문장), 패널 `report` 행동이 보고서 탭을 해당 보고서로 연다(`report-tab.tsx` `openReport`, 늦게 온 이전 읽기는 버림), KPI '미확정 미리보기' 라벨은 미리보기 출력일 때만 붙인다(`isPreviewOutput`·`kpiNote`). JIG 목록의 `stage: 'project'` 카드에 [삭제](확인 뒤 `DELETE …/jigs/:id/pin`, 작업본은 남김). `registry.ts` `result-tabs` 상한을 12로 맞췄다. 증거: `npm run typecheck:ui`. 남음: **고정 해제 엔진 경로(`DELETE …/jigs/:id/pin`)가 없어** [삭제]가 실제 엔진에서 동작하지 않는다. 보고서 행동을 선언한 `panel.json`이 아직 없다. `browser-jig-panel.mjs`·`browser-jigs.mjs`는 고치기만 하고 돌리지 않았다.
+- **6차 물결(2026-09-30).** jig 고정 해제 `DELETE …/jigs/:jigId/pin`(원격 `FORBIDDEN`, 없으면 `NOT_FOUND`, 설치 패키지·작업본은 남김, `JigStore.unpin`은 지웠는지 `boolean`). 멈춘 만들기 대화(`ConversationService.makeStopped`: 최근 멈춤 카드가 답 없음·`stop-here`·`new-conversation`)에는 `--add-dir`·파일 도구·`jig_delete_file`을 주지 않는다. example-grid 패널에 보고서 행동 '보고서 보기'와 `reports/grid-summary.json`. T-055의 만들기는 연결 Rhino에서 바로 적용으로 바뀌었다(PLAN-24 [T-074](PLAN-24-ai-conversations.md#t-074)). 증거: `tests/server/make-routes.test.mjs`·`conversations.test.mjs`, `tests/core/jig-panel.test.mjs`. 남음: `browser-make.mjs`, 실제 Rhino 만들기.

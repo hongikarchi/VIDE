@@ -465,7 +465,8 @@ test('M5 replay: a make-conversation writes, checks and asks; the pinned jig mat
     const posted = await api(`/projects/${project.id}/requests`, 'POST', {
       id,
       body,
-      permission: 'review',
+      // A make turn writes the draft: Auto (ADR-022). Plan keeps only the read tools.
+      mode: 'auto',
       provider: 'claude-cli',
       pins: [],
       sketches: [],

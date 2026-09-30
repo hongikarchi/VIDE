@@ -792,6 +792,15 @@
       "affects": ["beams"]
     },
     {
+      "key": "openingEdgeBeams",
+      "title": "개구 둘레 보 두기",
+      "help": "켜면 보이드에서 잘린 작은보를 보이드 둘레에 둔 보에 걸어 양 끝을 받친다. 끄면 잘린 끝은 내민 보로 남는다.",
+      "group": "작은보",
+      "type": "toggle",
+      "default": true,
+      "affects": ["beams"]
+    },
+    {
       "key": "restraintOn",
       "title": "수평 구속 두기",
       "help": "켜면 구속 레벨의 기둥 절점을 X·Y로 붙잡는다(유수지 상판).",
@@ -1387,7 +1396,8 @@
         "input.site.voids",
         "param.beamSpacing_m",
         "param.beamDirection",
-        "param.cantileverMax"
+        "param.cantileverMax",
+        "param.openingEdgeBeams"
       ],
       "writes": "beams",
       "speed": "release",

@@ -40,11 +40,23 @@ internal static class CodePolicy
                     if ((!objectTableRead &&DeniedNamespaces.Any(prefix => ns == prefix || ns.StartsWith(prefix + ".", StringComparison.Ordinal))) ||
                         name is "System.Environment" or "System.AppDomain" or "System.Type" or "System.Activator" or "System.Console" or "Rhino.RhinoApp" ||
                         symbol.Name == "GetType" && name == "object" ||
-                        name == "Rhino.RhinoDoc" && (symbol.IsStatic || symbol.Name is "Dispose" or "Close" or "Write3dmFile" or "WriteFile" or "ReadFile" or "Import" or "Export"))
+                        name == "Rhino.RhinoDoc" && (symbol.IsStatic || symbol.Name is "Dispose" or "Close" or "Write3dmFile" or "WriteFile" or "ReadFile" or "Import" or "Export") ||
+                        // Undo is VIDE's safety net for direct execution; generated code never controls it.
+                        name == "Rhino.RhinoDoc" && symbol.Name is "Undo" or "Redo" or "BeginUndoRecord" or "EndUndoRecord" or "ClearUndoRecords" or "AddCustomUndoEvent" or "UndoRecordingEnabled" ||
+                        name == "Rhino.RhinoDocUndoRecord")
                         failures.Add("API not permitted: " + (name.Length > 0 ? name + "." : ns + ".") + symbol.Name);
                 }
             }
         }
         return failures.Take(12).ToArray();
     }
+
+    /// <summary>Whether the code calls a Rhino table Purge/Compact, which undo cannot restore (direct-mode guard).</summary>
+    public static bool Purges(CSharpCompilation compilation) => compilation.SyntaxTrees.Any(tree =>
+    {
+        var model = compilation.GetSemanticModel(tree);
+        return tree.GetRoot().DescendantNodes().OfType<InvocationExpressionSyntax>().Any(call =>
+            model.GetSymbolInfo(call).Symbol is IMethodSymbol method && (method.Name.StartsWith("Purge", StringComparison.Ordinal) || method.Name == "Compact") &&
+            method.ContainingNamespace.ToDisplayString().StartsWith("Rhino", StringComparison.Ordinal));
+    });
 }

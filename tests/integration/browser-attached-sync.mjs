@@ -180,7 +180,12 @@ try {
   );
   assert.equal(captures, 2);
   await page.locator('#model').selectOption('codex-cli');
-  await page.locator('#permission').selectOption('apply');
+  // 자동 (default): the AI edits the open document directly inside one undo record.
+  await page.locator('#mode-toggle [data-mode="auto"]').click();
+  assert.equal(
+    await page.locator('#mode-toggle [data-mode="auto"]').getAttribute('aria-checked'),
+    'true',
+  );
   await page.locator('#body').fill('Raise the selected mass');
   assert.equal(
     await page.locator('#request').isDisabled(),
@@ -202,8 +207,9 @@ try {
   });
   await page.locator('#request').click();
   await page.waitForFunction(() => window.document.querySelector('#body').value === '');
-  assert.equal(sent.applyToSource, true);
+  assert.equal(sent.mode, 'auto');
   assert.equal(sent.permission, 'candidate');
+  assert.equal(sent.applyToSource, undefined);
   assert.ok(sent.baseRequestId);
   // A closed file stays listed with its last Sync; forced Sync needs the open file.
   connected = false;
@@ -216,7 +222,7 @@ try {
       passed: true,
       draftProtected: true,
       automaticSync: true,
-      explicitApplyPacket: true,
+      directAutoPacket: true,
       disconnectDisabled: true,
       directory,
     }),

@@ -32,6 +32,9 @@ namespace Vide.Zwcad.Connection
         private bool disposed, dirty;
         private long revision, generation;
         private DateTime changedAt;
+        /// <summary>The last direct execute (undoId) and the drawing revision right after it.</summary>
+        private string lastUndo; private long lastUndoRevision;
+        private TaskCompletionSource<object> undoing; private long undoingRevision;
 
         internal static AttachedDocument Connect(Document doc)
         {
@@ -57,6 +60,7 @@ namespace Vide.Zwcad.Connection
                 File.Move(record + ".tmp", record);
             } catch { listener.Stop(); throw; }
             doc.Database.ObjectAppended += Changed; doc.Database.ObjectModified += Changed; doc.Database.ObjectErased += Erased;
+            doc.Database.ObjectUnappended += Changed; doc.Database.ObjectReappended += Changed;
             Application.DocumentManager.DocumentToBeDestroyed += Closing;
             Application.Idle += Idle;
             Task.Run((Action)Listen);
@@ -91,7 +95,10 @@ namespace Vide.Zwcad.Connection
                         objectCount = space.Cast<ObjectId>().Count(), documentHash = Fingerprint(), revision, generation, live = Live, modified, hostBusy = Busy };
                 }
             }
+            if (method == "fingerprint") return new { ok = true, documentHash = Fingerprint(), revision };
             if (Busy) throw new InvalidOperationException("HOST_BUSY");
+            if (method == "direct-execute") return DirectExecute(request);
+            if (method == "direct-undo") return DirectUndo(Value(request, "undoId"));
             if (method == "displayPage") {
                 if (Value(request, "revision") != revision.ToString()) throw new InvalidOperationException("SOURCE_CHANGED");
                 using (Document.LockDocument()) {
@@ -110,9 +117,56 @@ namespace Vide.Zwcad.Connection
             {
                 string code = Value(request, "code") ?? "";
                 return String.Equals(Value(request, "write"), "true", StringComparison.OrdinalIgnoreCase)
-                    ? (object)AttachedEdit.Queue(Document, code) : AttachedEdit.Run(Document, code, false);
+                    ? (object)AttachedEdit.Queue(Document, () => AttachedEdit.Run(Document, code, true)) : AttachedEdit.Run(Document, code, false);
             }
             throw new InvalidOperationException("UNSUPPORTED_METHOD");
+        }
+        /// <summary>
+        /// Direct mode: the AI code runs in the open drawing as one VIDEAIRUN command (one UNDO step).
+        /// A run that changed the drawing gets an undoId; it stays undoable from VIDE while nothing
+        /// else has changed the drawing since.
+        /// </summary>
+        private object DirectExecute(Dictionary<string, object> request)
+        {
+            string code = Value(request, "code") ?? "", label = Value(request, "label") ?? "VIDE AI", requestId = Value(request, "requestId");
+            bool confirmed = false; int maxDeletes = 50; object value;
+            if (request.TryGetValue("guard", out value) && value is Dictionary<string, object> guard)
+            {
+                confirmed = String.Equals(Value(guard, "confirmed"), "true", StringComparison.OrdinalIgnoreCase);
+                int limit; if (Int32.TryParse(Value(guard, "maxDeletes"), out limit) && limit >= 0) maxDeletes = limit;
+            }
+            long before = revision;
+            return AttachedEdit.Queue(Document, () => {
+                var result = AttachedEdit.Direct(Document, code, label, confirmed, maxDeletes);
+                result["requestId"] = requestId;
+                string undoId = null;
+                if (true.Equals(result["ok"]) && revision != before)
+                {
+                    undoId = Guid.NewGuid().ToString(); lastUndo = undoId; lastUndoRevision = revision;
+                }
+                result["undoId"] = undoId; result["documentHash"] = Fingerprint(); result["revision"] = revision;
+                return result;
+            });
+        }
+        private object DirectUndo(string undoId)
+        {
+            if (undoId == null || undoId != lastUndo || revision != lastUndoRevision || undoing != null) return new { ok = false, reason = "not-latest" };
+            if (Application.DocumentManager.MdiActiveDocument != Document) return new { ok = false, reason = "document-not-active" };
+            undoing = new TaskCompletionSource<object>(); undoingRevision = revision; lastUndo = null;
+            var job = undoing.Task;
+            // ZWCAD's own U reverts the VIDEAIRUN step; VIDEAIUNDONE reports back once it has run.
+            Document.SendStringToExecute("_.U _VIDEAIUNDONE ", true, false, false);
+            return job;
+        }
+        /// <summary>Runs as the VIDEAIUNDONE command right after ZWCAD's U (see AttachedEdit).</summary>
+        internal static void UndoDone(Document doc)
+        {
+            AttachedDocument current;
+            if (doc == null || !Connections.TryGetValue(doc, out current) || current.undoing == null) return;
+            var job = current.undoing; current.undoing = null;
+            job.TrySetResult(current.revision != current.undoingRevision
+                ? (object)new { ok = true, documentHash = current.Fingerprint(), revision = current.revision }
+                : new { ok = false, reason = "undo-no-change" });
         }
         private void Listen()
         {
@@ -167,6 +221,8 @@ namespace Vide.Zwcad.Connection
         {
             if (disposed) return; disposed = true; listener.Stop();
             Document.Database.ObjectAppended -= Changed; Document.Database.ObjectModified -= Changed; Document.Database.ObjectErased -= Erased;
+            Document.Database.ObjectUnappended -= Changed; Document.Database.ObjectReappended -= Changed;
+            undoing?.TrySetResult(new { ok = false, reason = "closed" });
             Application.DocumentManager.DocumentToBeDestroyed -= Closing; Application.Idle -= Idle; Connections.Remove(Document);
             try { File.Delete(record); } catch (IOException) { }
         }

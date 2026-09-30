@@ -25,7 +25,10 @@ import {
   prepareBake,
   recordBaseline,
   registerBakeJob,
+  runDirectBake,
+  undoBake,
   type BakeContext,
+  type DirectHost,
 } from '../jigs/bake/bake.ts';
 import { overrideSchema, transformSchema, zoneSchema } from '../jigs/runtime/instance.ts';
 import { readFileSync } from 'node:fs';
@@ -57,8 +60,13 @@ export interface JigRouteContext {
   remote?: boolean;
   links?: DocumentLinks;
   sdk?: Pick<SdkExecution, 'readLayers' | 'importFile'>;
-  /** Starts the bake request (Rhino에 만들기 runs as a normal candidate request). */
+  /** Starts the work-copy bake request (only when no attached editor can run it directly). */
   execution?: Pick<Execution, 'start'>;
+  /**
+   * The attached editor's `direct-execute` / `direct-undo` / `fingerprint` (바로 적용). Omitted, the
+   * routes use `sdk.directExecute` / `sdk.directUndo` / `sdk.fingerprint` when the engine has them.
+   */
+  direct?: DirectHost;
 }
 
 /** HTTP statuses of the jig error codes (ARCH-03 §7); server.ts merges them into its table. */
@@ -80,6 +88,12 @@ export const jigStatuses: Record<string, number> = {
   BAKE_NOT_COMPUTED: 422,
   BAKE_JOB_MISSING: 409,
   NOT_APPLIED: 409,
+  BAKE_GUARDED: 409,
+  BAKE_FAILED: 422,
+  BAKE_READ_FAILED: 409,
+  BAKE_UNDO_UNAVAILABLE: 409,
+  BAKE_UNDO_NOT_LATEST: 409,
+  BAKE_UNDO_FAILED: 409,
 };
 /** What the person can do about a blocked before-bake gate (Design SCR-13 결과 서랍). */
 const bakeHints: Record<string, string> = {
@@ -286,6 +300,16 @@ export async function jigRoutes(
       pinned: store().pin(projectId, jig.id, jig.version),
       capabilities: jig.manifest.capabilities,
     });
+    return true;
+  }
+  // [삭제] on the jig list (T2 confirmed there): the jig leaves this project's list. The installed
+  // package and the project's instances stay; instances keep their pinned version.
+  if (pinRoute && method === 'DELETE') {
+    if (remote) throw new DomainError('FORBIDDEN');
+    const [, projectId, encoded] = pinRoute;
+    const jigId = decodeURIComponent(encoded);
+    if (!store().unpin(projectId, jigId)) throw new DomainError('NOT_FOUND');
+    send(200, { removed: jigId, pinned: store().pinned(projectId) });
     return true;
   }
   const projectJigs = /^\/api\/v1\/projects\/([^/]+)\/jigs$/.exec(url.pathname);
@@ -497,7 +521,7 @@ export async function jigRoutes(
     };
     if (rest === 'bake' && method === 'POST') {
       const input = bakeInput.parse(await body(request));
-      if (!context.execution || !context.links) throw new DomainError('EXECUTOR_NOT_READY');
+      if (!context.links) throw new DomainError('EXECUTOR_NOT_READY');
       const prepared = await prepareBake(bakeContext, {
         projectId,
         instanceId,
@@ -542,6 +566,38 @@ export async function jigRoutes(
         return true;
       }
       const link = context.links.get(projectId, prepared.linkId);
+      const direct = directOf(context);
+      if (direct && link.host === 'rhino' && !isFileLink(link)) {
+        // 바로 적용: the open document, one host undo record per body, baseline read right after.
+        const target = { instance: link.instance, documentId: link.documentId };
+        let made: Awaited<ReturnType<typeof runDirectBake>>;
+        try {
+          made = await runDirectBake({ ...bakeContext, direct }, prepared, target);
+        } catch (error) {
+          const code = (error as { code?: unknown }).code;
+          if (typeof code !== 'string' || !code.startsWith('BAKE_')) throw error;
+          // Undone already (guard, failure): the card says what happened; nothing stays changed.
+          const { guarded, reason, undoFailed } = error as Record<string, unknown>;
+          send(jigStatuses[code] ?? 409, {
+            ...shared,
+            code,
+            ...(guarded ? { guarded } : {}),
+            ...(reason ? { reason } : {}),
+            ...(undoFailed ? { undoFailed } : {}),
+          });
+          return true;
+        }
+        send(200, {
+          ...shared,
+          ...made.result,
+          status: 'applied',
+          runId: prepared.runId,
+          chunks: prepared.codes.length,
+        });
+        return true;
+      }
+      // No attached editor: the internal work copy (the original file is not changed).
+      if (!context.execution) throw new DomainError('EXECUTOR_NOT_READY');
       const basis = latestSyncOf(workspace, projectId, link);
       if (!basis) throw new DomainError('STALE_REFERENCE');
       const requestId = randomUUID();
@@ -583,6 +639,7 @@ export async function jigRoutes(
       send(200, {
         ...shared,
         status: 'submitted',
+        notice: '파일을 Rhino에서 열어 연결하세요',
         requestId,
         runId: prepared.runId,
         chunks: prepared.codes.length,
@@ -603,6 +660,13 @@ export async function jigRoutes(
     const baseline = /^bakes\/([^/]+)\/baseline$/.exec(rest);
     if (baseline && method === 'POST') {
       send(200, await recordBaseline(bakeContext, projectId, instanceId, baseline[1]));
+      return true;
+    }
+    const undo = /^bakes\/([^/]+)\/undo$/.exec(rest);
+    if (undo && method === 'POST') {
+      const direct = directOf(context);
+      if (!direct) throw new DomainError('BAKE_UNDO_UNAVAILABLE');
+      send(200, await undoBake({ store: store(), direct }, instanceId, undo[1]));
       return true;
     }
     return false;
@@ -669,6 +733,42 @@ export async function jigRoutes(
     return true;
   }
   return false;
+}
+
+/** The attached editor's direct commands: the context's own, else the engine's SDK methods. */
+function directOf(context: JigRouteContext): DirectHost | undefined {
+  if (context.direct) return context.direct;
+  const sdk = context.sdk as
+    | (Record<string, unknown> & {
+        directExecute?: DirectHost['execute'];
+        directUndo?: DirectHost['undo'];
+        // SdkExecution's names (sdk-execution.ts): runDirect(target, code, guard, {requestId, label}).
+        runDirect?: (
+          target: Parameters<DirectHost['execute']>[0],
+          code: string,
+          guard: Parameters<DirectHost['execute']>[1]['guard'],
+          meta: { requestId: string; label: string },
+        ) => ReturnType<DirectHost['execute']>;
+        undoDirect?: DirectHost['undo'];
+        fingerprint?: DirectHost['fingerprint'];
+      })
+    | undefined;
+  const execute: DirectHost['execute'] | undefined =
+    typeof sdk?.directExecute === 'function'
+      ? (target, command) => sdk.directExecute!.call(sdk, target, command)
+      : typeof sdk?.runDirect === 'function'
+        ? (target, { code, guard, requestId, label }) =>
+            sdk.runDirect!.call(sdk, target, code, guard, { requestId, label })
+        : undefined;
+  const undo = sdk?.directUndo ?? sdk?.undoDirect;
+  if (!sdk || !execute || typeof undo !== 'function') return undefined;
+  return {
+    execute,
+    undo: (target, undoId) => undo.call(sdk, target, undoId),
+    ...(typeof sdk.fingerprint === 'function'
+      ? { fingerprint: (target) => sdk.fingerprint!.call(sdk, target) }
+      : {}),
+  };
 }
 
 /**

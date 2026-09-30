@@ -195,6 +195,9 @@
     }
   ],
   "panel": "panel.json",
+  "reports": [
+    { "id": "grid-summary", "file": "reports/grid-summary.json", "title": "격자 골조 배치 요약" }
+  ],
   "capabilities": [
     { "name": "sync.read", "reason": "슬래브 외곽선·보이드 레이어의 곡선을 읽습니다" }
   ],

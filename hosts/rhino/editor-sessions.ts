@@ -6,6 +6,7 @@ import { editorConnectionSchema, resumeEditor, type ChangeSet } from './editor-c
 import { launchRhinoWorker } from './worker-client.ts';
 import type { HostTarget, HostDocuments } from '../../src/contracts/host-documents.ts';
 import type { ReadScope } from '../../src/contracts/native-model.ts';
+import type { DirectExecuteInput } from './application-contract.ts';
 
 type Resumed = ReturnType<typeof resumeEditor>;
 type Worker = Omit<Resumed, 'editorConnection'> & {
@@ -268,6 +269,21 @@ export class EditorSessions {
     if ((await this.connectionKind(target.instance)) !== 'attached-editor')
       throw failure('TARGET_MISMATCH');
     return (await this.get(target)).displayEditor(scope);
+  }
+  /** Direct mode runs only in a document the user attached (never an owned editing copy). */
+  private async attachedWorker(target: HostTarget) {
+    if ((await this.connectionKind(target.instance)) !== 'attached-editor')
+      throw failure('TARGET_MISMATCH');
+    return this.get(target);
+  }
+  async directExecute(target: HostTarget, input: DirectExecuteInput) {
+    return (await this.attachedWorker(target)).directExecute(input);
+  }
+  async directUndo(target: HostTarget, undoId: string) {
+    return (await this.attachedWorker(target)).directUndo(undoId);
+  }
+  async fingerprint(target: HostTarget) {
+    return (await this.attachedWorker(target)).fingerprint();
   }
   async changes(target: HostTarget, since: number) {
     if ((await this.connectionKind(target.instance)) !== 'attached-editor')

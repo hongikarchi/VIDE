@@ -1,0 +1,316 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="description" content="Claude Code의 AskUserQuestion을 VIDE 질문 카드로 받기"><meta name="generator" content="tools/docs/build.mjs — generated from docs/tdd/SPIKE-2026-09-30-native-questions-claude.md; do not edit"><title>VIDE · Claude Code의 AskUserQuestion을 VIDE 질문 카드로 받기</title><style>
+:root{--ink:#292c2d;--muted:#626b6e;--line:#e1e3e1;--soft:#f5f5f1;--coral:#d97660;--paper:#fff;--font:"Pretendard","Noto Sans KR","Malgun Gothic",Arial,sans-serif}
+*{box-sizing:border-box}html{scroll-behavior:smooth;scroll-padding-top:92px}body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--font);letter-spacing:-.025em}a{color:inherit;text-underline-offset:4px}button,input,textarea,select{font:inherit;color:inherit}button{cursor:pointer;border:1px solid var(--line);border-radius:4px;background:var(--paper);padding:10px 15px;line-height:1.3}button:hover{background:var(--soft)}button:disabled{cursor:default;opacity:.6}button.primary{background:var(--ink);color:#fff;border-color:var(--ink)}button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible{outline:3px solid var(--coral);outline-offset:3px}textarea{resize:vertical}::selection{background:#f2d7ce}[hidden]{display:none!important}
+.skip{position:fixed;top:-80px;left:20px;z-index:100;background:white;padding:12px}.skip:focus{top:10px}
+.topbar{height:68px;position:sticky;top:0;z-index:30;border-bottom:1px solid var(--line);background:#fffffff7;display:flex;align-items:center;justify-content:space-between;gap:24px;padding:0 max(24px,calc((100vw - 1450px)/2))}.brand{text-decoration:none;display:flex;align-items:center;gap:15px;white-space:nowrap}.brand b{font-size:29px;letter-spacing:-.08em}.brand span{border-left:1px solid var(--line);padding-left:15px;font-size:11px;letter-spacing:.08em}.doc-tabs{display:flex;height:100%;gap:25px;align-items:stretch;min-width:0;overflow-x:auto}.doc-tab{flex-shrink:0}.doc-tab{display:flex;align-items:center;position:relative;text-decoration:none;font-size:13px;color:var(--muted);white-space:nowrap}.doc-tab.active{color:var(--ink);font-weight:650}.doc-tab.active:after{content:"";position:absolute;bottom:0;left:0;right:0;height:3px;background:var(--coral)}.top-actions{display:flex;gap:8px}.top-actions button{padding:8px 11px;font-size:12px;white-space:nowrap}
+.layout{max-width:1450px;margin:auto;padding:0 30px;display:grid;grid-template-columns:218px minmax(0,1fr);gap:55px}.toc-shell{align-self:start;position:sticky;top:99px;padding-top:15px;max-height:calc(100vh - 120px)}.eyebrow{font-size:10px;line-height:1.6;letter-spacing:.16em;font-weight:500;color:var(--muted)}.toc-title{display:flex;justify-content:space-between;align-items:center;margin-bottom:15px}.toc-title strong{font-size:12px;font-weight:500}.toc-title span{font-size:10px;color:var(--muted)}#toc-toggle{display:none}.toc-search{width:100%;padding:10px 12px;border:1px solid var(--line);background:var(--paper);border-radius:4px;font-size:12px}.toc-hint{font-size:10px;color:var(--muted);margin:8px 0 15px;line-height:1.6}.toc-links{max-height:calc(100vh - 323px);overflow-y:auto;padding:0 8px 8px 0}.toc-links a{display:block;padding:8px 10px;margin:2px 0;border-left:2px solid transparent;border-radius:0 3px 3px 0;text-decoration:none;font-size:12px;line-height:1.65;color:var(--muted);word-break:keep-all;overflow-wrap:anywhere}.toc-links a:hover{background:var(--soft)}.toc-links a.active{border-color:var(--coral);background:var(--soft);color:var(--ink)}.toc-next{border-top:1px solid var(--line);padding-top:13px;margin-top:14px;font-size:11px;color:var(--muted);line-height:1.7}.toc-next b{font-weight:500;color:var(--ink)}
+main{min-width:0;max-width:1040px;padding-bottom:70px}.doc-hero{padding:55px 0 32px;border-bottom:1px solid var(--line)}.hero-label{display:flex;justify-content:space-between;gap:20px;align-items:center}.doc-hero h1{font-size:clamp(32px,3.15vw,48px);line-height:1.22;letter-spacing:-.065em;font-weight:550;margin:20px 0 18px;max-width:900px;word-break:keep-all;overflow-wrap:anywhere}.doc-description{font-size:14px;color:var(--muted);line-height:1.8;margin:0}.pill{display:inline-block;font-size:10px;letter-spacing:.01em;padding:5px 9px;border:1px solid var(--line);border-radius:3px;white-space:nowrap}.hero-meta{margin-top:22px;font-size:12px;color:var(--muted);line-height:1.9}.hero-meta p{font-size:12px;line-height:1.9;margin:8px 0}.hero-meta strong{font-weight:600}.hero-meta blockquote{margin:25px 0 0;padding:20px 22px;background:var(--soft);border-left:3px solid var(--coral);color:var(--ink)}.hero-meta blockquote p{word-break:keep-all;overflow-wrap:anywhere;font-size:18px;line-height:1.8;letter-spacing:-.03em;margin:0}.doc-section{padding:44px 0;border-bottom:1px solid var(--line);scroll-margin-top:93px;min-width:0}.doc-section h2{font-size:28px;font-weight:550;letter-spacing:-.055em;line-height:1.4;margin:0 0 24px;word-break:keep-all;overflow-wrap:anywhere}.section-num{font-weight:400;color:var(--coral);margin-right:10px;font-size:.75em;letter-spacing:-.02em}.doc-section h3{font-size:19px;font-weight:600;line-height:1.5;margin:32px 0 14px;letter-spacing:-.04em}.doc-section h4{font-size:16px;line-height:1.5;margin:25px 0 12px}.doc-section p{font-size:15px;line-height:1.92;margin:13px 0;word-break:keep-all;overflow-wrap:anywhere}.doc-section strong{font-weight:650}.doc-section ul,.doc-section ol{padding-left:22px;font-size:15px;line-height:1.85}.doc-section li{margin:7px 0}.doc-section blockquote{border-left:3px solid var(--coral);background:var(--soft);margin:23px 0;padding:15px 22px}.doc-section blockquote p{margin:0;font-size:16px;line-height:1.85}.doc-section hr{border:0;border-top:1px solid var(--line);margin:28px 0}.doc-section code:not(pre code){font-family:Consolas,"Liberation Mono",monospace;font-size:.91em;background:var(--soft);padding:2px 5px;border-radius:3px;overflow-wrap:anywhere}
+.table-scroll{overflow-x:auto;overscroll-behavior-x:contain;margin:22px 0;border-top:1px solid var(--ink);border-bottom:1px solid var(--line);width:100%}table{border-collapse:collapse;width:100%;font-size:12.5px;line-height:1.75;table-layout:auto}th,td{padding:13px 14px;vertical-align:top;text-align:left;border-bottom:1px solid var(--line);word-break:keep-all;overflow-wrap:anywhere}th{background:var(--soft);font-weight:600;font-size:11.5px}tr:last-child td{border-bottom:0}td:first-child{font-weight:550;min-width:125px}td{min-width:145px}.table-scroll table:has(th:nth-child(2)){min-width:410px}.table-scroll table:has(th:nth-child(3)){min-width:585px}.table-scroll table:has(th:nth-child(4)){min-width:710px}.table-scroll table:has(th:nth-child(5)){min-width:840px}.code-frame{position:relative;margin:23px 0;border:1px solid var(--line);border-radius:4px;overflow:hidden;background:#f8f8f5}.code-frame pre{margin:0;padding:49px 20px 19px;overflow:auto;max-height:680px;font-family:Consolas,"Liberation Mono",monospace;font-size:12px;line-height:1.9;white-space:pre;letter-spacing:-.01em}.copy-code{position:absolute;top:9px;right:10px;font-size:10px;padding:5px 9px;background:#fff}.code-frame .code-label{position:absolute;left:18px;top:15px;font-size:9px;color:var(--muted);letter-spacing:.12em}.doc-footer{margin-top:30px;display:flex;justify-content:space-between;gap:24px;font-size:10px;color:var(--muted);line-height:1.8}
+.review-workspace{background:var(--soft);border:1px solid var(--line);padding:27px;margin:30px 0 5px;border-radius:4px}.workspace-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:15px}.workspace-heading h3{margin:6px 0 10px}.workspace-heading p{font-size:12px;margin:0 0 20px}.checks{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}.check-group{min-width:0;margin:0;padding:14px 15px;border:1px solid var(--line);background:#fff;border-radius:3px}.check-group legend{padding:0 7px;font-size:12px;font-weight:600}.check-line{display:flex;gap:9px;align-items:flex-start;font-size:12px;line-height:1.7;margin:9px 0;cursor:pointer}.check-line input{accent-color:var(--coral);margin:3px 0 0;flex:none;width:15px;height:15px}.stage-field{display:flex;align-items:center;gap:15px;font-size:12px;margin:26px 0 20px}.stage-field select{background:#fff;border:1px solid var(--line);padding:9px 12px;max-width:100%;font-size:12px;border-radius:3px}.note-grid{display:grid;grid-template-columns:1fr 1fr;gap:18px}.note-field{display:block;min-width:0}.note-field>span{display:block;margin-bottom:8px;font-size:12px}.note-field textarea{width:100%;min-height:96px;border:1px solid var(--line);border-radius:3px;padding:12px;background:#fff;font-size:13px;line-height:1.8}.note-field:last-child{grid-column:1/-1}.note-actions{display:flex;gap:9px;flex-wrap:wrap;margin-top:20px}.note-actions button{font-size:12px}.review-workspace p.save-status{font-size:11px;margin:15px 0 5px;color:var(--muted)}.review-workspace p.micro{font-size:10px;line-height:1.8;color:var(--muted);margin:0}.toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);background:var(--ink);color:white;padding:12px 18px;border-radius:4px;font-size:12px;z-index:60;max-width:90vw;box-shadow:0 5px 24px #0002;line-height:1.6}.empty-nav{font-size:12px;color:var(--muted);padding:15px 5px;line-height:1.7}
+@media(min-width:1600px){.layout{gap:65px}}
+@media(max-width:1100px){.layout{grid-template-columns:188px minmax(0,1fr);gap:30px;padding:0 24px}.topbar{gap:18px}.brand span{display:none}.doc-hero h1{font-size:38px}.doc-section p{font-size:14px}.doc-section h2{font-size:26px}.doc-tabs{gap:23px}.review-workspace{padding:22px}.checks{grid-template-columns:1fr}}
+@media(max-width:820px){html{scroll-padding-top:84px}.topbar{height:60px;padding:0 18px;gap:14px}.brand b{font-size:27px}.doc-tabs{gap:18px}.doc-tab{font-size:12px}.top-actions{gap:6px}.top-actions button{font-size:10px;padding:7px 9px}.layout{display:block;padding:0 22px}.toc-shell{position:relative;top:auto;max-height:none;padding-top:18px;border-bottom:1px solid var(--line)}.toc-title{margin:0;padding-bottom:14px}.toc-title strong{font-size:11px}.toc-title>span{display:none}#toc-toggle{display:block;font-size:11px;padding:7px 11px}.toc-body{display:none}.toc-shell.open .toc-body{display:block}.toc-links{max-height:240px;margin-bottom:12px}.toc-next{display:none}.doc-hero{padding:34px 0 27px}.doc-hero h1{font-size:35px;max-width:600px}.hero-label{align-items:flex-start;gap:10px;flex-wrap:wrap}.hero-label .pill{font-size:9px}.doc-section{padding:34px 0;scroll-margin-top:80px}.doc-section h2{font-size:25px;line-height:1.45}.doc-section p{font-size:14px;line-height:1.95}.hero-meta blockquote p{font-size:16px}.note-grid{grid-template-columns:1fr}.stage-field{flex-wrap:wrap}.note-field:last-child{grid-column:auto}.workspace-heading{display:block}.workspace-heading .pill{margin-bottom:17px}.doc-footer{flex-direction:column;gap:5px}}
+@media(max-width:480px){.topbar{gap:10px;padding:0 16px}.doc-tabs{gap:15px}.top-actions button#source-download{display:none}.brand b{font-size:25px}.doc-hero h1{font-size:31px;line-height:1.3}.doc-hero .eyebrow{font-size:9px}.doc-description{font-size:12px}.hero-meta{font-size:11px}.hero-meta p{font-size:11px;line-height:1.9}.hero-meta blockquote{padding:16px 16px}.hero-meta blockquote p{font-size:15px}.doc-section h2{font-size:23px}.doc-section h3{font-size:18px}.doc-section p{font-size:14px}.table-scroll{margin:20px 0}td,th{padding:11px 12px}.code-frame pre{font-size:11px;padding-left:15px}.review-workspace{padding:18px}.note-actions{gap:8px}.note-actions button{padding:9px 10px;font-size:11px}.check-line{font-size:12px}.top-actions button{padding:7px 9px}}
+@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}*{transition:none!important}}
+@media print{@page{margin:15mm}.topbar,.toc-shell,.skip,.copy-code,.toast,.review-workspace,.doc-footer{display:none!important}.layout{display:block;padding:0;max-width:none}main{max-width:none;padding:0}.doc-hero{padding:0 0 18px}.doc-hero h1{font-size:27px}.doc-section{padding:22px 0;break-inside:auto}.doc-section h2{font-size:21px;break-after:avoid}.doc-section h3{font-size:16px;break-after:avoid}.doc-section p{font-size:11px;line-height:1.75}.table-scroll{overflow:visible;break-inside:auto}table{min-width:0!important;font-size:9px;table-layout:fixed}td,th{min-width:0;font-size:9px;word-break:normal;padding:7px}tr{break-inside:avoid}.code-frame pre{white-space:pre-wrap;max-height:none;font-size:9px;padding:16px;overflow:visible;word-break:break-word}.code-label{display:none}.hero-meta blockquote p{font-size:14px}}
+
+/* ---- 작성자별 첨삭 표기 (AI.md §5) -------------------------------------
+   ins  = 추가·교체 제안 (초록)   del = 삭제·교체 대상 (빨강 취소선)
+   blockquote.review = 검토 코멘트 (파란 상자)   .review-appendix = 검토 요약 부록
+   body.review-original  → 원문만 (제안·코멘트 숨김)
+   body.review-accepted  → 인라인 제안 미리보기 (코멘트 대안은 적용하지 않음)
+------------------------------------------------------------------------- */
+ins{background:#dff3e4;color:#17512a;text-decoration:none;border-bottom:2px solid #4f9d63;padding:0 3px;border-radius:2px}
+del{background:#fbe4e0;color:#8f3324;text-decoration:line-through;text-decoration-color:#c9573f;text-decoration-thickness:1.5px;padding:0 3px;border-radius:2px}
+h1 ins,h1 del,h2 ins,h2 del,h3 ins,h3 del{border-bottom-width:3px}
+blockquote.review{margin:14px 0 24px;padding:12px 16px 12px 18px;border:0;border-left:4px solid #3b6fd6;background:#eef3fc;border-radius:0 6px 6px 0;font-size:14px;line-height:1.75;color:#24303f}
+blockquote.review p{margin:0}
+blockquote.review p+p{margin-top:9px;padding-top:9px;border-top:1px dashed #c3d2ef}
+.review-label{display:inline-flex;gap:6px;align-items:center;margin-right:8px;font-weight:600;font-size:11.5px;vertical-align:1px;white-space:nowrap}
+.review-agent{color:#3b6fd6;text-transform:uppercase;letter-spacing:.09em}
+.review-id{background:#3b6fd6;color:#fff;border-radius:3px;padding:1px 7px;font-weight:600}
+.review-sev{border-radius:3px;padding:1px 7px;font-weight:600}
+.review-sev[data-sev="높음"]{background:#c9573f;color:#fff}
+.review-sev[data-sev="중간"]{background:#f0c14b;color:#3a2a00}
+.review-sev[data-sev="낮음"]{background:#d9dfe2;color:#3d484d}
+.doc-section.review-appendix{margin-top:60px;padding-top:28px;border-top:3px solid #3b6fd6}
+.doc-section.review-appendix h2 .section-num{color:#3b6fd6}
+.review-pill{border-color:#3b6fd6;color:#3b6fd6;text-decoration:none}
+.review-pill:hover{background:#eef3fc}
+.review-legend{margin:12px 0 0;font-size:12px;color:var(--muted);line-height:1.8}
+.review-legend span{margin-right:12px;white-space:nowrap}
+.review-select{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);white-space:nowrap}
+.review-select select{padding:7px 9px;border:1px solid var(--line);border-radius:4px;background:var(--paper);font-size:12px}
+blockquote.review[data-review-agent="codex"]{border-left-color:#7250a0;background:#f4effa;color:#352b46}
+[data-review-agent="codex"] .review-agent{color:#7250a0}
+[data-review-agent="codex"] .review-id{background:#7250a0}
+.review-pill[data-review-agent="codex"]{border-color:#7250a0;color:#7250a0}
+.review-pill[data-review-agent="codex"]:hover{background:#f4effa}
+.review-appendix[data-review-agent="codex"]{border-top-color:#7250a0}
+.review-appendix[data-review-agent="codex"] h2 .section-num{color:#7250a0}
+.review-label[id]{scroll-margin-top:110px}
+.review-label[id]:target{outline:2px solid currentColor;outline-offset:4px}
+.review-legend p{margin:5px 0}
+.review-select select:disabled{opacity:.6}
+.top-actions{flex-wrap:wrap}
+[hidden]{display:none!important}
+@media(max-width:1100px){.topbar{height:auto;min-height:68px;flex-wrap:wrap;padding-top:8px;padding-bottom:8px;gap:8px 18px}.doc-tabs{height:34px;flex:1;justify-content:flex-end}.top-actions{flex-basis:100%;justify-content:flex-end}.review-select select{max-width:185px}}
+@media(min-width:821px) and (max-width:1100px){.toc-shell{top:135px;max-height:calc(100vh - 155px)}}
+.toc-links a[data-reviews]{display:flex;justify-content:space-between;gap:8px;align-items:center}
+.toc-links a[data-reviews]::after{content:attr(data-reviews);flex:none;min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:#3b6fd6;color:#fff;font-size:10px;line-height:18px;text-align:center}
+body.review-original ins,body.review-original blockquote.review,body.review-original .review-appendix,body.review-original .review-legend{display:none}
+body.review-original del{background:none;color:inherit;text-decoration:none;padding:0}
+body.review-original .toc-links a[data-reviews]::after{display:none}
+body.review-accepted del,body.review-accepted blockquote.review,body.review-accepted .review-appendix,body.review-accepted .review-legend{display:none}
+body.review-accepted ins{background:none;color:inherit;border:0;padding:0}
+body.review-accepted .toc-links a[data-reviews]::after{display:none}
+@media print{blockquote.review{break-inside:avoid;background:#eef3fc!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}ins,del{-webkit-print-color-adjust:exact;print-color-adjust:exact}.review-select{display:none}}
+</style></head><body>
+<!-- GENERATED FILE — source: docs/tdd/SPIKE-2026-09-30-native-questions-claude.md — run: npm --prefix tools/docs run build -->
+<a class="skip" href="#reading-main">본문으로 이동</a>
+<header class="topbar"><a class="brand" href="../../index.html" aria-label="VIDE 문서 모음"><b>V.</b><span>VIDE</span></a><nav class="doc-tabs" aria-label="문서 선택"><a class="doc-tab" href="../PRD.html">PRD</a><a class="doc-tab" href="../specs/README.html">SPEC</a><a class="doc-tab" href="../../Design.html">Design</a><a class="doc-tab" href="../architecture/ARCH-01-system.html">기술 설계</a><a class="doc-tab" href="../plans/PLAN.html">PLAN</a><a class="doc-tab" href="../../DEVELOPMENT_GUIDE.html">개발 가이드</a><a class="doc-tab" href="../../AI.html">AI 규약</a></nav><div class="top-actions"><button id="source-download" title="현재 문서의 Markdown 원문 저장">원문 ↓</button><button id="print-doc" title="현재 문서 인쇄">인쇄</button></div></header>
+<div class="layout"><aside class="toc-shell" id="toc-shell" aria-label="현재 문서의 목차"><div class="toc-title"><strong>CONTENTS</strong><span id="toc-count"></span><button id="toc-toggle" aria-expanded="false" aria-controls="toc-body">목차 열기</button></div><div class="toc-body" id="toc-body"><input class="toc-search" id="toc-search" type="search" placeholder="장 제목으로 찾기" aria-label="현재 문서 목차 검색"><p class="toc-hint" id="nav-hint" role="status">장 제목으로 찾아갑니다.</p><nav class="toc-links" id="toc-links" aria-label="본문 장 이동"></nav><div class="toc-next">다음 작성할 문서<br><b>다음 작업 · PLAN §6.5</b><br>현재 단계와 작업별 계획을 확인한 뒤 해당 범위에서 재개</div></div></aside><main id="reading-main" tabindex="-1"><article id="spike-2026-09-30-native-questions-claude" class="document"><header class="doc-hero"><div class="hero-label"><span class="eyebrow">VERIFICATION</span><span><span class="pill">DRAFT · v0.1</span><span class="pill">7 CHAPTERS</span></span></div><h1 tabindex="-1">Claude Code의 AskUserQuestion을 VIDE 질문 카드로 받기</h1><div class="hero-meta">
+</div></header><section class="doc-section" id="spike-2026-09-30-native-questions-claude-section-x0"><h2><span aria-hidden="true" class="section-num">00 /</span> 질문</h2>
+<p>사용자 결정(2026-09-30 ④): 질문 카드 화면은 유지하고, 공급자 자체 질문 기능으로 출처를 바꿀 수 있는지 확인한다. VIDE는 Claude Code를 <code>-p</code> 한 번 실행으로 돌리고, 지금은 <code>--json-schema</code> 구조화 출력(<code>status: question</code> + <code>questions</code>)으로 질문 카드를 만든다(<code>src/server/turn-output.ts</code>). 확인할 것은 두 가지다.</p>
+<ol>
+<li>Claude Code가 <code>-p</code>에서 자기 질문 도구 <code>AskUserQuestion</code>을 호출할 때, 그 질문이 VIDE에 도달하는가.</li>
+<li>VIDE가 사용자의 답을 <strong>같은 실행 안에서</strong> 돌려주고 모델이 그 답으로 계속하는가.</li>
+</ol>
+<p>시도 순서: (a) <code>--permission-prompt-tool mcp__vide__ask</code>(VIDE MCP 도구), (b) stream-json 제어 프로토콜(<code>control_request</code> / <code>can_use_tool</code>), (c) 실패 시 현 구조화 출력 카드 유지.</p>
+</section><section class="doc-section" id="spike-2026-09-30-native-questions-claude-section-x1"><h2><span aria-hidden="true" class="section-num">01 /</span> 환경</h2>
+<ul>
+<li>Claude Code 2.1.285(<code>C:\Users\user\.local\bin\claude.exe</code>), 구독 로그인, 모델 <code>haiku</code>. <code>cli-compat.json</code> 범위(&gt;=2.1.284 &lt;2.2.0) 안.</li>
+<li>Windows 11, Node 24. 에이전트 셸의 <code>CLAUDE*</code>/<code>ANTHROPIC*</code> 환경변수는 지우고 실행.</li>
+<li>작업 폴더·스크립트는 세션 scratchpad(<code>…/scratchpad/nq/</code>). 저장소에는 두지 않음.</li>
+<li>프롬프트는 합성 문장만: &quot;Use the AskUserQuestion tool once to ask which color I prefer, with options Red and Blue. Then reply with only the chosen color.&quot; 프로젝트 자료 없음.</li>
+<li>공통 인자(아래 <code>$COMMON</code>): <code>-p --strict-mcp-config --mcp-config &lt;cfg&gt; --setting-sources '' --no-session-persistence --no-chrome --disable-slash-commands --output-format stream-json --verbose --model haiku</code>.</li>
+</ul>
+</section><section class="doc-section" id="spike-2026-09-30-native-questions-claude-section-x2"><h2><span aria-hidden="true" class="section-num">02 /</span> 조사: CLI가 무엇을 지원하는가</h2>
+<ul>
+<li><code>claude --help</code>에 <code>--permission-prompts &lt;host|none&gt;</code>이 있고 &quot;host (the SDK host or --permission-prompt-tool)&quot;로 설명된다. <code>--permission-prompt-tool &lt;tool&gt;</code>은 help 목록에 없지만 인자 해석기에는 있다(&quot;MCP tool to use for permission prompts (only works with --print)&quot;).</li>
+<li>실행 파일 안 문자열: <code>control_request</code>/<code>control_response</code>, <code>can_use_tool</code>(요청 필드 <code>tool_name</code>, <code>input</code>, <code>tool_use_id</code>, <code>requires_user_interaction</code>), <code>AskUserQuestion</code>의 &quot;parked … host_answer&quot; 처리, 그리고 답은 <code>updatedInput.answers</code>로 받는다. 즉 AskUserQuestion은 <strong>권한 요청 경로</strong>로 호스트에 간다.</li>
+</ul>
+</section><section class="doc-section" id="spike-2026-09-30-native-questions-claude-section-x3"><h2><span aria-hidden="true" class="section-num">03 /</span> 결과</h2>
+<div aria-label="검증 표 1" class="table-scroll" role="region" tabindex="0"><table>
+<thead>
+<tr>
+<th>#</th>
+<th>방법</th>
+<th>명령(요지)</th>
+<th>관찰</th>
+<th>판정</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>a1</td>
+<td>MCP 권한 도구</td>
+<td><code>$COMMON --tools AskUserQuestion --permission-prompt-tool mcp__vide__ask &quot;&lt;prompt&gt;&quot;</code> (stdio MCP 서버의 <code>ask</code>)</td>
+<td>모델이 <code>AskUserQuestion</code> tool_use → CLI가 <code>ask({tool_name:&quot;AskUserQuestion&quot;, input:{questions:[…]}, tool_use_id})</code> 호출 → <code>{&quot;behavior&quot;:&quot;allow&quot;,&quot;updatedInput&quot;:{…,&quot;answers&quot;:{&quot;Which color do you prefer?&quot;:&quot;Blue&quot;}}}</code> 반환 → tool_result <code>Your questions have been answered: &quot;…&quot;=&quot;Blue&quot;</code> → 최종 답 <code>Blue</code></td>
+<td><strong>통과</strong></td>
+</tr>
+<tr>
+<td>a2</td>
+<td>a1 + <code>--permission-mode dontAsk</code></td>
+<td>같음</td>
+<td><code>ask</code>가 불리지 않음. tool_result &quot;Permission to use AskUserQuestion has been denied because Claude Code is running in don't ask mode&quot;</td>
+<td>실패(모드 때문)</td>
+</tr>
+<tr>
+<td>a3</td>
+<td>a1 + <code>--allowedTools mcp__vide__ping</code></td>
+<td>모델에게 ping 후 질문 요청</td>
+<td><code>ping</code>은 권한 도구를 거치지 않고 바로 실행, <code>AskUserQuestion</code>만 <code>ask</code>로 옴</td>
+<td>통과</td>
+</tr>
+<tr>
+<td>a4</td>
+<td>a1 + 답을 150초 늦춤</td>
+<td><code>ASK_DELAY=150000</code></td>
+<td>150초 뒤 답 반영, 실행 정상 종료(<code>result success</code>)</td>
+<td>통과</td>
+</tr>
+<tr>
+<td>b1</td>
+<td>stream-json, 권한 경로 없음</td>
+<td><code>$COMMON --tools AskUserQuestion --input-format stream-json</code> (stdin에 user 메시지)</td>
+<td>init의 <code>tools: []</code> — 도구가 목록에서 빠짐. 모델이 텍스트로 가짜 <code>&lt;function_calls&gt;</code>를 씀</td>
+<td>실패</td>
+</tr>
+<tr>
+<td>b2</td>
+<td>b1 + <code>initialize</code> 제어 요청 먼저</td>
+<td><code>{&quot;type&quot;:&quot;control_request&quot;,&quot;request_id&quot;:&quot;init-1&quot;,&quot;request&quot;:{&quot;subtype&quot;:&quot;initialize&quot;}}</code></td>
+<td><code>control_response success</code>(commands·agents 목록)이지만 여전히 <code>tools: []</code></td>
+<td>실패</td>
+</tr>
+<tr>
+<td>b3</td>
+<td>b2 + <code>--permission-prompt-tool stdio</code></td>
+<td>같음</td>
+<td>init <code>tools:[&quot;AskUserQuestion&quot;]</code> → tool_use → stdout에 <code>{&quot;type&quot;:&quot;control_request&quot;,&quot;request_id&quot;:&quot;&lt;uuid&gt;&quot;,&quot;request&quot;:{&quot;subtype&quot;:&quot;can_use_tool&quot;,&quot;tool_name&quot;:&quot;AskUserQuestion&quot;,&quot;input&quot;:{…},&quot;tool_use_id&quot;:&quot;…&quot;,&quot;requires_user_interaction&quot;:true}}</code> → stdin에 <code>{&quot;type&quot;:&quot;control_response&quot;,&quot;response&quot;:{&quot;subtype&quot;:&quot;success&quot;,&quot;request_id&quot;:&quot;&lt;uuid&gt;&quot;,&quot;response&quot;:{&quot;behavior&quot;:&quot;allow&quot;,&quot;updatedInput&quot;:{…,&quot;answers&quot;:{…:&quot;Blue&quot;}}}}}</code> → tool_result 반영 → <code>Blue</code></td>
+<td><strong>통과</strong></td>
+</tr>
+<tr>
+<td>b4</td>
+<td>b3에서 <code>initialize</code> 생략</td>
+<td>같음</td>
+<td>b3와 같게 동작 — <code>initialize</code>는 필요 없음</td>
+<td>통과</td>
+</tr>
+<tr>
+<td>b5</td>
+<td>b4 + <code>--permission-mode dontAsk</code></td>
+<td>같음</td>
+<td><code>system/permission_denied</code>(decision_reason_type <code>mode</code>), 제어 요청 없음</td>
+<td>실패(모드 때문)</td>
+</tr>
+<tr>
+<td>b6</td>
+<td>b4, 답 대신 거절</td>
+<td><code>response:{&quot;behavior&quot;:&quot;deny&quot;,&quot;message&quot;:&quot;The user closed the question without answering.&quot;}</code></td>
+<td>tool_result <code>is_error:true</code> + 그 문구, 모델이 텍스트로 다시 묻고 종료</td>
+<td>통과(닫기 경로)</td>
+</tr>
+<tr>
+<td>b7</td>
+<td>b4, 답을 150초 늦춤</td>
+<td>같음</td>
+<td>150초 뒤 반영, 정상 종료</td>
+<td>통과</td>
+</tr>
+<tr>
+<td>s1</td>
+<td>어댑터 실사용</td>
+<td><code>new ClaudeCli({ nativeQuestions })</code> + VIDE 기본 인자(<code>--safe-mode</code>, <code>--tools ''</code>→<code>AskUserQuestion</code>, <code>dontAsk</code>→<code>default</code>, <code>--permission-prompt-tool stdio</code>, stream-json 입력)</td>
+<td>카드 <code>[{id:&quot;q1&quot;,title:&quot;Should the test box be 1 m or 2 m wide?&quot;,options:[{id:&quot;o1&quot;,label:&quot;1 m&quot;},{id:&quot;o2&quot;,label:&quot;2 m&quot;}],allowFree:true}]</code> → 답 <code>o2</code> → 결과 <code>2 m</code>, 진행 단계 <code>model &gt; question &gt; model</code></td>
+<td>통과</td>
+</tr>
+</tbody>
+</table></div>
+<p>(a)·(b) 모두 AskUserQuestion을 받고 답할 수 있다. 공통 조건:</p>
+<ul>
+<li><code>--permission-mode dontAsk</code>에서는 도구가 모드 단계에서 거절되어 호스트에 오지 않는다. <code>default</code> 모드 + VIDE 도구는 <code>--allowedTools</code>로 미리 허용해야 한다. 허용 목록에 없는 도구가 권한을 물으면 VIDE가 거절한다(아래 어댑터).</li>
+<li><code>AskUserQuestion</code>을 <code>--allowedTools</code>에 넣으면 안 된다. 권한 경로를 건너뛰어 답을 넣을 기회가 없다.</li>
+<li>권한 경로를 주지 않으면(b1·b2) CLI가 도구를 목록에서 빼 버린다.</li>
+<li>사용자가 답하는 동안 CLI 쪽 제한 시간은 보이지 않았다(150초까지 확인).</li>
+</ul>
+</section><section class="doc-section" id="spike-2026-09-30-native-questions-claude-section-x4"><h2><span aria-hidden="true" class="section-num">04 /</span> 판단</h2>
+<p><strong>(b) stream-json 제어 프로토콜 <code>--permission-prompt-tool stdio</code>를 권장한다.</strong></p>
+<ul>
+<li>VIDE가 이미 CLI 프로세스의 stdin/stdout을 쥐고 있으므로 추가 연결이 없다. (a)는 MCP HTTP 요청 하나를 사용자가 답할 때까지 열어 두어야 하고, 대화 도구가 없는 실행(<code>--mcp-config {}</code>)에서는 쓸 수 없으며, 도구 호출 수·만료(<code>AgentTools</code> 120초 TTL, 호출 20회)와 얽힌다.</li>
+<li>답은 같은 실행 안에서 이어지므로 &quot;질문 → 새 턴 재개&quot;가 필요 없다. 현 구조화 출력 카드(c)는 턴을 끝내고 다음 턴에 답을 넣는다.</li>
+<li>질문 카드 화면은 그대로 쓴다. AskUserQuestion 입력(질문 1~4개, 선택지 2~4개, 설명, multiSelect)을 카드 모양(<code>id/title/options{id,label,hint}/allowFree</code>)으로 바꾼다. 카드 한도(3개) 밖이면 CLI에 거절 사유를 돌려준다.</li>
+<li>(c) 구조화 출력 카드는 Codex와 플래그가 꺼진 Claude 실행의 기본 경로로 남긴다.</li>
+</ul>
+</section><section class="doc-section" id="spike-2026-09-30-native-questions-claude-section-x5"><h2><span aria-hidden="true" class="section-num">05 /</span> 구현(플래그 뒤, 최소)</h2>
+<ul>
+<li><code>src/ai/claude-cli.ts</code>: <code>CliOptions.nativeQuestions?: (cards, signal) =&gt; Promise&lt;answers | null&gt;</code>. 주어졌고 Claude 형식일 때만 켜진다.
+<ul>
+<li>인자 <code>nativeQuestionArguments</code>: <code>--tools</code>에 <code>AskUserQuestion</code> 추가, <code>dontAsk</code>→<code>default</code>, <code>--permission-prompt-tool stdio</code>, <code>--input-format stream-json</code>.</li>
+<li>입력은 stream-json user 메시지 한 줄, stdin은 <code>result</code> 이벤트까지 연다.</li>
+<li><code>control_request can_use_tool</code>: <code>AskUserQuestion</code>이면 카드로 바꿔 핸들러 호출, 답을 <code>updatedInput.answers[질문 문장] = 선택 라벨(+ 자유 답)</code>로 돌려준다. 핸들러가 <code>null</code>이면 deny(닫음). 다른 도구는 deny. 다른 subtype은 <code>error: unsupported</code>.</li>
+<li>질문 동안 실행 제한 타이머를 멈추고 답 뒤 다시 건다. 실행이 멈추면 핸들러의 <code>signal</code>이 abort된다. 진행 이벤트 <code>phase: 'question'</code>.</li>
+<li>플래그가 없으면 인자·입력이 그대로이고 제어 요청은 <code>INVALID_PROVIDER_OUTPUT</code>으로 멈춘다.</li>
+</ul>
+</li>
+<li><code>src/server/agent-tools.ts</code>: 바꾸지 않음. (b)에는 MCP <code>ask</code> 도구가 필요 없다.</li>
+<li>시험: <code>tests/ai/native-questions.test.mjs</code>(모의 이벤트 6건).</li>
+</ul>
+</section><section class="doc-section" id="spike-2026-09-30-native-questions-claude-section-x6"><h2><span aria-hidden="true" class="section-num">06 /</span> 남은 일·한계</h2>
+<ul>
+<li>서버 연결 미구현: 대화 턴(<code>src/server/conversations.ts</code> 등)에서 <code>nativeQuestions</code> 핸들러를 넘기고, 카드를 기존 질문 카드 UI로 보여 주고, 답을 핸들러로 돌려주는 경로. 카드는 턴 중간에 뜨므로 &quot;턴 끝 카드&quot;와 다르게 대기 상태를 보여야 한다.</li>
+<li>대화 도구가 있는 실행(<code>--restricted</code> + VIDE MCP + <code>--allowedTools</code>)과 세션 실행(<code>--session-id</code>/<code>--resume</code> + stream-json 입력)은 실제 CLI로 확인하지 않았다(모의 시험만).</li>
+<li>multiSelect 질문은 카드가 한 개 선택이라 라벨 하나만 돌려준다.</li>
+<li>모드 <code>default</code>는 허용 목록 밖 도구의 권한 질문을 VIDE로 보낸다. 지금 어댑터는 모두 거절한다. 계획/자동 모드 가드(사용자 결정 ②)의 확인 카드와 합칠지는 별도 결정.</li>
+<li><code>--permission-prompt-tool</code>은 help에 없는 인자다. CLI 범위를 넓힐 때 이 기록의 b3·s1을 다시 확인한다.</li>
+</ul>
+</section><footer class="doc-footer"><span>VIDE / PLANNING DOCUMENTS</span><span>문서 열람용 · 실제 CAD/BIM 지원은 구현·검증 후 선언</span></footer></article></main></div>
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+<script id="source-data" type="application/json">{"spike-2026-09-30-native-questions-claude":{"label":"Claude Code의 AskUserQuestion을 VIDE 질문 카드로 받기","file":"SPIKE-2026-09-30-native-questions-claude.md","markdown":"---\nid: SPIKE-2026-09-30-native-questions-claude\ntitle: Claude Code의 AskUserQuestion을 VIDE 질문 카드로 받기\nstatus: draft\nversion: 0.1\nupdated: 2026-09-30\nowner: agent:claude\nrelated: [SPEC-02, PLAN-24, ADR-021, RESEARCH-10, RESEARCH-11]\n---\n\n# Claude Code의 AskUserQuestion을 VIDE 질문 카드로 받기\n\n## 질문\n\n사용자 결정(2026-09-30 ④): 질문 카드 화면은 유지하고, 공급자 자체 질문 기능으로 출처를 바꿀 수 있는지 확인한다. VIDE는 Claude Code를 `-p` 한 번 실행으로 돌리고, 지금은 `--json-schema` 구조화 출력(`status: question` + `questions`)으로 질문 카드를 만든다(`src/server/turn-output.ts`). 확인할 것은 두 가지다.\n\n1. Claude Code가 `-p`에서 자기 질문 도구 `AskUserQuestion`을 호출할 때, 그 질문이 VIDE에 도달하는가.\n2. VIDE가 사용자의 답을 **같은 실행 안에서** 돌려주고 모델이 그 답으로 계속하는가.\n\n시도 순서: (a) `--permission-prompt-tool mcp__vide__ask`(VIDE MCP 도구), (b) stream-json 제어 프로토콜(`control_request` / `can_use_tool`), (c) 실패 시 현 구조화 출력 카드 유지.\n\n## 환경\n\n- Claude Code 2.1.285(`C:\\Users\\user\\.local\\bin\\claude.exe`), 구독 로그인, 모델 `haiku`. `cli-compat.json` 범위(>=2.1.284 \u003c2.2.0) 안.\n- Windows 11, Node 24. 에이전트 셸의 `CLAUDE*`/`ANTHROPIC*` 환경변수는 지우고 실행.\n- 작업 폴더·스크립트는 세션 scratchpad(`…/scratchpad/nq/`). 저장소에는 두지 않음.\n- 프롬프트는 합성 문장만: \"Use the AskUserQuestion tool once to ask which color I prefer, with options Red and Blue. Then reply with only the chosen color.\" 프로젝트 자료 없음.\n- 공통 인자(아래 `$COMMON`): `-p --strict-mcp-config --mcp-config \u003ccfg> --setting-sources '' --no-session-persistence --no-chrome --disable-slash-commands --output-format stream-json --verbose --model haiku`.\n\n## 조사: CLI가 무엇을 지원하는가\n\n- `claude --help`에 `--permission-prompts \u003chost|none>`이 있고 \"host (the SDK host or --permission-prompt-tool)\"로 설명된다. `--permission-prompt-tool \u003ctool>`은 help 목록에 없지만 인자 해석기에는 있다(\"MCP tool to use for permission prompts (only works with --print)\").\n- 실행 파일 안 문자열: `control_request`/`control_response`, `can_use_tool`(요청 필드 `tool_name`, `input`, `tool_use_id`, `requires_user_interaction`), `AskUserQuestion`의 \"parked … host_answer\" 처리, 그리고 답은 `updatedInput.answers`로 받는다. 즉 AskUserQuestion은 **권한 요청 경로**로 호스트에 간다.\n\n## 결과\n\n| # | 방법 | 명령(요지) | 관찰 | 판정 |\n|---|---|---|---|---|\n| a1 | MCP 권한 도구 | `$COMMON --tools AskUserQuestion --permission-prompt-tool mcp__vide__ask \"\u003cprompt>\"` (stdio MCP 서버의 `ask`) | 모델이 `AskUserQuestion` tool_use → CLI가 `ask({tool_name:\"AskUserQuestion\", input:{questions:[…]}, tool_use_id})` 호출 → `{\"behavior\":\"allow\",\"updatedInput\":{…,\"answers\":{\"Which color do you prefer?\":\"Blue\"}}}` 반환 → tool_result `Your questions have been answered: \"…\"=\"Blue\"` → 최종 답 `Blue` | **통과** |\n| a2 | a1 + `--permission-mode dontAsk` | 같음 | `ask`가 불리지 않음. tool_result \"Permission to use AskUserQuestion has been denied because Claude Code is running in don't ask mode\" | 실패(모드 때문) |\n| a3 | a1 + `--allowedTools mcp__vide__ping` | 모델에게 ping 후 질문 요청 | `ping`은 권한 도구를 거치지 않고 바로 실행, `AskUserQuestion`만 `ask`로 옴 | 통과 |\n| a4 | a1 + 답을 150초 늦춤 | `ASK_DELAY=150000` | 150초 뒤 답 반영, 실행 정상 종료(`result success`) | 통과 |\n| b1 | stream-json, 권한 경로 없음 | `$COMMON --tools AskUserQuestion --input-format stream-json` (stdin에 user 메시지) | init의 `tools: []` — 도구가 목록에서 빠짐. 모델이 텍스트로 가짜 `\u003cfunction_calls>`를 씀 | 실패 |\n| b2 | b1 + `initialize` 제어 요청 먼저 | `{\"type\":\"control_request\",\"request_id\":\"init-1\",\"request\":{\"subtype\":\"initialize\"}}` | `control_response success`(commands·agents 목록)이지만 여전히 `tools: []` | 실패 |\n| b3 | b2 + `--permission-prompt-tool stdio` | 같음 | init `tools:[\"AskUserQuestion\"]` → tool_use → stdout에 `{\"type\":\"control_request\",\"request_id\":\"\u003cuuid>\",\"request\":{\"subtype\":\"can_use_tool\",\"tool_name\":\"AskUserQuestion\",\"input\":{…},\"tool_use_id\":\"…\",\"requires_user_interaction\":true}}` → stdin에 `{\"type\":\"control_response\",\"response\":{\"subtype\":\"success\",\"request_id\":\"\u003cuuid>\",\"response\":{\"behavior\":\"allow\",\"updatedInput\":{…,\"answers\":{…:\"Blue\"}}}}}` → tool_result 반영 → `Blue` | **통과** |\n| b4 | b3에서 `initialize` 생략 | 같음 | b3와 같게 동작 — `initialize`는 필요 없음 | 통과 |\n| b5 | b4 + `--permission-mode dontAsk` | 같음 | `system/permission_denied`(decision_reason_type `mode`), 제어 요청 없음 | 실패(모드 때문) |\n| b6 | b4, 답 대신 거절 | `response:{\"behavior\":\"deny\",\"message\":\"The user closed the question without answering.\"}` | tool_result `is_error:true` + 그 문구, 모델이 텍스트로 다시 묻고 종료 | 통과(닫기 경로) |\n| b7 | b4, 답을 150초 늦춤 | 같음 | 150초 뒤 반영, 정상 종료 | 통과 |\n| s1 | 어댑터 실사용 | `new ClaudeCli({ nativeQuestions })` + VIDE 기본 인자(`--safe-mode`, `--tools ''`→`AskUserQuestion`, `dontAsk`→`default`, `--permission-prompt-tool stdio`, stream-json 입력) | 카드 `[{id:\"q1\",title:\"Should the test box be 1 m or 2 m wide?\",options:[{id:\"o1\",label:\"1 m\"},{id:\"o2\",label:\"2 m\"}],allowFree:true}]` → 답 `o2` → 결과 `2 m`, 진행 단계 `model > question > model` | 통과 |\n\n(a)·(b) 모두 AskUserQuestion을 받고 답할 수 있다. 공통 조건:\n\n- `--permission-mode dontAsk`에서는 도구가 모드 단계에서 거절되어 호스트에 오지 않는다. `default` 모드 + VIDE 도구는 `--allowedTools`로 미리 허용해야 한다. 허용 목록에 없는 도구가 권한을 물으면 VIDE가 거절한다(아래 어댑터).\n- `AskUserQuestion`을 `--allowedTools`에 넣으면 안 된다. 권한 경로를 건너뛰어 답을 넣을 기회가 없다.\n- 권한 경로를 주지 않으면(b1·b2) CLI가 도구를 목록에서 빼 버린다.\n- 사용자가 답하는 동안 CLI 쪽 제한 시간은 보이지 않았다(150초까지 확인).\n\n## 판단\n\n**(b) stream-json 제어 프로토콜 `--permission-prompt-tool stdio`를 권장한다.**\n\n- VIDE가 이미 CLI 프로세스의 stdin/stdout을 쥐고 있으므로 추가 연결이 없다. (a)는 MCP HTTP 요청 하나를 사용자가 답할 때까지 열어 두어야 하고, 대화 도구가 없는 실행(`--mcp-config {}`)에서는 쓸 수 없으며, 도구 호출 수·만료(`AgentTools` 120초 TTL, 호출 20회)와 얽힌다.\n- 답은 같은 실행 안에서 이어지므로 \"질문 → 새 턴 재개\"가 필요 없다. 현 구조화 출력 카드(c)는 턴을 끝내고 다음 턴에 답을 넣는다.\n- 질문 카드 화면은 그대로 쓴다. AskUserQuestion 입력(질문 1~4개, 선택지 2~4개, 설명, multiSelect)을 카드 모양(`id/title/options{id,label,hint}/allowFree`)으로 바꾼다. 카드 한도(3개) 밖이면 CLI에 거절 사유를 돌려준다.\n- (c) 구조화 출력 카드는 Codex와 플래그가 꺼진 Claude 실행의 기본 경로로 남긴다.\n\n## 구현(플래그 뒤, 최소)\n\n- `src/ai/claude-cli.ts`: `CliOptions.nativeQuestions?: (cards, signal) => Promise\u003canswers | null>`. 주어졌고 Claude 형식일 때만 켜진다.\n  - 인자 `nativeQuestionArguments`: `--tools`에 `AskUserQuestion` 추가, `dontAsk`→`default`, `--permission-prompt-tool stdio`, `--input-format stream-json`.\n  - 입력은 stream-json user 메시지 한 줄, stdin은 `result` 이벤트까지 연다.\n  - `control_request can_use_tool`: `AskUserQuestion`이면 카드로 바꿔 핸들러 호출, 답을 `updatedInput.answers[질문 문장] = 선택 라벨(+ 자유 답)`로 돌려준다. 핸들러가 `null`이면 deny(닫음). 다른 도구는 deny. 다른 subtype은 `error: unsupported`.\n  - 질문 동안 실행 제한 타이머를 멈추고 답 뒤 다시 건다. 실행이 멈추면 핸들러의 `signal`이 abort된다. 진행 이벤트 `phase: 'question'`.\n  - 플래그가 없으면 인자·입력이 그대로이고 제어 요청은 `INVALID_PROVIDER_OUTPUT`으로 멈춘다.\n- `src/server/agent-tools.ts`: 바꾸지 않음. (b)에는 MCP `ask` 도구가 필요 없다.\n- 시험: `tests/ai/native-questions.test.mjs`(모의 이벤트 6건).\n\n## 남은 일·한계\n\n- 서버 연결 미구현: 대화 턴(`src/server/conversations.ts` 등)에서 `nativeQuestions` 핸들러를 넘기고, 카드를 기존 질문 카드 UI로 보여 주고, 답을 핸들러로 돌려주는 경로. 카드는 턴 중간에 뜨므로 \"턴 끝 카드\"와 다르게 대기 상태를 보여야 한다.\n- 대화 도구가 있는 실행(`--restricted` + VIDE MCP + `--allowedTools`)과 세션 실행(`--session-id`/`--resume` + stream-json 입력)은 실제 CLI로 확인하지 않았다(모의 시험만).\n- multiSelect 질문은 카드가 한 개 선택이라 라벨 하나만 돌려준다.\n- 모드 `default`는 허용 목록 밖 도구의 권한 질문을 VIDE로 보낸다. 지금 어댑터는 모두 거절한다. 계획/자동 모드 가드(사용자 결정 ②)의 확인 카드와 합칠지는 별도 결정.\n- `--permission-prompt-tool`은 help에 없는 인자다. CLI 범위를 넓힐 때 이 기록의 b3·s1을 다시 확인한다.\n"}}</script>
+<script id="reader-config" type="application/json">{"initial":"spike-2026-09-30-native-questions-claude","siteTitle":"VIDE"}</script>
+<script>
+(() => {
+'use strict';
+const sourceData=JSON.parse(document.getElementById('source-data').textContent);
+const config=JSON.parse(document.getElementById('reader-config').textContent);
+const esc=s=>String(s);
+let activeDoc=config.initial;
+let observer;
+let toastTimer;
+const $=s=>document.querySelector(s);
+function notify(message){const t=$('#toast');t.textContent=message;t.hidden=false;clearTimeout(toastTimer);toastTimer=setTimeout(()=>{t.hidden=true;},3400);}
+function renderToc(){const links=$('#toc-links');links.replaceChildren();const nodes=document.querySelectorAll('#'+activeDoc+' .doc-section');nodes.forEach(section=>{const a=document.createElement('a');a.href='#'+section.id;a.textContent=section.querySelector('h2').textContent;a.dataset.title=a.textContent;a.addEventListener('click',()=>{$('#toc-shell').classList.remove('open');$('#toc-toggle').setAttribute('aria-expanded','false');});links.appendChild(a);});$('#toc-count').textContent=nodes.length+' CHAPTERS';$('#toc-search').value='';$('#nav-hint').textContent='章 제목으로 찾아갑니다.'.replace('章','장');if(observer)observer.disconnect();observer=new IntersectionObserver(entries=>{const visible=entries.filter(e=>e.isIntersecting).sort((a,b)=>a.boundingClientRect.top-b.boundingClientRect.top);if(!visible.length)return;document.querySelectorAll('#toc-links a').forEach(a=>a.classList.toggle('active',a.hash==='#'+visible[0].target.id));},{rootMargin:'-90px 0px -64% 0px',threshold:0});nodes.forEach(n=>observer.observe(n));}
+function showDoc(name,reset){if(!sourceData[name])name=config.initial;activeDoc=name;document.querySelectorAll('.document').forEach(d=>d.hidden=d.id!==name);document.querySelectorAll('.doc-tab').forEach(a=>{a.classList.toggle('active',a.dataset.doc===name);if(a.dataset.doc===name)a.setAttribute('aria-current','page');else a.removeAttribute('aria-current');});renderToc();document.title=(config.siteTitle||'VIDE')+' · '+sourceData[name].label;if(reset)window.scrollTo({top:0,behavior:'instant'});}
+function useHash(){let raw=decodeURIComponent(location.hash.slice(1)||config.initial);let name=raw.split('-section-')[0];if(!sourceData[name])name=config.initial;if(name!==activeDoc||!$('#toc-links').children.length)showDoc(name,false);const el=document.getElementById(raw);if(el&&!el.hidden){requestAnimationFrame(()=>el.scrollIntoView({block:'start',behavior:'instant'}));}}
+window.addEventListener('hashchange',useHash);
+document.querySelectorAll('.doc-tab[data-doc]').forEach(a=>a.addEventListener('click',e=>{e.preventDefault();const name=a.dataset.doc;showDoc(name,true);history.replaceState(null,'','#'+name);}));
+$('#toc-toggle').addEventListener('click',()=>{const on=$('#toc-shell').classList.toggle('open');$('#toc-toggle').setAttribute('aria-expanded',String(on));});
+$('#toc-search').addEventListener('input',()=>{const q=$('#toc-search').value.trim().toLocaleLowerCase();let n=0;document.querySelectorAll('#toc-links a').forEach(a=>{a.hidden=!a.dataset.title.toLocaleLowerCase().includes(q);if(!a.hidden)n++;});$('#nav-hint').textContent=q?(n?'일치하는 장 '+n+'개':'일치하는 장 제목이 없습니다.'):'장 제목으로 찾아갑니다.';});
+function download(name,contents,type){const blob=new Blob([contents],{type});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),2500);}
+$('#source-download').addEventListener('click',()=>download(sourceData[activeDoc].file,sourceData[activeDoc].markdown,'text/markdown;charset=utf-8'));
+$('#print-doc').addEventListener('click',()=>window.print());
+async function copy(text){try{if(navigator.clipboard&&navigator.clipboard.writeText){await navigator.clipboard.writeText(text);return true;}}catch(e){}const t=document.createElement('textarea');t.value=text;t.style.position='fixed';t.style.left='-9999px';document.body.appendChild(t);t.select();let ok=false;try{ok=document.execCommand('copy');}catch(e){}t.remove();return ok;}
+document.querySelectorAll('.copy-code').forEach(b=>b.addEventListener('click',async()=>{const text=b.parentElement.querySelector('pre').textContent;const ok=await copy(text);if(ok){b.textContent='복사됨';notify('텍스트를 복사했습니다.');setTimeout(()=>b.textContent='복사',1800);}else{const range=document.createRange();range.selectNodeContents(b.parentElement.querySelector('pre'));const sel=window.getSelection();sel.removeAllRanges();sel.addRange(range);notify('자동 복사가 제한됩니다. 선택된 텍스트를 직접 복사하세요.');}}));
+showDoc(config.initial,false);useHash();
+})();
+</script>
+<script>
+(() => {
+'use strict';
+const KEY = 'vide-docs-review-mode';
+const AUTHOR_KEY = 'vide-docs-review-author';
+const sel = document.getElementById('review-mode');
+if (!sel) return;
+const authorSel = document.getElementById('review-author');
+let mode = 'marked';
+let author = 'all';
+try { mode = localStorage.getItem(KEY) || 'marked'; } catch (e) {}
+try { author = localStorage.getItem(AUTHOR_KEY) || 'all'; } catch (e) {}
+if (!['marked', 'original', 'accepted'].includes(mode)) mode = 'marked';
+if (!authorSel || !Array.from(authorSel.options).some(o => o.value === author)) author = 'all';
+const matches = el => author === 'all' || el.dataset.reviewAgent === author;
+const decorate = () => {
+const query = (document.getElementById('toc-search')?.value || '').trim().toLocaleLowerCase();
+let visible = 0;
+document.querySelectorAll('#toc-links a').forEach(a => {
+  const section = document.getElementById(decodeURIComponent(a.hash.slice(1)));
+  if (!section) return;
+  a.hidden = !a.dataset.title.toLocaleLowerCase().includes(query) || (section.classList.contains('review-appendix') && (mode !== 'marked' || !matches(section)));
+  if (!a.hidden) visible += 1;
+  const n = Array.from(section.querySelectorAll('.review-label[data-rid]')).filter(matches).length;
+  if (n && mode === 'marked') a.dataset.reviews = String(n); else delete a.dataset.reviews;
+});
+if (query) document.getElementById('nav-hint').textContent = visible ? `일치하는 장 ${visible}개` : '일치하는 장 제목이 없습니다.';
+};
+const apply = () => {
+  sel.value = mode;
+  if (authorSel) { authorSel.value = author; authorSel.disabled = mode !== 'marked'; }
+  document.body.classList.toggle('review-original', mode === 'original');
+  document.body.classList.toggle('review-accepted', mode === 'accepted');
+  document.querySelectorAll('blockquote.review, .review-appendix').forEach(el => { el.hidden = !matches(el); });
+  decorate();
+  try { localStorage.setItem(KEY, mode); localStorage.setItem(AUTHOR_KEY, author); } catch (e) {}
+};
+apply();
+const toc = document.getElementById('toc-links');
+if (toc) new MutationObserver(decorate).observe(toc, { childList: true });
+document.getElementById('toc-search')?.addEventListener('input', decorate);
+sel.addEventListener('change', () => { mode = sel.value; apply(); });
+if (authorSel) authorSel.addEventListener('change', () => { author = authorSel.value; apply(); });
+const revealHash = () => {
+  let id;
+  try { id = decodeURIComponent(location.hash.slice(1)); } catch (e) { return; }
+  const target = document.getElementById(id);
+  if (!target || !target.dataset.reviewAgent) return;
+  mode = 'marked';
+  if (!matches(target)) author = 'all';
+  apply();
+  target.scrollIntoView({ block: 'center' });
+};
+window.addEventListener('hashchange', revealHash);
+revealHash();
+})();
+</script>
+</body></html>

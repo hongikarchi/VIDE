@@ -487,3 +487,70 @@ test('Codex make turns get the draft files in the packet and a files output sche
     /export function main/,
   );
 });
+
+test('a stopped make-conversation keeps no file tools until the stop card is answered with a way on', async (t) => {
+  const { call, base, conversation, conversations, project } = setup(t);
+  const draft = (await call('POST', base, { name: 'stopped', from: 'blank' })).data;
+  const made = (await conversation({ mode: 'make', draftId: draft.id })).data;
+  const stopped = () => conversations.makeStopped(project.id, made.id);
+  assert.equal(stopped(), false);
+  const card = (id) =>
+    conversations.store.addLedgerItem(made.id, {
+      kind: 'question',
+      requestId: 'r-' + id,
+      body: { id, title: '멈춤', options: [], blocks: '초안 작성', allowFree: true },
+    });
+  const answer = (questionId, body) =>
+    conversations.store.addLedgerItem(made.id, {
+      kind: 'answer',
+      requestId: 'next-' + questionId,
+      body: { questionId, ...body },
+    });
+  card('make-stop-3');
+  assert.equal(stopped(), true);
+  answer('make-stop-3', { optionId: 'stop-here' });
+  assert.equal(stopped(), true);
+  card('make-stop-5');
+  answer('make-stop-5', { optionId: 'retry-other' });
+  assert.equal(stopped(), false);
+  card('make-turn-cap-21');
+  answer('make-turn-cap-21', { text: '보 단면만 고쳐 주세요' });
+  assert.equal(stopped(), false);
+  card('make-turn-cap-41');
+  answer('make-turn-cap-41', { optionId: 'new-conversation' });
+  assert.equal(stopped(), true);
+
+  // The connection of a stopped turn: no --add-dir, no file tools, file events refused.
+  const draftDir = join(tmpdir(), 'vide-draft-stopped');
+  const connection = agentConnection({
+    url: 'http://127.0.0.1:47999/mcp',
+    token: 'b'.repeat(64),
+    tools: ['jig_validate', 'jig_test', 'jig_preview', 'ask_user'],
+    draftDir,
+    makeStopped: true,
+  });
+  assert.equal(connection.makeStopped, true);
+  const args = configureAgentArguments(
+    sessionArguments(cliArguments(), { id: '11111111-2222-4333-8444-555555555556', resume: false }),
+    'claude',
+    connection,
+    { neutral: true },
+  );
+  assert.ok(!args.includes('--add-dir'));
+  assert.ok(!args[args.indexOf('--tools') + 1].includes('Write'));
+  assert.equal(
+    args[args.indexOf('--allowedTools') + 1],
+    'mcp__vide__jig_validate,mcp__vide__jig_test,mcp__vide__jig_preview,mcp__vide__ask_user',
+  );
+  const use = (name, input) =>
+    allowedAgentEvent({ type: 'tool_use', name, input }, 'claude', connection);
+  assert.ok(!use('Write', { file_path: join(draftDir, 'steps', 'a.ts'), content: '' }));
+  assert.ok(!use('Read', { file_path: join(draftDir, 'jig.json') }));
+  assert.equal(allowedAgentEvent({ name: 'Edit' }, 'claude', connection), false);
+  assert.equal(allowedAgentEvent({ name: 'StructuredOutput' }, 'claude', connection), false);
+  assert.ok(allowedAgentEvent({ name: 'mcp__vide__ask_user' }, 'claude', connection));
+  assert.match(instructionFor(connection), /stopped/);
+  assert.doesNotMatch(instructionFor(connection), /file tools Read, Edit, Write/);
+  // makeStopped means nothing without a draft folder.
+  assert.equal(agentConnection({ ...connection, draftDir: undefined }).makeStopped, undefined);
+});

@@ -8,6 +8,7 @@ import { access, mkdir, readFile } from 'node:fs/promises';
 import { join, resolve, relative, isAbsolute } from 'node:path';
 import { z } from 'zod';
 import { launchZwcadWorker, zwcadReceiptSchema } from '../../hosts/zwcad/worker-client.ts';
+import type { DirectExecuteResult } from '../../hosts/zwcad/attached-documents.ts';
 import { workspaceResultSchema } from '../contracts/workspace-result.ts';
 import type { SdkExecution } from './sdk-execution.ts';
 import type { AgentTools } from './agent-tools.ts';
@@ -46,6 +47,32 @@ function verifyProtected(
   }
 }
 const failure = (code: string) => Object.assign(new Error(code), { code });
+/** Auto-mode guard: erasing more entities than this in one execute needs confirmation. */
+export const DIRECT_MAX_DELETES = 50;
+type DirectChanges = Pick<
+  Extract<DirectExecuteResult, { ok: true }>['changes'],
+  'added' | 'changed' | 'removed'
+>;
+/**
+ * Plan / Auto (user decision 2026-09-30). `mode` replaces `permission`; old values map
+ * review→plan, candidate|apply→auto. A guard confirmation arrives as guard.confirmed (or
+ * guardConfirmed) on the re-run request.
+ */
+export function directMode(input: object) {
+  const value = input as {
+    mode?: unknown;
+    permission?: unknown;
+    guard?: { confirmed?: unknown };
+    guardConfirmed?: unknown;
+  };
+  const mode: 'plan' | 'auto' =
+    value.mode === 'plan' || value.mode === 'auto'
+      ? value.mode
+      : value.permission === 'review'
+        ? 'plan'
+        : 'auto';
+  return { mode, confirmed: value.guard?.confirmed === true || value.guardConfirmed === true };
+}
 interface Options {
   directory: string;
   tools: AgentTools;
@@ -87,7 +114,28 @@ export class ZwcadSdkExecution {
       .object({ instance: z.string(), documentId: z.number() })
       .parse(previous!.result.sourceDocument);
     const attached = this.editors.attached;
-    const write = input.permission !== 'review';
+    const direct = directMode(input);
+    const write = direct.mode === 'auto';
+    // Direct mode: one entry per execute that changed the drawing ([되돌리기] → undo(undoId)),
+    // plus the held one of a tripped guard with its body (the card's [진행] re-runs only that).
+    // Same record shape as the Rhino direct turn (direct-mode.ts ExecutionRecord).
+    const executions: {
+      executionId: string;
+      host: 'zwcad';
+      target: { instance: string; documentId: number };
+      undoId: string | null;
+      label: string;
+      at: string;
+      state: 'applied' | 'guarded';
+      changes?: DirectChanges;
+      confirmedGuard?: unknown;
+      guarded?: { kind: string; detail: string };
+      code?: string;
+      document?: { documentHash: string; revision?: number };
+    }[] = [];
+    let guarded: { executionId: string; kind: string; detail: string } | undefined;
+    // A lost execute answer leaves the drawing unknown: no further execute in this turn.
+    let uncertain = false;
     const targetRef = 'zwcad-open:' + basis.instance;
     const activity: { at: string; kind: string; text: string; detail?: string }[] = [];
     const changes = {
@@ -127,56 +175,98 @@ export class ZwcadSdkExecution {
         if (attempts >= executionLimits(input).maxHostCommands) throw failure('HOST_COMMAND_LIMIT');
         attempts++;
         report('execute', `${write ? 'ZWCAD 도면 수정' : 'ZWCAD 도면 읽기'} ${attempts}회차`, code);
-        const result = await attached.run(basis, code, write);
+        if (write) {
+          if (uncertain) throw failure('HOST_RESULT_UNKNOWN');
+          const label = `VIDE AI ${attempts}회차`;
+          const executionId = randomUUID();
+          const record = {
+            executionId,
+            host: 'zwcad' as const,
+            target: { instance: basis.instance, documentId: basis.documentId },
+            label,
+          };
+          uncertain = true;
+          const result = await attached.directExecute(basis, {
+            requestId: executionId,
+            code,
+            label,
+            guard: { confirmed: direct.confirmed, maxDeletes: DIRECT_MAX_DELETES },
+          });
+          uncertain = false;
+          if (!result.ok) {
+            if (result.guarded) {
+              const held = { kind: result.guarded.kind, detail: result.guarded.detail };
+              guarded = { executionId, ...held };
+              executions.push({
+                ...record,
+                at: new Date().toISOString(),
+                state: 'guarded',
+                undoId: null,
+                guarded: held,
+                code,
+              });
+              report('guard', `확인 필요 · ${result.guarded.detail} · 도면에 반영하지 않음`);
+            } else
+              report(
+                'error',
+                '실행 거절 · AI가 수정해 다시 시도',
+                (result.diagnostics ?? []).join('\n'),
+              );
+            return result;
+          }
+          const { added, changed, removed } = result.changes;
+          if (result.undoId) {
+            writes++;
+            executions.push({
+              ...record,
+              at: new Date().toISOString(),
+              state: 'applied',
+              undoId: result.undoId,
+              changes: { added, changed, removed },
+              ...(result.confirmedGuard ? { confirmedGuard: result.confirmedGuard } : {}),
+              ...(result.documentHash
+                ? { document: { documentHash: result.documentHash, revision: result.revision } }
+                : {}),
+            });
+          }
+          for (const row of added) changes.added.add(row.nativeId);
+          for (const row of changed)
+            if (!changes.added.has(row.nativeId)) changes.modified.add(row.nativeId);
+          for (const row of removed) {
+            // Created and erased within this turn: never reached the user as a change.
+            if (changes.added.delete(row.nativeId)) continue;
+            changes.modified.delete(row.nativeId);
+            changes.erased.add(row.nativeId);
+          }
+          report(
+            'result',
+            `도면에 반영 · 추가 ${added.length} · 수정 ${changed.length} · 삭제 ${removed.length}`,
+          );
+          return result;
+        }
+        // Plan mode: read-only (the host always discards the transaction).
+        const result = await attached.run(basis, code, false);
         const outcome = z
-          .object({
-            ok: z.boolean(),
-            code: z.string().optional(),
-            diagnostics: z.array(z.string()).optional(),
-            changes: z
-              .object({
-                added: z.array(z.string()),
-                modified: z.array(z.string()),
-                erased: z.array(z.string()),
-              })
-              .optional(),
-          })
+          .object({ ok: z.boolean(), diagnostics: z.array(z.string()).optional() })
           .passthrough()
           .parse(result);
-        if (!outcome.ok) {
+        if (!outcome.ok)
           report(
             'error',
             '실행 거절 · AI가 수정해 다시 시도',
             (outcome.diagnostics ?? []).join('\n'),
           );
-          return result;
-        }
-        if (write && outcome.changes) {
-          writes++;
-          for (const id of outcome.changes.added) changes.added.add(id);
-          for (const id of outcome.changes.modified)
-            if (!changes.added.has(id)) changes.modified.add(id);
-          for (const id of outcome.changes.erased) {
-            changes.added.delete(id);
-            changes.modified.delete(id);
-            changes.erased.add(id);
-          }
-          report(
-            'result',
-            `도면에 반영 · 추가 ${outcome.changes.added.length} · 수정 ${outcome.changes.modified.length} · 삭제 ${outcome.changes.erased.length}`,
-          );
-        }
         return result;
       },
     };
     const scope = this.options.tools.issue({
       targetRef,
       handlers,
-      isCurrent: () => !signal.aborted,
+      isCurrent: () => !signal.aborted && !uncertain,
       maxCalls: executionLimits(input).maxToolCalls,
       ttlMs: Math.min(600000, (executionLimits(input).timeoutSeconds + 60) * 1000),
     });
-    const goal = `Target is the drawing open in the user's ZWCAD 2023 (${targetRef}). It is NOT a copy: ${write ? 'every successful execute is committed to that drawing immediately as one UNDO step' : 'this is Plan mode, so execute runs read-only (its transaction is always discarded)'}.
+    const goal = `Target is the drawing open in the user's ZWCAD 2023 (${targetRef}). It is NOT a copy: ${write ? 'Auto mode: every successful execute is committed to that drawing immediately as one UNDO step (the user can revert it with ZWCAD U or VIDE [되돌리기]). Erasing more than ' + DIRECT_MAX_DELETES + ' entities, deleting layers or purging definitions is held back until the user confirms: such an execute returns ok:false with "guarded"; then stop and say what needs confirmation instead of working around it.' : 'Plan mode: execute runs read-only (its transaction is always discarded). Read, measure and plan; do not change the drawing. End with a plan: steps (title, objects, risk) and any questions.'}
 Native coordinates are drawing units (usually millimetres; query returns "units"). Other hosts' geometry and sketches are metres, so convert explicitly.
 Use query (offset/limit pages, objectIds = entity handles) to inspect entities: handle, type, layer, colour, bounds and type-specific data (line ends, polyline vertices, text, block name/attributes, dimension values). Its "layers" lists every layer with its entity count.
 execute takes a C# method body. The wrapper imports System, System.Linq, ZwSoft.ZwCAD.DatabaseServices, ZwSoft.ZwCAD.Geometry and supplies Database db and Transaction tr. Use tr.GetObject and the model-space BlockTableRecord; create layers in db.LayerTableId when needed; append new entities and register them with tr.AddNewlyCreatedDBObject. The controller commits or discards the transaction; never call Commit/Abort, open or save files, use shell/network/reflection or active documents. Return small JSON-serializable values (numbers, strings, arrays, anonymous objects), never SDK objects.
@@ -197,6 +287,7 @@ User request: ${input.body || '첨부한 설계 문맥을 검토해 주세요.'}
           onProgress: () => update({ phase: writes ? 'host' : 'model', progress: progress() }),
         },
       );
+      if (uncertain) throw failure('HOST_RESULT_UNKNOWN');
       const changed = {
         added: [...changes.added],
         modified: [...changes.modified],
@@ -210,6 +301,9 @@ User request: ${input.body || '첨부한 설계 문맥을 검토해 주세요.'}
         progress: progress(),
         activity,
         changes: changed,
+        mode: direct.mode,
+        executions,
+        ...(guarded ? { guarded } : {}),
         appliedDirectly: writes > 0,
         hostExecuted: writes > 0,
         host: 'zwcad',
@@ -217,9 +311,33 @@ User request: ${input.body || '첨부한 설계 문맥을 검토해 주세요.'}
         baseRequestId: model ? undefined : previous?.id,
         sourceDocument: model?.sourceDocument ?? previous?.result.sourceDocument,
       };
+    } catch (error) {
+      // Applied executes stay in the drawing and undoable: a failed or unknown turn keeps them
+      // (without held bodies, which only a guard card re-runs).
+      const kept = {
+        host: 'zwcad',
+        mode: direct.mode,
+        appliedDirectly: writes > 0,
+        executions: executions
+          .filter((entry) => entry.state === 'applied')
+          .map(({ code: _code, ...entry }) => entry),
+      };
+      if (uncertain)
+        throw Object.assign(failure('HOST_RESULT_UNKNOWN'), {
+          intent: { phase: 'host', ...kept, progress: progress(), activity: [...activity] },
+          cause: error,
+        });
+      if (executions.length && error && typeof error === 'object')
+        Object.assign(error, { partial: kept });
+      throw error;
     } finally {
       scope.revoke();
     }
+  }
+  /** [되돌리기] for one direct execute on the attached drawing (only while it is the latest change). */
+  async undo(sourceDocument: unknown, undoId: string) {
+    const basis = z.object({ instance: z.string(), documentId: z.number() }).parse(sourceDocument);
+    return this.editors.attached.directUndo(basis, undoId);
   }
   async run(task: Task) {
     const { input, previous, items, signal, provider, update } = task;

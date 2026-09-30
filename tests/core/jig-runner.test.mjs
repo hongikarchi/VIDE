@@ -686,6 +686,19 @@ test('routes: remote sessions cannot import or pin; pin needs confirmation; inst
       (j) => j.id === 'project/example-grid' && j.source === 'dev-pack',
     ),
   );
+  // [삭제] takes the jig off the project's list (this PC only); the package stays installed.
+  await assert.rejects(call('DELETE', pinPath, { remote: true }), { code: 'FORBIDDEN' });
+  const unpinned = await call('DELETE', pinPath);
+  assert.equal(unpinned.status, 200);
+  assert.equal(unpinned.data.removed, 'project/example-grid');
+  assert.deepEqual(unpinned.data.pinned, []);
+  await assert.rejects(call('DELETE', pinPath), { code: 'NOT_FOUND' });
+  assert.ok(
+    (await call('GET', '/api/v1/jigs/packages')).data.jigs.some(
+      (j) => j.id === 'project/example-grid',
+    ),
+  );
+  await call('POST', pinPath, { payload: { version: '0.1.0', confirm: true } });
 
   // An instance from the pinned version, read by syncId, assembled and run through the routes.
   const base = `/api/v1/projects/${project.id}/jig-instances`;
@@ -814,6 +827,7 @@ function priorJig(root) {
   cpSync(join(EXAMPLE, 'steps'), join(dir, 'steps'), { recursive: true });
   cpSync(join(EXAMPLE, 'schemas'), join(dir, 'schemas'), { recursive: true });
   cpSync(join(EXAMPLE, 'fixtures'), join(dir, 'fixtures'), { recursive: true });
+  cpSync(join(EXAMPLE, 'reports'), join(dir, 'reports'), { recursive: true });
   writeFileSync(join(dir, 'steps', 'prior.ts'), PRIOR_STEPS);
   manifest.id = 'project/prior-demo';
   manifest.steps.push(

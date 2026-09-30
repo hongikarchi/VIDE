@@ -67,7 +67,7 @@ const definitions = {
   },
   execute: {
     description:
-      'Run SDK code on the task target. The task goal says whether that is a working copy or the open user document.',
+      'Run SDK code on the task target. In Auto mode the target is the open user document: each call runs directly in it as ONE undo record (Ctrl+Z / VIDE [되돌리기] reverts it) and returns undoId and the added/changed/removed objects. Bulk deletion above the limit, layer deletion and purge are held back: such a call returns ok:false with "guarded" and nothing stays applied; then stop and tell the user what needs confirmation. Plan mode has no execute. The task goal names the target.',
     schema: z.object({ targetRef: target, code: z.string().min(1).max(65536) }).strict(),
   },
   // The AI's eyes (PLAN-24): an image of the target's model view and measurements of its objects.
@@ -380,6 +380,36 @@ const controlledTools = new Set<ToolName>([
   'jig_run',
   'capture_view',
 ]);
+/**
+ * Plan mode (ADR-022 2): the AI reads, measures, captures, plans and asks; nothing that writes a
+ * document, a jig setting or a draft file.
+ */
+export const PLAN_MODE_TOOLS: ReadonlySet<string> = new Set<ToolName>([
+  'query',
+  'capture_view',
+  'measure',
+  'status',
+  'cancel',
+  'jig_list',
+  'jig_state',
+  'jig_output',
+  'structure_summary',
+  'structure_checks',
+  'links_layers',
+  'sync_sample',
+  'ask_user',
+  'project_brief',
+  'project_search',
+  'project_issue',
+  'project_statement',
+  'project_checks',
+]);
+/** The handlers Plan mode keeps (PLAN_MODE_TOOLS). */
+export function planModeHandlers<H extends Handlers>(handlers: H): H {
+  return Object.fromEntries(
+    Object.entries(handlers).filter(([name]) => PLAN_MODE_TOOLS.has(name)),
+  ) as H;
+}
 
 /** Internal controller capability, never minted by browser/agent input. No CAD executor is installed by default. */
 export class AgentTools {
@@ -406,11 +436,20 @@ export class AgentTools {
       isCurrent = () => true,
       maxCalls = 20,
       ttlMs = 120000,
-    }: { isCurrent?: ScopeOptions['isCurrent']; maxCalls?: number; ttlMs?: number } = {},
+      readOnly = false,
+    }: {
+      isCurrent?: ScopeOptions['isCurrent'];
+      maxCalls?: number;
+      ttlMs?: number;
+      /** Plan mode (ADR-022): only the tools of PLAN_MODE_TOOLS. */
+      readOnly?: boolean;
+    } = {},
   ): { connection: AgentConnection; revoke: () => void } | undefined {
     const origin = typeof this.origin === 'function' ? this.origin() : this.origin;
     if (!origin) return undefined;
-    const handlers = conversationHandlers(sources);
+    const all = conversationHandlers(sources);
+    const handlers = readOnly ? planModeHandlers(all) : all;
+    if (!Object.keys(handlers).length) return undefined;
     const scope = this.issue({
       targetRef: conversationTarget(sources.conversationId),
       handlers,

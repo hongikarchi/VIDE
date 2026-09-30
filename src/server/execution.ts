@@ -14,7 +14,7 @@ import { z } from 'zod';
 import { runLinked } from './linked-execution.ts';
 // Jig review gates (sync-review rows, structure-draft-review members/nodes; SPEC-06.9).
 import { factCitations, jigCheck } from './jig-gates.ts';
-import { conversationSources, type AgentTools } from './agent-tools.ts';
+import { conversationHandlers, conversationSources, type AgentTools } from './agent-tools.ts';
 import type { Workspace } from '../core/workspace.ts';
 import type { StoredWork } from '../contracts/stored-work.ts';
 import type { RequestInput } from '../contracts/workspace.ts';
@@ -33,6 +33,25 @@ import { turnOutputResult } from './turn-output.ts';
 import { makeTurnResult } from './make-routes.ts';
 import { workspaceResultSchema } from '../contracts/workspace-result.ts';
 import { bakeJobOf } from '../jigs/bake/bake.ts';
+// Plan / Auto and direct execution in the attached document (ADR-022).
+import { requestMode, withMode } from '../contracts/workspace.ts';
+import { randomUUID } from 'node:crypto';
+import { DomainError } from '../contracts/errors.ts';
+import { hostTargetSchema } from '../contracts/host-documents.ts';
+import {
+  DIRECT_MAX_DELETES,
+  continueBody,
+  documentAfter,
+  hostLeftUnknown,
+  displayQuery,
+  executionsOf,
+  publicRecord,
+  runDirectTurn,
+  takePlan,
+  PLAN_RULES,
+  type DirectDriver,
+  type ExecutionRecord,
+} from './direct-mode.ts';
 interface Provider {
   run(
     context: ProviderContext,
@@ -74,6 +93,11 @@ interface Options {
   conversations?: ConversationService;
   /** The project's addendum to the instruction bundle (PLAN-24 지침 묶음). */
   projectInstructions?: (projectId: string) => string;
+  /**
+   * The attached document a direct turn writes to (ADR-022); default: the Rhino editor connection
+   * of `sdk`. Undefined when the basis is not an attached document (tests inject a mock host).
+   */
+  directDriver?: (host: 'rhino' | 'zwcad', sourceDocument: unknown) => DirectDriver | undefined;
 }
 const pinsSchema = z.array(
   z
@@ -94,12 +118,45 @@ const errorData = (cause: unknown) => errorSchema.safeParse(cause).data ?? {};
 
 import { installedCodex } from '../ai/paths.ts';
 import { createProvider } from '../ai/providers.ts';
+import {
+  CodexAppServer,
+  closeCodexAppServers,
+  codexAppServerEnabled,
+} from '../ai/codex-app-server.ts';
 import type { InstructionHost, InstructionMode } from '../ai/instructions/index.ts';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 import { readFile } from 'node:fs/promises';
 import { geometryContract, interpret, protectGeometry } from '../core/geometry.ts';
 import { Diagnostics } from './diagnostics.ts';
+
+/**
+ * The project read tools a host modeling turn gets beside its host tools (SPEC-02.6): linked
+ * files' layers, Sync samples and the project facts. They read VIDE's own records, never a host.
+ */
+export const HOST_TURN_PROJECT_TOOLS = [
+  'links_layers',
+  'sync_sample',
+  'project_brief',
+  'project_search',
+  'project_issue',
+  'project_statement',
+  'project_checks',
+] as const;
+/**
+ * The handlers of HOST_TURN_PROJECT_TOOLS for a turn of `conversation`, to spread into a host
+ * scope's handler list (the host's own handlers win on a name clash).
+ */
+export function hostTurnProjectHandlers(
+  workspace: Workspace,
+  conversation: Parameters<typeof conversationSources>[1],
+  requestId?: string,
+) {
+  const all = conversationHandlers(conversationSources(workspace, conversation, { requestId }));
+  return Object.fromEntries(
+    HOST_TURN_PROJECT_TOOLS.flatMap((name) => (all[name] ? [[name, all[name]]] : [])),
+  ) as Pick<ReturnType<typeof conversationHandlers>, (typeof HOST_TURN_PROJECT_TOOLS)[number]>;
+}
 
 export class Execution {
   workspace: Workspace;
@@ -117,6 +174,7 @@ export class Execution {
   selectContext: NonNullable<Options['selectContext']>;
   conversations?: ConversationService;
   projectInstructions?: Options['projectInstructions'];
+  private injectedDirect?: Options['directDriver'];
   active = new Map<
     string,
     { controller: AbortController; completion: Promise<void>; projectId: string }
@@ -137,10 +195,12 @@ export class Execution {
       diagnostics,
       conversations,
       projectInstructions,
+      directDriver,
       selectContext: choose = (body, candidates) =>
         selectContext(body, candidates, { key: () => '' }),
     }: Options = {},
   ) {
+    this.injectedDirect = directDriver;
     this.workspace = workspace;
     this.onProviderLimit = onProviderLimit;
     this.applyAttached = applyAttached;
@@ -178,7 +238,15 @@ export class Execution {
     instructions?: { mode: InstructionMode; projectId: string; host?: InstructionHost },
   ) {
     const executable = this.executable(input.provider);
-    return this.providerFactory({
+    // Flag (SPIKE-2026-09-30-codex-app-server): Codex through `codex app-server` instead of
+    // `codex exec`; only replaces the default factory (tests keep their injected one).
+    const factory =
+      input.provider === 'codex-cli' &&
+      codexAppServerEnabled() &&
+      this.providerFactory === createProvider
+        ? (options: CliOptions) => new CodexAppServer(options)
+        : this.providerFactory;
+    return factory({
       provider: input.provider,
       executable,
       session,
@@ -357,7 +425,7 @@ export class Execution {
       model: input.model ?? null,
       effort: input.effort ?? null,
       host: input.host ?? 'rhino',
-      permission: input.permission,
+      mode: requestMode(input),
       conversation: input.conversationId ?? null,
     });
     return run
@@ -467,7 +535,9 @@ export class Execution {
   private endTurn(turn: Turn, projectId: string, id: string) {
     try {
       const done = this.workspace.get(projectId, id);
-      this.conversations!.endTurn(turn, { state: done.state, result: done.result });
+      // A turn stopped at a guard card ended normally as an AI turn (its session resumes).
+      const state = done.state === 'needs-confirmation' ? 'succeeded' : done.state;
+      this.conversations!.endTurn(turn, { state, result: done.result });
     } catch (error) {
       this.diagnostics?.write('conversation-turn-failed', {
         requestId: id,
@@ -477,6 +547,8 @@ export class Execution {
     }
   }
   async run(request: StoredWork, controller: AbortController, attempt = 0): Promise<void> {
+    // Both mode and the old permission filled (a stored row keeps only what was submitted).
+    request = { ...request, input: withMode(request.input) };
     const { projectId, id, input } = request;
     // A jig's AI review reads only the attached jig table: no host, no document context.
     // A turn taken without the host (SPEC-02.9 1) gets none either.
@@ -655,6 +727,45 @@ export class Execution {
             layer: layer64 ? Buffer.from(layer64, 'base64').toString('utf8') : null,
           })),
         });
+      // Plan / Auto (ADR-022): Plan turns end with a plan card; Auto on an attached document edits
+      // it directly, one undo record per execute.
+      const runMode = requestMode(input);
+      if (runMode === 'plan')
+        items.push({ id: 'plan-mode', type: 'mode', data: { mode: runMode, rules: PLAN_RULES } });
+      const direct =
+        !jigReview && target === 'rhino' && previous?.result.displayOnly === true
+          ? this.directDriverFor(target, previous.result.sourceDocument)
+          : undefined;
+      const origin =
+        typeof this.tools?.origin === 'function' ? this.tools.origin() : this.tools?.origin;
+      if (direct && previous && this.tools && origin) {
+        const result = await runDirectTurn({
+          input,
+          mode: runMode,
+          driver: direct,
+          previous,
+          items,
+          signal: controller.signal,
+          tools: this.tools,
+          origin,
+          protectedIds: pins
+            .filter((pin) => pin.role !== 'target' && pin.basis === previous.id)
+            .map((pin) => pin.id),
+          provider: (agent) =>
+            this.provider(input, agent, turn?.session, {
+              mode: 'modeling',
+              projectId,
+              host: target,
+            }),
+          update: (progress) => {
+            if (progress.phase === 'host') hostIntent = progress;
+            this.workspace.update(projectId, id, 'running', progress);
+          },
+          onExecution: (record) => this.ledgerExecution(request, record),
+        });
+        this.settleModes(request, result, false);
+        return;
+      }
       if (sdk) {
         const result = await sdk.run({
           input,
@@ -672,9 +783,12 @@ export class Execution {
             this.workspace.update(projectId, id, 'running', progress);
           },
         });
+        // Deprecated (ADR-022): the candidate → apply path of a Rhino work copy. An attached
+        // document takes the direct path above; this stays for requests stored before it.
         if (input.applyToSource && result.hostExecuted && target !== 'zwcad')
           await this.applyAttached!(request, result, controller.signal);
-        else this.workspace.update(projectId, id, 'succeeded', result);
+        // ZWCAD's attached drawing runs its own direct loop (executions, guarded) inside sdk.run.
+        else this.settleModes(request, result, target === 'zwcad');
         return;
       }
       const targetContract =
@@ -707,6 +821,7 @@ export class Execution {
       const scope =
         sources && this.tools
           ? this.tools.issueConversation(sources, {
+              readOnly: runMode === 'plan',
               isCurrent: () => !controller.signal.aborted,
               maxCalls: executionLimits(input).maxToolCalls,
               ttlMs: Math.min(600000, (executionLimits(input).timeoutSeconds + 60) * 1000),
@@ -720,7 +835,19 @@ export class Execution {
           : reviewJig
             ? 'review'
             : 'data';
-      const result = await this.provider(input, scope?.connection, turn?.session, {
+      // A stopped make-conversation (stop card unanswered, or this turn hit the turn cap) gets no
+      // file tools and no jig_delete_file (T-063).
+      const connection =
+        scope?.connection.draftDir &&
+        (sources?.draft?.guard?.stop ||
+          this.conversations?.makeStopped(projectId, turn!.conversation.id))
+          ? {
+              ...scope.connection,
+              makeStopped: true,
+              tools: scope.connection.tools.filter((name) => name !== 'jig_delete_file'),
+            }
+          : scope?.connection;
+      const result = await this.provider(input, connection, turn?.session, {
         mode,
         projectId,
         ...(host ? { host: target } : {}),
@@ -796,11 +923,20 @@ export class Execution {
             hostExecuted: false,
           });
       } else {
-        const answer = {
-          ...result,
-          ...jigCheck(input, result.text),
-          ...turnOutputResult(turn, result),
+        // Plan mode (ADR-022): the plan card leaves the text and the strict turn output.
+        const planned = runMode === 'plan' ? takePlan(result) : undefined;
+        const raw = planned?.value ?? result;
+        const answer: Record<string, unknown> = {
+          ...raw,
+          ...jigCheck(input, raw.text),
+          ...turnOutputResult(turn, raw),
         };
+        if (planned) {
+          const inner = takePlan(answer);
+          Object.assign(answer, inner.value, { mode: runMode });
+          const plan = inner.plan ?? planned.plan;
+          if (plan) answer.plan = plan;
+        }
         // A make turn: Codex's files go into the draft; a stopped turn ends with its card (T-063).
         if (sources?.draft) {
           const made = await makeTurnResult(projectId, sources.draft, result, answer);
@@ -844,6 +980,12 @@ export class Execution {
             : 'failed',
         {
           ...(error.code === 'HOST_RESULT_UNKNOWN' ? error.intent || hostIntent : {}),
+          // A direct turn that failed after applying executes keeps them ([되돌리기] still works).
+          ...(error.code !== 'HOST_RESULT_UNKNOWN' &&
+          error.partial &&
+          typeof error.partial === 'object'
+            ? error.partial
+            : {}),
           code: error.code || 'EXECUTION_FAILED',
           hostExecuted: false,
         },
@@ -855,6 +997,283 @@ export class Execution {
   /** Settles when the request's run ends (undefined when it is not running here). */
   completion(id: string): Promise<unknown> | undefined {
     return this.active.get(id)?.completion;
+  }
+
+  // --- Plan / Auto and direct execution (ADR-022) -----------------------------------------------
+
+  /**
+   * The attached document a direct turn writes to (or a stored execution undoes). `attachedOnly`:
+   * the source must name an attached editor connection (a request's basis); stored execution
+   * targets carry only instance and document.
+   */
+  directDriverFor(
+    host: 'rhino' | 'zwcad',
+    sourceDocument: unknown,
+    attachedOnly = true,
+  ): DirectDriver | undefined {
+    if (
+      attachedOnly &&
+      !z.object({ connection: z.literal('attached-editor') }).safeParse(sourceDocument).success
+    )
+      return undefined;
+    if (this.injectedDirect) return this.injectedDirect(host, sourceDocument);
+    const parsed = hostTargetSchema.safeParse(sourceDocument);
+    if (!parsed.success) return undefined;
+    const target = { instance: parsed.data.instance, documentId: parsed.data.documentId };
+    // An executor without the direct methods (an older or stub one) keeps the work copy path.
+    if (host === 'rhino' && typeof this.sdk?.runDirect === 'function') {
+      const sdk = this.sdk;
+      const reads = displayQuery(async () => {
+        const { sourceDocument, ...model } = await sdk.readLayers(target, {});
+        return { ...model, units: sourceDocument.units };
+      });
+      return {
+        host,
+        target,
+        execute: async (command) => {
+          try {
+            return await sdk.runDirect(target, command.code, command.guard, command);
+          } finally {
+            reads.invalidate();
+          }
+        },
+        undo: (undoId) => sdk.undoDirect(target, undoId),
+        query: (options) => reads.page(options),
+        vision: () => sdk.directView(target),
+        fingerprint: () => sdk.fingerprint(target),
+      };
+    }
+    if (host === 'zwcad' && this.zwcadSdk) {
+      // ZWCAD's turn runs its own direct loop (zwcad-sdk-execution.ts); this driver serves
+      // [되돌리기] and a confirmed re-run.
+      const attached = this.zwcadSdk.editors?.attached;
+      if (!attached) return undefined;
+      return {
+        host,
+        target,
+        execute: (command) => attached.directExecute(target, command),
+        undo: (undoId) => attached.directUndo(target, undoId),
+        fingerprint: () => attached.fingerprint(target),
+        query: async () => {
+          throw { code: 'EXECUTOR_NOT_READY' };
+        },
+      };
+    }
+    return undefined;
+  }
+  /** Books a run's outcome by mode: Plan keeps its plan card, a tripped guard waits on its card. */
+  private settleModes(request: StoredWork, result: Record<string, unknown>, ledger: boolean) {
+    const { projectId, id, input } = request;
+    const mode = requestMode(input);
+    let value: Record<string, unknown> = { ...result, mode };
+    if (mode === 'plan') {
+      const taken = takePlan(value);
+      value = taken.plan ? { ...taken.value, plan: taken.plan } : taken.value;
+    }
+    if (ledger) for (const record of executionsOf(value)) this.ledgerExecution(request, record);
+    const guarded = !!value.guarded && typeof value.guarded === 'object';
+    this.workspace.update(projectId, id, guarded ? 'needs-confirmation' : 'succeeded', value);
+  }
+  /** Each direct execution goes in the conversation's ledger (counts only, never the body). */
+  private ledgerExecution(request: StoredWork, record: Partial<ExecutionRecord>) {
+    const conversationId = request.input.conversationId;
+    if (!this.conversations || typeof conversationId !== 'string') return;
+    const { code: _code, changes, ...entry } = record;
+    const count = (key: 'added' | 'changed' | 'removed') =>
+      Array.isArray(changes?.[key]) ? (changes[key] as unknown[]).length : 0;
+    try {
+      this.conversations.addLedger(request.projectId, conversationId, {
+        kind: 'code',
+        requestId: request.id,
+        body: {
+          execution: {
+            ...entry,
+            host: entry.host ?? (request.input.host || 'rhino'),
+            ...(changes
+              ? {
+                  changes: {
+                    added: count('added'),
+                    changed: count('changed'),
+                    removed: count('removed'),
+                  },
+                }
+              : {}),
+          },
+        },
+      });
+    } catch (error) {
+      this.diagnostics?.write('conversation-ledger-failed', {
+        requestId: request.id,
+        projectId: request.projectId,
+        ...Diagnostics.error(error),
+      });
+    }
+  }
+  /**
+   * [되돌리기] (POST …/requests/:rid/undo {executionId}): the host undoes that execution's record
+   * only while it is the document's latest one; otherwise {ok:false, reason:'not-latest'} and the
+   * user reverts with the host's own Undo.
+   */
+  async undo(projectId: string, id: string, executionId: unknown) {
+    const key = z.string().min(1).max(100).parse(executionId);
+    const request = this.workspace.get(projectId, id);
+    const entry = executionsOf(request.result).find((e) => e.executionId === key);
+    if (!entry?.undoId) throw new DomainError('NOT_FOUND');
+    if (entry.state === 'undone') return { ok: true, already: true, request };
+    // A run (or a confirmed re-run) still writing this request would overwrite the undone mark;
+    // meanwhile the host's own Undo stays available.
+    if (this.active.has(id) || ['queued', 'running'].includes(request.state))
+      throw new DomainError('REVISION_CONFLICT');
+    const host = entry.host ?? (request.result?.host === 'zwcad' ? 'zwcad' : 'rhino');
+    const driver = this.directDriverFor(
+      host,
+      entry.target ?? request.result?.sourceDocument,
+      false,
+    );
+    if (!driver) throw new DomainError('EXECUTOR_NOT_READY');
+    const answer = await driver.undo(entry.undoId);
+    if (!answer.ok)
+      return {
+        ok: false,
+        reason: typeof answer.reason === 'string' ? answer.reason : 'undo-failed',
+        request: this.workspace.get(projectId, id),
+      };
+    // Re-read: the run may have moved on while the host answered.
+    const now = this.workspace.get(projectId, id);
+    const updated = this.workspace.update(projectId, id, now.state, {
+      ...now.result,
+      executions: executionsOf(now.result).map((e) =>
+        e.executionId === key ? { ...e, state: 'undone', undoneAt: new Date().toISOString() } : e,
+      ),
+    });
+    this.ledgerExecution(updated, { ...entry, state: 'undone' });
+    return { ok: true, request: updated };
+  }
+  /**
+   * The guard card's [진행] (POST …/requests/:rid/confirm {executionId}): the held body runs again
+   * with the guard released, as its own undo record. A host that kept no body (ZWCAD) runs the
+   * turn again with the guard released.
+   */
+  async confirm(projectId: string, id: string, executionId?: unknown) {
+    const key =
+      executionId === undefined ? undefined : z.string().min(1).max(100).parse(executionId);
+    const request = this.workspace.get(projectId, id);
+    if (request.state !== 'needs-confirmation' || this.active.has(id))
+      throw new DomainError('REVISION_CONFLICT');
+    const executions = executionsOf(request.result);
+    const entry = [...executions]
+      .reverse()
+      .find((e) => e.state === 'guarded' && (!key || e.executionId === key));
+    if (key && !entry) throw new DomainError('NOT_FOUND');
+    const driver =
+      entry?.code && entry.target
+        ? this.directDriverFor(entry.host ?? 'rhino', entry.target, false)
+        : undefined;
+    if (!entry?.code || !driver) {
+      this.start({ ...request, input: { ...request.input, guardConfirmed: true } });
+      return this.workspace.get(projectId, id);
+    }
+    const base = request.result ?? {};
+    this.workspace.update(projectId, id, 'running', { ...base, phase: 'host' });
+    const runId = randomUUID();
+    let outcome: Awaited<ReturnType<DirectDriver['execute']>>;
+    try {
+      outcome = await driver.execute({
+        requestId: runId,
+        code: entry.code,
+        label: entry.label,
+        guard: { confirmed: true, maxDeletes: DIRECT_MAX_DELETES },
+      });
+    } catch {
+      // The answer was lost: the document may or may not hold the record (fingerprint decides).
+      return this.workspace.update(projectId, id, 'unknown', {
+        ...base,
+        phase: 'host',
+        code: 'HOST_RESULT_UNKNOWN',
+      });
+    }
+    // A change the host could not revert leaves the document unknown, like a lost answer.
+    if (hostLeftUnknown(outcome))
+      return this.workspace.update(projectId, id, 'unknown', {
+        ...base,
+        phase: 'host',
+        code: 'HOST_RESULT_UNKNOWN',
+      });
+    if (!outcome.ok)
+      return this.workspace.update(projectId, id, 'failed', {
+        ...base,
+        phase: undefined,
+        code: typeof outcome.code === 'string' ? outcome.code : 'EXECUTION_FAILED',
+        ...(outcome.diagnostics ? { diagnostics: outcome.diagnostics } : {}),
+      });
+    const applied: ExecutionRecord = {
+      executionId: runId,
+      host: driver.host,
+      target: driver.target,
+      label: entry.label,
+      at: new Date().toISOString(),
+      state: 'applied',
+      undoId: outcome.undoId ?? null,
+      changes: outcome.changes,
+      confirms: entry.executionId,
+    };
+    const document = outcome.undoId ? await documentAfter(driver, outcome) : undefined;
+    if (document) applied.document = document;
+    const { guarded: _guarded, ...rest } = base;
+    const updated = this.workspace.update(projectId, id, 'succeeded', {
+      ...rest,
+      phase: undefined,
+      appliedDirectly: true,
+      executions: [
+        ...executions.map((e) =>
+          e.executionId === entry.executionId ? publicRecord({ ...e, state: 'confirmed' }) : e,
+        ),
+        applied,
+      ],
+    });
+    this.ledgerExecution(updated, applied);
+    return updated;
+  }
+  /**
+   * The plan card's [진행] (POST …/requests/:rid/continue): an Auto turn in the same conversation
+   * that carries the plan out. Idempotent: the continuation's id derives from the plan's.
+   */
+  continuePlan(projectId: string, id: string) {
+    const request = this.workspace.get(projectId, id);
+    const source = request.input;
+    if (
+      requestMode(source) !== 'plan' ||
+      request.state !== 'succeeded' ||
+      source.provider === 'extension'
+    )
+      throw new DomainError('REVISION_CONFLICT');
+    const plan = takePlan({ plan: request.result?.plan }).plan;
+    const input: Record<string, unknown> = {
+      id: `${id.slice(0, 96)}-go`,
+      mode: 'auto',
+      body: continueBody(source.body, plan),
+      provider: source.provider,
+      pins: source.pins,
+      sketches: source.sketches,
+      files: source.files,
+      continuesPlanId: id,
+    };
+    for (const name of [
+      'model',
+      'effort',
+      'accountProfileId',
+      'executionLimits',
+      'host',
+      'baseRequestId',
+      'conversationId',
+      'linkedTargets',
+      'coordinateBasis',
+      'routing',
+    ] as const)
+      if (source[name] !== undefined) input[name] = source[name];
+    const saved = this.workspace.submit(projectId, input);
+    if (saved.created) this.start(saved.request);
+    return this.workspace.get(projectId, saved.request.id);
   }
   cancel(projectId: string, id: string) {
     const active = this.active.get(id);
@@ -877,5 +1296,7 @@ export class Execution {
     const active = [...this.active.values()];
     active.forEach((x) => x.controller.abort());
     await Promise.all(active.map((x) => x.completion));
+    // Codex app-server processes kept between turns (flag) do not outlive the engine.
+    if (codexAppServerEnabled()) await closeCodexAppServers().catch(() => {});
   }
 }

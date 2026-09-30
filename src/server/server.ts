@@ -18,7 +18,11 @@ import { AccountProfiles } from '../ai/account-profiles.ts';
 import { AccountUsageService } from '../ai/account-usage.ts';
 import { JIGS } from '../jigs/catalog.ts';
 import { runSync } from '../jigs/sync.ts';
-import { jigRoutes, jigStatuses } from './jig-routes.ts';
+import { closeJigRuntime, jigRoutes, jigStatuses } from './jig-routes.ts';
+import {
+  analysisWorkerStats,
+  closeAnalysisWorker,
+} from '../jigs/official/structure-analysis/index.ts';
 import { makeRoutes, makeStatuses } from './make-routes.ts';
 import { syncReadRoutes } from './sync-reads.ts';
 import { factRoutes } from './facts-routes.ts';
@@ -91,6 +95,7 @@ import { randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import { readFile, unlink, writeFile } from 'node:fs/promises';
 import { Store, DomainError } from '../core/store.ts';
 import { Workspace } from '../core/workspace.ts';
+import { requestMode } from '../contracts/workspace.ts';
 import { Execution } from './execution.ts';
 import { captureMeasurements } from '../core/measurement-cache.ts';
 import { RhinoWorkspace } from '../../hosts/rhino/workspace.ts';
@@ -512,6 +517,12 @@ export async function startServer({
           url.pathname.startsWith('/api/v1/connectors') ||
           (request.method !== 'GET' &&
             /^\/api\/v1\/(accounts|settings|extensions)(\/|$)/.test(url.pathname)) ||
+          // The project's AI instructions steer every later turn: changed on this PC only.
+          (request.method !== 'GET' &&
+            /^\/api\/v1\/projects\/[^/]+\/ai-instructions$/.test(url.pathname)) ||
+          // Releasing a direct-mode guard (bulk erase, layer deletion, purge) is confirmed at the
+          // PC whose document it changes; [되돌리기] and the plan's [진행] stay remote.
+          /^\/api\/v1\/projects\/[^/]+\/requests\/[^/]+\/confirm$/.test(url.pathname) ||
           // jig import and pinning are this PC's actions (ARCH-03 §7).
           /^\/api\/v1\/(jigs\/import|projects\/[^/]+\/(jigs|jig-drafts)\/[^/]+\/pin)$/.test(
             url.pathname,
@@ -1153,7 +1164,18 @@ export async function startServer({
             return chosen.id;
           },
           // The answer turn of a question card (T-062): same conversation, service and account.
-          submit: async (projectId, input) => {
+          submit: async (projectId, input, askedIn) => {
+            // The answer turn keeps the Plan/Auto mode of the turn that asked (ADR-022); a deleted
+            // asking request leaves the route's fallback (Plan) instead of failing the answer.
+            if (askedIn) {
+              let asked: { mode?: unknown; permission?: unknown } | undefined;
+              try {
+                asked = workspace.get(projectId, askedIn).input;
+              } catch {
+                asked = undefined;
+              }
+              if (asked) input.mode = requestMode(asked);
+            }
             const conversation = conversations.fix(projectId, input);
             const provider = conversation.provider;
             if (accountLogin.busy(provider)) throw new DomainError('PROFILE_LOGIN_IN_PROGRESS');
@@ -1798,6 +1820,24 @@ export async function startServer({
         send(202, execution.intervene(intervention[1], intervention[2], await body(request)));
         return;
       }
+      // Plan / Auto (ADR-022): [되돌리기] of one direct execution, the guard card's [진행], and
+      // the plan card's [진행] (an Auto turn in the same conversation).
+      const directAction =
+        /^\/api\/v1\/projects\/([^/]+)\/requests\/([^/]+)\/(undo|confirm|continue)$/.exec(
+          url.pathname,
+        );
+      if (directAction && request.method === 'POST') {
+        const [, projectId, id, action] = directAction;
+        if (action === 'undo') {
+          const { executionId } = await body(request);
+          const undone = await execution.undo(projectId, id, executionId);
+          send(200, { ...undone, request: withApplications(undone.request) });
+        } else if (action === 'confirm') {
+          const { executionId } = await body(request);
+          send(202, withApplications(await execution.confirm(projectId, id, executionId)));
+        } else send(202, withApplications(execution.continuePlan(projectId, id)));
+        return;
+      }
       const job = /^\/api\/v1\/projects\/([^/]+)\/requests(?:\/([^/]+)(\/cancel)?)?$/.exec(
         url.pathname,
       );
@@ -2087,12 +2127,19 @@ export async function startServer({
       await execution.close();
       clearInterval(transcriptSweep);
       await Promise.allSettled([...importRecoveries.values()]);
-      return new Promise<void>((resolve, reject) =>
-        server.close((error) => {
-          store.close();
-          error ? reject(error) : resolve();
-        }),
-      );
+      try {
+        await new Promise<void>((resolve, reject) =>
+          server.close((error) => (error ? reject(error) : resolve())),
+        );
+      } finally {
+        // Nothing this engine started outlives it: jig child processes and runners (before the
+        // store they read), then the structure worker when no other engine in this process has
+        // work in it (the worker is per process; a later analysis starts a new one).
+        await closeJigRuntime(workspace).catch(() => {});
+        const analysis = analysisWorkerStats();
+        if (!analysis.running && analysis.queued === 0) await closeAnalysisWorker();
+        store.close();
+      }
     },
   };
 }

@@ -176,9 +176,9 @@ try {
   assert.deepEqual(pinPosts.at(-1).ids, []);
   // Shift+Tab cycles the work mode.
   await page.locator('#body').focus();
-  const before = await page.locator('#permission').inputValue();
+  const before = await page.locator('#mode-toggle').getAttribute('data-mode');
   await page.keyboard.press('Shift+Tab');
-  assert.notEqual(await page.locator('#permission').inputValue(), before);
+  assert.notEqual(await page.locator('#mode-toggle').getAttribute('data-mode'), before);
   await page.screenshot({ path: join(directory, 'rhino-panel-dark.png') });
   // Removed from the project in VIDE (SPEC-01.11 9): the panel asks the plugin to drop its link.
   await page.evaluate(() => {

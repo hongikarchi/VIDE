@@ -9,7 +9,10 @@
 // the girder within half a spacing, a back-span beam (`backspanOf`) in the adjacent cell carries it,
 // running inward to the first beam or girder it meets. A beam cut by the slab edge or a void gets a
 // back span across its root girder the same way, so no cantilever root is held by girder torsion
-// alone. Pure, JSON only.
+// alone. With `openingEdgeBeams` (default on) a beam cut by a void inside a cell lands on an opening
+// edge beam (개구 둘레 보, `openings`) laid across the cut ends just outside the void, from the nearest
+// beam or girder on one side to the next on the other; the cut beams are then carried on both ends
+// and need no back span. Pure, JSON only.
 
 import {
   lineCrossings,
@@ -37,6 +40,8 @@ export interface BeamsParams {
   minLength_m: number;
   /** A beam end within this of a girder lands on it (m). */
   endTol_m: number;
+  /** Beams cut by a void land on an opening edge beam across the cut ends (개구 둘레 보). */
+  openingEdgeBeams: boolean;
 }
 export const DEFAULT_BEAMS_PARAMS: BeamsParams = {
   beamSpacing_m: 2.5,
@@ -44,6 +49,7 @@ export const DEFAULT_BEAMS_PARAMS: BeamsParams = {
   cantileverMax_m: 3.5,
   minLength_m: 0.5,
   endTol_m: 0.02,
+  openingEdgeBeams: true,
 };
 export const BEAM_SPACING_RANGE: readonly [number, number] = [2.0, 3.0];
 
@@ -68,6 +74,8 @@ export interface BeamRow {
   rigidAt?: ('from' | 'to')[];
   /** A back span (its `from` end at the root) of this cantilever or cut beam. */
   backspanOf?: string;
+  /** An opening edge beam: the void (`V1`… in slab hole order) it frames; carries no cell strip. */
+  opening?: string;
 }
 export interface EdgeCantileverRow {
   id: string;
@@ -85,12 +93,23 @@ export interface EdgeCantileverRow {
    */
   width_m: number;
 }
+/** An opening edge beam (also in `beams`) and the cut beams it carries. */
+export interface OpeningRow {
+  id: string;
+  cellId: string;
+  /** The void it frames (`V1`… in slab hole order). */
+  void: string;
+  points: Vec3[];
+  length_m: number;
+  carries: string[];
+}
 export interface BeamsOutput {
   schema: 'vide.s06.beams/1';
   params: BeamsParams;
   cells: CellRow[];
   beams: BeamRow[];
   edgeCantilevers: EdgeCantileverRow[];
+  openings: OpeningRow[];
   summary: {
     cells: number;
     beams: number;
@@ -99,6 +118,9 @@ export interface BeamsOutput {
     edgeCantilevers: number;
     /** Back-span beams added so cantilevers are not held by girder torsion alone. */
     backspans: number;
+    /** Opening edge beams and the cut beams they carry. */
+    openingBeams: number;
+    resupported: number;
   };
   notes: string[];
 }
@@ -225,9 +247,9 @@ export function beams(
   }
 
   const out: BeamRow[] = [];
+  const frames = new Map<string, CellFrame>();
   let dropped = 0,
-    spacingUsed = 0,
-    loose = 0;
+    spacingUsed = 0;
   for (const cell of cells) {
     const ring = cell.polygon;
     const holes = cell.holes ?? [];
@@ -250,12 +272,12 @@ export function beams(
     const count = Math.max(1, Math.ceil(width / p.beamSpacing_m - 1e-9));
     const pitch = width / count;
     if (count > 1 && pitch > spacingUsed) spacingUsed = pitch;
+    frames.set(cell.id, { direction, normal, origin: [ox, oy], pitch });
     const own = girders.filter((g) => cell.girderIds.includes(g.id));
     const endOf = (at: Vec2): { end: BeamEnd; z: number } => {
       const hit = nearestGirder(at, own.length ? own : girders) ?? nearestGirder(at, girders);
       if (hit && hit.distance <= p.endTol_m)
         return { end: { girderId: hit.girder.id, t: r4(hit.t) }, z: hit.z };
-      loose++;
       const onVoid =
         slab?.holes.some((h) =>
           h.some((a, i) => segmentDistance(at, a, h[(i + 1) % h.length]) <= p.endTol_m),
@@ -326,6 +348,17 @@ export function beams(
     }
   }
   if (dropped) notes.push(`${p.minLength_m} m보다 짧은 작은보 ${dropped}개는 두지 않았습니다.`);
+  const openings =
+    slab && p.openingEdgeBeams ? frameOpenings(girders, cells, slab, p, out, frames) : null;
+  if (openings?.rows.length)
+    notes.push(
+      `보이드에서 잘린 작은보 ${openings.resupported}개를 개구 둘레 보 ${openings.rows.length}개에 걸었습니다.`,
+    );
+  if (openings?.left)
+    notes.push(
+      `보이드에서 잘린 작은보 끝 ${openings.left}곳은 개구 둘레 보를 둘 자리가 없어 내민 보로 둡니다.`,
+    );
+  const loose = out.reduce((s, b) => s + (b.from.edge ? 1 : 0) + (b.to.edge ? 1 : 0), 0);
   if (loose) notes.push(`작은보 끝 ${loose}곳이 거더가 아닌 슬래브 끝·보이드 둘레에 닿습니다.`);
 
   const framing = slab ? frameCantilevers(girders, cells, slab, p, out) : null;
@@ -349,6 +382,7 @@ export function beams(
     cells,
     beams: out,
     edgeCantilevers,
+    openings: openings?.rows ?? [],
     summary: {
       cells: cells.length,
       beams: out.length,
@@ -356,6 +390,8 @@ export function beams(
       dropped,
       edgeCantilevers: edgeCantilevers.length,
       backspans,
+      openingBeams: openings?.rows.length ?? 0,
+      resupported: openings?.resupported ?? 0,
     },
     notes,
   };
@@ -514,6 +550,8 @@ function frameCantilevers(
         ? 'to'
         : null;
     if (!on || b.backspanOf) continue;
+    // Only a free end (slab edge or void) is cut; an end on another beam is carried.
+    if (!b[on === 'from' ? 'to' : 'from'].edge) continue;
     const root = endPoint(b, on);
     const dir = unit2(otherPoint(b, on), root);
     if (!dir) continue;
@@ -714,4 +752,279 @@ function frameCantilevers(
     });
   }
   return { rows: out, unheld };
+}
+
+interface CellFrame {
+  direction: Vec2;
+  normal: Vec2;
+  origin: Vec2;
+  pitch: number;
+}
+/** An opening edge beam stands this far off the void edge, on the slab side (m). */
+const OPENING_CLEAR = 0.01;
+/** A void edge whose chain strays at most this far off its chord is framed along the chord (m). */
+const CHORD_BEND = 0.1;
+
+/**
+ * Opening edge beams (개구 둘레 보). In each cell the beam ends cut by one void on one side, in runs
+ * of neighbouring beam lines, get one edge beam across them: square to the beams, just outside the
+ * void where it comes nearest the roots within the band up to the neighbouring beam lines, running
+ * from the cut ends' middle each way to the first beam or girder it meets. Both of its ends must
+ * sit on one; otherwise the cut beams stay free (`left`). The cut beams are shortened onto it
+ * (`beamId` end); a beam whose other end is the slab edge stays as it is.
+ */
+function frameOpenings(
+  girders: readonly GirderRow[],
+  cells: readonly CellRow[],
+  slab: { outer: Vec2[]; holes: Vec2[][] },
+  p: BeamsParams,
+  beams: BeamRow[],
+  frames: ReadonlyMap<string, CellFrame>,
+): { rows: OpeningRow[]; resupported: number; left: number } {
+  const tol = Math.max(p.endTol_m, 1e-3);
+  const onRing = (q: readonly number[], ring: readonly Vec2[]) =>
+    ring.some((a, i) => segmentDistance([q[0], q[1]], a, ring[(i + 1) % ring.length]) <= tol);
+  const rows: OpeningRow[] = [];
+  let resupported = 0,
+    left = 0;
+  for (const cell of cells) {
+    const frame = frames.get(cell.id);
+    if (!frame) continue;
+    const { direction, normal, origin } = frame;
+    const S = (q: readonly number[]) =>
+      (q[0] - origin[0]) * direction[0] + (q[1] - origin[1]) * direction[1];
+    const N = (q: readonly number[]) =>
+      (q[0] - origin[0]) * normal[0] + (q[1] - origin[1]) * normal[1];
+    const at = (s: number, n: number): Vec2 => [
+      origin[0] + direction[0] * s + normal[0] * n,
+      origin[1] + direction[1] * s + normal[1] * n,
+    ];
+    const mine = beams.filter((b) => b.cellId === cell.id && !b.backspanOf && !b.opening);
+    type Cut = {
+      beam: BeamRow;
+      end: 'from' | 'to';
+      ring: number;
+      sign: number;
+      s: number;
+      n: number;
+      rootS: number;
+    };
+    const cuts: Cut[] = [];
+    for (const beam of mine)
+      for (const end of ['from', 'to'] as const) {
+        if (beam[end].edge !== 'void') continue;
+        // The other end must be carried (a girder) or be cut by a void too.
+        if (beam[end === 'from' ? 'to' : 'from'].edge === 'slab') continue;
+        const q = end === 'from' ? beam.points[0] : beam.points[beam.points.length - 1];
+        const r = end === 'from' ? beam.points[beam.points.length - 1] : beam.points[0];
+        const ring = slab.holes.findIndex((h) => onRing(q, h));
+        if (ring < 0) continue;
+        cuts.push({ beam, end, ring, sign: S(q) >= S(r) ? 1 : -1, s: S(q), n: N(q), rootS: S(r) });
+      }
+    const nextId = () =>
+      `${cell.id}-H${String(rows.filter((r) => r.cellId === cell.id).length + 1).padStart(2, '0')}`;
+    /** Moves the cut end onto the edge beam `id` at plan point q, height z. */
+    const resupport = (c: Cut, q: readonly number[], z: number, id: string) => {
+      const moved = p3([q[0], q[1], z]);
+      if (c.end === 'from') c.beam.points[0] = moved;
+      else c.beam.points[c.beam.points.length - 1] = moved;
+      c.beam[c.end] = { girderId: null, t: null, beamId: id };
+      const u = c.beam.points[0],
+        v = c.beam.points[c.beam.points.length - 1];
+      c.beam.length_m = r4(Math.hypot(v[0] - u[0], v[1] - u[1]));
+    };
+    // 1. A void edge of the cell that runs (nearly) straight from girder to girder: the edge beam
+    // lies on its chord and the cut beams keep their line up to it.
+    const ringPts = cell.polygon;
+    const m = ringPts.length;
+    const edgeOn = ringPts.map((a, i) => {
+      const b = ringPts[(i + 1) % m];
+      const h = slab.holes.findIndex(
+        (r) => onRing(a, r) && onRing(b, r) && onRing([(a[0] + b[0]) / 2, (a[1] + b[1]) / 2], r),
+      );
+      return h;
+    });
+    const firstOff = edgeOn.findIndex((h) => h < 0);
+    if (firstOff >= 0)
+      for (let k = 1; k <= m; k++) {
+        const i0 = (firstOff + k) % m;
+        const hole = edgeOn[i0];
+        if (hole < 0 || edgeOn[(i0 - 1 + m) % m] === hole) continue;
+        const chain: Vec2[] = [ringPts[i0]];
+        let i = i0;
+        while (edgeOn[i] === hole && chain.length <= m) {
+          i = (i + 1) % m;
+          chain.push(ringPts[i]);
+        }
+        const A = chain[0],
+          Z = chain[chain.length - 1];
+        const chord = Math.hypot(Z[0] - A[0], Z[1] - A[1]);
+        if (chord < p.minLength_m) continue;
+        const bend = Math.max(...chain.map((q) => segmentDistance(q, A, Z)));
+        const ga = nearestGirder(A, girders),
+          gz = nearestGirder(Z, girders);
+        if (bend > CHORD_BEND || !ga || !gz || ga.distance > tol || gz.distance > tol) continue;
+        const onChain = (q: readonly number[]) =>
+          chain.some((a, j) => j > 0 && segmentDistance([q[0], q[1]], chain[j - 1], a) <= tol);
+        const id = nextId();
+        const carried: string[] = [];
+        for (const c of [...cuts]) {
+          if (c.ring !== hole) continue;
+          const q = c.end === 'from' ? c.beam.points[0] : c.beam.points[c.beam.points.length - 1];
+          if (!onChain(q)) continue;
+          const root =
+            c.end === 'from' ? c.beam.points[c.beam.points.length - 1] : c.beam.points[0];
+          const dir = unit2(root, q);
+          const hit = dir && rayHit([root[0], root[1]], dir, A, Z);
+          if (!hit || hit.w < -1e-9 || hit.w > 1 + 1e-9 || hit.t < p.minLength_m) continue;
+          resupport(
+            c,
+            [root[0] + dir![0] * hit.t, root[1] + dir![1] * hit.t],
+            ga.z + hit.w * (gz.z - ga.z),
+            id,
+          );
+          cuts.splice(cuts.indexOf(c), 1);
+          carried.push(c.beam.id);
+        }
+        if (!carried.length) continue;
+        const points = [p3([A[0], A[1], ga.z]), p3([Z[0], Z[1], gz.z])];
+        beams.push({
+          id,
+          cellId: cell.id,
+          points: points.map((q) => [...q] as Vec3),
+          from: { girderId: ga.girder.id, t: r4(ga.t) },
+          to: { girderId: gz.girder.id, t: r4(gz.t) },
+          length_m: r4(chord),
+          opening: `V${hole + 1}`,
+        });
+        resupported += carried.length;
+        rows.push({
+          id,
+          cellId: cell.id,
+          void: `V${hole + 1}`,
+          points,
+          length_m: r4(chord),
+          carries: carried,
+        });
+      }
+    // 2. The other cut ends: an edge beam square to the beams, just outside the void.
+    // Runs of neighbouring beam lines cut by the same void on the same side.
+    const groups: Cut[][] = [];
+    const keyed = new Map<string, Cut[]>();
+    for (const c of cuts) {
+      const key = `${c.ring}:${c.sign}`;
+      keyed.set(key, [...(keyed.get(key) ?? []), c]);
+    }
+    for (const [, list] of [...keyed].sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0))) {
+      list.sort((a, b) => a.n - b.n);
+      let run: Cut[] = [];
+      for (const c of list) {
+        if (run.length && c.n - run[run.length - 1].n > frame.pitch * 1.5) {
+          groups.push(run);
+          run = [];
+        }
+        run.push(c);
+      }
+      if (run.length) groups.push(run);
+    }
+    /** Along-beam positions of the cell's edges on void `ring`, clipped to the band lo < n < hi. */
+    const voidAlong = (ring: number, lo: number, hi: number) =>
+      [cell.polygon, ...(cell.holes ?? [])].flatMap((r) =>
+        r.flatMap((a, i) => {
+          const b = r[(i + 1) % r.length];
+          const h = slab.holes[ring];
+          if (!onRing(a, h) || !onRing(b, h)) return [];
+          const na = N(a),
+            nb = N(b),
+            sa = S(a),
+            sb = S(b);
+          const out: number[] = [];
+          if (na > lo && na < hi) out.push(sa);
+          if (nb > lo && nb < hi) out.push(sb);
+          for (const edge of [lo, hi]) {
+            const w = nb !== na ? (edge - na) / (nb - na) : -1;
+            if (w > 0 && w < 1) out.push(sa + w * (sb - sa));
+          }
+          return out;
+        }),
+      );
+    for (const group of groups) {
+      const { ring, sign } = group[0];
+      const lo = group[0].n - frame.pitch * (1 - 1e-6),
+        hi = group[group.length - 1].n + frame.pitch * (1 - 1e-6);
+      // Nearest the roots the void comes within the band (the cut ends and the cell's void edge).
+      const ss = [...group.map((c) => c.s), ...voidAlong(ring, lo, hi)];
+      const sH = (sign > 0 ? Math.min(...ss) : Math.max(...ss)) - sign * OPENING_CLEAR;
+      let keep = group.filter((c) => sign * (sH - c.rootS) >= p.minLength_m);
+      const start = keep.length ? at(sH, (keep[0].n + keep[keep.length - 1].n) / 2) : null;
+      if (!start || !pointInRegion(start, { outer: cell.polygon, holes: cell.holes ?? [] }, 0)) {
+        left += group.length;
+        continue;
+      }
+      const mid = N(start);
+      const hosts = mine.filter((b) => !keep.some((c) => c.beam === b));
+      /** First beam or boundary along ±normal from the middle: the edge beam's end there. */
+      const reach = (towards: number) => {
+        const dir: Vec2 = [normal[0] * towards, normal[1] * towards];
+        let best: { t: number; end: BeamEnd; z: number } | null = null;
+        for (const b of hosts) {
+          const u = b.points[0],
+            v = b.points[b.points.length - 1];
+          const hit = rayHit(start, dir, u, v);
+          if (!hit || hit.t <= 1e-6 || hit.w < -1e-9 || hit.w > 1 + 1e-9) continue;
+          if (!best || hit.t < best.t)
+            best = {
+              t: hit.t,
+              end: { girderId: null, t: null, beamId: b.id },
+              z: u[2] + hit.w * (v[2] - u[2]),
+            };
+        }
+        const wall = [cell.polygon, ...(cell.holes ?? [])]
+          .flatMap((r) => lineCrossings(start, dir, r))
+          .filter((t) => t > 1e-6)
+          .sort((x, y) => x - y)[0];
+        if (wall !== undefined && (!best || wall < best.t - 1e-6)) {
+          const q: Vec2 = [start[0] + dir[0] * wall, start[1] + dir[1] * wall];
+          const g = nearestGirder(q, girders);
+          best =
+            g && g.distance <= tol
+              ? { t: wall, end: { girderId: g.girder.id, t: r4(g.t) }, z: g.z }
+              : null;
+        }
+        return best;
+      };
+      const a = reach(-1),
+        b = reach(1);
+      // Only the cut ends between the edge beam's ends are carried on it.
+      keep = a && b ? keep.filter((c) => c.n > mid - a.t + tol && c.n < mid + b.t - tol) : [];
+      left += group.length - keep.length;
+      if (!a || !b || !keep.length) continue;
+      const pa = at(sH, mid - a.t),
+        pb = at(sH, mid + b.t);
+      const id = nextId();
+      const length = a.t + b.t;
+      const zAt = (n: number) => a.z + ((n - (mid - a.t)) / length) * (b.z - a.z);
+      const points = [p3([pa[0], pa[1], a.z]), p3([pb[0], pb[1], b.z])];
+      beams.push({
+        id,
+        cellId: cell.id,
+        points: points.map((q) => [...q] as Vec3),
+        from: a.end,
+        to: b.end,
+        length_m: r4(length),
+        opening: `V${ring + 1}`,
+      });
+      for (const c of keep) resupport(c, at(sH, c.n), zAt(c.n), id);
+      resupported += keep.length;
+      rows.push({
+        id,
+        cellId: cell.id,
+        void: `V${ring + 1}`,
+        points,
+        length_m: r4(length),
+        carries: keep.map((c) => c.beam.id),
+      });
+    }
+  }
+  return { rows, resupported, left };
 }

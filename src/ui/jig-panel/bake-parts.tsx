@@ -9,11 +9,13 @@ import {
 } from '../bake-card.tsx';
 
 // 'Rhino에 만들기' as a panel part (PLAN-23 T-056, SPEC-07.12·13, Design SCR-13 part `bake-card`):
-// [선만 먼저 만들기] and [부재 만들기] start a bake of the instance (a normal candidate request),
-// the card follows the request and shows what the candidate adds, replaces and leaves alone, the
-// person's choices for preserved objects go into the next bake (`resolve`), and after the
-// candidate was applied in the work view the card reads the document again to record the
-// baseline (`POST …/bakes/:id/baseline`). The records of earlier bakes are listed below.
+// [선만 먼저 만들기] and [부재 만들기] bake the instance. With an attached Rhino the bake is made in
+// the open document at once, in host undo records (바로 적용, user decision 2026-09-30): the card
+// shows what was added, replaced and left alone, and [되돌리기] undoes the last bake through the
+// host (`POST …/bakes/:id/undo`). Without one it runs in a work copy only (a request the card
+// follows) and the person is asked to open the file in Rhino and connect it. The person's choices
+// for preserved objects go into the next bake (`resolve`); a baseline read that failed after the
+// run is retried with [반영 결과 읽기] (`POST …/bakes/:id/baseline`). Earlier bakes are listed below.
 
 const offerSchema = z.object({
   id: z.string(),
@@ -32,6 +34,8 @@ const recordSchema = z
     items: z.record(z.string(), z.object({ state: z.string() }).passthrough()),
     appliedAt: z.string().nullable(),
     pendingBaseline: z.boolean(),
+    undone: z.boolean().default(false),
+    undoable: z.boolean().default(false),
   })
   .passthrough();
 const bakesSchema = z.object({
@@ -73,7 +77,18 @@ const errorText = (body: Record<string, unknown>, fallback: string) => {
   if (body.code === 'GATE_BLOCKED')
     return `만들기 전에 막았습니다. ${[...hints, ...problems].join(' · ') || fallback}`;
   if (body.code === 'NOT_APPLIED')
-    return '아직 원본에 반영되지 않았습니다. 작업 보기에서 후보를 반영한 뒤 다시 누르세요.';
+    return 'Rhino 문서에서 이번에 만든 객체를 찾지 못했습니다. 파일을 Rhino에서 열어 연결하세요.';
+  if (body.code === 'BAKE_GUARDED')
+    return '기록에 없는 객체까지 지우려 해서 되돌렸습니다. Rhino 문서는 그대로입니다.';
+  if (body.code === 'BAKE_FAILED' || body.code === 'BAKE_READ_FAILED')
+    return body.undoFailed
+      ? '만들지 못했고 일부를 되돌리지 못했습니다. Rhino에서 Ctrl+Z로 확인하세요.'
+      : '만들지 못했습니다. Rhino 문서는 그대로입니다.';
+  if (body.code === 'BAKE_UNDO_NOT_LATEST')
+    return '그 뒤에 Rhino에서 다른 작업이 있어 되돌리지 않았습니다. Rhino에서 Ctrl+Z를 쓰세요.';
+  if (body.code === 'BAKE_UNDO_UNAVAILABLE')
+    return '이 만들기는 VIDE에서 되돌릴 수 없습니다. Rhino에서 Ctrl+Z를 쓰세요.';
+  if (body.code === 'STALE_INPUT') return 'Rhino 문서가 방금 바뀌었습니다. 다시 누르세요.';
   if (body.code === 'BAKE_NOT_COMPUTED') return '계산이 끝난 결과가 없습니다. 먼저 계산하세요.';
   return typeof body.message === 'string' ? body.message : fallback;
 };
@@ -221,13 +236,19 @@ export function BakePart({
         );
         return;
       }
+      const requestId = typeof body.requestId === 'string' ? body.requestId : undefined;
+      if (body.status === 'applied') {
+        // Made in the open document; the result carries the real summary.
+        const made = bakeSummarySchema.safeParse(body.bake);
+        const summary = made.success ? made.data : provisional(body);
+        if (summary) setLast({ requestId, summary, state: 'applied' });
+        setChoices({});
+        await load();
+        return;
+      }
       const summary = provisional(body);
-      if (summary)
-        setLast({
-          requestId: typeof body.requestId === 'string' ? body.requestId : undefined,
-          summary,
-          state: 'running',
-        });
+      if (summary) setLast({ requestId, summary, state: 'running' });
+      if (typeof body.notice === 'string') setNotice(body.notice);
       setChoices({});
     } catch {
       setNotice('엔진에 연결하지 못했습니다.');
@@ -261,6 +282,28 @@ export function BakePart({
     }
   };
 
+  const undo = async (record: BakeRecord) => {
+    setBusy(true);
+    setNotice('');
+    try {
+      const { ok, body } = await call(
+        `${base}/bakes/${encodeURIComponent(record.id)}/undo`,
+        'POST',
+        {},
+      );
+      if (!ok) setNotice(errorText(body, '되돌리지 못했습니다.'));
+      else {
+        setNotice('이번 만들기를 Rhino에서 되돌렸습니다.');
+        if (last?.requestId === record.requestId) setLast({ ...last, state: 'undone' });
+      }
+      await load();
+    } catch {
+      setNotice('엔진에 연결하지 못했습니다.');
+    } finally {
+      if (alive.current) setBusy(false);
+    }
+  };
+
   const lineIds = offers.filter((o) => !needsAnalysis(o)).map((o) => o.id);
   const memberIds = offers.filter(needsAnalysis).map((o) => o.id);
   const lastRecords = last?.requestId ? records.filter((r) => r.requestId === last.requestId) : [];
@@ -269,6 +312,7 @@ export function BakePart({
       ? 'recorded'
       : 'pending'
     : undefined;
+  const undoable = lastRecords.find((r) => r.undoable);
   const chosen = Object.entries(choices);
 
   return (
@@ -316,6 +360,7 @@ export function BakePart({
             state={last.state}
             baseline={baselineState}
             stale={stale}
+            onUndo={undoable && !busy ? () => void undo(undoable) : undefined}
             onRecordBaseline={
               lastRecords.some((r) => r.pendingBaseline)
                 ? () => void baseline(lastRecords.find((r) => r.pendingBaseline)!)
@@ -328,7 +373,7 @@ export function BakePart({
           />
           {last.state === 'succeeded' ? (
             <small className="kit-muted">
-              후보를 만들었습니다. 작업 보기에서 원본에 반영한 뒤 [반영 결과 읽기]를 누르세요.
+              작업 사본에만 만들었습니다. 파일을 Rhino에서 열어 연결하세요.
             </small>
           ) : null}
         </>
@@ -350,9 +395,11 @@ export function BakePart({
                   <small>
                     {' '}
                     객체 {count}개 ·{' '}
-                    {record.pendingBaseline
-                      ? '반영 뒤 읽기 전'
-                      : `기준 기록 ${new Date(record.appliedAt!).toLocaleString('ko-KR')}`}
+                    {record.undone
+                      ? '되돌림'
+                      : record.pendingBaseline
+                        ? '만든 뒤 읽기 전'
+                        : `만듦 ${new Date(record.appliedAt!).toLocaleString('ko-KR')}`}
                   </small>
                   {record.pendingBaseline ? (
                     <button type="button" disabled={busy} onClick={() => void baseline(record)}>

@@ -456,7 +456,7 @@ try {
   await bakeCard.getByText('만든 기록 1개').click();
   assert.match(
     await bakeCard.locator('.bake-records li').textContent(),
-    /객체 3개 · 반영 뒤 읽기 전/,
+    /객체 3개 · 만든 뒤 읽기 전/,
   );
   await bakeCard.getByRole('button', { name: '반영 결과 읽기' }).click();
   await bakeCard.getByText('반영 결과를 읽었습니다: 3개 기록').waitFor();

@@ -63,6 +63,15 @@ try {
     await page.locator('#request').click();
     await page.waitForFunction(() => document.querySelector('#body').value === '');
   }
+  // 자동 is the default mode; the old permission field goes along for older servers.
+  assert.deepEqual(
+    [...pending.values()].map(({ input }) => [input.mode, input.permission]),
+    [
+      ['auto', 'candidate'],
+      ['auto', 'candidate'],
+      ['auto', 'candidate'],
+    ],
+  );
   // A fourth is not refused: sending stays on and tells where it would wait.
   await page.locator('#body').fill('New condition must survive');
   assert.equal(await page.locator('#request').isEnabled(), true);

@@ -66,6 +66,7 @@ export const labels: Record<string, string> = {
   cancelled: '중단됨',
   interrupted: '재시작으로 중단됨',
   unknown: '호스트 결과 확인 필요',
+  'needs-confirmation': '진행 확인 필요',
 };
 export const errors: Record<string, string> = {
   ZWCAD_ATTACHED_EDIT_UNAVAILABLE:
@@ -225,4 +226,17 @@ Object.assign(errors, {
   // Conversations (SPEC-02.19 1).
   CONVERSATION_CLOSED: '닫힌 대화입니다. 다시 열거나 새 대화에서 보내세요.',
   CONVERSATION_PROVIDER: '이 대화는 다른 AI 서비스로 열렸습니다. 새 대화에서 보내세요.',
+});
+
+// Direct mode (user decision 2026-09-30): edits run in the open document, one undo record each.
+Object.assign(errors, {
+  WRITE_NOT_ALLOWED:
+    '계획 모드에서는 문서를 바꾸지 않습니다. 계획 카드의 [진행]을 누르거나 Shift+Tab으로 자동으로 바꾸세요.',
+  UNDO_NOT_LATEST:
+    '이 실행 뒤에 문서가 더 바뀌어 여기서 되돌릴 수 없습니다. Rhino에서 Ctrl+Z로 순서대로 되돌리세요.',
+  UNDO_UNAVAILABLE: '되돌리기 기록을 찾지 못했습니다. 호스트에서 Ctrl+Z로 확인하세요.',
+  DIRECT_ACTION_FAILED: '요청을 처리하지 못했습니다. 작업 상태를 다시 확인하세요.',
+  GUARD_CONFIRMATION_REQUIRED:
+    '되돌리기로 복구하기 어려운 변경이라 실행을 되돌리고 확인을 기다립니다. [진행]을 누르면 다시 실행합니다.',
+  PLAN_ALREADY_CONTINUED: '이 계획은 이미 자동으로 이어서 실행했습니다.',
 });

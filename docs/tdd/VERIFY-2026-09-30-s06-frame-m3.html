@@ -70,7 +70,7 @@ body.review-accepted .toc-links a[data-reviews]::after{display:none}
 <!-- GENERATED FILE — source: docs/tdd/VERIFY-2026-09-30-s06-frame-m3.md — run: npm --prefix tools/docs run build -->
 <a class="skip" href="#reading-main">본문으로 이동</a>
 <header class="topbar"><a class="brand" href="../../index.html" aria-label="VIDE 문서 모음"><b>V.</b><span>VIDE</span></a><nav class="doc-tabs" aria-label="문서 선택"><a class="doc-tab" href="../PRD.html">PRD</a><a class="doc-tab" href="../specs/README.html">SPEC</a><a class="doc-tab" href="../../Design.html">Design</a><a class="doc-tab" href="../architecture/ARCH-01-system.html">기술 설계</a><a class="doc-tab" href="../plans/PLAN.html">PLAN</a><a class="doc-tab" href="../../DEVELOPMENT_GUIDE.html">개발 가이드</a><a class="doc-tab" href="../../AI.html">AI 규약</a></nav><div class="top-actions"><button id="source-download" title="현재 문서의 Markdown 원문 저장">원문 ↓</button><button id="print-doc" title="현재 문서 인쇄">인쇄</button></div></header>
-<div class="layout"><aside class="toc-shell" id="toc-shell" aria-label="현재 문서의 목차"><div class="toc-title"><strong>CONTENTS</strong><span id="toc-count"></span><button id="toc-toggle" aria-expanded="false" aria-controls="toc-body">목차 열기</button></div><div class="toc-body" id="toc-body"><input class="toc-search" id="toc-search" type="search" placeholder="장 제목으로 찾기" aria-label="현재 문서 목차 검색"><p class="toc-hint" id="nav-hint" role="status">장 제목으로 찾아갑니다.</p><nav class="toc-links" id="toc-links" aria-label="본문 장 이동"></nav><div class="toc-next">다음 작성할 문서<br><b>다음 작업 · PLAN §6.5</b><br>현재 단계와 작업별 계획을 확인한 뒤 해당 범위에서 재개</div></div></aside><main id="reading-main" tabindex="-1"><article id="verify-2026-09-30-s06-frame-m3" class="document"><header class="doc-hero"><div class="hero-label"><span class="eyebrow">VERIFICATION</span><span><span class="pill">DRAFT · v0.2</span><span class="pill">6 CHAPTERS</span></span></div><h1 tabindex="-1">S-06 골조 jig M3 — ⑨~⑫ 연결 검수</h1><div class="hero-meta">
+<div class="layout"><aside class="toc-shell" id="toc-shell" aria-label="현재 문서의 목차"><div class="toc-title"><strong>CONTENTS</strong><span id="toc-count"></span><button id="toc-toggle" aria-expanded="false" aria-controls="toc-body">목차 열기</button></div><div class="toc-body" id="toc-body"><input class="toc-search" id="toc-search" type="search" placeholder="장 제목으로 찾기" aria-label="현재 문서 목차 검색"><p class="toc-hint" id="nav-hint" role="status">장 제목으로 찾아갑니다.</p><nav class="toc-links" id="toc-links" aria-label="본문 장 이동"></nav><div class="toc-next">다음 작성할 문서<br><b>다음 작업 · PLAN §6.5</b><br>현재 단계와 작업별 계획을 확인한 뒤 해당 범위에서 재개</div></div></aside><main id="reading-main" tabindex="-1"><article id="verify-2026-09-30-s06-frame-m3" class="document"><header class="doc-hero"><div class="hero-label"><span class="eyebrow">VERIFICATION</span><span><span class="pill">DRAFT · v0.3</span><span class="pill">8 CHAPTERS</span></span></div><h1 tabindex="-1">S-06 골조 jig M3 — ⑨~⑫ 연결 검수</h1><div class="hero-meta">
 </div></header><section class="doc-section" id="verify-2026-09-30-s06-frame-m3-section-x0"><h2><span aria-hidden="true" class="section-num">00 /</span> 범위와 기준</h2>
 <ul>
 <li><strong>대상:</strong> <a href="../plans/PLAN-23-s06-frame-jig.html#t-056">PLAN-23 T-056</a>. <code>project/s06-frame@0.3.0</code>에 ⑨ <code>sizing</code> → ⑪ <code>schedule</code> → ⑩ <code>heights</code> → ⑫ <code>bakePlan</code>·<code>bakeMembers</code> 단계를 잇고, 만들기 선언·패널 탭·KPI를 더했다.</li>
@@ -310,9 +310,221 @@ body.review-accepted .toc-links a[data-reviews]::after{display:none}
 <li>일람표·만들기 계획·선정의 물량 차이(134.6 / 130.9 / 134.7 t)는 앞 절과 같은 성격이다. 만들기 계획은 선 길이 기준이고 일람표는 설계 부재 기준이다.</li>
 <li>Rhino 만들기와 브라우저 시험은 이번에도 돌리지 않았다.</li>
 </ul>
+</section><section class="doc-section" id="verify-2026-09-30-s06-frame-m3-section-x6"><h2><span aria-hidden="true" class="section-num">06 /</span> 재검수 · 개구 둘레 보(2026-09-30, PLAN-23 남은 일)</h2>
+<p><strong>범위:</strong> 보이드에서 잘린 작은보가 끝이 떠 있던 문제(앞 절 '작은보 9–12 m' 16.2)를 고쳤다. 기준은 SPEC-06.11 4·6(칸 안 작은보, 보이드에서 자름)이다. 바꾼 것은 다음과 같다.</p>
+<ul>
+<li><code>beams</code>: 설정 <code>openingEdgeBeams</code>(기본 켬)이 켜져 있으면, 칸 안에서 보이드에 잘린 작은보 끝을 개구 둘레 보(<code>opening: 'V1'…</code>, 출력 <code>openings</code>)에 건다.
+<ol>
+<li>칸의 보이드 변이 거더에서 거더까지 거의 곧으면(현과의 차이 ≤ 0.1 m) 그 현에 둔다. 잘린 보는 제 줄을 그대로 유지한다.</li>
+<li>그 밖에는 잘린 끝들을 가로질러 보와 직각으로 둔다. 보이드에서 1 cm 떨어진 곳에서, 양쪽으로 처음 만나는 작은보나 거더까지 잇는다.</li>
+<li>양 끝을 받칠 곳이 없거나 다른 끝이 슬래브 끝인 보는 지금처럼 내민 보로 둔다.</li>
+</ol>
+</li>
+<li>잘린 보는 이제 양 끝이 받쳐지므로 뒤쪽 보를 두지 않는다.</li>
+<li><code>model</code>: 개구 둘레 보는 칸의 띠 하중을 받지 않고, 걸린 보의 반력만 받는다.</li>
+<li><code>roles</code>(보이드): 슬래브 솔리드에 이미 뚫린 구멍과 같은 보이드는 한 번만 센다. 슬래브 밖의 보이드는 뺀다.</li>
+<li><code>jig.json</code> 설정 '개구 둘레 보 두기'(그룹 작은보), <code>panel.json</code>의 '칸·작은보' 표에 '개구 둘레' 열을 더했다.
+<ul>
+<li>3D 겹쳐 보기에 층을 따로 더하지는 않았다. 층 상한이 12개라서다. 개구 둘레 보는 <code>beams</code>에 들어 있으므로 '작은보' 층에 함께 보인다.</li>
+</ul>
+</li>
+</ul>
+<p><strong>도구·시험</strong></p>
+<div aria-label="검증 표 5" class="table-scroll" role="region" tabindex="0"><table>
+<thead>
+<tr>
+<th>명령</th>
+<th>결과</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>node tools/jig/validate.mjs extensions/jigs/s06-frame</code></td>
+<td>통과, exit 0</td>
+</tr>
+<tr>
+<td><code>node tools/jig/test.mjs extensions/jigs/s06-frame</code></td>
+<td>exit 0</td>
+</tr>
+<tr>
+<td><code>node --test tests/core/s06-*.test.mjs</code></td>
+<td>81건 통과, 실패 0(<code>s06-beams</code> 새 시험 3건: 격자 보이드의 직각 개구 보, 곧은 보이드 변의 현 개구 보, 보이드 역할 중복·밖)</td>
+</tr>
+</tbody>
+</table></div>
+<p><strong>실데이터 방법:</strong> 앞 절과 같다. 최신 구조 Sync(2026-09-29)의 scratch 사본을 쓰고, 설치본 DB는 읽기만 했다. 이 모델의 보이드 2개는 슬래브 솔리드 윗면 외곽의 구멍이다. 보이드 역할은 비워 두었고, 비교를 위해 <code>openingEdgeBeams</code>를 끄고 한 번 더 돌렸다.</p>
+<div aria-label="검증 표 6" class="table-scroll" role="region" tabindex="0"><table>
+<thead>
+<tr>
+<th>항목</th>
+<th>끔(이전 동작)</th>
+<th>켬(기본)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>작은보 단계</td>
+<td>끝이 보이드·슬래브 끝에 닿는 곳 6, 뒤쪽 보 10</td>
+<td>개구 둘레 보 3(현 1·직각 2), 걸린 보 5, 남은 잘린 끝 1(1.2 m 내민 보), 뒤쪽 보 7</td>
+</tr>
+<tr>
+<td>모델</td>
+<td>작은보 50, 내민 보 15, 조각 289. 오류·경고 0, 기구 0</td>
+<td>작은보 55, 내민 보 10, 조각 299. 오류·경고 0, 기구 0</td>
+</tr>
+<tr>
+<td>작은보 최대 검정비(설정 기본 단면)</td>
+<td>16.2(보이드 옆 칸의 작은보), 10.4 m 잘린 보 14.7</td>
+<td>6.4(&gt; 12 m 작은보, 보이드와 무관). 10.4 m 보는 3.6(양 끝 받침), 개구 둘레 보 최대 1.5</td>
+</tr>
+<tr>
+<td>단면 선정</td>
+<td>수렴(5회). '선정' 3, '후보 없음' 7. 작은보 9–12 m(13개) 16.2 후보 없음</td>
+<td>수렴(5회). '선정' 4, '후보 없음' 6. <strong>작은보 9–12 m(14개) H-588x300x12x20, 0.89 선정</strong></td>
+</tr>
+<tr>
+<td>묶음</td>
+<td>기둥 27·7, 거더 2·30·11·19, 작은보 12·37·3·13</td>
+<td>기둥 27·7, 거더 2·30·11·19, 작은보 12·36·3·14</td>
+</tr>
+<tr>
+<td>최대 검정비(전체)</td>
+<td>999(기둥 세장비 한도 밖)</td>
+<td>999(같음). 기둥 밖 최대는 거더 &gt; 12 m의 7.5</td>
+</tr>
+<tr>
+<td>선정 단면 적용</td>
+<td>3개 묶음, 수정 사항 20. 다시 적용하면 0</td>
+<td>4개 묶음, 수정 사항 34. 다시 적용하면 0</td>
+</tr>
+<tr>
+<td>강재</td>
+<td>선정 135.3 t, 일람표 135.3 t(7행), 만들기 계획 131.5 t</td>
+<td>선정 148.1 t, 일람표 148.0 t(8행), 만들기 계획 144.3 t</td>
+</tr>
+<tr>
+<td>만들기</td>
+<td>상단선·부재 161, 못 만든 부재 0. 확정 뒤 <code>members</code> 127·<code>member-columns</code> 34, 문제 0</td>
+<td>같음</td>
+</tr>
+</tbody>
+</table></div>
+<p><strong>시간(ms):</strong> <code>beams</code> 9 → 15. 나머지 단계는 앞 절과 같은 수준이다(<code>analysis</code> 160, <code>sizing</code> 132).</p>
+<p><strong>남은 것</strong></p>
+<ul>
+<li>강재가 12.8 t 늘었다. 작은보 9–12 m 묶음이 H-400x200에서 H-588x300으로 바뀌어서다. 묶음 전체에 한 단면을 쓰기 때문에, 개구 둘레 보에 걸린 10.4 m 보 하나가 묶음 14개의 단면을 정한다.</li>
+<li>곡선 보이드(윗면 외곽 점 226개)는 직각 개구 보로 받는다. 개구 보와 보이드 곡선 사이의 슬래브는 개구 보에서 내민 것으로 보고, 따로 계산하지 않는다.</li>
+<li>보이드 역할을 레이어에서 따로 고른 경우의 실데이터 시험은 하지 않았다. 이 모델에는 보이드 레이어가 없다. 합성 시험만 했다.</li>
+<li>Rhino 만들기와 브라우저 시험은 돌리지 않았다.</li>
+</ul>
+</section><section class="doc-section" id="verify-2026-09-30-s06-frame-m3-section-x7"><h2><span aria-hidden="true" class="section-num">07 /</span> 재검수 · 개구 둘레 보 + 바로 적용 만들기(2026-09-30)</h2>
+<p><strong>범위:</strong> 개구 둘레 보(앞 절)와 jig 만들기의 바로 적용(E5 레인, <code>runDirectBake</code>·<code>undoBake</code>)이 들어간 뒤 도구 검사·단위 시험·실데이터 연결을 다시 돌렸다. 바로 적용은 2026-09-30 사용자 결정(작업 사본·후보 없이 열린 문서에서 실행, 본문 하나당 되돌리기 기록 하나)을 따른다. 단계 코드는 고치지 않았다. 계약 불일치가 없었다.</p>
+<p><strong>도구·시험</strong></p>
+<div aria-label="검증 표 7" class="table-scroll" role="region" tabindex="0"><table>
+<thead>
+<tr>
+<th>명령</th>
+<th>결과</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>node tools/jig/validate.mjs extensions/jigs/s06-frame</code></td>
+<td>통과(<code>project/s06-frame@0.3.1</code>), exit 0</td>
+</tr>
+<tr>
+<td><code>node tools/jig/test.mjs extensions/jigs/s06-frame</code></td>
+<td>exit 0. <code>applySections</code> 확인 → <code>sectionsApplied</code> → <code>bakeMembers</code>까지 돈다</td>
+</tr>
+<tr>
+<td><code>node --test tests/core/s06-*.test.mjs</code></td>
+<td>82건 통과, 실패 0</td>
+</tr>
+</tbody>
+</table></div>
+<p>새 시험 1건(<code>s06-m3</code>, '바로 적용'): 합성 <code>drawn-two-bay</code>를 적용·재확정까지 돌린 뒤, 상단선·부재·기둥 부재 계획을 가짜 연결 문서에 <code>runDirectBake</code>로 만든다.</p>
+<ul>
+<li>본문 3개가 되돌리기 기록 3개가 된다. 이름은 <code>VIDE jig: &lt;jig 이름&gt;</code>이다. 기록은 곧바로 <code>appliedAt</code>·기준 읽기를 가진다.</li>
+<li>사람이 옮긴 부재 1개와 기록에 없는 객체 1개를 둔 채 다시 만든다. 기록된 객체만 지우고 새로 만든다. 옮긴 부재는 보존(<code>edited</code>)되고, 기록에 없는 객체는 그대로 남는다.</li>
+<li>[되돌리기]는 두 번째 실행의 기록 3개를 최신부터 되돌린다. 첫 만들기 객체가 돌아오고 <code>appliedAt</code>이 비워진다.</li>
+</ul>
+<p><strong>실데이터 방법:</strong> 앞 절과 같다. 설치본 DB를 읽기 전용으로 확인했고, 구조 문서의 가장 최근 Sync는 여전히 2026-09-29다(그 뒤 Sync 4건은 다른 문서). 그 Sync의 scratch 사본을 썼다. 입력은 기둥 34, 거더 62, 슬래브이고 보이드 역할은 비웠다. 설정은 기본값(<code>openingEdgeBeams</code> 켬)이고, 구속 레벨은 기둥 하단 + 3 m로 가정했다. 순서는 <code>girders → cells → beams → model → analysis → sizing → applySections → model(적용 수정 사항) → analysis → sizing → schedule → heights → bakePlan → confirmAnalysis → bakeMembers</code>다. 이어서 만들기 계획을 가짜 연결 문서에 바로 적용으로 두 번 만들고 되돌렸다. 실제 Rhino는 건드리지 않았다.</p>
+<div aria-label="검증 표 8" class="table-scroll" role="region" tabindex="0"><table>
+<thead>
+<tr>
+<th>항목</th>
+<th>결과</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>작은보 단계</td>
+<td>작은보 56, 개구 둘레 보 3(V1 2·V2 1, 3.9·9.8·8.5 m), 걸린 보 5, 내민 보 뒤쪽 보 7</td>
+</tr>
+<tr>
+<td>모델</td>
+<td>기둥 34, 거더 62, 작은보 55, 내민 보 10, 조각 299. 오류·경고 0, 기구 0</td>
+</tr>
+<tr>
+<td>해석 미리보기</td>
+<td><code>ok</code>, 부재 161. 최대 검정비 999(기둥 9–12 m 세장비 한도 밖). 기둥 밖 최대값은 거더 &gt; 12 m의 7.59</td>
+</tr>
+<tr>
+<td>단면 선정</td>
+<td>수렴(5회), 미리보기 기준. 10개 묶음 중 '선정' 4, <strong>'후보 없음' 6</strong>, '미검토' 0</td>
+</tr>
+<tr>
+<td>선정 묶음</td>
+<td>기둥 6–9 m(7개) H-250x250x9x14, 0.90<br>거더 ≤6 m(2개) H-400x200x8x13, 0.61<br>거더 6–9 m(11개) H-588x300x12x20, 0.60<br>작은보 9–12 m(14개) H-588x300x12x20, 0.89</td>
+</tr>
+<tr>
+<td>'후보 없음' 묶음(지금 단면 유지)</td>
+<td>기둥 9–12 m(27개) 999<br>거더 9–12 m(30개) 6.79, 거더 &gt; 12 m(19개) 7.59<br>작은보 ≤6 m(36개) 1.60, 6–9 m(12개) 4.45, &gt; 12 m(3개) 6.42</td>
+</tr>
+<tr>
+<td>선정 단면 적용</td>
+<td>4개 묶음, 수정 사항 34. 모델 해시가 바뀌고 해석은 다시 <code>ok</code>다. 다시 선정하면 같은 결과이고, 다시 적용하면 0</td>
+</tr>
+<tr>
+<td>강재</td>
+<td>해석 133.8 t → 적용 뒤 148.1 t. 일람표 <strong>148.0 t</strong>(부호 8행, 부재 161, '미확정 미리보기', <code>SCHEDULE_NO_CANDIDATE</code>, 누락 0)</td>
+</tr>
+<tr>
+<td>기둥 높이</td>
+<td>34개 모두 1 m 단위로 내림. 받침 최대 0.83 m, 짧은 기둥 0, 보 춤 + 마감 초과 0</td>
+</tr>
+<tr>
+<td>만들기 계획</td>
+<td>상단선 161(기둥 34·거더 62·작은보·내민 보 65), 부재 161, 계획 물량 144.3 t, 못 만든 부재 0. <code>lines</code> 항목 161, 문제 0</td>
+</tr>
+<tr>
+<td>해석 확정 · 부재 계획</td>
+<td>확정됨. <code>bakeMembers</code>는 <code>previewOnly: false</code>이고, <code>members</code> 항목 127·<code>member-columns</code> 34, 문제 0</td>
+</tr>
+<tr>
+<td>바로 적용 · 첫 만들기</td>
+<td>본문 3개(선언마다 1개, 가장 큰 본문 34,564자 ≤ 65,536), 되돌리기 기록 3. 객체 322(161 + 127 + 34)</td>
+</tr>
+<tr>
+<td>바로 적용 · 다시 만들기</td>
+<td>사람이 옮긴 부재 1개와 기록 밖 객체 1개를 둔 상태. 교체 321(상단선 161·부재 126·기둥 34), 보존 1, 지운 객체 321(모두 기록된 것). 결과 323</td>
+</tr>
+<tr>
+<td>[되돌리기]</td>
+<td>두 번째 실행의 기록 3개를 되돌렸다. <code>appliedAt</code>이 비워지고, 첫 만들기 상태(사람 수정 포함 323)로 돌아온다</td>
+</tr>
+</tbody>
+</table></div>
+<p><strong>시간(ms):</strong> <code>girders</code> 18, <code>cells</code> 24, <code>beams</code> 14, <code>model</code> 8, <code>analysis</code> 148(적용 뒤 28), <code>sizing</code> 126(적용 뒤 112), <code>schedule</code> 5, <code>heights</code> 1, <code>bakePlan</code> 2, 해석 확정 34. 가짜 문서에 두 번 만들고 되돌리는 데 22 ms가 걸렸다.</p>
+<p><strong>남은 것</strong></p>
+<ul>
+<li>앞 절 수치와 같다. 입력 Sync가 같아서다. '후보 없음' 6개 묶음은 장경간 거더·작은보와 9–12 m 기둥 세장비로, 배치·구속을 다시 봐야 한다.</li>
+<li>바로 적용은 가짜 호스트로만 확인했다. 엔진에는 아직 <code>directExecute</code>·<code>directUndo</code>가 없다(E5 레인 보고). 연결되기 전까지 실제 경로는 작업 사본 흐름으로 돌아간다.</li>
+<li>실제 Rhino 만들기, 안내 카드 화면, 브라우저 시험은 돌리지 않았다.</li>
+</ul>
 </section><footer class="doc-footer"><span>VIDE / PLANNING DOCUMENTS</span><span>문서 열람용 · 실제 CAD/BIM 지원은 구현·검증 후 선언</span></footer></article></main></div>
 <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
-<script id="source-data" type="application/json">{"verify-2026-09-30-s06-frame-m3":{"label":"S-06 골조 jig M3 — 단면 선정·일람표·기둥 높이·만들기 계획 연결 검수","file":"VERIFY-2026-09-30-s06-frame-m3.md","markdown":"---\nid: VERIFY-2026-09-30-s06-frame-m3\ntitle: S-06 골조 jig M3 — 단면 선정·일람표·기둥 높이·만들기 계획 연결 검수\nstatus: draft\nversion: 0.2\nupdated: 2026-09-30\nowner: agent:claude\nrelated: [T-056, FR-23, AC-42, AC-43, SPEC-06, SPEC-07, PLAN-23]\n---\n\n# S-06 골조 jig M3 — ⑨~⑫ 연결 검수\n\n## 범위와 기준\n\n- **대상:** [PLAN-23 T-056](../plans/PLAN-23-s06-frame-jig.md#t-056). `project/s06-frame@0.3.0`에 ⑨ `sizing` → ⑪ `schedule` → ⑩ `heights` → ⑫ `bakePlan`·`bakeMembers` 단계를 잇고, 만들기 선언·패널 탭·KPI를 더했다.\n- **기준:** SPEC-06.11의 8·9, SPEC-06.12(단면 선정·부호·일람표·상단선·부재 만들기), SPEC-07.12. 화면 검수(SCR)는 이번에 하지 않았다. 브라우저 시험은 고치기만 했고 돌리지 않았다.\n- **이번에 하지 않은 것:** Rhino 만들기 실행. 이번 작업에서는 Rhino를 띄우거나 건드리지 않았다.\n\n## 연결한 것\n\n- **단계 순서:** `analysis` 다음에 `sizing`이 온다. `sizing`은 `step.analysis`(미확정 미리보기)만 읽고 `previewOnly: true`를 낸다. 그 뒤로 `schedule`, `heights`, `bakePlan`이 [해석 확정] 전에도 돈다.\n- **`bakeMembers`(새 단계, `steps/bakeplan.ts`):** `analysisConfirmed`가 끝나야 돈다. 확정 해석이 이 모델의 것이고, 계획한 모든 부재의 단면이 확정한 모델의 단면과 같을 때만 `previewOnly: false`를 낸다.\n  - 선정 단면을 모델에 적용하고 다시 확정하는 경로는 아직 없다. 그래서 선정으로 단면이 바뀌면 부재 계획은 미리보기로 남는다(SPEC-06.12 \"선정 뒤 다시 확정하지 않은 단면으로는 만들지 않는다\").\n- **만들기 선언(`jig.json` `bake`, 능력 `host.bake`):**\n  - `lines`(`vide.bake.curves@1`) ← `step.bakePlan.lines`\n  - `members`(`sweep-h@1`)·`member-columns`(`extrude-column@1`) ← `step.bakeMembers.members`, 둘 다 `requires: ['analysis-confirmed']`\n  - VIDE 기본 만들기의 같은 id보다 이 선언이 먼저 쓰인다.\n- **설정값:** `targetRatio`(목표 검정비 0.90, 그룹 '해석')를 새로 두었다. `depthMax`(m)는 `sizing`·`heights`가 읽고, `steelGrade`는 `sizing`, `heightStep`은 `heights`가 읽는다.\n- **패널:**\n  - 서랍 탭: 거더 보정 목록 · 칸·작은보 · 해석 요약 · 참고 처짐 · **단면 · 일람표 · 높이 · 만들기**(서랍 상한 8개)\n  - 일람표는 `schedule` 부품이고 CSV 이름은 '부재일람표'다.\n  - KPI '끝 붙임'을 '강재'(`step.schedule.totals.t`, t, '예비 단면 · 물량용')로 바꿨다.\n  - 왼쪽 만들기 카드는 `lines`·`members`·`member-columns`를 내놓는다.\n- **단계 계약을 조금 고친 것:**\n  - `sizing` 묶음에 `roleLabel`(기둥·거더·테두리보·작은보)을 더했다.\n  - `sizing`의 안내 문구에 나오는 묶음 id의 영어 역할을 한국어로 바꿨다.\n  - `heights`가 jig 설정값 `depthMax`(m)를 받는다.\n\n## 결과 · 합성\n\n**`drawn-two-bay`, 엔진 실행기 `tests/core/s06-m3.test.mjs`, 5건 통과**\n\n| 항목 | 결과 |\n|---|---|\n| 단면 선정 | `step.analysis` 미리보기로 시작(`basis: preview`, `previewOnly: true`). 수렴했고 5개 묶음이 모두 '선정'이다. 거더·작은보 춤은 900 mm 이하, 최대 검정비는 0.79 |\n| 일람표 | 설계 부재 16개가 한 번씩 들어간다. 부호는 `S06-SC1`처럼 붙고, 행 중량의 합은 합계와 같다. 표지는 '미확정 미리보기' |\n| 기둥 높이(`height-floor`) | 6개 기둥 모두 거더 하단 아래 1 m 단위로 내렸다(5 m, 받침 0.41 m). 강재 상단은 거더 하단 이하 |\n| 만들기 계획 | 상단선 16개(기둥 6·거더 6·작은보 4), 부재 16개. 기둥 부재는 내린 높이에 선다. `lines` 선언으로 항목 16개, 문제 0 |\n| 부재 만들기 | 선정 단면이 확정 모델과 다른 부재가 10개라 미리보기로 남는다. `members` 선언의 문제 목록에 '미확정 미리보기'가 뜬다. 단면이 같은 계획이면 `members`·`member-columns` 항목이 나오고 문제는 0 |\n| 확정 전 실행 | `sizing`~`bakePlan`은 끝나고, `bakeMembers`는 막힘이다. 실행 전체는 막히지 않는다 |\n| 다시 계산 | 부호와 상단선 키가 같다. `depthMax` 0.6·`heightStep` 0.5가 선정과 높이에 반영된다 |\n\n**자식 실행기 `npm run jig:test -- extensions/jigs/s06-frame`: 4건 통과**\n\n- 자식 실행기에서는 해석을 할 수 없다. 그래서 단면은 '미검토'(지금 단면)이고, 기대값은 개수만 본다.\n- `drawn-two-bay` 기대값: 선정 묶음 5, 일람표 16, 높이 6개(내림 6), 계획 선 16·부재 16, 부재 계획은 미리보기.\n\n## 결과 · 실데이터(구조 모델 Sync, 읽기 전용)\n\n**방법**\n\n- 설치본 DB(`%LOCALAPPDATA%/VIDE/vide.sqlite`)를 읽기 전용으로 열었다. 문서 이름에 '구조'가 들어간 문서의 가장 최근 Sync(2026-09-29)를 확인했고, 같은 Sync의 scratch 사본을 썼다.\n- 역할은 M2 검수와 같이 골랐다. 입력 기둥 34, 입력 거더 62, 슬래브 메시를 썼고 보이드는 비워 두었다.\n- 설정값은 기본값이다. 구속 레벨은 기둥 하단 + 3 m로 가정했다.\n- 단계 함수를 Node에서 차례로 불렀다: `girders → cells → beams → model → analysis → sizing → schedule → heights → bakePlan → confirmAnalysis → bakeMembers`.\n- 저장소에는 아무것도 넣지 않았다. 이름·좌표·레이어 이름은 적지 않는다.\n\n**모델:** 기둥 34, 거더 62, 작은보 40, 내민 보 16, 조각 273. 모델 오류는 0이다.\n\n| 단계 | 전체 모델(그대로) | 참고: 비틀림 뿌리 내민 보 13조각을 해석에서 뺌 |\n|---|---|---|\n| 해석 미리보기 | `unstable`(134 ms) | 선정 중 미리보기가 `ok` |\n| 단면 선정 | `error`. 10개 묶음 모두 '미검토'(지금 단면). 안내: \"미리보기 해석 unstable — 단면 선정을 멈춤\" | 수렴(4회, 115 ms). 10개 묶음 중 '선정' 4개, '후보 없음' 6개 |\n| 선정 묶음(역할 × 경간 띠) | 기둥 2(27·7개), 거더 4(2·11·30·19개), 작은보 4(27·12·13·4개) | '선정': 기둥 6–9 m, 거더 ≤6 m, 거더 6–9 m, 작은보 9–12 m. 최대 검정비 0.73~0.90\u003cbr>'후보 없음': 기둥 9–12 m(세장비 999), 거더 9–12 m(5.1), 거더 > 12 m(35.6), 작은보 ≤6 m(1.7)·6–9 m(4.9)·> 12 m(254.3). 춤 상한 안에 KS H 후보가 없어 단면을 두고 목록에 올림 |\n| 일람표 | 부호 4행, 부재 152개, **강재 133.2 t**(설정 기본 단면), 누락 0 | 부호 9행, 부재 152개, **강재 149.9 t**, 경고 `SCHEDULE_NO_CANDIDATE`, 누락 0 |\n| 기둥 높이 | 34개 모두 1 m 단위로 내림(8·9·10 m). 받침 높이 0.03~0.83 m. 짧은 기둥 0, 보 춤 + 마감 초과 0 | 같음 |\n| 만들기 계획 | 상단선 152개(기둥 34·거더 62·작은보·내민 보 56, 원호 0), 부재 152개(계획 물량 129.4 t), 못 만든 부재 0. `lines` 선언 항목 152개, 문제 0 | 같음(부재 물량 147.5 t) |\n| 부재 만들기 | 해석을 확정할 수 없어(`ANALYSIS_NOT_CONFIRMABLE`) 부재 계획은 미리보기. 부재 선언은 막힘 | 같음 |\n\n**시간:** `schedule` 5 ms, `bakePlan` 2 ms, 단면 선정 참고 실행 115 ms(≤ 1초).\n\n## 남은 문제\n\n1. **실데이터 전체 모델이 `unstable`이다.** 거더 중간에 뿌리를 둔 내민 보 13개를 거더 비틀림만 잡고 있다(F1 레인 `TORSION_ROOT` 경고). 그래서 전체 모델의 단면 선정은 멈추고 '미검토'로 남는다. 참고 실행에서도 '후보 없음'이 6개 묶음이다. > 12 m 작은보·거더, 9–12 m 기둥 세장비처럼 배치나 구속을 다시 봐야 할 값이다.\n2. **선정 단면을 모델에 적용하고 다시 확정하는 경로가 없다.** 그래서 선정으로 단면이 바뀐 부재는 [부재 만들기]가 막힌다. 적용 경로(수정 사항이나 설정으로 모델 단면을 바꾸는 방법)는 SPEC-06.12에 맞춰 따로 정해야 한다.\n3. **서랍 탭 상한(8개) 때문에 새 배치 제안 쪽 탭을 뺐다.** 뺀 탭은 간섭 · 제안, 배치 대안 · 제안, 확인 목록, 입력 조립이다. 제안 결과는 3D·평면 겹침과 단계 출력으로만 본다. 되살리려면 부품 목록(`src/ui/kit/registry.ts`)의 탭 상한이나 배치를 바꿔야 한다.\n4. **축선은 만들기 계획에 넣지 않았다.** 그려진 배치에는 새 축선이 없다. 새 배치 제안의 `axes`와 기존 그리드는 이후에 붙인다.\n5. **일람표 CSV는 표에 보이는 열로 만든다.** 단계 출력의 `csv`(BOM·전체 인용)는 보고서·내보내기용이다.\n6. **확인하지 않은 것:** 실제 Rhino 만들기(두 번 만들기 중복 없음, 사람이 옮긴 선 보존), 출력 레이어가 꺼졌을 때의 차단 안내 화면, 브라우저 시험 `browser-s06-jig.mjs`·`browser-jig-panel.mjs`.\n7. **엔진에서는 부호 원장이 이어지지 않는다.** `schedule`은 이전 출력의 `ledger`를 받으면 부호를 유지하지만(단위 시험), 실행기(`src/jigs/runtime/runner.ts`)는 단계에 자기 이전 출력을 넘기지 않는다. 입력이 같으면 캐시로 같은 부호가 나오지만, 단면이 바뀌어 다시 계산하면 번호가 새로 매겨질 수 있다(SPEC-06.12 '안정 부호'). 실행기가 이전 출력을 넘기는 계약을 ARCH-03에 정해야 한다. `analysis`의 이전 확정 유지도 같은 이유로 엔진에서는 쓰이지 않고, `sizing`의 `basis: 'confirmed'`도 나오지 않는다(항상 미리보기 기준).\n\n**검토 수정(2026-09-30):** '후보 없음'이 된 묶음이 앞 반복에서 적용한 후보 단면을 모델에 남기던 것을 시작 단면으로 되돌리게 고쳤다(`sizing.ts`, `tests/structure/sizing.test.mjs`). 보고서는 엔진에서 `inputs`(설정값 원장·남은 조건·해석 보기)를 받게 했고, `previewOnly` 출력(단면 선정·일람표·만들기 계획)을 확정 결과로 쓰지 않으며, '부재 준비' 문장은 미리보기가 아닌 부재 계획이 있을 때만 쓴다(`jig-routes.ts`, `report.ts`, `frame-study.json`).\n\n## 재검수 · 처음부터 끝까지(2026-09-30, `project/s06-frame@0.3.1`)\n\n**범위:** S1 레인의 작은보·내민 보 규칙 수정과 S2 레인의 [선정 단면 적용](SPEC-06.12)이 들어간 뒤, 도구 검사·단위 시험·실데이터 연결을 다시 돌렸다. 단계 코드는 고치지 않았다(계약 불일치 없음).\n\n**도구·시험**\n\n| 명령 | 결과 |\n|---|---|\n| `node tools/jig/validate.mjs extensions/jigs/s06-frame` | 통과, exit 0 |\n| `node tools/jig/test.mjs extensions/jigs/s06-frame` | 4건 통과, exit 0. `applySections` 확인 → `sectionsApplied` → `bakeMembers`까지 돈다 |\n| `node --test tests/core/s06-*.test.mjs` | 75건 통과, 실패 0 |\n\n**실데이터 방법:** 위 절과 같다. 최신 구조 Sync(2026-09-29)의 scratch 사본을 썼다. 입력은 기둥 34, 거더 62, 슬래브이고, 보이드는 비워 두었다. 설정값은 `jig.json` 기본값이고, 구속 레벨은 기둥 하단 + 3 m로 가정했다. 단계 함수는 다음 순서로 불렀다: `girders → cells → beams → model → analysis → sizing → applySections → model(적용 수정 사항) → analysis → sizing → schedule → heights → bakePlan → confirmAnalysis → bakeMembers`.\n\n| 항목 | 결과 |\n|---|---|\n| 모델 | 기둥 34, 거더 62, 작은보 48, 내민 보 15, 조각 283. 오류·경고 0, 기구(`findMechanisms`) 0 |\n| 해석 미리보기(안정) | `ok`, 부재 159. 최대 검정비는 999(기둥 세장비 한도 밖). 그 밖의 최대값은 작은보 9–12 m 묶음의 16.2다 |\n| 단면 선정 | 수렴(5회), 미리보기 기준(`previewOnly: true`). 10개 묶음 중 '선정' 3, '후보 없음' 7, '미검토' 0 |\n| 선정 묶음 | 기둥 6–9 m(7개) H-250x250x9x14, 0.90\u003cbr>거더 ≤6 m(2개) H-400x200x8x13, 0.58\u003cbr>거더 6–9 m(11개) H-588x300x12x20, 0.59 |\n| '후보 없음' 묶음(지금 단면 유지) | 기둥 9–12 m(27개) 999\u003cbr>거더 9–12 m(30개) 6.7, 거더 > 12 m(19개) 7.5\u003cbr>작은보 ≤6 m(35개) 1.7, 6–9 m(12개) 4.9, 9–12 m(13개) 16.2, > 12 m(3개) 6.4 |\n| 선정 단면 적용 | 3개 묶음, 수정 사항 20개(기둥 7·거더 13). '후보 없음' 7개 묶음은 그대로 둔다. 적용 뒤 모델 해시가 바뀌고 해석은 다시 `ok`(최대 검정비는 같다). 다시 선정하면 같은 결과가 나오고, 다시 적용하면 바꿀 부재 0 |\n| 강재 | 해석 132.8 t → 적용 뒤 134.7 t |\n| 일람표 | 부호 7행, 부재 159개, **134.6 t**, 표지 '미확정 미리보기', 경고 `SCHEDULE_NO_CANDIDATE`, 누락 0 |\n| 기둥 높이 | 34개 모두 1 m 단위로 내림. 받침 최대 0.83 m, 짧은 기둥 0, 보 춤 + 마감 초과 0 |\n| 만들기 계획 | 상단선 159(기둥 34·거더 62·작은보·내민 보 63), 부재 159, 계획 물량 130.9 t, 못 만든 부재 0. `lines` 선언 항목 159, 문제 0 |\n| 해석 확정 · 부재 만들기 | 적용한 모델의 해석을 확정할 수 있다. `bakeMembers`는 `previewOnly: false`(\"확정 해석과 같은 단면\")이고, `members` 항목 125와 `member-columns` 항목 34가 나온다. 문제는 0 |\n\n**시간(ms):** `girders` 19, `cells` 25, `beams` 8, `model` 9, `analysis` 148(적용 뒤 24), `sizing` 121(적용 뒤 107), `applySections` \u003c 1, `schedule` 5, `heights` 1, `bakePlan` 2, 해석 확정 33.\n\n**앞 절의 남은 문제와 달라진 것**\n\n- 1번: 전체 모델이 `ok`다. 그래서 단면 선정이 멈추지 않는다. '후보 없음' 7개 묶음(장경간 거더·작은보, 9–12 m 기둥 세장비)은 배치·구속을 다시 봐야 할 값으로 남는다.\n- 2번: 적용 경로가 생겼다. 적용 → 다시 확정 → 부재 만들기 선언까지 실데이터로 이어진다. 다만 '후보 없음' 묶음은 검정비가 1을 넘는 지금 단면 그대로 확정된다. 확정은 안정만 보고 검정비는 막지 않는다.\n- 일람표·만들기 계획·선정의 물량 차이(134.6 / 130.9 / 134.7 t)는 앞 절과 같은 성격이다. 만들기 계획은 선 길이 기준이고 일람표는 설계 부재 기준이다.\n- Rhino 만들기와 브라우저 시험은 이번에도 돌리지 않았다.\n"}}</script>
+<script id="source-data" type="application/json">{"verify-2026-09-30-s06-frame-m3":{"label":"S-06 골조 jig M3 — 단면 선정·일람표·기둥 높이·만들기 계획 연결 검수","file":"VERIFY-2026-09-30-s06-frame-m3.md","markdown":"---\nid: VERIFY-2026-09-30-s06-frame-m3\ntitle: S-06 골조 jig M3 — 단면 선정·일람표·기둥 높이·만들기 계획 연결 검수\nstatus: draft\nversion: 0.3\nupdated: 2026-09-30\nowner: agent:claude\nrelated: [T-056, FR-23, AC-42, AC-43, SPEC-06, SPEC-07, PLAN-23]\n---\n\n# S-06 골조 jig M3 — ⑨~⑫ 연결 검수\n\n## 범위와 기준\n\n- **대상:** [PLAN-23 T-056](../plans/PLAN-23-s06-frame-jig.md#t-056). `project/s06-frame@0.3.0`에 ⑨ `sizing` → ⑪ `schedule` → ⑩ `heights` → ⑫ `bakePlan`·`bakeMembers` 단계를 잇고, 만들기 선언·패널 탭·KPI를 더했다.\n- **기준:** SPEC-06.11의 8·9, SPEC-06.12(단면 선정·부호·일람표·상단선·부재 만들기), SPEC-07.12. 화면 검수(SCR)는 이번에 하지 않았다. 브라우저 시험은 고치기만 했고 돌리지 않았다.\n- **이번에 하지 않은 것:** Rhino 만들기 실행. 이번 작업에서는 Rhino를 띄우거나 건드리지 않았다.\n\n## 연결한 것\n\n- **단계 순서:** `analysis` 다음에 `sizing`이 온다. `sizing`은 `step.analysis`(미확정 미리보기)만 읽고 `previewOnly: true`를 낸다. 그 뒤로 `schedule`, `heights`, `bakePlan`이 [해석 확정] 전에도 돈다.\n- **`bakeMembers`(새 단계, `steps/bakeplan.ts`):** `analysisConfirmed`가 끝나야 돈다. 확정 해석이 이 모델의 것이고, 계획한 모든 부재의 단면이 확정한 모델의 단면과 같을 때만 `previewOnly: false`를 낸다.\n  - 선정 단면을 모델에 적용하고 다시 확정하는 경로는 아직 없다. 그래서 선정으로 단면이 바뀌면 부재 계획은 미리보기로 남는다(SPEC-06.12 \"선정 뒤 다시 확정하지 않은 단면으로는 만들지 않는다\").\n- **만들기 선언(`jig.json` `bake`, 능력 `host.bake`):**\n  - `lines`(`vide.bake.curves@1`) ← `step.bakePlan.lines`\n  - `members`(`sweep-h@1`)·`member-columns`(`extrude-column@1`) ← `step.bakeMembers.members`, 둘 다 `requires: ['analysis-confirmed']`\n  - VIDE 기본 만들기의 같은 id보다 이 선언이 먼저 쓰인다.\n- **설정값:** `targetRatio`(목표 검정비 0.90, 그룹 '해석')를 새로 두었다. `depthMax`(m)는 `sizing`·`heights`가 읽고, `steelGrade`는 `sizing`, `heightStep`은 `heights`가 읽는다.\n- **패널:**\n  - 서랍 탭: 거더 보정 목록 · 칸·작은보 · 해석 요약 · 참고 처짐 · **단면 · 일람표 · 높이 · 만들기**(서랍 상한 8개)\n  - 일람표는 `schedule` 부품이고 CSV 이름은 '부재일람표'다.\n  - KPI '끝 붙임'을 '강재'(`step.schedule.totals.t`, t, '예비 단면 · 물량용')로 바꿨다.\n  - 왼쪽 만들기 카드는 `lines`·`members`·`member-columns`를 내놓는다.\n- **단계 계약을 조금 고친 것:**\n  - `sizing` 묶음에 `roleLabel`(기둥·거더·테두리보·작은보)을 더했다.\n  - `sizing`의 안내 문구에 나오는 묶음 id의 영어 역할을 한국어로 바꿨다.\n  - `heights`가 jig 설정값 `depthMax`(m)를 받는다.\n\n## 결과 · 합성\n\n**`drawn-two-bay`, 엔진 실행기 `tests/core/s06-m3.test.mjs`, 5건 통과**\n\n| 항목 | 결과 |\n|---|---|\n| 단면 선정 | `step.analysis` 미리보기로 시작(`basis: preview`, `previewOnly: true`). 수렴했고 5개 묶음이 모두 '선정'이다. 거더·작은보 춤은 900 mm 이하, 최대 검정비는 0.79 |\n| 일람표 | 설계 부재 16개가 한 번씩 들어간다. 부호는 `S06-SC1`처럼 붙고, 행 중량의 합은 합계와 같다. 표지는 '미확정 미리보기' |\n| 기둥 높이(`height-floor`) | 6개 기둥 모두 거더 하단 아래 1 m 단위로 내렸다(5 m, 받침 0.41 m). 강재 상단은 거더 하단 이하 |\n| 만들기 계획 | 상단선 16개(기둥 6·거더 6·작은보 4), 부재 16개. 기둥 부재는 내린 높이에 선다. `lines` 선언으로 항목 16개, 문제 0 |\n| 부재 만들기 | 선정 단면이 확정 모델과 다른 부재가 10개라 미리보기로 남는다. `members` 선언의 문제 목록에 '미확정 미리보기'가 뜬다. 단면이 같은 계획이면 `members`·`member-columns` 항목이 나오고 문제는 0 |\n| 확정 전 실행 | `sizing`~`bakePlan`은 끝나고, `bakeMembers`는 막힘이다. 실행 전체는 막히지 않는다 |\n| 다시 계산 | 부호와 상단선 키가 같다. `depthMax` 0.6·`heightStep` 0.5가 선정과 높이에 반영된다 |\n\n**자식 실행기 `npm run jig:test -- extensions/jigs/s06-frame`: 4건 통과**\n\n- 자식 실행기에서는 해석을 할 수 없다. 그래서 단면은 '미검토'(지금 단면)이고, 기대값은 개수만 본다.\n- `drawn-two-bay` 기대값: 선정 묶음 5, 일람표 16, 높이 6개(내림 6), 계획 선 16·부재 16, 부재 계획은 미리보기.\n\n## 결과 · 실데이터(구조 모델 Sync, 읽기 전용)\n\n**방법**\n\n- 설치본 DB(`%LOCALAPPDATA%/VIDE/vide.sqlite`)를 읽기 전용으로 열었다. 문서 이름에 '구조'가 들어간 문서의 가장 최근 Sync(2026-09-29)를 확인했고, 같은 Sync의 scratch 사본을 썼다.\n- 역할은 M2 검수와 같이 골랐다. 입력 기둥 34, 입력 거더 62, 슬래브 메시를 썼고 보이드는 비워 두었다.\n- 설정값은 기본값이다. 구속 레벨은 기둥 하단 + 3 m로 가정했다.\n- 단계 함수를 Node에서 차례로 불렀다: `girders → cells → beams → model → analysis → sizing → schedule → heights → bakePlan → confirmAnalysis → bakeMembers`.\n- 저장소에는 아무것도 넣지 않았다. 이름·좌표·레이어 이름은 적지 않는다.\n\n**모델:** 기둥 34, 거더 62, 작은보 40, 내민 보 16, 조각 273. 모델 오류는 0이다.\n\n| 단계 | 전체 모델(그대로) | 참고: 비틀림 뿌리 내민 보 13조각을 해석에서 뺌 |\n|---|---|---|\n| 해석 미리보기 | `unstable`(134 ms) | 선정 중 미리보기가 `ok` |\n| 단면 선정 | `error`. 10개 묶음 모두 '미검토'(지금 단면). 안내: \"미리보기 해석 unstable — 단면 선정을 멈춤\" | 수렴(4회, 115 ms). 10개 묶음 중 '선정' 4개, '후보 없음' 6개 |\n| 선정 묶음(역할 × 경간 띠) | 기둥 2(27·7개), 거더 4(2·11·30·19개), 작은보 4(27·12·13·4개) | '선정': 기둥 6–9 m, 거더 ≤6 m, 거더 6–9 m, 작은보 9–12 m. 최대 검정비 0.73~0.90\u003cbr>'후보 없음': 기둥 9–12 m(세장비 999), 거더 9–12 m(5.1), 거더 > 12 m(35.6), 작은보 ≤6 m(1.7)·6–9 m(4.9)·> 12 m(254.3). 춤 상한 안에 KS H 후보가 없어 단면을 두고 목록에 올림 |\n| 일람표 | 부호 4행, 부재 152개, **강재 133.2 t**(설정 기본 단면), 누락 0 | 부호 9행, 부재 152개, **강재 149.9 t**, 경고 `SCHEDULE_NO_CANDIDATE`, 누락 0 |\n| 기둥 높이 | 34개 모두 1 m 단위로 내림(8·9·10 m). 받침 높이 0.03~0.83 m. 짧은 기둥 0, 보 춤 + 마감 초과 0 | 같음 |\n| 만들기 계획 | 상단선 152개(기둥 34·거더 62·작은보·내민 보 56, 원호 0), 부재 152개(계획 물량 129.4 t), 못 만든 부재 0. `lines` 선언 항목 152개, 문제 0 | 같음(부재 물량 147.5 t) |\n| 부재 만들기 | 해석을 확정할 수 없어(`ANALYSIS_NOT_CONFIRMABLE`) 부재 계획은 미리보기. 부재 선언은 막힘 | 같음 |\n\n**시간:** `schedule` 5 ms, `bakePlan` 2 ms, 단면 선정 참고 실행 115 ms(≤ 1초).\n\n## 남은 문제\n\n1. **실데이터 전체 모델이 `unstable`이다.** 거더 중간에 뿌리를 둔 내민 보 13개를 거더 비틀림만 잡고 있다(F1 레인 `TORSION_ROOT` 경고). 그래서 전체 모델의 단면 선정은 멈추고 '미검토'로 남는다. 참고 실행에서도 '후보 없음'이 6개 묶음이다. > 12 m 작은보·거더, 9–12 m 기둥 세장비처럼 배치나 구속을 다시 봐야 할 값이다.\n2. **선정 단면을 모델에 적용하고 다시 확정하는 경로가 없다.** 그래서 선정으로 단면이 바뀐 부재는 [부재 만들기]가 막힌다. 적용 경로(수정 사항이나 설정으로 모델 단면을 바꾸는 방법)는 SPEC-06.12에 맞춰 따로 정해야 한다.\n3. **서랍 탭 상한(8개) 때문에 새 배치 제안 쪽 탭을 뺐다.** 뺀 탭은 간섭 · 제안, 배치 대안 · 제안, 확인 목록, 입력 조립이다. 제안 결과는 3D·평면 겹침과 단계 출력으로만 본다. 되살리려면 부품 목록(`src/ui/kit/registry.ts`)의 탭 상한이나 배치를 바꿔야 한다.\n4. **축선은 만들기 계획에 넣지 않았다.** 그려진 배치에는 새 축선이 없다. 새 배치 제안의 `axes`와 기존 그리드는 이후에 붙인다.\n5. **일람표 CSV는 표에 보이는 열로 만든다.** 단계 출력의 `csv`(BOM·전체 인용)는 보고서·내보내기용이다.\n6. **확인하지 않은 것:** 실제 Rhino 만들기(두 번 만들기 중복 없음, 사람이 옮긴 선 보존), 출력 레이어가 꺼졌을 때의 차단 안내 화면, 브라우저 시험 `browser-s06-jig.mjs`·`browser-jig-panel.mjs`.\n7. **엔진에서는 부호 원장이 이어지지 않는다.** `schedule`은 이전 출력의 `ledger`를 받으면 부호를 유지하지만(단위 시험), 실행기(`src/jigs/runtime/runner.ts`)는 단계에 자기 이전 출력을 넘기지 않는다. 입력이 같으면 캐시로 같은 부호가 나오지만, 단면이 바뀌어 다시 계산하면 번호가 새로 매겨질 수 있다(SPEC-06.12 '안정 부호'). 실행기가 이전 출력을 넘기는 계약을 ARCH-03에 정해야 한다. `analysis`의 이전 확정 유지도 같은 이유로 엔진에서는 쓰이지 않고, `sizing`의 `basis: 'confirmed'`도 나오지 않는다(항상 미리보기 기준).\n\n**검토 수정(2026-09-30):** '후보 없음'이 된 묶음이 앞 반복에서 적용한 후보 단면을 모델에 남기던 것을 시작 단면으로 되돌리게 고쳤다(`sizing.ts`, `tests/structure/sizing.test.mjs`). 보고서는 엔진에서 `inputs`(설정값 원장·남은 조건·해석 보기)를 받게 했고, `previewOnly` 출력(단면 선정·일람표·만들기 계획)을 확정 결과로 쓰지 않으며, '부재 준비' 문장은 미리보기가 아닌 부재 계획이 있을 때만 쓴다(`jig-routes.ts`, `report.ts`, `frame-study.json`).\n\n## 재검수 · 처음부터 끝까지(2026-09-30, `project/s06-frame@0.3.1`)\n\n**범위:** S1 레인의 작은보·내민 보 규칙 수정과 S2 레인의 [선정 단면 적용](SPEC-06.12)이 들어간 뒤, 도구 검사·단위 시험·실데이터 연결을 다시 돌렸다. 단계 코드는 고치지 않았다(계약 불일치 없음).\n\n**도구·시험**\n\n| 명령 | 결과 |\n|---|---|\n| `node tools/jig/validate.mjs extensions/jigs/s06-frame` | 통과, exit 0 |\n| `node tools/jig/test.mjs extensions/jigs/s06-frame` | 4건 통과, exit 0. `applySections` 확인 → `sectionsApplied` → `bakeMembers`까지 돈다 |\n| `node --test tests/core/s06-*.test.mjs` | 75건 통과, 실패 0 |\n\n**실데이터 방법:** 위 절과 같다. 최신 구조 Sync(2026-09-29)의 scratch 사본을 썼다. 입력은 기둥 34, 거더 62, 슬래브이고, 보이드는 비워 두었다. 설정값은 `jig.json` 기본값이고, 구속 레벨은 기둥 하단 + 3 m로 가정했다. 단계 함수는 다음 순서로 불렀다: `girders → cells → beams → model → analysis → sizing → applySections → model(적용 수정 사항) → analysis → sizing → schedule → heights → bakePlan → confirmAnalysis → bakeMembers`.\n\n| 항목 | 결과 |\n|---|---|\n| 모델 | 기둥 34, 거더 62, 작은보 48, 내민 보 15, 조각 283. 오류·경고 0, 기구(`findMechanisms`) 0 |\n| 해석 미리보기(안정) | `ok`, 부재 159. 최대 검정비는 999(기둥 세장비 한도 밖). 그 밖의 최대값은 작은보 9–12 m 묶음의 16.2다 |\n| 단면 선정 | 수렴(5회), 미리보기 기준(`previewOnly: true`). 10개 묶음 중 '선정' 3, '후보 없음' 7, '미검토' 0 |\n| 선정 묶음 | 기둥 6–9 m(7개) H-250x250x9x14, 0.90\u003cbr>거더 ≤6 m(2개) H-400x200x8x13, 0.58\u003cbr>거더 6–9 m(11개) H-588x300x12x20, 0.59 |\n| '후보 없음' 묶음(지금 단면 유지) | 기둥 9–12 m(27개) 999\u003cbr>거더 9–12 m(30개) 6.7, 거더 > 12 m(19개) 7.5\u003cbr>작은보 ≤6 m(35개) 1.7, 6–9 m(12개) 4.9, 9–12 m(13개) 16.2, > 12 m(3개) 6.4 |\n| 선정 단면 적용 | 3개 묶음, 수정 사항 20개(기둥 7·거더 13). '후보 없음' 7개 묶음은 그대로 둔다. 적용 뒤 모델 해시가 바뀌고 해석은 다시 `ok`(최대 검정비는 같다). 다시 선정하면 같은 결과가 나오고, 다시 적용하면 바꿀 부재 0 |\n| 강재 | 해석 132.8 t → 적용 뒤 134.7 t |\n| 일람표 | 부호 7행, 부재 159개, **134.6 t**, 표지 '미확정 미리보기', 경고 `SCHEDULE_NO_CANDIDATE`, 누락 0 |\n| 기둥 높이 | 34개 모두 1 m 단위로 내림. 받침 최대 0.83 m, 짧은 기둥 0, 보 춤 + 마감 초과 0 |\n| 만들기 계획 | 상단선 159(기둥 34·거더 62·작은보·내민 보 63), 부재 159, 계획 물량 130.9 t, 못 만든 부재 0. `lines` 선언 항목 159, 문제 0 |\n| 해석 확정 · 부재 만들기 | 적용한 모델의 해석을 확정할 수 있다. `bakeMembers`는 `previewOnly: false`(\"확정 해석과 같은 단면\")이고, `members` 항목 125와 `member-columns` 항목 34가 나온다. 문제는 0 |\n\n**시간(ms):** `girders` 19, `cells` 25, `beams` 8, `model` 9, `analysis` 148(적용 뒤 24), `sizing` 121(적용 뒤 107), `applySections` \u003c 1, `schedule` 5, `heights` 1, `bakePlan` 2, 해석 확정 33.\n\n**앞 절의 남은 문제와 달라진 것**\n\n- 1번: 전체 모델이 `ok`다. 그래서 단면 선정이 멈추지 않는다. '후보 없음' 7개 묶음(장경간 거더·작은보, 9–12 m 기둥 세장비)은 배치·구속을 다시 봐야 할 값으로 남는다.\n- 2번: 적용 경로가 생겼다. 적용 → 다시 확정 → 부재 만들기 선언까지 실데이터로 이어진다. 다만 '후보 없음' 묶음은 검정비가 1을 넘는 지금 단면 그대로 확정된다. 확정은 안정만 보고 검정비는 막지 않는다.\n- 일람표·만들기 계획·선정의 물량 차이(134.6 / 130.9 / 134.7 t)는 앞 절과 같은 성격이다. 만들기 계획은 선 길이 기준이고 일람표는 설계 부재 기준이다.\n- Rhino 만들기와 브라우저 시험은 이번에도 돌리지 않았다.\n\n## 재검수 · 개구 둘레 보(2026-09-30, PLAN-23 남은 일)\n\n**범위:** 보이드에서 잘린 작은보가 끝이 떠 있던 문제(앞 절 '작은보 9–12 m' 16.2)를 고쳤다. 기준은 SPEC-06.11 4·6(칸 안 작은보, 보이드에서 자름)이다. 바꾼 것은 다음과 같다.\n\n- `beams`: 설정 `openingEdgeBeams`(기본 켬)이 켜져 있으면, 칸 안에서 보이드에 잘린 작은보 끝을 개구 둘레 보(`opening: 'V1'…`, 출력 `openings`)에 건다.\n  1. 칸의 보이드 변이 거더에서 거더까지 거의 곧으면(현과의 차이 ≤ 0.1 m) 그 현에 둔다. 잘린 보는 제 줄을 그대로 유지한다.\n  2. 그 밖에는 잘린 끝들을 가로질러 보와 직각으로 둔다. 보이드에서 1 cm 떨어진 곳에서, 양쪽으로 처음 만나는 작은보나 거더까지 잇는다.\n  3. 양 끝을 받칠 곳이 없거나 다른 끝이 슬래브 끝인 보는 지금처럼 내민 보로 둔다.\n- 잘린 보는 이제 양 끝이 받쳐지므로 뒤쪽 보를 두지 않는다.\n- `model`: 개구 둘레 보는 칸의 띠 하중을 받지 않고, 걸린 보의 반력만 받는다.\n- `roles`(보이드): 슬래브 솔리드에 이미 뚫린 구멍과 같은 보이드는 한 번만 센다. 슬래브 밖의 보이드는 뺀다.\n- `jig.json` 설정 '개구 둘레 보 두기'(그룹 작은보), `panel.json`의 '칸·작은보' 표에 '개구 둘레' 열을 더했다.\n  - 3D 겹쳐 보기에 층을 따로 더하지는 않았다. 층 상한이 12개라서다. 개구 둘레 보는 `beams`에 들어 있으므로 '작은보' 층에 함께 보인다.\n\n**도구·시험**\n\n| 명령 | 결과 |\n|---|---|\n| `node tools/jig/validate.mjs extensions/jigs/s06-frame` | 통과, exit 0 |\n| `node tools/jig/test.mjs extensions/jigs/s06-frame` | exit 0 |\n| `node --test tests/core/s06-*.test.mjs` | 81건 통과, 실패 0(`s06-beams` 새 시험 3건: 격자 보이드의 직각 개구 보, 곧은 보이드 변의 현 개구 보, 보이드 역할 중복·밖) |\n\n**실데이터 방법:** 앞 절과 같다. 최신 구조 Sync(2026-09-29)의 scratch 사본을 쓰고, 설치본 DB는 읽기만 했다. 이 모델의 보이드 2개는 슬래브 솔리드 윗면 외곽의 구멍이다. 보이드 역할은 비워 두었고, 비교를 위해 `openingEdgeBeams`를 끄고 한 번 더 돌렸다.\n\n| 항목 | 끔(이전 동작) | 켬(기본) |\n|---|---|---|\n| 작은보 단계 | 끝이 보이드·슬래브 끝에 닿는 곳 6, 뒤쪽 보 10 | 개구 둘레 보 3(현 1·직각 2), 걸린 보 5, 남은 잘린 끝 1(1.2 m 내민 보), 뒤쪽 보 7 |\n| 모델 | 작은보 50, 내민 보 15, 조각 289. 오류·경고 0, 기구 0 | 작은보 55, 내민 보 10, 조각 299. 오류·경고 0, 기구 0 |\n| 작은보 최대 검정비(설정 기본 단면) | 16.2(보이드 옆 칸의 작은보), 10.4 m 잘린 보 14.7 | 6.4(> 12 m 작은보, 보이드와 무관). 10.4 m 보는 3.6(양 끝 받침), 개구 둘레 보 최대 1.5 |\n| 단면 선정 | 수렴(5회). '선정' 3, '후보 없음' 7. 작은보 9–12 m(13개) 16.2 후보 없음 | 수렴(5회). '선정' 4, '후보 없음' 6. **작은보 9–12 m(14개) H-588x300x12x20, 0.89 선정** |\n| 묶음 | 기둥 27·7, 거더 2·30·11·19, 작은보 12·37·3·13 | 기둥 27·7, 거더 2·30·11·19, 작은보 12·36·3·14 |\n| 최대 검정비(전체) | 999(기둥 세장비 한도 밖) | 999(같음). 기둥 밖 최대는 거더 > 12 m의 7.5 |\n| 선정 단면 적용 | 3개 묶음, 수정 사항 20. 다시 적용하면 0 | 4개 묶음, 수정 사항 34. 다시 적용하면 0 |\n| 강재 | 선정 135.3 t, 일람표 135.3 t(7행), 만들기 계획 131.5 t | 선정 148.1 t, 일람표 148.0 t(8행), 만들기 계획 144.3 t |\n| 만들기 | 상단선·부재 161, 못 만든 부재 0. 확정 뒤 `members` 127·`member-columns` 34, 문제 0 | 같음 |\n\n**시간(ms):** `beams` 9 → 15. 나머지 단계는 앞 절과 같은 수준이다(`analysis` 160, `sizing` 132).\n\n**남은 것**\n\n- 강재가 12.8 t 늘었다. 작은보 9–12 m 묶음이 H-400x200에서 H-588x300으로 바뀌어서다. 묶음 전체에 한 단면을 쓰기 때문에, 개구 둘레 보에 걸린 10.4 m 보 하나가 묶음 14개의 단면을 정한다.\n- 곡선 보이드(윗면 외곽 점 226개)는 직각 개구 보로 받는다. 개구 보와 보이드 곡선 사이의 슬래브는 개구 보에서 내민 것으로 보고, 따로 계산하지 않는다.\n- 보이드 역할을 레이어에서 따로 고른 경우의 실데이터 시험은 하지 않았다. 이 모델에는 보이드 레이어가 없다. 합성 시험만 했다.\n- Rhino 만들기와 브라우저 시험은 돌리지 않았다.\n\n## 재검수 · 개구 둘레 보 + 바로 적용 만들기(2026-09-30)\n\n**범위:** 개구 둘레 보(앞 절)와 jig 만들기의 바로 적용(E5 레인, `runDirectBake`·`undoBake`)이 들어간 뒤 도구 검사·단위 시험·실데이터 연결을 다시 돌렸다. 바로 적용은 2026-09-30 사용자 결정(작업 사본·후보 없이 열린 문서에서 실행, 본문 하나당 되돌리기 기록 하나)을 따른다. 단계 코드는 고치지 않았다. 계약 불일치가 없었다.\n\n**도구·시험**\n\n| 명령 | 결과 |\n|---|---|\n| `node tools/jig/validate.mjs extensions/jigs/s06-frame` | 통과(`project/s06-frame@0.3.1`), exit 0 |\n| `node tools/jig/test.mjs extensions/jigs/s06-frame` | exit 0. `applySections` 확인 → `sectionsApplied` → `bakeMembers`까지 돈다 |\n| `node --test tests/core/s06-*.test.mjs` | 82건 통과, 실패 0 |\n\n새 시험 1건(`s06-m3`, '바로 적용'): 합성 `drawn-two-bay`를 적용·재확정까지 돌린 뒤, 상단선·부재·기둥 부재 계획을 가짜 연결 문서에 `runDirectBake`로 만든다.\n\n- 본문 3개가 되돌리기 기록 3개가 된다. 이름은 `VIDE jig: \u003cjig 이름>`이다. 기록은 곧바로 `appliedAt`·기준 읽기를 가진다.\n- 사람이 옮긴 부재 1개와 기록에 없는 객체 1개를 둔 채 다시 만든다. 기록된 객체만 지우고 새로 만든다. 옮긴 부재는 보존(`edited`)되고, 기록에 없는 객체는 그대로 남는다.\n- [되돌리기]는 두 번째 실행의 기록 3개를 최신부터 되돌린다. 첫 만들기 객체가 돌아오고 `appliedAt`이 비워진다.\n\n**실데이터 방법:** 앞 절과 같다. 설치본 DB를 읽기 전용으로 확인했고, 구조 문서의 가장 최근 Sync는 여전히 2026-09-29다(그 뒤 Sync 4건은 다른 문서). 그 Sync의 scratch 사본을 썼다. 입력은 기둥 34, 거더 62, 슬래브이고 보이드 역할은 비웠다. 설정은 기본값(`openingEdgeBeams` 켬)이고, 구속 레벨은 기둥 하단 + 3 m로 가정했다. 순서는 `girders → cells → beams → model → analysis → sizing → applySections → model(적용 수정 사항) → analysis → sizing → schedule → heights → bakePlan → confirmAnalysis → bakeMembers`다. 이어서 만들기 계획을 가짜 연결 문서에 바로 적용으로 두 번 만들고 되돌렸다. 실제 Rhino는 건드리지 않았다.\n\n| 항목 | 결과 |\n|---|---|\n| 작은보 단계 | 작은보 56, 개구 둘레 보 3(V1 2·V2 1, 3.9·9.8·8.5 m), 걸린 보 5, 내민 보 뒤쪽 보 7 |\n| 모델 | 기둥 34, 거더 62, 작은보 55, 내민 보 10, 조각 299. 오류·경고 0, 기구 0 |\n| 해석 미리보기 | `ok`, 부재 161. 최대 검정비 999(기둥 9–12 m 세장비 한도 밖). 기둥 밖 최대값은 거더 > 12 m의 7.59 |\n| 단면 선정 | 수렴(5회), 미리보기 기준. 10개 묶음 중 '선정' 4, **'후보 없음' 6**, '미검토' 0 |\n| 선정 묶음 | 기둥 6–9 m(7개) H-250x250x9x14, 0.90\u003cbr>거더 ≤6 m(2개) H-400x200x8x13, 0.61\u003cbr>거더 6–9 m(11개) H-588x300x12x20, 0.60\u003cbr>작은보 9–12 m(14개) H-588x300x12x20, 0.89 |\n| '후보 없음' 묶음(지금 단면 유지) | 기둥 9–12 m(27개) 999\u003cbr>거더 9–12 m(30개) 6.79, 거더 > 12 m(19개) 7.59\u003cbr>작은보 ≤6 m(36개) 1.60, 6–9 m(12개) 4.45, > 12 m(3개) 6.42 |\n| 선정 단면 적용 | 4개 묶음, 수정 사항 34. 모델 해시가 바뀌고 해석은 다시 `ok`다. 다시 선정하면 같은 결과이고, 다시 적용하면 0 |\n| 강재 | 해석 133.8 t → 적용 뒤 148.1 t. 일람표 **148.0 t**(부호 8행, 부재 161, '미확정 미리보기', `SCHEDULE_NO_CANDIDATE`, 누락 0) |\n| 기둥 높이 | 34개 모두 1 m 단위로 내림. 받침 최대 0.83 m, 짧은 기둥 0, 보 춤 + 마감 초과 0 |\n| 만들기 계획 | 상단선 161(기둥 34·거더 62·작은보·내민 보 65), 부재 161, 계획 물량 144.3 t, 못 만든 부재 0. `lines` 항목 161, 문제 0 |\n| 해석 확정 · 부재 계획 | 확정됨. `bakeMembers`는 `previewOnly: false`이고, `members` 항목 127·`member-columns` 34, 문제 0 |\n| 바로 적용 · 첫 만들기 | 본문 3개(선언마다 1개, 가장 큰 본문 34,564자 ≤ 65,536), 되돌리기 기록 3. 객체 322(161 + 127 + 34) |\n| 바로 적용 · 다시 만들기 | 사람이 옮긴 부재 1개와 기록 밖 객체 1개를 둔 상태. 교체 321(상단선 161·부재 126·기둥 34), 보존 1, 지운 객체 321(모두 기록된 것). 결과 323 |\n| [되돌리기] | 두 번째 실행의 기록 3개를 되돌렸다. `appliedAt`이 비워지고, 첫 만들기 상태(사람 수정 포함 323)로 돌아온다 |\n\n**시간(ms):** `girders` 18, `cells` 24, `beams` 14, `model` 8, `analysis` 148(적용 뒤 28), `sizing` 126(적용 뒤 112), `schedule` 5, `heights` 1, `bakePlan` 2, 해석 확정 34. 가짜 문서에 두 번 만들고 되돌리는 데 22 ms가 걸렸다.\n\n**남은 것**\n\n- 앞 절 수치와 같다. 입력 Sync가 같아서다. '후보 없음' 6개 묶음은 장경간 거더·작은보와 9–12 m 기둥 세장비로, 배치·구속을 다시 봐야 한다.\n- 바로 적용은 가짜 호스트로만 확인했다. 엔진에는 아직 `directExecute`·`directUndo`가 없다(E5 레인 보고). 연결되기 전까지 실제 경로는 작업 사본 흐름으로 돌아간다.\n- 실제 Rhino 만들기, 안내 카드 화면, 브라우저 시험은 돌리지 않았다.\n"}}</script>
 <script id="reader-config" type="application/json">{"initial":"verify-2026-09-30-s06-frame-m3","siteTitle":"VIDE"}</script>
 <script>
 (() => {

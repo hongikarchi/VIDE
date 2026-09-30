@@ -43,6 +43,8 @@ try {
     'Codex 로그인': { target: 'app', by: 'rules', app: 'login', provider: 'codex-cli' },
     'Claude 로그인': { target: 'app', by: 'rules', app: 'login', provider: 'claude-cli' },
     '이 프로젝트 결정 사항 알려줘': { target: 'ask', by: 'jev' },
+    // Jev marks a complex / multi-file request: in 자동 the composer suggests '계획부터'.
+    '두 도면 기둥 번호를 모두 맞춰줘': { target: 'document', by: 'jev', planFirst: true },
   };
   await page.route(/\/route$/, (route) =>
     route.fulfill({
@@ -158,6 +160,23 @@ try {
   );
   // Without a chosen conversation the request belongs to the project's default one.
   assert.equal(posted[0].conversationId, undefined);
+  assert.equal(posted[0].mode, 'auto');
+  // '계획부터 할까요?': [계획부터] sends this one request in 계획; the toggle stays on 자동.
+  posted.length = 0;
+  await send('두 도면 기둥 번호를 모두 맞춰줘');
+  await page.locator('#route-card').waitFor();
+  assert.match(await page.locator('#route-card').textContent(), /계획부터 할까요\?/);
+  assert.deepEqual(posted, []);
+  await page.locator('#route-card button').filter({ hasText: '계획부터' }).click();
+  for (let i = 0; i < 40 && !posted.length; i++) await page.waitForTimeout(50);
+  assert.deepEqual(
+    posted.map((input) => [input.body, input.mode, input.permission]),
+    [['두 도면 기둥 번호를 모두 맞춰줘', 'plan', 'review']],
+  );
+  assert.equal(
+    await page.locator('#mode-toggle [data-mode="auto"]').getAttribute('aria-checked'),
+    'true',
+  );
   // The account-limit card comes from the server's state; [새 세션으로 이어가기] posts the
   // hand-over (the server picks the spare account) and the card goes.
   await page.locator('[data-conversation="c-limit"]').click();

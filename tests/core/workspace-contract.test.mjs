@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { requestInputSchema } from '../../src/contracts/workspace.ts';
+import { requestInputSchema, requestMode } from '../../src/contracts/workspace.ts';
 const input = () => ({
   id: 'job-1',
   body: 'test',
@@ -34,6 +34,9 @@ test('shared request boundary rejects invalid coordinates, oversized content and
     { body: 'x'.repeat(20001) },
     { files: [{ name: 'a', text: 'x'.repeat(50001) }] },
     { provider: 'extension', permission: 'candidate', extension: 'test', extensionVersion: '1' },
+    { provider: 'extension', mode: 'auto', extension: 'test', extensionVersion: '1' },
+    { mode: 'review' },
+    { permission: 'write' },
     { model: '../injected' },
     { effort: 'invented' },
     { host: 'wrong' },
@@ -55,7 +58,8 @@ test('shared boundary preserves additive metadata and explicit new-work basis', 
     files: [{ name: 'a', text: 'content', contentStatus: 'included' }],
     source: 'document',
   };
-  assert.deepEqual(requestInputSchema.parse(original), original);
+  // The old permission is kept and the mode it maps to is added (ADR-022).
+  assert.deepEqual(requestInputSchema.parse(original), { ...original, mode: 'plan' });
   assert.equal(
     requestInputSchema.safeParse({
       ...input(),
@@ -120,4 +124,29 @@ test('brush sketches carry world XYZ strokes while plane sketches stay valid', (
     },
   ])
     assert.equal(sketches.safeParse([invalid]).success, false);
+});
+
+test('mode replaces permission: old values map review to plan and candidate/apply to auto', () => {
+  const { permission: _permission, ...bare } = input();
+  assert.equal(requestInputSchema.parse(bare).mode, 'auto');
+  assert.equal(requestInputSchema.parse(bare).permission, 'candidate');
+  for (const [permission, mode] of [
+    ['review', 'plan'],
+    ['candidate', 'auto'],
+    ['apply', 'auto'],
+  ]) {
+    const parsed = requestInputSchema.parse({ ...bare, permission });
+    assert.equal(parsed.mode, mode);
+    assert.equal(requestMode({ permission }), mode);
+  }
+  // An explicit mode wins over an old permission, and the permission follows it.
+  const plan = requestInputSchema.parse({ ...bare, mode: 'plan', permission: 'candidate' });
+  assert.deepEqual([plan.mode, plan.permission], ['plan', 'review']);
+  const auto = requestInputSchema.parse({ ...bare, mode: 'auto' });
+  assert.deepEqual([auto.mode, auto.permission], ['auto', 'candidate']);
+  assert.equal(requestMode({}), 'auto');
+  // Extensions stay read-only: Plan only.
+  const extension = { ...bare, provider: 'extension', extension: 'test', extensionVersion: '1' };
+  assert.equal(requestInputSchema.safeParse({ ...extension, mode: 'plan' }).success, true);
+  assert.equal(requestInputSchema.safeParse(extension).success, false);
 });

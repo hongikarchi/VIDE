@@ -132,7 +132,114 @@ function fakeDocument() {
   return { doc, add, model };
 }
 
-function fixture(t) {
+/**
+ * The fake attached Rhino of the direct path (바로 적용): `direct-execute` decodes the body's data
+ * block and acts like the template (deletes only listed GUIDs with this instance's and bake's tags,
+ * adds tagged objects), inside an undo record the fake `direct-undo` reverts while it is the latest.
+ * `direct.rogue` deletes one more object the body never listed, as a faulty body would (only on
+ * the `rogueAt`-th `direct-execute` call when set); `hostGuard: false` is a host without its own
+ * deletion count.
+ */
+function fakeDirect(document, calls, options) {
+  const stack = [];
+  const direct = {
+    stack,
+    fingerprint: async () => ({
+      documentHash: `rev-${document.doc.revision}`,
+      revision: document.doc.revision,
+    }),
+    execute: async (target, command) => {
+      assert.equal(target.instance, INSTANCE);
+      assert.equal(target.documentId, DOCUMENT);
+      calls.direct.push(command);
+      if (options.failAt === calls.direct.length) return { ok: false, reason: 'EXCEPTION' };
+      const block = decodeDataBlock(Buffer.from(command.code.split('"')[1], 'base64'));
+      const { header } = block;
+      const removed = [];
+      for (const id of header.deleteIds) {
+        const row = document.doc.rows.get(id);
+        if (
+          !row ||
+          row.tags['vide-instance'] !== header.instanceId ||
+          row.tags['vide-bake'] !== header.bakeId
+        )
+          continue;
+        document.doc.rows.delete(id);
+        removed.push(row);
+      }
+      const rogue = direct.rogue;
+      if (
+        rogue &&
+        document.doc.rows.has(rogue) &&
+        (!direct.rogueAt || direct.rogueAt === calls.direct.length)
+      ) {
+        removed.push(document.doc.rows.get(rogue));
+        document.doc.rows.delete(rogue);
+      }
+      const added = [];
+      for (const item of block.items) {
+        const nativeId = randomUUID();
+        document.add(nativeId, header.layerPath, `hash:${item.key}`, {
+          'vide-jig': header.jigId,
+          'vide-instance': header.instanceId,
+          'vide-run': header.runId,
+          'vide-bake': header.bakeId,
+          'vide-key': item.key,
+          ...Object.fromEntries(item.attrs),
+        });
+        added.push({ key: item.key, nativeId });
+      }
+      document.doc.revision++;
+      const revert = () => {
+        for (const { nativeId } of added) document.doc.rows.delete(nativeId);
+        for (const row of removed) document.doc.rows.set(row.nativeId, row);
+        document.doc.revision++;
+      };
+      // The host guard: more deletions than allowed, unconfirmed, undoes the record at once.
+      if (
+        direct.hostGuard !== false &&
+        removed.length > command.guard.maxDeletes &&
+        !command.guard.confirmed
+      ) {
+        revert();
+        return {
+          ok: false,
+          guarded: { kind: 'bulk-delete', detail: `${removed.length}개 삭제` },
+        };
+      }
+      const undoId = randomUUID();
+      stack.push({ undoId, revert });
+      direct.afterExecute?.();
+      return {
+        ok: true,
+        undoId,
+        changes: {
+          added: added.map(({ nativeId }) => ({ nativeId, hash: '', layer: header.layerPath })),
+          changed: [],
+          removed: removed.map((row) => ({ nativeId: row.nativeId, layer: row.layer })),
+        },
+        value: {
+          removed: removed.length,
+          keys: added.map((a) => a.key),
+          ids: added.map((a) => a.nativeId),
+          failed: [],
+        },
+        log: [],
+      };
+    },
+    undo: async (target, undoId) => {
+      calls.undo.push(undoId);
+      if (stack.at(-1)?.undoId !== undoId) return { ok: false, reason: 'not-latest' };
+      stack.pop().revert();
+      return { ok: true };
+    },
+    /** Someone did something else in Rhino after the bake. */
+    other: () => stack.push({ undoId: randomUUID(), revert: () => {} }),
+  };
+  return direct;
+}
+
+function fixture(t, options = {}) {
   const root = mkdtempSync(join(tmpdir(), 'vide-bake-'));
   const dataDir = join(root, 'data');
   mkdirSync(dataDir, { recursive: true });
@@ -142,7 +249,7 @@ function fixture(t) {
   const links = new DocumentLinks(store.db);
   const project = store.createProject('만들기 시험');
   const document = fakeDocument();
-  const calls = { reads: [], fixed: [] };
+  const calls = { reads: [], fixed: [], direct: [], undo: [] };
   let readFailure;
   const sdk = {
     readLayers: async (target, scope) => {
@@ -184,6 +291,7 @@ function fixture(t) {
     },
   };
   const execution = new Execution(workspace, { sdk });
+  const direct = options.direct ? fakeDirect(document, calls, options) : undefined;
   let last;
   const call = async (method, path, payload) => {
     last = undefined;
@@ -196,6 +304,7 @@ function fixture(t) {
       links,
       sdk,
       execution,
+      ...(direct ? { direct } : {}),
     });
     return handled ? last : { status: 0, data: undefined };
   };
@@ -216,6 +325,7 @@ function fixture(t) {
     document,
     calls,
     execution,
+    direct,
     call,
     failNextRead: (error) => (readFailure = error),
   };
@@ -324,7 +434,7 @@ function applied(f, iid, result, hashOf = (key) => `hash:${key}`) {
   return made;
 }
 
-test('bake: forced read, fixed bodies without a provider, record, baseline, then replacement by recorded GUIDs only', async (t) => {
+test('bake (work-copy fallback): forced read, fixed bodies without a provider, record, baseline, then replacement by recorded GUIDs only', async (t) => {
   const f = fixture(t);
   const { base, iid, link, columns, beams } = await ready(f);
   const readsBefore = f.calls.reads.length;
@@ -333,6 +443,11 @@ test('bake: forced read, fixed bodies without a provider, record, baseline, then
   const bake1 = await f.call('POST', `${base}/${iid}/bake`, { bake: ['columns', 'beams'] });
   assert.equal(bake1.status, 200, JSON.stringify(bake1.data));
   assert.equal(bake1.data.status, 'submitted');
+  assert.equal(
+    bake1.data.notice,
+    '파일을 Rhino에서 열어 연결하세요',
+    'no attached editor: work copy',
+  );
   assert.equal(f.calls.reads.length, readsBefore + 1);
   assert.deepEqual(f.calls.reads.at(-1), { includeHidden: true });
   assert.equal(f.jigStore.reads(iid).at(-1).purpose, 'pre-bake');
@@ -834,4 +949,166 @@ test('bake: the built-in lines bake, an absorbed edit respected by the next bake
     [[taken, 'edited']],
   );
   await finished(f, bake3.data.requestId);
+});
+
+// 바로 적용 (user decision 2026-09-30): with an attached Rhino the bake runs in the open document,
+// one host undo record per body, and the read right after the run is the baseline.
+const tagged = (f, runId) =>
+  [...f.document.doc.rows.values()].filter((row) => row.tags['vide-run'] === runId);
+
+test('bake (direct): runs in the attached document with undo records, baseline at once, replacement by recorded GUIDs, [되돌리기]', async (t) => {
+  const f = fixture(t, { direct: true });
+  const { base, iid, columns, beams } = await ready(f);
+
+  // 1. First bake: two bodies, each its own undo record; nothing goes through the work copy.
+  const bake1 = await f.call('POST', `${base}/${iid}/bake`, { bake: ['columns', 'beams'] });
+  assert.equal(bake1.status, 200, JSON.stringify(bake1.data));
+  assert.equal(bake1.data.status, 'applied');
+  assert.equal(bake1.data.baseline, 'recorded');
+  assert.equal(bake1.data.notice, undefined);
+  assert.equal(f.calls.fixed.length, 0, 'no work copy');
+  assert.equal(
+    f.workspace.list(f.project.id).filter((r) => r.input.jig?.kind === 'jig-bake').length,
+    0,
+    'no candidate request',
+  );
+  assert.equal(f.calls.direct.length, 2);
+  assert.ok(f.calls.direct.every((c) => /^VIDE jig: .+/.test(c.label)));
+  assert.deepEqual(
+    f.calls.direct.map((c) => c.guard),
+    [
+      { confirmed: false, maxDeletes: 0 },
+      { confirmed: false, maxDeletes: 0 },
+    ],
+  );
+  assert.equal(bake1.data.undoIds.length, 2);
+  assert.equal(bake1.data.bake.direct, true);
+  assert.equal(bake1.data.bake.totals.added, columns.length + beams.length);
+  assert.equal(tagged(f, bake1.data.runId).length, columns.length + beams.length);
+  // The baseline read came right after the run: fingerprints and appliedAt without a second step.
+  const reads = f.jigStore.reads(iid).filter((r) => r.purpose === 'pre-bake');
+  assert.equal(reads.length, 2, 'the forced read and the baseline read');
+  let records = (await f.call('GET', `${base}/${iid}/bakes`)).data.bakes;
+  assert.equal(records.length, 2);
+  assert.ok(records.every((r) => r.appliedAt && r.baselineReadId && !r.pendingBaseline));
+  assert.ok(records.every((r) => r.undoable && !r.undone));
+  const column1 = f.jigStore.bake(iid, records.find((r) => r.bakeId === 'columns').id);
+  const key0 = columns[0].key;
+  assert.equal(column1.items[key0].hash, `hash:${key0}`);
+  assert.equal(
+    f.document.doc.rows.get(column1.items[key0].nativeId).tags['vide-key'],
+    key0,
+    'the recorded GUID is the object in the document',
+  );
+  const made1 = Object.fromEntries(
+    Object.entries(column1.items).map(([key, item]) => [key, item.nativeId]),
+  );
+
+  // 2. A person edits one column; the next bake deletes only recorded, unchanged objects.
+  const [edited] = columns.map((c) => c.key);
+  f.document.doc.rows.get(made1[edited]).hash = 'hash:by-hand';
+  const untagged = f.document.add(randomUUID(), COLUMN_LAYER, 'mine', {});
+  f.document.doc.revision++;
+  const bake2 = await f.call('POST', `${base}/${iid}/bake`, { bake: ['columns'] });
+  assert.equal(bake2.status, 200, JSON.stringify(bake2.data));
+  assert.deepEqual(
+    bake2.data.plans[0].preserved.map((p) => [p.key, p.reason]),
+    [[edited, 'edited']],
+  );
+  const guard2 = f.calls.direct.at(-1).guard;
+  assert.deepEqual(guard2, { confirmed: false, maxDeletes: columns.length - 1 });
+  assert.ok(f.document.doc.rows.has(made1[edited]), 'the edited object stays');
+  assert.ok(f.document.doc.rows.has(untagged), 'an object no record lists stays');
+  assert.equal(tagged(f, bake2.data.runId).length, columns.length - 1);
+  assert.equal(tagged(f, bake1.data.runId).filter((r) => r.layer === COLUMN_LAYER).length, 1);
+  records = (await f.call('GET', `${base}/${iid}/bakes`)).data.bakes;
+  const latest = records.find((r) => r.runId === bake2.data.runId);
+  assert.ok(latest.undoable);
+
+  // 3. [되돌리기] while another change is newer in Rhino: refused, nothing undone.
+  f.direct.other();
+  await assert.rejects(f.call('POST', `${base}/${iid}/bakes/${latest.id}/undo`), {
+    code: 'BAKE_UNDO_NOT_LATEST',
+  });
+  assert.equal(tagged(f, bake2.data.runId).length, columns.length - 1);
+  f.direct.stack.pop();
+
+  // 4. [되돌리기] of the last bake: the host undoes it; the earlier objects are back.
+  const undone = await f.call('POST', `${base}/${iid}/bakes/${latest.id}/undo`);
+  assert.equal(undone.status, 200, JSON.stringify(undone.data));
+  assert.deepEqual(undone.data.records, [latest.id]);
+  assert.equal(tagged(f, bake2.data.runId).length, 0);
+  assert.ok(Object.values(made1).every((id) => f.document.doc.rows.has(id)));
+  records = (await f.call('GET', `${base}/${iid}/bakes`)).data.bakes;
+  const after = records.find((r) => r.id === latest.id);
+  assert.ok(after.undone && !after.undoable && !after.pendingBaseline);
+  await assert.rejects(f.call('POST', `${base}/${iid}/bakes/${latest.id}/undo`), {
+    code: 'BAKE_UNDO_UNAVAILABLE',
+  });
+
+  // 5. The next bake plans from the bake before the undone one again.
+  f.document.doc.revision++;
+  const bake3 = await f.call('POST', `${base}/${iid}/bake`, { bake: ['columns'] });
+  assert.equal(bake3.status, 200, JSON.stringify(bake3.data));
+  assert.equal(bake3.data.plans[0].replaced.length, columns.length - 1);
+  assert.deepEqual(bake3.data.plans[0].deleted, []);
+  assert.equal(bake3.data.plans[0].copies, 0);
+});
+
+test('bake (direct): a failing body undoes the bodies before it; the document is as it was', async (t) => {
+  const f = fixture(t, { direct: true, failAt: 2 });
+  const { base, iid } = await ready(f);
+  const before = new Map(f.document.doc.rows);
+  // The second body fails: the first body's record is undone too.
+  const failed = await f.call('POST', `${base}/${iid}/bake`, { bake: ['columns', 'beams'] });
+  assert.equal(failed.status, 422, JSON.stringify(failed.data));
+  assert.equal(failed.data.code, 'BAKE_FAILED');
+  assert.equal(f.calls.undo.length, 1);
+  assert.deepEqual([...f.document.doc.rows.keys()].sort(), [...before.keys()].sort());
+  assert.equal((await f.call('GET', `${base}/${iid}/bakes`)).data.bakes.length, 0);
+});
+
+test('bake (direct): a deletion no record lists is undone, by the host guard or by the engine', async (t) => {
+  const f = fixture(t, { direct: true });
+  const { base, iid } = await ready(f);
+  const outline = [...f.document.doc.rows.values()].find((r) => r.layer === '슬래브 외곽');
+  const before = [...f.document.doc.rows.keys()].sort();
+  // A faulty body deletes the person's outline as well.
+  f.direct.rogue = outline.nativeId;
+  // (a) The host guard: more deletions than the body lists, unconfirmed; the host undid it.
+  const hostGuarded = await f.call('POST', `${base}/${iid}/bake`, { bake: ['columns', 'beams'] });
+  assert.equal(hostGuarded.status, 409, JSON.stringify(hostGuarded.data));
+  assert.equal(hostGuarded.data.code, 'BAKE_GUARDED');
+  assert.equal(hostGuarded.data.guarded.kind, 'bulk-delete');
+  assert.deepEqual([...f.document.doc.rows.keys()].sort(), before);
+  // (b) A host without its own count: the engine sees an unlisted GUID removed and undoes it,
+  // with the body before it.
+  f.direct.hostGuard = false;
+  f.direct.rogueAt = f.calls.direct.length + 2;
+  const engineGuarded = await f.call('POST', `${base}/${iid}/bake`, {
+    bake: ['columns', 'beams'],
+  });
+  assert.equal(engineGuarded.status, 409, JSON.stringify(engineGuarded.data));
+  assert.equal(engineGuarded.data.code, 'BAKE_GUARDED');
+  assert.deepEqual([...f.document.doc.rows.keys()].sort(), before);
+  assert.ok(f.document.doc.rows.has(outline.nativeId));
+  assert.equal((await f.call('GET', `${base}/${iid}/bakes`)).data.bakes.length, 0);
+});
+
+test('bake (direct): a failed read after the run keeps the objects and the receipts; [반영 결과 읽기] records the baseline later', async (t) => {
+  const f = fixture(t, { direct: true });
+  const { base, iid, columns } = await ready(f);
+  f.direct.afterExecute = () =>
+    f.failNextRead(Object.assign(new Error('HOST_BUSY'), { code: 'HOST_BUSY' }));
+  const bake = await f.call('POST', `${base}/${iid}/bake`, { bake: ['columns'] });
+  assert.equal(bake.status, 200, JSON.stringify(bake.data));
+  assert.equal(bake.data.baseline, 'pending');
+  delete f.direct.afterExecute;
+  const [record] = (await f.call('GET', `${base}/${iid}/bakes`)).data.bakes;
+  assert.ok(record.pendingBaseline && !record.undone);
+  assert.equal(Object.keys(record.items).length, columns.length);
+  assert.ok(Object.values(record.items).every((item) => item.hash === ''));
+  const retry = await f.call('POST', `${base}/${iid}/bakes/${record.id}/baseline`);
+  assert.equal(retry.status, 200, JSON.stringify(retry.data));
+  assert.equal(retry.data.recorded, columns.length);
 });

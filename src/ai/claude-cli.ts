@@ -100,6 +100,12 @@ export interface CliOptions {
   timeoutMs?: number;
   stopGraceMs?: number;
   spawnProcess?: typeof spawn;
+  /**
+   * Flag (SPIKE-2026-09-30-native-questions-claude): when set, a Claude run offers the CLI's own
+   * AskUserQuestion and routes it over stdio (`--permission-prompt-tool stdio`) to this handler,
+   * which shows the question cards and returns the answers (null: the user closed them).
+   */
+  nativeQuestions?: NativeQuestionHandler;
 }
 const sessionSchema = z.object({
   id: z.string().regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/),
@@ -418,6 +424,147 @@ export async function removeClaudeTranscript(
   return removed;
 }
 
+// --- native questions (SPIKE-2026-09-30-native-questions-claude) --------------------------------
+/** The Claude Code tool that asks the user; its answers come back as `updatedInput.answers`. */
+export const NATIVE_QUESTION_TOOL = 'AskUserQuestion';
+/** One question card in the shape of the turn-output question card (turn-output.ts). */
+export interface NativeQuestionCard {
+  id: string;
+  title: string;
+  options: { id: string; label: string; hint?: string; recommended?: boolean }[];
+  allowFree: boolean;
+}
+/** The user's answer to one card: an option id, a free answer, or both. */
+export interface NativeQuestionAnswer {
+  id: string;
+  option?: string;
+  text?: string;
+}
+export type NativeQuestionHandler = (
+  cards: NativeQuestionCard[],
+  signal: AbortSignal,
+) => Promise<NativeQuestionAnswer[] | null>;
+const nativeQuestionInput = z
+  .object({
+    questions: z
+      .array(
+        z
+          .object({
+            question: z.string().trim().min(1).max(1000),
+            header: z.string().optional(),
+            multiSelect: z.boolean().optional(),
+            options: z
+              .array(
+                z
+                  .object({
+                    label: z.string().trim().min(1).max(200),
+                    description: z.string().optional(),
+                  })
+                  .passthrough(),
+              )
+              .min(2)
+              .max(5),
+          })
+          .passthrough(),
+      )
+      .min(1)
+      .max(3),
+  })
+  .passthrough();
+const clip = (text: string, max: number) =>
+  text.length > max ? text.slice(0, max - 1) + '…' : text;
+/** The CLI's AskUserQuestion input as question cards; undefined when it does not fit the cards. */
+export function nativeQuestionCards(input: unknown): NativeQuestionCard[] | undefined {
+  const parsed = nativeQuestionInput.safeParse(input);
+  if (!parsed.success) return undefined;
+  return parsed.data.questions.map((question, index) => ({
+    id: `q${index + 1}`,
+    title: clip(question.question, 200),
+    options: question.options.map((option, at) => ({
+      id: `o${at + 1}`,
+      label: clip(option.label, 80),
+      ...(option.description?.trim() ? { hint: clip(option.description.trim(), 200) } : {}),
+    })),
+    // The CLI's own dialog always offers a free answer.
+    allowFree: true,
+  }));
+}
+/** The answers as the CLI reads them: `answers[question text] = chosen label or free text`. */
+export function nativeQuestionInputWithAnswers(input: unknown, answers: NativeQuestionAnswer[]) {
+  const parsed = nativeQuestionInput.parse(input);
+  const byId = new Map(answers.map((answer) => [answer.id, answer]));
+  const values: Record<string, string> = {};
+  parsed.questions.forEach((question, index) => {
+    const answer = byId.get(`q${index + 1}`);
+    const option = answer?.option
+      ? question.options[Number(answer.option.slice(1)) - 1]
+      : undefined;
+    const text = answer?.text?.trim().slice(0, 2000);
+    const value = [option?.label, text].filter(Boolean).join(' — ');
+    if (value) values[question.question] = value;
+  });
+  return { ...(input as Record<string, unknown>), answers: values };
+}
+/**
+ * The arguments of a run that routes AskUserQuestion to VIDE: the tool is offered, permission
+ * prompts reach the host over stdio (so stdin is stream-json and stays open), and the mode is
+ * `default` because `dontAsk` denies the tool before any prompt. Every other tool keeps its
+ * `--allowedTools` entry; anything else that would prompt is denied by the run.
+ */
+export function nativeQuestionArguments(args: string[], enabled = true) {
+  if (!enabled) return args;
+  const tools = args.indexOf('--tools');
+  if (tools >= 0)
+    args[tools + 1] = [...args[tools + 1].split(',').filter(Boolean), NATIVE_QUESTION_TOOL].join(
+      ',',
+    );
+  const mode = args.indexOf('--permission-mode');
+  if (mode >= 0 && args[mode + 1] === 'dontAsk') args[mode + 1] = 'default';
+  args.push('--permission-prompt-tool', 'stdio');
+  if (!args.includes('--input-format')) args.push('--input-format', 'stream-json');
+  return args;
+}
+/** The control_response line for one control request id. */
+export function controlResponse(requestId: string, response: Record<string, unknown> | string) {
+  return (
+    JSON.stringify({
+      type: 'control_response',
+      response:
+        typeof response === 'string'
+          ? { subtype: 'error', request_id: requestId, error: response }
+          : { subtype: 'success', request_id: requestId, response },
+    }) + '\n'
+  );
+}
+/**
+ * The answer to one `can_use_tool` request: AskUserQuestion goes to the cards, anything else is
+ * denied (VIDE's own tools are pre-allowed and never prompt).
+ */
+export async function answerToolRequest(
+  request: { tool_name?: unknown; input?: unknown },
+  handler: NativeQuestionHandler,
+  signal: AbortSignal,
+): Promise<Record<string, unknown>> {
+  if (request.tool_name !== NATIVE_QUESTION_TOOL)
+    return { behavior: 'deny', message: 'This tool is not available in VIDE.' };
+  const cards = nativeQuestionCards(request.input);
+  if (!cards)
+    return {
+      behavior: 'deny',
+      message: 'Ask 1 to 3 questions with 2 to 5 options each.',
+    };
+  const answers = await handler(cards, signal);
+  if (!answers || !answers.length)
+    return {
+      behavior: 'deny',
+      message: 'The user closed the questions without answering. Continue without asking again.',
+    };
+  return {
+    behavior: 'allow',
+    updatedInput: nativeQuestionInputWithAnswers(request.input, answers),
+  };
+}
+
 export function killOwnedProcess(child: ChildProcess): Promise<boolean> {
   return new Promise((resolve) => {
     if (child.exitCode !== null || child.signalCode !== null) return resolve(true);
@@ -443,6 +590,7 @@ export class ClaudeCli {
   configDirectory?: string;
   agent?: AgentConnection;
   session?: SessionOptions;
+  nativeQuestions?: NativeQuestionHandler;
   /** The instruction bundle of every run of this provider (PLAN-24 지침 묶음). */
   instructions: string;
   constructor({
@@ -458,6 +606,7 @@ export class ClaudeCli {
     timeoutMs = 60000,
     stopGraceMs = 5000,
     spawnProcess = spawn,
+    nativeQuestions,
   }: CliOptions = {}) {
     if (typeof executable !== 'string' || !isAbsolute(executable)) throw error('CLI_PATH_REQUIRED');
     if (
@@ -477,6 +626,9 @@ export class ClaudeCli {
     this.timeoutMs = timeoutMs;
     this.stopGraceMs = stopGraceMs;
     this.spawnProcess = spawnProcess;
+    if (nativeQuestions !== undefined && typeof nativeQuestions !== 'function')
+      throw error('INVALID_NATIVE_QUESTIONS');
+    this.nativeQuestions = nativeQuestions;
     if (
       model !== undefined &&
       (typeof model !== 'string' || !/^[a-zA-Z0-9._-]{1,100}(?:\[1m\])?$/.test(model))
@@ -515,9 +667,9 @@ export class ClaudeCli {
     return args;
   }
   /** What the run writes to stdin: the packet, or with images a stream-json user message. */
-  inputOf(packet: unknown, images: readonly PacketImage[]) {
+  inputOf(packet: unknown, images: readonly PacketImage[], stream = images.length > 0) {
     const text = JSON.stringify(packet);
-    if (!images.length) return text;
+    if (!stream) return text;
     return (
       JSON.stringify({
         type: 'user',
@@ -665,6 +817,9 @@ export class ClaudeCli {
     // access; SPIKE-2026-09-30-instruction-bundle): it is accepted only in a run that asked for it.
     const schema = outputSchemaOf(context);
     const outputTool = (name: unknown) => !!schema && name === 'StructuredOutput';
+    // Native questions (flag): AskUserQuestion is offered and answered over the control channel.
+    const questions = this.eventFormat === 'claude' ? this.nativeQuestions : undefined;
+    const questionTool = (name: unknown) => !!questions && name === NATIVE_QUESTION_TOOL;
     let child: ChildProcessWithoutNullStreams | undefined;
     try {
       const env = this.environment();
@@ -672,18 +827,21 @@ export class ClaudeCli {
       if (this.agent) env.VIDE_AGENT_TOKEN = this.agent.token;
       child = this.spawnProcess(
         this.executable,
-        configureAgentArguments(
-          await this.withImages(
-            await this.withOutputSchema(this.arguments(), schema, cwd),
-            selected.images,
-            cwd,
+        nativeQuestionArguments(
+          configureAgentArguments(
+            await this.withImages(
+              await this.withOutputSchema(this.arguments(), schema, cwd),
+              selected.images,
+              cwd,
+            ),
+            this.eventFormat,
+            this.agent,
+            {
+              neutral: !!this.session,
+              bundle: this.instructions,
+            },
           ),
-          this.eventFormat,
-          this.agent,
-          {
-            neutral: !!this.session,
-            bundle: this.instructions,
-          },
+          !!questions,
         ),
         {
           cwd,
@@ -703,6 +861,8 @@ export class ClaudeCli {
           settled = false,
           grace: ReturnType<typeof setTimeout> | undefined;
         const processChild = child!;
+        // Aborted when the run ends, so an open question card is withdrawn.
+        const asking = new AbortController();
         let codexText = '',
           codexFailed = false,
           failureText = '',
@@ -718,6 +878,7 @@ export class ClaudeCli {
         const finish = (err: Error | null, value?: ProviderResult) => {
           if (settled) return;
           settled = true;
+          asking.abort();
           clearTimeout(timer);
           clearTimeout(grace);
           signal?.removeEventListener('abort', abort);
@@ -726,6 +887,7 @@ export class ClaudeCli {
         const stop = (reason: string) => {
           if (settled || stopReason) return;
           stopReason = reason;
+          asking.abort();
           progress({ state: 'stopping', reason });
           void killOwnedProcess(processChild);
           grace = setTimeout(() => {
@@ -737,8 +899,33 @@ export class ClaudeCli {
           }, this.stopGraceMs);
         };
         const abort = () => stop('CANCELLED');
-        const timer = setTimeout(() => stop('TIMEOUT'), this.timeoutMs);
+        let timer = setTimeout(() => stop('TIMEOUT'), this.timeoutMs);
         signal?.addEventListener('abort', abort, { once: true });
+        // A control request of a native-question run: the time the user takes is not run time.
+        const control = (event: ProviderEvent) => {
+          const id = typeof event.request_id === 'string' ? event.request_id : undefined;
+          const request = (event.request ?? {}) as {
+            subtype?: unknown;
+            tool_name?: unknown;
+            input?: unknown;
+          };
+          if (!id || !questions) return stop('INVALID_PROVIDER_OUTPUT');
+          const reply = (response: Record<string, unknown> | string) => {
+            if (!settled && !stopReason) processChild.stdin.write(controlResponse(id, response));
+          };
+          if (request.subtype !== 'can_use_tool') return reply('unsupported');
+          clearTimeout(timer);
+          progress({ state: 'running', phase: 'question' });
+          answerToolRequest(request, questions, asking.signal).then(
+            (response) => {
+              if (settled || stopReason) return;
+              timer = setTimeout(() => stop('TIMEOUT'), this.timeoutMs);
+              progress({ state: 'running', phase: 'model' });
+              reply(response);
+            },
+            () => stop('QUESTION_FAILED'),
+          );
+        };
         const parse = (line: string) => {
           let event: ProviderEvent;
           try {
@@ -752,6 +939,7 @@ export class ClaudeCli {
             return;
           }
           if (stopReason) return;
+          if (event.type === 'control_request') return control(event);
           if (this.eventFormat === 'codex') {
             if (event.type === 'turn.started') {
               initialized = true;
@@ -799,7 +987,7 @@ export class ClaudeCli {
           }
           if (event.type === 'system' && event.subtype === 'init') {
             const tools = Array.isArray(event.tools)
-              ? event.tools.filter((name) => !outputTool(name))
+              ? event.tools.filter((name) => !outputTool(name) && !questionTool(name))
               : undefined;
             const valid = this.agent
               ? Array.isArray(tools) &&
@@ -834,6 +1022,7 @@ export class ClaudeCli {
                   text: String(item.text ?? item.thinking),
                 });
               if (item.type === 'tool_use') {
+                if (questionTool(item.name)) continue;
                 if (!outputTool(item.name) && !allowedAgentEvent(item, 'claude', this.agent)) {
                   stop('UNEXPECTED_TOOL_CALL');
                   return;
@@ -846,6 +1035,8 @@ export class ClaudeCli {
               }
             }
           if (event.type === 'result') {
+            // The stream-json input of a native-question run stays open until the result.
+            if (questions) processChild.stdin.end();
             final = event;
             if (event.is_error) failureText += ' ' + errorText(event);
           }
@@ -914,7 +1105,9 @@ export class ClaudeCli {
         if (signal?.aborted) abort();
         if (!stopReason) {
           progress({ state: 'starting' });
-          processChild.stdin.end(this.inputOf(selected.packet, selected.images));
+          if (questions)
+            processChild.stdin.write(this.inputOf(selected.packet, selected.images, true));
+          else processChild.stdin.end(this.inputOf(selected.packet, selected.images));
         }
       });
       return result;

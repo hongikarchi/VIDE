@@ -20,7 +20,7 @@ import {
 } from '../contracts/native-model.ts';
 import { applyDisplayDelta } from '../core/display-delta.ts';
 import { withSurvey } from '../../hosts/rhino/scene-pages.ts';
-import { AgentTools, visionHandlers } from './agent-tools.ts';
+import { AgentTools, visionHandlers, type VisionSource } from './agent-tools.ts';
 import type { GeometryMeasurement } from '../core/measurement-cache.ts';
 
 type Worker = Awaited<ReturnType<typeof launchRhinoWorker>>;
@@ -173,6 +173,33 @@ export class SdkExecution {
         capturedAt: new Date().toISOString(),
       },
     };
+  }
+
+  /**
+   * Direct mode (ADR-022, 'direct-execute'): the AI's C# body runs in the attached document inside
+   * one undo record. Guarded effects come back as {ok:false, guarded} with the record undone.
+   */
+  runDirect(
+    target: HostTarget,
+    code: string,
+    guard: { confirmed: boolean; maxDeletes: number },
+    { requestId, label }: { requestId: string; label: string },
+  ) {
+    return this.editors.directExecute(target, { requestId, code, label, guard });
+  }
+  /** [되돌리기]: host undo of that record, only while it is the document's latest one. */
+  undoDirect(target: HostTarget, undoId: string) {
+    return this.editors.directUndo(target, undoId);
+  }
+  fingerprint(target: HostTarget) {
+    return this.editors.fingerprint(target);
+  }
+  /** capture_view and measure on the attached document (the editor connection's view methods). */
+  directView(target: HostTarget): Promise<VisionSource> {
+    // The connection object carries the view methods; EditorSessions keeps its lookup private.
+    return (this.editors as unknown as { get(target: HostTarget): Promise<VisionSource> }).get(
+      target,
+    );
   }
 
   /**

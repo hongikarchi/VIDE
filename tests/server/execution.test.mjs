@@ -401,3 +401,33 @@ for (const available of [true, false]) {
     }
   });
 }
+
+test('host modeling turns get the project read tools of SPEC-02.6 beside their host tools', async () => {
+  const { mkdtempSync, rmSync } = await import('node:fs');
+  const { tmpdir } = await import('node:os');
+  const { join } = await import('node:path');
+  const { HOST_TURN_PROJECT_TOOLS, hostTurnProjectHandlers } =
+    await import('../../src/server/execution.ts');
+  const root = mkdtempSync(join(tmpdir(), 'vide-host-tools-'));
+  const store = new Store(join(root, 'vide.sqlite'));
+  try {
+    const workspace = new Workspace(store);
+    const project = store.createProject('호스트 도구');
+    const handlers = hostTurnProjectHandlers(workspace, {
+      id: 'c-host',
+      projectId: project.id,
+      jigInstanceId: null,
+    });
+    // project_* come with the project's facts DB; this project has none, so only the link tools.
+    assert.ok(Object.keys(handlers).every((name) => HOST_TURN_PROJECT_TOOLS.includes(name)));
+    assert.deepEqual(Object.keys(handlers).sort(), ['links_layers', 'sync_sample']);
+    // Nothing that writes a document, a jig setting or a draft.
+    for (const name of ['execute', 'query', 'jig_set', 'jig_run', 'jig_delete_file'])
+      assert.equal(handlers[name], undefined, name);
+    const layers = await handlers.links_layers({}, { signal: new AbortController().signal });
+    assert.ok(layers && typeof layers === 'object');
+  } finally {
+    store.close();
+    rmSync(root, { recursive: true, force: true, maxRetries: 3 });
+  }
+});

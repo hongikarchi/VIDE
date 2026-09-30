@@ -1,15 +1,19 @@
 // Rhino에 만들기 (SPEC-07.12·13·17, ARCH-03 §9, decision A7): a deterministic host write with no
 // AI. `prepareBake` reads the linked document once more (hidden objects included), classifies the
 // objects an earlier bake recorded, runs the before-bake gates and renders the fixed templates
-// with one data block each; the route stores a normal candidate request whose `jig-bake` job is
-// kept here until the executor runs it through `SdkExecution.runFixed`. `finishBake` writes the
-// bake record (`jig_bakes`), and `recordBaseline` fills its fingerprints from a read taken right
-// after the person applied the candidate. Nothing here writes the user's original document.
+// with one data block each. With an attached Rhino (user decision 2026-09-30, '바로 적용'),
+// `runDirectBake` runs the bodies through the host's `direct-execute` in the open document, one
+// undo record each (label 'VIDE jig: <name>'), reads the document right after and writes the bake
+// record with its baseline — no candidate, no separate apply step; `undoBake` asks the host to undo
+// the last bake. Without an attached editor the route keeps the internal work copy: a `jig-bake`
+// request whose job is kept here until the executor runs it through `SdkExecution.runFixed`,
+// `finishBake` writes the record and `recordBaseline` fills its fingerprints later.
 
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { DomainError } from '../../contracts/errors.ts';
 import type { JigBake, JigStore } from '../../core/jig-store.ts';
+import type { HostTarget } from '../../contracts/host-documents.ts';
 import { runGates, type GateResult } from '../runtime/gates.ts';
 import type { LoadedJig } from '../runtime/loader.ts';
 import type { BakeDecl, GateUse } from '../runtime/manifest.ts';
@@ -86,6 +90,8 @@ export interface BakeSummary {
   };
   layers: string[];
   text: string;
+  /** Made directly in the open document (one host undo record per body); undone by `undoBake`. */
+  direct?: boolean;
 }
 /** A prepared bake the executor runs: fixed bodies, and what to do with the receipt. */
 export interface BakeJob {
@@ -425,6 +431,260 @@ function summarize(prepared: PreparedBake, bakes: BakeOutcome[]): BakeSummary {
   };
 }
 
+// --- direct bake (바로 적용, user decision 2026-09-30) -------------------------------------------
+/** The host guard of `direct-execute`: a guarded effect without confirmation is undone. */
+export interface DirectGuard {
+  confirmed: boolean;
+  maxDeletes: number;
+}
+export interface DirectCommand {
+  requestId: string;
+  code: string;
+  label: string;
+  guard: DirectGuard;
+}
+export interface DirectChange {
+  nativeId: string;
+  hash?: string;
+  layer?: string;
+}
+export interface DirectResult {
+  ok: boolean;
+  undoId?: string;
+  changes?: { added?: DirectChange[]; changed?: DirectChange[]; removed?: DirectChange[] };
+  guarded?: { kind: string; detail?: unknown };
+  /** The body's return value, when the host passes it on (a template's receipt). */
+  value?: unknown;
+  log?: unknown;
+  code?: string;
+  reason?: string;
+}
+/** The attached editor's direct commands (`direct-execute`, `direct-undo`, `fingerprint`). */
+export interface DirectHost {
+  execute(target: HostTarget, command: DirectCommand): Promise<DirectResult>;
+  undo(target: HostTarget, undoId: string): Promise<{ ok: boolean; reason?: string }>;
+  fingerprint?(target: HostTarget): Promise<{ documentHash: string; revision?: unknown }>;
+}
+export interface DirectBakeContext extends BakeContext {
+  direct: DirectHost;
+}
+/** What `undoBake` needs of a direct run; kept for this engine process (the host's undo stack). */
+interface DirectRun {
+  instanceId: string;
+  target: HostTarget;
+  undoIds: string[];
+  recordIds: string[];
+}
+const directRuns = new Map<string, DirectRun>();
+const directFailure = (code: string, extra: Record<string, unknown> = {}) =>
+  Object.assign(new DomainError(code), extra);
+
+/** Undo the records of a run, newest first; the first refusal stops (the rest stay). */
+async function undoAll(direct: DirectHost, target: HostTarget, undoIds: readonly string[]) {
+  for (const undoId of [...undoIds].reverse()) {
+    const undone = await direct.undo(target, undoId);
+    if (!undone.ok) return undone.reason ?? 'failed';
+  }
+  return undefined;
+}
+
+/**
+ * Run a prepared bake in the attached document: every body through `direct-execute`, each inside
+ * one host undo record labelled 'VIDE jig: <name>'. The guard allows deleting only as many objects
+ * as the body lists (recorded GUIDs, re-checked by their tags in the template), and every removed
+ * object must be one of them; otherwise the run is undone (`BAKE_GUARDED`). A failing body undoes
+ * the bodies before it (`BAKE_FAILED`). The document is read right after the run: the record gets
+ * its fingerprints and `appliedAt` at once. A failed read keeps the record without fingerprints
+ * (the card's [반영 결과 읽기] retries it through `recordBaseline`) when the receipts say which
+ * key became which object, and undoes the run when they do not.
+ */
+export async function runDirectBake(
+  ctx: DirectBakeContext,
+  prepared: PreparedBake,
+  target: HostTarget,
+): Promise<{ result: Record<string, unknown>; summary: BakeSummary; undoIds: string[] }> {
+  const { direct } = ctx;
+  if (!prepared.codes.length) throw new DomainError('INVALID_INPUT');
+  if (direct.fingerprint) {
+    // The document must still be the one the forced read saw.
+    const expected = (prepared.read.model.sourceDocument as { documentHash?: unknown } | undefined)
+      ?.documentHash;
+    const now = await direct.fingerprint(target);
+    if (typeof expected === 'string' && now.documentHash !== expected)
+      throw new DomainError('STALE_INPUT');
+  }
+  const requestId = randomUUID();
+  const label = `VIDE jig: ${prepared.jig.manifest.name}`;
+  const undoIds: string[] = [];
+  const values: unknown[] = [];
+  const log: unknown[] = [];
+  let removedTotal = 0;
+  const rollback = async (code: string, extra: Record<string, unknown> = {}) => {
+    const undoFailed = await undoAll(direct, target, undoIds);
+    throw directFailure(code, { ...extra, ...(undoFailed ? { undoFailed } : {}) });
+  };
+  for (const { chunks } of prepared.plans)
+    for (const chunk of chunks) {
+      const allowed = new Set(chunk.deleteIds.map((id) => id.toLowerCase()));
+      const run = await direct.execute(target, {
+        requestId: `${requestId}:${undoIds.length}`,
+        code: chunk.code,
+        label,
+        guard: { confirmed: false, maxDeletes: chunk.deleteIds.length },
+      });
+      if (run.log !== undefined) log.push(run.log);
+      if (run.guarded)
+        // The host already undid this body's record; the ones before it are undone here.
+        await rollback('BAKE_GUARDED', { guarded: run.guarded });
+      if (!run.ok || !run.undoId)
+        await rollback('BAKE_FAILED', { reason: run.reason ?? run.code, log: run.log });
+      undoIds.push(run.undoId!);
+      const removed = run.changes?.removed ?? [];
+      // Bakes never delete an object no record lists.
+      if (removed.some((object) => !allowed.has(object.nativeId.toLowerCase())))
+        await rollback('BAKE_GUARDED', {
+          guarded: { kind: 'bulk-delete', detail: '기록에 없는 객체를 지우려 했습니다' },
+        });
+      removedTotal += removed.length;
+      values.push(run.value ?? null);
+    }
+  // The read right after the run is the baseline (SPEC-07.17); objects match by run and key.
+  let read: BakeRead | undefined;
+  try {
+    read = await ctx.read(prepared.linkId);
+  } catch (error) {
+    if (!values.every((value) => receiptSchema.safeParse(value).success))
+      await rollback('BAKE_READ_FAILED', {
+        cause: error instanceof Error ? error.message : String(error),
+      });
+  }
+  const baseline = read
+    ? ctx.runtime.recordRead(prepared.projectId, prepared.instanceId, {
+        linkId: read.linkId,
+        revisionKey: read.revisionKey,
+        layers: [],
+        includeHidden: true,
+        purpose: 'pre-bake',
+        model: read.model,
+      })
+    : undefined;
+  const found = new Map<string, { nativeId: string; hash: string; layer: string }>();
+  if (read)
+    for (const object of readObjects(read.model).values())
+      if (object.tags['vide-run'] === prepared.runId && object.tags['vide-key'])
+        found.set(`${object.tags['vide-bake']}\u0000${object.tags['vide-key']}`, object);
+  const appliedAt = new Date().toISOString();
+  const bakes: BakeOutcome[] = [];
+  let index = 0;
+  for (const { decl, plan, chunks } of prepared.plans) {
+    const layerPath = layerPathOf(prepared.view.body.layerRoot, decl);
+    const items: BakeRecordItems = { ...plan.carry };
+    const failed: string[] = [];
+    for (const chunk of chunks) {
+      const receipt = receiptSchema.safeParse(values[index++]);
+      const ids = receipt.success
+        ? new Map(receipt.data.keys.map((key, i) => [key, receipt.data.ids[i]]))
+        : undefined;
+      for (const key of chunk.keys) {
+        const object = found.get(`${decl.id}\u0000${key}`);
+        const nativeId = object?.nativeId ?? (read ? undefined : ids?.get(key));
+        if (!nativeId) {
+          failed.push(key);
+          continue;
+        }
+        items[key] = {
+          nativeId,
+          hash: object?.hash ?? '',
+          layer: object?.layer ?? layerPath,
+          runId: prepared.runId,
+          state: 'jig',
+        };
+      }
+    }
+    const added = ctx.store.addBake(prepared.instanceId, {
+      bakeId: decl.id,
+      linkId: prepared.linkId,
+      requestId,
+      runId: prepared.runId,
+      items,
+      baselineReadId: baseline?.id ?? null,
+    });
+    const record = baseline
+      ? ctx.store.updateBake(prepared.instanceId, added.id, { appliedAt })
+      : added;
+    bakes.push({
+      bakeId: decl.id,
+      template: decl.template,
+      layer: layerPath,
+      added: plan.added.filter((key) => !failed.includes(key)),
+      replaced: plan.replaced.filter((key) => !failed.includes(key)),
+      dropped: plan.dropped,
+      preserved: plan.preserved,
+      respected: plan.respected,
+      kept: plan.kept,
+      deleted: plan.deleted,
+      copies: plan.copies,
+      failed,
+      chunks: chunks.length,
+      templateHash: chunks[0]?.templateHash ?? '',
+      recordId: record.id,
+    });
+  }
+  directRuns.set(prepared.runId, {
+    instanceId: prepared.instanceId,
+    target,
+    undoIds,
+    recordIds: bakes.map((bake) => bake.recordId!),
+  });
+  if (directRuns.size > MAX_JOBS) directRuns.delete(directRuns.keys().next().value as string);
+  const summary = { ...summarize(prepared, bakes), direct: true };
+  return {
+    result: {
+      text: summary.text,
+      bake: summary,
+      requestId,
+      undoIds,
+      removed: removedTotal,
+      baseline: baseline ? 'recorded' : 'pending',
+      ...(log.length ? { log } : {}),
+    },
+    summary,
+    undoIds,
+  };
+}
+
+/** Whether the run of a record can still be undone from VIDE (this engine process made it). */
+export const bakeUndoable = (record: Pick<JigBake, 'runId' | 'instanceId'>) =>
+  directRuns.get(record.runId)?.instanceId === record.instanceId;
+
+/**
+ * [되돌리기] of a direct bake: the host undoes the run's records, newest first, only while they
+ * are the document's latest (`BAKE_UNDO_NOT_LATEST` otherwise). The run's records lose `appliedAt`
+ * so the next bake plans from the bake before it again (its objects are back).
+ */
+export async function undoBake(
+  ctx: Pick<BakeContext, 'store'> & { direct: DirectHost },
+  instanceId: string,
+  recordId: string,
+): Promise<{ ok: true; runId: string; records: string[] }> {
+  const record = ctx.store.bake(instanceId, recordId);
+  const run = directRuns.get(record.runId);
+  if (!run || run.instanceId !== instanceId) throw new DomainError('BAKE_UNDO_UNAVAILABLE');
+  const [latest, ...rest] = [...run.undoIds].reverse();
+  const first = await ctx.direct.undo(run.target, latest);
+  if (!first.ok)
+    throw directFailure(
+      first.reason === 'not-latest' ? 'BAKE_UNDO_NOT_LATEST' : 'BAKE_UNDO_FAILED',
+      { reason: first.reason },
+    );
+  const remaining = rest.reverse();
+  const failed = await undoAll(ctx.direct, run.target, remaining);
+  directRuns.delete(record.runId);
+  for (const id of run.recordIds) ctx.store.updateBake(instanceId, id, { appliedAt: null });
+  if (failed) throw directFailure('BAKE_UNDO_FAILED', { reason: failed, partial: true });
+  return { ok: true, runId: record.runId, records: run.recordIds };
+}
+
 // --- baseline (after the person applied the candidate) ------------------------------------------
 /**
  * Read the applied document and store the display-path fingerprints of this run's objects in the
@@ -476,12 +736,21 @@ export async function recordBaseline(
 
 /** Records of an instance for the card: one line per bake and link, newest first. */
 export function bakeRecords(store: JigStore, instanceId: string, jig: LoadedJig, linkId?: string) {
-  const out: (JigBake & { pendingBaseline: boolean })[] = [];
+  const out: (JigBake & { pendingBaseline: boolean; undone: boolean; undoable: boolean })[] = [];
   for (const decl of bakeDeclsOf(jig)) {
     const records = linkId
       ? store.bakes(instanceId, decl.id, linkId)
       : allBakes(store, instanceId, decl.id);
-    for (const record of records) out.push({ ...record, pendingBaseline: !record.appliedAt });
+    for (const record of records) {
+      // A record with a baseline read but no `appliedAt` was undone (`undoBake`).
+      const undone = !record.appliedAt && !!record.baselineReadId;
+      out.push({
+        ...record,
+        pendingBaseline: !record.appliedAt && !undone,
+        undone,
+        undoable: !undone && bakeUndoable(record),
+      });
+    }
   }
   return out.reverse();
 }

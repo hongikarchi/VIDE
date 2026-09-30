@@ -266,3 +266,27 @@ test('the loader refuses a package whose panel.json uses an unknown part', async
     rmSync(root, { recursive: true, force: true });
   }
 });
+
+test('the example panel declares a report action that names a declared report frame', async () => {
+  const { parseReportTemplate, resolveReport } =
+    await import('../../src/jigs/runtime/report-format.ts');
+  const action = spec.actions.find((a) => a.report);
+  assert.deepEqual(action, {
+    id: 'report',
+    label: '보고서 보기',
+    report: 'grid-summary',
+    tier: 'T1',
+  });
+  const declared = manifest.reports.find((r) => r.id === action.report);
+  assert.equal(declared.file, 'reports/grid-summary.json');
+  const parsed = parseReportTemplate(read(declared.file));
+  assert.deepEqual(parsed.issues, []);
+  const values = Object.fromEntries(settings.map((s) => [s.key, s.value]));
+  const model = resolveReport(parsed.template, { outputs, params: values });
+  assert.deepEqual(
+    model.gates.filter((g) => !g.ok),
+    [],
+    JSON.stringify(model.gates),
+  );
+  assert.match(model.headline.text, /기둥 \d+개와 보 \d+개/);
+});

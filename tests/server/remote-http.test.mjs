@@ -250,6 +250,20 @@ test('site-signed tokens open local and tunnel sessions; tunnel cannot reach app
     body: { name: 'From iPad' },
   });
   assert.equal(created.status, 201, created.text);
+  // The project's AI instructions are readable remotely but changed on this PC only.
+  const instructions = `/api/v1/projects/${JSON.parse(created.text).id}/ai-instructions`;
+  assert.equal(
+    (await call(port, instructions, { ...remote, cookie, method: 'PUT', body: { text: 'x' } }))
+      .status,
+    403,
+  );
+  assert.equal((await call(port, instructions, { ...remote, cookie })).status, 200);
+  // A direct-mode guard (bulk erase, layer deletion, purge) is released at this PC only.
+  const confirm = `/api/v1/projects/${JSON.parse(created.text).id}/requests/r-1/confirm`;
+  assert.equal(
+    (await call(port, confirm, { ...remote, cookie, method: 'POST', body: {} })).status,
+    403,
+  );
   // Remote status (no secrets) is readable from the remote page for its settings panel.
   assert.equal((await call(port, '/api/v1/remote', { ...remote, cookie })).status, 200);
   // Turning remote access off ends remote sessions; the PC stays listed for local use.

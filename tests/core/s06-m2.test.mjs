@@ -50,11 +50,20 @@ test('the package and the panel declare the drawn chain with its settings, tabs 
   for (const id of ['girders', 'cells', 'beams', 'model', 'analysis', 'confirmAnalysis'])
     assert.ok(ids.includes(id), id);
   assert.equal(manifest.params.find((p) => p.key === 'layoutSource').default, 'drawn');
-  for (const key of ['snapTol_m', 'mergeTol_m', 'beamSpacing_m', 'beamDirection', 'restraintLevel'])
+  for (const key of [
+    'snapTol_m',
+    'mergeTol_m',
+    'beamSpacing_m',
+    'beamDirection',
+    'openingEdgeBeams',
+    'restraintLevel',
+  ])
     assert.ok(
       manifest.params.some((p) => p.key === key),
       key,
     );
+  assert.equal(manifest.params.find((p) => p.key === 'openingEdgeBeams').default, true);
+  assert.ok(manifest.steps.find((s) => s.id === 'beams').reads.includes('param.openingEdgeBeams'));
   assert.equal(manifest.steps.find((s) => s.id === 'confirmAnalysis').slot, 'confirm-analysis');
   const panel = validatePanel(read('panel.json'), scopeOf(manifest));
   assert.deepEqual(panel.issues, []);

@@ -124,5 +124,8 @@
       }
     ]
   },
-  "actions": [{ "id": "recompute", "label": "다시 계산", "step": "summary", "tier": "T1" }]
+  "actions": [
+    { "id": "recompute", "label": "다시 계산", "step": "summary", "tier": "T1" },
+    { "id": "report", "label": "보고서 보기", "report": "grid-summary", "tier": "T1" }
+  ]
 }

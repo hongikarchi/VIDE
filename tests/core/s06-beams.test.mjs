@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { cells } from '../../extensions/jigs/s06-frame/steps/cells.ts';
 import { beams } from '../../extensions/jigs/s06-frame/steps/beams.ts';
+import { slabOf } from '../../extensions/jigs/s06-frame/steps/roles.ts';
 
 // PLAN-23 T-053 drawn mode: cells and infill beams from a hand-made `girders` output (synthetic).
 const fixture = (name) =>
@@ -36,7 +37,7 @@ test('grid: T-junction girders make four cells, the void is a hole', () => {
 
 test('grid: beams parallel to the long edge, ends on girders with t, void cuts one line', () => {
   const f = fixture('beams-grid');
-  const { b } = run(f);
+  const { b } = run(f, { ...f.params, openingEdgeBeams: false });
   assert.equal(b.beams.length, f.expect.beams);
   close(b.summary.spacingUsed_m, 2);
   for (const beam of b.beams) {
@@ -70,7 +71,7 @@ test('grid: the 5 m east strip is listed as cantilevers, the 1 m strips are not'
 test('grid: u / v directions and spacing clamp', () => {
   const f = fixture('beams-grid');
   const v = run(f, { ...f.params, beamDirection: 'v' }).b;
-  const infill = v.beams.filter((beam) => !beam.backspanOf);
+  const infill = v.beams.filter((beam) => !beam.backspanOf && !beam.opening);
   for (const beam of infill) assert.equal(beam.points[0][0], beam.points[1][0], 'along y');
   // 8 m across at ≤ 2.5 m: 4 bays, 3 lines per cell; the void cuts the line x = 4 in two.
   assert.equal(infill.length, 13);
@@ -138,7 +139,7 @@ test('concave cell: a beam on the notch girder line stops at the notch, never ru
 // along a girder are that girder, not a cantilever.
 test('grid: edge cantilevers continue the interior beam lines, those ends rigid', () => {
   const f = fixture('beams-grid');
-  const { b } = run(f);
+  const { b } = run(f, { ...f.params, openingEdgeBeams: false });
   const byId = new Map(b.beams.map((x) => [x.id, x]));
   const continued = b.edgeCantilevers.filter((e) => e.continues);
   assert.equal(continued.length, 4);
@@ -184,7 +185,7 @@ test('grid v: no beam line ends on the edge girder → square cantilevers with b
     close(r.length_m, 2);
   }
   // Infill beams stay along y; only the back spans run across.
-  for (const x of b.beams.filter((y) => !y.backspanOf))
+  for (const x of b.beams.filter((y) => !y.backspanOf && !y.opening))
     assert.equal(x.points[0][0], x.points[1][0], 'along y');
 });
 
@@ -256,4 +257,179 @@ test('grid: no edge-strip gap wider than a spacing; strip widths add up to the s
   const gapFill = u.edgeCantilevers.find((e) => e.points[0][1] === 6);
   assert.ok(gapFill, 'a square cantilever at y = 6');
   close(gapFill.width_m, 2);
+});
+
+// PLAN-23 leftover (openings): a beam cut by a void lands on an opening edge beam (개구 둘레 보)
+// instead of ending free; `openingEdgeBeams: false` keeps the free ends.
+test('grid: the cut beams land on opening edge beams across the void, carried on both ends', () => {
+  const f = fixture('beams-grid');
+  const { b } = run(f);
+  assert.equal(b.params.openingEdgeBeams, true);
+  assert.equal(b.summary.openingBeams, 2);
+  assert.equal(b.summary.resupported, 2);
+  assert.equal(b.openings.length, 2);
+  for (const end of b.beams.flatMap((x) => [x.from, x.to])) assert.equal(end.edge, undefined);
+  const byId = new Map(b.beams.map((x) => [x.id, x]));
+  for (const o of b.openings) {
+    const edge = byId.get(o.id);
+    assert.equal(edge.opening, 'V1');
+    assert.equal(o.void, 'V1');
+    // Square to the beams (along y), 1 cm off the void side, from G01 up to the beam line y = 4.
+    assert.equal(edge.points[0][0], edge.points[1][0]);
+    assert.ok([2.99, 5.01].includes(edge.points[0][0]), `${edge.points[0][0]}`);
+    assert.deepEqual(
+      edge.points.map((q) => q[1]),
+      [0, 4],
+    );
+    assert.equal(edge.from.girderId, 'G01');
+    const host = byId.get(edge.to.beamId);
+    assert.equal(host.points[0][1], 4);
+    assert.equal(o.carries.length, 1);
+    const cut = byId.get(o.carries[0]);
+    const end = cut.from.beamId === o.id ? cut.points[0] : cut.points[1];
+    assert.deepEqual(end, [edge.points[0][0], 2, 6]);
+    close(cut.length_m, 2.99, 1e-9);
+  }
+  // Nothing is cut any more: no back span behind the root girder, no note about it.
+  assert.ok(!b.notes.some((n) => n.includes('뒤쪽 보를 두지 못했습니다')));
+  assert.ok(b.notes.some((n) => n.includes('개구 둘레 보 2개')));
+  // Deterministic.
+  assert.deepEqual(run(f).b, b);
+});
+
+test('a straight void edge from girder to girder carries the cut beams on its chord', () => {
+  const g = (id, pts) => ({ id, points: pts.map(([x, y]) => [x, y, 6]) });
+  const girders = [
+    g('G1', [
+      [0, 0],
+      [10, 0],
+    ]),
+    g('G2', [
+      [10, 0],
+      [10, 10],
+    ]),
+    g('G3', [
+      [10, 10],
+      [0, 10],
+    ]),
+    g('G4', [
+      [0, 10],
+      [0, 0],
+    ]),
+  ];
+  const ring = (pts) => ({ line: [...pts, pts[0]].flatMap(([x, y]) => [x, y, 6.3]) });
+  const site = {
+    slab: {
+      rows: [
+        {
+          id: 's',
+          ...ring([
+            [-1, -1],
+            [11, -1],
+            [11, 11],
+            [-1, 11],
+          ]),
+        },
+      ],
+    },
+    // A void over the north-east corner: its edge runs straight across the cell.
+    voids: {
+      rows: [
+        {
+          id: 'v',
+          ...ring([
+            [6, 10.5],
+            [10.5, 4],
+            [10.5, 10.5],
+          ]),
+        },
+      ],
+    },
+  };
+  const steps = { girders: { girders } };
+  const c = cells({ site, steps });
+  assert.equal(c.cells.length, 1);
+  assert.deepEqual(c.cells[0].edges, ['void']);
+  const b = beams({ site, steps: { ...steps, cells: c } }, { beamDirection: 'u' });
+  assert.equal(b.openings.length, 1);
+  const edge = b.beams.find((x) => x.id === b.openings[0].id);
+  assert.deepEqual([edge.from.girderId, edge.to.girderId].sort(), ['G2', 'G3']);
+  // The cut beams keep their line (along x) up to the void edge.
+  const carried = b.openings[0].carries.map((id) => b.beams.find((x) => x.id === id));
+  assert.deepEqual(carried.map((x) => x.points[0][1]).sort(), [5, 7.5]);
+  const xAt = (y) => 10.5 - ((y - 4) * 4.5) / 6.5;
+  for (const x of carried) {
+    assert.equal(x.to.beamId, edge.id);
+    assert.equal(x.points[0][1], x.points[1][1]);
+    close(x.points[1][0], xAt(x.points[1][1]), 1e-3, 'on the chord');
+  }
+  const off = beams(
+    { site, steps: { ...steps, cells: c } },
+    { beamDirection: 'u', openingEdgeBeams: false },
+  );
+  assert.equal(off.openings.length, 0);
+  assert.equal(off.beams.filter((x) => x.to.edge === 'void').length, 2);
+});
+
+test('voids role: a void over a slab hole counts once, one outside the slab is left out', () => {
+  const ring = (pts, z = 0) => [...pts, pts[0]].flatMap(([x, y]) => [x, y, z]);
+  const slab = {
+    rows: [
+      {
+        id: 's',
+        line: ring([
+          [0, 0],
+          [20, 0],
+          [20, 20],
+          [0, 20],
+        ]),
+      },
+      // A smaller ring inside the slab is a hole of the slab itself.
+      {
+        id: 'h',
+        line: ring([
+          [2, 2],
+          [4, 2],
+          [4, 4],
+          [2, 4],
+        ]),
+      },
+    ],
+  };
+  const voids = {
+    rows: [
+      {
+        id: 'same',
+        line: ring([
+          [2, 2],
+          [2, 4],
+          [4, 4],
+          [4, 2],
+        ]),
+      },
+      {
+        id: 'new',
+        line: ring([
+          [10, 10],
+          [12, 10],
+          [12, 12],
+          [10, 12],
+        ]),
+      },
+      {
+        id: 'out',
+        line: ring([
+          [30, 30],
+          [32, 30],
+          [32, 32],
+          [30, 32],
+        ]),
+      },
+    ],
+  };
+  const s = slabOf(slab, voids);
+  assert.equal(s.region.holes.length, 2);
+  close(s.region.area, 400 - 8);
+  assert.ok(s.notes.some((n) => n.includes('한 번만')));
+  assert.ok(s.notes.some((n) => n.includes('슬래브 밖')));
 });

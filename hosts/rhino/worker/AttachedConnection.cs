@@ -9,7 +9,8 @@ using Rhino.DocObjects;
 
 namespace Vide.Worker;
 
-// Explicit user attachment: never owns, opens, closes, or executes generated code in this document.
+// Explicit user attachment: never owns, opens or closes this document. Generated code runs here only
+// through direct-execute (one undo record per execution, DirectExecution.cs).
 internal sealed class AttachedConnection : IDisposable
 {
     internal static AttachedConnection? Current;
@@ -19,6 +20,7 @@ internal sealed class AttachedConnection : IDisposable
     private readonly string token = Convert.ToHexString(RandomNumberGenerator.GetBytes(32)).ToLowerInvariant();
     private readonly string session = Guid.NewGuid().ToString();
     private readonly EditorExecutor editor;
+    private readonly DirectExecutor direct;
     private long generation;
     private long selectionVersion;
     private readonly HashSet<Guid> pinned = new();
@@ -61,6 +63,7 @@ internal sealed class AttachedConnection : IDisposable
         Directory.CreateDirectory(directory);
         record = Path.Combine(root, session + ".json");
         editor = new EditorExecutor(doc, directory, RevisionHash);
+        direct = new DirectExecutor(doc);
         var process = Process.GetCurrentProcess();
         var ticks = process.StartTime.ToUniversalTime().Ticks.ToString();
         listener = new TcpListener(IPAddress.Loopback, 0);
@@ -148,6 +151,10 @@ internal sealed class AttachedConnection : IDisposable
             LastDisplayRead = DateTime.Now;
             return display.Changes(document, objectRevisions, since, cursor, readRevision);
         }
+        // Direct mode: the AI's code in this document, one undo record per execution.
+        if (method == "direct-execute") return direct.Execute(request);
+        if (method == "direct-undo") return direct.Undo(request);
+        if (method == "fingerprint") return DirectExecutor.Fingerprint(RevisionHash(), readRevision);
         return editor.Dispatch(request);
     }
     private string RevisionHash() => Convert.ToHexString(SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(
@@ -224,6 +231,7 @@ internal sealed class AttachedConnection : IDisposable
         if (disposed) return;
         disposed = true;
         listener.Stop();
+        direct.Dispose();
         RhinoDoc.AddRhinoObject -= ChangedObject; RhinoDoc.DeleteRhinoObject -= DeletedObject; RhinoDoc.UndeleteRhinoObject -= ChangedObject;
         RhinoDoc.ReplaceRhinoObject -= ReplacedObject; RhinoDoc.ModifyObjectAttributes -= ChangedAttributes; RhinoDoc.LayerTableEvent -= ChangedLayer;
         RhinoDoc.InstanceDefinitionTableEvent -= ChangedDefinition; RhinoDoc.MaterialTableEvent -= ChangedMaterial;

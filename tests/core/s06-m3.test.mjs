@@ -359,3 +359,178 @@ test('the marks ledger carries over: numbers continue after a change instead of 
   assert.ok(beams.length > 0);
   for (const m of beams) if (before.get(m.memberId) === 'S06-SB1') assert.equal(m.mark, 'S06-SB1');
 });
+
+test('바로 적용: the confirmed plans bake straight in the document, one undo record per body', async () => {
+  const { planBake } = await import('../../src/jigs/bake/plan.ts');
+  const { renderChunks } = await import('../../src/jigs/bake/templates.ts');
+  const { runDirectBake, undoBake } = await import('../../src/jigs/bake/bake.ts');
+  const hash = (r, id) => r.steps.find((s) => s.id === id).inputHash;
+  const first = await run('drawn-two-bay', {}, 'confirmed', {});
+  const confirmed = {
+    confirmAnalysis: hash(first, 'confirmAnalysis'),
+    applySections: hash(first, 'applySections'),
+  };
+  const applying = await run('drawn-two-bay', {}, 'confirmed', confirmed);
+  const overrides = applying.applies[0].overrides.map((o) => ({
+    ...o,
+    at: '2026-09-30T00:00:00Z',
+  }));
+  const after = await run('drawn-two-bay', {}, 'confirmed', confirmed, { overrides });
+  const again = await run(
+    'drawn-two-bay',
+    {},
+    'confirmed',
+    { confirmAnalysis: hash(after, 'confirmAnalysis') },
+    { overrides },
+  );
+  const manifest = read('jig.json');
+  const decls = ['lines', 'members', 'member-columns'].map((id) =>
+    manifest.bake.find((b) => b.id === id),
+  );
+
+  // A fake attached document: each body is one undo record; undo restores the record's snapshot.
+  const b64 = (s) => Buffer.from(s, 'utf8').toString('base64');
+  const doc = new Map();
+  const stack = [];
+  const bodies = new Map();
+  let serial = 0;
+  const uuid = () => `00000000-0000-4000-8000-${String(++serial).padStart(12, '0')}`;
+  const direct = {
+    async execute(_target, command) {
+      const body = bodies.get(command.code);
+      const before = new Map([...doc].map(([k, v]) => [k, { ...v }]));
+      const removed = body.deleteIds
+        .filter((id) => doc.delete(id))
+        .map((nativeId) => ({ nativeId }));
+      assert.ok(removed.length <= command.guard.maxDeletes);
+      assert.equal(command.label, `VIDE jig: ${manifest.name}`);
+      const ids = body.keys.map((key) => {
+        const nativeId = uuid();
+        const tags = { 'vide-run': body.runId, 'vide-key': key, 'vide-bake': body.bakeId };
+        doc.set(nativeId, {
+          nativeId,
+          geometryHash: `g-${key}`,
+          layer: body.layerPath,
+          attributes64: Object.entries(tags).map(([k, v]) => [b64(k), b64(v)]),
+        });
+        return nativeId;
+      });
+      const undoId = uuid();
+      stack.push({ undoId, before });
+      return {
+        ok: true,
+        undoId,
+        changes: { removed },
+        value: { removed: removed.length, keys: body.keys, ids, failed: [] },
+      };
+    },
+    async undo(_target, undoId) {
+      if (stack.at(-1)?.undoId !== undoId) return { ok: false, reason: 'not-latest' };
+      const { before } = stack.pop();
+      doc.clear();
+      for (const [k, v] of before) doc.set(k, v);
+      return { ok: true };
+    },
+  };
+  const records = new Map();
+  const store = {
+    addBake: (_i, r) => {
+      const record = { id: uuid(), instanceId: 'i', appliedAt: null, ...r };
+      records.set(record.id, record);
+      return record;
+    },
+    updateBake: (_i, id, patch) => Object.assign(records.get(id), patch),
+    bake: (_i, id) => records.get(id),
+  };
+  const ctx = {
+    store,
+    direct,
+    runtime: { recordRead: () => ({ id: uuid() }) },
+    read: async () => ({ linkId: 'L', revisionKey: 'r', model: { scene: [...doc.values()] } }),
+  };
+  const outputs = { lines: again.outputs.bakePlan, members: again.outputs.bakeMembers };
+  const bake = async (prior = {}) => {
+    const runId = uuid();
+    const plans = decls.map((decl) => {
+      const layerPath = `VIDE::S06::${decl.layer}`;
+      const plan = planBake({
+        instanceId: 'i',
+        bakeId: decl.id,
+        planned: extractItems(decl, outputs[decl.id] ?? outputs.members).items,
+        prior: prior[decl.id],
+        read: { scene: [...doc.values()] },
+      });
+      const chunks = renderChunks(
+        {
+          template: decl.template,
+          jigId: 'project/s06-frame',
+          instanceId: 'i',
+          bakeId: decl.id,
+          runId,
+          layerPath,
+          deleteIds: plan.deleteIds,
+        },
+        plan.create,
+      );
+      for (const c of chunks) bodies.set(c.code, { ...c, runId, bakeId: decl.id, layerPath });
+      return { decl, plan, chunks };
+    });
+    const prepared = {
+      projectId: 'P',
+      instanceId: 'i',
+      readId: 'r0',
+      read: { linkId: 'L', model: { scene: [] } },
+      runId,
+      linkId: 'L',
+      gates: [],
+      blocked: [],
+      problems: [],
+      absorbed: 0,
+      layers: decls.map((decl) => `VIDE::S06::${decl.layer}`),
+      plans,
+      codes: plans.flatMap((p) => p.chunks.map((c) => c.code)),
+      jig: { manifest },
+      view: { body: { layerRoot: 'VIDE::S06' } },
+    };
+    const made = await runDirectBake(ctx, prepared, { host: 'rhino' });
+    const recs = Object.fromEntries(
+      made.summary.bakes.map((b) => [b.bakeId, records.get(b.recordId)]),
+    );
+    return { made, recs };
+  };
+
+  const one = await bake();
+  const planned =
+    again.outputs.bakePlan.lines.length + again.outputs.bakeMembers.members.length * 2;
+  assert.equal(one.made.undoIds.length, 3);
+  assert.ok(one.made.summary.direct);
+  assert.ok(Object.values(one.recs).every((r) => r.appliedAt && r.baselineReadId));
+  const made = doc.size;
+  assert.ok(made > 0 && made <= planned);
+
+  // A person moves one member and draws an own object; the next bake replaces only recorded ones.
+  const edited = Object.values(one.recs.members.items)[0].nativeId;
+  doc.get(edited).geometryHash = 'moved';
+  doc.set('own', {
+    nativeId: 'own',
+    geometryHash: 'x',
+    layer: 'VIDE::S06::jig 부재',
+    attributes64: [],
+  });
+  const two = await bake(one.recs);
+  const members = two.made.summary.bakes.find((b) => b.bakeId === 'members');
+  assert.deepEqual(
+    members.preserved.map((p) => p.reason),
+    ['edited'],
+  );
+  assert.equal(two.made.result.removed, made - 1);
+  assert.ok(doc.has('own') && doc.has(edited));
+  assert.equal(doc.size, made + 1);
+
+  // [되돌리기]: the second run's records come off newest first; the first bake is back.
+  const undone = await undoBake(ctx, 'i', members.recordId);
+  assert.equal(undone.records.length, 3);
+  assert.ok(undone.records.every((id) => records.get(id).appliedAt === null));
+  assert.equal(doc.size, made + 1);
+  assert.ok(Object.values(one.recs.lines.items).every((item) => doc.has(item.nativeId)));
+});

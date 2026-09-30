@@ -5,6 +5,13 @@ import { sendHostCommand } from '../common/transport.ts';
 import { readScenePages } from './scene-pages.ts';
 import { viewMethods } from './view-tools.ts';
 import {
+  directExecuteInputSchema,
+  directExecuteResultSchema,
+  directUndoResultSchema,
+  documentFingerprintSchema,
+  type DirectExecuteInput,
+} from './application-contract.ts';
+import {
   displayObjectSchema,
   displaySceneSchema,
   displayDefinitionSchema,
@@ -217,6 +224,33 @@ export function editorMethods(
     async inspectEditor() {
       return editorReply(editorSnapshotSchema, await call('inspectEditor'));
     },
+    /**
+     * Direct mode: run the AI's C# body in this document inside one undo record. Compile, policy,
+     * execution failures and tripped guards come back as results (the AI or the user acts on them);
+     * a busy, mismatched or unreachable host throws its code.
+     */
+    async directExecute(input: DirectExecuteInput) {
+      const value = await call('direct-execute', directExecuteInputSchema.parse(input));
+      if (
+        value &&
+        typeof value === 'object' &&
+        ['guarded', 'diagnostics', 'reverted'].some((key) => key in value)
+      )
+        return directExecuteResultSchema.parse(value);
+      return editorReply(directExecuteResultSchema, value);
+    },
+    /** Host undo of that execution's record; `not-latest` when anything was recorded after it. */
+    async directUndo(undoId: string) {
+      if (!/^\d+$/.test(undoId)) throw failure('INVALID_INPUT');
+      const value = await call('direct-undo', { undoId });
+      const error = z.object({ ok: z.literal(false), code: z.string() }).safeParse(value);
+      if (error.success) throw failure(error.data.code);
+      return directUndoResultSchema.parse(value);
+    },
+    /** The connection's cheap change token and revision. */
+    async fingerprint() {
+      return editorReply(documentFingerprintSchema, await call('fingerprint'));
+    },
     async captureEditor(operationId: string) {
       editorReply(
         z.object({ ok: z.literal(true), pending: z.literal(true) }),
@@ -325,7 +359,9 @@ export function resumeEditor(
         },
         {
           port: identity.port,
-          timeoutMs: method === 'displayPage' || method === 'displayChanges' ? 180000 : 60000,
+          timeoutMs: ['displayPage', 'displayChanges', 'direct-execute'].includes(method)
+            ? 180000
+            : 60000,
           beforeSend: async () => {
             const at = owners.get(owner);
             if (at !== undefined && Date.now() - at < OWNERSHIP_REUSE_MS && alive(identity.pid))

@@ -48,6 +48,36 @@ export function codexInstructions(session?: SessionOptions, bundle = '') {
   return bundle ? withRules(bundle, rules) : rules;
 }
 /**
+ * The isolation shared by every Codex run of VIDE (`exec` and `app-server`, SPIKE-2026-09-30
+ * codex-app-server): the config values (`-c`) and the features switched off (`--disable`).
+ */
+export const codexIsolationConfig = [
+  'approval_policy="never"',
+  'model_provider="openai"',
+  'forced_login_method="chatgpt"',
+  'web_search="disabled"',
+  'mcp_servers={}',
+  'project_doc_max_bytes=0',
+] as const;
+export const codexDisabledFeatures = [
+  'shell_tool',
+  'unified_exec',
+  'apps',
+  'plugins',
+  'hooks',
+  'multi_agent',
+  'memories',
+  'browser_use',
+  'browser_use_external',
+  'computer_use',
+  'image_generation',
+  'view_image',
+  'code_mode',
+  'code_mode_host',
+  'skill_search',
+  'shell_snapshot',
+] as const;
+/**
  * Single-run isolation arguments; with a session (SPIKE-2026-09-30 ④) the transcript is kept, a
  * resumed turn goes through `exec resume`, which takes the sandbox as a config value instead of
  * `--sandbox`, and the developer instructions are the neutral ones fixed by the first turn (the
@@ -80,24 +110,7 @@ export function codexArguments(model?: string, session?: SessionOptions, bundle 
     '-c',
     'developer_instructions=' + JSON.stringify(codexInstructions(session, bundle)),
   ];
-  for (const flag of [
-    'shell_tool',
-    'unified_exec',
-    'apps',
-    'plugins',
-    'hooks',
-    'multi_agent',
-    'memories',
-    'browser_use',
-    'browser_use_external',
-    'computer_use',
-    'image_generation',
-    'view_image',
-    'code_mode',
-    'code_mode_host',
-    'skill_search',
-    'shell_snapshot',
-  ]) {
+  for (const flag of codexDisabledFeatures) {
     args.push('--disable', flag);
   }
   args.push('--enable', 'skip_host_skill_discovery');

@@ -8,6 +8,7 @@ import { requestAdmission, waitingOf } from '../contracts/request-scope.ts';
 import { waitingText } from './request-scope.ts';
 import { draftSnapshot, restoreDraft } from './draft-storage.ts';
 import { z } from 'zod';
+import { requestMode } from '../contracts/workspace.ts';
 import {
   hostDocumentsSchema,
   hostSelectionSchema,
@@ -172,6 +173,47 @@ let foregroundRequest: { id: string; selected: typeof selectedResult; draft: str
 let focusedWork: string | undefined;
 // Request routing (SPEC-02.17): Jev judges view-only or file work when the request is sent.
 let routing = false;
+/**
+ * Work mode (user decision 2026-09-30, replaces the review/candidate/apply permissions): 계획 reads,
+ * measures and plans without writing; 자동 (default) runs directly in the open document, one undo
+ * record per execution. Remembered per project. The old `permission` field still goes along
+ * (plan → review, auto → candidate) for servers that read only it.
+ */
+type WorkMode = 'plan' | 'auto';
+let mode: WorkMode = 'auto';
+const modeKey = (projectId: string) => 'vide:mode:' + projectId;
+const modeFields = (value: WorkMode) =>
+  ({ mode: value, permission: value === 'plan' ? 'review' : 'candidate' }) as const;
+/** A stored request's mode; older requests carry only the permission (review → 계획). */
+const modeOf = (input: { mode?: unknown; permission?: unknown }): WorkMode => requestMode(input);
+function loadMode(projectId: string) {
+  try {
+    mode = localStorage.getItem(modeKey(projectId)) === 'plan' ? 'plan' : 'auto';
+  } catch {
+    mode = 'auto';
+  }
+}
+function setMode(next: WorkMode) {
+  mode = next;
+  try {
+    if (project) localStorage.setItem(modeKey(project.id), next);
+  } catch {
+    // The mode stays for this page only.
+  }
+  render();
+}
+/** Keeps the draft's permission field in step with the mode and draws the toggle. */
+function syncMode() {
+  state.permission = mode === 'plan' ? 'review' : 'candidate';
+  state.applyToSource = false;
+  for (const button of document.querySelectorAll<HTMLButtonElement>('#mode-toggle [data-mode]')) {
+    button.setAttribute('aria-checked', String(button.dataset.mode === mode));
+    button.disabled = !ready;
+  }
+  $('mode-toggle').dataset.mode = mode;
+  $('mode-status').textContent =
+    mode === 'plan' ? '계획 · 문서를 바꾸지 않음' : '자동 · 열린 문서에 바로 적용';
+}
 /** Who is signed in (the providers' status), for the login card (SPEC-02.17 3). */
 let providerSignedIn: Partial<Record<Service, boolean>> = {};
 // Conversation chips (PLAN-24 T-061, src/ui/conversations.tsx) and question cards (T-062,
@@ -966,23 +1008,10 @@ function chip(text: string, remove: () => void, title?: string, select?: () => v
 }
 function render(rebuildRequests = true) {
   $('body').disabled = !ready;
-  for (const id of ['permission', 'model', 'effort'] as const) $(id).disabled = !ready;
+  for (const id of ['model', 'effort'] as const) $(id).disabled = !ready;
+  syncMode();
   if (unreadableDraft && draftHasInput(state)) unreadableDraft = false;
-  if (!draftHasInput(state) && displayedResult) {
-    const sourceOf = (id: string | null | undefined) =>
-      state.messages.find((m) => m.id === id)?.request.result?.sourceDocument;
-    const before = sourceOf(state.baseRequestId),
-      after = sourceOf(displayedResult);
-    if (
-      state.applyToSource &&
-      (!before ||
-        !after ||
-        before.instance !== after.instance ||
-        before.documentId !== after.documentId)
-    )
-      state.applyToSource = false;
-    state.baseRequestId = displayedResult;
-  }
+  if (!draftHasInput(state) && displayedResult) state.baseRequestId = displayedResult;
   if (rebuildRequests) renderRequests(state, render);
   // Intervention availability follows the composer, so the work view follows every render.
   if (project) renderConversation();
@@ -1135,14 +1164,12 @@ function render(rebuildRequests = true) {
         !state.pins.some((p) => p.id === sourceIdOf(object) && p.basis === object.revision)
       );
     });
-  $('pin').title = '현재 후보에서 첨부하지 않은 객체를 선택하세요.';
+  $('pin').title = '현재 모델에서 첨부하지 않은 객체를 선택하세요.';
   $('add-request').disabled = !ready || busy || !state.body.trim();
   $('linked-targets').disabled = !ready || busy || linkedCandidates(state).length < 2;
   $('linked-hint').textContent =
     linkedCandidates(state).length < 2 ? '실행에 성공한 SDK 후보 2개가 필요합니다.' : '';
 
-  $('permission').value = state.applyToSource ? 'apply' : state.permission;
-  $('permission').dataset.mode = $('permission').value;
   const inspected = objects.find((o) => o.id === state.selected);
   const active = state.messages.find(
     (m) =>
@@ -1526,7 +1553,49 @@ function renderConversation() {
       void submitRequest(id);
     },
     interventionReason: (id) => interventionReason(id),
+    direct: directAction,
   });
+}
+/**
+ * Direct-mode actions of the work view: [되돌리기] (…/undo {executionId}), the guard card's
+ * [진행] (…/confirm {executionId}) and the plan card's [진행] (…/continue). A reply naming
+ * another request (`requestId`, or a request with its own id) opens and follows it; otherwise the
+ * request is read again.
+ */
+async function directAction(
+  id: string,
+  action: 'undo' | 'confirm' | 'continue',
+  body: Record<string, unknown> = {},
+) {
+  const projectId = currentProject().id;
+  const reply = (await api(`/projects/${projectId}/requests/${id}/${action}`, 'POST', body)) as {
+    ok?: unknown;
+    reason?: unknown;
+    id?: unknown;
+    input?: unknown;
+    requestId?: unknown;
+  } | null;
+  if (reply?.ok === false) {
+    const code = reply.reason === 'not-latest' ? 'UNDO_NOT_LATEST' : String(reply.reason ?? '');
+    throw Error(errors[code] || errors.DIRECT_ACTION_FAILED);
+  }
+  const nextId =
+    typeof reply?.requestId === 'string'
+      ? reply.requestId
+      : typeof reply?.id === 'string' && reply.input
+        ? reply.id
+        : undefined;
+  if (project?.id !== projectId) return;
+  if (nextId && nextId !== id) {
+    const request = await requestData(`/projects/${projectId}/requests/${nextId}`);
+    if (!state.messages.some((entry) => entry.id === request.id))
+      state.messages.push(requestMessage(request));
+    focusedWork = request.id;
+    renderMessages();
+    void poll(request.id, projectId);
+    return;
+  }
+  await poll(id, projectId);
 }
 
 /** Layer paths in the stored Syncs, newest first: the output layers a jig instance may use. */
@@ -1594,6 +1663,8 @@ attachJigs(
       const projectId = currentProject().id;
       const input = {
         ...packet({ ...state, body: extra.body, pins: [], sketches: [], files: [] }),
+        // A jig that asks for review only runs in 계획, whatever the toggle says.
+        ...modeFields(extra.permission ? modeOf(extra) : mode),
         id: crypto.randomUUID(),
         ...extra,
       };
@@ -1667,13 +1738,8 @@ $('effort').oninput = () => {
     models.find((m) => m.id === state.model)?.efforts[$('effort').valueAsNumber] || 'default';
   render();
 };
-$('permission').onchange = () => {
-  state.applyToSource = $('permission').value === 'apply';
-  state.permission = state.applyToSource
-    ? 'candidate'
-    : z.enum(['review', 'candidate']).parse($('permission').value);
-  render();
-};
+for (const button of document.querySelectorAll<HTMLButtonElement>('#mode-toggle [data-mode]'))
+  button.onclick = () => setMode(button.dataset.mode === 'plan' ? 'plan' : 'auto');
 $('body').oninput = () => {
   state.body = $('body').value;
   // Pins whose inline token was deleted from the message leave the request.
@@ -1750,11 +1816,10 @@ function interventionReason(id: string): string | undefined {
   if (
     (original.host || 'rhino') !== state.host ||
     original.permission !== state.permission ||
-    Boolean(original.applyToSource) !== Boolean(state.applyToSource) ||
     (original.baseRequestId ?? null) !== (state.baseRequestId ?? null) ||
     JSON.stringify(original.linkedTargets) !== JSON.stringify(draft.linkedTargets)
   )
-    return '이 작업의 대상·기준·권한을 맞춘 뒤 추가하세요.';
+    return '이 작업의 대상·기준·모드를 맞춘 뒤 추가하세요.';
   if (
     state.messages.some(
       (entry) =>
@@ -1793,24 +1858,50 @@ async function routeContext(): Promise<{ context: RouteContext; instanceId?: str
   }
 }
 /** Request routing (SPEC-02.17): Jev decides; without a key or on failure, the rules. */
-async function decideRoute(body: string): Promise<{ route: Route; instanceId?: string }> {
+async function decideRoute(
+  body: string,
+): Promise<{ route: Route; instanceId?: string; planFirst?: boolean }> {
   const { context, instanceId } = await routeContext();
   const rules = routeRequest(body, routeObjects(), selectedIds, context);
   const subjects = routeSubjects(routeObjects(), selectedIds);
   try {
-    const answer = routeAnswer(
-      await api(
-        `/projects/${currentProject().id}/route`,
-        'POST',
-        routeQuery(body, subjects, context),
-      ),
+    const raw = await api(
+      `/projects/${currentProject().id}/route`,
+      'POST',
+      routeQuery(body, subjects, context),
     );
+    const answer = routeAnswer(raw);
     const route =
       answer.target === null ? rules : (jevRoute(answer, subjects, rules, context, body) ?? rules);
-    return { route, instanceId };
+    return { route, instanceId, planFirst: suggestsPlan(raw) };
   } catch {
     return { route: rules, instanceId };
   }
+}
+/**
+ * Jev marks a complex or multi-file request (`planFirst`, `complex` or `scope: 'multi-file'` in
+ * the /route answer): in 자동 the composer suggests '계획부터' before anything runs.
+ */
+function suggestsPlan(raw: unknown) {
+  const value = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
+  return value.planFirst === true || value.complex === true || value.scope === 'multi-file';
+}
+/** '계획부터 할까요?' over the composer: plan once (the toggle stays), or run in 자동 now. */
+function showPlanFirstCard() {
+  const card = $('route-card');
+  card.replaceChildren();
+  el('p', 'Jev · 여러 단계나 여러 파일이 걸린 요청입니다. 계획부터 할까요?', card);
+  const row = el('div', '', card, { class: 'route-card-actions' });
+  el('button', '계획부터', row, { type: 'button', class: 'primary-button' }).onclick = () => {
+    hideRouteCard();
+    void submitRequest(undefined, 'plan');
+  };
+  el('button', '바로 진행', row, { type: 'button' }).onclick = () => {
+    hideRouteCard();
+    void submitRequest(undefined, 'auto');
+  };
+  el('button', '닫기', row, { type: 'button' }).onclick = hideRouteCard;
+  card.hidden = false;
 }
 /** A notice with action buttons (undo, send to the AI after all). */
 function messageWithActions(text: string, actions: { label: string; run: () => void }[]) {
@@ -2060,9 +2151,10 @@ $('request').onclick = () => {
   $('request').setAttribute('aria-busy', 'true');
   hideRouteCard();
   void decideRoute(body)
-    .then(({ route, instanceId }) => {
+    .then(({ route, instanceId, planFirst }) => {
       if (route.target === 'view') runViewRequest(route, body);
       else if (route.target === 'param') void runParamRequest(route, body, instanceId);
+      else if (goesToAi(route) && planFirst && mode === 'auto') showPlanFirstCard();
       else if (goesToAi(route)) void submitRequest();
       else runAppRoute(route, body);
     })
@@ -2071,7 +2163,7 @@ $('request').onclick = () => {
       $('request').removeAttribute('aria-busy');
     });
 };
-async function submitRequest(predecessorId?: string) {
+async function submitRequest(predecessorId?: string, sendMode: WorkMode = mode) {
   if (validate(state) || busy || !project || (predecessorId && interventionReason(predecessorId)))
     return;
   busy = true;
@@ -2081,6 +2173,7 @@ async function submitRequest(predecessorId?: string) {
   const conversationId = predecessorId ? undefined : currentConversation();
   const input = {
     ...packet(predecessor ? interventionTargetDraft(state, predecessor) : state),
+    ...modeFields(predecessor ? modeOf(predecessor.input) : sendMode),
     id: crypto.randomUUID(),
     ...(conversationId ? { conversationId } : {}),
   };
@@ -2153,13 +2246,11 @@ async function poll(id: string, projectId = currentProject().id, original = stat
     message('작업 상태 연결이 끊겼습니다. 새로고침하면 저장된 기록을 다시 읽습니다.');
   }
 }
-/** Shift+Tab cycles Plan → Accept edits → Auto, like Claude Code. */
+/** Shift+Tab switches 계획 ↔ 자동, like Claude Code. */
 function cycleMode() {
-  const order = ['review', 'candidate', 'apply'];
-  $('permission').value = order[(order.indexOf($('permission').value) + 1) % order.length];
-  $('permission').dispatchEvent(new Event('change'));
-  const label = $('permission').selectedOptions[0];
-  message(`${label.textContent} · ${label.title}`);
+  setMode(mode === 'plan' ? 'auto' : 'plan');
+  const button = document.querySelector<HTMLButtonElement>(`#mode-toggle [data-mode="${mode}"]`);
+  message(`${button?.textContent ?? mode} · ${button?.title ?? ''}`);
 }
 $('body').onkeydown = (e) => {
   if (e.key === 'Tab' && e.shiftKey && !e.isComposing) {
@@ -2767,6 +2858,7 @@ async function initializeWorkspace() {
     projects = linked.projects;
     document.title = `${project.name} · VIDE`;
     renderHeading();
+    loadMode(project.id);
     let restored = false;
     try {
       const raw = localStorage.getItem('vide:draft:' + project.id);

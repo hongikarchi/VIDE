@@ -46,7 +46,12 @@ try {
   await page.goto(app.launchUrl);
   await page.waitForFunction(() => !document.querySelector('#body').disabled);
   await page.locator('#model').selectOption('test');
-  await page.locator('#permission').selectOption('review');
+  // 계획 (Plan): the AI reads and plans only; the mode replaced the permission select.
+  await page.locator('#mode-toggle [data-mode="plan"]').click();
+  assert.equal(
+    await page.locator('#mode-toggle [data-mode="plan"]').getAttribute('aria-checked'),
+    'true',
+  );
   await page.locator('#body').fill('Keep the boundary');
   await page.locator('#request').click();
   const add = page

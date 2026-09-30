@@ -64,6 +64,8 @@ export interface BeamIn {
   rigidAt?: ('from' | 'to')[];
   /** Set on a back span: the cantilever or cut beam it holds (carries no cell strip). */
   backspanOf?: string;
+  /** Set on an opening edge beam (the void it frames): it carries the cut beams, no cell strip. */
+  opening?: string;
 }
 export interface CantileverIn {
   id: string;
@@ -660,7 +662,7 @@ export function model(
       cellId: b.cellId,
       ...(rigidAt.length ? { rigid: [rigidAt.includes('from'), rigidAt.includes('to')] } : {}),
       ...(onBeam.length ? { onBeam } : {}),
-      ...(b.backspanOf ? { backspan: true } : {}),
+      ...(b.backspanOf || b.opening ? { backspan: true } : {}),
     });
   }
   // Back-span ends on an infill beam: onto that beam's rail, so the library joins them there.

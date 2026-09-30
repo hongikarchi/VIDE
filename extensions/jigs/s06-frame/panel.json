@@ -402,6 +402,10 @@
             "label": "끝 거더"
           },
           {
+            "field": "opening",
+            "label": "개구 둘레"
+          },
+          {
             "field": "length_m",
             "label": "길이",
             "unit": "m",

@@ -316,7 +316,8 @@ try {
     second,
   );
   assert.equal(restored.body, failed.body);
-  assert.equal(restored.permission, 'review');
+  // The mode is the page's 계획/자동 toggle (default 자동), not part of the restored input.
+  assert.equal(restored.permission, 'candidate');
   assert.deepEqual(restored.pins, []);
   const applicable = { ...fixtureInput, id: 'application-fixture', body: 'Apply fixture' };
   const applicableResult = {

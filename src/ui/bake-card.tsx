@@ -1,10 +1,13 @@
 import { z } from 'zod';
 
 // Rhino에 만들기 결과 카드 (Design SCR-13 'Rhino에 만들기 결과', part `bake-card`, SPEC-07.12 6):
-// what the candidate adds and replaces, what it left alone because a person changed, copied or
-// deleted it, the output layers, and the actions that follow — apply to the original (the SCR-15
-// confirmation card does the applying), record the baseline after application, and the person's
-// choice for each preserved object (유지 · 덮기 · 수정 사항으로 받기, SPEC-07.13). Wiring into the
+// what the bake added and replaced, what it left alone because a person changed, copied or
+// deleted it, the output layers, and the actions that follow. With an attached Rhino the bake is
+// made in the open document at once (바로 적용, user decision 2026-09-30) and the card offers
+// [되돌리기] for the last bake (the host's undo). Without one it ran in a work copy only and the
+// card asks to open the file in Rhino and connect it; [반영 결과 읽기] retries a baseline read that
+// failed; the person's choice for each preserved object (유지 · 덮기 · 수정 사항으로 받기,
+// SPEC-07.13) goes into the next bake. Wiring into the
 // jig screen is PLAN-23 T-056; this file is the component and the schema of the request result's
 // `bake` field (src/jigs/bake/bake.ts `BakeSummary`); `jig-panel/bake-parts.tsx` drives it.
 
@@ -44,6 +47,7 @@ export const bakeSummarySchema = z.object({
   }),
   layers: z.array(z.string()),
   text: z.string().optional(),
+  direct: z.boolean().optional(),
 });
 export type BakeSummary = z.infer<typeof bakeSummarySchema>;
 export type BakeOutcome = z.infer<typeof bakeOutcomeSchema>;
@@ -51,14 +55,19 @@ export type Resolve = 'keep' | 'overwrite' | 'absorb';
 
 export interface BakeCardProps {
   summary: BakeSummary;
-  /** The candidate request's state as the work view shows it. */
-  state: 'running' | 'succeeded' | 'failed' | 'applied' | 'unknown';
+  /**
+   * `applied`: made in the open document (direct) or read after application; `succeeded`: made in
+   * a work copy only (no attached Rhino); `undone`: taken back with [되돌리기].
+   */
+  state: 'running' | 'succeeded' | 'failed' | 'applied' | 'undone' | 'unknown';
   /** Recorded (baseline read done), pending (applied, read not yet), failed (read failed). */
   baseline?: 'recorded' | 'pending' | 'failed';
   /** The results changed after this bake ('만든 결과가 오래됨'). */
   stale?: boolean;
-  /** Opens the confirmation card that applies the candidate to the original (SCR-15). */
+  /** Opens the confirmation card that applies a work-copy result to the original (SCR-15). */
   onApply?: () => void;
+  /** Undo the last direct bake in Rhino (the host's undo record); only for the latest bake. */
+  onUndo?: () => void;
   /** Reads the applied document again to record the baseline fingerprints. */
   onRecordBaseline?: () => void;
   /** The person's choice for a preserved object, used by the next bake. */
@@ -94,6 +103,7 @@ export function BakeCard({
   baseline,
   stale,
   onApply,
+  onUndo,
   onRecordBaseline,
   onResolve,
   onFocus,
@@ -115,10 +125,16 @@ export function BakeCard({
         ) : null}
         {applied ? (
           <span className="bake-badge" data-tone="ok">
-            {baseline === 'recorded' ? '원본에 반영됨' : '반영됨 · 기준 읽기 필요'}
+            {baseline === 'recorded'
+              ? summary.direct
+                ? 'Rhino에 만듦'
+                : '원본에 반영됨'
+              : '만듦 · 결과 읽기 필요'}
           </span>
         ) : state === 'succeeded' ? (
-          <span className="bake-badge">후보</span>
+          <span className="bake-badge">작업 사본에만 만듦</span>
+        ) : state === 'undone' ? (
+          <span className="bake-badge">되돌림</span>
         ) : state === 'failed' ? (
           <span className="bake-badge" data-tone="no">
             만들지 못함
@@ -189,9 +205,18 @@ export function BakeCard({
             원본에 반영
           </button>
         ) : null}
+        {applied && onUndo ? (
+          <button
+            type="button"
+            onClick={onUndo}
+            title="Rhino의 실행 취소로 이번 만들기를 되돌립니다"
+          >
+            되돌리기
+          </button>
+        ) : null}
         {applied && baseline !== 'recorded' && onRecordBaseline ? (
           <button type="button" onClick={onRecordBaseline}>
-            {baseline === 'failed' ? '기준 읽기 다시 시도' : '반영 결과 읽기'}
+            {baseline === 'failed' ? '결과 읽기 다시 시도' : '반영 결과 읽기'}
           </button>
         ) : null}
         {applied && baseline === 'failed' ? (

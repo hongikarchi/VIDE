@@ -9,8 +9,34 @@ export const requestStateSchema = z.enum([
   'cancelled',
   'interrupted',
   'unknown',
+  // Auto mode tripped a guard (ADR-022 3): the host undid that execution; the card waits for the
+  // user's [진행] (POST …/requests/:rid/confirm), which re-runs it with the guard released.
+  'needs-confirmation',
 ]);
 export type RequestState = z.infer<typeof requestStateSchema>;
+/**
+ * Plan / Auto (ADR-022 2, user decision 2026-09-30). `mode` replaces the old permission; old
+ * values map review→plan, candidate|apply→auto. Absent both, a request runs in Auto (the default).
+ */
+export const requestModeSchema = z.enum(['plan', 'auto']);
+export type RequestMode = z.infer<typeof requestModeSchema>;
+export const legacyPermissionSchema = z.enum(['review', 'candidate', 'apply']);
+export function requestMode(input: { mode?: unknown; permission?: unknown }): RequestMode {
+  if (input.mode === 'plan' || input.mode === 'auto') return input.mode;
+  return input.permission === 'review' ? 'plan' : 'auto';
+}
+/**
+ * A stored input with both fields filled. Stored requests keep their submitted JSON (idempotency
+ * compares it), so a row may carry only `mode` or only the old `permission`.
+ */
+export function withMode<T extends { mode?: unknown; permission?: unknown }>(input: T) {
+  const mode = requestMode(input);
+  return {
+    ...input,
+    mode,
+    permission: mode === 'plan' ? ('review' as const) : ('candidate' as const),
+  };
+}
 const id = z.string().regex(/^[a-zA-Z0-9-]{1,100}$/);
 const coordinate = z.number().finite().min(-100000).max(100000);
 export const linkedTargetSchema = z
@@ -82,7 +108,14 @@ export const requestInputSchema = z
     id,
     executionLimits: executionLimitsSchema.optional(),
     body: z.string().max(20000),
-    permission: z.enum(['review', 'candidate']),
+    // Filled from each other on parse (see overwrite below): `mode` is the contract, `permission`
+    // stays for the code paths that still read it (review = plan, candidate = auto).
+    mode: requestModeSchema.optional(),
+    permission: z.preprocess(
+      (value) => (value === 'apply' ? 'candidate' : value),
+      z.enum(['review', 'candidate']).default('candidate'),
+    ),
+    /** Deprecated with the candidate/apply flow (ADR-022); kept so stored requests still parse. */
     applyToSource: z.boolean().optional(),
     provider: z.enum(['claude-cli', 'codex-cli', 'extension']),
     accountProfileId: z
@@ -112,10 +145,20 @@ export const requestInputSchema = z
     conversationId: id.optional(),
   })
   .passthrough()
+  // Normalize in place (keeps the object schema: `.shape` and `.safeExtend` still work).
+  .overwrite((input) => {
+    const mode = requestMode(input);
+    input.mode = mode;
+    input.permission = mode === 'plan' ? 'review' : 'candidate';
+    return input;
+  })
   .superRefine((input, context) => {
+    // A guard is released only by the card's [진행] (POST …/confirm), never by a submitted field.
+    if ('guardConfirmed' in input || 'guard' in input)
+      context.addIssue({ code: 'custom', message: 'Guard confirmation is not a request field' });
     if (
       input.applyToSource &&
-      (input.permission !== 'candidate' ||
+      (input.mode !== 'auto' ||
         (input.host || 'rhino') !== 'rhino' ||
         !input.baseRequestId ||
         input.linkedTargets ||
@@ -123,7 +166,7 @@ export const requestInputSchema = z
     )
       context.addIssue({
         code: 'custom',
-        message: 'A single explicit Rhino basis and candidate permission are required',
+        message: 'A single explicit Rhino basis and Auto mode are required',
       });
     if (
       input.linkedTargets &&
@@ -137,7 +180,7 @@ export const requestInputSchema = z
       });
     if (
       input.provider === 'extension' &&
-      (input.permission !== 'review' ||
+      (input.mode !== 'plan' ||
         typeof input.extension !== 'string' ||
         !/^[a-z0-9-]{1,80}$/.test(input.extension) ||
         typeof input.extensionVersion !== 'string')

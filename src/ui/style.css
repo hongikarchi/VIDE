@@ -661,9 +661,6 @@ textarea {
 #effort {
   max-width: none;
 }
-#permission {
-  max-width: 100px;
-}
 #validation:empty {
   display: none;
 }
@@ -1964,24 +1961,27 @@ body.left-hidden.right-hidden main {
   cursor: cell;
 }
 
-/* Work mode pill (Plan / Accept edits / Auto), cycled with Shift+Tab. */
-.composer-settings .mode-select {
-  max-width: 140px;
-  padding: 3px 8px;
+/* Work mode toggle (계획 / 자동), switched with Shift+Tab. */
+.mode-toggle {
+  display: inline-flex;
+  flex-shrink: 0;
+  padding: 2px;
   border-radius: 12px;
-  font-weight: 600;
   background: var(--soft);
-  color: #4f5c55;
 }
-.mode-select[data-mode='review'] {
+.mode-toggle button {
+  padding: 2px 10px;
+  border: 0;
+  border-radius: 10px;
+  font-weight: 600;
+  background: transparent;
+  color: var(--muted);
+}
+.mode-toggle button[aria-checked='true'][data-mode='plan'] {
   background: #e8eefb;
   color: #2f5aa8;
 }
-.mode-select[data-mode='candidate'] {
-  background: #f6e9d9;
-  color: #8a5a1f;
-}
-.mode-select[data-mode='apply'] {
+.mode-toggle button[aria-checked='true'][data-mode='auto'] {
   background: #f8e0d8;
   color: #a2462f;
 }
@@ -2182,21 +2182,13 @@ body.panel-mode .app-shell {
   color: #1d2120;
   border-color: #e6ebe8;
 }
-:root[data-theme='dark'] .mode-select[data-mode='review'] {
+:root[data-theme='dark'] .mode-toggle button[aria-checked='true'][data-mode='plan'] {
   background: #1f2d48;
   color: #9dbbf2;
 }
-:root[data-theme='dark'] .mode-select[data-mode='candidate'] {
-  background: #3d2f1c;
-  color: #e6c28f;
-}
-:root[data-theme='dark'] .mode-select[data-mode='apply'] {
+:root[data-theme='dark'] .mode-toggle button[aria-checked='true'][data-mode='auto'] {
   background: #45251d;
   color: #f0a893;
-}
-.composer-settings .mode-select {
-  max-width: none;
-  flex-shrink: 0;
 }
 body.panel-mode .chat-heading h2 {
   visibility: hidden;
@@ -3824,6 +3816,80 @@ body[data-workspace='context'] .workspace > .jig-dialog {
   font-size: 11px;
   color: #81553e;
 }
+/* Direct mode: change rows per execution, the guard card and the plan card. */
+.direct-executions {
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 11px;
+}
+.direct-execution {
+  padding: 5px 0;
+  border-top: 1px solid var(--line);
+}
+.direct-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+}
+.direct-label {
+  flex: 1 1 120px;
+  font-weight: 600;
+}
+.direct-count,
+.direct-state {
+  color: var(--muted);
+}
+.direct-execution[data-state='undone'] .direct-label {
+  text-decoration: line-through;
+  color: var(--muted);
+}
+.direct-execution details ul {
+  margin: 2px 0 0;
+  padding-left: 16px;
+}
+.direct-row button,
+.guard-card button,
+.plan-actions button {
+  padding: 3px 8px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  font-size: 10px;
+  background: var(--soft);
+  color: inherit;
+}
+.guard-card,
+.plan-card {
+  margin-top: 6px;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--soft);
+  font-size: 11px;
+}
+.guard-card {
+  border-color: var(--warn);
+}
+.guard-card p,
+.plan-card h5,
+.plan-card h6 {
+  margin: 0 0 4px;
+}
+.plan-card ol,
+.plan-card ul {
+  margin: 0 0 6px;
+  padding-left: 18px;
+}
+.plan-risk {
+  color: var(--ng);
+}
+.plan-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
 #task-list .task-row[aria-current='true'] {
   background: #eef2ee;
 }
@@ -4740,10 +4806,8 @@ body.panel-unlinked .chat-heading {
 body.panel-mode .chat-empty-history {
   display: none;
 }
-body.panel-mode #permission {
+body.panel-mode .mode-toggle {
   min-width: 0;
-  max-width: none;
-  width: auto;
 }
 #panel-footer {
   margin-top: auto;

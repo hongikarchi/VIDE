@@ -2,8 +2,8 @@
 id: PLAN-23
 title: S-06 골조 jig와 구조 라이브러리 1차 — 진단·배치·해석·단면·일람표·Rhino에 만들기
 status: review
-version: 0.1
-updated: 2026-09-29
+version: 0.2
+updated: 2026-09-30
 owner: agent:claude
 related: [PLAN, PLAN-17, PLAN-22, PLAN-24, FR-23, FR-24, AC-40, AC-41, AC-42, AC-43, SPEC-06, SPEC-07, ARCH-02, ARCH-03, ADR-019, ADR-020, RESEARCH-10, RESEARCH-08, RESEARCH-09]
 ---
@@ -354,4 +354,5 @@ M5 수용(S-06 보조 jig를 만들기 대화로 만들기)은 SPEC-07.16에 따
 - **T-058 · S-06 보고서 — 01~05·부록 구현·합성 검증(2026-09-30 4차).** `frame-study.json`을 M3 단계 이름에 맞춰 채웠다(기둥 길이 표, 경간 막대, 하중 조합·가정·미검토·검정비 분포·지배 부재 10·반력, 일람표·물량·후보 없음, 남은 조건 표, 부록 설정값 원장, KPI '남은 조건'). `report.ts` `jigReportInputs`를 엔진 보고서 경로에 연결했고, 미리보기 계획이면 '부재 준비' 문장을 쓰지 않는다. 증거: `tests/core/s06-report.test.mjs`, `browser-report.mjs` 통과. 남음: 실데이터 보고서는 해석 안정 뒤다.
 - **T-053 5차 물결 — 실데이터 해석 안정(2026-09-30).** `steps/beams.ts`: 가장자리 내민 보는 반 간격·45° 안의 안쪽 작은보 줄을 잇고(`continues`, 거더 쪽 끝 강접 `rigidAt`), 없으면 거더에 직각으로 내밀고 뒤쪽 보(`backspanOf`)를 더한다. 끝이 잘린 작은보는 건너편 작은보 끝으로 뿌리를 옮기되(자기 줄에서 15° 안) 못 옮기면 뒤쪽 보를 둔다. 한 가장자리의 내민 보 사이가 간격보다 넓으면 직각 내민 보를 더 두고, 내민 보마다 하중 폭 `width_m`를 준다. 선이 다른 거더를 5 cm 안에서 따라가면 그 거더로 본다(검정비 254의 원인이던 25.1 m 내민 보 제거). `steps/model.ts`: `rigidAt` 강접, `beamId` 끝은 받는 작은보 위 절점, 뒤쪽 보는 칸 면하중 없음, 내민 보 하중은 `width_m`, 거더끼리 만나는 곳에서 같은 줄로 이어지는 내민 보는 그 거더 끝을 강접. 실데이터(읽기 전용, 부재를 빼지 않음): 해석 `ok`, `TORSION_ROOT` 13 → 0, `MECHANISM` 0, 부재 159·강재 132.8 t, 판정 통과 43 / 주의 31 / 초과 85(기본 단면 미리보기). 합성 `beams-grid`의 `edgeCantilevers` 6 → 7. 증거: `tests/core/s06-{beams,analysis,m2,m3-steps,bakeplan,m3,jig}.test.mjs`, `jig:test` 4건, [VERIFY-2026-09-30-s06-frame-m2](../tdd/VERIFY-2026-09-30-s06-frame-m2.md) 새 절. 남음: 최대 검정비는 개구에 잘린 10.4 m 작은보(16.2)로, 보이드 역할과 개구 둘레 보를 정한 뒤 다시 본다. 기둥 13개는 세장비 한도 밖이다(구속 레벨 가정). 화면 시험은 돌리지 않았다.
 - **T-056 5차 물결 — 선정 단면 적용·부호 원장(2026-09-30).** `project/s06-frame@0.3.1`: 사람 단계 `applySections`와 코드 단계 `sectionsApplied`(`steps/apply-sections.ts`, '선정' 묶음 중 모델과 다른 부재마다 수정 사항 `s06-section:<부재>` 하나, '후보 없음'·'미검토'는 유지)를 두고 패널 행동 [선정 단면 적용](T2)을 해석 확정 옆에 넣었다. 실행기는 단계가 자기 출력(`step.<자기 id>`)을 읽으면 마지막 보관 출력을 넘기고(ARCH-03 §6.2), 새 계산의 적용 요청(`applies`)을 수정 사항으로 넣은 뒤 한 번 더 계산한다. 그래서 적용 → 수정 사항 기록 → 다시 확정 → 부재 만들기 순서가 되고, 선정 단면이 모델과 다르면 `bakeMembers`가 거부한다. `schedule`이 이전 부호 원장을 받아 같은 부재는 같은 부호를 유지한다. 배치 제안 탭 4개를 되살려 서랍 탭이 12개다(`result-tabs` 상한 12). 증거: `tests/core/s06-{jig,m3}.test.mjs`, `jig:test`. 남음: 적용 버튼이 탭 안이 아니라 패널 행동 줄에 있다(탭 안 버튼은 `panel.tsx` 변경 필요). `browser-s06-jig.mjs`·서랍 탭 12개 화면은 UI 빌드 뒤 확인, 축선 미포함, 실제 Rhino 만들기.
+- **T-053 6차 물결 — 개구 둘레 보(2026-09-30).** `steps/beams.ts` 설정 `openingEdgeBeams`(기본 켬)와 `frameOpenings`: 칸의 보이드 변이 거의 곧으면 그 현을 따라, 아니면 잘린 끝들을 가로질러 보이드에서 1 cm 떨어진 곳에 개구 둘레 보를 두고 잘린 작은보를 그 보에 건다. 양 끝을 받칠 곳이 없으면 두지 않고 예전처럼 내민 보로 남긴다. 개구 둘레 보는 띠 하중 없이 걸린 보의 반력만 받는다(`model.ts`). `roles.ts`는 슬래브 구멍과 같은 보이드를 한 번만 세고 슬래브 밖 보이드는 뺀다. 패널 '칸·작은보' 표에 '개구 둘레' 열. 실데이터에서 '작은보 9–12 m' 묶음이 '후보 없음'에서 선정으로 바뀌었다([VERIFY-2026-09-30-s06-frame-m3](../tdd/VERIFY-2026-09-30-s06-frame-m3.md) 재검수 절). 증거: `node --test tests/core/s06-*.test.mjs` 81건, `jig:validate`·`jig:test`, 무작위 모양 2,400건·하중 합계 940건 확인. 남음: 실제 Rhino 만들기.
 - T-067은 2차다.

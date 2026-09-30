@@ -1,13 +1,14 @@
 // T-055 (PLAN-22) on a synthetic document in VIDE-owned Rhino processes: Rhino에 만들기 with the
 // four fixed templates (lines, H members under their top line — one on an arc rail —, H columns,
-// text dots) → candidate → application to the attached document → baseline read → a second bake
-// that replaces only the recorded, unchanged objects and leaves human work alone (an edited
-// column, a copied line, a line moved to a hidden layer, a deleted mark), a hidden output layer
-// that blocks the bake, and an original changed after the work copy that blocks the application.
+// text dots) made directly in the attached document (바로 적용, user decision 2026-09-30: one host
+// undo record per body, baseline read right after) → a second bake that replaces only the
+// recorded, unchanged objects and leaves human work alone (an edited column, a copied line, a line
+// moved to a hidden layer, a deleted mark) → [되돌리기] of that bake through the host's undo → a
+// hidden output layer that blocks the bake.
 // No user document is opened; the test builds its own. Afterwards the Rhino it launched is closed
 // and the installed VIDE's plugin registration is restored.
 import assert from 'node:assert/strict';
-import { cpSync, existsSync } from 'node:fs';
+import { cpSync } from 'node:fs';
 import { copyFile, mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
 import { resolve, join } from 'node:path';
@@ -17,7 +18,6 @@ import { Store } from '../../src/core/store.ts';
 import { Workspace } from '../../src/core/workspace.ts';
 import { JigStore } from '../../src/core/jig-store.ts';
 import { DocumentLinks } from '../../src/core/document-links.ts';
-import { Applications } from '../../src/server/application.ts';
 import { Execution } from '../../src/server/execution.ts';
 import { SdkExecution } from '../../src/server/sdk-execution.ts';
 import { sdkOptions } from '../../src/server/sdk-options.ts';
@@ -325,7 +325,6 @@ except Exception as e: report('ready',dict(ok=False,error=str(e),trace=traceback
   await importPack(packed.bytes, { store: jigStore, dataDir });
   const execution = new Execution(workspace, { sdk });
   engine = { execution, workspace, store };
-  const applications = new Applications(store, workspace, { sdk: sessions });
   let last;
   const call = async (method, path, payload) => {
     last = undefined;
@@ -390,95 +389,48 @@ except Exception as e: report('ready',dict(ok=False,error=str(e),trace=traceback
     [...objects.values()].filter(
       (o) => o.tags['vide-instance'] === iid && (!run || o.tags['vide-run'] === run),
     );
-  const finished = async (requestId) => {
-    await execution.completion(requestId);
-    return workspace.get(project.id, requestId);
-  };
-  const apply = async (requestId) => {
-    try {
-      const prepared = await applications.prepare(project.id, requestId, target);
-      return await applications.confirm(project.id, prepared.id);
-    } catch (error) {
-      if (error.code !== 'SOURCE_CHANGED') throw error;
-      // Which objects differ from the candidate's capture: per-object fingerprints then and now.
-      const candidate = workspace.get(project.id, requestId).result;
-      const before = JSON.parse(
-        await readFile(candidate.sourceDocument.capture + '.capture.json', 'utf8'),
-      ).objects;
-      const now = await sdk.captureEditor(target, () => {});
-      const after = JSON.parse(
-        await readFile(now.sourceDocument.capture + '.capture.json', 'utf8'),
-      ).objects;
-      const objects = await readAll();
-      const changed = [...new Set([...Object.keys(before), ...Object.keys(after)])]
-        .filter((id) => before[id] !== after[id])
-        .map((id) => {
-          const row =
-            objects.get(id) ?? [...objects.values()].find((o) => o.tags['vide-id'] === id);
-          return {
-            id,
-            before: !!before[id],
-            after: !!after[id],
-            layer: row?.layer,
-            key: row?.tags['vide-key'],
-          };
-        });
-      const written = candidate.changes;
-      console.error(
-        'SOURCE_CHANGED diagnostic: ' +
-          JSON.stringify({ changed, removed: written.removed, modified: written.modified }),
-      );
-      throw error;
-    }
-  };
-  const baseline = async (bakeResult) => {
-    const out = [];
-    for (const bake of bakeResult.bake.bakes) {
-      const response = await call('POST', `${base}/${iid}/bakes/${bake.recordId}/baseline`);
-      assert.equal(response.status, 200, JSON.stringify(response.data));
-      assert.deepEqual(response.data.missing, [], bake.bakeId);
-      out.push(response.data.record);
-    }
-    return out;
-  };
+  const records = async () => (await call('GET', `${base}/${iid}/bakes`)).data.bakes;
   const before = await readAll();
   const outline = [...before.values()].find((o) => o.layer === '슬래브 외곽');
   const box = [...before.values()].find((o) => o.layer === '기타');
 
-  // 4. First bake: all four templates in one candidate (CodePolicy, sweep on an arc, extrusions).
+  // 4. First bake: all four templates made directly in the attached document (바로 적용), one host
+  //    undo record per body, and the baseline read right after — no work copy, no apply step.
   const started = performance.now();
   const bake1 = await call('POST', `${base}/${iid}/bake`, {
     bake: ['columns', 'beams', 'lines', 'marks'],
   });
-  assert.equal(bake1.status, 200, JSON.stringify(bake1.data));
+  assert.equal(bake1.status, 200, JSON.stringify(bake1.data).slice(0, 600));
+  assert.equal(
+    bake1.data.status,
+    'applied',
+    'the engine has direct-execute (SdkExecution.directExecute / directUndo)',
+  );
+  assert.equal(bake1.data.baseline, 'recorded');
   assert.equal(
     bake1.data.plans.reduce((n, p) => n + p.added.length, 0),
     total,
   );
-  const request1 = await finished(bake1.data.requestId);
-  assert.equal(request1.state, 'succeeded', JSON.stringify(request1.result).slice(0, 600));
+  assert.equal(bake1.data.undoIds.length, bake1.data.chunks);
   result.firstBakeMs = Math.round(performance.now() - started);
   result.chunks = bake1.data.chunks;
-  const summary1 = request1.result.bake;
+  const summary1 = bake1.data.bake;
+  assert.equal(summary1.direct, true);
   assert.equal(summary1.totals.added, total, JSON.stringify(summary1.totals));
   assert.equal(summary1.totals.failed, 0, JSON.stringify(summary1.bakes.map((b) => b.failed)));
-  assert.equal(
-    request1.result.changes.added.length,
-    total,
-    'every item is a new object in the work copy',
+  assert.equal(bake1.data.removed, 0);
+  // The document's rows: every object tagged and on its one-level output layer; members are solids.
+  const rows1 = (await sdk.readLayers(target, { includeHidden: true })).scene.filter((row) =>
+    row.attributes64.some(
+      ([k, v]) =>
+        Buffer.from(k, 'base64').toString() === 'vide-run' &&
+        Buffer.from(v, 'base64').toString() === summary1.runId,
+    ),
   );
-  assert.equal(request1.result.changes.removed.length, 0);
-  assert.ok(existsSync(request1.result.filename));
-  // The work copy's rows: every object tagged and on its one-level output layer; members are solids.
-  const candidateRows = request1.result.scene.filter((row) =>
-    row.attributes64.some(([k]) => Buffer.from(k, 'base64').toString() === 'vide-run'),
-  );
-  assert.equal(candidateRows.length, total);
+  assert.equal(rows1.length, total);
   const layerOf = (row) => Buffer.from(row.layer64, 'base64').toString();
-  assert.deepEqual(new Set(candidateRows.map(layerOf)), new Set(Object.values(LAYERS)));
-  const solids = candidateRows.filter((row) =>
-    [LAYERS.columns, LAYERS.beams].includes(layerOf(row)),
-  );
+  assert.deepEqual(new Set(rows1.map(layerOf)), new Set(Object.values(LAYERS)));
+  const solids = rows1.filter((row) => [LAYERS.columns, LAYERS.beams].includes(layerOf(row)));
   assert.ok(
     solids.every((row) => row.nativeType === 'Brep' && row.volume > 0),
     'members and columns are closed solids',
@@ -493,21 +445,20 @@ except Exception as e: report('ready',dict(ok=False,error=str(e),trace=traceback
   assert.ok(arc && arc.volume > 0, 'the H member swept along the arc rail is a solid');
   result.arcVolume = arc.volume;
 
-  // 5. Application, baseline, and the applied document.
-  const outcome1 = await apply(bake1.data.requestId);
-  assert.equal(outcome1.state, 'succeeded', JSON.stringify(outcome1.result));
-  const records1 = await baseline(request1.result);
+  // 5. The records: fingerprints and appliedAt at once, naming the objects in the document.
   const applied1 = await readAll();
   const run1 = tagged(applied1, summary1.runId);
-  assert.equal(run1.length, total, 'every object of the run is in the original');
-  assert.ok(run1.every((o) => o.hash.length === 64));
-  const candidateIds = new Set(candidateRows.map((row) => row.nativeId));
-  result.guidsKeptByApplication = run1.filter((o) => candidateIds.has(o.nativeId)).length;
+  assert.equal(run1.length, total, 'every object of the run is in the document');
+  const records1 = (await records()).filter((r) => r.runId === summary1.runId);
+  assert.equal(records1.length, 4);
+  assert.ok(records1.every((r) => r.appliedAt && !r.pendingBaseline && r.undoable));
   assert.ok(
     records1.every((record) =>
-      Object.values(record.items).every((item) => applied1.has(item.nativeId)),
+      Object.values(record.items).every(
+        (item) => applied1.get(item.nativeId)?.hash === item.hash && item.hash.length === 64,
+      ),
     ),
-    'the record names objects that exist after application',
+    'the record names objects that exist, with their fingerprints',
   );
   assert.equal(applied1.get(outline.nativeId).hash, outline.hash, 'other objects are untouched');
   assert.equal(applied1.get(box.nativeId).hash, box.hash);
@@ -570,11 +521,12 @@ assert doc.Objects.ModifyAttributes(obj,attr,True)`,
   assert.equal(edited.get(movedId).layer, HIDDEN);
   assert.ok(!edited.has(deletedId));
 
-  // 7. Second bake: only the recorded, unchanged objects are replaced.
+  // 7. Second bake: only the recorded, unchanged objects are replaced, in the document directly.
   const bake2 = await call('POST', `${base}/${iid}/bake`, {
     bake: ['columns', 'beams', 'lines', 'marks'],
   });
   assert.equal(bake2.status, 200, JSON.stringify(bake2.data).slice(0, 800));
+  assert.equal(bake2.data.status, 'applied');
   const plan = Object.fromEntries(bake2.data.plans.map((p) => [p.bakeId, p]));
   assert.deepEqual(plan.columns.preserved, [
     { key: editedKey, nativeId: editedId, reason: 'edited' },
@@ -586,9 +538,7 @@ assert doc.Objects.ModifyAttributes(obj,attr,True)`,
   assert.deepEqual(plan.marks.deleted, [deletedKey]);
   assert.equal(plan.marks.replaced.length, counts.marks - 1);
   assert.equal(plan.beams.replaced.length, counts.beams);
-  const request2 = await finished(bake2.data.requestId);
-  assert.equal(request2.state, 'succeeded', JSON.stringify(request2.result).slice(0, 600));
-  const summary2 = request2.result.bake;
+  const summary2 = bake2.data.bake;
   assert.deepEqual(
     [
       summary2.totals.added,
@@ -599,14 +549,7 @@ assert doc.Objects.ModifyAttributes(obj,attr,True)`,
     ],
     [0, total - 3, 2, 1, 1],
   );
-  assert.equal(
-    request2.result.changes.removed.length,
-    total - 3,
-    'the work copy deleted exactly the replaced objects',
-  );
-  const outcome2 = await apply(bake2.data.requestId);
-  assert.equal(outcome2.state, 'succeeded', JSON.stringify(outcome2.result));
-  await baseline(request2.result);
+  assert.equal(bake2.data.removed, total - 3, 'exactly the replaced objects were deleted');
   const applied2 = await readAll();
   assert.equal(
     applied2.get(editedId).hash,
@@ -641,7 +584,30 @@ assert doc.Objects.ModifyAttributes(obj,attr,True)`,
   assert.equal(applied2.get(box.nativeId).hash, box.hash);
   result.secondBake = summary2.totals;
 
-  // 8. A hidden output layer blocks before anything runs.
+  // 8. [되돌리기] of the second bake: the host undoes its records; the document is as before it.
+  const record2 = (await records()).find((r) => r.runId === summary2.runId && r.undoable);
+  assert.ok(record2, 'the last bake can be undone');
+  const undone = await call('POST', `${base}/${iid}/bakes/${record2.id}/undo`);
+  assert.equal(undone.status, 200, JSON.stringify(undone.data));
+  const afterUndo = await readAll();
+  assert.equal(tagged(afterUndo, summary2.runId).length, 0);
+  assert.deepEqual(
+    tagged(afterUndo)
+      .map((o) => `${o.nativeId}:${o.hash}`)
+      .sort(),
+    tagged(edited)
+      .map((o) => `${o.nativeId}:${o.hash}`)
+      .sort(),
+    'the objects of the first bake are back with the same GUIDs and fingerprints',
+  );
+  assert.equal(afterUndo.get(box.nativeId).hash, box.hash);
+  assert.ok((await records()).filter((r) => r.runId === summary2.runId).every((r) => r.undone));
+  await assert.rejects(call('POST', `${base}/${iid}/bakes/${record2.id}/undo`), {
+    code: 'BAKE_UNDO_UNAVAILABLE',
+  });
+  result.undone = true;
+
+  // 9. A hidden output layer blocks before anything runs.
   const setVisible = (path, visible) =>
     action(
       `found=[l for l in doc.Layers if not l.IsDeleted and l.FullPath==${py(path)}]
@@ -655,29 +621,7 @@ result=bool(found[0].IsVisible)`,
   assert.deepEqual(blocked.data.blocked, ['hidden-target']);
   assert.deepEqual(blocked.data.hints, ['Rhino에서 레이어를 켠 뒤 다시 누르세요']);
   assert.equal(await setVisible(LAYERS.lines, true), true);
-
-  // 9. The original changes after the work copy: the application is refused (SOURCE_CHANGED).
-  const bake3 = await call('POST', `${base}/${iid}/bake`, { bake: ['lines'] });
-  assert.equal(bake3.status, 200, JSON.stringify(bake3.data).slice(0, 400));
-  const request3 = await finished(bake3.data.requestId);
-  assert.equal(request3.state, 'succeeded');
-  const victim = request3.result.changes.removed[0];
-  await action(
-    `obj=doc.Objects.FindId(System.Guid(${JSON.stringify(victim)}))
-assert obj is not None
-doc.Objects.Transform(obj, Rhino.Geometry.Transform.Translation(0,0,1), True)`,
-  );
-  let refused;
-  try {
-    refused = await apply(bake3.data.requestId);
-  } catch (error) {
-    refused = { state: 'failed', result: { code: error.code } };
-  }
-  assert.notEqual(refused.state, 'succeeded');
-  assert.equal(refused.result.code, 'SOURCE_CHANGED', JSON.stringify(refused));
-  const untouched = await readAll();
-  assert.equal(tagged(untouched).length, mine.length, 'nothing was written');
-  result.sourceChangedRefused = true;
+  assert.equal(tagged(await readAll()).length, tagged(afterUndo).length, 'nothing was written');
 
   result.passed = true;
   await writeFile(join(directory, 'result.json'), JSON.stringify(result, null, 2));

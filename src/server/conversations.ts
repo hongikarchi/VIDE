@@ -634,6 +634,32 @@ export class ConversationService {
     return conversation;
   }
   /**
+   * A make-conversation is stopped (T-063) from its latest stop card (repeated failures or the
+   * turn cap) until that card is answered with a way to go on (another approach, a narrower
+   * scope, a free answer or 'continue'); 'stop-here' and 'new-conversation' keep it stopped. Its
+   * later turns get no file tools. Other conversations are never stopped.
+   */
+  makeStopped(projectId: string, conversationId: string) {
+    const conversation = this.store.get(projectId, conversationId);
+    if (conversation.kind !== 'jig-make') return false;
+    const ledger = this.store.ledger(conversationId, { current: true }).reverse();
+    const card = ledger.find(
+      (item) =>
+        item.kind === 'question' &&
+        /^make-(stop|turn-cap)-\d+$/.test(String((item.body as { id?: unknown } | null)?.id)),
+    );
+    if (!card) return false;
+    const cardId = (card.body as { id: string }).id;
+    const answer = ledger.find(
+      (item) =>
+        (item.kind === 'answer' || item.kind === 'decision') &&
+        (item.body as { questionId?: unknown } | null)?.questionId === cardId,
+    )?.body as { optionId?: string; text?: string } | undefined;
+    if (!answer) return true;
+    if (answer.optionId) return ['stop-here', 'new-conversation'].includes(answer.optionId);
+    return !answer.text;
+  }
+  /**
    * [다른 AI로 이어 가기] (SPEC-02.19 5, confirmed T2 card): the conversation goes on with another
    * service or model; its next turn opens a new session with a hand-over.
    */
@@ -1009,7 +1035,7 @@ export class ConversationService {
         },
       }),
     );
-    return { conversation, body: formatAnswers(answers), items };
+    return { conversation, body: formatAnswers(answers), items, askedIn: input.requestId };
   }
   /** Takes back recorded answers whose turn was not submitted (they can be answered again). */
   withdraw(conversationId: string, items: LedgerItem[]) {
@@ -1140,7 +1166,12 @@ export interface ConversationRouteContext {
   /** The account a new conversation is fixed to (SPEC-02.19 2). */
   chooseAccount: (provider: Provider) => Promise<string>;
   /** Submits a request (the answer turn) the way `POST …/requests` does; returns it. */
-  submit?: (projectId: string, input: Record<string, unknown>) => Promise<unknown>;
+  submit?: (
+    projectId: string,
+    input: Record<string, unknown>,
+    /** The request whose question is answered: the answer turn keeps its Plan/Auto mode. */
+    askedIn?: string,
+  ) => Promise<unknown>;
 }
 
 /** Answers `/api/v1/projects/:id/conversations…`; false when the request is not one. */
@@ -1224,17 +1255,22 @@ export async function conversationRoutes(
     const next = randomUUID();
     const answered = service.answer(projectId, conversationId, await body(request), next);
     try {
-      const created = await submit(projectId, {
-        id: next,
-        conversationId,
-        body: answered.body,
-        permission: 'review',
-        hostUse: 'none',
-        provider: answered.conversation.provider,
-        pins: [],
-        sketches: [],
-        files: [],
-      });
+      // `permission: 'review'` (Plan) is the fallback; submit sets the asked turn's mode.
+      const created = await submit(
+        projectId,
+        {
+          id: next,
+          conversationId,
+          body: answered.body,
+          permission: 'review',
+          hostUse: 'none',
+          provider: answered.conversation.provider,
+          pins: [],
+          sketches: [],
+          files: [],
+        },
+        answered.askedIn,
+      );
       send(201, { request: created, answers: answered.items });
     } catch (error) {
       service.withdraw(conversationId, answered.items);
