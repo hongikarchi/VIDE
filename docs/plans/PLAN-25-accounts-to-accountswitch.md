@@ -53,7 +53,7 @@ related: [ADR-025, SPEC-02, ARCH-01, PLAN-06, PLAN-13, PLAN-24, FR-08, AC-47]
 
 VIDE 계정 사이트(프로젝트 공유, PLAN-10)의 계정은 이 작업과 무관하다. `browser-account-catalog`·`browser-authenticated-accounts`, `tests/sharing/*`은 사이트 계정 시험이면 건드리지 않는다(착수 때 확인).
 
-**기존 계정 데이터:** `%LOCALAPPDATA%\VIDE\cli-profiles\<id>\`에 등록해 둔 계정(Claude 2, Codex 1)의 로그인이 있다. 사용자가 AccountSwitch에 같은 계정을 등록한 뒤, 이 폴더를 지울지 사용자에게 확인하고 지운다. 자동으로 지우지 않는다. 폴더를 AccountSwitch로 옮겨 다시 로그인하지 않는 방법은 사용자가 원할 때만 한다.
+**기존 계정 데이터:** 2026-09-30 사용자 요청으로 VIDE에 등록해 둔 계정 3개(Claude 2, Codex 1)의 로그인 폴더를 `%LOCALAPPDATA%\VIDE\cli-profiles\<id>\`에서 `%LOCALAPPDATA%\AccountSwitch\profiles\<id>\`로 옮기고(복사하지 않음: 토큰이 갱신되면 한쪽이 끊김), AccountSwitch 목록에 같은 ID·이름과 기존 로그인 이름을 등록했다. VIDE의 `profiles.json`에는 세 행이 남아 있고, VIDE는 폴더가 없으면 빈 폴더를 만들어 로그아웃으로 보인다. 2단계에서 이 행과 빈 폴더를 지운다.
 
 ## 3단계 — 검증
 

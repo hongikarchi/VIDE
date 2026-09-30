@@ -417,7 +417,10 @@ async function liveSyncHostDocument(target: HostTarget): Promise<boolean | 'retr
     )
     .at(-1);
   if (basis?.request.result?.sceneOmitted && !basis.request.result.scene) {
+    // Waits for the viewport's fetch when it already started; still without meshes, a full Sync.
     await loadFullResult(basis.id);
+    const loaded = state.messages.find((entry) => entry.id === basis.id)?.request.result;
+    if (!loaded?.scene) return false;
     return liveSyncHostDocument(target);
   }
   const result = basis?.request.result;
@@ -1365,23 +1368,26 @@ function renderMessages() {
   if (project) refreshJigs();
 }
 /** The request list omits display meshes; fetch one request in full when it is shown. */
-const loadingResults = new Set<string>();
-async function loadFullResult(id: string) {
-  if (loadingResults.has(id) || !project) return;
-  loadingResults.add(id);
+// One fetch per request; a second caller waits for the same one.
+const loadingResults = new Map<string, Promise<void>>();
+function loadFullResult(id: string): Promise<void> {
+  const pending = loadingResults.get(id);
+  if (pending || !project) return pending ?? Promise.resolve();
   viewportEmpty.sync('loading');
-  try {
-    const full = requestMessage(await api(`/projects/${currentProject().id}/requests/${id}`));
-    const index = state.messages.findIndex((entry) => entry.id === id);
-    if (index >= 0) state.messages[index] = full;
-    viewportEmpty.sync('idle');
-    renderMessages();
-  } catch (error) {
-    viewportEmpty.sync('failed');
-    message(readableError(error).message);
-  } finally {
-    loadingResults.delete(id);
-  }
+  const loading = (async () => {
+    try {
+      const full = requestMessage(await api(`/projects/${currentProject().id}/requests/${id}`));
+      const index = state.messages.findIndex((entry) => entry.id === id);
+      if (index >= 0) state.messages[index] = full;
+      viewportEmpty.sync('idle');
+      renderMessages();
+    } catch (error) {
+      viewportEmpty.sync('failed');
+      message(readableError(error).message);
+    }
+  })().finally(() => loadingResults.delete(id));
+  loadingResults.set(id, loading);
+  return loading;
 }
 /** Draw every visible layer together (SPEC-01.11); rebuild only when the layer set changed. */
 function showLayers() {

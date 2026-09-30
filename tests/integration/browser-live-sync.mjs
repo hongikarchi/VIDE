@@ -229,6 +229,42 @@ try {
     document.querySelector('.object-summary')?.textContent?.startsWith('2개 객체'),
   );
   assert.equal(lives.length, 3);
+
+  // Opened again with the file still live (installed 0.2.12): the list omits the Sync's meshes, the
+  // viewport is still fetching them when the catch-up Live Sync starts, and the page must wait for
+  // that fetch instead of spinning until the renderer runs out of memory.
+  let fullFetches = 0;
+  await page.route('**/api/v1/projects/*/requests/*', async (route) => {
+    const path = new URL(route.request().url()).pathname;
+    if (route.request().method() !== 'GET' || !path.endsWith('/' + syncId)) return route.fallback();
+    fullFetches++;
+    await new Promise((r) => setTimeout(r, 1500));
+    await route.fallback();
+  });
+  liveReply = (body) => ({
+    requestId: syncId,
+    basisId: body.basisId,
+    created: false,
+    since: body.revision,
+    revision: body.revision + 1,
+    request: summary(body.revision + 1),
+    delta: { objects: [], scene: [], removed: [] },
+  });
+  await page.reload();
+  const responsive = () =>
+    Promise.race([page.evaluate(() => true), new Promise((r) => setTimeout(() => r(false), 3000))]);
+  const reopenedStart = Date.now();
+  while (lives.length < 4 && Date.now() - reopenedStart < 15000) {
+    assert.equal(await responsive(), true, 'the page froze during the catch-up Live Sync');
+    await new Promise((r) => setTimeout(r, 200));
+  }
+  assert.equal(lives.length, 4);
+  assert.equal(lives[3].basisId, syncId);
+  assert.ok(fullFetches >= 1);
+  await page.waitForFunction(() =>
+    document.querySelector('.object-summary')?.textContent?.startsWith('2개 객체'),
+  );
+  assert.equal(captures, 2);
   assert.deepEqual(errors, []);
   await page.screenshot({ path: join(directory, 'live-sync.png') });
   console.log(
@@ -237,6 +273,7 @@ try {
       liveUpdateWithoutCapture: true,
       removalApplied: true,
       resyncFallback: true,
+      reopenedWhileMeshesLoad: true,
       directory,
     }),
   );

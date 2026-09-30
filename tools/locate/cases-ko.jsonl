@@ -37,3 +37,4 @@
 {"request":"추가로 지금 vide 채팅창에 채팅을 치려고 하면 렉이 엄청나게 걸리는데 원인 파악 좀","files":["src/ui/history.tsx"]}
 {"request":"accountswitch 설치해서 쓰고 vide에서 계정 전환 기능을 빼는 계획 세우기, 설치까지만","files":["docs/decisions/ADR-025-accounts-in-accountswitch.md","docs/plans/PLAN-25-accounts-to-accountswitch.md","docs/plans/PLAN.md"]}
 {"request":"나진상가를 vide에서 삭제하고 새로 만들었는데, plug-in에는 바로바로 반영이 안되네.","files":["src/server/server.ts","src/server/project-removal.ts","src/core/store.ts","src/server/remote-access.ts","src/server/offline-view.ts","src/sharing/hosts.ts","src/ui/project-heading.tsx","src/ui/app.ts","src/ui/style.css"]}
+{"request":"vide 프로그램이 자꾸 중간에 멈추거나, 오류가 뜨는 일이 생기는데 원인 파악 좀. (오류 코드: Out of Memory)","files":["src/ui/app.ts","tests/integration/browser-live-sync.mjs","docs/plans/PLAN-16-document-links.md"]}
