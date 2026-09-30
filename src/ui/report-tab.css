@@ -11,7 +11,7 @@ body[data-workspace='report'] .report-workspace {
   min-height: 0;
   display: grid;
   grid-template-columns: 240px minmax(0, 1fr);
-  background: white;
+  background: var(--bg-elevated);
 }
 @media (min-width: 851px) {
   body[data-workspace='report'] #left,
@@ -30,7 +30,7 @@ body[data-workspace='report'] .report-workspace {
   min-height: 0;
   overflow: auto;
   padding: 12px;
-  border-right: 1px solid var(--line);
+  border-right: var(--hairline) solid var(--line);
 }
 .report-list .caption {
   margin: 16px 0 6px;
@@ -55,19 +55,18 @@ body[data-workspace='report'] .report-workspace {
   width: 100%;
   padding: 6px 8px;
   border: 0;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   background: none;
   color: inherit;
   text-align: left;
   cursor: pointer;
 }
-.report-group button:hover,
-.report-group button[aria-current='true'] {
-  background: var(--soft);
+.report-group button:hover {
+  background: var(--bg-hover);
 }
 .report-group button[aria-current='true'] {
+  background: var(--bg-selected);
   font-weight: 600;
-  box-shadow: inset 2px 0 0 var(--coral);
 }
 .report-checks li {
   padding: 2px 0;
@@ -92,7 +91,7 @@ body[data-workspace='report'] .report-workspace {
   align-items: center;
   gap: 8px;
   padding: 8px 12px;
-  border-bottom: 1px solid var(--line);
+  border-bottom: var(--hairline) solid var(--line);
 }
 .report-toolbar strong {
   min-width: 0;
@@ -120,8 +119,8 @@ body[data-workspace='report'] .report-workspace {
   max-width: 420mm;
   margin: 0 auto;
   padding: 14mm;
-  background: white;
-  border: 1px solid var(--line);
+  background: var(--bg-elevated);
+  border: var(--hairline) solid var(--line);
 }
 .report-paper[data-paper='a4'] .report-sheet {
   max-width: 210mm;
@@ -135,7 +134,7 @@ body[data-workspace='report'] .report-workspace {
   .report-list {
     max-height: 30vh;
     border-right: 0;
-    border-bottom: 1px solid var(--line);
+    border-bottom: var(--hairline) solid var(--line);
   }
   .report-paper {
     padding: 8px;
@@ -143,10 +142,6 @@ body[data-workspace='report'] .report-workspace {
   .report-sheet {
     padding: 12px;
   }
-}
-:root[data-theme='dark'] .report-workspace,
-:root[data-theme='dark'] .report-sheet {
-  background: #1d2120;
 }
 
 /* Printing from the report tab keeps only the report page, on the chosen paper. */

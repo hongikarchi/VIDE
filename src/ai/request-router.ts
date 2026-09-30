@@ -53,6 +53,10 @@ export interface RouteJigQuery {
   intent: string;
   /** Rule words (kept here, never sent). */
   words?: readonly string[];
+  /** skill.md `not_for` (rules only, never sent). */
+  notFor?: readonly string[];
+  /** Words from a skill.md (guarded) or the official list (src/ui/request-route.ts RouteJig). */
+  source?: 'skill' | 'legacy';
 }
 /** A linked file by its role label ('Rhino 모델 1', 'CAD 2'), never its name. */
 export interface RouteLink {
@@ -69,6 +73,8 @@ export interface RouteQuery {
   conversation?: string;
   /** A conversation opens with this request: also ask the model's task and area. */
   opening?: boolean;
+  /** The jig id of the open instance (its own words change its settings). */
+  openJig?: string;
 }
 export interface RouteDecision {
   target: RouteTarget;
@@ -265,7 +271,14 @@ export async function judgeRoute(
   if (!query.body.trim()) return { reason: 'EMPTY', ms: ms() };
   const ruled = decisiveRoute(query.body, {
     params: query.params,
-    jigs: query.jigs?.map(({ id, name, words }) => ({ id, name, words })),
+    jigs: query.jigs?.map(({ id, name, words, notFor, source }) => ({
+      id,
+      name,
+      words,
+      ...(notFor ? { notFor } : {}),
+      ...(source ? { source } : {}),
+    })),
+    ...(query.openJig ? { openJig: query.openJig } : {}),
   });
   if (ruled) {
     const jig = ruled.jig ? query.jigs?.find((entry) => entry.id === ruled.jig!.id) : undefined;
@@ -377,7 +390,10 @@ export async function decideRoute(
   return (await judgeRoute(query, options)).decision;
 }
 
-/** The registered jigs offered to routing: available official ones with their Jev line and words. */
+/**
+ * The official jigs with their Jev line and words: the fallback when the project's skill catalog
+ * cannot be read (src/server/skill-catalog.ts builds the full list).
+ */
 export function officialJigs(
   entries: readonly { id: string; name: string; status: string }[],
 ): RouteJigQuery[] {

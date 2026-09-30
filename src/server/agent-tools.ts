@@ -22,6 +22,7 @@ import {
   type ReadModel,
 } from '../jigs/runtime/runtime.ts';
 import { jigRuntimeFor } from './jig-routes.ts';
+import { skillCatalog } from './skill-catalog.ts';
 import { MakeTurnGuard, draftsFor, makeStopNotice } from './make-routes.ts';
 import type { JigDrafts } from '../jigs/runtime/drafts.ts';
 import { turnOutputSchema } from './turn-output.ts';
@@ -170,6 +171,30 @@ const definitions = {
         instanceId: scopedInstance,
         until: id.optional(),
         mode: z.enum(['geometry', 'preview']).optional(),
+      })
+      .strict(),
+  },
+  // Screen actions (RESEARCH-12 §6.3): recorded in the conversation ledger; the screen carries
+  // them out through startSkill / setWorkspace. Nothing is computed or written here.
+  jig_open: {
+    description:
+      "Open a jig of this project's skill catalog on the user's screen (id from the catalog, e.g. project/s06-frame or structure). reuse 'last' opens its latest instance, 'new' a new one. The screen opens its tab, binds the instance to this conversation and computes up to the first step a person confirms. user-only jigs are refused. Returns at once; the screen does the work.",
+    schema: z
+      .object({
+        targetRef: scoped,
+        jigId: z.string().min(1).max(100),
+        reuse: z.enum(['last', 'new']).optional(),
+      })
+      .strict(),
+  },
+  ui_go: {
+    description:
+      "Switch the user's screen: stage 'model' (3D), 'jig' (the open jig's tab, or the JIG list), 'report', 'data' (project records) or 'make'. view 'plan' or '3d' sets the 3D projection. Only the screen changes.",
+    schema: z
+      .object({
+        targetRef: scoped,
+        stage: z.enum(['model', 'jig', 'report', 'data', 'make']),
+        view: z.enum(['3d', 'plan']).optional(),
       })
       .strict(),
   },
@@ -359,6 +384,7 @@ const knownErrors = new Set([
   'OUT_OF_RANGE',
   'UNIT_MISMATCH',
   'JIG_NOT_OPEN',
+  'JIG_USER_ONLY',
   'STRUCTURE_NOT_COMPUTED',
   'DRAFT_NOT_OPEN',
   'DRAFT_OUTSIDE',
@@ -393,6 +419,9 @@ export const PLAN_MODE_TOOLS: ReadonlySet<string> = new Set<ToolName>([
   'jig_list',
   'jig_state',
   'jig_output',
+  // Screen-only (RESEARCH-12 §6.3): opening a jig and switching the screen compute nothing.
+  'jig_open',
+  'ui_go',
   'structure_summary',
   'structure_checks',
   'links_layers',
@@ -666,8 +695,14 @@ export interface ConversationToolSources {
   workspace: Pick<Workspace, 'list' | 'get'>;
   jigs?: Pick<JigRuntime, 'list' | 'view' | 'output' | 'setParams' | 'run'>;
   links?: Pick<DocumentLinks, 'list' | 'get'>;
-  /** Records a ledger item of the conversation (a setting the AI changed). */
-  ledger?: (item: { kind: 'param-change' | 'code'; body: unknown; requestId?: string }) => unknown;
+  /** Records a ledger item of the conversation (a setting the AI changed, a screen action). */
+  ledger?: (item: {
+    kind: 'param-change' | 'code' | 'result-ref';
+    body: unknown;
+    requestId?: string;
+  }) => unknown;
+  /** The project's skill catalog (jig_open checks the id and `invocation`). */
+  skills?: () => Promise<readonly { id: string; name: string; invocation: string }[]>;
   /** The jig draft of a make-conversation (PLAN-22 T-063); jig_validate/test/preview and ask_user. */
   draft?: {
     draftId: string;
@@ -913,6 +948,9 @@ export function conversationHandlers(sources: ConversationToolSources): Handlers
       return bounded({ syncId: sync.syncId, layer, ...found, items: found.items.map(sampleRow) });
     },
   };
+  // Screen actions: a ledger item the screen reads while it follows the turn (app.ts); only a
+  // turn that records in a conversation ledger gets them.
+  if (ledger) Object.assign(handlers, screenHandlers(sources));
   if (openInstanceId) {
     handlers.jig_set = async ({ instanceId: given, values, reason }) => {
       const instanceId = pick(given);
@@ -965,6 +1003,38 @@ export function conversationHandlers(sources: ConversationToolSources): Handlers
     Object.assign(handlers, factHandlers(sources));
   if (sources.draft) Object.assign(handlers, makeHandlers(sources));
   return handlers;
+}
+
+/** jig_open and ui_go (RESEARCH-12 §6.3): recorded for the screen, nothing computed or written. */
+function screenHandlers(sources: ConversationToolSources): Handlers {
+  const { ledger, requestId } = sources;
+  const record = ledger!;
+  return {
+    jig_open: async ({ jigId, reuse }) => {
+      const catalog = (await sources.skills?.()) ?? [];
+      const entry = catalog.find((skill) => skill.id === jigId);
+      if (!entry) throw new DomainError('NOT_FOUND');
+      if (entry.invocation === 'user-only') throw new DomainError('JIG_USER_ONLY');
+      record({
+        kind: 'result-ref',
+        body: { appAction: 'jig_open', jigId, reuse: reuse ?? 'last', by: 'ai' },
+        ...(requestId ? { requestId } : {}),
+      });
+      return {
+        ok: true,
+        jig: { id: entry.id, name: entry.name },
+        note: 'The screen opens the jig and binds it to this conversation; use jig_state in the next turn.',
+      };
+    },
+    ui_go: async ({ stage, view }) => {
+      record({
+        kind: 'result-ref',
+        body: { appAction: 'ui_go', stage, ...(view ? { view } : {}), by: 'ai' },
+        ...(requestId ? { requestId } : {}),
+      });
+      return { ok: true };
+    },
+  };
 }
 
 // --- project facts tools (SPEC-08.7) ------------------------------------------------------------
@@ -1066,6 +1136,9 @@ export function conversationSources(
     jigs: file ? jigRuntimeFor(workspace, dirname(file)) : undefined,
     links: new DocumentLinks(workspace.store.db),
     ledger,
+    ...(file
+      ? { skills: () => skillCatalog(workspace, dirname(file), conversation.projectId) }
+      : {}),
     ...(file ? { facts: factsOf(workspace, dirname(file), conversation.projectId) } : {}),
     ...(file && conversation.kind === 'jig-make' && conversation.draftId
       ? {

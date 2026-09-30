@@ -1,7 +1,10 @@
 ---
 name: S-06 골조 배치
+description: 연결한 Rhino·CAD의 슬래브·기존 기초·그려진 기둥과 거더를 읽어 거더를 기둥에 붙여 보정하고, 칸마다 작은보를 두고, 골조 해석 미리보기와 KS H형강 단면 선정·부호·일람표·기둥 높이·Rhino에 만들 부재 계획까지 계산한다. 구조 분석·검정비·골조 배치를 빨리 보고 싶을 때 쓴다(탐색용 예비값).
+examples: ["구조 분석 해줘", "골조 해석 돌려줘", "검정비 어때", "경간 11로 해서 구조 분석", "작은보 간격 2.2로 다시 봐줘", "새 배치 제안으로 바꿔"]
+invocation: auto
 intent_en: read the slab, existing footings and the drawn columns and girders from linked models, correct the drawn girders onto the columns, lay secondary beams in each cell preview the frame analysis, size KS H sections per group, mark and schedule the members, floor the column lengths and plan the top lines and members to make in Rhino (drawn mode); optionally lay out new column lines within the span limit with pile-cap, open-cut and basin interference judged
-words: [골조, 배치, 축선, 기둥, 경간, 파일캡, 오픈컷, 유수지 보, 기존 기초, 간섭, 진단, 엇갈림, 거더 보정, 끝 붙임, 칸, 작은보, 내민 보, 하중, 식재, 해석, 검정비, 미리보기, 단면 선정, 부호, 일람표, 강재 물량, 기둥 높이, 받침 높이, 상단선, Rhino에 만들기]
+words: [구조 분석, 구조 해석, 구조 검토, 구조 계산, 골조 해석, 골조, 배치, 축선, 기둥, 경간, 파일캡, 오픈컷, 유수지 보, 기존 기초, 간섭, 진단, 엇갈림, 거더 보정, 끝 붙임, 칸, 작은보, 내민 보, 하중, 식재, 해석, 검정비, 미리보기, 단면 선정, 부호, 일람표, 강재 물량, 기둥 높이, 받침 높이, 상단선, Rhino에 만들기]
 not_for: [확정 구조 검토, 기초 설계, 접합 상세, 실제 프로젝트 값 저장]
 tools: []
 limits: [해석은 미확정 미리보기(사람이 해석 확정을 눌러야 확정), 편심은 무시하고 가정에 적음, 강종은 SM355 가정, 단면 선정은 미확정 미리보기 해석으로 반복한 예비값, 선정 단면을 모델에 적용해 다시 확정하는 경로는 아직 없음(그 전에는 부재 만들기가 막힘), 부호 접두는 가정, 유수지 보 띠는 볼록 껍질, 배치 후보는 직교·엇갈림 둘, 도면(CAD) 정렬 변환은 작업본에서 확인]

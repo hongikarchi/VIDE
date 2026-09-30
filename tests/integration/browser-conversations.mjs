@@ -116,14 +116,18 @@ try {
     await page.locator('#body').fill(text);
     await page.locator('#request').click();
   };
-  // A jig is proposed on a card; nothing goes to the AI until chosen.
+  // A jig opens at once (ADR-026 4): the route row says so and keeps [일반 대화로]; the older
+  // structure screen only opens, so nothing goes to the AI.
   await send('구조 검토 열어줘');
   await page.locator('#route-card').waitFor();
-  assert.match(await page.locator('#route-card').textContent(), /'구조 검토' jig를 열까요\?/);
-  assert.equal(await page.locator('#route-card button').filter({ hasText: '열기' }).count(), 1);
+  await page.waitForFunction(() =>
+    /열었습니다/.test(document.querySelector('#route-card').textContent),
+  );
+  assert.match(await page.locator('#route-card').textContent(), /jig · .+로 진행/);
+  assert.equal(await page.locator('#route-card button').filter({ hasText: '열기' }).count(), 0);
   assert.deepEqual(posted, []);
-  // 'AI 작업으로 보내기' sends the same words and records the route it undid, not the words.
-  await page.locator('#route-card button').filter({ hasText: 'AI 작업으로 보내기' }).click();
+  // [일반 대화로] sends the same words and records the route it undid, not the words.
+  await page.locator('#route-card button').filter({ hasText: '일반 대화로' }).click();
   for (let i = 0; i < 40 && !posted.length; i++) await page.waitForTimeout(50);
   assert.deepEqual(
     posted.map((input) => input.body),

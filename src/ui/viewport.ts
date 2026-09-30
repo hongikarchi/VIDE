@@ -32,6 +32,7 @@ import {
   type StyleRun,
   type StyledGeometry,
 } from './cad-annotations.ts';
+import { TOKEN_FALLBACK } from './tokens.ts';
 
 type Camera = THREE.PerspectiveCamera | THREE.OrthographicCamera;
 type PlaneName = 'XY' | 'XZ' | 'YZ';
@@ -86,17 +87,8 @@ export type FocusTarget =
   | readonly string[]
   | { min: Point3; max: Point3 }
   | { overlay: string; itemId?: string };
-// Design §02 values of the overlay tokens, used until the stylesheet defines the tokens.
-const OVERLAY_TONES: Record<OverlayTone, string> = {
-  'ov-grid': '#8a9396',
-  'ov-new': '#292c2d',
-  'ov-existing': '#b7bcb9',
-  'ov-clash': '#c8553d',
-  ok: '#6f9a7a',
-  warn: '#c9a24a',
-  ng: '#c8553d',
-  na: '#b8bdbb',
-};
+// tokens.css values of the overlay tokens, used until the stylesheet defines the tokens.
+const OVERLAY_TONES: Record<OverlayTone, string> = TOKEN_FALLBACK;
 interface DisplaySketch {
   points?: Point2[];
   plane?: string;
@@ -142,12 +134,14 @@ function objectIndex(object: DisplayObject) {
     ? object.color
     : undefined;
 }
-// Rhino shaded palette: light neutral surfaces, darker crease edges, warm selection.
+// Rhino shaded palette: light neutral surfaces, darker crease edges. The selection is the point
+// colour (--accent #d0664a, a lighter tint on surfaces), kept apart from the crimson of violations
+// (--ng), which the verdict tint and overlay use.
 const SURFACE = 0xd6d9d3,
   WIRE = 0x4c5650,
   EDGE = 0x3d4540,
-  SELECTED = 0xf0a37f,
-  SELECTED_WIRE = 0xd9542c;
+  SELECTED = 0xe3a392,
+  SELECTED_WIRE = 0xd0664a;
 const CREASE_ANGLE = 38;
 // Neutral fill for CAD solid hatches in the default colour source.
 const FILL = 0xb9c0ba;
@@ -214,7 +208,7 @@ export function createViewport(
   let tints: Map<string, string> | null = null;
   let lineSignature = '';
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color('#edf0ec');
+  scene.background = new THREE.Color('#f2f1ee');
   let display: DisplaySettings = { ...defaultDisplay };
   let plotStyle: PlotStyleTable = plotStyleTable();
   let darkBackground = false;
@@ -251,7 +245,7 @@ export function createViewport(
     helper.raycast = () => {};
     return helper;
   };
-  let grid = backdrop(new THREE.GridHelper(100, 50, 0xb8c2b9, 0xe0e5dc));
+  let grid = backdrop(new THREE.GridHelper(100, 50, 0xc6c4be, 0xe3e2de));
   grid.rotation.x = Math.PI / 2;
   scene.add(grid);
   // Soft sky fill plus a headlight that follows the camera, like Rhino's default lighting.
@@ -763,7 +757,8 @@ export function createViewport(
       !display.plot &&
       (display.background === 'dark' ||
         (display.background === 'auto' && matchMedia('(prefers-color-scheme: dark)').matches));
-    (scene.background as THREE.Color).set(display.plot ? '#ffffff' : dark ? '#23272a' : '#edf0ec');
+    // --bg-recessed of tokens.css (light / dark).
+    (scene.background as THREE.Color).set(display.plot ? '#ffffff' : dark ? '#161616' : '#f2f1ee');
     const rotation = grid.rotation.clone();
     scene.remove(grid);
     grid.geometry.dispose();
@@ -771,8 +766,8 @@ export function createViewport(
       material.dispose();
     grid = backdrop(
       dark
-        ? new THREE.GridHelper(100, 50, 0x4a5350, 0x33393a)
-        : new THREE.GridHelper(100, 50, 0xb8c2b9, 0xe0e5dc),
+        ? new THREE.GridHelper(100, 50, 0x454543, 0x2c2c2b)
+        : new THREE.GridHelper(100, 50, 0xc6c4be, 0xe3e2de),
     );
     grid.rotation.copy(rotation);
     grid.visible = !display.plot;
@@ -1074,7 +1069,7 @@ export function createViewport(
   function toneColor(tone: OverlayTone = 'ov-new') {
     let color = tones?.get(tone);
     if (color) return color;
-    // The stylesheet's token wins once it is defined; the defaults are the Design §02 values.
+    // The stylesheet's token wins once it is defined; the defaults are the tokens.css light values.
     const css = getComputedStyle(document.documentElement).getPropertyValue(`--${tone}`).trim();
     color = hexColor(css) ?? OVERLAY_TONES[tone] ?? OVERLAY_TONES['ov-new'];
     tones?.set(tone, color);
@@ -1912,7 +1907,7 @@ export function createViewport(
             y = ((1 - at.y) / 2) * height;
           context.beginPath();
           context.arc(x, y, radius, 0, Math.PI * 2);
-          context.fillStyle = '#d9480f';
+          context.fillStyle = TOKEN_FALLBACK.accent;
           context.fill();
           context.lineWidth = Math.max(2, radius / 5);
           context.strokeStyle = '#ffffff';

@@ -90,6 +90,7 @@ export const conversationStatuses: Record<string, number> = {
   CONVERSATION_PROVIDER: 409,
   NO_SPARE_ACCOUNT: 409,
   NO_ACTIVE_SESSION: 409,
+  CONVERSATION_BOUND: 409,
 };
 
 /** The project's default conversation: the requests without one (SPEC-02.19 1). */
@@ -598,6 +599,20 @@ export class ConversationService {
   /** A reopened conversation whose transcripts are gone starts a new session from the ledger. */
   reopen(projectId: string, conversationId: string) {
     return this.summarize(this.store.setState(projectId, conversationId, 'open'));
+  }
+  /**
+   * Binds an open conversation to a jig instance (RESEARCH-12 §6.3): its later turns get jig_set
+   * and jig_run on that instance. A conversation bound to another instance, or a make-conversation,
+   * is not rebound (the screen opens a new jig conversation instead).
+   */
+  bind(projectId: string, conversationId: string, jigInstanceId: string) {
+    const conversation = this.store.get(projectId, conversationId);
+    if (conversation.state !== 'open') throw new DomainError('CONVERSATION_CLOSED');
+    if (conversation.kind === 'jig-make') throw new DomainError('INVALID_INPUT');
+    new JigStore(this.db.db).instance(projectId, jigInstanceId);
+    if (conversation.jigInstanceId && conversation.jigInstanceId !== jigInstanceId)
+      throw new DomainError('CONVERSATION_BOUND');
+    return this.summarize(this.store.update(projectId, conversationId, { jigInstanceId }));
   }
   /** Records what happened outside an AI turn (a setting changed, an app action, a decision). */
   addLedger(projectId: string, conversationId: string, value: unknown) {
@@ -1190,7 +1205,7 @@ export async function conversationRoutes(
     return true;
   }
   const route =
-    /^\/api\/v1\/projects\/([^/]+)\/conversations(?:\/([^/]+)(?:\/(close|reopen|ledger|handoff|account|answer|renew))?)?$/.exec(
+    /^\/api\/v1\/projects\/([^/]+)\/conversations(?:\/([^/]+)(?:\/(close|reopen|ledger|handoff|account|answer|renew|bind))?)?$/.exec(
       url.pathname,
     );
   if (!route) return false;
@@ -1247,7 +1262,14 @@ export async function conversationRoutes(
     send(200, await service.close(projectId, conversationId, { discard: input.discard }));
   } else if (action === 'reopen') send(200, service.reopen(projectId, conversationId));
   else if (action === 'renew') send(200, service.renew(projectId, conversationId));
-  else if (action === 'ledger')
+  else if (action === 'bind') {
+    // A jig started from a request works in this conversation (RESEARCH-12 §6.3 startSkill).
+    const { jigInstanceId } = z
+      .object({ jigInstanceId: id })
+      .strict()
+      .parse(await body(request));
+    send(200, service.bind(projectId, conversationId, jigInstanceId));
+  } else if (action === 'ledger')
     send(201, service.addLedger(projectId, conversationId, await body(request)));
   else if (action === 'answer') {
     // The answers go as the next turn of the same conversation (SPEC-02.19 6).

@@ -28,13 +28,34 @@ import { renderProjectHeading } from './project-heading.tsx';
 import { setMobileView } from './mobile-navigation.tsx';
 import { showQuantities } from './quantities.tsx';
 import { attachNativeAttributes } from './native-attributes.ts';
-import { attachJigs, overlayPicked, refreshJigs, showJigs, type JigContext } from './jigs.tsx';
+import {
+  attachJigs,
+  legacyJigTab,
+  overlayPicked,
+  refreshJigs,
+  showJigs,
+  type JigContext,
+} from './jigs.tsx';
+import {
+  continueSkill,
+  provideSkillDeps,
+  revertSkill,
+  skillChecklist,
+  startSkill,
+  type SkillDeps,
+  type SkillRunReport,
+  type SkillStart,
+} from './skill-start.ts';
+import { skillRouteJigs, type SkillEntry } from './skill-catalog.ts';
+import { JIG_RAN, preferRun } from './jig-panel/instance.ts';
 import type { ConversationsController } from './conversations.tsx';
 import {
   activeWorkspace,
+  closeContextTab,
   contextId,
   contextTabs,
   initializeWorkspaces,
+  openContextTab,
   setWorkspace,
   workspaceShowsViewport,
 } from './workspaces.ts';
@@ -58,6 +79,7 @@ import { composeLayers, displayIdOf, layerSignature, sourceIdOf } from './layers
 import {
   goesToAi,
   instanceRouteContext,
+  jigRouteText,
   jevRoute,
   officialRouteJigs,
   routeAnswer,
@@ -69,6 +91,7 @@ import {
   type Route,
   type RouteContext,
   type Service,
+  worksOnFile,
 } from './request-route.ts';
 import { renderRequests } from './requests.tsx';
 import { iconSvg, initializeInspector, renderInspector } from './inspector.ts';
@@ -243,10 +266,19 @@ function renderQuestionCards() {
       })
     : [];
   const last = own.at(-1);
-  const turnOutput =
-    last?.request?.state === 'succeeded'
-      ? (last.request.result as { turnOutput?: unknown } | null | undefined)?.turnOutput
+  // A running Claude turn asking with its own question tool (ADR-026 4): answered in the same run.
+  const running = last?.request?.result as { phase?: unknown; questions?: unknown } | null;
+  const native =
+    last?.request?.state === 'running' &&
+    running?.phase === 'question' &&
+    Array.isArray(running.questions)
+      ? { status: 'question', questions: running.questions }
       : undefined;
+  const turnOutput =
+    native ??
+    (last?.request?.state === 'succeeded'
+      ? (last.request.result as { turnOutput?: unknown } | null | undefined)?.turnOutput
+      : undefined);
   if (!mountCards || !conversationId || !last || !turnOutput) {
     questionCards?.unmount();
     questionCards = undefined;
@@ -258,6 +290,11 @@ function renderQuestionCards() {
     conversationId,
     requestId: last.id,
     turnOutput,
+    ...(native
+      ? {
+          answerPath: `/projects/${encodeURIComponent(projectId)}/requests/${encodeURIComponent(last.id)}/questions`,
+        }
+      : {}),
     onAnswered: ({ id }: { id: string }) =>
       void requestData(`/projects/${projectId}/requests/${id}`).then((request) => {
         if (project?.id !== projectId) return;
@@ -266,7 +303,8 @@ function renderQuestionCards() {
         focusedWork = id;
         renderMessages();
         void conversationChips?.refresh();
-        void poll(id, projectId);
+        // The native answer continues the turn that is already followed.
+        if (!native) void poll(id, projectId);
       }),
   };
   if (questionCards) questionCards.update(options);
@@ -1852,14 +1890,44 @@ function openJigInstance() {
 }
 const jigInstancePath = (instanceId: string) =>
   `/projects/${encodeURIComponent(currentProject().id)}/jig-instances/${encodeURIComponent(instanceId)}`;
-/** What the words are read against: the official jigs and the open jig's settings. */
+/**
+ * The project's skill catalog (GET /projects/:id/skills, RESEARCH-12 §6.3): its jigs first, the
+ * official list last. Read once per project and again after a minute (jigs are pinned rarely).
+ */
+let skillCache: { projectId: string; at: number; list: Promise<SkillEntry[]> } | undefined;
+function skillCatalog(): Promise<SkillEntry[]> {
+  const projectId = currentProject().id;
+  if (skillCache?.projectId === projectId && Date.now() - skillCache.at < 60000)
+    return skillCache.list;
+  const list = api(`/projects/${encodeURIComponent(projectId)}/skills`).then(
+    (value) => ((value as { skills?: SkillEntry[] } | null)?.skills ?? []) as SkillEntry[],
+  );
+  skillCache = { projectId, at: Date.now(), list };
+  list.catch(() => {
+    if (skillCache?.list === list) skillCache = undefined;
+  });
+  return list;
+}
+/**
+ * What the words are read against: the skill catalog (this project's jigs first; the official
+ * list when it cannot be read) and the open jig's settings.
+ */
 async function routeContext(): Promise<{ context: RouteContext; instanceId?: string }> {
-  const jigs = officialRouteJigs();
+  const jigs = await skillCatalog()
+    .then(skillRouteJigs)
+    .catch(() => officialRouteJigs());
   const instanceId = openJigInstance();
   if (!instanceId) return { context: { jigs } };
   try {
-    const view = (await api(jigInstancePath(instanceId))) as { params?: unknown } | null;
-    return { context: { jigs, ...instanceRouteContext(view?.params) }, instanceId };
+    const view = (await api(jigInstancePath(instanceId))) as {
+      params?: unknown;
+      jig?: { id?: unknown };
+    } | null;
+    const openJig = typeof view?.jig?.id === 'string' ? view.jig.id : undefined;
+    return {
+      context: { jigs, ...instanceRouteContext(view?.params), ...(openJig ? { openJig } : {}) },
+      instanceId,
+    };
   } catch {
     return { context: { jigs } };
   }
@@ -1971,6 +2039,7 @@ function showRouteCard(
   card.hidden = false;
 }
 function hideRouteCard() {
+  $('route-card').classList.remove('route-row');
   $('route-card').hidden = true;
   $('route-card').replaceChildren();
 }
@@ -1983,39 +2052,317 @@ const jigParamsChanged = (instanceId: string) =>
  * applied and the notice says why.
  */
 async function runParamRequest(route: Route, body: string, instanceId: string | undefined) {
-  const param = route.param!;
-  const change = param.change;
+  // One setting, or several named in one request ("경간 11로, 작은보 간격 2.2").
+  const entries = route.params ?? (route.param ? [route.param] : []);
+  const applied = entries.filter((entry) => entry.change.ok);
   const toAiOnly = (text: string) =>
     messageWithActions(text, [{ label: 'AI 작업으로 보내기', run: sendToAi(route, body) }]);
-  if (!change.ok) return toAiOnly(change.text);
+  if (!applied.length) return toAiOnly(entries.map((entry) => entry.change.text).join(' '));
   if (!instanceId) return toAiOnly('설정값을 바꿀 jig 작업본이 열려 있지 않습니다.');
   const path = jigInstancePath(instanceId);
   try {
     const result = (await api(`${path}/params`, 'PUT', {
-      values: [{ key: param.key, value: change.value }],
+      values: applied.map((entry) => ({
+        key: entry.key,
+        value: (entry.change as { value: number | string | boolean }).value,
+      })),
       by: 'user',
       reason: '요청 입력',
     })) as { seqs?: unknown } | null;
-    const seq = Array.isArray(result?.seqs) ? Number(result.seqs[0]) : NaN;
+    const seqs = (Array.isArray(result?.seqs) ? result.seqs.map(Number) : []).filter(
+      (seq) => Number.isInteger(seq) && seq > 0,
+    );
     clearComposer();
     jigParamsChanged(instanceId);
-    const undoable = Number.isInteger(seq) && seq > 0;
+    const undoable = seqs.length > 0;
     const undo = () => {
       if (!undoable) return;
-      void api(`${path}/params/undo`, 'POST', { seq })
+      void (async () => {
+        for (const seq of [...seqs].reverse()) await api(`${path}/params/undo`, 'POST', { seq });
+      })()
         .then(() => jigParamsChanged(instanceId))
         .catch((cause) => {
           const error = readableError(cause);
           message(errors[error.code ?? ''] || error.message);
         });
     };
-    messageWithActions(routeCard(route)?.text ?? change.text, [
+    const text = routeCard(route)?.text ?? applied.map((entry) => entry.change.text).join(' · ');
+    messageWithActions(text, [
       ...(undoable ? [{ label: '되돌리기', run: undo }] : []),
       { label: 'AI 작업으로 보내기', run: sendToAi(route, body, undo) },
     ]);
   } catch (cause) {
     const error = readableError(cause);
     toAiOnly(errors[error.code ?? ''] || error.message);
+  }
+}
+// ── jig = skill (RESEARCH-12 §6.3, ADR-026): a request judged to be a jig opens and computes it. ──
+/** The screen's parts startSkill uses (src/ui/skill-start.ts); the JIG list uses them too. */
+const skillDeps: SkillDeps = {
+  api,
+  projectId: () => currentProject().id,
+  catalog: () => skillCatalog(),
+  openTab: (tab) => openContextTab(tab),
+  closeTab: (instanceId) => closeContextTab(instanceId),
+  isTabOpen: (instanceId) => contextTabs().some((tab) => tab.instanceId === instanceId),
+  legacyTab: (jigId) => legacyJigTab(jigId),
+  preferRun: (instanceId, preference) => preferRun(instanceId, preference),
+  paramsChanged: (instanceId) => jigParamsChanged(instanceId),
+  waitForRun: (instanceId, startMs) =>
+    new Promise<SkillRunReport | undefined>((resolve, reject) => {
+      // The panel's next run of this instance; none within startMs: the start runs it itself.
+      const ran = (event: Event) => {
+        const detail = (
+          event as CustomEvent<{ instanceId?: string; report?: unknown; error?: unknown }>
+        ).detail;
+        if (detail?.instanceId !== instanceId) return;
+        finish();
+        if (detail.error) reject(detail.error);
+        else resolve(detail.report as SkillRunReport);
+      };
+      const finish = () => {
+        clearTimeout(timer);
+        window.removeEventListener(JIG_RAN, ran);
+      };
+      const timer = setTimeout(() => {
+        finish();
+        resolve(undefined);
+      }, startMs);
+      window.addEventListener(JIG_RAN, ran);
+    }),
+  conversations: {
+    active: () => conversationChips?.active(),
+    select: (id) => conversationChips?.select(id),
+    refresh: () => conversationChips?.refresh() ?? Promise.resolve(),
+  },
+  model: () => {
+    const chosen = models.find((entry) => entry.id === state.model);
+    return chosen ? { provider: chosen.provider, model: chosen.id } : undefined;
+  },
+};
+provideSkillDeps(skillDeps);
+/** Conversations bound to a jig instance: their AI turns use the jig tools, not the host. */
+const jigConversations = new Map<string, string | null>();
+async function jigConversation(conversationId: string | undefined | null) {
+  if (!conversationId) return null;
+  if (jigConversations.has(conversationId)) return jigConversations.get(conversationId) ?? null;
+  try {
+    const found = (await api(
+      `/projects/${encodeURIComponent(currentProject().id)}/conversations/${encodeURIComponent(conversationId)}`,
+    )) as { jigInstanceId?: unknown } | null;
+    const instanceId = typeof found?.jigInstanceId === 'string' ? found.jigInstanceId : null;
+    jigConversations.set(conversationId, instanceId);
+    return instanceId;
+  } catch {
+    return null;
+  }
+}
+const skillErrors: Record<string, string> = {
+  JIG_USER_ONLY: '이 jig는 사용자가 JIG 목록에서 직접 엽니다.',
+  NOT_FOUND: '이 jig를 이 프로젝트에서 찾지 못했습니다.',
+  JIG_INVALID: '이 jig의 설명서에 문제가 있어 열 수 없습니다.',
+};
+/** The started skill whose route row shows (one at a time). */
+let shownSkill: { start?: SkillStart; body: string; route: Route; aiRequest?: string } | undefined;
+/**
+ * The route row of a jig start (SPEC-07.18 3·7, RESEARCH-12 §6.2 M5): what opened, the checklist,
+ * [진행] in 계획 and [일반 대화로] — never a card with only [닫기].
+ */
+function renderSkillRow(options: { status?: string; progress?: () => void } = {}) {
+  const shown = shownSkill;
+  const card = $('route-card');
+  card.replaceChildren();
+  if (!shown) {
+    card.hidden = true;
+    return;
+  }
+  card.classList.add('route-row');
+  const start = shown.start;
+  el(
+    'p',
+    `${shown.route.by === 'jev' ? 'Jev · ' : ''}jig · ${jigRouteText(
+      start?.name ?? shown.route.jig?.name ?? '',
+    )}${options.status ? ' · ' + options.status : ''}`,
+    card,
+    { class: 'route-row-head' },
+  );
+  if (start && !start.legacy) {
+    const list = el('ul', '', card, { class: 'route-row-steps' });
+    for (const item of skillChecklist(start))
+      el('li', `${item.done ? '✓' : '□'} ${item.text}`, list, { 'data-done': String(item.done) });
+    const summary = start.summary;
+    if (summary && (summary.waiting.length || summary.failed.length))
+      el(
+        'p',
+        [
+          summary.waiting.length ? `사람 확인 대기: ${summary.waiting.join(', ')}` : '',
+          summary.failed.length ? `멈춘 단계: ${summary.failed.join(', ')}` : '',
+        ]
+          .filter(Boolean)
+          .join(' · '),
+        card,
+        { class: 'route-row-note' },
+      );
+  }
+  const row = el('div', '', card, { class: 'route-card-actions' });
+  if (options.progress)
+    el('button', '진행', row, { type: 'button', class: 'primary-button' }).onclick =
+      options.progress;
+  el('button', '일반 대화로', row, { type: 'button' }).onclick = () => void skillToChat();
+  card.hidden = false;
+}
+function hideSkillRow() {
+  shownSkill = undefined;
+  $('route-card').classList.remove('route-row');
+  hideRouteCard();
+}
+/** The AI turn after a start: the request's words in the jig's conversation, without the host. */
+async function sendSkillTurn(body: string, sendMode: WorkMode) {
+  const typed = state.body;
+  state.body = body;
+  $('body').value = body;
+  render();
+  const before = new Set(state.messages.map((entry) => entry.id));
+  await submitRequest(undefined, sendMode, { hostUse: 'none' });
+  const sent = state.messages.find((entry) => !before.has(entry.id));
+  if (shownSkill && sent) {
+    shownSkill.aiRequest = sent.id;
+    if (shownSkill.start) shownSkill.start.aiRequest = sent.id;
+    renderSkillRow({ status: 'AI가 요약하는 중' });
+  }
+  // Something typed meanwhile stays in the composer.
+  if (typed.trim() && typed !== body && !state.body) {
+    state.body = typed;
+    $('body').value = typed;
+    render();
+  }
+}
+/**
+ * A request judged to be a jig (ADR-026 4): open and compute it at once (자동), or open and bind
+ * it with a checklist and [진행] (계획); then the AI summarizes and asks what is unclear.
+ */
+async function runSkillRoute(route: Route, body: string) {
+  const jig = route.jig!;
+  const runMode = mode;
+  shownSkill = { body, route };
+  renderSkillRow({ status: '여는 중…' });
+  let start: SkillStart;
+  try {
+    start = await startSkill(skillDeps, jig.id, {
+      mode: runMode,
+      request: body,
+      by: route.by ?? 'rules',
+    });
+  } catch (cause) {
+    // Nothing moved (SPEC-07.18 7): the reason, the JIG list and the words to the AI.
+    hideSkillRow();
+    const code = String((cause as { code?: unknown } | null)?.code ?? '');
+    messageWithActions(
+      `'${jig.name}'을(를) 열지 못했습니다. ${skillErrors[code] ?? readableError(cause).message}`,
+      [
+        { label: 'JIG 목록에서 열기', run: () => setWorkspace('jig') },
+        { label: '일반 대화로', run: sendToAi(route, body) },
+      ],
+    );
+    return;
+  }
+  if (shownSkill?.body !== body) return;
+  shownSkill.start = start;
+  if (start.conversationId) jigConversations.set(start.conversationId, start.instanceId || null);
+  if (start.legacy) {
+    renderSkillRow({ status: '열었습니다' });
+    return;
+  }
+  if (start.pending) {
+    renderSkillRow({
+      status: '계획 · [진행]을 누르면 계산합니다',
+      progress: () => void progressSkill(start, body),
+    });
+    return;
+  }
+  renderSkillRow({ status: '계산했습니다 · AI가 요약합니다' });
+  await sendSkillTurn(body, runMode);
+}
+/** [진행] of a 계획 start: make or open, apply, compute, then the AI turn. */
+async function progressSkill(start: SkillStart, body: string) {
+  renderSkillRow({ status: '계산하는 중…' });
+  try {
+    await continueSkill(skillDeps, start, body);
+  } catch (cause) {
+    renderSkillRow({ status: '멈춤 · ' + readableError(cause).message });
+    return;
+  }
+  if (start.conversationId) jigConversations.set(start.conversationId, start.instanceId || null);
+  renderSkillRow({ status: '계산했습니다 · AI가 요약합니다' });
+  // [진행] is the person's go-ahead for this jig: the turn may set its settings from the answers.
+  await sendSkillTurn(body, 'auto');
+}
+/**
+ * [일반 대화로] (SPEC-02.17 3): close what the start opened, undo its settings, stop its AI turn,
+ * record the reversal and send the same words as an ordinary AI turn.
+ */
+async function skillToChat() {
+  const shown = shownSkill;
+  if (!shown) return;
+  hideSkillRow();
+  const projectId = currentProject().id;
+  if (shown.aiRequest)
+    await api(`/projects/${projectId}/requests/${shown.aiRequest}/cancel`, 'POST').catch(
+      () => undefined,
+    );
+  if (shown.start) await revertSkill(skillDeps, shown.start).catch(() => undefined);
+  else
+    await api(`/projects/${projectId}/route/revert`, 'POST', routeRevert(shown.route)).catch(
+      () => undefined,
+    );
+  state.body = shown.body;
+  $('body').value = shown.body;
+  render();
+  void submitRequest();
+}
+/**
+ * Screen actions the AI asked for in a conversation turn (jig_open, ui_go: ledger items the engine
+ * recorded): each is carried out once, and only for items made while this page is open.
+ */
+const pageOpened = new Date().toISOString();
+const performedActions = new Set<string>();
+async function followAppActions(conversationId: string) {
+  let detail: { ledger?: { id: string; body?: unknown; createdAt?: string }[] } | null;
+  try {
+    detail = (await api(
+      `/projects/${encodeURIComponent(currentProject().id)}/conversations/${encodeURIComponent(conversationId)}`,
+    )) as typeof detail;
+  } catch {
+    return;
+  }
+  for (const item of detail?.ledger ?? []) {
+    const body = (item.body ?? {}) as Record<string, unknown>;
+    if (performedActions.has(item.id) || body.by !== 'ai') continue;
+    if (body.appAction !== 'jig_open' && body.appAction !== 'ui_go') continue;
+    performedActions.add(item.id);
+    if ((item.createdAt ?? '') < pageOpened) continue;
+    if (body.appAction === 'jig_open' && typeof body.jigId === 'string')
+      void startSkill(skillDeps, body.jigId, {
+        mode,
+        by: 'ai',
+        conversationId,
+        ...(body.reuse === 'new' ? { reuse: 'new' as const } : {}),
+      })
+        .then((start) => {
+          if (start.conversationId)
+            jigConversations.set(start.conversationId, start.instanceId || null);
+          message(`AI가 '${start.name}'을(를) 열었습니다.`);
+        })
+        .catch((cause) => message(readableError(cause).message));
+    else if (body.appAction === 'ui_go' && typeof body.stage === 'string') {
+      const own = jigConversations.get(conversationId);
+      if (body.stage === 'jig' && own) setWorkspace('', { instanceId: own });
+      else setWorkspace(body.stage);
+      if (body.view === 'plan' || body.view === '3d') {
+        $('projection').value = body.view === 'plan' ? 'plan' : 'axon';
+        $('projection').dispatchEvent(new Event('change'));
+      }
+    }
   }
 }
 /** Which linked file an app action names: the one chosen, the only one, or the one open now. */
@@ -2038,19 +2385,7 @@ function runAppRoute(route: Route, body: string) {
   const card = routeCard(route, { signedIn: providerSignedIn });
   if (!card) return void submitRequest();
   if (route.jig) {
-    const name = route.jig.name;
-    showRouteCard(
-      card.text,
-      {
-        label: card.run ?? '열기',
-        action: () => {
-          clearComposer();
-          setWorkspace('jig');
-          message(`JIG 목록에서 '${name}'을(를) 여세요.`);
-        },
-      },
-      toAi,
-    );
+    void runSkillRoute(route, body);
     return;
   }
   const app = route.app!;
@@ -2170,7 +2505,11 @@ $('request').onclick = () => {
       $('request').removeAttribute('aria-busy');
     });
 };
-async function submitRequest(predecessorId?: string, sendMode: WorkMode = mode) {
+async function submitRequest(
+  predecessorId?: string,
+  sendMode: WorkMode = mode,
+  extra: { hostUse?: 'none' } = {},
+) {
   if (validate(state) || busy || !project || (predecessorId && interventionReason(predecessorId)))
     return;
   busy = true;
@@ -2178,11 +2517,19 @@ async function submitRequest(predecessorId?: string, sendMode: WorkMode = mode) 
   const predecessor =
     predecessorId && state.messages.find((entry) => entry.id === predecessorId)?.request;
   const conversationId = predecessorId ? undefined : currentConversation();
+  // A jig conversation's turns work on its jig (the jig tools), unless the words name the file.
+  const hostless =
+    extra.hostUse === 'none' ||
+    (!predecessor &&
+      !state.linkedTargets &&
+      !worksOnFile(state.body) &&
+      !!(await jigConversation(conversationId)));
   const input = {
     ...packet(predecessor ? interventionTargetDraft(state, predecessor) : state),
     ...modeFields(predecessor ? modeOf(predecessor.input) : sendMode),
     id: crypto.randomUUID(),
     ...(conversationId ? { conversationId } : {}),
+    ...(hostless ? { hostUse: 'none' } : {}),
   };
   // Pins and sketches also go to the AI as a picture of the view with them drawn (PLAN-24).
   const image = predecessor ? undefined : annotatedCapture();
@@ -2238,6 +2585,9 @@ async function poll(id: string, projectId = currentProject().id, original = stat
     }
     const m = state.messages.find((x) => x.id === id);
     if (m) m.request = request;
+    // Screen actions the AI asked for in this conversation turn (jig_open, ui_go).
+    const turnConversation = (request.input as { conversationId?: unknown }).conversationId;
+    if (typeof turnConversation === 'string') void followAppActions(turnConversation);
     if (request.result?.hostExecuted && foregroundRequest?.id === id) {
       if (foregroundRequest.selected === selectedResult && foregroundRequest.draft === focusDraft())
         selectedResult = request.id;

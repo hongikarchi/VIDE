@@ -2,10 +2,10 @@
 id: PLAN
 title: VIDE 실행 로드맵
 status: review
-version: 0.218
-updated: 2026-09-30
+version: 0.219
+updated: 2026-10-01
 owner: agent:codex
-related: [ARCH-01, PLAN-02, PLAN-03, PLAN-22, PLAN-23, PLAN-24, PLAN-25, ADR-022, ADR-025, SPEC-00, SPEC-01, SPEC-02, SPEC-03, SPEC-04, SPEC-05, SPEC-06, SPEC-07]
+related: [ARCH-01, PLAN-02, PLAN-03, PLAN-22, PLAN-23, PLAN-24, PLAN-25, PLAN-26, ADR-022, ADR-025, ADR-026, SPEC-00, SPEC-01, SPEC-02, SPEC-03, SPEC-04, SPEC-05, SPEC-06, SPEC-07]
 ---
 
 # VIDE 실행 로드맵
@@ -80,7 +80,7 @@ Rhino 플러그인 재빌드는 T-043 한 번이었고, 5차 보기 도구와 T-
 
 ### 6.2 티켓 소유와 상세 계획
 
-T-001~018의 번호·지원 증거는 유지한다. 각 티켓의 현재 결과와 남은 조건은 §6.5, 상세 구현·시험 절차는 PLAN-02와 §7을 따른다. T-019~024의 구체 작업은 PLAN-03이 소유한다. T-041~067은 PLAN-22·23·24가 소유하며, RESEARCH-10 작업 묶음(WP)과의 대응표는 각 계획에 있다. T-068은 PLAN-25, 바로 적용·계획/자동 모드의 T-069~075는 PLAN-24가 소유한다. T-025~031은 PLAN-08의 예약 번호다. 하위 계획에 별도 현황표를 복제하지 않는다.
+T-001~018의 번호·지원 증거는 유지한다. 각 티켓의 현재 결과와 남은 조건은 §6.5, 상세 구현·시험 절차는 PLAN-02와 §7을 따른다. T-019~024의 구체 작업은 PLAN-03이 소유한다. T-041~067은 PLAN-22·23·24가 소유하며, RESEARCH-10 작업 묶음(WP)과의 대응표는 각 계획에 있다. T-068은 PLAN-25, 바로 적용·계획/자동 모드의 T-069~075는 PLAN-24, 대화 중심 구조의 T-076~080은 PLAN-26이 소유한다. T-025~031은 PLAN-08의 예약 번호다. 하위 계획에 별도 현황표를 복제하지 않는다.
 
 ### 6.3 착수 조건
 
@@ -91,6 +91,8 @@ T-001~018의 번호·지원 증거는 유지한다. 각 티켓의 현재 결과�
 현재 소스와 §6.5의 증거에서 이어간다. 과거 구현 일지는 [이행 기록](../tdd/VERIFY-2026-09-20-implementation-history.md)으로 옮겼다. 과거의 제한 JSON·MCP·ESM 설명을 현재 설계로 사용하지 않는다.
 
 ### 6.5 현재 티켓 현황과 이어갈 위치
+
+**2026-10-01 대화 중심 구조 결정([ADR-026](../decisions/ADR-026-chat-stage-and-skill-jigs.md), [PLAN-26](PLAN-26-chat-stage.md)):** 사용자가 RESEARCH-12의 질문을 결정했다 — 프로젝트 색 없음, 고정 코랄 포인트 하나, 토큰·CSS 정리, jig로 판정된 요청은 자동으로 열고 계산(계획 모드는 열기·묶기까지, 해석 확정·Rhino에 만들기는 사람), 프로젝트 jig도 자동 호출, 대화 열 + 무대는 목업 검수 뒤. SPEC-02·07, ARCH-03 §5.3, Design §02·§03 안내·SCR-13·15를 고쳤다. T-076(skill 시작·카탈로그·AI 도구·자체 질문 기본)·T-077(토큰·CSS) 구현·시험 완료, T-078 목업 게시·사용자 검토 대기, T-079(셸 교체)는 목업 VERIFY 전까지 막힘, T-080(층 평면) 대기. PRD §11.4·FR-25·AC-48은 결정 4에 맞춰 고침(PRD 0.14). 남은 문서: SPEC-01.10 단서와 ARCH-01 §3 도구 목록(다른 세션의 편집 뒤).
 
 **2026-09-30 6차 웨이브 — 바로 적용과 계획/자동(구현·단위 검증 완료, 실호스트·브라우저 시험 남음):** 사용자 결정([ADR-022](../decisions/ADR-022-direct-apply-plan-auto.md))대로 AI 편집은 연결된 Rhino·ZWCAD 문서에서 실행 하나당 되돌리기 기록 하나로 바로 실행하고, 권한 선택은 계획·자동 두 모드로 바꿨다(T-069~074, [PLAN-24](PLAN-24-ai-conversations.md#direct-apply)). 되돌리기 어려운 동작(대량 삭제·레이어 삭제·purge 등)은 확인 카드를 거친다. jig 만들기도 같은 경로다. 공급자 자체 질문 기능은 SPIKE 합격, 어댑터는 꺼 둔 채로 넣었다(T-075). 함께: S-06 개구 둘레 보(PLAN-23), jig 고정 해제 경로·멈춘 만들기 대화의 파일 도구 제거(PLAN-22), 엔진 종료 때 해석 worker·jig 자식 프로세스 정리. 스크래치 빌드는 Rhino·ZWCAD 모두 오류 0. 남은 일: Rhino·ZWCAD 플러그인 재빌드·설치(로드된 플러그인이 잠김) 뒤 실제 문서에서 보호·되돌리기·jig 만들기 확인, `browser-direct-mode.mjs` 등 브라우저 시험, 호스트 턴의 프로젝트 도구 연결, 자체 질문 기능을 기본으로 켤지 결정, 5차의 A/B, 커밋·설치본 릴리스는 사용자 요청 때.
 
@@ -206,7 +208,8 @@ Jev는 기존 계정이 없다는 사용자 확인에 따라 가입 재개까지
 | T-042·044·050~054·056·058·067 · S-06 골조 jig·구조 라이브러리 | M0 완료(T-042·T-044, 기준선 9/33/6/곡선 19, [VERIFY](../tdd/VERIFY-2026-09-29-s06-frame.md) v0.2는 제품 Sync로 재현). T-050·052·054 완료, T-051 합성 검증(실데이터 남음), T-053 그려진 배치·기구 사전 점검 구현(실데이터 해석 불안정 남음), T-056 ⑨~⑫ 연결·합성 검증(실제 Rhino·단면 적용 경로 남음), T-058 01~05·부록 구현(실데이터는 해석 안정 뒤), T-067은 2차 | [PLAN-23](PLAN-23-s06-frame-jig.md) |
 | T-049·059~062 · AI 대화·경로 | T-049 작성기 연결까지 완료, T-059 완료(SPIKE ①②⑤⑥⑦⑧ 합격·③ 실패·④ 조건부), T-060 완료, T-061 서버·화면 완료, Codex 세션 이어 실행 켬·계정 한도 인계 서버 흐름(한도 카드 화면·브라우저 시험 남음), T-062 설치본 도구 연결 완료(대화 읽기 도구의 `targetRef` 경로 남음) | [PLAN-24](PLAN-24-ai-conversations.md) |
 | T-068 · 계정 관리를 AccountSwitch로 | 2026-09-30 사용자 결정([ADR-025](../decisions/ADR-025-accounts-in-accountswitch.md)): VIDE는 기본 로그인만 쓰고 계정 관리는 AccountSwitch가 맡는다. 0단계(AccountSwitch 설치) 진행. 1단계부터는 다른 세션의 대화·계정 파일 작업이 커밋된 뒤 | [PLAN-25](PLAN-25-accounts-to-accountswitch.md) |
-| T-069~075 · 바로 적용·계획/자동 모드 | T-069 문서 완료([ADR-022](../decisions/ADR-022-direct-apply-plan-auto.md)). T-070(Rhino)·T-071(ZWCAD) 코드·스크래치 빌드 완료, 플러그인 재빌드·설치와 실호스트 확인 남음. T-072 서버 구현·단위 검증(안전 점검 7건 반영), T-073 화면 구현(브라우저 시험 남음), T-074 jig 만들기 바로 적용(실제 Rhino 남음), T-075 자체 질문 SPIKE 합격·어댑터는 꺼 둠(기본값 결정 남음) | [PLAN-24](PLAN-24-ai-conversations.md#direct-apply) |
+| T-069~075 · 바로 적용·계획/자동 모드 | T-069 문서 완료([ADR-022](../decisions/ADR-022-direct-apply-plan-auto.md)). T-070(Rhino)·T-071(ZWCAD) 코드·스크래치 빌드 완료, 플러그인 재빌드·설치와 실호스트 확인 남음. T-072 서버 구현·단위 검증(안전 점검 7건 반영), T-073 화면 구현(브라우저 시험 남음), T-074 jig 만들기 바로 적용(실제 Rhino 남음), T-075 자체 질문 SPIKE 합격·어댑터는 꺼 둠(2026-10-01 기본으로 켜기로 결정, [ADR-026](../decisions/ADR-026-chat-stage-and-skill-jigs.md), 적용은 T-076) | [PLAN-24](PLAN-24-ai-conversations.md#direct-apply) |
+| T-076~080 · 대화 중심 구조(skill 시작·토큰·목업·셸·층 평면) | 2026-10-01 결정([ADR-026](../decisions/ADR-026-chat-stage-and-skill-jigs.md)). T-076·077 구현·시험 완료, T-078 사용자 검토 대기, T-079 막힘(T-078 VERIFY 전), T-080 대기(SPEC-02.17 보완 먼저) | [PLAN-26](PLAN-26-chat-stage.md) |
 
 ### 6.6 전체 완료 관문
 

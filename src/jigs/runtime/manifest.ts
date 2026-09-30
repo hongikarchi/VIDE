@@ -346,6 +346,25 @@ export const manifestSchema = z
       .max(20),
     selftest: z.object({ fixtures: packagePath, requiresHost: z.literal(false) }).strict(),
     skill: packagePath,
+    // jig = skill (RESEARCH-12 §6.3): how a request opens and runs the jig; all optional.
+    /**
+     * `reuse: last` opens the project's latest instance. `layerRoot`: the output layer offered
+     * first when a request-opened instance asks for one at Rhino에 만들기 (ADR-026).
+     */
+    open: z
+      .object({
+        reuse: z.enum(['last', 'new']).optional(),
+        layerRoot: z.string().min(1).max(200).optional(),
+      })
+      .strict()
+      .optional(),
+    /** Settings a starting request may set ("구조 분석 해줘, 경간 11로"). */
+    from_request: z.array(key).max(30).optional(),
+    /** Run until this step, or `first-hard` (the first human step that blocks others; default). */
+    autorun: z
+      .object({ until: z.union([z.literal('first-hard'), key]) })
+      .strict()
+      .optional(),
     /** Values the core recomputes (ARCH-03 §3); when declared they must match. */
     derived: z
       .object({
@@ -656,6 +675,12 @@ export function validateManifest(
         error('JIG_LIBRARY_UNKNOWN', `${path}.use`, `${id}에 없는 함수: ${fn}`);
     }
   }
+  // The opening fields name existing settings and steps.
+  for (const key of manifest.from_request ?? [])
+    if (!params.has(key)) error('JIG_REF_MISSING', 'from_request', `없는 설정값: ${key}`);
+  const until = manifest.autorun?.until;
+  if (until && until !== 'first-hard' && !stepIds.has(until))
+    error('JIG_REF_MISSING', 'autorun.until', `없는 단계: ${until}`);
   const { cycle } = buildGraph(manifest);
   if (cycle.length) error('JIG_CYCLE', 'steps', `단계가 순환합니다: ${cycle.join(' → ')}`);
 

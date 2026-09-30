@@ -14,7 +14,7 @@ body[data-workspace='data'] .facts-workspace {
   display: grid;
   grid-template-columns: 260px minmax(0, 1fr);
   grid-template-rows: minmax(0, 1fr) auto;
-  background: white;
+  background: var(--bg-elevated);
 }
 @media (min-width: 851px) {
   body[data-workspace='data'] #left,
@@ -38,7 +38,7 @@ body[data-workspace='data'] .facts-workspace {
   min-height: 0;
   overflow: auto;
   padding: 12px;
-  border-right: 1px solid var(--line);
+  border-right: var(--hairline) solid var(--line);
 }
 .facts-left h4 {
   margin: 14px 0 4px;
@@ -65,7 +65,7 @@ body[data-workspace='data'] .facts-workspace {
   width: 100%;
   min-height: 30px;
   border: 0;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   padding: 4px 8px;
   text-align: left;
   background: transparent;
@@ -95,7 +95,7 @@ body[data-workspace='data'] .facts-workspace {
 }
 .facts-issues button {
   flex-direction: column;
-  border-bottom: 1px solid var(--line);
+  border-bottom: var(--hairline) solid var(--line);
   border-radius: 0;
 }
 .facts-issues button:hover,
@@ -107,8 +107,8 @@ body[data-workspace='data'] .facts-workspace {
   max-height: 40vh;
   overflow: auto;
   padding: 8px 20px 12px;
-  border-top: 1px solid var(--line);
-  background: white;
+  border-top: var(--hairline) solid var(--line);
+  background: var(--bg-elevated);
 }
 .facts-drawer[hidden] {
   display: none;
@@ -126,12 +126,12 @@ body[data-workspace='data'] .facts-workspace {
   gap: 4px;
   margin: 6px 0;
   padding: 8px;
-  border: 1px solid #e0b36a;
-  border-radius: 6px;
-  background: #fff8ec;
+  border: var(--hairline) solid var(--warn-muted);
+  border-radius: var(--radius-sm);
+  background: var(--warn-subtle);
 }
 .facts-suspects h4 {
-  color: #9a5b12;
+  color: var(--warn);
 }
 .knowledge-statement[aria-current='true'] {
   border-color: currentColor;
@@ -144,7 +144,7 @@ body[data-workspace='data'] .facts-workspace {
   .facts-left {
     grid-row: auto;
     border-right: 0;
-    border-bottom: 1px solid var(--line);
+    border-bottom: var(--hairline) solid var(--line);
     max-height: 40vh;
   }
   .facts-drawer {
@@ -156,21 +156,21 @@ body[data-workspace='data'] .facts-workspace {
 .fact-standing {
   display: inline-block;
   padding: 0 6px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   font-size: 11px;
   line-height: 18px;
-  border: 1px solid var(--line);
+  border: var(--hairline) solid var(--line);
   color: var(--muted);
 }
 .fact-standing[data-standing='confirmed'] {
-  color: #1f6f43;
-  border-color: #9fd0b2;
-  background: #eef8f1;
+  color: var(--ok);
+  border-color: var(--ok-muted);
+  background: var(--ok-subtle);
 }
 .fact-standing[data-standing='excluded'] {
-  color: #9a3412;
-  border-color: #f0b99a;
-  background: #fff3ec;
+  color: var(--warn);
+  border-color: var(--warn-muted);
+  background: var(--warn-subtle);
 }
 .knowledge-statement[data-standing='unconfirmed'] > p {
   color: var(--muted);
@@ -199,7 +199,7 @@ body[data-workspace='data'] .facts-workspace {
 }
 .fact-review-buttons button[data-verdict='contaminated'],
 .fact-review-buttons button[data-verdict='rejected'] {
-  color: #9a3412;
+  color: var(--ng);
 }
 .fact-review-reason {
   display: flex;
@@ -227,16 +227,16 @@ body[data-workspace='data'] .facts-workspace {
   display: grid;
   place-items: center;
   padding: 16px;
-  background: rgb(0 0 0 / 28%);
+  background: var(--scrim);
 }
 .fact-window {
   width: min(620px, 100%);
   max-height: min(80vh, 720px);
   overflow: auto;
   padding: 12px 16px 16px;
-  border-radius: 8px;
-  background: white;
-  box-shadow: 0 12px 40px rgb(0 0 0 / 25%);
+  border-radius: var(--radius-lg);
+  background: var(--bg-elevated);
+  box-shadow: var(--shadow-float);
 }
 .fact-window:focus {
   outline: none;

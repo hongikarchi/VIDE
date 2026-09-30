@@ -85,12 +85,31 @@ test('/route sends only the fixed items, honours the switch and decides rule wor
       links: [{ id: 'x', label: 'C:\\secret\\a.dwg' }],
     });
     assert.ok(injected.status >= 400);
-    // Words decided without Jev: no call, no model choice.
+    // Words decided without Jev: no call, no model choice. The project's skill catalog comes
+    // first (ADR-026 6): in this checkout the S-06 frame jig takes "구조 검토" before the
+    // official structure screen, which stays in the catalog as the fallback.
     const jig = await route({ body: '구조 검토하고 싶어', subjects: [] });
     assert.deepEqual(
       [jig.json.target, jig.json.by, jig.json.jig, jig.json.jigName, jig.json.ai],
-      ['jig', 'rules', 'structure', '구조 분석', false],
+      ['jig', 'rules', 'project/s06-frame', 'S-06 골조 배치', false],
     );
+    const skills = (await api(`/projects/${project.id}/skills`)).json.skills;
+    const ids = skills.map((skill) => skill.id);
+    assert.ok(ids.indexOf('project/s06-frame') < ids.indexOf('structure'));
+    const s06 = skills.find((skill) => skill.id === 'project/s06-frame');
+    assert.deepEqual(
+      [s06.kind, s06.invocation, s06.autorun.step],
+      ['instance', 'auto', 'confirmAnalysis'],
+    );
+    assert.ok(s06.examples.includes('구조 분석 해줘'));
+    // The open jig's own words change its setting instead of reopening it.
+    const own = await route({
+      body: '경간 11로',
+      subjects: [],
+      params: [{ key: 'spanMax', title: '경간 상한' }],
+      openJig: 'project/s06-frame',
+    });
+    assert.deepEqual([own.json.target, own.json.param], ['param', 'spanMax']);
     const account = await route({ body: 'codex 로그인해줘', subjects: [] });
     assert.deepEqual([account.json.app, account.json.provider], ['login', 'codex-cli']);
     assert.equal(sent.length, 1);

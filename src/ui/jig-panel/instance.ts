@@ -173,6 +173,24 @@ export const messageOf = (error: unknown) =>
  */
 export const JIG_PARAMS_CHANGED = 'vide:jig-params-changed';
 
+/**
+ * Sent on `window` after each run of an open panel ({ instanceId, report }): a jig started from a
+ * request (src/ui/skill-start.ts) waits for it before its AI turn.
+ */
+export const JIG_RAN = 'vide:jig-ran';
+export type RunPreference = { mode: 'geometry' | 'confirmed'; until?: string };
+/**
+ * How a panel runs when nothing names the mode (open, recompute, a setting changed from the
+ * request box): a jig started from a request computes up to its first human checkpoint
+ * (`confirmed` mode, SPEC-07.7 fingerprints), not geometry only. Set before its tab opens.
+ */
+const runPreferences = new Map<string, RunPreference>();
+export function preferRun(instanceId: string, preference: RunPreference | undefined) {
+  if (preference) runPreferences.set(instanceId, preference);
+  else runPreferences.delete(instanceId);
+}
+export const runPreference = (instanceId: string) => runPreferences.get(instanceId);
+
 /** A step that has been evaluated by a run no longer waits for one. */
 const evaluated = (status: string) => status !== 'blocked' && status !== 'skipped';
 
@@ -207,12 +225,25 @@ export function useInstance(projectId: string, instanceId: string) {
     async (options: { until?: string; mode?: 'geometry' | 'confirmed' } = {}) => {
       setComputing(true);
       try {
-        const report = reportSchema.parse(
-          await api(`${base}/run`, 'POST', {
-            mode: options.mode ?? 'geometry',
-            ...(options.until ? { until: options.until } : {}),
-          }),
-        );
+        // A full run without a named mode follows the instance's preference (a started skill).
+        const preferred =
+          !options.mode && !options.until ? runPreferences.get(instanceId) : undefined;
+        const mode = options.mode ?? preferred?.mode ?? 'geometry';
+        const until = options.until ?? preferred?.until;
+        const ran = (detail: Record<string, unknown>) =>
+          window.dispatchEvent(
+            new CustomEvent(JIG_RAN, { detail: { instanceId, mode, ...detail } }),
+          );
+        let report: z.infer<typeof reportSchema>;
+        try {
+          report = reportSchema.parse(
+            await api(`${base}/run`, 'POST', { mode, ...(until ? { until } : {}) }),
+          );
+        } catch (error) {
+          ran({ error });
+          throw error;
+        }
+        ran({ report });
         if (report.superseded || !mounted.current) return report;
         setOutputs((current) => ({ ...current, ...report.outputs }));
         setReports((current) => ({
@@ -230,7 +261,7 @@ export function useInstance(projectId: string, instanceId: string) {
         if (mounted.current) setComputing(false);
       }
     },
-    [base],
+    [base, instanceId],
   );
 
   // Open: the view, then a run (cached steps come back without computing).

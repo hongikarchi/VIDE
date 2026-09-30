@@ -101,7 +101,7 @@ export interface CliOptions {
   stopGraceMs?: number;
   spawnProcess?: typeof spawn;
   /**
-   * Flag (SPIKE-2026-09-30-native-questions-claude): when set, a Claude run offers the CLI's own
+   * (SPIKE-2026-09-30-native-questions-claude; on for conversation turns, ADR-026 4) When set, a Claude run offers the CLI's own
    * AskUserQuestion and routes it over stdio (`--permission-prompt-tool stdio`) to this handler,
    * which shows the question cards and returns the answers (null: the user closed them).
    */
@@ -558,6 +558,10 @@ export async function answerToolRequest(
   handler: NativeQuestionHandler,
   signal: AbortSignal,
 ): Promise<Record<string, unknown>> {
+  // The CLI's own structured-output tool (a turn's --json-schema answer) writes nothing; in the
+  // `default` mode a native-question run uses, it may ask before it answers.
+  if (request.tool_name === 'StructuredOutput')
+    return { behavior: 'allow', updatedInput: (request.input ?? {}) as Record<string, unknown> };
   if (request.tool_name !== NATIVE_QUESTION_TOOL)
     return { behavior: 'deny', message: 'This tool is not available in VIDE.' };
   const cards = nativeQuestionCards(request.input);

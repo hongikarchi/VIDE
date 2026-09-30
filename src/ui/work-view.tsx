@@ -30,7 +30,11 @@ const roleLabel = { target: '변경', preserve: '유지', reference: '참고' } 
 export const workMode = (message: Message) =>
   requestMode((message.request?.input ?? message) as { mode?: unknown; permission?: unknown });
 const modeLabel = (message: Message) =>
-  workMode(message) === 'plan' ? '계획 · 읽고 계획만' : '자동 · 열린 문서에 바로 적용';
+  workMode(message) === 'plan'
+    ? '계획 · 읽고 계획만'
+    : (message.request?.input as { hostUse?: unknown } | undefined)?.hostUse === 'none'
+      ? '자동 · 호스트 문서를 쓰지 않음'
+      : '자동 · 열린 문서에 바로 적용';
 
 // Direct mode (user decision 2026-09-30): each execution is one host undo record. The result
 // lists them with their changes; a guarded one (bulk deletion, layer deletion, purge, save-as,
@@ -530,12 +534,14 @@ function WorkView({
         .join(' ↔ ')
     : jig === 'sync-review'
       ? 'Sync jig 표 (호스트 없음)'
-      : hostName(request?.input?.host || message.host) +
-        (result?.sourceDocument?.name
-          ? ' · ' + result.sourceDocument.name
-          : base?.request?.result?.sourceDocument?.name
-            ? ' · ' + base.request.result.sourceDocument.name
-            : '');
+      : (request?.input as { hostUse?: unknown } | undefined)?.hostUse === 'none'
+        ? 'VIDE 안 계산 (호스트 없음)'
+        : hostName(request?.input?.host || message.host) +
+          (result?.sourceDocument?.name
+            ? ' · ' + result.sourceDocument.name
+            : base?.request?.result?.sourceDocument?.name
+              ? ' · ' + base.request.result.sourceDocument.name
+              : '');
   const checks = [
     request?.state === 'unknown' ? '호스트 결과가 확인되지 않았습니다. 새 쓰기는 보류됩니다.' : '',
     result?.recovered

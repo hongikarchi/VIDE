@@ -19,6 +19,7 @@ import { AccountUsageService } from '../ai/account-usage.ts';
 import { JIGS } from '../jigs/catalog.ts';
 import { runSync } from '../jigs/sync.ts';
 import { closeJigRuntime, jigRoutes, jigStatuses } from './jig-routes.ts';
+import { routeJigsOf, skillCatalog } from './skill-catalog.ts';
 import {
   analysisWorkerStats,
   closeAnalysisWorker,
@@ -803,11 +804,16 @@ export async function startServer({
               .optional(),
             conversation: z.string().max(60).optional(),
             opening: z.boolean().optional(),
+            openJig: z.string().max(200).optional(),
           })
           .strict()
           .parse(await body(request));
+        // The project's skill catalog (its jigs first); the official list if it cannot be read.
+        const jigs = await skillCatalog(workspace, dirname(filename), routeQuery[1])
+          .then(routeJigsOf)
+          .catch(() => officialJigs(JIGS));
         const judged = await judgeRoute(
-          { ...query, jigs: officialJigs(JIGS), links: linkLabels(links.list(routeQuery[1])) },
+          { ...query, jigs, links: linkLabels(links.list(routeQuery[1])) },
           { dataDirectory: dirname(filename), enabled: routeSettings().get().jev },
         );
         const decision = judged.decision;
@@ -1892,6 +1898,32 @@ export async function startServer({
           const { executionId } = await body(request);
           send(202, withApplications(await execution.confirm(projectId, id, executionId)));
         } else send(202, withApplications(execution.continuePlan(projectId, id)));
+        return;
+      }
+      // The answers to a running Claude turn's own questions (AskUserQuestion, ADR-026 4): the
+      // same run goes on with them.
+      const questions = /^\/api\/v1\/projects\/([^/]+)\/requests\/([^/]+)\/questions$/.exec(
+        url.pathname,
+      );
+      if (questions && request.method === 'POST') {
+        store.project(questions[1]);
+        const { answers } = z
+          .object({
+            answers: z
+              .array(
+                z
+                  .object({
+                    id: z.string().max(40),
+                    option: z.string().max(40).optional(),
+                    text: z.string().max(2000).optional(),
+                  })
+                  .strict(),
+              )
+              .max(3),
+          })
+          .strict()
+          .parse(await body(request));
+        send(200, execution.answerQuestions(questions[1], questions[2], answers));
         return;
       }
       const job = /^\/api\/v1\/projects\/([^/]+)\/requests(?:\/([^/]+)(\/cancel)?)?$/.exec(

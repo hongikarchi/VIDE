@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import type { Root } from 'react-dom/client';
 import { z } from 'zod';
@@ -593,13 +593,21 @@ function Conversations({
     });
   }, [list, messages]);
   // A closed or unknown conversation falls back to the default one.
+  // A conversation made a moment ago elsewhere (a jig started from a request) is read once more
+  // before it counts as unknown.
+  const recheck = useRef<{ id: string; list: ConversationEntry[] } | undefined>(undefined);
   useEffect(() => {
-    if (
-      selected !== null &&
-      list.length &&
-      !list.some((e) => e.id === selected && e.state === 'open')
-    )
-      select(null);
+    if (selected === null || !list.length) return;
+    if (list.some((e) => e.id === selected && e.state === 'open')) return;
+    if (!list.some((e) => e.id === selected)) {
+      if (recheck.current?.id !== selected) {
+        recheck.current = { id: selected, list };
+        setLoaded((n) => n + 1);
+        return;
+      }
+      if (recheck.current.list === list) return; // still the list read before the recheck
+    }
+    select(null);
   }, [list, selected, select]);
 
   const chips = chipStates(list, messages, seen);

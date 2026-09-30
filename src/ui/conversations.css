@@ -1,11 +1,10 @@
-/* 목적별 대화 칩 (Design SCR-15). Colours come from style.css tokens (--line, --muted, --soft,
-   --coral, --ok, --warn), so the dark theme follows them. */
+/* 목적별 대화 칩 (Design SCR-15). Colours come from tokens.css, so the dark theme follows them. */
 .conv {
   display: flex;
   flex-direction: column;
   gap: 6px;
   padding: 6px 8px;
-  border-bottom: 1px solid var(--line);
+  border-bottom: var(--hairline) solid var(--line);
   min-width: 0;
 }
 .conv-chips {
@@ -21,8 +20,8 @@
   gap: 4px;
   max-width: 180px;
   padding: 2px 8px;
-  border: 1px solid var(--line);
-  border-radius: 12px;
+  border: var(--hairline) solid var(--line);
+  border-radius: var(--radius-pill);
   background: transparent;
   color: inherit;
   font: inherit;
@@ -31,7 +30,7 @@
   min-width: 0;
 }
 .conv-chip[aria-selected='true'] {
-  border-color: currentColor;
+  background: var(--bg-selected);
   font-weight: 600;
 }
 .conv-label {
@@ -59,7 +58,7 @@
   width: 22px;
   height: 22px;
   padding: 0;
-  border: 1px solid var(--line);
+  border: var(--hairline) solid var(--line);
   border-radius: 50%;
   background: transparent;
   color: inherit;
@@ -108,7 +107,7 @@
 }
 .conv-menu > button {
   padding: 4px 8px;
-  border: 1px solid var(--line);
+  border: var(--hairline) solid var(--line);
   background: var(--soft);
   color: inherit;
   font: inherit;
@@ -120,8 +119,8 @@
   flex-direction: column;
   gap: 6px;
   padding: 8px;
-  border: 1px solid var(--line);
-  border-radius: 4px;
+  border: var(--hairline) solid var(--line);
+  border-radius: var(--radius-sm);
   background: var(--soft);
 }
 .conv-create label {

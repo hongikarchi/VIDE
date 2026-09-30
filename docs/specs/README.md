@@ -2,8 +2,8 @@
 id: INDEX-SPECS
 title: VIDE 기능 명세 · 사용자 작업과 기능 목록
 status: review
-version: 0.12
-updated: 2026-09-30
+version: 0.13
+updated: 2026-10-01
 owner: user
 related: []
 ---
@@ -64,7 +64,7 @@ VIDE에서 설계자는 Rhino·ZWCAD의 모델과 도면을 보고, 객체를 �
 | FR-22 | [SPEC-03](SPEC-03-data-history-export.md) · [SPEC-07](SPEC-07-jig-platform.md) | — |
 | FR-23 | [SPEC-06](SPEC-06-structure-analysis.md) · [SPEC-07](SPEC-07-jig-platform.md) | 구조 분석 jig와 프로젝트 구조 jig(입력 조립·진단·배치·간섭·단면·일람표·Rhino에 만들기) |
 | FR-24 | [SPEC-07](SPEC-07-jig-platform.md) · [SPEC-05](SPEC-05-extensions-install.md)(SPEC-05.8) · [SPEC-08](SPEC-08-project-facts.md)(SPEC-08.6) · [SPEC-02](SPEC-02-execution-candidates.md)(SPEC-02.13·17·19) · [SPEC-06](SPEC-06-structure-analysis.md) | jig 플랫폼: 작업본·형식·실행·Rhino에 만들기·만들기 대화 |
-| FR-25 | [SPEC-02](SPEC-02-execution-candidates.md)(SPEC-02.9·17·19) · [SPEC-08](SPEC-08-project-facts.md)(SPEC-08.7) | 대화 세션·동시 진행·말로 하는 경로 판정 |
+| FR-25 | [SPEC-02](SPEC-02-execution-candidates.md)(SPEC-02.9·17·19·20) · [SPEC-07](SPEC-07-jig-platform.md)(SPEC-07.18) · [SPEC-08](SPEC-08-project-facts.md)(SPEC-08.7) | 대화 세션·동시 진행·말로 하는 경로 판정 |
 
 호스트 계약·실험 범위: [Rhino](hosts/rhino.md) · [ZWCAD](hosts/zwcad.md).
 

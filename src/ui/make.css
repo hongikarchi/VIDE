@@ -14,12 +14,12 @@ body[data-workspace='make'] .make-workspace {
   display: grid;
   grid-template-columns: 260px minmax(0, 1fr);
   grid-template-rows: minmax(0, 1fr) minmax(120px, 34%);
-  background: white;
+  background: var(--bg-elevated);
 }
 body[data-workspace='make'] .make-side {
   display: block;
   padding: 8px 12px;
-  border-bottom: 1px solid var(--line);
+  border-bottom: var(--hairline) solid var(--line);
 }
 @media (min-width: 851px) {
   body[data-workspace='make'] #left,
@@ -56,8 +56,8 @@ body[data-workspace='make'] .make-side {
 .make-tag {
   font-size: 12px;
   color: var(--muted);
-  border: 1px solid var(--line);
-  border-radius: 4px;
+  border: var(--hairline) solid var(--line);
+  border-radius: var(--radius-sm);
   padding: 1px 6px;
   white-space: nowrap;
 }
@@ -66,7 +66,7 @@ body[data-workspace='make'] .make-side {
   min-height: 0;
   overflow: auto;
   padding: 12px;
-  border-right: 1px solid var(--line);
+  border-right: var(--hairline) solid var(--line);
 }
 .make-outline h3 {
   margin: 10px 0 4px;
@@ -106,7 +106,7 @@ body[data-workspace='make'] .make-side {
   align-items: baseline;
   gap: 8px;
   padding: 3px 0;
-  border-bottom: 1px solid var(--soft);
+  border-bottom: var(--hairline) solid var(--soft);
 }
 .make-group li small,
 .make-log li small {
@@ -147,7 +147,7 @@ body[data-workspace='make'] .make-side {
   gap: 8px;
   flex-wrap: wrap;
   padding: 8px 12px;
-  border-bottom: 1px solid var(--line);
+  border-bottom: var(--hairline) solid var(--line);
 }
 .make-run {
   display: flex;
@@ -169,7 +169,7 @@ body[data-workspace='make'] .make-side {
   min-height: 0;
   min-width: 0;
   overflow: auto;
-  border-top: 1px solid var(--line);
+  border-top: var(--hairline) solid var(--line);
   padding: 6px 12px;
 }
 .make-console-head {
@@ -179,7 +179,7 @@ body[data-workspace='make'] .make-side {
   flex-wrap: wrap;
   position: sticky;
   top: 0;
-  background: white;
+  background: var(--bg-elevated);
   padding-bottom: 4px;
 }
 .make-console-head .kit-actions {
@@ -191,7 +191,7 @@ body[data-workspace='make'] .make-side {
   justify-content: space-between;
   gap: 6px;
   padding: 3px 0;
-  border-bottom: 1px solid var(--soft);
+  border-bottom: var(--hairline) solid var(--soft);
 }
 .make-log li[data-level='error'],
 .make-log li[data-ok='false'] {
@@ -241,8 +241,8 @@ body[data-workspace='make'] .make-side {
   font-weight: 600;
 }
 .make-plan {
-  border: 1px solid var(--line);
-  border-radius: 6px;
+  border: var(--hairline) solid var(--line);
+  border-radius: var(--radius-sm);
   padding: 8px;
   margin-bottom: 8px;
 }
@@ -292,7 +292,7 @@ body[data-workspace='make'] .make-side {
   .make-outline {
     grid-row: auto;
     border-right: 0;
-    border-bottom: 1px solid var(--line);
+    border-bottom: var(--hairline) solid var(--line);
     max-height: 40vh;
   }
 }

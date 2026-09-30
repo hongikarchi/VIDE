@@ -41,6 +41,7 @@ import {
 } from '../jigs/runtime/report-format.ts';
 import { jigReportInputs, renderJigReport, type JigReportLedgerRow } from './report.ts';
 import { ConversationStore } from '../core/conversation-store.ts';
+import { skillCatalog } from './skill-catalog.ts';
 import { diagnose, type DiagnoseInputs } from '../../extensions/jigs/s06-frame/steps/diagnose.ts';
 import { ROLE_KEYS } from '../../extensions/jigs/s06-frame/steps/labels.ts';
 import {
@@ -150,11 +151,17 @@ const createInstance = z
     jig: z.string().min(1).max(100),
     version: z.string().max(50).optional(),
     title: z.string().min(1).max(500),
-    layerRoot: z.string().min(1).max(1000),
+    layerRoot: z.string().min(1).max(1000).optional(),
     params: z.array(paramChange).max(100).optional(),
     conversationId: id.optional(),
+    /**
+     * Opened from a request (startSkill, ADR-026): no output layer yet. Computing works; Rhino에
+     * 만들기 stops with LAYER_ROOT_MISSING and asks for the layer then (`PUT …/layer-root`).
+     */
+    layerRootLater: z.literal(true).optional(),
   })
-  .strict();
+  .strict()
+  .refine((input) => !!input.layerRoot !== !!input.layerRootLater);
 const setParams = z
   .object({
     values: z.array(paramChange).min(1).max(100),
@@ -312,6 +319,13 @@ export async function jigRoutes(
     send(200, { removed: jigId, pinned: store().pinned(projectId) });
     return true;
   }
+  // The skill catalog (RESEARCH-12 §6.3): what a request may open, this project's jigs first.
+  const skills = /^\/api\/v1\/projects\/([^/]+)\/skills$/.exec(url.pathname);
+  if (skills && method === 'GET') {
+    workspace.store.project(skills[1]);
+    send(200, { skills: await skillCatalog(workspace, context.dataDirectory, skills[1]) });
+    return true;
+  }
   const projectJigs = /^\/api\/v1\/projects\/([^/]+)\/jigs$/.exec(url.pathname);
   if (projectJigs && method === 'GET') {
     send(200, { pinned: store().pinned(projectJigs[1]) });
@@ -347,24 +361,36 @@ export async function jigRoutes(
         return true;
       }
       if (method === 'POST') {
-        const input = createInstance.parse(await body(request));
-        const layerExists = (layerRoot: string) => {
-          // The output layer must exist in a linked document; stored Sync layer tables are the evidence.
-          const tables = workspace
-            .list(projectId)
-            .filter(
-              (entry) =>
-                entry.state === 'succeeded' &&
-                Array.isArray((entry.result as { layers?: unknown })?.layers),
-            )
-            .map((entry) => (entry.result as { layers: { fullPath?: unknown }[] }).layers);
-          if (!tables.length) return undefined;
-          return tables.some((table) => table.some((layer) => layer.fullPath === layerRoot));
-        };
-        send(200, await rt.createInstance(projectId, input, { layerExists }));
+        const { layerRootLater: _later, ...input } = createInstance.parse(await body(request));
+        const layerExists = (layerRoot: string) => layerExistsIn(workspace, projectId, layerRoot);
+        send(
+          200,
+          await rt.createInstance(
+            projectId,
+            { ...input, layerRoot: input.layerRoot ?? '' },
+            {
+              layerExists,
+              layerRootLater: !input.layerRoot,
+            },
+          ),
+        );
         return true;
       }
       return false;
+    }
+    // The output layer of an instance opened without one (asked at Rhino에 만들기, ADR-026).
+    if (rest === 'layer-root' && method === 'PUT') {
+      const { layerRoot } = z
+        .object({ layerRoot: z.string().trim().min(1).max(1000) })
+        .strict()
+        .parse(await body(request));
+      send(
+        200,
+        await rt.setLayerRoot(projectId, instanceId, layerRoot, {
+          layerExists: (root) => layerExistsIn(workspace, projectId, root),
+        }),
+      );
+      return true;
     }
     if (!rest) {
       if (method !== 'GET') return false;
@@ -733,6 +759,23 @@ export async function jigRoutes(
     return true;
   }
   return false;
+}
+
+/**
+ * Whether an output layer exists in a linked document: stored Sync layer tables are the evidence;
+ * undefined when no Sync has a layer table yet.
+ */
+function layerExistsIn(workspace: Workspace, projectId: string, layerRoot: string) {
+  const tables = workspace
+    .list(projectId)
+    .filter(
+      (entry) =>
+        entry.state === 'succeeded' &&
+        Array.isArray((entry.result as { layers?: unknown })?.layers),
+    )
+    .map((entry) => (entry.result as { layers: { fullPath?: unknown }[] }).layers);
+  if (!tables.length) return undefined;
+  return tables.some((table) => table.some((layer) => layer.fullPath === layerRoot));
 }
 
 /** The attached editor's direct commands: the context's own, else the engine's SDK methods. */

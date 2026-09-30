@@ -204,11 +204,11 @@ try {
   assert.equal(await kpi('기둥 없는 끝'), '1곳');
   assert.equal(await kpi('경간 초과'), '2개');
   assert.equal(await kpi('작은보'), '9개'); // back spans included since 2026-09-30 (VERIFY s06-frame-m2 추가)
-  // The sandboxed jig child cannot start the analysis worker (steps/analysis.ts), so the preview
-  // reports 'unavailable'; the '미확정 미리보기' label shows only beside a preview value (kpiNote).
+  // The jig child may start the analysis worker (--allow-worker --allow-addons, hotfix 0.2.12), so
+  // the preview carries a value beside the '미확정 미리보기' label (kpiNote) until 해석 확정.
   const ratioText = await top.locator('.kit-kpi[data-kpi="최대 검정비"]').textContent();
-  assert.match(ratioText, /해석 전/);
-  assert.doesNotMatch(ratioText, /미확정 미리보기/);
+  assert.match(ratioText, /\d+\.\d+/);
+  assert.match(ratioText, /미확정 미리보기/);
   const drawnTabs = await drawer.getByRole('tab').allTextContents();
   assert.deepEqual(
     drawnTabs.slice(0, 4).map((t) => t.replace(/\d+$/, '')),

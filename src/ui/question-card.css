@@ -1,5 +1,4 @@
-/* 질문 카드 (Design SCR-15). Colours come from style.css tokens (--line, --muted, --soft,
-   --coral, --ok, --warn), so the dark theme follows them. */
+/* 질문 카드 (Design SCR-15). Colours come from tokens.css, so the dark theme follows them. */
 .qcards {
   display: flex;
   flex-direction: column;
@@ -11,8 +10,8 @@
   flex-direction: column;
   gap: 6px;
   padding: 8px 10px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
+  border: var(--hairline) solid var(--line);
+  border-radius: var(--radius-md);
   min-width: 0;
 }
 .qcard-head {
@@ -42,8 +41,8 @@
   align-items: center;
   column-gap: 6px;
   padding: 4px 6px;
-  border: 1px solid transparent;
-  border-radius: 6px;
+  border: var(--hairline) solid transparent;
+  border-radius: var(--radius-sm);
   cursor: pointer;
 }
 .qcard-option[data-selected='true'] {
@@ -55,8 +54,8 @@
 }
 .qcard-tag {
   padding: 0 6px;
-  border: 1px solid var(--ok);
-  border-radius: 10px;
+  border: var(--hairline) solid var(--ok);
+  border-radius: var(--radius-pill);
   color: var(--ok);
   font-size: 11px;
 }
@@ -68,8 +67,8 @@
 .qcard-free {
   font: inherit;
   padding: 4px 6px;
-  border: 1px solid var(--line);
-  border-radius: 6px;
+  border: var(--hairline) solid var(--line);
+  border-radius: var(--radius-sm);
   background: transparent;
   color: inherit;
   min-width: 0;
@@ -84,25 +83,25 @@
 .qcard-actions button {
   font: inherit;
   padding: 4px 10px;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   cursor: pointer;
 }
 .qcard-secondary {
-  border: 1px solid var(--line);
+  border: var(--hairline) solid var(--line);
   background: transparent;
   color: inherit;
 }
 .qcard-primary {
-  border: 1px solid var(--coral);
-  background: var(--coral);
-  color: #fff;
+  border: var(--hairline) solid var(--cta-bg);
+  background: var(--cta-bg);
+  color: var(--cta-text);
 }
 .qcard-actions button:disabled {
   opacity: 0.5;
   cursor: default;
 }
 .qcard-error {
-  color: var(--coral);
+  color: var(--ng);
   font-size: 12px;
   margin-right: auto;
 }

@@ -6,6 +6,7 @@ import { DeclaredJig } from './jig-panel/declared-jig.tsx';
 import { KnowledgeJig } from './knowledge-jig.tsx';
 import { DraftList, ImportJig, MakeCard } from './make-tab.tsx';
 import type { Point3 } from './model.ts';
+import { openSkill } from './skill-start.ts';
 import { StructureJig } from './structure-jig.tsx';
 import type { OverlayItem } from './viewport.ts';
 import {
@@ -620,6 +621,11 @@ setContextResolver(async (instanceId) => {
     return undefined;
   }
 });
+/** The tab of an older jig by its catalog id (`structure`, `sync`, `knowledge`), for startSkill. */
+export function legacyJigTab(jigId: string): ContextTab | undefined {
+  const kind = legacyKind(`legacy:${jigId}`);
+  return kind ? legacyTab(kind) : undefined;
+}
 function legacyTab(kind: LegacyKind): ContextTab {
   const project = current()?.projectName;
   return {
@@ -800,11 +806,21 @@ function Gallery({ context }: { context: JigContext }) {
                 <button
                   type="button"
                   onClick={() =>
-                    openContextTab({
-                      instanceId: row.id,
-                      label: row.title,
-                      title: `${entry.name} · ${row.title}`,
-                    })
+                    // One entry point (startSkill): the tab and this jig's conversation.
+                    void (
+                      openSkill(entry.id, {
+                        mode: 'auto',
+                        by: 'user',
+                        instanceId: row.id,
+                        openOnly: true,
+                      }) ?? Promise.reject(new Error('NOT_READY'))
+                    ).catch(() =>
+                      openContextTab({
+                        instanceId: row.id,
+                        label: row.title,
+                        title: `${entry.name} · ${row.title}`,
+                      }),
+                    )
                   }
                 >
                   열기
@@ -895,7 +911,15 @@ function Gallery({ context }: { context: JigContext }) {
                       {jig.basis ? ` · 근거 ${jig.basis}` : ''}
                     </small>
                     {jig.status === 'available' && kind ? (
-                      <button type="button" onClick={() => openContextTab(legacyTab(kind))}>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          void (
+                            openSkill(jig.id, { mode: 'auto', by: 'user', openOnly: true }) ??
+                            Promise.reject(new Error('NOT_READY'))
+                          ).catch(() => openContextTab(legacyTab(kind)))
+                        }
+                      >
                         열기
                       </button>
                     ) : null}

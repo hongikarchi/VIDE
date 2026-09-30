@@ -2,10 +2,10 @@
 id: ADR-022
 title: AI 편집은 열린 문서에 바로 적용하고 되돌리기로 보호한다 — 계획·자동 두 모드
 status: approved
-version: 0.2
-updated: 2026-09-30
+version: 0.3
+updated: 2026-10-01
 owner: user
-related: [FR-04, FR-08, FR-10, FR-11, FR-12, FR-16, FR-18, FR-24, FR-25, AC-17, AC-38, AC-43, AC-46, SPEC-02, SPEC-07, ARCH-01, ARCH-03, ADR-003, ADR-011, ADR-014, ADR-020, ADR-021, RESEARCH-10, RESEARCH-11, PLAN-22, PLAN-23, PLAN-24]
+related: [FR-04, FR-08, FR-10, FR-11, FR-12, FR-16, FR-18, FR-24, FR-25, AC-17, AC-38, AC-43, AC-46, SPEC-02, SPEC-07, ARCH-01, ARCH-03, ADR-003, ADR-011, ADR-014, ADR-020, ADR-021, ADR-026, RESEARCH-10, RESEARCH-11, PLAN-22, PLAN-23, PLAN-24]
 ---
 
 # AI 편집은 열린 문서에 바로 적용하고 되돌리기로 보호한다
@@ -69,3 +69,7 @@ B를 택했다. A의 보호는 되돌리기로 대부분 대신할 수 있고, �
 ## 출처
 
 2026-09-30 사용자 결정 (1)~(4). [RESEARCH-10 §1·§8](../research/RESEARCH-10-vide-restructure.md), [RESEARCH-11](../research/RESEARCH-11-ai-parity.md).
+
+## 후속 결정
+
+- **2026-10-01 [ADR-026](ADR-026-chat-stage-and-skill-jigs.md) — 계획 모드의 화면 이동·jig 열기, 공급자 자체 질문 기본.** 위 결정의 문구는 바꾸지 않는다. 결정 2의 계획 모드는 여전히 호스트·설정값을 쓰지 않지만, VIDE 화면 이동과 jig 열기(기존 작업본을 열고 대화를 묶기)는 한다. jig 단계 계산과 설정값 적용은 체크리스트의 [진행] 뒤다. 결정 5의 질문 카드는 공급자 자체 질문 기능을 기본으로 쓰고, 지원하지 않는 공급자·경로는 VIDE 카드로 대신한다. 동작 정본은 SPEC-02.19의 6·SPEC-02.20의 2.

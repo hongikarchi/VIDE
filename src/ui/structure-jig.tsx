@@ -3,6 +3,7 @@ import { api } from './gateway.ts';
 import type { JigContext } from './jigs.tsx';
 import { S06Diagnose } from './s06-diagnose.tsx';
 import { VerdictLegend, type VerdictBand } from './kit/status.tsx';
+import { tokenColor } from './tokens.ts';
 
 // Structure analysis jig (J-09, SPEC-06): pick Syncs → draft (computed + AI help) → check and fix →
 // confirm & analyse → member table and verdict colours. Results are exploratory, never sign-off.
@@ -114,16 +115,14 @@ export const verdictBand = (
       : check.ratio >= bands[0]
         ? 'warn'
         : 'ok';
-const BAND_COLOR: Record<VerdictBand, string> = {
-  ok: '#3a9d5d',
-  warn: '#d8a31a',
-  ng: '#d0453a',
-  na: '#8a8f8c',
-};
+// Verdict colours are the judgement tokens of tokens.css (--ok / --warn / --ng / --na), the same
+// ones the legend and verdict chips use.
 export const verdictColor = (
   check: Pick<Check, 'status' | 'ratio'>,
   bands: [number, number] = DEFAULT_BANDS,
-) => BAND_COLOR[verdictBand(check, bands)];
+) => tokenColor(verdictBand(check, bands));
+/** Worse verdicts win when one object holds several members. */
+const BAND_RANK: VerdictBand[] = ['ok', 'na', 'warn', 'ng'];
 /** The check table as CSV (SPEC-06.7), with the result label so a preview never reads as final. */
 export function checksCsv(
   rows: readonly Check[],
@@ -460,19 +459,22 @@ export function StructureJig({ context }: { context: JigContext }) {
   };
   const tint = () => {
     if (!confirmed || !context.tint) return;
-    const bySync = new Map<string, Record<string, string>>();
+    const bySync = new Map<string, Record<string, VerdictBand>>();
     for (const check of confirmed.result.checks) {
       const source = memberOf(check.member)?.source;
       if (!source) continue;
-      const colors = bySync.get(source.documentId) ?? {};
-      // One Rhino object can hold several analysis members; keep the worst colour.
-      const rank = (c: string) => ['#3a9d5d', '#8a8f8c', '#d8a31a', '#d0453a'].indexOf(c);
-      const next = verdictColor(check, bands);
-      if (!colors[source.objectId] || rank(next) > rank(colors[source.objectId]))
-        colors[source.objectId] = next;
-      bySync.set(source.documentId, colors);
+      const worst = bySync.get(source.documentId) ?? {};
+      // One Rhino object can hold several analysis members; keep the worst verdict.
+      const next = verdictBand(check, bands);
+      const held = worst[source.objectId];
+      if (!held || BAND_RANK.indexOf(next) > BAND_RANK.indexOf(held)) worst[source.objectId] = next;
+      bySync.set(source.documentId, worst);
     }
-    for (const [sync, colors] of bySync) context.tint(sync, colors);
+    for (const [sync, worst] of bySync) {
+      const colors: Record<string, string> = {};
+      for (const [id, band] of Object.entries(worst)) colors[id] = tokenColor(band);
+      context.tint(sync, colors);
+    }
   };
 
   const issues = draft ? [...draft.issues, ...draft.checks] : [];

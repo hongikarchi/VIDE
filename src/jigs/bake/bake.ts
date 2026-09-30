@@ -173,6 +173,8 @@ function recordsOf(store: JigStore, instanceId: string, bakeId: string, linkId: 
 export async function prepareBake(ctx: BakeContext, input: BakeInput): Promise<PreparedBake> {
   const { runtime, store } = ctx;
   const view = await runtime.view(input.projectId, input.instanceId);
+  // Opened from a request without an output layer (ADR-026): asked for before anything is made.
+  if (!view.body.layerRoot) throw new DomainError('LAYER_ROOT_MISSING');
   const jig = await runtime.registry.resolve(view.jig.id, view.jig.version);
   const decls = input.bakeIds.map((id) => {
     const decl = bakeDeclOf(jig, id);

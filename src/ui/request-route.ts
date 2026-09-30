@@ -88,13 +88,24 @@ export interface RouteJig {
   name?: string;
   /** Rule words (skill.md `words`) that open this jig without Jev. */
   words?: readonly string[];
+  /** skill.md `not_for`: words that mean this jig is not wanted. */
+  notFor?: readonly string[];
+  /**
+   * `skill`: words from a jig's skill.md, many of them topic words ("기둥", "해석"), so a single
+   * word opens the jig only when the request neither acts on objects nor asks a question.
+   * `legacy` (default): the official list's phrases, decisive as they are.
+   */
+  source?: 'skill' | 'legacy';
 }
 export interface RouteContext {
   /** Settings of the jig open now; none when no jig is open. */
   params?: readonly RouteParam[];
   /** Their current values in stored units. */
   values?: Readonly<Record<string, number | string | boolean>>;
+  /** Routing candidates in order (this project's jigs first, src/ui/skill-catalog.ts). */
   jigs?: readonly RouteJig[];
+  /** The jig id of the open instance: its own words then change its settings, not reopen it. */
+  openJig?: string;
 }
 export type ParamChange =
   | { ok: true; value: number | string | boolean; text: string }
@@ -111,6 +122,8 @@ export interface Route {
   /** The request uses screen-action words (worth showing where it goes, even to the file). */
   viewWords?: boolean;
   param?: { key: string; title: string; change: ParamChange };
+  /** Several settings in one request ("경간 11로, 작은보 간격 2.2"): all applied together. */
+  params?: { key: string; title: string; change: ParamChange }[];
   app?: { action: AppAction; tier: Tier; provider?: Service; link?: string };
   jig?: { id: string; name: string };
   reason: string;
@@ -148,6 +161,8 @@ export const OFFICIAL_JIG_ROUTING: Record<string, { intent: string; words: strin
 // Words that name the file itself or change it: these requests always go to the file.
 const documentWords =
   /(원본|도면에서|도면을|cad\s*에서|캐드|zwcad|rhino\s*에서|라이노에서|파일에|삭제|지워|없애|레이어[^.]{0,12}(바꿔|변경|옮)|색(상|깔)?[을를]?\s*(바꿔|변경|바꾸)|수정|이동|옮겨|만들어|그려|생성|추가|복사|회전|늘려|줄여|저장)/i;
+/** Words that name the file or change it (a jig conversation's turn then uses the host). */
+export const worksOnFile = (body: string) => documentWords.test(body) || FILE_WORDS.test(body);
 /** Naming the file or program means work on the file, whatever else the words say (decided without Jev). */
 export const FILE_WORDS =
   /(원본|파일에서|파일에|도면에서|cad\s*에서|캐드에서|zwcad|rhino\s*에서|라이노에서)/i;
@@ -486,6 +501,80 @@ export function paramFor(body: string, params: readonly RouteParam[] | undefined
   return scored[0].param;
 }
 
+/** Parts of one request that each may set one value ("경간 11로, 작은보 간격 2.2"). */
+const CLAUSES = /[,，;·]|\s(?:그리고|하고|및|또)\s/;
+/**
+ * Several settings named in one request, each read from its own clause (the one-setting rule of
+ * {@link paramFor} per clause). At least two different settings, else undefined.
+ */
+export function paramsFor(
+  body: string,
+  params: readonly RouteParam[] | undefined,
+): (RouteParam & { text: string })[] | undefined {
+  if (!params?.length || QUESTION.test(body)) return undefined;
+  const found = new Map<string, RouteParam & { text: string }>();
+  for (const clause of body.split(CLAUSES)) {
+    const param = paramFor(clause, params);
+    if (param) found.set(param.key, { ...param, text: clause });
+  }
+  return found.size >= 2 ? [...found.values()] : undefined;
+}
+/**
+ * The values a request gives for the settings a jig reads from requests (jig.json
+ * `from_request`) when it starts: every clause that names one of them with a value. Settings the
+ * words do not give, or give wrongly (out of range, fixed), are left out with their reason.
+ */
+export function requestValues(
+  body: string,
+  params: readonly RouteParam[],
+  values: Readonly<Record<string, number | string | boolean>> = {},
+  keys?: readonly string[],
+) {
+  const allowed = keys ? params.filter((param) => keys.includes(param.key)) : params;
+  const changes = new Map<string, { key: string; title: string; change: ParamChange }>();
+  if (!allowed.length) return [];
+  for (const clause of body.split(CLAUSES)) {
+    // "구조 분석 해줘" names no setting; "경간 11로 해서 구조 분석" names one with its value.
+    const param = paramFor(clause.replace(QUESTION, ' '), allowed);
+    if (!param) continue;
+    changes.set(param.key, {
+      key: param.key,
+      title: param.title,
+      change: paramChange(clause, param, values[param.key]),
+    });
+  }
+  return [...changes.values()];
+}
+
+/**
+ * The jig a request names by its rule words: the best hit (a phrase over a single word), the
+ * catalog's order breaking ties (this project's jigs first). skill.md words are guarded: a
+ * request that acts on objects, the file or the screen never opens a jig by them, a single word
+ * needs at least two letters and no question, and a `not_for` word rules the jig out.
+ */
+export function jigFor(body: string, jigs: readonly RouteJig[] | undefined) {
+  const acting =
+    NOT_A_SETTING.test(body) ||
+    FILE_WORDS.test(body) ||
+    viewActions.some(([, pattern]) => pattern.test(body));
+  const words = squash(body);
+  let best: { jig: RouteJig; score: number } | undefined;
+  for (const jig of jigs ?? []) {
+    const skill = jig.source === 'skill';
+    if (skill && hits(body, jig.notFor)) continue;
+    let score = 0;
+    for (const word of jig.words ?? []) {
+      const squashed = squash(word);
+      if (!squashed || !words.includes(squashed)) continue;
+      const phrase = /\s/.test(word.trim());
+      if (skill && (acting || (!phrase && (squashed.length < 2 || QUESTION.test(body))))) continue;
+      score = Math.max(score, phrase ? 2 : 1);
+    }
+    if (score > (best?.score ?? 0)) best = { jig, score };
+  }
+  return best;
+}
+
 /** A route from words that decide it without Jev, or undefined. */
 export function decisiveRoute(body: string, context: RouteContext = {}): Route | undefined {
   if (!body.trim()) return undefined;
@@ -508,16 +597,33 @@ export function decisiveRoute(body: string, context: RouteContext = {}): Route |
       app: { action: 'sync_link', tier: APP_TIER.sync_link },
       reason: '앱 동작 · Sync 받기',
     };
-  const jig = (context.jigs ?? []).find((entry) => hits(body, entry.words));
-  if (jig)
+  const found = jigFor(body, context.jigs);
+  const several = paramsFor(body, context.params);
+  const param = several ? undefined : paramFor(body, context.params);
+  // The open jig's own words ("끝 붙임 0.5로") and a single topic word beside a setting change
+  // its setting; a phrase naming another jig opens that one.
+  const settingFirst =
+    !!found && (!!param || !!several) && (found.jig.id === context.openJig || found.score < 2);
+  if (found && !settingFirst)
     return {
       target: 'jig',
       by: 'rules',
-      jig: { id: jig.id, name: jig.name ?? jig.id },
-      reason: 'jig 열기 제안',
+      jig: { id: found.jig.id, name: found.jig.name ?? found.jig.id },
+      reason: 'jig 열기',
     };
   if (MAKE.test(body)) return { target: 'make', by: 'rules', reason: 'jig 만들기' };
-  const param = paramFor(body, context.params);
+  if (several) {
+    return {
+      target: 'param',
+      by: 'rules',
+      params: several.map((entry) => ({
+        key: entry.key,
+        title: entry.title,
+        change: paramChange(entry.text, entry, context.values?.[entry.key]),
+      })),
+      reason: '설정값 변경',
+    };
+  }
   if (param)
     return {
       target: 'param',
@@ -759,7 +865,7 @@ export function jevRoute(
         target: 'jig',
         by,
         jig: { id: answer.jig, name: answer.jigName ?? known?.name ?? answer.jig },
-        reason: who + 'jig 열기 제안',
+        reason: who + 'jig 열기',
       };
     }
     case 'view':
@@ -799,6 +905,13 @@ export interface RouteCard {
   /** Every notice and card offers 'AI 작업으로 보내기' (undo, then the same words to the AI). */
   toAi: true;
 }
+/** The route row of a jig start: "S-06 골조 배치로 진행". */
+export const jigRouteText = (name: string) => {
+  const last = name.charCodeAt(name.length - 1);
+  const batchim = last >= 0xac00 && last <= 0xd7a3 ? (last - 0xac00) % 28 : 0;
+  // 받침 없음·ㄹ(8) → 로, 그 밖의 받침 → 으로; 한글이 아니면 로.
+  return `${name}${batchim && batchim !== 8 ? '으로' : '로'} 진행`;
+};
 export function routeCard(
   route: Route,
   status: { signedIn?: Partial<Record<Service, boolean>> } = {},
@@ -809,13 +922,18 @@ export function routeCard(
       ? { text: `설정값 ${change.text} · 다시 계산합니다.`, tier: 'auto', toAi: true }
       : { text: change.text, tier: 'R', toAi: true };
   }
-  if (route.jig)
-    return {
-      text: `'${route.jig.name}' jig를 열까요?`,
-      tier: 'T1',
-      run: '열기',
-      toAi: true,
-    };
+  if (route.params?.length) {
+    const done = route.params.filter((entry) => entry.change.ok);
+    return done.length
+      ? {
+          text: `설정값 ${done.map((entry) => entry.change.text).join(' · ')} · 다시 계산합니다.`,
+          tier: 'auto',
+          toAi: true,
+        }
+      : { text: route.params.map((entry) => entry.change.text).join(' '), tier: 'R', toAi: true };
+  }
+  // A jig opens at once (user decision 2026-10-01): the route row says so and offers the way back.
+  if (route.jig) return { text: jigRouteText(route.jig.name), tier: 'auto', toAi: true };
   if (!route.app) return undefined;
   const service = route.app.provider ? SERVICE_NAME[route.app.provider] : '';
   switch (route.app.action) {
@@ -954,6 +1072,7 @@ export function instanceRouteContext(params: unknown): {
 export function routeQuery(body: string, subjects: readonly Subject[], context: RouteContext = {}) {
   return {
     body,
+    ...(context.openJig ? { openJig: context.openJig } : {}),
     subjects: subjects.map(({ id, label }) => ({ id, label })),
     ...(context.params?.length
       ? {

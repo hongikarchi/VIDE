@@ -200,7 +200,7 @@ try {
   assert.ok(await result.isVisible(), 'the jig keeps its result while the model is shown');
   assert.equal(await dialog.evaluate((node) => node.matches(':modal')), false);
   // Verdict colours paint the model and can be switched off again; the jig stays open.
-  const verdicts = ['#3a9d5d', '#8a8f8c', '#d8a31a', '#d0453a'];
+  const verdicts = ['#2f7d4f', '#a0a0a0', '#a8660b', '#b42323'];
   const painted = () =>
     page.evaluate(
       (colors) =>

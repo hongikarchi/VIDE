@@ -1684,6 +1684,18 @@
     "requiresHost": false
   },
   "skill": "skill.md",
+  "open": { "reuse": "last" },
+  "from_request": [
+    "spanMax",
+    "layoutSource",
+    "snapTol_m",
+    "beamSpacing_m",
+    "depthMax",
+    "targetRatio",
+    "planterD",
+    "restraintLevel"
+  ],
+  "autorun": { "until": "first-hard" },
   "bake": [
     {
       "id": "lines",

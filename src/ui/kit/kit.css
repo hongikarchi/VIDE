@@ -1,37 +1,6 @@
-/* Official jig parts (Design §14 부품 목록). Only the new token names of Design §02 are added
-   here, with the values the app already uses; style.css keeps its own tokens and values
-   (--line, --muted, --soft, --coral, the verdict/zone/overlay colours, --fs-kpi). No
-   prefers-color-scheme: the dark values follow the host panel theme only (SCR-12). */
-:root {
-  --ink: #292c2d; /* the app's text colour */
-  --paper: #ffffff; /* panel background */
-  --bar-base: #dfe2df;
-  --bar-alt: #a9c4ad;
-  --bar-strong: #4f7a60;
-  --bar-actual: #d97660;
-  --fs-eyebrow: 11px;
-  --fs-small: 12px;
-  --fs-body: 14px;
-  --fs-lede: 15px;
-  --fs-h3: 20px;
-  --fs-claim: 28px;
-  --fs-headline: 44px;
-  --track-eyebrow: 0.16em;
-  --s1: 4px;
-  --s2: 8px;
-  --s3: 12px;
-  --s4: 16px;
-  --s6: 24px;
-  --s8: 32px;
-  --s12: 48px;
-  --hit: 36px;
-  --hit-touch: 44px;
-  --radius: 4px;
-}
-:root[data-theme='dark'] {
-  --ink: #dde3df;
-  --paper: #1d2120;
-}
+/* Official jig parts (Design §14 부품 목록). Tokens (--ink, --paper, --line, --muted, --soft, the
+   verdict/zone/overlay/bar colours, --fs-*, --s*) live in ../tokens.css; the dark theme only
+   redefines them there. */
 
 /* --- panel frame --------------------------------------------------------------------------- */
 .kit-panel {
@@ -83,7 +52,7 @@
   }
 }
 .kit-section {
-  border-top: 1px solid var(--line);
+  border-top: var(--hairline) solid var(--line);
   padding-top: var(--s2);
 }
 .kit-section > h4,
@@ -100,11 +69,10 @@
 .kit-notice {
   margin: 0;
   padding: var(--s2) var(--s3);
-  border-left: 2px solid var(--warn);
+  border-radius: var(--radius-sm);
   background: var(--zone-warn);
 }
 .kit-notice[data-level='error'] {
-  border-left-color: var(--ng);
   background: var(--zone-no);
 }
 .kit-issues {
@@ -122,16 +90,16 @@
 .kit-button {
   min-height: 30px;
   padding: 0 var(--s3);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
+  border: var(--hairline) solid var(--line);
+  border-radius: var(--radius-sm);
   background: var(--paper);
   cursor: pointer;
 }
 .kit-actions button[data-primary],
 .kit-button[data-primary] {
-  border-color: var(--ink);
-  background: var(--ink);
-  color: var(--paper);
+  border-color: var(--cta-bg);
+  background: var(--cta-bg);
+  color: var(--cta-text);
 }
 .kit-actions button:disabled,
 .kit-button:disabled {
@@ -167,12 +135,16 @@
   gap: 0 var(--s2);
   align-items: start;
   padding: var(--s1) var(--s2);
-  border-left: 2px solid transparent;
+  border-radius: var(--radius-sm);
 }
 .kit-rail li[data-state='reconfirm'],
 .kit-rail li[data-state='waiting'] {
-  border-left-color: var(--coral);
-  background: var(--soft);
+  background: var(--bg-selected);
+}
+/* The current step: a small coral mark (point colour ①). */
+.kit-rail li[data-state='waiting'] .kit-rail-mark,
+.kit-rail li[data-state='running'] .kit-rail-mark {
+  color: var(--accent);
 }
 .kit-rail-mark {
   font-weight: 700;
@@ -212,7 +184,7 @@
   display: inline-block;
   margin-left: var(--s1);
   padding: 0 5px;
-  border-radius: 8px;
+  border-radius: var(--radius-pill);
   background: var(--zone-no);
   font-size: var(--fs-eyebrow);
 }
@@ -252,8 +224,8 @@
 .kit-setting-control input[type='number'] {
   width: 92px;
   padding: 3px var(--s1);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
+  border: var(--hairline) solid var(--line);
+  border-radius: var(--radius-sm);
   text-align: right;
   font-variant-numeric: tabular-nums;
 }
@@ -261,15 +233,15 @@
   width: 26px;
   height: 26px;
   padding: 0;
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
+  border: var(--hairline) solid var(--line);
+  border-radius: var(--radius-sm);
   background: var(--paper);
 }
 .kit-zone {
   flex: 1;
   display: flex;
   padding: 2px 0;
-  border-radius: var(--radius);
+  border-radius: var(--radius-sm);
   background: var(--zone-ok);
 }
 .kit-chips {
@@ -279,8 +251,8 @@
 }
 .kit-chips button {
   padding: 2px var(--s2);
-  border: 1px solid var(--line);
-  border-radius: 12px;
+  border: var(--hairline) solid var(--line);
+  border-radius: var(--radius-pill);
   background: var(--paper);
 }
 .kit-chips button[aria-pressed='true'] {
@@ -291,11 +263,11 @@
   color: var(--muted);
 }
 .kit-board {
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
+  border: var(--hairline) solid var(--line);
+  border-radius: var(--radius-sm);
   padding: var(--s2) var(--s3);
   background: var(--paper);
-  box-shadow: 0 1px 4px color-mix(in srgb, var(--ink) 10%, transparent);
+  box-shadow: var(--shadow-float);
 }
 .kit-board > summary {
   display: flex;
@@ -317,8 +289,8 @@
   align-items: center;
   gap: 3px;
   padding: 0 6px;
-  border: 1px solid var(--line);
-  border-radius: 10px;
+  border: var(--hairline) solid var(--line);
+  border-radius: var(--radius-pill);
   font-size: var(--fs-eyebrow);
   color: var(--muted);
   white-space: nowrap;
@@ -347,8 +319,8 @@
   display: grid;
   gap: 2px;
   padding: var(--s2) var(--s3);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
+  border: var(--hairline) solid var(--line);
+  border-radius: var(--radius-sm);
 }
 .kit-role[data-state='missing'] {
   border-style: dashed;
@@ -389,7 +361,7 @@
 }
 .kit-kpi {
   padding: var(--s2) var(--s3) var(--s3);
-  border-left: 1px solid var(--line);
+  border-left: var(--hairline) solid var(--line);
 }
 .kit-kpi-title {
   display: flex;
@@ -450,8 +422,8 @@
   gap: var(--s1);
   align-items: center;
   padding: 2px var(--s1);
-  border: 1px solid transparent;
-  border-radius: var(--radius);
+  border: var(--hairline) solid transparent;
+  border-radius: var(--radius-sm);
   background: none;
   text-align: left;
   font-variant-numeric: tabular-nums;
@@ -462,7 +434,7 @@
 .kit-swatch {
   width: 10px;
   height: 10px;
-  border-radius: 2px;
+  border-radius: var(--radius-sm);
   background: var(--tone, var(--na));
 }
 .kit-legend[data-off] .kit-swatch {
@@ -474,7 +446,7 @@
 .kit-tabs {
   display: flex;
   flex-wrap: wrap;
-  border-bottom: 1px solid var(--line);
+  border-bottom: var(--hairline) solid var(--line);
 }
 .kit-view-tabs button,
 .kit-tabs button {
@@ -491,12 +463,12 @@
 .kit-view-tabs button[aria-selected='true'],
 .kit-tabs button[aria-selected='true'] {
   color: var(--ink);
-  font-weight: 700;
-  box-shadow: inset 0 -2px 0 var(--ink);
+  font-weight: 600;
+  box-shadow: inset 0 -1.5px 0 var(--ink);
 }
 .kit-tabs b {
   padding: 0 5px;
-  border-radius: 8px;
+  border-radius: var(--radius-pill);
   background: var(--soft);
   font-size: var(--fs-eyebrow);
   font-weight: 400;
@@ -530,8 +502,8 @@
   width: 100%;
   height: auto;
   aspect-ratio: 4 / 3;
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
+  border: var(--hairline) solid var(--line);
+  border-radius: var(--radius-sm);
   background: var(--paper);
   touch-action: manipulation;
 }
@@ -596,8 +568,8 @@
 .kit-table-wrap {
   max-height: 320px;
   overflow: auto;
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
+  border: var(--hairline) solid var(--line);
+  border-radius: var(--radius-sm);
 }
 .kit-table {
   width: 100%;
@@ -607,7 +579,7 @@
 .kit-table th,
 .kit-table td {
   padding: 4px var(--s2);
-  border-bottom: 1px solid var(--line);
+  border-bottom: var(--hairline) solid var(--line);
   text-align: left;
   white-space: nowrap;
 }
@@ -628,8 +600,8 @@
   background: var(--soft);
 }
 .kit-table tbody tr[aria-selected='true'] {
-  background: var(--soft);
-  box-shadow: inset 2px 0 0 var(--coral);
+  background: var(--bg-selected);
+  font-weight: 600;
 }
 .kit-table-foot {
   display: flex;
@@ -645,20 +617,20 @@
   display: grid;
   gap: 2px;
   padding: var(--s2) var(--s3);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
+  border: var(--hairline) solid var(--line);
+  border-radius: var(--radius-sm);
 }
 .kit-banner {
   padding: var(--s1) var(--s3);
-  border-left: 2px solid var(--coral);
+  border-radius: var(--radius-sm);
   background: var(--soft);
 }
 .kit-confirm {
   display: grid;
   gap: var(--s1);
   padding: var(--s2) var(--s3);
-  border: 1px solid var(--ink);
-  border-radius: var(--radius);
+  border: var(--hairline) solid var(--ink);
+  border-radius: var(--radius-sm);
 }
 
 /* --- beside the panel (context tab slots: above, over and below the 3D view) ------------------ */
@@ -701,9 +673,6 @@
 }
 
 /* --- report parts (Design §14 report · compare-bars · ledger, SCR-17) --------------------------- */
-:root {
-  --bar-na: #c9cecb;
-}
 .kit-report {
   display: grid;
   gap: var(--s4);
@@ -744,10 +713,10 @@
   display: inline-block;
   margin-left: var(--s2);
   padding: 0 6px;
-  border: 1px solid var(--ng);
-  border-radius: 2px;
+  border: var(--hairline) solid var(--ng);
+  border-radius: var(--radius-sm);
   color: var(--ng);
-  font-size: 11.5px;
+  font-size: 12px;
   font-weight: 400;
   letter-spacing: 0;
   vertical-align: middle;
@@ -762,7 +731,7 @@
   gap: var(--s3) var(--s8);
   margin-top: var(--s4);
   padding: 14px var(--s4);
-  border-left: 2px solid var(--ink);
+  border-radius: var(--radius-sm);
   background: var(--soft);
   font-size: 13px;
 }
@@ -789,7 +758,7 @@
 }
 .kit-report-kpi + .kit-report-kpi {
   padding-left: var(--s6);
-  border-left: 1px solid var(--line);
+  border-left: var(--hairline) solid var(--line);
 }
 .kit-report-kpi h3 {
   margin: 0;
@@ -799,7 +768,7 @@
 }
 .kit-report-kpi-value {
   margin: var(--s2) 0;
-  font-size: 32px;
+  font-size: var(--fs-kpi);
   font-weight: 500;
   line-height: 1.25;
   letter-spacing: -0.02em;
@@ -816,7 +785,7 @@
   color: var(--muted);
 }
 .kit-report-section {
-  border-top: 1px solid var(--line);
+  border-top: var(--hairline) solid var(--line);
   padding-top: var(--s8);
   margin-top: var(--s6);
 }
@@ -843,16 +812,16 @@
 }
 .kit-report-table th {
   padding: var(--s2);
-  border-bottom: 1px solid var(--ink);
+  border-bottom: var(--hairline) solid var(--ink);
   text-align: left;
-  font-size: 11.5px;
+  font-size: 12px;
   font-weight: 400;
   color: var(--muted);
   white-space: nowrap;
 }
 .kit-report-table td {
   padding: 7px var(--s2);
-  border-bottom: 1px solid var(--line);
+  border-bottom: var(--hairline) solid var(--line);
   font-size: 13px;
 }
 .kit-report-table [data-num] {
@@ -866,7 +835,7 @@
 .kit-report-open {
   margin-top: var(--s8);
   padding-top: var(--s4);
-  border-top: 1px solid var(--line);
+  border-top: var(--hairline) solid var(--line);
   font-size: var(--fs-small);
   color: var(--muted);
 }
@@ -898,7 +867,7 @@
 .kit-bar-fill {
   position: absolute;
   inset: 0 auto 0 0;
-  border-radius: 0 2px 2px 0;
+  border-radius: 0;
   background: var(--bar-base);
 }
 .kit-bar-fill[data-shade='alt'] {
@@ -917,7 +886,7 @@
   position: absolute;
   top: 50%;
   transform: translate(6px, -50%);
-  font-size: 12.5px;
+  font-size: 13px;
   font-weight: 700;
   white-space: nowrap;
 }
@@ -959,7 +928,7 @@
   min-height: var(--hit);
   padding: 0 var(--s2);
   border: 0;
-  border-bottom: 1px solid var(--line);
+  border-bottom: var(--hairline) solid var(--line);
   background: none;
   color: var(--ink);
   font: inherit;
@@ -971,8 +940,8 @@
   color: var(--muted);
 }
 .kit-ledger-toc button[aria-pressed='true'] {
-  font-weight: 700;
-  box-shadow: inset 2px 0 0 var(--coral);
+  background: var(--bg-selected);
+  font-weight: 600;
 }
 .kit-ledger-body {
   overflow-x: auto;

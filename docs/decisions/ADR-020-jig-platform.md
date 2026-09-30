@@ -2,10 +2,10 @@
 id: ADR-020
 title: jig 플랫폼 — 설명서 한 장, 코드 출처별 실행, 고정 틀로 Rhino에 만들기
 status: review
-version: 0.2
-updated: 2026-09-30
+version: 0.3
+updated: 2026-10-01
 owner: agent:claude
-related: [FR-13, FR-23, FR-24, OQ-07, ADR-008, ADR-014, ADR-019, ADR-021, ADR-022, SPEC-05, SPEC-06, SPEC-07, ARCH-02, ARCH-03, PLAN-22, PLAN-23, RESEARCH-05, RESEARCH-10]
+related: [FR-13, FR-23, FR-24, OQ-07, ADR-008, ADR-014, ADR-019, ADR-021, ADR-022, ADR-026, SPEC-05, SPEC-06, SPEC-07, ARCH-02, ARCH-03, PLAN-22, PLAN-23, RESEARCH-05, RESEARCH-10]
 ---
 
 # ADR-020 · jig 플랫폼: 설명서 한 장, 코드 출처별 실행, 고정 틀로 Rhino에 만들기
@@ -79,3 +79,4 @@ related: [FR-13, FR-23, FR-24, OQ-07, ADR-008, ADR-014, ADR-019, ADR-021, ADR-02
 ## 후속 결정
 
 - **2026-09-30 [ADR-022](ADR-022-direct-apply-plan-auto.md) — Rhino에 만들기도 바로 적용.** 위 결정의 문구는 바꾸지 않는다. 결정 4의 '작업 사본 → 후보 → 사용자의 원본 반영'과 'jig는 원본에 직접 쓰지 않는다', 결정 5의 '원본 반영 직후 읽은 값'은 대체된다. Rhino에 만들기는 사용자가 누를 때 연결된 열린 문서에 되돌리기 기록으로 바로 만들고, 만든 직후 읽은 지문을 기록한다. 고정 틀·데이터 블록 하나·AI 없는 실행과 '만들기 기록의 객체만 교체'(결정 4·5의 나머지)는 그대로다. 「대안과 대가」에서 물리쳤던 '원본에 직접 쓰고 되돌리기로 보호'가 채택된 셈이며, 그 표의 대가(사본 저장·재열기 확인을 거치지 않음)는 ADR-022의 결과로 받아들인다. Rhino 문서가 연결되지 않은 파일 연결에서는 내부 작업 사본에만 만든다. 동작 정본은 SPEC-07.12. 근거: 2026-09-30 사용자 결정 (3).
+- **2026-10-01 [ADR-026](ADR-026-chat-stage-and-skill-jigs.md) — skill 용어(B11)와 AI 호출 경계.** 위 결정의 문구는 바꾸지 않는다. 「승인 범위」의 'skill 용어(B11)는 1차 범위 밖'을 대체한다. jig = skill은 공급자 CLI의 skill이 아니라 VIDE 내부 계약(`skill.md`의 `description`·`examples`·`invocation`·`words`·`not_for`, `jig.json`의 `open`·`autorun`·`from_request`·`summary`)이고, AI·Jev가 스스로 부를 수 있는지는 `invocation: auto | user-only`로 표현한다. 공식 jig와 이 프로젝트에 고정된 jig는 기본 `auto`, 초안은 사용자만 연다. 공급자 skill은 계속 끈다. 동작 정본은 SPEC-07.18, 물리 계약은 ARCH-03 §5.3.

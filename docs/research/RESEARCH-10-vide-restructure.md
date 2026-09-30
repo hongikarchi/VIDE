@@ -2,8 +2,8 @@
 id: RESEARCH-10
 title: VIDE 재구성 설계안 — 맥락 모델링·바이브 모델링·jig 플랫폼
 status: draft
-version: 0.2
-updated: 2026-09-29
+version: 0.21
+updated: 2026-10-01
 owner: agent:claude
 related: [FR-13, FR-18, FR-21, FR-23, OQ-04, OQ-07, OQ-08, ADR-002, ADR-008, ADR-010, ADR-014, ADR-015, ADR-019, RESEARCH-05, RESEARCH-07, RESEARCH-08]
 ---
@@ -2559,6 +2559,8 @@ PDF·렌더·xlsx 추가는 OQ-08 결정에 넣는다 → §16 B9.
 ---
 
 ## 16. 결정이 필요한 항목
+
+2026-10-01 [ADR-026](../decisions/ADR-026-chat-stage-and-skill-jigs.md)이 B7의 'jig는 제안형'과 A10·§2.3의 'Jev 판정만의 자동 실행은 설정값 변경뿐'을 대체했다(jig는 자동으로 열고 계산한다).
 
 사용자가 이미 답한 것(F1 대화 세션 방향, F2.1~F2.13 S-06 규칙, F3 입력 조립, 2026-09-25 jig 결정 ①~⑤)은 목록에서 뺐다. 아래는 **문서 개정 승인이 필요하거나 아직 답이 없는 것**만이다. 승인된 문서와 부딪히는 것은 조용히 덮어쓰지 않고 여기에 올렸다.
 

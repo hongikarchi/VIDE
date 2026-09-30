@@ -98,7 +98,7 @@ try {
   assert.equal(result.colors.material[0], '#2233aa');
   // Objects without Rhino colours keep the neutral fallback for every source.
   assert.equal(result.colors.layer[1], '#4c5650');
-  assert.equal(result.selected, '#f0a37f');
+  assert.equal(result.selected, '#e3a392');
   assert.equal(result.restored, '#aa3322');
   assert.equal(result.wire, 'wireframe');
   assert.equal(result.background, 'dark');

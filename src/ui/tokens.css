@@ -1,0 +1,154 @@
+/* VIDE design tokens (RESEARCH-12 §3.2, user decision 2026-10-01): warm-grey neutrals, 0.5 px
+   hairlines, 13 px body and one fixed coral point colour. Loaded before every other stylesheet.
+   The dark theme is only a redefinition of these tokens (Rhino panel, `?theme=dark`), so no
+   component needs its own dark rule. The point colour is allowed only where §3.3 says: the AI
+   activity dot, the current step dot, the target chip, the viewport selection, focus rings,
+   ::selection and realised KPI values. Everything else stays neutral. */
+:root {
+  /* Surfaces: brightness steps, not colours. */
+  --bg: #fafaf8;
+  --bg-elevated: #ffffff;
+  --bg-surface: #f5f4f0;
+  --bg-hover: #eeedea;
+  --bg-active: #e5e4e0;
+  --bg-recessed: #f2f1ee;
+  --bg-selected: #0000000a;
+  --bg-floating: color-mix(in srgb, var(--bg-elevated) 94%, transparent);
+  --scrim: #12121247;
+  /* Text: four grey steps carry the hierarchy. --text-4 is for disabled marks, never body text. */
+  --text-1: #121212;
+  --text-2: #555555;
+  --text-3: #737373;
+  --text-4: #a0a0a0;
+  /* Lines */
+  --border: #dddcd8;
+  --border-subtle: #e8e7e3;
+  --hairline: 0.5px;
+  /* Primary action: near black, inverted in dark. */
+  --cta-bg: #121212;
+  --cta-bg-hover: #3a3a3a;
+  --cta-text: #ffffff;
+  /* The one point colour. --accent-strong only where small text must carry it. */
+  --accent: #d0664a;
+  --accent-strong: #b4532f;
+  --accent-muted: color-mix(in srgb, var(--accent) 20%, transparent);
+  --accent-subtle: color-mix(in srgb, var(--accent) 8%, transparent);
+  /* Judgement and information (never replaced by the point colour). */
+  --ok: #2f7d4f;
+  --warn: #a8660b;
+  --ng: #b42323;
+  --info: #2f5aa8;
+  --na: #a0a0a0;
+  --ok-subtle: color-mix(in srgb, var(--ok) 10%, transparent);
+  --warn-subtle: color-mix(in srgb, var(--warn) 10%, transparent);
+  --ng-subtle: color-mix(in srgb, var(--ng) 9%, transparent);
+  --info-subtle: color-mix(in srgb, var(--info) 9%, transparent);
+  --ok-muted: color-mix(in srgb, var(--ok) 28%, transparent);
+  --warn-muted: color-mix(in srgb, var(--warn) 30%, transparent);
+  --ng-muted: color-mix(in srgb, var(--ng) 28%, transparent);
+  --info-muted: color-mix(in srgb, var(--info) 28%, transparent);
+  /* Shape */
+  --radius-sm: 6px; /* rows, buttons, inputs */
+  --radius-md: 10px; /* cards, composer, popovers */
+  --radius-lg: 14px; /* dialogs */
+  --radius-pill: 999px;
+  --shadow-float: 0 4px 16px #00000014; /* only things that float */
+  /* Type: 11 · 12 · 13 (body) · 15 · 20; report display sizes stay separate. */
+  --font-sans: 'Pretendard', 'Noto Sans KR', 'Malgun Gothic', Arial, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, 'Cascadia Mono', Consolas, monospace;
+  --fs-xs: 11px;
+  --fs-sm: 12px;
+  --fs-md: 13px;
+  --fs-lg: 15px;
+  --fs-xl: 20px;
+  --tracking: -0.2px;
+
+  /* Former names, kept as aliases so every existing var() follows the tokens. */
+  --ink: var(--text-1);
+  --paper: var(--bg-elevated);
+  --line: var(--border);
+  --muted: var(--text-3);
+  --soft: var(--bg-surface);
+  --coral: var(--accent);
+  --radius: var(--radius-sm);
+  /* Design §02 jig tokens: slider zones, 3D overlays, comparison bars, KPI numbers. */
+  --zone-ok: var(--ok-subtle);
+  --zone-warn: var(--warn-subtle);
+  --zone-no: var(--ng-subtle);
+  --ov-grid: var(--text-3);
+  --ov-new: var(--text-1);
+  --ov-existing: var(--text-4);
+  --ov-clash: var(--ng);
+  --bar-base: var(--border);
+  --bar-alt: var(--text-4);
+  --bar-strong: var(--text-2);
+  --bar-actual: var(--accent);
+  --bar-na: var(--bg-active);
+  --fs-eyebrow: var(--fs-xs);
+  --fs-small: var(--fs-sm);
+  --fs-body: var(--fs-md);
+  --fs-lede: var(--fs-lg);
+  --fs-h3: var(--fs-xl);
+  --fs-kpi: 32px;
+  --fs-claim: 28px;
+  --fs-headline: 44px;
+  --track-eyebrow: 0.16em;
+  /* Spacing (Design §02) */
+  --s1: 4px;
+  --s2: 8px;
+  --s3: 12px;
+  --s4: 16px;
+  --s6: 24px;
+  --s8: 32px;
+  --s12: 48px;
+  --hit: 36px;
+  --hit-touch: 44px;
+}
+
+/* Dark: one step lighter than pure black so the page meets Rhino's dark panels. */
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --bg: #1b1b1b;
+  --bg-elevated: #222222;
+  --bg-surface: #272727;
+  --bg-hover: #2e2e2e;
+  --bg-active: #363636;
+  --bg-recessed: #161616;
+  --bg-selected: #ffffff12;
+  --scrim: #0000008c;
+  --text-1: #f2f2f0;
+  --text-2: #b0b0ac;
+  --text-3: #8a8a86;
+  --text-4: #5e5e5b;
+  --border: #3a3a38;
+  --border-subtle: #2e2e2c;
+  --cta-bg: #f3f1ec;
+  --cta-bg-hover: #d8d6d0;
+  --cta-text: #121212;
+  --accent: #e48a6c;
+  --accent-strong: #eea086;
+  --accent-muted: color-mix(in srgb, var(--accent) 25%, transparent);
+  --accent-subtle: color-mix(in srgb, var(--accent) 10%, transparent);
+  --ok: #5fbf85;
+  --warn: #e0b04a;
+  --ng: #f07a6e;
+  --info: #7fa6ea;
+  --na: #5e5e5b;
+  --ok-subtle: color-mix(in srgb, var(--ok) 14%, transparent);
+  --warn-subtle: color-mix(in srgb, var(--warn) 14%, transparent);
+  --ng-subtle: color-mix(in srgb, var(--ng) 14%, transparent);
+  --info-subtle: color-mix(in srgb, var(--info) 14%, transparent);
+  --shadow-float: 0 4px 16px #00000066;
+}
+
+:root {
+  font: var(--fs-md) var(--font-sans);
+  letter-spacing: var(--tracking);
+  color: var(--text-1);
+}
+body {
+  background: var(--bg);
+}
+::selection {
+  background: var(--accent-muted);
+}

@@ -184,7 +184,8 @@ test('words decided without Jev: login, Sync, jig words, making a jig, the file'
   assert.equal(routeCard(sync).run, 'Sync 받기');
   const jig = routeRequest('구조 검토하고 싶어', [], [], context);
   assert.deepEqual([jig.target, jig.jig.id], ['jig', 'structure']);
-  assert.deepEqual([routeCard(jig).tier, routeCard(jig).run], ['T1', '열기']);
+  // A jig opens at once (ADR-026 4): the route row says so, no proposal button.
+  assert.deepEqual([routeCard(jig).tier, routeCard(jig).run], ['auto', undefined]);
   assert.equal(routeRequest('구조검토 해 볼까', [], [], context).target, 'jig');
   assert.equal(routeRequest('이 확인을 도구로 만들어 줘', [], [], context).target, 'make');
   assert.equal(routeRequest('CAD에서 경간 표시 지워', []).target, 'document');
@@ -219,7 +220,7 @@ test('the server answer maps to routes for every target; malformed answers go to
     routeAnswer({ target: 'jig', by: 'rules', jig: 'structure', jigName: '구조 분석' }),
     subjects,
   );
-  assert.deepEqual([jig.jig.name, jig.reason], ['구조 분석', 'jig 열기 제안']);
+  assert.deepEqual([jig.jig.name, jig.reason], ['구조 분석', 'jig 열기']);
   assert.equal(jevRoute({ target: 'ask' }, subjects).target, 'ask');
   assert.equal(jevRoute({ target: 'make' }, subjects).target, 'make');
 });
@@ -273,7 +274,7 @@ test('the open jig instance settings become routing context; the query carries t
   // A fixed setting is not changed from words: the notice says why (sent to the AI only on request).
   const fixed = routeRequest('강종 SS275로', [], [], context);
   if (fixed.target === 'param') assert.equal(fixed.param.change.ok, false);
-  // The official jigs' rule words propose opening them.
+  // The official jigs' rule words open them.
   const jig = routeRequest('구조 검토 해줘', [], [], context);
   assert.deepEqual([jig.target, jig.jig.id, jig.jig.name], ['jig', 'structure', '구조 검토']);
   assert.equal(goesToAi(jig), false);

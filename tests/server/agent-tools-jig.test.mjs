@@ -178,11 +178,13 @@ test('one registry: connection allowlist equals the defined tools, conversation 
     [...connection.tools].sort(),
     [
       'jig_list',
+      'jig_open',
       'jig_output',
       'jig_run',
       'jig_set',
       'jig_state',
       'links_layers',
+      'ui_go',
       'structure_checks',
       'structure_summary',
       'sync_sample',
@@ -455,5 +457,44 @@ test('the turn rules name the target, the open jig and the linked files; tools t
   assert.throws(
     () => agentConnection({ ...scope.connection, scope: { targetRef: '' } }),
     /INVALID_AGENT_CONNECTION/,
+  );
+});
+
+// Screen tools (RESEARCH-12 §6.3, ADR-026): jig_open and ui_go only record a ledger item the
+// screen carries out; plan mode keeps them and never jig_set/jig_run.
+test('jig_open and ui_go record screen actions; user-only jigs are refused; plan mode keeps them', async () => {
+  const tools = new AgentTools({ origin: 'http://127.0.0.1:47999' });
+  const { sources, calls } = fakeSources();
+  sources.skills = async () => [
+    { id: 'project/s06-frame', name: 'S-06 골조 배치', invocation: 'auto' },
+    { id: 'project/hidden', name: '숨은 jig', invocation: 'user-only' },
+  ];
+  const scope = tools.issueConversation(sources);
+  const call = (name, args) => tools.call(scope.connection.token, name, args);
+  const opened = body(await call('jig_open', { targetRef: T, jigId: 'project/s06-frame' }));
+  assert.deepEqual([opened.ok, opened.jig.id], [true, 'project/s06-frame']);
+  assert.deepEqual(calls.ledger.at(-1), {
+    kind: 'result-ref',
+    body: { appAction: 'jig_open', jigId: 'project/s06-frame', reuse: 'last', by: 'ai' },
+    requestId: 'req-1',
+  });
+  const refused = await call('jig_open', { targetRef: T, jigId: 'project/hidden' });
+  assert.equal(refused.isError, true);
+  assert.equal(JSON.parse(refused.content[0].text).code, 'JIG_USER_ONLY');
+  const unknown = await call('jig_open', { targetRef: T, jigId: 'project/nope' });
+  assert.equal(JSON.parse(unknown.content[0].text).code, 'NOT_FOUND');
+  assert.deepEqual(body(await call('ui_go', { targetRef: T, stage: 'jig', view: 'plan' })), {
+    ok: true,
+  });
+  assert.deepEqual(calls.ledger.at(-1).body, {
+    appAction: 'ui_go',
+    stage: 'jig',
+    view: 'plan',
+    by: 'ai',
+  });
+  const plan = tools.issueConversation(sources, { readOnly: true });
+  assert.ok(plan.connection.tools.includes('jig_open') && plan.connection.tools.includes('ui_go'));
+  assert.ok(
+    !plan.connection.tools.includes('jig_set') && !plan.connection.tools.includes('jig_run'),
   );
 });

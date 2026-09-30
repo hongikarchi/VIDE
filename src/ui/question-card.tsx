@@ -49,6 +49,11 @@ export interface QuestionCardsOptions {
   answered?: boolean;
   /** Called with the answer turn the server created. */
   onAnswered?: (request: { id: string }) => void;
+  /**
+   * The questions a running turn asks with the provider's own tool (Claude AskUserQuestion,
+   * ADR-026 4): the answers go to this path and the same turn goes on (no new turn).
+   */
+  answerPath?: string;
 }
 
 interface Choice {
@@ -148,6 +153,20 @@ export function QuestionCards({ api, options }: { api: ApiCall; options: Questio
               ...(text ? { text } : {}),
             };
           });
+      if (options.answerPath) {
+        await api(options.answerPath, 'POST', {
+          answers: answers.map(
+            (answer: { questionId: string; optionId?: string; text?: string }) => ({
+              id: answer.questionId,
+              ...(answer.optionId ? { option: answer.optionId } : {}),
+              ...(answer.text ? { text: answer.text } : {}),
+            }),
+          ),
+        });
+        setSent(true);
+        options.onAnswered?.({ id: options.requestId });
+        return;
+      }
       const result = (await api(
         `/projects/${encodeURIComponent(options.projectId)}/conversations/${encodeURIComponent(options.conversationId)}/answer`,
         'POST',
@@ -212,7 +231,13 @@ export function mountQuestionCards(
 ): QuestionCardsController {
   const root: Root = createRoot(container);
   const render = (value: QuestionCardsOptions) =>
-    root.render(<QuestionCards key={value.requestId} api={api} options={value} />);
+    root.render(
+      <QuestionCards
+        key={value.requestId + (value.answerPath ? ':native' : '')}
+        api={api}
+        options={value}
+      />,
+    );
   render(options);
   return { update: render, unmount: () => root.unmount() };
 }

@@ -1,0 +1,334 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="description" content="대화가 화면과 작업을 이끄는 구조 (T-076~T-080)"><meta name="generator" content="tools/docs/build.mjs — generated from docs/plans/PLAN-26-chat-stage.md; do not edit"><title>VIDE · 대화가 화면과 작업을 이끄는 구조 — skill 시작, 토큰 정리, 대화 열 + 무대</title><style>
+:root{--ink:#292c2d;--muted:#626b6e;--line:#e1e3e1;--soft:#f5f5f1;--coral:#d97660;--paper:#fff;--font:"Pretendard","Noto Sans KR","Malgun Gothic",Arial,sans-serif}
+*{box-sizing:border-box}html{scroll-behavior:smooth;scroll-padding-top:92px}body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--font);letter-spacing:-.025em}a{color:inherit;text-underline-offset:4px}button,input,textarea,select{font:inherit;color:inherit}button{cursor:pointer;border:1px solid var(--line);border-radius:4px;background:var(--paper);padding:10px 15px;line-height:1.3}button:hover{background:var(--soft)}button:disabled{cursor:default;opacity:.6}button.primary{background:var(--ink);color:#fff;border-color:var(--ink)}button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible{outline:3px solid var(--coral);outline-offset:3px}textarea{resize:vertical}::selection{background:#f2d7ce}[hidden]{display:none!important}
+.skip{position:fixed;top:-80px;left:20px;z-index:100;background:white;padding:12px}.skip:focus{top:10px}
+.topbar{height:68px;position:sticky;top:0;z-index:30;border-bottom:1px solid var(--line);background:#fffffff7;display:flex;align-items:center;justify-content:space-between;gap:24px;padding:0 max(24px,calc((100vw - 1450px)/2))}.brand{text-decoration:none;display:flex;align-items:center;gap:15px;white-space:nowrap}.brand b{font-size:29px;letter-spacing:-.08em}.brand span{border-left:1px solid var(--line);padding-left:15px;font-size:11px;letter-spacing:.08em}.doc-tabs{display:flex;height:100%;gap:25px;align-items:stretch;min-width:0;overflow-x:auto}.doc-tab{flex-shrink:0}.doc-tab{display:flex;align-items:center;position:relative;text-decoration:none;font-size:13px;color:var(--muted);white-space:nowrap}.doc-tab.active{color:var(--ink);font-weight:650}.doc-tab.active:after{content:"";position:absolute;bottom:0;left:0;right:0;height:3px;background:var(--coral)}.top-actions{display:flex;gap:8px}.top-actions button{padding:8px 11px;font-size:12px;white-space:nowrap}
+.layout{max-width:1450px;margin:auto;padding:0 30px;display:grid;grid-template-columns:218px minmax(0,1fr);gap:55px}.toc-shell{align-self:start;position:sticky;top:99px;padding-top:15px;max-height:calc(100vh - 120px)}.eyebrow{font-size:10px;line-height:1.6;letter-spacing:.16em;font-weight:500;color:var(--muted)}.toc-title{display:flex;justify-content:space-between;align-items:center;margin-bottom:15px}.toc-title strong{font-size:12px;font-weight:500}.toc-title span{font-size:10px;color:var(--muted)}#toc-toggle{display:none}.toc-search{width:100%;padding:10px 12px;border:1px solid var(--line);background:var(--paper);border-radius:4px;font-size:12px}.toc-hint{font-size:10px;color:var(--muted);margin:8px 0 15px;line-height:1.6}.toc-links{max-height:calc(100vh - 323px);overflow-y:auto;padding:0 8px 8px 0}.toc-links a{display:block;padding:8px 10px;margin:2px 0;border-left:2px solid transparent;border-radius:0 3px 3px 0;text-decoration:none;font-size:12px;line-height:1.65;color:var(--muted);word-break:keep-all;overflow-wrap:anywhere}.toc-links a:hover{background:var(--soft)}.toc-links a.active{border-color:var(--coral);background:var(--soft);color:var(--ink)}.toc-next{border-top:1px solid var(--line);padding-top:13px;margin-top:14px;font-size:11px;color:var(--muted);line-height:1.7}.toc-next b{font-weight:500;color:var(--ink)}
+main{min-width:0;max-width:1040px;padding-bottom:70px}.doc-hero{padding:55px 0 32px;border-bottom:1px solid var(--line)}.hero-label{display:flex;justify-content:space-between;gap:20px;align-items:center}.doc-hero h1{font-size:clamp(32px,3.15vw,48px);line-height:1.22;letter-spacing:-.065em;font-weight:550;margin:20px 0 18px;max-width:900px;word-break:keep-all;overflow-wrap:anywhere}.doc-description{font-size:14px;color:var(--muted);line-height:1.8;margin:0}.pill{display:inline-block;font-size:10px;letter-spacing:.01em;padding:5px 9px;border:1px solid var(--line);border-radius:3px;white-space:nowrap}.hero-meta{margin-top:22px;font-size:12px;color:var(--muted);line-height:1.9}.hero-meta p{font-size:12px;line-height:1.9;margin:8px 0}.hero-meta strong{font-weight:600}.hero-meta blockquote{margin:25px 0 0;padding:20px 22px;background:var(--soft);border-left:3px solid var(--coral);color:var(--ink)}.hero-meta blockquote p{word-break:keep-all;overflow-wrap:anywhere;font-size:18px;line-height:1.8;letter-spacing:-.03em;margin:0}.doc-section{padding:44px 0;border-bottom:1px solid var(--line);scroll-margin-top:93px;min-width:0}.doc-section h2{font-size:28px;font-weight:550;letter-spacing:-.055em;line-height:1.4;margin:0 0 24px;word-break:keep-all;overflow-wrap:anywhere}.section-num{font-weight:400;color:var(--coral);margin-right:10px;font-size:.75em;letter-spacing:-.02em}.doc-section h3{font-size:19px;font-weight:600;line-height:1.5;margin:32px 0 14px;letter-spacing:-.04em}.doc-section h4{font-size:16px;line-height:1.5;margin:25px 0 12px}.doc-section p{font-size:15px;line-height:1.92;margin:13px 0;word-break:keep-all;overflow-wrap:anywhere}.doc-section strong{font-weight:650}.doc-section ul,.doc-section ol{padding-left:22px;font-size:15px;line-height:1.85}.doc-section li{margin:7px 0}.doc-section blockquote{border-left:3px solid var(--coral);background:var(--soft);margin:23px 0;padding:15px 22px}.doc-section blockquote p{margin:0;font-size:16px;line-height:1.85}.doc-section hr{border:0;border-top:1px solid var(--line);margin:28px 0}.doc-section code:not(pre code){font-family:Consolas,"Liberation Mono",monospace;font-size:.91em;background:var(--soft);padding:2px 5px;border-radius:3px;overflow-wrap:anywhere}
+.table-scroll{overflow-x:auto;overscroll-behavior-x:contain;margin:22px 0;border-top:1px solid var(--ink);border-bottom:1px solid var(--line);width:100%}table{border-collapse:collapse;width:100%;font-size:12.5px;line-height:1.75;table-layout:auto}th,td{padding:13px 14px;vertical-align:top;text-align:left;border-bottom:1px solid var(--line);word-break:keep-all;overflow-wrap:anywhere}th{background:var(--soft);font-weight:600;font-size:11.5px}tr:last-child td{border-bottom:0}td:first-child{font-weight:550;min-width:125px}td{min-width:145px}.table-scroll table:has(th:nth-child(2)){min-width:410px}.table-scroll table:has(th:nth-child(3)){min-width:585px}.table-scroll table:has(th:nth-child(4)){min-width:710px}.table-scroll table:has(th:nth-child(5)){min-width:840px}.code-frame{position:relative;margin:23px 0;border:1px solid var(--line);border-radius:4px;overflow:hidden;background:#f8f8f5}.code-frame pre{margin:0;padding:49px 20px 19px;overflow:auto;max-height:680px;font-family:Consolas,"Liberation Mono",monospace;font-size:12px;line-height:1.9;white-space:pre;letter-spacing:-.01em}.copy-code{position:absolute;top:9px;right:10px;font-size:10px;padding:5px 9px;background:#fff}.code-frame .code-label{position:absolute;left:18px;top:15px;font-size:9px;color:var(--muted);letter-spacing:.12em}.doc-footer{margin-top:30px;display:flex;justify-content:space-between;gap:24px;font-size:10px;color:var(--muted);line-height:1.8}
+.review-workspace{background:var(--soft);border:1px solid var(--line);padding:27px;margin:30px 0 5px;border-radius:4px}.workspace-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:15px}.workspace-heading h3{margin:6px 0 10px}.workspace-heading p{font-size:12px;margin:0 0 20px}.checks{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}.check-group{min-width:0;margin:0;padding:14px 15px;border:1px solid var(--line);background:#fff;border-radius:3px}.check-group legend{padding:0 7px;font-size:12px;font-weight:600}.check-line{display:flex;gap:9px;align-items:flex-start;font-size:12px;line-height:1.7;margin:9px 0;cursor:pointer}.check-line input{accent-color:var(--coral);margin:3px 0 0;flex:none;width:15px;height:15px}.stage-field{display:flex;align-items:center;gap:15px;font-size:12px;margin:26px 0 20px}.stage-field select{background:#fff;border:1px solid var(--line);padding:9px 12px;max-width:100%;font-size:12px;border-radius:3px}.note-grid{display:grid;grid-template-columns:1fr 1fr;gap:18px}.note-field{display:block;min-width:0}.note-field>span{display:block;margin-bottom:8px;font-size:12px}.note-field textarea{width:100%;min-height:96px;border:1px solid var(--line);border-radius:3px;padding:12px;background:#fff;font-size:13px;line-height:1.8}.note-field:last-child{grid-column:1/-1}.note-actions{display:flex;gap:9px;flex-wrap:wrap;margin-top:20px}.note-actions button{font-size:12px}.review-workspace p.save-status{font-size:11px;margin:15px 0 5px;color:var(--muted)}.review-workspace p.micro{font-size:10px;line-height:1.8;color:var(--muted);margin:0}.toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);background:var(--ink);color:white;padding:12px 18px;border-radius:4px;font-size:12px;z-index:60;max-width:90vw;box-shadow:0 5px 24px #0002;line-height:1.6}.empty-nav{font-size:12px;color:var(--muted);padding:15px 5px;line-height:1.7}
+@media(min-width:1600px){.layout{gap:65px}}
+@media(max-width:1100px){.layout{grid-template-columns:188px minmax(0,1fr);gap:30px;padding:0 24px}.topbar{gap:18px}.brand span{display:none}.doc-hero h1{font-size:38px}.doc-section p{font-size:14px}.doc-section h2{font-size:26px}.doc-tabs{gap:23px}.review-workspace{padding:22px}.checks{grid-template-columns:1fr}}
+@media(max-width:820px){html{scroll-padding-top:84px}.topbar{height:60px;padding:0 18px;gap:14px}.brand b{font-size:27px}.doc-tabs{gap:18px}.doc-tab{font-size:12px}.top-actions{gap:6px}.top-actions button{font-size:10px;padding:7px 9px}.layout{display:block;padding:0 22px}.toc-shell{position:relative;top:auto;max-height:none;padding-top:18px;border-bottom:1px solid var(--line)}.toc-title{margin:0;padding-bottom:14px}.toc-title strong{font-size:11px}.toc-title>span{display:none}#toc-toggle{display:block;font-size:11px;padding:7px 11px}.toc-body{display:none}.toc-shell.open .toc-body{display:block}.toc-links{max-height:240px;margin-bottom:12px}.toc-next{display:none}.doc-hero{padding:34px 0 27px}.doc-hero h1{font-size:35px;max-width:600px}.hero-label{align-items:flex-start;gap:10px;flex-wrap:wrap}.hero-label .pill{font-size:9px}.doc-section{padding:34px 0;scroll-margin-top:80px}.doc-section h2{font-size:25px;line-height:1.45}.doc-section p{font-size:14px;line-height:1.95}.hero-meta blockquote p{font-size:16px}.note-grid{grid-template-columns:1fr}.stage-field{flex-wrap:wrap}.note-field:last-child{grid-column:auto}.workspace-heading{display:block}.workspace-heading .pill{margin-bottom:17px}.doc-footer{flex-direction:column;gap:5px}}
+@media(max-width:480px){.topbar{gap:10px;padding:0 16px}.doc-tabs{gap:15px}.top-actions button#source-download{display:none}.brand b{font-size:25px}.doc-hero h1{font-size:31px;line-height:1.3}.doc-hero .eyebrow{font-size:9px}.doc-description{font-size:12px}.hero-meta{font-size:11px}.hero-meta p{font-size:11px;line-height:1.9}.hero-meta blockquote{padding:16px 16px}.hero-meta blockquote p{font-size:15px}.doc-section h2{font-size:23px}.doc-section h3{font-size:18px}.doc-section p{font-size:14px}.table-scroll{margin:20px 0}td,th{padding:11px 12px}.code-frame pre{font-size:11px;padding-left:15px}.review-workspace{padding:18px}.note-actions{gap:8px}.note-actions button{padding:9px 10px;font-size:11px}.check-line{font-size:12px}.top-actions button{padding:7px 9px}}
+@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}*{transition:none!important}}
+@media print{@page{margin:15mm}.topbar,.toc-shell,.skip,.copy-code,.toast,.review-workspace,.doc-footer{display:none!important}.layout{display:block;padding:0;max-width:none}main{max-width:none;padding:0}.doc-hero{padding:0 0 18px}.doc-hero h1{font-size:27px}.doc-section{padding:22px 0;break-inside:auto}.doc-section h2{font-size:21px;break-after:avoid}.doc-section h3{font-size:16px;break-after:avoid}.doc-section p{font-size:11px;line-height:1.75}.table-scroll{overflow:visible;break-inside:auto}table{min-width:0!important;font-size:9px;table-layout:fixed}td,th{min-width:0;font-size:9px;word-break:normal;padding:7px}tr{break-inside:avoid}.code-frame pre{white-space:pre-wrap;max-height:none;font-size:9px;padding:16px;overflow:visible;word-break:break-word}.code-label{display:none}.hero-meta blockquote p{font-size:14px}}
+
+/* ---- 작성자별 첨삭 표기 (AI.md §5) -------------------------------------
+   ins  = 추가·교체 제안 (초록)   del = 삭제·교체 대상 (빨강 취소선)
+   blockquote.review = 검토 코멘트 (파란 상자)   .review-appendix = 검토 요약 부록
+   body.review-original  → 원문만 (제안·코멘트 숨김)
+   body.review-accepted  → 인라인 제안 미리보기 (코멘트 대안은 적용하지 않음)
+------------------------------------------------------------------------- */
+ins{background:#dff3e4;color:#17512a;text-decoration:none;border-bottom:2px solid #4f9d63;padding:0 3px;border-radius:2px}
+del{background:#fbe4e0;color:#8f3324;text-decoration:line-through;text-decoration-color:#c9573f;text-decoration-thickness:1.5px;padding:0 3px;border-radius:2px}
+h1 ins,h1 del,h2 ins,h2 del,h3 ins,h3 del{border-bottom-width:3px}
+blockquote.review{margin:14px 0 24px;padding:12px 16px 12px 18px;border:0;border-left:4px solid #3b6fd6;background:#eef3fc;border-radius:0 6px 6px 0;font-size:14px;line-height:1.75;color:#24303f}
+blockquote.review p{margin:0}
+blockquote.review p+p{margin-top:9px;padding-top:9px;border-top:1px dashed #c3d2ef}
+.review-label{display:inline-flex;gap:6px;align-items:center;margin-right:8px;font-weight:600;font-size:11.5px;vertical-align:1px;white-space:nowrap}
+.review-agent{color:#3b6fd6;text-transform:uppercase;letter-spacing:.09em}
+.review-id{background:#3b6fd6;color:#fff;border-radius:3px;padding:1px 7px;font-weight:600}
+.review-sev{border-radius:3px;padding:1px 7px;font-weight:600}
+.review-sev[data-sev="높음"]{background:#c9573f;color:#fff}
+.review-sev[data-sev="중간"]{background:#f0c14b;color:#3a2a00}
+.review-sev[data-sev="낮음"]{background:#d9dfe2;color:#3d484d}
+.doc-section.review-appendix{margin-top:60px;padding-top:28px;border-top:3px solid #3b6fd6}
+.doc-section.review-appendix h2 .section-num{color:#3b6fd6}
+.review-pill{border-color:#3b6fd6;color:#3b6fd6;text-decoration:none}
+.review-pill:hover{background:#eef3fc}
+.review-legend{margin:12px 0 0;font-size:12px;color:var(--muted);line-height:1.8}
+.review-legend span{margin-right:12px;white-space:nowrap}
+.review-select{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);white-space:nowrap}
+.review-select select{padding:7px 9px;border:1px solid var(--line);border-radius:4px;background:var(--paper);font-size:12px}
+blockquote.review[data-review-agent="codex"]{border-left-color:#7250a0;background:#f4effa;color:#352b46}
+[data-review-agent="codex"] .review-agent{color:#7250a0}
+[data-review-agent="codex"] .review-id{background:#7250a0}
+.review-pill[data-review-agent="codex"]{border-color:#7250a0;color:#7250a0}
+.review-pill[data-review-agent="codex"]:hover{background:#f4effa}
+.review-appendix[data-review-agent="codex"]{border-top-color:#7250a0}
+.review-appendix[data-review-agent="codex"] h2 .section-num{color:#7250a0}
+.review-label[id]{scroll-margin-top:110px}
+.review-label[id]:target{outline:2px solid currentColor;outline-offset:4px}
+.review-legend p{margin:5px 0}
+.review-select select:disabled{opacity:.6}
+.top-actions{flex-wrap:wrap}
+[hidden]{display:none!important}
+@media(max-width:1100px){.topbar{height:auto;min-height:68px;flex-wrap:wrap;padding-top:8px;padding-bottom:8px;gap:8px 18px}.doc-tabs{height:34px;flex:1;justify-content:flex-end}.top-actions{flex-basis:100%;justify-content:flex-end}.review-select select{max-width:185px}}
+@media(min-width:821px) and (max-width:1100px){.toc-shell{top:135px;max-height:calc(100vh - 155px)}}
+.toc-links a[data-reviews]{display:flex;justify-content:space-between;gap:8px;align-items:center}
+.toc-links a[data-reviews]::after{content:attr(data-reviews);flex:none;min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:#3b6fd6;color:#fff;font-size:10px;line-height:18px;text-align:center}
+body.review-original ins,body.review-original blockquote.review,body.review-original .review-appendix,body.review-original .review-legend{display:none}
+body.review-original del{background:none;color:inherit;text-decoration:none;padding:0}
+body.review-original .toc-links a[data-reviews]::after{display:none}
+body.review-accepted del,body.review-accepted blockquote.review,body.review-accepted .review-appendix,body.review-accepted .review-legend{display:none}
+body.review-accepted ins{background:none;color:inherit;border:0;padding:0}
+body.review-accepted .toc-links a[data-reviews]::after{display:none}
+@media print{blockquote.review{break-inside:avoid;background:#eef3fc!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}ins,del{-webkit-print-color-adjust:exact;print-color-adjust:exact}.review-select{display:none}}
+</style></head><body>
+<!-- GENERATED FILE — source: docs/plans/PLAN-26-chat-stage.md — run: npm --prefix tools/docs run build -->
+<a class="skip" href="#reading-main">본문으로 이동</a>
+<header class="topbar"><a class="brand" href="../../index.html" aria-label="VIDE 문서 모음"><b>V.</b><span>VIDE</span></a><nav class="doc-tabs" aria-label="문서 선택"><a class="doc-tab" href="../PRD.html">PRD</a><a class="doc-tab" href="../specs/README.html">SPEC</a><a class="doc-tab" href="../../Design.html">Design</a><a class="doc-tab" href="../architecture/ARCH-01-system.html">기술 설계</a><a class="doc-tab" href="PLAN.html">PLAN</a><a class="doc-tab" href="../../DEVELOPMENT_GUIDE.html">개발 가이드</a><a class="doc-tab" href="../../AI.html">AI 규약</a></nav><div class="top-actions"><button id="source-download" title="현재 문서의 Markdown 원문 저장">원문 ↓</button><button id="print-doc" title="현재 문서 인쇄">인쇄</button></div></header>
+<div class="layout"><aside class="toc-shell" id="toc-shell" aria-label="현재 문서의 목차"><div class="toc-title"><strong>CONTENTS</strong><span id="toc-count"></span><button id="toc-toggle" aria-expanded="false" aria-controls="toc-body">목차 열기</button></div><div class="toc-body" id="toc-body"><input class="toc-search" id="toc-search" type="search" placeholder="장 제목으로 찾기" aria-label="현재 문서 목차 검색"><p class="toc-hint" id="nav-hint" role="status">장 제목으로 찾아갑니다.</p><nav class="toc-links" id="toc-links" aria-label="본문 장 이동"></nav><div class="toc-next">다음 작성할 문서<br><b>다음 작업 · PLAN §6.5</b><br>현재 단계와 작업별 계획을 확인한 뒤 해당 범위에서 재개</div></div></aside><main id="reading-main" tabindex="-1"><article id="plan-26-chat-stage" class="document"><header class="doc-hero"><div class="hero-label"><span class="eyebrow">PLAN</span><span><span class="pill">REVIEW · v0.1</span><span class="pill">6 CHAPTERS</span></span></div><h1 tabindex="-1">대화가 화면과 작업을 이끄는 구조 (T-076~T-080)</h1><div class="hero-meta">
+<p>기준: <a href="../decisions/ADR-026-chat-stage-and-skill-jigs.html">ADR-026</a>(2026-10-01 사용자 결정), 조사는 <a href="../research/RESEARCH-12-ui-chat-driven-structure.html">RESEARCH-12</a>. 진행 상황의 정본은 <a href="PLAN.html">PLAN §6.5</a>이다.</p>
+</div></header><section class="doc-section" id="plan-26-chat-stage-section-1"><h2><span aria-hidden="true" class="section-num">01 /</span> 범위와 순서</h2>
+<p>셸 교체보다 멈춤 해소가 먼저다(ADR-026 결정 7). T-076(skill 시작)과 T-077(토큰·CSS 정리)은 지금 배치 위에서 한다. T-078(목업·검수)이 끝나야 T-079(셸 교체)를 시작한다. T-080(층 평면)은 독립이다.</p>
+<div aria-label="PLAN 표 1" class="table-scroll" role="region" tabindex="0"><table>
+<thead>
+<tr>
+<th>티켓</th>
+<th>내용</th>
+<th>선행</th>
+<th>상태(2026-10-01)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>T-076</td>
+<td>단계 0: skill 시작, skill 카탈로그 로더, AI 도구 <code>jig_open</code>·<code>ui_go</code>, 공급자 자체 질문 기본</td>
+<td>ADR-026, 이 계획</td>
+<td>구현·단위·브라우저 시험 완료(2026-10-01). 남음: 실제 Claude CLI에서 자체 질문+jig 대화 확인, 확신 낮을 때 두 갈래 질문(M6), <code>summary.kpi</code></td>
+</tr>
+<tr>
+<td>T-077</td>
+<td>토큰층과 CSS 리터럴 정리</td>
+<td>ADR-026, Design §02</td>
+<td>완료(2026-10-01): UI CSS 색 리터럴 0, 왼쪽 막대 제거, 선택/초과 색 분리. 남음: 기능용 리터럴(<code>app.ts</code> 붓 색 등)</td>
+</tr>
+<tr>
+<td>T-078</td>
+<td>대화 열 + 무대 정적 목업과 VERIFY</td>
+<td>ADR-026 결정 5</td>
+<td>목업 게시, 사용자 검토 대기</td>
+</tr>
+<tr>
+<td>T-079</td>
+<td>셸 교체: 대화 열 + 무대</td>
+<td>T-078 VERIFY, T-076</td>
+<td>막힘(목업 검수 전)</td>
+</tr>
+<tr>
+<td>T-080</td>
+<td>층 평면 보기: 층 해석 + 뷰포트 단면 자르기</td>
+<td>SPEC-02.17 보완</td>
+<td>대기</td>
+</tr>
+</tbody>
+</table></div>
+<p><code>src/ui/app.ts</code>·<code>src/ui/style.css</code>는 여러 세션이 함께 고친다. 티켓마다 깨끗한 worktree에서 작업하고 자기 파일만 스테이징한다. 커밋·설치본 릴리스는 사용자 요청이나 웨이브 경계의 판단에 따른다.</p>
+<p><a id="t-076"></a></p>
+</section><section class="doc-section" id="plan-26-chat-stage-section-x1"><h2><span aria-hidden="true" class="section-num">01 /</span> T-076 · 단계 0 — skill 시작, 카탈로그, AI 도구, 자체 질문</h2>
+<p><strong>목적·기준:</strong> 요청이 jig로 판정되면 카드에서 멈추지 않고 작업본을 열고 계산까지 한다. FR-24·25·18, AC-48, ADR-026 결정 4·6, SPEC-02.17의 1~4, SPEC-02.19의 1·3·6·7, SPEC-02.20의 2, SPEC-07.4·07.18, ARCH-03 §5.3·§9.5, RESEARCH-12 §6.2~§6.3·§7.2 단계 0·2·3.</p>
+<p><strong>변경 범위</strong></p>
+<div aria-label="PLAN 표 2" class="table-scroll" role="region" tabindex="0"><table>
+<thead>
+<tr>
+<th>대상</th>
+<th>변경</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>src/ui/skill-catalog.ts</code>(있음), <code>src/server/skill-catalog.ts</code>(신설)</td>
+<td>앞머리 파서·정렬·후보(순수 부분)와 패키지의 <code>skill.md</code>·<code>jig.json</code> 읽기. 프로젝트 → 이 PC → 공식 순, <code>invocation: 'auto'</code>만 후보</td>
+</tr>
+<tr>
+<td><code>src/ui/request-route.ts</code>, <code>src/ai/request-router.ts</code></td>
+<td>카탈로그를 판정 후보로. 하드코딩 <code>OFFICIAL_JIG_ROUTING</code>·<code>officialJigs</code>는 대체로. 같은 말이면 프로젝트 jig 우선. <code>from_request</code> 값 읽기와 <code>paramFor</code>의 여러 값</td>
+</tr>
+<tr>
+<td><code>src/ui/app.ts</code>(jig 분기 <code>runAppRoute</code>), <code>src/ui/jigs.tsx</code></td>
+<td><code>startSkill(jigId, request, mode)</code> 한 경로: 작업본 재사용·기본 <code>layerRoot</code>로 생성 → 문맥 탭 → 대화 묶기 → 원장·판정 기록 → <code>from_request</code> 적용 → <code>preview</code> 자동 계산 → 결과 요약. 요청 글을 지우지 않는다. [일반 대화로](SPEC-02.17의 3). 계획 모드는 재사용·묶기까지와 체크리스트·[진행]</td>
+</tr>
+<tr>
+<td><code>src/server/conversations.ts</code></td>
+<td>대화의 <code>jigInstanceId</code> 묶기(SPEC-02.19의 1의 규칙), 서로 가리키는 줄</td>
+</tr>
+<tr>
+<td><code>src/server/agent-tools.ts</code>, <code>src/ai/agent-connection.ts</code></td>
+<td><code>jig_open</code>·<code>ui_go</code> 발급, 계획 모드 도구 집합(<code>PLAN_MODE_TOOLS</code>)에 두 도구 추가, <code>jig_set</code>·<code>jig_run</code>은 계획 모드 제외 유지</td>
+</tr>
+<tr>
+<td><code>src/jigs/runtime/manifest.ts</code>, <code>src/server/jig-routes.ts</code></td>
+<td><code>open</code>·<code>autorun</code>·<code>from_request</code>·<code>summary</code> 허용(<code>.strict()</code> 유지), skill 시작 작업본의 <code>layerRoot</code> 존재 검사 면제와 만들기 때 <code>LAYER_ROOT_MISSING</code></td>
+</tr>
+<tr>
+<td>질문 어댑터(T-075에서 꺼 둔 것)</td>
+<td>공급자 자체 질문 기능을 기본으로 켜고, 없는 공급자·경로는 VIDE 카드</td>
+</tr>
+<tr>
+<td><code>extensions/jigs/s06-frame/skill.md</code>, <code>jig.json</code></td>
+<td><code>description</code>·<code>examples</code>, <code>from_request</code>(예: <code>spanMax</code>·<code>beamSpacing_m</code>·<code>layoutSource</code>), <code>summary.kpi</code>. 합성 자료만</td>
+</tr>
+<tr>
+<td>문서</td>
+<td>ARCH-01 §3 도구 목록·계획 모드 도구, SPEC-01.10 단서(다른 세션의 편집이 커밋된 뒤). 구현과 다르면 ARCH-03 §5.3을 고친다</td>
+</tr>
+</tbody>
+</table></div>
+<p><strong>선행·외부 조건:</strong> ADR-026·SPEC·ARCH-03 반영(완료). ARCH-01·SPEC-01은 다른 세션이 편집 중이라 그 뒤에 고친다. 기본 출력 레이어(<code>VIDE/&lt;jig&gt;/&lt;n&gt;</code>)를 Rhino에 실제로 만드는 여러 단계 레이어 생성은 Rhino 플러그인 재빌드가 필요해(ARCH-03 §9.5, PLAN-22) 이 티켓의 완료 조건에서 뺀다. 그때까지 그 작업본의 Rhino에 만들기는 이유를 보이고 막는다.</p>
+<p><strong>검증 — 정상</strong></p>
+<ul>
+<li>단위: 새 <code>tests/core/skill-catalog.test.mjs</code>(앞머리 파서의 한 줄·블록 목록·블록 문자열, 정렬, <code>autorunUntil</code>의 <code>first-hard</code>, <code>layerRootFor</code>의 번호 비키기), <code>tests/core/request-route.test.mjs</code>(S-06 합성 프로젝트에서 &quot;구조 분석&quot;이 <code>project/s06-frame</code>, <code>user-only</code> 제외, 카탈로그 없을 때 하드코딩 대체), <code>tests/core/jig-manifest.test.mjs</code>(새 필드 허용, 모르는 필드 거절), <code>tests/server/agent-tools-jig.test.mjs</code>(계획 모드 턴에 <code>jig_open</code>·<code>ui_go</code>는 있고 <code>jig_set</code>·<code>jig_run</code>은 없음), <code>tests/server/conversations.test.mjs</code>(일반 대화는 묶고 다른 목적 대화는 새 jig 대화 + 상호 링크).</li>
+<li>브라우저: <code>browser-route.mjs</code>에 &quot;구조 분석 해줘&quot;(S-06 합성) → 카드 없이 작업본·문맥 탭이 열리고 <code>confirmAnalysis</code> 앞까지 미리보기, 결과 요약과 [일반 대화로]. &quot;구조 분석 해줘, 경간 11로&quot; → <code>spanMax</code> 11 m 적용과 [되돌리기]. 계획 모드 → 열리고 계산 없음, 체크리스트 [진행] 뒤 계산.</li>
+<li>실험: <code>docs/tdd/SPIKE-2026-10-xx-skill-start.md</code> — <code>.vide/</code> 아래 S-06 사본에서 클릭 수(목표 0), 해석 미리보기까지 걸린 시간, 오판정 되돌리기 1클릭. 판정 정확도는 <code>SPIKE-…-skill-routing</code>(사례 20개, 규칙 확정 대비 오판정이 늘지 않음).</li>
+</ul>
+<p><strong>검증 — 실패</strong></p>
+<ul>
+<li>Jev 키 없음·실패·지연 → <code>words</code> 규칙으로도 프로젝트 jig가 열린다. 판정 전송을 끄면 규칙만 쓴다(FR-18).</li>
+<li>두 jig가 비슷하게 맞음 → 열지 않고 질문 카드. <code>user-only</code> jig·초안 → 열지 않고 카드.</li>
+<li><code>skill.md</code> 형식 오류 → 그 jig만 후보에서 빠지고 형식 점검 오류로 보인다.</li>
+<li>작업본을 만들 수 없음 → 화면을 옮기지 않고 이유와 [JIG 목록에서 열기].</li>
+<li>자동 계산 중 단계 실패 → 그때까지의 결과와 이유를 요약에 보이고 뒤 단계는 멈춘다.</li>
+<li>[일반 대화로] → 새로 만든 작업본 삭제, 설정값 되돌림, 이전 화면, 같은 글의 AI 턴, 되돌림 기록. 사람이 손댄 작업본은 지우지 않는다.</li>
+<li>해석 확정·Rhino에 만들기를 AI·자동 계산이 누르지 않는다(도구 목록에 없음, 서버 경계에서 거절).</li>
+<li>자체 질문 기능이 없는 공급자 → 같은 모양의 VIDE 카드. 원격 세션 → 원래 경로의 제한 그대로.</li>
+</ul>
+<p><strong>완료:</strong> S-06(합성·사본)에서 &quot;구조 분석 해줘&quot;가 누르지 않고 미리보기 결과까지 가고, [일반 대화로] 한 번으로 복구되며, 위 단위·브라우저 시험이 통과한다. ARCH-03 §5.3·ARCH-01 §3이 코드와 맞는다. PLAN §6.5를 갱신한다.</p>
+<p><a id="t-077"></a></p>
+</section><section class="doc-section" id="plan-26-chat-stage-section-x2"><h2><span aria-hidden="true" class="section-num">02 /</span> T-077 · 토큰층과 CSS 리터럴 정리</h2>
+<p><strong>목적·기준:</strong> 무채 웜 그레이 + 고정 코랄 하나로 화면을 정리하고, 이후 셸 교체가 토큰 위에서 일어나게 한다. ADR-026 결정 1~3, <a href="../../Design.html">Design §01·§02</a>, RESEARCH-12 §2.2·§3·§7.2 단계 1·5. 기반 작업이므로 새 FR은 없다(화면 표현 FR-19·22의 Design 기준).</p>
+<p><strong>변경 범위</strong></p>
+<div aria-label="PLAN 표 3" class="table-scroll" role="region" tabindex="0"><table>
+<thead>
+<tr>
+<th>대상</th>
+<th>변경</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>src/ui/tokens.css</code>(있음)</td>
+<td>Design §02의 토큰과 이전 이름 별칭. 어두운 값은 호스트 패널 테마(<code>data-theme='dark'</code>)에만</td>
+</tr>
+<tr>
+<td><code>src/ui/style.css</code>, <code>kit/kit.css</code>, <code>report-tab.css</code>, <code>conversations.css</code>, <code>facts-tab.css</code>, <code>make.css</code>, <code>question-card.css</code></td>
+<td>16진 색·모서리·그림자 리터럴을 토큰으로, 요소별 어두운 규칙을 토큰 재정의로, 10px 이하 글자 제거, 선은 <code>--hairline</code>, 탭 구현 여러 벌을 하나로(가능한 범위)</td>
+</tr>
+<tr>
+<td>왼쪽 색 막대 7곳(<code>report-tab.css:70</code>, <code>kit/kit.css</code>)</td>
+<td>옅은 바탕 + 굵기로</td>
+</tr>
+<tr>
+<td><code>src/ui/structure-jig.tsx</code>, <code>src/ui/viewport.ts</code></td>
+<td>판정색을 <code>--ok</code>·<code>--warn</code>·<code>--ng</code>로 통일, 뷰포트 선택색·바탕을 <code>--accent</code>·<code>--bg-recessed</code>에 맞춤</td>
+</tr>
+</tbody>
+</table></div>
+<p><strong>선행·외부 조건:</strong> 없음(Design §02 반영 완료). <code>style.css</code>를 고치는 다른 세션과 겹치지 않게 파동을 나눈다.</p>
+<p><strong>검증 — 정상:</strong> <code>npm run verify</code>와 기존 브라우저 시험 전체 통과. 1440·900px와 호스트 패널 폭(약 300px), 밝은 값·호스트 패널 어두운 값의 화면 캡처를 VERIFY에 남긴다. 토큰 밖 16진 색·모서리·그림자 개수를 세어 기록한다(목표: 뷰포트 색 상수 같은 이유 있는 예외만).</p>
+<p><strong>검증 — 실패:</strong> <code>--accent</code>를 작은 글자에 쓴 곳이 없는지(대비 부족), 선택과 초과가 모양으로도 구분되는지(어두운 값에서 <code>--ng</code>와 <code>--accent</code>가 가까움), 왼쪽 색 막대가 남지 않았는지(<code>border-left</code>에 색이 있는 규칙 검색), 한 화면의 포인트 요소가 허용 위치 밖에 없는지.</p>
+<p><strong>완료:</strong> 위 검사 결과와 캡처를 <code>docs/tdd/VERIFY-2026-10-xx-tokens.md</code>에 남기고 PLAN §6.5를 갱신한다.</p>
+<p><a id="t-078"></a></p>
+</section><section class="doc-section" id="plan-26-chat-stage-section-x3"><h2><span aria-hidden="true" class="section-num">03 /</span> T-078 · 대화 열 + 무대 정적 목업과 검수</h2>
+<p><strong>목적·기준:</strong> 셸 교체 전에 구조와 토큰 방향을 사용자가 화면으로 고른다. ADR-026 결정 5·7, RESEARCH-12 §6.1·§6.2·§7.2 「먼저 확인할 목업·실험」, Design SCR-03·13·15·18.</p>
+<p><strong>변경 범위:</strong> <code>tools/mockups/chat-stage/</code>의 정적 HTML(<code>src/ui/tokens.css</code>의 값, 합성 수치만). 상태: 모델 무대, jig 무대(S-06 합성, 단계 레일·KPI 띠·결과 서랍), 문서 무대, 빈 무대의 프로젝트 보드, 자동 모드의 턴 블록(경로 줄·체크 목록·질문 카드·결과 카드·[일반 대화로]), 계획 모드의 체크리스트·[진행], '대기' 묶음, 호스트 패널 폭의 대화 열. 폭 1440·1280·900과 호스트 패널, 밝은 값과 패널 어두운 값. 대화 열 왼쪽·오른쪽 두 배치를 나란히 둔다(RESEARCH-12 Q3). 기록은 <code>docs/tdd/VERIFY-2026-10-xx-chat-stage-mockup.md</code>(SCR-03·13·15·18, AC-48 인용).</p>
+<p><strong>선행:</strong> 없음. 제품 코드가 아니므로 제품 지원 완료로 집계하지 않는다(AI.md §2).</p>
+<p><strong>검증 — 정상:</strong> 각 폭에서 가로 넘침 없음, 무대 전환의 600ms 외곽선과 포커스가 작성기에 남는 것을 목업 조작으로 확인, 포인트 요소가 화면당 셋 이하.</p>
+<p><strong>검증 — 실패:</strong> 좁은 화면(&lt;900)에서 대화·무대 두 장 전환이 되는지, 레일·탭 없이 jig 목록·보고서·자료로 가는 길(⌘K, 무대 머리, 프로젝트 보드)이 보이는지. 안 보이면 VERIFY에 적고 T-079 전에 고친다.</p>
+<p><strong>완료:</strong> 사용자가 배치 하나(대화 열 위치 포함)를 고르고 VERIFY에 결정과 남은 질문을 적는다. 그 결정으로 Design §03·SCR-03·SCR-18·§12.9를 다시 쓴다(T-079의 선행).</p>
+<p><a id="t-079"></a></p>
+</section><section class="doc-section" id="plan-26-chat-stage-section-x4"><h2><span aria-hidden="true" class="section-num">04 /</span> T-079 · 셸 교체: 대화 열 + 무대</h2>
+<p><strong>목적·기준:</strong> 상시 면을 대화 열과 무대 둘로 줄여 말과 결과를 한 줄기로 잇는다. ADR-026 결정 5, RESEARCH-12 §6.1·§6.2, 목업 VERIFY(T-078), 다시 쓴 Design §03.</p>
+<p><strong>변경 범위:</strong> <code>src/ui/index.html</code>, <code>src/ui/app.ts</code>, <code>src/ui/workspaces.ts</code>, <code>src/ui/work-view.tsx</code>·<code>src/ui/conversations.tsx</code>(스레드 렌더러로 합침), 무대 머리의 연결 점·보기 전환·⌘K, 접히는 무대 왼쪽 슬롯(모델: 파일·레이어, jig: 단계·설정값), 선택 줄·결과 서랍, 호스트 패널은 대화 열만, 좁은 화면 두 장 전환. 레일·'AI WORK' 머리·숨긴 선택 상자·이모지·긴 툴팁을 뺀다. <code>startSkill</code>의 화면 단계를 무대 열기로 바꾼다.</p>
+<p><strong>선행·외부 조건:</strong> T-078 VERIFY에서 사용자가 배치를 고름, Design §03·SCR-03·SCR-18·§12.9 다시 씀, T-076 완료. <strong>그 전에는 시작하지 않는다.</strong></p>
+<p><strong>검증 — 정상:</strong> 기존 브라우저 시험을 새 셸에 맞게 고쳐 전체 통과. 새 시험: 방금 보낸 요청에만 무대가 한 턴 한 번 옮겨지고, 외곽선·<code>aria-live</code> 알림이 있고, 포커스가 작성기에 남음. 무대별 카메라·선택 보존. 호스트 패널(SCR-12)에서 대화 열만 그려짐.</p>
+<p><strong>검증 — 실패:</strong> 다른 대화의 백그라운드 작업이 무대를 옮기지 않음, [원래대로] 한 번으로 무대 복귀, 연결 끊김이 연결 점에 바로 보임. 발견성 사용자 시험(레일·탭 없이 jig를 찾는지)을 VERIFY에 기록한다.</p>
+<p><strong>완료:</strong> 위 시험 통과, 사용자 시험 기록, 설치본 반영은 릴리스 때.</p>
+<p><a id="t-080"></a></p>
+</section><section class="doc-section" id="plan-26-chat-stage-section-x5"><h2><span aria-hidden="true" class="section-num">05 /</span> T-080 · 층 평면 보기: 층 해석 + 뷰포트 단면 자르기</h2>
+<p><strong>목적·기준:</strong> &quot;3층 평면 보여줘&quot;를 AI 없이 VIDE 화면에서 처리한다. FR-25, SPEC-02.17의 1·2(화면 경로), RESEARCH-12 §6.4 ②. 지금 화면 경로에는 평면 동작이 없어 AI로 간다(<code>request-route.ts</code>의 <code>viewActions</code>).</p>
+<p><strong>변경 범위:</strong> <code>src/ui/request-route.ts</code>(화면 동작 '층 평면'과 대상 '층'), 층 해석(레이어 이름 3F·L03·3층 → 호스트 레벨 정보 → 열린 jig의 레벨 설정값), <code>src/ui/viewport.ts</code>(위·직교 시점과 층 높이의 단면 자르기, 되돌리기), 결과 한 줄(&quot;평면 · 3층(EL +10.2 m) · 위를 잘라 봄 · 되돌리기 · 3D로&quot;).</p>
+<p><strong>선행:</strong> SPEC-02.17의 화면 경로에 '층 평면'(층 해석 순서, 후보가 여럿이거나 없을 때의 질문, 호스트 뷰를 바꾸지 않음, 되돌리기)을 먼저 적는다. 층 해석에 쓰는 호스트 레벨 정보가 Sync에 있는지 확인하고, 없으면 레이어 이름과 jig 설정값만 쓴다.</p>
+<p><strong>검증 — 정상:</strong> 단위: 층 이름 해석(3F·L03·3층·지하 1층), 레벨 후보 정렬. 브라우저: 합성 모델에서 &quot;3층 평면 보여줘&quot; → 위 직교 시점과 단면 자르기, 스레드 한 줄, U로 되돌림, Rhino 뷰 그대로.</p>
+<p><strong>검증 — 실패:</strong> 층 후보가 여럿이거나 없음 → 적용하지 않고 후보 2개와 '직접 입력' 질문 카드, 없는 레벨을 예시 값으로 채우지 않음. 원본을 바꾸는 말이 섞이면 화면 경로로 처리하지 않음(SPEC-02.17의 1).</p>
+<p><strong>완료:</strong> 위 시험 통과, 큰 모델에서 자르기의 프레임 시간을 PLAN-18의 기준으로 확인해 VERIFY에 적는다.</p>
+</section><footer class="doc-footer"><span>VIDE / PLANNING DOCUMENTS</span><span>문서 열람용 · 실제 CAD/BIM 지원은 구현·검증 후 선언</span></footer></article></main></div>
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+<script id="source-data" type="application/json">{"plan-26-chat-stage":{"label":"대화가 화면과 작업을 이끄는 구조 — skill 시작, 토큰 정리, 대화 열 + 무대","file":"PLAN-26-chat-stage.md","markdown":"---\nid: PLAN-26\ntitle: 대화가 화면과 작업을 이끄는 구조 — skill 시작, 토큰 정리, 대화 열 + 무대\nstatus: review\nversion: 0.1\nupdated: 2026-10-01\nowner: agent:claude\nrelated: [ADR-026, ADR-022, ADR-021, ADR-020, SPEC-02, SPEC-07, ARCH-03, ARCH-01, DESIGN, RESEARCH-12, PLAN-22, PLAN-24, FR-18, FR-24, FR-25, AC-48]\n---\n\n# 대화가 화면과 작업을 이끄는 구조 (T-076~T-080)\n\n기준: [ADR-026](../decisions/ADR-026-chat-stage-and-skill-jigs.md)(2026-10-01 사용자 결정), 조사는 [RESEARCH-12](../research/RESEARCH-12-ui-chat-driven-structure.md). 진행 상황의 정본은 [PLAN §6.5](PLAN.md)이다.\n\n## 1. 범위와 순서\n\n셸 교체보다 멈춤 해소가 먼저다(ADR-026 결정 7). T-076(skill 시작)과 T-077(토큰·CSS 정리)은 지금 배치 위에서 한다. T-078(목업·검수)이 끝나야 T-079(셸 교체)를 시작한다. T-080(층 평면)은 독립이다.\n\n| 티켓 | 내용 | 선행 | 상태(2026-10-01) |\n|---|---|---|---|\n| T-076 | 단계 0: skill 시작, skill 카탈로그 로더, AI 도구 `jig_open`·`ui_go`, 공급자 자체 질문 기본 | ADR-026, 이 계획 | 구현·단위·브라우저 시험 완료(2026-10-01). 남음: 실제 Claude CLI에서 자체 질문+jig 대화 확인, 확신 낮을 때 두 갈래 질문(M6), `summary.kpi` |\n| T-077 | 토큰층과 CSS 리터럴 정리 | ADR-026, Design §02 | 완료(2026-10-01): UI CSS 색 리터럴 0, 왼쪽 막대 제거, 선택/초과 색 분리. 남음: 기능용 리터럴(`app.ts` 붓 색 등) |\n| T-078 | 대화 열 + 무대 정적 목업과 VERIFY | ADR-026 결정 5 | 목업 게시, 사용자 검토 대기 |\n| T-079 | 셸 교체: 대화 열 + 무대 | T-078 VERIFY, T-076 | 막힘(목업 검수 전) |\n| T-080 | 층 평면 보기: 층 해석 + 뷰포트 단면 자르기 | SPEC-02.17 보완 | 대기 |\n\n`src/ui/app.ts`·`src/ui/style.css`는 여러 세션이 함께 고친다. 티켓마다 깨끗한 worktree에서 작업하고 자기 파일만 스테이징한다. 커밋·설치본 릴리스는 사용자 요청이나 웨이브 경계의 판단에 따른다.\n\n\u003ca id=\"t-076\">\u003c/a>\n## T-076 · 단계 0 — skill 시작, 카탈로그, AI 도구, 자체 질문\n\n**목적·기준:** 요청이 jig로 판정되면 카드에서 멈추지 않고 작업본을 열고 계산까지 한다. FR-24·25·18, AC-48, ADR-026 결정 4·6, SPEC-02.17의 1~4, SPEC-02.19의 1·3·6·7, SPEC-02.20의 2, SPEC-07.4·07.18, ARCH-03 §5.3·§9.5, RESEARCH-12 §6.2~§6.3·§7.2 단계 0·2·3.\n\n**변경 범위**\n\n| 대상 | 변경 |\n|---|---|\n| `src/ui/skill-catalog.ts`(있음), `src/server/skill-catalog.ts`(신설) | 앞머리 파서·정렬·후보(순수 부분)와 패키지의 `skill.md`·`jig.json` 읽기. 프로젝트 → 이 PC → 공식 순, `invocation: 'auto'`만 후보 |\n| `src/ui/request-route.ts`, `src/ai/request-router.ts` | 카탈로그를 판정 후보로. 하드코딩 `OFFICIAL_JIG_ROUTING`·`officialJigs`는 대체로. 같은 말이면 프로젝트 jig 우선. `from_request` 값 읽기와 `paramFor`의 여러 값 |\n| `src/ui/app.ts`(jig 분기 `runAppRoute`), `src/ui/jigs.tsx` | `startSkill(jigId, request, mode)` 한 경로: 작업본 재사용·기본 `layerRoot`로 생성 → 문맥 탭 → 대화 묶기 → 원장·판정 기록 → `from_request` 적용 → `preview` 자동 계산 → 결과 요약. 요청 글을 지우지 않는다. [일반 대화로](SPEC-02.17의 3). 계획 모드는 재사용·묶기까지와 체크리스트·[진행] |\n| `src/server/conversations.ts` | 대화의 `jigInstanceId` 묶기(SPEC-02.19의 1의 규칙), 서로 가리키는 줄 |\n| `src/server/agent-tools.ts`, `src/ai/agent-connection.ts` | `jig_open`·`ui_go` 발급, 계획 모드 도구 집합(`PLAN_MODE_TOOLS`)에 두 도구 추가, `jig_set`·`jig_run`은 계획 모드 제외 유지 |\n| `src/jigs/runtime/manifest.ts`, `src/server/jig-routes.ts` | `open`·`autorun`·`from_request`·`summary` 허용(`.strict()` 유지), skill 시작 작업본의 `layerRoot` 존재 검사 면제와 만들기 때 `LAYER_ROOT_MISSING` |\n| 질문 어댑터(T-075에서 꺼 둔 것) | 공급자 자체 질문 기능을 기본으로 켜고, 없는 공급자·경로는 VIDE 카드 |\n| `extensions/jigs/s06-frame/skill.md`, `jig.json` | `description`·`examples`, `from_request`(예: `spanMax`·`beamSpacing_m`·`layoutSource`), `summary.kpi`. 합성 자료만 |\n| 문서 | ARCH-01 §3 도구 목록·계획 모드 도구, SPEC-01.10 단서(다른 세션의 편집이 커밋된 뒤). 구현과 다르면 ARCH-03 §5.3을 고친다 |\n\n**선행·외부 조건:** ADR-026·SPEC·ARCH-03 반영(완료). ARCH-01·SPEC-01은 다른 세션이 편집 중이라 그 뒤에 고친다. 기본 출력 레이어(`VIDE/\u003cjig>/\u003cn>`)를 Rhino에 실제로 만드는 여러 단계 레이어 생성은 Rhino 플러그인 재빌드가 필요해(ARCH-03 §9.5, PLAN-22) 이 티켓의 완료 조건에서 뺀다. 그때까지 그 작업본의 Rhino에 만들기는 이유를 보이고 막는다.\n\n**검증 — 정상**\n\n- 단위: 새 `tests/core/skill-catalog.test.mjs`(앞머리 파서의 한 줄·블록 목록·블록 문자열, 정렬, `autorunUntil`의 `first-hard`, `layerRootFor`의 번호 비키기), `tests/core/request-route.test.mjs`(S-06 합성 프로젝트에서 \"구조 분석\"이 `project/s06-frame`, `user-only` 제외, 카탈로그 없을 때 하드코딩 대체), `tests/core/jig-manifest.test.mjs`(새 필드 허용, 모르는 필드 거절), `tests/server/agent-tools-jig.test.mjs`(계획 모드 턴에 `jig_open`·`ui_go`는 있고 `jig_set`·`jig_run`은 없음), `tests/server/conversations.test.mjs`(일반 대화는 묶고 다른 목적 대화는 새 jig 대화 + 상호 링크).\n- 브라우저: `browser-route.mjs`에 \"구조 분석 해줘\"(S-06 합성) → 카드 없이 작업본·문맥 탭이 열리고 `confirmAnalysis` 앞까지 미리보기, 결과 요약과 [일반 대화로]. \"구조 분석 해줘, 경간 11로\" → `spanMax` 11 m 적용과 [되돌리기]. 계획 모드 → 열리고 계산 없음, 체크리스트 [진행] 뒤 계산.\n- 실험: `docs/tdd/SPIKE-2026-10-xx-skill-start.md` — `.vide/` 아래 S-06 사본에서 클릭 수(목표 0), 해석 미리보기까지 걸린 시간, 오판정 되돌리기 1클릭. 판정 정확도는 `SPIKE-…-skill-routing`(사례 20개, 규칙 확정 대비 오판정이 늘지 않음).\n\n**검증 — 실패**\n\n- Jev 키 없음·실패·지연 → `words` 규칙으로도 프로젝트 jig가 열린다. 판정 전송을 끄면 규칙만 쓴다(FR-18).\n- 두 jig가 비슷하게 맞음 → 열지 않고 질문 카드. `user-only` jig·초안 → 열지 않고 카드.\n- `skill.md` 형식 오류 → 그 jig만 후보에서 빠지고 형식 점검 오류로 보인다.\n- 작업본을 만들 수 없음 → 화면을 옮기지 않고 이유와 [JIG 목록에서 열기].\n- 자동 계산 중 단계 실패 → 그때까지의 결과와 이유를 요약에 보이고 뒤 단계는 멈춘다.\n- [일반 대화로] → 새로 만든 작업본 삭제, 설정값 되돌림, 이전 화면, 같은 글의 AI 턴, 되돌림 기록. 사람이 손댄 작업본은 지우지 않는다.\n- 해석 확정·Rhino에 만들기를 AI·자동 계산이 누르지 않는다(도구 목록에 없음, 서버 경계에서 거절).\n- 자체 질문 기능이 없는 공급자 → 같은 모양의 VIDE 카드. 원격 세션 → 원래 경로의 제한 그대로.\n\n**완료:** S-06(합성·사본)에서 \"구조 분석 해줘\"가 누르지 않고 미리보기 결과까지 가고, [일반 대화로] 한 번으로 복구되며, 위 단위·브라우저 시험이 통과한다. ARCH-03 §5.3·ARCH-01 §3이 코드와 맞는다. PLAN §6.5를 갱신한다.\n\n\u003ca id=\"t-077\">\u003c/a>\n## T-077 · 토큰층과 CSS 리터럴 정리\n\n**목적·기준:** 무채 웜 그레이 + 고정 코랄 하나로 화면을 정리하고, 이후 셸 교체가 토큰 위에서 일어나게 한다. ADR-026 결정 1~3, [Design §01·§02](../../Design.md), RESEARCH-12 §2.2·§3·§7.2 단계 1·5. 기반 작업이므로 새 FR은 없다(화면 표현 FR-19·22의 Design 기준).\n\n**변경 범위**\n\n| 대상 | 변경 |\n|---|---|\n| `src/ui/tokens.css`(있음) | Design §02의 토큰과 이전 이름 별칭. 어두운 값은 호스트 패널 테마(`data-theme='dark'`)에만 |\n| `src/ui/style.css`, `kit/kit.css`, `report-tab.css`, `conversations.css`, `facts-tab.css`, `make.css`, `question-card.css` | 16진 색·모서리·그림자 리터럴을 토큰으로, 요소별 어두운 규칙을 토큰 재정의로, 10px 이하 글자 제거, 선은 `--hairline`, 탭 구현 여러 벌을 하나로(가능한 범위) |\n| 왼쪽 색 막대 7곳(`report-tab.css:70`, `kit/kit.css`) | 옅은 바탕 + 굵기로 |\n| `src/ui/structure-jig.tsx`, `src/ui/viewport.ts` | 판정색을 `--ok`·`--warn`·`--ng`로 통일, 뷰포트 선택색·바탕을 `--accent`·`--bg-recessed`에 맞춤 |\n\n**선행·외부 조건:** 없음(Design §02 반영 완료). `style.css`를 고치는 다른 세션과 겹치지 않게 파동을 나눈다.\n\n**검증 — 정상:** `npm run verify`와 기존 브라우저 시험 전체 통과. 1440·900px와 호스트 패널 폭(약 300px), 밝은 값·호스트 패널 어두운 값의 화면 캡처를 VERIFY에 남긴다. 토큰 밖 16진 색·모서리·그림자 개수를 세어 기록한다(목표: 뷰포트 색 상수 같은 이유 있는 예외만).\n\n**검증 — 실패:** `--accent`를 작은 글자에 쓴 곳이 없는지(대비 부족), 선택과 초과가 모양으로도 구분되는지(어두운 값에서 `--ng`와 `--accent`가 가까움), 왼쪽 색 막대가 남지 않았는지(`border-left`에 색이 있는 규칙 검색), 한 화면의 포인트 요소가 허용 위치 밖에 없는지.\n\n**완료:** 위 검사 결과와 캡처를 `docs/tdd/VERIFY-2026-10-xx-tokens.md`에 남기고 PLAN §6.5를 갱신한다.\n\n\u003ca id=\"t-078\">\u003c/a>\n## T-078 · 대화 열 + 무대 정적 목업과 검수\n\n**목적·기준:** 셸 교체 전에 구조와 토큰 방향을 사용자가 화면으로 고른다. ADR-026 결정 5·7, RESEARCH-12 §6.1·§6.2·§7.2 「먼저 확인할 목업·실험」, Design SCR-03·13·15·18.\n\n**변경 범위:** `tools/mockups/chat-stage/`의 정적 HTML(`src/ui/tokens.css`의 값, 합성 수치만). 상태: 모델 무대, jig 무대(S-06 합성, 단계 레일·KPI 띠·결과 서랍), 문서 무대, 빈 무대의 프로젝트 보드, 자동 모드의 턴 블록(경로 줄·체크 목록·질문 카드·결과 카드·[일반 대화로]), 계획 모드의 체크리스트·[진행], '대기' 묶음, 호스트 패널 폭의 대화 열. 폭 1440·1280·900과 호스트 패널, 밝은 값과 패널 어두운 값. 대화 열 왼쪽·오른쪽 두 배치를 나란히 둔다(RESEARCH-12 Q3). 기록은 `docs/tdd/VERIFY-2026-10-xx-chat-stage-mockup.md`(SCR-03·13·15·18, AC-48 인용).\n\n**선행:** 없음. 제품 코드가 아니므로 제품 지원 완료로 집계하지 않는다(AI.md §2).\n\n**검증 — 정상:** 각 폭에서 가로 넘침 없음, 무대 전환의 600ms 외곽선과 포커스가 작성기에 남는 것을 목업 조작으로 확인, 포인트 요소가 화면당 셋 이하.\n\n**검증 — 실패:** 좁은 화면(\u003c900)에서 대화·무대 두 장 전환이 되는지, 레일·탭 없이 jig 목록·보고서·자료로 가는 길(⌘K, 무대 머리, 프로젝트 보드)이 보이는지. 안 보이면 VERIFY에 적고 T-079 전에 고친다.\n\n**완료:** 사용자가 배치 하나(대화 열 위치 포함)를 고르고 VERIFY에 결정과 남은 질문을 적는다. 그 결정으로 Design §03·SCR-03·SCR-18·§12.9를 다시 쓴다(T-079의 선행).\n\n\u003ca id=\"t-079\">\u003c/a>\n## T-079 · 셸 교체: 대화 열 + 무대\n\n**목적·기준:** 상시 면을 대화 열과 무대 둘로 줄여 말과 결과를 한 줄기로 잇는다. ADR-026 결정 5, RESEARCH-12 §6.1·§6.2, 목업 VERIFY(T-078), 다시 쓴 Design §03.\n\n**변경 범위:** `src/ui/index.html`, `src/ui/app.ts`, `src/ui/workspaces.ts`, `src/ui/work-view.tsx`·`src/ui/conversations.tsx`(스레드 렌더러로 합침), 무대 머리의 연결 점·보기 전환·⌘K, 접히는 무대 왼쪽 슬롯(모델: 파일·레이어, jig: 단계·설정값), 선택 줄·결과 서랍, 호스트 패널은 대화 열만, 좁은 화면 두 장 전환. 레일·'AI WORK' 머리·숨긴 선택 상자·이모지·긴 툴팁을 뺀다. `startSkill`의 화면 단계를 무대 열기로 바꾼다.\n\n**선행·외부 조건:** T-078 VERIFY에서 사용자가 배치를 고름, Design §03·SCR-03·SCR-18·§12.9 다시 씀, T-076 완료. **그 전에는 시작하지 않는다.**\n\n**검증 — 정상:** 기존 브라우저 시험을 새 셸에 맞게 고쳐 전체 통과. 새 시험: 방금 보낸 요청에만 무대가 한 턴 한 번 옮겨지고, 외곽선·`aria-live` 알림이 있고, 포커스가 작성기에 남음. 무대별 카메라·선택 보존. 호스트 패널(SCR-12)에서 대화 열만 그려짐.\n\n**검증 — 실패:** 다른 대화의 백그라운드 작업이 무대를 옮기지 않음, [원래대로] 한 번으로 무대 복귀, 연결 끊김이 연결 점에 바로 보임. 발견성 사용자 시험(레일·탭 없이 jig를 찾는지)을 VERIFY에 기록한다.\n\n**완료:** 위 시험 통과, 사용자 시험 기록, 설치본 반영은 릴리스 때.\n\n\u003ca id=\"t-080\">\u003c/a>\n## T-080 · 층 평면 보기: 층 해석 + 뷰포트 단면 자르기\n\n**목적·기준:** \"3층 평면 보여줘\"를 AI 없이 VIDE 화면에서 처리한다. FR-25, SPEC-02.17의 1·2(화면 경로), RESEARCH-12 §6.4 ②. 지금 화면 경로에는 평면 동작이 없어 AI로 간다(`request-route.ts`의 `viewActions`).\n\n**변경 범위:** `src/ui/request-route.ts`(화면 동작 '층 평면'과 대상 '층'), 층 해석(레이어 이름 3F·L03·3층 → 호스트 레벨 정보 → 열린 jig의 레벨 설정값), `src/ui/viewport.ts`(위·직교 시점과 층 높이의 단면 자르기, 되돌리기), 결과 한 줄(\"평면 · 3층(EL +10.2 m) · 위를 잘라 봄 · 되돌리기 · 3D로\").\n\n**선행:** SPEC-02.17의 화면 경로에 '층 평면'(층 해석 순서, 후보가 여럿이거나 없을 때의 질문, 호스트 뷰를 바꾸지 않음, 되돌리기)을 먼저 적는다. 층 해석에 쓰는 호스트 레벨 정보가 Sync에 있는지 확인하고, 없으면 레이어 이름과 jig 설정값만 쓴다.\n\n**검증 — 정상:** 단위: 층 이름 해석(3F·L03·3층·지하 1층), 레벨 후보 정렬. 브라우저: 합성 모델에서 \"3층 평면 보여줘\" → 위 직교 시점과 단면 자르기, 스레드 한 줄, U로 되돌림, Rhino 뷰 그대로.\n\n**검증 — 실패:** 층 후보가 여럿이거나 없음 → 적용하지 않고 후보 2개와 '직접 입력' 질문 카드, 없는 레벨을 예시 값으로 채우지 않음. 원본을 바꾸는 말이 섞이면 화면 경로로 처리하지 않음(SPEC-02.17의 1).\n\n**완료:** 위 시험 통과, 큰 모델에서 자르기의 프레임 시간을 PLAN-18의 기준으로 확인해 VERIFY에 적는다.\n"}}</script>
+<script id="reader-config" type="application/json">{"initial":"plan-26-chat-stage","siteTitle":"VIDE"}</script>
+<script>
+(() => {
+'use strict';
+const sourceData=JSON.parse(document.getElementById('source-data').textContent);
+const config=JSON.parse(document.getElementById('reader-config').textContent);
+const esc=s=>String(s);
+let activeDoc=config.initial;
+let observer;
+let toastTimer;
+const $=s=>document.querySelector(s);
+function notify(message){const t=$('#toast');t.textContent=message;t.hidden=false;clearTimeout(toastTimer);toastTimer=setTimeout(()=>{t.hidden=true;},3400);}
+function renderToc(){const links=$('#toc-links');links.replaceChildren();const nodes=document.querySelectorAll('#'+activeDoc+' .doc-section');nodes.forEach(section=>{const a=document.createElement('a');a.href='#'+section.id;a.textContent=section.querySelector('h2').textContent;a.dataset.title=a.textContent;a.addEventListener('click',()=>{$('#toc-shell').classList.remove('open');$('#toc-toggle').setAttribute('aria-expanded','false');});links.appendChild(a);});$('#toc-count').textContent=nodes.length+' CHAPTERS';$('#toc-search').value='';$('#nav-hint').textContent='章 제목으로 찾아갑니다.'.replace('章','장');if(observer)observer.disconnect();observer=new IntersectionObserver(entries=>{const visible=entries.filter(e=>e.isIntersecting).sort((a,b)=>a.boundingClientRect.top-b.boundingClientRect.top);if(!visible.length)return;document.querySelectorAll('#toc-links a').forEach(a=>a.classList.toggle('active',a.hash==='#'+visible[0].target.id));},{rootMargin:'-90px 0px -64% 0px',threshold:0});nodes.forEach(n=>observer.observe(n));}
+function showDoc(name,reset){if(!sourceData[name])name=config.initial;activeDoc=name;document.querySelectorAll('.document').forEach(d=>d.hidden=d.id!==name);document.querySelectorAll('.doc-tab').forEach(a=>{a.classList.toggle('active',a.dataset.doc===name);if(a.dataset.doc===name)a.setAttribute('aria-current','page');else a.removeAttribute('aria-current');});renderToc();document.title=(config.siteTitle||'VIDE')+' · '+sourceData[name].label;if(reset)window.scrollTo({top:0,behavior:'instant'});}
+function useHash(){let raw=decodeURIComponent(location.hash.slice(1)||config.initial);let name=raw.split('-section-')[0];if(!sourceData[name])name=config.initial;if(name!==activeDoc||!$('#toc-links').children.length)showDoc(name,false);const el=document.getElementById(raw);if(el&&!el.hidden){requestAnimationFrame(()=>el.scrollIntoView({block:'start',behavior:'instant'}));}}
+window.addEventListener('hashchange',useHash);
+document.querySelectorAll('.doc-tab[data-doc]').forEach(a=>a.addEventListener('click',e=>{e.preventDefault();const name=a.dataset.doc;showDoc(name,true);history.replaceState(null,'','#'+name);}));
+$('#toc-toggle').addEventListener('click',()=>{const on=$('#toc-shell').classList.toggle('open');$('#toc-toggle').setAttribute('aria-expanded',String(on));});
+$('#toc-search').addEventListener('input',()=>{const q=$('#toc-search').value.trim().toLocaleLowerCase();let n=0;document.querySelectorAll('#toc-links a').forEach(a=>{a.hidden=!a.dataset.title.toLocaleLowerCase().includes(q);if(!a.hidden)n++;});$('#nav-hint').textContent=q?(n?'일치하는 장 '+n+'개':'일치하는 장 제목이 없습니다.'):'장 제목으로 찾아갑니다.';});
+function download(name,contents,type){const blob=new Blob([contents],{type});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),2500);}
+$('#source-download').addEventListener('click',()=>download(sourceData[activeDoc].file,sourceData[activeDoc].markdown,'text/markdown;charset=utf-8'));
+$('#print-doc').addEventListener('click',()=>window.print());
+async function copy(text){try{if(navigator.clipboard&&navigator.clipboard.writeText){await navigator.clipboard.writeText(text);return true;}}catch(e){}const t=document.createElement('textarea');t.value=text;t.style.position='fixed';t.style.left='-9999px';document.body.appendChild(t);t.select();let ok=false;try{ok=document.execCommand('copy');}catch(e){}t.remove();return ok;}
+document.querySelectorAll('.copy-code').forEach(b=>b.addEventListener('click',async()=>{const text=b.parentElement.querySelector('pre').textContent;const ok=await copy(text);if(ok){b.textContent='복사됨';notify('텍스트를 복사했습니다.');setTimeout(()=>b.textContent='복사',1800);}else{const range=document.createRange();range.selectNodeContents(b.parentElement.querySelector('pre'));const sel=window.getSelection();sel.removeAllRanges();sel.addRange(range);notify('자동 복사가 제한됩니다. 선택된 텍스트를 직접 복사하세요.');}}));
+showDoc(config.initial,false);useHash();
+})();
+</script>
+<script>
+(() => {
+'use strict';
+const KEY = 'vide-docs-review-mode';
+const AUTHOR_KEY = 'vide-docs-review-author';
+const sel = document.getElementById('review-mode');
+if (!sel) return;
+const authorSel = document.getElementById('review-author');
+let mode = 'marked';
+let author = 'all';
+try { mode = localStorage.getItem(KEY) || 'marked'; } catch (e) {}
+try { author = localStorage.getItem(AUTHOR_KEY) || 'all'; } catch (e) {}
+if (!['marked', 'original', 'accepted'].includes(mode)) mode = 'marked';
+if (!authorSel || !Array.from(authorSel.options).some(o => o.value === author)) author = 'all';
+const matches = el => author === 'all' || el.dataset.reviewAgent === author;
+const decorate = () => {
+const query = (document.getElementById('toc-search')?.value || '').trim().toLocaleLowerCase();
+let visible = 0;
+document.querySelectorAll('#toc-links a').forEach(a => {
+  const section = document.getElementById(decodeURIComponent(a.hash.slice(1)));
+  if (!section) return;
+  a.hidden = !a.dataset.title.toLocaleLowerCase().includes(query) || (section.classList.contains('review-appendix') && (mode !== 'marked' || !matches(section)));
+  if (!a.hidden) visible += 1;
+  const n = Array.from(section.querySelectorAll('.review-label[data-rid]')).filter(matches).length;
+  if (n && mode === 'marked') a.dataset.reviews = String(n); else delete a.dataset.reviews;
+});
+if (query) document.getElementById('nav-hint').textContent = visible ? `일치하는 장 ${visible}개` : '일치하는 장 제목이 없습니다.';
+};
+const apply = () => {
+  sel.value = mode;
+  if (authorSel) { authorSel.value = author; authorSel.disabled = mode !== 'marked'; }
+  document.body.classList.toggle('review-original', mode === 'original');
+  document.body.classList.toggle('review-accepted', mode === 'accepted');
+  document.querySelectorAll('blockquote.review, .review-appendix').forEach(el => { el.hidden = !matches(el); });
+  decorate();
+  try { localStorage.setItem(KEY, mode); localStorage.setItem(AUTHOR_KEY, author); } catch (e) {}
+};
+apply();
+const toc = document.getElementById('toc-links');
+if (toc) new MutationObserver(decorate).observe(toc, { childList: true });
+document.getElementById('toc-search')?.addEventListener('input', decorate);
+sel.addEventListener('change', () => { mode = sel.value; apply(); });
+if (authorSel) authorSel.addEventListener('change', () => { author = authorSel.value; apply(); });
+const revealHash = () => {
+  let id;
+  try { id = decodeURIComponent(location.hash.slice(1)); } catch (e) { return; }
+  const target = document.getElementById(id);
+  if (!target || !target.dataset.reviewAgent) return;
+  mode = 'marked';
+  if (!matches(target)) author = 'all';
+  apply();
+  target.scrollIntoView({ block: 'center' });
+};
+window.addEventListener('hashchange', revealHash);
+revealHash();
+})();
+</script>
+</body></html>

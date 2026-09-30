@@ -161,6 +161,9 @@ export function BakePart({
   const [choices, setChoices] = useState<Record<string, Resolve>>({});
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState('');
+  /** A request-opened instance has no output layer yet (ADR-026): the bakes waiting for one. */
+  const [needLayer, setNeedLayer] = useState<string[]>();
+  const [layer, setLayer] = useState('');
   const alive = useRef(true);
   useEffect(
     () => () => {
@@ -225,6 +228,13 @@ export function BakePart({
     try {
       const resolve = Object.keys(choices).length ? choices : undefined;
       const { ok, body } = await call(`${base}/bake`, 'POST', { bake: ids, resolve });
+      if (!ok && body.code === 'LAYER_ROOT_MISSING') {
+        setNeedLayer(ids);
+        setNotice(
+          '이 작업본은 요청으로 열어 출력 레이어가 아직 없습니다. 연결 모델에 있는 레이어를 적으면 그 바로 아래 한 단계에 만듭니다.',
+        );
+        return;
+      }
       if (!ok) {
         setNotice(errorText(body, '만들지 못했습니다.'));
         return;
@@ -352,6 +362,44 @@ export function BakePart({
         <p className="kit-notice" role="status">
           {notice}
         </p>
+      ) : null}
+      {needLayer ? (
+        <form
+          className="kit-actions"
+          aria-label="출력 레이어"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void (async () => {
+              if (!layer.trim()) return;
+              setBusy(true);
+              const { ok, body } = await call(`${base}/layer-root`, 'PUT', {
+                layerRoot: layer.trim(),
+              });
+              setBusy(false);
+              if (!ok) {
+                setNotice(
+                  body.code === 'LAYER_ROOT_MISSING'
+                    ? '연결 모델에 없는 레이어입니다. 연결 파일에 있는 레이어를 적으세요.'
+                    : errorText(body, '출력 레이어를 정하지 못했습니다.'),
+                );
+                return;
+              }
+              const ids = needLayer;
+              setNeedLayer(undefined);
+              await start(ids);
+            })();
+          }}
+        >
+          <input
+            value={layer}
+            maxLength={1000}
+            placeholder="연결 모델의 레이어 이름"
+            onChange={(event) => setLayer(event.target.value)}
+          />
+          <button type="submit" disabled={busy || !layer.trim()}>
+            정하고 만들기
+          </button>
+        </form>
       ) : null}
       {last ? (
         <>

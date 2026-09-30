@@ -20,6 +20,9 @@ import type { StoredWork } from '../contracts/stored-work.ts';
 import type { RequestInput } from '../contracts/workspace.ts';
 import type {
   CliOptions,
+  NativeQuestionAnswer,
+  NativeQuestionCard,
+  NativeQuestionHandler,
   ProviderContext,
   Progress,
   ProviderStatus,
@@ -159,6 +162,9 @@ export function hostTurnProjectHandlers(
   ) as Pick<ReturnType<typeof conversationHandlers>, (typeof HOST_TURN_PROJECT_TOOLS)[number]>;
 }
 
+/** Claude's AskUserQuestion on the question cards: on unless VIDE_NATIVE_QUESTIONS=0. */
+export const nativeQuestionsEnabled = () => process.env.VIDE_NATIVE_QUESTIONS !== '0';
+
 export class Execution {
   workspace: Workspace;
   applyAttached?: Options['applyAttached'];
@@ -176,6 +182,18 @@ export class Execution {
   conversations?: ConversationService;
   projectInstructions?: Options['projectInstructions'];
   private injectedDirect?: Options['directDriver'];
+  /**
+   * Questions a Claude turn asks with its own AskUserQuestion tool (ADR-026 4, SPIKE-2026-09-30-
+   * native-questions-claude), waiting for the person's answer in the same run: request id → cards.
+   */
+  private readonly nativeQuestions = new Map<
+    string,
+    {
+      projectId: string;
+      cards: NativeQuestionCard[];
+      answer: (answers: NativeQuestionAnswer[] | null) => void;
+    }
+  >();
   /** Step times of the running requests (the `request-stages` diagnostic line). */
   private readonly marks = new Map<
     string,
@@ -242,6 +260,8 @@ export class Execution {
     session?: SessionOptions,
     /** The instruction bundle's mode, the project whose addendum it carries, and its host. */
     instructions?: { mode: InstructionMode; projectId: string; host?: InstructionHost },
+    /** Claude's own question tool, answered on the question cards (conversation turns). */
+    nativeQuestions?: NativeQuestionHandler,
   ) {
     const executable = this.executable(input.provider);
     // Flag (SPIKE-2026-09-30-codex-app-server): Codex through `codex app-server` instead of
@@ -274,7 +294,51 @@ export class Execution {
             projectInstructions: this.projectInstructions?.(instructions.projectId),
           }
         : {}),
+      ...(nativeQuestions && input.provider === 'claude-cli' ? { nativeQuestions } : {}),
     });
+  }
+  /**
+   * The handler of one turn's native questions: the cards go on the request (phase `question`,
+   * shown on the question cards) until the person answers (`answerQuestions`) or the turn stops.
+   */
+  private questionHandler(projectId: string, requestId: string): NativeQuestionHandler {
+    return (cards, signal) =>
+      new Promise((resolve) => {
+        const done = (answers: NativeQuestionAnswer[] | null) => {
+          if (this.nativeQuestions.get(requestId)?.answer !== done) return;
+          this.nativeQuestions.delete(requestId);
+          signal.removeEventListener('abort', stop);
+          try {
+            this.workspace.update(projectId, requestId, 'running', {
+              phase: 'model',
+              hostExecuted: false,
+            });
+          } catch {
+            /* The request ended meanwhile. */
+          }
+          resolve(answers);
+        };
+        const stop = () => done(null);
+        signal.addEventListener('abort', stop, { once: true });
+        this.nativeQuestions.set(requestId, { projectId, cards, answer: done });
+        this.workspace.update(projectId, requestId, 'running', {
+          phase: 'question',
+          hostExecuted: false,
+          questions: cards,
+        });
+      });
+  }
+  /** The person's answers to a running turn's native questions (the question cards). */
+  answerQuestions(
+    projectId: string,
+    requestId: string,
+    answers: NativeQuestionAnswer[],
+  ): { ok: true } {
+    const waiting = this.nativeQuestions.get(requestId);
+    if (!waiting || waiting.projectId !== projectId) throw new DomainError('NOT_FOUND');
+    const known = new Set(waiting.cards.map((card) => card.id));
+    waiting.answer(answers.filter((answer) => known.has(answer.id)));
+    return { ok: true };
   }
   async models() {
     // Explicit models only: a "CLI default" entry hid which model actually ran. ChatGPT models
@@ -896,11 +960,24 @@ export class Execution {
           : scope?.connection;
       const result = await this.timed(
         id,
-        this.provider(input, connection, turn?.session, {
-          mode,
-          projectId,
-          ...(host ? { host: target } : {}),
-        }),
+        this.provider(
+          input,
+          connection,
+          turn?.session,
+          {
+            mode,
+            projectId,
+            ...(host ? { host: target } : {}),
+          },
+          // A conversation turn asks with Claude's own question tool by default (ADR-026 4);
+          // VIDE_NATIVE_QUESTIONS=0 keeps the structured-output cards only. Like the Codex
+          // app-server flag, an injected provider factory (tests) opts in with =1 only.
+          turn &&
+            (process.env.VIDE_NATIVE_QUESTIONS === '1' ||
+              (nativeQuestionsEnabled() && this.providerFactory === createProvider))
+            ? this.questionHandler(projectId, id)
+            : undefined,
+        ),
       )
         .run(
           { goal, revision: 1, items, includedIds: items.map((item) => item.id) },

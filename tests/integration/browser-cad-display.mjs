@@ -143,7 +143,7 @@ try {
   assert.notEqual(result.plot.block[0].width, result.plot.block[1].width);
   assert.deepEqual(result.plot.hatch, ['#000000']);
   assert.deepEqual(result.plot.text, ['#000000']);
-  assert.deepEqual(result.selectedText, ['#d9542c']);
+  assert.deepEqual(result.selectedText, ['#d0664a']);
   // Clicking a text quad selects the owning object.
   await page.mouse.click(result.labelPoint.x, result.labelPoint.y);
   assert.deepEqual(await page.evaluate(() => window.cadPicks.at(-1)), ['label']);

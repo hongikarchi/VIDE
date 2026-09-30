@@ -258,10 +258,14 @@ export class JigRuntime {
       params?: ParamChange[];
       conversationId?: string;
     },
-    options: { layerExists?: (layerRoot: string) => boolean | undefined } = {},
+    options: {
+      layerExists?: (layerRoot: string) => boolean | undefined;
+      /** Opened from a request (ADR-026): the output layer is asked at Rhino에 만들기. */
+      layerRootLater?: boolean;
+    } = {},
   ): Promise<InstanceView> {
-    if (!input.layerRoot) throw new DomainError('INVALID_INPUT');
-    if (options.layerExists?.(input.layerRoot) === false)
+    if (!input.layerRoot && !options.layerRootLater) throw new DomainError('INVALID_INPUT');
+    if (input.layerRoot && options.layerExists?.(input.layerRoot) === false)
       throw new DomainError('LAYER_ROOT_MISSING');
     const pinned = this.store.pinned(projectId).find((p) => p.jigId === input.jig);
     const jig = await this.registry.resolve(input.jig, input.version ?? pinned?.version);
@@ -281,6 +285,21 @@ export class JigRuntime {
       body: body as unknown as Record<string, unknown>,
     });
     return this.view(projectId, row.id);
+  }
+
+  /** Sets the output layer of an instance that has none yet; a set one never changes (SPEC-07.4). */
+  async setLayerRoot(
+    projectId: string,
+    instanceId: string,
+    layerRoot: string,
+    options: { layerExists?: (layerRoot: string) => boolean | undefined } = {},
+  ): Promise<InstanceView> {
+    const instance = this.store.instance(projectId, instanceId);
+    const body = bodyOf(instance.body);
+    if (body.layerRoot) throw new DomainError('INVALID_INPUT');
+    if (options.layerExists?.(layerRoot) === false) throw new DomainError('LAYER_ROOT_MISSING');
+    this.save(instance, { ...body, layerRoot });
+    return this.view(projectId, instanceId);
   }
 
   async view(projectId: string, instanceId: string): Promise<InstanceView> {

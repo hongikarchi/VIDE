@@ -2,10 +2,10 @@
 id: ARCH-03
 title: jig 런타임과 저장 스키마 v5의 물리 계약
 status: review
-version: 0.3
-updated: 2026-09-30
+version: 0.4
+updated: 2026-10-01
 owner: agent:claude
-related: [FR-23, FR-24, FR-25, SPEC-02, SPEC-05, SPEC-06, SPEC-07, ADR-014, ADR-019, ADR-020, ADR-021, ARCH-01, ARCH-02, PLAN-22, PLAN-23, PLAN-24, RESEARCH-10]
+related: [FR-23, FR-24, FR-25, SPEC-02, SPEC-05, SPEC-06, SPEC-07, ADR-014, ADR-019, ADR-020, ADR-021, ADR-026, ARCH-01, ARCH-02, PLAN-22, PLAN-23, PLAN-24, PLAN-26, RESEARCH-10, RESEARCH-12]
 ---
 
 # jig 런타임과 저장 스키마 v5의 물리 계약
@@ -105,6 +105,12 @@ export interface JigManifest {
   capabilities: { name: Capability; scope?: string; reason: string }[];
   selftest: { fixtures: string; requiresHost: false };
   skill: string;                     // 'skill.md'
+  // skill 시작(§5.3, SPEC-07.18). 모두 선택이며 없으면 기본값
+  open?: { reuse?: 'last' | 'new';   // 기본 'last'(이 프로젝트의 마지막 작업본)
+           layerRoot?: string };     // 새 작업본의 출력 레이어 틀. 기본 'VIDE/{jig}/{n}'
+  autorun?: { until?: string | 'first-hard' };   // 단계 id 또는 기본 'first-hard'(막는 사람 단계 바로 앞)
+  from_request?: string[];           // 요청 글에서 읽어 적용할 params[].key
+  summary?: { kpi: string[] };       // 결과 요약에 올릴 수치(단계 출력 경로 'step.<id>.<field>')
   // 파생 값은 코어가 다시 계산하고, 선언과 다르면 등록을 거절한다(JIG_DERIVED_MISMATCH)
   derived?: { ai?: { required: boolean; steps: string[] };
               runtimes?: Record<string, 'engine' | 'child' | 'box' | 'bake' | 'cli' | 'screen'> };
@@ -196,7 +202,7 @@ export interface JigInstance {
   id: string; projectId: string;
   jig: string; version: string;                    // 버전 고정
   title: string;
-  layerRoot: string;                               // fixedAtPin. 연결 문서에 이미 있는 레이어
+  layerRoot: string;                               // fixedAtPin. 연결 문서에 이미 있는 레이어(skill 시작으로 만든 작업본은 §9.5)
   assembly: Record<string, AssembledRole>;
   params: Record<string, ParamValue>;
   zones: Record<string, { id: string; shape: [number, number][]; source: ParamValue }[]>;
@@ -283,9 +289,45 @@ export type Binding = `step.${string}` | `$${string}` | 'params' | `inputs.${str
 - 보고서 점검은 `claim-consistent`(쓰인 틀의 `when`이 참), `numbers-in-source`, `unchecked-listed`, `combo-echo`다(§11).
 - 렌더러는 `src/server/report.ts`를 넓힌다. 스크립트 없는 CSP와 외부 요청 없는 HTML을 유지한다.
 
-### 5.3 `skill.md`
+### 5.3 `skill.md`와 skill 시작
 
-앞머리 YAML: `name`, `intent_en`(Jev 판정용 영어 한 줄), `words`(규칙 판정용 한국어 낱말), `not_for`, `tools`, `limits`. 목록 표시는 1,536자 이하. 공급자 CLI의 skill로는 로드하지 않는다.
+`skill.md`는 jig = skill 계약(SPEC-07.18, [ADR-026](../decisions/ADR-026-chat-stage-and-skill-jigs.md))의 '언제 쓰는가'를 담는다. 공급자 CLI의 skill로는 로드하지 않는다. 목록 표시는 1,536자 이하.
+
+| 앞머리 필드 | 형식 | 쓰임 |
+|---|---|---|
+| `name` | 문자열(100자) | 목록·경로 줄의 이름 |
+| `description` | 한국어 문자열(500자) | 무엇을 하고 언제 쓰는지. 판정 후보 목록에 싣는다 |
+| `examples` | 문자열 배열 | 이 jig로 가야 할 요청 예문 |
+| `invocation` | `auto` \| `user-only` | 판정·AI가 스스로 열 수 있는지. 없거나 다른 값이면 `auto`. 고정 전 초안은 선언과 관계없이 후보에 넣지 않는다 |
+| `words` | 문자열 배열 | 규칙 판정 낱말(Jev 없음·실패·지연 때) |
+| `not_for` | 문자열 배열 | 쓰지 않는 경우. 판정에서 빼는 근거 |
+| `intent_en` | 문자열(600자) | Jev 판정용 영어 한 줄. 있으면 Jev는 이것을, 없으면 `description`을 읽는다 |
+| `tools`, `limits` | 배열 | 기존 그대로 |
+
+배열은 한 줄 목록(`[a, b]`)과 블록 목록(`- a`)을, 긴 글은 블록 문자열(`|`·`>`)을 받는다. 형식이 맞지 않는 필드는 빼고 읽는다.
+
+**카탈로그 로더.** 순수 부분(앞머리 파서, 정렬, 판정 후보 만들기)은 `src/ui/skill-catalog.ts`이고 화면과 엔진이 같이 쓴다. 파일은 엔진(`src/server/skill-catalog.ts`)이 공식·설치·프로젝트 jig 패키지의 `skill.md`와 `jig.json`에서 읽는다. 항목은 `{id, name, kind: 'instance' | 'legacy', scope: 'project' | 'available' | 'official', description, examples, intent, words, notFor, invocation, open, fromRequest, autorun}`이며, `scope`는 이 프로젝트에 고정된 jig → 이 PC에 있는 다른 jig → 하드코딩 공식 목록 순으로 정렬한다. 경로 판정(`request-route.ts`·`request-router.ts`)은 `invocation: 'auto'`인 항목만 후보로 받는다. 하드코딩 `OFFICIAL_JIG_ROUTING`·`officialJigs`는 카탈로그를 읽지 못할 때와 레거시 jig(`kind: 'legacy'`, 작업본 없음)의 대체다. Jev에는 SPEC-02.17의 4의 항목만 보낸다.
+
+**skill 시작 `startSkill(jigId, request, mode)`.** 판정 경로, AI 도구 `jig_open`, 사람의 [열기]가 같은 클라이언트 함수를 부른다(1차는 서버 오케스트레이터 없이 기존 경로와 폴링을 쓴다).
+
+1. 작업본: `open.reuse`가 `last`이면 `GET …/jig-instances`에서 그 jig의 마지막 작업본, 없거나 `new`이면 `POST …/jig-instances`로 만든다. 새 작업본의 `layerRoot`는 `open.layerRoot` 틀을 채운 값이다(`{jig}` = id의 마지막 부분, `{jigId}` = id 전체, `{n}` = 이미 쓴 값과 겹치지 않는 다음 번호). 계획 모드는 재사용만 한다.
+2. 화면: 그 작업본의 jig 화면(지금은 문맥 탭)을 연다.
+3. 대화: 대화 기록의 `jigInstanceId`를 채운다(SPEC-02.19의 1의 묶기 규칙). 이 값이 있어야 그 대화 턴에 `jig_set`·`jig_run`이 발급된다.
+4. 기록: 판정 기록(`/route` 기록)과 대화 원장에 판정 근거·작업본·새로 만들었는지를 남긴다.
+5. 요청의 값: `from_request`에 있는 설정값만 요청 글에서 코드가 읽어 `PUT …/:iid/params`(`by: 'user'`, 한 번의 요청)로 적용한다.
+6. 자동 계산: `POST …/:iid/run {mode: 'preview', until}`. `until`은 `autorun.until`이 단계 id이면 그 단계, `first-hard`이면 `kind: 'human'`이고 `blocks`가 비어 있지 않은 첫 단계다. 그런 단계가 없으면 사람을 기다리지 않는 단계를 모두 돈다.
+7. 결과: `summary.kpi`의 값과 멈춘 단계·이유를 결과 카드로 남긴다.
+
+[일반 대화로]는 1에서 새로 만든 작업본 삭제, 5의 `params/undo`, 이전 화면 복귀, 같은 글의 AI 턴 전송, `/route/revert` 기록을 한 번에 한다(SPEC-02.17의 3).
+
+**AI 도구.** 턴마다 주는 도구 목록의 정본은 ARCH-01 §3이며, 아래 두 도구를 더한다(ARCH-01 반영은 PLAN-26 T-076).
+
+| 도구 | 인자 | 동작 | 계획 모드 |
+|---|---|---|---|
+| `jig_open` | `{jigId, reuse?: 'last' \| 'new'}` | `startSkill`의 1~4(계획 모드) 또는 1~7(자동 모드). `invocation: 'user-only'`·초안은 거절하고 제안 카드를 돌려준다 | 준다(재사용만) |
+| `ui_go` | `{stage, view?, focus?}` | VIDE 화면만 옮긴다. 호스트·작업본·설정값을 바꾸지 않는다. 한 턴에 한 번 | 준다 |
+
+두 도구는 화면이 실행하는 프런트 동작이다. 엔진이 호출을 화면에 넘기고 결과(열린 작업본 id, 옮긴 화면)를 도구 결과로 돌려받는 물리 경로는 T-076 구현에서 정하고 이 절에 적는다. 원격 세션 제한(ADR-010 §3)은 원래 경로의 검사를 그대로 받는다.
 
 ### 5.4 자체 시험
 
@@ -482,6 +524,7 @@ Item
 ### 9.5 레이어
 
 - `layerRoot`는 작업본을 만들 때 정하고(`fixedAtPin`) 연결 문서에 이미 있는 레이어여야 한다. 틀은 그 아래 한 단계 레이어만 켜짐·풀림으로 만든다.
+- **skill 시작으로 만든 작업본**(§5.3)의 `layerRoot`는 틀을 채운 기본값(`VIDE/s06-frame/1` 등)이라 연결 문서에 없을 수 있다. 이 작업본은 만들 때 존재 검사(`LAYER_ROOT_MISSING`)를 하지 않고, 계산·보기에는 `layerRoot`를 쓰지 않는다. Rhino에 만들기는 아래의 여러 단계 레이어 생성이 들어오기 전까지 `layerRoot`가 문서에 없으면 `LAYER_ROOT_MISSING`으로 막고 이유를 보인다. 여러 단계 레이어 생성(부모 재귀 생성)은 PLAN-26 T-076이 PLAN-22의 부모 탐색 수정과 함께 다룬다.
 - 두 단계 이상 새 레이어는 원본 반영 코드(`EditorApplication.TargetLayer`)가 새 부모를 찾지 못해 원본 루트에 생길 수 있으므로 허용하지 않는다. 부모 재귀 탐색 수정은 플러그인 재빌드와 함께 PLAN-22가 다룬다.
 - 원본 반영은 레이어 속성(켜짐·잠금)을 옮기지 않는다. 출력 레이어가 꺼져 있으면 VIDE가 켜지 않고 점검으로 막는다.
 
