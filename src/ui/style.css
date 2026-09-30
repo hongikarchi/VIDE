@@ -532,8 +532,6 @@ aside {
 }
 .chat-message > p:first-child {
   font-weight: 600;
-  border-left: 2px solid var(--coral);
-  padding-left: 9px;
 }
 .chat-message small {
   display: block;
@@ -1717,9 +1715,8 @@ body.left-hidden.right-hidden main {
   width: 100%;
   text-align: left;
   border: 0;
-  border-left: 2px solid var(--coral);
   border-radius: 0;
-  padding: 2px 0 2px 9px;
+  padding: 2px 0;
   margin: 0 0 6px;
 }
 .chat-message[data-open='false'] .card-head {
@@ -2847,7 +2844,6 @@ body.panel-mode #conversation {
 }
 .account-row[data-active='true'] {
   background: #eef5f0;
-  box-shadow: inset 3px 0 0 #4f8a64;
 }
 .account-name {
   flex: 1;
@@ -3308,9 +3304,6 @@ body.panel-mode #conversation {
 .jig-s06-table tr[aria-selected='true'] td {
   background: var(--soft);
 }
-.jig-s06-table tr[aria-selected='true'] td:first-child {
-  box-shadow: inset 2px 0 0 var(--coral);
-}
 @media (max-width: 600px) {
   .jig-inputs select {
     min-width: 0;
@@ -3339,8 +3332,7 @@ body.panel-mode #conversation {
   display: flex;
   align-items: flex-start;
   gap: 8px;
-  border-left: 2px solid var(--coral);
-  padding: 2px 0 2px 9px;
+  padding: 2px 0;
 }
 .work-head h3 {
   margin: 0;
@@ -3514,7 +3506,6 @@ body.panel-mode #conversation {
 }
 #task-list .task-row[aria-current='true'] {
   background: #eef2ee;
-  box-shadow: inset 2px 0 0 var(--coral);
 }
 :root[data-theme='dark'] .stage-mark,
 :root[data-theme='dark'] .work-others button,
@@ -3580,7 +3571,6 @@ body.panel-mode #conversation {
 }
 .link-row[aria-current='true'] {
   background: #eef2ee;
-  box-shadow: inset 2px 0 0 var(--coral);
 }
 .link-row[data-hidden='true'] .link-open {
   opacity: 0.5;
@@ -3936,7 +3926,7 @@ body.panel-mode #conversation {
 .knowledge-evidence {
   margin: 6px 0 0;
   padding: 6px 10px;
-  border-left: 3px solid var(--line);
+  border-radius: 4px;
   background: var(--soft);
   white-space: pre-wrap;
   max-height: 240px;
@@ -4034,7 +4024,6 @@ body.panel-mode #conversation {
   margin-bottom: 6px;
   padding: 6px 8px;
   border: 1px solid var(--line);
-  border-left: 3px solid #d97660;
   border-radius: 4px;
   font-size: 11px;
 }

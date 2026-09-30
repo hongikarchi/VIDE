@@ -42,7 +42,7 @@ import {
   type LinkRow,
   type OfflineStatus,
 } from './links.tsx';
-import { renderLinkCard, renderPanelHeader, type PanelState } from './host-panel.tsx';
+import { hostAction, renderLinkCard, renderPanelHeader, type PanelState } from './host-panel.tsx';
 import { mountUsageBars } from './usage-bars.ts';
 import { composeLayers, displayIdOf, layerSignature, sourceIdOf } from './layers.ts';
 import { jevRoute, routeRequest, routeSubjects, type Route } from './request-route.ts';
@@ -235,6 +235,8 @@ const reviews = initializeReviews(
 );
 const viewportEmpty = initializeViewportEmpty($('canvas').parentElement!);
 let connectedTarget: HostTarget | undefined;
+// Asked the plugin once to drop a link removed in VIDE; its reload gives the panel a fresh page.
+let panelUnlinking = false;
 // Request whose display is refreshed in place (Live Sync): keep the camera, rebuild only changes.
 let liveRefresh: string | undefined;
 const liveReplySchema = z.union([
@@ -511,6 +513,21 @@ async function pollLinks() {
         activeLayer = own.id;
         applyActiveLayer();
       }
+      // Removed from the project in VIDE (SPEC-01.11 9): the plugin drops its link as well.
+      const target = connectedTarget;
+      if (
+        !panelUnlinking &&
+        panelParams.get('project') === projectId &&
+        !links.some(
+          (link) =>
+            (link.instance === target.instance && link.documentId === target.documentId) ||
+            (link.connection?.instance === target.instance &&
+              link.connection.documentId === target.documentId),
+        )
+      ) {
+        panelUnlinking = true;
+        hostAction('unlink');
+      }
     }
     if (offlineAsked !== projectId) {
       offlineAsked = projectId;
@@ -613,16 +630,25 @@ function renderLinkPanel() {
       if (
         !confirm(
           link.kind === 'file'
-            ? `${link.name}을(를) 목록에서 뺄까요? 불러온 기록은 작업 이력에서 내려가지만 보존되고, 원본 파일은 그대로입니다.`
-            : `${link.name}의 연결을 해제할까요? 파일과 Sync 기록은 그대로이고, 다시 연결하려면 플러그인에서 Link를 누르세요.`,
+            ? `${link.name}을(를) 목록에서 뺄까요? VIDE에 불러온 사본과 기록이 지워집니다. 원본 파일은 그대로입니다.`
+            : `${link.name}을(를) 목록에서 빼고 연결을 끊을까요? VIDE의 Sync 기록과 사본이 지워집니다. ${link.host === 'zwcad' ? 'ZWCAD' : 'Rhino'} 파일과 객체는 그대로이고, 다시 쓰려면 플러그인에서 Link를 누르세요.`,
         )
       )
         return;
       void api(`/projects/${currentProject().id}/links/${link.id}/remove`, 'POST', {})
-        .then(() => {
+        .then((reply) => {
+          // Its records are gone (SPEC-01.11 9): drop them from the conversation too.
+          const gone = new Set(
+            z.object({ requestIds: z.array(z.string()).default([]) }).parse(reply).requestIds,
+          );
+          state.messages = state.messages.filter((entry) => !gone.has(entry.id));
+          if (selectedResult && gone.has(selectedResult)) selectedResult = undefined;
+          state.pins = state.pins.filter((pin) => !gone.has(pin.basis));
+          if (state.baseRequestId && gone.has(state.baseRequestId)) state.baseRequestId = undefined;
           links = links.filter((entry) => entry.id !== link.id);
           layerOverride.delete(link.id);
           renderMessages();
+          render();
           renderLinkPanel();
         })
         .catch((error: unknown) => message(readableError(error).message));

@@ -180,6 +180,23 @@ try {
   await page.keyboard.press('Shift+Tab');
   assert.notEqual(await page.locator('#permission').inputValue(), before);
   await page.screenshot({ path: join(directory, 'rhino-panel-dark.png') });
+  // Removed from the project in VIDE (SPEC-01.11 9): the panel asks the plugin to drop its link.
+  await page.evaluate(() => {
+    window.__actions = [];
+    window.addEventListener('vide-host-action', (event) => window.__actions.push(event.detail));
+  });
+  assert.deepEqual(await page.evaluate(() => window.__actions), []);
+  await page.evaluate(
+    (id) =>
+      fetch(`/api/v1/projects/${id}/links/link-panel/remove`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: '{}',
+      }),
+    projectId,
+  );
+  await page.waitForFunction(() => window.__actions.includes('unlink'));
+  assert.equal(app.store.db.prepare('SELECT count(*) AS n FROM document_links').get().n, 0);
   assert.deepEqual(errors, []);
   console.log(JSON.stringify({ passed: true, panelOnly: true, sharedPins: true, directory }));
 } finally {

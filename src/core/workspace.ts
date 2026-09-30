@@ -83,6 +83,35 @@ export class Workspace {
       .prepare('INSERT OR IGNORE INTO hidden_requests VALUES(?,?,?)')
       .run(projectId, id, new Date().toISOString());
   }
+  /**
+   * Delete finished requests for good (a removed linked file, SPEC-01.11 9). A request a web
+   * publication or shared feedback points at is hidden instead. Returns the deleted requests.
+   */
+  purge(projectId: string, ids: string[]): StoredWork[] {
+    const db = this.store.db;
+    return this.store.tx(() => {
+      const deleted: StoredWork[] = [];
+      for (const id of ids) {
+        const request = this.get(projectId, id);
+        if (['queued', 'running'].includes(request.state)) fail('PROJECT_BUSY');
+        const referenced =
+          db.prepare('SELECT 1 FROM publication_exports WHERE requestId=? LIMIT 1').get(id) ||
+          db.prepare('SELECT 1 FROM shared_feedback WHERE requestId=? LIMIT 1').get(id);
+        if (referenced) {
+          this.hide(projectId, id);
+          continue;
+        }
+        db.prepare('DELETE FROM hidden_requests WHERE projectId=? AND requestId=?').run(
+          projectId,
+          id,
+        );
+        db.prepare('DELETE FROM workspace_requests WHERE projectId=? AND id=?').run(projectId, id);
+        this.light.delete(id);
+        deleted.push(request);
+      }
+      return deleted;
+    });
+  }
   hiddenIds(projectId: string) {
     return new Set(
       this.store.db

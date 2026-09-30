@@ -68,6 +68,32 @@ export function Action({
     </button>
   );
 }
+/** Area and volume per object, drawn only while open: a large model has tens of thousands. */
+function Measurements({
+  scene,
+  objects,
+}: {
+  scene: { id: string; area?: number | null; volume?: number | null }[];
+  objects: { id: string; name?: string }[];
+}) {
+  const [open, setOpen] = useState(false);
+  let rows = null;
+  if (open) {
+    const names = new Map(objects.map((item) => [item.id, item.name]));
+    rows = scene.map((object) => (
+      <p key={object.id}>
+        {names.get(object.id) || object.id} · 기하 면적 {object.area?.toFixed(2) ?? '—'} m² · 체적{' '}
+        {object.volume?.toFixed(2) ?? '—'} m³
+      </p>
+    ));
+  }
+  return (
+    <details onToggle={(event) => setOpen(event.currentTarget.open)}>
+      <summary>측정값</summary>
+      {rows}
+    </details>
+  );
+}
 export function Candidate({
   message,
   projectId,
@@ -233,15 +259,7 @@ export function Candidate({
         >
           수량표
         </Action>
-        <details>
-          <summary>측정값</summary>
-          {scene.map((object) => (
-            <p key={object.id}>
-              {objects.find((item) => item.id === object.id)?.name || object.id} · 기하 면적{' '}
-              {object.area?.toFixed(2) ?? '—'} m² · 체적 {object.volume?.toFixed(2) ?? '—'} m³
-            </p>
-          ))}
-        </details>
+        <Measurements scene={scene} objects={objects} />
       </details>
     </>
   );

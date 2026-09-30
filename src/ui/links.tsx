@@ -8,6 +8,9 @@ export const linkRowSchema = z.object({
   host: z.enum(['rhino', 'zwcad']),
   name: z.string(),
   path: z.string().nullable(),
+  /** The window it was linked from (the host panel finds its own file by these). */
+  instance: z.string().optional(),
+  documentId: z.number().optional(),
   hidden: z.boolean(),
   /** "file": opened in VIDE from a 3DM/DWG file; "host": linked from a Rhino/ZWCAD window. */
   kind: z.enum(['host', 'file']).default('host'),
@@ -295,8 +298,8 @@ function LinkList(props: Props) {
               className="icon-button link-remove"
               title={
                 file
-                  ? '목록에서 빼기 (불러온 기록은 작업 이력에서 내리고 보존, 원본 파일은 그대로)'
-                  : '연결 해제 · 목록에서 빼기 (Sync 기록과 파일은 그대로)'
+                  ? '목록에서 빼기 (VIDE의 사본과 기록을 지움, 원본 파일은 그대로)'
+                  : '연결 해제 · 목록에서 빼기 (VIDE의 Sync 기록을 지움, 파일과 객체는 그대로)'
               }
               aria-label={`${link.name} ${file ? '목록에서 빼기' : '연결 해제'}`}
               onClick={() => props.onRemove(link)}

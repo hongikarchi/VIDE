@@ -222,6 +222,10 @@ export function createViewport(
   const perspective = new THREE.PerspectiveCamera(40, 1, 0.1, 1000);
   const orthographic = new THREE.OrthographicCamera(-25, 25, 25, -25, 0.1, 1000);
   let viewSpan = 50;
+  // How far the plan views may zoom in: down to a few centimetres of the framed model.
+  let maxZoom = 20;
+  // Perspective zoom limits of the framed model, kept when switching projection.
+  let distances = { min: 4, max: 180 };
   let standardView = false;
   let camera: Camera = perspective;
   camera.up.set(0, 0, 1);
@@ -1342,10 +1346,10 @@ export function createViewport(
     controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = false;
     controls.zoomToCursor = true;
-    controls.minDistance = 4;
-    controls.maxDistance = 180;
+    controls.minDistance = distances.min;
+    controls.maxDistance = distances.max;
     controls.minZoom = 0.2;
-    controls.maxZoom = 20;
+    controls.maxZoom = maxZoom;
     controls.target.copy(target);
     controls.addEventListener('change', reportCamera);
     configure();
@@ -1371,8 +1375,13 @@ export function createViewport(
     const sceneRadius = Math.max(bounds.getBoundingSphere(new THREE.Sphere()).radius, 0.1);
     camera.near = Math.max(sceneRadius / 10000, 0.001);
     camera.far = Math.max(sceneRadius * 100, 1000);
-    controls.minDistance = Math.max(sceneRadius * 0.01, 0.05);
-    controls.maxDistance = Math.max(sceneRadius * 20, 180);
+    // Zoom stops only a few centimetres from the surface, as in Rhino, not at 1% of the model.
+    distances = {
+      min: Math.max(sceneRadius * 0.0005, 0.02),
+      max: Math.max(sceneRadius * 20, 180),
+    };
+    controls.minDistance = distances.min;
+    controls.maxDistance = distances.max;
     const shift = center.clone().sub(controls.target);
     camera.position.add(shift);
     controls.target.copy(center);
@@ -1396,6 +1405,7 @@ export function createViewport(
       const aspect = container.clientWidth / Math.max(1, container.clientHeight);
       viewSpan = 2.6 * Math.max(halfH, halfW / aspect, 0.001);
       camera.zoom = 1;
+      maxZoom = controls.maxZoom = Math.max(20, viewSpan / 0.05);
     } else {
       const radius = sceneRadius;
       const v = THREE.MathUtils.degToRad(camera.fov / 2),

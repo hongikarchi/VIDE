@@ -40,6 +40,7 @@ import {
   openKnowledgeSource,
 } from '../jigs/knowledge.ts';
 import { DocumentLinks, isFileLink } from '../core/document-links.ts';
+import { removeLink } from './link-removal.ts';
 import { AccountLogin } from '../ai/account-login.ts';
 import { z } from 'zod';
 import type { IncomingMessage } from 'node:http';
@@ -791,20 +792,17 @@ export async function startServer({
         url.pathname,
       );
       if (linkRemove && request.method === 'POST') {
-        const removed = links.get(linkRemove[1], linkRemove[2]);
-        // A file opened in VIDE also leaves the work history (records kept), so it stays removed.
-        if (isFileLink(removed))
-          for (const entry of workspace.list(linkRemove[1]))
-            if (
-              entry.input.source === 'file' &&
-              !['queued', 'running'].includes(entry.state) &&
-              (entry.input.linkId === removed.id ||
-                (!entry.input.linkId &&
-                  importedName(entry.input.body).toLowerCase() === removed.name.toLowerCase()))
-            )
-              workspace.hide(linkRemove[1], entry.id);
-        links.remove(linkRemove[1], linkRemove[2]);
-        send(200, { ok: true });
+        // Its records, geometry and VIDE's copies go; the user's file stays (SPEC-01.11 9).
+        const removed = await removeLink({
+          projectId: linkRemove[1],
+          linkId: linkRemove[2],
+          links,
+          workspace,
+          dataDirectory: filename === ':memory:' ? undefined : dirname(filename),
+          importDirectories: [hosts.rhino.directory, hosts.zwcad.directory],
+          projects: () => store.listProjects(),
+        });
+        send(200, { ok: true, ...removed });
         return;
       }
       const capture = /^\/api\/v1\/projects\/([^/]+)\/capture$/.exec(url.pathname);

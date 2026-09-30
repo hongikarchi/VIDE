@@ -92,8 +92,8 @@ test('plugins link documents to a chosen project; links stay per project with th
     assert.equal((await api(`/projects/${b.id}/links/l1/remove`, 'POST', {})).status, 404);
     assert.equal((await api(`/projects/${a.id}/links/l1/remove`, 'POST', {})).status, 200);
     assert.deepEqual((await api(`/projects/${a.id}/links`)).body, []);
-    // The Sync record stays.
-    assert.equal((await api(`/projects/${a.id}/requests/sync-1`)).status, 200);
+    // Removing it deletes its Sync record (SPEC-01.11 9); the file on disk is not touched.
+    assert.equal((await api(`/projects/${a.id}/requests/sync-1`)).status, 404);
     // A Sync can only name a link of its own project.
     const foreign = await api(`/projects/${b.id}/capture`, 'POST', {
       id: 'c1',

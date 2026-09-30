@@ -155,13 +155,20 @@ try {
     ],
   );
   await page.screenshot({ path: join(directory, 'links.png') });
-  // Removing a file from the list keeps its Sync record.
+  // Removing a file deletes its Sync record (SPEC-01.11 9) and drops the pin that used it.
   await page.getByRole('button', { name: 'model.3dm 연결 해제' }).click();
   await page.waitForFunction(() => document.querySelectorAll('.link-row').length === 2);
+  await page.waitForFunction(
+    (id) =>
+      JSON.parse(localStorage.getItem('vide:draft:' + id)).pins.every(
+        (pin) => pin.basis !== 'sync-rhino',
+      ),
+    projectId,
+  );
   assert.equal(
     app.store.db.prepare("SELECT count(*) AS n FROM workspace_requests WHERE id='sync-rhino'").get()
       .n,
-    1,
+    0,
   );
 
   // A newly linked open file gets its first Sync without any click.

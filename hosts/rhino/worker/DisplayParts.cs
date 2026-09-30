@@ -156,9 +156,17 @@ internal sealed class DisplayParts
                 }
                 break;
         }
+        // Rhino can return a dimension line whose far end sits near the world origin (seen on linear
+        // dimensions with a dimension-line extension), which drew long stray lines. The dimension's own
+        // bounding box is right, so only the part of each line inside it is kept.
+        var box = dimension.GetBoundingBox(true);
+        box.Inflate(Math.Max(box.Diagonal.Length * 0.01, doc.ModelAbsoluteTolerance));
         foreach (var line in lines ?? [])
         {
-            var a = line.From; var b = line.To;
+            if (!box.IsValid || !Rhino.Geometry.Intersect.Intersection.LineBox(line, box, 0, out var inside)) continue;
+            double from = Math.Max(0, inside.Min), to = Math.Min(1, inside.Max);
+            if (from >= to) continue;
+            var a = line.PointAt(from); var b = line.PointAt(to);
             a.Transform(xform); b.Transform(xform);
             AddSegment(a, b);
         }
