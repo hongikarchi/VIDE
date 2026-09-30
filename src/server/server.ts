@@ -221,10 +221,12 @@ export async function startServer({
     afterHeartbeat: () => void offlineView.tick().catch(() => {}),
     onProjects: (projects) => {
       for (const project of projects) {
-        // Deleted on the account site: hidden here too (its data stays on this PC). A project
+        // Deleted on the account site: removed here too, rows and files (SPEC-01.1). A project
         // removed here is never recreated from a list the site has not updated yet.
-        if (project.deleted) void removedProjects.add(project.id).catch(() => {});
-        else if (!removedProjects.has(project.id)) {
+        if (project.deleted) {
+          void removedProjects.add(project.id).catch(() => {});
+          purgeRemoved(project.id);
+        } else if (!removedProjects.has(project.id)) {
           try {
             store.ensureProject(project.id, project.name);
           } catch {
@@ -254,6 +256,50 @@ export async function startServer({
     links,
     remote: remoteAccess,
   });
+  /**
+   * Deletes a project on this PC, asked in the app or on the account site (SPEC-01.1): its rows,
+   * the files VIDE made for it in the data folder, and then the space they took in the database.
+   */
+  async function purgeProject(projectId: string) {
+    const data = filename === ':memory:' ? undefined : dirname(filename);
+    const knowledge =
+      data && /^[0-9a-f-]{36}$/i.test(projectId) ? knowledgeFile(data, projectId) : undefined;
+    const perProject = data
+      ? [
+          join(data, 'structure', `${projectId}.json`),
+          join(data, 'ai-instructions', `${projectId}.json`),
+          ...(knowledge
+            ? [
+                ...['', '-wal', '-shm'].map((end) => knowledge + end),
+                knowledge.replace(/\.sqlite$/, '.structural-conditions.md'),
+              ]
+            : []),
+        ]
+      : [];
+    const removed = await removeProject({
+      projectId,
+      store,
+      links,
+      removed: removedProjects,
+      dataDirectory: data,
+      importDirectories: [hosts.rhino.directory, hosts.zwcad.directory],
+      projectFiles: perProject,
+    });
+    await offlineView.forget(projectId).catch(() => {});
+    store.compact();
+    return removed;
+  }
+  // A removed project that still has rows: deleted on the site (or while its work ran). One
+  // attempt at a time; PROJECT_BUSY leaves it for the next heartbeat.
+  const purging = new Set<string>();
+  function purgeRemoved(projectId: string) {
+    if (purging.has(projectId) || !store.listProjects().some((row) => row.id === projectId)) return;
+    purging.add(projectId);
+    void purgeProject(projectId)
+      .catch(() => {})
+      .finally(() => purging.delete(projectId));
+  }
+  for (const projectId of removedProjects.list()) purgeRemoved(projectId);
   const zwcadSdk = sdkOptions
     ? new ZwcadSdkExecution({
         directory: join(dirname(filename), 'zwcad-sdk-models'),
@@ -2028,31 +2074,8 @@ export async function startServer({
       const projectPath = /^\/api\/v1\/projects\/([^/]+)(\/thumbnail)?$/.exec(url.pathname);
       if (projectPath && request.method === 'DELETE' && !projectPath[2]) {
         // Asked for in the app after a confirmation; the user's own files stay.
-        const data = filename === ':memory:' ? undefined : dirname(filename);
         const projectId = projectPath[1];
-        const perProject = data
-          ? [
-              join(data, 'structure', `${projectId}.json`),
-              join(data, 'ai-instructions', `${projectId}.json`),
-              ...(/^[0-9a-f-]{36}$/i.test(projectId)
-                ? ['', '-wal', '-shm'].map((end) => knowledgeFile(data, projectId) + end)
-                : []),
-            ]
-          : [];
-        send(
-          200,
-          await removeProject({
-            projectId,
-            store,
-            workspace,
-            links,
-            removed: removedProjects,
-            dataDirectory: data,
-            importDirectories: [hosts.rhino.directory, hosts.zwcad.directory],
-            projectFiles: perProject,
-          }),
-        );
-        await offlineView.forget(projectId).catch(() => {});
+        send(200, await purgeProject(projectId));
         await remoteAccess.removeProject(projectId);
         return;
       }

@@ -2,8 +2,8 @@
 id: ARCH-01
 title: VIDE 기술 구조와 구현 계약
 status: review
-version: 0.53
-updated: 2026-09-30
+version: 0.54
+updated: 2026-10-01
 owner: agent:codex
 related: [SPEC-00, SPEC-02, SPEC-03, SPEC-04, PLAN, PLAN-20, PLAN-24, ADR-014, ADR-015, ADR-016, ADR-017, ADR-021, ADR-022, ARCH-03]
 ---
@@ -657,9 +657,9 @@ R2 조건부 쓰기/체크섬은 [공식 Workers API](https://developers.cloudfl
 [PLAN-09](../plans/PLAN-09-remote-host.md)·[PLAN-10](../plans/PLAN-10-account-workspace.md)의 물리 계약이다. 작업(대화·모델·AI 실행)은 언제나 작업 PC의 로컬 제어 서버가 하고, 계정 사이트(공유 Worker)는 계정·프로젝트 목록·PC 존재와 주소만 가진다.
 
 - 계정: 아이디·비밀번호. Better Auth의 이메일 계정에 `<아이디>@users.vide.invalid`를 대응시킨다(`@`가 있는 입력은 기존 이메일 계정). `POST /api/account/sign-up {username,password,code}`는 `SIGNUP_CODE` 비밀값과 일치할 때만 계정을 만들고 `emailVerified=1`로 둔다. `POST /api/account/sign-in`은 Better Auth 로그인(속도 제한·쿠키)으로 전달한다. `/api/auth/sign-up/email` 직접 호출은 403이다. `GET /api/me`는 표시용 아이디를 준다.
-- 프로젝트: `0006-accounts.sql`이 `projects`에 `updated_at`·`host_id`·`deleted_at`·`thumbnail`을, `remote_hosts`에 `local_url`을 더하고 페어링 표를 지운다. `GET /api/projects`는 최근 작업 순이다. `POST`(이름, 선택 `hostId`; PC가 하나면 그 PC), `PATCH /:id`(이름), `DELETE /:id`(목록에서만 제거), `GET /:id/thumbnail`. `POST /:id/open`은 프로젝트의 PC(없으면 켜진 PC를 지정)가 켜져 있을 때 `{hostId, local, remote}`를 준다. 각각 `<주소>/?project=<id>#r=<token>`이며 토큰은 `base64url({h,n,e})` + HMAC-SHA256(PC 키), 60초다.
+- 프로젝트: `0006-accounts.sql`이 `projects`에 `updated_at`·`host_id`·`deleted_at`·`thumbnail`을, `remote_hosts`에 `local_url`을 더하고 페어링 표를 지운다. `GET /api/projects`는 최근 작업 순이다. `POST`(이름, 선택 `hostId`; PC가 하나면 그 PC), `PATCH /:id`(이름), `DELETE /:id`(사이트 목록에서는 `deleted_at`만 두고 공유 검토용 행은 남긴다. PC는 heartbeat의 `deleted:true`를 받아 아래 로컬 삭제를 한다), `GET /:id/thumbnail`. `POST /:id/open`은 프로젝트의 PC(없으면 켜진 PC를 지정)가 켜져 있을 때 `{hostId, local, remote}`를 준다. 각각 `<주소>/?project=<id>#r=<token>`이며 토큰은 `base64url({h,n,e})` + HMAC-SHA256(PC 키), 60초다.
 - 작업 PC: `POST /api/hosts/device/login {username,password,name}`이 계정을 확인하고(확인용 세션은 즉시 삭제) PC 키를 한 번 발급한다. 이후 `Bearer hostId.secret`로 `device/heartbeat`(15초; `local`은 `http://127.0.0.1:<port>`만, `url`은 `https://*.trycloudflare.com`만, 프로젝트별 마지막 작업 시각)를 보내고 응답으로 그 PC의 프로젝트 목록을 받는다. `device/projects`(로컬 프로젝트 추가·이름, id 유지), `device/projects/:id/thumbnail`(160 KB 이하 data URL), `DELETE device/self`(로그아웃). 45초 안에 heartbeat가 있으면 켜짐, 터널 주소가 있으면 원격 가능이다.
-- 로컬: `src/server/remote-access.ts`가 PC 키를 `<데이터>/remote-host.json`(0600, 비밀번호 미저장)에 두고 시작 시 heartbeat와(원격 접속이 켜져 있으면) `cloudflared tunnel --no-autoupdate --url http://127.0.0.1:<port>`를 재개한다. 터널 주소는 `Registered tunnel connection`과 실제 응답을 확인한 뒤 알린다. heartbeat 응답의 프로젝트는 같은 id로 로컬에 만들거나 이름을 맞춘다. 로컬에서 만든·바꾼 프로젝트는 즉시 올린다. 기본 포트는 47821(사용 중이면 임의 포트)이고 로컬 세션 값은 `<데이터>/local-session.key`에 두어 재시작 뒤에도 열린 화면이 이어진다.
+- 로컬: `src/server/remote-access.ts`가 PC 키를 `<데이터>/remote-host.json`(0600, 비밀번호 미저장)에 두고 시작 시 heartbeat와(원격 접속이 켜져 있으면) `cloudflared tunnel --no-autoupdate --url http://127.0.0.1:<port>`를 재개한다. 터널 주소는 `Registered tunnel connection`과 실제 응답을 확인한 뒤 알린다. heartbeat 응답의 프로젝트는 같은 id로 로컬에 만들거나 이름을 맞춘다. `deleted:true`인 프로젝트는 `<데이터>/removed-projects.json`에 올려 목록에서 빼고, 로컬 행이 있으면 앱의 `DELETE /api/v1/projects/:id`와 같은 삭제(`removeProject`: `Store.deleteProject` + 데이터 폴더 안 파일)를 한다([SPEC-01.1](../specs/SPEC-01-project-input-sync.md)). `PROJECT_BUSY`면 다음 heartbeat에 다시 한다. 엔진 시작 때도 목록에 올라 있는데 행이 남은 프로젝트를 지운다. 삭제 뒤 빈 페이지가 파일의 25% 이상이고 4 MB를 넘으면 `VACUUM`한다. 로컬에서 만든·바꾼 프로젝트는 즉시 올린다. 기본 포트는 47821(사용 중이면 임의 포트)이고 로컬 세션 값은 `<데이터>/local-session.key`에 두어 재시작 뒤에도 열린 화면이 이어진다.
 - 같은 PC 판별: 사이트는 켜진 PC의 `local` 주소에 `GET /api/v1/hello`를 보낸다. 서버는 Origin이 연결된 사이트일 때만 CORS로 `{hostId}`를 답한다(사설망 사전 요청 허용). 일치하면 그 브라우저는 로컬 링크로, 아니면 원격 링크로 연다.
 - 세션: `POST /api/v1/session {remoteToken}`은 로컬 요청이면 서명·만료(2분 이내)·nonce 재사용을 검사하고 로컬 세션 쿠키를, 터널 Host 요청이면 `vide_remote` 쿠키(HttpOnly·Secure·SameSite=Strict, 12시간, 터널 종료 시 폐기)를 준다. 두 경우 모두 응답 전에 heartbeat로 사이트의 새 프로젝트를 받는다. 원격 세션은 `/api/v1/shutdown`, `/api/v1/remote*` 쓰기, `/mcp`, `accounts`·`settings`·`extensions`의 쓰기를 쓰지 못한다. 교차 사이트 요청은 API가 아닌 GET 화면 이동만 허용한다.
 - 연계 요청 좌표(2026-09-29): 입력 `coordinateBasis`는 `shared-metre-axes`(사용자가 같은 원점·축 확인) 또는 `align-by-features`(AI가 대응 요소로 이동·회전·축척·잔차를 먼저 구함)이다. 열린 문서의 표시 Sync(`displayOnly`, `connection = attached-editor`)도 연계 대상이다. Rhino 조회 행은 `layer`와 곡선의 `start`·`end`·`length`·`linear`·`closed`를 싣는다.

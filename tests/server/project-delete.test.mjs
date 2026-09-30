@@ -11,7 +11,7 @@ import { startServer } from '../../src/server/server.ts';
 // VIDE made in its data folder go; the user's own files and other projects' data stay.
 
 async function open(options = {}) {
-  const directory = await mkdtemp(join(tmpdir(), 'vide-project-delete-'));
+  const directory = options.directory ?? (await mkdtemp(join(tmpdir(), 'vide-project-delete-')));
   if (options.device)
     await writeFile(join(directory, 'remote-host.json'), JSON.stringify(options.device));
   const app = await startServer({
@@ -301,6 +301,95 @@ test('the account site list neither brings back a deleted project nor keeps a si
     [current.id],
   );
   assert.throws(() => app.store.project(removed.id), { code: 'NOT_FOUND' });
-  // Deleted on the site: hidden here, its data kept on this PC.
-  assert.equal(app.store.project(onSite.id).name, '사이트에서 삭제');
+  // Deleted on the site: deleted here too, rows and files (SPEC-01.1, 2026-10-01).
+  const gone = () => {
+    try {
+      app.store.project(onSite.id);
+      return false;
+    } catch {
+      return true;
+    }
+  };
+  for (let i = 0; i < 100 && !gone(); i++) await new Promise((r) => setTimeout(r, 10));
+  assert.ok(gone());
+});
+
+// A site-deleted project whose work is still running leaves the list at once and goes once the
+// work ends; one removed while the engine was off, or by an older version that only hid it, goes
+// when the engine starts. The database file gives the freed space back.
+test('a project deleted on the account site is deleted here after its work ends, and at start', async (t) => {
+  let cloud = [];
+  const device = {
+    workerOrigin: 'https://sharing.example',
+    hostId: '356ff01d-b586-460c-8e2b-8c9f3c083e96',
+    secret: 'a'.repeat(64),
+    name: 'Studio PC',
+    remote: false,
+  };
+  const remoteOptions = {
+    heartbeatMs: 3_600_000,
+    fetcher: async (url) =>
+      String(url).endsWith('/heartbeat')
+        ? new Response(JSON.stringify({ ok: true, projects: cloud }), { status: 200 })
+        : new Response('{}', { status: 200 }),
+  };
+  const first = await open({ device, remoteOptions });
+  let { app, api } = first;
+  const { directory } = first;
+  t.after(async () => {
+    await app.close();
+    await rm(directory, { recursive: true, force: true });
+  });
+  const busy = (await api('/projects', 'POST', { name: '진행 중' })).body;
+  const kept = (await api('/projects', 'POST', { name: '남김' })).body;
+  const db = () => app.store.db;
+  db()
+    .prepare('INSERT INTO workspace_requests VALUES(?,?,?,?,?,?)')
+    .run('r-busy', busy.id, input('r-busy'), 'running', null, '2026-09-30T00:00:00.000Z');
+  const knowledge = join(directory, 'knowledge', `${busy.id}.structural-conditions.md`);
+  await mkdir(join(knowledge, '..'), { recursive: true });
+  await writeFile(knowledge, 'x');
+  cloud = [
+    { id: busy.id, name: '진행 중', deleted: true },
+    { id: kept.id, name: '남김', deleted: false },
+  ];
+  await app.remoteAccess.heartbeat();
+  await new Promise((r) => setTimeout(r, 50));
+  // Listed as removed at once; its rows wait for the running work.
+  assert.deepEqual(
+    (await api('/projects')).body.map((project) => project.id),
+    [kept.id],
+  );
+  assert.equal(app.store.project(busy.id).name, '진행 중');
+  db().prepare("UPDATE workspace_requests SET state='succeeded' WHERE id='r-busy'").run();
+  await app.remoteAccess.heartbeat();
+  for (let i = 0; i < 100 && existsSync(knowledge); i++)
+    await new Promise((r) => setTimeout(r, 10));
+  assert.throws(() => app.store.project(busy.id), { code: 'NOT_FOUND' });
+  assert.equal(existsSync(knowledge), false);
+
+  // Hidden by an older version (removed-projects.json only) with ~12 MB of results left behind.
+  const old = (await api('/projects', 'POST', { name: '옛 프로젝트' })).body;
+  const mesh = JSON.stringify({ scene: [{ vertices: 'v'.repeat(12 * 1024 * 1024) }] });
+  db()
+    .prepare('INSERT INTO workspace_requests VALUES(?,?,?,?,?,?)')
+    .run('r-old', old.id, input('r-old'), 'succeeded', mesh, '2026-09-30T00:00:00.000Z');
+  await app.close();
+  const listed = JSON.parse(await readFile(join(directory, 'removed-projects.json'), 'utf8'));
+  await writeFile(join(directory, 'removed-projects.json'), JSON.stringify([...listed, old.id]));
+  const file = join(directory, 'workspace.sqlite');
+  const pages = (store) =>
+    Number(Object.values(store.db.prepare('PRAGMA page_count').get())[0]) *
+    Number(Object.values(store.db.prepare('PRAGMA page_size').get())[0]);
+  cloud = [{ id: kept.id, name: '남김', deleted: false }];
+  ({ app, api } = await open({ device, remoteOptions, directory }));
+  for (let i = 0; i < 200 && pages(app.store) > 8 * 1024 * 1024; i++)
+    await new Promise((r) => setTimeout(r, 10));
+  assert.throws(() => app.store.project(old.id), { code: 'NOT_FOUND' });
+  assert.ok(pages(app.store) < 8 * 1024 * 1024, `database still ${pages(app.store)} bytes`);
+  assert.ok(existsSync(file));
+  assert.deepEqual(
+    (await api('/projects')).body.map((project) => project.id),
+    [kept.id],
+  );
 });

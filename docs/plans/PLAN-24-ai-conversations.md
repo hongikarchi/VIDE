@@ -2,8 +2,8 @@
 id: PLAN-24
 title: AI 대화 세션·동시 진행·말로 하는 경로 판정 1차
 status: review
-version: 0.2
-updated: 2026-09-30
+version: 0.3
+updated: 2026-10-01
 owner: agent:claude
 related: [PLAN, PLAN-22, PLAN-23, PLAN-02, PLAN-05, PLAN-08, PLAN-19, FR-25, FR-24, FR-18, FR-10, FR-11, FR-12, AC-46, AC-47, AC-48, AC-38, SPEC-02, SPEC-07, ARCH-01, ARCH-03, ADR-021, ADR-014, ADR-022, RESEARCH-10, RESEARCH-11]
 ---
@@ -290,3 +290,4 @@ related: [PLAN, PLAN-22, PLAN-23, PLAN-02, PLAN-05, PLAN-08, PLAN-19, FR-25, FR-
   - **T-075 — SPIKE 합격, 어댑터는 꺼 둠.** Claude는 `--permission-prompt-tool stdio`로 `AskUserQuestion`을 같은 실행 안에서 받는다(실제 CLI 합성 턴, 150초 지연 통과). Codex는 `app-server`의 `requestUserInput`을 턴 중에 받고 프로세스를 대화 사이에 유지한다(격리는 스레드 설정·응답·MCP 상태로 확인). 서버는 Claude `nativeQuestions`를 넘기지 않고, Codex는 `VIDE_CODEX_APP_SERVER=1`일 때만 켠다(엔진을 닫을 때 프로세스 정리). 남음: 기본값으로 켤지 사용자 결정, 실제 대화에서 장시간 사용.
 - **5차 남은 것 정리(2026-09-30 6차).** SPEC-02.19 '대화가 길어짐' 행을 제안 방식([새 세션으로 이어가기] 카드, 누르기 전에는 지금 세션)으로 고쳤다. 원격 세션의 추가 지침 변경(`ai-instructions` GET 외)을 막았다. 멈춘 만들기 대화에는 파일 도구를 주지 않는다(`makeStopped`, PLAN-22 T-063). 남음: 호스트 모델링 턴의 `links_layers`·`sync_sample`·`project_*`는 `execution.ts`의 `HOST_TURN_PROJECT_TOOLS`·`hostTurnProjectHandlers`만 있고 호스트 도구 목록에 연결하지 않았다.
 - **설치본 0.2.11 핫픽스(2026-09-30 8차) — 구현·자동 검증, 설치본 확인 남음.** 엔진 재시작 뒤 입력창이 잠긴 채 남던 문제(`src/ui/connection-recovery.ts`, `#connection-banner` [다시 연결], 1→2→4→8초 자동 재시도, 401은 수동), 엔진 쪽 프로젝트 삭제(`DELETE /api/v1/projects/:id`, 원격 차단, `Store.deleteProject`·`src/server/project-removal.ts`, 선택기 삭제 확인, 사이트의 `deleted` 반영), direct 모드 진행 단계 이름(준비 → 요청 이해 → 모델 조회 → 실행 → 답변 정리, 작업 사본·bake는 기존 이름)과 로그인 확인 캐시·`request-stages` 로그. 증거: `npm run typecheck`, 단위 시험 711건, `browser-composer-ready.mjs`(재연결·401·선택기 삭제, `test:browser`에 추가)·`browser-workspace-controls`·`browser-conversations`·`browser-direct-mode`·`browser-links`·`browser-react-panels`·`browser-host-panel` 통과. 남음: 설치본에서 재시작·삭제·Rhino 플러그인 Link 목록 확인, 엔진 비정상 종료 원인(로그에 기록 없음).
+- **사이트 삭제 = PC에서도 삭제(2026-10-01 사용자 결정, [SPEC-01.1](../specs/SPEC-01-project-input-sync.md)) — 구현·자동 검증, 설치본 확인 남음.** 계정 웹에서 지운 프로젝트는 heartbeat의 `deleted:true`로 목록에서 빼고, 앱 삭제와 같은 `purgeProject`(`src/server/server.ts`)로 행과 데이터 폴더 파일(지식 DB의 `.structural-conditions.md` 포함)을 지운다. 진행 중 작업이 있으면 다음 heartbeat에, 엔진 시작 때는 `removed-projects.json`에 올라 있는데 행이 남은 프로젝트를 지운다. 삭제 경로는 결과 JSON을 모두 파싱하지 않고 SQL로 경로만 읽으며, 빈 페이지가 25%·4 MB를 넘으면 `Store.compact`(VACUUM)한다. 옛 나진상가(4ba343ff)의 지식 DB·구조 조건 메모는 사용자 요청으로 새 나진상가(404d0e4b)로 옮겼다(메타의 project_id 갱신, 무결성·행 수 동일). 증거: `tests/server/project-delete.test.mjs` 3건(이전 코드에서 2건 실패), 실제 DB 사본에서 시작 2.2초 만에 옛 프로젝트 삭제·594 MB → 9.9 MB, 새 프로젝트 요청 9건 유지.

@@ -114,7 +114,7 @@ export async function projectRoute(
     return json({ id: projectId, name });
   }
   if (path.length === 1 && request.method === 'DELETE') {
-    // Kept for shared reviews and the PC's own copy; it only leaves the account's list.
+    // Kept here for shared reviews; it leaves the account's list, and the PC deletes its own copy (SPEC-01.1).
     await db
       .prepare('UPDATE projects SET deleted_at=? WHERE id=?')
       .bind(Date.now(), projectId)

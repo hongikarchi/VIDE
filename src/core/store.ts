@@ -250,6 +250,24 @@ export class Store {
       return { id };
     });
   }
+  /**
+   * Gives the space of deleted rows back to the disk (VACUUM) once free pages are a large share of
+   * the file: deleting rows alone leaves the file as big as before. False when skipped or busy.
+   */
+  compact({ minShare = 0.25, minPages = 1024 } = {}) {
+    const pragma = (name: string) =>
+      Number(Object.values(this.db.prepare(`PRAGMA ${name}`).get() ?? {})[0] ?? 0);
+    const pages = pragma('page_count'),
+      free = pragma('freelist_count');
+    if (free < minPages || free < pages * minShare) return false;
+    try {
+      this.db.exec('VACUUM');
+      return true;
+    } catch {
+      // Another reader or an open transaction: the next deletion tries again.
+      return false;
+    }
+  }
   listProjects() {
     return this.db
       .prepare('SELECT * FROM projects ORDER BY rowid')
