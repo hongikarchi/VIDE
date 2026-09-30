@@ -1,0 +1,55 @@
+{
+  "steps": {
+    "assemble": {
+      "existing": {
+        "readable": 6,
+        "angleDeg": -21
+      },
+      "frame": {
+        "angleDeg": -21,
+        "source": "footings"
+      },
+      "basin": {
+        "readable": 2
+      }
+    },
+    "diagnose": {
+      "summary": {
+        "columns": 10,
+        "cap": {
+          "count": 4
+        },
+        "openCut": {
+          "count": 7
+        },
+        "basin": {
+          "count": 2
+        },
+        "spans": {
+          "total": 12,
+          "over": 2
+        },
+        "curves": {
+          "total": 6,
+          "over": 4
+        }
+      }
+    },
+    "axes": {
+      "objective": {
+        "spanOver": 0,
+        "cap": 0
+      }
+    },
+    "interference": {
+      "summary": {
+        "cap": {
+          "count": 0
+        }
+      }
+    }
+  },
+  "statuses": {
+    "confirmInputs": "confirmed"
+  }
+}

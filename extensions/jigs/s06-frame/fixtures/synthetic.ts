@@ -22,6 +22,16 @@ export interface SyntheticLayout {
   existing: { at: Local; turnDeg?: number; definition?: 'old' | 'missing' }[];
   /** Basin beams: solids along from → to with a width (m), z range default −3.0 … −2.0. */
   bands: { from: Local; to: Local; width: number }[];
+  /** Slab outline (local ring) drawn as a closed curve at the column top; voids likewise (M1). */
+  slab?: Local[];
+  voids?: Local[][];
+  /** Existing grid lines with names, new and existing expansion joints (local segments). */
+  grid?: { name: string; from: Local; to: Local }[];
+  newEJ?: { name?: string; from: Local; to: Local }[];
+  existingEJ?: { name?: string; from: Local; to: Local }[];
+  /** Drawn zones of the instance (local rings): fire route (no columns) and requested areas. */
+  fire?: Local[][];
+  requested?: { id: string; ring: Local[] }[];
 }
 
 export interface SyntheticSync {
@@ -53,7 +63,26 @@ export const LAYERS = {
   newFootings: '신설 기초',
   existingFootings: '기존 기초',
   basinGirders: '유수지 보',
+  slab: '슬래브',
+  voids: '보이드',
+  existingGrid: '기존 그리드',
+  newEJ: '신설 EJ',
+  existingEJ: '기존 EJ',
 } as const;
+export type LayerRole = keyof typeof LAYERS;
+/** Which synthetic document holds each role's layer. */
+export const HOME: Record<LayerRole, 'structure' | 'civil'> = {
+  columns: 'structure',
+  girders: 'structure',
+  newFootings: 'structure',
+  slab: 'structure',
+  voids: 'structure',
+  newEJ: 'structure',
+  existingFootings: 'civil',
+  basinGirders: 'civil',
+  existingGrid: 'civil',
+  existingEJ: 'civil',
+};
 
 const b64 = (text: string) => btoa(String.fromCharCode(...new TextEncoder().encode(text)));
 
@@ -153,15 +182,44 @@ export function buildCase(layout: SyntheticLayout, names = ['합성-구조.3dm',
   });
   const structure = sync(names[0], 1),
     civil = sync(names[1], 2);
-  const add = (target: SyntheticSync, layer: string, row: Record<string, unknown>) => {
+  const add = (target: SyntheticSync, layer: string, row: Record<string, unknown>, name = '') => {
     const n = target.scene.length + 1;
     const id = `${target === structure ? 's' : 'c'}${n}`;
     const nativeId = `00000000-0000-4000-8000-${String(target.sourceDocument.documentId * 100000 + n).padStart(12, '0')}`;
-    target.scene.push({ id, nativeId, layer64: b64(layer), name64: '', ...row });
-    target.objects.push({ id, name: '', kind: 'native', nativeId });
+    target.scene.push({ id, nativeId, layer64: b64(layer), name64: name ? b64(name) : '', ...row });
+    target.objects.push({ id, name, kind: 'native', nativeId });
   };
 
   const [z0, z1] = layout.columnZ;
+  const closed = (ring: Local[], z: number) => [...ring, ring[0]].flatMap((p) => [...toSite(p), z]);
+  if (layout.slab)
+    add(structure, LAYERS.slab, { nativeType: 'Curve', line: closed(layout.slab, z1) });
+  for (const ring of layout.voids ?? [])
+    add(structure, LAYERS.voids, { nativeType: 'Curve', line: closed(ring, z1) });
+  const segment = (from: Local, to: Local, z: number) => [...toSite(from), z, ...toSite(to), z];
+  for (const line of layout.grid ?? [])
+    add(
+      civil,
+      LAYERS.existingGrid,
+      { nativeType: 'Curve', line: segment(line.from, line.to, 0) },
+      line.name,
+    );
+  (layout.newEJ ?? []).forEach((line, k) =>
+    add(
+      structure,
+      LAYERS.newEJ,
+      { nativeType: 'Curve', line: segment(line.from, line.to, z1) },
+      line.name ?? `EJ${k + 1}`,
+    ),
+  );
+  (layout.existingEJ ?? []).forEach((line, k) =>
+    add(
+      civil,
+      LAYERS.existingEJ,
+      { nativeType: 'Curve', line: segment(line.from, line.to, 0) },
+      line.name ?? `XEJ${k + 1}`,
+    ),
+  );
   for (const column of layout.columns) {
     const [x, y] = toSite(column.at);
     const ends = [
@@ -208,6 +266,50 @@ export function buildCase(layout: SyntheticLayout, names = ['합성-구조.3dm',
     add(civil, LAYERS.basinGirders, { nativeType: 'Brep', vertices, indices: mesh.indices });
   }
   return { structure, civil, toSite };
+}
+
+/** Rows of one layer as a role snapshot `{ rows, definitions }` (the runtime decodes `layer`). */
+export function roleSnapshot(sync: SyntheticSync, layer: string) {
+  const wanted = b64(layer);
+  const rows: Record<string, unknown>[] = sync.scene
+    .filter((row) => row.layer64 === wanted)
+    .map((row) => ({ ...row, layer }));
+  const definitions: Record<string, unknown> = {};
+  for (const row of rows) {
+    const block = row.block as { definition?: string } | undefined;
+    if (block?.definition && sync.definitions[block.definition])
+      definitions[block.definition] = sync.definitions[block.definition];
+  }
+  return { rows, definitions };
+}
+
+/**
+ * The v3 `input.json` of a built case: assembly roles as `{ rows, definitions }` from the document
+ * that holds each layer, and the drawn zones in world coordinates (ARCH-03 §3 자체 시험 자료).
+ */
+export function roleInputs(
+  built: ReturnType<typeof buildCase>,
+  layout: SyntheticLayout,
+  roles: readonly LayerRole[] = Object.keys(LAYERS) as LayerRole[],
+) {
+  const site: Record<
+    string,
+    { rows: Record<string, unknown>[]; definitions: Record<string, unknown> }
+  > = {};
+  for (const role of roles) {
+    const snapshot = roleSnapshot(built[HOME[role]], LAYERS[role]);
+    if (snapshot.rows.length) site[role] = snapshot;
+  }
+  const zone = (id: string, ring: Local[]) => ({
+    id,
+    shape: ring.map((p) => built.toSite(p)),
+    source: { value: id, by: 'sketch', at: 'synthetic' },
+  });
+  return {
+    site,
+    fireRoute: (layout.fire ?? []).map((ring, k) => zone(`fire-${k + 1}`, ring)),
+    requestedZones: (layout.requested ?? []).map((r) => zone(r.id, r.ring)),
+  };
 }
 
 /**

@@ -154,6 +154,14 @@ test('structure jig: draft, edits, confirmation, stored result and staleness', a
     assert.equal(analysed.body.result.status, 'ok');
     assert.equal(analysed.body.result.checks.length, 8);
     assert.ok(analysed.body.ledger[0].input_kN > 0);
+    // The route runs the worker-thread path (T-052·T-054): the summary with the verdict legend
+    // travels with the confirmed record.
+    assert.deepEqual(analysed.body.colorBands, [0.7, 1]);
+    assert.equal(analysed.body.summary.mode, 'confirmed');
+    assert.equal(analysed.body.summary.label, '확정 결과');
+    assert.equal(analysed.body.summary.modelHash, analysed.body.modelHash);
+    assert.deepEqual(analysed.body.summary.statusCodes, ['ok', 'warn', 'ng', 'na', 'err']);
+    assert.equal(analysed.body.summary.members.length, 8);
     assert.ok(
       existsSync(join(directory, 'structure', `${project.id}.json`)),
       'record is kept on disk',
@@ -162,6 +170,7 @@ test('structure jig: draft, edits, confirmation, stored result and staleness', a
     let state = (await api(`/projects/${project.id}/jigs/structure`)).body;
     assert.equal(state.stale, false);
     assert.equal(state.confirmed.modelHash, analysed.body.modelHash);
+    assert.deepEqual(state.confirmed.colorBands, [0.7, 1]);
     // A newer Sync of the same document makes the confirmed result out of date.
     insert('sync-2', '2026-09-29T02:00:00.000Z');
     state = (await api(`/projects/${project.id}/jigs/structure`)).body;

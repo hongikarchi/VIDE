@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["schema", "columns", "heights", "pairs", "requested", "site", "count"],
+  "properties": {
+    "schema": { "const": "vide.s06.columns/1" },
+    "columns": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["key", "mark", "at", "bottom", "top", "line", "length", "gap", "verdict"]
+      }
+    },
+    "site": { "type": "object", "required": ["polygon"] },
+    "count": { "type": "integer" }
+  }
+}

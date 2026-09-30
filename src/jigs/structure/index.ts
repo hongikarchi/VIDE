@@ -7,6 +7,7 @@ import type {
   StructureModel,
   StructureModelInput,
   StructureResult,
+  StructureSummary,
 } from '../../contracts/structure-model.ts';
 import { hId, hName, parseSectionName } from './sections.ts';
 import { analyzeStructure, modelHash } from './core.ts';
@@ -22,16 +23,24 @@ import { checkModel, checkModelStatic, classifyFailures } from './review.ts';
 
 export { buildDraft, checkModel, checkModelStatic };
 export type { DraftIssue, DraftOptions, DraftSource };
-// The library both structure jigs share (T-052): model assembly, summary and preview analysis in a
-// worker thread, reference deflection and the structure gates.
+// The library both structure jigs share (T-052·T-054): model assembly, summary and preview analysis
+// in a worker thread, reference deflection, section sizing, stable marks, the schedule and its CSV,
+// and the structure gates.
 export {
   analyzeSummary,
   analysisConfirmed,
   buildFrameModel,
   closeAnalysisWorker,
   comboEcho,
+  hProps,
+  markUnique,
   memberMapFrom,
   referenceDeflection,
+  schedule,
+  scheduleComplete,
+  sizeGroups,
+  stableMarks,
+  toCsv,
   uncheckedListed,
 } from '../official/structure-analysis/index.ts';
 export type {
@@ -39,7 +48,10 @@ export type {
   AnalyzeOutcome,
   FrameBuild,
   FramePlan,
+  MarkResult,
   MemberMap,
+  SizingOptions,
+  SizingResult,
 } from '../official/structure-analysis/index.ts';
 
 /** Identity of the document a Sync result came from, to tell a newer Sync of the same document. */
@@ -65,6 +77,9 @@ export interface StructureRecord {
   ledger: LedgerRow[];
   issues: DraftIssue[];
   result: StructureResult;
+  /** Summary of the same analysis (verdict legend `colorBands`·`statusCodes`); absent in old records. */
+  summary?: StructureSummary;
+  colorBands?: [number, number];
 }
 
 export function draftStructure(

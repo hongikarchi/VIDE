@@ -387,7 +387,8 @@ export interface ManifestIssue {
     | 'JIG_FILE_MISSING'
     | 'JIG_FORBIDDEN_FILE'
     | 'JIG_DERIVED_MISMATCH'
-    | 'JIG_LIBRARY_UNKNOWN';
+    | 'JIG_LIBRARY_UNKNOWN'
+    | 'JIG_PANEL';
   path: string;
   message: string;
   /** Warnings do not fail validation. */

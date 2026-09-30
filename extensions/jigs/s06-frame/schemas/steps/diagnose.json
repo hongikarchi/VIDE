@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["schema", "summary", "tables", "fills", "bands"],
+  "properties": {
+    "schema": { "const": "vide.s06.diagnose/1" },
+    "summary": {
+      "type": "object",
+      "required": ["columns", "girders", "cap", "openCut", "basin", "spans", "curves"]
+    },
+    "tables": {
+      "type": "object",
+      "required": ["interference", "spans", "curves"],
+      "properties": {
+        "interference": {
+          "type": "array",
+          "items": { "type": "object", "required": ["key", "verdict", "judgement", "at"] }
+        },
+        "spans": {
+          "type": "array",
+          "items": { "type": "object", "required": ["key", "length", "line"] }
+        }
+      }
+    }
+  }
+}

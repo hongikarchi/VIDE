@@ -188,6 +188,9 @@ try {
   await settings.getByRole('button', { name: '닫기', exact: true }).click();
   await page.setViewportSize({ width: 800, height: 900 });
   await page.locator('[data-mobile="model"]').click();
+  // Below 900 px the workspace tabs are one menu over the centre (Design §03).
+  assert.equal(await page.getByRole('tablist', { name: '작업공간' }).isVisible(), false);
+  assert.equal(await page.getByRole('combobox', { name: '작업공간' }).inputValue(), 'model');
   await page.locator('#toggle-left').click();
   await page.locator('.left-panel-tabs').getByRole('button', { name: '작업 이력' }).click();
   assert.equal(await page.locator('#review-list').isVisible(), true);

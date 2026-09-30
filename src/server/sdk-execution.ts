@@ -62,6 +62,15 @@ export interface Task {
   provider: (connection: AgentConnection) => Provider;
   update: (phase: Record<string, unknown>) => void;
 }
+/** A bake: fixed bodies in order, no provider (`runFixed`). */
+export interface FixedTask {
+  input: RequestInput;
+  previous?: { id: string; result: Record<string, unknown> };
+  codes: string[];
+  signal: AbortSignal;
+  update: (phase: Record<string, unknown>) => void;
+  expectedDocumentHash?: string;
+}
 const sourceSchema = z.object({
   filename: z.string(),
   fileHash: z.string().regex(/^[a-f0-9]{64}$/),
@@ -290,6 +299,119 @@ export class SdkExecution {
     } catch (error) {
       if (writing) throw Object.assign(failure('HOST_RESULT_UNKNOWN'), { intent, cause: error });
       throw error;
+    } finally {
+      if (worker) await worker.stop();
+    }
+  }
+  /**
+   * Rhino에 만들기 (ARCH-03 §9.3, PLAN-22 T-055): fixed C# bodies VIDE rendered itself, run in
+   * order in one work copy with no AI provider, then saved and re-read like any candidate. A
+   * rejected or failing body fails the request (`BAKE_TEMPLATE_REJECTED` / `BAKE_FAILED`); the
+   * original is untouched either way. `expectedDocumentHash` is the forced read's revision token:
+   * a work copy of another revision is refused (`STALE_INPUT`) before anything runs.
+   */
+  async runFixed({ input, previous, codes, signal, update, expectedDocumentHash }: FixedTask) {
+    if (!codes.length) throw failure('INVALID_INPUT');
+    if (previous?.result.displayOnly === true) {
+      const basis = z
+        .object({ instance: z.string(), documentId: z.number(), documentHash: z.string() })
+        .parse(previous.result.sourceDocument);
+      // The document must still be the one the forced read saw. Compared before the capture: a
+      // capture itself moves the revision token (Rhino counts saves as a property change), and
+      // the application later verifies the captured content object by object anyway.
+      if (
+        expectedDocumentHash !== undefined &&
+        (await this.editors.inspect(basis)).documentHash !== expectedDocumentHash
+      )
+        throw failure('STALE_INPUT');
+      const prepared = await this.captureEditor(basis, update);
+      previous = { id: previous.id, result: prepared };
+    }
+    const options = this.options;
+    await mkdir(options.directory, { recursive: true });
+    const directory = join(options.directory, randomUUID());
+    const source = previous ? sourceSchema.parse(previous.result) : undefined;
+    if (!source) throw failure('STALE_REFERENCE');
+    let worker: Worker | undefined, last: Receipt | undefined, currentOperation: string | undefined;
+    let revision = 0;
+    const activity = activityLog();
+    const values: unknown[] = [];
+    const intent = () => ({
+      progress: { queries: 0, attempts: values.length, completed: revision },
+      activity: activity.entries,
+      phase: 'host',
+      hostExecuted: false,
+      host: 'rhino',
+      executionMode: 'sdk',
+      workerDirectory: directory,
+      baseRequestId: previous?.id,
+      operationId: currentOperation,
+      sourceDocument: previous?.result.sourceDocument,
+    });
+    try {
+      if (signal.aborted) throw failure('CANCELLED');
+      activity.add('host', 'Rhino 작업 사본 준비');
+      update({ phase: 'starting-host', hostExecuted: false, activity: activity.entries });
+      worker = await (options.launch || launchRhinoWorker)({ ...options, directory, source });
+      for (const [index, code] of codes.entries()) {
+        if (signal.aborted) throw failure('CANCELLED');
+        const operationId = randomUUID();
+        currentOperation = operationId;
+        activity.add('execute', `고정 틀 실행 ${index + 1}/${codes.length}`);
+        update({ ...intent(), operationId, revision });
+        const receipt = await worker.execute(operationId, revision, code);
+        if (!receipt.ok) {
+          const rejected =
+            receipt.code === 'COMPILE_ERROR' || receipt.code === 'CODE_POLICY_REJECTED';
+          activity.add(
+            'error',
+            rejected
+              ? '고정 틀이 워커에서 거절됨'
+              : `고정 틀 실행 실패 · ${receipt.exceptionType ?? receipt.code}`,
+            receipt.diagnostics?.join(' / '),
+          );
+          update(intent());
+          throw Object.assign(failure(rejected ? 'BAKE_TEMPLATE_REJECTED' : 'BAKE_FAILED'), {
+            diagnostics: receipt.diagnostics,
+            diagnosticId: receipt.diagnosticId,
+            exceptionType: receipt.exceptionType,
+          });
+        }
+        last = receipt;
+        revision = receipt.revision;
+        values.push(receipt.value ?? null);
+        const counts = writeChanges(receipt.changes)?.counts;
+        activity.add(
+          'result',
+          counts
+            ? `실행 성공 · 추가 ${counts.added} · 수정 ${counts.modified} · 삭제 ${counts.removed} · 저장·재열기 검증`
+            : '실행 성공 · 저장·재열기 검증',
+        );
+        update({
+          ...intent(),
+          operationId,
+          revision,
+          filename: receipt.filename,
+          fileHash: receipt.fileHash,
+        });
+      }
+      const model = await worker.exportModel();
+      return {
+        ...model,
+        values,
+        progress: { queries: 0, attempts: values.length, completed: revision },
+        activity: activity.entries,
+        changes: last!.changes,
+        filename: last!.filename,
+        fileHash: last!.fileHash,
+        verified: true,
+        hostExecuted: true,
+        host: 'rhino',
+        executionMode: 'sdk',
+        workerDirectory: directory,
+        baseRequestId: previous?.id,
+        sourceDocument: previous?.result.sourceDocument,
+      };
     } finally {
       if (worker) await worker.stop();
     }

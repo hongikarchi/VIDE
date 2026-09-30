@@ -6,16 +6,26 @@
 // routes of PLAN-23 T-044 stay until T-051 moves the step to the v3 runner.
 
 import type { IncomingMessage } from 'node:http';
+import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { DomainError } from '../core/store.ts';
 import { JigStore } from '../core/jig-store.ts';
 import type { Workspace } from '../core/workspace.ts';
-import { isFileLink, type DocumentLinks } from '../core/document-links.ts';
+import { isFileLink, type DocumentLink, type DocumentLinks } from '../core/document-links.ts';
 import { readScopeSchema } from '../contracts/native-model.ts';
 import type { SdkExecution } from './sdk-execution.ts';
+import type { Execution } from './execution.ts';
 import { JigRegistry, JigInvalidError, repositoryJigRoot } from '../jigs/runtime/loader.ts';
 import { importPack } from '../jigs/runtime/pack.ts';
-import { JigRuntime, rowsOfLayers, type ReadModel } from '../jigs/runtime/runtime.ts';
+import { JigRuntime, layersOf, rowsOfLayers, type ReadModel } from '../jigs/runtime/runtime.ts';
+import {
+  bakeRecords,
+  finishBake,
+  prepareBake,
+  recordBaseline,
+  registerBakeJob,
+  type BakeContext,
+} from '../jigs/bake/bake.ts';
 import { overrideSchema, transformSchema, zoneSchema } from '../jigs/runtime/instance.ts';
 import { diagnose, type DiagnoseInputs } from '../../extensions/jigs/s06-frame/steps/diagnose.ts';
 import { ROLE_KEYS } from '../../extensions/jigs/s06-frame/steps/labels.ts';
@@ -36,6 +46,8 @@ export interface JigRouteContext {
   remote?: boolean;
   links?: DocumentLinks;
   sdk?: Pick<SdkExecution, 'readLayers' | 'importFile'>;
+  /** Starts the bake request (Rhino에 만들기 runs as a normal candidate request). */
+  execution?: Pick<Execution, 'start'>;
 }
 
 /** HTTP statuses of the jig error codes (ARCH-03 §7); server.ts merges them into its table. */
@@ -54,6 +66,16 @@ export const jigStatuses: Record<string, number> = {
   LAYER_ROOT_MISSING: 422,
   CONFIRMATION_REQUIRED: 422,
   STALE_INPUT: 409,
+  BAKE_NOT_COMPUTED: 422,
+  BAKE_JOB_MISSING: 409,
+  NOT_APPLIED: 409,
+};
+/** What the person can do about a blocked before-bake gate (Design SCR-13 결과 서랍). */
+const bakeHints: Record<string, string> = {
+  'hidden-target': 'Rhino에서 레이어를 켠 뒤 다시 누르세요',
+  'layer-scope': '출력 레이어 밖에는 만들지 않습니다',
+  'bake-args-safe': '키·부호 문자에 허용되지 않는 글자가 있습니다',
+  'analysis-confirmed': '해석을 확정한 뒤 만드세요',
 };
 
 /** Most Syncs one diagnosis reads (linked documents) and objects it takes over all roles. */
@@ -147,6 +169,13 @@ const assemblyInput = z
   .strict();
 const runInput = z
   .object({ until: id.optional(), mode: z.enum(['geometry', 'preview', 'confirmed']).optional() })
+  .strict();
+const bakeInput = z
+  .object({
+    bake: z.array(id).min(1).max(20),
+    linkId: id.optional(),
+    resolve: z.record(z.string().max(200), z.enum(['keep', 'overwrite', 'absorb'])).optional(),
+  })
   .strict();
 const pinInput = z
   .object({
@@ -411,6 +440,119 @@ export async function jigRoutes(
       send(200, { stepId: output[1], output: rt.output(projectId, instanceId, output[1]) });
       return true;
     }
+    // --- Rhino에 만들기 (SPEC-07.12, ARCH-03 §9.3) ---------------------------------------------
+    const bakeContext: BakeContext = {
+      runtime: rt,
+      store: store(),
+      read: (linkId) => readForJig(context, projectId, { linkId, layers: [], includeHidden: true }),
+    };
+    if (rest === 'bake' && method === 'POST') {
+      const input = bakeInput.parse(await body(request));
+      if (!context.execution || !context.links) throw new DomainError('EXECUTOR_NOT_READY');
+      const prepared = await prepareBake(bakeContext, {
+        projectId,
+        instanceId,
+        bakeIds: input.bake,
+        linkId: input.linkId,
+        resolve: input.resolve,
+      });
+      const plans = prepared.plans.map(({ decl, plan }) => ({
+        bakeId: decl.id,
+        template: decl.template,
+        layer: `${prepared.view.body.layerRoot}::${decl.layer}`,
+        added: plan.added,
+        replaced: plan.replaced,
+        dropped: plan.dropped,
+        preserved: plan.preserved,
+        kept: plan.kept,
+        deleted: plan.deleted,
+        copies: plan.copies,
+        hiddenTargets: plan.hiddenTargets,
+      }));
+      const shared = {
+        readId: prepared.readId,
+        revisionKey: prepared.read.revisionKey,
+        linkId: prepared.linkId,
+        gates: prepared.gates,
+        plans,
+      };
+      if (prepared.absorbed) {
+        // Absorbed edits are overrides now; the results must be recomputed before they are made.
+        send(200, { ...shared, status: 'absorbed', absorbed: prepared.absorbed });
+        return true;
+      }
+      if (prepared.blocked.length || prepared.problems.length) {
+        send(422, {
+          ...shared,
+          code: 'GATE_BLOCKED',
+          blocked: prepared.blocked,
+          problems: prepared.problems,
+          hints: prepared.blocked.map((name) => bakeHints[name]).filter(Boolean),
+        });
+        return true;
+      }
+      const link = context.links.get(projectId, prepared.linkId);
+      const basis = latestSyncOf(workspace, projectId, link);
+      if (!basis) throw new DomainError('STALE_REFERENCE');
+      const requestId = randomUUID();
+      const submitted = workspace.submit(projectId, {
+        id: requestId,
+        body: `Rhino에 만들기 · ${prepared.jig.manifest.name} · ${prepared.plans
+          .map(({ decl }) => decl.layer)
+          .join(', ')}`,
+        permission: 'candidate',
+        provider: 'claude-cli',
+        pins: [],
+        sketches: [],
+        files: [],
+        host: 'rhino',
+        baseRequestId: basis.id,
+        hostUse: 'write',
+        jig: {
+          kind: 'jig-bake',
+          instanceId,
+          bakeIds: input.bake,
+          linkId: prepared.linkId,
+          readId: prepared.readId,
+          runId: prepared.runId,
+        },
+      });
+      const source = prepared.read.model.sourceDocument as { documentHash?: unknown } | undefined;
+      registerBakeJob({
+        requestId,
+        instanceId,
+        runId: prepared.runId,
+        codes: prepared.codes,
+        ...(typeof source?.documentHash === 'string'
+          ? { expectedDocumentHash: source.documentHash }
+          : {}),
+        finish: async (result) =>
+          finishBake({ store: store() }, prepared, requestId, result).result,
+      });
+      context.execution.start(submitted.request);
+      send(200, {
+        ...shared,
+        status: 'submitted',
+        requestId,
+        runId: prepared.runId,
+        chunks: prepared.codes.length,
+        waiting: submitted.request.state === 'queued' ? submitted.request.result : undefined,
+      });
+      return true;
+    }
+    if (rest === 'bakes' && method === 'GET') {
+      const view = await rt.view(projectId, instanceId);
+      const jig = await rt.registry.resolve(view.jig.id, view.jig.version);
+      send(200, {
+        bakes: bakeRecords(store(), instanceId, jig, url.searchParams.get('linkId') ?? undefined),
+      });
+      return true;
+    }
+    const baseline = /^bakes\/([^/]+)\/baseline$/.exec(rest);
+    if (baseline && method === 'POST') {
+      send(200, await recordBaseline(bakeContext, projectId, instanceId, baseline[1]));
+      return true;
+    }
     return false;
   }
 
@@ -478,6 +620,27 @@ export async function jigRoutes(
 }
 
 /**
+ * The newest finished Sync of a linked document (the display Sync of an open document, or the
+ * import of a file opened in VIDE): the bake's basis. Never a candidate — a candidate's work copy
+ * is an older state of the document, and the bake must start from the document as it is now.
+ */
+function latestSyncOf(workspace: Workspace, projectId: string, link: DocumentLink) {
+  return workspace
+    .list(projectId)
+    .filter((entry) => {
+      if (entry.state !== 'succeeded' || !entry.result?.hostExecuted) return false;
+      if ((entry.result.host ?? 'rhino') !== 'rhino') return false;
+      if (entry.result.displayOnly !== true && entry.input.source !== 'file') return false;
+      if (entry.input.linkId === link.id) return true;
+      const source = entry.result.sourceDocument as
+        | { instance?: unknown; documentId?: unknown }
+        | undefined;
+      return source?.instance === link.instance && source.documentId === link.documentId;
+    })
+    .at(-1);
+}
+
+/**
  * A jig input read (ARCH-03 §8): only the named layers. A linked Rhino document is read from the
  * host (attached) or its work copy (file opened in VIDE); a ZWCAD link, a `syncId`, or an engine
  * without host access filters the stored display Sync on the server. Nothing here touches the
@@ -495,7 +658,11 @@ async function readForJig(
       throw new DomainError('STALE_REFERENCE');
     const result = saved.result as ReadModel;
     const source = (result.sourceDocument ?? {}) as Record<string, unknown>;
-    const picked = rowsOfLayers(result, input.layers);
+    // No layer named: the whole stored model (a bake's forced read).
+    const picked = rowsOfLayers(
+      result,
+      input.layers.length ? input.layers : layersOf(result).map((layer) => layer.fullPath),
+    );
     const model: ReadModel = {
       scene: picked.rows,
       definitions: picked.definitions,
@@ -512,7 +679,10 @@ async function readForJig(
   if (input.syncId) return fromSync(input.syncId, input.linkId ?? `sync:${input.syncId}`);
   if (!input.linkId || !links) throw new DomainError('INVALID_INPUT');
   const link = links.get(projectId, input.linkId);
-  const scope = { layers: input.layers, ...(input.includeHidden ? { includeHidden: true } : {}) };
+  const scope = {
+    ...(input.layers.length ? { layers: input.layers } : {}),
+    ...(input.includeHidden ? { includeHidden: true } : {}),
+  };
   if (link.host === 'rhino' && sdk) {
     if (isFileLink(link)) {
       const latest = workspace

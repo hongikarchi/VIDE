@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": [
+    "schema",
+    "frame",
+    "chosen",
+    "alternatives",
+    "axes",
+    "points",
+    "spans",
+    "objective",
+    "summary",
+    "violations",
+    "relaxed",
+    "bands"
+  ],
+  "properties": {
+    "schema": { "const": "vide.s06.axes/1" },
+    "chosen": { "type": "string" },
+    "axes": {
+      "type": "array",
+      "items": { "type": "object", "required": ["key", "name", "axis", "at", "line"] }
+    },
+    "points": {
+      "type": "array",
+      "items": { "type": "object", "required": ["key", "at", "cap", "basin", "openCut"] }
+    },
+    "spans": {
+      "type": "array",
+      "items": { "type": "object", "required": ["key", "from", "to", "length", "verdict", "line"] }
+    },
+    "objective": {
+      "type": "object",
+      "required": ["spanOver", "spanExcess", "cap", "basin", "openCut", "columns"]
+    }
+  }
+}

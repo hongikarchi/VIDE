@@ -2,34 +2,126 @@
   "layout": "jig-run",
   "left": [
     { "part": "step-rail" },
-    { "part": "input-assembly", "input": "inputs.site" },
-    { "part": "param-list", "bind": "params" }
+    { "part": "role-card", "input": "inputs.site" },
+    { "part": "param-group" }
   ],
   "center": {
     "views": [
       {
-        "part": "plan-view",
-        "points": "step.grid.columns",
-        "lines": "step.beams.beams",
-        "boundary": "step.grid.site.polygon"
+        "part": "viewport-overlay",
+        "title": "3D",
+        "layers": [
+          {
+            "key": "site",
+            "title": "슬래브 외곽",
+            "from": "step.grid.site.polygon",
+            "shape": "polygon",
+            "tone": "ov-existing"
+          },
+          {
+            "key": "beams",
+            "title": "보",
+            "from": "step.beams.beams",
+            "shape": "line",
+            "tone": "ov-new",
+            "colorBy": "span_m",
+            "bands": [7, 10]
+          },
+          {
+            "key": "columns",
+            "title": "기둥",
+            "from": "step.grid.columns",
+            "shape": "point",
+            "label": "mark",
+            "tone": "ov-new"
+          }
+        ],
+        "legend": {
+          "part": "verdict-legend",
+          "title": "판정 · 보 경간(m)",
+          "from": "step.beams.beams",
+          "field": "span_m",
+          "bands": [7, 10],
+          "overlay": "beams"
+        }
+      },
+      {
+        "part": "plan-map",
+        "title": "평면",
+        "rotate": "$angle",
+        "layers": [
+          {
+            "key": "site",
+            "from": "step.grid.site.polygon",
+            "shape": "polygon",
+            "tone": "ov-existing"
+          },
+          {
+            "key": "beams",
+            "from": "step.beams.beams",
+            "shape": "line",
+            "tone": "ov-new",
+            "colorBy": "span_m",
+            "bands": [7, 10]
+          },
+          {
+            "key": "columns",
+            "from": "step.grid.columns",
+            "shape": "point",
+            "label": "mark",
+            "tone": "ov-new"
+          }
+        ]
       }
     ],
-    "board": { "part": "param-board", "bind": "params" },
+    "board": { "part": "slider-board", "params": ["$spacingX", "$spacingY", "$angle"] },
     "kpis": {
       "part": "kpi-strip",
       "items": [
-        { "label": "기둥", "value": "step.summary.columns" },
-        { "label": "보", "value": "step.summary.beams" },
-        { "label": "최대 경간", "value": "step.summary.maxSpan_m", "unit": "m" },
-        { "label": "기둥당 면적", "value": "step.summary.areaPerColumn_m2", "unit": "m²" }
+        { "label": "기둥", "from": "step.summary.columns", "unit": "개" },
+        { "label": "보", "from": "step.summary.beams", "unit": "개" },
+        {
+          "label": "최대 경간",
+          "from": "step.summary.maxSpan_m",
+          "unit": "m",
+          "decimals": 1,
+          "warnAbove": 10
+        },
+        {
+          "label": "기둥당 면적",
+          "from": "step.summary.areaPerColumn_m2",
+          "unit": "m²",
+          "decimals": 1
+        }
       ]
     }
   },
   "drawer": {
     "part": "result-tabs",
     "tabs": [
-      { "title": "기둥", "part": "table", "rows": "step.grid.columns" },
-      { "title": "보", "part": "table", "rows": "step.beams.beams" }
+      {
+        "title": "기둥",
+        "part": "table",
+        "from": "step.grid.columns",
+        "overlay": "columns",
+        "columns": [
+          { "field": "mark", "label": "부호" },
+          { "field": "at", "label": "위치 X, Y", "unit": "m", "decimals": 2 }
+        ],
+        "csv": "기둥"
+      },
+      {
+        "title": "보",
+        "part": "schedule",
+        "from": "step.beams.beams",
+        "overlay": "beams",
+        "columns": [
+          { "field": "key", "label": "부호" },
+          { "field": "span_m", "label": "경간", "unit": "m", "decimals": 2 },
+          { "field": "depth_m", "label": "보 춤", "unit": "m", "decimals": 2 }
+        ],
+        "csv": "보"
+      }
     ]
   },
   "actions": [{ "id": "recompute", "label": "다시 계산", "step": "summary", "tier": "T1" }]

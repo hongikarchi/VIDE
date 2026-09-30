@@ -37,6 +37,8 @@ export type NewConversation = z.input<typeof newConversation>;
 const conversationPatch = newConversation
   .pick({
     title: true,
+    // The service changes only by hand-over (SPEC-02.19 5), never mid-session.
+    provider: true,
     model: true,
     effort: true,
     accountProfileId: true,
@@ -167,6 +169,16 @@ export class ConversationStore {
           .prepare('SELECT * FROM conversations WHERE projectId=? ORDER BY createdAt')
           .all(projectId)) as unknown as ConversationRow[];
     return rows.map(toConversation);
+  }
+  /** Closed conversations of every project whose `closedAt` is before `at` (transcript retention). */
+  closedBefore(at: string): Conversation[] {
+    return (
+      this.db
+        .prepare(
+          "SELECT * FROM conversations WHERE state='closed' AND closedAt<? ORDER BY closedAt",
+        )
+        .all(at) as unknown as ConversationRow[]
+    ).map(toConversation);
   }
   update(projectId: string, conversationId: string, value: ConversationPatch): Conversation {
     const patch = conversationPatch.parse(value);
@@ -304,15 +316,18 @@ export class ConversationStore {
     if (!row) throw new DomainError('NOT_FOUND');
     return { ...row, body: JSON.parse(row.body) as unknown };
   }
-  /** Items in recording order; `current` leaves out superseded ones. */
-  ledger(conversationId: string, { current = false } = {}): LedgerItem[] {
+  /** Items in recording order; `current` leaves out superseded ones, `since` those before that time. */
+  ledger(
+    conversationId: string,
+    { current = false, since }: { current?: boolean; since?: string } = {},
+  ): LedgerItem[] {
     return (
       this.db
         .prepare(
-          `SELECT * FROM ledger_items WHERE conversationId=?${current ? ' AND supersededBy IS NULL' : ''}
+          `SELECT * FROM ledger_items WHERE conversationId=?${current ? ' AND supersededBy IS NULL' : ''}${since ? ' AND createdAt>=?' : ''}
             ORDER BY createdAt, rowid`,
         )
-        .all(conversationId) as unknown as LedgerRow[]
+        .all(...(since ? [conversationId, since] : [conversationId])) as unknown as LedgerRow[]
     ).map((row) => ({ ...row, body: JSON.parse(row.body) as unknown }));
   }
   supersede(conversationId: string, itemId: string, by: string) {

@@ -20,8 +20,9 @@ import { JIGS } from '../jigs/catalog.ts';
 import { runSync } from '../jigs/sync.ts';
 import { jigRoutes, jigStatuses } from './jig-routes.ts';
 import { syncReadRoutes } from './sync-reads.ts';
+import { ConversationService, conversationRoutes, conversationStatuses } from './conversations.ts';
 import {
-  analyzeConfirmed,
+  analyzeSummary,
   applyEdits,
   checkModel as checkStructureModel,
   documentKey as structureDocumentKey,
@@ -149,6 +150,7 @@ const statuses: Record<string, number> = {
   STRUCTURE_CORE_MISSING: 503,
   HOST_RUNNING: 409,
   ...jigStatuses,
+  ...conversationStatuses,
 };
 export async function startServer({
   filename,
@@ -299,8 +301,11 @@ export async function startServer({
   const diagnostics = new Diagnostics({
     directory: filename === ':memory:' ? undefined : dirname(filename),
   });
+  // Conversations (SPEC-02.19): sessions per turn, ledger, transcript retention (30 days).
+  const conversations = new ConversationService(store, { profiles, diagnostics });
   const execution = new Execution(workspace, {
     diagnostics,
+    conversations,
     selectContext: (text, candidates) =>
       selectContext(text, candidates, { dataDirectory: dirname(filename) }),
     onProviderLimit: (provider, id) =>
@@ -1086,10 +1091,29 @@ export async function startServer({
           dataDirectory: dirname(filename),
           links,
           sdk,
+          execution,
         })
       )
         return;
       if (await syncReadRoutes(url, request, { links, workspace, sdk, body, send })) return;
+      if (
+        await conversationRoutes(url, request, {
+          service: conversations,
+          body,
+          send,
+          remote,
+          chooseModel: async (routing, requested) =>
+            modelRouter.route(routing, await execution.models(), signedInServices(), requested),
+          chooseAccount: async (provider) => {
+            if (accountLogin.busy(provider)) throw new DomainError('PROFILE_LOGIN_IN_PROGRESS');
+            const chosen = await accountUsage.choose(provider, profiles.selected(provider));
+            if (chosen.switched && !profiles.list().pending[provider])
+              profiles.select(provider, chosen.id);
+            return chosen.id;
+          },
+        })
+      )
+        return;
       // Structure analysis jig (J-09, SPEC-06): draft from Syncs → small edits → confirm & analyse.
       const structureJig =
         /^\/api\/v1\/projects\/([^/]+)\/jigs\/structure(?:\/(draft|edit|analyze))?$/.exec(
@@ -1219,29 +1243,44 @@ export async function startServer({
             .parse(await body(request));
           const record = structures.get(projectId);
           if (!record.draft) throw new DomainError('NOT_FOUND');
-          let out: ReturnType<typeof analyzeConfirmed>;
+          // Worker-thread path (T-052·T-054): the engine thread serialises the model and waits; a
+          // newer analyze request for the same project supersedes one still queued.
+          let out: Awaited<ReturnType<typeof analyzeSummary>>;
           try {
-            out = analyzeConfirmed(record.draft.model);
+            out = await analyzeSummary(record.draft.model, undefined, {
+              mode: 'confirmed',
+              key: `project:${projectId}`,
+              detail: 'full',
+            });
           } catch (error) {
             const code = (error as { code?: string }).code;
-            if (code === 'STRUCTURE_MODEL_INVALID') {
-              send(422, { error: code, issues: (error as { issues?: unknown }).issues ?? [] });
-              return;
-            }
             if (code === 'STRUCTURE_CORE_MISSING') throw new DomainError('STRUCTURE_CORE_MISSING');
+            if (code === 'STRUCTURE_SUPERSEDED') throw new DomainError('PROJECT_BUSY');
             throw error;
+          }
+          const { summary } = out;
+          if (
+            summary.status === 'invalid' ||
+            summary.status === 'unstable' ||
+            !out.result ||
+            !out.model
+          ) {
+            send(422, { error: 'STRUCTURE_MODEL_INVALID', issues: summary.issues });
+            return;
           }
           record.confirmed = {
             confirmedAt: new Date().toISOString(),
-            modelHash: out.result.modelHash,
+            modelHash: summary.modelHash,
             model: out.model,
             sources: record.draft.sources.map(({ syncId, documentKey }) => ({
               syncId,
               documentKey,
             })),
-            ledger: out.ledger,
-            issues: out.issues,
+            ledger: out.ledger ?? [],
+            issues: summary.issues,
             result: out.result,
+            summary,
+            colorBands: summary.colorBands,
           };
           structures.save(projectId, record);
           send(200, { ...record.confirmed, stale: false });
@@ -1793,6 +1832,12 @@ export async function startServer({
               : undefined;
           const old =
             existing && typeof existing.input === 'string' ? JSON.parse(existing.input) : undefined;
+          // A conversation's turn keeps the service, model and account fixed when it opened
+          // (SPEC-02.19 2); without one the request is the default conversation's, chosen here.
+          const conversation =
+            typeof input.conversationId === 'string'
+              ? conversations.fix(projectId, input)
+              : undefined;
           if (old && isAutoModel(input.model) && old.routing) {
             // A retried automatic request keeps the service and model chosen the first time.
             input.provider = old.provider;
@@ -1827,7 +1872,10 @@ export async function startServer({
             if (accountLogin.busy(provider)) throw new DomainError('PROFILE_LOGIN_IN_PROGRESS');
             // Automatic switching (when on): an account near or at its limit hands the request to
             // the signed-in account of the same service with the most headroom.
-            const chosen = await accountUsage.choose(provider, profiles.selected(provider));
+            const chosen = await accountUsage.choose(
+              provider,
+              conversation?.accountProfileId ?? profiles.selected(provider),
+            );
             input.accountProfileId = chosen.id;
             if (chosen.switched) {
               input.accountSwitchedFrom = chosen.from;
@@ -1958,6 +2006,11 @@ export async function startServer({
   authority = `127.0.0.1:${address.port}`;
   origin = `http://${authority}`;
   void remoteAccess.init();
+  // Provider transcripts of conversations closed 30 days ago (SPEC-02.19 1): at start, then daily.
+  const sweepTranscripts = () => void conversations.sweep().catch(() => {});
+  sweepTranscripts();
+  const transcriptSweep = setInterval(sweepTranscripts, 24 * 60 * 60 * 1000);
+  transcriptSweep.unref();
   diagnostics.write('engine-start', {
     port: address.port,
     pid: process.pid,
@@ -1977,6 +2030,7 @@ export async function startServer({
       await accountLogin.close();
       agentTools.close();
       await execution.close();
+      clearInterval(transcriptSweep);
       await Promise.allSettled([...importRecoveries.values()]);
       return new Promise<void>((resolve, reject) =>
         server.close((error) => {

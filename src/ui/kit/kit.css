@@ -1,0 +1,701 @@
+/* Official jig parts (Design §14 부품 목록). Only the new token names of Design §02 are added
+   here, with the values the app already uses; style.css keeps its own tokens and values
+   (--line, --muted, --soft, --coral, the verdict/zone/overlay colours, --fs-kpi). No
+   prefers-color-scheme: the dark values follow the host panel theme only (SCR-12). */
+:root {
+  --ink: #292c2d; /* the app's text colour */
+  --paper: #ffffff; /* panel background */
+  --bar-base: #dfe2df;
+  --bar-alt: #a9c4ad;
+  --bar-strong: #4f7a60;
+  --bar-actual: #d97660;
+  --fs-eyebrow: 11px;
+  --fs-small: 12px;
+  --fs-body: 14px;
+  --fs-lede: 15px;
+  --fs-h3: 20px;
+  --fs-claim: 28px;
+  --fs-headline: 44px;
+  --track-eyebrow: 0.16em;
+  --s1: 4px;
+  --s2: 8px;
+  --s3: 12px;
+  --s4: 16px;
+  --s6: 24px;
+  --s8: 32px;
+  --s12: 48px;
+  --hit: 36px;
+  --hit-touch: 44px;
+  --radius: 4px;
+}
+:root[data-theme='dark'] {
+  --ink: #dde3df;
+  --paper: #1d2120;
+}
+
+/* --- panel frame --------------------------------------------------------------------------- */
+.kit-panel {
+  container-type: inline-size;
+  display: grid;
+  gap: var(--s3);
+  min-width: 0;
+  color: var(--ink);
+  font-size: var(--fs-small);
+}
+.kit-panel * {
+  min-width: 0;
+}
+.kit-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--s1) var(--s2);
+}
+.kit-head h3 {
+  margin: 0;
+  font-size: var(--fs-h3);
+  font-weight: 600;
+}
+.kit-head small,
+.kit-muted {
+  color: var(--muted);
+}
+.kit-columns {
+  display: grid;
+  gap: var(--s3);
+}
+.kit-side,
+.kit-main {
+  display: grid;
+  gap: var(--s3);
+  align-content: start;
+}
+/* One column: results first. Wide: steps and settings on the left, results on the right. */
+.kit-main {
+  order: -1;
+}
+@container (min-width: 640px) {
+  .kit-columns {
+    grid-template-columns: minmax(220px, 34%) minmax(0, 1fr);
+  }
+  .kit-main {
+    order: 0;
+  }
+}
+.kit-section {
+  border-top: 1px solid var(--line);
+  padding-top: var(--s2);
+}
+.kit-section > h4,
+.kit-section > summary {
+  margin: 0 0 var(--s2);
+  font-size: var(--fs-small);
+  font-weight: 600;
+  color: var(--muted);
+  cursor: default;
+}
+.kit-section > summary {
+  cursor: pointer;
+}
+.kit-notice {
+  margin: 0;
+  padding: var(--s2) var(--s3);
+  border-left: 2px solid var(--warn);
+  background: var(--zone-warn);
+}
+.kit-notice[data-level='error'] {
+  border-left-color: var(--ng);
+  background: var(--zone-no);
+}
+.kit-issues {
+  margin: var(--s1) 0 0;
+  padding-left: var(--s4);
+  color: var(--muted);
+}
+.kit-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s2);
+}
+.kit-actions button,
+.kit-button {
+  min-height: 30px;
+  padding: 0 var(--s3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--paper);
+  cursor: pointer;
+}
+.kit-actions button[data-primary],
+.kit-button[data-primary] {
+  border-color: var(--ink);
+  background: var(--ink);
+  color: var(--paper);
+}
+.kit-actions button:disabled,
+.kit-button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.kit-reason {
+  color: var(--muted);
+}
+/* 다시 계산 필요: a hollow dot */
+.kit-stale::before {
+  content: '';
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-right: var(--s1);
+  border: 1.5px solid var(--muted);
+  border-radius: 50%;
+  vertical-align: 1px;
+}
+
+/* --- step rail ------------------------------------------------------------------------------ */
+.kit-rail {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 2px;
+}
+.kit-rail li {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr) auto;
+  gap: 0 var(--s2);
+  align-items: start;
+  padding: var(--s1) var(--s2);
+  border-left: 2px solid transparent;
+}
+.kit-rail li[data-state='reconfirm'],
+.kit-rail li[data-state='waiting'] {
+  border-left-color: var(--coral);
+  background: var(--soft);
+}
+.kit-rail-mark {
+  font-weight: 700;
+  text-align: center;
+}
+.kit-rail li[data-state='done'] .kit-rail-mark,
+.kit-rail li[data-state='confirmed'] .kit-rail-mark {
+  color: var(--ok);
+}
+.kit-rail li[data-state='failed'] .kit-rail-mark {
+  color: var(--ng);
+}
+.kit-rail li[data-state='reconfirm'] .kit-rail-mark {
+  color: var(--warn);
+}
+.kit-rail-name {
+  font-weight: 600;
+}
+.kit-rail-meta,
+.kit-rail-time {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.kit-rail-meta {
+  grid-column: 2 / -1;
+}
+.kit-rail-why {
+  grid-column: 2 / -1;
+  color: var(--ng);
+}
+.kit-rail li > button {
+  grid-column: 2 / -1;
+  justify-self: start;
+  margin-top: var(--s1);
+}
+.kit-badge {
+  display: inline-block;
+  margin-left: var(--s1);
+  padding: 0 5px;
+  border-radius: 8px;
+  background: var(--zone-no);
+  font-size: var(--fs-eyebrow);
+}
+
+/* --- settings -------------------------------------------------------------------------------- */
+.kit-settings {
+  display: grid;
+  gap: var(--s2);
+}
+.kit-setting {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 2px var(--s2);
+  align-items: center;
+}
+.kit-setting-name {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s1);
+}
+.kit-setting-value {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.kit-setting-control {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: var(--s1);
+}
+.kit-setting-control input[type='range'] {
+  flex: 1;
+  min-width: 80px;
+  accent-color: var(--ink);
+}
+.kit-setting-control input[type='number'] {
+  width: 92px;
+  padding: 3px var(--s1);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.kit-setting-control button {
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--paper);
+}
+.kit-zone {
+  flex: 1;
+  display: flex;
+  padding: 2px 0;
+  border-radius: var(--radius);
+  background: var(--zone-ok);
+}
+.kit-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s1);
+}
+.kit-chips button {
+  padding: 2px var(--s2);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--paper);
+}
+.kit-chips button[aria-pressed='true'] {
+  border-color: var(--ink);
+  font-weight: 600;
+}
+.kit-locked {
+  color: var(--muted);
+}
+.kit-board {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: var(--s2) var(--s3);
+  background: var(--paper);
+  box-shadow: 0 1px 4px color-mix(in srgb, var(--ink) 10%, transparent);
+}
+.kit-board > summary {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: var(--s1) var(--s2);
+  cursor: pointer;
+  font-weight: 600;
+}
+.kit-board > summary small {
+  font-weight: 400;
+  color: var(--muted);
+}
+.kit-board[open] > summary {
+  margin-bottom: var(--s2);
+}
+.kit-fact {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 0 6px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  font-size: var(--fs-eyebrow);
+  color: var(--muted);
+  white-space: nowrap;
+}
+.kit-fact::before {
+  content: '';
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--muted);
+}
+.kit-fact[data-by='decision']::before,
+.kit-fact[data-by='user']::before {
+  background: var(--ink);
+}
+.kit-fact[data-by='fact']::before {
+  background: var(--bar-strong);
+}
+
+/* --- role cards ------------------------------------------------------------------------------ */
+.kit-roles {
+  display: grid;
+  gap: var(--s2);
+}
+.kit-role {
+  display: grid;
+  gap: 2px;
+  padding: var(--s2) var(--s3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+.kit-role[data-state='missing'] {
+  border-style: dashed;
+}
+.kit-role-head {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: var(--s1);
+}
+.kit-role-state[data-state='confirmed'] {
+  color: var(--ok);
+}
+.kit-role-state[data-state='proposed'],
+.kit-role-state[data-state='missing'] {
+  color: var(--warn);
+}
+.kit-role ul {
+  margin: var(--s1) 0 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: var(--s1);
+}
+.kit-role li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s1);
+}
+
+/* --- KPI strip ------------------------------------------------------------------------------- */
+.kit-kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  border-top: 2px solid var(--ink);
+}
+.kit-kpi {
+  padding: var(--s2) var(--s3) var(--s3);
+  border-left: 1px solid var(--line);
+}
+.kit-kpi-title {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: var(--s1);
+  font-size: var(--fs-eyebrow);
+  color: var(--muted);
+}
+.kit-kpi-value {
+  margin-top: 2px;
+  font-size: var(--fs-kpi);
+  line-height: 1.15;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+.kit-kpi-value small {
+  margin-left: 3px;
+  font-size: var(--fs-small);
+  font-weight: 400;
+  letter-spacing: 0;
+  color: var(--muted);
+}
+.kit-kpi-value[data-empty] {
+  font-size: var(--fs-small);
+  color: var(--muted);
+}
+.kit-kpi-note {
+  font-size: var(--fs-eyebrow);
+  color: var(--muted);
+}
+.kit-over {
+  color: var(--ng);
+  font-weight: 700;
+}
+
+/* --- verdict legend ---------------------------------------------------------------------------- */
+.kit-legend {
+  display: grid;
+  gap: var(--s1);
+}
+.kit-legend-head {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: var(--s1);
+  font-weight: 600;
+}
+.kit-legend-bands {
+  display: grid;
+  gap: 2px;
+}
+.kit-legend-bands button {
+  display: grid;
+  grid-template-columns: 12px 16px minmax(0, 1fr) auto;
+  gap: var(--s1);
+  align-items: center;
+  padding: 2px var(--s1);
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  background: none;
+  text-align: left;
+  font-variant-numeric: tabular-nums;
+}
+.kit-legend-bands button[aria-pressed='true'] {
+  border-color: var(--ink);
+}
+.kit-swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  background: var(--tone, var(--na));
+}
+.kit-legend[data-off] .kit-swatch {
+  background: var(--bar-base);
+}
+
+/* --- views: overlay layers and the plan -------------------------------------------------------- */
+.kit-view-tabs,
+.kit-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  border-bottom: 1px solid var(--line);
+}
+.kit-view-tabs button,
+.kit-tabs button {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s1);
+  padding: 6px 10px;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+}
+.kit-view-tabs button[aria-selected='true'],
+.kit-tabs button[aria-selected='true'] {
+  color: var(--ink);
+  font-weight: 700;
+  box-shadow: inset 0 -2px 0 var(--ink);
+}
+.kit-tabs b {
+  padding: 0 5px;
+  border-radius: 8px;
+  background: var(--soft);
+  font-size: var(--fs-eyebrow);
+  font-weight: 400;
+}
+.kit-layers {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.kit-layers li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s2);
+}
+.kit-layers label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s1);
+}
+.kit-layers input[type='range'] {
+  width: 90px;
+  accent-color: var(--ink);
+}
+.kit-plan {
+  display: block;
+  /* The app's icon rule makes every svg 18 px and click-through. */
+  pointer-events: auto;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 4 / 3;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--paper);
+  touch-action: manipulation;
+}
+/* Tones are Design §02 token names (the same names as the 3D overlay). */
+[data-tone='ov-grid'] {
+  --tone: var(--ov-grid);
+}
+[data-tone='ov-new'] {
+  --tone: var(--ov-new);
+}
+[data-tone='ov-existing'] {
+  --tone: var(--ov-existing);
+}
+[data-tone='ov-clash'] {
+  --tone: var(--ov-clash);
+}
+[data-tone='ok'] {
+  --tone: var(--ok);
+}
+[data-tone='warn'] {
+  --tone: var(--warn);
+}
+[data-tone='ng'] {
+  --tone: var(--ng);
+}
+[data-tone='na'] {
+  --tone: var(--na);
+}
+.kit-plan [data-tone] {
+  fill: none;
+  stroke: var(--tone, var(--ov-new));
+  stroke-width: 1.5px;
+  vector-effect: non-scaling-stroke;
+  cursor: pointer;
+}
+.kit-plan circle[data-tone] {
+  fill: var(--tone, var(--ov-new));
+  stroke: var(--paper);
+  stroke-width: 1px;
+}
+.kit-plan polygon[data-fill] {
+  fill: var(--tone, var(--ov-new));
+  fill-opacity: 0.18;
+}
+.kit-plan [data-dashed] {
+  stroke-dasharray: 5 4;
+}
+.kit-plan [data-selected] {
+  stroke: var(--coral);
+  stroke-width: 3px;
+}
+.kit-plan circle[data-selected] {
+  stroke: var(--coral);
+  stroke-width: 2.5px;
+}
+.kit-plan text {
+  fill: var(--muted);
+  pointer-events: none;
+}
+
+/* --- tables ------------------------------------------------------------------------------------ */
+.kit-table-wrap {
+  max-height: 320px;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+.kit-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+.kit-table th,
+.kit-table td {
+  padding: 4px var(--s2);
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  white-space: nowrap;
+}
+.kit-table th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--soft);
+  font-weight: 600;
+}
+.kit-table [data-num] {
+  text-align: right;
+}
+.kit-table tbody tr {
+  cursor: pointer;
+}
+.kit-table tbody tr:hover {
+  background: var(--soft);
+}
+.kit-table tbody tr[aria-selected='true'] {
+  background: var(--soft);
+  box-shadow: inset 2px 0 0 var(--coral);
+}
+.kit-table-foot {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: var(--s2);
+  margin-top: var(--s1);
+  color: var(--muted);
+}
+
+/* --- cards and banners ------------------------------------------------------------------------- */
+.kit-card {
+  display: grid;
+  gap: 2px;
+  padding: var(--s2) var(--s3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+.kit-banner {
+  padding: var(--s1) var(--s3);
+  border-left: 2px solid var(--coral);
+  background: var(--soft);
+}
+.kit-confirm {
+  display: grid;
+  gap: var(--s1);
+  padding: var(--s2) var(--s3);
+  border: 1px solid var(--ink);
+  border-radius: var(--radius);
+}
+
+/* --- beside the panel (context tab slots: above, over and below the 3D view) ------------------ */
+.kit-panel[data-slotted] .kit-main {
+  order: 0;
+}
+.kit-slot {
+  padding: var(--s2) var(--s3);
+}
+.kit-slot[data-slot='board'] {
+  padding: 0;
+}
+.kit-panel[data-slotted] .kit-columns {
+  grid-template-columns: minmax(0, 1fr);
+}
+/* The shown view: layer menu beside the legend, or the plan. */
+.kit-view > .kit-side {
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  align-items: start;
+}
+.kit-slot .kit-plan {
+  aspect-ratio: auto;
+  height: min(42vh, 480px);
+}
+.kit-layer-menu > summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+.kit-layer-menu[open] > summary {
+  margin-bottom: var(--s1);
+}
+/* A phone: smaller KPI numbers so the view keeps its room. */
+@container (max-width: 480px) {
+  .kit-kpi {
+    padding: var(--s1) var(--s2) var(--s2);
+  }
+  .kit-kpi-value {
+    font-size: var(--fs-h3);
+  }
+}

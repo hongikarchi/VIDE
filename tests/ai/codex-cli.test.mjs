@@ -2,8 +2,15 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
 import { PassThrough } from 'node:stream';
-import { resolve } from 'node:path';
-import { CodexCli, codexArguments, codexEnvironment } from '../../src/ai/codex-cli.ts';
+import { join, resolve } from 'node:path';
+import { tmpdir } from 'node:os';
+import { mkdir, mkdtemp, readdir, rm, writeFile } from 'node:fs/promises';
+import {
+  CodexCli,
+  codexArguments,
+  codexEnvironment,
+  removeCodexTranscript,
+} from '../../src/ai/codex-cli.ts';
 import { createProvider, providerCatalog } from '../../src/ai/providers.ts';
 const context = {
   goal: '합성 요청',
@@ -241,4 +248,57 @@ test('Codex 캐시 토큰(cached_input_tokens·cache_write_input_tokens)을 기�
     cacheCreationTokens: 0,
     subscriptionRemaining: null,
   });
+});
+
+// Session arguments (PLAN-24 T-061): the contract for when SPIKE ④ passes; conversations on
+// Codex run the ledger method until then, so a CodexCli without a session is unchanged.
+test('세션 인자: 기록을 남기고, resume은 exec resume <id>와 sandbox_mode 설정으로 간다', () => {
+  const id = '4d4d4d4d-4d4d-4d4d-8d4d-4d4d4d4d4d4d';
+  const opened = codexArguments('m', { id, resume: false });
+  assert.deepEqual(opened.slice(0, 2), ['exec', '--json']);
+  assert.ok(!opened.includes('--ephemeral'));
+  assert.equal(opened[opened.indexOf('--sandbox') + 1], 'read-only');
+  const resumed = codexArguments('m', { id, resume: true });
+  assert.deepEqual(resumed.slice(0, 4), ['exec', 'resume', id, '--json']);
+  assert.ok(!resumed.includes('--sandbox'));
+  assert.ok(resumed.includes('sandbox_mode="read-only"'));
+  assert.ok(!resumed.includes('--ephemeral'));
+  for (const args of [opened, resumed]) {
+    const instructions = args.find((value) => value.startsWith('developer_instructions='));
+    assert.ok(!/Do not invoke tools/.test(instructions));
+    assert.match(instructions, /turn-rules/);
+    for (const item of ['--ignore-user-config', '--ignore-rules', 'mcp_servers={}', 'shell_tool'])
+      assert.ok(args.includes(item));
+    assert.equal(args.at(-1), '-');
+  }
+  const cli = new CodexCli({
+    executable: process.execPath,
+    session: { id, resume: true },
+    effort: 'low',
+  });
+  const args = cli.arguments();
+  assert.equal(args[1], 'resume');
+  assert.ok(args.includes('model_reasoning_effort="low"'));
+});
+
+test('Codex 기록 삭제는 sessions/연/월/일 아래 그 세션의 rollout 파일만 지운다', async () => {
+  const home = await mkdtemp(join(tmpdir(), 'vide-codex-home-'));
+  try {
+    const id = '5e5e5e5e-5e5e-4e5e-8e5e-5e5e5e5e5e5e';
+    const day = join(home, 'sessions', '2026', '09', '30');
+    await mkdir(day, { recursive: true });
+    await writeFile(join(day, `rollout-2026-09-30T10-00-00-${id}.jsonl`), '{}\n');
+    await writeFile(
+      join(day, 'rollout-2026-09-30T11-00-00-6f6f6f6f-6f6f-4f6f-8f6f-6f6f6f6f6f6f.jsonl'),
+      '{}\n',
+    );
+    await writeFile(join(home, 'config.toml'), '');
+    assert.equal(await removeCodexTranscript(home, id), 1);
+    assert.equal((await readdir(day)).length, 1);
+    assert.equal(await removeCodexTranscript(home, id), 0);
+    assert.equal(await removeCodexTranscript(join(home, 'missing'), id), 0);
+    await assert.rejects(removeCodexTranscript(home, '../config'), { code: 'INVALID_SESSION' });
+  } finally {
+    await rm(home, { recursive: true, force: true });
+  }
 });

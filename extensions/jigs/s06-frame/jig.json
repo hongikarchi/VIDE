@@ -1,0 +1,640 @@
+{
+  "contractVersion": 3,
+  "id": "project/s06-frame",
+  "version": "0.1.0",
+  "kind": "tool",
+  "name": "S-06 골조 배치",
+  "summary": "연결한 모델에서 슬래브·기존 기초·유수지 보를 읽어 지금 그려진 배치를 진단하고, 경간 상한을 지키는 새 축선·기둥을 직교·엇갈림 두 후보로 만들어 파일캡·오픈컷·유수지 보 간섭을 판정하는 탐색용 도구. 실제 프로젝트 값은 작업본에만 둔다.",
+  "hosts": { "rhino": "optional" },
+  "uses": [{ "id": "vide/geometry-kit", "range": "^0.2.0" }],
+  "inputs": [
+    {
+      "key": "site",
+      "title": "입력 조립",
+      "kind": "assembly",
+      "roles": [
+        {
+          "role": "slab",
+          "title": "슬래브 경계",
+          "shape": "polygon",
+          "many": true,
+          "required": true,
+          "hints": {
+            "layers": ["*슬래브*", "*slab*", "*데크*", "*deck*"],
+            "words": ["슬래브", "slab"]
+          },
+          "extract": "rows"
+        },
+        {
+          "role": "voids",
+          "title": "보이드·설치 불가 영역",
+          "shape": "polygon",
+          "many": true,
+          "required": false,
+          "hints": {
+            "layers": ["*보이드*", "*void*", "*설치불가*", "*설치 불가*"],
+            "words": ["보이드", "개구", "void"]
+          },
+          "extract": "rows"
+        },
+        {
+          "role": "existingFootings",
+          "title": "기존 기초",
+          "shape": "footprint",
+          "many": true,
+          "required": true,
+          "hints": {
+            "layers": ["*기존*기초*", "*existing*footing*", "*EX*FOOT*", "*유수지*기둥*"],
+            "words": ["기존 기초", "existing"]
+          },
+          "extract": "rows"
+        },
+        {
+          "role": "basinGirders",
+          "title": "유수지 보",
+          "shape": "band",
+          "many": true,
+          "required": false,
+          "hints": {
+            "layers": ["*유수지*보*", "*basin*beam*", "*basin*girder*"],
+            "words": ["유수지 보", "basin"]
+          },
+          "extract": "rows"
+        },
+        {
+          "role": "existingGrid",
+          "title": "기존 그리드",
+          "shape": "line",
+          "many": true,
+          "required": false,
+          "hints": {
+            "layers": ["*그리드*", "*grid*", "*축선*"],
+            "words": ["그리드", "grid", "축선"]
+          },
+          "extract": "rows"
+        },
+        {
+          "role": "newEJ",
+          "title": "신설 E.J.",
+          "shape": "line",
+          "many": true,
+          "required": false,
+          "hints": {
+            "layers": ["*신설*E.J*", "*신설*EJ*", "*new*ej*"],
+            "words": ["신설 E.J", "신설 EJ"]
+          },
+          "extract": "rows"
+        },
+        {
+          "role": "existingEJ",
+          "title": "기존 E.J.",
+          "shape": "line",
+          "many": true,
+          "required": false,
+          "hints": {
+            "layers": ["*기존*E.J*", "*기존*EJ*", "*Exp.J*", "*existing*ej*"],
+            "words": ["기존 E.J", "Exp.J"]
+          },
+          "extract": "rows"
+        },
+        {
+          "role": "columns",
+          "title": "현재 배치 · 신설 기둥",
+          "shape": "line",
+          "many": true,
+          "required": false,
+          "hints": { "layers": ["*기둥*", "*column*"], "words": ["기둥", "column"] },
+          "extract": "rows"
+        },
+        {
+          "role": "girders",
+          "title": "현재 배치 · 거더",
+          "shape": "polyline",
+          "many": true,
+          "required": false,
+          "hints": { "layers": ["*거더*", "*girder*"], "words": ["거더", "girder"] },
+          "extract": "rows"
+        },
+        {
+          "role": "newFootings",
+          "title": "현재 배치 · 신설 기초",
+          "shape": "footprint",
+          "many": true,
+          "required": false,
+          "hints": {
+            "layers": ["*신설*기초*", "*파일캡*", "*pile*cap*", "*new*footing*"],
+            "words": ["신설 기초", "파일캡", "pile cap"]
+          },
+          "extract": "rows"
+        }
+      ]
+    },
+    {
+      "key": "fireRoute",
+      "title": "소방 동선(기둥 금지)",
+      "kind": "zone",
+      "shape": "polygon",
+      "meaning": "이 구역 안에는 기둥을 두지 않는다(결정 F2.9)",
+      "required": false
+    },
+    {
+      "key": "requestedZones",
+      "title": "구조사무소 요청 위치",
+      "kind": "zone",
+      "shape": "polygon",
+      "meaning": "이 영역마다 기둥이 하나 이상 있는지 판정한다",
+      "required": false
+    }
+  ],
+  "params": [
+    {
+      "key": "spanMax",
+      "title": "경간 상한",
+      "help": "거더 하나의 평면 길이 상한. 넘으면 '초과'로 판정한다(협의 구간 없음).",
+      "group": "배치",
+      "type": "length",
+      "unit": "m",
+      "display": { "unit": "m", "decimals": 1 },
+      "default": 12,
+      "range": { "min": 8, "max": 20, "step": 0.5 },
+      "words": { "more": ["넓게", "길게"], "less": ["촘촘히", "짧게"], "sign": 1 },
+      "basis": {
+        "status": "assumed",
+        "note": "일반 기본값. 프로젝트 값은 작업본에서 결정으로 둔다"
+      },
+      "affects": ["axes", "diagnose", "interference"],
+      "board": true
+    },
+    {
+      "key": "spanRule",
+      "title": "경간 적용 범위",
+      "group": "배치",
+      "type": "choice",
+      "default": "all",
+      "choices": [
+        {
+          "value": "all",
+          "label": "모든 거더(대각 포함)",
+          "consequence": "직교 격자의 칸 대각선도 상한 안"
+        },
+        { "value": "orthogonal", "label": "직교 간격만", "consequence": "대각 거더는 따로 판정" }
+      ],
+      "basis": { "status": "assumed", "note": "결정 D5" },
+      "affects": ["axes"]
+    },
+    {
+      "key": "layoutPattern",
+      "title": "배치 방식",
+      "group": "배치",
+      "type": "choice",
+      "default": "auto",
+      "choices": [
+        { "value": "auto", "label": "자동(목적이 좋은 후보)" },
+        { "value": "orthogonal", "label": "직교 격자" },
+        { "value": "staggered", "label": "엇갈림 격자" }
+      ],
+      "affects": ["axes"]
+    },
+    {
+      "key": "columnEdgeMin",
+      "title": "기둥과 슬래브 외곽 최소 거리",
+      "group": "배치",
+      "type": "length",
+      "unit": "m",
+      "display": { "unit": "m", "decimals": 2 },
+      "default": 0.5,
+      "range": { "min": 0, "max": 2, "step": 0.1 },
+      "basis": { "status": "assumed" },
+      "affects": ["axes"],
+      "board": true
+    },
+    {
+      "key": "cantileverMax",
+      "title": "바깥 축선에서 슬래브 끝까지 한도",
+      "group": "배치",
+      "type": "length",
+      "unit": "m",
+      "display": { "unit": "m", "decimals": 1 },
+      "default": 3.5,
+      "range": { "min": 2, "max": 5, "step": 0.1 },
+      "basis": { "status": "assumed", "note": "캔틸레버 한도" },
+      "affects": ["axes"]
+    },
+    {
+      "key": "gridAngleSource",
+      "title": "축 방향의 기준",
+      "group": "배치",
+      "type": "choice",
+      "default": "footings",
+      "choices": [
+        { "value": "footings", "label": "기존 기초의 회전" },
+        { "value": "grid", "label": "기존 그리드 선" },
+        { "value": "manual", "label": "설정값 각도" }
+      ],
+      "affects": ["assemble"]
+    },
+    {
+      "key": "gridAngle",
+      "title": "축 각도",
+      "group": "배치",
+      "type": "angle",
+      "unit": "deg",
+      "default": 0,
+      "range": { "min": -45, "max": 45, "step": 0.5 },
+      "affects": ["assemble"]
+    },
+    {
+      "key": "missingReach",
+      "title": "그리드 교점의 기초 탐색 거리",
+      "help": "기존 그리드 교점에서 이 거리 안에 기존 기초가 없으면 '모델 누락 가능'으로 표시한다.",
+      "group": "배치",
+      "type": "length",
+      "unit": "m",
+      "display": { "unit": "m", "decimals": 1 },
+      "default": 1,
+      "range": { "min": 0, "max": 3, "step": 0.1 },
+      "affects": ["assemble"]
+    },
+    {
+      "key": "capSize",
+      "title": "파일캡 한 변",
+      "group": "기초",
+      "type": "length",
+      "unit": "m",
+      "display": { "unit": "m", "decimals": 1 },
+      "default": 2,
+      "range": { "min": 1.5, "max": 3, "step": 0.1 },
+      "words": { "more": ["크게"], "less": ["작게"], "sign": 1 },
+      "basis": { "status": "assumed", "note": "모델 블록 값은 작업본에서" },
+      "affects": ["axes", "footprints", "interference"],
+      "board": true
+    },
+    {
+      "key": "openCutOffset",
+      "title": "오픈컷 여유",
+      "help": "파일캡 둘레로 더하는 오픈컷 폭. 오픈컷 한 변 = 파일캡 + 2 × 여유.",
+      "group": "기초",
+      "type": "length",
+      "unit": "m",
+      "display": { "unit": "m", "decimals": 1 },
+      "default": 0.8,
+      "range": { "min": 0, "max": 1.5, "step": 0.1 },
+      "affects": ["axes", "footprints"]
+    },
+    {
+      "key": "capClearance",
+      "title": "파일캡 추가 여유",
+      "help": "기존 기초와 이 거리보다 가까우면 '불가'. 0이면 겹칠 때만 불가.",
+      "group": "기초",
+      "type": "length",
+      "unit": "m",
+      "display": { "unit": "m", "decimals": 2 },
+      "default": 0.2,
+      "range": { "min": 0, "max": 1, "step": 0.05 },
+      "basis": { "status": "assumed", "note": "위치 불확실·시공 오차" },
+      "affects": ["axes", "diagnose", "interference"],
+      "board": true
+    },
+    {
+      "key": "openCutRule",
+      "title": "오픈컷↔기존 기초",
+      "group": "기초",
+      "type": "choice",
+      "default": "consult",
+      "choices": [
+        { "value": "consult", "label": "협의(토목 협의 목록)" },
+        { "value": "forbid", "label": "불가" }
+      ],
+      "basis": { "status": "assumed", "note": "결정 D6" },
+      "affects": ["diagnose", "interference"]
+    },
+    {
+      "key": "nudgeMax",
+      "title": "비켜 두기 한도",
+      "group": "기초",
+      "type": "length",
+      "unit": "m",
+      "display": { "unit": "m", "decimals": 1 },
+      "default": 0.6,
+      "range": { "min": 0, "max": 1.5, "step": 0.1 },
+      "affects": ["interference"]
+    },
+    {
+      "key": "columnSize",
+      "title": "기둥 단면(정사각)",
+      "group": "기둥",
+      "type": "length",
+      "unit": "m",
+      "display": { "unit": "mm", "decimals": 0 },
+      "default": 0.5,
+      "range": { "min": 0.3, "max": 1.2, "step": 0.05 },
+      "affects": ["columns", "footprints", "diagnose", "interference"]
+    },
+    {
+      "key": "heightStep",
+      "title": "기둥 길이 맞춤 단위",
+      "help": "기둥 길이를 이 단위의 정수배로 내린다. 차이는 받침 높이 표에 보인다.",
+      "group": "기둥",
+      "type": "length",
+      "unit": "m",
+      "display": { "unit": "m", "decimals": 1 },
+      "default": 1,
+      "range": { "min": 0.1, "max": 2, "step": 0.1 },
+      "basis": { "status": "assumed", "note": "결정 F2.6은 작업본에서 결정으로" },
+      "affects": ["columns"]
+    },
+    {
+      "key": "depthMax",
+      "title": "보 춤 상한",
+      "help": "단면 선정 전에는 거더 하단을 상단 − 이 값으로 잡는다.",
+      "group": "기둥",
+      "type": "length",
+      "unit": "m",
+      "display": { "unit": "mm", "decimals": 0 },
+      "default": 0.9,
+      "range": { "min": 0.6, "max": 1.2, "step": 0.05 },
+      "affects": ["columns"]
+    },
+    {
+      "key": "baseSource",
+      "title": "기둥 하단의 기준",
+      "group": "기둥",
+      "type": "choice",
+      "default": "footings",
+      "choices": [
+        { "value": "footings", "label": "기존 기초 상단(모델)" },
+        { "value": "manual", "label": "설정값 레벨" }
+      ],
+      "affects": ["columns"]
+    },
+    {
+      "key": "baseLevel",
+      "title": "기둥 하단 레벨",
+      "group": "기둥",
+      "type": "level",
+      "unit": "EL",
+      "default": 0,
+      "range": { "min": -50, "max": 50, "step": 0.01 },
+      "affects": ["columns"]
+    },
+    {
+      "key": "topSource",
+      "title": "거더 상단의 기준",
+      "group": "기둥",
+      "type": "choice",
+      "default": "slab",
+      "choices": [
+        { "value": "slab", "label": "슬래브 하면(모델)" },
+        { "value": "manual", "label": "설정값 레벨" }
+      ],
+      "basis": { "status": "assumed", "note": "결정 D4" },
+      "affects": ["columns"]
+    },
+    {
+      "key": "girderTopLevel",
+      "title": "거더 상단 레벨",
+      "group": "기둥",
+      "type": "level",
+      "unit": "EL",
+      "default": 6,
+      "range": { "min": -50, "max": 100, "step": 0.01 },
+      "affects": ["columns"]
+    },
+    {
+      "key": "ejDetail",
+      "title": "신설 E.J. 기둥 상세",
+      "group": "기둥",
+      "type": "choice",
+      "default": "twin",
+      "choices": [
+        { "value": "twin", "label": "쌍기둥 + 공통 파일캡" },
+        { "value": "single", "label": "한 기둥 + 미끄럼 받침" }
+      ],
+      "basis": { "status": "assumed", "note": "결정 F2.11·D8" },
+      "affects": ["columns", "footprints"]
+    },
+    {
+      "key": "ejWidth",
+      "title": "E.J. 폭",
+      "group": "기둥",
+      "type": "length",
+      "unit": "m",
+      "display": { "unit": "mm", "decimals": 0 },
+      "default": 0.6,
+      "range": { "min": 0.3, "max": 1, "step": 0.05 },
+      "basis": { "status": "assumed" },
+      "affects": ["columns", "footprints"]
+    },
+    {
+      "key": "splitTol",
+      "title": "기둥 위 끊기 허용오차",
+      "help": "진단에서 거더 곡선을 끊을 기둥 상단점의 평면 거리.",
+      "group": "진단",
+      "type": "length",
+      "unit": "m",
+      "display": { "unit": "m", "decimals": 1 },
+      "default": 0.3,
+      "range": { "min": 0, "max": 1, "step": 0.1 },
+      "affects": ["diagnose"]
+    }
+  ],
+  "steps": [
+    {
+      "id": "assemble",
+      "title": "입력 조립",
+      "kind": "code",
+      "entry": "steps/assemble.ts#assemble",
+      "reads": [
+        "input.site",
+        "input.fireRoute",
+        "input.requestedZones",
+        "param.gridAngleSource",
+        "param.gridAngle",
+        "param.missingReach"
+      ],
+      "writes": "assemble",
+      "speed": "release",
+      "gates": [
+        { "use": "inputs-present" },
+        { "use": "stale-input" },
+        { "use": "inputs-confirmed", "level": "warn" },
+        { "use": "no-nan" }
+      ],
+      "budget": { "wallClockMs": 5000 }
+    },
+    {
+      "id": "confirmInputs",
+      "title": "입력 확인",
+      "kind": "human",
+      "slot": "confirm-inputs",
+      "reads": ["input.site"],
+      "writes": "confirmation",
+      "speed": "confirm",
+      "blocks": [],
+      "gates": [{ "use": "inputs-confirmed", "level": "warn" }]
+    },
+    {
+      "id": "diagnose",
+      "title": "진단 · 지금 그려진 배치",
+      "kind": "code",
+      "entry": "steps/diagnose-step.ts#diagnoseStep",
+      "reads": [
+        "input.site.columns",
+        "input.site.girders",
+        "input.site.newFootings",
+        "input.site.existingFootings",
+        "input.site.basinGirders",
+        "param.spanMax",
+        "param.splitTol",
+        "param.columnSize",
+        "param.capClearance",
+        "param.openCutRule"
+      ],
+      "writes": "diagnose",
+      "speed": "release",
+      "gates": [
+        { "use": "inputs-present" },
+        { "use": "stale-input" },
+        { "use": "no-nan" },
+        { "use": "ids-stable", "args": { "items": "tables.interference", "key": "key" } }
+      ],
+      "budget": { "wallClockMs": 5000 }
+    },
+    {
+      "id": "axes",
+      "title": "축선·배치",
+      "kind": "code",
+      "entry": "steps/axes.ts#axes",
+      "needs": ["assemble"],
+      "reads": [
+        "step.assemble",
+        "input.site.slab",
+        "input.site.voids",
+        "input.site.existingFootings",
+        "input.site.basinGirders",
+        "input.fireRoute",
+        "param.spanMax",
+        "param.spanRule",
+        "param.layoutPattern",
+        "param.capSize",
+        "param.openCutOffset",
+        "param.capClearance",
+        "param.columnEdgeMin",
+        "param.cantileverMax"
+      ],
+      "writes": "axes",
+      "speed": "release",
+      "gates": [
+        { "use": "inputs-present" },
+        { "use": "non-empty", "args": { "items": "axes" } },
+        { "use": "no-nan" },
+        { "use": "ids-stable", "args": { "items": "points", "key": "key" } },
+        {
+          "use": "span-max",
+          "args": { "items": "spans", "key": "key", "field": "length", "param": "spanMax" }
+        }
+      ],
+      "budget": { "wallClockMs": 10000 }
+    },
+    {
+      "id": "columns",
+      "title": "기둥",
+      "kind": "code",
+      "entry": "steps/columns.ts#columns",
+      "reads": [
+        "step.axes",
+        "step.assemble",
+        "input.site.slab",
+        "input.fireRoute",
+        "input.requestedZones",
+        "param.columnSize",
+        "param.heightStep",
+        "param.depthMax",
+        "param.baseSource",
+        "param.baseLevel",
+        "param.topSource",
+        "param.girderTopLevel",
+        "param.ejDetail",
+        "param.ejWidth"
+      ],
+      "writes": "columns",
+      "speed": "release",
+      "gates": [
+        { "use": "non-empty", "args": { "items": "columns" } },
+        { "use": "no-nan" },
+        { "use": "ids-stable", "args": { "items": "columns", "key": "key" } },
+        {
+          "use": "inside-boundary",
+          "level": "isolate",
+          "args": {
+            "items": "columns",
+            "key": "key",
+            "field": "at",
+            "boundary": "output.site.polygon"
+          }
+        }
+      ],
+      "budget": { "wallClockMs": 5000 }
+    },
+    {
+      "id": "footprints",
+      "title": "기초 발자국",
+      "kind": "code",
+      "entry": "steps/footprints.ts#footprints",
+      "reads": [
+        "step.columns",
+        "step.assemble",
+        "input.site.existingFootings",
+        "input.site.basinGirders",
+        "param.capSize",
+        "param.openCutOffset",
+        "param.ejWidth",
+        "param.columnSize"
+      ],
+      "writes": "footprints",
+      "speed": "release",
+      "gates": [
+        { "use": "no-nan" },
+        { "use": "polygon-valid", "args": { "items": "caps", "key": "key", "field": "polygon" } }
+      ],
+      "budget": { "wallClockMs": 5000 }
+    },
+    {
+      "id": "interference",
+      "title": "기초 간섭",
+      "kind": "code",
+      "entry": "steps/interference.ts#interference",
+      "reads": [
+        "step.columns",
+        "step.footprints",
+        "step.axes",
+        "step.assemble",
+        "input.site.existingFootings",
+        "input.site.basinGirders",
+        "param.spanMax",
+        "param.columnSize",
+        "param.capClearance",
+        "param.openCutRule",
+        "param.nudgeMax",
+        "param.capSize"
+      ],
+      "writes": "interference",
+      "speed": "release",
+      "gates": [
+        { "use": "inputs-confirmed", "level": "warn" },
+        { "use": "no-nan" },
+        { "use": "ids-stable", "args": { "items": "tables.interference", "key": "key" } }
+      ],
+      "budget": { "wallClockMs": 5000 }
+    }
+  ],
+  "panel": "panel.json",
+  "capabilities": [
+    {
+      "name": "sync.read",
+      "reason": "슬래브·기존 기초·유수지 보·그리드·E.J.·현재 배치 레이어를 읽습니다"
+    }
+  ],
+  "selftest": { "fixtures": "fixtures", "requiresHost": false },
+  "skill": "skill.md"
+}

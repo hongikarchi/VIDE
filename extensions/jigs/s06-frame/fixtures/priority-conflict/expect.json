@@ -1,0 +1,13 @@
+{
+  "steps": {
+    "axes": {
+      "objective": {
+        "spanOver": 0
+      },
+      "relaxed": ["openCut", "cap"]
+    }
+  },
+  "statuses": {
+    "confirmInputs": "confirmed"
+  }
+}

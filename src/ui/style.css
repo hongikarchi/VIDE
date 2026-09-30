@@ -258,11 +258,22 @@ aside {
   color: var(--muted);
   line-height: 1.8;
 }
+/* Centre column: tab row, jig strip over the 3D view, the 3D view, inspector or jig drawer. The
+   jig panel of a context tab takes a first column (see "Workspace tabs" below). */
 .workspace {
   min-width: 0;
   min-height: 0;
   display: grid;
-  grid-template-rows: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+}
+.workspace > .viewport-area {
+  grid-row: 3;
+  grid-column: -2;
+}
+.workspace > #inspector {
+  grid-row: 4;
+  grid-column: -2;
 }
 .viewport-area {
   position: relative;
@@ -2910,22 +2921,119 @@ body.panel-mode #conversation {
   color: var(--ink, #292c2d);
 }
 
-/* JIG tab: jig gallery and the Sync jig. The panel is docked beside the 3D view and non-modal
-   (T-041): the viewport shrinks to the remaining width and stays usable. */
-.workspace.jig-open {
-  grid-template-columns: minmax(0, 1fr) var(--jig-width, clamp(360px, 50%, 720px));
+/* Workspace tabs (T-047, Design §03 작업공간 탭): a 32 px row over the centre column only; the
+   conversation column keeps its place. Below 900 px the row is one menu. */
+.workspace > .workspace-tabs {
+  grid-row: 1;
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: stretch;
+  height: 32px;
+  min-width: 0;
+  background: white;
+  border-bottom: 1px solid var(--line);
 }
-.workspace.jig-open.jig-collapsed {
-  grid-template-columns: minmax(0, 1fr) 36px;
+.workspace > .workspace-tabs:empty {
+  display: none;
 }
-.workspace.jig-open > .viewport-area,
-.workspace.jig-open > #inspector {
-  grid-column: 1;
+.workspace-tablist {
+  display: flex;
+  align-items: stretch;
+  gap: 2px;
+  min-width: 0;
+  padding: 0 8px;
+  overflow-x: auto;
+  scrollbar-width: none;
 }
+.workspace-tablist [role='tab'] {
+  flex-shrink: 0;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  padding: 0 10px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.workspace-tablist [role='tab'][aria-selected='true'] {
+  color: #292c2d;
+  font-weight: 600;
+  border-bottom-color: var(--coral);
+}
+.workspace-tablist [role='tab'][aria-disabled='true'] {
+  opacity: 0.45;
+  cursor: default;
+  background: transparent;
+}
+.workspace-tabs-rule {
+  flex-shrink: 0;
+  width: 1px;
+  margin: 7px 6px;
+  background: var(--line);
+}
+.workspace-context-tab {
+  display: flex;
+  align-items: stretch;
+  flex-shrink: 1;
+  min-width: 72px;
+  max-width: 220px;
+}
+.workspace-context-tab [role='tab'] {
+  flex-shrink: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding-right: 4px;
+}
+.workspace-tab-close {
+  align-self: center;
+  flex-shrink: 0;
+  border: 0;
+  padding: 2px 6px;
+  font-size: 14px;
+  line-height: 1;
+  color: var(--muted);
+}
+.workspace-context-tab:not([data-active]) .workspace-tab-close {
+  opacity: 0.45;
+}
+.workspace-context-tab:hover .workspace-tab-close,
+.workspace-tab-close:focus-visible {
+  opacity: 1;
+}
+.workspace-menu {
+  display: none;
+}
+@media (max-width: 899.98px) {
+  .workspace-tablist {
+    display: none;
+  }
+  .workspace-menu {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    width: 100%;
+    padding: 0 8px;
+  }
+  .workspace-menu select {
+    flex: 1;
+    max-width: 320px;
+    padding: 3px 6px;
+    border: 1px solid var(--line);
+    border-radius: 5px;
+    background: white;
+    font-weight: 600;
+  }
+}
+
+/* The jig panel: non-modal (T-041) and shaped by the tab (T-047). On the JIG tab it holds the list
+   over the whole centre. On a jig's context tab it docks left of the 3D view (SCR-13's left
+   column), which keeps the remaining width and stays usable; the jig's strip above the 3D view and
+   its drawer (in the inspector's place) show while they have content. The document panel gives
+   its room to the jig tabs. */
 .workspace > .jig-dialog {
   position: relative;
-  grid-column: 2;
-  grid-row: 1 / -1;
+  grid-column: 1;
+  grid-row: 2 / -1;
   z-index: 10;
   inset: auto;
   width: auto;
@@ -2936,11 +3044,78 @@ body.panel-mode #conversation {
   min-height: 0;
   margin: 0;
   border: 0;
-  border-left: 1px solid var(--line);
   border-radius: 0;
   padding: 0 16px 16px;
   overflow: auto;
   background: white;
+}
+body[data-workspace='jig'] .workspace > .viewport-area,
+body[data-workspace='jig'] .workspace > #inspector {
+  display: none;
+}
+body[data-workspace='jig'] .workspace > .jig-dialog {
+  grid-column: 1 / -1;
+  padding: 0;
+}
+body[data-workspace='context'] .workspace {
+  grid-template-columns: var(--jig-width, clamp(360px, 46%, 640px)) minmax(0, 1fr);
+}
+body[data-workspace='context'] .workspace.jig-collapsed {
+  grid-template-columns: 36px minmax(0, 1fr);
+}
+body[data-workspace='context'] .workspace > .jig-dialog {
+  border-right: 1px solid var(--line);
+}
+.workspace > .jig-top {
+  grid-row: 2;
+  grid-column: -2;
+  min-width: 0;
+  background: white;
+  border-bottom: 1px solid var(--line);
+}
+.workspace > .jig-drawer {
+  grid-row: 4;
+  grid-column: -2;
+  min-width: 0;
+  max-height: 40vh;
+  overflow: auto;
+  background: white;
+  border-top: 1px solid var(--line);
+}
+.viewport-area > .jig-board {
+  position: absolute;
+  z-index: 6;
+  top: 12px;
+  left: 58px;
+  width: 240px;
+  max-height: calc(100% - 24px);
+  overflow: auto;
+}
+.workspace > .jig-top:empty,
+.workspace > .jig-drawer:empty,
+.viewport-area > .jig-board:empty {
+  display: none;
+}
+.workspace:has(> .jig-drawer:not([hidden]):not(:empty)) > #inspector {
+  display: none;
+}
+@media (min-width: 851px) {
+  body[data-workspace='jig'] #left,
+  body[data-workspace='context'] #left,
+  body[data-workspace='jig'] #toggle-left,
+  body[data-workspace='context'] #toggle-left,
+  body[data-workspace='jig'] .panel-resize-left,
+  body[data-workspace='context'] .panel-resize-left {
+    display: none;
+  }
+  body[data-workspace='jig'] main,
+  body[data-workspace='context'] main {
+    grid-template-columns: minmax(260px, 1fr) var(--right-width, 370px);
+  }
+  body[data-workspace='jig'].right-hidden main,
+  body[data-workspace='context'].right-hidden main {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 .jig-dialog > .quantity-head {
   position: sticky;
@@ -2967,15 +3142,15 @@ body.panel-mode #conversation {
   color: var(--muted);
 }
 @media (max-width: 850px) {
-  .workspace.jig-open,
-  .workspace.jig-open.jig-collapsed {
+  body[data-workspace='context'] .workspace,
+  body[data-workspace='context'] .workspace.jig-collapsed {
     grid-template-columns: minmax(0, 1fr);
   }
-  .workspace > .jig-dialog {
+  body[data-workspace='context'] .workspace > .jig-dialog {
     position: absolute;
     inset: auto 0 0 0;
     height: 62%;
-    border-left: 0;
+    border-right: 0;
     border-top: 1px solid var(--line);
   }
   .workspace > .jig-dialog[data-collapsed] {
@@ -2986,6 +3161,151 @@ body.panel-mode #conversation {
     align-items: center;
     padding: 0 12px;
   }
+}
+
+/* JIG list (SCR-18): source filter on the left, jig cards with their instances. */
+.jig-gallery {
+  display: grid;
+  grid-template-columns: 188px minmax(0, 1fr);
+  min-height: 100%;
+}
+.jig-sources {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 14px 10px;
+  background: var(--soft);
+  border-right: 1px solid var(--line);
+}
+.jig-sources button {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  border: 0;
+  text-align: left;
+}
+.jig-sources button[aria-pressed='true'] {
+  background: #f6e4df;
+  color: #8c4a39;
+  font-weight: 600;
+}
+.jig-gallery-main {
+  min-width: 0;
+  padding: 12px 18px 18px;
+}
+.jig-instances {
+  list-style: none;
+  margin: 2px 0 0;
+  padding: 0;
+  border-top: 1px solid var(--line);
+}
+.jig-instances li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 0;
+  border-bottom: 1px solid var(--line);
+}
+.jig-instances li span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.jig-card .jig-instances button,
+.jig-card .jig-new button {
+  align-self: center;
+  margin: 0;
+}
+.jig-new {
+  display: grid;
+  gap: 6px;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--soft);
+}
+.jig-new label {
+  display: grid;
+  gap: 3px;
+  font-size: 11px;
+  color: var(--muted);
+}
+.jig-new input {
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  padding: 5px 7px;
+  background: white;
+  color: #292c2d;
+}
+@media (max-width: 640px) {
+  .jig-gallery {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .jig-sources {
+    flex-direction: row;
+    flex-wrap: wrap;
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+  }
+}
+
+/* A jig instance before its declarative panel draws it: steps and settings. */
+.jig-steps {
+  list-style: none;
+  margin: 12px 0;
+  padding: 0;
+  border-top: 1px solid var(--line);
+}
+.jig-steps li {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  gap: 6px;
+  padding: 7px 0;
+  border-bottom: 1px solid var(--line);
+}
+.jig-steps small {
+  display: block;
+}
+.jig-steps p {
+  margin: 3px 0 0;
+  color: var(--ng);
+}
+.jig-steps [data-status='done'] .jig-step-mark,
+.jig-steps [data-status='confirmed'] .jig-step-mark {
+  color: var(--ok);
+}
+.jig-steps [data-status='failed'] .jig-step-mark,
+.jig-steps [data-status='gate-failed'] .jig-step-mark,
+.jig-steps [data-status='blocked'] .jig-step-mark {
+  color: var(--ng);
+}
+.jig-param-group {
+  margin: 0 0 10px;
+  padding: 6px 10px 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+.jig-param-group legend {
+  padding: 0 4px;
+  font-weight: 600;
+}
+.jig-param {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 96px minmax(64px, auto);
+  align-items: center;
+  gap: 8px;
+  padding: 3px 0;
+}
+.jig-param input:not([type='checkbox']),
+.jig-param select {
+  width: 100%;
+  padding: 4px 6px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: white;
+  font-variant-numeric: tabular-nums;
 }
 .jig-intro {
   color: var(--muted);

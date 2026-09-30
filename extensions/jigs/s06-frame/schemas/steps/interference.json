@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["schema", "params", "summary", "tables", "fills", "missing", "bands"],
+  "properties": {
+    "schema": { "const": "vide.s06.interference/1" },
+    "tables": {
+      "type": "object",
+      "required": ["interference", "spans", "nudges", "ejCross", "review"],
+      "properties": {
+        "interference": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["key", "verdict", "judgement", "cap", "openCut", "basin"]
+          }
+        },
+        "nudges": {
+          "type": "array",
+          "items": { "type": "object", "required": ["key", "column", "to", "judgement", "text"] }
+        }
+      }
+    }
+  }
+}

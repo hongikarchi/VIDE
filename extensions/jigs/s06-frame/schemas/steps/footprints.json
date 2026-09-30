@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["schema", "caps", "openCuts", "existing", "basin", "definitions"],
+  "properties": {
+    "schema": { "const": "vide.s06.footprints/1" },
+    "caps": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["key", "columns", "kind", "polygon", "points", "z"]
+      }
+    },
+    "definitions": { "type": "object" }
+  }
+}

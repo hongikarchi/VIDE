@@ -2,14 +2,21 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
 import { PassThrough } from 'node:stream';
-import { resolve } from 'node:path';
+import { join, resolve } from 'node:path';
+import { tmpdir } from 'node:os';
+import { existsSync } from 'node:fs';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import {
   ClaudeCli,
   buildPacket,
+  cliArguments,
   subscriptionEnvironment,
   compareVersions,
+  removeClaudeTranscript,
+  sessionArguments,
   supportedCliVersion,
 } from '../../src/ai/claude-cli.ts';
+import { neutralInstruction } from '../../src/ai/agent-connection.ts';
 
 const context = () => ({
   goal: '선택 자료를 설명',
@@ -296,4 +303,157 @@ test('캐시 읽기·생성 토큰을 사용량에 기록한다', async () => {
   }).run(context());
   assert.equal(unknown.usage.cacheReadTokens, null);
   assert.equal(unknown.usage.cacheCreationTokens, null);
+});
+
+// Conversation sessions (PLAN-24 T-061, ARCH-01 §2): one run per turn on one transcript.
+test('세션 인자: 첫 턴 --session-id, 이후 --resume, 기록 끄기만 빼고 격리 인자는 그대로', () => {
+  const id = '0f0f0f0f-0f0f-4f0f-8f0f-0f0f0f0f0f0f';
+  const opened = sessionArguments(cliArguments(), { id, resume: false });
+  const resumed = sessionArguments(cliArguments(), { id, resume: true });
+  for (const args of [opened, resumed]) {
+    assert.ok(!args.includes('--no-session-persistence'));
+    assert.equal(args[args.indexOf('--system-prompt-snapshot') + 1], 'off');
+    assert.equal(args[args.indexOf('--system-prompt') + 1], neutralInstruction);
+    for (const flag of [
+      '--safe-mode',
+      '--strict-mcp-config',
+      '--setting-sources',
+      '--permission-mode',
+    ])
+      assert.ok(args.includes(flag));
+  }
+  assert.equal(opened[opened.indexOf('--session-id') + 1], id);
+  assert.ok(!opened.includes('--resume'));
+  assert.equal(resumed[resumed.indexOf('--resume') + 1], id);
+  assert.ok(!resumed.includes('--session-id'));
+  assert.throws(() => sessionArguments(cliArguments(), { id: '../x', resume: true }));
+  assert.throws(
+    () => new ClaudeCli({ executable: process.execPath, session: { id: 'x', resume: false } }),
+    { code: 'INVALID_SESSION' },
+  );
+});
+
+test('세션 턴은 중립 프롬프트를 쓰고 이번 턴 규칙을 자료로 보낸다(도구 없는 턴·도구 있는 턴)', async () => {
+  const id = '1a1a1a1a-1a1a-4a1a-8a1a-1a1a1a1a1a1a';
+  const plain = transport([init, result]);
+  await new ClaudeCli({
+    executable: process.execPath,
+    spawnProcess: plain.spawnProcess,
+    session: { id, resume: false },
+  }).run(context());
+  const run = plain.calls.find((entry) => entry.args[0] === '-p');
+  const packet = JSON.parse(run.input);
+  assert.deepEqual(
+    packet.items.map((item) => item.id),
+    ['turn-rules', 'a'],
+  );
+  assert.match(packet.items[0].data, /No tools are available in this turn/);
+  assert.equal(run.args[run.args.indexOf('--system-prompt') + 1], neutralInstruction);
+  const connection = {
+    url: 'http://127.0.0.1:4000/mcp',
+    token: 'a'.repeat(64),
+    tools: ['query', 'execute'],
+  };
+  const tools = transport([
+    {
+      ...init,
+      tools: ['mcp__vide__query', 'mcp__vide__execute'],
+      mcp_servers: [{ name: 'vide', status: 'connected' }],
+    },
+    result,
+  ]);
+  await new ClaudeCli({
+    executable: process.execPath,
+    spawnProcess: tools.spawnProcess,
+    agent: connection,
+    session: { id, resume: true },
+  }).run(context());
+  const toolRun = tools.calls.find((entry) => entry.args[0] === '-p');
+  assert.ok(toolRun.args.includes('--restricted'));
+  assert.equal(toolRun.args[toolRun.args.indexOf('--resume') + 1], id);
+  assert.equal(toolRun.args[toolRun.args.indexOf('--system-prompt') + 1], neutralInstruction);
+  assert.equal(
+    toolRun.args[toolRun.args.indexOf('--allowedTools') + 1],
+    'mcp__vide__query,mcp__vide__execute',
+  );
+  assert.match(
+    JSON.parse(toolRun.input).items[0].data,
+    /Available tools: the vide MCP tools query, execute/,
+  );
+  // Without a session the single-run prompts stay as they were.
+  const single = transport([init, result]);
+  await new ClaudeCli({ executable: process.execPath, spawnProcess: single.spawnProcess }).run(
+    context(),
+  );
+  const singleRun = single.calls.find((entry) => entry.args[0] === '-p');
+  assert.match(singleRun.args[singleRun.args.indexOf('--system-prompt') + 1], /Do not use tools/);
+  assert.equal(
+    JSON.parse(singleRun.input).items.find((item) => item.id === 'turn-rules'),
+    undefined,
+  );
+});
+
+test('이어 실행에서 기록이 없으면(No conversation found) SESSION_LOST, 첫 턴이나 단발은 PROVIDER_FAILED', async () => {
+  const lost = (session) => {
+    const spawnProcess = (executable, args) => {
+      const child = new EventEmitter();
+      child.stdin = new PassThrough();
+      child.stdout = new PassThrough();
+      child.stderr = new PassThrough();
+      child.exitCode = null;
+      child.signalCode = null;
+      child.unref = () => {};
+      const close = (code) => {
+        child.exitCode = code;
+        child.emit('exit', code);
+        child.emit('close', code);
+      };
+      if (args[0] === '--version')
+        queueMicrotask(() => {
+          child.stdout.write('2.1.284 (Claude Code)\n');
+          close(0);
+        });
+      else if (args[0] === 'auth')
+        queueMicrotask(() => {
+          child.stdout.write(JSON.stringify({ loggedIn: true, authMethod: 'claude.ai' }));
+          close(0);
+        });
+      else
+        child.stdin.on('finish', () => {
+          child.stderr.write(
+            'No conversation found with session ID: 1a1a1a1a-1a1a-4a1a-8a1a-1a1a1a1a1a1a\n',
+          );
+          setTimeout(() => close(1), 5);
+        });
+      return child;
+    };
+    return new ClaudeCli({ executable: process.execPath, spawnProcess, session }).run(context());
+  };
+  const id = '1a1a1a1a-1a1a-4a1a-8a1a-1a1a1a1a1a1a';
+  await assert.rejects(lost({ id, resume: true }), { code: 'SESSION_LOST' });
+  await assert.rejects(lost({ id, resume: false }), { code: 'PROVIDER_FAILED' });
+  await assert.rejects(lost(undefined), { code: 'PROVIDER_FAILED' });
+});
+
+test('기록 삭제는 그 세션의 파일과 비게 된 프로젝트 폴더만 지운다', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'vide-claude-profile-'));
+  try {
+    const id = '2b2b2b2b-2b2b-4b2b-8b2b-2b2b2b2b2b2b';
+    const other = '3c3c3c3c-3c3c-4c3c-8c3c-3c3c3c3c3c3c';
+    await mkdir(join(root, 'projects', 'C--tmp-one'), { recursive: true });
+    await mkdir(join(root, 'projects', 'C--tmp-two'), { recursive: true });
+    await writeFile(join(root, 'projects', 'C--tmp-one', id + '.jsonl'), '{}\n');
+    await writeFile(join(root, 'projects', 'C--tmp-two', id + '.jsonl'), '{}\n');
+    await writeFile(join(root, 'projects', 'C--tmp-two', other + '.jsonl'), '{}\n');
+    await writeFile(join(root, 'settings.json'), '{}');
+    assert.equal(await removeClaudeTranscript(root, id), 2);
+    assert.ok(!existsSync(join(root, 'projects', 'C--tmp-one')));
+    assert.ok(existsSync(join(root, 'projects', 'C--tmp-two', other + '.jsonl')));
+    assert.ok(existsSync(join(root, 'settings.json')));
+    assert.equal(await removeClaudeTranscript(root, id), 0);
+    assert.equal(await removeClaudeTranscript(join(root, 'missing'), id), 0);
+    await assert.rejects(removeClaudeTranscript(root, '../settings'));
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
 });

@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["schema", "roles", "frame", "existing", "notes"],
+  "properties": {
+    "schema": { "const": "vide.s06.assemble/1" },
+    "roles": {
+      "type": "array",
+      "items": { "type": "object", "required": ["role", "title", "present", "count"] }
+    },
+    "frame": { "type": "object", "required": ["origin", "angleDeg", "u", "v", "source"] },
+    "existing": { "type": "object", "required": ["count", "readable"] },
+    "possibleMissing": { "type": "array" },
+    "notes": { "type": "array", "items": { "type": "string" } }
+  }
+}

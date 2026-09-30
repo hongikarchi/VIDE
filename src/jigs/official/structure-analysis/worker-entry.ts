@@ -6,10 +6,11 @@ import { runAnalysis, type AnalyzeOptions } from './run.ts';
 import type { MemberMap } from './frame-plan.ts';
 import type { StructureModelInput } from '../../../contracts/structure-model.ts';
 
-interface Request {
+export interface WorkerRequest {
   id: number;
   payload: { input: StructureModelInput; map?: MemberMap; options: AnalyzeOptions };
 }
+type Request = WorkerRequest;
 
 const geometryCache = new Map<string, string>();
 const port = parentPort;

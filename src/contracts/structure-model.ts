@@ -516,3 +516,97 @@ export const structureSummarySchema = z
   .strict();
 
 export type StructureSummary = z.infer<typeof structureSummarySchema>;
+
+// Marks and the schedule (`vide.structure.marks/1`, `vide.structure.schedule/1`, ARCH-02 §4.3–4.4,
+// SPEC-06.12). The mark ledger is what a jig record keeps between recalculations so that the same
+// member keeps the same mark; the schedule is one row per mark.
+
+const markText = z.string().regex(/^[A-Za-z0-9_-]{1,40}$/);
+export const markLedgerSchema = z
+  .object({
+    schema: z.literal('vide.structure.marks/1'),
+    rule: z
+      .object({
+        projectPrefix: z.string().regex(/^[A-Za-z0-9_-]{0,20}$/),
+        /** Plan tag or role → prefix (SC, SG, SB, SEG, SCB, STB). Assumed until the standard is checked. */
+        prefixes: z.record(z.string(), z.string().regex(/^[A-Za-z0-9_-]{1,10}$/)),
+        assumed: z.boolean(),
+      })
+      .strict(),
+    /** mark → what it stands for. One mark points at one group only (gate `mark-unique`). */
+    groups: z.record(
+      markText,
+      z
+        .object({
+          prefix: z.string(),
+          role: memberRole,
+          tag: z.string().optional(),
+          section: z.string(),
+          curved: z.boolean(),
+          radius_m: finite.optional(),
+          rise_m: finite.optional(),
+        })
+        .strict(),
+    ),
+    /** design member id → mark. */
+    members: z.record(z.string(), markText),
+    /** design member id → chord ends, for split/merge correspondence after a recalculation. */
+    chords: z.record(z.string(), z.tuple([xyz, xyz])),
+    /** Highest number issued per prefix; numbers are never reused. */
+    next: z.record(z.string(), z.number().int().nonnegative()),
+  })
+  .strict();
+
+export type MarkLedger = z.infer<typeof markLedgerSchema>;
+
+const scheduleStatus = z.enum(summaryStatusCodes);
+export const structureScheduleSchema = z
+  .object({
+    schema: z.literal('vide.structure.schedule/1'),
+    mode: z.enum(['confirmed', 'preview']),
+    /** '확정 결과' or '미확정 미리보기'; a schedule without an analysis is a preview. */
+    label: z.string(),
+    modelHash: z.string(),
+    rows: z.array(
+      z
+        .object({
+          mark: markText,
+          role: memberRole,
+          tag: z.string().optional(),
+          section: z.string(),
+          sectionName: z.string(),
+          count: z.number().int().nonnegative(),
+          totalLength_m: finite,
+          /** Quantity-grade values from the section dimensions; null when they cannot be computed. */
+          unitWeight_kgpm: finite.nullable(),
+          weight_t: finite.nullable(),
+          maxRatio: ratio,
+          governing: z.string().nullable(),
+          /** Worst verdict of the members; '미완' members never count as passed. */
+          status: scheduleStatus.nullable(),
+          counts: z
+            .object({
+              ok: z.number().int(),
+              warn: z.number().int(),
+              ng: z.number().int(),
+              na: z.number().int(),
+              err: z.number().int(),
+            })
+            .strict(),
+          curved: z.boolean(),
+          radius_m: finite.optional(),
+          rise_m: finite.optional(),
+          chord_m: finite.optional(),
+          members: z.array(z.string()),
+        })
+        .strict(),
+    ),
+    totals: z.object({ count: z.number().int(), length_m: finite, weight_t: finite }).strict(),
+    /** Design members that carry no mark (gate `schedule-complete` fails while this is not empty). */
+    unlisted: z.array(z.string()),
+    assumptions: z.array(z.string()),
+    disclaimer: z.string(),
+  })
+  .strict();
+
+export type StructureSchedule = z.infer<typeof structureScheduleSchema>;

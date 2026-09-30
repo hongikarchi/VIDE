@@ -102,17 +102,31 @@ try {
     model.value = 'codex-cli';
     model.dispatchEvent(new Event('change'));
   });
+  const projectName = (await page.locator('#project-picker option:checked').textContent()).trim();
+  // The rail's JIG button opens the JIG tab (the list) before any jig was used.
   await page.getByRole('button', { name: 'JIG', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'JIG', exact: true });
   await dialog.waitFor();
-  // The gallery lists the working Sync jig and planned jigs.
-  await dialog.locator('.jig-card').first().waitFor();
-  assert.equal(await dialog.locator('.jig-card').count(), 11);
-  assert.equal(await dialog.locator('.jig-card[data-status="planned"]').count(), 8);
+  const tabs = page.getByRole('tablist', { name: '작업공간' });
+  assert.equal(
+    await tabs.getByRole('tab', { name: 'JIG', exact: true }).getAttribute('aria-selected'),
+    'true',
+  );
+  // The list shows the official catalogue: the working jigs and the planned ones.
+  const official = dialog.locator('.jig-card[data-source="official"]');
+  await official.first().waitFor();
+  assert.equal(await official.count(), 11);
+  assert.equal(
+    await dialog.locator('.jig-card[data-source="official"][data-status="planned"]').count(),
+    8,
+  );
   await dialog
     .locator('.jig-card[data-status="available"]', { hasText: 'Sync · 도면↔모델' })
-    .getByRole('button', { name: '열기' })
+    .getByRole('button', { name: '열기', exact: true })
     .click();
+  // The jig opens in its own context tab.
+  const syncTab = tabs.getByRole('tab', { name: `Sync · ${projectName}`, exact: true });
+  assert.equal(await syncTab.getAttribute('aria-selected'), 'true');
   assert.match(
     await dialog.getByLabel('Rhino Sync').locator('option:checked').textContent(),
     /model\.3dm/,
@@ -203,14 +217,19 @@ try {
   assert.equal(await dialog.evaluate((node) => node.matches(':modal')), false);
   const canvas = await page.locator('#canvas canvas').boundingBox();
   const panel = await dialog.boundingBox();
-  assert.ok(canvas.x + canvas.width <= panel.x + 1, 'the 3D view sits beside the panel');
+  // The panel docks on the left of the centre (the documents panel gives it its room).
+  assert.ok(panel.x + panel.width <= canvas.x + 1, 'the 3D view sits beside the panel');
+  assert.equal(await page.locator('#left').isVisible(), false);
   assert.ok(await dialog.getByLabel('R1 선택').isChecked(), 'the jig keeps its state');
-  // Closing and opening the tab again brings back the same jig and result.
+  // Closing the tab goes back to the model; the rail's JIG button brings the same jig back.
   await dialog.getByRole('button', { name: '닫기' }).click();
   await dialog.waitFor({ state: 'hidden' });
+  assert.equal(await syncTab.count(), 0);
+  assert.equal(await page.locator('#left').isVisible(), true);
   await page.getByRole('button', { name: 'JIG', exact: true }).click();
   await dialog.locator('.jig-relation').waitFor();
   assert.ok(await dialog.getByLabel('R1 선택').isChecked());
+  assert.equal(await syncTab.getAttribute('aria-selected'), 'true');
   assert.deepEqual(errors, []);
   console.log('JIG tab checks passed');
 } finally {

@@ -27,7 +27,13 @@ import { renderProjectHeading } from './project-heading.tsx';
 import { setMobileView } from './mobile-navigation.tsx';
 import { showQuantities } from './quantities.tsx';
 import { attachNativeAttributes } from './native-attributes.ts';
-import { overlayPicked, showJigs } from './jigs.tsx';
+import { attachJigs, overlayPicked, refreshJigs, showJigs, type JigContext } from './jigs.tsx';
+import {
+  activeWorkspace,
+  initializeWorkspaces,
+  setWorkspace,
+  workspaceShowsViewport,
+} from './workspaces.ts';
 const showAiSettings: typeof import('./ai-settings.tsx').showAiSettings = async (onStatus) =>
   (await import('./ai-settings.tsx')).showAiSettings(onStatus);
 import { initializeReviews } from './reviews.tsx';
@@ -1197,6 +1203,8 @@ function renderMessages() {
   showLayers();
   sidebar();
   renderConversation();
+  // A new Sync reaches the jigs that are open (their Sync lists).
+  if (project) refreshJigs();
 }
 /** The request list omits display meshes; fetch one request in full when it is shown. */
 const loadingResults = new Set<string>();
@@ -1369,9 +1377,11 @@ function renderConversation() {
       selectedResult = id;
       appliedSelection = undefined;
       renderMessages();
+      showModelView();
     },
     selection: (requestId, id) => {
       selectInResult(requestId, id);
+      showModelView();
     },
     report: downloadReport,
     saveReview: async (id) => {
@@ -1389,11 +1399,27 @@ function renderConversation() {
   });
 }
 
-// JIG tab: the jig gallery and the Sync jig (relation and differences of a Rhino and a CAD Sync).
-$('jigs').onclick = () => {
-  if (!project) return;
-  showJigs({
-    projectId: project.id,
+/** Layer paths in the stored Syncs, newest first: the output layers a jig instance may use. */
+function syncLayerPaths() {
+  const paths = new Set<string>();
+  for (const entry of [...state.messages].reverse()) {
+    if (entry.request.state !== 'succeeded') continue;
+    const layers = (entry.request.result as { layers?: unknown } | null | undefined)?.layers;
+    if (!Array.isArray(layers)) continue;
+    for (const layer of layers as { fullPath?: unknown }[])
+      if (typeof layer?.fullPath === 'string' && layer.fullPath) paths.add(layer.fullPath);
+  }
+  return [...paths];
+}
+// Workspace tabs (T-047): the JIG tab and jig context tabs use the project, its Syncs, the
+// viewport and the conversation through this context.
+attachJigs(
+  (): JigContext => ({
+    projectId: currentProject().id,
+    projectName: currentProject().name,
+    get layers() {
+      return syncLayerPaths();
+    },
     sources: linkedCandidates(state).map((entry) => ({
       id: entry.id,
       host: entry.request.result?.host === 'zwcad' ? 'zwcad' : 'rhino',
@@ -1427,6 +1453,7 @@ $('jigs').onclick = () => {
     },
     clearTint: () => viewport?.clearTint(),
     overlay: (key, items) => viewport?.overlay(key, items),
+    overlayStyle: (key, style) => viewport?.overlayStyle(key, style),
     focus: (target) =>
       viewport?.focus(
         'requestId' in target
@@ -1450,8 +1477,21 @@ $('jigs').onclick = () => {
       if ($('right').hidden) $('toggle-right').click();
       void poll(request.id, projectId, state);
     },
-  });
+  }),
+);
+// The rail's JIG button goes back to the jig used last, or to the JIG list.
+$('jigs').onclick = () => {
+  if (project) showJigs();
 };
+/** A result shown from the conversation needs the 3D view: leave the JIG list for the model. */
+function showModelView() {
+  if (!workspaceShowsViewport()) setWorkspace('model');
+}
+// The documents panel belongs to the model tab: its rail buttons bring that tab back.
+for (const button of document.querySelectorAll<HTMLButtonElement>('.rail [data-section]'))
+  button.addEventListener('click', () => {
+    if (activeWorkspace() !== 'model') setWorkspace('model');
+  });
 function openAiSettings() {
   void showAiSettings((rows) => {
     $('connection-status').textContent = rows
@@ -1961,7 +2001,8 @@ document.addEventListener('keydown', (e) => {
       return;
     }
   }
-  if (!typing && tool !== 'sketch' && viewport && !e.altKey) {
+  // 3D shortcuts only where the 3D view is (not the JIG list).
+  if (!typing && tool !== 'sketch' && viewport && !e.altKey && workspaceShowsViewport()) {
     const key = e.key.toLowerCase();
     if ((e.ctrlKey || e.metaKey) && key === 'a') {
       e.preventDefault();
@@ -2416,6 +2457,8 @@ async function initializeWorkspace() {
     void refreshAccount();
     render();
     renderMessages();
+    // The tab row and this project's last tab; host panels have neither (SCR-12).
+    if (!panelMode) initializeWorkspaces({ projectId: project.id, mount: $('workspace-tabs') });
     for (const entry of state.messages)
       if (['queued', 'running'].includes(entry.request.state)) void poll(entry.id);
     const host = hostStatusSchema.parse(await api('/host'));

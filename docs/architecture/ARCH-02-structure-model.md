@@ -2,7 +2,7 @@
 id: ARCH-02
 title: 구조 분석 jig의 해석 모델 계약과 Rust 코어
 status: review
-version: 0.2
+version: 0.3
 updated: 2026-09-30
 owner: agent:claude
 related: [FR-23, SPEC-06, ADR-019, ADR-020, RESEARCH-09, RESEARCH-10, ARCH-01, ARCH-03, PLAN-17, PLAN-23]
@@ -19,14 +19,14 @@ SPEC-06이 정한 동작을 구현하는 물리 계약과 구성요소 경계를
 | 해석 모델 계약 | `src/contracts/structure-model.ts` | 모델·결과·요약 JSON의 zod 스키마와 타입. 서버·UI·시험이 공유 |
 | 입력 구성(초안) | `src/jigs/structure/input.ts`, `sections.ts` | Rhino 중심선(scene `line`)·부재 솔리드(메시 주축·외곽 치수 → KS H형강 대조)·CAD Sync(보·기둥 레이어와 레벨) → 모델 초안. 끝점 병합·T자 접합·교차 분할, 역할·접합 규칙·지점, 레이어·이름·UserString의 역할·단면 힌트 |
 | 점검·하중 전처리 | `src/jigs/structure/review.ts`, `loads.ts` | 결정적 점검 `checkModelStatic`(SPEC-06.2), 단위 하중 안정성 확인 `stabilityProbe`·`probeIssues`, 둘을 합친 `checkModel`, 실패 원인 분류 `classifyFailures`(06.7), 면하중 한 방향 분배와 하중 장부 |
-| 라이브러리 jig `vide/structure-analysis` | `src/jigs/official/structure-analysis/` | 범용 구조 jig와 S-06 골조 jig가 함께 쓰는 1차 TS 층(PLAN-23 T-052). `buildFrameModel`(계획 → 모델: 역할·지점·접합·하중·설계 부재를 명시), `segmentCurve`(곡선 레일만 분할), `runAnalysis`·`analyzeSummary`(점검 → 안정성 확인 → 코어 → 원인 분류 → 요약; 작업 스레드), `referenceDeflection`(참고 처짐), `summarize`(요약 결과), 점검 `comboEcho`·`uncheckedListed`·`analysisConfirmed` |
+| 라이브러리 jig `vide/structure-analysis` | `src/jigs/official/structure-analysis/` | 범용 구조 jig와 S-06 골조 jig가 함께 쓰는 1차 TS 층(PLAN-23 T-052·T-054, 0.2.0). `buildFrameModel`(계획 → 모델: 역할·지점·접합·하중·설계 부재를 명시), `segmentCurve`(곡선 레일만 분할), `runAnalysis`·`analyzeSummary`(점검 → 안정성 확인 → 코어 → 원인 분류 → 요약; 작업 스레드), `referenceDeflection`(참고 처짐), `summarize`(요약 결과), `sizeGroups`(KS H 단면 선정, §4.3), `stableMarks`·`schedule`·`toCsv`(부호·일람표·CSV, §4.4), `sectionProps`·`hProps`(물량용 단면 성질), `memberGeometry`(설계 부재의 현·솟음·반지름), 점검 `comboEcho`·`uncheckedListed`·`analysisConfirmed`·`markUnique`·`scheduleComplete` |
 | 작업 스레드 | `src/jigs/official/structure-analysis/worker.ts`, `worker-entry.ts` | 코어 호출은 `worker_threads` 하나에서만 돈다(ARCH-03 §6.3). 키가 같은 요청은 대기 중인 것만 남기고 이전 것을 `STRUCTURE_SUPERSEDED`로 거절한다(가장 최근 요청만). 실행 중인 요청은 취소하지 않는다. 엔진 스레드는 JSON 직렬화와 결과 수신만 한다 |
-| 진입·저장(범용 jig) | `src/jigs/structure/index.ts` | 초안·수정(작은 수정 목록 `draftEditsSchema`)·확정 해석 `analyzeConfirmed`(동기 경로, 서버 라우트가 씀), 프로젝트별 기록 `<데이터>/structure/<프로젝트>.json`(초안 + 확정 결과). 라이브러리의 진입점을 다시 내보낸다. 오래됨 = 원래 Sync가 없거나 같은 문서(`sourceDocument.documentId`)의 더 새 Sync가 있음 |
+| 진입·저장(범용 jig) | `src/jigs/structure/index.ts` | 초안·수정(작은 수정 목록 `draftEditsSchema`), 프로젝트별 기록 `<데이터>/structure/<프로젝트>.json`(초안 + 확정 결과. 확정 기록은 코어 결과 `result`와 같은 해석의 요약 `summary`·판정 범례 `colorBands`를 함께 둔다; 이전 기록에는 없을 수 있다). 라이브러리의 진입점을 다시 내보낸다. 동기 경로 `analyzeConfirmed`는 시험·대체용으로 남아 있고 서버 라우트는 쓰지 않는다. 오래됨 = 원래 Sync가 없거나 같은 문서(`sourceDocument.documentId`)의 더 새 Sync가 있음 |
 | 해석·검정 코어 | `src/native/structure/` (Rust crate `vide-structure`) | 강성 조립·풀이·부재력, KDS 부재 검정·B1·처짐, 판정. 입력 JSON 외 I/O 없음 |
 | 코어 연결 | `src/jigs/structure/core.ts` | 빌드된 코어 경로 `corePath()`, 로드 `loadCore()`, 검증 포함 동기 호출 `analyzeStructure(model) → result`, 모델 해시 |
-| 서버 경로 | `src/server/server.ts` | `GET /projects/:id/jigs/structure`(초안·확정·오래됨), `POST …/draft`(Sync와 입력 형태), `POST …/edit`(수정 목록), `POST …/analyze`(`confirm: true`, 차단 오류면 422). 요청 본문 1 MB 한도 때문에 모델 전체는 서버에만 둠 |
+| 서버 경로 | `src/server/server.ts` | `GET /projects/:id/jigs/structure`(초안·확정·오래됨), `POST …/draft`(Sync와 입력 형태), `POST …/edit`(수정 목록), `POST …/analyze`(`confirm: true`; 작업 스레드의 `analyzeSummary(mode: 'confirmed', detail: 'full', key: 'project:<id>')`로 돌고 엔진 스레드는 기다리기만 한다. 점검 오류·불안정이면 422와 문제 목록, 같은 프로젝트의 더 새 요청에 밀리면 409 `PROJECT_BUSY`, 코어가 없으면 503). 요청 본문 1 MB 한도 때문에 모델 전체는 서버에만 둠 |
 | 화면 | `src/ui/structure-jig.tsx`, 뷰포트 `tint` | 입력 선택·초안 그룹별 단면 지정·면하중·AI 초안 검토 요청(`jig.kind = structure-draft-review`, 첨부만 보고 판정)·확정·결과 표·행 선택 → 모델 선택·판정색 |
-| 검증 자료 | `tests/structure/fixtures.mjs`, `frame-fixtures.mjs`, `frames/`, `tests/structure/*.test.mjs` | 닫힌 해·공개 벤치마크·불변량 fixture, 합성 골조 계획(`bayPlan`=`lb-k`, `gridPlan`, `archPlan`) |
+| 검증 자료 | `tests/structure/fixtures.mjs`, `frame-fixtures.mjs`, `frames/`, `tests/structure/*.test.mjs` | 닫힌 해·공개 벤치마크·불변량 fixture, 합성 골조 계획(`bayPlan`=`lb-k`, `gridPlan`, `archPlan`), 단면 선정·부호·일람표 시험(`sizing`·`marks`·`schedule`) |
 | 개발용 기준 해석기 | `tools/structure/` | PyNite 교차 검증 스크립트(개발 전용, 배포 제외) |
 
 **코어 구동 방식: Node-API 네이티브 애드온**(napi-rs, [SPIKE](../tdd/SPIKE-2026-09-29-structure-core-binding.md)). `cargo build --release --lib`의 `vide_structure.dll`을 `process.dlopen`으로 로드한다. 라이브러리 경로에서는 작업 스레드가 같은 애드온을 자기 스레드에 따로 로드한다. 같은 crate의 실행 파일(`src/bin/vide-structure.rs`, 반드시 별도 `--target-dir`로 빌드)은 코어 오류를 서버와 격리해야 할 때의 대체 경로다. crate 빌드 산출물(`target/`)은 저장소에 넣지 않으며, 데스크톱 패키지는 빌드된 코어 파일만 명시 경로로 포함한다. 작업 스레드 진입 파일은 `worker-entry.ts`이며 빌드본에서는 같은 자리의 `.js`를 먼저 찾는다.
@@ -118,7 +118,30 @@ StructureSummary
 
 ### 4.2 참고 처짐(`referenceDeflection`)
 
-설계 부재마다 사용성 조합별로 양 끝 지지 절점을 잇는 현(캔틸레버는 뿌리 절점)에서 잰 절점 변위의 수직 성분과 코어의 조각 처짐을 합친다. 조각마다 `max(r_a, r_b, (r_a + r_b)/2 + d)`(r = 양 끝 절점의 현 기준 변위, d = 조각 처짐)를 취하므로 어느 조각의 처짐보다도 작지 않다. 한계는 역할별 `L/n`(`checkSettings.deflectionLimits`), 캔틸레버는 `L/180`(가정). 행 `{ id, role, kind, combo, length_m, deflection_mm, segmentMax_mm, limit_mm, ratio, exceeds }`는 요약의 `members[4..5]`로 들어가고 4상태 판정에는 합치지 않는다(ADR-019 후속 결정, RESEARCH-10 A8). 판정에 합치는 것은 T-067이다.
+설계 부재마다 사용성 조합별로 양 끝 지지 절점을 잇는 현(캔틸레버는 뿌리 절점)에서 잰 절점 변위의 수직 성분과 코어의 조각 처짐을 합친다. 조각마다 `max(r_a, r_b, (r_a + r_b)/2 + d)`(r = 양 끝 절점의 현 기준 변위, d = 조각 처짐)를 취하므로 어느 조각의 처짐보다도 작지 않다. 한계는 역할별 `L/n`(`checkSettings.deflectionLimits`), 캔틸레버는 `L/180`(가정). 행 `{ id, role, kind, combo, length_m, deflection_mm, segmentMax_mm, limit_mm, ratio, exceeds }`는 요약의 `members[4..5]`로 들어가고 4상태 판정에는 합치지 않는다(ADR-019 후속 결정, RESEARCH-10 A8). 판정에 합치는 것은 T-067이다. 단면 선정(§4.3)은 이 값을 선정 기준으로만 쓴다.
+
+### 4.3 단면 선정(`sizeGroups`, `vide.structure.sizing/1`)
+
+SPEC-06.12의 선정 루프. 입력은 (확정한) 모델과 대응표, 출력은 **제안**이다: `{ status: converged|not-converged|error, iterations, target, groups[], assignments{ 설계 부재 → 단면 }, model(단면을 바꾼 사본), summary?(마지막 해석이 제안과 같을 때만), issues[], assumptions[], note }`. 모든 해석은 `mode: 'preview'`이며 저장하지 않고, 제안은 적용한 뒤 다시 확정해야 쓰인다(`analysis-confirmed`는 새 해시를 요구한다).
+
+- **묶음** = 역할 × 경간 띠(`spanBands_m`, 기본 6·9·12 m 상한) × 구역(`zoneOf`, 곡선 부재는 자동으로 따로). 역할은 기본 기둥·거더·작은보(`roles`).
+- **후보** = KS H(`src/jigs/structure/sections.ts`의 `KS_H`) 가운데 역할별 춤 상한(`depthMax_mm`, 기본 거더·작은보 900, 기둥 400) 이하, 무게(단면적) 오름차순. 기둥은 b/h ≥ 0.9인 기둥 계열만.
+- **추정** = 관측 검정비 × (현재 단면의 용량 / 후보의 용량). 용량은 지배 조항에 따라 `capacity.ts`가 코어 식을 흉내 내 계산한다: `F2 강축 휨`은 그 부재의 `Lb`·`Cb`로 F2 횡비틀림좌굴 모멘트, `E3 압축`은 조각의 K·L과 r로 E3 임계응력 × A, `세장비`는 1/(KL/r), `G2 전단`은 웨브 면적, `D2 인장`은 A, `F6 약축 휨`은 Z2, `처짐`은 I3, `H1-1 조합`은 축·휨 항의 역할별 가중 조화평균. 참고 처짐은 I3 비율로 따로 추정하고 `deflectionTarget`(기본 1.0)과 비교한다. 이 추정은 판정이 아니며 다음 해석이 바로잡는다.
+- **반복**: 해석 → 묶음마다 모든 후보를 추정으로 비교해 목표(`target`, 기본 0.90)를 만족하는 가장 가벼운 후보를 고름 → 바뀐 묶음에 적용 → 다시 해석. 해석한 단면이 목표를 놓치면 그 묶음에서 다시 쓰지 않고(`rejected`), 만족하면 알려진 통과 단면으로 기억한다(`passed`). 고른 단면이 현재 단면과 같아 안정되면, 해석 예산이 2회 이상 남았을 때 한 번만 바로 아래 후보를 추정 오차 15 % 안에서 시험한다(세장한 기둥·LTB에서 추정이 보수적이기 때문). 최대 `maxIterations`(기본 6)회 해석.
+- **끝맺음**: 모든 묶음이 안정되면 `converged`. 예산이 끝났는데 바뀔 묶음이 남았으면 그 후보가 이미 통과한 단면이면 그것을(상태 `ok`), 아니면 마지막 해석 단면과 후보 중 무거운 쪽을 택하고 `SIZING_NOT_CONVERGED` 경고를 낸다. 상한 안에 후보가 없으면 `no-candidate`로 두고 단면을 바꾸지 않으며, 전체 표에서 되는 가장 가벼운 단면을 `beyondLimit`으로 알린다(`SIZING_NO_CANDIDATE`). 추정할 값이 없으면 `unchanged`.
+- 명목 수평하중은 출발 모델의 자중 기준으로 두고 선정 중 갱신하지 않는다(가정 목록에 적음). 참조하지 않게 된 단면은 제안 모델에서 뺀다.
+
+### 4.4 부호와 일람표(`stableMarks`, `schedule`, `toCsv`)
+
+**부호 원장(`vide.structure.marks/1`)** `{ rule{ projectPrefix, prefixes{ 태그·역할 → 접두 }, assumed }, groups{ 부호 → { prefix, role, tag?, section, curved, radius_m?, rise_m? } }, members{ 설계 부재 → 부호 }, chords{ 설계 부재 → [시작점, 끝점] }, next{ 접두 → 마지막 번호 } }`. jig 기록이 계산 사이에 보관한다.
+
+- 접두 기본값(가정, 표준 파일 확인 전): 기둥 `SC`, 거더 `SG`, 테두리보 `SEG`, 작은보 `SB`, 내민보 `SCB`, 개구부 보 `STB`(가새 `SV`, 기타 `SM`). `map.tags`(계획 역할)가 있으면 그것으로, 없으면 모델 역할로 고른다. 프로젝트 접두는 부호 앞에 붙는다(`P1-SG1`). 문자는 `[A-Za-z0-9_-]`만(`bake-args-safe`와 같은 규칙).
+- 묶음 기준 = 접두 × 단면(첫 조각) × 곡선 여부. 곡선은 `memberGeometry`의 현 길이·솟음(현에서 잰 최대 이격, 허용오차 max(10 mm, 2 × 병합 허용오차))·반지름(`c²/(8s) + s/2`)이 같은 묶음의 대표값과 반지름 0.05 m·솟음 0.01 m 안이면 같은 부호다.
+- 번호는 접두마다 1부터, 묶음이 처음 나타나는 부재의 위치 순서(현 중점의 z·y·x를 0.05 m로 양자화)로 매긴다. 이전 원장이 있으면 (1) 같은 id의 부재가 같은 묶음이면 부호를 유지하고, (2) 나머지는 같은 묶음의 기존 부호(퇴역한 것도 되살림)를 받거나 접두의 다음 번호를 새로 받는다. 번호는 다시 쓰지 않는다. 부호가 바뀐 부재는 `changed`, 지금 아무도 쓰지 않는 부호는 `retired`.
+- 새 id의 부재는 이전 현과 대조해 `correspondence`에 적는다: 이전 현 안에 들어가면 `split`, 이전 현들을 품으면 `merge`, 양 끝이 같으면 `same-line`, 평면에서 같고 높이만 다르면 `moved`(S-18 `stable_ids` 규칙의 이식, RESEARCH-08 §3.6).
+- 점검 `mark-unique`: 모든 설계 부재에 부호가 있고, 문자 규칙을 지키며, 쓰이는 두 부호가 같은 직선 묶음(접두·단면)을 가리키지 않는다.
+
+**일람표(`vide.structure.schedule/1`)** `{ mode, label, modelHash, rows[], totals{ count, length_m, weight_t }, unlisted[], assumptions[], disclaimer }`. 행 = `{ mark, role, tag?, section, sectionName, count, totalLength_m, unitWeight_kgpm, weight_t, maxRatio, governing, status, counts{ ok, warn, ng, na, err }, curved, radius_m?, rise_m?, chord_m?, members[] }`. 단위중량은 `sectionProps`(코어 `section.rs`와 같은 식) × 7,850 kg/m³의 물량용 값이고 검정에 쓰지 않는다. 판정 열은 넘겨준 요약의 부재 행에서 오며(가장 나쁜 상태, 최대 검정비와 그 조항), 요약이 없으면 비어 있고 `label`은 '미확정 미리보기'다. `toCsv`는 제목 행(`부재 일람표`, 결과 표지, 안내문) → 머리글 → 부호 행 → 합계(→ 부호 없음)이며 UTF-8 BOM·CRLF·전체 인용, `= + @ -`로 시작하는 문자열 앞에 `'`를 붙인다(S-06 진단 CSV와 같은 형식). 점검 `schedule-complete`: 모든 설계 부재가 정확히 한 행에 있다.
 
 ## 5. 코어 내부
 
@@ -134,3 +157,5 @@ StructureSummary
 `tests/structure/fixtures.mjs`의 fixture는 {출처, 단위, 입력 모델, 기대값과 값별 허용오차, 가정}을 담는다. 교과서·공개 벤치마크의 "정답" fixture와 회귀용 골든 출력은 분리한다. 1차 목록은 RESEARCH-09 §4.1의 BM-03(닫힌 해), BM-06(보 횡비틀림좌굴), BM-10(PyNite 차분), BM-11(불변량), BM-12(KS 단면 성질)와 닫힌 해 보·골조이며, 구체 목록과 허용오차는 PLAN-17이 소유한다.
 
 라이브러리 시험(`tests/structure/frame-model.test.mjs`, `summary.test.mjs`, `worker.test.mjs`)은 합성 계획만 쓴다: `lb-k`(강접 거더 + 작은보 2.5 m의 Lb·K, 구속 레벨 위 기둥의 swayK), 구속 절점·자중·명목 하중·조합 항, 강축 규칙, 곡선 분할과 아치 추력, 참고 처짐 ≥ 조각 처짐, 요약 크기·시간, `combo-echo`·`unchecked-listed`·`analysis-confirmed`, 미완·invalid·unstable, 작업 스레드의 이벤트 루프 지연(< 50 ms)과 최신 요청 우선.
+
+단면 선정·부호·일람표 시험(`sizing.test.mjs`, `marks.test.mjs`, `schedule.test.mjs`)은 동기 `runAnalysis`를 해석 함수로 넘긴다: `hProps`가 KS 표(A·I·S·단위중량 1 %)와 맞음, 한 칸 골조가 6회 안에 수렴하고 각 묶음의 바로 아래 후보를 실제로 해석하면 목표나 처짐 한계를 넘김, 춤 상한 250 mm의 '후보 없음'(단면 유지·필요한 춤 안내), 세 작은보로 나뉜 12 m 거더를 참고 처짐이 올림(참고 처짐 기준을 풀면 더 가벼운 단면), 반복 상한·점검 오류 처리; 부호는 SC/SG/SB, ±1 mm 이동 후 원장 유무와 관계없이 같은 부호, 단면 변경 → 새 번호·퇴역·번호 재사용 없음·되살림, 곡선의 반지름·솟음 묶음, split/same-line/moved 대응, 규칙 문자 검사와 `mark-unique`; 일람표의 KS 단위중량·개수·길이·합계, 요약과 같은 판정 열, 미리보기 표지, 곡선 열, `schedule-complete`, CSV의 BOM·CRLF·수식 문자 처리. `server.test.mjs`는 확정 경로가 작업 스레드를 거쳐 `summary`·`colorBands`를 기록에 남기는지 본다.

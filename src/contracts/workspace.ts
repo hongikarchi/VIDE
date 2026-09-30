@@ -86,6 +86,9 @@ export const requestInputSchema = z
       .regex(/^[a-zA-Z0-9._-]{1,100}(?:\[1m\])?$/)
       .optional(),
     effort: z.enum(['default', 'low', 'medium', 'high', 'xhigh', 'max']).optional(),
+    // The conversation the turn belongs to (SPEC-02.19 1); absent: the project's default
+    // conversation. Fixed at submission (ARCH-03 §10.3).
+    conversationId: id.optional(),
   })
   .passthrough()
   .superRefine((input, context) => {

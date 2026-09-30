@@ -11,7 +11,7 @@ import {
 } from '../../../contracts/structure-model.ts';
 import { loadCore, modelHash } from '../../structure/core.ts';
 import type { DraftIssue } from '../../structure/input.ts';
-import { distributeAreaLoads } from '../../structure/loads.ts';
+import { distributeAreaLoads, type LedgerRow } from '../../structure/loads.ts';
 import {
   checkModelStatic,
   classifyFailures,
@@ -40,7 +40,10 @@ export interface AnalyzeOptions {
 
 export interface AnalyzeOutcome {
   summary: StructureSummary;
+  /** With `detail: 'full'`: the core result, the parsed model and the area-load ledger. */
   result?: StructureResult;
+  model?: StructureModel;
+  ledger?: LedgerRow[];
 }
 
 /** Hash of what decides stability: nodes, supports, members, releases and restraints. */
@@ -113,5 +116,7 @@ export function runAnalysis(
     issues,
     ms: performance.now() - started,
   });
-  return options.detail === 'full' ? { summary, result } : { summary };
+  return options.detail === 'full'
+    ? { summary, result, model, ledger: distributed.ledger }
+    : { summary };
 }

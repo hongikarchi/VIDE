@@ -1,15 +1,30 @@
-import { useEffect, useMemo, useState } from 'react';
+import { memo, useEffect, useMemo, useState, useSyncExternalStore, type FormEvent } from 'react';
 import { createRoot } from 'react-dom/client';
 import { z } from 'zod';
 import { api } from './gateway.ts';
+import { DeclaredJig } from './jig-panel/declared-jig.tsx';
 import { KnowledgeJig } from './knowledge-jig.tsx';
 import type { Point3 } from './model.ts';
 import { StructureJig } from './structure-jig.tsx';
 import type { OverlayItem } from './viewport.ts';
+import {
+  activeWorkspace,
+  closeContextTab,
+  contextId,
+  contextTabs,
+  lastJigInstance,
+  onWorkspaceChange,
+  openContextTab,
+  renameContextTab,
+  setContextResolver,
+  setWorkspace,
+  type ContextTab,
+} from './workspaces.ts';
 
-// The JIG tab: a gallery of jigs (working tools for one kind of task) and the Sync jig — the
-// relation between a Rhino model and a CAD drawing, their differences, an AI review of what the
-// differences mean, and edits that make one side follow the other.
+// The JIG tab (SCR-18) lists jigs (working tools for one kind of task); each opened jig gets a
+// context tab (SCR-13). The Sync jig here shows the relation between a Rhino model and a CAD
+// drawing, their differences, an AI review of what the differences mean, and edits that make one
+// side follow the other.
 const jigSchema = z.object({
   id: z.string(),
   code: z.string(),
@@ -89,7 +104,11 @@ export type JigFocus =
   | { overlay: string; itemId?: string };
 export interface JigContext {
   projectId: string;
+  /** The project's name, for tab names such as '구조 · <project>'. */
+  projectName?: string;
   sources: SyncSource[];
+  /** Layer paths in the linked documents' Syncs: the output layers a new jig instance may use. */
+  layers?: string[];
   /** Show one object of a Sync in the viewport (selected and framed). */
   show: (requestId: string, objectId: string) => void;
   /** Colour objects of a Sync in the viewport (structure verdicts); omitted when unsupported. */
@@ -98,10 +117,12 @@ export interface JigContext {
   clearTint: () => void;
   /**
    * Draw a jig result as an overlay layer over the model (null removes it). Overlays are display
-   * only: never selected, saved, synced or sent. They leave the model while the panel is closed
-   * and go for good when another jig is opened.
+   * only: never selected, saved, synced or sent. Each jig keeps its own; they are on the model
+   * only while that jig's tab shows.
    */
   overlay: (key: string, items: OverlayItem[] | null) => void;
+  /** Show, hide or fade one overlay layer; the jig's layers keep their style between tabs. */
+  overlayStyle?: (key: string, style: { visible?: boolean; opacity?: number }) => void;
   /** Frame part of the model without changing the selection. */
   focus: (target: JigFocus) => void;
   /** Overlay items clicked in the viewport (e.g. to move to the table row); returns unsubscribe. */
@@ -118,44 +139,450 @@ export interface JigContext {
   }) => Promise<void>;
 }
 
-// The JIG panel is docked beside the 3D view (Design SCR-13) and non-modal: the model stays usable
-// while a jig is open, and the jig keeps its inputs and results while folded or closed.
+// A jig instance (작업본) as the engine shows it (ARCH-03 §4·§7), read for the jig screens.
+const gateSchema = z
+  .object({
+    name: z.string(),
+    level: z.string(),
+    ok: z.boolean(),
+    message: z.string(),
+    verdict: z.boolean().optional(),
+  })
+  .passthrough();
+const paramViewSchema = z
+  .object({
+    key: z.string(),
+    title: z.string(),
+    group: z.string(),
+    type: z.string(),
+    unit: z.string(),
+    displayUnit: z.string(),
+    value: z.union([z.number(), z.string(), z.boolean()]),
+    displayValue: z.union([z.number(), z.string(), z.boolean()]),
+    by: z.string(),
+    fixedAtPin: z.boolean().optional(),
+    choices: z.array(z.object({ value: z.string(), label: z.string() }).passthrough()).optional(),
+    help: z.string().optional(),
+  })
+  .passthrough();
+const instanceViewSchema = z
+  .object({
+    id: z.string(),
+    jig: z
+      .object({ id: z.string(), version: z.string(), name: z.string(), summary: z.string() })
+      .passthrough(),
+    title: z.string(),
+    status: z.string(),
+    body: z.object({ layerRoot: z.string() }).passthrough(),
+    steps: z.array(
+      z
+        .object({
+          id: z.string(),
+          title: z.string(),
+          kind: z.string(),
+          status: z.string(),
+          inputHash: z.string().optional(),
+          ms: z.number().nullish(),
+          gates: z.array(gateSchema).optional(),
+        })
+        .passthrough(),
+    ),
+    params: z.array(paramViewSchema),
+    updatedAt: z.string(),
+  })
+  .passthrough();
+const runReportSchema = z
+  .object({
+    steps: z.array(
+      z
+        .object({
+          id: z.string(),
+          status: z.string(),
+          cached: z.boolean(),
+          ms: z.number().nullable(),
+          gates: z.array(gateSchema),
+          error: z.object({ code: z.string(), message: z.string() }).optional(),
+        })
+        .passthrough(),
+    ),
+    outputs: z.record(z.string(), z.unknown()),
+    blocked: z.boolean(),
+    superseded: z.boolean(),
+  })
+  .passthrough();
+export type JigInstanceView = z.infer<typeof instanceViewSchema>;
+export type JigRunReport = z.infer<typeof runReportSchema>;
+/** One setting change; a number in another unit than the setting's own names that unit. */
+export interface JigParamChange {
+  key: string;
+  value: number | string | boolean;
+  unit?: string;
+}
+export interface JigHostState {
+  /** The instance as last read: steps, settings, inputs. */
+  instance?: JigInstanceView;
+  /** The last run in this session (step reports and outputs). */
+  report?: JigRunReport;
+  busy: boolean;
+  /** Why the last action failed, in words for the screen. */
+  error?: string;
+}
+/**
+ * What a v3 jig screen (the declarative panel, T-048) gets for its instance in the context tab.
+ * Actions resolve to undefined when they fail and put the reason in `state().error`. The slots are
+ * the tab's regions beside the panel (Design SCR-13): above the 3D view (KPI strip, view switch),
+ * floating over its top left (slider board), and the drawer that takes the inspector's place while
+ * it has content. Asking the conversation, making in Rhino, export and fact lookup come with
+ * PLAN-24 T-062 and PLAN-22 T-055, T-057 and T-065.
+ */
+export interface JigHost extends JigContext {
+  instanceId: string;
+  state: () => JigHostState;
+  subscribe: (listener: () => void) => () => void;
+  refresh: () => Promise<JigInstanceView | undefined>;
+  params: {
+    get: () => JigInstanceView['params'];
+    set: (values: JigParamChange[], reason?: string) => Promise<JigInstanceView | undefined>;
+    undo: (seq: number) => Promise<JigInstanceView | undefined>;
+  };
+  run: (options?: {
+    until?: string;
+    mode?: 'geometry' | 'preview' | 'confirmed';
+  }) => Promise<JigRunReport | undefined>;
+  output: (stepId: string) => Promise<unknown>;
+  confirm: (stepId: string) => Promise<JigInstanceView | undefined>;
+  slots: { top: HTMLElement; board: HTMLElement; drawer: HTMLElement };
+}
+
+// The jig surface of the workspace tabs (workspaces.ts, Design §03·SCR-13·18): one non-modal panel
+// in the centre column. On the JIG tab it holds the jig list over the whole centre; on a jig's
+// context tab it docks left of the 3D view, which stays usable (T-041). An opened jig stays mounted
+// while its tab is in the row, so switching tabs keeps its inputs and results. The older jigs
+// (Sync, structure, project data) have no instance on the engine: they stay mounted after their
+// tab closes and come back as they were until the page reloads.
 const workspace = document.querySelector('.workspace') ?? document.body;
+const viewportArea = document.querySelector('.viewport-area') ?? workspace;
 const dialog = document.createElement('dialog');
 dialog.className = 'quantity-dialog jig-dialog';
 dialog.setAttribute('aria-label', 'JIG');
 workspace.append(dialog);
 const root = createRoot(dialog);
-let current: JigContext | undefined;
+
+type LegacyKind = 'sync' | 'structure' | 'knowledge';
+const LEGACY: Record<LegacyKind, { title: string; purpose: string }> = {
+  sync: { title: 'Sync · 도면↔모델', purpose: 'Sync' },
+  structure: { title: '구조 분석', purpose: '구조' },
+  knowledge: { title: '프로젝트 자료 · 시험판', purpose: '자료' },
+};
+const legacyKind = (instanceId: string) =>
+  /^legacy:(sync|structure|knowledge)$/.exec(instanceId)?.[1] as LegacyKind | undefined;
+interface OpenJig {
+  instanceId: string;
+  kind: LegacyKind | 'instance';
+  /** Overlay layers the jig drew; on the model only while its tab shows. */
+  drawn: Map<string, OverlayItem[]>;
+  styles: Map<string, { visible?: boolean; opacity?: number }>;
+  context: JigContext;
+  host?: JigHost;
+}
+let provide: (() => JigContext) | undefined;
+/** The workspace as of the last render; the jigs' contexts read through it. */
+let latest: JigContext | undefined;
+let sourcesKey = '';
+/** Bumped when the Syncs change, so the jigs that are not showing re-render with the new list. */
+let generation = 0;
 let collapsed = false;
-/**
- * Overlay layers drawn by the open jig. Closing the panel takes them off the model and opening it
- * again puts them back with the jig's state; they are forgotten when another jig is opened.
- */
-const drawn = new Map<string, OverlayItem[]>();
+/** The JIG list's source filter, kept between visits. */
+let listSource: Source = 'all';
+const mounted = new Map<string, OpenJig>();
+/** The jig whose tab shows; its overlays are on the model. */
+let shown: OpenJig | undefined;
 const narrow = () => matchMedia('(max-width: 850px)').matches;
-function hideOverlays() {
-  for (const key of drawn.keys()) current?.overlay(key, null);
+/** Read the workspace again; before a project is open there is nothing to read. */
+function current() {
+  try {
+    if (provide) latest = provide();
+  } catch {
+    /* No project yet: keep the last one read. */
+  }
+  return latest;
 }
-function forgetOverlays() {
-  hideOverlays();
-  drawn.clear();
-}
+
 function render() {
+  current();
+  const folded = collapsed && !!shown;
   workspace.classList.toggle('jig-open', dialog.open);
-  workspace.classList.toggle('jig-collapsed', collapsed);
-  dialog.toggleAttribute('data-collapsed', collapsed);
-  if (current) root.render(<Jigs context={current} collapsed={collapsed} />);
+  workspace.classList.toggle('jig-collapsed', folded);
+  dialog.toggleAttribute('data-collapsed', folded);
+  for (const jig of mounted.values())
+    for (const slot of Object.values(jig.host?.slots ?? {})) slot.hidden = jig !== shown;
+  if (latest) root.render(<Surface context={latest} />);
 }
 const fold = (value: boolean) => {
   collapsed = value;
   render();
 };
-const close = () => {
-  hideOverlays();
-  dialog.close();
+/** Follow the active tab: open or close the panel and put the shown jig's overlays on the model. */
+function surface() {
+  current();
+  const active = activeWorkspace();
+  const tab = contextTabs().find((entry) => contextId(entry.instanceId) === active);
+  const next = tab ? (mounted.get(tab.instanceId) ?? mount(tab.instanceId)) : undefined;
+  if (next !== shown) {
+    if (shown) for (const key of shown.drawn.keys()) latest?.overlay(key, null);
+    if (next)
+      for (const [key, items] of next.drawn) {
+        latest?.overlay(key, items);
+        const style = next.styles.get(key);
+        if (style) latest?.overlayStyle?.(key, style);
+      }
+    shown = next;
+    collapsed = false;
+  }
+  const open = active === 'jig' || !!next;
+  const focus = document.activeElement;
+  if (open && !dialog.open) {
+    dialog.show();
+    // Opening from the tab row or the rail leaves the focus there (show() would move it inside).
+    if (focus instanceof HTMLElement && focus !== document.body)
+      focus.focus({ preventScroll: true });
+  } else if (!open && dialog.open) {
+    dialog.close();
+    // Closed from inside the panel: the focus goes to the tab that now shows.
+    if (focus instanceof Node && dialog.contains(focus))
+      document
+        .querySelector<HTMLElement>('#workspace-tabs [role="tab"][aria-selected="true"]')
+        ?.focus({ preventScroll: true });
+  }
   render();
+}
+function mount(instanceId: string): OpenJig {
+  const jig = {
+    instanceId,
+    kind: legacyKind(instanceId) ?? 'instance',
+    drawn: new Map(),
+    styles: new Map(),
+  } as OpenJig;
+  jig.context = tabContext(jig);
+  mounted.set(instanceId, jig);
+  if (jig.kind === 'instance') {
+    jig.host = instanceHost(jig);
+    // Read the instance whatever screen draws it (the head names the jig once it is read).
+    void jig.host.refresh();
+  }
+  return jig;
+}
+function unmount(jig: OpenJig) {
+  if (shown === jig) {
+    for (const key of jig.drawn.keys()) latest?.overlay(key, null);
+    shown = undefined;
+  }
+  for (const slot of Object.values(jig.host?.slots ?? {})) slot.remove();
+  mounted.delete(jig.instanceId);
+}
+onWorkspaceChange((change) => {
+  const open = new Set(change.context.map((tab) => tab.instanceId));
+  // A closed instance tab lets its screen go; the instance itself stays on the engine.
+  for (const jig of [...mounted.values()])
+    if (jig.kind === 'instance' && !open.has(jig.instanceId)) unmount(jig);
+  surface();
+});
+
+/**
+ * One jig's view of the workspace. It reads the latest workspace on every use (so a new Sync shows
+ * up in an open jig) and keeps the jig's overlays and overlay clicks to its own tab.
+ */
+function tabContext(jig: OpenJig): JigContext {
+  const now = () => {
+    if (!latest) throw Error('JIG 화면을 준비하는 중입니다.');
+    return latest;
+  };
+  // On a phone the panel covers the model: fold it so the shown result is visible.
+  const reveal = () => {
+    if (narrow()) fold(true);
+  };
+  return {
+    get projectId() {
+      return now().projectId;
+    },
+    get projectName() {
+      return now().projectName;
+    },
+    get sources() {
+      return now().sources;
+    },
+    get layers() {
+      return now().layers;
+    },
+    show: (requestId, objectId) => {
+      reveal();
+      now().show(requestId, objectId);
+    },
+    tint: (requestId, colors) => {
+      reveal();
+      now().tint?.(requestId, colors);
+    },
+    clearTint: () => now().clearTint(),
+    overlay: (key, items) => {
+      if (items) jig.drawn.set(key, items);
+      else {
+        jig.drawn.delete(key);
+        jig.styles.delete(key);
+      }
+      // A result that lands while another tab shows waits until this tab shows again.
+      if (shown === jig) now().overlay(key, items);
+    },
+    overlayStyle: (key, style) => {
+      jig.styles.set(key, { ...jig.styles.get(key), ...style });
+      if (shown === jig) now().overlayStyle?.(key, style);
+    },
+    focus: (target) => now().focus(target),
+    onOverlayPick: (listener) => {
+      const handle = (event: Event) => {
+        if (shown === jig) listener((event as CustomEvent<{ key: string; itemId: string }>).detail);
+      };
+      dialog.addEventListener('overlaypick', handle);
+      return () => dialog.removeEventListener('overlaypick', handle);
+    },
+    send: (input) => now().send(input),
+  };
+}
+
+const jigErrors: Record<string, string> = {
+  PARAM_FIXED: '작업본을 만들 때 정한 값이라 바꿀 수 없습니다. 바꾸려면 새로 여세요.',
+  OUT_OF_RANGE: '정해진 범위 밖의 값입니다.',
+  UNIT_MISMATCH: '단위가 맞지 않습니다.',
+  GATE_BLOCKED: '점검에 막혔습니다. 단계에 적힌 이유를 확인하세요.',
+  LAYER_ROOT_MISSING: '연결 모델에 없는 레이어입니다. 연결 파일에 있는 레이어를 고르세요.',
+  STALE_INPUT: '읽은 문서가 그 뒤에 바뀌었습니다. 입력을 다시 읽은 뒤 계산하세요.',
+  JIG_INVALID: '이 jig의 설명서에 문제가 있어 열 수 없습니다.',
+  NOT_FOUND: '작업본을 찾을 수 없습니다.',
 };
+function jigError(error: unknown) {
+  const code = (error as { code?: unknown } | null)?.code;
+  return (
+    (typeof code === 'string' && jigErrors[code]) ||
+    (error instanceof Error ? error.message : '처리하지 못했습니다.')
+  );
+}
+
+/** The engine side of one instance: read, change settings, run, confirm (ARCH-03 §7). */
+function instanceHost(jig: OpenJig): JigHost {
+  let state: JigHostState = { busy: false };
+  const listeners = new Set<() => void>();
+  const update = (patch: Partial<JigHostState>) => {
+    state = { ...state, ...patch };
+    for (const listener of listeners) listener();
+    // The panel's head names the jig once it is read.
+    if (shown === jig) render();
+  };
+  const path = (rest = '') =>
+    `/projects/${encodeURIComponent(jig.context.projectId)}/jig-instances/${encodeURIComponent(jig.instanceId)}${rest}`;
+  const read = (value: unknown) => {
+    const instance = instanceViewSchema.parse(value);
+    update({ instance });
+    renameContextTab(jig.instanceId, instance.title, `${instance.jig.name} · ${instance.title}`);
+    return instance;
+  };
+  async function act<T>(work: () => Promise<T>): Promise<T | undefined> {
+    update({ busy: true, error: undefined });
+    try {
+      const value = await work();
+      update({ busy: false });
+      return value;
+    } catch (error) {
+      update({ busy: false, error: jigError(error) });
+      return undefined;
+    }
+  }
+  const changed = (value: unknown) =>
+    read(z.object({ instance: z.unknown() }).passthrough().parse(value).instance);
+  const slot = (name: string, parent: Element) => {
+    const node = document.createElement('div');
+    node.className = `jig-${name}`;
+    node.dataset.instance = jig.instanceId;
+    node.hidden = true;
+    parent.append(node);
+    return node;
+  };
+  const own = {
+    instanceId: jig.instanceId,
+    state: () => state,
+    subscribe: (listener: () => void) => {
+      listeners.add(listener);
+      return () => void listeners.delete(listener);
+    },
+    refresh: () => act(async () => read(await api(path()))),
+    params: {
+      get: () => state.instance?.params ?? [],
+      set: (values: JigParamChange[], reason?: string) =>
+        act(async () =>
+          changed(await api(path('/params'), 'PUT', { values, ...(reason ? { reason } : {}) })),
+        ),
+      undo: (seq: number) =>
+        act(async () => changed(await api(path('/params/undo'), 'POST', { seq }))),
+    },
+    run: (options: { until?: string; mode?: 'geometry' | 'preview' | 'confirmed' } = {}) =>
+      act(async () => {
+        const report = runReportSchema.parse(await api(path('/run'), 'POST', options));
+        update({ report });
+        read(await api(path()));
+        return report;
+      }),
+    // A read: it leaves `busy` alone so the screen can fetch outputs while settings change.
+    output: async (stepId: string) => {
+      try {
+        const reply = await api(path(`/steps/${encodeURIComponent(stepId)}/output`));
+        return z.object({ output: z.unknown() }).passthrough().parse(reply).output;
+      } catch (error) {
+        update({ error: jigError(error) });
+        return undefined;
+      }
+    },
+    confirm: (stepId: string) =>
+      act(async () => {
+        const inputHash = state.instance?.steps.find((step) => step.id === stepId)?.inputHash;
+        if (!inputHash) throw Error('먼저 계산하세요.');
+        return read(
+          await api(path(`/steps/${encodeURIComponent(stepId)}/confirm`), 'POST', { inputHash }),
+        );
+      }),
+    slots: {
+      top: slot('top', workspace),
+      board: slot('board', viewportArea),
+      drawer: slot('drawer', workspace),
+    },
+  };
+  // The host reads the workspace (Syncs, viewport, conversation) through the jig's context.
+  return Object.assign(Object.create(jig.context) as JigContext, own);
+}
+
+setContextResolver(async (instanceId) => {
+  const kind = legacyKind(instanceId);
+  if (kind) return legacyTab(kind);
+  const projectId = current()?.projectId;
+  if (!projectId) return undefined;
+  try {
+    const view = instanceViewSchema.parse(
+      await api(
+        `/projects/${encodeURIComponent(projectId)}/jig-instances/${encodeURIComponent(instanceId)}`,
+      ),
+    );
+    return { instanceId, label: view.title, title: `${view.jig.name} · ${view.title}` };
+  } catch {
+    // The instance is gone or unreadable: the list is the way back.
+    setWorkspace('jig');
+    return undefined;
+  }
+});
+function legacyTab(kind: LegacyKind): ContextTab {
+  const project = current()?.projectName;
+  return {
+    instanceId: `legacy:${kind}`,
+    label: project ? `${LEGACY[kind].purpose} · ${project}` : LEGACY[kind].title,
+    title: LEGACY[kind].title,
+  };
+}
 const mm = (metres: number) => `${Math.round(metres * 10000) / 10} mm`;
 const stateText: Record<Row['state'], string> = {
   match: '일치',
@@ -173,40 +600,324 @@ const unitScale: Record<string, number> = {
 
 const round = (values: number[], k = 1e4) => values.map((v) => Math.round(v * k) / k);
 
-function Gallery({ context, open }: { context: JigContext; open: (id: string) => void }) {
-  const [jigs, setJigs] = useState<Jig[]>();
+// The JIG list (SCR-18): the official catalogue, this project's jigs (installed and pinned here, or
+// being written in this checkout) with their instances, and drafts (T-063).
+const packageSchema = z
+  .object({
+    id: z.string(),
+    version: z.string(),
+    kind: z.enum(['tool', 'library']),
+    name: z.string(),
+    summary: z.string(),
+    stage: z.enum(['official', 'project', 'dev']),
+    corrupt: z.boolean().optional(),
+  })
+  .passthrough();
+type Package = z.infer<typeof packageSchema>;
+const instanceRowSchema = z
+  .object({
+    id: z.string(),
+    jigId: z.string(),
+    version: z.string(),
+    title: z.string(),
+    updatedAt: z.string(),
+  })
+  .passthrough();
+type InstanceRow = z.infer<typeof instanceRowSchema>;
+type Source = 'all' | 'official' | 'project' | 'draft';
+const SOURCES: { id: Source; label: string }[] = [
+  { id: 'all', label: '전체' },
+  { id: 'official', label: '공식' },
+  { id: 'project', label: '이 프로젝트의 jig' },
+  { id: 'draft', label: '내 초안' },
+];
+const stageText: Record<Package['stage'], string> = {
+  official: '공식',
+  project: '이 프로젝트의 jig',
+  dev: '작성 중',
+};
+const sourceOf = (entry: Package): Source => (entry.stage === 'official' ? 'official' : 'project');
+const when = (iso: string) =>
+  new Date(iso).toLocaleString('ko-KR', {
+    month: 'numeric',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+
+function Gallery({ context }: { context: JigContext }) {
+  const [legacy, setLegacy] = useState<Jig[]>();
+  const [packages, setPackages] = useState<Package[]>([]);
+  const [pinned, setPinned] = useState<string[]>([]);
+  const [instances, setInstances] = useState<InstanceRow[]>([]);
+  const [source, setSource] = useState<Source>(listSource);
+  const [creating, setCreating] = useState<string>();
+  const [notice, setNotice] = useState('');
+  const projectId = context.projectId;
+  // Read on each visit: instances change as jigs are opened, packages as jigs are pinned.
   useEffect(() => {
-    void api('/jigs').then((value) => setJigs(z.array(jigSchema).parse(value)));
-  }, []);
+    let live = true;
+    const project = `/projects/${encodeURIComponent(projectId)}`;
+    void api('/jigs')
+      .then((value) => live && setLegacy(z.array(jigSchema).parse(value)))
+      .catch((error: Error) => live && setNotice(error.message));
+    void api('/jigs/packages')
+      .then(
+        (value) =>
+          live && setPackages(z.object({ jigs: z.array(packageSchema) }).parse(value).jigs),
+      )
+      .catch(() => undefined);
+    void api(`${project}/jigs`)
+      .then(
+        (value) =>
+          live &&
+          setPinned(
+            z
+              .object({ pinned: z.array(z.object({ jigId: z.string() }).passthrough()) })
+              .parse(value)
+              .pinned.map((row) => row.jigId),
+          ),
+      )
+      .catch(() => undefined);
+    void api(`${project}/jig-instances`)
+      .then(
+        (value) =>
+          live &&
+          setInstances(z.object({ instances: z.array(instanceRowSchema) }).parse(value).instances),
+      )
+      .catch(() => undefined);
+    return () => {
+      live = false;
+    };
+  }, [projectId]);
+  // Installed jigs show only in the project they are pinned to.
+  const tools = packages.filter(
+    (entry) => entry.kind === 'tool' && (entry.stage !== 'project' || pinned.includes(entry.id)),
+  );
+  const official = (legacy?.length ?? 0) + tools.filter((t) => sourceOf(t) === 'official').length;
+  const counts: Record<Source, number> = {
+    all: (legacy?.length ?? 0) + tools.length,
+    official,
+    project: tools.filter((t) => sourceOf(t) === 'project').length,
+    draft: 0,
+  };
+  const listed = (kind: Source) => source === 'all' || source === kind;
+  const toolCard = (entry: Package) => {
+    const key = `${entry.id}@${entry.version}`;
+    const rows = instances.filter((row) => row.jigId === entry.id);
+    return (
+      <article
+        key={key}
+        className="jig-card"
+        data-source={sourceOf(entry)}
+        data-status={entry.corrupt ? 'planned' : 'available'}
+      >
+        <div className="jig-card-head">
+          <strong>{entry.name}</strong>
+          <span className="pill" data-ok={String(!entry.corrupt)}>
+            {entry.corrupt ? '열 수 없음' : '사용 가능'}
+          </span>
+        </div>
+        <p>
+          {entry.corrupt
+            ? '설치한 뒤 파일이 바뀌어 열 수 없습니다. 다시 가져오세요.'
+            : entry.summary}
+        </p>
+        <small>
+          {stageText[entry.stage]} · 버전 {entry.version}
+        </small>
+        {rows.length ? (
+          <ul className="jig-instances" aria-label={`${entry.name} 작업본`}>
+            {rows.map((row) => (
+              <li key={row.id}>
+                <span>{row.title}</span>
+                <small>
+                  {when(row.updatedAt)}
+                  {row.version !== entry.version ? ` · 버전 ${row.version}` : ''}
+                </small>
+                <button
+                  type="button"
+                  onClick={() =>
+                    openContextTab({
+                      instanceId: row.id,
+                      label: row.title,
+                      title: `${entry.name} · ${row.title}`,
+                    })
+                  }
+                >
+                  열기
+                </button>
+              </li>
+            ))}
+          </ul>
+        ) : null}
+        {entry.corrupt ? null : creating === key ? (
+          <NewInstance
+            entry={entry}
+            context={context}
+            onCancel={() => setCreating(undefined)}
+            onOpened={() => setCreating(undefined)}
+          />
+        ) : (
+          <button type="button" onClick={() => setCreating(key)}>
+            새로 열기
+          </button>
+        )}
+      </article>
+    );
+  };
   return (
-    <>
-      <p className="jig-intro">
-        jig는 한 가지 작업을 위한 도구입니다. 계산 단계는 매번 같은 결과를 내고, AI 단계는 계산
-        결과만 근거로 판정합니다. 준비 중인 jig는 과거 작업을 옮겨 오는 중입니다.
-      </p>
-      <div className="jig-grid">
-        {(jigs ?? []).map((jig) => (
-          <article key={jig.id} className="jig-card" data-status={jig.status}>
-            <div className="jig-card-head">
-              <strong>{jig.name}</strong>
-              <span className="pill" data-ok={String(jig.status === 'available')}>
-                {jig.status === 'available' ? '사용 가능' : '준비 중'}
-              </span>
-            </div>
-            <p>{jig.summary}</p>
-            <small>
-              {jig.code} · 입력: {jig.inputs.join(', ')}
-              {jig.basis ? ` · 근거 ${jig.basis}` : ''}
-            </small>
-            {jig.status === 'available' ? (
-              <button type="button" onClick={() => open(jig.id)}>
-                열기
-              </button>
-            ) : null}
-          </article>
+    <div className="jig-gallery">
+      <nav className="jig-sources" aria-label="출처">
+        {SOURCES.map((entry) => (
+          <button
+            key={entry.id}
+            type="button"
+            aria-pressed={source === entry.id}
+            onClick={() => setSource((listSource = entry.id))}
+          >
+            <span>{entry.label}</span> <small>{counts[entry.id]}</small>
+          </button>
         ))}
+      </nav>
+      <div className="jig-gallery-main">
+        <p className="jig-intro">
+          jig는 한 가지 작업을 위한 도구입니다. 계산 단계는 매번 같은 결과를 내고, AI 단계는 계산
+          결과만 근거로 판정합니다. 연 jig는 위의 탭에서 3D와 함께 쓰고, 준비 중인 jig는 과거 작업을
+          옮겨 오는 중입니다.
+        </p>
+        {notice ? <p role="status">{notice}</p> : null}
+        {source === 'draft' ? <p className="jig-intro">아직 만들고 있는 초안이 없습니다.</p> : null}
+        <div className="jig-grid">
+          {listed('project') ? tools.filter((t) => sourceOf(t) === 'project').map(toolCard) : null}
+          {listed('official')
+            ? (legacy ?? []).map((jig) => {
+                const kind = legacyKind(`legacy:${jig.id}`);
+                return (
+                  <article
+                    key={jig.id}
+                    className="jig-card"
+                    data-source="official"
+                    data-status={jig.status}
+                  >
+                    <div className="jig-card-head">
+                      <strong>{jig.name}</strong>
+                      <span className="pill" data-ok={String(jig.status === 'available')}>
+                        {jig.status === 'available' ? '사용 가능' : '준비 중'}
+                      </span>
+                    </div>
+                    <p>{jig.summary}</p>
+                    <small>
+                      {jig.code} · 입력: {jig.inputs.join(', ')}
+                      {jig.basis ? ` · 근거 ${jig.basis}` : ''}
+                    </small>
+                    {jig.status === 'available' && kind ? (
+                      <button type="button" onClick={() => openContextTab(legacyTab(kind))}>
+                        열기
+                      </button>
+                    ) : null}
+                  </article>
+                );
+              })
+            : null}
+          {listed('official')
+            ? tools.filter((t) => sourceOf(t) === 'official').map(toolCard)
+            : null}
+        </div>
       </div>
-    </>
+    </div>
+  );
+}
+
+/**
+ * Open a new instance of a jig (SCR-18 [새로 열기]): its name and the output layer, an existing
+ * layer of a linked model under which the jig makes one layer (SPEC-07.4). Both stay with it.
+ */
+function NewInstance({
+  entry,
+  context,
+  onCancel,
+  onOpened,
+}: {
+  entry: Package;
+  context: JigContext;
+  onCancel: () => void;
+  onOpened: () => void;
+}) {
+  const layers = useMemo(() => context.layers ?? [], [context]);
+  const [title, setTitle] = useState(
+    context.projectName ? `${entry.name} · ${context.projectName}` : entry.name,
+  );
+  const [layer, setLayer] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const listId = `jig-layers-${entry.id.replace(/[^a-z0-9]+/gi, '-')}`;
+  const submit = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!title.trim() || !layer.trim()) return;
+    setBusy(true);
+    setError('');
+    try {
+      const view = instanceViewSchema.parse(
+        await api(`/projects/${encodeURIComponent(context.projectId)}/jig-instances`, 'POST', {
+          jig: entry.id,
+          version: entry.version,
+          title: title.trim(),
+          layerRoot: layer.trim(),
+        }),
+      );
+      onOpened();
+      openContextTab({
+        instanceId: view.id,
+        label: view.title,
+        title: `${view.jig.name} · ${view.title}`,
+      });
+    } catch (cause) {
+      setError(jigError(cause));
+      setBusy(false);
+    }
+  };
+  return (
+    <form className="jig-new" onSubmit={(event) => void submit(event)}>
+      <label>
+        이름
+        <input value={title} maxLength={200} onChange={(e) => setTitle(e.target.value)} />
+      </label>
+      <label>
+        출력 레이어
+        <input
+          value={layer}
+          list={layers.length ? listId : undefined}
+          maxLength={1000}
+          placeholder={layers.length ? '연결 모델의 레이어' : '연결 모델의 레이어 이름'}
+          onChange={(e) => setLayer(e.target.value)}
+        />
+      </label>
+      {layers.length ? (
+        <datalist id={listId}>
+          {layers.map((path) => (
+            <option key={path} value={path} />
+          ))}
+        </datalist>
+      ) : null}
+      <small>
+        jig는 이 레이어 바로 아래 한 단계에만 만듭니다. 출력 레이어는 나중에 바꿀 수 없고, 바꾸려면
+        새로 엽니다.
+      </small>
+      {error ? <p role="status">{error}</p> : null}
+      <div>
+        <button
+          type="submit"
+          className="primary-button"
+          disabled={busy || !title.trim() || !layer.trim()}
+        >
+          {busy ? '여는 중…' : '열기'}
+        </button>{' '}
+        <button type="button" onClick={onCancel}>
+          취소
+        </button>
+      </div>
+    </form>
   );
 }
 
@@ -652,106 +1363,331 @@ function SyncJig({ context }: { context: JigContext }) {
   );
 }
 
-function Jigs({ context, collapsed }: { context: JigContext; collapsed: boolean }) {
-  const [open, setOpen] = useState<string>();
-  useEffect(() => forgetOverlays, [open]);
-  const jig = useMemo<JigContext>(() => {
-    const tint = context.tint;
-    return {
-      ...context,
-      // On a phone the panel covers the model: fold it so the shown result is visible.
-      show: (requestId, objectId) => {
-        if (narrow()) fold(true);
-        context.show(requestId, objectId);
-      },
-      tint:
-        tint &&
-        ((requestId, colors) => {
-          if (narrow()) fold(true);
-          tint(requestId, colors);
-        }),
-      overlay: (key, items) => {
-        if (items) drawn.set(key, items);
-        else drawn.delete(key);
-        // A result that lands after the panel was closed waits for the next opening.
-        if (dialog.open) context.overlay(key, items);
-      },
-      onOverlayPick: (listener) => {
-        const handle = (event: Event) =>
-          listener((event as CustomEvent<{ key: string; itemId: string }>).detail);
-        dialog.addEventListener('overlaypick', handle);
-        return () => dialog.removeEventListener('overlaypick', handle);
-      },
-    };
-  }, [context]);
-  const title =
-    open === 'sync'
-      ? 'Sync · 도면↔모델'
-      : open === 'knowledge'
-        ? '프로젝트 자료 · 시험판'
-        : open === 'structure'
-          ? '구조 분석'
-          : 'JIG';
+function titleOf(jig: OpenJig) {
+  if (jig.kind !== 'instance') return LEGACY[jig.kind].title;
+  return (
+    jig.host?.state().instance?.jig.name ??
+    contextTabs().find((tab) => tab.instanceId === jig.instanceId)?.label ??
+    'JIG'
+  );
+}
+
+/** The panel: the jig list on the JIG tab, or the shown jig with its head (fold, list, close). */
+function Surface({ context }: { context: JigContext }) {
+  const jig = shown;
+  const list = activeWorkspace() === 'jig';
+  const title = jig ? titleOf(jig) : 'JIG';
   return (
     <>
-      {collapsed ? (
-        <button
-          type="button"
-          className="jig-expand"
-          aria-label={`${title} 펼치기`}
-          title="JIG 펼치기"
-          onClick={() => fold(false)}
-        >
-          <span>{title}</span>
-        </button>
-      ) : (
-        <div className="quantity-head">
-          <h2>{title}</h2>
-          <div>
-            {open ? (
-              <button type="button" onClick={() => setOpen(undefined)}>
-                목록
-              </button>
-            ) : null}{' '}
-            <button
-              type="button"
-              title="3D를 넓게 보기 · 입력과 결과는 그대로 둡니다"
-              onClick={() => fold(true)}
-            >
-              접기
-            </button>{' '}
-            <button type="button" onClick={close}>
-              닫기
-            </button>
-          </div>
-        </div>
-      )}
-      {/* Folding hides the jig without unmounting it, so its inputs and results stay. */}
-      <div className="jig-body" hidden={collapsed}>
-        {open === 'sync' ? (
-          <SyncJig context={jig} />
-        ) : open === 'knowledge' ? (
-          <KnowledgeJig projectId={context.projectId} />
-        ) : open === 'structure' ? (
-          <StructureJig context={jig} />
+      {jig ? (
+        collapsed ? (
+          <button
+            type="button"
+            className="jig-expand"
+            aria-label={`${title} 펼치기`}
+            title="JIG 펼치기"
+            onClick={() => fold(false)}
+          >
+            <span>{title}</span>
+          </button>
         ) : (
-          <Gallery context={jig} open={setOpen} />
-        )}
-      </div>
+          <div className="quantity-head">
+            <h2>{title}</h2>
+            <div>
+              <button
+                type="button"
+                title="JIG 목록 · 이 탭은 그대로 둡니다"
+                onClick={() => setWorkspace('jig')}
+              >
+                목록
+              </button>{' '}
+              <button
+                type="button"
+                title="3D를 넓게 보기 · 입력과 결과는 그대로 둡니다"
+                onClick={() => fold(true)}
+              >
+                접기
+              </button>{' '}
+              <button
+                type="button"
+                title="이 탭 닫기 · 작업본은 남고 JIG 목록에서 다시 엽니다"
+                onClick={() => closeContextTab(jig.instanceId)}
+              >
+                닫기
+              </button>
+            </div>
+          </div>
+        )
+      ) : null}
+      {/* The list is read again on each visit and leaves nothing behind in the panel. */}
+      {list ? (
+        <div className="jig-list">
+          <Gallery context={context} />
+        </div>
+      ) : null}
+      {/* Every opened jig stays mounted; hiding keeps its inputs and results. */}
+      {[...mounted.values()].map((open) => (
+        <div
+          key={open.instanceId}
+          className="jig-body"
+          data-jig={open.kind}
+          hidden={open !== jig || collapsed}
+        >
+          <JigBody jig={open} generation={generation} />
+        </div>
+      ))}
     </>
   );
 }
-/** Open (or unfold) the JIG panel. The same jig and its state come back until the page reloads. */
-export function showJigs(context: JigContext) {
-  current = context;
-  collapsed = false;
-  if (!dialog.open) {
-    dialog.show();
-    for (const [key, items] of drawn) context.overlay(key, items);
+
+/** One jig's screen; kept from re-rendering while other tabs change (`generation` = new Syncs). */
+const JigBody = memo(function JigBody({ jig }: { jig: OpenJig; generation: number }) {
+  switch (jig.kind) {
+    case 'sync':
+      return <SyncJig context={jig.context} />;
+    case 'structure':
+      return <StructureJig context={jig.context} />;
+    case 'knowledge':
+      return <KnowledgeJig projectId={jig.context.projectId} />;
+    case 'instance':
+      // A jig with a declared screen draws it (T-048); otherwise the plain instance view.
+      return <DeclaredJig host={jig.host!} plain={<InstanceJig host={jig.host!} />} />;
+    default:
+      return <InstanceJig host={jig.host!} />;
   }
-  render();
+});
+
+const stepText: Record<string, string> = {
+  pending: '계산 전',
+  running: '계산 중',
+  done: '계산됨',
+  failed: '실패',
+  stale: '다시 계산 필요',
+  waiting: '확정 전',
+  confirmed: '확정됨',
+  reconfirm: '다시 확인 필요',
+  blocked: '앞 단계에서 멈춤',
+  skipped: '건너뜀',
+  'gate-failed': '점검에 막힘',
+};
+const stepMark: Record<string, string> = {
+  done: '✓',
+  confirmed: '✓',
+  failed: '✕',
+  'gate-failed': '✕',
+  blocked: '✕',
+  stale: '◌',
+  reconfirm: '!',
+  running: '…',
+  skipped: '–',
+};
+const kindText: Record<string, string> = {
+  code: '계산',
+  library: '라이브러리',
+  ai: 'AI',
+  human: '사람',
+  host: '호스트',
+};
+const byText: Record<string, string> = {
+  default: '기본값',
+  user: '사용자',
+  decision: '결정',
+  fact: '자료',
+  ai: 'AI',
+  rhino: 'Rhino',
+  sketch: '스케치',
+};
+const instanceText: Record<string, string> = {
+  new: '계산 전',
+  computed: '계산됨',
+  'gate-failed': '점검 실패',
+  stale: '다시 계산 필요',
+};
+
+/** A plain view of an instance (steps and settings) for a jig the declarative panel does not draw. */
+function InstanceJig({ host }: { host: JigHost }) {
+  const state = useSyncExternalStore(host.subscribe, host.state);
+  const view = state.instance;
+  if (!view)
+    return (
+      <p className="jig-intro" role="status">
+        {state.error ?? '작업본을 읽는 중…'}{' '}
+        {state.error && !state.busy ? (
+          <button type="button" onClick={() => void host.refresh()}>
+            다시 읽기
+          </button>
+        ) : null}
+      </p>
+    );
+  const groups = new Map<string, JigInstanceView['params']>();
+  for (const param of view.params)
+    groups.set(param.group, [...(groups.get(param.group) ?? []), param]);
+  return (
+    <div className="jig-instance">
+      <p className="jig-intro">
+        {view.jig.name} {view.jig.version} · {instanceText[view.status] ?? view.status} · 출력
+        레이어 {view.body.layerRoot}
+      </p>
+      <div className="jig-actions">
+        <button
+          type="button"
+          className="primary-button"
+          disabled={state.busy}
+          onClick={() => void host.run()}
+        >
+          {state.busy ? '계산 중…' : '계산'}
+        </button>
+      </div>
+      {state.error ? <p role="status">{state.error}</p> : null}
+      <ol className="jig-steps" aria-label="단계">
+        {view.steps.map((step) => {
+          const ran = state.report?.steps.find((entry) => entry.id === step.id);
+          const status = ran?.status ?? step.status;
+          const ms = ran ? ran.ms : step.ms;
+          const problems = (ran?.gates ?? step.gates ?? []).filter((g) => !g.ok && !g.verdict);
+          return (
+            <li key={step.id} data-status={status}>
+              <span className="jig-step-mark" aria-hidden="true">
+                {stepMark[status] ?? '○'}
+              </span>
+              <div>
+                <strong>{step.title}</strong>
+                <small>
+                  {[
+                    stepText[status] ?? status,
+                    kindText[step.kind] ?? step.kind,
+                    ms != null ? `${ms} ms` : '',
+                  ]
+                    .filter(Boolean)
+                    .join(' · ')}
+                </small>
+                {problems.map((gate) => (
+                  <p key={gate.name}>{gate.message}</p>
+                ))}
+                {ran?.error ? <p>{ran.error.message}</p> : null}
+              </div>
+            </li>
+          );
+        })}
+      </ol>
+      {[...groups].map(([group, params]) => (
+        <fieldset key={group} className="jig-param-group" disabled={state.busy}>
+          <legend>{group}</legend>
+          {params.map((param) => (
+            <ParamRow
+              key={`${param.key}:${String(param.displayValue)}`}
+              param={param}
+              set={(value) =>
+                void host.params.set([
+                  {
+                    key: param.key,
+                    value,
+                    ...(typeof value === 'number' ? { unit: param.displayUnit } : {}),
+                  },
+                ])
+              }
+            />
+          ))}
+        </fieldset>
+      ))}
+    </div>
+  );
 }
-/** The viewport reports a click on an overlay item; the open jig may follow it. */
+/** One setting: the value in its display unit; a new value is sent when the field is left. */
+function ParamRow({
+  param,
+  set,
+}: {
+  param: JigInstanceView['params'][number];
+  set: (value: number | string | boolean) => void;
+}) {
+  const fixed = !!param.fixedAtPin;
+  const commit = (input: HTMLInputElement) => {
+    if (typeof param.displayValue === 'number') {
+      const value = Number(input.value);
+      if (input.value.trim() === '' || !Number.isFinite(value)) {
+        input.value = String(param.displayValue);
+        return;
+      }
+      if (value !== param.displayValue) set(value);
+    } else if (input.value !== param.displayValue) set(input.value);
+  };
+  const control = param.choices?.length ? (
+    <select
+      aria-label={param.title}
+      defaultValue={String(param.value)}
+      disabled={fixed}
+      onChange={(event) => set(event.target.value)}
+    >
+      {param.choices.map((choice) => (
+        <option key={choice.value} value={choice.value}>
+          {choice.label}
+        </option>
+      ))}
+    </select>
+  ) : typeof param.value === 'boolean' ? (
+    <input
+      type="checkbox"
+      aria-label={param.title}
+      defaultChecked={param.value}
+      disabled={fixed}
+      onChange={(event) => set(event.target.checked)}
+    />
+  ) : (
+    <input
+      type={typeof param.displayValue === 'number' ? 'number' : 'text'}
+      step="any"
+      aria-label={param.title}
+      defaultValue={String(param.displayValue)}
+      disabled={fixed}
+      onBlur={(event) => commit(event.currentTarget)}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter') commit(event.currentTarget);
+      }}
+    />
+  );
+  return (
+    <div className="jig-param" title={param.help}>
+      <span>{param.title}</span>
+      {control}
+      <small>
+        {param.displayUnit}
+        {fixed ? ' · 고정' : ` · ${byText[param.by] ?? param.by}`}
+      </small>
+    </div>
+  );
+}
+
+/** Give the jig screens the workspace: project, Syncs, viewport and conversation. */
+export function attachJigs(context: () => JigContext) {
+  provide = context;
+}
+/**
+ * The rail's JIG button: back to the jig used last (its tab opens again if it was closed; an older
+ * jig comes back with its inputs and results), or the JIG list before any jig was opened.
+ */
+export function showJigs() {
+  const active = activeWorkspace();
+  if (active === 'jig' || contextTabs().some((tab) => contextId(tab.instanceId) === active)) {
+    if (collapsed) fold(false);
+    return;
+  }
+  const last = lastJigInstance();
+  if (last) setWorkspace('jig', { instanceId: last });
+  else setWorkspace('jig');
+}
+/** The Syncs changed: open jigs get the new list without being opened again. */
+export function refreshJigs() {
+  if (!mounted.size) return;
+  const context = current();
+  if (!context) return;
+  const key = context.sources.map((source) => `${source.id}|${source.label}`).join('\n');
+  if (key === sourcesKey) return;
+  sourcesKey = key;
+  generation++;
+  if (dialog.open) render();
+}
+/** The viewport reports a click on an overlay item; the shown jig may follow it. */
 export function overlayPicked(hit: { key: string; itemId: string }) {
   dialog.dispatchEvent(
     new CustomEvent('overlaypick', { detail: { key: hit.key, itemId: hit.itemId } }),

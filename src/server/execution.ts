@@ -16,17 +16,27 @@ import type { AgentTools } from './agent-tools.ts';
 import type { Workspace } from '../core/workspace.ts';
 import type { StoredWork } from '../contracts/stored-work.ts';
 import type { RequestInput } from '../contracts/workspace.ts';
-import type { CliOptions, ProviderContext, Progress, ProviderStatus } from '../ai/claude-cli.ts';
+import type {
+  CliOptions,
+  ProviderContext,
+  Progress,
+  ProviderStatus,
+  SessionOptions,
+} from '../ai/claude-cli.ts';
 import type { GeometryObject } from '../core/geometry.ts';
 import type { SdkExecution } from './sdk-execution.ts';
 import type { ZwcadSdkExecution } from './zwcad-sdk-execution.ts';
+import type { ConversationService, Turn } from './conversations.ts';
 import { workspaceResultSchema } from '../contracts/workspace-result.ts';
+import { bakeJobOf } from '../jigs/bake/bake.ts';
 interface Provider {
   run(
     context: ProviderContext,
     options: { signal: AbortSignal; onProgress: (event: Progress) => void },
   ): Promise<{ text: string; [key: string]: unknown }>;
   status(): Promise<ProviderStatus>;
+  /** The CLI version a conversation session is recorded with (CLI providers). */
+  checkVersion?(): Promise<string>;
 }
 interface Host {
   build(
@@ -56,6 +66,8 @@ interface Options {
   diagnostics?: Diagnostics;
   /** Which earlier exchanges go with a request (Jev when a key is set; else the last six). */
   selectContext?: (body: string, candidates: ContextCandidate[]) => Promise<ContextChoice>;
+  /** Conversations (SPEC-02.19): session per turn, ledger, one running turn per conversation. */
+  conversations?: ConversationService;
 }
 /**
  * Jig review gate (RESEARCH-05 standard gates): an AI review of a Sync jig table may cite only the
@@ -119,6 +131,7 @@ export class Execution {
   tools?: AgentTools;
   diagnostics?: Diagnostics;
   selectContext: NonNullable<Options['selectContext']>;
+  conversations?: ConversationService;
   active = new Map<
     string,
     { controller: AbortController; completion: Promise<void>; projectId: string }
@@ -137,6 +150,7 @@ export class Execution {
       applyAttached,
       onProviderLimit,
       diagnostics,
+      conversations,
       selectContext: choose = (body, candidates) =>
         selectContext(body, candidates, { key: () => '' }),
     }: Options = {},
@@ -155,6 +169,7 @@ export class Execution {
     this.tools = tools;
     this.diagnostics = diagnostics;
     this.selectContext = choose;
+    this.conversations = conversations;
   }
   executable(provider: string) {
     return (
@@ -170,11 +185,13 @@ export class Execution {
       'provider' | 'model' | 'effort' | 'accountProfileId' | 'executionLimits'
     >,
     agent?: unknown,
+    session?: SessionOptions,
   ) {
     const executable = this.executable(input.provider);
     return this.providerFactory({
       provider: input.provider,
       executable,
+      session,
       configDirectory:
         input.provider !== 'extension'
           ? this.profiles?.directory(
@@ -296,6 +313,23 @@ export class Execution {
       this.pump(request.projectId);
       return;
     }
+    // One running turn per conversation (SPEC-02.19 4): a later message waits in its line.
+    const hold = this.conversations?.hold(
+      request,
+      this.workspace.list(request.projectId),
+      new Set(this.active.keys()),
+    );
+    if (hold?.code) {
+      this.workspace.update(request.projectId, request.id, 'interrupted', {
+        ...request.result,
+        code: hold.code,
+      });
+      return;
+    }
+    if (hold?.waitingFor) {
+      this.workspace.wait(request.projectId, request.id, hold.waitingFor);
+      return;
+    }
     const controller = new AbortController();
     const completion = this.traced(request, this.run(request, controller)).finally(() => {
       this.active.delete(request.id);
@@ -327,6 +361,7 @@ export class Execution {
       effort: input.effort ?? null,
       host: input.host ?? 'rhino',
       permission: input.permission,
+      conversation: input.conversationId ?? null,
     });
     return run
       .catch((error: unknown) => {
@@ -424,7 +459,27 @@ export class Execution {
     predecessor.controller.abort();
     return request;
   }
-  async run(request: StoredWork, controller: AbortController) {
+  /** A conversation's turn: its session and the ledger items (undefined outside a conversation). */
+  private beginTurn(request: StoredWork): Promise<Turn | undefined> | undefined {
+    if (!this.conversations || typeof request.input.conversationId !== 'string') return undefined;
+    return this.conversations.beginTurn(request, {
+      rows: this.workspace.list(request.projectId),
+      cliVersion: async () => (await this.provider(request.input).checkVersion?.()) ?? 'unknown',
+    });
+  }
+  private endTurn(turn: Turn, projectId: string, id: string) {
+    try {
+      const done = this.workspace.get(projectId, id);
+      this.conversations!.endTurn(turn, { state: done.state, result: done.result });
+    } catch (error) {
+      this.diagnostics?.write('conversation-turn-failed', {
+        requestId: id,
+        projectId,
+        ...Diagnostics.error(error),
+      });
+    }
+  }
+  async run(request: StoredWork, controller: AbortController, attempt = 0): Promise<void> {
     const { projectId, id, input } = request;
     // A jig's AI review reads only the attached jig table: no host, no document context.
     // A turn taken without the host (SPEC-02.9 1) gets none either.
@@ -436,17 +491,64 @@ export class Execution {
       host = jigReview ? undefined : this.hosts[target];
     this.workspace.update(projectId, id, 'running');
     let hostIntent: Record<string, unknown> | undefined;
+    let turn: Turn | undefined;
     try {
       if (input.applyToSource && (!this.sdk || !this.applyAttached))
         throw { code: 'EXECUTOR_NOT_READY' };
+      // Rhino에 만들기 (SPEC-07.12, ARCH-03 §9.3): the fixed bodies the bake route prepared run in
+      // the work copy with no provider; the job writes the bake record and the candidate summary.
+      const bake = bakeJobOf(request);
+      if (bake) {
+        if (!this.sdk) throw { code: 'EXECUTOR_NOT_READY' };
+        const basis = this.workspace.basis(projectId, input);
+        let result: Record<string, unknown>;
+        try {
+          result = await this.sdk.runFixed({
+            input,
+            previous: basis
+              ? { ...basis, result: executionResultSchema.parse(basis.result) }
+              : undefined,
+            codes: bake.codes,
+            expectedDocumentHash: bake.expectedDocumentHash,
+            signal: controller.signal,
+            update: (progress) => {
+              if (progress.phase === 'host') hostIntent = progress;
+              this.workspace.update(projectId, id, 'running', progress);
+            },
+          });
+        } catch (cause) {
+          // A refused or failing template leaves the original untouched; keep the worker's
+          // diagnostics with the failure so the template fault can be fixed.
+          const error = errorData(cause);
+          if (error.code !== 'BAKE_TEMPLATE_REJECTED' && error.code !== 'BAKE_FAILED') throw cause;
+          const { code, diagnostics, diagnosticId, exceptionType } = error as Record<
+            string,
+            unknown
+          >;
+          this.workspace.update(projectId, id, 'failed', {
+            code,
+            hostExecuted: false,
+            ...(diagnostics ? { diagnostics } : {}),
+            ...(diagnosticId ? { diagnosticId } : {}),
+            ...(exceptionType ? { exceptionType } : {}),
+          });
+          return;
+        }
+        this.workspace.update(projectId, id, 'succeeded', await bake.finish(result));
+        return;
+      }
       const pins = pinsSchema.parse(input.pins);
       const items: { id: string; type: string; data: unknown }[] = [
         ...pins.map((data, i) => ({ id: `pin-${i}`, type: 'object-reference', data })),
         ...input.sketches.map((data, i) => ({ id: `sketch-${i}`, type: 'sketch', data })),
         ...input.files.map((data, i) => ({ id: `file-${i}`, type: 'file', data })),
       ];
+      // Outside a conversation the run stays synchronous up to the provider call (no await).
+      const pending = this.beginTurn(request);
+      if (pending) turn = await pending;
       if (input.linkedTargets) {
         if (!this.sdk || !this.zwcadSdk || !this.tools) throw { code: 'EXECUTOR_NOT_READY' };
+        if (turn) items.push(...turn.items);
         await runLinked({
           request,
           workspace: this.workspace,
@@ -454,7 +556,7 @@ export class Execution {
           drivers: { rhino: this.sdk, zwcad: this.zwcadSdk },
           items,
           signal: controller.signal,
-          provider: (agent) => this.provider(input, agent),
+          provider: (agent) => this.provider(input, agent, turn?.session),
         });
         return;
       }
@@ -489,8 +591,15 @@ export class Execution {
       if (referenced.length)
         items.push({ id: 'referenced-geometry', type: 'geometry-reference', data: referenced });
       const hidden = this.workspace.hiddenIds(projectId);
-      const earlier = this.workspace
-        .list(projectId)
+      // Earlier exchanges of this conversation (the default one: requests without any). A resumed
+      // session remembers them itself (SPEC-02.17 6); the ledger method sends a selection.
+      const earlier = (
+        turn?.session
+          ? []
+          : this.workspace
+              .list(projectId)
+              .filter((r) => (r.input.conversationId ?? null) === (input.conversationId ?? null))
+      )
         .filter((r) => r.id !== id && r.state === 'succeeded' && !hidden.has(r.id))
         .map((r) => ({
           id: r.id,
@@ -522,6 +631,7 @@ export class Execution {
         }));
       if (conversation.length)
         items.push({ id: 'conversation', type: 'conversation', data: conversation });
+      if (turn) items.push(...turn.items);
       const sdk = jigReview ? undefined : target === 'rhino' ? this.sdk : this.zwcadSdk;
       if (sdk)
         items.push(
@@ -551,7 +661,7 @@ export class Execution {
           previous,
           items,
           signal: controller.signal,
-          provider: (agent) => this.provider(input, agent),
+          provider: (agent) => this.provider(input, agent, turn?.session),
           update: (progress) => {
             if (progress.phase === 'host') hostIntent = progress;
             this.workspace.update(projectId, id, 'running', progress);
@@ -580,7 +690,7 @@ export class Execution {
             input.permission +
             '\nUser request: '
           : '') + (input.body || '첨부한 설계 문맥을 검토해 주세요.');
-      const result = await this.provider(input).run(
+      const result = await this.provider(input, undefined, turn?.session).run(
         { goal, revision: 1, items, includedIds: items.map((item) => item.id) },
         {
           signal: controller.signal,
@@ -657,6 +767,13 @@ export class Execution {
         });
     } catch (cause) {
       const error = errorData(cause);
+      if (error.code === 'SESSION_LOST' && turn && attempt === 0 && !controller.signal.aborted) {
+        // The resumed transcript is gone (SPEC-02.19 5): the turn runs once more in a new
+        // session that gets the ledger and a hand-over.
+        this.conversations!.endTurn(turn, { state: 'failed', result: { code: error.code } });
+        turn = undefined;
+        return this.run(request, controller, 1);
+      }
       if (error.code === 'PROVIDER_LIMIT')
         this.onProviderLimit?.(
           String(request.input.provider),
@@ -676,6 +793,8 @@ export class Execution {
           hostExecuted: false,
         },
       );
+    } finally {
+      if (turn) this.endTurn(turn, projectId, id);
     }
   }
   /** Settles when the request's run ends (undefined when it is not running here). */

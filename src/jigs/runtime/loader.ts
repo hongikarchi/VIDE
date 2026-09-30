@@ -9,6 +9,8 @@ import { join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { DomainError } from '../../contracts/errors.ts';
 import type { JigStore } from '../../core/jig-store.ts';
+// Pure (zod and the part registry only): the same check the screen runs before drawing.
+import { scopeOf, validatePanel } from '../../ui/jig-panel/spec.ts';
 import { sha256 } from './hash.ts';
 import {
   validateManifest,
@@ -131,6 +133,23 @@ export function readManifestFile(dir: string): unknown {
   }
 }
 
+/** Issues of the package's `panel.json` against the part registry and the manifest's names. */
+function checkPanelFile(dir: string, manifest: JigManifest): ManifestIssue[] {
+  const file = manifest.panel!;
+  let raw: unknown;
+  try {
+    raw = JSON.parse(readFileSync(join(dir, file), 'utf8'));
+  } catch {
+    return [{ code: 'JIG_PANEL', path: file, message: 'JSON이 아닙니다', level: 'error' }];
+  }
+  return validatePanel(raw, scopeOf(manifest)).issues.map((issue) => ({
+    code: 'JIG_PANEL' as const,
+    path: `${file}:${issue.path}`,
+    message: issue.message,
+    level: 'error' as const,
+  }));
+}
+
 /** Load and validate a package folder; throws `JigInvalidError` with the issues when it fails. */
 export async function loadJig(
   dir: string,
@@ -154,6 +173,13 @@ export async function loadJig(
     ),
   });
   if (!manifest || !derived) throw new JigInvalidError(issues);
+  // The panel is data the screen draws (ARCH-03 §5.1): a part outside the official list, an
+  // unknown property, a colour value or a binding the jig does not declare refuses registration
+  // here, not only on the screen.
+  if (manifest.kind === 'tool' && manifest.panel) {
+    const panelIssues = checkPanelFile(absolute, manifest);
+    if (panelIssues.length) throw new JigInvalidError([...issues, ...panelIssues]);
+  }
   const digest = digestDir(absolute, files);
   if (options.expectDigest && options.expectDigest !== digest)
     throw new DomainError('JIG_DIGEST_MISMATCH');

@@ -1,0 +1,440 @@
+{
+  "site": {
+    "existingFootings": {
+      "rows": [
+        {
+          "id": "c1",
+          "nativeId": "00000000-0000-4000-8000-000000200001",
+          "layer64": "6riw7KG0IOq4sOy0iA==",
+          "name64": "",
+          "nativeType": "InstanceReference",
+          "block": {
+            "definition": "00000000-0000-4000-8000-00000000e001",
+            "transform": [1, 0, 0, 1000, 0, 1, 0, 2000, 0, 0, 1, 0, 0, 0, 0, 1]
+          },
+          "layer": "기존 기초"
+        },
+        {
+          "id": "c2",
+          "nativeId": "00000000-0000-4000-8000-000000200002",
+          "layer64": "6riw7KG0IOq4sOy0iA==",
+          "name64": "",
+          "nativeType": "InstanceReference",
+          "block": {
+            "definition": "00000000-0000-4000-8000-00000000e001",
+            "transform": [1, 0, 0, 1000, 0, 1, 0, 2003, 0, 0, 1, 0, 0, 0, 0, 1]
+          },
+          "layer": "기존 기초"
+        },
+        {
+          "id": "c3",
+          "nativeId": "00000000-0000-4000-8000-000000200003",
+          "layer64": "6riw7KG0IOq4sOy0iA==",
+          "name64": "",
+          "nativeType": "InstanceReference",
+          "block": {
+            "definition": "00000000-0000-4000-8000-00000000e001",
+            "transform": [1, 0, 0, 1000, 0, 1, 0, 2006, 0, 0, 1, 0, 0, 0, 0, 1]
+          },
+          "layer": "기존 기초"
+        },
+        {
+          "id": "c4",
+          "nativeId": "00000000-0000-4000-8000-000000200004",
+          "layer64": "6riw7KG0IOq4sOy0iA==",
+          "name64": "",
+          "nativeType": "InstanceReference",
+          "block": {
+            "definition": "00000000-0000-4000-8000-00000000e001",
+            "transform": [1, 0, 0, 1003, 0, 1, 0, 2000, 0, 0, 1, 0, 0, 0, 0, 1]
+          },
+          "layer": "기존 기초"
+        },
+        {
+          "id": "c5",
+          "nativeId": "00000000-0000-4000-8000-000000200005",
+          "layer64": "6riw7KG0IOq4sOy0iA==",
+          "name64": "",
+          "nativeType": "InstanceReference",
+          "block": {
+            "definition": "00000000-0000-4000-8000-00000000e001",
+            "transform": [1, 0, 0, 1003, 0, 1, 0, 2003, 0, 0, 1, 0, 0, 0, 0, 1]
+          },
+          "layer": "기존 기초"
+        },
+        {
+          "id": "c6",
+          "nativeId": "00000000-0000-4000-8000-000000200006",
+          "layer64": "6riw7KG0IOq4sOy0iA==",
+          "name64": "",
+          "nativeType": "InstanceReference",
+          "block": {
+            "definition": "00000000-0000-4000-8000-00000000e001",
+            "transform": [1, 0, 0, 1003, 0, 1, 0, 2006, 0, 0, 1, 0, 0, 0, 0, 1]
+          },
+          "layer": "기존 기초"
+        },
+        {
+          "id": "c7",
+          "nativeId": "00000000-0000-4000-8000-000000200007",
+          "layer64": "6riw7KG0IOq4sOy0iA==",
+          "name64": "",
+          "nativeType": "InstanceReference",
+          "block": {
+            "definition": "00000000-0000-4000-8000-00000000e001",
+            "transform": [1, 0, 0, 1006, 0, 1, 0, 2000, 0, 0, 1, 0, 0, 0, 0, 1]
+          },
+          "layer": "기존 기초"
+        },
+        {
+          "id": "c8",
+          "nativeId": "00000000-0000-4000-8000-000000200008",
+          "layer64": "6riw7KG0IOq4sOy0iA==",
+          "name64": "",
+          "nativeType": "InstanceReference",
+          "block": {
+            "definition": "00000000-0000-4000-8000-00000000e001",
+            "transform": [1, 0, 0, 1006, 0, 1, 0, 2003, 0, 0, 1, 0, 0, 0, 0, 1]
+          },
+          "layer": "기존 기초"
+        },
+        {
+          "id": "c9",
+          "nativeId": "00000000-0000-4000-8000-000000200009",
+          "layer64": "6riw7KG0IOq4sOy0iA==",
+          "name64": "",
+          "nativeType": "InstanceReference",
+          "block": {
+            "definition": "00000000-0000-4000-8000-00000000e001",
+            "transform": [1, 0, 0, 1006, 0, 1, 0, 2006, 0, 0, 1, 0, 0, 0, 0, 1]
+          },
+          "layer": "기존 기초"
+        },
+        {
+          "id": "c10",
+          "nativeId": "00000000-0000-4000-8000-000000200010",
+          "layer64": "6riw7KG0IOq4sOy0iA==",
+          "name64": "",
+          "nativeType": "InstanceReference",
+          "block": {
+            "definition": "00000000-0000-4000-8000-00000000e001",
+            "transform": [1, 0, 0, 1009, 0, 1, 0, 2000, 0, 0, 1, 0, 0, 0, 0, 1]
+          },
+          "layer": "기존 기초"
+        },
+        {
+          "id": "c11",
+          "nativeId": "00000000-0000-4000-8000-000000200011",
+          "layer64": "6riw7KG0IOq4sOy0iA==",
+          "name64": "",
+          "nativeType": "InstanceReference",
+          "block": {
+            "definition": "00000000-0000-4000-8000-00000000e001",
+            "transform": [1, 0, 0, 1009, 0, 1, 0, 2003, 0, 0, 1, 0, 0, 0, 0, 1]
+          },
+          "layer": "기존 기초"
+        },
+        {
+          "id": "c12",
+          "nativeId": "00000000-0000-4000-8000-000000200012",
+          "layer64": "6riw7KG0IOq4sOy0iA==",
+          "name64": "",
+          "nativeType": "InstanceReference",
+          "block": {
+            "definition": "00000000-0000-4000-8000-00000000e001",
+            "transform": [1, 0, 0, 1009, 0, 1, 0, 2006, 0, 0, 1, 0, 0, 0, 0, 1]
+          },
+          "layer": "기존 기초"
+        },
+        {
+          "id": "c13",
+          "nativeId": "00000000-0000-4000-8000-000000200013",
+          "layer64": "6riw7KG0IOq4sOy0iA==",
+          "name64": "",
+          "nativeType": "InstanceReference",
+          "block": {
+            "definition": "00000000-0000-4000-8000-00000000e001",
+            "transform": [1, 0, 0, 1012, 0, 1, 0, 2000, 0, 0, 1, 0, 0, 0, 0, 1]
+          },
+          "layer": "기존 기초"
+        },
+        {
+          "id": "c14",
+          "nativeId": "00000000-0000-4000-8000-000000200014",
+          "layer64": "6riw7KG0IOq4sOy0iA==",
+          "name64": "",
+          "nativeType": "InstanceReference",
+          "block": {
+            "definition": "00000000-0000-4000-8000-00000000e001",
+            "transform": [1, 0, 0, 1012, 0, 1, 0, 2003, 0, 0, 1, 0, 0, 0, 0, 1]
+          },
+          "layer": "기존 기초"
+        },
+        {
+          "id": "c15",
+          "nativeId": "00000000-0000-4000-8000-000000200015",
+          "layer64": "6riw7KG0IOq4sOy0iA==",
+          "name64": "",
+          "nativeType": "InstanceReference",
+          "block": {
+            "definition": "00000000-0000-4000-8000-00000000e001",
+            "transform": [1, 0, 0, 1012, 0, 1, 0, 2006, 0, 0, 1, 0, 0, 0, 0, 1]
+          },
+          "layer": "기존 기초"
+        },
+        {
+          "id": "c16",
+          "nativeId": "00000000-0000-4000-8000-000000200016",
+          "layer64": "6riw7KG0IOq4sOy0iA==",
+          "name64": "",
+          "nativeType": "InstanceReference",
+          "block": {
+            "definition": "00000000-0000-4000-8000-00000000e001",
+            "transform": [1, 0, 0, 1015, 0, 1, 0, 2000, 0, 0, 1, 0, 0, 0, 0, 1]
+          },
+          "layer": "기존 기초"
+        },
+        {
+          "id": "c17",
+          "nativeId": "00000000-0000-4000-8000-000000200017",
+          "layer64": "6riw7KG0IOq4sOy0iA==",
+          "name64": "",
+          "nativeType": "InstanceReference",
+          "block": {
+            "definition": "00000000-0000-4000-8000-00000000e001",
+            "transform": [1, 0, 0, 1015, 0, 1, 0, 2003, 0, 0, 1, 0, 0, 0, 0, 1]
+          },
+          "layer": "기존 기초"
+        },
+        {
+          "id": "c18",
+          "nativeId": "00000000-0000-4000-8000-000000200018",
+          "layer64": "6riw7KG0IOq4sOy0iA==",
+          "name64": "",
+          "nativeType": "InstanceReference",
+          "block": {
+            "definition": "00000000-0000-4000-8000-00000000e001",
+            "transform": [1, 0, 0, 1015, 0, 1, 0, 2006, 0, 0, 1, 0, 0, 0, 0, 1]
+          },
+          "layer": "기존 기초"
+        },
+        {
+          "id": "c19",
+          "nativeId": "00000000-0000-4000-8000-000000200019",
+          "layer64": "6riw7KG0IOq4sOy0iA==",
+          "name64": "",
+          "nativeType": "InstanceReference",
+          "block": {
+            "definition": "00000000-0000-4000-8000-00000000e001",
+            "transform": [1, 0, 0, 1018, 0, 1, 0, 2000, 0, 0, 1, 0, 0, 0, 0, 1]
+          },
+          "layer": "기존 기초"
+        },
+        {
+          "id": "c20",
+          "nativeId": "00000000-0000-4000-8000-000000200020",
+          "layer64": "6riw7KG0IOq4sOy0iA==",
+          "name64": "",
+          "nativeType": "InstanceReference",
+          "block": {
+            "definition": "00000000-0000-4000-8000-00000000e001",
+            "transform": [1, 0, 0, 1018, 0, 1, 0, 2003, 0, 0, 1, 0, 0, 0, 0, 1]
+          },
+          "layer": "기존 기초"
+        },
+        {
+          "id": "c21",
+          "nativeId": "00000000-0000-4000-8000-000000200021",
+          "layer64": "6riw7KG0IOq4sOy0iA==",
+          "name64": "",
+          "nativeType": "InstanceReference",
+          "block": {
+            "definition": "00000000-0000-4000-8000-00000000e001",
+            "transform": [1, 0, 0, 1018, 0, 1, 0, 2006, 0, 0, 1, 0, 0, 0, 0, 1]
+          },
+          "layer": "기존 기초"
+        },
+        {
+          "id": "c22",
+          "nativeId": "00000000-0000-4000-8000-000000200022",
+          "layer64": "6riw7KG0IOq4sOy0iA==",
+          "name64": "",
+          "nativeType": "InstanceReference",
+          "block": {
+            "definition": "00000000-0000-4000-8000-00000000e001",
+            "transform": [1, 0, 0, 1021, 0, 1, 0, 2000, 0, 0, 1, 0, 0, 0, 0, 1]
+          },
+          "layer": "기존 기초"
+        },
+        {
+          "id": "c23",
+          "nativeId": "00000000-0000-4000-8000-000000200023",
+          "layer64": "6riw7KG0IOq4sOy0iA==",
+          "name64": "",
+          "nativeType": "InstanceReference",
+          "block": {
+            "definition": "00000000-0000-4000-8000-00000000e001",
+            "transform": [1, 0, 0, 1021, 0, 1, 0, 2003, 0, 0, 1, 0, 0, 0, 0, 1]
+          },
+          "layer": "기존 기초"
+        },
+        {
+          "id": "c24",
+          "nativeId": "00000000-0000-4000-8000-000000200024",
+          "layer64": "6riw7KG0IOq4sOy0iA==",
+          "name64": "",
+          "nativeType": "InstanceReference",
+          "block": {
+            "definition": "00000000-0000-4000-8000-00000000e001",
+            "transform": [1, 0, 0, 1021, 0, 1, 0, 2006, 0, 0, 1, 0, 0, 0, 0, 1]
+          },
+          "layer": "기존 기초"
+        },
+        {
+          "id": "c25",
+          "nativeId": "00000000-0000-4000-8000-000000200025",
+          "layer64": "6riw7KG0IOq4sOy0iA==",
+          "name64": "",
+          "nativeType": "InstanceReference",
+          "block": {
+            "definition": "00000000-0000-4000-8000-00000000e001",
+            "transform": [1, 0, 0, 1024, 0, 1, 0, 2000, 0, 0, 1, 0, 0, 0, 0, 1]
+          },
+          "layer": "기존 기초"
+        },
+        {
+          "id": "c26",
+          "nativeId": "00000000-0000-4000-8000-000000200026",
+          "layer64": "6riw7KG0IOq4sOy0iA==",
+          "name64": "",
+          "nativeType": "InstanceReference",
+          "block": {
+            "definition": "00000000-0000-4000-8000-00000000e001",
+            "transform": [1, 0, 0, 1024, 0, 1, 0, 2003, 0, 0, 1, 0, 0, 0, 0, 1]
+          },
+          "layer": "기존 기초"
+        },
+        {
+          "id": "c27",
+          "nativeId": "00000000-0000-4000-8000-000000200027",
+          "layer64": "6riw7KG0IOq4sOy0iA==",
+          "name64": "",
+          "nativeType": "InstanceReference",
+          "block": {
+            "definition": "00000000-0000-4000-8000-00000000e001",
+            "transform": [1, 0, 0, 1024, 0, 1, 0, 2006, 0, 0, 1, 0, 0, 0, 0, 1]
+          },
+          "layer": "기존 기초"
+        },
+        {
+          "id": "c28",
+          "nativeId": "00000000-0000-4000-8000-000000200028",
+          "layer64": "6riw7KG0IOq4sOy0iA==",
+          "name64": "",
+          "nativeType": "InstanceReference",
+          "block": {
+            "definition": "00000000-0000-4000-8000-00000000e001",
+            "transform": [1, 0, 0, 1027, 0, 1, 0, 2000, 0, 0, 1, 0, 0, 0, 0, 1]
+          },
+          "layer": "기존 기초"
+        },
+        {
+          "id": "c29",
+          "nativeId": "00000000-0000-4000-8000-000000200029",
+          "layer64": "6riw7KG0IOq4sOy0iA==",
+          "name64": "",
+          "nativeType": "InstanceReference",
+          "block": {
+            "definition": "00000000-0000-4000-8000-00000000e001",
+            "transform": [1, 0, 0, 1027, 0, 1, 0, 2003, 0, 0, 1, 0, 0, 0, 0, 1]
+          },
+          "layer": "기존 기초"
+        },
+        {
+          "id": "c30",
+          "nativeId": "00000000-0000-4000-8000-000000200030",
+          "layer64": "6riw7KG0IOq4sOy0iA==",
+          "name64": "",
+          "nativeType": "InstanceReference",
+          "block": {
+            "definition": "00000000-0000-4000-8000-00000000e001",
+            "transform": [1, 0, 0, 1027, 0, 1, 0, 2006, 0, 0, 1, 0, 0, 0, 0, 1]
+          },
+          "layer": "기존 기초"
+        },
+        {
+          "id": "c31",
+          "nativeId": "00000000-0000-4000-8000-000000200031",
+          "layer64": "6riw7KG0IOq4sOy0iA==",
+          "name64": "",
+          "nativeType": "InstanceReference",
+          "block": {
+            "definition": "00000000-0000-4000-8000-00000000e001",
+            "transform": [1, 0, 0, 1030, 0, 1, 0, 2000, 0, 0, 1, 0, 0, 0, 0, 1]
+          },
+          "layer": "기존 기초"
+        },
+        {
+          "id": "c32",
+          "nativeId": "00000000-0000-4000-8000-000000200032",
+          "layer64": "6riw7KG0IOq4sOy0iA==",
+          "name64": "",
+          "nativeType": "InstanceReference",
+          "block": {
+            "definition": "00000000-0000-4000-8000-00000000e001",
+            "transform": [1, 0, 0, 1030, 0, 1, 0, 2003, 0, 0, 1, 0, 0, 0, 0, 1]
+          },
+          "layer": "기존 기초"
+        },
+        {
+          "id": "c33",
+          "nativeId": "00000000-0000-4000-8000-000000200033",
+          "layer64": "6riw7KG0IOq4sOy0iA==",
+          "name64": "",
+          "nativeType": "InstanceReference",
+          "block": {
+            "definition": "00000000-0000-4000-8000-00000000e001",
+            "transform": [1, 0, 0, 1030, 0, 1, 0, 2006, 0, 0, 1, 0, 0, 0, 0, 1]
+          },
+          "layer": "기존 기초"
+        }
+      ],
+      "definitions": {
+        "00000000-0000-4000-8000-00000000e001": {
+          "hash": "old",
+          "vertices": [
+            -1.35, -1.35, -3, 1.35, -1.35, -3, 1.35, 1.35, -3, -1.35, 1.35, -3, -1.35, -1.35, -2.4,
+            1.35, -1.35, -2.4, 1.35, 1.35, -2.4, -1.35, 1.35, -2.4, -0.4, -0.4, -2.4, 0.4, -0.4,
+            -2.4, 0.4, 0.4, -2.4, -0.4, 0.4, -2.4, -0.4, -0.4, -1, 0.4, -0.4, -1, 0.4, 0.4, -1,
+            -0.4, 0.4, -1
+          ],
+          "indices": [
+            0, 3, 2, 0, 2, 1, 4, 5, 6, 4, 6, 7, 0, 1, 5, 0, 5, 4, 1, 2, 6, 1, 6, 5, 2, 3, 7, 2, 7,
+            6, 3, 0, 4, 3, 4, 7, 8, 11, 10, 8, 10, 9, 12, 13, 14, 12, 14, 15, 8, 9, 13, 8, 13, 12,
+            9, 10, 14, 9, 14, 13, 10, 11, 15, 10, 15, 14, 11, 8, 12, 11, 12, 15
+          ],
+          "segments": []
+        }
+      }
+    },
+    "slab": {
+      "rows": [
+        {
+          "id": "s1",
+          "nativeId": "00000000-0000-4000-8000-000000100001",
+          "layer64": "7Iqs656Y67iM",
+          "name64": "",
+          "nativeType": "Curve",
+          "line": [
+            998.5, 1998.5, 6, 1031.5, 1998.5, 6, 1031.5, 2007.5, 6, 998.5, 2007.5, 6, 998.5, 1998.5,
+            6
+          ],
+          "layer": "슬래브"
+        }
+      ],
+      "definitions": {}
+    }
+  },
+  "fireRoute": [],
+  "requestedZones": []
+}

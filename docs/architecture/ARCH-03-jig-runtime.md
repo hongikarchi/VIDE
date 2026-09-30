@@ -2,8 +2,8 @@
 id: ARCH-03
 title: jig 런타임과 저장 스키마 v5의 물리 계약
 status: review
-version: 0.1
-updated: 2026-09-29
+version: 0.2
+updated: 2026-09-30
 owner: agent:claude
 related: [FR-23, FR-24, FR-25, SPEC-02, SPEC-05, SPEC-06, SPEC-07, ADR-014, ADR-019, ADR-020, ADR-021, ARCH-01, ARCH-02, PLAN-22, PLAN-23, PLAN-24, RESEARCH-10]
 ---
@@ -257,7 +257,7 @@ export type PartUse = { part: string } & Record<string, Binding | string | numbe
 export type Binding = `step.${string}` | `$${string}` | 'params' | `inputs.${string}` | `ledger.${string}`;
 ```
 
-- `part`는 `src/ui/kit/registry.ts`에 등록된 이름이어야 하고, 부품마다 등록부의 zod 스키마로 속성을 검사한다. 목록 밖 부품·속성은 등록을 거절한다. 1차 부품 목록은 Design이 정한다.
+- `part`는 `src/ui/kit/registry.ts`에 등록된 이름이어야 하고, 부품마다 등록부의 zod 스키마로 속성을 검사한다. 목록 밖 부품·속성은 등록을 거절한다. 1차 부품 목록은 Design이 정한다. 검사는 `src/ui/jig-panel/spec.ts`의 `validatePanel`(zod와 등록부만 쓰는 순수 함수) 하나이며, 화면이 그리기 전과 로더(`loadJig`: `jig:validate`·가져오기·등록부 목록)가 같은 검사를 돌린다. 로더는 위반을 `JIG_PANEL` 항목(`panel.json:<경로>`)으로 거절한다. 연결은 설명서가 선언한 단계 id·설정값 키·입력 키(`scopeOf`)에 대해서만 검사한다. 목록에 있으나 아직 만들지 않은 부품(`compare-bars`·`report`·`ledger`, PLAN-22 T-057)은 그때까지 `PANEL_PART_NOT_READY`로 거절한다.
 - 연결은 단계 출력 경로(`step.<id>.<field>…`), 설정값(`$<key>`), `params`, `inputs.<key>…`, `ledger.<name>`뿐이다. 식·코드는 넣지 않는다.
 - 색은 Design §02의 토큰 이름만 쓴다. `#`·`rgb(`·`hsl(`로 시작하는 값은 거절한다.
 - `custom-view`는 1차에 거절한다(B13).
@@ -360,12 +360,14 @@ export type RunnerOut =
 | `PUT …/:iid/assembly/:role` | `{sources, transform?, confirm}` | 확정된 역할 |
 | `POST …/:iid/run` | `{until?, mode: 'geometry' \| 'preview' \| 'confirmed'}` | 단계 상태·KPI·겹침 층·표. `preview` 결과는 저장하지 않고 '미확정 미리보기'로 표시(SPEC-06) |
 | `POST …/:iid/steps/:stepId/confirm` | `{inputHash}` | 사람 단계(입력 확인·해석 확정) 기록 |
-| `POST …/:iid/bake` | `{bake: string[], resolve?: Record<string, 'keep' \| 'overwrite' \| 'absorb'>}` | 요청 ID(작업 보기로 추적, §9.3) |
+| `POST …/:iid/bake` | `{bake: string[], linkId?, resolve?: Record<string, 'keep' \| 'overwrite' \| 'absorb'>}` | `{status: 'submitted', requestId, runId, readId, revisionKey, linkId, gates, plans[], chunks, waiting?}`(작업 보기로 추적, §9.3). 막은 점검·인자 문제는 422 `GATE_BLOCKED`(`blocked`·`problems`·`hints`), `absorb`가 수정 사항을 더했으면 200 `status: 'absorbed'`(다시 계산 뒤 다시 누름). `linkId`는 조립 역할이 연결 하나만 읽었을 때 생략할 수 있다 |
+| `GET …/:iid/bakes?linkId=` | — | 만들기 기록(새 것 먼저, `pendingBaseline`) |
+| `POST …/:iid/bakes/:recordId/baseline` | — | 반영한 문서를 다시 읽어 기준 지문을 기록(§9.3 6). 그 실행의 객체가 하나도 없으면 409 `NOT_APPLIED` |
 | `GET …/:iid/report.html`, `GET …/:iid/schedule.csv` | — | 보고서·일람표 |
 | `POST /api/v1/projects/:id/jig-drafts`, `POST …/jig-drafts/:did/validate·test·preview`, `POST …/jig-drafts/:did/pin`, `DELETE …/jig-drafts/:did` | — | 제작 최소판(잠정). `pin`은 확인 필요 동작, 원격 세션 403 |
 
 - 기존 `POST /api/v1/projects/:id/jigs/sync`와 구조 jig 경로(ARCH-02 §1)는 그대로다.
-- 오류 코드(잠정): `JIG_INVALID`(형식·금지 파일·부품, 응답에 `issues[]`), `JIG_SIGNATURE`(서명), `JIG_VERSION_EXISTS`(같은 id·버전, 다른 내용, 409), `PARAM_FIXED`, `OUT_OF_RANGE`, `GATE_BLOCKED`(막은 점검 이름 목록 포함), `STALE_INPUT`(읽은 문서 버전이 현재와 다름), `LAYER_ROOT_MISSING`(저장된 Sync 레이어 표가 있는데 출력 레이어가 없음), `CONFIRMATION_REQUIRED`(확인 없는 가져오기·고정). 상태 번호는 ARCH-01 §1.3 매핑(400·403·404·409·422)을 따르며 `src/server/jig-routes.ts`의 `jigStatuses`가 정본이다.
+- 오류 코드(잠정): `JIG_INVALID`(형식·금지 파일·부품, 응답에 `issues[]`), `JIG_SIGNATURE`(서명), `JIG_VERSION_EXISTS`(같은 id·버전, 다른 내용, 409), `PARAM_FIXED`, `OUT_OF_RANGE`, `GATE_BLOCKED`(막은 점검 이름 목록 포함), `STALE_INPUT`(읽은 문서 버전이 현재와 다름), `LAYER_ROOT_MISSING`(저장된 Sync 레이어 표가 있는데 출력 레이어가 없음), `CONFIRMATION_REQUIRED`(확인 없는 가져오기·고정), `JIG_PANEL`(`panel.json`이 §5.1 검사에 걸림, `JIG_INVALID`의 `issues[]`로). 만들기: `BAKE_NOT_COMPUTED`(422, 항목을 내는 단계가 계산되지 않음), `BAKE_JOB_MISSING`(409, 그린 본문이 엔진에 없음 — 재시작 뒤 남은 만들기 요청), `NOT_APPLIED`(409); 요청 결과 코드 `BAKE_TEMPLATE_REJECTED`(워커의 컴파일·`CodePolicy` 거절)·`BAKE_FAILED`·`BAKE_RECEIPT_MISMATCH`(영수증의 키가 계획과 다름). 상태 번호는 ARCH-01 §1.3 매핑(400·403·404·409·422)을 따르며 `src/server/jig-routes.ts`의 `jigStatuses`가 정본이다.
 - 1차 구현(T-046)의 세부: 가져오기 확인은 `?confirm=true`, 고정 확인은 본문 `confirm: true`다. 등록부는 `GET /api/v1/jigs/packages`(공식 라이브러리 + 설치 + 저장소 소스)이며 기존 `GET /api/v1/jigs`의 확장은 T-047이 한다. `POST …/reads`는 `linkId` 대신 `syncId`를 받아 저장된 Sync를 서버에서 레이어로 거를 수 있다(ZWCAD·호스트 없는 시험). `GET …/params/log`(변경 이력)·`GET …/steps/:stepId/output`(보관된 결과)이 있다. `stale-input`의 현재 판 비교값(`currentRevisions`)은 아직 경로가 채우지 않는다(연결 판 조회는 후속).
 - 능력 검사는 화면이 아니라 이 경로들, 만들기 경로, AI 도구 발급에서 한다. 원격 세션 차단 정규식에 `jigs/import`, `jigs/[^/]+/pin`, `jig-drafts/[^/]+/pin`을 더한다(원격 세션의 앱·확장 제어 금지와 같은 범위).
 
@@ -402,6 +404,7 @@ curve = i32 kind(0 폴리라인, 1 3점 원호) + i32 n + vec3 × n
 DataBlock
   str  format        "vide.bake.data/1"
   str  template      "vide.bake.sweep-h@1"
+  str  jigId
   str  instanceId
   str  bakeId        설명서 bake[].id
   str  runId         이번 만들기 실행 ID
@@ -421,17 +424,17 @@ Item
 
 - 좌표는 VIDE 계약과 같은 m이고 틀이 `RhinoMath.UnitScale(UnitSystem.Meters, doc.ModelUnitSystem)`로 문서 단위로 바꾼다. 절대 좌표를 f32로 넣으면 측량 좌표계처럼 큰 값에서 cm 단위 오차가 나므로 f64 기준점 + f32 차이로 쓴다(1 km 범위 안에서 오차 0.1 mm 미만).
 - 틀은 모든 객체에 `vide-jig`, `vide-instance`, `vide-run`, `vide-bake`, `vide-key`를 붙이고 `Item`의 속성을 더 붙인다.
-- 워커 본문 한도는 65,536자다. 한도를 넘는 만들기는 항목을 나누어 같은 작업 안에서 여러 번 실행한다. 한 번에 넣을 항목 수는 SPIKE로 정한다(잠정).
-- 반환값: `{ removed, added }`. 틀은 VIDE가 넘긴 GUID 가운데 `vide-instance`·`vide-bake`가 일치하는 객체만 지우고, 지문을 다시 계산하지 않는다.
+- 워커 본문 한도는 65,536자다. 한도를 넘는 만들기는 항목을 나누어 같은 작업 안에서 여러 번 실행한다(`renderChunks`: 본문 한도에서 틀 길이를 뺀 base64 크기만큼 담고, 삭제 목록은 첫 묶음만). 한 항목이 혼자 한도를 넘으면 `BAKE_ITEM_TOO_LARGE`로 거절한다. 실제 Rhino에서의 묶음 크기 측정(SPIKE)은 남아 있다.
+- 반환값: `{ removed, keys[], ids[], failed[] }` — 만든 키와 그 GUID(같은 순서), 만들지 못한 키(퇴화한 곡선·닫히지 않은 솔리드). 틀은 VIDE가 넘긴 GUID 가운데 `vide-instance`·`vide-bake`가 일치하는 객체만 지우고, 지문을 다시 계산하지 않는다. 계획한 키가 두 목록 어디에도 없으면 `BAKE_RECEIPT_MISMATCH`다.
 
 ### 9.3 실행 경로
 
 1. `POST …/:iid/bake` → 만들기 계획(항목·키·레이어·태그) → 점검 `before-bake`.
-2. 서버가 그 연결의 jig 입력 읽기를 강제로 실행한다(`purpose: 'pre-bake'`, 숨긴 객체 포함, 출력 레이어와 이 작업본 태그 객체 한정). 읽기의 문서 버전이 작업 실행본의 기준 버전과 같을 때만 진행하고, 다르면 다시 읽는다.
+2. 서버가 그 연결의 jig 입력 읽기를 강제로 실행한다(`purpose: 'pre-bake'`, 숨긴 객체 포함, **문서 전체** — 사람이 jig 객체를 다른 레이어로 옮겼는지는 출력 레이어만 읽어서는 알 수 없다). 읽기의 `documentHash`가 요청의 `expectedDocumentHash`가 되고, 실행 직전 작업 실행본의 문서 판이 그것과 다르면 `STALE_INPUT`으로 거절한다(다시 읽지 않고 사람이 다시 누른다). 파일 링크는 가져온 사본이 기준이다.
 3. §9.4로 지울 GUID와 건너뛸 키를 정해 데이터 블록을 만든다.
-4. `workspace_requests`에 요청을 만든다: `jig: { kind: 'jig-bake', instanceId, bakeIds, readId }`, `hostUse: 'write'`. `Execution.run`은 이 종류를 보면 공급자를 부르지 않고 `SdkExecution.runFixed(codes[])`로 작업 실행본에서 틀을 실행한다 → 저장·재열기 확인 → 영수증 → 후보. 작업 보기(SCR-03)에 일반 요청처럼 보인다.
+4. `workspace_requests`에 요청을 만든다: `jig: { kind: 'jig-bake', instanceId, bakeIds, linkId, readId, runId }`, `hostUse: 'write'`, `permission: 'candidate'`(`provider`는 이름뿐이며 부르지 않고, AI 턴 상한에 세지 않는다). 그린 본문은 엔진 프로세스의 작업 목록(`registerBakeJob`, 요청 ID별, 최대 64개)에 두므로 재시작 뒤 남은 만들기 요청은 `BAKE_JOB_MISSING`으로 실패한다. `Execution.run`은 이 종류를 보면 공급자를 부르지 않고 `SdkExecution.runFixed(codes[])`로 작업 실행본에서 틀을 차례로 실행한다 → 저장·재열기 확인 → 영수증 → `finishBake`가 만들기 기록(`jig_bakes`, 지문은 비움)과 결과의 `bake`(추가·교체·보존·복사본·지운 것·만들지 못함; 스키마는 `src/ui/bake-card.tsx`)를 쓴다 → 후보. 작업 보기(SCR-03)에 일반 요청처럼 보인다.
 5. 사용자가 원본에 반영하면 기존 `applyAttached` 경로를 쓴다. 작업 실행본 이후의 원본 수정은 기존 `Unchanged` 검사가 `SOURCE_CHANGED`로 막는다.
-6. 반영 직후 서버가 표시용 Sync를 강제로 실행하고, 태그 `vide-run`이 이번 `runId`인 객체로 새 만들기 기록(`jig_bakes`)을 쓴다. 지문은 이 Sync의 `geometryHash`다. 이전 실행의 복사본은 `vide-run`이 달라 섞이지 않는다. 원본 반영 뒤 GUID가 작업 실행본과 같은지는 PLAN-22에서 확인한다.
+6. 반영 뒤 `POST …/bakes/:recordId/baseline`이 문서를 다시 읽어(2와 같은 강제 읽기) 태그 `vide-run`이 이번 `runId`인 객체를 `vide-key`로 기록 항목에 대응시키고 GUID를 바로잡은 뒤 지문(`geometryHash`)·`baselineReadId`·`appliedAt`을 기록한다. 1차에서는 카드의 [반영 결과 읽기]가 부르며 반영 경로가 자동으로 부르지는 않는다(연결은 PLAN-23 T-056). 읽기 전이거나 실패한 기록의 객체는 다음 만들기에서 `pending-baseline`으로 보존한다. 이전 실행의 복사본은 `vide-run`이 달라 섞이지 않는다. 원본 반영 뒤 GUID가 작업 실행본과 같은지는 실제 Rhino 검증(`tests/integration/rhino-bake.mjs`)이 확인한다.
 
 ### 9.4 만들기 기록과 교체 판정
 
@@ -447,7 +450,7 @@ Item
 | 없음 | `vide-instance` 태그 있음 | 사람이 만든 복사본 | 건드리지 않는다 |
 | — | 태그 없음 | 사람 객체 | 건드리지 않는다 |
 
-지문이 다를 때 세부 판정: 정점 배열을 경계 상자 중심 차이만큼 옮겨 같으면 '위치만 바뀜', 곡선 끝점의 z만 다르면 '높이만 바뀜', 그 밖은 '모양 바뀜'. 사람에게 보이는 방식과 기본 선택은 SPEC-07이 정한다.
+1차 구현(`src/jigs/bake/plan.ts`)의 보존 이유는 `edited`(같은 레이어, 다른 지문) · `moved`(다른 레이어) · `pending-baseline`(기준 지문 없음) 셋이고, '위치만 바뀜·높이만 바뀜·모양 바뀜' 세부 판정(정점 배열을 경계 상자 중심 차이만큼 옮겨 같으면 위치, 곡선 끝점의 z만 다르면 높이, 그 밖은 모양)은 SPEC-07.13이 표시 방식을 정한 뒤 더한다. `resolve`의 `keep`은 기록을 `kept`로 바꾸고, `overwrite`는 사람이 지운 것도 다시 만들며, `absorb`는 수정 사항(`target.kind: 'bake-item'`, `origin: 'host-edit'`, `fields: { nativeId, hash, layer }`)을 더한 뒤 만들지 않고 `status: 'absorbed'`로 돌려준다 — 단계가 이 수정 사항을 읽어 결과에 반영해야 다음 만들기에서 뜻이 생기며, 그 규칙은 아직 어느 단계도 구현하지 않았다(PLAN-23 T-056). 사람에게 보이는 방식과 기본 선택은 SPEC-07이 정한다.
 
 ### 9.5 레이어
 
@@ -552,7 +555,8 @@ CREATE TABLE IF NOT EXISTS project_roots(projectId TEXT PRIMARY KEY REFERENCES p
 - `input.conversationId`: 요청이 속한 대화 ID. 없으면 프로젝트 기본 대화이고, `workspace_requests.conversationId` 가상 열이 이 값을 읽는다(§10.1). Sync 캡처·만들기 요청에는 넣지 않는다.
 - `input.hostUse`: `'none' | 'read' | 'write'`. `none`이면 호스트 경합 대상 목록이 비고, `read`는 문서 키만 가진다(SPEC-02.9).
 - 차례를 기다리는 요청은 거절하지 않고 `state: 'queued'`로 두고, 결과 JSON에 `waitingFor: { kind: 'document' | 'conversation' | 'project', key, position }`을 적는다. `document`는 같은 문서 쓰기의 대기열, `conversation`은 한 대화에서 진행 중인 턴 뒤에 덧붙인 말, `project`는 프로젝트 AI 턴 상한(기본 3)이다. 앞 작업이 끝나면 실행기가 다음을 꺼낸다. 재시작 뒤 `queued` 요청은 보존하되 자동으로 실행하지 않는다(SPEC-02.9).
-- 요청 자료의 원장 항목은 `{ kind: 'ledger', items: [...] }` 하나이며 `supersededBy`가 없는 최신 항목만 넣고 8 KB를 넘으면 오래된 것부터 요약한다.
+- 요청 자료의 원장 항목은 `ledger` 항목(`{ scope: 'all' | 'since-last-turn', items[], summarized, omitted }`) 하나이며 `supersededBy`가 없는 최신 항목만 넣고 8 KB를 넘으면 오래된 것부터 요약하고, 그래도 넘으면 뺀다. 세션 턴은 6턴마다 전체를, 그 사이에는 지난 턴 이후 항목만 보낸다. 새 세션의 첫 턴에는 `handoff` 항목(이유·최근 3턴·파일 이름), 다른 대화가 그 사이 반영한 것은 `changes-elsewhere` 항목으로 더한다.
+- 대화 경로(`src/server/conversations.ts`): `GET·POST /api/v1/projects/:id/conversations`(POST `{kind?, title?, body?, provider?, model?, effort?, host?, permission?, jigInstanceId?, draftId?, targets?}` — 서비스·모델을 안 주면 Jev가 한 번 고르고 계정은 `accountUsage.choose`로 고정), `GET …/conversations/:cid`(`default`는 기본 대화; 원장·세션 포함), `POST …/:cid/close`(`{discard?}`: 기록 즉시 삭제)·`reopen`·`ledger`(`{kind, body, requestId?}`)·`handoff`(`{provider, model?, effort?}`, 확인 필요 동작, 원격 세션 403). 오류 `CONVERSATION_CLOSED`·`CONVERSATION_PROVIDER`(409). 요청 접수 때 `conversationId`가 있으면 그 대화의 서비스·모델·계정으로 고정하고(`fix`) 한 대화에 한 턴만 실행한다(`waitingFor.kind: 'conversation'`에 `after`·`position`).
 
 세션 인자·공급자 기록 보존 같은 CLI 쪽 물리 계약은 ADR-021에 따라 ARCH-01 §2에 둔다.
 

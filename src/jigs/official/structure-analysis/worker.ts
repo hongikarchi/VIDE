@@ -7,6 +7,8 @@ import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { Worker } from 'node:worker_threads';
 import { corePath } from '../../structure/core.ts';
+// Type-only: keeps worker-entry.ts in the tsc server build (nothing imports it at run time).
+import type { WorkerRequest } from './worker-entry.ts';
 
 interface Job {
   id: number;
@@ -112,7 +114,7 @@ function pump() {
 }
 
 /** Run one analysis task in the worker; `key` groups requests that supersede each other. */
-export function submitAnalysis<T>(key: string, payload: unknown): Promise<T> {
+export function submitAnalysis<T>(key: string, payload: WorkerRequest['payload']): Promise<T> {
   if (!corePath())
     return Promise.reject(
       fail('Structure core is not built (npm run build:structure)', 'STRUCTURE_CORE_MISSING'),

@@ -1,0 +1,33 @@
+{
+  "steps": {
+    "diagnose": {
+      "summary": {
+        "cap": {
+          "count": 0
+        },
+        "openCut": {
+          "count": 3
+        },
+        "basin": {
+          "count": 0
+        }
+      }
+    },
+    "axes": {
+      "objective": {
+        "spanOver": 0,
+        "cap": 0
+      }
+    },
+    "interference": {
+      "summary": {
+        "cap": {
+          "count": 0
+        }
+      }
+    }
+  },
+  "statuses": {
+    "confirmInputs": "confirmed"
+  }
+}

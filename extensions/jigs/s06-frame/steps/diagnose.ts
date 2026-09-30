@@ -135,6 +135,8 @@ export interface SpanRow {
   verdict: Verdict | null;
   reason?: string;
   focus: Box;
+  /** The piece of the girder curve (world metres); the whole curve for an unsupported one. */
+  points: Vec3[];
 }
 export interface CurveRow {
   key: string;
@@ -608,6 +610,7 @@ export function diagnose(
         verdict: 'incomplete',
         reason: `허용오차 ${p.splitTol} m 안에 기둥 상단이 없어 경간을 나눌 수 없습니다`,
         focus: boxOf(g.points, z0, z1),
+        points: g.points,
       });
       continue;
     }
@@ -624,6 +627,7 @@ export function diagnose(
         length3d: piece.length,
         verdict: piece.kind === 'span' ? (over ? 'over' : 'pass') : null,
         focus: boxOf(piece.points, ...zRange(piece.points)),
+        points: piece.points,
       };
       spans.push(row);
       if (over)

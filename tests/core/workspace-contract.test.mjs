@@ -38,6 +38,8 @@ test('shared request boundary rejects invalid coordinates, oversized content and
     { effort: 'invented' },
     { host: 'wrong' },
     { baseRequestId: '../other' },
+    { conversationId: '../other' },
+    { conversationId: '' },
     { body: ' ' },
   ]) {
     assert.equal(requestInputSchema.safeParse({ ...input(), ...change }).success, false);
@@ -47,6 +49,8 @@ test('shared boundary preserves additive metadata and explicit new-work basis', 
   const original = {
     ...input(),
     baseRequestId: null,
+    // The conversation a turn belongs to (SPEC-02.19); absent means the default conversation.
+    conversationId: '6ab830a9-bf65-4bfe-949b-aeb7d3ca7c38',
     model: 'claude-fable-5-1[1m]',
     files: [{ name: 'a', text: 'content', contentStatus: 'included' }],
     source: 'document',
