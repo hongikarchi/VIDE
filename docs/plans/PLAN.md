@@ -2,10 +2,10 @@
 id: PLAN
 title: VIDE 실행 로드맵
 status: review
-version: 0.216
+version: 0.217
 updated: 2026-09-30
 owner: agent:codex
-related: [ARCH-01, PLAN-02, PLAN-03, PLAN-22, PLAN-23, PLAN-24, SPEC-00, SPEC-01, SPEC-02, SPEC-03, SPEC-04, SPEC-05, SPEC-06, SPEC-07]
+related: [ARCH-01, PLAN-02, PLAN-03, PLAN-22, PLAN-23, PLAN-24, PLAN-25, ADR-025, SPEC-00, SPEC-01, SPEC-02, SPEC-03, SPEC-04, SPEC-05, SPEC-06, SPEC-07]
 ---
 
 # VIDE 실행 로드맵
@@ -71,6 +71,7 @@ related: [ARCH-01, PLAN-02, PLAN-03, PLAN-22, PLAN-23, PLAN-24, SPEC-00, SPEC-01
 | M5 대화·채팅으로 jig 만들기 | T-059·060 → T-061 → T-062 → T-063 → T-064 | 대화 3개 동시 진행, S-06 보조 jig를 대화로 만들어 ③ 결과와 일치 |
 | 독립 | T-065(자료 1차), T-066(공유 스냅샷 결함) | 각 계획의 완료 기준 |
 | 2차 | T-067(구조 코어 확장) | 2차 착수 지시 뒤 |
+| 독립 | T-068(계정 관리를 AccountSwitch로, [PLAN-25](PLAN-25-accounts-to-accountswitch.md)) | PLAN-24 대화 작업의 커밋 뒤 착수 |
 
 Rhino 플러그인 재빌드는 T-043 한 번이다. 완료 기준은 개발 빌드와 `.vide/` 합성 문서까지이며, 설치본 반영은 사용자가 요청할 때 묶음 릴리스로 한다.
 
@@ -201,6 +202,7 @@ Jev는 기존 계정이 없다는 사용자 확인에 따라 가입 재개까지
 | T-041·043·045~048·055·057·063~066 · jig 플랫폼 1차 | T-041·T-043(개발 빌드·합성 문서, 실자료 재확인)·T-045(스키마 v5)·T-046(형식 v3·작업본·실행기·가져오기)·T-066 완료. 남음은 PLAN-22 현황. T-047·048·057 완료(패널 부품 연결 포함, 새 브라우저 시험 미실행), T-055 모의 워커까지(실제 Rhino 남음), T-063 서버·화면 구현(화면 브라우저 시험 남음), T-064 서버 경로로 M5 합격, T-065 구현(브라우저 시험 남음). 설치본 반영(플러그인 재빌드 포함)은 릴리스 때 | [PLAN-22](PLAN-22-jig-platform.md) |
 | T-042·044·050~054·056·058·067 · S-06 골조 jig·구조 라이브러리 | M0 완료(T-042·T-044, 기준선 9/33/6/곡선 19, [VERIFY](../tdd/VERIFY-2026-09-29-s06-frame.md) v0.2는 제품 Sync로 재현). T-050·052·054 완료, T-051 합성 검증(실데이터 남음), T-053 그려진 배치·기구 사전 점검 구현(실데이터 해석 불안정 남음), T-056 ⑨~⑫ 연결·합성 검증(실제 Rhino·단면 적용 경로 남음), T-058 01~05·부록 구현(실데이터는 해석 안정 뒤), T-067은 2차 | [PLAN-23](PLAN-23-s06-frame-jig.md) |
 | T-049·059~062 · AI 대화·경로 | T-049 작성기 연결까지 완료, T-059 완료(SPIKE ①②⑤⑥⑦⑧ 합격·③ 실패·④ 조건부), T-060 완료, T-061 서버·화면 완료, Codex 세션 이어 실행 켬·계정 한도 인계 서버 흐름(한도 카드 화면·브라우저 시험 남음), T-062 설치본 도구 연결 완료(대화 읽기 도구의 `targetRef` 경로 남음) | [PLAN-24](PLAN-24-ai-conversations.md) |
+| T-068 · 계정 관리를 AccountSwitch로 | 2026-09-30 사용자 결정([ADR-025](../decisions/ADR-025-accounts-in-accountswitch.md)): VIDE는 기본 로그인만 쓰고 계정 관리는 AccountSwitch가 맡는다. 0단계(AccountSwitch 설치) 진행. 1단계부터는 다른 세션의 대화·계정 파일 작업이 커밋된 뒤 | [PLAN-25](PLAN-25-accounts-to-accountswitch.md) |
 
 ### 6.6 전체 완료 관문
 
