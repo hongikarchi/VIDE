@@ -6,6 +6,7 @@ import {
   unitText,
   type PanelSetting,
 } from '../jig-panel/bindings.ts';
+import { basisAttributes } from '../jig-panel/registry.ts';
 import './kit.css';
 
 // Setting parts (Design §14 `slider` · `choice` · `stepper` · `toggle` · `param-group` ·
@@ -41,7 +42,8 @@ const FACT: Record<string, string> = {
 };
 /**
  * The basis chip of a setting (SPEC-07.6): where the value came from, then its standing — the
- * declared basis for a default, the statement's state for a project fact.
+ * declared basis for a default, the statement's state for a project fact. A chip whose value rests
+ * on a statement carries `data-fact-statement`, so a click opens the fact window (registry.ts).
  */
 export function FactBadge({ setting }: { setting: PanelSetting }) {
   const standing =
@@ -60,6 +62,7 @@ export function FactBadge({ setting }: { setting: PanelSetting }) {
       title={[setting.basis?.note, setting.basis?.question, setting.ref]
         .filter(Boolean)
         .join(' · ')}
+      {...basisAttributes(setting)}
     >
       {BY[setting.by] ?? setting.by}
       {standing ? ` · ${standing}` : ''}

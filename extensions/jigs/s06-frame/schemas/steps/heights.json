@@ -1,0 +1,37 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["schema", "rows", "summary", "notes"],
+  "properties": {
+    "schema": { "const": "vide.s06.heights/1" },
+    "rows": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["columnId", "drawnLength_m", "length_m", "gap_m", "topZ", "bottomZ"],
+        "properties": {
+          "columnId": { "type": "string" },
+          "sourceId": { "type": "string" },
+          "drawnLength_m": { "type": ["number", "null"] },
+          "length_m": { "type": "number", "minimum": 0 },
+          "gap_m": { "type": "number" },
+          "topZ": { "type": "number" },
+          "bottomZ": { "type": "number" },
+          "girderTopZ": { "type": "number" },
+          "girderBottomZ": { "type": "number" },
+          "depth_mm": { "type": "number" },
+          "depthFrom": { "enum": ["sizing", "model", "limit"] },
+          "levelDiff_m": { "type": ["number", "null"] },
+          "status": { "enum": ["ok", "short"] },
+          "judgement": { "type": "string" },
+          "depthFinishOver": { "type": "boolean" }
+        }
+      }
+    },
+    "summary": {
+      "type": "object",
+      "required": ["columns", "floored", "short", "maxGap_m", "depthFinishOver", "heightStep"]
+    },
+    "notes": { "type": "array", "items": { "type": "string" } }
+  }
+}

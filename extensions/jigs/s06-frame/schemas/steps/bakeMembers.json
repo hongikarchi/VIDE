@@ -1,0 +1,96 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": [
+    "schema",
+    "params",
+    "previewOnly",
+    "lines",
+    "members",
+    "skipped",
+    "summary",
+    "notes"
+  ],
+  "properties": {
+    "schema": { "const": "vide.s06.bakePlan/1" },
+    "params": { "type": "object", "required": ["linesLayer", "membersLayer"] },
+    "previewOnly": { "type": "boolean" },
+    "lines": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["key", "kind", "points", "layer"],
+        "properties": {
+          "key": { "type": "string", "pattern": "^[A-Za-z0-9가-힣:_>.-]{1,64}$" },
+          "kind": { "enum": ["girder", "beam", "column", "axis"] },
+          "points": {
+            "type": "array",
+            "minItems": 2,
+            "items": {
+              "type": "array",
+              "items": { "type": "number" },
+              "minItems": 3,
+              "maxItems": 3
+            }
+          },
+          "arc": { "type": "object", "required": ["center", "radius", "plane"] },
+          "layer": { "type": "string" },
+          "mark": { "type": "string" }
+        }
+      }
+    },
+    "members": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "key",
+          "memberId",
+          "mark",
+          "sectionId",
+          "sectionName",
+          "points",
+          "role",
+          "webVertical",
+          "layer",
+          "status",
+          "H_mm",
+          "B_mm",
+          "tw_mm",
+          "tf_mm",
+          "kgpm",
+          "length_m"
+        ],
+        "properties": {
+          "key": { "type": "string", "pattern": "^[A-Za-z0-9가-힣:_>.-]{1,64}$" },
+          "role": { "enum": ["column", "girder", "beam", "edge"] },
+          "webVertical": { "const": true },
+          "status": { "enum": ["ok", "no-candidate", "unchecked"] },
+          "points": {
+            "type": "array",
+            "minItems": 2,
+            "items": {
+              "type": "array",
+              "items": { "type": "number" },
+              "minItems": 3,
+              "maxItems": 3
+            }
+          },
+          "arc": { "type": "object", "required": ["center", "radius", "plane"] },
+          "strongAxis": {
+            "type": "array",
+            "items": { "type": "number" },
+            "minItems": 3,
+            "maxItems": 3
+          }
+        }
+      }
+    },
+    "skipped": {
+      "type": "array",
+      "items": { "type": "object", "required": ["memberId", "reason"] }
+    },
+    "summary": { "type": "object", "required": ["lines", "members", "steel_t"] },
+    "notes": { "type": "array", "items": { "type": "string" } }
+  }
+}

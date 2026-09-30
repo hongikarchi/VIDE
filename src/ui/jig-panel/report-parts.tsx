@@ -1,4 +1,5 @@
-import type { ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
+import { api } from '../gateway.ts';
 import type { PartOf } from '../kit/registry.ts';
 import { CompareBars, LedgerPage, ReportPage } from '../kit/report.tsx';
 import {
@@ -6,6 +7,7 @@ import {
   resolveBlock,
   resolveReport,
   type ReportContext,
+  type ReportModel,
 } from '../../jigs/runtime/report-format.ts';
 import { resolve, type PanelData } from './bindings.ts';
 
@@ -111,6 +113,50 @@ export function ReportPart({
       </div>
     );
   return <ReportPage model={resolveReport(template, reportContext(data, final))} onBack={onBack} />;
+}
+
+/**
+ * A `report` view of an open instance: the engine resolves the jig's frame on the kept outputs
+ * (`GET …/reports/:id`, the same model as the 보고서 tab, previews marked) and it is read again
+ * whenever `revision` changes (a new run).
+ */
+export function InstanceReportPart({
+  projectId,
+  instanceId,
+  reportId,
+  revision,
+}: {
+  projectId: string;
+  instanceId: string;
+  reportId: string;
+  revision?: unknown;
+}) {
+  const [model, setModel] = useState<ReportModel>();
+  const [failed, setFailed] = useState(false);
+  useEffect(() => {
+    let live = true;
+    void (async () => {
+      try {
+        const out = (await api(
+          `/projects/${encodeURIComponent(projectId)}/jig-instances/${encodeURIComponent(instanceId)}/reports/${encodeURIComponent(reportId)}`,
+        )) as { model?: ReportModel };
+        if (!live) return;
+        setModel(out.model);
+        setFailed(!out.model);
+      } catch {
+        if (live) setFailed(true);
+      }
+    })();
+    return () => {
+      live = false;
+    };
+  }, [projectId, instanceId, reportId, revision]);
+  if (model) return <ReportPage model={model} />;
+  return (
+    <p className="kit-muted" role="status">
+      {failed ? `보고서 틀 ‘${reportId}’을 이 jig에서 열지 못했습니다.` : '보고서를 만드는 중…'}
+    </p>
+  );
 }
 
 /** Draw one report part of a checked panel (the panel's `render` hands these here). */

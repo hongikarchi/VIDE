@@ -13,6 +13,7 @@ import {
   ledgerItem,
   kindOf,
   SESSION_MAX_TURNS,
+  SESSION_PROVIDERS,
 } from '../../src/server/conversations.ts';
 import { startServer } from '../../src/server/server.ts';
 
@@ -360,6 +361,103 @@ test('an account switch opens a new session with the hand-over packet', async (t
   );
 });
 
+test('an account limit stops the turn, shows the T2 card, and the confirmed switch opens a new session with the hand-over', async (t) => {
+  const other = '11111111-2222-4333-8444-555555555555';
+  const { conversations, project, fake, open, send, settled, state } = setup(t, (turn) =>
+    turn === 1
+      ? [
+          init,
+          {
+            type: 'result',
+            subtype: 'success',
+            is_error: true,
+            result: "You've hit your usage limit · resets 3pm",
+          },
+        ]
+      : [init, answer(`답 ${turn + 1}`)],
+  );
+  const conversation = open();
+  send('m1', {
+    conversationId: conversation.id,
+    files: [{ name: '배치도.txt', text: '합성 메모' }],
+  });
+  await settled();
+  send('m2', { conversationId: conversation.id });
+  await settled();
+  assert.equal(state('m2').state, 'failed');
+  assert.equal(state('m2').result.code, 'PROVIDER_LIMIT');
+  // The stopped turn is never sent again by itself.
+  assert.equal(fake.runs().length, 2);
+  let saved = conversations.get(project.id, conversation.id);
+  assert.deepEqual(saved.handover, {
+    kind: 'limit',
+    grade: 'T2',
+    requestId: 'm2',
+    from: { provider: 'claude-cli', accountProfileId: 'default' },
+    sends: { ledgerItems: 1, recentTurns: 1, files: 1 },
+  });
+  assert.equal(conversations.list(project.id)[1].handover.requestId, 'm2');
+  // Confirming the card (the T2 action) is local only and needs another account.
+  const call = (value, remote = false) => {
+    let sent;
+    return conversationRoutes(
+      new URL(
+        `http://127.0.0.1/api/v1/projects/${project.id}/conversations/${conversation.id}/account`,
+      ),
+      { method: 'POST' },
+      {
+        service: conversations,
+        body: async () => value,
+        send: (status, data) => {
+          sent = { status, data };
+        },
+        remote,
+      },
+    ).then(() => sent);
+  };
+  await assert.rejects(call({ accountProfileId: other }, true), { code: 'FORBIDDEN' });
+  await assert.rejects(call({ accountProfileId: 'default' }), { code: 'INVALID_INPUT' });
+  const switched = await call({ accountProfileId: other });
+  assert.equal(switched.status, 200);
+  assert.equal(switched.data.accountProfileId, other);
+  assert.equal(switched.data.handover, null);
+  assert.equal(switched.data.session, null);
+  // The next turn comes on that account (the server chooses from the conversation's account).
+  send('m3', { conversationId: conversation.id, accountProfileId: other });
+  await settled();
+  assert.equal(state('m3').state, 'succeeded');
+  const runs = fake.runs();
+  assert.equal(runs.length, 3);
+  const first = runs[0].args[runs[0].args.indexOf('--session-id') + 1];
+  const opened = runs[2].args[runs[2].args.indexOf('--session-id') + 1];
+  assert.ok(opened && opened !== first);
+  assert.ok(!runs[2].args.includes('--resume'));
+  const packet = fake.packet(runs[2]);
+  const handoff = packet.items.find((item) => item.id === 'handoff').data;
+  assert.equal(handoff.reason, 'account');
+  assert.deepEqual(handoff.recentTurns, [{ request: 'm1', response: '답 1' }]);
+  assert.deepEqual(handoff.files, ['배치도.txt']);
+  assert.deepEqual(handoff.stopped, { request: 'm2', answered: false });
+  assert.equal(packet.items.find((item) => item.id === 'ledger').data.scope, 'all');
+  saved = conversations.get(project.id, conversation.id);
+  assert.deepEqual(
+    saved.sessions.map((session) => [session.accountProfileId, session.state, session.turns]),
+    [
+      ['default', 'handed-off', 1],
+      [other, 'active', 1],
+    ],
+  );
+  const handoffs = saved.ledger.filter((item) => item.kind === 'handoff');
+  assert.deepEqual(
+    handoffs.map((item) => [item.requestId, item.body.reason, item.body.confirmed ?? null]),
+    [
+      ['m2', 'account', 'T2'],
+      ['m3', 'account', null],
+    ],
+  );
+  assert.equal(saved.handover, null);
+});
+
 test('a lost session is retried once in a new session; the old one is never resumed', async (t) => {
   const { conversations, project, fake, open, send, settled, state } = setup(t, (turn, call) =>
     turn === 1 && call.args.includes('--resume')
@@ -387,7 +485,83 @@ test('a lost session is retried once in a new session; the old one is never resu
   );
 });
 
-test('a Codex conversation runs the ledger method: fresh runs with the ledger and earlier exchanges', async (t) => {
+test('a Codex conversation resumes its thread: exec resume, isolation every turn, growth-only tokens', async (t) => {
+  const thread = '01a0f026-1a25-7580-89e5-cbde1801d6d0';
+  const other = '01a0f026-1a25-7580-89e5-cbde1801ffff';
+  const fresh = '01a0f026-1a25-7580-89e5-cbde18020000';
+  // Codex reports a resumed turn's usage as the session's running total (SPIKE ④).
+  const totals = [100, 250, 420];
+  const { conversations, project, fake, open, send, settled, state } = setup(
+    t,
+    (turn, call) => {
+      const resumed = call.args[1] === 'resume';
+      const id = !resumed ? (turn === 0 ? thread : fresh) : turn === 3 ? other : call.args[2];
+      return [
+        { type: 'thread.started', thread_id: id },
+        { type: 'turn.started' },
+        { type: 'item.completed', item: { type: 'agent_message', text: `답 ${turn + 1}` } },
+        {
+          type: 'turn.completed',
+          usage: { input_tokens: totals[turn] ?? 50, cached_input_tokens: 40, output_tokens: 2 },
+        },
+      ];
+    },
+    { codex: true },
+  );
+  const conversation = open();
+  assert.equal(conversation.mode, 'session');
+  for (const id of ['c1', 'c2', 'c3']) {
+    send(id, { conversationId: conversation.id });
+    await settled();
+    assert.equal(state(id).state, 'succeeded', id);
+  }
+  const runs = fake.runs();
+  assert.equal(runs.length, 3);
+  assert.equal(runs[0].args[1], '--json');
+  assert.equal(runs[0].args[runs[0].args.indexOf('--sandbox') + 1], 'read-only');
+  for (const call of runs.slice(1)) {
+    assert.deepEqual(call.args.slice(0, 3), ['exec', 'resume', thread]);
+    assert.ok(!call.args.includes('--sandbox'));
+    assert.ok(call.args.includes('sandbox_mode="read-only"'));
+  }
+  for (const call of runs) {
+    assert.ok(!call.args.includes('--ephemeral'));
+    assert.ok(call.args.includes('mcp_servers={}'));
+    const packet = fake.packet(call);
+    assert.match(packet.items.find((item) => item.id === 'turn-rules').data, /No tools/);
+    assert.equal(
+      packet.items.find((item) => item.id === 'conversation'),
+      undefined,
+    );
+  }
+  let saved = conversations.get(project.id, conversation.id);
+  assert.equal(saved.session.sessionId, thread);
+  assert.equal(saved.session.turns, 3);
+  assert.equal(saved.session.inputTokens, 420);
+  assert.equal(state('c2').result.sessionId, thread);
+  // A resumed turn that reports another thread is a lost session: once more in a new one.
+  send('c4', { conversationId: conversation.id });
+  await settled();
+  assert.equal(state('c4').state, 'succeeded');
+  const all = fake.runs();
+  assert.deepEqual(all[3].args.slice(0, 3), ['exec', 'resume', thread]);
+  assert.equal(all[4].args[1], '--json');
+  assert.equal(fake.packet(all[4]).items.find((item) => item.id === 'handoff').data.reason, 'lost');
+  saved = conversations.get(project.id, conversation.id);
+  assert.deepEqual(
+    saved.sessions.map((session) => [session.sessionId, session.state]),
+    [
+      [thread, 'lost'],
+      [fresh, 'active'],
+    ],
+  );
+});
+
+test('with Codex sessions switched off a Codex conversation runs the ledger method', async (t) => {
+  SESSION_PROVIDERS['codex-cli'] = false;
+  t.after(() => {
+    SESSION_PROVIDERS['codex-cli'] = true;
+  });
   const { conversations, project, fake, open, send, settled, state } = setup(
     t,
     (turn) => codexTurn(`답 ${turn + 1}`),
@@ -681,7 +855,7 @@ test('HTTP: conversations open with a fixed service and model, and requests join
     ).json();
     assert.deepEqual(
       [named.provider, named.model, named.effort, named.mode],
-      ['codex-cli', 'gpt-5', 'low', 'ledger'],
+      ['codex-cli', 'gpt-5', 'low', 'session'],
     );
     assert.equal((await api(base, 'POST', { kind: 'chat' })).status, 400);
     // A turn of the conversation runs on its service and model whatever the request says.
@@ -706,7 +880,11 @@ test('HTTP: conversations open with a fixed service and model, and requests join
     assert.equal(turn.input.model, 'gpt-5');
     assert.equal(turn.input.effort, 'low');
     assert.equal(turn.state, 'succeeded');
-    assert.equal(runs.find((entry) => entry.options.model === 'gpt-5').options.session, undefined);
+    // A Codex conversation opens a session too (SPIKE ④ re-test); this fake names no thread.
+    assert.equal(
+      runs.find((entry) => entry.options.model === 'gpt-5').options.session.resume,
+      false,
+    );
     const listed = await (await api(requests)).json();
     assert.deepEqual(listed.map((row) => [row.id, row.input.conversationId ?? null]).sort(), [
       ['turn-1', named.id],

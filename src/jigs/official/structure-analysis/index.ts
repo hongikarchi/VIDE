@@ -74,6 +74,8 @@ export {
 } from './summary.ts';
 export type { SummarizeOptions } from './summary.ts';
 export { runAnalysis, geometryHash } from './run.ts';
+export { findMechanisms, mechanismIssues } from './mechanism.ts';
+export type { MechanismFinding } from './mechanism.ts';
 export { analyzeSummary } from './analyze.ts';
 export type { AnalyzeOptions, AnalyzeOutcome } from './analyze.ts';
 export { analysisWorkerStats, closeAnalysisWorker, submitAnalysis } from './worker.ts';

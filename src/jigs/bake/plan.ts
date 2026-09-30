@@ -91,12 +91,80 @@ export interface Extracted {
   items: BakeItem[];
   problems: string[];
 }
+/** The S-06 bake plan step output (PLAN-23 T-056 ⑫, `extensions/jigs/s06-frame/steps/bakeplan.ts`). */
+export const BAKE_PLAN_SCHEMA = 'vide.s06.bakePlan/1';
+const MEMBER_TEMPLATES: readonly TemplateName[] = [
+  'vide.bake.sweep-h@1',
+  'vide.bake.extrude-column@1',
+];
+/**
+ * Rows of a bake plan (`lines`, `members`) as the template fields: a line's `points` with `arc`
+ * are a three-point arc; members give their section name and sizes; `members` bakes (H under the
+ * top line, web vertical) take the non-column rows and column bakes the column rows. Members are
+ * refused unless the declaration requires `analysis-confirmed` and the plan is not a preview.
+ */
+function bakePlanRows(decl: BakeDecl, output: Record<string, unknown>, list: unknown[]) {
+  const problems: string[] = [];
+  const member = MEMBER_TEMPLATES.includes(decl.template);
+  if (member && !(decl.requires ?? []).includes('analysis-confirmed'))
+    problems.push('부재 만들기에는 확정 해석 점검(analysis-confirmed)이 필요합니다');
+  if (member && output.previewOnly !== false)
+    problems.push('미확정 미리보기 해석의 단면이라 부재를 만들지 않습니다');
+  const rows: Record<string, unknown>[] = [];
+  for (const entry of list) {
+    if (!entry || typeof entry !== 'object') continue;
+    const row = entry as Record<string, unknown>;
+    const points = Array.isArray(row.points) ? row.points : [];
+    const curve = { kind: row.arc && points.length === 3 ? 'arc' : 'polyline', points };
+    const base = {
+      ...row,
+      role: row.role ?? row.kind,
+      mark: typeof row.mark === 'string' && row.mark ? row.mark : undefined,
+    };
+    const column = row.role === 'column' || row.kind === 'column';
+    switch (decl.template) {
+      case 'vide.bake.curves@1':
+        rows.push({ ...base, curve });
+        break;
+      case 'vide.bake.sweep-h@1':
+        if (!column) rows.push({ ...base, section: row.sectionName, rail: curve });
+        break;
+      case 'vide.bake.extrude-column@1':
+        if (column)
+          rows.push({
+            ...base,
+            section: row.sectionName,
+            base: points[0],
+            top: points[points.length - 1],
+          });
+        break;
+      case 'vide.bake.textdot@1': {
+        if (!base.mark || !points.length) break;
+        const a = vec3(points[0]),
+          b = vec3(points[points.length - 1]);
+        const point =
+          points.length === 3 ? points[1] : a && b ? a.map((v, i) => (v + b[i]) / 2) : undefined;
+        rows.push({ ...base, text: base.mark, point });
+        break;
+      }
+    }
+  }
+  return { rows, problems };
+}
+
 /** The template items of a bake declaration from its step output, fields mapped by `decl.map`. */
 export function extractItems(decl: BakeDecl, output: unknown): Extracted {
   const problems: string[] = [];
   const { path } = itemsPath(decl);
-  const list = at(output, path || undefined);
-  if (!Array.isArray(list)) return { items: [], problems: [`항목 배열이 없습니다: ${decl.items}`] };
+  const found = at(output, path || undefined);
+  if (!Array.isArray(found))
+    return { items: [], problems: [`항목 배열이 없습니다: ${decl.items}`] };
+  let list: unknown[] = found;
+  if ((output as { schema?: unknown }).schema === BAKE_PLAN_SCHEMA) {
+    const plan = bakePlanRows(decl, output as Record<string, unknown>, list);
+    problems.push(...plan.problems);
+    list = plan.rows;
+  }
   const items: BakeItem[] = [];
   const field = (item: Record<string, unknown>, name: string) => at(item, decl.map?.[name] ?? name);
   list.forEach((entry, index) => {

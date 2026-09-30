@@ -1,0 +1,329 @@
+{
+  "note": "합성 자료(PLAN-23 검증 원칙). 8 m × 6 m 두 칸 중 한 칸: 거더 G1 직선, G2 연직면 원호(솟음 0.3 m), 작은보 두 개, 내민 보 하나, 기둥 넷. 높이 점검으로 기둥 길이를 1 m 단위로 내렸다.",
+  "inputs": {
+    "steps": {
+      "girders": {
+        "girders": [
+          {
+            "id": "G1",
+            "sourceId": "g-1",
+            "kind": "line",
+            "points": [
+              [0, 0, 6],
+              [8, 0, 6]
+            ],
+            "supports": [
+              {
+                "columnId": "c-1",
+                "t": 0
+              },
+              {
+                "columnId": "c-2",
+                "t": 1
+              }
+            ]
+          },
+          {
+            "id": "G2",
+            "sourceId": "g-2",
+            "kind": "arc",
+            "points": [
+              [0, 6, 6],
+              [0.9951, 6, 6.1311],
+              [1.9944, 6, 6.2249],
+              [2.9965, 6, 6.2812],
+              [4, 6, 6.3],
+              [5.0035, 6, 6.2812],
+              [6.0056, 6, 6.2249],
+              [7.0049, 6, 6.1311],
+              [8, 6, 6]
+            ],
+            "arc": {
+              "center": [4, 6, -20.5167],
+              "radius": 26.8167,
+              "startDeg": 98.5783,
+              "endDeg": 81.4217,
+              "sweepDeg": -17.1566,
+              "rise": 0.3,
+              "plane": "vertical"
+            },
+            "supports": [
+              {
+                "columnId": "c-3",
+                "t": 0
+              },
+              {
+                "columnId": "c-4",
+                "t": 1
+              }
+            ]
+          },
+          {
+            "id": "G3",
+            "sourceId": "g-3",
+            "kind": "line",
+            "points": [
+              [0, 0, 6],
+              [0, 6, 6]
+            ],
+            "supports": [
+              {
+                "columnId": "c-1",
+                "t": 0
+              },
+              {
+                "columnId": "c-3",
+                "t": 1
+              }
+            ]
+          },
+          {
+            "id": "G4",
+            "sourceId": "g-4",
+            "kind": "line",
+            "points": [
+              [8, 0, 6],
+              [8, 6, 6]
+            ],
+            "supports": [
+              {
+                "columnId": "c-2",
+                "t": 0
+              },
+              {
+                "columnId": "c-4",
+                "t": 1
+              }
+            ]
+          }
+        ]
+      },
+      "beams": {
+        "beams": [
+          {
+            "id": "B01",
+            "cellId": "K01",
+            "points": [
+              [2.5, 0, 6],
+              [2.5, 6, 6.2]
+            ]
+          },
+          {
+            "id": "B02",
+            "cellId": "K01",
+            "points": [
+              [5.5, 0, 6],
+              [5.5, 6, 6.2]
+            ]
+          }
+        ],
+        "edgeCantilevers": [
+          {
+            "id": "E01",
+            "from": {
+              "girderId": "G4",
+              "t": 0.5
+            },
+            "points": [
+              [8, 3, 6],
+              [10, 3, 6]
+            ]
+          }
+        ]
+      },
+      "model": {
+        "columns": [
+          {
+            "key": "col:c-1",
+            "sourceId": "c-1",
+            "base": [0, 0, 0],
+            "top": [0, 0, 6],
+            "moved_m": 0,
+            "girders": ["G1", "G3"]
+          },
+          {
+            "key": "col:c-2",
+            "sourceId": "c-2",
+            "base": [8, 0, 0],
+            "top": [8, 0, 6],
+            "moved_m": 0,
+            "girders": ["G1", "G4"]
+          },
+          {
+            "key": "col:c-3",
+            "sourceId": "c-3",
+            "base": [0, 6, 0],
+            "top": [0, 6, 6],
+            "moved_m": 0,
+            "girders": ["G2", "G3"]
+          },
+          {
+            "key": "col:c-4",
+            "sourceId": "c-4",
+            "base": [8, 6, 0],
+            "top": [8, 6, 6],
+            "moved_m": 0,
+            "girders": ["G2", "G4"]
+          }
+        ]
+      },
+      "heights": {
+        "rows": [
+          {
+            "columnId": "col:c-1",
+            "sourceId": "c-1",
+            "drawnLength_m": 6,
+            "length_m": 5,
+            "gap_m": 0.4,
+            "topZ": 5,
+            "bottomZ": 0
+          },
+          {
+            "columnId": "col:c-2",
+            "sourceId": "c-2",
+            "drawnLength_m": 6,
+            "length_m": 5,
+            "gap_m": 0.4,
+            "topZ": 5,
+            "bottomZ": 0
+          },
+          {
+            "columnId": "col:c-3",
+            "sourceId": "c-3",
+            "drawnLength_m": 6,
+            "length_m": 5,
+            "gap_m": 0.4,
+            "topZ": 5,
+            "bottomZ": 0
+          },
+          {
+            "columnId": "col:c-4",
+            "sourceId": "c-4",
+            "drawnLength_m": 6,
+            "length_m": 5,
+            "gap_m": 0.4,
+            "topZ": 5,
+            "bottomZ": 0
+          }
+        ]
+      },
+      "sizing": {
+        "schema": "vide.s06.sizing/1",
+        "previewOnly": false,
+        "groups": [
+          {
+            "id": "column-1",
+            "role": "column",
+            "memberIds": ["col:c-1", "col:c-2", "col:c-3", "col:c-4"],
+            "sectionId": "H300x300",
+            "sectionName": "H-300x300x10x15",
+            "maxRatio": 0.41,
+            "status": "ok"
+          },
+          {
+            "id": "girder-1",
+            "role": "girder",
+            "memberIds": ["G:G1", "G:G2", "G:G3", "G:G4"],
+            "sectionId": "H600x200",
+            "sectionName": "H-600x200x11x17",
+            "maxRatio": 0.82,
+            "status": "ok"
+          },
+          {
+            "id": "beam-1",
+            "role": "beam",
+            "memberIds": ["B:B01", "B:B02"],
+            "sectionId": "H400x200",
+            "sectionName": "H-400x200x8x13",
+            "maxRatio": 0.77,
+            "status": "ok"
+          },
+          {
+            "id": "edge-1",
+            "role": "edge",
+            "memberIds": ["A:E01"],
+            "sectionId": null,
+            "sectionName": null,
+            "maxRatio": null,
+            "status": "no-candidate"
+          }
+        ],
+        "sectionsById": {
+          "H300x300": {
+            "name": "H-300x300x10x15",
+            "h_mm": 300,
+            "b_mm": 300,
+            "tw_mm": 10,
+            "tf_mm": 15,
+            "kgpm": 93.1
+          },
+          "H600x200": {
+            "name": "H-600x200x11x17",
+            "h_mm": 600,
+            "b_mm": 200,
+            "tw_mm": 11,
+            "tf_mm": 17,
+            "kgpm": 104.5
+          },
+          "H400x200": {
+            "name": "H-400x200x8x13",
+            "h_mm": 400,
+            "b_mm": 200,
+            "tw_mm": 8,
+            "tf_mm": 13,
+            "kgpm": 65.4
+          }
+        },
+        "iterations": 2,
+        "notes": []
+      },
+      "schedule": {
+        "schema": "vide.s06.schedule/1",
+        "prefix": "",
+        "marks": [
+          {
+            "memberId": "col:c-1",
+            "mark": "C1"
+          },
+          {
+            "memberId": "col:c-2",
+            "mark": "C1"
+          },
+          {
+            "memberId": "col:c-3",
+            "mark": "C1"
+          },
+          {
+            "memberId": "col:c-4",
+            "mark": "C1"
+          },
+          {
+            "memberId": "G:G1",
+            "mark": "G1"
+          },
+          {
+            "memberId": "G:G2",
+            "mark": "G2"
+          },
+          {
+            "memberId": "G:G3",
+            "mark": "G1"
+          },
+          {
+            "memberId": "G:G4",
+            "mark": "G1"
+          },
+          {
+            "memberId": "B:B01",
+            "mark": "B1"
+          },
+          {
+            "memberId": "B:B02",
+            "mark": "B1"
+          }
+        ]
+      }
+    }
+  },
+  "params": {}
+}

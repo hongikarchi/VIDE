@@ -10,13 +10,21 @@ export interface WorkerRequest {
   id: number;
   payload: { input: StructureModelInput; map?: MemberMap; options: AnalyzeOptions };
 }
-type Request = WorkerRequest;
+/** Graceful stop: the thread closes its port and exits once the current request is answered. */
+export interface WorkerClose {
+  type: 'close';
+}
+type Request = WorkerRequest | WorkerClose;
 
 const geometryCache = new Map<string, string>();
 const port = parentPort;
 if (!port) throw new Error('worker-entry must run in a worker thread');
 
 port.on('message', (request: Request) => {
+  if ('type' in request) {
+    if (request.type === 'close') port.close();
+    return;
+  }
   try {
     const { input, map, options } = request.payload;
     const value = runAnalysis(input, map, options, geometryCache);

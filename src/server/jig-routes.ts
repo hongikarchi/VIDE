@@ -36,7 +36,8 @@ import {
   type ReportContext,
   type ReportModel,
 } from '../jigs/runtime/report-format.ts';
-import { renderJigReport } from './report.ts';
+import { jigReportInputs, renderJigReport, type JigReportLedgerRow } from './report.ts';
+import { ConversationStore } from '../core/conversation-store.ts';
 import { diagnose, type DiagnoseInputs } from '../../extensions/jigs/s06-frame/steps/diagnose.ts';
 import { ROLE_KEYS } from '../../extensions/jigs/s06-frame/steps/labels.ts';
 import {
@@ -802,8 +803,12 @@ export function reportFrames(jig: Pick<LoadedJigOf, 'manifest' | 'files'>): Repo
 /** Whether a kept step output is final (false for previews and unconfirmed analyses). */
 export function outputIsFinal(output: unknown): boolean {
   if (!output || typeof output !== 'object') return true;
-  const value = output as { mode?: unknown; summary?: { confirmed?: unknown } };
-  if (value.mode === 'preview') return false;
+  const value = output as {
+    mode?: unknown;
+    previewOnly?: unknown;
+    summary?: { confirmed?: unknown };
+  };
+  if (value.mode === 'preview' || value.previewOnly === true) return false;
   if (value.summary && typeof value.summary === 'object' && value.summary.confirmed === false)
     return false;
   return true;
@@ -856,9 +861,16 @@ async function instanceReport(
     }
   }
   const reads = rt.reads(projectId, instanceId);
+  // Question cards and answers of the conversations bound to this instance (the open items).
+  const conversations = new ConversationStore(workspace.store.db);
+  const ledger: JigReportLedgerRow[] = conversations
+    .list(projectId)
+    .filter((c) => c.jigInstanceId === instanceId)
+    .flatMap((c) => conversations.ledger(c.id, { current: true }));
   const context: ReportContext = {
     outputs,
     params: Object.fromEntries(view.params.map((p) => [p.key, p.value])),
+    inputs: jigReportInputs({ params: view.params, ledger, outputs, final }),
     final,
     source: {
       ...(reads.length ? { readAt: reads[reads.length - 1].at } : {}),

@@ -1,0 +1,100 @@
+{
+  "note": "합성 자료(PLAN-23 검증 원칙) height-floor: 경사 데크 아래 기둥 네 개. 거더 상단 6.35·6.0·5.62·1.2, 기존 기초 상단 0.0·0.4. 기둥 길이는 1 m 단위로 내리고 차이는 받침 높이.",
+  "site": {
+    "columns": {
+      "rows": [
+        { "id": "c-1", "line": [0, 0, 0, 0, 0, 6.2] },
+        { "id": "c-2", "line": [8, 0, 0.4, 8, 0, 5.8] },
+        { "id": "c-3", "line": [16, 0, 0, 16, 0, 5.5] },
+        { "id": "c-4", "line": [24, 0, 0.4, 24, 0, 1.2] }
+      ]
+    }
+  },
+  "model": {
+    "schema": "vide.s06.model/1",
+    "modelHash": "hand-made",
+    "columns": [
+      {
+        "key": "col:c-1",
+        "sourceId": "c-1",
+        "base": [0, 0, 0],
+        "top": [0, 0, 6.35],
+        "moved_m": 0,
+        "girders": ["G1"]
+      },
+      {
+        "key": "col:c-2",
+        "sourceId": "c-2",
+        "base": [8, 0, 0.4],
+        "top": [8, 0, 6.0],
+        "moved_m": 0,
+        "girders": ["G1", "G2"]
+      },
+      {
+        "key": "col:c-3",
+        "sourceId": "c-3",
+        "base": [16, 0, 0],
+        "top": [16, 0, 5.62],
+        "moved_m": 0,
+        "girders": ["G2"]
+      },
+      {
+        "key": "col:c-4",
+        "sourceId": "c-4",
+        "base": [24, 0, 0.4],
+        "top": [24, 0, 1.2],
+        "moved_m": 0,
+        "girders": ["G3"]
+      }
+    ],
+    "map": {
+      "physical": { "G:G1": ["m1"], "G:G2": ["m2"], "G:G3": ["m3"] },
+      "roles": { "G:G1": "girder", "G:G2": "girder", "G:G3": "girder" },
+      "tags": {},
+      "cantilever": {},
+      "columnOfNode": {}
+    },
+    "model": {
+      "members": [
+        { "id": "m1", "section": "H600x200x11x17" },
+        { "id": "m2", "section": "H600x200x11x17" },
+        { "id": "m3", "section": "H600x200x11x17" }
+      ],
+      "sections": [
+        {
+          "id": "H600x200x11x17",
+          "name": "H-600x200x11x17",
+          "shape": "H",
+          "dims_mm": { "h": 600, "b": 200, "tw": 11, "tf": 17 }
+        }
+      ]
+    }
+  },
+  "sizing": {
+    "schema": "vide.s06.sizing/1",
+    "previewOnly": true,
+    "groups": [
+      {
+        "id": "girder|6–9 m",
+        "role": "girder",
+        "band": "6–9 m",
+        "memberIds": ["G:G2"],
+        "sectionId": "H900x300x16x28",
+        "sectionName": "H-900x300x16x28",
+        "maxRatio": 0.8,
+        "status": "ok",
+        "judgement": "선정"
+      }
+    ],
+    "sectionsById": {
+      "H900x300x16x28": {
+        "name": "H-900x300x16x28",
+        "h_mm": 900,
+        "b_mm": 300,
+        "tw_mm": 16,
+        "tf_mm": 28,
+        "kgpm": 240
+      }
+    }
+  }
+}

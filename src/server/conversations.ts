@@ -1,7 +1,8 @@
 // Conversations (SPEC-02.19, ADR-021, PLAN-24 T-061): a conversation is one purpose's flow of
 // turns. Its service, model and account are fixed when it opens; a Claude conversation continues
-// one provider session (one CLI run per turn, `--session-id` then `--resume`), a Codex one runs the
-// ledger method (a fresh run per turn with the whole ledger) until SPIKE ④ passes. VIDE's ledger,
+// one provider session (one CLI run per turn, `--session-id` then `--resume`), a Codex one too
+// (`exec resume <thread>`, SPIKE ④ re-test 2026-09-30; the thread is named by its first turn).
+// A provider switched off in SESSION_PROVIDERS runs the ledger method. VIDE's ledger,
 // not the provider transcript, is the record: losing a session loses no work. Requests without a
 // conversation belong to the project's default conversation (`conversationId` NULL), which keeps
 // the earlier per-request behaviour. Storage rows: ARCH-03 §10; CLI arguments: ARCH-01 §2.
@@ -10,6 +11,7 @@ import { randomUUID } from 'node:crypto';
 import type { IncomingMessage } from 'node:http';
 import { z } from 'zod';
 import { DomainError, type Store } from '../core/store.ts';
+import { JigStore } from '../core/jig-store.ts';
 import {
   ConversationStore,
   conversationKinds,
@@ -42,7 +44,7 @@ type Kind = (typeof conversationKinds)[number];
 /** Providers whose session resume passed the SPIKE (ADR-021 7); the others run the ledger method. */
 export const SESSION_PROVIDERS: Record<Provider, boolean> = {
   'claude-cli': true,
-  'codex-cli': false,
+  'codex-cli': true,
 };
 /** A session longer than this reopens with the ledger (SPEC-02.19 5; PLAN-24 starting values). */
 export const SESSION_MAX_TURNS = 12;
@@ -99,12 +101,27 @@ export interface SessionSummary {
   state: ProviderSession['state'];
   lastTurnAt: string | null;
 }
+/**
+ * The T2 card of a turn stopped on its account's limit (SPEC-02.19 5, automatic switching off):
+ * the stopped turn is not sent again; confirming moves the conversation to another account of the
+ * same service, whose next turn opens a new session with the hand-over packet described here.
+ */
+export interface LimitHandover {
+  kind: 'limit';
+  grade: 'T2';
+  requestId: string;
+  from: { provider: string; accountProfileId: string };
+  /** What the new session receives: the whole ledger, the latest finished turns, file names. */
+  sends: { ledgerItems: number; recentTurns: number; files: number };
+}
 export type ConversationSummary = (Conversation | DefaultConversation) & {
   requests: number;
   /** The session the next turn would resume, if any. */
   session: SessionSummary | null;
+  /** A hand-over waiting for the user's confirmation. */
+  handover: LimitHandover | null;
 };
-export type NewSessionReason = 'first' | 'account' | 'length' | 'lost' | 'closed';
+export type NewSessionReason = 'first' | 'account' | 'provider' | 'length' | 'lost' | 'closed';
 /** A packet item a turn carries (ledger, hand-over, changes elsewhere). */
 export interface TurnItem {
   id: string;
@@ -121,6 +138,11 @@ export interface Turn {
   items: TurnItem[];
   /** Set when this turn opened a new session. */
   opened?: NewSessionReason;
+  /**
+   * A Codex session's opening turn: Codex names the thread itself, so the session row is added
+   * when the turn reports it (`result.sessionId`), with this CLI version.
+   */
+  pending?: { cliVersion: string };
   /** The turn ends as done, progress or question cards (T-062; turns without the host). */
   structured?: boolean;
   /** Question IDs the ledger already holds (asked or answered): never asked again. */
@@ -160,8 +182,11 @@ const createInput = z
     jigInstanceId: id.optional(),
     draftId: id.optional(),
     targets: z.array(id).max(50).optional(),
+    /** A make-conversation on a jig draft (PLAN-22 T-063): kind `jig-make`, `draftId` required. */
+    mode: z.literal('make').optional(),
   })
-  .strict();
+  .strict()
+  .refine((input) => input.mode !== 'make' || input.draftId !== undefined);
 export type CreateConversationInput = z.input<typeof createInput>;
 const ledgerInput = z
   .object({ kind: z.enum(ledgerKinds), body: z.unknown(), requestId: id.optional() })
@@ -174,6 +199,9 @@ const handoffInput = z
   })
   .strict();
 const closeInput = z.object({ discard: z.boolean().optional() }).strict();
+const switchInput = z
+  .object({ accountProfileId: z.string().regex(/^[a-zA-Z0-9-]{1,100}$/) })
+  .strict();
 const questionKey = z.string().regex(/^[a-zA-Z0-9_-]{1,40}$/);
 /** Answers to one turn's question cards; `recommended` answers every open one with its default. */
 const answerInput = z
@@ -325,6 +353,69 @@ export class ConversationService {
       ...conversation,
       requests: this.store.requestIds(conversation.projectId, conversation.id).length,
       session: active ? sessionSummary(active) : null,
+      handover: conversation.id ? this.limitHandover(conversation as Conversation) : null,
+    };
+  }
+  /**
+   * The conversation's latest request stopped on its account's limit and no hand-over answered it
+   * yet: the T2 card (SPEC-02.19 5). With automatic switching on, the next request already comes
+   * on another account and opens the new session itself, so the card is only offered.
+   */
+  private limitHandover(conversation: Conversation): LimitHandover | null {
+    if (conversation.state !== 'open') return null;
+    const rows = this.db.db
+      .prepare(
+        `SELECT id, state, input, result FROM workspace_requests WHERE conversationId=?
+          ORDER BY rowid DESC LIMIT 21`,
+      )
+      .all(conversation.id) as {
+      id: string;
+      state: string;
+      input: string;
+      result: string | null;
+    }[];
+    const last = rows[0];
+    if (!last || last.state !== 'failed') return null;
+    let code: unknown, accountProfileId: unknown;
+    try {
+      code = (JSON.parse(last.result ?? 'null') as { code?: unknown } | null)?.code;
+      accountProfileId = (JSON.parse(last.input) as { accountProfileId?: unknown })
+        .accountProfileId;
+    } catch {
+      return null;
+    }
+    if (code !== 'PROVIDER_LIMIT') return null;
+    const ledger = this.store.ledger(conversation.id, { current: true });
+    if (ledger.some((item) => item.kind === 'handoff' && item.requestId === last.id)) return null;
+    const files = new Set<string>();
+    let finished = 0;
+    for (const row of rows.slice(1))
+      if (row.state === 'succeeded') {
+        finished++;
+        try {
+          for (const file of (JSON.parse(row.input) as { files?: { name?: unknown }[] }).files ??
+            [])
+            if (typeof file?.name === 'string') files.add(file.name);
+        } catch {
+          /* A row that does not parse sends nothing. */
+        }
+      }
+    return {
+      kind: 'limit',
+      grade: 'T2',
+      requestId: last.id,
+      from: {
+        provider: conversation.provider,
+        accountProfileId:
+          typeof accountProfileId === 'string'
+            ? accountProfileId
+            : (conversation.accountProfileId ?? 'default'),
+      },
+      sends: {
+        ledgerItems: ledger.length,
+        recentTurns: Math.min(finished, RECENT_TURNS),
+        files: files.size,
+      },
     };
   }
 
@@ -344,6 +435,13 @@ export class ConversationService {
     },
   ) {
     this.db.project(projectId);
+    // A make-conversation writes an open draft of this project (PLAN-22 T-063).
+    if (
+      value.kind === 'jig-make' &&
+      value.draftId &&
+      new JigStore(this.db.db).draft(projectId, value.draftId).state !== 'open'
+    )
+      throw new DomainError('DRAFT_NOT_OPEN');
     const conversation = this.store.create(projectId, {
       ...value,
       effort: value.effort === 'default' ? null : value.effort,
@@ -409,6 +507,15 @@ export class ConversationService {
       else delete input.effort;
     }
     delete input.routing;
+    // A make-conversation turn never uses the host: it gets the draft's file and make tools (T-064).
+    if (conversation.kind === 'jig-make') {
+      if (
+        !conversation.draftId ||
+        new JigStore(this.db.db).draft(projectId, conversation.draftId).state !== 'open'
+      )
+        throw new DomainError('DRAFT_NOT_OPEN');
+      input.hostUse = 'none';
+    }
     return conversation;
   }
   /**
@@ -428,13 +535,53 @@ export class ConversationService {
       accountProfileId,
       mode: SESSION_PROVIDERS[input.provider] ? 'session' : 'ledger',
     });
+    const stopped = this.limitHandover(conversation)?.requestId;
     this.store.addLedgerItem(conversationId, {
       kind: 'handoff',
+      ...(stopped ? { requestId: stopped } : {}),
       body: {
         reason: 'provider',
         from: { provider: conversation.provider, model: conversation.model },
         to: { provider: updated.provider, model: updated.model },
       },
+    });
+    return this.summarize(updated);
+  }
+  /**
+   * The confirmed T2 card of an account limit (SPEC-02.19 5): the conversation keeps its service
+   * and model and goes on on another account of that service. The stopped turn is not sent again;
+   * the next turn opens a new session there with the ledger and the hand-over packet.
+   */
+  switchAccount(projectId: string, conversationId: string, value: unknown) {
+    const { accountProfileId } = switchInput.parse(value);
+    const conversation = this.store.get(projectId, conversationId);
+    if (conversation.state !== 'open') throw new DomainError('CONVERSATION_CLOSED');
+    const from = conversation.accountProfileId ?? 'default';
+    if (accountProfileId === from) throw new DomainError('INVALID_INPUT');
+    if (this.options.profiles)
+      try {
+        this.options.profiles.directory(conversation.provider as Provider, accountProfileId);
+      } catch {
+        throw new DomainError('INVALID_INPUT');
+      }
+    const stopped = this.limitHandover(conversation)?.requestId;
+    for (const session of this.store.sessions(conversationId, 'active'))
+      this.store.setSessionState(session, 'handed-off');
+    const updated = this.store.update(projectId, conversationId, { accountProfileId });
+    this.store.addLedgerItem(conversationId, {
+      kind: 'handoff',
+      ...(stopped ? { requestId: stopped } : {}),
+      body: {
+        reason: 'account',
+        confirmed: 'T2',
+        from: { provider: conversation.provider, accountProfileId: from },
+        to: { provider: conversation.provider, accountProfileId },
+      },
+    });
+    this.options.diagnostics?.write('conversation-handover', {
+      conversationId,
+      reason: 'account',
+      provider: conversation.provider,
     });
     return this.summarize(updated);
   }
@@ -542,19 +689,28 @@ export class ConversationService {
           : 'length'
         : previous.state === 'lost'
           ? 'lost'
-          : 'closed';
+          : // A confirmed hand-over (T2 card) left the session: say which way it went.
+            previous.state === 'handed-off' && previous.provider !== provider
+            ? 'provider'
+            : previous.state === 'handed-off' && previous.accountProfileId !== accountProfileId
+              ? 'account'
+              : 'closed';
     if (active) this.store.setSessionState(active, 'handed-off');
     const key = { conversationId, provider, accountProfileId, sessionId: randomUUID() };
-    this.store.addSession({ ...key, promptMode: 'neutral', cliVersion: await cliVersion() });
+    const version = await cliVersion();
+    // Codex names its thread itself: the row is added when the opening turn reports it.
+    const pending = provider === 'codex-cli' ? { cliVersion: version } : undefined;
+    if (!pending) this.store.addSession({ ...key, promptMode: 'neutral', cliVersion: version });
     if (conversation.accountProfileId !== accountProfileId)
       this.store.update(request.projectId, conversationId, { accountProfileId });
     const items: TurnItem[] = [ledgerItem(all(), 'all')];
     if (previous) {
       items.push(handoffItem(reason, own));
+      const { sessionId: _placeholder, ...opening } = key;
       this.store.addLedgerItem(conversationId, {
         kind: 'handoff',
         requestId: request.id,
-        body: { reason, from: sessionKey(previous), to: key },
+        body: { reason, from: sessionKey(previous), to: pending ? opening : key },
       });
     }
     return {
@@ -563,19 +719,53 @@ export class ConversationService {
       session: { id: key.sessionId, resume: false, ...key },
       items: [...items, ...elsewhere],
       opened: reason,
+      ...(pending ? { pending } : {}),
     };
   }
   /** Books the turn's outcome: tokens on the session, a lost session, the result in the ledger. */
   endTurn(turn: Turn, done: { state: string; result: Record<string, unknown> | null }) {
     const code = typeof done.result?.code === 'string' ? done.result.code : undefined;
     const finished = done.state === 'succeeded' || done.state === 'unknown';
-    if (turn.session) {
-      if (finished) this.store.recordTurn(turn.session, turnTokens(done.result?.usage));
+    let session: (SessionOptions & ProviderSessionKey) | undefined = turn.session;
+    if (session && turn.pending) {
+      // A Codex opening turn: the session is the thread it reported; without one nothing resumes.
+      const thread = done.result?.sessionId;
+      session =
+        typeof thread === 'string' && /^[0-9a-f-]{36}$/.test(thread)
+          ? { ...session, sessionId: thread, id: thread }
+          : undefined;
+      if (session)
+        this.store.addSession({
+          ...sessionKey(session),
+          promptMode: 'neutral',
+          cliVersion: turn.pending.cliVersion,
+        });
+    }
+    if (session) {
+      if (finished) {
+        // Codex counts cache reads inside its input, and a resumed Codex turn reports the
+        // session's running total (SPIKE-2026-09-30 ④): only the growth is this turn's.
+        const tokens =
+          session.provider === 'codex-cli'
+            ? Math.max(
+                0,
+                Math.round(
+                  Number((done.result?.usage as { inputTokens?: unknown })?.inputTokens) || 0,
+                ),
+              )
+            : turnTokens(done.result?.usage);
+        this.store.recordTurn(
+          session,
+          done.result?.usageScope === 'session'
+            ? Math.max(0, tokens - this.store.session(sessionKey(session)).inputTokens)
+            : tokens,
+        );
+      }
       // A stop without a confirmed exit or a transcript that is gone is never resumed
       // (SPEC-02.19 5); neither is an opening turn that failed, since the CLI may have written
       // its transcript under that ID already (a fresh ID opens the next turn).
-      else if (!turn.session.resume || code === 'STOP_UNCONFIRMED' || code === 'SESSION_LOST')
-        this.store.setSessionState(turn.session, 'lost');
+      else if (!session.resume || code === 'STOP_UNCONFIRMED' || code === 'SESSION_LOST')
+        this.store.setSessionState(session, 'lost');
     }
     if (finished)
       this.store.addLedgerItem(turn.conversation.id, {
@@ -748,6 +938,9 @@ function handoffItem(reason: NewSessionReason, own: StoredWork[]): TurnItem {
   const files = new Set<string>();
   for (const row of finished.slice(-20))
     for (const file of row.input.files) if (typeof file.name === 'string') files.add(file.name);
+  const last = own.at(-1);
+  const stopped =
+    last?.state === 'failed' && last.result?.code === 'PROVIDER_LIMIT' ? last : undefined;
   return {
     id: 'handoff',
     type: 'handoff',
@@ -759,6 +952,8 @@ function handoffItem(reason: NewSessionReason, own: StoredWork[]): TurnItem {
         response: clip(row.result?.text, 6000),
       })),
       files: [...files],
+      // The turn an account limit stopped was not answered and is not sent again by itself.
+      ...(stopped ? { stopped: { request: clip(stopped.input.body, 2000), answered: false } } : {}),
     },
   };
 }
@@ -807,7 +1002,7 @@ export async function conversationRoutes(
   { service, body, send, remote, chooseModel, chooseAccount, submit }: ConversationRouteContext,
 ): Promise<boolean> {
   const route =
-    /^\/api\/v1\/projects\/([^/]+)\/conversations(?:\/([^/]+)(?:\/(close|reopen|ledger|handoff|answer))?)?$/.exec(
+    /^\/api\/v1\/projects\/([^/]+)\/conversations(?:\/([^/]+)(?:\/(close|reopen|ledger|handoff|account|answer))?)?$/.exec(
       url.pathname,
     );
   if (!route) return false;
@@ -827,7 +1022,10 @@ export async function conversationRoutes(
           input.provider,
         )
       : { provider: input.provider!, model: input.model, effort: input.effort ?? 'default' };
-    const kind = input.kind ?? kindOf(automatic ? choice.task : undefined, input.host);
+    const kind =
+      input.mode === 'make'
+        ? 'jig-make'
+        : (input.kind ?? kindOf(automatic ? choice.task : undefined, input.host));
     const title =
       input.title ??
       (input.body?.trim() ? clip(input.body.trim().replace(/\s+/g, ' '), 60) : KIND_TITLES[kind]);
@@ -884,6 +1082,10 @@ export async function conversationRoutes(
       service.withdraw(conversationId, answered.items);
       throw error;
     }
+  } else if (action === 'account') {
+    // The confirmed T2 card of an account limit: same service, another account (SPEC-02.19 5).
+    if (remote) throw new DomainError('FORBIDDEN');
+    send(200, service.switchAccount(projectId, conversationId, await body(request)));
   } else {
     if (remote) throw new DomainError('FORBIDDEN');
     const input = handoffInput.parse(await body(request));

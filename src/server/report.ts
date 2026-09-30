@@ -257,7 +257,7 @@ export function renderJigReport(model: ReportModel, origin: JigReportOrigin): st
   const sections = model.sections
     .map(
       (s) =>
-        `<section id="${escape(s.id)}"><span class="no">${escape(s.no)}</span><h2>${claimHtml(s.title)}</h2>${s.lede ? `<p class="sec-lede">${claimHtml(s.lede)}</p>` : ''}${s.blocks.map(jigBlockHtml).join('')}</section>`,
+        `<section id="${escape(s.id)}"><span class="no">${escape(s.id === 'appendix' ? '부록' : s.no)}</span><h2>${claimHtml(s.title)}</h2>${s.lede ? `<p class="sec-lede">${claimHtml(s.lede)}</p>` : ''}${s.blocks.map(jigBlockHtml).join('')}</section>`,
     )
     .join('');
   const source = [...model.source, origin.at ? `보고서 ${origin.at}` : undefined]
@@ -271,4 +271,240 @@ ${failed.length ? `<p class="gates">확인 필요: ${failed.map((g) => escape(g.
 ${kpis}${sections}
 <p class="open">VIDE에서 열기: ${escape(origin.project)} · ${escape(origin.instance)} · ${escape(origin.version)}</p>
 </main></body></html>`;
+}
+
+// --- report inputs (PLAN-23 T-058, SPEC-07.11) -------------------------------------------------
+// What a jig report reads beside the step outputs, under `inputs.…`: the settings ledger (the
+// appendix), the open items (settings still on an assumed default, unanswered question cards),
+// the steps whose output is only a preview (`previewOnly`), and one view of the structure summary
+// shown (the confirmed result when there is one, else the preview): combinations as text, the
+// items not checked, the ratio histogram, governing members, reference deflection and the column
+// reactions. Pure; the engine passes it as `ReportContext.inputs`.
+
+export interface JigReportParamRow {
+  key: string;
+  title?: string;
+  value?: unknown;
+  displayValue?: unknown;
+  displayUnit?: string;
+  by?: string;
+  basis?: { status?: string; note?: string; question?: string };
+}
+export interface JigReportLedgerRow {
+  kind: string;
+  body: unknown;
+}
+const BY_TEXT: Record<string, string> = {
+  default: '기본값',
+  user: '사용자',
+  decision: '결정',
+  fact: '자료',
+  ai: 'AI 제안',
+  rhino: 'Rhino',
+  sketch: '스케치',
+};
+const BASIS_TEXT: Record<string, string> = {
+  confirmed: '확인됨',
+  assumed: '가정',
+  chosen: '선택',
+  'to-ask': '물어볼 것',
+};
+const JUDGEMENT_TEXT: Record<string, string> = {
+  ok: '통과',
+  warn: '주의',
+  ng: '초과',
+  na: '미완',
+  err: '오류',
+};
+type Loose = Record<string, unknown>;
+const isObject = (value: unknown): value is Loose =>
+  !!value && typeof value === 'object' && !Array.isArray(value);
+const isNum = (value: unknown): value is number =>
+  typeof value === 'number' && Number.isFinite(value);
+const listOf = (value: unknown): unknown[] => (Array.isArray(value) ? value : []);
+const short = (value: number) => String(Number(value.toFixed(3)));
+const RATIO_BINS = [
+  { label: '0.5 미만', below: 0.5, shade: 'base' },
+  { label: '0.5–0.7', below: 0.7, shade: 'base' },
+  { label: '0.7–0.9', below: 0.9, shade: 'alt' },
+  { label: '0.9–1.0', below: 1.0 + 1e-9, shade: 'alt' },
+  { label: '1.0 초과', below: Infinity, shade: 'strong' },
+];
+const isSummary = (value: unknown): value is Loose =>
+  isObject(value) && value.schema === 'vide.structure.summary/1';
+
+/**
+ * The structure summary the outputs show: a confirmed result first, else a preview. A confirmed
+ * result of a step that is not final (stale, waiting for re-confirmation) is not shown as confirmed.
+ */
+function shownSummary(outputs: Record<string, unknown>, final?: Record<string, boolean>) {
+  let preview: { step: string; summary: Loose; confirmed: boolean } | undefined;
+  for (const [step, output] of Object.entries(outputs)) {
+    if (!isObject(output)) continue;
+    const confirmed = isObject(output.confirmed) ? output.confirmed.result : undefined;
+    if (isSummary(confirmed) && final?.[step] !== false)
+      return { step, summary: confirmed, confirmed: true };
+    if (!preview && isSummary(output.preview))
+      preview = { step, summary: output.preview, confirmed: false };
+  }
+  return preview;
+}
+function structureView(shown: { step: string; summary: Loose; confirmed: boolean }) {
+  const s = shown.summary;
+  const members = listOf(s.members).filter(Array.isArray) as unknown[][];
+  const codes = listOf(s.statusCodes).map(String);
+  const clauses = listOf(s.clauses).map(String);
+  const ratios = members.map((m) => m[2]).filter(isNum);
+  const bins = RATIO_BINS.map((b, i) => ({
+    label: b.label,
+    count: ratios.filter((r) => r < b.below && (i === 0 || r >= RATIO_BINS[i - 1].below)).length,
+    shade: b.shade,
+  }));
+  const combos = listOf(s.combos)
+    .filter(isObject)
+    .map((c) => ({
+      id: String(c.id ?? ''),
+      limitState: c.limitState === 'service' ? '사용성' : '강도',
+      text: Object.entries(isObject(c.terms) ? c.terms : {})
+        .flatMap(([load, f]) => (isNum(f) ? [`${short(f)}${load}`] : []))
+        .join(' + '),
+    }));
+  const governing = members
+    .filter((m) => isNum(m[2]))
+    .sort((a, b) => (b[2] as number) - (a[2] as number))
+    .slice(0, 10)
+    .map((m) => ({
+      key: String(m[0]),
+      judgement: JUDGEMENT_TEXT[codes[m[1] as number] ?? ''] ?? '—',
+      ratio: Number(Math.min(m[2] as number, 999).toFixed(3)),
+      clause: isNum(m[3]) ? (clauses[m[3]] ?? '') : '',
+    }));
+  const deflections = members
+    .filter((m) => isNum(m[4]))
+    .map((m) => {
+      const d = m[4] as number;
+      const limit = isNum(m[5]) ? m[5] : null;
+      return {
+        key: String(m[0]),
+        deflection_mm: Number(d.toFixed(1)),
+        limit_mm: limit === null ? null : Number(limit.toFixed(1)),
+        ratio: limit ? Number((d / limit).toFixed(3)) : null,
+      };
+    })
+    .sort((a, b) => (b.ratio ?? -1) - (a.ratio ?? -1) || a.key.localeCompare(b.key))
+    .slice(0, 10);
+  const perColumn = listOf(isObject(s.reactions) ? s.reactions.perColumn : undefined).filter(
+    Array.isArray,
+  ) as unknown[][];
+  const reactions = perColumn
+    .map((r) => {
+      const rx = isNum(r[3]) ? r[3] : 0;
+      const ry = isNum(r[4]) ? r[4] : 0;
+      return {
+        column: String(r[0]),
+        z_m: isNum(r[1]) ? r[1] : null,
+        combo: combos[r[2] as number]?.id ?? '',
+        Rx_kN: rx,
+        Ry_kN: ry,
+        R_kN: Number(Math.hypot(rx, ry).toFixed(2)),
+      };
+    })
+    .sort((a, b) => b.R_kN - a.R_kN || a.column.localeCompare(b.column));
+  return {
+    step: shown.step,
+    mode: shown.confirmed ? '확정 결과' : '미확정 미리보기',
+    confirmed: shown.confirmed ? 1 : 0,
+    combos,
+    assumptions: listOf(s.assumptions).map(String),
+    unchecked: listOf(s.unchecked).map(String),
+    bins,
+    governing,
+    deflections,
+    reactions,
+  };
+}
+
+/**
+ * The `inputs` of a jig report: settings ledger, open items, previews, the structure view and
+ * `bake.members` — the members a bake may make now (a plan output with `members` that is not a
+ * preview; 0 while the members wait for a confirmed analysis).
+ */
+export function jigReportInputs(input: {
+  params?: readonly JigReportParamRow[];
+  ledger?: readonly JigReportLedgerRow[];
+  outputs?: Record<string, unknown>;
+  /** Report `final` flags per step: a non-final confirmed result is not shown as confirmed. */
+  final?: Record<string, boolean>;
+}) {
+  const params = input.params ?? [];
+  const ledger = input.ledger ?? [];
+  const valueText = (p: JigReportParamRow) => {
+    const v = p.displayValue ?? p.value;
+    const text = isNum(v)
+      ? short(v)
+      : typeof v === 'boolean'
+        ? v
+          ? '예'
+          : '아니오'
+        : String(v ?? '—');
+    return p.displayUnit && isNum(v) ? `${text} ${p.displayUnit}` : text;
+  };
+  const settings = params.map((p) => ({
+    key: p.key,
+    title: p.title ?? p.key,
+    value: valueText(p),
+    by: BY_TEXT[p.by ?? ''] ?? p.by ?? '—',
+    basis: BASIS_TEXT[p.basis?.status ?? ''] ?? '—',
+    note: p.basis?.question ?? p.basis?.note ?? '',
+  }));
+  // An assumed (or to-ask) setting still on its default is an open item; once someone sets it
+  // (user, decision, fact …) it is no longer assumed.
+  const assumed = params.filter(
+    (p) => (p.basis?.status === 'assumed' || p.basis?.status === 'to-ask') && p.by === 'default',
+  );
+  const answered = new Set<string>();
+  for (const item of ledger)
+    if ((item.kind === 'answer' || item.kind === 'decision') && isObject(item.body))
+      if (typeof item.body.questionId === 'string') answered.add(item.body.questionId);
+  const seen = new Set<string>();
+  const questions = ledger.flatMap((item) => {
+    const body = item.body;
+    if (item.kind !== 'question' || !isObject(body) || typeof body.id !== 'string') return [];
+    if (answered.has(body.id) || seen.has(body.id)) return [];
+    seen.add(body.id);
+    return [{ title: String(body.title ?? body.id), blocks: String(body.blocks ?? '') }];
+  });
+  const open = [
+    ...assumed.map((p) => ({
+      kind: '가정한 설정값',
+      text: `${p.title ?? p.key}: ${valueText(p)}`,
+      ask: p.basis?.question ?? p.basis?.note ?? '',
+    })),
+    ...questions.map((q) => ({ kind: '답하지 않은 질문', text: q.title, ask: q.blocks })),
+  ];
+  const outputs = input.outputs ?? {};
+  const preview = Object.fromEntries(
+    Object.entries(outputs)
+      .filter(([, o]) => isObject(o) && o.previewOnly === true)
+      .map(([step]) => [step, 1]),
+  );
+  const shown = shownSummary(outputs, input.final);
+  const bakeMembers = Object.entries(outputs).reduce((n, [step, o]) => {
+    if (!isObject(o) || o.schema !== 'vide.s06.bakePlan/1' || o.previewOnly !== false) return n;
+    if (input.final?.[step] === false) return n;
+    return Math.max(n, listOf(o.members).length);
+  }, 0);
+  return {
+    settings,
+    open,
+    counts: {
+      settings: settings.length,
+      assumed: assumed.length,
+      questions: questions.length,
+      open: open.length,
+    },
+    preview,
+    bake: { members: bakeMembers },
+    ...(shown ? { structure: structureView(shown) } : {}),
+  };
 }

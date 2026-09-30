@@ -116,19 +116,16 @@ try {
     '보고서',
   ]);
   assert.equal(await tab('모델').getAttribute('aria-selected'), 'true');
-  // The report tab is ready since PLAN-22 T-057 (tests/integration/browser-report.mjs).
-  for (const name of ['자료', '만들기'])
-    assert.equal(await tab(name).getAttribute('aria-disabled'), 'true');
+  // Every fixed tab is ready: 보고서 since PLAN-22 T-057, 자료 and 만들기 since T-065 and T-063
+  // (tests/integration/browser-report.mjs, browser-facts.mjs, browser-make.mjs).
+  for (const name of ['자료', 'JIG', '만들기', '보고서'])
+    assert.equal(await tab(name).getAttribute('aria-disabled'), null);
   const row = await page.locator('.workspace-tabs').boundingBox();
   const centre = await page.locator('.workspace').boundingBox();
   const right = await page.locator('#right').boundingBox();
   assert.ok(Math.abs(row.height - 32) <= 1, 'a 32 px row');
   assert.ok(row.x >= centre.x - 1 && row.x + row.width <= right.x + 1, 'over the centre only');
   assert.ok((await page.locator('#canvas canvas').boundingBox()).y >= row.y + row.height - 1);
-  // (Playwright treats aria-disabled as disabled; force the click to see that nothing happens.)
-  await tab('자료').click({ force: true });
-  assert.equal(await tab('모델').getAttribute('aria-selected'), 'true', 'not ready: no change');
-
   // A draft and the selection stay through every tab change below.
   const draft = '탭을 바꿔도 남는 초안';
   await page.locator('#body').fill(draft);
@@ -198,7 +195,11 @@ try {
   assert.equal(await page.locator('#selection').textContent(), 'B3');
   await tab('모델').focus();
   await page.keyboard.press('ArrowRight');
+  assert.equal(await tab('자료').getAttribute('aria-selected'), 'true');
+  await page.keyboard.press('ArrowRight');
   assert.equal(await tab('JIG').getAttribute('aria-selected'), 'true');
+  await page.keyboard.press('ArrowRight');
+  assert.equal(await tab('만들기').getAttribute('aria-selected'), 'true');
   await page.keyboard.press('ArrowRight');
   assert.equal(await tab('보고서').getAttribute('aria-selected'), 'true');
   await page.keyboard.press('ArrowRight');

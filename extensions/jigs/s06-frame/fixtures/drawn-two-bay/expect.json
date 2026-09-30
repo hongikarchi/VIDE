@@ -21,6 +21,37 @@
     },
     "axes": {
       "skipped": true
+    },
+    "sizing": {
+      "summary": {
+        "groups": 5
+      }
+    },
+    "schedule": {
+      "totals": {
+        "count": 16
+      }
+    },
+    "heights": {
+      "summary": {
+        "columns": 6,
+        "floored": 6,
+        "short": 0
+      }
+    },
+    "bakePlan": {
+      "previewOnly": true,
+      "summary": {
+        "lines": 16,
+        "members": 16
+      }
+    },
+    "bakeMembers": {
+      "previewOnly": true,
+      "summary": {
+        "lines": 0,
+        "members": 16
+      }
     }
   },
   "statuses": {

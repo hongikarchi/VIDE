@@ -273,6 +273,7 @@ export function buildFrameModel(plan: FramePlan): FrameBuild {
   const swayK = plan.swayK ?? 2.0;
   const strongTol = plan.jointRule === false ? undefined : (plan.jointRule?.strongAxisTolDeg ?? 15);
   let demoted = 0;
+  let cantileverFixed = 0;
   const outMembers: StructureModelInput['members'] = [];
   const designMembers: NonNullable<StructureModelInput['designMembers']> = [];
   const map: MemberMap = { physical: {}, roles: {}, tags: {}, cantilever: {}, columnOfNode: {} };
@@ -338,9 +339,17 @@ export function buildFrameModel(plan: FramePlan): FrameBuild {
     const role = PLAN_ROLE_TO_MODEL[m.role] ?? 'beam';
     const freeEnd = m.freeEnd ?? (m.role === 'arm' ? 'j' : undefined);
     const ends: FrameMember['ends'] = [...m.ends];
+    // A cantilever hangs on its root alone: the root holds the moment and the tip carries no
+    // release (a pinned root or a released tip is a mechanism), whatever the plan or joint rule say.
+    if (freeEnd) {
+      if (ends[0] !== 'rigid' || ends[1] !== 'rigid') cantileverFixed++;
+      ends[0] = 'rigid';
+      ends[1] = 'rigid';
+    }
     // Joint rule (SPEC-06.4): a rigid end at an H column stays rigid only near its strong axis.
     const endNodes: [number, number] = [segs[0].i, segs[segs.length - 1].j];
     endNodes.forEach((n, e) => {
+      if (freeEnd) return;
       const owner = columnOfNode.get(n);
       const column = owner === undefined ? undefined : columnMap.get(owner);
       if (ends[e] !== 'rigid' || !column?.strongAxis || strongTol === undefined) return;
@@ -411,6 +420,52 @@ export function buildFrameModel(plan: FramePlan): FrameBuild {
   if (demoted)
     assume(
       `H형강 기둥 주축 ±${strongTol}° 밖에서 붙는 단부 ${demoted}곳을 핀으로 둠(구조사무소 확인)`,
+    );
+  if (cantileverFixed)
+    assume(`내민 부재 ${cantileverFixed}개는 핀으로 준 단부를 강접으로 둠(뿌리가 핀이면 기구)`);
+  // A joint where every frame end is released is a hinge nothing holds: the first girder (else
+  // the longest member) there and the member most in line with it stay continuous through it, so
+  // the joint carries bending like a splice. Columns are never released.
+  const rolePriority = { girder: 0, beam: 1, brace: 2, other: 3, column: 4 } as const;
+  const endsAt = new Map<string, { k: number; end: 'i' | 'j' }[]>();
+  outMembers.forEach((m, k) => {
+    for (const end of ['i', 'j'] as const)
+      endsAt.set(m[end], [...(endsAt.get(m[end]) ?? []), { k, end }]);
+  });
+  const segmentLength = new Map([...segmentsOf.values()].flat().map((s) => [s.id, s.length_m]));
+  const pointOf = (id: string) => registry.points[Number(id.slice(1)) - 1];
+  /** Unit direction of a member leaving `node`. */
+  const away = (m: StructureModelInput['members'][number], node: string) =>
+    unit(sub(pointOf(m.i === node ? m.j : m.i), pointOf(node)));
+  const unrelease = ({ k, end }: { k: number; end: 'i' | 'j' }) => {
+    const m = outMembers[k];
+    const { [end]: _dropped, ...rest } = m.releases!;
+    if (Object.keys(rest).length) m.releases = rest;
+    else delete m.releases;
+  };
+  let restored = 0;
+  for (const [node, at] of endsAt) {
+    if (!at.every(({ k, end }) => outMembers[k].releases?.[end])) continue;
+    const [first, ...others] = [...at].sort((a, b) => {
+      const [ma, mb] = [outMembers[a.k], outMembers[b.k]];
+      const byRole = rolePriority[ma.role] - rolePriority[mb.role];
+      if (byRole) return byRole;
+      return segmentLength.get(mb.id)! - segmentLength.get(ma.id)! || a.k - b.k;
+    });
+    unrelease(first);
+    if (others.length) {
+      const d = away(outMembers[first.k], node);
+      const inLine = (e: { k: number }) => {
+        const v = away(outMembers[e.k], node);
+        return d[0] * v[0] + d[1] * v[1] + d[2] * v[2];
+      };
+      unrelease([...others].sort((a, b) => inLine(a) - inLine(b))[0]);
+    }
+    restored++;
+  }
+  if (restored)
+    assume(
+      `모든 단부가 핀인 절점 ${restored}곳은 거더(없으면 가장 긴 부재)와 가장 곧게 잇는 부재를 연속으로 둠`,
     );
   assume('해석은 상단선 위에서 하며 편심을 무시함(상단선 기준)');
   assume('데크가 상부 플랜지를 잡는다고 보고 Cb = 1.0 가정');

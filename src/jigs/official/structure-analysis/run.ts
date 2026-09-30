@@ -1,4 +1,4 @@
-// The synchronous analysis pipeline: checks → (stability probe) → core → failure causes → summary.
+// The synchronous analysis pipeline: checks → mechanism pre-check → (stability probe) → core → failure causes → summary.
 // Runs inside the worker thread (worker-entry.ts); tests call it directly. No I/O.
 
 import { createHash } from 'node:crypto';
@@ -19,6 +19,7 @@ import {
   stabilityProbe,
 } from '../../structure/review.ts';
 import { memberMapFrom } from './frame-model.ts';
+import { mechanismIssues } from './mechanism.ts';
 import type { MemberMap } from './frame-plan.ts';
 import { emptySummary, summarize } from './summary.ts';
 
@@ -80,6 +81,19 @@ export function runAnalysis(
     };
   const model = checked.model;
   const hash = modelHash(model);
+  // Joint patterns that are certainly mechanisms stop here with their nodes and cause.
+  const mechanisms = mechanismIssues(model);
+  issues.push(...mechanisms);
+  if (mechanisms.some((i) => i.level === 'error'))
+    return {
+      summary: emptySummary('unstable', {
+        ...base,
+        model,
+        modelHash: hash,
+        issues,
+        ms: performance.now() - started,
+      }),
+    };
   const memberMap = map ?? memberMapFrom(model);
   const key = options.key ?? '';
   const stability =

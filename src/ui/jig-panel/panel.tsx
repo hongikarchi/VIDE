@@ -2,13 +2,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import type { OverlayItem } from '../viewport.ts';
 import type { LegendSpec, PartOf, PartUse } from '../kit/registry.ts';
-import {
-  BakeCard,
-  ConflictBanner,
-  RoleCards,
-  type BakePlan,
-  type RoleCardData,
-} from '../kit/cards.tsx';
+import { ConflictBanner, RoleCards, type RoleCardData } from '../kit/cards.tsx';
 import {
   FactBadge,
   SettingGroup,
@@ -42,7 +36,9 @@ import {
   type Band,
   type PanelData,
 } from './bindings.ts';
+import { BakePart } from './bake-parts.tsx';
 import { useInstance, type InstanceView, type StepReport } from './instance.ts';
+import { InstanceReportPart, renderReportPart } from './report-parts.tsx';
 import { scopeOf, validatePanel, type PanelAction } from './spec.ts';
 
 // The declarative jig screen (SPEC-07.10, ARCH-03 §5.1, Design SCR-13): a checked `panel.json`
@@ -65,6 +61,8 @@ export interface PanelHost {
   sources?: readonly { id: string; host: string }[];
   /** Layer paths in the linked documents' Syncs. */
   layers?: readonly string[];
+  /** Frame one object of the linked document (the bake card's preserved objects). */
+  focusObject?: (nativeId: string) => void;
   /** Regions beside the panel (Design SCR-13): above the 3D view, over it, below it. */
   slots?: { top?: HTMLElement; board?: HTMLElement; drawer?: HTMLElement };
 }
@@ -561,16 +559,34 @@ export function JigPanel({
             })}
           />
         );
-      case 'bake-card': {
-        const plan = part.from ? resolve(part.from, data) : undefined;
+      case 'bake-card':
+        // [선만 먼저 만들기]·[부재 만들기], what the candidate changes, the records and the
+        // baseline read (bake-parts.tsx); read again after each run.
         return (
-          <BakeCard
+          <BakePart
             key={key}
+            projectId={host.projectId}
+            instanceId={instanceId}
             title={part.title}
-            plan={plan && typeof plan === 'object' ? (plan as BakePlan) : undefined}
+            bake={part.bake}
+            revision={jig.lastRun?.getTime()}
+            onRecompute={() => void jig.recompute()}
+            onFocus={host.focusObject}
           />
         );
-      }
+      case 'compare-bars':
+      case 'ledger':
+        return renderReportPart(part, key, data);
+      case 'report':
+        return (
+          <InstanceReportPart
+            key={key}
+            projectId={host.projectId}
+            instanceId={instanceId}
+            reportId={part.report}
+            revision={jig.lastRun?.getTime()}
+          />
+        );
       case 'conflict-banner':
         return (
           <ConflictBanner

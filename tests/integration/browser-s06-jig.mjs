@@ -3,7 +3,8 @@
 // beams, the grid and an old joint — synthetic) → JIG list → new instance of project/s06-frame →
 // role cards read and confirm every role → the human step confirmed → assembly, diagnosis, axes,
 // columns, footprints and interference done → KPI strip, result tabs, 3D overlays, table ↔ 3D.
-// Read-only: no request, no host, no AI. Not part of test:browser yet; run by hand after build:web.
+// M3 (T-056): sizing, schedule, heights and the bake plan tabs. Read-only: no request, no host,
+// no AI. Not part of test:browser yet; run by hand after build:web.
 import assert from 'node:assert/strict';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -122,6 +123,11 @@ try {
       'analysis',
       'confirmAnalysis',
       'analysisConfirmed',
+      'sizing',
+      'schedule',
+      'heights',
+      'bakePlan',
+      'bakeMembers',
     ],
   );
   // Nothing is read yet: the required roles are missing and the assembly step says so.
@@ -220,6 +226,31 @@ try {
   assert.equal(corrected.columns ?? 0, 0); // no proposed layout in drawn mode
   if (shot) await page.screenshot({ path: join(shot, 's06-jig-drawn.png') });
 
+  // M3 (PLAN-23 T-056): sizing on the preview, schedule, heights and the lines plan run before
+  // 해석 확정; the members plan waits for it. KPI 강재 (t), tabs 단면·일람표·높이·만들기, the
+  // schedule saves as CSV. Numbers depend on the analysis: tests/core/s06-m3.test.mjs.
+  for (const id of ['sizing', 'schedule', 'heights', 'bakePlan']) await rail(id, 'done').waitFor();
+  await rail('bakeMembers', 'blocked').waitFor();
+  const steel = await top.locator('.kit-kpi[data-kpi="강재"]').textContent();
+  assert.match(steel, /\d[\d.,]*\s*t/);
+  assert.match(steel, /예비 단면/);
+  assert.deepEqual(
+    drawnTabs.slice(4).map((t) => t.replace(/\d+$/, '')),
+    ['단면', '일람표', '높이', '만들기'],
+  );
+  await drawer.getByRole('tab', { name: /^일람표/ }).click();
+  const scheduleTable = drawer.getByRole('table', { name: '일람표' });
+  assert.ok((await scheduleTable.locator('tbody tr').count()) > 0);
+  assert.match(await scheduleTable.textContent(), /S06-S[A-Z]+1/);
+  const download = page.waitForEvent('download');
+  await drawer.getByRole('button', { name: /CSV/ }).first().click();
+  assert.equal((await download).suggestedFilename(), '부재일람표.csv');
+  await drawer.getByRole('tab', { name: /^높이/ }).click();
+  assert.ok((await drawer.getByRole('table', { name: '높이' }).locator('tbody tr').count()) > 0);
+  await drawer.getByRole('tab', { name: /^만들기/ }).click();
+  assert.ok((await drawer.getByRole('table', { name: '만들기' }).locator('tbody tr').count()) > 0);
+  await drawer.getByRole('tab', { name: /^거더 보정 목록/ }).click();
+
   // The proposed layout (②~④) after switching the layout source.
   assert.equal(
     await page.evaluate(async (id) => {
@@ -238,19 +269,8 @@ try {
   await panel.getByRole('button', { name: '다시 계산', exact: true }).click();
   await rail('interference', 'done').waitFor();
   for (const id of ['axes', 'columns', 'footprints']) await rail(id, 'done').waitFor();
-  // The rails were already 'done' in drawn mode (empty outputs): wait for the proposed results.
-  await drawer
-    .getByRole('tab')
-    .filter({ hasText: /^간섭 · 제안10/ })
-    .waitFor({ timeout: 30_000 })
-    .catch(() => {});
-  const tabs = await drawer.getByRole('tab').allTextContents();
-  assert.ok(
-    tabs.some((t) => t.startsWith('간섭 · 제안10')),
-    tabs.join('|'),
-  );
-  assert.ok(tabs.some((t) => t.startsWith('배치 대안 · 제안')));
-  assert.ok(tabs.some((t) => t.startsWith('확인 목록')));
+  // The drawer holds the drawn and M3 tabs (eight at most); the proposed results are overlays,
+  // the plan and the step outputs.
 
   // The results are overlay layers on the model: axes, columns, caps and footings.
   await page.waitForFunction(
@@ -265,24 +285,24 @@ try {
   assert.equal(drawn['cap-clash'] ?? 0, 0);
   if (shot) await page.screenshot({ path: join(shot, 's06-jig.png') });
 
-  // Table → 3D: an interference row selects its column and frames it.
-  await drawer.getByRole('tab', { name: /^간섭 · 제안/ }).click();
-  const row = drawer.getByRole('table', { name: '간섭 · 제안' }).locator('tr[data-id="col:N1-NA"]');
+  // Table → 3D: a corrected girder row selects its girder and frames it.
+  await drawer.getByRole('tab', { name: /^거더 보정 목록/ }).click();
+  const row = drawer.getByRole('table', { name: '거더 보정 목록' }).locator('tr[data-id="G01"]');
   await row.click();
   assert.equal(await row.getAttribute('aria-selected'), 'true');
   assert.ok(
     (await page.evaluate(() => window.videViewport.overlayInfo())) // overlay item ids are the keys
-      .find((o) => o.key === 'columns')
-      .items.includes('col:N1-NA'),
+      .find((o) => o.key === 'girders')
+      .items.includes('G01'),
   );
-  // The column's line (bottom → top) from the step output; its middle comes to the view's centre.
-  const column = await page.evaluate(async (id) => {
+  // The girder's top line from the step output; its middle comes to the view's centre.
+  const girder = await page.evaluate(async (id) => {
     const base = `/api/v1/projects/${id}/jig-instances`;
     const [instance] = (await (await fetch(base)).json()).instances;
-    const { output } = await (await fetch(`${base}/${instance.id}/steps/columns/output`)).json();
-    return output.columns.find((c) => c.key === 'col:N1-NA');
+    const { output } = await (await fetch(`${base}/${instance.id}/steps/girders/output`)).json();
+    return output.girders.find((g) => g.id === 'G01');
   }, projectId);
-  const centre = column.line[0].map((v, k) => (v + column.line.at(-1)[k]) / 2);
+  const centre = girder.points[0].map((v, k) => (v + girder.points.at(-1)[k]) / 2);
   await page
     .waitForFunction(
       (centre) => {
@@ -299,16 +319,20 @@ try {
         const at = window.videViewport.screenOf(centre);
         return { dx: at.x - (r.left + r.width / 2), dy: at.y - (r.top + r.height / 2) };
       }, centre);
-      assert.fail('the column is not framed: ' + JSON.stringify(framed));
+      assert.fail('the girder is not framed: ' + JSON.stringify(framed));
     });
 
-  // The plan turns with the frame and lists the same columns; the alternatives tab names both grids.
+  // The plan turns with the frame and lists the same columns; the alternatives name both grids.
   await top.getByRole('tab', { name: '평면' }).click();
   const plan = top.getByRole('img', { name: '평면' });
   assert.equal(await plan.locator('[data-layer="columns"] [data-id]').count(), 10);
   await top.getByRole('tab', { name: '3D' }).click();
-  await drawer.getByRole('tab', { name: /^배치 대안/ }).click();
-  const alternatives = await drawer.getByRole('table', { name: '배치 대안 · 제안' }).textContent();
+  const alternatives = await page.evaluate(async (id) => {
+    const base = `/api/v1/projects/${id}/jig-instances`;
+    const [instance] = (await (await fetch(base)).json()).instances;
+    const { output } = await (await fetch(`${base}/${instance.id}/steps/axes/output`)).json();
+    return JSON.stringify(output.alternatives);
+  }, projectId);
   assert.match(alternatives, /직교 격자/);
   assert.match(alternatives, /엇갈림 격자/);
   assert.match(alternatives, /● 선택/);

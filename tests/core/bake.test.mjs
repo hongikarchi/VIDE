@@ -706,3 +706,112 @@ test('built-in bakes: lines from axes, column lines and girder top lines; member
   assert.ok(Math.abs(columns.items[0].strongAxis[1] - 1) < 1e-9);
   assert.deepEqual(columns.items[0].top, [8, 0, 6]);
 });
+
+// PLAN-23 T-056 ⑫: the S-06 bake plan (`vide.s06.bakePlan/1`) is read as it is — lines with
+// their arcs, members by template (H under the top line, H columns), sizes from the plan — and
+// member bakes are refused without `analysis-confirmed` or from a preview plan.
+test('bake plan output: lines keep arcs, members split by template, members need a confirmed analysis', async () => {
+  const { bakePlan } = await import('../../extensions/jigs/s06-frame/steps/bakeplan.ts');
+  const { readFileSync } = await import('node:fs');
+  const fixture = JSON.parse(
+    readFileSync(
+      new URL('../../extensions/jigs/s06-frame/fixtures/bakeplan-two-bay.json', import.meta.url),
+      'utf8',
+    ),
+  );
+  const output = bakePlan(fixture.inputs, fixture.params);
+  const decl = (id, template, items, extra = {}) => ({
+    id,
+    template,
+    host: 'rhino',
+    items: `step.bakePlan.${items}`,
+    layer: template === 'vide.bake.curves@1' ? 'jig 상단선' : 'jig 부재',
+    key: 'key',
+    attrs: { 'vide-role': 'role', 'vide-mark': 'mark' },
+    mode: 'replace-own',
+    ...extra,
+  });
+  const confirmed = { requires: ['analysis-confirmed'] };
+
+  const lines = extractItems(decl('lines', 'vide.bake.curves@1', 'lines'), output);
+  assert.deepEqual(lines.problems, []);
+  assert.equal(lines.items.length, output.lines.length);
+  const g2 = lines.items.find((i) => i.key === 'girder:G2');
+  assert.equal(g2.curve.kind, 'arc');
+  assert.deepEqual(g2.curve.points[1], [4, 6, 6.3]);
+  assert.deepEqual(g2.attrs, [
+    ['vide-role', 'girder'],
+    ['vide-mark', 'G2'],
+  ]);
+  assert.deepEqual(
+    lines.items.find((i) => i.key === 'cantilever:E01').attrs,
+    [['vide-role', 'beam']],
+    'no empty mark attribute',
+  );
+  assert.deepEqual(unsafeArgs(lines.items), []);
+
+  const members = extractItems(
+    decl('members', 'vide.bake.sweep-h@1', 'members', confirmed),
+    output,
+  );
+  assert.deepEqual(members.problems, []);
+  assert.deepEqual(
+    members.items.map((i) => i.key),
+    ['girder:G1', 'girder:G2', 'girder:G3', 'girder:G4', 'beam:B01', 'beam:B02'],
+  );
+  const m2 = members.items[1];
+  assert.equal(m2.section, 'H-600x200x11x17');
+  assert.equal(m2.H_mm, 600);
+  assert.equal(m2.rail.kind, 'arc');
+  assert.deepEqual(unsafeArgs(members.items), []);
+
+  const columns = extractItems(
+    decl('member-columns', 'vide.bake.extrude-column@1', 'members', confirmed),
+    output,
+  );
+  assert.deepEqual(columns.problems, []);
+  assert.equal(columns.items.length, 4);
+  assert.deepEqual(columns.items[0].base, [0, 0, 0]);
+  assert.deepEqual(columns.items[0].top, [0, 0, 5]);
+  assert.deepEqual(columns.items[0].strongAxis, [0, 1, 0]);
+
+  const dots = extractItems(decl('marks', 'vide.bake.textdot@1', 'lines'), output);
+  assert.deepEqual(dots.problems, []);
+  assert.equal(dots.items.length, 10, 'marked lines only');
+  assert.deepEqual(dots.items.find((i) => i.key === 'girder:G1').point, [4, 0, 6]);
+
+  // Refusals: no analysis-confirmed requirement, or a preview plan.
+  const unguarded = extractItems(decl('members', 'vide.bake.sweep-h@1', 'members'), output);
+  assert.ok(unguarded.problems.some((p) => p.includes('analysis-confirmed')));
+  const preview = extractItems(decl('members', 'vide.bake.sweep-h@1', 'members', confirmed), {
+    ...output,
+    previewOnly: true,
+  });
+  assert.ok(preview.problems.some((p) => p.includes('미리보기')));
+  assert.deepEqual(
+    extractItems(decl('lines', 'vide.bake.curves@1', 'lines'), { ...output, previewOnly: true })
+      .problems,
+    [],
+    'lines are made from a preview plan too',
+  );
+
+  // Recomputing gives the same keys: a second bake replaces its own objects, adds nothing.
+  const again = extractItems(
+    decl('lines', 'vide.bake.curves@1', 'lines'),
+    bakePlan(fixture.inputs, fixture.params),
+  );
+  const prior = record(Object.fromEntries(lines.items.map((i, n) => [i.key, recorded(n + 1)])));
+  const read = model(
+    lines.items.map((i, n) => row(guid(n + 1), LAYER, `h${n + 1}`, tagged(i.key))),
+  );
+  const replan = planBake({
+    instanceId: 'inst-1',
+    bakeId: 'columns',
+    planned: again.items,
+    prior,
+    read,
+  });
+  assert.deepEqual(replan.added, []);
+  assert.equal(replan.replaced.length, lines.items.length);
+  assert.equal(replan.deleteIds.length, lines.items.length);
+});

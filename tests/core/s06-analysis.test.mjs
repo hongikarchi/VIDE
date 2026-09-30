@@ -4,7 +4,10 @@ import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { structureModelSchema } from '../../src/contracts/structure-model.ts';
-import { closeAnalysisWorker } from '../../src/jigs/official/structure-analysis/index.ts';
+import {
+  closeAnalysisWorker,
+  mechanismIssues,
+} from '../../src/jigs/official/structure-analysis/index.ts';
 import { checkSchema } from '../../src/jigs/runtime/schema.ts';
 import { model, MODEL_ASSUMPTIONS } from '../../extensions/jigs/s06-frame/steps/model.ts';
 import { analysis, confirmAnalysis } from '../../extensions/jigs/s06-frame/steps/analysis.ts';
@@ -72,6 +75,12 @@ test('model: drawn columns, girders (arc segmented), beams pinned, restraint, se
     assert.ok(members.get(segs[segs.length - 1]).releases?.j, `${key} j pinned`);
   }
   assert.equal(out.map.cantilever['A:E1'], 'j');
+  // The cantilever hangs rigid from its root with a free tip; the pre-check finds no mechanism.
+  for (const id of out.map.physical['A:E1']) assert.equal(members.get(id).releases, undefined, id);
+  assert.deepEqual(
+    mechanismIssues(parsed).filter((i) => i.level === 'error'),
+    [],
+  );
   // Assumptions the report lists.
   for (const text of [
     MODEL_ASSUMPTIONS.eccentricity,

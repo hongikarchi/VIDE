@@ -51,6 +51,13 @@ const message = (error: unknown) => {
 /** A file name for the saved page: instance and report title, no path characters. */
 export const reportFileName = (r: Pick<RenderedReport, 'instance' | 'report'>) =>
   `${r.instance.title}-${r.report.title}`.replace(/[\\/:*?"<>|\s]+/g, '_').slice(0, 120) + '.html';
+/** The appendix section is labelled '부록' instead of its number (T-058). */
+export const sectionNo = (s: { id: string; no: string }) => (s.id === 'appendix' ? '부록' : s.no);
+/** The model as the page draws it: numbered sections, the appendix labelled. */
+export const pageModel = (model: ReportModel): ReportModel => ({
+  ...model,
+  sections: model.sections.map((s) => ({ ...s, no: sectionNo(s) })),
+});
 /** The report to show after the list is read again: the same one while it exists, else the first. */
 export function keepChoice(
   list: readonly ListedReports[],
@@ -185,7 +192,7 @@ function ReportTab({ projectId }: { projectId: string }) {
             <ul>
               {shown.model.sections.map((s) => (
                 <li key={s.id}>
-                  {s.no} {s.title.text}
+                  {sectionNo(s)} {s.title.text}
                 </li>
               ))}
             </ul>
@@ -228,7 +235,7 @@ function ReportTab({ projectId }: { projectId: string }) {
         <div className="report-paper" data-paper={paper} aria-busy={loading}>
           {shown ? (
             <div className="report-sheet">
-              <ReportPage model={shown.model} origin={shown.origin} onBack={back} />
+              <ReportPage model={pageModel(shown.model)} origin={shown.origin} onBack={back} />
             </div>
           ) : (
             <p className="report-empty">

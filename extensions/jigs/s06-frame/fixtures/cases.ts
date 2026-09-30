@@ -198,6 +198,14 @@ export const CASES: FixtureCase[] = [
         cells: { summary: { cells: 2 } },
         beams: { summary: { beams: 4, edgeCantilevers: 0 } },
         axes: { skipped: true },
+        // M3 (T-056): five sizing groups (column, three girder span bands, beam), sixteen marked
+        // members, six columns floored to 5 m under a 0.6 m girder, sixteen top lines and members
+        // planned. Sections and tonnes depend on the analysis: tests/core/s06-m3.test.mjs.
+        sizing: { summary: { groups: 5 } },
+        schedule: { totals: { count: 16 } },
+        heights: { summary: { columns: 6, floored: 6, short: 0 } },
+        bakePlan: { previewOnly: true, summary: { lines: 16, members: 16 } },
+        bakeMembers: { previewOnly: true, summary: { lines: 0, members: 16 } },
       },
       // model·analysis need the engine (structure sections and core): tests/core/s06-m2.test.mjs.
       statuses: { confirmInputs: 'confirmed' },

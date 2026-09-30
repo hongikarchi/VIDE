@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { isMainThread } from 'node:worker_threads';
 import {
   structureModelSchema,
   structureResultSchema,
@@ -29,6 +30,18 @@ let binding: CoreBinding | undefined;
 /** The first built core on disk, or undefined when none is built. */
 export function corePath(): string | undefined {
   return coreCandidates.find((candidate) => existsSync(candidate));
+}
+
+/**
+ * Keep the core loaded until the process ends; call on the main thread before a worker loads it.
+ * Node unloads an addon when the worker thread that loaded it exits (never on the main thread),
+ * but the core's sparse solver (faer) runs on rayon's global pool, whose threads outlive the
+ * worker: unloading the library under them crashes the whole process (0xC0000005 on Windows),
+ * most often under CPU load while the pool is still spinning after a job. The main thread's load
+ * holds a reference no worker exit releases. A no-op on other threads.
+ */
+export function pinCore(): void {
+  if (isMainThread) loadCore();
 }
 
 export function loadCore(): CoreBinding {

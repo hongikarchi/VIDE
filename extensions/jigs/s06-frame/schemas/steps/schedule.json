@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["schema", "prefix", "label", "marks", "rows", "totals", "csv", "ledger", "issues"],
+  "properties": {
+    "schema": { "const": "vide.s06.schedule/1" },
+    "prefix": { "type": "string" },
+    "label": { "type": "string" },
+    "previewOnly": { "type": "boolean" },
+    "marks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["memberId", "mark"],
+        "properties": { "memberId": { "type": "string" }, "mark": { "type": "string" } }
+      }
+    },
+    "rows": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["mark", "role", "section", "count", "totalLength_m", "kgpm", "t", "maxRatio"],
+        "properties": {
+          "mark": { "type": "string" },
+          "role": { "type": "string" },
+          "roleLabel": { "type": "string" },
+          "section": { "type": "string" },
+          "count": { "type": "integer", "minimum": 1 },
+          "totalLength_m": { "type": "number" },
+          "kgpm": { "type": ["number", "null"] },
+          "t": { "type": ["number", "null"] },
+          "maxRatio": { "type": ["number", "null"] },
+          "curved": { "type": "boolean" },
+          "memberIds": { "type": "array", "items": { "type": "string" } }
+        }
+      }
+    },
+    "totals": {
+      "type": "object",
+      "required": ["count", "t"],
+      "properties": { "count": { "type": "integer" }, "t": { "type": "number" } }
+    },
+    "csv": { "type": "string" },
+    "ledger": { "type": "object", "required": ["schema", "rule", "groups", "members", "next"] },
+    "unlisted": { "type": "array", "items": { "type": "string" } },
+    "assumptions": { "type": "array", "items": { "type": "string" } },
+    "issues": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["level", "code", "message"],
+        "properties": { "level": { "enum": ["error", "warning", "info"] } }
+      }
+    }
+  }
+}

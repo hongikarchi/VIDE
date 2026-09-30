@@ -48,26 +48,48 @@
   "lede": {
     "cases": [
       {
-        "template": "지금 그려진 기둥·거더를 읽어 간섭·경간·부재 검정·일람표를 차례로 정리했습니다. 판정은 탐색용 예비값이며 구조사무소 확인 전입니다."
+        "template": "지금 그려진 기둥·거더를 읽어 간섭·경간·부재 검정·일람표·남은 조건을 차례로 정리했습니다. 판정은 탐색용 예비값이며 구조사무소 확인 전입니다."
       }
     ]
   },
   "kpis": [
-    { "label": "그려진 기둥", "from": "step.diagnose.summary.columns", "unit": "개" },
-    { "label": "파일캡 간섭", "from": "step.diagnose.summary.cap.count", "unit": "개" },
-    { "label": "경간 초과", "from": "step.girders.summary.spansOver", "unit": "개" },
+    {
+      "label": "그려진 기둥",
+      "from": "step.diagnose.summary.columns",
+      "unit": "개"
+    },
+    {
+      "label": "파일캡 간섭",
+      "from": "step.diagnose.summary.cap.count",
+      "unit": "개"
+    },
+    {
+      "label": "경간 초과",
+      "from": "step.girders.summary.spansOver",
+      "unit": "개"
+    },
     {
       "label": "중력 조합 부재 검정 여유",
       "from": "step.analysisConfirmed.confirmed.result.margin.value",
       "decimals": 2,
       "note": "확정 해석 뒤에 채웁니다"
     },
-    { "label": "강재 합계", "from": "step.schedule.totals.weight_t", "unit": "t", "decimals": 1 }
+    {
+      "label": "강재 합계",
+      "from": "step.schedule.totals.t",
+      "unit": "t",
+      "decimals": 1
+    },
+    {
+      "label": "남은 조건",
+      "from": "inputs.counts.open",
+      "unit": "개"
+    }
   ],
   "sections": [
     {
       "id": "placement",
-      "from": ["step.diagnose.summary", "step.interference.summary"],
+      "from": ["step.diagnose.summary", "step.interference.summary", "step.heights.summary"],
       "title": {
         "cases": [
           {
@@ -109,6 +131,11 @@
             "tone": "warn"
           },
           {
+            "when": "step.heights.summary.floored > 0",
+            "template": "기둥 {step.heights.summary.floored}개는 층고 단위 {step.heights.summary.heightStep} m로 내려 잘랐고, 가장 큰 받침 높이는 {step.heights.summary.maxGap_m:2} m입니다.",
+            "tone": "warn"
+          },
+          {
             "template": "거리는 평면 발자국 사이의 부호 거리이며, 음수는 겹친 깊이입니다. 협의 항목은 남은 조건 절에 올립니다."
           }
         ]
@@ -119,10 +146,28 @@
           "title": "그려진 기둥의 간섭 거리",
           "from": "step.diagnose.tables.interference",
           "columns": [
-            { "field": "key", "label": "기둥" },
-            { "field": "cap.distance", "label": "파일캡", "unit": "m", "decimals": 2 },
-            { "field": "openCut.distance", "label": "오픈컷", "unit": "m", "decimals": 2 },
-            { "field": "basin.distance", "label": "유수지 보", "unit": "m", "decimals": 2 }
+            {
+              "field": "key",
+              "label": "기둥"
+            },
+            {
+              "field": "cap.distance",
+              "label": "파일캡",
+              "unit": "m",
+              "decimals": 2
+            },
+            {
+              "field": "openCut.distance",
+              "label": "오픈컷",
+              "unit": "m",
+              "decimals": 2
+            },
+            {
+              "field": "basin.distance",
+              "label": "유수지 보",
+              "unit": "m",
+              "decimals": 2
+            }
           ]
         },
         {
@@ -130,11 +175,55 @@
           "title": "제안 배치의 간섭 판정",
           "from": "step.interference.tables.interference",
           "columns": [
-            { "field": "key", "label": "기둥" },
-            { "field": "judgement", "label": "판정" },
-            { "field": "capText", "label": "파일캡" },
-            { "field": "cutText", "label": "오픈컷" },
-            { "field": "basinText", "label": "유수지 보" }
+            {
+              "field": "key",
+              "label": "기둥"
+            },
+            {
+              "field": "judgement",
+              "label": "판정"
+            },
+            {
+              "field": "capText",
+              "label": "파일캡"
+            },
+            {
+              "field": "cutText",
+              "label": "오픈컷"
+            },
+            {
+              "field": "basinText",
+              "label": "유수지 보"
+            }
+          ]
+        },
+        {
+          "kind": "table",
+          "title": "기둥 길이 (층고 단위로 내림)",
+          "from": "step.heights.rows",
+          "columns": [
+            {
+              "field": "columnId",
+              "label": "기둥"
+            },
+            {
+              "field": "drawnLength_m",
+              "label": "그린 길이",
+              "unit": "m",
+              "decimals": 2
+            },
+            {
+              "field": "length_m",
+              "label": "강재 길이",
+              "unit": "m",
+              "decimals": 2
+            },
+            {
+              "field": "gap_m",
+              "label": "받침 높이",
+              "unit": "m",
+              "decimals": 2
+            }
           ]
         },
         {
@@ -194,12 +283,40 @@
           "title": "그려진 거더 경간",
           "from": "step.girders.spans",
           "columns": [
-            { "field": "girderId", "label": "거더" },
-            { "field": "from", "label": "시작 기둥" },
-            { "field": "to", "label": "끝 기둥" },
-            { "field": "planLength_m", "label": "평면 길이", "unit": "m", "decimals": 2 },
-            { "field": "over", "label": "상한 초과" }
+            {
+              "field": "girderId",
+              "label": "거더"
+            },
+            {
+              "field": "from",
+              "label": "시작 기둥"
+            },
+            {
+              "field": "to",
+              "label": "끝 기둥"
+            },
+            {
+              "field": "planLength_m",
+              "label": "평면 길이",
+              "unit": "m",
+              "decimals": 2
+            },
+            {
+              "field": "over",
+              "label": "상한 초과"
+            }
           ]
+        },
+        {
+          "kind": "compare-bars",
+          "title": "거더 경간과 상한",
+          "from": "step.girders.spans",
+          "label": "girderId",
+          "value": "planLength_m",
+          "unit": "m",
+          "decimals": 2,
+          "limit": "$spanMax",
+          "limitLabel": "경간 상한"
         },
         {
           "kind": "compare-bars",
@@ -225,7 +342,8 @@
       "from": [
         "step.analysisConfirmed.summary",
         "step.analysisConfirmed.confirmed.result.counts",
-        "step.analysisConfirmed.confirmed.result.maxRatio"
+        "step.analysisConfirmed.confirmed.result.maxRatio",
+        "inputs.structure.combos"
       ],
       "title": {
         "cases": [
@@ -263,6 +381,10 @@
       "lede": {
         "cases": [
           {
+            "when": "step.analysisConfirmed.confirmed.result.maxRatio >= 0 && inputs.structure.confirmed == 1",
+            "template": "검정비와 검정 여유는 사람이 확인한 확정 해석 기준이며, 아래 하중 조합 {inputs.structure.combos.length}개를 해석한 그대로 적었습니다."
+          },
+          {
             "when": "step.analysisConfirmed.confirmed.result.maxRatio >= 0",
             "template": "검정비와 검정 여유는 사람이 확인한 확정 해석 기준입니다."
           },
@@ -277,9 +399,128 @@
       },
       "blocks": [
         {
+          "kind": "table",
+          "title": "하중 조합 (해석한 그대로)",
+          "from": "inputs.structure.combos",
+          "columns": [
+            {
+              "field": "id",
+              "label": "조합"
+            },
+            {
+              "field": "limitState",
+              "label": "한계상태"
+            },
+            {
+              "field": "text",
+              "label": "계수"
+            }
+          ]
+        },
+        {
           "kind": "list",
           "title": "해석 가정",
-          "from": "step.analysis.assumptions"
+          "from": "inputs.structure.assumptions"
+        },
+        {
+          "kind": "list",
+          "title": "검토하지 않은 항목",
+          "from": "inputs.structure.unchecked"
+        },
+        {
+          "kind": "compare-bars",
+          "title": "검정비 분포",
+          "from": "inputs.structure.bins",
+          "label": "label",
+          "value": "count",
+          "shade": "shade",
+          "unit": "개"
+        },
+        {
+          "kind": "table",
+          "title": "지배 부재 (검정비 상위 10)",
+          "from": "inputs.structure.governing",
+          "columns": [
+            {
+              "field": "key",
+              "label": "부재"
+            },
+            {
+              "field": "judgement",
+              "label": "판정"
+            },
+            {
+              "field": "ratio",
+              "label": "검정비",
+              "decimals": 2
+            },
+            {
+              "field": "clause",
+              "label": "지배 조항"
+            }
+          ]
+        },
+        {
+          "kind": "table",
+          "title": "참고 처짐 (판정에 넣지 않음)",
+          "from": "inputs.structure.deflections",
+          "columns": [
+            {
+              "field": "key",
+              "label": "부재"
+            },
+            {
+              "field": "deflection_mm",
+              "label": "처짐",
+              "unit": "mm",
+              "decimals": 1
+            },
+            {
+              "field": "limit_mm",
+              "label": "참고 한도",
+              "unit": "mm",
+              "decimals": 1
+            },
+            {
+              "field": "ratio",
+              "label": "비율",
+              "decimals": 2
+            }
+          ]
+        },
+        {
+          "kind": "table",
+          "title": "기둥별 수평 반력",
+          "from": "inputs.structure.reactions",
+          "max": 20,
+          "columns": [
+            {
+              "field": "column",
+              "label": "기둥"
+            },
+            {
+              "field": "combo",
+              "label": "조합"
+            },
+            {
+              "field": "Rx_kN",
+              "label": "Rx",
+              "unit": "kN",
+              "decimals": 1
+            },
+            {
+              "field": "Ry_kN",
+              "label": "Ry",
+              "unit": "kN",
+              "decimals": 1
+            },
+            {
+              "field": "R_kN",
+              "label": "합",
+              "unit": "kN",
+              "decimals": 1
+            }
+          ]
         },
         {
           "kind": "list",
@@ -291,18 +532,42 @@
     },
     {
       "id": "schedule",
-      "from": ["step.schedule.totals", "step.schedule.rows", "step.schedule.unlisted"],
+      "from": [
+        "step.schedule.totals",
+        "step.schedule.rows",
+        "step.schedule.unlisted",
+        "step.sizing.summary",
+        "step.sizing.groups",
+        "inputs.preview.sizing",
+        "step.bakePlan.summary",
+        "inputs.bake.members"
+      ],
       "title": {
         "cases": [
+          {
+            "when": "inputs.preview.sizing > 0 && step.schedule.totals.count >= 0",
+            "template": "미확정 해석으로 고른 예비 일람표입니다. 부호 {step.schedule.rows.length}종, 부재 {step.schedule.totals.count}개, 강재 {step.schedule.totals.t:1} t입니다.",
+            "tone": "warn"
+          },
           {
             "when": "step.schedule.unlisted.length > 0",
             "template": "부호 {step.schedule.rows.length}종에 부재 {step.schedule.totals.count}개를 올렸고, 부호 없는 부재 {step.schedule.unlisted.length}개가 남았습니다.",
             "tone": "warn"
           },
           {
+            "when": "step.sizing.summary.noCandidate > 0 && step.schedule.totals.count >= 0",
+            "template": "부호 {step.schedule.rows.length}종, 강재 {step.schedule.totals.t:1} t이며, 후보 단면이 없는 그룹 {step.sizing.summary.noCandidate}개가 남았습니다.",
+            "tone": "warn"
+          },
+          {
             "when": "step.schedule.totals.count >= 0",
-            "template": "부호 {step.schedule.rows.length}종, 부재 {step.schedule.totals.count}개, 강재 {step.schedule.totals.weight_t:1} t입니다.",
+            "template": "부호 {step.schedule.rows.length}종, 부재 {step.schedule.totals.count}개, 강재 {step.schedule.totals.t:1} t입니다.",
             "tone": "ok"
+          },
+          {
+            "when": "step.sizing.groups.length >= 0",
+            "template": "부재 크기 그룹 {step.sizing.groups.length}개를 정했습니다. 일람표는 아직 없음.",
+            "tone": "warn"
           },
           {
             "template": "일람표: 아직 없음. 부재 크기를 정하면 채워집니다.",
@@ -315,22 +580,123 @@
           "kind": "ledger",
           "title": "부호 일람표",
           "from": "step.schedule.rows",
+          "group": "roleLabel",
           "columns": [
-            { "field": "mark", "label": "부호" },
-            { "field": "sectionName", "label": "단면" },
-            { "field": "count", "label": "개수" },
-            { "field": "totalLength_m", "label": "길이", "unit": "m", "decimals": 2 },
-            { "field": "weight_t", "label": "중량", "unit": "t", "decimals": 2 },
-            { "field": "maxRatio", "label": "최대 검정비", "decimals": 2 }
+            {
+              "field": "mark",
+              "label": "부호"
+            },
+            {
+              "field": "section",
+              "label": "단면"
+            },
+            {
+              "field": "count",
+              "label": "개수"
+            },
+            {
+              "field": "totalLength_m",
+              "label": "길이",
+              "unit": "m",
+              "decimals": 2
+            },
+            {
+              "field": "kgpm",
+              "label": "단위중량",
+              "unit": "kg/m",
+              "decimals": 1
+            },
+            {
+              "field": "t",
+              "label": "중량",
+              "unit": "t",
+              "decimals": 2
+            },
+            {
+              "field": "maxRatio",
+              "label": "최대 검정비",
+              "decimals": 2
+            }
           ]
+        },
+        {
+          "kind": "compare-bars",
+          "title": "부호별 강재 중량",
+          "from": "step.schedule.rows",
+          "label": "mark",
+          "value": "t",
+          "unit": "t",
+          "decimals": 2
+        },
+        {
+          "kind": "table",
+          "title": "부재 크기 그룹",
+          "from": "step.sizing.groups",
+          "columns": [
+            {
+              "field": "id",
+              "label": "그룹"
+            },
+            {
+              "field": "band",
+              "label": "경간대"
+            },
+            {
+              "field": "memberIds",
+              "label": "부재"
+            },
+            {
+              "field": "sectionName",
+              "label": "단면"
+            },
+            {
+              "field": "maxRatio",
+              "label": "최대 검정비",
+              "decimals": 2
+            },
+            {
+              "field": "judgement",
+              "label": "판정"
+            }
+          ]
+        },
+        {
+          "kind": "list",
+          "title": "부호 없는 부재",
+          "from": "step.schedule.unlisted"
+        },
+        {
+          "kind": "list",
+          "title": "크기 메모",
+          "from": "step.sizing.notes"
         }
-      ]
+      ],
+      "lede": {
+        "cases": [
+          {
+            "when": "inputs.bake.members > 0 && step.bakePlan.summary.lines >= 0",
+            "template": "Rhino로 보낼 부재 {inputs.bake.members}개와 선 {step.bakePlan.summary.lines}개가 준비되어 있습니다."
+          },
+          {
+            "when": "step.bakePlan.summary.lines >= 0",
+            "template": "Rhino로 보낼 선 {step.bakePlan.summary.lines}개가 준비되어 있고, 부재는 확정 해석 뒤에 보냅니다."
+          },
+          {
+            "template": "중량은 치수로 계산한 수량 산출용 값입니다. Rhino로 보내기: 아직 없음."
+          }
+        ]
+      }
     },
     {
       "id": "open",
-      "from": ["step.interference.tables.review", "step.diagnose.summary.openCut"],
+      "from": ["inputs.counts", "step.interference.tables.review", "step.diagnose.summary.openCut"],
       "title": {
         "cases": [
+          {
+            "when": "inputs.counts.open > 0",
+            "template": "남은 조건 {inputs.counts.open}개: 가정으로 둔 설정값 {inputs.counts.assumed}개, 답하지 않은 질문 {inputs.counts.questions}개입니다.",
+            "tone": "warn"
+          },
           {
             "when": "step.interference.tables.review.length > 0",
             "template": "확인이 필요한 항목 {step.interference.tables.review.length}개가 남아 있습니다.",
@@ -342,6 +708,11 @@
             "tone": "warn"
           },
           {
+            "when": "inputs.counts.open == 0",
+            "template": "가정으로 둔 설정값과 답하지 않은 질문이 없습니다. 남은 조건은 첫 쪽의 검토하지 않은 항목입니다.",
+            "tone": "ok"
+          },
+          {
             "template": "남은 조건은 아래 목록과 첫 쪽의 검토하지 않은 항목입니다."
           }
         ]
@@ -349,17 +720,116 @@
       "blocks": [
         {
           "kind": "table",
+          "title": "남은 조건 원장",
+          "from": "inputs.open",
+          "columns": [
+            {
+              "field": "kind",
+              "label": "종류"
+            },
+            {
+              "field": "text",
+              "label": "내용"
+            },
+            {
+              "field": "ask",
+              "label": "확인할 것"
+            }
+          ]
+        },
+        {
+          "kind": "table",
           "title": "확인할 항목",
           "from": "step.interference.tables.review",
           "columns": [
-            { "field": "key", "label": "번호" },
-            { "field": "judgement", "label": "판정" },
-            { "field": "text", "label": "내용" }
+            {
+              "field": "key",
+              "label": "번호"
+            },
+            {
+              "field": "judgement",
+              "label": "판정"
+            },
+            {
+              "field": "text",
+              "label": "내용"
+            }
           ]
         },
-        { "kind": "list", "title": "진단 메모", "from": "step.diagnose.notes" },
-        { "kind": "list", "title": "거더 메모", "from": "step.girders.notes" },
-        { "kind": "list", "title": "간섭 메모", "from": "step.interference.notes" }
+        {
+          "kind": "list",
+          "title": "진단 메모",
+          "from": "step.diagnose.notes"
+        },
+        {
+          "kind": "list",
+          "title": "거더 메모",
+          "from": "step.girders.notes"
+        },
+        {
+          "kind": "list",
+          "title": "간섭 메모",
+          "from": "step.interference.notes"
+        }
+      ]
+    },
+    {
+      "id": "appendix",
+      "from": ["inputs.counts"],
+      "title": {
+        "cases": [
+          {
+            "when": "inputs.counts.assumed > 0",
+            "template": "설정값 원장: {inputs.counts.settings}개 중 가정으로 둔 기본값 {inputs.counts.assumed}개가 남아 있습니다.",
+            "tone": "warn"
+          },
+          {
+            "when": "inputs.counts.settings > 0",
+            "template": "설정값 원장: {inputs.counts.settings}개 모두 근거가 있습니다.",
+            "tone": "ok"
+          },
+          {
+            "template": "설정값 원장: 아직 없음.",
+            "tone": "na"
+          }
+        ]
+      },
+      "lede": {
+        "cases": [
+          {
+            "template": "이 보고서를 만든 설정값입니다. 출처가 기본값이고 근거가 가정인 값은 남은 조건에 올렸습니다."
+          }
+        ]
+      },
+      "blocks": [
+        {
+          "kind": "table",
+          "title": "설정값",
+          "from": "inputs.settings",
+          "max": 100,
+          "columns": [
+            {
+              "field": "title",
+              "label": "설정값"
+            },
+            {
+              "field": "value",
+              "label": "값"
+            },
+            {
+              "field": "by",
+              "label": "출처"
+            },
+            {
+              "field": "basis",
+              "label": "근거"
+            },
+            {
+              "field": "note",
+              "label": "메모"
+            }
+          ]
+        }
       ]
     }
   ],

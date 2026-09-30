@@ -176,3 +176,38 @@ A는 턴마다 단발 + 원장(표를 매번 싣고 앞 문답을 원장으로),
   - vide MCP는 JSON-RPC `initialize`·`tools/list`·`tools/call`만 답하는 최소 HTTP 서버다.
   - 재현하려면 `tools/spikes/2026-09-30-cli-session-resume/`에 옮겨 둔다.
 - **정리.** 이 시험이 만든 Claude 세션 기록(5개)과 빈 프로젝트 폴더, Codex 기록 파일(2개), 임시 폴더는 시험 뒤 지웠다. Codex가 `CODEX_HOME`의 상태 DB에 남기는 스레드 색인은 지우지 않았다.
+
+## ④ 재시험(T-061, 2026-09-30)
+
+T-061이 ④의 조건을 구현한 뒤 같은 질문을 제품 `CodexCli`로 다시 돌렸다. 합격 기준은 위 표 그대로다(읽기 전용과 그 턴에 허용한 MCP만 보임). 합성 문장만 보냈고 Codex 0.157.1(npm), 기본 모델 `low`, 기본 로그인 프로필을 썼다.
+
+### 구현한 조건
+
+- **중립 지시.** 세션 턴의 `developer_instructions`는 Codex 전용 중립 지시(`codexSessionInstruction`)다. 도구 유무를 말하지 않고, 이번 턴 규칙은 요청 자료의 `turn-rules` 항목(사용자 문장)으로 간다.
+- **resume 인자.** `exec resume <thread> … -c sandbox_mode="read-only"`. 나머지 격리 인자와 MCP 설정은 매 턴 `-c`로 다시 넘기고 `--ephemeral`만 뺀다.
+- **매 턴 격리 단언.** Codex 시작 이벤트에는 도구 목록이 없으므로 실행 전에 인자를 단언한다(`codexTurnIsolated`). 어긋나면 실행하지 않고 `UNEXPECTED_TOOL_ACCESS`다. 실행 중에는 첫 이벤트 `thread.started`의 thread ID가 이어 갈 ID와 다르면 멈추고 `SESSION_LOST`로 분류한다.
+- **thread ID.** Codex는 첫 턴에 ID를 받지 않고 스스로 정한다. VIDE는 첫 턴의 `thread.started`에서 ID를 받아 세션 행을 그때 만든다. 실패한 첫 턴의 기록 파일은 그 자리에서 지운다.
+- **누적 사용량.** resume 턴의 사용량은 세션 누적값이므로 결과에 `usageScope: 'session'`을 붙이고, 대화 쪽이 증가분만 턴 값으로 센다.
+
+### 결과
+
+모델 호출은 3회(C1~C3)였다. C4는 모델을 부르지 않는다.
+
+| 턴 | 인자 | MCP 연결 / 도구 호출 | 응답 | 입력 누적 / 캐시 읽기 누적 |
+|---|---|---|---|---|
+| C1 여는 턴 | 도구 없음 | 0 / 0 | `READY` | 9,414 / 7,552 |
+| C2 resume | vide MCP(`query`) | 4 / 1 | `NONCE-4821 MAPLE-7` | 41,288 / 28,416 |
+| C3 resume | `mcp_servers={}` | 0 / 0 | `NONE MAPLE-7` | 51,477 / 37,632 |
+| C4 resume | 없는 thread ID | 0 / 0 | stderr `thread/resume failed: no rollout found for thread id …`, exit 1 | — |
+
+- 세 턴 모두 같은 thread ID를 보고했다. 2턴째에는 그 턴에 허용한 도구만 1회 불렀고, 3턴째에는 MCP 연결 없이 도구 없음을 답했다. 1턴의 코드 단어는 두 턴 모두 기억했다.
+- C4의 문구는 `SESSION_LOST`로 분류한다(`src/ai/claude-cli.ts`의 `SESSION_LOST`).
+- **판정: ④ 합격.** `SESSION_PROVIDERS['codex-cli']`를 켰다(`src/server/conversations.ts`). 원장 방식은 이 스위치를 끄면 그대로 돈다.
+
+### 관찰
+
+- **첫 시도의 지시문.** 첫 시도는 공통 중립 지시(`neutralInstruction`, "Only the data supplied in the current turn is available")로 돌렸다. 도구 범위는 같게 지켜졌으나, 모델이 두 턴 모두 "code word unavailable in current-turn context"라며 앞 턴 내용을 쓰지 않았다.
+  - 그래서 Codex 세션 지시는 앞 턴을 문맥으로 인정하되 권한은 이번 턴의 `turn-rules`만 따르도록 따로 두었다.
+  - Claude 세션도 같은 공통 지시를 쓴다. 같은 현상이 있는지 확인이 필요하다(`src/ai/agent-connection.ts`, 이 티켓의 수정 범위 밖).
+- **MCP 턴의 입력량.** vide MCP를 붙인 턴은 도구 정의와 code-mode 호스트 때문에 입력이 약 3.2만 토큰 늘었다(C2 증가분).
+- **정리.** 이 재시험이 만든 Codex 기록 파일 2개는 시험 뒤 지웠다. 상태 DB의 스레드 색인은 이전과 같이 남는다.

@@ -125,6 +125,8 @@ export interface BakePartProps {
   onRecompute?: () => void;
   /** Frame one object of the linked document. */
   onFocus?: (nativeId: string) => void;
+  /** Changes when the instance was computed again; the offers and records are read again. */
+  revision?: unknown;
 }
 
 export function BakePart({
@@ -134,6 +136,7 @@ export function BakePart({
   bake,
   onRecompute,
   onFocus,
+  revision,
 }: BakePartProps) {
   const base = `/projects/${encodeURIComponent(projectId)}/jig-instances/${encodeURIComponent(instanceId)}`;
   const [offers, setOffers] = useState<Offer[]>([]);
@@ -164,7 +167,7 @@ export function BakePart({
   }, [base, wanted]);
   useEffect(() => {
     void load();
-  }, [load]);
+  }, [load, revision]);
 
   // Follow the candidate request until it ends; its result carries the real summary.
   const requestId = last?.requestId;

@@ -18,10 +18,29 @@ import {
   type ReadModel,
 } from '../jigs/runtime/runtime.ts';
 import { jigRuntimeFor } from './jig-routes.ts';
+import { draftsFor } from './make-routes.ts';
+import type { JigDrafts } from '../jigs/runtime/drafts.ts';
+import { turnOutputSchema } from './turn-output.ts';
+import { existsSync } from 'node:fs';
+import { KnowledgeReviewStore } from '../core/knowledge-review-store.ts';
+import {
+  factBrief,
+  factChecks,
+  factIssue,
+  factSearch,
+  factStatement,
+  knowledgeFile,
+  reviewLayer,
+  type FactLayer,
+  type FactState,
+  type FactStatement,
+} from '../jigs/knowledge.ts';
 
 const digest = (token: string) => createHash('sha256').update(token).digest('hex');
 const failure = (code: string) => Object.assign(new Error(code), { code });
 const target = z.string().min(1).max(256);
+// The make tools act on the conversation's own draft: targetRef may be left out (T-064).
+const draftTarget = target.optional();
 const id = z.string().min(1).max(128);
 const page = {
   offset: z.number().int().min(0).optional(),
@@ -140,6 +159,97 @@ const definitions = {
       })
       .strict(),
   },
+  // Make-conversation tools (PLAN-22 T-063): the conversation's jig draft only. Checks run on
+  // the draft folder; AI-written steps run only in the compute box.
+  jig_validate: {
+    description:
+      'Check the jig draft: forbidden files, jig.json v3, declared files, panel.json parts and step sources. Returns ok and the issues to fix.',
+    schema: z.object({ targetRef: draftTarget }).strict(),
+  },
+  jig_test: {
+    description:
+      "Run the draft's fixture cases (fixtures/<case>/input.json, params.json, expect.json) with every code step in the compute box. Returns each case's result, mismatches and step errors.",
+    schema: z.object({ targetRef: draftTarget }).strict(),
+  },
+  jig_preview: {
+    description:
+      'Compute the draft on one fixture case (default: the first) in the compute box for the preview the user sees. Returns step statuses and an outline of each step output.',
+    schema: z
+      .object({
+        targetRef: draftTarget,
+        fixture: z
+          .string()
+          .regex(/^[A-Za-z0-9_.-]{1,100}$/)
+          .optional(),
+      })
+      .strict(),
+  },
+  ask_user: {
+    description:
+      'Ask the user one decision the supplied data does not settle, as a question card: an id naming what it decides (ASCII words), the question in plain Korean, 2-5 options with exactly one recommended. After calling it, end the turn with status "question" and this card in questions.',
+    schema: z
+      .object({
+        targetRef: draftTarget,
+        question: z
+          .object({
+            id: z.string().regex(/^[a-zA-Z0-9_-]{1,40}$/),
+            title: z.string().min(1).max(200),
+            options: z
+              .array(
+                z
+                  .object({
+                    id: z.string().regex(/^[a-zA-Z0-9_-]{1,40}$/),
+                    label: z.string().min(1).max(80),
+                    hint: z.string().max(200).nullable().optional(),
+                    recommended: z.boolean(),
+                  })
+                  .strict(),
+              )
+              .min(2)
+              .max(5),
+            blocks: z.string().max(200).nullable().optional(),
+            allowFree: z.boolean().optional(),
+          })
+          .strict(),
+      })
+      .strict(),
+  },
+  // Project facts tools (SPEC-08.7, PLAN-22 T-065): this project's 자료 only, read-only. Rejected,
+  // contaminated and excluded-source statements never come back. Cite statements as [S<id>].
+  project_brief: {
+    description:
+      "Project status from the project's 자료: decided/blocked/changed, issues by discipline, counts and review counts. Only statements a person confirmed are facts; cite statements as [S<id>].",
+    schema: z.object({ targetRef: target, discipline: z.string().max(40).optional() }).strict(),
+  },
+  project_search: {
+    description:
+      "Search this project's statements (all words must match; confirmed first). Each item has ref (S<id>), state ('confirmed' or 'unconfirmed'/'superseded' — say 미확정 when quoting those), party, date, content, path. Cite only refs returned by a tool in this turn, as [S<id>].",
+    schema: z
+      .object({
+        targetRef: target,
+        query: z.string().max(200),
+        kind: z.string().max(40).optional(),
+        discipline: z.string().max(40).optional(),
+        offset: z.number().int().min(0).optional(),
+        limit: z.number().int().min(1).max(30).optional(),
+      })
+      .strict(),
+  },
+  project_issue: {
+    description:
+      'One issue note (conclusions, open items, conditions, history with cited statement ids) and its statements. Cite statements as [S<id>].',
+    schema: z.object({ targetRef: target, issueId: z.number().int().min(0) }).strict(),
+  },
+  project_statement: {
+    description:
+      'One statement with its review state and the source excerpt (truncated). Excluded statements are refused (FACT_EXCLUDED). Cite as [S<id>].',
+    schema: z.object({ targetRef: target, statementId: z.number().int().min(0) }).strict(),
+  },
+  project_checks: {
+    description:
+      "Compare a jig instance's settings with the numbers of their basis statements (code compares): match, conflict, no-number, no-basis, invalid-basis. Without instanceId it uses the jig this conversation has open. Quote the verdicts; do not recompute.",
+    schema: z.object({ targetRef: target, instanceId: id.optional() }).strict(),
+  },
 };
 type ToolName = keyof typeof definitions;
 type ToolArgs<N extends ToolName> = z.infer<(typeof definitions)[N]['schema']>;
@@ -195,6 +305,8 @@ const knownErrors = new Set([
   'UNIT_MISMATCH',
   'JIG_NOT_OPEN',
   'STRUCTURE_NOT_COMPUTED',
+  'DRAFT_NOT_OPEN',
+  'FACT_EXCLUDED',
 ]);
 /** Tools that change or occupy the target: one at a time, after the basis check. */
 const controlledTools = new Set<ToolName>(['execute', 'query', 'jig_set', 'jig_run']);
@@ -241,6 +353,7 @@ export class AgentTools {
         url: new URL('/mcp', origin).href,
         token: scope.token,
         tools: Object.freeze(Object.keys(handlers)),
+        ...(sources.draft ? { draftDir: sources.draft.dir } : {}),
       }),
       revoke: scope.revoke,
     };
@@ -411,6 +524,19 @@ export interface ConversationToolSources {
   links?: Pick<DocumentLinks, 'list' | 'get'>;
   /** Records a ledger item of the conversation (a setting the AI changed). */
   ledger?: (item: { kind: 'param-change'; body: unknown; requestId?: string }) => unknown;
+  /** The jig draft of a make-conversation (PLAN-22 T-063); jig_validate/test/preview and ask_user. */
+  draft?: {
+    draftId: string;
+    dir: string;
+    drafts: Pick<JigDrafts, 'validate' | 'test' | 'preview'>;
+  };
+  /** The project's crawler DB and review layer (SPEC-08); project_* exist only with one. */
+  facts?: {
+    file: string;
+    layer: () => FactLayer;
+    /** Statements tools returned this turn, for the citation gate (knowledge.ts citationGate). */
+    returned?: Map<number, FactState>;
+  };
 }
 /** Each tool result stays small: the model pages instead of receiving a whole output. */
 const RESULT_BYTES = 48 * 1024;
@@ -677,13 +803,97 @@ export function conversationHandlers(sources: ConversationToolSources): Handlers
       });
     };
   }
+  if (sources.facts && existsSync(sources.facts.file))
+    Object.assign(handlers, factHandlers(sources));
+  if (sources.draft) Object.assign(handlers, makeHandlers(sources));
   return handlers;
+}
+
+// --- project facts tools (SPEC-08.7) ------------------------------------------------------------
+
+/** What a tool shows of a statement; the model cites `ref`. */
+const factRow = (fact: FactStatement) => ({
+  ref: fact.ref,
+  state: fact.state,
+  kind: fact.kind,
+  party: fact.party,
+  subject: fact.subject,
+  content: fact.content,
+  saidOn: fact.saidOn,
+  path: fact.path,
+});
+function factHandlers(sources: ConversationToolSources): Handlers {
+  const facts = sources.facts!;
+  const { projectId, openInstanceId, jigs } = sources;
+  const seen = (rows: FactStatement[]) => {
+    for (const row of rows) facts.returned?.set(row.id, row.state);
+    return rows.map(factRow);
+  };
+  return {
+    project_brief: ({ discipline }) => {
+      const brief = factBrief(facts.file, facts.layer());
+      if (!brief.available) return { available: false };
+      const disciplines = brief.disciplines
+        .filter((entry) => !discipline || entry.key === discipline)
+        .map((entry) => ({ ...entry, issues: entry.issues.slice(0, 20) }));
+      return bounded({ ...brief, disciplines });
+    },
+    project_search: ({ query, kind, discipline, offset, limit }) => {
+      const found = factSearch(facts.file, facts.layer(), query, {
+        kind,
+        discipline,
+        offset,
+        limit: limit ?? 20,
+      });
+      return bounded({
+        items: seen(found.items),
+        total: found.total,
+        offset: found.offset,
+        nextOffset: found.nextOffset,
+        excluded: found.excluded,
+      });
+    },
+    project_issue: ({ issueId }) => {
+      const issue = factIssue(facts.file, facts.layer(), issueId);
+      return bounded({ ...issue, statements: seen(issue.statements.slice(0, 60)) });
+    },
+    project_statement: ({ statementId }) => {
+      const fact = factStatement(facts.file, facts.layer(), statementId, { people: false });
+      seen([fact]);
+      const text = fact.text.length > 2000 ? fact.text.slice(0, 2000) + '…' : fact.text;
+      return bounded({ ...factRow(fact), quote: fact.quote, locator: fact.locator, excerpt: text });
+    },
+    project_checks: async ({ instanceId }) => {
+      const chosen = instanceId ?? openInstanceId;
+      if (!chosen) throw new DomainError('JIG_NOT_OPEN');
+      if (!jigs) throw new DomainError('EXECUTOR_NOT_READY');
+      const view = await jigs.view(projectId, chosen);
+      const settings = view.params.map((param) => ({
+        key: param.key,
+        title: param.title,
+        value: param.displayValue,
+        unit: param.displayUnit,
+        // A value set from a fact rests on that statement; otherwise the declared basis.
+        basis: param.by === 'fact' && param.ref ? { factRefs: [param.ref] } : param.basis,
+      }));
+      return bounded({
+        instanceId: chosen,
+        checks: factChecks(facts.file, facts.layer(), settings).slice(0, 100),
+      });
+    },
+  };
 }
 
 /** A conversation turn's sources from the engine's own stores (no host access). */
 export function conversationSources(
   workspace: Workspace,
-  conversation: { id: string; projectId: string; jigInstanceId: string | null },
+  conversation: {
+    id: string;
+    projectId: string;
+    jigInstanceId: string | null;
+    kind?: string;
+    draftId?: string | null;
+  },
   { requestId, ledger }: Pick<ConversationToolSources, 'requestId' | 'ledger'> = {},
 ): ConversationToolSources {
   const file = workspace.store.db.location();
@@ -696,5 +906,105 @@ export function conversationSources(
     jigs: file ? jigRuntimeFor(workspace, dirname(file)) : undefined,
     links: new DocumentLinks(workspace.store.db),
     ledger,
+    ...(file ? { facts: factsOf(workspace, dirname(file), conversation.projectId) } : {}),
+    ...(file && conversation.kind === 'jig-make' && conversation.draftId
+      ? { draft: draftOf(workspace, dirname(file), conversation.projectId, conversation.draftId) }
+      : {}),
+  };
+}
+/** The project's crawler DB and review layer; undefined for an id that names no DB file. */
+function factsOf(workspace: Workspace, dataDirectory: string, projectId: string) {
+  let file: string;
+  try {
+    file = knowledgeFile(dataDirectory, projectId);
+  } catch {
+    return undefined;
+  }
+  return {
+    file,
+    layer: () => reviewLayer(new KnowledgeReviewStore(workspace.store.db), projectId),
+    returned: new Map<number, FactState>(),
+  };
+}
+
+// --- make-conversation tools (PLAN-22 T-063) ----------------------------------------------------
+
+/** The open draft a make-conversation writes; undefined when it is not open (no make tools). */
+function draftOf(workspace: Workspace, dataDirectory: string, projectId: string, draftId: string) {
+  const drafts = draftsFor(workspace, dataDirectory);
+  try {
+    const draft = drafts.get(projectId, draftId);
+    return draft.state === 'open' ? { draftId, dir: draft.path, drafts } : undefined;
+  } catch {
+    return undefined;
+  }
+}
+function makeHandlers(sources: ConversationToolSources): Handlers {
+  const { projectId } = sources;
+  const { draftId, drafts } = sources.draft!;
+  return {
+    jig_validate: async () => {
+      const report = await drafts.validate(projectId, draftId);
+      return bounded({ ...report, issues: report.issues.slice(0, 50) });
+    },
+    jig_test: async () => {
+      const report = await drafts.test(projectId, draftId);
+      return bounded({
+        ok: report.ok,
+        id: report.id,
+        version: report.version,
+        ...(report.issues ? { issues: report.issues.slice(0, 50) } : {}),
+        cases: report.cases.slice(0, 20).map((c) => ({
+          name: c.name,
+          ok: c.ok,
+          ...(c.error ? { error: c.error.slice(0, 2000) } : {}),
+          mismatches: c.mismatches.slice(0, 20).map((m) => outline(m)),
+          steps: c.steps.map((step) => ({
+            id: step.id,
+            status: step.status,
+            ...(step.error ? { error: step.error } : {}),
+          })),
+        })),
+      });
+    },
+    jig_preview: async ({ fixture }) => {
+      const preview = await drafts.preview(projectId, draftId, { fixture });
+      return bounded({
+        ok: preview.ok,
+        fixture: preview.fixture,
+        panel: preview.panel !== null,
+        ...(preview.issues ? { issues: preview.issues.slice(0, 50) } : {}),
+        steps: preview.steps,
+        outputs: Object.fromEntries(
+          Object.entries(preview.outputs).map(([step, output]) => [step, outline(output)]),
+        ),
+      });
+    },
+    // The card itself travels in the turn output (T-062); this checks it and says so.
+    ask_user: ({ question }) => {
+      const parsed = turnOutputSchema.safeParse({
+        status: 'question',
+        text: '',
+        questions: [
+          {
+            ...question,
+            blocks: question.blocks ?? null,
+            allowFree: question.allowFree ?? false,
+            options: question.options.map((o) => ({ ...o, hint: o.hint ?? null })),
+          },
+        ],
+      });
+      const options = question.options;
+      if (
+        !parsed.success ||
+        options.filter((o) => o.recommended).length !== 1 ||
+        new Set(options.map((o) => o.id)).size !== options.length
+      )
+        throw new DomainError('INVALID_INPUT');
+      return {
+        question: parsed.data.questions[0],
+        next: 'End this turn with status "question" and exactly this card in questions; VIDE shows it to the user and the answer comes as the next turn.',
+      };
+    },
   };
 }

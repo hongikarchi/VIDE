@@ -1,10 +1,10 @@
 {
   "contractVersion": 3,
   "id": "project/s06-frame",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "kind": "tool",
   "name": "S-06 골조 배치",
-  "summary": "연결한 모델에서 슬래브·보이드·기존 기초와 지금 그려진 기둥·거더를 읽어, 거더 끝을 기둥에 맞추고 칸마다 작은보를 두어 해석 모델과 미확정 미리보기 해석까지 이어 보는 탐색용 도구. 새 축선·기둥 후보(직교·엇갈림)는 배치 기준을 바꾸면 만든다. 실제 프로젝트 값은 작업본에만 둔다.",
+  "summary": "연결한 모델에서 슬래브·보이드·기존 기초와 지금 그려진 기둥·거더를 읽어, 거더 끝을 기둥에 맞추고 칸마다 작은보를 두어 해석 모델과 미확정 미리보기 해석, 예비 단면·부호 일람표·기둥 높이와 Rhino에 만들 상단선·부재 계획까지 이어 보는 탐색용 도구. 새 축선·기둥 후보(직교·엇갈림)는 배치 기준을 바꾸면 만든다. 실제 프로젝트 값은 작업본에만 둔다.",
   "hosts": {
     "rhino": "optional"
   },
@@ -527,7 +527,7 @@
     {
       "key": "depthMax",
       "title": "보 춤 상한",
-      "help": "단면 선정 전에는 거더 하단을 상단 − 이 값으로 잡는다.",
+      "help": "단면 선정에서 거더·작은보 춤의 상한. 단면 선정 전에는 거더 하단을 상단 − 이 값으로 잡는다.",
       "group": "기둥",
       "type": "length",
       "unit": "m",
@@ -991,6 +991,28 @@
         "status": "assumed"
       },
       "affects": ["model"]
+    },
+    {
+      "key": "targetRatio",
+      "title": "단면 선정 목표 검정비",
+      "help": "묶음마다 최대 검정비가 이 값 이하인 가장 가벼운 KS H형강을 고른다(미확정 미리보기 해석으로 반복).",
+      "group": "해석",
+      "type": "ratio",
+      "display": {
+        "unit": "%",
+        "decimals": 0
+      },
+      "default": 0.9,
+      "range": {
+        "min": 0.5,
+        "max": 1,
+        "step": 0.05
+      },
+      "basis": {
+        "status": "assumed",
+        "note": "일반 기본값"
+      },
+      "affects": ["sizing"]
     }
   ],
   "steps": [
@@ -1466,6 +1488,150 @@
       "budget": {
         "wallClockMs": 60000
       }
+    },
+    {
+      "id": "sizing",
+      "title": "단면 선정",
+      "kind": "code",
+      "entry": "steps/sizing.ts#sizing",
+      "needs": ["analysis"],
+      "reads": [
+        "step.model",
+        "step.analysis",
+        "param.depthMax",
+        "param.targetRatio",
+        "param.steelGrade"
+      ],
+      "writes": "sizing",
+      "speed": "release",
+      "gates": [
+        {
+          "use": "no-nan"
+        },
+        {
+          "use": "ids-stable",
+          "args": {
+            "items": "groups",
+            "key": "id"
+          }
+        }
+      ],
+      "budget": {
+        "wallClockMs": 120000
+      }
+    },
+    {
+      "id": "schedule",
+      "title": "부호·일람표",
+      "kind": "code",
+      "entry": "steps/schedule.ts#schedule",
+      "needs": ["sizing"],
+      "reads": ["step.model", "step.sizing"],
+      "writes": "schedule",
+      "speed": "release",
+      "gates": [
+        {
+          "use": "no-nan"
+        },
+        {
+          "use": "ids-stable",
+          "args": {
+            "items": "marks",
+            "key": "memberId"
+          }
+        }
+      ],
+      "budget": {
+        "wallClockMs": 10000
+      }
+    },
+    {
+      "id": "heights",
+      "title": "기둥 높이",
+      "kind": "code",
+      "entry": "steps/heights.ts#heights",
+      "needs": ["sizing"],
+      "reads": [
+        "step.model",
+        "step.sizing",
+        "input.site.columns",
+        "param.heightStep",
+        "param.depthMax"
+      ],
+      "writes": "heights",
+      "speed": "release",
+      "gates": [
+        {
+          "use": "no-nan"
+        },
+        {
+          "use": "ids-stable",
+          "args": {
+            "items": "rows",
+            "key": "columnId"
+          }
+        }
+      ],
+      "budget": {
+        "wallClockMs": 5000
+      }
+    },
+    {
+      "id": "bakePlan",
+      "title": "Rhino에 만들기 계획",
+      "kind": "code",
+      "entry": "steps/bakeplan.ts#bakePlan",
+      "needs": ["schedule", "heights"],
+      "reads": [
+        "step.girders",
+        "step.beams",
+        "step.model",
+        "step.heights",
+        "step.sizing",
+        "step.schedule"
+      ],
+      "writes": "bakePlan",
+      "speed": "release",
+      "gates": [
+        {
+          "use": "no-nan"
+        },
+        {
+          "use": "ids-stable",
+          "args": {
+            "items": "lines",
+            "key": "key"
+          }
+        }
+      ],
+      "budget": {
+        "wallClockMs": 5000
+      }
+    },
+    {
+      "id": "bakeMembers",
+      "title": "부재 만들기 계획 · 확정 해석",
+      "kind": "code",
+      "entry": "steps/bakeplan.ts#bakeMembers",
+      "needs": ["bakePlan", "analysisConfirmed"],
+      "reads": ["step.bakePlan", "step.model", "step.analysisConfirmed"],
+      "writes": "bakeMembers",
+      "speed": "button",
+      "gates": [
+        {
+          "use": "no-nan"
+        },
+        {
+          "use": "ids-stable",
+          "args": {
+            "items": "members",
+            "key": "key"
+          }
+        }
+      ],
+      "budget": {
+        "wallClockMs": 5000
+      }
     }
   ],
   "panel": "panel.json",
@@ -1473,11 +1639,60 @@
     {
       "name": "sync.read",
       "reason": "슬래브·기존 기초·유수지 보·그리드·E.J.·현재 배치 레이어를 읽습니다"
+    },
+    {
+      "name": "host.bake",
+      "reason": "상단선과 H 부재를 연결한 Rhino 문서의 jig 출력 레이어에만 만듭니다(부재는 해석 확정 뒤)"
     }
   ],
   "selftest": {
     "fixtures": "fixtures",
     "requiresHost": false
   },
-  "skill": "skill.md"
+  "skill": "skill.md",
+  "bake": [
+    {
+      "id": "lines",
+      "template": "vide.bake.curves@1",
+      "host": "rhino",
+      "items": "step.bakePlan.lines",
+      "layer": "jig 상단선",
+      "key": "key",
+      "attrs": {
+        "vide-role": "kind",
+        "vide-mark": "mark"
+      },
+      "mode": "replace-own"
+    },
+    {
+      "id": "members",
+      "template": "vide.bake.sweep-h@1",
+      "host": "rhino",
+      "items": "step.bakeMembers.members",
+      "layer": "jig 부재",
+      "key": "key",
+      "attrs": {
+        "vide-role": "role",
+        "vide-section": "sectionName",
+        "vide-mark": "mark"
+      },
+      "mode": "replace-own",
+      "requires": ["analysis-confirmed"]
+    },
+    {
+      "id": "member-columns",
+      "template": "vide.bake.extrude-column@1",
+      "host": "rhino",
+      "items": "step.bakeMembers.members",
+      "layer": "jig 부재",
+      "key": "key",
+      "attrs": {
+        "vide-role": "role",
+        "vide-section": "sectionName",
+        "vide-mark": "mark"
+      },
+      "mode": "replace-own",
+      "requires": ["analysis-confirmed"]
+    }
+  ]
 }

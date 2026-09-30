@@ -24,9 +24,9 @@ export interface WorkspaceChange {
 // The data and make tabs open with PLAN-22 T-065 and T-063; the report tab is T-057.
 const FIXED: { id: FixedWorkspace; label: string; ready: boolean }[] = [
   { id: 'model', label: '모델', ready: true },
-  { id: 'data', label: '자료', ready: false },
+  { id: 'data', label: '자료', ready: true },
   { id: 'jig', label: 'JIG', ready: true },
-  { id: 'make', label: '만들기', ready: false },
+  { id: 'make', label: '만들기', ready: true },
   { id: 'report', label: '보고서', ready: true },
 ];
 const PREFIX = 'jig:';
@@ -88,7 +88,19 @@ function known(id: string) {
 }
 function emit(closed?: ContextTab) {
   document.body.dataset.workspace =
-    active === 'model' || active === 'jig' || active === 'report' ? active : 'context';
+    active === 'model' ||
+    active === 'jig' ||
+    active === 'report' ||
+    active === 'data' ||
+    active === 'make'
+      ? active
+      : 'context';
+  // The 만들기 screen loads when its tab is first shown (src/ui/make-tab.tsx, PLAN-22 T-063).
+  if (active === 'make' && projectId)
+    void import('./make-tab.tsx').then((screen) => screen.showMake(projectId!));
+  // The 자료 screen also loads when its tab is first shown (src/ui/facts-tab.tsx, PLAN-22 T-065).
+  if (active === 'data' && projectId)
+    void import('./facts-tab.tsx').then((screen) => screen.showFacts(projectId!));
   // The report screen loads when its tab is first shown (src/ui/report-tab.tsx).
   if (active === 'report' && projectId)
     void import('./report-tab.tsx').then((screen) => screen.showReports(projectId!));
@@ -175,6 +187,15 @@ export function setContextResolver(
 /** Draw the tab row in `mount` and come back to this project's last tab. */
 export function initializeWorkspaces(options: { projectId: string; mount: HTMLElement }) {
   projectId = options.projectId;
+  // Basis chips anywhere open the fact window of this project (src/ui/jig-panel/registry.ts).
+  void import('./jig-panel/registry.ts').then((chips) =>
+    chips.listenForBasisChips((statementId) => {
+      if (projectId)
+        void import('./jig-panel/basis-parts.tsx').then((parts) =>
+          parts.openFactWindow(projectId!, statementId),
+        );
+    }),
+  );
   bar = options.mount;
   const saved = recall();
   context = saved.context;

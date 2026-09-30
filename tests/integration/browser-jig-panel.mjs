@@ -287,6 +287,37 @@ try {
     );
   }
 
+  // A setting changed from the request box (app.ts: PUT …/params, then 'vide:jig-params-changed')
+  // shows in the open panel at once: the instance is read again and recomputed.
+  const { instances } = await page.evaluate(
+    async (id) => (await fetch(`api/v1/projects/${id}/jig-instances`)).json(),
+    projectId,
+  );
+  const gridId = instances.find((row) => row.jigId === 'project/example-grid').id;
+  runs.length = 0;
+  await page.evaluate(
+    async ({ projectId, gridId }) => {
+      const response = await fetch(`api/v1/projects/${projectId}/jig-instances/${gridId}/params`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ values: [{ key: 'spacingX', value: 8 }], by: 'user' }),
+      });
+      if (!response.ok) throw new Error(await response.text());
+      window.dispatchEvent(
+        new CustomEvent('vide:jig-params-changed', { detail: { instanceId: gridId } }),
+      );
+    },
+    { projectId, gridId },
+  );
+  await page.waitForFunction(
+    () => window.videViewport.overlayInfo().find((o) => o.key === 'columns')?.items.length === 8,
+  );
+  assert.equal(Number(await slider.inputValue()), 8);
+  assert.ok(
+    runs.some((run) => !run.until),
+    'the panel recomputes after the change',
+  );
+
   // Words on screen: no confirmation levels, no bindings or developer words.
   for (const node of [dialog, top, board, drawer]) {
     const text = await node.innerText();
@@ -312,8 +343,92 @@ try {
   assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= 321));
   assert.ok(await panel.locator('.kit-rail').isVisible());
   if (shot) await page.screenshot({ path: join(shot, 'jig-panel-320.png') });
-
   assert.deepEqual(errors, []);
+
+  // Rhino에 만들기 in a panel (bake-parts, PLAN-23 T-056): the S-06 jig's card offers its bakes
+  // from GET …/bakes; [선만 먼저 만들기] and [부재 만들기] send those bakes, a refusal shows why,
+  // and the records list reads the document again for a pending baseline. The engine's bake
+  // answers are stood in here (no Rhino).
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const bakeCalls = [];
+  const offer = (id, template, layer, requires = []) => ({
+    id,
+    template,
+    layer,
+    requires,
+    builtin: true,
+  });
+  await page.route('**/jig-instances/*/bakes', (route) =>
+    route.fulfill({
+      json: {
+        bakes: [
+          {
+            id: 'bake-1',
+            bakeId: 'lines',
+            linkId: 'link-1',
+            requestId: 'request-1',
+            runId: 'run-1',
+            items: { a: { state: 'jig' }, b: { state: 'jig' }, c: { state: 'jig' } },
+            appliedAt: null,
+            pendingBaseline: true,
+          },
+        ],
+        offers: [
+          offer('lines', 'vide.bake.curves@1', 'jig 상단선'),
+          offer('members', 'vide.bake.sweep-h@1', 'jig 부재', ['analysis-confirmed']),
+          offer('member-columns', 'vide.bake.extrude-column@1', 'jig 부재', ['analysis-confirmed']),
+        ],
+        stale: false,
+      },
+    }),
+  );
+  await page.route('**/jig-instances/*/bake', (route) => {
+    bakeCalls.push(JSON.parse(route.request().postData() ?? '{}'));
+    return route.fulfill({
+      status: 409,
+      json: { code: 'GATE_BLOCKED', message: 'blocked', hints: ['확정 해석이 필요합니다'] },
+    });
+  });
+  await page.route('**/jig-instances/*/bakes/*/baseline', (route) =>
+    route.fulfill({ json: { recorded: 3, missing: [] } }),
+  );
+  // The grid instance's context tab is showing: back to the list through the JIG workspace tab.
+  await page
+    .getByRole('tablist', { name: '작업공간' })
+    .getByRole('tab', { name: 'JIG', exact: true })
+    .click();
+  const s06Card = dialog.locator('.jig-card', { hasText: 'S-06 골조 배치' });
+  await s06Card.getByRole('button', { name: '새로 열기' }).click();
+  await s06Card.getByLabel('출력 레이어').fill('VIDE 출력');
+  await s06Card.getByRole('button', { name: '열기', exact: true }).click();
+  const bakeCard = dialog.locator('[data-jig-panel="project/s06-frame"] [data-part="bake-card"]');
+  await bakeCard.waitFor();
+  await bakeCard.locator('.kit-actions button').first().waitFor(); // the offers load after the card
+  // Only the bakes the panel names (lines; members and member-columns in one); no plan-only card.
+  assert.deepEqual(await bakeCard.locator('.kit-actions button').allTextContents(), [
+    '선만 먼저 만들기',
+    '부재 만들기',
+  ]);
+  await bakeCard.getByRole('button', { name: '선만 먼저 만들기' }).click();
+  await bakeCard.getByText(/만들기 전에 막았습니다\. 확정 해석이 필요합니다/).waitFor();
+  await bakeCard.getByRole('button', { name: '부재 만들기' }).click();
+  for (let i = 0; i < 50 && bakeCalls.length < 2; i++) await page.waitForTimeout(100);
+  assert.deepEqual(
+    bakeCalls.map((call) => call.bake),
+    [['lines'], ['members', 'member-columns']],
+  );
+  await bakeCard.getByText('만든 기록 1개').click();
+  assert.match(
+    await bakeCard.locator('.bake-records li').textContent(),
+    /객체 3개 · 반영 뒤 읽기 전/,
+  );
+  await bakeCard.getByRole('button', { name: '반영 결과 읽기' }).click();
+  await bakeCard.getByText('반영 결과를 읽었습니다: 3개 기록').waitFor();
+  // The stood-in refusals are the only console errors.
+  assert.deepEqual(
+    errors.filter((e) => !/status of 409/.test(e)),
+    [],
+  );
   console.log('Declarative jig panel checks passed');
 } finally {
   await browser?.close();

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { citationGate, type FactState } from '../jigs/knowledge.ts';
 
 // Jig review gates (RESEARCH-05 standard gates, SPEC-06.9, SPEC-07): an AI review of a jig table may
 // cite only what the table holds. Ids the answer cites that the table does not have are reported
@@ -51,6 +52,30 @@ const GATES: Record<string, RefGate> = {
     noun: '부재·절점',
   },
 };
+
+/**
+ * The citation gate of project facts (SPEC-08.7, `ref-whitelist`): `[S<n>]` citations of a turn's
+ * answer must be statements a project_* tool returned in this turn and not excluded. Unknown or
+ * excluded ones are recorded and marked in the answer as '확인되지 않은 인용'; {} when nothing is cited.
+ */
+export function factCitations(
+  text: string,
+  returned: ReadonlyMap<number, FactState> | undefined,
+): { factCheck?: ReturnType<typeof citationGate>; text?: string } {
+  const gate = citationGate(text, returned ?? new Map());
+  if (!gate.cited.length) return {};
+  const unverified = [...gate.unknown, ...gate.excluded].map((id) => `S${id}`);
+  return {
+    factCheck: gate,
+    ...(unverified.length
+      ? {
+          text:
+            text +
+            `\n\n⚠ 확인되지 않은 인용: ${unverified.join(', ')}. 이번 답에서 자료 도구가 돌려주지 않았거나 제외된 진술입니다.`,
+        }
+      : {}),
+  };
+}
 
 /** Apply the review gate of the request's jig kind to an AI answer; {} for other requests. */
 export function jigCheck(input: Record<string, unknown>, text: string): JigGateResult {

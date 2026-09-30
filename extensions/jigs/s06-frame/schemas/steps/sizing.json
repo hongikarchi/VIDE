@@ -1,0 +1,61 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": [
+    "schema",
+    "previewOnly",
+    "status",
+    "groups",
+    "sectionsById",
+    "iterations",
+    "notes",
+    "summary"
+  ],
+  "properties": {
+    "schema": { "const": "vide.s06.sizing/1" },
+    "previewOnly": { "type": "boolean" },
+    "basis": { "enum": ["confirmed", "preview", "none"] },
+    "modelHash": { "type": "string" },
+    "status": { "enum": ["converged", "not-converged", "error", "unavailable"] },
+    "groups": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "role", "memberIds", "sectionId", "sectionName", "maxRatio", "status"],
+        "properties": {
+          "id": { "type": "string" },
+          "role": { "enum": ["column", "girder", "beam", "edge"] },
+          "band": { "type": "string" },
+          "memberIds": { "type": "array", "minItems": 1, "items": { "type": "string" } },
+          "sectionId": { "type": ["string", "null"] },
+          "sectionName": { "type": ["string", "null"] },
+          "maxRatio": { "type": ["number", "null"] },
+          "status": { "enum": ["ok", "no-candidate", "unchecked"] },
+          "judgement": { "type": "string" },
+          "beyondLimit": { "type": "string" }
+        }
+      }
+    },
+    "sectionsById": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["name", "h_mm", "b_mm", "tw_mm", "tf_mm", "kgpm"],
+        "properties": {
+          "name": { "type": "string" },
+          "h_mm": { "type": "number" },
+          "b_mm": { "type": "number" },
+          "tw_mm": { "type": "number" },
+          "tf_mm": { "type": "number" },
+          "kgpm": { "type": "number" }
+        }
+      }
+    },
+    "iterations": { "type": "integer", "minimum": 0 },
+    "notes": { "type": "array", "items": { "type": "string" } },
+    "summary": {
+      "type": "object",
+      "required": ["groups", "ok", "noCandidate", "unchecked", "maxRatio", "steel_t"]
+    }
+  }
+}

@@ -19,7 +19,9 @@ import { AccountUsageService } from '../ai/account-usage.ts';
 import { JIGS } from '../jigs/catalog.ts';
 import { runSync } from '../jigs/sync.ts';
 import { jigRoutes, jigStatuses } from './jig-routes.ts';
+import { makeRoutes, makeStatuses } from './make-routes.ts';
 import { syncReadRoutes } from './sync-reads.ts';
+import { factRoutes } from './facts-routes.ts';
 import { ConversationService, conversationRoutes, conversationStatuses } from './conversations.ts';
 import {
   analyzeSummary,
@@ -151,6 +153,7 @@ const statuses: Record<string, number> = {
   HOST_RUNNING: 409,
   ...jigStatuses,
   ...conversationStatuses,
+  ...makeStatuses,
 };
 export async function startServer({
   filename,
@@ -168,7 +171,7 @@ export async function startServer({
   const store = new Store(filename),
     bootstrap = randomBytes(32).toString('hex'),
     session = await localSession(dirname(filename));
-  const agentTools = new AgentTools();
+  const agentTools = new AgentTools({ origin: () => origin });
   const accountLogin = new AccountLogin(loginOptions);
   const workspace = new Workspace(store),
     links = new DocumentLinks(store.db),
@@ -445,7 +448,14 @@ export async function startServer({
         }
       }
       if (!url.pathname.startsWith('/api/v1/')) throw new DomainError('NOT_FOUND');
-      if (!['GET', 'POST', 'PUT'].includes(request.method || '')) {
+      if (
+        !['GET', 'POST', 'PUT'].includes(request.method || '') &&
+        // Discarding a jig draft (ARCH-03 §7 `DELETE …/jig-drafts/:did`, T-064).
+        !(
+          request.method === 'DELETE' &&
+          /^\/api\/v1\/projects\/[^/]+\/jig-drafts\/[^/]+$/.test(url.pathname)
+        )
+      ) {
         send(405, { code: 'METHOD_NOT_ALLOWED', requestId });
         return;
       }
@@ -1095,7 +1105,20 @@ export async function startServer({
         })
       )
         return;
+      if (
+        await makeRoutes(url, request, {
+          workspace,
+          body,
+          send,
+          remote,
+          dataDirectory: dirname(filename),
+          conversations,
+        })
+      )
+        return;
       if (await syncReadRoutes(url, request, { links, workspace, sdk, body, send })) return;
+      const facts = { workspace, dataDirectory: dirname(filename), body, send, remote };
+      if (await factRoutes(url, request, facts)) return;
       if (
         await conversationRoutes(url, request, {
           service: conversations,

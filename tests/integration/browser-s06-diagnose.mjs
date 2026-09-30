@@ -85,7 +85,10 @@ try {
   const sources = dialog.locator('.jig-s06-sources input[type=checkbox]');
   assert.equal(await sources.count(), 2);
   for (let k = 0; k < 2; k++) assert.ok(await sources.nth(k).isChecked());
-  const role = (name) => dialog.getByLabel(name, { exact: true });
+  // A role is a group of picked layers (chips) with a list to add more.
+  const role = (name) => dialog.locator('.jig-s06').getByRole('group', { name, exact: true });
+  const picks = async (name) =>
+    (await role(name).locator('.jig-s06-pick').allTextContents()).map((t) => t.trim());
   const guessed = {
     '신설 기둥': `합성-구조.3dm · ${LAYERS.columns} — 곡선 10`,
     거더: `합성-구조.3dm · ${LAYERS.girders} — 곡선 6`,
@@ -94,11 +97,8 @@ try {
     '유수지 보': `합성-토목.3dm · ${LAYERS.basinGirders} — 솔리드 2`,
   };
   for (const [name, text] of Object.entries(guessed)) {
-    await page.waitForFunction(
-      (label) => document.querySelector(`select[aria-label="${label}"]`)?.value,
-      name,
-    );
-    assert.equal((await role(name).locator('option:checked').textContent()).trim(), text);
+    await role(name).locator('.jig-s06-pick').first().waitFor();
+    assert.deepEqual(await picks(name), [text]);
   }
 
   const response = page.waitForResponse((r) => r.url().endsWith('/jigs/structure/diagnose'));
@@ -224,6 +224,56 @@ try {
   await dialog.getByLabel('입력 Sync').waitFor();
   await dialog.getByRole('button', { name: '배치 진단' }).click();
   assert.equal(await kpi('파일캡 간섭'), '4곳', 'switching views keeps the result');
+
+  // Changing a role's layers clears the result and its overlays, and says why.
+  const basin = guessed['유수지 보'];
+  await role('유수지 보').getByRole('button', { name: /빼기$/ }).click();
+  await result.waitFor({ state: 'detached' });
+  assert.deepEqual(await overlays(), {});
+  await dialog.getByText('역할 레이어가 바뀌어 이전 진단 결과를 지웠습니다').waitFor();
+  assert.deepEqual(await picks('유수지 보'), []);
+  // A role takes several layers (here from the civil model); all of them are sent.
+  const add = (name, label) =>
+    role(name)
+      .getByRole('combobox', { name: `${name} 레이어 추가` })
+      .selectOption({ label });
+  await add('유수지 보', basin);
+  await add('유수지 보', guessed['기존 기초']);
+  assert.deepEqual(await picks('유수지 보'), [basin, guessed['기존 기초']]);
+  const twice = page.waitForRequest((r) => r.url().endsWith('/jigs/structure/diagnose'));
+  await dialog.getByRole('button', { name: '진단', exact: true }).click();
+  assert.deepEqual(
+    JSON.parse((await twice).postData()).roles.basinGirders.map((p) => p.layer),
+    [LAYERS.basinGirders, LAYERS.existingFootings],
+  );
+  await result.waitFor();
+  await role('유수지 보')
+    .getByRole('button', { name: `유수지 보에서 ${LAYERS.existingFootings} 빼기` })
+    .click();
+  await result.waitFor({ state: 'detached' });
+  await dialog.getByRole('button', { name: '진단', exact: true }).click();
+  await result.waitFor();
+  assert.equal(await kpi('기둥↔유수지 보'), '2곳', 'the same roles give the same result again');
+  assert.deepEqual(errors, []);
+
+  // '이 jig로 열기': an S-06 jig instance whose 'site' assembly holds the same role layers.
+  await dialog.getByRole('button', { name: '이 jig로 열기' }).click();
+  const form = dialog.getByRole('form', { name: 'S-06 골조 배치 jig로 열기' });
+  await form.getByLabel('출력 레이어').fill(LAYERS.columns);
+  await form.getByRole('button', { name: '열기', exact: true }).click();
+  await form.waitFor({ state: 'detached' });
+  const opened = await page.evaluate(async (id) => {
+    const list = await (await fetch(`/api/v1/projects/${id}/jig-instances`)).json();
+    const row = list.instances.find((r) => r.jigId === 'project/s06-frame');
+    return (await fetch(`/api/v1/projects/${id}/jig-instances/${row.id}`)).json();
+  }, projectId);
+  const assembled = (key) => opened.body.assembly[`site.${key}`];
+  assert.deepEqual(assembled('columns').sources[0].layers, [LAYERS.columns]);
+  assert.deepEqual(assembled('basinGirders').sources[0].layers, [LAYERS.basinGirders]);
+  assert.ok(assembled('existingFootings').confirmed, 'the picked roles are confirmed');
+  assert.equal(opened.body.layerRoot, LAYERS.columns);
+  await page.locator('.workspace-context-tab', { hasText: '배치 진단에서' }).first().waitFor();
+  assert.equal(await requests(), before, 'opening the jig makes no request');
   assert.deepEqual(errors, []);
 
   // Route limits (the browser logs these refusals, so they come after the error check).

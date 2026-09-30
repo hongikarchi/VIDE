@@ -167,6 +167,12 @@ export const messageOf = (error: unknown) =>
   MESSAGES[(error as { code?: string })?.code ?? ''] ??
   ((error instanceof Error && error.message) || '처리하지 못했습니다.');
 
+/**
+ * Sent on `window` when a setting of an instance changed outside its panel (the request box's
+ * `PUT …/params` or its undo, app.ts); an open panel of that instance reads it again and recomputes.
+ */
+export const JIG_PARAMS_CHANGED = 'vide:jig-params-changed';
+
 /** A step that has been evaluated by a run no longer waits for one. */
 const evaluated = (status: string) => status !== 'blocked' && status !== 'skipped';
 
@@ -243,6 +249,24 @@ export function useInstance(projectId: string, instanceId: string) {
       live = false;
     };
   }, [base, run]);
+
+  // A setting changed from the request box: read the instance again and recompute.
+  useEffect(() => {
+    const changed = (event: Event) => {
+      if ((event as CustomEvent<{ instanceId?: string }>).detail?.instanceId !== instanceId) return;
+      void (async () => {
+        try {
+          setView(await api(base));
+          if (mounted.current) setNotice(undefined);
+          await run();
+        } catch (error) {
+          if (mounted.current) setNotice(messageOf(error));
+        }
+      })();
+    };
+    window.addEventListener(JIG_PARAMS_CHANGED, changed);
+    return () => window.removeEventListener(JIG_PARAMS_CHANGED, changed);
+  }, [base, instanceId, run]);
 
   // Setting changes: the latest value per key waits here while the engine is busy.
   const queue = useRef({ values: new Map<string, Value>(), full: false });
@@ -361,6 +385,8 @@ export function useInstance(projectId: string, instanceId: string) {
       await run();
     });
   const runStep = (stepId: string) => act(() => run({ until: stepId, mode: 'confirmed' }));
+  /** Every step again (after edits made in Rhino were taken as 수정 사항). */
+  const recompute = () => act(() => run());
 
   return {
     view,
@@ -378,6 +404,7 @@ export function useInstance(projectId: string, instanceId: string) {
     findRole,
     confirmRole,
     runStep,
+    recompute,
   };
 }
 export type InstanceState = ReturnType<typeof useInstance>;

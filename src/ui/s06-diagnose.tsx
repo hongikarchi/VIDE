@@ -1,6 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { api } from './gateway.ts';
+import { messageOf } from './jig-panel/instance.ts';
 import type { JigContext } from './jigs.tsx';
+import { openContextTab } from './workspaces.ts';
 import type {
   DiagnoseOutput,
   InterferenceRow,
@@ -30,12 +32,22 @@ import type {
 // Layout diagnosis of the structure jig (PLAN-23 T-044, SPEC-06.14, Design SCR-13 KPI 띠·결과 표):
 // read the columns, girders and footings as drawn in linked Syncs, then show interference and
 // spans as a KPI strip, tables with CSV, and 3D overlays. Read-only: nothing is sent to a host.
+// A role may take several layers (from any chosen Sync); a result made from other roles or Syncs
+// is cleared with a notice. '이 jig로 열기' opens an S-06 jig instance with the same role layers.
 
 interface Layers {
   sources: { syncId: string; document: string; layers: LayerSummary[] }[];
   guess: Record<RoleKey, RolePick | null>;
 }
-type Result = DiagnoseOutput & { ms: number; sources: { syncId: string; document: string }[] };
+type Result = DiagnoseOutput & {
+  ms: number;
+  sources: { syncId: string; document: string }[];
+  /** The Syncs and role layers this result was made from (compared with the current picks). */
+  inputKey?: string;
+};
+type Roles = Record<RoleKey, string[]>;
+/** The S-06 jig package that takes the same roles in its 'site' assembly (jig.json). */
+const S06_JIG = 'project/s06-frame';
 
 const KIND: Record<ObjectKind, string> = {
   curve: '곡선',
@@ -58,12 +70,25 @@ const TABLES: [DiagnoseTable, string][] = [
 ];
 const pickValue = (pick: RolePick | null | undefined) =>
   pick ? `${pick.syncId}\n${pick.layer}` : '';
+const pickOf = (value: string): RolePick => {
+  const [syncId, layer] = value.split('\n');
+  return { syncId, layer };
+};
+const emptyRoles = () => Object.fromEntries(ROLE_KEYS.map((r) => [r, []])) as unknown as Roles;
+const inputKeyOf = (chosen: readonly string[], roles: Roles) =>
+  JSON.stringify([chosen, ROLE_KEYS.map((role) => [...roles[role]].sort())]);
 const m2 = (value: number | null | undefined, digits = 2) =>
   value === null || value === undefined ? '—' : value.toFixed(digits);
 const distance = (value: number | null) =>
   value === null ? '—' : value < 0 ? `겹침 ${(-value).toFixed(2)}` : value.toFixed(2);
 /** The document part of a Sync label ('name · date'). */
 const documentOf = (label: string) => label.split(' · ')[0];
+/** 'document · layer — kind counts', as a role's layer reads in the list and in its chip. */
+const layerText = (document: string, layer: LayerSummary) =>
+  `${document} · ${layer.name || '(이름 없음)'} — ` +
+  Object.entries(layer.kinds)
+    .map(([kind, n]) => `${KIND[kind as ObjectKind]} ${n}`)
+    .join(', ');
 
 function VerdictChip({ verdict }: { verdict: Verdict }) {
   return (
@@ -123,6 +148,161 @@ function MeasureCell({ measure }: { measure: Measure }) {
   );
 }
 
+/**
+ * '이 jig로 열기': a new S-06 jig instance (SPEC-07.4: a name and an existing output layer) whose
+ * 'site' assembly takes the role layers picked here — one read per Sync, then each role confirmed
+ * with the layers it has (several layers or Syncs per role are kept). The tab opens on the instance.
+ */
+function OpenInJig({
+  context,
+  roles,
+  onDone,
+}: {
+  context: JigContext;
+  roles: Roles;
+  onDone: () => void;
+}) {
+  const [jig, setJig] = useState<{ id: string; version: string; name: string } | null>();
+  const [title, setTitle] = useState(
+    context.projectName ? `배치 진단에서 · ${context.projectName}` : '배치 진단에서',
+  );
+  const [layer, setLayer] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  useEffect(() => {
+    let live = true;
+    api('/jigs/packages')
+      .then((value) => {
+        const list =
+          (
+            value as {
+              jigs?: {
+                id: string;
+                version: string;
+                name: string;
+                kind: string;
+                corrupt?: boolean;
+              }[];
+            }
+          ).jigs ?? [];
+        const found = list.find((j) => j.id === S06_JIG && j.kind === 'tool' && !j.corrupt);
+        if (live) setJig(found ? { id: found.id, version: found.version, name: found.name } : null);
+      })
+      .catch(() => live && setJig(null));
+    return () => {
+      live = false;
+    };
+  }, []);
+  const layers = context.layers ?? [];
+  const submit = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!jig || !title.trim() || !layer.trim()) return;
+    setBusy(true);
+    setError('');
+    const project = `/projects/${encodeURIComponent(context.projectId)}`;
+    let opened: { id: string; title: string; jig: { name: string } } | undefined;
+    try {
+      opened = (await api(`${project}/jig-instances`, 'POST', {
+        jig: jig.id,
+        version: jig.version,
+        title: title.trim(),
+        layerRoot: layer.trim(),
+      })) as { id: string; title: string; jig: { name: string } };
+      const at = `${project}/jig-instances/${encodeURIComponent(opened.id)}`;
+      // Layers of each Sync that any role takes (a layer without a name cannot be read by name).
+      const picks = ROLE_KEYS.map(
+        (role) => [role, roles[role].map(pickOf).filter((p) => p.layer)] as const,
+      );
+      const bySync = new Map<string, Set<string>>();
+      for (const [, list] of picks)
+        for (const pick of list)
+          bySync.set(pick.syncId, (bySync.get(pick.syncId) ?? new Set()).add(pick.layer));
+      const reads = new Map<string, string>();
+      for (const [syncId, names] of bySync) {
+        const read = (await api(`${at}/reads`, 'POST', {
+          syncId,
+          layers: [...names],
+          purpose: 'assembly',
+        })) as { readId: string };
+        reads.set(syncId, read.readId);
+      }
+      for (const [role, list] of picks) {
+        if (!list.length) continue;
+        const sources = [...new Set(list.map((p) => p.syncId))].map((syncId) => ({
+          readId: reads.get(syncId)!,
+          layers: list.filter((p) => p.syncId === syncId).map((p) => p.layer),
+        }));
+        await api(`${at}/assembly/${encodeURIComponent(`site.${role}`)}`, 'PUT', {
+          sources,
+          confirm: true,
+          reason: '배치 진단에서 고른 레이어',
+        });
+      }
+      onDone();
+    } catch (cause) {
+      setError(
+        (opened ? '작업본은 열었지만 역할을 모두 옮기지 못했습니다: ' : '') + messageOf(cause),
+      );
+      setBusy(false);
+    }
+    if (opened)
+      openContextTab({
+        instanceId: opened.id,
+        label: opened.title,
+        title: `${opened.jig.name} · ${opened.title}`,
+      });
+  };
+  return (
+    <form
+      className="jig-new"
+      aria-label="S-06 골조 배치 jig로 열기"
+      onSubmit={(event) => void submit(event)}
+    >
+      {jig === null ? (
+        <small>S-06 골조 배치 jig가 설치돼 있지 않아 열 수 없습니다.</small>
+      ) : (
+        <>
+          <label>
+            작업본 이름
+            <input value={title} maxLength={200} onChange={(e) => setTitle(e.target.value)} />
+          </label>
+          <label>
+            출력 레이어
+            <input
+              value={layer}
+              list={layers.length ? 's06-open-layers' : undefined}
+              maxLength={1000}
+              placeholder="연결 모델의 레이어"
+              onChange={(e) => setLayer(e.target.value)}
+            />
+          </label>
+          {layers.length ? (
+            <datalist id="s06-open-layers">
+              {layers.map((path) => (
+                <option key={path} value={path} />
+              ))}
+            </datalist>
+          ) : null}
+          <button
+            type="submit"
+            className="primary-button"
+            disabled={busy || !jig || !title.trim() || !layer.trim()}
+          >
+            {busy ? '여는 중…' : '열기'}
+          </button>
+        </>
+      )}
+      <button type="button" onClick={onDone}>
+        취소
+      </button>
+      <small>
+        고른 역할 레이어를 작업본의 입력 조립에 확정해 둡니다. 설정값은 jig 기본값으로 시작합니다.
+      </small>
+      {error ? <p role="alert">{error}</p> : null}
+    </form>
+  );
+}
+
 const severity = (a: { verdict: Verdict | null; key: string }, b: typeof a) =>
   VERDICT_RANK[b.verdict ?? 'pass'] - VERDICT_RANK[a.verdict ?? 'pass'] ||
   a.key.localeCompare(b.key);
@@ -136,9 +316,7 @@ export function S06Diagnose({ context }: { context: JigContext }) {
     return [...latest.values()].slice(-4);
   });
   const [layers, setLayers] = useState<Layers>();
-  const [roles, setRoles] = useState<Record<RoleKey, string>>(
-    () => Object.fromEntries(ROLE_KEYS.map((r) => [r, ''])) as Record<RoleKey, string>,
-  );
+  const [roles, setRoles] = useState<Roles>(emptyRoles);
   const [params, setParams] = useState({
     spanMax: '12',
     splitTol: '0.3',
@@ -153,8 +331,15 @@ export function S06Diagnose({ context }: { context: JigContext }) {
   const [tab, setTab] = useState<DiagnoseTable>('interference');
   const [selected, setSelected] = useState<string>();
   const [overlayOn, setOverlayOn] = useState(true);
+  const [opening, setOpening] = useState(false);
   const panel = useRef<HTMLDivElement>(null);
   const base = `/projects/${context.projectId}/jigs/structure`;
+  const describe = (value: string) => {
+    const pick = pickOf(value);
+    const source = layers?.sources.find((s) => s.syncId === pick.syncId);
+    const layer = source?.layers.find((l) => l.name === pick.layer);
+    return source && layer ? layerText(source.document, layer) : pick.layer || '(이름 없음)';
+  };
 
   // Layers of the chosen Syncs; roles keep their layer while it is still offered, else the guess.
   const chosenKey = chosen.join(',');
@@ -177,11 +362,12 @@ export function S06Diagnose({ context }: { context: JigContext }) {
         setRoles(
           (previous) =>
             Object.fromEntries(
-              ROLE_KEYS.map((role) => [
-                role,
-                offered.has(previous[role]) ? previous[role] : pickValue(next.guess[role]),
-              ]),
-            ) as Record<RoleKey, string>,
+              ROLE_KEYS.map((role) => {
+                const kept = previous[role].filter((value) => offered.has(value));
+                const guess = pickValue(next.guess[role]);
+                return [role, kept.length ? kept : guess ? [guess] : []];
+              }),
+            ) as unknown as Roles,
         );
       })
       .catch((error: Error) => live && setNotice(error.message));
@@ -190,6 +376,19 @@ export function S06Diagnose({ context }: { context: JigContext }) {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chosenKey]);
+
+  // A result belongs to the Syncs and role layers it was made from. When they change (or a run
+  // ends after they changed) the result and its overlays go, and the notice says why.
+  const inputKey = inputKeyOf(chosen, roles);
+  useEffect(() => {
+    if (!result || result.inputKey === inputKey) return;
+    for (const layer of result.overlays) context.overlay(layer.key, null);
+    setResult(undefined);
+    setSelected(undefined);
+    setNotice(
+      '읽을 Sync나 역할 레이어가 바뀌어 이전 진단 결과를 지웠습니다. 다시 [진단]을 누르세요.',
+    );
+  }, [context, result, inputKey]);
 
   // 3D overlays follow the result and the on/off switch; the JIG panel keeps them per jig.
   useEffect(() => {
@@ -241,12 +440,9 @@ export function S06Diagnose({ context }: { context: JigContext }) {
       return;
     }
     const picks = Object.fromEntries(
-      ROLE_KEYS.flatMap((role) => {
-        if (!roles[role]) return [];
-        const [syncId, layer] = roles[role].split('\n');
-        return [[role, [{ syncId, layer }]]];
-      }),
+      ROLE_KEYS.flatMap((role) => (roles[role].length ? [[role, roles[role].map(pickOf)]] : [])),
     );
+    const key = inputKey;
     setBusy(true);
     setNotice('');
     try {
@@ -255,7 +451,7 @@ export function S06Diagnose({ context }: { context: JigContext }) {
         roles: picks,
         params: { ...numbers, openCutSize, openCutRule: params.openCutRule },
       })) as Result;
-      setResult(out);
+      setResult({ ...out, inputKey: key });
       setSelected(undefined);
       // The result opens below the inputs; bring its KPI strip into view.
       requestAnimationFrame(() =>
@@ -349,31 +545,77 @@ export function S06Diagnose({ context }: { context: JigContext }) {
       </fieldset>
       <div className="jig-s06-roles">
         {ROLE_KEYS.map((role) => (
-          <label key={role} title={HINT[role]}>
+          // One role, several layers: picked layers as chips, more added from the list.
+          <div
+            key={role}
+            role="group"
+            aria-label={ROLE_LABEL[role]}
+            title={HINT[role]}
+            style={{
+              display: 'grid',
+              gridTemplateColumns: '11em minmax(0, 1fr)',
+              alignItems: 'start',
+              gap: 8,
+            }}
+          >
             <span>{ROLE_LABEL[role]}</span>
-            <select
-              aria-label={ROLE_LABEL[role]}
-              value={roles[role]}
-              onChange={(e) => setRoles({ ...roles, [role]: e.target.value })}
-            >
-              <option value="">지정 안 함 (이 판정은 미완)</option>
-              {layers?.sources.map((source) => (
-                <optgroup key={source.syncId} label={source.document}>
-                  {source.layers.map((layer) => (
-                    <option
-                      key={layer.name}
-                      value={pickValue({ syncId: source.syncId, layer: layer.name })}
-                    >
-                      {source.document} · {layer.name || '(이름 없음)'} —{' '}
-                      {Object.entries(layer.kinds)
-                        .map(([kind, n]) => `${KIND[kind as ObjectKind]} ${n}`)
-                        .join(', ')}
-                    </option>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, minWidth: 0 }}>
+              {roles[role].length ? (
+                <ul
+                  className="jig-s06-picks"
+                  aria-label={`${ROLE_LABEL[role]} 레이어`}
+                  style={{ display: 'contents', listStyle: 'none' }}
+                >
+                  {roles[role].map((value) => (
+                    <li key={value} className="chip">
+                      <span className="jig-s06-pick">{describe(value)}</span>
+                      <button
+                        type="button"
+                        aria-label={`${ROLE_LABEL[role]}에서 ${pickOf(value).layer || '(이름 없음)'} 빼기`}
+                        onClick={() =>
+                          setRoles({ ...roles, [role]: roles[role].filter((v) => v !== value) })
+                        }
+                      >
+                        ×
+                      </button>
+                    </li>
                   ))}
-                </optgroup>
-              ))}
-            </select>
-          </label>
+                </ul>
+              ) : (
+                <small>지정 안 함 (이 판정은 미완)</small>
+              )}
+              <select
+                aria-label={`${ROLE_LABEL[role]} 레이어 추가`}
+                value=""
+                onChange={(e) =>
+                  e.target.value && setRoles({ ...roles, [role]: [...roles[role], e.target.value] })
+                }
+              >
+                <option value="">
+                  {roles[role].length ? '+ 레이어 더하기' : '+ 레이어 고르기'}
+                </option>
+                {layers?.sources.map((source) => (
+                  <optgroup key={source.syncId} label={source.document}>
+                    {source.layers
+                      .filter(
+                        (layer) =>
+                          !roles[role].includes(
+                            pickValue({ syncId: source.syncId, layer: layer.name }),
+                          ),
+                      )
+                      .map((layer) => (
+                        <option
+                          key={layer.name}
+                          value={pickValue({ syncId: source.syncId, layer: layer.name })}
+                        >
+                          {layerText(source.document, layer)}
+                        </option>
+                      ))}
+                  </optgroup>
+                ))}
+              </select>
+            </div>
+          </div>
         ))}
       </div>
       <details className="jig-s06-params">
@@ -428,8 +670,20 @@ export function S06Diagnose({ context }: { context: JigContext }) {
         >
           {busy ? '진단 중…' : '진단'}
         </button>
+        <button
+          type="button"
+          aria-expanded={opening}
+          disabled={!ROLE_KEYS.some((role) => roles[role].some((v) => pickOf(v).layer))}
+          title="고른 역할 레이어로 S-06 골조 배치 jig 작업본을 새로 엽니다"
+          onClick={() => setOpening(!opening)}
+        >
+          이 jig로 열기
+        </button>
         <small>AI를 쓰지 않고 레이어 규칙과 기하 계산으로만 점검합니다.</small>
       </div>
+      {opening ? (
+        <OpenInJig context={context} roles={roles} onDone={() => setOpening(false)} />
+      ) : null}
       {notice ? <p className="jig-structure-notice">{notice}</p> : null}
 
       {result && s ? (

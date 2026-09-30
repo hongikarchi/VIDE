@@ -165,6 +165,11 @@ export function checksCsv(
 }
 const fmt = (v: number | null | undefined, digits = 2) =>
   v === null || v === undefined ? '—' : v.toFixed(digits);
+/** Roles a Rhino layer can be given in the draft (layer hints); a role may take several layers. */
+const PICK_ROLES = ['column', 'girder', 'beam', 'brace'] as const;
+type PickRole = (typeof PICK_ROLES)[number];
+const noRoleLayers = () =>
+  Object.fromEntries(PICK_ROLES.map((role) => [role, []])) as unknown as Record<PickRole, string[]>;
 
 export function StructureJig({ context }: { context: JigContext }) {
   const rhino = context.sources.filter((s) => s.host === 'rhino');
@@ -184,6 +189,12 @@ export function StructureJig({ context }: { context: JigContext }) {
   const [colored, setColored] = useState(false);
   const [view, setView] = useState<'analysis' | 'diagnose'>('analysis');
   const [diagnoseOpened, setDiagnoseOpened] = useState(false);
+  // Role layers of a Rhino Sync (several per role): sent as layer hints, and optionally as the only
+  // layers read. The key of the inputs a draft was made from tells when the draft no longer fits.
+  const [roleLayers, setRoleLayers] = useState<Record<PickRole, string[]>>(noRoleLayers);
+  const [onlyPicked, setOnlyPicked] = useState(false);
+  const [syncLayers, setSyncLayers] = useState<{ name: string; count: number }[]>();
+  const [draftedKey, setDraftedKey] = useState<string>();
   const base = `/projects/${context.projectId}/jigs/structure`;
 
   const call = async (path: string, method: 'GET' | 'POST', body?: unknown) => {
@@ -198,9 +209,21 @@ export function StructureJig({ context }: { context: JigContext }) {
       setBusy(false);
     }
   };
-  const refresh = async () => setState((await call('', 'GET')) as State);
+  const refresh = async () => {
+    const next = (await call('', 'GET')) as State | undefined;
+    setState(next);
+    return next;
+  };
   useEffect(() => {
-    void refresh();
+    // An existing draft brings back the Sync and input form it was made from.
+    void refresh().then((first) => {
+      const made = first?.draft?.sources[0];
+      if (made && context.sources.some((s) => s.id === made.syncId)) {
+        setSyncId(made.syncId);
+        if (made.mode === 'curves' || made.mode === 'breps' || made.mode === 'cad')
+          setMode(made.mode);
+      }
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -210,13 +233,56 @@ export function StructureJig({ context }: { context: JigContext }) {
     else if (mode === 'cad') setMode('curves');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [syncId]);
+  // Layers of the chosen Rhino Sync for the role pickers; picks keep the layers still offered.
+  useEffect(() => {
+    setSyncLayers(undefined);
+    if (!syncId || hostOf(syncId) !== 'rhino') return;
+    let live = true;
+    api(`${base}/layers?syncIds=${encodeURIComponent(syncId)}`)
+      .then((value) => {
+        if (!live) return;
+        const list = (value as { sources: { layers: { name: string; count: number }[] }[] })
+          .sources[0]?.layers;
+        setSyncLayers(list ?? []);
+        const names = new Set((list ?? []).map((l) => l.name));
+        setRoleLayers(
+          (previous) =>
+            Object.fromEntries(
+              PICK_ROLES.map((role) => [role, previous[role].filter((n) => names.has(n))]),
+            ) as unknown as Record<PickRole, string[]>,
+        );
+      })
+      .catch(() => live && setSyncLayers([]));
+    return () => {
+      live = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [syncId]);
+
+  const list = (text: string) =>
+    text
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
+  const picked = PICK_ROLES.flatMap((role) => roleLayers[role]);
+  // What a draft is made from: a draft (and its result) made from other inputs is marked.
+  const inputKey = JSON.stringify(
+    mode === 'cad'
+      ? [syncId, mode, levels, list(beamLayers), list(columnLayers), baseFixity]
+      : [syncId, mode, PICK_ROLES.map((r) => [...roleLayers[r]].sort()), onlyPicked, baseFixity],
+  );
+  const made = state?.draft?.sources[0];
+  const inputsChanged =
+    !!state?.draft &&
+    (draftedKey !== undefined
+      ? draftedKey !== inputKey
+      : made?.syncId !== syncId || made?.mode !== mode);
 
   const makeDraft = async () => {
-    const list = (text: string) =>
-      text
-        .split(',')
-        .map((s) => s.trim())
-        .filter(Boolean);
+    const key = inputKey;
+    const layerHints = Object.fromEntries(
+      PICK_ROLES.flatMap((role) => roleLayers[role].map((layer) => [layer, { role }])),
+    );
     const source =
       mode === 'cad'
         ? {
@@ -229,16 +295,34 @@ export function StructureJig({ context }: { context: JigContext }) {
               columnLayers: list(columnLayers),
             },
           }
-        : { syncId, mode };
-    const draft = await call('/draft', 'POST', { sources: [source], options: { baseFixity } });
-    if (draft) await refresh();
+        : { syncId, mode, ...(onlyPicked && picked.length ? { layers: picked } : {}) };
+    const options = mode !== 'cad' && picked.length ? { baseFixity, layerHints } : { baseFixity };
+    const draft = await call('/draft', 'POST', { sources: [source], options });
+    if (draft) {
+      setDraftedKey(key);
+      // A new draft makes the confirmed result old: its verdict colours leave the model.
+      if (colored) {
+        context.clearTint();
+        setColored(false);
+      }
+      setOnly(undefined);
+      await refresh();
+    }
   };
   const edit = async (edits: Record<string, unknown>) => {
     if (await call('/edit', 'POST', edits)) await refresh();
   };
   const analyse = async () => {
     const out = await call('/analyze', 'POST', { confirm: true });
-    if (out) await refresh();
+    if (out) {
+      // Colours of the previous result would read as this one's: switch them off.
+      if (colored) {
+        context.clearTint();
+        setColored(false);
+      }
+      setOnly(undefined);
+      await refresh();
+    }
   };
 
   const draft = state?.draft;
@@ -325,6 +409,15 @@ export function StructureJig({ context }: { context: JigContext }) {
   // '미확정 미리보기' results are marked as such everywhere they show (SPEC-06.3·.7).
   const preview = confirmed?.summary?.mode === 'preview';
   const resultLabel = confirmed?.summary?.label ?? (preview ? '미확정 미리보기' : '확정 결과');
+  // An out-of-date result keeps no colours on the model; the notice says why they went.
+  const stale = !!state?.stale;
+  useEffect(() => {
+    if (!stale || !colored) return;
+    context.clearTint();
+    setColored(false);
+    setNotice('입력이 바뀌어 이전 결과의 판정색을 지웠습니다. 초안을 다시 만들고 해석하세요.');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stale, colored]);
   const checks = useMemo(() => {
     const all = [...(confirmed?.result.checks ?? [])].sort(
       (a, b) => (b.ratio ?? Infinity) - (a.ratio ?? Infinity),
@@ -463,6 +556,7 @@ export function StructureJig({ context }: { context: JigContext }) {
                 보 레이어
                 <input
                   aria-label="보 레이어"
+                  placeholder="쉼표로 여러 레이어"
                   value={beamLayers}
                   onChange={(e) => setBeamLayers(e.target.value)}
                 />
@@ -471,6 +565,7 @@ export function StructureJig({ context }: { context: JigContext }) {
                 기둥 레이어
                 <input
                   aria-label="기둥 레이어"
+                  placeholder="쉼표로 여러 레이어"
                   value={columnLayers}
                   onChange={(e) => setColumnLayers(e.target.value)}
                 />
@@ -497,6 +592,79 @@ export function StructureJig({ context }: { context: JigContext }) {
             {busy ? '처리 중…' : '초안 만들기'}
           </button>
         </div>
+        {mode !== 'cad' && syncLayers?.length ? (
+          <details className="jig-s06-params">
+            <summary>
+              역할 레이어 지정 (선택){picked.length ? ` · ${picked.length}개 레이어` : ''} — 비워
+              두면 레이어·이름으로 역할을 추정합니다
+            </summary>
+            <div className="jig-s06-roles">
+              {PICK_ROLES.map((role) => (
+                <div
+                  key={role}
+                  role="group"
+                  aria-label={`${ROLE[role]} 레이어`}
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: '6em minmax(0, 1fr)',
+                    alignItems: 'start',
+                    gap: 8,
+                  }}
+                >
+                  <span>{ROLE[role]}</span>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, minWidth: 0 }}>
+                    {roleLayers[role].map((layer) => (
+                      <span key={layer} className="chip">
+                        {layer || '(이름 없음)'}
+                        <button
+                          type="button"
+                          aria-label={`${ROLE[role]}에서 ${layer || '(이름 없음)'} 빼기`}
+                          onClick={() =>
+                            setRoleLayers({
+                              ...roleLayers,
+                              [role]: roleLayers[role].filter((n) => n !== layer),
+                            })
+                          }
+                        >
+                          ×
+                        </button>
+                      </span>
+                    ))}
+                    <select
+                      aria-label={`${ROLE[role]} 레이어 추가`}
+                      value=""
+                      onChange={(e) =>
+                        e.target.value &&
+                        setRoleLayers({
+                          ...roleLayers,
+                          [role]: [...roleLayers[role], e.target.value],
+                        })
+                      }
+                    >
+                      <option value="">+ 레이어</option>
+                      {syncLayers
+                        .filter((l) => l.name && !picked.includes(l.name))
+                        .map((l) => (
+                          <option key={l.name} value={l.name}>
+                            {l.name} — {l.count}개
+                          </option>
+                        ))}
+                    </select>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <label>
+              <input
+                type="checkbox"
+                checked={onlyPicked}
+                disabled={!picked.length}
+                onChange={(e) => setOnlyPicked(e.target.checked)}
+              />{' '}
+              지정한 레이어만 읽기
+            </label>
+          </details>
+        ) : null}
         {notice ? <p className="jig-structure-notice">{notice}</p> : null}
 
         {draft ? (
@@ -506,7 +674,19 @@ export function StructureJig({ context }: { context: JigContext }) {
               {state?.draftStale ? (
                 <span className="pill"> 입력 Sync가 더 새것으로 바뀜</span>
               ) : null}
+              {inputsChanged ? (
+                <span className="pill" data-state="changed">
+                  {' '}
+                  입력이 초안과 다름
+                </span>
+              ) : null}
             </h3>
+            {inputsChanged ? (
+              <p className="jig-structure-notice" role="status">
+                Sync·입력 형태·역할 레이어가 이 초안을 만든 때와 다릅니다. [초안 만들기]를 다시 눌러
+                바뀐 입력으로 초안을 만든 뒤 확정하세요.
+              </p>
+            ) : null}
             {issues.length ? (
               <ul className="jig-structure-issues">
                 {issues.map((issue, k) => (
@@ -585,12 +765,15 @@ export function StructureJig({ context }: { context: JigContext }) {
               <button
                 type="button"
                 className="primary-button"
-                disabled={busy || blocking}
+                disabled={busy || blocking || inputsChanged}
                 onClick={() => void analyse()}
               >
                 확정하고 해석
               </button>
               {blocking ? <small>오류를 고친 뒤 확정할 수 있습니다.</small> : null}
+              {!blocking && inputsChanged ? (
+                <small>바뀐 입력으로 초안을 다시 만든 뒤 확정할 수 있습니다.</small>
+              ) : null}
             </div>
           </section>
         ) : null}
@@ -606,16 +789,16 @@ export function StructureJig({ context }: { context: JigContext }) {
             </h3>
             {confirmed.result.status === 'error' ? (
               <p>
-                해석 실패: {confirmed.result.error}
+                {resultLabel} · 해석 실패: {confirmed.result.error}
                 {confirmed.result.diagnostics.mechanisms.length
                   ? ` · 구속되지 않은 절점 ${[...new Set(confirmed.result.diagnostics.mechanisms.map((m) => m.node))].join(', ')}`
                   : ''}
               </p>
             ) : (
               <>
-                <p className="jig-structure-summary">
-                  강재 {fmt(confirmed.result.summary.steel_kN / 9.80665, 1)} t · 최대 검정비{' '}
-                  {fmt(confirmed.result.summary.maxRatio)} · 초과{' '}
+                <p className="jig-structure-summary" data-mode={preview ? 'preview' : 'confirmed'}>
+                  {resultLabel} · 강재 {fmt(confirmed.result.summary.steel_kN / 9.80665, 1)} t ·
+                  최대 검정비 {fmt(confirmed.result.summary.maxRatio)} · 초과{' '}
                   {confirmed.result.summary.failCount} · 미완{' '}
                   {confirmed.result.summary.incompleteCount}
                 </p>
@@ -663,6 +846,7 @@ export function StructureJig({ context }: { context: JigContext }) {
                 />
                 <div className="jig-table-wrap">
                   <table className="jig-table" aria-label="부재 검정">
+                    <caption style={{ textAlign: 'left' }}>부재 검정 · {resultLabel}</caption>
                     <thead>
                       <tr>
                         <th>부재</th>

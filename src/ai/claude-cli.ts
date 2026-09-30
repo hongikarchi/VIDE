@@ -90,8 +90,11 @@ const sessionSchema = z.object({
   id: z.string().regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/),
   resume: z.boolean(),
 });
-/** A resumed session whose transcript is gone (another account profile, deleted, never opened). */
-export const SESSION_LOST = /No conversation found/i;
+/**
+ * A resumed session whose transcript is gone (another account profile, deleted, never opened):
+ * Claude "No conversation found", Codex "no rollout found for thread id" (SPIKE-2026-09-30 ④).
+ */
+export const SESSION_LOST = /No conversation found|no rollout found for thread/i;
 const usageSchema = z
   .object({
     input_tokens: z.number().nonnegative().optional(),

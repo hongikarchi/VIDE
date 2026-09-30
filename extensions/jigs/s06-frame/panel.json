@@ -51,7 +51,7 @@
     {
       "part": "bake-card",
       "title": "Rhino에 만들기",
-      "bake": ["lines", "members"]
+      "bake": ["lines", "members", "member-columns"]
     }
   ],
   "center": {
@@ -298,11 +298,12 @@
           "empty": "읽기 전"
         },
         {
-          "label": "끝 붙임",
-          "from": "step.girders.summary.snapped",
-          "unit": "곳",
-          "note": "기둥 상단으로 옮김",
-          "empty": "읽기 전"
+          "label": "강재",
+          "from": "step.schedule.totals.t",
+          "unit": "t",
+          "decimals": 1,
+          "note": "예비 단면 · 물량용",
+          "empty": "단면 선정 전"
         },
         {
           "label": "기둥 없는 끝",
@@ -466,118 +467,167 @@
         "csv": "참고처짐"
       },
       {
-        "title": "간섭 · 제안",
-        "part": "issue-table",
-        "from": "step.interference.tables.interference",
-        "overlay": "columns",
+        "title": "단면",
+        "part": "table",
+        "from": "step.sizing.groups",
+        "key": "id",
         "columns": [
           {
-            "field": "key",
-            "label": "기둥"
+            "field": "roleLabel",
+            "label": "역할"
+          },
+          {
+            "field": "band",
+            "label": "경간 띠"
+          },
+          {
+            "field": "sectionName",
+            "label": "단면"
+          },
+          {
+            "field": "maxRatio",
+            "label": "최대 검정비(미리보기)",
+            "decimals": 2
           },
           {
             "field": "judgement",
             "label": "판정"
           },
           {
-            "field": "capText",
-            "label": "파일캡↔기존 기초"
-          },
-          {
-            "field": "cutText",
-            "label": "오픈컷↔기존 기초"
-          },
-          {
-            "field": "basinText",
-            "label": "기둥↔유수지 보"
+            "field": "beyondLimit",
+            "label": "상한 밖 후보"
           }
         ],
-        "csv": "간섭"
+        "csv": "단면선정"
       },
       {
-        "title": "배치 대안 · 제안",
-        "part": "table",
-        "from": "step.axes.alternatives",
-        "key": "id",
+        "title": "일람표",
+        "part": "schedule",
+        "from": "step.schedule.rows",
+        "key": "mark",
         "columns": [
           {
-            "field": "title",
-            "label": "배치"
+            "field": "mark",
+            "label": "부호"
           },
           {
-            "field": "chosenText",
-            "label": "선택"
+            "field": "roleLabel",
+            "label": "역할"
           },
           {
-            "field": "columns",
-            "label": "기둥",
+            "field": "section",
+            "label": "단면"
+          },
+          {
+            "field": "count",
+            "label": "개수",
             "unit": "개"
           },
           {
-            "field": "maxSpan",
-            "label": "최대 경간",
+            "field": "totalLength_m",
+            "label": "총길이",
+            "unit": "m",
+            "decimals": 1
+          },
+          {
+            "field": "kgpm",
+            "label": "단위중량",
+            "unit": "kg/m",
+            "decimals": 1
+          },
+          {
+            "field": "t",
+            "label": "중량",
+            "unit": "t",
+            "decimals": 2
+          },
+          {
+            "field": "maxRatio",
+            "label": "최대 검정비",
+            "decimals": 2
+          }
+        ],
+        "csv": "부재일람표"
+      },
+      {
+        "title": "높이",
+        "part": "table",
+        "from": "step.heights.rows",
+        "key": "columnId",
+        "columns": [
+          {
+            "field": "sourceId",
+            "label": "기둥"
+          },
+          {
+            "field": "drawnLength_m",
+            "label": "그린 길이",
             "unit": "m",
             "decimals": 2
           },
           {
-            "field": "spanOver",
-            "label": "경간 초과"
+            "field": "length_m",
+            "label": "강재 길이",
+            "unit": "m",
+            "decimals": 1
           },
           {
-            "field": "cap",
-            "label": "파일캡 간섭"
+            "field": "gap_m",
+            "label": "받침 높이",
+            "unit": "m",
+            "decimals": 2
           },
           {
-            "field": "basin",
-            "label": "유수지 보"
+            "field": "depth_mm",
+            "label": "거더 춤",
+            "unit": "mm",
+            "decimals": 0
           },
           {
-            "field": "openCut",
-            "label": "오픈컷"
-          }
-        ],
-        "csv": "배치대안"
-      },
-      {
-        "title": "확인 목록",
-        "part": "issue-table",
-        "from": "step.interference.tables.review",
-        "columns": [
-          {
-            "field": "kind",
-            "label": "항목"
+            "field": "levelDiff_m",
+            "label": "레벨 차",
+            "unit": "m",
+            "decimals": 2
           },
           {
             "field": "judgement",
             "label": "판정"
-          },
-          {
-            "field": "text",
-            "label": "내용"
           }
         ],
-        "csv": "확인목록"
+        "csv": "기둥높이"
       },
       {
-        "title": "입력 조립",
+        "title": "만들기",
         "part": "table",
-        "from": "step.assemble.roles",
-        "key": "role",
+        "from": "step.bakePlan.members",
+        "key": "key",
         "columns": [
           {
-            "field": "title",
-            "label": "역할"
+            "field": "memberId",
+            "label": "부재"
           },
           {
-            "field": "count",
-            "label": "객체",
-            "unit": "개"
+            "field": "mark",
+            "label": "부호"
           },
           {
-            "field": "summary",
-            "label": "읽은 것"
+            "field": "sectionName",
+            "label": "단면"
+          },
+          {
+            "field": "length_m",
+            "label": "길이",
+            "unit": "m",
+            "decimals": 2
+          },
+          {
+            "field": "kgpm",
+            "label": "단위중량",
+            "unit": "kg/m",
+            "decimals": 1
           }
-        ]
+        ],
+        "csv": "만들기계획"
       }
     ]
   },

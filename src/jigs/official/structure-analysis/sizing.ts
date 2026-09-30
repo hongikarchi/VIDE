@@ -285,6 +285,14 @@ export async function sizeGroups(
         if (k !== undefined) current.members[k].section = candidate.id;
       }
   };
+  /** Back to the one section the group started with ('후보 없음' never keeps a failed candidate). */
+  const restoreStart = (g: GroupState) => {
+    for (const id of g.members)
+      for (const seg of map.physical[id]) {
+        const k = memberIndex.get(seg);
+        if (k !== undefined) current.members[k].section = g.from[0];
+      }
+  };
   const fits = (
     c: Candidate,
     est: EstimateSection,
@@ -307,6 +315,7 @@ export async function sizeGroups(
   // Section last analysed per group (all members share one after the first application).
   const analysed = new Map<string, string | undefined>();
   const pending = new Map<string, Candidate>();
+  const restore = new Set<string>();
   while (iterations < maxIterations) {
     iterations++;
     const outcome = await analyze(current, map, {
@@ -329,6 +338,7 @@ export async function sizeGroups(
     const sections = new Map(current.sections.map((s) => [s.id, s]));
     let stable = true;
     pending.clear();
+    restore.clear();
     for (const g of groups.values()) {
       // Observation per member: ratio, governing clause, reference deflection ratio, section.
       const seen = g.members.map((id) => {
@@ -383,6 +393,12 @@ export async function sizeGroups(
         g.beyondLimit = beyond
           ? { id: beyond.id, name: beyond.name, h_mm: beyond.h_mm, weight_kgpm: beyond.weight_kgpm }
           : undefined;
+        // A candidate applied earlier that now leaves no candidate goes back to the starting
+        // section, analysed once more so the other groups are sized against the kept section.
+        if (g.from.length === 1 && current_ !== g.from[0]) {
+          stable = false;
+          restore.add(g.id);
+        }
         continue;
       }
       g.status = 'ok';
@@ -416,6 +432,8 @@ export async function sizeGroups(
       break;
     }
     if (iterations < maxIterations) for (const [key, c] of pending) apply(groups.get(key)!, c);
+    // Restored even on the last iteration: '후보 없음' reports the starting section.
+    for (const key of restore) restoreStart(groups.get(key)!);
   }
 
   if (status === 'not-converged') {

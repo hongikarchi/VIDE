@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { api } from './gateway.ts';
 import { DeclaredJig } from './jig-panel/declared-jig.tsx';
 import { KnowledgeJig } from './knowledge-jig.tsx';
+import { DraftList, ImportJig, MakeCard } from './make-tab.tsx';
 import type { Point3 } from './model.ts';
 import { StructureJig } from './structure-jig.tsx';
 import type { OverlayItem } from './viewport.ts';
@@ -653,6 +654,7 @@ function Gallery({ context }: { context: JigContext }) {
   const [source, setSource] = useState<Source>(listSource);
   const [creating, setCreating] = useState<string>();
   const [notice, setNotice] = useState('');
+  const [loaded, setLoaded] = useState(0);
   const projectId = context.projectId;
   // Read on each visit: instances change as jigs are opened, packages as jigs are pinned.
   useEffect(() => {
@@ -689,7 +691,7 @@ function Gallery({ context }: { context: JigContext }) {
     return () => {
       live = false;
     };
-  }, [projectId]);
+  }, [projectId, loaded]);
   // Installed jigs show only in the project they are pinned to.
   const tools = packages.filter(
     (entry) => entry.kind === 'tool' && (entry.stage !== 'project' || pinned.includes(entry.id)),
@@ -787,8 +789,10 @@ function Gallery({ context }: { context: JigContext }) {
           옮겨 오는 중입니다.
         </p>
         {notice ? <p role="status">{notice}</p> : null}
-        {source === 'draft' ? <p className="jig-intro">아직 만들고 있는 초안이 없습니다.</p> : null}
+        <ImportJig projectId={projectId} onImported={() => setLoaded((n) => n + 1)} />
+        {source === 'draft' ? <DraftList projectId={projectId} /> : null}
         <div className="jig-grid">
+          {source === 'all' || source === 'draft' ? <MakeCard projectId={projectId} /> : null}
           {listed('project') ? tools.filter((t) => sourceOf(t) === 'project').map(toolCard) : null}
           {listed('official')
             ? (legacy ?? []).map((jig) => {

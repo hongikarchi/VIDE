@@ -386,7 +386,8 @@ test('Codex: the schema goes as --output-schema <file>; the JSON text is parsed'
   assert.ok(at > 0);
   assert.equal(run.args.at(-1), '-');
   assert.deepEqual(JSON.parse(run.schemaFile), TURN_OUTPUT_JSON_SCHEMA);
-  for (const flag of ['--ephemeral', '--ignore-user-config', '--sandbox'])
+  // A Codex conversation now opens a session (T-061), so the transcript is kept: no --ephemeral.
+  for (const flag of ['--ignore-user-config', '--sandbox'])
     assert.ok(run.args.includes(flag), flag);
   const done = ctx.workspace.get(ctx.project.id, 'ask-1').result;
   assert.equal(done.turnOutput.questions[0].id, 'q1');

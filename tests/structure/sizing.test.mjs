@@ -230,3 +230,26 @@ test('a model with check errors stops sizing with an error issue instead of a pr
   assert.ok(result.issues.some((i) => i.code === 'SIZING_ANALYSIS'));
   assert.ok(result.groups.every((g) => g.status === 'unchanged' && g.section === null));
 });
+
+test("'후보 없음' after a failed candidate returns the group to its starting section", async () => {
+  const { model, map } = buildFrameModel(bayPlan());
+  const girderIds = new Set(Object.keys(map.physical).filter((id) => map.roles[id] === 'girder'));
+  // Every candidate the girders take does ten times worse than the estimate expects: each one
+  // fails when analysed and leaves nothing that fits, so the group ends '후보 없음'.
+  const worse = (m, mapArg, options) => {
+    const outcome = runAnalysis(m, mapArg, options);
+    const sectionOf = new Map(m.members.map((x) => [x.id, x.section]));
+    for (const row of outcome.summary.members ?? [])
+      if (girderIds.has(row[0]) && sectionOf.get(map.physical[row[0]][0]) !== 'H500')
+        row[2] = row[2] === null ? null : row[2] * 10;
+    return outcome;
+  };
+  const result = await sizeGroups(model, map, { roles: ['girder'] }, worse);
+  const girders = result.groups.find((g) => g.role === 'girder');
+  assert.ok(girders.history.length > 1, JSON.stringify(girders.history));
+  assert.equal(girders.status, 'no-candidate');
+  for (const id of girders.members)
+    for (const seg of map.physical[id])
+      assert.equal(result.model.members.find((m) => m.id === seg).section, 'H500');
+  assert.equal(result.assignments[girders.members[0]], 'H500');
+});

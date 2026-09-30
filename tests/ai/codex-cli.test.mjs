@@ -9,8 +9,10 @@ import {
   CodexCli,
   codexArguments,
   codexEnvironment,
+  codexTurnIsolated,
   removeCodexTranscript,
 } from '../../src/ai/codex-cli.ts';
+import { configureAgentArguments } from '../../src/ai/agent-connection.ts';
 import { createProvider, providerCatalog } from '../../src/ai/providers.ts';
 const context = {
   goal: '합성 요청',
@@ -250,8 +252,7 @@ test('Codex 캐시 토큰(cached_input_tokens·cache_write_input_tokens)을 기�
   });
 });
 
-// Session arguments (PLAN-24 T-061): the contract for when SPIKE ④ passes; conversations on
-// Codex run the ledger method until then, so a CodexCli without a session is unchanged.
+// Session arguments (PLAN-24 T-061, SPIKE ④): a CodexCli without a session is unchanged.
 test('세션 인자: 기록을 남기고, resume은 exec resume <id>와 sandbox_mode 설정으로 간다', () => {
   const id = '4d4d4d4d-4d4d-4d4d-8d4d-4d4d4d4d4d4d';
   const opened = codexArguments('m', { id, resume: false });
@@ -298,6 +299,153 @@ test('Codex 기록 삭제는 sessions/연/월/일 아래 그 세션의 rollout �
     assert.equal(await removeCodexTranscript(home, id), 0);
     assert.equal(await removeCodexTranscript(join(home, 'missing'), id), 0);
     await assert.rejects(removeCodexTranscript(home, '../config'), { code: 'INVALID_SESSION' });
+  } finally {
+    await rm(home, { recursive: true, force: true });
+  }
+});
+
+// Session turns (PLAN-24 T-061, SPIKE-2026-09-30 ④ re-test): Codex names the thread itself, so a
+// session run reports it; the isolation arguments are asserted before every spawn.
+const thread = '01a0f026-1a25-7580-89e5-cbde1801d6d0';
+const otherThread = '01a0f026-1a25-7580-89e5-cbde1801ffff';
+const threadRun = (id, usage = { input_tokens: 10, output_tokens: 2 }) => [
+  { type: 'thread.started', thread_id: id },
+  { type: 'turn.started' },
+  { type: 'item.completed', item: { type: 'agent_message', text: 'VIDE_OK' } },
+  { type: 'turn.completed', usage },
+];
+test('세션 턴은 thread ID를 돌려주고, resume 턴의 누적 사용량은 usageScope로 표시한다', async () => {
+  const opening = fake(threadRun(thread));
+  const first = await new CodexCli({
+    executable: process.execPath,
+    session: { id: '4d4d4d4d-4d4d-4d4d-8d4d-4d4d4d4d4d4d', resume: false },
+    spawnProcess: opening.spawnProcess,
+  }).run(context);
+  assert.equal(first.sessionId, thread);
+  assert.equal(first.usageScope, undefined);
+  const packet = JSON.parse(opening.calls.find((call) => call.args[0] === 'exec').input);
+  assert.match(JSON.stringify(packet), /turn-rules/);
+  const resumed = await new CodexCli({
+    executable: process.execPath,
+    session: { id: thread, resume: true },
+    spawnProcess: fake(threadRun(thread, { input_tokens: 250, output_tokens: 3 })).spawnProcess,
+  }).run(context);
+  assert.equal(resumed.sessionId, thread);
+  assert.equal(resumed.usageScope, 'session');
+  assert.equal(resumed.usage.inputTokens, 250);
+  // Without a session nothing changes.
+  const single = await new CodexCli({
+    executable: process.execPath,
+    spawnProcess: fake(threadRun(thread)).spawnProcess,
+  }).run(context);
+  assert.equal(single.sessionId, undefined);
+});
+test('resume 턴이 다른 thread를 보고하거나 thread 기록이 없으면 SESSION_LOST로 분류한다', async () => {
+  await assert.rejects(
+    new CodexCli({
+      executable: process.execPath,
+      session: { id: thread, resume: true },
+      spawnProcess: fake(threadRun(otherThread)).spawnProcess,
+    }).run(context),
+    { code: 'SESSION_LOST' },
+  );
+  const missing = fake([]);
+  const spawnProcess = (executable, args, options) => {
+    const child = missing.spawnProcess(executable, args, options);
+    if (args[0] === 'exec') {
+      // The installed CLI's words for a thread without a rollout (0.157.1, 2026-09-30).
+      child.stdin.removeAllListeners('finish');
+      child.stdin.once('finish', () => {
+        child.stderr.write(
+          `Error: thread/resume: thread/resume failed: no rollout found for thread id ${thread} (code -32600)\n`,
+        );
+        setTimeout(() => {
+          child.exitCode = 1;
+          child.emit('exit', 1);
+          child.emit('close', 1);
+        }, 5);
+      });
+    }
+    return child;
+  };
+  await assert.rejects(
+    new CodexCli({
+      executable: process.execPath,
+      session: { id: thread, resume: true },
+      spawnProcess,
+    }).run(context),
+    { code: 'SESSION_LOST' },
+  );
+});
+test('격리 인자가 빠진 세션 턴은 실행하지 않는다', async () => {
+  const session = { id: thread, resume: true };
+  const opening = { ...session, resume: false };
+  const args = codexArguments('m', session);
+  assert.equal(codexTurnIsolated(args, session), true);
+  assert.equal(codexTurnIsolated(codexArguments('m', opening), opening), true);
+  const broken = [
+    args.filter((value) => value !== '--ignore-user-config'),
+    args.map((value) =>
+      value === 'sandbox_mode="read-only"' ? 'sandbox_mode="workspace-write"' : value,
+    ),
+    args.map((value) => (value === 'mcp_servers={}' ? 'mcp_servers={other={url="x"}}' : value)),
+    args.map((value) =>
+      value.startsWith('developer_instructions=')
+        ? 'developer_instructions="Use any tool."'
+        : value,
+    ),
+    args.map((value) => (value === 'shell_tool' ? 'apps_v2' : value)),
+    [...args.slice(0, 2), '4d4d4d4d-4d4d-4d4d-8d4d-4d4d4d4d4d4d', ...args.slice(3)],
+    [...args.slice(0, -1), '--ephemeral', '-'],
+  ];
+  for (const candidate of broken) assert.equal(codexTurnIsolated(candidate, session), false);
+  // With the turn's VIDE connection only VIDE's server with exactly its tools passes.
+  const agent = { url: 'http://127.0.0.1:4000/mcp', token: 'a'.repeat(64), tools: ['query'] };
+  const cli = new CodexCli({ executable: process.execPath, session, agent });
+  const withAgent = configureAgentArguments(cli.arguments(), 'codex', cli.agent, { neutral: true });
+  assert.equal(codexTurnIsolated(withAgent, session, cli.agent), true);
+  assert.equal(codexTurnIsolated(withAgent, session), false);
+  assert.equal(
+    codexTurnIsolated(withAgent, session, { ...cli.agent, tools: ['query', 'execute'] }),
+    false,
+  );
+  // The check runs before spawning: a run whose arguments lost isolation never starts.
+  const transport = fake(threadRun(thread));
+  class Loose extends CodexCli {
+    arguments() {
+      return super.arguments().filter((value) => value !== '--ignore-rules');
+    }
+  }
+  await assert.rejects(
+    new Loose({ executable: process.execPath, session, spawnProcess: transport.spawnProcess }).run(
+      context,
+    ),
+    { code: 'UNEXPECTED_TOOL_ACCESS' },
+  );
+  assert.ok(!transport.calls.some((call) => call.args[0] === 'exec'));
+});
+test('실패한 여는 턴의 기록은 그 thread 파일만 바로 지운다', async () => {
+  const home = await mkdtemp(join(tmpdir(), 'vide-codex-open-'));
+  try {
+    const day = join(home, 'sessions', '2026', '09', '30');
+    await mkdir(day, { recursive: true });
+    const kept = `rollout-2026-09-30T11-00-00-${otherThread}.jsonl`;
+    await writeFile(join(day, `rollout-2026-09-30T10-00-00-${thread}.jsonl`), '{}\n');
+    await writeFile(join(day, kept), '{}\n');
+    await assert.rejects(
+      new CodexCli({
+        executable: process.execPath,
+        configDirectory: home,
+        session: { id: '4d4d4d4d-4d4d-4d4d-8d4d-4d4d4d4d4d4d', resume: false },
+        spawnProcess: fake([
+          { type: 'thread.started', thread_id: thread },
+          { type: 'turn.started' },
+          { type: 'turn.failed', error: { message: 'stream disconnected' } },
+        ]).spawnProcess,
+      }).run(context),
+      { code: 'PROVIDER_FAILED' },
+    );
+    assert.deepEqual(await readdir(day), [kept]);
   } finally {
     await rm(home, { recursive: true, force: true });
   }

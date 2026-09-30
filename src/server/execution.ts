@@ -13,7 +13,7 @@ import { hostUse, waitingOf } from '../contracts/request-scope.ts';
 import { z } from 'zod';
 import { runLinked } from './linked-execution.ts';
 // Jig review gates (sync-review rows, structure-draft-review members/nodes; SPEC-06.9).
-import { jigCheck } from './jig-gates.ts';
+import { factCitations, jigCheck } from './jig-gates.ts';
 import { conversationSources, type AgentTools } from './agent-tools.ts';
 import type { Workspace } from '../core/workspace.ts';
 import type { StoredWork } from '../contracts/stored-work.ts';
@@ -671,20 +671,21 @@ export class Execution {
             '\nUser request: '
           : '') + (input.body || '첨부한 설계 문맥을 검토해 주세요.');
       // A conversation turn without the host gets the conversation's tools (PLAN-24 T-062).
+      const sources =
+        turn && !host && this.tools
+          ? conversationSources(this.workspace, turn.conversation, {
+              requestId: id,
+              ledger: (item) =>
+                this.conversations!.addLedger(projectId, turn!.conversation.id, item),
+            })
+          : undefined;
       const scope =
-        turn && !host
-          ? this.tools?.issueConversation(
-              conversationSources(this.workspace, turn.conversation, {
-                requestId: id,
-                ledger: (item) =>
-                  this.conversations!.addLedger(projectId, turn!.conversation.id, item),
-              }),
-              {
-                isCurrent: () => !controller.signal.aborted,
-                maxCalls: executionLimits(input).maxToolCalls,
-                ttlMs: Math.min(600000, (executionLimits(input).timeoutSeconds + 60) * 1000),
-              },
-            )
+        sources && this.tools
+          ? this.tools.issueConversation(sources, {
+              isCurrent: () => !controller.signal.aborted,
+              maxCalls: executionLimits(input).maxToolCalls,
+              ttlMs: Math.min(600000, (executionLimits(input).timeoutSeconds + 60) * 1000),
+            })
           : undefined;
       const result = await this.provider(input, scope?.connection, turn?.session)
         .run(
@@ -757,13 +758,23 @@ export class Execution {
             text: proposal.message,
             hostExecuted: false,
           });
-      } else
-        this.workspace.update(projectId, id, 'succeeded', {
+      } else {
+        const answer = {
           ...result,
           ...jigCheck(input, result.text),
           ...turnOutputResult(turn, result),
+        };
+        // Citation gate of the project facts tools (SPEC-08.7): on the answer the user reads.
+        const cited =
+          sources?.facts && typeof answer.text === 'string'
+            ? factCitations(answer.text, sources.facts.returned)
+            : {};
+        this.workspace.update(projectId, id, 'succeeded', {
+          ...answer,
+          ...cited,
           hostExecuted: false,
         });
+      }
     } catch (cause) {
       const error = errorData(cause);
       if (error.code === 'SESSION_LOST' && turn && attempt === 0 && !controller.signal.aborted) {

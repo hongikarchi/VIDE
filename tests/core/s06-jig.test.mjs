@@ -411,7 +411,12 @@ test('the whole jig runs in the engine runner: the human step waits without bloc
       ['interference', 'done'],
       ['analysis', 'done'],
       ['confirmAnalysis', 'waiting'],
+      ['sizing', 'done'],
       ['analysisConfirmed', 'blocked'],
+      ['schedule', 'done'],
+      ['heights', 'done'],
+      ['bakePlan', 'done'],
+      ['bakeMembers', 'blocked'],
     ],
   );
   const flagged = report.steps

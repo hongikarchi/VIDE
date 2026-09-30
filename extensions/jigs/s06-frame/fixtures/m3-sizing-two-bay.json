@@ -1,0 +1,123 @@
+{
+  "note": "합성 자료(PLAN-23 검증 원칙). analysis-two-bay.json 모델에 대한 손으로 만든 단면 선정 결과: 거더 H-700, 곡선 거더 G4는 후보 없음(지금 단면 유지), 작은보·내민 보 H-400.",
+  "sizing": {
+    "schema": "vide.s06.sizing/1",
+    "previewOnly": true,
+    "basis": "preview",
+    "modelHash": "hand-made",
+    "status": "converged",
+    "groups": [
+      {
+        "id": "column|≤6 m",
+        "role": "column",
+        "band": "≤6 m",
+        "memberIds": ["col:col-1", "col:col-2", "col:col-3", "col:col-4", "col:col-5", "col:col-6"],
+        "sectionId": "H300x300x10x15",
+        "sectionName": "H-300x300x10x15",
+        "maxRatio": 0.41,
+        "status": "ok",
+        "judgement": "선정"
+      },
+      {
+        "id": "girder|6–9 m",
+        "role": "girder",
+        "band": "6–9 m",
+        "memberIds": ["G:G2", "G:G3", "G:G5"],
+        "sectionId": "H700x300x13x24",
+        "sectionName": "H-700x300x13x24",
+        "maxRatio": 0.62,
+        "status": "ok",
+        "judgement": "선정"
+      },
+      {
+        "id": "girder|>12 m",
+        "role": "girder",
+        "band": ">12 m",
+        "memberIds": ["G:G1"],
+        "sectionId": "H700x300x13x24",
+        "sectionName": "H-700x300x13x24",
+        "maxRatio": 0.88,
+        "status": "ok",
+        "judgement": "선정"
+      },
+      {
+        "id": "girder|6–9 m|곡선",
+        "role": "girder",
+        "band": "6–9 m",
+        "memberIds": ["G:G4"],
+        "sectionId": "H600x200x11x17",
+        "sectionName": "H-600x200x11x17",
+        "maxRatio": 1.35,
+        "status": "no-candidate",
+        "judgement": "후보 없음",
+        "beyondLimit": "H-1000x300x19x36"
+      },
+      {
+        "id": "beam|6–9 m",
+        "role": "beam",
+        "band": "6–9 m",
+        "memberIds": ["B:K1-B2", "B:K1-B4", "B:K2-B2", "B:K2-B4"],
+        "sectionId": "H400x200x8x13",
+        "sectionName": "H-400x200x8x13",
+        "maxRatio": 0.7,
+        "status": "ok",
+        "judgement": "선정"
+      },
+      {
+        "id": "beam|≤6 m",
+        "role": "beam",
+        "band": "≤6 m",
+        "memberIds": ["A:E1"],
+        "sectionId": "H400x200x8x13",
+        "sectionName": "H-400x200x8x13",
+        "maxRatio": 0.3,
+        "status": "ok",
+        "judgement": "선정"
+      }
+    ],
+    "sectionsById": {
+      "H300x300x10x15": {
+        "name": "H-300x300x10x15",
+        "h_mm": 300,
+        "b_mm": 300,
+        "tw_mm": 10,
+        "tf_mm": 15,
+        "kgpm": 94
+      },
+      "H700x300x13x24": {
+        "name": "H-700x300x13x24",
+        "h_mm": 700,
+        "b_mm": 300,
+        "tw_mm": 13,
+        "tf_mm": 24,
+        "kgpm": 185
+      },
+      "H600x200x11x17": {
+        "name": "H-600x200x11x17",
+        "h_mm": 600,
+        "b_mm": 200,
+        "tw_mm": 11,
+        "tf_mm": 17,
+        "kgpm": 106
+      },
+      "H400x200x8x13": {
+        "name": "H-400x200x8x13",
+        "h_mm": 400,
+        "b_mm": 200,
+        "tw_mm": 8,
+        "tf_mm": 13,
+        "kgpm": 66
+      }
+    },
+    "iterations": 3,
+    "notes": [],
+    "summary": {
+      "groups": 6,
+      "ok": 5,
+      "noCandidate": 1,
+      "unchecked": 0,
+      "maxRatio": 1.35,
+      "steel_t": null
+    }
+  }
+}

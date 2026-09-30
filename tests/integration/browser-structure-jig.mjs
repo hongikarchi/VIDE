@@ -112,9 +112,27 @@ try {
     await dialog.getByLabel('입력 Sync').locator('option:checked').textContent(),
     /frame\.3dm/,
   );
+  // Role layers (optional): several layers per role, sent as layer hints.
+  await dialog.getByText('역할 레이어 지정 (선택)').click();
+  const pickRole = (role) => dialog.getByRole('group', { name: `${role} 레이어`, exact: true });
+  await pickRole('기둥')
+    .getByRole('combobox', { name: '기둥 레이어 추가' })
+    .selectOption({ label: '기둥 — 6개' });
+  const drafted = page.waitForRequest((r) => r.url().endsWith('/jigs/structure/draft'));
   await dialog.getByRole('button', { name: '초안 만들기' }).click();
+  assert.deepEqual(JSON.parse((await drafted).postData()).options.layerHints, {
+    기둥: { role: 'column' },
+  });
   const draft = dialog.getByRole('region', { name: '해석 모델 초안' });
   await draft.waitFor();
+  // Other role layers than the draft's mark it and hold back confirmation until it is remade.
+  await pickRole('보')
+    .getByRole('combobox', { name: '보 레이어 추가' })
+    .selectOption({ label: '보 — 7개' });
+  await draft.getByText('입력이 초안과 다름').waitFor();
+  assert.ok(await dialog.getByRole('button', { name: '확정하고 해석' }).isDisabled());
+  await pickRole('보').getByRole('button', { name: '보에서 보 빼기' }).click();
+  await draft.getByText('입력이 초안과 다름').waitFor({ state: 'detached' });
   assert.match(await draft.locator('h3').textContent(), /부재 1[0-9]/);
   assert.match(await draft.textContent(), /단면이 없어 임시 단면/);
   assert.ok(
@@ -152,6 +170,14 @@ try {
   assert.match(await result.textContent(), /검토하지 않음: 풍하중/);
   // A confirmed result says so; the legend reads the analysis' colour bands (SPEC-06.7).
   assert.equal(await result.locator('h3 .pill[data-mode]').textContent(), '확정 결과');
+  // The label goes with every part of the result: summary line, legend and check table.
+  assert.match(await result.locator('.jig-structure-summary').textContent(), /^확정 결과 · 강재/);
+  assert.equal(
+    (
+      await result.getByRole('table', { name: '부재 검정' }).locator('caption').textContent()
+    ).trim(),
+    '부재 검정 · 확정 결과',
+  );
   const bands = result.getByRole('group', { name: /판정 범례.*구간/ });
   assert.match(await bands.textContent(), /통과 < 0\.70.*주의 0\.70~1\.00.*초과 ≥ 1\.00/s);
   // The check table goes out as CSV with the result label on every row.

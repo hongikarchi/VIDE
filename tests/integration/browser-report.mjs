@@ -1,6 +1,6 @@
-// 보고서 workspace tab (PLAN-22 T-057, PLAN-23 T-058 skeleton, SCR-17): the tab opens, lists the
-// S-06 instance's report, draws it with the numbered sections (each '아직 없음' before any step has
-// run), shows the three report gates passing, switches the paper, saves a page without scripts and
+// 보고서 workspace tab (PLAN-22 T-057, PLAN-23 T-058, SCR-17): the tab opens, lists the S-06
+// instance's report, draws it with the numbered sections and the 부록 (each '아직 없음' before any
+// step has run), shows the three report gates passing, switches the paper, saves a page without scripts and
 // goes back to the instance's context tab. No real host or CLI; no step outputs are needed.
 import assert from 'node:assert/strict';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
@@ -70,9 +70,16 @@ try {
     '03',
     '04',
     '05',
+    '부록',
   ]);
   const titles = await report.locator('.kit-report-section h2').allTextContents();
   for (const title of titles.slice(0, 4)) assert.match(title, /아직 없음/);
+  // The appendix reads the instance's settings from the engine even before any step has run.
+  assert.match(titles[5], /^설정값 원장: \d+개 중 가정으로 둔 기본값 \d+개가 남아 있습니다\.$/);
+  assert.match(
+    titles[4],
+    /^남은 조건 \d+개: 가정으로 둔 설정값 \d+개, 답하지 않은 질문 0개입니다\.$/,
+  );
   assert.match(await report.locator('h1').textContent(), /아직 계산한 결과가 없습니다\./);
   assert.match(await report.textContent(), /검토하지 않은 항목/);
   assert.deepEqual(

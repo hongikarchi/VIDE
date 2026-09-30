@@ -1,0 +1,252 @@
+/* 자료 workspace tab (PLAN-22 T-065, Design SCR-19): search and filters on the left, report / note /
+   results in the centre, the chosen statement's excerpt in the drawer. Also the fact window of a
+   basis chip and the review marks shared with the knowledge jig. */
+.facts-workspace {
+  display: none;
+}
+body[data-workspace='data'] .workspace > :not(.workspace-tabs):not(.facts-workspace) {
+  display: none !important;
+}
+body[data-workspace='data'] .facts-workspace {
+  grid-row: 2 / -1;
+  grid-column: 1 / -1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 260px minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr) auto;
+  background: white;
+}
+@media (min-width: 851px) {
+  body[data-workspace='data'] #left,
+  body[data-workspace='data'] #toggle-left,
+  body[data-workspace='data'] .panel-resize-left {
+    display: none;
+  }
+  body[data-workspace='data'] main {
+    grid-template-columns: minmax(260px, 1fr) var(--right-width, 370px);
+  }
+  body[data-workspace='data'].right-hidden main {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+.facts-workspace > .jig-intro {
+  grid-column: 1 / -1;
+  padding: 16px;
+}
+.facts-left {
+  grid-row: 1 / -1;
+  min-height: 0;
+  overflow: auto;
+  padding: 12px;
+  border-right: 1px solid var(--line);
+}
+.facts-left h4 {
+  margin: 14px 0 4px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.facts-search {
+  flex-wrap: wrap;
+}
+.facts-search input {
+  flex-basis: 100%;
+}
+.facts-nav {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.facts-nav button,
+.facts-issues button {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+  width: 100%;
+  min-height: 30px;
+  border: 0;
+  border-radius: 6px;
+  padding: 4px 8px;
+  text-align: left;
+  background: transparent;
+}
+.facts-nav button[aria-pressed='true'] {
+  background: var(--soft);
+  font-weight: 600;
+}
+.facts-nav small {
+  color: var(--muted);
+}
+.facts-status {
+  flex-wrap: wrap;
+}
+.facts-main {
+  min-height: 0;
+  overflow: auto;
+  padding: 12px 20px 20px;
+}
+.facts-main .knowledge-report {
+  max-height: none;
+}
+.facts-issues {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.facts-issues button {
+  flex-direction: column;
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
+}
+.facts-issues button:hover,
+.facts-nav button:hover {
+  background: var(--soft);
+}
+.facts-drawer {
+  grid-column: 2;
+  max-height: 40vh;
+  overflow: auto;
+  padding: 8px 20px 12px;
+  border-top: 1px solid var(--line);
+  background: white;
+}
+.facts-drawer[hidden] {
+  display: none;
+}
+.facts-drawer > header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.facts-suspects {
+  margin-top: 14px;
+}
+.facts-suspect {
+  display: grid;
+  gap: 4px;
+  margin: 6px 0;
+  padding: 8px;
+  border: 1px solid #e0b36a;
+  border-radius: 6px;
+  background: #fff8ec;
+}
+.facts-suspects h4 {
+  color: #9a5b12;
+}
+.knowledge-statement[aria-current='true'] {
+  border-color: currentColor;
+}
+@media (max-width: 850px) {
+  body[data-workspace='data'] .facts-workspace {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto minmax(0, 1fr) auto;
+  }
+  .facts-left {
+    grid-row: auto;
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+    max-height: 40vh;
+  }
+  .facts-drawer {
+    grid-column: 1;
+  }
+}
+
+/* Review marks: unconfirmed statements in grey text, excluded ones with a warning. */
+.fact-standing {
+  display: inline-block;
+  padding: 0 6px;
+  border-radius: 999px;
+  font-size: 11px;
+  line-height: 18px;
+  border: 1px solid var(--line);
+  color: var(--muted);
+}
+.fact-standing[data-standing='confirmed'] {
+  color: #1f6f43;
+  border-color: #9fd0b2;
+  background: #eef8f1;
+}
+.fact-standing[data-standing='excluded'] {
+  color: #9a3412;
+  border-color: #f0b99a;
+  background: #fff3ec;
+}
+.knowledge-statement[data-standing='unconfirmed'] > p {
+  color: var(--muted);
+}
+.knowledge-statement[data-standing='excluded'] > p {
+  text-decoration: line-through;
+  color: var(--muted);
+}
+.fact-detail > header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 6px;
+}
+.fact-content {
+  margin: 6px 0;
+  line-height: 1.55;
+}
+.fact-actions,
+.fact-review-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+}
+.fact-review-buttons button[data-verdict='contaminated'],
+.fact-review-buttons button[data-verdict='rejected'] {
+  color: #9a3412;
+}
+.fact-review-reason {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+}
+.fact-review-reason input[type='text'],
+.fact-review-reason input:not([type]) {
+  flex: 1 1 220px;
+  min-width: 0;
+  padding: 5px 8px;
+}
+
+/* The fact window of a basis chip. */
+.fact-basis-chip,
+[data-fact-statement] {
+  cursor: pointer;
+}
+.fact-window-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: rgb(0 0 0 / 28%);
+}
+.fact-window {
+  width: min(620px, 100%);
+  max-height: min(80vh, 720px);
+  overflow: auto;
+  padding: 12px 16px 16px;
+  border-radius: 8px;
+  background: white;
+  box-shadow: 0 12px 40px rgb(0 0 0 / 25%);
+}
+.fact-window:focus {
+  outline: none;
+}
+.fact-window-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+.fact-window-head > strong {
+  flex: 1;
+}

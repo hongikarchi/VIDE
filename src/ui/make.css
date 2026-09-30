@@ -1,0 +1,298 @@
+/* 만들기 workspace tab (PLAN-22 T-063, Design SCR-16): outline left, preview centre, console below;
+   the plan card and decisions sit in the right column under the conversation chips. */
+.make-workspace,
+.make-side {
+  display: none;
+}
+body[data-workspace='make'] .workspace > :not(.workspace-tabs):not(.make-workspace) {
+  display: none !important;
+}
+body[data-workspace='make'] .make-workspace {
+  grid-row: 2 / -1;
+  grid-column: 1 / -1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 260px minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr) minmax(120px, 34%);
+  background: white;
+}
+body[data-workspace='make'] .make-side {
+  display: block;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--line);
+}
+@media (min-width: 851px) {
+  body[data-workspace='make'] #left,
+  body[data-workspace='make'] #toggle-left,
+  body[data-workspace='make'] .panel-resize-left {
+    display: none;
+  }
+  body[data-workspace='make'] main {
+    grid-template-columns: minmax(260px, 1fr) var(--right-width, 370px);
+  }
+  body[data-workspace='make'].right-hidden main {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+.make-start {
+  grid-column: 1 / -1;
+  grid-row: 1 / -1;
+  overflow: auto;
+  padding: 16px;
+  display: grid;
+  align-content: start;
+  gap: 12px;
+  max-width: 640px;
+}
+.make-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.make-head small[data-over='true'] {
+  color: var(--ng);
+}
+.make-tag {
+  font-size: 12px;
+  color: var(--muted);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 1px 6px;
+  white-space: nowrap;
+}
+.make-outline {
+  grid-row: 1 / -1;
+  min-height: 0;
+  overflow: auto;
+  padding: 12px;
+  border-right: 1px solid var(--line);
+}
+.make-outline h3 {
+  margin: 10px 0 4px;
+}
+.make-outline select {
+  max-width: 120px;
+}
+.make-summary {
+  margin: 0 0 6px;
+  color: var(--muted);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.make-group {
+  margin-top: 10px;
+}
+.make-group summary {
+  font-weight: 600;
+  cursor: pointer;
+}
+.make-group ul,
+.make-files ul,
+.make-plan ul,
+.make-log,
+.make-drafts {
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0;
+}
+.make-group li,
+.make-drafts li {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+  padding: 3px 0;
+  border-bottom: 1px solid var(--soft);
+}
+.make-group li small,
+.make-log li small {
+  color: var(--muted);
+  font-size: 11px;
+  white-space: nowrap;
+}
+.make-group li[data-state='failed'] small,
+.make-group li[data-ok='false'] {
+  color: var(--ng);
+}
+.make-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.make-chips code,
+.make-files code {
+  font-size: 11px;
+}
+.make-files {
+  margin-top: 14px;
+}
+.make-files li[data-changed]::after {
+  content: ' ●';
+  color: var(--warn);
+}
+.make-center {
+  min-height: 0;
+  min-width: 0;
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
+}
+.make-center-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--line);
+}
+.make-run {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.make-center-body {
+  min-height: 0;
+  overflow: auto;
+  padding: 12px;
+}
+.make-skill {
+  white-space: pre-wrap;
+  font: inherit;
+  line-height: 1.6;
+  margin: 0;
+}
+.make-console {
+  min-height: 0;
+  min-width: 0;
+  overflow: auto;
+  border-top: 1px solid var(--line);
+  padding: 6px 12px;
+}
+.make-console-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  position: sticky;
+  top: 0;
+  background: white;
+  padding-bottom: 4px;
+}
+.make-console-head .kit-actions {
+  margin-left: auto;
+}
+.make-log li {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 3px 0;
+  border-bottom: 1px solid var(--soft);
+}
+.make-log li[data-level='error'],
+.make-log li[data-ok='false'] {
+  color: var(--ng);
+}
+.make-log li[data-level='warn'] {
+  color: var(--warn);
+}
+.make-case {
+  border: 0;
+  background: none;
+  padding: 0;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.make-case:disabled {
+  cursor: default;
+}
+.make-diff {
+  flex-basis: 100%;
+  font-size: 12px;
+  padding: 4px 8px;
+  background: var(--soft);
+}
+.make-minus {
+  color: var(--ng);
+}
+.make-plus {
+  color: var(--ok);
+}
+.make-phases {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  list-style: none;
+  padding: 0;
+  margin: 6px 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+.make-phases li + li::before {
+  content: '· ';
+}
+.make-phases li[aria-current] {
+  color: inherit;
+  font-weight: 600;
+}
+.make-plan {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 8px;
+  margin-bottom: 8px;
+}
+.make-plan li {
+  padding: 2px 0;
+}
+.make-plan li[data-done='false'] {
+  color: var(--muted);
+}
+.make-plan li[aria-current='true'] {
+  color: inherit;
+  font-weight: 600;
+}
+.make-decide {
+  display: grid;
+  gap: 6px;
+}
+.make-card label {
+  display: grid;
+  gap: 4px;
+}
+.make-starts {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.make-starts label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.make-import {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+@media (max-width: 850px) {
+  body[data-workspace='make'] .make-workspace {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr) auto;
+    overflow: auto;
+  }
+  .make-outline {
+    grid-row: auto;
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+    max-height: 40vh;
+  }
+}
