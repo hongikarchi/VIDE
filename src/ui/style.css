@@ -177,6 +177,27 @@ aside {
   border: 0;
   padding: 4px 6px;
 }
+#delete-project {
+  opacity: 0.6;
+  display: inline-flex;
+  align-items: center;
+}
+.project-delete {
+  align-items: center;
+}
+.project-delete-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+}
+.project-delete .danger {
+  color: #fff;
+  background: #b3452c;
+  border-radius: 4px;
+}
 #host-target {
   margin-top: 20px;
   width: 100%;
@@ -4887,4 +4908,27 @@ body.panel-mode .mode-toggle {
   border-color: #3a4a6a !important;
   background: #1f2633 !important;
   color: #8fb0f0 !important;
+}
+
+/* Engine connection lost: said above the composer, with a retry (the composer stays locked). */
+#connection-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 6px;
+  padding: 6px 10px;
+  border: 1px solid #e3b4a8;
+  border-radius: 6px;
+  background: #fbefeb;
+  color: #a33825;
+  font-size: 12px;
+}
+#connection-banner[hidden] {
+  display: none;
+}
+#connection-banner span {
+  flex: 1;
+}
+#connection-banner button {
+  flex: none;
 }

@@ -16,6 +16,7 @@ import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { providers } from '../contracts/ai-settings.ts';
 import type { Provider } from '../contracts/ai-settings.ts';
+import { clearAuthStatus } from './claude-cli.ts';
 const profile = z
   .object({
     id: z.string().uuid(),
@@ -130,6 +131,7 @@ export class AccountProfiles {
   }
   select(provider: Provider, id: string) {
     if (id !== 'default') this.find(provider, id);
+    clearAuthStatus(); // An account switch asks the login again.
     if (this.data.active[provider] === id) this.data.pending[provider] = null;
     else if (this.busy(provider)) this.data.pending[provider] = id;
     else {
@@ -170,6 +172,7 @@ export class AccountProfiles {
       fail('PROFILE_CLEANUP_FAILED');
     }
     this.data.profiles = this.data.profiles.filter((row) => row.id !== id);
+    clearAuthStatus();
     if (this.data.active[provider] === id) {
       this.data.active[provider] = 'default';
       this.data.pending[provider] = null;

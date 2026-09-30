@@ -2,7 +2,7 @@ import { spawn, type ChildProcess, type SpawnOptions } from 'node:child_process'
 import { randomUUID } from 'node:crypto';
 import { DomainError } from '../core/store.ts';
 import type { Provider } from '../contracts/ai-settings.ts';
-import { subscriptionEnvironment, killOwnedProcess } from './claude-cli.ts';
+import { clearAuthStatus, subscriptionEnvironment, killOwnedProcess } from './claude-cli.ts';
 import { codexEnvironment } from './codex-cli.ts';
 
 type State = 'running' | 'stopping' | 'succeeded' | 'failed' | 'cancelled';
@@ -162,6 +162,8 @@ export class AccountLogin {
       if (finishing) return;
       finishing = true;
       clearTimeout(job.timer);
+      // A login or logout changes who is signed in: the remembered login is asked again.
+      clearAuthStatus();
       let authenticated = false;
       if (code === 0 && !job.stopped) {
         try {

@@ -114,3 +114,77 @@ test('each stage shows how long it took; the one in progress counts up to now', 
   assert.equal(formatElapsed(5200), '5.2s');
   assert.equal(formatElapsed(125_000), '2:05');
 });
+
+test('a direct turn has its own stages: no save-and-reopen check, the final answer timed', () => {
+  const t0 = Date.parse('2026-09-30T06:00:00.000Z');
+  const at = (s) => new Date(t0 + s * 1000).toISOString();
+  const activity = [
+    { kind: 'host', text: '열린 Rhino 문서에 연결 · 자동', at: at(0.1) },
+    { kind: 'thinking', text: '벽을 찾는다', at: at(6) },
+    { kind: 'query', text: '문서 조회 1회차', at: at(8) },
+    { kind: 'thinking', text: '이제 실행', at: at(9) },
+    { kind: 'execute', text: 'Rhino 문서에 바로 실행 1회차', at: at(10) },
+    { kind: 'result', text: '문서에 반영 · 추가 1 · 수정 0 · 삭제 0 · 되돌리기 1단계', at: at(11) },
+    { kind: 'message', text: '정리 중', at: at(14) },
+  ];
+  const done = workStages({
+    state: 'succeeded',
+    host: 'rhino',
+    direct: true,
+    activity,
+    maxHostCommands: 12,
+    startedAt: t0,
+    endedAt: t0 + 20_000,
+  });
+  assert.equal(
+    states(done),
+    'prepare:done understand:done query:done execute:done answer:done result:done',
+  );
+  assert.deepEqual(
+    done.map((stage) => stage.label),
+    ['준비', '요청 이해', '모델 조회', '실행', '답변 정리', '결과'],
+  );
+  assert.equal(done[2].detail, '조회 1회'); // the note between tools is not a query
+  assert.equal(done[3].detail, '실행 1/12회 · 되돌리기 1단계');
+  const ms = Object.fromEntries(done.map((stage) => [stage.key, stage.elapsedMs]));
+  assert.equal(ms.prepare, 6000); // received → the model's first note
+  assert.equal(ms.understand, 2000);
+  assert.equal(ms.query, 2000);
+  assert.equal(ms.execute, 1000); // first execute → its host result
+  assert.equal(ms.answer, 9000); // last host result → the end of the request
+  // While the model writes after the last host result, the answer stage is current.
+  const running = workStages({
+    state: 'running',
+    host: 'rhino',
+    direct: true,
+    activity,
+    startedAt: t0,
+    now: t0 + 16_000,
+  });
+  assert.equal(
+    states(running),
+    'prepare:done understand:done query:done execute:done answer:active result:pending',
+  );
+  assert.equal(running[4].elapsedMs, 5000);
+  // A direct turn that only reads: no execute, the answer still has its stage.
+  const read = workStages({
+    state: 'succeeded',
+    host: 'rhino',
+    direct: true,
+    activity: activity.slice(0, 3),
+    startedAt: t0,
+  });
+  assert.equal(
+    states(read),
+    'prepare:done understand:done query:done execute:skipped answer:done result:done',
+  );
+  // The work copy path keeps its save-and-reopen check.
+  assert.equal(
+    workStages({
+      state: 'succeeded',
+      host: 'rhino',
+      activity: events('host', 'execute', 'result'),
+    })[4].label,
+    '저장·재열기 검증',
+  );
+});

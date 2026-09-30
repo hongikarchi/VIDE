@@ -8,6 +8,7 @@ import { existsSync } from 'node:fs';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import {
   ClaudeCli,
+  clearAuthStatus,
   buildPacket,
   cliArguments,
   subscriptionEnvironment,
@@ -489,4 +490,61 @@ test('구조화 출력 스키마는 포함된 turn-output 항목에서만 읽고
   const cli = new ClaudeCli({ executable: process.execPath });
   const args = await cli.withOutputSchema(cli.arguments(), undefined, '');
   assert.deepEqual(args, cliArguments(cli.instructions));
+});
+
+test('a confirmed login is reused for ten minutes per account folder; a limit or a switch asks again', async () => {
+  const fake = transport([init, result]);
+  const authCalls = () => fake.calls.filter((call) => call.args[0] === 'auth').length;
+  const make = (configDirectory) =>
+    new ClaudeCli({
+      executable: process.execPath,
+      spawnProcess: fake.spawnProcess,
+      configDirectory,
+    });
+  const first = make();
+  await first.run(context());
+  assert.equal(authCalls(), 1);
+  assert.equal(first.timing.authCached, false);
+  assert.ok(first.timing.spawnAt > 0 && first.timing.firstOutputAt >= first.timing.spawnAt);
+  const second = make();
+  await second.run(context());
+  assert.equal(authCalls(), 1, 'the second run reuses the login');
+  assert.equal(second.timing.authCached, true);
+  // Another account folder is its own login.
+  await make(resolve(tmpdir(), 'vide-profile-a')).run(context());
+  assert.equal(authCalls(), 2);
+  // An account switch (or login/logout) forgets every remembered login.
+  clearAuthStatus();
+  await make().run(context());
+  assert.equal(authCalls(), 3);
+  // A run refused on its subscription limit asks the login again next time.
+  const limited = transport([
+    init,
+    { ...result, subtype: 'error', is_error: true, result: "You've hit your usage limit" },
+  ]);
+  const limitedCli = () =>
+    new ClaudeCli({ executable: process.execPath, spawnProcess: limited.spawnProcess });
+  await assert.rejects(limitedCli().run(context()), { code: 'PROVIDER_LIMIT' });
+  await assert.rejects(limitedCli().run(context()), { code: 'PROVIDER_LIMIT' });
+  assert.equal(limited.calls.filter((call) => call.args[0] === 'auth').length, 2);
+});
+
+test('a login that is not available is never remembered', async () => {
+  let loggedIn = false;
+  const fake = transport([init, result]);
+  const spawnProcess = (executable, args, options) => {
+    if (args[0] !== 'auth') return fake.spawnProcess(executable, args, options);
+    const child = new EventEmitter();
+    child.stdout = new PassThrough();
+    child.stderr = new PassThrough();
+    queueMicrotask(() => {
+      child.stdout.write(JSON.stringify({ loggedIn, authMethod: 'claude.ai' }));
+      setTimeout(() => child.emit('close', 0), 1);
+    });
+    return child;
+  };
+  const cli = () => new ClaudeCli({ executable: process.execPath, spawnProcess });
+  await assert.rejects(cli().run(context()), { code: 'SUBSCRIPTION_LOGIN_REQUIRED' });
+  loggedIn = true;
+  assert.equal((await cli().run(context())).text, '분석 응답');
 });

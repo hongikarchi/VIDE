@@ -74,6 +74,7 @@ import { renderRequests } from './requests.tsx';
 import { iconSvg, initializeInspector, renderInspector } from './inspector.ts';
 import { api, connect, errors, labels } from './gateway.ts';
 import { remoteSession } from './remote-panel.ts';
+import { connectionRecovery, probeEngine } from './connection-recovery.ts';
 import { applyDisplayDelta } from '../core/display-delta.ts';
 import {
   objects,
@@ -2525,6 +2526,24 @@ async function renameProject(name: string) {
     message(readableError(cause).message);
   }
 }
+/** Confirmed in the heading; the project, its requests, links, jigs and conversations go. */
+async function deleteProject() {
+  if (!project) return;
+  const id = project.id;
+  try {
+    await api(`/projects/${encodeURIComponent(id)}`, 'DELETE');
+    try {
+      localStorage.removeItem('vide:draft:' + id);
+    } catch {
+      /* Storage may be unavailable. */
+    }
+    const next = projects.find((entry) => entry.id !== id);
+    // With none left, the start page makes a new one.
+    location.search = next ? '?project=' + encodeURIComponent(next.id) : '';
+  } catch (cause) {
+    message(readableError(cause).message);
+  }
+}
 function renderHeading() {
   renderPanel();
   // Link back to the account site's project list when this PC is signed in.
@@ -2538,6 +2557,7 @@ function renderHeading() {
     select: selectProject,
     create: createProject,
     rename: renameProject,
+    remove: deleteProject,
   });
 }
 
@@ -2841,11 +2861,13 @@ async function pollHostLink() {
   }
 }
 setInterval(() => void pollHostLink(), 1200);
+let usageMounted = false;
 async function initializeWorkspace() {
   try {
     const linked = await connect();
-    // Usage needs the session that connect() just opened.
-    mountUsageBars(panelMode ? $('panel-footer') : $('usage-bars'));
+    // Usage needs the session that connect() just opened; a retried start mounts it once.
+    if (!usageMounted) mountUsageBars(panelMode ? $('panel-footer') : $('usage-bars'));
+    usageMounted = true;
     void workspaceStatus.refreshAccount();
     const catalog = modelsSchema.parse(await api('/models'));
     models.splice(0, models.length, ...catalog);
@@ -2883,47 +2905,103 @@ async function initializeWorkspace() {
     void mountConversationScreens();
     for (const entry of state.messages)
       if (['queued', 'running'].includes(entry.request.state)) void poll(entry.id);
-    const host = hostStatusSchema.parse(await api('/host'));
-    const providers = providersSchema.parse(await api('/providers'));
-    providerSignedIn = Object.fromEntries(
-      providers.map((provider) => [provider.id, provider.available]),
-    );
-    $('connection-status').textContent = providers
-      .map(
-        (provider) =>
-          `${provider.id === 'claude-cli' ? 'Claude' : 'ChatGPT'} ${provider.available ? '연결됨' : '미연결'}`,
-      )
-      .join(' · ');
-    $('host-status').textContent =
-      'Rhino ' +
-      (host.available ? '실행 준비' : '미연결') +
-      ' · ZWCAD ' +
-      (host.zwcadAvailable ? '실행 준비' : '미연결') +
-      ' · 문서 연결은 문서 목록에서 확인';
+    await refreshConnectionStatus();
   } catch (cause) {
     const error = readableError(cause);
     message(errors[error.code ?? ''] || error.message);
   }
 }
+async function refreshConnectionStatus() {
+  const host = hostStatusSchema.parse(await api('/host'));
+  const providers = providersSchema.parse(await api('/providers'));
+  providerSignedIn = Object.fromEntries(
+    providers.map((provider) => [provider.id, provider.available]),
+  );
+  $('connection-status').textContent = providers
+    .map(
+      (provider) =>
+        `${provider.id === 'claude-cli' ? 'Claude' : 'ChatGPT'} ${provider.available ? '연결됨' : '미연결'}`,
+    )
+    .join(' · ');
+  $('host-status').textContent =
+    'Rhino ' +
+    (host.available ? '실행 준비' : '미연결') +
+    ' · ZWCAD ' +
+    (host.zwcadAvailable ? '실행 준비' : '미연결') +
+    ' · 문서 연결은 문서 목록에서 확인';
+}
+// A lost engine locks the composer only until it answers again (engine restart, sleep): the
+// banner above the composer says why and retries by itself, [다시 연결] checks at once.
+const connectionBanner = document.createElement('div');
+connectionBanner.id = 'connection-banner';
+connectionBanner.setAttribute('role', 'alert');
+connectionBanner.hidden = true;
+const connectionText = el('span', '', connectionBanner);
+const reconnectButton = el('button', '다시 연결', connectionBanner, { type: 'button' });
+document.querySelector('.composer-wrap')?.prepend(connectionBanner);
+let lostCode = '';
+const lostText = (code: string) =>
+  remoteSession()
+    ? (code === 'UNAUTHORIZED'
+        ? '작업 PC 세션이 끝났습니다(PC 재시작 등).'
+        : errors[code] || '작업 PC 연결이 끊겼습니다.') + ' 초안은 유지됩니다. '
+    : code === 'UNAUTHORIZED'
+      ? '로컬 인증이 만료됐습니다. 트레이의 VIDE 아이콘이나 실행 링크로 다시 연 뒤 [다시 연결]을 누르세요. 초안은 유지됩니다.'
+      : '작업 엔진에 연결할 수 없습니다. 엔진이 다시 켜지면 자동으로 이어집니다. 초안은 유지됩니다.';
+function showLost(text: string) {
+  connectionText.textContent = text;
+  // Opened from another device: the PC restarted or went off. Reopen from the project list.
+  if (remoteSession()) el('a', '프로젝트 목록에서 다시 열기', connectionText, { href: '/' });
+}
+const recovery = connectionRecovery({
+  probe: () => probeEngine(),
+  onState(next) {
+    if (next === 'ok') return;
+    showLost(
+      next === 'checking'
+        ? '작업 엔진 연결을 다시 확인하는 중… 초안은 유지됩니다.'
+        : lostText(next === 'unauthorized' ? 'UNAUTHORIZED' : lostCode),
+    );
+    reconnectButton.disabled = next === 'checking';
+  },
+  async onRecovered() {
+    connectionBanner.hidden = true;
+    $('auth-status').hidden = true;
+    $('auth-status').textContent = '';
+    // Never loaded (the first start failed): load now. Otherwise unlock and refresh what polls.
+    if (!project) {
+      await initializeWorkspace();
+      return;
+    }
+    ready = true;
+    render();
+    renderMessages();
+    message('작업 엔진에 다시 연결됐습니다.');
+    for (const entry of state.messages)
+      if (['queued', 'running'].includes(entry.request.state)) void poll(entry.id);
+    void reviews.refresh().catch(() => {});
+    await refreshConnectionStatus().catch(() => {});
+  },
+});
+reconnectButton.onclick = () => recovery.retry();
+window.addEventListener('focus', () => recovery.retry());
 window.addEventListener('vide:connection-lost', (event) => {
   ready = false;
-  $('auth-status').hidden = false;
   const code = (event as CustomEvent<string>).detail;
+  lostCode = code;
+  const text = lostText(code);
+  $('auth-status').hidden = false;
+  $('auth-status').textContent = text;
   if (remoteSession()) {
-    // Opened from another device: the PC restarted or went off. Reopen from the project list.
-    $('auth-status').textContent =
-      (code === 'UNAUTHORIZED'
-        ? '작업 PC 세션이 끝났습니다(PC 재시작 등).'
-        : errors[code] || '작업 PC 연결이 끊겼습니다.') + ' 초안은 유지됩니다. ';
     el('a', '프로젝트 목록에서 다시 열기', $('auth-status'), { href: '/' });
-    message($('auth-status').textContent ?? '');
-  } else
-    $('auth-status').textContent =
-      code === 'UNAUTHORIZED'
-        ? '로컬 인증이 만료됐습니다. VIDE 실행 링크로 다시 여세요. 초안은 유지됩니다.'
-        : '로컬 서버 연결이 끊겼습니다. 서버 확인 후 다시 여세요. 초안은 유지됩니다.';
+    if (!recovery.active) message(text);
+  }
+  showLost(text);
+  connectionBanner.hidden = false;
+  reconnectButton.disabled = false;
   $('connection-status').textContent = '연결 상태 확인 필요';
   $('host-status').textContent = '호스트 상태 확인 필요';
+  recovery.lost();
   render();
 });
 await initializeWorkspace();

@@ -212,6 +212,17 @@ export async function hostDeviceRoute(
     ]);
     return json({ id, name, deleted: false }, 201);
   }
+  if (path[0] === 'projects' && path.length === 2 && request.method === 'DELETE') {
+    // A project deleted on the PC leaves the account list, as a delete on the site does.
+    const id = projectId(path[1]);
+    await db
+      .prepare(
+        'UPDATE projects SET deleted_at=COALESCE(deleted_at,?) WHERE id=? AND host_id=? AND created_by=?',
+      )
+      .bind(Date.now(), id, row.id, row.user_id)
+      .run();
+    return json({ deleted: true });
+  }
   if (path[0] === 'projects' && path[2] === 'thumbnail' && path.length === 3) {
     const id = projectId(path[1]);
     if (request.method !== 'PUT') throw new HttpError(405, 'METHOD_NOT_ALLOWED');

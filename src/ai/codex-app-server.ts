@@ -635,7 +635,7 @@ export class CodexAppServer extends CodexCli {
       }
       return { entry: kept, opened: false };
     }
-    const auth = await this.status();
+    const auth = await this.cachedStatus();
     if (!auth.available) throw error(auth.reason ?? 'AUTH_INVALID');
     const { rpc, userServers, cwd } = await this.spawnServer();
     const entry: Live = {
@@ -895,14 +895,16 @@ export class CodexAppServer extends CodexCli {
       progress({ state: 'stopped', reason: stopReason });
       throw error(stopReason);
     }
-    if (result.status !== 'completed')
-      throw error(
-        MODE_CHANGED.test(failureText)
-          ? 'CLI_MODE_CHANGED'
-          : USAGE_LIMIT.test(failureText)
-            ? 'PROVIDER_LIMIT'
-            : 'PROVIDER_FAILED',
-      );
+    if (result.status !== 'completed') {
+      const failed = MODE_CHANGED.test(failureText)
+        ? 'CLI_MODE_CHANGED'
+        : USAGE_LIMIT.test(failureText)
+          ? 'PROVIDER_LIMIT'
+          : 'PROVIDER_FAILED';
+      // The remembered login is asked again on the next run.
+      if (failed !== 'PROVIDER_FAILED') this.forgetAuth();
+      throw error(failed);
+    }
     return {
       text: finalText || lastText,
       revision: selected.packet.revision,

@@ -61,3 +61,67 @@ export class Diagnostics {
     }
   }
 }
+
+/** When one run's steps happened (epoch ms), as the execution records them. */
+export interface RunMarks {
+  /** The request was received (its createdAt). */
+  receivedAt?: number;
+  /** The run started (the request left the queue). */
+  runAt: number;
+  /** The earlier-exchange selection took this long (0: no Jev call). */
+  contextMs?: number;
+  /** The provider was made for the run (the engine's own preparation ends here). */
+  providerAt?: number;
+  /** What the provider measured: its login check and when the CLI started and first answered. */
+  provider?: { authMs?: number; authCached?: boolean; spawnAt?: number; firstOutputAt?: number };
+}
+const MODEL_NOTES = new Set(['thinking', 'message', 'model']);
+const TOOL_EVENTS = new Set(['query', 'execute', 'result', 'error']);
+/**
+ * The `request-stages` line: milliseconds from the run's start to each step, then the time from the
+ * last host event to the end (the model's final answer and recording it). Numbers only.
+ */
+export function requestStages(
+  marks: RunMarks,
+  activity: unknown,
+  endedAt: number,
+): Record<string, number | boolean> {
+  const since = (at: number | undefined) =>
+    at === undefined || !Number.isFinite(at)
+      ? undefined
+      : Math.max(0, Math.round(at - marks.runAt));
+  const entries = (Array.isArray(activity) ? activity : [])
+    .map((entry) => entry as { kind?: unknown; at?: unknown })
+    .map((entry) => ({
+      kind: String(entry.kind),
+      at: typeof entry.at === 'string' ? Date.parse(entry.at) : NaN,
+    }))
+    .filter((entry) => Number.isFinite(entry.at));
+  const tools = entries.filter((entry) => TOOL_EVENTS.has(entry.kind));
+  const firstNote = entries.find((entry) => MODEL_NOTES.has(entry.kind))?.at;
+  const lastTool = tools.at(-1)?.at;
+  const fields: Record<string, number | boolean | undefined> = {
+    queuedMs:
+      marks.receivedAt !== undefined
+        ? Math.max(0, Math.round(marks.runAt - marks.receivedAt))
+        : undefined,
+    contextMs: marks.contextMs,
+    providerMs: since(marks.providerAt),
+    authMs: marks.provider?.authMs,
+    authCached: marks.provider?.authCached,
+    spawnMs: since(marks.provider?.spawnAt),
+    firstOutputMs: since(marks.provider?.firstOutputAt),
+    firstNoteMs: since(firstNote),
+    firstToolMs: since(tools[0]?.at),
+    lastToolMs: since(lastTool),
+    answerMs: lastTool !== undefined ? Math.max(0, Math.round(endedAt - lastTool)) : undefined,
+    totalMs: since(endedAt),
+    queries: entries.filter((entry) => entry.kind === 'query').length,
+    executes: entries.filter((entry) => entry.kind === 'execute').length,
+  };
+  return Object.fromEntries(
+    Object.entries(fields).filter(
+      (entry): entry is [string, number | boolean] => entry[1] !== undefined,
+    ),
+  );
+}

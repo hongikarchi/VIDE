@@ -408,6 +408,19 @@ export class RemoteAccess {
       this.error = 'PROJECT_SYNC_FAILED';
     }
   }
+  /**
+   * A project deleted on this PC leaves the account list. A site without the route answers 404;
+   * the local record of removed ids keeps the project from coming back either way.
+   */
+  async removeProject(projectId: string) {
+    await this.load();
+    if (!this.device) return;
+    await this.request(`/api/hosts/device/projects/${encodeURIComponent(projectId)}`, 'DELETE')
+      .then((response) => {
+        if (!response.ok && response.status !== 404) this.error = 'PROJECT_SYNC_FAILED';
+      })
+      .catch(() => (this.error = 'PROJECT_SYNC_FAILED'));
+  }
   /** Send a small preview image for the project card on the account site. */
   async pushThumbnail(projectId: string, image: string) {
     await this.load();

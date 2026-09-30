@@ -13,12 +13,49 @@ interface Props {
   select: (id: string) => void;
   create: (name: string) => Promise<void>;
   rename: (name: string) => Promise<void>;
+  /** Deletes the selected project and its data; called only after the inline confirmation. */
+  remove: () => Promise<void>;
 }
-function ProjectHeading({ projects, selected, select, create, rename }: Props) {
-  const [editing, setEditing] = useState<'new' | 'rename' | null>(null),
+function ProjectHeading({ projects, selected, select, create, rename, remove }: Props) {
+  const [editing, setEditing] = useState<'new' | 'rename' | 'delete' | null>(null),
     [value, setValue] = useState(''),
     [busy, setBusy] = useState(false);
   const current = projects.find((project) => project.id === selected);
+  if (editing === 'delete')
+    return (
+      <div
+        className="project-edit project-delete"
+        role="alertdialog"
+        aria-label="프로젝트 삭제 확인"
+        onKeyDown={(event) => {
+          if (event.key === 'Escape') setEditing(null);
+        }}
+      >
+        <span
+          className="project-delete-text"
+          title="요청·연결 파일 기록·지그·대화가 함께 삭제되며 되돌릴 수 없습니다. 사용자의 원본 파일은 그대로 둡니다."
+        >
+          ‘{current?.name}’ 삭제할까요?
+        </span>
+        <button
+          id="confirm-delete-project"
+          className="danger"
+          disabled={busy}
+          onClick={() => {
+            setBusy(true);
+            void remove().finally(() => {
+              setBusy(false);
+              setEditing(null);
+            });
+          }}
+        >
+          삭제
+        </button>
+        <button type="button" autoFocus onClick={() => setEditing(null)} title="취소 · Esc">
+          취소
+        </button>
+      </div>
+    );
   if (editing)
     return (
       <form
@@ -88,6 +125,21 @@ function ProjectHeading({ projects, selected, select, create, rename }: Props) {
         }}
       >
         ＋
+      </button>
+      <button
+        id="delete-project"
+        title="프로젝트 삭제"
+        aria-label="프로젝트 삭제"
+        onClick={() => setEditing('delete')}
+      >
+        <svg width="13" height="13" viewBox="0 0 16 16" aria-hidden="true">
+          <path
+            d="M2.5 4h11M6 4V2.5h4V4M4 4l.7 9.5h6.6L12 4M6.8 6.5v5M9.2 6.5v5"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.3"
+          />
+        </svg>
       </button>
     </>
   );

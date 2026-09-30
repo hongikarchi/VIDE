@@ -128,7 +128,8 @@ import { join } from 'node:path';
 import { homedir } from 'node:os';
 import { readFile } from 'node:fs/promises';
 import { geometryContract, interpret, protectGeometry } from '../core/geometry.ts';
-import { Diagnostics } from './diagnostics.ts';
+import { Diagnostics, requestStages, type RunMarks } from './diagnostics.ts';
+import { clearAuthStatus } from '../ai/claude-cli.ts';
 
 /**
  * The project read tools a host modeling turn gets beside its host tools (SPEC-02.6): linked
@@ -175,6 +176,11 @@ export class Execution {
   conversations?: ConversationService;
   projectInstructions?: Options['projectInstructions'];
   private injectedDirect?: Options['directDriver'];
+  /** Step times of the running requests (the `request-stages` diagnostic line). */
+  private readonly marks = new Map<
+    string,
+    RunMarks & { source?: { timing?: RunMarks['provider'] } }
+  >();
   active = new Map<
     string,
     { controller: AbortController; completion: Promise<void>; projectId: string }
@@ -371,6 +377,15 @@ export class Execution {
       }),
     );
   }
+  /** The provider of a run, noted for its step times (only the last one made is measured). */
+  private timed<P extends Provider>(id: string, provider: P): P {
+    const marks = this.marks.get(id);
+    if (marks) {
+      marks.providerAt ??= Date.now();
+      marks.source = provider as { timing?: RunMarks['provider'] };
+    }
+    return provider;
+  }
   /** Runs the request now, or leaves a waiting one in line (SPEC-02.9): `pump` starts it in turn. */
   start(request: StoredWork) {
     if (this.active.has(request.id)) return;
@@ -435,14 +450,24 @@ export class Execution {
       })
       .finally(() => {
         let state = 'unknown',
-          code: unknown = null;
+          code: unknown = null,
+          activity: unknown;
         try {
           const done = this.workspace.get(request.projectId, request.id);
           state = done.state;
           code = (done.result as { code?: unknown } | null)?.code ?? null;
+          activity = (done.result as { activity?: unknown } | null)?.activity;
         } catch {
           /* The request may be gone (project removed). */
         }
+        const marks = this.marks.get(request.id);
+        this.marks.delete(request.id);
+        // Each step's milliseconds (numbers only), so a slow stage can be measured exactly.
+        if (marks)
+          this.diagnostics?.write('request-stages', {
+            ...base,
+            ...requestStages({ ...marks, provider: marks.source?.timing }, activity, Date.now()),
+          });
         this.diagnostics?.write('request-end', {
           ...base,
           state,
@@ -550,6 +575,15 @@ export class Execution {
     // Both mode and the old permission filled (a stored row keeps only what was submitted).
     request = { ...request, input: withMode(request.input) };
     const { projectId, id, input } = request;
+    // Step times (diagnostic log): the run starts here, before its synchronous part up to the
+    // provider call; a retried turn keeps its first start.
+    if (!this.marks.has(id)) {
+      const received = Date.parse(request.createdAt ?? '');
+      this.marks.set(id, {
+        runAt: Date.now(),
+        ...(Number.isFinite(received) ? { receivedAt: received } : {}),
+      });
+    }
     // A jig's AI review reads only the attached jig table: no host, no document context.
     // A turn taken without the host (SPEC-02.9 1) gets none either.
     const reviewJig = z
@@ -628,7 +662,10 @@ export class Execution {
           items,
           signal: controller.signal,
           provider: (agent) =>
-            this.provider(input, agent, turn?.session, { mode: 'modeling', projectId }),
+            this.timed(
+              id,
+              this.provider(input, agent, turn?.session, { mode: 'modeling', projectId }),
+            ),
         });
         return;
       }
@@ -663,8 +700,10 @@ export class Execution {
       if (referenced.length)
         items.push({ id: 'referenced-geometry', type: 'geometry-reference', data: referenced });
       const hidden = this.workspace.hiddenIds(projectId);
-      // Earlier exchanges of this conversation (the default one: requests without any). A resumed
-      // session remembers them itself (SPEC-02.17 6); the ledger method sends a selection.
+      // Earlier exchanges of this conversation (the default one: requests without any). A provider
+      // session holds them itself (SPEC-02.17 6; a new one gets the hand-over): no Jev selection and
+      // no conversation item, only the ledger summary of its turn items. The ledger method sends a
+      // selection.
       const earlier = (
         turn?.session
           ? []
@@ -683,9 +722,11 @@ export class Execution {
         earlier.length <= CONTEXT_LIMIT
           ? { ids: earlier.map((entry) => entry.id), by: 'all' as const, ms: 0 }
           : await this.selectContext(input.body, earlier);
+      const marks = this.marks.get(id);
+      if (marks) marks.contextMs = context.ms;
       this.diagnostics?.write('context', {
         request: id,
-        by: context.by,
+        by: turn?.session ? 'session' : context.by,
         ms: context.ms,
         sent: context.ids.length,
         of: earlier.length,
@@ -752,11 +793,14 @@ export class Execution {
             .filter((pin) => pin.role !== 'target' && pin.basis === previous.id)
             .map((pin) => pin.id),
           provider: (agent) =>
-            this.provider(input, agent, turn?.session, {
-              mode: 'modeling',
-              projectId,
-              host: target,
-            }),
+            this.timed(
+              id,
+              this.provider(input, agent, turn?.session, {
+                mode: 'modeling',
+                projectId,
+                host: target,
+              }),
+            ),
           update: (progress) => {
             if (progress.phase === 'host') hostIntent = progress;
             this.workspace.update(projectId, id, 'running', progress);
@@ -773,11 +817,14 @@ export class Execution {
           items,
           signal: controller.signal,
           provider: (agent) =>
-            this.provider(input, agent, turn?.session, {
-              mode: 'modeling',
-              projectId,
-              host: target,
-            }),
+            this.timed(
+              id,
+              this.provider(input, agent, turn?.session, {
+                mode: 'modeling',
+                projectId,
+                host: target,
+              }),
+            ),
           update: (progress) => {
             if (progress.phase === 'host') hostIntent = progress;
             this.workspace.update(projectId, id, 'running', progress);
@@ -847,11 +894,14 @@ export class Execution {
               tools: scope.connection.tools.filter((name) => name !== 'jig_delete_file'),
             }
           : scope?.connection;
-      const result = await this.provider(input, connection, turn?.session, {
-        mode,
-        projectId,
-        ...(host ? { host: target } : {}),
-      })
+      const result = await this.timed(
+        id,
+        this.provider(input, connection, turn?.session, {
+          mode,
+          projectId,
+          ...(host ? { host: target } : {}),
+        }),
+      )
         .run(
           { goal, revision: 1, items, includedIds: items.map((item) => item.id) },
           {
@@ -965,6 +1015,8 @@ export class Execution {
         turn = undefined;
         return this.run(request, controller, 1);
       }
+      // A refused login or a subscription limit: the remembered login is asked again.
+      if (error.code === 'PROVIDER_LIMIT' || error.code === 'CLI_MODE_CHANGED') clearAuthStatus();
       if (error.code === 'PROVIDER_LIMIT')
         this.onProviderLimit?.(
           String(request.input.provider),
@@ -1071,6 +1123,8 @@ export class Execution {
       value = taken.plan ? { ...taken.value, plan: taken.plan } : taken.value;
     }
     if (ledger) for (const record of executionsOf(value)) this.ledgerExecution(request, record);
+    // A direct turn's end time: [진행] shows the final answer's time up to here.
+    if (typeof value.appliedDirectly === 'boolean') value.endedAt = new Date().toISOString();
     const guarded = !!value.guarded && typeof value.guarded === 'object';
     this.workspace.update(projectId, id, guarded ? 'needs-confirmation' : 'succeeded', value);
   }

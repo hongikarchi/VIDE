@@ -148,6 +148,22 @@ export class OfflineView {
     });
   }
 
+  /** A deleted project: its offline views leave the site, and its settings and inbox go. */
+  forget(projectId: string) {
+    return this.serial(async () => {
+      await this.load();
+      delete this.state.projects[projectId];
+      for (const [linkId, uploaded] of Object.entries(this.state.uploaded))
+        if (uploaded.projectId === projectId) {
+          await this.options.remote.deleteSnapshot(projectId, linkId).catch(() => undefined);
+          delete this.state.uploaded[linkId];
+          delete this.state.errors[linkId];
+        }
+      this.state.inbox = this.state.inbox.filter((item) => item.projectId !== projectId);
+      await this.save();
+    });
+  }
+
   /**
    * Upload changed linked files of enabled projects (at most one per file every 10 minutes). A
    * call during a run waits for that run.

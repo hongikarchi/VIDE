@@ -103,6 +103,7 @@ import { ZwcadWorkspace } from '../../hosts/zwcad/workspace.ts';
 import { dirname, join } from 'node:path';
 import { importModel, captureModel, recoverDwgImport } from './import-model.ts';
 import { renderReport } from './report.ts';
+import { RemovedProjects, removeProject } from './project-removal.ts';
 
 /** The file name of an import request ("plan.dwg 불러오기"). */
 const importedName = (body: string) => body.replace(/ 불러오기$/, '');
@@ -180,6 +181,8 @@ export async function startServer({
   const agentTools = new AgentTools({ origin: () => origin });
   const accountLogin = new AccountLogin(loginOptions);
   const workspace = new Workspace(store),
+    removedProjects = new RemovedProjects(filename === ':memory:' ? undefined : dirname(filename)),
+    listProjects = () => removedProjects.visible(store.listProjects()),
     links = new DocumentLinks(store.db),
     tableViews = new TableViews(store),
     structures = new StructureStore(
@@ -212,19 +215,23 @@ export async function startServer({
     ...remoteOptions,
     directory: dirname(filename),
     port: () => Number(new URL(origin).port),
-    projects: () => store.listProjects(),
+    projects: listProjects,
     activity: () => store.projectActivity(),
     onQueue: (items) => offlineView.receive(items),
     afterHeartbeat: () => void offlineView.tick().catch(() => {}),
     onProjects: (projects) => {
-      for (const project of projects)
-        if (!project.deleted) {
+      for (const project of projects) {
+        // Deleted on the account site: hidden here too (its data stays on this PC). A project
+        // removed here is never recreated from a list the site has not updated yet.
+        if (project.deleted) void removedProjects.add(project.id).catch(() => {});
+        else if (!removedProjects.has(project.id)) {
           try {
             store.ensureProject(project.id, project.name);
           } catch {
             /* A name the local store rejects keeps the local name. */
           }
         }
+      }
     },
     status: async () => {
       const rhino = (await sdk?.editors.list(true)) || { documents: [] };
@@ -462,9 +469,10 @@ export async function startServer({
       if (
         !['GET', 'POST', 'PUT'].includes(request.method || '') &&
         // Discarding a jig draft (ARCH-03 §7 `DELETE …/jig-drafts/:did`, T-064).
+        // and deleting a project with its data (after the app's confirmation).
         !(
           request.method === 'DELETE' &&
-          /^\/api\/v1\/projects\/[^/]+\/jig-drafts\/[^/]+$/.test(url.pathname)
+          /^\/api\/v1\/projects\/[^/]+(\/jig-drafts\/[^/]+)?$/.test(url.pathname)
         )
       ) {
         send(405, { code: 'METHOD_NOT_ALLOWED', requestId });
@@ -517,6 +525,8 @@ export async function startServer({
           url.pathname.startsWith('/api/v1/connectors') ||
           (request.method !== 'GET' &&
             /^\/api\/v1\/(accounts|settings|extensions)(\/|$)/.test(url.pathname)) ||
+          // Deleting a whole project and its data is done at this PC.
+          (request.method === 'DELETE' && /^\/api\/v1\/projects\/[^/]+$/.test(url.pathname)) ||
           // The project's AI instructions steer every later turn: changed on this PC only.
           (request.method !== 'GET' &&
             /^\/api\/v1\/projects\/[^/]+\/ai-instructions$/.test(url.pathname)) ||
@@ -2005,7 +2015,7 @@ export async function startServer({
       }
       if (url.pathname === '/api/v1/projects') {
         if (request.method === 'GET') {
-          send(200, store.listProjects());
+          send(200, listProjects());
           return;
         }
         if (request.method === 'POST') {
@@ -2016,6 +2026,36 @@ export async function startServer({
         }
       }
       const projectPath = /^\/api\/v1\/projects\/([^/]+)(\/thumbnail)?$/.exec(url.pathname);
+      if (projectPath && request.method === 'DELETE' && !projectPath[2]) {
+        // Asked for in the app after a confirmation; the user's own files stay.
+        const data = filename === ':memory:' ? undefined : dirname(filename);
+        const projectId = projectPath[1];
+        const perProject = data
+          ? [
+              join(data, 'structure', `${projectId}.json`),
+              join(data, 'ai-instructions', `${projectId}.json`),
+              ...(/^[0-9a-f-]{36}$/i.test(projectId)
+                ? ['', '-wal', '-shm'].map((end) => knowledgeFile(data, projectId) + end)
+                : []),
+            ]
+          : [];
+        send(
+          200,
+          await removeProject({
+            projectId,
+            store,
+            workspace,
+            links,
+            removed: removedProjects,
+            dataDirectory: data,
+            importDirectories: [hosts.rhino.directory, hosts.zwcad.directory],
+            projectFiles: perProject,
+          }),
+        );
+        await offlineView.forget(projectId).catch(() => {});
+        await remoteAccess.removeProject(projectId);
+        return;
+      }
       if (projectPath && request.method === 'PUT' && !projectPath[2]) {
         const renamed = store.renameProject(projectPath[1], (await body(request)).name);
         await remoteAccess.pushProject(renamed);

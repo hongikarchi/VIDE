@@ -325,6 +325,8 @@ export function stagesOf(message: Message, now = Date.now()) {
   const request = message.request,
     result = request?.result;
   const started = request?.createdAt ? Date.parse(request.createdAt) : NaN;
+  const endedAt = (result as { endedAt?: unknown } | undefined)?.endedAt;
+  const ended = typeof endedAt === 'string' ? Date.parse(endedAt) : NaN;
   return workStages({
     ...(Number.isFinite(started) ? { startedAt: started } : {}),
     now,
@@ -337,6 +339,10 @@ export function stagesOf(message: Message, now = Date.now()) {
     activity: activityEntries(result?.activity),
     progress: result?.progress,
     maxHostCommands: request?.input ? executionLimits(request.input).maxHostCommands : undefined,
+    // The open document edited directly (ADR-022) has its own stages (no save-and-reopen check).
+    direct:
+      typeof (result as { appliedDirectly?: unknown } | undefined)?.appliedDirectly === 'boolean',
+    ...(Number.isFinite(ended) ? { endedAt: ended } : {}),
   });
 }
 

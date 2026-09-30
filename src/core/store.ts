@@ -202,6 +202,54 @@ export class Store {
     }
     return activity;
   }
+  /**
+   * Delete a project and every row it owns, children first (foreign keys are on). Files are the
+   * caller's (see server/project-removal.ts). Refuses while one of its requests is still running.
+   */
+  deleteProject(id: string) {
+    this.project(id);
+    return this.tx(() => {
+      const busy = this.db
+        .prepare(
+          "SELECT 1 FROM workspace_requests WHERE projectId=? AND state IN ('queued','running') LIMIT 1",
+        )
+        .get(id);
+      if (busy) fail('PROJECT_BUSY');
+      const instances = 'SELECT id FROM jig_instances WHERE projectId=?',
+        conversations = 'SELECT id FROM conversations WHERE projectId=?';
+      for (const sql of [
+        `DELETE FROM jig_param_log WHERE instanceId IN (${instances})`,
+        `DELETE FROM jig_runs WHERE instanceId IN (${instances})`,
+        `DELETE FROM jig_bakes WHERE instanceId IN (${instances})`,
+        `DELETE FROM jig_reads WHERE instanceId IN (${instances})`,
+        'DELETE FROM jig_instances WHERE projectId=?',
+        `DELETE FROM provider_sessions WHERE conversationId IN (${conversations})`,
+        `DELETE FROM ledger_items WHERE conversationId IN (${conversations})`,
+        'DELETE FROM conversations WHERE projectId=?',
+        'DELETE FROM jig_drafts WHERE projectId=?',
+        'DELETE FROM project_jigs WHERE projectId=?',
+        'DELETE FROM knowledge_reviews WHERE projectId=?',
+        'DELETE FROM knowledge_source_rules WHERE projectId=?',
+        'DELETE FROM project_roots WHERE projectId=?',
+        'DELETE FROM review_notes WHERE projectId=?',
+        'DELETE FROM review_snapshots WHERE projectId=?',
+        'DELETE FROM shared_feedback WHERE projectId=?',
+        'DELETE FROM publication_exports WHERE projectId=?',
+        'DELETE FROM table_views WHERE projectId=?',
+        'DELETE FROM hidden_requests WHERE projectId=?',
+        'DELETE FROM workspace_requests WHERE projectId=?',
+        'DELETE FROM document_links WHERE projectId=?',
+        'DELETE FROM approvals WHERE projectId=?',
+        'DELETE FROM commands WHERE projectId=?',
+        'DELETE FROM runs WHERE projectId=?',
+        'DELETE FROM inputs WHERE projectId=?',
+        'DELETE FROM connections WHERE projectId=?',
+        'DELETE FROM projects WHERE id=?',
+      ])
+        this.db.prepare(sql).run(id);
+      return { id };
+    });
+  }
   listProjects() {
     return this.db
       .prepare('SELECT * FROM projects ORDER BY rowid')

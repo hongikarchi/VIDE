@@ -212,6 +212,19 @@ export function supportedCliVersion(provider: CliProvider, version: string) {
 }
 const VERSION_TTL_MS = 60000;
 const versionCache = new Map<string, { at: number; version: string }>();
+/**
+ * A confirmed subscription login is reused for ten minutes per provider, executable and account
+ * folder (each `auth status` / `login status` spawn is ~0.2 s before every turn). Only a login that
+ * was available is kept; a refused run (changed login mode, subscription limit), a login, logout or
+ * an account switch clears it (`clearAuthStatus`).
+ */
+export const AUTH_TTL_MS = 10 * 60_000;
+const authCache = new WeakMap<object, Map<string, { at: number; status: ProviderStatus }>>();
+let authGeneration = 0;
+/** Forgets every remembered login (account switch, login, logout, a refused run). */
+export function clearAuthStatus() {
+  authGeneration++;
+}
 const errorText = (event: Record<string, unknown>) => {
   const parts: string[] = [];
   const collect = (value: unknown, depth = 0) => {
@@ -593,6 +606,10 @@ export class ClaudeCli {
   nativeQuestions?: NativeQuestionHandler;
   /** The instruction bundle of every run of this provider (PLAN-24 지침 묶음). */
   instructions: string;
+  /** The spawn function given (the login cache is kept per spawn function: tests inject fakes). */
+  private readonly spawnIdentity: object;
+  /** Milliseconds of the last run's steps (diagnostic log): login check, CLI start, first output. */
+  timing: { authMs?: number; authCached?: boolean; spawnAt?: number; firstOutputAt?: number } = {};
   constructor({
     executable,
     configDirectory,
@@ -626,6 +643,7 @@ export class ClaudeCli {
     this.timeoutMs = timeoutMs;
     this.stopGraceMs = stopGraceMs;
     this.spawnProcess = spawnProcess;
+    this.spawnIdentity = spawnProcess;
     if (nativeQuestions !== undefined && typeof nativeQuestions !== 'function')
       throw error('INVALID_NATIVE_QUESTIONS');
     this.nativeQuestions = nativeQuestions;
@@ -748,6 +766,32 @@ export class ClaudeCli {
       });
     });
   }
+  private authKey() {
+    return `${authGeneration}\0${this.provider}\0${this.executable}\0${this.configDirectory ?? ''}`;
+  }
+  /** `status()` before a run: a login confirmed in the last ten minutes is not asked again. */
+  async cachedStatus(): Promise<ProviderStatus> {
+    const started = performance.now();
+    let entries = authCache.get(this.spawnIdentity);
+    if (!entries) authCache.set(this.spawnIdentity, (entries = new Map()));
+    const key = this.authKey();
+    const hit = entries.get(key);
+    if (hit && Date.now() - hit.at < AUTH_TTL_MS) {
+      this.timing.authMs = Math.round(performance.now() - started);
+      this.timing.authCached = true;
+      return hit.status;
+    }
+    const status = await this.status();
+    if (status.available) entries.set(key, { at: Date.now(), status });
+    else entries.delete(key);
+    this.timing.authMs = Math.round(performance.now() - started);
+    this.timing.authCached = false;
+    return status;
+  }
+  /** Forgets this provider's remembered login (a run refused for its login or its limit). */
+  forgetAuth() {
+    authCache.get(this.spawnIdentity)?.delete(this.authKey());
+  }
   async status(): Promise<ProviderStatus> {
     const child = this.spawnProcess(this.executable, ['auth', 'status', '--json'], {
       env: this.environment(),
@@ -808,8 +852,9 @@ export class ClaudeCli {
       this.session ? withTurnRules(context, this.agent, this.eventFormat) : context,
     );
     if (signal?.aborted) throw error('CANCELLED');
+    this.timing = {};
     await this.checkVersion();
-    const auth = await this.status();
+    const auth = await this.cachedStatus();
     if (!auth.available) throw error(auth.reason ?? 'AUTH_INVALID');
     if (signal?.aborted) throw error('CANCELLED');
     const cwd = await mkdtemp(join(tmpdir(), 'vide-cli-'));
@@ -851,6 +896,7 @@ export class ClaudeCli {
           stdio: ['pipe', 'pipe', 'pipe'],
         },
       );
+      this.timing.spawnAt = Date.now();
       const result = await new Promise<ProviderResult>((resolve, reject) => {
         const decoder = new StringDecoder('utf8');
         let buffer = '',
@@ -1043,6 +1089,7 @@ export class ClaudeCli {
         };
         processChild.stdout.on('data', (chunk) => {
           if (settled || stopReason) return;
+          this.timing.firstOutputAt ??= Date.now();
           bytes += chunk.length;
           if (bytes > 1024 * 1024) return stop('OUTPUT_TOO_LARGE');
           buffer += decoder.write(chunk);
@@ -1065,21 +1112,21 @@ export class ClaudeCli {
           const tail = buffer + decoder.end();
           if (!stopReason && tail.trim()) parse(tail);
           if (stopReason) return finish(error(stopReason));
-          if (code !== 0 || final?.is_error || codexFailed)
+          if (code !== 0 || final?.is_error || codexFailed) {
             // A changed login mode stops here (another account would fail the same way); a
             // subscription limit is told apart so another account can take the next request; a
             // resumed session without its transcript is reopened by hand-over (SPEC-02.19 5).
-            return finish(
-              error(
-                MODE_CHANGED.test(failureText)
-                  ? 'CLI_MODE_CHANGED'
-                  : USAGE_LIMIT.test(failureText)
-                    ? 'PROVIDER_LIMIT'
-                    : this.session?.resume && SESSION_LOST.test(failureText + ' ' + errorOutput)
-                      ? 'SESSION_LOST'
-                      : 'PROVIDER_FAILED',
-              ),
-            );
+            const failed = MODE_CHANGED.test(failureText)
+              ? 'CLI_MODE_CHANGED'
+              : USAGE_LIMIT.test(failureText)
+                ? 'PROVIDER_LIMIT'
+                : this.session?.resume && SESSION_LOST.test(failureText + ' ' + errorOutput)
+                  ? 'SESSION_LOST'
+                  : 'PROVIDER_FAILED';
+            // The remembered login is asked again on the next run.
+            if (failed === 'CLI_MODE_CHANGED' || failed === 'PROVIDER_LIMIT') this.forgetAuth();
+            return finish(error(failed));
+          }
           if (!initialized || final?.subtype !== 'success' || typeof final.result !== 'string')
             return finish(error('INCOMPLETE_RESULT'));
           finish(null, {
