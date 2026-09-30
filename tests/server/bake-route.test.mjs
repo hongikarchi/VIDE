@@ -744,3 +744,94 @@ test('SdkExecution.runFixed runs the bodies in order, refuses a stale work copy 
   assert.equal(stopped, 3, 'the worker is stopped after a failure too');
   await assert.rejects(sdk.runFixed({ ...task, codes: [] }), { code: 'INVALID_INPUT' });
 });
+
+test('bake: the built-in lines bake, an absorbed edit respected by the next bake, members gated by analysis', async (t) => {
+  const f = fixture(t);
+  const { base, iid, beams } = await ready(f);
+  const LINE_LAYER = `${ROOT}::jig 상단선`;
+  const listed = (await f.call('GET', `${base}/${iid}/bakes`)).data;
+  assert.deepEqual(
+    listed.offers.map((o) => [o.id, o.builtin]),
+    [
+      ['columns', false],
+      ['beams', false],
+      ['lines', true],
+      ['members', true],
+      ['member-columns', true],
+    ],
+  );
+  assert.equal(listed.stale, false);
+
+  // Members need a confirmed analysis of the same inputs; this jig has none.
+  const members = await f.call('POST', `${base}/${iid}/bake`, { bake: ['members'] });
+  assert.equal(members.status, 422);
+  assert.ok(members.data.blocked.includes('analysis-confirmed'));
+
+  const bake1 = await f.call('POST', `${base}/${iid}/bake`, { bake: ['lines'] });
+  assert.equal(bake1.status, 200, JSON.stringify(bake1.data));
+  const plan1 = bake1.data.plans[0];
+  assert.equal(plan1.layer, LINE_LAYER);
+  const beamKeys = beams.map((b) => `beam:${b.key}`);
+  assert.ok(beamKeys.every((key) => plan1.added.includes(key)));
+  const request1 = await finished(f, bake1.data.requestId);
+  assert.equal(request1.state, 'succeeded', JSON.stringify(request1.result).slice(0, 300));
+  const [block] = decodeCodes(f.calls.fixed.at(-1).codes);
+  assert.equal(block.header.template, 'vide.bake.curves@1');
+  assert.equal(block.header.bakeId, 'lines');
+  const made = applied(f, iid, request1.result);
+  const [record] = (await f.call('GET', `${base}/${iid}/bakes`)).data.bakes;
+  assert.equal(record.bakeId, 'lines');
+  assert.equal((await f.call('POST', `${base}/${iid}/bakes/${record.id}/baseline`)).status, 200);
+
+  // The person edits one line in Rhino and takes the edit as a 수정 사항.
+  const [taken, other] = beamKeys;
+  f.document.doc.rows.get(made[taken]).hash = 'hash:by-hand';
+  f.document.doc.revision++;
+  const absorb = await f.call('POST', `${base}/${iid}/bake`, {
+    bake: ['lines'],
+    resolve: { [taken]: 'absorb' },
+  });
+  assert.equal(absorb.data.status, 'absorbed');
+  assert.deepEqual(absorb.data.plans[0].respected, [taken]);
+  const override = (await f.call('GET', `${base}/${iid}`)).data.body.overrides[0];
+  assert.deepEqual(override.target.identity, { key: taken, bake: 'lines' });
+  // Recompute (the overrides are part of every step's fingerprint), confirming again if asked.
+  let run = await f.call('POST', `${base}/${iid}/run`, { mode: 'geometry' });
+  if (run.data.steps[1].status !== 'confirmed') {
+    await f.call('POST', `${base}/${iid}/steps/confirmInputs/confirm`, {
+      inputHash: run.data.steps[1].inputHash,
+    });
+    run = await f.call('POST', `${base}/${iid}/run`, { mode: 'geometry' });
+  }
+  assert.ok(run.data.steps.every((s) => s.status === 'done' || s.status === 'confirmed'));
+
+  // The next bake leaves the taken object as it is and replaces the others.
+  const bake2 = await f.call('POST', `${base}/${iid}/bake`, { bake: ['lines'] });
+  assert.equal(bake2.status, 200, JSON.stringify(bake2.data));
+  assert.deepEqual(bake2.data.plans[0].respected, [taken]);
+  assert.deepEqual(bake2.data.plans[0].preserved, []);
+  assert.ok(bake2.data.plans[0].replaced.includes(other));
+  assert.ok(!bake2.data.plans[0].replaced.includes(taken));
+  const request2 = await finished(f, bake2.data.requestId);
+  assert.equal(request2.state, 'succeeded');
+  assert.equal(request2.result.bake.totals.respected, 1);
+  const [block2] = decodeCodes(f.calls.fixed.at(-1).codes);
+  assert.ok(!block2.header.deleteIds.includes(made[taken]));
+  assert.ok(block2.header.deleteIds.includes(made[other]));
+  assert.ok(!block2.items.some((i) => i.key === taken));
+  const record2 = f.jigStore.bake(iid, request2.result.bake.bakes[0].recordId);
+  assert.deepEqual(
+    [record2.items[taken].hash, record2.items[taken].state],
+    ['hash:by-hand', 'jig'],
+  );
+
+  // Edited again: a person's edit again, preserved.
+  f.document.doc.rows.get(made[taken]).hash = 'hash:by-hand-2';
+  f.document.doc.revision++;
+  const bake3 = await f.call('POST', `${base}/${iid}/bake`, { bake: ['lines'] });
+  assert.deepEqual(
+    bake3.data.plans[0].preserved.map((p) => [p.key, p.reason]),
+    [[taken, 'edited']],
+  );
+  await finished(f, bake3.data.requestId);
+});

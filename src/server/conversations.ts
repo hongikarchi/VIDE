@@ -21,12 +21,20 @@ import {
 } from '../core/conversation-store.ts';
 import type { AccountProfiles } from '../ai/account-profiles.ts';
 import type { StoredWork } from '../contracts/stored-work.ts';
-import { waitingOf, type WaitingFor } from '../contracts/request-scope.ts';
+import { hostUse, waitingOf, type WaitingFor } from '../contracts/request-scope.ts';
 import type { SessionOptions } from '../ai/claude-cli.ts';
 import { removeClaudeTranscript } from '../ai/claude-cli.ts';
 import { removeCodexTranscript } from '../ai/codex-cli.ts';
 import { isAutoModel, type Choice, type RoutingInput } from '../ai/model-router.ts';
 import type { Diagnostics } from './diagnostics.ts';
+import {
+  MAX_QUESTIONS,
+  formatAnswers,
+  turnOutputItem,
+  turnOutputSchema,
+  type TurnAnswer,
+  type TurnQuestion,
+} from './turn-output.ts';
 
 type Provider = 'claude-cli' | 'codex-cli';
 type Kind = (typeof conversationKinds)[number];
@@ -113,6 +121,10 @@ export interface Turn {
   items: TurnItem[];
   /** Set when this turn opened a new session. */
   opened?: NewSessionReason;
+  /** The turn ends as done, progress or question cards (T-062; turns without the host). */
+  structured?: boolean;
+  /** Question IDs the ledger already holds (asked or answered): never asked again. */
+  askedQuestions?: ReadonlySet<string>;
 }
 export interface Hold {
   /** The conversation's line is stopped (an unresolved result, SPEC-02.19 4). */
@@ -162,6 +174,38 @@ const handoffInput = z
   })
   .strict();
 const closeInput = z.object({ discard: z.boolean().optional() }).strict();
+const questionKey = z.string().regex(/^[a-zA-Z0-9_-]{1,40}$/);
+/** Answers to one turn's question cards; `recommended` answers every open one with its default. */
+const answerInput = z
+  .object({
+    requestId: id,
+    answers: z
+      .array(
+        z
+          .object({
+            questionId: questionKey,
+            optionId: questionKey.optional(),
+            text: z.string().trim().min(1).max(500).optional(),
+          })
+          .strict()
+          .refine((answer) => answer.optionId || answer.text),
+      )
+      .max(MAX_QUESTIONS)
+      .default([]),
+    recommended: z.boolean().optional(),
+  })
+  .strict();
+/** The question and answer IDs in the ledger (SPEC-02.19 6: a decided thing is not asked again). */
+function askedQuestions(items: LedgerItem[]) {
+  const ids = new Set<string>();
+  for (const item of items) {
+    const body = (item.body ?? {}) as { id?: unknown; questionId?: unknown };
+    if (item.kind === 'question' && typeof body.id === 'string') ids.add(body.id);
+    if (['answer', 'decision'].includes(item.kind) && typeof body.questionId === 'string')
+      ids.add(body.questionId);
+  }
+  return ids;
+}
 
 const clip = (text: unknown, max: number) => {
   const value = typeof text === 'string' ? text : '';
@@ -427,6 +471,22 @@ export class ConversationService {
    */
   async beginTurn(
     request: StoredWork,
+    options: { rows: StoredWork[]; cliVersion: () => Promise<string> },
+  ): Promise<Turn | undefined> {
+    const turn = await this.openTurn(request, options);
+    // A turn without the host (and not a jig review with its own format) asks for structured
+    // output: done, progress or at most three question cards (PLAN-24 T-062).
+    if (!turn || request.input.jig !== undefined || hostUse(request.input) !== 'none') return turn;
+    const ledger = this.store.ledger(turn.conversation.id, { current: true });
+    return {
+      ...turn,
+      structured: true,
+      askedQuestions: askedQuestions(ledger),
+      items: [...turn.items, turnOutputItem()],
+    };
+  }
+  private async openTurn(
+    request: StoredWork,
     { rows, cliVersion }: { rows: StoredWork[]; cliVersion: () => Promise<string> },
   ): Promise<Turn | undefined> {
     const conversationId = request.input.conversationId;
@@ -529,6 +589,18 @@ export class ConversationService {
           ...(code ? { code } : {}),
         },
       });
+    // Question cards go in the ledger, so a later turn never asks them again.
+    const questions = z
+      .object({ turnOutput: z.object({ questions: z.array(z.unknown()) }).passthrough() })
+      .passthrough()
+      .safeParse(done.result);
+    if (finished && turn.structured && questions.success)
+      for (const question of questions.data.turnOutput.questions)
+        this.store.addLedgerItem(turn.conversation.id, {
+          kind: 'question',
+          requestId: turn.requestId,
+          body: question,
+        });
     this.options.diagnostics?.write('conversation-turn', {
       conversationId: turn.conversation.id,
       requestId: turn.requestId,
@@ -538,6 +610,76 @@ export class ConversationService {
       state: done.state,
       code: code ?? null,
     });
+  }
+
+  /**
+   * Answers a turn's question cards (SPEC-02.19 6): each open question of that turn gets the
+   * chosen option, a free answer when the card allows one, or its recommended option. The answers
+   * go in the ledger under the next turn's request ID; `withdraw` takes them back when that turn
+   * could not be submitted.
+   */
+  answer(projectId: string, conversationId: string, value: unknown, nextRequestId: string) {
+    const conversation = this.store.get(projectId, conversationId);
+    if (conversation.state !== 'open') throw new DomainError('CONVERSATION_CLOSED');
+    const input = answerInput.parse(value);
+    const ledger = this.store.ledger(conversationId, { current: true });
+    const answered = new Set(
+      ledger
+        .filter((item) => item.kind === 'answer' || item.kind === 'decision')
+        .map((item) => (item.body as { questionId?: unknown } | null)?.questionId),
+    );
+    const open = new Map<string, TurnQuestion>();
+    for (const item of ledger)
+      if (item.kind === 'question' && item.requestId === input.requestId) {
+        const parsed = turnOutputSchema.safeParse({
+          status: 'question',
+          text: '',
+          questions: [item.body],
+        });
+        const question = parsed.success ? parsed.data.questions[0] : undefined;
+        if (question && !answered.has(question.id)) open.set(question.id, question);
+      }
+    if (!open.size) throw new DomainError('NOT_FOUND');
+    const answers: TurnAnswer[] = [];
+    for (const given of input.answers) {
+      const question = open.get(given.questionId);
+      if (!question || answers.some((a) => a.question.id === question.id))
+        throw new DomainError('INVALID_INPUT');
+      const option = given.optionId
+        ? question.options.find((candidate) => candidate.id === given.optionId)
+        : undefined;
+      if ((given.optionId && !option) || (given.text && !question.allowFree))
+        throw new DomainError('INVALID_INPUT');
+      answers.push({ question, option, text: given.text, recommended: false });
+    }
+    if (input.recommended)
+      for (const question of open.values())
+        if (!answers.some((a) => a.question.id === question.id))
+          answers.push({
+            question,
+            option: question.options.find((o) => o.recommended) ?? question.options[0],
+            recommended: true,
+          });
+    if (!answers.length) throw new DomainError('INVALID_INPUT');
+    const items = answers.map((answer) =>
+      this.store.addLedgerItem(conversationId, {
+        kind: 'answer',
+        requestId: nextRequestId,
+        body: {
+          questionId: answer.question.id,
+          askedIn: input.requestId,
+          title: answer.question.title,
+          ...(answer.option ? { optionId: answer.option.id, label: answer.option.label } : {}),
+          ...(answer.text ? { text: answer.text } : {}),
+          by: answer.recommended ? 'recommended' : 'user',
+        },
+      }),
+    );
+    return { conversation, body: formatAnswers(answers), items };
+  }
+  /** Takes back recorded answers whose turn was not submitted (they can be answered again). */
+  withdraw(conversationId: string, items: LedgerItem[]) {
+    for (const item of items) this.store.supersede(conversationId, item.id, item.id);
   }
 
   /** Removes the transcripts of every session of the conversation (a discarded jig draft, retention). */
@@ -654,16 +796,18 @@ export interface ConversationRouteContext {
   chooseModel: (input: RoutingInput, requested?: Provider) => Promise<Choice & { task?: string }>;
   /** The account a new conversation is fixed to (SPEC-02.19 2). */
   chooseAccount: (provider: Provider) => Promise<string>;
+  /** Submits a request (the answer turn) the way `POST …/requests` does; returns it. */
+  submit?: (projectId: string, input: Record<string, unknown>) => Promise<unknown>;
 }
 
 /** Answers `/api/v1/projects/:id/conversations…`; false when the request is not one. */
 export async function conversationRoutes(
   url: URL,
   request: IncomingMessage,
-  { service, body, send, remote, chooseModel, chooseAccount }: ConversationRouteContext,
+  { service, body, send, remote, chooseModel, chooseAccount, submit }: ConversationRouteContext,
 ): Promise<boolean> {
   const route =
-    /^\/api\/v1\/projects\/([^/]+)\/conversations(?:\/([^/]+)(?:\/(close|reopen|ledger|handoff))?)?$/.exec(
+    /^\/api\/v1\/projects\/([^/]+)\/conversations(?:\/([^/]+)(?:\/(close|reopen|ledger|handoff|answer))?)?$/.exec(
       url.pathname,
     );
   if (!route) return false;
@@ -718,7 +862,29 @@ export async function conversationRoutes(
   } else if (action === 'reopen') send(200, service.reopen(projectId, conversationId));
   else if (action === 'ledger')
     send(201, service.addLedger(projectId, conversationId, await body(request)));
-  else {
+  else if (action === 'answer') {
+    // The answers go as the next turn of the same conversation (SPEC-02.19 6).
+    if (!submit) throw new DomainError('EXECUTOR_NOT_READY');
+    const next = randomUUID();
+    const answered = service.answer(projectId, conversationId, await body(request), next);
+    try {
+      const created = await submit(projectId, {
+        id: next,
+        conversationId,
+        body: answered.body,
+        permission: 'review',
+        hostUse: 'none',
+        provider: answered.conversation.provider,
+        pins: [],
+        sketches: [],
+        files: [],
+      });
+      send(201, { request: created, answers: answered.items });
+    } catch (error) {
+      service.withdraw(conversationId, answered.items);
+      throw error;
+    }
+  } else {
     if (remote) throw new DomainError('FORBIDDEN');
     const input = handoffInput.parse(await body(request));
     send(

@@ -15,7 +15,9 @@ import type { LoadedJig } from '../runtime/loader.ts';
 import type { BakeDecl, GateUse } from '../runtime/manifest.ts';
 import type { InstanceView, JigRuntime, ReadModel } from '../runtime/runtime.ts';
 import { unsafeArgs, type BakeItem } from './data-block.ts';
+import { bakeDeclOf, bakeDeclsOf, builtinOutput, isBuiltinBake } from './builtin.ts';
 import {
+  absorbedOf,
   extractItems,
   itemsPath,
   layerUsable,
@@ -56,6 +58,8 @@ export interface BakeOutcome {
   replaced: string[];
   dropped: string[];
   preserved: Preserved[];
+  /** Person-edited objects taken as 수정 사항; left as they are (SPEC-07.13). */
+  respected: string[];
   kept: string[];
   deleted: string[];
   copies: number;
@@ -75,6 +79,7 @@ export interface BakeSummary {
     added: number;
     replaced: number;
     preserved: number;
+    respected: number;
     copies: number;
     deleted: number;
     failed: number;
@@ -164,7 +169,7 @@ export async function prepareBake(ctx: BakeContext, input: BakeInput): Promise<P
   const view = await runtime.view(input.projectId, input.instanceId);
   const jig = await runtime.registry.resolve(view.jig.id, view.jig.version);
   const decls = input.bakeIds.map((id) => {
-    const decl = (jig.manifest.bake ?? []).find((b) => b.id === id);
+    const decl = bakeDeclOf(jig, id);
     if (!decl) throw new DomainError('NOT_FOUND');
     return decl;
   });
@@ -173,13 +178,24 @@ export async function prepareBake(ctx: BakeContext, input: BakeInput): Promise<P
   const problems: string[] = [];
   // Items come from computed, current step results only.
   const extracted = decls.map((decl) => {
+    if (isBuiltinBake(decl)) {
+      // Built-in bakes read every finished code step; nothing finished yet is not computed.
+      const done = view.steps.filter((s) => s.status === 'done');
+      if (!done.length) throw new DomainError(RESOLVE_CODE);
+      const outputs = done.map((s) => runtime.output(input.projectId, input.instanceId, s.id));
+      const result = extractItems(decl, builtinOutput(outputs));
+      if (!result.items.length) result.problems.push('만들 항목이 없습니다');
+      problems.push(...result.problems.map((p) => `${decl.id}: ${p}`));
+      const last = done.at(-1)!;
+      return { decl, items: result.items, inputHash: last.inputHash, stepId: last.id };
+    }
     const { stepId } = itemsPath(decl);
     const step = view.steps.find((s) => s.id === stepId);
     if (!step || step.status !== 'done') throw new DomainError(RESOLVE_CODE);
     const output = runtime.output(input.projectId, input.instanceId, stepId);
     const result = extractItems(decl, output);
     problems.push(...result.problems.map((p) => `${decl.id}: ${p}`));
-    return { decl, items: result.items, inputHash: step.inputHash };
+    return { decl, items: result.items, inputHash: step.inputHash, stepId };
   });
   // The forced read: the whole document with hidden objects, kept as a pre-bake read (§8).
   const read = await ctx.read(linkId);
@@ -205,7 +221,7 @@ export async function prepareBake(ctx: BakeContext, input: BakeInput): Promise<P
         step.slot === 'confirm-analysis' &&
         view.steps.find((s) => s.id === step.id)?.status === 'confirmed',
     );
-  for (const { decl, items, inputHash } of extracted) {
+  for (const { decl, items, inputHash, stepId } of extracted) {
     const layerPath = layerPathOf(view.body.layerRoot, decl);
     layers.push(layerPath);
     const { prior, pending } = recordsOf(store, input.instanceId, decl.id, linkId);
@@ -217,6 +233,7 @@ export async function prepareBake(ctx: BakeContext, input: BakeInput): Promise<P
       pending,
       read: read.model,
       resolve: input.resolve,
+      absorbed: absorbedOf(view.body.overrides ?? [], decl.id),
     });
     if (plan.absorbed.length) {
       await runtime.setOverrides(input.projectId, input.instanceId, { add: plan.absorbed });
@@ -238,7 +255,7 @@ export async function prepareBake(ctx: BakeContext, input: BakeInput): Promise<P
     ];
     const run = runGates(uses, 'before-bake', {
       manifest: jig.manifest,
-      stepId: itemsPath(decl).stepId,
+      stepId,
       inputs: {},
       params: view.body.params,
       inputHash,
@@ -355,6 +372,7 @@ export function finishBake(
       replaced: plan.replaced.filter((key) => !failed.includes(key)),
       dropped: plan.dropped,
       preserved: plan.preserved,
+      respected: plan.respected,
       kept: plan.kept,
       deleted: plan.deleted,
       copies: plan.copies,
@@ -368,11 +386,20 @@ export function finishBake(
   return { result: { ...result, text: summary.text, bake: summary }, summary };
 }
 function summarize(prepared: PreparedBake, bakes: BakeOutcome[]): BakeSummary {
-  const totals = { added: 0, replaced: 0, preserved: 0, copies: 0, deleted: 0, failed: 0 };
+  const totals = {
+    added: 0,
+    replaced: 0,
+    preserved: 0,
+    respected: 0,
+    copies: 0,
+    deleted: 0,
+    failed: 0,
+  };
   for (const bake of bakes) {
     totals.added += bake.added.length;
     totals.replaced += bake.replaced.length;
     totals.preserved += bake.preserved.length;
+    totals.respected += bake.respected.length;
     totals.copies += bake.copies;
     totals.deleted += bake.deleted.length;
     totals.failed += bake.failed.length;
@@ -381,6 +408,7 @@ function summarize(prepared: PreparedBake, bakes: BakeOutcome[]): BakeSummary {
     `추가 ${totals.added}`,
     `교체 ${totals.replaced}`,
     `사람이 고친 것 보존 ${totals.preserved}`,
+    ...(totals.respected ? [`수정 사항으로 받은 것 ${totals.respected}`] : []),
     `복사본 그대로 ${totals.copies}`,
     `사람이 지운 것 ${totals.deleted}`,
   ];
@@ -449,7 +477,7 @@ export async function recordBaseline(
 /** Records of an instance for the card: one line per bake and link, newest first. */
 export function bakeRecords(store: JigStore, instanceId: string, jig: LoadedJig, linkId?: string) {
   const out: (JigBake & { pendingBaseline: boolean })[] = [];
-  for (const decl of jig.manifest.bake ?? []) {
+  for (const decl of bakeDeclsOf(jig)) {
     const records = linkId
       ? store.bakes(instanceId, decl.id, linkId)
       : allBakes(store, instanceId, decl.id);
@@ -463,4 +491,13 @@ function allBakes(store: JigStore, instanceId: string, bakeId: string) {
   return [...links].flatMap((linkId) => store.bakes(instanceId, bakeId, linkId));
 }
 export const bakeItemsOf = (record: JigBake) => record.items as BakeRecordItems;
+/** The bakes an instance can offer, for the card (the jig's own, then the built-ins). */
+export const bakeOffers = (jig: LoadedJig) =>
+  bakeDeclsOf(jig).map((decl) => ({
+    id: decl.id,
+    template: decl.template,
+    layer: decl.layer,
+    requires: decl.requires ?? [],
+    builtin: isBuiltinBake(decl),
+  }));
 export type { BakeItem, BakePlan, Preserved, Resolve };

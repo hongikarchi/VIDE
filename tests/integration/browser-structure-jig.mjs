@@ -150,6 +150,19 @@ try {
   const rows = result.getByRole('table', { name: '부재 검정' }).locator('tbody tr');
   assert.ok((await rows.count()) >= 12, 'every member has a check row');
   assert.match(await result.textContent(), /검토하지 않음: 풍하중/);
+  // A confirmed result says so; the legend reads the analysis' colour bands (SPEC-06.7).
+  assert.equal(await result.locator('h3 .pill[data-mode]').textContent(), '확정 결과');
+  const bands = result.getByRole('group', { name: /판정 범례.*구간/ });
+  assert.match(await bands.textContent(), /통과 < 0\.70.*주의 0\.70~1\.00.*초과 ≥ 1\.00/s);
+  // The check table goes out as CSV with the result label on every row.
+  const [download] = await Promise.all([
+    page.waitForEvent('download'),
+    result.getByRole('button', { name: 'CSV로 내보내기' }).click(),
+  ]);
+  const csv = await (await download.createReadStream()).toArray();
+  const lines = Buffer.concat(csv).toString('utf8').replace(/^﻿/, '').trim().split('\r\n');
+  assert.match(lines[0], /^결과,부재,역할,단면,검정비/);
+  assert.ok(lines.length >= 13 && lines.slice(1).every((line) => line.startsWith('확정 결과,')));
   if (shot) await page.screenshot({ path: join(shot, 'structure-jig-result.png') });
 
   // A row selects its Rhino object while the jig stays open beside the model (non-modal).
@@ -170,7 +183,7 @@ try {
           .filter((id) => colors.includes(window.videViewport.colorOf(id))).length,
       verdicts,
     );
-  await result.getByRole('button', { name: '모델에 판정색' }).click();
+  await result.getByRole('button', { name: '판정색 켜기' }).click();
   await page.waitForFunction(
     (colors) =>
       window.videViewport
@@ -192,7 +205,7 @@ try {
   assert.equal(await painted(), 0, 'verdict colours are cleared');
   assert.equal(await rows.count(), rowCount);
   assert.equal(
-    await result.getByRole('button', { name: '전체' }).getAttribute('aria-pressed'),
+    await result.getByRole('button', { name: '전체', exact: true }).getAttribute('aria-pressed'),
     'true',
   );
   assert.deepEqual(errors, []);

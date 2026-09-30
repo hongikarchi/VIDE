@@ -74,11 +74,72 @@ export const priorityConflict: SyntheticLayout = {
   slab: rect(-1.5, -1.5, 31.5, 7.5),
 };
 
+/**
+ * drawn-two-bay (M2, drawn mode): six columns on an 8 m × 7 m two-bay grid turned 15°, girders as a
+ * person drew them — one ending 0.2 m short of its column (snapped), one starting 0.15 m off
+ * (snapped), a duplicate piece (merged), a 2.5 m girder past the last column (dangling end), one
+ * long girder over a middle column (cut there) — a planter zone over the left bay, restraint at
+ * EL 3.
+ */
+export const drawnTwoBay: SyntheticLayout = {
+  angleDeg: 15,
+  origin: [500, 800],
+  columnZ: [0, 6],
+  columns: [
+    { at: [0, 0] },
+    { at: [8, 0] },
+    { at: [16, 0] },
+    { at: [0, 7] },
+    { at: [8, 7] },
+    { at: [16, 7] },
+  ],
+  girders: [
+    [
+      [0, 0],
+      [16, 0],
+    ],
+    [
+      [0, 7],
+      [15.8, 7],
+    ],
+    [
+      [0, 0],
+      [0, 7],
+    ],
+    [
+      [8, 0.15],
+      [8, 7],
+    ],
+    [
+      [16, 0],
+      [16, 7],
+    ],
+    [
+      [0, 0],
+      [8, 0],
+    ],
+    [
+      [16, 0],
+      [18.5, 0],
+    ],
+  ],
+  existing: [{ at: [4, 3.5] }, { at: [12, 3.5] }],
+  bands: [],
+  slab: rect(-1, -1, 18.5, 8),
+  planter: [rect(-1, -1, 8, 8)],
+};
+
 export const CASES: FixtureCase[] = [
   {
     name: 'grid-rot21',
     layout: gridRot21M1,
-    params: { capClearance: 0, columnSize: 0.5, spanMax: 12, splitTol: 0.3 },
+    params: {
+      capClearance: 0,
+      columnSize: 0.5,
+      spanMax: 12,
+      splitTol: 0.3,
+      layoutSource: 'proposed',
+    },
     expect: {
       steps: {
         assemble: {
@@ -105,7 +166,7 @@ export const CASES: FixtureCase[] = [
   {
     name: 'grid-4m-bay',
     layout: grid4mBayM1,
-    params: { capClearance: 0, spanMax: 12, cantileverMax: 4 },
+    params: { capClearance: 0, spanMax: 12, cantileverMax: 4, layoutSource: 'proposed' },
     expect: {
       steps: {
         diagnose: { summary: { cap: { count: 0 }, openCut: { count: 3 }, basin: { count: 0 } } },
@@ -118,11 +179,27 @@ export const CASES: FixtureCase[] = [
   {
     name: 'priority-conflict',
     layout: priorityConflict,
-    params: { spanMax: 12, capClearance: 0.2 },
+    params: { spanMax: 12, capClearance: 0.2, layoutSource: 'proposed' },
     expect: {
       steps: {
         axes: { objective: { spanOver: 0 }, relaxed: ['openCut', 'cap'] },
       },
+      statuses: { confirmInputs: 'confirmed' },
+    },
+  },
+  {
+    name: 'drawn-two-bay',
+    layout: drawnTwoBay,
+    params: { spanMax: 12, restraintOn: true, restraintLevel: 3 },
+    expect: {
+      steps: {
+        // Every end within reach counts as snapped (9), two of them actually moved (0.2, 0.15 m).
+        girders: { summary: { girders: 6, snapped: 9, dangling: 1, spansOver: 0 } },
+        cells: { summary: { cells: 2 } },
+        beams: { summary: { beams: 4, edgeCantilevers: 0 } },
+        axes: { skipped: true },
+      },
+      // model·analysis need the engine (structure sections and core): tests/core/s06-m2.test.mjs.
       statuses: { confirmInputs: 'confirmed' },
     },
   },

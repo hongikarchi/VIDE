@@ -1,0 +1,65 @@
+{
+  "case": "dangling-end",
+  "note": "합성: 기둥 없는 끝 1개, 슬래브 경계와 보이드를 넘는 거더",
+  "input": {
+    "site": {
+      "columns": {
+        "rows": [
+          {
+            "id": "c-a",
+            "layer": "S-COL",
+            "line": [0, 0, 0, 0, 0, 6]
+          },
+          {
+            "id": "c-b",
+            "layer": "S-COL",
+            "line": [10, 0, 0, 10, 0, 6]
+          }
+        ]
+      },
+      "girders": {
+        "rows": [
+          {
+            "id": "g-1",
+            "layer": "S-GIRDER",
+            "line": [0, 0, 6, 10, 0, 6]
+          },
+          {
+            "id": "g-2",
+            "layer": "S-GIRDER",
+            "line": [10, 0, 6, 10, 6, 6]
+          }
+        ]
+      },
+      "slab": {
+        "rows": [
+          {
+            "id": "s-1",
+            "layer": "S-SLAB",
+            "line": [-1, -1, 6.2, 11, -1, 6.2, 11, 4, 6.2, -1, 4, 6.2, -1, -1, 6.2]
+          }
+        ]
+      },
+      "voids": {
+        "rows": [
+          {
+            "id": "v-1",
+            "layer": "S-VOID",
+            "line": [4, -0.5, 6.2, 6, -0.5, 6.2, 6, 0.5, 6.2, 4, 0.5, 6.2, 4, -0.5, 6.2]
+          }
+        ]
+      }
+    }
+  },
+  "params": {},
+  "expect": {
+    "summary": {
+      "girders": 2,
+      "snapped": 0,
+      "dangling": 1,
+      "spansOver": 0
+    },
+    "spans": 1,
+    "crossings": 3
+  }
+}

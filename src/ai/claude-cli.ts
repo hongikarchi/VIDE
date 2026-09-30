@@ -304,6 +304,20 @@ export function sessionArguments(args: string[], session: SessionOptions) {
   args.push(resume ? '--resume' : '--session-id', id, '--system-prompt-snapshot', 'off');
   return args;
 }
+/**
+ * The JSON Schema a turn asks for (PLAN-24 T-062): the included `turn-output` packet item names
+ * it; the CLI enforces it (Claude `--json-schema`, Codex `--output-schema <file>`).
+ */
+export function outputSchemaOf(context: ProviderContext): string | undefined {
+  const item = context.items?.find(
+    (entry) => entry?.type === 'turn-output' && context.includedIds?.includes(entry.id),
+  );
+  const schema = (item?.data as { schema?: unknown } | undefined)?.schema;
+  if (!schema || typeof schema !== 'object' || Array.isArray(schema)) return undefined;
+  const text = JSON.stringify(schema);
+  if (Buffer.byteLength(text) > 16 * 1024) throw error('INVALID_CONTEXT');
+  return text;
+}
 /** The packet of a session turn carries the turn's rules; the neutral prompt names none. */
 export function withTurnRules(context: ProviderContext, connection?: AgentConnection) {
   const item = { id: 'turn-rules', type: 'turn-rules', data: turnRules(connection) };
@@ -426,6 +440,11 @@ export class ClaudeCli {
     if (this.model) args.push('--model', this.model);
     if (this.effort) args.push('--effort', this.effort);
     return this.session ? sessionArguments(args, this.session) : args;
+  }
+  /** Adds the structured-output flag of a turn that asks for one (keeps every other argument). */
+  async withOutputSchema(args: string[], schema: string | undefined, _cwd: string) {
+    if (schema) args.push('--json-schema', schema);
+    return args;
   }
   get eventFormat(): AgentFormat {
     return 'claude';
@@ -554,9 +573,14 @@ export class ClaudeCli {
       if (this.agent) env.VIDE_AGENT_TOKEN = this.agent.token;
       child = this.spawnProcess(
         this.executable,
-        configureAgentArguments(this.arguments(), this.eventFormat, this.agent, {
-          neutral: !!this.session,
-        }),
+        configureAgentArguments(
+          await this.withOutputSchema(this.arguments(), outputSchemaOf(context), cwd),
+          this.eventFormat,
+          this.agent,
+          {
+            neutral: !!this.session,
+          },
+        ),
         {
           cwd,
           env,
@@ -764,6 +788,9 @@ export class ClaudeCli {
             text: final.result,
             revision: selected.packet.revision,
             manifest: selected.manifest,
+            ...(final.structured_output !== undefined
+              ? { structured: final.structured_output }
+              : {}),
             usage: {
               inputTokens: final.usage?.input_tokens ?? null,
               outputTokens: final.usage?.output_tokens ?? null,

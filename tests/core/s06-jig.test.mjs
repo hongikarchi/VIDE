@@ -58,9 +58,9 @@ test('the package validates, its fixtures are current, and the panel binds only 
   assert.deepEqual(panel.issues, []);
   assert.deepEqual(
     panel.spec.left.map((p) => p.part),
-    ['step-rail', 'role-card', 'param-group', 'param-group', 'param-group', 'param-group'],
+    ['step-rail', 'role-card', ...Array(8).fill('param-group'), 'bake-card'],
   );
-  assert.equal(panel.spec.drawer.tabs.length, 7);
+  assert.equal(panel.spec.drawer.tabs.length, 8);
   // The fixture files on disk are what `cases.ts` builds (regenerate with the cases when they change).
   for (const entry of CASES) {
     const built = files(entry.name);
@@ -401,10 +401,17 @@ test('the whole jig runs in the engine runner: the human step waits without bloc
       ['assemble', 'done'],
       ['confirmInputs', 'waiting'],
       ['diagnose', 'done'],
+      ['girders', 'done'],
       ['axes', 'done'],
+      ['cells', 'done'],
       ['columns', 'done'],
+      ['beams', 'done'],
       ['footprints', 'done'],
+      ['model', 'done'],
       ['interference', 'done'],
+      ['analysis', 'done'],
+      ['confirmAnalysis', 'waiting'],
+      ['analysisConfirmed', 'blocked'],
     ],
   );
   const flagged = report.steps
@@ -426,7 +433,7 @@ test('the whole jig runs in the engine runner: the human step waits without bloc
   );
   assert.deepEqual(
     selftest.cases.map((c) => c.name),
-    ['grid-4m-bay', 'grid-rot21', 'priority-conflict'],
+    ['drawn-two-bay', 'grid-4m-bay', 'grid-rot21', 'priority-conflict'],
   );
 });
 

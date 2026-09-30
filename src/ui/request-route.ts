@@ -867,3 +867,106 @@ export function routeCard(
       };
   }
 }
+
+// ── The composer's side (T-049): what it tells the router and what it records. ───────────────
+/** Screen names of the official jigs offered by their rule words. */
+const OFFICIAL_JIG_NAMES: Record<string, string> = {
+  structure: '구조 검토',
+  sync: '모델·도면 정합',
+  knowledge: '프로젝트 현황',
+};
+/** The official jigs as the rules see them (their words open a jig without Jev). */
+export function officialRouteJigs(): RouteJig[] {
+  return Object.entries(OFFICIAL_JIG_ROUTING).map(([id, entry]) => ({
+    id,
+    name: OFFICIAL_JIG_NAMES[id] ?? id,
+    words: entry.words,
+  }));
+}
+const PARAM_TYPES = new Set<NonNullable<RouteParam['type']>>([
+  'length',
+  'area',
+  'force',
+  'lineLoad',
+  'areaLoad',
+  'angle',
+  'ratio',
+  'count',
+  'level',
+  'choice',
+  'toggle',
+]);
+/**
+ * The open jig instance's settings (the engine's ParamView, ARCH-03 §4) as routing context: the
+ * declarations the words are read against and the current values in stored units. Malformed rows
+ * are left out, so a setting the screen cannot read is never changed from words.
+ */
+export function instanceRouteContext(params: unknown): {
+  params: RouteParam[];
+  values: Record<string, number | string | boolean>;
+} {
+  const out: RouteParam[] = [];
+  const values: Record<string, number | string | boolean> = {};
+  for (const raw of Array.isArray(params) ? params : []) {
+    const p = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
+    if (typeof p.key !== 'string' || typeof p.title !== 'string') continue;
+    const param: RouteParam = { key: p.key, title: p.title };
+    if (typeof p.help === 'string') param.help = p.help;
+    if (PARAM_TYPES.has(p.type as NonNullable<RouteParam['type']>))
+      param.type = p.type as RouteParam['type'];
+    if (typeof p.unit === 'string' && p.unit) param.unit = p.unit;
+    if (typeof p.displayUnit === 'string' && p.displayUnit)
+      param.display = {
+        unit: p.displayUnit,
+        decimals: typeof p.decimals === 'number' ? p.decimals : 3,
+      };
+    const range = p.range as RouteParam['range'] | undefined;
+    if (
+      range &&
+      typeof range.min === 'number' &&
+      typeof range.max === 'number' &&
+      typeof range.step === 'number'
+    )
+      param.range = { min: range.min, max: range.max, step: range.step };
+    if (Array.isArray(p.choices))
+      param.choices = (p.choices as { value?: unknown; label?: unknown }[])
+        .filter((c) => typeof c?.value === 'string')
+        .map((c) => ({
+          value: c.value as string,
+          label: typeof c.label === 'string' ? c.label : (c.value as string),
+        }));
+    const words = p.words as RouteParam['words'] | undefined;
+    if (
+      words &&
+      Array.isArray(words.more) &&
+      Array.isArray(words.less) &&
+      (words.sign === 1 || words.sign === -1)
+    )
+      param.words = { more: words.more, less: words.less, sign: words.sign };
+    if (p.fixedAtPin === true) param.fixedAtPin = true;
+    out.push(param);
+    if (['number', 'string', 'boolean'].includes(typeof p.value))
+      values[p.key] = p.value as number | string | boolean;
+  }
+  return { params: out, values };
+}
+/** The `/route` query: the words, the object groups and the open jig's settings (title and help only). */
+export function routeQuery(body: string, subjects: readonly Subject[], context: RouteContext = {}) {
+  return {
+    body,
+    subjects: subjects.map(({ id, label }) => ({ id, label })),
+    ...(context.params?.length
+      ? {
+          params: context.params.map(({ key, title, help }) => ({
+            key,
+            title,
+            ...(help ? { help } : {}),
+          })),
+        }
+      : {}),
+  };
+}
+/** What 'AI 작업으로 보내기' records (`/route/revert`): the route it undid and who chose it. */
+export const routeRevert = (route: Route) => ({ target: route.target, by: route.by ?? 'rules' });
+/** Routes the composer hands to the conversation AI unchanged (SPEC-02.17 2). */
+export const goesToAi = (route: Route) => AI_ROUTES.includes(route.target);

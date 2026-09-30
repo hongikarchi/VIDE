@@ -1,5 +1,6 @@
 {
   "capClearance": 0,
   "spanMax": 12,
-  "cantileverMax": 4
+  "cantileverMax": 4,
+  "layoutSource": "proposed"
 }

@@ -1,0 +1,382 @@
+{
+  "template": "study",
+  "title": "골조 사전 점검 보고서",
+  "eyebrow": "S-06 골조 사전 점검",
+  "headline": {
+    "cases": [
+      {
+        "when": "step.girders.summary.spansOver > 0",
+        "template": "그려진 거더 경간 {step.girders.summary.spansOver}개가 상한 {$spanMax} m를 넘습니다.",
+        "tone": "ng"
+      },
+      {
+        "when": "step.diagnose.summary.cap.count > 0",
+        "template": "지금 배치의 파일캡 간섭 {step.diagnose.summary.cap.count}개를 먼저 풀어야 합니다.",
+        "tone": "ng"
+      },
+      {
+        "when": "step.analysisConfirmed.confirmed.result.counts.ng > 0",
+        "template": "확정 해석에서 검정을 넘는 부재가 {step.analysisConfirmed.confirmed.result.counts.ng}개 있습니다.",
+        "tone": "ng"
+      },
+      {
+        "when": "step.analysisConfirmed.confirmed.result.maxRatio <= 1",
+        "template": "확정 해석에서 최대 검정비 {step.analysisConfirmed.confirmed.result.maxRatio:2}로 부재 검정을 통과합니다.",
+        "tone": "ok"
+      },
+      {
+        "when": "step.girders.summary.spansOver == 0",
+        "template": "그려진 거더 경간이 모두 상한 {$spanMax} m 이내이며, 부재 검정은 아직 확정되지 않았습니다.",
+        "tone": "warn"
+      },
+      {
+        "when": "step.diagnose.summary.spans.over > 0",
+        "template": "지금 배치의 경간 {step.diagnose.summary.spans.over}개가 상한 {$spanMax} m를 넘습니다.",
+        "tone": "ng"
+      },
+      {
+        "when": "step.diagnose.summary.spans.over == 0",
+        "template": "지금 배치의 경간이 모두 상한 {$spanMax} m 이내이며, 부재 검정은 아직 없습니다.",
+        "tone": "warn"
+      },
+      {
+        "template": "아직 계산한 결과가 없습니다. 입력을 확인하고 단계를 실행하면 채워집니다.",
+        "tone": "na"
+      }
+    ]
+  },
+  "lede": {
+    "cases": [
+      {
+        "template": "지금 그려진 기둥·거더를 읽어 간섭·경간·부재 검정·일람표를 차례로 정리했습니다. 판정은 탐색용 예비값이며 구조사무소 확인 전입니다."
+      }
+    ]
+  },
+  "kpis": [
+    { "label": "그려진 기둥", "from": "step.diagnose.summary.columns", "unit": "개" },
+    { "label": "파일캡 간섭", "from": "step.diagnose.summary.cap.count", "unit": "개" },
+    { "label": "경간 초과", "from": "step.girders.summary.spansOver", "unit": "개" },
+    {
+      "label": "중력 조합 부재 검정 여유",
+      "from": "step.analysisConfirmed.confirmed.result.margin.value",
+      "decimals": 2,
+      "note": "확정 해석 뒤에 채웁니다"
+    },
+    { "label": "강재 합계", "from": "step.schedule.totals.weight_t", "unit": "t", "decimals": 1 }
+  ],
+  "sections": [
+    {
+      "id": "placement",
+      "from": ["step.diagnose.summary", "step.interference.summary"],
+      "title": {
+        "cases": [
+          {
+            "when": "step.diagnose.summary.cap.count == 0 && step.diagnose.summary.openCut.count == 0 && step.diagnose.summary.basin.count == 0",
+            "template": "그려진 기둥 {step.diagnose.summary.columns}개에 파일캡·오픈컷·유수지 보 간섭이 없습니다.",
+            "tone": "ok"
+          },
+          {
+            "when": "step.diagnose.summary.cap.count > 0",
+            "template": "그려진 기둥 {step.diagnose.summary.columns}개 중 파일캡 간섭 {step.diagnose.summary.cap.count}개는 배치를 바꿔야 합니다.",
+            "tone": "ng"
+          },
+          {
+            "when": "step.diagnose.summary.columns >= 0",
+            "template": "그려진 기둥 {step.diagnose.summary.columns}개 중 오픈컷 협의 {step.diagnose.summary.openCut.count}개, 유수지 보 경고 {step.diagnose.summary.basin.count}개가 있습니다.",
+            "tone": "warn"
+          },
+          {
+            "when": "step.interference.summary.cap.count == 0 && step.interference.summary.openCut.count == 0 && step.interference.summary.basin.count == 0",
+            "template": "제안 배치의 기둥 {step.interference.summary.columns}개에 간섭이 없습니다.",
+            "tone": "ok"
+          },
+          {
+            "when": "step.interference.summary.columns >= 0",
+            "template": "제안 배치의 기둥 {step.interference.summary.columns}개 중 파일캡 {step.interference.summary.cap.count}개, 오픈컷 {step.interference.summary.openCut.count}개, 유수지 보 {step.interference.summary.basin.count}개를 확인해야 합니다.",
+            "tone": "warn"
+          },
+          {
+            "template": "배치·기초 간섭: 아직 없음. 진단 단계를 실행하면 채워집니다.",
+            "tone": "na"
+          }
+        ]
+      },
+      "lede": {
+        "cases": [
+          {
+            "when": "step.diagnose.summary.cap.incomplete > 0",
+            "template": "읽지 못한 기초 때문에 파일캡 판정 {step.diagnose.summary.cap.incomplete}개는 미완입니다. 미완은 통과로 세지 않습니다.",
+            "tone": "warn"
+          },
+          {
+            "template": "거리는 평면 발자국 사이의 부호 거리이며, 음수는 겹친 깊이입니다. 협의 항목은 남은 조건 절에 올립니다."
+          }
+        ]
+      },
+      "blocks": [
+        {
+          "kind": "table",
+          "title": "그려진 기둥의 간섭 거리",
+          "from": "step.diagnose.tables.interference",
+          "columns": [
+            { "field": "key", "label": "기둥" },
+            { "field": "cap.distance", "label": "파일캡", "unit": "m", "decimals": 2 },
+            { "field": "openCut.distance", "label": "오픈컷", "unit": "m", "decimals": 2 },
+            { "field": "basin.distance", "label": "유수지 보", "unit": "m", "decimals": 2 }
+          ]
+        },
+        {
+          "kind": "table",
+          "title": "제안 배치의 간섭 판정",
+          "from": "step.interference.tables.interference",
+          "columns": [
+            { "field": "key", "label": "기둥" },
+            { "field": "judgement", "label": "판정" },
+            { "field": "capText", "label": "파일캡" },
+            { "field": "cutText", "label": "오픈컷" },
+            { "field": "basinText", "label": "유수지 보" }
+          ]
+        },
+        {
+          "kind": "list",
+          "title": "검사하지 못한 항목",
+          "from": "step.diagnose.missing",
+          "field": "reason"
+        }
+      ]
+    },
+    {
+      "id": "spans",
+      "from": ["step.girders.summary", "step.diagnose.summary.spans", "$spanMax"],
+      "title": {
+        "cases": [
+          {
+            "when": "step.girders.summary.spansOver > 0",
+            "template": "그려진 거더 경간 {step.girders.spans.length}개 중 {step.girders.summary.spansOver}개가 상한 {$spanMax} m를 넘습니다.",
+            "tone": "ng"
+          },
+          {
+            "when": "step.girders.summary.spansOver == 0",
+            "template": "그려진 거더 경간 {step.girders.spans.length}개가 모두 상한 {$spanMax} m 이내입니다.",
+            "tone": "ok"
+          },
+          {
+            "when": "step.diagnose.summary.spans.over > 0",
+            "template": "지금 배치의 경간 {step.diagnose.summary.spans.total}개 중 {step.diagnose.summary.spans.over}개가 상한 {$spanMax} m를 넘고, 가장 긴 경간은 {step.diagnose.summary.spans.max:2} m입니다.",
+            "tone": "ng"
+          },
+          {
+            "when": "step.diagnose.summary.spans.over == 0",
+            "template": "지금 배치의 경간 {step.diagnose.summary.spans.total}개가 모두 상한 {$spanMax} m 이내입니다.",
+            "tone": "ok"
+          },
+          {
+            "template": "경간: 아직 없음. 거더 단계를 실행하면 채워집니다.",
+            "tone": "na"
+          }
+        ]
+      },
+      "lede": {
+        "cases": [
+          {
+            "when": "step.girders.summary.dangling > 0",
+            "template": "기둥에 닿지 않은 거더 끝 {step.girders.summary.dangling}개는 경간에 넣지 않았습니다.",
+            "tone": "warn"
+          },
+          {
+            "template": "경간은 기둥 상단 사이를 거더를 따라 잰 평면 길이입니다."
+          }
+        ]
+      },
+      "blocks": [
+        {
+          "kind": "table",
+          "title": "그려진 거더 경간",
+          "from": "step.girders.spans",
+          "columns": [
+            { "field": "girderId", "label": "거더" },
+            { "field": "from", "label": "시작 기둥" },
+            { "field": "to", "label": "끝 기둥" },
+            { "field": "planLength_m", "label": "평면 길이", "unit": "m", "decimals": 2 },
+            { "field": "over", "label": "상한 초과" }
+          ]
+        },
+        {
+          "kind": "compare-bars",
+          "title": "지금 배치의 경간",
+          "from": "step.diagnose.tables.spans",
+          "label": "key",
+          "value": "length",
+          "unit": "m",
+          "decimals": 2,
+          "limit": "$spanMax",
+          "limitLabel": "경간 상한"
+        },
+        {
+          "kind": "list",
+          "title": "기둥에 닿지 않은 거더",
+          "from": "step.girders.dangling",
+          "field": "girderId"
+        }
+      ]
+    },
+    {
+      "id": "members",
+      "from": [
+        "step.analysisConfirmed.summary",
+        "step.analysisConfirmed.confirmed.result.counts",
+        "step.analysisConfirmed.confirmed.result.maxRatio"
+      ],
+      "title": {
+        "cases": [
+          {
+            "when": "step.analysisConfirmed.confirmed.result.counts.ng > 0",
+            "template": "확정 해석에서 부재 {step.analysisConfirmed.summary.members}개 중 {step.analysisConfirmed.confirmed.result.counts.ng}개가 검정을 넘습니다.",
+            "tone": "ng"
+          },
+          {
+            "when": "step.analysisConfirmed.confirmed.result.maxRatio <= 1",
+            "template": "확정 해석에서 부재 {step.analysisConfirmed.summary.members}개의 최대 검정비는 {step.analysisConfirmed.confirmed.result.maxRatio:2}입니다.",
+            "tone": "ok"
+          },
+          {
+            "when": "step.analysis.preview.counts.ng > 0",
+            "template": "미확정 미리보기에서 부재 {step.analysis.summary.members}개 중 {step.analysis.preview.counts.ng}개가 검정을 넘습니다. 확정 전 값입니다.",
+            "tone": "warn"
+          },
+          {
+            "when": "step.analysis.preview.maxRatio >= 0",
+            "template": "미확정 미리보기의 최대 검정비는 {step.analysis.preview.maxRatio:2}입니다. 확정 전 값이라 결론에 쓰지 않습니다.",
+            "tone": "warn"
+          },
+          {
+            "when": "step.analysis.summary.members >= 0",
+            "template": "부재 검정을 계산하지 못했습니다. 해석 입력을 확인해야 합니다.",
+            "tone": "na"
+          },
+          {
+            "template": "부재 검정: 아직 없음. 해석 단계를 실행하면 채워집니다.",
+            "tone": "na"
+          }
+        ]
+      },
+      "lede": {
+        "cases": [
+          {
+            "when": "step.analysisConfirmed.confirmed.result.maxRatio >= 0",
+            "template": "검정비와 검정 여유는 사람이 확인한 확정 해석 기준입니다."
+          },
+          {
+            "when": "step.analysis.summary.members >= 0",
+            "template": "해석을 확정하지 않아 검정 여유 칸은 비워 두었습니다. 해석을 확인하고 확정하면 채워집니다."
+          },
+          {
+            "template": "해석 결과가 없어 검정 여유 칸은 비어 있습니다."
+          }
+        ]
+      },
+      "blocks": [
+        {
+          "kind": "list",
+          "title": "해석 가정",
+          "from": "step.analysis.assumptions"
+        },
+        {
+          "kind": "list",
+          "title": "해석 점검 메모",
+          "from": "step.analysis.preview.issues",
+          "field": "message"
+        }
+      ]
+    },
+    {
+      "id": "schedule",
+      "from": ["step.schedule.totals", "step.schedule.rows", "step.schedule.unlisted"],
+      "title": {
+        "cases": [
+          {
+            "when": "step.schedule.unlisted.length > 0",
+            "template": "부호 {step.schedule.rows.length}종에 부재 {step.schedule.totals.count}개를 올렸고, 부호 없는 부재 {step.schedule.unlisted.length}개가 남았습니다.",
+            "tone": "warn"
+          },
+          {
+            "when": "step.schedule.totals.count >= 0",
+            "template": "부호 {step.schedule.rows.length}종, 부재 {step.schedule.totals.count}개, 강재 {step.schedule.totals.weight_t:1} t입니다.",
+            "tone": "ok"
+          },
+          {
+            "template": "일람표: 아직 없음. 부재 크기를 정하면 채워집니다.",
+            "tone": "na"
+          }
+        ]
+      },
+      "blocks": [
+        {
+          "kind": "ledger",
+          "title": "부호 일람표",
+          "from": "step.schedule.rows",
+          "columns": [
+            { "field": "mark", "label": "부호" },
+            { "field": "sectionName", "label": "단면" },
+            { "field": "count", "label": "개수" },
+            { "field": "totalLength_m", "label": "길이", "unit": "m", "decimals": 2 },
+            { "field": "weight_t", "label": "중량", "unit": "t", "decimals": 2 },
+            { "field": "maxRatio", "label": "최대 검정비", "decimals": 2 }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "open",
+      "from": ["step.interference.tables.review", "step.diagnose.summary.openCut"],
+      "title": {
+        "cases": [
+          {
+            "when": "step.interference.tables.review.length > 0",
+            "template": "확인이 필요한 항목 {step.interference.tables.review.length}개가 남아 있습니다.",
+            "tone": "warn"
+          },
+          {
+            "when": "step.diagnose.summary.openCut.count > 0",
+            "template": "오픈컷 협의 {step.diagnose.summary.openCut.count}개를 토목사무소와 확인해야 합니다.",
+            "tone": "warn"
+          },
+          {
+            "template": "남은 조건은 아래 목록과 첫 쪽의 검토하지 않은 항목입니다."
+          }
+        ]
+      },
+      "blocks": [
+        {
+          "kind": "table",
+          "title": "확인할 항목",
+          "from": "step.interference.tables.review",
+          "columns": [
+            { "field": "key", "label": "번호" },
+            { "field": "judgement", "label": "판정" },
+            { "field": "text", "label": "내용" }
+          ]
+        },
+        { "kind": "list", "title": "진단 메모", "from": "step.diagnose.notes" },
+        { "kind": "list", "title": "거더 메모", "from": "step.girders.notes" },
+        { "kind": "list", "title": "간섭 메모", "from": "step.interference.notes" }
+      ]
+    }
+  ],
+  "assumptions": [
+    "거더 기준선은 상단선이며, 해석도 상단선으로 하고 편심은 무시했습니다.",
+    "경간은 기둥 상단 사이의 평면 길이로 잽니다.",
+    "부재 부호(SC·SG·SB·SEG·SCB·STB)는 표준 파일을 확인하기 전까지 가정입니다.",
+    "보 아래 마감 두께는 가정값입니다.",
+    "판정은 탐색용 예비값이며 흐름을 막지 않습니다."
+  ],
+  "unchecked": [
+    "접합부 설계",
+    "기초·말뚝 설계와 파일캡 크기 확정",
+    "신설 E.J. 상세",
+    "기존 기초의 구속 강성",
+    "수평 하중(지진·풍) 조합의 부재 검정",
+    "사용성(진동) 검토"
+  ],
+  "polish": "none"
+}

@@ -32,6 +32,9 @@ export interface SyntheticLayout {
   /** Drawn zones of the instance (local rings): fire route (no columns) and requested areas. */
   fire?: Local[][];
   requested?: { id: string; ring: Local[] }[];
+  /** Load zones of the instance (local rings, M2): planter and dry areas. */
+  planter?: Local[][];
+  dry?: Local[][];
 }
 
 export interface SyntheticSync {
@@ -309,6 +312,10 @@ export function roleInputs(
     site,
     fireRoute: (layout.fire ?? []).map((ring, k) => zone(`fire-${k + 1}`, ring)),
     requestedZones: (layout.requested ?? []).map((r) => zone(r.id, r.ring)),
+    ...(layout.planter
+      ? { planterZones: layout.planter.map((ring, k) => zone(`planter-${k + 1}`, ring)) }
+      : {}),
+    ...(layout.dry ? { dryZones: layout.dry.map((ring, k) => zone(`dry-${k + 1}`, ring)) } : {}),
   };
 }
 

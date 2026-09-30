@@ -15,7 +15,13 @@ import {
   renderChunks,
   renderTemplate,
 } from '../../src/jigs/bake/templates.ts';
-import { curveOf, extractItems, planBake } from '../../src/jigs/bake/plan.ts';
+import { absorbedOf, curveOf, extractItems, planBake } from '../../src/jigs/bake/plan.ts';
+import {
+  BUILTIN_BAKES,
+  bakeDeclOf,
+  bakeDeclsOf,
+  builtinOutput,
+} from '../../src/jigs/bake/builtin.ts';
 
 // T-055 (PLAN-22): the data block is the only value a template receives; the rendered body is
 // the template text with the one placeholder replaced by base64; large bakes split into chunks;
@@ -471,8 +477,12 @@ test('planBake blocks replacement on hidden or locked layers and honours keep, o
   });
   assert.deepEqual(resolved.kept, ['col:1']);
   assert.equal(resolved.carry['col:1'].state, 'kept');
-  assert.deepEqual(resolved.deleteIds, [guid(2), guid(3)]);
-  assert.deepEqual(resolved.replaced, ['col:2', 'col:3']);
+  // Absorb takes the person's object as the jig's item: it is neither deleted nor made again.
+  assert.deepEqual(resolved.deleteIds, [guid(2)]);
+  assert.deepEqual(resolved.replaced, ['col:2']);
+  assert.deepEqual(resolved.respected, ['col:3']);
+  assert.ok(!resolved.create.some((i) => i.key === 'col:3'));
+  assert.deepEqual(resolved.carry['col:3'], { ...recorded(3), hash: 'h3-edited' });
   assert.equal(resolved.absorbed.length, 1);
   assert.equal(resolved.absorbed[0].target.identity.key, 'col:3');
   assert.equal(resolved.absorbed[0].origin, 'host-edit');
@@ -526,4 +536,173 @@ test('planBake preserves objects whose baseline read never succeeded until it do
   );
   assert.deepEqual(pending.create, []);
   assert.equal(pending.copies, 1, 'the unrelated run-1 object is a copy for this plan');
+});
+
+test('an absorbed edit is respected by later bakes until the person edits it again or overwrites it', () => {
+  const prior = record({ 'col:1': recorded(1), 'col:2': recorded(2) });
+  const overrides = [
+    // The override the absorb choice added (SPEC-07.13), and unrelated ones that must not count.
+    {
+      target: { kind: 'bake-item', identity: { key: 'col:1', bake: 'columns' } },
+      op: 'set',
+      fields: { nativeId: guid(1), hash: 'h1-taken', layer: LAYER },
+      origin: 'host-edit',
+    },
+    {
+      target: { kind: 'bake-item', identity: { key: 'col:2', bake: 'beams' } },
+      op: 'set',
+      fields: { nativeId: guid(2), hash: 'x', layer: LAYER },
+      origin: 'host-edit',
+    },
+    {
+      target: { kind: 'column', identity: { key: 'col:2' } },
+      op: 'move',
+      fields: {},
+      origin: 'pen',
+    },
+  ];
+  const absorbed = absorbedOf(overrides, 'columns');
+  assert.deepEqual(absorbed, { 'col:1': { nativeId: guid(1), hash: 'h1-taken', layer: LAYER } });
+  const plan = (hash1, resolve) =>
+    planBake({
+      instanceId: 'inst-1',
+      bakeId: 'columns',
+      planned: ['col:1', 'col:2'].map(item),
+      prior,
+      read: model([
+        row(guid(1), LAYER, hash1, tagged('col:1')),
+        row(guid(2), LAYER, 'h2', tagged('col:2')),
+      ]),
+      absorbed,
+      resolve,
+    });
+  const same = plan('h1-taken');
+  assert.deepEqual(same.respected, ['col:1']);
+  assert.deepEqual(same.deleteIds, [guid(2)]);
+  assert.deepEqual(
+    same.create.map((i) => i.key),
+    ['col:2'],
+  );
+  assert.deepEqual(same.preserved, []);
+  assert.equal(same.carry['col:1'].hash, 'h1-taken');
+  assert.equal(same.carry['col:1'].state, 'jig');
+  assert.equal(same.absorbed.length, 0, 'nothing new to record');
+  // Edited again after it was taken: a person's edit again.
+  const again = plan('h1-again');
+  assert.deepEqual(again.respected, []);
+  assert.deepEqual(
+    again.preserved.map((p) => [p.key, p.reason]),
+    [['col:1', 'edited']],
+  );
+  // Overwrite puts the jig's item back.
+  const overwrite = plan('h1-taken', { 'col:1': 'overwrite' });
+  assert.deepEqual(overwrite.respected, []);
+  assert.deepEqual(overwrite.deleteIds, [guid(1), guid(2)]);
+  assert.deepEqual(overwrite.replaced, ['col:1', 'col:2']);
+  // Without the override (removed from the 수정 사항), the recorded baseline decides again.
+  const removed = planBake({
+    instanceId: 'inst-1',
+    bakeId: 'columns',
+    planned: ['col:1'].map(item),
+    prior: record({ 'col:1': recorded(1, { hash: 'h1-taken' }) }),
+    read: model([row(guid(1), LAYER, 'h1-taken', tagged('col:1'))]),
+  });
+  assert.deepEqual(removed.replaced, ['col:1']);
+});
+
+test('built-in bakes: lines from axes, column lines and girder top lines; members only with sections', () => {
+  const jig = { source: 'dev-source', manifest: { hosts: { rhino: 'optional' } } };
+  assert.deepEqual(
+    bakeDeclsOf(jig).map((d) => d.id),
+    ['lines', 'members', 'member-columns'],
+  );
+  assert.deepEqual(bakeDeclsOf({ ...jig, source: 'ai-draft' }), [], 'an AI draft gets none');
+  assert.deepEqual(bakeDeclsOf({ source: 'builtin', manifest: {} }), [], 'no Rhino, no bake');
+  const own = { ...BUILTIN_BAKES[0], items: 'step.x.lines', layer: '내 선' };
+  assert.equal(bakeDeclOf({ ...jig, manifest: { ...jig.manifest, bake: [own] } }, 'lines'), own);
+  assert.equal(bakeDeclOf(jig, 'members').requires[0], 'analysis-confirmed');
+
+  const line = (x) => [
+    [x, 0, 0],
+    [x, 10, 0],
+  ];
+  const outputs = [
+    {
+      axes: [
+        { key: 'X1', line: line(0) },
+        { key: 'X2', line: line(8) },
+      ],
+      notes: [],
+    },
+    {
+      columns: [
+        {
+          key: 'X1-Y1',
+          line: [
+            [0, 0, 0],
+            [0, 0, 6],
+          ],
+        },
+        {
+          key: 'X2-Y1',
+          line: [
+            [8, 0, 0],
+            [8, 0, 6],
+          ],
+          section: 'H-300x300x10x15',
+          H_mm: 300,
+          B_mm: 300,
+          tw_mm: 10,
+          tf_mm: 15,
+          strongAxisDeg: 90,
+        },
+      ],
+      girders: [
+        {
+          key: 'G1',
+          topLine: [
+            [0, 0, 6],
+            [8, 0, 6],
+          ],
+          line: [
+            [0, 0, 5.5],
+            [8, 0, 5.5],
+          ],
+          section: 'H-600x200x11x17',
+          H_mm: 600,
+          B_mm: 200,
+          tw_mm: 11,
+          tf_mm: 17,
+        },
+        { key: 'G2', stats: 1 },
+      ],
+    },
+    // A later step's row with the same key replaces the earlier one.
+    { axes: [{ key: 'X2', line: line(9) }] },
+    null,
+  ];
+  const out = builtinOutput(outputs);
+  assert.deepEqual(
+    out.lines.map((r) => r.key),
+    ['axis:X1', 'axis:X2', 'column:X1-Y1', 'column:X2-Y1', 'girder:G1'],
+  );
+  assert.equal(out.lines[1].curve[0][0], 9);
+  assert.equal(out.lines[4].curve[0][2], 6, 'a girder bakes its top line');
+  const lines = extractItems(BUILTIN_BAKES[0], out);
+  assert.deepEqual(lines.problems, []);
+  assert.equal(lines.items.length, 5);
+  assert.deepEqual(lines.items[0].attrs, [['vide-role', 'axis']]);
+  assert.deepEqual(unsafeArgs(lines.items), []);
+  const members = extractItems(BUILTIN_BAKES[1], out);
+  assert.deepEqual(members.problems, []);
+  assert.deepEqual(
+    members.items.map((i) => [i.key, i.section, i.rail.points[0][2]]),
+    [['girder:G1', 'H-600x200x11x17', 6]],
+  );
+  const columns = extractItems(BUILTIN_BAKES[2], out);
+  assert.deepEqual(columns.problems, []);
+  assert.equal(columns.items.length, 1);
+  assert.equal(columns.items[0].key, 'column:X2-Y1');
+  assert.ok(Math.abs(columns.items[0].strongAxis[1] - 1) < 1e-9);
+  assert.deepEqual(columns.items[0].top, [8, 0, 6]);
 });

@@ -116,7 +116,8 @@ try {
     '보고서',
   ]);
   assert.equal(await tab('모델').getAttribute('aria-selected'), 'true');
-  for (const name of ['자료', '만들기', '보고서'])
+  // The report tab is ready since PLAN-22 T-057 (tests/integration/browser-report.mjs).
+  for (const name of ['자료', '만들기'])
     assert.equal(await tab(name).getAttribute('aria-disabled'), 'true');
   const row = await page.locator('.workspace-tabs').boundingBox();
   const centre = await page.locator('.workspace').boundingBox();
@@ -189,7 +190,7 @@ try {
   await dialog.getByText('탐색용 예비값입니다').waitFor();
   if (shot) await page.screenshot({ path: join(shot, 'workspace-tabs-context.png') });
 
-  // Keyboard: arrows move over the tabs that can open (the data tab is skipped).
+  // Keyboard: arrows move over the tabs that can open (the data and make tabs are skipped).
   await tab('모델').click();
   await dialog.waitFor({ state: 'hidden' });
   assert.equal(await page.locator('#left').isVisible(), true);
@@ -198,6 +199,8 @@ try {
   await tab('모델').focus();
   await page.keyboard.press('ArrowRight');
   assert.equal(await tab('JIG').getAttribute('aria-selected'), 'true');
+  await page.keyboard.press('ArrowRight');
+  assert.equal(await tab('보고서').getAttribute('aria-selected'), 'true');
   await page.keyboard.press('ArrowRight');
   assert.equal(await syncTab.getAttribute('aria-selected'), 'true');
   assert.ok(await syncTab.evaluate((node) => node === document.activeElement));

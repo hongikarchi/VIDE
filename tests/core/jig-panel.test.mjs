@@ -60,9 +60,10 @@ test('parts outside the list, out of place, not ready or custom are refused', ()
   const placed = clone();
   placed.left.push({ part: 'slider-board' });
   assert.deepEqual(codes(placed), ['PANEL_PART_PLACE']);
+  // The report frame parts are built since T-057, so a report view is accepted.
   const report = clone();
   report.center.views.push({ part: 'report', report: 'study' });
-  assert.deepEqual(codes(report), ['PANEL_PART_NOT_READY']);
+  assert.deepEqual(codes(report), []);
   const tab = clone();
   tab.drawer.tabs.push({ title: '막대', part: 'kpi-strip', items: [] });
   assert.deepEqual(codes(tab), ['PANEL_PART_PLACE']);

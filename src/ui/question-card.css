@@ -1,0 +1,113 @@
+/* 질문 카드 (Design SCR-15). Colours come from style.css tokens (--line, --muted, --soft,
+   --coral, --ok, --warn), so the dark theme follows them. */
+.qcards {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+.qcard {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  min-width: 0;
+}
+.qcard-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.qcard-blocks {
+  color: var(--warn);
+  text-align: right;
+}
+.qcard-title {
+  margin: 0;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.qcard-options {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.qcard-option {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  column-gap: 6px;
+  padding: 4px 6px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.qcard-option[data-selected='true'] {
+  border-color: var(--line);
+  background: var(--soft);
+}
+.qcard-label {
+  overflow-wrap: anywhere;
+}
+.qcard-tag {
+  padding: 0 6px;
+  border: 1px solid var(--ok);
+  border-radius: 10px;
+  color: var(--ok);
+  font-size: 11px;
+}
+.qcard-hint {
+  grid-column: 2 / 4;
+  color: var(--muted);
+  font-size: 12px;
+}
+.qcard-free {
+  font: inherit;
+  padding: 4px 6px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  min-width: 0;
+}
+.qcard-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 6px;
+}
+.qcard-actions button {
+  font: inherit;
+  padding: 4px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.qcard-secondary {
+  border: 1px solid var(--line);
+  background: transparent;
+  color: inherit;
+}
+.qcard-primary {
+  border: 1px solid var(--coral);
+  background: var(--coral);
+  color: #fff;
+}
+.qcard-actions button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.qcard-error {
+  color: var(--coral);
+  font-size: 12px;
+  margin-right: auto;
+}
+.qcard-note {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+}

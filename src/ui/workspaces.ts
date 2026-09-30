@@ -21,13 +21,13 @@ export interface WorkspaceChange {
   closed?: ContextTab;
 }
 
-// The data, make and report tabs open with PLAN-22 T-065, T-063 and T-057.
+// The data and make tabs open with PLAN-22 T-065 and T-063; the report tab is T-057.
 const FIXED: { id: FixedWorkspace; label: string; ready: boolean }[] = [
   { id: 'model', label: '모델', ready: true },
   { id: 'data', label: '자료', ready: false },
   { id: 'jig', label: 'JIG', ready: true },
   { id: 'make', label: '만들기', ready: false },
-  { id: 'report', label: '보고서', ready: false },
+  { id: 'report', label: '보고서', ready: true },
 ];
 const PREFIX = 'jig:';
 export const contextId = (instanceId: string) => PREFIX + instanceId;
@@ -88,7 +88,10 @@ function known(id: string) {
 }
 function emit(closed?: ContextTab) {
   document.body.dataset.workspace =
-    active === 'model' ? 'model' : active === 'jig' ? 'jig' : 'context';
+    active === 'model' || active === 'jig' || active === 'report' ? active : 'context';
+  // The report screen loads when its tab is first shown (src/ui/report-tab.tsx).
+  if (active === 'report' && projectId)
+    void import('./report-tab.tsx').then((screen) => screen.showReports(projectId!));
   paint();
   remember();
   const change = { active, context, ...(closed ? { closed } : {}) };

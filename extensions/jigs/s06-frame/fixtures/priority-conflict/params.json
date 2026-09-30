@@ -1,4 +1,5 @@
 {
   "spanMax": 12,
-  "capClearance": 0.2
+  "capClearance": 0.2,
+  "layoutSource": "proposed"
 }

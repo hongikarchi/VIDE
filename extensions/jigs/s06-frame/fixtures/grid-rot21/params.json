@@ -2,5 +2,6 @@
   "capClearance": 0,
   "columnSize": 0.5,
   "spanMax": 12,
-  "splitTol": 0.3
+  "splitTol": 0.3,
+  "layoutSource": "proposed"
 }

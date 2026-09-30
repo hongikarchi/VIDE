@@ -1,0 +1,309 @@
+{
+  "note": "합성 자료(PLAN-23 검증 원칙). 8 m × 6 m 두 칸, 가운데 거더 G4는 연직면 원호(솟음 0.3 m), 오른쪽 칸은 식재 구역, G5 밖으로 2 m 내민 보.",
+  "site": {
+    "columns": {
+      "rows": [
+        {
+          "id": "col-1",
+          "layer": "신설 기둥",
+          "line": [0, 0, 0, 0, 0, 5.5]
+        },
+        {
+          "id": "col-2",
+          "layer": "신설 기둥",
+          "line": [8, 0, 0, 8, 0, 5.5]
+        },
+        {
+          "id": "col-3",
+          "layer": "신설 기둥",
+          "line": [16, 0, 0, 16, 0, 5.5]
+        },
+        {
+          "id": "col-4",
+          "layer": "신설 기둥",
+          "line": [0, 6, 0, 0, 6, 5.5]
+        },
+        {
+          "id": "col-5",
+          "layer": "신설 기둥",
+          "line": [8, 6, 0, 8, 6, 5.5]
+        },
+        {
+          "id": "col-6",
+          "layer": "신설 기둥",
+          "line": [16, 6, 0, 16, 6, 5.5]
+        }
+      ]
+    }
+  },
+  "planterZones": [
+    {
+      "id": "Z-planter",
+      "shape": [
+        [9, 1],
+        [15, 1],
+        [15, 5],
+        [9, 5]
+      ]
+    }
+  ],
+  "dryZones": [],
+  "steps": {
+    "girders": {
+      "girders": [
+        {
+          "id": "G1",
+          "sourceId": "g-1",
+          "points": [
+            [0, 0, 6],
+            [16, 0, 6]
+          ],
+          "kind": "line",
+          "supports": [
+            {
+              "columnId": "col-1",
+              "t": 0
+            },
+            {
+              "columnId": "col-2",
+              "t": 0.5
+            },
+            {
+              "columnId": "col-3",
+              "t": 1
+            }
+          ],
+          "snapped": []
+        },
+        {
+          "id": "G2",
+          "sourceId": "g-2",
+          "points": [
+            [0, 6, 6],
+            [16, 6, 6]
+          ],
+          "kind": "line",
+          "supports": [
+            {
+              "columnId": "col-4",
+              "t": 0
+            },
+            {
+              "columnId": "col-5",
+              "t": 0.5
+            },
+            {
+              "columnId": "col-6",
+              "t": 1
+            }
+          ],
+          "snapped": []
+        },
+        {
+          "id": "G3",
+          "sourceId": "g-3",
+          "points": [
+            [0, 0, 6],
+            [0, 6, 6]
+          ],
+          "kind": "line",
+          "supports": [
+            {
+              "columnId": "col-1",
+              "t": 0
+            },
+            {
+              "columnId": "col-4",
+              "t": 1
+            }
+          ],
+          "snapped": []
+        },
+        {
+          "id": "G4",
+          "sourceId": "g-4",
+          "points": [
+            [8, 0, 6],
+            [8, 1.5, 6.2256],
+            [8, 3, 6.3],
+            [8, 4.5, 6.2256],
+            [8, 6, 6]
+          ],
+          "kind": "arc",
+          "arc": {
+            "center": [8, 3, -8.850000000000001],
+            "radius": 15.15,
+            "startDeg": 0,
+            "endDeg": 0,
+            "plane": "vertical"
+          },
+          "supports": [
+            {
+              "columnId": "col-2",
+              "t": 0
+            },
+            {
+              "columnId": "col-5",
+              "t": 1
+            }
+          ],
+          "snapped": []
+        },
+        {
+          "id": "G5",
+          "sourceId": "g-5",
+          "points": [
+            [16, 0, 6],
+            [16, 6, 6]
+          ],
+          "kind": "line",
+          "supports": [
+            {
+              "columnId": "col-3",
+              "t": 0
+            },
+            {
+              "columnId": "col-6",
+              "t": 1
+            }
+          ],
+          "snapped": []
+        }
+      ],
+      "dangling": [],
+      "crossings": [],
+      "spans": [],
+      "summary": {
+        "girders": 5,
+        "snapped": 0,
+        "dangling": 0,
+        "spansOver": 0
+      }
+    },
+    "cells": {
+      "cells": [
+        {
+          "id": "K1",
+          "polygon": [
+            [0, 0],
+            [8, 0],
+            [8, 6],
+            [0, 6]
+          ],
+          "girderIds": ["G1", "G2", "G3", "G4"],
+          "area_m2": 48
+        },
+        {
+          "id": "K2",
+          "polygon": [
+            [8, 0],
+            [16, 0],
+            [16, 6],
+            [8, 6]
+          ],
+          "girderIds": ["G1", "G2", "G4", "G5"],
+          "area_m2": 48
+        }
+      ],
+      "summary": {
+        "cells": 2,
+        "beams": 4,
+        "spacingUsed_m": 2
+      }
+    },
+    "beams": {
+      "beams": [
+        {
+          "id": "K1-B2",
+          "cellId": "K1",
+          "points": [
+            [0, 2, 6],
+            [8, 2, 6]
+          ],
+          "from": {
+            "girderId": "G3",
+            "t": 0.3333333333333333
+          },
+          "to": {
+            "girderId": "G4",
+            "t": 0.3333333333333333
+          },
+          "length_m": 8
+        },
+        {
+          "id": "K1-B4",
+          "cellId": "K1",
+          "points": [
+            [0, 4, 6],
+            [8, 4, 6]
+          ],
+          "from": {
+            "girderId": "G3",
+            "t": 0.6666666666666666
+          },
+          "to": {
+            "girderId": "G4",
+            "t": 0.6666666666666666
+          },
+          "length_m": 8
+        },
+        {
+          "id": "K2-B2",
+          "cellId": "K2",
+          "points": [
+            [8, 2, 6],
+            [16, 2, 6]
+          ],
+          "from": {
+            "girderId": "G4",
+            "t": 0.3333333333333333
+          },
+          "to": {
+            "girderId": "G5",
+            "t": 0.3333333333333333
+          },
+          "length_m": 8
+        },
+        {
+          "id": "K2-B4",
+          "cellId": "K2",
+          "points": [
+            [8, 4, 6],
+            [16, 4, 6]
+          ],
+          "from": {
+            "girderId": "G4",
+            "t": 0.6666666666666666
+          },
+          "to": {
+            "girderId": "G5",
+            "t": 0.6666666666666666
+          },
+          "length_m": 8
+        }
+      ],
+      "edgeCantilevers": [
+        {
+          "id": "E1",
+          "from": {
+            "girderId": "G5",
+            "t": 0.5
+          },
+          "points": [
+            [16, 3, 6],
+            [18, 3, 6]
+          ],
+          "length_m": 2
+        }
+      ],
+      "summary": {
+        "cells": 2,
+        "beams": 4,
+        "spacingUsed_m": 2
+      }
+    }
+  },
+  "params": {
+    "restraintLevel": 3
+  }
+}

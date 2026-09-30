@@ -1,12 +1,58 @@
 {
   "layout": "jig-run",
   "left": [
-    { "part": "step-rail" },
-    { "part": "role-card", "input": "inputs.site" },
-    { "part": "param-group", "title": "배치", "group": "배치" },
-    { "part": "param-group", "title": "기초", "group": "기초" },
-    { "part": "param-group", "title": "기둥", "group": "기둥" },
-    { "part": "param-group", "title": "진단", "group": "진단" }
+    {
+      "part": "step-rail"
+    },
+    {
+      "part": "role-card",
+      "input": "inputs.site"
+    },
+    {
+      "part": "param-group",
+      "title": "배치",
+      "group": "배치"
+    },
+    {
+      "part": "param-group",
+      "title": "거더 보정",
+      "group": "거더 보정"
+    },
+    {
+      "part": "param-group",
+      "title": "작은보",
+      "group": "작은보"
+    },
+    {
+      "part": "param-group",
+      "title": "하중",
+      "group": "하중"
+    },
+    {
+      "part": "param-group",
+      "title": "해석",
+      "group": "해석"
+    },
+    {
+      "part": "param-group",
+      "title": "기초",
+      "group": "기초"
+    },
+    {
+      "part": "param-group",
+      "title": "기둥",
+      "group": "기둥"
+    },
+    {
+      "part": "param-group",
+      "title": "진단",
+      "group": "진단"
+    },
+    {
+      "part": "bake-card",
+      "title": "Rhino에 만들기",
+      "bake": ["lines", "members"]
+    }
   ],
   "center": {
     "views": [
@@ -17,32 +63,62 @@
           {
             "key": "existing",
             "title": "기존 기초",
-            "from": "step.footprints.existing",
+            "from": "step.diagnose.shapes.existing",
             "shape": "polygon",
             "at": "points",
             "tone": "ov-existing"
           },
           {
-            "key": "basin",
-            "title": "유수지 보",
-            "from": "step.footprints.basin",
-            "shape": "polygon",
+            "key": "girders",
+            "title": "보정한 거더",
+            "from": "step.girders.girders",
+            "shape": "line",
             "at": "points",
-            "tone": "ov-existing",
-            "dashed": true
+            "id": "id",
+            "label": "id",
+            "tone": "ov-new"
           },
           {
-            "key": "missing",
-            "title": "모델 누락 가능",
-            "from": "step.assemble.possibleMissing",
+            "key": "dangling",
+            "title": "기둥 없는 거더 끝",
+            "from": "step.girders.danglingAt",
             "shape": "point",
             "at": "at",
-            "label": "grid",
+            "id": "girderId",
+            "label": "girderId",
             "tone": "warn"
           },
           {
+            "key": "crossings",
+            "title": "경계·보이드를 넘는 곳",
+            "from": "step.girders.crossings",
+            "shape": "point",
+            "at": "at",
+            "id": "girderId",
+            "tone": "warn"
+          },
+          {
+            "key": "beams",
+            "title": "작은보",
+            "from": "step.beams.beams",
+            "shape": "line",
+            "at": "points",
+            "id": "id",
+            "tone": "ov-grid"
+          },
+          {
+            "key": "cantilevers",
+            "title": "내민 보",
+            "from": "step.beams.edgeCantilevers",
+            "shape": "line",
+            "at": "points",
+            "id": "id",
+            "tone": "ov-grid",
+            "dashed": true
+          },
+          {
             "key": "axes",
-            "title": "새 축선",
+            "title": "새 축선 · 제안",
             "from": "step.axes.axes",
             "shape": "line",
             "at": "line",
@@ -52,7 +128,7 @@
           },
           {
             "key": "spans",
-            "title": "거더망(경간)",
+            "title": "거더망(경간) · 제안",
             "from": "step.axes.spans",
             "shape": "line",
             "at": "line",
@@ -62,7 +138,7 @@
           },
           {
             "key": "columns",
-            "title": "기둥",
+            "title": "기둥 · 제안",
             "from": "step.columns.columns",
             "shape": "line",
             "at": "line",
@@ -71,24 +147,15 @@
           },
           {
             "key": "caps",
-            "title": "파일캡",
+            "title": "파일캡 · 제안",
             "from": "step.footprints.caps",
             "shape": "polygon",
             "at": "points",
             "tone": "ov-new"
           },
           {
-            "key": "cuts",
-            "title": "오픈컷",
-            "from": "step.footprints.openCuts",
-            "shape": "polygon",
-            "at": "points",
-            "tone": "ov-new",
-            "dashed": true
-          },
-          {
             "key": "cap-clash",
-            "title": "파일캡 간섭",
+            "title": "파일캡 간섭 · 제안",
             "from": "step.interference.fills.capClash",
             "shape": "polygon",
             "at": "points",
@@ -98,18 +165,8 @@
             "fill": true
           },
           {
-            "key": "cut-clash",
-            "title": "오픈컷 협의",
-            "from": "step.interference.fills.cutClash",
-            "shape": "polygon",
-            "at": "points",
-            "id": "key",
-            "tone": "warn",
-            "fill": true
-          },
-          {
             "key": "basin-clash",
-            "title": "유수지 보 간섭",
+            "title": "유수지 보 간섭 · 제안",
             "from": "step.interference.fills.basinClash",
             "shape": "polygon",
             "at": "points",
@@ -117,17 +174,6 @@
             "label": "label",
             "tone": "warn",
             "fill": true
-          },
-          {
-            "key": "nudges",
-            "title": "비켜 두기 제안",
-            "from": "step.interference.fills.nudges",
-            "shape": "polygon",
-            "at": "points",
-            "id": "key",
-            "label": "label",
-            "tone": "ok",
-            "dashed": true
           }
         ],
         "legend": {
@@ -146,18 +192,44 @@
         "layers": [
           {
             "key": "existing",
-            "from": "step.footprints.existing",
+            "from": "step.diagnose.shapes.existing",
             "shape": "polygon",
             "at": "points",
             "tone": "ov-existing"
           },
           {
-            "key": "basin",
-            "from": "step.footprints.basin",
+            "key": "cells",
+            "from": "step.cells.cells",
             "shape": "polygon",
+            "at": "polygon",
+            "id": "id",
+            "label": "id",
+            "tone": "ov-grid"
+          },
+          {
+            "key": "girders",
+            "from": "step.girders.girders",
+            "shape": "line",
             "at": "points",
-            "tone": "ov-existing",
-            "dashed": true
+            "id": "id",
+            "label": "id",
+            "tone": "ov-new"
+          },
+          {
+            "key": "beams",
+            "from": "step.beams.beams",
+            "shape": "line",
+            "at": "points",
+            "id": "id",
+            "tone": "ov-grid"
+          },
+          {
+            "key": "dangling",
+            "from": "step.girders.danglingAt",
+            "shape": "point",
+            "at": "at",
+            "id": "girderId",
+            "tone": "warn"
           },
           {
             "key": "axes",
@@ -207,49 +279,59 @@
     "board": {
       "part": "slider-board",
       "title": "놓으면 다시 계산",
-      "params": ["$spanMax", "$capSize", "$capClearance", "$columnEdgeMin"]
+      "params": [
+        "$snapTol_m",
+        "$beamSpacing_m",
+        "$planterD",
+        "$deckL",
+        "$spanMax",
+        "$cantileverMax"
+      ]
     },
     "kpis": {
       "part": "kpi-strip",
       "items": [
-        { "label": "기둥", "from": "step.columns.count", "unit": "개", "empty": "배치 전" },
         {
-          "label": "최대 경간",
-          "from": "step.axes.summary.maxSpan",
-          "unit": "m",
-          "decimals": 2,
-          "warnAbove": "$spanMax",
-          "empty": "배치 전"
+          "label": "거더",
+          "from": "step.girders.summary.girders",
+          "unit": "개",
+          "empty": "읽기 전"
+        },
+        {
+          "label": "끝 붙임",
+          "from": "step.girders.summary.snapped",
+          "unit": "곳",
+          "note": "기둥 상단으로 옮김",
+          "empty": "읽기 전"
+        },
+        {
+          "label": "기둥 없는 끝",
+          "from": "step.girders.summary.dangling",
+          "unit": "곳",
+          "warnAbove": 0,
+          "empty": "읽기 전"
         },
         {
           "label": "경간 초과",
-          "from": "step.axes.summary.spanOver",
+          "from": "step.girders.summary.spansOver",
           "unit": "개",
           "warnAbove": 0,
-          "note": "대각 거더 포함",
-          "empty": "배치 전"
+          "note": "평면 길이",
+          "empty": "읽기 전"
         },
         {
-          "label": "파일캡 불가",
-          "from": "step.interference.summary.cap.count",
-          "unit": "곳",
-          "warnAbove": 0,
-          "note": "기존 기초와 겹침",
-          "empty": "간섭 계산 전"
+          "label": "작은보",
+          "from": "step.beams.summary.beams",
+          "unit": "개",
+          "empty": "칸 계산 전"
         },
         {
-          "label": "오픈컷 협의",
-          "from": "step.interference.summary.openCut.count",
-          "unit": "곳",
-          "note": "토목 협의 목록",
-          "empty": "간섭 계산 전"
-        },
-        {
-          "label": "유수지 보 경고",
-          "from": "step.interference.summary.basin.count",
-          "unit": "곳",
-          "warnAbove": 0,
-          "empty": "간섭 계산 전"
+          "label": "최대 검정비",
+          "from": "step.analysis.summary.maxRatio",
+          "decimals": 2,
+          "warnAbove": 1,
+          "note": "미확정 미리보기",
+          "empty": "해석 전"
         }
       ]
     }
@@ -258,86 +340,221 @@
     "part": "result-tabs",
     "tabs": [
       {
-        "title": "간섭",
+        "title": "거더 보정 목록",
+        "part": "issue-table",
+        "from": "step.girders.girders",
+        "key": "id",
+        "overlay": "girders",
+        "columns": [
+          {
+            "field": "id",
+            "label": "거더"
+          },
+          {
+            "field": "name",
+            "label": "이름"
+          },
+          {
+            "field": "kind",
+            "label": "모양"
+          },
+          {
+            "field": "note",
+            "label": "보정"
+          },
+          {
+            "field": "planLength_m",
+            "label": "평면 길이",
+            "unit": "m",
+            "decimals": 2
+          },
+          {
+            "field": "length_m",
+            "label": "길이",
+            "unit": "m",
+            "decimals": 2
+          }
+        ],
+        "csv": "거더보정"
+      },
+      {
+        "title": "칸·작은보",
+        "part": "table",
+        "from": "step.beams.beams",
+        "key": "id",
+        "overlay": "beams",
+        "columns": [
+          {
+            "field": "id",
+            "label": "작은보"
+          },
+          {
+            "field": "cellId",
+            "label": "칸"
+          },
+          {
+            "field": "from.girderId",
+            "label": "시작 거더"
+          },
+          {
+            "field": "to.girderId",
+            "label": "끝 거더"
+          },
+          {
+            "field": "length_m",
+            "label": "길이",
+            "unit": "m",
+            "decimals": 2
+          }
+        ],
+        "csv": "작은보"
+      },
+      {
+        "title": "해석 요약",
+        "part": "issue-table",
+        "from": "step.analysis.rows",
+        "key": "key",
+        "columns": [
+          {
+            "field": "key",
+            "label": "부재"
+          },
+          {
+            "field": "judgement",
+            "label": "판정(미확정 미리보기)"
+          },
+          {
+            "field": "ratio",
+            "label": "검정비",
+            "decimals": 2
+          },
+          {
+            "field": "clause",
+            "label": "지배 조항"
+          }
+        ],
+        "csv": "해석요약"
+      },
+      {
+        "title": "참고 처짐",
+        "part": "table",
+        "from": "step.analysis.deflections",
+        "key": "key",
+        "columns": [
+          {
+            "field": "key",
+            "label": "부재"
+          },
+          {
+            "field": "deflection_mm",
+            "label": "참고 처짐",
+            "unit": "mm",
+            "decimals": 1
+          },
+          {
+            "field": "limit_mm",
+            "label": "한계",
+            "unit": "mm",
+            "decimals": 1
+          },
+          {
+            "field": "ratio",
+            "label": "비",
+            "decimals": 2
+          }
+        ],
+        "csv": "참고처짐"
+      },
+      {
+        "title": "간섭 · 제안",
         "part": "issue-table",
         "from": "step.interference.tables.interference",
         "overlay": "columns",
         "columns": [
-          { "field": "key", "label": "기둥" },
-          { "field": "judgement", "label": "판정" },
-          { "field": "capText", "label": "파일캡↔기존 기초" },
-          { "field": "cutText", "label": "오픈컷↔기존 기초" },
-          { "field": "basinText", "label": "기둥↔유수지 보" }
+          {
+            "field": "key",
+            "label": "기둥"
+          },
+          {
+            "field": "judgement",
+            "label": "판정"
+          },
+          {
+            "field": "capText",
+            "label": "파일캡↔기존 기초"
+          },
+          {
+            "field": "cutText",
+            "label": "오픈컷↔기존 기초"
+          },
+          {
+            "field": "basinText",
+            "label": "기둥↔유수지 보"
+          }
         ],
         "csv": "간섭"
       },
       {
-        "title": "경간",
-        "part": "issue-table",
-        "from": "step.axes.spans",
-        "overlay": "spans",
-        "columns": [
-          { "field": "key", "label": "거더" },
-          { "field": "judgement", "label": "판정" },
-          { "field": "length", "label": "경간", "unit": "m", "decimals": 2 },
-          { "field": "kind", "label": "구분" }
-        ],
-        "csv": "경간"
-      },
-      {
-        "title": "대안",
+        "title": "배치 대안 · 제안",
         "part": "table",
         "from": "step.axes.alternatives",
         "key": "id",
         "columns": [
-          { "field": "title", "label": "배치" },
-          { "field": "chosenText", "label": "선택" },
-          { "field": "columns", "label": "기둥", "unit": "개" },
-          { "field": "maxSpan", "label": "최대 경간", "unit": "m", "decimals": 2 },
-          { "field": "spanOver", "label": "경간 초과" },
-          { "field": "cap", "label": "파일캡 간섭" },
-          { "field": "basin", "label": "유수지 보" },
-          { "field": "openCut", "label": "오픈컷" }
+          {
+            "field": "title",
+            "label": "배치"
+          },
+          {
+            "field": "chosenText",
+            "label": "선택"
+          },
+          {
+            "field": "columns",
+            "label": "기둥",
+            "unit": "개"
+          },
+          {
+            "field": "maxSpan",
+            "label": "최대 경간",
+            "unit": "m",
+            "decimals": 2
+          },
+          {
+            "field": "spanOver",
+            "label": "경간 초과"
+          },
+          {
+            "field": "cap",
+            "label": "파일캡 간섭"
+          },
+          {
+            "field": "basin",
+            "label": "유수지 보"
+          },
+          {
+            "field": "openCut",
+            "label": "오픈컷"
+          }
         ],
         "csv": "배치대안"
-      },
-      {
-        "title": "높이",
-        "part": "table",
-        "from": "step.columns.heights",
-        "overlay": "columns",
-        "columns": [
-          { "field": "key", "label": "기둥" },
-          { "field": "judgement", "label": "판정" },
-          { "field": "bottom", "label": "하단", "unit": "EL", "decimals": 2 },
-          { "field": "top", "label": "상단", "unit": "EL", "decimals": 2 },
-          { "field": "length", "label": "길이", "unit": "m", "decimals": 1 },
-          { "field": "girderBottom", "label": "거더 하단", "unit": "EL", "decimals": 2 },
-          { "field": "gap", "label": "받침 높이", "unit": "m", "decimals": 2 }
-        ],
-        "csv": "기둥높이"
-      },
-      {
-        "title": "비켜 두기",
-        "part": "table",
-        "from": "step.interference.tables.nudges",
-        "columns": [
-          { "field": "column", "label": "기둥" },
-          { "field": "judgement", "label": "제안" },
-          { "field": "along", "label": "방향" },
-          { "field": "shift_m", "label": "이동", "unit": "m", "decimals": 2 },
-          { "field": "text", "label": "설명" }
-        ],
-        "csv": "비켜두기"
       },
       {
         "title": "확인 목록",
         "part": "issue-table",
         "from": "step.interference.tables.review",
         "columns": [
-          { "field": "kind", "label": "항목" },
-          { "field": "judgement", "label": "판정" },
-          { "field": "text", "label": "내용" }
+          {
+            "field": "kind",
+            "label": "항목"
+          },
+          {
+            "field": "judgement",
+            "label": "판정"
+          },
+          {
+            "field": "text",
+            "label": "내용"
+          }
         ],
         "csv": "확인목록"
       },
@@ -347,12 +564,35 @@
         "from": "step.assemble.roles",
         "key": "role",
         "columns": [
-          { "field": "title", "label": "역할" },
-          { "field": "count", "label": "객체", "unit": "개" },
-          { "field": "summary", "label": "읽은 것" }
+          {
+            "field": "title",
+            "label": "역할"
+          },
+          {
+            "field": "count",
+            "label": "객체",
+            "unit": "개"
+          },
+          {
+            "field": "summary",
+            "label": "읽은 것"
+          }
         ]
       }
     ]
   },
-  "actions": [{ "id": "recompute", "label": "다시 계산", "step": "interference", "tier": "T1" }]
+  "actions": [
+    {
+      "id": "recompute",
+      "label": "다시 계산",
+      "step": "analysis",
+      "tier": "T1"
+    },
+    {
+      "id": "confirm-analysis",
+      "label": "해석 확정",
+      "step": "confirmAnalysis",
+      "tier": "T2"
+    }
+  ]
 }

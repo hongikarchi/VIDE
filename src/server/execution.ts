@@ -12,7 +12,9 @@ import { CLAUDE_MODELS, claudeEfforts, modelName } from './model-capabilities.ts
 import { hostUse, waitingOf } from '../contracts/request-scope.ts';
 import { z } from 'zod';
 import { runLinked } from './linked-execution.ts';
-import type { AgentTools } from './agent-tools.ts';
+// Jig review gates (sync-review rows, structure-draft-review members/nodes; SPEC-06.9).
+import { jigCheck } from './jig-gates.ts';
+import { conversationSources, type AgentTools } from './agent-tools.ts';
 import type { Workspace } from '../core/workspace.ts';
 import type { StoredWork } from '../contracts/stored-work.ts';
 import type { RequestInput } from '../contracts/workspace.ts';
@@ -27,6 +29,7 @@ import type { GeometryObject } from '../core/geometry.ts';
 import type { SdkExecution } from './sdk-execution.ts';
 import type { ZwcadSdkExecution } from './zwcad-sdk-execution.ts';
 import type { ConversationService, Turn } from './conversations.ts';
+import { turnOutputResult } from './turn-output.ts';
 import { workspaceResultSchema } from '../contracts/workspace-result.ts';
 import { bakeJobOf } from '../jigs/bake/bake.ts';
 interface Provider {
@@ -68,29 +71,6 @@ interface Options {
   selectContext?: (body: string, candidates: ContextCandidate[]) => Promise<ContextChoice>;
   /** Conversations (SPEC-02.19): session per turn, ledger, one running turn per conversation. */
   conversations?: ConversationService;
-}
-/**
- * Jig review gate (RESEARCH-05 standard gates): an AI review of a Sync jig table may cite only the
- * table's rows. Unknown row ids are reported with the answer instead of being passed silently.
- */
-function jigCheck(input: Record<string, unknown>, text: string) {
-  const jig = z
-    .object({ kind: z.literal('sync-review'), rows: z.array(z.string()).max(20000) })
-    .safeParse(input.jig);
-  if (!jig.success) return {};
-  const known = new Set(jig.data.rows);
-  const cited = [...new Set(text.match(/\bR\d+\b/g) ?? [])];
-  const unknown = cited.filter((row) => !known.has(row));
-  return {
-    jigCheck: { gate: 'ref-whitelist', cited: cited.length, unknown },
-    ...(unknown.length
-      ? {
-          text:
-            text +
-            `\n\n⚠ 검증: 표에 없는 행 ${unknown.join(', ')}을(를) 인용했습니다. 해당 부분은 근거가 없는 내용이니 확인하세요.`,
-        }
-      : {}),
-  };
 }
 const pinsSchema = z.array(
   z
@@ -690,17 +670,35 @@ export class Execution {
             input.permission +
             '\nUser request: '
           : '') + (input.body || '첨부한 설계 문맥을 검토해 주세요.');
-      const result = await this.provider(input, undefined, turn?.session).run(
-        { goal, revision: 1, items, includedIds: items.map((item) => item.id) },
-        {
-          signal: controller.signal,
-          onProgress: (event) =>
-            this.workspace.update(projectId, id, 'running', {
-              phase: event.state === 'stopping' ? 'stopping' : 'model',
-              hostExecuted: false,
-            }),
-        },
-      );
+      // A conversation turn without the host gets the conversation's tools (PLAN-24 T-062).
+      const scope =
+        turn && !host
+          ? this.tools?.issueConversation(
+              conversationSources(this.workspace, turn.conversation, {
+                requestId: id,
+                ledger: (item) =>
+                  this.conversations!.addLedger(projectId, turn!.conversation.id, item),
+              }),
+              {
+                isCurrent: () => !controller.signal.aborted,
+                maxCalls: executionLimits(input).maxToolCalls,
+                ttlMs: Math.min(600000, (executionLimits(input).timeoutSeconds + 60) * 1000),
+              },
+            )
+          : undefined;
+      const result = await this.provider(input, scope?.connection, turn?.session)
+        .run(
+          { goal, revision: 1, items, includedIds: items.map((item) => item.id) },
+          {
+            signal: controller.signal,
+            onProgress: (event) =>
+              this.workspace.update(projectId, id, 'running', {
+                phase: event.state === 'stopping' ? 'stopping' : 'model',
+                hostExecuted: false,
+              }),
+          },
+        )
+        .finally(() => scope?.revoke());
       if (host) {
         const proposal = interpret(result.text, previous?.result.objects || [], input.permission);
         const protectedIds = pins
@@ -763,6 +761,7 @@ export class Execution {
         this.workspace.update(projectId, id, 'succeeded', {
           ...result,
           ...jigCheck(input, result.text),
+          ...turnOutputResult(turn, result),
           hostExecuted: false,
         });
     } catch (cause) {

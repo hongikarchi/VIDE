@@ -1,0 +1,91 @@
+{
+  "case": "straight-grid",
+  "note": "합성: 7 m·14 m 경간 격자, 두 끝이 허용오차 안에서 어긋난 거더 1개",
+  "input": {
+    "site": {
+      "columns": {
+        "rows": [
+          {
+            "id": "c-0-0",
+            "layer": "S-COL",
+            "line": [0, 0, 0, 0, 0, 6]
+          },
+          {
+            "id": "c-0-8",
+            "layer": "S-COL",
+            "line": [0, 8, 0, 0, 8, 6]
+          },
+          {
+            "id": "c-7-0",
+            "layer": "S-COL",
+            "line": [7, 0, 0, 7, 0, 6]
+          },
+          {
+            "id": "c-7-8",
+            "layer": "S-COL",
+            "line": [7, 8, 0, 7, 8, 6]
+          },
+          {
+            "id": "c-21-0",
+            "layer": "S-COL",
+            "line": [21, 0, 0, 21, 0, 6]
+          },
+          {
+            "id": "c-21-8",
+            "layer": "S-COL",
+            "line": [21, 8, 0, 21, 8, 6]
+          }
+        ]
+      },
+      "girders": {
+        "rows": [
+          {
+            "id": "g-y0",
+            "layer": "S-GIRDER",
+            "line": [-0.15, 0.1, 6.4, 21.2, -0.1, 6.4]
+          },
+          {
+            "id": "g-y8",
+            "layer": "S-GIRDER",
+            "line": [0, 8, 6.4, 21, 8, 6.4]
+          },
+          {
+            "id": "g-x0",
+            "layer": "S-GIRDER",
+            "line": [0, 0, 6.4, 0, 8, 6.4]
+          },
+          {
+            "id": "g-x7",
+            "layer": "S-GIRDER",
+            "line": [7, 0, 6.4, 7, 8, 6.4]
+          },
+          {
+            "id": "g-x21",
+            "layer": "S-GIRDER",
+            "line": [21, 0, 6.4, 21, 8, 6.4]
+          }
+        ]
+      },
+      "slab": {
+        "rows": [
+          {
+            "id": "s-1",
+            "layer": "S-SLAB",
+            "line": [-1, -1, 6.8, 22, -1, 6.8, 22, 9, 6.8, -1, 9, 6.8, -1, -1, 6.8]
+          }
+        ]
+      }
+    }
+  },
+  "params": {},
+  "expect": {
+    "summary": {
+      "girders": 5,
+      "snapped": 2,
+      "dangling": 0,
+      "spansOver": 2
+    },
+    "spans": 7,
+    "crossings": 0
+  }
+}

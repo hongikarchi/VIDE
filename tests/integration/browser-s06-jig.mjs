@@ -107,7 +107,22 @@ try {
     panel.locator(`.kit-rail li[data-step="${id}"]${state ? `[data-state="${state}"]` : ''}`);
   assert.deepEqual(
     await panel.locator('.kit-rail li').evaluateAll((rows) => rows.map((r) => r.dataset.step)),
-    ['assemble', 'confirmInputs', 'diagnose', 'axes', 'columns', 'footprints', 'interference'],
+    [
+      'assemble',
+      'confirmInputs',
+      'diagnose',
+      'axes',
+      'columns',
+      'footprints',
+      'interference',
+      'girders',
+      'cells',
+      'beams',
+      'model',
+      'analysis',
+      'confirmAnalysis',
+      'analysisConfirmed',
+    ],
   );
   // Nothing is read yet: the required roles are missing and the assembly step says so.
   await rail('assemble', 'failed').waitFor();
@@ -132,6 +147,7 @@ try {
           await put('zones', { zones }),
           await put('params', { values: [{ key: 'capClearance', value: capClearance }] }),
         ];
+        // layoutSource stays 'drawn' (the default) until the drawn checks below are done.
       },
       {
         id: projectId,
@@ -166,25 +182,29 @@ try {
   }
   assert.match(await panel.locator('.kit-roles').locator('..').textContent(), /9\/10 확인/);
   await rail('confirmInputs', 'waiting').getByRole('button', { name: '확인' }).click();
-  await rail('interference', 'done').waitFor();
-  for (const id of ['assemble', 'diagnose', 'axes', 'columns', 'footprints'])
-    await rail(id, 'done').waitFor();
 
-  // KPI strip: the generated layout of the synthetic site (see tests/core/s06-jig.test.mjs).
+  // M2 drawn mode (default): the drawn girders are corrected, cells and beams follow, the frame
+  // model is analysed as a '미확정 미리보기' and 해석 확정 waits for a person (PLAN-23 T-053).
+  for (const id of ['assemble', 'diagnose', 'girders', 'cells', 'beams', 'model', 'analysis'])
+    await rail(id, 'done').waitFor();
+  await rail('confirmAnalysis', 'waiting').waitFor();
   const top = page.locator('.kit-slot[data-slot="top"]');
   const drawer = page.locator('.kit-slot[data-slot="drawer"]');
   const kpi = (label) => top.locator(`.kit-kpi[data-kpi="${label}"] .kit-kpi-value`).textContent();
-  assert.equal(await kpi('기둥'), '10개');
-  assert.equal(await kpi('파일캡 불가'), '0곳');
-  assert.equal(await kpi('경간 초과'), '0개');
-  assert.equal(await kpi('유수지 보 경고'), '0곳');
-  assert.match(await kpi('최대 경간'), /^11\.\d\dm$/);
-  const tabs = await drawer.getByRole('tab').allTextContents();
-  assert.ok(tabs[0].startsWith('간섭10'), tabs.join('|'));
-  assert.ok(tabs.some((t) => t.startsWith('대안')));
-  assert.ok(tabs.some((t) => t.startsWith('확인 목록')));
-
-  // The results are overlay layers on the model: axes, columns, caps, footings and the open cuts to consult.
+  // grid-rot21 as drawn (see tests/core/s06-m2.test.mjs for the drawn-two-bay numbers).
+  assert.equal(await kpi('거더'), '6개');
+  assert.equal(await kpi('기둥 없는 끝'), '1곳');
+  assert.equal(await kpi('경간 초과'), '2개');
+  assert.equal(await kpi('작은보'), '5개');
+  assert.match(
+    await top.locator('.kit-kpi[data-kpi="최대 검정비"]').textContent(),
+    /미확정 미리보기/,
+  );
+  const drawnTabs = await drawer.getByRole('tab').allTextContents();
+  assert.deepEqual(
+    drawnTabs.slice(0, 4).map((t) => t.replace(/\d+$/, '')),
+    ['거더 보정 목록', '칸·작은보', '해석 요약', '참고 처짐'],
+  );
   const overlays = () =>
     page.evaluate(() =>
       Object.fromEntries(
@@ -192,20 +212,62 @@ try {
       ),
     );
   await page.waitForFunction(
+    () => window.videViewport.overlayInfo().find((o) => o.key === 'girders')?.items.length === 6,
+  );
+  const corrected = await overlays();
+  assert.equal(corrected.dangling, 1);
+  assert.equal(corrected.beams, 5);
+  assert.equal(corrected.columns ?? 0, 0); // no proposed layout in drawn mode
+  if (shot) await page.screenshot({ path: join(shot, 's06-jig-drawn.png') });
+
+  // The proposed layout (②~④) after switching the layout source.
+  assert.equal(
+    await page.evaluate(async (id) => {
+      const base = `/api/v1/projects/${id}/jig-instances`;
+      const [instance] = (await (await fetch(base)).json()).instances;
+      return (
+        await fetch(`${base}/${instance.id}/params`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ values: [{ key: 'layoutSource', value: 'proposed' }] }),
+        })
+      ).status;
+    }, projectId),
+    200,
+  );
+  await panel.getByRole('button', { name: '다시 계산', exact: true }).click();
+  await rail('interference', 'done').waitFor();
+  for (const id of ['axes', 'columns', 'footprints']) await rail(id, 'done').waitFor();
+  // The rails were already 'done' in drawn mode (empty outputs): wait for the proposed results.
+  await drawer
+    .getByRole('tab')
+    .filter({ hasText: /^간섭 · 제안10/ })
+    .waitFor({ timeout: 30_000 })
+    .catch(() => {});
+  const tabs = await drawer.getByRole('tab').allTextContents();
+  assert.ok(
+    tabs.some((t) => t.startsWith('간섭 · 제안10')),
+    tabs.join('|'),
+  );
+  assert.ok(tabs.some((t) => t.startsWith('배치 대안 · 제안')));
+  assert.ok(tabs.some((t) => t.startsWith('확인 목록')));
+
+  // The results are overlay layers on the model: axes, columns, caps and footings.
+  await page.waitForFunction(
     () => window.videViewport.overlayInfo().find((o) => o.key === 'columns')?.items.length === 10,
   );
   const drawn = await overlays();
   assert.equal(drawn.axes, 6);
   assert.equal(drawn.caps, 8);
-  assert.equal(drawn.existing, 6);
-  assert.equal(drawn.basin, 2);
-  assert.equal(drawn.missing, 5);
-  assert.ok(drawn['cut-clash'] > 0, JSON.stringify(drawn));
+  // Existing footings now come from the diagnosis (every footing, in drawn mode too), not only
+  // those the proposed footprints step compared.
+  assert.equal(drawn.existing, 8);
   assert.equal(drawn['cap-clash'] ?? 0, 0);
   if (shot) await page.screenshot({ path: join(shot, 's06-jig.png') });
 
   // Table → 3D: an interference row selects its column and frames it.
-  const row = drawer.getByRole('table', { name: '간섭' }).locator('tr[data-id="col:N1-NA"]');
+  await drawer.getByRole('tab', { name: /^간섭 · 제안/ }).click();
+  const row = drawer.getByRole('table', { name: '간섭 · 제안' }).locator('tr[data-id="col:N1-NA"]');
   await row.click();
   assert.equal(await row.getAttribute('aria-selected'), 'true');
   assert.ok(
@@ -245,21 +307,23 @@ try {
   const plan = top.getByRole('img', { name: '평면' });
   assert.equal(await plan.locator('[data-layer="columns"] [data-id]').count(), 10);
   await top.getByRole('tab', { name: '3D' }).click();
-  await drawer.getByRole('tab', { name: /^대안/ }).click();
-  const alternatives = await drawer.getByRole('table', { name: '대안' }).textContent();
+  await drawer.getByRole('tab', { name: /^배치 대안/ }).click();
+  const alternatives = await drawer.getByRole('table', { name: '배치 대안 · 제안' }).textContent();
   assert.match(alternatives, /직교 격자/);
   assert.match(alternatives, /엇갈림 격자/);
   assert.match(alternatives, /● 선택/);
 
-  // A setting the layout reads recomputes from the axes on; the diagnosis of the drawn layout is reused.
+  // A setting the layout and the beams read recomputes them; the diagnosis and the girders are reused.
   const report = page.waitForResponse(
     (r) => r.request().method() === 'POST' && /\/run$/.test(r.url()),
   );
-  await panel.getByRole('button', { name: '파일캡 한 변 늘리기' }).click();
+  await panel.getByRole('button', { name: '바깥 축선에서 슬래브 끝까지 한도 늘리기' }).click();
   const recomputed = await (await report).json();
   const statuses = Object.fromEntries(recomputed.steps.map((s) => [s.id, [s.status, s.cached]]));
   assert.deepEqual(statuses.diagnose, ['done', true]);
+  assert.deepEqual(statuses.girders, ['done', true]);
   assert.deepEqual(statuses.axes, ['done', false]);
+  assert.deepEqual(statuses.beams, ['done', false]);
   assert.deepEqual(statuses.interference, ['done', false]);
 
   // Words on screen: no confirmation levels, bindings or developer words; the preliminary-value note.

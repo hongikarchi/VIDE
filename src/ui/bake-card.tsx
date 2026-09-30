@@ -6,7 +6,7 @@ import { z } from 'zod';
 // confirmation card does the applying), record the baseline after application, and the person's
 // choice for each preserved object (유지 · 덮기 · 수정 사항으로 받기, SPEC-07.13). Wiring into the
 // jig screen is PLAN-23 T-056; this file is the component and the schema of the request result's
-// `bake` field (src/jigs/bake/bake.ts `BakeSummary`).
+// `bake` field (src/jigs/bake/bake.ts `BakeSummary`); `jig-panel/bake-parts.tsx` drives it.
 
 const preserved = z.object({
   key: z.string(),
@@ -21,6 +21,7 @@ export const bakeOutcomeSchema = z.object({
   replaced: z.array(z.string()),
   dropped: z.array(z.string()).default([]),
   preserved: z.array(preserved),
+  respected: z.array(z.string()).default([]),
   kept: z.array(z.string()),
   deleted: z.array(z.string()),
   copies: z.number().int().nonnegative(),
@@ -36,6 +37,7 @@ export const bakeSummarySchema = z.object({
     added: z.number(),
     replaced: z.number(),
     preserved: z.number(),
+    respected: z.number().default(0),
     copies: z.number(),
     deleted: z.number(),
     failed: z.number(),
@@ -127,6 +129,13 @@ export function BakeCard({
         <Line label="추가" count={totals.added} />
         <Line label="교체" count={totals.replaced} />
         <Line label="사람이 고친 것 보존" count={totals.preserved} />
+        {totals.respected ? (
+          <Line
+            label="수정 사항으로 받은 것"
+            count={totals.respected}
+            detail="Rhino에서 고친 그대로 둠"
+          />
+        ) : null}
         <Line label="복사본 그대로" count={totals.copies} />
         <Line
           label="사람이 지운 것"

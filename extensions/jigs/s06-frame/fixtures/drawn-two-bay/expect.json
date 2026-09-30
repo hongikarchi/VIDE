@@ -1,0 +1,29 @@
+{
+  "steps": {
+    "girders": {
+      "summary": {
+        "girders": 6,
+        "snapped": 9,
+        "dangling": 1,
+        "spansOver": 0
+      }
+    },
+    "cells": {
+      "summary": {
+        "cells": 2
+      }
+    },
+    "beams": {
+      "summary": {
+        "beams": 4,
+        "edgeCantilevers": 0
+      }
+    },
+    "axes": {
+      "skipped": true
+    }
+  },
+  "statuses": {
+    "confirmInputs": "confirmed"
+  }
+}

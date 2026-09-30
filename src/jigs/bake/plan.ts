@@ -4,6 +4,8 @@
 // recorded object with the same fingerprint on its recorded, visible layer is replaced; a changed,
 // moved or missing one is a person's work and is left alone; tagged objects the record does not
 // know are copies and stay. Only the objects of this instance and bake are ever deleted.
+// An edit taken as a 수정 사항 (`absorb`, SPEC-07.13) moves that key's baseline to the taken
+// fingerprint: while the object keeps it, the object stands for the jig's item and is left alone.
 
 import type { BakeDecl } from '../runtime/manifest.ts';
 import type { Override } from '../runtime/instance.ts';
@@ -261,6 +263,32 @@ export interface BakePlan {
   carry: BakeRecordItems;
   /** Overrides to add for `absorb` resolutions (origin `host-edit`). */
   absorbed: Omit<Override, 'id' | 'at'>[];
+  /**
+   * Keys whose person-edited object was taken as a 수정 사항 (now or earlier) and still has the
+   * taken fingerprint: it stands for the jig's item, so it is neither deleted nor made again.
+   */
+  respected: string[];
+}
+/** The fingerprint a person's edit was taken at (`absorb`, SPEC-07.13), by result key. */
+export type Absorbed = Record<string, { nativeId: string; hash: string; layer: string }>;
+/**
+ * The taken edits of one bake from an instance's overrides (`target.kind: 'bake-item'`, origin
+ * `host-edit`); the latest override of a key wins.
+ */
+export function absorbedOf(
+  overrides: readonly Pick<Override, 'target' | 'op' | 'fields' | 'origin'>[],
+  bakeId: string,
+): Absorbed {
+  const out: Absorbed = {};
+  for (const o of overrides) {
+    if (o.target.kind !== 'bake-item' || o.origin !== 'host-edit' || o.op !== 'set') continue;
+    if (o.target.identity.bake !== bakeId) continue;
+    const { nativeId, hash, layer } = o.fields;
+    if (typeof nativeId !== 'string' || typeof hash !== 'string' || typeof layer !== 'string')
+      continue;
+    out[String(o.target.identity.key)] = { nativeId, hash, layer };
+  }
+  return out;
 }
 export interface PlanInput {
   instanceId: string;
@@ -272,6 +300,8 @@ export interface PlanInput {
   pending?: readonly Pick<JigBake, 'runId' | 'items'>[];
   read: ReadModel;
   resolve?: Record<string, Resolve>;
+  /** Edits taken earlier as 수정 사항 (`absorbedOf`); they replace the recorded baseline. */
+  absorbed?: Absorbed;
 }
 /** Classify the recorded objects against the forced read and decide what to delete and make. */
 export function planBake(input: PlanInput): BakePlan {
@@ -291,6 +321,7 @@ export function planBake(input: PlanInput): BakePlan {
     hiddenTargets: [],
     carry: {},
     absorbed: [],
+    respected: [],
   };
   const known = new Set<string>();
   const skip = new Set<string>();
@@ -305,7 +336,11 @@ export function planBake(input: PlanInput): BakePlan {
       by: 'user',
       note: `Rhino에서 고친 ${key}을(를) 수정 사항으로 받음`,
     });
-  for (const [key, item] of Object.entries(priorItems)) {
+  for (const [key, recordedItem] of Object.entries(priorItems)) {
+    known.add(recordedItem.nativeId);
+    // A taken edit moves the baseline to the fingerprint it was taken at (SPEC-07.13).
+    const taken = input.absorbed?.[key];
+    const item = taken ? { ...recordedItem, ...taken } : recordedItem;
     known.add(item.nativeId);
     const choice = resolve[key];
     if (item.state === 'kept' && choice !== 'overwrite') {
@@ -342,7 +377,21 @@ export function planBake(input: PlanInput): BakePlan {
       skip.add(key);
       continue;
     }
-    if (edited && choice === 'absorb') absorb(key, object);
+    if (choice !== 'overwrite' && (edited ? choice === 'absorb' : !!taken)) {
+      // Taken as a 수정 사항: the person's object stands for the jig's item and stays as it is;
+      // editing it again makes it a person's edit again, `overwrite` replaces it with the jig's.
+      if (edited) absorb(key, object);
+      plan.respected.push(key);
+      plan.carry[key] = {
+        ...item,
+        nativeId: object.nativeId,
+        hash: object.hash,
+        layer: object.layer,
+        state: 'jig',
+      };
+      skip.add(key);
+      continue;
+    }
     // Replace: the recorded object, unchanged (or overwritten on request), on a usable layer.
     const usable = layerUsable(layers, object.layer);
     if (!usable.visible || usable.locked) {

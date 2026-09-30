@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["schema", "cells", "summary", "notes"],
+  "properties": {
+    "schema": { "const": "vide.s06.cells/1" },
+    "cells": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "polygon", "girderIds", "area_m2"],
+        "properties": {
+          "id": { "type": "string" },
+          "polygon": {
+            "type": "array",
+            "items": {
+              "type": "array",
+              "items": { "type": "number" },
+              "minItems": 2,
+              "maxItems": 2
+            },
+            "minItems": 3
+          },
+          "holes": {
+            "type": "array",
+            "items": {
+              "type": "array",
+              "items": {
+                "type": "array",
+                "items": { "type": "number" },
+                "minItems": 2,
+                "maxItems": 2
+              }
+            }
+          },
+          "girderIds": { "type": "array", "items": { "type": "string" } },
+          "edges": { "type": "array", "items": { "enum": ["slab", "void"] } },
+          "area_m2": { "type": "number" }
+        }
+      }
+    },
+    "summary": { "type": "object", "required": ["cells", "area_m2"] },
+    "notes": { "type": "array", "items": { "type": "string" } }
+  }
+}

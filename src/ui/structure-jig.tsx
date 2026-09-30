@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { api } from './gateway.ts';
 import type { JigContext } from './jigs.tsx';
 import { S06Diagnose } from './s06-diagnose.tsx';
+import { VerdictLegend, type VerdictBand } from './kit/status.tsx';
 
 // Structure analysis jig (J-09, SPEC-06): pick Syncs → draft (computed + AI help) → check and fix →
 // confirm & analyse → member table and verdict colours. Results are exploratory, never sign-off.
@@ -76,6 +77,9 @@ interface Confirmed {
     };
     notChecked: string[];
   };
+  /** Summary of the same analysis: '확정 결과' or '미확정 미리보기' and the verdict band edges. */
+  summary?: { mode: 'confirmed' | 'preview'; label: string; colorBands: [number, number] };
+  colorBands?: [number, number];
 }
 interface State {
   draft: Draft | null;
@@ -97,14 +101,68 @@ const STATUS: Record<Check['status'], string> = {
   incomplete: '미완',
   error: '오류',
 };
-export const verdictColor = (check: Pick<Check, 'status' | 'ratio'>) =>
+// Verdict bands (SPEC-06.7): 미판정 / 통과 / 주의 / 초과, edges from the analysis' colorBands.
+const DEFAULT_BANDS: [number, number] = [0.7, 1.0];
+export const verdictBand = (
+  check: Pick<Check, 'status' | 'ratio'>,
+  bands: [number, number] = DEFAULT_BANDS,
+): VerdictBand =>
   check.status === 'incomplete' || check.status === 'error' || check.ratio === null
-    ? '#8a8f8c'
-    : check.ratio >= 1
-      ? '#d0453a'
-      : check.ratio >= 0.7
-        ? '#d8a31a'
-        : '#3a9d5d';
+    ? 'na'
+    : check.ratio >= bands[1]
+      ? 'ng'
+      : check.ratio >= bands[0]
+        ? 'warn'
+        : 'ok';
+const BAND_COLOR: Record<VerdictBand, string> = {
+  ok: '#3a9d5d',
+  warn: '#d8a31a',
+  ng: '#d0453a',
+  na: '#8a8f8c',
+};
+export const verdictColor = (
+  check: Pick<Check, 'status' | 'ratio'>,
+  bands: [number, number] = DEFAULT_BANDS,
+) => BAND_COLOR[verdictBand(check, bands)];
+/** The check table as CSV (SPEC-06.7), with the result label so a preview never reads as final. */
+export function checksCsv(
+  rows: readonly Check[],
+  label: string,
+  member: (id: string) => { role: string; section: string } | undefined,
+) {
+  const cell = (v: unknown) => {
+    const s = v === null || v === undefined ? '' : String(v);
+    return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  };
+  const head = [
+    '결과',
+    '부재',
+    '역할',
+    '단면',
+    '검정비',
+    '지배 조합',
+    '조항',
+    '판정',
+    '원인',
+    '메모',
+  ];
+  const body = rows.map((c) => {
+    const m = member(c.member);
+    return [
+      label,
+      c.member,
+      ROLE[m?.role ?? 'other'] ?? m?.role,
+      m?.section ?? '',
+      c.ratio === null ? '' : c.ratio.toFixed(3),
+      c.governing?.combo ?? '',
+      c.governing?.clause ?? '',
+      STATUS[c.status],
+      c.cause === 'input-suspect' ? '입력·모델 의심' : c.cause === 'member' ? '부재 부족' : '',
+      c.notes.join(' · '),
+    ];
+  });
+  return '\uFEFF' + [head, ...body].map((row) => row.map(cell).join(',')).join('\r\n') + '\r\n';
+}
 const fmt = (v: number | null | undefined, digits = 2) =>
   v === null || v === undefined ? '—' : v.toFixed(digits);
 
@@ -122,6 +180,8 @@ export function StructureJig({ context }: { context: JigContext }) {
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState('');
   const [filter, setFilter] = useState<'problems' | 'all'>('problems');
+  const [only, setOnly] = useState<VerdictBand>();
+  const [colored, setColored] = useState(false);
   const [view, setView] = useState<'analysis' | 'diagnose'>('analysis');
   const [diagnoseOpened, setDiagnoseOpened] = useState(false);
   const base = `/projects/${context.projectId}/jigs/structure`;
@@ -261,12 +321,43 @@ export function StructureJig({ context }: { context: JigContext }) {
   };
 
   const confirmed = state?.confirmed;
+  const bands = confirmed?.colorBands ?? confirmed?.summary?.colorBands ?? DEFAULT_BANDS;
+  // '미확정 미리보기' results are marked as such everywhere they show (SPEC-06.3·.7).
+  const preview = confirmed?.summary?.mode === 'preview';
+  const resultLabel = confirmed?.summary?.label ?? (preview ? '미확정 미리보기' : '확정 결과');
   const checks = useMemo(() => {
     const all = [...(confirmed?.result.checks ?? [])].sort(
       (a, b) => (b.ratio ?? Infinity) - (a.ratio ?? Infinity),
     );
-    return filter === 'all' ? all : all.filter((c) => c.status !== 'pass' || (c.ratio ?? 0) >= 0.7);
-  }, [confirmed, filter]);
+    if (only) return all.filter((c) => verdictBand(c, bands) === only);
+    return filter === 'all'
+      ? all
+      : all.filter((c) => c.status !== 'pass' || verdictBand(c, bands) !== 'ok');
+  }, [confirmed, filter, only, bands]);
+  const legend = useMemo(() => {
+    const count = { ok: 0, warn: 0, ng: 0, na: 0 };
+    for (const c of confirmed?.result.checks ?? []) count[verdictBand(c, bands)]++;
+    const [a, b] = bands.map((v) => v.toFixed(2));
+    return [
+      { band: 'ok' as const, symbol: '○', text: '통과', range: `< ${a}`, count: count.ok },
+      { band: 'warn' as const, symbol: '△', text: '주의', range: `${a}~${b}`, count: count.warn },
+      { band: 'ng' as const, symbol: '✕', text: '초과', range: `≥ ${b}`, count: count.ng },
+      { band: 'na' as const, symbol: '—', text: '미판정', range: '미완·오류', count: count.na },
+    ];
+  }, [confirmed, bands]);
+  const exportCsv = () => {
+    if (!confirmed) return;
+    const text = checksCsv(confirmed.result.checks, resultLabel, (id) => {
+      const m = memberOf(id);
+      return m && { role: m.role, section: sectionName(m.section) };
+    });
+    const url = URL.createObjectURL(new Blob([text], { type: 'text/csv;charset=utf-8' }));
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `부재검정-${preview ? '미리보기' : '확정'}-${confirmed.confirmedAt.slice(0, 10)}.csv`;
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  };
   const memberOf = (id: string) => confirmed?.model.members.find((m) => m.id === id);
   const sectionName = (id: string) =>
     confirmed?.model.sections.find((s) => s.id === id)?.name ?? id;
@@ -283,7 +374,7 @@ export function StructureJig({ context }: { context: JigContext }) {
       const colors = bySync.get(source.documentId) ?? {};
       // One Rhino object can hold several analysis members; keep the worst colour.
       const rank = (c: string) => ['#3a9d5d', '#8a8f8c', '#d8a31a', '#d0453a'].indexOf(c);
-      const next = verdictColor(check);
+      const next = verdictColor(check, bands);
       if (!colors[source.objectId] || rank(next) > rank(colors[source.objectId]))
         colors[source.objectId] = next;
       bySync.set(source.documentId, colors);
@@ -507,7 +598,10 @@ export function StructureJig({ context }: { context: JigContext }) {
         {confirmed ? (
           <section className="jig-relation" aria-label="해석 결과">
             <h3>
-              결과 · {new Date(confirmed.confirmedAt).toLocaleString('ko-KR')}
+              결과 · {new Date(confirmed.confirmedAt).toLocaleString('ko-KR')}{' '}
+              <span className="pill" data-mode={preview ? 'preview' : 'confirmed'}>
+                {resultLabel}
+              </span>
               {state?.stale ? <span className="pill"> 오래된 결과 — 입력이 바뀜</span> : null}
             </h3>
             {confirmed.result.status === 'error' ? (
@@ -549,17 +643,24 @@ export function StructureJig({ context }: { context: JigContext }) {
                   >
                     전체
                   </button>{' '}
-                  {context.tint ? (
-                    <>
-                      <button type="button" onClick={tint}>
-                        모델에 판정색
-                      </button>
-                      <button type="button" onClick={context.clearTint}>
-                        판정색 끄기
-                      </button>
-                    </>
-                  ) : null}
+                  <button type="button" onClick={exportCsv}>
+                    CSV로 내보내기
+                  </button>
                 </div>
+                <VerdictLegend
+                  title={`판정 범례 · ${resultLabel}`}
+                  total={confirmed.result.checks.length}
+                  bands={legend}
+                  only={only}
+                  colored={context.tint ? colored : true}
+                  onOnly={setOnly}
+                  onColored={(on) => {
+                    if (!context.tint) return;
+                    setColored(on);
+                    if (on) tint();
+                    else context.clearTint();
+                  }}
+                />
                 <div className="jig-table-wrap">
                   <table className="jig-table" aria-label="부재 검정">
                     <thead>
@@ -584,7 +685,7 @@ export function StructureJig({ context }: { context: JigContext }) {
                             <td>
                               <span
                                 className="jig-structure-swatch"
-                                style={{ background: verdictColor(c) }}
+                                style={{ background: verdictColor(c, bands) }}
                               />
                               {fmt(c.ratio)}
                             </td>

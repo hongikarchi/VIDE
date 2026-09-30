@@ -1,0 +1,86 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": [
+    "schema",
+    "params",
+    "girders",
+    "columns",
+    "dangling",
+    "crossings",
+    "spans",
+    "summary"
+  ],
+  "properties": {
+    "schema": { "const": "vide.s06.girders/1" },
+    "girders": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "sourceId", "points", "kind", "supports", "snapped"],
+        "properties": {
+          "kind": { "enum": ["line", "arc"] },
+          "points": {
+            "type": "array",
+            "minItems": 2,
+            "items": { "type": "array", "minItems": 3, "maxItems": 3 }
+          },
+          "arc": {
+            "type": "object",
+            "required": ["center", "radius", "startDeg", "endDeg", "plane"],
+            "properties": { "plane": { "enum": ["vertical", "plan"] } }
+          },
+          "supports": {
+            "type": "array",
+            "items": { "type": "object", "required": ["columnId", "t"] }
+          },
+          "snapped": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["end", "columnId", "moved_m"],
+              "properties": { "end": { "enum": ["start", "end"] } }
+            }
+          }
+        }
+      }
+    },
+    "columns": {
+      "type": "array",
+      "items": { "type": "object", "required": ["id", "sourceId", "bottom", "top"] }
+    },
+    "dangling": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["girderId", "end", "distance_m"],
+        "properties": { "end": { "enum": ["start", "end"] } }
+      }
+    },
+    "crossings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["girderId", "boundary", "at"],
+        "properties": { "boundary": { "enum": ["slab", "void"] } }
+      }
+    },
+    "spans": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["girderId", "from", "to", "length_m", "planLength_m", "over"]
+      }
+    },
+    "summary": {
+      "type": "object",
+      "required": ["girders", "snapped", "dangling", "spansOver"],
+      "properties": {
+        "girders": { "type": "integer" },
+        "snapped": { "type": "integer" },
+        "dangling": { "type": "integer" },
+        "spansOver": { "type": "integer" }
+      }
+    }
+  }
+}

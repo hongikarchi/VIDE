@@ -4,6 +4,7 @@ import type { Root } from 'react-dom/client';
 import { isDwgSdkEditMode } from '../contracts/dwg-edit-mode.ts';
 import { executionLimits } from '../contracts/execution-limits.ts';
 import { ActivityLog, activityEntries } from './activity.tsx';
+import { conversationFilter, inConversation, onConversationFilter } from './conversations.tsx';
 import { api } from './gateway.ts';
 import {
   Action,
@@ -181,12 +182,15 @@ function StageList({
 function WorkView({
   message,
   messages,
+  conversation = messages,
   models,
   projectId,
   actions,
 }: {
   message: Message;
   messages: Message[];
+  /** The requests of the chosen conversation (all of them without chips). */
+  conversation?: Message[];
   models: { id: string; name: string }[];
   projectId: string;
   actions: Actions;
@@ -197,7 +201,7 @@ function WorkView({
   const running = Boolean(request && ['queued', 'running'].includes(request.state));
   const activity = activityEntries(result?.activity);
   const imported = ['file', 'document'].includes(message.source ?? '');
-  const others = messages.filter(
+  const others = conversation.filter(
     (entry) =>
       entry.id !== message.id &&
       !entry.request?.input?.parentRequestId &&
@@ -475,6 +479,27 @@ function WorkView({
 }
 
 const roots = new Map<HTMLElement, Root>();
+type RenderArgs = Parameters<typeof renderWork>;
+const lastArgs = new Map<HTMLElement, RenderArgs>();
+/**
+ * The work shown under the chosen conversation (SCR-15, PLAN-24 T-061): the focused request when
+ * it belongs to it, else the conversation's latest running (or latest) request, chosen the way
+ * the app chooses without a conversation (§06 SCR-03). Without chips (panel mode) nothing changes.
+ */
+export function workInConversation(
+  focused: Message | undefined,
+  messages: Message[],
+  filter: string | null | undefined,
+) {
+  if (filter === undefined || (focused && inConversation(focused, filter))) return focused;
+  const listed = messages.filter(
+    (entry) => !entry.request?.input?.parentRequestId && inConversation(entry, filter),
+  );
+  return (
+    [...listed].reverse().find((entry) => ['queued', 'running'].includes(entry.request?.state)) ??
+    listed.at(-1)
+  );
+}
 export function renderWork(
   element: HTMLElement,
   focused: Message | undefined,
@@ -483,32 +508,47 @@ export function renderWork(
   projectId: string | undefined,
   actions: Actions,
 ): void {
+  lastArgs.set(element, [element, focused, messages, models, projectId, actions]);
   let root = roots.get(element);
   if (!root) {
     root = createRoot(element);
     roots.set(element, root);
   }
+  const filter = conversationFilter();
+  const shown = workInConversation(focused, messages, filter);
+  // Requests of other conversations stay in `related` (base and child lookups) but not in the
+  // "진행 중인 다른 작업" line.
+  const others =
+    filter === undefined ? messages : messages.filter((entry) => inConversation(entry, filter));
   root.render(
-    focused ? (
+    shown ? (
       <WorkView
-        key={focused.id}
-        message={focused}
+        key={shown.id}
+        message={shown}
         messages={messages}
+        conversation={others}
         models={models}
         projectId={projectId ?? ''}
         actions={actions}
       />
     ) : (
       <div className="chat-empty">
-        요청을 보내면 진행 단계와 결과가 여기에 표시됩니다.
+        {filter === undefined
+          ? '요청을 보내면 진행 단계와 결과가 여기에 표시됩니다.'
+          : '이 대화에는 아직 작업이 없습니다. 요청을 보내면 여기에 표시됩니다.'}
         <span className="chat-empty-history"> 지난 작업은 왼쪽 작업 이력에서 엽니다.</span>
       </div>
     ),
   );
 }
+// Choosing another conversation chip re-renders the work view with the same inputs.
+onConversationFilter(() => {
+  for (const args of lastArgs.values()) renderWork(...args);
+});
 window.addEventListener('pagehide', (event) => {
   if (!event.persisted) {
     for (const root of roots.values()) root.unmount();
     roots.clear();
+    lastArgs.clear();
   }
 });

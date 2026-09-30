@@ -457,3 +457,24 @@ test('기록 삭제는 그 세션의 파일과 비게 된 프로젝트 폴더만
     await rm(root, { recursive: true, force: true });
   }
 });
+
+test('구조화 출력 스키마는 포함된 turn-output 항목에서만 읽고 크기를 제한한다(T-062)', async () => {
+  const { outputSchemaOf } = await import('../../src/ai/claude-cli.ts');
+  const schema = { type: 'object', additionalProperties: false, properties: {}, required: [] };
+  const base = { goal: 'g', revision: 1 };
+  const item = { id: 'turn-output', type: 'turn-output', data: { schema } };
+  assert.equal(outputSchemaOf({ ...base, items: [item], includedIds: [] }), undefined);
+  assert.equal(outputSchemaOf({ ...base, items: [], includedIds: [] }), undefined);
+  assert.deepEqual(
+    JSON.parse(outputSchemaOf({ ...base, items: [item], includedIds: ['turn-output'] })),
+    schema,
+  );
+  const huge = { ...item, data: { schema: { description: 'x'.repeat(17000) } } };
+  assert.throws(() => outputSchemaOf({ ...base, items: [huge], includedIds: ['turn-output'] }), {
+    code: 'INVALID_CONTEXT',
+  });
+  // Without the item the arguments are the single-run ones, unchanged.
+  const cli = new ClaudeCli({ executable: process.execPath });
+  const args = await cli.withOutputSchema(cli.arguments(), undefined, '');
+  assert.deepEqual(args, cliArguments());
+});

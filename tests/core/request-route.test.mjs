@@ -223,3 +223,77 @@ test('the server answer maps to routes for every target; malformed answers go to
   assert.equal(jevRoute({ target: 'ask' }, subjects).target, 'ask');
   assert.equal(jevRoute({ target: 'make' }, subjects).target, 'make');
 });
+
+test('the open jig instance settings become routing context; the query carries title and help only', async () => {
+  const { instanceRouteContext, routeQuery, routeRevert, goesToAi, officialRouteJigs } =
+    await import('../../src/ui/request-route.ts');
+  // The engine's ParamView rows (ARCH-03 §4) of the open instance.
+  const { params, values } = instanceRouteContext([
+    {
+      key: 'spanMax',
+      title: '경간 상한',
+      help: '거더 경간의 상한',
+      group: '배치',
+      type: 'length',
+      unit: 'm',
+      displayUnit: 'm',
+      decimals: 1,
+      value: 12,
+      displayValue: 12,
+      by: 'default',
+      range: { min: 3, max: 30, step: 0.5 },
+    },
+    {
+      key: 'grade',
+      title: '강종',
+      type: 'choice',
+      unit: '',
+      displayUnit: '',
+      value: 'SM355',
+      choices: [
+        { value: 'SM355', label: 'SM355' },
+        { value: 'SS275', label: 'SS275' },
+      ],
+      fixedAtPin: true,
+    },
+    { title: 'no key' },
+    null,
+  ]);
+  assert.deepEqual(
+    params.map((p) => p.key),
+    ['spanMax', 'grade'],
+  );
+  assert.deepEqual(values, { spanMax: 12, grade: 'SM355' });
+  assert.deepEqual(params[0].display, { unit: 'm', decimals: 1 });
+  assert.equal(params[1].fixedAtPin, true);
+  const context = { params, values, jigs: officialRouteJigs() };
+  const route = routeRequest('경간 11로', [], [], context);
+  assert.equal(route.target, 'param');
+  assert.deepEqual(route.param.change, { ok: true, value: 11, text: '경간 상한 12 m → 11 m' });
+  // A fixed setting is not changed from words: the notice says why (sent to the AI only on request).
+  const fixed = routeRequest('강종 SS275로', [], [], context);
+  if (fixed.target === 'param') assert.equal(fixed.param.change.ok, false);
+  // The official jigs' rule words propose opening them.
+  const jig = routeRequest('구조 검토 해줘', [], [], context);
+  assert.deepEqual([jig.target, jig.jig.id, jig.jig.name], ['jig', 'structure', '구조 검토']);
+  assert.equal(goesToAi(jig), false);
+  // The /route query: settings by key, title and help; no values, units or ranges leave the screen.
+  const query = routeQuery(
+    '경간 11로',
+    [{ id: 'kind:선', label: 'lines', ids: ['a'], subject: '선' }],
+    context,
+  );
+  assert.deepEqual(query, {
+    body: '경간 11로',
+    subjects: [{ id: 'kind:선', label: 'lines' }],
+    params: [
+      { key: 'spanMax', title: '경간 상한', help: '거더 경간의 상한' },
+      { key: 'grade', title: '강종' },
+    ],
+  });
+  assert.deepEqual(routeQuery('숨겨', []), { body: '숨겨', subjects: [] });
+  // 'AI 작업으로 보내기' records the route and who chose it, never the words.
+  assert.deepEqual(routeRevert(route), { target: 'param', by: 'rules' });
+  assert.equal(goesToAi({ target: 'document', reason: '' }), true);
+  assert.equal(goesToAi({ target: 'ask', reason: '' }), true);
+});

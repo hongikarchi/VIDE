@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": [
+    "schema",
+    "params",
+    "model",
+    "map",
+    "modelHash",
+    "assumptions",
+    "issues",
+    "columns",
+    "loads",
+    "totals",
+    "summary"
+  ],
+  "properties": {
+    "schema": { "const": "vide.s06.model/1" },
+    "model": {
+      "type": "object",
+      "required": ["sections", "nodes", "members", "loadPatterns", "combinations", "analysis"]
+    },
+    "map": {
+      "type": "object",
+      "required": ["physical", "roles", "tags", "cantilever", "columnOfNode"]
+    },
+    "modelHash": { "type": "string" },
+    "assumptions": { "type": "array", "items": { "type": "string" } },
+    "issues": {
+      "type": "array",
+      "items": { "type": "object", "required": ["level", "code", "message"] }
+    },
+    "columns": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["key", "sourceId", "base", "top", "moved_m", "girders"]
+      }
+    },
+    "loads": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["memberKey", "case", "value_kNpm", "source", "zone"]
+      }
+    },
+    "totals": { "type": "object", "required": ["area_m2", "D_kN", "L_kN"] },
+    "summary": {
+      "type": "object",
+      "required": ["columns", "girders", "beams", "cantilevers", "segments", "errors", "warnings"]
+    }
+  }
+}

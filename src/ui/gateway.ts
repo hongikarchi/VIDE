@@ -218,4 +218,11 @@ Object.assign(errors, {
   WEB_MODEL_LIMIT: '현재 공유 뷰어의 64 MiB 표시 한도를 넘었습니다. 공개할 객체를 줄여 주세요.',
   RESULT_NOT_VERIFIED: '검증이 끝난 결과만 공유할 수 있습니다.',
   UNSUPPORTED_GEOMETRY: '선택한 객체 중 공유 뷰어가 표시하지 못하는 형상이 있습니다.',
+  // Settings of an open jig changed from the request box (SPEC-02.17 2, SPEC-07.6).
+  PARAM_FIXED: '이 설정값은 검토본을 고정한 뒤라 바꿀 수 없습니다. 새 작업본에서 바꾸세요.',
+  OUT_OF_RANGE: '설정값이 허용 범위를 벗어납니다.',
+  UNIT_MISMATCH: '이 설정값에 맞지 않는 단위입니다.',
+  // Conversations (SPEC-02.19 1).
+  CONVERSATION_CLOSED: '닫힌 대화입니다. 다시 열거나 새 대화에서 보내세요.',
+  CONVERSATION_PROVIDER: '이 대화는 다른 AI 서비스로 열렸습니다. 새 대화에서 보내세요.',
 });

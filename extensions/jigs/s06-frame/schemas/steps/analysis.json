@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["schema", "label", "modelHash", "preview", "assumptions", "summary"],
+  "properties": {
+    "schema": { "const": "vide.s06.analysis/1" },
+    "label": { "const": "미확정 미리보기" },
+    "modelHash": { "type": "string" },
+    "preview": {
+      "type": ["object", "null"],
+      "required": ["schema", "mode", "label", "status", "combos", "members"]
+    },
+    "assumptions": { "type": "array", "items": { "type": "string" } },
+    "confirmed": {
+      "type": "object",
+      "required": ["result", "at", "modelHash"],
+      "properties": { "result": { "type": "object", "required": ["mode", "status"] } }
+    },
+    "staleConfirmed": { "type": "object", "required": ["at", "modelHash"] },
+    "error": { "type": "object", "required": ["code", "message"] },
+    "summary": {
+      "type": "object",
+      "required": ["status", "members", "confirmed", "maxRatio", "ms"]
+    }
+  }
+}

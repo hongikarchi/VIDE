@@ -19,6 +19,7 @@ import { JigRegistry, JigInvalidError, repositoryJigRoot } from '../jigs/runtime
 import { importPack } from '../jigs/runtime/pack.ts';
 import { JigRuntime, layersOf, rowsOfLayers, type ReadModel } from '../jigs/runtime/runtime.ts';
 import {
+  bakeOffers,
   bakeRecords,
   finishBake,
   prepareBake,
@@ -27,6 +28,15 @@ import {
   type BakeContext,
 } from '../jigs/bake/bake.ts';
 import { overrideSchema, transformSchema, zoneSchema } from '../jigs/runtime/instance.ts';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import {
+  parseReportTemplate,
+  resolveReport,
+  type ReportContext,
+  type ReportModel,
+} from '../jigs/runtime/report-format.ts';
+import { renderJigReport } from './report.ts';
 import { diagnose, type DiagnoseInputs } from '../../extensions/jigs/s06-frame/steps/diagnose.ts';
 import { ROLE_KEYS } from '../../extensions/jigs/s06-frame/steps/labels.ts';
 import {
@@ -283,6 +293,22 @@ export async function jigRoutes(
     return true;
   }
 
+  // The report tab's list: every instance of the project with its jig's report frames.
+  const projectReports = /^\/api\/v1\/projects\/([^/]+)\/jig-reports$/.exec(url.pathname);
+  if (projectReports && method === 'GET') {
+    const rt = runtime();
+    const out = [];
+    for (const row of rt.list(projectReports[1])) {
+      const frames = await rt.registry
+        .resolve(row.jigId, row.version)
+        .then(reportFrames)
+        .catch(() => []);
+      if (frames.length) out.push({ instance: row, reports: frames });
+    }
+    send(200, { instances: out });
+    return true;
+  }
+
   // --- instances ------------------------------------------------------------------------------
   const instances = /^\/api\/v1\/projects\/([^/]+)\/jig-instances(?:\/([^/]+)(?:\/(.+))?)?$/.exec(
     url.pathname,
@@ -440,6 +466,28 @@ export async function jigRoutes(
       send(200, { stepId: output[1], output: rt.output(projectId, instanceId, output[1]) });
       return true;
     }
+    // --- 보고서 (SPEC-07.11, ARCH-03 §5.2, PLAN-22 T-057) -----------------------------------
+    if (rest === 'reports' && method === 'GET') {
+      const view = await rt.view(projectId, instanceId);
+      send(200, {
+        reports: reportFrames(await rt.registry.resolve(view.jig.id, view.jig.version)),
+      });
+      return true;
+    }
+    const reportRoute = /^reports\/([^/]+)$/.exec(rest);
+    if (reportRoute && method === 'GET') {
+      send(
+        200,
+        await instanceReport(
+          rt,
+          workspace,
+          projectId,
+          instanceId,
+          decodeURIComponent(reportRoute[1]),
+        ),
+      );
+      return true;
+    }
     // --- Rhino에 만들기 (SPEC-07.12, ARCH-03 §9.3) ---------------------------------------------
     const bakeContext: BakeContext = {
       runtime: rt,
@@ -464,6 +512,7 @@ export async function jigRoutes(
         replaced: plan.replaced,
         dropped: plan.dropped,
         preserved: plan.preserved,
+        respected: plan.respected,
         kept: plan.kept,
         deleted: plan.deleted,
         copies: plan.copies,
@@ -545,6 +594,8 @@ export async function jigRoutes(
       const jig = await rt.registry.resolve(view.jig.id, view.jig.version);
       send(200, {
         bakes: bakeRecords(store(), instanceId, jig, url.searchParams.get('linkId') ?? undefined),
+        offers: bakeOffers(jig),
+        stale: !!view.body.bakeStale,
       });
       return true;
     }
@@ -725,4 +776,114 @@ async function readForJig(
     .at(-1);
   if (!latest) throw new DomainError('STALE_REFERENCE');
   return fromSync(latest.id, link.id);
+}
+
+// --- jig reports (SPEC-07.11, ARCH-03 §5.2, PLAN-22 T-057) ---------------------------------------
+// A jig's report frames are its manifest `reports`, else every `reports/*.json` of the package.
+// A report reads the kept output of every step that has one; a step whose output says it is a
+// preview (`mode: 'preview'`, or an analysis summary not confirmed) is marked, never written as
+// final. Blocks whose step has no output yet are left out; the section's claim says '아직 없음'.
+
+type LoadedJigOf = Awaited<ReturnType<JigRegistry['resolve']>>;
+export interface ReportFrameInfo {
+  id: string;
+  title: string;
+  file: string;
+}
+export function reportFrames(jig: Pick<LoadedJigOf, 'manifest' | 'files'>): ReportFrameInfo[] {
+  if (jig.manifest.reports?.length) return jig.manifest.reports.map((r) => ({ ...r }));
+  return jig.files
+    .filter((file) => /^reports\/[a-z0-9][a-z0-9-]*\.json$/.test(file))
+    .map((file) => {
+      const id = file.slice('reports/'.length, -'.json'.length);
+      return { id, title: id, file };
+    });
+}
+/** Whether a kept step output is final (false for previews and unconfirmed analyses). */
+export function outputIsFinal(output: unknown): boolean {
+  if (!output || typeof output !== 'object') return true;
+  const value = output as { mode?: unknown; summary?: { confirmed?: unknown } };
+  if (value.mode === 'preview') return false;
+  if (value.summary && typeof value.summary === 'object' && value.summary.confirmed === false)
+    return false;
+  return true;
+}
+/** Leave out blocks that have nothing to show (their step has not run yet). */
+export function withoutEmptyBlocks(model: ReportModel): ReportModel {
+  return {
+    ...model,
+    sections: model.sections.map((section) => ({
+      ...section,
+      blocks: section.blocks.filter((block) =>
+        block.kind === 'list' ? block.items.length > 0 : block.rows.length > 0,
+      ),
+    })),
+  };
+}
+async function instanceReport(
+  rt: JigRuntime,
+  workspace: Workspace,
+  projectId: string,
+  instanceId: string,
+  reportId: string,
+) {
+  const view = await rt.view(projectId, instanceId);
+  const jig = await rt.registry.resolve(view.jig.id, view.jig.version);
+  const frame = reportFrames(jig).find((r) => r.id === reportId);
+  if (!frame) throw new DomainError('NOT_FOUND');
+  let raw: unknown;
+  try {
+    raw = JSON.parse(readFileSync(join(jig.dir, ...frame.file.split('/')), 'utf8'));
+  } catch {
+    throw new DomainError('NOT_FOUND');
+  }
+  const parsed = parseReportTemplate(raw);
+  if (!parsed.template)
+    throw new JigInvalidError(
+      parsed.issues.map((issue) => ({ level: 'error' as const, code: 'JIG_SCHEMA', ...issue })),
+    );
+  const outputs: Record<string, unknown> = {};
+  const final: Record<string, boolean> = {};
+  for (const step of view.steps) {
+    if (!step.hasOutput) continue;
+    try {
+      outputs[step.id] = rt.output(projectId, instanceId, step.id);
+      // A stale or re-confirm result is shown as it was, never as final.
+      final[step.id] =
+        outputIsFinal(outputs[step.id]) && (step.status === 'done' || step.status === 'confirmed');
+    } catch {
+      /* An output that went missing reads as not yet computed. */
+    }
+  }
+  const reads = rt.reads(projectId, instanceId);
+  const context: ReportContext = {
+    outputs,
+    params: Object.fromEntries(view.params.map((p) => [p.key, p.value])),
+    final,
+    source: {
+      ...(reads.length ? { readAt: reads[reads.length - 1].at } : {}),
+      params: {
+        total: view.params.length,
+        grounded: view.params.filter((p) => p.by !== 'default').length,
+      },
+    },
+  };
+  const model = withoutEmptyBlocks(resolveReport(parsed.template, context));
+  const at = new Date().toISOString();
+  const origin = {
+    project: workspace.store.project(projectId).name,
+    instance: view.title,
+    version: `${view.jig.name} ${view.jig.version}`,
+    at,
+  };
+  const html = renderJigReport(model, origin);
+  return {
+    report: { ...frame, title: frame.title === frame.id ? model.title : frame.title },
+    instance: { id: view.id, title: view.title, jig: view.jig },
+    origin,
+    /** The resolved report: the app draws it with the kit parts (the page CSP forbids inline styles). */
+    model,
+    /** The exported page: self-contained, no scripts. */
+    html,
+  };
 }

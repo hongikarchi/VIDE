@@ -1,12 +1,19 @@
 {
   "contractVersion": 3,
   "id": "project/s06-frame",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "kind": "tool",
   "name": "S-06 골조 배치",
-  "summary": "연결한 모델에서 슬래브·기존 기초·유수지 보를 읽어 지금 그려진 배치를 진단하고, 경간 상한을 지키는 새 축선·기둥을 직교·엇갈림 두 후보로 만들어 파일캡·오픈컷·유수지 보 간섭을 판정하는 탐색용 도구. 실제 프로젝트 값은 작업본에만 둔다.",
-  "hosts": { "rhino": "optional" },
-  "uses": [{ "id": "vide/geometry-kit", "range": "^0.2.0" }],
+  "summary": "연결한 모델에서 슬래브·보이드·기존 기초와 지금 그려진 기둥·거더를 읽어, 거더 끝을 기둥에 맞추고 칸마다 작은보를 두어 해석 모델과 미확정 미리보기 해석까지 이어 보는 탐색용 도구. 새 축선·기둥 후보(직교·엇갈림)는 배치 기준을 바꾸면 만든다. 실제 프로젝트 값은 작업본에만 둔다.",
+  "hosts": {
+    "rhino": "optional"
+  },
+  "uses": [
+    {
+      "id": "vide/geometry-kit",
+      "range": "^0.2.0"
+    }
+  ],
   "inputs": [
     {
       "key": "site",
@@ -103,7 +110,10 @@
           "shape": "line",
           "many": true,
           "required": false,
-          "hints": { "layers": ["*기둥*", "*column*"], "words": ["기둥", "column"] },
+          "hints": {
+            "layers": ["*기둥*", "*column*"],
+            "words": ["기둥", "column"]
+          },
           "extract": "rows"
         },
         {
@@ -112,7 +122,10 @@
           "shape": "polyline",
           "many": true,
           "required": false,
-          "hints": { "layers": ["*거더*", "*girder*"], "words": ["거더", "girder"] },
+          "hints": {
+            "layers": ["*거더*", "*girder*"],
+            "words": ["거더", "girder"]
+          },
           "extract": "rows"
         },
         {
@@ -144,6 +157,22 @@
       "shape": "polygon",
       "meaning": "이 영역마다 기둥이 하나 이상 있는지 판정한다",
       "required": false
+    },
+    {
+      "key": "planterZones",
+      "title": "식재 구역",
+      "kind": "zone",
+      "shape": "polygon",
+      "meaning": "이 구역의 작은보·거더에는 식재 하중을 싣는다",
+      "required": false
+    },
+    {
+      "key": "dryZones",
+      "title": "건조 구역",
+      "kind": "zone",
+      "shape": "polygon",
+      "meaning": "이 구역에는 건조 구역 하중을 싣는다(밖은 데크 하중)",
+      "required": false
     }
   ],
   "params": [
@@ -154,16 +183,48 @@
       "group": "배치",
       "type": "length",
       "unit": "m",
-      "display": { "unit": "m", "decimals": 1 },
+      "display": {
+        "unit": "m",
+        "decimals": 1
+      },
       "default": 12,
-      "range": { "min": 8, "max": 20, "step": 0.5 },
-      "words": { "more": ["넓게", "길게"], "less": ["촘촘히", "짧게"], "sign": 1 },
+      "range": {
+        "min": 8,
+        "max": 20,
+        "step": 0.5
+      },
+      "words": {
+        "more": ["넓게", "길게"],
+        "less": ["촘촘히", "짧게"],
+        "sign": 1
+      },
       "basis": {
         "status": "assumed",
         "note": "일반 기본값. 프로젝트 값은 작업본에서 결정으로 둔다"
       },
       "affects": ["axes", "diagnose", "interference"],
       "board": true
+    },
+    {
+      "key": "layoutSource",
+      "title": "배치 기준",
+      "help": "그려진 배치: 지금 그려진 기둥·거더를 보정해 쓴다. 새 배치 제안: 축선·기둥 후보를 만든다(②~④).",
+      "group": "배치",
+      "type": "choice",
+      "default": "drawn",
+      "choices": [
+        {
+          "value": "drawn",
+          "label": "그려진 배치",
+          "consequence": "거더 보정 → 칸·작은보 → 해석"
+        },
+        {
+          "value": "proposed",
+          "label": "새 배치 제안",
+          "consequence": "축선·기둥·기초 간섭 후보를 만든다"
+        }
+      ],
+      "affects": ["axes", "columns", "footprints", "interference"]
     },
     {
       "key": "spanRule",
@@ -177,9 +238,16 @@
           "label": "모든 거더(대각 포함)",
           "consequence": "직교 격자의 칸 대각선도 상한 안"
         },
-        { "value": "orthogonal", "label": "직교 간격만", "consequence": "대각 거더는 따로 판정" }
+        {
+          "value": "orthogonal",
+          "label": "직교 간격만",
+          "consequence": "대각 거더는 따로 판정"
+        }
       ],
-      "basis": { "status": "assumed", "note": "결정 D5" },
+      "basis": {
+        "status": "assumed",
+        "note": "결정 D5"
+      },
       "affects": ["axes"]
     },
     {
@@ -189,9 +257,18 @@
       "type": "choice",
       "default": "auto",
       "choices": [
-        { "value": "auto", "label": "자동(목적이 좋은 후보)" },
-        { "value": "orthogonal", "label": "직교 격자" },
-        { "value": "staggered", "label": "엇갈림 격자" }
+        {
+          "value": "auto",
+          "label": "자동(목적이 좋은 후보)"
+        },
+        {
+          "value": "orthogonal",
+          "label": "직교 격자"
+        },
+        {
+          "value": "staggered",
+          "label": "엇갈림 격자"
+        }
       ],
       "affects": ["axes"]
     },
@@ -201,10 +278,19 @@
       "group": "배치",
       "type": "length",
       "unit": "m",
-      "display": { "unit": "m", "decimals": 2 },
+      "display": {
+        "unit": "m",
+        "decimals": 2
+      },
       "default": 0.5,
-      "range": { "min": 0, "max": 2, "step": 0.1 },
-      "basis": { "status": "assumed" },
+      "range": {
+        "min": 0,
+        "max": 2,
+        "step": 0.1
+      },
+      "basis": {
+        "status": "assumed"
+      },
       "affects": ["axes"],
       "board": true
     },
@@ -214,11 +300,22 @@
       "group": "배치",
       "type": "length",
       "unit": "m",
-      "display": { "unit": "m", "decimals": 1 },
+      "display": {
+        "unit": "m",
+        "decimals": 1
+      },
       "default": 3.5,
-      "range": { "min": 2, "max": 5, "step": 0.1 },
-      "basis": { "status": "assumed", "note": "캔틸레버 한도" },
-      "affects": ["axes"]
+      "range": {
+        "min": 2,
+        "max": 5,
+        "step": 0.1
+      },
+      "basis": {
+        "status": "assumed",
+        "note": "캔틸레버 한도"
+      },
+      "affects": ["axes", "beams"],
+      "help": "바깥 거더(또는 축선)에서 슬래브 끝까지 이 거리를 넘으면 내민 보를 둔다."
     },
     {
       "key": "gridAngleSource",
@@ -227,9 +324,18 @@
       "type": "choice",
       "default": "footings",
       "choices": [
-        { "value": "footings", "label": "기존 기초의 회전" },
-        { "value": "grid", "label": "기존 그리드 선" },
-        { "value": "manual", "label": "설정값 각도" }
+        {
+          "value": "footings",
+          "label": "기존 기초의 회전"
+        },
+        {
+          "value": "grid",
+          "label": "기존 그리드 선"
+        },
+        {
+          "value": "manual",
+          "label": "설정값 각도"
+        }
       ],
       "affects": ["assemble"]
     },
@@ -240,7 +346,11 @@
       "type": "angle",
       "unit": "deg",
       "default": 0,
-      "range": { "min": -45, "max": 45, "step": 0.5 },
+      "range": {
+        "min": -45,
+        "max": 45,
+        "step": 0.5
+      },
       "affects": ["assemble"]
     },
     {
@@ -250,9 +360,16 @@
       "group": "배치",
       "type": "length",
       "unit": "m",
-      "display": { "unit": "m", "decimals": 1 },
+      "display": {
+        "unit": "m",
+        "decimals": 1
+      },
       "default": 1,
-      "range": { "min": 0, "max": 3, "step": 0.1 },
+      "range": {
+        "min": 0,
+        "max": 3,
+        "step": 0.1
+      },
       "affects": ["assemble"]
     },
     {
@@ -261,11 +378,25 @@
       "group": "기초",
       "type": "length",
       "unit": "m",
-      "display": { "unit": "m", "decimals": 1 },
+      "display": {
+        "unit": "m",
+        "decimals": 1
+      },
       "default": 2,
-      "range": { "min": 1.5, "max": 3, "step": 0.1 },
-      "words": { "more": ["크게"], "less": ["작게"], "sign": 1 },
-      "basis": { "status": "assumed", "note": "모델 블록 값은 작업본에서" },
+      "range": {
+        "min": 1.5,
+        "max": 3,
+        "step": 0.1
+      },
+      "words": {
+        "more": ["크게"],
+        "less": ["작게"],
+        "sign": 1
+      },
+      "basis": {
+        "status": "assumed",
+        "note": "모델 블록 값은 작업본에서"
+      },
       "affects": ["axes", "footprints", "interference"],
       "board": true
     },
@@ -276,9 +407,16 @@
       "group": "기초",
       "type": "length",
       "unit": "m",
-      "display": { "unit": "m", "decimals": 1 },
+      "display": {
+        "unit": "m",
+        "decimals": 1
+      },
       "default": 0.8,
-      "range": { "min": 0, "max": 1.5, "step": 0.1 },
+      "range": {
+        "min": 0,
+        "max": 1.5,
+        "step": 0.1
+      },
       "affects": ["axes", "footprints"]
     },
     {
@@ -288,10 +426,20 @@
       "group": "기초",
       "type": "length",
       "unit": "m",
-      "display": { "unit": "m", "decimals": 2 },
+      "display": {
+        "unit": "m",
+        "decimals": 2
+      },
       "default": 0.2,
-      "range": { "min": 0, "max": 1, "step": 0.05 },
-      "basis": { "status": "assumed", "note": "위치 불확실·시공 오차" },
+      "range": {
+        "min": 0,
+        "max": 1,
+        "step": 0.05
+      },
+      "basis": {
+        "status": "assumed",
+        "note": "위치 불확실·시공 오차"
+      },
       "affects": ["axes", "diagnose", "interference"],
       "board": true
     },
@@ -302,10 +450,19 @@
       "type": "choice",
       "default": "consult",
       "choices": [
-        { "value": "consult", "label": "협의(토목 협의 목록)" },
-        { "value": "forbid", "label": "불가" }
+        {
+          "value": "consult",
+          "label": "협의(토목 협의 목록)"
+        },
+        {
+          "value": "forbid",
+          "label": "불가"
+        }
       ],
-      "basis": { "status": "assumed", "note": "결정 D6" },
+      "basis": {
+        "status": "assumed",
+        "note": "결정 D6"
+      },
       "affects": ["diagnose", "interference"]
     },
     {
@@ -314,9 +471,16 @@
       "group": "기초",
       "type": "length",
       "unit": "m",
-      "display": { "unit": "m", "decimals": 1 },
+      "display": {
+        "unit": "m",
+        "decimals": 1
+      },
       "default": 0.6,
-      "range": { "min": 0, "max": 1.5, "step": 0.1 },
+      "range": {
+        "min": 0,
+        "max": 1.5,
+        "step": 0.1
+      },
       "affects": ["interference"]
     },
     {
@@ -325,9 +489,16 @@
       "group": "기둥",
       "type": "length",
       "unit": "m",
-      "display": { "unit": "mm", "decimals": 0 },
+      "display": {
+        "unit": "mm",
+        "decimals": 0
+      },
       "default": 0.5,
-      "range": { "min": 0.3, "max": 1.2, "step": 0.05 },
+      "range": {
+        "min": 0.3,
+        "max": 1.2,
+        "step": 0.05
+      },
       "affects": ["columns", "footprints", "diagnose", "interference"]
     },
     {
@@ -337,10 +508,20 @@
       "group": "기둥",
       "type": "length",
       "unit": "m",
-      "display": { "unit": "m", "decimals": 1 },
+      "display": {
+        "unit": "m",
+        "decimals": 1
+      },
       "default": 1,
-      "range": { "min": 0.1, "max": 2, "step": 0.1 },
-      "basis": { "status": "assumed", "note": "결정 F2.6은 작업본에서 결정으로" },
+      "range": {
+        "min": 0.1,
+        "max": 2,
+        "step": 0.1
+      },
+      "basis": {
+        "status": "assumed",
+        "note": "결정 F2.6은 작업본에서 결정으로"
+      },
       "affects": ["columns"]
     },
     {
@@ -350,9 +531,16 @@
       "group": "기둥",
       "type": "length",
       "unit": "m",
-      "display": { "unit": "mm", "decimals": 0 },
+      "display": {
+        "unit": "mm",
+        "decimals": 0
+      },
       "default": 0.9,
-      "range": { "min": 0.6, "max": 1.2, "step": 0.05 },
+      "range": {
+        "min": 0.6,
+        "max": 1.2,
+        "step": 0.05
+      },
       "affects": ["columns"]
     },
     {
@@ -362,8 +550,14 @@
       "type": "choice",
       "default": "footings",
       "choices": [
-        { "value": "footings", "label": "기존 기초 상단(모델)" },
-        { "value": "manual", "label": "설정값 레벨" }
+        {
+          "value": "footings",
+          "label": "기존 기초 상단(모델)"
+        },
+        {
+          "value": "manual",
+          "label": "설정값 레벨"
+        }
       ],
       "affects": ["columns"]
     },
@@ -374,7 +568,11 @@
       "type": "level",
       "unit": "EL",
       "default": 0,
-      "range": { "min": -50, "max": 50, "step": 0.01 },
+      "range": {
+        "min": -50,
+        "max": 50,
+        "step": 0.01
+      },
       "affects": ["columns"]
     },
     {
@@ -384,10 +582,19 @@
       "type": "choice",
       "default": "slab",
       "choices": [
-        { "value": "slab", "label": "슬래브 하면(모델)" },
-        { "value": "manual", "label": "설정값 레벨" }
+        {
+          "value": "slab",
+          "label": "슬래브 하면(모델)"
+        },
+        {
+          "value": "manual",
+          "label": "설정값 레벨"
+        }
       ],
-      "basis": { "status": "assumed", "note": "결정 D4" },
+      "basis": {
+        "status": "assumed",
+        "note": "결정 D4"
+      },
       "affects": ["columns"]
     },
     {
@@ -397,7 +604,11 @@
       "type": "level",
       "unit": "EL",
       "default": 6,
-      "range": { "min": -50, "max": 100, "step": 0.01 },
+      "range": {
+        "min": -50,
+        "max": 100,
+        "step": 0.01
+      },
       "affects": ["columns"]
     },
     {
@@ -407,10 +618,19 @@
       "type": "choice",
       "default": "twin",
       "choices": [
-        { "value": "twin", "label": "쌍기둥 + 공통 파일캡" },
-        { "value": "single", "label": "한 기둥 + 미끄럼 받침" }
+        {
+          "value": "twin",
+          "label": "쌍기둥 + 공통 파일캡"
+        },
+        {
+          "value": "single",
+          "label": "한 기둥 + 미끄럼 받침"
+        }
       ],
-      "basis": { "status": "assumed", "note": "결정 F2.11·D8" },
+      "basis": {
+        "status": "assumed",
+        "note": "결정 F2.11·D8"
+      },
       "affects": ["columns", "footprints"]
     },
     {
@@ -419,10 +639,19 @@
       "group": "기둥",
       "type": "length",
       "unit": "m",
-      "display": { "unit": "mm", "decimals": 0 },
+      "display": {
+        "unit": "mm",
+        "decimals": 0
+      },
       "default": 0.6,
-      "range": { "min": 0.3, "max": 1, "step": 0.05 },
-      "basis": { "status": "assumed" },
+      "range": {
+        "min": 0.3,
+        "max": 1,
+        "step": 0.05
+      },
+      "basis": {
+        "status": "assumed"
+      },
       "affects": ["columns", "footprints"]
     },
     {
@@ -432,10 +661,336 @@
       "group": "진단",
       "type": "length",
       "unit": "m",
-      "display": { "unit": "m", "decimals": 1 },
+      "display": {
+        "unit": "m",
+        "decimals": 1
+      },
       "default": 0.3,
-      "range": { "min": 0, "max": 1, "step": 0.1 },
+      "range": {
+        "min": 0,
+        "max": 1,
+        "step": 0.1
+      },
       "affects": ["diagnose"]
+    },
+    {
+      "key": "snapTol_m",
+      "title": "거더 끝 붙임 거리",
+      "help": "거더 끝에서 이 평면 거리 안의 기둥 상단으로 끝을 옮긴다. 거더 곡선을 기둥 위에서 끊을 때도 쓴다.",
+      "group": "거더 보정",
+      "type": "length",
+      "unit": "m",
+      "display": {
+        "unit": "mm",
+        "decimals": 0
+      },
+      "default": 0.3,
+      "range": {
+        "min": 0,
+        "max": 1,
+        "step": 0.05
+      },
+      "words": {
+        "more": ["넉넉히"],
+        "less": ["엄격히"],
+        "sign": 1
+      },
+      "basis": {
+        "status": "assumed",
+        "note": "그리기 오차 일반값"
+      },
+      "affects": ["girders"],
+      "board": true
+    },
+    {
+      "key": "mergeTol_m",
+      "title": "중복 거더 합침 거리",
+      "help": "이 거리 안에서 겹치는 거더 곡선은 하나로 본다.",
+      "group": "거더 보정",
+      "type": "length",
+      "unit": "m",
+      "display": {
+        "unit": "mm",
+        "decimals": 0
+      },
+      "default": 0.05,
+      "range": {
+        "min": 0,
+        "max": 0.5,
+        "step": 0.01
+      },
+      "affects": ["girders"]
+    },
+    {
+      "key": "arcSagitta_m",
+      "title": "원호로 볼 휨",
+      "help": "거더 곡선이 현에서 이만큼 넘게 벗어나면 단일 곡률 원호로 맞춘다.",
+      "group": "거더 보정",
+      "type": "length",
+      "unit": "m",
+      "display": {
+        "unit": "mm",
+        "decimals": 0
+      },
+      "default": 0.05,
+      "range": {
+        "min": 0.01,
+        "max": 0.5,
+        "step": 0.01
+      },
+      "affects": ["girders"]
+    },
+    {
+      "key": "beamSpacing_m",
+      "title": "작은보 간격",
+      "help": "칸마다 이 간격 이하로 작은보를 둔다(2.0~3.0 m).",
+      "group": "작은보",
+      "type": "length",
+      "unit": "m",
+      "display": {
+        "unit": "m",
+        "decimals": 1
+      },
+      "default": 2.5,
+      "range": {
+        "min": 2,
+        "max": 3,
+        "step": 0.1
+      },
+      "words": {
+        "more": ["넓게"],
+        "less": ["촘촘히"],
+        "sign": 1
+      },
+      "basis": {
+        "status": "assumed",
+        "note": "데크 일반값"
+      },
+      "affects": ["beams"],
+      "board": true
+    },
+    {
+      "key": "beamDirection",
+      "title": "작은보 방향",
+      "group": "작은보",
+      "type": "choice",
+      "default": "longest-edge",
+      "choices": [
+        {
+          "value": "longest-edge",
+          "label": "칸의 가장 긴 변과 나란히"
+        },
+        {
+          "value": "u",
+          "label": "거더망 u 방향"
+        },
+        {
+          "value": "v",
+          "label": "거더망 v 방향"
+        }
+      ],
+      "affects": ["beams"]
+    },
+    {
+      "key": "restraintOn",
+      "title": "수평 구속 두기",
+      "help": "켜면 구속 레벨의 기둥 절점을 X·Y로 붙잡는다(유수지 상판).",
+      "group": "해석",
+      "type": "toggle",
+      "default": false,
+      "basis": {
+        "status": "to-ask",
+        "question": "유수지 상판의 수평 구속 강성"
+      },
+      "affects": ["model"]
+    },
+    {
+      "key": "restraintLevel",
+      "title": "구속 레벨",
+      "group": "해석",
+      "type": "level",
+      "unit": "EL",
+      "default": 0,
+      "range": {
+        "min": -50,
+        "max": 50,
+        "step": 0.01
+      },
+      "affects": ["model"]
+    },
+    {
+      "key": "deckD",
+      "title": "데크 고정하중",
+      "group": "하중",
+      "type": "areaLoad",
+      "unit": "kN/m2",
+      "display": {
+        "unit": "kN/m2",
+        "decimals": 1
+      },
+      "default": 3,
+      "range": {
+        "min": 0,
+        "max": 40,
+        "step": 0.5
+      },
+      "basis": {
+        "status": "assumed",
+        "note": "일반값. 프로젝트 값은 작업본에서"
+      },
+      "affects": ["model"]
+    },
+    {
+      "key": "deckL",
+      "title": "데크 활하중",
+      "group": "하중",
+      "type": "areaLoad",
+      "unit": "kN/m2",
+      "display": {
+        "unit": "kN/m2",
+        "decimals": 1
+      },
+      "default": 5,
+      "range": {
+        "min": 0,
+        "max": 20,
+        "step": 0.5
+      },
+      "basis": {
+        "status": "assumed",
+        "note": "일반값"
+      },
+      "affects": ["model"],
+      "board": true
+    },
+    {
+      "key": "dryD",
+      "title": "건조 구역 고정하중",
+      "group": "하중",
+      "type": "areaLoad",
+      "unit": "kN/m2",
+      "display": {
+        "unit": "kN/m2",
+        "decimals": 1
+      },
+      "default": 1.5,
+      "range": {
+        "min": 0,
+        "max": 40,
+        "step": 0.5
+      },
+      "basis": {
+        "status": "assumed",
+        "note": "일반값. 프로젝트 값은 작업본에서"
+      },
+      "affects": ["model"]
+    },
+    {
+      "key": "dryL",
+      "title": "건조 구역 활하중",
+      "group": "하중",
+      "type": "areaLoad",
+      "unit": "kN/m2",
+      "display": {
+        "unit": "kN/m2",
+        "decimals": 1
+      },
+      "default": 3,
+      "range": {
+        "min": 0,
+        "max": 20,
+        "step": 0.5
+      },
+      "basis": {
+        "status": "assumed",
+        "note": "일반값"
+      },
+      "affects": ["model"]
+    },
+    {
+      "key": "planterD",
+      "title": "식재 구역 고정하중",
+      "group": "하중",
+      "type": "areaLoad",
+      "unit": "kN/m2",
+      "display": {
+        "unit": "kN/m2",
+        "decimals": 1
+      },
+      "default": 12,
+      "range": {
+        "min": 0,
+        "max": 40,
+        "step": 0.5
+      },
+      "basis": {
+        "status": "assumed",
+        "note": "일반값. 프로젝트 값은 작업본에서"
+      },
+      "affects": ["model"],
+      "board": true
+    },
+    {
+      "key": "planterL",
+      "title": "식재 구역 활하중",
+      "group": "하중",
+      "type": "areaLoad",
+      "unit": "kN/m2",
+      "display": {
+        "unit": "kN/m2",
+        "decimals": 1
+      },
+      "default": 3,
+      "range": {
+        "min": 0,
+        "max": 20,
+        "step": 0.5
+      },
+      "basis": {
+        "status": "assumed",
+        "note": "일반값"
+      },
+      "affects": ["model"]
+    },
+    {
+      "key": "steelGrade",
+      "title": "강종",
+      "group": "해석",
+      "type": "choice",
+      "default": "SM355",
+      "choices": [
+        {
+          "value": "SM355",
+          "label": "SM355",
+          "consequence": "두께별 항복강도, E = 210,000 MPa(가정)"
+        }
+      ],
+      "basis": {
+        "status": "assumed",
+        "note": "기준 원문 확인 전"
+      },
+      "affects": ["model"]
+    },
+    {
+      "key": "notionalRatio",
+      "title": "가상 수평력 비",
+      "help": "조합 1.2D+1.6L+NX·NY의 가상 수평력(중력의 비). 조합은 1.2D+1.6L, 1.2D+1.6L+NX·NY, 1.0D+1.0L 넷.",
+      "group": "해석",
+      "type": "ratio",
+      "display": {
+        "unit": "%",
+        "decimals": 1
+      },
+      "default": 0.002,
+      "range": {
+        "min": 0,
+        "max": 0.01,
+        "step": 0.001
+      },
+      "basis": {
+        "status": "assumed"
+      },
+      "affects": ["model"]
     }
   ],
   "steps": [
@@ -455,12 +1010,23 @@
       "writes": "assemble",
       "speed": "release",
       "gates": [
-        { "use": "inputs-present" },
-        { "use": "stale-input" },
-        { "use": "inputs-confirmed", "level": "warn" },
-        { "use": "no-nan" }
+        {
+          "use": "inputs-present"
+        },
+        {
+          "use": "stale-input"
+        },
+        {
+          "use": "inputs-confirmed",
+          "level": "warn"
+        },
+        {
+          "use": "no-nan"
+        }
       ],
-      "budget": { "wallClockMs": 5000 }
+      "budget": {
+        "wallClockMs": 5000
+      }
     },
     {
       "id": "confirmInputs",
@@ -471,7 +1037,12 @@
       "writes": "confirmation",
       "speed": "confirm",
       "blocks": [],
-      "gates": [{ "use": "inputs-confirmed", "level": "warn" }]
+      "gates": [
+        {
+          "use": "inputs-confirmed",
+          "level": "warn"
+        }
+      ]
     },
     {
       "id": "diagnose",
@@ -493,18 +1064,32 @@
       "writes": "diagnose",
       "speed": "release",
       "gates": [
-        { "use": "inputs-present" },
-        { "use": "stale-input" },
-        { "use": "no-nan" },
-        { "use": "ids-stable", "args": { "items": "tables.interference", "key": "key" } }
+        {
+          "use": "inputs-present"
+        },
+        {
+          "use": "stale-input"
+        },
+        {
+          "use": "no-nan"
+        },
+        {
+          "use": "ids-stable",
+          "args": {
+            "items": "tables.interference",
+            "key": "key"
+          }
+        }
       ],
-      "budget": { "wallClockMs": 5000 }
+      "budget": {
+        "wallClockMs": 5000
+      }
     },
     {
       "id": "axes",
       "title": "축선·배치",
       "kind": "code",
-      "entry": "steps/axes.ts#axes",
+      "entry": "steps/proposed.ts#axesStep",
       "needs": ["assemble"],
       "reads": [
         "step.assemble",
@@ -520,27 +1105,51 @@
         "param.openCutOffset",
         "param.capClearance",
         "param.columnEdgeMin",
-        "param.cantileverMax"
+        "param.cantileverMax",
+        "param.layoutSource"
       ],
       "writes": "axes",
       "speed": "release",
       "gates": [
-        { "use": "inputs-present" },
-        { "use": "non-empty", "args": { "items": "axes" } },
-        { "use": "no-nan" },
-        { "use": "ids-stable", "args": { "items": "points", "key": "key" } },
+        {
+          "use": "inputs-present"
+        },
+        {
+          "use": "non-empty",
+          "args": {
+            "items": "axes"
+          },
+          "level": "warn"
+        },
+        {
+          "use": "no-nan"
+        },
+        {
+          "use": "ids-stable",
+          "args": {
+            "items": "points",
+            "key": "key"
+          }
+        },
         {
           "use": "span-max",
-          "args": { "items": "spans", "key": "key", "field": "length", "param": "spanMax" }
+          "args": {
+            "items": "spans",
+            "key": "key",
+            "field": "length",
+            "param": "spanMax"
+          }
         }
       ],
-      "budget": { "wallClockMs": 10000 }
+      "budget": {
+        "wallClockMs": 10000
+      }
     },
     {
       "id": "columns",
       "title": "기둥",
       "kind": "code",
-      "entry": "steps/columns.ts#columns",
+      "entry": "steps/proposed.ts#columnsStep",
       "reads": [
         "step.axes",
         "step.assemble",
@@ -555,14 +1164,29 @@
         "param.topSource",
         "param.girderTopLevel",
         "param.ejDetail",
-        "param.ejWidth"
+        "param.ejWidth",
+        "param.layoutSource"
       ],
       "writes": "columns",
       "speed": "release",
       "gates": [
-        { "use": "non-empty", "args": { "items": "columns" } },
-        { "use": "no-nan" },
-        { "use": "ids-stable", "args": { "items": "columns", "key": "key" } },
+        {
+          "use": "non-empty",
+          "args": {
+            "items": "columns"
+          },
+          "level": "warn"
+        },
+        {
+          "use": "no-nan"
+        },
+        {
+          "use": "ids-stable",
+          "args": {
+            "items": "columns",
+            "key": "key"
+          }
+        },
         {
           "use": "inside-boundary",
           "level": "isolate",
@@ -574,13 +1198,15 @@
           }
         }
       ],
-      "budget": { "wallClockMs": 5000 }
+      "budget": {
+        "wallClockMs": 5000
+      }
     },
     {
       "id": "footprints",
       "title": "기초 발자국",
       "kind": "code",
-      "entry": "steps/footprints.ts#footprints",
+      "entry": "steps/proposed.ts#footprintsStep",
       "reads": [
         "step.columns",
         "step.assemble",
@@ -589,21 +1215,33 @@
         "param.capSize",
         "param.openCutOffset",
         "param.ejWidth",
-        "param.columnSize"
+        "param.columnSize",
+        "param.layoutSource"
       ],
       "writes": "footprints",
       "speed": "release",
       "gates": [
-        { "use": "no-nan" },
-        { "use": "polygon-valid", "args": { "items": "caps", "key": "key", "field": "polygon" } }
+        {
+          "use": "no-nan"
+        },
+        {
+          "use": "polygon-valid",
+          "args": {
+            "items": "caps",
+            "key": "key",
+            "field": "polygon"
+          }
+        }
       ],
-      "budget": { "wallClockMs": 5000 }
+      "budget": {
+        "wallClockMs": 5000
+      }
     },
     {
       "id": "interference",
       "title": "기초 간섭",
       "kind": "code",
-      "entry": "steps/interference.ts#interference",
+      "entry": "steps/proposed.ts#interferenceStep",
       "reads": [
         "step.columns",
         "step.footprints",
@@ -616,16 +1254,218 @@
         "param.capClearance",
         "param.openCutRule",
         "param.nudgeMax",
-        "param.capSize"
+        "param.capSize",
+        "param.layoutSource"
       ],
       "writes": "interference",
       "speed": "release",
       "gates": [
-        { "use": "inputs-confirmed", "level": "warn" },
-        { "use": "no-nan" },
-        { "use": "ids-stable", "args": { "items": "tables.interference", "key": "key" } }
+        {
+          "use": "inputs-confirmed",
+          "level": "warn"
+        },
+        {
+          "use": "no-nan"
+        },
+        {
+          "use": "ids-stable",
+          "args": {
+            "items": "tables.interference",
+            "key": "key"
+          }
+        }
       ],
-      "budget": { "wallClockMs": 5000 }
+      "budget": {
+        "wallClockMs": 5000
+      }
+    },
+    {
+      "id": "girders",
+      "title": "거더 보정 · 그려진 배치",
+      "kind": "code",
+      "entry": "steps/girders.ts#girders",
+      "reads": [
+        "input.site.columns",
+        "input.site.girders",
+        "input.site.slab",
+        "input.site.voids",
+        "param.snapTol_m",
+        "param.mergeTol_m",
+        "param.arcSagitta_m",
+        "param.spanMax"
+      ],
+      "writes": "girders",
+      "speed": "release",
+      "gates": [
+        {
+          "use": "inputs-present"
+        },
+        {
+          "use": "stale-input"
+        },
+        {
+          "use": "no-nan"
+        },
+        {
+          "use": "ids-stable",
+          "args": {
+            "items": "girders",
+            "key": "id"
+          }
+        },
+        {
+          "use": "span-max",
+          "args": {
+            "items": "spans",
+            "key": "girderId",
+            "field": "planLength_m",
+            "param": "spanMax"
+          }
+        }
+      ],
+      "budget": {
+        "wallClockMs": 5000
+      }
+    },
+    {
+      "id": "cells",
+      "title": "칸",
+      "kind": "code",
+      "entry": "steps/cells.ts#cells",
+      "needs": ["girders"],
+      "reads": ["step.girders", "input.site.slab", "input.site.voids"],
+      "writes": "cells",
+      "speed": "release",
+      "gates": [
+        {
+          "use": "no-nan"
+        },
+        {
+          "use": "ids-stable",
+          "args": {
+            "items": "cells",
+            "key": "id"
+          }
+        }
+      ],
+      "budget": {
+        "wallClockMs": 5000
+      }
+    },
+    {
+      "id": "beams",
+      "title": "작은보",
+      "kind": "code",
+      "entry": "steps/beams.ts#beams",
+      "needs": ["cells"],
+      "reads": [
+        "step.girders",
+        "step.cells",
+        "input.site.slab",
+        "input.site.voids",
+        "param.beamSpacing_m",
+        "param.beamDirection",
+        "param.cantileverMax"
+      ],
+      "writes": "beams",
+      "speed": "release",
+      "gates": [
+        {
+          "use": "no-nan"
+        },
+        {
+          "use": "ids-stable",
+          "args": {
+            "items": "beams",
+            "key": "id"
+          }
+        }
+      ],
+      "budget": {
+        "wallClockMs": 5000
+      }
+    },
+    {
+      "id": "model",
+      "title": "해석 모델",
+      "kind": "code",
+      "entry": "steps/model.ts#model",
+      "needs": ["beams"],
+      "reads": [
+        "step.girders",
+        "step.beams",
+        "step.cells",
+        "input.site.columns",
+        "input.planterZones",
+        "input.dryZones",
+        "param.restraintOn",
+        "param.restraintLevel",
+        "param.deckD",
+        "param.deckL",
+        "param.dryD",
+        "param.dryL",
+        "param.planterD",
+        "param.planterL",
+        "param.steelGrade",
+        "param.notionalRatio"
+      ],
+      "writes": "model",
+      "speed": "release",
+      "gates": [
+        {
+          "use": "no-nan"
+        }
+      ],
+      "budget": {
+        "wallClockMs": 5000
+      }
+    },
+    {
+      "id": "analysis",
+      "title": "해석 미리보기",
+      "kind": "code",
+      "entry": "steps/analysis.ts#analysis",
+      "needs": ["model"],
+      "reads": ["step.model"],
+      "writes": "analysis",
+      "speed": "release",
+      "gates": [
+        {
+          "use": "no-nan"
+        }
+      ],
+      "budget": {
+        "wallClockMs": 30000
+      }
+    },
+    {
+      "id": "confirmAnalysis",
+      "title": "해석 확정",
+      "kind": "human",
+      "slot": "confirm-analysis",
+      "needs": ["analysis"],
+      "reads": ["step.analysis"],
+      "writes": "confirmAnalysis",
+      "speed": "confirm",
+      "blocks": ["analysisConfirmed"]
+    },
+    {
+      "id": "analysisConfirmed",
+      "title": "확정 해석",
+      "kind": "code",
+      "entry": "steps/analysis.ts#confirmAnalysis",
+      "needs": ["confirmAnalysis"],
+      "reads": ["step.model", "step.analysis"],
+      "writes": "analysisConfirmed",
+      "speed": "button",
+      "gates": [
+        {
+          "use": "no-nan"
+        }
+      ],
+      "budget": {
+        "wallClockMs": 60000
+      }
     }
   ],
   "panel": "panel.json",
@@ -635,6 +1475,9 @@
       "reason": "슬래브·기존 기초·유수지 보·그리드·E.J.·현재 배치 레이어를 읽습니다"
     }
   ],
-  "selftest": { "fixtures": "fixtures", "requiresHost": false },
+  "selftest": {
+    "fixtures": "fixtures",
+    "requiresHost": false
+  },
   "skill": "skill.md"
 }

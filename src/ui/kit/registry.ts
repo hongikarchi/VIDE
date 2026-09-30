@@ -2,8 +2,8 @@
 // A `panel.json` may use only these parts, only in their places, only with these properties.
 // Values are words, numbers, token names or bindings — a step output path (`step.<id>.<field>…`),
 // a setting (`$<key>`), `params`, `inputs.<key>…` or `ledger.<name>`; never code, never a colour.
-// Parts marked `ready: false` are listed in Design but not built yet (보고서·원장·비교 막대 come
-// with the report frame, PLAN-22 T-057), so a panel that uses them is refused until then.
+// Parts in `NOT_READY` are listed in Design but not built yet, so a panel that uses them is refused
+// (보고서·원장·비교 막대 came with the report frame, PLAN-22 T-057).
 // This module is pure (zod only) so the engine and tests can check a panel without React.
 
 import { z } from 'zod';
@@ -185,15 +185,42 @@ export const PART_PROPS = {
   'result-tabs': z
     .object({ tabs: z.array(z.record(z.string(), z.unknown())).min(1).max(8) })
     .strict(),
-  'compare-bars': z.object({ from: binding }).strict(),
-  'bake-card': z.object({ title: title.optional(), from: binding.optional() }).strict(),
+  'compare-bars': z
+    .object({
+      title: title.optional(),
+      from: binding,
+      label: field,
+      value: field,
+      /** Row field naming the bar shade: base · alt · strong · actual · na. */
+      shade: field.optional(),
+      unit: z.string().max(12).optional(),
+      decimals: z.number().int().min(0).max(6).optional(),
+      limit: z.union([binding, z.number()]).optional(),
+      limitLabel: title.optional(),
+    })
+    .strict(),
+  'bake-card': z
+    .object({
+      title: title.optional(),
+      from: binding.optional(),
+      // Bake ids the card offers (the jig's own or VIDE's built-in `lines`·`members`); all when omitted.
+      bake: z.array(z.string().min(1).max(40)).max(10).optional(),
+    })
+    .strict(),
   'conflict-banner': z.object({ from: binding }).strict(),
   report: z.object({ report: title }).strict(),
-  ledger: z.object({ from: binding }).strict(),
+  ledger: z
+    .object({
+      title: title.optional(),
+      from: binding,
+      group: field.optional(),
+      columns: z.array(column).min(1).max(12).optional(),
+    })
+    .strict(),
 } satisfies Record<PartName, z.ZodType>;
 
-/** Parts not built yet: listed, but a panel that uses them is refused. */
-export const NOT_READY: ReadonlySet<PartName> = new Set(['compare-bars', 'report', 'ledger']);
+/** Parts not built yet: listed, but a panel that uses them is refused (none since T-057). */
+export const NOT_READY: ReadonlySet<PartName> = new Set<PartName>([]);
 
 /** Where each place of the `jig-run` layout accepts which parts. */
 export const PLACES = {

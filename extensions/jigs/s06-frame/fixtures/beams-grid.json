@@ -1,0 +1,147 @@
+{
+  "case": "beams-grid",
+  "note": "합성: 8 m×6 m 칸 4개, T자 접합 거더, 칸 안 보이드 1개, 동쪽 슬래브 끝 5 m 내민 띠",
+  "input": {
+    "site": {
+      "slab": {
+        "rows": [
+          {
+            "id": "slab-1",
+            "layer": "S-SLAB",
+            "line": [-1, -1, 6.3, 21, -1, 6.3, 21, 13, 6.3, -1, 13, 6.3, -1, -1, 6.3]
+          }
+        ]
+      },
+      "voids": {
+        "rows": [
+          {
+            "id": "void-1",
+            "layer": "S-VOID",
+            "line": [3, 1.5, 6.3, 5, 1.5, 6.3, 5, 2.5, 6.3, 3, 2.5, 6.3, 3, 1.5, 6.3]
+          }
+        ]
+      }
+    },
+    "steps": {
+      "girders": {
+        "girders": [
+          {
+            "id": "G01",
+            "sourceId": "src-G01",
+            "points": [
+              [0, 0, 6],
+              [16, 0, 6]
+            ],
+            "kind": "line",
+            "supports": [],
+            "snapped": [],
+            "length_m": 0,
+            "planLength_m": 0
+          },
+          {
+            "id": "G02",
+            "sourceId": "src-G02",
+            "points": [
+              [0, 6, 6],
+              [8, 6, 6]
+            ],
+            "kind": "line",
+            "supports": [],
+            "snapped": [],
+            "length_m": 0,
+            "planLength_m": 0
+          },
+          {
+            "id": "G03",
+            "sourceId": "src-G03",
+            "points": [
+              [8, 6, 6],
+              [16, 6, 6]
+            ],
+            "kind": "line",
+            "supports": [],
+            "snapped": [],
+            "length_m": 0,
+            "planLength_m": 0
+          },
+          {
+            "id": "G04",
+            "sourceId": "src-G04",
+            "points": [
+              [0, 12, 6],
+              [16, 12, 6]
+            ],
+            "kind": "line",
+            "supports": [],
+            "snapped": [],
+            "length_m": 0,
+            "planLength_m": 0
+          },
+          {
+            "id": "G05",
+            "sourceId": "src-G05",
+            "points": [
+              [0, 0, 6],
+              [0, 12, 6]
+            ],
+            "kind": "line",
+            "supports": [],
+            "snapped": [],
+            "length_m": 0,
+            "planLength_m": 0
+          },
+          {
+            "id": "G06",
+            "sourceId": "src-G06",
+            "points": [
+              [8, 0, 6],
+              [8, 6, 6]
+            ],
+            "kind": "line",
+            "supports": [],
+            "snapped": [],
+            "length_m": 0,
+            "planLength_m": 0
+          },
+          {
+            "id": "G07",
+            "sourceId": "src-G07",
+            "points": [
+              [8, 6, 6],
+              [8, 12, 6]
+            ],
+            "kind": "line",
+            "supports": [],
+            "snapped": [],
+            "length_m": 0,
+            "planLength_m": 0
+          },
+          {
+            "id": "G08",
+            "sourceId": "src-G08",
+            "points": [
+              [16, 0, 6],
+              [16, 12, 6]
+            ],
+            "kind": "line",
+            "supports": [],
+            "snapped": [],
+            "length_m": 0,
+            "planLength_m": 0
+          }
+        ]
+      }
+    }
+  },
+  "params": {
+    "beamSpacing_m": 2.5,
+    "beamDirection": "longest-edge",
+    "cantileverMax_m": 3.5
+  },
+  "expect": {
+    "cells": 4,
+    "area_m2": 190,
+    "beams": 9,
+    "edgeCantilevers": 6
+  }
+}

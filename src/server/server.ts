@@ -1111,6 +1111,20 @@ export async function startServer({
               profiles.select(provider, chosen.id);
             return chosen.id;
           },
+          // The answer turn of a question card (T-062): same conversation, service and account.
+          submit: async (projectId, input) => {
+            const conversation = conversations.fix(projectId, input);
+            const provider = conversation.provider;
+            if (accountLogin.busy(provider)) throw new DomainError('PROFILE_LOGIN_IN_PROGRESS');
+            const chosen = await accountUsage.choose(
+              provider,
+              conversation.accountProfileId ?? profiles.selected(provider),
+            );
+            input.accountProfileId = chosen.id;
+            const result = workspace.submit(projectId, input);
+            if (result.created) execution.start(result.request);
+            return result.request;
+          },
         })
       )
         return;

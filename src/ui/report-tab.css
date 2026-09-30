@@ -1,0 +1,185 @@
+/* 보고서 workspace tab (PLAN-22 T-057, Design SCR-17): list on the left, paper preview in the centre. */
+.report-workspace {
+  display: none;
+}
+body[data-workspace='report'] .workspace > :not(.workspace-tabs):not(.report-workspace) {
+  display: none !important;
+}
+body[data-workspace='report'] .report-workspace {
+  grid-row: 2 / -1;
+  grid-column: 1 / -1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 240px minmax(0, 1fr);
+  background: white;
+}
+@media (min-width: 851px) {
+  body[data-workspace='report'] #left,
+  body[data-workspace='report'] #toggle-left,
+  body[data-workspace='report'] .panel-resize-left {
+    display: none;
+  }
+  body[data-workspace='report'] main {
+    grid-template-columns: minmax(260px, 1fr) var(--right-width, 370px);
+  }
+  body[data-workspace='report'].right-hidden main {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+.report-list {
+  min-height: 0;
+  overflow: auto;
+  padding: 12px;
+  border-right: 1px solid var(--line);
+}
+.report-list .caption {
+  margin: 16px 0 6px;
+  color: var(--muted);
+}
+.report-list .caption:first-child {
+  margin-top: 0;
+}
+.report-group h3 {
+  margin: 12px 0 4px;
+  font-size: 12px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.report-group ul,
+.report-checks ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.report-group button {
+  width: 100%;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.report-group button:hover,
+.report-group button[aria-current='true'] {
+  background: var(--soft);
+}
+.report-group button[aria-current='true'] {
+  font-weight: 600;
+  box-shadow: inset 2px 0 0 var(--coral);
+}
+.report-checks li {
+  padding: 2px 0;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+.report-checks li[data-ok='false'] {
+  color: var(--ng);
+}
+.report-empty {
+  color: var(--muted);
+}
+.report-preview {
+  min-width: 0;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
+}
+.report-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--line);
+}
+.report-toolbar strong {
+  min-width: 0;
+  margin-right: auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.report-error {
+  margin: 8px 12px 0;
+  color: var(--ng);
+}
+.report-paper {
+  min-height: 0;
+  overflow: auto;
+  padding: 16px;
+  background: var(--soft);
+}
+.report-paper > .report-empty {
+  padding: 24px;
+}
+/* Paper widths at screen scale: A3 landscape 420 mm, A4 portrait 210 mm (content inside margins). */
+.report-sheet {
+  box-sizing: border-box;
+  max-width: 420mm;
+  margin: 0 auto;
+  padding: 14mm;
+  background: white;
+  border: 1px solid var(--line);
+}
+.report-paper[data-paper='a4'] .report-sheet {
+  max-width: 210mm;
+  padding: 12mm;
+}
+@media (max-width: 850px) {
+  body[data-workspace='report'] .report-workspace {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+  .report-list {
+    max-height: 30vh;
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .report-paper {
+    padding: 8px;
+  }
+  .report-sheet {
+    padding: 12px;
+  }
+}
+:root[data-theme='dark'] .report-workspace,
+:root[data-theme='dark'] .report-sheet {
+  background: #1d2120;
+}
+
+/* Printing from the report tab keeps only the report page, on the chosen paper. */
+@page report-a3 {
+  size: A3 landscape;
+  margin: 14mm;
+}
+@page report-a4 {
+  size: A4 portrait;
+  margin: 12mm;
+}
+@media print {
+  body[data-workspace='report'] * {
+    visibility: hidden;
+  }
+  body[data-workspace='report'] .report-sheet,
+  body[data-workspace='report'] .report-sheet * {
+    visibility: visible;
+  }
+  body[data-workspace='report'] .report-sheet {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    max-width: none;
+    padding: 0;
+    border: 0;
+    page: report-a3;
+  }
+  body[data-workspace='report'][data-report-paper='a4'] .report-sheet {
+    page: report-a4;
+  }
+  body[data-workspace='report'] .report-sheet .kit-actions {
+    display: none;
+  }
+}

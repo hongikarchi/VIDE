@@ -210,24 +210,26 @@ export async function selftestJig(
               actual: step?.status ?? 'missing',
             });
         }
+        // A step that fails is an error unless the case expects that exact status for it.
         const failed = report.steps.filter(
-          (s) => s.status === 'failed' || s.status === 'gate-failed',
+          (s) =>
+            (s.status === 'failed' || s.status === 'gate-failed') &&
+            expect.statuses?.[s.id] === undefined,
         );
-        const error =
-          failed.length && !expect.statuses
-            ? failed
-                .map(
-                  (s) =>
-                    `${s.id}: ${s.error?.code ?? 'gate'} ${
-                      s.error?.message ??
-                      s.gates
-                        .filter((g) => !g.ok)
-                        .map((g) => g.message)
-                        .join('; ')
-                    }`,
-                )
-                .join('\n')
-            : undefined;
+        const error = failed.length
+          ? failed
+              .map(
+                (s) =>
+                  `${s.id}: ${s.error?.code ?? 'gate'} ${
+                    s.error?.message ??
+                    s.gates
+                      .filter((g) => !g.ok)
+                      .map((g) => g.message)
+                      .join('; ')
+                  }`,
+              )
+              .join('\n')
+          : undefined;
         cases.push({
           name,
           ok: !mismatches.length && !error,
@@ -256,13 +258,24 @@ export async function selftestJig(
   };
 }
 
-/** A repository jig that is not bundled imports `src/jigs/official` and `node_modules`; allow them. */
+/**
+ * A repository jig that is not bundled imports `src/jigs/official` and `node_modules`; allow them.
+ * The official structure library reuses `src/jigs/structure` (sections, loads, core path) and the
+ * ARCH-02 contracts (ARCH-03 §2), so those source folders are readable too — reading only.
+ */
 export function devReadPaths(jig: LoadedJig): Pick<ChildRunnerOptions, 'extraReadPaths'> {
   if (jig.bundled || jig.source !== 'dev-source') return {};
   const root = repositoryJigRoot();
   if (!root) return {};
   const repo = resolve(root, '..', '..');
-  return { extraReadPaths: [join(repo, 'src', 'jigs', 'official'), join(repo, 'node_modules')] };
+  return {
+    extraReadPaths: [
+      join(repo, 'src', 'jigs', 'official'),
+      join(repo, 'src', 'jigs', 'structure'),
+      join(repo, 'src', 'contracts'),
+      join(repo, 'node_modules'),
+    ],
+  };
 }
 
 // --- signing ---------------------------------------------------------------------------------

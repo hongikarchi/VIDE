@@ -1,0 +1,98 @@
+{
+  "case": "beams-triangle",
+  "note": "합성: 대각 거더로 나눈 10 m 칸, 슬래브 모서리가 칸을 자름",
+  "input": {
+    "site": {
+      "slab": {
+        "rows": [
+          {
+            "id": "slab-1",
+            "layer": "S-SLAB",
+            "line": [-1, -1, 6.3, 11, -1, 6.3, 11, 6, 6.3, 6, 11, 6.3, -1, 11, 6.3, -1, -1, 6.3]
+          }
+        ]
+      }
+    },
+    "steps": {
+      "girders": {
+        "girders": [
+          {
+            "id": "G01",
+            "sourceId": "src-G01",
+            "points": [
+              [0, 0, 6],
+              [10, 0, 6]
+            ],
+            "kind": "line",
+            "supports": [],
+            "snapped": [],
+            "length_m": 0,
+            "planLength_m": 0
+          },
+          {
+            "id": "G02",
+            "sourceId": "src-G02",
+            "points": [
+              [10, 0, 6],
+              [10, 10, 6]
+            ],
+            "kind": "line",
+            "supports": [],
+            "snapped": [],
+            "length_m": 0,
+            "planLength_m": 0
+          },
+          {
+            "id": "G03",
+            "sourceId": "src-G03",
+            "points": [
+              [10, 10, 6],
+              [0, 10, 6]
+            ],
+            "kind": "line",
+            "supports": [],
+            "snapped": [],
+            "length_m": 0,
+            "planLength_m": 0
+          },
+          {
+            "id": "G04",
+            "sourceId": "src-G04",
+            "points": [
+              [0, 10, 6],
+              [0, 0, 6]
+            ],
+            "kind": "line",
+            "supports": [],
+            "snapped": [],
+            "length_m": 0,
+            "planLength_m": 0
+          },
+          {
+            "id": "G05",
+            "sourceId": "src-G05",
+            "points": [
+              [0, 0, 6],
+              [5, 5, 6],
+              [10, 10, 6]
+            ],
+            "kind": "line",
+            "supports": [],
+            "snapped": [],
+            "length_m": 0,
+            "planLength_m": 0
+          }
+        ]
+      }
+    }
+  },
+  "params": {
+    "beamSpacing_m": 2.5,
+    "beamDirection": "longest-edge",
+    "cantileverMax_m": 3.5
+  },
+  "expect": {
+    "cells": 2,
+    "area_m2": 95.5
+  }
+}

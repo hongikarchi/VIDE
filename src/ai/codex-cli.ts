@@ -1,4 +1,4 @@
-import { readdir, unlink } from 'node:fs/promises';
+import { readdir, unlink, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import type { CliOptions, ProviderStatus, SessionOptions } from './claude-cli.ts';
@@ -141,6 +141,14 @@ export class CodexCli extends ClaudeCli {
       args.splice(args.length - 1, 0, '-c', `model_reasoning_effort="${this.effort}"`);
     if (this.configDirectory)
       args.splice(args.length - 1, 0, '-c', 'cli_auth_credentials_store="file"');
+    return args;
+  }
+  /** Codex reads the turn's schema from a file: it goes in the run's own temporary folder. */
+  async withOutputSchema(args: string[], schema: string | undefined, cwd: string) {
+    if (!schema) return args;
+    const file = join(cwd, 'turn-output.schema.json');
+    await writeFile(file, schema, 'utf8');
+    args.splice(args.length - 1, 0, '--output-schema', file);
     return args;
   }
   async status(): Promise<ProviderStatus> {

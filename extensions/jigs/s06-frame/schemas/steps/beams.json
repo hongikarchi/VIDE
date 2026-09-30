@@ -1,0 +1,112 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["schema", "params", "cells", "beams", "edgeCantilevers", "summary", "notes"],
+  "properties": {
+    "schema": { "const": "vide.s06.beams/1" },
+    "params": {
+      "type": "object",
+      "required": ["beamSpacing_m", "beamDirection", "cantileverMax_m"]
+    },
+    "cells": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "polygon", "girderIds", "area_m2"],
+        "properties": {
+          "id": { "type": "string" },
+          "polygon": {
+            "type": "array",
+            "items": {
+              "type": "array",
+              "items": { "type": "number" },
+              "minItems": 2,
+              "maxItems": 2
+            },
+            "minItems": 3
+          },
+          "holes": {
+            "type": "array",
+            "items": {
+              "type": "array",
+              "items": {
+                "type": "array",
+                "items": { "type": "number" },
+                "minItems": 2,
+                "maxItems": 2
+              }
+            }
+          },
+          "girderIds": { "type": "array", "items": { "type": "string" } },
+          "edges": { "type": "array", "items": { "enum": ["slab", "void"] } },
+          "area_m2": { "type": "number" }
+        }
+      }
+    },
+    "beams": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "cellId", "points", "from", "to", "length_m"],
+        "properties": {
+          "id": { "type": "string" },
+          "cellId": { "type": "string" },
+          "points": {
+            "type": "array",
+            "items": {
+              "type": "array",
+              "items": { "type": "number" },
+              "minItems": 3,
+              "maxItems": 3
+            },
+            "minItems": 2
+          },
+          "from": {
+            "type": "object",
+            "required": ["girderId", "t"],
+            "properties": {
+              "girderId": { "type": ["string", "null"] },
+              "t": { "type": ["number", "null"] },
+              "edge": { "enum": ["slab", "void"] }
+            }
+          },
+          "to": {
+            "type": "object",
+            "required": ["girderId", "t"],
+            "properties": {
+              "girderId": { "type": ["string", "null"] },
+              "t": { "type": ["number", "null"] },
+              "edge": { "enum": ["slab", "void"] }
+            }
+          },
+          "length_m": { "type": "number" }
+        }
+      }
+    },
+    "edgeCantilevers": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "from", "points", "length_m"],
+        "properties": {
+          "id": { "type": "string" },
+          "from": { "type": "object", "required": ["girderId", "t"] },
+          "points": {
+            "type": "array",
+            "items": {
+              "type": "array",
+              "items": { "type": "number" },
+              "minItems": 3,
+              "maxItems": 3
+            },
+            "minItems": 2
+          },
+          "length_m": { "type": "number" },
+          "cantilever_m": { "type": "number" }
+        }
+      }
+    },
+    "summary": { "type": "object", "required": ["cells", "beams", "spacingUsed_m"] },
+    "notes": { "type": "array", "items": { "type": "string" } }
+  }
+}

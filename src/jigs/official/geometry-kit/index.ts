@@ -74,3 +74,4 @@ export type {
 } from './infill.ts';
 export { arcPoint, arcThrough, fitArc, segmentArc, segmentPolyline, verticalArc } from './arc.ts';
 export type { Arc, ArcFit, SegmentOptions } from './arc.ts';
+export * from './faces.ts';

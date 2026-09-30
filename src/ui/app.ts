@@ -28,8 +28,11 @@ import { setMobileView } from './mobile-navigation.tsx';
 import { showQuantities } from './quantities.tsx';
 import { attachNativeAttributes } from './native-attributes.ts';
 import { attachJigs, overlayPicked, refreshJigs, showJigs, type JigContext } from './jigs.tsx';
+import type { ConversationsController } from './conversations.tsx';
 import {
   activeWorkspace,
+  contextId,
+  contextTabs,
   initializeWorkspaces,
   setWorkspace,
   workspaceShowsViewport,
@@ -51,7 +54,21 @@ import {
 import { hostAction, renderLinkCard, renderPanelHeader, type PanelState } from './host-panel.tsx';
 import { mountUsageBars } from './usage-bars.ts';
 import { composeLayers, displayIdOf, layerSignature, sourceIdOf } from './layers.ts';
-import { jevRoute, routeRequest, routeSubjects, type Route } from './request-route.ts';
+import {
+  goesToAi,
+  instanceRouteContext,
+  jevRoute,
+  officialRouteJigs,
+  routeAnswer,
+  routeCard,
+  routeQuery,
+  routeRequest,
+  routeRevert,
+  routeSubjects,
+  type Route,
+  type RouteContext,
+  type Service,
+} from './request-route.ts';
 import { renderRequests } from './requests.tsx';
 import { iconSvg, initializeInspector, renderInspector } from './inspector.ts';
 import { api, connect, errors, labels } from './gateway.ts';
@@ -155,6 +172,91 @@ let foregroundRequest: { id: string; selected: typeof selectedResult; draft: str
 let focusedWork: string | undefined;
 // Request routing (SPEC-02.17): Jev judges view-only or file work when the request is sent.
 let routing = false;
+/** Who is signed in (the providers' status), for the login card (SPEC-02.17 3). */
+let providerSignedIn: Partial<Record<Service, boolean>> = {};
+// Conversation chips (PLAN-24 T-061, src/ui/conversations.tsx) and question cards (T-062,
+// src/ui/question-card.tsx) are their own screens, loaded after the page; the glob keeps this page
+// working while one of them is not there yet.
+type QuestionCardsModule = typeof import('./question-card.tsx');
+const conversationScreens = import.meta.glob<typeof import('./conversations.tsx')>(
+  './conversations.tsx',
+);
+const questionScreens = import.meta.glob<QuestionCardsModule>('./question-card.tsx');
+let conversationChips: ConversationsController | undefined;
+let mountCards: QuestionCardsModule['mountQuestionCards'] | undefined;
+let questionCards: ReturnType<QuestionCardsModule['mountQuestionCards']> | undefined;
+/**
+ * The question cards of the chosen conversation (SPEC-02.19 6): shown while its latest turn ended
+ * with questions; the answer goes to `…/conversations/:cid/answer` and becomes its next turn.
+ */
+function renderQuestionCards() {
+  const conversationId = currentConversation();
+  const own = conversationId
+    ? state.messages.filter((entry) => {
+        const input = entry.request?.input as
+          | { conversationId?: unknown; parentRequestId?: unknown }
+          | undefined;
+        return !input?.parentRequestId && input?.conversationId === conversationId;
+      })
+    : [];
+  const last = own.at(-1);
+  const turnOutput =
+    last?.request?.state === 'succeeded'
+      ? (last.request.result as { turnOutput?: unknown } | null | undefined)?.turnOutput
+      : undefined;
+  if (!mountCards || !conversationId || !last || !turnOutput) {
+    questionCards?.unmount();
+    questionCards = undefined;
+    return;
+  }
+  const projectId = currentProject().id;
+  const options = {
+    projectId,
+    conversationId,
+    requestId: last.id,
+    turnOutput,
+    onAnswered: ({ id }: { id: string }) =>
+      void requestData(`/projects/${projectId}/requests/${id}`).then((request) => {
+        if (project?.id !== projectId) return;
+        if (!state.messages.some((entry) => entry.id === id))
+          state.messages.push(requestMessage(request));
+        focusedWork = id;
+        renderMessages();
+        void conversationChips?.refresh();
+        void poll(id, projectId);
+      }),
+  };
+  if (questionCards) questionCards.update(options);
+  else questionCards = mountCards($('question-cards'), api, options);
+}
+/** The conversation the next request goes to; undefined = the project's default conversation. */
+const currentConversation = () => conversationChips?.active() ?? undefined;
+const conversationOptions = () => ({
+  projectId: currentProject().id,
+  models: models.map(({ id, name, provider }) => ({ id, name, provider })),
+  targets: links.map((link) => ({ id: link.id, name: link.name })),
+  messages: state.messages,
+});
+async function mountConversationScreens() {
+  try {
+    const chips = await conversationScreens['./conversations.tsx']?.();
+    conversationChips?.unmount();
+    conversationChips = chips?.mountConversations($('conversation-chips'), api, {
+      ...conversationOptions(),
+      onChange: () => renderMessages(),
+    });
+  } catch {
+    conversationChips = undefined;
+  }
+  try {
+    mountCards = (await questionScreens['./question-card.tsx']?.())?.mountQuestionCards;
+  } catch {
+    mountCards = undefined;
+  }
+  questionCards?.unmount();
+  questionCards = undefined;
+  renderQuestionCards();
+}
 const focusDraft = () => JSON.stringify({ draft: draftSnapshot(state), strokes });
 initializeWorkspacePanels();
 /**
@@ -507,6 +609,7 @@ async function pollLinks() {
     const next = z.array(linkRowSchema).parse(await api(`/projects/${projectId}/links`));
     if (project?.id !== projectId) return;
     links = next;
+    conversationChips?.update({ targets: next.map((link) => ({ id: link.id, name: link.name })) });
     linksLoaded = true;
     // The host panel works on its own file: requests from it target that file.
     if (panelMode && connectedTarget) {
@@ -1183,6 +1286,8 @@ function sidebar() {
 }
 let appliedSelection: string | null | undefined;
 function renderMessages() {
+  conversationChips?.update({ messages: state.messages });
+  renderQuestionCards();
   if (selectedResult !== appliedSelection) {
     appliedSelection = selectedResult;
     if (selectedResult) showRequest(selectedResult);
@@ -1641,52 +1746,242 @@ const routeObjects = () =>
     layer: object.layerName ?? object.layer,
     name: object.name,
   }));
-/** Request routing (SPEC-02.17): Jev decides; without a key or on failure, the rules. */
-async function decideRoute(body: string): Promise<Route> {
-  const rules = routeRequest(body, routeObjects(), selectedIds);
-  const subjects = routeSubjects(routeObjects(), selectedIds);
+/** The open jig instance: the context tab shown now (older jigs' tabs have no settings). */
+function openJigInstance() {
+  const active = activeWorkspace();
+  return contextTabs().find(
+    (tab) => contextId(tab.instanceId) === active && !tab.instanceId.startsWith('legacy:'),
+  )?.instanceId;
+}
+const jigInstancePath = (instanceId: string) =>
+  `/projects/${encodeURIComponent(currentProject().id)}/jig-instances/${encodeURIComponent(instanceId)}`;
+/** What the words are read against: the official jigs and the open jig's settings. */
+async function routeContext(): Promise<{ context: RouteContext; instanceId?: string }> {
+  const jigs = officialRouteJigs();
+  const instanceId = openJigInstance();
+  if (!instanceId) return { context: { jigs } };
   try {
-    const decision = z
-      .object({
-        target: z.enum(['view', 'document']).nullable(),
-        action: z.enum(['hide', 'isolate', 'unhide', 'select', 'fit']).optional(),
-        subject: z.string().optional(),
-      })
-      .parse(
-        await api(`/projects/${currentProject().id}/route`, 'POST', {
-          body,
-          subjects: subjects.map(({ id, label }) => ({ id, label })),
-        }),
-      );
-    return jevRoute(decision, subjects, rules) ?? rules;
+    const view = (await api(jigInstancePath(instanceId))) as { params?: unknown } | null;
+    return { context: { jigs, ...instanceRouteContext(view?.params) }, instanceId };
   } catch {
-    return rules;
+    return { context: { jigs } };
   }
 }
-/** A notice with one action button (e.g. send a view-only request to the AI after all). */
-function messageWithAction(text: string, label: string, action: () => void) {
+/** Request routing (SPEC-02.17): Jev decides; without a key or on failure, the rules. */
+async function decideRoute(body: string): Promise<{ route: Route; instanceId?: string }> {
+  const { context, instanceId } = await routeContext();
+  const rules = routeRequest(body, routeObjects(), selectedIds, context);
+  const subjects = routeSubjects(routeObjects(), selectedIds);
+  try {
+    const answer = routeAnswer(
+      await api(
+        `/projects/${currentProject().id}/route`,
+        'POST',
+        routeQuery(body, subjects, context),
+      ),
+    );
+    const route =
+      answer.target === null ? rules : (jevRoute(answer, subjects, rules, context, body) ?? rules);
+    return { route, instanceId };
+  } catch {
+    return { route: rules, instanceId };
+  }
+}
+/** A notice with action buttons (undo, send to the AI after all). */
+function messageWithActions(text: string, actions: { label: string; run: () => void }[]) {
   clearTimeout(toastTimer);
   const box = $('message');
   box.replaceChildren(text + ' ');
-  const button = el('button', label, box, { type: 'button', class: 'message-action' });
-  button.onclick = () => {
-    box.hidden = true;
-    action();
-  };
+  for (const { label, run } of actions) {
+    const button = el('button', label, box, { type: 'button', class: 'message-action' });
+    button.onclick = () => {
+      box.hidden = true;
+      run();
+    };
+  }
   box.hidden = false;
   toastTimer = setTimeout(() => (box.hidden = true), 9000);
 }
-/** A screen-only request changes the VIDE view; the file and AI are not involved. */
-function runViewRequest(route: Route, body: string) {
-  const view = route.view!;
-  // Sending it to the AI after all: undo the view change and send the same words.
-  const toAi = (undo: () => void) => () => {
+/** A notice with one action button (e.g. send a view-only request to the AI after all). */
+function messageWithAction(text: string, label: string, action: () => void) {
+  messageWithActions(text, [{ label, run: action }]);
+}
+/**
+ * 'AI 작업으로 보내기' (SPEC-02.17 2): undo what VIDE did, record the reversal (route and who chose
+ * it, never the words) and send the same words to the AI.
+ */
+function sendToAi(route: Route, body: string, undo: () => void = () => {}) {
+  return () => {
     undo();
+    hideRouteCard();
+    void api(`/projects/${currentProject().id}/route/revert`, 'POST', routeRevert(route)).catch(
+      () => {},
+    );
     state.body = body;
     $('body').value = body;
     render();
     void submitRequest();
   };
+}
+function clearComposer() {
+  state.body = '';
+  $('body').value = '';
+  render();
+}
+/** A proposal card over the composer (jig to open, T2 app action): one button carries it out. */
+function showRouteCard(
+  text: string,
+  run: { label: string; action: () => void } | undefined,
+  toAi: () => void,
+) {
+  const card = $('route-card');
+  card.replaceChildren();
+  el('p', text, card);
+  const row = el('div', '', card, { class: 'route-card-actions' });
+  if (run)
+    el('button', run.label, row, { type: 'button', class: 'primary-button' }).onclick = () => {
+      hideRouteCard();
+      run.action();
+    };
+  el('button', 'AI 작업으로 보내기', row, { type: 'button' }).onclick = toAi;
+  el('button', '닫기', row, { type: 'button' }).onclick = hideRouteCard;
+  card.hidden = false;
+}
+function hideRouteCard() {
+  $('route-card').hidden = true;
+  $('route-card').replaceChildren();
+}
+/** The jig screens read the instance again after a setting changed from the request box. */
+const jigParamsChanged = (instanceId: string) =>
+  window.dispatchEvent(new CustomEvent('vide:jig-params-changed', { detail: { instanceId } }));
+/**
+ * A setting of the open jig read from the words (SPEC-02.17 2, SPEC-07.6): applied at once without
+ * the AI, with an undo; a value the words do not give, a fixed setting or one out of range is not
+ * applied and the notice says why.
+ */
+async function runParamRequest(route: Route, body: string, instanceId: string | undefined) {
+  const param = route.param!;
+  const change = param.change;
+  const toAiOnly = (text: string) =>
+    messageWithActions(text, [{ label: 'AI 작업으로 보내기', run: sendToAi(route, body) }]);
+  if (!change.ok) return toAiOnly(change.text);
+  if (!instanceId) return toAiOnly('설정값을 바꿀 jig 작업본이 열려 있지 않습니다.');
+  const path = jigInstancePath(instanceId);
+  try {
+    const result = (await api(`${path}/params`, 'PUT', {
+      values: [{ key: param.key, value: change.value }],
+      by: 'user',
+      reason: '요청 입력',
+    })) as { seqs?: unknown } | null;
+    const seq = Array.isArray(result?.seqs) ? Number(result.seqs[0]) : NaN;
+    clearComposer();
+    jigParamsChanged(instanceId);
+    const undoable = Number.isInteger(seq) && seq > 0;
+    const undo = () => {
+      if (!undoable) return;
+      void api(`${path}/params/undo`, 'POST', { seq })
+        .then(() => jigParamsChanged(instanceId))
+        .catch((cause) => {
+          const error = readableError(cause);
+          message(errors[error.code ?? ''] || error.message);
+        });
+    };
+    messageWithActions(routeCard(route)?.text ?? change.text, [
+      ...(undoable ? [{ label: '되돌리기', run: undo }] : []),
+      { label: 'AI 작업으로 보내기', run: sendToAi(route, body, undo) },
+    ]);
+  } catch (cause) {
+    const error = readableError(cause);
+    toAiOnly(errors[error.code ?? ''] || error.message);
+  }
+}
+/** Which linked file an app action names: the one chosen, the only one, or the one open now. */
+function routedLink(id?: string) {
+  if (id) return links.find((entry) => entry.id === id);
+  if (links.length === 1) return links[0];
+  return links.find(
+    (entry) =>
+      entry.connection?.instance === connectedTarget?.instance &&
+      entry.connection?.documentId === connectedTarget?.documentId,
+  );
+}
+/**
+ * Routes VIDE does itself (SPEC-02.17 2·3, SPEC-02.19 7): a jig or a T1 app action (Sync) is
+ * proposed on a card with its one button, a T2 one waits for its confirmation card. Every notice
+ * and card keeps 'AI 작업으로 보내기'.
+ */
+function runAppRoute(route: Route, body: string) {
+  const toAi = sendToAi(route, body);
+  const card = routeCard(route, { signedIn: providerSignedIn });
+  if (!card) return void submitRequest();
+  if (route.jig) {
+    const name = route.jig.name;
+    showRouteCard(
+      card.text,
+      {
+        label: card.run ?? '열기',
+        action: () => {
+          clearComposer();
+          setWorkspace('jig');
+          message(`JIG 목록에서 '${name}'을(를) 여세요.`);
+        },
+      },
+      toAi,
+    );
+    return;
+  }
+  const app = route.app!;
+  if (app.action === 'sync_link') {
+    const link = routedLink(app.link);
+    if (!link?.connection) {
+      messageWithActions(
+        '다시 Sync 받을 연결 파일을 찾지 못했습니다. 연결 파일 목록에서 고르세요.',
+        [{ label: 'AI 작업으로 보내기', run: toAi }],
+      );
+      return;
+    }
+    // T1 (SPEC-02.19 7): proposed on a card and run by the person's press, never by the words alone.
+    showRouteCard(
+      `'${link.name}'을(를) 다시 Sync 받을까요? 원본은 그대로입니다.`,
+      {
+        label: 'Sync 받기',
+        action: () => {
+          clearComposer();
+          void syncLink(link, 'manual');
+        },
+      },
+      toAi,
+    );
+    return;
+  }
+  if (card.tier === 'R' || !card.run) {
+    messageWithActions(card.text, [{ label: 'AI 작업으로 보내기', run: toAi }]);
+    return;
+  }
+  // Signing in, out or switching accounts happens in the account settings, where the one-time code
+  // is typed into the login window itself; the connector install and offline view in the settings.
+  const open = ['login', 'logout', 'switch_account'].includes(app.action)
+    ? () => openAiSettings()
+    : app.action === 'export'
+      ? () => message('내보내기는 jig 결과 표나 검토본 화면의 내보내기 버튼에서 합니다.')
+      : () => $('workspace-settings').click();
+  showRouteCard(
+    card.text,
+    {
+      label: card.run,
+      action: () => {
+        clearComposer();
+        open();
+      },
+    },
+    toAi,
+  );
+}
+/** A screen-only request changes the VIDE view; the file and AI are not involved. */
+function runViewRequest(route: Route, body: string) {
+  const view = route.view!;
+  // Sending it to the AI after all: undo the view change and send the same words.
+  const toAi = (undo: () => void) => sendToAi(route, body, undo);
   if (view.action !== 'unhide' && !view.ids.length) {
     messageWithAction(
       '화면에서 어떤 객체인지 찾지 못했습니다. 객체를 고른 뒤 다시 보내거나, AI에게 맡기세요.',
@@ -1738,10 +2033,13 @@ $('request').onclick = () => {
   routing = true;
   const body = state.body;
   $('request').setAttribute('aria-busy', 'true');
+  hideRouteCard();
   void decideRoute(body)
-    .then((route) => {
+    .then(({ route, instanceId }) => {
       if (route.target === 'view') runViewRequest(route, body);
-      else void submitRequest();
+      else if (route.target === 'param') void runParamRequest(route, body, instanceId);
+      else if (goesToAi(route)) void submitRequest();
+      else runAppRoute(route, body);
     })
     .finally(() => {
       routing = false;
@@ -1755,9 +2053,11 @@ async function submitRequest(predecessorId?: string) {
   render();
   const predecessor =
     predecessorId && state.messages.find((entry) => entry.id === predecessorId)?.request;
+  const conversationId = predecessorId ? undefined : currentConversation();
   const input = {
     ...packet(predecessor ? interventionTargetDraft(state, predecessor) : state),
     id: crypto.randomUUID(),
+    ...(conversationId ? { conversationId } : {}),
   };
   const projectId = currentProject().id,
     original = state;
@@ -1780,6 +2080,7 @@ async function submitRequest(predecessorId?: string) {
     foregroundRequest = { id: request.id, selected: selectedResult, draft: focusDraft() };
     focusedWork = request.id;
     renderMessages();
+    void conversationChips?.refresh();
     void poll(request.id, projectId, original);
     const waiting = waitingOf(request);
     if (waiting) message(`${waitingText(waiting)} · 앞 작업이 끝나면 자동으로 시작합니다.`);
@@ -2459,10 +2760,14 @@ async function initializeWorkspace() {
     renderMessages();
     // The tab row and this project's last tab; host panels have neither (SCR-12).
     if (!panelMode) initializeWorkspaces({ projectId: project.id, mount: $('workspace-tabs') });
+    void mountConversationScreens();
     for (const entry of state.messages)
       if (['queued', 'running'].includes(entry.request.state)) void poll(entry.id);
     const host = hostStatusSchema.parse(await api('/host'));
     const providers = providersSchema.parse(await api('/providers'));
+    providerSignedIn = Object.fromEntries(
+      providers.map((provider) => [provider.id, provider.available]),
+    );
     $('connection-status').textContent = providers
       .map(
         (provider) =>

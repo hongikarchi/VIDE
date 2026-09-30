@@ -4469,6 +4469,27 @@ body[data-workspace='context'] .workspace > .jig-dialog {
 .toast .message-action:hover {
   background: rgba(255, 255, 255, 0.14);
 }
+/* A proposal over the composer (a jig to open, a login or account switch to confirm), SPEC-02.17 3. */
+.route-card {
+  margin: 0 12px 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--soft);
+  flex-shrink: 0;
+}
+.route-card p {
+  margin: 0 0 8px;
+}
+.route-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.conversation-chips:empty,
+.question-cards:empty {
+  display: none;
+}
 /* Jev is judging where the request goes (a moment before it is sent). */
 #request[aria-busy='true'] {
   opacity: 0.55;
