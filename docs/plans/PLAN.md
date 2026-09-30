@@ -2,8 +2,8 @@
 id: PLAN
 title: VIDE 실행 로드맵
 status: review
-version: 0.215
-updated: 2026-09-29
+version: 0.216
+updated: 2026-09-30
 owner: agent:codex
 related: [ARCH-01, PLAN-02, PLAN-03, PLAN-22, PLAN-23, PLAN-24, SPEC-00, SPEC-01, SPEC-02, SPEC-03, SPEC-04, SPEC-05, SPEC-06, SPEC-07]
 ---
@@ -89,6 +89,8 @@ T-001~018의 번호·지원 증거는 유지한다. 각 티켓의 현재 결과�
 현재 소스와 §6.5의 증거에서 이어간다. 과거 구현 일지는 [이행 기록](../tdd/VERIFY-2026-09-20-implementation-history.md)으로 옮겼다. 과거의 제한 JSON·MCP·ESM 설명을 현재 설계로 사용하지 않는다.
 
 ### 6.5 현재 티켓 현황과 이어갈 위치
+
+**2026-09-30 5차 웨이브 — VIDE 안 AI를 터미널 수준으로(구현·단위 검증 완료, 실호스트·A/B 남음):** 공급자 기본 시스템 프롬프트를 유지하고 VIDE 지시 묶음(공통·모델링(+Rhino·CAD 노하우)·자료·만들기 + 프로젝트 추가분, `src/ai/instructions/`)을 덧붙인다(Claude `--append-system-prompt`, Codex `developer_instructions`; skill·plugin은 계속 끔). Rhino 보기 도구 `capture_view`·`measure`, 대화 턴 상한 100회·600초와 `query` 커서, 대화 대상의 턴 규칙 반영, 만들기의 파일 삭제·멈춤 조건·Codex 작성, S-06 해석 안정화(실데이터 `ok`)와 선정 단면 적용 단계, 패널 [보기]·보고서 행동을 더했다. Claude 실호출 2턴으로 묶음 도달을 확인했다([SPIKE-2026-09-30-instruction-bundle](../tdd/SPIKE-2026-09-30-instruction-bundle.md)). 남은 일: Rhino 플러그인 재빌드(Rhino가 파일을 잠금)와 실제 캡처·측정, A/B 실행([SPIKE-2026-09-30-ai-parity-ab](../tdd/SPIKE-2026-09-30-ai-parity-ab.md)), jig 고정 해제 엔진 경로, 이번 웨이브 브라우저 시험, 커밋·설치본 릴리스는 사용자 요청 때. 세부는 PLAN-22·23·24 현황.
 
 **2026-09-30 jig 플랫폼 4차 웨이브(T-053·056·057·058·061~065):** S-06 ⑨ 단면 선정 → ⑪ 일람표 → ⑩ 기둥 높이 → ⑫ 만들기 계획을 `s06-frame@0.3.0`에 잇고 보고서 01~05·부록을 채웠다([VERIFY-2026-09-30-s06-frame-m3](../tdd/VERIFY-2026-09-30-s06-frame-m3.md)). 해석 전 기구 사전 점검을 넣었으나 실데이터 전체 모델은 거더 비틀림에만 기대는 내민 보 13개 때문에 아직 `unstable`이다. 대화로 jig 만들기(초안·계산 상자·만들기 탭·도구)를 만들고 실제 Claude CLI로 M5 수용을 통과했다([VERIFY-2026-09-30-jig-authoring-m5](../tdd/VERIFY-2026-09-30-jig-authoring-m5.md)). 프로젝트 자료([SPEC-08](../specs/SPEC-08-project-facts.md))·자료 탭·근거 칩·인용 게이트, Codex 세션 이어 실행, 설치본 대화 도구 연결, 패널의 만들기·보고서 부품 연결을 더했다. 대화 안 AI의 `jig_set`·`jig_run` 확인 없는 실행은 사용자 결정으로 SPEC-02.19에 반영했다. 남은 일: 실제 Rhino 만들기 시험(모든 Rhino를 닫은 세션), 이번 웨이브 브라우저 시험(`browser-jig-panel`·`make`·`facts`·`s06-jig`·`s06-diagnose`·`structure-jig`·`conversations`), 선정 단면 적용·재확정 경로와 부호 원장 계약, 커밋·설치본 릴리스는 사용자 요청 때. 세부는 PLAN-22·23·24 현황.
 

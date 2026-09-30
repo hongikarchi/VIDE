@@ -2,6 +2,9 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
 import { PassThrough } from 'node:stream';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { Store } from '../../src/core/store.ts';
 import { Workspace } from '../../src/core/workspace.ts';
 import { Execution } from '../../src/server/execution.ts';
@@ -94,6 +97,23 @@ function transport(script) {
   const runs_ = () => calls.filter((call) => ['-p', 'exec'].includes(call.args[0]));
   const packet = (call) => JSON.parse(call.input);
   return { spawnProcess, calls, runs: runs_, packet };
+}
+
+/** One POST to a conversation action through the route helper (local, not remote). */
+function route(service, projectId, path, value = {}, extra = {}) {
+  let sent;
+  return conversationRoutes(
+    new URL(`http://127.0.0.1/api/v1/projects/${projectId}/conversations/${path}`),
+    { method: 'POST' },
+    {
+      service,
+      body: async () => value,
+      send: (status, data) => {
+        sent = { status, data };
+      },
+      ...extra,
+    },
+  ).then(() => sent);
 }
 
 function setup(t, script, { codex = false } = {}) {
@@ -417,7 +437,19 @@ test('an account limit stops the turn, shows the T2 card, and the confirmed swit
   };
   await assert.rejects(call({ accountProfileId: other }, true), { code: 'FORBIDDEN' });
   await assert.rejects(call({ accountProfileId: 'default' }), { code: 'INVALID_INPUT' });
-  const switched = await call({ accountProfileId: other });
+  // [새 세션으로 이어가기] leaves the account to the server; the same account is no way out.
+  const chosen = (id) => ({ chooseAccount: async () => id });
+  await assert.rejects(
+    route(conversations, project.id, `${conversation.id}/account`, {}, chosen('default')),
+    { code: 'NO_SPARE_ACCOUNT' },
+  );
+  const switched = await route(
+    conversations,
+    project.id,
+    `${conversation.id}/account`,
+    {},
+    chosen(other),
+  );
   assert.equal(switched.status, 200);
   assert.equal(switched.data.accountProfileId, other);
   assert.equal(switched.data.handover, null);
@@ -645,7 +677,7 @@ test('one running turn per conversation: a later message waits in that line and 
   assert.deepEqual(runs, ['q1', 'q2', 'q3', 'o1']);
 });
 
-test('a session past its turn limit reopens from the ledger; closed conversations refuse turns', async (t) => {
+test('a session past the length setting goes on with a suggestion; [새 세션으로 이어가기] opens a new one', async (t) => {
   const { conversations, project, fake, open, send, settled, state } = setup(t, () => [
     init,
     answer('ok'),
@@ -660,24 +692,118 @@ test('a session past its turn limit reopens from the ledger; closed conversation
     accountProfileId: 'default',
     sessionId: session.sessionId,
   };
+  assert.equal(conversations.get(project.id, conversation.id).handover, null);
   for (let turn = 1; turn < SESSION_MAX_TURNS; turn++) conversations.store.recordTurn(key, 100);
+  // At 12 turns a new session is suggested (T1), not forced: the next turn still resumes.
+  let saved = conversations.get(project.id, conversation.id);
+  assert.deepEqual(saved.handover, {
+    kind: 'length',
+    grade: 'T1',
+    turns: SESSION_MAX_TURNS,
+    inputTokens: 10 + 100 * (SESSION_MAX_TURNS - 1),
+    limits: { maxTurns: 12, maxInputTokens: 150000 },
+    sends: { ledgerItems: 1, recentTurns: 1, files: 0 },
+  });
   send('m2', { conversationId: conversation.id });
   await settled();
   assert.equal(state('m2').state, 'succeeded');
-  const runs = fake.runs();
-  assert.ok(runs[1].args.includes('--session-id'));
+  let runs = fake.runs();
+  assert.ok(runs[1].args.includes('--resume'));
+  assert.equal(conversations.get(project.id, conversation.id).handover.kind, 'length');
+  // The button: the session is left, the next turn opens a new one with the hand-over.
+  const renewed = await route(conversations, project.id, `${conversation.id}/renew`);
+  assert.equal(renewed.status, 200);
+  assert.equal(renewed.data.handover, null);
+  assert.equal(renewed.data.session, null);
+  await assert.rejects(route(conversations, project.id, `${conversation.id}/renew`), {
+    code: 'NO_ACTIVE_SESSION',
+  });
+  send('m3', { conversationId: conversation.id });
+  await settled();
+  runs = fake.runs();
+  assert.ok(runs[2].args.includes('--session-id'));
   assert.equal(
-    fake.packet(runs[1]).items.find((item) => item.id === 'handoff').data.reason,
+    fake.packet(runs[2]).items.find((item) => item.id === 'handoff').data.reason,
     'length',
+  );
+  saved = conversations.get(project.id, conversation.id);
+  assert.deepEqual(
+    saved.sessions.map((row) => [row.state, row.turns]),
+    [
+      ['handed-off', SESSION_MAX_TURNS + 1],
+      ['active', 1],
+    ],
+  );
+  assert.deepEqual(
+    saved.ledger.filter((item) => item.kind === 'handoff').map((item) => item.body.reason),
+    ['length', 'length'],
   );
   await conversations.close(project.id, conversation.id);
   assert.throws(() => conversations.fix(project.id, { conversationId: conversation.id }), {
     code: 'CONVERSATION_CLOSED',
   });
-  send('m3', { conversationId: conversation.id });
+  send('m4', { conversationId: conversation.id });
   await settled();
-  assert.equal(state('m3').state, 'failed');
-  assert.equal(state('m3').result.code, 'CONVERSATION_CLOSED');
+  assert.equal(state('m4').state, 'failed');
+  assert.equal(state('m4').result.code, 'CONVERSATION_CLOSED');
+});
+
+test('the length setting is read from its file, saved locally only, and applies to the suggestion', async (t) => {
+  const directory = await mkdtemp(join(tmpdir(), 'vide-conv-settings-'));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  const store = new Store(':memory:');
+  t.after(() => store.close());
+  const settingsFile = join(directory, 'conversation-settings.json');
+  const service = new ConversationService(store, { settingsFile });
+  assert.deepEqual(service.limits(), { maxTurns: 12, maxInputTokens: 150000 });
+  const call = (method, value, remote = false) => {
+    let sent;
+    return conversationRoutes(
+      new URL('http://127.0.0.1/api/v1/settings/conversations'),
+      { method },
+      {
+        service,
+        body: async () => value,
+        send: (status, data) => (sent = { status, data }),
+        remote,
+      },
+    ).then((handled) => (handled ? sent : undefined));
+  };
+  assert.deepEqual((await call('GET')).data, { maxTurns: 12, maxInputTokens: 150000 });
+  await assert.rejects(call('PUT', { maxTurns: 4, maxInputTokens: 50000 }, true), {
+    code: 'FORBIDDEN',
+  });
+  await assert.rejects(call('PUT', { maxTurns: 1, maxInputTokens: 50000 }), {
+    code: 'INVALID_INPUT',
+  });
+  assert.deepEqual((await call('PUT', { maxTurns: 4, maxInputTokens: 50000 })).data, {
+    maxTurns: 4,
+    maxInputTokens: 50000,
+  });
+  assert.deepEqual(JSON.parse(await readFile(settingsFile, 'utf8')), {
+    maxTurns: 4,
+    maxInputTokens: 50000,
+  });
+  // A new service (a restart) reads the saved setting.
+  const again = new ConversationService(store, { settingsFile });
+  assert.deepEqual(again.limits(), { maxTurns: 4, maxInputTokens: 50000 });
+  const project = store.createProject('limits');
+  const conversation = again.create(project.id, {
+    kind: 'ask',
+    title: '길이',
+    provider: 'claude-cli',
+    accountProfileId: 'default',
+  });
+  const key = {
+    conversationId: conversation.id,
+    provider: 'claude-cli',
+    accountProfileId: 'default',
+    sessionId: '11111111-2222-4333-8444-555555555555',
+  };
+  again.store.addSession({ ...key, promptMode: 'neutral', cliVersion: '2.1.284' });
+  again.store.recordTurn(key, 60000);
+  assert.equal(again.get(project.id, conversation.id).handover.kind, 'length');
+  assert.equal(service.limits().maxTurns, 4);
 });
 
 test('transcripts go on discard at once and 30 days after closing; other sessions are untouched', async (t) => {

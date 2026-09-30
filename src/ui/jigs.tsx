@@ -91,6 +91,19 @@ const syncSchema = z.object({
   cadUnits: z.string(),
 });
 type Sync = z.infer<typeof syncSchema>;
+/** A stored Sync as far as finding one document object in it needs. */
+const syncObjectsSchema = z
+  .object({
+    result: z
+      .object({
+        objects: z
+          .array(z.object({ id: z.string(), nativeId: z.string().optional() }).passthrough())
+          .optional(),
+      })
+      .passthrough()
+      .nullish(),
+  })
+  .passthrough();
 type Row = Sync['rows'][number];
 
 export interface SyncSource {
@@ -252,6 +265,13 @@ export interface JigHost extends JigContext {
   }) => Promise<JigRunReport | undefined>;
   output: (stepId: string) => Promise<unknown>;
   confirm: (stepId: string) => Promise<JigInstanceView | undefined>;
+  /**
+   * Show one object of a linked Rhino document by its id there (the bake card's [보기]): the
+   * newest Sync that holds it selects and frames it. Resolves to why not when no Sync holds it.
+   */
+  focusObject: (nativeId: string) => Promise<string | undefined>;
+  /** Open one of this instance's reports in the 보고서 tab. */
+  openReport: (reportId: string) => void;
   slots: { top: HTMLElement; board: HTMLElement; drawer: HTMLElement };
 }
 
@@ -548,6 +568,30 @@ function instanceHost(jig: OpenJig): JigHost {
           await api(path(`/steps/${encodeURIComponent(stepId)}/confirm`), 'POST', { inputHash }),
         );
       }),
+    focusObject: async (nativeId: string) => {
+      const wanted = nativeId.toLowerCase();
+      const project = `/projects/${encodeURIComponent(jig.context.projectId)}`;
+      // Sources are in request order (oldest first): the newest Sync holding the object wins.
+      for (const source of jig.context.sources.filter((s) => s.host === 'rhino').reverse()) {
+        let objects: { id: string; nativeId?: string }[] = [];
+        try {
+          objects =
+            syncObjectsSchema.parse(
+              await api(`${project}/requests/${encodeURIComponent(source.id)}`),
+            ).result?.objects ?? [];
+        } catch {
+          continue;
+        }
+        const hit = objects.find((object) => object.nativeId?.toLowerCase() === wanted);
+        if (hit) {
+          jig.context.show(source.id, hit.id);
+          return undefined;
+        }
+      }
+      return '연결한 Rhino 문서의 Sync에 이 객체가 없습니다. 원본에 반영한 뒤 Sync를 다시 하면 보입니다.';
+    },
+    openReport: (reportId: string) =>
+      void import('./report-tab.tsx').then((screen) => screen.openReport(jig.instanceId, reportId)),
     slots: {
       top: slot('top', workspace),
       board: slot('board', viewportArea),
@@ -653,6 +697,8 @@ function Gallery({ context }: { context: JigContext }) {
   const [instances, setInstances] = useState<InstanceRow[]>([]);
   const [source, setSource] = useState<Source>(listSource);
   const [creating, setCreating] = useState<string>();
+  /** The project jig whose [삭제] waits for confirmation. */
+  const [removing, setRemoving] = useState<string>();
   const [notice, setNotice] = useState('');
   const [loaded, setLoaded] = useState(0);
   const projectId = context.projectId;
@@ -704,6 +750,20 @@ function Gallery({ context }: { context: JigContext }) {
     draft: 0,
   };
   const listed = (kind: Source) => source === 'all' || source === kind;
+  // [삭제] takes an installed jig off this project's list; its instances stay in the project.
+  const remove = async (entry: Package) => {
+    setRemoving(undefined);
+    try {
+      await api(
+        `/projects/${encodeURIComponent(projectId)}/jigs/${encodeURIComponent(entry.id)}/pin`,
+        'DELETE',
+      );
+      setNotice(`‘${entry.name}’을 이 프로젝트의 jig에서 삭제했습니다.`);
+      setLoaded((n) => n + 1);
+    } catch (error) {
+      setNotice(`‘${entry.name}’을 삭제하지 못했습니다. ${jigError(error)}`);
+    }
+  };
   const toolCard = (entry: Package) => {
     const key = `${entry.id}@${entry.version}`;
     const rows = instances.filter((row) => row.jigId === entry.id);
@@ -763,6 +823,25 @@ function Gallery({ context }: { context: JigContext }) {
         ) : (
           <button type="button" onClick={() => setCreating(key)}>
             새로 열기
+          </button>
+        )}
+        {entry.stage !== 'project' ? null : removing === key ? (
+          <div className="jig-remove" role="group" aria-label={`${entry.name} 삭제 확인`}>
+            <small>
+              이 프로젝트의 jig 목록에서 뺍니다.
+              {rows.length ? ` 작업본 ${rows.length}개는 지우지 않습니다.` : ''} 다시 쓰려면 다시
+              가져옵니다.
+            </small>{' '}
+            <button type="button" onClick={() => void remove(entry)}>
+              삭제
+            </button>{' '}
+            <button type="button" onClick={() => setRemoving(undefined)}>
+              취소
+            </button>
+          </div>
+        ) : (
+          <button type="button" onClick={() => setRemoving(key)}>
+            삭제
           </button>
         )}
       </article>

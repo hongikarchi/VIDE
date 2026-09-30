@@ -57,6 +57,26 @@ export const brushSketchSchema = z
     'Sketch has too many points',
   );
 export const sketchSchema = z.union([planeSketchSchema.passthrough(), brushSketchSchema]);
+/** Images a turn shows the model (PLAN-24): at most 3, each a PNG/JPEG data URL of at most 1 MB. */
+export const MAX_TURN_IMAGES = 3;
+export const MAX_TURN_IMAGE_BYTES = 1_000_000;
+export const imageItemSchema = z
+  .object({
+    // annotated: the viewport with the turn's sketch strokes and pin markers drawn on it.
+    kind: z.enum(['viewport', 'annotated']),
+    name: z.string().max(100).optional(),
+    dataUrl: z
+      .string()
+      .max(Math.ceil((MAX_TURN_IMAGE_BYTES * 4) / 3) + 40)
+      .regex(/^data:image\/(png|jpeg);base64,[A-Za-z0-9+/]+={0,2}$/),
+  })
+  .strict()
+  .refine((image) => {
+    // Decoded size without Buffer (the schema also runs in the browser).
+    const data = image.dataUrl.slice(image.dataUrl.indexOf(',') + 1);
+    const padding = data.endsWith('==') ? 2 : data.endsWith('=') ? 1 : 0;
+    return (data.length / 4) * 3 - padding <= MAX_TURN_IMAGE_BYTES;
+  }, 'Image is larger than 1 MB');
 export const requestInputSchema = z
   .object({
     id,
@@ -72,6 +92,7 @@ export const requestInputSchema = z
     // Pin identity and basis are checked against project data by Workspace.
     pins: z.array(z.unknown()).max(100),
     sketches: z.array(sketchSchema).max(100),
+    images: z.array(imageItemSchema).max(MAX_TURN_IMAGES).optional(),
     files: z
       .array(z.object({ name: z.string(), text: z.string().max(50000) }).passthrough())
       .max(100),

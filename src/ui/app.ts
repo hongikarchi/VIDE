@@ -867,6 +867,31 @@ function captureViewport() {
   if (!viewport) throw Error('3D 화면을 준비한 뒤 다시 시도하세요.');
   return viewport.capture();
 }
+/**
+ * The view with the draft's sketch strokes and numbered pin markers, small enough for the stored
+ * request (the whole input stays under 200 KB); undefined without pins/sketches or a view.
+ */
+function annotatedCapture() {
+  if (!viewport || (!state.pins.length && !state.sketches.length)) return undefined;
+  const pins = state.pins.flatMap((pin, index) => {
+    const id = displayIdOf(objects, pin.basis, pin.id);
+    return id ? [{ id, label: /\d+/.exec(pin.label ?? '')?.[0] ?? String(index + 1) }] : [];
+  });
+  try {
+    for (const [maxSize, quality] of [
+      [1280, 0.8],
+      [960, 0.7],
+      [720, 0.6],
+    ]) {
+      const dataUrl = viewport.captureWithAnnotations(pins, { maxSize, quality });
+      if (dataUrl.length <= 150_000 && /^data:image\/(png|jpeg);base64,/.test(dataUrl))
+        return { kind: 'annotated' as const, name: '고정·스케치 화면', dataUrl };
+    }
+  } catch {
+    /* No picture: the pins and sketches still go as data. */
+  }
+  return undefined;
+}
 /** Unattached brush strokes. */
 function pendingSketch() {
   return strokes.length > 0;
@@ -2059,6 +2084,9 @@ async function submitRequest(predecessorId?: string) {
     id: crypto.randomUUID(),
     ...(conversationId ? { conversationId } : {}),
   };
+  // Pins and sketches also go to the AI as a picture of the view with them drawn (PLAN-24).
+  const image = predecessor ? undefined : annotatedCapture();
+  if (image) Object.assign(input, { images: [image] });
   const projectId = currentProject().id,
     original = state;
   try {

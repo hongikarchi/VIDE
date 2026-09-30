@@ -92,3 +92,30 @@ test('agent scope enforces paging inputs and target isolation before query dispa
     tools.close();
   }
 });
+
+test('a cursor pages past 100 objects on one revision and refuses mixed or stale forms', () => {
+  const snapshot = {
+    revision: 4,
+    objects: Array.from({ length: 250 }, (_, i) => ({ id: `o${i}` })),
+  };
+  const ids = [];
+  let page = queryPage(snapshot, { limit: 100 });
+  assert.equal(page.page.cursor, '4:100');
+  ids.push(...page.objects.map((o) => o.id));
+  while (page.page.cursor) {
+    page = queryPage(snapshot, { cursor: page.page.cursor, limit: 100 });
+    ids.push(...page.objects.map((o) => o.id));
+  }
+  assert.equal(page.page.nextOffset, null);
+  assert.deepEqual(
+    ids,
+    snapshot.objects.map((o) => o.id),
+  );
+  assert.throws(() => queryPage(snapshot, { cursor: '4:100', offset: 100 }), {
+    code: 'INVALID_INPUT',
+  });
+  assert.throws(() => queryPage({ ...snapshot, revision: 5 }, { cursor: '4:100' }), {
+    code: 'STALE_REFERENCE',
+  });
+  assert.throws(() => queryPage(snapshot, { cursor: 'abc' }));
+});

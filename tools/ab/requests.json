@@ -1,0 +1,125 @@
+{
+  "version": 1,
+  "note": "Five fixed modelling requests for the AI parity A/B (SPIKE-2026-09-30-ai-parity-ab). Checks read the candidate model in millimetres (fixture.py builds a mm document). Each request starts from the untouched fixture unless run with --chain.",
+  "fixture": {
+    "file": ".vide/ab/ab-fixture.3dm",
+    "units": "mm",
+    "layers": {
+      "S-GRID": "7 axis lines: 4 along Y at x = 0, 6000, 12000, 18000 (names A..D) and 3 along X at y = 0, 6000, 12000 (names 1..3)",
+      "S-BEAM": "3 beams on the 2F grid line y = 0, 300 wide x 500 deep, top at z = 3600",
+      "S-SLAB": "1 slab 18000 x 12000 x 200, top at z = 3600 (2F)",
+      "LEVEL": "3 named points: '1F FL+0', '2F FL+3600', '3F FL+7200'",
+      "A-RAIL-GUIDE": "1 open curve on the 2F slab edge (arc from (0,12000) through (9000,13500) to (18000,12000), z = 3600)"
+    }
+  },
+  "requests": [
+    {
+      "id": "R1",
+      "title": "기둥 격자",
+      "body": "기둥 12개를 격자로 세워",
+      "expect": "One column at each of the 12 grid intersections, vertical, from 1F to 2F.",
+      "checks": [
+        {
+          "type": "added",
+          "min": 12,
+          "max": 12,
+          "shape": "vertical"
+        },
+        {
+          "type": "addedOnGrid",
+          "gridLayer": "S-GRID",
+          "tolerance": 50
+        },
+        {
+          "type": "removedMax",
+          "max": 0
+        }
+      ]
+    },
+    {
+      "id": "R2",
+      "title": "보 춤 변경",
+      "body": "보 높이를 600으로",
+      "expect": "The three S-BEAM beams become 600 deep (top kept or bottom kept both accepted); no other object changes.",
+      "checks": [
+        {
+          "type": "layer",
+          "layer": "S-BEAM",
+          "count": 3,
+          "sizeZ": [599, 601]
+        },
+        {
+          "type": "untouchedOutside",
+          "layers": ["S-BEAM"]
+        }
+      ]
+    },
+    {
+      "id": "R3",
+      "title": "슬래브 복사",
+      "body": "2층 슬래브를 복사해 3층 만들기",
+      "expect": "A second S-SLAB object, same size, top at 3F FL+7200 (bottom at z = 7000).",
+      "checks": [
+        {
+          "type": "layer",
+          "layer": "S-SLAB",
+          "count": 2
+        },
+        {
+          "type": "layerAny",
+          "layer": "S-SLAB",
+          "originZ": [6990, 7010],
+          "sizeZ": [199, 201]
+        },
+        {
+          "type": "removedMax",
+          "max": 0
+        }
+      ]
+    },
+    {
+      "id": "R4",
+      "title": "곡선 따라 난간",
+      "body": "이 곡선을 따라 난간 만들기",
+      "pin": {
+        "layer": "A-RAIL-GUIDE",
+        "role": "reference"
+      },
+      "note": "'이 곡선' is the only object on A-RAIL-GUIDE: the engine run pins it (role reference) like a click in the viewport; the terminal run selects it in Rhino before sending (README).",
+      "expect": "New railing geometry following the A-RAIL-GUIDE curve, at least 800 high above the slab.",
+      "checks": [
+        {
+          "type": "added",
+          "min": 1
+        },
+        {
+          "type": "addedNear",
+          "layer": "A-RAIL-GUIDE",
+          "margin": 300,
+          "minSizeZ": 800
+        },
+        {
+          "type": "removedMax",
+          "max": 0
+        }
+      ]
+    },
+    {
+      "id": "R5",
+      "title": "축선 이름 정리",
+      "body": "축선 이름을 X·Y로 정리",
+      "expect": "The 7 S-GRID lines renamed X1.. / Y1.. by direction (either assignment of X to one direction accepted, numbered in order); geometry unchanged.",
+      "checks": [
+        {
+          "type": "gridNames",
+          "layer": "S-GRID",
+          "count": 7
+        },
+        {
+          "type": "removedMax",
+          "max": 0
+        }
+      ]
+    }
+  ]
+}

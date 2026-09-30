@@ -3,6 +3,7 @@ import { resolve, isAbsolute } from 'node:path';
 import { inspectWindowsProcess } from '../common/owned-process.ts';
 import { sendHostCommand } from '../common/transport.ts';
 import { readScenePages } from './scene-pages.ts';
+import { viewMethods } from './view-tools.ts';
 import {
   displayObjectSchema,
   displaySceneSchema,
@@ -116,6 +117,8 @@ export function editorMethods(
   call: (method: string, extra?: Record<string, unknown>) => Promise<unknown>,
 ) {
   return {
+    // View image and measurements (the AI's eyes); the worker client spreads these methods too.
+    ...viewMethods(call),
     /** The display Sync, or with `scope` a layer-limited read (hidden objects too when asked). */
     async displayEditor(scope: ReadScope = {}) {
       const before = editorReply(editorSnapshotSchema, await call('inspectEditor'));

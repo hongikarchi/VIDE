@@ -85,6 +85,9 @@ internal sealed class WorkerExecutor(RhinoDoc document, string directory)
             lastMeasurementContext = context;
             return result;
         }
+        // The AI's eyes: a view image of this hidden working copy (layers may be switched for it) and measurements.
+        if (method == "captureView") return ViewTools.Capture(document, request, mayChangeLayers: true);
+        if (method == "measure") return ViewTools.Measure(document, request);
         if (method != "execute") throw new InvalidOperationException("UNKNOWN_METHOD");
         var operation = request.GetProperty("operationId").GetString()!;
         if (!Guid.TryParseExact(operation, "D", out _)) throw new InvalidOperationException("INVALID_OPERATION");

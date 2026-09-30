@@ -5,7 +5,7 @@
 // the kit's ReportPage (the app's CSP forbids the exported page's inline styles in a frame), and
 // [HTML 저장] keeps the engine's self-contained page without scripts. The in-app report has one way
 // back, to the instance and the settings it was made from; the exported page has no controls.
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import type { ReportModel } from '../jigs/runtime/report-format.ts';
 import { api, errors } from './gateway.ts';
@@ -76,10 +76,14 @@ export function keepChoice(
 function ReportTab({ projectId }: { projectId: string }) {
   const [list, setList] = useState<ListedReports[] | null>(null);
   const [error, setError] = useState<string>();
-  const [chosen, setChosen] = useState<{ instanceId: string; reportId: string }>();
+  // A report asked for from a jig panel (openReport) is the first choice.
+  const [chosen, setChosen] = useState<{ instanceId: string; reportId: string } | undefined>(
+    takeAsked,
+  );
   const [shown, setShown] = useState<RenderedReport>();
   const [loading, setLoading] = useState(false);
   const [paper, setPaper] = useState<Paper>('a3');
+  const reading = useRef(0);
 
   const refreshList = useCallback(async () => {
     try {
@@ -94,6 +98,8 @@ function ReportTab({ projectId }: { projectId: string }) {
     }
   }, [projectId]);
   const render = useCallback(async () => {
+    // Only the latest read shows: an older one finishing later (a stale handler's) is dropped.
+    const ticket = ++reading.current;
     if (!chosen) {
       setShown(undefined);
       return;
@@ -101,16 +107,16 @@ function ReportTab({ projectId }: { projectId: string }) {
     setLoading(true);
     setError(undefined);
     try {
-      setShown(
-        (await api(
-          `${projectPath(projectId)}/jig-instances/${encodeURIComponent(chosen.instanceId)}/reports/${encodeURIComponent(chosen.reportId)}`,
-        )) as RenderedReport,
-      );
+      const report = (await api(
+        `${projectPath(projectId)}/jig-instances/${encodeURIComponent(chosen.instanceId)}/reports/${encodeURIComponent(chosen.reportId)}`,
+      )) as RenderedReport;
+      if (ticket === reading.current) setShown(report);
     } catch (e) {
+      if (ticket !== reading.current) return;
       setShown(undefined);
       setError(message(e));
     } finally {
-      setLoading(false);
+      if (ticket === reading.current) setLoading(false);
     }
   }, [projectId, chosen]);
 
@@ -126,8 +132,16 @@ function ReportTab({ projectId }: { projectId: string }) {
       void refreshList();
       void render();
     };
+    const asked = () => {
+      const choice = takeAsked();
+      if (choice) setChosen(choice);
+    };
+    window.addEventListener('vide:report-asked', asked);
     window.addEventListener('vide:reports-shown', again);
-    return () => window.removeEventListener('vide:reports-shown', again);
+    return () => {
+      window.removeEventListener('vide:report-asked', asked);
+      window.removeEventListener('vide:reports-shown', again);
+    };
   }, [refreshList, render]);
 
   const print = () => {
@@ -246,6 +260,23 @@ function ReportTab({ projectId }: { projectId: string }) {
       </div>
     </>
   );
+}
+
+/** The report a jig panel asked for, until the tab takes it. */
+let askedReport: { instanceId: string; reportId: string } | undefined;
+function takeAsked() {
+  const choice = askedReport;
+  askedReport = undefined;
+  return choice;
+}
+/**
+ * Show one instance's report in the 보고서 tab (a jig panel's report action, T-048): the tab
+ * mounts with it chosen, or chooses it when already mounted, and reads it again.
+ */
+export function openReport(instanceId: string, reportId: string) {
+  askedReport = { instanceId, reportId };
+  window.dispatchEvent(new Event('vide:report-asked'));
+  setWorkspace('report');
 }
 
 let root: Root | undefined;

@@ -196,7 +196,7 @@ test('one registry: connection allowlist equals the defined tools, conversation 
     'claude',
     connection,
   );
-  assert.equal(args[args.indexOf('--system-prompt') + 1], conversationToolInstruction);
+  assert.ok(args[args.indexOf('--system-prompt') + 1].startsWith(conversationToolInstruction));
   assert.match(args.at(-1), /mcp__vide__jig_state/);
   assert.throws(
     () => agentConnection({ ...scope.connection, tools: ['jig_delete'] }),
@@ -410,4 +410,50 @@ test('large outputs come as an outline; an oversized page is refused, not cut', 
     path: 'rows',
   });
   assert.equal(body(direct).code, 'QUERY_RESULT_TOO_LARGE');
+});
+
+test('the turn rules name the target, the open jig and the linked files; tools take them left out', async () => {
+  const { scope, call, calls, tools } = scoped();
+  // The values travel with the connection (ids and hosts only; no file names).
+  assert.deepEqual(scope.connection.scope, {
+    targetRef: T,
+    openInstanceId: 'inst-1',
+    links: [{ id: 'L1', host: 'rhino' }],
+  });
+  const connection = agentConnection({ ...scope.connection, tools: [...scope.connection.tools] });
+  const rules = turnRules(connection);
+  assert.match(rules, /targetRef is "conversation:conv-1", the only target/);
+  assert.match(rules, /instanceId "inst-1"; leave instanceId out/);
+  assert.match(rules, /"linkId":"L1","host":"rhino"/);
+  assert.doesNotMatch(rules, /합성 모델/);
+  // targetRef and instanceId left out: the scope's only target and the open jig.
+  assert.equal(body(await call('jig_list', {})).instances.length, 2);
+  assert.equal(body(await call('jig_state', {})).id, 'inst-1');
+  assert.equal(body(await call('structure_summary', {})).maxRatio, 1.13);
+  assert.equal(body(await call('links_layers', {})).links[0].syncId, 'sync-1');
+  const set = body(await call('jig_set', { values: [{ key: 'span', value: 10 }] }));
+  assert.deepEqual(set.changes[0].to, 10);
+  assert.equal(calls.set.at(-1).instanceId, 'inst-1');
+  assert.equal(body(await call('jig_run', {})).status, 'computed');
+  // Without an open jig instanceId must be given; the rules say so.
+  const closed = scoped({ openInstanceId: null });
+  assert.equal(body(await closed.call('jig_state', {})).code, 'JIG_NOT_OPEN');
+  assert.equal(body(await closed.call('jig_state', { instanceId: 'inst-2' })).id, 'inst-2');
+  assert.match(turnRules(closed.scope.connection), /No jig is open/);
+  // A scope with several targets still needs targetRef named.
+  const many = tools.issue({
+    targetRef: [T, 'conversation:conv-2'],
+    handlers: conversationHandlers(fakeSources().sources),
+    isCurrent: () => true,
+  });
+  assert.equal(body(await tools.call(many.token, 'jig_list', {})).code, 'TARGET_MISMATCH');
+  assert.equal(
+    body(await tools.call(many.token, 'jig_list', { targetRef: T })).instances.length,
+    2,
+  );
+  // Scope values are checked like the rest of the connection.
+  assert.throws(
+    () => agentConnection({ ...scope.connection, scope: { targetRef: '' } }),
+    /INVALID_AGENT_CONNECTION/,
+  );
 });

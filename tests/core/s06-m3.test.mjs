@@ -24,7 +24,19 @@ const files = (name) => fixtureFiles(CASES.find((c) => c.name === name));
 
 after(() => closeAnalysisWorker());
 
-async function run(name, overrides = {}, mode = 'selftest', confirmations) {
+/** A cache that also keeps each step's last result, as the runtime does with `jig_runs`. */
+class KeptCache extends MemoryCache {
+  last = new Map();
+  async put(stepId, hash, output) {
+    this.last.set(stepId, { inputHash: hash, output });
+    return super.put(stepId, hash, output);
+  }
+  async previous(stepId) {
+    return this.last.get(stepId) ?? null;
+  }
+}
+
+async function run(name, overrides = {}, mode = 'selftest', confirmations, extra = {}) {
   const jig = await loadJig(JIG);
   const { input, params } = files(name);
   const values = { ...params, ...overrides };
@@ -42,6 +54,7 @@ async function run(name, overrides = {}, mode = 'selftest', confirmations) {
     inputs: input,
     params: all,
     confirmations,
+    ...extra,
   });
 }
 
@@ -82,9 +95,25 @@ test('the package declares the M3 chain, its settings, bakes and panel tabs', as
   assert.deepEqual(panel.issues, []);
   const tabs = panel.spec.drawer.tabs;
   assert.deepEqual(
-    tabs.slice(4).map((t) => t.title),
+    tabs.slice(4, 8).map((t) => t.title),
     ['단면', '일람표', '높이', '만들기'],
   );
+  // The drawer holds 12 tabs, so the four layout proposal tabs are back.
+  assert.deepEqual(
+    tabs.slice(8).map((t) => t.title),
+    ['간섭 · 제안', '배치 대안 · 제안', '확인 목록', '입력 조립'],
+  );
+  assert.ok(
+    panel.spec.actions.some(
+      (a) => a.id === 'apply-sections' && a.step === 'applySections' && a.tier === 'T2',
+    ),
+  );
+  // 선정 단면 적용: a person confirms, then the action step writes the sections (SPEC-06.12).
+  assert.equal(step('applySections').kind, 'human');
+  assert.deepEqual(step('applySections').blocks, ['sectionsApplied']);
+  assert.equal(step('sectionsApplied').entry, 'steps/apply-sections.ts#applySections');
+  // The schedule reads its own previous output: the marks ledger (ARCH-03 §6.2).
+  assert.ok(step('schedule').reads.includes('step.schedule'));
   const schedule = tabs.find((t) => t.title === '일람표');
   assert.equal(schedule.part, 'schedule');
   assert.equal(schedule.from, 'step.schedule.rows');
@@ -220,4 +249,113 @@ test('recomputing keeps marks and bake keys; a changed setting reaches sizing an
   assert.equal(heights.summary.heightStep, 0.5);
   for (const row of heights.rows)
     assert.ok(Math.abs(row.length_m * 2 - Math.round(row.length_m * 2)) < 1e-9);
+});
+
+test('선정 단면 적용: confirm → overrides → the confirmed analysis waits again → members bake', async () => {
+  const st = (r) => Object.fromEntries(r.steps.map((s) => [s.id, s.status]));
+  const hash = (r, id) => r.steps.find((s) => s.id === id).inputHash;
+  const first = await run('drawn-two-bay', {}, 'confirmed', {});
+  assert.equal(st(first).applySections, 'waiting');
+  assert.equal(st(first).sectionsApplied, 'blocked');
+  assert.deepEqual(first.applies, []);
+
+  // The person confirms the analysis and the application of the chosen sections.
+  const confirmed = {
+    confirmAnalysis: hash(first, 'confirmAnalysis'),
+    applySections: hash(first, 'applySections'),
+  };
+  const applying = await run('drawn-two-bay', {}, 'confirmed', confirmed);
+  const applied = applying.outputs.sectionsApplied;
+  assert.equal(applied.schema, 'vide.s06.applySections/1');
+  assert.equal(applied.summary.changed, 16);
+  assert.equal(applying.applies.length, 1);
+  assert.equal(applying.applies[0].stepId, 'sectionsApplied');
+  const overrides = applying.applies[0].overrides;
+  assert.equal(overrides.length, 16);
+  assert.ok(overrides.every((o) => o.id === `s06-section:${o.target.identity.key}`));
+  // The members plan still refuses: the sections were chosen on a preview.
+  assert.equal(applying.outputs.bakeMembers.previewOnly, true);
+
+  // Written into the instance, the sections change the model: both confirmations wait again.
+  const written = overrides.map((o) => ({ ...o, at: '2026-09-30T00:00:00Z' }));
+  const after = await run('drawn-two-bay', {}, 'confirmed', confirmed, { overrides: written });
+  assert.notEqual(after.outputs.model.modelHash, applying.outputs.model.modelHash);
+  assert.equal(st(after).confirmAnalysis, 'reconfirm');
+  assert.equal(st(after).analysisConfirmed, 'blocked');
+  assert.equal(st(after).bakeMembers, 'blocked');
+  assert.equal(st(after).applySections, 'reconfirm');
+  assert.deepEqual(after.applies, []);
+  const sectionOf = new Map(after.outputs.model.model.members.map((m) => [m.id, m.section]));
+  for (const g of applying.outputs.sizing.groups)
+    for (const id of g.memberIds)
+      for (const seg of after.outputs.model.map.physical[id])
+        assert.equal(sectionOf.get(seg), g.sectionId, id);
+
+  // Confirmed again: the members plan offers members with the applied sections.
+  const again = await run(
+    'drawn-two-bay',
+    {},
+    'confirmed',
+    {
+      confirmAnalysis: hash(after, 'confirmAnalysis'),
+    },
+    { overrides: written },
+  );
+  assert.equal(st(again).analysisConfirmed, 'done');
+  assert.equal(again.outputs.bakeMembers.previewOnly, false);
+  assert.ok(again.outputs.bakeMembers.members.length > 0);
+  // The schedule and the bake plan use the applied sections.
+  const names = new Map(
+    Object.entries(again.outputs.sizing.sectionsById).map(([id, s]) => [id, s.name]),
+  );
+  for (const m of again.outputs.bakePlan.members)
+    assert.equal(
+      sectionOf.get(again.outputs.model.map.physical[m.memberId][0]),
+      m.sectionId,
+      m.key,
+    );
+  assert.ok(again.outputs.schedule.rows.every((r) => [...names.values()].includes(r.section)));
+});
+
+test('applySections leaves 후보 없음 groups and already applied members alone', async () => {
+  const { applySections } = await import('../../extensions/jigs/s06-frame/steps/apply-sections.ts');
+  const report = await run('drawn-two-bay');
+  const { sizing, model } = report.outputs;
+  const [kept, ...rest] = sizing.groups;
+  const partial = {
+    ...sizing,
+    groups: [{ ...kept, status: 'no-candidate', judgement: '후보 없음' }, ...rest],
+  };
+  const out = applySections({ steps: { sizing: partial, model } });
+  assert.equal(out.groups[0].kept, '후보 없음');
+  assert.equal(out.summary.kept, 1);
+  assert.ok(out.apply.overrides.every((o) => !kept.memberIds.includes(o.target.identity.key)));
+  // A model that already carries every chosen section asks for nothing.
+  const written = out.apply.overrides.map((o) => ({ ...o, at: 'x' }));
+  const all = applySections({ steps: { sizing, model } }).apply.overrides.map((o) => ({
+    ...o,
+    at: 'x',
+  }));
+  const redone = await run('drawn-two-bay', {}, 'selftest', undefined, { overrides: all });
+  const none = applySections({ steps: { sizing, model: redone.outputs.model } });
+  assert.equal(none.summary.changed, 0);
+  assert.deepEqual(none.apply.overrides, []);
+  assert.ok(written.length < all.length);
+});
+
+test('the marks ledger carries over: numbers continue after a change instead of restarting', async () => {
+  const cache = new KeptCache();
+  const first = await run('drawn-two-bay', {}, 'selftest', undefined, { cache });
+  const changed = await run('drawn-two-bay', { depthMax: 0.5 }, 'selftest', undefined, { cache });
+  const fresh = await run('drawn-two-bay', { depthMax: 0.5 });
+  const next = (r) => r.outputs.schedule.ledger.next;
+  // Numbers are never reused: a new girder group gets the next number after the old ones.
+  for (const [prefix, n] of Object.entries(next(first)))
+    assert.ok(next(changed)[prefix] >= n, prefix);
+  assert.ok(next(changed).SG > next(fresh).SG);
+  // Members whose group did not change keep their mark.
+  const before = new Map(first.outputs.schedule.marks.map((m) => [m.memberId, m.mark]));
+  const beams = changed.outputs.schedule.marks.filter((m) => m.memberId.startsWith('B:'));
+  assert.ok(beams.length > 0);
+  for (const m of beams) if (before.get(m.memberId) === 'S06-SB1') assert.equal(m.mark, 'S06-SB1');
 });

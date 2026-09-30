@@ -176,3 +176,128 @@ test('analysis: a failing analyser gives an error, never a throw; errors block c
   assert.equal(refused.confirmed, undefined);
   assert.ok(refused.error);
 });
+
+// T-053 real-data leftover: a cantilever off a girder mid-span is held only by girder torsion
+// unless a beam continues it through the girder. `beams` gives the continuation (`rigidAt`) or a
+// back span (`backspanOf`, landing on an infill beam with `beamId`); `model` keeps those ends rigid.
+test('model: cantilevers continued through the girder are held in bending, not by torsion', async () => {
+  const f = structuredClone(fixture);
+  const b = f.steps.beams;
+  // E1 on the line of K2-B2 (y = 2) through G5; E2 off G2 at x = 12 with a back span onto K2-B4.
+  b.edgeCantilevers = [
+    {
+      id: 'E1',
+      from: { girderId: 'G5', t: 1 / 3 },
+      points: [
+        [16, 2, 6],
+        [18, 2, 6],
+      ],
+      length_m: 2,
+      continues: 'K2-B2',
+    },
+    {
+      id: 'E2',
+      from: { girderId: 'G2', t: 0.75 },
+      points: [
+        [12, 6, 6],
+        [12, 8, 6],
+      ],
+      length_m: 2,
+      continues: 'K2-R01',
+    },
+  ];
+  const plain = model(inputsOf(f), fixture.params);
+  const torsion = (out) =>
+    mechanismIssues(structureModelSchema.parse(out.model)).filter((i) => i.code === 'TORSION_ROOT');
+  // Without the continuation both roots twist the girder: listed.
+  assert.equal(torsion(plain).length, 2, JSON.stringify(torsion(plain)));
+
+  b.beams.find((x) => x.id === 'K2-B2').rigidAt = ['to'];
+  b.beams.push({
+    id: 'K2-R01',
+    cellId: 'K2',
+    points: [
+      [12, 6, 6],
+      [12, 4, 6],
+    ],
+    from: { girderId: 'G2', t: 0.75 },
+    to: { girderId: null, t: null, beamId: 'K2-B4' },
+    length_m: 2,
+    rigidAt: ['from'],
+    backspanOf: 'E2',
+  });
+  const out = model(inputsOf(f), fixture.params);
+  schemaOk('model', out);
+  assert.equal(out.summary.errors, 0, JSON.stringify(out.issues));
+  const parsed = structureModelSchema.parse(out.model);
+  assert.deepEqual(torsion(out), []);
+  const members = new Map(parsed.members.map((m) => [m.id, m]));
+  const nodes = new Map(parsed.nodes.map((n) => [n.id, n.xyz_m]));
+  const segs = (key) => out.map.physical[key].map((id) => members.get(id));
+  // K2-B2: pinned on G4, rigid on G5 where E1 carries on.
+  const b2 = segs('B:K2-B2');
+  assert.ok(b2[0].releases?.i);
+  assert.equal(b2[b2.length - 1].releases?.j, undefined);
+  // The back span: rigid at the root on G2, pinned on K2-B4, which is split at that point.
+  const r = segs('B:K2-R01');
+  assert.equal(r[0].releases?.i, undefined);
+  assert.ok(r[r.length - 1].releases?.j);
+  const landing = r[r.length - 1].j;
+  // On K2-B4's rail (which rises to the arched G4), at x = 12, y = 4 in plan.
+  const at = nodes.get(landing);
+  assert.deepEqual(at.slice(0, 2), [12, 4]);
+  assert.ok(at[2] > 6 && at[2] < 6.3, `z ${at[2]}`);
+  const b4 = segs('B:K2-B4');
+  assert.equal(b4.length, 2);
+  assert.ok(b4.some((m) => m.i === landing || m.j === landing));
+  // The back span carries no cell strip (the infill beams already do).
+  assert.ok(!out.loads.some((l) => l.memberKey === 'B:K2-R01' && l.source === 'area'));
+  const a = await analysis({ steps: { model: out } });
+  assert.equal(a.preview?.status, 'ok', JSON.stringify(a.error ?? a.preview?.issues));
+});
+
+// Review (wave 5): an edge cantilever carries the strip width `beams` gives it, not a fixed spacing.
+test('model: an edge cantilever is loaded over its own strip width', () => {
+  const base = model(inputsOf(), fixture.params);
+  const f = structuredClone(fixture);
+  for (const e of f.steps.beams.edgeCantilevers) e.width_m = 3;
+  const wide = model(inputsOf(f), fixture.params);
+  const lineD = (out) =>
+    out.loads.filter((l) => l.memberKey.startsWith('A:') && l.case === 'D' && l.source === 'area');
+  assert.ok(lineD(base).length > 0);
+  for (const l of lineD(wide)) {
+    const before = lineD(base).find((x) => x.memberKey === l.memberKey);
+    close3(l.value_kNpm / before.value_kNpm, 3 / (fixture.steps.beams.summary?.spacingUsed_m ?? 2));
+  }
+});
+function close3(actual, expected) {
+  assert.ok(Math.abs(actual - expected) < 1e-3, `${actual} ≠ ${expected}`);
+}
+
+// Review (wave 5): a cantilever at a girder junction continues that girder through the edge
+// girder; the girder end there is rigid (its back span), not pinned onto the edge girder's torsion.
+test('model: a girder continued by an edge cantilever is rigid at that end', () => {
+  const f = structuredClone(fixture);
+  f.steps.girders.girders.push({
+    id: 'G6',
+    points: [
+      [8, 3, 6.3],
+      [16, 3, 6],
+    ],
+  });
+  const endJ = (out) => {
+    const parsed = structureModelSchema.parse(out.model);
+    const members = new Map(parsed.members.map((m) => [m.id, m]));
+    const segs = out.map.physical['G:G6'];
+    return members.get(segs[segs.length - 1]).releases?.j;
+  };
+  const withArm = model(inputsOf(f), fixture.params);
+  assert.equal(withArm.summary.errors, 0, JSON.stringify(withArm.issues));
+  assert.equal(endJ(withArm), undefined, 'rigid where E1 carries G6 on');
+  const torsion = mechanismIssues(structureModelSchema.parse(withArm.model)).filter(
+    (i) => i.code === 'TORSION_ROOT',
+  );
+  assert.deepEqual(torsion, []);
+  f.steps.beams.edgeCantilevers = [];
+  assert.ok(endJ(model(inputsOf(f), fixture.params)), 'pinned without a cantilever');
+});

@@ -183,7 +183,7 @@ export const PART_PROPS = {
   table: z.object(tableProps).strict(),
   schedule: z.object(tableProps).strict(),
   'result-tabs': z
-    .object({ tabs: z.array(z.record(z.string(), z.unknown())).min(1).max(8) })
+    .object({ tabs: z.array(z.record(z.string(), z.unknown())).min(1).max(12) })
     .strict(),
   'compare-bars': z
     .object({

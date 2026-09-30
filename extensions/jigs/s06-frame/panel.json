@@ -628,6 +628,120 @@
           }
         ],
         "csv": "만들기계획"
+      },
+      {
+        "title": "간섭 · 제안",
+        "part": "issue-table",
+        "from": "step.interference.tables.interference",
+        "overlay": "columns",
+        "columns": [
+          {
+            "field": "key",
+            "label": "기둥"
+          },
+          {
+            "field": "judgement",
+            "label": "판정"
+          },
+          {
+            "field": "capText",
+            "label": "파일캡↔기존 기초"
+          },
+          {
+            "field": "cutText",
+            "label": "오픈컷↔기존 기초"
+          },
+          {
+            "field": "basinText",
+            "label": "기둥↔유수지 보"
+          }
+        ],
+        "csv": "간섭"
+      },
+      {
+        "title": "배치 대안 · 제안",
+        "part": "table",
+        "from": "step.axes.alternatives",
+        "key": "id",
+        "columns": [
+          {
+            "field": "title",
+            "label": "배치"
+          },
+          {
+            "field": "chosenText",
+            "label": "선택"
+          },
+          {
+            "field": "columns",
+            "label": "기둥",
+            "unit": "개"
+          },
+          {
+            "field": "maxSpan",
+            "label": "최대 경간",
+            "unit": "m",
+            "decimals": 2
+          },
+          {
+            "field": "spanOver",
+            "label": "경간 초과"
+          },
+          {
+            "field": "cap",
+            "label": "파일캡 간섭"
+          },
+          {
+            "field": "basin",
+            "label": "유수지 보"
+          },
+          {
+            "field": "openCut",
+            "label": "오픈컷"
+          }
+        ],
+        "csv": "배치대안"
+      },
+      {
+        "title": "확인 목록",
+        "part": "issue-table",
+        "from": "step.interference.tables.review",
+        "columns": [
+          {
+            "field": "kind",
+            "label": "항목"
+          },
+          {
+            "field": "judgement",
+            "label": "판정"
+          },
+          {
+            "field": "text",
+            "label": "내용"
+          }
+        ],
+        "csv": "확인목록"
+      },
+      {
+        "title": "입력 조립",
+        "part": "table",
+        "from": "step.assemble.roles",
+        "key": "role",
+        "columns": [
+          {
+            "field": "title",
+            "label": "역할"
+          },
+          {
+            "field": "count",
+            "label": "객체",
+            "unit": "개"
+          },
+          {
+            "field": "summary",
+            "label": "읽은 것"
+          }
+        ]
       }
     ]
   },
@@ -642,6 +756,12 @@
       "id": "confirm-analysis",
       "label": "해석 확정",
       "step": "confirmAnalysis",
+      "tier": "T2"
+    },
+    {
+      "id": "apply-sections",
+      "label": "선정 단면 적용",
+      "step": "applySections",
       "tier": "T2"
     }
   ]

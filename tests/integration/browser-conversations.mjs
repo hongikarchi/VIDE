@@ -49,6 +49,61 @@ try {
       json: answers[JSON.parse(route.request().postData()).body] ?? { target: null },
     }),
   );
+  // Conversations with a server hand-over state (T-062): an account limit (T2) and a session past
+  // the length setting (a suggestion). The chips read them; the buttons post the hand-over.
+  const handedOver = [];
+  const sends = { ledgerItems: 2, recentTurns: 1, files: 0 };
+  const entry = (id, title, handover) => ({
+    id,
+    kind: 'ask',
+    title,
+    provider: 'claude-cli',
+    model: null,
+    effort: null,
+    accountProfileId: 'default',
+    mode: 'session',
+    targets: null,
+    state: 'open',
+    requests: 1,
+    session: null,
+    handover,
+  });
+  const conversationsState = {
+    'c-limit': entry('c-limit', '한도 대화', {
+      kind: 'limit',
+      grade: 'T2',
+      requestId: 'r1',
+      from: { provider: 'claude-cli', accountProfileId: 'default' },
+      sends,
+    }),
+    'c-long': entry('c-long', '긴 대화', {
+      kind: 'length',
+      grade: 'T1',
+      turns: 12,
+      inputTokens: 152000,
+      limits: { maxTurns: 12, maxInputTokens: 150000 },
+      sends,
+    }),
+  };
+  const defaultEntry = {
+    ...entry(null, '기본 대화', null),
+    kind: 'general',
+    provider: null,
+    accountProfileId: null,
+    mode: 'ledger',
+  };
+  await page.route(/\/api\/v1\/projects\/[^/]+\/conversations(\/.*)?$/, (route) => {
+    const [, rest = ''] = /\/conversations(\/.*)?$/.exec(new URL(route.request().url()).pathname);
+    const [, id, action] = rest.split('/');
+    if (route.request().method() === 'POST' && action) {
+      handedOver.push({ id, action, body: JSON.parse(route.request().postData() || '{}') });
+      conversationsState[id] = { ...conversationsState[id], handover: null };
+      return route.fulfill({ json: conversationsState[id] });
+    }
+    if (!id) return route.fulfill({ json: [defaultEntry, ...Object.values(conversationsState)] });
+    const found = id === 'default' ? defaultEntry : conversationsState[id];
+    return route.fulfill({ json: { ...found, ledger: [], sessions: [] } });
+  });
   await page.goto(app.launchUrl);
   await page.waitForFunction(() => !document.querySelector('#body').disabled);
   // Mount points are in the right column; empty ones take no room.
@@ -103,8 +158,31 @@ try {
   );
   // Without a chosen conversation the request belongs to the project's default one.
   assert.equal(posted[0].conversationId, undefined);
+  // The account-limit card comes from the server's state; [새 세션으로 이어가기] posts the
+  // hand-over (the server picks the spare account) and the card goes.
+  await page.locator('[data-conversation="c-limit"]').click();
+  const limitCard = page.locator('section[aria-label="계정 한도"]');
+  await limitCard.waitFor();
+  assert.match(await limitCard.textContent(), /원장 2개 · 최근 턴 1개/);
+  assert.equal(
+    await limitCard.locator('button').filter({ hasText: '다른 AI로 이어 가기' }).count(),
+    1,
+  );
+  await limitCard.locator('button').filter({ hasText: '새 세션으로 이어가기' }).click();
+  await limitCard.waitFor({ state: 'detached' });
+  assert.deepEqual(handedOver, [{ id: 'c-limit', action: 'account', body: {} }]);
+  // Past the length setting a new session is suggested, not forced.
+  await page.locator('[data-conversation="c-long"]').click();
+  const lengthCard = page.locator('section[aria-label="대화 길이"]');
+  await lengthCard.waitFor();
+  assert.match(await lengthCard.textContent(), /12턴 · 누적 15\.2만 토큰/);
+  await lengthCard.locator('button').filter({ hasText: '새 세션으로 이어가기' }).click();
+  await lengthCard.waitFor({ state: 'detached' });
+  assert.deepEqual(handedOver.at(-1), { id: 'c-long', action: 'renew', body: {} });
   assert.deepEqual(errors, []);
-  console.log('browser conversations: route cards, AI fallback and mount points pass');
+  console.log(
+    'browser conversations: route cards, AI fallback, mount points and hand-over cards pass',
+  );
 } finally {
   await browser?.close();
   await app?.close();

@@ -91,7 +91,8 @@ test('SDK review cannot acquire execute and closes its owned worker', () =>
       input: { ...task.input, permission: 'review' },
       provider: (connection) => ({
         run: async () => {
-          assert.deepEqual(connection.tools, ['query']);
+          // Review keeps the read tools: query and the AI's eyes (PLAN-24), never execute.
+          assert.deepEqual(connection.tools, ['query', 'capture_view', 'measure']);
           assert.equal(scope().handlers.execute, undefined);
           return { text: 'Review' };
         },

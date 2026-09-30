@@ -30,6 +30,7 @@ import type { SdkExecution } from './sdk-execution.ts';
 import type { ZwcadSdkExecution } from './zwcad-sdk-execution.ts';
 import type { ConversationService, Turn } from './conversations.ts';
 import { turnOutputResult } from './turn-output.ts';
+import { makeTurnResult } from './make-routes.ts';
 import { workspaceResultSchema } from '../contracts/workspace-result.ts';
 import { bakeJobOf } from '../jigs/bake/bake.ts';
 interface Provider {
@@ -71,6 +72,8 @@ interface Options {
   selectContext?: (body: string, candidates: ContextCandidate[]) => Promise<ContextChoice>;
   /** Conversations (SPEC-02.19): session per turn, ledger, one running turn per conversation. */
   conversations?: ConversationService;
+  /** The project's addendum to the instruction bundle (PLAN-24 지침 묶음). */
+  projectInstructions?: (projectId: string) => string;
 }
 const pinsSchema = z.array(
   z
@@ -91,6 +94,7 @@ const errorData = (cause: unknown) => errorSchema.safeParse(cause).data ?? {};
 
 import { installedCodex } from '../ai/paths.ts';
 import { createProvider } from '../ai/providers.ts';
+import type { InstructionHost, InstructionMode } from '../ai/instructions/index.ts';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 import { readFile } from 'node:fs/promises';
@@ -112,6 +116,7 @@ export class Execution {
   diagnostics?: Diagnostics;
   selectContext: NonNullable<Options['selectContext']>;
   conversations?: ConversationService;
+  projectInstructions?: Options['projectInstructions'];
   active = new Map<
     string,
     { controller: AbortController; completion: Promise<void>; projectId: string }
@@ -131,6 +136,7 @@ export class Execution {
       onProviderLimit,
       diagnostics,
       conversations,
+      projectInstructions,
       selectContext: choose = (body, candidates) =>
         selectContext(body, candidates, { key: () => '' }),
     }: Options = {},
@@ -150,6 +156,7 @@ export class Execution {
     this.diagnostics = diagnostics;
     this.selectContext = choose;
     this.conversations = conversations;
+    this.projectInstructions = projectInstructions;
   }
   executable(provider: string) {
     return (
@@ -162,10 +169,13 @@ export class Execution {
   provider(
     input: Pick<
       RequestInput,
-      'provider' | 'model' | 'effort' | 'accountProfileId' | 'executionLimits'
+      // conversationId: a conversation turn takes the wider turn limits (SPEC-02.6).
+      'provider' | 'model' | 'effort' | 'accountProfileId' | 'executionLimits' | 'conversationId'
     >,
     agent?: unknown,
     session?: SessionOptions,
+    /** The instruction bundle's mode, the project whose addendum it carries, and its host. */
+    instructions?: { mode: InstructionMode; projectId: string; host?: InstructionHost },
   ) {
     const executable = this.executable(input.provider);
     return this.providerFactory({
@@ -183,6 +193,13 @@ export class Execution {
       agent,
       model: input.model && input.model !== input.provider ? input.model : undefined,
       effort: input.effort && input.effort !== 'default' ? input.effort : undefined,
+      ...(instructions
+        ? {
+            instructionMode: instructions.mode,
+            instructionHost: instructions.host,
+            projectInstructions: this.projectInstructions?.(instructions.projectId),
+          }
+        : {}),
     });
   }
   async models() {
@@ -463,10 +480,10 @@ export class Execution {
     const { projectId, id, input } = request;
     // A jig's AI review reads only the attached jig table: no host, no document context.
     // A turn taken without the host (SPEC-02.9 1) gets none either.
-    const jigReview =
-      z
-        .object({ kind: z.enum(['sync-review', 'structure-draft-review', 'input-roles']) })
-        .safeParse(input.jig).success || hostUse(input) === 'none';
+    const reviewJig = z
+      .object({ kind: z.enum(['sync-review', 'structure-draft-review', 'input-roles']) })
+      .safeParse(input.jig).success;
+    const jigReview = reviewJig || hostUse(input) === 'none';
     const target = input.host || 'rhino',
       host = jigReview ? undefined : this.hosts[target];
     this.workspace.update(projectId, id, 'running');
@@ -522,6 +539,8 @@ export class Execution {
         ...pins.map((data, i) => ({ id: `pin-${i}`, type: 'object-reference', data })),
         ...input.sketches.map((data, i) => ({ id: `sketch-${i}`, type: 'sketch', data })),
         ...input.files.map((data, i) => ({ id: `file-${i}`, type: 'file', data })),
+        // Images go to the model as image content (PLAN-24; the CLI adapters split them out).
+        ...(input.images ?? []).map((data, i) => ({ id: `image-${i}`, type: 'image', data })),
       ];
       // Outside a conversation the run stays synchronous up to the provider call (no await).
       const pending = this.beginTurn(request);
@@ -536,7 +555,8 @@ export class Execution {
           drivers: { rhino: this.sdk, zwcad: this.zwcadSdk },
           items,
           signal: controller.signal,
-          provider: (agent) => this.provider(input, agent, turn?.session),
+          provider: (agent) =>
+            this.provider(input, agent, turn?.session, { mode: 'modeling', projectId }),
         });
         return;
       }
@@ -641,7 +661,12 @@ export class Execution {
           previous,
           items,
           signal: controller.signal,
-          provider: (agent) => this.provider(input, agent, turn?.session),
+          provider: (agent) =>
+            this.provider(input, agent, turn?.session, {
+              mode: 'modeling',
+              projectId,
+              host: target,
+            }),
           update: (progress) => {
             if (progress.phase === 'host') hostIntent = progress;
             this.workspace.update(projectId, id, 'running', progress);
@@ -687,7 +712,19 @@ export class Execution {
               ttlMs: Math.min(600000, (executionLimits(input).timeoutSeconds + 60) * 1000),
             })
           : undefined;
-      const result = await this.provider(input, scope?.connection, turn?.session)
+      // The bundle's mode (PLAN-24 지침 묶음): host edit, jig making, jig review or data.
+      const mode: InstructionMode = host
+        ? 'modeling'
+        : turn?.conversation.kind === 'jig-make'
+          ? 'make'
+          : reviewJig
+            ? 'review'
+            : 'data';
+      const result = await this.provider(input, scope?.connection, turn?.session, {
+        mode,
+        projectId,
+        ...(host ? { host: target } : {}),
+      })
         .run(
           { goal, revision: 1, items, includedIds: items.map((item) => item.id) },
           {
@@ -764,6 +801,14 @@ export class Execution {
           ...jigCheck(input, result.text),
           ...turnOutputResult(turn, result),
         };
+        // A make turn: Codex's files go into the draft; a stopped turn ends with its card (T-063).
+        if (sources?.draft) {
+          const made = await makeTurnResult(projectId, sources.draft, result, answer);
+          Object.assign(answer, made);
+          // SPEC-07.9: the files VIDE wrote for Codex stay in the ledger as a code item.
+          if (made.makeFiles)
+            sources.ledger?.({ kind: 'code', body: made.makeFiles, requestId: id });
+        }
         // Citation gate of the project facts tools (SPEC-08.7): on the answer the user reads.
         const cited =
           sources?.facts && typeof answer.text === 'string'

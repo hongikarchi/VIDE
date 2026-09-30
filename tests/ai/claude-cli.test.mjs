@@ -313,7 +313,9 @@ test('세션 인자: 첫 턴 --session-id, 이후 --resume, 기록 끄기만 빼
   for (const args of [opened, resumed]) {
     assert.ok(!args.includes('--no-session-persistence'));
     assert.equal(args[args.indexOf('--system-prompt-snapshot') + 1], 'off');
-    assert.equal(args[args.indexOf('--system-prompt') + 1], neutralInstruction);
+    // The default system prompt stays; without a bundle only the neutral rules are appended.
+    assert.ok(!args.includes('--system-prompt'));
+    assert.equal(args[args.indexOf('--append-system-prompt') + 1], neutralInstruction);
     for (const flag of [
       '--safe-mode',
       '--strict-mcp-config',
@@ -348,7 +350,10 @@ test('세션 턴은 중립 프롬프트를 쓰고 이번 턴 규칙을 자료로
     ['turn-rules', 'a'],
   );
   assert.match(packet.items[0].data, /No tools are available in this turn/);
-  assert.equal(run.args[run.args.indexOf('--system-prompt') + 1], neutralInstruction);
+  assert.ok(!run.args.includes('--system-prompt'));
+  const appended = run.args[run.args.indexOf('--append-system-prompt') + 1];
+  assert.ok(appended.startsWith('# VIDE 작업 지침 (공통)'));
+  assert.ok(appended.endsWith(neutralInstruction));
   const connection = {
     url: 'http://127.0.0.1:4000/mcp',
     token: 'a'.repeat(64),
@@ -371,7 +376,11 @@ test('세션 턴은 중립 프롬프트를 쓰고 이번 턴 규칙을 자료로
   const toolRun = tools.calls.find((entry) => entry.args[0] === '-p');
   assert.ok(toolRun.args.includes('--restricted'));
   assert.equal(toolRun.args[toolRun.args.indexOf('--resume') + 1], id);
-  assert.equal(toolRun.args[toolRun.args.indexOf('--system-prompt') + 1], neutralInstruction);
+  assert.ok(!toolRun.args.includes('--system-prompt'));
+  const toolPrompt = toolRun.args[toolRun.args.indexOf('--append-system-prompt') + 1];
+  // A session keeps the neutral rules: the tool rules travel in the packet, not the prompt.
+  assert.ok(toolPrompt.endsWith(neutralInstruction));
+  assert.match(toolPrompt, /# 모델링 지침/);
   assert.equal(
     toolRun.args[toolRun.args.indexOf('--allowedTools') + 1],
     'mcp__vide__query,mcp__vide__execute',
@@ -386,7 +395,10 @@ test('세션 턴은 중립 프롬프트를 쓰고 이번 턴 규칙을 자료로
     context(),
   );
   const singleRun = single.calls.find((entry) => entry.args[0] === '-p');
-  assert.match(singleRun.args[singleRun.args.indexOf('--system-prompt') + 1], /Do not use tools/);
+  assert.match(
+    singleRun.args[singleRun.args.indexOf('--append-system-prompt') + 1],
+    /# VIDE 작업 지침[\s\S]*Do not use tools/,
+  );
   assert.equal(
     JSON.parse(singleRun.input).items.find((item) => item.id === 'turn-rules'),
     undefined,
@@ -476,5 +488,5 @@ test('구조화 출력 스키마는 포함된 turn-output 항목에서만 읽고
   // Without the item the arguments are the single-run ones, unchanged.
   const cli = new ClaudeCli({ executable: process.execPath });
   const args = await cli.withOutputSchema(cli.arguments(), undefined, '');
-  assert.deepEqual(args, cliArguments());
+  assert.deepEqual(args, cliArguments(cli.instructions));
 });

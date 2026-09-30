@@ -61,8 +61,13 @@ export interface PanelHost {
   sources?: readonly { id: string; host: string }[];
   /** Layer paths in the linked documents' Syncs. */
   layers?: readonly string[];
-  /** Frame one object of the linked document (the bake card's preserved objects). */
-  focusObject?: (nativeId: string) => void;
+  /**
+   * Frame one object of the linked document (the bake card's preserved objects); resolves to why
+   * it could not be shown (e.g. no Sync holds it yet), or undefined once shown.
+   */
+  focusObject?: (nativeId: string) => void | Promise<string | undefined>;
+  /** Open one of this instance's reports in the 보고서 tab; omitted where there is no such tab. */
+  openReport?: (reportId: string) => void;
   /** Regions beside the panel (Design SCR-13): above the 3D view, over it, below it. */
   slots?: { top?: HTMLElement; board?: HTMLElement; drawer?: HTMLElement };
 }
@@ -96,6 +101,32 @@ const CONTROL: Partial<Record<PartUse['part'], SettingControl>> = {
   toggle: 'toggle',
   choice: 'choice',
 };
+
+const PREVIEW = '미확정 미리보기';
+/** Whether a step's kept output is only a preview (never shown as a final result, SPEC-06.3). */
+export function isPreviewOutput(output: unknown): boolean {
+  if (!output || typeof output !== 'object') return false;
+  const value = output as { mode?: unknown; previewOnly?: unknown; summary?: unknown };
+  if (value.mode === 'preview' || value.previewOnly === true) return true;
+  const summary = value.summary as { mode?: unknown; confirmed?: unknown } | null | undefined;
+  return (
+    !!summary &&
+    typeof summary === 'object' &&
+    (summary.mode === 'preview' || summary.confirmed === false)
+  );
+}
+/**
+ * A KPI cell's note with the '미확정 미리보기' label exactly when its value comes from a preview:
+ * added when the jig did not write it, dropped when the value is a confirmed result.
+ */
+export function kpiNote(note: string | undefined, preview: boolean): string | undefined {
+  const rest = (note ?? '')
+    .split(' · ')
+    .map((part) => part.trim())
+    .filter((part) => part && part !== PREVIEW);
+  const parts = preview ? [PREVIEW, ...rest] : rest;
+  return parts.length ? parts.join(' · ') : undefined;
+}
 
 /** One rail row from the stored step, the latest run and the pending changes. */
 function railStep(
@@ -190,6 +221,8 @@ export function JigPanel({
   const [opacity, setOpacity] = useState<Record<string, number>>({});
   const [viewTab, setViewTab] = useState(0);
   const [asking, setAsking] = useState<PanelAction>();
+  /** Why an object asked for from the bake card was not shown. */
+  const [focusNote, setFocusNote] = useState('');
   const data: PanelData = useMemo(
     () => ({ outputs: jig.outputs, params: view?.params ?? [] }),
     [jig.outputs, view?.params],
@@ -231,6 +264,15 @@ export function JigPanel({
     setSelection({ key, id });
     if (drawn.has(key) && !hidden.has(key)) host.focus({ overlay: key, itemId: id });
   };
+  const focusObject = host.focusObject
+    ? (nativeId: string) => {
+        setFocusNote('');
+        void Promise.resolve(host.focusObject?.(nativeId)).then(
+          (reason) => reason && setFocusNote(reason),
+          () => setFocusNote('객체를 보여 주지 못했습니다.'),
+        );
+      }
+    : undefined;
 
   if (!view)
     return (
@@ -462,14 +504,13 @@ export function JigPanel({
               const value = resolve(item.from, data);
               const limit =
                 typeof item.warnAbove === 'string' ? resolve(item.warnAbove, data) : item.warnAbove;
+              const shown = value !== undefined && value !== null;
+              const step = stepOf(item.from);
               return {
                 label: item.label,
-                value:
-                  value === undefined || value === null
-                    ? undefined
-                    : cellText(value, item.decimals),
+                value: shown ? cellText(value, item.decimals) : undefined,
                 unit: item.unit,
-                note: item.note,
+                note: kpiNote(item.note, shown && !!step && isPreviewOutput(jig.outputs[step])),
                 over: typeof value === 'number' && typeof limit === 'number' && value > limit,
                 empty: item.empty,
                 stale: isStale(item.from),
@@ -563,16 +604,22 @@ export function JigPanel({
         // [선만 먼저 만들기]·[부재 만들기], what the candidate changes, the records and the
         // baseline read (bake-parts.tsx); read again after each run.
         return (
-          <BakePart
-            key={key}
-            projectId={host.projectId}
-            instanceId={instanceId}
-            title={part.title}
-            bake={part.bake}
-            revision={jig.lastRun?.getTime()}
-            onRecompute={() => void jig.recompute()}
-            onFocus={host.focusObject}
-          />
+          <div key={key}>
+            <BakePart
+              projectId={host.projectId}
+              instanceId={instanceId}
+              title={part.title}
+              bake={part.bake}
+              revision={jig.lastRun?.getTime()}
+              onRecompute={() => void jig.recompute()}
+              onFocus={focusObject}
+            />
+            {focusNote ? (
+              <p className="kit-muted" role="status">
+                {focusNote}
+              </p>
+            ) : null}
+          </div>
         );
       case 'compare-bars':
       case 'ledger':
@@ -686,12 +733,24 @@ export function JigPanel({
         <div className="kit-actions">
           {spec.actions.map((action) =>
             action.report ? (
-              <span key={action.id} className="kit-actions">
-                <button type="button" disabled>
+              // A report opens in the 보고서 tab (reading it changes nothing, so no confirmation).
+              host.openReport ? (
+                <button
+                  key={action.id}
+                  type="button"
+                  data-report={action.report}
+                  onClick={() => host.openReport?.(action.report!)}
+                >
                   {action.label}
                 </button>
-                <span className="kit-reason">보고서 틀은 준비 중입니다</span>
-              </span>
+              ) : (
+                <span key={action.id} className="kit-actions">
+                  <button type="button" disabled>
+                    {action.label}
+                  </button>
+                  <span className="kit-reason">이 화면에서는 보고서 탭을 열 수 없습니다</span>
+                </span>
+              )
             ) : (
               <button
                 key={action.id}

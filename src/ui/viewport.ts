@@ -1871,6 +1871,61 @@ export function createViewport(
         dirty = true;
       }
     },
+    /**
+     * The model view for the AI (PLAN-24): the sketch strokes as drawn plus a numbered marker at
+     * each pinned object (display ids), scaled to at most `maxSize` px, as a compact data URL.
+     */
+    captureWithAnnotations(
+      pins: readonly { id: string; label?: string }[] = [],
+      { maxSize = 1280, type = 'image/jpeg', quality = 0.8 } = {},
+    ) {
+      const shown = overlayRoot.visible;
+      overlayRoot.visible = false;
+      try {
+        renderer.render(scene, camera);
+        const source = renderer.domElement;
+        const scale = Math.min(1, maxSize / Math.max(source.width, source.height, 1));
+        const width = Math.max(1, Math.round(source.width * scale)),
+          height = Math.max(1, Math.round(source.height * scale));
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const context = canvas.getContext('2d');
+        if (!context) return source.toDataURL('image/png');
+        // JPEG has no transparency: the view's own background shows where the model is empty.
+        context.fillStyle = '#ffffff';
+        context.fillRect(0, 0, width, height);
+        context.drawImage(source, 0, 0, width, height);
+        const radius = Math.max(9, Math.round(Math.max(width, height) / 90));
+        context.font = `bold ${Math.round(radius * 1.1)}px sans-serif`;
+        context.textAlign = 'center';
+        context.textBaseline = 'middle';
+        pins.forEach((pin, index) => {
+          const object = byId.get(pin.id);
+          if (!object) return;
+          object.updateWorldMatrix(true, true);
+          const box = new THREE.Box3().setFromObject(object);
+          if (box.isEmpty()) return;
+          const at = box.getCenter(new THREE.Vector3()).project(camera);
+          if (at.z > 1 || Math.abs(at.x) > 1 || Math.abs(at.y) > 1) return;
+          const x = ((at.x + 1) / 2) * width,
+            y = ((1 - at.y) / 2) * height;
+          context.beginPath();
+          context.arc(x, y, radius, 0, Math.PI * 2);
+          context.fillStyle = '#d9480f';
+          context.fill();
+          context.lineWidth = Math.max(2, radius / 5);
+          context.strokeStyle = '#ffffff';
+          context.stroke();
+          context.fillStyle = '#ffffff';
+          context.fillText((pin.label || String(index + 1)).slice(0, 3), x, y);
+        });
+        return canvas.toDataURL(type, quality);
+      } finally {
+        overlayRoot.visible = shown;
+        dirty = true;
+      }
+    },
     replace(data: DisplayObject[], definitions?: Record<string, BlockDefinition>) {
       replace(data, false, definitions);
       fit();

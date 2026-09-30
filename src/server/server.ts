@@ -75,6 +75,7 @@ import { AgentTools } from './agent-tools.ts';
 import { SdkExecution } from './sdk-execution.ts';
 import { ZwcadSdkExecution } from './zwcad-sdk-execution.ts';
 import { AiSettings } from '../core/ai-settings.ts';
+import { ProjectInstructionStore } from '../ai/instructions/project-store.ts';
 import { ReviewNotes } from '../core/review-notes.ts';
 import { compareReviews } from '../core/review-comparison.ts';
 import { Reviews } from '../core/reviews.ts';
@@ -306,9 +307,14 @@ export async function startServer({
   });
   // Conversations (SPEC-02.19): sessions per turn, ledger, transcript retention (30 days).
   const conversations = new ConversationService(store, { profiles, diagnostics });
+  // The per-project addendum of the AI instruction bundle (PLAN-24 지침 묶음).
+  const projectInstructions = new ProjectInstructionStore(
+    filename === ':memory:' ? undefined : dirname(filename),
+  );
   const execution = new Execution(workspace, {
     diagnostics,
     conversations,
+    projectInstructions: (projectId) => projectInstructions.text(projectId),
     selectContext: (text, candidates) =>
       selectContext(text, candidates, { dataDirectory: dirname(filename) }),
     onProviderLimit: (provider, id) =>
@@ -1015,6 +1021,18 @@ export async function startServer({
       );
       if (extensionRun && request.method === 'POST') {
         send(200, extensions.execute(extensionRun[1], extensionRun[2], await body(request)));
+        return;
+      }
+      // The project's addendum to the AI instruction bundle (PLAN-24 지침 묶음), ≤ 8 KB.
+      const aiInstructions = /^\/api\/v1\/projects\/([^/]+)\/ai-instructions$/.exec(url.pathname);
+      if (aiInstructions && (request.method === 'GET' || request.method === 'PUT')) {
+        store.project(aiInstructions[1]);
+        send(
+          200,
+          request.method === 'PUT'
+            ? projectInstructions.save(aiInstructions[1], await body(request))
+            : projectInstructions.get(aiInstructions[1]),
+        );
         return;
       }
       if (url.pathname === '/api/v1/settings/ai') {

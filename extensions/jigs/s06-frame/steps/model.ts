@@ -2,9 +2,10 @@
 // (step 'girders'), the secondary beams and edge cantilevers (step 'beams', cells from 'cells')
 // and the drawn columns become one frame plan for `buildFrameModel` of vide/structure-analysis:
 // top-of-steel lines (eccentricity ignored and listed), arcs segmented ≤ 1 m by the library,
-// beams pinned at both ends, columns with the bottom fixity of the settings and the web along the
-// main girder, lateral restraint only at the column nodes on the restraint (basin slab) level,
-// steel self-weight on, zone area loads turned into line loads by tributary width, and the named
+// beams pinned at both ends (rigid where a cantilever continues the beam through the girder; back
+// spans land on their infill beam), columns with the bottom fixity of the settings and the web
+// along the main girder, lateral restraint only at the column nodes on the restraint (basin slab)
+// level, steel self-weight on, zone area loads turned into line loads by tributary width, and the named
 // combinations 1.2D+1.6L (± notional X/Y) and 1.0D+1.0L. Pure: no I/O, JSON in and out.
 
 import { createHash } from 'node:crypto';
@@ -52,16 +53,25 @@ export interface BeamIn {
   id: string;
   cellId: string;
   points: Vec3[];
-  /** `girderId: null` (with `edge`) = the end meets the slab edge or a void, not a girder. */
-  from?: { girderId: string | null; t: number | null; edge?: string };
-  to?: { girderId: string | null; t: number | null; edge?: string };
+  /**
+   * `girderId: null` (with `edge`) = the end meets the slab edge or a void, not a girder;
+   * `girderId: null` with `beamId` = the end sits on that beam (a back span).
+   */
+  from?: { girderId: string | null; t: number | null; edge?: string; beamId?: string };
+  to?: { girderId: string | null; t: number | null; edge?: string; beamId?: string };
   length_m?: number;
+  /** Ends continuous through the girder with a cantilever on the same line (rigid, not pinned). */
+  rigidAt?: ('from' | 'to')[];
+  /** Set on a back span: the cantilever or cut beam it holds (carries no cell strip). */
+  backspanOf?: string;
 }
 export interface CantileverIn {
   id: string;
   from: { girderId: string; t: number };
   points: Vec3[];
   length_m?: number;
+  /** Width of the edge strip it carries (m); the beam spacing when absent. */
+  width_m?: number;
 }
 export interface BeamsIn {
   cells?: CellIn[];
@@ -594,6 +604,14 @@ export function model(
     role: 'beam' | 'arm';
     rail: Vec3[];
     cellId?: string;
+    /** Ends continuous with a cantilever through the girder (beams only). */
+    rigid?: [boolean, boolean];
+    /** Rail ends that sit on another beam (key): moved onto its rail once all rails are known. */
+    onBeam?: { end: 0 | 1; key: string }[];
+    /** A back span: no cell strip of its own. */
+    backspan?: boolean;
+    /** An edge cantilever's strip width (m). */
+    width?: number;
   }
   const pending: PendingBeam[] = [];
   for (const b of beamsStep.beams ?? []) {
@@ -601,8 +619,10 @@ export function model(
     if (points.length < 2) continue;
     // An end on the slab edge or a void (`girderId: null`) is free: the beam is carried as a
     // cantilever from its girder end, never pulled onto the nearest girder.
-    const onA = b.from?.girderId !== null,
-      onZ = b.to?.girderId !== null;
+    const beamA = typeof b.from?.beamId === 'string' ? b.from.beamId : undefined,
+      beamZ = typeof b.to?.beamId === 'string' ? b.to.beamId : undefined;
+    const onA = b.from?.girderId !== null || !!beamA,
+      onZ = b.to?.girderId !== null || !!beamZ;
     if (!onA && !onZ) {
       issues.push({
         level: 'warning',
@@ -623,11 +643,41 @@ export function model(
       pending.push({ key: `B:${b.id}`, role: 'arm', rail: [root, tipAt], cellId: b.cellId });
       continue;
     }
-    const a = snapToGirder(b.from?.girderId ?? undefined, points[0]).point;
-    const z = snapToGirder(b.to?.girderId ?? undefined, points[points.length - 1]).point;
+    // An end on another beam stays where it is (moved onto that beam's rail below).
+    const a = beamA ? points[0] : snapToGirder(b.from?.girderId ?? undefined, points[0]).point;
+    const last = points[points.length - 1];
+    const z = beamZ ? last : snapToGirder(b.to?.girderId ?? undefined, last).point;
     if (d3(a, z) < 0.05) continue;
-    pending.push({ key: `B:${b.id}`, role: 'beam', rail: [a, z], cellId: b.cellId });
+    const rigidAt = Array.isArray(b.rigidAt) ? b.rigidAt : [];
+    const onBeam = [
+      ...(beamA ? [{ end: 0 as const, key: `B:${beamA}` }] : []),
+      ...(beamZ ? [{ end: 1 as const, key: `B:${beamZ}` }] : []),
+    ];
+    pending.push({
+      key: `B:${b.id}`,
+      role: 'beam',
+      rail: [[...a], [...z]],
+      cellId: b.cellId,
+      ...(rigidAt.length ? { rigid: [rigidAt.includes('from'), rigidAt.includes('to')] } : {}),
+      ...(onBeam.length ? { onBeam } : {}),
+      ...(b.backspanOf ? { backspan: true } : {}),
+    });
   }
+  // Back-span ends on an infill beam: onto that beam's rail, so the library joins them there.
+  for (const b of pending)
+    for (const { end, key } of b.onBeam ?? []) {
+      const host = pending.find((x) => x.key === key);
+      if (!host) {
+        issues.push({
+          level: 'warning',
+          code: 'BEAM_HOST_MISSING',
+          message: `${b.key}: 끝이 닿는 작은보 ${key}가 모델에 없음`,
+          members: [b.key],
+        });
+        continue;
+      }
+      b.rail[end] = nearestOnPolyline(host.rail, b.rail[end]).point;
+    }
   for (const e of beamsStep.edgeCantilevers ?? []) {
     const points = (e.points ?? []).filter(finite3);
     if (points.length < 2) continue;
@@ -635,7 +685,13 @@ export function model(
     const tip = points[points.length - 1];
     const tipAt: Vec3 = [tip[0], tip[1], root[2]];
     if (d3(root, tipAt) < 0.05) continue;
-    pending.push({ key: `A:${e.id}`, role: 'arm', rail: [root, tipAt] });
+    const width = Number.isFinite(e.width_m) && e.width_m! > 0 ? e.width_m : undefined;
+    pending.push({
+      key: `A:${e.id}`,
+      role: 'arm',
+      rail: [root, tipAt],
+      ...(width ? { width } : {}),
+    });
   }
 
   for (const g of girdersIn) {
@@ -671,8 +727,32 @@ export function model(
       });
       if (!interiorSupport) freeEnd = tip;
     }
+    // An edge cantilever carrying this girder's line on out past its end (a station on a girder
+    // junction, where `beams` adds no back span) is held by the girder in bending: that end is
+    // rigid, not pinned, so the cantilever root does not hang on the edge girder's torsion alone.
+    const continuedAt = (k: 0 | 1) => {
+      const q = k === 0 ? rail[0] : rail[rail.length - 1];
+      const r = k === 0 ? rail[1] : rail[rail.length - 2];
+      const l = d2(q, r);
+      return pending.some((b) => {
+        if (b.role !== 'arm' || b.cellId || d2(b.rail[0], q) > 0.05) return false;
+        const a = d2(b.rail[0], b.rail[1]);
+        if (!(l > 1e-9 && a > 1e-9)) return false;
+        const cos =
+          ((q[0] - r[0]) * (b.rail[1][0] - b.rail[0][0]) +
+            (q[1] - r[1]) * (b.rail[1][1] - b.rail[0][1])) /
+          (l * a);
+        return cos >= Math.cos(Math.PI / 12);
+      });
+    };
     const endOf = (q: Vec3, k: 0 | 1): 'rigid' | 'pinned' =>
-      !supported[k] || freeEnd ? 'rigid' : atColumn(q) ? p.girderEnds : 'pinned';
+      !supported[k] || freeEnd
+        ? 'rigid'
+        : atColumn(q)
+          ? p.girderEnds
+          : continuedAt(k)
+            ? 'rigid'
+            : 'pinned';
     const ends: [FrameMember['ends'][0], FrameMember['ends'][1]] = [endOf(start, 0), endOf(end, 1)];
     const braces = [...new Set((bracesOf.get(g.id) ?? []).map((t) => round(t, 1e4)))].sort(
       (a, b) => a - b,
@@ -697,8 +777,12 @@ export function model(
         sectionOverride.get(b.key) ?? (b.role === 'arm' ? p.cantileverSection : p.beamSection),
         `${b.role === 'arm' ? '내민 보' : '작은보'} ${b.key}`,
       ),
-      // A cantilever's tip is free: no release there (a released free end is a mechanism).
-      ends: b.role === 'arm' ? ['rigid', 'rigid'] : ['pinned', 'pinned'],
+      // A cantilever's tip is free: no release there (a released free end is a mechanism). A beam
+      // end continuous with a cantilever through the girder is rigid (the cantilever's back span).
+      ends:
+        b.role === 'arm'
+          ? ['rigid', 'rigid']
+          : [b.rigid?.[0] ? 'rigid' : 'pinned', b.rigid?.[1] ? 'rigid' : 'pinned'],
       ...(b.role === 'arm' ? { freeEnd: 'j' as const } : {}),
     });
     memberRail.set(b.key, b.rail);
@@ -727,7 +811,8 @@ export function model(
   // A beam cut short by the slab edge or a void (an arm with a cell) carries its cell strip like
   // a beam; only the edge cantilevers outside every cell get their own strip below.
   for (const b of pending)
-    if (b.cellId) beamsOfCell.set(b.cellId, [...(beamsOfCell.get(b.cellId) ?? []), b]);
+    if (b.cellId && !b.backspan)
+      beamsOfCell.set(b.cellId, [...(beamsOfCell.get(b.cellId) ?? []), b]);
   for (const cell of cells) {
     const ring = (cell.polygon ?? []).filter((q) => Array.isArray(q) && q.length >= 2) as Vec2[];
     if (ring.length < 3) continue;
@@ -778,8 +863,10 @@ export function model(
   for (const b of pending)
     if (b.role === 'arm' && !b.cellId) {
       const tip = b.rail[1];
-      addLoad(b.key, spacing, zoneAt(tip));
-      area += spacing * d2(b.rail[0], tip);
+      // Each cantilever carries its own strip (neighbours on the edge share the width between them).
+      const width = b.width ?? spacing;
+      addLoad(b.key, width, zoneAt(tip));
+      area += width * d2(b.rail[0], tip);
     }
 
   const lineLoads: FrameLineLoad[] = [];

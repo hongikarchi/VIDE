@@ -1,0 +1,455 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="description" content="VIDE 안의 AI와 터미널 Claude Code의 차이"><meta name="generator" content="tools/docs/build.mjs — generated from docs/research/RESEARCH-11-ai-parity.md; do not edit"><title>VIDE · VIDE 안의 AI와 터미널 Claude Code의 차이 — 원인·물결별 조치·A/B 비교 방법·스킬 이식표</title><style>
+:root{--ink:#292c2d;--muted:#626b6e;--line:#e1e3e1;--soft:#f5f5f1;--coral:#d97660;--paper:#fff;--font:"Pretendard","Noto Sans KR","Malgun Gothic",Arial,sans-serif}
+*{box-sizing:border-box}html{scroll-behavior:smooth;scroll-padding-top:92px}body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--font);letter-spacing:-.025em}a{color:inherit;text-underline-offset:4px}button,input,textarea,select{font:inherit;color:inherit}button{cursor:pointer;border:1px solid var(--line);border-radius:4px;background:var(--paper);padding:10px 15px;line-height:1.3}button:hover{background:var(--soft)}button:disabled{cursor:default;opacity:.6}button.primary{background:var(--ink);color:#fff;border-color:var(--ink)}button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible{outline:3px solid var(--coral);outline-offset:3px}textarea{resize:vertical}::selection{background:#f2d7ce}[hidden]{display:none!important}
+.skip{position:fixed;top:-80px;left:20px;z-index:100;background:white;padding:12px}.skip:focus{top:10px}
+.topbar{height:68px;position:sticky;top:0;z-index:30;border-bottom:1px solid var(--line);background:#fffffff7;display:flex;align-items:center;justify-content:space-between;gap:24px;padding:0 max(24px,calc((100vw - 1450px)/2))}.brand{text-decoration:none;display:flex;align-items:center;gap:15px;white-space:nowrap}.brand b{font-size:29px;letter-spacing:-.08em}.brand span{border-left:1px solid var(--line);padding-left:15px;font-size:11px;letter-spacing:.08em}.doc-tabs{display:flex;height:100%;gap:25px;align-items:stretch;min-width:0;overflow-x:auto}.doc-tab{flex-shrink:0}.doc-tab{display:flex;align-items:center;position:relative;text-decoration:none;font-size:13px;color:var(--muted);white-space:nowrap}.doc-tab.active{color:var(--ink);font-weight:650}.doc-tab.active:after{content:"";position:absolute;bottom:0;left:0;right:0;height:3px;background:var(--coral)}.top-actions{display:flex;gap:8px}.top-actions button{padding:8px 11px;font-size:12px;white-space:nowrap}
+.layout{max-width:1450px;margin:auto;padding:0 30px;display:grid;grid-template-columns:218px minmax(0,1fr);gap:55px}.toc-shell{align-self:start;position:sticky;top:99px;padding-top:15px;max-height:calc(100vh - 120px)}.eyebrow{font-size:10px;line-height:1.6;letter-spacing:.16em;font-weight:500;color:var(--muted)}.toc-title{display:flex;justify-content:space-between;align-items:center;margin-bottom:15px}.toc-title strong{font-size:12px;font-weight:500}.toc-title span{font-size:10px;color:var(--muted)}#toc-toggle{display:none}.toc-search{width:100%;padding:10px 12px;border:1px solid var(--line);background:var(--paper);border-radius:4px;font-size:12px}.toc-hint{font-size:10px;color:var(--muted);margin:8px 0 15px;line-height:1.6}.toc-links{max-height:calc(100vh - 323px);overflow-y:auto;padding:0 8px 8px 0}.toc-links a{display:block;padding:8px 10px;margin:2px 0;border-left:2px solid transparent;border-radius:0 3px 3px 0;text-decoration:none;font-size:12px;line-height:1.65;color:var(--muted);word-break:keep-all;overflow-wrap:anywhere}.toc-links a:hover{background:var(--soft)}.toc-links a.active{border-color:var(--coral);background:var(--soft);color:var(--ink)}.toc-next{border-top:1px solid var(--line);padding-top:13px;margin-top:14px;font-size:11px;color:var(--muted);line-height:1.7}.toc-next b{font-weight:500;color:var(--ink)}
+main{min-width:0;max-width:1040px;padding-bottom:70px}.doc-hero{padding:55px 0 32px;border-bottom:1px solid var(--line)}.hero-label{display:flex;justify-content:space-between;gap:20px;align-items:center}.doc-hero h1{font-size:clamp(32px,3.15vw,48px);line-height:1.22;letter-spacing:-.065em;font-weight:550;margin:20px 0 18px;max-width:900px;word-break:keep-all;overflow-wrap:anywhere}.doc-description{font-size:14px;color:var(--muted);line-height:1.8;margin:0}.pill{display:inline-block;font-size:10px;letter-spacing:.01em;padding:5px 9px;border:1px solid var(--line);border-radius:3px;white-space:nowrap}.hero-meta{margin-top:22px;font-size:12px;color:var(--muted);line-height:1.9}.hero-meta p{font-size:12px;line-height:1.9;margin:8px 0}.hero-meta strong{font-weight:600}.hero-meta blockquote{margin:25px 0 0;padding:20px 22px;background:var(--soft);border-left:3px solid var(--coral);color:var(--ink)}.hero-meta blockquote p{word-break:keep-all;overflow-wrap:anywhere;font-size:18px;line-height:1.8;letter-spacing:-.03em;margin:0}.doc-section{padding:44px 0;border-bottom:1px solid var(--line);scroll-margin-top:93px;min-width:0}.doc-section h2{font-size:28px;font-weight:550;letter-spacing:-.055em;line-height:1.4;margin:0 0 24px;word-break:keep-all;overflow-wrap:anywhere}.section-num{font-weight:400;color:var(--coral);margin-right:10px;font-size:.75em;letter-spacing:-.02em}.doc-section h3{font-size:19px;font-weight:600;line-height:1.5;margin:32px 0 14px;letter-spacing:-.04em}.doc-section h4{font-size:16px;line-height:1.5;margin:25px 0 12px}.doc-section p{font-size:15px;line-height:1.92;margin:13px 0;word-break:keep-all;overflow-wrap:anywhere}.doc-section strong{font-weight:650}.doc-section ul,.doc-section ol{padding-left:22px;font-size:15px;line-height:1.85}.doc-section li{margin:7px 0}.doc-section blockquote{border-left:3px solid var(--coral);background:var(--soft);margin:23px 0;padding:15px 22px}.doc-section blockquote p{margin:0;font-size:16px;line-height:1.85}.doc-section hr{border:0;border-top:1px solid var(--line);margin:28px 0}.doc-section code:not(pre code){font-family:Consolas,"Liberation Mono",monospace;font-size:.91em;background:var(--soft);padding:2px 5px;border-radius:3px;overflow-wrap:anywhere}
+.table-scroll{overflow-x:auto;overscroll-behavior-x:contain;margin:22px 0;border-top:1px solid var(--ink);border-bottom:1px solid var(--line);width:100%}table{border-collapse:collapse;width:100%;font-size:12.5px;line-height:1.75;table-layout:auto}th,td{padding:13px 14px;vertical-align:top;text-align:left;border-bottom:1px solid var(--line);word-break:keep-all;overflow-wrap:anywhere}th{background:var(--soft);font-weight:600;font-size:11.5px}tr:last-child td{border-bottom:0}td:first-child{font-weight:550;min-width:125px}td{min-width:145px}.table-scroll table:has(th:nth-child(2)){min-width:410px}.table-scroll table:has(th:nth-child(3)){min-width:585px}.table-scroll table:has(th:nth-child(4)){min-width:710px}.table-scroll table:has(th:nth-child(5)){min-width:840px}.code-frame{position:relative;margin:23px 0;border:1px solid var(--line);border-radius:4px;overflow:hidden;background:#f8f8f5}.code-frame pre{margin:0;padding:49px 20px 19px;overflow:auto;max-height:680px;font-family:Consolas,"Liberation Mono",monospace;font-size:12px;line-height:1.9;white-space:pre;letter-spacing:-.01em}.copy-code{position:absolute;top:9px;right:10px;font-size:10px;padding:5px 9px;background:#fff}.code-frame .code-label{position:absolute;left:18px;top:15px;font-size:9px;color:var(--muted);letter-spacing:.12em}.doc-footer{margin-top:30px;display:flex;justify-content:space-between;gap:24px;font-size:10px;color:var(--muted);line-height:1.8}
+.review-workspace{background:var(--soft);border:1px solid var(--line);padding:27px;margin:30px 0 5px;border-radius:4px}.workspace-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:15px}.workspace-heading h3{margin:6px 0 10px}.workspace-heading p{font-size:12px;margin:0 0 20px}.checks{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}.check-group{min-width:0;margin:0;padding:14px 15px;border:1px solid var(--line);background:#fff;border-radius:3px}.check-group legend{padding:0 7px;font-size:12px;font-weight:600}.check-line{display:flex;gap:9px;align-items:flex-start;font-size:12px;line-height:1.7;margin:9px 0;cursor:pointer}.check-line input{accent-color:var(--coral);margin:3px 0 0;flex:none;width:15px;height:15px}.stage-field{display:flex;align-items:center;gap:15px;font-size:12px;margin:26px 0 20px}.stage-field select{background:#fff;border:1px solid var(--line);padding:9px 12px;max-width:100%;font-size:12px;border-radius:3px}.note-grid{display:grid;grid-template-columns:1fr 1fr;gap:18px}.note-field{display:block;min-width:0}.note-field>span{display:block;margin-bottom:8px;font-size:12px}.note-field textarea{width:100%;min-height:96px;border:1px solid var(--line);border-radius:3px;padding:12px;background:#fff;font-size:13px;line-height:1.8}.note-field:last-child{grid-column:1/-1}.note-actions{display:flex;gap:9px;flex-wrap:wrap;margin-top:20px}.note-actions button{font-size:12px}.review-workspace p.save-status{font-size:11px;margin:15px 0 5px;color:var(--muted)}.review-workspace p.micro{font-size:10px;line-height:1.8;color:var(--muted);margin:0}.toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);background:var(--ink);color:white;padding:12px 18px;border-radius:4px;font-size:12px;z-index:60;max-width:90vw;box-shadow:0 5px 24px #0002;line-height:1.6}.empty-nav{font-size:12px;color:var(--muted);padding:15px 5px;line-height:1.7}
+@media(min-width:1600px){.layout{gap:65px}}
+@media(max-width:1100px){.layout{grid-template-columns:188px minmax(0,1fr);gap:30px;padding:0 24px}.topbar{gap:18px}.brand span{display:none}.doc-hero h1{font-size:38px}.doc-section p{font-size:14px}.doc-section h2{font-size:26px}.doc-tabs{gap:23px}.review-workspace{padding:22px}.checks{grid-template-columns:1fr}}
+@media(max-width:820px){html{scroll-padding-top:84px}.topbar{height:60px;padding:0 18px;gap:14px}.brand b{font-size:27px}.doc-tabs{gap:18px}.doc-tab{font-size:12px}.top-actions{gap:6px}.top-actions button{font-size:10px;padding:7px 9px}.layout{display:block;padding:0 22px}.toc-shell{position:relative;top:auto;max-height:none;padding-top:18px;border-bottom:1px solid var(--line)}.toc-title{margin:0;padding-bottom:14px}.toc-title strong{font-size:11px}.toc-title>span{display:none}#toc-toggle{display:block;font-size:11px;padding:7px 11px}.toc-body{display:none}.toc-shell.open .toc-body{display:block}.toc-links{max-height:240px;margin-bottom:12px}.toc-next{display:none}.doc-hero{padding:34px 0 27px}.doc-hero h1{font-size:35px;max-width:600px}.hero-label{align-items:flex-start;gap:10px;flex-wrap:wrap}.hero-label .pill{font-size:9px}.doc-section{padding:34px 0;scroll-margin-top:80px}.doc-section h2{font-size:25px;line-height:1.45}.doc-section p{font-size:14px;line-height:1.95}.hero-meta blockquote p{font-size:16px}.note-grid{grid-template-columns:1fr}.stage-field{flex-wrap:wrap}.note-field:last-child{grid-column:auto}.workspace-heading{display:block}.workspace-heading .pill{margin-bottom:17px}.doc-footer{flex-direction:column;gap:5px}}
+@media(max-width:480px){.topbar{gap:10px;padding:0 16px}.doc-tabs{gap:15px}.top-actions button#source-download{display:none}.brand b{font-size:25px}.doc-hero h1{font-size:31px;line-height:1.3}.doc-hero .eyebrow{font-size:9px}.doc-description{font-size:12px}.hero-meta{font-size:11px}.hero-meta p{font-size:11px;line-height:1.9}.hero-meta blockquote{padding:16px 16px}.hero-meta blockquote p{font-size:15px}.doc-section h2{font-size:23px}.doc-section h3{font-size:18px}.doc-section p{font-size:14px}.table-scroll{margin:20px 0}td,th{padding:11px 12px}.code-frame pre{font-size:11px;padding-left:15px}.review-workspace{padding:18px}.note-actions{gap:8px}.note-actions button{padding:9px 10px;font-size:11px}.check-line{font-size:12px}.top-actions button{padding:7px 9px}}
+@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}*{transition:none!important}}
+@media print{@page{margin:15mm}.topbar,.toc-shell,.skip,.copy-code,.toast,.review-workspace,.doc-footer{display:none!important}.layout{display:block;padding:0;max-width:none}main{max-width:none;padding:0}.doc-hero{padding:0 0 18px}.doc-hero h1{font-size:27px}.doc-section{padding:22px 0;break-inside:auto}.doc-section h2{font-size:21px;break-after:avoid}.doc-section h3{font-size:16px;break-after:avoid}.doc-section p{font-size:11px;line-height:1.75}.table-scroll{overflow:visible;break-inside:auto}table{min-width:0!important;font-size:9px;table-layout:fixed}td,th{min-width:0;font-size:9px;word-break:normal;padding:7px}tr{break-inside:avoid}.code-frame pre{white-space:pre-wrap;max-height:none;font-size:9px;padding:16px;overflow:visible;word-break:break-word}.code-label{display:none}.hero-meta blockquote p{font-size:14px}}
+
+/* ---- 작성자별 첨삭 표기 (AI.md §5) -------------------------------------
+   ins  = 추가·교체 제안 (초록)   del = 삭제·교체 대상 (빨강 취소선)
+   blockquote.review = 검토 코멘트 (파란 상자)   .review-appendix = 검토 요약 부록
+   body.review-original  → 원문만 (제안·코멘트 숨김)
+   body.review-accepted  → 인라인 제안 미리보기 (코멘트 대안은 적용하지 않음)
+------------------------------------------------------------------------- */
+ins{background:#dff3e4;color:#17512a;text-decoration:none;border-bottom:2px solid #4f9d63;padding:0 3px;border-radius:2px}
+del{background:#fbe4e0;color:#8f3324;text-decoration:line-through;text-decoration-color:#c9573f;text-decoration-thickness:1.5px;padding:0 3px;border-radius:2px}
+h1 ins,h1 del,h2 ins,h2 del,h3 ins,h3 del{border-bottom-width:3px}
+blockquote.review{margin:14px 0 24px;padding:12px 16px 12px 18px;border:0;border-left:4px solid #3b6fd6;background:#eef3fc;border-radius:0 6px 6px 0;font-size:14px;line-height:1.75;color:#24303f}
+blockquote.review p{margin:0}
+blockquote.review p+p{margin-top:9px;padding-top:9px;border-top:1px dashed #c3d2ef}
+.review-label{display:inline-flex;gap:6px;align-items:center;margin-right:8px;font-weight:600;font-size:11.5px;vertical-align:1px;white-space:nowrap}
+.review-agent{color:#3b6fd6;text-transform:uppercase;letter-spacing:.09em}
+.review-id{background:#3b6fd6;color:#fff;border-radius:3px;padding:1px 7px;font-weight:600}
+.review-sev{border-radius:3px;padding:1px 7px;font-weight:600}
+.review-sev[data-sev="높음"]{background:#c9573f;color:#fff}
+.review-sev[data-sev="중간"]{background:#f0c14b;color:#3a2a00}
+.review-sev[data-sev="낮음"]{background:#d9dfe2;color:#3d484d}
+.doc-section.review-appendix{margin-top:60px;padding-top:28px;border-top:3px solid #3b6fd6}
+.doc-section.review-appendix h2 .section-num{color:#3b6fd6}
+.review-pill{border-color:#3b6fd6;color:#3b6fd6;text-decoration:none}
+.review-pill:hover{background:#eef3fc}
+.review-legend{margin:12px 0 0;font-size:12px;color:var(--muted);line-height:1.8}
+.review-legend span{margin-right:12px;white-space:nowrap}
+.review-select{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);white-space:nowrap}
+.review-select select{padding:7px 9px;border:1px solid var(--line);border-radius:4px;background:var(--paper);font-size:12px}
+blockquote.review[data-review-agent="codex"]{border-left-color:#7250a0;background:#f4effa;color:#352b46}
+[data-review-agent="codex"] .review-agent{color:#7250a0}
+[data-review-agent="codex"] .review-id{background:#7250a0}
+.review-pill[data-review-agent="codex"]{border-color:#7250a0;color:#7250a0}
+.review-pill[data-review-agent="codex"]:hover{background:#f4effa}
+.review-appendix[data-review-agent="codex"]{border-top-color:#7250a0}
+.review-appendix[data-review-agent="codex"] h2 .section-num{color:#7250a0}
+.review-label[id]{scroll-margin-top:110px}
+.review-label[id]:target{outline:2px solid currentColor;outline-offset:4px}
+.review-legend p{margin:5px 0}
+.review-select select:disabled{opacity:.6}
+.top-actions{flex-wrap:wrap}
+[hidden]{display:none!important}
+@media(max-width:1100px){.topbar{height:auto;min-height:68px;flex-wrap:wrap;padding-top:8px;padding-bottom:8px;gap:8px 18px}.doc-tabs{height:34px;flex:1;justify-content:flex-end}.top-actions{flex-basis:100%;justify-content:flex-end}.review-select select{max-width:185px}}
+@media(min-width:821px) and (max-width:1100px){.toc-shell{top:135px;max-height:calc(100vh - 155px)}}
+.toc-links a[data-reviews]{display:flex;justify-content:space-between;gap:8px;align-items:center}
+.toc-links a[data-reviews]::after{content:attr(data-reviews);flex:none;min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:#3b6fd6;color:#fff;font-size:10px;line-height:18px;text-align:center}
+body.review-original ins,body.review-original blockquote.review,body.review-original .review-appendix,body.review-original .review-legend{display:none}
+body.review-original del{background:none;color:inherit;text-decoration:none;padding:0}
+body.review-original .toc-links a[data-reviews]::after{display:none}
+body.review-accepted del,body.review-accepted blockquote.review,body.review-accepted .review-appendix,body.review-accepted .review-legend{display:none}
+body.review-accepted ins{background:none;color:inherit;border:0;padding:0}
+body.review-accepted .toc-links a[data-reviews]::after{display:none}
+@media print{blockquote.review{break-inside:avoid;background:#eef3fc!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}ins,del{-webkit-print-color-adjust:exact;print-color-adjust:exact}.review-select{display:none}}
+</style></head><body>
+<!-- GENERATED FILE — source: docs/research/RESEARCH-11-ai-parity.md — run: npm --prefix tools/docs run build -->
+<a class="skip" href="#reading-main">본문으로 이동</a>
+<header class="topbar"><a class="brand" href="../../index.html" aria-label="VIDE 문서 모음"><b>V.</b><span>VIDE</span></a><nav class="doc-tabs" aria-label="문서 선택"><a class="doc-tab" href="../PRD.html">PRD</a><a class="doc-tab" href="../specs/README.html">SPEC</a><a class="doc-tab" href="../../Design.html">Design</a><a class="doc-tab" href="../architecture/ARCH-01-system.html">기술 설계</a><a class="doc-tab" href="../plans/PLAN.html">PLAN</a><a class="doc-tab" href="../../DEVELOPMENT_GUIDE.html">개발 가이드</a><a class="doc-tab" href="../../AI.html">AI 규약</a></nav><div class="top-actions"><button id="source-download" title="현재 문서의 Markdown 원문 저장">원문 ↓</button><button id="print-doc" title="현재 문서 인쇄">인쇄</button></div></header>
+<div class="layout"><aside class="toc-shell" id="toc-shell" aria-label="현재 문서의 목차"><div class="toc-title"><strong>CONTENTS</strong><span id="toc-count"></span><button id="toc-toggle" aria-expanded="false" aria-controls="toc-body">목차 열기</button></div><div class="toc-body" id="toc-body"><input class="toc-search" id="toc-search" type="search" placeholder="장 제목으로 찾기" aria-label="현재 문서 목차 검색"><p class="toc-hint" id="nav-hint" role="status">장 제목으로 찾아갑니다.</p><nav class="toc-links" id="toc-links" aria-label="본문 장 이동"></nav><div class="toc-next">다음 작성할 문서<br><b>다음 작업 · PLAN §6.5</b><br>현재 단계와 작업별 계획을 확인한 뒤 해당 범위에서 재개</div></div></aside><main id="reading-main" tabindex="-1"><article id="research-11-ai-parity" class="document"><header class="doc-hero"><div class="hero-label"><span class="eyebrow">RESEARCH</span><span><span class="pill">DRAFT · v0.1</span><span class="pill">7 CHAPTERS</span></span></div><h1 tabindex="-1">VIDE 안의 AI와 터미널 Claude Code의 차이</h1><div class="hero-meta">
+</div></header><section class="doc-section" id="research-11-ai-parity-section-0"><h2><span aria-hidden="true" class="section-num">00 /</span> 요약</h2>
+<p>사용자가 2026-09-30에 지적했다. 같은 모델인데도 VIDE 안의 AI가 터미널 Claude Code보다 모델링을 못한다. 원인은 모델이 아니라 AI를 둘러싼 조건의 차이다. 다섯 가지를 확인했다: ① 기본 시스템 프롬프트를 한 줄 지시로 <strong>바꿔 끼웠다</strong>, ② AI가 자기가 만든 것을 <strong>보지 못한다</strong>, ③ 도구 예산과 읽기 범위가 좁다, ④ 이전 대화의 글만 넘어갔다, ⑤ 되물을 수 없었다. ④·⑤는 2~4차 물결에서 고쳤다. ①~③은 5차 물결에서 고친다. 방법은 기본 프롬프트를 유지하고 VIDE 지시 묶음을 <strong>덧붙이는 것</strong>, 캡처·측정 도구, 대화 턴 상한 상향이다. 사용자의 이전 Rhino 스킬 9종(RESEARCH-04 출처 S-09)의 노하우는 이 묶음 안으로 옮겼다(§5). 두 환경이 같은 요청에서 얼마나 차이 나는지는 Rhino가 비어 있을 때 §4의 방법으로 잰다. 이 문서는 조사·방법 문서이며, 결정은 ARCH-01 §2와 PLAN-24의 해당 작업이 소유한다.</p>
+</section><section class="doc-section" id="research-11-ai-parity-section-1"><h2><span aria-hidden="true" class="section-num">01 /</span> 터미널과 VIDE의 차이 [사실]</h2>
+<p>4차 물결(<code>c972e23</code>)까지의 코드와 <a href="RESEARCH-10-vide-restructure.html">RESEARCH-10</a> §1.1을 기준으로 적는다.</p>
+<div aria-label="조사 표 1" class="table-scroll" role="region" tabindex="0"><table>
+<thead>
+<tr>
+<th>#</th>
+<th>항목</th>
+<th>터미널 Claude Code(사용자 환경)</th>
+<th>VIDE 안의 AI(4차까지)</th>
+<th>근거</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>시스템 프롬프트</td>
+<td>기본 시스템 프롬프트, 저장소 <code>CLAUDE.md</code>, 사용자 메모리</td>
+<td><code>--system-prompt</code>로 <strong>교체</strong>한다. 도구 없는 턴은 <code>noToolsInstruction</code>, 호스트 턴은 <code>agentInstruction</code>, 세션은 <code>neutralInstruction</code>이며 각각 한 문단이다</td>
+<td><code>src/ai/claude-cli.ts</code> <code>cliArguments()</code>·<code>sessionArguments()</code>, <code>src/ai/agent-connection.ts</code></td>
+</tr>
+<tr>
+<td>2</td>
+<td>skill·plugin·MCP</td>
+<td>전역 설정의 <code>rhino</code> MCP, 플러그인, <code>.claude/skills/*</code>(S-09 9종)</td>
+<td>모두 끈다: <code>--setting-sources ''</code>, <code>--strict-mcp-config</code>, <code>--disable-slash-commands</code>, <code>--safe-mode</code> 또는 <code>--restricted</code>. 허용 도구는 <code>mcp__vide__*</code>뿐이다</td>
+<td>RESEARCH-10 §1.1, §1.2 4행</td>
+</tr>
+<tr>
+<td>3</td>
+<td>보기</td>
+<td><code>capture_viewport</code>로 화면 이미지를 보고, <code>measure_objects</code>·<code>analyze_objects</code>로 잰다</td>
+<td>이미지가 없다. <code>query</code>의 쪽 단위 목록과 <code>execute</code>의 반환값만 본다</td>
+<td><code>src/server/agent-tools.ts</code> <code>definitions</code></td>
+</tr>
+<tr>
+<td>4</td>
+<td>도구 예산</td>
+<td>사실상 없다(사용자가 끊을 때까지)</td>
+<td>도구 30회·호스트 명령 12회·180초. 연계 대상이 있으면 60회</td>
+<td><code>src/contracts/execution-limits.ts</code>(4차)</td>
+</tr>
+<tr>
+<td>5</td>
+<td>읽기 범위</td>
+<td>문서 전체를 자유롭게 조회한다</td>
+<td><code>query</code>는 한 쪽 최대 100개. 다음 쪽은 <code>nextOffset</code> + <code>expectedRevision</code></td>
+<td><code>agent-tools.ts</code> <code>page</code>, <code>src/server/query-page.ts</code></td>
+</tr>
+<tr>
+<td>6</td>
+<td>대화 이어짐</td>
+<td>한 세션 안의 코드·오류·질문이 모두 남는다</td>
+<td>이전 요청 6개의 요청문(2,000자)과 최종 답(6,000자)만 다시 보냈다</td>
+<td>RESEARCH-10 §1.1, <code>src/ai/context-selector.ts</code></td>
+</tr>
+<tr>
+<td>7</td>
+<td>되묻기</td>
+<td><code>AskUserQuestion</code></td>
+<td><code>--permission-mode dontAsk</code>라 CLI 질문 도구를 쓸 수 없고, 최종 글로만 물을 수 있었다</td>
+<td>RESEARCH-10 §1.3</td>
+</tr>
+<tr>
+<td>8</td>
+<td>코드 실행</td>
+<td>MCP로 RhinoScript Python·C#·Rhino 명령(<code>_SelDup</code>, <code>_-Purge</code>, <code>_-Export</code>)을 실행한다</td>
+<td>C# 메서드 본문 하나(<code>Run(RhinoDoc doc)</code>)만 실행한다. 명령·<code>RhinoApp</code>·파일·UI·리플렉션은 <code>CodePolicy</code>가 거절한다. ZWCAD는 <code>Run(Database db, Transaction tr)</code>이다</td>
+<td><code>hosts/rhino/worker/CodePolicy.cs</code>, <code>WorkerExecutor.cs</code>, <code>hosts/zwcad/worker/SdkCompiler.cs</code></td>
+</tr>
+<tr>
+<td>9</td>
+<td>쓰기 대상</td>
+<td>사용자가 열어 둔 Rhino 문서에 바로 쓴다</td>
+<td>작업 사본에 쓰고, 후보를 만든 뒤, 사람이 반영한다(ADR-014). 작업 사본은 미터 단위로 고정하고, <code>vide-id</code>가 겹치면 실행 전체가 실패한다</td>
+<td><code>WorkerExecutor.cs</code>, <code>WorkerScene.Validate</code></td>
+</tr>
+</tbody>
+</table></div>
+<p>8·9행은 의도한 차이다(§3). 1~7행이 품질 차이의 후보다.</p>
+</section><section class="doc-section" id="research-11-ai-parity-section-2"><h2><span aria-hidden="true" class="section-num">02 /</span> 2~5차 물결에서 바뀐 것</h2>
+<div aria-label="조사 표 2" class="table-scroll" role="region" tabindex="0"><table>
+<thead>
+<tr>
+<th>물결</th>
+<th>커밋</th>
+<th>바뀐 것</th>
+<th>위 표의 행</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>2차</td>
+<td><code>c67bf57</code></td>
+<td>대화 세션 서버(T-061): Claude는 <code>--session-id</code>/<code>--resume</code>으로 이어 실행하고 매 턴 격리 인자를 다시 넘긴다. 이번 턴 규칙은 <code>turn-rules</code> 항목으로 보낸다</td>
+<td>6</td>
+</tr>
+<tr>
+<td>3차</td>
+<td><code>6b70f34</code></td>
+<td>대화 칩, 구조화 턴 출력과 질문 카드(T-062, 턴당 최대 3개), 대화용 jig 도구</td>
+<td>6, 7</td>
+</tr>
+<tr>
+<td>4차</td>
+<td><code>c972e23</code></td>
+<td>Codex 세션 이어 실행(SPIKE ④ 재시험 통과), 계정 한도 인계, 대화로 jig 만들기(초안 폴더, 600초·100회), 설치본에서 도구 연결(<code>origin</code>)</td>
+<td>6, 7</td>
+</tr>
+<tr>
+<td>5차</td>
+<td>작업 중(커밋 전)</td>
+<td>① 기본 시스템 프롬프트를 유지하고 VIDE 지시 묶음(<code>src/ai/instructions/</code>: 공통·모델링·자료·만들기 + 프로젝트 추가분)을 덧붙인다. Claude는 <code>--append-system-prompt</code>, Codex는 <code>developer_instructions</code>를 쓴다(ARCH-01 §2). ② S-09 스킬 노하우를 <code>modeling-rhino.md</code>·<code>modeling-cad.md</code>로 옮긴다(§5). ③ 대화 턴 상한을 도구 100회·호스트 명령 48회·600초로 올린다(<code>conversationTurnLimits</code>). 단발 요청은 30회·12회·180초를 유지한다. ④ <code>query</code> 쪽 넘김 커서와 이번 턴 값(targetRef·열린 jig·연결 파일)을 규칙에 싣는다. ⑤ 보기 캡처·측정 도구를 추가한다(도구 이름과 입출력은 ARCH-01 §3)</td>
+<td>1, 2, 3, 4, 5</td>
+</tr>
+</tbody>
+</table></div>
+<p>5차 행은 이 문서를 쓰는 시점에 진행 중인 작업이다. 완료 여부와 증거는 <a href="../plans/PLAN-24-ai-conversations.html">PLAN-24</a>의 「지침 묶음·AI 동등성」 작업과 현황에서 확인한다.</p>
+</section><section class="doc-section" id="research-11-ai-parity-section-3"><h2><span aria-hidden="true" class="section-num">03 /</span> 남겨 두는 차이 [결정 반영]</h2>
+<ul>
+<li><strong>격리는 유지한다.</strong> 공급자 skill·plugin·전역 MCP·개인 설정은 계속 끈다. 켜면 AI가 사용자가 열어 둔 Rhino에 직접 써서 작업 사본·후보·반영을 우회한다(RESEARCH-10 §1.2 4행). 필요한 skill은 내용을 묶음 안으로 옮긴다.</li>
+<li><strong>쓰기 경로는 작업 사본 → 후보 → 반영이다(ADR-014).</strong> 터미널처럼 열린 문서에 바로 쓰지 않는다. ZWCAD 직접 편집은 기존 규칙(SPEC-02)을 그대로 따른다.</li>
+<li><strong>Rhino 명령은 쓰지 않는다.</strong> <code>_-Purge</code>·<code>_-Export</code>·<code>_SelDup</code>이 맡던 일은 RhinoCommon으로 대신하거나 보고만 한다. 내보내기 실행은 사용자의 동작이다.</li>
+<li>모델·effort 선택은 Jev가 정한 대로 둔다(RESEARCH-10 §8.3).</li>
+</ul>
+</section><section class="doc-section" id="research-11-ai-parity-section-4"><h2><span aria-hidden="true" class="section-num">04 /</span> A/B 비교 방법(Rhino가 비어 있을 때 실행)</h2>
+<p><strong>목적.</strong> 5차 물결 뒤 VIDE 모델링 대화(B)가 터미널 Claude Code(A)와 같은 요청에서 얼마나 차이 나는지 잰다. 결과는 <code>docs/tdd/VERIFY-YYYY-MM-DD-ai-parity.md</code>에 남긴다.</p>
+<p><strong>조건.</strong></p>
+<ul>
+<li>A: 사용자의 터미널 Claude Code. 사용자 환경의 <code>rhino</code> MCP와 S-09 스킬을 켠다.</li>
+<li>B: VIDE 모델링 대화. 5차 지시 묶음, 캡처·측정 도구, 대화 턴 상한을 쓴다. 개발 엔진(<code>npm run dev</code>)에서 돌리고 설치본(47821)은 쓰지 않는다.</li>
+<li>같은 모델·effort, 같은 계정 종류를 쓰고, 매번 새 세션으로 시작한다.</li>
+<li>문서는 합성 <code>.3dm</code> 하나를 <code>.vide/</code> 아래에 두고, 실행마다 원본에서 새로 복사한다. 사용자의 원본 파일이나 실제 프로젝트 자료는 쓰지 않는다. A는 열린 문서에 바로 쓰므로 A도 이 사본에서 돌린다.</li>
+<li>에이전트는 Rhino를 띄우지 않는다. 사용자가 Rhino를 쓰지 않는 시간에 사용자가 실행하거나 실행을 허락한다(AI.md §8).</li>
+<li>요청마다 A·B를 두 번씩 돌리고 순서를 번갈아 바꾼다(ABBA).</li>
+</ul>
+<p><strong>요청 5개(합성, 정답을 미리 만든다).</strong></p>
+<div aria-label="조사 표 3" class="table-scroll" role="region" tabindex="0"><table>
+<thead>
+<tr>
+<th>#</th>
+<th>요청(사용자 말)</th>
+<th>합성 문서에 심는 것</th>
+<th>정답 판정</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>R1</td>
+<td>&quot;겹친 선 정리해 줘&quot;</td>
+<td>같은 경로의 Line·Nurbs 쌍 20개, 부분 겹침 10개, 안에 들어간 조각 10개, 끝만 닿는 선 10개</td>
+<td>남는 선의 수와 덮인 길이가 정답과 같고 구멍이 없음</td>
+</tr>
+<tr>
+<td>R2</td>
+<td>&quot;터진 모서리 붙이고 짧은 선 합쳐 줘&quot;</td>
+<td>끝점 간격 2~15 mm인 모서리 12개(문서 허용 오차 1 mm), 짧은 조각 8개, 떨어진 짧은 선 3개</td>
+<td>닫힌 모서리 12개, 떨어진 선은 보고만 함</td>
+</tr>
+<tr>
+<td>R3</td>
+<td>&quot;이 대지 경계 안에 4층 매스, 층고 3.6 m, 경계에서 2 m 띄워서&quot;</td>
+<td>닫힌 대지 경계선 하나</td>
+<td>닫힌 솔리드, 높이 14.4 m, 경계와의 거리 ≥ 2 m(허용 1 mm)</td>
+</tr>
+<tr>
+<td>R4</td>
+<td>&quot;그리드 교차점마다 600각 기둥, 층고 3.6 m&quot;</td>
+<td>X 6줄 × Y 4줄 그리드 선(8.4 m 간격)</td>
+<td>기둥 24개, 단면 0.6 × 0.6 m, 높이 3.6 m, 기둥 레이어</td>
+</tr>
+<tr>
+<td>R5</td>
+<td>&quot;열린 폴리서피스 찾아서 닫을 수 있는 건 닫아 줘&quot;</td>
+<td>닫힌 솔리드 6개, 터진 솔리드 4개, 일부러 열어 둔 면 3개</td>
+<td>4개 닫힘, 3개는 보고만 함, 다른 객체는 변경 없음</td>
+</tr>
+</tbody>
+</table></div>
+<p><strong>측정값.</strong></p>
+<div aria-label="조사 표 4" class="table-scroll" role="region" tabindex="0"><table>
+<thead>
+<tr>
+<th>측정</th>
+<th>정의</th>
+<th>수집</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>성공</td>
+<td>정답 판정 항목을 모두 통과(통과/실패, 항목별 기록)</td>
+<td>합성 문서를 스크립트로 판정. B는 반영 전의 후보를 판정</td>
+</tr>
+<tr>
+<td>수정 요청 수</td>
+<td>정답에 이르기까지 사용자가 더 보낸 말의 수(최대 3번, 넘으면 실패)</td>
+<td>실행 기록</td>
+</tr>
+<tr>
+<td>소요 시간</td>
+<td>첫 전송부터 마지막 답(B는 후보 준비)까지의 벽시계 시간</td>
+<td>A는 터미널 기록, B는 요청 시작·끝 시각</td>
+</tr>
+<tr>
+<td>토큰</td>
+<td>입력·캐시 읽기·캐시 생성·출력 토큰의 합과 내역</td>
+<td>A는 세션 기록의 <code>usage</code>, B는 <code>stream-json</code> 사용량(T-059 계측)</td>
+</tr>
+<tr>
+<td>도구 호출</td>
+<td>도구 호출 수와 실패 수</td>
+<td>두 환경의 도구 기록</td>
+</tr>
+</tbody>
+</table></div>
+<p><strong>합격 기준(제안).</strong> B의 성공 수가 A 이상이다. 수정 요청 수의 중앙값이 A + 1 이하이다. 소요 시간의 중앙값이 A의 1.5배 이하이다. 어긋나는 요청이 있으면 표 1의 어느 행이 원인인지 적고 묶음이나 도구를 고친 뒤 그 요청만 다시 잰다.</p>
+</section><section class="doc-section" id="research-11-ai-parity-section-5"><h2><span aria-hidden="true" class="section-num">05 /</span> 스킬 이식 대응표(S-09 → 지시 묶음)</h2>
+<p>원본은 사용자 PC의 Rhino 스킬 폴더(<code>.claude/skills/*/SKILL.md</code>와 스크립트, RESEARCH-04 S-09)이다. 읽기만 했고, 프로젝트 파일 이름·경로·모델 이름은 옮기지 않았다. 옮긴 것은 RhinoCommon 사용법과 판정 규칙이다. MCP 로더(<code>exec(open(...))</code>), <code>sc.sticky</code>, <code>AskUserQuestion</code>, SaveAs 사본 묻기는 VIDE의 <code>execute</code> 두 단계(진단 → 적용), 질문 카드, 작업 사본으로 바꿨다.</p>
+<div aria-label="조사 표 5" class="table-scroll" role="region" tabindex="0"><table>
+<thead>
+<tr>
+<th>S-09 스킬</th>
+<th>옮긴 노하우</th>
+<th>묶음 위치</th>
+<th>옮기지 않은 것(이유)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>clean-similar-curves</td>
+<td>타입이 달라도 찾는 중복 판정(표본점 + <code>ClosestPoint</code>), <code>GetDistancesBetweenCurves</code> 금지(부분 겹침 → 구멍), 1차원 구간 분할 규칙, 덮개 조건, 곡선 부분 겹침은 보고만, 좌표 표류 진단. <code>tjunction_report</code>의 T자 판정</td>
+<td><code>modeling-rhino.md</code> 「Duplicate curves」「T-junctions」</td>
+<td>IronPython 튜플 처리(C#에서는 해당 없음)</td>
+</tr>
+<tr>
+<td>clean-similar-objects</td>
+<td>싼 지문(위상 수 + bbox 크기·중심), Extrusion은 <code>ToBrep()</code>, 블록은 정의 + 변환, 같은 자리와 다른 자리의 구분, 질량 계산은 후보에만</td>
+<td><code>modeling-rhino.md</code> 「Duplicate solids, meshes and blocks」</td>
+<td>잠김·숨김 레이어 선택 제외(작업 사본에는 선택이 없음)</td>
+</tr>
+<tr>
+<td>clean-geometry</td>
+<td>Simplify(각도는 라디안) → Tidy(잔차·제어점 조건) → Join(짧은 선이 든 묶음만) → Gap(Fillet 반지름 0) 순서, 거의 직교는 보고만, 새 객체는 가장 긴 원래 선의 속성을 이어받음(<code>vide-id</code> 제외)</td>
+<td><code>modeling-rhino.md</code> 「Curve cleanup」</td>
+<td>매개변수 기본값 표(묶음 크기 제한, 규칙만 남김)</td>
+</tr>
+<tr>
+<td>clean-geometry-solids</td>
+<td><code>IsSolid</code>, 떨어진 모서리 수·길이, 복제본으로 <code>JoinNakedEdges</code> 시험, 직각 프리즘만 Extrusion 변환, 부피·중심 검증, 400면 초과 건너뜀</td>
+<td><code>modeling-rhino.md</code> 「Solids」</td>
+<td>—</td>
+</tr>
+<tr>
+<td>clean-rhino</td>
+<td>쓰지 않는 블록 정의·빈 그룹·빈 레이어 정리(깊은 레이어 먼저, 현재 레이어·블록 정의 레이어 제외), 정리 뒤 재질, 흰 무광 PBR은 직접 생성(<code>CreateBasicMaterial</code> 금지)</td>
+<td><code>modeling-rhino.md</code> 「Document housekeeping」</td>
+<td><code>_-Purge</code> 명령(명령 금지 → 보고만), 전체 파일 파이프라인 순서(요청마다 필요한 단계만)</td>
+</tr>
+<tr>
+<td>export-common</td>
+<td>형식별 제거 분류 순서(<code>AnnotationBase</code>를 <code>Curve</code>보다 먼저)</td>
+<td><code>modeling-rhino.md</code> 「Preparing exports」</td>
+<td>—</td>
+</tr>
+<tr>
+<td>export-cad</td>
+<td>z=0 평탄화(<code>PlanarProjection</code>) + <code>ToArcsAndLines</code>(null이면 평탄화한 곡선 유지)</td>
+<td><code>modeling-rhino.md</code> 「Preparing exports」, <code>modeling-cad.md</code> 「Drawing conventions」</td>
+<td><code>_-Export</code> 방식과 <code>.ini</code> 설정(내보내기는 사용자 동작)</td>
+</tr>
+<tr>
+<td>export-sketchup</td>
+<td>NURBS·솔리드 없음, 열린 면은 낱장 면, 객체 하나 = 블록 하나 = 컴포넌트 하나</td>
+<td><code>modeling-rhino.md</code> 「Preparing exports」</td>
+<td>SKP 설정 대화상자(명령이 없어 해당 없음)</td>
+</tr>
+<tr>
+<td>export-d5</td>
+<td>매핑 없음 판정(<code>GetTextureChannels</code>), 예시 객체 매핑 복사 또는 원점 공용 박스 매핑, PBR 기본색</td>
+<td><code>modeling-rhino.md</code> 「Preparing exports」</td>
+<td>D5 Sync 수동 클릭(VIDE 밖)</td>
+</tr>
+</tbody>
+</table></div>
+<p>ZWCAD 쪽(<code>modeling-cad.md</code>)은 스킬에서 온 내용이 아니다. <code>hosts/zwcad/</code>의 코드(<code>SdkCompiler.cs</code>, <code>DwgReader.cs</code>, <code>DwgEditor.cs</code>, <code>EditorApply.cs</code>, <code>connection/AttachedEdit.cs</code>, <code>edit-contract.ts</code>)에서 실행 형식, 단위(<code>INSUNITS</code>), VIDE가 읽고 쓰는 엔티티, 반영 때 레이어·선 종류 조건을 추렸다.</p>
+</section><section class="doc-section" id="research-11-ai-parity-section-6"><h2><span aria-hidden="true" class="section-num">06 /</span> 한계와 남은 질문</h2>
+<ul>
+<li>§4의 A/B는 아직 돌리지 않았다. Rhino가 사용 중이라 에이전트가 띄울 수 없다.</li>
+<li>옮긴 규칙은 S-09에서 실제 Rhino로 검증된 것이다. 하지만 VIDE의 <code>CodePolicy</code> 아래에서 모두 돌아가는지는 확인하지 않았다(예: <code>Rhino.Render</code> 재질·매핑 API는 금지 목록에 없지만 실행 확인 전이다). A/B의 R1·R5와 별도 합성 실행으로 확인한다.</li>
+<li>묶음 크기: 모델링 모드에는 공통 + <code>modeling.md</code> + 두 노하우 파일(약 11 KB) + 프로젝트 추가분(≤ 8 KB)이 붙는다. 크기 상한과 자르는 순서는 <code>src/ai/instructions/index.ts</code>가 정한다.</li>
+<li>캡처·측정 도구는 <code>capture_view</code>·<code>measure</code>(Rhino 대상 모델링 턴, 입출력은 ARCH-01 AI 도구 표)로 정해졌고 <code>modeling.md</code>의 확인 습관이 이 이름을 쓴다. ZWCAD 대상에는 아직 없다.</li>
+</ul>
+</section><footer class="doc-footer"><span>VIDE / PLANNING DOCUMENTS</span><span>문서 열람용 · 실제 CAD/BIM 지원은 구현·검증 후 선언</span></footer></article></main></div>
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+<script id="source-data" type="application/json">{"research-11-ai-parity":{"label":"VIDE 안의 AI와 터미널 Claude Code의 차이 — 원인·물결별 조치·A/B 비교 방법·스킬 이식표","file":"RESEARCH-11-ai-parity.md","markdown":"---\nid: RESEARCH-11\ntitle: VIDE 안의 AI와 터미널 Claude Code의 차이 — 원인·물결별 조치·A/B 비교 방법·스킬 이식표\nstatus: draft\nversion: 0.1\nupdated: 2026-09-30\nowner: agent:claude\nrelated: [FR-25, SPEC-02, ARCH-01, ADR-014, ADR-021, PLAN-24, RESEARCH-10, RESEARCH-04]\n---\n\n# VIDE 안의 AI와 터미널 Claude Code의 차이\n\n## 0. 요약\n\n사용자가 2026-09-30에 지적했다. 같은 모델인데도 VIDE 안의 AI가 터미널 Claude Code보다 모델링을 못한다. 원인은 모델이 아니라 AI를 둘러싼 조건의 차이다. 다섯 가지를 확인했다: ① 기본 시스템 프롬프트를 한 줄 지시로 **바꿔 끼웠다**, ② AI가 자기가 만든 것을 **보지 못한다**, ③ 도구 예산과 읽기 범위가 좁다, ④ 이전 대화의 글만 넘어갔다, ⑤ 되물을 수 없었다. ④·⑤는 2~4차 물결에서 고쳤다. ①~③은 5차 물결에서 고친다. 방법은 기본 프롬프트를 유지하고 VIDE 지시 묶음을 **덧붙이는 것**, 캡처·측정 도구, 대화 턴 상한 상향이다. 사용자의 이전 Rhino 스킬 9종(RESEARCH-04 출처 S-09)의 노하우는 이 묶음 안으로 옮겼다(§5). 두 환경이 같은 요청에서 얼마나 차이 나는지는 Rhino가 비어 있을 때 §4의 방법으로 잰다. 이 문서는 조사·방법 문서이며, 결정은 ARCH-01 §2와 PLAN-24의 해당 작업이 소유한다.\n\n## 1. 터미널과 VIDE의 차이 [사실]\n\n4차 물결(`c972e23`)까지의 코드와 [RESEARCH-10](RESEARCH-10-vide-restructure.md) §1.1을 기준으로 적는다.\n\n| # | 항목 | 터미널 Claude Code(사용자 환경) | VIDE 안의 AI(4차까지) | 근거 |\n|---|---|---|---|---|\n| 1 | 시스템 프롬프트 | 기본 시스템 프롬프트, 저장소 `CLAUDE.md`, 사용자 메모리 | `--system-prompt`로 **교체**한다. 도구 없는 턴은 `noToolsInstruction`, 호스트 턴은 `agentInstruction`, 세션은 `neutralInstruction`이며 각각 한 문단이다 | `src/ai/claude-cli.ts` `cliArguments()`·`sessionArguments()`, `src/ai/agent-connection.ts` |\n| 2 | skill·plugin·MCP | 전역 설정의 `rhino` MCP, 플러그인, `.claude/skills/*`(S-09 9종) | 모두 끈다: `--setting-sources ''`, `--strict-mcp-config`, `--disable-slash-commands`, `--safe-mode` 또는 `--restricted`. 허용 도구는 `mcp__vide__*`뿐이다 | RESEARCH-10 §1.1, §1.2 4행 |\n| 3 | 보기 | `capture_viewport`로 화면 이미지를 보고, `measure_objects`·`analyze_objects`로 잰다 | 이미지가 없다. `query`의 쪽 단위 목록과 `execute`의 반환값만 본다 | `src/server/agent-tools.ts` `definitions` |\n| 4 | 도구 예산 | 사실상 없다(사용자가 끊을 때까지) | 도구 30회·호스트 명령 12회·180초. 연계 대상이 있으면 60회 | `src/contracts/execution-limits.ts`(4차) |\n| 5 | 읽기 범위 | 문서 전체를 자유롭게 조회한다 | `query`는 한 쪽 최대 100개. 다음 쪽은 `nextOffset` + `expectedRevision` | `agent-tools.ts` `page`, `src/server/query-page.ts` |\n| 6 | 대화 이어짐 | 한 세션 안의 코드·오류·질문이 모두 남는다 | 이전 요청 6개의 요청문(2,000자)과 최종 답(6,000자)만 다시 보냈다 | RESEARCH-10 §1.1, `src/ai/context-selector.ts` |\n| 7 | 되묻기 | `AskUserQuestion` | `--permission-mode dontAsk`라 CLI 질문 도구를 쓸 수 없고, 최종 글로만 물을 수 있었다 | RESEARCH-10 §1.3 |\n| 8 | 코드 실행 | MCP로 RhinoScript Python·C#·Rhino 명령(`_SelDup`, `_-Purge`, `_-Export`)을 실행한다 | C# 메서드 본문 하나(`Run(RhinoDoc doc)`)만 실행한다. 명령·`RhinoApp`·파일·UI·리플렉션은 `CodePolicy`가 거절한다. ZWCAD는 `Run(Database db, Transaction tr)`이다 | `hosts/rhino/worker/CodePolicy.cs`, `WorkerExecutor.cs`, `hosts/zwcad/worker/SdkCompiler.cs` |\n| 9 | 쓰기 대상 | 사용자가 열어 둔 Rhino 문서에 바로 쓴다 | 작업 사본에 쓰고, 후보를 만든 뒤, 사람이 반영한다(ADR-014). 작업 사본은 미터 단위로 고정하고, `vide-id`가 겹치면 실행 전체가 실패한다 | `WorkerExecutor.cs`, `WorkerScene.Validate` |\n\n8·9행은 의도한 차이다(§3). 1~7행이 품질 차이의 후보다.\n\n## 2. 2~5차 물결에서 바뀐 것\n\n| 물결 | 커밋 | 바뀐 것 | 위 표의 행 |\n|---|---|---|---|\n| 2차 | `c67bf57` | 대화 세션 서버(T-061): Claude는 `--session-id`/`--resume`으로 이어 실행하고 매 턴 격리 인자를 다시 넘긴다. 이번 턴 규칙은 `turn-rules` 항목으로 보낸다 | 6 |\n| 3차 | `6b70f34` | 대화 칩, 구조화 턴 출력과 질문 카드(T-062, 턴당 최대 3개), 대화용 jig 도구 | 6, 7 |\n| 4차 | `c972e23` | Codex 세션 이어 실행(SPIKE ④ 재시험 통과), 계정 한도 인계, 대화로 jig 만들기(초안 폴더, 600초·100회), 설치본에서 도구 연결(`origin`) | 6, 7 |\n| 5차 | 작업 중(커밋 전) | ① 기본 시스템 프롬프트를 유지하고 VIDE 지시 묶음(`src/ai/instructions/`: 공통·모델링·자료·만들기 + 프로젝트 추가분)을 덧붙인다. Claude는 `--append-system-prompt`, Codex는 `developer_instructions`를 쓴다(ARCH-01 §2). ② S-09 스킬 노하우를 `modeling-rhino.md`·`modeling-cad.md`로 옮긴다(§5). ③ 대화 턴 상한을 도구 100회·호스트 명령 48회·600초로 올린다(`conversationTurnLimits`). 단발 요청은 30회·12회·180초를 유지한다. ④ `query` 쪽 넘김 커서와 이번 턴 값(targetRef·열린 jig·연결 파일)을 규칙에 싣는다. ⑤ 보기 캡처·측정 도구를 추가한다(도구 이름과 입출력은 ARCH-01 §3) | 1, 2, 3, 4, 5 |\n\n5차 행은 이 문서를 쓰는 시점에 진행 중인 작업이다. 완료 여부와 증거는 [PLAN-24](../plans/PLAN-24-ai-conversations.md)의 「지침 묶음·AI 동등성」 작업과 현황에서 확인한다.\n\n## 3. 남겨 두는 차이 [결정 반영]\n\n- **격리는 유지한다.** 공급자 skill·plugin·전역 MCP·개인 설정은 계속 끈다. 켜면 AI가 사용자가 열어 둔 Rhino에 직접 써서 작업 사본·후보·반영을 우회한다(RESEARCH-10 §1.2 4행). 필요한 skill은 내용을 묶음 안으로 옮긴다.\n- **쓰기 경로는 작업 사본 → 후보 → 반영이다(ADR-014).** 터미널처럼 열린 문서에 바로 쓰지 않는다. ZWCAD 직접 편집은 기존 규칙(SPEC-02)을 그대로 따른다.\n- **Rhino 명령은 쓰지 않는다.** `_-Purge`·`_-Export`·`_SelDup`이 맡던 일은 RhinoCommon으로 대신하거나 보고만 한다. 내보내기 실행은 사용자의 동작이다.\n- 모델·effort 선택은 Jev가 정한 대로 둔다(RESEARCH-10 §8.3).\n\n## 4. A/B 비교 방법(Rhino가 비어 있을 때 실행)\n\n**목적.** 5차 물결 뒤 VIDE 모델링 대화(B)가 터미널 Claude Code(A)와 같은 요청에서 얼마나 차이 나는지 잰다. 결과는 `docs/tdd/VERIFY-YYYY-MM-DD-ai-parity.md`에 남긴다.\n\n**조건.**\n- A: 사용자의 터미널 Claude Code. 사용자 환경의 `rhino` MCP와 S-09 스킬을 켠다.\n- B: VIDE 모델링 대화. 5차 지시 묶음, 캡처·측정 도구, 대화 턴 상한을 쓴다. 개발 엔진(`npm run dev`)에서 돌리고 설치본(47821)은 쓰지 않는다.\n- 같은 모델·effort, 같은 계정 종류를 쓰고, 매번 새 세션으로 시작한다.\n- 문서는 합성 `.3dm` 하나를 `.vide/` 아래에 두고, 실행마다 원본에서 새로 복사한다. 사용자의 원본 파일이나 실제 프로젝트 자료는 쓰지 않는다. A는 열린 문서에 바로 쓰므로 A도 이 사본에서 돌린다.\n- 에이전트는 Rhino를 띄우지 않는다. 사용자가 Rhino를 쓰지 않는 시간에 사용자가 실행하거나 실행을 허락한다(AI.md §8).\n- 요청마다 A·B를 두 번씩 돌리고 순서를 번갈아 바꾼다(ABBA).\n\n**요청 5개(합성, 정답을 미리 만든다).**\n\n| # | 요청(사용자 말) | 합성 문서에 심는 것 | 정답 판정 |\n|---|---|---|---|\n| R1 | \"겹친 선 정리해 줘\" | 같은 경로의 Line·Nurbs 쌍 20개, 부분 겹침 10개, 안에 들어간 조각 10개, 끝만 닿는 선 10개 | 남는 선의 수와 덮인 길이가 정답과 같고 구멍이 없음 |\n| R2 | \"터진 모서리 붙이고 짧은 선 합쳐 줘\" | 끝점 간격 2~15 mm인 모서리 12개(문서 허용 오차 1 mm), 짧은 조각 8개, 떨어진 짧은 선 3개 | 닫힌 모서리 12개, 떨어진 선은 보고만 함 |\n| R3 | \"이 대지 경계 안에 4층 매스, 층고 3.6 m, 경계에서 2 m 띄워서\" | 닫힌 대지 경계선 하나 | 닫힌 솔리드, 높이 14.4 m, 경계와의 거리 ≥ 2 m(허용 1 mm) |\n| R4 | \"그리드 교차점마다 600각 기둥, 층고 3.6 m\" | X 6줄 × Y 4줄 그리드 선(8.4 m 간격) | 기둥 24개, 단면 0.6 × 0.6 m, 높이 3.6 m, 기둥 레이어 |\n| R5 | \"열린 폴리서피스 찾아서 닫을 수 있는 건 닫아 줘\" | 닫힌 솔리드 6개, 터진 솔리드 4개, 일부러 열어 둔 면 3개 | 4개 닫힘, 3개는 보고만 함, 다른 객체는 변경 없음 |\n\n**측정값.**\n\n| 측정 | 정의 | 수집 |\n|---|---|---|\n| 성공 | 정답 판정 항목을 모두 통과(통과/실패, 항목별 기록) | 합성 문서를 스크립트로 판정. B는 반영 전의 후보를 판정 |\n| 수정 요청 수 | 정답에 이르기까지 사용자가 더 보낸 말의 수(최대 3번, 넘으면 실패) | 실행 기록 |\n| 소요 시간 | 첫 전송부터 마지막 답(B는 후보 준비)까지의 벽시계 시간 | A는 터미널 기록, B는 요청 시작·끝 시각 |\n| 토큰 | 입력·캐시 읽기·캐시 생성·출력 토큰의 합과 내역 | A는 세션 기록의 `usage`, B는 `stream-json` 사용량(T-059 계측) |\n| 도구 호출 | 도구 호출 수와 실패 수 | 두 환경의 도구 기록 |\n\n**합격 기준(제안).** B의 성공 수가 A 이상이다. 수정 요청 수의 중앙값이 A + 1 이하이다. 소요 시간의 중앙값이 A의 1.5배 이하이다. 어긋나는 요청이 있으면 표 1의 어느 행이 원인인지 적고 묶음이나 도구를 고친 뒤 그 요청만 다시 잰다.\n\n## 5. 스킬 이식 대응표(S-09 → 지시 묶음)\n\n원본은 사용자 PC의 Rhino 스킬 폴더(`.claude/skills/*/SKILL.md`와 스크립트, RESEARCH-04 S-09)이다. 읽기만 했고, 프로젝트 파일 이름·경로·모델 이름은 옮기지 않았다. 옮긴 것은 RhinoCommon 사용법과 판정 규칙이다. MCP 로더(`exec(open(...))`), `sc.sticky`, `AskUserQuestion`, SaveAs 사본 묻기는 VIDE의 `execute` 두 단계(진단 → 적용), 질문 카드, 작업 사본으로 바꿨다.\n\n| S-09 스킬 | 옮긴 노하우 | 묶음 위치 | 옮기지 않은 것(이유) |\n|---|---|---|---|\n| clean-similar-curves | 타입이 달라도 찾는 중복 판정(표본점 + `ClosestPoint`), `GetDistancesBetweenCurves` 금지(부분 겹침 → 구멍), 1차원 구간 분할 규칙, 덮개 조건, 곡선 부분 겹침은 보고만, 좌표 표류 진단. `tjunction_report`의 T자 판정 | `modeling-rhino.md` 「Duplicate curves」「T-junctions」 | IronPython 튜플 처리(C#에서는 해당 없음) |\n| clean-similar-objects | 싼 지문(위상 수 + bbox 크기·중심), Extrusion은 `ToBrep()`, 블록은 정의 + 변환, 같은 자리와 다른 자리의 구분, 질량 계산은 후보에만 | `modeling-rhino.md` 「Duplicate solids, meshes and blocks」 | 잠김·숨김 레이어 선택 제외(작업 사본에는 선택이 없음) |\n| clean-geometry | Simplify(각도는 라디안) → Tidy(잔차·제어점 조건) → Join(짧은 선이 든 묶음만) → Gap(Fillet 반지름 0) 순서, 거의 직교는 보고만, 새 객체는 가장 긴 원래 선의 속성을 이어받음(`vide-id` 제외) | `modeling-rhino.md` 「Curve cleanup」 | 매개변수 기본값 표(묶음 크기 제한, 규칙만 남김) |\n| clean-geometry-solids | `IsSolid`, 떨어진 모서리 수·길이, 복제본으로 `JoinNakedEdges` 시험, 직각 프리즘만 Extrusion 변환, 부피·중심 검증, 400면 초과 건너뜀 | `modeling-rhino.md` 「Solids」 | — |\n| clean-rhino | 쓰지 않는 블록 정의·빈 그룹·빈 레이어 정리(깊은 레이어 먼저, 현재 레이어·블록 정의 레이어 제외), 정리 뒤 재질, 흰 무광 PBR은 직접 생성(`CreateBasicMaterial` 금지) | `modeling-rhino.md` 「Document housekeeping」 | `_-Purge` 명령(명령 금지 → 보고만), 전체 파일 파이프라인 순서(요청마다 필요한 단계만) |\n| export-common | 형식별 제거 분류 순서(`AnnotationBase`를 `Curve`보다 먼저) | `modeling-rhino.md` 「Preparing exports」 | — |\n| export-cad | z=0 평탄화(`PlanarProjection`) + `ToArcsAndLines`(null이면 평탄화한 곡선 유지) | `modeling-rhino.md` 「Preparing exports」, `modeling-cad.md` 「Drawing conventions」 | `_-Export` 방식과 `.ini` 설정(내보내기는 사용자 동작) |\n| export-sketchup | NURBS·솔리드 없음, 열린 면은 낱장 면, 객체 하나 = 블록 하나 = 컴포넌트 하나 | `modeling-rhino.md` 「Preparing exports」 | SKP 설정 대화상자(명령이 없어 해당 없음) |\n| export-d5 | 매핑 없음 판정(`GetTextureChannels`), 예시 객체 매핑 복사 또는 원점 공용 박스 매핑, PBR 기본색 | `modeling-rhino.md` 「Preparing exports」 | D5 Sync 수동 클릭(VIDE 밖) |\n\nZWCAD 쪽(`modeling-cad.md`)은 스킬에서 온 내용이 아니다. `hosts/zwcad/`의 코드(`SdkCompiler.cs`, `DwgReader.cs`, `DwgEditor.cs`, `EditorApply.cs`, `connection/AttachedEdit.cs`, `edit-contract.ts`)에서 실행 형식, 단위(`INSUNITS`), VIDE가 읽고 쓰는 엔티티, 반영 때 레이어·선 종류 조건을 추렸다.\n\n## 6. 한계와 남은 질문\n\n- §4의 A/B는 아직 돌리지 않았다. Rhino가 사용 중이라 에이전트가 띄울 수 없다.\n- 옮긴 규칙은 S-09에서 실제 Rhino로 검증된 것이다. 하지만 VIDE의 `CodePolicy` 아래에서 모두 돌아가는지는 확인하지 않았다(예: `Rhino.Render` 재질·매핑 API는 금지 목록에 없지만 실행 확인 전이다). A/B의 R1·R5와 별도 합성 실행으로 확인한다.\n- 묶음 크기: 모델링 모드에는 공통 + `modeling.md` + 두 노하우 파일(약 11 KB) + 프로젝트 추가분(≤ 8 KB)이 붙는다. 크기 상한과 자르는 순서는 `src/ai/instructions/index.ts`가 정한다.\n- 캡처·측정 도구는 `capture_view`·`measure`(Rhino 대상 모델링 턴, 입출력은 ARCH-01 AI 도구 표)로 정해졌고 `modeling.md`의 확인 습관이 이 이름을 쓴다. ZWCAD 대상에는 아직 없다.\n"}}</script>
+<script id="reader-config" type="application/json">{"initial":"research-11-ai-parity","siteTitle":"VIDE"}</script>
+<script>
+(() => {
+'use strict';
+const sourceData=JSON.parse(document.getElementById('source-data').textContent);
+const config=JSON.parse(document.getElementById('reader-config').textContent);
+const esc=s=>String(s);
+let activeDoc=config.initial;
+let observer;
+let toastTimer;
+const $=s=>document.querySelector(s);
+function notify(message){const t=$('#toast');t.textContent=message;t.hidden=false;clearTimeout(toastTimer);toastTimer=setTimeout(()=>{t.hidden=true;},3400);}
+function renderToc(){const links=$('#toc-links');links.replaceChildren();const nodes=document.querySelectorAll('#'+activeDoc+' .doc-section');nodes.forEach(section=>{const a=document.createElement('a');a.href='#'+section.id;a.textContent=section.querySelector('h2').textContent;a.dataset.title=a.textContent;a.addEventListener('click',()=>{$('#toc-shell').classList.remove('open');$('#toc-toggle').setAttribute('aria-expanded','false');});links.appendChild(a);});$('#toc-count').textContent=nodes.length+' CHAPTERS';$('#toc-search').value='';$('#nav-hint').textContent='章 제목으로 찾아갑니다.'.replace('章','장');if(observer)observer.disconnect();observer=new IntersectionObserver(entries=>{const visible=entries.filter(e=>e.isIntersecting).sort((a,b)=>a.boundingClientRect.top-b.boundingClientRect.top);if(!visible.length)return;document.querySelectorAll('#toc-links a').forEach(a=>a.classList.toggle('active',a.hash==='#'+visible[0].target.id));},{rootMargin:'-90px 0px -64% 0px',threshold:0});nodes.forEach(n=>observer.observe(n));}
+function showDoc(name,reset){if(!sourceData[name])name=config.initial;activeDoc=name;document.querySelectorAll('.document').forEach(d=>d.hidden=d.id!==name);document.querySelectorAll('.doc-tab').forEach(a=>{a.classList.toggle('active',a.dataset.doc===name);if(a.dataset.doc===name)a.setAttribute('aria-current','page');else a.removeAttribute('aria-current');});renderToc();document.title=(config.siteTitle||'VIDE')+' · '+sourceData[name].label;if(reset)window.scrollTo({top:0,behavior:'instant'});}
+function useHash(){let raw=decodeURIComponent(location.hash.slice(1)||config.initial);let name=raw.split('-section-')[0];if(!sourceData[name])name=config.initial;if(name!==activeDoc||!$('#toc-links').children.length)showDoc(name,false);const el=document.getElementById(raw);if(el&&!el.hidden){requestAnimationFrame(()=>el.scrollIntoView({block:'start',behavior:'instant'}));}}
+window.addEventListener('hashchange',useHash);
+document.querySelectorAll('.doc-tab[data-doc]').forEach(a=>a.addEventListener('click',e=>{e.preventDefault();const name=a.dataset.doc;showDoc(name,true);history.replaceState(null,'','#'+name);}));
+$('#toc-toggle').addEventListener('click',()=>{const on=$('#toc-shell').classList.toggle('open');$('#toc-toggle').setAttribute('aria-expanded',String(on));});
+$('#toc-search').addEventListener('input',()=>{const q=$('#toc-search').value.trim().toLocaleLowerCase();let n=0;document.querySelectorAll('#toc-links a').forEach(a=>{a.hidden=!a.dataset.title.toLocaleLowerCase().includes(q);if(!a.hidden)n++;});$('#nav-hint').textContent=q?(n?'일치하는 장 '+n+'개':'일치하는 장 제목이 없습니다.'):'장 제목으로 찾아갑니다.';});
+function download(name,contents,type){const blob=new Blob([contents],{type});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),2500);}
+$('#source-download').addEventListener('click',()=>download(sourceData[activeDoc].file,sourceData[activeDoc].markdown,'text/markdown;charset=utf-8'));
+$('#print-doc').addEventListener('click',()=>window.print());
+async function copy(text){try{if(navigator.clipboard&&navigator.clipboard.writeText){await navigator.clipboard.writeText(text);return true;}}catch(e){}const t=document.createElement('textarea');t.value=text;t.style.position='fixed';t.style.left='-9999px';document.body.appendChild(t);t.select();let ok=false;try{ok=document.execCommand('copy');}catch(e){}t.remove();return ok;}
+document.querySelectorAll('.copy-code').forEach(b=>b.addEventListener('click',async()=>{const text=b.parentElement.querySelector('pre').textContent;const ok=await copy(text);if(ok){b.textContent='복사됨';notify('텍스트를 복사했습니다.');setTimeout(()=>b.textContent='복사',1800);}else{const range=document.createRange();range.selectNodeContents(b.parentElement.querySelector('pre'));const sel=window.getSelection();sel.removeAllRanges();sel.addRange(range);notify('자동 복사가 제한됩니다. 선택된 텍스트를 직접 복사하세요.');}}));
+showDoc(config.initial,false);useHash();
+})();
+</script>
+<script>
+(() => {
+'use strict';
+const KEY = 'vide-docs-review-mode';
+const AUTHOR_KEY = 'vide-docs-review-author';
+const sel = document.getElementById('review-mode');
+if (!sel) return;
+const authorSel = document.getElementById('review-author');
+let mode = 'marked';
+let author = 'all';
+try { mode = localStorage.getItem(KEY) || 'marked'; } catch (e) {}
+try { author = localStorage.getItem(AUTHOR_KEY) || 'all'; } catch (e) {}
+if (!['marked', 'original', 'accepted'].includes(mode)) mode = 'marked';
+if (!authorSel || !Array.from(authorSel.options).some(o => o.value === author)) author = 'all';
+const matches = el => author === 'all' || el.dataset.reviewAgent === author;
+const decorate = () => {
+const query = (document.getElementById('toc-search')?.value || '').trim().toLocaleLowerCase();
+let visible = 0;
+document.querySelectorAll('#toc-links a').forEach(a => {
+  const section = document.getElementById(decodeURIComponent(a.hash.slice(1)));
+  if (!section) return;
+  a.hidden = !a.dataset.title.toLocaleLowerCase().includes(query) || (section.classList.contains('review-appendix') && (mode !== 'marked' || !matches(section)));
+  if (!a.hidden) visible += 1;
+  const n = Array.from(section.querySelectorAll('.review-label[data-rid]')).filter(matches).length;
+  if (n && mode === 'marked') a.dataset.reviews = String(n); else delete a.dataset.reviews;
+});
+if (query) document.getElementById('nav-hint').textContent = visible ? `일치하는 장 ${visible}개` : '일치하는 장 제목이 없습니다.';
+};
+const apply = () => {
+  sel.value = mode;
+  if (authorSel) { authorSel.value = author; authorSel.disabled = mode !== 'marked'; }
+  document.body.classList.toggle('review-original', mode === 'original');
+  document.body.classList.toggle('review-accepted', mode === 'accepted');
+  document.querySelectorAll('blockquote.review, .review-appendix').forEach(el => { el.hidden = !matches(el); });
+  decorate();
+  try { localStorage.setItem(KEY, mode); localStorage.setItem(AUTHOR_KEY, author); } catch (e) {}
+};
+apply();
+const toc = document.getElementById('toc-links');
+if (toc) new MutationObserver(decorate).observe(toc, { childList: true });
+document.getElementById('toc-search')?.addEventListener('input', decorate);
+sel.addEventListener('change', () => { mode = sel.value; apply(); });
+if (authorSel) authorSel.addEventListener('change', () => { author = authorSel.value; apply(); });
+const revealHash = () => {
+  let id;
+  try { id = decodeURIComponent(location.hash.slice(1)); } catch (e) { return; }
+  const target = document.getElementById(id);
+  if (!target || !target.dataset.reviewAgent) return;
+  mode = 'marked';
+  if (!matches(target)) author = 'all';
+  apply();
+  target.scrollIntoView({ block: 'center' });
+};
+window.addEventListener('hashchange', revealHash);
+revealHash();
+})();
+</script>
+</body></html>

@@ -26,6 +26,35 @@ const sessionSchema = z
     lastTurnAt: z.string().nullable(),
   })
   .passthrough();
+const sendsSchema = z.object({
+  ledgerItems: z.number(),
+  recentTurns: z.number(),
+  files: z.number(),
+});
+/**
+ * The server's hand-over state (conversations.ts `limitHandover`/`lengthHandover`): an account
+ * limit waiting for the T2 card, or a session past the length setting (a suggestion).
+ */
+export const handoverSchema = z.union([
+  z
+    .object({
+      kind: z.literal('limit'),
+      requestId: z.string(),
+      from: z.object({ provider: z.string(), accountProfileId: z.string() }).passthrough(),
+      sends: sendsSchema,
+    })
+    .passthrough(),
+  z
+    .object({
+      kind: z.literal('length'),
+      turns: z.number(),
+      inputTokens: z.number(),
+      limits: z.object({ maxTurns: z.number(), maxInputTokens: z.number() }),
+      sends: sendsSchema,
+    })
+    .passthrough(),
+]);
+export type ServerHandover = z.infer<typeof handoverSchema>;
 export const conversationSchema = z
   .object({
     id: z.string().nullable(),
@@ -40,6 +69,8 @@ export const conversationSchema = z
     state: z.enum(['open', 'closed']),
     requests: z.number().default(0),
     session: sessionSchema.nullable().default(null),
+    // An unknown shape (a newer server) shows no card rather than failing the list.
+    handover: handoverSchema.nullable().catch(null).default(null),
   })
   .passthrough();
 export type ConversationEntry = z.infer<typeof conversationSchema>;
@@ -175,8 +206,23 @@ export type HandoverCard =
       kind: 'limit';
       requestId: string;
       text: string;
+      /** What the new session receives, from the server's state. */
+      sends?: string;
     }
+  | { kind: 'length'; key: string; text: string; sends: string }
   | { kind: 'record'; ledgerId: string; text: string; from?: string; to?: string };
+/** '원장 n개 · 최근 턴 n개 · 파일 n개': what a new session receives. */
+export function sendsText(sends: z.infer<typeof sendsSchema>) {
+  return [
+    `원장 ${sends.ledgerItems}개`,
+    `최근 턴 ${sends.recentTurns}개`,
+    ...(sends.files ? [`파일 ${sends.files}개`] : []),
+  ].join(' · ');
+}
+const tokenText = (tokens: number) =>
+  tokens >= 10_000 ? `${Math.round(tokens / 1000) / 10}만` : tokens.toLocaleString('ko-KR');
+const LIMIT_TEXT =
+  '이 계정의 사용 한도에 닿아 턴을 멈췄습니다. 끝난 턴은 자동으로 다시 보내지 않습니다.';
 const sideLabel = (value: unknown) => {
   const side = value as { provider?: unknown; model?: unknown; accountProfileId?: unknown } | null;
   if (!side || typeof side.provider !== 'string') return undefined;
@@ -196,10 +242,31 @@ const sideLabel = (value: unknown) => {
  * the latest hand-over the ledger recorded (changed account or session and why).
  */
 export function handoverCard(
-  detail: Pick<ConversationDetail, 'id' | 'ledger'> | undefined,
+  detail:
+    | (Pick<ConversationDetail, 'id' | 'ledger'> & { handover?: ServerHandover | null })
+    | undefined,
   messages: RequestLike[],
 ): HandoverCard | undefined {
   if (!detail || detail.id === null) return;
+  // The server's state comes first: it knows the stop and what a new session receives.
+  const state = detail.handover;
+  if (state?.kind === 'limit')
+    return {
+      kind: 'limit',
+      requestId: state.requestId,
+      text: LIMIT_TEXT,
+      sends: sendsText(state.sends),
+    };
+  if (state?.kind === 'length')
+    return {
+      kind: 'length',
+      key: `${detail.id}:${state.turns}`,
+      text:
+        `대화가 길어졌습니다(${state.turns}턴 · 누적 ${tokenText(state.inputTokens)} 토큰, ` +
+        `기준 ${state.limits.maxTurns}턴 · ${tokenText(state.limits.maxInputTokens)} 토큰). ` +
+        '원장으로 새 세션을 열면 앞 내용은 원장과 최근 요약으로 이어집니다.',
+      sends: sendsText(state.sends),
+    };
   const own = messages.filter(
     (message) => !isChild(message) && conversationOf(message) === detail.id,
   );
@@ -213,7 +280,7 @@ export function handoverCard(
       return {
         kind: 'limit',
         requestId: last.id,
-        text: '이 계정의 사용 한도에 닿아 턴을 멈췄습니다. 끝난 턴은 자동으로 다시 보내지 않습니다.',
+        text: LIMIT_TEXT,
       };
   }
   if (!record) return;
@@ -268,7 +335,11 @@ export interface ConversationsController {
 }
 
 const errorText = (error: unknown) =>
-  error instanceof Error ? error.message : '요청을 처리하지 못했습니다.';
+  (error as { code?: unknown } | null)?.code === 'NO_SPARE_ACCOUNT'
+    ? '같은 AI의 여유 계정이 없습니다. 설정 → AI에서 계정을 더하거나 다른 AI로 이어 가세요.'
+    : error instanceof Error
+      ? error.message
+      : '요청을 처리하지 못했습니다.';
 
 function CreateForm({
   models,
@@ -452,6 +523,9 @@ function Conversations({
   const [detail, setDetail] = useState<ConversationDetail>();
   const [creating, setCreating] = useState(false);
   const [handing, setHanding] = useState(false);
+  const [renewing, setRenewing] = useState(false);
+  /** Length suggestions the user chose to go on past (conversation id and turn count). */
+  const [kept, setKept] = useState<ReadonlySet<string>>(() => new Set());
   const [error, setError] = useState('');
   const [seen, setSeen] = useState(() => new Map<string, Set<string>>());
   const [loaded, setLoaded] = useState(0);
@@ -538,6 +612,16 @@ function Conversations({
     .map((id) => targets.find((option) => option.id === id)?.name)
     .filter(Boolean);
   const reload = () => setLoaded((value) => value + 1);
+  /** [새 세션으로 이어가기]: posts the hand-over (a spare account, or a new session). */
+  const renew = (path: string) => {
+    if (!current?.id) return;
+    setRenewing(true);
+    setError('');
+    api(`${base}/${current.id}/${path}`, 'POST', {})
+      .then(reload)
+      .catch((reason) => setError(errorText(reason)))
+      .finally(() => setRenewing(false));
+  };
 
   return (
     <div className="conv">
@@ -681,14 +765,57 @@ function Conversations({
             </header>
             <p>{card.text}</p>
             <small className="conv-note">
+              {card.sends
+                ? `같은 AI의 여유 계정에서 새 세션을 엽니다. 보내는 것: ${card.sends}. `
+                : ''}
               설정 → AI에서 자동 전환을 켜 두면 다음 턴부터 같은 AI의 여유 계정으로 이어 갑니다.
             </small>
             <div className="conv-actions">
-              <button type="button" className="primary" onClick={() => setHanding(true)}>
+              {card.sends ? (
+                <button
+                  type="button"
+                  className="primary"
+                  disabled={renewing}
+                  onClick={() => renew('account')}
+                >
+                  새 세션으로 이어가기
+                </button>
+              ) : null}
+              <button
+                type="button"
+                className={card.sends ? undefined : 'primary'}
+                onClick={() => setHanding(true)}
+              >
                 다른 AI로 이어 가기
               </button>
             </div>
           </section>
+        ) : card.kind === 'length' ? (
+          kept.has(card.key) ? null : (
+            <section className="conv-card" data-grade="T1" aria-label="대화 길이">
+              <header>
+                <strong>새 세션 제안</strong>
+              </header>
+              <p>{card.text}</p>
+              <small className="conv-note">보내는 것: {card.sends}</small>
+              <div className="conv-actions">
+                <button
+                  type="button"
+                  className="primary"
+                  disabled={renewing}
+                  onClick={() => renew('renew')}
+                >
+                  새 세션으로 이어가기
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setKept((previous) => new Set(previous).add(card.key))}
+                >
+                  지금 세션으로 계속
+                </button>
+              </div>
+            </section>
+          )
         ) : (
           <section className="conv-card" data-grade="record" aria-label="인계">
             <header>

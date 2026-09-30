@@ -8,6 +8,8 @@
 // the earlier per-request behaviour. Storage rows: ARCH-03 §10; CLI arguments: ARCH-01 §2.
 
 import { randomUUID } from 'node:crypto';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 import type { IncomingMessage } from 'node:http';
 import { z } from 'zod';
 import { DomainError, type Store } from '../core/store.ts';
@@ -27,6 +29,7 @@ import { hostUse, waitingOf, type WaitingFor } from '../contracts/request-scope.
 import type { SessionOptions } from '../ai/claude-cli.ts';
 import { removeClaudeTranscript } from '../ai/claude-cli.ts';
 import { removeCodexTranscript } from '../ai/codex-cli.ts';
+import { MAKE_LIMITS } from './make-routes.ts';
 import { isAutoModel, type Choice, type RoutingInput } from '../ai/model-router.ts';
 import type { Diagnostics } from './diagnostics.ts';
 import {
@@ -46,9 +49,23 @@ export const SESSION_PROVIDERS: Record<Provider, boolean> = {
   'claude-cli': true,
   'codex-cli': true,
 };
-/** A session longer than this reopens with the ledger (SPEC-02.19 5; PLAN-24 starting values). */
+/**
+ * Past these a new session with the ledger is suggested (SPEC-02.19 5; PLAN-24 starting values):
+ * the defaults of the conversation length setting (`<data>/conversation-settings.json`).
+ */
 export const SESSION_MAX_TURNS = 12;
 export const SESSION_MAX_INPUT_TOKENS = 150_000;
+export const sessionLimitsSchema = z
+  .object({
+    maxTurns: z.number().int().min(2).max(200),
+    maxInputTokens: z.number().int().min(10_000).max(2_000_000),
+  })
+  .strict();
+export type SessionLimits = z.infer<typeof sessionLimitsSchema>;
+export const DEFAULT_SESSION_LIMITS: SessionLimits = Object.freeze({
+  maxTurns: SESSION_MAX_TURNS,
+  maxInputTokens: SESSION_MAX_INPUT_TOKENS,
+});
 /** The ledger item sent with a turn; older entries are summarized past this (ARCH-03 §10.3). */
 export const LEDGER_BYTES = 8 * 1024;
 /** Provider transcripts of a closed conversation are removed after this (SPEC-02.19 1). */
@@ -71,6 +88,8 @@ const KIND_TITLES: Record<Kind, string> = {
 export const conversationStatuses: Record<string, number> = {
   CONVERSATION_CLOSED: 409,
   CONVERSATION_PROVIDER: 409,
+  NO_SPARE_ACCOUNT: 409,
+  NO_ACTIVE_SESSION: 409,
 };
 
 /** The project's default conversation: the requests without one (SPEC-02.19 1). */
@@ -114,12 +133,25 @@ export interface LimitHandover {
   /** What the new session receives: the whole ledger, the latest finished turns, file names. */
   sends: { ledgerItems: number; recentTurns: number; files: number };
 }
+/**
+ * The conversation's session reached the length setting (SPEC-02.19 5): a new session with the
+ * ledger and the hand-over packet is suggested ([새 세션으로 이어가기], `…/renew`); until then the
+ * session goes on.
+ */
+export interface LengthHandover {
+  kind: 'length';
+  grade: 'T1';
+  turns: number;
+  inputTokens: number;
+  limits: SessionLimits;
+  sends: { ledgerItems: number; recentTurns: number; files: number };
+}
 export type ConversationSummary = (Conversation | DefaultConversation) & {
   requests: number;
   /** The session the next turn would resume, if any. */
   session: SessionSummary | null;
-  /** A hand-over waiting for the user's confirmation. */
-  handover: LimitHandover | null;
+  /** A hand-over waiting for the user's confirmation, or a suggested one. */
+  handover: LimitHandover | LengthHandover | null;
 };
 export type NewSessionReason = 'first' | 'account' | 'provider' | 'length' | 'lost' | 'closed';
 /** A packet item a turn carries (ledger, hand-over, changes elsewhere). */
@@ -162,6 +194,11 @@ interface Options {
     configDirectory: string | undefined,
     sessionId: string,
   ) => Promise<number>;
+  /**
+   * The conversation length setting's file; by default `conversation-settings.json` next to the
+   * database (none for an in-memory one: the defaults apply).
+   */
+  settingsFile?: string | null;
 }
 
 const id = z.string().regex(/^[a-zA-Z0-9-]{1,100}$/);
@@ -202,6 +239,8 @@ const closeInput = z.object({ discard: z.boolean().optional() }).strict();
 const switchInput = z
   .object({ accountProfileId: z.string().regex(/^[a-zA-Z0-9-]{1,100}$/) })
   .strict();
+/** The account-limit card's button: a named account, or left out for the server's choice. */
+const accountInput = switchInput.partial().strict();
 const questionKey = z.string().regex(/^[a-zA-Z0-9_-]{1,40}$/);
 /** Answers to one turn's question cards; `recommended` answers every open one with its default. */
 const answerInput = z
@@ -301,11 +340,44 @@ export class ConversationService {
   readonly store: ConversationStore;
   private readonly db: Store;
   private readonly options: Options;
+  private readonly settingsFile: string | null;
+  private cachedLimits?: SessionLimits;
   constructor(store: Store, options: Options = {}) {
     this.db = store;
     this.store = new ConversationStore(store.db);
     this.options = options;
+    const location = store.db.location();
+    this.settingsFile =
+      options.settingsFile !== undefined
+        ? options.settingsFile
+        : location
+          ? join(dirname(location), 'conversation-settings.json')
+          : null;
     this.recover();
+  }
+  /** The conversation length setting (defaults when unset or unreadable). */
+  limits(): SessionLimits {
+    if (this.cachedLimits) return this.cachedLimits;
+    let limits = DEFAULT_SESSION_LIMITS;
+    if (this.settingsFile)
+      try {
+        const parsed = sessionLimitsSchema.safeParse(
+          JSON.parse(readFileSync(this.settingsFile, 'utf8')),
+        );
+        if (parsed.success) limits = parsed.data;
+      } catch {
+        /* No file yet, or one that does not parse: the defaults. */
+      }
+    return (this.cachedLimits = limits);
+  }
+  saveLimits(value: unknown): SessionLimits {
+    const parsed = sessionLimitsSchema.safeParse(value);
+    if (!parsed.success) throw new DomainError('INVALID_INPUT');
+    if (this.settingsFile) {
+      mkdirSync(dirname(this.settingsFile), { recursive: true });
+      writeFileSync(this.settingsFile, JSON.stringify(parsed.data, null, 2) + '\n');
+    }
+    return (this.cachedLimits = parsed.data);
   }
   /**
    * After a restart the session of a turn that was cut off is not resumed (SPEC-02.19 5): an
@@ -353,8 +425,66 @@ export class ConversationService {
       ...conversation,
       requests: this.store.requestIds(conversation.projectId, conversation.id).length,
       session: active ? sessionSummary(active) : null,
-      handover: conversation.id ? this.limitHandover(conversation as Conversation) : null,
+      handover: conversation.id
+        ? (this.limitHandover(conversation as Conversation) ??
+          (active ? this.lengthHandover(conversation as Conversation, active) : null))
+        : null,
     };
+  }
+  /** The length suggestion of an open conversation whose active session reached the setting. */
+  private lengthHandover(
+    conversation: Conversation,
+    active: ProviderSession,
+  ): LengthHandover | null {
+    const limits = this.limits();
+    if (
+      conversation.state !== 'open' ||
+      (active.turns < limits.maxTurns && active.inputTokens < limits.maxInputTokens)
+    )
+      return null;
+    const { finished, files } = this.recentWork(this.latestRows(conversation.id));
+    return {
+      kind: 'length',
+      grade: 'T1',
+      turns: active.turns,
+      inputTokens: active.inputTokens,
+      limits,
+      sends: {
+        ledgerItems: this.store.ledger(conversation.id, { current: true }).length,
+        recentTurns: Math.min(finished, RECENT_TURNS),
+        files,
+      },
+    };
+  }
+  /** Finished turns and file names among a conversation's latest requests (what a hand-over sends). */
+  private recentWork(rows: { state: string; input: string }[]) {
+    const files = new Set<string>();
+    let finished = 0;
+    for (const row of rows)
+      if (row.state === 'succeeded') {
+        finished++;
+        try {
+          for (const file of (JSON.parse(row.input) as { files?: { name?: unknown }[] }).files ??
+            [])
+            if (typeof file?.name === 'string') files.add(file.name);
+        } catch {
+          /* A row that does not parse sends nothing. */
+        }
+      }
+    return { finished, files: files.size };
+  }
+  private latestRows(conversationId: string) {
+    return this.db.db
+      .prepare(
+        `SELECT id, state, input, result FROM workspace_requests WHERE conversationId=?
+          ORDER BY rowid DESC LIMIT 21`,
+      )
+      .all(conversationId) as {
+      id: string;
+      state: string;
+      input: string;
+      result: string | null;
+    }[];
   }
   /**
    * The conversation's latest request stopped on its account's limit and no hand-over answered it
@@ -363,17 +493,7 @@ export class ConversationService {
    */
   private limitHandover(conversation: Conversation): LimitHandover | null {
     if (conversation.state !== 'open') return null;
-    const rows = this.db.db
-      .prepare(
-        `SELECT id, state, input, result FROM workspace_requests WHERE conversationId=?
-          ORDER BY rowid DESC LIMIT 21`,
-      )
-      .all(conversation.id) as {
-      id: string;
-      state: string;
-      input: string;
-      result: string | null;
-    }[];
+    const rows = this.latestRows(conversation.id);
     const last = rows[0];
     if (!last || last.state !== 'failed') return null;
     let code: unknown, accountProfileId: unknown;
@@ -387,19 +507,7 @@ export class ConversationService {
     if (code !== 'PROVIDER_LIMIT') return null;
     const ledger = this.store.ledger(conversation.id, { current: true });
     if (ledger.some((item) => item.kind === 'handoff' && item.requestId === last.id)) return null;
-    const files = new Set<string>();
-    let finished = 0;
-    for (const row of rows.slice(1))
-      if (row.state === 'succeeded') {
-        finished++;
-        try {
-          for (const file of (JSON.parse(row.input) as { files?: { name?: unknown }[] }).files ??
-            [])
-            if (typeof file?.name === 'string') files.add(file.name);
-        } catch {
-          /* A row that does not parse sends nothing. */
-        }
-      }
+    const { finished, files } = this.recentWork(rows.slice(1));
     return {
       kind: 'limit',
       grade: 'T2',
@@ -414,7 +522,7 @@ export class ConversationService {
       sends: {
         ledgerItems: ledger.length,
         recentTurns: Math.min(finished, RECENT_TURNS),
-        files: files.size,
+        files,
       },
     };
   }
@@ -445,7 +553,12 @@ export class ConversationService {
     const conversation = this.store.create(projectId, {
       ...value,
       effort: value.effort === 'default' ? null : value.effort,
-      mode: SESSION_PROVIDERS[value.provider] ? 'session' : 'ledger',
+      // A Codex make-conversation runs the ledger method: its draft files travel in each packet.
+      mode:
+        SESSION_PROVIDERS[value.provider] &&
+        !(value.kind === 'jig-make' && value.provider === 'codex-cli')
+          ? 'session'
+          : 'ledger',
     });
     this.options.diagnostics?.write('conversation-open', {
       conversationId: conversation.id,
@@ -515,6 +628,8 @@ export class ConversationService {
       )
         throw new DomainError('DRAFT_NOT_OPEN');
       input.hostUse = 'none';
+      // Make budgets for every make turn, a question card's answer turn too (T-063).
+      if (input.executionLimits === undefined) input.executionLimits = { ...MAKE_LIMITS };
     }
     return conversation;
   }
@@ -533,7 +648,11 @@ export class ConversationService {
       model: input.model ?? null,
       effort: input.effort && input.effort !== 'default' ? input.effort : null,
       accountProfileId,
-      mode: SESSION_PROVIDERS[input.provider] ? 'session' : 'ledger',
+      mode:
+        SESSION_PROVIDERS[input.provider] &&
+        !(conversation.kind === 'jig-make' && input.provider === 'codex-cli')
+          ? 'session'
+          : 'ledger',
     });
     const stopped = this.limitHandover(conversation)?.requestId;
     this.store.addLedgerItem(conversationId, {
@@ -584,6 +703,34 @@ export class ConversationService {
       provider: conversation.provider,
     });
     return this.summarize(updated);
+  }
+  /**
+   * [새 세션으로 이어가기] on the length suggestion (SPEC-02.19 5): the active session is left and
+   * the next turn opens a new one on the same service and account with the ledger and hand-over.
+   */
+  renew(projectId: string, conversationId: string) {
+    const conversation = this.store.get(projectId, conversationId);
+    if (conversation.state !== 'open') throw new DomainError('CONVERSATION_CLOSED');
+    const active = this.store.sessions(conversationId, 'active');
+    if (!active.length) throw new DomainError('NO_ACTIVE_SESSION');
+    for (const session of active) this.store.setSessionState(session, 'handed-off');
+    const last = active.at(-1)!;
+    this.store.addLedgerItem(conversationId, {
+      kind: 'handoff',
+      body: {
+        reason: 'length',
+        confirmed: 'T1',
+        turns: last.turns,
+        inputTokens: last.inputTokens,
+        from: sessionKey(last),
+      },
+    });
+    this.options.diagnostics?.write('conversation-handover', {
+      conversationId,
+      reason: 'length',
+      provider: conversation.provider,
+    });
+    return this.summarize(this.store.get(projectId, conversationId));
   }
 
   /**
@@ -655,13 +802,8 @@ export class ConversationService {
         items: [ledgerItem(all(), 'all'), ...elsewhere],
       };
     const active = this.store.sessions(conversationId, 'active').at(-1);
-    if (
-      active &&
-      active.provider === provider &&
-      active.accountProfileId === accountProfileId &&
-      active.turns < SESSION_MAX_TURNS &&
-      active.inputTokens < SESSION_MAX_INPUT_TOKENS
-    ) {
+    if (active && active.provider === provider && active.accountProfileId === accountProfileId) {
+      // Past the length setting the session goes on; a new one is only suggested (lengthHandover).
       const full = active.turns % FULL_LEDGER_EVERY === 0 || !active.lastTurnAt;
       return {
         conversation,
@@ -694,7 +836,9 @@ export class ConversationService {
             ? 'provider'
             : previous.state === 'handed-off' && previous.accountProfileId !== accountProfileId
               ? 'account'
-              : 'closed';
+              : previous.state === 'handed-off' && lastHandoffReason(all()) === 'length'
+                ? 'length'
+                : 'closed';
     if (active) this.store.setSessionState(active, 'handed-off');
     const key = { conversationId, provider, accountProfileId, sessionId: randomUUID() };
     const version = await cliVersion();
@@ -917,6 +1061,10 @@ export class ConversationService {
   }
 }
 
+/** Why the conversation's latest hand-over happened (a confirmed length suggestion: 'length'). */
+const lastHandoffReason = (items: LedgerItem[]) =>
+  (items.filter((item) => item.kind === 'handoff').at(-1)?.body as { reason?: unknown } | undefined)
+    ?.reason;
 const sessionKey = (session: ProviderSessionKey): ProviderSessionKey => ({
   conversationId: session.conversationId,
   provider: session.provider,
@@ -1001,8 +1149,17 @@ export async function conversationRoutes(
   request: IncomingMessage,
   { service, body, send, remote, chooseModel, chooseAccount, submit }: ConversationRouteContext,
 ): Promise<boolean> {
+  // The conversation length setting (SPEC-02.19 5): changed only on this computer.
+  if (url.pathname === '/api/v1/settings/conversations') {
+    if (request.method === 'GET') send(200, service.limits());
+    else if (request.method === 'PUT') {
+      if (remote) throw new DomainError('FORBIDDEN');
+      send(200, service.saveLimits(await body(request)));
+    } else return false;
+    return true;
+  }
   const route =
-    /^\/api\/v1\/projects\/([^/]+)\/conversations(?:\/([^/]+)(?:\/(close|reopen|ledger|handoff|account|answer))?)?$/.exec(
+    /^\/api\/v1\/projects\/([^/]+)\/conversations(?:\/([^/]+)(?:\/(close|reopen|ledger|handoff|account|answer|renew))?)?$/.exec(
       url.pathname,
     );
   if (!route) return false;
@@ -1058,6 +1215,7 @@ export async function conversationRoutes(
     const input = closeInput.parse(await body(request));
     send(200, await service.close(projectId, conversationId, { discard: input.discard }));
   } else if (action === 'reopen') send(200, service.reopen(projectId, conversationId));
+  else if (action === 'renew') send(200, service.renew(projectId, conversationId));
   else if (action === 'ledger')
     send(201, service.addLedger(projectId, conversationId, await body(request)));
   else if (action === 'answer') {
@@ -1085,7 +1243,17 @@ export async function conversationRoutes(
   } else if (action === 'account') {
     // The confirmed T2 card of an account limit: same service, another account (SPEC-02.19 5).
     if (remote) throw new DomainError('FORBIDDEN');
-    send(200, service.switchAccount(projectId, conversationId, await body(request)));
+    const input = accountInput.parse(await body(request));
+    let accountProfileId = input.accountProfileId;
+    if (!accountProfileId) {
+      // [새 세션으로 이어가기]: the server picks a spare account of the same service.
+      const conversation = service.get(projectId, conversationId);
+      if (!conversation.provider) throw new DomainError('INVALID_INPUT');
+      accountProfileId = await chooseAccount(conversation.provider);
+      if (accountProfileId === (conversation.accountProfileId ?? 'default'))
+        throw new DomainError('NO_SPARE_ACCOUNT');
+    }
+    send(200, service.switchAccount(projectId, conversationId, { accountProfileId }));
   } else {
     if (remote) throw new DomainError('FORBIDDEN');
     const input = handoffInput.parse(await body(request));

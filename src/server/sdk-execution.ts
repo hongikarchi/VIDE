@@ -20,7 +20,7 @@ import {
 } from '../contracts/native-model.ts';
 import { applyDisplayDelta } from '../core/display-delta.ts';
 import { withSurvey } from '../../hosts/rhino/scene-pages.ts';
-import { AgentTools } from './agent-tools.ts';
+import { AgentTools, visionHandlers } from './agent-tools.ts';
 import type { GeometryMeasurement } from '../core/measurement-cache.ts';
 
 type Worker = Awaited<ReturnType<typeof launchRhinoWorker>>;
@@ -499,6 +499,13 @@ export class SdkExecution {
           return queryPage(result, args, revision);
         },
       };
+      // The AI's eyes (PLAN-24): an image of the working copy's view and measurements.
+      Object.assign(
+        handlers,
+        visionHandlers(worker, (tool) =>
+          activity.add('query', tool === 'capture_view' ? '모델 화면 보기' : '모델 치수 재기'),
+        ),
+      );
       if (input.permission === 'candidate')
         handlers.execute = async ({ code }) => {
           if (signal.aborted) throw failure('CANCELLED');

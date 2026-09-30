@@ -403,10 +403,17 @@ test('격리 인자가 빠진 세션 턴은 실행하지 않는다', async () =>
   const agent = { url: 'http://127.0.0.1:4000/mcp', token: 'a'.repeat(64), tools: ['query'] };
   const cli = new CodexCli({ executable: process.execPath, session, agent });
   const withAgent = configureAgentArguments(cli.arguments(), 'codex', cli.agent, { neutral: true });
-  assert.equal(codexTurnIsolated(withAgent, session, cli.agent), true);
-  assert.equal(codexTurnIsolated(withAgent, session), false);
+  assert.equal(codexTurnIsolated(withAgent, session, cli.agent, cli.instructions), true);
+  assert.equal(codexTurnIsolated(withAgent, session, undefined, cli.instructions), false);
+  // The developer instructions are the bundle with the session rules (PLAN-24 지침 묶음).
+  assert.equal(codexTurnIsolated(withAgent, session, cli.agent), false);
   assert.equal(
-    codexTurnIsolated(withAgent, session, { ...cli.agent, tools: ['query', 'execute'] }),
+    codexTurnIsolated(
+      withAgent,
+      session,
+      { ...cli.agent, tools: ['query', 'execute'] },
+      cli.instructions,
+    ),
     false,
   );
   // The check runs before spawning: a run whose arguments lost isolation never starts.

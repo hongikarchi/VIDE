@@ -28,6 +28,9 @@ internal sealed class EditorExecutor(RhinoDoc document, string directory, Func<s
             var applicationId = request.GetProperty("operationId").GetString()!;
             return method == "applyEditorCandidate" ? application.Apply(applicationId, candidateFile, hash, expected, changes) : application.Recover(applicationId, candidateFile, hash, expected, changes);
         }
+        // A view image and measurements of the shown document; its layers are never switched.
+        if (method == "captureView") return ViewTools.Capture(document, request, mayChangeLayers: false);
+        if (method == "measure") return ViewTools.Measure(document, request);
         if (method != "captureEditor" && method != "verifyEditorCapture") throw new InvalidOperationException("UNKNOWN_METHOD");
         var operation = request.GetProperty("operationId").GetString();
         if (!Guid.TryParseExact(operation, "D", out _)) throw new InvalidOperationException("INVALID_OPERATION");

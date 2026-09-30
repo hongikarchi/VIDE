@@ -2,7 +2,7 @@
 id: ARCH-03
 title: jig 런타임과 저장 스키마 v5의 물리 계약
 status: review
-version: 0.2
+version: 0.3
 updated: 2026-09-30
 owner: agent:claude
 related: [FR-23, FR-24, FR-25, SPEC-02, SPEC-05, SPEC-06, SPEC-07, ADR-014, ADR-019, ADR-020, ADR-021, ARCH-01, ARCH-02, PLAN-22, PLAN-23, PLAN-24, RESEARCH-10]
@@ -257,7 +257,20 @@ export type PartUse = { part: string } & Record<string, Binding | string | numbe
 export type Binding = `step.${string}` | `$${string}` | 'params' | `inputs.${string}` | `ledger.${string}`;
 ```
 
-- `part`는 `src/ui/kit/registry.ts`에 등록된 이름이어야 하고, 부품마다 등록부의 zod 스키마로 속성을 검사한다. 목록 밖 부품·속성은 등록을 거절한다. 1차 부품 목록은 Design이 정한다. 검사는 `src/ui/jig-panel/spec.ts`의 `validatePanel`(zod와 등록부만 쓰는 순수 함수) 하나이며, 화면이 그리기 전과 로더(`loadJig`: `jig:validate`·가져오기·등록부 목록)가 같은 검사를 돌린다. 로더는 위반을 `JIG_PANEL` 항목(`panel.json:<경로>`)으로 거절한다. 연결은 설명서가 선언한 단계 id·설정값 키·입력 키(`scopeOf`)에 대해서만 검사한다. 목록에 있으나 아직 만들지 않은 부품(`compare-bars`·`report`·`ledger`, PLAN-22 T-057)은 그때까지 `PANEL_PART_NOT_READY`로 거절한다.
+- `part`는 `src/ui/kit/registry.ts`에 등록된 이름이어야 하고, 부품마다 등록부의 zod 스키마로 속성을 검사한다. 목록 밖 부품·속성은 등록을 거절한다. 1차 부품 목록은 Design이 정한다. 검사는 `src/ui/jig-panel/spec.ts`의 `validatePanel`(zod와 등록부만 쓰는 순수 함수) 하나이며, 화면이 그리기 전과 로더(`loadJig`: `jig:validate`·가져오기·등록부 목록)가 같은 검사를 돌린다. 로더는 위반을 `JIG_PANEL` 항목(`panel.json:<경로>`)으로 거절한다. 연결은 설명서가 선언한 단계 id·설정값 키·입력 키(`scopeOf`)에 대해서만 검사한다. 목록에 있으나 아직 만들지 않은 부품은 `NOT_READY`에 두고 `PANEL_PART_NOT_READY`로 거절한다. T-057(4차 물결)로 `compare-bars`·`report`·`ledger`를 만들어 지금은 비어 있다.
+- 부품과 놓는 자리(`PART_NAMES`·`PLACES`, 2026-09-30 기준). 자리 밖에 놓은 부품은 거절한다.
+
+  | 자리 | 부품 |
+  |---|---|
+  | `left` | `step-rail`, `param-group`, `slider`, `choice`, `stepper`, `toggle`, `fact-badge`, `role-card`, `verdict-legend`, `bake-card`, `conflict-banner` |
+  | `center.views` | `viewport-overlay`, `plan-map`, `report` |
+  | `center.board` | `slider-board` |
+  | `center.kpis` | `kpi-strip` |
+  | `drawer` | `result-tabs`, `issue-table`, `table`, `schedule`, `ledger` |
+  | `result-tabs`의 탭 | `issue-table`, `table`, `schedule`, `bake-card`, `compare-bars`, `ledger` |
+
+- 4차 물결에 더한 부품의 속성: `bake-card`는 `{title?, from?, bake?}`이며 `bake`는 내놓을 만들기 id(jig 자체 또는 VIDE 기본 `lines`·`members`) 최대 10개, 생략하면 전부다. 누르면 §7 `POST …/bake`로 간다. `compare-bars`는 `{title?, from, label, value, shade?, unit?, decimals?, limit?, limitLabel?}`이고 `shade`는 행 필드로 `base`·`alt`·`strong`·`actual`·`na` 중 하나를 준다. `report`는 `{report}`로 보고서 틀 이름(§5.2)을 가리키고 §7 `…/reports/:name`의 해석된 보고서를 부품으로 그린다. `ledger`는 `{title?, from, group?, columns?}`이며 `from`은 보통 `ledger.<name>`이다.
+- 근거 칩: 설정값을 그리는 부품(`slider`·`choice`·`stepper`·`toggle`·`param-group`·`slider-board`)과 `fact-badge`는 값마다 칩 하나를 붙인다. 칩은 값의 출처(`by`: `default` 기본값·`user` 사용자·`decision` 사용자 결정·`fact` 프로젝트 자료·`ai` AI 제안·`rhino` 모델·`sketch` 스케치)와 그 상태(기본값이면 선언된 근거의 `status`: 가정·선택·물어볼 것, 자료면 진술의 검토 상태: 미확정·근거 무효·대체됨, 확정이면 상태 글자 없음)를 보인다(SPEC-07.6). 진술에 기댄 칩은 `data-fact-statement`를 달아 누르면 진술 창을 연다(`src/ui/kit/settings.tsx` `FactBadge`).
 - 연결은 단계 출력 경로(`step.<id>.<field>…`), 설정값(`$<key>`), `params`, `inputs.<key>…`, `ledger.<name>`뿐이다. 식·코드는 넣지 않는다.
 - 색은 Design §02의 토큰 이름만 쓴다. `#`·`rgb(`·`hsl(`로 시작하는 값은 거절한다.
 - `custom-view`는 1차에 거절한다(B13).
@@ -313,6 +326,8 @@ export type RunnerOut =
 - 출력은 엔진이 단계 출력 스키마로 검사한 뒤에만 다음 단계·화면으로 간다. `budgetMs`를 넘으면 끊고 `BUDGET`으로 기록한다.
 - TS 단계는 묶을 때(`jig:pack`) Vite의 `build` API(이미 devDependency, esbuild는 별도 의존성이 아니다)로 만든 `dist/steps.mjs`(모든 `code` 단계 함수를 `steps[<entry>]`로 내보내는 한 파일)를 쓴다. `dist/steps.mjs`가 없으면(저장소 소스, 묶지 않은 시험 묶음) Node의 타입 제거로 `.ts` 진입 파일을 직접 적재한다.
 - 단계 함수의 `inputs`는 선언한 `reads`만 담는다: `input.<key>` → `inputs[key]`, `input.<key>.<role>` → `inputs[key][role]`, `step.<id>` → `inputs.steps[id]`. `params`는 읽는다고 선언한 설정값의 저장 단위 값이다. 사람 단계의 지문에는 수정 사항이 들어가지 않는다.
+- **이전 출력.** 앞 단계 출력은 이번 계산의 결과를 단계 id로 받는다. 단계가 자기 자신(`step.<자기 id>`)을 읽는다고 선언하면 `inputs.steps[자기 id]`로 그 작업본에서 **마지막으로 보관한 자기 출력**(없으면 `null`)을 받는다. 그래프 순서에는 영향이 없고(자기 참조는 선행 관계가 아님) 지문에도 들어가지 않는다. 보관 출력은 `jig_runs`와 캐시 파일에 있으므로 다시 계산·엔진 재시작 뒤에도 이어지고, 결과 없이 실패한 실행은 마지막 보관 출력과 그 지문을 지우지 않는다. 미리보기 계산은 보관하지 않는다. S-06 부호 원장(`schedule.ledger`)이 이 방식으로 이어져 같은 부재는 같은 부호를 유지하고 번호는 다시 쓰지 않는다(SPEC-06.12).
+- **적용 요청.** 단계 출력의 `apply.overrides`(각각 고정 `id`를 가진 §4 수정 사항)는 엔진이 작업본 수정 사항에 id 기준으로 덮어쓴다. 실제 계산(미리보기·자체 시험이 아니고 캐시 재사용이 아닌 실행)에서만 받으며, id 없는 항목은 버린다. 쓰면 모든 단계가 오래된 결과가 되고 엔진은 한 번 더 계산해 그 결과를 돌려준다. 적용 단계 앞에는 사람 단계를 두어, 적용 뒤에는 바뀐 지문 때문에 다시 확인을 기다리게 한다(S-06 [선정 단면 적용], SPEC-06.12).
 
 ### 6.3 엔진 단계 실행기
 
@@ -341,7 +356,7 @@ export type RunnerOut =
 
 ## 7. 서버 경로
 
-모든 경로는 `src/server/jig-routes.ts`가 처리하고 ARCH-01 §1.3의 인증·Host·Origin·크기 검사를 그대로 따른다. `:iid`는 작업본 ID, `:jigId`는 URL 인코딩한 jig id(`project%2Fs06-frame`)다.
+jig·보고서 경로는 `src/server/jig-routes.ts`, 초안 경로(`jig-drafts`)는 `src/server/make-routes.ts`, 자료 경로(`facts`)는 `src/server/facts-routes.ts`가 처리하고, 모두 ARCH-01 §1.3의 인증·Host·Origin·크기 검사를 그대로 따른다. `:iid`는 작업본 ID, `:jigId`는 URL 인코딩한 jig id(`project%2Fs06-frame`)다.
 
 | 메서드·경로 | 본문 | 응답·비고 |
 |---|---|---|
@@ -363,11 +378,23 @@ export type RunnerOut =
 | `POST …/:iid/bake` | `{bake: string[], linkId?, resolve?: Record<string, 'keep' \| 'overwrite' \| 'absorb'>}` | `{status: 'submitted', requestId, runId, readId, revisionKey, linkId, gates, plans[], chunks, waiting?}`(작업 보기로 추적, §9.3). 막은 점검·인자 문제는 422 `GATE_BLOCKED`(`blocked`·`problems`·`hints`), `absorb`가 수정 사항을 더했으면 200 `status: 'absorbed'`(다시 계산 뒤 다시 누름). `linkId`는 조립 역할이 연결 하나만 읽었을 때 생략할 수 있다 |
 | `GET …/:iid/bakes?linkId=` | — | 만들기 기록(새 것 먼저, `pendingBaseline`) |
 | `POST …/:iid/bakes/:recordId/baseline` | — | 반영한 문서를 다시 읽어 기준 지문을 기록(§9.3 6). 그 실행의 객체가 하나도 없으면 409 `NOT_APPLIED` |
-| `GET …/:iid/report.html`, `GET …/:iid/schedule.csv` | — | 보고서·일람표 |
-| `POST /api/v1/projects/:id/jig-drafts`, `POST …/jig-drafts/:did/validate·test·preview`, `POST …/jig-drafts/:did/pin`, `DELETE …/jig-drafts/:did` | — | 제작 최소판(잠정). `pin`은 확인 필요 동작, 원격 세션 403 |
+| `GET /api/v1/projects/:id/jig-reports` | — | 보고서 탭 목록: 보고서 틀이 있는 작업본마다 `{instance, reports[]}` |
+| `GET …/:iid/reports` | — | 그 작업본 jig의 보고서 틀 목록(설명서 `reports`, 없으면 패키지의 `reports/*.json`) |
+| `GET …/:iid/reports/:name` | — | 해석된 보고서(§5.2). 보관된 단계 결과·설정값 원장·남은 조건·해석 보기를 읽고, `previewOnly` 결과는 확정으로 쓰지 않는다. 화면이 부품으로 그린다(CSP가 인라인 스타일을 막으므로 HTML을 내려보내지 않음). 일람표 CSV는 표 부품의 `csv`로 화면이 만든다 |
+| `GET·POST /api/v1/projects/:id/jig-drafts` | POST `{name, from?}` | 초안 목록·만들기(`from`은 시작 본). 201 |
+| `GET·DELETE …/jig-drafts/:did` | — | 초안 하나. `DELETE`는 버리기: 상태 `discarded`, 초안 폴더와 그 초안에 붙은 만들기 대화의 공급자 기록을 지우고 열린 대화를 닫는다. 엔진이 DELETE를 받는 경로는 이것 하나다 |
+| `POST …/jig-drafts/:did/validate·test·preview` | preview `{fixture?}` | 형식 점검·자체 시험·미리보기(계산 상자, §6.5). 마지막 결과는 초안 폴더 밖 `.results/<did>.json`에 둔다 |
+| `POST …/jig-drafts/:did/pin` | `{jigId?, version?, approvedCaps?, confirm}` | 점검·자체 시험을 다시 확인한 뒤 읽기 전용 설치본(`source: ai-draft`)으로 설치하고 이 프로젝트에 고정. 확인 필요 동작, 원격 세션 403 |
+| `GET /api/v1/projects/:id/facts` | — | 자료 요약(결정·막힘·바뀜, 분야별 이슈, 건수·검토 건수) |
+| `GET …/facts/search` | `?q, kind?, discipline?, status?, excluded?, offset?, limit?` | 진술 검색. 제외된 진술은 `excluded=1`일 때만 |
+| `GET …/facts/issues/:n`, `GET …/facts/statements/:n` | — | 이슈·진술 하나 |
+| `POST·PUT …/facts/statements/:n/review` | `{verdict \| null, reason?, correction?, supersededBy?}` | 사람의 검토 기록(`knowledge_reviews`). `null`이면 지움. AI 도구는 쓰지 않는다 |
+| `GET·POST …/facts/rules` | POST `{sourceId \| pattern, reason?, remove?}` | 출처 제외 규칙(`knowledge_source_rules`) |
+| `POST …/facts/refs` | `{statementId? , factRefs?}` | 근거 참조의 유효성(확정·오염 등) |
+| `POST …/facts/sources/:n/open` | — | 원본 파일을 이 PC에서 연다. 원격 세션 403, AI 도구로 내놓지 않는다 |
 
 - 기존 `POST /api/v1/projects/:id/jigs/sync`와 구조 jig 경로(ARCH-02 §1)는 그대로다.
-- 오류 코드(잠정): `JIG_INVALID`(형식·금지 파일·부품, 응답에 `issues[]`), `JIG_SIGNATURE`(서명), `JIG_VERSION_EXISTS`(같은 id·버전, 다른 내용, 409), `PARAM_FIXED`, `OUT_OF_RANGE`, `GATE_BLOCKED`(막은 점검 이름 목록 포함), `STALE_INPUT`(읽은 문서 버전이 현재와 다름), `LAYER_ROOT_MISSING`(저장된 Sync 레이어 표가 있는데 출력 레이어가 없음), `CONFIRMATION_REQUIRED`(확인 없는 가져오기·고정), `JIG_PANEL`(`panel.json`이 §5.1 검사에 걸림, `JIG_INVALID`의 `issues[]`로). 만들기: `BAKE_NOT_COMPUTED`(422, 항목을 내는 단계가 계산되지 않음), `BAKE_JOB_MISSING`(409, 그린 본문이 엔진에 없음 — 재시작 뒤 남은 만들기 요청), `NOT_APPLIED`(409); 요청 결과 코드 `BAKE_TEMPLATE_REJECTED`(워커의 컴파일·`CodePolicy` 거절)·`BAKE_FAILED`·`BAKE_RECEIPT_MISMATCH`(영수증의 키가 계획과 다름). 상태 번호는 ARCH-01 §1.3 매핑(400·403·404·409·422)을 따르며 `src/server/jig-routes.ts`의 `jigStatuses`가 정본이다.
+- 오류 코드(잠정): `JIG_INVALID`(형식·금지 파일·부품, 응답에 `issues[]`), `JIG_SIGNATURE`(서명), `JIG_VERSION_EXISTS`(같은 id·버전, 다른 내용, 409), `PARAM_FIXED`, `OUT_OF_RANGE`, `GATE_BLOCKED`(막은 점검 이름 목록 포함), `STALE_INPUT`(읽은 문서 버전이 현재와 다름), `LAYER_ROOT_MISSING`(저장된 Sync 레이어 표가 있는데 출력 레이어가 없음), `CONFIRMATION_REQUIRED`(확인 없는 가져오기·고정), `JIG_PANEL`(`panel.json`이 §5.1 검사에 걸림, `JIG_INVALID`의 `issues[]`로). 만들기: `BAKE_NOT_COMPUTED`(422, 항목을 내는 단계가 계산되지 않음), `BAKE_JOB_MISSING`(409, 그린 본문이 엔진에 없음 — 재시작 뒤 남은 만들기 요청), `NOT_APPLIED`(409); 요청 결과 코드 `BAKE_TEMPLATE_REJECTED`(워커의 컴파일·`CodePolicy` 거절)·`BAKE_FAILED`·`BAKE_RECEIPT_MISMATCH`(영수증의 키가 계획과 다름). 초안: `DRAFT_NOT_OPEN`(409, 고정·버린 초안에 쓰거나 그 만들기 대화에 턴을 보냄), `DRAFT_OUTSIDE`·`DRAFT_FORBIDDEN_FILE`·`DRAFT_PATH_INVALID`(422, 초안 밖 경로·금지 파일·잘못된 경로), `DRAFT_TEMPLATE_MISSING`(500). 상태 번호는 ARCH-01 §1.3 매핑(400·403·404·409·422)을 따르며 `src/server/jig-routes.ts`의 `jigStatuses`와 `src/server/make-routes.ts`의 `makeStatuses`가 정본이다.
 - 1차 구현(T-046)의 세부: 가져오기 확인은 `?confirm=true`, 고정 확인은 본문 `confirm: true`다. 등록부는 `GET /api/v1/jigs/packages`(공식 라이브러리 + 설치 + 저장소 소스)이며 기존 `GET /api/v1/jigs`의 확장은 T-047이 한다. `POST …/reads`는 `linkId` 대신 `syncId`를 받아 저장된 Sync를 서버에서 레이어로 거를 수 있다(ZWCAD·호스트 없는 시험). `GET …/params/log`(변경 이력)·`GET …/steps/:stepId/output`(보관된 결과)이 있다. `stale-input`의 현재 판 비교값(`currentRevisions`)은 아직 경로가 채우지 않는다(연결 판 조회는 후속).
 - 능력 검사는 화면이 아니라 이 경로들, 만들기 경로, AI 도구 발급에서 한다. 원격 세션 차단 정규식에 `jigs/import`, `jigs/[^/]+/pin`, `jig-drafts/[^/]+/pin`을 더한다(원격 세션의 앱·확장 제어 금지와 같은 범위).
 
@@ -549,6 +576,12 @@ CREATE TABLE IF NOT EXISTS knowledge_source_rules(projectId TEXT NOT NULL REFERE
 CREATE TABLE IF NOT EXISTS project_roots(projectId TEXT PRIMARY KEY REFERENCES projects(id),
   kdbRoot TEXT, localRoot TEXT);
 ```
+
+위 표는 `src/core/migrations.ts`의 v5와 같다(2026-09-30 4차 물결에서 대조). 표를 쓰는 쪽의 구현 상태:
+
+- `conversations`·`provider_sessions`·`ledger_items`: `src/core/conversation-store.ts`. `kind`·원장 `kind`의 값 목록은 그 모듈의 `conversationKinds`·`ledgerKinds`가 정본이다. `jig-make` 대화는 `draftId`를 가진다. Claude·Codex 모두 `mode: 'session'`으로 이어 실행한다(Codex는 SPIKE ④ 재시험 통과 뒤, PLAN-24 T-061). 예외로 Codex의 `jig-make` 대화는 `mode: 'ledger'`이다: 초안 파일이 매 턴 `draft-files` 항목으로 가고, VIDE가 쓴 `files`의 결과는 원장 `code` 항목으로 남는다(ARCH-01 §2).
+- `jig_drafts`(PLAN-22 T-063): `src/core/jig-store.ts`·`src/jigs/runtime/drafts.ts`. 행 하나가 초안 폴더 `<data>/jigs/drafts/<id>/`(§2.3) 하나다. `state`는 `open`(만들기 대화가 쓸 수 있음) → `pinned`(고정: 설치본 `jig_packages`·`project_jigs` 행을 만듦) 또는 `discarded`(버림: 폴더 삭제)로만 간다. `archived`는 자리만 있고 1차에는 쓰지 않으며 `openedAt`은 만들 때 한 번 적는다. `conversationId` 열은 1차에 채우지 않고, 초안을 쓰는 대화는 `conversations.draftId`(열린 것 가운데 최신)로 찾는다. 버려도 행은 `discarded`로 남는다. 마지막 점검·시험·미리보기 결과는 표가 아니라 초안 루트의 `.results/<id>.json`에 둔다(AI가 쓰는 폴더 밖, 버릴 때 함께 지움).
+- `jig_packages`: 초안 고정은 `source: 'ai-draft'`, `signer`는 비운다(§12). `jig_bakes`·`jig_reads`는 §9, 자료 검토 표는 `src/core/knowledge-review-store.ts`(사람만 씀, SPEC-08.5).
 
 ### 10.3 요청 JSON에 더하는 필드(열 추가 없음, 잠정)
 

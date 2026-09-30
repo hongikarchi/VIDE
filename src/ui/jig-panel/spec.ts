@@ -112,8 +112,8 @@ export function validatePanel(
     if (name === 'result-tabs') {
       const tabs = Array.isArray(props.tabs) ? props.tabs : undefined;
       const extra = Object.keys(props).filter((key) => key !== 'tabs');
-      if (!tabs || !tabs.length || tabs.length > 8 || extra.length) {
-        issue('PANEL_PROPERTY', path, '결과 서랍은 tabs(1~8개)만 받습니다');
+      if (!tabs || !tabs.length || tabs.length > 12 || extra.length) {
+        issue('PANEL_PROPERTY', path, '결과 서랍은 tabs(1~12개)만 받습니다');
         return undefined;
       }
       const checked = tabs.map((tab, i) => {

@@ -382,11 +382,37 @@ try {
       },
     }),
   );
+  // The first bake is refused; the second is accepted with two objects a person changed, one in
+  // the Sync (00000001 = o1) and one not read yet.
   await page.route('**/jig-instances/*/bake', (route) => {
     bakeCalls.push(JSON.parse(route.request().postData() ?? '{}'));
+    if (bakeCalls.length === 1)
+      return route.fulfill({
+        status: 409,
+        json: { code: 'GATE_BLOCKED', message: 'blocked', hints: ['확정 해석이 필요합니다'] },
+      });
     return route.fulfill({
-      status: 409,
-      json: { code: 'GATE_BLOCKED', message: 'blocked', hints: ['확정 해석이 필요합니다'] },
+      json: {
+        runId: 'run-2',
+        readId: 'read-2',
+        linkId: 'link-1',
+        plans: [
+          {
+            bakeId: 'members',
+            template: 'vide.bake.sweep-h@1',
+            layer: 'jig 부재',
+            added: [],
+            replaced: [],
+            preserved: [
+              { key: 'G1', nativeId: '00000001', reason: 'edited' },
+              { key: 'G9', nativeId: 'ffffffff-0000-4000-8000-000000000009', reason: 'moved' },
+            ],
+            kept: [],
+            deleted: [],
+            copies: 0,
+          },
+        ],
+      },
     });
   });
   await page.route('**/jig-instances/*/bakes/*/baseline', (route) =>
@@ -417,6 +443,16 @@ try {
     bakeCalls.map((call) => call.bake),
     [['lines'], ['members', 'member-columns']],
   );
+  // [보기] on a preserved object selects it in the viewport through the Sync that holds it; one
+  // no Sync holds yet says so.
+  const preserved = bakeCard.locator('.bake-preserved');
+  await preserved.getByRole('button', { name: 'G1', exact: true }).click();
+  await page.waitForFunction(
+    () => document.querySelector('#selection-count')?.textContent === '1개 선택',
+  );
+  assert.equal(await page.locator('#selection').textContent(), 'o1');
+  await preserved.getByRole('button', { name: 'G9', exact: true }).click();
+  await dialog.getByText(/Rhino 문서의 Sync에 이 객체가 없습니다/).waitFor();
   await bakeCard.getByText('만든 기록 1개').click();
   assert.match(
     await bakeCard.locator('.bake-records li').textContent(),

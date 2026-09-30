@@ -13,7 +13,14 @@ import {
   neutralInstruction,
   noToolsInstruction,
   turnRules,
+  instructionModeFor,
 } from './agent-connection.ts';
+import {
+  bundleFor,
+  withRules,
+  type InstructionHost,
+  type InstructionMode,
+} from './instructions/index.ts';
 import compat from './cli-compat.json' with { type: 'json' };
 
 export class ProviderError extends Error {
@@ -82,6 +89,14 @@ export interface CliOptions {
   effort?: string;
   agent?: unknown;
   session?: SessionOptions;
+  /**
+   * The instruction bundle (PLAN-24 지침 묶음) appended to the provider's default prompt: its mode
+   * (default: what the connection implies), the host of a modeling bundle, and the project's
+   * addendum (sanitised as data by `bundleFor`).
+   */
+  instructionMode?: InstructionMode;
+  instructionHost?: InstructionHost;
+  projectInstructions?: string;
   timeoutMs?: number;
   stopGraceMs?: number;
   spawnProcess?: typeof spawn;
@@ -233,6 +248,15 @@ export function buildPacket({ goal, items, includedIds, revision }: ProviderCont
       type: item.type,
       data: item.data,
     }));
+  // Image items (PLAN-24) go to the model as images; the packet keeps their place and metadata.
+  const images: PacketImage[] = [];
+  for (const entry of data)
+    if (entry.type === 'image') {
+      const { dataUrl, ...meta } = (entry.data ?? {}) as { dataUrl?: unknown };
+      images.push(packetImage(dataUrl));
+      entry.data = { ...meta, image: images.length };
+    }
+  if (images.length > MAX_PACKET_IMAGES) throw error('CONTEXT_TOO_LARGE');
   const packet = { goal, revision, items: data };
   const serialized = JSON.stringify(packet);
   if (Buffer.byteLength(serialized) > 256 * 1024) throw error('CONTEXT_TOO_LARGE');
@@ -252,7 +276,25 @@ export function buildPacket({ goal, items, includedIds, revision }: ProviderCont
       })
       .parse(JSON.parse(serialized)),
     manifest: data.map(({ id, label, type }) => ({ id, label, type })),
+    images,
   };
+}
+/** A picture for the model (PLAN-24): base64 PNG or JPEG, at most 3 per turn and 1 MB each. */
+export interface PacketImage {
+  mediaType: 'image/png' | 'image/jpeg';
+  data: string;
+}
+export const MAX_PACKET_IMAGES = 3;
+export const MAX_PACKET_IMAGE_BYTES = 1_000_000;
+/** A data URL of an image item; anything else is an invalid context. */
+export function packetImage(dataUrl: unknown): PacketImage {
+  const match =
+    typeof dataUrl === 'string' &&
+    /^data:(image\/png|image\/jpeg);base64,([A-Za-z0-9+/]+={0,2})$/.exec(dataUrl);
+  if (!match) throw error('INVALID_CONTEXT');
+  if (Buffer.byteLength(match[2], 'base64') > MAX_PACKET_IMAGE_BYTES)
+    throw error('CONTEXT_TOO_LARGE');
+  return { mediaType: match[1] as PacketImage['mediaType'], data: match[2] };
 }
 
 export function subscriptionEnvironment(source = process.env) {
@@ -270,7 +312,12 @@ export function subscriptionEnvironment(source = process.env) {
   return env;
 }
 
-export function cliArguments() {
+/**
+ * Single-run isolation arguments. The default Claude Code system prompt is kept and VIDE's text is
+ * appended: the instruction `bundle` and this run's rules (no tools unless a connection's rules
+ * replace them).
+ */
+export function cliArguments(bundle = '') {
   return [
     '-p',
     '--safe-mode',
@@ -289,21 +336,23 @@ export function cliArguments() {
     '--output-format',
     'stream-json',
     '--verbose',
-    '--system-prompt',
-    noToolsInstruction,
+    '--append-system-prompt',
+    bundle ? withRules(bundle, noToolsInstruction) : noToolsInstruction,
   ];
 }
 /**
  * Turns the single-run isolation arguments into one turn of a session (SPIKE-2026-09-30 ①⑦):
- * only session persistence is switched on, the prompt is the neutral one and is not replayed
- * from the transcript (`--system-prompt-snapshot off`), so every turn's tools, MCP servers and
+ * only session persistence is switched on, the appended prompt is the bundle with the neutral
+ * session rules (the default prompt stays) and is not replayed from the transcript (`--system-prompt-snapshot off`), so every turn's tools, MCP servers and
  * rules are the ones passed with it.
  */
-export function sessionArguments(args: string[], session: SessionOptions) {
+export function sessionArguments(args: string[], session: SessionOptions, bundle = '') {
   const { id, resume } = sessionSchema.parse(session);
   const persistence = args.indexOf('--no-session-persistence');
   if (persistence >= 0) args.splice(persistence, 1);
-  args[args.indexOf('--system-prompt') + 1] = neutralInstruction;
+  args[args.indexOf('--append-system-prompt') + 1] = bundle
+    ? withRules(bundle, neutralInstruction)
+    : neutralInstruction;
   args.push(resume ? '--resume' : '--session-id', id, '--system-prompt-snapshot', 'off');
   return args;
 }
@@ -322,8 +371,12 @@ export function outputSchemaOf(context: ProviderContext): string | undefined {
   return text;
 }
 /** The packet of a session turn carries the turn's rules; the neutral prompt names none. */
-export function withTurnRules(context: ProviderContext, connection?: AgentConnection) {
-  const item = { id: 'turn-rules', type: 'turn-rules', data: turnRules(connection) };
+export function withTurnRules(
+  context: ProviderContext,
+  connection?: AgentConnection,
+  format: AgentFormat = 'claude',
+) {
+  const item = { id: 'turn-rules', type: 'turn-rules', data: turnRules(connection, format) };
   return {
     ...context,
     items: [item, ...context.items],
@@ -390,6 +443,8 @@ export class ClaudeCli {
   configDirectory?: string;
   agent?: AgentConnection;
   session?: SessionOptions;
+  /** The instruction bundle of every run of this provider (PLAN-24 지침 묶음). */
+  instructions: string;
   constructor({
     executable,
     configDirectory,
@@ -397,6 +452,9 @@ export class ClaudeCli {
     effort,
     agent,
     session,
+    instructionMode,
+    instructionHost,
+    projectInstructions,
     timeoutMs = 60000,
     stopGraceMs = 5000,
     spawnProcess = spawn,
@@ -432,6 +490,13 @@ export class ClaudeCli {
     if (session !== undefined && !sessionSchema.safeParse(session).success)
       throw error('INVALID_SESSION');
     this.session = session;
+    this.instructions = bundleFor(
+      instructionMode ?? instructionModeFor(this.agent),
+      projectInstructions,
+      {
+        host: instructionHost,
+      },
+    );
   }
   environment() {
     const env = subscriptionEnvironment();
@@ -439,10 +504,35 @@ export class ClaudeCli {
     return env;
   }
   arguments() {
-    const args = cliArguments();
+    const args = cliArguments(this.instructions);
     if (this.model) args.push('--model', this.model);
     if (this.effort) args.push('--effort', this.effort);
-    return this.session ? sessionArguments(args, this.session) : args;
+    return this.session ? sessionArguments(args, this.session, this.instructions) : args;
+  }
+  /** A turn with images reads its input as one stream-json user message (text packet + images). */
+  async withImages(args: string[], images: readonly PacketImage[], _cwd: string) {
+    if (images.length) args.push('--input-format', 'stream-json');
+    return args;
+  }
+  /** What the run writes to stdin: the packet, or with images a stream-json user message. */
+  inputOf(packet: unknown, images: readonly PacketImage[]) {
+    const text = JSON.stringify(packet);
+    if (!images.length) return text;
+    return (
+      JSON.stringify({
+        type: 'user',
+        message: {
+          role: 'user',
+          content: [
+            { type: 'text', text },
+            ...images.map((image) => ({
+              type: 'image',
+              source: { type: 'base64', media_type: image.mediaType, data: image.data },
+            })),
+          ],
+        },
+      }) + '\n'
+    );
   }
   /** Adds the structured-output flag of a turn that asks for one (keeps every other argument). */
   async withOutputSchema(args: string[], schema: string | undefined, _cwd: string) {
@@ -562,13 +652,19 @@ export class ClaudeCli {
       onProgress = () => {},
     }: { signal?: AbortSignal; onProgress?: (event: Progress) => void } = {},
   ): Promise<ProviderResult> {
-    const selected = buildPacket(this.session ? withTurnRules(context, this.agent) : context);
+    const selected = buildPacket(
+      this.session ? withTurnRules(context, this.agent, this.eventFormat) : context,
+    );
     if (signal?.aborted) throw error('CANCELLED');
     await this.checkVersion();
     const auth = await this.status();
     if (!auth.available) throw error(auth.reason ?? 'AUTH_INVALID');
     if (signal?.aborted) throw error('CANCELLED');
     const cwd = await mkdtemp(join(tmpdir(), 'vide-cli-'));
+    // With --json-schema the CLI may list and call its own output tool (no file, shell or network
+    // access; SPIKE-2026-09-30-instruction-bundle): it is accepted only in a run that asked for it.
+    const schema = outputSchemaOf(context);
+    const outputTool = (name: unknown) => !!schema && name === 'StructuredOutput';
     let child: ChildProcessWithoutNullStreams | undefined;
     try {
       const env = this.environment();
@@ -577,11 +673,16 @@ export class ClaudeCli {
       child = this.spawnProcess(
         this.executable,
         configureAgentArguments(
-          await this.withOutputSchema(this.arguments(), outputSchemaOf(context), cwd),
+          await this.withImages(
+            await this.withOutputSchema(this.arguments(), schema, cwd),
+            selected.images,
+            cwd,
+          ),
           this.eventFormat,
           this.agent,
           {
             neutral: !!this.session,
+            bundle: this.instructions,
           },
         ),
         {
@@ -697,15 +798,18 @@ export class ClaudeCli {
             return;
           }
           if (event.type === 'system' && event.subtype === 'init') {
+            const tools = Array.isArray(event.tools)
+              ? event.tools.filter((name) => !outputTool(name))
+              : undefined;
             const valid = this.agent
-              ? Array.isArray(event.tools) &&
-                event.tools.every((name) => allowedAgentEvent({ name }, 'claude', this.agent)) &&
+              ? Array.isArray(tools) &&
+                tools.every((name) => allowedAgentEvent({ name }, 'claude', this.agent)) &&
                 Array.isArray(event.mcp_servers) &&
                 event.mcp_servers.length === 1 &&
                 event.mcp_servers[0].name === 'vide' &&
                 event.mcp_servers[0].status === 'connected'
-              : Array.isArray(event.tools) &&
-                !event.tools.length &&
+              : Array.isArray(tools) &&
+                !tools.length &&
                 Array.isArray(event.mcp_servers) &&
                 !event.mcp_servers.length;
             if (!valid) {
@@ -730,7 +834,7 @@ export class ClaudeCli {
                   text: String(item.text ?? item.thinking),
                 });
               if (item.type === 'tool_use') {
-                if (!allowedAgentEvent(item, 'claude', this.agent)) {
+                if (!outputTool(item.name) && !allowedAgentEvent(item, 'claude', this.agent)) {
                   stop('UNEXPECTED_TOOL_CALL');
                   return;
                 }
@@ -810,7 +914,7 @@ export class ClaudeCli {
         if (signal?.aborted) abort();
         if (!stopReason) {
           progress({ state: 'starting' });
-          processChild.stdin.end(JSON.stringify(selected.packet));
+          processChild.stdin.end(this.inputOf(selected.packet, selected.images));
         }
       });
       return result;

@@ -102,7 +102,8 @@
             "minItems": 2
           },
           "length_m": { "type": "number" },
-          "cantilever_m": { "type": "number" }
+          "cantilever_m": { "type": "number" },
+          "width_m": { "type": "number" }
         }
       }
     },

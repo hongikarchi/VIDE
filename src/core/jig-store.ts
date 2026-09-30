@@ -427,13 +427,17 @@ export class JigStore {
     );
   }
 
-  // Step runs: the latest result of each step (input-hash cache and status).
+  // Step runs: the latest result of each step (input-hash cache and status). A failed run without
+  // a result keeps the last kept result and its fingerprint, so a step's previous output (e.g. the
+  // S-06 marks ledger, ARCH-03 §6.2) survives a failed recomputation.
   saveRun(instanceId: string, stepId: string, value: z.input<typeof runInput>): JigRun {
     const input = runInput.parse(value);
+    const keep = `excluded.status='failed' AND excluded.outputRef IS NULL AND jig_runs.outputRef IS NOT NULL`;
     this.db
       .prepare(
         `INSERT INTO jig_runs VALUES(?,?,?,?,?,?,?,?) ON CONFLICT(instanceId, stepId) DO UPDATE SET
-          inputHash=excluded.inputHash, outputRef=excluded.outputRef, ms=excluded.ms,
+          inputHash=CASE WHEN ${keep} THEN jig_runs.inputHash ELSE excluded.inputHash END,
+          outputRef=CASE WHEN ${keep} THEN jig_runs.outputRef ELSE excluded.outputRef END, ms=excluded.ms,
           status=excluded.status, gates=excluded.gates, at=excluded.at`,
       )
       .run(

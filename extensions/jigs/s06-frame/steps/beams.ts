@@ -3,8 +3,13 @@
 // straight edge (or the u / v direction of the girder network), cut at the cell boundary and at
 // voids, left out when shorter than the minimum; both ends are pinned on a girder, named by girder
 // id and plan-length fraction t (the `t` of `girders`). Where the slab edge lies farther than
-// `cantileverMax_m` from the nearest girder the edge strip needs cantilever beams: those are listed
-// (`edgeCantilevers`), not generated as members. Pure, JSON only.
+// `cantileverMax_m` from the nearest girder the edge strip needs cantilever beams (`edgeCantilevers`).
+// A cantilever is the continuation of the nearest interior beam line (continuous through the girder,
+// that beam end rigid: `rigidAt`); where no beam line within 45° of the outward direction ends on
+// the girder within half a spacing, a back-span beam (`backspanOf`) in the adjacent cell carries it,
+// running inward to the first beam or girder it meets. A beam cut by the slab edge or a void gets a
+// back span across its root girder the same way, so no cantilever root is held by girder torsion
+// alone. Pure, JSON only.
 
 import {
   lineCrossings,
@@ -43,12 +48,14 @@ export const DEFAULT_BEAMS_PARAMS: BeamsParams = {
 export const BEAM_SPACING_RANGE: readonly [number, number] = [2.0, 3.0];
 
 export interface BeamEnd {
-  /** Girder the end sits on; null when the end is on the slab edge or a void edge. */
+  /** Girder the end sits on; null when the end is on the slab edge, a void edge or a beam. */
   girderId: string | null;
   /** Plan-length fraction along the girder (null with no girder). */
   t: number | null;
-  /** What the end sits on when it is not a girder. */
+  /** What the end sits on when it is neither a girder nor a beam. */
   edge?: 'slab' | 'void';
+  /** Beam the end sits on (a back span landing on an infill beam). */
+  beamId?: string;
 }
 export interface BeamRow {
   id: string;
@@ -57,6 +64,10 @@ export interface BeamRow {
   from: BeamEnd;
   to: BeamEnd;
   length_m: number;
+  /** Ends continuous through the girder with a cantilever on the same line: rigid, not pinned. */
+  rigidAt?: ('from' | 'to')[];
+  /** A back span (its `from` end at the root) of this cantilever or cut beam. */
+  backspanOf?: string;
 }
 export interface EdgeCantileverRow {
   id: string;
@@ -66,6 +77,13 @@ export interface EdgeCantileverRow {
   length_m: number;
   /** Distance from the slab-edge point to the nearest girder (m), over `cantileverMax_m`. */
   cantilever_m: number;
+  /** The beam (interior or back span) this cantilever continues through the girder. */
+  continues?: string;
+  /**
+   * Width of the edge strip this cantilever carries (m): half the distance to each neighbour on
+   * the same girder edge, each half at most half a spacing; mirrored at the ends of the edge.
+   */
+  width_m: number;
 }
 export interface BeamsOutput {
   schema: 'vide.s06.beams/1';
@@ -79,6 +97,8 @@ export interface BeamsOutput {
     spacingUsed_m: number;
     dropped: number;
     edgeCantilevers: number;
+    /** Back-span beams added so cantilevers are not held by girder torsion alone. */
+    backspans: number;
   };
   notes: string[];
 }
@@ -308,10 +328,20 @@ export function beams(
   if (dropped) notes.push(`${p.minLength_m} m보다 짧은 작은보 ${dropped}개는 두지 않았습니다.`);
   if (loose) notes.push(`작은보 끝 ${loose}곳이 거더가 아닌 슬래브 끝·보이드 둘레에 닿습니다.`);
 
-  const edgeCantilevers = slab ? cantilevers(girders, cells, slab, p) : [];
+  const framing = slab ? frameCantilevers(girders, cells, slab, p, out) : null;
+  const edgeCantilevers = framing?.rows ?? [];
   if (edgeCantilevers.length)
     notes.push(
-      `슬래브 끝이 거더에서 ${p.cantileverMax_m} m보다 먼 곳 ${edgeCantilevers.length}곳: 내민 보가 필요합니다.`,
+      `슬래브 끝이 거더에서 ${p.cantileverMax_m} m보다 먼 곳 ${edgeCantilevers.length}곳: 내민 보를 안쪽 작은보 줄에 이어 둡니다.`,
+    );
+  const backspans = out.filter((b) => b.backspanOf).length;
+  if (backspans)
+    notes.push(
+      `내민 보 뿌리를 잡는 뒤쪽 보 ${backspans}개를 옆 칸에 더했습니다(거더에서 연속, 강접).`,
+    );
+  if (framing?.unheld)
+    notes.push(
+      `끝이 잘린 작은보 ${framing.unheld}개는 뿌리 거더 건너편에 칸이 없어 뒤쪽 보를 두지 못했습니다.`,
     );
   return {
     schema: 'vide.s06.beams/1',
@@ -325,33 +355,252 @@ export function beams(
       spacingUsed_m: r4(spacingUsed),
       dropped,
       edgeCantilevers: edgeCantilevers.length,
+      backspans,
     },
     notes,
   };
 }
 
+type Seg = { a: Vec3; b: Vec3; id: string };
+const dot2 = (u: readonly number[], v: readonly number[]) => u[0] * v[0] + u[1] * v[1];
+const unit2 = (a: readonly number[], b: readonly number[]): Vec2 | null => {
+  const l = Math.hypot(b[0] - a[0], b[1] - a[1]);
+  return l > 1e-9 ? [(b[0] - a[0]) / l, (b[1] - a[1]) / l] : null;
+};
+/** Ray origin + t·dir (dir a unit vector) crossing the line of ab: t and the fraction w on ab. */
+function rayHit(origin: Vec2, dir: Vec2, a: readonly number[], b: readonly number[]) {
+  const ex = b[0] - a[0],
+    ey = b[1] - a[1];
+  const den = dir[0] * ey - dir[1] * ex;
+  if (Math.abs(den) < 1e-12) return null;
+  const wx = a[0] - origin[0],
+    wy = a[1] - origin[1];
+  return { t: (wx * ey - wy * ex) / den, w: (wx * dir[1] - wy * dir[0]) / den };
+}
+/** Plan distance between segments pq and ab (0 when they cross). */
+function segSegDistance(p: Vec2, q: Vec2, a: readonly number[], b: readonly number[]) {
+  const d = unit2(p, q);
+  if (d) {
+    const hit = rayHit(p, d, a, b);
+    const l = Math.hypot(q[0] - p[0], q[1] - p[1]);
+    if (hit && hit.t >= 0 && hit.t <= l && hit.w >= 0 && hit.w <= 1) return 0;
+  }
+  const A: Vec2 = [a[0], a[1]],
+    B: Vec2 = [b[0], b[1]];
+  return Math.min(
+    segmentDistance(p, A, B),
+    segmentDistance(q, A, B),
+    segmentDistance(A, p, q),
+    segmentDistance(B, p, q),
+  );
+}
+
+/** A continuation must lie within this angle of the outward direction (cos 45°). */
+const CONTINUE_COS = Math.SQRT1_2;
+/** A beam across the root girder continues a cut beam when within this angle of its line (cos 15°). */
+const LINE_COS = Math.cos(Math.PI / 12);
+
 /**
- * Stations along every outer girder edge (a cell on one side only) at the beam pitch; a ray from
- * each outward to the slab edge (or a void) that meets no other girder first is an edge strip. It
- * is listed when the slab-edge point is farther than the limit from the nearest girder.
+ * Edge cantilevers and the back spans that hold them. Stations along every outer girder edge (a
+ * cell on one side only) at the beam pitch; a ray from each outward to the slab edge (or a void)
+ * that meets no other girder first — and does not run along one — is an edge strip, listed when the
+ * slab-edge point is farther than the limit from the nearest girder. Each such cantilever continues
+ * the nearest interior beam ending on that girder within half a spacing (that beam end becomes
+ * rigid); without one it goes out square from the girder with a back-span beam in the cell behind.
+ * Beams cut by the slab edge or a void get a back span across their root girder too. A gap wider
+ * than a spacing left between cantilevers of one edge gets square ones; each carries the strip
+ * half-way to its neighbours (`width_m`). Adds the back spans to `beams` and marks `rigidAt` there.
  */
-function cantilevers(
+function frameCantilevers(
   girders: readonly GirderRow[],
   cells: readonly CellRow[],
   slab: { outer: Vec2[]; holes: Vec2[][] },
   p: BeamsParams,
-): EdgeCantileverRow[] {
-  const inCell = (q: Vec2) =>
-    cells.some((c) => pointInRegion(q, { outer: c.polygon, holes: c.holes ?? [] }, 0));
+  beams: BeamRow[],
+): { rows: EdgeCantileverRow[]; unheld: number } {
+  const cellAt = (q: Vec2) =>
+    cells.find((c) => pointInRegion(q, { outer: c.polygon, holes: c.holes ?? [] }, 0));
   const inSlab = (q: Vec2) => pointInRegion(q, slab, 0);
-  const segs: { a: Vec3; b: Vec3; id: string }[] = [];
+  const segs: Seg[] = [];
   for (const g of girders)
     for (let i = 1; i < (g.points?.length ?? 0); i++)
       segs.push({ a: g.points[i - 1], b: g.points[i], id: g.id });
   const rings = [slab.outer, ...slab.holes];
+  const tol = Math.max(p.endTol_m, 1e-3);
+  // Infill beams with both ends on girders: the lines a cantilever or a back span may use.
+  const infill = beams.filter((b) => b.from.girderId && b.to.girderId && !b.backspanOf);
+  const counters = new Map<string, number>();
+  const markRigid = (b: BeamRow, end: 'from' | 'to') => {
+    const list = b.rigidAt ?? [];
+    if (!list.includes(end)) list.push(end);
+    b.rigidAt = list;
+  };
+  /** The ray from `origin` along `dir` runs within 5 cm of a girder between 0.5 m and length − 0.5 m. */
+  const runsAlong = (origin: Vec2, dir: Vec2, length: number) => {
+    if (!(length > 1)) return false;
+    const a: Vec2 = [origin[0] + dir[0] * 0.5, origin[1] + dir[1] * 0.5];
+    const b: Vec2 = [origin[0] + dir[0] * (length - 0.5), origin[1] + dir[1] * (length - 0.5)];
+    return segs.some((o) => segSegDistance(a, b, o.a, o.b) < 0.05);
+  };
+  const endPoint = (b: BeamRow, end: 'from' | 'to') =>
+    end === 'from' ? b.points[0] : b.points[b.points.length - 1];
+  const otherPoint = (b: BeamRow, end: 'from' | 'to') =>
+    end === 'from' ? b.points[b.points.length - 1] : b.points[0];
+
+  /** Back span from `root` (on `girder`) along `dir` inside `cell` to the first infill beam or girder. */
+  const addBackspan = (
+    root: Vec3,
+    girder: { id: string; t: number },
+    dir: Vec2,
+    cell: CellRow,
+    of: string,
+  ): BeamRow | null => {
+    const origin: Vec2 = [root[0], root[1]];
+    const exits = [cell.polygon, ...(cell.holes ?? [])]
+      .flatMap((r) => lineCrossings(origin, dir, r))
+      .filter((t) => t > tol)
+      .sort((a, b) => a - b);
+    let stop = exits[0];
+    if (stop === undefined) return null;
+    // A girder already running inward from the root (a corner station) is the back span.
+    if (runsAlong(origin, dir, stop)) return null;
+    let onBeam: { beam: BeamRow; w: number } | null = null;
+    for (const b of infill) {
+      if (b.cellId !== cell.id) continue;
+      const hit = rayHit(origin, dir, b.points[0], b.points[b.points.length - 1]);
+      if (!hit || hit.w < 0.01 || hit.w > 0.99 || hit.t < p.minLength_m || hit.t >= stop) continue;
+      stop = hit.t;
+      onBeam = { beam: b, w: hit.w };
+    }
+    if (stop < p.minLength_m) return null;
+    const at: Vec2 = [origin[0] + dir[0] * stop, origin[1] + dir[1] * stop];
+    let to: BeamEnd, z: number;
+    if (onBeam) {
+      const a = onBeam.beam.points[0],
+        b = onBeam.beam.points[onBeam.beam.points.length - 1];
+      to = { girderId: null, t: null, beamId: onBeam.beam.id };
+      z = a[2] + onBeam.w * (b[2] - a[2]);
+    } else {
+      const hit = nearestGirder(at, girders);
+      // The far end must sit on a girder: a back span ending at the slab edge holds nothing.
+      if (!hit || hit.distance > tol) return null;
+      to = { girderId: hit.girder.id, t: r4(hit.t) };
+      z = hit.z;
+    }
+    const k = (counters.get(cell.id) ?? 0) + 1;
+    counters.set(cell.id, k);
+    const row: BeamRow = {
+      id: `${cell.id}-R${String(k).padStart(2, '0')}`,
+      cellId: cell.id,
+      points: [p3(root), p3([at[0], at[1], z])],
+      from: { girderId: girder.id, t: r4(girder.t) },
+      to,
+      length_m: r4(stop),
+      rigidAt: ['from'],
+      backspanOf: of,
+    };
+    beams.push(row);
+    return row;
+  };
+
+  // 1. Beams cut by the slab edge or a void: continue them through the root girder.
+  let unheld = 0;
+  for (const b of beams.filter((x) => !infill.includes(x))) {
+    const on: 'from' | 'to' | null = b.from.girderId
+      ? b.to.girderId
+        ? null
+        : 'from'
+      : b.to.girderId
+        ? 'to'
+        : null;
+    if (!on || b.backspanOf) continue;
+    const root = endPoint(b, on);
+    const dir = unit2(otherPoint(b, on), root);
+    if (!dir) continue;
+    const far = otherPoint(b, on);
+    const cutLength = Math.hypot(far[0] - root[0], far[1] - root[1]);
+    // The nearest beam line across the root girder (another cell's beam ending on that girder
+    // within half a spacing, within 15° of this line): the cut beam's root moves onto that end and
+    // the two run on continuously through the girder.
+    const rootGirder = b[on].girderId!;
+    let best: { beam: BeamRow; end: 'from' | 'to'; gap: number } | null = null;
+    for (const o of infill) {
+      if (o.cellId === b.cellId) continue;
+      for (const e of ['from', 'to'] as const) {
+        if (o[e].girderId !== rootGirder) continue;
+        const end = endPoint(o, e);
+        const v = unit2(end, otherPoint(o, e));
+        const gap = Math.hypot(end[0] - root[0], end[1] - root[1]);
+        if (!v || dot2(v, dir) < LINE_COS || gap > p.beamSpacing_m / 2 + 1e-9) continue;
+        // Moving the root sideways skews the cut beam: at most 15° off its own line.
+        const lateral = Math.abs(dir[0] * (end[1] - root[1]) - dir[1] * (end[0] - root[0]));
+        if (lateral > Math.max(tol, cutLength * Math.tan(Math.PI / 12))) continue;
+        if (!best || gap < best.gap) best = { beam: o, end: e, gap };
+      }
+    }
+    if (best) {
+      markRigid(best.beam, best.end);
+      if (best.gap > 1e-6) {
+        const end = endPoint(best.beam, best.end);
+        const moved = p3([end[0], end[1], end[2]]);
+        if (on === 'from') b.points[0] = moved;
+        else b.points[b.points.length - 1] = moved;
+        b[on] = { girderId: rootGirder, t: best.beam[best.end].t };
+        b.length_m = r4(
+          Math.hypot(b.points[1][0] - b.points[0][0], b.points[1][1] - b.points[0][1]),
+        );
+      }
+      continue;
+    }
+    const beyond = cellAt([root[0] + dir[0] * 0.05, root[1] + dir[1] * 0.05]);
+    if (!beyond || beyond.id === b.cellId) {
+      unheld++;
+      continue;
+    }
+    const girder = { id: rootGirder, t: b[on].t ?? 0 };
+    if (!addBackspan(root, girder, dir, beyond, b.id)) unheld++;
+  }
+
+  // 2. Edge strips.
   const out: EdgeCantileverRow[] = [];
   const seen = new Set<string>();
   const probe = 0.05;
+  /** Ray from `from` along `dir` to the slab edge; null when a girder frames it first. */
+  const reachEdge = (from: Vec2, dir: Vec2, own: Seg) => {
+    const hits = rings
+      .flatMap((ring) => lineCrossings(from, dir, ring))
+      .filter((t) => t > 1e-6)
+      .sort((a, b) => a - b);
+    const d = hits[0];
+    if (d === undefined) return null;
+    const end: Vec2 = [from[0] + dir[0] * d, from[1] + dir[1] * d];
+    const crossed = segs.some((o) => {
+      if (o === own) return false;
+      const hit = rayHit(from, dir, o.a, o.b);
+      return !!hit && hit.t > 1e-3 && hit.t < d - 1e-3 && hit.w >= 0 && hit.w <= 1;
+    });
+    // A ray running along another girder (a corner station) is that girder, not a strip.
+    if (crossed || runsAlong(from, dir, d)) return null;
+    let reach = Infinity;
+    for (const o of segs) reach = Math.min(reach, segmentDistance(end, o.a, o.b));
+    return { d, end, reach };
+  };
+  const nextId = () => `E${String(out.length + 1).padStart(2, '0')}`;
+  type Ray = { d: number; end: Vec2; reach: number };
+  const push = (girderId: string, t: number, root: Vec3, ray: Ray, continues?: string) => {
+    const row: EdgeCantileverRow = {
+      id: nextId(),
+      from: { girderId, t: r4(t) },
+      points: [p3(root), p3([ray.end[0], ray.end[1], root[2]])],
+      length_m: r4(ray.d),
+      cantilever_m: r4(ray.reach),
+      ...(continues ? { continues } : {}),
+      width_m: 0,
+    };
+    out.push(row);
+    return row;
+  };
+  const half = p.beamSpacing_m / 2;
   for (const s of segs) {
     const dx = s.b[0] - s.a[0],
       dy = s.b[1] - s.a[1];
@@ -364,55 +613,105 @@ function cantilevers(
       mid[0] + sign * left[0] * probe,
       mid[1] + sign * left[1] * probe,
     ];
-    const l = inCell(side(1)),
-      r = inCell(side(-1));
-    if (l === r) continue;
-    const outward: Vec2 = l ? [-left[0], -left[1]] : left;
-    if (!inSlab(side(l ? -1 : 1))) continue;
+    const lc = cellAt(side(1)),
+      rc = cellAt(side(-1));
+    if (!!lc === !!rc) continue;
+    const inner = (lc ?? rc)!;
+    const outward: Vec2 = lc ? [-left[0], -left[1]] : left;
+    if (!inSlab(side(lc ? -1 : 1))) continue;
+    const own = girders.filter((g) => g.id === s.id);
+    // Interior beam ends on this girder edge whose line points outward (within 45°).
+    const lines = infill.flatMap((b) =>
+      (['from', 'to'] as const).flatMap((e) => {
+        const end = endPoint(b, e);
+        const v = unit2(otherPoint(b, e), end);
+        if (b[e].girderId !== s.id || !v || dot2(v, outward) < CONTINUE_COS) return [];
+        const plan: Vec2 = [end[0], end[1]];
+        if (segmentDistance(plan, [s.a[0], s.a[1]], [s.b[0], s.b[1]]) > tol) return [];
+        const at = dot2([end[0] - s.a[0], end[1] - s.a[1]], along);
+        return [{ beam: b, end: e, point: end, dir: v, at }];
+      }),
+    );
+    // Planned cantilevers of this edge by their station along it: a continued interior beam line
+    // or a square one (with a back span); made in station order once the gaps are filled.
+    type Planned =
+      | { at: number; line: (typeof lines)[number]; ray: Ray }
+      | { at: number; from: Vec2; ray: Ray };
+    const planned: Planned[] = [];
+    /** A square cantilever at `u·len` when the strip there needs one and nothing was put there. */
+    const square = (u: number): { from: Vec2; ray: Ray } | null => {
+      const from: Vec2 = [s.a[0] + u * dx, s.a[1] + u * dy];
+      const key = `${Math.round(from[0] * 1000)},${Math.round(from[1] * 1000)},${Math.round(outward[0] * 1000)},${Math.round(outward[1] * 1000)}`;
+      if (seen.has(key)) return null;
+      seen.add(key);
+      const ray = reachEdge(from, outward, s);
+      return ray && ray.reach > p.cantileverMax_m ? { from, ray } : null;
+    };
     const count = Math.max(1, Math.ceil(len / p.beamSpacing_m - 1e-9));
     for (let i = 0; i <= count; i++) {
       const u = i / count;
-      const from: Vec2 = [s.a[0] + u * dx, s.a[1] + u * dy];
-      const key = `${Math.round(from[0] * 1000)},${Math.round(from[1] * 1000)},${Math.round(outward[0] * 1000)},${Math.round(outward[1] * 1000)}`;
-      if (seen.has(key)) continue;
-      seen.add(key);
-      const hits = rings
-        .flatMap((ring) => lineCrossings(from, outward, ring))
-        .filter((t) => t > 1e-6)
-        .sort((a, b) => a - b);
-      const d = hits[0];
-      if (d === undefined) continue;
-      // Another girder crossed before the edge: the strip is framed there, not a cantilever.
-      const blocked = segs.some((o) => {
-        if (o === s) return false;
-        const ex = o.b[0] - o.a[0],
-          ey = o.b[1] - o.a[1];
-        const den = outward[0] * ey - outward[1] * ex;
-        if (Math.abs(den) < 1e-12) return false;
-        const wx = o.a[0] - from[0],
-          wy = o.a[1] - from[1];
-        const t = (wx * ey - wy * ex) / den;
-        const w = (wx * outward[1] - wy * outward[0]) / den;
-        return t > 1e-3 && t < d - 1e-3 && w >= 0 && w <= 1;
-      });
-      if (blocked) continue;
-      const end: Vec2 = [from[0] + outward[0] * d, from[1] + outward[1] * d];
-      let reach = Infinity;
-      for (const o of segs) reach = Math.min(reach, segmentDistance(end, o.a, o.b));
-      if (!(reach > p.cantileverMax_m)) continue;
-      const hit = nearestGirder(
-        from,
-        girders.filter((g) => g.id === s.id),
-      );
-      const z = hit?.z ?? s.a[2];
-      out.push({
-        id: `E${String(out.length + 1).padStart(2, '0')}`,
-        from: { girderId: s.id, t: r4(hit?.t ?? 0) },
-        points: [p3([from[0], from[1], z]), p3([end[0], end[1], z])],
-        length_m: r4(d),
-        cantilever_m: r4(reach),
-      });
+      const station = square(u);
+      if (!station) continue;
+      // The nearest interior beam line within half a spacing carries the cantilever on.
+      const near = lines
+        .filter((l) => Math.abs(l.at - u * len) <= half + 1e-9)
+        .sort((x, y) => Math.abs(x.at - u * len) - Math.abs(y.at - u * len));
+      let done = false;
+      for (const l of near) {
+        const lineKey = `${l.beam.id}:${l.end}`;
+        if (seen.has(lineKey)) {
+          done = true;
+          break;
+        }
+        const ray = reachEdge([l.point[0], l.point[1]], l.dir, s);
+        // A skew line far longer than the square strip is not this strip's cantilever.
+        if (!ray || ray.d > station.ray.d * 1.5 + 0.5) continue;
+        seen.add(lineKey);
+        planned.push({ at: l.at, line: l, ray });
+        done = true;
+        break;
+      }
+      if (!done) planned.push({ at: u * len, ...station });
     }
+    // Snapping stations onto beam lines can open a gap wider than a spacing (e.g. where a girder,
+    // not a beam, meets this edge): square cantilevers fill it, so no part of the strip is left
+    // without one and none carries more than a spacing.
+    const anchors = [0, ...planned.map((x) => x.at).sort((a, b) => a - b), len];
+    for (let k = 1; k < anchors.length; k++) {
+      const gap = anchors[k] - anchors[k - 1];
+      if (!(gap > p.beamSpacing_m + 1e-6)) continue;
+      const extra = Math.ceil(gap / p.beamSpacing_m - 1e-9) - 1;
+      for (let j = 1; j <= extra; j++) {
+        const at = anchors[k - 1] + (gap * j) / (extra + 1);
+        const station = square(at / len);
+        if (station) planned.push({ at, ...station });
+      }
+    }
+    planned.sort((a, b) => a.at - b.at);
+    const rows: EdgeCantileverRow[] = [];
+    for (const x of planned) {
+      if ('line' in x) {
+        markRigid(x.line.beam, x.line.end);
+        const t = nearestGirder(x.line.point, own)?.t ?? 0;
+        rows.push(push(s.id, t, x.line.point, x.ray, x.line.beam.id));
+        continue;
+      }
+      const hit = nearestGirder(x.from, own);
+      const root: Vec3 = [x.from[0], x.from[1], hit?.z ?? s.a[2]];
+      const t = hit?.t ?? 0;
+      // The cell behind this station (a long girder edge can border several cells).
+      const behind =
+        cellAt([x.from[0] - outward[0] * probe, x.from[1] - outward[1] * probe]) ?? inner;
+      const back = addBackspan(root, { id: s.id, t }, [-outward[0], -outward[1]], behind, nextId());
+      rows.push(push(s.id, t, root, x.ray, back?.id));
+    }
+    // Strip widths: half the distance to each neighbour, at most half a spacing on each side.
+    rows.forEach((row, k) => {
+      const toPrev = k > 0 ? Math.min((planned[k].at - planned[k - 1].at) / 2, half) : undefined;
+      const toNext =
+        k < rows.length - 1 ? Math.min((planned[k + 1].at - planned[k].at) / 2, half) : undefined;
+      row.width_m = r4((toPrev ?? toNext ?? half) + (toNext ?? toPrev ?? half));
+    });
   }
-  return out;
+  return { rows: out, unheld };
 }

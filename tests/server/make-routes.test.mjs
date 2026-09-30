@@ -1,13 +1,24 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Readable } from 'node:stream';
 import { Store } from '../../src/core/store.ts';
 import { Workspace } from '../../src/core/workspace.ts';
 import { JigStore } from '../../src/core/jig-store.ts';
-import { makeRoutes } from '../../src/server/make-routes.ts';
+import {
+  MAKE_LIMITS,
+  MAKE_TURN_CAP,
+  MakeTurnGuard,
+  makeRoutes,
+  makeTurnResult,
+} from '../../src/server/make-routes.ts';
+import {
+  TURN_OUTPUT_JSON_SCHEMA,
+  turnOutputResult,
+  turnOutputSchema,
+} from '../../src/server/turn-output.ts';
 import { closeJigRuntime } from '../../src/server/jig-routes.ts';
 import { ConversationService, conversationRoutes } from '../../src/server/conversations.ts';
 import {
@@ -23,7 +34,12 @@ import {
   instructionFor,
 } from '../../src/ai/agent-connection.ts';
 import { cliArguments, sessionArguments } from '../../src/ai/claude-cli.ts';
-import { codexArguments } from '../../src/ai/codex-cli.ts';
+import {
+  CodexCli,
+  codexArguments,
+  makeOutputSchema,
+  withDraftFiles,
+} from '../../src/ai/codex-cli.ts';
 
 // T-063 part 1 (PLAN-22): the jig-drafts routes, the make-conversation and its turn's tools and
 // CLI arguments. Synthetic drafts only; no provider runs, no host.
@@ -271,4 +287,203 @@ test('Claude make turns get file tools on the draft folder only; Codex gets none
   // Without a draft folder the file tools stay refused.
   const plain = agentConnection({ ...connection, draftDir: undefined });
   assert.equal(allowedAgentEvent({ name: 'Read' }, 'claude', plain), false);
+});
+
+test('jig_delete_file deletes in the draft only and is a registered make tool', async (t) => {
+  const { call, base, conversation, workspace } = setup(t);
+  const draft = (await call('POST', base, { name: 'delete', from: 'blank' })).data;
+  const made = (await conversation({ mode: 'make', draftId: draft.id })).data;
+  const sources = conversationSources(workspace, made);
+  const tools = new AgentTools({ origin: 'http://127.0.0.1:47999' });
+  const scope = tools.issueConversation(sources);
+  assert.ok(scope.connection.tools.includes('jig_delete_file'));
+  writeFileSync(join(draft.path, 'steps', 'old.ts'), 'export const x = 1;\n');
+  const run = async (path) =>
+    JSON.parse(
+      (await tools.call(scope.connection.token, 'jig_delete_file', { path })).content[0].text,
+    );
+  assert.deepEqual(await run('steps/old.ts'), { path: 'steps/old.ts', deleted: true });
+  assert.equal(existsSync(join(draft.path, 'steps', 'old.ts')), false);
+  assert.deepEqual(await run('jig.json'), { code: 'DRAFT_PATH_INVALID' });
+  assert.deepEqual(await run('../other.ts'), { code: 'DRAFT_OUTSIDE' });
+  assert.deepEqual(await run('.claude/settings.json'), { code: 'DRAFT_FORBIDDEN_FILE' });
+  assert.deepEqual(await run('steps/none.ts'), { code: 'NOT_FOUND' });
+  scope.revoke();
+  tools.close();
+  assert.match(instructionFor(scope.connection), /jig_delete_file/);
+});
+
+test('three failures for the same reason stop the make turn with a question card', async (t) => {
+  const { call, base, conversation, workspace, project } = setup(t);
+  const draft = (await call('POST', base, { name: 'stop', from: 'blank' })).data;
+  const made = (await conversation({ mode: 'make', draftId: draft.id })).data;
+  const sources = conversationSources(workspace, made);
+  assert.equal(sources.draft.guard.turns, 1);
+  assert.equal(sources.draft.guard.stop, undefined);
+  const handlers = conversationHandlers(sources);
+  const expect = join(draft.path, 'fixtures', 'basic', 'expect.json');
+  writeFileSync(expect, JSON.stringify({ steps: { main: { total: 999 } } }));
+  assert.equal((await handlers.jig_test({})).stop, undefined);
+  // A pass in between starts the count again.
+  assert.equal((await handlers.jig_validate({})).ok, true);
+  assert.equal((await handlers.jig_test({})).stop, undefined);
+  assert.equal((await handlers.jig_test({})).stop, undefined);
+  const third = await handlers.jig_test({});
+  assert.equal(third.ok, false);
+  assert.equal(third.stop, 'failures');
+  assert.match(third.next, /Stop now/);
+  // After the stop the make tools refuse.
+  for (const name of ['jig_validate', 'jig_test', 'jig_preview'])
+    await assert.rejects(async () => handlers[name]({}), /MAKE_STOPPED/);
+  assert.throws(() => handlers.jig_delete_file({ path: 'skill.md' }), /MAKE_STOPPED/);
+
+  const patch = await makeTurnResult(
+    project.id,
+    sources.draft,
+    { text: '{"status":"progress","text":"x","questions":[]}' },
+    { text: '합계 시험이 계속 다릅니다.' },
+  );
+  assert.equal(patch.turnOutput.status, 'question');
+  assert.equal(patch.turnOutput.stop.reason, 'failures');
+  assert.equal(patch.turnOutput.questions[0].id, 'make-stop-1');
+  assert.match(patch.text, /^합계 시험이 계속 다릅니다\.\n\n멈춘 이유/);
+  assert.match(patch.text, /basic/);
+  // The card is a valid question card: the answer flow reads it back from the ledger.
+  const parsed = turnOutputSchema.safeParse({
+    status: 'question',
+    text: '',
+    questions: patch.turnOutput.questions,
+  });
+  assert.ok(parsed.success, JSON.stringify(parsed.error?.issues));
+});
+
+test('the turn cap stops every twentieth turn past the cap', async () => {
+  assert.equal(new MakeTurnGuard(20).stop, undefined);
+  assert.deepEqual(new MakeTurnGuard(21).stop, { reason: 'turn-cap', turns: 21 });
+  assert.equal(new MakeTurnGuard(22).stop, undefined);
+  assert.equal(new MakeTurnGuard(41).stop?.reason, 'turn-cap');
+  assert.equal(MAKE_TURN_CAP, 20);
+  const guard = new MakeTurnGuard(21);
+  assert.throws(() => guard.check(), /MAKE_STOPPED/);
+  const patch = await makeTurnResult('p', { draftId: 'd', drafts: {}, guard }, {}, { text: '' });
+  assert.equal(patch.turnOutput.questions[0].id, 'make-turn-cap-21');
+  assert.equal(patch.turnOutput.questions[0].options[0].id, 'new-conversation');
+  assert.match(patch.text, /^멈춘 이유: 20턴 초과/);
+});
+
+test('a Codex make turn returns its files in the output; VIDE writes, checks and refuses', async (t) => {
+  const { call, base, conversation, conversations, workspace, project } = setup(t);
+  const draft = (await call('POST', base, { name: 'codex make', from: 'blank' })).data;
+  // A Codex make-conversation runs the ledger method.
+  const made = (
+    await conversation({ mode: 'make', draftId: draft.id, provider: 'codex-cli', model: 'gpt-5' })
+  ).data;
+  assert.equal(made.provider, 'codex-cli');
+  assert.equal(conversations.store.get(project.id, made.id).mode, 'ledger');
+  // Every make turn (an answer turn too) takes the make budgets.
+  const input = { conversationId: made.id };
+  conversations.fix(project.id, input);
+  assert.deepEqual(input.executionLimits, MAKE_LIMITS);
+  assert.equal(input.hostUse, 'none');
+
+  writeFileSync(join(draft.path, 'steps', 'gone.ts'), 'export {};\n');
+  const main = `export function main(_i: unknown, params: { count: number }) {
+  const items = Array.from({ length: params.count }, (_, i) => ({ key: 'item:' + (i + 1), value: 2 }));
+  return { items, total: items.length * 2 };
+}
+`;
+  const output = {
+    status: 'done',
+    text: '두 배로 바꿨습니다.',
+    questions: [],
+    files: [
+      { path: 'steps/main.ts', content: main },
+      { path: 'fixtures/basic/expect.json', content: '{"steps":{"main":{"total":6}}}\n' },
+      { path: 'steps/gone.ts', content: null },
+      { path: 'CLAUDE.md', content: '# no' },
+      { path: '../escape.ts', content: 'x' },
+    ],
+  };
+  const result = { text: JSON.stringify(output) };
+  // The checked turn output keeps text and questions; the files never go into the result.
+  const checked = turnOutputResult({ structured: true }, result);
+  assert.equal(checked.turnOutputError, undefined);
+  assert.equal(checked.text, '두 배로 바꿨습니다.');
+  assert.equal('files' in checked, false);
+
+  const sources = conversationSources(workspace, made);
+  const patch = await makeTurnResult(project.id, sources.draft, result, checked);
+  assert.deepEqual(patch.makeFiles.written, ['steps/main.ts', 'fixtures/basic/expect.json']);
+  assert.deepEqual(patch.makeFiles.deleted, ['steps/gone.ts']);
+  assert.deepEqual(patch.makeFiles.refused, [
+    { path: 'CLAUDE.md', code: 'DRAFT_FORBIDDEN_FILE' },
+    { path: '../escape.ts', code: 'DRAFT_OUTSIDE' },
+  ]);
+  assert.deepEqual(patch.makeFiles.validate, { ok: true, issues: 0 });
+  assert.deepEqual(patch.makeFiles.test, { ok: true, failed: 0 });
+  assert.equal(patch.turnOutput, undefined);
+  assert.equal(readFileSync(join(draft.path, 'steps', 'main.ts'), 'utf8'), main);
+  assert.equal(existsSync(join(draft.path, 'steps', 'gone.ts')), false);
+  assert.equal(existsSync(join(draft.path, 'CLAUDE.md')), false);
+  // Invalid files are not guessed at: nothing is written and the reason goes back.
+  const none = await makeTurnResult(
+    project.id,
+    sources.draft,
+    { text: JSON.stringify({ ...output, files: [{ path: 'x.ts' }] }) },
+    {},
+  );
+  assert.deepEqual(none.makeFiles, {
+    written: [],
+    deleted: [],
+    refused: [{ path: '', code: 'MAKE_FILES_INVALID' }],
+  });
+  assert.equal(existsSync(join(draft.path, 'x.ts')), false);
+  // No files in the output: nothing to report.
+  const quiet = await makeTurnResult(project.id, sources.draft, { text: '{"status":"done"}' }, {});
+  assert.equal(quiet.makeFiles, undefined);
+});
+
+test('Codex make turns get the draft files in the packet and a files output schema', async (t) => {
+  const { call, base } = setup(t);
+  const draft = (await call('POST', base, { name: 'codex packet', from: 'blank' })).data;
+  writeFileSync(join(draft.path, 'AGENTS.md'), '# not for the packet');
+  const connection = agentConnection({
+    url: 'http://127.0.0.1:47999/mcp',
+    token: 'a'.repeat(64),
+    tools: ['jig_validate', 'jig_test', 'jig_preview', 'jig_delete_file', 'ask_user'],
+    draftDir: draft.path,
+  });
+  const args = configureAgentArguments(codexArguments('gpt-5'), 'codex', connection);
+  const instructions = args.find((value) => value.startsWith('developer_instructions='));
+  assert.match(instructions, /no file tools/);
+  assert.match(instructions, /draft-files/);
+  assert.doesNotMatch(instructionFor(connection), /draft-files/);
+
+  const schema = JSON.parse(makeOutputSchema(JSON.stringify(TURN_OUTPUT_JSON_SCHEMA)));
+  assert.deepEqual(schema.required, ['status', 'text', 'questions', 'files']);
+  assert.deepEqual(schema.properties.files.items.required, ['path', 'content']);
+  const cli = new CodexCli({ executable: process.execPath, agent: connection });
+  const folder = mkdtempSync(join(tmpdir(), 'vide-codex-schema-'));
+  t.after(() => rmSync(folder, { recursive: true, force: true }));
+  const withSchema = await cli.withOutputSchema(
+    ['exec', '-'],
+    JSON.stringify(TURN_OUTPUT_JSON_SCHEMA),
+    folder,
+  );
+  const file = withSchema[withSchema.indexOf('--output-schema') + 1];
+  assert.ok(JSON.parse(readFileSync(file, 'utf8')).properties.files);
+
+  const packet = await withDraftFiles(
+    { goal: 'x', revision: 1, items: [{ id: 'a', type: 'note', data: 1 }], includedIds: ['a'] },
+    draft.path,
+  );
+  assert.deepEqual(packet.includedIds, ['a', 'draft-files']);
+  const files = packet.items.at(-1).data.files;
+  const paths = files.map((entry) => entry.path);
+  assert.ok(paths.includes('jig.json') && paths.includes('steps/main.ts'));
+  assert.ok(!paths.includes('AGENTS.md'));
+  assert.match(
+    files.find((entry) => entry.path === 'steps/main.ts').content,
+    /export function main/,
+  );
 });

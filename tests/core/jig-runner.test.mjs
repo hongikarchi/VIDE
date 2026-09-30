@@ -3,10 +3,12 @@ import assert from 'node:assert/strict';
 import { randomBytes } from 'node:crypto';
 import {
   chmodSync,
+  cpSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
   readdirSync,
+  readFileSync,
   rmSync,
   statSync,
   writeFileSync,
@@ -778,4 +780,178 @@ test('routes: remote sessions cannot import or pin; pin needs confirmation; inst
     { code: 'NOT_FOUND' },
   );
   assert.equal((await call('GET', '/api/v1/projects/p/jigs/sync')).status, 0);
+});
+
+// ARCH-03 §6.2·§6.3 (PLAN-23 T-056): a step that reads itself gets its previous kept output, also
+// after a failed run and across a restart; a step output's `apply.overrides` is written into the
+// instance once, which makes the confirmation that led to it wait again.
+const PRIOR_STEPS = `
+export function counter(inputs, params) {
+  if (params.spacingX > 12) throw new Error('너무 넓음');
+  const prior = inputs.steps.counter;
+  return { runs: (prior?.runs ?? 0) + 1, sawPrior: prior !== null && prior !== undefined };
+}
+export function asker(inputs) {
+  const n = inputs.steps.counter.runs;
+  return {
+    n,
+    apply: {
+      overrides: [
+        { id: 'demo:k1', target: { kind: 'member', identity: { key: 'k1' } }, op: 'set',
+          fields: { section: 'H-200x100x5.5x8', n }, origin: 'table', by: 'user' },
+        { target: { kind: 'member', identity: { key: 'no-id' } }, op: 'set', fields: {},
+          origin: 'table', by: 'user' },
+      ],
+    },
+  };
+}
+`;
+function priorJig(root) {
+  const dir = join(root, 'jigs', 'prior-demo');
+  mkdirSync(join(dir, 'steps'), { recursive: true });
+  const manifest = JSON.parse(readFileSync(join(EXAMPLE, 'jig.json'), 'utf8'));
+  for (const name of ['panel.json', 'skill.md']) cpSync(join(EXAMPLE, name), join(dir, name));
+  cpSync(join(EXAMPLE, 'steps'), join(dir, 'steps'), { recursive: true });
+  cpSync(join(EXAMPLE, 'schemas'), join(dir, 'schemas'), { recursive: true });
+  cpSync(join(EXAMPLE, 'fixtures'), join(dir, 'fixtures'), { recursive: true });
+  writeFileSync(join(dir, 'steps', 'prior.ts'), PRIOR_STEPS);
+  manifest.id = 'project/prior-demo';
+  manifest.steps.push(
+    {
+      id: 'counter',
+      title: '횟수',
+      kind: 'code',
+      entry: 'steps/prior.ts#counter',
+      reads: ['step.counter', 'param.spacingX'],
+      writes: 'counter',
+      speed: 'release',
+    },
+    {
+      id: 'applyIt',
+      title: '적용 확인',
+      kind: 'human',
+      slot: 'confirm-inputs',
+      needs: ['counter'],
+      reads: ['step.counter'],
+      writes: 'applyIt',
+      speed: 'confirm',
+      blocks: ['asker'],
+    },
+    {
+      id: 'asker',
+      title: '적용',
+      kind: 'code',
+      entry: 'steps/prior.ts#asker',
+      needs: ['applyIt'],
+      reads: ['step.counter'],
+      writes: 'asker',
+      speed: 'button',
+    },
+  );
+  writeFileSync(join(dir, 'jig.json'), JSON.stringify(manifest, null, 2));
+  return join(root, 'jigs');
+}
+
+test('prior outputs and apply requests: kept across runs, failures and restarts; applied once', async (t) => {
+  const root = mkdtempSync(join(tmpdir(), 'vide-jig-prior-'));
+  const dataDir = join(root, 'data');
+  mkdirSync(dataDir, { recursive: true });
+  const devRoot = priorJig(root);
+  const filename = join(root, 'workspace.sqlite');
+  let state;
+  const open = () => {
+    const store = new Store(filename);
+    const jigStore = new JigStore(store.db);
+    const registry = new JigRegistry({ store: jigStore, dataDir, devRoots: [devRoot] });
+    const runtime = new JigRuntime({
+      store: jigStore,
+      dataDir,
+      registry,
+      child: { idleMs: 60_000 },
+    });
+    state = { store, jigStore, runtime };
+    return state;
+  };
+  t.after(async () => {
+    await state?.runtime.close();
+    state?.store.close();
+    rmrf(root);
+  });
+  let { store, jigStore, runtime } = open();
+  const project = store.createProject('이전 출력');
+  const created = await runtime.createInstance(project.id, {
+    jig: 'project/prior-demo',
+    title: '이전 출력 A',
+    layerRoot: 'VIDE::이전',
+  });
+  const status = (r, id) => r.steps.find((s) => s.id === id).status;
+  const out = (r) => r.outputs.counter;
+
+  const first = await runtime.run(project.id, created.id, { mode: 'geometry' });
+  assert.deepEqual(out(first), { runs: 1, sawPrior: false });
+  assert.equal(status(first, 'applyIt'), 'waiting');
+  // Same fingerprint: the cached result, whatever the prior was.
+  const same = await runtime.run(project.id, created.id, { mode: 'geometry' });
+  assert.equal(same.steps.find((s) => s.id === 'counter').cached, true);
+  assert.equal(
+    same.steps.find((s) => s.id === 'counter').inputHash,
+    first.steps.find((s) => s.id === 'counter').inputHash,
+  );
+  // A setting change recomputes with the previous output.
+  await runtime.setParams(project.id, created.id, {
+    values: [{ key: 'spacingX', value: 9 }],
+    by: 'user',
+  });
+  const second = await runtime.run(project.id, created.id, { mode: 'geometry' });
+  assert.deepEqual(out(second), { runs: 2, sawPrior: true });
+  // A failed run keeps the last kept result as the prior.
+  await runtime.setParams(project.id, created.id, {
+    values: [{ key: 'spacingX', value: 14 }],
+    by: 'user',
+  });
+  const failed = await runtime.run(project.id, created.id, { mode: 'geometry' });
+  assert.equal(status(failed, 'counter'), 'failed');
+  assert.ok(jigStore.run(created.id, 'counter').outputRef);
+  // …and across a restart.
+  await state.runtime.close();
+  state.store.close();
+  ({ store, jigStore, runtime } = open());
+  await runtime.setParams(project.id, created.id, {
+    values: [{ key: 'spacingX', value: 10 }],
+    by: 'user',
+  });
+  const third = await runtime.run(project.id, created.id, { mode: 'geometry' });
+  assert.deepEqual(out(third), { runs: 3, sawPrior: true });
+
+  // Confirmed: the action step asks for overrides; only the one with an id is written, once.
+  await runtime.confirmStep(
+    project.id,
+    created.id,
+    'applyIt',
+    third.steps.find((s) => s.id === 'applyIt').inputHash,
+  );
+  const applied = await runtime.run(project.id, created.id, { mode: 'geometry' });
+  const overrides = (await runtime.view(project.id, created.id)).body.overrides;
+  assert.deepEqual(
+    overrides.map((o) => [o.id, o.fields.n]),
+    [['demo:k1', 3]],
+  );
+  // The overrides changed every fingerprint: the returned run is the one after writing them.
+  assert.equal(status(applied, 'applyIt'), 'reconfirm');
+  assert.equal(status(applied, 'asker'), 'blocked');
+  assert.deepEqual(applied.applies, []);
+  assert.deepEqual(out(applied), { runs: 4, sawPrior: true });
+  // Confirmed again (the counter is cached at 4): the same id replaces the earlier override.
+  await runtime.confirmStep(
+    project.id,
+    created.id,
+    'applyIt',
+    applied.steps.find((s) => s.id === 'applyIt').inputHash,
+  );
+  await runtime.run(project.id, created.id, { mode: 'geometry' });
+  const replaced = (await runtime.view(project.id, created.id)).body.overrides;
+  assert.deepEqual(
+    replaced.map((o) => [o.id, o.fields.n]),
+    [['demo:k1', 4]],
+  );
 });

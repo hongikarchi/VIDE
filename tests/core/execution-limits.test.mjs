@@ -1,6 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { executionLimits, executionLimitsSchema } from '../../src/contracts/execution-limits.ts';
+import {
+  conversationTurnLimits,
+  executionLimits,
+  executionLimitsSchema,
+  requestLimits,
+} from '../../src/contracts/execution-limits.ts';
 import { initial, packet, failedRequestDraft } from '../../src/ui/model.ts';
 import { draftSnapshot, restoreDraft } from '../../src/ui/draft-storage.ts';
 import { interventionInput } from '../../src/core/intervention.ts';
@@ -46,4 +51,25 @@ test('request timeout is delivered to the actual provider factory', () => {
   assert.equal(received.timeoutMs, 60000);
   execution.provider({ provider: 'codex-cli' });
   assert.equal(received.timeoutMs, 180000);
+});
+test('conversation turns and their question-card answer turns default to the wide turn limits', () => {
+  const turn = { maxToolCalls: 100, maxHostCommands: 48, timeoutSeconds: 600 };
+  assert.deepEqual(executionLimits({ conversationId: 'c1' }), turn);
+  // The answer turn the server submits: same conversation, no host, no explicit limits.
+  assert.deepEqual(
+    executionLimits({ conversationId: 'c1', permission: 'review', hostUse: 'none' }),
+    turn,
+  );
+  assert.deepEqual(executionLimits({ conversationId: 'c1', linkedTargets: [] }), turn);
+  assert.equal(executionLimitsSchema.safeParse(conversationTurnLimits).success, true);
+  assert.deepEqual(executionLimits({ conversationId: 'c1', executionLimits: limits }), limits);
+  assert.deepEqual(executionLimits({}), requestLimits);
+  executionLimits({ conversationId: 'c1' }).maxToolCalls = 1;
+  assert.equal(conversationTurnLimits.maxToolCalls, 100);
+  let received;
+  new Execution({}, { providerFactory: (options) => ((received = options), {}) }).provider({
+    provider: 'claude-cli',
+    conversationId: 'c1',
+  });
+  assert.equal(received.timeoutMs, 600000);
 });

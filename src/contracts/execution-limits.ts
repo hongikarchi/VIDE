@@ -8,15 +8,27 @@ export const executionLimitsSchema = z
   })
   .strict();
 export type ExecutionLimits = z.infer<typeof executionLimitsSchema>;
+/** Single requests outside a conversation (and linked two-target runs): the earlier defaults. */
+export const requestLimits: ExecutionLimits = {
+  maxToolCalls: 30,
+  maxHostCommands: 12,
+  timeoutSeconds: 180,
+};
+/**
+ * A conversation turn (modeling, data or make) and the answer turn of its question cards: the
+ * schema maxima, so the AI can read, check and correct its work within one turn (SPEC-02.6).
+ */
+export const conversationTurnLimits: ExecutionLimits = {
+  maxToolCalls: 100,
+  maxHostCommands: 48,
+  timeoutSeconds: 600,
+};
 export function executionLimits(input: {
   executionLimits?: ExecutionLimits;
   linkedTargets?: unknown[];
-}) {
-  return (
-    input.executionLimits ?? {
-      maxToolCalls: input.linkedTargets ? 60 : 30,
-      maxHostCommands: 12,
-      timeoutSeconds: 180,
-    }
-  );
+  conversationId?: string;
+}): ExecutionLimits {
+  if (input.executionLimits) return input.executionLimits;
+  if (typeof input.conversationId === 'string') return { ...conversationTurnLimits };
+  return input.linkedTargets ? { ...requestLimits, maxToolCalls: 60 } : { ...requestLimits };
 }

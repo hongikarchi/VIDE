@@ -128,6 +128,8 @@ try {
       'heights',
       'bakePlan',
       'bakeMembers',
+      'applySections',
+      'sectionsApplied',
     ],
   );
   // Nothing is read yet: the required roles are missing and the assembly step says so.
@@ -201,11 +203,12 @@ try {
   assert.equal(await kpi('거더'), '6개');
   assert.equal(await kpi('기둥 없는 끝'), '1곳');
   assert.equal(await kpi('경간 초과'), '2개');
-  assert.equal(await kpi('작은보'), '5개');
-  assert.match(
-    await top.locator('.kit-kpi[data-kpi="최대 검정비"]').textContent(),
-    /미확정 미리보기/,
-  );
+  assert.equal(await kpi('작은보'), '9개'); // back spans included since 2026-09-30 (VERIFY s06-frame-m2 추가)
+  // The sandboxed jig child cannot start the analysis worker (steps/analysis.ts), so the preview
+  // reports 'unavailable'; the '미확정 미리보기' label shows only beside a preview value (kpiNote).
+  const ratioText = await top.locator('.kit-kpi[data-kpi="최대 검정비"]').textContent();
+  assert.match(ratioText, /해석 전/);
+  assert.doesNotMatch(ratioText, /미확정 미리보기/);
   const drawnTabs = await drawer.getByRole('tab').allTextContents();
   assert.deepEqual(
     drawnTabs.slice(0, 4).map((t) => t.replace(/\d+$/, '')),
@@ -222,7 +225,7 @@ try {
   );
   const corrected = await overlays();
   assert.equal(corrected.dangling, 1);
-  assert.equal(corrected.beams, 5);
+  assert.equal(corrected.beams, 9); // 5 infill beams + 4 back spans
   assert.equal(corrected.columns ?? 0, 0); // no proposed layout in drawn mode
   if (shot) await page.screenshot({ path: join(shot, 's06-jig-drawn.png') });
 
@@ -236,7 +239,16 @@ try {
   assert.match(steel, /예비 단면/);
   assert.deepEqual(
     drawnTabs.slice(4).map((t) => t.replace(/\d+$/, '')),
-    ['단면', '일람표', '높이', '만들기'],
+    [
+      '단면',
+      '일람표',
+      '높이',
+      '만들기',
+      '간섭 · 제안',
+      '배치 대안 · 제안',
+      '확인 목록',
+      '입력 조립',
+    ],
   );
   await drawer.getByRole('tab', { name: /^일람표/ }).click();
   const scheduleTable = drawer.getByRole('table', { name: '일람표' });

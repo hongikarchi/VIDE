@@ -5,6 +5,11 @@ export const queryPageFields = {
   limit: z.number().int().min(1).max(100).optional(),
   expectedRevision: z.number().int().nonnegative().optional(),
   objectIds: z.array(z.string().min(1).max(256)).min(1).max(100).optional(),
+  /** `page.cursor` of the previous page: its revision and next offset in one value. */
+  cursor: z
+    .string()
+    .regex(/^\d{1,15}:\d{1,7}$/)
+    .optional(),
 };
 const optionsSchema = z.object(queryPageFields);
 export type QueryPageOptions = z.infer<typeof optionsSchema>;
@@ -29,10 +34,18 @@ const snapshotSchema = z.object({
 const fail = (code: string): never => {
   throw Object.assign(new Error(code), { code });
 };
+/** A cursor stands for offset + expectedRevision; giving both forms at once is ambiguous. */
+function cursorOptions(input: QueryPageOptions): QueryPageOptions {
+  if (input.cursor === undefined) return input;
+  if (input.offset !== undefined || input.expectedRevision !== undefined) fail('INVALID_INPUT');
+  const [revision, offset] = input.cursor.split(':').map(Number);
+  if (offset > 1000000) fail('INVALID_INPUT');
+  return { ...input, offset, expectedRevision: revision };
+}
 
 /** Bound agent output only; full snapshots remain in the native verification path. */
 export function queryPage(raw: unknown, options: QueryPageOptions = {}, revision?: number) {
-  const input = optionsSchema.parse(options);
+  const input = cursorOptions(optionsSchema.parse(options));
   const snapshot = snapshotSchema.parse(raw);
   const currentRevision = snapshot.revision ?? revision ?? 0;
   const offset = input.offset ?? 0;
@@ -69,6 +82,11 @@ export function queryPage(raw: unknown, options: QueryPageOptions = {}, revision
     uncertain: snapshot.uncertain,
     units: snapshot.units,
     ...(model ? { model: { ...metadata, objects, scene: measurements } } : { objects }),
-    page: { offset, total: filtered.length, nextOffset: next < filtered.length ? next : null },
+    page: {
+      offset,
+      total: filtered.length,
+      nextOffset: next < filtered.length ? next : null,
+      cursor: next < filtered.length ? `${currentRevision}:${next}` : null,
+    },
   };
 }

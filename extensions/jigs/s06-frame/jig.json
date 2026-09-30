@@ -1,7 +1,7 @@
 {
   "contractVersion": 3,
   "id": "project/s06-frame",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "kind": "tool",
   "name": "S-06 골조 배치",
   "summary": "연결한 모델에서 슬래브·보이드·기존 기초와 지금 그려진 기둥·거더를 읽어, 거더 끝을 기둥에 맞추고 칸마다 작은보를 두어 해석 모델과 미확정 미리보기 해석, 예비 단면·부호 일람표·기둥 높이와 Rhino에 만들 상단선·부재 계획까지 이어 보는 탐색용 도구. 새 축선·기둥 후보(직교·엇갈림)는 배치 기준을 바꾸면 만든다. 실제 프로젝트 값은 작업본에만 둔다.",
@@ -1526,7 +1526,7 @@
       "kind": "code",
       "entry": "steps/schedule.ts#schedule",
       "needs": ["sizing"],
-      "reads": ["step.model", "step.sizing"],
+      "reads": ["step.model", "step.sizing", "step.schedule"],
       "writes": "schedule",
       "speed": "release",
       "gates": [
@@ -1629,6 +1629,30 @@
           }
         }
       ],
+      "budget": {
+        "wallClockMs": 5000
+      }
+    },
+    {
+      "id": "applySections",
+      "title": "선정 단면 적용",
+      "kind": "human",
+      "slot": "confirm-inputs",
+      "needs": ["sizing"],
+      "reads": ["step.sizing"],
+      "writes": "applySections",
+      "speed": "confirm",
+      "blocks": ["sectionsApplied"]
+    },
+    {
+      "id": "sectionsApplied",
+      "title": "선정 단면을 작업본에 적용",
+      "kind": "code",
+      "entry": "steps/apply-sections.ts#applySections",
+      "needs": ["applySections"],
+      "reads": ["step.sizing", "step.model"],
+      "writes": "sectionsApplied",
+      "speed": "button",
       "budget": {
         "wallClockMs": 5000
       }

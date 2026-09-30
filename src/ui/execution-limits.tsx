@@ -1,6 +1,17 @@
 import { useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { executionLimitsSchema, type ExecutionLimits } from '../contracts/execution-limits.ts';
+import {
+  conversationTurnLimits,
+  executionLimitsSchema,
+  requestLimits,
+  type ExecutionLimits,
+} from '../contracts/execution-limits.ts';
+
+/** Presets the dialog fills in; the user still presses 적용. */
+const presets: { label: string; value: ExecutionLimits }[] = [
+  { label: '기본', value: requestLimits },
+  { label: '대화 턴', value: conversationTurnLimits },
+];
 
 export function showExecutionLimits(
   value: ExecutionLimits,
@@ -33,6 +44,30 @@ export function showExecutionLimits(
       >
         <h2>작업 상한</h2>
         <p>다음 요청에 적용합니다. 이미 시작된 호스트 연산은 안전하게 종료될 때까지 기다립니다.</p>
+        <p>
+          대화의 턴은 따로 정하지 않으면 도구 호출 {conversationTurnLimits.maxToolCalls}회, 호스트
+          실행 {conversationTurnLimits.maxHostCommands}회, {conversationTurnLimits.timeoutSeconds}
+          초를 씁니다.
+        </p>
+        <div className="table-controls" role="group" aria-label="미리 정한 값">
+          {presets.map((preset) => (
+            <button
+              key={preset.label}
+              type="button"
+              onClick={(event) => {
+                const form = event.currentTarget.form;
+                if (!form) return;
+                for (const [name, number] of Object.entries(preset.value)) {
+                  const field = form.elements.namedItem(name);
+                  if (field instanceof HTMLInputElement) field.value = String(number);
+                }
+                setMessage(`${preset.label} 값을 채웠습니다. 적용을 누르세요.`);
+              }}
+            >
+              {preset.label}
+            </button>
+          ))}
+        </div>
         <label>
           도구 호출 수{' '}
           <input

@@ -60,7 +60,7 @@ test('the package validates, its fixtures are current, and the panel binds only 
     panel.spec.left.map((p) => p.part),
     ['step-rail', 'role-card', ...Array(8).fill('param-group'), 'bake-card'],
   );
-  assert.equal(panel.spec.drawer.tabs.length, 8);
+  assert.equal(panel.spec.drawer.tabs.length, 12);
   // The fixture files on disk are what `cases.ts` builds (regenerate with the cases when they change).
   for (const entry of CASES) {
     const built = files(entry.name);
@@ -415,7 +415,9 @@ test('the whole jig runs in the engine runner: the human step waits without bloc
       ['analysisConfirmed', 'blocked'],
       ['schedule', 'done'],
       ['heights', 'done'],
+      ['applySections', 'waiting'],
       ['bakePlan', 'done'],
+      ['sectionsApplied', 'blocked'],
       ['bakeMembers', 'blocked'],
     ],
   );

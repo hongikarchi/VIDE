@@ -109,6 +109,8 @@ export const turnOutputSchema = z
     status: z.enum(['question', 'progress', 'done']),
     text: z.string().max(4000),
     questions: z.array(questionSchema).max(MAX_QUESTIONS).default([]),
+    // A Codex make turn's files (T-063): make-routes.ts checks and writes them; never kept here.
+    files: z.array(z.unknown()).max(50).nullable().optional(),
   })
   .strict()
   .refine((output) => new Set(output.questions.map((q) => q.id)).size === output.questions.length);

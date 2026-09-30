@@ -8,7 +8,7 @@ import type { IncomingMessage } from 'node:http';
 import { z } from 'zod';
 import { DomainError } from '../core/store.ts';
 import type { Workspace } from '../core/workspace.ts';
-import { DRAFT_TEMPLATES, JigDrafts } from '../jigs/runtime/drafts.ts';
+import { DRAFT_LIMITS, DRAFT_TEMPLATES, JigDrafts, failureReason } from '../jigs/runtime/drafts.ts';
 import { JigInvalidError } from '../jigs/runtime/loader.ts';
 import type { ConversationService } from './conversations.ts';
 import { jigRuntimeFor } from './jig-routes.ts';
@@ -32,6 +32,7 @@ export const makeStatuses: Record<string, number> = {
   DRAFT_FORBIDDEN_FILE: 422,
   DRAFT_PATH_INVALID: 422,
   DRAFT_TEMPLATE_MISSING: 500,
+  MAKE_STOPPED: 409,
 };
 
 const id = z.string().regex(/^[a-zA-Z0-9-]{1,100}$/);
@@ -133,4 +134,206 @@ export async function makeRoutes(
     }
   }
   return true;
+}
+
+// --- make-conversation turns (SPEC-07.9 상한과 멈춤, PLAN-22 T-063) -------------------------------
+
+/** The budget of every make turn, the answer turn of its question cards included (SPEC-07.9). */
+export const MAKE_LIMITS = { maxToolCalls: 100, maxHostCommands: 12, timeoutSeconds: 600 } as const;
+/** A make-conversation asks to start over after this many turns (and every as many after). */
+export const MAKE_TURN_CAP = 20;
+/** Validate/test failures for the same reason in a row that stop the turn. */
+export const MAKE_FAILURE_STREAK = 3;
+/** Why a make turn stopped instead of going on. */
+export type MakeStop =
+  | { reason: 'failures'; count: number; detail: string[] }
+  | { reason: 'turn-cap'; turns: number };
+type CheckReport = Parameters<typeof failureReason>[0];
+
+/** The readable lines of a failed report: issue messages or failing cases (at most five). */
+function failureLines(report: CheckReport): string[] {
+  const issues = (report.issues ?? []).filter((entry) => entry.level !== 'warn');
+  if (issues.length) return issues.slice(0, 5).map((entry) => entry.message.slice(0, 200));
+  return (report.cases ?? [])
+    .filter((entry) => !entry.ok)
+    .slice(0, 5)
+    .map((entry) =>
+      `${entry.name}: ${entry.error?.split('\n')[0] ?? entry.mismatches.map((m) => m.path).join(', ')}`.slice(
+        0,
+        200,
+      ),
+    );
+}
+
+/**
+ * The stop rule of one make turn: validate/test failing for the same reason three times in a row
+ * (whichever of the two ran), or a turn past the turn cap. Once stopped, the make tools refuse
+ * (`MAKE_STOPPED`) and the turn ends with a card (`makeTurnResult`).
+ */
+export class MakeTurnGuard {
+  readonly turns: number;
+  stop?: MakeStop;
+  #reason?: string;
+  #count = 0;
+  constructor(turns: number) {
+    this.turns = turns;
+    if (turns > MAKE_TURN_CAP && (turns - 1) % MAKE_TURN_CAP === 0)
+      this.stop = { reason: 'turn-cap', turns };
+  }
+  /** Counts one validate or test report; returns the stop it caused, if any. */
+  record(report: CheckReport): MakeStop | undefined {
+    const reason = failureReason(report);
+    if (!reason) {
+      this.#reason = undefined;
+      this.#count = 0;
+      return undefined;
+    }
+    this.#count = reason === this.#reason ? this.#count + 1 : 1;
+    this.#reason = reason;
+    if (!this.stop && this.#count >= MAKE_FAILURE_STREAK)
+      this.stop = { reason: 'failures', count: this.#count, detail: failureLines(report) };
+    return this.stop;
+  }
+  /** Refuses further make work after a stop. */
+  check() {
+    if (this.stop) throw new DomainError('MAKE_STOPPED');
+  }
+}
+/** What a make tool says when it stops the turn. */
+export const makeStopNotice = (stop: MakeStop) => ({
+  stop: stop.reason,
+  next:
+    stop.reason === 'failures'
+      ? 'Stop now: the same check failed for the same reason three times in a row. Change nothing more; end this turn with a short Korean summary of what you built and what keeps failing. VIDE asks the user how to go on.'
+      : 'Stop now: this make-conversation passed its turn limit. Change nothing; end this turn with a short Korean summary of the draft. VIDE asks the user to start a new conversation on the draft.',
+});
+
+/** The files a Codex make turn returns in its structured output (it has no file tools). */
+const turnFiles = z
+  .array(
+    z
+      .object({
+        path: z.string().min(1).max(300),
+        // null deletes the file.
+        content: z.string().max(DRAFT_LIMITS.fileBytes).nullable(),
+      })
+      .strict(),
+  )
+  .max(50);
+function filesOf(result: { text?: unknown; structured?: unknown }) {
+  let value = result.structured;
+  if (value === undefined && typeof result.text === 'string')
+    try {
+      value = JSON.parse(result.text);
+    } catch {
+      return undefined;
+    }
+  const files = (value as { files?: unknown } | null)?.files;
+  if (files === undefined || files === null) return undefined;
+  const parsed = turnFiles.safeParse(files);
+  return parsed.success ? parsed.data : ('invalid' as const);
+}
+
+export interface MakeTurnDraft {
+  draftId: string;
+  drafts: Pick<JigDrafts, 'writeFile' | 'deleteFile' | 'validate' | 'test'>;
+  guard?: MakeTurnGuard;
+}
+/** The card of a stopped make turn: one question card, the reason and the model's own words. */
+function stopCard(stop: MakeStop, turns: number, text: string) {
+  const question =
+    stop.reason === 'failures'
+      ? {
+          id: `make-stop-${turns}`,
+          title: '같은 점검·시험이 같은 이유로 세 번 잇달아 실패해 멈췄습니다. 어떻게 할까요?',
+          options: [
+            { id: 'retry-other', label: '다른 방법으로 다시 시도', recommended: true },
+            { id: 'narrow', label: '범위를 줄여 다시 시도', recommended: false },
+            { id: 'stop-here', label: '여기서 멈추고 직접 보기', recommended: false },
+          ],
+          blocks: '초안 작성',
+          allowFree: true,
+        }
+      : {
+          id: `make-turn-cap-${turns}`,
+          title: `이 만들기 대화가 ${MAKE_TURN_CAP}턴을 넘었습니다. 여기까지 저장하고 새로 시작할까요?`,
+          options: [
+            {
+              id: 'new-conversation',
+              label: '저장하고 새 대화로',
+              hint: '초안 파일과 점검 결과는 그대로 남습니다',
+              recommended: true,
+            },
+            { id: 'continue', label: '이 대화로 계속', recommended: false },
+          ],
+          blocks: '다음 턴',
+          allowFree: false,
+        };
+  const why =
+    stop.reason === 'failures'
+      ? ['멈춘 이유: 같은 이유로 세 번 잇달아 실패', ...stop.detail.map((line) => `- ${line}`)]
+      : [`멈춘 이유: ${MAKE_TURN_CAP}턴 초과 (${stop.turns}번째 턴)`];
+  return {
+    text: [text.trim(), why.join('\n')].filter(Boolean).join('\n\n'),
+    turnOutput: { status: 'question', questions: [question], stop },
+  };
+}
+
+/**
+ * The end of a make-conversation turn (execution.ts, after the structured output is checked): a
+ * Codex turn's `files` are written into the draft with the same path rule as the file tools (null
+ * deletes), then validated and tested; a turn the guard stopped ends with the stop card in place
+ * of whatever the model said it would do next. Returns the fields to merge into the result.
+ */
+export async function makeTurnResult(
+  projectId: string,
+  draft: MakeTurnDraft,
+  result: { text?: unknown; structured?: unknown },
+  answer: { text?: unknown },
+): Promise<Record<string, unknown>> {
+  const patch: Record<string, unknown> = {};
+  const files = draft.guard?.stop ? undefined : filesOf(result);
+  // Files that do not fit the output shape are not guessed at: nothing is written, the reason goes back.
+  if (files === 'invalid')
+    patch.makeFiles = {
+      written: [],
+      deleted: [],
+      refused: [{ path: '', code: 'MAKE_FILES_INVALID' }],
+    };
+  else if (files?.length) {
+    const written: string[] = [],
+      deleted: string[] = [],
+      refused: { path: string; code: string }[] = [];
+    for (const file of files)
+      try {
+        if (file.content === null) {
+          draft.drafts.deleteFile(projectId, draft.draftId, file.path);
+          deleted.push(file.path);
+        } else {
+          draft.drafts.writeFile(projectId, draft.draftId, file.path, file.content);
+          written.push(file.path);
+        }
+      } catch (error) {
+        refused.push({ path: file.path, code: (error as { code?: string }).code ?? 'FAILED' });
+      }
+    const made: Record<string, unknown> = { written, deleted, refused };
+    if (written.length || deleted.length) {
+      const validation = await draft.drafts.validate(projectId, draft.draftId);
+      draft.guard?.record(validation);
+      made.validate = { ok: validation.ok, issues: validation.issues.length };
+      if (validation.ok) {
+        const tested = await draft.drafts.test(projectId, draft.draftId);
+        draft.guard?.record(tested);
+        made.test = { ok: tested.ok, failed: tested.cases.filter((c) => !c.ok).length };
+      }
+    }
+    patch.makeFiles = made;
+  }
+  const stop = draft.guard?.stop;
+  if (stop)
+    Object.assign(
+      patch,
+      stopCard(stop, draft.guard!.turns, typeof answer.text === 'string' ? answer.text : ''),
+    );
+  return patch;
 }

@@ -103,6 +103,41 @@ try {
     model.dispatchEvent(new Event('change'));
   });
   const projectName = (await page.locator('#project-picker option:checked').textContent()).trim();
+  // A jig installed from a .vjig and pinned to this project (registry list, stood in here); its
+  // [삭제] takes it off the project's list.
+  let pinned = true;
+  const unpinned = [];
+  await page.route('**/api/v1/jigs/packages', async (route) => {
+    const { jigs } = await (await route.fetch()).json();
+    await route.fulfill({
+      json: {
+        jigs: [
+          ...jigs,
+          {
+            id: 'project/check-sample',
+            version: '0.1.0',
+            kind: 'tool',
+            name: '합성 점검 jig',
+            summary: '가져온 설명서로 그리는 합성 jig',
+            source: 'pack',
+            stage: 'project',
+            capabilities: [],
+          },
+        ],
+      },
+    });
+  });
+  await page.route('**/api/v1/projects/*/jigs', (route) =>
+    route.fulfill({
+      json: { pinned: pinned ? [{ jigId: 'project/check-sample', version: '0.1.0' }] : [] },
+    }),
+  );
+  await page.route('**/api/v1/projects/*/jigs/*/pin', (route) => {
+    if (route.request().method() !== 'DELETE') return route.fallback();
+    unpinned.push(new URL(route.request().url()).pathname);
+    pinned = false;
+    return route.fulfill({ json: { unpinned: true } });
+  });
   // The rail's JIG button opens the JIG tab (the list) before any jig was used.
   await page.getByRole('button', { name: 'JIG', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'JIG', exact: true });
@@ -120,6 +155,20 @@ try {
     await dialog.locator('.jig-card[data-source="official"][data-status="planned"]').count(),
     8,
   );
+  assert.equal(await official.getByRole('button', { name: '삭제', exact: true }).count(), 0);
+  const installed = dialog.locator('.jig-card[data-source="project"]', {
+    hasText: '합성 점검 jig',
+  });
+  await installed.waitFor();
+  assert.match(await installed.textContent(), /가져온 설명서로 그리는 합성 jig/);
+  await installed.getByRole('button', { name: '삭제', exact: true }).click();
+  await installed
+    .getByRole('group', { name: '합성 점검 jig 삭제 확인' })
+    .getByRole('button', { name: '삭제', exact: true })
+    .click();
+  await dialog.getByText('‘합성 점검 jig’을 이 프로젝트의 jig에서 삭제했습니다.').waitFor();
+  await installed.waitFor({ state: 'detached' });
+  assert.deepEqual(unpinned, [`/api/v1/projects/${projectId}/jigs/project%2Fcheck-sample/pin`]);
   await dialog
     .locator('.jig-card[data-status="available"]', { hasText: 'Sync · 도면↔모델' })
     .getByRole('button', { name: '열기', exact: true })

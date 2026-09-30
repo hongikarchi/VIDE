@@ -5,7 +5,8 @@
 // input hashes, read settings, overrides) to reuse a cached result, runs the before/after gates,
 // checks the output against its schema, and stops the steps after a failure or a block. Library
 // steps run in the engine; human steps wait for a confirmation with the same fingerprint; AI and
-// host steps are not executed here (T-063, T-055).
+// host steps are not executed here (T-063, T-055). A step that reads itself gets its previous kept
+// output (e.g. a marks ledger), and a step output's `apply.overrides` is handed to the caller.
 
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -13,7 +14,7 @@ import { pathToFileURL } from 'node:url';
 import { runGates, type GateContext, type GateResult } from './gates.ts';
 import { buildGraph, type StepGraph } from './graph.ts';
 import { hashValue } from './hash.ts';
-import type { AssembledRole, Override } from './instance.ts';
+import { overrideSchema, type AssembledRole, type Override } from './instance.ts';
 import { libraryFunction, type LoadedJig } from './loader.ts';
 import type { JigSource, StepDecl } from './manifest.ts';
 import { plainValues, type ParamValue } from './params.ts';
@@ -152,6 +153,24 @@ export interface ExecutionReport {
   blocked: boolean;
   /** Settings changed while running: the results are not the latest and were not kept. */
   superseded: boolean;
+  /** Override writes asked by steps that ran now (not preview/selftest, not cached): ARCH-03 §6.3. */
+  applies: ApplyRequest[];
+}
+/** A step output's `apply.overrides`: overrides with stable ids for the engine to upsert. */
+export interface ApplyRequest {
+  stepId: string;
+  overrides: (Omit<Override, 'at'> & { id: string })[];
+}
+/** The overrides a step output asks the engine to write (only well-formed ones with an id). */
+export function applyRequestOf(output: unknown): ApplyRequest['overrides'] {
+  const list = (output as { apply?: { overrides?: unknown } } | null)?.apply?.overrides;
+  if (!Array.isArray(list)) return [];
+  return list.flatMap((o) => {
+    const parsed = overrideSchema.safeParse(o);
+    return parsed.success && parsed.data.id
+      ? [parsed.data as Omit<Override, 'at'> & { id: string }]
+      : [];
+  });
 }
 
 /** Where step results are kept between runs; the runtime backs this with files and `jig_runs`. */
@@ -267,6 +286,7 @@ export async function executeSteps(input: ExecutionInput): Promise<ExecutionRepo
   const outputs: Record<string, unknown> = {};
   const inputHashes: Record<string, string> = {};
   const steps: StepReport[] = [];
+  const applies: ApplyRequest[] = [];
   const stopped = new Set<string>(); // steps whose predecessors failed, blocked or wait
   let blocked = false;
   let superseded = false;
@@ -382,6 +402,14 @@ export async function executeSteps(input: ExecutionInput): Promise<ExecutionRepo
       stopped.add(id);
       continue;
     }
+    // The step's own kept result from an earlier run (ARCH-03 §6.2 이전 출력): a step that reads
+    // `step.<its id>` gets it as `inputs.steps[<its id>]`; it is not part of the fingerprint.
+    const previous = (await cache.previous?.(id)) ?? null;
+    if (graph.readsOf(id).some((r) => r.kind === 'step' && r.id === id))
+      stepInputs.steps = {
+        ...((stepInputs.steps as Record<string, unknown>) ?? {}),
+        [id]: previous?.output ?? null,
+      };
 
     // Cached result with the same fingerprint.
     const cached = await cache.get(id, inputHash);
@@ -453,7 +481,6 @@ export async function executeSteps(input: ExecutionInput): Promise<ExecutionRepo
     }
 
     // After-run gates (isolate gates may trim the output).
-    const previous = (await cache.previous?.(id)) ?? null;
     const afterGates = runGates(
       step.gates ?? [],
       'after-run',
@@ -478,7 +505,11 @@ export async function executeSteps(input: ExecutionInput): Promise<ExecutionRepo
     report.status = 'done';
     if (!report.cached && mode !== 'preview')
       report.outputRef = await cache.put(id, inputHash, output);
+    if (!report.cached && mode !== 'preview' && mode !== 'selftest') {
+      const asked = applyRequestOf(output);
+      if (asked.length) applies.push({ stepId: id, overrides: asked });
+    }
     if (id === input.until) break;
   }
-  return { mode, steps, outputs, blocked, superseded };
+  return { mode, steps, outputs, blocked, superseded, applies };
 }

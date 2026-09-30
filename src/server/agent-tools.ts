@@ -6,7 +6,11 @@ import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/
 import { dirname } from 'node:path';
 import { z } from 'zod';
 import { queryPageFields } from './query-page.ts';
-import { agentToolNames, type AgentConnection } from '../ai/agent-connection.ts';
+import {
+  agentToolNames,
+  type AgentConnection,
+  type ConversationScope,
+} from '../ai/agent-connection.ts';
 import { DomainError } from '../core/store.ts';
 import { DocumentLinks } from '../core/document-links.ts';
 import type { Workspace } from '../core/workspace.ts';
@@ -18,7 +22,7 @@ import {
   type ReadModel,
 } from '../jigs/runtime/runtime.ts';
 import { jigRuntimeFor } from './jig-routes.ts';
-import { draftsFor } from './make-routes.ts';
+import { MakeTurnGuard, draftsFor, makeStopNotice } from './make-routes.ts';
 import type { JigDrafts } from '../jigs/runtime/drafts.ts';
 import { turnOutputSchema } from './turn-output.ts';
 import { existsSync } from 'node:fs';
@@ -41,7 +45,16 @@ const failure = (code: string) => Object.assign(new Error(code), { code });
 const target = z.string().min(1).max(256);
 // The make tools act on the conversation's own draft: targetRef may be left out (T-064).
 const draftTarget = target.optional();
+// A conversation turn's scope has one target: its tools accept targetRef left out (T-062).
+const scoped = target.optional();
 const id = z.string().min(1).max(128);
+/** Left out, the jig the conversation has open (its id is in the turn's rules). */
+const scopedInstance = id.optional();
+/** One end of a measured distance: an object id or a point [x, y, z]. */
+const measureEnd = z.union([
+  z.string().min(1).max(100),
+  z.tuple([z.number(), z.number(), z.number()]),
+]);
 const page = {
   offset: z.number().int().min(0).optional(),
   limit: z.number().int().min(1).max(100).optional(),
@@ -57,6 +70,43 @@ const definitions = {
       'Run SDK code on the task target. The task goal says whether that is a working copy or the open user document.',
     schema: z.object({ targetRef: target, code: z.string().min(1).max(65536) }).strict(),
   },
+  // The AI's eyes (PLAN-24): an image of the target's model view and measurements of its objects.
+  capture_view: {
+    description:
+      'See the task target: returns a PNG of its current model view (default 1200x800, at most 1600 px a side) and the camera. Frame objects with fitIds, look through a namedView, and switch layers on or off for this image only (working copies). Nothing in the document changes. Look after edits to check the result.',
+    schema: z
+      .object({
+        targetRef: target,
+        width: z.number().int().min(64).max(1600).optional(),
+        height: z.number().int().min(64).max(1600).optional(),
+        namedView: z.string().min(1).max(200).optional(),
+        fitIds: z.array(z.string().min(1).max(100)).min(1).max(50).optional(),
+        showLayers: z.array(z.string().min(1).max(1000)).max(200).optional(),
+        hideLayers: z.array(z.string().min(1).max(1000)).max(200).optional(),
+      })
+      .strict(),
+  },
+  measure: {
+    description:
+      'Measure objects of the task target in model units: bounding box and size, curve length, area, and volume of closed solids for each id; and closest distances between pairs whose ends are object ids or [x,y,z] points (with the two closest points and dx/dy/dz). Quote these numbers instead of estimating.',
+    schema: z
+      .object({
+        targetRef: target,
+        ids: z.array(z.string().min(1).max(100)).max(50).optional(),
+        distances: z
+          .array(
+            z
+              .object({
+                a: measureEnd,
+                b: measureEnd,
+              })
+              .strict(),
+          )
+          .max(20)
+          .optional(),
+      })
+      .strict(),
+  },
   status: { description: 'Read the current task execution status.', schema: z.object({}).strict() },
   cancel: {
     description:
@@ -68,20 +118,20 @@ const definitions = {
   jig_list: {
     description:
       "List the jig instances (작업본) of this project. 'open' marks the one this conversation works on.",
-    schema: z.object({ targetRef: target }).strict(),
+    schema: z.object({ targetRef: scoped }).strict(),
   },
   jig_state: {
     description:
       'Read one jig instance: its settings (value, unit, who set it, fixedAtPin, range) and the status of each step.',
-    schema: z.object({ targetRef: target, instanceId: id }).strict(),
+    schema: z.object({ targetRef: scoped, instanceId: scopedInstance }).strict(),
   },
   jig_output: {
     description:
       'Read the kept output of one step, one page at a time. Without path you get an outline; give path (dotted keys) to read a value, and offset/limit to page an array. Quote only numbers you read here.',
     schema: z
       .object({
-        targetRef: target,
-        instanceId: id,
+        targetRef: scoped,
+        instanceId: scopedInstance,
         stepId: id,
         path: z.string().max(200).optional(),
         ...page,
@@ -93,8 +143,8 @@ const definitions = {
       "Change settings of the jig this conversation has open (value in the setting's unit, or give unit). Reversible; recorded in the conversation. fixedAtPin settings are refused. Steps after the change become stale until jig_run.",
     schema: z
       .object({
-        targetRef: target,
-        instanceId: id,
+        targetRef: scoped,
+        instanceId: scopedInstance,
         values: z
           .array(
             z
@@ -116,8 +166,8 @@ const definitions = {
       'Run the steps of the jig this conversation has open (cached steps are reused), up to until. Steps waiting for a person stay waiting.',
     schema: z
       .object({
-        targetRef: target,
-        instanceId: id,
+        targetRef: scoped,
+        instanceId: scopedInstance,
         until: id.optional(),
         mode: z.enum(['geometry', 'preview']).optional(),
       })
@@ -126,15 +176,15 @@ const definitions = {
   structure_summary: {
     description:
       "Read the structure analysis summary a jig step keeps: label ('확정 결과' or '미확정 미리보기', quote it with every number), status, worst ratio, counts, steel weight, combinations, issues, assumptions, what is not checked.",
-    schema: z.object({ targetRef: target, instanceId: id }).strict(),
+    schema: z.object({ targetRef: scoped, instanceId: scopedInstance }).strict(),
   },
   structure_checks: {
     description:
       'Page through member checks of the structure summary: member, verdict, ratio, clause, reference deflection. Filter by status (ok/warn/ng/na/err); order worst puts the highest ratio first.',
     schema: z
       .object({
-        targetRef: target,
-        instanceId: id,
+        targetRef: scoped,
+        instanceId: scopedInstance,
         status: z.enum(['ok', 'warn', 'ng', 'na', 'err']).optional(),
         order: z.enum(['stored', 'worst']).optional(),
         ...page,
@@ -144,14 +194,14 @@ const definitions = {
   links_layers: {
     description:
       'Layer table of each linked file of this project (from its latest stored Sync): layer path and object count.',
-    schema: z.object({ targetRef: target, linkId: id.optional() }).strict(),
+    schema: z.object({ targetRef: scoped, linkId: id.optional() }).strict(),
   },
   sync_sample: {
     description:
       'A small sample of the stored Sync rows of one layer of a linked file (id, type, bounds, measures). At most 50 rows per call.',
     schema: z
       .object({
-        targetRef: target,
+        targetRef: scoped,
         linkId: id,
         layer: z.string().min(1).max(1000),
         offset: z.number().int().min(0).optional(),
@@ -183,6 +233,11 @@ const definitions = {
           .optional(),
       })
       .strict(),
+  },
+  jig_delete_file: {
+    description:
+      'Delete one file of the jig draft (path relative to the draft folder, e.g. steps/old.ts). Not jig.json; agent and settings files and paths outside the draft are refused. Empty folders left behind go too.',
+    schema: z.object({ targetRef: draftTarget, path: z.string().min(1).max(300) }).strict(),
   },
   ask_user: {
     description:
@@ -219,14 +274,14 @@ const definitions = {
   project_brief: {
     description:
       "Project status from the project's 자료: decided/blocked/changed, issues by discipline, counts and review counts. Only statements a person confirmed are facts; cite statements as [S<id>].",
-    schema: z.object({ targetRef: target, discipline: z.string().max(40).optional() }).strict(),
+    schema: z.object({ targetRef: scoped, discipline: z.string().max(40).optional() }).strict(),
   },
   project_search: {
     description:
       "Search this project's statements (all words must match; confirmed first). Each item has ref (S<id>), state ('confirmed' or 'unconfirmed'/'superseded' — say 미확정 when quoting those), party, date, content, path. Cite only refs returned by a tool in this turn, as [S<id>].",
     schema: z
       .object({
-        targetRef: target,
+        targetRef: scoped,
         query: z.string().max(200),
         kind: z.string().max(40).optional(),
         discipline: z.string().max(40).optional(),
@@ -238,17 +293,17 @@ const definitions = {
   project_issue: {
     description:
       'One issue note (conclusions, open items, conditions, history with cited statement ids) and its statements. Cite statements as [S<id>].',
-    schema: z.object({ targetRef: target, issueId: z.number().int().min(0) }).strict(),
+    schema: z.object({ targetRef: scoped, issueId: z.number().int().min(0) }).strict(),
   },
   project_statement: {
     description:
       'One statement with its review state and the source excerpt (truncated). Excluded statements are refused (FACT_EXCLUDED). Cite as [S<id>].',
-    schema: z.object({ targetRef: target, statementId: z.number().int().min(0) }).strict(),
+    schema: z.object({ targetRef: scoped, statementId: z.number().int().min(0) }).strict(),
   },
   project_checks: {
     description:
       "Compare a jig instance's settings with the numbers of their basis statements (code compares): match, conflict, no-number, no-basis, invalid-basis. Without instanceId it uses the jig this conversation has open. Quote the verdicts; do not recompute.",
-    schema: z.object({ targetRef: target, instanceId: id.optional() }).strict(),
+    schema: z.object({ targetRef: scoped, instanceId: id.optional() }).strict(),
   },
 };
 type ToolName = keyof typeof definitions;
@@ -306,10 +361,25 @@ const knownErrors = new Set([
   'JIG_NOT_OPEN',
   'STRUCTURE_NOT_COMPUTED',
   'DRAFT_NOT_OPEN',
+  'DRAFT_OUTSIDE',
+  'DRAFT_FORBIDDEN_FILE',
+  'DRAFT_PATH_INVALID',
+  'MAKE_STOPPED',
   'FACT_EXCLUDED',
+  'NO_VIEW',
+  'LAYER_OPTION_UNAVAILABLE',
+  'CAPTURE_FAILED',
+  'MEASURE_FAILED',
 ]);
 /** Tools that change or occupy the target: one at a time, after the basis check. */
-const controlledTools = new Set<ToolName>(['execute', 'query', 'jig_set', 'jig_run']);
+// capture_view moves the camera and layers of the target for one image, so it takes the turn too.
+const controlledTools = new Set<ToolName>([
+  'execute',
+  'query',
+  'jig_set',
+  'jig_run',
+  'capture_view',
+]);
 
 /** Internal controller capability, never minted by browser/agent input. No CAD executor is installed by default. */
 export class AgentTools {
@@ -354,6 +424,7 @@ export class AgentTools {
         token: scope.token,
         tools: Object.freeze(Object.keys(handlers)),
         ...(sources.draft ? { draftDir: sources.draft.dir } : {}),
+        scope: conversationScope(sources),
       }),
       revoke: scope.revoke,
     };
@@ -437,6 +508,9 @@ export class AgentTools {
     });
     if (run.abort.signal.aborted || run.expires <= this.#now()) return error('AGENT_SCOPE_EXPIRED');
     if (args.targetRef && !run.targets.has(args.targetRef)) return error('TARGET_MISMATCH');
+    // Left out, targetRef means the scope's only target; with several it must be named.
+    if (!args.targetRef && run.targets.size !== 1 && 'targetRef' in definitions[name].schema.shape)
+      return error('TARGET_MISMATCH');
     const controlled = controlledTools.has(name);
     if (controlled && run.busy) return error('AGENT_BUSY');
     if (run.remaining <= 0) return error('AGENT_CALL_LIMIT');
@@ -448,6 +522,13 @@ export class AgentTools {
       if (run.abort.signal.aborted || run.expires <= this.#now())
         return error('AGENT_SCOPE_EXPIRED');
       const result = await invoke(name, run.handlers, args, run.abort.signal);
+      if (result instanceof ToolImage)
+        return {
+          content: [
+            { type: 'image', data: result.data, mimeType: result.mimeType },
+            { type: 'text', text: JSON.stringify(result.meta) },
+          ],
+        };
       return { content: [{ type: 'text', text: JSON.stringify(result) }] };
     } catch (cause) {
       const code =
@@ -510,6 +591,28 @@ export class AgentTools {
 
 // --- conversation tools (PLAN-24 T-062) ---------------------------------------------------------
 
+/**
+ * The values the turn's rules name (T-062): the one target, the open jig and the project's linked
+ * files (ids and hosts only; names stay behind links_layers).
+ */
+export function conversationScope(sources: ConversationToolSources): ConversationScope {
+  let links: { id: string; host: string; target?: boolean }[] = [];
+  try {
+    links = (sources.links?.list(sources.projectId) ?? []).slice(0, 50).map((link) => ({
+      id: link.id,
+      host: link.host,
+      ...(sources.targetLinkIds?.includes(link.id) ? { target: true } : {}),
+    }));
+  } catch {
+    /* The links table cannot be read: the rules name no files, links_layers still answers. */
+  }
+  return {
+    targetRef: conversationTarget(sources.conversationId),
+    ...(sources.openInstanceId ? { openInstanceId: sources.openInstanceId } : {}),
+    links,
+  };
+}
+
 export const conversationTarget = (conversationId: string) => `conversation:${conversationId}`;
 /** What a conversation turn's tools read and change; everything is bound to one project. */
 export interface ConversationToolSources {
@@ -519,16 +622,20 @@ export interface ConversationToolSources {
   openInstanceId: string | null;
   /** The turn's request (param log and ledger reference). */
   requestId?: string;
+  /** The linked files the conversation names as its targets. */
+  targetLinkIds?: readonly string[] | null;
   workspace: Pick<Workspace, 'list' | 'get'>;
   jigs?: Pick<JigRuntime, 'list' | 'view' | 'output' | 'setParams' | 'run'>;
   links?: Pick<DocumentLinks, 'list' | 'get'>;
   /** Records a ledger item of the conversation (a setting the AI changed). */
-  ledger?: (item: { kind: 'param-change'; body: unknown; requestId?: string }) => unknown;
+  ledger?: (item: { kind: 'param-change' | 'code'; body: unknown; requestId?: string }) => unknown;
   /** The jig draft of a make-conversation (PLAN-22 T-063); jig_validate/test/preview and ask_user. */
   draft?: {
     draftId: string;
     dir: string;
-    drafts: Pick<JigDrafts, 'validate' | 'test' | 'preview'>;
+    drafts: Pick<JigDrafts, 'validate' | 'test' | 'preview' | 'deleteFile' | 'writeFile'>;
+    /** The turn's stop rule (SPEC-07.9): repeated failures or the turn cap end the turn. */
+    guard?: MakeTurnGuard;
   };
   /** The project's crawler DB and review layer (SPEC-08); project_* exist only with one. */
   facts?: {
@@ -658,6 +765,12 @@ export function conversationHandlers(sources: ConversationToolSources): Handlers
     if (!openInstanceId || instanceId !== openInstanceId) throw new DomainError('JIG_NOT_OPEN');
     return runtime();
   };
+  /** instanceId left out is the jig the conversation has open. */
+  const pick = (instanceId: string | undefined) => {
+    const chosen = instanceId ?? openInstanceId;
+    if (!chosen) throw new DomainError('JIG_NOT_OPEN');
+    return chosen;
+  };
   const handlers: Handlers = {
     jig_list: () =>
       bounded({
@@ -666,7 +779,8 @@ export function conversationHandlers(sources: ConversationToolSources): Handlers
           .slice(-50)
           .map((row) => ({ ...row, ...(row.id === openInstanceId ? { open: true } : {}) })),
       }),
-    jig_state: async ({ instanceId }) => {
+    jig_state: async ({ instanceId: given }) => {
+      const instanceId = pick(given);
       const view = await runtime().view(projectId, instanceId);
       return bounded({
         id: view.id,
@@ -687,7 +801,8 @@ export function conversationHandlers(sources: ConversationToolSources): Handlers
         })),
       });
     },
-    jig_output: ({ instanceId, stepId, path, offset, limit }) => {
+    jig_output: ({ instanceId: given, stepId, path, offset, limit }) => {
+      const instanceId = pick(given);
       const value = atPath(runtime().output(projectId, instanceId, stepId), path);
       const at = { stepId, path: path ?? null };
       if (Array.isArray(value)) return bounded({ ...at, ...pageOf(value, offset, limit ?? 20) });
@@ -696,7 +811,8 @@ export function conversationHandlers(sources: ConversationToolSources): Handlers
         ...(sizeOf(value) <= 8 * 1024 ? { value } : { outline: outline(value) }),
       });
     },
-    structure_summary: async ({ instanceId }) => {
+    structure_summary: async ({ instanceId: given }) => {
+      const instanceId = pick(given);
       const summary = await structureOf(runtime(), projectId, instanceId);
       const { members, reactions, statusCodes: _codes, colorBands: _bands, ...head } = summary;
       return bounded({
@@ -711,7 +827,8 @@ export function conversationHandlers(sources: ConversationToolSources): Handlers
         issueCount: head.issues.length,
       });
     },
-    structure_checks: async ({ instanceId, status, order, offset, limit }) => {
+    structure_checks: async ({ instanceId: given, status, order, offset, limit }) => {
+      const instanceId = pick(given);
       const summary = await structureOf(runtime(), projectId, instanceId);
       let rows = summary.members.map(
         ([member, code, ratio, clause, deflection, limitMm, segments]) => ({
@@ -758,7 +875,8 @@ export function conversationHandlers(sources: ConversationToolSources): Handlers
     },
   };
   if (openInstanceId) {
-    handlers.jig_set = async ({ instanceId, values, reason }) => {
+    handlers.jig_set = async ({ instanceId: given, values, reason }) => {
+      const instanceId = pick(given);
       const rt = open(instanceId);
       const before = new Map(
         (await rt.view(projectId, instanceId)).params.map((param) => [param.key, param]),
@@ -787,7 +905,8 @@ export function conversationHandlers(sources: ConversationToolSources): Handlers
       });
       return bounded({ changes, seqs: done.seqs, staleSteps: done.affected });
     };
-    handlers.jig_run = async ({ instanceId, until, mode }) => {
+    handlers.jig_run = async ({ instanceId: given, until, mode }) => {
+      const instanceId = pick(given);
       const report = await open(instanceId).run(projectId, instanceId, {
         until,
         mode: mode ?? 'geometry',
@@ -893,6 +1012,7 @@ export function conversationSources(
     jigInstanceId: string | null;
     kind?: string;
     draftId?: string | null;
+    targets?: string[] | null;
   },
   { requestId, ledger }: Pick<ConversationToolSources, 'requestId' | 'ledger'> = {},
 ): ConversationToolSources {
@@ -902,13 +1022,18 @@ export function conversationSources(
     conversationId: conversation.id,
     openInstanceId: conversation.jigInstanceId,
     requestId,
+    targetLinkIds: conversation.targets ?? null,
     workspace,
     jigs: file ? jigRuntimeFor(workspace, dirname(file)) : undefined,
     links: new DocumentLinks(workspace.store.db),
     ledger,
     ...(file ? { facts: factsOf(workspace, dirname(file), conversation.projectId) } : {}),
     ...(file && conversation.kind === 'jig-make' && conversation.draftId
-      ? { draft: draftOf(workspace, dirname(file), conversation.projectId, conversation.draftId) }
+      ? {
+          draft: draftOf(workspace, dirname(file), conversation.projectId, conversation.draftId, {
+            turns: turnCount(workspace, conversation.projectId, conversation.id),
+          }),
+        }
       : {}),
   };
 }
@@ -930,44 +1055,78 @@ function factsOf(workspace: Workspace, dataDirectory: string, projectId: string)
 // --- make-conversation tools (PLAN-22 T-063) ----------------------------------------------------
 
 /** The open draft a make-conversation writes; undefined when it is not open (no make tools). */
-function draftOf(workspace: Workspace, dataDirectory: string, projectId: string, draftId: string) {
+function draftOf(
+  workspace: Workspace,
+  dataDirectory: string,
+  projectId: string,
+  draftId: string,
+  { turns = 1 }: { turns?: number } = {},
+) {
   const drafts = draftsFor(workspace, dataDirectory);
   try {
     const draft = drafts.get(projectId, draftId);
-    return draft.state === 'open' ? { draftId, dir: draft.path, drafts } : undefined;
+    return draft.state === 'open'
+      ? { draftId, dir: draft.path, drafts, guard: new MakeTurnGuard(turns) }
+      : undefined;
   } catch {
     return undefined;
   }
 }
+/** The turns of a conversation so far, the running one included (its requests). */
+function turnCount(workspace: Pick<Workspace, 'list'>, projectId: string, conversationId: string) {
+  try {
+    return Math.max(
+      1,
+      workspace.list(projectId).filter((row) => row.input.conversationId === conversationId).length,
+    );
+  } catch {
+    return 1;
+  }
+}
 function makeHandlers(sources: ConversationToolSources): Handlers {
   const { projectId } = sources;
-  const { draftId, drafts } = sources.draft!;
+  const { draftId, drafts, guard } = sources.draft!;
+  // After a stop every make tool refuses; the check that stopped the turn says so in its result.
+  const checked = <T extends object>(report: Parameters<MakeTurnGuard['record']>[0], shown: T) => {
+    const stop = guard?.record(report);
+    return stop ? { ...shown, ...makeStopNotice(stop) } : shown;
+  };
   return {
     jig_validate: async () => {
+      guard?.check();
       const report = await drafts.validate(projectId, draftId);
-      return bounded({ ...report, issues: report.issues.slice(0, 50) });
+      return checked(report, bounded({ ...report, issues: report.issues.slice(0, 50) }));
+    },
+    jig_delete_file: ({ path }) => {
+      guard?.check();
+      return drafts.deleteFile(projectId, draftId, path);
     },
     jig_test: async () => {
+      guard?.check();
       const report = await drafts.test(projectId, draftId);
-      return bounded({
-        ok: report.ok,
-        id: report.id,
-        version: report.version,
-        ...(report.issues ? { issues: report.issues.slice(0, 50) } : {}),
-        cases: report.cases.slice(0, 20).map((c) => ({
-          name: c.name,
-          ok: c.ok,
-          ...(c.error ? { error: c.error.slice(0, 2000) } : {}),
-          mismatches: c.mismatches.slice(0, 20).map((m) => outline(m)),
-          steps: c.steps.map((step) => ({
-            id: step.id,
-            status: step.status,
-            ...(step.error ? { error: step.error } : {}),
+      return checked(
+        report,
+        bounded({
+          ok: report.ok,
+          id: report.id,
+          version: report.version,
+          ...(report.issues ? { issues: report.issues.slice(0, 50) } : {}),
+          cases: report.cases.slice(0, 20).map((c) => ({
+            name: c.name,
+            ok: c.ok,
+            ...(c.error ? { error: c.error.slice(0, 2000) } : {}),
+            mismatches: c.mismatches.slice(0, 20).map((m) => outline(m)),
+            steps: c.steps.map((step) => ({
+              id: step.id,
+              status: step.status,
+              ...(step.error ? { error: step.error } : {}),
+            })),
           })),
-        })),
-      });
+        }),
+      );
     },
     jig_preview: async ({ fixture }) => {
+      guard?.check();
       const preview = await drafts.preview(projectId, draftId, { fixture });
       return bounded({
         ok: preview.ok,
@@ -1005,6 +1164,55 @@ function makeHandlers(sources: ConversationToolSources): Handlers {
         question: parsed.data.questions[0],
         next: 'End this turn with status "question" and exactly this card in questions; VIDE shows it to the user and the answer comes as the next turn.',
       };
+    },
+  };
+}
+
+// --- the AI's eyes (PLAN-24) ---------------------------------------------------------------------
+
+/** A tool result that is an image: the model receives it as image content with `meta` as text. */
+export class ToolImage {
+  readonly data: string;
+  readonly mimeType: 'image/png' | 'image/jpeg';
+  readonly meta: Record<string, unknown>;
+  constructor(data: string, mimeType: ToolImage['mimeType'], meta: Record<string, unknown> = {}) {
+    if (!/^[A-Za-z0-9+/]+={0,2}$/.test(data) || Buffer.byteLength(data, 'base64') > 1_000_000)
+      throw new DomainError('QUERY_RESULT_TOO_LARGE');
+    this.data = data;
+    this.mimeType = mimeType;
+    this.meta = meta;
+  }
+}
+type CaptureArgs = Omit<ToolArgs<'capture_view'>, 'targetRef'>;
+type MeasureArgs = Omit<ToolArgs<'measure'>, 'targetRef'>;
+/** What capture_view and measure read: a worker working copy or an attached editor channel. */
+export interface VisionSource {
+  captureView(options: CaptureArgs): Promise<{
+    mimeType: 'image/png';
+    data: string;
+    width: number;
+    height: number;
+    [key: string]: unknown;
+  }>;
+  measure(options: MeasureArgs): Promise<unknown>;
+}
+/** capture_view and measure on one host source; `onUse` records each call (activity log). */
+export function visionHandlers(
+  source: VisionSource,
+  onUse: (tool: 'capture_view' | 'measure') => void = () => {},
+): Handlers {
+  return {
+    capture_view: async ({ targetRef: _target, ...options }) => {
+      const { data, mimeType, ...meta } = await source.captureView(options);
+      onUse('capture_view');
+      return new ToolImage(data, mimeType, meta);
+    },
+    measure: async ({ targetRef: _target, ...options }) => {
+      if (!options.ids?.length && !options.distances?.length)
+        throw new DomainError('INVALID_INPUT');
+      const result = await source.measure(options);
+      onUse('measure');
+      return bounded(result);
     },
   };
 }

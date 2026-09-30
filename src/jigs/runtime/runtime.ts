@@ -679,7 +679,13 @@ export class JigRuntime {
   async run(
     projectId: string,
     instanceId: string,
-    input: { until?: string; mode: RunMode; currentRevisions?: Record<string, string> } = {
+    input: {
+      until?: string;
+      mode: RunMode;
+      currentRevisions?: Record<string, string>;
+      /** Internal: the overrides a step asked for were written already in this call. */
+      applied?: boolean;
+    } = {
       mode: 'geometry',
     },
   ): Promise<ExecutionReport & { status: JigInstanceRow['status'] }> {
@@ -731,6 +737,14 @@ export class JigRuntime {
         ? 'stale'
         : 'computed';
     this.save(instance, body, status);
+    // A step asked to write overrides (e.g. 선정 단면 적용, SPEC-06.12): upsert them by id, which
+    // makes every step stale, and compute once more so the screen shows the new model at once.
+    // The confirmation that led here no longer matches, so the second run asks nothing again.
+    const add = report.applies.flatMap((a) => a.overrides);
+    if (add.length && !input.applied) {
+      await this.setOverrides(projectId, instanceId, { add, remove: add.map((o) => o.id) });
+      return this.run(projectId, instanceId, { ...input, applied: true });
+    }
     return { ...report, status };
   }
 

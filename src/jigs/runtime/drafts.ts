@@ -23,6 +23,7 @@ import {
   readdirSync,
   renameSync,
   rmSync,
+  rmdirSync,
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -377,7 +378,8 @@ export class JigDrafts {
     return this.get(projectId, draftId);
   }
 
-  private writeIn(dir: string, path: string, content: string | Uint8Array) {
+  /** The checked target of a draft path: allowed by the path rule and reached through no link. */
+  private target(dir: string, path: string) {
     const refusal = draftPathRefusal(dir, path);
     if (refusal) throw new DomainError(refusal);
     const target = resolve(dir, path);
@@ -389,6 +391,10 @@ export class JigDrafts {
     }
     if (existsSync(target) && lstatSync(target).isSymbolicLink())
       throw new DomainError('DRAFT_FORBIDDEN_FILE');
+    return target;
+  }
+  private writeIn(dir: string, path: string, content: string | Uint8Array) {
+    const target = this.target(dir, path);
     const bytes = typeof content === 'string' ? Buffer.byteLength(content) : content.byteLength;
     if (bytes > DRAFT_LIMITS.fileBytes) throw new DomainError('INPUT_TOO_LARGE');
     mkdirSync(dirname(target), { recursive: true });
@@ -397,6 +403,24 @@ export class JigDrafts {
   /** Writes one file of an open draft; a forbidden or outside path is refused. */
   writeFile(projectId: string, draftId: string, path: string, content: string | Uint8Array) {
     this.writeIn(this.open(projectId, draftId).path, path, content);
+  }
+  /**
+   * Deletes one file of an open draft (the make tool `jig_delete_file`): the same path rule as a
+   * write, only a plain file, never `jig.json`; folders left empty on the way up are removed.
+   */
+  deleteFile(projectId: string, draftId: string, path: string): { path: string; deleted: true } {
+    const dir = resolve(this.open(projectId, draftId).path);
+    const target = this.target(dir, path);
+    const rel = relative(dir, target).split(sep).join('/');
+    if (rel.toLowerCase() === 'jig.json') throw new DomainError('DRAFT_PATH_INVALID');
+    if (!existsSync(target)) throw new DomainError('NOT_FOUND');
+    if (!lstatSync(target).isFile()) throw new DomainError('DRAFT_PATH_INVALID');
+    rmSync(target);
+    for (let folder = dirname(target); folder.startsWith(dir + sep); folder = dirname(folder)) {
+      if (readdirSync(folder).length) break;
+      rmdirSync(folder);
+    }
+    return { path: rel, deleted: true };
   }
 
   /** Forbidden files, then the manifest, files and panel as an `ai-draft` package. */
@@ -514,13 +538,23 @@ export class JigDrafts {
     const version = input.version ?? String(raw.version);
     if (!JIG_ID.test(id) || !id.startsWith('project/') || !SEMVER.test(version))
       throw new DomainError('INVALID_INPUT');
-    const entries = listPackageFiles(dir).map((path) => ({
-      path,
-      bytes:
-        path === 'jig.json' && (id !== raw.id || version !== raw.version)
-          ? Buffer.from(JSON.stringify({ ...raw, id, version }, null, 2) + '\n', 'utf8')
-          : readFileSync(join(dir, path)),
-    }));
+    // A step file the conversation emptied (a file tool cannot delete) and no step names is dropped.
+    const named = new Set(
+      (Array.isArray(raw.steps) ? (raw.steps as { entry?: unknown }[]) : [])
+        .map((step) => (typeof step?.entry === 'string' ? step.entry.split('#')[0] : ''))
+        .filter(Boolean),
+    );
+    const emptyStep = (path: string) =>
+      /^steps\//.test(path) && !named.has(path) && !readFileSync(join(dir, path), 'utf8').trim();
+    const entries = listPackageFiles(dir)
+      .filter((path) => !emptyStep(path))
+      .map((path) => ({
+        path,
+        bytes:
+          path === 'jig.json' && (id !== raw.id || version !== raw.version)
+            ? Buffer.from(JSON.stringify({ ...raw, id, version }, null, 2) + '\n', 'utf8')
+            : readFileSync(join(dir, path)),
+      }));
     const digest = digestEntries(entries);
     let existing;
     try {
@@ -619,6 +653,37 @@ export async function validateDraftDir(dir: string): Promise<ValidationReport> {
         });
       }
   return sources.length ? { ...report, ok: false, issues: [...report.issues, ...sources] } : report;
+}
+
+/**
+ * Why a validate or test report failed, as a stable text (undefined when it passed): the issues'
+ * codes and paths, or each failing case with its first error line and mismatch paths. Two failures
+ * with the same text failed for the same reason (the make-conversation's stop rule, SPEC-07.9).
+ */
+export function failureReason(
+  report: Pick<ValidationReport, 'ok'> & {
+    issues?: ManifestIssue[];
+    cases?: SelftestReport['cases'];
+  },
+): string | undefined {
+  if (report.ok) return undefined;
+  const issues = (report.issues ?? [])
+    .filter((entry) => entry.level !== 'warn')
+    .map((entry) => `${entry.code} ${entry.path}`)
+    .sort();
+  if (issues.length) return issues.join('; ').slice(0, 1000);
+  const cases = (report.cases ?? [])
+    .filter((entry) => !entry.ok)
+    .map((entry) =>
+      [
+        entry.name,
+        entry.error?.split('\n')[0]?.slice(0, 200),
+        ...entry.mismatches.map((m) => m.path),
+      ]
+        .filter(Boolean)
+        .join(' '),
+    );
+  return (cases.length ? cases.join('; ') : '시험 사례 없음').slice(0, 1000);
 }
 
 function fixtureNames(jig: LoadedJig): string[] {

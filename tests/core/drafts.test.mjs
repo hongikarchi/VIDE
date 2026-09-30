@@ -12,7 +12,7 @@ import {
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Store } from '../../src/core/store.ts';
-import { JigDrafts, draftsRoot, scanDraft } from '../../src/jigs/runtime/drafts.ts';
+import { JigDrafts, draftsRoot, failureReason, scanDraft } from '../../src/jigs/runtime/drafts.ts';
 import { draftPathRefusal } from '../../src/ai/agent-connection.ts';
 import { JigStore } from '../../src/core/jig-store.ts';
 
@@ -183,4 +183,74 @@ test('pinning installs a read-only ai-draft package and pins it; discarding remo
   } finally {
     t.close();
   }
+});
+
+test('a draft file is deleted inside the folder only; empty folders go with it', async () => {
+  const t = setup();
+  try {
+    const draft = t.drafts.create(t.projectId, { name: 'delete me', from: 'blank' });
+    t.drafts.writeFile(t.projectId, draft.id, 'steps/extra/old.ts', 'export const x = 1;\n');
+    assert.deepEqual(t.drafts.deleteFile(t.projectId, draft.id, 'steps/extra/old.ts'), {
+      path: 'steps/extra/old.ts',
+      deleted: true,
+    });
+    assert.ok(!existsSync(join(draft.path, 'steps', 'extra')));
+    assert.ok(existsSync(join(draft.path, 'steps', 'main.ts')));
+    const refused = (path, code) =>
+      assert.throws(
+        () => t.drafts.deleteFile(t.projectId, draft.id, path),
+        (error) => error.code === code,
+      );
+    refused('jig.json', 'DRAFT_PATH_INVALID');
+    refused('JIG.JSON', 'DRAFT_PATH_INVALID');
+    refused('steps', 'DRAFT_PATH_INVALID');
+    refused('steps/none.ts', 'NOT_FOUND');
+    refused('../outside.ts', 'DRAFT_OUTSIDE');
+    refused(join(t.dir, 'vide.sqlite'), 'DRAFT_OUTSIDE');
+    refused('CLAUDE.md', 'DRAFT_FORBIDDEN_FILE');
+    refused('node_modules/x/index.js', 'DRAFT_FORBIDDEN_FILE');
+    assert.ok(existsSync(join(t.dir, 'vide.sqlite')));
+    // A pinned draft is closed to changes.
+    await t.drafts.pin(t.projectId, draft.id, {});
+    refused('skill.md', 'DRAFT_NOT_OPEN');
+  } finally {
+    t.close();
+  }
+});
+
+test('the pin drops step files left empty and named by no step', async () => {
+  const t = setup();
+  try {
+    const draft = t.drafts.create(t.projectId, { name: 'empty steps', from: 'blank' });
+    t.drafts.writeFile(t.projectId, draft.id, 'steps/old.ts', '  \n');
+    t.drafts.writeFile(t.projectId, draft.id, 'steps/kept.ts', 'export const k = 1;\n');
+    assert.equal((await t.drafts.validate(t.projectId, draft.id)).ok, true);
+    const pinned = await t.drafts.pin(t.projectId, draft.id, {});
+    assert.ok(!existsSync(join(pinned.path, 'steps', 'old.ts')));
+    assert.ok(existsSync(join(pinned.path, 'steps', 'kept.ts')));
+    assert.ok(existsSync(join(pinned.path, 'steps', 'main.ts')));
+    assert.ok(existsSync(join(draft.path, 'steps', 'old.ts')));
+  } finally {
+    t.close();
+  }
+});
+
+test('failure reasons name the issues or the failing cases; a pass has none', () => {
+  assert.equal(failureReason({ ok: true, issues: [] }), undefined);
+  const issues = [
+    { code: 'JIG_SCHEMA', path: 'jig.json', message: 'x', level: 'error' },
+    { code: 'JIG_PANEL', path: 'panel.json', message: 'y', level: 'warn' },
+  ];
+  assert.equal(failureReason({ ok: false, issues }), 'JIG_SCHEMA jig.json');
+  assert.equal(
+    failureReason({
+      ok: false,
+      cases: [
+        { name: 'basic', ok: false, steps: [], mismatches: [{ path: 'steps.main.total' }] },
+        { name: 'other', ok: true, steps: [], mismatches: [] },
+      ],
+    }),
+    'basic steps.main.total',
+  );
+  assert.equal(failureReason({ ok: false, cases: [] }), '시험 사례 없음');
 });

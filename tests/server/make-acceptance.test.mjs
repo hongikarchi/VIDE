@@ -226,10 +226,9 @@ function draftFiles(manifest) {
       },
     }),
     'steps/twins.ts': TWINS,
-    // The example's grid steps are replaced; with no delete tool the AI leaves them empty.
-    'steps/grid.ts': '// 쓰지 않음\nexport {};\n',
-    'steps/beams.ts': '// 쓰지 않음\nexport {};\n',
-    'steps/summary.ts': '// 쓰지 않음\nexport {};\n',
+    // The example's grid steps are replaced: grid and beams go by jig_delete_file (turn 1), the
+    // summary step is left empty, which the pin drops.
+    'steps/summary.ts': '',
     'fixtures/basic/input.json': json(caseInput([[-1.5, 3]])),
     'fixtures/basic/params.json': json({}),
     'fixtures/basic/expect.json': json({ steps: { twins: { ok: 1, caps: 1 } } }),
@@ -374,6 +373,12 @@ test('M5 replay: a make-conversation writes, checks and asks; the pinned jig mat
         const manifest = JSON.parse(readFileSync(join(side.draftDir, 'jig.json'), 'utf8'));
         side.use('Read', { file_path: join(side.draftDir, 'jig.json') });
         for (const [path, text] of Object.entries(draftFiles(manifest))) side.write(path, text);
+        for (const path of ['steps/grid.ts', 'steps/beams.ts']) {
+          side.use('mcp__vide__jig_delete_file', { path });
+          seen[path] = await side.tool('jig_delete_file', { path });
+        }
+        seen.deleteManifest = await side.tool('jig_delete_file', { path: 'jig.json' });
+        seen.deleteOutside = await side.tool('jig_delete_file', { path: '../outside.ts' });
         // targetRef is left out: the make tools act on the conversation's draft.
         for (const name of ['jig_validate', 'jig_test', 'jig_preview']) {
           side.use(`mcp__vide__${name}`, {});
@@ -482,6 +487,14 @@ test('M5 replay: a make-conversation writes, checks and asks; the pinned jig mat
   assert.equal(argOf(seen.args, '--add-dir'), draft.path);
   assert.equal(argOf(seen.args, '--tools'), 'Read,Edit,Write,Glob,Grep');
   assert.ok(seen.args.includes('--restricted') && seen.args.includes('--json-schema'));
+  assert.deepEqual(seen['steps/grid.ts'], {
+    error: false,
+    data: { path: 'steps/grid.ts', deleted: true },
+  });
+  assert.equal(seen['steps/beams.ts'].data.deleted, true);
+  assert.equal(existsSync(join(draft.path, 'steps', 'grid.ts')), false);
+  assert.deepEqual(seen.deleteManifest, { error: true, data: { code: 'DRAFT_PATH_INVALID' } });
+  assert.deepEqual(seen.deleteOutside, { error: true, data: { code: 'DRAFT_OUTSIDE' } });
   assert.equal(seen.jig_validate.error, false);
   assert.equal(seen.jig_validate.data.ok, true, JSON.stringify(seen.jig_validate.data.issues));
   assert.equal(seen.jig_test.data.ok, true, JSON.stringify(seen.jig_test.data.cases));
@@ -508,6 +521,12 @@ test('M5 replay: a make-conversation writes, checks and asks; the pinned jig mat
   const second = await settle(project.id, answered.json.request.id);
   assert.equal(second.state, 'succeeded', JSON.stringify(second.result));
   assert.match(seen.answerPacket, /ej-on-line=flag/);
+  // The answer turn of a make-conversation runs on the make budgets (SPEC-07.9).
+  assert.deepEqual(second.input.executionLimits, {
+    maxToolCalls: 100,
+    maxHostCommands: 12,
+    timeoutSeconds: 600,
+  });
   assert.equal(seen.retest.data.ok, true);
 
   // Turn 3: a forbidden file write stops the turn; nothing lands in the folder.
@@ -526,6 +545,10 @@ test('M5 replay: a make-conversation writes, checks and asks; the pinned jig mat
   const pinned = await api(`${base}/${draft.id}/pin`, 'POST', { confirm: true });
   assert.equal(pinned.status, 200, JSON.stringify(pinned.json));
   assert.equal(pinned.json.id, 'project/ej-twin-check');
+  // The emptied step file stayed in the draft but not in the pinned package.
+  assert.equal(existsSync(join(draft.path, 'steps', 'summary.ts')), true);
+  assert.equal(existsSync(join(pinned.json.path, 'steps', 'summary.ts')), false);
+  assert.equal(existsSync(join(pinned.json.path, 'steps', 'twins.ts')), true);
   const jig = await loadJig(pinned.json.path, {
     source: 'ai-draft',
     expectDigest: pinned.json.digest,

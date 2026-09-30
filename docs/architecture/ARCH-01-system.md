@@ -2,8 +2,8 @@
 id: ARCH-01
 title: VIDE 기술 구조와 구현 계약
 status: review
-version: 0.50
-updated: 2026-09-29
+version: 0.52
+updated: 2026-09-30
 owner: agent:codex
 related: [SPEC-00, SPEC-02, SPEC-03, SPEC-04, PLAN, PLAN-20, PLAN-24, ADR-014, ADR-015, ADR-016, ADR-017, ADR-021, ARCH-03]
 ---
@@ -301,11 +301,31 @@ SDK 영수증 복구 결과에는 `recovered: true`를 둔다. 기존 succeeded�
 [ADR-021](../decisions/ADR-021-conversation-sessions.md)의 목적별 대화(SPEC-02.19)를 실행하는 CLI 쪽 계약이다. 대화·공급자 세션·원장의 저장은 [ARCH-03](ARCH-03-jig-runtime.md) §10이 소유한다. 아래 인자와 경로는 PLAN-24의 SPIKE(ADR-021 표의 0·①~⑨) 결과로 확정할 때 고친다.
 
 - **턴 하나 = CLI 실행 하나.** Claude는 대화의 첫 턴에 `--session-id <UUID>`, 이후 턴에 `--resume <UUID>`로 실행한다. 매 턴 인자는 현행 격리 인자(도구 없는 턴·도구 있는 턴 각각)에서 `--no-session-persistence`만 뺀 것이고, 시작 이벤트의 도구·MCP 목록이 그 턴의 허용 목록과 다르면 실행하지 않는다. Codex는 SPIKE ④ 통과 전까지 원장 방식(턴마다 단발 실행 + 원장)이다. 세션 이어 실행이 막힌 공급자·항목도 원장 방식으로 돈다.
-- **시스템 프롬프트:** 대화마다 중립 시스템 프롬프트 하나를 쓰고, 턴마다 달라지는 범위·대상·권한·상한은 요청 자료의 '이번 턴 규칙'으로 보낸다. 기록된 프롬프트를 쓰지 않게 하는 옵션(`--system-prompt-snapshot off`)은 SPIKE ⑦ 뒤에 쓰고, 통하지 않으면 한 대화 아래 도구 없는 세션과 도구 있는 세션을 따로 둔다.
+- **시스템 프롬프트:** 대화마다 중립 시스템 프롬프트 하나를 쓰고, 턴마다 달라지는 범위·대상·권한·상한은 요청 자료의 '이번 턴 규칙'으로 보낸다. 기록된 프롬프트를 쓰지 않게 하는 옵션(`--system-prompt-snapshot off`)은 SPIKE ⑦ 뒤에 쓰고, 통하지 않으면 한 대화 아래 도구 없는 세션과 도구 있는 세션을 따로 둔다. 4차 물결까지는 Claude가 `--system-prompt`로 공급자 기본 프롬프트를 한 줄 중립 지시로 바꾸고, Codex는 `developer_instructions`에 같은 뜻의 중립 지시를 넣는다.
+- **VIDE 지시 묶음(적용 중, 2026-09-30 5차 물결):** 공급자 기본 시스템 프롬프트를 바꾸지 않고 그 뒤에 VIDE 지시 묶음을 **덧붙인다**. Claude는 `--append-system-prompt`, Codex는 `developer_instructions`로 같은 본문을 보낸다. 묶음은 모드별(공통·모델링·자료·만들기) 본문과 프로젝트별 추가분으로 나누며 원본은 `src/ai/instructions/`에 둔다. 공급자 skill·plugin은 계속 끄고(격리), 쓸모 있는 skill의 내용은 묶음 안으로 옮긴다. 이번 턴 규칙·격리 인자·시작 이벤트의 도구 검사는 그대로다. 쓰기는 작업 사본 → 후보 → 반영 경로만 쓴다. 모드별 확정 인자는 아래 「AI 실행 인자」가 소유한다.
 - **작업 폴더:** 매 턴 저장소·데이터 폴더 밖의 빈 임시 폴더다. jig 만들기 대화만 초안 폴더를 붙인다(ARCH-03 §2.3).
 - **CLI 판 확인:** 실행 전 `--version`(60초 캐시)을 검증한 판 범위(`cli-compat.json`)와 비교해 밖이면 실행을 거절하고 안내한다. `--bare` 기본화 같은 인증 방식 전환의 실패 신호는 `CLI_MODE_CHANGED`로 분류하고 멈춘다. 가능하면 검증한 판의 실행 파일 경로를 고정한다.
 - **한 세션을 두 실행이 쓰지 않는다.** 종료를 확인하지 못한 턴 뒤에는 그 세션을 `lost`로 두고, 이전 프로세스의 종료를 확인한 뒤 인계 자료로 새 세션을 연다.
 - **공급자 기록 관리:** 대화를 닫고 30일 뒤 `provider_sessions`의 세션 ID로 해당 계정 프로필의 공급자 기록을 지우고, 버린 jig 초안의 기록은 바로 지운다. 공급자 기록은 백업 대상이 아니다. 기본 로그인 프로필의 설정 경로는 바꾸지 않는다(「CLI 프로필 실행 경계」).
+
+#### AI 실행 인자
+
+두 CLI의 한 실행 인자다. 원본은 `cliArguments`·`sessionArguments`(`src/ai/claude-cli.ts`), `codexArguments`·`codexTurnIsolated`(`src/ai/codex-cli.ts`), `configureAgentArguments`(`src/ai/agent-connection.ts`)이고, 이 표와 다르면 코드를 고친다. 묶음(`bundleFor(mode, 추가 지침, {host})`)은 두 CLI에 같은 본문이 가고, 그 뒤에 `## 이번 실행의 규칙` 아래 실행 규칙 한 문단이 붙는다(`withRules`). 세션 턴은 실행 규칙이 중립 문장으로 고정되고, 그 턴의 도구·대상·권한은 요청 자료의 `turn-rules` 항목(`turnRules(연결, 공급자 형식)`)으로 간다.
+
+| 경우 | 묶음 모드 | Claude Code | Codex |
+|---|---|---|---|
+| 공통 격리(모든 경우) | — | `-p --safe-mode --tools "" --strict-mcp-config --mcp-config {"mcpServers":{}} --setting-sources "" --no-session-persistence --no-chrome --disable-slash-commands --permission-mode dontAsk --output-format stream-json --verbose --append-system-prompt <묶음+규칙>` `[--model m] [--effort e]`. `--system-prompt`은 쓰지 않는다(기본 프롬프트 유지) | `exec --json --ephemeral --ignore-user-config --ignore-rules --skip-git-repo-check --sandbox read-only -c approval_policy="never" -c model_provider="openai" -c forced_login_method="chatgpt" -c web_search="disabled" -c mcp_servers={} -c project_doc_max_bytes=0 -c tools.view_image=false -c developer_instructions=<JSON 문자열: 묶음+규칙>`, `--disable` 16개(shell_tool·unified_exec·apps·plugins·hooks·multi_agent·memories·browser_use·browser_use_external·computer_use·image_generation·view_image·code_mode·code_mode_host·skill_search·shell_snapshot), `--enable skip_host_skill_discovery` `[--model m] [-c model_reasoning_effort="e"]` `[-c cli_auth_credentials_store="file"]` `-` |
+| 단발·도구 없음 | 호출자가 준 모드, 없으면 `data` | 규칙 = `noToolsInstruction`. 시작 이벤트의 도구·MCP 목록이 비어야 한다 | 규칙 = `codexSingleInstruction` |
+| 세션 턴(도구 없음) | 대화 종류대로 | `--no-session-persistence`를 빼고 첫 턴 `--session-id <UUID>`, 이후 `--resume <UUID>`, 매 턴 `--system-prompt-snapshot off`. 규칙 = `neutralInstruction` | `--ephemeral`을 빼고, 이어 턴은 `exec resume <thread>`와 `--sandbox` 대신 `-c sandbox_mode="read-only"`. 규칙 = `codexSessionInstruction`(첫 턴 값이 세션에 고정). 실행 전 `codexTurnIsolated` 검사 |
+| 호스트 도구(`query`·`execute`) | `modeling`(+대상 호스트 조각. 복수 대상은 두 조각 모두) | `--safe-mode` → `--restricted`, `--mcp-config {"mcpServers":{"vide":{"type":"http","url":<127.0.0.1…/mcp>,"headers":{"Authorization":"Bearer ${VIDE_AGENT_TOKEN}"}}}}`, `--allowedTools mcp__vide__<도구,…>`. 단발 규칙 = `agentInstruction`, 세션이면 중립 문장 유지 | `-c mcp_servers={vide={url=…,bearer_token_env_var="VIDE_AGENT_TOKEN",enabled_tools=[…],default_tools_approval_mode="approve",required=true,tool_timeout_sec=60}}`, `--enable code_mode --enable code_mode_host`(셸은 꺼진 채). 단발 규칙 = `agentInstruction`, 세션이면 중립 문장 유지 |
+| 대화 도구(jig·구조·Sync·질문) | `data`(검토 jig는 `review`) | 호스트 도구와 같고 규칙 = `conversationToolInstruction`+대화 범위 | 호스트 도구와 같고 규칙 = `conversationToolInstruction`+대화 범위 |
+| jig 만들기 | `make` | 위에 더해 `--tools Read,Edit,Write,Glob,Grep --add-dir <초안 폴더>`, `--allowedTools`에 파일 도구 추가. 규칙 = `makeToolInstruction` | 파일 도구 없음. 규칙 = `codexMakeInstruction`(세션 턴도 `turn-rules`가 이 문장), 출력 스키마에 `files`(최대 50개, 초안 안 경로와 전체 내용, `null`은 삭제) 추가. 턴 뒤 `makeTurnResult`(`src/server/make-routes.ts`)가 초안의 경로 규칙·파일 크기 상한으로 하나씩 쓰고(거절한 파일은 이유와 함께 `makeFiles.refused`), 점검·자체 시험을 돌려 결과를 원장 `code` 항목으로 남긴다. 멈춘 턴의 `files`는 쓰지 않는다 |
+| 구조화 출력(`turn-output` 항목) | — | `--json-schema <스키마>`. 이때만 CLI의 출력 도구 `StructuredOutput`을 시작 목록·호출에서 허용 | 실행 임시 폴더의 `--output-schema <파일>` |
+| 이미지 | — | `--input-format stream-json`(표준 입력이 이미지 포함 사용자 메시지) | `--json` 바로 뒤 `--image <임시 파일>` |
+
+- **환경:** 도구가 있으면 `VIDE_AGENT_TOKEN`만 넣는다. 계정 프로필은 `CLAUDE_CONFIG_DIR`·`CODEX_HOME`(기본 프로필은 넣지 않음). `ANTHROPIC_*`·`OPENAI_*` 등 API 키 경로는 지운다.
+- **크기:** 묶음은 추가 지침 포함 20,000자 이하(추가 지침부터 자른다). 추가 지침이 없을 때 `data`·`review` 약 2.0천, `make` 약 2.9천, `modeling` 두 호스트 약 14.3천·Rhino 약 9.7천·ZWCAD 약 7.8천 자다. 가장 긴 명령줄은 약 2.2만 자로 Windows 한도 32,767자 안이다.
+- **실측:** Claude 2.1.285에서 자료 모드 세션 2턴(질문 카드 → 답변 턴)이 시작 이벤트 검사를 통과하고 묶음과 추가 지침이 모델에 닿았다([SPIKE-2026-09-30-instruction-bundle](../tdd/SPIKE-2026-09-30-instruction-bundle.md)).
 
 ### ZWCAD 범용 실행기의 물리 계약
 
@@ -362,7 +382,18 @@ PLAN-02 §6의 비교는 연결 어댑터를 선택하는 과정이다. 대상 �
 
 ### AI 도구와 내부 계약 분리
 
-AI 도구는 discover, query, execute, status, cancel과 필요한 자산/SDK 조회로 시작한다. 기본 실행 인수는 다음과 같다.
+AI 도구의 이름은 등록부 하나가 정한다. `src/ai/agent-connection.ts`의 `agentToolNames`가 이름 목록이고 `src/server/agent-tools.ts`의 정의(설명·zod 입력 스키마)가 두 목록이 다르면 로드를 거절한다(PLAN-24 T-062). 턴이 받는 도구는 모드에 따라 다음과 같다(2026-09-30 5차 물결 기준).
+
+| 모드 | 발급 조건 | 도구 |
+|---|---|---|
+| 모델링(호스트 작업) | Rhino·ZWCAD 작업 사본을 쓰는 요청 턴 | `query`, `execute`, `status`, `cancel` |
+| 보기(Rhino) | Rhino 대상의 모델링 턴 | `capture_view`(대상의 모델 화면 PNG, 기본 1200×800·한 변 최대 1600 px, `fitIds`·`namedView`, 이 이미지에만 레이어 켜고 끄기, 문서 변경 없음, 한 번에 하나), `measure`(객체별 bbox·길이·면적·닫힌 솔리드 부피 최대 50개, 객체·점 쌍의 최단 거리 최대 20쌍, 모델 단위) |
+| 대화 읽기(jig·구조·Sync) | 목적별 대화의 턴. 대상은 `conversation:<대화 ID>` | `jig_list`, `jig_state`, `jig_output`, `structure_summary`, `structure_checks`, `links_layers`, `sync_sample` |
+| jig 조작 | 그 대화에 jig 작업본이 열려 있을 때, 열린 작업본에만 | `jig_set`(되돌릴 수 있는 설정값 변경, 원장 기록), `jig_run`(계산 단계만) |
+| 자료 | 그 프로젝트의 자료 DB가 있을 때, 읽기만 | `project_brief`, `project_search`, `project_issue`, `project_statement`, `project_checks` |
+| 만들기 | `jig-make` 대화이고 초안이 열려 있을 때. `targetRef`를 생략하면 그 대화의 초안 | `jig_validate`, `jig_test`, `jig_preview`, `jig_delete_file`(초안 파일 하나, `jig.json`·금지 파일 제외), `ask_user` + Claude 파일 도구 `Read`·`Edit`·`Write`·`Glob`·`Grep`(초안 폴더만, ARCH-03 §2.3) |
+
+대화 턴은 위 행 가운데 조건을 만족하는 것을 합쳐 받는다. 모델에 주는 지시는 모드별로 다르다(`instructionFor`: 호스트 도구·대화 도구·만들기). 옛 설계의 `discover`와 자산/SDK 조회 도구는 등록부에 없다. 보기 도구는 5차 물결에서 더했다. 호스트 작업 도구의 기본 실행 인수는 다음과 같다.
 
 ```json
 {"targetRef":"VIDE가 조회 결과에 발급한 참조", "code":"AI가 작성한 코드"}
@@ -380,7 +411,7 @@ VIDE 내부에서 protocolVersion, operationId, taskId, 실제 대상(hostSessio
 
 major 불일치는 연결 거절, minor 추가 필드는 협상된 능력 안에서 허용한다. 요청 ID는 통신 응답 대응, operationId는 재접속 후 작업 식별이다. 같은 operationId+동일 payload는 기존 상태를 반환하고 다른 payload는 거절한다. 호스트에도 실행 전 접수·시작 저널을 기록한다. CAD 변경과 저널을 하나의 원자 트랜잭션으로 만들 수 없으므로 exactly-once를 주장하지 않는다. 변경 후 응답/기록 유실은 unknown으로 조사하며 자동 재실행하지 않는다.
 
-목적별 대화(SPEC-02.19)에서는 도구 범위를 대화 종류 × jig 출처로 턴마다 발급하고 턴이 끝나면 회수한다. jig·구조·자료 도구(이름 초안은 RESEARCH-10 §8.4)는 PLAN-24의 대화 도구 작업에서 입출력과 함께 이 절에 정하며, 그 전에는 위의 현행 도구만 발급한다.
+목적별 대화(SPEC-02.19)에서는 도구 범위를 대화 종류 × jig 출처로 턴마다 발급하고 턴이 끝나면 회수한다. 발급은 `AgentTools`의 범위(scope)이며 한 범위에 호출 횟수·유효 시간 상한이 붙는다(기본값과 대화 턴의 상한은 `src/contracts/execution-limits.ts`). 도구 결과는 작게 자르고 큰 출력은 `offset`·`limit`로 나눠 읽는다. 대화 도구는 엔진 저장소(작업본·단계 결과·Sync·자료 DB)만 읽고 호스트 문서를 직접 열지 않는다. 도구별 입력 스키마의 정본은 `src/server/agent-tools.ts`의 정의다.
 
 ### 한 요청의 복수 대상 실행
 
