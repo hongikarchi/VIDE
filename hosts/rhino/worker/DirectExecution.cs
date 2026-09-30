@@ -23,6 +23,9 @@ internal sealed class DirectExecutor : IDisposable
     private readonly Dictionary<uint, bool> records = new();
     // Records undone while UndoRecord runs (null otherwise).
     private List<uint>? watching;
+    // Every record of this document currently undone (any origin), and this connection's empty
+    // records Rhino discarded: serials that no longer stand between a record and the undo top.
+    private readonly HashSet<uint> undone = new(), discarded = new();
     internal DirectExecutor(RhinoDoc doc)
     {
         document = doc;
@@ -32,8 +35,8 @@ internal sealed class DirectExecutor : IDisposable
 
     private void UndoRedo(object? sender, Rhino.Commands.UndoRedoEventArgs e)
     {
-        if (e.IsBeginUndo) { watching?.Add(e.UndoSerialNumber); if (records.ContainsKey(e.UndoSerialNumber)) records[e.UndoSerialNumber] = true; }
-        if (e.IsBeginRedo && records.ContainsKey(e.UndoSerialNumber)) records[e.UndoSerialNumber] = false;
+        if (e.IsBeginUndo) { watching?.Add(e.UndoSerialNumber); undone.Add(e.UndoSerialNumber); if (records.ContainsKey(e.UndoSerialNumber)) records[e.UndoSerialNumber] = true; }
+        if (e.IsBeginRedo) { undone.Remove(e.UndoSerialNumber); if (records.ContainsKey(e.UndoSerialNumber)) records[e.UndoSerialNumber] = false; }
     }
 
     internal sealed record GuardOptions(bool Confirmed, int MaxDeletes)
@@ -111,6 +114,7 @@ internal sealed class DirectExecutor : IDisposable
         if (failure != null)
         {
             // A failed run leaves nothing half done: its record is undone when it changed anything.
+            if (!any) discarded.Add(serial);
             var reverted = !any || UndoRecord(serial);
             document.Views.Redraw();
             return new { ok = false, code = reverted ? "EXECUTION_FAILED" : "HOST_RESULT_UNKNOWN", reverted, log,
@@ -131,6 +135,7 @@ internal sealed class DirectExecutor : IDisposable
         document.Views.Redraw();
         string? undoId = null;
         if (any) { records[serial] = false; undoId = serial.ToString(System.Globalization.CultureInfo.InvariantCulture); }
+        else discarded.Add(serial);
         var result = new { ok = true, undoId, changes = changes.Report(), log, value = Value(value), units = document.ModelUnitSystem.ToString() };
         receipts[requestId] = (hash, result);
         return result;
@@ -146,7 +151,10 @@ internal sealed class DirectExecutor : IDisposable
         if (!uint.TryParse(text, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var serial) ||
             !records.TryGetValue(serial, out var isUndone)) return new { ok = false, reason = "unknown" };
         if (isUndone) return new { ok = true, already = true };
-        if (document.NextUndoRecordSerialNumber != serial + 1) return new { ok = false, reason = "not-latest" };
+        // Latest: every record made after it is undone or was an empty record of ours (a run of
+        // several bodies is undone newest first, so the next-newest becomes the latest).
+        for (var later = serial + 1; later < document.NextUndoRecordSerialNumber; later++)
+            if (!undone.Contains(later) && !discarded.Contains(later)) return new { ok = false, reason = "not-latest" };
         if (!UndoRecord(serial)) return new { ok = false, reason = "undo-failed" };
         document.Views.Redraw();
         return new { ok = true };
@@ -161,12 +169,32 @@ internal sealed class DirectExecutor : IDisposable
         var seen = watching = new List<uint>();
         try
         {
-            if (!document.Undo()) return false;
-            if (seen.Count > 0 && !seen.Contains(serial)) { document.Redo(); return false; }
+            var next = document.NextUndoRecordSerialNumber;
+            var ok = document.Undo();
+            CloseOwnRecord(next);
+            if (!ok) return false;
+            if (seen.Count > 0 && !seen.Contains(serial))
+            {
+                next = document.NextUndoRecordSerialNumber;
+                document.Redo();
+                CloseOwnRecord(next);
+                return false;
+            }
         }
         finally { watching = null; }
+        undone.Add(serial);
         if (records.ContainsKey(serial)) records[serial] = true;
         return true;
+    }
+
+    // RhinoDoc.Undo/Redo outside a command open a record of their own and leave it open (seen on
+    // Rhino 8: the next Undo, Redo or BeginUndoRecord then fails). Close it; its serial is no
+    // record standing above ours.
+    private void CloseOwnRecord(uint next)
+    {
+        if (document.UndoRecordingIsActive && document.CurrentUndoRecordSerialNumber >= next)
+            document.EndUndoRecord(document.CurrentUndoRecordSerialNumber);
+        for (var own = next; own < document.NextUndoRecordSerialNumber; own++) discarded.Add(own);
     }
 
     private sealed record ChangeReport(List<RhinoObject> Added, List<RhinoObject> Changed, List<(Guid Id, string Layer)> Removed,

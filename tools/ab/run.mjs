@@ -13,7 +13,7 @@ import { randomUUID } from 'node:crypto';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
-import { captureSvg, evaluate, objectOf } from './checks.mjs';
+import { captureSvg, diff, evaluate, objectOf } from './checks.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const { values: args } = parseArgs({
@@ -31,6 +31,7 @@ const { values: args } = parseArgs({
     timeout: { type: 'string', default: '900' },
     scale: { type: 'string', default: 'auto' },
     out: { type: 'string' },
+    'keep-applied': { type: 'boolean', default: false },
     'dry-run': { type: 'boolean', default: false },
   },
 });
@@ -162,7 +163,63 @@ for (const item of requests) {
     record.error = String(error?.message ?? error);
   }
   record.ms = Date.now() - began;
-  const result = done?.result ?? {};
+  let result = done?.result ?? {};
+  // Auto mode applies directly to the attached document (ADR-022): the request result carries
+  // executions, not a candidate scene. Sync the linked document again and diff it against the
+  // basis, then (unless --keep-applied / --chain) revert every applied execution with the
+  // product's [되돌리기] so the next request starts from the untouched fixture.
+  const executions = Array.isArray(result.executions) ? result.executions : [];
+  if (done && !result.scene && basis.input?.linkId && basis.result?.sourceDocument) {
+    const target = {
+      instance: basis.result.sourceDocument.instance,
+      documentId: basis.result.sourceDocument.documentId,
+    };
+    const synced = await call(`/projects/${project.id}/capture`, {
+      ...target,
+      id: randomUUID(),
+      linkId: basis.input.linkId,
+    });
+    const rows = synced.result?.scene ?? [];
+    result = {
+      ...result,
+      scene: rows,
+      displayOnly: synced.result?.displayOnly,
+      changes: diff(basisScene, rows),
+    };
+    record.afterSync = synced.id;
+    if (!args['keep-applied'] && !args.chain) {
+      record.undo = [];
+      for (const entry of [...executions].reverse().filter((e) => e.state === 'applied')) {
+        const undone = await call(`/projects/${project.id}/requests/${id}/undo`, {
+          executionId: entry.executionId,
+        }).catch((error) => ({ ok: false, reason: String(error?.message ?? error) }));
+        record.undo.push({
+          executionId: entry.executionId,
+          ok: undone.ok ?? !undone.reason,
+          reason: undone.reason,
+        });
+      }
+      const restored = await call(`/projects/${project.id}/capture`, {
+        ...target,
+        id: randomUUID(),
+        linkId: basis.input.linkId,
+      });
+      const left = diff(basisScene, restored.result?.scene ?? []);
+      record.restored = {
+        added: left.added.length,
+        removed: left.removed.length,
+        modified: left.modified.length,
+      };
+    }
+  }
+  record.executions = executions.map((e) => ({
+    state: e.state,
+    changes: e.changes && {
+      added: (e.changes.added ?? []).length,
+      changed: (e.changes.changed ?? []).length,
+      removed: (e.changes.removed ?? []).length,
+    },
+  }));
   record.state = done?.state ?? 'not-sent';
   record.provider = done?.input?.provider;
   record.model = done?.input?.model ?? null;

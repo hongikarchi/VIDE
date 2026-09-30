@@ -28,7 +28,9 @@ test('Rhino direct execution runs in one undo record and generated code cannot c
       direct.includes('"layer-delete"') &&
       direct.includes('"purge"'),
   );
-  assert.ok(direct.includes('NextUndoRecordSerialNumber != serial + 1'));
+  // Latest: every later record is undone or an empty one; Undo/Redo outside a command close their own record.
+  assert.ok(direct.includes('reason = "not-latest"') && direct.includes('!undone.Contains(later)'));
+  assert.ok(direct.includes('CloseOwnRecord(next)'));
   for (const member of [
     '"Undo"',
     '"BeginUndoRecord"',
@@ -36,4 +38,10 @@ test('Rhino direct execution runs in one undo record and generated code cannot c
     'RhinoDocUndoRecord',
   ])
     assert.ok(policy.includes(member), member);
+  // Read-only validity checks inherited from CommonObject are allowed; Rhino.Runtime stays denied otherwise.
+  assert.ok(policy.includes('"Rhino.Runtime"'));
+  assert.match(
+    policy,
+    /name == "Rhino\.Runtime\.CommonObject" && symbol\.Name is "IsValid" or "IsValidWithLog" or "IsDocumentControlled"\) continue;/,
+  );
 });

@@ -37,7 +37,9 @@ internal static class CodePolicy
                     var typeName = (symbol.Name == "GetType" && name == "object") ||
                         (symbol.Name is "Name" or "FullName" && name is "System.Type" or "System.Reflection.MemberInfo");
                     if (typeName) continue;
-                    if ((!objectTableRead &&DeniedNamespaces.Any(prefix => ns == prefix || ns.StartsWith(prefix + ".", StringComparison.Ordinal))) ||
+                    // Validity checks inherited from CommonObject (brep.IsValid) are read-only; the rest of Rhino.Runtime stays denied.
+                    if (name == "Rhino.Runtime.CommonObject" && symbol.Name is "IsValid" or "IsValidWithLog" or "IsDocumentControlled") continue;
+                    if ((!objectTableRead && DeniedNamespaces.Any(prefix => ns == prefix || ns.StartsWith(prefix + ".", StringComparison.Ordinal))) ||
                         name is "System.Environment" or "System.AppDomain" or "System.Type" or "System.Activator" or "System.Console" or "Rhino.RhinoApp" ||
                         symbol.Name == "GetType" && name == "object" ||
                         name == "Rhino.RhinoDoc" && (symbol.IsStatic || symbol.Name is "Dispose" or "Close" or "Write3dmFile" or "WriteFile" or "ReadFile" or "Import" or "Export") ||

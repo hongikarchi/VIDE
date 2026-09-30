@@ -75,6 +75,8 @@ folder = os.path.dirname(path)
 if not os.path.isdir(folder):
     os.makedirs(folder)
 # Save As, so the open document IS the fixture (the engine links and syncs this file).
-if not Rhino.RhinoApp.RunScript('_-SaveAs "{}" _Enter'.format(path), False):
+# RunScript is refused when this runs inside another script (e.g. a /runscript startup); SaveAs
+# keeps the same meaning there (the open document becomes the saved file).
+if not Rhino.RhinoApp.RunScript('_-SaveAs "{}" _Enter'.format(path), False) and not doc.SaveAs(path):
     raise Exception('Could not save ' + path)
 print('A/B fixture saved: ' + path)

@@ -1147,7 +1147,8 @@ export class Execution {
       ),
     });
     this.ledgerExecution(updated, { ...entry, state: 'undone' });
-    return { ok: true, request: updated };
+    // The host had it undone already (Rhino Ctrl+Z / ZWCAD U): nothing more was undone now.
+    return { ok: true, ...(answer.already === true ? { already: true } : {}), request: updated };
   }
   /**
    * The guard card's [진행] (POST …/requests/:rid/confirm {executionId}): the held body runs again

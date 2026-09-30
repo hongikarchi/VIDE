@@ -261,7 +261,9 @@ export async function selftestJig(
 /**
  * A repository jig that is not bundled imports `src/jigs/official` and `node_modules`; allow them.
  * The official structure library reuses `src/jigs/structure` (sections, loads, core path) and the
- * ARCH-02 contracts (ARCH-03 §2), so those source folders are readable too — reading only.
+ * ARCH-02 contracts (ARCH-03 §2), so those source folders are readable too — reading only. The
+ * structure core's folder holds the Node-API addon (`vide_structure.node` in the desktop package,
+ * `target/release/vide_structure.dll` in a checkout).
  */
 export function devReadPaths(jig: LoadedJig): Pick<ChildRunnerOptions, 'extraReadPaths'> {
   if (jig.bundled || jig.source !== 'dev-source') return {};
@@ -273,6 +275,7 @@ export function devReadPaths(jig: LoadedJig): Pick<ChildRunnerOptions, 'extraRea
       join(repo, 'src', 'jigs', 'official'),
       join(repo, 'src', 'jigs', 'structure'),
       join(repo, 'src', 'contracts'),
+      join(repo, 'src', 'native', 'structure'),
       join(repo, 'node_modules'),
     ],
   };

@@ -237,7 +237,7 @@ try:
     connect=assembly.GetType('Vide.Worker.AttachedConnection').GetMethod('Connect',System.Reflection.BindingFlags.Static|System.Reflection.BindingFlags.NonPublic)
     connect.Invoke(None,System.Array[System.Object]([doc]))
     Rhino.RhinoApp.Idle+=idle
-    report('ready',dict(ok=True,documentId=int(doc.RuntimeSerialNumber),objects=int(doc.Objects.Count),units=str(doc.ModelUnitSystem)))
+    report('ready',dict(ok=True,documentId=int(doc.RuntimeSerialNumber),objects=int(doc.Objects.Count),units=str(doc.ModelUnitSystem),plugin=assembly.Location))
 except Exception as e: report('ready',dict(ok=False,error=str(e),trace=traceback.format_exc()))
 `,
   );
@@ -258,6 +258,8 @@ except Exception as e: report('ready',dict(ok=False,error=str(e),trace=traceback
   );
   assert.equal(ready.ok, true, JSON.stringify(ready));
   result.units = ready.units;
+  result.plugin = ready.plugin;
+  console.log('plugin loaded from ' + ready.plugin);
   let step = 0;
   /** Run Python in the attached Rhino; `result` in its scope comes back. */
   const action = async (code) => {
@@ -431,8 +433,22 @@ except Exception as e: report('ready',dict(ok=False,error=str(e),trace=traceback
   const layerOf = (row) => Buffer.from(row.layer64, 'base64').toString();
   assert.deepEqual(new Set(rows1.map(layerOf)), new Set(Object.values(LAYERS)));
   const solids = rows1.filter((row) => [LAYERS.columns, LAYERS.beams].includes(layerOf(row)));
-  assert.ok(
-    solids.every((row) => row.nativeType === 'Brep' && row.volume > 0),
+  // The display read carries no measurements (volume is null there), so solidity and volume are
+  // read in the attached Rhino itself.
+  const volumes = await action(
+    `ids=${JSON.stringify(solids.map((row) => row.nativeId))}
+out={}
+for i in ids:
+    g=doc.Objects.FindId(System.Guid(i)).Geometry
+    b=g if isinstance(g,Rhino.Geometry.Brep) else (g.ToBrep() if hasattr(g,'ToBrep') else None)
+    m=Rhino.Geometry.VolumeMassProperties.Compute(b) if b is not None and b.IsSolid else None
+    out[i]=m.Volume if m is not None else None
+result=out`,
+  );
+  const open = solids.filter((row) => !(row.nativeType === 'Brep' && volumes[row.nativeId] > 0));
+  assert.deepEqual(
+    open.map((row) => ({ layer: layerOf(row), type: row.nativeType })),
+    [],
     'members and columns are closed solids',
   );
   const arc = solids.find((row) =>
@@ -442,8 +458,33 @@ except Exception as e: report('ready',dict(ok=False,error=str(e),trace=traceback
         Buffer.from(v, 'base64').toString() === 'ARC:1',
     ),
   );
-  assert.ok(arc && arc.volume > 0, 'the H member swept along the arc rail is a solid');
-  result.arcVolume = arc.volume;
+  assert.ok(arc && volumes[arc.nativeId] > 0, 'the H member swept along the arc rail is a solid');
+  result.arcVolume = volumes[arc.nativeId];
+  // Web vertical, flange on top: a straight H member's box is H (0.5 m) high with its top on the
+  // top line (+4 m) and B (0.2 m) wide across the rail.
+  const straight = solids.filter((row) =>
+    row.attributes64.some(
+      ([k, v]) =>
+        Buffer.from(k, 'base64').toString() === 'vide-key' &&
+        Buffer.from(v, 'base64').toString().startsWith('G:'),
+    ),
+  );
+  const boxes = await action(
+    `out=[]
+for i in ${JSON.stringify(straight.map((row) => row.nativeId))}:
+    b=doc.Objects.FindId(System.Guid(i)).Geometry.GetBoundingBox(True)
+    d=b.Max-b.Min
+    out.append([max(d.X,d.Y),min(d.X,d.Y),d.Z,b.Max.Z])
+result=out`,
+  );
+  assert.ok(boxes.length >= 4);
+  for (const [length, width, height, top] of boxes) {
+    assert.ok(length > 1, 'along the rail');
+    assert.ok(Math.abs(width - 0.2) < 1e-3, 'flange width B across the rail: ' + width);
+    assert.ok(Math.abs(height - 0.5) < 1e-3, 'web height H vertical: ' + height);
+    assert.ok(Math.abs(top - 4) < 1e-3, 'top flange on the top line: ' + top);
+  }
+  result.webVertical = boxes.length;
 
   // 5. The records: fingerprints and appliedAt at once, naming the objects in the document.
   const applied1 = await readAll();
@@ -638,6 +679,9 @@ result=bool(found[0].IsVisible)`,
   }
   await worker?.stop();
   await host?.stop();
-  const restored = await restoreInstalledPlugin();
-  console.log('installed plugin registration: ' + JSON.stringify(restored));
+  // VIDE_TEST_KEEP_REGISTRATION=1: a verification window whose caller re-registers afterwards.
+  if (process.env.VIDE_TEST_KEEP_REGISTRATION !== '1') {
+    const restored = await restoreInstalledPlugin();
+    console.log('installed plugin registration: ' + JSON.stringify(restored));
+  }
 }

@@ -102,10 +102,12 @@ internal static class ViewTools
     // System.Drawing.Common is not referenced at build time (RhinoCommon brings it at run time).
     private static byte[] Png(RhinoView view, int width, int height)
     {
-        var settings = new ViewCaptureSettings(view, new System.Drawing.Size(width, height), 72) { DrawGrid = false, DrawAxis = false };
-        var capture = typeof(ViewCapture).GetMethod("CaptureToBitmap", BindingFlags.Public | BindingFlags.Static, [typeof(ViewCaptureSettings)])
+        // The view's own capture (grid and axes off): ViewCapture.CaptureToBitmap(settings) returned a
+        // blank white image in a Rhino whose window is hidden (VERIFY-2026-09-30-direct-apply-rhino).
+        var capture = typeof(RhinoView).GetMethod("CaptureToBitmap", BindingFlags.Public | BindingFlags.Instance,
+            [typeof(System.Drawing.Size), typeof(bool), typeof(bool), typeof(bool)])
             ?? throw new InvalidOperationException("CAPTURE_FAILED");
-        var bitmap = capture.Invoke(null, [settings]) ?? throw new InvalidOperationException("CAPTURE_FAILED");
+        var bitmap = capture.Invoke(view, [new System.Drawing.Size(width, height), false, false, false]) ?? throw new InvalidOperationException("CAPTURE_FAILED");
         try
         {
             var type = bitmap.GetType();

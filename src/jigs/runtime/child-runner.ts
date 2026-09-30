@@ -1,7 +1,8 @@
 // Node child process runner (ARCH-03 §6.4, SPEC-07.9): `code` steps of a jig written in the
 // repository and signed on this PC run outside the engine, under Node's permission model with
 // read access to the package folder and this runner only, an environment of `PATH` and
-// `SystemRoot`, no write, child-process, addon or worker permission. The engine kills it when a
+// `SystemRoot`, worker-thread and addon permission (the structure library runs the Node-API
+// core in a worker), no write or child-process permission. The engine kills it when a
 // step passes its budget and after five idle minutes; a dead child is started again on the next
 // step and the instance is unaffected (SPEC-07.17).
 
@@ -64,7 +65,13 @@ export class ChildRunner implements StepRunner {
     if (!jig) throw new Error('NOT_LOADED');
     const entry = childEntryPath();
     const reads = [jig.dir, dirname(entry), ...this.options.extraReadPaths].map((p) => resolve(p));
-    return ['--permission', ...reads.map((p) => `--allow-fs-read=${p}`), entry];
+    return [
+      '--permission',
+      '--allow-worker',
+      '--allow-addons',
+      ...reads.map((p) => `--allow-fs-read=${p}`),
+      entry,
+    ];
   }
 
   private ensure(): ChildProcess {

@@ -5,9 +5,10 @@
 // the stability probe) and stores `{ result, at, modelHash }` in the output. A confirmation is
 // carried to later runs only while the model hash is the same; otherwise it is reported stale.
 //
-// The analysis needs the native core in a worker thread, which the sandboxed jig child process
-// is not allowed to start: run these functions in the engine (library-style step) or pass
-// `deps.analyze`. When the analysis cannot run, the output says so instead of throwing.
+// The analysis needs the native core in a worker thread; the jig child process is started with
+// worker and addon permission and read access to the core folder (ARCH-03 §6.4), and the engine
+// runner or `deps.analyze` work too. When the analysis cannot run, the output says so instead
+// of throwing.
 
 import type { StructureSummary } from '../../../../src/contracts/structure-model.ts';
 import {

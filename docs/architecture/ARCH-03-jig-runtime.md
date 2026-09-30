@@ -338,8 +338,8 @@ export type RunnerOut =
 
 ### 6.4 Node 자식 프로세스(`dev-pack`)
 
-- 띄우기: `node --permission --allow-fs-read=<패키지 폴더> --allow-fs-read=<geometry-kit 묶음 폴더> --allow-fs-read=<runner.mjs 폴더> runner.mjs`. 경로마다 `--allow-fs-read`를 따로 준다(쉼표로 이으면 한 경로로 해석된다). 쓰기·자식 프로세스·addon·worker 허용 플래그는 주지 않는다. 런타임은 설치본의 Node 24.15다.
-- `env`에는 `PATH`, `SystemRoot`만 넘긴다(부모 환경의 키가 보이지 않게). Windows에서는 libuv가 자식 환경에 고정 필수 변수(`HOMEDRIVE`·`HOMEPATH`·`LOGONSERVER`·`SYSTEMDRIVE`·`TEMP`·`USERDOMAIN`·`USERNAME`·`USERPROFILE`·`WINDIR`)를 더하며 그 밖의 변수는 없다(기동 시험이 확인). 묶기 전 저장소 소스(`dev-source`)는 상대 import를 위해 `src/jigs/official`과 `node_modules` 읽기를 추가로 허용한다. 공식 구조 라이브러리가 재사용하는 `src/jigs/structure`와 ARCH-02 계약 `src/contracts`도 읽기만 허용한다(쓰기·addon은 그대로 금지).
+- 띄우기: `node --permission --allow-fs-read=<패키지 폴더> --allow-fs-read=<geometry-kit 묶음 폴더> --allow-fs-read=<runner.mjs 폴더> runner.mjs`. 경로마다 `--allow-fs-read`를 따로 준다(쉼표로 이으면 한 경로로 해석된다). 구조 라이브러리가 Node-API 코어를 worker 스레드에서 불러오므로 `--allow-worker`·`--allow-addons`를 주고 코어 폴더 `src/native/structure`(저장소의 `target/release/vide_structure.dll`, 설치본의 `app/src/native/structure/vide_structure.node`)를 읽기로 허용하며, 쓰기·자식 프로세스 허용 플래그는 주지 않는다. 런타임은 설치본의 Node 24.15다.
+- `env`에는 `PATH`, `SystemRoot`만 넘긴다(부모 환경의 키가 보이지 않게). Windows에서는 libuv가 자식 환경에 고정 필수 변수(`HOMEDRIVE`·`HOMEPATH`·`LOGONSERVER`·`SYSTEMDRIVE`·`TEMP`·`USERDOMAIN`·`USERNAME`·`USERPROFILE`·`WINDIR`)를 더하며 그 밖의 변수는 없다(기동 시험이 확인). 묶기 전 저장소 소스(`dev-source`)는 상대 import를 위해 `src/jigs/official`과 `node_modules` 읽기를 추가로 허용한다. 공식 구조 라이브러리가 재사용하는 `src/jigs/structure`와 ARCH-02 계약 `src/contracts`도 읽기만 허용한다(쓰기는 그대로 금지).
 - 설치된 Node의 권한 모델에는 네트워크 제한이 없다. 이 실행기는 저장소에서 사람이 검토하고 이 PC에서 서명한 코드만 올린다.
 - 작업본마다 하나를 띄워 두고 유휴 5분 뒤 끝낸다.
 
