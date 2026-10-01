@@ -2,7 +2,7 @@
 id: PLAN-24
 title: AI 대화 세션·동시 진행·말로 하는 경로 판정 1차
 status: review
-version: 0.45
+version: 0.46
 updated: 2026-10-01
 owner: agent:claude
 related: [PLAN, PLAN-22, PLAN-23, PLAN-25, PLAN-26, PLAN-02, PLAN-05, PLAN-08, PLAN-19, FR-25, FR-24, FR-18, FR-10, FR-11, FR-12, AC-46, AC-47, AC-48, AC-38, SPEC-02, SPEC-07, ARCH-01, ARCH-03, ADR-021, ADR-014, ADR-022, ADR-025, ADR-026, ADR-027, RESEARCH-10, RESEARCH-11]
@@ -336,7 +336,7 @@ related: [PLAN, PLAN-22, PLAN-23, PLAN-25, PLAN-26, PLAN-02, PLAN-05, PLAN-08, P
 
 사용자 결정(2026-10-01, [ADR-027](../decisions/ADR-027-multi-file-coordination.md)): AI는 한 요청에서 그 프로젝트의 열린 연결 파일을 함께 읽고 고치며, 되돌리기는 요청 단위이고, 실패한 요청은 다른 파일의 적용분을 자동으로 되돌린다(전부 또는 전무). 기준: SPEC-01.11의 5, SPEC-02.6·.9의 3·.13의 6·.16, ARCH-01 §3·§4 「여러 파일 턴」, Design SCR-03 결과. 1차 범위는 Rhino 연결 문서가 대상인 바로 편집 턴이다(ZWCAD 대상 턴은 범위 밖).
 
-**번호:** 같은 날 PLAN-26이 T-089(첨부)·T-090(참고 이미지 의도 확인)을 먼저 썼으므로 이 묶음은 T-092~094다. 기능 브랜치 커밋 메시지의 T-089·T-090·T-091이 각각 T-092·T-093·T-094다.
+**번호:** 같은 날 PLAN-26이 T-089(첨부)·T-090(참고 이미지 의도 확인)·T-091(프로젝트 폴더)을 먼저 썼으므로 이 묶음은 T-092~094다. 기능 브랜치 커밋 메시지의 T-089·T-090·T-091이 각각 T-092·T-093·T-094다.
 
 ### T-092 · 다른 열린 연결 파일의 실시간 읽기 {#t-092}
 

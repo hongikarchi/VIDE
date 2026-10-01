@@ -2,7 +2,7 @@
 id: SPEC-01
 title: 프로젝트·공간 입력·수동 동기화
 status: review
-version: 0.21
+version: 0.22
 updated: 2026-10-01
 owner: agent:codex
 related: [FR-01, FR-02, FR-03, FR-05, FR-06, FR-07, FR-16, AC-21, AC-25, AC-39, ADR-022, ADR-027]
