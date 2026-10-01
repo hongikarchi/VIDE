@@ -2,10 +2,10 @@
 id: ARCH-01
 title: VIDE 기술 구조와 구현 계약
 status: review
-version: 0.59
+version: 0.60
 updated: 2026-10-01
 owner: agent:codex
-related: [SPEC-00, SPEC-02, SPEC-03, SPEC-04, SPEC-09, PLAN, PLAN-20, PLAN-24, ADR-014, ADR-015, ADR-016, ADR-017, ADR-021, ADR-022, ADR-025, PLAN-25, ARCH-03]
+related: [SPEC-00, SPEC-02, SPEC-03, SPEC-04, SPEC-09, PLAN, PLAN-20, PLAN-24, ADR-014, ADR-015, ADR-016, ADR-017, ADR-021, ADR-022, ADR-025, ADR-027, PLAN-25, ARCH-03]
 ---
 
 # VIDE 기술 구조와 구현 계약
@@ -172,7 +172,7 @@ T-002의 첫 HTTP 구현은 프로젝트 목록·생성과 입력 목록·생성
 | snapshots / object_refs | documentSessionId, basisId, capturedAt, units, completeness; nativeId와 지원 속성/형상 해시 |
 | input_versions | inputId, revision, body, refs, sketch, parameters, provenance, role; 실행이 참조한 버전 불변 |
 | candidates / candidate_objects | runId, revision, basisIds, nativeRefs, ownershipProof, observedFingerprint, validity. **2026-09-30 ADR-022 이후 AI 편집에는 쓰지 않는다**(jig·가져오기의 내부 작업 사본에만 남음) |
-| 실행 기록(executions) | AI 편집의 실행 한 번씩: 요청 결과의 `executions[]`와 대화 원장 항목. executionId, host, target(연결·문서), label, undoId, 상태, changes, guarded. jig 만들기의 되돌리기 기록 번호는 현재 서버 메모리에만 있어 재시작 뒤에는 그 만들기의 [되돌리기]가 꺼진다(Rhino의 Ctrl+Z는 남음). §4 「바로 적용 경로」 |
+| 실행 기록(executions) | AI 편집의 실행 한 번씩: 요청 결과의 `executions[]`와 대화 원장 항목. executionId, host, target(연결·문서), file(연결 파일 ID·이름, 여러 파일 턴), label, undoId, 상태, changes, guarded. jig 만들기의 되돌리기 기록 번호는 현재 서버 메모리에만 있어 재시작 뒤에는 그 만들기의 [되돌리기]가 꺼진다(Rhino의 Ctrl+Z는 남음). §4 「바로 적용 경로」 |
 | relations / query_results | sourceRef, targetRef, relationType, provenance; 계산 정의/입력 기준/값/단위/미상 사유 |
 | checkpoints / assets | 불변 manifest와 content hash; 파일 저장 완료 후 manifest 공개 |
 | publications / comments | 고정 공개 manifest, 서버 접수 ID/시각; 게시본 기준과 의견 제출 ID 유일성 |
@@ -194,7 +194,7 @@ T-002의 첫 HTTP 구현은 프로젝트 목록·생성과 입력 목록·생성
 |---|---|---|
 | 프로젝트·입력 | `GET·POST /projects`, `PUT·DELETE /projects/:p`, `POST …/thumbnail`, `…/inputs[/:i]`, `…/ai-instructions`, `POST …/attachments?name=`, `POST …/attachments/:a/view`, `GET …/attachments/:a`, `GET·POST …/folders`, `POST …/folders/remove` | 프로젝트 삭제는 SPEC-01.1. 첨부는 §3 「첨부 보관과 읽기 도구」, 폴더는 §3 「프로젝트 폴더와 파일 읽기 도구」 |
 | 요청(AI 턴·Sync·가져오기) | `GET·POST …/requests`, `GET …/requests/:r`, `…/:r/cancel`, `…/:r/interventions`, `…/:r/hide`, `…/:r/questions`, `…/:r/reconcile`, `…/:r/model\|open`, `…/:r/report`, `…/:r/quantities[.csv]`, `…/:r/publication-export` | 상태는 SPEC-00.10 |
-| 바로 적용 | `POST …/requests/:r/undo {executionId}`, `…/:r/confirm {executionId?}`, `…/:r/continue` | §4 「바로 적용 경로」. confirm·continue는 202 |
+| 바로 적용 | `POST …/requests/:r/undo {executionId}` 또는 `{all: true}`(작업 단위, ADR-027), `…/:r/confirm {executionId?}`, `…/:r/continue` | §4 「바로 적용 경로」. confirm·continue는 202 |
 | 연결 파일·Sync | `GET·POST …/links`, `PUT …/links/:l`, `POST …/links/:l/remove`, `POST …/links/:l/reads`, `…/live-sync`, `…/capture`, `…/import`, `…/imports/:i/reconcile` | §7 「프로젝트 연결 파일(Link)」 |
 | 사본 적용(jig·가져오기 내부 사본) | `…/applications[/:a[/reconcile]]` | ADR-022로 AI 편집에는 쓰지 않음 |
 | 대화 | `…/conversations[/:c[/close\|reopen\|ledger\|handoff\|account\|answer\|renew\|bind]]` | ARCH-03 §10. `account`·계정 인계는 PLAN-25 2단계에서 빼는 중 |
@@ -391,7 +391,7 @@ AI 도구의 이름은 등록부 하나가 정한다. `src/ai/agent-connection.t
 
 | 모드 | 발급 조건 | 도구 |
 |---|---|---|
-| 모델링(호스트 작업) | 자동 모드: Rhino·ZWCAD 연결 문서를 쓰는 턴(ADR-022). 계획 모드: 같은 대상을 읽기만 하는 턴 | 자동: `query`, `execute`(= `direct-execute`, 호출 하나가 되돌리기 기록 하나), `status`, `cancel`. 계획: `query`, `status`, `cancel` |
+| 모델링(호스트 작업) | 자동 모드: Rhino·ZWCAD 연결 문서를 쓰는 턴(ADR-022). 계획 모드: 같은 대상을 읽기만 하는 턴 | 자동: `query`, `execute`(= `direct-execute`, 호출 하나가 되돌리기 기록 하나), `status`, `cancel`. 계획: `query`, `status`, `cancel`. `query`·`execute`·`capture_view`·`measure`는 선택 인수 `linkId`(연결 파일 ID)를 받는다: 생략하면 대상 문서, 주면 같은 프로젝트의 열린 연결 문서(ADR-027, 아래 「여러 파일 턴」). 범위가 `linkId`를 받지 않는 턴(ZWCAD 대상·작업 사본·연계 요청)은 `LINK_NOT_LIVE` |
 | 보기(Rhino) | Rhino 대상의 모델링 턴(바로 편집은 연결이 보기 메서드를 가질 때만. 없으면 목표 문장에도 넣지 않는다) | `capture_view`(대상의 모델 화면 PNG, 기본 1200×800·한 변 최대 1600 px, `fitIds`·`namedView`, 이 이미지에만 레이어 켜고 끄기, 문서 변경 없음, 한 번에 하나), `measure`(객체별 bbox·길이·면적·닫힌 솔리드 부피 최대 50개, 객체·점 쌍의 최단 거리 최대 20쌍, 모델 단위) |
 | 대화 읽기(jig·구조·Sync) | 목적별 대화의 턴. 대상은 `conversation:<대화 ID>` | `jig_list`, `jig_state`, `jig_output`, `structure_summary`, `structure_checks`, `links_layers`, `sync_sample` |
 | 화면 | 대화 원장에 기록하는 턴(목적별 대화). 계산·쓰기 없음이라 계획 모드에도 남는다(`PLAN_MODE_TOOLS`) | `jig_open`(프로젝트 skill 목록의 jig를 사용자 화면에 열고 작업본을 이 대화에 묶음, `reuse: 'last' \| 'new'`, `user-only` jig는 거절), `ui_go`(화면 전환: 모델·jig·보고서·자료·만들기, 3D 투영 `plan`·`3d`). 원장 항목으로 남기고 화면이 따라 한다(RESEARCH-12 §6.3) |
@@ -399,7 +399,7 @@ AI 도구의 이름은 등록부 하나가 정한다. `src/ai/agent-connection.t
 | 자료 | 그 프로젝트의 자료 DB가 있을 때, 읽기만 | `project_brief`, `project_search`, `project_issue`, `project_statement`, `project_checks` |
 | 첨부 | 요청이나 같은 대화의 앞선 요청에 보관 첨부가 있을 때(모든 모드, 계획 모드 포함). `Execution.provider`가 그 턴의 범위에 더하고, 도구 없는 턴이면 이 도구만 발급 | `attachment_read`(아래 「첨부 보관과 읽기 도구」) |
 | 파일 | 지시 묶음을 받는 모든 턴(모든 모드, 계획 모드 포함; 붙인 표만 읽는 jig AI 검토 턴은 제외). `Execution.provider`가 첨부와 같은 방식으로 더함 | `file_read`, `file_list`(아래 「프로젝트 폴더와 파일 읽기 도구」) |
-| 프로젝트 읽기(호스트 턴) | 모든 호스트 모델링 턴(Rhino·ZWCAD 바로 편집, 작업 사본, 연계 요청; 계획·자동). 대화 밖 요청은 프로젝트 기본 대화(`default-<프로젝트>`)의 범위. 호스트 도구와 같은 범위에 더하고(`HOST_TURN_PROJECT_TOOLS`·`hostTurnProjectHandlers`, `src/server/execution.ts`), 대상이 여럿인 연계 턴에서도 `targetRef`를 생략할 수 있다 | `links_layers`, `sync_sample`, 자료 DB가 있으면 `project_*` 다섯. 원장에 쓰는 도구·jig 조작·만들기 도구는 주지 않는다. 지시(`hostProjectNote`, `modeling.md`)는 다른 파일이 마지막 Sync로만 보이고 살아 있는 문서는 대상 하나뿐임을 알린다 |
+| 프로젝트 읽기(호스트 턴) | 모든 호스트 모델링 턴(Rhino·ZWCAD 바로 편집, 작업 사본, 연계 요청; 계획·자동). 대화 밖 요청은 프로젝트 기본 대화(`default-<프로젝트>`)의 범위. 호스트 도구와 같은 범위에 더하고(`HOST_TURN_PROJECT_TOOLS`·`hostTurnProjectHandlers`, `src/server/execution.ts`), 대상이 여럿인 연계 턴에서도 `targetRef`를 생략할 수 있다 | `links_layers`, `sync_sample`, 자료 DB가 있으면 `project_*` 다섯. 원장에 쓰는 도구·jig 조작·만들기 도구는 주지 않는다. 지시(`hostProjectNote`, `modeling.md`)는 열린 연결 파일은 `linkId`로 실시간으로 다루고, 닫힌 파일·`LINK_NOT_LIVE`인 파일은 이 저장 기록으로 읽으라고 알린다 |
 | 만들기 | `jig-make` 대화이고 초안이 열려 있을 때. `targetRef`를 생략하면 그 대화의 초안 | `jig_validate`, `jig_test`, `jig_preview`, `jig_delete_file`(초안 파일 하나, `jig.json`·금지 파일 제외), `ask_user` + Claude 파일 도구 `Read`·`Edit`·`Write`·`Glob`·`Grep`(초안 폴더만, ARCH-03 §2.3) |
 
 대화 턴은 위 행 가운데 조건을 만족하는 것을 합쳐 받는다. 모델에 주는 지시는 모드별로 다르다(`instructionFor`: 호스트 도구·대화 도구·만들기). 옛 설계의 `discover`와 자산/SDK 조회 도구는 등록부에 없다. 보기 도구는 5차 물결에서 더했다. 호스트 작업 도구의 기본 실행 인수는 다음과 같다.
@@ -518,6 +518,14 @@ Roslyn/호스트 런타임 버전 충돌·첫 컴파일 지연·반복 실행 �
 **실행 기록.** 실행 한 번마다 요청 결과의 `executions[]`에 `{executionId, host, target: {instance, documentId}, label, at, state: applied | undone | guarded | confirmed, undoId, changes, guarded?, code?(guarded 동안만), confirms?(보호를 푼 재실행이 가리키는 원래 행), undoneAt?}`를 남기고, 같은 내용을 대화 원장에 한 항목으로 적는다(ARCH-03 §10). 응답을 잃은 실행은 행을 만들지 않고 요청을 `unknown`(`HOST_RESULT_UNKNOWN`)으로 두며, `fingerprint`와 되돌리기 기록 조회로만 해소하고 다시 실행하지 않는다. 실행 전후 문서 지문을 행에 남기는 것은 남은 작업이다(PLAN-24).
 
 **되돌리기 API.** `POST /api/v1/projects/:id/requests/:rid/undo {executionId}`는 그 실행의 대상 연결에 `direct-undo {undoId}`를 부른다. 성공하면 행을 `undone`으로 바꾸고 `200 {ok: true, request}`를 돌려준다. 호스트가 거절하면 `200 {ok: false, reason: 'not-latest' | …, request}`이며 행은 그대로다. 행이나 `undoId`가 없으면 `NOT_FOUND`, 연결이 없으면 `EXECUTOR_NOT_READY`다. 이미 `undone`인 행의 재요청은 `{ok: true, already: true}`다. 되돌린 뒤 `fingerprint`를 다시 받아 기록하는 것과 문서별 쓰기 대기열에 세우는 것은 SPEC-02.13의 3이 요구하며 남은 작업이다(PLAN-24). 원격 세션 제한(ADR-010 §3)을 받는다.
+
+**여러 파일 턴(ADR-027, 2026-10-01).** 동작 정본은 SPEC-01.11의 5·SPEC-02.13의 6·SPEC-02.9의 3이다. 1차 범위는 Rhino 연결 문서가 대상인 바로 편집 턴(`runDirectTurn`, `src/server/direct-mode.ts`)이다.
+- **파일 해석:** 도구 인수 `linkId`를 그 프로젝트의 연결 행(`DocumentLinks`)에서 찾고, 링크 목록 경로(`GET …/links`)와 같은 규칙(경로가 같으면 같은 파일, 저장 안 된 문서는 `instance`·`documentId`)으로 지금 열린 **연결 편집기** 문서(Rhino `editors.list(true)`, ZWCAD `editors.attached.list()`)에 맞춘다(`src/server/live-links.ts`). 맞는 문서가 없거나 파일 항목(`file:`)이면 `LINK_NOT_LIVE`. 대상 문서와 같은 문서면 대상의 드라이버를 쓴다. 턴 시작 때 열린·닫힌 연결 파일 목록(ID·이름·호스트)을 목표 문장에 싣는다. 해석한 드라이버는 그 턴 동안 문서마다 하나이며 실행 뒤 그 문서의 조회 캐시만 무효로 한다.
+- **도구별:** Rhino 문서는 `query`(`readLayers` 페이지)·`capture_view`·`measure`(`directView`)·`execute`(`direct-execute`). ZWCAD 도면은 `query`(`queryEntities`)·`execute`(`direct-execute`)이고 보기 메서드가 없어 `capture_view`·`measure`는 `NO_VIEW`. ZWCAD 답의 `COMPILE_ERROR`·`CODE_POLICY_REJECTED`·`EXECUTION_FAILED`·`GUARD_CONFIRMATION_REQUIRED` 밖의 실패는 실행 전 거절이 아니면 `HOST_RESULT_UNKNOWN`으로 읽는다(`runAttached`와 같은 규칙). `AgentTools.issue`의 `links: true` 범위만 `linkId`를 처리기로 넘기고, 다른 범위에서 `linkId`를 준 문서 도구는 처리기를 부르지 않고 `LINK_NOT_LIVE`다. 오류 답에는 `next`(저장 기록 도구로 읽으라는 안내)를 붙인다.
+- **잠금:** 대상 문서 밖의 문서에 첫 `execute`를 보내기 전에 `Execution`이 그 문서를 검사한다(`documentHolder`, `src/contracts/request-scope.ts`): 다른 대기 중이 아닌 `queued`·`running` 요청의 쓰기 주장(입력의 대상 + 결과의 `documents[]`)에 그 문서가 있으면 `DOCUMENT_LOCKED`, 결과 불명 요청이 그 문서를 주장하면 `HOST_RESULT_UNRESOLVED`. 통과하면 결과의 `documents: [{host, instance, documentId, linkId?, name?}]`에 더한다(같은 동기 구간이라 두 턴이 동시에 통과하지 않는다). `requestAdmission`은 진행 중·결과 불명 요청의 `documents[]`도 쓰기 주장으로 센다. 잠금 거절은 실행 전 거절과 같은 모양(`{ok: false, executed: false, code, reason, next}`)으로 AI에 돌려주고 문서별 '실행하지 않음'으로 기록한다. 대기는 하지 않는다.
+- **실행 기록:** 모든 행에 `file: {linkId?, name}`을 싣는다. 실행 전 거절의 `final`(읽기 전용 문서·연결 끊김)은 그 문서에만 적용한다. 응답을 잃은 실행은 지금처럼 그 턴의 다음 실행을 모두 막는다.
+- **여러 파일 요청:** 실행을 시도한 문서가 둘 이상인 요청(`multiFile: true`). 요청이 오류·중단(`CANCELLED`, 추가 지시로 끊긴 경우 제외)으로 끝나면 `runDirectTurn`이 적용된 실행(`state: applied`, `undoId` 있음)을 마지막 것부터 문서별 `direct-undo`로 되돌린다. 한 문서에서 거절되면 그 문서의 더 앞 실행은 건너뛰고(마지막 기록이 아니므로) 다른 문서는 계속한다. 응답을 잃은 실행이 있는 문서는 되돌리지 않는다. 결과의 `rollback: {at, reason: 'failed' | 'cancelled', files: [{host, target, name, state: 'undone' | 'refused' | 'unknown' | 'skipped', undone, kept, reason?}]}`에 남기고 행을 `undone`으로 바꾼다. 거절이 있으면 요청 코드는 원래 코드 그대로(화면이 `rollback`을 보임), 되돌리기 답을 잃으면 요청은 `unknown`(`HOST_RESULT_UNKNOWN`)이다.
+- **작업 단위 되돌리기:** `POST …/requests/:rid/undo {all: true}`는 그 요청의 적용된 행을 마지막 것부터 위 규칙으로 되돌리고 `200 {ok, files: [{host, target, name, state, undone, kept, reason?}], request}`(모두 되돌렸을 때만 `ok: true`)를 돌려준다. 결과의 `undo: {at, files}`에 마지막 시도를 남긴다. 진행 중 요청은 `REVISION_CONFLICT`, 되돌릴 행이 없으면 `{ok: true, already: true}`. 한 파일 요청의 실행별 `{executionId}`는 그대로다.
 
 ### VIDE 소유 작업 실행본과 사본 분기
 
