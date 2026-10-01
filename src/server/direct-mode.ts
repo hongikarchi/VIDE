@@ -18,6 +18,7 @@ import {
 } from './agent-tools.ts';
 import { directRefusal, type DirectRefusal } from '../contracts/direct-refusal.ts';
 import type { LiveLink } from './live-links.ts';
+import { ZWCAD_EXECUTE_WRAPPER } from './zwcad-sdk-execution.ts';
 
 /** Auto-mode guard: deleting more objects than this in one execute needs the user's confirmation. */
 export const DIRECT_MAX_DELETES = 50;
@@ -534,7 +535,6 @@ export function afterRequestUndo(
   return { state: 'unknown', result: still };
 }
 /** One document of a request (its host, window and document id). */
-
 export const documentKey = (host: string, target: { instance: string; documentId: number }) =>
   JSON.stringify([host, target.instance, target.documentId]);
 const hostLabel = (host: 'rhino' | 'zwcad') => (host === 'rhino' ? 'Rhino' : 'ZWCAD');
@@ -554,14 +554,25 @@ function linkedFilesNote(links: LiveLink[], targetKey: string, eyes: boolean, mo
           : 'closed: stored Sync only (links_layers, sync_sample)';
     return `- ${link.id} · ${link.name} (${hostLabel(link.host)}) · ${state}`;
   });
+  // A drawing open in ZWCAD takes ZWCAD's own wrapper, not RhinoCommon (ADR-027 4).
+  const drawing = links
+    .slice(0, 30)
+    .some(
+      (link) =>
+        link.host === 'zwcad' && link.open && documentKey(link.host, link.open) !== targetKey,
+    );
   return `
 Linked files of this project (linkId · name · state):
 ${rows.join('\n')}
 Each file keeps its own units and coordinates (query returns units); do not assume a shared origin unless the request or the pins establish one. A file answering LINK_NOT_LIVE is not open now: read it from its stored Sync.${
     mode === 'auto'
       ? `
-execute with an open file's linkId edits that file directly, one undo record there per execute, under the same rules and guard as the target. This request is one unit across files: the user's [되돌리기] undoes all of it, and if the request fails or is stopped after it tried to change two or more files, VIDE undoes every change of this request in every file.
- A file another task is writing answers DOCUMENT_LOCKED: nothing ran there; leave it and tell the user.`
+execute with an open file's linkId edits that file directly, one undo record there per execute, with the same guard as the target and in that file's own host API. This request is one unit across files: the user's [되돌리기] undoes all of it, and if the request fails or is stopped after it tried to change two or more files, VIDE undoes every change of this request in every file. A file another task is writing answers DOCUMENT_LOCKED: nothing ran there; leave it and tell the user.${
+          drawing
+            ? `
+execute with a ZWCAD file's linkId takes a C# method body for ZWCAD, not RhinoCommon (there is no RhinoDoc doc). ${ZWCAD_EXECUTE_WRAPPER} Identity there is the entity handle (query rows carry it); units are the drawing's own (usually millimetres), so convert from this document's units explicitly.`
+            : ''
+        }`
       : ''
   }`;
 }

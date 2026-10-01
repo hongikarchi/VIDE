@@ -50,6 +50,12 @@ function verifyProtected(
 const failure = (code: string) => Object.assign(new Error(code), { code });
 /** Auto-mode guard: erasing more entities than this in one execute needs confirmation. */
 export const DIRECT_MAX_DELETES = 50;
+/**
+ * What ZWCAD's direct-execute wrapper gives the code: the drawing's own turns and a Rhino turn that
+ * edits a linked drawing (ADR-027 4) say the same.
+ */
+export const ZWCAD_EXECUTE_WRAPPER =
+  'The wrapper imports System, System.Linq, ZwSoft.ZwCAD.DatabaseServices, ZwSoft.ZwCAD.Geometry and supplies Database db and Transaction tr. Use tr.GetObject and the model-space BlockTableRecord; create layers in db.LayerTableId when needed; append new entities and register them with tr.AddNewlyCreatedDBObject. The controller commits or discards the transaction; never call Commit/Abort, open or save files, use shell/network/reflection or active documents. Return small JSON-serializable values (numbers, strings, arrays, anonymous objects), never SDK objects.';
 type DirectChanges = Pick<
   Extract<DirectExecuteResult, { ok: true }>['changes'],
   'added' | 'changed' | 'removed'
@@ -330,7 +336,8 @@ export class ZwcadSdkExecution {
     const goal = `Target is the drawing open in the user's ZWCAD 2023 (${targetRef}). It is NOT a copy: ${write ? 'Auto mode: every successful execute is committed to that drawing immediately as one UNDO step (the user can revert it with ZWCAD U or VIDE [되돌리기]). Erasing more than ' + DIRECT_MAX_DELETES + ' entities, deleting layers or purging definitions is held back until the user confirms: such an execute returns ok:false with "guarded"; then stop and say what needs confirmation instead of working around it.' : 'Plan mode: execute runs read-only (its transaction is always discarded). Read, measure and plan; do not change the drawing. End with a plan: steps (title, objects, risk) and any questions.'}
 Native coordinates are drawing units (usually millimetres; query returns "units"). Other hosts' geometry and sketches are metres, so convert explicitly.
 Use query (offset/limit pages, objectIds = entity handles) to inspect entities: handle, type, layer, colour, bounds and type-specific data (line ends, polyline vertices, text, block name/attributes, dimension values). Its "layers" lists every layer with its entity count.
-execute takes a C# method body. The wrapper imports System, System.Linq, ZwSoft.ZwCAD.DatabaseServices, ZwSoft.ZwCAD.Geometry and supplies Database db and Transaction tr. Use tr.GetObject and the model-space BlockTableRecord; create layers in db.LayerTableId when needed; append new entities and register them with tr.AddNewlyCreatedDBObject. The controller commits or discards the transaction; never call Commit/Abort, open or save files, use shell/network/reflection or active documents. Return small JSON-serializable values (numbers, strings, arrays, anonymous objects), never SDK objects.
+execute takes a C# method body. ${ZWCAD_EXECUTE_WRAPPER}
+
 Keep existing handles, layers and colours unless the request changes them; edit entities in place rather than erasing and redrawing. Do not touch protected/reference objects. Work in few, complete executes; query after writing to confirm. When a dimension is missing but a standard or conventional value exists, use it and say so.
 Limits: ${executionLimits(input).maxToolCalls} tool calls, ${executionLimits(input).maxHostCommands} executes, ${executionLimits(input).timeoutSeconds} seconds. Reply in Korean with what actually changed in the drawing (and that ZWCAD's UNDO reverts it).
 User request: ${input.body || '첨부한 설계 문맥을 검토해 주세요.'}`;

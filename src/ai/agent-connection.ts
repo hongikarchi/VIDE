@@ -186,8 +186,9 @@ function ownInstruction(connection: AgentConnection, format: AgentFormat) {
     : conversationToolInstruction + scope;
 }
 /**
- * A host turn's project read tools (SPEC-02.6, T-062) and the other linked files it may read live
- * (ADR-027). Empty when the turn has none of them.
+ * A host turn's project read tools (SPEC-02.6, T-062). Empty when the turn has none of them. Which
+ * other linked files a turn reads or edits live (ADR-027) is told only by the goal of a turn that
+ * can (a direct Rhino turn lists them with their linkId), never by the tool list.
  */
 export function hostProjectNote(tools: readonly string[]) {
   const links = tools.includes('links_layers') || tools.includes('sync_sample');
@@ -201,7 +202,7 @@ export function hostProjectNote(tools: readonly string[]) {
     (facts
       ? " project_brief, project_search, project_issue, project_statement and project_checks read the project's 자료 (cite statements as [S<id>], say 미확정 for unconfirmed ones);"
       : '') +
-    ' targetRef may be left out for these. Other linked files that are open and connected now (the task goal lists them with their linkId) are read live: query, measure and capture_view take that linkId, and in Auto mode execute with that linkId edits the file (its own undo records; the request is undone as one unit). A closed file, or one answering LINK_NOT_LIVE, is known only from its stored Sync, which may be older than the file.'
+    ' targetRef may be left out for these. Another linked file is known from its stored Sync, which may be older than the file, unless the task goal lists it as open with its linkId.'
   );
 }
 /** The instruction-bundle mode a connection implies when the caller names none (PLAN-24). */

@@ -78,7 +78,7 @@ import {
   type ExecutionRecord,
 } from './direct-mode.ts';
 import { directRefusal } from '../contracts/direct-refusal.ts';
-import { DocumentLinks } from '../core/document-links.ts';
+import { DocumentLinks, isFileLink } from '../core/document-links.ts';
 import { zwcadAnsweredCodes } from './zwcad-sdk-execution.ts';
 import { liveLinksOf, type LiveLink } from './live-links.ts';
 import { activityLog } from './activity.ts';
@@ -1206,7 +1206,7 @@ export class Execution {
               ? (previous.result.sourceDocument as { name: string }).name
               : undefined,
           linked: {
-            list: () => this.liveLinks(projectId),
+            list: () => this.liveLinks(projectId, { host: direct.host, ...direct.target }),
             driver: (host, document) => this.directDriverFor(host, document, false),
             // Another file is locked on its first write; held elsewhere it is refused, never
             // waited for (ADR-027 5, SPEC-02.9 3).
@@ -1573,16 +1573,27 @@ export class Execution {
   }
   /**
    * The project's linked files with the document each has open in a connected (plugin) window
-   * right now (ADR-027): what a direct turn may read and edit beside its target.
+   * right now (ADR-027): what a direct turn may read and edit beside its target. Only the hosts
+   * the project links are asked (a project without host links asks none), at the same time.
+   * `prefer`: the turn's target, for a file open in two windows.
    */
-  async liveLinks(projectId: string): Promise<LiveLink[]> {
+  async liveLinks(
+    projectId: string,
+    prefer?: { host: string; instance: string; documentId: number },
+  ): Promise<LiveLink[]> {
     if (this.injectedLinks) return this.injectedLinks(projectId);
     const links = new DocumentLinks(this.workspace.store.db).list(projectId);
-    const open = [
-      ...((await this.sdk?.editors.list(true).catch(() => null))?.documents ?? []),
-      ...((await this.zwcadSdk?.editors.attached.list().catch(() => [])) ?? []),
-    ];
-    return liveLinksOf(links, open);
+    const hosts = new Set(links.filter((link) => !isFileLink(link)).map((link) => link.host));
+    const [rhino, zwcad] = await Promise.all([
+      hosts.has('rhino')
+        ? this.sdk?.editors
+            .list(true)
+            .then((answer) => answer?.documents ?? [])
+            .catch(() => [])
+        : undefined,
+      hosts.has('zwcad') ? this.zwcadSdk?.editors.attached.list().catch(() => []) : undefined,
+    ]);
+    return liveLinksOf(links, [...(rhino ?? []), ...(zwcad ?? [])], prefer);
   }
   /** Books a run's outcome by mode: Plan keeps its plan card, a tripped guard waits on its card. */
   private settleModes(request: StoredWork, result: Record<string, unknown>, ledger: boolean) {

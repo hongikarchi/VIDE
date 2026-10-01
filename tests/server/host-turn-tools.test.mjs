@@ -190,10 +190,12 @@ test('direct-mode Rhino turns offer and answer links_layers, sync_sample and pro
     for (const turn of [auto, plan]) assert.ok(turn.agent.tools.includes(name), name);
   assert.ok(auto.agent.tools.includes('execute'));
   assert.ok(!plan.agent.tools.includes('execute'));
-  // The rules the CLI gets describe the project reads and the live reads of open files (ADR-027).
+  // The rules the CLI gets describe the project reads; which other files a turn reads or edits
+  // live is the goal's to say (ADR-027): the shared rules promise no live access.
   const rules = instructionFor(auto.agent);
   assert.match(rules, /links_layers lists the project's linked files/);
-  assert.match(rules, /query, measure and capture_view take that linkId/);
+  assert.match(rules, /unless the task goal lists it as open with its linkId/);
+  assert.doesNotMatch(rules, /take that linkId/);
   // A connection without view methods: the goal does not offer capture_view or measure.
   assert.doesNotMatch(auto.context.goal, /capture_view|measure for exact/);
   assert.doesNotMatch(plan.context.goal, /capture_view|measure for exact/);

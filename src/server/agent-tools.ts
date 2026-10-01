@@ -455,10 +455,13 @@ const knownErrors = new Set([
 /** What the model should do next after these errors (ADR-027): sent beside the code. */
 const errorHints: Record<string, string> = {
   LINK_NOT_LIVE:
-    'That linked file is not open and connected now (or this turn cannot reach other files live). Read it from its stored Sync with links_layers and sync_sample, do not edit it, and tell the user it must be open in its host to be edited.',
+    'That linked file is not open and connected now. Read it from its stored Sync with links_layers and sync_sample, do not edit it, and tell the user it must be open in its host to be edited.',
   DOCUMENT_LOCKED:
     'Another running task is writing that file. Nothing ran there; do not retry it in this turn. Tell the user.',
 };
+/** LINK_NOT_LIVE from a turn that never reaches other files live (the file may well be open). */
+const noLinksHint =
+  'This kind of turn cannot reach other linked files live (only a request whose target is an open Rhino document can). Read them from their stored Sync with links_layers and sync_sample and do not edit them; do not ask the user to open the file.';
 /** The host document tools whose linkId names another linked file (links_layers keeps its own). */
 const linkTools: ReadonlySet<string> = new Set(['query', 'execute', 'capture_view', 'measure']);
 /**
@@ -680,19 +683,19 @@ export class AgentTools {
     name: ToolName,
     args: { targetRef?: string; linkId?: string; [key: string]: unknown },
   ): Promise<CallToolResult> {
-    const error = (code: string): CallToolResult => ({
+    const error = (code: string, next = errorHints[code]): CallToolResult => ({
       isError: true,
       content: [
         {
           type: 'text',
-          text: JSON.stringify(errorHints[code] ? { code, next: errorHints[code] } : { code }),
+          text: JSON.stringify(next ? { code, next } : { code }),
         },
       ],
     });
     if (run.abort.signal.aborted || run.expires <= this.#now()) return error('AGENT_SCOPE_EXPIRED');
     // Another linked file only where the handlers resolve it; elsewhere never the target instead.
     if (args.linkId !== undefined && linkTools.has(name) && !run.links)
-      return error('LINK_NOT_LIVE');
+      return error('LINK_NOT_LIVE', noLinksHint);
     if (args.targetRef && !run.targets.has(args.targetRef)) return error('TARGET_MISMATCH');
     // Left out, targetRef means the scope's only target; with several it must be named.
     if (

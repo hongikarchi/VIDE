@@ -8,6 +8,9 @@ import { Workspace } from '../../src/core/workspace.ts';
 import { Execution } from '../../src/server/execution.ts';
 import { AgentTools } from '../../src/server/agent-tools.ts';
 import { documentHolder } from '../../src/contracts/request-scope.ts';
+import { hostProjectNote } from '../../src/ai/agent-connection.ts';
+import { liveLinksOf, openDocumentOf } from '../../src/server/live-links.ts';
+import { DocumentLinks } from '../../src/core/document-links.ts';
 
 const hash = 'a'.repeat(64);
 const sourceDocument = (instance, name) => ({
@@ -292,7 +295,10 @@ test('A scope that does not resolve linkId refuses it instead of reading the tar
   });
   assert.equal(refused.isError, true);
   assert.equal(JSON.parse(refused.content[0].text).code, 'LINK_NOT_LIVE');
+  // Such a turn cannot reach other files live: the AI is not told to ask the user to open them.
   assert.match(JSON.parse(refused.content[0].text).next, /stored Sync/);
+  assert.match(JSON.parse(refused.content[0].text).next, /cannot reach other linked files live/);
+  assert.doesNotMatch(JSON.parse(refused.content[0].text).next, /must be open/);
   assert.equal(reads, 0);
   const plain = await tools.call(scope.token, 'query', { targetRef: 'rhino-copy:1' });
   assert.equal(plain.isError, undefined);
@@ -1049,4 +1055,157 @@ test('A confirmed re-run names its file, so the request [되돌리기] names it 
       ['B.3dm', 'link-b', 'refused'],
     ],
   );
+});
+
+// --- what a turn is told about other files, and how links are matched ---------------------------
+
+test('A Rhino Auto turn with an open ZWCAD drawing is told the ZWCAD execute wrapper; others are not', async (t) => {
+  const cadLinks = [
+    { id: 'link-a', host: 'rhino', name: 'A.3dm', open: { instance: 'win-a', documentId: 7 } },
+    { id: 'link-cad', host: 'zwcad', name: '평면.dwg', open: { instance: 'cad-1', documentId: 1 } },
+  ];
+  const withCad = setup(t, async () => ({ text: '읽었습니다.' }), { links: cadLinks });
+  withCad.send('auto-cad', { mode: 'auto' });
+  withCad.send('plan-cad', { mode: 'plan' });
+  await withCad.settled();
+  const [auto, plan] = withCad.seen.map((entry) => entry.context.goal);
+  assert.match(auto, /ZWCAD file's linkId takes a C# method body for ZWCAD, not RhinoCommon/);
+  assert.match(auto, /supplies Database db and Transaction tr/);
+  assert.match(auto, /AddNewlyCreatedDBObject/);
+  assert.match(auto, /never call Commit\/Abort/);
+  assert.doesNotMatch(plan, /Transaction tr/);
+  // Only Rhino files open (or none): the goal is as before.
+  const rhinoOnly = setup(t, async () => ({ text: '읽었습니다.' }));
+  rhinoOnly.send('auto-rhino', { mode: 'auto' });
+  await rhinoOnly.settled();
+  assert.doesNotMatch(rhinoOnly.seen[0].context.goal, /Transaction tr|ZwSoft/);
+});
+
+test('The host project note no longer promises live reads to turns that cannot make them', () => {
+  const note = hostProjectNote(['query', 'execute', 'links_layers', 'sync_sample']);
+  assert.match(note, /links_layers lists the project's linked files/);
+  assert.match(note, /stored Sync/);
+  assert.doesNotMatch(note, /execute with that linkId|read live/);
+});
+
+test('Linked files: a file opened in VIDE is listed but never live; a file open twice resolves to the target', () => {
+  const link = (fields) => ({
+    projectId: 'p',
+    hidden: false,
+    linkedAt: '',
+    updatedAt: '',
+    path: null,
+    ...fields,
+  });
+  const links = [
+    link({
+      id: 'l-a',
+      host: 'rhino',
+      name: 'A.3dm',
+      path: 'C:\\w\\A.3dm',
+      instance: 'w1',
+      documentId: 7,
+    }),
+    link({ id: 'l-f', host: 'rhino', name: 'F.3dm', instance: 'file:f.3dm', documentId: 1 }),
+  ];
+  // The same path open in two windows, the other one listed first.
+  const open = [
+    { instance: 'w2', id: 3, host: 'rhino', path: 'c:\\w\\a.3dm' },
+    { instance: 'w9', id: 7, host: 'rhino', path: 'C:\\w\\A.3dm' },
+  ];
+  const listed = liveLinksOf(links, open, { host: 'rhino', instance: 'w9', documentId: 7 });
+  assert.deepEqual(listed, [
+    { id: 'l-a', host: 'rhino', name: 'A.3dm', open: { instance: 'w9', documentId: 7 } },
+    { id: 'l-f', host: 'rhino', name: 'F.3dm', open: null },
+  ]);
+  // Without a target: the window the link was made from, else the first listed.
+  assert.equal(
+    openDocumentOf(links[0], [
+      ...open,
+      { instance: 'w1', id: 7, host: 'rhino', path: 'C:\\w\\A.3dm' },
+    ]).instance,
+    'w1',
+  );
+  assert.equal(openDocumentOf(links[0], open).instance, 'w2');
+});
+
+test('A file opened in VIDE answers LINK_NOT_LIVE (stored Sync), an unknown id NOT_FOUND', async (t) => {
+  const answers = [];
+  const { send, settled } = setup(
+    t,
+    async ({ call }) => {
+      answers.push(await call('query', { linkId: 'link-f' }));
+      answers.push(await call('query', { linkId: 'nope' }));
+      return { text: '끝' };
+    },
+    {
+      links: [
+        { id: 'link-a', host: 'rhino', name: 'A.3dm', open: { instance: 'win-a', documentId: 7 } },
+        { id: 'link-f', host: 'rhino', name: 'F.3dm', open: null },
+      ],
+    },
+  );
+  send('auto-1', { mode: 'auto' });
+  await settled();
+  assert.deepEqual(
+    answers.map((answer) => answer.value.code),
+    ['LINK_NOT_LIVE', 'NOT_FOUND'],
+  );
+  assert.match(answers[0].value.next, /stored Sync/);
+});
+
+test('Live links ask only the hosts the project links, at the same time', async (t) => {
+  const store = new Store(':memory:'),
+    workspace = new Workspace(store),
+    project = store.createProject('links');
+  const calls = { rhino: 0, zwcad: 0 };
+  const execution = new Execution(workspace, {
+    sdk: {
+      editors: {
+        list: async () => {
+          calls.rhino++;
+          return { documents: [{ instance: 'w1', id: 7, host: 'rhino', path: 'C:\\A.3dm' }] };
+        },
+      },
+    },
+    zwcadSdk: {
+      editors: {
+        attached: {
+          list: async () => {
+            calls.zwcad++;
+            return [];
+          },
+        },
+      },
+    },
+  });
+  t.after(async () => {
+    await execution.close();
+    store.close();
+  });
+  // No links at all (a one-file request): no host is asked.
+  assert.deepEqual(await execution.liveLinks(project.id), []);
+  assert.deepEqual(calls, { rhino: 0, zwcad: 0 });
+  // A file opened in VIDE: still nothing to ask.
+  const links = new DocumentLinks(store.db);
+  links.fileLink(project.id, 'rhino', 'F.3dm');
+  assert.equal((await execution.liveLinks(project.id))[0].open, null);
+  assert.deepEqual(calls, { rhino: 0, zwcad: 0 });
+  // A Rhino link: Rhino only.
+  links.link(project.id, {
+    host: 'rhino',
+    name: 'A.3dm',
+    path: 'C:\\A.3dm',
+    instance: 'w1',
+    documentId: 7,
+  });
+  const live = await execution.liveLinks(project.id);
+  assert.deepEqual(
+    live.map((entry) => [entry.name, entry.open?.instance ?? null]),
+    [
+      ['F.3dm', null],
+      ['A.3dm', 'w1'],
+    ],
+  );
+  assert.deepEqual(calls, { rhino: 1, zwcad: 0 });
 });
