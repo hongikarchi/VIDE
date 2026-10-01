@@ -630,18 +630,22 @@ function Conversations({
           <span className="conv-ai" title="대화를 시작할 때 정한 AI">
             {providerLabel(current, models)}
           </span>
-          {current.provider && !current.pending ? (
+          {/* A '새 대화' tab [+] opened is closed the same way before its first request; only
+              the hand-over needs the AI its first turn fixes (T-097). */}
+          {(current.provider && !current.pending) || current.id !== null ? (
             <details className="conv-menu">
               <summary aria-label="대화 메뉴">⋯</summary>
-              <button
-                type="button"
-                onClick={(event) => {
-                  (event.currentTarget.closest('details') as HTMLDetailsElement).open = false;
-                  setHanding(true);
-                }}
-              >
-                다른 AI로 이어 가기
-              </button>
+              {current.provider && !current.pending ? (
+                <button
+                  type="button"
+                  onClick={(event) => {
+                    (event.currentTarget.closest('details') as HTMLDetailsElement).open = false;
+                    setHanding(true);
+                  }}
+                >
+                  다른 AI로 이어 가기
+                </button>
+              ) : null}
               {current.id !== null ? (
                 <button
                   type="button"

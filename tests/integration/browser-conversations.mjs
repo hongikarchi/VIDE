@@ -144,17 +144,22 @@ try {
     // [+]: an empty general conversation whose first turn chooses its AI.
     if (route.request().method() === 'POST' && !id) {
       created.push(JSON.parse(route.request().postData() || '{}'));
-      conversationsState['c-plus'] = {
-        ...entry('c-plus', '대화', null),
+      const made = created.length === 1 ? 'c-plus' : `c-plus-${created.length}`;
+      conversationsState[made] = {
+        ...entry(made, '대화', null),
         kind: 'general',
         requests: 0,
         pending: true,
       };
-      return route.fulfill({ status: 201, json: conversationsState['c-plus'] });
+      return route.fulfill({ status: 201, json: conversationsState[made] });
     }
     if (route.request().method() === 'POST' && action) {
       handedOver.push({ id, action, body: JSON.parse(route.request().postData() || '{}') });
-      conversationsState[id] = { ...conversationsState[id], handover: null };
+      conversationsState[id] = {
+        ...conversationsState[id],
+        handover: null,
+        ...(action === 'close' ? { state: 'closed' } : {}),
+      };
       return route.fulfill({ json: conversationsState[id] });
     }
     if (!id) return route.fulfill({ json: [defaultEntry, ...Object.values(conversationsState)] });
@@ -310,9 +315,24 @@ try {
       document.querySelector('[data-conversation="c-plus"] .conv-label')?.textContent ===
       '보 간격 검토해줘',
   );
+  // A '새 대화' tab [+] opened by mistake closes from its ⋯ menu before any request; the hand-over
+  // waits for the AI its first turn fixes.
+  await page.locator('#conversation-chips .conv-add').click();
+  await page.waitForFunction(
+    () =>
+      document.querySelector('[data-conversation="c-plus-2"]')?.getAttribute('aria-selected') ===
+      'true',
+  );
+  await page.locator('#conversation-chips .conv-menu summary').click();
+  const menu = page.locator('#conversation-chips .conv-menu');
+  assert.equal(await menu.locator('button').filter({ hasText: '다른 AI로 이어 가기' }).count(), 0);
+  handedOver.length = 0;
+  await menu.locator('button').filter({ hasText: '대화 닫기' }).click();
+  await page.locator('[data-conversation="c-plus-2"]').waitFor({ state: 'detached' });
+  assert.deepEqual(handedOver, [{ id: 'c-plus-2', action: 'close', body: {} }]);
   assert.deepEqual(errors, []);
   console.log(
-    'browser conversations: route cards, AI fallback, tabs with a fixed AI, a model change to a new tab, hand-over cards and [+] opening a tab at once pass',
+    'browser conversations: route cards, AI fallback, tabs with a fixed AI, a model change to a new tab, hand-over cards, [+] opening a tab at once and closing it before a request pass',
   );
 } finally {
   await browser?.close();

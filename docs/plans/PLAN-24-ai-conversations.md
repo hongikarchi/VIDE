@@ -336,14 +336,14 @@ related: [PLAN, PLAN-22, PLAN-23, PLAN-25, PLAN-26, PLAN-02, PLAN-05, PLAN-08, P
 
 - **목적/기준:** 2026-10-01 사용자 결정("추천대로"): 새 대화를 열 때 목적·대상 파일·AI를 묻는 창은 빠르고 직관적인 사용과 어긋난다. [+]는 빈 탭 ‘새 대화’를 바로 열고 첫 요청이 이름을 정한다. SPEC-02.19의 1·2, Design SCR-15 대화 칩.
 - **변경 범위:**
-  - `src/ui/conversations.tsx`: 만들기 창(`CreateForm`: 이름·목적·대상 파일·AI)과 `creating` 상태를 지운다. [+]는 `POST …/conversations {kind:'general'}` → 목록 다시 읽기 → 새 탭 고르기 → `onCreated`(작성기 `#body`에 커서, `src/ui/app.ts`). 첫 요청 전의 일반 대화 탭은 ‘새 대화’로 보인다(`titleOf`·`chipLabel`). `src/ui/conversations.css`의 `.conv-create` 규칙 삭제
+  - `src/ui/conversations.tsx`: 만들기 창(`CreateForm`: 이름·목적·대상 파일·AI)과 `creating` 상태를 지운다. [+]는 `POST …/conversations {kind:'general'}` → 목록 다시 읽기 → 새 탭 고르기 → `onCreated`(작성기 `#body`에 커서, `src/ui/app.ts`). 첫 요청 전의 일반 대화 탭은 ‘새 대화’로 보인다(`titleOf`·`chipLabel`). 머리 줄 ⋯ 메뉴는 첫 요청 전(`pending`)에도 [대화 닫기]를 두고 [다른 AI로 이어 가기]만 AI가 정해진 뒤에 둔다(잘못 누른 [+]의 탭이 남지 않게). `src/ui/conversations.css`의 `.conv-create` 규칙 삭제
   - `src/server/conversations.ts` 만들기 라우트: 자동 선택이고 요청 글이 없으면 Jev·모델 선택을 부르지 않는다(종류는 주어진 것, 없으면 `general`; `pending`). `place`의 첫 턴 고정 분기: 같은 갱신에서 이름이 아직 그 종류의 기본 이름(`KIND_TITLES`)이면 첫 요청 글의 앞 60자로 바꾼다. 종류·대상은 바꾸지 않는다
   - `docs/architecture/ARCH-03-jig-runtime.md` 대화 경로 줄: 만들기 POST는 `body`가 있을 때만 Jev를 부르고 첫 턴이 기본 이름을 바꾼다
   - 유지: `createInput`의 `title`·`kind`·`targets`·`provider`·`model`·`jigInstanceId`·`draftId`·`mode`는 프로그램 호출(skill 시작의 `jig-run`, `make-api`의 `jig-make`, 인계)이 그대로 쓴다
   - 하지 않음: 목적이 달라 보일 때의 새 대화 제안 카드(SPEC-02.19의 1에 있었으나 만들지 않았던 것)는 명세에서 빼고 만들지 않는다. 이름 바꾸기 화면은 아직 없으므로 더하지 않는다
 - **선행:** T-088(첫 턴 고정, `0fb9506`).
 - **검증:**
-  - 정상: `tests/server/conversations.test.mjs`([+]의 만들기는 모델 호출 0회·`general`·`pending`, 첫 요청이 기본 이름을 60자로 바꿈, 다음 요청은 이름을 바꾸지 않음, 준 이름은 유지, 요청 글이 있는 jig 대화는 Jev 한 번, 모델을 준 만들기는 호출 없음), `tests/core/conversations-ui.test.mjs`(‘새 대화’ 표시), `tests/integration/browser-conversations.mjs`([+] → 창 없이 새 탭이 골라지고 커서가 작성기, 첫 요청이 그 탭으로 가고 탭 이름이 됨)
+  - 정상: `tests/server/conversations.test.mjs`([+]의 만들기는 모델 호출 0회·`general`·`pending`, 첫 요청이 기본 이름을 60자로 바꿈, 다음 요청은 이름을 바꾸지 않음, 준 이름은 유지, 요청 글이 있는 jig 대화는 Jev 한 번, 모델을 준 만들기는 호출 없음), `tests/core/conversations-ui.test.mjs`(‘새 대화’ 표시), `tests/integration/browser-conversations.mjs`([+] → 창 없이 새 탭이 골라지고 커서가 작성기, 첫 요청이 그 탭으로 가고 탭 이름이 됨, 다시 [+]로 연 ‘새 대화’는 첫 요청 전에 ⋯ → [대화 닫기]로 닫히고 [다른 AI로 이어 가기]는 없음)
   - 회귀: `tests/server/make-routes.test.mjs`, `browser-route`·`browser-make`·`browser-jigs`·`browser-ai-settings-smoke`·`browser-concurrent-work`·`browser-workspace-tabs`
 - **완료:** 위 시험 통과.
 - **상태(2026-10-01):** 구현·단위·브라우저 시험 완료(브랜치 `feature/fast-new-conversation`). 설치본 확인은 묶음 릴리스 때.
