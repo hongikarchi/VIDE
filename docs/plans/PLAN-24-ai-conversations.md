@@ -390,7 +390,7 @@ related: [PLAN, PLAN-22, PLAN-23, PLAN-25, PLAN-26, PLAN-02, PLAN-05, PLAN-08, P
   - `src/server/conversations.ts` `hold`: 불명 결과로 대화 줄을 멈추지 않는다. `src/core/workspace.ts` 주석
   - `src/server/direct-mode.ts`: `lockRefusal`·`LinkedFiles.claim`에서 불명 문구 삭제, 새 `unresolvedNote`(턴 문맥 항목 `unresolved-results`). `src/server/execution.ts`: 턴 문맥에 그 항목을 넣음, 새 `acknowledge`, 기록 없는 불명의 `undoRequest`는 `acknowledge`로 닫음, 보호 카드 [진행] 주석. `src/server/jig-routes.ts`: 바로 만들기의 불명 거절 문구 삭제. `src/server/server.ts`: `POST …/requests/:r/acknowledge`(원격 허용)
   - 화면: `src/ui/work-view.tsx` 결과 불명 카드의 [확인함]과 '확인할 것' 문구, `src/ui/work-stages.ts` '결과 미확인 · 확인함', `src/ui/app.ts` 행동, `src/ui/gateway.ts` `HOST_RESULT_UNRESOLVED` 문구(옛 기록용, '보류' 없음)
-  - 하지 않음: 추가 지시(SPEC-02.8)가 끊은 앞 요청이 불명이면 후속을 `INTERVENTION_REVIEW_REQUIRED`로 두는 규칙은 이번 범위 밖(그대로)
+  - 통합 검토 보완(2026-10-02): 추가 지시(SPEC-02.8)가 끊은 앞 요청이 불명이어도 후속을 보류하지 않는다(`INTERVENTION_REVIEW_REQUIRED`는 이전 연계 요청의 하위 부분 결과에만). 턴이 `linkId`로 처음 닿는 다른 연결 파일의 불명 결과는 `unresolvedOn`으로 찾아 첫 조회 결과에 붙이고, 읽기 전 첫 실행은 `HOST_RESULT_UNRESOLVED`로 한 번 돌려준다. 원본 적용 요청(`applicationId`)은 [확인함] 대상이 아니고, 이전 연계 요청의 [확인함]은 불명 하위 요청을 닫는다. 시험: `multi-file.test.mjs`, `intervention.test.mjs`, `execution.test.mjs`
 - **선행:** T-093(잠금·`documents[]`).
 - **검증:**
   - 정상: `tests/core/request-scope.test.mjs`(불명 뒤에 기다리던 쓰기가 풀려 실행됨, 같은 계보의 새 쓰기 접수, 문서 없는(null 키) 불명이 Rhino 쓰기를 막지 않고 `unresolvedFor`로 이름이 나옴, ZWCAD 쓰기는 무관), `tests/server/execution.test.mjs`([확인함]이 `interrupted`·`acknowledgedAt`으로 닫고 기록 유지, `settles`가 있으면 원래 결과로, 기록 없는 불명의 [되돌리기]가 닫음, 불명 뒤 다음 턴 문맥에 `unresolved-results`가 들어감)
