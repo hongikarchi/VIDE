@@ -10,6 +10,7 @@ import { Workspace } from '../../src/core/workspace.ts';
 import { JigStore } from '../../src/core/jig-store.ts';
 import { DocumentLinks } from '../../src/core/document-links.ts';
 import { Execution } from '../../src/server/execution.ts';
+import { documentHolder } from '../../src/contracts/request-scope.ts';
 import { SdkExecution } from '../../src/server/sdk-execution.ts';
 import { closeJigRuntime, jigRoutes } from '../../src/server/jig-routes.ts';
 import { importPack, packJig } from '../../src/jigs/runtime/pack.ts';
@@ -1081,6 +1082,47 @@ test('bake (direct): a body refused before running (read-only) undoes the ones b
   assert.match(refused.data.refused, /읽기 전용으로 열린 문서라 실행하지 않았습니다/);
   assert.equal(f.calls.undo.length, 1);
   assert.deepEqual([...f.document.doc.rows.keys()].sort(), [...before.keys()].sort());
+});
+
+test('bake (direct): one writer per document — refused while an AI turn writes it, and holds it while it runs', async (t) => {
+  const f = fixture(t, { direct: true });
+  const { base, iid } = await ready(f);
+  const ai = (id) => ({
+    id,
+    body: '기둥 맞추기',
+    provider: 'claude-cli',
+    pins: [],
+    sketches: [],
+    files: [],
+    host: 'rhino',
+    mode: 'auto',
+    baseRequestId: 'sync-1',
+  });
+  const doc = { host: 'rhino', instance: INSTANCE, documentId: DOCUMENT };
+  // (a) An AI turn is writing the document: the bake runs nothing and says why.
+  f.workspace.submit(f.project.id, ai('ai-1'));
+  f.workspace.update(f.project.id, 'ai-1', 'running', { phase: 'host' });
+  const refused = await f.call('POST', `${base}/${iid}/bake`, { bake: ['columns', 'beams'] });
+  assert.equal(refused.status, 422, JSON.stringify(refused.data));
+  assert.equal(refused.data.code, 'BAKE_FAILED');
+  assert.equal(refused.data.reason, 'DOCUMENT_LOCKED');
+  assert.match(refused.data.refused, /다른 작업이 이 문서를 고치는 중/);
+  assert.equal(f.calls.direct.length, 0);
+  f.workspace.update(f.project.id, 'ai-1', 'succeeded', {});
+  // (b) While the bake runs, a turn's first write there is locked out and a new write waits.
+  const during = [];
+  f.direct.afterExecute = () => {
+    if (during.length) return;
+    during.push(documentHolder('turn-x', doc, f.workspace.claimRows(f.project.id))?.code);
+    const queued = f.workspace.submit(f.project.id, ai('ai-2')).request;
+    during.push(queued.state, queued.result?.waitingFor?.kind);
+  };
+  const made = await f.call('POST', `${base}/${iid}/bake`, { bake: ['columns', 'beams'] });
+  assert.equal(made.status, 200, JSON.stringify(made.data));
+  assert.deepEqual(during, ['DOCUMENT_LOCKED', 'queued', 'document']);
+  // Released afterwards: nothing holds the document and the waiting request was let go.
+  assert.equal(documentHolder('turn-x', doc, f.workspace.claimRows(f.project.id)), undefined);
+  assert.equal(f.workspace.get(f.project.id, 'ai-2').result?.phase === 'queue', false);
 });
 
 test('bake (direct): a deletion no record lists is undone, by the host guard or by the engine', async (t) => {

@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { isDwgSdkEditMode } from '../contracts/dwg-edit-mode.ts';
 import { AI_TURN_LIMIT, requestAdmission, waitingOf } from '../contracts/request-scope.ts';
 import type { WaitingFor } from '../contracts/request-scope.ts';
@@ -45,6 +46,45 @@ export class Workspace {
     this.store = store;
     store.db.exec(`
       UPDATE workspace_requests SET state=CASE WHEN state='running' AND json_extract(result,'$.phase')='host' THEN 'unknown' ELSE 'interrupted' END WHERE state IN ('queued','running');`);
+  }
+  /**
+   * Writes that run outside the request table while they last: a jig's direct bake on an attached
+   * document (SPEC-02.9 3, ADR-027 5). Admission and a turn's lock check (`claimRows`) see each as a
+   * running write of that document; nothing is stored or listed.
+   */
+  private readonly briefWrites = new Map<string, StoredWork>();
+  /** Holds a document for a brief write; call the returned function when the write has ended. */
+  holdWrite(projectId: string, document: { host: string; instance: string; documentId: number }) {
+    const id = `brief-write:${randomUUID()}`;
+    const input = {
+      id,
+      body: '',
+      provider: 'claude-cli',
+      mode: 'auto',
+      permission: 'candidate',
+      pins: [],
+      sketches: [],
+      files: [],
+      host: document.host,
+      hostUse: 'write',
+      // A write of exactly that document (request-scope claims a 'document' source by its id).
+      source: 'document',
+      sourceDocument: { instance: document.instance, documentId: document.documentId },
+    } as unknown as RequestInput;
+    this.briefWrites.set(id, {
+      id,
+      projectId,
+      input,
+      state: 'running',
+      result: null,
+      createdAt: new Date().toISOString(),
+    });
+    return () => void this.briefWrites.delete(id);
+  }
+  /** The project's requests and the brief writes running now: what write admission weighs. */
+  claimRows(projectId: string): StoredWork[] {
+    const brief = [...this.briefWrites.values()].filter((row) => row.projectId === projectId);
+    return brief.length ? [...this.list(projectId), ...brief] : this.list(projectId);
   }
   /**
    * Every request of the project, without display geometry (`scene`, `definitions`; marked
@@ -275,7 +315,7 @@ export class Workspace {
     // for its predecessor first; its own turn is checked when that one ends (Execution).
     const admission = requestAdmission(
       input,
-      this.list(projectId).filter(
+      this.claimRows(projectId).filter(
         (row) =>
           !predecessorId ||
           (row.id !== predecessorId && row.input.parentRequestId !== predecessorId),
@@ -306,7 +346,7 @@ export class Workspace {
    * waiting before it. Later waiting requests stand behind it; an intervention keeps the place of
    * the request it replaces.
    */
-  admission(projectId: string, id: string, rows = this.list(projectId)) {
+  admission(projectId: string, id: string, rows = this.claimRows(projectId)) {
     const index = rows.findIndex((row) => row.id === id);
     if (index < 0) fail('NOT_FOUND');
     const placeOf = (at: number) => {
@@ -336,7 +376,7 @@ export class Workspace {
    * (SPEC-02.9 5) and is kept, not run.
    */
   release(projectId: string): StoredWork[] {
-    const rows = this.list(projectId);
+    const rows = this.claimRows(projectId);
     const ready: StoredWork[] = [];
     for (let index = 0; index < rows.length; index++) {
       const row = rows[index];

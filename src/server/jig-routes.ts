@@ -12,6 +12,7 @@ import { DomainError } from '../core/store.ts';
 import { JigStore } from '../core/jig-store.ts';
 import type { Workspace } from '../core/workspace.ts';
 import { isFileLink, type DocumentLink, type DocumentLinks } from '../core/document-links.ts';
+import { documentHolder } from '../contracts/request-scope.ts';
 import { readScopeSchema } from '../contracts/native-model.ts';
 import type { SdkExecution } from './sdk-execution.ts';
 import type { Execution } from './execution.ts';
@@ -62,7 +63,7 @@ export interface JigRouteContext {
   links?: DocumentLinks;
   sdk?: Pick<SdkExecution, 'readLayers' | 'importFile'>;
   /** Starts the work-copy bake request (only when no attached editor can run it directly). */
-  execution?: Pick<Execution, 'start'>;
+  execution?: Pick<Execution, 'start'> & Partial<Pick<Execution, 'resume'>>;
   /**
    * The attached editor's `direct-execute` / `direct-undo` / `fingerprint` (바로 적용). Omitted, the
    * routes use `sdk.directExecute` / `sdk.directUndo` / `sdk.fingerprint` when the engine has them.
@@ -596,6 +597,26 @@ export async function jigRoutes(
       if (direct && link.host === 'rhino' && !isFileLink(link)) {
         // 바로 적용: the open document, one host undo record per body, baseline read right after.
         const target = { instance: link.instance, documentId: link.documentId };
+        // One writer per document (SPEC-02.9 3, ADR-027 5): another request writing it, or an
+        // unresolved result on it, refuses the bake at once; while it runs it holds the document.
+        const held = documentHolder(
+          '',
+          { host: 'rhino', ...target },
+          workspace.claimRows(projectId),
+        );
+        if (held) {
+          send(jigStatuses.BAKE_FAILED, {
+            ...shared,
+            code: 'BAKE_FAILED',
+            reason: held.code,
+            refused:
+              held.code === 'HOST_RESULT_UNRESOLVED'
+                ? '이 문서에 결과를 확인하지 못한 작업이 있어 만들지 않았습니다. 그 작업의 결과를 먼저 확인하세요.'
+                : '다른 작업이 이 문서를 고치는 중이라 만들지 않았습니다. 그 작업이 끝난 뒤 다시 누르세요.',
+          });
+          return true;
+        }
+        const release = workspace.holdWrite(projectId, { host: 'rhino', ...target });
         let made: Awaited<ReturnType<typeof runDirectBake>>;
         try {
           made = await runDirectBake({ ...bakeContext, direct }, prepared, target);
@@ -614,6 +635,10 @@ export async function jigRoutes(
             ...(undoFailed ? { undoFailed } : {}),
           });
           return true;
+        } finally {
+          release();
+          // Requests that waited for the document go on.
+          context.execution?.resume?.(projectId);
         }
         send(200, {
           ...shared,

@@ -767,6 +767,10 @@ export class Execution {
     this.active.set(request.id, { controller, completion, projectId: request.projectId });
   }
   private closing = false;
+  /** A write outside the request table ended (a jig's direct bake): the waiting requests go on. */
+  resume(projectId: string) {
+    this.pump(projectId);
+  }
   /** Starts the waiting requests whose turn has come (after any run ends or a wait is cancelled). */
   private pump(projectId: string) {
     if (this.closing) return;
@@ -1210,7 +1214,8 @@ export class Execution {
             driver: (host, document) => this.directDriverFor(host, document, false),
             // Another file is locked on its first write; held elsewhere it is refused, never
             // waited for (ADR-027 5, SPEC-02.9 3).
-            claim: (document) => documentHolder(id, document, this.workspace.list(projectId))?.code,
+            claim: (document) =>
+              documentHolder(id, document, this.workspace.claimRows(projectId))?.code,
             intervened: () => this.intervened.has(id),
           },
           protectedIds: pins
@@ -1770,7 +1775,7 @@ export class Execution {
         ? documentHolder(
             id,
             { host: driver.host, ...driver.target },
-            this.workspace.list(projectId),
+            this.workspace.claimRows(projectId),
           )
         : undefined;
     if (held)
