@@ -3133,7 +3133,10 @@ body[data-workspace='context'] .workspace > .jig-dialog {
 }
 .jig-instances li {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
+  /* Name, time · version, then [올리기] (an older version only, T-101) and [열기] on one row. */
+  grid-template-columns: minmax(0, 1fr);
+  grid-auto-flow: column;
+  grid-auto-columns: auto;
   align-items: center;
   gap: 8px;
   padding: 5px 0;
@@ -3270,6 +3273,20 @@ body[data-workspace='context'] .workspace > .jig-dialog {
 .jig-card button {
   align-self: flex-start;
   margin-top: auto;
+}
+/* A card's actions on one row at its foot (T-101); a note wraps under them. */
+.jig-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: auto;
+}
+.jig-card .jig-card-actions button {
+  margin-top: 0;
+}
+.jig-card-actions small {
+  flex-basis: 100%;
 }
 .jig-card-head {
   display: flex;

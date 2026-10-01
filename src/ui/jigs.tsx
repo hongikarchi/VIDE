@@ -929,29 +929,16 @@ function Gallery({ context }: { context: JigContext }) {
             </button>
           </div>
         ) : null}
-        {entry.corrupt ? null : creating === key ? (
+        {/* The open form and the delete confirmation take the card's foot; else one row of
+            actions (T-101 adds [수정하기]). */}
+        {!entry.corrupt && creating === key ? (
           <NewInstance
             entry={entry}
             context={context}
             onCancel={() => setCreating(undefined)}
             onOpened={() => setCreating(undefined)}
           />
-        ) : (
-          <button type="button" onClick={() => setCreating(key)}>
-            새로 열기
-          </button>
-        )}
-        {editable ? (
-          <button
-            type="button"
-            disabled={forking === entry.id}
-            title="이 jig의 사본을 초안으로 만들어 고칩니다 · 고정한 버전은 바뀌지 않습니다"
-            onClick={() => void edit(entry)}
-          >
-            {forking === entry.id ? '사본 만드는 중…' : '수정하기'}
-          </button>
-        ) : null}
-        {entry.stage !== 'project' ? null : removing === key ? (
+        ) : entry.stage === 'project' && removing === key ? (
           <div className="jig-remove" role="group" aria-label={`${entry.name} 삭제 확인`}>
             <small>
               이 프로젝트의 jig 목록에서 뺍니다.
@@ -966,9 +953,28 @@ function Gallery({ context }: { context: JigContext }) {
             </button>
           </div>
         ) : (
-          <button type="button" onClick={() => setRemoving(key)}>
-            삭제
-          </button>
+          <div className="jig-card-actions">
+            {entry.corrupt ? null : (
+              <button type="button" onClick={() => setCreating(key)}>
+                새로 열기
+              </button>
+            )}
+            {editable ? (
+              <button
+                type="button"
+                disabled={forking === entry.id}
+                title="이 jig의 사본을 초안으로 만들어 고칩니다 · 고정한 버전은 바뀌지 않습니다"
+                onClick={() => void edit(entry)}
+              >
+                {forking === entry.id ? '사본 만드는 중…' : '수정하기'}
+              </button>
+            ) : null}
+            {entry.stage === 'project' ? (
+              <button type="button" onClick={() => setRemoving(key)}>
+                삭제
+              </button>
+            ) : null}
+          </div>
         )}
       </article>
     );
@@ -1022,7 +1028,7 @@ function Gallery({ context }: { context: JigContext }) {
                       {jig.basis ? ` · 근거 ${jig.basis}` : ''}
                     </small>
                     {jig.status === 'available' && kind ? (
-                      <>
+                      <div className="jig-card-actions">
                         <button
                           type="button"
                           onClick={() =>
@@ -1041,7 +1047,7 @@ function Gallery({ context }: { context: JigContext }) {
                         <small id={`jig-fixed-${jig.id}`}>
                           기본 화면 jig는 아직 수정할 수 없습니다
                         </small>
-                      </>
+                      </div>
                     ) : null}
                   </article>
                 );
