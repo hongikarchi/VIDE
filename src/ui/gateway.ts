@@ -235,3 +235,57 @@ Object.assign(errors, {
   GUARD_CONFIRMATION_REQUIRED:
     '되돌리기로 복구하기 어려운 변경이라 실행을 되돌리고 확인을 기다립니다. [진행]을 누르면 다시 실행합니다.',
 });
+
+// Codes the engine and hosts send that used to show raw: what happened and what to do.
+Object.assign(errors, {
+  NOT_FOUND: '대상을 찾을 수 없습니다. 목록을 새로고침한 뒤 다시 고르세요.',
+  FORBIDDEN: '이 화면에서는 할 수 없는 작업입니다. 작업 PC의 VIDE에서 하세요.',
+  METHOD_NOT_ALLOWED: '이 판의 VIDE가 지원하지 않는 요청입니다. 앱을 다시 열거나 업데이트하세요.',
+  INTERNAL_ERROR: 'VIDE 내부 오류가 났습니다. 다시 시도하고, 반복되면 피드백으로 알려 주세요.',
+  JSON_REQUIRED: '요청 형식이 맞지 않습니다. 앱을 새로고침한 뒤 다시 시도하세요.',
+  INPUT_TOO_LARGE: '보낸 내용이 너무 큽니다(1 MB 한도). 첨부나 글을 줄여 다시 보내세요.',
+  RESYNC_REQUIRED: '문서가 많이 바뀌어 이어서 맞출 수 없습니다. Sync를 다시 실행하세요.',
+  EXECUTOR_NOT_READY:
+    '실행 준비가 아직 끝나지 않았습니다. 호스트 연결을 확인한 뒤 다시 시도하세요.',
+  CANCELLED: '작업을 중단했습니다.',
+  JIG_VERSION_EXISTS:
+    '같은 판 번호의 jig가 이미 설치돼 있고 내용이 다릅니다. 판 번호를 올린 뒤 다시 등록하세요.',
+  JIG_SELFTEST_FAILED:
+    'jig의 자체 시험이 통과하지 못했습니다. 시험 결과를 확인해 고친 뒤 다시 등록하세요.',
+  JIG_DIGEST_MISMATCH: '설치된 jig 파일이 바뀌었습니다. jig를 다시 가져오세요.',
+  JIG_PACK_FAILED: 'jig 묶음을 만들지 못했습니다. 작업본의 파일과 오류를 확인하세요.',
+  JIG_LIBRARY_UNKNOWN: 'jig가 이 VIDE에 없는 기능을 씁니다. VIDE를 업데이트하거나 jig를 고치세요.',
+  DRAFT_NOT_OPEN: '이 jig 작업본은 이미 닫혔습니다. 새 작업본에서 이어 하세요.',
+  DRAFT_OUTSIDE: '작업본 폴더 밖의 파일은 바꿀 수 없습니다.',
+  DRAFT_FORBIDDEN_FILE: '작업본에서 바꿀 수 없는 파일입니다.',
+  DRAFT_PATH_INVALID: '파일 경로가 올바르지 않습니다.',
+  DRAFT_TEMPLATE_MISSING:
+    '작업본을 시작할 jig 틀을 찾지 못했습니다. VIDE를 다시 설치하거나 업데이트하세요.',
+  MAKE_STOPPED: 'jig 만들기를 멈췄습니다.',
+  MAKE_FILES_INVALID:
+    '가져온 파일로 jig 작업본을 만들 수 없습니다. jig.json이 있는 폴더인지 확인하세요.',
+  STRUCTURE_CORE_MISSING: '구조 계산 모듈이 없습니다. VIDE를 다시 설치하거나 업데이트하세요.',
+  STRUCTURE_MODEL_INVALID:
+    '구조 모델에 고칠 곳이 있어 계산하지 않았습니다. 표시된 문제를 고친 뒤 다시 계산하세요.',
+  SOURCE_UNAVAILABLE: '원본 파일을 찾을 수 없습니다. 서버 연결과 파일 위치를 확인하세요.',
+  PUBLICATION_LIMIT: '공유할 모델이 너무 큽니다(512 MB 한도). 공개할 객체를 줄이세요.',
+  PUBLICATION_BASIS_NOT_FOUND:
+    '의견이 가리키는 공유본을 찾을 수 없습니다. 공유 목록을 새로고침하세요.',
+  AMBIGUOUS_OBJECT: '같은 이름의 객체가 여럿이라 하나로 정할 수 없습니다. 객체를 직접 고르세요.',
+  DUPLICATE_OBJECT: '같은 객체가 두 번 골라졌습니다. 목록을 확인하세요.',
+  OBJECT_NOT_FOUND: '고른 객체가 지금 모델에 없습니다. Sync한 뒤 다시 고르세요.',
+  HOST_VERIFICATION_FAILED: '호스트가 불러온 결과를 확인하지 못했습니다. 파일을 다시 열어 보세요.',
+  LINKED_TARGET_UNAVAILABLE:
+    '연계 대상 문서를 열 수 없습니다. 두 호스트가 연결돼 있는지 확인하세요.',
+  DOCUMENT_READ_ONLY:
+    'Rhino 문서가 읽기 전용으로 열려 있어 바꾸지 않았습니다. 쓰기 가능하게 연 뒤 다시 보내세요.',
+  OPERATION_CONFLICT:
+    '같은 작업이 다른 내용으로 이미 실행됐습니다. 작업 상태를 확인한 뒤 다시 보내세요.',
+  HOST_INVALID_RESPONSE: '호스트 응답을 읽지 못했습니다. 호스트를 다시 연결한 뒤 시도하세요.',
+  HOST_RESPONSE_TOO_LARGE: '호스트 응답이 너무 큽니다. 범위를 좁혀 다시 시도하세요.',
+  HOST_RESULT_TOO_LARGE: '한 번에 읽을 결과가 너무 큽니다. 레이어나 범위를 좁혀 다시 시도하세요.',
+  TURN_OUTPUT_INVALID: 'AI 답을 읽지 못했습니다. 같은 요청을 다시 보내세요.',
+  QUERY_RESULT_TOO_LARGE: '조회 결과가 너무 큽니다. 범위를 좁혀 다시 요청하세요.',
+  NO_ACTIVE_SESSION: '이어 갈 대화가 없습니다. 새 대화에서 보내세요.',
+  BAKE_UNDO_FAILED: 'Rhino에 만든 결과를 모두 되돌리지 못했습니다. Rhino에서 Ctrl+Z로 확인하세요.',
+});

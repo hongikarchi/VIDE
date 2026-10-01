@@ -72,8 +72,15 @@ try {
     'Codex 로그인': { target: 'app', by: 'rules', app: 'login', provider: 'codex-cli' },
     'Claude 로그인': { target: 'app', by: 'rules', app: 'login', provider: 'claude-cli' },
     '이 프로젝트 결정 사항 알려줘': { target: 'ask', by: 'jev' },
-    // Jev marks a complex / multi-file request: in 자동 the composer suggests '계획부터'.
-    '두 도면 기둥 번호를 모두 맞춰줘': { target: 'document', by: 'jev', planFirst: true },
+    // Jev judges a request complex (RouteDecision.task): in 자동 the composer suggests '계획부터'.
+    '두 도면 기둥 번호를 모두 맞춰줘': {
+      target: 'document',
+      by: 'jev',
+      task: 'complex',
+      ai: true,
+      confidence: 0.9,
+      ms: 5,
+    },
     '다른 모델로 이어서': { target: 'document', by: 'jev' },
   };
   await page.route(/\/route$/, (route) =>

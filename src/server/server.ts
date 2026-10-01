@@ -107,7 +107,9 @@ import { sweepCopies, unsettledCopies, within } from './capture-cleanup.ts';
 const importedName = (body: string) => body.replace(/ 불러오기$/, '');
 
 /** The local browser session survives restarts, so an open page keeps working after one. */
-async function localSession(directory: string) {
+/** The desktop shell's session key, kept in the data folder; an in-memory store keeps none. */
+async function localSession(directory: string | undefined) {
+  if (!directory) return randomBytes(32).toString('hex');
   const file = join(directory, 'local-session.key');
   try {
     const saved = (await readFile(file, 'utf8')).trim();
@@ -175,7 +177,7 @@ export async function startServer({
 }: ServerOptions) {
   const store = new Store(filename),
     bootstrap = randomBytes(32).toString('hex'),
-    session = await localSession(dirname(filename));
+    session = await localSession(filename === ':memory:' ? undefined : dirname(filename));
   const agentTools = new AgentTools({ origin: () => origin });
   const accountLogin = new AccountLogin(loginOptions);
   const workspace = new Workspace(store),
@@ -1680,14 +1682,22 @@ export async function startServer({
         const input = hostTargetSchema
           .extend({ ids: z.array(z.string().uuid()).max(5000) })
           .parse(await body(request));
-        if (!sdk) throw Object.assign(new Error('STALE_CONNECTION'), { code: 'STALE_CONNECTION' });
-        send(
-          200,
-          await sdk.editors.setPins(
-            { instance: input.instance, documentId: input.documentId },
-            input.ids,
-          ),
-        );
+        if (!sdk) throw new DomainError('STALE_CONNECTION');
+        try {
+          send(
+            200,
+            await sdk.editors.setPins(
+              { instance: input.instance, documentId: input.documentId },
+              input.ids,
+            ),
+          );
+        } catch (error) {
+          // A lost or busy document answers its code (STALE_CONNECTION …); the app shows it.
+          const code = (error as { code?: unknown } | undefined)?.code;
+          if (typeof code === 'string' && /^[A-Z][A-Z0-9_]*$/.test(code))
+            throw new DomainError(code);
+          throw error;
+        }
         return;
       }
       if (url.pathname === '/api/v1/host/selection' && request.method === 'GET') {
@@ -2005,13 +2015,18 @@ export async function startServer({
               : (() => {
                   // Entries the user removed from the conversation are not listed.
                   const hidden = workspace.hiddenIds(projectId);
-                  // The list carries no display meshes (tens of MB per Sync); the UI fetches one
-                  // request in full when it shows that model.
+                  // The list carries no display meshes (tens of MB per Sync) and no view images
+                  // sent to the AI (up to ~1 MB each); the UI fetches one request in full when it
+                  // shows that model. The run itself reads the stored input.
                   return workspace
                     .list(projectId)
                     .filter((row) => !hidden.has(row.id))
                     .map(withApplications)
                     .map((row) => {
+                      if (row.input && 'images' in row.input) {
+                        const { images: _images, ...input } = row.input;
+                        row = { ...row, input: input as typeof row.input };
+                      }
                       const result = row.result;
                       if (!result || !Array.isArray(result.scene)) return row;
                       const { scene: _scene, definitions: _definitions, ...rest } = result;

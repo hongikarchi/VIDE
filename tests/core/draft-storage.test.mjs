@@ -62,3 +62,9 @@ test('draft restore rejects invalid geometry and missing pin basis without retar
   assert.throws(() => restoreDraft({ ...draft, baseRequestId: 'missing' }, messages));
   assert.throws(() => restoreDraft({ ...draft, instructions: [null] }, messages));
 });
+
+test('a draft stored with the former applyToSource field still restores, without it', () => {
+  const restored = restoreDraft({ ...initial(), body: '이동', applyToSource: true }, []);
+  assert.equal(restored.body, '이동');
+  assert.equal('applyToSource' in restored, false);
+});

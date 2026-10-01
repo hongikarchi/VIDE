@@ -52,7 +52,6 @@ export interface DraftState {
   model: string;
   effort: string;
   permission: 'review' | 'candidate';
-  applyToSource?: boolean;
   messages: UiMessage[];
   baseRequestId?: string | null;
   drawingPlane?: 'XY' | 'XZ' | 'YZ';
@@ -167,7 +166,6 @@ export function failedRequestDraft(state: DraftState, request: RestoreRequest) {
     model: input.model || input.provider || state.model,
     effort: input.effort || 'default',
     permission: input.permission,
-    applyToSource: false,
     selected: null,
   });
 }
@@ -222,11 +220,6 @@ export function validate(s: DraftState) {
     return '메시지나 참조를 추가하세요.';
   const m = models.find((m) => m.id === s.model);
   if (!m || !m.efforts.includes(s.effort)) return '모델과 effort를 확인하세요.';
-  if (
-    s.applyToSource &&
-    (s.permission !== 'candidate' || s.host !== 'rhino' || !s.baseRequestId || s.linkedTargets)
-  )
-    return 'Sync한 Rhino 문서 하나를 기준으로 선택하세요.';
   if (!['review', 'candidate'].includes(s.permission)) return '권한을 확인하세요.';
   return '';
 }
@@ -248,7 +241,6 @@ export function packet(s: DraftState) {
     model: s.model,
     effort: s.effort,
     permission: s.permission,
-    ...(s.applyToSource ? { applyToSource: true } : {}),
   });
 }
 /** Attach free brush strokes (world XYZ metres) as one sketch. */

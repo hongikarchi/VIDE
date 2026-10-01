@@ -46,8 +46,8 @@ const GATE_LABEL: Record<string, string> = {
 const PAPER: Record<Paper, string> = { a3: 'A3 가로', a4: 'A4 세로' };
 const projectPath = (id: string) => `/projects/${encodeURIComponent(id)}`;
 const message = (error: unknown) => {
-  const code = error instanceof Error ? error.message : String(error);
-  return errors[code] ?? '보고서를 불러오지 못했습니다.';
+  const code = (error as { code?: unknown } | undefined)?.code;
+  return (typeof code === 'string' && errors[code]) || '보고서를 불러오지 못했습니다.';
 };
 /** A file name for the saved page: instance and report title, no path characters. */
 export const reportFileName = (r: Pick<RenderedReport, 'instance' | 'report'>) =>

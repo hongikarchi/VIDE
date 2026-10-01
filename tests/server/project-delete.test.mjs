@@ -409,3 +409,14 @@ test('[삭제] on the jig list reaches the unpin route over HTTP instead of the 
   // Other DELETE paths stay closed.
   assert.equal((await api(`/projects/${project.id}/jigs`, 'DELETE')).status, 405);
 });
+
+test('POST /host/pins without a Rhino connection answers STALE_CONNECTION, not a 500', async (t) => {
+  const { app, api, directory } = await open();
+  t.after(async () => {
+    await app.close();
+    await rm(directory, { recursive: true, force: true });
+  });
+  const reply = await api('/host/pins', 'POST', { instance: '1234:5678', documentId: 1, ids: [] });
+  assert.equal(reply.status, 400);
+  assert.equal(reply.body.code, 'STALE_CONNECTION');
+});

@@ -148,7 +148,6 @@ export interface JigContext {
     permission: 'review' | 'candidate';
     host?: 'rhino' | 'zwcad';
     baseRequestId?: string;
-    applyToSource?: boolean;
     jig: Record<string, unknown>;
   }) => Promise<void>;
 }
@@ -1192,14 +1191,15 @@ function SyncJig({ context }: { context: JigContext }) {
           baseRequestId: cad,
           jig: { kind: 'sync-apply', side: 'cad' },
         });
+      // Rhino follows the drawing in the open document (자동, ADR-022): one undo record per
+      // execute, reverted with Rhino Ctrl+Z or [되돌리기]; no work copy to apply afterwards.
       else
         await context.send({
-          body: '첨부 sync-edits.json의 편집을 Rhino 문서에 그대로 적용해 줘 (좌표 단위: m, 작업 사본 기준). move-ends는 해당 ID 곡선의 두 끝점을 to로 옮기고(직선 유지, ID·이름·레이어·속성 유지), add-line은 지정 레이어(없으면 만들기)에 선을 추가하고, delete는 해당 ID를 지워. 목록에 없는 객체는 건드리지 마. 끝나면 조회해서 결과를 행 번호별로 알려 줘.',
+          body: '첨부 sync-edits.json의 편집을 열린 Rhino 문서에 그대로 적용해 줘 (좌표 단위: m, 문서 좌표 기준). move-ends는 해당 ID 곡선의 두 끝점을 to로 옮기고(직선 유지, ID·이름·레이어·속성 유지), add-line은 지정 레이어(없으면 만들기)에 선을 추가하고, delete는 해당 ID를 지워. 목록에 없는 객체는 건드리지 마. 끝나면 조회해서 결과를 행 번호별로 알려 줘.',
           files: [{ name: 'sync-edits.json', text: JSON.stringify(rhinoEdits()) }],
           permission: 'candidate',
           host: 'rhino',
           baseRequestId: rhino,
-          applyToSource: true,
           jig: { kind: 'sync-apply', side: 'rhino' },
         });
       setNotice(

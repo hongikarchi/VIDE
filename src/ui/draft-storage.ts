@@ -3,7 +3,8 @@ import { requestInputSchema } from '../contracts/workspace.ts';
 import { draftPinSchema } from './workspace-data.ts';
 import type { DraftState } from './model.ts';
 
-// Drafts can be empty; execution input validation remains at submission time.
+// Drafts can be empty; execution input validation remains at submission time. Unknown fields of
+// older drafts (the composer's former `applyToSource`) are dropped when they are read.
 const draftSchema = z.object({
   executionLimits: requestInputSchema.shape.executionLimits,
   body: z.string().max(20000),
@@ -15,7 +16,6 @@ const draftSchema = z.object({
   model: z.string().min(1).max(110),
   effort: z.string().min(1).max(30),
   permission: z.enum(['review', 'candidate']),
-  applyToSource: z.boolean().optional(),
   baseRequestId: z.string().nullable().optional(),
   linkedTargets: requestInputSchema.shape.linkedTargets,
   coordinateBasis: requestInputSchema.shape.coordinateBasis,
@@ -52,7 +52,6 @@ export function restoreDraft(value: unknown, messages: DraftState['messages']) {
   }
   return {
     ...draft,
-    applyToSource: false,
     selected: null,
     baseRequestId: draft.baseRequestId ?? undefined,
     messages,

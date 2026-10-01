@@ -19,6 +19,7 @@
     "src/ai/**/*",
     "src/contracts/**/*",
     "hosts/**/*.ts",
-    "extensions/**/*.ts"
+    "extensions/**/*.ts",
+    "src/jigs/runtime/child-entry.ts"
   ]
 }

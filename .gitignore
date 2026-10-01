@@ -60,3 +60,5 @@ cli-profiles/
 
 # Rust build output (structure core, PLAN-17)
 src/native/**/target/
+# Cargo binary sources (src/bin/*.rs, [[bin]] in Cargo.toml) are code, not build output.
+!src/native/**/src/bin/

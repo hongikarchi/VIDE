@@ -230,7 +230,6 @@ function setMode(next: WorkMode) {
 /** Keeps the draft's permission field in step with the mode and draws the toggle. */
 function syncMode() {
   state.permission = mode === 'plan' ? 'review' : 'candidate';
-  state.applyToSource = false;
   for (const button of document.querySelectorAll<HTMLButtonElement>('#mode-toggle [data-mode]')) {
     button.setAttribute('aria-checked', String(button.dataset.mode === mode));
     button.disabled = !ready;
@@ -2047,12 +2046,12 @@ async function decideRoute(
   }
 }
 /**
- * Jev marks a complex or multi-file request (`planFirst`, `complex` or `scope: 'multi-file'` in
- * the /route answer): in 자동 the composer suggests '계획부터' before anything runs.
+ * Jev judges a request complex (`task: 'complex'` in the /route answer, RouteDecision): in 자동 the
+ * composer suggests '계획부터' before anything runs.
  */
 function suggestsPlan(raw: unknown) {
   const value = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
-  return value.planFirst === true || value.complex === true || value.scope === 'multi-file';
+  return value.task === 'complex';
 }
 /** '계획부터 할까요?' over the composer: plan once (the toggle stays), or run in 자동 now. */
 function showPlanFirstCard() {

@@ -114,7 +114,11 @@ export const requestInputSchema = z
       (value) => (value === 'apply' ? 'candidate' : value),
       z.enum(['review', 'candidate']).default('candidate'),
     ),
-    /** Deprecated with the candidate/apply flow (ADR-022); kept so stored requests still parse. */
+    /**
+     * Deprecated with the candidate/apply flow (ADR-022): the app no longer sends it (an Auto
+     * request on an attached document edits it directly); kept so stored requests still parse
+     * and run as they were made.
+     */
     applyToSource: z.boolean().optional(),
     provider: z.enum(['claude-cli', 'codex-cli', 'extension']),
     accountProfileId: z

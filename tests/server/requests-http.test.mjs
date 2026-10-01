@@ -87,3 +87,53 @@ test('authenticated requests execute once, persist results and protect cross-pro
     await app.close();
   }
 });
+
+test('the request list leaves out the view images sent to the AI; one request keeps them', async () => {
+  const app = await startServer({
+    filename: ':memory:',
+    host: { status: async () => ({ available: true }) },
+    providerFactory: () => ({
+      run: async () => ({ text: JSON.stringify({ message: '검토 결과', operations: [] }) }),
+    }),
+  });
+  try {
+    const login = await fetch(app.origin + '/api/v1/session', {
+      method: 'POST',
+      headers: { Origin: app.origin, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token: new URL(app.launchUrl).hash.slice(1) }),
+    });
+    const headers = {
+      Origin: app.origin,
+      'Content-Type': 'application/json',
+      Cookie: login.headers.get('set-cookie').split(';')[0],
+    };
+    const api = async (path, method = 'GET', data) =>
+      fetch(app.origin + '/api/v1' + path, {
+        method,
+        headers,
+        body: data ? JSON.stringify(data) : undefined,
+      });
+    const p = await (await api('/projects', 'POST', { name: 'images' })).json();
+    const image = { kind: 'annotated', dataUrl: 'data:image/png;base64,iVBORw0KGgo=' };
+    const path = `/projects/${p.id}/requests`;
+    const input = {
+      id: 'with-image',
+      provider: 'codex-cli',
+      permission: 'review',
+      body: '검토',
+      pins: [],
+      sketches: [],
+      files: [],
+      images: [image],
+    };
+    assert.equal((await api(path, 'POST', input)).status, 202);
+    const [listed] = await (await api(path)).json();
+    assert.equal(listed.id, 'with-image');
+    assert.equal('images' in listed.input, false);
+    assert.equal(listed.input.body, '검토');
+    const one = await (await api(path + '/with-image')).json();
+    assert.deepEqual(one.input.images, [image]);
+  } finally {
+    await app.close();
+  }
+});

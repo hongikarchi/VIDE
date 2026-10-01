@@ -246,7 +246,9 @@ try {
   const rhino = posted.at(-1);
   assert.equal(rhino.host, 'rhino');
   assert.equal(rhino.baseRequestId, 'rhino-sync');
-  assert.equal(rhino.applyToSource, true);
+  // Direct in the open document (ADR-022): 자동 mode, not the old candidate → apply flow.
+  assert.equal(rhino.mode, 'auto');
+  assert.equal(rhino.applyToSource, undefined);
   assert.deepEqual(JSON.parse(rhino.files[0].text)[0], {
     row: 'R1',
     action: 'move-ends',
