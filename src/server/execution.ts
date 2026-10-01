@@ -82,7 +82,7 @@ import {
 import { directRefusal } from '../contracts/direct-refusal.ts';
 import { DocumentLinks, isFileLink } from '../core/document-links.ts';
 import { zwcadAnsweredCodes } from './zwcad-sdk-execution.ts';
-import { liveLinksOf, type LiveLink } from './live-links.ts';
+import { followOpenDocuments, liveLinksOf, type LiveLink } from './live-links.ts';
 interface Provider {
   run(
     context: ProviderContext,
@@ -1611,7 +1611,8 @@ export class Execution {
     prefer?: { host: string; instance: string; documentId: number },
   ): Promise<LiveLink[]> {
     if (this.injectedLinks) return this.injectedLinks(projectId);
-    const links = new DocumentLinks(this.workspace.store.db).list(projectId);
+    const documentLinks = new DocumentLinks(this.workspace.store.db);
+    const links = documentLinks.list(projectId);
     const hosts = new Set(links.filter((link) => !isFileLink(link)).map((link) => link.host));
     const [rhino, zwcad] = await Promise.all([
       hosts.has('rhino')
@@ -1622,7 +1623,19 @@ export class Execution {
         : undefined,
       hosts.has('zwcad') ? this.zwcadSdk?.editors.attached.list().catch(() => []) : undefined,
     ]);
-    return liveLinksOf(links, [...(rhino ?? []), ...(zwcad ?? [])], prefer);
+    // The links list's own matching and follow step (live-links.ts): a Save As since its last
+    // poll is seen here too, and one window is one live row.
+    const { rows, matched, ownedOpen } = await followOpenDocuments(
+      documentLinks,
+      projectId,
+      [...(rhino ?? []), ...(zwcad ?? [])],
+      async (link) =>
+        link.host === 'rhino'
+          ? await this.sdk?.editors.has(link.instance)
+          : await this.zwcadSdk?.editors.has(link.instance),
+      prefer,
+    );
+    return liveLinksOf(rows, matched, ownedOpen);
   }
   /** Books a run's outcome by mode: Plan keeps its plan card, a tripped guard waits on its card. */
   private settleModes(request: StoredWork, result: Record<string, unknown>, ledger: boolean) {

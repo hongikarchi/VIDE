@@ -9,8 +9,8 @@ import { Execution } from '../../src/server/execution.ts';
 import { AgentTools } from '../../src/server/agent-tools.ts';
 import { documentHolder } from '../../src/contracts/request-scope.ts';
 import { hostProjectNote } from '../../src/ai/agent-connection.ts';
-import { liveLinksOf, openDocumentOf } from '../../src/server/live-links.ts';
-import { DocumentLinks } from '../../src/core/document-links.ts';
+import { liveLinksOf, matchLinks } from '../../src/server/live-links.ts';
+import { DocumentLinks, matchOpenDocuments } from '../../src/core/document-links.ts';
 import { undoReason } from '../../src/contracts/direct-refusal.ts';
 
 const hash = 'a'.repeat(64);
@@ -1114,20 +1114,24 @@ test('Linked files: a file opened in VIDE is listed but never live; a file open 
     { instance: 'w2', id: 3, host: 'rhino', path: 'c:\\w\\a.3dm' },
     { instance: 'w9', id: 7, host: 'rhino', path: 'C:\\w\\A.3dm' },
   ];
-  const listed = liveLinksOf(links, open, { host: 'rhino', instance: 'w9', documentId: 7 });
+  const target = { host: 'rhino', instance: 'w9', documentId: 7 };
+  const listed = liveLinksOf(links, matchLinks(links, open, target));
   assert.deepEqual(listed, [
     { id: 'l-a', host: 'rhino', name: 'A.3dm', open: { instance: 'w9', documentId: 7 } },
     { id: 'l-f', host: 'rhino', name: 'F.3dm', open: null },
   ]);
-  // Without a target: the window the link was made from, else the first listed.
+  const windowOf = (documents, prefer) =>
+    matchLinks(links, documents, prefer).get('l-a')?.document.instance;
+  // The window the link was made from wins over the target, as in the links list.
+  const own = [...open, { instance: 'w1', id: 7, host: 'rhino', path: 'C:\\w\\A.3dm' }];
+  assert.equal(windowOf(own, target), 'w1');
+  // Without a target: the first listed.
+  assert.equal(windowOf(open), 'w2');
+  // A window that is not plugin-attached (a work copy VIDE opened) is never live.
   assert.equal(
-    openDocumentOf(links[0], [
-      ...open,
-      { instance: 'w1', id: 7, host: 'rhino', path: 'C:\\w\\A.3dm' },
-    ]).instance,
-    'w1',
+    liveLinksOf(links, matchLinks(links, [{ ...open[1], connection: 'owned' }]))[0].open,
+    null,
   );
-  assert.equal(openDocumentOf(links[0], open).instance, 'w2');
 });
 
 test('A file opened in VIDE answers LINK_NOT_LIVE (stored Sync), an unknown id NOT_FOUND', async (t) => {
@@ -1209,6 +1213,87 @@ test('Live links ask only the hosts the project links, at the same time', async 
     ],
   );
   assert.deepEqual(calls, { rhino: 1, zwcad: 0 });
+});
+
+/** An Execution whose Rhino reports `documents` open (attached), over a real store. */
+function linkedRhino(t, documents, owned = new Set()) {
+  const store = new Store(':memory:'),
+    workspace = new Workspace(store),
+    project = store.createProject('links');
+  const execution = new Execution(workspace, {
+    sdk: {
+      editors: {
+        list: async () => ({ documents: documents() }),
+        has: async (instance) => owned.has(instance),
+      },
+    },
+  });
+  t.after(async () => {
+    await execution.close();
+    store.close();
+  });
+  return { store, project, execution, links: new DocumentLinks(store.db) };
+}
+const window1 = (path) => ({
+  instance: 'I1',
+  id: 1,
+  host: 'rhino',
+  name: path.split('/').at(-1),
+  path,
+  connection: 'attached-editor',
+});
+
+test("A turn and the links list agree: Save As onto an older link's path leaves one live row, the window's own (T-095)", async (t) => {
+  let open = [window1('C:/p/a.3dm')];
+  const { project, execution, links } = linkedRhino(t, () => open);
+  // Monday: b.3dm from a window that is closed now. Today: a.3dm from window I1.
+  const older = links.link(project.id, {
+    host: 'rhino',
+    name: 'b.3dm',
+    path: 'C:/p/b.3dm',
+    instance: 'I0',
+    documentId: 3,
+  });
+  const own = links.link(project.id, {
+    host: 'rhino',
+    name: 'a.3dm',
+    path: 'C:/p/a.3dm',
+    instance: 'I1',
+    documentId: 1,
+  });
+  // I1 saves as b.3dm; the list's matcher runs on the next poll (GET …/links).
+  open = [window1('C:/p/b.3dm')];
+  for (const [id, { document, session }] of matchOpenDocuments(links.list(project.id), open))
+    if (session) links.follow(project.id, id, document);
+  const listed = [...matchOpenDocuments(links.list(project.id), open).keys()];
+  assert.deepEqual(listed, [own.id]);
+  const live = (
+    await execution.liveLinks(project.id, { host: 'rhino', instance: 'I1', documentId: 1 })
+  )
+    .filter((link) => link.open)
+    .map((link) => [link.id, link.name, link.open]);
+  assert.deepEqual(live, [[own.id, 'b.3dm', { instance: 'I1', documentId: 1 }]]);
+  assert.notEqual(older.id, own.id);
+});
+
+test('A turn right after Save As (before the next links poll) sees the window under its new name', async (t) => {
+  let open = [window1('C:/p/a.3dm')];
+  const { project, execution, links } = linkedRhino(t, () => open);
+  const own = links.link(project.id, {
+    host: 'rhino',
+    name: 'a.3dm',
+    path: 'C:/p/a.3dm',
+    instance: 'I1',
+    documentId: 1,
+  });
+  open = [window1('C:/p/b.3dm')];
+  const live = await execution.liveLinks(project.id);
+  assert.deepEqual(
+    live.map((link) => [link.id, link.name, link.open]),
+    [[own.id, 'b.3dm', { instance: 'I1', documentId: 1 }]],
+  );
+  // The row followed the window, as the list would on its next poll.
+  assert.equal(links.get(project.id, own.id).path, 'C:/p/b.3dm');
 });
 
 test('A file the host did not undo is named with a Korean reason, never the raw host code', () => {

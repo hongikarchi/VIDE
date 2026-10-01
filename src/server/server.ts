@@ -40,7 +40,8 @@ import { AUTO_MODELS, ModelRouter, isAutoModel } from '../ai/model-router.ts';
 import { startHealthLog } from './health.ts';
 import { Diagnostics } from './diagnostics.ts';
 import { knowledgeFile } from '../jigs/knowledge.ts';
-import { DocumentLinks, isFileLink, matchOpenDocuments } from '../core/document-links.ts';
+import { DocumentLinks, isFileLink } from '../core/document-links.ts';
+import { followOpenDocuments } from './live-links.ts';
 import { linkRequests, removeLink } from './link-removal.ts';
 import { importedName } from '../contracts/link-requests.ts';
 import { z } from 'zod';
@@ -818,26 +819,23 @@ export async function startServer({
               true,
             );
         // Work copies VIDE opened itself answer only whether their window is still open.
-        const ownedOpen = new Set<string>();
-        for (const link of links.list(linkList[1]))
-          if (
-            !isFileLink(link) &&
-            !open.some((item) => item.instance === link.instance) &&
-            (link.host === 'rhino'
-              ? await sdk?.editors.has(link.instance).catch(() => false)
-              : await zwcadSdk?.editors.has(link.instance).catch(() => false))
-          )
-            ownedOpen.add(link.id);
         // The window's own row first; after Save As (or a first save) that row follows the window
         // and takes the new name and path. A row reconnected by path (a reopened file, a ZWCAD
         // Sync without Link) takes the window's session, so it follows a later Save As too
-        // (SPEC-01.11 1, T-095). A work copy VIDE opened keeps its own window.
-        const matched = matchOpenDocuments(links.list(linkList[1]), open);
-        for (const [id, { document, session }] of matched)
-          if (session || !ownedOpen.has(id)) links.follow(linkList[1], id, document);
+        // (SPEC-01.11 1, T-095). A work copy VIDE opened keeps its own window. A host turn's live
+        // links run the same step (live-links.ts).
+        const { rows, matched, ownedOpen } = await followOpenDocuments(
+          links,
+          linkList[1],
+          open,
+          async (link) =>
+            link.host === 'rhino'
+              ? await sdk?.editors.has(link.instance)
+              : await zwcadSdk?.editors.has(link.instance),
+        );
         send(
           200,
-          links.list(linkList[1]).map((link) => {
+          rows.map((link) => {
             const doc = matched.get(link.id)?.document;
             const file = isFileLink(link);
             const syncs = linkRequests(link, requests);

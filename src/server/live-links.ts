@@ -1,15 +1,20 @@
 // The project's linked files as they are open right now (ADR-027, SPEC-01.11 5): a link is live
 // when a connected host window holds that document. The links list (GET …/links) and a host turn
-// that reads or edits other linked files match links to open documents the same way.
+// that reads or edits other linked files both run `followOpenDocuments`: the same matcher
+// (`matchOpenDocuments`, session first, one row per open document, T-095) and the same follow
+// step, so a Save As made since the list's last poll is seen by the turn too, and one window is
+// never two live rows.
 
-import { isFileLink, type DocumentLink } from '../core/document-links.ts';
+import {
+  isFileLink,
+  matchOpenDocuments,
+  type DocumentLink,
+  type DocumentLinks,
+  type OpenDocument as LinkedDocument,
+} from '../core/document-links.ts';
 
 /** One document a host connection reports open (Rhino `editors.list`, ZWCAD `attached.list`). */
-export interface OpenDocument {
-  instance?: string;
-  id: number;
-  host?: string;
-  path?: string;
+export interface OpenDocument extends LinkedDocument {
   connection?: string;
 }
 /** One open document: its host window and document id. */
@@ -17,29 +22,56 @@ export interface OpenTarget {
   instance: string;
   documentId: number;
 }
+/** Which open document each row shows (row id → document; `session`: matched by its window). */
+export type LinkMatches<D extends OpenDocument = OpenDocument> = Map<
+  string,
+  { document: D; session: boolean }
+>;
 /**
- * The open document a link names: the same path, or (unsaved) the same window and document. The
- * same file open in two windows: `prefer` (the turn's target) first, then the window and document
- * the link was made from, then the first one listed.
+ * The links list's matcher. `prefer` (a host turn's target) only breaks a tie the matcher leaves:
+ * a row whose own window is gone, reconnected by path while that file is open in two windows,
+ * goes to the target window (otherwise the first one listed).
  */
-export function openDocumentOf<T extends OpenDocument>(
-  link: Pick<DocumentLink, 'host' | 'path' | 'instance' | 'documentId'>,
-  open: readonly T[],
-  prefer?: OpenTarget,
-): T | undefined {
-  const candidates = open.filter(
-    (item) =>
-      (item.host ?? 'rhino') === link.host &&
-      (link.path && item.path
-        ? item.path.toLowerCase() === link.path.toLowerCase()
-        : item.instance === link.instance && item.id === link.documentId),
-  );
-  const at = (target: OpenTarget | undefined) =>
-    target &&
-    candidates.find((item) => item.instance === target.instance && item.id === target.documentId);
-  return (
-    at(prefer) ?? at({ instance: link.instance, documentId: link.documentId }) ?? candidates[0]
-  );
+export function matchLinks<D extends OpenDocument>(
+  links: DocumentLink[],
+  open: readonly D[],
+  prefer?: { host: string } & OpenTarget,
+): LinkMatches<D> {
+  const preferred = (item: D) =>
+    !!prefer &&
+    (item.host ?? 'rhino') === prefer.host &&
+    item.instance === prefer.instance &&
+    item.id === prefer.documentId;
+  return matchOpenDocuments(links, [
+    ...open.filter(preferred),
+    ...open.filter((item) => !preferred(item)),
+  ]);
+}
+/**
+ * Matches the open documents to the project's link rows and lets each matched row follow its
+ * window (DocumentLinks.follow: Save As, first save, a row reconnected by path takes the window's
+ * session). A work copy VIDE opened itself (`ownedOpen`: its window is not in `open` but still
+ * open) keeps its own window. Returns the rows as they are after the follow step.
+ */
+export async function followOpenDocuments<D extends OpenDocument>(
+  links: DocumentLinks,
+  projectId: string,
+  open: readonly D[],
+  isOwnedOpen: (link: DocumentLink) => Promise<boolean | undefined>,
+  prefer?: { host: string } & OpenTarget,
+) {
+  const ownedOpen = new Set<string>();
+  for (const link of links.list(projectId))
+    if (
+      !isFileLink(link) &&
+      !open.some((item) => item.instance === link.instance) &&
+      (await isOwnedOpen(link).catch(() => false))
+    )
+      ownedOpen.add(link.id);
+  const matched = matchLinks(links.list(projectId), open, prefer);
+  for (const [id, { document, session }] of matched)
+    if (session || !ownedOpen.has(id)) links.follow(projectId, id, document);
+  return { rows: links.list(projectId), matched, ownedOpen };
 }
 /** A linked file and, when a connected (plugin-attached) window holds it now, where it is. */
 export interface LiveLink {
@@ -49,27 +81,25 @@ export interface LiveLink {
   open: { instance: string; documentId: number } | null;
 }
 /**
- * The project's links with their attached open document, if any. Files opened in VIDE (`file:`
- * entries) are listed but never live, like work copies VIDE opened itself: only a document a
- * user's host window holds through the connection plugin can be read and edited in place.
- * `prefer`: the turn's target, for a file open in two windows.
+ * The project's links with the open document the links list shows for each, when that is a
+ * user's window attached through the connection plugin. Files opened in VIDE (`file:` entries)
+ * and work copies VIDE opened itself are listed but never live: only a document a user's host
+ * window holds through the plugin can be read and edited in place.
  */
 export function liveLinksOf(
   links: readonly DocumentLink[],
-  open: readonly OpenDocument[],
-  prefer?: { host: string } & OpenTarget,
+  matched: LinkMatches,
+  ownedOpen: ReadonlySet<string> = new Set(),
 ): LiveLink[] {
-  const attached = open.filter(
-    (item) => (item.connection ?? 'attached-editor') === 'attached-editor',
-  );
   return links.map((link) => {
-    if (isFileLink(link)) return { id: link.id, host: link.host, name: link.name, open: null };
-    const doc = openDocumentOf(link, attached, prefer?.host === link.host ? prefer : undefined);
+    const doc =
+      isFileLink(link) || ownedOpen.has(link.id) ? undefined : matched.get(link.id)?.document;
+    const attached = (doc?.connection ?? 'attached-editor') === 'attached-editor';
     return {
       id: link.id,
       host: link.host,
       name: link.name,
-      open: doc?.instance ? { instance: doc.instance, documentId: doc.id } : null,
+      open: doc?.instance && attached ? { instance: doc.instance, documentId: doc.id } : null,
     };
   });
 }
