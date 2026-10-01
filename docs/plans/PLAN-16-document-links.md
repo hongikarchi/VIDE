@@ -2,7 +2,7 @@
 id: PLAN-16
 title: 프로젝트 연결 파일(Link)과 여러 파일의 한 공간
 status: review
-version: 0.6
+version: 0.7
 updated: 2026-10-01
 owner: agent:claude
 related: [PLAN, SPEC-01, DESIGN, ARCH-01, FR-01, FR-02, FR-03, FR-16]
@@ -89,3 +89,20 @@ related: [PLAN, SPEC-01, DESIGN, ARCH-01, FR-01, FR-02, FR-03, FR-16]
 - **패널 첨부가 최대 1.2초 늦음:** "Rhino 선택 N개 첨부"는 이제 누를 때 Rhino 선택을 다시 읽어 고정하고, 고정 직후 칩을 비운 뒤 바로 다시 확인한다.
 - 남은 것(별도 결정): 입력창에 글을 쓰면 그 파일의 자동 Sync가 보류되어(SPEC-01.11 6), 그 사이 새로 만든 객체는 ⟳ 전까지 고정할 수 없다. 패널에는 입력창 고정 칩과 Rhino 첨부 칩이 함께 보인다.
 - 검증: `browser-rhino-panel.mjs`에 "토큰 고정 뒤 Rhino 목록 변경" 단계를 더했다(이전 코드에서 실패, 수정 뒤 통과). `browser-host-panel`, `browser-pin-tokens`, `browser-links`, `browser-live-sync` 통과. 재현 스크립트(두 파일·패널·Sync 뒤)에서 토큰 유지, 다른 파일 클릭 뒤 선택 유지, 다른 Rhino 창 선택 반영을 확인했다.
+
+## 2026-10-01 다른 이름으로 저장·숨긴 뒤 남는 객체 (사용자 지적)
+
+사용자 지적: (1) "다른 이름으로 저장했을 때 VIDE에 바로 반영이 안 되고 꼬인다. link된 파일이 바로 변경이 안 된다." (2) "연결 파일을 다 숨겼는데도 객체가 남는 경우가 있다." 결정(2026-10-01, 추천대로): 연결은 창을 따라가고, 중복 항목은 하나만 연결 상태로 두며 기록은 합치지 않고, 어느 연결에도 속하지 않는 결과는 닫을 수 있는 '작업 결과 · <이름>' 행으로만 그린다. 동작은 [SPEC-01.11](../specs/SPEC-01-project-input-sync.md)의 1·4, 대조 규칙은 [ARCH-01](../architecture/ARCH-01-system.md) '프로젝트 연결 파일'.
+
+<a id="t-095"></a>
+
+### T-095 연결이 창을 따라감
+
+- **원인:** 연결 행의 식별이 경로 우선이었다. 목록 경로가 열린 문서와 행을 경로로 먼저 맞춰서, 다른 이름으로 저장하면 같은 창(같은 `instance`·`documentId`)인데도 닫힘이 되고 자동 Sync·Live Sync가 멈췄다. `DocumentLinks.link()`는 경로로 행을 찾고 경로를 고치지 않아, 다시 Link하면 두 번째 행이 생겼다. 저장 안 된 문서를 처음 저장한 뒤 다시 Link하면 같은 창에 연결된 행이 둘이 되어 두 번 그려졌다. ZWCAD는 저장 전 도면도 경로 자리에 `Drawing1.dwg`를 보내 첫 저장에서도 같은 문제가 났다.
+- **변경:**
+  - `matchOpenDocuments`(`src/core/document-links.ts`): 같은 창의 행을 먼저(여럿이면 지금 경로와 같은 행, 다음은 최근 행), 창이 닫힌 행만 경로로 잇는다. 열린 문서 하나에 행 하나. 폴더 없는 경로는 경로 없음으로 본다.
+  - `GET …/links`: 세션으로 이은 행의 이름·경로가 다르면 `DocumentLinks.follow`로 그 행에 쓴다(파일 항목 제외). 마지막 Sync는 빼기와 같은 `linkRequests`로 찾는다.
+  - `DocumentLinks.link()`(플러그인 Link): 같은 순서로 기존 행을 찾고 경로도 갱신한다.
+  - Rhino 플러그인: 저장 중이나 저장 직후(2초)의 `DocumentPropertiesChanged`는 객체 전체를 바뀐 것으로 표시하지 않는다(다른 이름으로 저장 뒤 불필요한 전체 Live Sync 방지).
+- **검증:** `tests/server/link-follow.test.mjs` — 다른 이름으로 저장 뒤 같은 행이 연결 상태로 새 이름·경로·이전 Sync를 유지, 다시 Link해도 행 하나, 저장 안 된 문서의 첫 저장, 기존 중복 행 중 하나만 연결 상태(다음 저장도 그 행만 따라감), 닫힌 행의 경로 재연결과 다른 창의 행을 빼앗지 않음, 파일 항목 불변, ZWCAD의 첫 저장·다른 이름 저장. 기존 `file-links`·`links-http`·`live-sync`·`offline-view`·`sync-coalesce` 통과. Rhino 플러그인은 빌드만 확인했다.
+- **남은 것:** 실제 Rhino 8에서 다른 이름으로 저장 때 `DocumentPropertiesChanged`가 오는지와 패널 다시 읽기(패널 주소에 문서 이름이 들어 있음)는 설치본 반영 뒤 합성 문서로 확인한다. ZWCAD 실제 창의 다른 이름 저장도 같다.

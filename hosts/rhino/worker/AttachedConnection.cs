@@ -28,8 +28,8 @@ internal sealed class AttachedConnection : IDisposable
     // Last revision at which each object changed (UI thread only); lets a reader fetch only what changed.
     private readonly Dictionary<Guid, int> objectRevisions = new();
     private readonly DisplayScene display = new();
-    private bool live, dirty, disposed;
-    private DateTime changedAt;
+    private bool live, dirty, disposed, saving;
+    private DateTime changedAt, savedAt;
     internal uint DocumentId => document.RuntimeSerialNumber;
     internal string Instance { get; }
     internal int Port { get; }
@@ -90,6 +90,8 @@ internal sealed class AttachedConnection : IDisposable
         RhinoDoc.GroupTableEvent += ChangedGroup;
         RhinoDoc.DocumentPropertiesChanged += ChangedProperties;
         RhinoDoc.CloseDocument += Closed;
+        RhinoDoc.BeginSaveDocument += BeginSave;
+        RhinoDoc.EndSaveDocument += EndSave;
         RhinoDoc.SelectObjects += SelectionChanged;
         RhinoDoc.DeselectObjects += SelectionChanged;
         RhinoDoc.DeselectAllObjects += SelectionCleared;
@@ -216,9 +218,14 @@ internal sealed class AttachedConnection : IDisposable
     private void ChangedProperties(object? sender, DocumentEventArgs e)
     {
         if (e.Document != document) return;
+        // Saving (Save As, a first save) renames the document but changes nothing drawn; VIDE's link
+        // follows the new name from attachedStatus (T-095), so no full Live Sync for it.
+        if (saving || (DateTime.UtcNow - savedAt).TotalSeconds < 2) return;
         display.Clear();
         MarkObjects(e.Document, AllObjects(_ => true).Select(obj => obj.Id).ToList());
     }
+    private void BeginSave(object? sender, DocumentSaveEventArgs e) { if (e.Document == document) saving = true; }
+    private void EndSave(object? sender, DocumentSaveEventArgs e) { if (e.Document == document) { saving = false; savedAt = DateTime.UtcNow; } }
     private void Closed(object? sender, DocumentEventArgs e) { if (e.Document == document) { Dispose(); if (Current == this) Current = null; } }
     private void Idle(object? sender, EventArgs e)
     {
@@ -239,6 +246,7 @@ internal sealed class AttachedConnection : IDisposable
         RhinoDoc.GroupTableEvent -= ChangedGroup; RhinoDoc.DocumentPropertiesChanged -= ChangedProperties;
         display.Clear();
         RhinoDoc.CloseDocument -= Closed; RhinoApp.Idle -= Idle;
+        RhinoDoc.BeginSaveDocument -= BeginSave; RhinoDoc.EndSaveDocument -= EndSave;
         RhinoDoc.SelectObjects -= SelectionChanged; RhinoDoc.DeselectObjects -= SelectionChanged; RhinoDoc.DeselectAllObjects -= SelectionCleared;
         try { File.Delete(record); } catch (IOException) { /* Dead socket and disposed dispatch revoke access even if cleanup fails. */ }
     }

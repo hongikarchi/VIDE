@@ -40,9 +40,9 @@ import { AUTO_MODELS, ModelRouter, isAutoModel } from '../ai/model-router.ts';
 import { startHealthLog } from './health.ts';
 import { Diagnostics } from './diagnostics.ts';
 import { knowledgeFile } from '../jigs/knowledge.ts';
-import { DocumentLinks, isFileLink } from '../core/document-links.ts';
-import { openDocumentOf } from './live-links.ts';
-import { removeLink } from './link-removal.ts';
+import { DocumentLinks, isFileLink, matchOpenDocuments } from '../core/document-links.ts';
+import { linkRequests, removeLink } from './link-removal.ts';
+import { importedName } from '../contracts/link-requests.ts';
 import { z } from 'zod';
 import type { IncomingMessage } from 'node:http';
 import type { StoredWork } from '../contracts/stored-work.ts';
@@ -112,9 +112,6 @@ import { RemovedProjects, removeProject } from './project-removal.ts';
 import { SyncCoalescer } from './sync-coalesce.ts';
 import { ReadOnlyWatch } from './read-only-watch.ts';
 import { sweepCopies, unsettledCopies, within } from './capture-cleanup.ts';
-
-/** The file name of an import request ("plan.dwg 불러오기"). */
-const importedName = (body: string) => body.replace(/ 불러오기$/, '');
 
 /** The local browser session survives restarts, so an open page keeps working after one. */
 /** The desktop shell's session key, kept in the data folder; an in-memory store keeps none. */
@@ -805,20 +802,17 @@ export async function startServer({
               : await zwcadSdk?.editors.has(link.instance).catch(() => false))
           )
             ownedOpen.add(link.id);
+        // The window's own row first; after Save As (or a first save) that row follows the window
+        // and takes the new name and path (SPEC-01.11 1, T-095).
+        const matched = matchOpenDocuments(links.list(linkList[1]), open);
+        for (const [id, { document, session }] of matched)
+          if (session) links.follow(linkList[1], id, document);
         send(
           200,
           links.list(linkList[1]).map((link) => {
-            const doc = openDocumentOf(link, open);
+            const doc = matched.get(link.id)?.document;
             const file = isFileLink(link);
-            const syncs = requests.filter(
-              (entry) =>
-                entry.input.linkId === link.id ||
-                (file &&
-                  !entry.input.linkId &&
-                  entry.input.source === 'file' &&
-                  entry.input.host === link.host &&
-                  importedName(entry.input.body).toLowerCase() === link.name.toLowerCase()),
-            );
+            const syncs = linkRequests(link, requests);
             const last = syncs.filter((entry) => entry.state === 'succeeded').at(-1);
             const latest = syncs.at(-1);
             return {

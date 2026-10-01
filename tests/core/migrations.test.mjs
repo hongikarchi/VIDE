@@ -126,13 +126,13 @@ test('schema 4 keeps linked files per project, one link per file, hidden and rem
   const model = {
     host: 'rhino',
     name: 'm.3dm',
-    path: 'C:\p\m.3dm',
+    path: 'C:\\p\\m.3dm',
     instance: '1:2:x',
     documentId: 1,
   };
   const first = links.link(a, model);
   // Linking the same file again (another Rhino session) updates the link instead of adding one.
-  const again = links.link(a, { ...model, path: 'c:\P\m.3dm', instance: '9:9:y', documentId: 3 });
+  const again = links.link(a, { ...model, path: 'c:\\P\\m.3dm', instance: '9:9:y', documentId: 3 });
   assert.equal(again.id, first.id);
   assert.equal(again.instance, '9:9:y');
   const drawing = links.link(a, { host: 'zwcad', name: 'd.dwg', instance: '5:6:z', documentId: 1 });

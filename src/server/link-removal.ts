@@ -8,21 +8,12 @@ import { isFileLink } from '../core/document-links.ts';
 import type { DocumentLink, DocumentLinks } from '../core/document-links.ts';
 import type { Workspace } from '../core/workspace.ts';
 import type { StoredWork } from '../contracts/stored-work.ts';
-
-export const importedName = (body: string) => body.replace(/ 불러오기$/, '');
+import { belongsToLink } from '../contracts/link-requests.ts';
 
 /** The requests of a linked file: its Syncs, and for a file item older imports of the same name. */
 export function linkRequests(link: DocumentLink, requests: StoredWork[]) {
-  const file = isFileLink(link);
-  return requests.filter(
-    (entry) =>
-      entry.input.linkId === link.id ||
-      (file &&
-        !entry.input.linkId &&
-        entry.input.source === 'file' &&
-        entry.input.host === link.host &&
-        importedName(entry.input.body).toLowerCase() === link.name.toLowerCase()),
-  );
+  const owner = { ...link, file: isFileLink(link) };
+  return requests.filter((entry) => belongsToLink(owner, entry));
 }
 
 const inside = (root: string, path: string) => {
