@@ -66,6 +66,9 @@ const executionSchema = z
       .nullish(),
     guarded: guardSchema.nullish(),
     undone: z.boolean().nullish(),
+    // The linked file it ran in (ADR-027): a multi-file request groups its rows by file.
+    file: z.object({ linkId: z.string().optional(), name: z.string() }).passthrough().nullish(),
+    target: z.object({ instance: z.string(), documentId: z.number() }).passthrough().nullish(),
   })
   .passthrough()
   .transform((row) => ({
@@ -111,8 +114,70 @@ export function directPlan(result: unknown) {
  */
 export function directRefused(result: unknown) {
   const refused = (result as { refused?: unknown } | null | undefined)?.refused;
-  return z.object({ code: z.string(), reason: z.string() }).safeParse(refused).data;
+  return z
+    .object({ code: z.string(), reason: z.string(), file: z.string().optional() })
+    .safeParse(refused).data;
 }
+// A multi-file request's [되돌리기] and automatic rollback (ADR-027): what happened per file.
+const fileUndoSchema = z
+  .object({
+    name: z.string(),
+    host: z.string().nullish(),
+    target: z.object({ instance: z.string(), documentId: z.number() }).passthrough().nullish(),
+    state: z.string(),
+    undone: z.number().nullish(),
+    kept: z.number().nullish(),
+    reason: z.string().nullish(),
+  })
+  .passthrough();
+const requestUndoSchema = z
+  .object({
+    at: z.string().nullish(),
+    reason: z.string().nullish(),
+    files: z.array(fileUndoSchema),
+  })
+  .passthrough();
+type FileUndo = z.infer<typeof fileUndoSchema>;
+/** The result's `undo` (the user's [되돌리기]) or `rollback` (automatic), when present. */
+export function requestUndo(result: unknown, key: 'undo' | 'rollback') {
+  const value = (result as Record<string, unknown> | null | undefined)?.[key];
+  return value ? requestUndoSchema.safeParse(value).data : undefined;
+}
+const fileKey = (execution: {
+  host?: string | null;
+  target?: { instance: string; documentId: number } | null;
+  file?: { name: string } | null;
+}) =>
+  execution.target
+    ? JSON.stringify([
+        execution.host ?? 'rhino',
+        execution.target.instance,
+        execution.target.documentId,
+      ])
+    : (execution.file?.name ?? '');
+/** Executions by file, in the order the request first wrote each file. */
+export function executionFiles(executions: DirectExecution[]) {
+  const files = new Map<
+    string,
+    { key: string; name: string; host: string; rows: DirectExecution[] }
+  >();
+  for (const execution of executions) {
+    const key = fileKey(execution);
+    const file = files.get(key) ?? {
+      key,
+      name: execution.file?.name ?? `${hostName(execution.host ?? undefined)} 문서`,
+      host: execution.host ?? 'rhino',
+      rows: [],
+    };
+    file.rows.push(execution);
+    files.set(key, file);
+  }
+  return [...files.values()];
+}
+/** A request that wrote two or more files is shown and undone per request (ADR-027). */
+export const isMultiFile = (result: unknown, executions: DirectExecution[]) =>
+  (result as { multiFile?: unknown } | null | undefined)?.multiFile === true ||
+  executionFiles(executions).length > 1;
 /** A guard the whole request waits on (`result.guarded`, state 'needs-confirmation'). */
 export function requestGuard(result: unknown) {
   const guarded = (result as { guarded?: unknown } | null | undefined)?.guarded;
@@ -207,19 +272,24 @@ function GuardCard({
     </section>
   );
 }
-/** Per-execution change rows with [되돌리기], and the guard card with [진행]. */
+/** Per-execution change rows with [되돌리기] (one file), and the guard card with [진행]. */
 function DirectChanges({
   message,
   executions,
   actions,
+  undoEach = true,
+  label = '실행별 변경',
 }: {
   message: Message;
   executions: DirectExecution[];
   actions: ViewActions;
+  /** A multi-file request has one [되돌리기] for the request instead (ADR-027). */
+  undoEach?: boolean;
+  label?: string;
 }) {
   if (!executions.length) return null;
   return (
-    <ol className="direct-executions" aria-label="실행별 변경">
+    <ol className="direct-executions" aria-label={label}>
       {executions.map((execution, index) => {
         const count = changeCount(execution);
         const state = execution.state;
@@ -232,7 +302,7 @@ function DirectChanges({
                 추가 {count.added} · 변경 {count.changed} · 삭제 {count.removed}
               </span>
               <span className="direct-state">{executionStates[state] ?? state}</span>
-              {['applied', 'confirmed'].includes(state) && execution.undoId !== null ? (
+              {undoEach && ['applied', 'confirmed'].includes(state) && execution.undoId !== null ? (
                 <Action
                   latch
                   error={actions.error}
@@ -263,6 +333,124 @@ function DirectChanges({
         );
       })}
     </ol>
+  );
+}
+const undoReasons: Record<string, string> = {
+  'not-latest': '그 뒤에 문서가 더 바뀜',
+  HOST_RESULT_UNKNOWN: '결과 확인 필요',
+  EXECUTOR_NOT_READY: '연결 없음',
+  STALE_CONNECTION: '문서가 닫히거나 바뀜',
+  TARGET_MISMATCH: '문서가 닫히거나 바뀜',
+  HOST_UNAVAILABLE: '호스트에 연결하지 못함',
+};
+const fileUndoState = (file: FileUndo) =>
+  file.state === 'undone'
+    ? '되돌림'
+    : file.state === 'unknown'
+      ? '확인 필요'
+      : `되돌리지 못함 · ${undoReasons[file.reason ?? ''] ?? file.reason ?? '거절'}`;
+/**
+ * A multi-file request (ADR-027): rows grouped by file with each file's totals, one [되돌리기]
+ * for the whole request, and what an automatic rollback or the last [되돌리기] did per file.
+ */
+function FileGroups({
+  message,
+  executions,
+  actions,
+}: {
+  message: Message;
+  executions: DirectExecution[];
+  actions: ViewActions;
+}) {
+  const result = message.request?.result;
+  const rollback = requestUndo(result, 'rollback');
+  const undo = requestUndo(result, 'undo');
+  const files = executionFiles(executions);
+  const undoable = executions.filter(
+    (execution) => execution.state === 'applied' && execution.undoId,
+  );
+  const undoFiles = new Set(undoable.map(fileKey));
+  const outcomeOf = (key: string) =>
+    [...(undo?.files ?? []), ...(rollback?.files ?? [])].find(
+      (file) =>
+        (file.target
+          ? JSON.stringify([file.host ?? 'rhino', file.target.instance, file.target.documentId])
+          : file.name) === key,
+    );
+  const left = (outcome?: { files: FileUndo[] }) =>
+    (outcome?.files ?? []).filter((file) => file.state !== 'undone');
+  return (
+    <section className="direct-files" aria-label="파일별 변경">
+      {rollback ? (
+        <p className="direct-rollback" data-state={left(rollback).length ? 'partial' : 'done'}>
+          {left(rollback).length
+            ? `자동으로 되돌리지 못한 파일: ${left(rollback)
+                .map((file) => `${file.name}(${fileUndoState(file)})`)
+                .join(', ')} · 호스트에서 Ctrl+Z(ZWCAD는 U)로 되돌리거나 상태를 확인하세요.`
+            : `${rollback.reason === 'cancelled' ? '중단해서' : '요청이 실패해서'} 모든 파일의 변경을 자동으로 되돌렸습니다.`}
+        </p>
+      ) : null}
+      {undo && left(undo).length ? (
+        <p className="direct-rollback" data-state="partial">
+          되돌리지 못한 파일:{' '}
+          {left(undo)
+            .map((file) => `${file.name}(${fileUndoState(file)})`)
+            .join(', ')}{' '}
+          · 호스트에서 Ctrl+Z(ZWCAD는 U)로 순서대로 되돌리세요.
+        </p>
+      ) : null}
+      {undoable.length ? (
+        <div className="direct-request-undo">
+          <span>
+            파일 {undoFiles.size}개의 실행 {undoable.length}개를 되돌립니다
+          </span>
+          <Action
+            latch
+            error={actions.error}
+            run={() => actions.direct(message.id, 'undo', { all: true })}
+          >
+            되돌리기
+          </Action>
+        </div>
+      ) : null}
+      {files.map((file) => {
+        const total = file.rows.reduce(
+          (sum, row) => {
+            const count = changeCount(row);
+            return {
+              added: sum.added + count.added,
+              changed: sum.changed + count.changed,
+              removed: sum.removed + count.removed,
+            };
+          },
+          { added: 0, changed: 0, removed: 0 },
+        );
+        const outcome = outcomeOf(file.key);
+        return (
+          <section key={file.key} className="direct-file" aria-label={file.name}>
+            <div className="direct-file-head">
+              <strong>{file.name}</strong>
+              <span className="direct-count">
+                {hostName(file.host)} · 추가 {total.added} · 변경 {total.changed} · 삭제{' '}
+                {total.removed}
+              </span>
+              {outcome ? (
+                <span className="direct-state" data-state={outcome.state}>
+                  {fileUndoState(outcome)}
+                </span>
+              ) : null}
+            </div>
+            <DirectChanges
+              message={message}
+              executions={file.rows}
+              actions={actions}
+              undoEach={false}
+              label={`${file.name} 실행별 변경`}
+            />
+          </section>
+        );
+      })}
+    </section>
   );
 }
 /** The 계획 turn's plan: steps, questions and [진행] (continues the conversation in 자동). */
@@ -709,8 +897,17 @@ function WorkView({
           {plan ? (
             <PlanCard message={message} plan={plan} continued={continued} actions={actions} />
           ) : null}
-          {refused ? <p className="direct-refused">실행하지 않음 · {refused.reason}</p> : null}
-          <DirectChanges message={message} executions={executions} actions={actions} />
+          {refused ? (
+            <p className="direct-refused">
+              실행하지 않음 · {refused.file ? `${refused.file} · ` : ''}
+              {refused.reason}
+            </p>
+          ) : null}
+          {isMultiFile(result, executions) ? (
+            <FileGroups message={message} executions={executions} actions={actions} />
+          ) : (
+            <DirectChanges message={message} executions={executions} actions={actions} />
+          )}
           {request.state === 'needs-confirmation' &&
           guard &&
           !executions.some((execution) => execution.state === 'guarded') ? (

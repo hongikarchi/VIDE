@@ -351,12 +351,17 @@ related: [PLAN, PLAN-22, PLAN-23, PLAN-25, PLAN-26, PLAN-02, PLAN-05, PLAN-08, P
 - **선행 조건과 선택:** 잠금은 기다리지 않고 거절(ADR-027 결정 5). 한 파일 요청은 지금 동작 그대로(ADR-027 「선택지」).
 - **검증:** `tests/server/multi-file.test.mjs` — 두 문서를 고친 뒤 [되돌리기] 한 번이 둘 다 되돌림, 한 문서가 `not-latest`면 그 파일만 남고 이유가 보임, 둘째 문서에서 공급자가 실패하면 첫 문서가 자동으로 되돌려짐, 자동 되돌림 거절은 `rollback`에 파일 이름, 되돌리기 답을 잃으면 `unknown`, 다른 요청이 쓰는 문서는 `DOCUMENT_LOCKED`이고 그 요청의 접수도 잠긴 문서 뒤에 섬, 실행 전 거절은 적용분이 아님, 보호 걸린 다른 문서의 [진행]. `tests/core/request-scope.test.mjs`(있으면) 또는 같은 시험에 `documentHolder`.
 - **완료:** 위 시험과 `npm test` 통과. 실제 Rhino 두 창 확인은 설치본 묶음 때.
+- **상태(2026-10-01):** 구현·단위 검증 완료(설치 전). `execute`의 `linkId`로 열린 연결 문서(Rhino, ZWCAD 연결 도면)에 바로 실행하고 행마다 `file`을 남긴다. 다른 문서는 첫 실행 때 `documentHolder`로 검사해 결과의 `documents[]`에 잠그고, 다른 요청이 쓰는 문서는 `DOCUMENT_LOCKED`(기다리지 않음, 그 파일에 대해 최종). 두 파일 이상에 실행을 시도한 요청(`multiFile`)은 실패·중단 때 `undoExecutions`로 모든 파일을 마지막 것부터 되돌리고 `rollback`에 파일별 결과를 남기며, 되돌리기 거절은 실패로 이름과 이유를, 답을 잃은 되돌리기·실행은 `unknown`으로 둔다. 추가 지시로 끊긴 턴은 되돌리지 않는다. `POST …/undo {all: true}`(`Execution.undoRequest`). 한 파일 요청은 그대로다. ZWCAD 연결 도면의 실패 분류는 `runAttached`와 같게 맞췄다(알려진 답·실행 전 거절 밖은 `HOST_RESULT_UNKNOWN`).
+  - 증거: `tests/server/multi-file.test.mjs`(쓰기·되돌리기 9건), `tests/server/direct-mode-e2e.test.mjs`(HTTP `{all: true}`), `npm test` 764 통과, `browser-concurrent-work.mjs`·`browser-links.mjs` 통과
+  - 남음: 실제 Rhino 두 창·실제 ZWCAD로 함께 고치기·[되돌리기]·자동 되돌림 확인, ZWCAD 도면이 대상인 턴의 여러 파일(이번 범위 밖)
 
 ### T-091 · 화면: 파일별 결과와 요청의 [되돌리기] {#t-091}
 
 - **변경 범위:** `src/ui/work-view.tsx`(실행을 파일별로 묶음, 요청의 [되돌리기] 하나, `rollback`·`undo` 결과 줄), `app.ts`(`undo {all: true}` 답의 거절 파일 표시), 스타일.
 - **검증:** `tests/integration/browser-direct-mode.mjs`에 두 파일 요청: 파일 머리 두 개, 요청 [되돌리기]가 `{all: true}`로 가고 행이 '되돌림', 자동 되돌림 줄. 한 파일 요청은 지금 화면 그대로.
 - **완료:** 브라우저 시험 통과.
+- **상태(2026-10-01):** 완료(설치 전). 여러 파일 요청은 파일별 묶음(이름·호스트·합계·되돌리기 결과)과 요청의 [되돌리기] 하나('파일 N개의 실행 M개를 되돌립니다'), 일부 되돌리지 못하면 파일 이름과 이유, 자동 되돌림 줄을 보인다. 실행 전 거절 줄에 다른 파일의 이름을 붙인다. 한 파일 요청의 화면은 그대로다.
+  - 증거: `tests/integration/browser-direct-mode.mjs` 통과(기존 단일 파일 흐름 포함)
 
 ## 순서와 의존
 

@@ -2,6 +2,8 @@
 // (no host, no CLI): the 계획 / 자동 toggle, per-execution change rows with [되돌리기]
 // (…/undo {executionId}, including the host's 'not-latest' refusal), the guard card whose [진행]
 // posts …/confirm, and the plan card whose [진행] posts …/continue and opens the continued work.
+// A multi-file request (ADR-027) groups its rows by file with one [되돌리기] (…/undo {all: true})
+// and shows a partial undo and an automatic rollback per file.
 import assert from 'node:assert/strict';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -60,6 +62,98 @@ try {
           mode: 'auto',
           executions: [],
           guarded: { kind: 'bulk-delete', detail: '객체 120개 삭제' },
+        },
+      };
+    // Two linked files in one request (ADR-027): rows carry their file; one undo for the request.
+    const file = (name, instance) => ({
+      host: 'rhino',
+      target: { instance, documentId: 7 },
+      file: { linkId: 'link-' + name, name },
+    });
+    if (input.body.startsWith('두 파일 맞추기'))
+      return {
+        state: 'succeeded',
+        result: {
+          mode: 'auto',
+          executionMode: 'direct',
+          appliedDirectly: true,
+          multiFile: true,
+          text: '두 파일을 맞췄습니다.',
+          executions: [
+            {
+              executionId: 'm-1',
+              undoId: 'a-1',
+              state: 'applied',
+              label: '구조 기둥 옮기기',
+              ...file('구조.3dm', 'win-a'),
+              changes: { added: [], changed: [added('c-1'), added('c-2')], removed: [] },
+            },
+            {
+              executionId: 'm-2',
+              undoId: 'b-1',
+              state: 'applied',
+              label: '평면 기둥 맞추기',
+              ...file('평면.3dm', 'win-b'),
+              changes: { added: [added('p-1', '평면')], changed: [], removed: [] },
+            },
+            {
+              executionId: 'm-3',
+              undoId: 'a-2',
+              state: 'applied',
+              label: '구조 보 맞추기',
+              ...file('구조.3dm', 'win-a'),
+              changes: { added: [added('g-1', '보')], changed: [], removed: [] },
+            },
+          ],
+        },
+      };
+    if (input.body.startsWith('실패한 두 파일 작업'))
+      return {
+        state: 'failed',
+        result: {
+          mode: 'auto',
+          executionMode: 'direct',
+          appliedDirectly: true,
+          multiFile: true,
+          code: 'PROVIDER_TIMEOUT',
+          executions: [
+            {
+              executionId: 'f-1',
+              undoId: 'a-9',
+              state: 'undone',
+              label: '구조 기둥 옮기기',
+              ...file('구조.3dm', 'win-a'),
+              changes: { added: [], changed: [added('c-1')], removed: [] },
+            },
+            {
+              executionId: 'f-2',
+              undoId: 'b-9',
+              state: 'undone',
+              label: '평면 기둥 맞추기',
+              ...file('평면.3dm', 'win-b'),
+              changes: { added: [added('p-9', '평면')], changed: [], removed: [] },
+            },
+          ],
+          rollback: {
+            at: '2026-10-01T00:00:00.000Z',
+            reason: 'failed',
+            files: [
+              {
+                name: '구조.3dm',
+                ...file('구조.3dm', 'win-a'),
+                state: 'undone',
+                undone: 1,
+                kept: 0,
+              },
+              {
+                name: '평면.3dm',
+                ...file('평면.3dm', 'win-b'),
+                state: 'undone',
+                undone: 1,
+                kept: 0,
+              },
+            ],
+          },
         },
       };
     // The host refused before running (a read-only document): nothing ran, the reason is shown.
@@ -135,6 +229,23 @@ try {
     const body = route.request().postDataJSON() ?? {};
     calls.push({ id, action, body });
     const request = requests.get(id);
+    if (action === 'undo' && body.all === true) {
+      // The whole request: the first press finds 평면.3dm edited after it (not-latest), the
+      // second undoes what is left.
+      const left = request.result.executions.filter((row) => row.state === 'applied');
+      const blocked = !request.undoTried;
+      request.undoTried = true;
+      for (const row of left) if (!blocked || row.file.name !== '평면.3dm') row.state = 'undone';
+      const files = ['구조.3dm', '평면.3dm'].map((name) => ({
+        name,
+        host: 'rhino',
+        target: left.find((row) => row.file.name === name)?.target,
+        state: blocked && name === '평면.3dm' ? 'refused' : 'undone',
+        ...(blocked && name === '평면.3dm' ? { reason: 'not-latest' } : {}),
+      }));
+      request.result = { ...request.result, undo: { at: 'now', files } };
+      return route.fulfill({ json: { ok: !blocked, files, request } });
+    }
     if (action === 'undo') {
       // Only the latest record can be undone here (the host answers 'not-latest' otherwise).
       const latest = request.result.executions.filter((row) => row.state !== 'undone').at(-1);
@@ -284,6 +395,64 @@ try {
     1,
   );
 
+  // Two files in one request: rows grouped by file, one [되돌리기] for the whole request.
+  await send('두 파일 맞추기');
+  const groups = work().locator('.direct-file');
+  await groups.first().waitFor();
+  assert.equal(await groups.count(), 2);
+  assert.match(
+    await groups.nth(0).locator('.direct-file-head').textContent(),
+    /구조\.3dm.*Rhino · 추가 1 · 변경 2 · 삭제 0/,
+  );
+  assert.match(
+    await groups.nth(1).locator('.direct-file-head').textContent(),
+    /평면\.3dm.*추가 1 · 변경 0 · 삭제 0/,
+  );
+  assert.equal(await groups.nth(0).locator('.direct-execution').count(), 2);
+  // No [되돌리기] per row: one for the request.
+  assert.equal(await groups.getByRole('button', { name: '되돌리기', exact: true }).count(), 0);
+  const requestUndo = work().locator('.direct-request-undo');
+  assert.match(await requestUndo.textContent(), /파일 2개의 실행 3개를 되돌립니다/);
+  await requestUndo.getByRole('button', { name: '되돌리기', exact: true }).click();
+  // 평면.3dm was edited after it: that file stays and is named; 구조.3dm is undone.
+  await page.waitForFunction(() =>
+    document.querySelector('.work-view .direct-rollback')?.textContent.includes('평면.3dm'),
+  );
+  assert.match(
+    await work().locator('.direct-rollback').textContent(),
+    /되돌리지 못한 파일: 평면\.3dm\(되돌리지 못함 · 그 뒤에 문서가 더 바뀜\)/,
+  );
+  await page.waitForFunction(() =>
+    document.querySelector('#message')?.textContent.includes('일부 파일은 되돌리지 못했습니다'),
+  );
+  assert.match(await groups.nth(0).locator('.direct-file-head').textContent(), /되돌림/);
+  assert.equal(
+    await groups.nth(1).locator('.direct-execution').first().getAttribute('data-state'),
+    'applied',
+  );
+  assert.match(await requestUndo.textContent(), /파일 1개의 실행 1개를 되돌립니다/);
+  await requestUndo.getByRole('button', { name: '되돌리기', exact: true }).click();
+  await page.waitForFunction(() => !document.querySelector('.work-view .direct-request-undo'));
+  assert.equal(await work().locator('.direct-execution[data-state="applied"]').count(), 0);
+  assert.deepEqual(
+    calls.slice(-2).map(({ action, body }) => [action, body.all]),
+    [
+      ['undo', true],
+      ['undo', true],
+    ],
+  );
+
+  // A failed multi-file request was rolled back automatically: the result says so per file.
+  await send('실패한 두 파일 작업');
+  const rolled = work().locator('.direct-rollback');
+  await rolled.waitFor();
+  assert.match(
+    await rolled.textContent(),
+    /요청이 실패해서 모든 파일의 변경을 자동으로 되돌렸습니다/,
+  );
+  assert.equal(await work().locator('.direct-file').count(), 2);
+  assert.equal(await work().locator('.direct-request-undo').count(), 0);
+
   // A refusal before execution reads as not run with the reason, never as an unknown result.
   await send('읽기 전용 문서에 벽 추가');
   const refusedNote = work().locator('.direct-refused');
@@ -319,7 +488,7 @@ try {
   assert.equal(await modeButton('plan').getAttribute('aria-checked'), 'true');
   assert.deepEqual(pageErrors, []);
   console.log(
-    'Browser direct mode: mode toggle, execution rows with undo and not-latest, guard confirmation, refusal before execution and plan continuation passed.',
+    'Browser direct mode: mode toggle, execution rows with undo and not-latest, guard confirmation, multi-file groups with request undo and rollback, refusal before execution and plan continuation passed.',
   );
 } finally {
   await browser?.close();

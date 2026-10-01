@@ -3781,6 +3781,54 @@ body[data-workspace='context'] .workspace > .jig-dialog {
 .guard-card {
   border-color: var(--warn);
 }
+/* A multi-file request (ADR-027): rows grouped by file, one [되돌리기] for the request. */
+.direct-files {
+  margin: 6px 0 0;
+  font-size: 11px;
+}
+.direct-file {
+  margin-top: 6px;
+  padding: 6px 8px;
+  border: var(--hairline) solid var(--line);
+  border-radius: var(--radius-sm);
+}
+.direct-file-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 8px;
+}
+.direct-file .direct-executions {
+  margin-top: 4px;
+}
+.direct-request-undo {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  margin-top: 6px;
+  color: var(--muted);
+}
+.direct-request-undo button {
+  padding: 3px 8px;
+  border: var(--hairline) solid var(--line);
+  border-radius: var(--radius-sm);
+  font-size: 11px;
+  background: var(--soft);
+  color: var(--ink);
+}
+.direct-rollback {
+  margin: 6px 0 0;
+  padding: 6px 8px;
+  border-radius: var(--radius-sm);
+  background: var(--soft);
+  font-size: 12px;
+}
+.direct-rollback[data-state='partial'],
+.direct-file-head .direct-state[data-state='refused'],
+.direct-file-head .direct-state[data-state='unknown'] {
+  color: var(--warn);
+}
 /* An execute the host refused before running (read-only document, busy host): nothing changed. */
 .direct-refused {
   margin: 6px 0 0;

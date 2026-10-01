@@ -1682,6 +1682,11 @@ async function directAction(
     requestId?: unknown;
   } | null;
   if (reply?.ok === false) {
+    // [되돌리기] of a whole request (ADR-027): the files left are named in the result; show it.
+    if (action === 'undo' && body.all === true) {
+      await poll(id, projectId);
+      throw Error(errors.UNDO_PARTIAL);
+    }
     const code = reply.reason === 'not-latest' ? 'UNDO_NOT_LATEST' : String(reply.reason ?? '');
     throw Error(errors[code] || errors.DIRECT_ACTION_FAILED);
   }
