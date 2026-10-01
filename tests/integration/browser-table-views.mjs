@@ -2,8 +2,9 @@ import { installBrowserSupport } from './browser-support.mjs';
 // Read-only live capture and persistent table UI; no AI calls or original writes.
 // args: playwright launch.json instance documentId --run-live
 import assert from 'node:assert/strict';
-import { readFile, mkdir } from 'node:fs/promises';
+import { readFile } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
+import { evidencePath } from './run-directory.mjs';
 const [playwright, launch, instance, serial, flag] = process.argv.slice(2);
 if (flag !== '--run-live') throw Error('Explicit --run-live required');
 const { chromium } = await import(pathToFileURL(playwright).href),
@@ -64,8 +65,9 @@ try {
   assert.ok(csv.includes('Default'));
   assert.ok(csv.includes(data.capture.id));
   assert.ok(!csv.includes('Unrelated test point'));
-  await mkdir('docs/assets/native-workspace', { recursive: true });
-  await page.screenshot({ path: 'docs/assets/native-workspace/quantity-filters.png' });
+  await page.screenshot({
+    path: evidencePath('docs/assets/native-workspace/quantity-filters.png'),
+  });
   await dialog.getByLabel('객체 검색').fill('no-such-object');
   await dialog.getByLabel('객체 검색').press('Enter');
   await dialog.getByRole('status').filter({ hasText: '0 / 2개 객체' }).waitFor();

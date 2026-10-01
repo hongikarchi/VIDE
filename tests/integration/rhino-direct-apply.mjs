@@ -17,10 +17,9 @@ import { sdkOptions } from '../../src/server/sdk-options.ts';
 import { launchOwnedHost } from '../../hosts/common/owned-process.ts';
 import { launchRhinoWorker } from '../../hosts/rhino/worker-client.ts';
 import { EditorSessions } from '../../hosts/rhino/editor-sessions.ts';
+import { runDirectory } from './run-directory.mjs';
 
-const dataDir = resolve(
-  process.env.VIDE_TEST_DATA_DIR || join('.vide/rhino-direct-apply', randomUUID()),
-);
+const dataDir = resolve(process.env.VIDE_TEST_DATA_DIR || runDirectory('rhino-direct-apply'));
 const docDir = resolve(process.env.VIDE_TEST_DOC_DIR || join(dataDir, 'document'));
 await mkdir(dataDir, { recursive: true });
 await mkdir(docDir, { recursive: true });

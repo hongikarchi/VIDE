@@ -4,8 +4,9 @@ import { randomUUID, createHash } from 'node:crypto';
 import { resolve, join } from 'node:path';
 import { launchRhinoWorker } from '../../hosts/rhino/worker-client.ts';
 import { sdkOptions } from '../../src/server/sdk-options.ts';
+import { runDirectory } from './run-directory.mjs';
 
-const directory = resolve('.vide/rhino-complex-brep', randomUUID());
+const directory = runDirectory('rhino-complex-brep');
 await mkdir(directory, { recursive: true });
 const options = sdkOptions(directory);
 let worker, editor;

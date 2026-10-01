@@ -6,7 +6,8 @@ import { createHash, randomUUID } from 'node:crypto';
 import { chromium } from 'playwright';
 import { launchRhinoWorker } from '../../hosts/rhino/worker-client.ts';
 import { startServer } from '../../src/server/server.ts';
-const directory = resolve('.vide/sdk-import', randomUUID());
+import { runDirectory } from './run-directory.mjs';
+const directory = runDirectory('sdk-import');
 await mkdir(directory, { recursive: true });
 const options = {
   executable: 'C:\\Program Files\\Rhino 8\\System\\Rhino.exe',

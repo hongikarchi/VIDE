@@ -1,13 +1,14 @@
 // Creates only an isolated headless synthetic file; never modifies the active document.
 import assert from 'node:assert/strict';
-import { randomUUID, createHash } from 'node:crypto';
+import { createHash } from 'node:crypto';
 import { mkdir, readFile } from 'node:fs/promises';
 import { resolve, join } from 'node:path';
 import { rhinoCommand } from '../../hosts/rhino/transport.ts';
 import { RhinoWorkspace } from '../../hosts/rhino/workspace.ts';
 import { nativeAttributes } from '../../src/ui/native-attributes.ts';
+import { runDirectory } from './run-directory.mjs';
 if (process.argv[2] !== '--run-live') throw Error('Pass --run-live');
-const directory = resolve('.vide/attribute-check', randomUUID());
+const directory = runDirectory('attribute-check');
 await mkdir(directory, { recursive: true });
 const source = join(directory, 'source.3dm');
 const code = `using(var work=Rhino.RhinoDoc.CreateHeadless(null)){

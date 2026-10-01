@@ -1,14 +1,14 @@
 // Real ZWCAD (owned synthetic process): display styles, text, hatches and clipped xrefs.
 import assert from 'node:assert/strict';
-import { randomUUID } from 'node:crypto';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { resolve, join } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { launchOwnedHost } from '../../hosts/common/owned-process.ts';
 import { inspectorOptions } from '../../hosts/zwcad/inspector.ts';
 import { AttachedZwcadDocuments } from '../../hosts/zwcad/attached-documents.ts';
+import { runDirectory } from './run-directory.mjs';
 
-const directory = resolve('.vide/zwcad-display-styles', randomUUID());
+const directory = runDirectory('zwcad-display-styles');
 const registry = join(directory, 'zwcad-connections');
 await mkdir(registry, { recursive: true });
 const config = inspectorOptions(),

@@ -1,14 +1,14 @@
 import assert from 'node:assert/strict';
 import { mkdir, writeFile } from 'node:fs/promises';
-import { randomUUID } from 'node:crypto';
 import { resolve, join } from 'node:path';
 import { chromium } from 'playwright';
 import { startServer } from '../../src/server/server.ts';
 import { sdkOptions } from '../../src/server/sdk-options.ts';
+import { runDirectory } from './run-directory.mjs';
 
 const provider = process.argv[2] || 'codex-cli';
 assert.ok(['codex-cli', 'claude-cli'].includes(provider));
-const directory = resolve('.vide/browser-zwcad-sdk', process.argv[3] || randomUUID());
+const directory = runDirectory('browser-zwcad-sdk', { id: process.argv[3] });
 await mkdir(directory, { recursive: true });
 let app, browser;
 try {

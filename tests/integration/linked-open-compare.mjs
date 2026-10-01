@@ -12,8 +12,9 @@ import { inspectorOptions } from '../../hosts/zwcad/inspector.ts';
 import { AttachedZwcadDocuments } from '../../hosts/zwcad/attached-documents.ts';
 import { startServer } from '../../src/server/server.ts';
 import { sdkOptions } from '../../src/server/sdk-options.ts';
+import { runDirectory } from './run-directory.mjs';
 
-const directory = resolve('.vide/linked-open-compare', randomUUID());
+const directory = runDirectory('linked-open-compare');
 await mkdir(join(directory, 'zwcad-connections'), { recursive: true });
 const slash = (value) => value.split(String.fromCharCode(92)).join('/');
 const quote = (value) => JSON.stringify(slash(value));

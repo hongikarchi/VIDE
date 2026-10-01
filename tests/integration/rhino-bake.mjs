@@ -28,7 +28,7 @@ import { launchOwnedHost } from '../../hosts/common/owned-process.ts';
 import { EditorSessions } from '../../hosts/rhino/editor-sessions.ts';
 import { launchRhinoWorker } from '../../hosts/rhino/worker-client.ts';
 
-const directory = resolve('.vide/rhino-bake', randomUUID());
+const directory = runDirectory('rhino-bake');
 await mkdir(directory, { recursive: true });
 const options = sdkOptions(directory),
   connectionDirectory = join(directory, 'rhino-connections');
@@ -141,6 +141,7 @@ export function members(inputs: { steps: { grid: { columns: { key: string; mark:
   return dir;
 }
 import { readFileSync, writeFileSync } from 'node:fs';
+import { runDirectory } from './run-directory.mjs';
 const readFileSyncUtf8 = (path) => readFileSync(path, 'utf8');
 const writeFileSyncUtf8 = (path, text) => writeFileSync(path, text);
 

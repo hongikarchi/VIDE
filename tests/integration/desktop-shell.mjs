@@ -7,15 +7,15 @@ import assert from 'node:assert/strict';
 import { mkdir, readFile, rm } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import { randomUUID } from 'node:crypto';
 import { spawn, execFileSync } from 'node:child_process';
 import { chromium } from 'playwright';
+import { runDirectory } from './run-directory.mjs';
 
 // VIDE_DESKTOP_EXE runs a packaged program (bundled Node and app) instead of the shell build.
 const packaged = process.env.VIDE_DESKTOP_EXE;
 const exe = resolve(packaged || '.vide/build/desktop-shell/bin/VIDE.exe');
 assert.ok(existsSync(exe), 'Run npm run desktop:build first.');
-const directory = resolve('.vide/desktop-shell', randomUUID());
+const directory = runDirectory('desktop-shell');
 const data = join(directory, 'data');
 await mkdir(data, { recursive: true });
 const debugPort = 9300 + Math.floor(Math.random() * 400);

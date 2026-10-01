@@ -6,6 +6,7 @@ import { chromium } from 'playwright';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { pathToFileURL } from 'node:url';
+import { runDirectory } from './run-directory.mjs';
 const appRoot = resolve(process.env.VIDE_TEST_PACKAGE_APP || '.');
 const { startServer } = await import(pathToFileURL(join(appRoot, 'src/server/server.ts')).href);
 const { sdkOptions } = await import(pathToFileURL(join(appRoot, 'src/server/sdk-options.ts')).href);
@@ -13,7 +14,7 @@ const { launchRhinoWorker } = await import(
   pathToFileURL(join(appRoot, 'hosts/rhino/worker-client.ts')).href
 );
 
-const directory = resolve('.vide/browser-linked-hosts', randomUUID());
+const directory = runDirectory('browser-linked-hosts');
 const failRhino = process.argv.includes('--fail-rhino');
 const sameHost = process.argv.includes('--same-host');
 const intervene = process.argv.includes('--intervene');

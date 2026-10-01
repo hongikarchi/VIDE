@@ -1,15 +1,16 @@
 import { installBrowserSupport } from './browser-support.mjs';
 // Simulates losing the first read result after a real isolated DWG import. Never writes a user drawing.
 import assert from 'node:assert/strict';
-import { randomUUID, createHash } from 'node:crypto';
+import { createHash } from 'node:crypto';
 import { readFile, access } from 'node:fs/promises';
 import { resolve, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { startServer } from '../../src/server/server.ts';
 import { ZwcadWorkspace } from '../../hosts/zwcad/workspace.ts';
+import { runDirectory } from './run-directory.mjs';
 const [playwright, source, flag] = process.argv.slice(2);
 if (flag !== '--run-live') throw Error('Explicit --run-live required');
-const data = resolve('.vide', 'import-recovery-check', randomUUID()),
+const data = runDirectory('import-recovery-check'),
   cad = new ZwcadWorkspace(join(data, 'cad-models')),
   originalImport = cad.importFile.bind(cad),
   originalInspect = cad.inspectImport.bind(cad);

@@ -2,12 +2,13 @@ import assert from 'node:assert/strict';
 import { DatabaseSync } from 'node:sqlite';
 import { mkdir, readFile, writeFile, copyFile } from 'node:fs/promises';
 import { join, resolve, extname } from 'node:path';
-import { createHash, randomUUID } from 'node:crypto';
+import { createHash } from 'node:crypto';
 import { chromium } from 'playwright';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { startServer } from '../../src/server/server.ts';
 import { sdkOptions } from '../../src/server/sdk-options.ts';
+import { runDirectory } from './run-directory.mjs';
 
 // Use only the owned synthetic result from browser-linked-hosts --intervene.
 const sourceDirectory = resolve(process.argv[2]);
@@ -16,7 +17,7 @@ assert.equal(proof.nativeIntervention, true);
 const source = new DatabaseSync(join(sourceDirectory, 'test.sqlite'), { readOnly: true });
 const rows = source.prepare('SELECT * FROM workspace_requests').all();
 source.close();
-const directory = resolve('.vide/browser-linked-native-followup', randomUUID());
+const directory = runDirectory('browser-linked-native-followup');
 await mkdir(directory, { recursive: true });
 let app,
   browser,

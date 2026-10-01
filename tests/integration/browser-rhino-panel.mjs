@@ -6,8 +6,9 @@ import { randomUUID } from 'node:crypto';
 import { chromium } from 'playwright';
 import { startServer } from '../../src/server/server.ts';
 import { Workspace } from '../../src/core/workspace.ts';
+import { runDirectory } from './run-directory.mjs';
 
-const directory = resolve('.vide/browser-rhino-panel', randomUUID());
+const directory = runDirectory('browser-rhino-panel');
 await mkdir(directory, { recursive: true });
 let app, browser;
 try {

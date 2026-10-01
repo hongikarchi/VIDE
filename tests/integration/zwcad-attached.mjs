@@ -1,5 +1,4 @@
 import assert from 'node:assert/strict';
-import { randomUUID } from 'node:crypto';
 import { mkdir, readFile, writeFile, readdir } from 'node:fs/promises';
 import { resolve, join } from 'node:path';
 import { execFileSync } from 'node:child_process';
@@ -11,8 +10,9 @@ import { chromium } from 'playwright';
 import { startServer } from '../../src/server/server.ts';
 import { sdkOptions } from '../../src/server/sdk-options.ts';
 import { linkOpenDocument } from './link-helper.mjs';
+import { runDirectory } from './run-directory.mjs';
 
-const directory = resolve('.vide/zwcad-attached', randomUUID());
+const directory = runDirectory('zwcad-attached');
 const registry = join(directory, 'zwcad-connections');
 await mkdir(registry, { recursive: true });
 const config = inspectorOptions(),

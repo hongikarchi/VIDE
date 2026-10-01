@@ -7,10 +7,11 @@ import { pathToFileURL } from 'node:url';
 import { randomUUID } from 'node:crypto';
 import { startServer } from '../../src/server/server.ts';
 import { applyNativeMovements } from '../../hosts/rhino/native-application.ts';
+import { runDirectory } from './run-directory.mjs';
 const [playwright, instance, serial, flag] = process.argv.slice(2);
 if (flag !== '--run-live') throw Error('Explicit --run-live required');
 const documentId = Number(serial);
-const directory = resolve('.vide', 'recovery-check', randomUUID());
+const directory = runDirectory('recovery-check');
 await mkdir(directory, { recursive: true });
 const filename = join(directory, 'workspace.sqlite');
 let target,

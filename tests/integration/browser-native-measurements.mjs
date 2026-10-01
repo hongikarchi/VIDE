@@ -3,6 +3,7 @@ import { installBrowserSupport } from './browser-support.mjs';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
+import { evidencePath } from './run-directory.mjs';
 const [playwright, launch, fixture] = process.argv.slice(2),
   { chromium } = await import(pathToFileURL(playwright).href),
   { url } = JSON.parse(await readFile(launch, 'utf8'));
@@ -49,7 +50,9 @@ try {
   assert.ok(text.includes('12.566 m'));
   assert.ok(text.includes('폭 X'));
   assert.ok(!text.includes('표시 폭'));
-  await page.screenshot({ path: 'docs/assets/native-workspace/native-measurements.png' });
+  await page.screenshot({
+    path: evidencePath('docs/assets/native-workspace/native-measurements.png'),
+  });
   console.log(
     JSON.stringify({
       projectId,

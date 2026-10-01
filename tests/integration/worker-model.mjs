@@ -7,8 +7,9 @@ import { chromium } from 'playwright';
 import { launchRhinoWorker } from '../../hosts/rhino/worker-client.ts';
 import { startServer } from '../../src/server/server.ts';
 import { SdkExecution } from '../../src/server/sdk-execution.ts';
+import { runDirectory } from './run-directory.mjs';
 
-const directory = resolve('.vide/worker-ui-check', randomUUID());
+const directory = runDirectory('worker-ui-check');
 await mkdir(directory, { recursive: true });
 const options = {
   executable: 'C:\\Program Files\\Rhino 8\\System\\Rhino.exe',

@@ -1,12 +1,12 @@
 import assert from 'node:assert/strict';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { resolve, join } from 'node:path';
-import { randomUUID } from 'node:crypto';
 import { spawn } from 'node:child_process';
 import { launchOwnedHost } from '../../hosts/common/owned-process.ts';
 import { SdkExecution } from '../../src/server/sdk-execution.ts';
+import { runDirectory } from './run-directory.mjs';
 
-const directory = resolve('.vide/measurement-undo', randomUUID());
+const directory = runDirectory('measurement-undo');
 await mkdir(directory, { recursive: true });
 const script = join(directory, 'fixture.py');
 await writeFile(

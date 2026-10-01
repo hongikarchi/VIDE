@@ -9,8 +9,9 @@ import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/
 import { startServer } from '../../src/server/server.ts';
 import { sdkOptions } from '../../src/server/sdk-options.ts';
 import { installBrowserSupport } from './browser-support.mjs';
+import { runDirectory } from './run-directory.mjs';
 
-const directory = resolve('.vide/native-concurrent-work', randomUUID());
+const directory = runDirectory('native-concurrent-work');
 const config = sdkOptions(directory);
 const cancelRhino = process.argv.includes('--cancel-rhino');
 await mkdir(config.directory, { recursive: true });

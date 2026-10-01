@@ -4,12 +4,13 @@ import { randomUUID } from 'node:crypto';
 import { resolve, join } from 'node:path';
 import { launchRhinoWorker } from '../../hosts/rhino/worker-client.ts';
 import { sdkOptions } from '../../src/server/sdk-options.ts';
+import { runDirectory } from './run-directory.mjs';
 
 const fixture = JSON.parse(await readFile(process.argv[2], 'utf8'));
 const source = fixture.evidence.find((row) => row.kind === (process.argv[3] || 'points'));
 assert.equal(fixture.passed, true);
 assert.ok(source);
-const directory = resolve('.vide/rhino-large-apply', randomUUID());
+const directory = runDirectory('rhino-large-apply');
 await mkdir(directory, { recursive: true });
 let editor, worker;
 try {

@@ -4,8 +4,9 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { resolve, join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { launchRhinoWorker } from '../../hosts/rhino/worker-client.ts';
+import { runDirectory } from './run-directory.mjs';
 
-const directory = resolve('.vide/worker-readback', randomUUID());
+const directory = runDirectory('worker-readback');
 await mkdir(directory, { recursive: true });
 const worker = await launchRhinoWorker({
   directory: join(directory, 'worker'),

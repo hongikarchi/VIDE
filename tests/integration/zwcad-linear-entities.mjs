@@ -4,8 +4,9 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { launchZwcadWorker } from '../../hosts/zwcad/worker-client.ts';
 import { ZwcadEditors } from '../../hosts/zwcad/editor-sessions.ts';
+import { runDirectory } from './run-directory.mjs';
 
-const directory = resolve('.vide/zwcad-linear-entities', randomUUID());
+const directory = runDirectory('zwcad-linear-entities');
 await mkdir(directory, { recursive: true });
 const workers = [];
 const launch = async (name, source, editor = false) => {

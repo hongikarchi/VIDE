@@ -2,14 +2,15 @@
 import assert from 'node:assert/strict';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { resolve, join } from 'node:path';
-import { createHash, randomUUID } from 'node:crypto';
+import { createHash } from 'node:crypto';
 import { chromium } from 'playwright';
 import { startServer } from '../../src/server/server.ts';
+import { runDirectory } from './run-directory.mjs';
 
 if (!process.argv[2]) throw Error('Provide a synthetic DWG fixture');
 const linear = process.argv.includes('--linear');
 const source = resolve(process.argv[2]),
-  directory = resolve('.vide/browser-dwg-sdk', randomUUID());
+  directory = runDirectory('browser-dwg-sdk');
 await mkdir(directory, { recursive: true });
 const fingerprint = async () =>
   createHash('sha256')

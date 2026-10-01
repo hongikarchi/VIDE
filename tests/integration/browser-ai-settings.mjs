@@ -3,6 +3,7 @@ import { installBrowserSupport } from './browser-support.mjs';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
+import { evidencePath } from './run-directory.mjs';
 const [playwright, launch] = process.argv.slice(2),
   { chromium } = await import(pathToFileURL(playwright).href),
   { url } = JSON.parse(await readFile(launch, 'utf8'));
@@ -60,7 +61,7 @@ try {
     await dialog.getByText('구독 로그인 확인됨', { exact: true }).count(),
     statusRows.filter((row) => row.available).length,
   );
-  await page.screenshot({ path: 'docs/assets/native-workspace/ai-settings.png' });
+  await page.screenshot({ path: evidencePath('docs/assets/native-workspace/ai-settings.png') });
   await dialog.getByLabel('Codex · ChatGPT 실행 경로').fill('C:/VIDE-nonexistent/codex.exe');
   await dialog.getByRole('button', { name: '설정 저장', exact: true }).click();
   await dialog

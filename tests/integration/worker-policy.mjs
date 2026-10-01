@@ -4,7 +4,8 @@ import { mkdir, readFile, writeFile, access } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
 import { resolve, join } from 'node:path';
 import { launchRhinoWorker } from '../../hosts/rhino/worker-client.ts';
-const root = resolve('.vide/worker-policy', randomUUID());
+import { runDirectory } from './run-directory.mjs';
+const root = runDirectory('worker-policy');
 await mkdir(root, { recursive: true });
 let worker;
 try {

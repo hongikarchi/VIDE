@@ -8,9 +8,10 @@ import { pathToFileURL } from 'node:url';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { liveLaunch } from '../../src/server/lifecycle.ts';
+import { runDirectory } from './run-directory.mjs';
 const exec = promisify(execFile),
   [playwright, archive, dwgFixture] = process.argv.slice(2),
-  workspace = resolve('.vide', 'package-check', randomUUID()),
+  workspace = runDirectory('package-check'),
   install = join(workspace, 'install space'),
   data = join(workspace, 'data');
 await mkdir(install, { recursive: true });

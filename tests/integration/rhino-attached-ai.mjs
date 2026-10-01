@@ -2,14 +2,14 @@
 import assert from 'node:assert/strict';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { resolve, join } from 'node:path';
-import { randomUUID } from 'node:crypto';
 import { spawn } from 'node:child_process';
 import { chromium } from 'playwright';
 import { launchOwnedHost } from '../../hosts/common/owned-process.ts';
 import { startServer } from '../../src/server/server.ts';
 import { sdkOptions } from '../../src/server/sdk-options.ts';
 import { linkOpenDocument } from './link-helper.mjs';
-const directory = resolve('.vide/rhino-attached-ai', randomUUID());
+import { runDirectory } from './run-directory.mjs';
+const directory = runDirectory('rhino-attached-ai');
 await mkdir(directory, { recursive: true });
 const options = sdkOptions(directory);
 options.plugin = resolve(

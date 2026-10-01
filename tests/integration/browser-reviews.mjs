@@ -1,8 +1,9 @@
 // Saves and reopens an immutable review of an existing synthetic candidate; no AI or host writes.
 // args: playwright launch.json projectId
 import assert from 'node:assert/strict';
-import { readFile, mkdir } from 'node:fs/promises';
+import { readFile } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
+import { evidencePath } from './run-directory.mjs';
 const [playwright, launch, projectId] = process.argv.slice(2);
 const { chromium } = await import(pathToFileURL(playwright).href),
   { url } = JSON.parse(await readFile(launch, 'utf8'));
@@ -43,8 +44,7 @@ try {
   assert.ok(!html.includes('api/v1'));
   assert.ok(!html.includes('C:\\Users'));
   assert.ok(html.includes('원본 반영 기록 없음'));
-  await mkdir('docs/assets/native-workspace', { recursive: true });
-  await page.screenshot({ path: 'docs/assets/native-workspace/saved-review.png' });
+  await page.screenshot({ path: evidencePath('docs/assets/native-workspace/saved-review.png') });
   await viewer.getByRole('button', { name: '닫기', exact: true }).click();
   await page.reload();
   await page

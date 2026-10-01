@@ -3,8 +3,9 @@ import { randomUUID } from 'node:crypto';
 import { resolve, join } from 'node:path';
 import { mkdir, writeFile, readFile } from 'node:fs/promises';
 import { launchZwcadWorker } from '../../hosts/zwcad/worker-client.ts';
+import { runDirectory } from './run-directory.mjs';
 
-const directory = resolve('.vide/zwcad-worker', randomUUID());
+const directory = runDirectory('zwcad-worker');
 await mkdir(directory, { recursive: true });
 let worker;
 try {

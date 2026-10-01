@@ -1,14 +1,14 @@
 import assert from 'node:assert/strict';
 import { mkdir } from 'node:fs/promises';
 import { resolve, join } from 'node:path';
-import { randomUUID } from 'node:crypto';
 import { chromium } from 'playwright';
 import { startServer } from '../../src/server/server.ts';
 import { Workspace } from '../../src/core/workspace.ts';
+import { runDirectory } from './run-directory.mjs';
 
 // A Rhino document linked to the project (SPEC-01.11): first Sync without a click, failure display,
 // draft protection of automatic Sync, the explicit apply packet, and a closed file.
-const directory = resolve('.vide/browser-attached', randomUUID());
+const directory = runDirectory('browser-attached');
 await mkdir(directory, { recursive: true });
 let app, browser;
 try {

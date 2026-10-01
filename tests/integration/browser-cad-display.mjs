@@ -1,14 +1,14 @@
 // CAD display fidelity: per-segment styles in blocks, solid fills with holes and text annotations.
 import assert from 'node:assert/strict';
-import { mkdtemp, rm, mkdir } from 'node:fs/promises';
+import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { join } from 'node:path';
 import { chromium } from 'playwright';
 import { startServer } from '../../src/server/server.ts';
 import { installBrowserSupport } from './browser-support.mjs';
+import { runDirectory } from './run-directory.mjs';
 const directory = await mkdtemp(join(tmpdir(), 'vide-cad-display-'));
-const evidence = resolve('.vide/browser-cad-display');
-await mkdir(evidence, { recursive: true });
+const evidence = runDirectory('browser-cad-display');
 let app, browser;
 try {
   app = await startServer({ filename: join(directory, 'workspace.sqlite') });

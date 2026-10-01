@@ -5,6 +5,7 @@ import { resolve, join, relative, isAbsolute } from 'node:path';
 import { randomUUID, createHash } from 'node:crypto';
 import { DatabaseSync } from 'node:sqlite';
 import { launchRhinoWorker } from '../../hosts/rhino/worker-client.ts';
+import { runDirectory } from './run-directory.mjs';
 const sourceDirectory = resolve(process.argv[2] || ''),
   within = relative(resolve('.vide/browser-owned-editor'), sourceDirectory);
 assert.ok(within && !within.startsWith('..') && !isAbsolute(within));
@@ -18,7 +19,7 @@ const row = database
   .get();
 database.close();
 const source = JSON.parse(row.result),
-  directory = resolve('.vide/native-editor-followup', randomUUID());
+  directory = runDirectory('native-editor-followup');
 await mkdir(directory, { recursive: true });
 const saved = join(directory, 'manually-saved.3dm'),
   options = {

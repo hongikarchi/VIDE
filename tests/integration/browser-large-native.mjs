@@ -1,14 +1,14 @@
 import assert from 'node:assert/strict';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
-import { randomUUID } from 'node:crypto';
 import { resolve, join } from 'node:path';
 import { chromium } from 'playwright';
 import { startServer } from '../../src/server/server.ts';
 import { sdkOptions } from '../../src/server/sdk-options.ts';
+import { runDirectory } from './run-directory.mjs';
 
 const fixture = JSON.parse(await readFile(process.argv[2], 'utf8'));
 assert.equal(fixture.passed, true);
-const directory = resolve('.vide/browser-large-native', randomUUID());
+const directory = runDirectory('browser-large-native');
 await mkdir(directory, { recursive: true });
 let app, browser;
 try {

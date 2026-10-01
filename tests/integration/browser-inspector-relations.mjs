@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
+import { evidencePath } from './run-directory.mjs';
 const [playwright, launch, projectId] = process.argv.slice(2),
   { chromium } = await import(pathToFileURL(playwright).href),
   { url } = JSON.parse(await readFile(launch, 'utf8'));
@@ -34,7 +35,9 @@ try {
   await page.locator('#body').fill('Keep editing this Rhino candidate');
   const link = page.locator('#inspector-content').getByRole('button', { name: /참고 입력.*ZWCAD/ });
   assert.equal(await link.count(), 1);
-  await page.screenshot({ path: 'docs/assets/native-workspace/inspector-relations.png' });
+  await page.screenshot({
+    path: evidencePath('docs/assets/native-workspace/inspector-relations.png'),
+  });
   await link.click();
   assert.equal(await page.locator('#document-host').innerText(), 'ZWCAD');
   assert.equal(await page.locator('#host-target').inputValue(), 'rhino');

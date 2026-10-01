@@ -7,13 +7,14 @@ import { execFileSync } from 'node:child_process';
 import { launchOwnedHost } from '../../hosts/common/owned-process.ts';
 import { ZwcadEditors } from '../../hosts/zwcad/editor-sessions.ts';
 import { inspectDwg, inspectorOptions } from '../../hosts/zwcad/inspector.ts';
+import { runDirectory } from './run-directory.mjs';
 
 const fixture = JSON.parse(await readFile(process.argv[2], 'utf8'));
 const source = fixture.result || fixture.captured;
 const modes = process.argv.includes('--move-only')
   ? ['move-save']
   : ['move-unsaved-control', 'move-save', 'move-unsaved', 'save-as', 'close'];
-const directory = resolve('.vide/zwcad-native-edit', randomUUID());
+const directory = runDirectory('zwcad-native-edit');
 await mkdir(directory, { recursive: true });
 const config = inspectorOptions();
 const harness = join(directory, 'NativeCommands.dll');

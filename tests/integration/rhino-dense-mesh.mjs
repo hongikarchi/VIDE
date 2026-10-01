@@ -7,6 +7,7 @@ import { resolve, join } from 'node:path';
 import { launchRhinoWorker } from '../../hosts/rhino/worker-client.ts';
 import { sdkOptions } from '../../src/server/sdk-options.ts';
 import { queryPage } from '../../src/server/query-page.ts';
+import { runDirectory } from './run-directory.mjs';
 
 const run = promisify(execFile);
 async function memory(worker) {
@@ -24,7 +25,7 @@ async function memory(worker) {
   return { node: process.memoryUsage(), rhino: JSON.parse(stdout) };
 }
 
-const directory = resolve('.vide/rhino-dense-mesh', randomUUID());
+const directory = runDirectory('rhino-dense-mesh');
 await mkdir(directory, { recursive: true });
 const evidence = [];
 for (const [kind, count] of [['dense-mesh', 1]]) {

@@ -14,6 +14,7 @@ import { chromium, devices } from 'playwright';
 import { startServer } from '../../src/server/server.ts';
 import { Workspace } from '../../src/core/workspace.ts';
 import { captureInput } from '../../src/server/import-model.ts';
+import { runDirectory } from './run-directory.mjs';
 
 const sharing = process.env.VIDE_SHARING_TEST_ORIGIN;
 assert.ok(sharing, 'Set VIDE_SHARING_TEST_ORIGIN to the sharing Worker origin.');
@@ -26,7 +27,7 @@ process.env.VIDE_CLOUDFLARED ||= join(
   'cloudflared.exe',
 );
 assert.ok(existsSync(process.env.VIDE_CLOUDFLARED), 'cloudflared is not installed.');
-const directory = resolve('.vide/remote-loop', randomUUID());
+const directory = runDirectory('remote-loop');
 await mkdir(directory, { recursive: true });
 const result = { directory, sharing };
 const received = [];

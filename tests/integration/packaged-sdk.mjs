@@ -6,7 +6,7 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 const exec = promisify(execFile),
   archive = resolve(process.argv[2]),
-  directory = resolve('.vide/packaged-sdk', randomUUID()),
+  directory = runDirectory('packaged-sdk'),
   install = join(directory, 'install space');
 await mkdir(install, { recursive: true });
 await exec('tar.exe', ['-xf', archive, '-C', install], { windowsHide: true });
@@ -25,6 +25,7 @@ import assert from 'node:assert/strict';
 import {pathToFileURL} from 'node:url';
 import {join} from 'node:path';
 import {randomUUID} from 'node:crypto';
+import { runDirectory } from './run-directory.mjs';
 const root=${JSON.stringify(root)},directory=${JSON.stringify(directory)};
 const {launchRhinoWorker}=await import(pathToFileURL(join(root,'app/hosts/rhino/worker-client.ts')));
 const worker=await launchRhinoWorker({directory:join(directory,'worker'),executable:'C:/Program Files/Rhino 8/System/Rhino.exe',plugin:join(root,'app/hosts/rhino/worker/runtime/VIDE.Worker.rhp'),bootstrap:join(root,'app/hosts/rhino/worker/bootstrap.py')});

@@ -6,8 +6,9 @@ import { tmpdir } from 'node:os';
 import { randomUUID } from 'node:crypto';
 import { spawn } from 'node:child_process';
 import { launchOwnedHost } from '../../hosts/common/owned-process.ts';
+import { runDirectory } from './run-directory.mjs';
 
-const directory = resolve('.vide/rhino-saveas-control', randomUUID());
+const directory = runDirectory('rhino-saveas-control');
 await mkdir(directory, { recursive: true });
 const saveDirectory = process.argv.includes('--save-in-temp')
   ? join(tmpdir(), 'vide-saveas-' + randomUUID())

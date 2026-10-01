@@ -1,12 +1,12 @@
 // Real browser sketch -> subscription agent -> RhinoCommon -> saved/read-back geometry.
 import assert from 'node:assert/strict';
 import { mkdir, writeFile } from 'node:fs/promises';
-import { randomUUID } from 'node:crypto';
 import { resolve, join } from 'node:path';
 import { chromium } from 'playwright';
 import { startServer } from '../../src/server/server.ts';
+import { runDirectory } from './run-directory.mjs';
 
-const directory = resolve('.vide/sdk-sketch', randomUUID());
+const directory = runDirectory('sdk-sketch');
 await mkdir(directory, { recursive: true });
 let app, browser;
 try {

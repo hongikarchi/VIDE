@@ -4,12 +4,12 @@
 import assert from 'node:assert/strict';
 import { mkdir } from 'node:fs/promises';
 import { resolve, join } from 'node:path';
-import { randomUUID } from 'node:crypto';
 import { chromium } from 'playwright';
 import { startServer } from '../../src/server/server.ts';
 import { Workspace } from '../../src/core/workspace.ts';
+import { runDirectory } from './run-directory.mjs';
 
-const directory = resolve('.vide/browser-pin-tokens', randomUUID());
+const directory = runDirectory('browser-pin-tokens');
 await mkdir(directory, { recursive: true });
 const instance = '42:100:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const box = (nativeId, x, hash) => ({

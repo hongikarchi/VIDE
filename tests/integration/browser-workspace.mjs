@@ -1,8 +1,9 @@
 // Run against a populated live development workspace; no provider calls or host mutations.
 // node tests/integration/browser-workspace.mjs <playwright-module-path> <launch.json>
 import assert from 'node:assert/strict';
-import { readFile, mkdir } from 'node:fs/promises';
+import { readFile } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
+import { evidencePath } from './run-directory.mjs';
 const { chromium } = await import(pathToFileURL(process.argv[2]).href);
 const { url } = JSON.parse(await readFile(process.argv[3], 'utf8'));
 const browser = await chromium.launch({
@@ -159,13 +160,12 @@ try {
   assert.ok(csv.includes('기하 면적 (m²)'));
   assert.ok(csv.includes('저장·재열기한 호스트 형상'));
   await page.getByRole('button', { name: '닫기', exact: true }).click();
-  await mkdir('docs/assets/native-workspace', { recursive: true });
-  await page.screenshot({ path: 'docs/assets/native-workspace/desktop.png' });
+  await page.screenshot({ path: evidencePath('docs/assets/native-workspace/desktop.png') });
   await page.setViewportSize({ width: 390, height: 844 });
   await page.getByRole('button', { name: '작업', exact: true }).click();
   assert.equal(await page.locator('#body').isVisible(), true);
   assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
-  await page.screenshot({ path: 'docs/assets/native-workspace/mobile.png' });
+  await page.screenshot({ path: evidencePath('docs/assets/native-workspace/mobile.png') });
   assert.deepEqual(errors, [
     'Failed to load resource: the server responded with a status of 503 (Service Unavailable)',
   ]);

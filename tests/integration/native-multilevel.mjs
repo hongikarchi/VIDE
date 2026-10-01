@@ -3,6 +3,7 @@ import { installBrowserSupport } from './browser-support.mjs';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
+import { evidencePath } from './run-directory.mjs';
 const [playwright, launch, flag, existingProject] = process.argv.slice(2);
 if (flag !== '--run-live') throw Error('Pass --run-live');
 const { chromium } = await import(pathToFileURL(playwright).href),
@@ -88,7 +89,9 @@ try {
     Math.abs(comparison.rows.reduce((sum, row) => sum + (row.delta.volume || 0), 0) + 40) < 0.001,
   );
   await page.waitForFunction(() => document.querySelectorAll('#task-list .task-row').length >= 2);
-  await page.screenshot({ path: 'docs/assets/native-workspace/multilevel-candidate.png' });
+  await page.screenshot({
+    path: evidencePath('docs/assets/native-workspace/multilevel-candidate.png'),
+  });
   console.log(
     JSON.stringify({
       projectId,

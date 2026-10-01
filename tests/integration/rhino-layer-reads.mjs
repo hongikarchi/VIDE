@@ -17,8 +17,9 @@ import { EditorSessions } from '../../hosts/rhino/editor-sessions.ts';
 import { launchRhinoWorker } from '../../hosts/rhino/worker-client.ts';
 import { SdkExecution } from '../../src/server/sdk-execution.ts';
 import { sdkOptions } from '../../src/server/sdk-options.ts';
+import { runDirectory } from './run-directory.mjs';
 
-const directory = resolve('.vide/rhino-layer-reads', randomUUID());
+const directory = runDirectory('rhino-layer-reads');
 await mkdir(directory, { recursive: true });
 const options = sdkOptions(directory),
   connectionDirectory = join(directory, 'rhino-connections');

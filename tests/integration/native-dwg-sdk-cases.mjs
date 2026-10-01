@@ -4,8 +4,9 @@ import { resolve, join } from 'node:path';
 import { randomUUID, createHash } from 'node:crypto';
 import { launchProbe } from '../../tools/spikes/2026-09-22-zwcad-sdk/channel-client.mjs';
 import { ZwcadWorkspace } from '../../hosts/zwcad/workspace.ts';
+import { runDirectory } from './run-directory.mjs';
 
-const directory = resolve('.vide/dwg-sdk-cases', randomUUID());
+const directory = runDirectory('dwg-sdk-cases');
 await mkdir(directory, { recursive: true });
 const literal = (value) => '@"' + value.replaceAll('"', '""') + '"';
 let fixture;

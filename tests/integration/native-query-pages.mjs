@@ -1,12 +1,12 @@
 import assert from 'node:assert/strict';
 import { mkdir, writeFile } from 'node:fs/promises';
-import { randomUUID } from 'node:crypto';
 import { resolve, join } from 'node:path';
 import { SdkExecution } from '../../src/server/sdk-execution.ts';
 import { ZwcadSdkExecution } from '../../src/server/zwcad-sdk-execution.ts';
 import { sdkOptions } from '../../src/server/sdk-options.ts';
+import { runDirectory } from './run-directory.mjs';
 
-const directory = resolve('.vide/native-query-pages', randomUUID());
+const directory = runDirectory('native-query-pages');
 await mkdir(directory, { recursive: true });
 const evidence = [];
 for (const host of ['rhino', 'zwcad']) {

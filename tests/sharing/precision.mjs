@@ -2,13 +2,13 @@ import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import { resolve, join } from 'node:path';
 import { readFile, mkdir, writeFile } from 'node:fs/promises';
-import { randomUUID } from 'node:crypto';
 import { chromium } from 'playwright';
+import { runDirectory } from '../integration/run-directory.mjs';
 
 const root = resolve('.'),
   require = createRequire(join(root, 'src/sharing/package.json')),
   { build } = require('esbuild');
-const directory = resolve('.vide/sharing-precision', randomUUID());
+const directory = runDirectory('sharing-precision');
 await mkdir(directory, { recursive: true });
 const bundled = await build({
   stdin: {

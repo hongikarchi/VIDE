@@ -3,6 +3,7 @@ import { installBrowserSupport } from './browser-support.mjs';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
+import { evidencePath } from './run-directory.mjs';
 const [playwright, launch, projectId] = process.argv.slice(2),
   { chromium } = await import(pathToFileURL(playwright).href),
   { url } = JSON.parse(await readFile(launch, 'utf8'));
@@ -49,7 +50,9 @@ try {
   const objectName = result.input.pins[0].name;
   await card.getByRole('button', { name: objectName, exact: true }).click();
   assert.equal(await page.locator('#selection').innerText(), objectName);
-  await page.screenshot({ path: 'docs/assets/native-workspace/extension-summary.png' });
+  await page.screenshot({
+    path: evidencePath('docs/assets/native-workspace/extension-summary.png'),
+  });
   await page.getByRole('button', { name: 'JIG', exact: true }).click();
   await page.getByRole('button', { name: /개발용 확장/ }).click();
   await dialog.getByRole('button', { name: '비활성화', exact: true }).click();

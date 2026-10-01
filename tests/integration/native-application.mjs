@@ -1,10 +1,11 @@
 // Applies existing synthetic candidates only to an explicitly identified empty test document.
 // args: playwright, launch.json, project, first, second, instance, documentId, --run-live
 import assert from 'node:assert/strict';
-import { readFile, mkdir } from 'node:fs/promises';
+import { readFile } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
 import { listDocuments } from '../../hosts/rhino/documents.ts';
 import { rhinoCommand } from '../../hosts/rhino/transport.ts';
+import { evidencePath } from './run-directory.mjs';
 if (process.argv[9] !== '--run-live') throw Error('Explicit --run-live required');
 const [playwright, launch, projectId, firstId, secondId, instance, documentId] = process.argv.slice(
   2,
@@ -82,8 +83,9 @@ try {
     document.querySelector('#connection-status').textContent.includes('연결됨'),
   );
   assert.equal(await page.getByText('원본 반영됨 · 파일 저장 별도', { exact: true }).count(), 2);
-  await mkdir('docs/assets/native-workspace', { recursive: true });
-  await page.screenshot({ path: 'docs/assets/native-workspace/native-application.png' });
+  await page.screenshot({
+    path: evidencePath('docs/assets/native-workspace/native-application.png'),
+  });
   console.log(
     JSON.stringify({
       applied: 2,

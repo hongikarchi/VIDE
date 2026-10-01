@@ -1,8 +1,9 @@
 // Explicit live integration test: consumes subscription CLI calls and creates its own Rhino candidate files.
 // node tests/integration/native-workflow.mjs <playwright-module> <launch.json> --run-live
 import assert from 'node:assert/strict';
-import { readFile, mkdir } from 'node:fs/promises';
+import { readFile } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
+import { evidencePath } from './run-directory.mjs';
 if (process.argv[4] !== '--run-live')
   throw Error('Pass --run-live to create isolated native test candidates.');
 const { chromium } = await import(pathToFileURL(process.argv[2]).href);
@@ -115,8 +116,9 @@ try {
   await page.getByLabel('비교할 이전 후보', { exact: true }).selectOption(first.id);
   await page.getByRole('button', { name: '현재 후보와 비교', exact: true }).click();
   await page.locator('.comparison-result').getByText(/체적/).waitFor();
-  await mkdir('docs/assets/native-workspace', { recursive: true });
-  await page.screenshot({ path: 'docs/assets/native-workspace/quantity-comparison.png' });
+  await page.screenshot({
+    path: evidencePath('docs/assets/native-workspace/quantity-comparison.png'),
+  });
   console.log(
     JSON.stringify({
       projectId: project.id,

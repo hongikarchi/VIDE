@@ -5,8 +5,9 @@ import { resolve, join } from 'node:path';
 import { launchRhinoWorker } from '../../hosts/rhino/worker-client.ts';
 import { sdkOptions } from '../../src/server/sdk-options.ts';
 import { queryPage } from '../../src/server/query-page.ts';
+import { runDirectory } from './run-directory.mjs';
 
-const directory = resolve('.vide/rhino-large-native', randomUUID());
+const directory = runDirectory('rhino-large-native');
 await mkdir(directory, { recursive: true });
 const evidence = [];
 for (const [kind, count] of [

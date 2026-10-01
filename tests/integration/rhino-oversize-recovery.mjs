@@ -1,12 +1,13 @@
 import assert from 'node:assert/strict';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
-import { createHash, randomUUID } from 'node:crypto';
+import { createHash } from 'node:crypto';
 import { resolve, join } from 'node:path';
 import { SdkExecution } from '../../src/server/sdk-execution.ts';
 import { sdkOptions } from '../../src/server/sdk-options.ts';
 import { launchRhinoWorker } from '../../hosts/rhino/worker-client.ts';
+import { runDirectory } from './run-directory.mjs';
 
-const directory = resolve('.vide/rhino-oversize-recovery', randomUUID());
+const directory = runDirectory('rhino-oversize-recovery');
 await mkdir(directory, { recursive: true });
 let handlers,
   executions = 0,

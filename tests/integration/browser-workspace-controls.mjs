@@ -1,9 +1,10 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, rm, mkdir } from 'node:fs/promises';
+import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { join } from 'node:path';
 import { chromium } from 'playwright';
 import { startServer } from '../../src/server/server.ts';
+import { runDirectory } from './run-directory.mjs';
 const directory = await mkdtemp(join(tmpdir(), 'vide-controls-'));
 let app, browser;
 try {
@@ -221,8 +222,7 @@ try {
   await page.waitForFunction(() =>
     document.querySelector('#context').textContent.includes('valid.txt'),
   );
-  const evidence = resolve('.vide/ui-audit');
-  await mkdir(evidence, { recursive: true });
+  const evidence = runDirectory('ui-audit');
   await page.screenshot({ path: join(evidence, 'controls-1440.png') });
   await page.locator('#model').selectOption('test-model');
   await page.locator('#effort-menu summary').click();

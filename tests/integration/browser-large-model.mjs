@@ -1,11 +1,11 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, rm, mkdir, writeFile } from 'node:fs/promises';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
-import { randomUUID } from 'node:crypto';
+import { join } from 'node:path';
 import { chromium } from 'playwright';
 import { startServer } from '../../src/server/server.ts';
 import { installBrowserSupport } from './browser-support.mjs';
+import { runDirectory } from './run-directory.mjs';
 
 const baseline = process.argv.includes('--baseline');
 const directory = await mkdtemp(join(tmpdir(), 'vide-large-model-'));
@@ -160,11 +160,10 @@ try {
     browser: 'Chromium headless, unsafe-swiftshader enabled',
     scaleScope: 'viewport fixtures; not native import support',
   };
-  const path = resolve(
-    '.vide/viewport-spike',
-    `large-model-${baseline ? 'before' : 'after'}-${randomUUID()}.json`,
+  const path = join(
+    runDirectory('viewport-spike'),
+    `large-model-${baseline ? 'before' : 'after'}.json`,
   );
-  await mkdir(resolve('.vide/viewport-spike'), { recursive: true });
   await writeFile(path, JSON.stringify(evidence, null, 2));
   console.log(JSON.stringify({ path, ...evidence }));
 } finally {

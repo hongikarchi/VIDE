@@ -3,7 +3,8 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { resolve, join } from 'node:path';
 import { randomUUID, createHash } from 'node:crypto';
 import { launchRhinoWorker } from '../../hosts/rhino/worker-client.ts';
-const directory = resolve('.vide/owned-editor', randomUUID());
+import { runDirectory } from './run-directory.mjs';
+const directory = runDirectory('owned-editor');
 await mkdir(directory, { recursive: true });
 const options = {
   executable: 'C:/Program Files/Rhino 8/System/Rhino.exe',

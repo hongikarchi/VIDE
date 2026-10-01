@@ -2,6 +2,7 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
+import { evidencePath } from './run-directory.mjs';
 const { chromium } = await import(pathToFileURL(process.argv[2]).href);
 const { url } = JSON.parse(await readFile(process.argv[3], 'utf8'));
 const browser = await chromium.launch({
@@ -65,7 +66,7 @@ try {
   assert.equal(await page.locator('#body').inputValue(), 'Project B current draft');
   const menu = await page.getByLabel('초안 메뉴').boundingBox();
   assert.ok(menu.y >= 0);
-  await page.screenshot({ path: 'docs/assets/native-workspace/draft-menu.png' });
+  await page.screenshot({ path: evidencePath('docs/assets/native-workspace/draft-menu.png') });
   await page.getByLabel('초안 메뉴').click(); // Close after the failed load.
   await action('save');
   await navigate(a.id);

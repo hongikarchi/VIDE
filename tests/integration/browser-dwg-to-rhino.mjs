@@ -3,6 +3,7 @@ import { installBrowserSupport } from './browser-support.mjs';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
+import { evidencePath } from './run-directory.mjs';
 const [playwright, launch, source, flag, existingProject] = process.argv.slice(2);
 if (flag !== '--run-live') throw Error('Explicit --run-live required');
 const { chromium } = await import(pathToFileURL(playwright).href),
@@ -81,7 +82,9 @@ try {
     document.querySelector('.object-summary')?.textContent.startsWith('1개 객체'),
   );
   await page.waitForFunction(() => document.querySelector('#host-target').value === 'rhino');
-  await page.screenshot({ path: 'docs/assets/native-workspace/dwg-import-rhino.png' });
+  await page.screenshot({
+    path: evidencePath('docs/assets/native-workspace/dwg-import-rhino.png'),
+  });
   console.log(
     JSON.stringify({
       projectId,

@@ -1,12 +1,13 @@
 import assert from 'node:assert/strict';
 import { chromium } from 'playwright';
-import { randomBytes, randomUUID } from 'node:crypto';
+import { randomBytes } from 'node:crypto';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
+import { runDirectory } from '../integration/run-directory.mjs';
 const origin = process.env.VIDE_SHARING_TEST_ORIGIN;
 if (origin !== 'https://vide-sharing-staging.archivibe.workers.dev')
   throw new Error('Explicit staging origin required');
-const directory = resolve('.vide/sharing-remote', randomUUID());
+const directory = runDirectory('sharing-remote');
 await mkdir(directory, { recursive: true });
 const browser = await chromium.launch({ channel: 'chrome', headless: true });
 const contexts = [];

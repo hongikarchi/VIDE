@@ -13,7 +13,8 @@ import { EditorSessions } from '../../hosts/rhino/editor-sessions.ts';
 import { SdkExecution } from '../../src/server/sdk-execution.ts';
 import { launchRhinoWorker } from '../../hosts/rhino/worker-client.ts';
 import { sdkOptions } from '../../src/server/sdk-options.ts';
-const directory = resolve('.vide/rhino-attached', randomUUID());
+import { runDirectory } from './run-directory.mjs';
+const directory = runDirectory('rhino-attached');
 await mkdir(directory, { recursive: true });
 const options = sdkOptions(directory),
   connectionDirectory = join(directory, 'rhino-connections');

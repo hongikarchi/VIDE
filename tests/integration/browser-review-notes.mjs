@@ -3,6 +3,7 @@ import { installBrowserSupport } from './browser-support.mjs';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
+import { evidencePath } from './run-directory.mjs';
 const [playwright, launch, projectId] = process.argv.slice(2),
   { chromium } = await import(pathToFileURL(playwright).href),
   { url } = JSON.parse(await readFile(launch, 'utf8'));
@@ -86,7 +87,9 @@ try {
     projectId,
   );
   assert.equal(restored.baseRequestId, rows.at(-1).requestId);
-  await page.screenshot({ path: 'docs/assets/native-workspace/review-note-draft.png' });
+  await page.screenshot({
+    path: evidencePath('docs/assets/native-workspace/review-note-draft.png'),
+  });
   assert.deepEqual(errors, []);
   console.log(
     JSON.stringify({

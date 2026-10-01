@@ -3,6 +3,7 @@ import { installBrowserSupport } from './browser-support.mjs';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
+import { evidencePath } from './run-directory.mjs';
 const [playwright, launch] = process.argv.slice(2),
   { chromium } = await import(pathToFileURL(playwright).href),
   { url } = JSON.parse(await readFile(launch, 'utf8'));
@@ -46,7 +47,9 @@ try {
   const canvas = page.locator('#precision-fixture canvas');
   await canvas.click();
   assert.deepEqual(await page.evaluate(() => window.precisionPicks), ['tiny-detail']);
-  await page.screenshot({ path: 'docs/assets/native-workspace/large-coordinate-detail.png' });
+  await page.screenshot({
+    path: evidencePath('docs/assets/native-workspace/large-coordinate-detail.png'),
+  });
   await page.evaluate(() => {
     window.precisionView.projection('perspective');
     window.precisionView.fit();

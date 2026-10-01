@@ -5,9 +5,10 @@ import { randomUUID, createHash } from 'node:crypto';
 import { resolve, join, basename } from 'node:path';
 import { chromium } from 'playwright';
 import { startServer } from '../../src/server/server.ts';
+import { runDirectory } from './run-directory.mjs';
 const runId = process.argv[2] || randomUUID();
 assert.match(runId, /^[a-f0-9-]{36}$/);
-const directory = resolve('.vide/sdk-workflow', runId);
+const directory = runDirectory('sdk-workflow', { id: runId, keep: !!process.argv[2] });
 await mkdir(directory, { recursive: true });
 let app, browser;
 try {

@@ -3,13 +3,14 @@ import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import { resolve, join } from 'node:path';
 import { mkdir, readFile, writeFile, readdir } from 'node:fs/promises';
-import { randomUUID, randomBytes } from 'node:crypto';
+import { randomBytes } from 'node:crypto';
+import { runDirectory } from '../integration/run-directory.mjs';
 
 const root = fileURLToPath(new URL('../../src/sharing/', import.meta.url));
 const require = createRequire(join(root, 'package.json'));
 const { Miniflare, Log, LogLevel } = require('miniflare'),
   { build } = require('esbuild');
-const directory = resolve(root, '../../.vide/sharing-membership', randomUUID());
+const directory = runDirectory('sharing-membership');
 await mkdir(directory, { recursive: true });
 const bundled = await build({
   entryPoints: [join(root, 'worker.ts')],

@@ -1,11 +1,11 @@
 import assert from 'node:assert/strict';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { resolve, join } from 'node:path';
-import { randomUUID } from 'node:crypto';
 import { SdkExecution } from '../../src/server/sdk-execution.ts';
 import { sdkOptions } from '../../src/server/sdk-options.ts';
+import { runDirectory } from './run-directory.mjs';
 
-const directory = resolve('.vide/native-sdk-interruption', randomUUID());
+const directory = runDirectory('native-sdk-interruption');
 await mkdir(directory, { recursive: true });
 const controller = new AbortController();
 let handlers,

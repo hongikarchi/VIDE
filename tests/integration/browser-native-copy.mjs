@@ -5,6 +5,7 @@ import { readFile } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
 import { randomUUID } from 'node:crypto';
 import { RhinoWorkspace } from '../../hosts/rhino/workspace.ts';
+import { evidencePath } from './run-directory.mjs';
 const [playwright, launch, flag, existingProject] = process.argv.slice(2);
 if (flag !== '--run-live') throw Error('Explicit --run-live required');
 const { chromium } = await import(pathToFileURL(playwright).href),
@@ -111,7 +112,7 @@ try {
   await page.waitForFunction(() =>
     document.querySelector('.object-summary')?.textContent.startsWith('2개 객체'),
   );
-  await page.screenshot({ path: 'docs/assets/native-workspace/native-copy.png' });
+  await page.screenshot({ path: evidencePath('docs/assets/native-workspace/native-copy.png') });
   console.log(
     JSON.stringify({
       projectId,

@@ -3,6 +3,7 @@ import { installBrowserSupport } from './browser-support.mjs';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
+import { evidencePath } from './run-directory.mjs';
 const [playwright, launch, projectId] = process.argv.slice(2);
 const { chromium } = await import(pathToFileURL(playwright).href),
   { url } = JSON.parse(await readFile(launch, 'utf8'));
@@ -62,7 +63,9 @@ try {
   assert.equal(await dialog.locator('iframe').count(), 2);
   for (const frame of await dialog.locator('iframe').all())
     assert.equal(await frame.getAttribute('sandbox'), '');
-  await page.screenshot({ path: 'docs/assets/native-workspace/review-comparison.png' });
+  await page.screenshot({
+    path: evidencePath('docs/assets/native-workspace/review-comparison.png'),
+  });
   await page.setViewportSize({ width: 390, height: 844 });
   assert.ok(await dialog.evaluate((node) => node.getBoundingClientRect().width <= 390));
   assert.deepEqual(errors, []);
