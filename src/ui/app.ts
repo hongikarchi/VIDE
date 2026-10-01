@@ -259,7 +259,8 @@ let questionCards: ReturnType<QuestionCardsModule['mountQuestionCards']> | undef
  * with questions; the answer goes to `…/conversations/:cid/answer` and becomes its next turn.
  */
 function renderQuestionCards() {
-  const conversationId = currentConversation();
+  // The default conversation's turns carry its row's ID once its first turn made it.
+  const conversationId = currentConversation() ?? (project ? defaultRowId() : undefined);
   const own = conversationId
     ? state.messages.filter((entry) => {
         const input = entry.request?.input as
@@ -315,6 +316,31 @@ function renderQuestionCards() {
 }
 /** The conversation the next request goes to; undefined = the project's default conversation. */
 const currentConversation = () => conversationChips?.active() ?? undefined;
+/** The default conversation's row on the server (src/server/conversations.ts). */
+const defaultRowId = () => `default-${currentProject().id}`;
+/** The composer's model was set by a chosen conversation, not by the user. */
+let modelFollowsConversation = false;
+/**
+ * The composer's model follows the chosen conversation's fixed AI (SPEC-02.19 2), so sending there
+ * keeps it; a conversation whose first turn has not chosen yet goes back to "자동 (Jev)" unless the
+ * user picked a model themselves.
+ */
+function followConversationModel(fixed: { provider: string; model: string | null } | null) {
+  const automatic = models.find((m) => m.id === 'auto');
+  const target = fixed
+    ? (models.find(
+        (m) => m.provider === fixed.provider && m.id === (fixed.model ?? fixed.provider),
+      ) ?? automatic)
+    : modelFollowsConversation
+      ? automatic
+      : undefined;
+  if (!target) return;
+  modelFollowsConversation = !!fixed;
+  if (target.id === state.model) return;
+  chooseModel(state, target.id);
+  void refreshAccount();
+  render();
+}
 const conversationOptions = () => ({
   projectId: currentProject().id,
   models: models.map(({ id, name, provider }) => ({ id, name, provider })),
@@ -328,6 +354,7 @@ async function mountConversationScreens() {
     conversationChips = chips?.mountConversations($('conversation-chips'), api, {
       ...conversationOptions(),
       onChange: () => renderMessages(),
+      onFixed: followConversationModel,
     });
   } catch {
     conversationChips = undefined;
@@ -1843,6 +1870,7 @@ function fillModels() {
 }
 fillModels();
 $('model').onchange = () => {
+  modelFollowsConversation = false;
   chooseModel(state, $('model').value);
   void refreshAccount();
   render();
@@ -2585,14 +2613,16 @@ async function submitRequest(
   render();
   const predecessor =
     predecessorId && state.messages.find((entry) => entry.id === predecessorId)?.request;
-  const conversationId = predecessorId ? undefined : currentConversation();
+  const chosen = predecessorId ? undefined : currentConversation();
+  // The default conversation's turns go as `default`: its first turn fixes its AI (SPEC-02.19 2).
+  const conversationId = chosen ?? (!predecessorId && conversationChips ? 'default' : undefined);
   // A jig conversation's turns work on its jig (the jig tools), unless the words name the file.
   const hostless =
     extra.hostUse === 'none' ||
     (!predecessor &&
       !state.linkedTargets &&
       !worksOnFile(state.body) &&
-      !!(await jigConversation(conversationId)));
+      !!(await jigConversation(chosen)));
   const input = {
     ...packet(predecessor ? interventionTargetDraft(state, predecessor) : state),
     ...modeFields(predecessor ? modeOf(predecessor.input) : sendMode),
@@ -2626,6 +2656,22 @@ async function submitRequest(
     renderMessages();
     void conversationChips?.refresh();
     void poll(request.id, projectId, original);
+    // Another model than the conversation's: the server opened a new conversation and sent the
+    // request there (SPEC-02.19 5); its tab is chosen.
+    const landed = (request.input as { conversationId?: unknown }).conversationId;
+    if (
+      conversationId &&
+      typeof landed === 'string' &&
+      landed !== conversationId &&
+      landed !== defaultRowId()
+    ) {
+      conversationChips?.select(landed);
+      const model = (request.input as { model?: unknown }).model;
+      message(
+        `모델이 달라 새 대화로 이어서 보냈습니다 · ${models.find((m) => m.id === model)?.name ?? model ?? ''}`,
+      );
+      return;
+    }
     const waiting = waitingOf(request);
     if (waiting) message(`${waitingText(waiting)} · 앞 작업이 끝나면 자동으로 시작합니다.`);
   } catch (cause) {

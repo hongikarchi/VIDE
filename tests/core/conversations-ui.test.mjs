@@ -52,6 +52,9 @@ const request = (id, conversationId, state, result = null, extra = {}) => ({
 test('requests without a conversation belong to the default one; undefined filters nothing', () => {
   assert.equal(ui.conversationOf(request('r1', undefined, 'succeeded')), null);
   assert.equal(ui.conversationOf(request('r2', 'c1', 'succeeded')), 'c1');
+  // The default conversation's row (made at its first turn) is still the default one.
+  assert.equal(ui.conversationOf(request('r3', 'default-p1', 'succeeded')), null);
+  assert.equal(ui.inConversation(request('r3', 'default-p1', 'running'), null), true);
   assert.equal(ui.inConversation(request('r1', undefined, 'running'), null), true);
   assert.equal(ui.inConversation(request('r1', undefined, 'running'), 'c1'), false);
   assert.equal(ui.inConversation(request('r2', 'c1', 'running'), undefined), true);
@@ -99,7 +102,16 @@ test('chip and AI labels', () => {
   assert.equal(ui.chipLabel(entry('c1', { kind: 'ask', title: '주차 대수' })), '질문 · 주차 대수');
   assert.equal(ui.chipLabel(entry('c1', { kind: 'cad-edit', title: 'CAD 편집' })), 'CAD 편집');
   const models = [{ id: 'sonnet', name: 'Sonnet', provider: 'claude-cli' }];
-  assert.equal(ui.providerLabel(entry(null), models), '요청마다 고른 AI');
+  // Every conversation fixes its AI at its first turn; until then the label says so.
+  assert.equal(ui.providerLabel(entry(null), models), '첫 요청 때 AI를 정합니다');
+  assert.equal(
+    ui.providerLabel(entry('c1', { pending: true }), models),
+    '첫 요청 때 AI를 정합니다',
+  );
+  assert.equal(
+    ui.providerLabel(entry(null, { provider: 'claude-cli', model: 'sonnet' }), models),
+    'Claude · Sonnet',
+  );
   assert.equal(ui.providerLabel(entry('c1'), models), 'Claude · Sonnet');
   assert.equal(
     ui.providerLabel(entry('c1', { accountProfileId: 'p2', model: null }), models, (id) =>
@@ -145,6 +157,19 @@ test('hand-over card: the limit stop (T2), then the recorded hand-over', () => {
   };
   assert.equal(ui.handoverCard(first, []), undefined);
   assert.equal(ui.handoverCard({ id: null, ledger: [] }, stopped), undefined);
+  // Another model took a request to a new conversation: one line in both.
+  const moved = (reason, side) => ({
+    id: 'c1',
+    ledger: [{ id: 'l2', kind: 'handoff', createdAt: 'y', body: { reason, ...side } }],
+  });
+  assert.equal(
+    ui.handoverCard(moved('moved', { to: { provider: 'codex-cli', model: 'gpt-5' } }), []).text,
+    '모델이 달라 새 대화로 이어서 보냈습니다 · Codex · gpt-5',
+  );
+  assert.equal(
+    ui.handoverCard(moved('model', { from: { provider: 'claude-cli', model: 'sonnet' } }), []).text,
+    '모델이 달라 새 대화로 이어서 보냈습니다 · Claude · sonnet',
+  );
   const elsewhere = [request('z', 'c2', 'failed', { code: 'PROVIDER_LIMIT' })];
   assert.equal(ui.handoverCard(detail, elsewhere), undefined);
 });

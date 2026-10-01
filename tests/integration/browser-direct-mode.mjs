@@ -62,6 +62,23 @@ try {
           guarded: { kind: 'bulk-delete', detail: '객체 120개 삭제' },
         },
       };
+    // The host refused before running (a read-only document): nothing ran, the reason is shown.
+    if (input.body.startsWith('읽기 전용 문서에 벽'))
+      return {
+        state: 'succeeded',
+        result: {
+          mode: 'auto',
+          executionMode: 'direct',
+          appliedDirectly: false,
+          text: '문서가 읽기 전용이라 실행하지 않았습니다.',
+          executions: [],
+          refused: {
+            code: 'DOCUMENT_READ_ONLY',
+            reason:
+              '읽기 전용으로 열린 문서라 실행하지 않았습니다. Rhino에서 다른 이름으로 저장(같은 이름에 덮어쓰기)한 뒤 다시 요청하세요.',
+          },
+        },
+      };
     // The engine's own shape: the held execution is a row (state guarded, no undo record).
     if (input.body.startsWith('옛 레이어 지우기'))
       return {
@@ -267,6 +284,17 @@ try {
     1,
   );
 
+  // A refusal before execution reads as not run with the reason, never as an unknown result.
+  await send('읽기 전용 문서에 벽 추가');
+  const refusedNote = work().locator('.direct-refused');
+  await refusedNote.waitFor();
+  assert.match(
+    await refusedNote.textContent(),
+    /^실행하지 않음 · 읽기 전용으로 열린 문서라 실행하지 않았습니다\. Rhino에서 다른 이름으로 저장/,
+  );
+  assert.doesNotMatch(await work().textContent(), /호스트 결과 확인 필요|확인되지 않았습니다/);
+  assert.equal(await work().locator('.direct-execution').count(), 0);
+
   // 계획: the AI plans without writing; [진행] continues in 자동 and opens that work.
   await modeButton('plan').click();
   assert.match(await page.locator('#mode-status').textContent(), /계획/);
@@ -291,7 +319,7 @@ try {
   assert.equal(await modeButton('plan').getAttribute('aria-checked'), 'true');
   assert.deepEqual(pageErrors, []);
   console.log(
-    'Browser direct mode: mode toggle, execution rows with undo and not-latest, guard confirmation and plan continuation passed.',
+    'Browser direct mode: mode toggle, execution rows with undo and not-latest, guard confirmation, refusal before execution and plan continuation passed.',
   );
 } finally {
   await browser?.close();

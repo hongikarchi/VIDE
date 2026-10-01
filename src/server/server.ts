@@ -421,6 +421,13 @@ export async function startServer({
     dataDirectory: dirname(filename),
     log: filename !== ':memory:',
   });
+  /** The account a conversation is fixed to when it opens (SPEC-02.19 2). */
+  const conversationAccount = async (provider: 'claude-cli' | 'codex-cli') => {
+    if (accountLogin.busy(provider)) throw new DomainError('PROFILE_LOGIN_IN_PROGRESS');
+    const chosen = await accountUsage.choose(provider, profiles.selected(provider));
+    if (chosen.switched && !profiles.list().pending[provider]) profiles.select(provider, chosen.id);
+    return chosen.id;
+  };
   const withApplications = (request: StoredWork) => ({
     ...request,
     applications: store.db
@@ -1277,13 +1284,7 @@ export async function startServer({
           remote,
           chooseModel: async (routing, requested) =>
             modelRouter.route(routing, await execution.models(), signedInServices(), requested),
-          chooseAccount: async (provider) => {
-            if (accountLogin.busy(provider)) throw new DomainError('PROFILE_LOGIN_IN_PROGRESS');
-            const chosen = await accountUsage.choose(provider, profiles.selected(provider));
-            if (chosen.switched && !profiles.list().pending[provider])
-              profiles.select(provider, chosen.id);
-            return chosen.id;
-          },
+          chooseAccount: conversationAccount,
           // The answer turn of a question card (T-062): same conversation, service and account.
           submit: async (projectId, input, askedIn) => {
             // The answer turn keeps the Plan/Auto mode of the turn that asked (ADR-022); a deleted
@@ -2079,12 +2080,40 @@ export async function startServer({
               : undefined;
           const old =
             existing && typeof existing.input === 'string' ? JSON.parse(existing.input) : undefined;
-          // A conversation's turn keeps the service, model and account fixed when it opened
-          // (SPEC-02.19 2); without one the request is the default conversation's, chosen here.
+          const routingInput = () => ({
+            body: typeof input.body === 'string' ? input.body : '',
+            host: typeof input.host === 'string' ? input.host : undefined,
+            permission: typeof input.permission === 'string' ? input.permission : undefined,
+            files: Array.isArray(input.files) ? input.files : undefined,
+            pins: Array.isArray(input.pins) ? input.pins : undefined,
+            sketches: Array.isArray(input.sketches) ? input.sketches : undefined,
+            linkedTargets: Array.isArray(input.linkedTargets) ? input.linkedTargets : undefined,
+          });
+          // A retried request stays where it went the first time.
+          if (old) {
+            if (typeof old.conversationId === 'string') input.conversationId = old.conversationId;
+            else delete input.conversationId;
+          }
+          // A conversation's first turn fixes its service and model (the composer's own model, else
+          // Jev once); later turns keep them, and another model opens a new conversation with a
+          // hand-over (SPEC-02.19 2·5). `default` is the project's default conversation.
           const conversation =
-            typeof input.conversationId === 'string'
-              ? conversations.fix(projectId, input)
-              : undefined;
+            typeof input.conversationId !== 'string'
+              ? undefined
+              : old
+                ? conversations.fix(projectId, input)
+                : (
+                    await conversations.place(projectId, input, {
+                      route: async (requested) =>
+                        modelRouter.route(
+                          routingInput(),
+                          await execution.models(),
+                          signedInServices(),
+                          requested,
+                        ),
+                      chooseAccount: conversationAccount,
+                    })
+                  ).conversation;
           if (old && isAutoModel(input.model) && old.routing) {
             // A retried automatic request keeps the service and model chosen the first time.
             input.provider = old.provider;
@@ -2093,15 +2122,7 @@ export async function startServer({
             input.routing = old.routing;
           } else if (!old && isAutoModel(input.model)) {
             const decision = await modelRouter.route(
-              {
-                body: typeof input.body === 'string' ? input.body : '',
-                host: typeof input.host === 'string' ? input.host : undefined,
-                permission: typeof input.permission === 'string' ? input.permission : undefined,
-                files: Array.isArray(input.files) ? input.files : undefined,
-                pins: Array.isArray(input.pins) ? input.pins : undefined,
-                sketches: Array.isArray(input.sketches) ? input.sketches : undefined,
-                linkedTargets: Array.isArray(input.linkedTargets) ? input.linkedTargets : undefined,
-              },
+              routingInput(),
               await execution.models(),
               signedInServices(),
               input.provider === 'codex-cli' ? 'codex-cli' : 'claude-cli',

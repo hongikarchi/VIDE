@@ -55,6 +55,7 @@ import {
   type DirectDriver,
   type ExecutionRecord,
 } from './direct-mode.ts';
+import { directRefusal } from '../contracts/direct-refusal.ts';
 interface Provider {
   run(
     context: ProviderContext,
@@ -1305,10 +1306,13 @@ export class Execution {
       this.start({ ...request, input: { ...request.input, guardConfirmed: true } });
       return this.workspace.get(projectId, id);
     }
-    const base = request.result ?? {};
+    // An earlier refusal of this [진행] no longer describes the request once it runs again.
+    const { refused: _refused, ...base } = (request.result ?? {}) as Record<string, unknown>;
     this.workspace.update(projectId, id, 'running', { ...base, phase: 'host' });
     const runId = randomUUID();
-    let outcome: Awaited<ReturnType<DirectDriver['execute']>>;
+    const started = Date.now();
+    let outcome: Awaited<ReturnType<DirectDriver['execute']>> | undefined;
+    let lost: unknown;
     try {
       outcome = await driver.execute({
         requestId: runId,
@@ -1316,14 +1320,28 @@ export class Execution {
         label: entry.label,
         guard: { confirmed: true, maxDeletes: DIRECT_MAX_DELETES },
       });
-    } catch {
-      // The answer was lost: the document may or may not hold the record (fingerprint decides).
+    } catch (error) {
+      lost = error;
+    }
+    // Refused before it touched the document (read-only, busy, closed): nothing ran, the guard
+    // card stays answerable once the cause is fixed.
+    const refusal =
+      !outcome?.ok &&
+      !outcome?.guarded &&
+      directRefusal(driver.host, outcome ?? lost, Date.now() - started);
+    if (refusal)
+      return this.workspace.update(projectId, id, 'needs-confirmation', {
+        ...base,
+        phase: undefined,
+        refused: { code: refusal.code, reason: refusal.reason },
+      });
+    // The answer was lost: the document may or may not hold the record (fingerprint decides).
+    if (!outcome)
       return this.workspace.update(projectId, id, 'unknown', {
         ...base,
         phase: 'host',
         code: 'HOST_RESULT_UNKNOWN',
       });
-    }
     // A change the host could not revert leaves the document unknown, like a lost answer.
     if (hostLeftUnknown(outcome))
       return this.workspace.update(projectId, id, 'unknown', {

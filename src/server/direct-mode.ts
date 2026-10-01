@@ -11,6 +11,7 @@ import type { RequestInput, RequestMode } from '../contracts/workspace.ts';
 import { queryPage, type QueryPageOptions } from './query-page.ts';
 import { activityLog } from './activity.ts';
 import { visionHandlers, type AgentTools, type VisionSource } from './agent-tools.ts';
+import { directRefusal, type DirectRefusal } from '../contracts/direct-refusal.ts';
 
 /** Auto-mode guard: deleting more objects than this in one execute needs the user's confirmation. */
 export const DIRECT_MAX_DELETES = 50;
@@ -311,6 +312,9 @@ export async function runDirectTurn(turn: DirectTurn) {
     applied = 0,
     uncertain = false;
   let guarded: ExecutionRecord | undefined;
+  // The last refusal before execution (the result card shows it); a final one (read-only document,
+  // lost connection) answers every later execute of this turn without calling the host.
+  let refused: DirectRefusal | undefined;
   const progress = () => ({ queries, attempts, completed: applied });
   const state = (phase: string) => ({
     phase,
@@ -340,11 +344,29 @@ export async function runDirectTurn(turn: DirectTurn) {
       ),
     );
   }
+  /** A refused execute: recorded once, answered to the AI as not run (with whether to retry). */
+  const notExecuted = (refusal: DirectRefusal, fresh = false) => {
+    if (fresh) {
+      refused = refusal;
+      activity.add('result', `실행하지 않음 · ${refusal.reason}`, refusal.code);
+      update(state('model'));
+    }
+    return {
+      ok: false,
+      executed: false,
+      code: refusal.code,
+      reason: refusal.reason,
+      next: refusal.final
+        ? 'Nothing ran and the document is unchanged. No execute can succeed in this turn: stop executing and tell the user the reason and the next step in Korean.'
+        : 'Nothing ran and the document is unchanged. Retry once only if the cause has likely passed; otherwise stop and tell the user the reason.',
+    };
+  };
   if (mode === 'auto')
     handlers.execute = async ({ code }) => {
       if (typeof code !== 'string') throw failure('INVALID_INPUT');
       if (signal.aborted) throw failure('CANCELLED');
       if (uncertain) throw failure('HOST_RESULT_UNKNOWN');
+      if (refused?.final) return notExecuted(refused);
       if (attempts >= limits.maxHostCommands) throw failure('HOST_COMMAND_LIMIT');
       attempts++;
       const executionId = randomUUID();
@@ -353,18 +375,29 @@ export async function runDirectTurn(turn: DirectTurn) {
       update(state('host'));
       // A lost answer leaves the document state unknown: no further execute in this turn.
       uncertain = true;
-      const outcome = await driver.execute({
-        requestId: executionId,
-        code,
-        label,
-        guard: { confirmed: input.guardConfirmed === true, maxDeletes: DIRECT_MAX_DELETES },
-      });
+      let outcome: DirectOutcome;
+      try {
+        outcome = await driver.execute({
+          requestId: executionId,
+          code,
+          label,
+          guard: { confirmed: input.guardConfirmed === true, maxDeletes: DIRECT_MAX_DELETES },
+        });
+      } catch (error) {
+        // Refused before it touched the document (read-only, busy, closed): nothing ran.
+        const refusal = directRefusal(driver.host, error);
+        if (!refusal) throw error;
+        uncertain = false;
+        return notExecuted(refusal, true);
+      }
       // A change the host could not revert: as unknown as a lost answer (stays uncertain).
       if (hostLeftUnknown(outcome)) {
         activity.add('error', '실행 결과를 되돌리지 못함 · 문서 상태 확인 필요', outcome.code);
         throw failure('HOST_RESULT_UNKNOWN');
       }
       uncertain = false;
+      // The host answered this one: an earlier passing refusal (busy) no longer describes the turn.
+      refused = undefined;
       const record = {
         executionId,
         host: driver.host,
@@ -391,6 +424,8 @@ export async function runDirectTurn(turn: DirectTurn) {
           next: 'Nothing stays applied. Stop here and tell the user what needs confirmation; the card re-runs this execute after they confirm.',
         };
       }
+      const refusal = !outcome.ok && !outcome.guarded && directRefusal(driver.host, outcome);
+      if (refusal) return notExecuted(refusal, true);
       if (!outcome.ok) {
         activity.add(
           'error',
@@ -473,6 +508,7 @@ export async function runDirectTurn(turn: DirectTurn) {
       phase: undefined,
       executionMode: 'direct',
       ...(guarded ? { guarded: { executionId: guarded.executionId, ...guarded.guarded! } } : {}),
+      ...(refused ? { refused: { code: refused.code, reason: refused.reason } } : {}),
       baseRequestId: previous.id,
       sourceDocument: previous.result.sourceDocument,
       // Kept for [진행]: the guarded body (never shown; dropped once confirmed).

@@ -12,6 +12,7 @@
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { DomainError } from '../../contracts/errors.ts';
+import { directRefusal } from '../../contracts/direct-refusal.ts';
 import type { JigBake, JigStore } from '../../core/jig-store.ts';
 import type { HostTarget } from '../../contracts/host-documents.ts';
 import { runGates, type GateResult } from '../runtime/gates.ts';
@@ -528,12 +529,22 @@ export async function runDirectBake(
   for (const { chunks } of prepared.plans)
     for (const chunk of chunks) {
       const allowed = new Set(chunk.deleteIds.map((id) => id.toLowerCase()));
-      const run = await direct.execute(target, {
-        requestId: `${requestId}:${undoIds.length}`,
-        code: chunk.code,
-        label,
-        guard: { confirmed: false, maxDeletes: chunk.deleteIds.length },
-      });
+      let run: DirectResult;
+      try {
+        run = await direct.execute(target, {
+          requestId: `${requestId}:${undoIds.length}`,
+          code: chunk.code,
+          label,
+          guard: { confirmed: false, maxDeletes: chunk.deleteIds.length },
+        });
+      } catch (error) {
+        // Refused before it touched the document (read-only, busy, closed): this body did not run;
+        // the bodies before it are undone. Any other failure leaves the document unknown.
+        const refusal = directRefusal('rhino', error);
+        if (!refusal) throw error;
+        await rollback('BAKE_FAILED', { reason: refusal.code, refused: refusal.reason });
+        throw error;
+      }
       if (run.log !== undefined) log.push(run.log);
       if (run.guarded)
         // The host already undid this body's record; the ones before it are undone here.

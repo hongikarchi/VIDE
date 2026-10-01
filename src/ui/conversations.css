@@ -1,4 +1,4 @@
-/* 목적별 대화 칩 (Design SCR-15). Colours come from tokens.css, so the dark theme follows them. */
+/* 목적별 대화 탭 (Design SCR-15; one tab per conversation, the chosen one on a soft background). Colours come from tokens.css, so the dark theme follows them. */
 .conv {
   display: flex;
   flex-direction: column;
@@ -19,9 +19,9 @@
   align-items: center;
   gap: 4px;
   max-width: 180px;
-  padding: 2px 8px;
-  border: var(--hairline) solid var(--line);
-  border-radius: var(--radius-pill);
+  padding: 3px 10px;
+  border: none;
+  border-radius: var(--radius-sm);
   background: transparent;
   color: inherit;
   font: inherit;
@@ -169,4 +169,7 @@
     flex-direction: column;
     align-items: stretch;
   }
+}
+.conv-chip:hover:not([aria-selected='true']) {
+  background: var(--soft);
 }

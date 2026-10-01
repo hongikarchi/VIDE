@@ -12,6 +12,7 @@ import type { DirectExecuteResult } from '../../hosts/zwcad/attached-documents.t
 import { workspaceResultSchema } from '../contracts/workspace-result.ts';
 import type { SdkExecution } from './sdk-execution.ts';
 import type { AgentTools } from './agent-tools.ts';
+import { directRefusal, type DirectRefusal } from '../contracts/direct-refusal.ts';
 type Task = Parameters<SdkExecution['run']>[0];
 type Worker = Awaited<ReturnType<typeof launchZwcadWorker>>;
 type Receipt = Extract<Awaited<ReturnType<Worker['execute']>>, { ok: true }>;
@@ -73,6 +74,16 @@ export function directMode(input: object) {
         : 'auto';
   return { mode, confirmed: value.guard?.confirmed === true || value.guardConfirmed === true };
 }
+/**
+ * ZWCAD direct-execute failures the host answers after a definite outcome: compile and policy
+ * rejections ran nothing, a failed run aborted its transaction, a held guard committed nothing.
+ */
+const answeredCodes = new Set([
+  'COMPILE_ERROR',
+  'CODE_POLICY_REJECTED',
+  'EXECUTION_FAILED',
+  'GUARD_CONFIRMATION_REQUIRED',
+]);
 interface Options {
   directory: string;
   tools: AgentTools;
@@ -136,6 +147,8 @@ export class ZwcadSdkExecution {
     let guarded: { executionId: string; kind: string; detail: string } | undefined;
     // A lost execute answer leaves the drawing unknown: no further execute in this turn.
     let uncertain = false;
+    // A refusal before execution (nothing ran); a final one answers later executes without a call.
+    let refused: DirectRefusal | undefined;
     const targetRef = 'zwcad-open:' + basis.instance;
     const activity: { at: string; kind: string; text: string; detail?: string }[] = [];
     const changes = {
@@ -157,6 +170,22 @@ export class ZwcadSdkExecution {
         activity: [...activity],
       });
     };
+    /** A refused execute: recorded once, answered to the AI as not run (with whether to retry). */
+    const notExecuted = (refusal: DirectRefusal, fresh = false) => {
+      if (fresh) {
+        refused = refusal;
+        report('result', `실행하지 않음 · ${refusal.reason}`, refusal.code);
+      }
+      return {
+        ok: false,
+        executed: false,
+        code: refusal.code,
+        reason: refusal.reason,
+        next: refusal.final
+          ? 'Nothing ran and the drawing is unchanged. No execute can succeed in this turn: stop executing and tell the user the reason and the next step in Korean.'
+          : 'Nothing ran and the drawing is unchanged. Retry once only if the cause has likely passed; otherwise stop and tell the user the reason.',
+      };
+    };
     const handlers: {
       query: (args?: QueryPageOptions) => Promise<unknown>;
       execute: (args: { code: string }) => Promise<unknown>;
@@ -172,6 +201,7 @@ export class ZwcadSdkExecution {
       },
       execute: async ({ code }) => {
         if (signal.aborted) throw failure('CANCELLED');
+        if (write && refused?.final) return notExecuted(refused);
         if (attempts >= executionLimits(input).maxHostCommands) throw failure('HOST_COMMAND_LIMIT');
         attempts++;
         report('execute', `${write ? 'ZWCAD 도면 수정' : 'ZWCAD 도면 읽기'} ${attempts}회차`, code);
@@ -186,13 +216,34 @@ export class ZwcadSdkExecution {
             label,
           };
           uncertain = true;
-          const result = await attached.directExecute(basis, {
-            requestId: executionId,
-            code,
-            label,
-            guard: { confirmed: direct.confirmed, maxDeletes: DIRECT_MAX_DELETES },
-          });
+          const started = Date.now();
+          let result: DirectExecuteResult;
+          try {
+            result = await attached.directExecute(basis, {
+              requestId: executionId,
+              code,
+              label,
+              guard: { confirmed: direct.confirmed, maxDeletes: DIRECT_MAX_DELETES },
+            });
+          } catch (error) {
+            // Refused before it reached the drawing (closed, unreachable): nothing ran.
+            const refusal = directRefusal('zwcad', error, Date.now() - started);
+            if (!refusal) throw error;
+            uncertain = false;
+            return notExecuted(refusal, true);
+          }
+          if (!result.ok && !result.guarded && !answeredCodes.has(result.code)) {
+            const refusal = directRefusal('zwcad', result, Date.now() - started);
+            // Any other failure (a slow HOST_BUSY, HOST_READ_FAILED) may have reached the drawing.
+            if (!refusal) {
+              report('error', '실행 결과를 확인하지 못함 · 도면 상태 확인 필요', result.code);
+              throw failure('HOST_RESULT_UNKNOWN');
+            }
+            uncertain = false;
+            return notExecuted(refusal, true);
+          }
           uncertain = false;
+          refused = undefined;
           if (!result.ok) {
             if (result.guarded) {
               const held = { kind: result.guarded.kind, detail: result.guarded.detail };
@@ -304,6 +355,7 @@ User request: ${input.body || '첨부한 설계 문맥을 검토해 주세요.'}
         mode: direct.mode,
         executions,
         ...(guarded ? { guarded } : {}),
+        ...(refused ? { refused: { code: refused.code, reason: refused.reason } } : {}),
         appliedDirectly: writes > 0,
         hostExecuted: writes > 0,
         host: 'zwcad',

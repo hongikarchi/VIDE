@@ -153,6 +153,8 @@ function fakeDirect(document, calls, options) {
       assert.equal(target.documentId, DOCUMENT);
       calls.direct.push(command);
       if (options.failAt === calls.direct.length) return { ok: false, reason: 'EXCEPTION' };
+      if (options.refuseAt === calls.direct.length)
+        throw Object.assign(new Error(options.refuse), { code: options.refuse });
       const block = decodeDataBlock(Buffer.from(command.code.split('"')[1], 'base64'));
       const { header } = block;
       const removed = [];
@@ -1066,6 +1068,19 @@ test('bake (direct): a failing body undoes the bodies before it; the document is
   assert.equal(f.calls.undo.length, 1);
   assert.deepEqual([...f.document.doc.rows.keys()].sort(), [...before.keys()].sort());
   assert.equal((await f.call('GET', `${base}/${iid}/bakes`)).data.bakes.length, 0);
+});
+
+test('bake (direct): a body refused before running (read-only) undoes the ones before it and says why', async (t) => {
+  const f = fixture(t, { direct: true, refuseAt: 2, refuse: 'DOCUMENT_READ_ONLY' });
+  const { base, iid } = await ready(f);
+  const before = new Map(f.document.doc.rows);
+  const refused = await f.call('POST', `${base}/${iid}/bake`, { bake: ['columns', 'beams'] });
+  assert.equal(refused.status, 422, JSON.stringify(refused.data));
+  assert.equal(refused.data.code, 'BAKE_FAILED');
+  assert.equal(refused.data.reason, 'DOCUMENT_READ_ONLY');
+  assert.match(refused.data.refused, /읽기 전용으로 열린 문서라 실행하지 않았습니다/);
+  assert.equal(f.calls.undo.length, 1);
+  assert.deepEqual([...f.document.doc.rows.keys()].sort(), [...before.keys()].sort());
 });
 
 test('bake (direct): a deletion no record lists is undone, by the host guard or by the engine', async (t) => {

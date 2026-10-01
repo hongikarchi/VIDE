@@ -55,7 +55,8 @@ try {
   await page.waitForFunction(() =>
     document.querySelector('.work-stages')?.textContent.includes('검증 성공 2회'),
   );
-  assert.match(await page.locator('.work-stages').textContent(), /조회 2회.*실행 3\/12회/s);
+  // A default-conversation turn is a conversation turn (T-088): the wider turn limits apply.
+  assert.match(await page.locator('.work-stages').textContent(), /조회 2회.*실행 3\/48회/s);
   // SPEC-02.9: three AI turns run at once in a project.
   for (const body of ['Second independent document', 'Third independent document']) {
     await page.locator('#body').fill(body);

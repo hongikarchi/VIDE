@@ -126,10 +126,11 @@ export class ConversationStore {
     this.db = db;
   }
 
-  create(projectId: string, value: NewConversation): Conversation {
+  /** `row` names the conversation (the project's default one has a fixed ID); else a new UUID. */
+  create(projectId: string, value: NewConversation, row: string = randomUUID()): Conversation {
     const input = newConversation.parse(value);
-    const now = new Date().toISOString(),
-      row = randomUUID();
+    const now = new Date().toISOString();
+    id.parse(row);
     this.db
       .prepare(
         `INSERT INTO conversations(id,projectId,kind,title,provider,model,effort,accountProfileId,mode,

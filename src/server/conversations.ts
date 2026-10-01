@@ -3,9 +3,12 @@
 // one provider session (one CLI run per turn, `--session-id` then `--resume`), a Codex one too
 // (`exec resume <thread>`, SPIKE ④ re-test 2026-09-30; the thread is named by its first turn).
 // A provider switched off in SESSION_PROVIDERS runs the ledger method. VIDE's ledger,
-// not the provider transcript, is the record: losing a session loses no work. Requests without a
-// conversation belong to the project's default conversation (`conversationId` NULL), which keeps
-// the earlier per-request behaviour. Storage rows: ARCH-03 §10; CLI arguments: ARCH-01 §2.
+// not the provider transcript, is the record: losing a session loses no work. Every conversation,
+// the project's default one included, fixes its service and model at its first turn (2026-10-01,
+// ADR-021, `place`): the composer's own model, else Jev's choice, once; another model later opens a
+// new conversation with a hand-over. The default conversation becomes a row (`default-<project>`)
+// at its first turn; requests from before then (`conversationId` NULL) stay listed under it.
+// Storage rows: ARCH-03 §10; CLI arguments: ARCH-01 §2.
 
 import { randomUUID } from 'node:crypto';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -74,6 +77,12 @@ export const TRANSCRIPT_RETENTION_DAYS = 30;
 const FULL_LEDGER_EVERY = 6;
 const RECENT_TURNS = 3;
 export const DEFAULT_TITLE = '기본 대화';
+/** What the composer sends for the default conversation; the server resolves it to the row. */
+export const DEFAULT_KEY = 'default';
+/** The default conversation's row, made at its first turn. */
+export const defaultConversationId = (projectId: string) => `default-${projectId}`;
+/** The ledger mark of a conversation opened with "자동 (Jev)" and no request yet. */
+const FIRST_TURN_CHOICE = 'first-turn';
 const KIND_TITLES: Record<Kind, string> = {
   general: '대화',
   'model-edit': '모델 편집',
@@ -147,14 +156,41 @@ export interface LengthHandover {
   limits: SessionLimits;
   sends: { ledgerItems: number; recentTurns: number; files: number };
 }
-export type ConversationSummary = (Conversation | DefaultConversation) & {
+export type ConversationSummary = (
+  | Conversation
+  | DefaultConversation
+  | (Omit<Conversation, 'id'> & { id: null })
+) & {
   requests: number;
+  /** Service and model are chosen at the next (first) turn; until then the shown ones are provisional. */
+  pending: boolean;
   /** The session the next turn would resume, if any. */
   session: SessionSummary | null;
   /** A hand-over waiting for the user's confirmation, or a suggested one. */
   handover: LimitHandover | LengthHandover | null;
 };
-export type NewSessionReason = 'first' | 'account' | 'provider' | 'length' | 'lost' | 'closed';
+export type NewSessionReason =
+  | 'first'
+  | 'account'
+  | 'provider'
+  | 'model'
+  | 'length'
+  | 'lost'
+  | 'closed';
+/** Where a turn's conversation goes and how its service and model were fixed (`place`). */
+export interface Placement {
+  conversation: Conversation;
+  /** Jev's decision when it chose at this (first) turn. */
+  routing?: Choice;
+  /** The conversation the request was sent from when another model opened a new one. */
+  movedFrom?: Conversation;
+}
+export interface PlaceDeps {
+  /** Jev's service, model and effort for this request (`requested`: the composer's service). */
+  route: (requested: Provider) => Promise<Choice>;
+  /** The account a newly fixed conversation keeps. */
+  chooseAccount: (provider: Provider) => Promise<string>;
+}
 /** A packet item a turn carries (ledger, hand-over, changes elsewhere). */
 export interface TurnItem {
   id: string;
@@ -305,6 +341,28 @@ export function kindOf(task: string | undefined, host: string | undefined): Kind
     return host === 'zwcad' ? 'cad-edit' : 'model-edit';
   return 'general';
 }
+/**
+ * The composer's own service and model (SPEC-02.19 2); undefined for "자동 (Jev)". A model named
+ * after its service is that CLI's own default model (no catalog): stored as no model.
+ */
+export function explicitChoice(input: Record<string, unknown>): Choice | undefined {
+  const provider = providerSchema.safeParse(input.provider);
+  if (!provider.success || typeof input.model !== 'string' || isAutoModel(input.model)) return;
+  const model = modelSchema.safeParse(input.model);
+  if (!model.success) return;
+  return {
+    provider: provider.data,
+    model: model.data === provider.data ? undefined : model.data,
+    effort: typeof input.effort === 'string' ? input.effort : 'default',
+  };
+}
+const sameAi = (conversation: Conversation, choice: Choice) =>
+  conversation.provider === choice.provider &&
+  (conversation.model ?? null) === (choice.model ?? null);
+const sessionMode = (provider: Provider, kind: Kind) =>
+  SESSION_PROVIDERS[provider] && !(kind === 'jig-make' && provider === 'codex-cli')
+    ? 'session'
+    : 'ledger';
 /** The ledger as one packet item: current entries, oldest summarized then left out past 8 KB. */
 export function ledgerItem(items: LedgerItem[], scope: 'all' | 'since-last-turn'): TurnItem {
   const entries = items.map((item) => ({
@@ -425,12 +483,47 @@ export class ConversationService {
     return {
       ...conversation,
       requests: this.store.requestIds(conversation.projectId, conversation.id).length,
+      pending: conversation.id ? this.pendingChoice(conversation as Conversation) : true,
       session: active ? sessionSummary(active) : null,
       handover: conversation.id
         ? (this.limitHandover(conversation as Conversation) ??
           (active ? this.lengthHandover(conversation as Conversation, active) : null))
         : null,
     };
+  }
+  /** The project's default conversation row, once its first turn made it. */
+  defaultRow(projectId: string): Conversation | undefined {
+    try {
+      return this.store.get(projectId, defaultConversationId(projectId));
+    } catch (error) {
+      if ((error as { code?: string }).code === 'NOT_FOUND') return undefined;
+      throw error;
+    }
+  }
+  /**
+   * The default conversation as listed (`id` null): its row once fixed, with the requests from
+   * before the row (no `conversationId`) counted in.
+   */
+  private defaultSummary(projectId: string): ConversationSummary {
+    const row = this.defaultRow(projectId);
+    if (!row) return this.summarize(this.defaultConversation(projectId));
+    const summary = this.summarize(row);
+    return {
+      ...summary,
+      id: null,
+      title: DEFAULT_TITLE,
+      requests: summary.requests + this.store.requestIds(projectId, null).length,
+    } as ConversationSummary;
+  }
+  /** The conversation was opened with "자동 (Jev)" and no request yet: its first turn chooses. */
+  private pendingChoice(conversation: Conversation) {
+    return this.store
+      .ledger(conversation.id, { current: true })
+      .some(
+        (item) =>
+          item.kind === 'decision' &&
+          (item.body as { aiChoice?: unknown } | null)?.aiChoice === FIRST_TURN_CHOICE,
+      );
   }
   /** The length suggestion of an open conversation whose active session reached the setting. */
   private lengthHandover(
@@ -541,7 +634,17 @@ export class ConversationService {
       jigInstanceId?: string | null;
       draftId?: string | null;
       targets?: string[] | null;
+      /** Opened with "자동 (Jev)" before any request: the first turn chooses again (`place`). */
+      pending?: boolean;
     },
+  ) {
+    return this.summarize(this.open(projectId, value));
+  }
+  private open(
+    projectId: string,
+    { pending, ...value }: Parameters<ConversationService['create']>[1],
+    row?: string,
+    by?: 'user' | 'jev',
   ) {
     this.db.project(projectId);
     // A make-conversation writes an open draft of this project (PLAN-22 T-063).
@@ -551,16 +654,21 @@ export class ConversationService {
       new JigStore(this.db.db).draft(projectId, value.draftId).state !== 'open'
     )
       throw new DomainError('DRAFT_NOT_OPEN');
-    const conversation = this.store.create(projectId, {
-      ...value,
-      effort: value.effort === 'default' ? null : value.effort,
-      // A Codex make-conversation runs the ledger method: its draft files travel in each packet.
-      mode:
-        SESSION_PROVIDERS[value.provider] &&
-        !(value.kind === 'jig-make' && value.provider === 'codex-cli')
-          ? 'session'
-          : 'ledger',
-    });
+    const conversation = this.store.create(
+      projectId,
+      {
+        ...value,
+        effort: value.effort === 'default' ? null : value.effort,
+        // A Codex make-conversation runs the ledger method: its draft files travel in each packet.
+        mode: sessionMode(value.provider, value.kind),
+      },
+      row,
+    );
+    if (pending)
+      this.store.addLedgerItem(conversation.id, {
+        kind: 'decision',
+        body: { aiChoice: FIRST_TURN_CHOICE },
+      });
     this.options.diagnostics?.write('conversation-open', {
       conversationId: conversation.id,
       projectId,
@@ -569,20 +677,33 @@ export class ConversationService {
       model: conversation.model,
       effort: conversation.effort,
       mode: conversation.mode,
+      ...(by ? { by } : {}),
+      ...(pending ? { pending: true } : {}),
     });
-    return this.summarize(conversation);
+    return conversation;
   }
   /** The default conversation first, then the project's own in opening order. */
   list(projectId: string): ConversationSummary[] {
     this.db.project(projectId);
-    return [this.defaultConversation(projectId), ...this.store.list(projectId)].map((entry) =>
-      this.summarize(entry),
-    );
+    const own = defaultConversationId(projectId);
+    return [
+      this.defaultSummary(projectId),
+      ...this.store
+        .list(projectId)
+        .filter((entry) => entry.id !== own)
+        .map((entry) => this.summarize(entry)),
+    ];
   }
   get(projectId: string, conversationId: string | null) {
     this.db.project(projectId);
-    if (conversationId === null)
-      return { ...this.summarize(this.defaultConversation(projectId)), ledger: [], sessions: [] };
+    if (conversationId === null) {
+      const row = this.defaultRow(projectId);
+      return {
+        ...this.defaultSummary(projectId),
+        ledger: row ? this.store.ledger(row.id, { current: true }) : [],
+        sessions: row ? this.store.sessions(row.id).map(sessionSummary) : [],
+      };
+    }
     const conversation = this.store.get(projectId, conversationId);
     return {
       ...this.summarize(conversation),
@@ -592,6 +713,8 @@ export class ConversationService {
   }
   /** Closing keeps VIDE's requests, results and ledger; `discard` removes the transcripts now. */
   async close(projectId: string, conversationId: string, { discard = false } = {}) {
+    // The default conversation stays (SPEC-02.19 1).
+    if (conversationId === defaultConversationId(projectId)) throw new DomainError('INVALID_INPUT');
     const conversation = this.store.setState(projectId, conversationId, 'closed');
     if (discard) await this.purge(conversationId);
     return this.summarize(this.store.get(projectId, conversation.id));
@@ -675,37 +798,170 @@ export class ConversationService {
     return !answer.text;
   }
   /**
-   * [다른 AI로 이어 가기] (SPEC-02.19 5, confirmed T2 card): the conversation goes on with another
-   * service or model; its next turn opens a new session with a hand-over.
+   * Where a submitted turn goes (SPEC-02.19 2, 2026-10-01): `conversationId` is a conversation or
+   * `default`. The first turn fixes service and model: the composer's own model, else Jev's choice
+   * (the only time Jev chooses a model for a conversation). A later turn keeps them; only its effort
+   * may differ. Another service or model from the composer opens a new conversation with a
+   * hand-over, and the request goes there. Fills the input like `fix`.
+   */
+  async place(
+    projectId: string,
+    input: Record<string, unknown>,
+    deps: PlaceDeps,
+  ): Promise<Placement> {
+    const raw = id.parse(input.conversationId);
+    const explicit = explicitChoice(input);
+    let routing: Placement['routing'];
+    const choose = async (): Promise<Choice> =>
+      explicit ??
+      (routing = await deps.route(input.provider === 'codex-cli' ? 'codex-cli' : 'claude-cli'));
+    let conversation: Conversation | undefined;
+    let movedFrom: Conversation | undefined;
+    let opened = false;
+    if (raw === DEFAULT_KEY || raw === defaultConversationId(projectId)) {
+      this.db.project(projectId);
+      conversation = this.defaultRow(projectId);
+      if (!conversation) {
+        opened = true;
+        const choice = await choose();
+        const accountProfileId = await deps.chooseAccount(choice.provider);
+        // Two first turns at once: the one that lost the race joins the row the other made.
+        conversation =
+          this.defaultRow(projectId) ??
+          this.open(
+            projectId,
+            {
+              kind: 'general',
+              title: DEFAULT_TITLE,
+              provider: choice.provider,
+              model: choice.model ?? null,
+              effort: choice.effort,
+              accountProfileId,
+            },
+            defaultConversationId(projectId),
+            routing ? 'jev' : 'user',
+          );
+      }
+    } else conversation = this.store.get(projectId, raw);
+    if (conversation.state !== 'open') throw new DomainError('CONVERSATION_CLOSED');
+    if (!opened) {
+      const mark = this.store
+        .ledger(conversation.id, { current: true })
+        .find(
+          (item) =>
+            item.kind === 'decision' &&
+            (item.body as { aiChoice?: unknown } | null)?.aiChoice === FIRST_TURN_CHOICE,
+        );
+      if (mark) {
+        // Opened with "자동 (Jev)" and no request yet: this first turn fixes service and model.
+        const choice = await choose();
+        const accountProfileId = await deps.chooseAccount(choice.provider);
+        this.store.supersede(conversation.id, mark.id, mark.id);
+        conversation = this.store.update(projectId, conversation.id, {
+          provider: choice.provider,
+          model: choice.model ?? null,
+          effort: choice.effort === 'default' ? null : choice.effort,
+          accountProfileId,
+          mode: sessionMode(choice.provider, conversation.kind),
+        });
+        this.options.diagnostics?.write('conversation-fixed', {
+          conversationId: conversation.id,
+          provider: conversation.provider,
+          model: conversation.model,
+          by: routing ? 'jev' : 'user',
+        });
+      } else if (explicit && !sameAi(conversation, explicit)) {
+        movedFrom = conversation;
+        conversation = this.continueIn(
+          projectId,
+          conversation,
+          explicit,
+          await deps.chooseAccount(explicit.provider),
+          typeof input.body === 'string' ? input.body : undefined,
+        );
+      }
+    }
+    input.conversationId = conversation.id;
+    this.fix(projectId, input);
+    if (routing) input.routing = routing;
+    return { conversation, ...(routing ? { routing } : {}), ...(movedFrom ? { movedFrom } : {}) };
+  }
+  /**
+   * Another service or model for an open conversation (SPEC-02.19 5, 2026-10-01): the conversation
+   * stays as it is, a new one opens on that service and model, and its first session gets the
+   * hand-over (the old conversation's ledger, latest turns and files). Both ledgers say so.
+   */
+  private continueIn(
+    projectId: string,
+    from: Conversation,
+    choice: Choice,
+    accountProfileId: string,
+    body?: string,
+  ) {
+    const title =
+      body?.trim() && from.id === defaultConversationId(projectId)
+        ? clip(body.trim().replace(/\s+/g, ' '), 60)
+        : from.id === defaultConversationId(projectId)
+          ? KIND_TITLES.general
+          : from.title;
+    const made = this.open(projectId, {
+      kind: from.kind === 'app' ? 'general' : from.kind,
+      title,
+      provider: choice.provider,
+      model: choice.model ?? null,
+      effort: choice.effort,
+      accountProfileId,
+      jigInstanceId: from.jigInstanceId,
+      draftId: from.draftId,
+      targets: from.targets,
+    });
+    const side = (conversation: Conversation) => ({
+      conversationId: conversation.id,
+      title:
+        conversation.id === defaultConversationId(projectId) ? DEFAULT_TITLE : conversation.title,
+      provider: conversation.provider,
+      model: conversation.model,
+    });
+    // The account-limit stop the old conversation shows is answered by this move.
+    const stopped = this.limitHandover(from)?.requestId;
+    this.store.addLedgerItem(from.id, {
+      kind: 'handoff',
+      ...(stopped ? { requestId: stopped } : {}),
+      body: { reason: 'moved', to: side(made) },
+    });
+    this.store.addLedgerItem(made.id, {
+      kind: 'handoff',
+      body: {
+        reason: 'model',
+        from: side(from),
+        to: { provider: made.provider, model: made.model },
+      },
+    });
+    this.options.diagnostics?.write('conversation-handover', {
+      conversationId: made.id,
+      from: from.id,
+      reason: 'model',
+      provider: made.provider,
+      model: made.model,
+    });
+    return made;
+  }
+  /**
+   * [다른 AI로 이어 가기] (SPEC-02.19 5, confirmed T2 card): a new conversation on the chosen
+   * service and model takes over; its first turn opens a session with the hand-over.
    */
   handoffTo(projectId: string, conversationId: string, value: unknown, accountProfileId: string) {
     const input = handoffInput.parse(value);
     const conversation = this.store.get(projectId, conversationId);
     if (conversation.state !== 'open') throw new DomainError('CONVERSATION_CLOSED');
-    for (const session of this.store.sessions(conversationId, 'active'))
-      this.store.setSessionState(session, 'handed-off');
-    const updated = this.store.update(projectId, conversationId, {
-      provider: input.provider,
-      model: input.model ?? null,
-      effort: input.effort && input.effort !== 'default' ? input.effort : null,
-      accountProfileId,
-      mode:
-        SESSION_PROVIDERS[input.provider] &&
-        !(conversation.kind === 'jig-make' && input.provider === 'codex-cli')
-          ? 'session'
-          : 'ledger',
-    });
-    const stopped = this.limitHandover(conversation)?.requestId;
-    this.store.addLedgerItem(conversationId, {
-      kind: 'handoff',
-      ...(stopped ? { requestId: stopped } : {}),
-      body: {
-        reason: 'provider',
-        from: { provider: conversation.provider, model: conversation.model },
-        to: { provider: updated.provider, model: updated.model },
-      },
-    });
-    return this.summarize(updated);
+    return this.summarize(
+      this.continueIn(
+        projectId,
+        conversation,
+        { provider: input.provider, model: input.model, effort: input.effort ?? 'default' },
+        accountProfileId,
+      ),
+    );
   }
   /**
    * The confirmed T2 card of an account limit (SPEC-02.19 5): the conversation keeps its service
@@ -864,7 +1120,7 @@ export class ConversationService {
     }
     // A new session: the previous one is never resumed again; its work comes over in the packet.
     const previous = active ?? this.store.sessions(conversationId).at(-1);
-    const reason: NewSessionReason = !previous
+    let reason: NewSessionReason = !previous
       ? 'first'
       : active
         ? active.accountProfileId !== accountProfileId || active.provider !== provider
@@ -897,6 +1153,14 @@ export class ConversationService {
         requestId: request.id,
         body: { reason, from: sessionKey(previous), to: pending ? opening : key },
       });
+    } else {
+      // A conversation's first session: what it continues (another model's conversation, or the
+      // default conversation's requests from before it was one) comes over as a hand-over.
+      const source = this.firstSessionSource(conversation, others);
+      if (source) {
+        reason = source.reason;
+        items.push(handoffItem(source.reason, source.rows, source.from));
+      }
     }
     return {
       conversation,
@@ -906,6 +1170,53 @@ export class ConversationService {
       opened: reason,
       ...(pending ? { pending } : {}),
     };
+  }
+  private firstSessionSource(
+    conversation: Conversation,
+    rows: StoredWork[],
+  ): { reason: NewSessionReason; rows: StoredWork[]; from?: Record<string, unknown> } | undefined {
+    const moved = this.store
+      .ledger(conversation.id, { current: true })
+      .find(
+        (item) =>
+          item.kind === 'handoff' && (item.body as { reason?: unknown } | null)?.reason === 'model',
+      );
+    const from = (moved?.body as { from?: Record<string, unknown> } | undefined)?.from;
+    if (typeof from?.conversationId === 'string') {
+      const source = from.conversationId;
+      const ledger = this.store
+        .ledger(source, { current: true })
+        .filter(
+          (item) =>
+            item.kind !== 'handoff' &&
+            (item.body as { aiChoice?: unknown } | null)?.aiChoice === undefined,
+        );
+      return {
+        reason: 'model',
+        rows: rows.filter((row) => row.input.conversationId === source && !isChildRow(row)),
+        from: {
+          title: from.title,
+          provider: from.provider,
+          model: from.model,
+          ledger: ledgerItem(ledger, 'all').data,
+        },
+      };
+    }
+    if (conversation.id !== defaultConversationId(conversation.projectId)) return;
+    const earlier = rows.filter((row) => {
+      const input = row.input as Record<string, unknown>;
+      return (
+        input.conversationId === undefined &&
+        !isChildRow(row) &&
+        typeof input.body === 'string' &&
+        !!input.body.trim() &&
+        input.source === undefined &&
+        input.jig === undefined
+      );
+    });
+    return earlier.some((row) => row.state === 'succeeded')
+      ? { reason: 'first', rows: earlier }
+      : undefined;
   }
   /** Books the turn's outcome: tokens on the session, a lost session, the result in the ledger. */
   endTurn(turn: Turn, done: { state: string; result: Record<string, unknown> | null }) {
@@ -1122,7 +1433,13 @@ const sessionSummary = (session: ProviderSession): SessionSummary => ({
   lastTurnAt: session.lastTurnAt,
 });
 /** Hand-over to a new session (SPEC-02.19 5): the ledger item carries everything decided; this one the recent turns and files. */
-function handoffItem(reason: NewSessionReason, own: StoredWork[]): TurnItem {
+const isChildRow = (row: StoredWork) =>
+  !!(row.input as { parentRequestId?: unknown }).parentRequestId;
+function handoffItem(
+  reason: NewSessionReason,
+  own: StoredWork[],
+  from?: Record<string, unknown>,
+): TurnItem {
   const finished = own.filter((row) => row.state === 'succeeded');
   const files = new Set<string>();
   for (const row of finished.slice(-20))
@@ -1135,7 +1452,13 @@ function handoffItem(reason: NewSessionReason, own: StoredWork[]): TurnItem {
     type: 'handoff',
     data: {
       reason,
-      note: 'This is a new session of the same conversation. The ledger item holds every decision, assumption, question and result so far; the most recent turns follow.',
+      note:
+        reason === 'model'
+          ? 'This conversation continues another one that used a different model. `from.ledger` holds its decisions, assumptions, questions and results; its most recent turns follow.'
+          : reason === 'first'
+            ? 'This conversation continues the earlier requests of this project; the most recent ones follow.'
+            : 'This is a new session of the same conversation. The ledger item holds every decision, assumption, question and result so far; the most recent turns follow.',
+      ...(from ? { from } : {}),
       recentTurns: finished.slice(-RECENT_TURNS).map((row) => ({
         request: clip(row.input.body, 2000),
         response: clip(row.result?.text, 6000),
@@ -1244,18 +1567,21 @@ export async function conversationRoutes(
         jigInstanceId: input.jigInstanceId,
         draftId: input.draftId,
         targets: input.targets,
+        // Jev had no request to read: the first turn chooses service and model (SPEC-02.19 2).
+        pending: automatic && !input.body?.trim(),
       }),
     );
     return true;
   }
-  const conversationId = rawId === 'default' ? null : rawId;
   if (!action) {
     if (request.method !== 'GET') return false;
-    send(200, service.get(projectId, conversationId));
+    send(200, service.get(projectId, rawId === DEFAULT_KEY ? null : rawId));
     return true;
   }
   if (request.method !== 'POST') return false;
-  // The default conversation has no session, ledger or hand-over of its own.
+  // The default conversation has a session, ledger and hand-over once its first turn fixed it.
+  const conversationId =
+    rawId === DEFAULT_KEY ? (service.defaultRow(projectId)?.id ?? null) : rawId;
   if (conversationId === null) throw new DomainError('INVALID_INPUT');
   if (action === 'close') {
     const input = closeInput.parse(await body(request));

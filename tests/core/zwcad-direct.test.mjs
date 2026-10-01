@@ -271,3 +271,56 @@ test('a confirmed re-run releases the guard; plan mode never writes', async (t) 
   assert.equal(result.executions.length, 0);
   assert.equal(result.appliedDirectly, false);
 });
+
+// User decision 2026-10-01: a refusal before execution is "실행하지 않음" with its reason; an answer
+// that may have reached the drawing (HOST_READ_FAILED) stays unknown.
+test('a refused execute is not run: a closed drawing stops later executes, busy lets them run', async (t) => {
+  let answer = { ok: false, code: 'STALE_CONNECTION', exceptionType: 'InvalidOperationException' };
+  const host = await fakeHost(t, (params) =>
+    params.method === 'direct-execute' ? (answer ?? applied(params)) : { ok: false, code: 'X' },
+  );
+  const { sdk, handlers } = execution(host);
+  const { task: closed } = task(host, { mode: 'auto' }, async () => {
+    const first = await handlers().execute({ code: 'return 1;' });
+    const second = await handlers().execute({ code: 'return 1;' });
+    assert.equal(first.executed, false);
+    assert.equal(first.code, 'STALE_CONNECTION');
+    assert.match(first.next, /No execute can succeed/);
+    assert.deepEqual(second, first);
+    return { summary: '실행하지 않음' };
+  });
+  const result = await sdk.run(closed);
+  assert.equal(host.calls.filter((call) => call.method === 'direct-execute').length, 1);
+  assert.equal(result.refused.code, 'STALE_CONNECTION');
+  assert.match(result.refused.reason, /다시 연결/);
+  assert.equal(result.appliedDirectly, false);
+
+  answer = { ok: false, code: 'HOST_BUSY', exceptionType: 'InvalidOperationException' };
+  const { task: busy } = task(host, { mode: 'auto' }, async () => {
+    const first = await handlers().execute({ code: 'return 1;' });
+    assert.equal(first.executed, false);
+    assert.match(first.reason, /명령이 진행 중/);
+    answer = undefined;
+    assert.equal((await handlers().execute({ code: 'return 1;' })).ok, true);
+    return {};
+  });
+  const after = await sdk.run(busy);
+  assert.equal(after.refused, undefined);
+  assert.equal(after.appliedDirectly, true);
+});
+
+test('a failure that may have reached the drawing stays unknown', async (t) => {
+  const host = await fakeHost(t, () => ({
+    ok: false,
+    code: 'HOST_READ_FAILED',
+    exceptionType: 'System.NullReferenceException',
+  }));
+  const { sdk, handlers } = execution(host);
+  const { task: auto } = task(host, { mode: 'auto' }, async () => {
+    await assert.rejects(handlers().execute({ code: 'return 1;' }), {
+      code: 'HOST_RESULT_UNKNOWN',
+    });
+    return {};
+  });
+  await assert.rejects(sdk.run(auto), { code: 'HOST_RESULT_UNKNOWN' });
+});

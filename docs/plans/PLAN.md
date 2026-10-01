@@ -211,6 +211,7 @@ Jev는 기존 계정이 없다는 사용자 확인에 따라 가입 재개까지
 | T-068 · 계정 관리를 AccountSwitch로 | 2026-09-30 사용자 결정([ADR-025](../decisions/ADR-025-accounts-in-accountswitch.md)): VIDE는 기본 로그인만 쓰고 계정 관리는 AccountSwitch가 맡는다. 0단계(AccountSwitch 설치) 진행. 1단계부터는 다른 세션의 대화·계정 파일 작업이 커밋된 뒤 | [PLAN-25](PLAN-25-accounts-to-accountswitch.md) |
 | T-069~075 · 바로 적용·계획/자동 모드 | T-069 문서 완료([ADR-022](../decisions/ADR-022-direct-apply-plan-auto.md)). T-070(Rhino)·T-071(ZWCAD) 코드·스크래치 빌드 완료, 플러그인 재빌드·설치와 실호스트 확인 남음. T-072 서버 구현·단위 검증(안전 점검 7건 반영), T-073 화면 구현(브라우저 시험 남음), T-074 jig 만들기 바로 적용(실제 Rhino 남음), T-075 자체 질문 SPIKE 합격·어댑터는 꺼 둠(2026-10-01 기본으로 켜기로 결정, [ADR-026](../decisions/ADR-026-chat-stage-and-skill-jigs.md), 적용은 T-076) | [PLAN-24](PLAN-24-ai-conversations.md#direct-apply) |
 | T-076~080 · 대화 중심 구조(skill 시작·토큰·목업·셸·층 평면) | 2026-10-01 결정([ADR-026](../decisions/ADR-026-chat-stage-and-skill-jigs.md)). T-076·077 구현·시험 완료, T-078 사용자 검토 대기, T-079 막힘(T-078 VERIFY 전), T-080 대기(SPEC-02.17 보완 먼저) | [PLAN-26](PLAN-26-chat-stage.md) |
+| T-088 · 대화별 모델 고정·모델 바꾸기 = 새 탭 | 2026-10-01 결정([ADR-021](../decisions/ADR-021-conversation-sessions.md) 보완). 구현·단위·브라우저 시험 완료(2026-10-01). 실제 CLI로 모델 바꾸기 인계 확인은 설치본 릴리스 때 | [PLAN-24](PLAN-24-ai-conversations.md#t-088) |
 
 ### 6.6 전체 완료 관문
 

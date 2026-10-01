@@ -4,11 +4,12 @@ import type { Root } from 'react-dom/client';
 import { z } from 'zod';
 import './conversations.css';
 
-// 목적별 대화 칩 (Design SCR-15, SPEC-02.19, PLAN-24 T-061): one row of chips at the top of the
-// right column, one chip per conversation (the project's default conversation first), with its
+// 목적별 대화 탭 (Design SCR-15, SPEC-02.19, PLAN-24 T-061·T-088): one row of tabs at the top of
+// the right column, one per conversation (the project's default conversation first), with its
 // state (● 진행 중, ◌ 읽지 않은 답, '대기 n'); a head line with the conversation's name, its target
-// files and the service · model · account fixed when it opened (read-only); [+] 새 대화; closing;
-// and the T2 hand-over card (다른 AI로 이어 가기, and the account-limit stop the server reports).
+// files and the service · model · account fixed at its first turn (read-only; the composer's model
+// follows the chosen tab, `onFixed`); [+] 새 대화; closing; and the T2 hand-over card (다른 AI로 이어
+// 가기 opens a new conversation, and the account-limit stop the server reports).
 // The chosen conversation is also the work view's filter (`conversationFilter`, read by
 // work-view.tsx). Server routes: src/server/conversations.ts `conversationRoutes`.
 
@@ -68,6 +69,8 @@ export const conversationSchema = z
     targets: z.array(z.string()).nullable(),
     state: z.enum(['open', 'closed']),
     requests: z.number().default(0),
+    /** Service and model are chosen at the first turn (the shown ones are provisional). */
+    pending: z.boolean().default(false),
     session: sessionSchema.nullable().default(null),
     // An unknown shape (a newer server) shows no card rather than failing the list.
     handover: handoverSchema.nullable().catch(null).default(null),
@@ -112,6 +115,10 @@ export const KIND_LABELS: Record<string, string> = {
   app: '앱',
 };
 const PROVIDER_LABELS: Record<string, string> = { 'claude-cli': 'Claude', 'codex-cli': 'Codex' };
+/** The one line both conversations show when another model took a request to a new one. */
+export const MOVED_TEXT = '모델이 달라 새 대화로 이어서 보냈습니다';
+/** The default conversation: its key as sent (`default`) and its row on the server (`default-<project>`). */
+const DEFAULT_ROW = /^default(-|$)/;
 const HANDOFF_REASONS: Record<string, string> = {
   first: '첫 세션',
   account: '계정 한도로 여유 계정의 새 세션으로 옮겼습니다',
@@ -119,14 +126,16 @@ const HANDOFF_REASONS: Record<string, string> = {
   lost: '끊긴 턴의 세션을 다시 쓰지 않고 원장으로 새 세션을 열었습니다',
   closed: '기록을 지운 대화를 원장으로 새 세션에서 이어 갑니다',
   provider: '다른 AI로 이어 갑니다',
+  model: MOVED_TEXT,
+  moved: MOVED_TEXT,
 };
 const RUNNING = new Set(['queued', 'running']);
 const FINISHED = new Set(['succeeded', 'failed', 'cancelled', 'interrupted', 'unknown']);
 
-/** The conversation a request belongs to: absent is the default conversation (`null`). */
+/** The conversation a request belongs to: absent (or its row) is the default conversation (`null`). */
 export function conversationOf(message: RequestLike): string | null {
   const id = (message.request?.input as { conversationId?: unknown } | undefined)?.conversationId;
-  return typeof id === 'string' ? id : null;
+  return typeof id === 'string' && !DEFAULT_ROW.test(id) ? id : null;
 }
 /** Whether a request shows under a conversation filter; `undefined` shows everything. */
 export function inConversation(message: RequestLike, filter: string | null | undefined) {
@@ -184,11 +193,13 @@ export function chipLabel(entry: Pick<ConversationEntry, 'id' | 'kind' | 'title'
 }
 /** The small read-only label of a conversation's service, model and account. */
 export function providerLabel(
-  entry: Pick<ConversationEntry, 'provider' | 'model' | 'effort' | 'accountProfileId'>,
+  entry: Pick<ConversationEntry, 'provider' | 'model' | 'effort' | 'accountProfileId'> & {
+    pending?: boolean;
+  },
   models: readonly ModelOption[] = [],
   accountName?: (id: string) => string | undefined,
 ) {
-  if (!entry.provider) return '요청마다 고른 AI';
+  if (!entry.provider || entry.pending) return '첫 요청 때 AI를 정합니다';
   const model = entry.model
     ? (models.find((option) => option.id === entry.model)?.name ?? entry.model)
     : '기본 모델';
@@ -247,7 +258,7 @@ export function handoverCard(
     | undefined,
   messages: RequestLike[],
 ): HandoverCard | undefined {
-  if (!detail || detail.id === null) return;
+  if (!detail) return;
   // The server's state comes first: it knows the stop and what a new session receives.
   const state = detail.handover;
   if (state?.kind === 'limit')
@@ -260,7 +271,7 @@ export function handoverCard(
   if (state?.kind === 'length')
     return {
       kind: 'length',
-      key: `${detail.id}:${state.turns}`,
+      key: `${keyOf(detail.id)}:${state.turns}`,
       text:
         `대화가 길어졌습니다(${state.turns}턴 · 누적 ${tokenText(state.inputTokens)} 토큰, ` +
         `기준 ${state.limits.maxTurns}턴 · ${tokenText(state.limits.maxInputTokens)} 토큰). ` +
@@ -287,6 +298,15 @@ export function handoverCard(
   const body = (record.body ?? {}) as { reason?: unknown; from?: unknown; to?: unknown };
   const reason = typeof body.reason === 'string' ? body.reason : '';
   if (reason === 'first') return;
+  // A request taken to a new conversation: '… · <the other side>' in both.
+  if (reason === 'moved' || reason === 'model')
+    return {
+      kind: 'record',
+      ledgerId: record.id,
+      text: [MOVED_TEXT, sideLabel(reason === 'moved' ? body.to : body.from)]
+        .filter(Boolean)
+        .join(' · '),
+    };
   return {
     kind: 'record',
     ledgerId: record.id,
@@ -322,6 +342,11 @@ interface Options {
   messages?: RequestLike[];
   /** The chosen conversation changed: the composer sends `conversationId` (absent for null). */
   onChange?: (id: string | null) => void;
+  /**
+   * The chosen conversation's fixed service and model (null while its first turn has not chosen):
+   * the composer's model follows it, so sending there keeps the conversation (SPEC-02.19 2).
+   */
+  onFixed?: (fixed: { provider: string; model: string | null } | null) => void;
   accountName?: (id: string) => string | undefined;
 }
 export interface ConversationsController {
@@ -424,7 +449,8 @@ function CreateForm({
         </select>
       </label>
       <small className="conv-note">
-        AI와 모델은 대화를 시작할 때 정하고 이 대화 동안 바꾸지 않습니다.
+        AI와 모델은 첫 요청 때 정하고(자동이면 Jev가 고름) 이 대화 동안 바꾸지 않습니다. 다른 모델을
+        고르면 새 대화로 이어집니다.
       </small>
       {error ? <small className="conv-error">{error}</small> : null}
       <div className="conv-actions">
@@ -478,8 +504,8 @@ function HandoverConfirm({
         </select>
       </p>
       <small className="conv-note">
-        새 AI에는 이 대화의 원장(결정·가정·질문과 답·결과 참조)과 최근 요청 요약을 보냅니다. 이전
-        세션은 이어 쓰지 않습니다.
+        새 대화를 열어 이 대화의 원장(결정·가정·질문과 답·결과 참조)과 최근 요청 요약을 보냅니다. 이
+        대화는 지금 AI로 그대로 남습니다.
       </small>
       {error ? <small className="conv-error">{error}</small> : null}
       <div className="conv-actions">
@@ -620,12 +646,25 @@ function Conversations({
     .map((id) => targets.find((option) => option.id === id)?.name)
     .filter(Boolean);
   const reload = () => setLoaded((value) => value + 1);
+  const fixedKey =
+    current && current.provider && !current.pending
+      ? `${keyOf(current.id)}|${current.provider}|${current.model ?? ''}`
+      : current
+        ? `${keyOf(current.id)}|`
+        : '';
+  const onFixed = useRef(options.onFixed);
+  onFixed.current = options.onFixed;
+  useEffect(() => {
+    if (!fixedKey) return;
+    const [, provider, model] = fixedKey.split('|');
+    onFixed.current?.(provider ? { provider, model: model || null } : null);
+  }, [fixedKey]);
   /** [새 세션으로 이어가기]: posts the hand-over (a spare account, or a new session). */
   const renew = (path: string) => {
-    if (!current?.id) return;
+    if (!current?.provider) return;
     setRenewing(true);
     setError('');
-    api(`${base}/${current.id}/${path}`, 'POST', {})
+    api(`${base}/${keyOf(current.id)}/${path}`, 'POST', {})
       .then(reload)
       .catch((reason) => setError(errorText(reason)))
       .finally(() => setRenewing(false));
@@ -700,7 +739,7 @@ function Conversations({
           <span className="conv-ai" title="대화를 시작할 때 정한 AI">
             {providerLabel(current, models, options.accountName)}
           </span>
-          {current.id !== null ? (
+          {current.provider && !current.pending ? (
             <details className="conv-menu">
               <summary aria-label="대화 메뉴">⋯</summary>
               <button
@@ -713,21 +752,23 @@ function Conversations({
               >
                 다른 AI로 이어 가기
               </button>
-              <button
-                type="button"
-                onClick={(event) => {
-                  (event.currentTarget.closest('details') as HTMLDetailsElement).open = false;
-                  const id = current.id!;
-                  api(`${base}/${id}/close`, 'POST', {})
-                    .then(() => {
-                      select(null);
-                      reload();
-                    })
-                    .catch((reason) => setError(errorText(reason)));
-                }}
-              >
-                대화 닫기
-              </button>
+              {current.id !== null ? (
+                <button
+                  type="button"
+                  onClick={(event) => {
+                    (event.currentTarget.closest('details') as HTMLDetailsElement).open = false;
+                    const id = current.id!;
+                    api(`${base}/${id}/close`, 'POST', {})
+                      .then(() => {
+                        select(null);
+                        reload();
+                      })
+                      .catch((reason) => setError(errorText(reason)));
+                  }}
+                >
+                  대화 닫기
+                </button>
+              ) : null}
             </details>
           ) : null}
         </div>
@@ -751,16 +792,20 @@ function Conversations({
           }}
         />
       ) : null}
-      {handing && current && current.id !== null ? (
+      {handing && current?.provider ? (
         <HandoverConfirm
           entry={current}
           models={models}
           cancel={() => setHanding(false)}
           run={async (value) => {
-            await api(`${base}/${current.id}/handoff`, 'POST', value);
+            // The conversation stays; a new one on that AI takes over (SPEC-02.19 5).
+            const made = conversationSchema.parse(
+              await api(`${base}/${keyOf(current.id)}/handoff`, 'POST', value),
+            );
             setHanding(false);
             setError('');
             reload();
+            select(made.id);
           }}
         />
       ) : null}

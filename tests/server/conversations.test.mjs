@@ -923,6 +923,222 @@ test('the ledger item stays under 8 KB by summarizing, then leaving out, the old
   assert.equal(kindOf(undefined, undefined), 'general');
 });
 
+/** Jev and the account chooser as `place` sees them; `routes` counts Jev's calls. */
+function placeDeps(choice = { provider: 'claude-cli', model: 'opus', effort: 'high' }) {
+  const deps = {
+    routes: 0,
+    route: async () => {
+      deps.routes++;
+      return { ...choice, by: 'jev', task: 'complex' };
+    },
+    chooseAccount: async () => 'default',
+  };
+  return deps;
+}
+/** A composer turn: placed like `POST …/requests` (the first turn fixes the AI), then started. */
+async function composerTurn({ conversations, workspace, execution, project }, deps, id, fields) {
+  const input = {
+    id,
+    body: id,
+    provider: 'claude-cli',
+    model: 'auto',
+    effort: 'default',
+    permission: 'review',
+    pins: [],
+    sketches: [],
+    files: [],
+    ...fields,
+  };
+  const placed = await conversations.place(project.id, input, deps);
+  const request = workspace.submit(project.id, input).request;
+  execution.start(request);
+  return { placed, request };
+}
+const flag = (call, name) =>
+  call.args.includes(name) ? call.args[call.args.indexOf(name) + 1] : null;
+
+test('the default conversation fixes its AI at the first turn; later turns keep it, effort may change', async (t) => {
+  const context = setup(t, (turn) => [init, answer(`답 ${turn + 1}`)]);
+  const { conversations, project, fake, send, settled, state } = context;
+  // A request from before the default conversation was one.
+  send('plain-1');
+  await settled();
+  assert.equal(conversations.list(project.id)[0].pending, true);
+  const deps = placeDeps();
+  const first = await composerTurn(context, deps, 'd1', { conversationId: 'default' });
+  await settled();
+  // Jev chose once; the turn runs in the default conversation's row on Jev's choice.
+  assert.equal(deps.routes, 1);
+  assert.equal(first.placed.conversation.id, `default-${project.id}`);
+  assert.equal(first.placed.routing.by, 'jev');
+  assert.deepEqual(
+    [state('d1').input.conversationId, state('d1').input.model, state('d1').input.effort],
+    [`default-${project.id}`, 'opus', 'high'],
+  );
+  assert.equal(state('d1').state, 'succeeded');
+  // Later turns: "자동 (Jev)" in the composer is not asked again; effort changes, session stays.
+  await composerTurn(context, deps, 'd2', { conversationId: 'default' });
+  await settled();
+  await composerTurn(context, deps, 'd3', {
+    conversationId: 'default',
+    model: 'opus',
+    effort: 'low',
+  });
+  await settled();
+  assert.equal(deps.routes, 1);
+  assert.deepEqual(
+    ['d2', 'd3'].map((id) => [
+      state(id).input.model,
+      state(id).input.effort,
+      state(id).input.routing,
+    ]),
+    [
+      ['opus', 'high', undefined],
+      ['opus', 'low', undefined],
+    ],
+  );
+  const runs = fake.runs().slice(1);
+  const session = flag(runs[0], '--session-id');
+  assert.match(session, /^[0-9a-f-]{36}$/);
+  assert.deepEqual(
+    runs.map((call) => [flag(call, '--model'), flag(call, '--effort'), flag(call, '--resume')]),
+    [
+      ['opus', 'high', null],
+      ['opus', 'high', session],
+      ['opus', 'low', session],
+    ],
+  );
+  // Its first session got the earlier requests as a hand-over.
+  const handoff = fake.packet(runs[0]).items.find((item) => item.id === 'handoff');
+  assert.equal(handoff.data.reason, 'first');
+  assert.deepEqual(handoff.data.recentTurns, [{ request: 'plain-1', response: '답 1' }]);
+  // Listed as the default conversation (id null), now with its fixed AI and every request.
+  const listed = conversations.list(project.id);
+  assert.equal(listed.length, 1);
+  assert.deepEqual(
+    [listed[0].id, listed[0].provider, listed[0].model, listed[0].pending, listed[0].requests],
+    [null, 'claude-cli', 'opus', false, 4],
+  );
+  assert.equal(conversations.get(project.id, null).session.turns, 3);
+  // The default conversation is not closed.
+  await assert.rejects(conversations.close(project.id, `default-${project.id}`), {
+    code: 'INVALID_INPUT',
+  });
+});
+
+test("the composer's own model at the first turn is kept without asking Jev", async (t) => {
+  const context = setup(t, () => [init, answer('답')]);
+  const deps = placeDeps();
+  const { placed } = await composerTurn(context, deps, 'e1', {
+    conversationId: 'default',
+    model: 'sonnet',
+    effort: 'medium',
+  });
+  await context.settled();
+  assert.equal(deps.routes, 0);
+  assert.equal(placed.routing, undefined);
+  assert.deepEqual(
+    [placed.conversation.provider, placed.conversation.model, placed.conversation.effort],
+    ['claude-cli', 'sonnet', 'medium'],
+  );
+  // A conversation opened with "자동 (Jev)" before any request is fixed at its first turn.
+  const pending = context.conversations.create(context.project.id, {
+    kind: 'general',
+    title: '대화',
+    provider: 'claude-cli',
+    model: 'sonnet',
+    accountProfileId: 'default',
+    pending: true,
+  });
+  assert.equal(pending.pending, true);
+  const fixed = await composerTurn(context, deps, 'e2', { conversationId: pending.id });
+  await context.settled();
+  assert.equal(deps.routes, 1);
+  assert.equal(fixed.placed.conversation.id, pending.id);
+  assert.equal(fixed.placed.movedFrom, undefined);
+  const after = context.conversations.get(context.project.id, pending.id);
+  assert.deepEqual([after.model, after.effort, after.pending], ['opus', 'high', false]);
+  // The mark is not part of what the AI is sent.
+  assert.deepEqual(
+    after.ledger.map((item) => item.kind),
+    ['result-ref'],
+  );
+});
+
+test('another model from the composer opens a new conversation with the hand-over, and the request runs there', async (t) => {
+  const context = setup(t, (turn) => [init, answer(`답 ${turn + 1}`)]);
+  const { conversations, project, fake, open, send, settled, state } = context;
+  const conversation = open({ model: 'sonnet' });
+  send('m1', { conversationId: conversation.id });
+  await settled();
+  conversations.addLedger(project.id, conversation.id, {
+    kind: 'decision',
+    body: { text: '층고 4.2 m로 본다' },
+  });
+  const deps = placeDeps();
+  const moved = await composerTurn(context, deps, 'm2', {
+    conversationId: conversation.id,
+    model: 'opus',
+    effort: 'high',
+    body: '같은 조건으로 계단을 다시 그려줘',
+  });
+  await settled();
+  assert.equal(deps.routes, 0);
+  assert.equal(moved.placed.movedFrom.id, conversation.id);
+  const made = moved.placed.conversation;
+  assert.notEqual(made.id, conversation.id);
+  assert.deepEqual(
+    [made.kind, made.provider, made.model, made.title],
+    ['ask', 'claude-cli', 'opus', '법규 질문'],
+  );
+  assert.equal(state('m2').input.conversationId, made.id);
+  assert.equal(state('m2').state, 'succeeded');
+  // The old conversation is untouched and says where the request went; the new one, where from.
+  const old = conversations.get(project.id, conversation.id);
+  assert.equal(old.model, 'sonnet');
+  assert.equal(old.session.turns, 1);
+  assert.equal(old.ledger.at(-1).kind, 'handoff');
+  assert.deepEqual(old.ledger.at(-1).body, {
+    reason: 'moved',
+    to: { conversationId: made.id, title: '법규 질문', provider: 'claude-cli', model: 'opus' },
+  });
+  const fresh = conversations.get(project.id, made.id);
+  assert.equal(fresh.ledger[0].body.reason, 'model');
+  assert.equal(fresh.ledger[0].body.from.conversationId, conversation.id);
+  // The new conversation's first session carries the old one's ledger and latest turns.
+  const runs = fake.runs();
+  assert.equal(runs.length, 2);
+  assert.equal(flag(runs[1], '--model'), 'opus');
+  assert.ok(flag(runs[1], '--session-id'));
+  assert.notEqual(flag(runs[1], '--session-id'), flag(runs[0], '--session-id'));
+  const handoff = fake.packet(runs[1]).items.find((item) => item.id === 'handoff');
+  assert.equal(handoff.data.reason, 'model');
+  assert.deepEqual(handoff.data.recentTurns, [{ request: 'm1', response: '답 1' }]);
+  assert.equal(handoff.data.from.model, 'sonnet');
+  assert.deepEqual(
+    handoff.data.from.ledger.items.map((item) => item.kind),
+    ['result-ref', 'decision'],
+  );
+  // Back in the old conversation, its own model keeps it there (no further moves).
+  const back = await composerTurn(context, deps, 'm3', {
+    conversationId: conversation.id,
+    model: 'sonnet',
+  });
+  await settled();
+  assert.equal(back.placed.conversation.id, conversation.id);
+  assert.equal(flag(fake.runs()[2], '--resume'), flag(runs[0], '--session-id'));
+  // [다른 AI로 이어 가기] also opens a new conversation now.
+  const handed = conversations.handoffTo(
+    project.id,
+    conversation.id,
+    { provider: 'codex-cli', model: 'gpt-5' },
+    'default',
+  );
+  assert.notEqual(handed.id, conversation.id);
+  assert.deepEqual([handed.provider, handed.model], ['codex-cli', 'gpt-5']);
+  assert.equal(conversations.get(project.id, conversation.id).provider, 'claude-cli');
+});
+
 test('HTTP: conversations open with a fixed service and model, and requests join them', async () => {
   const runs = [];
   const app = await startServer({
@@ -1046,6 +1262,29 @@ test('HTTP: conversations open with a fixed service and model, and requests join
       await api(`${base}/${named.id}/handoff`, 'POST', { provider: 'claude-cli' })
     ).json();
     assert.deepEqual([handed.provider, handed.model, handed.mode], ['claude-cli', null, 'session']);
+    assert.notEqual(handed.id, named.id);
+    // The default conversation's first turn fixes it; Jev is not asked on later turns.
+    assert.equal(
+      (await api(requests, 'POST', { ...input, id: 'turn-d1', conversationId: 'default' })).status,
+      202,
+    );
+    const fixed = (await (await api(base)).json())[0];
+    assert.deepEqual([fixed.id, fixed.provider, fixed.pending], [null, 'claude-cli', false]);
+    const firstTurn = await (await api(requests + '/turn-d1')).json();
+    assert.equal(firstTurn.input.conversationId, `default-${project.id}`);
+    assert.ok(firstTurn.input.routing);
+    // Another service from the composer: the request goes to a new conversation.
+    const switched = await (
+      await api(requests, 'POST', {
+        ...input,
+        id: 'turn-d2',
+        conversationId: 'default',
+        provider: 'codex-cli',
+        model: 'gpt-5',
+      })
+    ).json();
+    assert.notEqual(switched.input.conversationId, `default-${project.id}`);
+    assert.deepEqual([switched.input.provider, switched.input.model], ['codex-cli', 'gpt-5']);
     const closed = await (await api(`${base}/${named.id}/close`, 'POST', {})).json();
     assert.equal(closed.state, 'closed');
     assert.equal(

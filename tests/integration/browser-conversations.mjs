@@ -1,6 +1,8 @@
 // Routes without the AI in the composer (SPEC-02.17 2·3, PLAN-24 T-049) and the conversation mount
 // points (T-061·T-062): a jig, Sync or a T2 app action is proposed on a card, every
 // notice keeps 'AI 작업으로 보내기' (which records the reversal), and ask/document go to the AI.
+// T-088: conversations are tabs whose AI is fixed at the first turn; the composer's model follows
+// the chosen tab, and another model sends the request to a new conversation (its tab is chosen).
 import assert from 'node:assert/strict';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -27,11 +29,38 @@ try {
       ],
     }),
   );
-  // Sending to the AI is only recorded (no CLI runs here).
-  await page.route(/\/requests$/, (route) => {
-    if (route.request().method() !== 'POST') return route.continue();
-    posted.push(JSON.parse(route.request().postData()));
-    return route.fulfill({ status: 409, json: { code: 'PROJECT_BUSY' } });
+  await page.route('**/api/v1/models', (route) =>
+    route.fulfill({
+      json: [
+        { id: 'auto', name: '자동 (Jev)', provider: 'claude-cli', efforts: ['default'] },
+        { id: 'sonnet', name: 'Sonnet', provider: 'claude-cli', efforts: ['default', 'low'] },
+        { id: 'opus', name: 'Opus', provider: 'claude-cli', efforts: ['default', 'low'] },
+      ],
+    }),
+  );
+  // Sending to the AI is only recorded (no CLI runs here). One request comes back moved to a new
+  // conversation, the way the server answers another model than the conversation's.
+  let moved;
+  await page.route(/\/requests(\/r-moved)?$/, (route) => {
+    if (route.request().method() !== 'POST')
+      return moved && /r-moved$/.test(route.request().url())
+        ? route.fulfill({ json: moved })
+        : route.continue();
+    const input = JSON.parse(route.request().postData());
+    posted.push(input);
+    if (input.body !== '다른 모델로 이어서')
+      return route.fulfill({ status: 409, json: { code: 'PROJECT_BUSY' } });
+    conversationsState['c-new'] = {
+      ...entry('c-new', '다른 모델로 이어서', null),
+      model: 'opus',
+    };
+    moved = {
+      id: 'r-moved',
+      state: 'queued',
+      input: { ...input, id: 'r-moved', conversationId: 'c-new' },
+      result: null,
+    };
+    return route.fulfill({ status: 202, json: moved });
   });
   await page.route(/\/route\/revert$/, (route) => {
     reverted.push(JSON.parse(route.request().postData()));
@@ -45,6 +74,7 @@ try {
     '이 프로젝트 결정 사항 알려줘': { target: 'ask', by: 'jev' },
     // Jev marks a complex / multi-file request: in 자동 the composer suggests '계획부터'.
     '두 도면 기둥 번호를 모두 맞춰줘': { target: 'document', by: 'jev', planFirst: true },
+    '다른 모델로 이어서': { target: 'document', by: 'jev' },
   };
   await page.route(/\/route$/, (route) =>
     route.fulfill({
@@ -87,13 +117,8 @@ try {
       sends,
     }),
   };
-  const defaultEntry = {
-    ...entry(null, '기본 대화', null),
-    kind: 'general',
-    provider: null,
-    accountProfileId: null,
-    mode: 'ledger',
-  };
+  // The default conversation's first turn already fixed it on Sonnet.
+  const defaultEntry = { ...entry(null, '기본 대화', null), kind: 'general', model: 'sonnet' };
   await page.route(/\/api\/v1\/projects\/[^/]+\/conversations(\/.*)?$/, (route) => {
     const [, rest = ''] = /\/conversations(\/.*)?$/.exec(new URL(route.request().url()).pathname);
     const [, id, action] = rest.split('/');
@@ -112,6 +137,16 @@ try {
   assert.equal(await page.locator('#right #conversation-chips').count(), 1);
   assert.equal(await page.locator('#right #question-cards').count(), 1);
   assert.ok(await page.locator('#route-card').isHidden());
+  // Conversations read as tabs; the default one is chosen and shows the AI its first turn fixed,
+  // and the composer's model follows it.
+  const tabs = page.locator('#conversation-chips [role="tab"]');
+  await tabs.first().waitFor();
+  assert.equal(await tabs.count(), 3);
+  assert.equal(await tabs.first().getAttribute('aria-selected'), 'true');
+  await page.waitForFunction(
+    () => document.querySelector('#conversation-chips .conv-ai')?.textContent === 'Claude · Sonnet',
+  );
+  await page.waitForFunction(() => document.querySelector('#model').value === 'sonnet');
   const send = async (text) => {
     await page.locator('#body').fill(text);
     await page.locator('#request').click();
@@ -162,8 +197,9 @@ try {
     posted.map((input) => input.body),
     ['이 프로젝트 결정 사항 알려줘'],
   );
-  // Without a chosen conversation the request belongs to the project's default one.
-  assert.equal(posted[0].conversationId, undefined);
+  // Without a chosen conversation the request goes to the project's default one, on its model.
+  assert.equal(posted[0].conversationId, 'default');
+  assert.equal(posted[0].model, 'sonnet');
   assert.equal(posted[0].mode, 'auto');
   // '계획부터 할까요?': [계획부터] sends this one request in 계획; the toggle stays on 자동.
   posted.length = 0;
@@ -202,9 +238,30 @@ try {
   await lengthCard.locator('button').filter({ hasText: '새 세션으로 이어가기' }).click();
   await lengthCard.waitFor({ state: 'detached' });
   assert.deepEqual(handedOver.at(-1), { id: 'c-long', action: 'renew', body: {} });
+  // Another model in the composer: the server sends the request to a new conversation, whose tab
+  // is chosen, and the composer says what happened.
+  await page.locator('[data-conversation="default"]').click();
+  await page.waitForFunction(() => document.querySelector('#model').value === 'sonnet');
+  await page.locator('#model').selectOption('opus');
+  posted.length = 0;
+  await send('다른 모델로 이어서');
+  for (let i = 0; i < 40 && !posted.length; i++) await page.waitForTimeout(50);
+  assert.deepEqual(
+    posted.map((input) => [input.conversationId, input.model]),
+    [['default', 'opus']],
+  );
+  await page.waitForFunction(
+    () =>
+      document.querySelector('[data-conversation="c-new"]')?.getAttribute('aria-selected') ===
+      'true',
+  );
+  assert.match(
+    await page.locator('#message').textContent(),
+    /모델이 달라 새 대화로 이어서 보냈습니다 · Opus/,
+  );
   assert.deepEqual(errors, []);
   console.log(
-    'browser conversations: route cards, AI fallback, mount points and hand-over cards pass',
+    'browser conversations: route cards, AI fallback, tabs with a fixed AI, a model change to a new tab and hand-over cards pass',
   );
 } finally {
   await browser?.close();

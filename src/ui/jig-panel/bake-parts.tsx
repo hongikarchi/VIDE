@@ -83,7 +83,9 @@ const errorText = (body: Record<string, unknown>, fallback: string) => {
   if (body.code === 'BAKE_FAILED' || body.code === 'BAKE_READ_FAILED')
     return body.undoFailed
       ? '만들지 못했고 일부를 되돌리지 못했습니다. Rhino에서 Ctrl+Z로 확인하세요.'
-      : '만들지 못했습니다. Rhino 문서는 그대로입니다.';
+      : typeof body.refused === 'string'
+        ? `만들지 않았습니다. ${body.refused}`
+        : '만들지 못했습니다. Rhino 문서는 그대로입니다.';
   if (body.code === 'BAKE_UNDO_NOT_LATEST')
     return '그 뒤에 Rhino에서 다른 작업이 있어 되돌리지 않았습니다. Rhino에서 Ctrl+Z를 쓰세요.';
   if (body.code === 'BAKE_UNDO_UNAVAILABLE')

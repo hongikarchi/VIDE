@@ -255,6 +255,14 @@ related: [PLAN, PLAN-22, PLAN-23, PLAN-02, PLAN-05, PLAN-08, PLAN-19, FR-25, FR-
 - **검증:** [SPIKE-2026-09-30-native-questions-claude](../tdd/SPIKE-2026-09-30-native-questions-claude.md)·[SPIKE-2026-09-30-codex-app-server](../tdd/SPIKE-2026-09-30-codex-app-server.md), `tests/ai/native-questions.test.mjs`·`codex-app-server.test.mjs`.
 - **완료:** SPIKE 판정 기록. 기본값으로 켜는 것은 사용자 결정 뒤다.
 
+### T-088 · 대화별 모델 고정과 모델 바꾸기 = 새 탭 {#t-088}
+
+- **목적/기준:** 2026-10-01 사용자 결정([ADR-021](../decisions/ADR-021-conversation-sessions.md) 보완). 요청마다 Jev가 모델을 바꾸면 세션·캐시를 버리므로 모든 대화(기본 대화 포함)가 첫 턴에 공급자·모델을 고정한다. SPEC-02.17의 5, SPEC-02.19의 1·2·5.
+- **변경 범위:** `src/server/conversations.ts` `place`(첫 턴 고정: 작성기의 명시 모델, 아니면 Jev 한 번; 기본 대화는 첫 턴에 실제 대화 행 `default-<projectId>`가 되어 세션을 연다; 다른 공급자·모델이면 새 대화 + 인계 원장 + 양쪽 한 줄), `handoffTo`도 새 대화로, 첫 세션의 인계 자료(이전 대화 또는 기본 대화의 이전 요청). `src/server/server.ts` 요청 접수에서 `place` 호출, Jev 기록(`routed`)은 첫 턴만. `src/ui/conversations.tsx` 탭(정해진 AI 표시·'첫 요청 때 정함', 고른 대화의 모델을 작성기에 맞춤), `src/ui/app.ts` 기본 대화 턴은 `conversationId: 'default'`, 새 대화로 옮겨지면 그 탭을 고른다.
+- **검증:** `tests/server/conversations.test.mjs`(첫 턴 고정, 다음 턴은 Jev 무시, effort 바꿔도 같은 세션, 다른 모델 → 새 대화·인계·요청이 거기서 실행), `tests/core/conversations-ui.test.mjs`, `tests/integration/browser-conversations.mjs`·`browser-route.mjs`·`browser-ai-settings-smoke.mjs`.
+- **완료:** 위 시험 통과. 실제 CLI로 모델 바꾸기 인계 확인은 설치본 묶음 릴리스 때.
+- **상태(2026-10-01):** 구현·검증 완료. `npm test`(749)·`browser-conversations`·`browser-route`·`browser-ai-settings-smoke`·`browser-concurrent-work` 등 통과. 기본 대화 턴은 이제 대화 턴이므로 한 번에 한 턴씩 돌고(SPEC-02.19의 4) 대화 턴 상한(호스트 명령 48)을 쓴다. 남음: 실제 CLI 확인.
+
 ## 순서와 의존
 
 - T-049는 M1에서 PLAN-22 T-046과 함께 한다.

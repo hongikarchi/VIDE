@@ -105,6 +105,14 @@ export function directPlan(result: unknown) {
   const plan = (result as { plan?: unknown } | null | undefined)?.plan;
   return plan ? planSchema.safeParse(plan).data : undefined;
 }
+/**
+ * An execute the host refused before it touched the document (`result.refused`, e.g. a read-only
+ * Rhino document): nothing ran; the reason carries the next step.
+ */
+export function directRefused(result: unknown) {
+  const refused = (result as { refused?: unknown } | null | undefined)?.refused;
+  return z.object({ code: z.string(), reason: z.string() }).safeParse(refused).data;
+}
 /** A guard the whole request waits on (`result.guarded`, state 'needs-confirmation'). */
 export function requestGuard(result: unknown) {
   const guarded = (result as { guarded?: unknown } | null | undefined)?.guarded;
@@ -484,6 +492,7 @@ function WorkView({
   const executions = directExecutions(result);
   const plan = directPlan(result);
   const guard = requestGuard(result);
+  const refused = directRefused(result);
   const continued =
     Boolean((result as { continuedRequestId?: unknown } | null | undefined)?.continuedRequestId) ||
     messages.some((entry) => {
@@ -700,6 +709,7 @@ function WorkView({
           {plan ? (
             <PlanCard message={message} plan={plan} continued={continued} actions={actions} />
           ) : null}
+          {refused ? <p className="direct-refused">실행하지 않음 · {refused.reason}</p> : null}
           <DirectChanges message={message} executions={executions} actions={actions} />
           {request.state === 'needs-confirmation' &&
           guard &&

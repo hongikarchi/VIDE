@@ -603,12 +603,14 @@ export async function jigRoutes(
           const code = (error as { code?: unknown }).code;
           if (typeof code !== 'string' || !code.startsWith('BAKE_')) throw error;
           // Undone already (guard, failure): the card says what happened; nothing stays changed.
-          const { guarded, reason, undoFailed } = error as Record<string, unknown>;
+          const { guarded, reason, refused, undoFailed } = error as Record<string, unknown>;
           send(jigStatuses[code] ?? 409, {
             ...shared,
             code,
             ...(guarded ? { guarded } : {}),
             ...(reason ? { reason } : {}),
+            // Refused before execution (read-only, busy): the reason and next step in Korean.
+            ...(refused ? { refused } : {}),
             ...(undoFailed ? { undoFailed } : {}),
           });
           return true;

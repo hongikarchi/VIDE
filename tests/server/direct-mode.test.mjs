@@ -545,3 +545,108 @@ test('a confirmed re-run the host could not revert leaves the request unknown', 
   assert.equal(after.state, 'unknown');
   assert.equal(after.result.code, 'HOST_RESULT_UNKNOWN');
 });
+
+// User decision 2026-10-01: a refusal before execution (e.g. a read-only document) is "실행하지
+// 않음" with its reason, not an unknown result. Only a lost answer stays unknown.
+const thrown = (code) => Object.assign(new Error(code), { code });
+
+test('a read-only document is not run: reason recorded, later executes answered without the host', async (t) => {
+  const answers = [];
+  const { host, send, settled, state } = setup(t, async ({ call }) => {
+    answers.push(await call('execute', { code: 'add wall' }));
+    answers.push(await call('execute', { code: 'add wall again' }));
+    return { text: '읽기 전용 문서라 실행하지 않았습니다.' };
+  });
+  host.driver.execute = async (command) => {
+    host.calls.execute.push(command);
+    throw thrown('DOCUMENT_READ_ONLY');
+  };
+  send('readonly-1');
+  await settled();
+  const done = state('readonly-1');
+  assert.equal(done.state, 'succeeded');
+  assert.equal(done.result.code, undefined);
+  assert.equal(done.result.appliedDirectly, false);
+  assert.deepEqual(done.result.executions, []);
+  assert.equal(done.result.refused.code, 'DOCUMENT_READ_ONLY');
+  assert.match(done.result.refused.reason, /읽기 전용으로 열린 문서라 실행하지 않았습니다/);
+  assert.match(done.result.refused.reason, /다른 이름으로 저장/);
+  // The AI gets a plain answer: nothing ran, and no execute can work in this turn.
+  for (const answer of answers) {
+    assert.equal(answer.error, false);
+    assert.equal(answer.value.executed, false);
+    assert.equal(answer.value.code, 'DOCUMENT_READ_ONLY');
+    assert.match(answer.value.next, /No execute can succeed/);
+  }
+  assert.equal(host.calls.execute.length, 1);
+  const lines = done.result.activity.filter((entry) => entry.text.startsWith('실행하지 않음 · '));
+  assert.equal(lines.length, 1);
+});
+
+test('a passing refusal (host busy) lets the next execute run and is not reported at the end', async (t) => {
+  const answers = [];
+  const { host, send, settled, state } = setup(t, async ({ call }) => {
+    answers.push(await call('execute', { code: 'add wall' }));
+    answers.push(await call('execute', { code: 'add wall' }));
+    return { text: '추가' };
+  });
+  const execute = host.driver.execute;
+  let busy = true;
+  host.driver.execute = async (command) => {
+    if (!busy) return execute(command);
+    busy = false;
+    host.calls.execute.push(command);
+    throw thrown('HOST_BUSY');
+  };
+  send('busy-1');
+  await settled();
+  const done = state('busy-1');
+  assert.equal(answers[0].value.executed, false);
+  assert.match(answers[0].value.next, /Retry once/);
+  assert.equal(answers[1].value.ok, true);
+  assert.equal(done.state, 'succeeded');
+  assert.equal(done.result.refused, undefined);
+  assert.equal(done.result.executions.length, 1);
+});
+
+test('a lost execute answer still leaves the turn unknown', async (t) => {
+  const answers = [];
+  const { host, send, settled, state } = setup(t, async ({ call }) => {
+    answers.push(await call('execute', { code: 'add wall' }));
+    answers.push(await call('execute', { code: 'add wall' }));
+    return { text: '끝' };
+  });
+  host.driver.execute = async (command) => {
+    host.calls.execute.push(command);
+    throw thrown('HOST_RESULT_UNKNOWN');
+  };
+  send('lost-1');
+  await settled();
+  const done = state('lost-1');
+  assert.equal(done.state, 'unknown');
+  assert.equal(done.result.code, 'HOST_RESULT_UNKNOWN');
+  assert.equal(done.result.refused, undefined);
+  assert.equal(answers[0].error, true);
+  assert.equal(host.calls.execute.length, 1);
+});
+
+test('a refused confirmed re-run keeps the guard card with the reason', async (t) => {
+  const { execution, host, send, settled, state, project } = setup(t, async ({ call }) => {
+    await call('execute', { code: 'wipe old layer' });
+    return { text: '확인 필요' };
+  });
+  send('guard-3');
+  await settled();
+  const [held] = state('guard-3').result.executions;
+  const execute = host.driver.execute;
+  host.driver.execute = async () => {
+    throw thrown('DOCUMENT_READ_ONLY');
+  };
+  const after = await execution.confirm(project.id, 'guard-3', held.executionId);
+  assert.equal(after.state, 'needs-confirmation');
+  assert.equal(after.result.refused.code, 'DOCUMENT_READ_ONLY');
+  host.driver.execute = execute;
+  const again = await execution.confirm(project.id, 'guard-3', held.executionId);
+  assert.equal(again.state, 'succeeded');
+  assert.equal(again.result.refused, undefined);
+});

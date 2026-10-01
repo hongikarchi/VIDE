@@ -3911,6 +3911,15 @@ body[data-workspace='context'] .workspace > .jig-dialog {
 .guard-card {
   border-color: var(--warn);
 }
+/* An execute the host refused before running (read-only document, busy host): nothing changed. */
+.direct-refused {
+  margin: 6px 0 0;
+  padding: 6px 8px;
+  border: var(--hairline) solid var(--warn);
+  border-radius: var(--radius-sm);
+  background: var(--soft);
+  font-size: 12px;
+}
 .guard-card p,
 .plan-card h5,
 .plan-card h6 {
