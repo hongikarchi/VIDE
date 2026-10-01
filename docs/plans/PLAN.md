@@ -2,7 +2,7 @@
 id: PLAN
 title: VIDE 실행 로드맵
 status: review
-version: 0.230
+version: 0.231
 updated: 2026-10-01
 owner: agent:codex
 related: [ARCH-01, PLAN-02, PLAN-03, PLAN-22, PLAN-23, PLAN-24, PLAN-25, PLAN-26, PLAN-27, ADR-022, ADR-025, ADR-026, ADR-027, SPEC-00, SPEC-01, SPEC-02, SPEC-03, SPEC-04, SPEC-05, SPEC-06, SPEC-07]
@@ -102,7 +102,7 @@ related: [ARCH-01, PLAN-02, PLAN-03, PLAN-22, PLAN-23, PLAN-24, PLAN-25, PLAN-26
 | 안정성 | T-082~T-087(Sync 저장 구조와 작동 안정성, [PLAN-27](PLAN-27-sync-storage-stability.md), 근거 [RESEARCH-13](../research/RESEARCH-13-stability-audit.md)) | 0단계(진단·복구) 바로 착수. 1단계는 ARCH-01 저장 계약 확인 뒤 |
 | 바로 적용 | T-069 → T-070·071 → T-072 → T-073·074, T-075([PLAN-24](PLAN-24-ai-conversations.md#direct-apply), [ADR-022](../decisions/ADR-022-direct-apply-plan-auto.md)) | 실제 Rhino·ZWCAD에서 보호·되돌리기 확인, 브라우저 시험 |
 | 여러 파일 조율 | T-092 → T-093 → T-094([PLAN-24](PLAN-24-ai-conversations.md#multi-file), [ADR-027](../decisions/ADR-027-multi-file-coordination.md)) | 모의 연결 두 개의 서버·브라우저 시험, 실제 Rhino 두 창 확인 |
-| 대화 중심 구조 | T-076·077 → T-078 → T-079, T-080, T-081([PLAN-26](PLAN-26-chat-stage.md), [ADR-026](../decisions/ADR-026-chat-stage-and-skill-jigs.md)) | 각 티켓의 시험 통과. 화면 변경은 지금 배치 위에 하나씩 |
+| 대화 중심 구조 | T-076·077 → T-078 → T-079, T-080, T-081, T-098(대시보드 할 일)([PLAN-26](PLAN-26-chat-stage.md), [ADR-026](../decisions/ADR-026-chat-stage-and-skill-jigs.md)) | 각 티켓의 시험 통과. 화면 변경은 지금 배치 위에 하나씩 |
 
 호스트 플러그인을 바꾸는 티켓의 완료 기준은 개발 빌드와 `.vide/` 합성 문서·사본까지이며, 설치본 반영은 사용자 요청이나 웨이브 경계의 판단으로 묶음 릴리스한다.
 
@@ -239,7 +239,7 @@ T-001~018의 번호·지원 증거는 유지한다. 각 티켓의 현재 결과�
 | T-076 skill 시작·카탈로그·`jig_open`·`ui_go` | 구현·단위·브라우저 시험 완료 | 실제 Claude CLI의 자체 질문 + jig 대화, 확신 낮을 때 두 갈래 질문, `summary.kpi` | [PLAN-26](PLAN-26-chat-stage.md) |
 | T-077 토큰층·CSS 정리 | 완료 | 기능용 색 리터럴(`app.ts` 붓 색 등) | [PLAN-26](PLAN-26-chat-stage.md) |
 | T-078 정적 목업 | 종료. 검토 결과를 T-079에 넘기고 목업은 폐기(`3a9617f`). 화면 검토는 `tools/mockups/ui-preview/` | — | [PLAN-26](PLAN-26-chat-stage.md) |
-| T-079 셸 정리(좁힌 범위) | 완료(설치 전): 레일의 고정 화면·대시보드·프로젝트 자료·피드백·다크/라이트, 위쪽 줄은 열린 작업본만, 연결 파일·레이어 목록 | 피드백 폼 주소(사용자), 대시보드 내용 결정 | `16eb911`, `633f694`, `browser-workspace-tabs.mjs` |
+| T-079 셸 정리(좁힌 범위) | 완료(설치 전): 레일의 고정 화면·대시보드·프로젝트 자료·피드백·다크/라이트, 위쪽 줄은 열린 작업본만, 연결 파일·레이어 목록 | 피드백 폼 주소(사용자). 대시보드 내용은 T-098로 정함 | `16eb911`, `633f694`, `browser-workspace-tabs.mjs` |
 | T-080 층 평면 보기 | 대기 | SPEC-02.17 보완 먼저 | [PLAN-26](PLAN-26-chat-stage.md) |
 | T-081 산출물 탭 | 페이지 구현·브라우저 시험 완료(설치 전) | 도면 시트·생성형 렌더링 기능(각 SPEC 먼저) | `3a9617f` |
 | T-092 다른 열린 연결 파일의 실시간 읽기 | 구현·단위 검증(설치 전). Rhino 대상 턴이 열린 Rhino 문서(조회·측정·보기)와 ZWCAD 도면(조회)을 `linkId`로 읽음 | 실제 Rhino 두 창 확인 | [PLAN-24](PLAN-24-ai-conversations.md#t-092) |
@@ -252,6 +252,7 @@ T-001~018의 번호·지원 증거는 유지한다. 각 티켓의 현재 결과�
 | T-091 프로젝트 폴더·AI 파일 읽기(`file_read`·`file_list`, 폴더 밖은 권한 질문) | 구현·단위·브라우저 시험 완료(2026-10-01, 커밋 전) | 실제 Claude·Codex로 권한 질문 답하기 확인(설치본 릴리스 때), 셸 폴더 선택 창은 다음 설치본부터 | [PLAN-26](PLAN-26-chat-stage.md#t-091), SPEC-01.13, `project-files.test.mjs`, `browser-project-folders.mjs` |
 | T-095 다른 이름으로 저장 뒤 연결이 창을 따라감(Rhino·ZWCAD, 중복 행은 하나만 연결) | 구현·서버 시험 완료(2026-10-01, 설치 전) | 실제 Rhino·ZWCAD 창에서 다른 이름 저장 확인(설치본 반영 뒤 합성 문서) | [PLAN-16](PLAN-16-document-links.md#t-095), `link-follow.test.mjs` |
 | T-096 연결 파일을 모두 숨겨도 남던 객체(시작 때 선택 순서), 어느 파일에도 속하지 않는 결과는 '작업 결과' 행 | 구현·브라우저 시험 완료(2026-10-01, 설치 전) | 설치본에서 사용자 프로젝트로 확인 | [PLAN-16](PLAN-16-document-links.md#t-096), `browser-links.mjs` |
+| T-098 대시보드 할 일·일정(맨 위 '오늘', `agenda_*` 도구와 [되돌리기], schema 7) | 구현·단위·브라우저 시험 완료(2026-10-01, 설치 전) | 실제 Claude·Codex로 '회의록에서 할 일 뽑아줘' 확인(설치본 릴리스 때). 후속: 반복 일정·캘린더 연동·자료에서 찾기 | [PLAN-26](PLAN-26-chat-stage.md#t-098), SPEC-01.14, `agenda.test.mjs`, `browser-dashboard-agenda.mjs` |
 | T-082 안정성 0단계 진단·복구 | 구현·자동 검증(`9aac8cd`) | 실제 창의 화면 복구 확인, 설치본 릴리스 | [PLAN-27](PLAN-27-sync-storage-stability.md) |
 | T-083 객체 단위 저장 | 계획 | ARCH-01 저장 계약 작성과 사용자 확인 뒤 착수 | [PLAN-27](PLAN-27-sync-storage-stability.md), [RESEARCH-13](../research/RESEARCH-13-stability-audit.md) |
 | T-084 엔진 주관 Sync | 계획. 문서별 Sync 합치기는 먼저 구현(`fda1e5d`) | SPEC-01.11의 Sync 주체 보완 뒤 착수 | [PLAN-27](PLAN-27-sync-storage-stability.md) |

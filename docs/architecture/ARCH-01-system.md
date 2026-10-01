@@ -2,7 +2,7 @@
 id: ARCH-01
 title: VIDE 기술 구조와 구현 계약
 status: review
-version: 0.63
+version: 0.64
 updated: 2026-10-01
 owner: agent:codex
 related: [SPEC-00, SPEC-02, SPEC-03, SPEC-04, SPEC-09, PLAN, PLAN-20, PLAN-24, ADR-014, ADR-015, ADR-016, ADR-017, ADR-021, ADR-022, ADR-025, ADR-027, PLAN-25, ARCH-03]
@@ -163,7 +163,7 @@ T-002의 첫 HTTP 구현은 프로젝트 목록·생성과 입력 목록·생성
 
 #### 추가 저장 모델과 식별
 
-아래는 T-013의 설계 대상이며 표로 다 만들지 않았다(현재 DB는 schema 6, §5·§7). 실제 행·열은 `src/core/migrations.ts`가 정본이다. 모든 하위 레코드는 projectId를 검증한다. revision은 레코드 수정 번호, basisId는 불변 취득 기준, connectionId는 현재 전송 연결, documentSessionId는 열린 문서 세션이다. 저장 파일과 재열기 전 세션의 관계는 확인 기록으로만 연결하며 파일 경로로 쓰기 세션을 복원하지 않는다.
+아래는 T-013의 설계 대상이며 표로 다 만들지 않았다(현재 DB는 schema 7, §5·§7). 실제 행·열은 `src/core/migrations.ts`가 정본이다. 모든 하위 레코드는 projectId를 검증한다. revision은 레코드 수정 번호, basisId는 불변 취득 기준, connectionId는 현재 전송 연결, documentSessionId는 열린 문서 세션이다. 저장 파일과 재열기 전 세션의 관계는 확인 기록으로만 연결하며 파일 경로로 쓰기 세션을 복원하지 않는다.
 
 | 저장 대상 | 핵심 필드·제약 |
 |---|---|
@@ -192,7 +192,7 @@ T-002의 첫 HTTP 구현은 프로젝트 목록·생성과 입력 목록·생성
 
 | 묶음 | 경로 | 비고 |
 |---|---|---|
-| 프로젝트·입력 | `GET·POST /projects`, `PUT·DELETE /projects/:p`, `POST …/thumbnail`, `…/inputs[/:i]`, `…/ai-instructions`, `POST …/attachments?name=`, `POST …/attachments/:a/view`, `GET …/attachments/:a`, `GET·POST …/folders`, `POST …/folders/remove` | 프로젝트 삭제는 SPEC-01.1. 첨부는 §3 「첨부 보관과 읽기 도구」, 폴더는 §3 「프로젝트 폴더와 파일 읽기 도구」 |
+| 프로젝트·입력 | `GET·POST /projects`, `PUT·DELETE /projects/:p`, `POST …/thumbnail`, `…/inputs[/:i]`, `…/ai-instructions`, `POST …/attachments?name=`, `POST …/attachments/:a/view`, `GET …/attachments/:a`, `GET·POST …/folders`, `POST …/folders/remove`, `GET·POST …/agenda`, `PUT …/agenda/:id`, `POST …/agenda/order`, `POST …/agenda/:id/remove`, `POST …/agenda/remove-done`, `POST …/agenda/undo` | 프로젝트 삭제는 SPEC-01.1. 첨부는 §3 「첨부 보관과 읽기 도구」, 폴더는 §3 「프로젝트 폴더와 파일 읽기 도구」, 할 일은 §3 「대시보드의 할 일」 |
 | 요청(AI 턴·Sync·가져오기) | `GET·POST …/requests`, `GET …/requests/:r`, `…/:r/cancel`, `…/:r/interventions`, `…/:r/hide`, `…/:r/questions`, `…/:r/reconcile`, `…/:r/model\|open`, `…/:r/report`, `…/:r/quantities[.csv]`, `…/:r/publication-export` | 상태는 SPEC-00.10 |
 | 바로 적용 | `POST …/requests/:r/undo {executionId}` 또는 `{all: true}`(작업 단위, ADR-027), `…/:r/confirm {executionId?}`, `…/:r/continue` | §4 「바로 적용 경로」. confirm·continue는 202 |
 | 연결 파일·Sync | `GET·POST …/links`, `PUT …/links/:l`, `POST …/links/:l/remove`, `POST …/links/:l/reads`, `…/live-sync`, `…/capture`, `…/import`, `…/imports/:i/reconcile` | §7 「프로젝트 연결 파일(Link)」 |
@@ -396,6 +396,7 @@ AI 도구의 이름은 등록부 하나가 정한다. `src/ai/agent-connection.t
 | 대화 읽기(jig·구조·Sync) | 목적별 대화의 턴. 대상은 `conversation:<대화 ID>` | `jig_list`, `jig_state`, `jig_output`, `structure_summary`, `structure_checks`, `links_layers`, `sync_sample` |
 | 화면 | 대화 원장에 기록하는 턴(목적별 대화). 계산·쓰기 없음이라 계획 모드에도 남는다(`PLAN_MODE_TOOLS`) | `jig_open`(프로젝트 skill 목록의 jig를 사용자 화면에 열고 작업본을 이 대화에 묶음, `reuse: 'last' \| 'new'`, `user-only` jig는 거절), `ui_go`(화면 전환: 모델·jig·보고서·자료·만들기, 3D 투영 `plan`·`3d`). 원장 항목으로 남기고 화면이 따라 한다(RESEARCH-12 §6.3) |
 | jig 조작 | 그 대화에 jig 작업본이 열려 있을 때, 열린 작업본에만 | `jig_set`(되돌릴 수 있는 설정값 변경, 원장 기록), `jig_run`(계산 단계만) |
+| 할 일 | 목적별 대화의 턴. 쓰기 둘은 대화 원장에 기록하는 턴에만(되돌리기에 원장이 필요), 계획 모드는 `agenda_list`만 | `agenda_list`, `agenda_add`, `agenda_set`(아래 「대시보드의 할 일」) |
 | 자료 | 그 프로젝트의 자료 DB가 있을 때, 읽기만 | `project_brief`, `project_search`, `project_issue`, `project_statement`, `project_checks` |
 | 첨부 | 요청이나 같은 대화의 앞선 요청에 보관 첨부가 있을 때(모든 모드, 계획 모드 포함). `Execution.provider`가 그 턴의 범위에 더하고, 도구 없는 턴이면 이 도구만 발급 | `attachment_read`(아래 「첨부 보관과 읽기 도구」) |
 | 파일 | 지시 묶음을 받는 모든 턴(모든 모드, 계획 모드 포함; 붙인 표만 읽는 jig AI 검토 턴은 제외). `Execution.provider`가 첨부와 같은 방식으로 더함 | `file_read`, `file_list`(아래 「프로젝트 폴더와 파일 읽기 도구」) |
@@ -458,6 +459,14 @@ SPEC-09(PLAN-26 T-090, 2026-10-01). 이미지 첨부 하나의 영역·해석 �
 - **판:** 실행이 끝나면(`Execution` `onFinished`) `afterTurn`이 `nextVersion`으로 판을 만든다. interpret은 그린 글자(없으면 A) 전부가 정확히 와야 하고, region은 그 글자만 바꾸고 나머지는 이전 판 그대로, 말로 고친 판은 아는 글자만. 맞지 않으면 판을 만들지 않고 `problem`(`REGION_MISMATCH` 등)을 남긴다. 판 번호는 1부터 하나씩 오르고 판마다 `conversationId`·`requestId`·`kind(all|region|spoken|continue)`·`changed`·`confirmed`·`image`를 둔다.
 - **이미지 작업**(`src/server/reference-image.ts`): 새 판마다(설정 꺼짐 `off`, 원격 요청 `remote`, 캡처 없음 `no-model`이 아니면) 보드당 하나만 돌고 새 판이 이전 작업을 취소한다. `codex exec --json --ephemeral --ignore-user-config --ignore-rules --skip-git-repo-check --sandbox read-only`와 VIDE 공통 `-c` 격리값, `model_reasoning_effort="low"`, `codexDisabledFeatures`에서 `image_generation`·`code_mode_host`만 빼고 끔(내장 이미지 도구는 code-mode host로 돈다: codex-cli 0.157.1에서 host를 끄면 모델이 도구가 꺼졌다고 답함), `--enable image_generation`, `--image v<N>-view.* --image <a>.masked.png`, 지시문은 stdin(`imageJobPrompt`: 한 번만 생성·빠른 품질·1024 이하·글자 없음·카메라와 매스 유지 + 요약·영역 문장·`imagePrompt`). 작업 폴더는 임시 폴더, 환경은 `codexEnvironment()`(API 키 변수 제거, ChatGPT 로그인). 시간 제한 60초(시작 포함, `IMAGE_TIME_LIMIT_MS`)·[생성 취소]는 `killOwnedProcess`(taskkill /T /F, 실패하면 `kill`)로 끝내고 프로세스 종료(`close`, 최대 5초)를 기다린 뒤 작업 폴더와 그 thread 폴더를 지우며 결과를 보지 않는다(Codex는 도구 실행 전에 `thread.started`를 내므로 종료 뒤 출력에서 thread를 안다). 프로젝트 설정을 끄면 진행 중 작업을 멈추고 그 판은 `off`, 엔진 종료(`ReferenceBoards.close`, `execution.close()`와 함께)는 새 작업을 막고 진행 중 작업을 끝낸다(`IMAGE_INTERRUPTED`). 성공은 종료 코드 0과 `turn.completed`(`error` 항목은 경고라 실패로 보지 않음), 결과는 `~/.codex/generated_images/<thread>/` 안 시작 뒤 쓰인 PNG 중 최신을 `v<N>.png`로 복사하고 그 thread 폴더는 지운다. 실패 구분 `CODEX_UNAVAILABLE·CODEX_LOGIN_REQUIRED·CODEX_USAGE_LIMIT·IMAGE_REFUSED·IMAGE_NOT_CREATED·IMAGE_FAILED·IMAGE_TIMEOUT·IMAGE_CANCELLED`, 엔진 재시작으로 끊긴 작업은 `IMAGE_INTERRUPTED`. 판의 `image {state, startedAt, elapsedMs, size, code}`에 남는다. 이 PC 실측(합성 장면, 2026-10-01): 33–44초.
 - **확정:** `action: confirm`은 `version`이 최신 판이어야 하고(`STALE_REFERENCE`), 대상 `unknown`인 영역이 `targets`로 답해지지 않으면 `REFERENCE_TARGET_UNKNOWN`(페이지가 먼저 `targetQuestions` 질문 카드를 보임). 이미 확정된 판의 두 번째 [맞음]은 `REFERENCE_FROZEN`이다. 통과하면 요청을 `mode: auto`(계획 모드여도)·호스트 쓰기로 바꾸고 본문을 `confirmText`(판·영역·값·출처·대상, 12KB 이하: 넘치는 영역은 '영역 n개 더'로 줄임)로 쓰며, 요청이 저장되면 판에 대상 답을 넣어 `confirmed {at, requestId}`로 고정한다. 패킷의 `reference-board` 항목은 확정 판(모든 영역)·영역 상자(`drawn`)와 추정 값 처리 지시다. 페이지는 영역을 그린 참고 이미지와 마지막 생성 이미지(각 JPEG 85,000자 이하)를 `images`로, 원본을 `files`로 함께 보낸다. [새 판으로 고치기]는 확정 판의 이미지 상태를 그대로 잇는다(준비된 이미지는 복사, 진행 중이면 같은 작업이 두 판을 채움, 꺼짐·실패 등은 그대로). 이후는 바로 적용 경로(§4, ADR-022)다.
+### 대시보드의 할 일
+
+SPEC-01.14(2026-10-01). 프로젝트마다 할 일 목록 하나이며, 시각이 있는 항목이 일정이다.
+
+- **저장:** schema 7의 `agenda_items(id, projectId FK, text, date 'YYYY-MM-DD' NULL, time 'HH:MM' NULL, doneAt NULL, ord REAL, source 'user'|'ai', revision, createdAt, updatedAt)`와 색인 `(projectId, ord)`(`src/core/agenda.ts`, 모양은 `src/contracts/agenda.ts`). 날짜·시각은 PC 현지 달력의 글자이며 UTC로 바꾸지 않는다. 완료는 `doneAt`이 있음이다. 새 항목은 순서 끝(`max(ord)+1`)에 붙는다. 한 프로젝트 1,000개까지(`AGENDA_LIMIT`). 프로젝트 삭제(`Store.deleteProject`)가 행을 지운다.
+- **경로:** `GET …/agenda` → `{items}`(사용자 순서, 완료 포함). `POST …/agenda {text, date?, time?}` → `{item, items}`(시각만 있으면 오늘 날짜). `PUT …/agenda/:id {revision, text?, date?, time?, done?}` → `{item, items}`; 읽은 `revision`이 다르면 `REVISION_CONFLICT`(409), `date: null`은 시각도 비운다. `POST …/agenda/order {ids}` → 주어진 항목들이 이미 가진 `ord` 값들을 주어진 순서로 다시 나눠 가진다(다른 항목 자리·`revision`은 그대로). `POST …/agenda/:id/remove {revision?}`, `POST …/agenda/remove-done`. 지우기는 폴더 경로처럼 POST라 DELETE 허용 목록은 그대로다. 원격 세션 금지 목록에 넣지 않는다(iPad도 고침). 날짜·시각 읽기는 화면(`src/ui/agenda-text.ts`)이 하고 엔진은 정해진 형식만 받는다.
+- **도구:** `agenda_list({done?})` → `{today, total, items:[{id, text, date, time, done, by?}]}`(완료는 `done: true`일 때만, 최대 200). `agenda_add({items:[{text, date?, time?}] ≤ 20})`, `agenda_set({items:[{id, text?, date?, time?, done?}] ≤ 20})`은 `source: 'ai'`로 바로 쓰고, 한 호출을 원장 항목 하나 `result-ref {appAction:'agenda', by:'ai', changes}`로 남긴다. `changes`는 `{op:'add', id, text, date, time}` 또는 `{op:'set', id, text, revision(쓴 뒤), before:{text, date, time, doneAt}}`이다. 중간에 실패해도 그때까지 쓴 것은 기록한다. 쓰기 둘은 원장 콜백이 있는 대화 턴에만 주고 `PLAN_MODE_TOOLS`에는 `agenda_list`만 든다.
+- **되돌리기:** 화면(`app.ts`의 `followAppActions`)이 `appAction: 'agenda'` 원장 항목을 보면 대시보드를 다시 읽고(`vide:agenda-changed`) 안내와 [되돌리기]를 띄운다. [되돌리기]는 `POST …/agenda/undo {conversationId, ledgerId}`: 그 대화가 그 프로젝트의 것이고 항목이 `appAction: 'agenda'`인지 확인하고, `changes`를 거꾸로 적용한다(`add`는 지움, `set`은 지금 `revision`이 기록과 같을 때만 `before`로 돌림, 없거나 바뀐 항목은 `skipped`). 결과 `{reverted, skipped, items}`. 그 뒤 원장에 `{appAction:'agenda-undo', ledgerId, by:'user', reverted, skipped}`를 더하고 원래 항목을 그것으로 대체(`supersededBy`)한다. 이미 대체된 항목은 `AGENDA_UNDONE`(409).
 
 ### 한 요청의 복수 대상 실행
 
@@ -591,7 +600,7 @@ Rhino 편집 적용은 그룹 표의 ID·이름·인덱스·사용자 문자열�
 
 Git에서 스냅샷·부모 참조·변경되지 않은 자료 재사용을 차용하되 Git CLI나 전체 객체 내용 주소 저장소를 첫 구현의 선행 조건으로 만들지 않는다. 기존 SQLite·작업 기록·파일 보관을 확장한다. 기록·캐시·체크포인트 생성에 LLM을 호출하지 않는다. [Git 스냅샷 원리](https://git-scm.com/book/en/v2/Getting-Started-What-is-Git%3F).
 
-현재 DB는 §7의 schema 6과 순차 마이그레이션(`src/core/migrations.ts`: 2 기본 표, 3 숨긴 요청, 4 연결 파일 `document_links`, 5 대화·jig 표 — ARCH-03 §10, 6 프로젝트 폴더 `project_folders` — §3 「프로젝트 폴더와 파일 읽기 도구」)을 사용하며 새 객체/캐시/체크포인트 테이블은 미구현이다. schema 3은 대화 목록에서 지운 요청을 `hidden_requests(projectId, requestId, hiddenAt)`로 기록한다. 요청 기록·결과·연결은 지우지 않으며, 요청 목록 조회와 AI 대화 문맥에서만 제외한다. 확장은 단일 제어 잠금→백업→버전별 마이그레이션 트랜잭션→무결성/기존 자료 대조를 따른다. 실패 시 신규 쓰기를 열지 않고 원본/백업과 진단을 보존한다. 새 DB뿐 아니라 기존 프로젝트·파일 참조 승계와 중간 종료를 시험한다.
+현재 DB는 §7의 schema 7과 순차 마이그레이션(`src/core/migrations.ts`: 2 기본 표, 3 숨긴 요청, 4 연결 파일 `document_links`, 5 대화·jig 표 — ARCH-03 §10, 6 프로젝트 폴더 `project_folders` — §3 「프로젝트 폴더와 파일 읽기 도구」, 7 할 일 `agenda_items` — §3 「대시보드의 할 일」)을 사용하며 새 객체/캐시/체크포인트 테이블은 미구현이다. schema 3은 대화 목록에서 지운 요청을 `hidden_requests(projectId, requestId, hiddenAt)`로 기록한다. 요청 기록·결과·연결은 지우지 않으며, 요청 목록 조회와 AI 대화 문맥에서만 제외한다. 확장은 단일 제어 잠금→백업→버전별 마이그레이션 트랜잭션→무결성/기존 자료 대조를 따른다. 실패 시 신규 쓰기를 열지 않고 원본/백업과 진단을 보존한다. 새 DB뿐 아니라 기존 프로젝트·파일 참조 승계와 중간 종료를 시험한다.
 
 현재 전체 문서 지문과 호스트별 객체 제한은 이벤트 추적으로 자동 대체되지 않는다. 애드인의 이벤트 구독이 누락되었거나 연속성이 끊기면 캐시를 신뢰하지 않고 문서 재조회·강한 비교를 수행한다. 이벤트와 지문이 충돌하면 오래된 이벤트 기록을 우선하지 않는다. 자체 SDK 객체 상한의 실측 지원 여부는 호스트 지원표와 L5 검수로 확인한다.
 

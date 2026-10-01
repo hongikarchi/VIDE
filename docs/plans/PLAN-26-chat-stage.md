@@ -5,10 +5,10 @@ status: review
 version: 0.5
 updated: 2026-10-01
 owner: agent:claude
-related: [ADR-026, ADR-022, ADR-021, ADR-020, SPEC-02, SPEC-07, ARCH-03, ARCH-01, DESIGN, RESEARCH-12, PLAN-22, PLAN-24, FR-18, FR-24, FR-25, AC-48]
+related: [ADR-026, ADR-022, ADR-021, ADR-020, SPEC-01, SPEC-02, SPEC-07, ARCH-03, ARCH-01, DESIGN, RESEARCH-12, PLAN-22, PLAN-24, FR-18, FR-24, FR-25, AC-48]
 ---
 
-# 대화가 화면과 작업을 이끄는 구조 (T-076~T-081, T-089~T-091)
+# 대화가 화면과 작업을 이끄는 구조 (T-076~T-081, T-089~T-091, T-098)
 
 기준: [ADR-026](../decisions/ADR-026-chat-stage-and-skill-jigs.md)(2026-10-01 사용자 결정), 조사는 [RESEARCH-12](../research/RESEARCH-12-ui-chat-driven-structure.md). 진행 상황의 정본은 [PLAN §6.5](PLAN.md)이다.
 
@@ -21,8 +21,9 @@ related: [ADR-026, ADR-022, ADR-021, ADR-020, SPEC-02, SPEC-07, ARCH-03, ARCH-01
 | T-076 | 단계 0: skill 시작, skill 카탈로그 로더, AI 도구 `jig_open`·`ui_go`, 공급자 자체 질문 기본 | ADR-026, 이 계획 | 구현·단위·브라우저 시험 완료(2026-10-01). 남음: 실제 Claude CLI에서 자체 질문+jig 대화 확인, 확신 낮을 때 두 갈래 질문(M6), `summary.kpi` |
 | T-077 | 토큰층과 CSS 리터럴 정리 | ADR-026, Design §02 | 완료(2026-10-01): UI CSS 색 리터럴 0, 왼쪽 막대 제거, 선택/초과 색 분리. 남음: 기능용 리터럴(`app.ts` 붓 색 등) |
 | T-078 | 대화 열 + 무대 정적 목업과 VERIFY | ADR-026 결정 5 | 종료(2026-10-01): 목업 6판까지 검토 결과(색·글꼴 좋음, 대화 열 오른쪽, 작성기·상태줄 유지, 레일 유지, 홈과 대시보드 분리)를 T-079에 반영하고 목업은 폐기. 이후 화면 검토는 실제 빌드 미리보기 `tools/mockups/ui-preview/snapshot.mjs` |
-| T-079 | 셸 정리: 사용자가 목업에서 명시한 항목만 지금 배치 위에 반영 | T-078 검토 | 구현·시험 완료(2026-10-01, 설치 전): 레일 대시보드·프로젝트 자료·피드백(구글폼)·다크/라이트, 대시보드 탭(초안), 연결 파일 행 정리(Live 초록 불·파일에서 열기 유지), lucide 아이콘·Inter/Noto Sans KR/JetBrains Mono 글꼴. 남음: 구글폼 주소(사용자), 대시보드 내용 결정. 작업공간 탭 줄·왼쪽 패널 제거는 하지 않음. 레일·위쪽 줄 역할 나눔(2026-10-01 사용자 결정): 레일이 고정 화면(대시보드·모델·작업 이력·자료·JIG·만들기·산출물)을 맡고 위쪽 줄은 열린 작업본만, 열린 것이 없으면 숨김 — 구현·시험 완료(browser-workspace-tabs) |
+| T-079 | 셸 정리: 사용자가 목업에서 명시한 항목만 지금 배치 위에 반영 | T-078 검토 | 구현·시험 완료(2026-10-01, 설치 전): 레일 대시보드·프로젝트 자료·피드백(구글폼)·다크/라이트, 대시보드 탭(초안), 연결 파일 행 정리(Live 초록 불·파일에서 열기 유지), lucide 아이콘·Inter/Noto Sans KR/JetBrains Mono 글꼴. 남음: 구글폼 주소(사용자). 대시보드 내용은 2026-10-01 사용자 결정으로 '오늘(할 일·일정)'을 맨 위에 두기로 했다(T-098). 작업공간 탭 줄·왼쪽 패널 제거는 하지 않음. 레일·위쪽 줄 역할 나눔(2026-10-01 사용자 결정): 레일이 고정 화면(대시보드·모델·작업 이력·자료·JIG·만들기·산출물)을 맡고 위쪽 줄은 열린 작업본만, 열린 것이 없으면 숨김 — 구현·시험 완료(browser-workspace-tabs) |
 | T-080 | 층 평면 보기: 층 해석 + 뷰포트 단면 자르기 | SPEC-02.17 보완 | 대기 |
+| T-098 | 대시보드의 할 일과 일정(맨 위 '오늘', AI 도구 `agenda_*`와 [되돌리기]) | SPEC-01.14, T-079의 대시보드 내용 결정 | 구현·단위·브라우저 시험 완료(2026-10-01, 설치 전). 남음: 실제 Claude·Codex로 '회의록에서 할 일 뽑아줘' 확인(설치본 릴리스 때) |
 | T-081 | 산출물 탭: 도면·보고서·렌더링을 한 탭에 (지금은 페이지만) | 사용자 요청 2026-10-01 | 페이지 구현·브라우저 시험 완료(2026-10-01, 설치 전). 남음: 도면 시트·생성형 렌더링 기능(각각 SPEC 먼저) |
 
 `src/ui/app.ts`·`src/ui/style.css`는 여러 세션이 함께 고친다. 티켓마다 깨끗한 worktree에서 작업하고 자기 파일만 스테이징한다. 커밋·설치본 릴리스는 사용자 요청이나 웨이브 경계의 판단에 따른다.
@@ -107,7 +108,7 @@ related: [ADR-026, ADR-022, ADR-021, ADR-020, SPEC-02, SPEC-07, ARCH-03, ARCH-01
 - 레일·위쪽 줄 역할 나눔(2026-10-01 사용자 결정): 레일이 고정 화면을 고르고 위쪽 줄은 열린 작업본만 보이며 열린 것이 없으면 숨긴다. 왼쪽 패널은 연결 파일과 레이어를 보인다 — 633f694.
 - 검증: `tests/integration/browser-workspace-tabs.mjs`, `browser-workspace-controls.mjs`, 633f694에서 고친 기존 브라우저 시험들, `tests/server/server.test.mjs`.
 
-**남음:** 구글폼 주소(사용자), 대시보드 내용 결정(사용자), 설치본 반영(릴리스 때).
+**남음:** 구글폼 주소(사용자), 설치본 반영(릴리스 때). 대시보드 내용 결정은 2026-10-01 사용자 결정으로 닫고 T-098로 구현했다.
 
 **하지 않음(사용자가 따로 요청하면 하나씩):** 작업공간 탭 줄·좌측 고정 패널 제거, 대화 스레드 렌더러 통합, 무대 머리 연결 점·⌘K, 선택 줄·결과 서랍, 방금 보낸 요청에만 무대를 옮기는 전환 규칙, 호스트 패널의 대화 열 전용 화면, 좁은 화면 두 장 전환, 모든 jig의 같은 무대 틀.
 <a id="t-080"></a>
@@ -208,3 +209,23 @@ related: [ADR-026, ADR-022, ADR-021, ADR-020, SPEC-02, SPEC-07, ARCH-03, ARCH-01
 **검증 — 실패:** 정션으로 폴더 밖을 가리킴 → `FILE_FORBIDDEN`(질문 없음). `.ssh`·`.env`·VIDE 데이터 폴더 → `FILE_FORBIDDEN`(허용 폴더 안이어도). 드라이브 맨 위·데이터 폴더·없는 경로를 프로젝트 폴더로 → `FOLDER_NOT_ALLOWED`·`FOLDER_NOT_FOUND`. 답 없음·턴 중단 → `FILE_ACCESS_DENIED`와 카드 거둠.
 
 **완료:** 위 시험 통과와 PLAN §6.5 갱신. 실제 CLI로 폴더 밖 파일 권한 질문을 한 번 답해 보는 확인은 설치본 릴리스 때.
+
+<a id="t-098"></a>
+## T-098 · 대시보드의 할 일과 일정
+
+**목적·기준:** 사용자 요청(2026-10-01) 'Dashboard에 오늘의 할일 / 일정 이런거 적혀있으면 좋을 듯. 편집도 가능하도록.'과 같은 날 추천안 수락 — T-079에 남아 있던 '대시보드 내용 결정'을 닫는다. 동작 정본은 [SPEC-01.14](../specs/SPEC-01-project-input-sync.md), AI 쓰기의 등급은 SPEC-02.19의 7(T1), 저장·경로·도구는 ARCH-01 §3 「대시보드의 할 일」, 화면은 Design §03 「대시보드의 오늘」·SCR-20. 프로젝트별 목록 하나, 일정은 시각이 있는 할 일, 반복·캘린더 연동·장소·참석자·자료에서 찾기 버튼은 이번 범위 밖.
+
+| 대상 | 변경 |
+|---|---|
+| `src/core/migrations.ts`, `src/core/agenda.ts`(신설), `src/core/store.ts`, `src/contracts/agenda.ts`(신설) | schema 7 `agenda_items`, 더하기·고치기(revision 검사)·순서·빼기·완료 비우기·되돌리기, 프로젝트 삭제 때 행 삭제, 공용 zod 모양 |
+| `src/server/agenda-routes.ts`(신설), `src/server/server.ts` | `GET·POST …/agenda`, `PUT …/agenda/:id`, `POST …/agenda/order`·`…/:id/remove`·`…/remove-done`·`…/undo`, 오류 상태(`AGENDA_LIMIT`·`AGENDA_UNDONE` 409). 원격 금지 목록·DELETE 허용 목록은 그대로 |
+| `src/server/agent-tools.ts`, `src/ai/agent-connection.ts` | 대화 턴 도구 `agenda_list`(계획 모드 포함)·`agenda_add`·`agenda_set`(원장이 있는 턴만, 원장 `appAction: 'agenda'`), 대화 지시문 한 문장. 호스트(모델링) 턴에는 주지 않는다 — 등록부가 대화 턴의 범위로 도구를 발급하므로 거기 더하는 것이 자연스럽다 |
+| `src/ui/agenda-text.ts`(신설), `src/ui/dashboard-agenda.tsx`(신설), `src/ui/dashboard.tsx`, `src/ui/dashboard.css`, `src/ui/app.ts` | 날짜·시각 읽기, '오늘' 구역(입력·미리보기·확인란·그 자리 편집·↑↓·끌기·[빼기]·예정·완료 접기), AI 쓰기 안내와 [되돌리기] |
+
+**선행·외부 조건:** 없음. schema 7은 이 티켓이 쓴다(같은 웨이브의 다른 티켓은 스키마를 올리지 않는다).
+
+**검증 — 정상:** 단위 `tests/core/agenda-text.test.mjs`(내일 3시·오전 9시 반·금요일까지·다음 주 월요일·10/7 14:00·지난 달은 다음 해·읽지 못하면 그대로), `tests/server/agenda.test.mjs`(더하기·고치기·완료·순서·빼기·완료 비우기, 다른 프로젝트 거절, 프로젝트 삭제와 함께 삭제, HTTP 경로, 원장에 남은 AI 쓰기의 `…/undo`와 두 번째 되돌리기 거절), `tests/server/agenda-tools.test.mjs`(도구 `agenda_add`·`agenda_set` → 원장 → 되돌리기, 사람이 다시 고친 항목은 남김, 계획 모드는 `agenda_list`만, 실제 대화 턴의 `agenda_add` → `…/undo`), `tests/server/remote-http.test.mjs`(원격 세션이 더하고 완료하고 뺌), `tests/core/migrations.test.mjs`(schema 7 표). 브라우저 `tests/integration/browser-dashboard-agenda.mjs`('내일 3시 구조 회의' Enter → 예정 15:00, 확인란 → '완료 1', 그 자리 편집, ↑와 끌기, 새로고침 뒤 유지, [완료 비우기], [빼기]). 전체 `npm test`·`npm run typecheck`·prettier.
+
+**검증 — 실패:** 오래된 `revision`으로 고침·빼기 → `REVISION_CONFLICT`(화면은 최신 목록을 다시 읽음). 없는 항목 → `NOT_FOUND`. 빈 내용·없는 날짜(2/30)·24:00 → `INVALID_INPUT`. 같은 쓰기의 두 번째 [되돌리기] → `AGENDA_UNDONE`. 계획 모드 턴에는 `agenda_add`가 없다.
+
+**완료:** 위 시험 통과와 PLAN §6.5 갱신. 실제 CLI로 '회의록에서 할 일 뽑아줘'를 한 번 해 보는 확인은 설치본 릴리스 때.
