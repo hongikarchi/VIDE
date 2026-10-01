@@ -201,7 +201,7 @@ export function hostProjectNote(tools: readonly string[]) {
     (facts
       ? " project_brief, project_search, project_issue, project_statement and project_checks read the project's 자료 (cite statements as [S<id>], say 미확정 for unconfirmed ones);"
       : '') +
-    ' targetRef may be left out for these. Other linked files that are open and connected now (the task goal lists them with their linkId) are read live: query, measure and capture_view take that linkId. A closed file, or one answering LINK_NOT_LIVE, is known only from its stored Sync, which may be older than the file.'
+    ' targetRef may be left out for these. Other linked files that are open and connected now (the task goal lists them with their linkId) are read live: query, measure and capture_view take that linkId, and in Auto mode execute with that linkId edits the file (its own undo records; the request is undone as one unit). A closed file, or one answering LINK_NOT_LIVE, is known only from its stored Sync, which may be older than the file.'
   );
 }
 /** The instruction-bundle mode a connection implies when the caller names none (PLAN-24). */

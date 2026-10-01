@@ -372,3 +372,27 @@ test('Plan over HTTP: no execute, a plan card, and [진행] continues in Auto', 
   assert.equal(seen.length, 2);
   assert.equal((await api(`${path}/plan-1-go/continue`, 'POST', {})).status, 409);
 });
+
+test('[되돌리기] of the whole request over HTTP ({all: true}) undoes every record, last first', async (t) => {
+  const { api, path, send, settled, host } = await setup(t, async ({ call }) => {
+    await call('execute', { code: 'add wall one' });
+    await call('execute', { code: 'add wall two' });
+    return { text: '벽 2개를 추가했습니다.' };
+  });
+  await send('all-1', { mode: 'auto' });
+  assert.equal((await settled('all-1')).state, 'succeeded');
+  const undone = await api(`${path}/all-1/undo`, 'POST', { all: true });
+  assert.equal(undone.status, 200);
+  assert.equal(undone.body.ok, true);
+  assert.deepEqual(
+    host.calls.filter((c) => c.method === 'direct-undo').map((c) => c.undoId),
+    ['42', '41'],
+  );
+  assert.ok(undone.body.request.result.executions.every((e) => e.state === 'undone'));
+  assert.deepEqual(
+    undone.body.files.map((file) => [file.state, file.undone]),
+    [['undone', 2]],
+  );
+  const again = await api(`${path}/all-1/undo`, 'POST', { all: true });
+  assert.equal(again.body.already, true);
+});

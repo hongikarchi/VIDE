@@ -40,6 +40,8 @@ interface ScopeWork {
     baseRequestId?: unknown;
     phase?: unknown;
     waitingFor?: unknown;
+    /** Other documents a direct turn locked as it first wrote them (ADR-027). */
+    documents?: unknown;
   } | null;
 }
 /** Stored on a waiting request's result (`phase: 'queue'`). */
@@ -153,6 +155,26 @@ function claims(input: ScopeInput, rows: ReadonlyMap<string, ScopeWork>): Claim[
     : [resolve(host, input.baseRequestId)];
 }
 
+/**
+ * A request's write claims: what its input names, plus the documents its turn locked while
+ * running (`result.documents`, ADR-027). Only a running, queued or unresolved request holds them.
+ */
+function claimsOf(row: ScopeWork, rows: ReadonlyMap<string, ScopeWork>): Claim[] {
+  const held = row.result?.documents;
+  const extra =
+    Array.isArray(held) && ['queued', 'running', 'unknown'].includes(row.state)
+      ? held.flatMap((entry: unknown): Claim[] => {
+          const key = documentKey(entry);
+          const host =
+            entry && typeof entry === 'object' && 'host' in entry && typeof entry.host === 'string'
+              ? entry.host
+              : undefined;
+          return key && host ? [{ host, key, source: true }] : [];
+        })
+      : [];
+  return [...claims(row.input, rows), ...extra];
+}
+
 const same = (a: Claim, b: Claim) =>
   a.host === b.host && (a.key === null || b.key === null || a.key === b.key);
 
@@ -177,7 +199,7 @@ export function requestAdmission(
       (row) =>
         row.state === 'unknown' &&
         hostUse(row.input) !== 'none' &&
-        claims(row.input, byId).some((theirs) => mine.some((claim) => same(claim, theirs))),
+        claimsOf(row, byId).some((theirs) => mine.some((claim) => same(claim, theirs))),
     )
   )
     return { code: 'HOST_RESULT_UNRESOLVED' };
@@ -196,7 +218,7 @@ export function requestAdmission(
   // user document (it reads after the write), a write for any earlier write to its document.
   const holds = (row: ScopeWork) => {
     if ((hostUse(row.input) ?? 'write') !== 'write') return;
-    for (const theirs of claims(row.input, byId))
+    for (const theirs of claimsOf(row, byId))
       for (const claim of mine)
         if (same(claim, theirs) && (use === 'write' || theirs.source))
           return {
@@ -226,6 +248,34 @@ export function requestAdmission(
   if (!waitingFor) return {};
   // A Sync, an import or an extension runs at once or not at all.
   return queueable(input) ? { waitingFor } : { code: 'PROJECT_BUSY' };
+}
+
+/**
+ * A running turn's first write to a document other than its target (ADR-027, SPEC-02.9 3): never
+ * waits. `DOCUMENT_LOCKED` when another queued or running write holds that document (its target or
+ * a document its turn locked), `HOST_RESULT_UNRESOLVED` when an unresolved result names it;
+ * undefined when the turn may lock it.
+ */
+export function documentHolder(
+  requestId: string,
+  document: { host: string; instance: string; documentId: number },
+  rows: readonly ScopeWork[],
+): { code: 'DOCUMENT_LOCKED' | 'HOST_RESULT_UNRESOLVED'; by: string } | undefined {
+  const byId = new Map(rows.map((row) => [row.id, row]));
+  const mine: Claim = { host: document.host, key: documentKey(document) ?? null, source: true };
+  const overlaps = (row: ScopeWork) => claimsOf(row, byId).some((theirs) => same(mine, theirs));
+  for (const row of rows) {
+    if (row.id === requestId || hostUse(row.input) === 'none') continue;
+    if (row.state === 'unknown' && overlaps(row))
+      return { code: 'HOST_RESULT_UNRESOLVED', by: row.id };
+    if (
+      ['queued', 'running'].includes(row.state) &&
+      !waitingOf(row) &&
+      (hostUse(row.input) ?? 'write') === 'write' &&
+      overlaps(row)
+    )
+      return { code: 'DOCUMENT_LOCKED', by: row.id };
+  }
 }
 
 /** The refusal code of `requestAdmission` (waiting is not a conflict). */

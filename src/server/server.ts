@@ -1904,8 +1904,12 @@ export async function startServer({
       if (directAction && request.method === 'POST') {
         const [, projectId, id, action] = directAction;
         if (action === 'undo') {
-          const { executionId } = await body(request);
-          const undone = await execution.undo(projectId, id, executionId);
+          // {executionId}: one execution; {all: true}: the whole request in every file (ADR-027).
+          const { executionId, all } = await body(request);
+          const undone =
+            all === true
+              ? await execution.undoRequest(projectId, id)
+              : await execution.undo(projectId, id, executionId);
           send(200, { ...undone, request: withApplications(undone.request) });
         } else if (action === 'confirm') {
           const { executionId } = await body(request);

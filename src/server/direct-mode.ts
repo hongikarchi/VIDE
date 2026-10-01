@@ -79,6 +79,9 @@ export interface ExecutionRecord {
   confirms?: string;
   /** The document's change token right after this execution (absent when it could not be read). */
   document?: { documentHash: string; revision?: unknown };
+  /** The linked file it ran in (ADR-027: the result groups executions by file). */
+  file?: { linkId?: string; name: string };
+  undoneAt?: string;
 }
 /**
  * The host said an execute changed the document and could not be undone (a failed run or a tripped
@@ -297,12 +300,129 @@ export interface LinkedFiles {
     host: 'rhino' | 'zwcad',
     target: { instance: string; documentId: number },
   ): DirectDriver | undefined;
+  /**
+   * Before the first execute in a document other than the target: undefined when the request may
+   * lock it, else the refusal code (DOCUMENT_LOCKED, HOST_RESULT_UNRESOLVED). Synchronous, so the
+   * check and the lock (the next progress update) cannot interleave with another turn.
+   */
+  claim?(document: TurnDocument): string | undefined;
+  /** The turn was cut by an intervention (SPEC-02.8): its changes stay for the next condition. */
+  intervened?(): boolean;
 }
+/** One file's outcome of a request-level undo or an automatic rollback (ADR-027). */
+export interface FileUndo {
+  host: 'rhino' | 'zwcad';
+  target: { instance: string; documentId: number };
+  linkId?: string;
+  name: string;
+  /**
+   * undone: every applied execute there is undone; refused: the host refused one (it and the
+   * older ones there stay); unknown: an answer was lost (the document state is unknown).
+   */
+  state: 'undone' | 'refused' | 'unknown';
+  undone: number;
+  kept: number;
+  reason?: string;
+}
+/** A request-level undo or rollback, as the request result keeps it (`undo` / `rollback`). */
+export interface RequestUndo {
+  at: string;
+  reason?: 'failed' | 'cancelled';
+  files: FileUndo[];
+}
+/** The refusal of a first write to a document another request holds (ADR-027 5). */
+export function lockRefusal(code: string, name: string): DirectRefusal {
+  return {
+    code,
+    final: true,
+    reason:
+      code === 'HOST_RESULT_UNRESOLVED'
+        ? `'${name}' 파일에 결과를 확인하지 못한 작업이 있어 이 파일은 실행하지 않았습니다. 그 작업의 결과를 먼저 확인하세요.`
+        : `다른 작업이 '${name}' 파일을 고치는 중이라 이 파일은 실행하지 않았습니다. 그 작업이 끝난 뒤 다시 요청하세요.`,
+  };
+}
+/**
+ * Undoes a request's applied executions, last first, each with its document's driver (ADR-027
+ * 2·3). Where the host refuses one (not the latest record, closed), that file's older ones stay
+ * too; other files go on. A thrown answer is a refusal when it came before the host touched the
+ * document, unknown otherwise. `skip`: documents left alone (their state is unknown).
+ */
+export async function undoExecutions(
+  records: readonly ExecutionRecord[],
+  driverOf: (record: ExecutionRecord) => DirectDriver | undefined,
+  { skip = new Set<string>() }: { skip?: ReadonlySet<string> } = {},
+) {
+  const at = new Date().toISOString();
+  const files = new Map<string, FileUndo>();
+  const undone = new Set<string>();
+  for (const record of [...records].reverse()) {
+    if (record.state !== 'applied' || !record.undoId) continue;
+    const key = documentKey(record.host, record.target);
+    let file = files.get(key);
+    if (!file) {
+      file = {
+        host: record.host,
+        target: record.target,
+        ...(record.file?.linkId ? { linkId: record.file.linkId } : {}),
+        name: record.file?.name ?? `${hostLabel(record.host)} 문서`,
+        state: skip.has(key) ? 'unknown' : 'undone',
+        undone: 0,
+        kept: 0,
+        ...(skip.has(key) ? { reason: 'HOST_RESULT_UNKNOWN' } : {}),
+      };
+      files.set(key, file);
+    }
+    if (file.state !== 'undone') {
+      file.kept++;
+      continue;
+    }
+    const driver = driverOf(record);
+    if (!driver) {
+      Object.assign(file, { state: 'refused', reason: 'EXECUTOR_NOT_READY' });
+      file.kept++;
+      continue;
+    }
+    let answer: Awaited<ReturnType<DirectDriver['undo']>>;
+    try {
+      answer = await driver.undo(record.undoId);
+    } catch (error) {
+      const refusal = directRefusal(record.host, error);
+      Object.assign(
+        file,
+        refusal
+          ? { state: 'refused', reason: refusal.code }
+          : { state: 'unknown', reason: 'HOST_RESULT_UNKNOWN' },
+      );
+      file.kept++;
+      continue;
+    }
+    if (answer.ok) {
+      undone.add(record.executionId);
+      file.undone++;
+    } else {
+      Object.assign(file, {
+        state: 'refused',
+        reason: typeof answer.reason === 'string' ? answer.reason : 'undo-failed',
+      });
+      file.kept++;
+    }
+  }
+  // Files in the order the request first wrote them.
+  const first = records.map((record) => documentKey(record.host, record.target));
+  return {
+    at,
+    undone,
+    files: [...files.entries()]
+      .sort(([x], [y]) => first.indexOf(x) - first.indexOf(y))
+      .map(([, file]) => file),
+  };
+}
+
 const documentKey = (host: string, target: { instance: string; documentId: number }) =>
   JSON.stringify([host, target.instance, target.documentId]);
 const hostLabel = (host: 'rhino' | 'zwcad') => (host === 'rhino' ? 'Rhino' : 'ZWCAD');
 /** The linked-files lines of a turn goal: which file is the target, which are live, which closed. */
-function linkedFilesNote(links: LiveLink[], targetKey: string, eyes: boolean) {
+function linkedFilesNote(links: LiveLink[], targetKey: string, eyes: boolean, mode: RequestMode) {
   if (!links.length) return '';
   const rows = links.slice(0, 30).map((link) => {
     const state =
@@ -320,7 +440,12 @@ function linkedFilesNote(links: LiveLink[], targetKey: string, eyes: boolean) {
   return `
 Linked files of this project (linkId · name · state):
 ${rows.join('\n')}
-Each file keeps its own units and coordinates (query returns units); do not assume a shared origin unless the request or the pins establish one. A file answering LINK_NOT_LIVE is not open now: read it from its stored Sync.`;
+Each file keeps its own units and coordinates (query returns units); do not assume a shared origin unless the request or the pins establish one. A file answering LINK_NOT_LIVE is not open now: read it from its stored Sync.${
+    mode === 'auto'
+      ? `
+execute with an open file's linkId edits that file directly, one undo record there per execute, under the same rules and guard as the target. This request is one unit across files: the user's [되돌리기] undoes all of it, and if the request fails or is stopped after it changed two or more files, VIDE undoes every change of this request in every file. A file another task is writing answers DOCUMENT_LOCKED: nothing ran there; leave it and tell the user.`
+      : ''
+  }`;
 }
 
 function rhinoGoal(turn: DirectTurn, targetRef: string, linkedNote = '') {
@@ -374,7 +499,9 @@ export async function runDirectTurn(turn: DirectTurn) {
   let guarded: ExecutionRecord | undefined;
   // The last refusal before execution (the result card shows it); a final one (read-only document,
   // lost connection) answers every later execute of this turn without calling the host.
-  let refused: DirectRefusal | undefined;
+  let refused: (DirectRefusal & { file?: string }) | undefined;
+  /** The document the last refusal was about (a later answer from it clears it). */
+  let refusedKey: string | undefined;
   const progress = () => ({ queries, attempts, completed: applied });
   // The documents of the turn (ADR-027): the target and every other linked file it resolved.
   interface TurnDoc {
@@ -382,6 +509,12 @@ export async function runDirectTurn(turn: DirectTurn) {
     driver: DirectDriver;
     file: { linkId?: string; name: string };
     vision?: ReturnType<typeof visionHandlers>;
+    /** The last refusal before execution here; a final one answers later executes at once. */
+    refused?: DirectRefusal;
+    /** Locked for this request (another file, on its first execute). */
+    claimed?: boolean;
+    /** An execute answer was lost here: the document state is unknown. */
+    lost?: boolean;
   }
   let links: LiveLink[] = turn.linked ? await turn.linked.list().catch(() => []) : [];
   const primaryKey = documentKey(driver.host, driver.target);
@@ -421,6 +554,19 @@ export async function runDirectTurn(turn: DirectTurn) {
   /** Activity text naming the file when it is not the target. */
   const named = (doc: TurnDoc, text: string) =>
     doc === primary ? text : `${doc.file.name} · ${text}`;
+  /** The documents this turn sent an execute to (two or more: a multi-file request, ADR-027). */
+  const attempted = new Set<string>();
+  const multiFile = () => attempted.size > 1;
+  /** Other documents the turn locked as it first wrote them (the request result keeps them). */
+  const documents: TurnDocument[] = [];
+  const turnDocument = (doc: TurnDoc): TurnDocument => ({
+    host: doc.driver.host,
+    instance: doc.driver.target.instance,
+    documentId: doc.driver.target.documentId,
+    ...(doc.file.linkId ? { linkId: doc.file.linkId } : {}),
+    name: doc.file.name,
+  });
+  let rollback: RequestUndo | undefined;
   const state = (phase: string) => ({
     phase,
     host: driver.host,
@@ -430,6 +576,19 @@ export async function runDirectTurn(turn: DirectTurn) {
     progress: progress(),
     activity: activity.entries,
     executions: executions.map(publicRecord),
+    ...(documents.length ? { documents } : {}),
+    ...(multiFile() ? { multiFile: true } : {}),
+    ...(rollback ? { rollback } : {}),
+    // The last refusal before execution (a failed or stopped request keeps it too).
+    ...(refused
+      ? {
+          refused: {
+            code: refused.code,
+            reason: refused.reason,
+            ...(refused.file ? { file: refused.file } : {}),
+          },
+        }
+      : {}),
   });
   type Handler = (args: Record<string, unknown>, context?: { signal: AbortSignal }) => unknown;
   const handlers: Record<string, Handler> = {
@@ -462,42 +621,63 @@ export async function runDirectTurn(turn: DirectTurn) {
         return (doc.vision[tool] as Handler)(args, context ?? { signal });
       };
   }
-  /** A refused execute: recorded once, answered to the AI as not run (with whether to retry). */
-  const notExecuted = (refusal: DirectRefusal, fresh = false) => {
+  /**
+   * A refused execute: recorded once, answered to the AI as not run (with whether to retry). A
+   * final refusal holds only for that document (another file of the turn may still be written).
+   */
+  const notExecuted = (doc: TurnDoc, refusal: DirectRefusal, fresh = false) => {
     if (fresh) {
-      refused = refusal;
-      activity.add('result', `실행하지 않음 · ${refusal.reason}`, refusal.code);
+      doc.refused = refusal;
+      refused = { ...refusal, ...(doc === primary ? {} : { file: doc.file.name }) };
+      refusedKey = doc.key;
+      activity.add('result', named(doc, `실행하지 않음 · ${refusal.reason}`), refusal.code);
       update(state('model'));
     }
+    const where = doc === primary ? 'the document' : doc.file.name;
     return {
       ok: false,
       executed: false,
       code: refusal.code,
       reason: refusal.reason,
-      next: refusal.final
-        ? 'Nothing ran and the document is unchanged. No execute can succeed in this turn: stop executing and tell the user the reason and the next step in Korean.'
-        : 'Nothing ran and the document is unchanged. Retry once only if the cause has likely passed; otherwise stop and tell the user the reason.',
+      next: !refusal.final
+        ? `Nothing ran and ${where} is unchanged. Retry once only if the cause has likely passed; otherwise stop and tell the user the reason.`
+        : doc === primary
+          ? 'Nothing ran and the document is unchanged. No execute can succeed in this turn: stop executing and tell the user the reason and the next step in Korean.'
+          : `Nothing ran and ${where} is unchanged. No execute in that file can succeed in this turn: leave it and tell the user the reason and the next step in Korean.`,
     };
   };
   if (mode === 'auto')
     handlers.execute = async ({ code, linkId }) => {
       if (typeof code !== 'string') throw failure('INVALID_INPUT');
       if (signal.aborted) throw failure('CANCELLED');
-      // Editing other linked files follows (T-090); reading them is live already.
-      if ((await resolve(linkId)) !== primary) throw failure('LINK_NOT_LIVE');
       if (uncertain) throw failure('HOST_RESULT_UNKNOWN');
-      if (refused?.final) return notExecuted(refused);
+      const doc = await resolve(linkId);
+      if (doc.refused?.final) return notExecuted(doc, doc.refused);
       if (attempts >= limits.maxHostCommands) throw failure('HOST_COMMAND_LIMIT');
+      // Another file is locked as the turn first writes it; held elsewhere, it is refused at once
+      // (never waits, so two turns cannot wait on each other's files).
+      if (doc !== primary && !doc.claimed) {
+        const held = turn.linked?.claim?.(turnDocument(doc));
+        if (held) return notExecuted(doc, lockRefusal(held, doc.file.name), true);
+        doc.claimed = true;
+        documents.push(turnDocument(doc));
+        update(state('host'));
+      }
       attempts++;
+      attempted.add(doc.key);
       const executionId = randomUUID();
       const label = directLabel(input.body, attempts);
-      activity.add('execute', `${hostName} 문서에 바로 실행 ${attempts}회차`, code);
+      activity.add(
+        'execute',
+        named(doc, `${hostLabel(doc.driver.host)} 문서에 바로 실행 ${attempts}회차`),
+        code,
+      );
       update(state('host'));
       // A lost answer leaves the document state unknown: no further execute in this turn.
       uncertain = true;
       let outcome: DirectOutcome;
       try {
-        outcome = await driver.execute({
+        outcome = await doc.driver.execute({
           requestId: executionId,
           code,
           label,
@@ -505,23 +685,33 @@ export async function runDirectTurn(turn: DirectTurn) {
         });
       } catch (error) {
         // Refused before it touched the document (read-only, busy, closed): nothing ran.
-        const refusal = directRefusal(driver.host, error);
-        if (!refusal) throw error;
+        const refusal = directRefusal(doc.driver.host, error);
+        if (!refusal) {
+          doc.lost = true;
+          throw error;
+        }
         uncertain = false;
-        return notExecuted(refusal, true);
+        return notExecuted(doc, refusal, true);
       }
       // A change the host could not revert: as unknown as a lost answer (stays uncertain).
       if (hostLeftUnknown(outcome)) {
-        activity.add('error', '실행 결과를 되돌리지 못함 · 문서 상태 확인 필요', outcome.code);
+        doc.lost = true;
+        activity.add(
+          'error',
+          named(doc, '실행 결과를 되돌리지 못함 · 문서 상태 확인 필요'),
+          outcome.code,
+        );
         throw failure('HOST_RESULT_UNKNOWN');
       }
       uncertain = false;
-      // The host answered this one: an earlier passing refusal (busy) no longer describes the turn.
-      refused = undefined;
+      // The host answered this one: an earlier passing refusal (busy) no longer describes it.
+      doc.refused = undefined;
+      if (refusedKey === doc.key) refused = undefined;
       const record = {
         executionId,
-        host: driver.host,
-        target: driver.target,
+        host: doc.driver.host,
+        target: doc.driver.target,
+        file: doc.file,
         label,
         at: new Date().toISOString(),
       };
@@ -535,7 +725,7 @@ export async function runDirectTurn(turn: DirectTurn) {
         };
         executions.push(guarded);
         turn.onExecution?.(guarded);
-        activity.add('error', `확인 필요 · ${outcome.guarded.detail} · 되돌려 둠`);
+        activity.add('error', named(doc, `확인 필요 · ${outcome.guarded.detail} · 되돌려 둠`));
         update(state('host'));
         return {
           ok: false,
@@ -544,12 +734,12 @@ export async function runDirectTurn(turn: DirectTurn) {
           next: 'Nothing stays applied. Stop here and tell the user what needs confirmation; the card re-runs this execute after they confirm.',
         };
       }
-      const refusal = !outcome.ok && !outcome.guarded && directRefusal(driver.host, outcome);
-      if (refusal) return notExecuted(refusal, true);
+      const refusal = !outcome.ok && !outcome.guarded && directRefusal(doc.driver.host, outcome);
+      if (refusal) return notExecuted(doc, refusal, true);
       if (!outcome.ok) {
         activity.add(
           'error',
-          '실행 거절 · AI가 수정해 다시 시도',
+          named(doc, '실행 거절 · AI가 수정해 다시 시도'),
           (outcome.diagnostics ?? []).join('\n') || outcome.code,
         );
         update(state('model'));
@@ -558,7 +748,7 @@ export async function runDirectTurn(turn: DirectTurn) {
       const changes = boundedChanges(outcome.changes);
       if (outcome.undoId) {
         applied++;
-        const document = await documentAfter(driver, outcome);
+        const document = await documentAfter(doc.driver, outcome);
         const entry: ExecutionRecord = {
           ...record,
           state: 'applied',
@@ -570,9 +760,12 @@ export async function runDirectTurn(turn: DirectTurn) {
         turn.onExecution?.(entry);
         activity.add(
           'result',
-          `문서에 반영 · 추가 ${countOf(outcome.changes, 'added')} · 수정 ${countOf(outcome.changes, 'changed')} · 삭제 ${countOf(outcome.changes, 'removed')} · 되돌리기 1단계`,
+          named(
+            doc,
+            `문서에 반영 · 추가 ${countOf(outcome.changes, 'added')} · 수정 ${countOf(outcome.changes, 'changed')} · 삭제 ${countOf(outcome.changes, 'removed')} · 되돌리기 1단계`,
+          ),
         );
-      } else activity.add('result', '실행 성공 · 바뀐 객체 없음');
+      } else activity.add('result', named(doc, '실행 성공 · 바뀐 객체 없음'));
       update(state('host'));
       return {
         ok: true,
@@ -588,6 +781,47 @@ export async function runDirectTurn(turn: DirectTurn) {
             : {}),
       };
     };
+  /**
+   * All or nothing (ADR-027 3): a multi-file request that ends failed or stopped undoes what it
+   * applied, in every file, last first. A document whose execute answer was lost is left alone.
+   */
+  const rollBack = async (reason: 'failed' | 'cancelled') => {
+    const lost = new Set([...docs.values()].filter((doc) => doc.lost).map((doc) => doc.key));
+    const outcome = await undoExecutions(
+      executions,
+      (record) => docs.get(documentKey(record.host, record.target))?.driver,
+      { skip: lost },
+    );
+    for (const entry of executions)
+      if (outcome.undone.has(entry.executionId)) {
+        entry.state = 'undone';
+        entry.undoneAt = outcome.at;
+        turn.onExecution?.(entry);
+      }
+    // A file whose execute answer was lost needs attention even with nothing applied there.
+    for (const doc of docs.values())
+      if (
+        doc.lost &&
+        !outcome.files.some((file) => documentKey(file.host, file.target) === doc.key)
+      )
+        outcome.files.push({
+          host: doc.driver.host,
+          target: doc.driver.target,
+          ...doc.file,
+          state: 'unknown',
+          undone: 0,
+          kept: 0,
+          reason: 'HOST_RESULT_UNKNOWN',
+        });
+    rollback = { at: outcome.at, reason, files: outcome.files };
+    const left = outcome.files.filter((file) => file.state !== 'undone');
+    activity.add(
+      left.length ? 'error' : 'result',
+      left.length
+        ? `실패해서 자동으로 되돌림 · 되돌리지 못한 파일 ${left.map((file) => file.name).join(', ')}`
+        : `실패해서 자동으로 되돌림 · 파일 ${outcome.files.length}개`,
+    );
+  };
   const scope = turn.tools.issue({
     targetRef,
     handlers: handlers as Parameters<AgentTools['issue']>[0]['handlers'],
@@ -608,7 +842,11 @@ export async function runDirectTurn(turn: DirectTurn) {
       })
       .run(
         {
-          goal: rhinoGoal(turn, targetRef, linkedFilesNote(links, primaryKey, !!driver.vision)),
+          goal: rhinoGoal(
+            turn,
+            targetRef,
+            linkedFilesNote(links, primaryKey, !!driver.vision, mode),
+          ),
           revision: 1,
           items,
           includedIds: items.map((i) => i.id),
@@ -623,13 +861,14 @@ export async function runDirectTurn(turn: DirectTurn) {
       );
     if (uncertain) throw failure('HOST_RESULT_UNKNOWN');
     if (signal.aborted && !applied) throw failure('CANCELLED');
+    // A stopped multi-file request is not left half done (an intervention keeps its changes).
+    if (signal.aborted && multiFile() && !turn.linked?.intervened?.()) throw failure('CANCELLED');
     return {
       ...response,
       ...state('done'),
       phase: undefined,
       executionMode: 'direct',
       ...(guarded ? { guarded: { executionId: guarded.executionId, ...guarded.guarded! } } : {}),
-      ...(refused ? { refused: { code: refused.code, reason: refused.reason } } : {}),
       baseRequestId: previous.id,
       sourceDocument: previous.result.sourceDocument,
       // Kept for [진행]: the guarded body (never shown; dropped once confirmed).
@@ -638,11 +877,34 @@ export async function runDirectTurn(turn: DirectTurn) {
       ),
     };
   } catch (error) {
-    // Only a lost execute answer leaves the document unknown; applied records are known (and
-    // undoable), so a failing provider keeps them with the failure.
-    if (uncertain)
+    const code =
+      error && typeof error === 'object' && 'code' in error ? String(error.code) : undefined;
+    if (
+      multiFile() &&
+      executions.some((entry) => entry.state === 'applied' && entry.undoId) &&
+      !(code === 'CANCELLED' && turn.linked?.intervened?.())
+    )
+      await rollBack(code === 'CANCELLED' ? 'cancelled' : 'failed');
+    // Only a lost execute (or undo) answer leaves a document unknown; applied records are known
+    // (and undoable), so a failing provider keeps them with the failure. While unresolved, the
+    // request holds only the documents that need attention.
+    const attention = new Map<string, TurnDocument>();
+    for (const doc of docs.values()) if (doc.lost) attention.set(doc.key, turnDocument(doc));
+    for (const file of rollback?.files ?? [])
+      if (file.state === 'unknown')
+        attention.set(documentKey(file.host, file.target), {
+          host: file.host,
+          ...file.target,
+          ...(file.linkId ? { linkId: file.linkId } : {}),
+          name: file.name,
+        });
+    if (uncertain || attention.size)
       throw Object.assign(failure('HOST_RESULT_UNKNOWN'), {
-        intent: { ...state('host'), baseRequestId: previous.id },
+        intent: {
+          ...state('host'),
+          baseRequestId: previous.id,
+          documents: [...attention.values()],
+        },
         cause: error,
       });
     if (executions.length && error && typeof error === 'object')
@@ -652,7 +914,6 @@ export async function runDirectTurn(turn: DirectTurn) {
     scope.revoke();
   }
 }
-/** A record without the guarded body (what progress updates and the ledger carry). */
 export function publicRecord({ code: _code, ...entry }: ExecutionRecord) {
   return entry;
 }

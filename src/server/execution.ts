@@ -8,7 +8,7 @@ import { isDwgSdkEditMode } from '../contracts/dwg-edit-mode.ts';
 import { executionLimits } from '../contracts/execution-limits.ts';
 import { modelContext } from './model-context.ts';
 import { CLAUDE_MODELS, claudeEfforts, modelName } from './model-capabilities.ts';
-import { hostUse, waitingOf } from '../contracts/request-scope.ts';
+import { documentHolder, hostUse, waitingOf } from '../contracts/request-scope.ts';
 import { z } from 'zod';
 import { runLinked } from './linked-execution.ts';
 // Jig review gates (sync-review rows, structure-draft-review members/nodes; SPEC-06.9).
@@ -69,12 +69,14 @@ import {
   publicRecord,
   runDirectTurn,
   takePlan,
+  undoExecutions,
   PLAN_RULES,
   type DirectDriver,
   type ExecutionRecord,
 } from './direct-mode.ts';
 import { directRefusal } from '../contracts/direct-refusal.ts';
 import { DocumentLinks } from '../core/document-links.ts';
+import { zwcadAnsweredCodes } from './zwcad-sdk-execution.ts';
 import { liveLinksOf, type LiveLink } from './live-links.ts';
 interface Provider {
   run(
@@ -226,6 +228,8 @@ export class Execution {
   attachments?: AttachmentStore;
   private injectedDirect?: Options['directDriver'];
   private injectedLinks?: Options['liveLinks'];
+  /** Requests an intervention cut (SPEC-02.8): a stopped multi-file turn keeps its changes. */
+  private readonly intervened = new Set<string>();
   /**
    * Questions a Claude turn asks with its own AskUserQuestion tool (ADR-026 4, SPIKE-2026-09-30-
    * native-questions-claude), waiting for the person's answer in the same run: request id → cards.
@@ -849,6 +853,7 @@ export class Execution {
     const controller = new AbortController();
     const completion = (async () => {
       await predecessor.completion;
+      this.intervened.delete(predecessorId);
       if (controller.signal.aborted) {
         this.workspace.update(projectId, request.id, 'cancelled');
         return;
@@ -889,6 +894,7 @@ export class Execution {
         this.pump(projectId);
       });
     this.active.set(request.id, { controller, completion, projectId });
+    this.intervened.add(predecessorId);
     predecessor.controller.abort();
     return request;
   }
@@ -1198,6 +1204,10 @@ export class Execution {
           linked: {
             list: () => this.liveLinks(projectId),
             driver: (host, document) => this.directDriverFor(host, document, false),
+            // Another file is locked on its first write; held elsewhere it is refused, never
+            // waited for (ADR-027 5, SPEC-02.9 3).
+            claim: (document) => documentHolder(id, document, this.workspace.list(projectId))?.code,
+            intervened: () => this.intervened.has(id),
           },
           protectedIds: pins
             .filter((pin) => pin.role !== 'target' && pin.basis === previous.id)
@@ -1527,7 +1537,21 @@ export class Execution {
       return {
         host,
         target,
-        execute: (command) => attached.directExecute(target, command),
+        execute: async (command) => {
+          const started = Date.now();
+          const result = await attached.directExecute(target, command);
+          // Like runAttached: a failure that is neither a known answer nor a refusal before the
+          // drawing was touched (a slow HOST_BUSY, HOST_READ_FAILED) leaves the drawing unknown.
+          const code = (result as { code?: unknown }).code;
+          if (
+            !result.ok &&
+            !result.guarded &&
+            !(typeof code === 'string' && zwcadAnsweredCodes.has(code)) &&
+            !directRefusal('zwcad', result, Date.now() - started)
+          )
+            return { ...result, code: 'HOST_RESULT_UNKNOWN' };
+          return result;
+        },
         undo: (undoId) => attached.directUndo(target, undoId),
         fingerprint: () => attached.fingerprint(target),
         // Another file's reads in a Rhino turn (ADR-027): entity pages by handle, like runAttached.
@@ -1646,6 +1670,64 @@ export class Execution {
     this.ledgerExecution(updated, { ...entry, state: 'undone' });
     // The host had it undone already (Rhino Ctrl+Z / ZWCAD U): nothing more was undone now.
     return { ok: true, ...(answer.already === true ? { already: true } : {}), request: updated };
+  }
+  /**
+   * [되돌리기] of a whole request (POST …/requests/:rid/undo {all: true}, ADR-027 2): every applied
+   * execution, in every file, last first. A file whose undo the host refuses keeps its remaining
+   * executions (named in `files` and the result's `undo`); a lost undo answer leaves the request
+   * unknown on that file.
+   */
+  async undoRequest(projectId: string, id: string) {
+    const request = this.workspace.get(projectId, id);
+    if (this.active.has(id) || ['queued', 'running'].includes(request.state))
+      throw new DomainError('REVISION_CONFLICT');
+    const records = executionsOf(request.result);
+    if (!records.some((entry) => entry.state === 'applied' && entry.undoId))
+      return { ok: true, already: true, files: [], request };
+    const outcome = await undoExecutions(records, (record) =>
+      this.directDriverFor(
+        record.host ?? (request.result?.host === 'zwcad' ? 'zwcad' : 'rhino'),
+        record.target ?? request.result?.sourceDocument,
+        false,
+      ),
+    );
+    // Re-read: the request may have changed while the hosts answered.
+    const now = this.workspace.get(projectId, id);
+    const unknown = outcome.files.filter((file) => file.state === 'unknown');
+    const result = {
+      ...now.result,
+      executions: executionsOf(now.result).map((entry) =>
+        outcome.undone.has(entry.executionId)
+          ? { ...entry, state: 'undone' as const, undoneAt: outcome.at }
+          : entry,
+      ),
+      undo: { at: outcome.at, files: outcome.files },
+      ...(unknown.length
+        ? {
+            code: 'HOST_RESULT_UNKNOWN',
+            documents: unknown.map((file) => ({
+              host: file.host,
+              ...file.target,
+              ...(file.linkId ? { linkId: file.linkId } : {}),
+              name: file.name,
+            })),
+          }
+        : {}),
+    };
+    const updated = this.workspace.update(
+      projectId,
+      id,
+      unknown.length ? 'unknown' : now.state,
+      result,
+    );
+    for (const entry of records)
+      if (outcome.undone.has(entry.executionId))
+        this.ledgerExecution(updated, { ...entry, state: 'undone' });
+    return {
+      ok: outcome.files.every((file) => file.state === 'undone'),
+      files: outcome.files,
+      request: updated,
+    };
   }
   /**
    * The guard card's [진행] (POST …/requests/:rid/confirm {executionId}): the held body runs again

@@ -298,3 +298,350 @@ test('A scope that does not resolve linkId refuses it instead of reading the tar
   assert.equal(reads, 1);
   tools.close();
 });
+
+// --- writing several files in one request (T-090) -----------------------------------------------
+
+const fail = (code) => Object.assign(new Error(code), { code });
+const applied = (result) => result.executions.filter((entry) => entry.state === 'applied');
+
+test('Auto edits two files; one [되돌리기] undoes the whole request in both, last first', async (t) => {
+  const answers = [];
+  const { a, b, execution, project, seen, send, settled, state } = setup(t, async ({ call }) => {
+    answers.push(await call('execute', { code: 'add wall' }));
+    answers.push(await call('execute', { linkId: 'link-b', code: 'add column' }));
+    answers.push(await call('execute', { linkId: 'link-a', code: 'add slab' }));
+    return { text: '두 파일을 맞췄습니다.' };
+  });
+  send('auto-1', { mode: 'auto' });
+  await settled();
+  const done = state('auto-1');
+  assert.equal(done.state, 'succeeded', JSON.stringify(done.result));
+  assert.ok(
+    answers.every((answer) => answer.value.ok),
+    JSON.stringify(answers),
+  );
+  assert.equal(done.result.multiFile, true);
+  assert.deepEqual(
+    done.result.executions.map((entry) => [entry.file.name, entry.undoId, entry.state]),
+    [
+      ['A.3dm', 'A-11', 'applied'],
+      ['B.3dm', 'B-11', 'applied'],
+      ['A.3dm', 'A-12', 'applied'],
+    ],
+  );
+  assert.deepEqual(done.result.executions[1].target, { instance: 'win-b', documentId: 7 });
+  // The other file is held by this request while it runs (the result keeps it).
+  assert.deepEqual(
+    done.result.documents.map((entry) => [entry.instance, entry.linkId]),
+    [['win-b', 'link-b']],
+  );
+  assert.match(seen[0].context.goal, /execute with an open file's linkId edits that file/);
+  assert.deepEqual(b.calls.execute[0].guard, { confirmed: false, maxDeletes: 50 });
+
+  const undone = await execution.undoRequest(project.id, 'auto-1');
+  assert.equal(undone.ok, true);
+  assert.deepEqual(a.calls.undo.concat(b.calls.undo), ['A-12', 'A-11', 'B-11']);
+  assert.ok(
+    [...a.records, ...b.records].every((record) => record.undone),
+    'every record is undone',
+  );
+  assert.deepEqual(
+    undone.files.map((file) => [file.name, file.state, file.undone, file.kept]),
+    [
+      ['A.3dm', 'undone', 2, 0],
+      ['B.3dm', 'undone', 1, 0],
+    ],
+  );
+  assert.ok(undone.request.result.executions.every((entry) => entry.state === 'undone'));
+  assert.equal(undone.request.result.undo.files.length, 2);
+  // Nothing left: a second press is a no-op.
+  assert.equal((await execution.undoRequest(project.id, 'auto-1')).already, true);
+});
+
+test('[되돌리기] of the request: a file edited after it keeps its executions and is named', async (t) => {
+  const { a, b, execution, project, send, settled } = setup(t, async ({ call }) => {
+    await call('execute', { code: 'add wall' });
+    await call('execute', { linkId: 'link-b', code: 'add column' });
+    return { text: '완료' };
+  });
+  send('auto-1', { mode: 'auto' });
+  await settled();
+  b.userEdit();
+  const undone = await execution.undoRequest(project.id, 'auto-1');
+  assert.equal(undone.ok, false);
+  assert.deepEqual(
+    undone.files.map((file) => [file.name, file.state, file.reason ?? null]),
+    [
+      ['A.3dm', 'undone', null],
+      ['B.3dm', 'refused', 'not-latest'],
+    ],
+  );
+  assert.equal(a.records[0].undone, true);
+  assert.equal(b.records[0].undone, false);
+  assert.deepEqual(
+    undone.request.result.executions.map((entry) => entry.state),
+    ['undone', 'applied'],
+  );
+  // The request itself stays succeeded: the document states are known.
+  assert.equal(undone.request.state, 'succeeded');
+});
+
+test('All or nothing: the second file fails the request and the first file is rolled back', async (t) => {
+  const { a, b, send, settled, state } = setup(t, async ({ call }) => {
+    await call('execute', { code: 'add wall' });
+    // A compile error in B is the AI's to fix, not a failure of the request,
+    const bad = await call('execute', { linkId: 'link-b', code: 'bad body' });
+    assert.equal(bad.value.code, 'COMPILE_ERROR');
+    await call('execute', { linkId: 'link-b', code: 'add column' });
+    // but the request ending failed is.
+    throw fail('PROVIDER_TIMEOUT');
+  });
+  send('auto-1', { mode: 'auto' });
+  await settled();
+  const done = state('auto-1');
+  assert.equal(done.state, 'failed');
+  assert.equal(done.result.code, 'PROVIDER_TIMEOUT');
+  assert.deepEqual(b.calls.undo.concat(a.calls.undo), ['B-11', 'A-11']);
+  assert.ok([...a.records, ...b.records].every((record) => record.undone));
+  assert.equal(done.result.rollback.reason, 'failed');
+  assert.deepEqual(
+    done.result.rollback.files.map((file) => [file.name, file.state, file.undone]),
+    [
+      ['A.3dm', 'undone', 1],
+      ['B.3dm', 'undone', 1],
+    ],
+  );
+  assert.equal(applied(done.result).length, 0);
+  assert.ok(done.result.activity.some((entry) => /실패해서 자동으로 되돌림/.test(entry.text)));
+});
+
+test('All or nothing: an execute refused before it ran is not applied; a single-file failure is unchanged', async (t) => {
+  const { a, b, send, settled, state } = setup(t, async ({ call, turn }) => {
+    await call('execute', { code: 'add wall' });
+    if (turn === 1) {
+      b.next.execute.push(() => ({ ok: false, code: 'DOCUMENT_READ_ONLY' }));
+      const refused = await call('execute', { linkId: 'link-b', code: 'add column' });
+      assert.equal(refused.value.executed, false);
+    }
+    throw fail('PROVIDER_TIMEOUT');
+  });
+  send('two-files', { mode: 'auto' });
+  await settled();
+  const two = state('two-files');
+  assert.equal(two.state, 'failed');
+  assert.equal(two.result.multiFile, true);
+  // A's execute is rolled back; B never ran, so it has nothing to undo.
+  assert.deepEqual(
+    two.result.rollback.files.map((file) => file.name),
+    ['A.3dm'],
+  );
+  assert.deepEqual(b.calls.undo, []);
+  assert.equal(two.result.refused.code, 'DOCUMENT_READ_ONLY');
+  assert.equal(two.result.refused.file, 'B.3dm');
+
+  // One file only: the failed turn keeps its execute ([되돌리기] still works), as before.
+  send('one-file', { mode: 'auto' });
+  await settled();
+  const one = state('one-file');
+  assert.equal(one.state, 'failed');
+  assert.equal(one.result.rollback, undefined);
+  assert.equal(applied(one.result).length, 1);
+  assert.equal(a.records.at(-1).undone, false);
+});
+
+test('A rollback the host refuses is shown per file; a lost undo answer leaves the request unknown', async (t) => {
+  const { a, b, send, settled, state } = setup(t, async ({ call, turn }) => {
+    await call('execute', { code: 'add wall' });
+    await call('execute', { linkId: 'link-b', code: 'add column' });
+    if (turn === 1) a.userEdit();
+    else b.next.undo.push(() => Promise.reject(fail('TIMEOUT')));
+    throw fail('PROVIDER_TIMEOUT');
+  });
+  send('refused', { mode: 'auto' });
+  await settled();
+  const refused = state('refused');
+  assert.equal(refused.state, 'failed');
+  assert.deepEqual(
+    refused.result.rollback.files.map((file) => [file.name, file.state, file.reason ?? null]),
+    [
+      ['A.3dm', 'refused', 'not-latest'],
+      ['B.3dm', 'undone', null],
+    ],
+  );
+  // A's execute stays applied and undoable from the host.
+  assert.deepEqual(
+    refused.result.executions.map((entry) => [entry.file.name, entry.state]),
+    [
+      ['A.3dm', 'applied'],
+      ['B.3dm', 'undone'],
+    ],
+  );
+
+  send('lost', { mode: 'auto' });
+  await settled();
+  const lost = state('lost');
+  assert.equal(lost.state, 'unknown');
+  assert.equal(lost.result.code, 'HOST_RESULT_UNKNOWN');
+  assert.deepEqual(
+    lost.result.rollback.files.map((file) => [file.name, file.state]),
+    [
+      ['A.3dm', 'undone'],
+      ['B.3dm', 'unknown'],
+    ],
+  );
+  // While unresolved, only the file that needs attention stays held.
+  assert.deepEqual(
+    lost.result.documents.map((entry) => entry.instance),
+    ['win-b'],
+  );
+});
+
+test('A stopped multi-file request is rolled back; the guard of another file waits on its card', async (t) => {
+  let release;
+  const reached = new Promise((resolve) => (release = resolve));
+  const { a, b, execution, project, send, settled, state } = setup(
+    t,
+    async ({ call, signal, turn }) => {
+      if (turn === 1) {
+        await call('execute', { code: 'add wall' });
+        await call('execute', { linkId: 'link-b', code: 'add column' });
+        release();
+        await new Promise((resolve) => signal.addEventListener('abort', resolve, { once: true }));
+        throw fail('CANCELLED');
+      }
+      b.next.execute.push(() => ({
+        ok: false,
+        reverted: true,
+        guarded: { kind: 'bulk-delete', detail: '객체 60개를 지웁니다 (기준 50개).' },
+      }));
+      const held = await call('execute', { linkId: 'link-b', code: 'wipe old' });
+      assert.equal(held.value.guarded.kind, 'bulk-delete');
+      return { text: '확인이 필요합니다.' };
+    },
+  );
+  send('stop-1', { mode: 'auto' });
+  await reached;
+  execution.cancel(project.id, 'stop-1');
+  await settled();
+  const stopped = state('stop-1');
+  assert.equal(stopped.state, 'cancelled');
+  assert.equal(stopped.result.rollback.reason, 'cancelled');
+  assert.ok([...a.records, ...b.records].every((record) => record.undone));
+
+  send('guard-1', { mode: 'auto' });
+  await settled();
+  const waiting = state('guard-1');
+  assert.equal(waiting.state, 'needs-confirmation');
+  const [held] = waiting.result.executions;
+  assert.equal(held.file.name, 'B.3dm');
+  // [진행] re-runs the held body in B with the guard released.
+  const confirmed = await execution.confirm(project.id, 'guard-1', held.executionId);
+  assert.equal(confirmed.state, 'succeeded');
+  assert.equal(b.calls.execute.at(-1).code, 'wipe old');
+  assert.deepEqual(b.calls.execute.at(-1).guard, { confirmed: true, maxDeletes: 50 });
+});
+
+/** A promise and its resolver. */
+const gate = () => {
+  let open;
+  const promise = new Promise((resolve) => (open = resolve));
+  return { promise, open };
+};
+
+test('Another request writing the file: DOCUMENT_LOCKED at once, never a wait', async (t) => {
+  const holdB = gate(),
+    runningB = gate(),
+    holdA = gate(),
+    aWrote = gate();
+  const answers = {};
+  const { b, execution, send, settled, state } = setup(t, async ({ call, agent }) => {
+    if (agent.targetRef === 'rhino-open:win-b') {
+      runningB.open();
+      await holdB.promise;
+      return { text: 'B 작업 끝' };
+    }
+    // A's turn: B is being written by the other request, so nothing runs there.
+    answers.locked = await call('execute', { linkId: 'link-b', code: 'add column' });
+    answers.own = await call('execute', { code: 'add wall' });
+    aWrote.open();
+    await holdA.promise;
+    // The refusal is final for that file in this turn.
+    answers.again = await call('execute', { linkId: 'link-b', code: 'add column' });
+    return { text: '완료' };
+  });
+  send('writes-b', { mode: 'auto', baseRequestId: 'sync-b' });
+  await runningB.promise;
+  send('writes-a', { mode: 'auto' });
+  await aWrote.promise;
+  assert.equal(answers.locked.value.code, 'DOCUMENT_LOCKED');
+  assert.equal(answers.locked.value.executed, false);
+  assert.match(answers.locked.value.reason, /B\.3dm/);
+  assert.equal(answers.own.value.ok, true);
+  assert.equal(b.calls.execute.length, 0);
+  holdB.open();
+  await execution.completion('writes-b');
+  holdA.open();
+  await settled();
+  assert.equal(answers.again.value.code, 'DOCUMENT_LOCKED');
+  const done = state('writes-a');
+  assert.equal(done.state, 'succeeded');
+  assert.equal(done.result.refused.file, 'B.3dm');
+  // Only the target was written: a single-file request.
+  assert.equal(done.result.multiFile, undefined);
+});
+
+test('A file a running turn locked holds new writes to it until the turn ends', async (t) => {
+  const holdA = gate(),
+    aLocked = gate();
+  const { send, settled, state } = setup(t, async ({ call, agent }) => {
+    if (agent.targetRef === 'rhino-open:win-b') return { text: 'B 작업' };
+    const done = await call('execute', { linkId: 'link-b', code: 'add column' });
+    assert.equal(done.value.ok, true);
+    aLocked.open();
+    await holdA.promise;
+    return { text: '완료' };
+  });
+  send('locks-b', { mode: 'auto' });
+  await aLocked.promise;
+  const queued = send('then-b', { mode: 'auto', baseRequestId: 'sync-b' });
+  const waiting = state(queued.id);
+  assert.equal(waiting.state, 'queued');
+  assert.equal(waiting.result.waitingFor.kind, 'document');
+  assert.equal(waiting.result.waitingFor.after, 'locks-b');
+  holdA.open();
+  await settled();
+  assert.equal(state('then-b').state, 'succeeded');
+});
+
+test('ZWCAD drawings through the engine driver: entity pages by handle, unknown failures stay unknown', async () => {
+  const store = new Store(':memory:');
+  const calls = [];
+  const attached = {
+    query: async (target, params) => {
+      calls.push(['query', target, params]);
+      return { objects: [] };
+    },
+    directExecute: async (target, command) => {
+      calls.push(['execute', target, command.code]);
+      if (command.code === 'slow') return { ok: false, code: 'HOST_READ_FAILED' };
+      if (command.code === 'bad') return { ok: false, code: 'COMPILE_ERROR', diagnostics: [] };
+      return { ok: false, code: 'DOCUMENT_READ_ONLY' };
+    },
+    directUndo: async () => ({ ok: true }),
+    fingerprint: async () => ({ documentHash: hash }),
+  };
+  const execution = new Execution(new Workspace(store), {
+    zwcadSdk: { editors: { attached } },
+  });
+  const driver = execution.directDriverFor('zwcad', { instance: '4321:99', documentId: 1 }, false);
+  await driver.query({ objectIds: ['cad-1A2', '3F'] });
+  assert.deepEqual(calls[0][2], { offset: 0, limit: 100, handles: ['1A2', '3F'] });
+  const guard = { confirmed: false, maxDeletes: 50 };
+  const run = async (code) =>
+    (await driver.execute({ requestId: 'r', code, label: 'x', guard })).code;
+  assert.equal(await run('slow'), 'HOST_RESULT_UNKNOWN');
+  assert.equal(await run('bad'), 'COMPILE_ERROR');
+  assert.equal(await run('ro'), 'DOCUMENT_READ_ONLY');
+  await execution.close();
+  store.close();
+});

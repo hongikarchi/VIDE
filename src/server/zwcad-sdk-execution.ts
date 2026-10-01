@@ -78,7 +78,7 @@ export function directMode(input: object) {
  * ZWCAD direct-execute failures the host answers after a definite outcome: compile and policy
  * rejections ran nothing, a failed run aborted its transaction, a held guard committed nothing.
  */
-const answeredCodes = new Set([
+export const zwcadAnsweredCodes: ReadonlySet<string> = new Set([
   'COMPILE_ERROR',
   'CODE_POLICY_REJECTED',
   'EXECUTION_FAILED',
@@ -242,7 +242,7 @@ export class ZwcadSdkExecution {
             uncertain = false;
             return notExecuted(refusal, true);
           }
-          if (!result.ok && !result.guarded && !answeredCodes.has(result.code)) {
+          if (!result.ok && !result.guarded && !zwcadAnsweredCodes.has(result.code)) {
             const refusal = directRefusal('zwcad', result, Date.now() - started);
             // Any other failure (a slow HOST_BUSY, HOST_READ_FAILED) may have reached the drawing.
             if (!refusal) {
