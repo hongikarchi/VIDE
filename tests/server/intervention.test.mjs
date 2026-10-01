@@ -85,7 +85,9 @@ test('intervention persists first, waits for actual termination and preserves co
   assert.match(JSON.stringify(received[1]), /Use height 4.5 m/);
 });
 
-test('uncertain predecessor preserves new conditions without replay', async (t) => {
+// T-102 (SPEC-02.13 7): an unresolved predecessor does not stop the added instruction; it runs
+// once with the new conditions (its turn is told to read the document first).
+test('uncertain predecessor does not hold the new conditions back', async (t) => {
   const { workspace, project, execution, next, release, received } = fixture(
     t,
     'HOST_RESULT_UNKNOWN',
@@ -93,10 +95,10 @@ test('uncertain predecessor preserves new conditions without replay', async (t) 
   execution.intervene(project.id, 'first', next);
   release();
   await execution.active.get('second').completion;
-  assert.equal(received.length, 1);
-  const saved = workspace.get(project.id, 'second');
-  assert.equal(saved.state, 'interrupted');
-  assert.equal(saved.result.code, 'INTERVENTION_REVIEW_REQUIRED');
+  assert.equal(workspace.get(project.id, 'first').state, 'unknown');
+  assert.equal(received.length, 2);
+  assert.match(JSON.stringify(received[1]), /Use height 4.5 m/);
+  assert.equal(workspace.get(project.id, 'second').state, 'succeeded');
 });
 
 test('cancelling waiting intervention does not launch it after predecessor exits', async (t) => {

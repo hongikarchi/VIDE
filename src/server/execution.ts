@@ -939,17 +939,16 @@ export class Execution {
       const children = this.workspace
         .list(projectId)
         .filter((row) => row.input.parentRequestId === predecessorId);
-      if (
-        previous.state === 'unknown' ||
-        children.some((row) => row.state === 'unknown' || row.result?.hostExecuted)
-      ) {
+      // A legacy linked predecessor's partial result cannot be resumed safely; an unresolved
+      // result of a direct one does not stop it (SPEC-02.13 7, T-102): its turn is told instead.
+      if (children.some((row) => row.state === 'unknown' || row.result?.hostExecuted)) {
         this.workspace.update(projectId, request.id, 'interrupted', {
           code: 'INTERVENTION_REVIEW_REQUIRED',
         });
         return;
       }
-      // Its own turn now (SPEC-02.9): an unresolved result stops it, a busy document or a full
-      // AI turn limit puts it in line (started by `pump`).
+      // Its own turn now (SPEC-02.9): a busy document or a full AI turn limit puts it in line
+      // (started by `pump`).
       const admission = this.workspace.admission(projectId, request.id);
       if (admission.code) {
         this.workspace.update(projectId, request.id, 'interrupted', { code: admission.code });
