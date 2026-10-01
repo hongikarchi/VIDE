@@ -11,7 +11,7 @@ import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/
 import { Store } from '../../src/core/store.ts';
 import { Agenda } from '../../src/core/agenda.ts';
 import { conversationHandlers, PLAN_MODE_TOOLS } from '../../src/server/agent-tools.ts';
-import { agentConnection, agentToolNames } from '../../src/ai/agent-connection.ts';
+import { agentConnection, agentToolNames, instructionFor } from '../../src/ai/agent-connection.ts';
 import { startServer } from '../../src/server/server.ts';
 
 async function storeOf(t) {
@@ -46,6 +46,14 @@ test('agenda_add and agenda_set are T1 writes in the ledger; revert takes back o
   // Plan mode reads only.
   assert.ok(PLAN_MODE_TOOLS.has('agenda_list'));
   assert.ok(!PLAN_MODE_TOOLS.has('agenda_add') && !PLAN_MODE_TOOLS.has('agenda_set'));
+  // A host (modeling) turn's rules name them beside query/execute.
+  const hostRules = instructionFor({
+    url: 'http://127.0.0.1:1/mcp',
+    token: 't',
+    tools: ['query', 'execute', 'agenda_list', 'agenda_add', 'agenda_set'],
+  });
+  assert.match(hostRules, /Use query to observe/);
+  assert.match(hostRules, /agenda_add and agenda_set/);
 
   const kept = agenda.add(project.id, { text: '기존 할 일' });
   const added = await handlers.agenda_add({
@@ -137,106 +145,117 @@ test('[되돌리기] of an add leaves an item the user changed or finished since
   );
 });
 
-test('a conversation turn adds 할 일 with agenda_add; [되돌리기] removes them', async (t) => {
-  const directory = await mkdtemp(join(tmpdir(), 'vide-agenda-turn-'));
-  const app = await startServer({
-    filename: join(directory, 'store.sqlite'),
-    host: { status: async () => ({ available: true }) },
-    providerFactory: (options) => ({
-      run: async () => {
-        const agent = agentConnection(options.agent);
-        const client = new Client({ name: 'synthetic-agent', version: '1.0.0' });
-        await client.connect(
-          new StreamableHTTPClientTransport(new URL(agent.url), {
-            requestInit: { headers: { Authorization: `Bearer ${agent.token}` } },
-          }),
-        );
-        const call = async (name, args) => {
-          const out = await client.callTool({ name, arguments: args });
-          return JSON.parse(out.content[0].text);
-        };
-        await call('agenda_add', {
-          items: [{ text: '구조 회의', date: '2026-10-02', time: '15:00' }],
-        });
-        await client.close();
-        return { text: JSON.stringify({ message: '할 일 1개를 넣었습니다.', operations: [] }) };
-      },
-      status: async () => ({ available: true }),
-    }),
-  });
-  t.after(async () => {
-    await app.close();
-    await rm(directory, { recursive: true, force: true });
-  });
-  const login = await fetch(app.origin + '/api/v1/session', {
-    method: 'POST',
-    headers: { Origin: app.origin, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ token: new URL(app.launchUrl).hash.slice(1) }),
-  });
-  const headers = {
-    Origin: app.origin,
-    'Content-Type': 'application/json',
-    Cookie: login.headers.get('set-cookie').split(';')[0],
-  };
-  const api = async (path, method = 'GET', data) => {
-    const response = await fetch(app.origin + '/api/v1' + path, {
-      method,
-      headers,
-      body: data ? JSON.stringify(data) : undefined,
+// The 기본 대화 runs as a host (modeling) turn: it gets the agenda tools too, beside the host's.
+for (const [name, turnInput] of [
+  ['a conversation turn without the host', { hostUse: 'none' }],
+  ['a 기본 대화 host turn', {}],
+])
+  test(`${name} adds 할 일 with agenda_add; [되돌리기] removes them`, async (t) => {
+    const directory = await mkdtemp(join(tmpdir(), 'vide-agenda-turn-'));
+    let given = [],
+      rules = '';
+    const app = await startServer({
+      filename: join(directory, 'store.sqlite'),
+      host: { status: async () => ({ available: true }) },
+      providerFactory: (options) => ({
+        run: async () => {
+          const agent = agentConnection(options.agent);
+          given = agent.tools;
+          rules = instructionFor(agent);
+          const client = new Client({ name: 'synthetic-agent', version: '1.0.0' });
+          await client.connect(
+            new StreamableHTTPClientTransport(new URL(agent.url), {
+              requestInit: { headers: { Authorization: `Bearer ${agent.token}` } },
+            }),
+          );
+          const call = async (name, args) => {
+            const out = await client.callTool({ name, arguments: args });
+            return JSON.parse(out.content[0].text);
+          };
+          await call('agenda_add', {
+            items: [{ text: '구조 회의', date: '2026-10-02', time: '15:00' }],
+          });
+          await client.close();
+          return { text: JSON.stringify({ message: '할 일 1개를 넣었습니다.', operations: [] }) };
+        },
+        status: async () => ({ available: true }),
+      }),
     });
-    return { status: response.status, json: await response.json().catch(() => null) };
-  };
-  const project = (await api('/projects', 'POST', { name: '할 일' })).json;
-  const base = `/projects/${project.id}/agenda`;
-  // A conversation turn: the AI adds one 할 일, recorded in the conversation's ledger.
-  const conversation = (
-    await api(`/projects/${project.id}/conversations`, 'POST', {
-      kind: 'general',
-      title: '일정',
+    t.after(async () => {
+      await app.close();
+      await rm(directory, { recursive: true, force: true });
+    });
+    const login = await fetch(app.origin + '/api/v1/session', {
+      method: 'POST',
+      headers: { Origin: app.origin, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token: new URL(app.launchUrl).hash.slice(1) }),
+    });
+    const headers = {
+      Origin: app.origin,
+      'Content-Type': 'application/json',
+      Cookie: login.headers.get('set-cookie').split(';')[0],
+    };
+    const api = async (path, method = 'GET', data) => {
+      const response = await fetch(app.origin + '/api/v1' + path, {
+        method,
+        headers,
+        body: data ? JSON.stringify(data) : undefined,
+      });
+      return { status: response.status, json: await response.json().catch(() => null) };
+    };
+    const project = (await api('/projects', 'POST', { name: '할 일' })).json;
+    const base = `/projects/${project.id}/agenda`;
+    // A conversation turn: the AI adds one 할 일, recorded in the conversation's ledger.
+    const conversation = (
+      await api(`/projects/${project.id}/conversations`, 'POST', {
+        kind: 'general',
+        title: '일정',
+        provider: 'codex-cli',
+      })
+    ).json;
+    const sent = await api(`/projects/${project.id}/requests`, 'POST', {
+      id: 'turn-a',
+      body: '내일 3시 구조 회의 넣어줘',
       provider: 'codex-cli',
-    })
-  ).json;
-  const sent = await api(`/projects/${project.id}/requests`, 'POST', {
-    id: 'turn-a',
-    body: '내일 3시 구조 회의 넣어줘',
-    provider: 'codex-cli',
-    // Auto mode: a plan-mode turn gets agenda_list only.
-    mode: 'auto',
-    permission: 'review',
-    pins: [],
-    sketches: [],
-    files: [],
-    conversationId: conversation.id,
-    hostUse: 'none',
+      // Auto mode: a plan-mode turn gets agenda_list only.
+      mode: 'auto',
+      permission: 'review',
+      pins: [],
+      sketches: [],
+      files: [],
+      conversationId: conversation.id,
+      ...turnInput,
+    });
+    assert.ok(sent.status < 300, JSON.stringify(sent.json));
+    let done;
+    for (let i = 0; i < 400 && !done; i++) {
+      const row = (await api(`/projects/${project.id}/requests/turn-a`)).json;
+      if (row.state !== 'running' && row.state !== 'queued') done = row;
+      else await new Promise((resolve) => setTimeout(resolve, 20));
+    }
+    assert.equal(done?.state, 'succeeded', JSON.stringify(done?.result));
+    assert.ok(['agenda_list', 'agenda_add', 'agenda_set'].every((tool) => given.includes(tool)));
+    assert.match(rules, /agenda_add and agenda_set/);
+    const items = (await api(base)).json.items;
+    assert.deepEqual(
+      items.map((item) => [item.text, item.date, item.time, item.source]),
+      [['구조 회의', '2026-10-02', '15:00', 'ai']],
+    );
+    const detail = (await api(`/projects/${project.id}/conversations/${conversation.id}`)).json;
+    const record = detail.ledger.find((item) => item.body?.appAction === 'agenda');
+    assert.equal(record.requestId, 'turn-a');
+    const undo = await api(`${base}/undo`, 'POST', {
+      conversationId: conversation.id,
+      ledgerId: record.id,
+    });
+    assert.deepEqual([undo.status, undo.json.reverted, undo.json.items.length], [200, 1, 0]);
+    // Taken back once; the record is superseded by the undo and a second press is refused.
+    const again = await api(`${base}/undo`, 'POST', {
+      conversationId: conversation.id,
+      ledgerId: record.id,
+    });
+    assert.deepEqual([again.status, again.json.code], [409, 'AGENDA_UNDONE']);
+    const after = (await api(`/projects/${project.id}/conversations/${conversation.id}`)).json;
+    assert.ok(!after.ledger.some((item) => item.id === record.id));
+    assert.ok(after.ledger.some((item) => item.body?.appAction === 'agenda-undo'));
   });
-  assert.ok(sent.status < 300, JSON.stringify(sent.json));
-  let done;
-  for (let i = 0; i < 400 && !done; i++) {
-    const row = (await api(`/projects/${project.id}/requests/turn-a`)).json;
-    if (row.state !== 'running' && row.state !== 'queued') done = row;
-    else await new Promise((resolve) => setTimeout(resolve, 20));
-  }
-  assert.equal(done?.state, 'succeeded', JSON.stringify(done?.result));
-  const items = (await api(base)).json.items;
-  assert.deepEqual(
-    items.map((item) => [item.text, item.date, item.time, item.source]),
-    [['구조 회의', '2026-10-02', '15:00', 'ai']],
-  );
-  const detail = (await api(`/projects/${project.id}/conversations/${conversation.id}`)).json;
-  const record = detail.ledger.find((item) => item.body?.appAction === 'agenda');
-  assert.equal(record.requestId, 'turn-a');
-  const undo = await api(`${base}/undo`, 'POST', {
-    conversationId: conversation.id,
-    ledgerId: record.id,
-  });
-  assert.deepEqual([undo.status, undo.json.reverted, undo.json.items.length], [200, 1, 0]);
-  // Taken back once; the record is superseded by the undo and a second press is refused.
-  const again = await api(`${base}/undo`, 'POST', {
-    conversationId: conversation.id,
-    ledgerId: record.id,
-  });
-  assert.deepEqual([again.status, again.json.code], [409, 'AGENDA_UNDONE']);
-  const after = (await api(`/projects/${project.id}/conversations/${conversation.id}`)).json;
-  assert.ok(!after.ledger.some((item) => item.id === record.id));
-  assert.ok(after.ledger.some((item) => item.body?.appAction === 'agenda-undo'));
-});

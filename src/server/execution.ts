@@ -15,6 +15,7 @@ import { runLinked } from './linked-execution.ts';
 import { factCitations, jigCheck } from './jig-gates.ts';
 import {
   HOST_TURN_PROJECT_TOOLS,
+  agendaHandlers,
   attachmentHandlers,
   conversationHandlers,
   conversationSources,
@@ -30,6 +31,7 @@ import {
   type TurnGrants,
 } from './project-files.ts';
 import type { ProjectFolders } from '../core/project-folders.ts';
+import { Agenda } from '../core/agenda.ts';
 import { activityLog, type ActivityEntry } from './activity.ts';
 import { readableAttachments, type AttachmentStore } from './attachments.ts';
 import { storedAttachments } from '../contracts/workspace.ts';
@@ -332,7 +334,13 @@ export class Execution {
       RequestInput,
       // conversationId: a conversation turn takes the wider turn limits (SPEC-02.6).
       'provider' | 'model' | 'effort' | 'executionLimits' | 'conversationId'
-    > & { id?: string; files?: readonly unknown[] },
+    > & {
+      id?: string;
+      files?: readonly unknown[];
+      /** Plan or Auto (a host turn's agenda tools: Plan reads only). */
+      mode?: unknown;
+      permission?: unknown;
+    },
     agent?: unknown,
     session?: SessionOptions,
     /** The instruction bundle's mode, the project whose addendum it carries, and its host. */
@@ -364,6 +372,7 @@ export class Execution {
         agent,
         instructions.projectId,
         instructions.mode === 'review' ? undefined : instructions.requestId,
+        instructions.mode === 'modeling',
       );
     return factory({
       provider: input.provider,
@@ -386,14 +395,17 @@ export class Execution {
   /**
    * The turn's read tools (ARCH-01 §3): attachment_read for this request's and its conversation's
    * stored attachments (SPEC-01.12), and file_list/file_read on the project's folders with the
-   * permission question outside them (SPEC-01.13). They join the turn's tool scope, or get a scope
-   * of their own when the turn has no tools.
+   * permission question outside them (SPEC-01.13). A host (modeling) turn of a conversation also
+   * gets the project's 할 일 (SPEC-01.14 6): agenda_list, and in Auto agenda_add/agenda_set
+   * recorded in the conversation's ledger (a hostless turn has them among its conversation tools).
+   * They join the turn's tool scope, or get a scope of their own when the turn has no tools.
    */
   private readAgent(
     input: Parameters<Execution['provider']>[0],
     agent: unknown,
     projectId: string,
     requestId?: string,
+    hostTurn = false,
   ): unknown {
     if (!this.tools) return agent;
     const handlers: Parameters<AgentTools['issue']>[0]['handlers'] = {};
@@ -411,6 +423,19 @@ export class Execution {
     }
     if (this.folders && requestId)
       Object.assign(handlers, fileHandlers(this.fileAccess(input, projectId, requestId)));
+    const conversationId = input.conversationId;
+    if (hostTurn && conversationId && this.conversations) {
+      const conversations = this.conversations;
+      const agenda = agendaHandlers({
+        projectId,
+        requestId,
+        agenda: new Agenda(this.workspace.store),
+        ledger: (item) => conversations.addLedger(projectId, conversationId, item),
+      });
+      // Plan reads only (PLAN_MODE_TOOLS).
+      if (requestMode(input) === 'plan') handlers.agenda_list = agenda.agenda_list;
+      else Object.assign(handlers, agenda);
+    }
     const names = Object.keys(handlers);
     if (!names.length) return agent;
     const current = z

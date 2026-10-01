@@ -1187,7 +1187,8 @@ export function conversationHandlers(sources: ConversationToolSources): Handlers
       });
     };
   }
-  if (sources.agenda) Object.assign(handlers, agendaHandlers(sources));
+  if (sources.agenda)
+    Object.assign(handlers, agendaHandlers({ ...sources, agenda: sources.agenda }));
   if (sources.facts && existsSync(sources.facts.file))
     Object.assign(handlers, factHandlers(sources));
   if (sources.draft) Object.assign(handlers, makeHandlers(sources));
@@ -1206,11 +1207,17 @@ const agendaRow = (item: AgendaItem) => ({
 /**
  * agenda_list, and agenda_add/agenda_set as T1 writes (SPEC-01.14 6, SPEC-02.19 7): applied at once
  * and recorded as one ledger item `{appAction:'agenda', changes}` that [되돌리기] takes back
- * (`POST …/agenda/undo`); the screen shows the notice and redraws the dashboard (app.ts).
+ * (`POST …/agenda/undo`); the screen shows the notice and redraws the dashboard (app.ts). A host
+ * (modeling) turn of a conversation gets them too, beside its host tools (execution.ts readAgent).
  */
-function agendaHandlers(sources: ConversationToolSources): Handlers {
-  const { projectId, ledger, requestId } = sources;
-  const agenda = sources.agenda!;
+export function agendaHandlers({
+  projectId,
+  ledger,
+  requestId,
+  agenda,
+}: Pick<ConversationToolSources, 'projectId' | 'ledger' | 'requestId'> & {
+  agenda: Agenda;
+}): Handlers {
   const record = (changes: AgendaChange[]) =>
     ledger?.({
       kind: 'result-ref',
