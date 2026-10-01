@@ -95,7 +95,7 @@ function RoutingSection() {
   );
 }
 /**
- * 작업 중 질문 받기 (PLAN-24 T-075, ADR-026 4): the AI asks with its provider's own question tool
+ * AI가 작업 도중에 묻기 (PLAN-24 T-075, ADR-026 4): the AI asks with its provider's own question tool
  * inside the running turn and goes on with the answer. One switch for Claude and Codex, default on;
  * an environment variable on this PC can still force a provider off (src/ai/question-settings.ts).
  */
@@ -126,8 +126,8 @@ function QuestionsSection() {
       setState(read(await api('/settings/questions', 'PUT', { native })));
       setMessage(
         native
-          ? '다음 요청부터 AI가 작업 중에 묻고 답을 받아 이어 갑니다.'
-          : '다음 요청부터 AI는 작업을 마친 뒤 질문 카드로 묻습니다.',
+          ? '다음 요청부터 AI가 도중에 멈춰 묻고, 답을 받아 같은 작업을 이어 갑니다.'
+          : '다음 요청부터 AI는 작업을 먼저 마친 뒤 질문을 남깁니다.',
       );
     } catch (error) {
       setMessage(error instanceof Error ? error.message : '설정을 바꾸지 못했습니다.');
@@ -140,33 +140,29 @@ function QuestionsSection() {
     : [];
   const status = !state ? '확인 중' : !state.native ? '꺼짐' : forced.length ? '일부 꺼짐' : '켜짐';
   return (
-    <section className="ai-provider ai-questions" aria-label="작업 중 질문 받기">
+    <section className="ai-provider ai-questions" aria-label="AI가 작업 도중에 묻기">
       <div className="ai-provider-head">
-        <h3>작업 중 질문 받기</h3>
+        <h3>AI가 작업 도중에 묻기</h3>
         <span className="pill" data-ok={String(Boolean(state?.native))} role="status">
           {status}
         </span>
       </div>
       <p className="ai-intro">
-        AI가 결과가 크게 달라지는 결정을 만나면 작업을 멈추지 않고 질문 카드로 묻고, 답을 받아 같은
-        작업을 이어 갑니다. Claude Code와 Codex 모두에 적용됩니다.
+        켜면: AI가 도중에 멈춰 묻고, 답을 받아 같은 작업을 이어 갑니다. 끄면: 작업을 먼저 마친 뒤
+        질문을 남기고, 답은 다음 요청에 반영됩니다. Claude Code와 Codex에 똑같이 적용됩니다.
       </p>
       <label>
         <input
           type="checkbox"
-          aria-label="작업 중 질문 받기"
+          aria-label="AI가 작업 도중에 묻기"
           checked={state?.native ?? false}
           disabled={!state || saving}
           onChange={(event) => {
             void toggle(event.target.checked);
           }}
         />{' '}
-        작업 중 질문 받기
+        AI가 작업 도중에 묻기
       </label>
-      <small>
-        끄면 AI는 작업을 마친 뒤 질문 카드로 묻고, 답은 다음 요청으로 이어집니다. Codex는 요청마다
-        새로 실행됩니다.
-      </small>
       {state?.native && forced.length > 0 && (
         <small>이 PC의 환경 변수로 꺼져 있습니다: {forced.join(', ')}</small>
       )}

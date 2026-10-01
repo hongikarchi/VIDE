@@ -1,5 +1,5 @@
 // The AI settings dialog's project addendum editor (PLAN-24 지침 묶음): type, save, reload, read back;
-// and the 작업 중 질문 받기 switch (T-075): on by default, off kept across a reload.
+// and the AI가 작업 도중에 묻기 switch (T-075): on by default, off kept across a reload.
 // Synthetic engine and provider; no model requests or host writes.
 import assert from 'node:assert/strict';
 import { mkdtemp, rm } from 'node:fs/promises';
@@ -68,8 +68,8 @@ try {
     projectId,
   );
   assert.deepEqual(stored, { images: false });
-  // 작업 중 질문 받기 (T-075): on by default; off is kept across a reload.
-  const questions = page.getByRole('checkbox', { name: '작업 중 질문 받기', exact: true });
+  // AI가 작업 도중에 묻기 (T-075): on by default; off is kept across a reload.
+  const questions = page.getByRole('checkbox', { name: 'AI가 작업 도중에 묻기', exact: true });
   await page.waitForFunction(() => !document.querySelector('.ai-questions input')?.disabled);
   assert.ok(await questions.isChecked(), 'questions are on by default');
   // A controlled switch: it changes once the engine answered the PUT.
@@ -77,7 +77,7 @@ try {
   await page
     .locator('section.ai-questions')
     .getByRole('status')
-    .filter({ hasText: '질문 카드로 묻습니다' })
+    .filter({ hasText: '작업을 먼저 마친 뒤 질문을 남깁니다' })
     .waitFor();
   await page.reload();
   await open();

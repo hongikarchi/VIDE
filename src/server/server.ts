@@ -410,7 +410,7 @@ export async function startServer({
   const projectInstructions = new ProjectInstructionStore(
     filename === ':memory:' ? undefined : dirname(filename),
   );
-  // Settings → AI 「작업 중 질문 받기」 (T-075): the providers' own questions mid-turn, default on.
+  // Settings → AI 「AI가 작업 도중에 묻기」 (T-075): the providers' own questions mid-turn, default on.
   const questionSettings = new QuestionSettings(
     filename === ':memory:' ? undefined : join(dirname(filename), 'question-settings.json'),
   );

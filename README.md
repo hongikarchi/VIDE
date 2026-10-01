@@ -18,7 +18,7 @@
 - 실행: `npm run dev` — 개발 엔진은 포트 47831과 `.vide/dev-data`를 써서, 실무용 설치본(포트 47821)과 섞이지 않습니다.
 - 시험: `npm run typecheck`, `npm test`, `npm run test:browser`
 - 설치본 만들기: `npm run desktop:release -- <버전>`
-- 문서 HTML 다시 만들기: `npm --prefix tools/docs run build`
+- 문서 HTML 만들기: `npm --prefix tools/docs run build` (`human/`에 생성, 아래 문서 절)
 
 엔진과 화면은 TypeScript입니다(Node 24가 `.ts`를 바로 실행). 시험·도구 스크립트는 `.mjs`, Rhino·ZWCAD 플러그인과 데스크톱 셸은 C#, 구조 해석 코어는 Rust입니다.
 
@@ -38,3 +38,4 @@
 - 에이전트(Claude Code, Codex 등)는 [AI.md](AI.md)부터 읽습니다.
 - 사람은 [DEVELOPMENT_GUIDE.md](DEVELOPMENT_GUIDE.md), 지금 진행 상황은 [docs/plans/PLAN.md](docs/plans/PLAN.md) §6.5를 보면 됩니다.
 - 화면 설계는 [Design.md](Design.md), 기능별 명세는 [docs/specs/](docs/specs/README.md)에 있습니다.
+- 문서를 읽기 편한 HTML로 보려면 `npm --prefix tools/docs run build` 후 `human/index.html`을 엽니다. MD가 원본이고 `human/`은 로컬 생성물입니다(Git 제외). Claude Code가 MD를 고치면 자동으로 다시 만들어집니다.

@@ -1,34 +1,14 @@
 #!/bin/sh
-# Regenerate the HTML renders from Markdown before every commit (AI.md §4).
+# Check that the Markdown documents still build before every commit (AI.md §4).
+# The HTML itself is generated into human/ (git-ignored) and is never committed.
 # Activate once per clone:  git config core.hooksPath .githooks
 #   (tools/docs `npm install` runs this for you via postinstall)
 cd "$(git rev-parse --show-toplevel)" || exit 1
-# Build inputs must be fully staged, or the committed HTML would not match the committed MD.
-unstaged=$(git diff --name-only -- '*.md' 'tools/docs')
-untracked=$(git ls-files --others --exclude-standard -- '*.md' 'tools/docs')
-if [ -n "$unstaged$untracked" ]; then
-  echo "[docs] 스테이징되지 않은 빌드 입력이 있어 MD/HTML이 어긋날 수 있습니다:" >&2
-  printf '  %s\n' $unstaged $untracked >&2
-  echo "[docs] 전부 스테이징(git add)하거나 잠시 치우세요(git stash push --keep-index)." >&2
-  exit 1
-fi
 if [ ! -d tools/docs/node_modules ]; then
   echo "[docs] tools/docs/node_modules 가 없습니다. 먼저:  npm --prefix tools/docs install" >&2
   exit 1
 fi
-changed=$(node tools/docs/build.mjs --quiet) || { echo "[docs] HTML 재생성 실패" >&2; exit 1; }
-if [ -n "$changed" ]; then
-  echo "$changed" | while IFS= read -r f; do [ -n "$f" ] && git add -- "$f"; done
-  echo "[docs] MD에서 재생성한 HTML을 이 커밋에 포함했습니다: $(echo "$changed" | tr '\n' ' ')"
-fi
-# Pre-rendered HTML may not appear in this build's changed list.
-# Do not silently commit stale index content or stage unrelated local edits.
-remaining=$(git diff --name-only -- '*.html')
-new_html=$(git ls-files --others --exclude-standard -- '*.html')
-if [ -n "$remaining$new_html" ]; then
-  echo "[docs] HTML에 아직 스테이징되지 않은 변경이 있습니다. 생성물을 확인하여 함께 스테이징한 뒤 다시 커밋하세요." >&2
-  printf '%s\n' "$remaining" "$new_html" >&2
-  exit 1
-fi
+# Renders every document in memory (writes nothing) and fails on broken links or front matter.
+node tools/docs/build.mjs --check --quiet || { echo "[docs] 문서 검사 실패 — 위 항목을 MD에서 고친 뒤 다시 커밋하세요." >&2; exit 1; }
 node tools/checks/commit.mjs || exit 1
 exit 0

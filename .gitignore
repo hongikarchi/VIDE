@@ -62,3 +62,6 @@ cli-profiles/
 src/native/**/target/
 # Cargo binary sources (src/bin/*.rs, [[bin]] in Cargo.toml) are code, not build output.
 !src/native/**/src/bin/
+
+# Generated document HTML (tools/docs/build.mjs). Build locally: npm --prefix tools/docs run build
+human/

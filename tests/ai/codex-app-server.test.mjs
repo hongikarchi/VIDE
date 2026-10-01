@@ -611,6 +611,83 @@ test('provider의 nativeQuestions 처리기도 받는다; 닫으면(null) 빈 �
   });
 });
 
+test('답을 기다리는 시간은 턴 제한 시간에 들지 않고, 답 뒤에는 시간이 처음부터 다시 간다', async () => {
+  const question = (id) => (server) =>
+    server.send({
+      id,
+      method: 'item/tool/requestUserInput',
+      params: {
+        threadId: THREAD,
+        turnId: server.turnId,
+        questions: [{ id: 'q', question: '어떤 색?', options: [{ label: 'A' }, { label: 'B' }] }],
+      },
+    });
+  // The person takes three turn limits to answer; the model then answers at once.
+  const answered = fake({
+    turns: [
+      (server) => {
+        server.onResponse = (message) => {
+          if (message.id !== 5) return;
+          server.notify('item/completed', {
+            turnId: server.turnId,
+            item: { type: 'agentMessage', text: 'A로 진행', phase: 'final_answer' },
+          });
+          server.notify('turn/completed', { turn: { id: server.turnId, status: 'completed' } });
+        };
+        question(5)(server);
+      },
+    ],
+  });
+  const slow = async (cards) => {
+    await new Promise((resolve) => setTimeout(resolve, 450));
+    return [{ id: cards[0].id, option: cards[0].options[0].id }];
+  };
+  const result = await provider(answered, { timeoutMs: 150 }).run(context, { onQuestion: slow });
+  assert.equal(result.text, 'A로 진행');
+  assert.equal(answered.method('turn/interrupt').length, 0);
+  // After the answer the clock runs again: a model that goes silent stops at the limit.
+  const silent = fake({ turns: [question(6)] });
+  await assert.rejects(provider(silent, { timeoutMs: 150 }).run(context, { onQuestion: slow }), {
+    code: 'TIMEOUT',
+  });
+  assert.equal(silent.method('turn/interrupt').length, 1);
+});
+
+test('답을 기다리는 중에 멈추면 카드가 닫히고(null) 턴은 CANCELLED로 끝난다', async () => {
+  const transport = fake({
+    turns: [
+      (server) =>
+        server.send({
+          id: 8,
+          method: 'item/tool/requestUserInput',
+          params: {
+            threadId: THREAD,
+            turnId: server.turnId,
+            questions: [
+              { id: 'q', question: '어떤 색?', options: [{ label: 'A' }, { label: 'B' }] },
+            ],
+          },
+        }),
+    ],
+  });
+  const controller = new AbortController();
+  let closed = false;
+  const running = provider(transport).run(context, {
+    signal: controller.signal,
+    onQuestion: (_cards, signal) =>
+      new Promise((resolve) => {
+        signal.addEventListener('abort', () => {
+          closed = true;
+          resolve(null);
+        });
+        setTimeout(() => controller.abort(), 20);
+      }),
+  });
+  await assert.rejects(running, { code: 'CANCELLED' });
+  assert.equal(closed, true);
+  assert.equal(transport.method('turn/interrupt').length, 1);
+});
+
 test('사용자 MCP 서버가 켜져 있거나 샌드박스가 다르면 턴을 시작하지 않는다', async () => {
   for (const options of [
     { statuses: [{ name: 'rhino', runtimeStatus: 'connected', httpOrigin: null }] },

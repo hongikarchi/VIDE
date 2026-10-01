@@ -1,6 +1,6 @@
 # AI.md — 에이전트 공통 규약 (형식)
 
-버전 0.20 · 2026-09-29 · 소유: user
+버전 0.21 · 2026-10-02 · 소유: user
 
 이 파일은 이 저장소에서 일하는 모든 에이전트(Claude Code, Codex, Gemini CLI 등)와 사람이 공유하는 **형식 규약**이다. 문서별 판단 기준과 진입 경로, 폴더·파일·ID·상태·첨삭·생성물의 공통 규칙을 정한다.
 제품이 무엇인지·범위·요구는 `docs/PRD.md`가 정하고, 작업 절차는 `DEVELOPMENT_GUIDE.md`가 정한다. 가이드 전체를 매번 읽을 필요는 없지만 현재 단계에 해당하는 절은 따른다. 이 파일은 기술 스택·화면·기능 범위를 결정하지 않는다.
@@ -26,19 +26,19 @@
 
 ```text
 VIDE/
-├─ AI.md (+ .html)                이 파일. 형식 규약의 단일 원본 (.html은 생성물)
+├─ AI.md                          이 파일. 형식 규약의 단일 원본
 ├─ CLAUDE.md                      "@AI.md" 한 줄 (Claude Code가 인라인)
 ├─ AGENTS.md                      AI.md를 읽으라는 안내 (Codex 등)
-├─ Design.md (+ .html)            디자인 DNA·배치·컴포넌트·화면 표현
-├─ DEVELOPMENT_GUIDE.md (+ .html) 프로세스 가이드. 현재 단계의 절을 참조
-├─ index.html                     생성물. 문서 목록 (tools/docs가 만든다)
-├─ .claude/settings.json          Claude Code 프로젝트 훅: .md 편집 후 HTML 재생성 (settings.local.json은 개인 설정)
-├─ .githooks/pre-commit           커밋 전 HTML 재생성·포함. `git config core.hooksPath .githooks`
+├─ Design.md                      디자인 DNA·배치·컴포넌트·화면 표현
+├─ DEVELOPMENT_GUIDE.md           프로세스 가이드. 현재 단계의 절을 참조
+├─ human/                         생성물, Git 제외. 문서 HTML 전체(원본과 같은 상대 경로)와 index.html 문서 목록 (§4)
+├─ .claude/settings.json          Claude Code 프로젝트 훅: .md 편집 후 human/ 재생성 (settings.local.json은 개인 설정)
+├─ .githooks/pre-commit           커밋 전 문서 검사(렌더·링크·front matter). `git config core.hooksPath .githooks`
 ├─ tools/docs/                    md→html 렌더러 (build.mjs, docs.config.json, theme.css, review.css, reader.js, review.js, hook-postedit.mjs)
 ├─ tools/spikes/<date>-<slug>/     필요한 기술 실험 코드만, 첫 실험 때 생성
 ├─ tools/mockups/<slug>/           필요한 임시 목업 코드만, 첫 목업 때 생성
 └─ docs/
-   ├─ PRD.md (+ .html)            제품 요구사항. FR / AC / OQ / C ID의 소유자
+   ├─ PRD.md                      제품 요구사항. FR / AC / OQ / C ID의 소유자
    ├─ specs/                      기능 동작 명세 묶음 (가이드의 "SPEC.md"에 해당)
    │   ├─ README.md               색인: FR → SPEC 파일 대응표
    │   ├─ SPEC-00-common.md       공통 상태·권한·개입·참조 규칙
@@ -72,12 +72,12 @@ VIDE/
 - 호스트 파일: `docs/specs/hosts/<host>.md`, `<host>` ∈ rhino, revit, autocad, zwcad.
 - 고유 기준 문서의 복제본을 다른 폴더에 두지 않는다. 폴더별 `README.md`와 도구의 필수 파일명은 허용하며 전체 경로로 구분한다. 외부 도구가 요구하는 이름·기존 루트 이름은 소문자 규칙의 예외다.
 
-## 4. md / html 짝
+## 4. md / html
 
-- `.md`만 원본이다. 같은 폴더·같은 basename의 `.html`과 루트 `index.html`은 `tools/docs/build.mjs`가 만드는 생성물이며 손으로 편집하지 않는다. 생성물 머리에는 `GENERATED FILE` 주석이 있다.
-- 재생성: `npm --prefix tools/docs run build` (최초 1회 `npm --prefix tools/docs install`). 사람이 편집할 때는 `run watch`, 확인만 하려면 `run check`(오래됐으면 exit 1).
-- 자동 재생성: Claude Code가 `.md`를 Edit/Write 하면 `.claude/settings.json`의 PostToolUse 훅이 재생성한다. `git commit` 때는 `.githooks/pre-commit`이 재생성하고 바뀐 HTML을 커밋에 넣는다.
-- pre-commit은 빌드 입력(`*.md`, `tools/docs`)의 미스테이징·미추적 파일이 있으면 중단한다. 재생성 후에도 미스테이징·미추적 HTML이 남으면 중단하고 확인·스테이징을 안내한다. 미리 생성해 둔 HTML도 커밋에서 빠지지 않도록 검사한다. 실제 커밋은 사용자 지시가 있을 때만 수행한다.
+- `.md`만 원본이며 저장소에는 MD만 둔다. 열람용 HTML은 `tools/docs/build.mjs`가 루트 `human/` 한 폴더에 원본과 같은 상대 경로로 만든다(예: `docs/plans/PLAN.md` → `human/docs/plans/PLAN.html`, 문서 목록 `human/index.html`). `human/`은 `.gitignore` 대상이라 커밋하지 않고 각 PC에서 만든다. 손으로 편집하지 않으며 생성물 머리에는 `GENERATED FILE` 주석이 있다. MD 옆에 `.html`을 두지 않는다.
+- 보기: `npm --prefix tools/docs run build`(최초 1회 `npm --prefix tools/docs install`) 뒤 `human/index.html`을 브라우저로 연다. `docs/assets/**` 이미지는 `human/`에 함께 복사된다. 사람이 편집할 때는 `run watch`.
+- 검사: `npm run docs:check`(= `npm --prefix tools/docs run check`)는 파일을 쓰지 않고 모든 MD를 렌더해 깨진 상대 링크·이미지와 front matter(§6) 오류가 있으면 exit 1이다. `verify`와 CI가 이를 돈다.
+- 자동 생성·검사: Claude Code가 `.md`를 Edit/Write 하면 `.claude/settings.json`의 PostToolUse 훅이 `human/`을 다시 만든다. `git commit` 때는 `.githooks/pre-commit`이 문서 검사만 하고 HTML을 커밋에 넣지 않는다. 실제 커밋은 사용자 지시가 있을 때만 수행한다.
 - 새 문서는 `docs/specs/` `docs/architecture/` `docs/plans/` `docs/research/` `docs/tdd/` `docs/decisions/`에 두면 자동 탐색된다. 상단 탭·설명은 `tools/docs/docs.config.json`에서 정한다.
 - MD를 고친 에이전트는 HTML을 직접 건드리지 않는다. 훅이 실패하면 위 명령으로 재생성한다.
 
@@ -193,7 +193,7 @@ T·SCR·SPEC 세부 항목 번호도 한 번 부여하면 재사용하지 않는
 - 새 파일을 만들기 전에 기존 위치와 재사용 가능성을 확인한다. 루트에 일회성 스크립트·로그·백업 복사본을 쌓지 않는다. 재사용할 실험 코드는 §2의 위치에, 일회성 산출물은 용도가 구분된 임시 디렉터리에 둔다. 캐시·로그·빌드 결과의 경로와 제외 규칙을 명시하며, .gitignore만 추가하고 무제한 누적시키지 않는다.
 - 티켓을 마칠 때 변경·새 파일 목록을 확인하고, 자신이 만든 불필요한 임시 파일·디버그 출력·폐기 코드를 정리한다. 미사용 코드·의존성·파일은 동적 로딩·설정·문서 참조와 재현 필요성을 확인한 뒤 제거하고 관련 검증을 수행한다. 정리를 이유로 무관한 대규모 재구성을 하지 않는다.
 - 출처·용도가 불명확한 파일, 다른 작업자의 변경, 사용자 데이터는 임의 삭제하지 않는다. 추적되지 않거나 오래됐다는 이유만으로 정크로 판단하지 않는다. 삭제·이동 전 실제 대상 경로와 범위를 확인하고, 저장소 전체를 일괄 청소하는 명령은 사용하지 않는다.
-- 문서와 짝인 HTML, 필요한 잠금 파일·마이그레이션·시험 자료, 문서에서 참조하는 검증 증거는 유지한다. 임시 산출물을 증거로 채택하면 필요한 부분만 정해진 위치에 보존하고 참조를 갱신한다.
+- 필요한 잠금 파일·마이그레이션·시험 자료, 문서에서 참조하는 검증 증거는 유지한다. `human/`은 언제든 다시 만드는 생성물이므로 지워도 된다. 임시 산출물을 증거로 채택하면 필요한 부분만 정해진 위치에 보존하고 참조를 갱신한다.
 
 ## 9. 플러그인·스킬 경로 덮어쓰기
 

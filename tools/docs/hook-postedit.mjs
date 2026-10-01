@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Claude Code PostToolUse hook (see .claude/settings.json).
-// After Edit/Write of a .md file inside this repo, regenerate the HTML renders.
+// After Edit/Write of a .md file inside this repo, regenerate the HTML renders into human/ (git-ignored).
 // Never blocks the agent: any failure is reported and exits 0.
 import fs from 'node:fs';
 import path from 'node:path';

@@ -121,7 +121,7 @@ interface Options {
   /** Start/end, duration and failure code of every run (diagnostic log). */
   diagnostics?: Diagnostics;
   /**
-   * Settings → AI 「작업 중 질문 받기」 (T-075): the provider's own question tool in a turn (Claude's
+   * Settings → AI 「AI가 작업 도중에 묻기」 (T-075): the provider's own question tool in a turn (Claude's
    * AskUserQuestion, Codex's app-server). Default on; the environment still forces each one off.
    */
   questions?: () => boolean;
@@ -312,7 +312,7 @@ export class Execution {
     this.questions = questions;
   }
   private readonly questions?: Options['questions'];
-  /** 작업 중 질문 받기 is on (an unreadable setting counts as off). */
+  /** AI가 작업 도중에 묻기 is on (an unreadable setting counts as off). */
   questionsOn() {
     try {
       return this.questions?.() ?? true;
@@ -356,7 +356,7 @@ export class Execution {
   ) {
     const executable = this.executable(input.provider);
     // Codex through `codex app-server` (its own questions mid-turn, SPIKE-2026-09-30-codex-app-
-    // server) by default; `codex exec` when 작업 중 질문 받기 is off or VIDE_CODEX_APP_SERVER=0.
+    // server) by default; `codex exec` when AI가 작업 도중에 묻기 is off or VIDE_CODEX_APP_SERVER=0.
     // Only replaces the default factory (tests keep their injected one).
     const factory =
       input.provider === 'codex-cli' &&
@@ -389,7 +389,9 @@ export class Execution {
             projectInstructions: this.projectInstructions?.(instructions.projectId),
           }
         : {}),
-      ...(nativeQuestions && input.provider === 'claude-cli' ? { nativeQuestions } : {}),
+      // Either provider's own question tool (SPEC-02.19 6): Claude's AskUserQuestion, Codex's
+      // requestUserInput on the app-server. Without it Codex stops at a question (answer next turn).
+      ...(nativeQuestions ? { nativeQuestions } : {}),
     });
   }
   /**
@@ -602,12 +604,21 @@ export class Execution {
   private questionHandler(projectId: string, requestId: string): NativeQuestionHandler {
     return (cards, signal) =>
       new Promise((resolve) => {
+        // What the request showed before the question (a host turn's activity) stays on it.
+        let before: Record<string, unknown> | null = null;
+        try {
+          before = this.workspace.get(projectId, requestId).result;
+        } catch {
+          return resolve(null);
+        }
+        const { questions: _shown, ...kept } = before ?? {};
         const done = (answers: NativeQuestionAnswer[] | null) => {
           if (this.nativeQuestions.get(requestId)?.answer !== done) return;
           this.nativeQuestions.delete(requestId);
           signal.removeEventListener('abort', stop);
           try {
             this.workspace.update(projectId, requestId, 'running', {
+              ...kept,
               phase: 'model',
               hostExecuted: false,
             });
@@ -617,14 +628,41 @@ export class Execution {
           resolve(answers);
         };
         const stop = () => done(null);
+        if (signal.aborted) return resolve(null);
         signal.addEventListener('abort', stop, { once: true });
         this.nativeQuestions.set(requestId, { projectId, cards, answer: done });
         this.workspace.update(projectId, requestId, 'running', {
+          ...kept,
           phase: 'question',
           hostExecuted: false,
           questions: cards,
         });
       });
+  }
+  /**
+   * The mid-run question handler of one turn (SPEC-02.19 6, ADR-026 4), the same rule for both
+   * providers: a conversation turn (host or not) with AI가 작업 도중에 묻기 on asks with the provider's
+   * own tool — Claude's AskUserQuestion, Codex's requestUserInput on the app-server — and goes on
+   * in the same run with the answer. Elsewhere, or with the switch off, the run finishes first and
+   * the answer goes to the next turn. VIDE_NATIVE_QUESTIONS=0 turns Claude's off and
+   * VIDE_CODEX_APP_SERVER=0 Codex's (`codex exec` cannot ask mid-run); an injected provider
+   * factory (tests) opts in with VIDE_NATIVE_QUESTIONS=1.
+   */
+  midRunQuestions(
+    provider: string,
+    conversationTurn: boolean,
+    projectId: string,
+    requestId: string,
+  ): NativeQuestionHandler | undefined {
+    if (!conversationTurn || !this.questionsOn()) return undefined;
+    if (provider === 'codex-cli' ? !codexAppServerEnabled() : provider !== 'claude-cli')
+      return undefined;
+    if (this.providerFactory !== createProvider)
+      return process.env.VIDE_NATIVE_QUESTIONS === '1'
+        ? this.questionHandler(projectId, requestId)
+        : undefined;
+    if (provider === 'claude-cli' && !nativeQuestionsEnabled()) return undefined;
+    return this.questionHandler(projectId, requestId);
   }
   /**
    * The person's answers to a running turn's native questions or file permission question (the
@@ -1098,11 +1136,17 @@ export class Execution {
           provider: (agent) =>
             this.timed(
               id,
-              this.provider(input, agent, turn?.session, {
-                mode: 'modeling',
-                projectId,
-                requestId: id,
-              }),
+              this.provider(
+                input,
+                agent,
+                turn?.session,
+                {
+                  mode: 'modeling',
+                  projectId,
+                  requestId: id,
+                },
+                this.midRunQuestions(input.provider, !!turn, projectId, id),
+              ),
             ),
         });
         return;
@@ -1248,12 +1292,18 @@ export class Execution {
           provider: (agent) =>
             this.timed(
               id,
-              this.provider(input, agent, turn?.session, {
-                mode: 'modeling',
-                projectId,
-                requestId: id,
-                host: target,
-              }),
+              this.provider(
+                input,
+                agent,
+                turn?.session,
+                {
+                  mode: 'modeling',
+                  projectId,
+                  requestId: id,
+                  host: target,
+                },
+                this.midRunQuestions(input.provider, !!turn, projectId, id),
+              ),
             ),
           update: (progress) => {
             if (progress.phase === 'host') hostIntent = progress;
@@ -1274,12 +1324,18 @@ export class Execution {
           provider: (agent) =>
             this.timed(
               id,
-              this.provider(input, agent, turn?.session, {
-                mode: 'modeling',
-                projectId,
-                requestId: id,
-                host: target,
-              }),
+              this.provider(
+                input,
+                agent,
+                turn?.session,
+                {
+                  mode: 'modeling',
+                  projectId,
+                  requestId: id,
+                  host: target,
+                },
+                this.midRunQuestions(input.provider, !!turn, projectId, id),
+              ),
             ),
           update: (progress) => {
             if (progress.phase === 'host') hostIntent = progress;
@@ -1362,15 +1418,7 @@ export class Execution {
             requestId: id,
             ...(host ? { host: target } : {}),
           },
-          // A conversation turn asks with Claude's own question tool by default (ADR-026 4);
-          // 작업 중 질문 받기 off or VIDE_NATIVE_QUESTIONS=0 keeps the structured-output cards
-          // only. Like the Codex app-server, an injected provider factory (tests) opts in with =1.
-          turn &&
-            this.questionsOn() &&
-            (process.env.VIDE_NATIVE_QUESTIONS === '1' ||
-              (nativeQuestionsEnabled() && this.providerFactory === createProvider))
-            ? this.questionHandler(projectId, id)
-            : undefined,
+          this.midRunQuestions(input.provider, !!turn, projectId, id),
         ),
       )
         .run(

@@ -10,7 +10,7 @@ related: [FR-23, SPEC-06, ADR-019, ADR-020, RESEARCH-09, RESEARCH-10, ARCH-01, A
 
 # 구조 분석 jig의 해석 모델 계약과 Rust 코어
 
-SPEC-06이 정한 동작을 구현하는 물리 계약과 구성요소 경계를 정한다. 공통 서버·저장·호스트 경계는 [ARCH-01](ARCH-01-system.md), jig 런타임·실행 위치·성능 목표는 [ARCH-03](ARCH-03-jig-runtime.md)을 따른다. 필드 후보와 선례는 [RESEARCH-09 §3](../research/RESEARCH-09-structure-analysis-methods.md), 1차 TS 보완의 근거는 [RESEARCH-10 §10](../research/RESEARCH-10-jig-platform.md)에 있다.
+SPEC-06이 정한 동작을 구현하는 물리 계약과 구성요소 경계를 정한다. 공통 서버·저장·호스트 경계는 [ARCH-01](ARCH-01-system.md), jig 런타임·실행 위치·성능 목표는 [ARCH-03](ARCH-03-jig-runtime.md)을 따른다. 필드 후보와 선례는 [RESEARCH-09 §3](../research/RESEARCH-09-structure-analysis-methods.md), 1차 TS 보완의 근거는 [RESEARCH-10 §10](../research/RESEARCH-10-vide-restructure.md)에 있다.
 
 ## 1. 구성요소와 위치
 

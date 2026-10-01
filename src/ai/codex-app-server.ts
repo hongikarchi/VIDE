@@ -2,7 +2,7 @@
 // alternative to one `codex exec` run per turn. One process per conversation keeps the thread
 // loaded between turns; a question the model asks with its own tool (`item/tool/requestUserInput`)
 // becomes VIDE's question card. On by default (2026-10-01 user decision, like Claude's own
-// questions, ADR-026 4); `VIDE_CODEX_APP_SERVER=0` or Settings → AI 「작업 중 질문 받기」 off sends
+// questions, ADR-026 4); `VIDE_CODEX_APP_SERVER=0` or Settings → AI 「AI가 작업 도중에 묻기」 off sends
 // Codex through `codex exec` again. The isolation of `exec` is asserted here too, from what the server
 // reports: read-only sandbox, no approvals, no user MCP servers (only VIDE's, with this turn's
 // tools), no shell, web, apps or plugins, the developer instructions exactly the bundle's.
@@ -812,7 +812,7 @@ export class CodexAppServer extends CodexCli {
         }, this.stopGraceMs);
       };
       const abort = () => stop('CANCELLED');
-      const timer = setTimeout(() => stop('TIMEOUT'), this.timeoutMs);
+      let timer = setTimeout(() => stop('TIMEOUT'), this.timeoutMs);
       signal?.addEventListener('abort', abort, { once: true });
       const handle = (message: Message) => {
         if (message.method === 'vide/closed') {
@@ -847,9 +847,13 @@ export class CodexAppServer extends CodexCli {
             asked = { cards };
             return stop('QUESTION');
           }
+          // The time the person takes is not run time (as on Claude): the turn's clock stops
+          // while the card waits and starts over with the answer.
+          clearTimeout(timer);
           void onQuestion(cards, questionAbort.signal).then(
             (answers) => {
               if (settled || stopReason) return;
+              timer = setTimeout(() => stop('TIMEOUT'), this.timeoutMs);
               // Closed without answers (null): the model goes on without them, as on Claude.
               rpc.respond(requestId, nativeAnswers(questions, cards, sources, answers ?? []));
               progress({ state: 'running', phase: 'model' });

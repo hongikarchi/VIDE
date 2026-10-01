@@ -1,6 +1,7 @@
 {
   "brand": "VIDE",
   "siteTitle": "VIDE",
+  "outDir": "human",
   "index": "index.html",
   "next": {
     "title": "다음 작업 · PLAN §6.5",

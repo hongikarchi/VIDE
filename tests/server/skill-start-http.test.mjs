@@ -147,85 +147,91 @@ test('a request-opened instance has no output layer until Rhino에 만들기 ask
   }
 });
 
-test("a Claude turn's own questions (AskUserQuestion) wait on the cards and go on in the same run", async () => {
-  const previous = process.env.VIDE_NATIVE_QUESTIONS;
-  process.env.VIDE_NATIVE_QUESTIONS = '1';
-  const seen = [];
-  const { app, api } = await session({
-    providerFactory: (options) => ({
-      run: async (_context, { signal }) => {
-        assert.equal(typeof options.nativeQuestions, 'function');
-        const answers = await options.nativeQuestions(
-          [
-            {
-              id: 'q1',
-              title: '슬래브는 S-SLAB-3F 레이어인가요?',
-              options: [
-                { id: 'o1', label: '맞음' },
-                { id: 'o2', label: '다른 레이어' },
-              ],
-              allowFree: true,
-            },
-          ],
-          signal,
-        );
-        seen.push(answers);
-        return { text: JSON.stringify({ message: '답을 반영했습니다', operations: [] }) };
-      },
-    }),
+// SPEC-02.19 6: the same mid-run rule for both providers (Claude's AskUserQuestion, Codex's
+// requestUserInput on the app-server): the card waits, the answer goes on in the same run.
+for (const [provider, model] of [
+  ['claude-cli', 'claude-opus-5-5'],
+  ['codex-cli', 'gpt-5'],
+])
+  test(`a ${provider} conversation turn's own questions wait on the cards and go on in the same run`, async () => {
+    const previous = process.env.VIDE_NATIVE_QUESTIONS;
+    process.env.VIDE_NATIVE_QUESTIONS = '1';
+    const seen = [];
+    const { app, api } = await session({
+      providerFactory: (options) => ({
+        run: async (_context, { signal }) => {
+          assert.equal(typeof options.nativeQuestions, 'function');
+          const answers = await options.nativeQuestions(
+            [
+              {
+                id: 'q1',
+                title: '슬래브는 S-SLAB-3F 레이어인가요?',
+                options: [
+                  { id: 'o1', label: '맞음' },
+                  { id: 'o2', label: '다른 레이어' },
+                ],
+                allowFree: true,
+              },
+            ],
+            signal,
+          );
+          seen.push(answers);
+          return { text: JSON.stringify({ message: '답을 반영했습니다', operations: [] }) };
+        },
+      }),
+    });
+    try {
+      const project = (await api('/projects', 'POST', { name: 'questions' })).json;
+      const base = `/projects/${project.id}`;
+      const conversation = (
+        await api(`${base}/conversations`, 'POST', {
+          kind: 'jig-run',
+          title: '구조',
+          provider,
+          model,
+        })
+      ).json;
+      const sent = await api(`${base}/requests`, 'POST', {
+        id: 'turn-q',
+        body: '구조 분석 해줘',
+        provider,
+        model,
+        permission: 'candidate',
+        mode: 'auto',
+        pins: [],
+        sketches: [],
+        files: [],
+        conversationId: conversation.id,
+        hostUse: 'none',
+      });
+      assert.ok(sent.status < 300, JSON.stringify(sent.json));
+      let waiting;
+      for (let i = 0; i < 200 && !waiting; i++) {
+        const row = (await api(`${base}/requests/turn-q`)).json;
+        if (row.state === 'running' && row.result?.phase === 'question') waiting = row;
+        else await new Promise((resolve) => setTimeout(resolve, 20));
+      }
+      assert.ok(waiting, 'the turn shows its question');
+      assert.equal(waiting.result.questions[0].title, '슬래브는 S-SLAB-3F 레이어인가요?');
+      assert.equal(
+        (await api(`${base}/requests/other/questions`, 'POST', { answers: [] })).status,
+        404,
+      );
+      const answered = await api(`${base}/requests/turn-q/questions`, 'POST', {
+        answers: [{ id: 'q1', option: 'o1' }],
+      });
+      assert.deepEqual([answered.status, answered.json], [200, { ok: true }]);
+      let done;
+      for (let i = 0; i < 200 && !done; i++) {
+        const row = (await api(`${base}/requests/turn-q`)).json;
+        if (row.state !== 'running' && row.state !== 'queued') done = row;
+        else await new Promise((resolve) => setTimeout(resolve, 20));
+      }
+      assert.equal(done.state, 'succeeded');
+      assert.deepEqual(seen, [[{ id: 'q1', option: 'o1' }]]);
+    } finally {
+      await app.close();
+      if (previous === undefined) delete process.env.VIDE_NATIVE_QUESTIONS;
+      else process.env.VIDE_NATIVE_QUESTIONS = previous;
+    }
   });
-  try {
-    const project = (await api('/projects', 'POST', { name: 'questions' })).json;
-    const base = `/projects/${project.id}`;
-    const conversation = (
-      await api(`${base}/conversations`, 'POST', {
-        kind: 'jig-run',
-        title: '구조',
-        provider: 'claude-cli',
-        model: 'claude-opus-5-5',
-      })
-    ).json;
-    const sent = await api(`${base}/requests`, 'POST', {
-      id: 'turn-q',
-      body: '구조 분석 해줘',
-      provider: 'claude-cli',
-      model: 'claude-opus-5-5',
-      permission: 'candidate',
-      mode: 'auto',
-      pins: [],
-      sketches: [],
-      files: [],
-      conversationId: conversation.id,
-      hostUse: 'none',
-    });
-    assert.ok(sent.status < 300, JSON.stringify(sent.json));
-    let waiting;
-    for (let i = 0; i < 200 && !waiting; i++) {
-      const row = (await api(`${base}/requests/turn-q`)).json;
-      if (row.state === 'running' && row.result?.phase === 'question') waiting = row;
-      else await new Promise((resolve) => setTimeout(resolve, 20));
-    }
-    assert.ok(waiting, 'the turn shows its question');
-    assert.equal(waiting.result.questions[0].title, '슬래브는 S-SLAB-3F 레이어인가요?');
-    assert.equal(
-      (await api(`${base}/requests/other/questions`, 'POST', { answers: [] })).status,
-      404,
-    );
-    const answered = await api(`${base}/requests/turn-q/questions`, 'POST', {
-      answers: [{ id: 'q1', option: 'o1' }],
-    });
-    assert.deepEqual([answered.status, answered.json], [200, { ok: true }]);
-    let done;
-    for (let i = 0; i < 200 && !done; i++) {
-      const row = (await api(`${base}/requests/turn-q`)).json;
-      if (row.state !== 'running' && row.state !== 'queued') done = row;
-      else await new Promise((resolve) => setTimeout(resolve, 20));
-    }
-    assert.equal(done.state, 'succeeded');
-    assert.deepEqual(seen, [[{ id: 'q1', option: 'o1' }]]);
-  } finally {
-    await app.close();
-    if (previous === undefined) delete process.env.VIDE_NATIVE_QUESTIONS;
-    else process.env.VIDE_NATIVE_QUESTIONS = previous;
-  }
-});

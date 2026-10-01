@@ -1,4 +1,4 @@
-// Settings → AI 「작업 중 질문 받기」 (PLAN-24 T-075, ADR-026 4; 2026-10-01 user decision "codex도
+// Settings → AI 「AI가 작업 도중에 묻기」 (PLAN-24 T-075, ADR-026 4; 2026-10-01 user decision "codex도
 // 기본으로 켜야"): the AI asks with its provider's own question tool inside the running turn —
 // Claude's AskUserQuestion, Codex through `codex app-server` — and the turn goes on with the answer.
 // One switch for both providers, on by default. The environment still forces each one off:
