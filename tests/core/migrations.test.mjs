@@ -243,6 +243,7 @@ test('schema 5 migrates a schema 4 database after a backup without rewriting req
       'knowledge_source_rules',
       'project_roots',
       'project_folders',
+      'agenda_items',
     ])
       assert.ok(tableNames(store.db).includes(table), table);
     // conversationId is not indexed (ARCH-03 §10.1).

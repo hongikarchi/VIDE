@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 
 /** v5 and later cannot be opened by an older installation (UNSUPPORTED_SCHEMA); see ARCH-03 §10.1. */
-export const schemaVersion = 6;
+export const schemaVersion = 7;
 export const baselineSchema = `
         CREATE TABLE IF NOT EXISTS projects(id TEXT PRIMARY KEY, name TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS connections(id TEXT PRIMARY KEY, projectId TEXT NOT NULL REFERENCES projects(id),
@@ -101,12 +101,20 @@ CREATE TABLE IF NOT EXISTS project_roots(projectId TEXT PRIMARY KEY REFERENCES p
 const projectFolders = `CREATE TABLE IF NOT EXISTS project_folders(projectId TEXT NOT NULL REFERENCES projects(id),
   path TEXT NOT NULL COLLATE NOCASE, kind TEXT NOT NULL CHECK(kind IN ('project','read')),
   addedAt TEXT NOT NULL, PRIMARY KEY(projectId, path));`;
+// The project's 할 일 on the dashboard (SPEC-01.14, ARCH-01 §3): local date/time text, done when
+// doneAt is set, `ord` is the user's order.
+const agendaItems = `CREATE TABLE IF NOT EXISTS agenda_items(id TEXT PRIMARY KEY,
+  projectId TEXT NOT NULL REFERENCES projects(id), text TEXT NOT NULL, date TEXT, time TEXT,
+  doneAt TEXT, ord REAL NOT NULL, source TEXT NOT NULL CHECK(source IN ('user','ai')),
+  revision INTEGER NOT NULL, createdAt TEXT NOT NULL, updatedAt TEXT NOT NULL);
+CREATE INDEX IF NOT EXISTS agenda_items_project ON agenda_items(projectId, ord);`;
 export const migrations: Migration[] = [
   { version: 2, sql: baselineSchema },
   { version: 3, sql: hiddenRequests },
   { version: 4, sql: documentLinks },
   { version: 5, sql: conversationsAndJigs },
   { version: 6, sql: projectFolders },
+  { version: 7, sql: agendaItems },
 ];
 
 /** Caller holds the exclusive controller lock. Never migrates user model files. */

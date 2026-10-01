@@ -259,6 +259,38 @@ test('site-signed tokens open local and tunnel sessions; tunnel cannot reach app
     403,
   );
   assert.equal((await call(port, instructions, { ...remote, cookie })).status, 200);
+  // The dashboard's 할 일 are edited from the iPad too (SPEC-01.14 5).
+  const agenda = `/api/v1/projects/${JSON.parse(created.text).id}/agenda`;
+  const todo = await call(port, agenda, {
+    ...remote,
+    cookie,
+    method: 'POST',
+    body: { text: '현장 사진 정리' },
+  });
+  assert.equal(todo.status, 200, todo.text);
+  const todoId = JSON.parse(todo.text).item.id;
+  assert.equal(
+    (
+      await call(port, `${agenda}/${todoId}`, {
+        ...remote,
+        cookie,
+        method: 'PUT',
+        body: { revision: 1, done: true },
+      })
+    ).status,
+    200,
+  );
+  assert.equal(
+    (
+      await call(port, `${agenda}/${todoId}/remove`, {
+        ...remote,
+        cookie,
+        method: 'POST',
+        body: {},
+      })
+    ).status,
+    200,
+  );
   // A direct-mode guard (bulk erase, layer deletion, purge) is released at this PC only.
   const confirm = `/api/v1/projects/${JSON.parse(created.text).id}/requests/r-1/confirm`;
   assert.equal(

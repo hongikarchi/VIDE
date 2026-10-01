@@ -102,6 +102,8 @@ import { importModel, captureModel, recoverDwgImport } from './import-model.ts';
 import { AttachmentStore } from './attachments.ts';
 import { folderRoutes } from './project-files.ts';
 import { ProjectFolders } from '../core/project-folders.ts';
+import { Agenda } from '../core/agenda.ts';
+import { agendaRoutes, agendaStatuses } from './agenda-routes.ts';
 import {
   ReferenceBoards,
   referenceRoutes,
@@ -175,6 +177,7 @@ const statuses: Record<string, number> = {
   ...conversationStatuses,
   ...factStatuses,
   ...makeStatuses,
+  ...agendaStatuses,
 };
 export async function startServer({
   filename,
@@ -215,6 +218,7 @@ export async function startServer({
     listProjects = () => removedProjects.visible(store.listProjects()),
     links = new DocumentLinks(store.db),
     tableViews = new TableViews(store),
+    agenda = new Agenda(store),
     structures = new StructureStore(
       filename === ':memory:' ? null : join(dirname(filename), 'structure'),
     ),
@@ -762,6 +766,28 @@ export async function startServer({
           project: (projectId) => store.project(projectId),
           body: () => body(request),
           send,
+        })
+      )
+        return;
+      // The project's 할 일 on the dashboard (SPEC-01.14, ARCH-01 §3); remote sessions may edit.
+      if (
+        await agendaRoutes(url, request.method, {
+          agenda,
+          body: () => body(request),
+          send,
+          ledger: {
+            item: (projectId, conversationId, ledgerId) => {
+              conversations.store.get(projectId, conversationId);
+              return conversations.store.ledgerItem(conversationId, ledgerId);
+            },
+            undone: (projectId, conversationId, ledgerId, result) => {
+              const undo = conversations.addLedger(projectId, conversationId, {
+                kind: 'result-ref',
+                body: { appAction: 'agenda-undo', ledgerId, by: 'user', ...result },
+              });
+              conversations.store.supersede(conversationId, ledgerId, undo.id);
+            },
+          },
         })
       )
         return;
