@@ -1,8 +1,11 @@
 import { createRoot } from 'react-dom/client';
 import { z } from 'zod';
+import { iconSvg } from './inspector.ts';
 
 // The project's linked files (SPEC-01.11, Design §03): files linked from the Rhino/ZWCAD plugins,
 // shown together in one space. Each row: visibility, status, last Sync, forced Sync, removal.
+// Row look (2026-10-01, from the chat-stage mockup): bold name with a green dot only while Live,
+// a small meta line under it and small icon buttons.
 export const linkRowSchema = z.object({
   id: z.string(),
   host: z.enum(['rhino', 'zwcad']),
@@ -243,14 +246,13 @@ function LinkList(props: Props) {
           >
             <button
               type="button"
-              className="link-eye"
+              className="link-mini link-eye"
               aria-pressed={!link.hidden}
               aria-label={`${link.name} ${link.hidden ? '보이기' : '숨기기'}`}
               title={link.hidden ? '보이기' : '숨기기'}
               onClick={() => props.onToggle(link)}
-            >
-              {link.hidden ? '◌' : '◉'}
-            </button>
+              dangerouslySetInnerHTML={{ __html: iconSvg(link.hidden ? 'eye-off' : 'eye') }}
+            />
             <button
               type="button"
               className="link-open"
@@ -258,11 +260,12 @@ function LinkList(props: Props) {
               onClick={() => props.onFocus(link)}
             >
               <span className="link-name">
-                <span className="link-host">{link.host === 'zwcad' ? 'CAD' : 'R'}</span>
+                {state === 'live' ? <span className="dot" aria-hidden="true" /> : null}
                 {link.name}
               </span>
               <span className="link-meta">
-                <span className="dot" aria-hidden="true" />
+                {link.host === 'zwcad' ? 'ZWCAD' : 'Rhino'}
+                {' · '}
                 {file
                   ? '파일에서 연 사본'
                   : state === 'live'
@@ -283,19 +286,18 @@ function LinkList(props: Props) {
             </button>
             <button
               type="button"
-              className="icon-button link-sync"
+              className="link-mini link-sync"
               disabled={!connection}
               tabIndex={file ? -1 : undefined}
               aria-hidden={file || undefined}
               title={connection ? '지금 Sync' : '파일이 열려 있지 않습니다'}
               aria-label={`${link.name} Sync`}
               onClick={() => props.onSync(link)}
-            >
-              ⟳
-            </button>
+              dangerouslySetInnerHTML={{ __html: iconSvg('refresh') }}
+            />
             <button
               type="button"
-              className="icon-button link-remove"
+              className="link-mini link-remove"
               title={
                 file
                   ? '목록에서 빼기 (VIDE의 사본과 기록을 지움, 원본 파일은 그대로)'
@@ -303,9 +305,8 @@ function LinkList(props: Props) {
               }
               aria-label={`${link.name} ${file ? '목록에서 빼기' : '연결 해제'}`}
               onClick={() => props.onRemove(link)}
-            >
-              ×
-            </button>
+              dangerouslySetInnerHTML={{ __html: iconSvg('x') }}
+            />
             {props.candidates.has(link.id) ? (
               <button
                 type="button"

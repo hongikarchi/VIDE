@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { createRoot } from 'react-dom/client';
+import { iconSvg } from './inspector.ts';
 
 // Project switcher. New and rename use an inline field: browser prompt() dialogs are blocked in
 // embedded browsers, which silently dropped new projects and names.
@@ -131,16 +132,8 @@ function ProjectHeading({ projects, selected, select, create, rename, remove }: 
         title="프로젝트 삭제"
         aria-label="프로젝트 삭제"
         onClick={() => setEditing('delete')}
-      >
-        <svg width="13" height="13" viewBox="0 0 16 16" aria-hidden="true">
-          <path
-            d="M2.5 4h11M6 4V2.5h4V4M4 4l.7 9.5h6.6L12 4M6.8 6.5v5M9.2 6.5v5"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.3"
-          />
-        </svg>
-      </button>
+        dangerouslySetInnerHTML={{ __html: iconSvg('trash') }}
+      />
     </>
   );
 }

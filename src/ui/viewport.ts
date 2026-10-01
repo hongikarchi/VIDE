@@ -756,7 +756,7 @@ export function createViewport(
     const dark =
       !display.plot &&
       (display.background === 'dark' ||
-        (display.background === 'auto' && matchMedia('(prefers-color-scheme: dark)').matches));
+        (display.background === 'auto' && document.documentElement.dataset.theme === 'dark'));
     // --bg-recessed of tokens.css (light / dark).
     (scene.background as THREE.Color).set(display.plot ? '#ffffff' : dark ? '#161616' : '#f2f1ee');
     const rotation = grid.rotation.clone();
@@ -1078,7 +1078,7 @@ export function createViewport(
   /** A screen-constant tag; its scale follows the camera (see scaleLabels). */
   function overlayLabel(text: string, color: string) {
     const k = 2,
-      font = `600 ${11 * k}px Pretendard, 'Noto Sans KR', 'Malgun Gothic', sans-serif`;
+      font = `600 ${11 * k}px 'Inter Variable', 'Noto Sans KR Variable', 'Malgun Gothic', sans-serif`;
     const canvas = document.createElement('canvas');
     const context = canvas.getContext('2d')!;
     context.font = font;

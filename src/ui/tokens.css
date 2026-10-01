@@ -54,8 +54,9 @@
   --radius-pill: 999px;
   --shadow-float: 0 4px 16px #00000014; /* only things that float */
   /* Type: 11 · 12 · 13 (body) · 15 · 20; report display sizes stay separate. */
-  --font-sans: 'Pretendard', 'Noto Sans KR', 'Malgun Gothic', Arial, sans-serif;
-  --font-mono: 'JetBrains Mono', ui-monospace, 'Cascadia Mono', Consolas, monospace;
+  /* Bundled fonts as in 참고 앱 A (imported once in main.tsx, served from dist/ui/assets). */
+  --font-sans: 'Inter Variable', 'Noto Sans KR Variable', 'Malgun Gothic', sans-serif;
+  --font-mono: 'JetBrains Mono Variable', ui-monospace, Consolas, monospace;
   --fs-xs: 11px;
   --fs-sm: 12px;
   --fs-md: 13px;

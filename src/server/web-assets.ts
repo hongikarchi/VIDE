@@ -3,7 +3,8 @@ import { packageRoot } from '../core/package-root.ts';
 
 // Source, compiled server and packaged app share the nearest package root.
 const root = new URL('dist/ui/', packageRoot);
-const assetPath = /^\/assets\/[A-Za-z0-9_-]+\.(js|css)$/;
+// Bundled fonts (woff2) ship with the UI so the desktop app works offline.
+const assetPath = /^\/assets\/[A-Za-z0-9_-]+\.(js|css|woff2)$/;
 
 export async function readWebAsset(
   pathname: string,
@@ -19,7 +20,9 @@ export async function readWebAsset(
           ? 'text/html; charset=utf-8'
           : pathname.endsWith('.css')
             ? 'text/css; charset=utf-8'
-            : 'text/javascript; charset=utf-8',
+            : pathname.endsWith('.woff2')
+              ? 'font/woff2'
+              : 'text/javascript; charset=utf-8',
     };
   } catch (error) {
     if (error instanceof Error && 'code' in error && error.code === 'ENOENT' && pathname !== '/')

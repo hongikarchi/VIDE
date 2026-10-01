@@ -105,10 +105,11 @@ try {
   await page.reload();
   await page.waitForFunction(() => document.querySelectorAll('#task-list .task-row').length === 2);
 
-  // The row: five fixed tabs over the centre column only; the model tab first and shown.
+  // The row: six fixed tabs over the centre column only; 대시보드 first, the model tab shown.
   const tabs = page.getByRole('tablist', { name: '작업공간' });
   const tab = (name) => tabs.getByRole('tab', { name, exact: true });
   assert.deepEqual(await tabs.getByRole('tab').allTextContents(), [
+    '대시보드',
     '모델',
     '자료',
     'JIG',
@@ -118,7 +119,7 @@ try {
   assert.equal(await tab('모델').getAttribute('aria-selected'), 'true');
   // Every fixed tab is ready: 보고서 since PLAN-22 T-057, 자료 and 만들기 since T-065 and T-063
   // (tests/integration/browser-report.mjs, browser-facts.mjs, browser-make.mjs).
-  for (const name of ['자료', 'JIG', '만들기', '보고서'])
+  for (const name of ['대시보드', '자료', 'JIG', '만들기', '보고서'])
     assert.equal(await tab(name).getAttribute('aria-disabled'), null);
   const row = await page.locator('.workspace-tabs').boundingBox();
   const centre = await page.locator('.workspace').boundingBox();
@@ -243,6 +244,38 @@ try {
   await structureTab.click();
   await page.getByRole('button', { name: `구조 · ${projectName} 탭 닫기` }).click();
   assert.equal(await structureTab.count(), 0);
+  assert.equal(
+    await tab(`격자 골조 배치 예제 · ${projectName}`).getAttribute('aria-selected'),
+    'true',
+  );
+
+  // 대시보드 (the rail item and the first tab): the project's name, its jigs and the latest
+  // finished requests over the centre; a jig opens like the JIG list's [열기].
+  await page.locator('#rail-dashboard').click();
+  assert.equal(await tab('대시보드').getAttribute('aria-selected'), 'true');
+  const board = page.getByRole('region', { name: '대시보드', exact: true });
+  await board.getByRole('heading', { name: projectName, exact: true }).waitFor();
+  assert.equal(await page.locator('#canvas canvas').isVisible(), false);
+  assert.equal(await page.locator('#left').isVisible(), false);
+  assert.ok(await board.getByRole('region', { name: '연결 파일' }).isVisible());
+  assert.deepEqual(
+    (
+      await board
+        .getByRole('region', { name: '최근 작업' })
+        .locator('.dash-row-title')
+        .allTextContents()
+    ).sort(),
+    ['rhino sync', 'zwcad sync'],
+  );
+  const boardJig = board
+    .getByRole('region', { name: '이 프로젝트의 jig' })
+    .getByRole('button', { name: /격자 골조 배치 예제/ });
+  await boardJig.waitFor();
+  if (shot) await page.screenshot({ path: join(shot, 'workspace-tabs-dashboard.png') });
+  await boardJig.click();
+  await page.waitForFunction(
+    () => document.querySelector('.jig-dialog h2')?.textContent === '격자 골조 배치 예제',
+  );
   assert.equal(
     await tab(`격자 골조 배치 예제 · ${projectName}`).getAttribute('aria-selected'),
     'true',

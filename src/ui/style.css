@@ -105,6 +105,13 @@ a {
   background: var(--bg-active);
   color: var(--text-1);
 }
+/* Icon sizes as in 참고 앱 A: 18 px for the main rail items (the global svg size), 16 px for the
+   small items at the rail's end. */
+.rail .rail-end svg,
+.rail .rail-settings svg {
+  width: 16px;
+  height: 16px;
+}
 main {
   display: grid;
   grid-template-columns: var(--left-width, 266px) minmax(260px, 1fr) var(--right-width, 370px);
@@ -162,6 +169,10 @@ aside {
   opacity: 0.6;
   display: inline-flex;
   align-items: center;
+}
+#delete-project svg {
+  width: 14px;
+  height: 14px;
 }
 .project-delete {
   align-items: center;
@@ -1254,6 +1265,44 @@ body.left-hidden.right-hidden main {
   margin-bottom: 10px;
   font-size: 20px;
 }
+/* Feedback and the theme toggle sit at the bottom of the rail, above the settings. */
+.rail-feedback {
+  margin-top: auto;
+}
+.rail-feedback ~ .rail-settings {
+  margin-top: 0;
+}
+.feedback-dialog {
+  width: min(350px, 90vw);
+  padding: 0;
+  border: var(--hairline) solid var(--line);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-float);
+}
+.feedback-dialog::backdrop {
+  background: var(--scrim);
+}
+.feedback-box {
+  padding: 24px 18px 18px;
+  text-align: center;
+}
+.feedback-box h2 {
+  margin: 0 0 10px;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.3px;
+}
+.feedback-box p {
+  margin: 0 0 14px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-3);
+}
+.feedback-actions {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+}
 .composer-wrap {
   padding: 12px;
   border-top: var(--hairline) solid var(--line);
@@ -1485,6 +1534,32 @@ body.left-hidden.right-hidden main {
   display: flex;
   flex-direction: column;
   gap: 6px;
+}
+/* '파일에서 열기' under the list, as the mockup's link with lucide's folder-open (ISC) drawn by a
+   mask, since its markup belongs to index.html. */
+#import-model {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  align-self: flex-start;
+  margin: 2px 6px 0;
+  font-size: var(--fs-sm);
+  color: var(--text-2);
+  text-decoration: underline;
+  text-decoration-color: var(--border);
+  text-underline-offset: 3px;
+}
+#import-model::before {
+  content: '';
+  flex: 0 0 14px;
+  width: 14px;
+  height: 14px;
+  background: currentColor;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.54 6a2 2 0 0 1-1.95 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2'/%3E%3C/svg%3E")
+    center / contain no-repeat;
+}
+#import-model:hover:not(:disabled) {
+  color: var(--text-1);
 }
 .icon-button {
   width: 30px;
@@ -3775,16 +3850,21 @@ body[data-workspace='context'] .workspace > .jig-dialog {
 }
 .link-row {
   display: grid;
-  grid-template-columns: 24px 1fr 26px 22px;
+  grid-template-columns: 22px 1fr auto auto;
   align-items: center;
-  gap: 2px;
+  gap: 2px 4px;
   border-radius: var(--radius-sm);
-  padding: 2px 0;
+  padding: 4px 4px 4px 2px;
+}
+.link-row:hover {
+  background: var(--bg-hover);
 }
 .link-row[aria-current='true'] {
   background: var(--bg-selected);
 }
-.link-row[data-hidden='true'] .link-open {
+/* Hidden and closed files are dimmed. */
+.link-row[data-hidden='true'] .link-open,
+.link-row[data-state='closed'] .link-open {
   opacity: 0.5;
 }
 .link-row button {
@@ -3792,73 +3872,57 @@ body[data-workspace='context'] .workspace > .jig-dialog {
   background: transparent;
   padding: 0;
 }
-.link-eye {
-  font-size: 13px;
-  color: var(--text-2);
-}
 .link-row .link-open {
-  display: grid;
-  gap: 2px;
+  display: flex;
+  flex-direction: column;
   text-align: left;
   min-width: 0;
-  padding: 4px 2px;
+  padding: 0;
 }
 .link-name {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  font-size: 11px;
+  font-size: var(--fs-sm);
   font-weight: 600;
+  color: var(--text-1);
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
 }
-.link-host {
-  flex-shrink: 0;
-  font-size: 11px;
-  font-weight: 600;
-  padding: 0 4px;
-  border-radius: var(--radius-sm);
-  background: var(--soft);
-  color: var(--muted);
-}
-.link-meta {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 11px;
-  color: var(--muted);
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
-.link-meta .dot {
-  flex-shrink: 0;
+/* The green light: only while the file is Live in its host. */
+.link-name .dot {
+  display: inline-block;
   width: 7px;
   height: 7px;
+  margin-right: 6px;
+  vertical-align: 1px;
   border-radius: 50%;
-  background: var(--text-4);
-}
-.link-row[data-state='connected'] .dot {
-  background: var(--info);
-}
-.link-row[data-state='live'] .dot {
   background: var(--ok);
-  box-shadow: 0 0 0 3px var(--ok-muted);
+  box-shadow: 0 0 0 2px var(--ok-muted);
 }
-.link-row .link-sync,
-.link-row .link-remove {
-  width: 24px;
-  font-size: 12px;
+.link-meta {
+  font-size: var(--fs-xs);
+  color: var(--text-3);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.link-row .link-mini {
+  width: 22px;
+  height: 22px;
+  border-radius: 4px;
+  display: inline-grid;
+  place-items: center;
   color: var(--text-3);
 }
-.link-remove {
-  /* Always visible (a hidden button that works when clicked felt like a bug); stronger on hover. */
-  opacity: 0.45;
+.link-row .link-mini:hover:not(:disabled) {
+  background: var(--bg-active);
+  color: var(--text-1);
 }
-.link-row:hover .link-remove,
-.link-remove:focus-visible {
-  opacity: 1;
+.link-row .link-mini:disabled {
+  opacity: 0.35;
+}
+.link-mini svg {
+  width: 14px;
+  height: 14px;
 }
 .link-row .link-back {
   grid-column: 2 / -1;
@@ -4318,10 +4382,6 @@ body[data-workspace='context'] .workspace > .jig-dialog {
 }
 .link-row[data-state='file'] .link-sync {
   visibility: hidden;
-}
-.link-row[data-state='file'] .dot {
-  background: var(--text-4);
-  border-radius: var(--radius-sm);
 }
 /* One action inside a notice (e.g. "AI 작업으로 보내기" after a view-only request). */
 .toast .message-action {

@@ -1,6 +1,37 @@
 import { renderInspectorContent } from './inspector-content.tsx';
 import type { InspectorContentProps } from './inspector-content.tsx';
 import { nativeAttributes } from './native-attributes.ts';
+import {
+  ArrowUp,
+  Box,
+  Cuboid,
+  Database,
+  Expand,
+  Eye,
+  EyeOff,
+  FileText,
+  Focus,
+  FolderOpen,
+  Grid2x2Plus,
+  History,
+  House,
+  Layers,
+  LayoutDashboard,
+  ListPlus,
+  MessageSquare,
+  Moon,
+  MousePointer2,
+  Paperclip,
+  Pencil,
+  Pin,
+  Pyramid,
+  RefreshCw,
+  Sun,
+  Trash2,
+  Wrench,
+  X,
+} from 'lucide';
+import type { IconNode } from 'lucide';
 type InspectorTab = 'properties' | 'geometry' | 'relations' | 'history';
 interface InspectorObject {
   id: string;
@@ -71,35 +102,59 @@ function showInspector(open: boolean) {
   $('inspector').classList.toggle('collapsed', !open);
   $('inspector-toggle').setAttribute('aria-expanded', String(open));
 }
-const paths: Record<string, string> = {
-  extension: '<path d="M3 3h7v7H3V3Zm11 0h7v7h-7V3ZM3 14h7v7H3v-7Zm14 0v8m-4-4h8"/>',
-  jig: '<path d="M4 20 14 10m2-6 4 4-3 3-4-4 3-3ZM4 4h5v5H4zM15 15h5v5h-5z"/>',
-  // View: perspective (converging frame) and parallel projection, fit selection, fit all.
-  perspective: '<path d="M3 5h18l-4 14H7L3 5Zm5 4h8l-1.5 6h-5L8 9Z"/>',
-  orthographic: '<path d="M4 7h11v11H4V7Zm5-4h11v11M4 7l5-4m6 4 5-4m-5 15 5-4"/>',
-  'fit-selection': '<path d="M4 9V4h5m6 0h5v5m0 6v5h-5m-6 0H4v-5"/><circle cx="12" cy="12" r="3"/>',
-  'fit-all':
-    '<path d="M9 4H4v5m11-5h5v5m0 6v5h-5M9 20H4v-5M8 8l-3-3m11 3 3-3m-3 11 3 3M8 16l-3 3"/>',
-  home: '<path d="m3 11 9-8 9 8M5 9.5V21h5v-6h4v6h5V9.5"/>',
-  layers: '<path d="m12 3 9 5-9 5-9-5 9-5Zm-9 9 9 5 9-5M3 16l9 5 9-5"/>',
-  history: '<path d="M3 11a9 9 0 1 1 2 7M3 4v7h7m2-5v6l4 2"/>',
-  file: '<path d="M14 3H5v18h14V8l-5-5Zm0 0v6h5M8 13h8m-8 4h5"/>',
-  cursor: '<path d="m5 3 14 10-7 1-3 7L5 3Z"/>',
-  pin: '<path d="m9 3 6 0-1 6 4 4H6l4-4-1-6Zm3 10v8"/>',
-  pencil: '<path d="m15 4 5 5M4 20l5-1L21 7l-5-5L4 14v6Z"/>',
-  cube: '<path d="m12 2 9 5v10l-9 5-9-5V7l9-5Zm0 10v10M3 7l9 5 9-5M12 2v10"/>',
-  paperclip:
-    '<path d="m20 11.5-8.2 8.2a5 5 0 0 1-7.1-7.1l8.5-8.5a3.3 3.3 0 0 1 4.7 4.7l-8.5 8.5a1.7 1.7 0 0 1-2.4-2.4l7.8-7.8"/>',
-  send: '<path d="M12 19V5m-6.5 6.5L12 5l6.5 6.5"/>',
-  'list-plus': '<path d="M4 6h12M4 11h12M4 16h7m6-2v7m-3.5-3.5h7"/>',
+// Icon shapes are lucide's (ISC licence, https://lucide.dev), as in 참고 앱 A: 24 x 24, stroke 2.
+// The names stay VIDE's own so data-icon attributes and iconSvg() callers do not change.
+const icons: Record<string, IconNode> = {
+  extension: Grid2x2Plus,
+  jig: Wrench,
+  // View: perspective (converging) and parallel projection, fit selection, fit all.
+  perspective: Pyramid,
+  orthographic: Cuboid,
+  'fit-selection': Focus,
+  'fit-all': Expand,
+  home: House,
+  layers: Layers,
+  history: History,
+  file: FileText,
+  cursor: MousePointer2,
+  pin: Pin,
+  pencil: Pencil,
+  cube: Box,
+  paperclip: Paperclip,
+  send: ArrowUp,
+  'list-plus': ListPlus,
+  trash: Trash2,
+  dashboard: LayoutDashboard,
+  database: Database,
+  message: MessageSquare,
+  moon: Moon,
+  sun: Sun,
+  eye: Eye,
+  'eye-off': EyeOff,
+  refresh: RefreshCw,
+  x: X,
+  'folder-open': FolderOpen,
 };
+const attribute = (value: string | number | undefined) =>
+  String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;');
+const markup = (node: IconNode | undefined) =>
+  (node ?? [])
+    .map(
+      ([tag, attrs]) =>
+        `<${tag} ${Object.entries(attrs)
+          .map(([key, value]) => `${key}="${attribute(value)}"`)
+          .join(' ')}/>`,
+    )
+    .join('');
 /** An inline icon (same set as the data-icon buttons). */
 export function iconSvg(name: string) {
-  return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths[name] ?? ''}</svg>`;
+  return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${markup(icons[name])}</svg>`;
 }
 export function initializeInspector(onTab: (tab: InspectorTab) => void) {
   for (const node of document.querySelectorAll<HTMLElement>('[data-icon]')) {
-    node.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths[node.dataset.icon ?? ''] ?? ''}</svg>`;
+    node.innerHTML = iconSvg(node.dataset.icon ?? '');
   }
   for (const button of document.querySelectorAll<HTMLButtonElement>('[data-inspect]'))
     button.onclick = () => {

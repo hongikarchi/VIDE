@@ -13,5 +13,7 @@ export default defineConfig({
     outDir: '../../dist/ui',
     emptyOutDir: true,
     manifest: true,
+    // Fonts stay files: the server's CSP allows fonts from 'self' only, not data: addresses.
+    assetsInlineLimit: (file) => (file.endsWith('.woff2') ? false : undefined),
   },
 });

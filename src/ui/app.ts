@@ -119,12 +119,17 @@ import { attachPinTokens, tokenLabels } from './pin-tokens.ts';
 import { initializeWorkspacePanels } from './workspace-panels.ts';
 import { createViewport } from './viewport.ts';
 import { initializeDisplaySettings } from './display-settings.ts';
+import { currentTheme, setTheme, storedTheme } from './theme.ts';
+import { showFeedback } from './feedback.ts';
+import { provideDashboard, refreshDashboard } from './dashboard.tsx';
 
 // Host panel mode (?panel=rhino|zwcad, Design SCR-12): the chat column only, bound to one
 // attached document of the Rhino panel or the ZWCAD palette.
 const panelParams = new URLSearchParams(location.search);
 const panelHost = (['rhino', 'zwcad'] as const).find((host) => host === panelParams.get('panel'));
 const panelMode = panelHost !== undefined;
+// The work screen's theme is the one this browser chose; a host panel follows its host below.
+if (!panelMode) setTheme(storedTheme(), false);
 /** What the panel header shows; refreshed by the host poll. */
 const panelView: {
   file: string;
@@ -809,6 +814,7 @@ function dismissInboxItem(item: InboxItem) {
 }
 function renderLinkPanel() {
   renderPanel();
+  refreshDashboard();
   renderLinks($('host-document-controls'), {
     links,
     projectName: project?.name,
@@ -1409,6 +1415,7 @@ function renderMessages() {
   renderConversation();
   // A new Sync reaches the jigs that are open (their Sync lists).
   if (project) refreshJigs();
+  refreshDashboard();
 }
 /** The request list omits display meshes; fetch one request in full when it is shown. */
 // One fetch per request; a second caller waits for the same one.
@@ -1734,6 +1741,68 @@ attachJigs(
 $('jigs').onclick = () => {
   if (project) showJigs();
 };
+// 대시보드 and 프로젝트 자료 (the project DB) open their workspace tabs.
+$('rail-dashboard').onclick = () => {
+  if (project) setWorkspace('dashboard');
+};
+$('rail-facts').onclick = () => {
+  if (project) setWorkspace('data');
+};
+$('rail-feedback').onclick = () => void showFeedback();
+/** The toggle shows the theme it switches to. */
+function paintThemeToggle() {
+  const toggle = $('rail-theme');
+  const dark = currentTheme() === 'dark';
+  const label = dark ? '라이트 테마로 전환' : '다크 테마로 전환';
+  toggle.dataset.icon = dark ? 'sun' : 'moon';
+  toggle.innerHTML = iconSvg(toggle.dataset.icon);
+  toggle.title = label;
+  toggle.setAttribute('aria-label', label);
+}
+$('rail-theme').onclick = () => {
+  setTheme(currentTheme() === 'dark' ? 'light' : 'dark');
+  paintThemeToggle();
+};
+paintThemeToggle();
+// The dashboard reads what this screen already holds (src/ui/dashboard.tsx).
+provideDashboard({
+  data: () => ({
+    projectName: project?.name ?? '',
+    linksLoaded,
+    links: links.map((link) => ({
+      id: link.id,
+      name: link.name,
+      host: link.host,
+      state:
+        link.kind === 'file'
+          ? 'file'
+          : link.connection
+            ? link.connection.live
+              ? 'live'
+              : 'connected'
+            : 'closed',
+      ...(link.lastSync?.at ? { lastSync: link.lastSync.at } : {}),
+    })),
+    recent: state.messages
+      .filter(
+        (entry) =>
+          entry.source !== 'document' &&
+          !entry.request?.input?.parentRequestId &&
+          !['queued', 'running'].includes(entry.request.state),
+      )
+      .slice(-5)
+      .reverse()
+      .map((entry) => ({
+        id: entry.id,
+        title: entry.body || '첨부 검토',
+        state: entry.request.state,
+        stateLabel: labels[entry.request.state] || entry.request.state,
+        ...(entry.request.createdAt ? { at: String(entry.request.createdAt) } : {}),
+      })),
+  }),
+  openRequest: (id) => focusWork(id),
+  notice: (text) => message(text),
+});
 /** A result shown from the conversation needs the 3D view: leave the JIG list for the model. */
 function showModelView() {
   if (!workspaceShowsViewport()) setWorkspace('model');
@@ -3058,7 +3127,7 @@ function rhinoBasis(target: HostTarget) {
 }
 if (panelMode) {
   document.body.classList.add('panel-mode');
-  document.documentElement.dataset.theme = panelParams.get('theme') === 'dark' ? 'dark' : 'light';
+  setTheme(panelParams.get('theme') === 'dark' ? 'dark' : 'light', false);
   const documentId = Number(panelParams.get('document'));
   const instance = panelParams.get('instance') ?? '';
   if (instance && documentId > 0) connectedTarget = { instance, documentId };

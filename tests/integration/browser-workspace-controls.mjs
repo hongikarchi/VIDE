@@ -158,9 +158,42 @@ try {
   assert.equal(await page.locator('#document-tree').isVisible(), false);
   assert.equal(await page.locator('#task-list').isVisible(), true);
   assert.equal(await page.locator('#review-list').isVisible(), true);
-  await page.locator('[data-section="reference-list"]').click();
-  assert.equal(await page.locator('#task-list').isVisible(), false);
+  // The attached files show with the history; the rail's 프로젝트 자료 opens the 자료 tab (project DB).
   assert.equal(await page.locator('#reference-list').isVisible(), true);
+  await page.getByRole('button', { name: '프로젝트 자료', exact: true }).click();
+  const workspaceTab = (name) =>
+    page.getByRole('tablist', { name: '작업공간' }).getByRole('tab', { name, exact: true });
+  assert.equal(await workspaceTab('자료').getAttribute('aria-selected'), 'true');
+  await page.locator('.facts-workspace').waitFor();
+  // The rail's 대시보드 opens the first tab.
+  await page.getByRole('button', { name: '대시보드', exact: true }).click();
+  assert.equal(await workspaceTab('대시보드').getAttribute('aria-selected'), 'true');
+  await page.getByRole('region', { name: '대시보드' }).getByRole('heading', { level: 2 }).waitFor();
+  // Feedback: a small dialog; the form address is not set yet, so its open button is disabled.
+  await page.getByRole('button', { name: '피드백 보내기', exact: true }).click();
+  const feedback = page.getByRole('dialog', { name: '피드백 보내기', exact: true });
+  await feedback.waitFor();
+  assert.match(await feedback.textContent(), /주소가 아직 설정되지 않았습니다/);
+  assert.equal(await feedback.getByRole('button', { name: '구글폼 열기' }).isDisabled(), true);
+  await page.keyboard.press('Escape');
+  await feedback.waitFor({ state: 'detached' });
+  await page.getByRole('button', { name: '피드백 보내기', exact: true }).click();
+  await feedback.waitFor();
+  await page.mouse.click(10, 450);
+  await feedback.waitFor({ state: 'detached' });
+  await page.getByRole('button', { name: '피드백 보내기', exact: true }).click();
+  await feedback.getByRole('button', { name: '닫기', exact: true }).click();
+  await feedback.waitFor({ state: 'detached' });
+  // The theme toggle: light by default, dark on a click (the 3D view's auto background too).
+  const theme = () => page.evaluate(() => document.documentElement.dataset.theme);
+  assert.equal(await theme(), 'light');
+  await page.getByRole('button', { name: '다크 테마로 전환', exact: true }).click();
+  assert.equal(await theme(), 'dark');
+  assert.equal(await page.locator('#canvas canvas').getAttribute('data-background'), 'dark');
+  assert.equal(
+    await page.getByRole('button', { name: '라이트 테마로 전환', exact: true }).isVisible(),
+    true,
+  );
   assert.equal(await page.locator('#body').inputValue(), 'Saved draft');
   await page.locator('[data-section="document-tree"]').click();
   const before = (await page.locator('#left').boundingBox()).width;
@@ -253,6 +286,11 @@ try {
   }
   await page.reload();
   await page.waitForFunction(() => !document.querySelector('#body').disabled);
+  // The chosen theme comes back after a reload; the toggle switches back to light.
+  assert.equal(await theme(), 'dark');
+  await page.getByRole('button', { name: '라이트 테마로 전환', exact: true }).click();
+  assert.equal(await theme(), 'light');
+  assert.equal(await page.evaluate(() => localStorage.getItem('vide:theme')), 'light');
   await page.getByRole('button', { name: '오류 기록', exact: true }).click();
   await settings
     .locator('.problem-list li')

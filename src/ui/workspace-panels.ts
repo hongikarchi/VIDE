@@ -4,11 +4,12 @@ export function initializeWorkspacePanels() {
   const groups = new Map<string, HTMLElement[]>();
   const documents = [$('connection-card'), $('document-tree')];
   groups.set('document-tree', documents);
+  // The rail's 프로젝트 자료 opens the 자료 tab now, so the attached files show with the history.
   groups.set('task-list', [
     $('task-list').closest('details')!,
     $('review-list').closest('details')!,
+    $('reference-list').closest('details')!,
   ]);
-  groups.set('reference-list', [$('reference-list').closest('details')!]);
   const buttons = [...document.querySelectorAll<HTMLButtonElement>('[data-section]')];
   const mobileButtons: HTMLButtonElement[] = [];
   function select(id: string, expand = true) {

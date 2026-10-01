@@ -1,3 +1,7 @@
+// Bundled fonts (참고 앱 A): Inter for Latin, Noto Sans KR for Hangul, JetBrains Mono for code.
+import '@fontsource-variable/inter';
+import '@fontsource-variable/noto-sans-kr';
+import '@fontsource-variable/jetbrains-mono';
 import { createRoot } from 'react-dom/client';
 import { MobileNavigation } from './mobile-navigation.tsx';
 

@@ -5,7 +5,7 @@
 // last tab and the open context tabs are a viewer convenience remembered per project in this
 // browser's storage; a blocked or empty storage just opens the model tab.
 
-export type FixedWorkspace = 'model' | 'data' | 'jig' | 'make' | 'report';
+export type FixedWorkspace = 'dashboard' | 'model' | 'data' | 'jig' | 'make' | 'report';
 /** A jig opened in its own tab: a jig instance (작업본) id, or `legacy:<jigId>` for older jigs. */
 export interface ContextTab {
   instanceId: string;
@@ -22,7 +22,9 @@ export interface WorkspaceChange {
 }
 
 // The data and make tabs open with PLAN-22 T-065 and T-063; the report tab is T-057.
+// 대시보드 (first draft, user request 2026-10-01) comes first; the model tab stays the default.
 const FIXED: { id: FixedWorkspace; label: string; ready: boolean }[] = [
+  { id: 'dashboard', label: '대시보드', ready: true },
   { id: 'model', label: '모델', ready: true },
   { id: 'data', label: '자료', ready: true },
   { id: 'jig', label: 'JIG', ready: true },
@@ -88,6 +90,7 @@ function known(id: string) {
 }
 function emit(closed?: ContextTab) {
   document.body.dataset.workspace =
+    active === 'dashboard' ||
     active === 'model' ||
     active === 'jig' ||
     active === 'report' ||
@@ -95,6 +98,9 @@ function emit(closed?: ContextTab) {
     active === 'make'
       ? active
       : 'context';
+  // The 대시보드 screen reads the project's state when it is shown (src/ui/dashboard.tsx).
+  if (active === 'dashboard' && projectId)
+    void import('./dashboard.tsx').then((screen) => screen.showDashboard(projectId!));
   // The 만들기 screen loads when its tab is first shown (src/ui/make-tab.tsx, PLAN-22 T-063).
   if (active === 'make' && projectId)
     void import('./make-tab.tsx').then((screen) => screen.showMake(projectId!));

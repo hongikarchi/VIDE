@@ -1,3 +1,4 @@
+import { THEME_CHANGED } from './theme.ts';
 /** Viewport shading options (Blender-style header popover next to the view buttons). */
 export interface DisplaySettings {
   mode: 'shaded' | 'wireframe' | 'ghosted';
@@ -155,7 +156,8 @@ export function initializeDisplaySettings(
   document.addEventListener('keydown', (event) => {
     if (event.key === 'Escape' && !panel.hidden) close();
   });
-  matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+  // 'auto' follows the app's theme (the rail's toggle, or the host panel's theme).
+  addEventListener(THEME_CHANGED, () => {
     if (settings.background === 'auto') apply(settings);
   });
   update();
