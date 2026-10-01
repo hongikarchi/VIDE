@@ -81,7 +81,6 @@ import { directRefusal } from '../contracts/direct-refusal.ts';
 import { DocumentLinks, isFileLink } from '../core/document-links.ts';
 import { zwcadAnsweredCodes } from './zwcad-sdk-execution.ts';
 import { liveLinksOf, type LiveLink } from './live-links.ts';
-import { activityLog } from './activity.ts';
 interface Provider {
   run(
     context: ProviderContext,
