@@ -2,7 +2,7 @@
 id: PLAN-24
 title: AI 대화 세션·동시 진행·말로 하는 경로 판정 1차
 status: review
-version: 0.46
+version: 0.51
 updated: 2026-10-01
 owner: agent:claude
 related: [PLAN, PLAN-22, PLAN-23, PLAN-25, PLAN-26, PLAN-02, PLAN-05, PLAN-08, PLAN-19, FR-25, FR-24, FR-18, FR-10, FR-11, FR-12, AC-46, AC-47, AC-48, AC-38, SPEC-02, SPEC-07, ARCH-01, ARCH-03, ADR-021, ADR-014, ADR-022, ADR-025, ADR-026, ADR-027, RESEARCH-10, RESEARCH-11]
@@ -180,7 +180,7 @@ related: [PLAN, PLAN-22, PLAN-23, PLAN-25, PLAN-26, PLAN-02, PLAN-05, PLAN-08, P
     - 이어 쓰기 실패·종료 미확인·재시작으로 끊긴 턴: 그 세션을 다시 쓰지 않는다. 이전 프로세스 종료를 확인한 뒤 인계 자료로 새 세션을 연다(방식은 ARCH-01 §2)
     - 대화가 길어짐: 정한 턴 수·누적 입력량을 넘으면 원장으로 새 세션을 연다. 시작값은 12턴·누적 150k 토큰이고, SPIKE ⑨ 측정 뒤 설정 기본값을 확정한다
   - 기록 관리: 닫고 30일 뒤 공급자 기록 삭제, 버린 jig 초안의 기록은 바로 삭제, 백업 제외. 기록을 지운 뒤 다시 연 대화는 원장으로 새 세션을 연다
-  - 새 `src/ui/conversations.tsx`: 대화 칩, 진행 중·안 읽음 점, 대기 수, 새 대화 제안 카드(`same_conversation`이 낮을 때, 자동으로 나누지 않음)
+  - 새 `src/ui/conversations.tsx`: 대화 칩, 진행 중·안 읽음 점, 대기 수. 새 대화 제안 카드는 만들지 않는다(2026-10-01 SPEC-02.19의 1에서 뺌, T-097)
   - `work-view.tsx`: 대화 필터. 패널 모드는 대상 문서 필터를 유지하고 대화 칩을 그리지 않는다
   - 기존 요청과 패널에서 보낸 요청은 프로젝트 기본 대화다(`conversationId = NULL`)
 - **선행:** PLAN-22 T-045, T-060. 대화·원장·원장 방식은 SPIKE를 기다리지 않고, 세션 이어 실행만 T-059의 합격 항목(①②⑤⑥⑦)을 기다린다(ADR-021).
@@ -331,6 +331,22 @@ related: [PLAN, PLAN-22, PLAN-23, PLAN-25, PLAN-26, PLAN-02, PLAN-05, PLAN-08, P
   - 기본 대화 턴은 이제 대화 턴이므로 한 번에 한 턴씩 돌고(SPEC-02.19의 4) 대화 턴 상한(호스트 명령 48)을 쓴다. 새 대화 탭은 원장·마지막 세 턴·파일을 인계받고 양쪽 대화에 바꾼 사실이 한 줄 남는다. 대화는 공급자·모델만 고정하고 계정은 고정하지 않는다(ADR-025, `5ec4458`)
   - 증거: `npm test`(커밋 때 749)·`browser-conversations`·`browser-route`·`browser-ai-settings-smoke`·`browser-concurrent-work` 통과. `browser-conversations`·`browser-route`는 2026-10-01 main(`a8c3d08`)에서 다시 통과
   - 남음: 실제 CLI로 모델 바꾸기 인계 확인(설치본 묶음 릴리스 때)
+
+### T-097 · [+] 새 대화를 묻지 않고 바로 열기 {#t-097}
+
+- **목적/기준:** 2026-10-01 사용자 결정("추천대로"): 새 대화를 열 때 목적·대상 파일·AI를 묻는 창은 빠르고 직관적인 사용과 어긋난다. [+]는 빈 탭 ‘새 대화’를 바로 열고 첫 요청이 이름을 정한다. SPEC-02.19의 1·2, Design SCR-15 대화 칩.
+- **변경 범위:**
+  - `src/ui/conversations.tsx`: 만들기 창(`CreateForm`: 이름·목적·대상 파일·AI)과 `creating` 상태를 지운다. [+]는 `POST …/conversations {kind:'general'}` → 목록 다시 읽기 → 새 탭 고르기 → `onCreated`(작성기 `#body`에 커서, `src/ui/app.ts`). 첫 요청 전의 일반 대화 탭은 ‘새 대화’로 보인다(`titleOf`·`chipLabel`). `src/ui/conversations.css`의 `.conv-create` 규칙 삭제
+  - `src/server/conversations.ts` 만들기 라우트: 자동 선택이고 요청 글이 없으면 Jev·모델 선택을 부르지 않는다(종류는 주어진 것, 없으면 `general`; `pending`). `place`의 첫 턴 고정 분기: 같은 갱신에서 이름이 아직 그 종류의 기본 이름(`KIND_TITLES`)이면 첫 요청 글의 앞 60자로 바꾼다. 종류·대상은 바꾸지 않는다
+  - `docs/architecture/ARCH-03-jig-runtime.md` 대화 경로 줄: 만들기 POST는 `body`가 있을 때만 Jev를 부르고 첫 턴이 기본 이름을 바꾼다
+  - 유지: `createInput`의 `title`·`kind`·`targets`·`provider`·`model`·`jigInstanceId`·`draftId`·`mode`는 프로그램 호출(skill 시작의 `jig-run`, `make-api`의 `jig-make`, 인계)이 그대로 쓴다
+  - 하지 않음: 목적이 달라 보일 때의 새 대화 제안 카드(SPEC-02.19의 1에 있었으나 만들지 않았던 것)는 명세에서 빼고 만들지 않는다. 이름 바꾸기 화면은 아직 없으므로 더하지 않는다
+- **선행:** T-088(첫 턴 고정, `0fb9506`).
+- **검증:**
+  - 정상: `tests/server/conversations.test.mjs`([+]의 만들기는 모델 호출 0회·`general`·`pending`, 첫 요청이 기본 이름을 60자로 바꿈, 다음 요청은 이름을 바꾸지 않음, 준 이름은 유지, 요청 글이 있는 jig 대화는 Jev 한 번, 모델을 준 만들기는 호출 없음), `tests/core/conversations-ui.test.mjs`(‘새 대화’ 표시), `tests/integration/browser-conversations.mjs`([+] → 창 없이 새 탭이 골라지고 커서가 작성기, 첫 요청이 그 탭으로 가고 탭 이름이 됨)
+  - 회귀: `tests/server/make-routes.test.mjs`, `browser-route`·`browser-make`·`browser-jigs`·`browser-ai-settings-smoke`·`browser-concurrent-work`·`browser-workspace-tabs`
+- **완료:** 위 시험 통과.
+- **상태(2026-10-01):** 구현·단위·브라우저 시험 완료(브랜치 `feature/fast-new-conversation`). 설치본 확인은 묶음 릴리스 때.
 
 ## 여러 파일 조율 {#multi-file}
 

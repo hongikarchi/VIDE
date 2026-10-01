@@ -2,7 +2,7 @@
 id: ARCH-03
 title: jig 런타임과 저장 스키마 v5의 물리 계약
 status: review
-version: 0.7
+version: 0.8
 updated: 2026-10-01
 owner: agent:claude
 related: [FR-23, FR-24, FR-25, SPEC-02, SPEC-05, SPEC-06, SPEC-07, ADR-014, ADR-019, ADR-020, ADR-021, ADR-022, ADR-026, ARCH-01, ARCH-02, PLAN-22, PLAN-23, PLAN-24, PLAN-26, RESEARCH-10, RESEARCH-12]
@@ -637,7 +637,7 @@ CREATE TABLE IF NOT EXISTS project_roots(projectId TEXT PRIMARY KEY REFERENCES p
 - `input.hostUse`: `'none' | 'read' | 'write'`. `none`이면 호스트 경합 대상 목록이 비고, `read`는 문서 키만 가진다(SPEC-02.9).
 - 차례를 기다리는 요청은 거절하지 않고 `state: 'queued'`로 두고, 결과 JSON에 `waitingFor: { kind: 'document' | 'conversation' | 'project', key, position }`을 적는다. `document`는 같은 문서 쓰기의 대기열, `conversation`은 한 대화에서 진행 중인 턴 뒤에 덧붙인 말, `project`는 프로젝트 AI 턴 상한(기본 3)이다. 앞 작업이 끝나면 실행기가 다음을 꺼낸다. 재시작 뒤 `queued` 요청은 보존하되 자동으로 실행하지 않는다(SPEC-02.9).
 - 요청 자료의 원장 항목은 `ledger` 항목(`{ scope: 'all' | 'since-last-turn', items[], summarized, omitted }`) 하나이며 `supersededBy`가 없는 최신 항목만 넣고 8 KB를 넘으면 오래된 것부터 요약하고, 그래도 넘으면 뺀다. 세션 턴은 6턴마다 전체를, 그 사이에는 지난 턴 이후 항목만 보낸다. 새 세션의 첫 턴에는 `handoff` 항목(이유·최근 3턴·파일 이름), 다른 대화가 그 사이 반영한 것은 `changes-elsewhere` 항목으로 더한다.
-- 대화 경로(`src/server/conversations.ts`): `GET·POST /api/v1/projects/:id/conversations`(POST `{kind?, title?, body?, provider?, model?, effort?, host?, permission?, jigInstanceId?, draftId?, targets?}` — 서비스·모델을 안 주면 Jev가 한 번 고르고 계정은 `accountUsage.choose`로 고정), `GET …/conversations/:cid`(`default`는 기본 대화; 원장·세션 포함), `POST …/:cid/close`(`{discard?}`: 기록 즉시 삭제)·`reopen`·`ledger`(`{kind, body, requestId?}`)·`handoff`(`{provider, model?, effort?}`, 확인 필요 동작, 원격 세션 403). 오류 `CONVERSATION_CLOSED`·`CONVERSATION_PROVIDER`(409). 요청 접수 때 `conversationId`가 있으면 `place`가 첫 턴이면 서비스·모델을 정하고(`routing`은 이 턴에만 남는다), 그 뒤에는 그 대화의 서비스·모델·계정으로 고정하며(`fix`, effort만 요청 값), 요청의 명시 모델이 다르면 새 대화를 만들어 `conversationId`를 바꾼다(양쪽 원장에 `handoff` `{reason: 'moved'|'model'}`, 새 대화 첫 세션의 `handoff` 항목에 `from.ledger`). 한 대화에 한 턴만 실행한다(`waitingFor.kind: 'conversation'`에 `after`·`position`). AI를 고르지 않고 연 대화(`body` 없이 자동)는 원장에 `decision {aiChoice: 'first-turn'}` 표시를 두고 첫 턴에 지운다(목록의 `pending`). `handoff` 경로는 새 대화를 만들어 돌려준다.
+- 대화 경로(`src/server/conversations.ts`): `GET·POST /api/v1/projects/:id/conversations`(POST `{kind?, title?, body?, provider?, model?, effort?, host?, permission?, jigInstanceId?, draftId?, targets?}` — 서비스·모델을 안 주고 `body`가 있으면 Jev가 한 번 고르고 계정은 `accountUsage.choose`로 고정), `GET …/conversations/:cid`(`default`는 기본 대화; 원장·세션 포함), `POST …/:cid/close`(`{discard?}`: 기록 즉시 삭제)·`reopen`·`ledger`(`{kind, body, requestId?}`)·`handoff`(`{provider, model?, effort?}`, 확인 필요 동작, 원격 세션 403). 오류 `CONVERSATION_CLOSED`·`CONVERSATION_PROVIDER`(409). 요청 접수 때 `conversationId`가 있으면 `place`가 첫 턴이면 서비스·모델을 정하고(`routing`은 이 턴에만 남는다), 그 뒤에는 그 대화의 서비스·모델·계정으로 고정하며(`fix`, effort만 요청 값), 요청의 명시 모델이 다르면 새 대화를 만들어 `conversationId`를 바꾼다(양쪽 원장에 `handoff` `{reason: 'moved'|'model'}`, 새 대화 첫 세션의 `handoff` 항목에 `from.ledger`). 한 대화에 한 턴만 실행한다(`waitingFor.kind: 'conversation'`에 `after`·`position`). AI를 고르지 않고 연 대화(`body` 없이 자동, 화면의 [+]는 `{kind:'general'}`만 보낸다)는 Jev를 부르지 않고 원장에 `decision {aiChoice: 'first-turn'}` 표시를 두어 첫 턴에 지우며(목록의 `pending`), 그 첫 턴에 이름이 아직 그 종류의 기본 이름이면 요청 글의 앞 60자로 바꾼다(T-097). `handoff` 경로는 새 대화를 만들어 돌려준다.
 
 세션 인자·공급자 기록 보존 같은 CLI 쪽 물리 계약은 ADR-021에 따라 ARCH-01 §2에 둔다.
 

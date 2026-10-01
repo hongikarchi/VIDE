@@ -2,7 +2,7 @@
 id: PLAN
 title: VIDE 실행 로드맵
 status: review
-version: 0.229
+version: 0.230
 updated: 2026-10-01
 owner: agent:codex
 related: [ARCH-01, PLAN-02, PLAN-03, PLAN-22, PLAN-23, PLAN-24, PLAN-25, PLAN-26, PLAN-27, ADR-022, ADR-025, ADR-026, ADR-027, SPEC-00, SPEC-01, SPEC-02, SPEC-03, SPEC-04, SPEC-05, SPEC-06, SPEC-07]
@@ -246,6 +246,7 @@ T-001~018의 번호·지원 증거는 유지한다. 각 티켓의 현재 결과�
 | T-093 여러 파일 쓰기·잠금·작업 단위 되돌리기·자동 되돌림 | 구현·단위 검증(설치 전). 잠금은 기다리지 않고 `DOCUMENT_LOCKED`(jig 바로 만들기 포함), 실패·중단한 여러 파일 요청은 자동으로 되돌림, `undo {all: true}`, 결과 불명은 확인 필요 문서만 잡고 되돌리기 답 유실은 다시 [되돌리기]로 해소(2026-10-01 검토 반영) | 실제 Rhino 두 창·ZWCAD 확인, ZWCAD 대상 턴의 여러 파일, 실행 답 유실의 해소 동작 | [PLAN-24](PLAN-24-ai-conversations.md#t-093) |
 | T-094 파일별 결과·요청 [되돌리기] 화면 | 완료(설치 전) | 설치본 화면 확인 | [PLAN-24](PLAN-24-ai-conversations.md#t-094) |
 | T-088 대화별 모델 고정·모델 바꾸기 = 새 탭 | 구현·단위·브라우저 시험 완료(`0fb9506`) | 실제 CLI로 모델 바꾸기 인계 확인(설치본 릴리스 때) | [PLAN-24](PLAN-24-ai-conversations.md#t-088) |
+| T-097 [+] 새 대화를 묻지 않고 바로 열기(첫 요청이 이름) | 구현·단위·브라우저 시험 완료(2026-10-01) | 설치본 확인(묶음 릴리스 때) | [PLAN-24](PLAN-24-ai-conversations.md#t-097), SPEC-02.19 |
 | T-089 첨부 버튼 정리·경로 기반 첨부(모든 형식, `attachment_read`) | 구현·단위·브라우저 시험 완료(2026-10-01, 커밋 전) | 실제 Claude·Codex로 첨부 이미지·텍스트 읽기 확인(설치본 릴리스 때). 후속: PDF 본문 추출, 3DM 요약, 말(@언급)로 연계 대상 고르기. 원본 위치의 파일은 T-091의 프로젝트 폴더 읽기로 대신 | [PLAN-26](PLAN-26-chat-stage.md#t-089), SPEC-01.12 |
 | T-090 참고 이미지 의도 확인 (a)~(d) 영역 표시·해석 말풍선·Codex 이미지·확정 → 모델링 | (a)~(d) 구현·단위·브라우저 시험(가짜 공급자·가짜 이미지 작업) 완료(2026-10-01, 커밋 전). 실제 Codex 이미지 작업 실측 33–44초(합성 장면) | 실제 CLI 해석 턴은 Claude·Codex 통과(2026-10-01). 말로 고치기의 실제 CLI 확인, 실제 Rhino 사본으로 SPEC-09 완료 기준·VERIFY, Design §03·§14 표현, PRD 범위 문장 | [PLAN-26](PLAN-26-chat-stage.md), SPEC-09 |
 | T-091 프로젝트 폴더·AI 파일 읽기(`file_read`·`file_list`, 폴더 밖은 권한 질문) | 구현·단위·브라우저 시험 완료(2026-10-01, 커밋 전) | 실제 Claude·Codex로 권한 질문 답하기 확인(설치본 릴리스 때), 셸 폴더 선택 창은 다음 설치본부터 | [PLAN-26](PLAN-26-chat-stage.md#t-091), SPEC-01.13, `project-files.test.mjs`, `browser-project-folders.mjs` |
