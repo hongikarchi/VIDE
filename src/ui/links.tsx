@@ -73,6 +73,10 @@ interface Props {
   /** Links whose shown result is a candidate instead of their latest Sync. */
   candidates: Set<string>;
   loaded: boolean;
+  /** Shown results that belong to no linked file (SPEC-01.11 4): "작업 결과 · <이름>". */
+  results: { key: string; name: string }[];
+  onCloseResult: (key: string) => void;
+  onFocusResult: (key: string) => void;
   onToggle: (link: LinkRow) => void;
   onSync: (link: LinkRow) => void;
   onRemove: (link: LinkRow) => void;
@@ -182,45 +186,93 @@ function Links(props: Props) {
     </>
   );
 }
+/**
+ * A result opened from the work history that no linked file owns (an older import, a Sync from
+ * before links, an AI result of a removed file): drawn beside the files until it is closed.
+ */
+function ResultRow({ result, ...props }: Props & { result: Props['results'][number] }) {
+  return (
+    <li
+      className="link-row link-result"
+      data-state="result"
+      data-result-key={result.key}
+      aria-current={props.active === result.key ? 'true' : undefined}
+    >
+      <span
+        className="link-mini link-result-mark"
+        aria-hidden="true"
+        dangerouslySetInnerHTML={{ __html: iconSvg('history') }}
+      />
+      <button
+        type="button"
+        className="link-open"
+        title="작업 이력에서 연 결과 · 연결 파일을 숨겨도 남습니다. 닫으면 화면에서 내려갑니다."
+        onClick={() => props.onFocusResult(result.key)}
+      >
+        <span className="link-name">{result.name}</span>
+        <span className="link-meta">연결 파일 밖의 결과</span>
+      </button>
+      <span />
+      <button
+        type="button"
+        className="link-mini link-remove"
+        title="닫기 (작업 이력의 기록은 그대로)"
+        aria-label={`${result.name} 닫기`}
+        onClick={() => props.onCloseResult(result.key)}
+        dangerouslySetInnerHTML={{ __html: iconSvg('x') }}
+      />
+    </li>
+  );
+}
 function LinkList(props: Props) {
   if (!props.loaded) return <small className="link-empty">연결 파일 확인 중…</small>;
+  const results = props.results.map((result) => (
+    <ResultRow key={result.key} {...props} result={result} />
+  ));
   if (!props.links.length)
     return (
-      <section className="link-start" aria-label="파일 연결 방법">
-        <strong>아직 연결된 파일이 없습니다</strong>
-        <p>
-          작업 중인 Rhino 모델이나 CAD 도면을 연결하면 여기서 함께 보고 AI에게 작업을 맡길 수
-          있습니다.
-        </p>
-        <ol className="link-steps">
-          <li>
-            <span className="link-step-no">1</span>
-            <span>
-              <b>Rhino</b> 또는 <b>ZWCAD</b>에서 파일을 엽니다
-            </span>
-          </li>
-          <li>
-            <span className="link-step-no">2</span>
-            <span>
-              VIDE 패널에서 <b>Link</b>를 누르고{' '}
-              {props.projectName ? (
-                <b className="link-project">{props.projectName}</b>
-              ) : (
-                '이 프로젝트'
-              )}
-              를 고릅니다
-            </span>
-          </li>
-          <li>
-            <span className="link-step-no">3</span>
-            <span>첫 Sync가 끝나면 이 목록과 화면에 나타납니다</span>
-          </li>
-        </ol>
-        <p className="link-hint">
-          패널이 보이지 않으면 명령창에 <code>VIDELink</code>(Rhino) · <code>VIDECADLink</code>
-          (ZWCAD)를 입력하세요. 파일만 볼 때는 아래 <b>파일에서 열기</b>를 쓰면 됩니다.
-        </p>
-      </section>
+      <>
+        {results.length ? (
+          <ul className="link-list" aria-label="작업 결과">
+            {results}
+          </ul>
+        ) : null}
+        <section className="link-start" aria-label="파일 연결 방법">
+          <strong>아직 연결된 파일이 없습니다</strong>
+          <p>
+            작업 중인 Rhino 모델이나 CAD 도면을 연결하면 여기서 함께 보고 AI에게 작업을 맡길 수
+            있습니다.
+          </p>
+          <ol className="link-steps">
+            <li>
+              <span className="link-step-no">1</span>
+              <span>
+                <b>Rhino</b> 또는 <b>ZWCAD</b>에서 파일을 엽니다
+              </span>
+            </li>
+            <li>
+              <span className="link-step-no">2</span>
+              <span>
+                VIDE 패널에서 <b>Link</b>를 누르고{' '}
+                {props.projectName ? (
+                  <b className="link-project">{props.projectName}</b>
+                ) : (
+                  '이 프로젝트'
+                )}
+                를 고릅니다
+              </span>
+            </li>
+            <li>
+              <span className="link-step-no">3</span>
+              <span>첫 Sync가 끝나면 이 목록과 화면에 나타납니다</span>
+            </li>
+          </ol>
+          <p className="link-hint">
+            패널이 보이지 않으면 명령창에 <code>VIDELink</code>(Rhino) · <code>VIDECADLink</code>
+            (ZWCAD)를 입력하세요. 파일만 볼 때는 아래 <b>파일에서 열기</b>를 쓰면 됩니다.
+          </p>
+        </section>
+      </>
     );
   return (
     <ul className="link-list" aria-label="연결 파일">
@@ -319,6 +371,7 @@ function LinkList(props: Props) {
           </li>
         );
       })}
+      {results}
     </ul>
   );
 }

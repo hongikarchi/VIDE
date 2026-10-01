@@ -257,9 +257,169 @@ try {
   assert.equal(captured.instance, '7:8');
   assert.equal(captured.documentId, 3);
   assert.deepEqual(errors, []);
+  // Hidden files leave the space on every start (SPEC-01.11 4, T-096): with no saved draft, and
+  // with a draft whose basis is the Sync that was on screen when VIDE last closed.
+  await hiddenStart(browser, false);
+  await hiddenStart(browser, true);
   console.log('Linked files checks passed');
 } finally {
   await browser?.close();
   await app?.close();
   await rm(directory, { recursive: true, force: true });
+}
+
+async function hiddenStart(browser, draftBase) {
+  const root = await mkdtemp(join(tmpdir(), 'vide-links-hidden-'));
+  const server = await startServer({ filename: join(root, 'test.sqlite') });
+  const page = await browser.newPage({ viewport: { width: 1440, height: 900 } }),
+    errors = [],
+    unhidden = [];
+  try {
+    page.setDefaultTimeout(10000);
+    page.on('pageerror', (error) => errors.push(error.message));
+    page.on('request', (request) => {
+      if (request.method() === 'PUT' && request.url().includes('/links/'))
+        if (request.postDataJSON()?.hidden === false) unhidden.push(request.url());
+    });
+    await page.route('**/api/v1/host', (route) => route.fulfill({ json: { available: false } }));
+    await page.route('**/api/v1/providers', (route) =>
+      route.fulfill({ json: [{ id: 'codex-cli', available: true }] }),
+    );
+    await page.route('**/api/v1/models', (route) =>
+      route.fulfill({
+        json: [{ id: 'codex-cli', name: 'Test', provider: 'codex-cli', efforts: ['default'] }],
+      }),
+    );
+    await page.goto(server.launchUrl);
+    await page.waitForFunction(() => document.querySelector('#project-picker')?.value);
+    const projectId = await page.locator('#project-picker').inputValue();
+    const b64 = (text) => Buffer.from(text).toString('base64');
+    const now = Date.now();
+    const at = (s) => new Date(now - s * 1000).toISOString();
+    const link = (id, name, s) =>
+      server.store.db
+        .prepare('INSERT INTO document_links VALUES(?,?,?,?,?,?,?,0,?,?)')
+        .run(id, projectId, 'rhino', name, 'C:\\p\\' + name, '1:2', 1, at(s), at(s));
+    const sync = (id, linkId, name, ids, s) => {
+      const scene = ids.map((objectId, i) => ({
+        id: objectId,
+        nativeId: objectId,
+        nativeType: 'Curve',
+        segments: [i, 0, 0, i + 1, 0, 0],
+        layer64: b64('L'),
+      }));
+      server.store.db.prepare('INSERT INTO workspace_requests VALUES(?,?,?,?,?,?)').run(
+        id,
+        projectId,
+        JSON.stringify({
+          id,
+          ...(linkId ? { linkId } : {}),
+          provider: 'codex-cli',
+          host: 'rhino',
+          source: 'document',
+          permission: 'candidate',
+          body: name + ' 가져오기',
+          pins: [],
+          sketches: [],
+          files: [],
+        }),
+        'succeeded',
+        JSON.stringify({
+          hostExecuted: true,
+          executionMode: 'sdk',
+          host: 'rhino',
+          displayOnly: true,
+          objects: scene.map((item) => ({
+            id: item.id,
+            name: name + ' ' + item.id,
+            kind: 'native',
+            nativeId: item.id,
+          })),
+          scene,
+          sourceDocument: { name, capturedAt: at(s), instance: '1:2', documentId: 1 },
+        }),
+        at(s),
+      );
+    };
+    // A Sync from before links existed belongs to no file.
+    sync('old-capture', undefined, 'old.3dm', ['o-1', 'o-2', 'o-3'], 70);
+    link('link-a', 'a.3dm', 60);
+    link('link-b', 'b.3dm', 50);
+    sync('sync-a', 'link-a', 'a.3dm', ['a-1'], 45);
+    sync('sync-b', 'link-b', 'b.3dm', ['b-1', 'b-2'], 35);
+    const summary = () => page.locator('.object-summary').textContent();
+    const shows = (text) =>
+      page.waitForFunction(
+        (start) => document.querySelector('.object-summary')?.textContent.startsWith(start),
+        text,
+      );
+    const empty = () =>
+      page.waitForFunction(() => document.querySelector('#viewport-empty')?.hidden === false);
+    const draft = () =>
+      page.evaluate((id) => JSON.parse(localStorage.getItem('vide:draft:' + id)), projectId);
+    const restart = async () => {
+      await page.reload();
+      await page.locator('.link-row').nth(1).waitFor();
+    };
+    if (draftBase) {
+      await restart();
+      await shows('3개 객체');
+      assert.ok((await draft()).baseRequestId, 'the draft keeps the shown Sync as its basis');
+    } else await page.evaluate((id) => localStorage.removeItem('vide:draft:' + id), projectId);
+    await restart();
+    await shows('3개 객체');
+    assert.equal(await page.locator('.link-result').count(), 0);
+    // Hiding every file empties the space.
+    await page.getByRole('button', { name: 'a.3dm 숨기기' }).click();
+    await page.getByRole('button', { name: 'b.3dm 숨기기' }).click();
+    await empty();
+    // ...and it stays empty after a restart; nothing un-hides a file on the engine.
+    await restart();
+    await page.waitForTimeout(3200);
+    assert.equal(await page.locator('#viewport-empty').isHidden(), false, await summary());
+    assert.deepEqual(
+      await page.locator('.link-row').evaluateAll((rows) => rows.map((row) => row.dataset.hidden)),
+      ['true', 'true'],
+    );
+    assert.deepEqual(unhidden, []);
+    // A newer Sync of a visible file replaces its older one; nothing is drawn twice.
+    await page.getByRole('button', { name: 'b.3dm 보이기' }).click();
+    await shows('2개 객체');
+    sync('sync-b2', 'link-b', 'b.3dm', ['b-1'], 5);
+    await shows('1개 객체');
+    await page.waitForTimeout(1700);
+    assert.match(await summary(), /^1개 객체/);
+    // A result of no file, opened from the work history, is drawn as its own closable row.
+    await page.getByRole('button', { name: 'b.3dm 숨기기' }).click();
+    await empty();
+    unhidden.length = 0; // the user's own 보이기 above
+    await page.locator('button[data-section="task-list"]').click();
+    await page.locator('[data-task-id="old-capture"] .task-open').click();
+    await page
+      .locator('.work-view[data-request-id="old-capture"]')
+      .getByRole('button', { name: '이 모델 보기', exact: true })
+      .click();
+    await page.locator('button[data-section="document-tree"]').click();
+    const row = page.locator('.link-result');
+    await row.waitFor();
+    assert.match(await row.textContent(), /작업 결과 · old\.3dm/);
+    await shows('3개 객체');
+    await page.getByRole('button', { name: '작업 결과 · old.3dm 닫기' }).click();
+    await empty();
+    assert.equal(await row.count(), 0);
+    // Closed stays closed on the next start.
+    await restart();
+    await page.waitForTimeout(3200);
+    assert.equal(await page.locator('.link-result').count(), 0);
+    assert.equal(await page.locator('#viewport-empty').isHidden(), false);
+    assert.deepEqual(unhidden, []);
+    assert.deepEqual(errors, []);
+  } catch (error) {
+    await page.screenshot({ path: join(tmpdir(), `vide-links-hidden-${draftBase}.png`) });
+    throw error;
+  } finally {
+    await page.close();
+    await server.close();
+    await rm(root, { recursive: true, force: true });
+  }
 }

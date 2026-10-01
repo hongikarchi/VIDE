@@ -9,6 +9,7 @@ import { waitingText } from './request-scope.ts';
 import { draftSnapshot, restoreDraft } from './draft-storage.ts';
 import { z } from 'zod';
 import { requestMode } from '../contracts/workspace.ts';
+import { belongsToLink } from '../contracts/link-requests.ts';
 import {
   hostDocumentsSchema,
   hostSelectionSchema,
@@ -556,17 +557,29 @@ interface Layer {
 }
 let currentLayers: Layer[] = [];
 const seenGeneration = new Map<string, number>();
+/** The link whose own record a request is (its Sync, or for a file item an older import). */
+const ownerOf = (request: { input: Record<string, unknown> }) =>
+  links.find((link) => belongsToLink({ ...link, file: link.kind === 'file' }, request));
 /** The linked file a request belongs to: its own link, or the link of its basis chain. */
 function linkOfRequest(id: string | null | undefined): string | undefined {
   let current = id ? state.messages.find((entry) => entry.id === id) : undefined;
   for (let depth = 0; current && depth < 30; depth++) {
-    const linkId = current.request.input.linkId;
-    if (typeof linkId === 'string' && links.some((link) => link.id === linkId)) return linkId;
+    const owner = ownerOf(current.request);
+    if (owner) return owner.id;
     const base = current.request.input.baseRequestId ?? current.request.result?.baseRequestId;
     current =
       typeof base === 'string' ? state.messages.find((entry) => entry.id === base) : undefined;
   }
   return undefined;
+}
+/** The shown result that belongs to no linked file: its row "작업 결과 · <이름>" (SPEC-01.11 4). */
+function transientLayer(): Layer | undefined {
+  const entry = transientResult
+    ? state.messages.find((item) => item.id === transientResult)
+    : undefined;
+  if (!entry) return undefined;
+  const name = entry.request.result?.sourceDocument?.name || entry.body.slice(0, 40) || '결과';
+  return { key: 'result:' + entry.id, requestId: entry.id, name: '작업 결과 · ' + name };
 }
 function visibleLayers(): Layer[] {
   const layers: Layer[] = [];
@@ -576,24 +589,24 @@ function visibleLayers(): Layer[] {
     if (requestId && state.messages.some((entry) => entry.id === requestId))
       layers.push({ key: link.id, requestId, name: link.name, link });
   }
-  const entry = transientResult
-    ? state.messages.find((item) => item.id === transientResult)
-    : undefined;
-  if (entry && !layers.some((layer) => layer.requestId === entry.id))
-    layers.push({
-      key: 'result:' + entry.id,
-      requestId: entry.id,
-      name: entry.request.result?.sourceDocument?.name || entry.body.slice(0, 40) || '결과',
-    });
+  const transient = transientLayer();
+  if (transient && !layers.some((layer) => layer.requestId === transient.requestId))
+    layers.push(transient);
   return layers;
 }
-/** Open a result: a linked file's candidate takes that file's place; anything else shows beside. */
-function showRequest(id: string) {
+/**
+ * Open a result: a linked file's candidate takes that file's place; anything else shows beside.
+ * `restored` (the selection a restart brings back): a file's own Sync shows as its latest Sync
+ * and a hidden file stays hidden (SPEC-01.11 4).
+ */
+function showRequest(id: string, restored = false) {
   const link = links.find((entry) => entry.id === linkOfRequest(id));
   if (link) {
-    if (link.lastSync?.requestId === id) layerOverride.delete(link.id);
+    const entry = state.messages.find((item) => item.id === id);
+    if (link.lastSync?.requestId === id || (restored && entry && ownerOf(entry.request) === link))
+      layerOverride.delete(link.id);
     else layerOverride.set(link.id, id);
-    if (link.hidden) void setLinkHidden(link, false);
+    if (link.hidden && !restored) void setLinkHidden(link, false);
     transientResult = undefined;
     activeLayer = link.id;
   } else {
@@ -849,6 +862,28 @@ function renderLinkPanel() {
         .map(([id]) => id),
     ),
     loaded: linksLoaded,
+    results: (() => {
+      const layer = transientLayer();
+      return layer ? [{ key: layer.key, name: layer.name }] : [];
+    })(),
+    onCloseResult: () => {
+      // Closed until it is opened again from the work history (SPEC-01.11 4); a restart does not
+      // bring it back as the restored view.
+      if (!draftHasInput(state) && state.baseRequestId === transientResult)
+        state.baseRequestId = undefined;
+      transientResult = undefined;
+      selectedResult = null;
+      appliedSelection = null;
+      if (activeLayer?.startsWith('result:')) activeLayer = undefined;
+      renderMessages();
+      render();
+    },
+    onFocusResult: (key) => {
+      activeLayer = key;
+      applyActiveLayer();
+      render();
+      renderLinkPanel();
+    },
     onToggle: (link) => void setLinkHidden(link, !link.hidden),
     onSync: (link) => void syncLink(link, 'manual'),
     onRemove: (link) => {
@@ -1437,19 +1472,41 @@ function sidebar() {
   files.forEach((f) => el('small', f.name, $('reference-list'), { class: 'reference-file' }));
 }
 let appliedSelection: string | null | undefined;
+/** The selection a start restored (draft basis or newest result); it never un-hides a file. */
+let restoredSelection: string | undefined;
 function renderMessages() {
   conversationChips?.update({ messages: state.messages });
   renderQuestionCards();
-  if (selectedResult !== appliedSelection) {
+  // Applied once the project's links are known: before that every result would look like one
+  // that belongs to no file and stay drawn after its file is hidden (SPEC-01.11 4).
+  if (selectedResult !== appliedSelection && linksLoaded) {
     appliedSelection = selectedResult;
-    if (selectedResult) showRequest(selectedResult);
+    if (selectedResult) showRequest(selectedResult, selectedResult === restoredSelection);
     else if (selectedResult === null) {
       transientResult = undefined;
       activeLayer = undefined;
     }
+    restoredSelection = undefined;
+  }
+  // A result shown beside the files that now belongs to one (its file was linked or listed since)
+  // follows that file and its visibility; a file's own Sync is shown as that file's.
+  const owner = transientResult
+    ? links.find((link) => link.id === linkOfRequest(transientResult))
+    : undefined;
+  if (owner && transientResult) {
+    const entry = state.messages.find((item) => item.id === transientResult);
+    if (
+      entry &&
+      ownerOf(entry.request) !== owner &&
+      owner.lastSync?.requestId !== transientResult &&
+      !layerOverride.has(owner.id)
+    )
+      layerOverride.set(owner.id, transientResult);
+    if (activeLayer === 'result:' + transientResult) activeLayer = owner.id;
+    transientResult = undefined;
   }
   // A project without linked files shows its latest result, as before links existed.
-  if (!links.length && selectedResult === undefined)
+  if (linksLoaded && !links.length && selectedResult === undefined)
     transientResult = state.messages
       .filter(
         (entry) =>
@@ -1462,7 +1519,8 @@ function renderMessages() {
   renderConversation();
   // A new Sync reaches the jigs that are open (their Sync lists).
   if (project) refreshJigs();
-  refreshDashboard();
+  // The links panel shows the work-result row of what is drawn; it also refreshes the dashboard.
+  renderLinkPanel();
 }
 /** The request list omits display meshes; fetch one request in full when it is shown. */
 // One fetch per request; a second caller waits for the same one.
@@ -3551,10 +3609,13 @@ async function initializeWorkspace() {
     }
     if (!restored)
       selectedResult = linked.requests.filter((request) => request.result?.hostExecuted).at(-1)?.id;
+    restoredSelection = selectedResult ?? undefined;
     ready = true;
     void refreshAccount();
     render();
     renderMessages();
+    // The display waits for the links (renderMessages); read them now rather than at the next tick.
+    void pollLinks();
     // The tab row and this project's last tab; host panels have neither (SCR-12).
     if (!panelMode) initializeWorkspaces({ projectId: project.id, mount: $('workspace-tabs') });
     void mountConversationScreens();

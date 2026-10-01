@@ -4646,3 +4646,7 @@ body.panel-mode .mode-toggle {
 #connection-banner button {
   flex: none;
 }
+/* A result shown beside the linked files (SPEC-01.11 4): a muted mark instead of the eye. */
+.link-row .link-result-mark {
+  color: var(--text-3);
+}

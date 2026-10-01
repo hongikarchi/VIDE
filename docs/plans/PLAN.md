@@ -2,7 +2,7 @@
 id: PLAN
 title: VIDE 실행 로드맵
 status: review
-version: 0.228
+version: 0.229
 updated: 2026-10-01
 owner: agent:codex
 related: [ARCH-01, PLAN-02, PLAN-03, PLAN-22, PLAN-23, PLAN-24, PLAN-25, PLAN-26, PLAN-27, ADR-022, ADR-025, ADR-026, ADR-027, SPEC-00, SPEC-01, SPEC-02, SPEC-03, SPEC-04, SPEC-05, SPEC-06, SPEC-07]
@@ -250,6 +250,7 @@ T-001~018의 번호·지원 증거는 유지한다. 각 티켓의 현재 결과�
 | T-090 참고 이미지 의도 확인 (a)~(d) 영역 표시·해석 말풍선·Codex 이미지·확정 → 모델링 | (a)~(d) 구현·단위·브라우저 시험(가짜 공급자·가짜 이미지 작업) 완료(2026-10-01, 커밋 전). 실제 Codex 이미지 작업 실측 33–44초(합성 장면) | 실제 CLI 해석 턴은 Claude·Codex 통과(2026-10-01). 말로 고치기의 실제 CLI 확인, 실제 Rhino 사본으로 SPEC-09 완료 기준·VERIFY, Design §03·§14 표현, PRD 범위 문장 | [PLAN-26](PLAN-26-chat-stage.md), SPEC-09 |
 | T-091 프로젝트 폴더·AI 파일 읽기(`file_read`·`file_list`, 폴더 밖은 권한 질문) | 구현·단위·브라우저 시험 완료(2026-10-01, 커밋 전) | 실제 Claude·Codex로 권한 질문 답하기 확인(설치본 릴리스 때), 셸 폴더 선택 창은 다음 설치본부터 | [PLAN-26](PLAN-26-chat-stage.md#t-091), SPEC-01.13, `project-files.test.mjs`, `browser-project-folders.mjs` |
 | T-095 다른 이름으로 저장 뒤 연결이 창을 따라감(Rhino·ZWCAD, 중복 행은 하나만 연결) | 구현·서버 시험 완료(2026-10-01, 설치 전) | 실제 Rhino·ZWCAD 창에서 다른 이름 저장 확인(설치본 반영 뒤 합성 문서) | [PLAN-16](PLAN-16-document-links.md#t-095), `link-follow.test.mjs` |
+| T-096 연결 파일을 모두 숨겨도 남던 객체(시작 때 선택 순서), 어느 파일에도 속하지 않는 결과는 '작업 결과' 행 | 구현·브라우저 시험 완료(2026-10-01, 설치 전) | 설치본에서 사용자 프로젝트로 확인 | [PLAN-16](PLAN-16-document-links.md#t-096), `browser-links.mjs` |
 | T-082 안정성 0단계 진단·복구 | 구현·자동 검증(`9aac8cd`) | 실제 창의 화면 복구 확인, 설치본 릴리스 | [PLAN-27](PLAN-27-sync-storage-stability.md) |
 | T-083 객체 단위 저장 | 계획 | ARCH-01 저장 계약 작성과 사용자 확인 뒤 착수 | [PLAN-27](PLAN-27-sync-storage-stability.md), [RESEARCH-13](../research/RESEARCH-13-stability-audit.md) |
 | T-084 엔진 주관 Sync | 계획. 문서별 Sync 합치기는 먼저 구현(`fda1e5d`) | SPEC-01.11의 Sync 주체 보완 뒤 착수 | [PLAN-27](PLAN-27-sync-storage-stability.md) |
