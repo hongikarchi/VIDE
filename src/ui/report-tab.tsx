@@ -1,4 +1,5 @@
-// The 보고서 workspace tab (PLAN-22 T-057, SPEC-07.11, Design SCR-17): the left column lists the
+// The 보고서 view of the 산출물 tab (PLAN-22 T-057, PLAN-26 T-081, SPEC-07.11, Design SCR-17;
+// it was its own workspace tab before T-081): the left column lists the
 // report frames of the project's jig instances (작업본) and the chosen report's gates; the centre
 // previews it on the chosen paper (A3 landscape or A4 portrait) with print and save. The engine
 // resolves and renders the report (src/server/report.ts); the app draws the resolved model with
@@ -270,27 +271,32 @@ function takeAsked() {
   return choice;
 }
 /**
- * Show one instance's report in the 보고서 tab (a jig panel's report action, T-048): the tab
+ * Show one instance's report in 산출물 → 보고서 (a jig panel's report action, T-048): the view
  * mounts with it chosen, or chooses it when already mounted, and reads it again.
  */
 export function openReport(instanceId: string, reportId: string) {
   askedReport = { instanceId, reportId };
   window.dispatchEvent(new Event('vide:report-asked'));
-  setWorkspace('report');
+  setWorkspace('output', { outputView: 'report' });
 }
 
 let root: Root | undefined;
+let rootIn: HTMLElement | undefined;
 let shownFor: string | undefined;
 
-/** Show the report tab of a project (mounts once; later calls read the list again). */
-export function showReports(projectId: string) {
-  const workspace = document.querySelector<HTMLElement>('.workspace');
-  if (!workspace) return;
-  if (!root) {
+/**
+ * Show the reports of a project in `mount`, the 산출물 tab's 보고서 view (mounts once; later
+ * calls read the list again).
+ */
+export function showReports(projectId: string, mount: HTMLElement) {
+  if (!root || rootIn !== mount) {
+    root?.unmount();
+    shownFor = undefined;
     const host = document.createElement('section');
     host.className = 'report-workspace';
     host.setAttribute('aria-label', '보고서');
-    workspace.append(host);
+    mount.replaceChildren(host);
+    rootIn = mount;
     root = createRoot(host);
   }
   if (shownFor !== projectId) {

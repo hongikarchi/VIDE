@@ -1,7 +1,9 @@
-// 보고서 workspace tab (PLAN-22 T-057, PLAN-23 T-058, SCR-17): the tab opens, lists the S-06
+// 보고서 view of the 산출물 tab (PLAN-22 T-057, PLAN-23 T-058, PLAN-26 T-081, SCR-17): it opens
+// from the 산출물 tab, lists the S-06
 // instance's report, draws it with the numbered sections and the 부록 (each '아직 없음' before any
 // step has run), shows the three report gates passing, switches the paper, saves a page without scripts and
-// goes back to the instance's context tab. No real host or CLI; no step outputs are needed.
+// goes back to the instance's context tab. A last tab stored under the former 'report' id still
+// opens it. No real host or CLI; no step outputs are needed.
 import assert from 'node:assert/strict';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -54,12 +56,18 @@ try {
   const instanceId = created.body.id ?? created.body.instance?.id;
   assert.ok(instanceId, JSON.stringify(created.body));
 
-  // The report tab is ready and shows the list and the report.
-  const tab = page.locator('#workspace-tabs [role="tab"][data-workspace="report"]');
+  // The 산출물 tab is ready; its 보고서 view shows the list and the report.
+  const tab = page.locator('#workspace-tabs [role="tab"][data-workspace="output"]');
   assert.equal(await tab.getAttribute('aria-disabled'), null);
   await tab.click();
-  assert.equal(await page.evaluate(() => document.body.dataset.workspace), 'report');
-  const screen = page.locator('.report-workspace');
+  assert.equal(await page.evaluate(() => document.body.dataset.workspace), 'output');
+  const views = page.getByRole('tablist', { name: '산출물 종류' });
+  await views.getByRole('tab', { name: '보고서', exact: true }).click();
+  assert.equal(
+    await views.getByRole('tab', { name: '보고서', exact: true }).getAttribute('aria-selected'),
+    'true',
+  );
+  const screen = page.locator('.output-workspace .report-workspace');
   await screen.locator('.report-group', { hasText: '합성 골조' }).waitFor();
   assert.ok(!(await page.locator('.workspace > .viewport-area').isVisible()));
   const report = screen.locator('.kit-report');
@@ -89,7 +97,7 @@ try {
     ['true', 'true', 'true'],
   );
   assert.doesNotMatch(await screen.textContent(), /claim-consistent|undefined|null/);
-  if (shot) await page.screenshot({ path: join(shot, 'report-tab.png') });
+  if (shot) await page.screenshot({ path: join(shot, 'output-report.png') });
 
   // Paper: A4 portrait narrows the sheet (its width limit: at 1440 px the centre column is
   // already narrower than either paper, so the rendered widths can be equal).
@@ -122,10 +130,29 @@ try {
   assert.equal(await page.evaluate(() => document.body.dataset.workspace), 'context');
   assert.ok(!(await screen.isVisible()));
 
+  // A last tab stored under the former 보고서 tab id opens 산출물 → 보고서.
+  await page.evaluate(
+    (id) =>
+      localStorage.setItem(
+        `vide:workspace:${id}`,
+        JSON.stringify({ active: 'report', context: [] }),
+      ),
+    projectId,
+  );
+  await page.evaluate((id) => localStorage.setItem(`vide:output-view:${id}`, 'sheet'), projectId);
+  await page.reload();
+  await page.waitForFunction(() => document.body.dataset.workspace === 'output');
+  assert.equal(await tab.getAttribute('aria-selected'), 'true');
+  assert.equal(
+    await views.getByRole('tab', { name: '보고서', exact: true }).getAttribute('aria-selected'),
+    'true',
+  );
+  await report.waitFor();
+
   // Narrow screen: the list stacks above the page without sideways scrolling.
-  await tab.click().catch(() => page.locator('.workspace-menu select').selectOption('report'));
+  await page.locator('#workspace-tabs [role="tab"][data-workspace="model"]').click();
   await page.setViewportSize({ width: 390, height: 800 });
-  await page.locator('.workspace-menu select').selectOption('report');
+  await page.locator('.workspace-menu select').selectOption('output');
   await report.waitFor();
   assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= 391));
 

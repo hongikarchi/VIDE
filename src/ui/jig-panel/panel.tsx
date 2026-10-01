@@ -66,7 +66,7 @@ export interface PanelHost {
    * it could not be shown (e.g. no Sync holds it yet), or undefined once shown.
    */
   focusObject?: (nativeId: string) => void | Promise<string | undefined>;
-  /** Open one of this instance's reports in the 보고서 tab; omitted where there is no such tab. */
+  /** Open one of this instance's reports in 산출물 → 보고서; omitted where there is no such tab. */
   openReport?: (reportId: string) => void;
   /** Regions beside the panel (Design SCR-13): above the 3D view, over it, below it. */
   slots?: { top?: HTMLElement; board?: HTMLElement; drawer?: HTMLElement };
@@ -733,7 +733,7 @@ export function JigPanel({
         <div className="kit-actions">
           {spec.actions.map((action) =>
             action.report ? (
-              // A report opens in the 보고서 tab (reading it changes nothing, so no confirmation).
+              // A report opens in 산출물 → 보고서 (reading it changes nothing, so no confirmation).
               host.openReport ? (
                 <button
                   key={action.id}
@@ -748,7 +748,9 @@ export function JigPanel({
                   <button type="button" disabled>
                     {action.label}
                   </button>
-                  <span className="kit-reason">이 화면에서는 보고서 탭을 열 수 없습니다</span>
+                  <span className="kit-reason">
+                    이 화면에서는 산출물 탭의 보고서를 열 수 없습니다
+                  </span>
                 </span>
               )
             ) : (

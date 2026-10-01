@@ -1,7 +1,8 @@
 // Workspace tabs (PLAN-22 T-047, Design §03 작업공간 탭, SCR-13·18): the tab row over the centre
 // column, the JIG list tab, jig context tabs beside the 3D view (two at once, each keeping its
 // state), a new instance of a v3 jig, the per-project memory of the last tab (and a blocked
-// storage), the narrow-screen menu and the host panel without tabs. No real CLI or host.
+// storage), the narrow-screen menu, the 산출물 tab's three views (PLAN-26 T-081) and the host
+// panel without tabs. No real CLI or host.
 import assert from 'node:assert/strict';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -114,13 +115,15 @@ try {
     '자료',
     'JIG',
     '만들기',
-    '보고서',
+    '산출물',
   ]);
   assert.equal(await tab('모델').getAttribute('aria-selected'), 'true');
-  // Every fixed tab is ready: 보고서 since PLAN-22 T-057, 자료 and 만들기 since T-065 and T-063
-  // (tests/integration/browser-report.mjs, browser-facts.mjs, browser-make.mjs).
-  for (const name of ['대시보드', '자료', 'JIG', '만들기', '보고서'])
+  // Every fixed tab is ready: 자료 and 만들기 since PLAN-22 T-065 and T-063, 산출물 (with the
+  // 보고서 view of T-057) since PLAN-26 T-081 (tests/integration/browser-report.mjs,
+  // browser-facts.mjs, browser-make.mjs).
+  for (const name of ['대시보드', '자료', 'JIG', '만들기', '산출물'])
     assert.equal(await tab(name).getAttribute('aria-disabled'), null);
+  assert.equal(await tab('산출물').getAttribute('title'), 'Output · 도면 · 보고서 · 렌더링');
   const row = await page.locator('.workspace-tabs').boundingBox();
   const centre = await page.locator('.workspace').boundingBox();
   const right = await page.locator('#right').boundingBox();
@@ -202,7 +205,7 @@ try {
   await page.keyboard.press('ArrowRight');
   assert.equal(await tab('만들기').getAttribute('aria-selected'), 'true');
   await page.keyboard.press('ArrowRight');
-  assert.equal(await tab('보고서').getAttribute('aria-selected'), 'true');
+  assert.equal(await tab('산출물').getAttribute('aria-selected'), 'true');
   await page.keyboard.press('ArrowRight');
   assert.equal(await syncTab.getAttribute('aria-selected'), 'true');
   assert.ok(await syncTab.evaluate((node) => node === document.activeElement));
@@ -301,6 +304,55 @@ try {
   assert.equal(await menu.inputValue(), 'model');
   if (shot) await page.screenshot({ path: join(shot, 'workspace-tabs-880.png') });
   await page.setViewportSize({ width: 1440, height: 900 });
+
+  // 산출물 (PLAN-26 T-081): 도면 · 보고서 · 렌더링 at its top; 도면 and 렌더링 are pages only, their
+  // actions disabled ('준비 중'). The last view is remembered per project.
+  await tab('산출물').click();
+  assert.equal(await page.evaluate(() => document.body.dataset.workspace), 'output');
+  const output = page.getByRole('region', { name: '산출물', exact: true });
+  const views = output.getByRole('tablist', { name: '산출물 종류' });
+  await views.waitFor();
+  assert.equal(await page.locator('#canvas canvas').isVisible(), false);
+  assert.equal(await page.locator('#left').isVisible(), false);
+  const view = (name) => views.getByRole('tab', { name, exact: true });
+  assert.deepEqual(await views.getByRole('tab').allTextContents(), ['도면', '보고서', '렌더링']);
+  assert.equal(await view('도면').getAttribute('aria-selected'), 'true');
+  const sheets = output.getByRole('tabpanel', { name: '도면' });
+  await sheets.getByText('아직 시트가 없습니다').waitFor();
+  assert.ok(await sheets.getByRole('img', { name: '빈 A1 가로 시트' }).isVisible());
+  const newSheet = sheets.getByRole('button', { name: '새 시트' });
+  assert.ok(await newSheet.isDisabled());
+  assert.equal(await newSheet.getAttribute('title'), '준비 중');
+  if (shot) await page.screenshot({ path: join(shot, 'output-sheet.png') });
+  await view('보고서').click();
+  // The report screen (src/ui/report-tab.tsx) lists the project's instances here.
+  await output
+    .getByRole('navigation', { name: '보고서 목록' })
+    .getByText('격자 골조 배치 예제')
+    .waitFor();
+  assert.equal(await sheets.isVisible(), false);
+  await view('보고서').focus();
+  await page.keyboard.press('ArrowRight');
+  assert.equal(await view('렌더링').getAttribute('aria-selected'), 'true');
+  const render = output.getByRole('tabpanel', { name: '렌더링' });
+  assert.deepEqual(await render.locator('.output-node strong').allTextContents(), [
+    '뷰 캡처',
+    '깊이·선화',
+    '이미지 생성',
+    '결과',
+  ]);
+  assert.ok(await render.getByRole('textbox', { name: '프롬프트' }).isDisabled());
+  assert.ok(await render.getByRole('combobox', { name: '스타일' }).isDisabled());
+  const generate = render.getByRole('button', { name: '생성' });
+  assert.ok(await generate.isDisabled());
+  assert.equal(await generate.getAttribute('title'), '준비 중');
+  await render.getByText('아직 생성한 이미지가 없습니다').waitFor();
+  if (shot) await page.screenshot({ path: join(shot, 'output-render.png') });
+  await page.reload();
+  await page.waitForFunction(() => document.body.dataset.workspace === 'output');
+  assert.equal(await view('렌더링').getAttribute('aria-selected'), 'true');
+  assert.ok(await render.isVisible());
+  await tab('모델').click();
 
   // A storage that refuses (private window, blocked site data): the model tab, and tabs still work.
   const blocked = await browser.newContext({ viewport: { width: 1440, height: 900 } });

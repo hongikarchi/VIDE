@@ -271,7 +271,7 @@ export interface JigHost extends JigContext {
    * newest Sync that holds it selects and frames it. Resolves to why not when no Sync holds it.
    */
   focusObject: (nativeId: string) => Promise<string | undefined>;
-  /** Open one of this instance's reports in the 보고서 tab. */
+  /** Open one of this instance's reports in 산출물 → 보고서. */
   openReport: (reportId: string) => void;
   slots: { top: HTMLElement; board: HTMLElement; drawer: HTMLElement };
 }

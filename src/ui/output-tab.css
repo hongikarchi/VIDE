@@ -1,0 +1,323 @@
+/* 산출물 workspace tab (PLAN-26 T-081): the 도면 · 보고서 · 렌더링 views over the centre column.
+   도면 and 렌더링 are placeholder pages for now. Colours, lines and radii come from tokens.css. */
+.output-workspace {
+  display: none;
+}
+body[data-workspace='output'] .workspace > :not(.workspace-tabs):not(.output-workspace) {
+  display: none !important;
+}
+body[data-workspace='output'] .output-workspace {
+  grid-row: 2 / -1;
+  grid-column: 1 / -1;
+  min-height: 0;
+  display: block;
+  background: var(--bg-elevated);
+}
+@media (min-width: 851px) {
+  body[data-workspace='output'] #left,
+  body[data-workspace='output'] #toggle-left,
+  body[data-workspace='output'] .panel-resize-left {
+    display: none;
+  }
+  body[data-workspace='output'] main {
+    grid-template-columns: minmax(260px, 1fr) var(--right-width, 370px);
+  }
+  body[data-workspace='output'].right-hidden main {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+.output-page {
+  height: 100%;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+/* The three views: a small segmented control at the top. */
+.output-head {
+  display: flex;
+  align-items: center;
+  padding: 8px 12px;
+  border-bottom: var(--hairline) solid var(--border-subtle);
+}
+.output-views {
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  border: var(--hairline) solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-surface);
+}
+.output-views button {
+  height: 24px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: var(--text-3);
+  font-size: var(--fs-sm);
+}
+.output-views button:hover {
+  color: var(--text-1);
+  background: var(--bg-hover);
+}
+.output-views button[aria-selected='true'] {
+  background: var(--bg-elevated);
+  color: var(--text-1);
+  font-weight: 600;
+  box-shadow: 0 0 0 var(--hairline) var(--border);
+}
+
+.output-pane {
+  min-height: 0;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr);
+}
+.output-pane[hidden] {
+  display: none;
+}
+.output-pane-sheet {
+  grid-template-columns: 240px minmax(0, 1fr);
+}
+.output-pane-render {
+  grid-template-columns: 240px minmax(0, 1fr) 220px;
+}
+
+/* Side lists (시트, 입력, 결과). */
+.output-side,
+.output-results {
+  min-height: 0;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+}
+.output-side {
+  border-right: var(--hairline) solid var(--border);
+}
+.output-results {
+  border-left: var(--hairline) solid var(--border);
+}
+.output-side .caption,
+.output-results .caption {
+  margin: 0;
+}
+.output-side-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.output-empty {
+  margin: 0;
+  color: var(--text-3);
+}
+.output-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: var(--fs-sm);
+  color: var(--text-2);
+}
+.output-field textarea {
+  resize: none;
+}
+.output-capture {
+  display: grid;
+  place-items: center;
+  aspect-ratio: 4 / 3;
+  border: var(--hairline) dashed var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-surface);
+  color: var(--text-3);
+  font-size: var(--fs-sm);
+}
+
+/* The centre of a placeholder view. */
+.output-stage {
+  min-height: 0;
+  min-width: 0;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 16px 20px;
+  background: var(--bg);
+}
+.output-note {
+  margin: 0;
+  color: var(--text-3);
+}
+
+/* 도면: an empty A1 landscape sheet with a title block strip at the right. */
+.output-sheet-wrap {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+.output-sheet {
+  width: min(100%, 980px);
+  aspect-ratio: 841 / 594;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 15%;
+  gap: 0;
+  padding: 1.6%;
+  border: var(--hairline) solid var(--border);
+  background: var(--bg-elevated);
+  box-shadow: var(--shadow-float);
+}
+.output-sheet-area {
+  border: 1px solid var(--text-4);
+  border-right: 0;
+}
+.output-title-block {
+  display: grid;
+  grid-template-rows: 1fr 1fr auto auto auto;
+  border: 1px solid var(--text-4);
+}
+.output-title-block span {
+  padding: 6px 8px;
+  border-bottom: var(--hairline) solid var(--border);
+  color: var(--text-3);
+  font-size: var(--fs-xs);
+}
+.output-title-block span:last-child {
+  border-bottom: 0;
+}
+.output-title-block .output-sheet-no {
+  padding: 12px 8px;
+  color: var(--text-2);
+  font-weight: 600;
+}
+.output-sheet-caption {
+  margin: 0;
+  color: var(--text-3);
+  font-size: var(--fs-xs);
+}
+
+/* 렌더링: a static node flow (뷰 캡처 → 깊이·선화 → 이미지 생성 → 결과). */
+.output-flow {
+  flex: 1;
+  list-style: none;
+  margin: 0;
+  padding: 24px 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 36px;
+  border: var(--hairline) solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background-color: var(--bg-surface);
+  background-image: radial-gradient(var(--border) 1px, transparent 1px);
+  background-size: 16px 16px;
+}
+.output-node {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  width: 132px;
+  padding: 10px 12px;
+  border: var(--hairline) solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-elevated);
+}
+.output-node strong {
+  font-size: var(--fs-sm);
+}
+.output-node span:not(.output-port) {
+  font-size: var(--fs-xs);
+  color: var(--text-3);
+}
+/* The wire to the next node. */
+.output-node + .output-node::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  right: 100%;
+  width: 36px;
+  border-top: 1px solid var(--text-4);
+}
+.output-port {
+  position: absolute;
+  top: calc(50% - 4px);
+  width: 8px;
+  height: 8px;
+  border: 1px solid var(--text-4);
+  border-radius: var(--radius-pill);
+  background: var(--bg-elevated);
+}
+.output-port[data-side='in'] {
+  left: -5px;
+}
+.output-port[data-side='out'] {
+  right: -5px;
+}
+.output-node:first-child .output-port[data-side='in'],
+.output-node:last-child .output-port[data-side='out'] {
+  display: none;
+}
+.output-gallery {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.output-gallery span {
+  aspect-ratio: 1;
+  border: var(--hairline) dashed var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-surface);
+}
+
+@media (max-width: 1180px) {
+  .output-flow {
+    flex-direction: column;
+    gap: 28px;
+  }
+  .output-node + .output-node::before {
+    top: auto;
+    right: auto;
+    bottom: 100%;
+    left: 50%;
+    width: 0;
+    height: 28px;
+    border-top: 0;
+    border-left: 1px solid var(--text-4);
+  }
+  .output-port[data-side='in'] {
+    top: -5px;
+    left: calc(50% - 4px);
+  }
+  .output-port[data-side='out'] {
+    top: auto;
+    right: auto;
+    bottom: -5px;
+    left: calc(50% - 4px);
+  }
+}
+@media (max-width: 850px) {
+  .output-workspace {
+    overflow: auto;
+  }
+  .output-page {
+    height: auto;
+  }
+  .output-pane-sheet,
+  .output-pane-render {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .output-side,
+  .output-results {
+    border: 0;
+    border-bottom: var(--hairline) solid var(--border);
+  }
+  .output-stage {
+    padding: 12px;
+  }
+}

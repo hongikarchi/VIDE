@@ -189,7 +189,7 @@ const definitions = {
   },
   ui_go: {
     description:
-      "Switch the user's screen: stage 'model' (3D), 'jig' (the open jig's tab, or the JIG list), 'report', 'data' (project records) or 'make'. view 'plan' or '3d' sets the 3D projection. Only the screen changes.",
+      "Switch the user's screen: stage 'model' (3D), 'jig' (the open jig's tab, or the JIG list), 'report' (the 보고서 view of the 산출물 tab), 'data' (project records) or 'make'. view 'plan' or '3d' sets the 3D projection. Only the screen changes.",
     schema: z
       .object({
         targetRef: scoped,

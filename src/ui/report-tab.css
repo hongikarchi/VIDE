@@ -1,30 +1,11 @@
-/* 보고서 workspace tab (PLAN-22 T-057, Design SCR-17): list on the left, paper preview in the centre. */
+/* 보고서 view of the 산출물 tab (PLAN-22 T-057, PLAN-26 T-081, Design SCR-17): list on the left,
+   paper preview in the centre. The tab itself (src/ui/output-tab.css) gives it the centre column. */
 .report-workspace {
-  display: none;
-}
-body[data-workspace='report'] .workspace > :not(.workspace-tabs):not(.report-workspace) {
-  display: none !important;
-}
-body[data-workspace='report'] .report-workspace {
-  grid-row: 2 / -1;
-  grid-column: 1 / -1;
+  height: 100%;
   min-height: 0;
   display: grid;
   grid-template-columns: 240px minmax(0, 1fr);
   background: var(--bg-elevated);
-}
-@media (min-width: 851px) {
-  body[data-workspace='report'] #left,
-  body[data-workspace='report'] #toggle-left,
-  body[data-workspace='report'] .panel-resize-left {
-    display: none;
-  }
-  body[data-workspace='report'] main {
-    grid-template-columns: minmax(260px, 1fr) var(--right-width, 370px);
-  }
-  body[data-workspace='report'].right-hidden main {
-    grid-template-columns: minmax(0, 1fr);
-  }
 }
 .report-list {
   min-height: 0;
@@ -127,7 +108,7 @@ body[data-workspace='report'] .report-workspace {
   padding: 12mm;
 }
 @media (max-width: 850px) {
-  body[data-workspace='report'] .report-workspace {
+  .report-workspace {
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: auto minmax(0, 1fr);
   }
@@ -154,14 +135,14 @@ body[data-workspace='report'] .report-workspace {
   margin: 12mm;
 }
 @media print {
-  body[data-workspace='report'] * {
+  body[data-workspace='output'] * {
     visibility: hidden;
   }
-  body[data-workspace='report'] .report-sheet,
-  body[data-workspace='report'] .report-sheet * {
+  body[data-workspace='output'] .report-sheet,
+  body[data-workspace='output'] .report-sheet * {
     visibility: visible;
   }
-  body[data-workspace='report'] .report-sheet {
+  body[data-workspace='output'] .report-sheet {
     position: absolute;
     top: 0;
     left: 0;
@@ -171,10 +152,10 @@ body[data-workspace='report'] .report-workspace {
     border: 0;
     page: report-a3;
   }
-  body[data-workspace='report'][data-report-paper='a4'] .report-sheet {
+  body[data-workspace='output'][data-report-paper='a4'] .report-sheet {
     page: report-a4;
   }
-  body[data-workspace='report'] .report-sheet .kit-actions {
+  body[data-workspace='output'] .report-sheet .kit-actions {
     display: none;
   }
 }

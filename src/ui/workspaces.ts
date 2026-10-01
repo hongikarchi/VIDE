@@ -5,7 +5,9 @@
 // last tab and the open context tabs are a viewer convenience remembered per project in this
 // browser's storage; a blocked or empty storage just opens the model tab.
 
-export type FixedWorkspace = 'dashboard' | 'model' | 'data' | 'jig' | 'make' | 'report';
+export type FixedWorkspace = 'dashboard' | 'model' | 'data' | 'jig' | 'make' | 'output';
+/** A sub-view of the 산출물 tab (src/ui/output-tab.tsx). */
+export type OutputView = 'sheet' | 'report' | 'render';
 /** A jig opened in its own tab: a jig instance (작업본) id, or `legacy:<jigId>` for older jigs. */
 export interface ContextTab {
   instanceId: string;
@@ -23,18 +25,25 @@ export interface WorkspaceChange {
 
 // The data and make tabs open with PLAN-22 T-065 and T-063; the report tab is T-057.
 // 대시보드 (first draft, user request 2026-10-01) comes first; the model tab stays the default.
-const FIXED: { id: FixedWorkspace; label: string; ready: boolean }[] = [
+// 산출물 (PLAN-26 T-081) holds 도면 · 보고서 · 렌더링; the report tab (T-057) is its 보고서 view.
+const FIXED: { id: FixedWorkspace; label: string; ready: boolean; title?: string }[] = [
   { id: 'dashboard', label: '대시보드', ready: true },
   { id: 'model', label: '모델', ready: true },
   { id: 'data', label: '자료', ready: true },
   { id: 'jig', label: 'JIG', ready: true },
   { id: 'make', label: '만들기', ready: true },
-  { id: 'report', label: '보고서', ready: true },
+  { id: 'output', label: '산출물', ready: true, title: 'Output · 도면 · 보고서 · 렌더링' },
 ];
 const PREFIX = 'jig:';
 export const contextId = (instanceId: string) => PREFIX + instanceId;
 const instanceOf = (id: string) => (id.startsWith(PREFIX) ? id.slice(PREFIX.length) : undefined);
 const MAX_CONTEXT = 12;
+/** Former tab ids that are now a view of a fixed tab: every way to the report still opens it. */
+const ALIAS: Record<string, { tab: FixedWorkspace; view: OutputView }> = {
+  report: { tab: 'output', view: 'report' },
+};
+/** The 산출물 view asked for with the tab (an alias or a caller); else its remembered view. */
+let outputView: OutputView | undefined;
 
 let projectId: string | undefined;
 let active = 'model';
@@ -93,7 +102,7 @@ function emit(closed?: ContextTab) {
     active === 'dashboard' ||
     active === 'model' ||
     active === 'jig' ||
-    active === 'report' ||
+    active === 'output' ||
     active === 'data' ||
     active === 'make'
       ? active
@@ -107,9 +116,13 @@ function emit(closed?: ContextTab) {
   // The 자료 screen also loads when its tab is first shown (src/ui/facts-tab.tsx, PLAN-22 T-065).
   if (active === 'data' && projectId)
     void import('./facts-tab.tsx').then((screen) => screen.showFacts(projectId!));
-  // The report screen loads when its tab is first shown (src/ui/report-tab.tsx).
-  if (active === 'report' && projectId)
-    void import('./report-tab.tsx').then((screen) => screen.showReports(projectId!));
+  // The 산출물 screen loads when its tab is first shown (src/ui/output-tab.tsx); its 보고서 view
+  // is the report screen (src/ui/report-tab.tsx).
+  if (active === 'output' && projectId) {
+    const view = outputView;
+    outputView = undefined;
+    void import('./output-tab.tsx').then((screen) => screen.showOutput(projectId!, view));
+  } else outputView = undefined;
   paint();
   remember();
   const change = { active, context, ...(closed ? { closed } : {}) };
@@ -126,7 +139,15 @@ function activate(id: string) {
  * Show a tab: a fixed tab id, a context tab id, or with `instanceId` the jig instance's context
  * tab — opened first when it is not in the row (the jig screen resolves its name).
  */
-export function setWorkspace(id: string, options: { instanceId?: string } = {}) {
+export function setWorkspace(
+  id: string,
+  options: { instanceId?: string; outputView?: OutputView } = {},
+) {
+  const alias = ALIAS[id];
+  if (alias) {
+    id = alias.tab;
+    outputView = alias.view;
+  } else if (id === 'output' && options.outputView) outputView = options.outputView;
   if (options.instanceId !== undefined) {
     const instanceId = options.instanceId;
     if (context.some((tab) => tab.instanceId === instanceId)) activate(contextId(instanceId));
@@ -205,6 +226,12 @@ export function initializeWorkspaces(options: { projectId: string; mount: HTMLEl
   bar = options.mount;
   const saved = recall();
   context = saved.context;
+  // A last tab saved under a former id (the 보고서 tab) opens where it lives now.
+  const alias = saved.active ? ALIAS[saved.active] : undefined;
+  if (alias) {
+    saved.active = alias.tab;
+    outputView = alias.view;
+  }
   const target = saved.active && known(saved.active) ? saved.active : 'model';
   const instance = instanceOf(target);
   if (instance !== undefined) lastJig = instance;
@@ -256,7 +283,7 @@ function paint() {
   list.className = 'workspace-tablist';
   list.setAttribute('role', 'tablist');
   list.setAttribute('aria-label', '작업공간');
-  for (const tab of FIXED) list.append(tabButton(tab.id, tab.label, tab.ready));
+  for (const tab of FIXED) list.append(tabButton(tab.id, tab.label, tab.ready, tab.title));
   if (context.length) {
     const rule = document.createElement('span');
     rule.className = 'workspace-tabs-rule';
@@ -303,6 +330,7 @@ function paint() {
   for (const tab of FIXED) {
     const option = new Option(tab.ready ? tab.label : `${tab.label} · 준비 중`, tab.id);
     option.disabled = !tab.ready;
+    if (tab.title) option.title = tab.title;
     select.append(option);
   }
   if (context.length) {

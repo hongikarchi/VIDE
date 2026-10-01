@@ -111,7 +111,7 @@ jig·보고서·자료 화면(§14)이 함께 쓰는 이름은 위 토큰을 가
 
 ## 03. 작업 공간의 배치
 
-**바뀔 예정:** 2026-10-01 사용자 결정([ADR-026](docs/decisions/ADR-026-chat-stage-and-skill-jigs.md) 결정 5)으로 이 배치(레일·좌측 탐색·작업공간 탭·우측 AI 열)는 **대화 열 + 무대**([RESEARCH-12 §6.1](docs/research/RESEARCH-12-ui-chat-driven-structure.md))로 바뀐다. 방향만 승인됐고 배치·치수는 정적 목업(`tools/mockups/chat-stage/`)의 검수 기록(VERIFY) 뒤에 이 절을 다시 쓴다([PLAN-26](docs/plans/PLAN-26-chat-stage.md) T-078·T-079). 그때까지는 아래 배치가 유효하다.
+**바뀌는 방식:** 2026-10-01 사용자 결정([ADR-026](docs/decisions/ADR-026-chat-stage-and-skill-jigs.md) 결정 5와 그 조정)으로 이 배치(레일·좌측 탐색·작업공간 탭·우측 AI 열)는 유지하고, 사용자가 명시한 변경만 하나씩 반영한다: 레일의 대시보드·프로젝트 자료·피드백·다크/라이트, 작업공간 탭의 대시보드·산출물(도면·보고서·렌더링, 보고서 탭을 흡수), 연결 파일 행 정리, lucide 아이콘과 Inter·Noto Sans KR·JetBrains Mono 글꼴([PLAN-26](docs/plans/PLAN-26-chat-stage.md) T-079·T-081). 화면 검토는 실제 빌드를 찍은 미리보기(`tools/mockups/ui-preview/`)로 한다. 아래 배치가 유효하다.
 
 ```text
 ┌ 레일 ┬ 프로젝트·문서 ┬ 작업공간 탭·문맥 탭 ───┬ AI 작업 ────────┐
