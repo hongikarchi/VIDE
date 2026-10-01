@@ -74,6 +74,8 @@ import {
   type ExecutionRecord,
 } from './direct-mode.ts';
 import { directRefusal } from '../contracts/direct-refusal.ts';
+import { DocumentLinks } from '../core/document-links.ts';
+import { liveLinksOf, type LiveLink } from './live-links.ts';
 interface Provider {
   run(
     context: ProviderContext,
@@ -135,6 +137,11 @@ interface Options {
   fileContext?: FileContext;
   /** Every run's end with its stored request (reference boards read their turns, T-090). */
   onFinished?: (request: StoredWork) => void | Promise<void>;
+  /**
+   * The project's linked files and their open attached documents now (ADR-027); default: the
+   * links table matched to the Rhino and ZWCAD connections like the links list.
+   */
+  liveLinks?: (projectId: string) => Promise<LiveLink[]>;
 }
 const pinsSchema = z.array(
   z
@@ -218,6 +225,7 @@ export class Execution {
   projectInstructions?: Options['projectInstructions'];
   attachments?: AttachmentStore;
   private injectedDirect?: Options['directDriver'];
+  private injectedLinks?: Options['liveLinks'];
   /**
    * Questions a Claude turn asks with its own AskUserQuestion tool (ADR-026 4, SPIKE-2026-09-30-
    * native-questions-claude), waiting for the person's answer in the same run: request id → cards.
@@ -265,12 +273,14 @@ export class Execution {
       folders,
       fileContext,
       onFinished,
+      liveLinks,
       questions,
       selectContext: choose = (body, candidates) =>
         selectContext(body, candidates, { key: () => '' }),
     }: Options = {},
   ) {
     this.injectedDirect = directDriver;
+    this.injectedLinks = liveLinks;
     this.workspace = workspace;
     this.onProviderLimit = onProviderLimit;
     this.applyAttached = applyAttached;
@@ -1180,6 +1190,15 @@ export class Execution {
           tools: this.tools,
           origin,
           projectTools,
+          targetName:
+            typeof (previous.result.sourceDocument as { name?: unknown } | undefined)?.name ===
+            'string'
+              ? (previous.result.sourceDocument as { name: string }).name
+              : undefined,
+          linked: {
+            list: () => this.liveLinks(projectId),
+            driver: (host, document) => this.directDriverFor(host, document, false),
+          },
           protectedIds: pins
             .filter((pin) => pin.role !== 'target' && pin.basis === previous.id)
             .map((pin) => pin.id),
@@ -1511,12 +1530,31 @@ export class Execution {
         execute: (command) => attached.directExecute(target, command),
         undo: (undoId) => attached.directUndo(target, undoId),
         fingerprint: () => attached.fingerprint(target),
-        query: async () => {
-          throw { code: 'EXECUTOR_NOT_READY' };
-        },
+        // Another file's reads in a Rhino turn (ADR-027): entity pages by handle, like runAttached.
+        query: (options) =>
+          attached.query(target, {
+            offset: options.offset ?? 0,
+            limit: options.limit ?? 100,
+            ...(options.objectIds
+              ? { handles: options.objectIds.map((id) => id.replace(/^cad-/, '')) }
+              : {}),
+          }),
       };
     }
     return undefined;
+  }
+  /**
+   * The project's linked files with the document each has open in a connected (plugin) window
+   * right now (ADR-027): what a direct turn may read and edit beside its target.
+   */
+  async liveLinks(projectId: string): Promise<LiveLink[]> {
+    if (this.injectedLinks) return this.injectedLinks(projectId);
+    const links = new DocumentLinks(this.workspace.store.db).list(projectId);
+    const open = [
+      ...((await this.sdk?.editors.list(true).catch(() => null))?.documents ?? []),
+      ...((await this.zwcadSdk?.editors.attached.list().catch(() => [])) ?? []),
+    ];
+    return liveLinksOf(links, open);
   }
   /** Books a run's outcome by mode: Plan keeps its plan card, a tripped guard waits on its card. */
   private settleModes(request: StoredWork, result: Record<string, unknown>, ledger: boolean) {

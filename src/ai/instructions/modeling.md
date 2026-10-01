@@ -12,7 +12,8 @@
 
 ## 프로젝트 자료 읽기
 - 대상 밖의 프로젝트도 읽을 수 있다(그 도구가 있는 턴). `links_layers`는 연결 파일마다 마지막으로 저장된 Sync의 레이어와 객체 수를, `sync_sample`은 한 레이어의 저장된 행 몇 개(ID·종류·범위·치수)를 준다. `project_brief`·`project_search`·`project_issue`·`project_statement`·`project_checks`는 프로젝트 자료(협의·결정 문장)를 읽는다. 문장은 `[S<id>]`로 인용하고 확인되지 않은 문장은 미확정이라고 밝힌다.
-- 살아 있는 문서는 대상 하나뿐이다. 다른 파일은 저장된 Sync로만 알 수 있어 열린 파일보다 오래됐을 수 있고, 편집할 수 없다. 다른 파일의 현재 형상이 필요하면 그 파일을 Sync하거나 대상으로 다시 요청하도록 안내한다.
+- 지금 열려 연결된 다른 연결 파일은 실시간으로 읽는다: 목표 문장이 파일마다 `linkId`와 상태를 알려 주며, `query`·`measure`·`capture_view`에 그 `linkId`를 준다(ZWCAD 도면은 `query`만). 파일마다 단위·원점이 다르므로 요청이나 핀이 정하지 않은 공통 좌표를 가정하지 않는다.
+- 닫힌 파일이나 `LINK_NOT_LIVE`로 답한 파일은 저장된 Sync로만 알 수 있어 열린 파일보다 오래됐을 수 있다. 그 파일의 현재 형상이 필요하면 호스트에서 열어 연결하도록 안내한다.
 
 ## RhinoCommon 관행
 - 편집은 제자리에서: `doc.Objects.Replace(id, geometry)`로 ID·레이어·속성을 유지한다. 속성 변경은 `Attributes.Duplicate()` → 수정 → `ModifyAttributes`, 그다음 형상 `Replace`. 변경 뒤 객체를 다시 읽어 값을 확인한다.

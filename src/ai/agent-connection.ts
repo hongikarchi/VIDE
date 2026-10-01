@@ -186,8 +186,8 @@ function ownInstruction(connection: AgentConnection, format: AgentFormat) {
     : conversationToolInstruction + scope;
 }
 /**
- * A host turn's project read tools (SPEC-02.6, T-062): what they read and that only the target is
- * live. Empty when the turn has none of them.
+ * A host turn's project read tools (SPEC-02.6, T-062) and the other linked files it may read live
+ * (ADR-027). Empty when the turn has none of them.
  */
 export function hostProjectNote(tools: readonly string[]) {
   const links = tools.includes('links_layers') || tools.includes('sync_sample');
@@ -201,7 +201,7 @@ export function hostProjectNote(tools: readonly string[]) {
     (facts
       ? " project_brief, project_search, project_issue, project_statement and project_checks read the project's 자료 (cite statements as [S<id>], say 미확정 for unconfirmed ones);"
       : '') +
-    ' targetRef may be left out for these. Only the target is live: other files are known only from their stored Sync, which may be older than the open file, and nothing here edits another file.'
+    ' targetRef may be left out for these. Other linked files that are open and connected now (the task goal lists them with their linkId) are read live: query, measure and capture_view take that linkId. A closed file, or one answering LINK_NOT_LIVE, is known only from its stored Sync, which may be older than the file.'
   );
 }
 /** The instruction-bundle mode a connection implies when the caller names none (PLAN-24). */

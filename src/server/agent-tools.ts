@@ -58,6 +58,11 @@ const measureEnd = z.union([
   z.string().min(1).max(100),
   z.tuple([z.number(), z.number(), z.number()]),
 ]);
+/**
+ * Another linked file of the project (ADR-027): its link id from links_layers or the turn's goal.
+ * Left out, the task target. Only a direct host turn's scope accepts it (LINK_NOT_LIVE otherwise).
+ */
+const linkId = z.string().min(1).max(128).optional();
 const page = {
   offset: z.number().int().min(0).optional(),
   limit: z.number().int().min(1).max(100).optional(),
@@ -65,21 +70,22 @@ const page = {
 const definitions = {
   query: {
     description:
-      'Read a bounded page of the current task target. Use page.nextOffset with expectedRevision for subsequent pages, or objectIds for specific objects. Never treat one page as the whole model.',
-    schema: z.object({ targetRef: target, ...queryPageFields }).strict(),
+      'Read a bounded page of the current task target, or with linkId of another linked file of the project that is open now. Use page.nextOffset with expectedRevision for subsequent pages, or objectIds for specific objects. Never treat one page as the whole model.',
+    schema: z.object({ targetRef: target, linkId, ...queryPageFields }).strict(),
   },
   execute: {
     description:
-      'Run SDK code on the task target. In Auto mode the target is the open user document: each call runs directly in it as ONE undo record (Ctrl+Z / VIDE [되돌리기] reverts it) and returns undoId and the added/changed/removed objects. Bulk deletion above the limit, layer deletion and purge are held back: such a call returns ok:false with "guarded" and nothing stays applied; then stop and tell the user what needs confirmation. Plan mode has no execute. The task goal names the target.',
-    schema: z.object({ targetRef: target, code: z.string().min(1).max(65536) }).strict(),
+      'Run SDK code on the task target. In Auto mode the target is the open user document: each call runs directly in it as ONE undo record (Ctrl+Z / VIDE [되돌리기] reverts it) and returns undoId and the added/changed/removed objects. Bulk deletion above the limit, layer deletion and purge are held back: such a call returns ok:false with "guarded" and nothing stays applied; then stop and tell the user what needs confirmation. Plan mode has no execute. The task goal names the target; linkId runs it in another open linked file of the project instead (its own undo records).',
+    schema: z.object({ targetRef: target, linkId, code: z.string().min(1).max(65536) }).strict(),
   },
   // The AI's eyes (PLAN-24): an image of the target's model view and measurements of its objects.
   capture_view: {
     description:
-      'See the task target: returns a PNG of its current model view (default 1200x800, at most 1600 px a side) and the camera. Frame objects with fitIds, look through a namedView, and switch layers on or off for this image only (working copies). Nothing in the document changes. Look after edits to check the result.',
+      'See the task target: returns a PNG of its current model view (default 1200x800, at most 1600 px a side) and the camera. Frame objects with fitIds, look through a namedView, and switch layers on or off for this image only (working copies). Nothing in the document changes. Look after edits to check the result. linkId: another open linked file of the project.',
     schema: z
       .object({
         targetRef: target,
+        linkId,
         width: z.number().int().min(64).max(1600).optional(),
         height: z.number().int().min(64).max(1600).optional(),
         namedView: z.string().min(1).max(200).optional(),
@@ -91,10 +97,11 @@ const definitions = {
   },
   measure: {
     description:
-      'Measure objects of the task target in model units: bounding box and size, curve length, area, and volume of closed solids for each id; and closest distances between pairs whose ends are object ids or [x,y,z] points (with the two closest points and dx/dy/dz). Quote these numbers instead of estimating.',
+      'Measure objects of the task target in model units: bounding box and size, curve length, area, and volume of closed solids for each id; and closest distances between pairs whose ends are object ids or [x,y,z] points (with the two closest points and dx/dy/dz). Quote these numbers instead of estimating. linkId: another open linked file of the project.',
     schema: z
       .object({
         targetRef: target,
+        linkId,
         ids: z.array(z.string().min(1).max(100)).max(50).optional(),
         distances: z
           .array(
@@ -382,9 +389,12 @@ interface ScopeOptions {
   isCurrent: () => boolean | Promise<boolean>;
   maxCalls?: number;
   ttlMs?: number;
+  /** The handlers resolve `linkId` on the document tools (a direct host turn, ADR-027). */
+  links?: boolean;
 }
 interface Run {
   targets: Set<string>;
+  links: boolean;
   handlers: Handlers;
   isCurrent: ScopeOptions['isCurrent'];
   remaining: number;
@@ -438,7 +448,19 @@ const knownErrors = new Set([
   'FILE_NOT_FOUND',
   'FILE_FORBIDDEN',
   'FILE_ACCESS_DENIED',
+  'LINK_NOT_LIVE',
+  'DOCUMENT_LOCKED',
+  'HOST_RESULT_UNRESOLVED',
 ]);
+/** What the model should do next after these errors (ADR-027): sent beside the code. */
+const errorHints: Record<string, string> = {
+  LINK_NOT_LIVE:
+    'That linked file is not open and connected now (or this turn cannot reach other files live). Read it from its stored Sync with links_layers and sync_sample, do not edit it, and tell the user it must be open in its host to be edited.',
+  DOCUMENT_LOCKED:
+    'Another running task is writing that file. Nothing ran there; do not retry it in this turn. Tell the user.',
+};
+/** The host document tools whose linkId names another linked file (links_layers keeps its own). */
+const linkTools: ReadonlySet<string> = new Set(['query', 'execute', 'capture_view', 'measure']);
 /**
  * The project read tools a host modeling turn gets beside its host tools (SPEC-02.6, T-062):
  * linked files' layers, Sync samples and the project facts. They read VIDE's own records, never a
@@ -561,7 +583,14 @@ export class AgentTools {
     };
   }
 
-  issue({ targetRef, handlers, isCurrent, maxCalls = 20, ttlMs = 120000 }: ScopeOptions) {
+  issue({
+    targetRef,
+    handlers,
+    isCurrent,
+    maxCalls = 20,
+    ttlMs = 120000,
+    links = false,
+  }: ScopeOptions) {
     const targets = Array.isArray(targetRef) ? targetRef : [targetRef];
     if (
       targets.length < 1 ||
@@ -589,6 +618,7 @@ export class AgentTools {
       key = digest(token);
     const run = {
       targets: new Set(targets),
+      links,
       handlers: { ...handlers },
       isCurrent,
       remaining: maxCalls,
@@ -648,13 +678,21 @@ export class AgentTools {
   async #invoke(
     run: Run,
     name: ToolName,
-    args: { targetRef?: string; [key: string]: unknown },
+    args: { targetRef?: string; linkId?: string; [key: string]: unknown },
   ): Promise<CallToolResult> {
     const error = (code: string): CallToolResult => ({
       isError: true,
-      content: [{ type: 'text', text: JSON.stringify({ code }) }],
+      content: [
+        {
+          type: 'text',
+          text: JSON.stringify(errorHints[code] ? { code, next: errorHints[code] } : { code }),
+        },
+      ],
     });
     if (run.abort.signal.aborted || run.expires <= this.#now()) return error('AGENT_SCOPE_EXPIRED');
+    // Another linked file only where the handlers resolve it; elsewhere never the target instead.
+    if (args.linkId !== undefined && linkTools.has(name) && !run.links)
+      return error('LINK_NOT_LIVE');
     if (args.targetRef && !run.targets.has(args.targetRef)) return error('TARGET_MISMATCH');
     // Left out, targetRef means the scope's only target; with several it must be named.
     if (
@@ -1399,12 +1437,12 @@ export function visionHandlers(
   onUse: (tool: 'capture_view' | 'measure') => void = () => {},
 ): Handlers {
   return {
-    capture_view: async ({ targetRef: _target, ...options }) => {
+    capture_view: async ({ targetRef: _target, linkId: _link, ...options }) => {
       const { data, mimeType, ...meta } = await source.captureView(options);
       onUse('capture_view');
       return new ToolImage(data, mimeType, meta);
     },
-    measure: async ({ targetRef: _target, ...options }) => {
+    measure: async ({ targetRef: _target, linkId: _link, ...options }) => {
       if (!options.ids?.length && !options.distances?.length)
         throw new DomainError('INVALID_INPUT');
       const result = await source.measure(options);

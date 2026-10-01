@@ -41,6 +41,7 @@ import { startHealthLog } from './health.ts';
 import { Diagnostics } from './diagnostics.ts';
 import { knowledgeFile } from '../jigs/knowledge.ts';
 import { DocumentLinks, isFileLink } from '../core/document-links.ts';
+import { openDocumentOf } from './live-links.ts';
 import { removeLink } from './link-removal.ts';
 import { z } from 'zod';
 import type { IncomingMessage } from 'node:http';
@@ -807,13 +808,7 @@ export async function startServer({
         send(
           200,
           links.list(linkList[1]).map((link) => {
-            const doc = open.find(
-              (item) =>
-                (item.host ?? 'rhino') === link.host &&
-                (link.path && item.path
-                  ? item.path.toLowerCase() === link.path.toLowerCase()
-                  : item.instance === link.instance && item.id === link.documentId),
-            );
+            const doc = openDocumentOf(link, open);
             const file = isFileLink(link);
             const syncs = requests.filter(
               (entry) =>

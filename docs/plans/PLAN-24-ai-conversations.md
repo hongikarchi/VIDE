@@ -341,6 +341,9 @@ related: [PLAN, PLAN-22, PLAN-23, PLAN-25, PLAN-26, PLAN-02, PLAN-05, PLAN-08, P
 - **변경 범위:** `src/server/live-links.ts`(연결 행 → 열린 연결 편집기 문서, 링크 목록 경로와 같은 맞춤 규칙, `server.ts` 링크 목록도 이 함수를 씀), `agent-tools.ts`(`query`·`execute`·`capture_view`·`measure`의 선택 인수 `linkId`, 범위 옵션 `links`, `LINK_NOT_LIVE`·`DOCUMENT_LOCKED` 오류와 `next` 안내), `direct-mode.ts`(문서별 드라이버·조회 캐시·보기, 목표 문장의 열린·닫힌 연결 파일 목록), `execution.ts`(`directDriverFor`의 ZWCAD 조회, 턴에 연결 해석기 전달), 지시 `hostProjectNote`·`modeling.md`(T-062의 '살아 있는 문서는 대상 하나' 문구를 새 규칙으로), `gateway.ts` 오류 문구.
 - **검증:** `tests/server/multi-file.test.mjs` — 모의 편집기 두 개로 대상 Rhino 턴이 다른 문서를 `linkId`로 조회·측정·캡처(계획·자동), 닫힌 연결은 `LINK_NOT_LIVE`와 안내, `linkId`를 받지 않는 범위의 거절. `tests/server/host-turn-tools.test.mjs` 지시 문구.
 - **완료:** 위 시험과 `npm test` 통과.
+- **상태(2026-10-01):** 구현·단위 검증 완료(설치 전). 대상 Rhino 턴의 `query`·`measure`·`capture_view`가 `linkId`로 열린 연결 문서를 읽고(계획·자동), 닫힌 연결은 `LINK_NOT_LIVE`와 `next` 안내, 모르는 ID는 `NOT_FOUND`, 보기 메서드 없는 문서는 `NO_VIEW`. ZWCAD 연결 도면은 `queryEntities`로 읽는다(보기 없음). `linkId`를 처리하지 않는 범위(ZWCAD 대상·작업 사본·연계)는 처리기를 부르지 않고 `LINK_NOT_LIVE`. 지시(`hostProjectNote`, `modeling.md`)와 목표 문장의 연결 파일 목록을 바꿨다.
+  - 증거: `tests/server/multi-file.test.mjs`(읽기 4건), `tests/server/host-turn-tools.test.mjs`(지시 문구), `npm test` 754 통과
+  - 남음: 실제 Rhino 두 창·실제 CLI로 확인(설치본 묶음 때)
 
 ### T-090 · 한 요청의 여러 파일 쓰기·잠금·작업 단위 되돌리기·자동 되돌림 {#t-090}
 

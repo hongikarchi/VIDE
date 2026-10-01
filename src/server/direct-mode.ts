@@ -17,6 +17,7 @@ import {
   type VisionSource,
 } from './agent-tools.ts';
 import { directRefusal, type DirectRefusal } from '../contracts/direct-refusal.ts';
+import type { LiveLink } from './live-links.ts';
 
 /** Auto-mode guard: deleting more objects than this in one execute needs the user's confirmation. */
 export const DIRECT_MAX_DELETES = 50;
@@ -274,9 +275,55 @@ export interface DirectTurn {
   protectedIds?: string[];
   /** The project read tools of the turn (SPEC-02.6, T-062), offered in Plan and Auto. */
   projectTools?: ProjectToolHandlers;
+  /** The other linked files of the project the turn reads live (ADR-027); absent: target only. */
+  linked?: LinkedFiles;
+  /** The target document's name (its records and the result group it). */
+  targetName?: string;
+}
+/** A document a turn works on, as its records and the request result name it. */
+export interface TurnDocument {
+  host: 'rhino' | 'zwcad';
+  instance: string;
+  documentId: number;
+  linkId?: string;
+  name: string;
+}
+/** The project's other linked files as a direct turn sees them (ADR-027, SPEC-01.11 5). */
+export interface LinkedFiles {
+  /** The project's linked files now; a live one names its open (plugin-attached) document. */
+  list(): Promise<LiveLink[]>;
+  /** The driver of an open linked document; undefined when this engine cannot reach it. */
+  driver(
+    host: 'rhino' | 'zwcad',
+    target: { instance: string; documentId: number },
+  ): DirectDriver | undefined;
+}
+const documentKey = (host: string, target: { instance: string; documentId: number }) =>
+  JSON.stringify([host, target.instance, target.documentId]);
+const hostLabel = (host: 'rhino' | 'zwcad') => (host === 'rhino' ? 'Rhino' : 'ZWCAD');
+/** The linked-files lines of a turn goal: which file is the target, which are live, which closed. */
+function linkedFilesNote(links: LiveLink[], targetKey: string, eyes: boolean) {
+  if (!links.length) return '';
+  const rows = links.slice(0, 30).map((link) => {
+    const state =
+      link.open && documentKey(link.host, link.open) === targetKey
+        ? 'the target (this document; linkId may be left out)'
+        : link.open
+          ? link.host === 'rhino' && eyes
+            ? 'open: read it live with query, measure and capture_view and its linkId'
+            : link.host === 'rhino'
+              ? 'open: read it live with query and its linkId'
+              : `open: read it live with query and its linkId${eyes ? ' (no capture_view or measure)' : ''}`
+          : 'closed: stored Sync only (links_layers, sync_sample)';
+    return `- ${link.id} · ${link.name} (${hostLabel(link.host)}) · ${state}`;
+  });
+  return `
+Linked files of this project (linkId · name · state):
+${rows.join('\n')}
+Each file keeps its own units and coordinates (query returns units); do not assume a shared origin unless the request or the pins establish one. A file answering LINK_NOT_LIVE is not open now: read it from its stored Sync.`;
 }
 
-function rhinoGoal(turn: DirectTurn, targetRef: string) {
+function rhinoGoal(turn: DirectTurn, targetRef: string, linkedNote = '') {
   const { input, mode } = turn;
   const limits = executionLimits(input);
   const kept = turn.protectedIds?.length
@@ -302,6 +349,7 @@ Keep existing IDs, layers and attributes unless the request changes them; modify
       : kept
   }
 When a dimension is missing but a standard or conventional value exists, use it and state the assumption; ask only when no reasonable value exists.
+${linkedNote}
 Limits: ${limits.maxToolCalls} tool calls, ${limits.maxHostCommands} executes, ${limits.timeoutSeconds} seconds. Stop at the limit and report remaining work.
 Reply in Korean with what actually changed in the document${mode === 'auto' ? ' (and that Ctrl+Z or [되돌리기] reverts it)' : ''}.
 User request: ${input.body || '첨부한 설계 문맥을 검토해 주세요.'}`;
@@ -328,6 +376,51 @@ export async function runDirectTurn(turn: DirectTurn) {
   // lost connection) answers every later execute of this turn without calling the host.
   let refused: DirectRefusal | undefined;
   const progress = () => ({ queries, attempts, completed: applied });
+  // The documents of the turn (ADR-027): the target and every other linked file it resolved.
+  interface TurnDoc {
+    key: string;
+    driver: DirectDriver;
+    file: { linkId?: string; name: string };
+    vision?: ReturnType<typeof visionHandlers>;
+  }
+  let links: LiveLink[] = turn.linked ? await turn.linked.list().catch(() => []) : [];
+  const primaryKey = documentKey(driver.host, driver.target);
+  const primaryLink = links.find(
+    (link) => link.open && documentKey(link.host, link.open) === primaryKey,
+  );
+  const primary: TurnDoc = {
+    key: primaryKey,
+    driver,
+    file: {
+      ...(primaryLink ? { linkId: primaryLink.id } : {}),
+      name: turn.targetName ?? primaryLink?.name ?? `${hostName} 문서`,
+    },
+  };
+  const docs = new Map<string, TurnDoc>([[primaryKey, primary]]);
+  /** The document a tool call names: the target, or an open linked file (LINK_NOT_LIVE else). */
+  const resolve = async (linkId: unknown): Promise<TurnDoc> => {
+    if (linkId === undefined || linkId === primary.file.linkId) return primary;
+    if (typeof linkId !== 'string' || !turn.linked) throw failure('LINK_NOT_LIVE');
+    let link = links.find((entry) => entry.id === linkId);
+    // Opened or closed since the turn began: read the links once more.
+    if (!link?.open) {
+      links = await turn.linked.list().catch(() => links);
+      link = links.find((entry) => entry.id === linkId);
+    }
+    if (!link) throw failure('NOT_FOUND');
+    if (!link.open) throw failure('LINK_NOT_LIVE');
+    const key = documentKey(link.host, link.open);
+    const known = docs.get(key);
+    if (known) return known;
+    const linked = turn.linked.driver(link.host, link.open);
+    if (!linked) throw failure('LINK_NOT_LIVE');
+    const doc: TurnDoc = { key, driver: linked, file: { linkId: link.id, name: link.name } };
+    docs.set(key, doc);
+    return doc;
+  };
+  /** Activity text naming the file when it is not the target. */
+  const named = (doc: TurnDoc, text: string) =>
+    doc === primary ? text : `${doc.file.name} · ${text}`;
   const state = (phase: string) => ({
     phase,
     host: driver.host,
@@ -338,25 +431,36 @@ export async function runDirectTurn(turn: DirectTurn) {
     activity: activity.entries,
     executions: executions.map(publicRecord),
   });
-  const handlers: Record<string, (args: Record<string, unknown>) => unknown> = {
+  type Handler = (args: Record<string, unknown>, context?: { signal: AbortSignal }) => unknown;
+  const handlers: Record<string, Handler> = {
     // The project's records beside the open document (T-062); the document's own tools follow.
-    ...(turn.projectTools as Record<string, (args: Record<string, unknown>) => unknown>),
-    query: async ({ targetRef: _target, ...args }) => {
-      const page = await driver.query(args as QueryPageOptions);
+    ...(turn.projectTools as Record<string, Handler>),
+    query: async ({ targetRef: _target, linkId, ...args }) => {
+      const doc = await resolve(linkId);
+      const page = await doc.driver.query(args as QueryPageOptions);
       queries++;
-      activity.add('query', `문서 조회 ${queries}회차`);
+      activity.add('query', named(doc, `문서 조회 ${queries}회차`));
       update(state('query'));
       return page;
     },
   };
-  if (driver.vision) {
-    const source = await driver.vision();
-    Object.assign(
-      handlers,
-      visionHandlers(source, (tool) =>
-        activity.add('query', tool === 'capture_view' ? '모델 화면 보기' : '모델 치수 재기'),
+  const eyes = (doc: TurnDoc, source: VisionSource) =>
+    visionHandlers(source, (tool) =>
+      activity.add(
+        'query',
+        named(doc, tool === 'capture_view' ? '모델 화면 보기' : '모델 치수 재기'),
       ),
     );
+  // Only a connection with view methods has the eyes; another file's open on first use.
+  if (driver.vision) {
+    primary.vision = eyes(primary, await driver.vision());
+    for (const tool of ['capture_view', 'measure'] as const)
+      handlers[tool] = async (args, context) => {
+        const doc = await resolve(args.linkId);
+        if (!doc.driver.vision) throw failure('NO_VIEW');
+        doc.vision ??= eyes(doc, await doc.driver.vision());
+        return (doc.vision[tool] as Handler)(args, context ?? { signal });
+      };
   }
   /** A refused execute: recorded once, answered to the AI as not run (with whether to retry). */
   const notExecuted = (refusal: DirectRefusal, fresh = false) => {
@@ -376,9 +480,11 @@ export async function runDirectTurn(turn: DirectTurn) {
     };
   };
   if (mode === 'auto')
-    handlers.execute = async ({ code }) => {
+    handlers.execute = async ({ code, linkId }) => {
       if (typeof code !== 'string') throw failure('INVALID_INPUT');
       if (signal.aborted) throw failure('CANCELLED');
+      // Editing other linked files follows (T-090); reading them is live already.
+      if ((await resolve(linkId)) !== primary) throw failure('LINK_NOT_LIVE');
       if (uncertain) throw failure('HOST_RESULT_UNKNOWN');
       if (refused?.final) return notExecuted(refused);
       if (attempts >= limits.maxHostCommands) throw failure('HOST_COMMAND_LIMIT');
@@ -488,6 +594,7 @@ export async function runDirectTurn(turn: DirectTurn) {
     isCurrent: () => !signal.aborted && !uncertain,
     maxCalls: limits.maxToolCalls,
     ttlMs: Math.min(600000, (limits.timeoutSeconds + 60) * 1000),
+    links: true,
   });
   try {
     activity.add('host', `열린 ${hostName} 문서에 연결 · ${mode === 'auto' ? '자동' : '계획'}`);
@@ -501,7 +608,7 @@ export async function runDirectTurn(turn: DirectTurn) {
       })
       .run(
         {
-          goal: rhinoGoal(turn, targetRef),
+          goal: rhinoGoal(turn, targetRef, linkedFilesNote(links, primaryKey, !!driver.vision)),
           revision: 1,
           items,
           includedIds: items.map((i) => i.id),

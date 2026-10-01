@@ -228,6 +228,13 @@ Object.assign(errors, {
   DIRECT_ACTION_FAILED: '요청을 처리하지 못했습니다. 작업 상태를 다시 확인하세요.',
   GUARD_CONFIRMATION_REQUIRED:
     '되돌리기로 복구하기 어려운 변경이라 실행을 되돌리고 확인을 기다립니다. [진행]을 누르면 다시 실행합니다.',
+  // Several linked files in one request (ADR-027).
+  LINK_NOT_LIVE:
+    '그 연결 파일은 지금 열려 연결되어 있지 않아 실시간으로 읽거나 고칠 수 없습니다. AI는 마지막 Sync 기록으로만 읽습니다. 호스트에서 파일을 열고 연결한 뒤 다시 요청하세요.',
+  DOCUMENT_LOCKED:
+    '다른 작업이 그 파일을 고치는 중이라 이 요청에서는 그 파일을 바꾸지 않았습니다. 그 작업이 끝난 뒤 다시 요청하세요.',
+  UNDO_PARTIAL:
+    '일부 파일은 되돌리지 못했습니다. 결과에 남은 파일을 호스트에서 Ctrl+Z(ZWCAD는 U)로 순서대로 되돌리세요.',
 });
 
 // Codes the engine and hosts send that used to show raw: what happened and what to do.
