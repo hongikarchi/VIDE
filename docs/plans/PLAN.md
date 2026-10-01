@@ -2,7 +2,7 @@
 id: PLAN
 title: VIDE 실행 로드맵
 status: review
-version: 0.234
+version: 0.235
 updated: 2026-10-01
 owner: agent:codex
 related: [ARCH-01, PLAN-02, PLAN-03, PLAN-22, PLAN-23, PLAN-24, PLAN-25, PLAN-26, PLAN-27, ADR-022, ADR-025, ADR-026, ADR-027, SPEC-00, SPEC-01, SPEC-02, SPEC-03, SPEC-04, SPEC-05, SPEC-06, SPEC-07]
@@ -246,13 +246,13 @@ T-001~018의 번호·지원 증거는 유지한다. 각 티켓의 현재 결과�
 | T-093 여러 파일 쓰기·잠금·작업 단위 되돌리기·자동 되돌림 | 구현·단위 검증(설치 전). 잠금은 기다리지 않고 `DOCUMENT_LOCKED`(jig 바로 만들기 포함), 실패·중단한 여러 파일 요청은 자동으로 되돌림, `undo {all: true}`, 결과 불명은 확인 필요 문서만 잡고 되돌리기 답 유실은 다시 [되돌리기]로 해소(2026-10-01 검토 반영) | 실제 Rhino 두 창·ZWCAD 확인, ZWCAD 대상 턴의 여러 파일, 실행 답 유실의 해소 동작 | [PLAN-24](PLAN-24-ai-conversations.md#t-093) |
 | T-094 파일별 결과·요청 [되돌리기] 화면 | 완료(설치 전) | 설치본 화면 확인 | [PLAN-24](PLAN-24-ai-conversations.md#t-094) |
 | T-088 대화별 모델 고정·모델 바꾸기 = 새 탭 | 구현·단위·브라우저 시험 완료(`0fb9506`) | 실제 CLI로 모델 바꾸기 인계 확인(설치본 릴리스 때) | [PLAN-24](PLAN-24-ai-conversations.md#t-088) |
-| T-097 [+] 새 대화를 묻지 않고 바로 열기(첫 요청이 이름) | 구현·단위·브라우저 시험 완료(2026-10-01) | 설치본 확인(묶음 릴리스 때) | [PLAN-24](PLAN-24-ai-conversations.md#t-097), SPEC-02.19 |
+| T-097 [+] 새 대화를 묻지 않고 바로 열기(첫 요청이 이름) | 구현·단위·브라우저 시험 완료(2026-10-01). 통합 검토 반영: [+]의 빈 탭이 jig 시작에 묶인 뒤 [일반 대화로]를 누르면 그 묶기를 풀어(`…/unbind`) 같은 글이 jig 도구 없는 일반 턴으로 간다 | 설치본 확인(묶음 릴리스 때) | [PLAN-24](PLAN-24-ai-conversations.md#t-097), SPEC-02.19 |
 | T-089 첨부 버튼 정리·경로 기반 첨부(모든 형식, `attachment_read`) | 구현·단위·브라우저 시험 완료(2026-10-01, 커밋 전) | 실제 Claude·Codex로 첨부 이미지·텍스트 읽기 확인(설치본 릴리스 때). 후속: PDF 본문 추출, 3DM 요약, 말(@언급)로 연계 대상 고르기. 원본 위치의 파일은 T-091의 프로젝트 폴더 읽기로 대신 | [PLAN-26](PLAN-26-chat-stage.md#t-089), SPEC-01.12 |
 | T-090 참고 이미지 의도 확인 (a)~(d) 영역 표시·해석 말풍선·Codex 이미지·확정 → 모델링 | (a)~(d) 구현·단위·브라우저 시험(가짜 공급자·가짜 이미지 작업) 완료(2026-10-01, 커밋 전). 실제 Codex 이미지 작업 실측 33–44초(합성 장면) | 실제 CLI 해석 턴은 Claude·Codex 통과(2026-10-01). 말로 고치기의 실제 CLI 확인, 실제 Rhino 사본으로 SPEC-09 완료 기준·VERIFY, Design §03·§14 표현, PRD 범위 문장 | [PLAN-26](PLAN-26-chat-stage.md), SPEC-09 |
 | T-091 프로젝트 폴더·AI 파일 읽기(`file_read`·`file_list`, 폴더 밖은 권한 질문) | 구현·단위·브라우저 시험 완료(2026-10-01, 커밋 전) | 실제 Claude·Codex로 권한 질문 답하기 확인(설치본 릴리스 때), 셸 폴더 선택 창은 다음 설치본부터 | [PLAN-26](PLAN-26-chat-stage.md#t-091), SPEC-01.13, `project-files.test.mjs`, `browser-project-folders.mjs` |
 | T-095 다른 이름으로 저장 뒤 연결이 창을 따라감(Rhino·ZWCAD, 중복 행은 하나만 연결) | 구현·서버 시험 완료(2026-10-01, 설치 전) | 실제 Rhino·ZWCAD 창에서 다른 이름 저장 확인(설치본 반영 뒤 합성 문서) | [PLAN-16](PLAN-16-document-links.md#t-095), `link-follow.test.mjs` |
 | T-096 연결 파일을 모두 숨겨도 남던 객체(시작 때 선택 순서), 어느 파일에도 속하지 않는 결과는 '작업 결과' 행 | 구현·브라우저 시험 완료(2026-10-01, 설치 전) | 설치본에서 사용자 프로젝트로 확인 | [PLAN-16](PLAN-16-document-links.md#t-096), `browser-links.mjs` |
-| T-098 대시보드 할 일·일정(맨 위 '오늘', `agenda_*` 도구와 [되돌리기], schema 7) | 구현·단위·브라우저 시험 완료(2026-10-01, 설치 전). 검토 지적 6건 반영(되돌리기 판 검사, 편집 판 고정, 입력칸 초점, 기본 대화 호스트 턴 도구, 턴마다 안내 하나) | 실제 Claude·Codex로 '회의록에서 할 일 뽑아줘' 확인(설치본 릴리스 때). 후속: 반복 일정·캘린더 연동·자료에서 찾기 | [PLAN-26](PLAN-26-chat-stage.md#t-098), SPEC-01.14, `agenda.test.mjs`, `browser-dashboard-agenda.mjs` |
+| T-098 대시보드 할 일·일정(맨 위 '오늘', `agenda_*` 도구와 [되돌리기], schema 7) | 구현·단위·브라우저 시험 완료(2026-10-01, 설치 전). 검토 지적 6건 반영(되돌리기 판 검사, 편집 판 고정, 입력칸 초점, 기본 대화 호스트 턴 도구, 턴마다 안내 하나). 통합 검토 반영: 대상이 여럿인 연계 턴에서도 `agenda_*`는 `targetRef` 없이 쓴다 | 실제 Claude·Codex로 '회의록에서 할 일 뽑아줘' 확인(설치본 릴리스 때). 후속: 반복 일정·캘린더 연동·자료에서 찾기 | [PLAN-26](PLAN-26-chat-stage.md#t-098), SPEC-01.14, `agenda.test.mjs`, `browser-dashboard-agenda.mjs` |
 | T-099 JIG 한 화면(레일의 만들기를 JIG에, 끝의 [새로 만들기] 카드, 작성 중 초안 카드, jig 하나에 카드 하나) | 구현·단위·브라우저 시험 완료(2026-10-01, 설치 전) | 설치본 반영(릴리스 때) | [PLAN-26](PLAN-26-chat-stage.md#t-099), `jig-list.test.mjs`, `browser-make.mjs` |
 | T-100 jig 아이콘(정해 둔 목록의 `icon`) | 구현·단위·브라우저 시험 완료(2026-10-01, 설치 전) | S-06 v0.3.1은 아이콘 없음(기본 그림) — S-06은 사본을 만들 수 없어(T-101) 저장소 소스의 다음 버전에서 넣는다 | [PLAN-26](PLAN-26-chat-stage.md#t-100), `jig-manifest.test.mjs`, `make-routes.test.mjs`, `browser-jigs.mjs` |
 | T-101 [수정하기](사본 초안 → 다시 고정 → 작업본 [올리기]) | 구현·단위·브라우저 시험 완료(2026-10-01, 설치 전) | 단계가 jig 밖을 가져오는 저장소 jig(S-06)는 사본을 만들지 않음(`JIG_NOT_FORKABLE`, 카드에 흐린 [수정하기]와 이유). S-06 사본은 상자 라이브러리만 쓰도록 다시 쓰는 후속 작업 뒤 가능. 설치본 반영 | [PLAN-26](PLAN-26-chat-stage.md#t-101), `drafts.test.mjs`, `make-routes.test.mjs`, `browser-jigs.mjs` |

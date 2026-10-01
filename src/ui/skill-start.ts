@@ -87,6 +87,11 @@ export interface SkillStart {
   openedTab: boolean;
   conversationId: string | null;
   conversationCreated: boolean;
+  /**
+   * This start bound a conversation that was on no jig before (the empty tab of [+]): [일반 대화로]
+   * unbinds it again, so the words it sends there go to an ordinary turn without jig tools.
+   */
+  boundExisting: boolean;
   /** The conversation the composer sent to before this start (the way back). */
   previousConversation: string | null | undefined;
   /** Values read from the request: applied in 자동, proposed in 계획. */
@@ -151,12 +156,12 @@ async function bindConversation(
   entry: SkillEntry,
   instanceId: string,
   options: Pick<SkillStartOptions, 'request' | 'conversationId'>,
-): Promise<{ id: string; created: boolean }> {
-  const bind = async (id: string) => {
+): Promise<{ id: string; created: boolean; bound: boolean }> {
+  const bind = async (id: string, bound = false) => {
     await deps.api(path(deps, `/conversations/${encodeURIComponent(id)}/bind`), 'POST', {
       jigInstanceId: instanceId,
     });
-    return { id, created: false };
+    return { id, created: false, bound };
   };
   if (options.conversationId) {
     try {
@@ -168,7 +173,7 @@ async function bindConversation(
   const list = ((await deps.api(path(deps, '/conversations'))) as ConversationRow[] | null) ?? [];
   const open = list.filter((row) => row.id && row.state !== 'closed');
   const already = open.find((row) => row.jigInstanceId === instanceId);
-  if (already?.id) return { id: already.id, created: false };
+  if (already?.id) return { id: already.id, created: false, bound: false };
   // A new general conversation with nothing in it yet takes the jig (no empty conversation left).
   const active = deps.conversations.active();
   const fresh = open.find(
@@ -178,7 +183,7 @@ async function bindConversation(
       (row.requests ?? 0) === 0 &&
       (row.kind === 'general' || row.kind === 'jig-run'),
   );
-  if (fresh?.id) return bind(fresh.id);
+  if (fresh?.id) return bind(fresh.id, true);
   const model = deps.model?.();
   const made = (await deps.api(path(deps, '/conversations'), 'POST', {
     kind: 'jig-run',
@@ -189,7 +194,7 @@ async function bindConversation(
     ...(model?.provider && model.model ? { model: model.model } : {}),
   })) as { id?: string };
   if (!made?.id) throw skillError('INVALID_PROVIDER_OUTPUT');
-  return { id: made.id, created: true };
+  return { id: made.id, created: true, bound: false };
 }
 
 /** The values the request gives for the jig's `from_request` settings, read against its view. */
@@ -262,6 +267,7 @@ export async function startSkill(
     by,
     mode: options.mode,
     previousConversation,
+    boundExisting: false,
     values: [] as SkillValue[],
     seqs: [] as number[],
   };
@@ -373,6 +379,7 @@ async function open(
   const conversation = await bindConversation(deps, entry, start.instanceId, options);
   start.conversationId = conversation.id;
   start.conversationCreated = conversation.created;
+  start.boundExisting = conversation.bound;
   // The chips read the list again first, so the new conversation is known when it is chosen.
   await deps.conversations.refresh().catch(() => {});
   deps.conversations.select(conversation.id);
@@ -476,7 +483,8 @@ export async function continueSkill(
 
 /**
  * [일반 대화로]: close the tab this start opened, undo its settings (newest first), stop the
- * preference, give the composer its conversation back and count the reversal (never the words).
+ * preference, close the conversation it made or unbind the one it bound, give the composer its
+ * conversation back and count the reversal (never the words).
  */
 export async function revertSkill(deps: SkillDeps, start: SkillStart) {
   deps.preferRun(start.instanceId, undefined);
@@ -491,6 +499,16 @@ export async function revertSkill(deps: SkillDeps, start: SkillStart) {
         path(deps, `/conversations/${encodeURIComponent(start.conversationId)}/close`),
         'POST',
         {},
+      )
+      .catch(() => undefined);
+  // The conversation this start bound (it was on no jig): unbound, so the words go to it as an
+  // ordinary turn (SPEC-02.17 3) without jig_set/jig_run on the instance just backed out of.
+  if (start.boundExisting && start.conversationId)
+    await deps
+      .api(
+        path(deps, `/conversations/${encodeURIComponent(start.conversationId)}/unbind`),
+        'POST',
+        { jigInstanceId: start.instanceId },
       )
       .catch(() => undefined);
   await record(deps, start.conversationCreated ? null : start.conversationId, {

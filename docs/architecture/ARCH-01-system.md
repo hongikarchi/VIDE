@@ -197,7 +197,7 @@ T-002의 첫 HTTP 구현은 프로젝트 목록·생성과 입력 목록·생성
 | 바로 적용 | `POST …/requests/:r/undo {executionId}` 또는 `{all: true}`(작업 단위, ADR-027), `…/:r/confirm {executionId?}`, `…/:r/continue` | §4 「바로 적용 경로」. confirm·continue는 202 |
 | 연결 파일·Sync | `GET·POST …/links`, `PUT …/links/:l`, `POST …/links/:l/remove`, `POST …/links/:l/reads`, `…/live-sync`, `…/capture`, `…/import`, `…/imports/:i/reconcile` | §7 「프로젝트 연결 파일(Link)」 |
 | 사본 적용(jig·가져오기 내부 사본) | `…/applications[/:a[/reconcile]]` | ADR-022로 AI 편집에는 쓰지 않음 |
-| 대화 | `…/conversations[/:c[/close\|reopen\|ledger\|handoff\|account\|answer\|renew\|bind]]` | ARCH-03 §10. `account`·계정 인계는 PLAN-25 2단계에서 빼는 중 |
+| 대화 | `…/conversations[/:c[/close\|reopen\|ledger\|handoff\|account\|answer\|renew\|bind\|unbind]]` | ARCH-03 §10. `account`·계정 인계는 PLAN-25 2단계에서 빼는 중 |
 | jig·만들기·자료 | `…/jigs…`, `…/jig-instances…`, `…/jig-reports`, `…/jig-drafts…`, `…/skills`, `…/facts…`, `…/jigs/knowledge…`, `…/jigs/structure…`, `…/jigs/sync` | ARCH-03 §7, ARCH-02 |
 | 경로 판정·검토·공유 | `…/route`, `…/route/revert`, `…/reviews…`, `…/review-comparison`, `…/comparison`, `…/table-views…`, `…/shared-feedback`, `…/offline-view…`, `…/extensions/:e/run` | §6 |
 

@@ -692,6 +692,17 @@ export class ConversationService {
       throw new DomainError('CONVERSATION_BOUND');
     return this.summarize(this.store.update(projectId, conversationId, { jigInstanceId }));
   }
+  /**
+   * Undoes a bind ([일반 대화로] after a start that bound this conversation, SPEC-02.17 3): its later
+   * turns are ordinary again. Only from the instance named; a conversation on another instance
+   * stays as it is (CONVERSATION_BOUND), one on none is left alone.
+   */
+  unbind(projectId: string, conversationId: string, jigInstanceId: string) {
+    const conversation = this.store.get(projectId, conversationId);
+    if (!conversation.jigInstanceId) return this.summarize(conversation);
+    if (conversation.jigInstanceId !== jigInstanceId) throw new DomainError('CONVERSATION_BOUND');
+    return this.summarize(this.store.update(projectId, conversationId, { jigInstanceId: null }));
+  }
   /** Records what happened outside an AI turn (a setting changed, an app action, a decision). */
   addLedger(projectId: string, conversationId: string, value: unknown) {
     this.store.get(projectId, conversationId);
@@ -1455,7 +1466,7 @@ export async function conversationRoutes(
     return true;
   }
   const route =
-    /^\/api\/v1\/projects\/([^/]+)\/conversations(?:\/([^/]+)(?:\/(close|reopen|ledger|handoff|answer|renew|bind))?)?$/.exec(
+    /^\/api\/v1\/projects\/([^/]+)\/conversations(?:\/([^/]+)(?:\/(close|reopen|ledger|handoff|answer|renew|bind|unbind))?)?$/.exec(
       url.pathname,
     );
   if (!route) return false;
@@ -1526,6 +1537,12 @@ export async function conversationRoutes(
       .strict()
       .parse(await body(request));
     send(200, service.bind(projectId, conversationId, jigInstanceId));
+  } else if (action === 'unbind') {
+    const { jigInstanceId } = z
+      .object({ jigInstanceId: id })
+      .strict()
+      .parse(await body(request));
+    send(200, service.unbind(projectId, conversationId, jigInstanceId));
   } else if (action === 'ledger')
     send(201, service.addLedger(projectId, conversationId, await body(request)));
   else if (action === 'answer') {

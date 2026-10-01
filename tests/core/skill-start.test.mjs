@@ -278,3 +278,47 @@ test('[일반 대화로]: close the tab it opened, undo its values, close its ne
   assert.deepEqual(revert[2], { target: 'jig', by: 'jev' });
   assert.equal(h.selected(), 'c-before');
 });
+
+test('[일반 대화로] after a start in the empty tab of [+]: that tab is unbound again, so the turn gets no jig tools', async () => {
+  const h = harness({
+    active: 'c-tab',
+    conversations: [
+      { id: 'c-tab', kind: 'general', state: 'open', requests: 0 },
+      { id: 'c-bound', kind: 'jig-run', state: 'open', requests: 2, jigInstanceId: 'other' },
+    ],
+    instances: [{ id: 'last', jigId: 'project/s06-frame', title: '작업본 2', updatedAt: 'b' }],
+  });
+  const start = await startSkill(h.deps, 'project/s06-frame', {
+    mode: 'auto',
+    request: '구조 분석',
+    by: 'rules',
+  });
+  // The empty tab took the jig (no second empty conversation).
+  assert.equal(start.conversationId, 'c-tab');
+  assert.equal(start.conversationCreated, false);
+  assert.equal(start.boundExisting, true);
+  await revertSkill(h.deps, start);
+  const unbind = h.calls.find(([, p]) => p.endsWith('/unbind'));
+  assert.deepEqual(
+    [unbind?.[0], unbind?.[1], unbind?.[2]],
+    ['POST', '/conversations/c-tab/unbind', { jigInstanceId: 'last' }],
+  );
+  // The tab is not closed (it was the person's), and it is the one the words go to.
+  assert.ok(!h.calls.some(([, p]) => p === '/conversations/c-tab/close'));
+  assert.equal(h.selected(), 'c-tab');
+});
+
+test('[일반 대화로] never unbinds a conversation that was already on the instance', async () => {
+  const h = harness({
+    active: 'c-jig',
+    conversations: [
+      { id: 'c-jig', kind: 'jig-run', state: 'open', requests: 3, jigInstanceId: 'last' },
+    ],
+    instances: [{ id: 'last', jigId: 'project/s06-frame', title: '작업본 2', updatedAt: 'b' }],
+  });
+  const start = await startSkill(h.deps, 'project/s06-frame', { mode: 'auto', by: 'rules' });
+  assert.equal(start.conversationId, 'c-jig');
+  assert.equal(start.boundExisting, false);
+  await revertSkill(h.deps, start);
+  assert.ok(!h.calls.some(([, p]) => p.endsWith('/unbind')));
+});

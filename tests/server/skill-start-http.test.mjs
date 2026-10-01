@@ -96,6 +96,38 @@ test('a request-opened instance has no output layer until Rhino에 만들기 ask
       jigInstanceId: other.id,
     });
     assert.deepEqual([refused.status, refused.json.code], [409, 'CONVERSATION_BOUND']);
+    // [일반 대화로] unbinds only from the instance it bound; then the turns are ordinary again.
+    const wrong = await api(`${base}/conversations/${conversation.id}/unbind`, 'POST', {
+      jigInstanceId: other.id,
+    });
+    assert.deepEqual([wrong.status, wrong.json.code], [409, 'CONVERSATION_BOUND']);
+    const unbound = await api(`${base}/conversations/${conversation.id}/unbind`, 'POST', {
+      jigInstanceId: instance,
+    });
+    assert.deepEqual([unbound.status, unbound.json.jigInstanceId], [200, null]);
+    assert.equal(
+      (await api(`${base}/conversations`)).json.find((row) => row.id === conversation.id)
+        .jigInstanceId,
+      null,
+    );
+    // Unbound already: nothing to undo.
+    assert.equal(
+      (
+        await api(`${base}/conversations/${conversation.id}/unbind`, 'POST', {
+          jigInstanceId: instance,
+        })
+      ).status,
+      200,
+    );
+    // It can take a jig again afterwards.
+    assert.equal(
+      (
+        await api(`${base}/conversations/${conversation.id}/bind`, 'POST', {
+          jigInstanceId: other.id,
+        })
+      ).status,
+      200,
+    );
     assert.equal(
       (
         await api(`${base}/conversations/${conversation.id}/bind`, 'POST', {
