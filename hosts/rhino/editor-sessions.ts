@@ -57,6 +57,8 @@ export class EditorSessions {
   private ready: Promise<void> | undefined;
   private writes = Promise.resolve();
   private attached = new Map<string, Worker>();
+  /** Sees every attached document snapshot (read-only log, T-087); its errors never reach a read. */
+  observe?: (target: HostTarget, snapshot: { readOnly?: boolean; name?: string }) => void;
   constructor(options: Options) {
     this.options = options;
   }
@@ -212,8 +214,27 @@ export class EditorSessions {
       throw failure('STALE_CONNECTION');
     return worker.setPins(ids);
   }
+  private seen<T extends { source: { readOnly?: boolean; name?: string } }>(
+    target: HostTarget,
+    read: T,
+  ) {
+    try {
+      this.observe?.(target, read.source);
+    } catch {
+      /* Observation never fails a read. */
+    }
+    return read;
+  }
+  /** An attached document's name and path as Rhino reports them now. */
+  async status(target: HostTarget) {
+    if ((await this.connectionKind(target.instance)) !== 'attached-editor')
+      throw failure('TARGET_MISMATCH');
+    return (await this.get(target)).attachedStatus();
+  }
   async inspect(target: HostTarget) {
-    const snapshot = await (await this.get(target)).inspectEditor();
+    const worker = await this.get(target);
+    const snapshot = await worker.inspectEditor();
+    if (this.attached.get(target.instance) === worker) this.seen(target, { source: snapshot });
     return {
       ...target,
       documentHash: snapshot.documentHash,
@@ -268,7 +289,7 @@ export class EditorSessions {
   async display(target: HostTarget, scope: ReadScope = {}) {
     if ((await this.connectionKind(target.instance)) !== 'attached-editor')
       throw failure('TARGET_MISMATCH');
-    return (await this.get(target)).displayEditor(scope);
+    return this.seen(target, await (await this.get(target)).displayEditor(scope));
   }
   /** Direct mode runs only in a document the user attached (never an owned editing copy). */
   private async attachedWorker(target: HostTarget) {
@@ -288,6 +309,6 @@ export class EditorSessions {
   async changes(target: HostTarget, since: number) {
     if ((await this.connectionKind(target.instance)) !== 'attached-editor')
       throw failure('RESYNC_REQUIRED');
-    return (await this.get(target)).displayChanges(since);
+    return this.seen(target, await (await this.get(target)).displayChanges(since));
   }
 }

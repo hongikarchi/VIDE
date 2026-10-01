@@ -141,6 +141,16 @@ SPEC-01.11의 Sync 주체를 먼저 고친다.
   - WAL 크기를 제한한다.
 - 15초마다의 heartbeat가 결과 표를 훑지 않게 색인을 둔다.
 
+**먼저 한 부분(2026-10-01, 사용자 요청) — 구현·단위 시험, 설치본 확인 남음:**
+- `rhino-connections` 사본·`sdk-models` 작업 폴더 정리를 앞당겨 했다.
+  - 사본(.3dm)은 작업 사본이 읽은 직후 지운다.
+  - 영수증(.capture.json)은 그 사본으로 만든 후보를 더 적용할 수 없을 때 지운다. 후보 없이 끝난 실행이나 적용이 끝난 때(성공·실패)다.
+  - 가져오기 폴더는 실행이 끝나면 지운다. 복구 확인 폴더도 같다.
+  - 엔진 시작 때 하루 지난 사본·영수증·작업 폴더와 끝난 세션 폴더를 지운다. 끝나지 않은 요청·적용이 가리키는 것, 열린 편집 사본, 링크·정션은 건너뛴다.
+  - 파일: `src/server/capture-cleanup.ts`(새), `sdk-execution.ts`, `attached-application.ts`, `server.ts`, `tests/server/capture-cleanup.test.mjs`·`capture-release.test.mjs`(새).
+- 문서 Sync 합치기: 같은 문서의 자동 Sync는 실행 중인 것에 합류한다. 끝난 지 2초 안이고 문서 revision이 같으면 그 결과를 다시 쓴다. ↻·지금 Sync는 항상 새로 읽는다(`src/server/sync-coalesce.ts`, `server.ts`, `src/ui/app.ts`).
+- 읽기 전용 감지 기록: 연결 문서가 `readOnly`이면 문서·Rhino 세션마다 한 번 `document-read-only`를 엔진 기록에 남긴다. 속성·잠금 파일·Rhino 프로세스·파일 점유 프로세스(Restart Manager)를 함께 남기고 화면에는 보이지 않는다(`src/server/read-only-watch.ts`, `hosts/rhino/editor-sessions.ts`).
+
 ## 6단계 — Rhino·ZWCAD 쪽 (T-087에 포함)
 
 - AI 코드 실행에 시간 제한과 취소를 둔다. 끝나지 않으면 Rhino를 멈추지 않고 실패로 돌린다.

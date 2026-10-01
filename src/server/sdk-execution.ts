@@ -7,7 +7,8 @@ import { mkdir, readFile, access } from 'node:fs/promises';
 import { createReadStream } from 'node:fs';
 import { EditorSessions } from '../../hosts/rhino/editor-sessions.ts';
 import type { HostTarget } from '../contracts/host-documents.ts';
-import { join, resolve, relative, isAbsolute } from 'node:path';
+import { join, resolve, relative, isAbsolute, dirname } from 'node:path';
+import { CopyFiles, within } from './capture-cleanup.ts';
 import { z } from 'zod';
 import { launchRhinoWorker, workerResultSchema } from '../../hosts/rhino/worker-client.ts';
 import type { RequestInput } from '../contracts/workspace.ts';
@@ -53,7 +54,15 @@ interface Options {
   tools: AgentTools;
   origin: () => string;
   launch?: typeof launchRhinoWorker;
+  connectionDirectory?: string;
 }
+const hasChanges = (value: unknown) =>
+  !!value &&
+  typeof value === 'object' &&
+  ['added', 'modified', 'removed'].some((key) => {
+    const list = (value as Record<string, unknown>)[key];
+    return Array.isArray(list) && list.length > 0;
+  });
 export interface Task {
   input: RequestInput;
   previous?: { id: string; result: Record<string, unknown> };
@@ -86,9 +95,15 @@ const failure = (code: string) => Object.assign(new Error(code), { code });
 export class SdkExecution {
   private options: Options;
   readonly editors: EditorSessions;
+  /** VIDE's own document copies and work folders (deleted when no longer needed, T-087). */
+  readonly copies: CopyFiles;
   constructor(options: Options) {
     this.options = options;
     this.editors = new EditorSessions(options);
+    this.copies = new CopyFiles([
+      options.directory,
+      options.connectionDirectory || join(dirname(options.directory), 'rhino-connections'),
+    ]);
   }
   async status() {
     try {
@@ -146,6 +161,46 @@ export class SdkExecution {
       )
         Object.assign(error, { intent: { ...error.intent, sourceDocument } });
       throw error;
+    } finally {
+      // The work copy holds its own copy now; only the small receipt is still needed (T-087).
+      await this.copies.removeCapture(captured.filename, { copy: true });
+    }
+  }
+  /**
+   * A run from an attached document's display Sync edits a fresh capture of it (`prepared`). When
+   * the run ends, the folder the capture was imported into goes unless the result still points at
+   * it, and the capture's receipt goes unless a candidate made from it can still be applied (or a
+   * write is uncertain and its recovery may make one).
+   */
+  private async settle<T>(prepared: Record<string, unknown> | undefined, work: () => Promise<T>) {
+    let outcome: Record<string, unknown> | undefined,
+      uncertain = false;
+    try {
+      const value = await work();
+      outcome = value as Record<string, unknown>;
+      return value;
+    } catch (error) {
+      uncertain =
+        !!error &&
+        typeof error === 'object' &&
+        'code' in error &&
+        error.code === 'HOST_RESULT_UNKNOWN';
+      throw error;
+    } finally {
+      if (prepared) {
+        const folder = prepared.workerDirectory,
+          filename = outcome?.filename;
+        if (
+          typeof folder === 'string' &&
+          !(typeof filename === 'string' && within(folder, filename))
+        )
+          await this.copies.removeDirectory(folder);
+        if (!uncertain && !(outcome?.hostExecuted === true && hasChanges(outcome.changes)))
+          await this.copies.removeCapture(
+            (prepared.sourceDocument as { capture?: unknown } | undefined)?.capture,
+            { copy: true, receipt: true },
+          );
+      }
     }
   }
 
@@ -296,7 +351,8 @@ export class SdkExecution {
       operationId,
     };
     let worker: Worker | undefined,
-      writing = false;
+      writing = false,
+      discard = false;
     try {
       worker = await (options.launch || launchRhinoWorker)({
         ...options,
@@ -325,9 +381,12 @@ export class SdkExecution {
       };
     } catch (error) {
       if (writing) throw Object.assign(failure('HOST_RESULT_UNKNOWN'), { intent, cause: error });
+      // Nothing was written: the half-made work folder has no use (T-087).
+      discard = true;
       throw error;
     } finally {
       if (worker) await worker.stop();
+      if (discard) await this.copies.removeDirectory(directory);
     }
   }
   /**
@@ -337,23 +396,38 @@ export class SdkExecution {
    * original is untouched either way. `expectedDocumentHash` is the forced read's revision token:
    * a work copy of another revision is refused (`STALE_INPUT`) before anything runs.
    */
-  async runFixed({ input, previous, codes, signal, update, expectedDocumentHash }: FixedTask) {
-    if (!codes.length) throw failure('INVALID_INPUT');
-    if (previous?.result.displayOnly === true) {
-      const basis = z
-        .object({ instance: z.string(), documentId: z.number(), documentHash: z.string() })
-        .parse(previous.result.sourceDocument);
-      // The document must still be the one the forced read saw. Compared before the capture: a
-      // capture itself moves the revision token (Rhino counts saves as a property change), and
-      // the application later verifies the captured content object by object anyway.
-      if (
-        expectedDocumentHash !== undefined &&
-        (await this.editors.inspect(basis)).documentHash !== expectedDocumentHash
-      )
-        throw failure('STALE_INPUT');
-      const prepared = await this.captureEditor(basis, update);
-      previous = { id: previous.id, result: prepared };
-    }
+  async runFixed(task: FixedTask) {
+    if (!task.codes.length) throw failure('INVALID_INPUT');
+    // The document must still be the one the forced read saw. Compared before the capture: a
+    // capture itself moves the revision token (Rhino counts saves as a property change), and
+    // the application later verifies the captured content object by object anyway.
+    const prepared = await this.prepareDisplayBasis(task, task.expectedDocumentHash);
+    return this.settle(prepared, () =>
+      this.runFixedOn(
+        prepared ? { ...task, previous: { id: task.previous!.id, result: prepared } } : task,
+      ),
+    );
+  }
+  /**
+   * A display Sync holds no file: a run from it starts from a fresh capture of the attached
+   * document, imported into a work copy (undefined: the basis is already a file).
+   */
+  private async prepareDisplayBasis(
+    { previous, update }: Pick<Task, 'previous' | 'update'>,
+    expectedDocumentHash?: string,
+  ) {
+    if (previous?.result.displayOnly !== true) return undefined;
+    const basis = z
+      .object({ instance: z.string(), documentId: z.number(), documentHash: z.string() })
+      .parse(previous.result.sourceDocument);
+    if (
+      expectedDocumentHash !== undefined &&
+      (await this.editors.inspect(basis)).documentHash !== expectedDocumentHash
+    )
+      throw failure('STALE_INPUT');
+    return this.captureEditor(basis, update);
+  }
+  private async runFixedOn({ previous, codes, signal, update }: FixedTask) {
     const options = this.options;
     await mkdir(options.directory, { recursive: true });
     const directory = join(options.directory, randomUUID());
@@ -443,17 +517,18 @@ export class SdkExecution {
       if (worker) await worker.stop();
     }
   }
-  async run({ input, previous, items, signal, provider, update }: Task) {
-    if (previous?.result.displayOnly === true) {
-      const basis = z
-        .object({ instance: z.string(), documentId: z.number(), documentHash: z.string() })
-        .parse(previous.result.sourceDocument);
-      // Edit the document as it is now. The Sync basis names the Rhino session and document; its
-      // revision also moves on material/property events and whenever the user keeps working in
-      // Rhino, so it cannot gate a request. Application checks this capture's content hash.
-      const prepared = await this.captureEditor(basis, update);
-      previous = { id: previous.id, result: prepared };
-    }
+  async run(task: Task) {
+    // Edit the document as it is now. The Sync basis names the Rhino session and document; its
+    // revision also moves on material/property events and whenever the user keeps working in
+    // Rhino, so it cannot gate a request. Application checks this capture's content hash.
+    const prepared = await this.prepareDisplayBasis(task);
+    return this.settle(prepared, () =>
+      this.runOn(
+        prepared ? { ...task, previous: { id: task.previous!.id, result: prepared } } : task,
+      ),
+    );
+  }
+  private async runOn({ input, previous, items, signal, provider, update }: Task) {
     const options = this.options;
     await mkdir(options.directory, { recursive: true });
     const directory = join(options.directory, randomUUID());
@@ -724,10 +799,12 @@ User request: ${input.body || '첨부한 설계 문맥을 검토해 주세요.'}
     )
       throw failure('HOST_RESULT_UNKNOWN');
     let worker: Worker | undefined;
+    // The re-read runs in a folder of its own that nothing refers to afterwards (T-087).
+    const check = join(this.options.directory, randomUUID());
     try {
       worker = await (this.options.launch || launchRhinoWorker)({
         ...this.options,
-        directory: join(this.options.directory, randomUUID()),
+        directory: check,
         source: { filename: receipt.filename, fileHash: receipt.fileHash },
       });
       const model = await worker.exportModel();
@@ -749,6 +826,7 @@ User request: ${input.body || '첨부한 설계 문맥을 검토해 주세요.'}
       };
     } finally {
       if (worker) await worker.stop();
+      await this.copies.removeDirectory(check);
     }
   }
 }

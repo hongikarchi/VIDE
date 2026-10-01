@@ -662,6 +662,8 @@ async function syncLink(link: LinkRow, mode: 'first' | 'auto' | 'manual') {
       ...target,
       id: crypto.randomUUID(),
       linkId: link.id,
+      // Automatic Syncs from several open pages share one read; the user's own always runs.
+      ...(mode === 'manual' ? { fresh: true } : {}),
     });
     if (project?.id !== projectId) return;
     if (!state.messages.some((entry) => entry.id === request.id))

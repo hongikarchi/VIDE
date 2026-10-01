@@ -108,7 +108,10 @@ for (const scenario of [
         return { state: scenario === 'unknown' ? 'unknown' : 'succeeded' };
       },
     };
+    const released = [];
     const sdk = {
+      // The candidate's capture goes once the application settled either way (PLAN-27 T-087).
+      copies: { removeCapture: async (path, parts) => released.push({ path, parts }) },
       captureEditor: async () => {
         reads++;
         if (scenario === 'sync-failure') throw Error('offline');
@@ -142,5 +145,6 @@ for (const scenario of [
       if (scenario === 'sync-failure') assert.equal(result.result.code, 'APPLIED_SYNC_FAILED');
     }
     assert.equal(result.result.hostExecuted, true);
+    assert.equal(released.length, ['unknown', 'cancelled'].includes(scenario) ? 0 : 1);
   });
 }

@@ -18,14 +18,21 @@ const code = (error: unknown) =>
 export async function applyAttachedCandidate(
   workspace: Workspace,
   applications: Pick<Applications, 'prepare' | 'confirm'>,
-  sdk: Pick<SdkExecution, 'captureEditor'>,
+  sdk: Pick<SdkExecution, 'captureEditor'> & Partial<Pick<SdkExecution, 'copies'>>,
   request: StoredWork,
   candidate: Record<string, unknown>,
   signal: AbortSignal,
 ) {
   const { projectId, id, input } = request;
-  const finish = (state: StoredWork['state'], result: Record<string, unknown>) =>
-    workspace.update(projectId, id, state, result);
+  const finish = (state: StoredWork['state'], result: Record<string, unknown>) => {
+    // Settled either way: the capture this candidate was made from has no further use (T-087).
+    if (state === 'succeeded' || state === 'failed')
+      void sdk.copies?.removeCapture(
+        (candidate.sourceDocument as { capture?: unknown } | undefined)?.capture,
+        { copy: true, receipt: true },
+      );
+    return workspace.update(projectId, id, state, result);
+  };
   const activity = activityLog(
     Array.isArray(candidate.activity) ? (candidate.activity as ActivityEntry[]) : [],
   );

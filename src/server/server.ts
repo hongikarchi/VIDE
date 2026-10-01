@@ -106,6 +106,9 @@ import { dirname, join } from 'node:path';
 import { importModel, captureModel, recoverDwgImport } from './import-model.ts';
 import { renderReport } from './report.ts';
 import { RemovedProjects, removeProject } from './project-removal.ts';
+import { SyncCoalescer } from './sync-coalesce.ts';
+import { ReadOnlyWatch } from './read-only-watch.ts';
+import { sweepCopies, unsettledCopies, within } from './capture-cleanup.ts';
 
 /** The file name of an import request ("plan.dwg 불러오기"). */
 const importedName = (body: string) => body.replace(/ 불러오기$/, '');
@@ -205,6 +208,8 @@ export async function startServer({
     ? new SdkExecution({ ...sdkOptions, tools: agentTools, origin: () => origin })
     : undefined;
   const liveSync = sdk ? new LiveSync(workspace, sdk) : undefined;
+  // Automatic document Syncs of the same document share one read (PLAN-27 T-087).
+  const documentSyncs = new SyncCoalescer<StoredWork>();
   const connectors = new Connectors({
     directory: dirname(filename),
     bundledRhino: sdkOptions?.plugin ?? defaultRhinoPlugin(),
@@ -365,6 +370,14 @@ export async function startServer({
   const diagnostics = new Diagnostics({
     directory: filename === ':memory:' ? undefined : dirname(filename),
   });
+  // An attached document Rhino opened read-only: one log entry with what could explain it.
+  if (sdk && filename !== ':memory:') {
+    const readOnly = new ReadOnlyWatch({
+      write: (event, fields) => diagnostics.write(event, fields),
+      describe: (target) => sdk.editors.status(target),
+    });
+    sdk.editors.observe = (target, snapshot) => readOnly.note(target, snapshot);
+  }
   // Conversations (SPEC-02.19): sessions per turn, ledger, transcript retention (30 days).
   const conversations = new ConversationService(store, { profiles, diagnostics });
   // The per-project addendum of the AI instruction bundle (PLAN-24 지침 묶음).
@@ -903,56 +916,90 @@ export async function startServer({
       const capture = /^\/api\/v1\/projects\/([^/]+)\/capture$/.exec(url.pathname);
       if (capture && request.method === 'POST') {
         const target = hostTargetSchema
-          .extend({ id: z.string(), linkId: z.string().uuid().optional() })
+          .extend({
+            id: z.string(),
+            linkId: z.string().uuid().optional(),
+            /** The user asked for this Sync (↻, 지금 Sync): never shared with another. */
+            fresh: z.boolean().optional(),
+          })
           .parse(await body(request));
         if (target.linkId) links.get(capture[1], target.linkId);
+        const projectId = capture[1];
         const own = await sdk?.editors.has(target.instance);
         const cadOwn = await zwcadSdk?.editors.has(target.instance);
-        // Sync timing (PLAN-18 step 3): the host read (meshing, pages) and the rest (checks, storing).
-        const began = performance.now();
-        let hostMs: number | undefined;
-        const timed =
-          <T>(read: () => Promise<T>) =>
+        const attached =
+          !cadOwn &&
+          own &&
+          (await sdk!.editors.connectionKind(target.instance)) === 'attached-editor';
+        const { result: synced, shared } = await documentSyncs.run(
+          [projectId, cadOwn ? 'zwcad' : 'rhino', target.instance, target.documentId].join('|'),
           async () => {
-            const start = performance.now();
-            try {
-              return await read();
-            } finally {
-              hostMs = Math.round(performance.now() - start);
-            }
-          };
-        const captured = await captureModel(
-          capture[1],
-          target,
-          workspace,
-          own ? rhinoImport : host,
-          cadOwn
-            ? timed(async () => zwcadSdk!.editors.capture(target))
-            : own
-              ? timed(async () =>
-                  sdk!.syncEditor(
-                    target,
-                    (intent) => workspace.update(capture[1], target.id, 'running', intent),
-                    // Attached display reads never measure; skip parsing every stored model.
-                    (await sdk!.editors.connectionKind(target.instance)) === 'attached-editor'
-                      ? []
-                      : captureMeasurements(workspace.list(capture[1], { full: true }), target),
-                  ),
-                )
-              : undefined,
-          cadOwn ? 'zwcad' : 'rhino',
+            // Sync timing (PLAN-18 step 3): the host read (meshing, pages) and the rest (checks, storing).
+            const began = performance.now();
+            let hostMs: number | undefined;
+            const timed =
+              <T>(read: () => Promise<T>) =>
+              async () => {
+                const start = performance.now();
+                try {
+                  return await read();
+                } finally {
+                  hostMs = Math.round(performance.now() - start);
+                }
+              };
+            const captured = await captureModel(
+              capture[1],
+              target,
+              workspace,
+              own ? rhinoImport : host,
+              cadOwn
+                ? timed(async () => zwcadSdk!.editors.capture(target))
+                : own
+                  ? timed(async () =>
+                      sdk!.syncEditor(
+                        target,
+                        (intent) => workspace.update(capture[1], target.id, 'running', intent),
+                        // Attached display reads never measure; skip parsing every stored model.
+                        attached
+                          ? []
+                          : captureMeasurements(workspace.list(capture[1], { full: true }), target),
+                      ),
+                    )
+                  : undefined,
+              cadOwn ? 'zwcad' : 'rhino',
+            );
+            const scene = (captured.result as { scene?: unknown[] } | null)?.scene;
+            diagnostics.write('sync', {
+              request: target.id,
+              host: cadOwn ? 'zwcad' : 'rhino',
+              state: captured.state,
+              ms: Math.round(performance.now() - began),
+              hostMs,
+              objects: Array.isArray(scene) ? scene.length : undefined,
+            });
+            if (!cadOwn) liveSync?.record(capture[1], captured);
+            return captured;
+          },
+          {
+            fresh: target.fresh,
+            // Reused only while the attached document is still at the revision that Sync read.
+            reusable: async (done) => {
+              if (!attached) return false;
+              const current = workspace.get(projectId, done.id);
+              const hash = (
+                current.result?.sourceDocument as { documentHash?: unknown } | undefined
+              )?.documentHash;
+              return (
+                current.state === 'succeeded' &&
+                typeof hash === 'string' &&
+                (await sdk!.fingerprint(target)).documentHash === hash
+              );
+            },
+          },
         );
-        const scene = (captured.result as { scene?: unknown[] } | null)?.scene;
-        diagnostics.write('sync', {
-          request: target.id,
-          host: cadOwn ? 'zwcad' : 'rhino',
-          state: captured.state,
-          ms: Math.round(performance.now() - began),
-          hostMs,
-          objects: Array.isArray(scene) ? scene.length : undefined,
-        });
-        if (!cadOwn) liveSync?.record(capture[1], captured);
-        send(200, captured);
+        if (shared)
+          diagnostics.write('sync-shared', { request: target.id, shared, with: synced.id });
+        send(200, shared === 'reused' ? workspace.get(projectId, synced.id) : synced);
         return;
       }
       const live = /^\/api\/v1\/projects\/([^/]+)\/live-sync$/.exec(url.pathname);
@@ -1753,6 +1800,11 @@ export async function startServer({
                 outcome.state === 'succeeded' ? 'succeeded' : 'failed',
                 result,
               );
+              // Settled: the candidate's capture has no further use (T-087).
+              void sdk.copies.removeCapture(
+                (saved.result.sourceDocument as { capture?: unknown } | undefined)?.capture,
+                { copy: true, receipt: true },
+              );
             }
           }
           send(200, outcome);
@@ -2219,6 +2271,22 @@ export async function startServer({
     version: appVersion(),
   });
   const stopHealth = filename === ':memory:' ? () => {} : startHealthLog(diagnostics);
+  // Copies and work folders left by earlier runs (T-087): older than a day and not in use.
+  // Only folders inside this engine's own data folder are swept.
+  const own = (path: string) => (within(dirname(filename), path) ? path : undefined);
+  if (sdkOptions && filename !== ':memory:')
+    void sweepCopies({
+      connections: own(
+        sdkOptions.connectionDirectory || join(dirname(sdkOptions.directory), 'rhino-connections'),
+      ),
+      models: own(sdkOptions.directory),
+      keep: unsettledCopies(store.db),
+    })
+      .then((swept) => {
+        if (swept.captures || swept.directories || swept.sessions)
+          diagnostics.write('copies-swept', swept);
+      })
+      .catch((error) => diagnostics.write('copies-sweep-failed', Diagnostics.error(error)));
   return {
     origin,
     diagnostics,
