@@ -803,10 +803,12 @@ export async function startServer({
           )
             ownedOpen.add(link.id);
         // The window's own row first; after Save As (or a first save) that row follows the window
-        // and takes the new name and path (SPEC-01.11 1, T-095).
+        // and takes the new name and path. A row reconnected by path (a reopened file, a ZWCAD
+        // Sync without Link) takes the window's session, so it follows a later Save As too
+        // (SPEC-01.11 1, T-095). A work copy VIDE opened keeps its own window.
         const matched = matchOpenDocuments(links.list(linkList[1]), open);
         for (const [id, { document, session }] of matched)
-          if (session) links.follow(linkList[1], id, document);
+          if (session || !ownedOpen.has(id)) links.follow(linkList[1], id, document);
         send(
           200,
           links.list(linkList[1]).map((link) => {

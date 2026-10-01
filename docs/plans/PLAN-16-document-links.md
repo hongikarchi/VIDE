@@ -2,7 +2,7 @@
 id: PLAN-16
 title: 프로젝트 연결 파일(Link)과 여러 파일의 한 공간
 status: review
-version: 0.8
+version: 0.9
 updated: 2026-10-01
 owner: agent:claude
 related: [PLAN, SPEC-01, DESIGN, ARCH-01, FR-01, FR-02, FR-03, FR-16]
@@ -103,8 +103,9 @@ related: [PLAN, SPEC-01, DESIGN, ARCH-01, FR-01, FR-02, FR-03, FR-16]
   - `matchOpenDocuments`(`src/core/document-links.ts`): 같은 창의 행을 먼저(여럿이면 지금 경로와 같은 행, 다음은 최근 행), 창이 닫힌 행만 경로로 잇는다. 열린 문서 하나에 행 하나. 폴더 없는 경로는 경로 없음으로 본다.
   - `GET …/links`: 세션으로 이은 행의 이름·경로가 다르면 `DocumentLinks.follow`로 그 행에 쓴다(파일 항목 제외). 마지막 Sync는 빼기와 같은 `linkRequests`로 찾는다.
   - `DocumentLinks.link()`(플러그인 Link): 같은 순서로 기존 행을 찾고 경로도 갱신한다.
+  - 검토 보완(2026-10-01): 경로로 이은 행도 `follow`로 그 창의 세션을 받아, 다시 연 파일(ZWCAD에서 Link 없이 Sync·Live Sync한 창 포함)을 다른 이름으로 저장해도 닫힘이 되지 않는다. 숨기기·보이기는 `updatedAt`을 바꾸지 않고, `follow`는 지금 연결 상태인 행을 같은 창의 다른 행보다 최근으로 유지해서, 중복 행 가운데 닫힘 행을 마지막에 숨기거나 예전에 다시 Link했더라도 다른 이름 저장 때 연결 행이 바뀌지 않는다.
   - Rhino 플러그인: 저장 중이나 저장 직후(2초)의 `DocumentPropertiesChanged`는 객체 전체를 바뀐 것으로 표시하지 않는다(다른 이름으로 저장 뒤 불필요한 전체 Live Sync 방지).
-- **검증:** `tests/server/link-follow.test.mjs` — 다른 이름으로 저장 뒤 같은 행이 연결 상태로 새 이름·경로·이전 Sync를 유지, 다시 Link해도 행 하나, 저장 안 된 문서의 첫 저장, 기존 중복 행 중 하나만 연결 상태(다음 저장도 그 행만 따라감), 닫힌 행의 경로 재연결과 다른 창의 행을 빼앗지 않음, 파일 항목 불변, ZWCAD의 첫 저장·다른 이름 저장. 기존 `file-links`·`links-http`·`live-sync`·`offline-view`·`sync-coalesce` 통과. Rhino 플러그인은 빌드만 확인했다.
+- **검증:** `tests/server/link-follow.test.mjs` — 다른 이름으로 저장 뒤 같은 행이 연결 상태로 새 이름·경로·이전 Sync를 유지, 다시 Link해도 행 하나, 저장 안 된 문서의 첫 저장, 기존 중복 행 중 하나만 연결 상태(다음 저장도 그 행만 따라감), 닫힌 행의 경로 재연결과 다른 창의 행을 빼앗지 않음, 파일 항목 불변, ZWCAD의 첫 저장·다른 이름 저장, 중복 행을 모두 숨긴(닫힘 행을 마지막에) 뒤 또는 닫힘 행이 더 최근일 때의 다른 이름 저장, 이전 세션의 행을 경로로 이은 ZWCAD 창의 다른 이름 저장(두 시험은 수정 전 코드에서 실패). 기존 `file-links`·`links-http`·`live-sync`·`offline-view`·`sync-coalesce` 통과. Rhino 플러그인은 빌드만 확인했다.
 - **남은 것:** 실제 Rhino 8에서 다른 이름으로 저장 때 `DocumentPropertiesChanged`가 오는지와 패널 다시 읽기(패널 주소에 문서 이름이 들어 있음)는 설치본 반영 뒤 합성 문서로 확인한다. ZWCAD 실제 창의 다른 이름 저장도 같다.
 
 <a id="t-096"></a>

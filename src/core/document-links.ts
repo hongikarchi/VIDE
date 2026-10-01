@@ -153,24 +153,53 @@ export class DocumentLinks {
     return this.get(projectId, id);
   }
   /**
-   * The linked window saved its document under another name (Save As, or a first save): the row
-   * follows the window and keeps its Sync history (SPEC-01.11 1). Host rows only.
+   * The open document a row matched (SPEC-01.11 1): the linked window saved under another name
+   * (Save As, or a first save), so the row follows the window and keeps its Sync history; a row
+   * reconnected by path takes the window's session, so a later Save As there follows it too. Host
+   * rows only. updatedAt marks the last match: among rows of one window the live one stays newest,
+   * so it is the one that follows when no row has the new path.
    */
-  follow(projectId: string, id: string, document: { name: string; path?: string | null }) {
+  follow(projectId: string, id: string, document: OpenDocument) {
     const link = this.get(projectId, id);
+    if (isFileLink(link)) return link;
     const path = savedPath(document.path);
-    if (isFileLink(link) || !path || !document.name) return link;
-    if (link.name === document.name && samePath(link.path, path)) return link;
+    const next = {
+      name: path && document.name ? document.name : link.name,
+      path: path ?? link.path,
+      instance: document.instance ?? link.instance,
+      documentId: document.id,
+    };
+    const changed =
+      next.name !== link.name ||
+      next.path !== link.path ||
+      next.instance !== link.instance ||
+      next.documentId !== link.documentId;
+    const sibling = this.list(projectId)
+      .filter(
+        (row) =>
+          row.id !== link.id &&
+          !isFileLink(row) &&
+          row.host === link.host &&
+          row.instance === next.instance &&
+          row.documentId === next.documentId,
+      )
+      .reduce((newest, row) => (row.updatedAt > newest ? row.updatedAt : newest), '');
+    if (!changed && sibling < link.updatedAt) return link;
+    const now = Date.now();
+    const at = new Date(sibling ? Math.max(now, Date.parse(sibling) + 1) : now).toISOString();
     this.db
-      .prepare('UPDATE document_links SET name=?, path=?, updatedAt=? WHERE projectId=? AND id=?')
-      .run(document.name, path, new Date().toISOString(), projectId, id);
+      .prepare(
+        'UPDATE document_links SET name=?, path=?, instance=?, documentId=?, updatedAt=? WHERE projectId=? AND id=?',
+      )
+      .run(next.name, next.path, next.instance, next.documentId, at, projectId, id);
     return this.get(projectId, id);
   }
+  /** Showing or hiding is no match: it leaves updatedAt, which decides the live row (T-095). */
   setHidden(projectId: string, id: string, hidden: boolean) {
     this.get(projectId, id);
     this.db
-      .prepare('UPDATE document_links SET hidden=?, updatedAt=? WHERE projectId=? AND id=?')
-      .run(hidden ? 1 : 0, new Date().toISOString(), projectId, id);
+      .prepare('UPDATE document_links SET hidden=? WHERE projectId=? AND id=?')
+      .run(hidden ? 1 : 0, projectId, id);
     return this.get(projectId, id);
   }
   /**

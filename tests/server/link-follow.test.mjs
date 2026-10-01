@@ -200,6 +200,49 @@ test('duplicate rows of one window from earlier re-links: one connected row, the
   );
 });
 
+test('duplicate rows: hiding a closed row or an older re-link never moves the window on Save As', async (t) => {
+  const document = { name: 'B.3dm', path: 'C:\\p\\B.3dm', generation: 4 };
+  const { app, api, instance } = await rhinoEngine(t, document);
+  const project = await api('/projects', 'POST', { name: 'p' });
+  const insert = (id, name, path, s) => {
+    const at = new Date(Date.now() - s * 1000).toISOString();
+    app.store.db
+      .prepare('INSERT INTO document_links VALUES(?,?,?,?,?,?,?,0,?,?)')
+      .run(id, project.id, 'rhino', name, path, instance, 7, at, at);
+  };
+  const state = async () =>
+    (await api(`/projects/${project.id}/links`)).map((row) => [row.id, row.name, !!row.connection]);
+  insert('old', 'A.3dm', 'C:\\p\\A.3dm', 60);
+  insert('new', 'B.3dm', 'C:\\p\\B.3dm', 30);
+  assert.deepEqual(await state(), [
+    ['old', 'A.3dm', false],
+    ['new', 'B.3dm', true],
+  ]);
+  // Every file hidden, the closed row last: hiding is no match and does not make it the window.
+  await api(`/projects/${project.id}/links/new`, 'PUT', { hidden: true });
+  await new Promise((resolve) => setTimeout(resolve, 5));
+  await api(`/projects/${project.id}/links/old`, 'PUT', { hidden: true });
+  Object.assign(document, { name: 'D.3dm', path: 'C:\\p\\D.3dm' });
+  assert.deepEqual(await state(), [
+    ['old', 'A.3dm', false],
+    ['new', 'D.3dm', true],
+  ]);
+  // A closed row re-linked later than the live one (the window was at its file once): the row
+  // the window showed at the last poll is the one that follows the next Save As.
+  app.store.db
+    .prepare('UPDATE document_links SET updatedAt=? WHERE id=?')
+    .run(new Date(Date.now() + 60_000).toISOString(), 'old');
+  assert.deepEqual(await state(), [
+    ['old', 'A.3dm', false],
+    ['new', 'D.3dm', true],
+  ]);
+  Object.assign(document, { name: 'E.3dm', path: 'C:\\p\\E.3dm' });
+  assert.deepEqual(await state(), [
+    ['old', 'A.3dm', false],
+    ['new', 'E.3dm', true],
+  ]);
+});
+
 test('a closed row reconnects by path only when no row of that window exists', () => {
   const at = (s) => new Date(Date.now() - s * 1000).toISOString();
   const row = (id, path, instance, s = 10) => ({
@@ -278,18 +321,18 @@ test('DocumentLinks: Link looks up the window first and never renames a file ite
   assert.equal(links.list(p).length, 2);
 });
 
-test('ZWCAD Save As and first save follow the window as well', async (t) => {
+const CAD = '11:22:cccccccc-cccc-4ccc-8ccc-cccccccccccc';
+async function zwcadEngine(t, drawing) {
   const root = await mkdtemp(join(tmpdir(), 'vide-link-follow-cad-'));
   const executable = join(root, 'Rhino.exe');
   await writeFile(executable, '');
-  const drawing = { name: 'Drawing1.dwg', path: 'Drawing1.dwg' };
   const original = {
     list: AttachedZwcadDocuments.prototype.list,
     has: AttachedZwcadDocuments.prototype.has,
   };
   AttachedZwcadDocuments.prototype.list = async () => [
     {
-      instance: '11:22:cccccccc-cccc-4ccc-8ccc-cccccccccccc',
+      instance: drawing.instance ?? CAD,
       id: 1,
       host: 'zwcad',
       connection: 'attached-editor',
@@ -303,8 +346,7 @@ test('ZWCAD Save As and first save follow the window as well', async (t) => {
       hostBusy: false,
     },
   ];
-  AttachedZwcadDocuments.prototype.has = async (instance) =>
-    instance === '11:22:cccccccc-cccc-4ccc-8ccc-cccccccccccc';
+  AttachedZwcadDocuments.prototype.has = async (instance) => instance === (drawing.instance ?? CAD);
   const app = await startServer({
     filename: join(root, 'vide.db'),
     host: { status: async () => ({ available: true }) },
@@ -321,13 +363,14 @@ test('ZWCAD Save As and first save follow the window as well', async (t) => {
     await app.close();
     await rm(root, { recursive: true, force: true });
   });
-  const api = await session(app);
+  return { app, api: await session(app) };
+}
+
+test('ZWCAD Save As and first save follow the window as well', async (t) => {
+  const drawing = { name: 'Drawing1.dwg', path: 'Drawing1.dwg' };
+  const { api } = await zwcadEngine(t, drawing);
   const project = await api('/projects', 'POST', { name: 'p' });
-  const target = {
-    host: 'zwcad',
-    instance: '11:22:cccccccc-cccc-4ccc-8ccc-cccccccccccc',
-    documentId: 1,
-  };
+  const target = { host: 'zwcad', instance: CAD, documentId: 1 };
   const linked = await api(`/projects/${project.id}/links`, 'POST', target);
   assert.equal(linked.path, null);
   Object.assign(drawing, { name: 'plan.dwg', path: 'D:\\w\\plan.dwg' });
@@ -339,4 +382,25 @@ test('ZWCAD Save As and first save follow the window as well', async (t) => {
   const list = await api(`/projects/${project.id}/links`);
   assert.deepEqual(rows(list), [['plan-b.dwg', 'D:\\w\\plan-b.dwg', true]]);
   assert.equal(list[0].id, linked.id);
+});
+
+test('a row reconnected by path takes the window, so a Save As there follows it (ZWCAD Sync without Link)', async (t) => {
+  // Day 2: plan.dwg opened in a new ZWCAD; VIDECADSync connects it without POST /links.
+  const drawing = { name: 'plan.dwg', path: 'D:\\w\\plan.dwg' };
+  const { app, api } = await zwcadEngine(t, drawing);
+  const project = await api('/projects', 'POST', { name: 'p' });
+  const at = new Date(Date.now() - 86_400_000).toISOString();
+  app.store.db
+    .prepare('INSERT INTO document_links VALUES(?,?,?,?,?,?,?,0,?,?)')
+    .run('day1', project.id, 'zwcad', 'plan.dwg', 'D:\\w\\plan.dwg', '1:1:day-one', 1, at, at);
+  assert.deepEqual(rows(await api(`/projects/${project.id}/links`)), [
+    ['plan.dwg', 'D:\\w\\plan.dwg', true],
+  ]);
+  assert.equal(new DocumentLinks(app.store.db).get(project.id, 'day1').instance, CAD);
+  Object.assign(drawing, { name: 'plan-b.dwg', path: 'D:\\w\\plan-b.dwg' });
+  const list = await api(`/projects/${project.id}/links`);
+  assert.deepEqual(
+    list.map((row) => [row.id, row.name, row.path, !!row.connection]),
+    [['day1', 'plan-b.dwg', 'D:\\w\\plan-b.dwg', true]],
+  );
 });
