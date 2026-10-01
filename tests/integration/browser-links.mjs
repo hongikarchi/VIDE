@@ -132,7 +132,7 @@ try {
       ).hidden === true,
     projectId,
   );
-  // Picking an object of a file makes that file the request target; pins use the file's own id.
+  // Picking an object of a file makes that file the starting document; pins use the file's own id.
   await page.locator('#objects .object').filter({ hasText: 'plan-1.dwg 20' }).click();
   await page.waitForFunction(
     () =>
@@ -140,7 +140,8 @@ try {
   );
   await page.locator('#body').fill('이 보를 옮겨줘 ');
   await page.locator('#selection-pin').click();
-  await page.locator('#context .target-file').filter({ hasText: 'plan-1.dwg' }).waitFor();
+  // No target-file chip: which linked files a request changes is the AI's (T-103).
+  assert.equal(await page.locator('#context .target-file').count(), 0);
   const draft = await page.evaluate(
     (id) => JSON.parse(localStorage.getItem('vide:draft:' + id)),
     projectId,
@@ -151,18 +152,18 @@ try {
     draft.pins.map((pin) => [pin.id, pin.basis, pin.role]),
     [['cad-20', 'sync-plan-1', 'target']],
   );
-  // An object of another file joins as a reference.
+  // An object of another file is a change pin too, not a reference (SPEC-01.11 5, T-103).
   await page.locator('#objects .object').filter({ hasText: 'model.3dm r-1' }).click();
   await page.locator('#selection-pin').click();
-  const withReference = await page.evaluate(
+  const withOther = await page.evaluate(
     (id) => JSON.parse(localStorage.getItem('vide:draft:' + id)),
     projectId,
   );
   assert.deepEqual(
-    withReference.pins.map((pin) => [pin.id, pin.basis, pin.role]),
+    withOther.pins.map((pin) => [pin.id, pin.basis, pin.role]),
     [
       ['cad-20', 'sync-plan-1', 'target'],
-      ['r-1', 'sync-rhino', 'reference'],
+      ['r-1', 'sync-rhino', 'target'],
     ],
   );
   await page.screenshot({ path: join(directory, 'links.png') });

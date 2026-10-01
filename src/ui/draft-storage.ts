@@ -34,7 +34,7 @@ export function restoreDraft(value: unknown, messages: DraftState['messages']) {
       !basis.result?.hostExecuted ||
       (basis.result.host || 'rhino') !== target.host
     )
-      throw Error('연계 대상의 기준 후보를 확인할 수 없습니다.');
+      throw Error('이전 연계 요청의 기준 후보를 확인할 수 없습니다.');
   }
   if (
     draft.baseRequestId &&

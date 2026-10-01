@@ -97,6 +97,14 @@ interface HostSelection {
   documentHash: string;
   selectedIds: string[];
 }
+/** Succeeded SDK host results: the jig sources and the bases a pre-T-103 linked request used. */
+export const linkedCandidates = (state: DraftState) =>
+  state.messages.filter(
+    (message) =>
+      message.request.state === 'succeeded' &&
+      message.request.result?.hostExecuted &&
+      message.request.result?.executionMode === 'sdk',
+  );
 export const objects: DraftObject[] = [];
 /** Replaced by the engine's catalog on connect; this entry only fills the menu before that. */
 export const models: ModelOption[] = [
@@ -212,7 +220,7 @@ export function validate(s: DraftState) {
       new Set(s.linkedTargets.map((target) => target.baseRequestId)).size !== 2 ||
       !s.coordinateBasis)
   )
-    return '연계 대상 두 개와 좌표 기준을 확인하세요.';
+    return '이전 연계 요청의 두 파일과 좌표 기준을 확인하세요.';
   if (
     s.instructions !== undefined &&
     (!Array.isArray(s.instructions) || s.instructions.some((t) => typeof t !== 'string'))

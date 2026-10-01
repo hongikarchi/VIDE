@@ -57,7 +57,6 @@ const showAiSettings: typeof import('./ai-settings.tsx').showAiSettings = async 
   (await import('./ai-settings.tsx')).showAiSettings(onStatus);
 import { initializeReviews } from './reviews.tsx';
 import { attachSharedFeedback } from './shared-feedback.tsx';
-import { linkedCandidates, showLinkedTargets } from './linked-targets.tsx';
 import { attachmentPreview, batchRefusal, uploadAttachments } from './attachments.ts';
 import { notifyReference, setReferenceBridge } from './reference-bridge.ts';
 import { renderWork } from './work-view.tsx';
@@ -108,6 +107,7 @@ import {
   validate,
   packet,
   attachBrushSketch,
+  linkedCandidates,
 } from './model.ts';
 import { createObjectList, type SelectMode } from './object-list.ts';
 import { attachPinTokens, tokenLabels } from './pin-tokens.ts';
@@ -1237,41 +1237,12 @@ function render(rebuildRequests = true) {
     );
     chip.onclick = () => void attachPanelSelection();
   }
-  // Several files on screen: say which one this request changes (SPEC-01.11 요청 대상).
-  const target = currentLayers.find(
-    (layer) => layer.requestId === (state.baseRequestId ?? displayedResult),
-  );
-  // Linked targets (SPEC-02.14) are the request's targets, not an attachment: the target chip
-  // opens their dialog when two succeeded SDK bases exist (SPEC-01.12 5), even with one file shown.
-  const linkable = ready && !busy && linkedCandidates(state).length >= 2;
-  if ((currentLayers.length > 1 && target) || linkable) {
-    const targetChip = el(
-      linkable ? 'button' : 'span',
-      target ? '대상 파일 · ' + target.name : '연계 대상',
-      $('context'),
-      {
-        class: 'chip target-file',
-        title: [
-          target
-            ? '변경 핀이 있는 파일, 없으면 마지막으로 고른 객체의 파일입니다. 다른 파일의 객체를 누르면 바뀝니다.'
-            : '',
-          linkable ? '누르면 두 파일을 함께 다루는 연계 대상을 고릅니다.' : '',
-        ]
-          .filter(Boolean)
-          .join(' '),
-      },
-    );
-    if (linkable) {
-      targetChip.setAttribute('type', 'button');
-      targetChip.onclick = openLinkedTargets;
-    }
-  }
-  // With several files the target chip already names the basis when it is on screen.
+  // Several files on screen form one space; only a draft whose basis is off screen says so.
   if (
     draftHasInput(state) &&
     displayedResult &&
     state.baseRequestId !== displayedResult &&
-    !(currentLayers.length > 1 && target)
+    !currentLayers.some((layer) => layer.requestId === state.baseRequestId)
   ) {
     if (state.baseRequestId) {
       const basis = el('button', '입력 기준 보기', $('context'));
@@ -2018,11 +1989,8 @@ const pinComposer = attachPinTokens($('body'), {
       ...pinnable().map((object) => ({
         id: sourceIdOf(object),
         name: object.name,
-        // Objects of another file than the composer's target are references (SPEC-01.11).
-        role:
-          state.baseRequestId && object.revision !== state.baseRequestId
-            ? ('reference' as const)
-            : ('target' as const),
+        // A pin is a change pin in whichever linked file it lives (SPEC-01.11 5, T-103).
+        role: 'target' as const,
         basis: object.revision!,
         label,
       })),
@@ -2958,17 +2926,9 @@ $('toggle-recent').onclick = () => {
   $('recent-section').dataset.open = String(open);
   $('toggle-recent').setAttribute('aria-expanded', String(open));
 };
-// The paperclip opens the file picker directly (SPEC-01.12 1); pinning, sketching and linked
-// targets have their own places (selection bar, viewport pencil, target chip).
+// The paperclip opens the file picker directly (SPEC-01.12 1); pinning and sketching have their
+// own places (selection bar, viewport pencil). Which linked files to change is the AI's (T-103).
 $('attach-file').onclick = () => $('files').click();
-function openLinkedTargets() {
-  if (busy) return;
-  const original = state;
-  showLinkedTargets(state, () => {
-    if (state !== original) throw Error('프로젝트가 바뀌었습니다.');
-    render();
-  });
-}
 /**
  * Composer attachments (SPEC-01.12): any type, picked, pasted or dropped; the engine keeps each
  * file and the draft holds its record. A batch over the limits is refused as a whole.

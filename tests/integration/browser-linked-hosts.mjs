@@ -198,17 +198,23 @@ try {
   await page.goto(app.launchUrl);
   console.log('linked: loaded');
   await page.locator('#project-picker').selectOption(project.id);
-  await page.getByLabel('참조 추가', { exact: true }).click();
-  await page.getByRole('button', { name: '연계 대상', exact: true }).click();
-  await page.getByLabel('연계 대상 1', { exact: true }).selectOption('cad-basis');
-  await page.getByLabel('연계 대상 2', { exact: true }).selectOption('rhino-basis');
-  // Two targets are enough; the coordinates default to "different or unknown (AI aligns)".
-  assert.equal(
-    await page.getByRole('button', { name: '요청에 첨부', exact: true }).isEnabled(),
-    true,
+  // The composer no longer offers linked targets (T-103); a pre-T-103 linked draft still sends
+  // them, so the draft is written the way that dialog saved it (server support stays).
+  await page.waitForFunction(() => !document.querySelector('#body').disabled);
+  await page.waitForFunction((id) => !!localStorage.getItem('vide:draft:' + id), project.id);
+  await page.evaluate(
+    ({ id, secondHost }) => {
+      const key = 'vide:draft:' + id;
+      const draft = JSON.parse(localStorage.getItem(key));
+      draft.linkedTargets = [
+        { baseRequestId: 'cad-basis', host: 'zwcad' },
+        { baseRequestId: 'rhino-basis', host: secondHost },
+      ];
+      draft.coordinateBasis = 'shared-metre-axes';
+      localStorage.setItem(key, JSON.stringify(draft));
+    },
+    { id: project.id, secondHost: sameHost ? 'zwcad' : 'rhino' },
   );
-  await page.getByRole('radio', { name: /원점과 축이 같음/ }).check();
-  await page.getByRole('button', { name: '요청에 첨부', exact: true }).click();
   console.log('linked: targets attached');
   await page.reload();
   await page

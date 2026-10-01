@@ -345,18 +345,10 @@ try {
     .click();
   assert.equal(await settings.isVisible(), false);
   assert.equal(await page.locator('[data-request-id="failed-sync"]').isVisible(), true);
-  // Linked targets open from the composer's target chip, not from the paperclip (SPEC-01.12 5).
-  await page.locator('#context button.target-file').click();
-  const linking = page.getByRole('dialog', { name: '연계 대상', exact: true });
-  await linking.getByLabel('연계 대상 1', { exact: true }).selectOption('basis-one');
-  await linking.getByLabel('연계 대상 2', { exact: true }).selectOption('basis-two');
-  // The coordinate question defaults to "different or unknown (AI aligns)"; choose "same".
-  await linking.getByRole('radio', { name: /원점과 축이 같음/ }).check();
-  await linking.getByRole('button', { name: '요청에 첨부', exact: true }).click();
-  const linkedChip = page.locator('#context .chip').filter({ hasText: '연계 묶음' });
-  assert.match(await linkedChip.textContent(), /basis-one.*basis-two/);
-  await linkedChip.getByRole('button').click();
-  assert.equal(await page.locator('#context .chip').filter({ hasText: '연계 묶음' }).count(), 0);
+  // The user never picks a target file or linked targets: the AI decides which linked files a
+  // request changes (T-103, ADR-027), so the composer has no target chip and no linked dialog.
+  assert.equal(await page.locator('#context .target-file').count(), 0);
+  assert.equal(await page.getByRole('button', { name: '연계 대상', exact: true }).count(), 0);
   // The work history lists the requests; a row opens that work on the right.
   const openWork = async (id) => {
     await page.locator('button[data-section="task-list"]').click();

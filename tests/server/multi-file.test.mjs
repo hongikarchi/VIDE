@@ -225,9 +225,12 @@ test('A direct turn reads another open linked file live with linkId (Auto and Pl
   assert.equal(a.calls.query, 4);
   // Reads never write: no execute reached either document.
   assert.equal(a.calls.execute.length + b.calls.execute.length, 0);
-  // The goal lists the linked files: the target, the open one, the closed one.
+  // The goal lists the linked files: the starting document, the open one, the closed one.
   const goal = seen[0].context.goal;
-  assert.match(goal, /link-a · A\.3dm \(Rhino\) · the target/);
+  assert.match(goal, /link-a · A\.3dm \(Rhino\) · starting document/);
+  // Every open file is the AI's to pick; the starting document is only the default (T-103).
+  assert.match(goal, /Every open linked file is yours to work on \(read and edit\)/);
+  assert.match(goal, /The user does not choose a target file/);
   assert.match(goal, /link-b · B\.3dm \(Rhino\) · open: read it live/);
   assert.match(goal, /link-c · C\.3dm \(Rhino\) · closed: stored Sync only/);
   // The activity names the other file.

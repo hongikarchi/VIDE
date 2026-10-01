@@ -8,7 +8,7 @@ owner: agent:claude
 related: [ADR-026, ADR-022, ADR-021, ADR-020, SPEC-01, SPEC-02, SPEC-07, ARCH-03, ARCH-01, DESIGN, RESEARCH-12, PLAN-22, PLAN-24, FR-18, FR-24, FR-25, AC-48]
 ---
 
-# 대화가 화면과 작업을 이끄는 구조 (T-076~T-081, T-089~T-091, T-098~T-101)
+# 대화가 화면과 작업을 이끄는 구조 (T-076~T-081, T-089~T-091, T-098~T-101, T-103)
 
 기준: [ADR-026](../decisions/ADR-026-chat-stage-and-skill-jigs.md)(2026-10-01 사용자 결정), 조사는 [RESEARCH-12](../research/RESEARCH-12-ui-chat-driven-structure.md). 진행 상황의 정본은 [PLAN §6.5](PLAN.md)이다.
 
@@ -28,6 +28,7 @@ related: [ADR-026, ADR-022, ADR-021, ADR-020, SPEC-01, SPEC-02, SPEC-07, ARCH-03
 | T-099 | JIG 한 화면: 레일의 만들기를 JIG에 합침, 목록 끝의 [새로 만들기] 카드, 작성 중 초안 카드, jig 하나에 카드 하나 | 사용자 요청 2026-10-01 | 구현·단위·브라우저 시험 완료(2026-10-01, 설치 전) |
 | T-100 | jig 아이콘: 정해 둔 목록에서 고르는 `jig.json`의 `icon`, 카드·문맥 탭·대화 칩·대시보드에 표시 | T-099 | 구현·단위·브라우저 시험 완료(2026-10-01, 설치 전) |
 | T-101 | [수정하기]: 고정한 jig의 사본 초안(같은 id·버전 +0.0.1) → 다시 고정 → 작업본 [올리기] | T-099 | 구현·단위·브라우저 시험 완료(2026-10-01, 설치 전). 단계가 jig 밖을 가져오는 저장소 jig(S-06)는 사본을 만들지 않는다(검토 지적 반영) |
+| T-103 | 작성기의 대상 파일 칩·연계 대상 창 폐지: 고칠 연결 파일은 AI가 정하고, 다른 파일의 핀도 변경 핀 | ADR-027, 사용자 질문 2026-10-02 | 구현·단위·브라우저 시험 완료(2026-10-02, 설치 전) |
 
 `src/ui/app.ts`·`src/ui/style.css`는 여러 세션이 함께 고친다. 티켓마다 깨끗한 worktree에서 작업하고 자기 파일만 스테이징한다. 커밋·설치본 릴리스는 사용자 요청이나 웨이브 경계의 판단에 따른다.
 
@@ -301,3 +302,25 @@ related: [ADR-026, ADR-022, ADR-021, ADR-020, SPEC-01, SPEC-02, SPEC-07, ARCH-03
 **검증 — 실패:** `vide/` jig·없는 jig → `INVALID_INPUT`·`NOT_FOUND`, 단계가 jig 밖을 가져오는 jig(S-06) → `JIG_NOT_FORKABLE`과 카드의 흐린 [수정하기](`drafts.test.mjs`·`make-routes.test.mjs`·`browser-jigs.mjs`), 고정 안 된 jig의 작업본 올리기 → `NOT_FOUND`, 이미 고정 버전이면 바꾸지 않음, 고정 버전이 작업본보다 낮으면(예전 묶음을 가져와 다시 고정) `JIG_VERSION_NOT_NEWER`이고 그 행에 '이전 버전'·[올리기]가 없음(`make-routes.test.mjs`·`jig-list.test.mjs`·`browser-jigs.mjs`), 원격 세션의 고정은 그대로 403.
 
 **완료:** 위 시험 통과, SPEC-07·ARCH-03 §7과 코드 일치, PLAN §6.5 갱신. S-06의 사본 고정은 이 티켓에서 하지 않는다(위 선행·외부 조건).
+
+<a id="t-103"></a>
+## T-103 · 대상 파일 칩·연계 대상 창 폐지 — 고칠 파일은 AI가 정한다
+
+**목적·기준:** 사용자 질문(2026-10-02) "대상 파일이라는게 존재해야하나? 어떤 파일을 수정할지는 우리가 정하는게 아니라, AI가 판단해서 link된 연결 파일 중에 어떤거를 수정할지 결정하는거 아닌가?" — [ADR-027](../decisions/ADR-027-multi-file-coordination.md)(후속 결정 2026-10-02)로 한 요청이 열린 연결 파일을 모두 `linkId`로 읽고 고칠 수 있으므로, 사용자가 고르거나 보는 대상 파일을 없앤다. 동작 정본은 [SPEC-01](../specs/SPEC-01-project-input-sync.md).11의 5·12의 5, SPEC-02.14 머리의 폐지 문단, 화면은 Design §03 작성기.
+
+| 대상 | 변경 |
+|---|---|
+| `src/ui/app.ts`, `src/ui/style.css` | 작성기의 '대상 파일 · 이름'/'연계 대상' 칩과 그 창 열기 삭제. 다른 파일의 핀도 역할 `target`. 입력 기준 보기 단추는 기준이 화면 밖일 때만 |
+| `src/ui/linked-targets.tsx`(삭제), `src/ui/model.ts` | 연계 대상 창 삭제. jig 원본 목록이 쓰는 `linkedCandidates`는 `model.ts`로 옮김 |
+| `src/ui/gateway.ts`, `src/ui/model.ts`, `src/ui/draft-storage.ts` | '연계 대상' 문구를 이전 연계 요청·연결 파일 문구로 |
+| `src/server/direct-mode.ts`, `src/server/agent-tools.ts`, `src/ai/instructions/modeling.md` | 턴 목표의 연결 파일 목록에 '시작 문서'와 "열린 연결 파일은 모두 AI가 읽고 고칠 파일, 사용자가 대상을 고르지 않음, 시작 문서는 기본값일 뿐" 문장. 도구 설명(`query`·`execute`·`capture_view`·`measure`)을 같은 뜻으로. 다른 파일이라는 이유만으로 읽기 전용이 아님 |
+
+**남기는 것:** 요청 입력 `linkedTargets`와 엔진의 연계 실행(SPEC-02.14 아래 부분)은 이전 연계 요청의 복원·개입과 이전 클라이언트를 위해 남긴다. 새 작성기는 이것을 만들지 않는다. 내부 시작 문서(초안을 시작할 때 보던 파일)는 `linkId` 없는 호출의 기본값과 접수 대기열의 열쇠로 남는다.
+
+**선행·외부 조건:** ADR-027의 여러 파일 조율(T-092~094). ZWCAD 도면에서 시작하는 요청이 다른 파일을 실시간으로 다루는 것은 실행 경로(ZWCAD SDK 턴)가 달라 이 티켓 밖의 후속이다.
+
+**검증 — 정상:** 단위 `tests/server/multi-file.test.mjs`(목표 문장의 '시작 문서'와 AI가 파일을 고른다는 문장), 전체 `npm test`. 브라우저 `browser-workspace-controls.mjs`(대상 칩·연계 대상 단추 없음), `browser-links.mjs`(다른 파일 객체를 고정해도 역할 `target`, 대상 칩 없음), `browser-pin-tokens.mjs`, `browser-linked-followup.mjs`(이전 연계 요청의 후속은 그대로). `browser-linked-hosts.mjs`는 실호스트가 필요해 이번에 돌리지 않았고, 창 대신 이전 형식의 초안을 넣도록 바꿨다.
+
+**검증 — 실패:** 이전 연계 초안의 기준 후보가 없으면 '이전 연계 요청의 기준 후보를 확인할 수 없습니다.'로 복원하지 않음(`draft-storage.ts`). 열리지 않은 파일의 `linkId` → `LINK_NOT_LIVE`(기존 `multi-file.test.mjs`).
+
+**완료:** 위 시험 통과, `npm run typecheck`·`format:check`, PLAN §6.5 갱신. 설치본 반영은 릴리스 때.

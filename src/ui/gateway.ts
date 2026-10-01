@@ -281,7 +281,7 @@ Object.assign(errors, {
   OBJECT_NOT_FOUND: '고른 객체가 지금 모델에 없습니다. Sync한 뒤 다시 고르세요.',
   HOST_VERIFICATION_FAILED: '호스트가 불러온 결과를 확인하지 못했습니다. 파일을 다시 열어 보세요.',
   LINKED_TARGET_UNAVAILABLE:
-    '연계 대상 문서를 열 수 없습니다. 두 호스트가 연결돼 있는지 확인하세요.',
+    '함께 다룰 연결 파일을 열 수 없습니다. 두 호스트가 연결돼 있는지 확인하세요.',
   DOCUMENT_READ_ONLY:
     'Rhino 문서가 읽기 전용으로 열려 있어 바꾸지 않았습니다. 쓰기 가능하게 연 뒤 다시 보내세요.',
   OPERATION_CONFLICT:

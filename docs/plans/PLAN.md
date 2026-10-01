@@ -2,7 +2,7 @@
 id: PLAN
 title: VIDE 실행 로드맵
 status: review
-version: 0.236
+version: 0.237
 updated: 2026-10-02
 owner: agent:codex
 related: [ARCH-01, PLAN-02, PLAN-03, PLAN-22, PLAN-23, PLAN-24, PLAN-25, PLAN-26, PLAN-27, ADR-022, ADR-025, ADR-026, ADR-027, SPEC-00, SPEC-01, SPEC-02, SPEC-03, SPEC-04, SPEC-05, SPEC-06, SPEC-07]
@@ -110,7 +110,7 @@ related: [ARCH-01, PLAN-02, PLAN-03, PLAN-22, PLAN-23, PLAN-24, PLAN-25, PLAN-26
 
 ### 6.2 티켓 소유와 상세 계획
 
-T-001~018의 번호·지원 증거는 유지한다. 각 티켓의 현재 결과와 남은 조건은 §6.5, 상세 구현·시험 절차는 PLAN-02와 §7을 따른다. T-019~024·T-032·T-040(진단 로그)의 구체 작업은 PLAN-03, T-033~039는 PLAN-17이 소유한다. T-041~067은 PLAN-22·23·24가 소유하며, RESEARCH-10 작업 묶음(WP)과의 대응표는 각 계획에 있다. T-068은 PLAN-25, 바로 적용·계획/자동 모드의 T-069~075와 여러 파일 조율의 T-092~094, 새 대화 바로 열기의 T-097은 PLAN-24, 대화 중심 구조·산출물 탭의 T-076~081과 첨부·참고 이미지 의도 확인·프로젝트 폴더의 T-089~091, 대시보드 할 일의 T-098, JIG 한 화면·아이콘·[수정하기]의 T-099~101은 PLAN-26, Sync 저장 구조와 작동 안정성의 T-082~087은 PLAN-27, 연결 파일 보완 T-095·096은 PLAN-16이 소유한다. T-025~031은 PLAN-08의 예약 번호이며 아직 등록하지 않았다. 하위 계획에 별도 현황표를 복제하지 않는다.
+T-001~018의 번호·지원 증거는 유지한다. 각 티켓의 현재 결과와 남은 조건은 §6.5, 상세 구현·시험 절차는 PLAN-02와 §7을 따른다. T-019~024·T-032·T-040(진단 로그)의 구체 작업은 PLAN-03, T-033~039는 PLAN-17이 소유한다. T-041~067은 PLAN-22·23·24가 소유하며, RESEARCH-10 작업 묶음(WP)과의 대응표는 각 계획에 있다. T-068은 PLAN-25, 바로 적용·계획/자동 모드의 T-069~075와 여러 파일 조율의 T-092~094, 새 대화 바로 열기의 T-097은 PLAN-24, 대화 중심 구조·산출물 탭의 T-076~081과 첨부·참고 이미지 의도 확인·프로젝트 폴더의 T-089~091, 대시보드 할 일의 T-098, JIG 한 화면·아이콘·[수정하기]의 T-099~101과 대상 파일 칩 폐지의 T-103은 PLAN-26, Sync 저장 구조와 작동 안정성의 T-082~087은 PLAN-27, 연결 파일 보완 T-095·096은 PLAN-16이 소유한다. T-025~031은 PLAN-08의 예약 번호이며 아직 등록하지 않았다. 하위 계획에 별도 현황표를 복제하지 않는다.
 
 ### 6.3 착수 조건
 
@@ -257,6 +257,7 @@ T-001~018의 번호·지원 증거는 유지한다. 각 티켓의 현재 결과�
 | T-099 JIG 한 화면(레일의 만들기를 JIG에, 끝의 [새로 만들기] 카드, 작성 중 초안 카드, jig 하나에 카드 하나) | 구현·단위·브라우저 시험 완료(2026-10-01, 설치 전) | 설치본 반영(릴리스 때) | [PLAN-26](PLAN-26-chat-stage.md#t-099), `jig-list.test.mjs`, `browser-make.mjs` |
 | T-100 jig 아이콘(정해 둔 목록의 `icon`) | 구현·단위·브라우저 시험 완료(2026-10-01, 설치 전) | S-06 v0.3.1은 아이콘 없음(기본 그림) — S-06은 사본을 만들 수 없어(T-101) 저장소 소스의 다음 버전에서 넣는다 | [PLAN-26](PLAN-26-chat-stage.md#t-100), `jig-manifest.test.mjs`, `make-routes.test.mjs`, `browser-jigs.mjs` |
 | T-101 [수정하기](사본 초안 → 다시 고정 → 작업본 [올리기]) | 구현·단위·브라우저 시험 완료(2026-10-01, 설치 전) | 단계가 jig 밖을 가져오는 저장소 jig(S-06)는 사본을 만들지 않음(`JIG_NOT_FORKABLE`, 카드에 흐린 [수정하기]와 이유). S-06 사본은 상자 라이브러리만 쓰도록 다시 쓰는 후속 작업 뒤 가능. 설치본 반영 | [PLAN-26](PLAN-26-chat-stage.md#t-101), `drafts.test.mjs`, `make-routes.test.mjs`, `browser-jigs.mjs` |
+| T-103 대상 파일 칩·연계 대상 창 폐지(고칠 연결 파일은 AI가 정함) | 구현·단위·브라우저 시험 완료(2026-10-02, 설치 전) | ZWCAD 도면에서 시작하는 요청은 여전히 다른 파일을 저장된 Sync로만 읽음(후속). `linkedTargets`는 이전 연계 요청용으로 엔진에 남김. 설치본 반영 | [PLAN-26](PLAN-26-chat-stage.md#t-103), SPEC-01.11의 5, ADR-027 후속 결정, `multi-file.test.mjs`, `browser-links.mjs`, `browser-workspace-controls.mjs` |
 | T-082 안정성 0단계 진단·복구 | 구현·자동 검증(`9aac8cd`) | 실제 창의 화면 복구 확인, 설치본 릴리스 | [PLAN-27](PLAN-27-sync-storage-stability.md) |
 | T-083 객체 단위 저장 | 계획 | ARCH-01 저장 계약 작성과 사용자 확인 뒤 착수 | [PLAN-27](PLAN-27-sync-storage-stability.md), [RESEARCH-13](../research/RESEARCH-13-stability-audit.md) |
 | T-084 엔진 주관 Sync | 계획. 문서별 Sync 합치기는 먼저 구현(`fda1e5d`) | SPEC-01.11의 Sync 주체 보완 뒤 착수 | [PLAN-27](PLAN-27-sync-storage-stability.md) |

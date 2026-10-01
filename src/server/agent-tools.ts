@@ -68,7 +68,8 @@ const measureEnd = z.union([
 ]);
 /**
  * Another linked file of the project (ADR-027): its link id from links_layers or the turn's goal.
- * Left out, the task target. Only a direct host turn's scope accepts it (LINK_NOT_LIVE otherwise).
+ * Left out, the turn's starting document. Only a direct host turn's scope accepts it (LINK_NOT_LIVE
+ * otherwise). The AI picks the files a request is about; the user does not choose one (T-103).
  */
 const linkId = z.string().min(1).max(128).optional();
 const page = {
@@ -78,18 +79,18 @@ const page = {
 const definitions = {
   query: {
     description:
-      'Read a bounded page of the current task target, or with linkId of another linked file of the project that is open now. Use page.nextOffset with expectedRevision for subsequent pages, or objectIds for specific objects. Never treat one page as the whole model.',
+      "Read a bounded page of a document: with linkId any linked file of the project that is open now (the goal lists them), without it the turn's starting document. Use page.nextOffset with expectedRevision for subsequent pages, or objectIds for specific objects. Never treat one page as the whole model.",
     schema: z.object({ targetRef: target, linkId, ...queryPageFields }).strict(),
   },
   execute: {
     description:
-      'Run SDK code on the task target. In Auto mode the target is the open user document: each call runs directly in it as ONE undo record (Ctrl+Z / VIDE [되돌리기] reverts it) and returns undoId and the added/changed/removed objects. Bulk deletion above the limit, layer deletion and purge are held back: such a call returns ok:false with "guarded" and nothing stays applied; then stop and tell the user what needs confirmation. Plan mode has no execute. The task goal names the target; linkId runs it in another open linked file of the project instead (its own undo records).',
+      'Run SDK code in a document: with linkId any open linked file of the project (the goal lists them; pick the file or files the request is about), without it the turn\'s starting document. In Auto mode it is the open user document: each call runs directly in it as ONE undo record (Ctrl+Z / VIDE [되돌리기] reverts it) and returns undoId and the added/changed/removed objects. Bulk deletion above the limit, layer deletion and purge are held back: such a call returns ok:false with "guarded" and nothing stays applied; then stop and tell the user what needs confirmation. Plan mode has no execute. Each file keeps its own undo records.',
     schema: z.object({ targetRef: target, linkId, code: z.string().min(1).max(65536) }).strict(),
   },
   // The AI's eyes (PLAN-24): an image of the target's model view and measurements of its objects.
   capture_view: {
     description:
-      'See the task target: returns a PNG of its current model view (default 1200x800, at most 1600 px a side) and the camera. Frame objects with fitIds, look through a namedView, and switch layers on or off for this image only (working copies). Nothing in the document changes. Look after edits to check the result. linkId: another open linked file of the project.',
+      'See a document (the starting document, or an open linked file by linkId): returns a PNG of its current model view (default 1200x800, at most 1600 px a side) and the camera. Frame objects with fitIds, look through a namedView, and switch layers on or off for this image only (working copies). Nothing in the document changes. Look after edits to check the result.',
     schema: z
       .object({
         targetRef: target,
@@ -105,7 +106,7 @@ const definitions = {
   },
   measure: {
     description:
-      'Measure objects of the task target in model units: bounding box and size, curve length, area, and volume of closed solids for each id; and closest distances between pairs whose ends are object ids or [x,y,z] points (with the two closest points and dx/dy/dz). Quote these numbers instead of estimating. linkId: another open linked file of the project.',
+      'Measure objects of a document (the starting document, or an open linked file by linkId) in model units: bounding box and size, curve length, area, and volume of closed solids for each id; and closest distances between pairs whose ends are object ids or [x,y,z] points (with the two closest points and dx/dy/dz). Quote these numbers instead of estimating.',
     schema: z
       .object({
         targetRef: target,
@@ -520,7 +521,7 @@ const errorHints: Record<string, string> = {
 };
 /** LINK_NOT_LIVE from a turn that never reaches other files live (the file may well be open). */
 const noLinksHint =
-  'This kind of turn cannot reach other linked files live (only a request whose target is an open Rhino document can). Read them from their stored Sync with links_layers and sync_sample and do not edit them; do not ask the user to open the file.';
+  'This kind of turn cannot reach other linked files live (only a request that starts in an open Rhino document can). Read them from their stored Sync with links_layers and sync_sample and do not edit them; do not ask the user to open the file.';
 /** The host document tools whose linkId names another linked file (links_layers keeps its own). */
 const linkTools: ReadonlySet<string> = new Set(['query', 'execute', 'capture_view', 'measure']);
 /**

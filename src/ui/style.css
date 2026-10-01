@@ -617,9 +617,6 @@ pre {
   border-color: var(--accent-muted);
   background: var(--accent-subtle);
 }
-button.chip.target-file {
-  cursor: pointer;
-}
 textarea {
   width: 100%;
   display: block;

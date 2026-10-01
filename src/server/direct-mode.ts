@@ -562,13 +562,16 @@ export function unresolvedNote(
 export const documentKey = (host: string, target: { instance: string; documentId: number }) =>
   JSON.stringify([host, target.instance, target.documentId]);
 const hostLabel = (host: 'rhino' | 'zwcad') => (host === 'rhino' ? 'Rhino' : 'ZWCAD');
-/** The linked-files lines of a turn goal: which file is the target, which are live, which closed. */
+/**
+ * The linked-files lines of a turn goal: which file the turn starts in, which are live, which
+ * closed. Every open file is the AI's to read and (Auto) edit; it picks the files (T-103).
+ */
 function linkedFilesNote(links: LiveLink[], targetKey: string, eyes: boolean, mode: RequestMode) {
   if (!links.length) return '';
   const rows = links.slice(0, 30).map((link) => {
     const state =
       link.open && documentKey(link.host, link.open) === targetKey
-        ? 'the target (this document; linkId may be left out)'
+        ? 'starting document (the default when linkId is left out)'
         : link.open
           ? link.host === 'rhino' && eyes
             ? 'open: read it live with query, measure and capture_view and its linkId'
@@ -588,10 +591,10 @@ function linkedFilesNote(links: LiveLink[], targetKey: string, eyes: boolean, mo
   return `
 Linked files of this project (linkId · name · state):
 ${rows.join('\n')}
-Each file keeps its own units and coordinates (query returns units); do not assume a shared origin unless the request or the pins establish one. A file answering LINK_NOT_LIVE is not open now: read it from its stored Sync.${
+Every open linked file is yours to work on${mode === 'auto' ? ' (read and edit)' : ' (read)'}: decide from the request, its pins and what you read which file or files it is about and pass their linkId. The user does not choose a target file; the starting document is only the default for calls without linkId, not a limit. Each file keeps its own units and coordinates (query returns units); do not assume a shared origin unless the request or the pins establish one. A file answering LINK_NOT_LIVE is not open now: read it from its stored Sync.${
     mode === 'auto'
       ? `
-execute with an open file's linkId edits that file directly, one undo record there per execute, with the same guard as the target and in that file's own host API. This request is one unit across files: the user's [되돌리기] undoes all of it, and if the request fails or is stopped after it tried to change two or more files, VIDE undoes every change of this request in every file. A file another task is writing answers DOCUMENT_LOCKED: nothing ran there; leave it and tell the user.${
+execute with an open file's linkId edits that file directly, one undo record there per execute, with the same guard as the starting document and in that file's own host API. This request is one unit across files: the user's [되돌리기] undoes all of it, and if the request fails or is stopped after it tried to change two or more files, VIDE undoes every change of this request in every file. A file another task is writing answers DOCUMENT_LOCKED: nothing ran there; leave it and tell the user.${
           drawing
             ? `
 execute with a ZWCAD file's linkId takes a C# method body for ZWCAD, not RhinoCommon (there is no RhinoDoc doc). ${ZWCAD_EXECUTE_WRAPPER} Identity there is the entity handle (query rows carry it); units are the drawing's own (usually millimetres), so convert from this document's units explicitly.`
