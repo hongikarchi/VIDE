@@ -14,11 +14,13 @@ import { runLinked } from './linked-execution.ts';
 // Jig review gates (sync-review rows, structure-draft-review members/nodes; SPEC-06.9).
 import { factCitations, jigCheck } from './jig-gates.ts';
 import {
+  HOST_TURN_PROJECT_TOOLS,
   attachmentHandlers,
   conversationHandlers,
   conversationSources,
   fileHandlers,
   type AgentTools,
+  type ProjectToolHandlers,
 } from './agent-tools.ts';
 import {
   FileAccess,
@@ -47,7 +49,7 @@ import type {
 import type { GeometryObject } from '../core/geometry.ts';
 import type { SdkExecution } from './sdk-execution.ts';
 import type { ZwcadSdkExecution } from './zwcad-sdk-execution.ts';
-import type { ConversationService, Turn } from './conversations.ts';
+import { defaultConversationId, type ConversationService, type Turn } from './conversations.ts';
 import { takeReferenceBlock, turnOutputResult } from './turn-output.ts';
 import { makeTurnResult } from './make-routes.ts';
 import { workspaceResultSchema } from '../contracts/workspace-result.ts';
@@ -161,32 +163,20 @@ import { geometryContract, interpret, protectGeometry } from '../core/geometry.t
 import { Diagnostics, requestStages, type RunMarks } from './diagnostics.ts';
 import { clearAuthStatus } from '../ai/claude-cli.ts';
 
-/**
- * The project read tools a host modeling turn gets beside its host tools (SPEC-02.6): linked
- * files' layers, Sync samples and the project facts. They read VIDE's own records, never a host.
- */
-export const HOST_TURN_PROJECT_TOOLS = [
-  'links_layers',
-  'sync_sample',
-  'project_brief',
-  'project_search',
-  'project_issue',
-  'project_statement',
-  'project_checks',
-] as const;
+export { HOST_TURN_PROJECT_TOOLS };
 /**
  * The handlers of HOST_TURN_PROJECT_TOOLS for a turn of `conversation`, to spread into a host
- * scope's handler list (the host's own handlers win on a name clash).
+ * scope's handler list (the host's own handlers win on a name clash). No ledger: they record nothing.
  */
 export function hostTurnProjectHandlers(
   workspace: Workspace,
   conversation: Parameters<typeof conversationSources>[1],
   requestId?: string,
-) {
+): ProjectToolHandlers {
   const all = conversationHandlers(conversationSources(workspace, conversation, { requestId }));
   return Object.fromEntries(
     HOST_TURN_PROJECT_TOOLS.flatMap((name) => (all[name] ? [[name, all[name]]] : [])),
-  ) as Pick<ReturnType<typeof conversationHandlers>, (typeof HOST_TURN_PROJECT_TOOLS)[number]>;
+  ) as ProjectToolHandlers;
 }
 
 /** The card id of the file permission question (SPEC-01.13 3). */
@@ -874,6 +864,36 @@ export class Execution {
     predecessor.controller.abort();
     return request;
   }
+  /**
+   * The project read tools of a host modeling turn (SPEC-02.6, T-062): other linked files' layers
+   * and Sync samples and the project's facts, read from VIDE's own records. A turn outside an
+   * explicit conversation belongs to the project's default conversation. Undefined without the
+   * tool server or when the project's records cannot be opened (the turn keeps its host tools).
+   */
+  private projectTools(projectId: string, requestId: string, turn?: Turn) {
+    if (!this.tools) return undefined;
+    try {
+      const conversation = turn?.conversation ?? this.conversations?.defaultRow(projectId);
+      return hostTurnProjectHandlers(
+        this.workspace,
+        {
+          // Only the reads: never the make tools of a jig-make conversation.
+          id: conversation?.id ?? defaultConversationId(projectId),
+          projectId,
+          jigInstanceId: conversation?.jigInstanceId ?? null,
+          targets: conversation?.targets ?? null,
+        },
+        requestId,
+      );
+    } catch (error) {
+      this.diagnostics?.write('host-project-tools-failed', {
+        requestId,
+        projectId,
+        ...Diagnostics.error(error),
+      });
+      return undefined;
+    }
+  }
   /** A conversation's turn: its session and the ledger items (undefined outside a conversation). */
   private beginTurn(request: StoredWork): Promise<Turn | undefined> | undefined {
     if (!this.conversations || typeof request.input.conversationId !== 'string') return undefined;
@@ -996,6 +1016,8 @@ export class Execution {
       // Outside a conversation the run stays synchronous up to the provider call (no await).
       const pending = this.beginTurn(request);
       if (pending) turn = await pending;
+      // Every host modeling turn reads the project beside its target (SPEC-02.6, T-062).
+      const projectTools = jigReview ? undefined : this.projectTools(projectId, id, turn);
       if (input.linkedTargets) {
         if (!this.sdk || !this.zwcadSdk || !this.tools) throw { code: 'EXECUTOR_NOT_READY' };
         if (turn) items.push(...turn.items);
@@ -1005,6 +1027,7 @@ export class Execution {
           tools: this.tools,
           drivers: { rhino: this.sdk, zwcad: this.zwcadSdk },
           items,
+          projectTools,
           signal: controller.signal,
           provider: (agent) =>
             this.timed(
@@ -1138,6 +1161,7 @@ export class Execution {
           signal: controller.signal,
           tools: this.tools,
           origin,
+          projectTools,
           protectedIds: pins
             .filter((pin) => pin.role !== 'target' && pin.basis === previous.id)
             .map((pin) => pin.id),
@@ -1165,6 +1189,7 @@ export class Execution {
           input,
           previous,
           items,
+          projectTools,
           signal: controller.signal,
           provider: (agent) =>
             this.timed(

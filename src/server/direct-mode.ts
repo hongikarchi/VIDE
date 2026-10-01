@@ -10,7 +10,12 @@ import { executionLimits } from '../contracts/execution-limits.ts';
 import type { RequestInput, RequestMode } from '../contracts/workspace.ts';
 import { queryPage, type QueryPageOptions } from './query-page.ts';
 import { activityLog } from './activity.ts';
-import { visionHandlers, type AgentTools, type VisionSource } from './agent-tools.ts';
+import {
+  visionHandlers,
+  type AgentTools,
+  type ProjectToolHandlers,
+  type VisionSource,
+} from './agent-tools.ts';
 import { directRefusal, type DirectRefusal } from '../contracts/direct-refusal.ts';
 
 /** Auto-mode guard: deleting more objects than this in one execute needs the user's confirmation. */
@@ -267,6 +272,8 @@ export interface DirectTurn {
   onExecution?: (record: ExecutionRecord) => void;
   /** Ids the pins keep (preserve/reference) in this document. */
   protectedIds?: string[];
+  /** The project read tools of the turn (SPEC-02.6, T-062), offered in Plan and Auto. */
+  projectTools?: ProjectToolHandlers;
 }
 
 function rhinoGoal(turn: DirectTurn, targetRef: string) {
@@ -282,11 +289,16 @@ ${
     : `${PLAN_RULES} There is no execute in this mode.`
 }
 Units are the document's own model units (query returns "units"); sketches and other hosts' geometry are metres, convert explicitly.
-Use query (pages, objectIds) to observe native IDs, layers and bounds; capture_view to see the model and measure for exact sizes and distances.${
+Use query (pages, objectIds) to observe native IDs, layers and bounds${
+    // Only a connection with view methods has the eyes (driver.vision).
+    turn.driver.vision
+      ? '; capture_view to see the model and measure for exact sizes and distances'
+      : ''
+  }.${
     mode === 'auto'
       ? `
 execute takes a C# method body. The wrapper imports System, System.Linq, Rhino, Rhino.Geometry and supplies RhinoDoc doc and StringBuilder output (its lines come back as log). Do not declare a class or method. Never save, open or export documents, run Rhino commands, show UI, or use files, processes, network or reflection. Return a small JSON-serializable value (at most 16 KiB) to observe results; never Rhino objects. Each successful execute returns undoId and the added/changed/removed objects.
-Keep existing IDs, layers and attributes unless the request changes them; modify objects in place (ModifyAttributes, Replace) rather than delete and redraw.${kept} Work in few, complete executes and check the result with query or capture_view. Compile diagnostics allow correction; after an uncertain result never execute again.`
+Keep existing IDs, layers and attributes unless the request changes them; modify objects in place (ModifyAttributes, Replace) rather than delete and redraw.${kept} Work in few, complete executes and check the result with query${turn.driver.vision ? ' or capture_view' : ''}. Compile diagnostics allow correction; after an uncertain result never execute again.`
       : kept
   }
 When a dimension is missing but a standard or conventional value exists, use it and state the assumption; ask only when no reasonable value exists.
@@ -326,7 +338,9 @@ export async function runDirectTurn(turn: DirectTurn) {
     activity: activity.entries,
     executions: executions.map(publicRecord),
   });
-  const handlers: Record<string, (args: Record<string, unknown>) => Promise<unknown>> = {
+  const handlers: Record<string, (args: Record<string, unknown>) => unknown> = {
+    // The project's records beside the open document (T-062); the document's own tools follow.
+    ...(turn.projectTools as Record<string, (args: Record<string, unknown>) => unknown>),
     query: async ({ targetRef: _target, ...args }) => {
       const page = await driver.query(args as QueryPageOptions);
       queries++;

@@ -439,6 +439,24 @@ const knownErrors = new Set([
   'FILE_FORBIDDEN',
   'FILE_ACCESS_DENIED',
 ]);
+/**
+ * The project read tools a host modeling turn gets beside its host tools (SPEC-02.6, T-062):
+ * linked files' layers, Sync samples and the project facts. They read VIDE's own records, never a
+ * host, and their answer does not depend on the target, so a scope of several targets (a linked
+ * turn) may leave targetRef out for them.
+ */
+export const HOST_TURN_PROJECT_TOOLS = [
+  'links_layers',
+  'sync_sample',
+  'project_brief',
+  'project_search',
+  'project_issue',
+  'project_statement',
+  'project_checks',
+] as const satisfies readonly ToolName[];
+const projectReads: ReadonlySet<string> = new Set(HOST_TURN_PROJECT_TOOLS);
+/** The handlers of HOST_TURN_PROJECT_TOOLS a host turn spreads into its scope. */
+export type ProjectToolHandlers = Pick<Handlers, (typeof HOST_TURN_PROJECT_TOOLS)[number]>;
 /** Tools that change or occupy the target: one at a time, after the basis check. */
 // capture_view moves the camera and layers of the target for one image, so it takes the turn too.
 const controlledTools = new Set<ToolName>([
@@ -639,7 +657,12 @@ export class AgentTools {
     if (run.abort.signal.aborted || run.expires <= this.#now()) return error('AGENT_SCOPE_EXPIRED');
     if (args.targetRef && !run.targets.has(args.targetRef)) return error('TARGET_MISMATCH');
     // Left out, targetRef means the scope's only target; with several it must be named.
-    if (!args.targetRef && run.targets.size !== 1 && 'targetRef' in definitions[name].schema.shape)
+    if (
+      !args.targetRef &&
+      run.targets.size !== 1 &&
+      !projectReads.has(name) &&
+      'targetRef' in definitions[name].schema.shape
+    )
       return error('TARGET_MISMATCH');
     const controlled = controlledTools.has(name);
     if (controlled && run.busy) return error('AGENT_BUSY');

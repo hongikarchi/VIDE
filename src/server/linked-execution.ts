@@ -32,8 +32,10 @@ export async function runLinked(options: {
   items: Task['items'];
   signal: AbortSignal;
   provider: Task['provider'];
+  /** The project read tools of the turn (T-062), offered beside the targets' query/execute. */
+  projectTools?: Task['projectTools'];
 }) {
-  const { request, workspace, tools, drivers, items, signal, provider } = options;
+  const { request, workspace, tools, drivers, items, signal, provider, projectTools } = options;
   const targets = request.input.linkedTargets!;
   const gate = deferred<Response>();
   const ready = targets.map(() => deferred<Ready | null>());
@@ -119,6 +121,7 @@ export async function runLinked(options: {
       return value;
     };
     const handlers = {
+      ...projectTools,
       query: (args: { targetRef: string } & QueryPageOptions) => dispatch('query', args),
       ...(request.input.permission === 'candidate'
         ? { execute: (args: { targetRef: string; code: string }) => dispatch('execute', args) }

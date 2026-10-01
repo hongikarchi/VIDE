@@ -120,7 +120,15 @@ export class ZwcadSdkExecution {
    * method bodies on it directly. Plan mode only reads (every transaction is aborted); the other
    * modes commit one transaction per execute, which ZWCAD's UNDO reverts in one step.
    */
-  private async runAttached({ input, previous, items, signal, provider, update }: Task) {
+  private async runAttached({
+    input,
+    previous,
+    items,
+    signal,
+    provider,
+    update,
+    projectTools,
+  }: Task) {
     const basis = z
       .object({ instance: z.string(), documentId: z.number() })
       .parse(previous!.result.sourceDocument);
@@ -190,6 +198,8 @@ export class ZwcadSdkExecution {
       query: (args?: QueryPageOptions) => Promise<unknown>;
       execute: (args: { code: string }) => Promise<unknown>;
     } = {
+      // The project's records beside the drawing (T-062); the drawing's own tools follow.
+      ...projectTools,
       query: async (args = {}) => {
         queries++;
         report('query', `도면 조회 ${queries}회차`);
@@ -392,7 +402,7 @@ User request: ${input.body || '첨부한 설계 문맥을 검토해 주세요.'}
     return this.editors.attached.directUndo(basis, undoId);
   }
   async run(task: Task) {
-    const { input, previous, items, signal, provider, update } = task;
+    const { input, previous, items, signal, provider, update, projectTools } = task;
     if (
       previous?.result?.displayOnly === true &&
       z
@@ -453,6 +463,8 @@ User request: ${input.body || '첨부한 설계 문맥을 검토해 주세요.'}
         query: (args?: QueryPageOptions) => Promise<unknown>;
         execute?: (args: { code: string }) => Promise<unknown>;
       } = {
+        // The project's records beside the work copy (T-062).
+        ...projectTools,
         query: async (args) => {
           const result = await worker!.query();
           queries++;

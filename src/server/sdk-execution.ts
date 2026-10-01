@@ -21,7 +21,12 @@ import {
 } from '../contracts/native-model.ts';
 import { applyDisplayDelta } from '../core/display-delta.ts';
 import { withSurvey } from '../../hosts/rhino/scene-pages.ts';
-import { AgentTools, visionHandlers, type VisionSource } from './agent-tools.ts';
+import {
+  AgentTools,
+  visionHandlers,
+  type ProjectToolHandlers,
+  type VisionSource,
+} from './agent-tools.ts';
 import type { GeometryMeasurement } from '../core/measurement-cache.ts';
 
 type Worker = Awaited<ReturnType<typeof launchRhinoWorker>>;
@@ -70,6 +75,11 @@ export interface Task {
   signal: AbortSignal;
   provider: (connection: AgentConnection) => Provider;
   update: (phase: Record<string, unknown>) => void;
+  /**
+   * The project read tools of the turn (SPEC-02.6, T-062): other linked files' layers and Sync
+   * samples and the project's facts, offered beside the host tools in every mode.
+   */
+  projectTools?: ProjectToolHandlers;
 }
 /** A bake: fixed bodies in order, no provider (`runFixed`). */
 export interface FixedTask {
@@ -528,7 +538,7 @@ export class SdkExecution {
       ),
     );
   }
-  private async runOn({ input, previous, items, signal, provider, update }: Task) {
+  private async runOn({ input, previous, items, signal, provider, update, projectTools }: Task) {
     const options = this.options;
     await mkdir(options.directory, { recursive: true });
     const directory = join(options.directory, randomUUID());
@@ -601,7 +611,9 @@ export class SdkExecution {
           return queryPage(result, args, revision);
         },
       };
-      // The AI's eyes (PLAN-24): an image of the working copy's view and measurements.
+      // The project's records (T-062) and the AI's eyes (PLAN-24): an image of the working copy's
+      // view and measurements.
+      Object.assign(handlers, projectTools);
       Object.assign(
         handlers,
         visionHandlers(worker, (tool) =>

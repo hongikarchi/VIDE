@@ -510,3 +510,26 @@ test('linked unchanged target retains a verified source without an empty write',
     assert.equal(refused.hostExecuted, false);
     assert.equal(refused.unchanged, undefined);
   }));
+
+test('the work-copy turn offers the project read tools beside its host tools (T-062)', () =>
+  fixture(async ({ sdk, task, scope }) => {
+    const projectTools = {
+      links_layers: async () => ({ links: [] }),
+      sync_sample: async () => ({ items: [] }),
+    };
+    for (const permission of ['review', 'candidate'])
+      await sdk.run({
+        ...task,
+        input: { ...task.input, permission },
+        projectTools,
+        provider: (connection) => ({
+          run: async () => {
+            assert.ok(connection.tools.includes('links_layers'), permission);
+            assert.ok(connection.tools.includes('sync_sample'), permission);
+            assert.equal(connection.tools.includes('execute'), permission === 'candidate');
+            assert.equal(scope().handlers.links_layers, projectTools.links_layers);
+            return { text: permission };
+          },
+        }),
+      });
+  }));

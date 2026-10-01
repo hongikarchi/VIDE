@@ -2,7 +2,7 @@
 id: PLAN-24
 title: AI 대화 세션·동시 진행·말로 하는 경로 판정 1차
 status: review
-version: 0.4
+version: 0.41
 updated: 2026-10-01
 owner: agent:claude
 related: [PLAN, PLAN-22, PLAN-23, PLAN-25, PLAN-26, PLAN-02, PLAN-05, PLAN-08, PLAN-19, FR-25, FR-24, FR-18, FR-10, FR-11, FR-12, AC-46, AC-47, AC-48, AC-38, SPEC-02, SPEC-07, ARCH-01, ARCH-03, ADR-021, ADR-014, ADR-022, ADR-025, ADR-026, RESEARCH-10, RESEARCH-11]
@@ -216,12 +216,14 @@ related: [PLAN, PLAN-22, PLAN-23, PLAN-25, PLAN-26, PLAN-02, PLAN-05, PLAN-08, P
   - 정상: "왜 C12가 빨개?"가 결과 인용과 함께 답, 질문 카드 최대 3개(원장에 있는 질문·사용자 결정은 다시 묻지 않음), 자료 질문에 근거 칩, 미리보기 수치 인용에 '미확정 미리보기' 표기
   - 실패: `fixedAtPin` 값 변경 요청 거절, 결과에 없는 숫자·부재 인용은 점검 실패, 자료에 없는 질문은 "자료에 없음", 다른 프로젝트 DB 접근 불가, 도구 결과에 비밀값·로그인 코드 없음, AI가 앱 동작·Rhino에 만들기를 직접 실행하지 못함, 기존 AI 작업 권한이 넓어지지 않음
 - **완료:** 위 시험 통과.
-- **상태(2026-10-01):** 구현·단위 검증 완료, 설치본에서도 도구가 켜진다. 호스트 모델링 턴의 자료·레이어 도구 연결이 남음.
+- **상태(2026-10-01):** 구현·단위 검증 완료, 설치본에서도 도구가 켜진다. 호스트 모델링 턴에도 자료·레이어 도구를 준다.
   - 구조화 턴 출력 `src/server/turn-output.ts`(strict JSON 스키마, 질문 ≤ 3·선택지 2~5, 권장 선택지를 앞으로, 원장에 있는 질문 제외, 질문 id는 결정 이름; Claude `--json-schema`, Codex `--output-schema`)와 질문 카드 `src/ui/question-card.tsx`(가장 최근 성공 턴이 질문으로 끝났을 때, 답은 `…/conversations/:cid/answer`). 대상은 호스트·jig 검토가 아닌 대화 턴이다. Claude 대화 턴은 이제 공급자 자체 질문을 기본으로 쓴다(T-075)
   - 도구 등록부 `src/server/agent-tools.ts`: `jig_list`·`jig_state`·`jig_output`·`jig_set`·`jig_run`·`structure_summary`·`structure_checks`·`links_layers`·`sync_sample`(대화 범위, `confirmed` 실행 불가, 호스트 문서에 쓰지 않음). `server.ts`가 엔진 `origin`을 넘겨 설치본에서도 켜진다. 대상이 하나뿐이면 `targetRef`·`instanceId` 없이 받는다(T-061의 `scopeRules`)
   - 결정(사용자 2026-09-30, SPEC-02.19 0.34): 대화 안의 AI는 그 대화에 열린 jig에 한해 `jig_set`(되돌릴 수 있는 T1, 원장 + [되돌리기])·`jig_run`(계산 단계만)을 확인 없이 실행한다. 해석 확정·Rhino 만들기·반영·계정 동작은 사람이 누른다
   - 증거: `6b70f34`(출력·카드·도구), `c972e23`(`origin`), `32bf8be`(대상 생략). `tests/server/turn-output.test.mjs`, `agent-tools-jig.test.mjs`, `agent-tools-origin.test.mjs`. Claude 실호출에서 `--json-schema` 대화 턴이 돌았다([SPIKE-2026-09-30-instruction-bundle](../tdd/SPIKE-2026-09-30-instruction-bundle.md))
-  - 남음: 호스트 모델링 턴의 `links_layers`·`sync_sample`·`project_*` 발급(SPEC-02.6). `execution.ts`에 `HOST_TURN_PROJECT_TOOLS`·`hostTurnProjectHandlers`만 있고 부르는 곳이 없다. 자료 도구 `project_*`는 PLAN-22 T-065. Codex `--output-schema` 실호출은 확인하지 않았다
+  - 호스트 모델링 턴(사용자 결정 2026-10-01 "도구를 만들어 놓고 특정 작업에는 안 쓰게 하는 것도 이상하다", SPEC-02.6): `Execution.projectTools`가 턴의 대화(대화 밖이면 프로젝트 기본 대화)로 `links_layers`·`sync_sample`·`project_*` 처리기를 만들어 Rhino·ZWCAD 바로 편집(`direct-mode.ts`, `zwcad-sdk-execution.ts` `runAttached`), 작업 사본(`sdk-execution.ts`, ZWCAD `run`), 연계 요청(`linked-execution.ts`)의 범위에 더한다. 계획·자동 모두 받는다. 허용 도구 목록은 연결의 `tools`에서 만들어 Claude `--allowedTools`·Codex `enabled_tools`에 그대로 실린다. 지시: `instructionFor`의 `hostProjectNote`, `modeling.md` 「프로젝트 자료 읽기」(다른 파일은 마지막 Sync로만, 살아 있는 문서는 대상 하나). 대상이 여럿인 연계 턴에서도 이 읽기 도구는 `targetRef`를 생략할 수 있다. 감사 지적도 고쳤다: Rhino 바로 편집 목표가 보기 메서드 없는 연결에도 `capture_view`·`measure`를 말하던 것
+  - 증거(호스트 턴): `tests/server/host-turn-tools.test.mjs`(바로 편집 자동·계획 턴이 도구를 받고 실제로 불러 레이어·표본·자료를 읽음, 작업 사본 턴이 처리기를 받음, 연계 범위의 `targetRef` 생략), `tests/server/sdk-execution.test.mjs`(작업 사본 범위·도구 목록)
+  - 남음: 실제 CLI로 호스트 턴에서 이 도구를 부르는 확인(모의 공급자로만 시험). Codex `--output-schema` 실호출은 확인하지 않았다
 
 ### 지침 묶음·AI 동등성 {#ai-parity}
 

@@ -220,7 +220,7 @@ T-001~018의 번호·지원 증거는 유지한다. 각 티켓의 현재 결과�
 | T-059 CLI 판 점검·세션 SPIKE | 완료 | — | [SPIKE](../tdd/SPIKE-2026-09-30-cli-session-resume.md) |
 | T-060 동시 접수 규칙 | 완료(AI 턴 상한 3) | 재시작 때 대기 요청 자동 재개, [다시 기준 잡기] 카드 | [PLAN-24](PLAN-24-ai-conversations.md) |
 | T-061 대화 스레드·세션 | 서버·화면 완료, Claude·Codex 세션 이어 실행, 길이 기준 설정과 새 세션 제안 | 실제 CLI 5턴 토큰 기록. 계정 한도 인계는 T-068에서 뺀다 | `browser-conversations.mjs`(`792e31d`에서 통과) |
-| T-062 대화 도구·질문 카드 | 완료(설치본 도구 연결, 대상이 하나면 `targetRef` 생략) | 호스트 모델링 턴의 `links_layers`·`sync_sample`·`project_*` 연결 | `tests/server/agent-tools-origin.test.mjs` |
+| T-062 대화 도구·질문 카드 | 완료(설치본 도구 연결, 대상이 하나면 `targetRef` 생략). 호스트 모델링 턴(바로 편집·작업 사본·연계, 계획·자동)도 `links_layers`·`sync_sample`·`project_*`를 받는다 | 실제 CLI로 호스트 턴의 도구 호출 확인 | `tests/server/agent-tools-origin.test.mjs`, `tests/server/host-turn-tools.test.mjs` |
 | T-063 만들기 최소판 | 서버·화면·Codex 만들기 턴 구현, 단위 검증 | `browser-make.mjs` 실행 기록, 실제 Codex 만들기 턴 | `tests/server/make-routes.test.mjs` |
 | T-064 M5 수용 | 서버 경로로 합격 | 만들기 탭 화면으로 같은 흐름 확인 | [VERIFY](../tdd/VERIFY-2026-09-30-jig-authoring-m5.md) |
 | T-065 자료 1차·자료 탭 | 구현·단위 검증 | 실제 자료 DB로 화면 확인, `browser-facts.mjs` 실행 기록 | [SPEC-08](../specs/SPEC-08-project-facts.md), `tests/server/facts-routes.test.mjs` |

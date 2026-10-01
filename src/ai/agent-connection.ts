@@ -182,8 +182,27 @@ function ownInstruction(connection: AgentConnection, format: AgentFormat) {
         : makeToolInstruction(connection.draftDir)) + scope
     );
   return connection.tools.some((name) => name === 'query' || name === 'execute')
-    ? agentInstruction
+    ? agentInstruction + hostProjectNote(connection.tools)
     : conversationToolInstruction + scope;
+}
+/**
+ * A host turn's project read tools (SPEC-02.6, T-062): what they read and that only the target is
+ * live. Empty when the turn has none of them.
+ */
+export function hostProjectNote(tools: readonly string[]) {
+  const links = tools.includes('links_layers') || tools.includes('sync_sample');
+  const facts = tools.some((name) => name.startsWith('project_'));
+  if (!links && !facts) return '';
+  return (
+    ' Besides the target you may read the project:' +
+    (links
+      ? " links_layers lists the project's linked files with the layers and object counts of their last stored Sync, and sync_sample reads a few stored rows (id, type, bounds, measures) of one layer;"
+      : '') +
+    (facts
+      ? " project_brief, project_search, project_issue, project_statement and project_checks read the project's 자료 (cite statements as [S<id>], say 미확정 for unconfirmed ones);"
+      : '') +
+    ' targetRef may be left out for these. Only the target is live: other files are known only from their stored Sync, which may be older than the open file, and nothing here edits another file.'
+  );
 }
 /** The instruction-bundle mode a connection implies when the caller names none (PLAN-24). */
 export function instructionModeFor(connection?: AgentConnection): InstructionMode {
