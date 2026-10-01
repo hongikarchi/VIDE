@@ -33,25 +33,6 @@ internal static class WorkerReadback
     internal static string Metadata(ObjectAttributes attributes, GeometryBase geometry) =>
         Attributes(attributes) + "|geometry-data=" + Strings(geometry.GetUserStrings());
 
-    internal static void VerifyArchive(RhinoDoc expected, Rhino.FileIO.File3dm actual)
-    {
-        if (actual.Settings.ModelUnitSystem != expected.ModelUnitSystem) throw new InvalidOperationException("Readback units mismatch");
-        var originals = BlockIdentity.Objects(expected);
-        if (BlockIdentity.Signature(expected) != BlockIdentity.Signature(actual.AllInstanceDefinitions))
-            throw new InvalidOperationException("Readback block definition mismatch");
-        var restored = actual.Objects.ToDictionary(obj => obj.Attributes.ObjectId);
-        if (restored.Count != originals.Length) throw new InvalidOperationException("Readback count mismatch");
-        foreach (var obj in originals)
-        {
-            if (!restored.TryGetValue(obj.Id, out var saved) || !saved.Geometry.IsValid || !GeometryBase.GeometryEquals(obj.Geometry, saved.Geometry))
-                throw new InvalidOperationException("Readback geometry mismatch");
-            if (Metadata(obj) != Metadata(saved.Attributes, saved.Geometry)) throw new InvalidOperationException("Readback attributes mismatch");
-            var layer = actual.AllLayers.FirstOrDefault(layer => layer.Index == saved.Attributes.LayerIndex);
-            if (layer == null || layer.Id != expected.Layers[obj.Attributes.LayerIndex].Id || layer.Name != expected.Layers[obj.Attributes.LayerIndex].Name)
-                throw new InvalidOperationException("Readback layer mismatch");
-        }
-    }
-
     private static string Attributes(ObjectAttributes attributes)
     {
         // Archive bookkeeping bytes differ after reopen; compare public values instead.

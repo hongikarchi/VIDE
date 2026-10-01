@@ -52,7 +52,6 @@ export const PARAM_TYPES = [
   'toggle',
 ] as const;
 export type ParamType = (typeof PARAM_TYPES)[number];
-export const PARAM_UNITS = ['m', 'mm', 'kN', 'kN/m', 'kN/m2', 'deg', '%', 'EA', 'EL'] as const;
 /** Units a setting type may declare (storage is SI; the first is the storage unit). */
 export const UNITS_BY_TYPE: Record<ParamType, readonly string[]> = {
   length: ['m', 'mm'],

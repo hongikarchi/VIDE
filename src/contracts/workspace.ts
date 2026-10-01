@@ -20,7 +20,6 @@ export type RequestState = z.infer<typeof requestStateSchema>;
  */
 export const requestModeSchema = z.enum(['plan', 'auto']);
 export type RequestMode = z.infer<typeof requestModeSchema>;
-export const legacyPermissionSchema = z.enum(['review', 'candidate', 'apply']);
 export function requestMode(input: { mode?: unknown; permission?: unknown }): RequestMode {
   if (input.mode === 'plan' || input.mode === 'auto') return input.mode;
   return input.permission === 'review' ? 'plan' : 'auto';

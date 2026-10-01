@@ -772,7 +772,6 @@ function allBakes(store: JigStore, instanceId: string, bakeId: string) {
   for (const read of store.reads(instanceId)) links.add(read.linkId);
   return [...links].flatMap((linkId) => store.bakes(instanceId, bakeId, linkId));
 }
-export const bakeItemsOf = (record: JigBake) => record.items as BakeRecordItems;
 /** The bakes an instance can offer, for the card (the jig's own, then the built-ins). */
 export const bakeOffers = (jig: LoadedJig) =>
   bakeDeclsOf(jig).map((decl) => ({

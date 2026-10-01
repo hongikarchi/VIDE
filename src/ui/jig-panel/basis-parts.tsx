@@ -1,25 +1,11 @@
 import { useEffect, useRef } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { FactDetail } from '../knowledge-jig.tsx';
-import { FactBadge } from '../kit/settings.tsx';
 import type { Review } from '../facts-api.ts';
-import type { PanelSetting } from './bindings.ts';
-import { basisAttributes, statementOf } from './registry.ts';
 
 // The fact window of a basis chip (Design 근거 칩 "누르면 진술 창을 연다", SCR-19, PLAN-22 T-065):
 // the statement, its excerpt with the quoted passage marked, [원본 열기] (a person's action), the
 // review actions and a way to the 자료 tab. One window at a time, over the page, closed with Esc.
-
-/** A setting's basis chip that opens the fact window when the value rests on a statement. */
-export function BasisChip({ setting }: { setting: PanelSetting }) {
-  const id = statementOf(setting);
-  if (id === undefined) return <FactBadge setting={setting} />;
-  return (
-    <span className="fact-basis-chip" {...basisAttributes(setting)} title={`진술 ${id} 보기`}>
-      <FactBadge setting={setting} />
-    </span>
-  );
-}
 
 function FactWindow({
   projectId,
@@ -111,7 +97,4 @@ export function openFactWindow(projectId: string, statementId: number) {
       onClose={close}
     />,
   );
-}
-export function closeFactWindow() {
-  root?.render(null);
 }

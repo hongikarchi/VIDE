@@ -110,8 +110,7 @@ a {
   color: var(--text-1);
 }
 /* Icon sizes as in 참고 앱 A: 18 px for the main rail items (the global svg size), 16 px for the
-   small items at the rail's end. */
-.rail .rail-end svg,
+   settings item at the rail's end. */
 .rail .rail-settings svg {
   width: 16px;
   height: 16px;
@@ -202,20 +201,10 @@ aside {
   border-radius: var(--radius-sm);
   background: var(--soft);
 }
-.document-heading {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-top: 22px;
-}
 .caption {
   font-size: 11px;
   color: var(--muted);
   letter-spacing: 0.07em;
-}
-.document-heading button {
-  border: 0;
-  font-size: 20px;
 }
 .document {
   padding: 10px 0;
@@ -839,14 +828,6 @@ body.left-hidden.right-hidden main {
   display: none;
 }
 
-.request-section,
-.active-section {
-  padding: 12px 14px;
-  border-bottom: var(--hairline) solid var(--line);
-  flex-shrink: 0;
-}
-.request-section h3,
-.active-section h3,
 .recent-heading {
   font-size: 11px;
   letter-spacing: 0.06em;
@@ -905,41 +886,11 @@ body.left-hidden.right-hidden main {
   border: 0;
   padding: 4px;
 }
-.request-section:has(#request-count:empty) {
-  display: none;
-}
-
 .chip select {
   background: transparent;
   border: 0;
   max-width: 58px;
   font-size: 11px;
-}
-
-.coordinate-entry,
-.coordinate-row {
-  display: flex;
-  gap: 5px;
-  align-items: center;
-}
-.coordinate-entry {
-  flex-basis: 100%;
-}
-.coordinate-entry input,
-.coordinate-row input {
-  min-width: 0;
-  width: 75px;
-  border: var(--hairline) solid var(--line);
-  border-radius: var(--radius-sm);
-  padding: 4px;
-  background: var(--bg-elevated);
-}
-.coordinate-row {
-  margin-top: 4px;
-}
-.coordinate-row > span {
-  width: 20px;
-  color: var(--muted);
 }
 
 .quantity-dialog {
@@ -1568,12 +1519,6 @@ body.left-hidden.right-hidden main {
 #import-model:hover:not(:disabled) {
   color: var(--text-1);
 }
-.icon-button {
-  width: 30px;
-  padding: 0;
-  background: var(--bg-elevated);
-  font-size: 13px;
-}
 .primary-button {
   background: var(--cta-bg);
   color: var(--cta-text);
@@ -1797,31 +1742,6 @@ body.left-hidden.right-hidden main {
   border-style: dashed;
   border-color: var(--ok);
   background: var(--ok-subtle);
-}
-.panel-section {
-  padding: 10px 14px;
-  border-bottom: var(--hairline) solid var(--line);
-  flex-shrink: 0;
-}
-.panel-section > summary {
-  font-size: 11px;
-  letter-spacing: 0.06em;
-  color: var(--muted);
-  font-weight: 600;
-  margin: 0;
-  list-style: none;
-}
-.panel-section > summary::before {
-  content: '▸';
-  display: inline-block;
-  width: 12px;
-  transition: transform 0.1s;
-}
-.panel-section[open] > summary::before {
-  transform: rotate(90deg);
-}
-.panel-section[open] > summary {
-  margin-bottom: 9px;
 }
 .recent-section {
   flex: 1;

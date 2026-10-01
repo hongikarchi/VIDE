@@ -147,9 +147,6 @@ const candidates = z.object({
   ),
 });
 export type Candidate = z.infer<typeof candidates>['proposals'][string]['candidates'][number];
-export const instanceRow = z
-  .object({ id: z.string(), jigId: z.string(), title: z.string(), updatedAt: z.string() })
-  .passthrough();
 
 type Value = number | string | boolean;
 const MESSAGES: Record<string, string> = {
@@ -189,7 +186,6 @@ export function preferRun(instanceId: string, preference: RunPreference | undefi
   if (preference) runPreferences.set(instanceId, preference);
   else runPreferences.delete(instanceId);
 }
-export const runPreference = (instanceId: string) => runPreferences.get(instanceId);
 
 /** A step that has been evaluated by a run no longer waits for one. */
 const evaluated = (status: string) => status !== 'blocked' && status !== 'skipped';

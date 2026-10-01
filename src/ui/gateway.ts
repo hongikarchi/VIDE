@@ -114,8 +114,6 @@ Object.assign(errors, {
   AGENT_CALL_LIMIT: '설정한 도구 호출 횟수에 도달했습니다.',
   PROFILE_LOGIN_IN_PROGRESS: '계정 로그인 종료를 기다린 뒤 요청하세요.',
   INVALID_GEOMETRY: 'AI의 형상 제안이 검증을 통과하지 못했습니다.',
-  WRITE_NOT_ALLOWED:
-    'Plan mode에서는 형상을 변경하지 않습니다. Shift+Tab으로 Accept edits 또는 Auto mode로 바꾸세요.',
   PROJECT_BUSY: '같은 대상의 작업이 진행 중입니다. 다른 문서를 선택하거나 완료를 기다리세요.',
   INTERVENTION_REVIEW_REQUIRED:
     '이전 작업의 부분 결과 또는 불명확 상태를 확인해야 합니다. 추가 지시는 보존했습니다.',
@@ -127,8 +125,6 @@ Object.assign(errors, {
 });
 
 Object.assign(errors, {
-  SOURCE_CHANGED:
-    '기준 Rhino 파일이 외부에서 변경됐습니다. 수정된 파일을 다시 불러와 이어서 작업하세요.',
   IMPORT_LIMIT: '현재 연결 경로의 객체 수 한도를 넘어 가져오지 못했습니다. 기존 표시를 유지합니다.',
   IMPORT_FAILED: '파일을 불러오지 못했습니다.',
 });
@@ -238,5 +234,4 @@ Object.assign(errors, {
   DIRECT_ACTION_FAILED: '요청을 처리하지 못했습니다. 작업 상태를 다시 확인하세요.',
   GUARD_CONFIRMATION_REQUIRED:
     '되돌리기로 복구하기 어려운 변경이라 실행을 되돌리고 확인을 기다립니다. [진행]을 누르면 다시 실행합니다.',
-  PLAN_ALREADY_CONTINUED: '이 계획은 이미 자동으로 이어서 실행했습니다.',
 });

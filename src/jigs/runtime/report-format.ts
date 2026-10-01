@@ -626,6 +626,3 @@ export function resolveReport(
     provisional,
   };
 }
-
-/** A headline is a sentence: it ends with a period (the frame's own rule, Design SCR-17). */
-export const endsAsSentence = (text: string) => /[.。]$/.test(text.trim());

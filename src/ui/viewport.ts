@@ -36,7 +36,7 @@ import { TOKEN_FALLBACK } from './tokens.ts';
 
 type Camera = THREE.PerspectiveCamera | THREE.OrthographicCamera;
 type PlaneName = 'XY' | 'XZ' | 'YZ';
-type ToolMode = 'select' | 'pin' | 'sketch';
+type ToolMode = 'select' | 'sketch';
 export interface BrushSettings {
   color: string;
   width: number;
@@ -194,12 +194,7 @@ function ownerId(object: THREE.Object3D | undefined) {
 export function createViewport(
   container: HTMLElement,
   objects: DisplayObject[],
-  onPick: (
-    ids: string[],
-    mode: 'replace' | 'add' | 'remove',
-    pin: boolean,
-    source: PickSource,
-  ) => void,
+  onPick: (ids: string[], mode: 'replace' | 'add' | 'remove', source: PickSource) => void,
   onSketch: (event: SketchEvent) => void,
   onCamera?: (state: { view: string; projection: 'orthographic' | 'perspective' }) => void,
 ) {
@@ -1749,13 +1744,12 @@ export function createViewport(
         onPick(
           boxSelect(start.x, start.y, e.clientX, e.clientY, e.clientX < start.x),
           selectionMode(e),
-          mode === 'pin',
           { source: 'document' },
         );
       return;
     }
     const pick = pickAt(e.clientX, e.clientY);
-    onPick(pick.ids, selectionMode(e), mode === 'pin', pick.source);
+    onPick(pick.ids, selectionMode(e), pick.source);
   }
   /**
    * A click: overlay marks (points, labels, lines) first as they are drawn on top, then document

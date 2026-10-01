@@ -97,7 +97,6 @@ import {
   models,
   initial,
   chooseModel,
-  pinSelection,
   attachHostSelection,
   attachReviewNote,
   failedRequestDraft,
@@ -166,7 +165,7 @@ let selectedIds: string[] = [];
 // Set once the inline pin composer exists; render() may run before that.
 let refreshPinComposer = () => {};
 /** Rhino-style selection: replace by default, Shift adds, Ctrl removes. */
-function applySelection(ids: string[], mode: SelectMode, pin = false) {
+function applySelection(ids: string[], mode: SelectMode) {
   if (mode === 'replace') selectedIds = [...new Set(ids)];
   else if (mode === 'add') selectedIds = [...new Set([...selectedIds, ...ids])];
   else selectedIds = selectedIds.filter((id) => !ids.includes(id));
@@ -177,7 +176,6 @@ function applySelection(ids: string[], mode: SelectMode, pin = false) {
     applyActiveLayer();
     renderLinkPanel();
   }
-  if (pin) pinSelection(state, ids);
   render();
 }
 /** Show a result and select one of its objects by the object's own id. */
@@ -192,7 +190,7 @@ function selectInResult(requestId: string | undefined, id: string) {
   return state.selected;
 }
 const renderObjectList = createObjectList($('objects'), (ids, mode) => {
-  applySelection(ids, mode, tool === 'pin');
+  applySelection(ids, mode);
   if (ids.length === 1 && mode !== 'remove') viewport?.fit(ids[0]);
 });
 let foregroundRequest: { id: string; selected: typeof selectedResult; draft: string } | undefined;
@@ -417,7 +415,7 @@ const workspaceStatus = initializeWorkspaceStatus({
     renderHeading();
   },
 });
-let tool: 'select' | 'pin' | 'sketch' = 'select',
+let tool: 'select' | 'sketch' = 'select',
   strokes: DraftStroke[] = [],
   toastTimer: ReturnType<typeof setTimeout> | undefined;
 const message = (text: string) => {
@@ -940,8 +938,8 @@ try {
   viewport = createViewport(
     $('canvas'),
     objects,
-    (ids, mode, pin, source) =>
-      source.source === 'overlay' ? overlayPicked(source) : applySelection(ids, mode, pin),
+    (ids, mode, source) =>
+      source.source === 'overlay' ? overlayPicked(source) : applySelection(ids, mode),
     (event) => {
       if (event.type === 'stroke') {
         if (strokes.length >= 200) {
@@ -1044,7 +1042,7 @@ function attachStrokes() {
   strokes = [];
   render();
 }
-function setTool(next: 'select' | 'pin' | 'sketch') {
+function setTool(next: 'select' | 'sketch') {
   // Leaving the sketch tool keeps what was drawn: the strokes join the message as a sketch.
   if (tool === 'sketch' && next !== 'sketch' && pendingSketch())
     try {
@@ -1064,9 +1062,7 @@ function setTool(next: 'select' | 'pin' | 'sketch') {
   $('tool-hint').textContent =
     tool === 'sketch'
       ? '펜·드래그로 그리기 · 손가락/우클릭 회전 · 두 손가락/Shift+우클릭 이동 · 휠·핀치 확대 · 위/앞/옆 보기는 그 평면에 그리기'
-      : tool === 'pin'
-        ? '객체를 누르면 입력에 첨부됩니다.'
-        : '';
+      : '';
   draw();
 }
 function chip(text: string, remove: () => void, title?: string, select?: () => void) {
@@ -2801,7 +2797,7 @@ $('selection-pin').onclick = () => {
   $('pin').click();
 };
 for (const button of document.querySelectorAll<HTMLButtonElement>('[data-tool]'))
-  button.onclick = () => setTool(z.enum(['select', 'pin', 'sketch']).parse(button.dataset.tool));
+  button.onclick = () => setTool(z.enum(['select', 'sketch']).parse(button.dataset.tool));
 for (const id of ['brush-color', 'brush-width'] as const)
   $(id).addEventListener('input', brushSettings);
 $('brush-surface').onclick = () => {

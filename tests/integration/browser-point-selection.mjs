@@ -30,7 +30,7 @@ try {
     window.pointView = createViewport(
       container,
       [],
-      (ids, _mode, pin) => ids.length && window.pointPicks.push({ id: ids[0], pin }),
+      (ids) => ids.length && window.pointPicks.push({ id: ids[0] }),
       () => {},
     );
     window.pointView.replace([
@@ -40,24 +40,16 @@ try {
   });
   const canvas = page.locator('#point-fixture canvas');
   await canvas.click();
-  assert.deepEqual(await page.evaluate(() => window.pointPicks), [
-    { id: 'survey-point', pin: false },
-  ]);
-  await page.evaluate(() => window.pointView.mode('pin'));
-  await canvas.click();
-  assert.deepEqual((await page.evaluate(() => window.pointPicks)).at(-1), {
-    id: 'survey-point',
-    pin: true,
-  });
+  assert.deepEqual(await page.evaluate(() => window.pointPicks), [{ id: 'survey-point' }]);
   await page.evaluate(() => {
     window.pointView.projection('perspective');
     window.pointView.fit();
   });
   await canvas.click();
-  assert.equal((await page.evaluate(() => window.pointPicks)).length, 3);
+  assert.equal((await page.evaluate(() => window.pointPicks)).length, 2);
   const box = await canvas.boundingBox();
   await page.mouse.click(box.x + box.width / 2 + 30, box.y + box.height / 2);
-  assert.equal((await page.evaluate(() => window.pointPicks)).length, 3);
+  assert.equal((await page.evaluate(() => window.pointPicks)).length, 2);
   assert.deepEqual(errors, []);
   await page.evaluate(() => {
     window.pointView.dispose();
@@ -67,7 +59,6 @@ try {
     JSON.stringify({
       orthographicPick: true,
       perspectivePick: true,
-      pin: true,
       offPointMiss: true,
       largeCoordinates: true,
     }),
