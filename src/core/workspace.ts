@@ -185,6 +185,39 @@ export class Workspace {
       .at(-1);
     return latest && this.get(projectId, latest.id);
   }
+  /** The user document (`sourceDocument` key) a request's chain stands on, if identified. */
+  private documentOf(projectId: string, id: string | null | undefined): string | undefined {
+    const visited = new Set<string>();
+    while (id && !visited.has(id)) {
+      visited.add(id);
+      let row;
+      try {
+        row = this.get(projectId, id);
+      } catch {
+        return;
+      }
+      const source = row.result?.sourceDocument as Record<string, unknown> | undefined;
+      if (source && typeof source.instance === 'string' && typeof source.documentId === 'number')
+        return JSON.stringify([
+          row.result?.host || row.input.host || 'rhino',
+          source.instance,
+          source.documentId,
+        ]);
+      const parent =
+        row.input.baseRequestId ??
+        (row.result as { baseRequestId?: unknown } | null)?.baseRequestId;
+      id = typeof parent === 'string' ? parent : undefined;
+    }
+  }
+  /**
+   * A change pin in another linked file than the request's starting document (T-103, SPEC-01.11
+   * 5): the AI picks which linked file it edits, so such a pin is not stale for this baseline.
+   */
+  private otherDocument(projectId: string, basis: string, baseline: string | undefined) {
+    const pinned = this.documentOf(projectId, basis);
+    const start = this.documentOf(projectId, baseline);
+    return pinned !== undefined && start !== undefined && pinned !== start;
+  }
   submit(projectId: string, value: unknown) {
     return this.insert(projectId, value);
   }
@@ -307,7 +340,9 @@ export class Workspace {
           ? targets.some((t) => t.host === (source.result!.host || 'rhino'))
           : (source.result.host || 'rhino') === target) &&
         ['target', 'preserve'].includes(pin.role) &&
-        (targets ? !targets.some((t) => t.baseRequestId === pin.basis) : pin.basis !== baseline?.id)
+        (targets
+          ? !targets.some((t) => t.baseRequestId === pin.basis)
+          : pin.basis !== baseline?.id && !this.otherDocument(projectId, pin.basis, baseline?.id))
       )
         fail('STALE_REFERENCE');
     }
