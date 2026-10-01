@@ -965,13 +965,12 @@ export class ConversationService {
 
   /**
    * One running turn per conversation (SPEC-02.19 4): a later message of the same conversation
-   * waits in its line, in order; an unresolved result stops the line.
+   * waits in its line, in order. An unresolved result does not stop the line (T-102).
    */
   hold(request: StoredWork, rows: StoredWork[], active: ReadonlySet<string>): Hold | undefined {
     const key = request.input.conversationId;
     if (typeof key !== 'string') return;
     const mine = rows.filter((row) => row.id !== request.id && row.input.conversationId === key);
-    if (mine.some((row) => row.state === 'unknown')) return { code: 'HOST_RESULT_UNRESOLVED' };
     const index = rows.findIndex((row) => row.id === request.id);
     // Earlier messages of the conversation that run or wait: this one stands behind them.
     const ahead = (index < 0 ? mine : mine.filter((row) => rows.indexOf(row) < index)).filter(

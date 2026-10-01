@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { Store } from '../../src/core/store.ts';
 import { Workspace } from '../../src/core/workspace.ts';
-import { hostUse, requestAdmission } from '../../src/contracts/request-scope.ts';
+import { hostUse, requestAdmission, unresolvedFor } from '../../src/contracts/request-scope.ts';
 
 const instance = '1:2:356ff01d-b586-460c-8e2b-8c9f3c083e96';
 
@@ -147,7 +147,7 @@ test('a Sync waits only for a source apply of the same document and is refused a
   assert.equal(submit('edit', { baseRequestId: 'doc-1' }).result.waitingFor.after, 'apply');
 });
 
-test('an unresolved result stops only the writes of its document; its queue stops with the reason', (t) => {
+test('an unresolved result never refuses or stops a later write; it is named to that turn (T-102)', (t) => {
   const { workspace, project, submit, finish } = fixture(t);
   submit('root');
   finish('root');
@@ -160,16 +160,41 @@ test('an unresolved result stops only the writes of its document; its queue stop
     'edit-child',
   );
   finish('edit-child', { phase: 'host' }, 'unknown');
-  assert.deepEqual(workspace.release(project.id), []);
-  const stopped = workspace.get(project.id, 'edit-root');
-  assert.equal(stopped.state, 'interrupted');
-  assert.equal(stopped.result.code, 'HOST_RESULT_UNRESOLVED');
-  assert.equal(stopped.result.waitingFor.after, 'edit-child');
-  assert.throws(() => submit('edit-root-2', { baseRequestId: 'root' }), {
-    code: 'HOST_RESULT_UNRESOLVED',
-  });
+  // The waiting write's turn has come: the unknown one ahead does not stop it.
+  assert.deepEqual(
+    workspace.release(project.id).map((row) => row.id),
+    ['edit-root'],
+  );
+  workspace.update(project.id, 'edit-root', 'succeeded', { host: 'rhino', hostExecuted: true });
+  assert.equal(submit('edit-root-2', { baseRequestId: 'root' }).result, null);
+  assert.deepEqual(
+    unresolvedFor(workspace.get(project.id, 'edit-root-2').input, workspace.list(project.id)).map(
+      (row) => row.id,
+    ),
+    ['edit-child'],
+  );
   assert.equal(submit('independent').result, null);
   assert.equal(submit('inspect', { baseRequestId: 'root', permission: 'review' }).state, 'queued');
+});
+
+test('an unresolved result without any document (null key) does not refuse a write of its host', (t) => {
+  const { workspace, project, submit, finish } = fixture(t);
+  // The user's case: a lost read-only execute, no sourceDocument, no documents, no targetRef.
+  submit('lost', { baseRequestId: undefined });
+  workspace.update(project.id, 'lost', 'unknown', { code: 'HOST_RESULT_UNKNOWN', executions: [] });
+  const next = submit('next');
+  assert.equal(next.state, 'queued');
+  assert.equal(next.result, null);
+  assert.deepEqual(
+    unresolvedFor(next.input, workspace.list(project.id)).map((row) => row.id),
+    ['lost'],
+  );
+  // A ZWCAD write is not about that Rhino result.
+  assert.deepEqual(
+    unresolvedFor(submit('cad', { host: 'zwcad' }).input, workspace.list(project.id)),
+    [],
+  );
+  finish('next');
 });
 
 test('a request without an identified document stands behind every write of its host only', (t) => {

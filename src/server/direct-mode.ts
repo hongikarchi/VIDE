@@ -309,7 +309,7 @@ export interface LinkedFiles {
   ): DirectDriver | undefined;
   /**
    * Before the first execute in a document other than the target: undefined when the request may
-   * lock it, else the refusal code (DOCUMENT_LOCKED, HOST_RESULT_UNRESOLVED). Synchronous, so the
+   * lock it, else the refusal code (DOCUMENT_LOCKED). Synchronous, so the
    * check and the lock (the next progress update) cannot interleave with another turn.
    */
   claim?(document: TurnDocument): string | undefined;
@@ -342,10 +342,7 @@ export function lockRefusal(code: string, name: string): DirectRefusal {
   return {
     code,
     final: true,
-    reason:
-      code === 'HOST_RESULT_UNRESOLVED'
-        ? `'${name}' 파일에 결과를 확인하지 못한 작업이 있어 이 파일은 실행하지 않았습니다. 그 작업의 결과를 먼저 확인하세요.`
-        : `다른 작업이 '${name}' 파일을 고치는 중이라 이 파일은 실행하지 않았습니다. 그 작업이 끝난 뒤 다시 요청하세요.`,
+    reason: `다른 작업이 '${name}' 파일을 고치는 중이라 이 파일은 실행하지 않았습니다. 그 작업이 끝난 뒤 다시 요청하세요.`,
   };
 }
 /**
@@ -533,6 +530,33 @@ export function afterRequestUndo(
   };
   if (!held.size) delete still.heldOnly;
   return { state: 'unknown', result: still };
+}
+/**
+ * The turn context item about earlier unresolved results on the turn's documents (SPEC-02.13 7,
+ * T-102), or undefined when there are none. The turn still runs: it reads the document first and
+ * does not repeat that work blindly.
+ */
+export function unresolvedNote(
+  rows: readonly { id: string; input: { body?: unknown }; result?: unknown }[],
+): ContextItem | undefined {
+  if (!rows.length) return;
+  const nameOf = (result: unknown) => {
+    const source = (result as { sourceDocument?: { name?: unknown } } | null | undefined)
+      ?.sourceDocument;
+    return typeof source?.name === 'string' ? source.name : undefined;
+  };
+  return {
+    id: 'unresolved-results',
+    type: 'note',
+    data: {
+      note: 'The host answer of these earlier requests was lost (their result is unconfirmed): the document may or may not hold their changes. Read the document (query) before acting, do not repeat that work blindly, and say in your reply what you found.',
+      requests: rows.slice(-5).map((row) => ({
+        requestId: row.id,
+        request: typeof row.input.body === 'string' ? row.input.body.slice(0, 300) : '',
+        ...(nameOf(row.result) ? { document: nameOf(row.result) } : {}),
+      })),
+    },
+  };
 }
 /** One document of a request (its host, window and document id). */
 export const documentKey = (host: string, target: { instance: string; documentId: number }) =>

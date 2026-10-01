@@ -8,7 +8,7 @@ import { isDwgSdkEditMode } from '../contracts/dwg-edit-mode.ts';
 import { executionLimits } from '../contracts/execution-limits.ts';
 import { modelContext } from './model-context.ts';
 import { CLAUDE_MODELS, claudeEfforts, modelName } from './model-capabilities.ts';
-import { documentHolder, hostUse, waitingOf } from '../contracts/request-scope.ts';
+import { documentHolder, hostUse, unresolvedFor, waitingOf } from '../contracts/request-scope.ts';
 import { z } from 'zod';
 import { runLinked } from './linked-execution.ts';
 // Jig review gates (sync-review rows, structure-draft-review members/nodes; SPEC-06.9).
@@ -78,6 +78,7 @@ import {
   PLAN_RULES,
   type DirectDriver,
   type ExecutionRecord,
+  unresolvedNote,
 } from './direct-mode.ts';
 import { directRefusal } from '../contracts/direct-refusal.ts';
 import { DocumentLinks, isFileLink } from '../core/document-links.ts';
@@ -1117,6 +1118,12 @@ export class Execution {
         // Images go to the model as image content (PLAN-24; the CLI adapters split them out).
         ...(input.images ?? []).map((data, i) => ({ id: `image-${i}`, type: 'image', data })),
       ];
+      // An earlier request whose host answer was lost on this turn's documents does not stop it
+      // (SPEC-02.13 7, T-102): the turn is told so, to read the document before acting.
+      if (!jigReview) {
+        const note = unresolvedNote(unresolvedFor(input, this.workspace.claimRows(projectId)));
+        if (note) items.push(note);
+      }
       // Outside a conversation the run stays synchronous up to the provider call (no await).
       const pending = this.beginTurn(request);
       if (pending) turn = await pending;
@@ -1777,6 +1784,38 @@ export class Execution {
     return { ok: true, ...(answer.already === true ? { already: true } : {}), request: updated };
   }
   /**
+   * [확인함] (POST …/requests/:rid/acknowledge, SPEC-02.13 7, T-102): the user has looked at the
+   * document and closes an unresolved request. It settles to the state an undo would have restored
+   * (`settles`), else `interrupted`, keeping its record, its code and `acknowledgedAt`. Later turns
+   * are no longer told about it. Any other state answers as it is (already settled).
+   */
+  acknowledge(projectId: string, id: string) {
+    const request = this.workspace.get(projectId, id);
+    if (request.state !== 'unknown') return request;
+    if (this.active.has(id)) throw new DomainError('REVISION_CONFLICT');
+    const {
+      heldOnly: _heldOnly,
+      settles,
+      ...rest
+    } = (request.result ?? {}) as Record<string, unknown>;
+    const back = settles as { state?: unknown; code?: unknown } | undefined;
+    const state =
+      typeof back?.state === 'string' && back.state !== 'unknown'
+        ? (back.state as typeof request.state)
+        : 'interrupted';
+    return this.workspace.update(projectId, id, state, {
+      ...rest,
+      phase: undefined,
+      code:
+        state === 'interrupted'
+          ? 'HOST_RESULT_UNKNOWN'
+          : typeof back?.code === 'string'
+            ? back.code
+            : undefined,
+      acknowledgedAt: new Date().toISOString(),
+    });
+  }
+  /**
    * [되돌리기] of a whole request (POST …/requests/:rid/undo {all: true}, ADR-027 2): every applied
    * execution, in every file, last first. A file whose undo the host refuses keeps its remaining
    * executions (named in `files` and the result's `undo`); a lost undo answer leaves the request
@@ -1787,6 +1826,10 @@ export class Execution {
     if (this.active.has(id) || ['queued', 'running'].includes(request.state))
       throw new DomainError('REVISION_CONFLICT');
     const records = executionsOf(request.result);
+    // An unresolved request without any execution record has nothing an undo could settle: the
+    // [되돌리기] closes it as [확인함] does (T-102), instead of leaving it unknown for good.
+    if (request.state === 'unknown' && !records.length)
+      return { ok: true, files: [], request: this.acknowledge(projectId, id) };
     // An unresolved request runs it anyway: an unknown it can settle may have nothing left to undo.
     if (
       request.state !== 'unknown' &&
@@ -1848,8 +1891,8 @@ export class Execution {
     const { refused: _refused, ...base } = (request.result ?? {}) as Record<string, unknown>;
     const name = entry.file?.name ?? `${driver.host === 'zwcad' ? 'ZWCAD' : 'Rhino'} 문서`;
     // A multi-file request waiting on its card holds no document (SPEC-02.13 4): the document is
-    // checked again before the re-run, refused at once when another request writes it or leaves it
-    // unknown (SPEC-02.9 3, ADR-027 5). A one-file request on its target runs as before.
+    // checked again before the re-run, refused at once when another request writes it (SPEC-02.9
+    // 3, ADR-027 5). A one-file request on its target runs as before.
     const multi = base.multiFile === true;
     const target = hostTargetSchema.safeParse(base.sourceDocument).data;
     const elsewhere =

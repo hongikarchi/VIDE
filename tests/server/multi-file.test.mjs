@@ -7,7 +7,19 @@ import { Store } from '../../src/core/store.ts';
 import { Workspace } from '../../src/core/workspace.ts';
 import { Execution } from '../../src/server/execution.ts';
 import { AgentTools } from '../../src/server/agent-tools.ts';
-import { documentHolder } from '../../src/contracts/request-scope.ts';
+import { documentHolder, unresolvedFor } from '../../src/contracts/request-scope.ts';
+
+/**
+ * What a document meets from other requests: a write holding it (DOCUMENT_LOCKED), else an
+ * unresolved result there, which never refuses but is named to the next turn (T-102).
+ */
+const concernOf = (rows, instance) => {
+  const doc = { host: 'rhino', instance, documentId: 7 };
+  const held = documentHolder('probe', doc, rows);
+  if (held) return held;
+  const probe = { id: 'probe', host: 'rhino', source: 'document', sourceDocument: doc };
+  if (unresolvedFor(probe, rows).length) return { code: 'UNRESOLVED_NOTE' };
+};
 import { hostProjectNote } from '../../src/ai/agent-connection.ts';
 import { liveLinksOf, matchLinks } from '../../src/server/live-links.ts';
 import { DocumentLinks, matchOpenDocuments } from '../../src/core/document-links.ts';
@@ -468,8 +480,7 @@ test('A rollback the host refuses is shown per file; a lost undo answer leaves t
       throw fail('PROVIDER_TIMEOUT');
     },
   );
-  const holderOf = (instance) =>
-    documentHolder('probe', { host: 'rhino', instance, documentId: 7 }, workspace.list(project.id));
+  const holderOf = (instance) => concernOf(workspace.list(project.id), instance);
   send('refused', { mode: 'auto' });
 
   await settled();
@@ -509,13 +520,12 @@ test('A rollback the host refuses is shown per file; a lost undo answer leaves t
     [['win-b', 'undo']],
   );
   assert.equal(lost.result.heldOnly, true);
-  // A, rolled back and known, takes new writes; B stays refused until it is settled.
+  // A, rolled back, is known; B is still unknown and named to the next turn there, but a write to
+  // B is taken too (T-102).
   assert.equal(holderOf('win-a'), undefined);
-  assert.equal(holderOf('win-b')?.code, 'HOST_RESULT_UNRESOLVED');
+  assert.equal(holderOf('win-b')?.code, 'UNRESOLVED_NOTE');
   assert.equal(submit('after-a', { mode: 'auto' }).state, 'queued');
-  assert.throws(() => submit('after-b', { mode: 'auto', baseRequestId: 'sync-b' }), {
-    code: 'HOST_RESULT_UNRESOLVED',
-  });
+  assert.equal(submit('after-b', { mode: 'auto', baseRequestId: 'sync-b' }).state, 'queued');
   // [되돌리기] whose answer arrives in B settles it: the request is the failure it was.
   const settled2 = await execution.undoRequest(project.id, 'lost');
   assert.equal(settled2.ok, true);
@@ -681,7 +691,7 @@ test('ZWCAD drawings through the engine driver: entity pages by handle, unknown 
 
 /** Who holds a document now (the lock check of a turn's first write there). */
 const holder = (workspace, project) => (instance) =>
-  documentHolder('probe', { host: 'rhino', instance, documentId: 7 }, workspace.list(project.id));
+  concernOf(workspace.list(project.id), instance);
 
 test('[되돌리기] whose answer is lost in one file: a later one that the host answers settles the request', async (t) => {
   const { a, b, execution, project, workspace, submit, send, settled, state } = setup(
@@ -713,7 +723,7 @@ test('[되돌리기] whose answer is lost in one file: a later one that the host
   );
   // A is known (undone): only B is held meanwhile.
   assert.equal(holderOf('win-a'), undefined);
-  assert.equal(holderOf('win-b')?.code, 'HOST_RESULT_UNRESOLVED');
+  assert.equal(holderOf('win-b')?.code, 'UNRESOLVED_NOTE');
   const second = await execution.undoRequest(project.id, 'auto-1');
   assert.equal(second.ok, true);
   assert.ok([...a.records, ...b.records].every((record) => record.undone));
@@ -752,7 +762,7 @@ test('A file whose execute answer was lost stays held through a later [되돌리
   );
   assert.deepEqual(b.calls.undo, []);
   assert.equal(holderOf('win-a'), undefined);
-  assert.equal(holderOf('win-b')?.code, 'HOST_RESULT_UNRESOLVED');
+  assert.equal(holderOf('win-b')?.code, 'UNRESOLVED_NOTE');
   // The user undoes their own edit; then the request's [되돌리기] loses A's answer.
   a.records.at(-1).undone = true;
   a.next.undo.push(() => Promise.reject(fail('TIMEOUT')));
@@ -765,8 +775,8 @@ test('A file whose execute answer was lost stays held through a later [되돌리
       ['A.3dm', 'undo'],
     ],
   );
-  assert.equal(holderOf('win-a')?.code, 'HOST_RESULT_UNRESOLVED');
-  assert.equal(holderOf('win-b')?.code, 'HOST_RESULT_UNRESOLVED');
+  assert.equal(holderOf('win-a')?.code, 'UNRESOLVED_NOTE');
+  assert.equal(holderOf('win-b')?.code, 'UNRESOLVED_NOTE');
   // A settles with the next answer; B, whose execute answer was lost, stays unknown.
   const again = await execution.undoRequest(project.id, 'auto-1');
   assert.equal(again.request.state, 'unknown');
@@ -775,7 +785,7 @@ test('A file whose execute answer was lost stays held through a later [되돌리
     ['B.3dm'],
   );
   assert.equal(holderOf('win-a'), undefined);
-  assert.equal(holderOf('win-b')?.code, 'HOST_RESULT_UNRESOLVED');
+  assert.equal(holderOf('win-b')?.code, 'UNRESOLVED_NOTE');
 });
 
 test('A stop while another file has an execute in flight: no rollback around it, it stays held, its late answer changes nothing', async (t) => {
@@ -818,7 +828,7 @@ test('A stop while another file has an execute in flight: no rollback around it,
   assert.equal(a.records[0].undone, true);
   const holderOf = holder(workspace, project);
   assert.equal(holderOf('win-a'), undefined);
-  assert.equal(holderOf('win-b')?.code, 'HOST_RESULT_UNRESOLVED');
+  assert.equal(holderOf('win-b')?.code, 'UNRESOLVED_NOTE');
   answerB.open();
   await new Promise((resolve) => setTimeout(resolve, 20));
   const late = state('stop-1');
@@ -894,7 +904,7 @@ test('A stop the provider ends STOP_UNCONFIRMED is a cancellation; an interventi
   assert.equal(b.records.at(-1).undone, false);
 });
 
-test('An unresolved request that does not name every unknown document keeps its target held', () => {
+test('An unresolved request that does not name every unknown document keeps its target named', () => {
   const doc = (instance) => ({ host: 'rhino', instance, documentId: 7 });
   const sync = {
     id: 'sync-a',
@@ -909,13 +919,13 @@ test('An unresolved request that does not name every unknown document keeps its 
     state: 'unknown',
     result: { documents: [{ ...doc('win-b'), name: 'B.3dm' }] },
   };
-  const holderOf = (rows, instance) => documentHolder('probe', doc(instance), rows)?.code;
-  assert.equal(holderOf([sync, recovered], 'win-a'), 'HOST_RESULT_UNRESOLVED');
-  assert.equal(holderOf([sync, recovered], 'win-b'), 'HOST_RESULT_UNRESOLVED');
-  // Naming every unknown document (heldOnly), it holds only those.
+  const holderOf = (rows, instance) => concernOf(rows, instance)?.code;
+  assert.equal(holderOf([sync, recovered], 'win-a'), 'UNRESOLVED_NOTE');
+  assert.equal(holderOf([sync, recovered], 'win-b'), 'UNRESOLVED_NOTE');
+  // Naming every unknown document (heldOnly), it concerns only those.
   const named = { ...recovered, result: { ...recovered.result, heldOnly: true } };
   assert.equal(holderOf([sync, named], 'win-a'), undefined);
-  assert.equal(holderOf([sync, named], 'win-b'), 'HOST_RESULT_UNRESOLVED');
+  assert.equal(holderOf([sync, named], 'win-b'), 'UNRESOLVED_NOTE');
   // While it runs, it holds its target and the documents it locked.
   const running = { ...named, state: 'running' };
   assert.equal(holderOf([sync, running], 'win-a'), 'DOCUMENT_LOCKED');
@@ -1014,7 +1024,7 @@ test('[진행] that fails in another file rolls the request back in every file',
   );
   const holderOf = holder(workspace, project);
   assert.equal(holderOf('win-a'), undefined);
-  assert.equal(holderOf('win-b')?.code, 'HOST_RESULT_UNRESOLVED');
+  assert.equal(holderOf('win-b')?.code, 'UNRESOLVED_NOTE');
   assert.equal(submit('next-a', { mode: 'auto' }).state, 'queued');
 });
 

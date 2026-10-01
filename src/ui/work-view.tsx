@@ -220,7 +220,7 @@ const executionStates: Record<string, string> = {
 export interface DirectActions {
   direct: (
     id: string,
-    action: 'undo' | 'confirm' | 'continue',
+    action: 'undo' | 'confirm' | 'continue' | 'acknowledge',
     body?: Record<string, unknown>,
   ) => Promise<void>;
 }
@@ -540,6 +540,8 @@ export function stagesOf(message: Message, now = Date.now()) {
     direct:
       typeof (result as { appliedDirectly?: unknown } | undefined)?.appliedDirectly === 'boolean',
     ...(Number.isFinite(ended) ? { endedAt: ended } : {}),
+    acknowledged:
+      typeof (result as { acknowledgedAt?: unknown } | undefined)?.acknowledgedAt === 'string',
   });
 }
 
@@ -737,7 +739,9 @@ function WorkView({
               ? ' · ' + base.request.result.sourceDocument.name
               : '');
   const checks = [
-    request?.state === 'unknown' ? '호스트 결과가 확인되지 않았습니다. 새 쓰기는 보류됩니다.' : '',
+    request?.state === 'unknown'
+      ? '호스트 결과가 확인되지 않았습니다. 문서를 확인한 뒤 [확인함]을 누르세요. 그동안 다음 작업은 이 문서를 먼저 읽고 진행합니다.'
+      : '',
     result?.recovered
       ? '사본에서 복구한 결과 · 목표 완료 미확인. 이어가기 전에 후보를 확인하세요.'
       : '',
@@ -927,6 +931,15 @@ function WorkView({
             <Candidate message={message} projectId={projectId} actions={actions} />
           ) : null}
           {result?.code ? <p>{errorLabels[result.code] || result.code}</p> : null}
+          {request.state === 'unknown' ? (
+            <Action
+              latch
+              error={actions.error}
+              run={() => actions.direct(message.id, 'acknowledge', {})}
+            >
+              확인함
+            </Action>
+          ) : null}
           {request.state === 'unknown' &&
           !result?.applicationId &&
           result?.executionMode === 'sdk' ? (

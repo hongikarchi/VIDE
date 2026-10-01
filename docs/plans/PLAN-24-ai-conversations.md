@@ -382,6 +382,22 @@ related: [PLAN, PLAN-22, PLAN-23, PLAN-25, PLAN-26, PLAN-02, PLAN-05, PLAN-08, P
 - **상태(2026-10-01):** 완료(설치 전). 여러 파일 요청은 파일별 묶음(이름·호스트·합계·되돌리기 결과)과 요청의 [되돌리기] 하나('파일 N개의 실행 M개를 되돌립니다'), 일부 되돌리지 못하면 파일 이름과 이유, 자동 되돌림 줄을 보인다. 실행 전 거절 줄에 다른 파일의 이름을 붙인다. 한 파일 요청의 화면은 그대로다.
   - 증거: `tests/integration/browser-direct-mode.mjs` 통과(기존 단일 파일 흐름 포함)
 
+### T-102 · 결과 확인 필요가 다음 요청을 막지 않음, [확인함] {#t-102}
+
+- **목적/기준:** 2026-10-02 사용자 지적("이 호스트에 결과를 확인하지 못한 작업이 있어 새 후보 생성을 보류합니다 … 이게 떠서 자꾸 진행이 안돼"). 엔진이 죽어 답을 잃은 조회용 실행 하나(`unknown`, `executions: []`, 문서 없음 → 호스트 전체 주장)가 하루 동안 프로젝트의 모든 Rhino 쓰기를 막았고, 되돌리기로도 풀 수 없었다. 기준: SPEC-02.13의 7(새), SPEC-02.9의 3·5, SPEC-02.7, SPEC-02.19의 대화 줄, ARCH-01 §4·접수 절, FR-16(불명 결과 자동 재실행 금지는 유지).
+- **변경 범위:**
+  - `src/contracts/request-scope.ts`: `requestAdmission`·`documentHolder`에서 결과 불명 거절(`HOST_RESULT_UNRESOLVED`)을 뺀다. 새 `unresolvedFor(input, rows)` — 그 요청의 주장과 겹치는 `unknown` 요청(문서 없는 불명은 호스트 전체)
+  - `src/server/conversations.ts` `hold`: 불명 결과로 대화 줄을 멈추지 않는다. `src/core/workspace.ts` 주석
+  - `src/server/direct-mode.ts`: `lockRefusal`·`LinkedFiles.claim`에서 불명 문구 삭제, 새 `unresolvedNote`(턴 문맥 항목 `unresolved-results`). `src/server/execution.ts`: 턴 문맥에 그 항목을 넣음, 새 `acknowledge`, 기록 없는 불명의 `undoRequest`는 `acknowledge`로 닫음, 보호 카드 [진행] 주석. `src/server/jig-routes.ts`: 바로 만들기의 불명 거절 문구 삭제. `src/server/server.ts`: `POST …/requests/:r/acknowledge`(원격 허용)
+  - 화면: `src/ui/work-view.tsx` 결과 불명 카드의 [확인함]과 '확인할 것' 문구, `src/ui/work-stages.ts` '결과 미확인 · 확인함', `src/ui/app.ts` 행동, `src/ui/gateway.ts` `HOST_RESULT_UNRESOLVED` 문구(옛 기록용, '보류' 없음)
+  - 하지 않음: 추가 지시(SPEC-02.8)가 끊은 앞 요청이 불명이면 후속을 `INTERVENTION_REVIEW_REQUIRED`로 두는 규칙은 이번 범위 밖(그대로)
+- **선행:** T-093(잠금·`documents[]`).
+- **검증:**
+  - 정상: `tests/core/request-scope.test.mjs`(불명 뒤에 기다리던 쓰기가 풀려 실행됨, 같은 계보의 새 쓰기 접수, 문서 없는(null 키) 불명이 Rhino 쓰기를 막지 않고 `unresolvedFor`로 이름이 나옴, ZWCAD 쓰기는 무관), `tests/server/execution.test.mjs`([확인함]이 `interrupted`·`acknowledgedAt`으로 닫고 기록 유지, `settles`가 있으면 원래 결과로, 기록 없는 불명의 [되돌리기]가 닫음, 불명 뒤 다음 턴 문맥에 `unresolved-results`가 들어감)
+  - 회귀: `tests/server/multi-file.test.mjs`(확인 필요 파일은 거절 대신 안내 대상, 쓰기 접수), `npm test`
+- **완료:** 위 시험과 `npm run typecheck`·`format:check` 통과.
+- **상태(2026-10-02):** 구현·단위 시험 완료(브랜치 `fix/unknown-no-block`, 설치 전). 남음: 설치본에서 사용자의 막힌 요청을 [확인함]으로 닫고 다음 Rhino 요청이 진행되는지 확인.
+
 ## 순서와 의존
 
 - T-049는 M1에서 PLAN-22 T-046과 함께 한다.
@@ -389,7 +405,7 @@ related: [PLAN, PLAN-22, PLAN-23, PLAN-25, PLAN-26, PLAN-02, PLAN-05, PLAN-08, P
 - T-061은 T-060·PLAN-22 T-045 뒤다(세션 이어 실행은 T-059 합격 항목만). T-062는 T-061 뒤다. PLAN-22 T-063(만들기 대화)이 이 둘을 쓴다.
 - 마일스톤 표기는 S-06 결과를 먼저 보이는 순서(M5)이지만, 선행이 갖춰진 티켓은 먼저 해도 된다.
 - 바로 적용: T-069 → T-070·T-071 → T-072 → T-073·T-074. T-075는 독립이다. 실제 호스트 확인은 플러그인 재빌드·설치 뒤 묶어서 한다.
-- 여러 파일 조율: T-062·T-072 → T-092 → T-093 → T-094.
+- 여러 파일 조율: T-062·T-072 → T-092 → T-093 → T-094 → T-102.
 
 ## 현황 {#status}
 

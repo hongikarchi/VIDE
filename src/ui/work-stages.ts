@@ -44,6 +44,8 @@ export interface StageInput {
   direct?: boolean;
   /** When the request ended (ms), for the last stage of a finished direct turn. */
   endedAt?: number;
+  /** An unresolved result the user closed with [확인함] (T-102). */
+  acknowledged?: boolean;
 }
 const ACTIVE = ['queued', 'running'];
 const FAILED = ['failed', 'cancelled', 'interrupted', 'unknown'];
@@ -66,11 +68,13 @@ function stageStates(input: StageInput): {
           ? '중단됨'
           : input.state === 'unknown'
             ? '호스트 결과 확인 필요'
-            : input.state === 'interrupted'
-              ? '연결 종료로 중단'
-              : failed
-                ? '실패'
-                : '',
+            : input.acknowledged
+              ? '결과 미확인 · 확인함'
+              : input.state === 'interrupted'
+                ? '연결 종료로 중단'
+                : failed
+                  ? '실패'
+                  : '',
   });
   const single = (stages: Stage[]) => ({ stages, starts: [input.startedAt] });
   // Documents brought in (Sync, file import): capture then result.

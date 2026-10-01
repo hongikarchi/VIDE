@@ -2,7 +2,7 @@
 id: PLAN
 title: VIDE 실행 로드맵
 status: review
-version: 0.235
+version: 0.236
 updated: 2026-10-02
 owner: agent:codex
 related: [ARCH-01, PLAN-02, PLAN-03, PLAN-22, PLAN-23, PLAN-24, PLAN-25, PLAN-26, PLAN-27, ADR-022, ADR-025, ADR-026, ADR-027, SPEC-00, SPEC-01, SPEC-02, SPEC-03, SPEC-04, SPEC-05, SPEC-06, SPEC-07]
@@ -245,6 +245,7 @@ T-001~018의 번호·지원 증거는 유지한다. 각 티켓의 현재 결과�
 | T-092 다른 열린 연결 파일의 실시간 읽기 | 구현·단위 검증(설치 전). Rhino 대상 턴이 열린 Rhino 문서(조회·측정·보기)와 ZWCAD 도면(조회)을 `linkId`로 읽음 | 실제 Rhino 두 창 확인 | [PLAN-24](PLAN-24-ai-conversations.md#t-092) |
 | T-093 여러 파일 쓰기·잠금·작업 단위 되돌리기·자동 되돌림 | 구현·단위 검증(설치 전). 잠금은 기다리지 않고 `DOCUMENT_LOCKED`(jig 바로 만들기 포함), 실패·중단한 여러 파일 요청은 자동으로 되돌림, `undo {all: true}`, 결과 불명은 확인 필요 문서만 잡고 되돌리기 답 유실은 다시 [되돌리기]로 해소(2026-10-01 검토 반영) | 실제 Rhino 두 창·ZWCAD 확인, ZWCAD 대상 턴의 여러 파일, 실행 답 유실의 해소 동작 | [PLAN-24](PLAN-24-ai-conversations.md#t-093) |
 | T-094 파일별 결과·요청 [되돌리기] 화면 | 완료(설치 전) | 설치본 화면 확인 | [PLAN-24](PLAN-24-ai-conversations.md#t-094) |
+| T-102 결과 확인 필요가 다음 요청을 막지 않음(다음 턴에 '먼저 읽기' 안내), [확인함]·기록 없는 불명의 [되돌리기]로 닫기 | 구현·단위 시험 완료(2026-10-02, 설치 전) | 설치본에서 막혀 있던 요청을 [확인함]으로 닫고 다음 Rhino 요청 확인. 추가 지시의 불명 규칙(SPEC-02.8)은 범위 밖 | [PLAN-24](PLAN-24-ai-conversations.md#t-102) |
 | T-088 대화별 모델 고정·모델 바꾸기 = 새 탭 | 구현·단위·브라우저 시험 완료(`0fb9506`) | 실제 CLI로 모델 바꾸기 인계 확인(설치본 릴리스 때) | [PLAN-24](PLAN-24-ai-conversations.md#t-088) |
 | T-097 [+] 새 대화를 묻지 않고 바로 열기(첫 요청이 이름) | 구현·단위·브라우저 시험 완료(2026-10-01). 통합 검토 반영: [+]의 빈 탭이 jig 시작에 묶인 뒤 [일반 대화로]를 누르면 그 묶기를 풀어(`…/unbind`) 같은 글이 jig 도구 없는 일반 턴으로 간다 | 설치본 확인(묶음 릴리스 때) | [PLAN-24](PLAN-24-ai-conversations.md#t-097), SPEC-02.19 |
 | T-089 첨부 버튼 정리·경로 기반 첨부(모든 형식, `attachment_read`) | 구현·단위·브라우저 시험 완료(2026-10-01, 커밋 전) | 실제 Claude·Codex로 첨부 이미지·텍스트 읽기 확인(설치본 릴리스 때). 후속: PDF 본문 추출, 3DM 요약, 말(@언급)로 연계 대상 고르기. 원본 위치의 파일은 T-091의 프로젝트 폴더 읽기로 대신 | [PLAN-26](PLAN-26-chat-stage.md#t-089), SPEC-01.12 |

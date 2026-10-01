@@ -79,7 +79,7 @@ export const errors: Record<string, string> = {
   UNSUPPORTED_DWG_EDIT:
     '이 DWG에서는 기존 독립 직선 경계의 이동·정점 수정만 가능합니다. 객체 추가·삭제 또는 관계가 있는 객체는 지원하지 않습니다.',
   HOST_RESULT_UNRESOLVED:
-    '이 호스트에 결과를 확인하지 못한 작업이 있어 새 후보 생성을 보류합니다. 검토와 기존 결과 조회는 가능합니다.',
+    '이전 판에서 결과를 확인하지 못한 작업 때문에 멈춘 요청입니다. 지금 다시 보내면 실행됩니다.',
   PROTECTED_OBJECT_CHANGED:
     '유지·참고 대상으로 지정한 객체를 바꾸는 제안이어서 실행하지 않았습니다.',
   SUBSCRIPTION_LOGIN_REQUIRED:

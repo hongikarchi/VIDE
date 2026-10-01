@@ -282,7 +282,7 @@ test('cross-host references are read-only input and cannot become the wrong outp
   }
 });
 
-test('restart during host execution preserves unknown intent and blocks new writes on that host', () => {
+test('restart during host execution preserves unknown intent and still takes new writes on that host', () => {
   const { store, workspace, project, input } = fixture();
   try {
     workspace.submit(project.id, { ...input, permission: 'candidate' });
@@ -296,9 +296,10 @@ test('restart during host execution preserves unknown intent and blocks new writ
     const saved = resumed.get(project.id, input.id);
     assert.equal(saved.state, 'unknown');
     assert.equal(saved.result.objects[0].id, 'planned');
-    assert.throws(
-      () => resumed.submit(project.id, { ...input, id: 'new-write', permission: 'candidate' }),
-      { code: 'HOST_RESULT_UNRESOLVED' },
+    // T-102: an unresolved result never refuses a later write.
+    assert.equal(
+      resumed.submit(project.id, { ...input, id: 'new-write', permission: 'candidate' }).created,
+      true,
     );
     assert.equal(resumed.submit(project.id, { ...input, id: 'read-only' }).created, true);
   } finally {
@@ -330,13 +331,17 @@ test('host transport uncertainty retains intended geometry and cannot be reporte
   }
 });
 
-test('malformed host response after execution preserves uncertainty instead of allowing a blind retry', async () => {
+test('malformed host response preserves uncertainty; the next turn runs and is told to read first', async () => {
   const { store, workspace, project, input } = fixture();
   const object = { id: 'box', kind: 'box', name: 'Box', origin: [0, 0, 0], size: [1, 1, 1] };
+  const seen = [];
   const execution = new Execution(workspace, {
     host: { build: async () => ({ scene: 'invalid' }) },
     providerFactory: () => ({
-      run: async () => ({ text: JSON.stringify({ message: 'create', operations: [object] }) }),
+      run: async (context) => {
+        seen.push(context.items);
+        return { text: JSON.stringify({ message: 'create', operations: [object] }) };
+      },
     }),
   });
   try {
@@ -346,10 +351,78 @@ test('malformed host response after execution preserves uncertainty instead of a
     assert.equal(saved.state, 'unknown');
     assert.equal(saved.result.code, 'HOST_RESULT_UNKNOWN');
     assert.deepEqual(saved.result.objects, [object]);
-    assert.throws(
-      () => workspace.submit(project.id, { ...input, id: 'retry', permission: 'candidate' }),
-      { code: 'HOST_RESULT_UNRESOLVED' },
+    assert.equal(
+      seen[0].some((item) => item.id === 'unresolved-results'),
+      false,
     );
+    // T-102: the next write is taken and its turn carries the note about the lost answer.
+    const retry = workspace.submit(project.id, { ...input, id: 'retry', permission: 'candidate' });
+    assert.equal(retry.created, true);
+    execution.start(retry.request);
+    await Promise.all([...execution.active.values()].map((x) => x.completion));
+    const note = seen[1].find((item) => item.id === 'unresolved-results');
+    assert.ok(note, 'the next turn is told about the unresolved result');
+    assert.equal(note.data.requests[0].requestId, input.id);
+    assert.match(note.data.note, /Read the document/);
+  } finally {
+    store.close();
+  }
+});
+
+test('[확인함] closes an unresolved request and keeps its record (T-102)', () => {
+  const { store, workspace, project, input } = fixture();
+  const execution = new Execution(workspace, {});
+  try {
+    workspace.submit(project.id, { ...input, permission: 'candidate' });
+    // The user's case: a lost read-only execute, no records, no documents.
+    workspace.update(project.id, input.id, 'unknown', {
+      phase: 'host',
+      code: 'HOST_RESULT_UNKNOWN',
+      executions: [],
+      text: '목록',
+    });
+    const closed = execution.acknowledge(project.id, input.id);
+    assert.equal(closed.state, 'interrupted');
+    assert.equal(closed.result.code, 'HOST_RESULT_UNKNOWN');
+    assert.equal(closed.result.text, '목록');
+    assert.equal(typeof closed.result.acknowledgedAt, 'string');
+    // Answered as it is once settled.
+    assert.equal(
+      execution.acknowledge(project.id, input.id).result.acknowledgedAt,
+      closed.result.acknowledgedAt,
+    );
+    // An unknown left by a lost undo answer goes back to the state that undo would have restored.
+    workspace.submit(project.id, { ...input, id: 'lost-undo', permission: 'candidate' });
+    workspace.update(project.id, 'lost-undo', 'unknown', {
+      code: 'HOST_RESULT_UNKNOWN',
+      heldOnly: true,
+      settles: { state: 'succeeded' },
+      documents: [],
+    });
+    const back = execution.acknowledge(project.id, 'lost-undo');
+    assert.equal(back.state, 'succeeded');
+    assert.equal(back.result.code, undefined);
+    assert.equal(back.result.settles, undefined);
+    assert.equal(back.result.heldOnly, undefined);
+  } finally {
+    store.close();
+  }
+});
+
+test('[되돌리기] of an unresolved request without records settles it as [확인함] does (T-102)', async () => {
+  const { store, workspace, project, input } = fixture();
+  const execution = new Execution(workspace, {});
+  try {
+    workspace.submit(project.id, { ...input, permission: 'candidate' });
+    workspace.update(project.id, input.id, 'unknown', {
+      code: 'HOST_RESULT_UNKNOWN',
+      executions: [],
+    });
+    const undone = await execution.undoRequest(project.id, input.id);
+    assert.equal(undone.ok, true);
+    assert.deepEqual(undone.files, []);
+    assert.equal(undone.request.state, 'interrupted');
+    assert.equal(typeof undone.request.result.acknowledgedAt, 'string');
   } finally {
     store.close();
   }

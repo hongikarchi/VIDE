@@ -603,8 +603,8 @@ export async function jigRoutes(
       if (direct && link.host === 'rhino' && !isFileLink(link)) {
         // 바로 적용: the open document, one host undo record per body, baseline read right after.
         const target = { instance: link.instance, documentId: link.documentId };
-        // One writer per document (SPEC-02.9 3, ADR-027 5): another request writing it, or an
-        // unresolved result on it, refuses the bake at once; while it runs it holds the document.
+        // One writer per document (SPEC-02.9 3, ADR-027 5): another request writing it refuses the
+        // bake at once (an unresolved result there does not, T-102); while it runs it holds it.
         const held = documentHolder(
           '',
           { host: 'rhino', ...target },
@@ -616,9 +616,7 @@ export async function jigRoutes(
             code: 'BAKE_FAILED',
             reason: held.code,
             refused:
-              held.code === 'HOST_RESULT_UNRESOLVED'
-                ? '이 문서에 결과를 확인하지 못한 작업이 있어 만들지 않았습니다. 그 작업의 결과를 먼저 확인하세요.'
-                : '다른 작업이 이 문서를 고치는 중이라 만들지 않았습니다. 그 작업이 끝난 뒤 다시 누르세요.',
+              '다른 작업이 이 문서를 고치는 중이라 만들지 않았습니다. 그 작업이 끝난 뒤 다시 누르세요.',
           });
           return true;
         }

@@ -372,8 +372,8 @@ export class Workspace {
   }
   /**
    * The waiting requests whose turn has come, in order (the executor starts them now). The rest
-   * keep an up-to-date place in line; one behind an unresolved result stops with that reason
-   * (SPEC-02.9 5) and is kept, not run.
+   * keep an up-to-date place in line; one whose admission is refused (an invalid declaration, a
+   * capture that cannot wait) stops with that reason and is kept, not run.
    */
   release(projectId: string): StoredWork[] {
     const rows = this.claimRows(projectId);

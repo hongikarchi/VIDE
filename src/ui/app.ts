@@ -1725,13 +1725,14 @@ function renderConversation() {
 }
 /**
  * Direct-mode actions of the work view: [되돌리기] (…/undo {executionId}), the guard card's
- * [진행] (…/confirm {executionId}) and the plan card's [진행] (…/continue). A reply naming
+ * [진행] (…/confirm {executionId}), the plan card's [진행] (…/continue) and [확인함] of an
+ * unresolved result (…/acknowledge, T-102). A reply naming
  * another request (`requestId`, or a request with its own id) opens and follows it; otherwise the
  * request is read again.
  */
 async function directAction(
   id: string,
-  action: 'undo' | 'confirm' | 'continue',
+  action: 'undo' | 'confirm' | 'continue' | 'acknowledge',
   body: Record<string, unknown> = {},
 ) {
   const projectId = currentProject().id;

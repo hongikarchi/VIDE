@@ -1,7 +1,9 @@
 /**
  * Concurrent intake (SPEC-02.9, ARCH-03 §10.3): which host documents a request uses, whom it waits
  * behind and the project limit of AI turns. Overlapping writes wait their turn instead of being
- * refused. Scheduling identity only; this never authorizes native writes or resolves unknown results.
+ * refused, and an unresolved result never refuses or stops later work (SPEC-02.9 5, T-102): the
+ * next turn on that document is only told about it. Scheduling identity only; this never
+ * authorizes native writes or resolves unknown results.
  */
 
 import { requestMode } from './workspace.ts';
@@ -184,9 +186,9 @@ const same = (a: Claim, b: Claim) =>
   a.host === b.host && (a.key === null || b.key === null || a.key === b.key);
 
 /**
- * Admission of a request against the requests ahead of it (for a new one, all stored requests):
- * refused only when a write meets an unresolved result on its document; otherwise it runs now or
- * waits for the same document's earlier write, or for a free AI turn (SPEC-02.9 1-5).
+ * Admission of a request against the requests ahead of it (for a new one, all stored requests): it
+ * runs now or waits for the same document's earlier write, or for a free AI turn (SPEC-02.9 1-5).
+ * An unresolved result ahead never refuses it (`unresolvedFor` names it to the turn instead).
  */
 export function requestAdmission(
   input: ScopeInput,
@@ -198,16 +200,6 @@ export function requestAdmission(
   const byId = new Map(rows.map((row) => [row.id, row]));
   const mine = claims(input, byId);
   const others = rows.filter((row) => row.id !== input.id);
-  if (
-    use === 'write' &&
-    others.some(
-      (row) =>
-        row.state === 'unknown' &&
-        hostUse(row.input) !== 'none' &&
-        claimsOf(row, byId).some((theirs) => mine.some((claim) => same(claim, theirs))),
-    )
-  )
-    return { code: 'HOST_RESULT_UNRESOLVED' };
   const active = others.filter(
     (row) =>
       !row.input.parentRequestId &&
@@ -258,21 +250,19 @@ export function requestAdmission(
 /**
  * A running turn's first write to a document other than its target (ADR-027, SPEC-02.9 3): never
  * waits. `DOCUMENT_LOCKED` when another queued or running write holds that document (its target or
- * a document its turn locked), `HOST_RESULT_UNRESOLVED` when an unresolved result names it;
- * undefined when the turn may lock it.
+ * a document its turn locked); undefined when the turn may lock it. An unresolved result there
+ * does not hold it.
  */
 export function documentHolder(
   requestId: string,
   document: { host: string; instance: string; documentId: number },
   rows: readonly ScopeWork[],
-): { code: 'DOCUMENT_LOCKED' | 'HOST_RESULT_UNRESOLVED'; by: string } | undefined {
+): { code: 'DOCUMENT_LOCKED'; by: string } | undefined {
   const byId = new Map(rows.map((row) => [row.id, row]));
   const mine: Claim = { host: document.host, key: documentKey(document) ?? null, source: true };
   const overlaps = (row: ScopeWork) => claimsOf(row, byId).some((theirs) => same(mine, theirs));
   for (const row of rows) {
     if (row.id === requestId || hostUse(row.input) === 'none') continue;
-    if (row.state === 'unknown' && overlaps(row))
-      return { code: 'HOST_RESULT_UNRESOLVED', by: row.id };
     if (
       ['queued', 'running'].includes(row.state) &&
       !waitingOf(row) &&
@@ -281,6 +271,25 @@ export function documentHolder(
     )
       return { code: 'DOCUMENT_LOCKED', by: row.id };
   }
+}
+
+/**
+ * The unresolved results (state `unknown`) on the documents a host request uses (SPEC-02.13 7,
+ * T-102): earlier requests whose host answer was lost there, oldest first. A result without an
+ * identified document counts for the whole host. The request still runs; its turn is told to read
+ * the document first instead of repeating that work.
+ */
+export function unresolvedFor<T extends ScopeWork>(input: ScopeInput, rows: readonly T[]): T[] {
+  const byId = new Map(rows.map((row) => [row.id, row]));
+  const mine = claims(input, byId);
+  if (!mine.length) return [];
+  return rows.filter(
+    (row) =>
+      row.id !== input.id &&
+      row.state === 'unknown' &&
+      hostUse(row.input) !== 'none' &&
+      claimsOf(row, byId).some((theirs) => mine.some((claim) => same(claim, theirs))),
+  );
 }
 
 /** The refusal code of `requestAdmission` (waiting is not a conflict). */

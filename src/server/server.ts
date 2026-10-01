@@ -1915,10 +1915,11 @@ export async function startServer({
         send(202, execution.intervene(intervention[1], intervention[2], await body(request)));
         return;
       }
-      // Plan / Auto (ADR-022): [되돌리기] of one direct execution, the guard card's [진행], and
-      // the plan card's [진행] (an Auto turn in the same conversation).
+      // Plan / Auto (ADR-022): [되돌리기] of one direct execution, the guard card's [진행], the
+      // plan card's [진행] (an Auto turn in the same conversation), and [확인함] of an unresolved
+      // result (T-102).
       const directAction =
-        /^\/api\/v1\/projects\/([^/]+)\/requests\/([^/]+)\/(undo|confirm|continue)$/.exec(
+        /^\/api\/v1\/projects\/([^/]+)\/requests\/([^/]+)\/(undo|confirm|continue|acknowledge)$/.exec(
           url.pathname,
         );
       if (directAction && request.method === 'POST') {
@@ -1934,7 +1935,9 @@ export async function startServer({
         } else if (action === 'confirm') {
           const { executionId } = await body(request);
           send(202, withApplications(await execution.confirm(projectId, id, executionId)));
-        } else send(202, withApplications(execution.continuePlan(projectId, id)));
+        } else if (action === 'acknowledge')
+          send(200, withApplications(execution.acknowledge(projectId, id)));
+        else send(202, withApplications(execution.continuePlan(projectId, id)));
         return;
       }
       // The answers to a running Claude turn's own questions (AskUserQuestion, ADR-026 4): the
