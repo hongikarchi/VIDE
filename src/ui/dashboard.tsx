@@ -1,9 +1,9 @@
-// 대시보드 workspace tab (first draft, user request 2026-10-01): one page of what the project
-// already has — its name, the linked files, its folders on this PC (SPEC-01.13), this project's
-// jigs and the latest finished requests.
-// What belongs here is still the user's to decide, so it reads only existing state (app.ts gives
-// it through `provideDashboard`) and the skill catalog; a jig starts through startSkill like the
-// JIG list's [열기]. Each section is one small component, easy to drop or replace.
+// 대시보드 workspace tab (Design SCR-20, user requests 2026-10-01): '오늘' — the project's 할 일 and
+// 일정 (SPEC-01.14, dashboard-agenda.tsx) — first, then its name, the linked files, its folders on
+// this PC (SPEC-01.13), this project's jigs and the latest finished requests.
+// Apart from the 할 일 and the folders it reads only existing state (app.ts gives it through
+// `provideDashboard`) and the skill catalog; a jig starts through startSkill like the JIG list's
+// [열기]. Each section is one small component, easy to drop or replace.
 import { useEffect, useState } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { api } from './gateway.ts';
@@ -11,6 +11,7 @@ import type { SkillEntry } from './skill-catalog.ts';
 import { openSkill } from './skill-start.ts';
 import { setWorkspace } from './workspaces.ts';
 import { ProjectFolders } from './project-folders.tsx';
+import { AgendaToday } from './dashboard-agenda.tsx';
 import './dashboard.css';
 
 export interface DashboardLink {
@@ -214,6 +215,7 @@ function Dashboard({ projectId }: { projectId: string }) {
           {data.recent[0]?.at ? ` · 최근 작업 ${when(data.recent[0].at)}` : ''}
         </p>
       </header>
+      <AgendaToday projectId={projectId} shown={shown} />
       <Links data={data} />
       <ProjectFolders projectId={projectId} />
       <Jigs projectId={projectId} shown={shown} />

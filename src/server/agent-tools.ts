@@ -29,6 +29,14 @@ import { turnOutputSchema } from './turn-output.ts';
 import type { AttachmentStore } from './attachments.ts';
 import type { FileAccess } from './project-files.ts';
 import { existsSync } from 'node:fs';
+import { Agenda, localDate } from '../core/agenda.ts';
+import {
+  AGENDA_TEXT_MAX,
+  agendaDateSchema,
+  agendaTimeSchema,
+  type AgendaChange,
+  type AgendaItem,
+} from '../contracts/agenda.ts';
 import { KnowledgeReviewStore } from '../core/knowledge-review-store.ts';
 import {
   factBrief,
@@ -339,6 +347,56 @@ const definitions = {
       })
       .strict(),
   },
+  // The project's 할 일 (SPEC-01.14): read, and T1 writes recorded in the ledger with an undo.
+  agenda_list: {
+    description:
+      "List this project's 할 일 (the dashboard's to-do list). An item with a time is a 일정 (schedule). Dates are the PC's local 'YYYY-MM-DD', times 'HH:MM'; today is given. Done items only with done:true.",
+    schema: z.object({ targetRef: scoped, done: z.boolean().optional() }).strict(),
+  },
+  agenda_add: {
+    description:
+      "Add 할 일 to this project's dashboard list when the user's words ask for it (e.g. '내일 3시 구조 회의 넣어줘', or items from meeting notes they asked you to collect). Write the date as 'YYYY-MM-DD' and the time as 'HH:MM' (24 h) yourself; leave them out when the words give none. Applied at once and recorded in the conversation; the user gets [되돌리기]. List the added items in your reply.",
+    schema: z
+      .object({
+        targetRef: scoped,
+        items: z
+          .array(
+            z
+              .object({
+                text: z.string().min(1).max(AGENDA_TEXT_MAX),
+                date: agendaDateSchema.optional(),
+                time: agendaTimeSchema.optional(),
+              })
+              .strict(),
+          )
+          .min(1)
+          .max(20),
+      })
+      .strict(),
+  },
+  agenda_set: {
+    description:
+      "Change 할 일 of this project when the user's words ask for it: text, date/time (null clears) or done. ids come from agenda_list. Applied at once and recorded in the conversation; the user gets [되돌리기]. Say what changed in your reply.",
+    schema: z
+      .object({
+        targetRef: scoped,
+        items: z
+          .array(
+            z
+              .object({
+                id,
+                text: z.string().min(1).max(AGENDA_TEXT_MAX).optional(),
+                date: agendaDateSchema.nullable().optional(),
+                time: agendaTimeSchema.nullable().optional(),
+                done: z.boolean().optional(),
+              })
+              .strict(),
+          )
+          .min(1)
+          .max(20),
+      })
+      .strict(),
+  },
   // Project facts tools (SPEC-08.7, PLAN-22 T-065): this project's 자료 only, read-only. Rejected,
   // contaminated and excluded-source statements never come back. Cite statements as [S<id>].
   project_brief: {
@@ -451,6 +509,7 @@ const knownErrors = new Set([
   'LINK_NOT_LIVE',
   'DOCUMENT_LOCKED',
   'HOST_RESULT_UNRESOLVED',
+  'AGENDA_LIMIT',
 ]);
 /** What the model should do next after these errors (ADR-027): sent beside the code. */
 const errorHints: Record<string, string> = {
@@ -520,6 +579,7 @@ export const PLAN_MODE_TOOLS: ReadonlySet<string> = new Set<ToolName>([
   'attachment_read',
   'file_list',
   'file_read',
+  'agenda_list',
 ]);
 /** The handlers Plan mode keeps (PLAN_MODE_TOOLS). */
 export function planModeHandlers<H extends Handlers>(handlers: H): H {
@@ -837,6 +897,8 @@ export interface ConversationToolSources {
     /** The turn's stop rule (SPEC-07.9): repeated failures or the turn cap end the turn. */
     guard?: MakeTurnGuard;
   };
+  /** The project's 할 일 (SPEC-01.14); agenda_add/agenda_set exist only with a ledger (their undo). */
+  agenda?: Agenda;
   /** The project's crawler DB and review layer (SPEC-08); project_* exist only with one. */
   facts?: {
     file: string;
@@ -1125,9 +1187,89 @@ export function conversationHandlers(sources: ConversationToolSources): Handlers
       });
     };
   }
+  if (sources.agenda) Object.assign(handlers, agendaHandlers(sources));
   if (sources.facts && existsSync(sources.facts.file))
     Object.assign(handlers, factHandlers(sources));
   if (sources.draft) Object.assign(handlers, makeHandlers(sources));
+  return handlers;
+}
+
+/** What the AI sees of a 할 일. */
+const agendaRow = (item: AgendaItem) => ({
+  id: item.id,
+  text: item.text,
+  date: item.date,
+  time: item.time,
+  done: item.done,
+  ...(item.source === 'ai' ? { by: 'ai' } : {}),
+});
+/**
+ * agenda_list, and agenda_add/agenda_set as T1 writes (SPEC-01.14 6, SPEC-02.19 7): applied at once
+ * and recorded as one ledger item `{appAction:'agenda', changes}` that [되돌리기] takes back
+ * (`POST …/agenda/undo`); the screen shows the notice and redraws the dashboard (app.ts).
+ */
+function agendaHandlers(sources: ConversationToolSources): Handlers {
+  const { projectId, ledger, requestId } = sources;
+  const agenda = sources.agenda!;
+  const record = (changes: AgendaChange[]) =>
+    ledger?.({
+      kind: 'result-ref',
+      body: { appAction: 'agenda', by: 'ai', changes },
+      ...(requestId ? { requestId } : {}),
+    });
+  const handlers: Handlers = {
+    agenda_list: ({ done }) => {
+      const items = agenda.list(projectId).filter((item) => done || !item.done);
+      return bounded({ today: localDate(), ...pageOf(items.map(agendaRow), 0, 200) });
+    },
+  };
+  if (!ledger) return handlers;
+  handlers.agenda_add = ({ items }) => {
+    const added: AgendaItem[] = [];
+    try {
+      for (const entry of items) added.push(agenda.add(projectId, entry, 'ai'));
+    } finally {
+      // What was added stays undoable even when a later item failed (AGENDA_LIMIT).
+      if (added.length)
+        record(
+          added.map((item) => ({
+            op: 'add',
+            id: item.id,
+            text: item.text,
+            date: item.date,
+            time: item.time,
+          })),
+        );
+    }
+    return bounded({ added: added.map(agendaRow) });
+  };
+  handlers.agenda_set = ({ items }) => {
+    const changes: AgendaChange[] = [];
+    const changed: AgendaItem[] = [];
+    try {
+      for (const { id: itemId, ...fields } of items) {
+        const before = agenda.get(projectId, itemId);
+        const after = agenda.set(projectId, itemId, { ...fields, revision: before.revision });
+        changed.push(after);
+        changes.push({
+          op: 'set',
+          id: itemId,
+          text: after.text,
+          revision: after.revision,
+          before: {
+            text: before.text,
+            date: before.date,
+            time: before.time,
+            doneAt: before.doneAt,
+          },
+        });
+      }
+    } finally {
+      // What did change stays undoable even when a later item failed.
+      if (changes.length) record(changes);
+    }
+    return bounded({ changed: changed.map(agendaRow) });
+  };
   return handlers;
 }
 
@@ -1261,6 +1403,7 @@ export function conversationSources(
     workspace,
     jigs: file ? jigRuntimeFor(workspace, dirname(file)) : undefined,
     links: new DocumentLinks(workspace.store.db),
+    agenda: new Agenda(workspace.store),
     ledger,
     ...(file
       ? { skills: () => skillCatalog(workspace, dirname(file), conversation.projectId) }

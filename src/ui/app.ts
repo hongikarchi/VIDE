@@ -117,6 +117,7 @@ import { initializeDisplaySettings } from './display-settings.ts';
 import { currentTheme, setTheme, storedTheme } from './theme.ts';
 import { showFeedback } from './feedback.ts';
 import { provideDashboard, refreshDashboard } from './dashboard.tsx';
+import { AGENDA_CHANGED, agendaNotice } from './agenda-text.ts';
 
 // Host panel mode (?panel=rhino|zwcad, Design SCR-12): the chat column only, bound to one
 // attached document of the Rhino panel or the ZWCAD palette.
@@ -2508,7 +2509,8 @@ async function skillToChat() {
 }
 /**
  * Screen actions the AI asked for in a conversation turn (jig_open, ui_go: ledger items the engine
- * recorded): each is carried out once, and only for items made while this page is open.
+ * recorded): each is carried out once, and only for items made while this page is open. 할 일 the
+ * AI added or changed (SPEC-01.14 6) redraw the dashboard and get a notice with [되돌리기].
  */
 const pageOpened = new Date().toISOString();
 const performedActions = new Set<string>();
@@ -2524,6 +2526,11 @@ async function followAppActions(conversationId: string) {
   for (const item of detail?.ledger ?? []) {
     const body = (item.body ?? {}) as Record<string, unknown>;
     if (performedActions.has(item.id) || body.by !== 'ai') continue;
+    if (body.appAction === 'agenda') {
+      performedActions.add(item.id);
+      if ((item.createdAt ?? '') >= pageOpened) followAgenda(conversationId, item.id, body);
+      continue;
+    }
     if (body.appAction !== 'jig_open' && body.appAction !== 'ui_go') continue;
     performedActions.add(item.id);
     if ((item.createdAt ?? '') < pageOpened) continue;
@@ -2550,6 +2557,40 @@ async function followAppActions(conversationId: string) {
       }
     }
   }
+}
+function followAgenda(conversationId: string, ledgerId: string, body: unknown) {
+  dispatchEvent(new Event(AGENDA_CHANGED));
+  const text = agendaNotice(body);
+  if (!text) return;
+  const projectId = currentProject().id;
+  messageWithActions(text, [
+    {
+      label: '되돌리기',
+      run: () =>
+        void api(`/projects/${encodeURIComponent(projectId)}/agenda/undo`, 'POST', {
+          conversationId,
+          ledgerId,
+        })
+          .then((value) => {
+            dispatchEvent(new Event(AGENDA_CHANGED));
+            const { skipped } = value as { skipped?: number };
+            message(
+              skipped
+                ? `되돌렸습니다. 그 뒤에 바뀌었거나 빠진 ${skipped}개는 그대로 둡니다.`
+                : '되돌렸습니다.',
+            );
+          })
+          .catch((cause) => {
+            const error = readableError(cause);
+            message(
+              error.code === 'AGENDA_UNDONE'
+                ? '이미 되돌렸습니다.'
+                : errors[error.code ?? ''] || error.message,
+            );
+          }),
+    },
+    { label: '대시보드', run: () => setWorkspace('dashboard') },
+  ]);
 }
 /** Which linked file an app action names: the one chosen, the only one, or the one open now. */
 function routedLink(id?: string) {

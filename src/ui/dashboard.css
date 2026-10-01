@@ -181,6 +181,117 @@ button.dash-tile:hover {
   font-size: 12px;
   color: var(--warn);
 }
+/* 대시보드 › 오늘 (SPEC-01.14, Design SCR-20): one list of 할 일; a row being edited or dragged gets
+   the soft selected background (no side bars). */
+.dash-agenda-day {
+  font-size: 12px;
+  color: var(--text-3);
+}
+.dash-agenda-add input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 7px 10px;
+  border: var(--hairline) solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-elevated);
+}
+.dash-agenda-hint {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: var(--text-3);
+}
+.dash-agenda-list {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  border-top: var(--hairline) solid var(--border-subtle);
+}
+.dash-agenda-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 34px;
+  padding: 3px 4px;
+  border-bottom: var(--hairline) solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+}
+.dash-agenda-row[draggable='true'] {
+  cursor: grab;
+}
+.dash-agenda-row[data-editing],
+.dash-agenda-row[data-dragging] {
+  background: var(--bg-selected);
+}
+.dash-agenda-row input[type='checkbox'] {
+  flex-shrink: 0;
+  margin: 0;
+}
+.dash-agenda-text {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  padding: 4px 2px;
+  background: none;
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: text;
+}
+.dash-agenda-text:hover {
+  background: var(--bg-hover);
+}
+.dash-agenda-row[data-when='done'] .dash-agenda-text {
+  color: var(--text-3);
+  text-decoration: line-through;
+}
+.dash-agenda-meta {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+  font-size: 12px;
+  color: var(--text-3);
+}
+.dash-agenda-row[data-when='overdue'] .dash-agenda-meta {
+  color: var(--warn);
+}
+.dash-agenda-time {
+  font: 12px var(--font-mono);
+  color: var(--text-2);
+}
+.dash-agenda-by {
+  font-size: 11px;
+}
+.dash-agenda-tools {
+  display: flex;
+  gap: 2px;
+  flex-shrink: 0;
+}
+.dash-agenda-tools button {
+  padding: 2px 7px;
+  font-size: 12px;
+  border-color: transparent;
+  background: none;
+  color: var(--text-3);
+}
+.dash-agenda-tools button:hover:not(:disabled) {
+  background: var(--bg-hover);
+  color: var(--text-1);
+}
+.dash-agenda-edit {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.dash-agenda-edit input[type='text'] {
+  flex: 1;
+  min-width: 160px;
+}
+.dash-agenda-done {
+  margin-top: 10px;
+}
 @media (max-width: 850px) {
   .dash-page {
     padding: 16px;
