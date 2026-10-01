@@ -2,10 +2,10 @@
 id: PLAN
 title: VIDE 실행 로드맵
 status: review
-version: 0.220
+version: 0.221
 updated: 2026-10-01
 owner: agent:codex
-related: [ARCH-01, PLAN-02, PLAN-03, PLAN-22, PLAN-23, PLAN-24, PLAN-25, PLAN-26, ADR-022, ADR-025, ADR-026, SPEC-00, SPEC-01, SPEC-02, SPEC-03, SPEC-04, SPEC-05, SPEC-06, SPEC-07]
+related: [ARCH-01, PLAN-02, PLAN-03, PLAN-22, PLAN-23, PLAN-24, PLAN-25, PLAN-26, PLAN-27, ADR-022, ADR-025, ADR-026, SPEC-00, SPEC-01, SPEC-02, SPEC-03, SPEC-04, SPEC-05, SPEC-06, SPEC-07]
 ---
 
 # VIDE 실행 로드맵
@@ -20,13 +20,40 @@ related: [ARCH-01, PLAN-02, PLAN-03, PLAN-22, PLAN-23, PLAN-24, PLAN-25, PLAN-26
 | 기능 동작·상태·권한 | [SPEC 색인](../specs/README.md) |
 | 화면 표현 | [Design](../../Design.md) |
 | 구조·스택·저장/API·호스트·공유 계약 | [ARCH-01](../architecture/ARCH-01-system.md) |
-| 참고 사례와 대안 조사 | [RESEARCH-01](../research/RESEARCH-01-reference.md) |
-| AI·호스트·모델·공유 실행 계획 | [PLAN-02](PLAN-02-agent-host-versioning.md) |
-| 선택된 UI 수정 계획 | [PLAN-04](PLAN-04-workspace-ui.md) |
-| 판정 계층 평가 | [PLAN-05](PLAN-05-decision-layer-evaluation.md) |
-| CLI 계정 관리 | [PLAN-06](PLAN-06-cli-account-profiles.md) |
-| 개발 기반 구축 계획 | [PLAN-03](PLAN-03-development-foundation.md) |
+| jig 실행·구조 모델 계약 | [ARCH-03](../architecture/ARCH-03-jig-runtime.md), [ARCH-02](../architecture/ARCH-02-structure-model.md) |
+| 참고 사례와 대안 조사 | [RESEARCH-01](../research/RESEARCH-01-reference.md) 등 docs/research |
 | 채택 이유·실제 검증 | [ADR 목록](../../index.html), docs/tdd의 SPIKE·VERIFY |
+
+작업 계획(번호는 식별자이며 순서가 아니다):
+
+| 계획 | 다루는 일 |
+|---|---|
+| [PLAN-02](PLAN-02-agent-host-versioning.md) | AI·호스트·모델 기록·공유 실행 (T-001~018 상세) |
+| [PLAN-03](PLAN-03-development-foundation.md) | 개발 기반·진단 로그 (T-019~024, T-032, T-040) |
+| [PLAN-04](PLAN-04-workspace-ui.md) | 선택된 UI 수정 |
+| [PLAN-05](PLAN-05-decision-layer-evaluation.md) | 판정 계층(Jev) 평가 |
+| [PLAN-06](PLAN-06-cli-account-profiles.md) | CLI 계정 프로필 — [ADR-025](../decisions/ADR-025-accounts-in-accountswitch.md)로 대체 |
+| [PLAN-07](PLAN-07-zwcad-attached-sync.md) | 현재 ZWCAD 도면 연결과 패널 |
+| [PLAN-08](PLAN-08-project-knowledge.md) | 프로젝트 지식 DB 단계 계획(draft, T-025~031 예약) |
+| [PLAN-09](PLAN-09-remote-host.md) | 원격 기기에서 작업 PC 열기 |
+| [PLAN-10](PLAN-10-account-workspace.md) | 계정 웹사이트 |
+| [PLAN-11](PLAN-11-desktop-app.md) | PC 프로그램(설치본·창·트레이·업데이트·연결 프로그램) |
+| [PLAN-12](PLAN-12-field-fixes.md) | 실사용 오류·외부 접속·스케치·설정 정리 |
+| [PLAN-13](PLAN-13-multi-account.md) | 다중 AI 계정 — [ADR-025](../decisions/ADR-025-accounts-in-accountswitch.md)로 대체 |
+| [PLAN-14](PLAN-14-jig-tab.md) | JIG 탭과 Sync jig |
+| [PLAN-15](PLAN-15-work-view.md) | 작업 이력과 작업 보기 |
+| [PLAN-16](PLAN-16-document-links.md) | 연결 파일(Link)·여러 파일 한 공간·선택 반영과 고정 |
+| [PLAN-17](PLAN-17-structure-jig.md) | 구조 분석 jig 1단계 (T-033~039) |
+| [PLAN-18](PLAN-18-render-performance.md) | 큰 모델 표시·Sync 성능 |
+| [PLAN-19](PLAN-19-request-routing.md) | 요청 경로와 함께 보낼 이전 대화 |
+| [PLAN-20](PLAN-20-offline-view.md) | PC가 꺼져 있을 때의 모델 보기·요청 대기 |
+| [PLAN-21](PLAN-21-host-panel.md) | 호스트 패널 화면과 사용량 막대 |
+| [PLAN-22](PLAN-22-jig-platform.md) | jig 플랫폼 1차 |
+| [PLAN-23](PLAN-23-s06-frame-jig.md) | S-06 골조 jig와 구조 라이브러리 1차 |
+| [PLAN-24](PLAN-24-ai-conversations.md) | AI 대화·경로 판정, 바로 적용·계획/자동 모드 |
+| [PLAN-25](PLAN-25-accounts-to-accountswitch.md) | 계정 관리를 AccountSwitch로 (T-068) |
+| [PLAN-26](PLAN-26-chat-stage.md) | 대화 중심 구조·셸 정리·산출물 탭 (T-076~081) |
+| [PLAN-27](PLAN-27-sync-storage-stability.md) | Sync 저장 구조와 작동 안정성 (T-082~087) |
 
 새 세션은 §6.5 → 해당 작업 PLAN → 관련 SPEC·ARCH·Design 순서로 읽는다. 동작 의미는 SPEC, 기술 계약은 ARCH, 순서는 PLAN이 소유하므로 충돌은 해당 정본에서 고친다. 과거 PLAN-01은 조사 문서로 이전됐으며 실행 지시가 아니다.
 
@@ -66,22 +93,23 @@ related: [ARCH-01, PLAN-02, PLAN-03, PLAN-22, PLAN-23, PLAN-24, PLAN-25, PLAN-26
 | M0 진단 | T-041·042·043 → T-044 | S-06 사본에서 기존 간이 검사 기준선 재현 + 기둥 위에서 끊은 경간 표(VERIFY) |
 | M1 입력 조립·축선·기둥·간섭 | T-045 → T-046 → T-047·048, T-049, T-050 → T-051 | 형식 v3 작업본에서 ⓪~④ 계산, `jig:validate`·`jig:test` 통과, 실데이터 M1 기록 |
 | M2 거더·작은보·해석 | T-052 → T-053 | 참고 처짐·Lb·K 시험, 미확정 미리보기와 [해석 확정] 구분, M2 기록 |
-| M3 단면·일람표·Rhino에 만들기 | T-054, T-055 → T-056 | 사본 문서에 두 번 만들기 중복 없음·사람 수정 보존, 일람표 CSV |
+| M3 단면·일람표·Rhino에 만들기 | T-054, T-055 → T-056 | 두 번 만들기 중복 없음·사람 수정 보존·[되돌리기], 일람표 CSV |
 | M4 보고서 | T-057 → T-058 | 보고서 게이트 통과, 미검토 항목 인쇄 |
 | M5 대화·채팅으로 jig 만들기 | T-059·060 → T-061 → T-062 → T-063 → T-064 | 대화 3개 동시 진행, S-06 보조 jig를 대화로 만들어 ③ 결과와 일치 |
 | 독립 | T-065(자료 1차), T-066(공유 스냅샷 결함) | 각 계획의 완료 기준 |
 | 2차 | T-067(구조 코어 확장) | 2차 착수 지시 뒤 |
-| 독립 | T-068(계정 관리를 AccountSwitch로, [PLAN-25](PLAN-25-accounts-to-accountswitch.md)) | PLAN-24 대화 작업의 커밋 뒤 착수 |
+| 독립 | T-068(계정 관리를 AccountSwitch로, [PLAN-25](PLAN-25-accounts-to-accountswitch.md)) | 정본 반영·코드 제거 뒤 계정 API 404·읽기 전용 카드 확인 |
 | 안정성 | T-082~T-087(Sync 저장 구조와 작동 안정성, [PLAN-27](PLAN-27-sync-storage-stability.md), 근거 [RESEARCH-13](../research/RESEARCH-13-stability-audit.md)) | 0단계(진단·복구) 바로 착수. 1단계는 ARCH-01 저장 계약 확인 뒤 |
-| 바로 적용 | T-069 → T-070·071 → T-072 → T-073·074, T-075([PLAN-24](PLAN-24-ai-conversations.md#direct-apply), [ADR-022](../decisions/ADR-022-direct-apply-plan-auto.md)) | 플러그인 설치 뒤 실제 Rhino·ZWCAD에서 보호·되돌리기 확인, 브라우저 시험 |
+| 바로 적용 | T-069 → T-070·071 → T-072 → T-073·074, T-075([PLAN-24](PLAN-24-ai-conversations.md#direct-apply), [ADR-022](../decisions/ADR-022-direct-apply-plan-auto.md)) | 실제 Rhino·ZWCAD에서 보호·되돌리기 확인, 브라우저 시험 |
+| 대화 중심 구조 | T-076·077 → T-078 → T-079, T-080, T-081([PLAN-26](PLAN-26-chat-stage.md), [ADR-026](../decisions/ADR-026-chat-stage-and-skill-jigs.md)) | 각 티켓의 시험 통과. 화면 변경은 지금 배치 위에 하나씩 |
 
-Rhino 플러그인 재빌드는 T-043 한 번이었고, 5차 보기 도구와 T-070·T-071(바로 실행)이 Rhino·ZWCAD 플러그인 재빌드를 더 요구한다. 완료 기준은 개발 빌드와 `.vide/` 합성 문서까지이며, 설치본 반영은 사용자가 요청할 때 묶음 릴리스로 한다.
+호스트 플러그인을 바꾸는 티켓의 완료 기준은 개발 빌드와 `.vide/` 합성 문서·사본까지이며, 설치본 반영은 사용자 요청이나 웨이브 경계의 판단으로 묶음 릴리스한다.
 
 대표 과업은 기능 개발 초기에 선정하고 각 단계에서 반복 검증한다. 공유의 외부 제약으로 독립 로컬 작업을 중단하지 않는다. 후속 Jev 조사는 §9.4 조건을 따른다.
 
 ### 6.2 티켓 소유와 상세 계획
 
-T-001~018의 번호·지원 증거는 유지한다. 각 티켓의 현재 결과와 남은 조건은 §6.5, 상세 구현·시험 절차는 PLAN-02와 §7을 따른다. T-019~024의 구체 작업은 PLAN-03이 소유한다. T-041~067은 PLAN-22·23·24가 소유하며, RESEARCH-10 작업 묶음(WP)과의 대응표는 각 계획에 있다. T-068은 PLAN-25, 바로 적용·계획/자동 모드의 T-069~075는 PLAN-24, 대화 중심 구조의 T-076~080은 PLAN-26이 소유한다. T-025~031은 PLAN-08의 예약 번호다. 하위 계획에 별도 현황표를 복제하지 않는다.
+T-001~018의 번호·지원 증거는 유지한다. 각 티켓의 현재 결과와 남은 조건은 §6.5, 상세 구현·시험 절차는 PLAN-02와 §7을 따른다. T-019~024·T-032·T-040(진단 로그)의 구체 작업은 PLAN-03, T-033~039는 PLAN-17이 소유한다. T-041~067은 PLAN-22·23·24가 소유하며, RESEARCH-10 작업 묶음(WP)과의 대응표는 각 계획에 있다. T-068은 PLAN-25, 바로 적용·계획/자동 모드의 T-069~075는 PLAN-24, 대화 중심 구조·산출물 탭의 T-076~081은 PLAN-26, Sync 저장 구조와 작동 안정성의 T-082~087은 PLAN-27이 소유한다. T-025~031은 PLAN-08의 예약 번호이며 아직 등록하지 않았다. 하위 계획에 별도 현황표를 복제하지 않는다.
 
 ### 6.3 착수 조건
 
@@ -93,134 +121,157 @@ T-001~018의 번호·지원 증거는 유지한다. 각 티켓의 현재 결과�
 
 ### 6.5 현재 티켓 현황과 이어갈 위치
 
-**2026-10-01 대화 중심 구조 결정([ADR-026](../decisions/ADR-026-chat-stage-and-skill-jigs.md), [PLAN-26](PLAN-26-chat-stage.md)):** 사용자가 RESEARCH-12의 질문을 결정했다 — 프로젝트 색 없음, 고정 코랄 포인트 하나, 토큰·CSS 정리, jig로 판정된 요청은 자동으로 열고 계산(계획 모드는 열기·묶기까지, 해석 확정·Rhino에 만들기는 사람), 프로젝트 jig도 자동 호출, 대화 열 + 무대는 목업 검수 뒤. SPEC-02·07, ARCH-03 §5.3, Design §02·§03 안내·SCR-13·15를 고쳤다. T-076(skill 시작·카탈로그·AI 도구·자체 질문 기본)·T-077(토큰·CSS) 구현·시험 완료, T-078 목업 게시·사용자 검토 대기, T-079(셸 교체)는 목업 VERIFY 전까지 막힘, T-080(층 평면) 대기. PRD §11.4·FR-25·AC-48은 결정 4에 맞춰 고침(PRD 0.14). 남은 문서: SPEC-01.10 단서와 ARCH-01 §3 도구 목록(다른 세션의 편집 뒤).
+이 절은 티켓마다 현재 상태·남은 조건·증거만 둔다. 지난 진행 기록은 각 작업 PLAN의 현황, VERIFY·SPIKE, Git 이력에 있다. 최신 설치본 릴리스는 v0.2.12(`792e31d`)이고 그 뒤 커밋은 설치 전이다. 설치본 반영(플러그인 재빌드 포함)은 사용자 요청이나 웨이브 경계의 판단으로 묶어 한다.
 
-**2026-09-30 6차 웨이브 — 바로 적용과 계획/자동(구현·단위 검증 완료, 실호스트·브라우저 시험 남음):** 사용자 결정([ADR-022](../decisions/ADR-022-direct-apply-plan-auto.md))대로 AI 편집은 연결된 Rhino·ZWCAD 문서에서 실행 하나당 되돌리기 기록 하나로 바로 실행하고, 권한 선택은 계획·자동 두 모드로 바꿨다(T-069~074, [PLAN-24](PLAN-24-ai-conversations.md#direct-apply)). 되돌리기 어려운 동작(대량 삭제·레이어 삭제·purge 등)은 확인 카드를 거친다. jig 만들기도 같은 경로다. 공급자 자체 질문 기능은 SPIKE 합격, 어댑터는 꺼 둔 채로 넣었다(T-075). 함께: S-06 개구 둘레 보(PLAN-23), jig 고정 해제 경로·멈춘 만들기 대화의 파일 도구 제거(PLAN-22), 엔진 종료 때 해석 worker·jig 자식 프로세스 정리. 스크래치 빌드는 Rhino·ZWCAD 모두 오류 0. 남은 일: Rhino·ZWCAD 플러그인 재빌드·설치(로드된 플러그인이 잠김) 뒤 실제 문서에서 보호·되돌리기·jig 만들기 확인, `browser-direct-mode.mjs` 등 브라우저 시험, 호스트 턴의 프로젝트 도구 연결, 자체 질문 기능을 기본으로 켤지 결정, 5차의 A/B, 커밋·설치본 릴리스는 사용자 요청 때.
+**지금 진행 중**
 
-**2026-09-30 5차 웨이브 — VIDE 안 AI를 터미널 수준으로(구현·단위 검증 완료, 실호스트·A/B 남음):** 공급자 기본 시스템 프롬프트를 유지하고 VIDE 지시 묶음(공통·모델링(+Rhino·CAD 노하우)·자료·만들기 + 프로젝트 추가분, `src/ai/instructions/`)을 덧붙인다(Claude `--append-system-prompt`, Codex `developer_instructions`; skill·plugin은 계속 끔). Rhino 보기 도구 `capture_view`·`measure`, 대화 턴 상한 100회·600초와 `query` 커서, 대화 대상의 턴 규칙 반영, 만들기의 파일 삭제·멈춤 조건·Codex 작성, S-06 해석 안정화(실데이터 `ok`)와 선정 단면 적용 단계, 패널 [보기]·보고서 행동을 더했다. Claude 실호출 2턴으로 묶음 도달을 확인했다([SPIKE-2026-09-30-instruction-bundle](../tdd/SPIKE-2026-09-30-instruction-bundle.md)). 남은 일: Rhino 플러그인 재빌드(Rhino가 파일을 잠금)와 실제 캡처·측정, A/B 실행([SPIKE-2026-09-30-ai-parity-ab](../tdd/SPIKE-2026-09-30-ai-parity-ab.md)), jig 고정 해제 엔진 경로, 이번 웨이브 브라우저 시험, 커밋·설치본 릴리스는 사용자 요청 때. 세부는 PLAN-22·23·24 현황.
+- T-068([PLAN-25](PLAN-25-accounts-to-accountswitch.md)): VIDE 안의 계정 관리·전환을 빼고 기본 로그인만 쓴다. 정본 반영(1단계)과 코드 제거(2단계)가 진행 중이다.
+- T-083~087([PLAN-27](PLAN-27-sync-storage-stability.md)): T-082(0단계) 뒤 1단계 객체 단위 저장. ARCH-01 저장 계약을 먼저 쓰고 사용자 확인을 받는다. 5단계의 사본·작업 폴더 정리와 2단계의 문서별 Sync 합치기, 읽기 전용 감지 기록은 앞당겨 구현했다(`fda1e5d`, 설치본 확인 남음).
+- T-071: ZWCAD 바로 실행의 실호스트 재실행(0.2.11 이상 연결 플러그인).
 
-**2026-09-30 jig 플랫폼 4차 웨이브(T-053·056·057·058·061~065):** S-06 ⑨ 단면 선정 → ⑪ 일람표 → ⑩ 기둥 높이 → ⑫ 만들기 계획을 `s06-frame@0.3.0`에 잇고 보고서 01~05·부록을 채웠다([VERIFY-2026-09-30-s06-frame-m3](../tdd/VERIFY-2026-09-30-s06-frame-m3.md)). 해석 전 기구 사전 점검을 넣었으나 실데이터 전체 모델은 거더 비틀림에만 기대는 내민 보 13개 때문에 아직 `unstable`이다. 대화로 jig 만들기(초안·계산 상자·만들기 탭·도구)를 만들고 실제 Claude CLI로 M5 수용을 통과했다([VERIFY-2026-09-30-jig-authoring-m5](../tdd/VERIFY-2026-09-30-jig-authoring-m5.md)). 프로젝트 자료([SPEC-08](../specs/SPEC-08-project-facts.md))·자료 탭·근거 칩·인용 게이트, Codex 세션 이어 실행, 설치본 대화 도구 연결, 패널의 만들기·보고서 부품 연결을 더했다. 대화 안 AI의 `jig_set`·`jig_run` 확인 없는 실행은 사용자 결정으로 SPEC-02.19에 반영했다. 남은 일: 실제 Rhino 만들기 시험(모든 Rhino를 닫은 세션), 이번 웨이브 브라우저 시험(`browser-jig-panel`·`make`·`facts`·`s06-jig`·`s06-diagnose`·`structure-jig`·`conversations`), 선정 단면 적용·재확정 경로와 부호 원장 계약, 커밋·설치본 릴리스는 사용자 요청 때. 세부는 PLAN-22·23·24 현황.
+**작업 계획별 현황(T 번호가 없는 계획)**
 
-**2026-09-30 jig 플랫폼 3차 웨이브(T-049·052·053·055~058·061·062):** S-06 그려진 배치의 ⑤ 거더 보정 → 칸 → ⑦ 작은보 → 해석 모델 → ⑧ 미리보기·[해석 확정](T-053, [VERIFY-2026-09-30-s06-frame-m2](../tdd/VERIFY-2026-09-30-s06-frame-m2.md)), 보고서 틀 v0·보고서 탭(T-057)과 S-06 보고서 뼈대(T-058), 기본 만들기 셋과 '받기' 동작 변경(T-055·T-056 일부), 범용 구조 jig 범례·CSV·인용 검사(T-052 남은 것), 작성기 경로 연결·대화 칩·질문 카드·대화 도구(T-049·061·062)가 들어갔다. 검토에서 자식 실행기 읽기 경로, `jig:test` 판정, 질문 카드 장착·답 경로, 버튼 없이 돌던 Sync를 고쳤다. 남은 큰 것: 실데이터 해석 `unstable`(내민 보 뿌리 규칙), 실제 Rhino 만들기 시험(Rhino가 모두 닫힌 세션), `server.ts`의 대화 도구 연결, 패널의 만들기·보고서 부품 연결, ⑨~⑪ 연결, AI의 `jig_set`·`jig_run` 허용 여부 결정, ARCH-03 §9.4 '받기' 문장 정리, 새 브라우저 시험 실행, 설치본 릴리스.
+| 계획 | 현재 | 남은 것·다음 | 증거 |
+|---|---|---|---|
+| [PLAN-02](PLAN-02-agent-host-versioning.md) AI·호스트·모델 기록·공유 | §6.1의 1·2·3a·3b·4a를 합성 지원 범위로 검증. 기존 Rhino 창 연결·읽기 Sync·선택형 Live Sync | 4b 원격 모델 검수(R2 무료 조건 대기), 대표 실무 과업 검수(사용자 결정 뒤) | [로컬 완결](../tdd/VERIFY-2026-09-24-local-product-completion.md), [Rhino 연결](../tdd/VERIFY-2026-09-28-rhino-attached-sync.md), [Sync 성능](../tdd/VERIFY-2026-09-28-sync-performance.md) |
+| [PLAN-04](PLAN-04-workspace-ui.md) 작업 공간 UI | 선택 항목 반영·검수 통과 | — | [VERIFY](../tdd/VERIFY-2026-09-28-workspace-polish.md) |
+| [PLAN-05](PLAN-05-decision-layer-evaluation.md) 판정 계층 평가 | 평가 계획. Jev는 모델 자동 선택·요청 경로·이전 대화 고르기에 쓰고 있다([PLAN-19](PLAN-19-request-routing.md)) | 평가 실행 | [로컬 판정 실험](../tdd/SPIKE-2026-09-25-decision-layer.md) |
+| [PLAN-06](PLAN-06-cli-account-profiles.md) CLI 계정 프로필 | [ADR-025](../decisions/ADR-025-accounts-in-accountswitch.md)로 대체 | T-068이 이어 받음 | — |
+| [PLAN-07](PLAN-07-zwcad-attached-sync.md) ZWCAD 연결 | 연결 플러그인·패널·읽기 Sync·Live Sync. 실제 기본도면은 부분 표시(3,841개 중 3,369개) | 대형 외부참조·문자/해치 표시 보완. AI 편집은 T-071 | [VERIFY](../tdd/VERIFY-2026-09-28-zwcad-attached-sync.md) |
+| [PLAN-08](PLAN-08-project-knowledge.md) 프로젝트 지식 | 초안(draft). 1차 제품 작업은 T-065·T-062로 진행 | 예약 번호 T-025~031은 등록하지 않았다. 남은 단계와 저장 구조([ADR-018](../decisions/ADR-018-project-knowledge-store.md) 초안)는 사용자 결정 대기 | PLAN-08 |
+| [PLAN-09](PLAN-09-remote-host.md) 원격 기기 | 임시 터널로 작업 PC 열기, 에뮬레이션 iPad·staging 확인 | 실제 iPad·실제 Rhino 원격 AI 수정 왕복, 상시 터널·도메인 결정 | [VERIFY](../tdd/VERIFY-2026-09-28-remote-loop.md) |
+| [PLAN-10](PLAN-10-account-workspace.md) 계정 웹사이트 | ID 로그인·프로젝트 목록·작업 PC 열기. 사이트에서 지운 프로젝트는 PC에서도 지운다([SPEC-01.1](../specs/SPEC-01-project-input-sync.md)) | 비밀번호 변경·복구, 계정 삭제 | PLAN-10, `tests/server/project-delete.test.mjs` |
+| [PLAN-11](PLAN-11-desktop-app.md) PC 프로그램 | 설치본(Velopack)·자체 창·트레이·자동 업데이트·연결 프로그램, GitHub Releases 게시 | 코드 서명(외부 배포 전 결정) | [VERIFY](../tdd/VERIFY-2026-09-28-desktop-app.md) |
+| [PLAN-12](PLAN-12-field-fixes.md) 실사용 오류 | 요청 실패 수정, iPad 고정 주소, 스케치·설정 정리 | 실제 ZWCAD 창의 되돌리기 확인(T-071과 함께) | PLAN-12 |
+| [PLAN-13](PLAN-13-multi-account.md) 다중 AI 계정 | [ADR-025](../decisions/ADR-025-accounts-in-accountswitch.md)로 대체. 현재 계정 사용량 읽기만 남는다 | T-068 | — |
+| [PLAN-14](PLAN-14-jig-tab.md) JIG 탭·Sync jig | 공식 jig 목록, Sync jig(도면↔모델) | 실제 Rhino·CAD Sync로 실사용 검수, 곡선·블록 짝짓기 | PLAN-14 |
+| [PLAN-15](PLAN-15-work-view.md) 작업 보기 | 작업 이력과 선택한 작업의 진행 화면 | 설치본에서 Rhino 요청 진행 화면 확인 | PLAN-15 |
+| [PLAN-16](PLAN-16-document-links.md) 연결 파일 | Link·연결 파일 목록·여러 파일 한 공간, 빼기 = 기록 삭제([SPEC-01.11](../specs/SPEC-01-project-input-sync.md)), 문서별 Rhino 선택 반영과 Rhino와 함께 쓰는 고정 목록(`c55cc53`) | 두 파일에 걸친 연계 요청, 큰 건축 파일 '파일에서 열기' 재읽기 실패(미수정), 입력 중 Sync 보류 동안 새 객체 고정(별도 결정) | PLAN-16 |
+| [PLAN-18](PLAN-18-render-performance.md) 큰 모델 표시 | 18,000객체 여는 시간 4.5 → 1.84초, 전송 68.5 → 34.9 MB, 호스트 Sync 구간 기록 | 인스턴싱·LOD. 저장·화면 구조는 PLAN-27 | [SPIKE](../tdd/SPIKE-2026-09-29-render-perf.md) |
+| [PLAN-19](PLAN-19-request-routing.md) 요청 경로 | 화면만 바꾸는 요청은 VIDE가 처리, 모델 선택 '자동 (Jev)', 이전 대화 고르기 | 잘못 판정한 경우의 기록, 다른 PC의 Jev 중계 | PLAN-19 |
+| [PLAN-20](PLAN-20-offline-view.md) PC가 꺼져 있을 때 | 구현·로컬 시험. 스냅샷은 과금 결정 전까지 꺼짐(T-066) | 원격 D1 `0007`·Worker 배포(사용자 확인 뒤), 실제 PC 확인 | PLAN-20 |
+| [PLAN-21](PLAN-21-host-panel.md) 호스트 패널 | Rhino 패널·ZWCAD 팔레트를 같은 웹 화면으로, 사용량 막대 | 설치본에서 두 호스트의 연결→Link→Sync→요청 확인 | PLAN-21 |
 
-**2026-09-30 jig 플랫폼 2차 웨이브(T-047·048·051·054·055·061):** 작업공간 탭과 jig 문맥 탭(T-047), 선언형 패널 v0와 부품 1차(T-048; 검토에서 로더도 `panel.json`을 거절하게 함), S-06 골조 jig 0.1 ⓪~④의 합성 검증(T-051, [VERIFY-2026-09-30-s06-frame-m1](../tdd/VERIFY-2026-09-30-s06-frame-m1.md)), 단면 선정·부호·일람표·CSV(T-054; 범용 jig 확정 경로를 작업 스레드로), Rhino에 만들기의 고정 틀·데이터 블록·교체 판정(T-055; 모의 워커까지), 대화 세션·원장·한 대화 한 턴(T-061; 서버·CLI까지)이 들어갔다. 검사(브라우저 시험 2개의 시험 코드 수정)와 적대 검토(ARCH-03 §5.1·§7·§9·§10.3을 구현에 맞춤, `test:browser`에 새 시험 4개 추가)를 거쳤다. 남은 큰 것: 실제 Rhino에서의 만들기 검증(`tests/integration/rhino-bake.mjs`, 사용자가 허락한 세션), 대화 화면(`conversations.tsx`·인계 카드), S-06 실데이터 검수와 AI 역할 제안 연결, 범용 구조 jig 화면의 범례·CSV, 설치본 릴리스. 다음: PLAN-23 M2(사용자 지시대로 그려 둔 거더 보정 우선) — T-053·T-056, PLAN-24 T-062, PLAN-22 T-057.
-
-**2026-09-30 jig 플랫폼 1차 웨이브(T-043·045·046·049·050·052·059·060·066):** 여러 에이전트가 한 작업 트리에서 병행한 뒤 검사·적대 검토를 거쳤다. Rhino 플러그인은 Sync 범위 수·레이어 표·레이어 한정 읽기·블록 export를 얻었고(T-043, 개발 빌드로 S-06 사본의 진단 기준선을 제품 Sync에서 재현), 저장 스키마는 v5(T-045), jig 형식 v3·작업본·자식 프로세스 실행기·서명 가져오기(T-046), geometry-kit 배치 함수(T-050), structure-analysis 라이브러리(T-052: 물리 부재 기준 Lb·K, 지정 기둥 절점 구속, 자중·명목 하중, 작업 스레드), 일곱 경로 판정·값 추출·전송 고지(T-049), CLI 판 점검·세션 SPIKE(T-059), 겹치는 쓰기의 문서별 대기열·AI 턴 상한(T-060), 스냅샷 업로드 차단(T-066)이 들어갔다. 검토에서 고친 것: 설정값 핵심어+숫자 규칙의 오판(객체·화면·파일 동작 말이 있으면 설정값 변경으로 실행하지 않음), `CLI_VERSION_UNSUPPORTED`·`CLI_MODE_CHANGED`·`WORKSPACE_CAPACITY` 화면 문구. 남은 큰 것: T-049 작성기 카드 연결, T-052의 범용 jig 연결, `browser-ai-settings.mjs`(이 웨이브 전부터 깨짐: 없는 라벨 '초안 메뉴' 대기), 설치본 릴리스(플러그인 재빌드·CLI 판 범위 안내). 다음: M1 — T-047·T-048 → T-051, T-061.
-
-**2026-09-29 VIDE 재구성 설계(1차 결정 반영):** jig 정의·패키지 형식·실행 권한, 작업공간 탭, 모든 대화의 세션화와 동시 진행, 말로 하는 앱 조작, 구조 해석 라이브러리 결함 수정, 프로젝트 자료·Sync 발전, 공유·내보내기, S-06 구조 jig(사용자 결정 반영)를 한 문서로 설계했다. [RESEARCH-10](../research/RESEARCH-10-vide-restructure.md)(draft), 화면 목업 `tools/mockups/jig-platform/`([검수](../tdd/VERIFY-2026-09-29-jig-platform-mockups.md)). 조사 중 확인한 결함: 구조 jig 처짐·비지지 길이가 분할 부재 기준(비보수), 수평 구속이 지붕 전 절점을 잡음, Sync가 꺼진 레이어를 빼고도 누락 0으로 표시, 접수 규칙이 겹치는 요청을 거절(동시 대화 불가). 같은 날 사용자가 §16의 1차 항목(A·D)을 결정했고, B·C는 2·3차 전으로 미뤘다. 결정은 PRD(FR-23 확장·FR-24·FR-25, C-02 채택), [ADR-020](../decisions/ADR-020-jig-platform.md)(jig 플랫폼)·[ADR-021](../decisions/ADR-021-conversation-sessions.md)(AI 대화 세션), [SPEC-07](../specs/SPEC-07-jig-platform.md)·[ARCH-03](../architecture/ARCH-03-jig-runtime.md)과 해당 SPEC·Design에 반영한다. 1차 작업은 [PLAN-22](PLAN-22-jig-platform.md)(jig 플랫폼)·[PLAN-23](PLAN-23-s06-frame-jig.md)(S-06 골조 jig·구조 라이브러리)·[PLAN-24](PLAN-24-ai-conversations.md)(AI 대화·경로)에 T-041~067로 등록했다(순서 §6.1). 다음: M0 — T-041·T-042·T-043 → T-044(S-06 사본에서 기준선 재현). T-059(CLI 버전 점검·세션 SPIKE)와 T-066은 병행할 수 있다.
-
-**2026-09-29 구조 분석 jig(J-09):** 사용자 결정으로 첫 출시 범위에 넣었다(PRD FR-23·AC-40, [ADR-019](../decisions/ADR-019-structure-jig-rust-core.md)). 해석·검정 코어는 Rust, 입력은 CAD·Rhino Brep·중심선에서 AI가 초안을 만들고 사용자가 확정한다. 1단계는 계획 단계 중력 검토(선형 정적, KDS 14 31 10 부재 검정·B1, 4상태 판정, NG 원인 분류). 동작 [SPEC-06](../specs/SPEC-06-structure-analysis.md), 계약 [ARCH-02](../architecture/ARCH-02-structure-model.md), 계획·완료 기준 [PLAN-17](PLAN-17-structure-jig.md)(T-033~039). T-033~038 1차 완료(코어·입력·화면, 시험 통과). 다음: T-039 설치본 빌드(커밋 후)와 실제 입력 검수.
-
-**2026-09-29 큰 모델 표시:** 그리기 묶음(호출 27,001 → 74), 면 모서리 계산 교체와 표시용 이진 전송으로 18,000객체 모델을 여는 시간 4.5 → 1.84초, 전송 68.5 → 34.9 MB. 실제 Sync 구간은 진단 기록에 모은다. 계획·완료 기준은 [PLAN-18](PLAN-18-render-performance.md). 다음: 사용자 Sync 기록을 보고 느린 호스트 구간을 고친다.
-
-**2026-09-29 요청 경로·이전 대화:** 화면만 요청(숨기기·격리 등)은 VIDE에서 바로 처리하고, 모델 선택은 "자동 (Jev)" 하나로 통일, 이전 대화는 6개를 넘으면 Jev가 관련 대화를 고른다. [PLAN-19](PLAN-19-request-routing.md).
-
-**2026-09-29 호스트 패널:** Rhino 패널과 ZWCAD 팔레트를 같은 웹 화면(머리·연결 카드·선택 칩·사용량 막대)으로 바꾸고, 사용량 막대를 앱 상태줄에도 두었다. 시험 통과, 실제 호스트 확인은 0.2.10 설치 뒤. [PLAN-21](PLAN-21-host-panel.md).
-
-**2026-09-29 PC가 꺼져 있을 때:** 연결 파일의 보기 전용 모델을 계정 사이트에 저장(프로젝트별로 켬)하고, 사이트에 남긴 요청을 PC가 켜지면 받는다. 구현·로컬 시험 완료, 사이트 배포(D1 0007)와 설치본 배포는 사용자 확인 대기. [PLAN-20](PLAN-20-offline-view.md).
-
-**2026-09-29 연결 파일:** 플러그인 Link(프로젝트 고르기+첫 Sync), 프로젝트별 연결 파일 목록(보이기·강제 Sync), 여러 파일을 주종 없이 한 공간에 표시. 계획·완료 기준은 [PLAN-16](PLAN-16-document-links.md).
-
-**2026-09-29 작업 보기:** 요청 목록을 왼쪽 작업 이력으로 모으고, 오른쪽을 선택한 작업 하나의 진행 화면(조건·단계·결과·확인할 것·단계별 개입)으로 바꾼다. 계획·완료 기준은 [PLAN-15](PLAN-15-work-view.md).
-
-**2026-09-29 JIG 탭:** 레일의 JIG 탭에 공식 jig 목록(사용 가능 1·준비 중 9)과 Sync jig(도면↔모델)를 넣었다. Sync jig는 원점·회전이 다른 Rhino·CAD Sync의 관계와 오차·한쪽에만 있는 객체를 계산하고, AI가 표의 행만 근거로 의미를 판정하며, 고른 행을 양쪽 문서에 반영 요청으로 보낸다. 계획·완료 기준은 [PLAN-14](PLAN-14-jig-tab.md). 다음: 실제 프로젝트 Sync로 실사용 검수, 준비 중 jig의 조사 보강과 이식.
-
-**2026-09-29 실사용 오류·외부 접속:** 설치본에서 나던 요청 실패(사본 캡처·전체 문서 비교)를 AI 변경분만 적용하는 방식으로 고쳐, 사용자 문서 사본에서 H형강 34개 생성·곡선 326개 숨기기를 실제 Rhino에 적용했다. 아이패드는 계정 사이트 고정 주소 `/pc/<PC>/` 중계와 PWA로 연다. 스케치(Grease Pencil식 자동 배치·펜/손가락 분리), 설정 탭, 모델 목록, 레일의 홈 버튼을 정리했다. 계획·완료 기준은 [PLAN-12](PLAN-12-field-fixes.md). 다음: 다중 AI 계정 완성(사용자 요청 순서 1), jig 조사 보강·계획·이식과 도면·모델 동기화 jig(순서 2).
-
-**2026-09-28 원격 기기에서 작업 PC 열기:** 공유 staging 사이트의 "작업 PC" 목록에서 켜져 있는 PC를 열면, 그 PC의 VIDE 작업 공간을 원격 기기에서 그대로 쓴다(Cloudflare 임시 터널, 60초 서명 토큰, 원격 세션은 앱 제어·계정·설정 차단). 에뮬레이션 iPad와 실제 터널·staging에서 실제 크기 모델 표시 9.2초(23.5 MB)와 터치 스케치 요청의 PC 수신을 확인했다. 실제 iPad와 실제 Rhino 원격 수정, CAD 연결 도면 수정은 남았다([PLAN-09](PLAN-09-remote-host.md), [검수](../tdd/VERIFY-2026-09-28-remote-loop.md)).
-
-**2026-09-28 계정 웹사이트:** 아이디·비밀번호(가입 코드) 로그인, 계정별 프로젝트 목록(최근 순·미리보기), 카드를 누르면 작업 PC에서 그대로 열림(같은 PC는 로컬, 다른 기기는 원격). PC는 등록 코드 대신 같은 아이디로 로그인한다. 작업 화면의 `···` 메뉴·앱 종료·수동 초안 저장을 없애고 설정을 하나로 모았으며, 새 프로젝트·이름 바꾸기를 입력칸으로 고쳤다. 실무/개발 엔진 분리와 실제 iPad·Rhino 원격 수정은 남았다([PLAN-10](PLAN-10-account-workspace.md)).
-
-**2026-09-28 PC 프로그램:** 설치본(Velopack, 사용자 범위)·자체 창(WebView2)·트레이·자동 실행/백그라운드 설정·자동 업데이트·연결 프로그램(Rhino 8 플러그인 설치)을 만들고 이 PC에 설치했다. 실무는 설치된 프로그램, 개발은 `npm run dev`(별도 데이터·포트)로 분리했다. 0.2.0→0.2.1 자동 업데이트와 설치 경로의 Rhino 플러그인 로드를 확인했다. 코드 서명과 GitHub Releases 첫 게시는 남았다([PLAN-11](PLAN-11-desktop-app.md), [검수](../tdd/VERIFY-2026-09-28-desktop-app.md)).
-
-**2026-09-28 사용성 3차(구현 우선):** 요청 고정은 메시지 문장 안의 `[고정N · k개]` 토큰으로 넣는다. 커서 위치의 반투명 칩을 누르면 현재 선택이 토큰이 되고, 토큰을 지우면 고정도 빠진다. 뷰포트 핀 도구·선택 해제 버튼·V. 로고를 없앴다. H 숨기기, I 분리 표시, U 모두 표시, Z 선택 확대, Ctrl+A 전체 선택을 추가했다. 대화 항목을 목록에서 지울 수 있다(기록은 보존, schema 3). effort·첨부 메뉴는 바깥을 누르면 닫히고, 하단 속성 패널은 머리줄 전체로 열고 닫으며 선택이 없어도 열린 상태를 유지한다. 자동·브라우저 회귀는 통과했고 실제 iPad 입력은 확인하지 않았다.
-
-**프로젝트 지식 DB(2026-09-28 사용자 요청):** 메일·첨부·회의록 기반 지식 정리·질의·크리틱은 PRD C-02이며 2026-09-29 채택됐다(결정 A9). 파악은 [RESEARCH-06](../research/RESEARCH-06-project-knowledge.md), 단계 계획은 [PLAN-08](PLAN-08-project-knowledge.md)(draft), 저장·팀 공동 축적 구조는 [ADR-018](../decisions/ADR-018-project-knowledge-store.md)(초안)이다. 1차 제품 작업은 검색·검토 기록·근거 칩([PLAN-22](PLAN-22-jig-platform.md) T-065)과 AI 자료 도구([PLAN-24](PLAN-24-ai-conversations.md) T-062)이며 프로젝트 지식 SPEC 초안 뒤 시작한다. RESEARCH-06 §12의 나머지 결정(회사 정책·공개 범위 등)은 PLAN-08의 해당 단계 전에 확인한다. 요청 처리 방식(의도 카드·검증·실제 수행 설명·편집 가능한 작업 이력)은 [RESEARCH-07](../research/RESEARCH-07-request-processing.md)에 정리했고, 작업 이력은 PRD C-03 제안(R-75) 상태다.
-
-**2026-09-28 Sync 성능·증분 Live Sync:** 실제 문서 사본(표시 10,086개)의 전체 Sync가 37.8초에서 4.4초(두 번째 1.9초)로 줄었다. Live Sync는 바뀐 객체만 받아 마지막 표시 Sync에 병합하며, 객체 1개 이동의 Rhino 조회는 34 ms이고 서버 병합·저장은 1~1.5초다. 사용자 Rhino는 새 RHP를 불러오도록 재시작해야 하며, 사용자 창의 체감 확인이 남았다([검수](../tdd/VERIFY-2026-09-28-sync-performance.md), [PLAN-02](PLAN-02-agent-host-versioning.md)).
-
-**2026-09-28 사용성 2차(구현 우선):** Rhino 패널은 VIDE 대화 열을 WebView로 띄워(`?panel=rhino`, Rhino 테마 dark/light) 같은 서버·이력을 쓴다. 대화는 이력·진행 중 작업·대기 요청이 한 흐름이며 모드는 Plan mode/Accept edits/Auto mode(Shift+Tab)다. 고정 객체는 칩 하나로 합치고 연결 Rhino가 고정 목록·선택을 보관해 브라우저·패널에 실시간 반영한다. 뷰포트는 Rhino식 음영·레이어/표시/재질 색·표시 설정·monochrome 출력 미리보기를 지원하고, ZWCAD 연결 Sync는 선분별 색·선 굵기(ByLayer/ByBlock/레이어 0), 문자·속성, 단색/패턴 해치, xref와 XCLIP 경계를 내보낸다(`zwcad-display-styles` 실측 통과). 실제 사용자 도면·Rhino WebView 패널의 화면 확인은 남았다.
-
-**병렬 CAD 연결:** [PLAN-07](PLAN-07-zwcad-attached-sync.md)의 별도 연결 플러그인·패널·읽기 Sync와 합성 Live Sync·다중 도면 검증을 통과했다. 사용자 재시작 후 수정 DLL로 실제 기본도면 Sync와 브라우저 새로고침 후 표시 복원까지 확인했다. 3,841개 중 3,369개 표시, 472개 제외(대형 블록 14개 포함)로 부분 표시이며 전체 도면 재현은 아니다([검수](../tdd/VERIFY-2026-09-28-zwcad-attached-sync.md)). 별도 시험 포트 63703을 사용했고 기존 Rhino 서버·원본 도면은 유지했다. 다음은 대형 외부참조·문자/해치 표시 보완이며 현재 사용자 CAD AI 편집은 별도 남은 작업이다.
-
-**2026-09-28 사용성 묶음(사용자 지시, 구현 우선·문서 정리는 후속):** 뷰포트 관성 제거·커서 기준 줌, Rhino식 클릭/창(좌→우)/교차(우→좌) 다중 선택, 왼쪽 모델 연결 카드와 레이어→유형 객체 트리, 접는 REQUESTS/ACTIVE WORK/RECENT·요약 카드, AI 작업 과정 로그(추론·조회·실행 코드·검증 결과), 보내기 옆 요청 추가(Shift+Enter)를 구현했다. Rhino 패널 채팅(모델·effort·권한·선택 고정)은 연결된 Rhino가 메시지를 보관하고 열린 VIDE 화면이 가져가 같은 Sync 기준의 일반 요청으로 실행하며 진행 상황을 패널에 되돌린다(VIDE 화면이 열려 있어야 전달). 자동 회귀(단위·브라우저 전체, `browser-rhino-chat`)는 통과했고, 사용자 Rhino에서 새 RHP로 패널 채팅을 쓰려면 Rhino 재시작이 필요하다. 실제 건축 문서 대상 AI 편집 왕복과 SPEC·Design 반영은 후속이다.
-
-**오늘의 연결 왕복:** Rhino 문서별 패널을 구현했고 별도 시험 문서에서 실제 ChatGPT 구독 CLI → RhinoCommon 수정 → 같은 Rhino 반영 → VIDE 갱신·재열기를 통과했다(4m→5m, 동일 ID, mm 보존). 사용자 저장·종료 후 기본 경로에 새 RHP를 배치하고 작업 파일을 다시 열어 패널 표시·연결과 제품 Sync를 확인했다. 사용자 브라우저의 인증 복구와 화면 확인이 다음 행동이다. 근거·지원 범위는 [연결 검수](../tdd/VERIFY-2026-09-28-rhino-attached-sync.md). 현재 사용자 건축 문서의 일반 편집·CAD는 완료로 집계하지 않는다.
-
-2026-09-28 프런트 조작 개선은 [PLAN-04 검수](../tdd/VERIFY-2026-09-28-workspace-polish.md)를 통과했다. 연결 오류 수정과 블록 정의 보존·변경 감지는 각각 자동/실제 합성 Rhino 회귀로 확인했으며, 10,713개 합성 혼합 모델의 분할 표시 취득도 검증했다. 다음은 PLAN-02의 실제 작업 문서 재연결/읽기 Sync다. 사용자 저장·종료 후 새 빌드를 준비해 파일을 다시 열었고 연결 명령 수동 실행을 기다린다.
-
-최우선은 2026-09-28 사용자 지시의 **기존 Rhino 창 연결·Sync·같은 문서 적용·선택형 Live Sync**이며, 읽기 Sync를 작업 사본 저장·재열기와 분리한 직접 표시 경로를 구현했다. 실제 문서 복사본의 보이는 객체 8,000개 조회와 그중 7,431개의 제품 뷰포트 렌더링을 확인했다. 사용자 창 재연결 후 실제 제품 Sync도 성공했다(45.486초, 조회 10,086개·표시 형상 8,702개). 현재 Aside는 로컬 인증이 만료되어 인증 재연결과 최종 화면 확인이 남아 있다. 현재 문서의 블록·주석 등 표시 미지원 1,384개와 실제 문서 AI 편집은 완료로 집계하지 않는다. 다음 작업은 PLAN-02 마지막 절의 실제 연결 표시 확인이며 성능 최적화는 그 뒤다. 근거는 [연결 검수](../tdd/VERIFY-2026-09-28-rhino-attached-sync.md). 그 밖의 작업은 사용자 지시대로 [PLAN-02 §6.2](PLAN-02-agent-host-versioning.md)와 [PLAN-06](PLAN-06-cli-account-profiles.md)의 남은 구현·검증이다. 로컬에서는 양쪽 구독/호스트 왕복, 대상별 병렬·개입, Undo/Redo 수량 캐시, 네이티브 취소 종료 대기/복구, 요청별 상한 설정을 검증했다. Rhino 자체 SDK의 1천 박스·1만 점 저장/재열기·브라우저 표시·단일 수정 적용, PolylineCurve 정점 변경·고정 적용·재열기, 3개 층 Brep 관통 개구부 확대·속성 갱신·고정 적용·재열기, 빈 층 변경의 무시 방지, 그룹 소속을 보존하는 객체 형상·속성 적용과 13만 삼각형 메시의 실제 호스트/브라우저 왕복·메모리 계측, 81만 삼각형 응답 상한 초과의 영수증 보존·재실행 없는 복구 거절을 추가 검증했다. ZWCAD의 평면 LINE/Polyline 혼합 문서 생성·수정·고정 적용·브라우저 가져오기와 기본 Move/저장 재열기를 검증했다. 초기 문맥/도구 응답 요약·페이지 조회·TCP 수신 복사도 개선했다. 수정 후 반복 export의 수량 재계산을 제거하고 tolerance 변경 무효화를 실제 Rhino에서 확인했다. 두 확인 후보를 사용하는 연계 후속 초안과 보류된 추가 지시의 조건 유지·재열기·명시 전송, 정책 수정/호출 상한 후 중복 쓰기 없는 재개와 두 실제 호스트 실행 중 브라우저 개입→저장 후보 복구→서버 재시작/조건 복원을 검증했다. 연계 추가 지시가 대상 첨부 초기화로 막히던 UI를 수정했다. 복구 뒤 명시 후속에서 CAD 쓰기 없이 경계를 유지하고 Rhino만 4.5m로 변경했으며, 변경 없는 대상도 다음 연계 후보로 유지하도록 연결했다. 실제 범위와 수치는 [로컬 완결 검수](../tdd/VERIFY-2026-09-24-local-product-completion.md)가 소유한다.
-
-계정은 기본/두 번째 ChatGPT의 실제 응답·브라우저 선택·재시작 복원과 짧은 병렬 요청, 두 번째 계정의 실제 Rhino SDK 후보 생성을 통과했고, 공식 로그인/로그아웃 프로세스의 종료 대기·취소·실행 잠금과 로그아웃 후 관리 프로필 제거·전환 완료의 모델 목록 재확인을 연결했다([계정 SPIKE](../tdd/SPIKE-2026-09-25-cli-profiles.md)). 다음은 PLAN-06의 장기 인증 갱신 조건과 PLAN-02의 일반 부분 결과/층·자원 편집 확대, 일반 복잡 형상, Save As 환경 원인이다. Save As는 VIDE 플러그인 없는 임시 경로·새 시험 scheme에서도 파일 저장 성공 뒤 읽기 전용으로 바뀌는 것을 재현했고 아직 해결되지 않았다. 안전 모드 파일 열기는 확인했으나 저장 대화상자의 자동화 초점을 확정하지 못해 수동 저장 대조는 미완료다. 2026-09-28 사용자가 평소 VIDE 없이 Rhino를 직접 사용해도 같은 안내가 나온다고 확인했다. VIDE 전용 재현이 아닌 기존 환경 증상으로 추적하며, 원인은 미확정이다. 독립 개발을 막지 않되 정상 반복 저장은 미검증으로 유지한다. 기본 Undo와 단순 네이티브 취소 실증을 복합 과업 전체 완료로 확대하지 않는다. Claude 두 계정은 미검증이다.
-
-Jev는 기존 계정이 없다는 사용자 확인에 따라 가입 재개까지 외부 접근/비교를 보류한다. [로컬 판정 실험](../tdd/SPIKE-2026-09-25-decision-layer.md)은 별도이며 실제 Jev 검증이 아니다. 배포 ZIP·원격 공유·논현동 대표 과업 선정은 사용자 지시대로 후순위다. 다른 세션의 연구 원문은 보존한다.
-
-**현재 단계: PLAN-02 §6.1의 1·2·3a·3b·4a를 아래 합성 지원 범위로 검증했고, 4b 원격 모델 검수는 무료 조건 대기다.** 개발 기반 main 통합(`78b180c`), [실행 안전성](../tdd/VERIFY-2026-09-24-sdk-execution-safety.md), [양쪽 구독 ZWCAD SDK·소유 편집 창·직접 편집/저장](../tdd/VERIFY-2026-09-24-zwcad-sdk-product.md), [한 요청 CAD→Rhino·두 CAD 문서·부분 실패 보존](../tdd/VERIFY-2026-09-24-linked-hosts.md), [다른 사용자 의견→실제 수정→재게시](../tdd/VERIFY-2026-09-24-sharing-host-roundtrip.md), [로컬 Windows 패키지](../tdd/VERIFY-2026-09-24-sdk-package.md)를 검증했다. 당시 패키지 검수의 자동 회귀는 145개였으며 최신 로컬 검증은 위 검수 문서를 따른다. 최신 ZIP의 연계·런처·재시작·데이터 유지도 통과했다. 4b는 9월 24일 재조회에서 계정의 다른 R2 버킷이 약 11.2 GB인 것을 확인해 차단을 유지했다([조건/재개 기준](../tdd/VERIFY-2026-09-24-sharing-host-roundtrip.md)). 다음 행동은 무료 조건 또는 시험 예산 확정 후 원격 검수, 사용자 결정 후 대표 실무 과업 검수다. 원격 업로드 제한은 유지하며 원격 CI/별도 PC 설치·일반 자산 복사까지 완료한 것은 아니다. 논현동 수준의 대표 과업 선정·실무 검수는 사용자 지시대로 현재 묶음 이후 결정한다. Jev 조사 문서는 보존한다. 구현 범위·완료 기준은 [PLAN-02 §6.1](PLAN-02-agent-host-versioning.md)을 따른다.
-
-개발 위임·중단 기준은 [가이드 §12](../../DEVELOPMENT_GUIDE.md#development-delegation)를 따른다. 기존 기능 단위 커밋 위임은 유지하며 원격 push는 해당 사용자 지시 범위에서만 한다. Cloudflare 시험은 무료·메일 없는 가입/소유자 승인 모드다. 유료 전환·도메인 구매·메일 발송은 승인되지 않았다. R2 기존 사용량 때문에 원격 모델 업로드는 차단돼 있으며, 무료 시험 조건을 확인하기 전 해제하지 않는다. 기존 사용자 자료·열린 호스트는 시험용으로 변경하지 않는다.
-
-기존 자동 시험·패키지 검증은 아래 증거의 기록이며 이번 문서 재배치에서 재실행한 결과가 아니다. 최신 설치 산출물은 `.vide/releases/VIDE-0.1.0-dev.20260924.2-windows-x64.zip`이다. 상세 실행 이력은 VERIFY와 Git으로 확인한다.
+**제품 티켓 T-001~018**
 
 | 티켓 | 현재 결과 | 남은 완료 조건·다음 행동 | 증거 |
 |---|---|---|---|
-| T-001 | 로컬 SQLite 저장·대상 큐·중복/불명확 쓰기 보호, TS 전환 | 복수 문서 관계/버전·마이그레이션 확대 | TS/자체 호스트 VERIFY, PLAN-02 §3·4 |
+| T-001 | 로컬 SQLite 저장·대상 큐·중복/불명확 쓰기 보호, TS 전환 | 복수 문서 관계/버전 확대. 저장 구조 개편은 PLAN-27 | TS/자체 호스트 VERIFY, PLAN-02 §3·4 |
 | T-002 | 채팅·핀·스케치·파일·초안 복원, 실제 구독 스케치 돌출 | 대표 실무 과업·복잡한 입력·평면 확대 | 네이티브 VERIFY, TS/자체 호스트 VERIFY |
-| T-003 | 자체 Rhino worker·소유 실행본 확인·인증 TCP·SDK 실행/재열기 | 외부 실행본 자동 연결, 복수 문서·일반 호스트 유형 확대 | 에이전트 도구 SPIKE, TS/자체 호스트 VERIFY |
+| T-003 | 자체 Rhino worker·소유 실행본 확인·인증 TCP·SDK 실행/재열기, 사용자가 연 Rhino 문서 연결(VIDEConnect) | 복수 문서·일반 호스트 유형 확대 | 에이전트 도구 SPIKE, [Rhino 연결 VERIFY](../tdd/VERIFY-2026-09-28-rhino-attached-sync.md) |
 | T-004 | Claude/Codex 실제 구독 도구 호출·SDK 코드·취소·설정 연결 | 모델별 능력/한도·장기 과업·복잡한 개입 | TS/자체 호스트 VERIFY |
-| T-005 | 자체 Rhino 편집 사본에 형상/속성 추가·수정·삭제 적용, GUID 보존·재연결·중복/오래된 기준 거절; 실제 Move/SaveAs·재열기 | 외부 열린 원본의 일반 적용, 그룹/재질/문서 자원·관계 확대, 대표 과업 | TS/자체 호스트 VERIFY |
-| T-006 | ZWCAD DWG 사본의 독립 직선 XY LWPolyline·평면 LINE 수정·재열기·Handle/속성 보존, CAD→Rhino 돌출; 자체 SDK DWG 가져오기·브라우저 표시, 양쪽 구독 SDK AI 생성/수정·소유 편집 창/재취득·고정 수정/추가/삭제 적용·기본 이동/저장·재열기 | 일반 객체/단위·정확한 자산/관계 복사(한 요청 CAD→Rhino·두 CAD 경계 전달은 연계 VERIFY 통과) | [SDK 제품 VERIFY](../tdd/VERIFY-2026-09-24-zwcad-sdk-product.md) |
-| T-007 | 수량 필터/그룹·CSV·고정 검토본·A/B 비교·객체 수량표, SDK 미변경 기하의 수량 재사용 | 실무 전문 표·회전/이동 최적화·외부 변경 이벤트 캐시 | 네이티브 VERIFY, TS/자체 호스트 VERIFY |
+| T-005 | 연결된 Rhino 문서에 바로 실행·되돌리기·보호(T-070). 자체 편집 사본의 형상/속성 적용과 GUID 보존은 '검토'·jig 내부 사본 경로로 남음 | 그룹/재질/문서 자원·관계 확대, 대표 과업 | [바로 적용 VERIFY](../tdd/VERIFY-2026-09-30-direct-apply-rhino.md), TS/자체 호스트 VERIFY |
+| T-006 | ZWCAD DWG 사본·자체 SDK 생성/수정·저장 재열기, CAD→Rhino 돌출, 연결 도면 바로 실행 코드(T-071) | T-071 실호스트 확인, 일반 객체/단위·자산/관계 복사 | [SDK 제품 VERIFY](../tdd/VERIFY-2026-09-24-zwcad-sdk-product.md), [바로 적용 VERIFY](../tdd/VERIFY-2026-09-30-direct-apply-zwcad.md) |
+| T-007 | 수량 필터/그룹·CSV·고정 검토본·A/B 비교·객체 수량표, SDK 미변경 기하의 수량 재사용 | 실무 전문 표·외부 변경 이벤트 캐시 | 네이티브 VERIFY, TS/자체 호스트 VERIFY |
 | T-008 | 속성 요약 확장 등록/실행/실패/비활성화·객체 연결 | 추가 확장·장기 작업·배포 수용 | 네이티브 VERIFY |
-| T-009 | 원격 배포 완료(무료·메일 없는 소유자 승인 모드): 가입·로그인·프로젝트·참여 신청/승인·회수를 실제 staging에서 검증. 로컬 런타임: 초대/권한·R2 게시·원문/핀/스케치 의견·파일 왕복 채택·재시작 복원·대용량 전송 | 모델 게시·의견의 원격 완결(R2 업로드 차단 해제 조건 포함)·PC 종료 후 모델 열람·운영 백업/복구·비용 계측; 후속 메일 인증 모드(발신 도메인·요금제 승인 뒤) | 공유 VERIFY |
-| T-010 | shell/Inspector 및 PLAN-04 선택 UI 항목·입력 보호·Aside/브라우저 회귀 | 사용자 최종 디자인·미선택 UI 항목·iPad/펜 실기기 사용성 | [UI VERIFY](../tdd/VERIFY-2026-09-24-workspace-controls.md), 네이티브·공유 VERIFY |
-| T-011 | 최신 Windows ZIP의 번들 실행·재시작·제거 후 자료 보존·백업 검증 | 별도 비개발 PC·서명/설치 프로그램·복구 UI | TS/자체 호스트 VERIFY |
+| T-009 | 무료·메일 없는 소유자 승인 모드로 원격 배포: 가입·로그인·프로젝트·참여 신청/승인·회수 staging 검증. 로컬 런타임의 게시·의견·채택 왕복 | 모델 게시·의견의 원격 완결(R2 업로드 차단 해제 조건 포함), 운영 백업/복구·비용 계측, 메일 인증 모드(발신 도메인·요금제 승인 뒤) | 공유 VERIFY |
+| T-010 | shell/Inspector, PLAN-04 선택 UI, 레일·작업공간·산출물 화면(T-079·T-081), 브라우저 회귀 | 사용자 최종 디자인·iPad/펜 실기기 사용성 | [UI VERIFY](../tdd/VERIFY-2026-09-24-workspace-controls.md), `npm run test:browser` |
+| T-011 | 설치본(Velopack)·자동 업데이트·연결 프로그램 설치, 제거 후 자료 보존 | 별도 비개발 PC 검수·코드 서명·복구 UI | [PC 프로그램 VERIFY](../tdd/VERIFY-2026-09-28-desktop-app.md) |
 | T-012 | 미착수 | 동일 과업의 수작업 및 에이전트+MCP 기준선 비교 | §6.6·§7 |
-| T-013 | 작업 요청/상태/결과 저장·HTTP 경계 검사·불명확 실행 회수, TS strict | 실제 관계/버전·호스트 확대 및 DB 이행 | TS/자체 호스트 VERIFY, PLAN-02 §4 |
-| T-014 | 참고 사례 조사 및 확정 스택·React/TS/Vite 기반 이행 | 현재 스택을 유지하며 제품 통합 검수 | ADR-016·017, PLAN-01, TS/자체 호스트 VERIFY |
-| T-015 | 실제 메시/선/점·객체 대응·정투영·좌표 입력, 표시 정밀도 보완 | 대형 실무 모델·추가 유형·기기 성능 | 뷰포트 SPIKE, 네이티브 VERIFY |
-| T-016 | 요청 목록·실행·결과·검사기/설정·작업 이력의 실제 API 통합·초안 격리 | 전체 출시 수용·실무 사용성 | 네이티브 VERIFY, TS/자체 호스트 VERIFY |
+| T-013 | 작업 요청/상태/결과 저장·HTTP 경계 검사·불명확 실행 회수, TS strict | 실제 관계/버전·호스트 확대 | TS/자체 호스트 VERIFY, PLAN-02 §4 |
+| T-014 | 참고 사례 조사, React/TS/Vite 기반 | 현재 스택 유지, 제품 통합 검수 | ADR-016·017, TS/자체 호스트 VERIFY |
+| T-015 | 실제 메시/선/점·객체 대응·정투영, 큰 모델 표시 개선(PLAN-18) | 대형 실무 모델·추가 유형·기기 성능 | 뷰포트 SPIKE, 네이티브 VERIFY |
+| T-016 | 요청 목록·실행·결과·작업 이력의 실제 API 통합, 대화 세션(T-061) | 전체 출시 수용·실무 사용성 | 네이티브 VERIFY, TS/자체 호스트 VERIFY |
 | T-017 | 표/검토본/확장·Inspector 수량표·외부 의견 초안 채택 | 실무 과업·복수 객체 선택·자동 공유 연결 | 네이티브 VERIFY, 공유 VERIFY |
-| T-018 | 실제 구독 AI→조회/SDK 코드→검증된 Rhino 후보·소유 편집 사본 적용 | 복잡한 목표·여러 문서 개입·일반 호스트 과업 | TS/자체 호스트 VERIFY |
+| T-018 | 실제 구독 AI → 조회/SDK 코드 → 연결 Rhino 바로 실행·되돌리기(자동 모드), 계획 모드의 계획 카드 | 복잡한 목표·여러 문서 개입·일반 호스트 과업 | [바로 적용 VERIFY](../tdd/VERIFY-2026-09-30-direct-apply-rhino.md), [A/B SPIKE](../tdd/SPIKE-2026-09-30-ai-parity-ab.md) |
 
-현재 지원의 중요한 경계는 다음과 같다.
+**개발 기반**
 
-- 자체 Rhino 편집 사본은 Brep/Extrusion/Curve/Mesh/Point와 기존 층 범위에서 적용한다. 기존 그룹 소속을 유지한 객체 수정은 실증했으며 그룹 표/소속·재질·층/문서 자원 변경과 미확인 관계는 거절한다. AI 코드는 작업 사본에서 실행하며 편집 창에는 검토한 후보를 적용하는 고정 메서드만 제공한다. 사용자가 연 Rhino 문서도 VIDEConnect 자체 채널로 연결하며 기존 RhinoMCP는 호환 경로다. 현재 연결 구현·합성 검증은 [VERIFY](../tdd/VERIFY-2026-09-28-rhino-attached-sync.md), 사용자 실무 문서 연결은 확인했고 전체 Sync는 10,000개 상한으로 실패했다. 다음은 PLAN-02 대형 문서 Sync다.
-- `sdk-models.editors.json`의 pairing은 재시작 때 PID·시작 시각·실행 파일·포트 소유를 재확인하며 모델 백업/공유에는 포함하지 않는다. 복원 핸들은 새 Rhino 실행·임의 코드 실행·쓰기 재전송을 하지 않는다. 과거 PID를 새 세션에서 재사용하지 않는다.
-- SDK의 동일 기하/계산 버전/입력 해시를 확인한 수량 재사용과 사본 간 변경 요약은 구현됐다. 현재 연결 문서의 객체·속성·레이어 이벤트 기반 선택형 Live Sync는 구현·합성 검증했다. 모든 유형의 관계 보존과 실무 대형 모델 자동 Sync는 완료가 아니다. 작은 SDK JSON 반환은 16 KiB 상한과 생략 여부를 명시한다.
-- ZWCAD 자체 SDK는 능력 표시가 있는 mm·독립 직선 XY LWPolyline과 평면 LINE의 수정/추가/삭제를 지원하며 그룹·확장 사전·XData·잠긴 레이어·선폭/두께 등을 확인하지 못하면 참고 전용이다. 새 지원을 과거 취득 자료에 소급하지 않는다.
-- Rhino 속성 입력은 ObjectAttributes user text의 한정 읽기·사용자 선택 첨부다. geometry dictionary·플러그인 UserData·BIM 관계 추론 전체를 뜻하지 않는다. 세부 한도와 누락 표시는 네이티브 VERIFY를 따른다.
-- 공유 게시/의견 왕복은 명시적 파일 전달이다. 파일의 작성자/서버 접수 정보는 온라인 재인증한 정보가 아니며 원 공개 후보와 manifest를 대조한 로컬 수신으로 표시한다. 500 MiB 바이너리 전송 통과와 별개로 웹 표시 JSON은 64 MiB 한도이며 대형 모델 최적화는 남았다.
-- Rhino 수동 SaveAs 뒤 읽기 전용 안내는 일반 Rhino 사용에서도 발생한다는 사용자 확인이 있다(2026-09-28). 원인은 미해소다. 실제 파일 저장·별도 실행본 재열기 결과와 이 안내를 구분해 기록했다.
-
-증거: [TS/자체 호스트 VERIFY](../tdd/VERIFY-2026-09-22-typescript-foundation.md), [네이티브 VERIFY](../tdd/VERIFY-2026-09-20-native-workspace.md), [공유 VERIFY](../tdd/VERIFY-2026-09-22-cloudflare-sharing.md), [에이전트 도구 SPIKE](../tdd/SPIKE-2026-09-21-agent-tools.md), [뷰포트 SPIKE](../tdd/SPIKE-2026-09-21-viewport-engine.md). [ZWCAD SDK SPIKE](../tdd/SPIKE-2026-09-22-zwcad-sdk.md)도 참조한다. 상세 과거 실행 기록은 이 증거와 Git 이력에 보존하며 이 절은 최신 결과·제약·다음 행동만 유지한다. 전체 완료는 §6.6의 관문으로 판단한다.
-
-
-| 기반 티켓 | 현재 상태 | 상세 |
+| 티켓 | 현재 상태 | 상세 |
 |---|---|---|
 | T-019 · Git 추적·ignore | 제외·패키징 소스 정책 검증 | [PLAN-03](PLAN-03-development-foundation.md#t-019) |
 | T-020 · 비밀정보·배포 보호 | 로컬 스캔·배포 대상 검사 완료; 원격 CI/보호 미검수 | [PLAN-03](PLAN-03-development-foundation.md#t-020) |
 | T-021 · 자동 검증 | 통합 명령·커밋 가드·실패 차단 검증 | [PLAN-03](PLAN-03-development-foundation.md#t-021) |
 | T-022 · 포맷 | 포맷 별도 커밋·재검사 통과 | [PLAN-03](PLAN-03-development-foundation.md#t-022) |
-| T-023 · DB 마이그레이션 | schema 2·백업·실패 복구 검증 | [PLAN-03](PLAN-03-development-foundation.md#t-023) |
+| T-023 · DB 마이그레이션 | 이행·백업·실패 복구 검증. 현재 스키마 v5(T-045) | [PLAN-03](PLAN-03-development-foundation.md#t-023) |
 | T-024 · 호스트 의존 경계 | 중립 경로·공통 literal·예외 점검 완료 | [PLAN-03](PLAN-03-development-foundation.md#t-024) |
-| T-032 · Jev 수정 위치 찾기(개발 도구) | `npm run locate` 사용 가능. 실측 정답 파일 5위 안 영어 100%·한국어 100%([SPIKE](../tdd/SPIKE-2026-09-29-jev-locate.md)). 표본 확대·에이전트 비교 남음. 제품 이식은 [PLAN-05 §7](PLAN-05-decision-layer-evaluation.md) 계획만 | [PLAN-03](PLAN-03-development-foundation.md#t-032) |
-| T-033~039 · 구조 분석 jig 1단계 | T-033 완료(애드온). T-034~036 코어(선형 해석·기구 탐지·KDS/AISC 검정·E7), T-037 입력(곡선·솔리드·CAD → 초안·점검·확정), T-038 화면(JIG 탭 구조 분석·판정색) 1차 완료: `npm run test:structure`(Rust 9·노드 28)와 `browser-structure-jig.mjs` 통과. T-039: 설치본 포함 코드 추가, 전체 빌드는 커밋 후, 실제 입력 검수 남음. 남음: AISC E·G·H 예제, KDS 조항 대응, 한국 고유 fixture 검토 | [PLAN-17](PLAN-17-structure-jig.md) |
-| T-041·043·045~048·055·057·063~066 · jig 플랫폼 1차 | T-041·T-043(개발 빌드·합성 문서, 실자료 재확인)·T-045(스키마 v5)·T-046(형식 v3·작업본·실행기·가져오기)·T-066 완료. 남음은 PLAN-22 현황. T-047·048·057 완료(패널 부품 연결 포함, 새 브라우저 시험 미실행), T-055 모의 워커까지(실제 Rhino 남음), T-063 서버·화면 구현(화면 브라우저 시험 남음), T-064 서버 경로로 M5 합격, T-065 구현(브라우저 시험 남음). 설치본 반영(플러그인 재빌드 포함)은 릴리스 때 | [PLAN-22](PLAN-22-jig-platform.md) |
-| T-042·044·050~054·056·058·067 · S-06 골조 jig·구조 라이브러리 | M0 완료(T-042·T-044, 기준선 9/33/6/곡선 19, [VERIFY](../tdd/VERIFY-2026-09-29-s06-frame.md) v0.2는 제품 Sync로 재현). T-050·052·054 완료, T-051 합성 검증(실데이터 남음), T-053 그려진 배치·기구 사전 점검 구현(실데이터 해석 불안정 남음), T-056 ⑨~⑫ 연결·합성 검증(실제 Rhino·단면 적용 경로 남음), T-058 01~05·부록 구현(실데이터는 해석 안정 뒤), T-067은 2차 | [PLAN-23](PLAN-23-s06-frame-jig.md) |
-| T-049·059~062 · AI 대화·경로 | T-049 작성기 연결까지 완료, T-059 완료(SPIKE ①②⑤⑥⑦⑧ 합격·③ 실패·④ 조건부), T-060 완료, T-061 서버·화면 완료, Codex 세션 이어 실행 켬·계정 한도 인계 서버 흐름(한도 카드 화면·브라우저 시험 남음), T-062 설치본 도구 연결 완료(대화 읽기 도구의 `targetRef` 경로 남음) | [PLAN-24](PLAN-24-ai-conversations.md) |
-| T-068 · 계정 관리를 AccountSwitch로 | 2026-09-30 사용자 결정([ADR-025](../decisions/ADR-025-accounts-in-accountswitch.md)): VIDE는 기본 로그인만 쓰고 계정 관리는 AccountSwitch가 맡는다. 0단계(AccountSwitch 설치) 진행. 1단계부터는 다른 세션의 대화·계정 파일 작업이 커밋된 뒤 | [PLAN-25](PLAN-25-accounts-to-accountswitch.md) |
-| T-069~075 · 바로 적용·계획/자동 모드 | T-069 문서 완료([ADR-022](../decisions/ADR-022-direct-apply-plan-auto.md)). T-070(Rhino)·T-071(ZWCAD) 코드·스크래치 빌드 완료, 플러그인 재빌드·설치와 실호스트 확인 남음. T-072 서버 구현·단위 검증(안전 점검 7건 반영), T-073 화면 구현(브라우저 시험 남음), T-074 jig 만들기 바로 적용(실제 Rhino 남음), T-075 자체 질문 SPIKE 합격·어댑터는 꺼 둠(2026-10-01 기본으로 켜기로 결정, [ADR-026](../decisions/ADR-026-chat-stage-and-skill-jigs.md), 적용은 T-076) | [PLAN-24](PLAN-24-ai-conversations.md#direct-apply) |
-| T-076~080 · 대화 중심 구조(skill 시작·토큰·목업·셸·층 평면) | 2026-10-01 결정([ADR-026](../decisions/ADR-026-chat-stage-and-skill-jigs.md)). T-076·077 구현·시험 완료, T-078 사용자 검토 대기, T-079 막힘(T-078 VERIFY 전), T-080 대기(SPEC-02.17 보완 먼저) | [PLAN-26](PLAN-26-chat-stage.md) |
-| T-088 · 대화별 모델 고정·모델 바꾸기 = 새 탭 | 2026-10-01 결정([ADR-021](../decisions/ADR-021-conversation-sessions.md) 보완). 구현·단위·브라우저 시험 완료(2026-10-01). 실제 CLI로 모델 바꾸기 인계 확인은 설치본 릴리스 때 | [PLAN-24](PLAN-24-ai-conversations.md#t-088) |
+| T-032 · Jev 수정 위치 찾기(개발 도구) | `npm run locate` 사용 가능. 정답 파일 5위 안 영어·한국어 100%([SPIKE](../tdd/SPIKE-2026-09-29-jev-locate.md)). 표본 확대·에이전트 비교 남음. 제품 이식은 [PLAN-05 §7](PLAN-05-decision-layer-evaluation.md) 계획만 | [PLAN-03](PLAN-03-development-foundation.md) |
+| T-040 · 진단 로그 | 엔진 쪽 완료(`0ba4f1a`): `logs/engine-*.jsonl`(14일), 내부 오류 스택, 작업 시작·끝, 셸의 엔진 오류 출력. 엔진 종료 코드·메모리 기록은 T-082. 남음: Rhino·ZWCAD 플러그인 쪽 오류 로그 | [PLAN-03](PLAN-03-development-foundation.md), `tests/server/diagnostics.test.mjs` |
+
+**구조 분석 jig 1단계([PLAN-17](PLAN-17-structure-jig.md))**
+
+| 티켓 | 현재 | 남은 것·다음 | 증거 |
+|---|---|---|---|
+| T-033~038 | 1차 완료: 애드온, Rust 코어(선형 해석·기구 탐지·KDS/AISC 검정), 입력(곡선·솔리드·CAD → 초안·점검·확정), JIG 탭 화면 | AISC E·G·H 예제, KDS 조항 대응, 한국 고유 fixture 검토 | `npm run test:structure`, `browser-structure-jig.mjs` |
+| T-039 | 설치본에 코어·라이선스 포함 | 실제 Rhino·CAD 입력 검수 | PLAN-17 |
+
+**jig 플랫폼·S-06·AI 대화·대화 중심 구조·안정성(T-041~087)**
+
+| 티켓 | 현재 | 남은 것·다음 | 증거 |
+|---|---|---|---|
+| T-041 겹침 층·jig 비모달 | 완료 | 겹침의 깊이 검사, 850 px 이하 아래 판 시험 | [PLAN-22](PLAN-22-jig-platform.md#t-041), `browser-jig-overlay.mjs` |
+| T-042 geometry-kit 진단 함수 | 완료 | — | [PLAN-23](PLAN-23-s06-frame-jig.md), `tests/core/geometry-kit.test.mjs` |
+| T-043 Sync 범위 수·레이어 표·레이어 한정 읽기 | 완료(개발 빌드·실자료 재확인) | 화면 배지 브라우저 회귀, 큰 문서의 조사 비용 측정 | [PLAN-22](PLAN-22-jig-platform.md#t-043), [VERIFY](../tdd/VERIFY-2026-09-29-s06-frame.md) |
+| T-044 S-06 M0 진단 | 완료(기준선 9/33/6/19 재현) | 토목 모델을 제품 Sync로 재대조, 임시 진단 경로 제거(T-051) | [VERIFY](../tdd/VERIFY-2026-09-29-s06-frame.md) |
+| T-045 저장 스키마 v5 | 완료 | 규모 DB의 시작 시간 측정 | `tests/core/migrations.test.mjs` |
+| T-046 jig 형식 v3·작업본·실행기·가져오기 | 완료 | `stale-input`의 현재 판 채우기 | [PLAN-22](PLAN-22-jig-platform.md#t-046), `tests/core/jig-runner.test.mjs` |
+| T-047 작업공간 탭 | 완료. 2026-10-01부터 레일이 고정 화면을 맡고 위쪽 줄은 열린 작업본만 보인다(T-079) | — | `browser-workspace-tabs.mjs` |
+| T-048 선언형 패널·부품 | 완료 | 수천 개 겹침의 성능 측정, 역할 카드의 AI 제안(T-051) | `tests/core/jig-panel.test.mjs`, `browser-jig-panel.mjs` |
+| T-049 경로 판정·값 추출·전송 고지 | 완료(작성기 연결 포함) | — | [PLAN-24](PLAN-24-ai-conversations.md), `tests/core/request-route.test.mjs` |
+| T-050 geometry-kit 배치 함수 | 완료 | — | [PLAN-23](PLAN-23-s06-frame-jig.md) |
+| T-051 S-06 ⓪~④ | 합성 검증 완료 | 실데이터 ②~④ 검수, AI 역할 제안 연결, 임시 진단 경로 제거 | [VERIFY m1](../tdd/VERIFY-2026-09-30-s06-frame-m1.md) |
+| T-052 structure-analysis 1차 | 완료(범용 구조 jig 범례·CSV·인용 검사 포함) | `browser-structure-jig.mjs` 실행 기록 | `tests/server/execution-gates.test.mjs` |
+| T-053 ⑤~⑧ 거더·작은보·해석 | 실데이터 해석 `ok`, 개구 둘레 보 | 기둥 13개 세장비 한도 밖(구속 레벨 가정)과 '후보 없음' 묶음은 사용자 판단 | [VERIFY m2](../tdd/VERIFY-2026-09-30-s06-frame-m2.md), [VERIFY m3](../tdd/VERIFY-2026-09-30-s06-frame-m3.md) |
+| T-054 단면 선정·부호·일람표 | 완료 | 부호 접두 표는 S-18 표준 확인 전 가정 | [PLAN-23](PLAN-23-s06-frame-jig.md) |
+| T-055 Rhino에 만들기 | 완료: 합성·S-06 사본의 실제 Rhino 만들기·재만들기·보존·숨긴 레이어 차단. 연결 Rhino는 바로 적용(T-074) | 설치본 플러그인으로 재확인 | [SPIKE](../tdd/SPIKE-2026-09-30-jig-bake.md) |
+| T-056 ⑨~⑫ 단면·일람표·높이·만들기 | 연결·선정 단면 적용·부호 원장 완료. 실제 Rhino에서 상단선 161·부재 127 만들기와 [되돌리기] | 기둥 부재(`member-columns`) 만들기, 부재 재만들기의 사람 수정 보존, `browser-s06-jig.mjs` | [VERIFY m3](../tdd/VERIFY-2026-09-30-s06-frame-m3.md) |
+| T-057 보고서 틀·보고서 화면 | 완료. 보고서는 산출물 탭 안에 있다(T-081) | `JigHost.export` | `tests/core/report.test.mjs`, `browser-report.mjs` |
+| T-058 S-06 보고서 | 01~05·부록 합성 검증 | 실데이터 보고서 | `tests/core/s06-report.test.mjs` |
+| T-059 CLI 판 점검·세션 SPIKE | 완료 | — | [SPIKE](../tdd/SPIKE-2026-09-30-cli-session-resume.md) |
+| T-060 동시 접수 규칙 | 완료(AI 턴 상한 3) | 재시작 때 대기 요청 자동 재개, [다시 기준 잡기] 카드 | [PLAN-24](PLAN-24-ai-conversations.md) |
+| T-061 대화 스레드·세션 | 서버·화면 완료, Claude·Codex 세션 이어 실행, 길이 기준 설정과 새 세션 제안 | 실제 CLI 5턴 토큰 기록. 계정 한도 인계는 T-068에서 뺀다 | `browser-conversations.mjs`(`792e31d`에서 통과) |
+| T-062 대화 도구·질문 카드 | 완료(설치본 도구 연결, 대상이 하나면 `targetRef` 생략) | 호스트 모델링 턴의 `links_layers`·`sync_sample`·`project_*` 연결 | `tests/server/agent-tools-origin.test.mjs` |
+| T-063 만들기 최소판 | 서버·화면·Codex 만들기 턴 구현, 단위 검증 | `browser-make.mjs` 실행 기록, 실제 Codex 만들기 턴 | `tests/server/make-routes.test.mjs` |
+| T-064 M5 수용 | 서버 경로로 합격 | 만들기 탭 화면으로 같은 흐름 확인 | [VERIFY](../tdd/VERIFY-2026-09-30-jig-authoring-m5.md) |
+| T-065 자료 1차·자료 탭 | 구현·단위 검증 | 실제 자료 DB로 화면 확인, `browser-facts.mjs` 실행 기록 | [SPEC-08](../specs/SPEC-08-project-facts.md), `tests/server/facts-routes.test.mjs` |
+| T-066 공유 스냅샷 결함 | 완료 | 운영 설정 점검, staging 배포·D1 `0007`(사용자 요청 때) | `tests/sharing/offline.mjs`, `npm run deployment:check` |
+| T-067 구조 코어 확장 | 2차 | 2차 착수 지시 뒤 | [PLAN-23](PLAN-23-s06-frame-jig.md) |
+| T-068 계정 관리를 AccountSwitch로 | 0단계(AccountSwitch 0.1.2 설치)·1단계 정본 반영·2단계 코드 제거 완료(2026-10-01) | 계정 전환 뒤 세션 이어 쓰기 SPIKE, 3단계 실제 확인, 설치본 릴리스 | [PLAN-25](PLAN-25-accounts-to-accountswitch.md) |
+| T-069 바로 적용 문서 기준 | 완료 | — | [ADR-022](../decisions/ADR-022-direct-apply-plan-auto.md) |
+| T-070 Rhino 바로 실행·되돌리기·보호 | 완료(실제 Rhino 8, 합성 문서) | 설치본 플러그인으로 재확인 | [VERIFY](../tdd/VERIFY-2026-09-30-direct-apply-rhino.md) |
+| T-071 ZWCAD 바로 실행·되돌리기·보호 | 코드 완료, 실호스트 막힘(자동 로드된 0.2.10 연결 플러그인이 개발 빌드를 가림) | 0.2.11 이상 플러그인으로 `.vide/h4/run.mjs` 재실행 | [VERIFY](../tdd/VERIFY-2026-09-30-direct-apply-zwcad.md) |
+| T-072 서버 계획/자동 모드·실행 기록 | 완료(단위 시험, 실제 Rhino 왕복) | — | `tests/server/direct-mode.test.mjs`, [VERIFY](../tdd/VERIFY-2026-09-30-direct-apply-rhino.md) |
+| T-073 화면: 모드 토글·실행 행·확인·계획 카드 | 완료 | — | `browser-direct-mode.mjs`(`792e31d`에서 통과) |
+| T-074 jig 만들기의 바로 적용 | 완료(합성 문서, S-06 사본 상단선·부재) | 기둥 부재 만들기(T-056) | [SPIKE](../tdd/SPIKE-2026-09-30-jig-bake.md), [VERIFY m3](../tdd/VERIFY-2026-09-30-s06-frame-m3.md) |
+| T-075 공급자 자체 질문 | SPIKE 합격. Claude는 기본으로 켬(`d733f52`, `VIDE_NATIVE_QUESTIONS=0`이면 끔). Codex `app-server`는 `VIDE_CODEX_APP_SERVER=1`일 때만 | 실제 대화의 장시간 사용 | [Claude SPIKE](../tdd/SPIKE-2026-09-30-native-questions-claude.md), [Codex SPIKE](../tdd/SPIKE-2026-09-30-codex-app-server.md) |
+| AI 동등성 A/B(PLAN-24 지침 묶음) | 재실행 기준 VIDE 5/5 성공, 시간은 터미널의 2~4배. 관찰 1(되돌리기 뒤 열린 기록)·3(`IsValid`)·4(빈 캡처)는 `d8fb2ba`에서 고침 | 같은 절차로 다시 재기, 공정한 B(사람이 실행) | [SPIKE](../tdd/SPIKE-2026-09-30-ai-parity-ab.md), [지침 묶음 SPIKE](../tdd/SPIKE-2026-09-30-instruction-bundle.md) |
+| T-076 skill 시작·카탈로그·`jig_open`·`ui_go` | 구현·단위·브라우저 시험 완료 | 실제 Claude CLI의 자체 질문 + jig 대화, 확신 낮을 때 두 갈래 질문, `summary.kpi` | [PLAN-26](PLAN-26-chat-stage.md) |
+| T-077 토큰층·CSS 정리 | 완료 | 기능용 색 리터럴(`app.ts` 붓 색 등) | [PLAN-26](PLAN-26-chat-stage.md) |
+| T-078 정적 목업 | 종료. 검토 결과를 T-079에 넘기고 목업은 폐기(`3a9617f`). 화면 검토는 `tools/mockups/ui-preview/` | — | [PLAN-26](PLAN-26-chat-stage.md) |
+| T-079 셸 정리(좁힌 범위) | 완료(설치 전): 레일의 고정 화면·대시보드·프로젝트 자료·피드백·다크/라이트, 위쪽 줄은 열린 작업본만, 연결 파일·레이어 목록 | 피드백 폼 주소(사용자), 대시보드 내용 결정 | `16eb911`, `633f694`, `browser-workspace-tabs.mjs` |
+| T-080 층 평면 보기 | 대기 | SPEC-02.17 보완 먼저 | [PLAN-26](PLAN-26-chat-stage.md) |
+| T-081 산출물 탭 | 페이지 구현·브라우저 시험 완료(설치 전) | 도면 시트·생성형 렌더링 기능(각 SPEC 먼저) | `3a9617f` |
+| T-088 대화별 모델 고정·모델 바꾸기 = 새 탭 | 구현·단위·브라우저 시험 완료(`0fb9506`) | 실제 CLI로 모델 바꾸기 인계 확인(설치본 릴리스 때) | [PLAN-24](PLAN-24-ai-conversations.md#t-088) |
+| T-082 안정성 0단계 진단·복구 | 구현·자동 검증(`9aac8cd`) | 실제 창의 화면 복구 확인, 설치본 릴리스 | [PLAN-27](PLAN-27-sync-storage-stability.md) |
+| T-083 객체 단위 저장 | 계획 | ARCH-01 저장 계약 작성과 사용자 확인 뒤 착수 | [PLAN-27](PLAN-27-sync-storage-stability.md), [RESEARCH-13](../research/RESEARCH-13-stability-audit.md) |
+| T-084 엔진 주관 Sync | 계획. 문서별 Sync 합치기는 먼저 구현(`fda1e5d`) | SPEC-01.11의 Sync 주체 보완 뒤 착수 | [PLAN-27](PLAN-27-sync-storage-stability.md) |
+| T-085 화면 | 계획 | T-083 뒤 | [PLAN-27](PLAN-27-sync-storage-stability.md) |
+| T-086 상한 | 계획 | T-083~085 뒤 | [PLAN-27](PLAN-27-sync-storage-stability.md) |
+| T-087 정리·Rhino/ZWCAD 쪽 | 계획. 사본·작업 폴더 정리와 읽기 전용 감지 기록은 먼저 구현(`fda1e5d`) | 설치본 확인, 나머지 정리·호스트 쪽 항목 | [PLAN-27](PLAN-27-sync-storage-stability.md) |
+
+현재 지원의 중요한 경계는 다음과 같다.
+
+- 연결된 Rhino·ZWCAD 문서의 AI 편집은 자동 모드에서 실행 하나당 되돌리기 기록 하나로 바로 실행한다. 되돌리기로 쉽게 고칠 수 없는 동작(보호 목록)은 확인 카드를 거친다([ADR-022](../decisions/ADR-022-direct-apply-plan-auto.md), SPEC-02.13). 작업 사본·후보 경로는 '검토'와 jig 내부 사본·가져오기에만 남는다. 사본 경로의 적용 지원 범위(Brep/Extrusion/Curve/Mesh/Point, 기존 층, 그룹 소속 유지)는 그대로다.
+- 문서당 Sync 객체 상한은 20,000개다(`WorkerScene.MaxObjects`, PLAN-27 T-086에서 올린다).
+- `sdk-models.editors.json`의 pairing은 재시작 때 PID·시작 시각·실행 파일·포트 소유를 재확인하며 모델 백업/공유에는 포함하지 않는다. 복원 핸들은 새 Rhino 실행·임의 코드 실행·쓰기 재전송을 하지 않는다.
+- 객체·속성·레이어 이벤트 기반 선택형 Live Sync는 구현·검증했다. 모든 유형의 관계 보존은 완료가 아니다. 작은 SDK JSON 반환은 16 KiB 상한과 생략 여부를 명시한다.
+- ZWCAD 자체 SDK는 능력 표시가 있는 mm·독립 직선 XY LWPolyline과 평면 LINE의 수정/추가/삭제를 지원한다. 그룹·확장 사전·XData·잠긴 레이어 등을 확인하지 못하면 참고 전용이다.
+- Rhino 속성 입력은 ObjectAttributes user text의 한정 읽기·사용자 선택 첨부다. 세부 한도와 누락 표시는 네이티브 VERIFY를 따른다.
+- 공유 게시/의견 왕복은 명시적 파일 전달이다. 500 MiB 바이너리 전송 통과와 별개로 웹 표시 JSON은 64 MiB 한도다.
+- Rhino 수동 SaveAs 뒤 읽기 전용 안내는 VIDE 없이 Rhino를 써도 생긴다(2026-09-28 사용자 확인). 원인은 미해소이며, 연결 문서가 읽기 전용이면 엔진 기록에 남긴다(`fda1e5d`).
+
+운영 조건: 개발 위임·중단 기준은 [가이드 §12](../../DEVELOPMENT_GUIDE.md#development-delegation)를 따른다. Cloudflare 시험은 무료·메일 없는 가입/소유자 승인 모드다. 유료 전환·도메인 구매·메일 발송은 승인되지 않았다. R2 기존 사용량 때문에 원격 모델 업로드는 차단돼 있으며 무료 시험 조건을 확인하기 전 해제하지 않는다([조건/재개 기준](../tdd/VERIFY-2026-09-24-sharing-host-roundtrip.md)). 기존 사용자 자료·열린 호스트는 시험용으로 변경하지 않는다. 대표 실무 과업 선정은 사용자 지시대로 후순위다.
+
+증거: [TS/자체 호스트 VERIFY](../tdd/VERIFY-2026-09-22-typescript-foundation.md), [네이티브 VERIFY](../tdd/VERIFY-2026-09-20-native-workspace.md), [공유 VERIFY](../tdd/VERIFY-2026-09-22-cloudflare-sharing.md), [에이전트 도구 SPIKE](../tdd/SPIKE-2026-09-21-agent-tools.md), [뷰포트 SPIKE](../tdd/SPIKE-2026-09-21-viewport-engine.md), [ZWCAD SDK SPIKE](../tdd/SPIKE-2026-09-22-zwcad-sdk.md). 전체 완료는 §6.6의 관문으로 판단한다.
 
 ### 6.6 전체 완료 관문
 
-완료 판정은 PRD §14.3·§15·§16을 따른다. 구현 증거는 아래 묶음으로 모으고 각 VERIFY에 적용 AC의 결과를 남긴다.
+완료 판정은 PRD §14.3·§15·§16을 따른다. 구현 증거는 아래 묶음으로 모으고 각 VERIFY에 적용 AC의 결과를 남긴다. AI 편집의 기준은 [ADR-022](../decisions/ADR-022-direct-apply-plan-auto.md)의 바로 적용과 계획/자동 모드다. 후보·원본 적용 단계는 관문에 요구하지 않으며, '검토'와 jig 내부 사본에 남은 사본 경로는 해당 기능의 VERIFY로 따로 확인한다.
 
 | 관문 | 필요한 실제 증거 | 담당 티켓 |
 |---|---|---|
-| 각 호스트 완결 | 읽기·공간 입력·생성/수정·후보·개입·원본 적용·기본 도구 편집·저장/재열기 | T-003·005·006·018 |
-| 연계·병렬·보호 | 복수 문서 대상 고정, CAD→Rhino 실제 자료, 직접 수정·늦은 결과·부분 실패·불명확 복구 | T-001·005·006 |
+| 각 호스트 완결 | 읽기·공간 입력·계획 모드의 계획 카드·자동 모드의 바로 실행(바뀐 객체 목록)·[되돌리기]와 호스트 Undo·보호 동작 확인 카드·개입·기본 도구 편집·사용자 저장/재열기 | T-003·005·006·018 |
+| 연계·병렬·보호 | 복수 문서 대상 고정, CAD→Rhino 실제 자료, 같은 문서 쓰기 대기열, 사람의 직접 수정·늦은 결과·부분 실패(호스트별 되돌리기)·불명확 결과의 지문 확인 | T-001·005·006 |
 | 기록·수량·전달 | AI 단절 입력 보존, 근거/단위/미상 집계, 검토본 불변·비교, 표/요약 실제 열람 | T-002·007 |
 | 외부 웹 | 실제 게시·의견·로컬 채택·수정, PC 종료 지속성, 권한 거절, 선언 브라우저/펜 입력 | T-009·010 |
 | 확장·설치 | 실제 확장 실행·실패·비활성화, 별도 PC 설치·재개·제거 후 자료 보존 | T-008·011 |
@@ -230,7 +281,7 @@ Jev는 기존 계정이 없다는 사용자 확인에 따라 가입 재개까지
 
 ## 7. 테스트·수용 검수
 
-결정적 권한·버전·큐 전이는 `node:test`로 TDD한다. 실제 저장 파일을 닫고 다시 여는 시험과 프로세스 중단 복구를 포함한다. UI·CLI·실호스트는 모의 테스트와 별도 결과로 기록한다. 호스트별 전체 흐름은 읽기→네이티브 생성/수정→실제 후보→개입→원본 적용→기본 도구 재편집→저장·재열기다. 같은 호스트 복수 인스턴스, 두 호스트 부분 실패, 원본 직접 수정, 늦은 결과, 응답 유실을 포함한다.
+결정적 권한·버전·큐 전이는 `node:test`로 TDD한다. 실제 저장 파일을 닫고 다시 여는 시험과 프로세스 중단 복구를 포함한다. UI·CLI·실호스트는 모의 테스트와 별도 결과로 기록한다. 호스트별 전체 흐름은 읽기→계획(계획 모드)→바로 실행(자동 모드)→개입→[되돌리기]·호스트 Undo→기본 도구 재편집→사용자 저장·재열기다([ADR-022](../decisions/ADR-022-direct-apply-plan-auto.md)). 같은 호스트 복수 인스턴스, 두 호스트 부분 실패, 사람의 직접 수정, 늦은 결과, 응답 유실을 포함한다.
 
 외부 웹은 로컬 PC를 종료한 채 마지막 게시본을 열고 의견을 제출한다. 서버의 원격 실행 거절도 확인한다. 확장은 실제 등록·실행·진행·개입·실패·비활성화를 검수한다. 집계는 지원 범위의 기준·단위·미상 값을 확인하고 CSV·HTML을 별도 프로그램에서 연다.
 
@@ -250,7 +301,7 @@ PRD §16.4 세 대표 과업과 ADR-006·012를 유지한다. OQ-06·14의 목�
 
 ### 7.2 대표 과업의 구체 시험 자료와 판정
 
-다음 수치는 기능이 의도대로 이어지는지 확인할 **합성 시험 입력**이며 실제 프로젝트 규모·성능 목표가 아니다. 좌표 단위는 m로 설명하고 호스트 mm 시험에는 명시적으로 환산한다. 기하 비교 허용 오차는 실제 호스트 문서 tolerance·연산 특성과 OQ-03·14에서 선언한 값을 기록한다. 임의의 법정 면적으로 해석하지 않는다.
+다음 수치는 기능이 의도대로 이어지는지 확인할 **합성 시험 입력**이며 실제 프로젝트 규모·성능 목표가 아니다. 좌표 단위는 m로 설명하고 호스트 mm 시험에는 명시적으로 환산한다. 기하 비교 허용 오차는 실제 호스트 문서 tolerance·연산 특성과 OQ-03·14에서 선언한 값을 기록한다. 임의의 법정 면적으로 해석하지 않는다. ADR-022 이후 아래의 '후보'는 자동 모드의 실행 결과(바뀐 객체 목록과 되돌리기 기록)로, '적용'은 그 결과를 유지하는 것으로 읽는다. 사본 후보는 '검토'를 고른 경우에만 생긴다.
 
 **과업 A — 각 호스트에서 경계 수정과 후속 지시**
 
@@ -331,4 +382,4 @@ git config --get core.hooksPath
 
 ### 9.4 후속 연구의 실행 계획
 
-[Jev 판정 계층 평가 PLAN-05](PLAN-05-decision-layer-evaluation.md)와 [CLI 계정 프로필 PLAN-06](PLAN-06-cli-account-profiles.md)에 선행 조건·변경 범위·검증·선택 기준을 정리했다. 연구 사실은 RESEARCH-02·03에 보존한다. 기존 실행+코드 규칙을 판정 기준선으로 유지하며 인코더/Jev 도입을 확정하지 않는다. 계정 관리는 수동 전환과 공식 CLI 격리 확인부터 시작한다. 연구 계획 작성은 로컬 제품 완결이나 해당 기능 구현 완료가 아니다.
+[Jev 판정 계층 평가 PLAN-05](PLAN-05-decision-layer-evaluation.md)에 선행 조건·변경 범위·검증·선택 기준을 정리했다. 연구 사실은 RESEARCH-02·03에 보존한다. Jev는 모델 자동 선택·요청 경로·이전 대화 고르기([PLAN-19](PLAN-19-request-routing.md))와 개발 도구(T-032)에 쓰고 있으며, 판정 계층 전체의 도입은 PLAN-05의 평가 뒤 정한다. 계정 관리는 [ADR-025](../decisions/ADR-025-accounts-in-accountswitch.md)에 따라 외부 AccountSwitch가 맡고, VIDE는 각 CLI의 기본 로그인만 쓴다([PLAN-25](PLAN-25-accounts-to-accountswitch.md)). PLAN-06의 계정 프로필 계획은 대체됐다. 연구 계획 작성은 로컬 제품 완결이나 해당 기능 구현 완료가 아니다.

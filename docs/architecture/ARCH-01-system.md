@@ -2,10 +2,10 @@
 id: ARCH-01
 title: VIDE 기술 구조와 구현 계약
 status: review
-version: 0.55
+version: 0.56
 updated: 2026-10-01
 owner: agent:codex
-related: [SPEC-00, SPEC-02, SPEC-03, SPEC-04, PLAN, PLAN-20, PLAN-24, ADR-014, ADR-015, ADR-016, ADR-017, ADR-021, ADR-022, ARCH-03]
+related: [SPEC-00, SPEC-02, SPEC-03, SPEC-04, PLAN, PLAN-20, PLAN-24, ADR-014, ADR-015, ADR-016, ADR-017, ADR-021, ADR-022, ADR-025, PLAN-25, ARCH-03]
 ---
 
 # VIDE 기술 구조와 구현 계약
@@ -14,7 +14,7 @@ related: [SPEC-00, SPEC-02, SPEC-03, SPEC-04, PLAN, PLAN-20, PLAN-24, ADR-014, A
 
 ## 1. 구조와 확정 스택
 
-계정 로그인은 로컬 제어기의 공급자별 메모리 lease와 소유 CLI 프로세스로 관리한다. `/api/v1/accounts/login` POST는 관리 프로필 ID만 받으며 기본 프로필은 거절한다. GET은 비밀 없는 진행 상태, `/accounts/login/cancel` POST는 소유 로그인 중단 요청이다. 환경은 실행 어댑터와 동일한 구독 전용 정리를 거치고 서버가 검증한 설정 디렉터리만 주입한다. 원시 인증 출력은 버린다. 종료 코드 0과 공식 status 성공을 모두 확인해야 succeeded다. 실행 중 서버 종료 시 로그인도 종료하며 저장된 running 숫자로 재시작 로그인을 복원하지 않는다.
+AI 구독 계정의 추가·로그인·로그아웃·제거·전환·자동 전환은 외부 프로그램 AccountSwitch가 맡는다([ADR-025](../decisions/ADR-025-accounts-in-accountswitch.md)). VIDE는 각 CLI의 기본 로그인만 쓰고 현재 계정과 사용량을 읽기만 한다(§7 「CLI 기본 로그인 실행 경계」). VIDE 안의 계정 관리 API·관리 프로필 주입은 [PLAN-25](../plans/PLAN-25-accounts-to-accountswitch.md) 2단계에서 빼는 중이며(2026-10-01) 이 문서의 계약이 아니다.
 
 요청 실행 상한은 선택적 `executionLimits: { maxToolCalls, maxHostCommands, timeoutSeconds }`로 접수·저장한다. 정수 범위는 각각 1~100, 1~48, 30~600이며 미지정 이전 요청은 PLAN-02의 기존 기본값을 사용한다. 연계 요청의 도구 호출은 공유 라우터 전체 상한, 호스트 명령은 대상별 상한이다. CLI 응답 시간 제한은 공급자 실행에 전달하고 도구 capability 유효 시간은 해당 시간에 60초를 더하되 600초를 넘기지 않는다. 대기/호스트 기동과 이미 시작된 네이티브 연산의 안전한 종료 대기는 AI 응답 시간과 구분한다. 초안·개입·복원은 명시한 값을 보존하고 기존 요청의 상한을 소급 변경하지 않는다.
 
@@ -28,7 +28,7 @@ TypeScript·React·Vite·CSS와 Three.js, TypeScript·Node.js 로컬 제어 서�
 
 - `src/core/`: 프로젝트 저장·버전 검사·명령 상태·대상 격리. 네트워크와 공급자에 독립된 순수 검증 및 저장 계층.
 - `src/server/`: 127.0.0.1 제어 서버, 세션 인증, API, 이벤트·파일 제공. 정확한 Host·Origin 검사와 별도 호스트 인증을 적용한다.
-- `src/ui/`: Design의 SCR-01~11을 구성하는 로컬 브라우저 화면. 표시 상태에서 권한을 추론하지 않는다.
+- `src/ui/`: Design §12의 SCR을 구성하는 로컬 브라우저 화면. 표시 상태에서 권한을 추론하지 않는다.
 - `src/ai/`: CLI 프로세스 관리·자료 허용 목록·구조화 결과 검증. 셸 문자열 대신 실행 파일과 인자 배열을 사용한다.
 - `hosts/rhino/`, `hosts/zwcad/`: 네이티브 문서 식별·조회·바로 적용 실행(되돌리기 기록)·되돌리기·결과 확인(§4 「바로 적용 경로」). 호스트 UI/문서 실행 문맥에서만 쓰기.
 - `src/sharing/`: 외부 게시본·검토 의견 서비스. 로컬 제어 API와 인증을 공유하지 않는다.
@@ -40,7 +40,7 @@ TypeScript·React·Vite·CSS와 Three.js, TypeScript·Node.js 로컬 제어 서�
 
 #### 의존 방향과 폴더 책임
 
-새 에이전트의 도구 호출은 VIDE의 권한·대상 확인을 거쳐 호스트에 도달한다. application/persistence는 책임 경계이며 아래 모든 폴더의 즉시 생성을 요구하지 않는다. 현재 코드의 이행은 PLAN §6.5를 따른다.
+새 에이전트의 도구 호출은 VIDE의 권한·대상 확인을 거쳐 호스트에 도달한다. application/persistence는 책임 경계이며 폴더로 만들지 않았다(2026-10-01 현재 `src/` 아래 폴더는 `ai`·`contracts`·`core`·`desktop`·`jigs`·`native`·`server`·`sharing`·`ui`다). 현재 코드의 이행은 PLAN §6.5를 따른다.
 
 ```text
 로컬 UI → 로컬 API → application → core / persistence
@@ -52,21 +52,21 @@ TypeScript·React·Vite·CSS와 Three.js, TypeScript·Node.js 로컬 제어 서�
 
 AI·웹·UI가 네이티브 명령 큐나 DB에 직접 쓰는 경로는 두지 않는다. application은 조건·권한·선후관계를 조합하며 core는 상태 전이와 식별·버전 규칙을 검사한다. 원본 변경은 호스트 어댑터가 소유하고, 성공 보고만으로 끝내지 않고 결과 확인 자료를 반환한다.
 
-| 경로 | 계획된 책임 | 의존 제한 |
+| 경로 | 책임 | 의존 제한 |
 |---|---|---|
 | `src/contracts/` | 요청/응답·이벤트·런타임 검증·표시 DTO | 프레임워크·SQLite·호스트 SDK 참조 없음 |
-| `src/application/` | 프로젝트·작업·Sync·개입·적용·게시 유스케이스 | 저장/호스트/AI 포트에 의존 |
-| `src/core/` | 순수 정책·상태 전이·의존성 검사 | HTTP·UI 참조 없음; 기존 store는 단계적으로 분리 |
-| `src/persistence/` | SQLite 저장소·마이그레이션·자산 저장·이벤트 outbox | 원본 CAD 편집 없음 |
-| `src/server/` | 로컬 세션·API·이벤트·허용 자산 | application을 호출하고 업무 상태를 중복 결정하지 않음 |
-| `src/ui/` | shell, workspace, input, tasks, results, review, settings | 공통 데이터 접근 계층으로만 읽기/행동; 직접 CLI 호출 없음 |
-| `src/viewer/` | 표시 형상·선택 대응·좌표/평면·핀·스케치 렌더링 | 네이티브 쓰기/원본 편집 커널 없음 |
-| `src/ai/` | Claude/Codex 실행·진행·취소·도구 호출 | 제품 도구가 노출하는 범위 제한; 임의 코드의 OS 격리와 구분 |
-| `src/hosts/` | 로컬 어댑터 연결·명령 전달·결과 수신 | 호스트별 API는 `hosts/<host>/` 내부 |
+| `src/core/` | 순수 정책·상태 전이·의존성 검사, SQLite 저장소·마이그레이션(`store.ts`·`migrations.ts` 등) | HTTP·UI 참조 없음 |
+| `src/server/` | 로컬 세션·API·이벤트·허용 자산, 실행 조율(`execution.ts`·`direct-mode.ts`·`sdk-execution.ts`·`zwcad-sdk-execution.ts`)과 경로 모듈(`jig-routes.ts`·`make-routes.ts`·`facts-routes.ts`·`conversations.ts`) | 업무 상태를 core와 중복 결정하지 않음 |
+| `src/ui/` | shell, workspace, input, tasks, results, review, settings, 뷰포트(`viewport.ts`) | 공통 데이터 접근 계층(`gateway.ts`)으로만 읽기/행동; 직접 CLI 호출 없음 |
+| `src/ai/` | Claude/Codex 실행·진행·취소·도구 호출, VIDE 지시 묶음(`instructions/`) | 제품 도구가 노출하는 범위 제한; 임의 코드의 OS 격리와 구분 |
+| `src/jigs/` | jig 목록·Sync jig·구조 jig·자료(`catalog.ts`·`sync.ts`·`structure/`·`knowledge.ts`), jig 런타임(`runtime/`)·공식 라이브러리(`official/`)·Rhino에 만들기(`bake/`) | 물리 계약은 [ARCH-03](ARCH-03-jig-runtime.md) |
+| `src/native/` | 구조 해석 Rust 코어(`structure/`, Node-API 애드온) | [ADR-019](../decisions/ADR-019-structure-jig-rust-core.md), ARCH-02 |
+| `src/desktop/` | PC 프로그램 셸(`shell/`, WinForms·WebView2·Velopack)과 패키징·백업 스크립트 | §6 「PC 프로그램」 |
 | `src/sharing/` | 독립 외부 API·게시본/의견 권한과 저장 포트 | 로컬 명령 큐/CLI 모듈을 배포 의존성에 포함하지 않음 |
-| `extensions/` | 허용 확장 선언·검수 샘플 | 공통 컨텍스트/결과 계약 사용 |
+| `hosts/<host>/` | 호스트 애드인(C#)과 Node 쪽 연결·전송 어댑터(`hosts/common/*.ts`, `hosts/rhino/*.ts`, `hosts/zwcad/*.ts`) | 서버 구현을 import하지 않음(§7) |
+| `extensions/` | 허용 확장 선언·검수 샘플, 프로젝트 jig 소스(`extensions/jigs/`) | 공통 컨텍스트/결과 계약 사용 |
 
-폴더는 해당 티켓 착수 시 생성한다. 현재 `src/core/store.ts`를 한꺼번에 재작성하지 않고 유스케이스별로 포트를 추출한다. 화면별 프로젝트·대상·권한 저장소를 따로 만들지 않는다. 로컬/웹은 뷰어·표·핀·의견 표현을 재사용하되 명령 가능한 데이터 접근 계층을 분리한다.
+이전 계획의 `src/application/`(유스케이스)·`src/persistence/`(저장)·`src/viewer/`(뷰어)·`src/hosts/`(어댑터)는 만들지 않았다. 각 책임은 위 표의 `src/server/`·`src/core/`·`src/ui/`·`hosts/`가 맡는다. 새 폴더는 해당 티켓 착수 시 생성한다. 현재 `src/core/store.ts`를 한꺼번에 재작성하지 않고 유스케이스별로 포트를 추출한다. 화면별 프로젝트·대상·권한 저장소를 따로 만들지 않는다. 로컬/웹은 뷰어·표·핀·의견 표현을 재사용하되 명령 가능한 데이터 접근 계층을 분리한다.
 
 <a id="master-2-2"></a>
 
@@ -141,7 +141,7 @@ AI 경계 선택은 [ADR-013](../decisions/ADR-013-local-coordinator-cli.md), �
 
 **품질과 일관성:** 새 TS/TSX는 strict 타입 검사를 적용한다. 외부 미확인 값은 unknown에서 검증하여 좁히고 any·ts-ignore로 오류를 일괄 숨기지 않는다. 파일은 책임/변경 이유로 나누며 줄 수만 맞추는 분할이나 거대한 공용 utils를 만들지 않는다. 오류는 안정된 코드로 처리하고 비밀 값은 로그·브라우저 번들에 포함하지 않는다.
 
-**자동 검증으로 연결:** 전환 2단계에서 웹/서버 타입 검사와 웹/서버 빌드를 독립 명령으로 구성하고 브라우저의 Node 전용 import를 차단한다. 각 기능 변경은 해당 계약·실패 경로 테스트를 수행하며 화면 변경은 실제 브라우저에서 확인한다. 패키징 변경은 개발 도구 없는 실행을 확인한다. 타입 검사·빌드·필요 테스트가 통과한 기능 묶음별로 커밋한다. 타입 검사(`npm run typecheck`)·웹/서버 빌드 명령은 구현되어 제품 런타임 전체에 통과한다. 이 검사는 아직 커밋 훅·CI에서 강제되지 않으며, 별도 PC 배포 검증은 T-011에 남아 있다.
+**자동 검증으로 연결:** 전환 2단계에서 웹/서버 타입 검사와 웹/서버 빌드를 독립 명령으로 구성하고 브라우저의 Node 전용 import를 차단한다. 각 기능 변경은 해당 계약·실패 경로 테스트를 수행하며 화면 변경은 실제 브라우저에서 확인한다. 패키징 변경은 개발 도구 없는 실행을 확인한다. 타입 검사·빌드·필요 테스트가 통과한 기능 묶음별로 커밋한다. 타입 검사(`npm run typecheck`)·웹/서버 빌드 명령은 구현되어 제품 런타임 전체에 통과하고, 코드가 바뀐 커밋에서는 커밋 훅(`tools/checks/commit.mjs`)이 강제한다(§7). 별도 PC 배포 검증은 T-011에 남아 있다.
 
 새 전역 상태 라이브러리·UI 프레임워크·서버 프레임워크를 기능마다 추가하지 않는다. 기존 기준으로 해결하기 어려운 구체 증거가 있을 때 영향/비용을 기록하고 채택한다. 결정 변경은 ADR과 이 절을 함께 갱신하고 일회성 우회를 영구 기준으로 남기지 않는다.
 
@@ -163,7 +163,7 @@ T-002의 첫 HTTP 구현은 프로젝트 목록·생성과 입력 목록·생성
 
 #### 추가 저장 모델과 식별
 
-아래는 T-013 구현 대상이며 현재 DB schema 1과 구분한다. 모든 하위 레코드는 projectId를 검증한다. revision은 레코드 수정 번호, basisId는 불변 취득 기준, connectionId는 현재 전송 연결, documentSessionId는 열린 문서 세션이다. 저장 파일과 재열기 전 세션의 관계는 확인 기록으로만 연결하며 파일 경로로 쓰기 세션을 복원하지 않는다.
+아래는 T-013의 설계 대상이며 표로 다 만들지 않았다(현재 DB는 schema 5, §5·§7). 실제 행·열은 `src/core/migrations.ts`가 정본이다. 모든 하위 레코드는 projectId를 검증한다. revision은 레코드 수정 번호, basisId는 불변 취득 기준, connectionId는 현재 전송 연결, documentSessionId는 열린 문서 세션이다. 저장 파일과 재열기 전 세션의 관계는 확인 기록으로만 연결하며 파일 경로로 쓰기 세션을 복원하지 않는다.
 
 | 저장 대상 | 핵심 필드·제약 |
 |---|---|
@@ -188,28 +188,24 @@ T-002의 첫 HTTP 구현은 프로젝트 목록·생성과 입력 목록·생성
 
 #### API·이벤트 계약
 
-다음은 계획 API다. 이미 존재하는 프로젝트/입력 API 외에는 구현 전이다. 쓰기 요청은 `requestId`, 재전송 가능한 요청은 `idempotencyKey`, 기존 객체 수정은 `expectedRevision`을 포함한다. 서버가 소속·권한·입력 해시를 검증한다. 수신 확인과 완료 결과를 분리하고 장시간 요청은 202와 operationId를 반환한다.
+실제 경로는 `src/server/server.ts`와 위임 모듈이 정한다. 아래는 2026-10-01 코드의 프로젝트 범위 경로 묶음이다(`/api/v1/projects/:p/…`). 요청은 `workspace_requests` 한 행으로 접수하고(`requests`), 작업·실행·명령을 따로 나눈 이전 계획 API는 만들지 않았다.
 
-| 요청 | 필수 입력 | 응답/후속 관찰 |
+| 묶음 | 경로 | 비고 |
 |---|---|---|
-| POST `/api/v1/projects/:p/scopes` | 목표·대상·조건 | scopeId, revision |
-| POST `/api/v1/projects/:p/connections/:c/sync` | 대상·지원 읽기 범위 | operationId → basisId/completeness 또는 실패 |
-| POST `/api/v1/projects/:p/tasks/:t/runs` | 조건 버전·기준·자료 manifest·providerId·limits | runId, queued; 기준 불일치는 거절 |
-| POST `/api/v1/projects/:p/runs/:r/interventions` | 새 조건·기대 버전 | 지시 접수 ID → 범위별 채택/보류 |
-| POST `/api/v1/projects/:p/runs/:r/stop` | 현재 실행 ID | stopping; 실제 종료는 별도 이벤트 |
-| ~~POST `/api/v1/projects/:p/candidates/:c/apply`~~ | ADR-022로 AI 편집에서 폐기(jig·가져오기 내부용만) | — |
-| POST `/api/v1/projects/:p/requests/:r/undo` | `{executionId}` | 그 실행의 `direct-undo` 결과(§4 「바로 적용 경로」) |
-| POST `/api/v1/projects/:p/requests/:r/confirm` | `{executionId?}` | 202, 보호 확인 카드의 [진행]: 보호를 푼 재실행(§4 「바로 적용 경로」) |
-| POST `/api/v1/projects/:p/requests/:r/continue` | — | 202, 계획 카드의 [진행]: 같은 대화의 자동 모드 요청 |
-| POST `/api/v1/projects/:p/commands/:c/reconcile` | 확인 요청 | 읽기 증거·확인/미반영/미해소; 무조건 재시도 없음 |
-| POST `/api/v1/projects/:p/queries` | 지원 필터·그룹·집계·basisIds | 표·단위·미상·기준·정의 |
-| POST `/api/v1/projects/:p/checkpoints` | 포함 manifest | 불변 검토본 ID 또는 생성 실패 |
-| POST `/api/v1/projects/:p/publications` | 공개 manifest·접근 설정 | 게시 operationId → 서버 확인 게시본 |
-| POST `/review/v1/publications/:p/comments` | 게시본 기준·입력·submissionId | 서버 접수 ID·시각; 실행 요청 필드 거절 |
+| 프로젝트·입력 | `GET·POST /projects`, `PUT·DELETE /projects/:p`, `POST …/thumbnail`, `…/inputs[/:i]`, `…/ai-instructions` | 프로젝트 삭제는 SPEC-01.1 |
+| 요청(AI 턴·Sync·가져오기) | `GET·POST …/requests`, `GET …/requests/:r`, `…/:r/cancel`, `…/:r/interventions`, `…/:r/hide`, `…/:r/questions`, `…/:r/reconcile`, `…/:r/model\|open`, `…/:r/report`, `…/:r/quantities[.csv]`, `…/:r/publication-export` | 상태는 SPEC-00.10 |
+| 바로 적용 | `POST …/requests/:r/undo {executionId}`, `…/:r/confirm {executionId?}`, `…/:r/continue` | §4 「바로 적용 경로」. confirm·continue는 202 |
+| 연결 파일·Sync | `GET·POST …/links`, `PUT …/links/:l`, `POST …/links/:l/remove`, `POST …/links/:l/reads`, `…/live-sync`, `…/capture`, `…/import`, `…/imports/:i/reconcile` | §7 「프로젝트 연결 파일(Link)」 |
+| 사본 적용(jig·가져오기 내부 사본) | `…/applications[/:a[/reconcile]]` | ADR-022로 AI 편집에는 쓰지 않음 |
+| 대화 | `…/conversations[/:c[/close\|reopen\|ledger\|handoff\|account\|answer\|renew\|bind]]` | ARCH-03 §10. `account`·계정 인계는 PLAN-25 2단계에서 빼는 중 |
+| jig·만들기·자료 | `…/jigs…`, `…/jig-instances…`, `…/jig-reports`, `…/jig-drafts…`, `…/skills`, `…/facts…`, `…/jigs/knowledge…`, `…/jigs/structure…`, `…/jigs/sync` | ARCH-03 §7, ARCH-02 |
+| 경로 판정·검토·공유 | `…/route`, `…/route/revert`, `…/reviews…`, `…/review-comparison`, `…/comparison`, `…/table-views…`, `…/shared-feedback`, `…/offline-view…`, `…/extensions/:e/run` | §6 |
+
+그 밖의 전역 경로: `/api/v1/session`·`hello`·`shutdown`·`remote`·`host…`(문서·선택·핀)·`models`·`providers`·`settings/ai|routing|conversations`·`connectors…`·`extensions`·`jigs…`·`accounts`·`accounts/usage`·`accounts/usage-settings`(계정은 읽기 전용, §7). 이전 계획의 `scopes`·`connections/:c/sync`·`tasks/:t/runs`·`runs/:r/interventions|stop`·`candidates/:c/apply`·`commands/:c/reconcile`·`queries`·`checkpoints`·로컬 `publications`는 만들지 않았다. 웹 검토 서버의 의견 접수는 §6이 소유한다. 장시간 요청은 접수 응답과 완료 결과를 나누고, 멱등·기대 버전 검사는 각 경로가 한다.
 
 검증 오류는 400, 미인증/권한 부족은 401/403, 다른 프로젝트의 비공개 자료는 404, 오래된 revision/멱등 ID 변조는 409, 지원 밖 기능은 422로 매핑한다. 상태는 `code`로 판정하고 번역된 문구로 분기하지 않는다.
 
-이벤트는 `{eventId, projectId, sequence, aggregateId, revision, type, occurredAt, payload}`다. DB 갱신과 outbox 저장을 같은 트랜잭션으로 묶고 커밋 뒤 전달한다. SSE `/api/v1/projects/:p/events`로 변경 알림을 보내며 클라이언트는 sequence 중복을 무시한다. 재연결의 누락 범위를 복구할 수 없으면 `resyncRequired`를 보내 정본 DTO를 다시 조회한다. 이벤트 수신은 명령 성공의 대체 증거가 아니다.
+아래 이벤트·SSE 계약은 만들지 않았다(2026-10-01 현재 화면은 요청·연결 상태를 주기 조회한다). 만들 때의 설계로 남긴다. 이벤트는 `{eventId, projectId, sequence, aggregateId, revision, type, occurredAt, payload}`다. DB 갱신과 outbox 저장을 같은 트랜잭션으로 묶고 커밋 뒤 전달한다. SSE `/api/v1/projects/:p/events`로 변경 알림을 보내며 클라이언트는 sequence 중복을 무시한다. 재연결의 누락 범위를 복구할 수 없으면 `resyncRequired`를 보내 정본 DTO를 다시 조회한다. 이벤트 수신은 명령 성공의 대체 증거가 아니다.
 
 <a id="master-4-3"></a>
 
@@ -223,7 +219,7 @@ T-002의 첫 HTTP 구현은 프로젝트 목록·생성과 입력 목록·생성
 
 #### 화면 조회 모델과 gateway
 
-UI는 업무 엔티티의 DB 행을 직접 해석하지 않는다. 아래 조회 모델은 각 프로젝트 범위에서 생성하며 의미는 SPEC, 표시 위치는 Design §12를 따른다. 모든 표시 모델은 실제/합성 출처를 유지한다.
+UI는 업무 엔티티의 DB 행을 직접 해석하지 않는다. 아래 조회 모델과 gateway 행동 목록은 처음 설계이며 이 이름 그대로 만들지 않았다. 실제 화면 데이터 접근은 `src/ui/gateway.ts`가 위 「API·이벤트 계약」의 경로를 부르는 것이고, `CandidateView`·`applyCandidate`는 ADR-022 이후 AI 편집에 쓰지 않는다. 아래 조회 모델은 각 프로젝트 범위에서 생성하며 의미는 SPEC, 표시 위치는 Design §12를 따른다. 모든 표시 모델은 실제/합성 출처를 유지한다.
 
 | 조회 모델 | 필요한 정보 | 소비 화면 |
 |---|---|---|
@@ -251,9 +247,9 @@ gateway는 `getWorkspace`, `getBasis`, `saveInput`, `startTask`, `intervene`, `s
 
 #### 수동 Sync와 실행 결과 표시의 연결
 
-수동 Sync는 사용자가 호스트 현재 상태를 가져오는 경로다. VIDE 자체 작업이 생성한 후보의 결과 재조회는 해당 실행의 결과 표시 경로이며, 사용자가 매 중간 후보마다 다시 Sync해야 볼 수 있는 구조로 만들지 않는다. 이 결과 갱신을 일반 호스트 Live Sync로 확대하지 않는다. 호스트 직접 수정은 수동 Sync 또는 쓰기 전 보호용 재조회로 확인한다. 자동 카메라/선택 동기화는 추가하지 않는다.
+수동 Sync는 사용자가 호스트 현재 상태를 가져오는 경로다. AI 편집과 jig 만들기는 2026-09-30 ADR-022부터 연결 문서 자체를 바꾸므로(§4 「바로 적용 경로」) 바뀐 객체는 실행 기록(`executions[]`의 `changes`)으로 보이고, 화면의 형상은 그 문서의 Live Sync(켜져 있을 때) 또는 수동 Sync가 반영한다. 가져온 파일·검토 jig의 내부 작업 사본 결과는 해당 실행의 결과 표시 경로로 보이며, 사용자가 매 중간 결과마다 다시 Sync해야 볼 수 있는 구조로 만들지 않는다. 자동 카메라 동기화는 추가하지 않는다. Rhino 선택의 문서별 반영과 고정 묶음은 SPEC-01이 정한다.
 
-CAD→Rhino는 native 객체를 통째로 넘기는 대신 선택 경계의 확인된 점열·평면·단위·기준과 사용자 확인 변환을 전달한다. 수정 후보 경계를 후속 입력으로 쓰면 원본 CAD 적용 전에 양쪽 후보를 검토할 수 있다. 관계 저장은 원본/후보 참조와 변환·실행 기준을 함께 남긴다. 일반 DWG↔3DM 변환기나 상시 양방향 동기화로 구현 범위를 바꾸지 않는다.
+CAD→Rhino는 native 객체를 통째로 넘기는 대신 선택 경계의 확인된 점열·평면·단위·기준과 사용자 확인 변환을 전달한다. 수정한 경계를 후속 입력으로 쓸 수 있다. 관계 저장은 원본/후보 참조와 변환·실행 기준을 함께 남긴다. 일반 DWG↔3DM 변환기나 상시 양방향 동기화로 구현 범위를 바꾸지 않는다.
 
 
 <a id="detail-1"></a>
@@ -286,6 +282,8 @@ Rhino/ZWCAD SDK 실행은 기존 요청 result 안의 `progress`로 조회 완�
 
 ### 복구 후보와 후속 초안
 
+> 2026-09-30 [ADR-022](../decisions/ADR-022-direct-apply-plan-auto.md) 이전 사본 경로의 계약이다. 연결 문서의 AI 편집은 §4 「바로 적용 경로」를 쓰므로 이 절은 연결 문서가 아닌 대상(가져온 파일의 작업 사본, 검토 jig)의 실행에만 남는다.
+
 연계 하위 candidate 요청에서 source가 검증된 자체 SDK 후보이고 query>0/execute 시도=0이면 export로 현재 사본을 확인하고 기존 파일/해시를 그대로 참조한다. 결과에 `unchanged: true`, `baseRequestId`, 빈 changes와 실제 progress를 남기며 새 저장 영수증/쓰기를 만들지 않는다. 기존 `hostExecuted`는 실제 호스트에서 후보를 확인했다는 표시로 유지하고 완료 횟수는 0이다. 취소/불명확/컴파일 거절을 거친 요청은 이 경로에 들어가지 않는다. 읽기 실패는 성공으로 감추지 않는다.
 
 연계 후속 초안은 부모의 `targetResults.requestId`를 현재 작업 목록에서 다시 조회한다. 각 하위 요청의 `parentRequestId`, 원 `baseRequestId`, host와 성공/hostExecuted를 확인하고 두 `linkedTargets`를 하위 후보 ID로 교체한다. 원 기준 핀은 논리 ID·nativeId 일치를 검증해 basis만 바꾼다. 다른 참조·좌표 확인·권한·실행 상한은 유지하며 저장/API는 기존 초안과 요청 계약을 사용한다. 보류된 개입 요청은 supersedesRequestId의 종료된 원 요청을 조회해 같은 대상/좌표/권한을 검증하고 그 하위 결과만 사용한다. 입력 조건·첨부는 개입 요청에서 가져온다. 새 실행 ID는 전송 때 부여하며 supersedes 관계를 임의 재전송하지 않는다.
@@ -304,13 +302,13 @@ SDK 영수증 복구 결과에는 `recovered: true`를 둔다. 기존 succeeded�
 
 [ADR-021](../decisions/ADR-021-conversation-sessions.md)의 목적별 대화(SPEC-02.19)를 실행하는 CLI 쪽 계약이다. 대화·공급자 세션·원장의 저장은 [ARCH-03](ARCH-03-jig-runtime.md) §10이 소유한다. 아래 인자와 경로는 PLAN-24의 SPIKE(ADR-021 표의 0·①~⑨) 결과로 확정할 때 고친다.
 
-- **턴 하나 = CLI 실행 하나.** Claude는 대화의 첫 턴에 `--session-id <UUID>`, 이후 턴에 `--resume <UUID>`로 실행한다. 매 턴 인자는 현행 격리 인자(도구 없는 턴·도구 있는 턴 각각)에서 `--no-session-persistence`만 뺀 것이고, 시작 이벤트의 도구·MCP 목록이 그 턴의 허용 목록과 다르면 실행하지 않는다. Codex는 SPIKE ④ 통과 전까지 원장 방식(턴마다 단발 실행 + 원장)이다. 세션 이어 실행이 막힌 공급자·항목도 원장 방식으로 돈다.
+- **턴 하나 = CLI 실행 하나.** Claude는 대화의 첫 턴에 `--session-id <UUID>`, 이후 턴에 `--resume <UUID>`로 실행한다. 매 턴 인자는 현행 격리 인자(도구 없는 턴·도구 있는 턴 각각)에서 `--no-session-persistence`만 뺀 것이고, 시작 이벤트의 도구·MCP 목록이 그 턴의 허용 목록과 다르면 실행하지 않는다. Codex도 세션 방식이다: 첫 턴의 thread를 기록하고 이후 턴은 `exec resume <thread>`로 이어 간다(아래 「AI 실행 인자」, SPIKE ④ [SPIKE-2026-09-30-cli-session-resume](../tdd/SPIKE-2026-09-30-cli-session-resume.md)). 대화의 방식은 열 때 정하며(`SESSION_PROVIDERS`, `src/server/conversations.ts`) Codex의 jig 만들기 대화만 원장 방식(턴마다 단발 실행 + 원장, 초안 파일을 매 턴 자료로 보냄)이다. 세션 이어 실행이 막힌 공급자·항목도 원장 방식으로 돈다.
 - **시스템 프롬프트:** 대화마다 중립 시스템 프롬프트 하나를 쓰고, 턴마다 달라지는 범위·대상·권한·상한은 요청 자료의 '이번 턴 규칙'으로 보낸다. 기록된 프롬프트를 쓰지 않게 하는 옵션(`--system-prompt-snapshot off`)은 SPIKE ⑦ 뒤에 쓰고, 통하지 않으면 한 대화 아래 도구 없는 세션과 도구 있는 세션을 따로 둔다. 4차 물결까지는 Claude가 `--system-prompt`로 공급자 기본 프롬프트를 한 줄 중립 지시로 바꾸고, Codex는 `developer_instructions`에 같은 뜻의 중립 지시를 넣는다.
 - **VIDE 지시 묶음(적용 중, 2026-09-30 5차 물결):** 공급자 기본 시스템 프롬프트를 바꾸지 않고 그 뒤에 VIDE 지시 묶음을 **덧붙인다**. Claude는 `--append-system-prompt`, Codex는 `developer_instructions`로 같은 본문을 보낸다. 묶음은 모드별(공통·모델링·자료·만들기) 본문과 프로젝트별 추가분으로 나누며 원본은 `src/ai/instructions/`에 둔다. 공급자 skill·plugin은 계속 끄고(격리), 쓸모 있는 skill의 내용은 묶음 안으로 옮긴다. 이번 턴 규칙·격리 인자·시작 이벤트의 도구 검사는 그대로다. 쓰기는 자동 모드의 `execute`(`direct-execute`, §4 「바로 적용 경로」)만 쓰고, 계획 모드 턴에는 쓰기 도구가 없다(ADR-022). 모드별 확정 인자는 아래 「AI 실행 인자」가 소유한다.
 - **작업 폴더:** 매 턴 저장소·데이터 폴더 밖의 빈 임시 폴더다. jig 만들기 대화만 초안 폴더를 붙인다(ARCH-03 §2.3).
 - **CLI 판 확인:** 실행 전 `--version`(60초 캐시)을 검증한 판 범위(`cli-compat.json`)와 비교해 밖이면 실행을 거절하고 안내한다. `--bare` 기본화 같은 인증 방식 전환의 실패 신호는 `CLI_MODE_CHANGED`로 분류하고 멈춘다. 가능하면 검증한 판의 실행 파일 경로를 고정한다.
 - **한 세션을 두 실행이 쓰지 않는다.** 종료를 확인하지 못한 턴 뒤에는 그 세션을 `lost`로 두고, 이전 프로세스의 종료를 확인한 뒤 인계 자료로 새 세션을 연다.
-- **공급자 기록 관리:** 대화를 닫고 30일 뒤 `provider_sessions`의 세션 ID로 해당 계정 프로필의 공급자 기록을 지우고, 버린 jig 초안의 기록은 바로 지운다. 공급자 기록은 백업 대상이 아니다. 기본 로그인 프로필의 설정 경로는 바꾸지 않는다(「CLI 프로필 실행 경계」).
+- **공급자 기록 관리:** 대화를 닫고 30일 뒤 `provider_sessions`의 세션 ID로 기본 로그인 폴더의 공급자 기록을 지우고, 버린 jig 초안의 기록은 바로 지운다. 공급자 기록은 백업 대상이 아니다. 기본 로그인의 설정 경로는 바꾸지 않는다(§7 「CLI 기본 로그인 실행 경계」).
 
 #### AI 실행 인자
 
@@ -327,13 +325,13 @@ SDK 영수증 복구 결과에는 `recovered: true`를 둔다. 기존 succeeded�
 | 구조화 출력(`turn-output` 항목) | — | `--json-schema <스키마>`. 이때만 CLI의 출력 도구 `StructuredOutput`을 시작 목록·호출에서 허용 | 실행 임시 폴더의 `--output-schema <파일>` |
 | 이미지 | — | `--input-format stream-json`(표준 입력이 이미지 포함 사용자 메시지) | `--json` 바로 뒤 `--image <임시 파일>` |
 
-- **환경:** 도구가 있으면 `VIDE_AGENT_TOKEN`만 넣는다. 계정 프로필은 `CLAUDE_CONFIG_DIR`·`CODEX_HOME`(기본 프로필은 넣지 않음). `ANTHROPIC_*`·`OPENAI_*` 등 API 키 경로는 지운다.
+- **환경:** 도구가 있으면 `VIDE_AGENT_TOKEN`만 넣는다. `CLAUDE_CONFIG_DIR`·`CODEX_HOME`은 넣지 않고 기본 로그인을 쓴다(ADR-025. 관리 프로필용 주입과 위 표의 Codex `-c cli_auth_credentials_store="file"`은 PLAN-25 2단계에서 빼는 중). `ANTHROPIC_*`·`OPENAI_*` 등 API 키 경로와 상속된 `CLAUDE_CONFIG_DIR`·`CODEX_HOME`은 지운다.
 - **크기:** 묶음은 추가 지침 포함 20,000자 이하(추가 지침부터 자른다). 추가 지침이 없을 때 `data`·`review` 약 2.0천, `make` 약 2.9천, `modeling` 두 호스트 약 14.3천·Rhino 약 9.7천·ZWCAD 약 7.8천 자다. 가장 긴 명령줄은 약 2.2만 자로 Windows 한도 32,767자 안이다.
 - **실측:** Claude 2.1.285에서 자료 모드 세션 2턴(질문 카드 → 답변 턴)이 시작 이벤트 검사를 통과하고 묶음과 추가 지침이 모델에 닿았다([SPIKE-2026-09-30-instruction-bundle](../tdd/SPIKE-2026-09-30-instruction-bundle.md)).
 
 ### ZWCAD 범용 실행기의 물리 계약
 
-PLAN-02 §6.1의 3a는 ZWCAD 2023의 .NET Framework 4.8 애드인에서 실행한다. `Microsoft.CodeAnalysis.CSharp` 4.11.0의 .NET Standard 2.0 자산을 고정하고 의존 DLL은 자체 플러그인과 함께 배포한다. 설치 SDK DLL은 참조만 하고 복사하지 않는다. [공식 패키지 호환 정보](https://www.nuget.org/packages/Microsoft.CodeAnalysis.CSharp/4.11.0)와 설치 런타임 확인이 빌드 선택의 근거이며 실제 로드는 별도로 검증한다.
+이 절은 VIDE가 연 작업 사본(가져온 DWG)의 실행기다. 사용자가 연결한 열린 도면은 연결 DLL이 직접 실행한다(§6 「ZWCAD 열린 도면 수정」, §4 「바로 적용 경로」). PLAN-02 §6.1의 3a는 ZWCAD 2023의 .NET Framework 4.8 애드인에서 실행한다. `Microsoft.CodeAnalysis.CSharp` 4.11.0의 .NET Standard 2.0 자산을 고정하고 의존 DLL은 자체 플러그인과 함께 배포한다. 설치 SDK DLL은 참조만 하고 복사하지 않는다. [공식 패키지 호환 정보](https://www.nuget.org/packages/Microsoft.CodeAnalysis.CSharp/4.11.0)와 설치 런타임 확인이 빌드 선택의 근거이며 실제 로드는 별도로 검증한다.
 
 - 기존 읽기/정점 편집 명령은 유지하고 범용 작업 세션을 별도 명령으로 연다. 인증된 loopback TCP와 PID·시작 시각·세션·문서 ID를 확인하고, 호스트 Idle 문맥에서 요청을 직렬 실행한다. 활성 사용자 문서를 암묵 조회하지 않는다.
 - AI 본문에 `Database db`, `Transaction tr`을 제공한다. 제어기가 작업 사본을 열고 트랜잭션·저장·재열기를 소유한다. AI에 문서 열기/저장·트랜잭션 확정·앱 전역 접근을 허용하지 않는다. 컴파일과 정책 검사는 실행 전에 끝낸다.
@@ -341,6 +339,8 @@ PLAN-02 §6.1의 3a는 ZWCAD 2023의 .NET Framework 4.8 애드인에서 실행�
 - 성공은 별도 DWG 저장과 재취득까지 통과했을 때만 반환한다. 초기 표시/검수는 기존 DwgReader의 지원 범위를 사용하며 지원 밖 결과를 일부 누락한 성공으로 반환하지 않는다. 객체 표현의 확장은 해당 호스트 SPEC과 검증을 먼저 추가한다.
 
 ### ZWCAD 후보 편집 창 연결
+
+> 2026-09-30 [ADR-022](../decisions/ADR-022-direct-apply-plan-auto.md) 이전 사본·후보 경로의 기록이다. 연결 도면의 AI 편집은 연결 DLL의 `direct-execute`·`direct-undo`(§4 「바로 적용 경로」)를 쓰며, 아래 후보 편집 창·고정 적용은 새 AI 편집 기능에 붙이지 않는다.
 
 PLAN-02 §6.1의 3b는 먼저 후보 파일을 해시 검증하고 별도 편집 사본을 만든 뒤 자체 SDK 명령으로 연다. 후보 산출물 자체를 사용자 편집 파일로 열어 덮어쓰지 않는다. 전용 프로세스의 시작 시각·세션·포트와 실제 열린 Document 참조를 고정하며 사용자 활성 창 검색/COM attach를 사용하지 않는다. 편집 창은 제어기 종료에도 유지하고 자동 종료하지 않는다.
 
@@ -386,13 +386,14 @@ PLAN-02 §6의 비교는 연결 어댑터를 선택하는 과정이다. 대상 �
 
 ### AI 도구와 내부 계약 분리
 
-AI 도구의 이름은 등록부 하나가 정한다. `src/ai/agent-connection.ts`의 `agentToolNames`가 이름 목록이고 `src/server/agent-tools.ts`의 정의(설명·zod 입력 스키마)가 두 목록이 다르면 로드를 거절한다(PLAN-24 T-062). 턴이 받는 도구는 모드에 따라 다음과 같다(2026-09-30 5차 물결 기준).
+AI 도구의 이름은 등록부 하나가 정한다. `src/ai/agent-connection.ts`의 `agentToolNames`가 이름 목록이고 `src/server/agent-tools.ts`의 정의(설명·zod 입력 스키마)가 두 목록이 다르면 로드를 거절한다(PLAN-24 T-062). 턴이 받는 도구는 모드에 따라 다음과 같다(2026-10-01 등록부 기준). 계획 모드 턴은 `PLAN_MODE_TOOLS`(`src/server/agent-tools.ts`)에 든 읽기·화면 도구만 받는다.
 
 | 모드 | 발급 조건 | 도구 |
 |---|---|---|
 | 모델링(호스트 작업) | 자동 모드: Rhino·ZWCAD 연결 문서를 쓰는 턴(ADR-022). 계획 모드: 같은 대상을 읽기만 하는 턴 | 자동: `query`, `execute`(= `direct-execute`, 호출 하나가 되돌리기 기록 하나), `status`, `cancel`. 계획: `query`, `status`, `cancel` |
 | 보기(Rhino) | Rhino 대상의 모델링 턴 | `capture_view`(대상의 모델 화면 PNG, 기본 1200×800·한 변 최대 1600 px, `fitIds`·`namedView`, 이 이미지에만 레이어 켜고 끄기, 문서 변경 없음, 한 번에 하나), `measure`(객체별 bbox·길이·면적·닫힌 솔리드 부피 최대 50개, 객체·점 쌍의 최단 거리 최대 20쌍, 모델 단위) |
 | 대화 읽기(jig·구조·Sync) | 목적별 대화의 턴. 대상은 `conversation:<대화 ID>` | `jig_list`, `jig_state`, `jig_output`, `structure_summary`, `structure_checks`, `links_layers`, `sync_sample` |
+| 화면 | 대화 원장에 기록하는 턴(목적별 대화). 계산·쓰기 없음이라 계획 모드에도 남는다(`PLAN_MODE_TOOLS`) | `jig_open`(프로젝트 skill 목록의 jig를 사용자 화면에 열고 작업본을 이 대화에 묶음, `reuse: 'last' \| 'new'`, `user-only` jig는 거절), `ui_go`(화면 전환: 모델·jig·보고서·자료·만들기, 3D 투영 `plan`·`3d`). 원장 항목으로 남기고 화면이 따라 한다(RESEARCH-12 §6.3) |
 | jig 조작 | 그 대화에 jig 작업본이 열려 있을 때, 열린 작업본에만 | `jig_set`(되돌릴 수 있는 설정값 변경, 원장 기록), `jig_run`(계산 단계만) |
 | 자료 | 그 프로젝트의 자료 DB가 있을 때, 읽기만 | `project_brief`, `project_search`, `project_issue`, `project_statement`, `project_checks` |
 | 만들기 | `jig-make` 대화이고 초안이 열려 있을 때. `targetRef`를 생략하면 그 대화의 초안 | `jig_validate`, `jig_test`, `jig_preview`, `jig_delete_file`(초안 파일 하나, `jig.json`·금지 파일 제외), `ask_user` + Claude 파일 도구 `Read`·`Edit`·`Write`·`Glob`·`Grep`(초안 폴더만, ARCH-03 §2.3) |
@@ -492,9 +493,9 @@ VIDE가 직접 기동한 기록(프로세스 ID·시작 시각·실행 세션)�
 
 documentSessionId는 열릴 때마다 새 값, documentId는 VIDE 논리 문서 ID다. 경로 변경(Save As), 동일 파일의 동시 열기, 외부 복사로 내부 ID가 중복된 경우를 매핑 기록으로 구분한다. readonly 취득만으로 사용자 파일에 ID를 쓰지 않는다. 식별 불명은 재연결 대상으로 제시하고 활성 문서에 자동 대체하지 않는다.
 
-접수 경합 키는 host와 sourceDocument의 instance/documentId, 또는 baseRequestId 계보의 최초 후보 ID로 만든다. baseRequestId=null은 요청 ID별 새 독립 후보, 필드 생략/계보 식별 실패는 해당 host 전체 키다. 연계 요청은 두 대상 키를 모두 점유하고 자식 작업을 중복 집계하지 않는다. 실행 중 독립 부모 요청은 프로젝트당 2개까지 접수한다(초기 자원 상한이며 성능 보증이 아님). 기존 PROJECT_BUSY는 대상 경합, WORKSPACE_CAPACITY는 상한 초과, HOST_RESULT_UNRESOLVED는 해당 대상 불명확 쓰기에 사용한다. 2026-09-29 SPEC-02.9의 동시 접수 개정에 따라 이 거절·상한 규칙은 PLAN-24의 접수 규칙 작업에서 호스트 사용 구분·문서별 대기열·프로젝트 AI 턴 상한 N(기본 3)으로 바뀌며, 대기 상태와 필드는 [ARCH-03](ARCH-03-jig-runtime.md) §10.3이 정한다. 동일 JSON 재접수의 기존 직렬화·멱등성 계약은 유지한다. UI와 서버가 같은 순수 경합 판정을 사용하며 서버가 최종 확인한다. `POST /api/v1/projects/:project/requests/:request/interventions`는 추가 입력을 받아 원본 조건과 합친 새 workspace_requests 행을 queued로 저장하고 서버가 supersedesRequestId를 부여한다. 일반 submit에서 이 필드를 받지 않는다. 별도 스키마/테이블을 추가하지 않는다. 기존 요청 하나에 대기 후속은 하나만 허용하고 후속 대기는 독립 슬롯을 추가 점유하지 않는다. 입력/권한/대상과 직렬화 멱등성을 확인한 뒤 이전 실행을 abort하고 completion을 기다린다. 불명확 결과 또는 확인되지 않은 연계 부분 결과는 후속을 interrupted로 남긴다. 종료 후 실행 직전에 다른 작업과의 충돌을 다시 검사한다. 후속 취소는 이전 실행 종료 대기 후 cancelled로 기록하며 종료 확인 전 완료라고 표시하지 않는다.
+접수 경합 키는 host와 sourceDocument의 instance/documentId, 또는 baseRequestId 계보의 최초 후보 ID로 만든다. baseRequestId=null은 요청 ID별 새 독립 후보, 필드 생략/계보 식별 실패는 해당 host 전체 키다. 연계 요청은 두 대상 키를 모두 점유하고 자식 작업을 중복 집계하지 않는다. 접수는 SPEC-02.9를 따른다(`requestAdmission`, `src/contracts/request-scope.ts`): 같은 문서를 쓰는 요청은 거절하지 않고 문서별 대기열에 서며(호스트를 쓰지 않거나 읽기만 하는 요청은 기다리지 않음, 문서를 특정하지 못한 쪽은 그 호스트 전체 뒤에 선다), 프로젝트에서 동시에 도는 AI 턴은 `AI_TURN_LIMIT` = 3개까지이고 넘으면 프로젝트 대기열에 선다. 대기하지 않는 종류(Sync·가져오기·확장 실행)가 막히면 `PROJECT_BUSY`, 해당 대상에 불명확 쓰기가 있으면 `HOST_RESULT_UNRESOLVED`다. 이전의 '독립 부모 요청 프로젝트당 2개'와 `WORKSPACE_CAPACITY` 거절은 쓰지 않는다. 대기 상태와 필드는 [ARCH-03](ARCH-03-jig-runtime.md) §10.3이 정한다. 동일 JSON 재접수의 기존 직렬화·멱등성 계약은 유지한다. UI와 서버가 같은 순수 경합 판정을 사용하며 서버가 최종 확인한다. `POST /api/v1/projects/:project/requests/:request/interventions`는 추가 입력을 받아 원본 조건과 합친 새 workspace_requests 행을 queued로 저장하고 서버가 supersedesRequestId를 부여한다. 일반 submit에서 이 필드를 받지 않는다. 별도 스키마/테이블을 추가하지 않는다. 기존 요청 하나에 대기 후속은 하나만 허용하고 후속 대기는 독립 슬롯을 추가 점유하지 않는다. 입력/권한/대상과 직렬화 멱등성을 확인한 뒤 이전 실행을 abort하고 completion을 기다린다. 불명확 결과 또는 확인되지 않은 연계 부분 결과는 후속을 interrupted로 남긴다. 종료 후 실행 직전에 다른 작업과의 충돌을 다시 검사한다. 후속 취소는 이전 실행 종료 대기 후 cancelled로 기록하며 종료 확인 전 완료라고 표시하지 않는다.
 
-UI polling은 시작 프로젝트와 작업 공간 인스턴스를 고정하고 프로젝트 전환 후 결과를 다른 화면에 넣지 않는다. 자동 후보 전환은 마지막으로 보낸 요청이고 선택 후보·초안·미완성 스케치가 제출 후 바뀌지 않은 경우만 허용한다. 그 외 완료 결과는 이력에 보존하고 명시적으로 열 수 있다.
+UI polling은 시작 프로젝트와 작업 공간 인스턴스를 고정하고 프로젝트 전환 후 결과를 다른 화면에 넣지 않는다. (아래 '후보'는 작업 사본 경로의 결과다. 바로 적용한 AI 편집은 연결 문서 자체가 바뀐다.) 자동 후보 전환은 마지막으로 보낸 요청이고 선택 후보·초안·미완성 스케치가 제출 후 바뀌지 않은 경우만 허용한다. 그 외 완료 결과는 이력에 보존하고 명시적으로 열 수 있다.
 
 문서 쓰기는 직렬화하고, UI 스레드 API 실행은 호스트 프로세스 단위 큐에서도 직렬화한다. 서로 다른 프로세스의 독립 작업은 병렬 실행 가능하다. 같은 호스트의 서로 다른 문서라는 이유만으로 SDK 동시 호출이 가능하다고 가정하지 않는다. 실행 직전에 대상 존재·문서 세션·관련 객체 버전을 재검사한다. readSet을 모르는 임의 코드에는 문서 전체 revision을 보수적으로 적용한다.
 
@@ -527,22 +528,20 @@ AI `query`는 선택적인 `offset`(기본 0), `limit`(기본 50, 최대 100), `
 
 공통 호스트 TCP 수신은 4바이트 프레임 길이를 먼저 검증하고 기본 최대 16 MiB 본문을 한 번 할당한다. CAD 읽기 표시 경로만 아래 별도 수신 크기를 사용한다. 분할된 헤더/UTF-8 본문은 바이트 기준으로 채우고 완성 후 한 번 파싱한다. 과대 응답은 `HOST_RESPONSE_TOO_LARGE`, 빈 응답은 `HOST_INVALID_RESPONSE`로 구분하며 쓰기 재전송은 하지 않는다.
 
-Rhino 자체 SDK의 객체/측정 캐시 상한은 10,000개이며 호스트 요청 프레임은 4 MiB다. 응답 프레임은 16 MiB를 유지한다. 기존 레거시 JSON/외부 MCP 경로는 500개 제한을 유지한다. 객체 수 이내여도 복잡한 형상으로 전송 한도를 넘으면 완료 후보로 채택하지 않고 기존 불명확/복구 절차를 따른다. 객체 개수 상한은 메모리/시간 성능 보증이 아니다.
+Rhino 자체 SDK의 객체/측정 캐시 상한은 20,000개(`WorkerScene.MaxObjects`, `hosts/rhino/worker/WorkerScene.cs`, §7 「Rhino 표시 페이지 취득」과 같은 값)이며 호스트 요청 프레임은 4 MiB다. 응답 프레임은 16 MiB를 유지한다. 기존 레거시 JSON/외부 MCP 경로는 500개 제한을 유지한다. 객체 수 이내여도 복잡한 형상으로 전송 한도를 넘으면 완료 후보로 채택하지 않고 기존 불명확/복구 절차를 따른다. 객체 개수 상한은 메모리/시간 성능 보증이 아니다.
 
-AI execute의 성공 응답은 Rhino snapshot 또는 ZWCAD model을 query의 첫 페이지로 제한한다. 단일 행이 64 KiB를 넘으면 목록 대신 생략 원인과 query 안내를 반환한다. Rhino 변경 ID는 종류별 최대 50개를 표시하고 전체 건수를 별도로 기록한다. 원래 receipt·last·최종 후보와 보호 검증은 전부 보존한다. 사용자 코드의 value 16 KiB 제한은 그대로다.
+AI execute의 성공 응답은 Rhino snapshot 또는 ZWCAD model을 query의 첫 페이지로 제한한다. 단일 행이 64 KiB를 넘으면 목록 대신 생략 원인과 query 안내를 반환한다. 이 작업 사본 경로에서 Rhino 변경 ID는 종류별 최대 50개를 표시하고 전체 건수를 별도로 기록한다(`writeChanges`, `src/server/write-context.ts`). 바로 적용 경로의 AI 응답은 종류별 200개다(§4 「바로 적용 경로」의 `boundedChanges`). 원래 receipt·last·최종 후보와 보호 검증은 전부 보존한다. 사용자 코드의 value 16 KiB 제한은 그대로다.
 
 Rhino 편집 적용은 그룹 표의 ID·이름·인덱스·사용자 문자열을 후보/대상 문서 간 비교하며 문서 지문에도 포함한다. 기존 객체 업데이트는 `GetGroupList()`를 원본과 비교하고 같은 그룹 목록이면 허용한다. 그룹 표 전체의 기존 서명 비교를 유지한다. 그룹 소속 신규 객체·그룹 구성원 삭제·소속 변경은 Prepare에서 거절한다. Replace/ModifyAttributes와 최종 Metadata 검증은 그대로 사용하며 대상 native ID·그룹 소속을 보존한다. 잠김·참조·이력 등 기존 보호는 해제하지 않는다. 독립 객체의 적용 때문에 그룹을 재생성하거나 인덱스를 추정 매핑하지 않는다.
 
-`POST /api/v1/accounts/logout`은 관리 profileId만 받고 기존 로그인 프로세스 수명 관리기를 `operation=logout`으로 재사용한다. Codex는 고정 file 저장소의 `logout`, Claude는 `auth logout`을 사용한다. exit0과 공식 status의 SUBSCRIPTION_LOGIN_REQUIRED를 모두 확인하며 AUTH_TIMEOUT/CLI_UNAVAILABLE는 성공이 아니다. 상태 API는 operation을 포함하고 공급자 lease는 종료/검증까지 유지한다. 프로필 디렉터리/인증 파일을 VIDE가 직접 파싱하거나 지우지 않는다.
-
-`POST /api/v1/accounts/remove`는 관리 profileId, `deleteLocalData=true`를 요구한다. 공식 상태의 인증 해제를 확인하고 비동기 조회 후 사용 중 여부를 재검사한다. 관리 루트 아래 UUID 디렉터리의 정규 경로와 하위 심볼릭 링크/경로 이탈을 검사한 뒤 해당 디렉터리만 제거한다. 파일 제거 실패는 메타데이터를 유지한다. 파일 제거 뒤 manifest 저장 실패 시 기존 프로필 메타데이터를 복원하고 다음 접근에서 빈 관리 디렉터리를 만들 수 있으나 삭제된 이력의 복원은 보장하지 않는다. 자격 증명 내용은 읽지 않는다.
+계정 로그아웃·제거(`/api/v1/accounts/logout`·`remove`)와 로그인·이름 변경·선택 경로는 ADR-025로 VIDE에서 빼며(PLAN-25 2단계, 2026-10-01 진행 중) 이 문서의 계약이 아니다. 계정 관리는 AccountSwitch가 한다(§7 「CLI 기본 로그인 실행 경계」).
 
 ## 5. 모델·데이터 저장
 
 
 Git에서 스냅샷·부모 참조·변경되지 않은 자료 재사용을 차용하되 Git CLI나 전체 객체 내용 주소 저장소를 첫 구현의 선행 조건으로 만들지 않는다. 기존 SQLite·작업 기록·파일 보관을 확장한다. 기록·캐시·체크포인트 생성에 LLM을 호출하지 않는다. [Git 스냅샷 원리](https://git-scm.com/book/en/v2/Getting-Started-What-is-Git%3F).
 
-현재 DB는 §7의 schema 3과 순차 마이그레이션을 사용하며 새 객체/캐시/체크포인트 테이블은 미구현이다. schema 3은 대화 목록에서 지운 요청을 `hidden_requests(projectId, requestId, hiddenAt)`로 기록한다. 요청 기록·결과·연결은 지우지 않으며, 요청 목록 조회와 AI 대화 문맥에서만 제외한다. 확장은 단일 제어 잠금→백업→버전별 마이그레이션 트랜잭션→무결성/기존 자료 대조를 따른다. 실패 시 신규 쓰기를 열지 않고 원본/백업과 진단을 보존한다. 새 DB뿐 아니라 기존 프로젝트·파일 참조 승계와 중간 종료를 시험한다.
+현재 DB는 §7의 schema 5와 순차 마이그레이션(`src/core/migrations.ts`: 2 기본 표, 3 숨긴 요청, 4 연결 파일 `document_links`, 5 대화·jig 표 — ARCH-03 §10)을 사용하며 새 객체/캐시/체크포인트 테이블은 미구현이다. schema 3은 대화 목록에서 지운 요청을 `hidden_requests(projectId, requestId, hiddenAt)`로 기록한다. 요청 기록·결과·연결은 지우지 않으며, 요청 목록 조회와 AI 대화 문맥에서만 제외한다. 확장은 단일 제어 잠금→백업→버전별 마이그레이션 트랜잭션→무결성/기존 자료 대조를 따른다. 실패 시 신규 쓰기를 열지 않고 원본/백업과 진단을 보존한다. 새 DB뿐 아니라 기존 프로젝트·파일 참조 승계와 중간 종료를 시험한다.
 
 현재 전체 문서 지문과 호스트별 객체 제한은 이벤트 추적으로 자동 대체되지 않는다. 애드인의 이벤트 구독이 누락되었거나 연속성이 끊기면 캐시를 신뢰하지 않고 문서 재조회·강한 비교를 수행한다. 이벤트와 지문이 충돌하면 오래된 이벤트 기록을 우선하지 않는다. 자체 SDK 객체 상한의 실측 지원 여부는 호스트 지원표와 L5 검수로 확인한다.
 
@@ -584,7 +583,7 @@ AI 과업 완료 또는 명시적 저장/체크포인트 시 .3dm/.dwg와 데이
 
 모델·속성·관계·표 정의·근거를 같은 체크포인트 기준으로 보존하고 과거 모델과 최신 데이터를 섞지 않는다. 단순 manifest와 입력 기준으로 정합성을 확보하며 재생성 가능한 표/메시 캐시와 보존할 게시 산출물을 구분한다. 삭제는 객체 외부 변경 요약에 남기고 복원 가능 여부는 보관한 네이티브 파일 기준으로 표시한다. 최신 key-value는 필요한 추적값의 미러이며 누적 이력의 정본이 아니다. 자기 속성 갱신은 형상 변경 이벤트와 구분한다.
 
-파일을 임시 위치에 기록→해시 확인·확정→SQLite 트랜잭션으로 체크포인트 참조 순서로 저장한다. 중단된 파일을 완성 체크포인트로 노출하지 않는다. 보관한 네이티브 파일을 별도 사본으로 열어 당시 자료와 함께 확인한다. 과거 상태를 현재 원본으로 되돌리는 기능과 삭제 객체의 자동 복원은 PRD §14.2의 후속 범위다. 현재 후보를 원본에 적용하는 이 문서 §4 기능과 과거 복원 기능을 혼동하지 않는다.
+파일을 임시 위치에 기록→해시 확인·확정→SQLite 트랜잭션으로 체크포인트 참조 순서로 저장한다. 중단된 파일을 완성 체크포인트로 노출하지 않는다. 보관한 네이티브 파일을 별도 사본으로 열어 당시 자료와 함께 확인한다. 과거 상태를 현재 원본으로 되돌리는 기능과 삭제 객체의 자동 복원은 PRD §14.2의 후속 범위다. 이 문서 §4의 바로 적용·되돌리기(실행 하나 단위)와 과거 복원 기능을 혼동하지 않는다.
 
 백업은 일관된 DB와 참조 파일·manifest를 함께 검증한다. 확정 이력·모델은 자동 삭제하지 않으며 임시 파일·재생성 캐시는 구분된 TTL/용량 제한을 둔다. 기존 데이터는 마이그레이션 전 백업한다.
 
@@ -663,7 +662,7 @@ R2 조건부 쓰기/체크섬은 [공식 Workers API](https://developers.cloudfl
 - 같은 PC 판별: 사이트는 켜진 PC의 `local` 주소에 `GET /api/v1/hello`를 보낸다. 서버는 Origin이 연결된 사이트일 때만 CORS로 `{hostId}`를 답한다(사설망 사전 요청 허용). 일치하면 그 브라우저는 로컬 링크로, 아니면 원격 링크로 연다.
 - 세션: `POST /api/v1/session {remoteToken}`은 로컬 요청이면 서명·만료(2분 이내)·nonce 재사용을 검사하고 로컬 세션 쿠키를, 터널 Host 요청이면 `vide_remote` 쿠키(HttpOnly·Secure·SameSite=Strict, 12시간, 터널 종료 시 폐기)를 준다. 두 경우 모두 응답 전에 heartbeat로 사이트의 새 프로젝트를 받는다. 원격 세션은 `/api/v1/shutdown`, `/api/v1/remote*` 쓰기, `/mcp`, `accounts`·`settings`·`extensions`의 쓰기를 쓰지 못한다. 교차 사이트 요청은 API가 아닌 GET 화면 이동만 허용한다.
 - 연계 요청 좌표(2026-09-29): 입력 `coordinateBasis`는 `shared-metre-axes`(사용자가 같은 원점·축 확인) 또는 `align-by-features`(AI가 대응 요소로 이동·회전·축척·잔차를 먼저 구함)이다. 열린 문서의 표시 Sync(`displayOnly`, `connection = attached-editor`)도 연계 대상이다. Rhino 조회 행은 `layer`와 곡선의 `start`·`end`·`length`·`linear`·`closed`를 싣는다.
-- ZWCAD 열린 도면 수정(2026-09-29): 연결 DLL(`hosts/zwcad/connection`)은 `queryEntities{offset,limit≤200,handles,layers,types}`(핸들·유형·레이어·색·범위와 유형별 값, 레이어별 개수)와 `runCode{code,write}`를 받는다. 코드는 작업 사본 worker의 `SdkCompiler`(같은 API 정책)로 컴파일한다. `write=false`는 잠금·트랜잭션 후 항상 Abort, `write=true`는 `SendStringToExecute("_VIDEAIRUN")`로 명령 안에서 실행·Commit하고 Entity의 추가·수정·삭제 핸들을 돌려준다. 서버(`ZwcadSdkExecution.runAttached`)는 표시 Sync 기준(`sourceDocument.connection = attached-editor`)이면 이 경로를 쓰고, 쓰기가 있으면 도면을 다시 읽어 결과로 둔다(`appliedDirectly`). 연결 프로그램의 ZWCAD 설치는 DLL과 컴파일러 어셈블리를 `<데이터>\plugins\zwcad\<버전>-<해시8>\`에 복사하고 `HKCU\Software\ZWSOFT\ZWCAD\2023\<언어>\Applications\VIDE`(`LOADER`, `LOADCTRLS=2`, `MANAGED=1`)를 쓴다. 시작 시 `VIDE CAD` 패널을 한 번 연다.
+- ZWCAD 열린 도면 수정(2026-09-29): 연결 DLL(`hosts/zwcad/connection`)은 `queryEntities{offset,limit≤200,handles,layers,types}`(핸들·유형·레이어·색·범위와 유형별 값, 레이어별 개수)와 `runCode{code,write}`를 받는다. 코드는 작업 사본 worker의 `SdkCompiler`(같은 API 정책)로 컴파일한다. `write=false`는 잠금·트랜잭션 후 항상 Abort, `write=true`는 `SendStringToExecute("_VIDEAIRUN")`로 명령 안에서 실행·Commit하고 Entity의 추가·수정·삭제 핸들을 돌려준다. 서버(`ZwcadSdkExecution.runAttached`)는 표시 Sync 기준(`sourceDocument.connection = attached-editor`)이면 이 경로를 쓰고, 쓰기가 있으면 도면을 다시 읽어 결과로 둔다(`appliedDirectly`). 2026-09-30 ADR-022부터 자동 모드의 쓰기는 같은 명령 형식의 `direct-execute`로 하고 실행마다 되돌리기 기록을 남긴다(§4 「바로 적용 경로」). 연결 프로그램의 ZWCAD 설치는 DLL과 컴파일러 어셈블리를 `<데이터>\plugins\zwcad\<버전>-<해시8>\`에 복사하고 `HKCU\Software\ZWSOFT\ZWCAD\2023\<언어>\Applications\VIDE`(`LOADER`, `LOADCTRLS=2`, `MANAGED=1`)를 쓴다. 시작 시 `VIDE CAD` 패널을 한 번 연다.
 - 사이트 중계(2026-09-29): 다른 기기의 열기 링크는 터널 주소가 아니라 `<사이트>/pc/<hostId>/?project=<id>#r=<token>`이다. Worker(`src/sharing/pc-proxy.ts`)는 로그인한 소유자의 PC가 켜져 있고 터널 주소가 있을 때 요청을 그 터널로 흘려보낸다. 사이트 쿠키·Referer는 빼고, 사이트 Origin만 받아 PC의 Origin(터널)으로 바꾸고, PC 세션 쿠키는 `vide_remote_<hostId 16진>`(Path=`/pc/<hostId>/`)으로 저장했다가 PC에는 `vide_remote`로 넘긴다. PC 응답의 보안 정책(CSP)은 그대로 둔다. PC가 꺼졌거나 원격이 꺼졌으면 503(`HOST_OFFLINE`·`HOST_REMOTE_OFF`, 화면 이동이면 안내 페이지), 터널 무응답은 502 `HOST_UNREACHABLE`이다. 작업 화면은 상대 주소(`api/v1/…`, Vite `base: './'`)만 써서 PC 루트와 `/pc/<id>/` 양쪽에서 같다. 터널이 다시 시작돼도 같은 주소로 다시 열린다. 사이트는 PWA 설정(`manifest.webmanifest`, 아이콘, iOS 메타)을 제공해 아이패드 홈 화면에 앱으로 추가할 수 있다. 모든 작업 요청이 Worker를 거치므로 Workers 요청 수(무료 10만/일)를 쓴다.
 - 버전: heartbeat 상태에 PC 프로그램 버전을 싣는다. `MIN_APP_VERSION`(선택)보다 낮은 PC는 목록에 "업데이트 필요"로 보이고 열기는 409 `HOST_UPDATE_REQUIRED`다. 비교는 점 구분 숫자이며 사이트↔PC 계약은 하위 호환으로만 바꾼다.
 - 저장된 모델·요청 대기(2026-09-29, [PLAN-20](../plans/PLAN-20-offline-view.md)): `0007-offline-view.sql`이 `project_snapshots(project_id, link_id, user_id, name, host, size, object_count, captured_at, updated_at)`와 `queued_requests(id, project_id, user_id, host_id, link_id, body, created_at, delivered_at, canceled_at)`를 만든다. PC는 `PUT device/projects/:id/snapshots/:linkId?name&host&objects&captured`(본문은 gzip된 `vide-snapshot-v1`, `Content-Length` 필수, 50 MB 이하)로 R2 `snapshots/<project>/<link>`를 덮어쓰고 `DELETE` 같은 경로로 지운다. 한도는 계정 `SNAPSHOT_QUOTA_MB`(기본 500)·사이트 전체 `SNAPSHOT_TOTAL_MB`(기본 8000, R2 무료 10 GB 안)이며 넘으면 507 `SNAPSHOT_QUOTA`·`SNAPSHOT_SITE_FULL`, `SNAPSHOTS_ENABLED=false`면 503이다. heartbeat 응답의 `queue[]`(미전달·미취소 50개까지)를 받은 PC는 보관한 id를 `POST device/queue/delivered {ids}`로 알린다. 브라우저(소유자만): `GET /api/projects/:id/snapshots`, `GET …/snapshots/:linkId`(바이트, `no-store`), `GET|POST /api/projects/:id/queue`(본문 4000자, 미전달 20개까지, 넘으면 429 `QUEUE_FULL`), `DELETE …/queue/:id`(전달 전만, 이후 409). 형식(`src/contracts/offline-snapshot.ts`): `VSN1` + u32 머리 길이 + JSON 머리 + 4바이트 정렬 버퍼. 레이어×종류(mesh·lines·points) 묶음마다 원점 기준 float32 좌표, 정점별 uint8 RGB, uint32 색인이고 문자는 20,000개(각 200자)까지다. PC(`src/server/offline-view.ts`)는 `<데이터>/offline-view.json`에 프로젝트별 켜짐, 파일별 올린 Sync id·시각·크기·오류, 받은 요청(200개)을 둔다. heartbeat 뒤 켜진 프로젝트의 보이는 연결 파일마다 마지막 성공 Sync가 바뀌었으면 파일당 10분에 한 번까지 올린다. 로컬 API: `GET|PUT /api/v1/projects/:id/offline-view {enabled}`, `POST …/offline-view/inbox/:id/dismiss`. 사이트 화면은 `DecompressionStream('gzip')`으로 풀어 묶음마다 한 번 그린다.
@@ -681,22 +680,21 @@ R2 조건부 쓰기/체크섬은 [공식 Workers API](https://developers.cloudfl
 
 개발 도구는 Gitleaks 8.30.1과 Prettier 3.8.1을 고정한다. Git 커밋은 staged 비밀정보·입력 일치·포맷·UI/서버/공유 타입·웹 빌드·단위/계약 시험을 검사한다. CI는 공유 통합·브라우저 회귀·전체 이력 검사도 실행한다. 실제 원격 CI/브랜치 보호 상태는 PLAN §6.5가 소유한다.
 
-로컬 DB의 현재 schema는 2다. `src/core/migrations.ts`가 번호 순서와 모든 초기 테이블을 소유하며 서비스 생성자는 스키마를 변경하지 않는다. 단일 제어 잠금 → 읽기 전용 버전/무결성 확인 → 이전 DB의 SQLite 스냅샷 → 단일 트랜잭션 이행/무결성 확인 순서다. 실패는 rollback하고 기존 모델 파일을 변경하지 않는다. `<DB 파일>.backups/schema-<이전 버전>-<UUID>.sqlite`는 이전 DB만 보존하며 전체 프로젝트 백업과 다르다. 성공 후 같은 버전 재시작은 추가 백업을 만들지 않는다. 복구 시 앱을 종료하고 실패 DB/WAL 및 모델 자료를 보존한 뒤 이전 DB와 호환되는 앱으로 사본을 검증한다. 자동 덮어쓰기·이전 앱으로의 자동 다운그레이드는 하지 않는다.
+로컬 DB의 현재 schema는 5다(`schemaVersion`). `src/core/migrations.ts`가 번호 순서와 모든 초기 테이블을 소유하며 서비스 생성자는 스키마를 변경하지 않는다. 단일 제어 잠금 → 읽기 전용 버전/무결성 확인 → 이전 DB의 SQLite 스냅샷 → 단일 트랜잭션 이행/무결성 확인 순서다. 실패는 rollback하고 기존 모델 파일을 변경하지 않는다. `<DB 파일>.backups/schema-<이전 버전>-<UUID>.sqlite`는 이전 DB만 보존하며 전체 프로젝트 백업과 다르다. 성공 후 같은 버전 재시작은 추가 백업을 만들지 않는다. 복구 시 앱을 종료하고 실패 DB/WAL 및 모델 자료를 보존한 뒤 이전 DB와 호환되는 앱으로 사본을 검증한다. 자동 덮어쓰기·이전 앱으로의 자동 다운그레이드는 하지 않는다.
 
 런타임 루트 탐색은 `src/core/package-root.ts`, C# verbatim 문자열은 `hosts/common/csharp.ts`가 소유한다. 호스트는 서버 구현을 import하지 않는다. 패키지 소스는 Git index의 허용된 소스 폴더만 복사하며 금지 파일·심볼릭 링크를 거절한다. 런타임/의존성/UI 빌드 산출물은 별도 명시 경로로 포함한다. 구현/검증 절차는 PLAN-03, 실제 증거는 개발 기반 VERIFY를 따른다.
 
 ### 로컬 세션의 다중 실행 격리
 같은 loopback 호스트의 쿠키는 포트별로 격리되지 않는다. 로컬 세션 쿠키 이름에 서버 포트를 포함해 다른 VIDE 인스턴스의 로그인이 덮어쓰지 않게 한다. 값·Host/Origin 검사·HttpOnly·SameSite=Strict는 유지하고 고정 이름의 이전 쿠키로 인증을 우회하지 않는다. UI는 인증 오류를 공통 API 경계에서 받아 연결 상실을 표시하며 자동 쓰기 재시도를 하지 않는다.
 
-### CLI 프로필 실행 경계
+### CLI 기본 로그인 실행 경계
 
-사용량(2026-09-29, [PLAN-13](../plans/PLAN-13-multi-account.md)): `AccountUsageService`가 계정 폴더(기본 로그인은 `~/.claude`·`~/.claude.json`·`~/.codex`)의 `.credentials.json`(`claudeAiOauth.accessToken·expiresAt·subscriptionType`), `.claude.json`(`oauthAccount.emailAddress`), `auth.json`(`tokens.access_token·account_id·id_token`의 email·`chatgpt_plan_type`)을 읽는다. 조회를 켜면 Claude는 `GET https://api.anthropic.com/api/oauth/usage`(`anthropic-beta: oauth-2025-04-20`, `five_hour`·`seven_day`의 `utilization`·`resets_at`), Codex는 `GET https://chatgpt.com/backend-api/wham/usage`(`ChatGPT-Account-Id`, `rate_limit.primary_window/secondary_window`의 `used_percent`·`limit_window_seconds`·`reset_at`, `limit_reached`)를 3분 간격으로 부른다. API: `GET /api/v1/accounts/usage[?refresh=1]` → `{settings, accounts[]}`, `POST /api/v1/accounts/usage-settings {usageLookup?, autoSwitch?, threshold?}`(원격 세션 불가). 요청 접수는 `choose(provider, 선택 계정)`으로 `accountProfileId`를 정하고 전환했으면 `accountSwitchedFrom`을 남긴다. CLI 결과의 한도 문구는 `PROVIDER_LIMIT`이고 실행기가 `markLimited`를 부른다.
+2026-09-30 [ADR-025](../decisions/ADR-025-accounts-in-accountswitch.md): VIDE는 Claude Code·Codex CLI의 기본 로그인(`~/.claude`·`~/.claude.json`, `~/.codex`)만 쓴다. 계정의 추가·로그인·로그아웃·제거·이름 변경·전환·자동 전환은 외부 프로그램 AccountSwitch가 하며, AccountSwitch는 고른 계정의 로그인을 기본 로그인 폴더로 옮긴다. 한 PC에서 한 공급자는 한 번에 한 계정을 쓰고 동시에 도는 대화도 그 계정을 함께 쓴다. 대화는 공급자·모델만 고정하고 계정은 턴마다 그때의 기본 로그인이다(동작은 SPEC-02.17~19).
 
-PLAN-06의 프로필 실행은 서버가 선택한 절대 configDirectory를 CliOptions로 전달한다. 상속 인증 환경을 정리한 후 공급자별 CODEX_HOME 또는 CLAUDE_CONFIG_DIR만 주입하며 상태 조회와 실제 실행에서 같은 environment()를 사용한다. HTTP 입력의 임의 경로를 직접 전달하지 않는다. 경로에는 인증 파일 내용을 저장하거나 복사하지 않는다. 기본 프로필은 경로 옵션 없이 기존 동작을 유지한다.
-
-프로필 메타데이터는 로컬 데이터 루트의 cli-profiles/profiles.json에 원자적 교체로 저장하고, 공식 CLI 인증은 UUID 하위 경로에만 둔다. 모델 백업의 허용 디렉터리 밖이며 웹 게시에는 포함하지 않는다. Codex 관리 프로필은 로그인·상태·실행 모두 file 자격증명 저장소를 명시해 OS keyring 기본값의 공유를 피한다. 기본 호환 프로필의 저장 방식은 바꾸지 않는다.
-
-전환은 공급자별 활성/대기 ID를 저장한다. workspace_requests의 queued/running/unknown과 실제 Execution.active를 함께 확인하며 대기 전환 중 신규 접수를 거절한다. 별도 휘발성 카운터를 복제하지 않는다. 접수된 input.accountProfileId는 서버가 고정하며 클라이언트 지정은 거절한다. 개입은 원 프로필을 승계하고 다른 공급자로 바꾸지 않는다. 재시작 뒤 unknown은 전환 장벽을 유지한다. 계정 API는 기존 로컬 인증·Origin 검사를 그대로 따른다.
+- **실행:** CLI 실행에 `CLAUDE_CONFIG_DIR`·`CODEX_HOME`을 주입하지 않고, 상속 환경의 같은 변수와 API 키 변수는 지운다(§2 「AI 실행 인자」의 환경). 요청·대화의 저장된 `accountProfileId`는 옛 기록 읽기용으로만 남고 새 기록에는 쓰지 않는다(마이그레이션 없음, PLAN-25).
+- **현재 계정·사용량(읽기 전용):** `AccountUsageService`(`src/ai/account-usage.ts`)가 기본 로그인 폴더의 `.credentials.json`(`claudeAiOauth.accessToken·expiresAt·subscriptionType`), `.claude.json`(`oauthAccount.emailAddress`), `auth.json`(`tokens.access_token·account_id·id_token`의 email·`chatgpt_plan_type`)을 읽는다. 조회를 켜면 Claude는 `GET https://api.anthropic.com/api/oauth/usage`(`anthropic-beta: oauth-2025-04-20`, `five_hour`·`seven_day`의 `utilization`·`resets_at`), Codex는 `GET https://chatgpt.com/backend-api/wham/usage`(`ChatGPT-Account-Id`, `rate_limit.primary_window/secondary_window`의 `used_percent`·`limit_window_seconds`·`reset_at`, `limit_reached`)를 3분 간격으로 부른다. API: `GET /api/v1/accounts`, `GET /api/v1/accounts/usage[?refresh=1]` → `{settings, accounts[]}`, `POST /api/v1/accounts/usage-settings`(조회 켜기, 원격 세션 불가). 인증 파일은 읽기만 하고 고치거나 복사하지 않는다.
+- **한도:** CLI 결과의 한도 문구는 `PROVIDER_LIMIT`이다. 그 턴은 다른 계정으로 자동으로 다시 보내지 않으며 알림 방식은 SPEC-02.19가 정한다.
+- **이행(2026-10-01 진행 중):** 관리 프로필(`cli-profiles/profiles.json`, UUID 하위 설정 폴더, Codex file 자격증명 저장소), 계정 선택 `choose`·자동 전환(`autoSwitch`·`threshold`)·`accountSwitchedFrom`·`markLimited`, 계정 로그인·로그아웃·제거·이름 변경·선택 API, 대화의 계정 인계(`…/conversations/:c/account`)는 PLAN-25 2단계에서 코드에서 뺀다. 이전 계약은 [PLAN-06](../plans/PLAN-06-cli-account-profiles.md)·[PLAN-13](../plans/PLAN-13-multi-account.md)과 Git 이력에 있다.
 
 ### ZWCAD의 평면 LINE 표현
 
@@ -708,7 +706,7 @@ PLAN-06의 프로필 실행은 서버가 선택한 절대 configDirectory를 Cli
 
 현재 사용자 LocalAppData/VIDE/rhino-connections 아래에 세션별 연결 기록을 원자적으로 등록한다. 토큰은 로컬 연결 기록에만 있으며 브라우저/AI/공유 응답에 전달하지 않는다. 제어기는 직접 실행 경로/소켓 소유를 검증한 기록만 발견하고 외부 연결은 소유 창 레지스트리에 복제하지 않는다. 외부 instance에는 새 sessionId도 포함하여 재연결 전 후보를 차단한다. 시험은 별도 연결 디렉터리를 환경 변수로 지정한다.
 
-Rhino 패널은 기존 RHP 안의 Eto `ConnectionPanel`을 `PanelType.PerDoc`로 등록하고 `VIDEPanel` 명령으로 연다. 어셈블리 GUID와 플러그인 GUID를 일치시킨다. 문서 런타임 번호로 기존 AttachedConnection을 조작하며 별도 MCP나 웹뷰를 추가하지 않는다. 사용자가 VIDE 열기를 누르면 LocalAppData/VIDE/launch.json의 loopback HTTP 주소를 기본 브라우저로 연다. 인증 주소는 로그/상태 텍스트에 출력하지 않는다. 패널 타이머는 연결·Live·조회 시각 표시만 갱신하고 형상을 조회하거나 저장하지 않는다.
+Rhino 패널은 기존 RHP 안의 Eto `ConnectionPanel`을 `PanelType.PerDoc`로 등록하고 `VIDEPanel` 명령으로 연다. 어셈블리 GUID와 플러그인 GUID를 일치시킨다. 문서 런타임 번호로 기존 AttachedConnection을 조작하며 별도 MCP를 추가하지 않는다(2026-09-29 PLAN-21부터 패널 본문은 Eto `WebView`로 VIDE 페이지를 연다, §6 「PC 프로그램」의 호스트 패널). 사용자가 VIDE 열기를 누르면 LocalAppData/VIDE/launch.json의 loopback HTTP 주소를 기본 브라우저로 연다. 인증 주소는 로그/상태 텍스트에 출력하지 않는다. 패널 타이머는 연결·Live·조회 시각 표시만 갱신하고 형상을 조회하거나 저장하지 않는다.
 
 플러그인은 객체·속성·층·정의·재질 변경 이벤트마다 해당 객체의 변경 revision을 기록하고, Live Sync가 켜져 있으면 0.5초 idle 후 세대를 갱신한다. 제어 화면은 가벼운 연결 상태를 1초 주기로 조회한다. 세대가 바뀌면 마지막 표시 Sync의 revision 이후 변경·삭제된 객체만 `displayChanges`로 받아 그 Sync에 병합한다. 다른 요청이 참조한 Sync는 덮어쓰지 않고 병합한 새 기록을 만든다. 연결이 바뀌었거나 revision을 추적할 수 없으면 전체 표시 Sync(`displayPage`)로 돌아간다. 연결 문서의 표시 기준값(`documentHash`)은 연결 session·revision 토큰이며 표시 조회에서 전체 기하 해시를 계산하지 않는다. 후보 캡처는 이 토큰과 내용 지문(`contentHash`)을 함께 남기고, 원본 적용은 내용 지문으로 검증한다. 표시 형상은 객체 GUID·런타임 번호별로 캐시하고, 페이지는 12 MiB 예산으로 끊으며, 메싱·직렬화는 UI 스레드 밖에서 병렬로 한다. 블록은 정의(중첩 전개 포함)의 메시·선분·문자를 표시 모델의 `definitions[정의 GUID]`에 한 번만 싣고, 인스턴스 항목은 `block.definition`과 미터 단위 행 우선 4×4 `block.transform`만 싣는다. 뷰포트는 정의별 GPU 형상을 인스턴스끼리 공유한다. 치수·문자는 `segments`(xyz 끝점 쌍)와 `texts`(CAD와 같은 문자 표시 형식, XY 평면), 해치는 패턴 선·경계를 `segments`로, 단색 채움은 메시로 싣는다. 증분 조회는 바뀐 인스턴스가 참조하는 정의를 함께 보내며, 정의·치수 스타일이 바뀌면 캐시를 비우고 해당 객체를 변경으로 기록한다. 네이티브 블록·주석은 수정하지 않는다. PowerShell 소유 확인은 연결별로 60초 재사용하되 매 호출 PID 생존을 확인하고 통신 실패 시 무효화한다. 적용/명령 중 취득은 보류하고 자동 취득은 단일 실행·초안 보호·실패 후 수동 재개를 따른다.
 
@@ -724,32 +722,32 @@ Rhino 패널은 기존 RHP 안의 Eto `ConnectionPanel`을 `PanelType.PerDoc`로
 
 완성된 표시 응답은 `displayCoverage`에 total·displayed·omitted·omittedTypes를 담는다. 실제 sceneRepresentation으로 표시할 수 없는 객체를 집계하며 삭제로 표시하지 않는다. 블록 상세 메시 미지원은 이 범위에 포함한다. 네이티브 보존 검증과 화면 형상 지원은 분리한다.
 
-연결된 사용자 Rhino의 읽기 Sync는 고정 메서드 `displayPage`를 사용한다. 현재 문서의 보이는 객체를 조회하고 미터 단위 표시 좌표를 반환한다. 네이티브 파일 저장·별도 worker 실행·면적/체적 계산은 하지 않는다. 페이지 사이 변경은 읽기 revision과 전후 문서 지문으로 확인한다. 직접 표시 응답의 합산 예산은 128MiB이며 편집 worker의 기존 예산과 구분한다. 결과는 `displayOnly: true`, `verified: false`, 원본 식별자·지문을 담은 `sourceDocument`로 저장한다. 원래 유효하지 않은 객체는 `valid: false`로 기록하고 렌더링에서 제외한다. 엄격한 `nativeModelSchema`와 표시용 `displayModelSchema`를 분리하며 네이티브 편집 검증을 완화하지 않는다. 후속 SDK 편집에서만 같은 원본 지문을 확인하고 기존 `captureEditor`로 검증된 작업 사본을 준비한다.
+연결된 사용자 Rhino의 읽기 Sync는 고정 메서드 `displayPage`를 사용한다. 현재 문서의 보이는 객체를 조회하고 미터 단위 표시 좌표를 반환한다. 네이티브 파일 저장·별도 worker 실행·면적/체적 계산은 하지 않는다. 페이지 사이 변경은 읽기 revision과 전후 문서 지문으로 확인한다. 직접 표시 응답의 합산 예산은 128MiB이며 편집 worker의 기존 예산과 구분한다. 결과는 `displayOnly: true`, `verified: false`, 원본 식별자·지문을 담은 `sourceDocument`로 저장한다. 원래 유효하지 않은 객체는 `valid: false`로 기록하고 렌더링에서 제외한다. 엄격한 `nativeModelSchema`와 표시용 `displayModelSchema`를 분리하며 네이티브 편집 검증을 완화하지 않는다. 이 표시 Sync를 기준으로 한 AI 편집은 §4 「바로 적용 경로」로 열린 문서에서 실행한다(`Execution`이 Rhino 표시 Sync 기준이면 `runDirectTurn`). 바로 적용 드라이버를 쓰지 않는 실행(검토 jig 등)만 같은 원본 지문을 확인하고 기존 `captureEditor`로 검증된 작업 사본을 준비한다.
 
 ### 프로젝트 연결 파일(Link)
 
-SPEC-01.11. 스키마 v4의 `document_links(id, projectId, host, name, path, instance, documentId, hidden, linkedAt, updatedAt)`가 프로젝트별 연결 파일을 소유한다. 같은 프로젝트·호스트에서 `path`(없으면 `instance`+`documentId`)가 같으면 한 연결로 본다. `GET /api/v1/projects/:id/links`는 연결 행에 현재 연결 상태(열린 문서 목록과 대조한 live·generation·objectCount)와 마지막 Sync(`input.linkId`가 그 연결인 가장 최근 성공 Sync)를 붙여 돌려준다. `POST .../links`(플러그인), `PUT .../links/:linkId`(hidden), `POST .../links/:linkId/remove`(목록에서 빼기, Sync 기록 보존). Sync·Live Sync 요청 본문의 `linkId`가 결과를 연결에 묶는다.
+SPEC-01.11. 스키마 v4의 `document_links(id, projectId, host, name, path, instance, documentId, hidden, linkedAt, updatedAt)`가 프로젝트별 연결 파일을 소유한다. 같은 프로젝트·호스트에서 `path`(없으면 `instance`+`documentId`)가 같으면 한 연결로 본다. `GET /api/v1/projects/:id/links`는 연결 행에 현재 연결 상태(열린 문서 목록과 대조한 live·generation·objectCount)와 마지막 Sync(`input.linkId`가 그 연결인 가장 최근 성공 Sync)를 붙여 돌려준다. `POST .../links`(플러그인), `PUT .../links/:linkId`(hidden), `POST .../links/:linkId/remove`(연결 파일 제거, SPEC-01.11의 9: `removeLink`, `src/server/link-removal.ts`가 그 연결의 Sync·가져오기 요청(`input.linkId`가 그 연결이거나, 파일 항목이면 같은 이름의 이전 가져오기)을 기하와 함께 지우고(`workspace.purge`, 게시본이 쓰는 것은 숨김), 데이터 폴더 안의 작업 폴더·업로드 사본 가운데 다른 요청이 쓰지 않는 것을 지운 뒤 연결 행을 뺀다. 그 요청이 대기·실행 중이면 `PROJECT_BUSY`. 사용자 파일과 호스트 창은 건드리지 않는다). Sync·Live Sync 요청 본문의 `linkId`가 결과를 연결에 묶는다.
 
 플러그인은 사용자 권한으로 `%LOCALAPPDATA%/VIDE/launch.json`의 실행 주소(127.0.0.1)와 실행 토큰으로 `/api/v1/session`에 세션을 만든 뒤(Origin 헤더 포함) 프로젝트 목록 조회·Link를 호출한다. 호출은 호스트 UI 스레드 밖에서 하며, VIDE는 Link 응답을 바로 돌려주고 첫 Sync는 화면(연결 목록 폴링)이 수행한다. VIDE가 연 작업 사본 창(`/requests/:id/open`)도 같은 연결로 등록하며, 그 창은 열림 여부만 확인한다(자동 갱신 없음, ⟳로 Sync). 엔진이 플러그인 문서에 다시 요청하는 동안 플러그인이 UI 스레드에서 기다리지 않는다.
 
-화면은 보이기 연결마다 그 연결의 표시 결과(마지막 Sync 또는 사용자가 연 후보)를 레이어로 두고 하나의 장면으로 합친다. 여러 레이어일 때 장면·객체 ID는 `레이어키::원래ID`로 구분하고 객체의 `sourceId`·`revision`(기준 요청)으로 핀·검사를 원래 기준에 되돌린다. Live Sync 변경분은 해당 레이어에만 합쳐 증분 갱신한다.
+화면은 보이기 연결마다 그 연결의 표시 결과(마지막 Sync 또는 사용자가 연 작업 사본 결과)를 레이어로 두고 하나의 장면으로 합친다. 여러 레이어일 때 장면·객체 ID는 `레이어키::원래ID`로 구분하고 객체의 `sourceId`·`revision`(기준 요청)으로 핀·검사를 원래 기준에 되돌린다. Live Sync 변경분은 해당 레이어에만 합쳐 증분 갱신한다.
 
 ### JIG 탭과 Sync jig
 
 `src/jigs/catalog.ts`가 공식 jig 목록, `src/jigs/sync.ts`가 Sync jig 계산을 소유한다(SPEC-05.8). `GET /api/v1/jigs`는 목록, `POST /api/v1/projects/:id/jigs/sync`는 저장된 두 Sync 결과의 `scene`(Rhino `line`/`points`, CAD `segments`, 미터)로 계산해 관계·행(최대 5,000행과 `totalRows`)·레이어 대응·CAD 단위(`sourceUnits`)를 돌려준다. 관계는 Rhino→CAD `rotation`(라디안)·`translation`·`dz`이며, 방향 후보(주 방향 차)마다 길이 버킷이 같은 선분 쌍의 이동량을 투표하고 대응 쌍의 중앙값으로 다듬는다. 행의 `ends`는 CAD 좌표, `inRhino`는 역변환한 모델 좌표다.
 
-AI 검토 요청은 `jig: { kind: 'sync-review', rows }`와 `sync-jig.json` 첨부로 만든다. 실행기는 이 요청에 호스트·기준 문서·모델 문맥을 붙이지 않고, 답의 `R숫자` 인용을 `rows`와 대조해 `jigCheck`를 결과에 남긴다. 반영 요청은 `jig: { kind: 'sync-apply' }`와 `sync-edits.json`으로 기존 ZWCAD 열린 도면 수정·Rhino 원본 적용 경로를 쓴다.
+AI 검토 요청은 `jig: { kind: 'sync-review', rows }`와 `sync-jig.json` 첨부로 만든다. 실행기는 이 요청에 호스트·기준 문서·모델 문맥을 붙이지 않고, 답의 `R숫자` 인용을 `rows`와 대조해 `jigCheck`를 결과에 남긴다. 반영 요청은 `jig: { kind: 'sync-apply', side }`와 `sync-edits.json`으로 만들며 그 쪽 Sync(`baseRequestId`)를 기준으로 하는 일반 AI 편집과 같은 경로를 쓴다: 열린 문서의 표시 Sync면 바로 적용(2026-09-30 ADR-022, §4 「바로 적용 경로」), 가져온 파일이면 작업 사본 경로다.
 
 jig 플랫폼(패키지 형식 v3, 작업본, 출처별 실행기, `src/server/jig-routes.ts`의 jig 경로, jig 입력 읽기, 공식 틀과 데이터 블록으로 하는 Rhino에 만들기 `jig: { kind: 'jig-bake' }`, 스키마 v5)의 물리 계약은 [ARCH-03](ARCH-03-jig-runtime.md)이 소유한다. 이 절의 Sync jig·구조 jig 경로와 저장은 그대로 두며, `GET /api/v1/jigs`는 ARCH-03 §7에 따라 공식 목록에 설치된 jig 버전을 더한 등록부로 넓어진다.
 
 ### 현재 ZWCAD의 읽기 연결
 
-`hosts/zwcad/connection/`은 설치된 ZWCAD 2023 SDK를 참조하는 .NET Framework 4.8 x64 DLL이다. AI 코드 실행기와 별도 어셈블리이며 Roslyn 또는 외부 MCP 설치가 필요 없다. `VIDECADConnect`·`VIDECADDisconnect`·`VIDECADSync`·`VIDECADLiveSync`·`VIDECADPanel`과 WinForms PaletteSet을 제공한다. 패널은 활성 도면을 보여 주되 이미 연결된 다른 도면의 대상을 바꾸지 않는다. 배포본에는 연결 DLL만 포함하고 ZWCAD SDK DLL은 설치본에서 사용한다.
+`hosts/zwcad/connection/`은 설치된 ZWCAD 2023 SDK를 참조하는 .NET Framework 4.8 x64 DLL이다. 작업 사본 worker와 별도 어셈블리이지만, 열린 도면의 AI 코드 실행(아래, §6 「ZWCAD 열린 도면 수정」)을 위해 worker의 `SdkCompiler`와 컴파일러 어셈블리를 함께 설치한다. 외부 MCP 설치는 필요 없다. `VIDECADConnect`·`VIDECADDisconnect`·`VIDECADSync`·`VIDECADLiveSync`·`VIDECADPanel`과 WinForms PaletteSet을 제공한다. 패널은 활성 도면을 보여 주되 이미 연결된 다른 도면의 대상을 바꾸지 않는다. 배포본에는 연결 DLL만 포함하고 ZWCAD SDK DLL은 설치본에서 사용한다.
 
-문서마다 인증된 loopback TCP 리스너를 만들고 `%LOCALAPPDATA%/VIDE/zwcad-connections/<sessionId>.json`에 기록한다. 시험은 `VIDE_ZWCAD_CONNECT_DIR`로 분리한다. public instance는 PID·시작 ticks·session UUID, public documentId는 1이다. native documentId는 session UUID로 고정한다. 제어기는 실행 경로·시작 시각·리스너 소유 PID를 대조한 뒤 고정 메서드 `attachedStatus`·`displayPage`·`selection`만 호출한다. 수신한 생성 코드를 실행하는 메서드는 없다. 문서 닫힘/Disconnect에서 이벤트와 리스너·기록을 폐기하며 사용자 프로세스를 종료하는 소유권은 만들지 않는다.
+문서마다 인증된 loopback TCP 리스너를 만들고 `%LOCALAPPDATA%/VIDE/zwcad-connections/<sessionId>.json`에 기록한다. 시험은 `VIDE_ZWCAD_CONNECT_DIR`로 분리한다. public instance는 PID·시작 ticks·session UUID, public documentId는 1이다. native documentId는 session UUID로 고정한다. 제어기는 실행 경로·시작 시각·리스너 소유 PID를 대조한 뒤 메서드를 호출한다: 읽기 `attachedStatus`·`displayPage`·`selection`·`fingerprint`·`queryEntities`, 생성 코드 실행 `runCode{code, write}`(2026-09-29)와 바로 적용의 `direct-execute`·`direct-undo`(2026-09-30 ADR-022, §4 「바로 적용 경로」. `hosts/zwcad/connection/AttachedDocument.cs`, 서버 `ZwcadSdkExecution.runAttached`, `src/server/zwcad-sdk-execution.ts`). 생성 코드는 ZWCAD 명령(`_VIDEAIRUN`) 하나 안에서 실행해 Undo 묶음 하나가 된다. 문서 닫힘/Disconnect에서 이벤트와 리스너·기록을 폐기하며 사용자 프로세스를 종료하는 소유권은 만들지 않는다.
 
 SDK 조회는 Idle의 주 스레드와 문서 잠금에서 수행한다. ObjectAppended/Modified/Erased가 revision을 올리고 Live Sync가 켜졌으면 1초 안정화 후 generation을 올린다. Sync는 generation을 즉시 올린다. 지문은 연결 session·revision·단위이며 전체 기하를 매번 해시하지 않는다. `displayPage`의 offset·next·total·revision과 객체/scene ID 대응, 전후 지문을 검사한다. 원본 Handle에 대응하는 최상위 객체 한 개에 블록 내부 선분을 묶고 미터 좌표의 `scene.segments`(xyz 끝점 쌍)를 `THREE.LineSegments`로 표시한다. 네이티브 블록·곡선은 수정하지 않는다. 이 표현의 웹 공유 게시 지원은 별도이며 아직 허용하지 않는다.
 
 CAD 표시 응답은 최대 128MiB 수신을 명시한다. 실제 도면의 722MB 단일 블록 응답과 시간 초과를 확인해, 플러그인은 객체 하나의 표시 좌표 수가 2,000,000개를 넘으면 직렬화 전에 `OversizedDisplay`로 제외한다. SDK 객체 읽기 예외도 `UnreadableObject`로 해당 객체만 기록한다. 페이지 누적 좌표가 같은 기준을 넘으면 그 객체까지 반환하고 `next`부터 이어 읽는다. 총 도면 객체 수를 잘라내는 한도는 아니다. 큰 블록의 공유 기하/인스턴싱 지원 전까지의 부분 표시이며 이 제외 수를 화면에 알린다.
 
-이전 플러그인의 실제 SDK 조회 실패는 범위를 이분한다. 프레임 초과는 동일한 큰 블록을 매 이분 단계에서 재직렬화하지 않도록 그 범위를 개별 객체로 조회하고 단일 객체도 실패하면 위 누락 유형으로 기록한다. 인증·revision 변경·불명확 연결 오류는 재시도로 성공을 만들지 않는다. 표시되지 않은 객체는 원본에 남는다. 결과는 `displayOnly: true`, `verified: false`, `referenceOnly: true`이며 현재 문서용 AI 실행은 `ZWCAD_ATTACHED_EDIT_UNAVAILABLE`로 공급자 호출 전에 거절한다. 기존 별도 CAD 편집 사본 경로는 유지한다.
+이전 플러그인의 실제 SDK 조회 실패는 범위를 이분한다. 프레임 초과는 동일한 큰 블록을 매 이분 단계에서 재직렬화하지 않도록 그 범위를 개별 객체로 조회하고 단일 객체도 실패하면 위 누락 유형으로 기록한다. 인증·revision 변경·불명확 연결 오류는 재시도로 성공을 만들지 않는다. 표시되지 않은 객체는 원본에 남는다. 결과는 `displayOnly: true`, `verified: false`, `referenceOnly: true`다. 연결 도면의 표시 Sync(`sourceDocument.connection = attached-editor`)를 기준으로 한 AI 실행은 `runAttached`가 열린 도면에서 하고, 그 밖의 표시 전용 기준(연결 정보가 없는 이전 결과)만 `ZWCAD_ATTACHED_EDIT_UNAVAILABLE`로 공급자 호출 전에 거절한다. 가져온 DWG의 별도 CAD 편집 사본 경로는 유지한다.

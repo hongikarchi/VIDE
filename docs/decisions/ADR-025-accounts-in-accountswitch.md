@@ -2,8 +2,8 @@
 id: ADR-025
 title: AI 구독 계정 관리는 AccountSwitch가 맡는다
 status: approved
-version: 0.1
-updated: 2026-09-30
+version: 0.2
+updated: 2026-10-01
 owner: user
 related: [FR-08, FR-18, AC-47, SPEC-02, ARCH-01, PLAN-06, PLAN-13, PLAN-24, PLAN-25, ADR-021]
 ---
@@ -41,4 +41,4 @@ VIDE가 계정 한도·현재 계정을 어떻게 알리는지 같은 세부는 
 - AccountSwitch가 없는 사용자는 CLI에 로그인한 한 계정으로 그대로 쓴다.
 - 대화의 공급자·모델 고정은 그대로다. 계정은 대화에 고정하지 않고 턴마다 그때의 기본 로그인을 쓴다.
 - 계정 한도로 끝난 턴은 지금처럼 자동으로 다시 보내지 않는다. 다른 계정으로 바꾸는 일은 AccountSwitch가 한다.
-- 고칠 정본: SPEC-02.17(대화의 계정 고정)·SPEC-02.18(구독 계정 프로필)·SPEC-02.19(계정 전환 카드), ARCH-01 「CLI 프로필 실행 경계」, Design의 설정 → AI 화면, PRD의 계정 관련 문장 확인. PLAN-06·PLAN-13의 계정 관리 부분은 이 ADR로 대체된다.
+- 고칠 정본: SPEC-02.17(대화의 계정 고정)·SPEC-02.18(구독 계정 프로필)·SPEC-02.19(계정 전환 카드), ARCH-01 「CLI 기본 로그인 실행 경계」, Design의 설정 → AI 화면, PRD의 계정 관련 문장 확인. PLAN-06·PLAN-13의 계정 관리 부분은 이 ADR로 대체된다.
