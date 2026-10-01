@@ -101,6 +101,12 @@ test('chip and AI labels', () => {
   assert.equal(ui.chipLabel(entry(null)), '기본 대화');
   assert.equal(ui.chipLabel(entry('c1', { kind: 'ask', title: '주차 대수' })), '질문 · 주차 대수');
   assert.equal(ui.chipLabel(entry('c1', { kind: 'cad-edit', title: 'CAD 편집' })), 'CAD 편집');
+  // A tab [+] opened reads '새 대화' until its first request names it (T-097); an older general
+  // conversation that kept the default name with requests in it stays '대화'.
+  assert.equal(ui.chipLabel(entry('c1', { title: '대화' })), '새 대화');
+  assert.equal(ui.titleOf(entry('c1', { title: '대화' })), '새 대화');
+  assert.equal(ui.chipLabel(entry('c1', { title: '대화', requests: 2 })), '대화');
+  assert.equal(ui.chipLabel(entry('c1', { title: '구조 검토 부탁' })), '구조 검토 부탁');
   const models = [{ id: 'sonnet', name: 'Sonnet', provider: 'claude-cli' }];
   // Every conversation fixes its AI at its first turn; until then the label says so.
   assert.equal(ui.providerLabel(entry(null), models), '첫 요청 때 AI를 정합니다');

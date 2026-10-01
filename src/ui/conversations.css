@@ -113,7 +113,6 @@
   font: inherit;
   cursor: pointer;
 }
-.conv-create,
 .conv-card {
   display: flex;
   flex-direction: column;
@@ -123,17 +122,6 @@
   border-radius: var(--radius-sm);
   background: var(--soft);
 }
-.conv-create label {
-  display: grid;
-  grid-template-columns: 64px 1fr;
-  align-items: center;
-  gap: 6px;
-}
-.conv-create label > span {
-  color: var(--muted);
-}
-.conv-create input,
-.conv-create select,
 .conv-card select {
   font: inherit;
   min-width: 0;

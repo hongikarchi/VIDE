@@ -809,7 +809,11 @@ export class ConversationService {
         // Opened with "자동 (Jev)" and no request yet: this first turn fixes service and model.
         const choice = await choose();
         this.store.supersede(conversation.id, mark.id, mark.id);
+        // A tab opened by [+] still has its default name: the first request names it (T-097).
+        const body = typeof input.body === 'string' ? input.body.trim() : '';
+        const named = body && conversation.title === KIND_TITLES[conversation.kind];
         conversation = this.store.update(projectId, conversation.id, {
+          ...(named ? { title: clip(body.replace(/\s+/g, ' '), 60) } : {}),
           provider: choice.provider,
           model: choice.model ?? null,
           effort: choice.effort === 'default' ? null : choice.effort,
@@ -1465,12 +1469,17 @@ export async function conversationRoutes(
     const input = createInput.parse(await body(request));
     // A named service (and model) is kept as in a request; otherwise Jev chooses once, here.
     const automatic = !input.provider || isAutoModel(input.model);
-    const choice = automatic
-      ? await chooseModel(
-          { body: input.body ?? input.title ?? '', host: input.host, permission: input.permission },
-          input.provider,
-        )
-      : { provider: input.provider!, model: input.model, effort: input.effort ?? 'default' };
+    // [+] sends no request yet (SPEC-02.19 1, T-097): nothing to choose from, so no Jev call; the
+    // first turn chooses (`place`) and the shown service is only provisional.
+    const pending = automatic && !input.body?.trim();
+    const choice: Choice & { task?: string } = pending
+      ? { provider: input.provider ?? 'claude-cli', effort: 'default' }
+      : automatic
+        ? await chooseModel(
+            { body: input.body ?? '', host: input.host, permission: input.permission },
+            input.provider,
+          )
+        : { provider: input.provider!, model: input.model, effort: input.effort ?? 'default' };
     const kind =
       input.mode === 'make'
         ? 'jig-make'
@@ -1490,7 +1499,7 @@ export async function conversationRoutes(
         draftId: input.draftId,
         targets: input.targets,
         // Jev had no request to read: the first turn chooses service and model (SPEC-02.19 2).
-        pending: automatic && !input.body?.trim(),
+        pending,
       }),
     );
     return true;

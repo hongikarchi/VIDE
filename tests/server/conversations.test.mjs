@@ -1002,6 +1002,84 @@ test("the composer's own model at the first turn is kept without asking Jev", as
   );
 });
 
+test('[+] opens a conversation without asking Jev; its first request names it, a given name stays', async (t) => {
+  const context = setup(t, () => [init, answer('답')]);
+  const { conversations, project, settled } = context;
+  const chosen = [];
+  /** POST …/conversations as the [+] button and the programmatic callers send it. */
+  const create = async (value) => {
+    let sent;
+    await conversationRoutes(
+      new URL(`http://127.0.0.1/api/v1/projects/${project.id}/conversations`),
+      { method: 'POST' },
+      {
+        service: conversations,
+        body: async () => value,
+        send: (status, data) => (sent = { status, data }),
+        chooseModel: async (routing, requested) => {
+          chosen.push(routing.body);
+          return {
+            provider: requested ?? 'claude-cli',
+            model: 'sonnet',
+            effort: 'default',
+            task: 'lookup',
+          };
+        },
+      },
+    );
+    return sent;
+  };
+  // [+] (T-097): no request yet, so no model call; an empty general tab whose first turn chooses.
+  const plus = await create({ kind: 'general' });
+  assert.equal(plus.status, 201);
+  assert.deepEqual(
+    [plus.data.kind, plus.data.title, plus.data.pending, plus.data.requests],
+    ['general', '대화', true, 0],
+  );
+  assert.equal((await create({})).data.kind, 'general');
+  const named = await create({ title: '구조 검토' });
+  assert.deepEqual([named.data.title, named.data.pending], ['구조 검토', true]);
+  assert.deepEqual(chosen, []);
+  // The first request names the tab (its first 60 characters) and fixes its AI; kind and targets
+  // are left as they are.
+  const deps = placeDeps();
+  const long =
+    '보 간격을 2.5 m로 줄였을 때 처짐이 기준 안에 드는지 3층 평면의 모든 큰보에 대해 확인하고 결과를 표로 정리해줘';
+  await composerTurn(context, deps, 'n1', { conversationId: plus.data.id, body: `  ${long}  ` });
+  await settled();
+  const after = conversations.get(project.id, plus.data.id);
+  assert.equal(after.title, long.slice(0, 60) + ' …(생략)');
+  assert.deepEqual(
+    [after.kind, after.targets, after.pending, after.model],
+    ['general', null, false, 'opus'],
+  );
+  // A later request does not rename it again.
+  await composerTurn(context, deps, 'n2', { conversationId: plus.data.id, body: '다음 질문' });
+  await settled();
+  assert.equal(conversations.get(project.id, plus.data.id).title, after.title);
+  // A name given when it opened is kept.
+  await composerTurn(context, deps, 'n3', {
+    conversationId: named.data.id,
+    body: '기둥 위치 확인',
+  });
+  await settled();
+  assert.equal(conversations.get(project.id, named.data.id).title, '구조 검토');
+  // A jig conversation opened with its request still has Jev choose once, as before.
+  const jig = await create({ kind: 'jig-run', title: '구조 검토 jig', body: '구조 검토 열어줘' });
+  assert.deepEqual(
+    [jig.data.kind, jig.data.title, jig.data.pending, jig.data.model],
+    ['jig-run', '구조 검토 jig', false, 'sonnet'],
+  );
+  assert.deepEqual(chosen, ['구조 검토 열어줘']);
+  // A request opening a conversation with a named model is not asked about either.
+  const fixed = await create({ body: '법규 질문', provider: 'codex-cli', model: 'gpt-5' });
+  assert.deepEqual(
+    [fixed.data.provider, fixed.data.model, fixed.data.title],
+    ['codex-cli', 'gpt-5', '법규 질문'],
+  );
+  assert.equal(chosen.length, 1);
+});
+
 test('another model from the composer opens a new conversation with the hand-over, and the request runs there', async (t) => {
   const context = setup(t, (turn) => [init, answer(`답 ${turn + 1}`)]);
   const { conversations, project, fake, open, send, settled, state } = context;

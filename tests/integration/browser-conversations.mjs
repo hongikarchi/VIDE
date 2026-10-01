@@ -3,6 +3,8 @@
 // notice keeps 'AI 작업으로 보내기' (which records the reversal), and ask/document go to the AI.
 // T-088: conversations are tabs whose AI is fixed at the first turn; the composer's model follows
 // the chosen tab, and another model sends the request to a new conversation (its tab is chosen).
+// T-097: [+] opens an empty '새 대화' tab at once (no form), the composer takes the cursor, and the
+// first request names the tab.
 import assert from 'node:assert/strict';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -41,13 +43,25 @@ try {
   // Sending to the AI is only recorded (no CLI runs here). One request comes back moved to a new
   // conversation, the way the server answers another model than the conversation's.
   let moved;
-  await page.route(/\/requests(\/r-moved)?$/, (route) => {
+  const served = {};
+  await page.route(/\/requests(\/[^/]+)?$/, (route) => {
+    const [, id] = /\/requests(?:\/([^/]+))?$/.exec(new URL(route.request().url()).pathname);
     if (route.request().method() !== 'POST')
-      return moved && /r-moved$/.test(route.request().url())
-        ? route.fulfill({ json: moved })
-        : route.continue();
+      return id && served[id] ? route.fulfill({ json: served[id] }) : route.continue();
+    if (id) return route.continue();
     const input = JSON.parse(route.request().postData());
     posted.push(input);
+    // The first request of a tab [+] opened: the server names the tab after it (T-097).
+    if (input.conversationId === 'c-plus') {
+      conversationsState['c-plus'] = {
+        ...conversationsState['c-plus'],
+        title: input.body,
+        pending: false,
+        requests: 1,
+      };
+      served[input.id] = { id: input.id, state: 'queued', input, result: null };
+      return route.fulfill({ status: 202, json: served[input.id] });
+    }
     if (input.body !== '다른 모델로 이어서')
       return route.fulfill({ status: 409, json: { code: 'PROJECT_BUSY' } });
     conversationsState['c-new'] = {
@@ -60,6 +74,7 @@ try {
       input: { ...input, id: 'r-moved', conversationId: 'c-new' },
       result: null,
     };
+    served['r-moved'] = moved;
     return route.fulfill({ status: 202, json: moved });
   });
   await page.route(/\/route\/revert$/, (route) => {
@@ -82,6 +97,7 @@ try {
       ms: 5,
     },
     '다른 모델로 이어서': { target: 'document', by: 'jev' },
+    '보 간격 검토해줘': { target: 'document', by: 'jev' },
   };
   await page.route(/\/route$/, (route) =>
     route.fulfill({
@@ -92,7 +108,8 @@ try {
   // (a suggestion). The chip reads it; the button posts the hand-over. An account limit is no
   // server card any more (ADR-025: not sent again, change the account in AccountSwitch); its
   // notice is read from the stopped request (tests/core/conversations-ui.test.mjs).
-  const handedOver = [];
+  const handedOver = [],
+    created = [];
   const sends = { ledgerItems: 2, recentTurns: 1, files: 0 };
   const entry = (id, title, handover) => ({
     id,
@@ -124,6 +141,17 @@ try {
   await page.route(/\/api\/v1\/projects\/[^/]+\/conversations(\/.*)?$/, (route) => {
     const [, rest = ''] = /\/conversations(\/.*)?$/.exec(new URL(route.request().url()).pathname);
     const [, id, action] = rest.split('/');
+    // [+]: an empty general conversation whose first turn chooses its AI.
+    if (route.request().method() === 'POST' && !id) {
+      created.push(JSON.parse(route.request().postData() || '{}'));
+      conversationsState['c-plus'] = {
+        ...entry('c-plus', '대화', null),
+        kind: 'general',
+        requests: 0,
+        pending: true,
+      };
+      return route.fulfill({ status: 201, json: conversationsState['c-plus'] });
+    }
     if (route.request().method() === 'POST' && action) {
       handedOver.push({ id, action, body: JSON.parse(route.request().postData() || '{}') });
       conversationsState[id] = { ...conversationsState[id], handover: null };
@@ -250,9 +278,41 @@ try {
     await page.locator('#message').textContent(),
     /모델이 달라 새 대화로 이어서 보냈습니다 · Opus/,
   );
+  // [+] opens a new tab at once: no form, nothing asked, the tab is chosen and the cursor is in
+  // the composer (T-097).
+  await page.locator('#conversation-chips .conv-add').click();
+  await page.waitForFunction(
+    () =>
+      document.querySelector('[data-conversation="c-plus"]')?.getAttribute('aria-selected') ===
+      'true',
+  );
+  assert.deepEqual(created, [{ kind: 'general' }]);
+  assert.equal(await page.locator('#conversation-chips form').count(), 0);
+  assert.equal(await page.locator('#conversation-chips select:not(.conv-more)').count(), 0);
+  assert.equal(await page.locator('[data-conversation="c-plus"]').textContent(), '새 대화');
+  assert.equal(await page.evaluate(() => document.activeElement?.id), 'body');
+  await page.waitForFunction(
+    () =>
+      document.querySelector('#conversation-chips .conv-ai')?.textContent ===
+      '첫 요청 때 AI를 정합니다',
+  );
+  // Its first request goes to it and names it.
+  posted.length = 0;
+  await page.keyboard.type('보 간격 검토해줘');
+  await page.locator('#request').click();
+  for (let i = 0; i < 40 && !posted.length; i++) await page.waitForTimeout(50);
+  assert.deepEqual(
+    posted.map((input) => [input.conversationId, input.body]),
+    [['c-plus', '보 간격 검토해줘']],
+  );
+  await page.waitForFunction(
+    () =>
+      document.querySelector('[data-conversation="c-plus"] .conv-label')?.textContent ===
+      '보 간격 검토해줘',
+  );
   assert.deepEqual(errors, []);
   console.log(
-    'browser conversations: route cards, AI fallback, tabs with a fixed AI, a model change to a new tab and hand-over cards pass',
+    'browser conversations: route cards, AI fallback, tabs with a fixed AI, a model change to a new tab, hand-over cards and [+] opening a tab at once pass',
   );
 } finally {
   await browser?.close();

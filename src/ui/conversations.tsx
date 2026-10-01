@@ -8,8 +8,9 @@ import './conversations.css';
 // the right column, one per conversation (the project's default conversation first), with its
 // state (● 진행 중, ◌ 읽지 않은 답, '대기 n'); a head line with the conversation's name, its target
 // files and the service · model · account fixed at its first turn (read-only; the composer's model
-// follows the chosen tab, `onFixed`); [+] 새 대화; closing; and the T2 hand-over card (다른 AI로 이어
-// 가기 opens a new conversation, and the account-limit stop the server reports).
+// follows the chosen tab, `onFixed`); [+] 새 대화, which opens an empty tab at once with no questions
+// (T-097: the first request names it and fixes its AI); closing; and the T2 hand-over card (다른 AI로
+// 이어 가기 opens a new conversation, and the account-limit stop the server reports).
 // The chosen conversation is also the work view's filter (`conversationFilter`, read by
 // work-view.tsx). Server routes: src/server/conversations.ts `conversationRoutes`.
 
@@ -174,13 +175,22 @@ export function chipStates(
     });
 }
 export const keyOf = (id: string | null) => id ?? 'default';
+/** The name of a tab [+] opened, until its first request names it (T-097). */
+export const NEW_TITLE = '새 대화';
+/** A conversation's name: an empty general one still on its default name reads '새 대화'. */
+export function titleOf(entry: Pick<ConversationEntry, 'kind' | 'title'> & { requests?: number }) {
+  return entry.kind === 'general' && entry.title === KIND_LABELS.general && !entry.requests
+    ? NEW_TITLE
+    : entry.title;
+}
 /** '목적 · 이름' unless the name already says the purpose. */
-export function chipLabel(entry: Pick<ConversationEntry, 'id' | 'kind' | 'title'>) {
+export function chipLabel(
+  entry: Pick<ConversationEntry, 'id' | 'kind' | 'title'> & { requests?: number },
+) {
   if (entry.id === null) return entry.title;
+  if (entry.kind === 'general') return titleOf(entry);
   const kind = KIND_LABELS[entry.kind] ?? '';
-  return !kind || entry.kind === 'general' || entry.title.startsWith(kind)
-    ? entry.title
-    : `${kind} · ${entry.title}`;
+  return !kind || entry.title.startsWith(kind) ? entry.title : `${kind} · ${entry.title}`;
 }
 /**
  * The small read-only label of a conversation's service and model. The account is the CLI's
@@ -318,6 +328,8 @@ interface Options {
    * the composer's model follows it, so sending there keeps the conversation (SPEC-02.19 2).
    */
   onFixed?: (fixed: { provider: string; model: string | null } | null) => void;
+  /** [+] opened a new tab and chose it: the app puts the cursor in the composer. */
+  onCreated?: () => void;
 }
 export interface ConversationsController {
   /** New project, models, linked files or requests; a new project reloads the list. */
@@ -331,105 +343,6 @@ export interface ConversationsController {
 
 const errorText = (error: unknown) =>
   error instanceof Error ? error.message : '요청을 처리하지 못했습니다.';
-
-function CreateForm({
-  models,
-  targets,
-  create,
-  cancel,
-}: {
-  models: ModelOption[];
-  targets: TargetOption[];
-  create: (value: Record<string, unknown>) => Promise<void>;
-  cancel: () => void;
-}) {
-  const [title, setTitle] = useState('');
-  const [kind, setKind] = useState('general');
-  const [target, setTarget] = useState('');
-  const [model, setModel] = useState('auto');
-  const [error, setError] = useState('');
-  const [busy, setBusy] = useState(false);
-  const choice = models.find((option) => option.id === model);
-  return (
-    <form
-      className="conv-create"
-      aria-label="새 대화"
-      onSubmit={(event) => {
-        event.preventDefault();
-        setBusy(true);
-        setError('');
-        create({
-          ...(title.trim() ? { title: title.trim() } : {}),
-          kind,
-          ...(target ? { targets: [target] } : {}),
-          ...(choice && model !== 'auto' ? { provider: choice.provider, model } : {}),
-        })
-          .catch((reason) => setError(errorText(reason)))
-          .finally(() => setBusy(false));
-      }}
-    >
-      <label>
-        <span>이름</span>
-        <input
-          value={title}
-          maxLength={60}
-          placeholder="예: 구조 검토, 법규 질문"
-          onChange={(event) => setTitle(event.target.value)}
-          autoFocus
-        />
-      </label>
-      <label>
-        <span>목적</span>
-        <select value={kind} onChange={(event) => setKind(event.target.value)}>
-          {Object.entries(KIND_LABELS)
-            .filter(([key]) => !['jig-make', 'app'].includes(key))
-            .map(([key, label]) => (
-              <option key={key} value={key}>
-                {label}
-              </option>
-            ))}
-        </select>
-      </label>
-      <label>
-        <span>대상 파일</span>
-        <select value={target} onChange={(event) => setTarget(event.target.value)}>
-          <option value="">정하지 않음</option>
-          {targets.map((option) => (
-            <option key={option.id} value={option.id}>
-              {option.name}
-            </option>
-          ))}
-        </select>
-      </label>
-      <label>
-        <span>AI</span>
-        <select value={model} onChange={(event) => setModel(event.target.value)}>
-          <option value="auto">자동 (Jev)</option>
-          {models
-            .filter((option) => option.id !== 'auto')
-            .map((option) => (
-              <option key={option.id} value={option.id}>
-                {(PROVIDER_LABELS[option.provider] ?? option.provider) + ' · ' + option.name}
-              </option>
-            ))}
-        </select>
-      </label>
-      <small className="conv-note">
-        AI와 모델은 첫 요청 때 정하고(자동이면 Jev가 고름) 이 대화 동안 바꾸지 않습니다. 다른 모델을
-        고르면 새 대화로 이어집니다.
-      </small>
-      {error ? <small className="conv-error">{error}</small> : null}
-      <div className="conv-actions">
-        <button type="submit" className="primary" disabled={busy}>
-          대화 시작
-        </button>
-        <button type="button" onClick={cancel}>
-          취소
-        </button>
-      </div>
-    </form>
-  );
-}
 
 function HandoverConfirm({
   entry,
@@ -513,7 +426,7 @@ function Conversations({
   const { projectId, models = [], targets = [], messages = [] } = options;
   const [list, setList] = useState<ConversationEntry[]>([]);
   const [detail, setDetail] = useState<ConversationDetail>();
-  const [creating, setCreating] = useState(false);
+  const [adding, setAdding] = useState(false);
   const [handing, setHanding] = useState(false);
   const [renewing, setRenewing] = useState(false);
   /** Length suggestions the user chose to go on past (conversation id and turn count). */
@@ -687,10 +600,22 @@ function Conversations({
           className="conv-add"
           title="새 대화"
           aria-label="새 대화"
-          disabled={!base}
+          disabled={!base || adding}
           onClick={() => {
-            setCreating(true);
+            // No questions (T-097): an empty general tab; its first request names it and Jev or
+            // the composer's model fixes its AI then (SPEC-02.19 1·2).
+            setAdding(true);
             setHanding(false);
+            api(base, 'POST', { kind: 'general' })
+              .then((value) => {
+                const made = conversationSchema.parse(value);
+                setError('');
+                reload();
+                select(made.id);
+                options.onCreated?.();
+              })
+              .catch((reason) => setError(errorText(reason)))
+              .finally(() => setAdding(false));
           }}
         >
           +
@@ -699,7 +624,7 @@ function Conversations({
       {current ? (
         <div className="conv-head">
           <span className="conv-title">
-            {current.id === null ? '기본 대화' : current.title}
+            {current.id === null ? '기본 대화' : titleOf(current)}
             {targetNames.length ? ` · ${targetNames.join(', ')}` : ''}
           </span>
           <span className="conv-ai" title="대화를 시작할 때 정한 AI">
@@ -713,7 +638,6 @@ function Conversations({
                 onClick={(event) => {
                   (event.currentTarget.closest('details') as HTMLDetailsElement).open = false;
                   setHanding(true);
-                  setCreating(false);
                 }}
               >
                 다른 AI로 이어 가기
@@ -743,20 +667,6 @@ function Conversations({
         <small className="conv-error" role="alert">
           {error}
         </small>
-      ) : null}
-      {creating ? (
-        <CreateForm
-          models={models}
-          targets={targets}
-          cancel={() => setCreating(false)}
-          create={async (value) => {
-            const made = conversationSchema.parse(await api(base, 'POST', value));
-            setCreating(false);
-            setError('');
-            reload();
-            select(made.id);
-          }}
-        />
       ) : null}
       {handing && current?.provider ? (
         <HandoverConfirm

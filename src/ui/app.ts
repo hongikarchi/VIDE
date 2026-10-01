@@ -355,6 +355,8 @@ async function mountConversationScreens() {
       ...conversationOptions(),
       onChange: () => renderMessages(),
       onFixed: followConversationModel,
+      // [+] opens a tab at once (T-097): the next thing is to type.
+      onCreated: () => $('body').focus(),
     });
   } catch {
     conversationChips = undefined;
