@@ -172,8 +172,8 @@ try {
   await page.getByRole('button', { name: '피드백 보내기', exact: true }).click();
   const feedback = page.getByRole('dialog', { name: '피드백 보내기', exact: true });
   await feedback.waitFor();
-  assert.match(await feedback.textContent(), /주소가 아직 설정되지 않았습니다/);
-  assert.equal(await feedback.getByRole('button', { name: '구글폼 열기' }).isDisabled(), true);
+  assert.doesNotMatch(await feedback.textContent(), /주소가 아직 설정되지 않았습니다/);
+  assert.equal(await feedback.getByRole('button', { name: '구글폼 열기' }).isDisabled(), false);
   await page.keyboard.press('Escape');
   await feedback.waitFor({ state: 'detached' });
   await page.getByRole('button', { name: '피드백 보내기', exact: true }).click();

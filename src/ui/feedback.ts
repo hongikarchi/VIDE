@@ -5,7 +5,7 @@
 import { append as el } from './elements.ts';
 
 /** The Google Form for feedback. Empty until the user gives the address. */
-export const FEEDBACK_FORM_URL = '';
+export const FEEDBACK_FORM_URL = 'https://forms.gle/PT7Rpouf5st1sEtf9';
 
 export function showFeedback(url: string = FEEDBACK_FORM_URL) {
   const dialog = document.createElement('dialog');
