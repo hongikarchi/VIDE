@@ -913,3 +913,140 @@ test('An unresolved request that does not name every unknown document keeps its 
   const running = { ...named, state: 'running' };
   assert.equal(holderOf([sync, running], 'win-a'), 'DOCUMENT_LOCKED');
 });
+
+// --- the guard card's [진행] in a multi-file request ---------------------------------------------
+
+const guardOnce = (doc) =>
+  doc.next.execute.push(() => ({
+    ok: false,
+    reverted: true,
+    guarded: { kind: 'bulk-delete', detail: '객체 60개를 지웁니다 (기준 50개).' },
+  }));
+/** A applied, then B's execute held by the guard: the request waits on its card. */
+const appliedThenGuarded =
+  (a, b) =>
+  async ({ call, agent }) => {
+    if (agent.targetRef === 'rhino-open:win-b') return { text: 'B 작업' };
+    await call('execute', { code: 'add wall' });
+    guardOnce(b);
+    await call('execute', { linkId: 'link-b', code: 'wipe old' });
+    return { text: '확인이 필요합니다.' };
+  };
+
+test('[진행] in a file another request is writing is refused DOCUMENT_LOCKED and runs nothing', async (t) => {
+  const holdB = gate(),
+    runningB = gate();
+  let b;
+  const { execution, project, send, settled, state, ...rest } = setup(t, async (turn) => {
+    if (turn.agent.targetRef === 'rhino-open:win-b') {
+      runningB.open();
+      await holdB.promise;
+      return { text: 'B 작업 끝' };
+    }
+    return appliedThenGuarded(rest.a, b)(turn);
+  });
+  b = rest.b;
+  send('guard-1', { mode: 'auto' });
+  await settled();
+  const waiting = state('guard-1');
+  assert.equal(waiting.state, 'needs-confirmation');
+  assert.equal(waiting.result.multiFile, true);
+  send('writes-b', { mode: 'auto', baseRequestId: 'sync-b' });
+  await runningB.promise;
+  const calls = b.calls.execute.length;
+  const refused = await execution.confirm(project.id, 'guard-1');
+  assert.equal(refused.state, 'needs-confirmation');
+  assert.equal(refused.result.refused.code, 'DOCUMENT_LOCKED');
+  assert.equal(refused.result.refused.file, 'B.3dm');
+  assert.equal(b.calls.execute.length, calls);
+  holdB.open();
+  await settled();
+  // Once B is free the card runs.
+  const confirmed = await execution.confirm(project.id, 'guard-1');
+  assert.equal(confirmed.state, 'succeeded');
+  assert.equal(confirmed.result.refused, undefined);
+});
+
+test('[진행] that fails in another file rolls the request back in every file', async (t) => {
+  let a, b;
+  const ctx = setup(t, (turn) => appliedThenGuarded(a, b)(turn));
+  ({ a, b } = ctx);
+  const { execution, project, workspace, send, submit, settled, state } = ctx;
+  send('guard-1', { mode: 'auto' });
+  await settled();
+  b.next.execute.push(() => ({ ok: false, code: 'RUNTIME_ERROR', diagnostics: ['boom'] }));
+  const failed = await execution.confirm(project.id, 'guard-1');
+  assert.equal(failed.state, 'failed');
+  assert.equal(failed.result.code, 'RUNTIME_ERROR');
+  assert.equal(failed.result.rollback.reason, 'failed');
+  assert.deepEqual(
+    failed.result.rollback.files.map((file) => [file.name, file.state]),
+    [['A.3dm', 'undone']],
+  );
+  assert.deepEqual(a.calls.undo, ['A-11']);
+  assert.equal(a.records[0].undone, true);
+  assert.equal(applied(failed.result).length, 0);
+  assert.ok(failed.result.activity.some((entry) => /실패해서 자동으로 되돌림/.test(entry.text)));
+
+  // The re-run's answer is lost: B is left alone and stays unknown; A is rolled back and free.
+  send('guard-2', { mode: 'auto' });
+  await settled();
+  b.next.execute.push(() => Promise.reject(fail('TIMEOUT')));
+  const lost = await execution.confirm(project.id, 'guard-2');
+  assert.equal(lost.state, 'unknown');
+  assert.deepEqual(
+    lost.result.rollback.files.map((file) => [file.name, file.state]),
+    [
+      ['A.3dm', 'undone'],
+      ['B.3dm', 'unknown'],
+    ],
+  );
+  assert.deepEqual(
+    lost.result.documents.map((entry) => [entry.name, entry.pending]),
+    [['B.3dm', 'execute']],
+  );
+  const holderOf = holder(workspace, project);
+  assert.equal(holderOf('win-a'), undefined);
+  assert.equal(holderOf('win-b')?.code, 'HOST_RESULT_UNRESOLVED');
+  assert.equal(submit('next-a', { mode: 'auto' }).state, 'queued');
+});
+
+test('A one-file [진행] that fails keeps the turn’s executes, as before', async (t) => {
+  const { a, execution, project, send, settled, state } = setup(t, async ({ call }) => {
+    await call('execute', { code: 'add wall' });
+    guardOnce(a);
+    await call('execute', { code: 'wipe old' });
+    return { text: '확인이 필요합니다.' };
+  });
+  send('guard-1', { mode: 'auto' });
+  await settled();
+  assert.equal(state('guard-1').state, 'needs-confirmation');
+  a.next.execute.push(() => ({ ok: false, code: 'RUNTIME_ERROR' }));
+  const failed = await execution.confirm(project.id, 'guard-1');
+  assert.equal(failed.state, 'failed');
+  assert.equal(failed.result.rollback, undefined);
+  assert.equal(applied(failed.result).length, 1);
+  assert.deepEqual(a.calls.undo, []);
+});
+
+test('A confirmed re-run names its file, so the request [되돌리기] names it too', async (t) => {
+  let a, b;
+  const ctx = setup(t, (turn) => appliedThenGuarded(a, b)(turn));
+  ({ a, b } = ctx);
+  const { execution, project, send, settled } = ctx;
+  send('guard-1', { mode: 'auto' });
+  await settled();
+  const confirmed = await execution.confirm(project.id, 'guard-1');
+  assert.equal(confirmed.state, 'succeeded');
+  const rerun = confirmed.result.executions.at(-1);
+  assert.deepEqual(rerun.file, { linkId: 'link-b', name: 'B.3dm' });
+  b.userEdit();
+  const undone = await execution.undoRequest(project.id, 'guard-1');
+  assert.deepEqual(
+    undone.files.map((file) => [file.name, file.linkId ?? null, file.state]),
+    [
+      ['A.3dm', 'link-a', 'undone'],
+      ['B.3dm', 'link-b', 'refused'],
+    ],
+  );
+});

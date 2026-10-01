@@ -66,6 +66,7 @@ import {
   documentKey,
   documentAfter,
   hostLeftUnknown,
+  lockRefusal,
   displayQuery,
   executionsOf,
   publicRecord,
@@ -80,6 +81,7 @@ import { directRefusal } from '../contracts/direct-refusal.ts';
 import { DocumentLinks } from '../core/document-links.ts';
 import { zwcadAnsweredCodes } from './zwcad-sdk-execution.ts';
 import { liveLinksOf, type LiveLink } from './live-links.ts';
+import { activityLog } from './activity.ts';
 interface Provider {
   run(
     context: ProviderContext,
@@ -1743,6 +1745,29 @@ export class Execution {
     }
     // An earlier refusal of this [진행] no longer describes the request once it runs again.
     const { refused: _refused, ...base } = (request.result ?? {}) as Record<string, unknown>;
+    const name = entry.file?.name ?? `${driver.host === 'zwcad' ? 'ZWCAD' : 'Rhino'} 문서`;
+    // A multi-file request waiting on its card holds no document (SPEC-02.13 4): the document is
+    // checked again before the re-run, refused at once when another request writes it or leaves it
+    // unknown (SPEC-02.9 3, ADR-027 5). A one-file request on its target runs as before.
+    const multi = base.multiFile === true;
+    const target = hostTargetSchema.safeParse(base.sourceDocument).data;
+    const elsewhere =
+      target?.instance !== driver.target.instance ||
+      target?.documentId !== driver.target.documentId;
+    const held =
+      multi || elsewhere
+        ? documentHolder(
+            id,
+            { host: driver.host, ...driver.target },
+            this.workspace.list(projectId),
+          )
+        : undefined;
+    if (held)
+      return this.workspace.update(projectId, id, 'needs-confirmation', {
+        ...base,
+        phase: undefined,
+        refused: { code: held.code, reason: lockRefusal(held.code, name).reason, file: name },
+      });
     this.workspace.update(projectId, id, 'running', { ...base, phase: 'host' });
     const runId = randomUUID();
     const started = Date.now();
@@ -1770,31 +1795,34 @@ export class Execution {
         phase: undefined,
         refused: { code: refusal.code, reason: refusal.reason },
       });
-    // The answer was lost: the document may or may not hold the record (fingerprint decides).
-    if (!outcome)
+    // The answer was lost, or the host could not revert a change: the document may or may not hold
+    // the record (fingerprint decides). A multi-file request rolls the other files back.
+    if (!outcome || hostLeftUnknown(outcome)) {
+      if (multi) return this.rollBackConfirmed(request, base, entry, driver, 'HOST_RESULT_UNKNOWN');
       return this.workspace.update(projectId, id, 'unknown', {
         ...base,
         phase: 'host',
         code: 'HOST_RESULT_UNKNOWN',
       });
-    // A change the host could not revert leaves the document unknown, like a lost answer.
-    if (hostLeftUnknown(outcome))
-      return this.workspace.update(projectId, id, 'unknown', {
-        ...base,
-        phase: 'host',
-        code: 'HOST_RESULT_UNKNOWN',
-      });
-    if (!outcome.ok)
+    }
+    if (!outcome.ok) {
+      const failed = {
+        code: typeof outcome.code === 'string' ? outcome.code : 'EXECUTION_FAILED',
+        ...(outcome.diagnostics ? { diagnostics: outcome.diagnostics } : {}),
+      };
+      // All or nothing (ADR-027 3): the request ends failed, so what it applied elsewhere goes.
+      if (multi) return this.rollBackConfirmed(request, base, entry, driver, undefined, failed);
       return this.workspace.update(projectId, id, 'failed', {
         ...base,
         phase: undefined,
-        code: typeof outcome.code === 'string' ? outcome.code : 'EXECUTION_FAILED',
-        ...(outcome.diagnostics ? { diagnostics: outcome.diagnostics } : {}),
+        ...failed,
       });
+    }
     const applied: ExecutionRecord = {
       executionId: runId,
       host: driver.host,
       target: driver.target,
+      ...(entry.file ? { file: entry.file } : {}),
       label: entry.label,
       at: new Date().toISOString(),
       state: 'applied',
@@ -1820,7 +1848,97 @@ export class Execution {
     return updated;
   }
   /**
+   * A multi-file request whose confirmed re-run failed (ADR-027 3·6, SPEC-02.13 6): its applied
+   * executes are undone in every file, last first, like the turn's own rollback. `lost`: the re-run's
+   * answer was lost, so its document is left alone and stays unknown.
+   */
+  private async rollBackConfirmed(
+    request: StoredWork,
+    base: Record<string, unknown>,
+    entry: ExecutionRecord,
+    driver: DirectDriver,
+    lost?: 'HOST_RESULT_UNKNOWN',
+    failed: Record<string, unknown> = {},
+  ) {
+    const { projectId, id } = request;
+    const executions = executionsOf(request.result);
+    const here = documentKey(driver.host, driver.target);
+    const hostOf = (record: ExecutionRecord) =>
+      record.host ?? (request.result?.host === 'zwcad' ? 'zwcad' : 'rhino');
+    const outcome = await undoExecutions(
+      executions,
+      (record) =>
+        this.directDriverFor(
+          hostOf(record),
+          record.target ?? request.result?.sourceDocument,
+          false,
+        ),
+      { skip: lost ? new Set([here]) : undefined },
+    );
+    const name = entry.file?.name ?? `${driver.host === 'zwcad' ? 'ZWCAD' : 'Rhino'} 문서`;
+    if (lost && !outcome.files.some((file) => documentKey(file.host, file.target) === here))
+      outcome.files.push({
+        host: driver.host,
+        target: driver.target,
+        ...(entry.file?.linkId ? { linkId: entry.file.linkId } : {}),
+        name,
+        state: 'unknown',
+        undone: 0,
+        kept: 0,
+        reason: 'HOST_RESULT_UNKNOWN',
+      });
+    const unknown = outcome.files.filter((file) => file.state === 'unknown');
+    const left = outcome.files.filter((file) => file.state !== 'undone');
+    const activity = activityLog(Array.isArray(base.activity) ? base.activity : []);
+    activity.add(
+      left.length ? 'error' : 'result',
+      left.length
+        ? `실패해서 자동으로 되돌림 · 되돌리지 못한 파일 ${left.map((file) => file.name).join(', ')}`
+        : `실패해서 자동으로 되돌림 · 파일 ${outcome.files.length}개`,
+    );
+    const result: Record<string, unknown> = {
+      ...base,
+      ...failed,
+      phase: unknown.length ? 'host' : undefined,
+      activity: activity.entries,
+      executions: executions.map((record) =>
+        outcome.undone.has(record.executionId)
+          ? { ...record, state: 'undone' as const, undoneAt: outcome.at }
+          : record,
+      ),
+      rollback: { at: outcome.at, reason: 'failed', files: outcome.files },
+    };
+    if (unknown.length) {
+      Object.assign(result, {
+        code: 'HOST_RESULT_UNKNOWN',
+        documents: unknown.map((file) => ({
+          host: file.host,
+          ...file.target,
+          ...(file.linkId ? { linkId: file.linkId } : {}),
+          name: file.name,
+          pending: lost && documentKey(file.host, file.target) === here ? 'execute' : 'undo',
+        })),
+        heldOnly: true,
+        settles: {
+          state: 'failed',
+          ...(typeof failed.code === 'string' ? { code: failed.code } : {}),
+        },
+      });
+    }
+    const updated = this.workspace.update(
+      projectId,
+      id,
+      unknown.length ? 'unknown' : 'failed',
+      result,
+    );
+    for (const record of executions)
+      if (outcome.undone.has(record.executionId))
+        this.ledgerExecution(updated, { ...record, state: 'undone' });
+    return updated;
+  }
+  /**
    * The plan card's [진행] (POST …/requests/:rid/continue): an Auto turn in the same conversation
+
    * that carries the plan out. Idempotent: the continuation's id derives from the plan's.
    */
   continuePlan(projectId: string, id: string) {
