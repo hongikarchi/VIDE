@@ -235,6 +235,83 @@ try {
   await capture('model-dark', '모델 · 다크');
   await page.locator('#rail-theme').click();
 
+  // The reference-image tab as built (SPEC-09, PLAN-26 T-090 phase (a)): an example image drawn
+  // in the page is attached, two regions are drawn and the board's frame is opened. Engine images
+  // are made data URLs so the static preview shows them.
+  try {
+    const png = await page.evaluate(() => {
+      const canvas = document.createElement('canvas');
+      canvas.width = 800;
+      canvas.height = 560;
+      const g = canvas.getContext('2d');
+      const sky = g.createLinearGradient(0, 0, 0, 560);
+      sky.addColorStop(0, 'rgb(217 226 231)');
+      sky.addColorStop(1, 'rgb(241 239 233)');
+      g.fillStyle = sky;
+      g.fillRect(0, 0, 800, 560);
+      g.fillStyle = 'rgb(205 200 190)';
+      g.fillRect(0, 470, 800, 90);
+      g.fillStyle = 'rgb(230 224 212)';
+      g.fillRect(120, 70, 560, 400);
+      g.fillStyle = 'rgb(86 100 108)';
+      for (const y of [76, 156, 236, 316]) g.fillRect(140, y, 520, 70);
+      g.fillStyle = 'rgb(192 138 86)';
+      for (let x = 146; x <= 650; x += 18) g.fillRect(x, 74, 6, 314);
+      g.fillStyle = 'rgb(63 76 83)';
+      g.fillRect(140, 398, 520, 72);
+      g.fillStyle = 'rgb(43 43 43)';
+      g.fillRect(318, 390, 164, 7);
+      return canvas.toDataURL('image/png').split(',')[1];
+    });
+    await page.locator('#files').setInputFiles({
+      name: 'facade.png',
+      mimeType: 'image/png',
+      buffer: Buffer.from(png, 'base64'),
+    });
+    const chip = page.locator('#context .chip').filter({ hasText: 'facade.png' });
+    await chip.getByRole('button', { name: '영역 표시' }).click();
+    await page.locator('.reference-stage img').waitFor();
+    await page.waitForTimeout(300);
+    const box = await page.locator('.reference-stage img').boundingBox();
+    const at = (fx, fy) => [box.x + box.width * fx, box.y + box.height * fy];
+    await page.locator('.reference-tools input[type="range"]').fill('60');
+    await page.mouse.move(...at(0.56, 0.2));
+    await page.mouse.down();
+    for (let k = 1; k <= 12; k++) await page.mouse.move(...at(0.56 + k * 0.02, 0.2 + k * 0.04));
+    await page.mouse.up();
+    await page.getByLabel('영역 A 메모').fill('루버 간격과 깊이 느낌만');
+    await page.getByLabel('영역 A 메모').press('Enter');
+    await page.getByRole('button', { name: '+ 새 영역' }).click();
+    await page.getByRole('button', { name: '사각형', exact: true }).click();
+    await page.mouse.move(...at(0.39, 0.68));
+    await page.mouse.down();
+    await page.mouse.move(...at(0.61, 0.74));
+    await page.mouse.up();
+    await page.getByLabel('영역 B 메모').fill('형태만, 색은 빼고');
+    await page.getByLabel('영역 B 메모').press('Enter');
+    const inline = () =>
+      page.evaluate(async () => {
+        for (const img of document.querySelectorAll('.reference-workspace img, img.chip-thumb')) {
+          if (img.src.startsWith('data:')) continue;
+          await img.decode().catch(() => {});
+          const canvas = document.createElement('canvas');
+          canvas.width = img.naturalWidth;
+          canvas.height = img.naturalHeight;
+          canvas.getContext('2d').drawImage(img, 0, 0);
+          img.src = canvas.toDataURL('image/jpeg', 0.85);
+        }
+      });
+    await inline();
+    await capture('reference-mask', '참고 이미지 · 영역 표시 (구현)');
+    await page.getByRole('button', { name: '이해 확인' }).click();
+    await page.locator('.reference-board').waitFor();
+    await inline();
+    await capture('reference-board', '이해 확인 · 틀 (구현)');
+    await page.locator('.workspace-tablist .workspace-tab-close').first().click();
+  } catch (error) {
+    console.warn('reference image state skipped:', error.message.split('\n')[0]);
+  }
+
   // Proposals (SPEC-09, PLAN-26 T-090), not implemented: injected into the real DOM after every
   // real screen is captured, so the real states above stay as they are. The board's right image
   // stands on the model view captured here; the left panel is folded as a user would.

@@ -1,5 +1,6 @@
 // 대시보드 workspace tab (first draft, user request 2026-10-01): one page of what the project
-// already has — its name, the linked files, this project's jigs and the latest finished requests.
+// already has — its name, the linked files, its folders on this PC (SPEC-01.13), this project's
+// jigs and the latest finished requests.
 // What belongs here is still the user's to decide, so it reads only existing state (app.ts gives
 // it through `provideDashboard`) and the skill catalog; a jig starts through startSkill like the
 // JIG list's [열기]. Each section is one small component, easy to drop or replace.
@@ -9,6 +10,7 @@ import { api } from './gateway.ts';
 import type { SkillEntry } from './skill-catalog.ts';
 import { openSkill } from './skill-start.ts';
 import { setWorkspace } from './workspaces.ts';
+import { ProjectFolders } from './project-folders.tsx';
 import './dashboard.css';
 
 export interface DashboardLink {
@@ -213,6 +215,7 @@ function Dashboard({ projectId }: { projectId: string }) {
         </p>
       </header>
       <Links data={data} />
+      <ProjectFolders projectId={projectId} />
       <Jigs projectId={projectId} shown={shown} />
       <Recent data={data} />
     </div>

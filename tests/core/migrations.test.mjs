@@ -214,7 +214,10 @@ test('schema 5 migrates a schema 4 database after a backup without rewriting req
   db.close();
   const store = new Store(file);
   try {
-    assert.equal(store.db.prepare('SELECT version FROM schema_version').get().version, 5);
+    assert.equal(
+      store.db.prepare('SELECT version FROM schema_version').get().version,
+      schemaVersion,
+    );
     // Request rows keep their count, content and size; old requests belong to the default conversation.
     assert.deepEqual(requestRows(store.db), before);
     assert.equal(
@@ -239,6 +242,7 @@ test('schema 5 migrates a schema 4 database after a backup without rewriting req
       'knowledge_reviews',
       'knowledge_source_rules',
       'project_roots',
+      'project_folders',
     ])
       assert.ok(tableNames(store.db).includes(table), table);
     // conversationId is not indexed (ARCH-03 §10.1).
@@ -294,7 +298,10 @@ test('an interrupted schema 5 migration leaves schema 4 and its requests, and th
   copyFileSync(join(file + '.backups', backup), restored);
   const store = new Store(restored);
   try {
-    assert.equal(store.db.prepare('SELECT version FROM schema_version').get().version, 5);
+    assert.equal(
+      store.db.prepare('SELECT version FROM schema_version').get().version,
+      schemaVersion,
+    );
     assert.deepEqual(requestRows(store.db), before);
   } finally {
     store.close();

@@ -2,7 +2,7 @@
 id: SPEC-02
 title: 실행·개입·바로 적용·되돌리기
 status: review
-version: 0.39
+version: 0.40
 updated: 2026-10-01
 owner: agent:codex
 related: [FR-04, FR-08, FR-10, FR-11, FR-12, FR-15, FR-16, FR-18, FR-24, FR-25, AC-17, AC-24, AC-32, AC-33, AC-38, AC-46, AC-47, AC-48, ADR-021, ADR-022, ADR-025, ADR-026, PLAN-25]
@@ -282,6 +282,7 @@ Rhino A의 객체를 Rhino B로 복사하면 원본 버전을 읽어 확인한 �
 
 - Jev와 AI는 동작을 제안만 하고(예외: SPEC-02.17의 2의 jig 열기, 3의 `jig_open`·`ui_go`와 대화 안 `jig_set`·`jig_run`), 실행은 VIDE가 사람이 누를 때와 같은 경로·검사로 한다. 제안 카드로 실행하는 동작도 원격 세션 제한([ADR-010](../decisions/ADR-010-first-release-local-only.md) §3)을 그대로 받으며, 등급은 원격에서 허용하는 범위를 넓히지 않는다.
 - 로그인 주소·일회용 코드·비밀값은 AI 대화와 도구 결과에 넣지 않는다.
+- AI의 파일 읽기는 R이다. 프로젝트 폴더·읽기 허용 폴더 밖의 파일은 읽기 전에 권한 질문 카드([이번만] [이 폴더는 항상] [거절])를 거치고, 비밀 파일·VIDE 데이터 폴더는 허락과 관계없이 읽지 않는다(SPEC-01.13). 파일 쓰기 도구는 주지 않는다.
 
 | 말 | 경로 | 처리 |
 |---|---|---|

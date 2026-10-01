@@ -2,7 +2,7 @@
 id: ARCH-01
 title: VIDE 기술 구조와 구현 계약
 status: review
-version: 0.57
+version: 0.58
 updated: 2026-10-01
 owner: agent:codex
 related: [SPEC-00, SPEC-02, SPEC-03, SPEC-04, PLAN, PLAN-20, PLAN-24, ADR-014, ADR-015, ADR-016, ADR-017, ADR-021, ADR-022, ADR-025, PLAN-25, ARCH-03]
@@ -163,7 +163,7 @@ T-002의 첫 HTTP 구현은 프로젝트 목록·생성과 입력 목록·생성
 
 #### 추가 저장 모델과 식별
 
-아래는 T-013의 설계 대상이며 표로 다 만들지 않았다(현재 DB는 schema 5, §5·§7). 실제 행·열은 `src/core/migrations.ts`가 정본이다. 모든 하위 레코드는 projectId를 검증한다. revision은 레코드 수정 번호, basisId는 불변 취득 기준, connectionId는 현재 전송 연결, documentSessionId는 열린 문서 세션이다. 저장 파일과 재열기 전 세션의 관계는 확인 기록으로만 연결하며 파일 경로로 쓰기 세션을 복원하지 않는다.
+아래는 T-013의 설계 대상이며 표로 다 만들지 않았다(현재 DB는 schema 6, §5·§7). 실제 행·열은 `src/core/migrations.ts`가 정본이다. 모든 하위 레코드는 projectId를 검증한다. revision은 레코드 수정 번호, basisId는 불변 취득 기준, connectionId는 현재 전송 연결, documentSessionId는 열린 문서 세션이다. 저장 파일과 재열기 전 세션의 관계는 확인 기록으로만 연결하며 파일 경로로 쓰기 세션을 복원하지 않는다.
 
 | 저장 대상 | 핵심 필드·제약 |
 |---|---|
@@ -192,7 +192,7 @@ T-002의 첫 HTTP 구현은 프로젝트 목록·생성과 입력 목록·생성
 
 | 묶음 | 경로 | 비고 |
 |---|---|---|
-| 프로젝트·입력 | `GET·POST /projects`, `PUT·DELETE /projects/:p`, `POST …/thumbnail`, `…/inputs[/:i]`, `…/ai-instructions`, `POST …/attachments?name=`, `POST …/attachments/:a/view`, `GET …/attachments/:a` | 프로젝트 삭제는 SPEC-01.1. 첨부는 §3 「첨부 보관과 읽기 도구」 |
+| 프로젝트·입력 | `GET·POST /projects`, `PUT·DELETE /projects/:p`, `POST …/thumbnail`, `…/inputs[/:i]`, `…/ai-instructions`, `POST …/attachments?name=`, `POST …/attachments/:a/view`, `GET …/attachments/:a`, `GET·POST …/folders`, `POST …/folders/remove` | 프로젝트 삭제는 SPEC-01.1. 첨부는 §3 「첨부 보관과 읽기 도구」, 폴더는 §3 「프로젝트 폴더와 파일 읽기 도구」 |
 | 요청(AI 턴·Sync·가져오기) | `GET·POST …/requests`, `GET …/requests/:r`, `…/:r/cancel`, `…/:r/interventions`, `…/:r/hide`, `…/:r/questions`, `…/:r/reconcile`, `…/:r/model\|open`, `…/:r/report`, `…/:r/quantities[.csv]`, `…/:r/publication-export` | 상태는 SPEC-00.10 |
 | 바로 적용 | `POST …/requests/:r/undo {executionId}`, `…/:r/confirm {executionId?}`, `…/:r/continue` | §4 「바로 적용 경로」. confirm·continue는 202 |
 | 연결 파일·Sync | `GET·POST …/links`, `PUT …/links/:l`, `POST …/links/:l/remove`, `POST …/links/:l/reads`, `…/live-sync`, `…/capture`, `…/import`, `…/imports/:i/reconcile` | §7 「프로젝트 연결 파일(Link)」 |
@@ -397,6 +397,7 @@ AI 도구의 이름은 등록부 하나가 정한다. `src/ai/agent-connection.t
 | jig 조작 | 그 대화에 jig 작업본이 열려 있을 때, 열린 작업본에만 | `jig_set`(되돌릴 수 있는 설정값 변경, 원장 기록), `jig_run`(계산 단계만) |
 | 자료 | 그 프로젝트의 자료 DB가 있을 때, 읽기만 | `project_brief`, `project_search`, `project_issue`, `project_statement`, `project_checks` |
 | 첨부 | 요청이나 같은 대화의 앞선 요청에 보관 첨부가 있을 때(모든 모드, 계획 모드 포함). `Execution.provider`가 그 턴의 범위에 더하고, 도구 없는 턴이면 이 도구만 발급 | `attachment_read`(아래 「첨부 보관과 읽기 도구」) |
+| 파일 | 지시 묶음을 받는 모든 턴(모든 모드, 계획 모드 포함; 붙인 표만 읽는 jig AI 검토 턴은 제외). `Execution.provider`가 첨부와 같은 방식으로 더함 | `file_read`, `file_list`(아래 「프로젝트 폴더와 파일 읽기 도구」) |
 | 만들기 | `jig-make` 대화이고 초안이 열려 있을 때. `targetRef`를 생략하면 그 대화의 초안 | `jig_validate`, `jig_test`, `jig_preview`, `jig_delete_file`(초안 파일 하나, `jig.json`·금지 파일 제외), `ask_user` + Claude 파일 도구 `Read`·`Edit`·`Write`·`Glob`·`Grep`(초안 폴더만, ARCH-03 §2.3) |
 
 대화 턴은 위 행 가운데 조건을 만족하는 것을 합쳐 받는다. 모델에 주는 지시는 모드별로 다르다(`instructionFor`: 호스트 도구·대화 도구·만들기). 옛 설계의 `discover`와 자산/SDK 조회 도구는 등록부에 없다. 보기 도구는 5차 물결에서 더했다. 호스트 작업 도구의 기본 실행 인수는 다음과 같다.
@@ -430,6 +431,20 @@ SPEC-01.12(2026-10-01). 작성기의 파일·이미지 첨부는 내용을 요�
 - **도구:** `attachment_read({id, offset?, limit?})`, 읽기 전용이고 `PLAN_MODE_TOOLS`에 든다. 허용 목록은 발급 때 정한다: 그 요청과 같은 `conversationId`의 요청들에 붙은 보관 첨부의 `id`. 목록 밖이거나 보관본이 없으면 `ATTACHMENT_NOT_FOUND`. 결과는 `text` → `{id, name, kind, size, offset, nextOffset, text}`(바이트 구간, 기본 20,000·최대 40,000바이트, UTF-8 경계 맞춤), `image`(PNG·JPEG·GIF·WebP; 1MB(`ToolImage` 상한) 이하는 원본, 넘으면 보기본) → MCP 이미지 항목(`capture_view`와 같은 `ToolImage` 경로, Claude·Codex 공통)과 메타 텍스트, 보기본이 없는 큰 이미지는 안내만, 그 밖 → `{id, name, kind, size, type, note}`. PDF 본문 추출·3DM 요약은 의존성·호스트 경로가 없어 하지 않는다(PLAN-26 T-089 후속).
 - **지시:** 턴의 연결에 `attachment_read`가 있으면 `instructionFor`가 첨부 읽는 법(패킷의 `file` 항목 `id`로 읽고, 못 읽은 내용을 지어내지 않음)을 덧붙인다. 도구가 이 하나뿐인 턴은 `attachmentOnlyInstruction`을 쓴다.
 - **삭제:** 프로젝트 삭제(`purgeProject`)가 `attachments/<projectId>` 폴더를 함께 지운다.
+
+### 프로젝트 폴더와 파일 읽기 도구
+
+SPEC-01.13(2026-10-01). 프로젝트가 가리키는 이 PC의 폴더와, AI가 그 안팎의 파일을 읽는 엔진 경유 도구다. 쓰기 도구는 없다.
+
+- **저장:** schema 6의 `project_folders(projectId, path COLLATE NOCASE, kind 'project'|'read', addedAt, PRIMARY KEY(projectId, path))`(`src/core/project-folders.ts`). `path`는 실제 위치(`realpath.native`로 정션·심볼릭 링크를 푼 절대 경로)다. `project`는 대시보드에서 정한 프로젝트 폴더, `read`는 권한 질문의 [이 폴더는 항상]이 더한 읽기 허용 폴더다. 같은 경로를 `project`로 더하면 `read` 행을 올리고, `read`로 더할 때 이미 `project`면 그대로 둔다. 프로젝트 삭제가 행을 지운다.
+- **경로:** `GET …/folders` → `{folders:[{path, kind, addedAt, exists}]}`. `POST …/folders {path, kind?='project'}`와 `POST …/folders/remove {path}`는 바뀐 목록을 돌려준다. 원격 세션은 `GET`만(SPEC-01.13의 1). 더하기 검사(`checkFolder`, `src/server/project-files.ts`): 절대 경로이고 장치 경로(`\\?\`·`\\.\`)가 아님(아니면 `INVALID_INPUT`), 있고 폴더임(아니면 `FOLDER_NOT_FOUND`), 드라이브 맨 위·UNC 공유 맨 위·VIDE 데이터 폴더(현재 엔진의 것과 설치본 `%LOCALAPPDATA%\VIDE`)와 그 안·아래 금지 위치와 그 안이 아님(아니면 `FOLDER_NOT_ALLOWED`).
+- **PC 프로그램의 폴더 선택:** 페이지가 WebView2 메시지 `{type:'folder:pick', id}`를 보내면 셸(`ShellContext.Handle` → `ShellForm.PickFolder`)이 Windows 폴더 선택 창을 열고 `{type:'folder:picked', id, path}`(취소면 `path: null`)를 돌려준다. 경로 검사는 위의 엔진 검사가 한다. 브라우저(셸 밖)와 이 메시지를 모르는 이전 셸에서는 경로 입력칸을 쓴다.
+- **도구:** `file_list({path?, pattern?, offset?, limit?})` — `path`를 빼면 프로젝트·허용 폴더 목록, 주면 그 폴더의 한 단계 항목 `{name, kind:'dir'|'file', size?, modified}`를 폴더 먼저·이름순으로 `limit`(기본 100·최대 200)씩. `pattern`은 이름의 `*`·`?` 와일드카드(대소문자 무시). `file_read({path, offset?, limit?})` — 내용으로 판별해 `attachment_read`와 같은 결과(텍스트 바이트 구간 기본 20,000·최대 40,000, 1MB 이하 이미지는 `ToolImage`, 그 밖은 이름·크기·형식·안내; 공용 함수 `readFileContent`, `src/server/attachments.ts`). 둘 다 `PLAN_MODE_TOOLS`에 든다. 상대 경로는 첫 프로젝트 폴더 기준이다.
+- **판정 순서**(`FileAccess`, `src/server/project-files.ts`): ① 금지 위치(입력 경로와 실제 경로 모두) → `FILE_FORBIDDEN` ② 실제 경로가 없으면 `FILE_NOT_FOUND` ③ 실제 경로가 프로젝트·허용 폴더(각 실제 경로) 안이면 읽음 ④ 입력 경로는 폴더 안인데 실제 경로가 밖이면(정션·링크 탈출) `FILE_FORBIDDEN` ⑤ 이번 요청에서 [이번만]으로 허락한 폴더 안이면 읽음, 이번 요청에서 거절한 폴더 안이면 묻지 않고 `FILE_ACCESS_DENIED` ⑥ 그 밖은 권한 질문. 질문할 폴더는 파일이면 그 파일이 든 폴더, 폴더면 그 폴더다.
+- **권한 질문:** `Execution`이 공급자 자체 질문과 같은 대기 경로(요청 결과 `phase: 'question'`·`questions`, 답은 `POST …/requests/:r/questions`)로 카드 하나 `{id:'file-access', title, options:[once 이번만, always 이 폴더는 항상, deny 거절(권장)], allowFree:false, blocks:'AI 파일 읽기'}`를 띄우고 그 도구 호출 안에서 답을 기다린다. 한 요청의 파일 질문은 차례로 하나씩이다. 기다리는 시간은 Codex 50초(MCP `tool_timeout_sec=60` 안), 그 밖 5분이며, 지나거나 턴이 멈추면 카드를 거두고 `FILE_ACCESS_DENIED`. `always`는 그 폴더를 `checkFolder`로 검사해 `read` 행으로 더하고(검사에 걸리면 이번만), 원격 세션의 답이면 이번만으로 처리한다. 대화가 아닌 단일 요청(카드를 보일 곳 없음)은 묻지 않고 `FILE_ACCESS_DENIED`. 이번만 허락·거절 기록은 요청이 끝나면 버린다.
+- **금지 위치**(`deniedPath`): VIDE 데이터 폴더(현재·설치본), 사용자 폴더의 `.ssh`·`.aws`·`.gnupg`·`.azure`·`.kube`·`.docker`·`.claude`·`.codex`, 어느 위치든 경로 조각 `.ssh`·`.gnupg`·`.aws`, `%APPDATA%\Microsoft\{Credentials,Protect,SystemCertificates}`, `%LOCALAPPDATA%\Microsoft\Credentials`, `%LOCALAPPDATA%\{Google\Chrome,Microsoft\Edge}\User Data`, `%APPDATA%\Mozilla\Firefox`, 이름 `.env`·`.env.*`, `.git-credentials`, `.netrc`·`_netrc`, `.npmrc`, `.pypirc`, `.pgpass`, `id_rsa`·`id_dsa`·`id_ecdsa`·`id_ed25519`(공개 키 `.pub`는 아님), `credentials`·`credentials.json`·`.credentials.json`, 확장자 `.pem`·`.key`·`.pfx`·`.p12`·`.kdbx`·`.ppk`·`.jks`·`.keystore`. `file_list` 결과에서도 뺀다.
+- **기록:** 호출마다 요청의 `activity`에 경로만 한 줄(`파일 읽기 · 경로`, `폴더 목록 · 경로`, 거절은 `파일 읽기 거절 · 경로`)을 더한다. 진행 중에는 그때의 결과에 붙이고, 턴이 끝나면 최종 결과의 `activity`에 시각순으로 합친다. 내용은 남기지 않는다.
+- **지시:** 연결에 `file_read`가 있으면 `instructionFor`가 파일 읽는 법(프로젝트 폴더는 `file_list()`로 확인, 밖은 권한 질문이 뜨고 거절이면 다시 묻지 말 것, 쓰기 없음)을 덧붙이고, 공통 지침(`src/ai/instructions/common.md`)의 '파일 시스템을 쓰지 않는다'에 이 두 도구를 예외로 적는다.
 
 ### 한 요청의 복수 대상 실행
 
@@ -554,7 +569,7 @@ Rhino 편집 적용은 그룹 표의 ID·이름·인덱스·사용자 문자열�
 
 Git에서 스냅샷·부모 참조·변경되지 않은 자료 재사용을 차용하되 Git CLI나 전체 객체 내용 주소 저장소를 첫 구현의 선행 조건으로 만들지 않는다. 기존 SQLite·작업 기록·파일 보관을 확장한다. 기록·캐시·체크포인트 생성에 LLM을 호출하지 않는다. [Git 스냅샷 원리](https://git-scm.com/book/en/v2/Getting-Started-What-is-Git%3F).
 
-현재 DB는 §7의 schema 5와 순차 마이그레이션(`src/core/migrations.ts`: 2 기본 표, 3 숨긴 요청, 4 연결 파일 `document_links`, 5 대화·jig 표 — ARCH-03 §10)을 사용하며 새 객체/캐시/체크포인트 테이블은 미구현이다. schema 3은 대화 목록에서 지운 요청을 `hidden_requests(projectId, requestId, hiddenAt)`로 기록한다. 요청 기록·결과·연결은 지우지 않으며, 요청 목록 조회와 AI 대화 문맥에서만 제외한다. 확장은 단일 제어 잠금→백업→버전별 마이그레이션 트랜잭션→무결성/기존 자료 대조를 따른다. 실패 시 신규 쓰기를 열지 않고 원본/백업과 진단을 보존한다. 새 DB뿐 아니라 기존 프로젝트·파일 참조 승계와 중간 종료를 시험한다.
+현재 DB는 §7의 schema 6과 순차 마이그레이션(`src/core/migrations.ts`: 2 기본 표, 3 숨긴 요청, 4 연결 파일 `document_links`, 5 대화·jig 표 — ARCH-03 §10, 6 프로젝트 폴더 `project_folders` — §3 「프로젝트 폴더와 파일 읽기 도구」)을 사용하며 새 객체/캐시/체크포인트 테이블은 미구현이다. schema 3은 대화 목록에서 지운 요청을 `hidden_requests(projectId, requestId, hiddenAt)`로 기록한다. 요청 기록·결과·연결은 지우지 않으며, 요청 목록 조회와 AI 대화 문맥에서만 제외한다. 확장은 단일 제어 잠금→백업→버전별 마이그레이션 트랜잭션→무결성/기존 자료 대조를 따른다. 실패 시 신규 쓰기를 열지 않고 원본/백업과 진단을 보존한다. 새 DB뿐 아니라 기존 프로젝트·파일 참조 승계와 중간 종료를 시험한다.
 
 현재 전체 문서 지문과 호스트별 객체 제한은 이벤트 추적으로 자동 대체되지 않는다. 애드인의 이벤트 구독이 누락되었거나 연속성이 끊기면 캐시를 신뢰하지 않고 문서 재조회·강한 비교를 수행한다. 이벤트와 지문이 충돌하면 오래된 이벤트 기록을 우선하지 않는다. 자체 SDK 객체 상한의 실측 지원 여부는 호스트 지원표와 L5 검수로 확인한다.
 

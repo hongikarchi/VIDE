@@ -326,7 +326,8 @@ test('over HTTP: upload any type, preview images only, requests keep the kept re
   }
   assert.equal(stored.input.files[0].path, image.path);
   assert.equal(stored.input.files[0].size, PNG.length);
-  assert.deepEqual(seen.slice(0, 2), [['attachment_read'], 'image']);
+  // Every instructed turn also has the project file tools (SPEC-01.13).
+  assert.deepEqual(seen.slice(0, 2), [['attachment_read', 'file_list', 'file_read'], 'image']);
   // Deleting the project deletes its attachments.
   assert.equal((await call(`/projects/${project.id}`, 'DELETE')).status, 200);
   assert.equal(existsSync(model.path), false);

@@ -603,6 +603,15 @@ pre {
   border: var(--hairline) solid var(--border);
   flex: none;
 }
+/* An image chip's [영역 표시] opens the reference-image tab (SPEC-09.2, PLAN-26 T-090). */
+.chip .chip-mask {
+  color: var(--text-2);
+  white-space: nowrap;
+  text-decoration: underline dotted;
+}
+.chip .chip-mask:hover {
+  color: var(--text-1);
+}
 /* A file dragged over the composer (SPEC-01.12). */
 .composer.dropping {
   border-color: var(--accent-muted);

@@ -237,6 +237,10 @@ Object.assign(errors, {
   INTERNAL_ERROR: 'VIDE 내부 오류가 났습니다. 다시 시도하고, 반복되면 피드백으로 알려 주세요.',
   JSON_REQUIRED: '요청 형식이 맞지 않습니다. 앱을 새로고침한 뒤 다시 시도하세요.',
   INPUT_TOO_LARGE: '보낸 내용이 너무 큽니다(1 MB 한도). 첨부나 글을 줄여 다시 보내세요.',
+  // Project folders (SPEC-01.13).
+  FOLDER_NOT_FOUND: '이 PC에 그 폴더가 없습니다. 경로를 확인하세요.',
+  FOLDER_NOT_ALLOWED:
+    '이 폴더는 프로젝트 폴더로 정할 수 없습니다(드라이브 맨 위, VIDE 데이터 폴더, 키·로그인 폴더).',
   RESYNC_REQUIRED: '문서가 많이 바뀌어 이어서 맞출 수 없습니다. Sync를 다시 실행하세요.',
   EXECUTOR_NOT_READY:
     '실행 준비가 아직 끝나지 않았습니다. 호스트 연결을 확인한 뒤 다시 시도하세요.',

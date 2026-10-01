@@ -95,6 +95,9 @@ import { ZwcadWorkspace } from '../../hosts/zwcad/workspace.ts';
 import { dirname, join } from 'node:path';
 import { importModel, captureModel, recoverDwgImport } from './import-model.ts';
 import { AttachmentStore } from './attachments.ts';
+import { folderRoutes } from './project-files.ts';
+import { ProjectFolders } from '../core/project-folders.ts';
+import { ReferenceBoards, referenceRoutes } from './reference-boards.ts';
 import { renderReport } from './report.ts';
 import { RemovedProjects, removeProject } from './project-removal.ts';
 import { SyncCoalescer } from './sync-coalesce.ts';
@@ -182,6 +185,14 @@ export async function startServer({
     filename === ':memory:'
       ? undefined
       : new AttachmentStore(join(dirname(filename), 'attachments'));
+  // Reference-image boards (SPEC-09.9): regions over image attachments, per project.
+  const referenceBoards =
+    filename === ':memory:'
+      ? undefined
+      : new ReferenceBoards(join(dirname(filename), 'reference-boards'));
+  // Project folders and the AI's file tools (SPEC-01.13): the data folder is never read.
+  const folders = new ProjectFolders(store.db),
+    fileContext = { dataDirectory: filename === ':memory:' ? undefined : dirname(filename) };
   const workspace = new Workspace(store),
     removedProjects = new RemovedProjects(filename === ':memory:' ? undefined : dirname(filename)),
     listProjects = () => removedProjects.visible(store.listProjects()),
@@ -290,6 +301,7 @@ export async function startServer({
         hosts.rhino.directory,
         hosts.zwcad.directory,
         ...(attachments ? [attachments.root] : []),
+        ...(referenceBoards ? [referenceBoards.root] : []),
       ],
       projectFiles: perProject,
     });
@@ -392,6 +404,8 @@ export async function startServer({
     sdk,
     zwcadSdk,
     attachments,
+    folders,
+    fileContext,
   });
   // Signed-in services for automatic model choice; each check runs the CLIs, so it is reused briefly.
   let signedIn: { at: number; value: Promise<('claude-cli' | 'codex-cli')[]> } | undefined;
@@ -586,7 +600,10 @@ export async function startServer({
           // jig import and pinning are this PC's actions (ARCH-03 §7).
           /^\/api\/v1\/(jigs\/import|projects\/[^/]+\/(jigs|jig-drafts)\/[^/]+\/pin)$/.test(
             url.pathname,
-          )
+          ) ||
+          // Which folders of this PC the AI may read is set at this PC (SPEC-01.13 1).
+          (request.method !== 'GET' &&
+            /^\/api\/v1\/projects\/[^/]+\/folders(\/remove)?$/.test(url.pathname))
         )
           throw new DomainError('FORBIDDEN');
       } else if (!equal(cookie, session)) throw new DomainError('UNAUTHORIZED');
@@ -689,6 +706,28 @@ export async function startServer({
         }
         throw new DomainError('NOT_FOUND');
       }
+      if (
+        await referenceRoutes(url, request, {
+          boards: referenceBoards,
+          isImage: (projectId, id) => attachments?.get(projectId, id)?.kind === 'image',
+          project: (projectId) => store.project(projectId),
+          body,
+          send,
+          response,
+        })
+      )
+        return;
+      // Project folders (SPEC-01.13, ARCH-01 §3).
+      if (
+        await folderRoutes(url, request.method, {
+          folders,
+          context: fileContext,
+          project: (projectId) => store.project(projectId),
+          body: () => body(request),
+          send,
+        })
+      )
+        return;
       // Project link files (SPEC-01.11): linked from a host plugin, listed with live status.
       const linkList = /^\/api\/v1\/projects\/([^/]+)\/links$/.exec(url.pathname);
       const linkItem = /^\/api\/v1\/projects\/([^/]+)\/links\/([^/]+)$/.exec(url.pathname);
@@ -1847,7 +1886,7 @@ export async function startServer({
           })
           .strict()
           .parse(await body(request));
-        send(200, execution.answerQuestions(questions[1], questions[2], answers));
+        send(200, execution.answerQuestions(questions[1], questions[2], answers, remote));
         return;
       }
       const job = /^\/api\/v1\/projects\/([^/]+)\/requests(?:\/([^/]+)(\/cancel)?)?$/.exec(

@@ -2,7 +2,7 @@
 id: ARCH-03
 title: jig 런타임과 저장 스키마 v5의 물리 계약
 status: review
-version: 0.6
+version: 0.7
 updated: 2026-10-01
 owner: agent:claude
 related: [FR-23, FR-24, FR-25, SPEC-02, SPEC-05, SPEC-06, SPEC-07, ADR-014, ADR-019, ADR-020, ADR-021, ADR-022, ADR-026, ARCH-01, ARCH-02, PLAN-22, PLAN-23, PLAN-24, PLAN-26, RESEARCH-10, RESEARCH-12]
@@ -542,6 +542,7 @@ Item
 - 데이터 접근은 `src/core/conversation-store.ts`(대화·공급자 세션·원장), `src/core/jig-store.ts`(jig 표), `src/core/knowledge-review-store.ts`(자료 검토 표)가 맡는다. 동작 규칙은 이 모듈을 쓰는 쪽(PLAN-22·24)이 정한다.
 - Sync 캡처·jig 입력 읽기·만들기 행은 대화에 속하지 않는다.
 - 이관 절차는 ARCH-01 §1.3(버전 확인 → 백업 → 트랜잭션 변경 → 무결성 확인)을 따른다. v5 이후에는 이전 설치본으로 되돌릴 수 없으며(`UNSUPPORTED_SCHEMA`), 배포 안내에 적는다.
+- v6은 프로젝트 폴더 표 `project_folders` 하나다(2026-10-01, PLAN-26 T-091). 정의는 ARCH-01 §3 「프로젝트 폴더와 파일 읽기 도구」가 소유한다.
 
 ### 10.2 표
 

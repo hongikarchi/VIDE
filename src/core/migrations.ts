@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 
 /** v5 and later cannot be opened by an older installation (UNSUPPORTED_SCHEMA); see ARCH-03 §10.1. */
-export const schemaVersion = 5;
+export const schemaVersion = 6;
 export const baselineSchema = `
         CREATE TABLE IF NOT EXISTS projects(id TEXT PRIMARY KEY, name TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS connections(id TEXT PRIMARY KEY, projectId TEXT NOT NULL REFERENCES projects(id),
@@ -97,11 +97,16 @@ CREATE TABLE IF NOT EXISTS knowledge_source_rules(projectId TEXT NOT NULL REFERE
   pattern TEXT NOT NULL, reason TEXT, PRIMARY KEY(projectId, pattern));
 CREATE TABLE IF NOT EXISTS project_roots(projectId TEXT PRIMARY KEY REFERENCES projects(id),
   kdbRoot TEXT, localRoot TEXT);`;
+// Project folders and the folders the user let the AI read (SPEC-01.13, ARCH-01 §3): real paths.
+const projectFolders = `CREATE TABLE IF NOT EXISTS project_folders(projectId TEXT NOT NULL REFERENCES projects(id),
+  path TEXT NOT NULL COLLATE NOCASE, kind TEXT NOT NULL CHECK(kind IN ('project','read')),
+  addedAt TEXT NOT NULL, PRIMARY KEY(projectId, path));`;
 export const migrations: Migration[] = [
   { version: 2, sql: baselineSchema },
   { version: 3, sql: hiddenRequests },
   { version: 4, sql: documentLinks },
   { version: 5, sql: conversationsAndJigs },
+  { version: 6, sql: projectFolders },
 ];
 
 /** Caller holds the exclusive controller lock. Never migrates user model files. */

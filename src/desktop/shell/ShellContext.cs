@@ -191,6 +191,12 @@ namespace Vide.Desktop
                 Quit(true);
                 return;
             }
+            else if (type == "folder:pick")
+            {
+                // 대시보드 › 프로젝트 폴더 (SPEC-01.13): the engine checks the chosen path.
+                form?.PickFolder(message.TryGetValue("id", out var id) ? id as string : null);
+                return;
+            }
             form?.PostState();
         }
 
@@ -200,6 +206,8 @@ namespace Vide.Desktop
             ["version"] = Paths.Version,
             ["settings"] = Settings.ToMessage(),
             ["update"] = Updater.ToMessage(),
+            // This shell answers `folder:pick` with the Windows folder picker.
+            ["folderPick"] = true,
         };
 
         /// <summary>The account website this PC is signed in to (for tray links).</summary>

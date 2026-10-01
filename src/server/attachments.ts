@@ -280,53 +280,84 @@ export class AttachmentStore {
       throw Object.assign(new Error('ATTACHMENT_NOT_FOUND'), { code: 'ATTACHMENT_NOT_FOUND' });
     const name = allowed.get(id) || kept.name;
     const about = { id, name, kind: kept.kind, size: kept.size, type: kept.type };
-    if (kept.kind === 'text') {
-      const start = Math.min(offset, kept.size);
-      const length = Math.min(Math.max(1, limit), MAX_TEXT_PAGE_BYTES);
-      // Read a few bytes more to finish the last character.
-      const handle = await open(kept.path, 'r');
-      let bytes: Buffer;
-      try {
-        const buffer = Buffer.alloc(Math.min(length + 3, kept.size - start));
-        const { bytesRead } = await handle.read(buffer, 0, buffer.length, start);
-        bytes = buffer.subarray(0, bytesRead);
-      } finally {
-        await handle.close();
-      }
-      const from = charStart(bytes, 0);
-      let to = Math.min(bytes.length, length);
-      // End before a character the page cannot finish.
-      if (start + to < kept.size) while (to > from && (bytes[to] & 0xc0) === 0x80) to--;
-      const next = start + to;
+    const view =
+      kept.kind === 'image' && kept.size > MAX_VIEWABLE_IMAGE_BYTES
+        ? this.#view(projectId, id)
+        : undefined;
+    return readFileContent(kept, about, { offset, limit }, view);
+  }
+}
+
+/** Size and content kind of a file on disk (its first 64 KB are sniffed, not its name). */
+export async function describeFile(
+  path: string,
+): Promise<{ size: number; kind: Kind; type: string }> {
+  const handle = await open(path, 'r');
+  try {
+    const { size } = await handle.stat();
+    const head = Buffer.alloc(Math.min(size, 65536));
+    const { bytesRead } = await handle.read(head, 0, head.length, 0);
+    return { size, ...sniff(head.subarray(0, bytesRead)) };
+  } finally {
+    await handle.close();
+  }
+}
+
+/**
+ * The read result of one file (attachment_read, file_read): text in byte pages, an image the model
+ * sees (`view` is a smaller copy of a large image), or what is known of it with a note.
+ */
+export async function readFileContent(
+  file: { path: string; size: number; kind: Kind; type: string },
+  about: Record<string, unknown>,
+  { offset = 0, limit = TEXT_PAGE_BYTES }: { offset?: number; limit?: number } = {},
+  view?: { path: string; type: ImageType },
+): Promise<AttachmentRead> {
+  if (file.kind === 'text') {
+    const start = Math.min(offset, file.size);
+    const length = Math.min(Math.max(1, limit), MAX_TEXT_PAGE_BYTES);
+    // Read a few bytes more to finish the last character.
+    const handle = await open(file.path, 'r');
+    let bytes: Buffer;
+    try {
+      const buffer = Buffer.alloc(Math.min(length + 3, file.size - start));
+      const { bytesRead } = await handle.read(buffer, 0, buffer.length, start);
+      bytes = buffer.subarray(0, bytesRead);
+    } finally {
+      await handle.close();
+    }
+    const from = charStart(bytes, 0);
+    let to = Math.min(bytes.length, length);
+    // End before a character the page cannot finish.
+    if (start + to < file.size) while (to > from && (bytes[to] & 0xc0) === 0x80) to--;
+    const next = start + to;
+    return {
+      ...about,
+      offset: start + from,
+      nextOffset: next < file.size ? next : null,
+      text: bytes.subarray(from, to).toString('utf8'),
+    };
+  }
+  if (file.kind === 'image') {
+    if (file.size > MAX_VIEWABLE_IMAGE_BYTES && !view)
       return {
         ...about,
-        offset: start + from,
-        nextOffset: next < kept.size ? next : null,
-        text: bytes.subarray(from, to).toString('utf8'),
+        note: `The image is larger than ${MAX_VIEWABLE_IMAGE_BYTES} bytes and has no smaller view copy, so it cannot be shown; ask the user for a smaller copy or a crop.`,
       };
-    }
-    if (kept.kind === 'image') {
-      const view = kept.size > MAX_VIEWABLE_IMAGE_BYTES ? this.#view(projectId, id) : undefined;
-      if (kept.size > MAX_VIEWABLE_IMAGE_BYTES && !view)
-        return {
-          ...about,
-          note: `The image is larger than ${MAX_VIEWABLE_IMAGE_BYTES} bytes and has no smaller view copy, so it cannot be shown; ask the user for a smaller copy or a crop.`,
-        };
-      return {
-        image: (await readFile(view?.path ?? kept.path)).toString('base64'),
-        mimeType: view?.type ?? (kept.type as ImageType),
-        about: view ? { ...about, shown: 'reduced view copy (long side 1600 px)' } : about,
-      };
-    }
-    const notes: Record<Exclude<Kind, 'text' | 'image'>, string> = {
-      pdf: 'PDF text extraction is not available in this VIDE version. Ask the user for the pages you need as images or text.',
-      'rhino-3dm':
-        'Rhino model file. This tool cannot read its contents; ask the user to open it with 파일에서 열기 or Link it, then use the model tools.',
-      dwg: 'DWG drawing. This tool cannot read its contents; ask the user to open it with 파일에서 열기 or Link it in ZWCAD, then use the model tools.',
-      binary: 'Binary file: only its name, size and type are known.',
+    return {
+      image: (await readFile(view?.path ?? file.path)).toString('base64'),
+      mimeType: view?.type ?? (file.type as ImageType),
+      about: view ? { ...about, shown: 'reduced view copy (long side 1600 px)' } : about,
     };
-    return { ...about, note: notes[kept.kind] };
   }
+  const notes: Record<Exclude<Kind, 'text' | 'image'>, string> = {
+    pdf: 'PDF text extraction is not available in this VIDE version. Ask the user for the pages you need as images or text.',
+    'rhino-3dm':
+      'Rhino model file. This tool cannot read its contents; ask the user to open it with 파일에서 열기 or Link it, then use the model tools.',
+    dwg: 'DWG drawing. This tool cannot read its contents; ask the user to open it with 파일에서 열기 or Link it in ZWCAD, then use the model tools.',
+    binary: 'Binary file: only its name, size and type are known.',
+  };
+  return { ...about, note: notes[file.kind] };
 }
 export type AttachmentRead =
   | { image: string; mimeType: ImageType; about: Record<string, unknown> }

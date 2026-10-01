@@ -71,6 +71,7 @@ const owned = {
   knowledge_reviews: 'projectId=?',
   knowledge_source_rules: 'projectId=?',
   project_roots: 'projectId=?',
+  project_folders: 'projectId=?',
   review_snapshots: 'projectId=?',
   review_notes: 'projectId=?',
   shared_feedback: 'projectId=?',
@@ -159,6 +160,7 @@ function seed(db, a, data, outside) {
   run(`INSERT INTO knowledge_reviews VALUES(?,1,'confirmed',NULL,NULL,NULL,'user',?)`, a, t);
   run(`INSERT INTO knowledge_source_rules VALUES(?,'*.tmp',NULL)`, a);
   run('INSERT INTO project_roots VALUES(?,?,?)', a, join(outside, 'kdb'), join(outside, 'kdb'));
+  run(`INSERT INTO project_folders VALUES(?,?,'project',?)`, a, join(outside, 'project'), t);
   run(`INSERT INTO review_snapshots VALUES('rv-a',?,'r-a1','검토',?,'{}')`, a, t);
   run(`INSERT INTO review_notes VALUES('rn-a',?,'rv-a','r-a1',NULL,'메모',?)`, a, t);
   run(`INSERT INTO shared_feedback VALUES('sf-a',?,'r-a1','ident-a','{}',?)`, a, t);

@@ -17,8 +17,18 @@ import {
   attachmentHandlers,
   conversationHandlers,
   conversationSources,
+  fileHandlers,
   type AgentTools,
 } from './agent-tools.ts';
+import {
+  FileAccess,
+  turnGrants,
+  type FileContext,
+  type PermissionAnswer,
+  type TurnGrants,
+} from './project-files.ts';
+import type { ProjectFolders } from '../core/project-folders.ts';
+import { activityLog, type ActivityEntry } from './activity.ts';
 import { readableAttachments, type AttachmentStore } from './attachments.ts';
 import { storedAttachments } from '../contracts/workspace.ts';
 import type { Workspace } from '../core/workspace.ts';
@@ -112,6 +122,10 @@ interface Options {
   directDriver?: (host: 'rhino' | 'zwcad', sourceDocument: unknown) => DirectDriver | undefined;
   /** Composer attachments (SPEC-01.12): read by the turn's attachment_read tool. */
   attachments?: AttachmentStore;
+  /** Project folders (SPEC-01.13): read by the turn's file_list/file_read tools. */
+  folders?: ProjectFolders;
+  /** Where the data folder is (never read by the file tools). */
+  fileContext?: FileContext;
 }
 const pinsSchema = z.array(
   z
@@ -173,6 +187,20 @@ export function hostTurnProjectHandlers(
   ) as Pick<ReturnType<typeof conversationHandlers>, (typeof HOST_TURN_PROJECT_TOOLS)[number]>;
 }
 
+/** The card id of the file permission question (SPEC-01.13 3). */
+export const FILE_PERMISSION_CARD = 'file-access';
+/** How long a file tool waits for the permission answer: within Codex's 60 s MCP tool timeout. */
+export const CODEX_PERMISSION_WAIT_MS = 50_000;
+export const PERMISSION_WAIT_MS = 300_000;
+/** `entries` added to an activity list once each, in time order. */
+export function mergeActivity(current: unknown, entries: readonly ActivityEntry[]) {
+  const list = Array.isArray(current) ? (current as ActivityEntry[]) : [];
+  const seen = new Set(list.map((entry) => `${entry.at}|${entry.text}`));
+  return [...list, ...entries.filter((entry) => !seen.has(`${entry.at}|${entry.text}`))].sort(
+    (a, b) => String(a.at).localeCompare(String(b.at)),
+  );
+}
+
 /** Claude's AskUserQuestion on the question cards: on unless VIDE_NATIVE_QUESTIONS=0. */
 export const nativeQuestionsEnabled = () => process.env.VIDE_NATIVE_QUESTIONS !== '0';
 
@@ -202,9 +230,15 @@ export class Execution {
     {
       projectId: string;
       cards: NativeQuestionCard[];
-      answer: (answers: NativeQuestionAnswer[] | null) => void;
+      answer: (answers: NativeQuestionAnswer[] | null, remote?: boolean) => void;
     }
   >();
+  /** Project folders (SPEC-01.13): the file tools of every instructed turn. */
+  folders?: ProjectFolders;
+  fileContext?: FileContext;
+  /** One request's permission answers and file tool lines, until the request ends. */
+  private readonly fileGrants = new Map<string, TurnGrants>();
+  private readonly fileUses = new Map<string, ActivityEntry[]>();
   /** Step times of the running requests (the `request-stages` diagnostic line). */
   private readonly marks = new Map<
     string,
@@ -231,6 +265,8 @@ export class Execution {
       projectInstructions,
       directDriver,
       attachments,
+      folders,
+      fileContext,
       selectContext: choose = (body, candidates) =>
         selectContext(body, candidates, { key: () => '' }),
     }: Options = {},
@@ -252,6 +288,8 @@ export class Execution {
     this.conversations = conversations;
     this.projectInstructions = projectInstructions;
     this.attachments = attachments;
+    this.folders = folders;
+    this.fileContext = fileContext;
   }
   executable(provider: string) {
     return (
@@ -270,7 +308,13 @@ export class Execution {
     agent?: unknown,
     session?: SessionOptions,
     /** The instruction bundle's mode, the project whose addendum it carries, and its host. */
-    instructions?: { mode: InstructionMode; projectId: string; host?: InstructionHost },
+    instructions?: {
+      mode: InstructionMode;
+      projectId: string;
+      host?: InstructionHost;
+      /** The request the turn runs for (its file permission questions and activity). */
+      requestId?: string;
+    },
     /** Claude's own question tool, answered on the question cards (conversation turns). */
     nativeQuestions?: NativeQuestionHandler,
   ) {
@@ -283,7 +327,14 @@ export class Execution {
       this.providerFactory === createProvider
         ? (options: CliOptions) => new CodexAppServer(options)
         : this.providerFactory;
-    if (instructions) agent = this.attachmentAgent(input, agent, instructions.projectId);
+    // A jig's AI review reads only its attached table: no project file tools there.
+    if (instructions)
+      agent = this.readAgent(
+        input,
+        agent,
+        instructions.projectId,
+        instructions.mode === 'review' ? undefined : instructions.requestId,
+      );
     return factory({
       provider: input.provider,
       executable,
@@ -303,36 +354,43 @@ export class Execution {
     });
   }
   /**
-   * The turn's attachments (SPEC-01.12, ARCH-01 §3): attachment_read joins the turn's tool scope,
-   * or gets a scope of its own when the turn has no tools. Only this request's and its
-   * conversation's stored attachments are readable.
+   * The turn's read tools (ARCH-01 §3): attachment_read for this request's and its conversation's
+   * stored attachments (SPEC-01.12), and file_list/file_read on the project's folders with the
+   * permission question outside them (SPEC-01.13). They join the turn's tool scope, or get a scope
+   * of their own when the turn has no tools.
    */
-  private attachmentAgent(
+  private readAgent(
     input: Parameters<Execution['provider']>[0],
     agent: unknown,
     projectId: string,
+    requestId?: string,
   ): unknown {
-    if (!this.attachments || !this.tools) return agent;
-    if (!input.conversationId && !storedAttachments(input.files ?? []).length) return agent;
-    let others: { files?: readonly unknown[]; conversationId?: string }[] = [];
-    if (input.conversationId)
-      try {
-        others = this.workspace.list(projectId).map((row) => row.input);
-      } catch {
-        others = [];
-      }
-    const allowed = readableAttachments(input, others);
-    if (!allowed.size) return agent;
-    const handlers = attachmentHandlers(this.attachments, projectId, allowed);
+    if (!this.tools) return agent;
+    const handlers: Parameters<AgentTools['issue']>[0]['handlers'] = {};
+    if (this.attachments && (input.conversationId || storedAttachments(input.files ?? []).length)) {
+      let others: { files?: readonly unknown[]; conversationId?: string }[] = [];
+      if (input.conversationId)
+        try {
+          others = this.workspace.list(projectId).map((row) => row.input);
+        } catch {
+          others = [];
+        }
+      const allowed = readableAttachments(input, others);
+      if (allowed.size)
+        Object.assign(handlers, attachmentHandlers(this.attachments, projectId, allowed));
+    }
+    if (this.folders && requestId)
+      Object.assign(handlers, fileHandlers(this.fileAccess(input, projectId, requestId)));
+    const names = Object.keys(handlers);
+    if (!names.length) return agent;
     const current = z
       .object({ token: z.string(), tools: z.array(z.string()) })
       .passthrough()
       .safeParse(agent);
     if (current.success) {
       if (!this.tools.extend(current.data.token, handlers)) return agent;
-      return current.data.tools.includes('attachment_read')
-        ? agent
-        : { ...current.data, tools: [...current.data.tools, 'attachment_read'] };
+      const added = names.filter((name) => !current.data.tools.includes(name));
+      return added.length ? { ...current.data, tools: [...current.data.tools, ...added] } : agent;
     }
     if (agent !== undefined) return agent;
     const origin =
@@ -340,13 +398,147 @@ export class Execution {
     if (!origin) return agent;
     const limits = executionLimits(input);
     const scope = this.tools.issue({
-      targetRef: `attachments:${input.id ?? randomUUID()}`,
+      targetRef: `attachments:${requestId ?? input.id ?? randomUUID()}`,
       handlers,
       isCurrent: () => true,
       maxCalls: Math.min(100, limits.maxToolCalls),
       ttlMs: Math.min(600000, (limits.timeoutSeconds + 60) * 1000),
     });
-    return { url: new URL('/mcp', origin).href, token: scope.token, tools: ['attachment_read'] };
+    return { url: new URL('/mcp', origin).href, token: scope.token, tools: names };
+  }
+  /**
+   * One turn's project file access (SPEC-01.13): the request's permission answers, the question on
+   * the request's cards (conversation turns only: elsewhere no card is shown, so it is refused) and
+   * each use in the request's activity.
+   */
+  private fileAccess(
+    input: Parameters<Execution['provider']>[0],
+    projectId: string,
+    requestId: string,
+  ) {
+    let grants = this.fileGrants.get(requestId);
+    if (!grants) this.fileGrants.set(requestId, (grants = turnGrants()));
+    const waitMs = input.provider === 'codex-cli' ? CODEX_PERMISSION_WAIT_MS : PERMISSION_WAIT_MS;
+    return new FileAccess({
+      folders: this.folders!,
+      projectId,
+      context: this.fileContext,
+      grants,
+      ask:
+        typeof input.conversationId === 'string'
+          ? (folder, path, signal) =>
+              this.askFilePermission(projectId, requestId, folder, path, signal, waitMs)
+          : undefined,
+      onUse: (text) => this.noteFileUse(projectId, requestId, text),
+    });
+  }
+  /** One line of the request's activity per file tool call (path only), shown while it runs. */
+  private noteFileUse(projectId: string, requestId: string, text: string) {
+    const log = activityLog(this.fileUses.get(requestId) ?? [], 200);
+    log.add('query', text);
+    this.fileUses.set(requestId, log.entries);
+    try {
+      const running = this.workspace.get(projectId, requestId);
+      if (running.state === 'running')
+        this.workspace.update(projectId, requestId, 'running', {
+          ...(running.result ?? {}),
+          activity: mergeActivity(running.result?.activity, log.entries),
+        });
+    } catch {
+      /* The request ended meanwhile: the end of the run merges the lines. */
+    }
+  }
+  /** The file lines merged into the finished request's activity (in time order). */
+  private settleFileUses(projectId: string, requestId: string) {
+    this.fileGrants.delete(requestId);
+    const uses = this.fileUses.get(requestId);
+    this.fileUses.delete(requestId);
+    if (!uses?.length) return;
+    try {
+      const done = this.workspace.get(projectId, requestId);
+      if (!done.result || done.state === 'running') return;
+      this.workspace.update(projectId, requestId, done.state, {
+        ...done.result,
+        activity: mergeActivity(done.result.activity, uses),
+      });
+    } catch {
+      /* The project is gone. */
+    }
+  }
+  /**
+   * The permission question for a path outside the project folders (SPEC-01.13 3): one card on the
+   * running request, answered like the provider's own questions (`answerQuestions`). An answer
+   * from a remote session never adds a folder for good.
+   */
+  private askFilePermission(
+    projectId: string,
+    requestId: string,
+    folder: string,
+    path: string,
+    signal: AbortSignal,
+    waitMs: number,
+  ): Promise<PermissionAnswer> {
+    const card = {
+      id: FILE_PERMISSION_CARD,
+      title: `AI가 프로젝트 폴더 밖의 파일을 읽으려 합니다 · ${path}`,
+      blocks: 'AI 파일 읽기',
+      options: [
+        { id: 'once', label: '이번만', hint: `이 요청 동안 ${folder} 읽기 허용` },
+        { id: 'always', label: '이 폴더는 항상', hint: `${folder}를 읽기 허용 폴더에 추가` },
+        { id: 'deny', label: '거절', hint: '읽지 않고 AI에 거절로 알림', recommended: true },
+      ],
+      allowFree: false,
+    };
+    let before: Record<string, unknown> | null = null;
+    try {
+      before = this.workspace.get(projectId, requestId).result;
+    } catch {
+      return Promise.resolve(null);
+    }
+    const run = this.active.get(requestId)?.controller.signal;
+    return new Promise((resolve) => {
+      const timer = setTimeout(() => done(null), waitMs);
+      const stop = () => done(null);
+      const done = (answers: NativeQuestionAnswer[] | null, remote = false) => {
+        if (this.nativeQuestions.get(requestId)?.answer !== done) return;
+        this.nativeQuestions.delete(requestId);
+        clearTimeout(timer);
+        signal.removeEventListener('abort', stop);
+        run?.removeEventListener('abort', stop);
+        try {
+          const now = this.workspace.get(projectId, requestId);
+          if (now.state === 'running')
+            this.workspace.update(projectId, requestId, 'running', {
+              ...(before ?? { phase: 'model', hostExecuted: false }),
+              activity: mergeActivity(before?.activity, this.fileUses.get(requestId) ?? []),
+            });
+        } catch {
+          /* The request ended meanwhile. */
+        }
+        const option = answers?.find((answer) => answer.id === FILE_PERMISSION_CARD)?.option;
+        resolve(
+          option === 'always'
+            ? remote
+              ? 'once'
+              : 'always'
+            : option === 'once'
+              ? 'once'
+              : option === 'deny'
+                ? 'deny'
+                : null,
+        );
+      };
+      if (signal.aborted || run?.aborted) return done(null);
+      signal.addEventListener('abort', stop, { once: true });
+      run?.addEventListener('abort', stop, { once: true });
+      this.nativeQuestions.set(requestId, { projectId, cards: [card], answer: done });
+      this.workspace.update(projectId, requestId, 'running', {
+        ...(before ?? {}),
+        phase: 'question',
+        hostExecuted: false,
+        questions: [card],
+      });
+    });
   }
   /**
    * The handler of one turn's native questions: the cards go on the request (phase `question`,
@@ -379,16 +571,23 @@ export class Execution {
         });
       });
   }
-  /** The person's answers to a running turn's native questions (the question cards). */
+  /**
+   * The person's answers to a running turn's native questions or file permission question (the
+   * question cards); `remote` marks an answer from a remote session.
+   */
   answerQuestions(
     projectId: string,
     requestId: string,
     answers: NativeQuestionAnswer[],
+    remote = false,
   ): { ok: true } {
     const waiting = this.nativeQuestions.get(requestId);
     if (!waiting || waiting.projectId !== projectId) throw new DomainError('NOT_FOUND');
     const known = new Set(waiting.cards.map((card) => card.id));
-    waiting.answer(answers.filter((answer) => known.has(answer.id)));
+    waiting.answer(
+      answers.filter((answer) => known.has(answer.id)),
+      remote,
+    );
     return { ok: true };
   }
   async models() {
@@ -551,6 +750,8 @@ export class Execution {
         throw error;
       })
       .finally(() => {
+        // The file tools' lines join the finished request's activity (SPEC-01.13 2).
+        this.settleFileUses(request.projectId, request.id);
         let state = 'unknown',
           code: unknown = null,
           activity: unknown;
@@ -766,7 +967,11 @@ export class Execution {
           provider: (agent) =>
             this.timed(
               id,
-              this.provider(input, agent, turn?.session, { mode: 'modeling', projectId }),
+              this.provider(input, agent, turn?.session, {
+                mode: 'modeling',
+                projectId,
+                requestId: id,
+              }),
             ),
         });
         return;
@@ -900,6 +1105,7 @@ export class Execution {
               this.provider(input, agent, turn?.session, {
                 mode: 'modeling',
                 projectId,
+                requestId: id,
                 host: target,
               }),
             ),
@@ -924,6 +1130,7 @@ export class Execution {
               this.provider(input, agent, turn?.session, {
                 mode: 'modeling',
                 projectId,
+                requestId: id,
                 host: target,
               }),
             ),
@@ -1005,6 +1212,7 @@ export class Execution {
           {
             mode,
             projectId,
+            requestId: id,
             ...(host ? { host: target } : {}),
           },
           // A conversation turn asks with Claude's own question tool by default (ADR-026 4);

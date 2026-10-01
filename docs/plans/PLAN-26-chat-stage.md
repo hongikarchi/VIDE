@@ -2,13 +2,13 @@
 id: PLAN-26
 title: 대화가 화면과 작업을 이끄는 구조 — skill 시작, 토큰 정리, 셸 정리, 산출물 탭
 status: review
-version: 0.3
+version: 0.4
 updated: 2026-10-01
 owner: agent:claude
 related: [ADR-026, ADR-022, ADR-021, ADR-020, SPEC-02, SPEC-07, ARCH-03, ARCH-01, DESIGN, RESEARCH-12, PLAN-22, PLAN-24, FR-18, FR-24, FR-25, AC-48]
 ---
 
-# 대화가 화면과 작업을 이끄는 구조 (T-076~T-081)
+# 대화가 화면과 작업을 이끄는 구조 (T-076~T-081, T-089~T-091)
 
 기준: [ADR-026](../decisions/ADR-026-chat-stage-and-skill-jigs.md)(2026-10-01 사용자 결정), 조사는 [RESEARCH-12](../research/RESEARCH-12-ui-chat-driven-structure.md). 진행 상황의 정본은 [PLAN §6.5](PLAN.md)이다.
 
@@ -175,4 +175,28 @@ related: [ADR-026, ADR-022, ADR-021, ADR-020, SPEC-02, SPEC-07, ARCH-03, ARCH-01
 | (c) Codex 이미지 작업 | 한 장에 한 번 `codex exec`(세션 없음), 입력 = 뷰 캡처 + 영역 겹침 참고 이미지 + 지시문, 결과를 산출물로 복사, 시간 제한 1분·취소·실패 구분, 첫 생성 알림, 프로젝트 설정 끄기 | SPIKE: 시간·크기·성공률(합성 파사드 5장). 브라우저(가짜 작업): 말풍선 먼저 → '생성 중' → 이미지 | Codex 없음·로그인 안 됨·한도·거절·결과 없음·시간 초과·취소 각각 이유와 [다시 생성], 원격 세션에서 실행 안 함 |
 | (d) 확정 → 모델링 | [맞음 → 모델링 반영]이 확정 해석을 자동 모드 다음 턴으로 보냄, 대상 '모름'이면 질문 카드, 판 고정과 원장 기록, [새 판으로 고치기] | 브라우저(가짜 공급자): 자동 모드 턴의 입력에 판·영역·값·출처. `.vide/` 사본의 Rhino에서 루버 생성 → [되돌리기] 한 번 | 대상 모름 → 실행 전 질문, 보호 동작은 SPEC-02.13의 4 그대로 |
 
+**상태(2026-10-01):** (a) 구현·단위·브라우저 시험 완료(커밋·설치 전). 이미지 칩의 [영역 표시] → 위쪽 줄 '참고 이미지 · <파일>' 탭(`workspaces.ts`의 문맥 탭 종류 `reference`), 붓(굵기)·올가미·사각형·지우개(지금 영역만), 휠 확대·스페이스/가운데 버튼 이동, 영역 A…Z·AA…와 메모·삭제(글자 재사용 없음), Ctrl+Z/Ctrl+Shift+Z(Ctrl+Y). 영역은 이미지 비율 좌표의 벡터 도형으로 엔진에 저장(`src/server/reference-boards.ts`, `<data>/reference-boards/<projectId>/<attachmentId>.json`, 라우트 `GET·PUT /projects/:id/reference-boards/:attachmentId`), 다시 열거나 새로 고쳐도 복원. [이해 확인](도움말 '해석은 다음 단계에서 연결됩니다')은 AI를 부르지 않고 영역·글자를 그린 입력 이미지(긴 변 1600 px 이하 PNG, `…/masked`)를 저장한 뒤 '이해 확인 · <파일>' 보드 틀(왼쪽 '해석 대기', 오른쪽 '아직 없음', 빈 읽은 값 표, [영역 고치기])을 연다. 시험: `tests/core/reference-mask.test.mjs`, `tests/server/reference-boards.test.mjs`, `tests/integration/browser-reference-image.mjs`(1440·900 px, 다크). 미리보기 `snapshot.mjs`에 '참고 이미지 · 영역 표시 (구현)'·'이해 확인 · 틀 (구현)'. 남음((a) 범위): 보낸 대화 카드·작업 이력에서 다시 열기(SPEC-09.2의 2), 8000 px 실제 이미지 확인, ARCH-01에 저장 경로·라우트 기록, Design §03·§14 표현. (b)가 이을 것: [이해 확인]의 모델 이미지 가능 판정(SPEC-09.3의 6)과 대화 묶기(SPEC-09.2의 3), 저장된 입력 이미지·영역·메모를 해석 도구 입력으로, 보드의 말풍선·값 표·상태 표시.
+
 **완료:** SPEC-09 「완료 기준」을 실제 Rhino 사본으로 한 번 통과하고 VERIFY에 남긴다. PLAN §6.5에 상태를 적는다.
+
+<a id="t-091"></a>
+## T-091 · 프로젝트 폴더와 AI의 파일 읽기(폴더 밖은 권한 질문)
+
+**목적·기준:** 사용자 결정(2026-10-01) — 대시보드에서 프로젝트에 해당하는 폴더를 정하고, AI는 그 안의 파일을 엔진 경유 읽기 전용 도구로 읽으며, 밖의 파일은 읽으려 할 때 권한 질문([이번만] [이 폴더는 항상] [거절])을 보낸다. 동작 정본은 [SPEC-01.13](../specs/SPEC-01-project-input-sync.md)과 SPEC-02.19의 7, 저장·경로·도구·금지 목록은 ARCH-01 §3 「프로젝트 폴더와 파일 읽기 도구」, 화면은 Design §03 「대시보드의 프로젝트 폴더」. 경로 없이 붙여넣은 내용은 T-089의 복사 첨부 그대로다.
+
+| 대상 | 변경 |
+|---|---|
+| `src/core/migrations.ts`, `src/core/project-folders.ts`(신설), `src/core/store.ts` | schema 6 `project_folders`, 목록·추가·빼기, 프로젝트 삭제 때 행 삭제 |
+| `src/server/project-files.ts`(신설) | `checkFolder`, `deniedPath`, `FileAccess`(경로 판정·정션 탈출·이번 요청 허락/거절·목록·읽기), 폴더 경로 처리 |
+| `src/server/attachments.ts` | 텍스트 구간·이미지·안내 읽기를 공용 `readFileContent`로 분리 |
+| `src/server/agent-tools.ts`, `src/ai/agent-connection.ts`, `src/ai/instructions/common.md` | 도구 `file_read`·`file_list`(계획 모드 포함), 오류 코드, 지시문 |
+| `src/server/execution.ts`, `src/server/server.ts` | 턴마다 파일 도구를 범위에 더함, 권한 질문(자체 질문과 같은 대기 경로·답 경로, 원격의 '항상'은 이번만), 진행 기록에 경로, `GET·POST …/folders`·`POST …/folders/remove`, 원격은 GET만 |
+| `src/ui/dashboard.tsx`, `dashboard.css`, `src/desktop/shell/ShellContext.cs`·`ShellForm.cs` | 대시보드 '프로젝트 폴더' 구역(목록·[폴더 추가]·[빼기]·읽기 허용 폴더), PC 프로그램의 Windows 폴더 선택 창(`folder:pick` 메시지), 브라우저는 경로 입력 |
+
+**선행·외부 조건:** 없음. 실제 Claude·Codex가 권한 질문을 기다리는 동안의 도구 대기 한도(Codex 60초)는 설치본 릴리스 때 확인한다. 셸의 폴더 선택 창은 다음 설치본부터 보이고, 그 전 셸과 브라우저는 경로 입력을 쓴다.
+
+**검증 — 정상:** 단위 `tests/server/project-files.test.mjs`(폴더 더하기·빼기·검사, 안의 파일은 묻지 않고 읽음, 목록 나눠 읽기·패턴, 텍스트 구간·이미지 항목, 밖의 파일 → 질문 → 이번만/항상/거절 각각, 같은 턴의 거절 폴더는 다시 묻지 않음, 원격의 '항상'은 이번만, 진행 기록에 경로). 브라우저 `browser-project-folders.mjs`(대시보드에서 경로로 더하기·빼기, 거절 이유 표시). 전체 `npm test`·`npm run test:browser`·`npm run typecheck`·prettier. 셸은 `npm run desktop:build`로 빌드만 확인.
+
+**검증 — 실패:** 정션으로 폴더 밖을 가리킴 → `FILE_FORBIDDEN`(질문 없음). `.ssh`·`.env`·VIDE 데이터 폴더 → `FILE_FORBIDDEN`(허용 폴더 안이어도). 드라이브 맨 위·데이터 폴더·없는 경로를 프로젝트 폴더로 → `FOLDER_NOT_ALLOWED`·`FOLDER_NOT_FOUND`. 답 없음·턴 중단 → `FILE_ACCESS_DENIED`와 카드 거둠.
+
+**완료:** 위 시험 통과와 PLAN §6.5 갱신. 실제 CLI로 폴더 밖 파일 권한 질문을 한 번 답해 보는 확인은 설치본 릴리스 때.

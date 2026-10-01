@@ -1,0 +1,464 @@
+/* 참고 이미지 탭 (SPEC-09.2·09.3·09.5, PLAN-26 T-090 (a)): the region editor and the 이해 확인
+   board's frame over the centre column. Colours, lines and radii come from tokens.css. */
+.reference-workspace {
+  display: none;
+}
+body[data-workspace='reference'] .workspace > :not(.workspace-tabs):not(.reference-workspace) {
+  display: none !important;
+}
+body[data-workspace='reference'] .reference-workspace {
+  grid-row: 2 / -1;
+  grid-column: 1 / -1;
+  min-height: 0;
+  display: block;
+  background: var(--bg);
+}
+@media (min-width: 851px) {
+  body[data-workspace='reference'] #left,
+  body[data-workspace='reference'] #toggle-left,
+  body[data-workspace='reference'] .panel-resize-left {
+    display: none;
+  }
+  body[data-workspace='reference'] main {
+    grid-template-columns: minmax(260px, 1fr) var(--right-width, 370px);
+  }
+  body[data-workspace='reference'].right-hidden main {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.reference-page {
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.reference-loading,
+.reference-failed {
+  margin: auto;
+  color: var(--text-3);
+  font-size: var(--fs-md);
+}
+.reference-failed {
+  color: var(--ng);
+}
+.reference-head {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  padding: var(--s3) var(--s4);
+  border-bottom: var(--hairline) solid var(--border);
+  background: var(--bg-elevated);
+}
+.reference-head h2 {
+  margin: 0;
+  font-size: var(--fs-lg);
+  font-weight: 600;
+  letter-spacing: var(--tracking);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.reference-meta {
+  color: var(--text-3);
+  font-size: var(--fs-sm);
+}
+
+/* Editor: image on the left, the list of regions on the right. */
+.reference-editor {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 256px;
+}
+.reference-canvas {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.reference-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: var(--s2) var(--s4);
+  border-bottom: var(--hairline) solid var(--border-subtle);
+  background: var(--bg-elevated);
+  font-size: var(--fs-sm);
+}
+.reference-tools > button {
+  padding: 4px 9px;
+  font-size: var(--fs-sm);
+}
+.reference-seg {
+  display: inline-flex;
+  border: var(--hairline) solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+.reference-seg button {
+  border: 0;
+  border-radius: 0;
+  padding: 5px 10px;
+  font-size: var(--fs-sm);
+  background: var(--bg-elevated);
+  color: var(--text-2);
+}
+.reference-seg button + button {
+  border-left: var(--hairline) solid var(--border);
+}
+.reference-seg button[aria-pressed='true'] {
+  background: var(--bg-active);
+  color: var(--text-1);
+  font-weight: 600;
+}
+.reference-sep {
+  width: 1px;
+  height: 18px;
+  background: var(--border);
+  margin: 0 2px;
+}
+.reference-tools label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-2);
+}
+.reference-tools input[type='range'] {
+  width: 90px;
+}
+.reference-zoom {
+  min-width: 40px;
+  color: var(--text-3);
+  font-variant-numeric: tabular-nums;
+}
+.reference-hint {
+  margin-left: auto;
+  color: var(--text-3);
+}
+.reference-stage {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--bg-recessed);
+  touch-action: none;
+  user-select: none;
+  cursor: crosshair;
+}
+.reference-stage[data-tool='pan'] {
+  cursor: grab;
+}
+.reference-stage[data-tool='erase'] {
+  cursor: cell;
+}
+.reference-layer,
+.reference-figure-layer {
+  position: absolute;
+  left: 0;
+  top: 0;
+  transform-origin: 0 0;
+}
+.reference-layer {
+  box-shadow: var(--shadow-float);
+}
+.reference-layer img,
+.reference-figure-layer img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+.reference-overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+}
+.reference-region-fill {
+  fill: var(--accent-muted);
+}
+.reference-region-fill[data-active] {
+  fill: color-mix(in srgb, var(--accent-muted), var(--accent) 18%);
+}
+.reference-badge rect {
+  fill: var(--accent);
+}
+.reference-badge[data-active] rect {
+  stroke: var(--text-1);
+  stroke-width: 1.5px;
+  vector-effect: non-scaling-stroke;
+}
+.reference-badge text {
+  fill: var(--bg-elevated);
+  font-family: var(--font-sans);
+  font-weight: 700;
+}
+.reference-draft {
+  fill: none;
+  stroke: var(--accent);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: 0.55;
+}
+.reference-draft[data-tool='erase'] {
+  stroke: var(--text-3);
+  opacity: 0.4;
+}
+.reference-draft[data-tool='rect'],
+.reference-draft[data-tool='lasso'] {
+  fill: var(--accent-subtle);
+  opacity: 1;
+  stroke-width: 2px;
+  stroke-dasharray: 7 5;
+  vector-effect: non-scaling-stroke;
+}
+
+/* The list of regions: soft background for the region being drawn (no side bars). */
+.reference-regions {
+  min-height: 0;
+  overflow: auto;
+  border-left: var(--hairline) solid var(--border);
+  background: var(--bg-elevated);
+  display: flex;
+  flex-direction: column;
+}
+.reference-regions h3 {
+  margin: 0;
+  padding: var(--s3) var(--s4) var(--s2);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  color: var(--text-2);
+}
+.reference-regions ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.reference-region {
+  margin: 0 var(--s2) 6px;
+  padding: var(--s2) 10px;
+  border-radius: var(--radius-sm);
+  display: grid;
+  grid-template-columns: 22px 1fr auto;
+  gap: 4px 8px;
+  align-items: center;
+  cursor: pointer;
+}
+.reference-region:hover {
+  background: var(--bg-hover);
+}
+.reference-region[data-active] {
+  background: var(--bg-selected);
+}
+.reference-letter {
+  min-width: 22px;
+  height: 22px;
+  padding: 0 4px;
+  box-sizing: border-box;
+  border-radius: var(--radius-pill);
+  display: grid;
+  place-items: center;
+  background: var(--accent);
+  color: var(--bg-elevated);
+  font-size: var(--fs-xs);
+  font-weight: 700;
+}
+.reference-region strong {
+  font-size: var(--fs-md);
+  font-weight: 600;
+}
+.reference-remove {
+  border: 0;
+  padding: 0 6px;
+  color: var(--text-3);
+  background: transparent;
+}
+.reference-region input {
+  grid-column: 2 / -1;
+  width: 100%;
+  box-sizing: border-box;
+  font-size: var(--fs-sm);
+  padding: 5px 7px;
+  border: var(--hairline) solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-elevated);
+  color: var(--text-1);
+}
+.reference-region small {
+  grid-column: 2 / -1;
+  color: var(--text-3);
+  font-size: var(--fs-xs);
+}
+.reference-add {
+  margin: 2px var(--s4);
+  align-self: flex-start;
+  font-size: var(--fs-sm);
+}
+.reference-foot {
+  margin-top: auto;
+  padding: var(--s4);
+  border-top: var(--hairline) solid var(--border-subtle);
+  display: grid;
+  gap: var(--s2);
+}
+.reference-foot p {
+  margin: 0;
+  color: var(--text-3);
+  font-size: var(--fs-xs);
+  line-height: 1.5;
+}
+.reference-cta {
+  width: 100%;
+  padding: 9px 12px;
+  font-size: var(--fs-md);
+  font-weight: 600;
+}
+
+/* Board: the reference and the generated image side by side, the values below. */
+.reference-board {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--s4);
+  padding: var(--s4);
+  align-content: start;
+}
+.reference-pane {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.reference-pane-head {
+  font-size: var(--fs-sm);
+  color: var(--text-2);
+}
+.reference-pane-head strong {
+  color: var(--text-1);
+  font-weight: 600;
+}
+.reference-figure {
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--radius-sm);
+  border: var(--hairline) solid var(--border);
+  background: var(--bg-recessed);
+}
+.reference-waiting {
+  position: absolute;
+  left: 50%;
+  bottom: var(--s3);
+  transform: translateX(-50%);
+  padding: 3px 10px;
+  border-radius: var(--radius-pill);
+  background: var(--bg-floating);
+  border: var(--hairline) solid var(--border);
+  color: var(--text-2);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+}
+.reference-empty {
+  display: grid;
+  place-items: center;
+}
+.reference-empty-card {
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  padding: var(--s4) var(--s6);
+  border-radius: var(--radius-md);
+  border: var(--hairline) dashed var(--border);
+  background: var(--bg-elevated);
+  text-align: center;
+}
+.reference-empty-card strong {
+  font-size: var(--fs-md);
+}
+.reference-empty-card small,
+.reference-caption {
+  color: var(--text-3);
+  font-size: var(--fs-xs);
+  line-height: 1.5;
+}
+.reference-values {
+  grid-column: 1 / -1;
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--fs-sm);
+}
+.reference-values caption {
+  text-align: left;
+  padding: 0 0 6px;
+  color: var(--text-2);
+  font-weight: 600;
+}
+.reference-values th,
+.reference-values td {
+  text-align: left;
+  padding: 6px 8px;
+  border-bottom: var(--hairline) solid var(--border-subtle);
+}
+.reference-values th {
+  color: var(--text-3);
+  font-weight: 500;
+  font-size: var(--fs-xs);
+}
+.reference-values-empty {
+  color: var(--text-3);
+  text-align: center !important;
+}
+.reference-states {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding-top: var(--s2);
+  border-top: var(--hairline) solid var(--border-subtle);
+  color: var(--text-3);
+  font-size: var(--fs-xs);
+}
+.reference-states span[data-on] {
+  color: var(--text-1);
+  font-weight: 600;
+}
+.reference-states i {
+  font-style: normal;
+  opacity: 0.6;
+}
+.reference-back {
+  margin-left: auto;
+  font-size: var(--fs-sm);
+}
+
+@media (max-width: 1180px) {
+  .reference-editor {
+    grid-template-columns: minmax(0, 1fr) 208px;
+  }
+  .reference-hint {
+    display: none;
+  }
+}
+@media (max-width: 850px) {
+  .reference-editor {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) auto;
+  }
+  .reference-regions {
+    max-height: 38vh;
+    border-left: 0;
+    border-top: var(--hairline) solid var(--border);
+  }
+  .reference-board {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .reference-hint {
+    display: none;
+  }
+}

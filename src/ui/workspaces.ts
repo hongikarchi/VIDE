@@ -11,15 +11,21 @@
 export type FixedWorkspace = 'dashboard' | 'model' | 'data' | 'jig' | 'make' | 'output';
 /** A sub-view of the 산출물 tab (src/ui/output-tab.tsx). */
 export type OutputView = 'sheet' | 'report' | 'render';
-/** A jig opened in its own tab: a jig instance (작업본) id, or `legacy:<jigId>` for older jigs. */
+/**
+ * An item opened in its own tab. A jig (the default kind): `instanceId` is a jig instance (작업본)
+ * id, or `legacy:<jigId>` for older jigs. A reference image (SPEC-09.2, PLAN-26 T-090):
+ * `instanceId` is the image attachment's id, and its screen is src/ui/reference-tab.tsx.
+ */
+export type ContextKind = 'jig' | 'reference';
 export interface ContextTab {
   instanceId: string;
+  kind?: ContextKind;
   label: string;
   /** The longer name shown as the tab's tooltip. */
   title?: string;
 }
 export interface WorkspaceChange {
-  /** A fixed tab id, or `contextId(instanceId)` of a context tab. */
+  /** A fixed tab id, or `tabId(tab)` of a context tab. */
   active: string;
   context: readonly ContextTab[];
   /** The context tab this change closed. */
@@ -38,8 +44,20 @@ const FIXED: { id: FixedWorkspace; label: string; ready: boolean; title?: string
   { id: 'output', label: '산출물', ready: true, title: 'Output · 도면 · 보고서 · 렌더링' },
 ];
 const PREFIX = 'jig:';
+const REFERENCE = 'ref:';
+/** The tab id of a jig instance's context tab. */
 export const contextId = (instanceId: string) => PREFIX + instanceId;
+/** The tab id of a reference image's tab. */
+export const referenceTabId = (attachmentId: string) => REFERENCE + attachmentId;
+/** The tab id of any context tab. */
+export const tabId = (tab: ContextTab) =>
+  tab.kind === 'reference' ? referenceTabId(tab.instanceId) : contextId(tab.instanceId);
 const instanceOf = (id: string) => (id.startsWith(PREFIX) ? id.slice(PREFIX.length) : undefined);
+/** The attachment of a reference tab id. */
+export const referenceOf = (id: string) =>
+  id.startsWith(REFERENCE) ? id.slice(REFERENCE.length) : undefined;
+const sameTab = (a: ContextTab, b: { instanceId: string; kind?: ContextKind }) =>
+  a.instanceId === b.instanceId && (a.kind ?? 'jig') === (b.kind ?? 'jig');
 const MAX_CONTEXT = 12;
 /** Former tab ids that are now a view of a fixed tab: every way to the report still opens it. */
 const ALIAS: Record<string, { tab: FixedWorkspace; view: OutputView }> = {
@@ -84,6 +102,7 @@ function recall(): { active?: string; context: ContextTab[] } {
       .slice(0, MAX_CONTEXT)
       .map((entry) => ({
         instanceId: entry.instanceId,
+        ...(entry.kind === 'reference' ? { kind: 'reference' as const } : {}),
         label: entry.label.slice(0, 120),
         ...(typeof entry.title === 'string' ? { title: entry.title.slice(0, 300) } : {}),
       }));
@@ -94,8 +113,7 @@ function recall(): { active?: string; context: ContextTab[] } {
 }
 
 function known(id: string) {
-  const instance = instanceOf(id);
-  if (instance !== undefined) return context.some((tab) => tab.instanceId === instance);
+  if (context.some((tab) => tabId(tab) === id)) return true;
   return FIXED.some((tab) => tab.id === id && tab.ready);
 }
 function emit(closed?: ContextTab) {
@@ -107,7 +125,9 @@ function emit(closed?: ContextTab) {
     active === 'data' ||
     active === 'make'
       ? active
-      : 'context';
+      : referenceOf(active) !== undefined
+        ? 'reference'
+        : 'context';
   // The 대시보드 screen reads the project's state when it is shown (src/ui/dashboard.tsx).
   if (active === 'dashboard' && projectId)
     void import('./dashboard.tsx').then((screen) => screen.showDashboard(projectId!));
@@ -124,6 +144,12 @@ function emit(closed?: ContextTab) {
     outputView = undefined;
     void import('./output-tab.tsx').then((screen) => screen.showOutput(projectId!, view));
   } else outputView = undefined;
+  // A reference image's tab: the region editor or the 이해 확인 board (src/ui/reference-tab.tsx).
+  const reference = context.find((tab) => tab.kind === 'reference' && tabId(tab) === active);
+  if (reference && projectId) {
+    const project = projectId;
+    void import('./reference-tab.tsx').then((screen) => screen.showReference(project, reference));
+  }
   paint();
   remember();
   const change = { active, context, ...(closed ? { closed } : {}) };
@@ -149,7 +175,7 @@ export function setWorkspace(
   } else if (id === 'output' && options.outputView) outputView = options.outputView;
   if (options.instanceId !== undefined) {
     const instanceId = options.instanceId;
-    if (context.some((tab) => tab.instanceId === instanceId)) activate(contextId(instanceId));
+    if (context.some((tab) => sameTab(tab, { instanceId }))) activate(contextId(instanceId));
     else
       void resolver?.(instanceId).then((tab) => {
         if (tab) openContextTab(tab);
@@ -158,46 +184,61 @@ export function setWorkspace(
   }
   if (known(id)) activate(id);
 }
-/** Add a jig's context tab (or rename it when present) and show it unless `show` is false. */
+/** Add a context tab (or rename it when present) and show it unless `show` is false. */
 export function openContextTab(tab: ContextTab, show = true) {
-  const index = context.findIndex((entry) => entry.instanceId === tab.instanceId);
+  const index = context.findIndex((entry) => sameTab(entry, tab));
   if (index >= 0) context = context.map((entry, k) => (k === index ? { ...entry, ...tab } : entry));
   else {
     // The oldest tab that is not showing makes room; its instance stays and reopens from the list.
     if (context.length >= MAX_CONTEXT) {
-      const drop = context.find((entry) => contextId(entry.instanceId) !== active);
+      const drop = context.find((entry) => tabId(entry) !== active);
       if (drop) context = context.filter((entry) => entry !== drop);
     }
     context = [...context, tab];
   }
-  if (show) activate(contextId(tab.instanceId));
+  if (show) activate(tabId(tab));
   else emit();
 }
-/** Close a context tab. The jig instance stays; the neighbouring tab (or the model tab) shows. */
-export function closeContextTab(instanceId: string) {
-  const index = context.findIndex((entry) => entry.instanceId === instanceId);
+/**
+ * Close a context tab. What it showed stays (a jig instance, a reference board); the neighbouring
+ * tab (or the model tab) shows.
+ */
+export function closeContextTab(instanceId: string, kind: ContextKind = 'jig') {
+  const index = context.findIndex((entry) => sameTab(entry, { instanceId, kind }));
   if (index < 0) return;
   const closed = context[index];
   context = context.filter((_, k) => k !== index);
-  if (active === contextId(instanceId)) {
+  if (active === tabId(closed)) {
     const neighbour = context[index] ?? context[index - 1];
-    active = neighbour ? contextId(neighbour.instanceId) : 'model';
+    active = neighbour ? tabId(neighbour) : 'model';
   }
   emit(closed);
 }
-export function renameContextTab(instanceId: string, label: string, title?: string) {
-  if (!context.some((entry) => entry.instanceId === instanceId)) return;
+export function renameContextTab(
+  instanceId: string,
+  label: string,
+  title?: string,
+  kind: ContextKind = 'jig',
+) {
+  if (!context.some((entry) => sameTab(entry, { instanceId, kind }))) return;
   context = context.map((entry) =>
-    entry.instanceId === instanceId ? { ...entry, label, ...(title ? { title } : {}) } : entry,
+    sameTab(entry, { instanceId, kind }) ? { ...entry, label, ...(title ? { title } : {}) } : entry,
   );
   paint();
   remember();
 }
 export const activeWorkspace = () => active;
 export const contextTabs = (): readonly ContextTab[] => context;
-/** The rail destination the shown workspace belongs to: a context tab (a jig instance) is JIG's. */
-export const workspaceDestination = (): FixedWorkspace =>
-  instanceOf(active) !== undefined ? 'jig' : (active as FixedWorkspace);
+/**
+ * The rail destination the shown workspace belongs to: a jig instance's tab is JIG's; a reference
+ * image's tab belongs to none.
+ */
+export const workspaceDestination = (): FixedWorkspace | undefined =>
+  instanceOf(active) !== undefined
+    ? 'jig'
+    : referenceOf(active) !== undefined
+      ? undefined
+      : (active as FixedWorkspace);
 /** The 3D view is part of the model tab and of every jig context tab. */
 export const workspaceShowsViewport = () => active === 'model' || instanceOf(active) !== undefined;
 export function onWorkspaceChange(listener: (change: WorkspaceChange) => void) {
@@ -256,10 +297,13 @@ function closeButton(tab: ContextTab, focusable: boolean) {
   close.textContent = '×';
   close.tabIndex = focusable ? 0 : -1;
   close.setAttribute('aria-label', `${tab.label} 탭 닫기`);
-  close.title = '탭 닫기 · 작업본은 남고 JIG 목록에서 다시 엽니다';
+  close.title =
+    tab.kind === 'reference'
+      ? '탭 닫기 · 영역은 남고 첨부의 [영역 표시]로 다시 엽니다'
+      : '탭 닫기 · 작업본은 남고 JIG 목록에서 다시 엽니다';
   close.onclick = (event) => {
     event.stopPropagation();
-    closeContextTab(tab.instanceId);
+    closeContextTab(tab.instanceId, tab.kind);
   };
   return close;
 }
@@ -277,7 +321,7 @@ function paint() {
   list.setAttribute('aria-label', '작업공간');
   // Only what is open: the fixed screens are the rail's (user decision 2026-10-01).
   for (const tab of context) {
-    const id = contextId(tab.instanceId);
+    const id = tabId(tab);
     const item = document.createElement('span');
     item.className = 'workspace-context-tab';
     item.toggleAttribute('data-active', id === active);
@@ -299,9 +343,10 @@ function paint() {
     else if (event.key === 'ArrowLeft') move(at - 1);
     else if (event.key === 'Home') move(0);
     else if (event.key === 'End') move(tabs.length - 1);
-    else if (event.key === 'Delete' && instanceOf(current) !== undefined) {
+    else if (event.key === 'Delete' && context.some((tab) => tabId(tab) === current)) {
       event.preventDefault();
-      closeContextTab(instanceOf(current)!);
+      const tab = context.find((entry) => tabId(entry) === current)!;
+      closeContextTab(tab.instanceId, tab.kind);
       bar?.querySelector<HTMLElement>('[role="tab"][aria-selected="true"]')?.focus();
     }
   };
@@ -317,16 +362,21 @@ function paint() {
     if (tab.title) option.title = tab.title;
     select.append(option);
   }
-  if (context.length) {
+  for (const [kind, label] of [
+    ['jig', '열린 jig'],
+    ['reference', '참고 이미지'],
+  ] as const) {
+    const tabs = context.filter((tab) => (tab.kind ?? 'jig') === kind);
+    if (!tabs.length) continue;
     const group = document.createElement('optgroup');
-    group.label = '열린 jig';
-    for (const tab of context) group.append(new Option(tab.label, contextId(tab.instanceId)));
+    group.label = label;
+    for (const tab of tabs) group.append(new Option(tab.label, tabId(tab)));
     select.append(group);
   }
   select.value = active;
   select.onchange = () => setWorkspace(select.value);
   narrow.append(select);
-  const open = context.find((tab) => contextId(tab.instanceId) === active);
+  const open = context.find((tab) => tabId(tab) === active);
   if (open) narrow.append(closeButton(open, true));
 
   bar.replaceChildren(list, narrow);

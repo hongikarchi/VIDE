@@ -27,6 +27,7 @@ import { MakeTurnGuard, draftsFor, makeStopNotice } from './make-routes.ts';
 import type { JigDrafts } from '../jigs/runtime/drafts.ts';
 import { turnOutputSchema } from './turn-output.ts';
 import type { AttachmentStore } from './attachments.ts';
+import type { FileAccess } from './project-files.ts';
 import { existsSync } from 'node:fs';
 import { KnowledgeReviewStore } from '../core/knowledge-review-store.ts';
 import {
@@ -117,6 +118,30 @@ const definitions = {
     schema: z
       .object({
         id: z.string().regex(/^[0-9a-f]{24}$/),
+        offset: z.number().int().min(0).optional(),
+        limit: z.number().int().min(1).max(40000).optional(),
+      })
+      .strict(),
+  },
+  // Project files (SPEC-01.13): read-only, through the engine; outside the folders the user is asked.
+  file_list: {
+    description:
+      "List this project's folders (leave path out), or one folder's entries (folders first, then files, by name) a page at a time; pattern filters names with * and ?. Paths outside the project folders ask the user first (FILE_ACCESS_DENIED when refused: do not ask again this turn). Key, login and VIDE data files are never listed.",
+    schema: z
+      .object({
+        path: z.string().min(1).max(1024).optional(),
+        pattern: z.string().min(1).max(200).optional(),
+        offset: z.number().int().min(0).optional(),
+        limit: z.number().int().min(1).max(200).optional(),
+      })
+      .strict(),
+  },
+  file_read: {
+    description:
+      'Read a file by absolute path (or relative to the first project folder). Text comes in byte pages (offset, limit up to 40000; continue from nextOffset). PNG/JPEG/GIF/WebP up to 1 MB come back as an image you see. PDF, 3DM, DWG and other binary files return name, size, type and a note. Inside the project folders it reads at once; outside, the user is asked (FILE_ACCESS_DENIED when refused: do not ask again this turn). FILE_FORBIDDEN: keys, logins, VIDE data, or a link leading out of a folder; never retry. Read-only: there is no write tool.',
+    schema: z
+      .object({
+        path: z.string().min(1).max(1024),
         offset: z.number().int().min(0).optional(),
         limit: z.number().int().min(1).max(40000).optional(),
       })
@@ -410,6 +435,9 @@ const knownErrors = new Set([
   'CAPTURE_FAILED',
   'MEASURE_FAILED',
   'ATTACHMENT_NOT_FOUND',
+  'FILE_NOT_FOUND',
+  'FILE_FORBIDDEN',
+  'FILE_ACCESS_DENIED',
 ]);
 /** Tools that change or occupy the target: one at a time, after the basis check. */
 // capture_view moves the camera and layers of the target for one image, so it takes the turn too.
@@ -447,6 +475,8 @@ export const PLAN_MODE_TOOLS: ReadonlySet<string> = new Set<ToolName>([
   'project_statement',
   'project_checks',
   'attachment_read',
+  'file_list',
+  'file_read',
 ]);
 /** The handlers Plan mode keeps (PLAN_MODE_TOOLS). */
 export function planModeHandlers<H extends Handlers>(handlers: H): H {
@@ -1357,6 +1387,23 @@ export function visionHandlers(
       const result = await source.measure(options);
       onUse('measure');
       return bounded(result);
+    },
+  };
+}
+
+/** file_list and file_read of one turn (SPEC-01.13) through its `FileAccess`. */
+export function fileHandlers(access: FileAccess): Handlers {
+  return {
+    file_list: (args, { signal }) => access.list(args, signal),
+    file_read: async (args, { signal }) => {
+      const result = await access.read(args, signal);
+      if ('image' in result && typeof result.image === 'string')
+        return new ToolImage(
+          result.image,
+          result.mimeType as ToolImage['mimeType'],
+          result.about as Record<string, unknown>,
+        );
+      return result;
     },
   };
 }

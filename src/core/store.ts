@@ -231,6 +231,7 @@ export class Store {
         'DELETE FROM knowledge_reviews WHERE projectId=?',
         'DELETE FROM knowledge_source_rules WHERE projectId=?',
         'DELETE FROM project_roots WHERE projectId=?',
+        'DELETE FROM project_folders WHERE projectId=?',
         'DELETE FROM review_notes WHERE projectId=?',
         'DELETE FROM review_snapshots WHERE projectId=?',
         'DELETE FROM shared_feedback WHERE projectId=?',

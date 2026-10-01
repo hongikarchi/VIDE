@@ -195,6 +195,32 @@ namespace Vide.Desktop
             catch { /* Page not ready. */ }
         }
 
+        /// <summary>
+        /// The Windows folder picker for 대시보드 › 프로젝트 폴더 (SPEC-01.13); the page gets
+        /// <c>{type:'folder:picked', id, path}</c> (path null when cancelled). Shown after the
+        /// message handler returns, not inside it.
+        /// </summary>
+        public void PickFolder(string id)
+        {
+            BeginInvoke((Action)(() =>
+            {
+                string path = null;
+                using (var dialog = new FolderBrowserDialog { Description = "VIDE 프로젝트 폴더를 고르세요", ShowNewFolderButton = false })
+                    if (dialog.ShowDialog(this) == DialogResult.OK) path = dialog.SelectedPath;
+                if (!ready || view.CoreWebView2 == null) return;
+                try
+                {
+                    view.CoreWebView2.PostWebMessageAsJson(json.Serialize(new Dictionary<string, object>
+                    {
+                        ["type"] = "folder:picked",
+                        ["id"] = id,
+                        ["path"] = path,
+                    }));
+                }
+                catch { /* Page gone. */ }
+            }));
+        }
+
         protected override void OnFormClosing(FormClosingEventArgs e)
         {
             context.Settings.Maximized = WindowState == FormWindowState.Maximized;

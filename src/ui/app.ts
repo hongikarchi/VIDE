@@ -1051,6 +1051,7 @@ function chip(
   title?: string,
   select?: () => void,
   thumbnail?: string,
+  action?: { label: string; title: string; run: () => void },
 ) {
   const span = el('span', text, $('context'), { class: 'chip' });
   if (title) span.title = title;
@@ -1061,6 +1062,11 @@ function chip(
     span.onclick = (event) => {
       if (event.target === span) select();
     };
+  }
+  if (action) {
+    const button = el('button', action.label, span, { type: 'button', class: 'chip-mask' });
+    button.title = action.title;
+    button.onclick = action.run;
   }
   const b = el('button', '×', span, { 'aria-label': `${text} 제외` });
   b.onclick = remove;
@@ -1158,6 +1164,22 @@ function render(rebuildRequests = true) {
       undefined,
       f.kind === 'image' && typeof f.id === 'string' && project
         ? attachmentPreview(currentProject().id, f.id)
+        : undefined,
+      // An image opens its reference-image tab for marking regions (SPEC-09.2, PLAN-26 T-090).
+      f.kind === 'image' && typeof f.id === 'string' && project && !panelMode
+        ? {
+            label: '영역 표시',
+            title: '참고 이미지 탭에서 원하는 부분을 영역으로 표시합니다',
+            run: () => {
+              const name = f.displayName || f.name;
+              openContextTab({
+                instanceId: f.id as string,
+                kind: 'reference',
+                label: `참고 이미지 · ${name}`,
+                title: `참고 이미지 · ${name} · 영역 표시`,
+              });
+            },
+          }
         : undefined,
     ),
   );
