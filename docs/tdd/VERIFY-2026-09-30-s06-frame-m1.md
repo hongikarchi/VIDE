@@ -1,9 +1,9 @@
 ---
 id: VERIFY-2026-09-30-s06-frame-m1
 title: S-06 골조 jig 0.1 — ⓪ 입력 조립 ~ ④ 기초 간섭의 합성 자료 검증(M1)
-status: draft
-version: 0.1
-updated: 2026-09-30
+status: review
+version: 0.2
+updated: 2026-10-01
 owner: agent:claude
 related: [FR-23, FR-24, AC-41, AC-42, SPEC-06, SPEC-07, ARCH-03, PLAN-22, PLAN-23, T-051]
 ---

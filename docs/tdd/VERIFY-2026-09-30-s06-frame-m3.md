@@ -1,9 +1,9 @@
 ---
 id: VERIFY-2026-09-30-s06-frame-m3
 title: S-06 골조 jig M3 — 단면 선정·일람표·기둥 높이·만들기 계획 연결 검수
-status: draft
-version: 0.5
-updated: 2026-09-30
+status: review
+version: 0.6
+updated: 2026-10-01
 owner: agent:claude
 related: [T-056, T-055, T-074, FR-23, AC-42, AC-43, SPEC-06, SPEC-07, PLAN-23]
 ---

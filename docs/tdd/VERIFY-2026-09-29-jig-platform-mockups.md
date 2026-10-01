@@ -1,9 +1,9 @@
 ---
 id: VERIFY-2026-09-29-jig-platform-mockups
 title: jig 플랫폼·작업공간·S-06 구조 jig 화면 목업 검수
-status: draft
-version: 0.1
-updated: 2026-09-29
+status: review
+version: 0.2
+updated: 2026-10-01
 owner: agent:claude
 related: [RESEARCH-10, FR-23, SCR-03, SCR-12]
 ---

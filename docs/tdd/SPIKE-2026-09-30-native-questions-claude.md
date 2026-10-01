@@ -1,9 +1,9 @@
 ---
 id: SPIKE-2026-09-30-native-questions-claude
 title: Claude Code의 AskUserQuestion을 VIDE 질문 카드로 받기
-status: draft
-version: 0.1
-updated: 2026-09-30
+status: review
+version: 0.2
+updated: 2026-10-01
 owner: agent:claude
 related: [SPEC-02, PLAN-24, ADR-021, RESEARCH-10, RESEARCH-11]
 ---

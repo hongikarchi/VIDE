@@ -1,9 +1,9 @@
 ---
 id: VERIFY-2026-09-30-jig-authoring-m5
 title: M5 수용 — 만들기 대화로 S-06 보조 jig 만들기(실제 Claude CLI)
-status: draft
-version: 0.1
-updated: 2026-09-30
+status: review
+version: 0.2
+updated: 2026-10-01
 owner: agent:claude
 related: [FR-24, AC-45, SPEC-07, ARCH-03, PLAN-22, T-063, T-064]
 ---

@@ -1,9 +1,9 @@
 ---
 id: SPIKE-2026-09-30-jig-bake
 title: jig 만들기 바로 적용 — 실제 Rhino 확인(합성 문서·S-06 사본)
-status: draft
-version: 0.1
-updated: 2026-09-30
+status: review
+version: 0.2
+updated: 2026-10-01
 owner: agent:claude
 related: [T-055, T-074, PLAN-22, PLAN-24, SPEC-07, ARCH-03, ADR-022]
 ---

@@ -1,9 +1,9 @@
 ---
 id: VERIFY-2026-09-30-direct-apply-rhino
 title: 바로 적용 실호스트 확인 — Rhino direct-execute·되돌리기·보호·보기 도구
-status: draft
-version: 0.1
-updated: 2026-09-30
+status: review
+version: 0.2
+updated: 2026-10-01
 owner: agent:claude
 related: [ADR-022, SPEC-02, T-070, T-072, T-073, PLAN-24]
 ---

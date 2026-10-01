@@ -1,9 +1,9 @@
 ---
 id: VERIFY-2026-09-30-s06-frame-m2
 title: S-06 골조 jig 0.2 — 그려진 배치 ⑤ 거더 보정 ~ ⑧ 해석 미리보기 검증(M2)
-status: draft
-version: 0.2
-updated: 2026-09-30
+status: review
+version: 0.3
+updated: 2026-10-01
 owner: agent:claude
 related: [FR-23, AC-42, SPEC-06, SPEC-07, ARCH-02, ARCH-03, PLAN-23, T-053]
 ---

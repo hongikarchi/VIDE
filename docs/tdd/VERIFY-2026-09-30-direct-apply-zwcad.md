@@ -1,9 +1,9 @@
 ---
 id: VERIFY-2026-09-30-direct-apply-zwcad
 title: ZWCAD 바로 실행·되돌리기·보호 실호스트 검수
-status: draft
-version: 0.1
-updated: 2026-09-30
+status: review
+version: 0.2
+updated: 2026-10-01
 owner: agent:claude
 related: [ADR-022, T-071]
 ---

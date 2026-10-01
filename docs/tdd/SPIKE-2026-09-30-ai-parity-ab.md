@@ -1,9 +1,9 @@
 ---
 id: SPIKE-2026-09-30-ai-parity-ab
 title: VIDE 안 AI와 터미널 Claude Code의 모델링 동등성 A/B
-status: draft
-version: 0.2
-updated: 2026-09-30
+status: review
+version: 0.3
+updated: 2026-10-01
 owner: agent:claude
 related: [PLAN-24, SPEC-02, RESEARCH-10, RESEARCH-11, ADR-021, ADR-022]
 ---
