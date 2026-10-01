@@ -19,7 +19,7 @@ import {
   turnOutputResult,
   turnOutputSchema,
 } from '../../src/server/turn-output.ts';
-import { closeJigRuntime, jigRuntimeFor } from '../../src/server/jig-routes.ts';
+import { closeJigRuntime, jigRoutes, jigRuntimeFor } from '../../src/server/jig-routes.ts';
 import { ConversationService, conversationRoutes } from '../../src/server/conversations.ts';
 import {
   AgentTools,
@@ -178,6 +178,30 @@ test('[수정하기] forks the pinned jig by route; re-pin moves the list; [올�
   // An instance of a jig no longer on the project's list cannot move.
   new JigStore(workspace.store.db).unpin(project.id, 'project/upgrade-me');
   await assert.rejects(runtime.upgrade(project.id, instance.id), /NOT_FOUND/);
+});
+
+test('[수정하기] is refused for S-06, whose steps import the repository; the list says so (T-101)', async (t) => {
+  const { call, base, workspace, root } = setup(t);
+  await assert.rejects(
+    call('POST', base, { from: { jig: 'project/s06-frame' } }),
+    /JIG_NOT_FORKABLE/,
+  );
+  assert.equal((await call('GET', base)).data.drafts.length, 0);
+  let listed;
+  await jigRoutes(
+    new URL('http://127.0.0.1/api/v1/jigs/packages'),
+    Object.assign(Readable.from([]), { method: 'GET', headers: {} }),
+    {
+      workspace,
+      body: async () => ({}),
+      send: (status, data) => (listed = data),
+      dataDirectory: root,
+    },
+  );
+  const forkableOf = (id) => listed.jigs.find((entry) => entry.id === id)?.forkable;
+  assert.equal(forkableOf('project/s06-frame'), false);
+  assert.equal(forkableOf('project/example-grid'), true);
+  assert.equal(forkableOf('vide/geometry-kit'), undefined, 'a library is no card');
 });
 
 test('drafts are created, checked in the compute box, previewed and pinned by confirmation', async (t) => {

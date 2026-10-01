@@ -486,6 +486,7 @@ const jigErrors: Record<string, string> = {
   LAYER_ROOT_MISSING: '연결 모델에 없는 레이어입니다. 연결 파일에 있는 레이어를 고르세요.',
   STALE_INPUT: '읽은 문서가 그 뒤에 바뀌었습니다. 입력을 다시 읽은 뒤 계산하세요.',
   JIG_INVALID: '이 jig의 설명서에 문제가 있어 열 수 없습니다.',
+  JIG_NOT_FORKABLE: '저장소에서 만든 jig는 아직 사본으로 고칠 수 없습니다.',
   NOT_FOUND: '작업본을 찾을 수 없습니다.',
 };
 function jigError(error: unknown) {
@@ -681,6 +682,8 @@ const packageSchema = z
     stage: z.enum(['official', 'project', 'dev']),
     corrupt: z.boolean().optional(),
     icon: z.string().optional(),
+    /** False when a copy could not run in the compute box (steps import outside the jig; T-101). */
+    forkable: z.boolean().optional(),
   })
   .passthrough();
 type Package = z.infer<typeof packageSchema>;
@@ -843,7 +846,10 @@ function Gallery({ context }: { context: JigContext }) {
     const pinnedHere = pinned.some(
       (row) => row.jigId === entry.id && row.version === entry.version,
     );
+    // [수정하기] on a project jig; a jig whose steps import outside it (written in this checkout,
+    // like S-06) shows it disabled with the reason: its copy could not run in the compute box.
     const editable = !entry.corrupt && entry.id.startsWith('project/');
+    const fixedReason = editable && entry.forkable === false ? `jig-fixed-${key}` : undefined;
     return (
       <article
         key={key}
@@ -959,7 +965,14 @@ function Gallery({ context }: { context: JigContext }) {
                 새로 열기
               </button>
             )}
-            {editable ? (
+            {fixedReason ? (
+              <>
+                <button type="button" disabled aria-describedby={fixedReason}>
+                  수정하기
+                </button>
+                <small id={fixedReason}>저장소에서 만든 jig는 아직 사본으로 고칠 수 없습니다</small>
+              </>
+            ) : editable ? (
               <button
                 type="button"
                 disabled={forking === entry.id}

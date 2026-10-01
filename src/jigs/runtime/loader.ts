@@ -86,6 +86,8 @@ const LIBRARY_MODULES: Record<string, () => Promise<Record<string, unknown>>> = 
   'vide/structure-analysis': () =>
     import('../official/structure-analysis/index.ts') as Promise<Record<string, unknown>>,
 };
+/** The official library ids, known without loading the libraries. */
+export const OFFICIAL_LIBRARY_IDS: readonly string[] = Object.keys(LIBRARY_MODULES);
 let libraries: Promise<Record<string, LibraryInfo>> | undefined;
 /** The official libraries (ARCH-03 §2.3), loaded once. */
 export function officialLibraries(): Promise<Record<string, LibraryInfo>> {

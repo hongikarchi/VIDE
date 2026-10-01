@@ -271,6 +271,18 @@ try {
     true,
   );
   await syncCard.getByText('기본 화면 jig는 아직 수정할 수 없습니다').waitFor();
+  // S-06 imports the repository's modules: a copy could not run in the compute box, so its
+  // [수정하기] is off with the reason; the grid example, whose steps import only its own files, keeps it.
+  const s06Card = dialog.locator('.jig-card', { hasText: 'S-06 골조 배치' });
+  assert.equal(
+    await s06Card.getByRole('button', { name: '수정하기', exact: true }).isDisabled(),
+    true,
+  );
+  await s06Card.getByText('저장소에서 만든 jig는 아직 사본으로 고칠 수 없습니다').waitFor();
+  assert.equal(
+    await gridCard.getByRole('button', { name: '수정하기', exact: true }).isDisabled(),
+    false,
+  );
   // [수정하기] makes a copy draft (same id, next version) and opens it in the 만들기 screen,
   // whose outline shows what the jig takes, how it works and what it makes.
   await installed.getByRole('button', { name: '수정하기', exact: true }).click();

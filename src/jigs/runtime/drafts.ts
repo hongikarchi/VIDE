@@ -33,7 +33,12 @@ import type { DatabaseSync } from 'node:sqlite';
 import { DomainError } from '../../contracts/errors.ts';
 import { JigStore, type JigDraft } from '../../core/jig-store.ts';
 import { draftPathRefusal } from '../../ai/agent-connection.ts';
-import { ComputeBoxRunner, boxSource, type ComputeBoxOptions } from './compute-box.ts';
+import {
+  ComputeBoxRunner,
+  boxSource,
+  outsideBoxImports,
+  type ComputeBoxOptions,
+} from './compute-box.ts';
 import { sha256 } from './hash.ts';
 import {
   JigInvalidError,
@@ -275,6 +280,15 @@ export function nextPatch(versions: readonly string[]): string {
   return `${major}.${minor}.${patch + 1}`;
 }
 
+/**
+ * Whether [수정하기] can copy the package in `dir` (SPEC-07.3, PLAN-26 T-101): the copy runs in the
+ * compute box, so every import of its step sources must reach a file of the package or an official
+ * library. A jig written in this checkout against the repository's modules (S-06) is not copied.
+ */
+export function forkable(dir: string): boolean {
+  return outsideBoxImports(dir, listPackageFiles(dir)).length === 0;
+}
+
 const slug = (name: string) =>
   name
     .toLowerCase()
@@ -414,7 +428,8 @@ export class JigDrafts {
    * so pinning it later re-pins the same jig at a new version. The files are copied one by one
    * under the draft path rule (writable, unlike the read-only install); the `dist/` bundle is left
    * out because the steps are edited as sources. Where the copy came from is kept beside the
-   * drafts, never in the folder the AI writes.
+   * drafts, never in the folder the AI writes. A package whose steps import outside it (a checkout
+   * jig such as S-06) is refused with JIG_NOT_FORKABLE: its copy could never pass the self-test.
    */
   fork(
     projectId: string,
@@ -422,6 +437,7 @@ export class JigDrafts {
   ): DraftView {
     if (!JIG_ID.test(source.id) || !source.id.startsWith('project/'))
       throw new DomainError('INVALID_INPUT');
+    if (!forkable(source.dir)) throw new DomainError('JIG_NOT_FORKABLE');
     const others = this.store
       .drafts(projectId, 'open')
       .map((draft) => this.view(draft).manifest)

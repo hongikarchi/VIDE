@@ -11,17 +11,22 @@ import {
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { Store } from '../../src/core/store.ts';
 import {
   JigDrafts,
   draftsRoot,
   failureReason,
+  forkable,
   nextPatch,
   scanDraft,
 } from '../../src/jigs/runtime/drafts.ts';
 import { draftPathRefusal } from '../../src/ai/agent-connection.ts';
 import { JigStore } from '../../src/core/jig-store.ts';
 import { listPackageFiles } from '../../src/jigs/runtime/loader.ts';
+import { outsideBoxImports } from '../../src/jigs/runtime/compute-box.ts';
+
+const repository = fileURLToPath(new URL('../..', import.meta.url));
 
 function setup() {
   const dir = mkdtempSync(join(tmpdir(), 'vide-drafts-'));
@@ -243,6 +248,76 @@ test('[수정하기] copies a pinned jig into a writable draft with the same id 
     );
     assert.equal(jigs.packages('project/fork-me').length, 2, 'the older version stays installed');
     assert.equal(nextPatch(['0.3.1', '0.10.0', '0.9.9', 'x']), '0.10.1');
+  } finally {
+    t.close();
+  }
+});
+
+test('[수정하기] refuses a jig whose steps import outside it; its copy could never pass the box (T-101)', async () => {
+  const t = setup();
+  try {
+    // S-06 is written in this checkout against the repository's modules and node:crypto.
+    const s06 = join(repository, 'extensions', 'jigs', 's06-frame');
+    const outside = outsideBoxImports(s06, listPackageFiles(s06));
+    assert.ok(outside.some((line) => line.endsWith('geometry-kit/index.ts')));
+    assert.ok(outside.includes('steps/model.ts → node:crypto'));
+    assert.equal(forkable(s06), false);
+    assert.throws(
+      () =>
+        t.drafts.fork(t.projectId, {
+          dir: s06,
+          id: 'project/s06-frame',
+          version: '0.3.1',
+          name: 'S-06',
+        }),
+      /JIG_NOT_FORKABLE/,
+    );
+    assert.equal(t.drafts.list(t.projectId).length, 0, 'no draft is left behind');
+    // The grid example imports only its own files: its copy validates, tests and pins.
+    const grid = join(repository, 'extensions', 'jigs', 'example-grid');
+    assert.equal(forkable(grid), true);
+    const copy = t.drafts.fork(t.projectId, {
+      dir: grid,
+      id: 'project/example-grid',
+      version: '0.1.0',
+      name: 'grid',
+    });
+    assert.equal((await t.drafts.test(t.projectId, copy.id)).ok, true);
+    assert.equal((await t.drafts.pin(t.projectId, copy.id)).version, copy.version);
+
+    // The rule on a synthetic package: type-only imports and comments are no imports; a library id
+    // and the package's own files are allowed; a path that leaves the package, a bare name or a
+    // node: module is not.
+    const dir = join(t.dir, 'pkg');
+    mkdirSync(join(dir, 'steps'), { recursive: true });
+    writeFileSync(join(dir, 'steps', 'own.ts'), 'export const one = 1;\n');
+    writeFileSync(
+      join(dir, 'steps', 'main.ts'),
+      [
+        "import type { Thing } from '../../outside/types.ts';",
+        "// import { gone } from '../../commented.ts';",
+        "/* import x from 'node:fs'; */",
+        "import { offsetPolygon } from 'vide/geometry-kit';",
+        "import { one } from './own.ts';",
+        "export { one as two } from './own.ts';",
+        'export const main = (i: Thing) => [offsetPolygon, one, i];',
+      ].join('\n'),
+    );
+    assert.deepEqual(outsideBoxImports(dir, ['steps/main.ts', 'steps/own.ts']), []);
+    writeFileSync(
+      join(dir, 'steps', 'bad.ts'),
+      [
+        "import { a } from '../../outside.ts';",
+        "import 'zod';",
+        "const fs = await import('node:fs');",
+        'export const bad = [a, fs];',
+      ].join('\n'),
+    );
+    assert.deepEqual(outsideBoxImports(dir, ['steps/main.ts', 'steps/own.ts', 'steps/bad.ts']), [
+      'steps/bad.ts → ../../outside.ts',
+      'steps/bad.ts → zod',
+      'steps/bad.ts → node:fs',
+    ]);
   } finally {
     t.close();
   }

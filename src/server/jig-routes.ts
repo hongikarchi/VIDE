@@ -18,6 +18,7 @@ import type { SdkExecution } from './sdk-execution.ts';
 import type { Execution } from './execution.ts';
 import { JigRegistry, JigInvalidError, repositoryJigRoot } from '../jigs/runtime/loader.ts';
 import { importPack } from '../jigs/runtime/pack.ts';
+import { forkable } from '../jigs/runtime/drafts.ts';
 import { JigRuntime, layersOf, rowsOfLayers, type ReadModel } from '../jigs/runtime/runtime.ts';
 import {
   bakeOffers,
@@ -78,6 +79,7 @@ export const jigStatuses: Record<string, number> = {
   JIG_SELFTEST_FAILED: 422,
   JIG_LIBRARY_UNKNOWN: 422,
   JIG_VERSION_EXISTS: 409,
+  JIG_NOT_FORKABLE: 422,
   JIG_DIGEST_MISMATCH: 409,
   JIG_PACK_FAILED: 500,
   PARAM_FIXED: 422,
@@ -271,7 +273,13 @@ export async function jigRoutes(
 
   // --- registry, import, pin -------------------------------------------------------------------
   if (url.pathname === '/api/v1/jigs/packages' && method === 'GET') {
-    send(200, { jigs: await runtime().registry.list() });
+    // `forkable`: whether [수정하기] can copy the tool (its steps import nothing outside it; T-101).
+    const jigs = (await runtime().registry.list()).map((entry) =>
+      entry.kind === 'tool' && entry.path && !entry.corrupt
+        ? { ...entry, forkable: forkable(entry.path) }
+        : entry,
+    );
+    send(200, { jigs });
     return true;
   }
   if (url.pathname === '/api/v1/jigs/import' && method === 'POST') {

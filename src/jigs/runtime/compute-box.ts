@@ -18,7 +18,7 @@ import {
   type QuickJSHandle,
   type QuickJSWASMModule,
 } from 'quickjs-emscripten';
-import { officialLibraries, type LoadedJig } from './loader.ts';
+import { OFFICIAL_LIBRARY_IDS, officialLibraries, type LoadedJig } from './loader.ts';
 import type { JigSource } from './manifest.ts';
 import type { RunRequest, RunnerOut, StepRunner } from './runner.ts';
 
@@ -37,6 +37,59 @@ export const BOX_STACK_BYTES = 1024 * 1024;
 export const BOX_OUTPUT_BYTES = 16 * 1024 * 1024;
 const SOURCE = /\.(ts|mts|js|mjs)$/;
 const ENTRY = '__vide_entry.js';
+
+/**
+ * Where an import of a step file goes in the box: a library id, a source file of the package, or
+ * nowhere (undefined: MODULE_NOT_ALLOWED). The box's module loader and the [수정하기] check
+ * (`outsideBoxImports`) share this rule.
+ */
+export function boxImportTarget(
+  base: string,
+  requested: string,
+  has: (path: string) => boolean,
+  isLibrary: (name: string) => boolean,
+): string | undefined {
+  if (isLibrary(requested)) return requested;
+  if (base === ENTRY && has(requested)) return requested;
+  if (requested.startsWith('./') || requested.startsWith('../')) {
+    const path = posix.normalize(posix.join(posix.dirname(base), requested));
+    if (!path.startsWith('../') && has(path)) return path;
+  }
+  return undefined;
+}
+
+/** A static `import`/`export … from`, a bare `import '…'` and an `import('…')` of a literal name. */
+const IMPORT =
+  /\b(?:import|export)\s*(?:[\w$*{}\s,]*?\bfrom\s*)?(['"])([^'"\n]+)\1|\bimport\s*\(\s*(['"])([^'"\n]+)\3\s*\)/g;
+/**
+ * The imports of a package's step sources that the box cannot load, as `file → name` (PLAN-26
+ * T-101). A jig written in this checkout may import the repository's own modules or `node:`
+ * modules; they run in a child process but not in the box. A copy made by [수정하기] runs in the
+ * box, so such a jig is not copied. Read from the type-stripped text the box would run (type-only
+ * imports are gone); a file the box cannot strip is listed too.
+ */
+export function outsideBoxImports(dir: string, files: readonly string[]): string[] {
+  const sources = new Set(files.filter((file) => SOURCE.test(file) && !file.startsWith('dist/')));
+  const isLibrary = (name: string) => OFFICIAL_LIBRARY_IDS.includes(name);
+  const out: string[] = [];
+  for (const file of sources) {
+    let text: string;
+    try {
+      text = boxSource(file, readFileSync(join(dir, ...file.split('/')), 'utf8'));
+    } catch {
+      out.push(`${file} → (TypeScript)`);
+      continue;
+    }
+    // Comments are not imports: block comments and whole-line `//` comments are dropped.
+    text = text.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+    for (const match of text.matchAll(IMPORT)) {
+      const name = match[2] ?? match[4];
+      if (!boxImportTarget(file, name, (path) => sources.has(path), isLibrary))
+        out.push(`${file} → ${name}`);
+    }
+  }
+  return out;
+}
 
 export interface BoxLibrary {
   functions: Record<string, (...args: unknown[]) => unknown>;
@@ -179,12 +232,13 @@ export class ComputeBoxRunner implements StepRunner {
         return { error: new Error(`MODULE_NOT_ALLOWED ${moduleName}`) };
       },
       (base, requested) => {
-        if (libraryOf(requested)) return requested;
-        if (base === ENTRY && files.has(requested)) return requested;
-        if (requested.startsWith('./') || requested.startsWith('../')) {
-          const path = posix.normalize(posix.join(posix.dirname(base), requested));
-          if (!path.startsWith('../') && files.has(path)) return path;
-        }
+        const target = boxImportTarget(
+          base,
+          requested,
+          (path) => files.has(path),
+          (name) => !!libraryOf(name),
+        );
+        if (target) return target;
         throw new Error(`MODULE_NOT_ALLOWED ${requested}`);
       },
     );

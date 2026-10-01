@@ -2,7 +2,7 @@
 id: PLAN-26
 title: 대화가 화면과 작업을 이끄는 구조 — skill 시작, 토큰 정리, 셸 정리, 산출물 탭
 status: review
-version: 0.7
+version: 0.8
 updated: 2026-10-01
 owner: agent:claude
 related: [ADR-026, ADR-022, ADR-021, ADR-020, SPEC-01, SPEC-02, SPEC-07, ARCH-03, ARCH-01, DESIGN, RESEARCH-12, PLAN-22, PLAN-24, FR-18, FR-24, FR-25, AC-48]
@@ -27,7 +27,7 @@ related: [ADR-026, ADR-022, ADR-021, ADR-020, SPEC-01, SPEC-02, SPEC-07, ARCH-03
 | T-081 | 산출물 탭: 도면·보고서·렌더링을 한 탭에 (지금은 페이지만) | 사용자 요청 2026-10-01 | 페이지 구현·브라우저 시험 완료(2026-10-01, 설치 전). 남음: 도면 시트·생성형 렌더링 기능(각각 SPEC 먼저) |
 | T-099 | JIG 한 화면: 레일의 만들기를 JIG에 합침, 목록 끝의 [새로 만들기] 카드, 작성 중 초안 카드, jig 하나에 카드 하나 | 사용자 요청 2026-10-01 | 구현·단위·브라우저 시험 완료(2026-10-01, 설치 전) |
 | T-100 | jig 아이콘: 정해 둔 목록에서 고르는 `jig.json`의 `icon`, 카드·문맥 탭·대화 칩·대시보드에 표시 | T-099 | 구현·단위·브라우저 시험 완료(2026-10-01, 설치 전) |
-| T-101 | [수정하기]: 고정한 jig의 사본 초안(같은 id·버전 +0.0.1) → 다시 고정 → 작업본 [올리기] | T-099 | 구현·단위·브라우저 시험 완료(2026-10-01, 설치 전). 남음: `.vide/` 합성 사본에서 S-06 사본 고정과 계산 상자 실행 확인 |
+| T-101 | [수정하기]: 고정한 jig의 사본 초안(같은 id·버전 +0.0.1) → 다시 고정 → 작업본 [올리기] | T-099 | 구현·단위·브라우저 시험 완료(2026-10-01, 설치 전). 단계가 jig 밖을 가져오는 저장소 jig(S-06)는 사본을 만들지 않는다(검토 지적 반영) |
 
 `src/ui/app.ts`·`src/ui/style.css`는 여러 세션이 함께 고친다. 티켓마다 깨끗한 worktree에서 작업하고 자기 파일만 스테이징한다. 커밋·설치본 릴리스는 사용자 요청이나 웨이브 경계의 판단에 따른다.
 
@@ -269,7 +269,7 @@ related: [ADR-026, ADR-022, ADR-021, ADR-020, SPEC-01, SPEC-02, SPEC-07, ARCH-03
 | `src/server/make-routes.ts` | `PUT …/jig-drafts/:did/icon {icon}` — 열린 초안의 `jig.json` `icon`만 바꾼다 |
 | `src/ai/instructions/make.md`, `extensions/jigs/example-grid/jig.json` | 만들기 대화가 목록에서 아이콘을 고른다. 격자 예제는 `grid` |
 
-**선행·외부 조건:** T-099. 내장 화면 jig(Sync·구조 분석·프로젝트 자료)는 `jig.json`이 없어 화면 코드의 고정 아이콘을 쓴다. 이미 설치한 S-06 v0.3.1은 아이콘이 없어 기본 아이콘이며, 사본 → 다시 고정(T-101)으로 넣는다.
+**선행·외부 조건:** T-099. 내장 화면 jig(Sync·구조 분석·프로젝트 자료)는 `jig.json`이 없어 화면 코드의 고정 아이콘을 쓴다. S-06 v0.3.1은 아이콘이 없어 기본 아이콘이다. S-06은 단계가 저장소 모듈을 가져와 [수정하기] 사본을 만들 수 없으므로(T-101) 아이콘은 S-06 저장소 소스의 다음 버전에서 `jig.json`에 넣는다(PLAN-23 쪽 작업, 이 티켓 밖).
 
 **검증 — 정상:** 단위 `tests/core/jig-manifest.test.mjs`(목록 안 허용, 목록 밖 거절, 없으면 통과), 등록부·카탈로그의 `icon`, `tests/server/make-routes.test.mjs`(아이콘 바꾸기), `tests/core/conversations-ui.test.mjs`(칩 아이콘). 브라우저 `browser-jigs.mjs`(카드·문맥 탭 아이콘), `browser-make.mjs`(아이콘 바꾸기).
 
@@ -286,14 +286,15 @@ related: [ADR-026, ADR-022, ADR-021, ADR-020, SPEC-01, SPEC-02, SPEC-07, ARCH-03
 |---|---|
 | `src/jigs/runtime/drafts.ts` | `fork()`: 고른 패키지의 파일을 새 초안 폴더로 복사(쓰기 가능, 경로 규칙·금지 파일 검사 그대로), id 유지, 버전 = 그 id의 설치본·열린 초안·원본 가운데 가장 높은 버전 + 0.0.1(사람·AI가 초안에서 더 올릴 수 있음), 출처(`origin`)는 초안 폴더 밖 `.results/<did>.json` |
 | `src/server/make-routes.ts` | `POST …/jig-drafts`의 `from`이 `{jig, version?}`이면 등록부에서 그 버전(없으면 이 프로젝트의 고정 버전)을 찾아 사본을 만든다. `project/` jig만 |
+| `src/jigs/runtime/compute-box.ts`, `drafts.ts`, `src/server/jig-routes.ts` | 사본은 계산 상자에서 돌므로 단계 소스의 import가 패키지 파일·공식 라이브러리 밖이면(S-06의 저장소 상대 경로·`node:crypto`) `fork()`가 `JIG_NOT_FORKABLE`로 거절한다. 판단(`outsideBoxImports`)은 상자의 모듈 규칙(`boxImportTarget`)을 같이 쓰고, 등록부 목록은 도구마다 `forkable`을 싣는다 |
 | `src/jigs/runtime/runtime.ts`, `src/server/jig-routes.ts` | `upgrade()`와 `POST …/jig-instances/:iid/upgrade`: 작업본을 이 프로젝트의 고정 버전으로 옮기고, 새 버전에 남은 설정값은 유지(맞지 않으면 기본값), 계산한 단계는 모두 '다시 계산 필요', 사람 단계 확인은 입력 지문으로 다시 비교 |
-| `src/ui/jigs.tsx`, `make-tab.tsx`, `make-api.ts` | 카드의 [수정하기](그 jig의 작성 중 사본이 있으면 그것을 연다), 내장 화면 jig는 흐린 [수정하기]와 '기본 화면 jig는 아직 수정할 수 없습니다', 작업본 행의 [올리기], 만들기 개요의 '수정 · <원래 jig> v0.3.1의 사본' 표지와 입력 → 단계 → 결과 묶음, 흐름 탭의 입력·결과 |
+| `src/ui/jigs.tsx`, `make-tab.tsx`, `make-api.ts` | 카드의 [수정하기](그 jig의 작성 중 사본이 있으면 그것을 연다), 내장 화면 jig는 흐린 [수정하기]와 '기본 화면 jig는 아직 수정할 수 없습니다', `forkable: false`인 저장소 jig는 흐린 [수정하기]와 '저장소에서 만든 jig는 아직 사본으로 고칠 수 없습니다', 작업본 행의 [올리기], 만들기 개요의 '수정 · <원래 jig> v0.3.1의 사본' 표지와 입력 → 단계 → 결과 묶음, 흐름 탭의 입력·결과 |
 | `src/ai/instructions/make.md` | 사본 초안은 id를 바꾸지 않고, 동작이 바뀌면 버전을 더 올릴 수 있다 |
 
-**선행·외부 조건:** T-099. 사본은 `ai-draft`로 다시 고정되어 계산 상자에서 돈다(SPEC-07.9). 저장소에서 쓴 jig(S-06처럼 자식 프로세스에서 도는 `dev-pack`)를 사본으로 고정하면 계산 상자의 메모리·시간 상한과 import 규칙에 걸릴 수 있다 — 형식 점검·자체 시험이 고정 전에 막고 이유를 보인다. 같은 id의 더 높은 버전이 나중에 저장소 묶음으로 들어오면 `JIG_VERSION_EXISTS`가 날 수 있다(SPEC-07.15 그대로).
+**선행·외부 조건:** T-099. 사본은 `ai-draft`로 다시 고정되어 계산 상자에서 돈다(SPEC-07.9). 저장소에서 쓴 jig(S-06처럼 자식 프로세스에서 도는 `dev-source`·`dev-pack`)는 단계가 저장소의 다른 모듈과 `node:` 모듈을 가져오므로 사본이 계산 상자의 import 규칙에서 자체 시험을 통과할 수 없다(검토에서 S-06 사본이 `MODULE_NOT_ALLOWED`로 실패함을 확인). 그래서 그런 jig는 사본을 만들지 않고 카드에서 이유를 보인다. 사용자 예시(S-06 v0.3.1 → v0.3.2)는 S-06을 상자 라이브러리만 쓰도록 다시 쓰거나 사본이 공식 라이브러리 이름으로 import를 바꾸는 후속 작업이 있어야 가능하다. import는 통과해도 메모리·시간 상한은 형식 점검·자체 시험이 고정 전에 막는다. 같은 id의 더 높은 버전이 나중에 저장소 묶음으로 들어오면 `JIG_VERSION_EXISTS`가 날 수 있다(SPEC-07.15 그대로).
 
 **검증 — 정상:** 단위 `tests/core/drafts.test.mjs`(사본의 파일·쓰기 가능·id 유지·버전 +0.0.1, 열린 사본·설치본을 넘는 다음 버전, 출처 기록, 다시 고정 → `project_jigs` 한 줄이 새 버전, 같은 버전 다른 내용은 `JIG_VERSION_EXISTS`), `tests/core/jig-runner.test.mjs` 또는 런타임 시험(올리기: 버전·설정값·'다시 계산 필요'), `tests/server/make-routes.test.mjs`(경로). 브라우저 `browser-jigs.mjs`([수정하기] → 만들기 화면의 사본 표지·입력/단계/결과, 내장 jig의 흐린 버튼과 이유, 이전 버전 작업본의 [올리기]).
 
-**검증 — 실패:** `vide/` jig·없는 jig → `INVALID_INPUT`·`NOT_FOUND`, 고정 안 된 jig의 작업본 올리기 → `NOT_FOUND`, 이미 고정 버전이면 바꾸지 않음, 원격 세션의 고정은 그대로 403.
+**검증 — 실패:** `vide/` jig·없는 jig → `INVALID_INPUT`·`NOT_FOUND`, 단계가 jig 밖을 가져오는 jig(S-06) → `JIG_NOT_FORKABLE`과 카드의 흐린 [수정하기](`drafts.test.mjs`·`make-routes.test.mjs`·`browser-jigs.mjs`), 고정 안 된 jig의 작업본 올리기 → `NOT_FOUND`, 이미 고정 버전이면 바꾸지 않음, 원격 세션의 고정은 그대로 403.
 
-**완료:** 위 시험 통과, SPEC-07·ARCH-03 §7과 코드 일치, PLAN §6.5 갱신. 실제 S-06 사본 고정과 계산 상자 실행은 `.vide/` 합성 사본에서 따로 확인한다.
+**완료:** 위 시험 통과, SPEC-07·ARCH-03 §7과 코드 일치, PLAN §6.5 갱신. S-06의 사본 고정은 이 티켓에서 하지 않는다(위 선행·외부 조건).
