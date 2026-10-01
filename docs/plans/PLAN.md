@@ -2,7 +2,7 @@
 id: PLAN
 title: VIDE 실행 로드맵
 status: review
-version: 0.231
+version: 0.232
 updated: 2026-10-01
 owner: agent:codex
 related: [ARCH-01, PLAN-02, PLAN-03, PLAN-22, PLAN-23, PLAN-24, PLAN-25, PLAN-26, PLAN-27, ADR-022, ADR-025, ADR-026, ADR-027, SPEC-00, SPEC-01, SPEC-02, SPEC-03, SPEC-04, SPEC-05, SPEC-06, SPEC-07]
@@ -252,7 +252,7 @@ T-001~018의 번호·지원 증거는 유지한다. 각 티켓의 현재 결과�
 | T-091 프로젝트 폴더·AI 파일 읽기(`file_read`·`file_list`, 폴더 밖은 권한 질문) | 구현·단위·브라우저 시험 완료(2026-10-01, 커밋 전) | 실제 Claude·Codex로 권한 질문 답하기 확인(설치본 릴리스 때), 셸 폴더 선택 창은 다음 설치본부터 | [PLAN-26](PLAN-26-chat-stage.md#t-091), SPEC-01.13, `project-files.test.mjs`, `browser-project-folders.mjs` |
 | T-095 다른 이름으로 저장 뒤 연결이 창을 따라감(Rhino·ZWCAD, 중복 행은 하나만 연결) | 구현·서버 시험 완료(2026-10-01, 설치 전) | 실제 Rhino·ZWCAD 창에서 다른 이름 저장 확인(설치본 반영 뒤 합성 문서) | [PLAN-16](PLAN-16-document-links.md#t-095), `link-follow.test.mjs` |
 | T-096 연결 파일을 모두 숨겨도 남던 객체(시작 때 선택 순서), 어느 파일에도 속하지 않는 결과는 '작업 결과' 행 | 구현·브라우저 시험 완료(2026-10-01, 설치 전) | 설치본에서 사용자 프로젝트로 확인 | [PLAN-16](PLAN-16-document-links.md#t-096), `browser-links.mjs` |
-| T-098 대시보드 할 일·일정(맨 위 '오늘', `agenda_*` 도구와 [되돌리기], schema 7) | 구현·단위·브라우저 시험 완료(2026-10-01, 설치 전) | 실제 Claude·Codex로 '회의록에서 할 일 뽑아줘' 확인(설치본 릴리스 때). 후속: 반복 일정·캘린더 연동·자료에서 찾기 | [PLAN-26](PLAN-26-chat-stage.md#t-098), SPEC-01.14, `agenda.test.mjs`, `browser-dashboard-agenda.mjs` |
+| T-098 대시보드 할 일·일정(맨 위 '오늘', `agenda_*` 도구와 [되돌리기], schema 7) | 구현·단위·브라우저 시험 완료(2026-10-01, 설치 전). 검토 지적 6건 반영(되돌리기 판 검사, 편집 판 고정, 입력칸 초점, 기본 대화 호스트 턴 도구, 턴마다 안내 하나) | 실제 Claude·Codex로 '회의록에서 할 일 뽑아줘' 확인(설치본 릴리스 때). 후속: 반복 일정·캘린더 연동·자료에서 찾기 | [PLAN-26](PLAN-26-chat-stage.md#t-098), SPEC-01.14, `agenda.test.mjs`, `browser-dashboard-agenda.mjs` |
 | T-082 안정성 0단계 진단·복구 | 구현·자동 검증(`9aac8cd`) | 실제 창의 화면 복구 확인, 설치본 릴리스 | [PLAN-27](PLAN-27-sync-storage-stability.md) |
 | T-083 객체 단위 저장 | 계획 | ARCH-01 저장 계약 작성과 사용자 확인 뒤 착수 | [PLAN-27](PLAN-27-sync-storage-stability.md), [RESEARCH-13](../research/RESEARCH-13-stability-audit.md) |
 | T-084 엔진 주관 Sync | 계획. 문서별 Sync 합치기는 먼저 구현(`fda1e5d`) | SPEC-01.11의 Sync 주체 보완 뒤 착수 | [PLAN-27](PLAN-27-sync-storage-stability.md) |

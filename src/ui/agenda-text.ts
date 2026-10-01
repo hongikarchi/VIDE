@@ -151,17 +151,65 @@ export function dateLabel(value: string, today: string) {
   return shortDate(value);
 }
 
-/** The notice after an AI write ([되돌리기] beside it): what was added or changed. */
+/**
+ * The notice after an AI write ([되돌리기] beside it): what was added or changed. An item one turn
+ * added and then changed is named once, as added, with its last text.
+ */
 export function agendaNotice(body: unknown) {
   const changes = (body as { changes?: unknown } | null)?.changes;
   if (!Array.isArray(changes) || !changes.length) return undefined;
-  const added = changes.filter((change) => change?.op === 'add');
-  const names = changes
+  const items = new Map<unknown, { text: string; added: boolean }>();
+  changes.forEach((change, index) => {
+    const key = change?.id ?? index;
+    items.set(key, {
+      text: String(change?.text ?? ''),
+      added: Boolean(items.get(key)?.added) || change?.op === 'add',
+    });
+  });
+  const named = [...items.values()];
+  const names = named
     .slice(0, 3)
-    .map((change) => `'${String(change?.text ?? '')}'`)
+    .map((item) => `'${item.text}'`)
     .join(', ');
-  const more = changes.length > 3 ? ` 외 ${changes.length - 3}개` : '';
-  return added.length === changes.length
+  const more = named.length > 3 ? ` 외 ${named.length - 3}개` : '';
+  return named.every((item) => item.added)
     ? `AI가 할 일을 더했습니다: ${names}${more}`
     : `AI가 할 일을 바꿨습니다: ${names}${more}`;
+}
+
+/** One AI 할 일 write as the conversation's ledger lists it. */
+export interface AgendaWrite {
+  id: string;
+  requestId?: string | null;
+  body?: unknown;
+}
+/** The AI 할 일 writes of one turn, shown as one notice with one [되돌리기]. */
+export interface AgendaTurn {
+  ledgerIds: string[];
+  body: { changes: unknown[] };
+}
+/**
+ * Groups the AI's 할 일 writes by the turn (request) that made them (SPEC-01.14 6): a turn that
+ * wrote several times gets one notice, shown when the turn ends, and one [되돌리기] for all.
+ */
+export class AgendaTurns {
+  #pending = new Map<string, AgendaTurn>();
+  add(write: AgendaWrite) {
+    const key = write.requestId || `ledger:${write.id}`;
+    const turn = this.#pending.get(key) ?? { ledgerIds: [], body: { changes: [] } };
+    const changes = (write.body as { changes?: unknown } | null)?.changes;
+    turn.ledgerIds.push(write.id);
+    if (Array.isArray(changes)) turn.body.changes.push(...changes);
+    this.#pending.set(key, turn);
+  }
+  /** The turns to show now: `finished` (a request whose turn ended) and writes made outside a turn. */
+  take(finished?: string) {
+    const ready: AgendaTurn[] = [];
+    for (const [key, turn] of this.#pending)
+      if (key === finished || key.startsWith('ledger:')) {
+        ready.push(turn);
+        this.#pending.delete(key);
+      }
+    return ready;
+  }
 }

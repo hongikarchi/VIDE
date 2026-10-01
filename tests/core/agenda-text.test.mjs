@@ -2,7 +2,13 @@
 // (src/ui/agenda-text.ts); no AI call, the text stays when nothing is read.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { agendaNotice, agendaWhen, dateLabel, parseAgendaText } from '../../src/ui/agenda-text.ts';
+import {
+  AgendaTurns,
+  agendaNotice,
+  agendaWhen,
+  dateLabel,
+  parseAgendaText,
+} from '../../src/ui/agenda-text.ts';
 
 // Thursday 2026-10-01, 10:20 local.
 const now = new Date(2026, 9, 1, 10, 20);
@@ -95,4 +101,43 @@ test('where an item stands, its label and the AI notice', () => {
     "AI가 할 일을 바꿨습니다: 'a', 'b'",
   );
   assert.equal(agendaNotice({ changes: [] }), undefined);
+  // An item added and then changed in one turn is named once, as added, with its last text.
+  assert.equal(
+    agendaNotice({
+      changes: [
+        { op: 'add', id: 'a', text: '도면 제출' },
+        { op: 'set', id: 'a', text: '도면 제출 — 3장' },
+      ],
+    }),
+    "AI가 할 일을 더했습니다: '도면 제출 — 3장'",
+  );
+});
+
+test('one notice per turn: the AI 할 일 writes of a turn wait for its end and go together', () => {
+  const turns = new AgendaTurns();
+  const write = (id, requestId, op, text) => ({
+    id,
+    requestId,
+    body: { appAction: 'agenda', by: 'ai', changes: [{ op, text }] },
+  });
+  turns.add(write('l1', 'r1', 'add', '구조 회의'));
+  turns.add(write('l2', 'r1', 'set', '회의록 정리'));
+  turns.add(write('l3', 'r2', 'add', '현장 사진'));
+  // While the turns run nothing is shown.
+  assert.deepEqual(turns.take(), []);
+  const [one, ...rest] = turns.take('r1');
+  assert.equal(rest.length, 0);
+  assert.deepEqual(one.ledgerIds, ['l1', 'l2']);
+  assert.equal(agendaNotice(one.body), "AI가 할 일을 바꿨습니다: '구조 회의', '회의록 정리'");
+  assert.deepEqual(turns.take('r1'), []);
+  // A write recorded without a turn is shown at once.
+  turns.add(write('l4', null, 'add', '도면 제출'));
+  assert.deepEqual(
+    turns.take().map((group) => group.ledgerIds),
+    [['l4']],
+  );
+  assert.deepEqual(
+    turns.take('r2').map((group) => group.ledgerIds),
+    [['l3']],
+  );
 });

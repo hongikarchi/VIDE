@@ -1,19 +1,50 @@
 // 대시보드 › 오늘 (SPEC-01.14, Design SCR-20, PLAN-26 T-098): Enter adds a 할 일 with the date and
 // time read from the words ('내일 3시 …' goes under 예정 at 15:00), the box finishes one into the
 // '완료 n' fold, a click edits in place, ↑ and drag reorder, and everything survives a reload;
-// [완료 비우기] clears the fold. Synthetic project only; no real CLI or host.
+// [완료 비우기] clears the fold. A 기본 대화 turn whose AI adds and then changes a 할 일 (two writes)
+// gets one notice with one [되돌리기], which stays past 9 s and takes both back. Synthetic project
+// and provider only; no real CLI or host.
 import assert from 'node:assert/strict';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { chromium } from 'playwright';
+import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { startServer } from '../../src/server/server.ts';
+import { agentConnection } from '../../src/ai/agent-connection.ts';
+
+/** A provider whose AI writes 할 일 twice in one turn: agenda_add, then agenda_set on that item. */
+const writingProvider = (options) => ({
+  status: async () => ({ available: true }),
+  run: async () => {
+    const agent = options.agent && agentConnection(options.agent);
+    if (!agent?.tools.includes('agenda_add'))
+      return { text: JSON.stringify({ message: '할 일 도구가 없습니다.', operations: [] }) };
+    const client = new Client({ name: 'synthetic-agent', version: '1.0.0' });
+    await client.connect(
+      new StreamableHTTPClientTransport(new URL(agent.url), {
+        requestInit: { headers: { Authorization: `Bearer ${agent.token}` } },
+      }),
+    );
+    const call = async (name, args) =>
+      JSON.parse((await client.callTool({ name, arguments: args })).content[0].text);
+    const { added } = await call('agenda_add', { items: [{ text: '구조 회의' }] });
+    await call('agenda_set', { items: [{ id: added[0].id, text: '구조 회의 — 3층' }] });
+    await client.close();
+    return { text: JSON.stringify({ message: "'구조 회의 — 3층'을 넣었습니다.", operations: [] }) };
+  },
+});
 
 const shot = process.env.VIDE_SHOT_DIR;
 const directory = await mkdtemp(join(tmpdir(), 'vide-dashboard-agenda-'));
 let app, browser;
 try {
-  app = await startServer({ filename: join(directory, 'data', 'test.sqlite') });
+  app = await startServer({
+    filename: join(directory, 'data', 'test.sqlite'),
+    host: { status: async () => ({ available: true }) },
+    providerFactory: writingProvider,
+  });
   browser = await chromium.launch({ channel: 'chrome', headless: true });
   const errors = [];
   const page = await (
@@ -22,14 +53,6 @@ try {
   page.setDefaultTimeout(10000);
   page.on('pageerror', (error) => errors.push(error.message));
   await page.route('**/api/v1/host', (route) => route.fulfill({ json: { available: false } }));
-  await page.route('**/api/v1/providers', (route) =>
-    route.fulfill({ json: [{ id: 'codex-cli', available: true }] }),
-  );
-  await page.route('**/api/v1/models', (route) =>
-    route.fulfill({
-      json: [{ id: 'codex-cli', name: 'Test', provider: 'codex-cli', efforts: ['default'] }],
-    }),
-  );
   await page.goto(app.launchUrl);
   await page.waitForFunction(() => document.querySelector('#project-picker')?.value);
   const openDashboard = () => page.locator('.rail [data-workspace-target="dashboard"]').click();
@@ -161,6 +184,20 @@ try {
   // [빼기] removes one.
   await today.getByRole('button', { name: '현장 사진 분류 빼기' }).click();
   await today.getByText('현장 사진 분류').waitFor({ state: 'detached' });
+  assert.deepEqual(await texts(), ['도면 정리 — 단면도']);
+
+  // The AI writes twice in one 기본 대화 turn: one notice when the turn ends, kept past 9 s.
+  await page.locator('#body').fill('구조 회의 넣어줘');
+  await page.locator('#request').click();
+  const notice = page.locator('#message');
+  await notice.getByText("AI가 할 일을 더했습니다: '구조 회의 — 3층'").waitFor();
+  await today.getByText('구조 회의 — 3층').waitFor();
+  await page.waitForTimeout(9500);
+  assert.ok(await notice.isVisible());
+  // [되돌리기] takes back both writes of the turn: the item is gone.
+  await notice.getByRole('button', { name: '되돌리기' }).click();
+  await notice.getByText('되돌렸습니다.').waitFor();
+  await today.getByText('구조 회의 — 3층').waitFor({ state: 'detached' });
   assert.deepEqual(await texts(), ['도면 정리 — 단면도']);
 
   assert.deepEqual(errors, []);

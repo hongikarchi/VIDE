@@ -143,6 +143,16 @@ test('[되돌리기] of an add leaves an item the user changed or finished since
     agenda.list(project.id).map((item) => [item.text, item.done]),
     [['사용자가 고친 내용', true]],
   );
+  // One turn adds an item and then changes it: undoing the turn (both writes) removes it.
+  const turn = ledger.length;
+  const { added: made } = await handlers.agenda_add({ items: [{ text: '도면 제출' }] });
+  await handlers.agenda_set({ items: [{ id: made[0].id, date: '2026-10-09' }] });
+  const both = agenda.revert(
+    project.id,
+    ledger.slice(turn).flatMap((item) => item.body.changes),
+  );
+  assert.deepEqual([both.reverted, both.skipped], [2, 0]);
+  assert.ok(!agenda.list(project.id).some((item) => item.id === made[0].id));
 });
 
 // The 기본 대화 runs as a host (modeling) turn: it gets the agenda tools too, beside the host's.

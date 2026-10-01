@@ -192,4 +192,43 @@ test('over HTTP: the dashboard routes, and [되돌리기] of a recorded AI write
       .status,
     404,
   );
+
+  // One turn's writes (two ledger items) go back with one [되돌리기], newest first.
+  const write = async (changes) =>
+    (
+      await api(`/projects/${project.id}/conversations/${conversation.id}/ledger`, 'POST', {
+        kind: 'result-ref',
+        requestId: 'turn-b',
+        body: { appAction: 'agenda', by: 'ai', changes },
+      })
+    ).json;
+  const drawn = (await api(base, 'POST', { text: '도면 제출' })).json.item;
+  const firstWrite = await write([
+    { op: 'add', id: drawn.id, text: drawn.text, date: null, time: null, revision: 1 },
+  ]);
+  const changedNow = (
+    await api(`${base}/${drawn.id}`, 'PUT', { revision: 1, text: '도면 제출 — 3장' })
+  ).json.item;
+  const secondWrite = await write([
+    {
+      op: 'set',
+      id: drawn.id,
+      text: changedNow.text,
+      revision: changedNow.revision,
+      before: { text: '도면 제출', date: null, time: null, doneAt: null },
+    },
+  ]);
+  const both = await api(`${base}/undo`, 'POST', {
+    conversationId: conversation.id,
+    ledgerIds: [firstWrite.id, secondWrite.id],
+  });
+  assert.deepEqual(
+    [both.status, both.json.reverted, both.json.skipped, both.json.items.length],
+    [200, 2, 0, 0],
+  );
+  const twice = await api(`${base}/undo`, 'POST', {
+    conversationId: conversation.id,
+    ledgerIds: [firstWrite.id, secondWrite.id],
+  });
+  assert.deepEqual([twice.status, twice.json.code], [409, 'AGENDA_UNDONE']);
 });

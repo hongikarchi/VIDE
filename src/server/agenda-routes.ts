@@ -64,16 +64,31 @@ export async function agendaRoutes(
   else if (method === 'POST' && name === 'undo') {
     const input = agendaUndoSchema.safeParse(await body());
     if (!input.success) throw new DomainError('INVALID_INPUT');
-    const { conversationId, ledgerId } = input.data;
-    const item = ledger.item(projectId, conversationId, ledgerId);
-    const recorded = changesOf.safeParse(item.body);
-    if (!recorded.success) throw new DomainError('NOT_FOUND');
-    if (item.supersededBy) throw new DomainError('AGENDA_UNDONE');
-    const result = agenda.revert(projectId, recorded.data.changes);
-    ledger.undone(projectId, conversationId, ledgerId, {
-      reverted: result.reverted,
-      skipped: result.skipped,
+    const { conversationId } = input.data;
+    // One turn's writes go back together: their changes in the order made, reverted newest first.
+    const writes = (input.data.ledgerIds ?? [input.data.ledgerId!]).map((ledgerId) => {
+      const item = ledger.item(projectId, conversationId, ledgerId);
+      const recorded = changesOf.safeParse(item.body);
+      if (!recorded.success) throw new DomainError('NOT_FOUND');
+      return {
+        ledgerId,
+        at: item.createdAt,
+        undone: Boolean(item.supersededBy),
+        changes: recorded.data.changes,
+      };
     });
+    writes.sort((a, b) => a.at.localeCompare(b.at));
+    const open = writes.filter((write) => !write.undone);
+    if (!open.length) throw new DomainError('AGENDA_UNDONE');
+    const result = agenda.revert(
+      projectId,
+      open.flatMap((write) => write.changes),
+    );
+    for (const write of open)
+      ledger.undone(projectId, conversationId, write.ledgerId, {
+        reverted: result.reverted,
+        skipped: result.skipped,
+      });
     send(200, result);
   } else if (method === 'PUT' && !remove) {
     const item = agenda.set(projectId, name, await body());

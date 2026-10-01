@@ -2,7 +2,7 @@
 id: PLAN-26
 title: 대화가 화면과 작업을 이끄는 구조 — skill 시작, 토큰 정리, 셸 정리, 산출물 탭
 status: review
-version: 0.5
+version: 0.6
 updated: 2026-10-01
 owner: agent:claude
 related: [ADR-026, ADR-022, ADR-021, ADR-020, SPEC-01, SPEC-02, SPEC-07, ARCH-03, ARCH-01, DESIGN, RESEARCH-12, PLAN-22, PLAN-24, FR-18, FR-24, FR-25, AC-48]
@@ -219,13 +219,14 @@ related: [ADR-026, ADR-022, ADR-021, ADR-020, SPEC-01, SPEC-02, SPEC-07, ARCH-03
 |---|---|
 | `src/core/migrations.ts`, `src/core/agenda.ts`(신설), `src/core/store.ts`, `src/contracts/agenda.ts`(신설) | schema 7 `agenda_items`, 더하기·고치기(revision 검사)·순서·빼기·완료 비우기·되돌리기, 프로젝트 삭제 때 행 삭제, 공용 zod 모양 |
 | `src/server/agenda-routes.ts`(신설), `src/server/server.ts` | `GET·POST …/agenda`, `PUT …/agenda/:id`, `POST …/agenda/order`·`…/:id/remove`·`…/remove-done`·`…/undo`, 오류 상태(`AGENDA_LIMIT`·`AGENDA_UNDONE` 409). 원격 금지 목록·DELETE 허용 목록은 그대로 |
-| `src/server/agent-tools.ts`, `src/ai/agent-connection.ts` | 대화 턴 도구 `agenda_list`(계획 모드 포함)·`agenda_add`·`agenda_set`(원장이 있는 턴만, 원장 `appAction: 'agenda'`), 대화 지시문 한 문장. 호스트(모델링) 턴에는 주지 않는다 — 등록부가 대화 턴의 범위로 도구를 발급하므로 거기 더하는 것이 자연스럽다 |
-| `src/ui/agenda-text.ts`(신설), `src/ui/dashboard-agenda.tsx`(신설), `src/ui/dashboard.tsx`, `src/ui/dashboard.css`, `src/ui/app.ts` | 날짜·시각 읽기, '오늘' 구역(입력·미리보기·확인란·그 자리 편집·↑↓·끌기·[빼기]·예정·완료 접기), AI 쓰기 안내와 [되돌리기] |
+| `src/server/agent-tools.ts`, `src/ai/agent-connection.ts`, `src/server/execution.ts` | 대화 턴 도구 `agenda_list`(계획 모드 포함)·`agenda_add`·`agenda_set`(원장이 있는 턴만, 원장 `appAction: 'agenda'`), 도구가 있을 때 지시문 한 문장(`agendaInstruction`). 기본 대화는 호스트(모델링) 턴으로 돌므로 `Execution.readAgent`가 대화 안의 호스트 턴에도 같은 처리기를 더한다(검토 지적, 2026-10-01) |
+| `src/ui/agenda-text.ts`(신설), `src/ui/dashboard-agenda.tsx`(신설), `src/ui/dashboard.tsx`, `src/ui/dashboard.css`, `src/ui/app.ts` | 날짜·시각 읽기, '오늘' 구역(입력·미리보기·확인란·그 자리 편집·↑↓·끌기·[빼기]·예정·완료 접기), AI 쓰기 안내와 [되돌리기](턴마다 하나, 닫을 때까지 남음) |
+| 검토 지적 반영(2026-10-01) | 더한 항목의 되돌리기도 `revision` 검사, 그 자리 편집은 연 때의 판으로 저장(다른 화면의 변경을 덮어쓰지 않음), 입력칸은 저장 중에도 막지 않음(초점 유지), 기본 대화 호스트 턴의 할 일 도구, 한 턴의 쓰기를 안내 하나·[되돌리기] 하나(`ledgerIds`)로 |
 
 **선행·외부 조건:** 없음. schema 7은 이 티켓이 쓴다(같은 웨이브의 다른 티켓은 스키마를 올리지 않는다).
 
-**검증 — 정상:** 단위 `tests/core/agenda-text.test.mjs`(내일 3시·오전 9시 반·금요일까지·다음 주 월요일·10/7 14:00·지난 달은 다음 해·읽지 못하면 그대로), `tests/server/agenda.test.mjs`(더하기·고치기·완료·순서·빼기·완료 비우기, 다른 프로젝트 거절, 프로젝트 삭제와 함께 삭제, HTTP 경로, 원장에 남은 AI 쓰기의 `…/undo`와 두 번째 되돌리기 거절), `tests/server/agenda-tools.test.mjs`(도구 `agenda_add`·`agenda_set` → 원장 → 되돌리기, 사람이 다시 고친 항목은 남김, 계획 모드는 `agenda_list`만, 실제 대화 턴의 `agenda_add` → `…/undo`), `tests/server/remote-http.test.mjs`(원격 세션이 더하고 완료하고 뺌), `tests/core/migrations.test.mjs`(schema 7 표). 브라우저 `tests/integration/browser-dashboard-agenda.mjs`('내일 3시 구조 회의' Enter → 예정 15:00, 확인란 → '완료 1', 그 자리 편집, ↑와 끌기, 새로고침 뒤 유지, [완료 비우기], [빼기]). 전체 `npm test`·`npm run typecheck`·prettier.
+**검증 — 정상:** 단위 `tests/core/agenda-text.test.mjs`(내일 3시·오전 9시 반·금요일까지·다음 주 월요일·10/7 14:00·지난 달은 다음 해·읽지 못하면 그대로), `tests/server/agenda.test.mjs`(더하기·고치기·완료·순서·빼기·완료 비우기, 다른 프로젝트 거절, 프로젝트 삭제와 함께 삭제, HTTP 경로, 원장에 남은 AI 쓰기의 `…/undo`와 두 번째 되돌리기 거절), `tests/server/agenda-tools.test.mjs`(도구 `agenda_add`·`agenda_set` → 원장 → 되돌리기, 사람이 다시 고친 항목은 남김 — AI가 더한 뒤 사람이 고치거나 완료한 항목도, 한 턴에 더하고 고친 항목은 함께 지움, 계획 모드는 `agenda_list`만, 실제 대화 턴과 hostUse 없는 기본 대화 호스트 턴의 `agenda_add` → `…/undo`), `tests/server/remote-http.test.mjs`(원격 세션이 더하고 완료하고 뺌), `tests/core/migrations.test.mjs`(schema 7 표). 브라우저 `tests/integration/browser-dashboard-agenda.mjs`('내일 3시 구조 회의' Enter → 예정 15:00, 느린 저장 중에도 입력칸 초점 유지, 확인란 → '완료 1', 그 자리 편집, 편집 중 다른 화면의 변경은 거절·최신 날짜 위에 다시 저장, ↑와 끌기, 새로고침 뒤 유지, [완료 비우기], [빼기], 기본 대화 한 턴의 두 쓰기 → 안내 하나가 9초 뒤에도 남고 [되돌리기]로 둘 다 되돌림). 전체 `npm test`·`npm run typecheck`·prettier.
 
-**검증 — 실패:** 오래된 `revision`으로 고침·빼기 → `REVISION_CONFLICT`(화면은 최신 목록을 다시 읽음). 없는 항목 → `NOT_FOUND`. 빈 내용·없는 날짜(2/30)·24:00 → `INVALID_INPUT`. 같은 쓰기의 두 번째 [되돌리기] → `AGENDA_UNDONE`. 계획 모드 턴에는 `agenda_add`가 없다.
+**검증 — 실패:** 오래된 `revision`으로 고침·빼기 → `REVISION_CONFLICT`(화면은 최신 목록을 다시 읽음). 없는 항목 → `NOT_FOUND`. 빈 내용·없는 날짜(2/30)·24:00 → `INVALID_INPUT`. 같은 쓰기의 두 번째 [되돌리기] → `AGENDA_UNDONE`. 새로고침 뒤에는 지난 턴의 [되돌리기]를 다시 띄우지 않는다(대화 기록에 남기는 것은 후속). 계획 모드 턴에는 `agenda_add`가 없다.
 
 **완료:** 위 시험 통과와 PLAN §6.5 갱신. 실제 CLI로 '회의록에서 할 일 뽑아줘'를 한 번 해 보는 확인은 설치본 릴리스 때.

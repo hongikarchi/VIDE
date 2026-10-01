@@ -117,7 +117,7 @@ import { initializeDisplaySettings } from './display-settings.ts';
 import { currentTheme, setTheme, storedTheme } from './theme.ts';
 import { showFeedback } from './feedback.ts';
 import { provideDashboard, refreshDashboard } from './dashboard.tsx';
-import { AGENDA_CHANGED, agendaNotice } from './agenda-text.ts';
+import { AGENDA_CHANGED, AgendaTurns, agendaNotice, type AgendaTurn } from './agenda-text.ts';
 
 // Host panel mode (?panel=rhino|zwcad, Design SCR-12): the chat column only, bound to one
 // attached document of the Rhino panel or the ZWCAD palette.
@@ -2165,8 +2165,15 @@ function showPlanFirstCard() {
   el('button', '닫기', row, { type: 'button' }).onclick = hideRouteCard;
   card.hidden = false;
 }
-/** A notice with action buttons (undo, send to the AI after all). */
-function messageWithActions(text: string, actions: { label: string; run: () => void }[]) {
+/**
+ * A notice with action buttons (undo, send to the AI after all). It hides after 9 s, or with
+ * `keep` stays until a button is pressed or another notice takes its place.
+ */
+function messageWithActions(
+  text: string,
+  actions: { label: string; run: () => void }[],
+  { keep = false }: { keep?: boolean } = {},
+) {
   clearTimeout(toastTimer);
   const box = $('message');
   box.replaceChildren(text + ' ');
@@ -2178,7 +2185,7 @@ function messageWithActions(text: string, actions: { label: string; run: () => v
     };
   }
   box.hidden = false;
-  toastTimer = setTimeout(() => (box.hidden = true), 9000);
+  if (!keep) toastTimer = setTimeout(() => (box.hidden = true), 9000);
 }
 /** A notice with one action button (e.g. send a view-only request to the AI after all). */
 function messageWithAction(text: string, label: string, action: () => void) {
@@ -2510,12 +2517,16 @@ async function skillToChat() {
 /**
  * Screen actions the AI asked for in a conversation turn (jig_open, ui_go: ledger items the engine
  * recorded): each is carried out once, and only for items made while this page is open. 할 일 the
- * AI added or changed (SPEC-01.14 6) redraw the dashboard and get a notice with [되돌리기].
+ * AI added or changed (SPEC-01.14 6) redraw the dashboard at once; the writes of one turn get one
+ * notice with [되돌리기] when the turn has ended (`finished`, the request id).
  */
 const pageOpened = new Date().toISOString();
 const performedActions = new Set<string>();
-async function followAppActions(conversationId: string) {
-  let detail: { ledger?: { id: string; body?: unknown; createdAt?: string }[] } | null;
+const agendaTurns = new AgendaTurns();
+async function followAppActions(conversationId: string, finished?: string) {
+  let detail: {
+    ledger?: { id: string; body?: unknown; createdAt?: string; requestId?: string | null }[];
+  } | null;
   try {
     detail = (await api(
       `/projects/${encodeURIComponent(currentProject().id)}/conversations/${encodeURIComponent(conversationId)}`,
@@ -2528,7 +2539,10 @@ async function followAppActions(conversationId: string) {
     if (performedActions.has(item.id) || body.by !== 'ai') continue;
     if (body.appAction === 'agenda') {
       performedActions.add(item.id);
-      if ((item.createdAt ?? '') >= pageOpened) followAgenda(conversationId, item.id, body);
+      if ((item.createdAt ?? '') >= pageOpened) {
+        agendaTurns.add(item);
+        dispatchEvent(new Event(AGENDA_CHANGED));
+      }
       continue;
     }
     if (body.appAction !== 'jig_open' && body.appAction !== 'ui_go') continue;
@@ -2557,40 +2571,49 @@ async function followAppActions(conversationId: string) {
       }
     }
   }
+  for (const turn of agendaTurns.take(finished)) followAgenda(conversationId, turn);
 }
-function followAgenda(conversationId: string, ledgerId: string, body: unknown) {
-  dispatchEvent(new Event(AGENDA_CHANGED));
-  const text = agendaNotice(body);
+/**
+ * One turn's 할 일 notice: what the AI added or changed, with [되돌리기] for all of that turn's
+ * writes. It stays until it is used or closed (the reply is read first).
+ */
+function followAgenda(conversationId: string, turn: AgendaTurn) {
+  const text = agendaNotice(turn.body);
   if (!text) return;
   const projectId = currentProject().id;
-  messageWithActions(text, [
-    {
-      label: '되돌리기',
-      run: () =>
-        void api(`/projects/${encodeURIComponent(projectId)}/agenda/undo`, 'POST', {
-          conversationId,
-          ledgerId,
-        })
-          .then((value) => {
-            dispatchEvent(new Event(AGENDA_CHANGED));
-            const { skipped } = value as { skipped?: number };
-            message(
-              skipped
-                ? `되돌렸습니다. 그 뒤에 바뀌었거나 빠진 ${skipped}개는 그대로 둡니다.`
-                : '되돌렸습니다.',
-            );
+  messageWithActions(
+    text,
+    [
+      {
+        label: '되돌리기',
+        run: () =>
+          void api(`/projects/${encodeURIComponent(projectId)}/agenda/undo`, 'POST', {
+            conversationId,
+            ledgerIds: turn.ledgerIds,
           })
-          .catch((cause) => {
-            const error = readableError(cause);
-            message(
-              error.code === 'AGENDA_UNDONE'
-                ? '이미 되돌렸습니다.'
-                : errors[error.code ?? ''] || error.message,
-            );
-          }),
-    },
-    { label: '대시보드', run: () => setWorkspace('dashboard') },
-  ]);
+            .then((value) => {
+              dispatchEvent(new Event(AGENDA_CHANGED));
+              const { skipped } = value as { skipped?: number };
+              message(
+                skipped
+                  ? `되돌렸습니다. 그 뒤에 바뀌었거나 빠진 ${skipped}개는 그대로 둡니다.`
+                  : '되돌렸습니다.',
+              );
+            })
+            .catch((cause) => {
+              const error = readableError(cause);
+              message(
+                error.code === 'AGENDA_UNDONE'
+                  ? '이미 되돌렸습니다.'
+                  : errors[error.code ?? ''] || error.message,
+              );
+            }),
+      },
+      { label: '대시보드', run: () => setWorkspace('dashboard') },
+      { label: '닫기', run: () => {} },
+    ],
+    { keep: true },
+  );
 }
 /** Which linked file an app action names: the one chosen, the only one, or the one open now. */
 function routedLink(id?: string) {
@@ -2887,7 +2910,11 @@ async function poll(id: string, projectId = currentProject().id, original = stat
     if (m) m.request = request;
     // Screen actions the AI asked for in this conversation turn (jig_open, ui_go).
     const turnConversation = (request.input as { conversationId?: unknown }).conversationId;
-    if (typeof turnConversation === 'string') void followAppActions(turnConversation);
+    if (typeof turnConversation === 'string')
+      void followAppActions(
+        turnConversation,
+        ['queued', 'running'].includes(request.state) ? undefined : request.id,
+      );
     if (request.result?.hostExecuted && foregroundRequest?.id === id) {
       if (foregroundRequest.selected === selectedResult && foregroundRequest.draft === focusDraft())
         selectedResult = request.id;

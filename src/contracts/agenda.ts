@@ -65,10 +65,18 @@ export const agendaOrderSchema = z
   .object({ ids: z.array(z.string().min(1).max(100)).min(1).max(AGENDA_MAX_ITEMS) })
   .strict();
 
-/** `POST …/agenda/undo`: the ledger item an AI write recorded ([되돌리기]). */
+/**
+ * `POST …/agenda/undo`: the ledger item an AI write recorded ([되돌리기]), or the items of one turn
+ * (`ledgerIds`, in the order they were made) taken back together.
+ */
 export const agendaUndoSchema = z
-  .object({ conversationId: z.string().min(1).max(100), ledgerId: z.string().min(1).max(100) })
-  .strict();
+  .object({
+    conversationId: z.string().min(1).max(100),
+    ledgerId: z.string().min(1).max(100).optional(),
+    ledgerIds: z.array(z.string().min(1).max(100)).min(1).max(100).optional(),
+  })
+  .strict()
+  .refine((input) => (input.ledgerId === undefined) !== (input.ledgerIds === undefined));
 
 /** What an AI write changed, kept in its ledger item so [되돌리기] can take it back. */
 export const agendaChangeSchema = z.discriminatedUnion('op', [
