@@ -2,6 +2,8 @@
 // one card per jig id at the version pinned to this project, and the drafts still being written.
 // No DOM and no requests here; src/ui/jigs.tsx reads the registry, the pins and the drafts.
 
+import { isNewerVersion } from '../contracts/jig-version.ts';
+
 export interface ListedPackage {
   id: string;
   version: string;
@@ -53,3 +55,10 @@ export interface ListedDraft {
 /** The drafts shown as cards: the open ones (a pinned or discarded draft is done). */
 export const openDrafts = <T extends ListedDraft>(drafts: readonly T[]): T[] =>
   drafts.filter((draft) => !draft.state || draft.state === 'open');
+
+/**
+ * Whether an instance row offers [올리기] (SPEC-07.4, T-101): only when the card's version — the one
+ * pinned here — is newer than the instance's. An older pinned version is no 올리기.
+ */
+export const behindCard = (instanceVersion: string, cardVersion: string): boolean =>
+  isNewerVersion(cardVersion, instanceVersion);

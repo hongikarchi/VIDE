@@ -5,7 +5,7 @@ import { api } from './gateway.ts';
 import { DeclaredJig } from './jig-panel/declared-jig.tsx';
 import { KnowledgeJig } from './knowledge-jig.tsx';
 import { JigIconMark, legacyJigIcon, noteJigIcon } from './jig-icons.ts';
-import { listedTools, openDrafts, type PinnedRow } from './jig-list.ts';
+import { behindCard, listedTools, openDrafts, type PinnedRow } from './jig-list.ts';
 import { createDraft, listDrafts, type DraftSummary } from './make-api.ts';
 import { DraftCard, ImportJig, MakeCard, openDraft } from './make-tab.tsx';
 import type { Point3 } from './model.ts';
@@ -487,6 +487,7 @@ const jigErrors: Record<string, string> = {
   STALE_INPUT: '읽은 문서가 그 뒤에 바뀌었습니다. 입력을 다시 읽은 뒤 계산하세요.',
   JIG_INVALID: '이 jig의 설명서에 문제가 있어 열 수 없습니다.',
   JIG_NOT_FORKABLE: '저장소에서 만든 jig는 아직 사본으로 고칠 수 없습니다.',
+  JIG_VERSION_NOT_NEWER: '이 프로젝트에 고정한 버전이 작업본보다 높지 않아 올릴 수 없습니다.',
   NOT_FOUND: '작업본을 찾을 수 없습니다.',
 };
 function jigError(error: unknown) {
@@ -881,9 +882,9 @@ function Gallery({ context }: { context: JigContext }) {
                 <span>{row.title}</span>
                 <small>
                   {when(row.updatedAt)} · v{row.version}
-                  {row.version !== entry.version ? ' · 이전 버전' : ''}
+                  {behindCard(row.version, entry.version) ? ' · 이전 버전' : ''}
                 </small>
-                {row.version !== entry.version && pinnedHere ? (
+                {behindCard(row.version, entry.version) && pinnedHere ? (
                   <button
                     type="button"
                     title={`v${entry.version}로 올립니다 · 모든 단계를 다시 계산해야 합니다`}

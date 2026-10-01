@@ -52,6 +52,7 @@ import {
 } from './loader.ts';
 import { JIG_ID, SEMVER, type ManifestIssue } from './manifest.ts';
 import { isJigIcon } from '../../contracts/jig-icons.ts';
+import { isNewerVersion, versionParts } from '../../contracts/jig-version.ts';
 import {
   DEFAULT_TOLERANCE,
   compareExpected,
@@ -260,23 +261,12 @@ export interface DraftOptions {
   onInstalled?: (id: string, version: string) => void;
 }
 
-/** `a.b.c` as numbers (a pre-release tag is ignored); for ordering versions of one jig. */
-const parts = (version: string) =>
-  version
-    .split('-')[0]
-    .split('.')
-    .map((part) => Number(part) || 0);
-function newer(a: string, b: string) {
-  const [x, y] = [parts(a), parts(b)];
-  for (let i = 0; i < 3; i++) if ((x[i] ?? 0) !== (y[i] ?? 0)) return (x[i] ?? 0) > (y[i] ?? 0);
-  return false;
-}
 /** The patch after the highest of the versions given (`0.3.1`, `0.3.2` → `0.3.3`). */
 export function nextPatch(versions: readonly string[]): string {
   const top = versions
     .filter((v) => SEMVER.test(v))
-    .reduce((a, b) => (newer(b, a) ? b : a), '0.0.0');
-  const [major, minor, patch] = parts(top);
+    .reduce((a, b) => (isNewerVersion(b, a) ? b : a), '0.0.0');
+  const [major, minor, patch] = versionParts(top);
   return `${major}.${minor}.${patch + 1}`;
 }
 

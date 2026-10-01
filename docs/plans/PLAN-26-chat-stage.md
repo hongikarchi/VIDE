@@ -295,6 +295,6 @@ related: [ADR-026, ADR-022, ADR-021, ADR-020, SPEC-01, SPEC-02, SPEC-07, ARCH-03
 
 **검증 — 정상:** 단위 `tests/core/drafts.test.mjs`(사본의 파일·쓰기 가능·id 유지·버전 +0.0.1, 열린 사본·설치본을 넘는 다음 버전, 출처 기록, 다시 고정 → `project_jigs` 한 줄이 새 버전, 같은 버전 다른 내용은 `JIG_VERSION_EXISTS`), `tests/core/jig-runner.test.mjs` 또는 런타임 시험(올리기: 버전·설정값·'다시 계산 필요'), `tests/server/make-routes.test.mjs`(경로). 브라우저 `browser-jigs.mjs`([수정하기] → 만들기 화면의 사본 표지·입력/단계/결과, 내장 jig의 흐린 버튼과 이유, 이전 버전 작업본의 [올리기]).
 
-**검증 — 실패:** `vide/` jig·없는 jig → `INVALID_INPUT`·`NOT_FOUND`, 단계가 jig 밖을 가져오는 jig(S-06) → `JIG_NOT_FORKABLE`과 카드의 흐린 [수정하기](`drafts.test.mjs`·`make-routes.test.mjs`·`browser-jigs.mjs`), 고정 안 된 jig의 작업본 올리기 → `NOT_FOUND`, 이미 고정 버전이면 바꾸지 않음, 원격 세션의 고정은 그대로 403.
+**검증 — 실패:** `vide/` jig·없는 jig → `INVALID_INPUT`·`NOT_FOUND`, 단계가 jig 밖을 가져오는 jig(S-06) → `JIG_NOT_FORKABLE`과 카드의 흐린 [수정하기](`drafts.test.mjs`·`make-routes.test.mjs`·`browser-jigs.mjs`), 고정 안 된 jig의 작업본 올리기 → `NOT_FOUND`, 이미 고정 버전이면 바꾸지 않음, 고정 버전이 작업본보다 낮으면(예전 묶음을 가져와 다시 고정) `JIG_VERSION_NOT_NEWER`이고 그 행에 '이전 버전'·[올리기]가 없음(`make-routes.test.mjs`·`jig-list.test.mjs`·`browser-jigs.mjs`), 원격 세션의 고정은 그대로 403.
 
 **완료:** 위 시험 통과, SPEC-07·ARCH-03 §7과 코드 일치, PLAN §6.5 갱신. S-06의 사본 고정은 이 티켓에서 하지 않는다(위 선행·외부 조건).

@@ -175,6 +175,11 @@ test('[수정하기] forks the pinned jig by route; re-pin moves the list; [올�
   assert.equal(upgraded.steps.find((s) => s.id === 'main').status, 'stale');
   const count = upgraded.params.find((p) => p.key === 'count');
   assert.deepEqual([count.value, count.by], [2, 'default']);
+  // An older version pinned again (an imported older pack pins itself) is no 올리기: refused, and
+  // the instance keeps its version and its runs.
+  new JigStore(workspace.store.db).pin(project.id, 'project/upgrade-me', '0.1.0');
+  await assert.rejects(runtime.upgrade(project.id, instance.id), /JIG_VERSION_NOT_NEWER/);
+  assert.equal((await runtime.view(project.id, instance.id)).jig.version, '0.1.1');
   // An instance of a jig no longer on the project's list cannot move.
   new JigStore(workspace.store.db).unpin(project.id, 'project/upgrade-me');
   await assert.rejects(runtime.upgrade(project.id, instance.id), /NOT_FOUND/);

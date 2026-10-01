@@ -10,6 +10,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { gunzipSync, gzipSync } from 'node:zlib';
 import { DomainError } from '../../contracts/errors.ts';
+import { isNewerVersion } from '../../contracts/jig-version.ts';
 import type { JigInstanceRow, JigRead, JigStore, StepStatus } from '../../core/jig-store.ts';
 import { ChildRunner, type ChildRunnerOptions } from './child-runner.ts';
 import { ComputeBoxRunner } from './compute-box.ts';
@@ -310,13 +311,16 @@ export class JigRuntime {
    * project — never automatically. A setting the new version still declares keeps its value when
    * the new declaration accepts it (else its default); every computed step becomes '다시 계산
    * 필요'. A human step keeps its confirmation, which the next run compares by input fingerprint
-   * (as after a setting change). Already at the pinned version, nothing changes.
+   * (as after a setting change). Already at the pinned version, nothing changes. An older pinned
+   * version (an imported older pack re-pinned over a fork) is no 올리기: JIG_VERSION_NOT_NEWER.
    */
   async upgrade(projectId: string, instanceId: string): Promise<InstanceView> {
     const instance = this.store.instance(projectId, instanceId);
     const pinned = this.store.pinned(projectId).find((row) => row.jigId === instance.jigId);
     if (!pinned) throw new DomainError('NOT_FOUND');
     if (pinned.version === instance.version) return this.view(projectId, instanceId);
+    if (!isNewerVersion(pinned.version, instance.version))
+      throw new DomainError('JIG_VERSION_NOT_NEWER');
     const jig = await this.registry.resolve(instance.jigId, pinned.version);
     if (jig.manifest.kind !== 'tool') throw new DomainError('INVALID_INPUT');
     const body = bodyOf(instance.body);

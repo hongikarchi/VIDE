@@ -164,7 +164,9 @@ try {
       createdAt: '2026-10-01T00:00:00.000Z',
       updatedAt: '2026-10-01T00:00:00.000Z',
     };
-    await route.fulfill({ json: { instances: [...instances, row] } });
+    // An instance on a newer version than the one pinned here (an older pack was pinned again).
+    const ahead = { ...row, id: 'inst-ahead', version: '0.1.2', title: '작업본 B' };
+    await route.fulfill({ json: { instances: [...instances, row, ahead] } });
   });
   await page.route('**/api/v1/projects/*/jig-instances/inst-old/upgrade', (route) => {
     upgraded.push('inst-old');
@@ -249,10 +251,13 @@ try {
   // one card at the pinned version; an instance on 0.1.0 shows '이전 버전' and [올리기].
   assert.equal(await installed.count(), 1);
   assert.match(await installed.textContent(), /버전 0\.1\.1/);
-  const oldRow = installed
-    .getByRole('list', { name: '합성 점검 jig 작업본' })
-    .getByRole('listitem');
+  const rowsOf = installed.getByRole('list', { name: '합성 점검 jig 작업본' });
+  const oldRow = rowsOf.getByRole('listitem').filter({ hasText: '작업본 A' });
   assert.match(await oldRow.textContent(), /v0\.1\.0 · 이전 버전/);
+  // A row ahead of the card is no '이전 버전' and has no [올리기] (that would move it back).
+  const aheadRow = rowsOf.getByRole('listitem').filter({ hasText: '작업본 B' });
+  assert.doesNotMatch(await aheadRow.textContent(), /이전 버전/);
+  assert.equal(await aheadRow.getByRole('button', { name: '올리기', exact: true }).count(), 0);
   await oldRow.getByRole('button', { name: '올리기', exact: true }).click();
   await installed
     .getByRole('group', { name: '올리기 확인' })

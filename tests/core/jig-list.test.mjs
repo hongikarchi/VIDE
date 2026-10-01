@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { listedTools, openDrafts } from '../../src/ui/jig-list.ts';
+import { behindCard, listedTools, openDrafts } from '../../src/ui/jig-list.ts';
 
 // PLAN-26 T-099: the JIG list shows one card per jig id, at the version pinned to this project.
 const tool = (id, version, stage) => ({ id, version, kind: 'tool', stage });
@@ -62,4 +62,11 @@ test('only open drafts are cards', () => {
     openDrafts(drafts).map((draft) => draft.id),
     ['a', 'c'],
   );
+});
+
+test('[올리기] shows only for an instance behind the card; an older pinned version is no 올리기 (T-101)', () => {
+  assert.equal(behindCard('0.1.0', '0.1.1'), true);
+  assert.equal(behindCard('0.9.9', '0.10.0'), true, 'numbers, not text');
+  assert.equal(behindCard('0.1.1', '0.1.1'), false);
+  assert.equal(behindCard('0.1.2', '0.1.1'), false, 'the card was re-pinned to an older import');
 });
