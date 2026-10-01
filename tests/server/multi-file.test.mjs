@@ -1327,3 +1327,56 @@ test('A file the host did not undo is named with a Korean reason, never the raw 
   assert.equal(undoReason('not-latest'), '그 뒤에 문서가 더 바뀜');
   assert.equal(undoReason('SOMETHING_NEW'), '호스트가 거절함');
 });
+
+// SPEC-02.13 7 (T-102, T-103): an earlier answer lost in another linked file is told to the turn
+// the first time it reads or writes that file, not only for the starting document.
+test('An unresolved result in another linked file is told before the turn writes or reads it there', async (t) => {
+  const answers = {};
+  const { workspace, project, b, send, settled, state, seen } = setup(t, async ({ call, turn }) => {
+    if (turn === 1) {
+      answers.first = await call('execute', { linkId: 'link-b', code: 'add column' });
+      answers.second = await call('execute', { linkId: 'link-b', code: 'add column' });
+    } else {
+      answers.query = await call('query', { linkId: 'link-b' });
+      answers.again = await call('query', { linkId: 'link-b' });
+      answers.write = await call('execute', { linkId: 'link-b', code: 'add column' });
+    }
+    return { text: '완료' };
+  });
+  workspace.submit(project.id, {
+    id: 'lost-b',
+    body: 'B의 보도 옮겨줘',
+    provider: 'claude-cli',
+    mode: 'auto',
+    baseRequestId: 'sync-a',
+    pins: [],
+    sketches: [],
+    files: [],
+  });
+  workspace.update(project.id, 'lost-b', 'unknown', {
+    host: 'rhino',
+    hostExecuted: false,
+    code: 'HOST_RESULT_UNKNOWN',
+    heldOnly: true,
+    documents: [
+      { host: 'rhino', instance: 'win-b', documentId: 7, name: 'B.3dm', pending: 'execute' },
+    ],
+  });
+  send('again', { mode: 'auto' });
+  await settled();
+  // The turn starts in A: no note at the start, since nothing is unresolved there.
+  assert.ok(!seen[0].context.items.some((item) => item.id === 'unresolved-results'));
+  assert.equal(answers.first.value.code, 'HOST_RESULT_UNRESOLVED');
+  assert.equal(answers.first.value.executed, false);
+  assert.equal(answers.first.value.unresolved.requests[0].requestId, 'lost-b');
+  assert.equal(answers.second.value.ok, true);
+  assert.equal(b.calls.execute.length, 1);
+  assert.equal(state('again').state, 'succeeded');
+  // Read first: the query carries the note once, and the write then runs.
+  send('read-first', { mode: 'auto' });
+  await settled();
+  assert.equal(answers.query.value.unresolved.requests[0].requestId, 'lost-b');
+  assert.equal(answers.again.value.unresolved, undefined);
+  assert.equal(answers.write.value.ok, true);
+  assert.equal(b.calls.execute.length, 2);
+});

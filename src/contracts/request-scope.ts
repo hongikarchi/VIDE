@@ -292,6 +292,27 @@ export function unresolvedFor<T extends ScopeWork>(input: ScopeInput, rows: read
   );
 }
 
+/**
+ * The unresolved results on one document a running turn reaches through a link (SPEC-02.13 7,
+ * T-103): `unresolvedFor` covers the starting document, this one each other linked file the turn
+ * first reads or writes, so the turn is told before it acts there.
+ */
+export function unresolvedOn<T extends ScopeWork>(
+  requestId: string,
+  document: { host: string; instance: string; documentId: number },
+  rows: readonly T[],
+): T[] {
+  const byId = new Map(rows.map((row) => [row.id, row]));
+  const mine: Claim = { host: document.host, key: documentKey(document) ?? null, source: true };
+  return rows.filter(
+    (row) =>
+      row.id !== requestId &&
+      row.state === 'unknown' &&
+      hostUse(row.input) !== 'none' &&
+      claimsOf(row, byId).some((theirs) => same(mine, theirs)),
+  );
+}
+
 /** The refusal code of `requestAdmission` (waiting is not a conflict). */
 export function requestConflict(
   input: ScopeInput,

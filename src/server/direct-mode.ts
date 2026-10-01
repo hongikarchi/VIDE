@@ -313,6 +313,11 @@ export interface LinkedFiles {
    * check and the lock (the next progress update) cannot interleave with another turn.
    */
   claim?(document: TurnDocument): string | undefined;
+  /**
+   * The note about earlier unresolved results on another linked file (SPEC-02.13 7), given the
+   * first time the turn reads or writes it; undefined when there are none.
+   */
+  unresolved?(document: TurnDocument): unknown;
   /** The turn was cut by an intervention (SPEC-02.8): its changes stay for the next condition. */
   intervened?(): boolean;
 }
@@ -676,6 +681,8 @@ export async function runDirectTurn(turn: DirectTurn) {
     claimed?: boolean;
     /** An execute answer was lost here: the document state is unknown. */
     lost?: boolean;
+    /** Earlier unresolved results here (another file), told once before the turn acts on it. */
+    unresolved?: unknown;
   }
   let links: LiveLink[] = turn.linked ? await turn.linked.list().catch(() => []) : [];
   const primaryKey = documentKey(driver.host, driver.target);
@@ -709,6 +716,7 @@ export async function runDirectTurn(turn: DirectTurn) {
     const linked = turn.linked.driver(link.host, link.open);
     if (!linked) throw failure('LINK_NOT_LIVE');
     const doc: TurnDoc = { key, driver: linked, file: { linkId: link.id, name: link.name } };
+    doc.unresolved = turn.linked.unresolved?.(turnDocument(doc));
     docs.set(key, doc);
     return doc;
   };
@@ -756,6 +764,12 @@ export async function runDirectTurn(turn: DirectTurn) {
         }
       : {}),
   });
+  /** The unresolved-results note of another file, once (then the turn has been told). */
+  const told = (doc: TurnDoc) => {
+    const note = doc.unresolved;
+    doc.unresolved = undefined;
+    return note;
+  };
   type Handler = (args: Record<string, unknown>, context?: { signal: AbortSignal }) => unknown;
   const handlers: Record<string, Handler> = {
     // The project's records beside the open document (T-062); the document's own tools follow.
@@ -766,7 +780,8 @@ export async function runDirectTurn(turn: DirectTurn) {
       queries++;
       activity.add('query', named(doc, `문서 조회 ${queries}회차`));
       update(state('query'));
-      return page;
+      const unresolved = told(doc);
+      return unresolved && page && typeof page === 'object' ? { ...page, unresolved } : page;
     },
   };
   const eyes = (doc: TurnDoc, source: VisionSource) =>
@@ -819,6 +834,17 @@ export async function runDirectTurn(turn: DirectTurn) {
       if (uncertain) throw failure('HOST_RESULT_UNKNOWN');
       const doc = await resolve(linkId);
       if (doc.refused?.final) return notExecuted(doc, doc.refused);
+      // An earlier answer in this file was lost and the turn has not read it yet: it is told
+      // first and nothing runs, so it does not repeat that work blindly (SPEC-02.13 7).
+      const unresolved = told(doc);
+      if (unresolved)
+        return {
+          ok: false,
+          executed: false,
+          code: 'HOST_RESULT_UNRESOLVED',
+          unresolved,
+          next: `Nothing ran and ${doc.file.name} is unchanged. Read it first (query with this linkId), then execute again only what is still missing.`,
+        };
       if (attempts >= limits.maxHostCommands) throw failure('HOST_COMMAND_LIMIT');
       attempted.add(doc.key);
       // Another file is locked as the turn first writes it; held elsewhere, it is refused at once

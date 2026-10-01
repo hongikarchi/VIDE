@@ -8,7 +8,13 @@ import { isDwgSdkEditMode } from '../contracts/dwg-edit-mode.ts';
 import { executionLimits } from '../contracts/execution-limits.ts';
 import { modelContext } from './model-context.ts';
 import { CLAUDE_MODELS, claudeEfforts, modelName } from './model-capabilities.ts';
-import { documentHolder, hostUse, unresolvedFor, waitingOf } from '../contracts/request-scope.ts';
+import {
+  documentHolder,
+  hostUse,
+  unresolvedFor,
+  unresolvedOn,
+  waitingOf,
+} from '../contracts/request-scope.ts';
 import { z } from 'zod';
 import { runLinked } from './linked-execution.ts';
 // Jig review gates (sync-review rows, structure-draft-review members/nodes; SPEC-06.9).
@@ -1291,6 +1297,8 @@ export class Execution {
             // waited for (ADR-027 5, SPEC-02.9 3).
             claim: (document) =>
               documentHolder(id, document, this.workspace.claimRows(projectId))?.code,
+            unresolved: (document) =>
+              unresolvedNote(unresolvedOn(id, document, this.workspace.claimRows(projectId)))?.data,
             intervened: () => this.intervened.has(id),
           },
           protectedIds: pins
