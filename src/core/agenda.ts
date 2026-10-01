@@ -140,8 +140,9 @@ export class Agenda {
   }
   /**
    * Takes back what an AI write changed ([되돌리기]): an added item is removed, a changed one gets
-   * its earlier text, date, time and done state back. An item removed since, or changed again
-   * after the write (its revision moved on), is left as it is and counted as skipped.
+   * its earlier text, date, time and done state back. An item removed since, or changed or
+   * finished after the write (its revision moved on, an added one too), is left as it is and
+   * counted as skipped.
    */
   revert(projectId: string, changes: readonly AgendaChange[]) {
     this.store.project(projectId);
@@ -152,7 +153,7 @@ export class Agenda {
         const row = this.store.db
           .prepare('SELECT revision FROM agenda_items WHERE projectId=? AND id=?')
           .get(projectId, change.id) as { revision: number } | undefined;
-        if (!row) {
+        if (!row || row.revision !== change.revision) {
           skipped++;
           continue;
         }
@@ -161,8 +162,7 @@ export class Agenda {
             .prepare('DELETE FROM agenda_items WHERE projectId=? AND id=?')
             .run(projectId, change.id);
           reverted++;
-        } else if (row.revision !== change.revision) skipped++;
-        else {
+        } else {
           const { text, date, time, doneAt } = change.before;
           this.store.db
             .prepare(

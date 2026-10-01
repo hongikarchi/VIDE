@@ -102,6 +102,41 @@ test('agenda_add and agenda_set are T1 writes in the ledger; revert takes back o
   assert.ok(bare.agenda_list && !bare.agenda_add && !bare.agenda_set);
 });
 
+test('[되돌리기] of an add leaves an item the user changed or finished since (SPEC-01.14 6)', async (t) => {
+  const store = await storeOf(t);
+  const agenda = new Agenda(store);
+  const project = store.createProject('되돌리기');
+  const ledger = [];
+  const handlers = conversationHandlers({
+    projectId: project.id,
+    conversationId: 'c1',
+    openInstanceId: null,
+    requestId: 'r1',
+    workspace: { list: () => [], get: () => undefined },
+    agenda,
+    ledger: (item) => {
+      ledger.push(item);
+      return { id: `l${ledger.length}` };
+    },
+  });
+  const { added } = await handlers.agenda_add({
+    items: [{ text: '구조 회의', date: '2026-10-02' }, { text: '회의록 정리' }],
+  });
+  // The add records the revision it left, like a set.
+  assert.deepEqual(
+    ledger[0].body.changes.map((change) => change.revision),
+    [1, 1],
+  );
+  // On another screen the user edits and finishes the first one.
+  agenda.set(project.id, added[0].id, { revision: 1, text: '사용자가 고친 내용', done: true });
+  const undo = agenda.revert(project.id, ledger[0].body.changes);
+  assert.deepEqual([undo.reverted, undo.skipped], [1, 1]);
+  assert.deepEqual(
+    agenda.list(project.id).map((item) => [item.text, item.done]),
+    [['사용자가 고친 내용', true]],
+  );
+});
+
 test('a conversation turn adds 할 일 with agenda_add; [되돌리기] removes them', async (t) => {
   const directory = await mkdtemp(join(tmpdir(), 'vide-agenda-turn-'));
   const app = await startServer({

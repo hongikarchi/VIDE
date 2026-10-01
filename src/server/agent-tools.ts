@@ -1238,6 +1238,7 @@ function agendaHandlers(sources: ConversationToolSources): Handlers {
             text: item.text,
             date: item.date,
             time: item.time,
+            revision: item.revision,
           })),
         );
     }

@@ -154,7 +154,16 @@ test('over HTTP: the dashboard routes, and [되돌리기] of a recorded AI write
       body: {
         appAction: 'agenda',
         by: 'ai',
-        changes: [{ op: 'add', id: added.id, text: added.text, date: added.date, time: '15:00' }],
+        changes: [
+          {
+            op: 'add',
+            id: added.id,
+            text: added.text,
+            date: added.date,
+            time: '15:00',
+            revision: 1,
+          },
+        ],
       },
     })
   ).json;

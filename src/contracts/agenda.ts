@@ -78,6 +78,8 @@ export const agendaChangeSchema = z.discriminatedUnion('op', [
     text: z.string(),
     date: z.string().nullable(),
     time: z.string().nullable(),
+    /** The revision the add left (1); an item changed since is not removed. */
+    revision: z.number().int(),
   }),
   z.object({
     op: z.literal('set'),
