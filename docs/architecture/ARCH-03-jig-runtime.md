@@ -2,7 +2,7 @@
 id: ARCH-03
 title: jig 런타임과 저장 스키마 v5의 물리 계약
 status: review
-version: 0.5
+version: 0.6
 updated: 2026-10-01
 owner: agent:claude
 related: [FR-23, FR-24, FR-25, SPEC-02, SPEC-05, SPEC-06, SPEC-07, ADR-014, ADR-019, ADR-020, ADR-021, ADR-022, ADR-026, ARCH-01, ARCH-02, PLAN-22, PLAN-23, PLAN-24, PLAN-26, RESEARCH-10, RESEARCH-12]
@@ -406,6 +406,7 @@ jig·보고서 경로는 `src/server/jig-routes.ts`, 초안 경로(`jig-drafts`)
 | `POST /api/v1/jigs/import` | `.vjig` 바이트 | `{id, version, digest, capabilities}`. 확인 필요 동작, 서명 확인(§12), 원격 세션 403 |
 | `GET /api/v1/projects/:id/jigs` | — | 이 프로젝트에 고정된 jig·버전 |
 | `POST /api/v1/projects/:id/jigs/:jigId/pin` | `{version, approvedCaps}` | `project_jigs` 행. 확인 필요 동작, 원격 세션 403 |
+| `DELETE /api/v1/projects/:id/jigs/:jigId/pin` | — | JIG 목록의 [삭제]: 이 프로젝트의 jig 목록에서 뺀다(`project_jigs` 행만 지움). 설치본과 그 jig로 만든 인스턴스는 남는다 |
 | `GET·POST /api/v1/projects/:id/jig-instances` | POST `{jig, version?, title, layerRoot}` | 작업본. `layerRoot`가 연결 문서에 없으면 422 |
 | `GET …/jig-instances/:iid` | — | 작업본 + 단계 상태 요약 |
 | `PUT …/:iid/params` | `{values:[{key, value}], by, reason?, requestId?}` | 다시 계산 요약 + `jig_param_log.seq`. `fixedAtPin` 값은 422 `PARAM_FIXED` |
@@ -425,16 +426,17 @@ jig·보고서 경로는 `src/server/jig-routes.ts`, 초안 경로(`jig-drafts`)
 | `GET …/:iid/reports` | — | 그 작업본 jig의 보고서 틀 목록(설명서 `reports`, 없으면 패키지의 `reports/*.json`) |
 | `GET …/:iid/reports/:name` | — | 해석된 보고서(§5.2). 보관된 단계 결과·설정값 원장·남은 조건·해석 보기를 읽고, `previewOnly` 결과는 확정으로 쓰지 않는다. 화면이 부품으로 그린다(CSP가 인라인 스타일을 막으므로 HTML을 내려보내지 않음). 일람표 CSV는 표 부품의 `csv`로 화면이 만든다 |
 | `GET·POST /api/v1/projects/:id/jig-drafts` | POST `{name, from?}` | 초안 목록·만들기(`from`은 시작 본). 201 |
-| `GET·DELETE …/jig-drafts/:did` | — | 초안 하나. `DELETE`는 버리기: 상태 `discarded`, 초안 폴더와 그 초안에 붙은 만들기 대화의 공급자 기록을 지우고 열린 대화를 닫는다. 엔진이 DELETE를 받는 경로는 이것 하나다 |
+| `GET·DELETE …/jig-drafts/:did` | — | 초안 하나. `DELETE`는 버리기: 상태 `discarded`, 초안 폴더와 그 초안에 붙은 만들기 대화의 공급자 기록을 지우고 열린 대화를 닫는다. 엔진이 DELETE를 받는 경로는 이것과 jig 고정 해제(위), 프로젝트 삭제(ARCH-01)뿐이다 |
 | `POST …/jig-drafts/:did/validate·test·preview` | preview `{fixture?}` | 형식 점검·자체 시험·미리보기(계산 상자, §6.5). 마지막 결과는 초안 폴더 밖 `.results/<did>.json`에 둔다 |
 | `POST …/jig-drafts/:did/pin` | `{jigId?, version?, approvedCaps?, confirm}` | 점검·자체 시험을 다시 확인한 뒤 읽기 전용 설치본(`source: ai-draft`)으로 설치하고 이 프로젝트에 고정. 확인 필요 동작, 원격 세션 403 |
 | `GET /api/v1/projects/:id/facts` | — | 자료 요약(결정·막힘·바뀜, 분야별 이슈, 건수·검토 건수) |
-| `GET …/facts/search` | `?q, kind?, discipline?, status?, excluded?, offset?, limit?` | 진술 검색. 제외된 진술은 `excluded=1`일 때만 |
+| `GET …/facts/search` | `?q, kind?, discipline?, status?, excluded?, offset?, limit?` | 진술 검색. 응답 `{items, total, offset, nextOffset, excluded, capped, plan}`(형식은 `src/contracts/facts.ts`, 서버·화면 공용). `status=excluded`는 제외된 진술만, `excluded=1`은 제외된 진술도 함께, 둘 다 없으면 제외된 진술을 뺀다 |
 | `GET …/facts/issues/:n`, `GET …/facts/statements/:n` | — | 이슈·진술 하나 |
 | `POST·PUT …/facts/statements/:n/review` | `{verdict \| null, reason?, correction?, supersededBy?}` | 사람의 검토 기록(`knowledge_reviews`). `null`이면 지움. AI 도구는 쓰지 않는다 |
 | `GET·POST …/facts/rules` | POST `{sourceId \| pattern, reason?, remove?}` | 출처 제외 규칙(`knowledge_source_rules`) |
 | `POST …/facts/refs` | `{statementId? , factRefs?}` | 근거 참조의 유효성(확정·오염 등) |
-| `POST …/facts/sources/:n/open` | — | 원본 파일을 이 PC에서 연다. 원격 세션 403, AI 도구로 내놓지 않는다 |
+| `POST …/facts/sources/:n/open` | — | 원본 파일을 이 PC의 기본 프로그램으로 연다(작업 PC 화면의 [원본 열기]). 원격 세션 403, AI 도구로 내놓지 않는다 |
+| `GET …/facts/sources/:n/file` | — | 원격 화면의 [원본 열기](SPEC-08.4): 원본 바이트를 그 브라우저로 스트리밍한다. 자료 DB 루트 아래 경로만(`..`·링크·junction으로 벗어나면 거절), 200 MB 넘으면 `SOURCE_TOO_LARGE`. PDF·이미지·텍스트는 `inline`, 그 밖(HTML·SVG 등 실행될 수 있는 형식 포함)은 `attachment`로 내려받게 하고 `X-Content-Type-Options: nosniff`, `Cache-Control: private, no-store`. 이 PC에서 프로그램을 실행하지 않는다. 실패는 한국어 한 문장(text/plain)으로 답한다 |
 
 - 기존 `POST /api/v1/projects/:id/jigs/sync`와 구조 jig 경로(ARCH-02 §1)는 그대로다.
 - 오류 코드(잠정): `JIG_INVALID`(형식·금지 파일·부품, 응답에 `issues[]`), `JIG_SIGNATURE`(서명), `JIG_VERSION_EXISTS`(같은 id·버전, 다른 내용, 409), `PARAM_FIXED`, `OUT_OF_RANGE`, `GATE_BLOCKED`(막은 점검 이름 목록 포함), `STALE_INPUT`(읽은 문서 버전이 현재와 다름), `LAYER_ROOT_MISSING`(저장된 Sync 레이어 표가 있는데 출력 레이어가 없음), `CONFIRMATION_REQUIRED`(확인 없는 가져오기·고정), `JIG_PANEL`(`panel.json`이 §5.1 검사에 걸림, `JIG_INVALID`의 `issues[]`로). 만들기: `BAKE_NOT_COMPUTED`(422, 항목을 내는 단계가 계산되지 않음), `BAKE_JOB_MISSING`(409, 그린 본문이 엔진에 없음 — 재시작 뒤 남은 만들기 요청), `NOT_APPLIED`(409), 바로 적용의 `BAKE_GUARDED`(409)·`BAKE_READ_FAILED`(409)·`BAKE_UNDO_UNAVAILABLE`·`BAKE_UNDO_NOT_LATEST`·`BAKE_UNDO_FAILED`(409); 요청 결과 코드 `BAKE_TEMPLATE_REJECTED`(워커의 컴파일·`CodePolicy` 거절)·`BAKE_FAILED`·`BAKE_RECEIPT_MISMATCH`(영수증의 키가 계획과 다름). 초안: `DRAFT_NOT_OPEN`(409, 고정·버린 초안에 쓰거나 그 만들기 대화에 턴을 보냄), `DRAFT_OUTSIDE`·`DRAFT_FORBIDDEN_FILE`·`DRAFT_PATH_INVALID`(422, 초안 밖 경로·금지 파일·잘못된 경로), `DRAFT_TEMPLATE_MISSING`(500). 상태 번호는 ARCH-01 §1.3 매핑(400·403·404·409·422)을 따르며 `src/server/jig-routes.ts`의 `jigStatuses`와 `src/server/make-routes.ts`의 `makeStatuses`가 정본이다.
