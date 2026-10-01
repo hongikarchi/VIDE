@@ -2,7 +2,7 @@
 id: ARCH-01
 title: VIDE 기술 구조와 구현 계약
 status: review
-version: 0.65
+version: 0.66
 updated: 2026-10-01
 owner: agent:codex
 related: [SPEC-00, SPEC-02, SPEC-03, SPEC-04, SPEC-09, PLAN, PLAN-20, PLAN-24, ADR-014, ADR-015, ADR-016, ADR-017, ADR-021, ADR-022, ADR-025, ADR-027, PLAN-25, ARCH-03]
@@ -396,11 +396,11 @@ AI 도구의 이름은 등록부 하나가 정한다. `src/ai/agent-connection.t
 | 대화 읽기(jig·구조·Sync) | 목적별 대화의 턴. 대상은 `conversation:<대화 ID>` | `jig_list`, `jig_state`, `jig_output`, `structure_summary`, `structure_checks`, `links_layers`, `sync_sample` |
 | 화면 | 대화 원장에 기록하는 턴(목적별 대화). 계산·쓰기 없음이라 계획 모드에도 남는다(`PLAN_MODE_TOOLS`) | `jig_open`(프로젝트 skill 목록의 jig를 사용자 화면에 열고 작업본을 이 대화에 묶음, `reuse: 'last' \| 'new'`, `user-only` jig는 거절), `ui_go`(화면 전환: 모델·jig·보고서·자료·만들기, 3D 투영 `plan`·`3d`). 원장 항목으로 남기고 화면이 따라 한다(RESEARCH-12 §6.3) |
 | jig 조작 | 그 대화에 jig 작업본이 열려 있을 때, 열린 작업본에만 | `jig_set`(되돌릴 수 있는 설정값 변경, 원장 기록), `jig_run`(계산 단계만) |
-| 할 일 | 대화의 턴: 목적별 대화의 턴과, 기본 대화의 호스트(모델링) 턴(`Execution.provider`가 호스트 도구 옆에 더함). 쓰기 둘은 대화 원장에 기록하는 턴에만(되돌리기에 원장이 필요), 계획 모드는 `agenda_list`만 | `agenda_list`, `agenda_add`, `agenda_set`(아래 「대시보드의 할 일」) |
+| 할 일 | 대화의 턴: 목적별 대화의 턴과, 대화에 속한 호스트(모델링) 턴(기본 대화, 대상이 여럿인 연계 턴 포함; `Execution.readAgent`가 호스트 도구 옆에 더함). 쓰기 둘은 대화 원장에 기록하는 턴에만(되돌리기에 원장이 필요), 계획 모드는 `agenda_list`만. 호스트 파일이 아니라 프로젝트에 대한 도구라 대상이 여럿인 턴에서도 `targetRef`를 생략할 수 있다(`projectScoped`, `src/server/agent-tools.ts`) | `agenda_list`, `agenda_add`, `agenda_set`(아래 「대시보드의 할 일」) |
 | 자료 | 그 프로젝트의 자료 DB가 있을 때, 읽기만 | `project_brief`, `project_search`, `project_issue`, `project_statement`, `project_checks` |
 | 첨부 | 요청이나 같은 대화의 앞선 요청에 보관 첨부가 있을 때(모든 모드, 계획 모드 포함). `Execution.provider`가 그 턴의 범위에 더하고, 도구 없는 턴이면 이 도구만 발급 | `attachment_read`(아래 「첨부 보관과 읽기 도구」) |
 | 파일 | 지시 묶음을 받는 모든 턴(모든 모드, 계획 모드 포함; 붙인 표만 읽는 jig AI 검토 턴은 제외). `Execution.provider`가 첨부와 같은 방식으로 더함 | `file_read`, `file_list`(아래 「프로젝트 폴더와 파일 읽기 도구」) |
-| 프로젝트 읽기(호스트 턴) | 모든 호스트 모델링 턴(Rhino·ZWCAD 바로 편집, 작업 사본, 연계 요청; 계획·자동). 대화 밖 요청은 프로젝트 기본 대화(`default-<프로젝트>`)의 범위. 호스트 도구와 같은 범위에 더하고(`HOST_TURN_PROJECT_TOOLS`·`hostTurnProjectHandlers`, `src/server/execution.ts`), 대상이 여럿인 연계 턴에서도 `targetRef`를 생략할 수 있다 | `links_layers`, `sync_sample`, 자료 DB가 있으면 `project_*` 다섯. 원장에 쓰는 도구·jig 조작·만들기 도구는 주지 않는다. 지시(`hostProjectNote`, `modeling.md`)는 열린 연결 파일은 `linkId`로 실시간으로 다루고, 닫힌 파일·`LINK_NOT_LIVE`인 파일은 이 저장 기록으로 읽으라고 알린다 |
+| 프로젝트 읽기(호스트 턴) | 모든 호스트 모델링 턴(Rhino·ZWCAD 바로 편집, 작업 사본, 연계 요청; 계획·자동). 대화 밖 요청은 프로젝트 기본 대화(`default-<프로젝트>`)의 범위. 호스트 도구와 같은 범위에 더하고(`HOST_TURN_PROJECT_TOOLS`·`hostTurnProjectHandlers`, `src/server/execution.ts`), 대상이 여럿인 연계 턴에서도 `targetRef`를 생략할 수 있다 | `links_layers`, `sync_sample`, 자료 DB가 있으면 `project_*` 다섯. jig 조작·만들기 도구는 주지 않는다. 원장에 쓰는 도구는 대화에 속한 턴의 할 일 쓰기(위 「할 일」 행)뿐이다. 지시(`hostProjectNote`, `modeling.md`)는 열린 연결 파일은 `linkId`로 실시간으로 다루고, 닫힌 파일·`LINK_NOT_LIVE`인 파일은 이 저장 기록으로 읽으라고 알린다 |
 | 만들기 | `jig-make` 대화이고 초안이 열려 있을 때. `targetRef`를 생략하면 그 대화의 초안 | `jig_validate`, `jig_test`, `jig_preview`, `jig_delete_file`(초안 파일 하나, `jig.json`·금지 파일 제외), `ask_user` + Claude 파일 도구 `Read`·`Edit`·`Write`·`Glob`·`Grep`(초안 폴더만, ARCH-03 §2.3) |
 
 대화 턴은 위 행 가운데 조건을 만족하는 것을 합쳐 받는다. 모델에 주는 지시는 모드별로 다르다(`instructionFor`: 호스트 도구·대화 도구·만들기). 옛 설계의 `discover`와 자산/SDK 조회 도구는 등록부에 없다. 보기 도구는 5차 물결에서 더했다. 호스트 작업 도구의 기본 실행 인수는 다음과 같다.

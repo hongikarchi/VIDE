@@ -538,7 +538,17 @@ export const HOST_TURN_PROJECT_TOOLS = [
   'project_statement',
   'project_checks',
 ] as const satisfies readonly ToolName[];
-const projectReads: ReadonlySet<string> = new Set(HOST_TURN_PROJECT_TOOLS);
+/**
+ * Tools that act on the project, never on one host file, so a scope of several targets (a linked
+ * turn) may leave targetRef out: the project reads above and the 할 일 a conversation's host turn
+ * gets (T-098; they stay out of HOST_TURN_PROJECT_TOOLS, which every host turn spreads).
+ */
+const projectScoped: ReadonlySet<string> = new Set([
+  ...HOST_TURN_PROJECT_TOOLS,
+  'agenda_list',
+  'agenda_add',
+  'agenda_set',
+]);
 /** The handlers of HOST_TURN_PROJECT_TOOLS a host turn spreads into its scope. */
 export type ProjectToolHandlers = Pick<Handlers, (typeof HOST_TURN_PROJECT_TOOLS)[number]>;
 /** Tools that change or occupy the target: one at a time, after the basis check. */
@@ -761,7 +771,7 @@ export class AgentTools {
     if (
       !args.targetRef &&
       run.targets.size !== 1 &&
-      !projectReads.has(name) &&
+      !projectScoped.has(name) &&
       'targetRef' in definitions[name].schema.shape
     )
       return error('TARGET_MISMATCH');

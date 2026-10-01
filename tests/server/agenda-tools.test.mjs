@@ -10,7 +10,12 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { Store } from '../../src/core/store.ts';
 import { Agenda } from '../../src/core/agenda.ts';
-import { conversationHandlers, PLAN_MODE_TOOLS } from '../../src/server/agent-tools.ts';
+import {
+  AgentTools,
+  agendaHandlers,
+  conversationHandlers,
+  PLAN_MODE_TOOLS,
+} from '../../src/server/agent-tools.ts';
 import { agentConnection, agentToolNames, instructionFor } from '../../src/ai/agent-connection.ts';
 import { startServer } from '../../src/server/server.ts';
 
@@ -153,6 +158,42 @@ test('[되돌리기] of an add leaves an item the user changed or finished since
   );
   assert.deepEqual([both.reverted, both.skipped], [2, 0]);
   assert.ok(!agenda.list(project.id).some((item) => item.id === made[0].id));
+});
+
+// A linked conversation turn targets several host files (runLinked); the 할 일 belong to the
+// project, not to one of them, so the agenda tools need no targetRef there (like the project reads).
+test('a linked (several-target) host turn adds and lists 할 일 without naming a targetRef', async (t) => {
+  const store = await storeOf(t);
+  const project = store.createProject('연계');
+  const tools = new AgentTools();
+  const scope = tools.issue({
+    targetRef: ['rhino:aaaa', 'zwcad:bbbb'],
+    handlers: { query: async () => ({}) },
+    isCurrent: () => true,
+  });
+  t.after(() => scope.revoke());
+  const ledger = [];
+  tools.extend(
+    scope.token,
+    agendaHandlers({
+      projectId: project.id,
+      requestId: 'r1',
+      agenda: new Agenda(store),
+      ledger: (item) => {
+        ledger.push(item);
+        return { id: `l${ledger.length}` };
+      },
+    }),
+  );
+  const answer = async (name, args) =>
+    JSON.parse((await tools.call(scope.token, name, args)).content[0].text);
+  const added = await answer('agenda_add', { items: [{ text: '구조 회의', time: '15:00' }] });
+  assert.deepEqual(
+    added.added.map((item) => item.text),
+    ['구조 회의'],
+  );
+  assert.equal((await answer('agenda_list', {})).total, 1);
+  assert.equal(ledger.length, 1);
 });
 
 // The 기본 대화 runs as a host (modeling) turn: it gets the agenda tools too, beside the host's.
