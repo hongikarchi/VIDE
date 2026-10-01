@@ -17,6 +17,8 @@ namespace Vide.Desktop
         public string Url { get; private set; }
         /// <summary>True when another engine already served this data folder and we only attached.</summary>
         public bool Attached { get; private set; }
+        /// <summary>When the current engine process was started (UTC).</summary>
+        public DateTime StartedAt { get; private set; }
         public event Action<int> Exited;
 
         public Task<string> Start()
@@ -40,6 +42,7 @@ namespace Vide.Desktop
             start.EnvironmentVariables["VIDE_DESKTOP"] = "1";
             start.EnvironmentVariables["VIDE_DESKTOP_VERSION"] = Paths.Version;
             var started = DateTime.UtcNow;
+            StartedAt = started;
             process = new Process { StartInfo = start, EnableRaisingEvents = true };
             process.OutputDataReceived += (s, e) =>
             {
@@ -71,12 +74,40 @@ namespace Vide.Desktop
                     else ready.TrySetException(new EngineException(error ?? "STARTUP_FAILED"));
                     return;
                 }
+                // Every exit with its code: a native crash (0xC0000005…), a kill (1, 0xFFFFFFFF)
+                // and a console event (0xC000013A) leave no other trace (RESEARCH-13 §1).
+                AppendExit(own, code, started, stopping);
                 if (!stopping && ReferenceEquals(own, process)) Exited?.Invoke(code);
             };
             process.Start();
             process.BeginOutputReadLine();
             process.BeginErrorReadLine();
             return ready.Task;
+        }
+
+        /// <summary>Hex form of an exit code as Windows reports it (0xC0000005 for an access violation).</summary>
+        public static string Hex(int code) => "0x" + code.ToString("X8");
+
+        private static void AppendExit(Process own, int code, DateTime started, bool asked)
+        {
+            try
+            {
+                int pid = -1;
+                try { pid = own.Id; } catch { /* Gone before we asked. */ }
+                string line = "{\"at\":\"" + DateTime.UtcNow.ToString("o") + "\",\"event\":\"engine-exit\",\"pid\":" + pid
+                    + ",\"code\":" + code + ",\"hex\":\"" + Hex(code) + "\",\"uptimeSec\":"
+                    + (int)(DateTime.UtcNow - started).TotalSeconds + ",\"asked\":" + (asked ? "true" : "false") + "}";
+                string folder = Path.Combine(Paths.Data, "logs");
+                lock (ErrorLock)
+                {
+                    Directory.CreateDirectory(folder);
+                    File.AppendAllText(Path.Combine(folder, "engine-exits.jsonl"), line + Environment.NewLine);
+                }
+            }
+            catch
+            {
+                // Logging never stops the program.
+            }
         }
 
         private static readonly object ErrorLock = new object();

@@ -38,6 +38,7 @@ import {
   StructureStore,
 } from '../jigs/structure/index.ts';
 import { AUTO_MODELS, ModelRouter, isAutoModel } from '../ai/model-router.ts';
+import { startHealthLog } from './health.ts';
 import { Diagnostics } from './diagnostics.ts';
 import {
   knowledgeEvidence,
@@ -959,7 +960,18 @@ export async function startServer({
         if (!liveSync) throw new DomainError('RESYNC_REQUIRED');
         const began = performance.now();
         const synced = await liveSync.run(live[1], await body(request));
-        diagnostics.write('live-sync', { ms: Math.round(performance.now() - began) });
+        diagnostics.write('live-sync', {
+          ms: Math.round(performance.now() - began),
+          ...('delta' in synced
+            ? {
+                changed: synced.delta.objects.length,
+                removed: synced.delta.removed.length,
+                created: synced.created,
+              }
+            : 'retry' in synced
+              ? { retry: synced.retry }
+              : { resync: true }),
+        });
         send(200, synced);
         return;
       }
@@ -2206,6 +2218,7 @@ export async function startServer({
     pid: process.pid,
     version: appVersion(),
   });
+  const stopHealth = filename === ':memory:' ? () => {} : startHealthLog(diagnostics);
   return {
     origin,
     diagnostics,
@@ -2216,6 +2229,7 @@ export async function startServer({
     close: async () => {
       stopping = true;
       diagnostics.write('engine-stop');
+      stopHealth();
       await remoteAccess.close();
       await accountLogin.close();
       agentTools.close();

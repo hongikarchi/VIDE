@@ -1,0 +1,427 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="description" content="Sync 저장 구조와 작동 안정성 (T-082~T-087)"><meta name="generator" content="tools/docs/build.mjs — generated from docs/plans/PLAN-27-sync-storage-stability.md; do not edit"><title>VIDE · Sync 저장 구조와 작동 안정성 — 진단·복구, 객체 단위 저장, 엔진 주관 Sync</title><style>
+:root{--ink:#292c2d;--muted:#626b6e;--line:#e1e3e1;--soft:#f5f5f1;--coral:#d97660;--paper:#fff;--font:"Pretendard","Noto Sans KR","Malgun Gothic",Arial,sans-serif}
+*{box-sizing:border-box}html{scroll-behavior:smooth;scroll-padding-top:92px}body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--font);letter-spacing:-.025em}a{color:inherit;text-underline-offset:4px}button,input,textarea,select{font:inherit;color:inherit}button{cursor:pointer;border:1px solid var(--line);border-radius:4px;background:var(--paper);padding:10px 15px;line-height:1.3}button:hover{background:var(--soft)}button:disabled{cursor:default;opacity:.6}button.primary{background:var(--ink);color:#fff;border-color:var(--ink)}button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible{outline:3px solid var(--coral);outline-offset:3px}textarea{resize:vertical}::selection{background:#f2d7ce}[hidden]{display:none!important}
+.skip{position:fixed;top:-80px;left:20px;z-index:100;background:white;padding:12px}.skip:focus{top:10px}
+.topbar{height:68px;position:sticky;top:0;z-index:30;border-bottom:1px solid var(--line);background:#fffffff7;display:flex;align-items:center;justify-content:space-between;gap:24px;padding:0 max(24px,calc((100vw - 1450px)/2))}.brand{text-decoration:none;display:flex;align-items:center;gap:15px;white-space:nowrap}.brand b{font-size:29px;letter-spacing:-.08em}.brand span{border-left:1px solid var(--line);padding-left:15px;font-size:11px;letter-spacing:.08em}.doc-tabs{display:flex;height:100%;gap:25px;align-items:stretch;min-width:0;overflow-x:auto}.doc-tab{flex-shrink:0}.doc-tab{display:flex;align-items:center;position:relative;text-decoration:none;font-size:13px;color:var(--muted);white-space:nowrap}.doc-tab.active{color:var(--ink);font-weight:650}.doc-tab.active:after{content:"";position:absolute;bottom:0;left:0;right:0;height:3px;background:var(--coral)}.top-actions{display:flex;gap:8px}.top-actions button{padding:8px 11px;font-size:12px;white-space:nowrap}
+.layout{max-width:1450px;margin:auto;padding:0 30px;display:grid;grid-template-columns:218px minmax(0,1fr);gap:55px}.toc-shell{align-self:start;position:sticky;top:99px;padding-top:15px;max-height:calc(100vh - 120px)}.eyebrow{font-size:10px;line-height:1.6;letter-spacing:.16em;font-weight:500;color:var(--muted)}.toc-title{display:flex;justify-content:space-between;align-items:center;margin-bottom:15px}.toc-title strong{font-size:12px;font-weight:500}.toc-title span{font-size:10px;color:var(--muted)}#toc-toggle{display:none}.toc-search{width:100%;padding:10px 12px;border:1px solid var(--line);background:var(--paper);border-radius:4px;font-size:12px}.toc-hint{font-size:10px;color:var(--muted);margin:8px 0 15px;line-height:1.6}.toc-links{max-height:calc(100vh - 323px);overflow-y:auto;padding:0 8px 8px 0}.toc-links a{display:block;padding:8px 10px;margin:2px 0;border-left:2px solid transparent;border-radius:0 3px 3px 0;text-decoration:none;font-size:12px;line-height:1.65;color:var(--muted);word-break:keep-all;overflow-wrap:anywhere}.toc-links a:hover{background:var(--soft)}.toc-links a.active{border-color:var(--coral);background:var(--soft);color:var(--ink)}.toc-next{border-top:1px solid var(--line);padding-top:13px;margin-top:14px;font-size:11px;color:var(--muted);line-height:1.7}.toc-next b{font-weight:500;color:var(--ink)}
+main{min-width:0;max-width:1040px;padding-bottom:70px}.doc-hero{padding:55px 0 32px;border-bottom:1px solid var(--line)}.hero-label{display:flex;justify-content:space-between;gap:20px;align-items:center}.doc-hero h1{font-size:clamp(32px,3.15vw,48px);line-height:1.22;letter-spacing:-.065em;font-weight:550;margin:20px 0 18px;max-width:900px;word-break:keep-all;overflow-wrap:anywhere}.doc-description{font-size:14px;color:var(--muted);line-height:1.8;margin:0}.pill{display:inline-block;font-size:10px;letter-spacing:.01em;padding:5px 9px;border:1px solid var(--line);border-radius:3px;white-space:nowrap}.hero-meta{margin-top:22px;font-size:12px;color:var(--muted);line-height:1.9}.hero-meta p{font-size:12px;line-height:1.9;margin:8px 0}.hero-meta strong{font-weight:600}.hero-meta blockquote{margin:25px 0 0;padding:20px 22px;background:var(--soft);border-left:3px solid var(--coral);color:var(--ink)}.hero-meta blockquote p{word-break:keep-all;overflow-wrap:anywhere;font-size:18px;line-height:1.8;letter-spacing:-.03em;margin:0}.doc-section{padding:44px 0;border-bottom:1px solid var(--line);scroll-margin-top:93px;min-width:0}.doc-section h2{font-size:28px;font-weight:550;letter-spacing:-.055em;line-height:1.4;margin:0 0 24px;word-break:keep-all;overflow-wrap:anywhere}.section-num{font-weight:400;color:var(--coral);margin-right:10px;font-size:.75em;letter-spacing:-.02em}.doc-section h3{font-size:19px;font-weight:600;line-height:1.5;margin:32px 0 14px;letter-spacing:-.04em}.doc-section h4{font-size:16px;line-height:1.5;margin:25px 0 12px}.doc-section p{font-size:15px;line-height:1.92;margin:13px 0;word-break:keep-all;overflow-wrap:anywhere}.doc-section strong{font-weight:650}.doc-section ul,.doc-section ol{padding-left:22px;font-size:15px;line-height:1.85}.doc-section li{margin:7px 0}.doc-section blockquote{border-left:3px solid var(--coral);background:var(--soft);margin:23px 0;padding:15px 22px}.doc-section blockquote p{margin:0;font-size:16px;line-height:1.85}.doc-section hr{border:0;border-top:1px solid var(--line);margin:28px 0}.doc-section code:not(pre code){font-family:Consolas,"Liberation Mono",monospace;font-size:.91em;background:var(--soft);padding:2px 5px;border-radius:3px;overflow-wrap:anywhere}
+.table-scroll{overflow-x:auto;overscroll-behavior-x:contain;margin:22px 0;border-top:1px solid var(--ink);border-bottom:1px solid var(--line);width:100%}table{border-collapse:collapse;width:100%;font-size:12.5px;line-height:1.75;table-layout:auto}th,td{padding:13px 14px;vertical-align:top;text-align:left;border-bottom:1px solid var(--line);word-break:keep-all;overflow-wrap:anywhere}th{background:var(--soft);font-weight:600;font-size:11.5px}tr:last-child td{border-bottom:0}td:first-child{font-weight:550;min-width:125px}td{min-width:145px}.table-scroll table:has(th:nth-child(2)){min-width:410px}.table-scroll table:has(th:nth-child(3)){min-width:585px}.table-scroll table:has(th:nth-child(4)){min-width:710px}.table-scroll table:has(th:nth-child(5)){min-width:840px}.code-frame{position:relative;margin:23px 0;border:1px solid var(--line);border-radius:4px;overflow:hidden;background:#f8f8f5}.code-frame pre{margin:0;padding:49px 20px 19px;overflow:auto;max-height:680px;font-family:Consolas,"Liberation Mono",monospace;font-size:12px;line-height:1.9;white-space:pre;letter-spacing:-.01em}.copy-code{position:absolute;top:9px;right:10px;font-size:10px;padding:5px 9px;background:#fff}.code-frame .code-label{position:absolute;left:18px;top:15px;font-size:9px;color:var(--muted);letter-spacing:.12em}.doc-footer{margin-top:30px;display:flex;justify-content:space-between;gap:24px;font-size:10px;color:var(--muted);line-height:1.8}
+.review-workspace{background:var(--soft);border:1px solid var(--line);padding:27px;margin:30px 0 5px;border-radius:4px}.workspace-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:15px}.workspace-heading h3{margin:6px 0 10px}.workspace-heading p{font-size:12px;margin:0 0 20px}.checks{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}.check-group{min-width:0;margin:0;padding:14px 15px;border:1px solid var(--line);background:#fff;border-radius:3px}.check-group legend{padding:0 7px;font-size:12px;font-weight:600}.check-line{display:flex;gap:9px;align-items:flex-start;font-size:12px;line-height:1.7;margin:9px 0;cursor:pointer}.check-line input{accent-color:var(--coral);margin:3px 0 0;flex:none;width:15px;height:15px}.stage-field{display:flex;align-items:center;gap:15px;font-size:12px;margin:26px 0 20px}.stage-field select{background:#fff;border:1px solid var(--line);padding:9px 12px;max-width:100%;font-size:12px;border-radius:3px}.note-grid{display:grid;grid-template-columns:1fr 1fr;gap:18px}.note-field{display:block;min-width:0}.note-field>span{display:block;margin-bottom:8px;font-size:12px}.note-field textarea{width:100%;min-height:96px;border:1px solid var(--line);border-radius:3px;padding:12px;background:#fff;font-size:13px;line-height:1.8}.note-field:last-child{grid-column:1/-1}.note-actions{display:flex;gap:9px;flex-wrap:wrap;margin-top:20px}.note-actions button{font-size:12px}.review-workspace p.save-status{font-size:11px;margin:15px 0 5px;color:var(--muted)}.review-workspace p.micro{font-size:10px;line-height:1.8;color:var(--muted);margin:0}.toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);background:var(--ink);color:white;padding:12px 18px;border-radius:4px;font-size:12px;z-index:60;max-width:90vw;box-shadow:0 5px 24px #0002;line-height:1.6}.empty-nav{font-size:12px;color:var(--muted);padding:15px 5px;line-height:1.7}
+@media(min-width:1600px){.layout{gap:65px}}
+@media(max-width:1100px){.layout{grid-template-columns:188px minmax(0,1fr);gap:30px;padding:0 24px}.topbar{gap:18px}.brand span{display:none}.doc-hero h1{font-size:38px}.doc-section p{font-size:14px}.doc-section h2{font-size:26px}.doc-tabs{gap:23px}.review-workspace{padding:22px}.checks{grid-template-columns:1fr}}
+@media(max-width:820px){html{scroll-padding-top:84px}.topbar{height:60px;padding:0 18px;gap:14px}.brand b{font-size:27px}.doc-tabs{gap:18px}.doc-tab{font-size:12px}.top-actions{gap:6px}.top-actions button{font-size:10px;padding:7px 9px}.layout{display:block;padding:0 22px}.toc-shell{position:relative;top:auto;max-height:none;padding-top:18px;border-bottom:1px solid var(--line)}.toc-title{margin:0;padding-bottom:14px}.toc-title strong{font-size:11px}.toc-title>span{display:none}#toc-toggle{display:block;font-size:11px;padding:7px 11px}.toc-body{display:none}.toc-shell.open .toc-body{display:block}.toc-links{max-height:240px;margin-bottom:12px}.toc-next{display:none}.doc-hero{padding:34px 0 27px}.doc-hero h1{font-size:35px;max-width:600px}.hero-label{align-items:flex-start;gap:10px;flex-wrap:wrap}.hero-label .pill{font-size:9px}.doc-section{padding:34px 0;scroll-margin-top:80px}.doc-section h2{font-size:25px;line-height:1.45}.doc-section p{font-size:14px;line-height:1.95}.hero-meta blockquote p{font-size:16px}.note-grid{grid-template-columns:1fr}.stage-field{flex-wrap:wrap}.note-field:last-child{grid-column:auto}.workspace-heading{display:block}.workspace-heading .pill{margin-bottom:17px}.doc-footer{flex-direction:column;gap:5px}}
+@media(max-width:480px){.topbar{gap:10px;padding:0 16px}.doc-tabs{gap:15px}.top-actions button#source-download{display:none}.brand b{font-size:25px}.doc-hero h1{font-size:31px;line-height:1.3}.doc-hero .eyebrow{font-size:9px}.doc-description{font-size:12px}.hero-meta{font-size:11px}.hero-meta p{font-size:11px;line-height:1.9}.hero-meta blockquote{padding:16px 16px}.hero-meta blockquote p{font-size:15px}.doc-section h2{font-size:23px}.doc-section h3{font-size:18px}.doc-section p{font-size:14px}.table-scroll{margin:20px 0}td,th{padding:11px 12px}.code-frame pre{font-size:11px;padding-left:15px}.review-workspace{padding:18px}.note-actions{gap:8px}.note-actions button{padding:9px 10px;font-size:11px}.check-line{font-size:12px}.top-actions button{padding:7px 9px}}
+@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}*{transition:none!important}}
+@media print{@page{margin:15mm}.topbar,.toc-shell,.skip,.copy-code,.toast,.review-workspace,.doc-footer{display:none!important}.layout{display:block;padding:0;max-width:none}main{max-width:none;padding:0}.doc-hero{padding:0 0 18px}.doc-hero h1{font-size:27px}.doc-section{padding:22px 0;break-inside:auto}.doc-section h2{font-size:21px;break-after:avoid}.doc-section h3{font-size:16px;break-after:avoid}.doc-section p{font-size:11px;line-height:1.75}.table-scroll{overflow:visible;break-inside:auto}table{min-width:0!important;font-size:9px;table-layout:fixed}td,th{min-width:0;font-size:9px;word-break:normal;padding:7px}tr{break-inside:avoid}.code-frame pre{white-space:pre-wrap;max-height:none;font-size:9px;padding:16px;overflow:visible;word-break:break-word}.code-label{display:none}.hero-meta blockquote p{font-size:14px}}
+
+/* ---- 작성자별 첨삭 표기 (AI.md §5) -------------------------------------
+   ins  = 추가·교체 제안 (초록)   del = 삭제·교체 대상 (빨강 취소선)
+   blockquote.review = 검토 코멘트 (파란 상자)   .review-appendix = 검토 요약 부록
+   body.review-original  → 원문만 (제안·코멘트 숨김)
+   body.review-accepted  → 인라인 제안 미리보기 (코멘트 대안은 적용하지 않음)
+------------------------------------------------------------------------- */
+ins{background:#dff3e4;color:#17512a;text-decoration:none;border-bottom:2px solid #4f9d63;padding:0 3px;border-radius:2px}
+del{background:#fbe4e0;color:#8f3324;text-decoration:line-through;text-decoration-color:#c9573f;text-decoration-thickness:1.5px;padding:0 3px;border-radius:2px}
+h1 ins,h1 del,h2 ins,h2 del,h3 ins,h3 del{border-bottom-width:3px}
+blockquote.review{margin:14px 0 24px;padding:12px 16px 12px 18px;border:0;border-left:4px solid #3b6fd6;background:#eef3fc;border-radius:0 6px 6px 0;font-size:14px;line-height:1.75;color:#24303f}
+blockquote.review p{margin:0}
+blockquote.review p+p{margin-top:9px;padding-top:9px;border-top:1px dashed #c3d2ef}
+.review-label{display:inline-flex;gap:6px;align-items:center;margin-right:8px;font-weight:600;font-size:11.5px;vertical-align:1px;white-space:nowrap}
+.review-agent{color:#3b6fd6;text-transform:uppercase;letter-spacing:.09em}
+.review-id{background:#3b6fd6;color:#fff;border-radius:3px;padding:1px 7px;font-weight:600}
+.review-sev{border-radius:3px;padding:1px 7px;font-weight:600}
+.review-sev[data-sev="높음"]{background:#c9573f;color:#fff}
+.review-sev[data-sev="중간"]{background:#f0c14b;color:#3a2a00}
+.review-sev[data-sev="낮음"]{background:#d9dfe2;color:#3d484d}
+.doc-section.review-appendix{margin-top:60px;padding-top:28px;border-top:3px solid #3b6fd6}
+.doc-section.review-appendix h2 .section-num{color:#3b6fd6}
+.review-pill{border-color:#3b6fd6;color:#3b6fd6;text-decoration:none}
+.review-pill:hover{background:#eef3fc}
+.review-legend{margin:12px 0 0;font-size:12px;color:var(--muted);line-height:1.8}
+.review-legend span{margin-right:12px;white-space:nowrap}
+.review-select{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);white-space:nowrap}
+.review-select select{padding:7px 9px;border:1px solid var(--line);border-radius:4px;background:var(--paper);font-size:12px}
+blockquote.review[data-review-agent="codex"]{border-left-color:#7250a0;background:#f4effa;color:#352b46}
+[data-review-agent="codex"] .review-agent{color:#7250a0}
+[data-review-agent="codex"] .review-id{background:#7250a0}
+.review-pill[data-review-agent="codex"]{border-color:#7250a0;color:#7250a0}
+.review-pill[data-review-agent="codex"]:hover{background:#f4effa}
+.review-appendix[data-review-agent="codex"]{border-top-color:#7250a0}
+.review-appendix[data-review-agent="codex"] h2 .section-num{color:#7250a0}
+.review-label[id]{scroll-margin-top:110px}
+.review-label[id]:target{outline:2px solid currentColor;outline-offset:4px}
+.review-legend p{margin:5px 0}
+.review-select select:disabled{opacity:.6}
+.top-actions{flex-wrap:wrap}
+[hidden]{display:none!important}
+@media(max-width:1100px){.topbar{height:auto;min-height:68px;flex-wrap:wrap;padding-top:8px;padding-bottom:8px;gap:8px 18px}.doc-tabs{height:34px;flex:1;justify-content:flex-end}.top-actions{flex-basis:100%;justify-content:flex-end}.review-select select{max-width:185px}}
+@media(min-width:821px) and (max-width:1100px){.toc-shell{top:135px;max-height:calc(100vh - 155px)}}
+.toc-links a[data-reviews]{display:flex;justify-content:space-between;gap:8px;align-items:center}
+.toc-links a[data-reviews]::after{content:attr(data-reviews);flex:none;min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:#3b6fd6;color:#fff;font-size:10px;line-height:18px;text-align:center}
+body.review-original ins,body.review-original blockquote.review,body.review-original .review-appendix,body.review-original .review-legend{display:none}
+body.review-original del{background:none;color:inherit;text-decoration:none;padding:0}
+body.review-original .toc-links a[data-reviews]::after{display:none}
+body.review-accepted del,body.review-accepted blockquote.review,body.review-accepted .review-appendix,body.review-accepted .review-legend{display:none}
+body.review-accepted ins{background:none;color:inherit;border:0;padding:0}
+body.review-accepted .toc-links a[data-reviews]::after{display:none}
+@media print{blockquote.review{break-inside:avoid;background:#eef3fc!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}ins,del{-webkit-print-color-adjust:exact;print-color-adjust:exact}.review-select{display:none}}
+</style></head><body>
+<!-- GENERATED FILE — source: docs/plans/PLAN-27-sync-storage-stability.md — run: npm --prefix tools/docs run build -->
+<a class="skip" href="#reading-main">본문으로 이동</a>
+<header class="topbar"><a class="brand" href="../../index.html" aria-label="VIDE 문서 모음"><b>V.</b><span>VIDE</span></a><nav class="doc-tabs" aria-label="문서 선택"><a class="doc-tab" href="../PRD.html">PRD</a><a class="doc-tab" href="../specs/README.html">SPEC</a><a class="doc-tab" href="../../Design.html">Design</a><a class="doc-tab" href="../architecture/ARCH-01-system.html">기술 설계</a><a class="doc-tab" href="PLAN.html">PLAN</a><a class="doc-tab" href="../../DEVELOPMENT_GUIDE.html">개발 가이드</a><a class="doc-tab" href="../../AI.html">AI 규약</a></nav><div class="top-actions"><button id="source-download" title="현재 문서의 Markdown 원문 저장">원문 ↓</button><button id="print-doc" title="현재 문서 인쇄">인쇄</button></div></header>
+<div class="layout"><aside class="toc-shell" id="toc-shell" aria-label="현재 문서의 목차"><div class="toc-title"><strong>CONTENTS</strong><span id="toc-count"></span><button id="toc-toggle" aria-expanded="false" aria-controls="toc-body">목차 열기</button></div><div class="toc-body" id="toc-body"><input class="toc-search" id="toc-search" type="search" placeholder="장 제목으로 찾기" aria-label="현재 문서 목차 검색"><p class="toc-hint" id="nav-hint" role="status">장 제목으로 찾아갑니다.</p><nav class="toc-links" id="toc-links" aria-label="본문 장 이동"></nav><div class="toc-next">다음 작성할 문서<br><b>다음 작업 · PLAN §6.5</b><br>현재 단계와 작업별 계획을 확인한 뒤 해당 범위에서 재개</div></div></aside><main id="reading-main" tabindex="-1"><article id="plan-27-sync-storage-stability" class="document"><header class="doc-hero"><div class="hero-label"><span class="eyebrow">PLAN</span><span><span class="pill">DRAFT · v0.1</span><span class="pill">9 CHAPTERS</span></span></div><h1 tabindex="-1">Sync 저장 구조와 작동 안정성 (T-082~T-087)</h1><div class="hero-meta">
+<p>근거: <a href="../research/RESEARCH-13-stability-audit.html">RESEARCH-13</a>의 점검 결과와 2026-10-01 사용자 결정. 결정 내용은 다음과 같다.</p>
+<ol>
+<li>Sync 저장은 바뀐 것만 반영하는 git 방식으로 바꾼다.</li>
+<li>Sync를 주관하는 곳은 엔진 한 곳으로 하고, 화면 갱신 방식도 바꾼다.</li>
+<li>상한은 작업에 불편이 없을 만큼 넉넉하게 걸고, 문제가 생기면 고친다.</li>
+</ol>
+<p>엔진 언어는 TypeScript를 유지한다. 계산이 무거운 부분만 측정한 뒤 네이티브 모듈로 엔진 밖(작업 스레드·자식 프로세스)에서 돌린다(§7).</p>
+</div></header><section class="doc-section" id="plan-27-sync-storage-stability-section-x0"><h2><span aria-hidden="true" class="section-num">00 /</span> 0단계 — 진단·복구 (T-082)</h2>
+<p>기존 동작을 바꾸지 않는다.</p>
+<div aria-label="PLAN 표 1" class="table-scroll" role="region" tabindex="0"><table>
+<thead>
+<tr>
+<th>변경</th>
+<th>위치</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>엔진이 끝나면 종료 코드(16진)·가동 시간·재시작 횟수를 <code>logs/engine-exits.jsonl</code>에 남기고, 안내 문구에도 코드를 보인다</td>
+<td><code>src/desktop/shell/Engine.cs</code>, <code>ShellContext.cs</code></td>
+</tr>
+<tr>
+<td>엔진 재시작 횟수를 10분 정상 가동 뒤 초기화한다</td>
+<td><code>ShellContext.cs</code></td>
+</tr>
+<tr>
+<td>업데이트 자동 적용이 실행 중인 VIDE·엔진을 죽이지 않는다. 받은 업데이트는 트레이 메뉴나 종료 때 적용한다</td>
+<td><code>Program.cs</code></td>
+</tr>
+<tr>
+<td>WebView2 화면 프로세스가 죽거나 응답이 없으면 다시 불러온다(1분에 3회까지). 브라우저 프로세스가 죽으면 WebView를 새로 만든다</td>
+<td><code>ShellForm.cs</code></td>
+</tr>
+<tr>
+<td>엔진이 1분마다 메모리(rss·heap·external)와 이벤트 루프 지연(최대·p99)을 기록하고, 정상 종료가 아닌 <code>exit</code>도 기록한다</td>
+<td><code>src/server/main.ts</code>, <code>diagnostics.ts</code></td>
+</tr>
+<tr>
+<td>1초를 넘긴 Sync·Live Sync·요청 목록 처리를 크기와 함께 기록한다</td>
+<td><code>src/server/server.ts</code>, <code>live-sync.ts</code></td>
+</tr>
+<tr>
+<td>자식 프로세스(cloudflared, jig 실행기, 로그인)의 <code>error</code>·stdin <code>error</code>를 처리하고, 처리 안 된 rejection은 기록만 하고 엔진을 끝내지 않는다</td>
+<td><code>remote-access.ts</code>, <code>src/jigs/runtime/child-runner.ts</code>, <code>src/ai/account-login.ts</code>, <code>main.ts</code></td>
+</tr>
+</tbody>
+</table></div>
+<p><strong>검증:</strong></p>
+<ul>
+<li>셸 빌드</li>
+<li>엔진 단위 시험</li>
+<li>자식 프로세스 실행 실패·죽은 자식에 쓰기 재현 스크립트(RESEARCH-13 §5)로 엔진이 살아 있는지 확인</li>
+<li>화면 프로세스 강제 종료 뒤 다시 불러오는지 확인</li>
+<li>종료 코드 기록 확인</li>
+</ul>
+<p>Rhino 패널의 같은 복구(플러그인 재빌드·Rhino 재시작 필요)는 6단계에 둔다.</p>
+<p><strong>결과(2026-10-01) — 구현·자동 검증, 설치본 확인 남음:</strong></p>
+<ul>
+<li>셸 수정 내용:
+<ul>
+<li>엔진이 끝날 때마다 <code>logs/engine-exits.jsonl</code>에 <code>{pid, code, hex, uptimeSec, asked}</code>를 남기고, 안내 문구에 16진 코드를 보인다.</li>
+<li>재시작 횟수는 10분 넘게 돈 엔진이 끝나면 초기화한다.</li>
+<li>업데이트는 VIDE가 이미 실행 중일 때 시작 시 자동 적용하지 않는다(<code>SetAutoApplyOnStartup(!running)</code>).</li>
+<li>WebView2 <code>ProcessFailed</code> 처리: 화면 프로세스가 끝나거나 응답이 없으면 다시 불러온다(1분 3회). 브라우저 프로세스가 끝나면 WebView를 새로 만들어 마지막 페이지로 간다.</li>
+<li><code>npm run desktop:build</code> 오류 0개.</li>
+</ul>
+</li>
+<li>엔진 수정 내용:
+<ul>
+<li><code>src/server/health.ts</code>가 1분마다 <code>health</code>를 기록한다.</li>
+<li><code>live-sync</code> 기록에 바뀐·지운 객체 수와 사본 생성 여부를 더했다.</li>
+<li><code>unhandledRejection</code>은 <code>engine-unhandled</code>로 기록하고 엔진을 끝내지 않는다.</li>
+<li><code>exit</code>도 기록한다.</li>
+<li>자식 프로세스 <code>error</code> 처리: jig 실행기(단계 실패로 끝남, 로그 500줄 제한), cloudflared, 로그인 stdin, 탐색기.</li>
+</ul>
+</li>
+<li>시험:
+<ul>
+<li>새로 추가: <code>tests/core/jig-runner.test.mjs</code>(실행 프로그램이 없을 때), <code>tests/server/remote-tunnel-error.test.mjs</code>. 둘 다 이전 코드에서는 실패하고 수정 뒤 통과한다.</li>
+<li>새로 추가: <code>tests/server/health.test.mjs</code>.</li>
+<li>단위·서버 시험 729건 통과.</li>
+</ul>
+</li>
+<li>남음:
+<ul>
+<li>셸의 화면 복구는 실제 창에서 확인하지 않았다. 시험용 셸은 설치본과 같은 단일 실행 이름을 써서 사용자 VIDE가 켜져 있으면 실행할 수 없다.</li>
+<li>설치본 릴리스: 다른 세션의 미커밋 화면 변경이 작업 트리에 있어 이번 커밋만으로 빌드해야 한다.</li>
+</ul>
+</li>
+</ul>
+</section><section class="doc-section" id="plan-27-sync-storage-stability-section-x1"><h2><span aria-hidden="true" class="section-num">01 /</span> 1단계 — 객체 단위 저장 (T-083)</h2>
+<p>먼저 ARCH-01에 저장 계약을 쓰고 사용자 확인을 받는다.</p>
+<ul>
+<li><strong>객체 판:</strong> 객체 하나의 표시 형상과 속성이다. 내용 지문으로 이름 붙이고 한 번만 저장한다.
+<ul>
+<li>형상은 바이너리로 둔다. 객체마다 기준점은 float64로 두고, 정점은 기준점과의 차이를 float32로 둔다. 지금의 VGT1 전송 형식을 저장에도 쓴다.</li>
+<li>같은 모델(객체 1만 개, 정점 100만 개)로 잰 값: JSON 64.8 MB → 18.2 MB, 만들기 254 ms → 13 ms, 읽기 105 ms → 1 ms, 오차 0.001 mm.</li>
+</ul>
+</li>
+<li><strong>Sync 목록:</strong> 그 시점의 (객체 ID → 객체 판) 목록과 부모 Sync, 문서 변경 번호를 가진다.</li>
+<li><strong>전체 Sync:</strong> 바뀌지 않은 객체는 기존 판을 가리킨다.</li>
+<li><strong>Live Sync:</strong> 바뀐 객체 판만 쓰고 목록의 그 줄만 바꾼다. 다른 요청이 참조 중인 Sync면 목록만 복사한 새 Sync를 만든다.</li>
+<li><strong>기존 결과 이전과 하위 호환:</strong>
+<ul>
+<li>기존 <code>workspace_requests.result</code>의 형상은 한 번 옮기고 VACUUM한다(옮기기 전 백업 1개).</li>
+<li>작업 이력·고정·비교·검토본·웹 게시가 옛 Sync를 계속 열어야 한다.</li>
+<li>요청 목록과 한 요청 조회는 지금 응답 모양을 유지한다. 형상은 바이너리로 준다.</li>
+</ul>
+</li>
+</ul>
+<p><strong>검증:</strong></p>
+<ul>
+<li>이전 전후 같은 요청의 객체·형상 동일성(지문)</li>
+<li>사용자 DB 사본으로 이전 시간과 크기 확인</li>
+<li>위 기능들의 기존 시험</li>
+<li>Live Sync 한 번의 엔진 처리 시간(목표: 객체 수와 무관하게 100 ms 안팎)</li>
+</ul>
+</section><section class="doc-section" id="plan-27-sync-storage-stability-section-x2"><h2><span aria-hidden="true" class="section-num">02 /</span> 2단계 — Sync를 엔진이 주관 (T-084)</h2>
+<p>SPEC-01.11의 Sync 주체를 먼저 고친다.</p>
+<ul>
+<li>엔진이 연결된 문서의 변경 번호를 직접 보고, 문서당 한 번 전체 Sync·Live Sync를 한다.</li>
+<li>같은 문서의 동시 Sync는 하나로 합친다.</li>
+<li>데스크톱 창·Rhino 패널·브라우저 탭은 결과 알림만 받는다. 알림은 가벼운 변경 번호 폴링이나 이벤트 스트림으로 한다.</li>
+<li>초안·고정·실행 중 작업에 따른 자동 갱신 보류는 엔진이 판단한다(SPEC-01.11 6).</li>
+<li>Sync 중 편집으로 <code>SOURCE_CHANGED</code>가 나면 잠시 뒤 다시 한다.</li>
+<li>AI가 문서를 고치는 중에는 Sync가 기다린다.</li>
+</ul>
+<p><strong>검증:</strong></p>
+<ul>
+<li>창과 패널을 함께 연 상태에서 Rhino 변경 한 번에 Sync·Live Sync가 한 번만 일어나는지</li>
+<li>기존 <code>browser-live-sync</code>·<code>browser-links</code>·<code>browser-rhino-panel</code></li>
+</ul>
+</section><section class="doc-section" id="plan-27-sync-storage-stability-section-x3"><h2><span aria-hidden="true" class="section-num">03 /</span> 3단계 — 화면 (T-085)</h2>
+<ul>
+<li>형상을 바이너리 그대로 GPU에 올린다(숫자 배열로 풀지 않음).</li>
+<li>Live Sync는 바뀐 객체만 다시 그린다.</li>
+<li>화면에 보이지 않는 Sync의 형상은 메모리에서 버리고 필요할 때 다시 받는다.</li>
+<li>Rhino 패널은 3D 장면을 만들지 않는다.</li>
+<li>많이 선택했을 때 선택 계산은 색인으로 한다(지금은 전체 선택 시 키 입력마다 0.65초).</li>
+<li>작업 상태 확인과 Live Sync 재시도는 실패해도 다시 시도하고, 요청에 시간 제한을 둔다.</li>
+</ul>
+<p><strong>검증:</strong> 합성 1만 개 모델로 전체 Sync 5회 뒤 화면 메모리 증가가 없을 것, Live Sync 한 번에 주 스레드 멈춤 50 ms 이하, 전체 선택 키 입력 지연.</p>
+</section><section class="doc-section" id="plan-27-sync-storage-stability-section-x4"><h2><span aria-hidden="true" class="section-num">04 /</span> 4단계 — 상한 (T-086)</h2>
+<p>원칙: 평소 작업에서 상한에 걸려 불편이 생기지 않게 넉넉히 둔다. 넘어도 작업 전체를 실패시키지 않고, 그 부분만 줄여서 알린다. 문제가 생기면 고친다(2026-10-01 사용자 결정).</p>
+<div aria-label="PLAN 표 2" class="table-scroll" role="region" tabindex="0"><table>
+<thead>
+<tr>
+<th>항목</th>
+<th>지금</th>
+<th>바꿀 값</th>
+<th>넘으면</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>요청당 고정 객체</td>
+<td>100 (<code>workspace.ts</code>, <code>draft-storage.ts</code>, 화면)</td>
+<td>10,000</td>
+<td>AI에는 상세 200개와 나머지 ID·레이어 요약을 보내고, AI가 필요하면 조회한다</td>
+</tr>
+<tr>
+<td>Rhino 고정 목록</td>
+<td>5,000</td>
+<td>10,000</td>
+<td>알림</td>
+</tr>
+<tr>
+<td>Rhino 선택 보고</td>
+<td>2,000 (<code>AttachedConnection.cs</code>)</td>
+<td>20,000. ID는 선택이 바뀔 때만 보낸다</td>
+<td>개수만 보고</td>
+</tr>
+<tr>
+<td>문서당 객체</td>
+<td>20,000 (<code>WorkerScene.MaxObjects</code>, 넘으면 Sync 실패)</td>
+<td>200,000</td>
+<td>알림</td>
+</tr>
+<tr>
+<td>Sync 하나 전체</td>
+<td>128 MB (<code>editor-channel.ts</code>, 넘으면 Sync 실패)</td>
+<td>총량 상한 없앰</td>
+<td>—</td>
+</tr>
+<tr>
+<td>객체 하나의 형상</td>
+<td>없음</td>
+<td>바이너리 64 MB</td>
+<td>그 객체만 상자로 표시하고 알림</td>
+</tr>
+<tr>
+<td>한 번에 주고받는 묶음</td>
+<td>페이지 1,000개</td>
+<td>16 MB 묶음으로 자동 분할</td>
+<td>나눠 받음</td>
+</tr>
+<tr>
+<td>AI 실행 결과 목록</td>
+<td>2,000 (<code>DirectExecution.MaxListed</code>)</td>
+<td>20,000</td>
+<td>개수만 보고</td>
+</tr>
+<tr>
+<td>스케치 좌표</td>
+<td>±100 km (<code>workspace.ts</code> <code>coordinate</code>)</td>
+<td>유한한 값이면 허용</td>
+<td>—</td>
+</tr>
+<tr>
+<td>jig 입력 객체</td>
+<td>50,000 (<code>jig-routes.ts</code>)</td>
+<td>200,000</td>
+<td>알림</td>
+</tr>
+<tr>
+<td>그대로 둠</td>
+<td>본문 2만 자, 첨부·스케치·요청 목록 각 100, 턴당 이미지 3</td>
+<td>—</td>
+<td>평소 작업에서 걸리지 않음</td>
+</tr>
+</tbody>
+</table></div>
+<p>상한을 올리기 전에, 그 값을 감당하는 경로(1~3단계)가 먼저 있어야 한다.</p>
+<ul>
+<li>고정 10,000은 고정마다 기준 Sync 전체를 해석하던 문제(RESEARCH-13 §2)가 1단계로 풀린 뒤에 올린다.</li>
+<li>객체 200,000은 2·3단계 뒤에 올린다.</li>
+</ul>
+</section><section class="doc-section" id="plan-27-sync-storage-stability-section-x5"><h2><span aria-hidden="true" class="section-num">05 /</span> 5단계 — 정리 (T-087)</h2>
+<ul>
+<li>아무 Sync 목록도 가리키지 않는 객체 판을 지운다.</li>
+<li>옛 Sync 목록은 파일별 최근 몇 개와 참조된 것만 남긴다. 몇 개를 남길지는 착수 때 SPEC-01.11에 정한다.</li>
+<li>그 밖의 정리:
+<ul>
+<li>이전 백업(<code>vide.sqlite.backups</code>)은 최근 2개만 남긴다.</li>
+<li><code>rhino-connections</code> 사본과 <code>sdk-models</code> 작업 폴더도 정리한다.</li>
+<li>WAL 크기를 제한한다.</li>
+</ul>
+</li>
+<li>15초마다의 heartbeat가 결과 표를 훑지 않게 색인을 둔다.</li>
+</ul>
+</section><section class="doc-section" id="plan-27-sync-storage-stability-section-x6"><h2><span aria-hidden="true" class="section-num">06 /</span> 6단계 — Rhino·ZWCAD 쪽 (T-087에 포함)</h2>
+<ul>
+<li>AI 코드 실행에 시간 제한과 취소를 둔다. 끝나지 않으면 Rhino를 멈추지 않고 실패로 돌린다.</li>
+<li>Rhino 패널·ZWCAD 팔레트의 WebView에 0단계와 같은 화면 복구를 넣는다.</li>
+<li>ZWCAD의 시간 초과 뒤 늦게 실행되는 쓰기를 막는다.</li>
+<li>구조 해석 코어는 작업 스레드에서만 부른다.</li>
+</ul>
+</section><section class="doc-section" id="plan-27-sync-storage-stability-section-7"><h2><span aria-hidden="true" class="section-num">07 /</span> 엔진 언어</h2>
+<p>TypeScript(Node)를 유지한다.</p>
+<ul>
+<li>Rust·C++는 계산 자체가 무거운 부분(구조 해석은 이미 Rust, 간섭 검사·공간 색인·메시 처리 등)에만 측정 후 붙인다.</li>
+<li>네이티브 코드는 엔진 프로세스 밖이나 작업 스레드에서 돌린다. 그래야 그쪽 충돌이 엔진을 끝내지 않는다(RESEARCH-13 §1).</li>
+</ul>
+</section><section class="doc-section" id="plan-27-sync-storage-stability-section-x8"><h2><span aria-hidden="true" class="section-num">08 /</span> 완료 기준</h2>
+<ul>
+<li><strong>0단계:</strong> 다음 엔진 종료에서 종료 코드가 기록되고, 화면·엔진이 꺼진 채 남지 않는다.</li>
+<li><strong>1~3단계:</strong> 객체 1만 개 문서에서 아래를 만족한다. 0단계 기록으로 확인한다.
+<ul>
+<li>Live Sync 한 번에 엔진·화면 멈춤이 각각 100 ms·50 ms 안팎이다.</li>
+<li>창과 패널을 함께 열어도 Sync가 한 번이다.</li>
+<li>전체 Sync를 반복해도 DB와 화면 메모리가 변경분만큼만 는다.</li>
+</ul>
+</li>
+<li><strong>4단계:</strong> 위 표의 상한이 반영된다.</li>
+<li><strong>5·6단계:</strong> 각 항목이 반영되고, PLAN §6.5와 설치본 릴리스가 갱신된다.</li>
+</ul>
+</section><footer class="doc-footer"><span>VIDE / PLANNING DOCUMENTS</span><span>문서 열람용 · 실제 CAD/BIM 지원은 구현·검증 후 선언</span></footer></article></main></div>
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+<script id="source-data" type="application/json">{"plan-27-sync-storage-stability":{"label":"Sync 저장 구조와 작동 안정성 — 진단·복구, 객체 단위 저장, 엔진 주관 Sync","file":"PLAN-27-sync-storage-stability.md","markdown":"---\nid: PLAN-27\ntitle: Sync 저장 구조와 작동 안정성 — 진단·복구, 객체 단위 저장, 엔진 주관 Sync\nstatus: draft\nversion: 0.1\nupdated: 2026-10-01\nowner: agent:claude\nrelated: [RESEARCH-13, SPEC-01, ARCH-01, PLAN-16, PLAN-18, PLAN-24, FR-02, FR-03, FR-16]\n---\n\n# Sync 저장 구조와 작동 안정성 (T-082~T-087)\n\n근거: [RESEARCH-13](../research/RESEARCH-13-stability-audit.md)의 점검 결과와 2026-10-01 사용자 결정. 결정 내용은 다음과 같다.\n\n1. Sync 저장은 바뀐 것만 반영하는 git 방식으로 바꾼다.\n2. Sync를 주관하는 곳은 엔진 한 곳으로 하고, 화면 갱신 방식도 바꾼다.\n3. 상한은 작업에 불편이 없을 만큼 넉넉하게 걸고, 문제가 생기면 고친다.\n\n엔진 언어는 TypeScript를 유지한다. 계산이 무거운 부분만 측정한 뒤 네이티브 모듈로 엔진 밖(작업 스레드·자식 프로세스)에서 돌린다(§7).\n\n## 0단계 — 진단·복구 (T-082)\n\n기존 동작을 바꾸지 않는다.\n\n| 변경 | 위치 |\n|---|---|\n| 엔진이 끝나면 종료 코드(16진)·가동 시간·재시작 횟수를 `logs/engine-exits.jsonl`에 남기고, 안내 문구에도 코드를 보인다 | `src/desktop/shell/Engine.cs`, `ShellContext.cs` |\n| 엔진 재시작 횟수를 10분 정상 가동 뒤 초기화한다 | `ShellContext.cs` |\n| 업데이트 자동 적용이 실행 중인 VIDE·엔진을 죽이지 않는다. 받은 업데이트는 트레이 메뉴나 종료 때 적용한다 | `Program.cs` |\n| WebView2 화면 프로세스가 죽거나 응답이 없으면 다시 불러온다(1분에 3회까지). 브라우저 프로세스가 죽으면 WebView를 새로 만든다 | `ShellForm.cs` |\n| 엔진이 1분마다 메모리(rss·heap·external)와 이벤트 루프 지연(최대·p99)을 기록하고, 정상 종료가 아닌 `exit`도 기록한다 | `src/server/main.ts`, `diagnostics.ts` |\n| 1초를 넘긴 Sync·Live Sync·요청 목록 처리를 크기와 함께 기록한다 | `src/server/server.ts`, `live-sync.ts` |\n| 자식 프로세스(cloudflared, jig 실행기, 로그인)의 `error`·stdin `error`를 처리하고, 처리 안 된 rejection은 기록만 하고 엔진을 끝내지 않는다 | `remote-access.ts`, `src/jigs/runtime/child-runner.ts`, `src/ai/account-login.ts`, `main.ts` |\n\n**검증:**\n- 셸 빌드\n- 엔진 단위 시험\n- 자식 프로세스 실행 실패·죽은 자식에 쓰기 재현 스크립트(RESEARCH-13 §5)로 엔진이 살아 있는지 확인\n- 화면 프로세스 강제 종료 뒤 다시 불러오는지 확인\n- 종료 코드 기록 확인\n\nRhino 패널의 같은 복구(플러그인 재빌드·Rhino 재시작 필요)는 6단계에 둔다.\n\n**결과(2026-10-01) — 구현·자동 검증, 설치본 확인 남음:**\n- 셸 수정 내용:\n  - 엔진이 끝날 때마다 `logs/engine-exits.jsonl`에 `{pid, code, hex, uptimeSec, asked}`를 남기고, 안내 문구에 16진 코드를 보인다.\n  - 재시작 횟수는 10분 넘게 돈 엔진이 끝나면 초기화한다.\n  - 업데이트는 VIDE가 이미 실행 중일 때 시작 시 자동 적용하지 않는다(`SetAutoApplyOnStartup(!running)`).\n  - WebView2 `ProcessFailed` 처리: 화면 프로세스가 끝나거나 응답이 없으면 다시 불러온다(1분 3회). 브라우저 프로세스가 끝나면 WebView를 새로 만들어 마지막 페이지로 간다.\n  - `npm run desktop:build` 오류 0개.\n- 엔진 수정 내용:\n  - `src/server/health.ts`가 1분마다 `health`를 기록한다.\n  - `live-sync` 기록에 바뀐·지운 객체 수와 사본 생성 여부를 더했다.\n  - `unhandledRejection`은 `engine-unhandled`로 기록하고 엔진을 끝내지 않는다.\n  - `exit`도 기록한다.\n  - 자식 프로세스 `error` 처리: jig 실행기(단계 실패로 끝남, 로그 500줄 제한), cloudflared, 로그인 stdin, 탐색기.\n- 시험:\n  - 새로 추가: `tests/core/jig-runner.test.mjs`(실행 프로그램이 없을 때), `tests/server/remote-tunnel-error.test.mjs`. 둘 다 이전 코드에서는 실패하고 수정 뒤 통과한다.\n  - 새로 추가: `tests/server/health.test.mjs`.\n  - 단위·서버 시험 729건 통과.\n- 남음:\n  - 셸의 화면 복구는 실제 창에서 확인하지 않았다. 시험용 셸은 설치본과 같은 단일 실행 이름을 써서 사용자 VIDE가 켜져 있으면 실행할 수 없다.\n  - 설치본 릴리스: 다른 세션의 미커밋 화면 변경이 작업 트리에 있어 이번 커밋만으로 빌드해야 한다.\n\n## 1단계 — 객체 단위 저장 (T-083)\n\n먼저 ARCH-01에 저장 계약을 쓰고 사용자 확인을 받는다.\n\n- **객체 판:** 객체 하나의 표시 형상과 속성이다. 내용 지문으로 이름 붙이고 한 번만 저장한다.\n  - 형상은 바이너리로 둔다. 객체마다 기준점은 float64로 두고, 정점은 기준점과의 차이를 float32로 둔다. 지금의 VGT1 전송 형식을 저장에도 쓴다.\n  - 같은 모델(객체 1만 개, 정점 100만 개)로 잰 값: JSON 64.8 MB → 18.2 MB, 만들기 254 ms → 13 ms, 읽기 105 ms → 1 ms, 오차 0.001 mm.\n- **Sync 목록:** 그 시점의 (객체 ID → 객체 판) 목록과 부모 Sync, 문서 변경 번호를 가진다.\n- **전체 Sync:** 바뀌지 않은 객체는 기존 판을 가리킨다.\n- **Live Sync:** 바뀐 객체 판만 쓰고 목록의 그 줄만 바꾼다. 다른 요청이 참조 중인 Sync면 목록만 복사한 새 Sync를 만든다.\n- **기존 결과 이전과 하위 호환:**\n  - 기존 `workspace_requests.result`의 형상은 한 번 옮기고 VACUUM한다(옮기기 전 백업 1개).\n  - 작업 이력·고정·비교·검토본·웹 게시가 옛 Sync를 계속 열어야 한다.\n  - 요청 목록과 한 요청 조회는 지금 응답 모양을 유지한다. 형상은 바이너리로 준다.\n\n**검증:**\n- 이전 전후 같은 요청의 객체·형상 동일성(지문)\n- 사용자 DB 사본으로 이전 시간과 크기 확인\n- 위 기능들의 기존 시험\n- Live Sync 한 번의 엔진 처리 시간(목표: 객체 수와 무관하게 100 ms 안팎)\n\n## 2단계 — Sync를 엔진이 주관 (T-084)\n\nSPEC-01.11의 Sync 주체를 먼저 고친다.\n\n- 엔진이 연결된 문서의 변경 번호를 직접 보고, 문서당 한 번 전체 Sync·Live Sync를 한다.\n- 같은 문서의 동시 Sync는 하나로 합친다.\n- 데스크톱 창·Rhino 패널·브라우저 탭은 결과 알림만 받는다. 알림은 가벼운 변경 번호 폴링이나 이벤트 스트림으로 한다.\n- 초안·고정·실행 중 작업에 따른 자동 갱신 보류는 엔진이 판단한다(SPEC-01.11 6).\n- Sync 중 편집으로 `SOURCE_CHANGED`가 나면 잠시 뒤 다시 한다.\n- AI가 문서를 고치는 중에는 Sync가 기다린다.\n\n**검증:**\n- 창과 패널을 함께 연 상태에서 Rhino 변경 한 번에 Sync·Live Sync가 한 번만 일어나는지\n- 기존 `browser-live-sync`·`browser-links`·`browser-rhino-panel`\n\n## 3단계 — 화면 (T-085)\n\n- 형상을 바이너리 그대로 GPU에 올린다(숫자 배열로 풀지 않음).\n- Live Sync는 바뀐 객체만 다시 그린다.\n- 화면에 보이지 않는 Sync의 형상은 메모리에서 버리고 필요할 때 다시 받는다.\n- Rhino 패널은 3D 장면을 만들지 않는다.\n- 많이 선택했을 때 선택 계산은 색인으로 한다(지금은 전체 선택 시 키 입력마다 0.65초).\n- 작업 상태 확인과 Live Sync 재시도는 실패해도 다시 시도하고, 요청에 시간 제한을 둔다.\n\n**검증:** 합성 1만 개 모델로 전체 Sync 5회 뒤 화면 메모리 증가가 없을 것, Live Sync 한 번에 주 스레드 멈춤 50 ms 이하, 전체 선택 키 입력 지연.\n\n## 4단계 — 상한 (T-086)\n\n원칙: 평소 작업에서 상한에 걸려 불편이 생기지 않게 넉넉히 둔다. 넘어도 작업 전체를 실패시키지 않고, 그 부분만 줄여서 알린다. 문제가 생기면 고친다(2026-10-01 사용자 결정).\n\n| 항목 | 지금 | 바꿀 값 | 넘으면 |\n|---|---|---|---|\n| 요청당 고정 객체 | 100 (`workspace.ts`, `draft-storage.ts`, 화면) | 10,000 | AI에는 상세 200개와 나머지 ID·레이어 요약을 보내고, AI가 필요하면 조회한다 |\n| Rhino 고정 목록 | 5,000 | 10,000 | 알림 |\n| Rhino 선택 보고 | 2,000 (`AttachedConnection.cs`) | 20,000. ID는 선택이 바뀔 때만 보낸다 | 개수만 보고 |\n| 문서당 객체 | 20,000 (`WorkerScene.MaxObjects`, 넘으면 Sync 실패) | 200,000 | 알림 |\n| Sync 하나 전체 | 128 MB (`editor-channel.ts`, 넘으면 Sync 실패) | 총량 상한 없앰 | — |\n| 객체 하나의 형상 | 없음 | 바이너리 64 MB | 그 객체만 상자로 표시하고 알림 |\n| 한 번에 주고받는 묶음 | 페이지 1,000개 | 16 MB 묶음으로 자동 분할 | 나눠 받음 |\n| AI 실행 결과 목록 | 2,000 (`DirectExecution.MaxListed`) | 20,000 | 개수만 보고 |\n| 스케치 좌표 | ±100 km (`workspace.ts` `coordinate`) | 유한한 값이면 허용 | — |\n| jig 입력 객체 | 50,000 (`jig-routes.ts`) | 200,000 | 알림 |\n| 그대로 둠 | 본문 2만 자, 첨부·스케치·요청 목록 각 100, 턴당 이미지 3 | — | 평소 작업에서 걸리지 않음 |\n\n상한을 올리기 전에, 그 값을 감당하는 경로(1~3단계)가 먼저 있어야 한다.\n- 고정 10,000은 고정마다 기준 Sync 전체를 해석하던 문제(RESEARCH-13 §2)가 1단계로 풀린 뒤에 올린다.\n- 객체 200,000은 2·3단계 뒤에 올린다.\n\n## 5단계 — 정리 (T-087)\n\n- 아무 Sync 목록도 가리키지 않는 객체 판을 지운다.\n- 옛 Sync 목록은 파일별 최근 몇 개와 참조된 것만 남긴다. 몇 개를 남길지는 착수 때 SPEC-01.11에 정한다.\n- 그 밖의 정리:\n  - 이전 백업(`vide.sqlite.backups`)은 최근 2개만 남긴다.\n  - `rhino-connections` 사본과 `sdk-models` 작업 폴더도 정리한다.\n  - WAL 크기를 제한한다.\n- 15초마다의 heartbeat가 결과 표를 훑지 않게 색인을 둔다.\n\n## 6단계 — Rhino·ZWCAD 쪽 (T-087에 포함)\n\n- AI 코드 실행에 시간 제한과 취소를 둔다. 끝나지 않으면 Rhino를 멈추지 않고 실패로 돌린다.\n- Rhino 패널·ZWCAD 팔레트의 WebView에 0단계와 같은 화면 복구를 넣는다.\n- ZWCAD의 시간 초과 뒤 늦게 실행되는 쓰기를 막는다.\n- 구조 해석 코어는 작업 스레드에서만 부른다.\n\n## 7. 엔진 언어\n\nTypeScript(Node)를 유지한다.\n- Rust·C++는 계산 자체가 무거운 부분(구조 해석은 이미 Rust, 간섭 검사·공간 색인·메시 처리 등)에만 측정 후 붙인다.\n- 네이티브 코드는 엔진 프로세스 밖이나 작업 스레드에서 돌린다. 그래야 그쪽 충돌이 엔진을 끝내지 않는다(RESEARCH-13 §1).\n\n## 완료 기준\n\n- **0단계:** 다음 엔진 종료에서 종료 코드가 기록되고, 화면·엔진이 꺼진 채 남지 않는다.\n- **1~3단계:** 객체 1만 개 문서에서 아래를 만족한다. 0단계 기록으로 확인한다.\n  - Live Sync 한 번에 엔진·화면 멈춤이 각각 100 ms·50 ms 안팎이다.\n  - 창과 패널을 함께 열어도 Sync가 한 번이다.\n  - 전체 Sync를 반복해도 DB와 화면 메모리가 변경분만큼만 는다.\n- **4단계:** 위 표의 상한이 반영된다.\n- **5·6단계:** 각 항목이 반영되고, PLAN §6.5와 설치본 릴리스가 갱신된다.\n"}}</script>
+<script id="reader-config" type="application/json">{"initial":"plan-27-sync-storage-stability","siteTitle":"VIDE"}</script>
+<script>
+(() => {
+'use strict';
+const sourceData=JSON.parse(document.getElementById('source-data').textContent);
+const config=JSON.parse(document.getElementById('reader-config').textContent);
+const esc=s=>String(s);
+let activeDoc=config.initial;
+let observer;
+let toastTimer;
+const $=s=>document.querySelector(s);
+function notify(message){const t=$('#toast');t.textContent=message;t.hidden=false;clearTimeout(toastTimer);toastTimer=setTimeout(()=>{t.hidden=true;},3400);}
+function renderToc(){const links=$('#toc-links');links.replaceChildren();const nodes=document.querySelectorAll('#'+activeDoc+' .doc-section');nodes.forEach(section=>{const a=document.createElement('a');a.href='#'+section.id;a.textContent=section.querySelector('h2').textContent;a.dataset.title=a.textContent;a.addEventListener('click',()=>{$('#toc-shell').classList.remove('open');$('#toc-toggle').setAttribute('aria-expanded','false');});links.appendChild(a);});$('#toc-count').textContent=nodes.length+' CHAPTERS';$('#toc-search').value='';$('#nav-hint').textContent='章 제목으로 찾아갑니다.'.replace('章','장');if(observer)observer.disconnect();observer=new IntersectionObserver(entries=>{const visible=entries.filter(e=>e.isIntersecting).sort((a,b)=>a.boundingClientRect.top-b.boundingClientRect.top);if(!visible.length)return;document.querySelectorAll('#toc-links a').forEach(a=>a.classList.toggle('active',a.hash==='#'+visible[0].target.id));},{rootMargin:'-90px 0px -64% 0px',threshold:0});nodes.forEach(n=>observer.observe(n));}
+function showDoc(name,reset){if(!sourceData[name])name=config.initial;activeDoc=name;document.querySelectorAll('.document').forEach(d=>d.hidden=d.id!==name);document.querySelectorAll('.doc-tab').forEach(a=>{a.classList.toggle('active',a.dataset.doc===name);if(a.dataset.doc===name)a.setAttribute('aria-current','page');else a.removeAttribute('aria-current');});renderToc();document.title=(config.siteTitle||'VIDE')+' · '+sourceData[name].label;if(reset)window.scrollTo({top:0,behavior:'instant'});}
+function useHash(){let raw=decodeURIComponent(location.hash.slice(1)||config.initial);let name=raw.split('-section-')[0];if(!sourceData[name])name=config.initial;if(name!==activeDoc||!$('#toc-links').children.length)showDoc(name,false);const el=document.getElementById(raw);if(el&&!el.hidden){requestAnimationFrame(()=>el.scrollIntoView({block:'start',behavior:'instant'}));}}
+window.addEventListener('hashchange',useHash);
+document.querySelectorAll('.doc-tab[data-doc]').forEach(a=>a.addEventListener('click',e=>{e.preventDefault();const name=a.dataset.doc;showDoc(name,true);history.replaceState(null,'','#'+name);}));
+$('#toc-toggle').addEventListener('click',()=>{const on=$('#toc-shell').classList.toggle('open');$('#toc-toggle').setAttribute('aria-expanded',String(on));});
+$('#toc-search').addEventListener('input',()=>{const q=$('#toc-search').value.trim().toLocaleLowerCase();let n=0;document.querySelectorAll('#toc-links a').forEach(a=>{a.hidden=!a.dataset.title.toLocaleLowerCase().includes(q);if(!a.hidden)n++;});$('#nav-hint').textContent=q?(n?'일치하는 장 '+n+'개':'일치하는 장 제목이 없습니다.'):'장 제목으로 찾아갑니다.';});
+function download(name,contents,type){const blob=new Blob([contents],{type});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),2500);}
+$('#source-download').addEventListener('click',()=>download(sourceData[activeDoc].file,sourceData[activeDoc].markdown,'text/markdown;charset=utf-8'));
+$('#print-doc').addEventListener('click',()=>window.print());
+async function copy(text){try{if(navigator.clipboard&&navigator.clipboard.writeText){await navigator.clipboard.writeText(text);return true;}}catch(e){}const t=document.createElement('textarea');t.value=text;t.style.position='fixed';t.style.left='-9999px';document.body.appendChild(t);t.select();let ok=false;try{ok=document.execCommand('copy');}catch(e){}t.remove();return ok;}
+document.querySelectorAll('.copy-code').forEach(b=>b.addEventListener('click',async()=>{const text=b.parentElement.querySelector('pre').textContent;const ok=await copy(text);if(ok){b.textContent='복사됨';notify('텍스트를 복사했습니다.');setTimeout(()=>b.textContent='복사',1800);}else{const range=document.createRange();range.selectNodeContents(b.parentElement.querySelector('pre'));const sel=window.getSelection();sel.removeAllRanges();sel.addRange(range);notify('자동 복사가 제한됩니다. 선택된 텍스트를 직접 복사하세요.');}}));
+showDoc(config.initial,false);useHash();
+})();
+</script>
+<script>
+(() => {
+'use strict';
+const KEY = 'vide-docs-review-mode';
+const AUTHOR_KEY = 'vide-docs-review-author';
+const sel = document.getElementById('review-mode');
+if (!sel) return;
+const authorSel = document.getElementById('review-author');
+let mode = 'marked';
+let author = 'all';
+try { mode = localStorage.getItem(KEY) || 'marked'; } catch (e) {}
+try { author = localStorage.getItem(AUTHOR_KEY) || 'all'; } catch (e) {}
+if (!['marked', 'original', 'accepted'].includes(mode)) mode = 'marked';
+if (!authorSel || !Array.from(authorSel.options).some(o => o.value === author)) author = 'all';
+const matches = el => author === 'all' || el.dataset.reviewAgent === author;
+const decorate = () => {
+const query = (document.getElementById('toc-search')?.value || '').trim().toLocaleLowerCase();
+let visible = 0;
+document.querySelectorAll('#toc-links a').forEach(a => {
+  const section = document.getElementById(decodeURIComponent(a.hash.slice(1)));
+  if (!section) return;
+  a.hidden = !a.dataset.title.toLocaleLowerCase().includes(query) || (section.classList.contains('review-appendix') && (mode !== 'marked' || !matches(section)));
+  if (!a.hidden) visible += 1;
+  const n = Array.from(section.querySelectorAll('.review-label[data-rid]')).filter(matches).length;
+  if (n && mode === 'marked') a.dataset.reviews = String(n); else delete a.dataset.reviews;
+});
+if (query) document.getElementById('nav-hint').textContent = visible ? `일치하는 장 ${visible}개` : '일치하는 장 제목이 없습니다.';
+};
+const apply = () => {
+  sel.value = mode;
+  if (authorSel) { authorSel.value = author; authorSel.disabled = mode !== 'marked'; }
+  document.body.classList.toggle('review-original', mode === 'original');
+  document.body.classList.toggle('review-accepted', mode === 'accepted');
+  document.querySelectorAll('blockquote.review, .review-appendix').forEach(el => { el.hidden = !matches(el); });
+  decorate();
+  try { localStorage.setItem(KEY, mode); localStorage.setItem(AUTHOR_KEY, author); } catch (e) {}
+};
+apply();
+const toc = document.getElementById('toc-links');
+if (toc) new MutationObserver(decorate).observe(toc, { childList: true });
+document.getElementById('toc-search')?.addEventListener('input', decorate);
+sel.addEventListener('change', () => { mode = sel.value; apply(); });
+if (authorSel) authorSel.addEventListener('change', () => { author = authorSel.value; apply(); });
+const revealHash = () => {
+  let id;
+  try { id = decodeURIComponent(location.hash.slice(1)); } catch (e) { return; }
+  const target = document.getElementById(id);
+  if (!target || !target.dataset.reviewAgent) return;
+  mode = 'marked';
+  if (!matches(target)) author = 'all';
+  apply();
+  target.scrollIntoView({ block: 'center' });
+};
+window.addEventListener('hashchange', revealHash);
+revealHash();
+})();
+</script>
+</body></html>

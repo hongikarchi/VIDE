@@ -16,8 +16,13 @@ namespace Vide.Desktop
         [STAThread]
         private static int Main(string[] args)
         {
-            // Install/uninstall/update hooks run here and exit before the app starts.
-            VelopackApp.Build().Run();
+            // Install/uninstall/update hooks run here and exit before the app starts. A downloaded
+            // update is applied at startup only when no VIDE is running: applying it kills the
+            // running VIDE and its engine without a clean stop (RESEARCH-13 §1.3). The running
+            // one applies it from the tray or when it exits.
+            bool running = Mutex.TryOpenExisting(MutexName, out Mutex existing);
+            existing?.Dispose();
+            VelopackApp.Build().SetAutoApplyOnStartup(!running).Run();
             bool background = Array.IndexOf(args, "--background") >= 0;
             using (var mutex = new Mutex(true, MutexName, out bool first))
             {

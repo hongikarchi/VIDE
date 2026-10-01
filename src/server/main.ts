@@ -45,6 +45,13 @@ try {
   process.on('uncaughtExceptionMonitor', (error, origin) =>
     crashLog.write('engine-crash', { origin, ...Diagnostics.error(error) }),
   );
+  // A promise nobody waited on must not end the engine and every open page with it (Node's
+  // default): it is recorded and work goes on (PLAN-27 step 0, RESEARCH-13 §5).
+  process.on('unhandledRejection', (error) =>
+    crashLog.write('engine-unhandled', Diagnostics.error(error)),
+  );
+  // Any exit Node still runs code for (a native crash or a kill runs none: the shell logs those).
+  process.on('exit', (code) => crashLog.write('engine-exit', { code }));
   const options = {
     filename: join(directory, 'vide.sqlite'),
     onShutdown: () => void close(),

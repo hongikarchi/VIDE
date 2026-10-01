@@ -266,7 +266,10 @@ export function openKnowledgeSource(
   file: string,
   sourceId: number,
   launch: (path: string) => void = (path) =>
-    spawn('explorer.exe', [path], { detached: true, stdio: 'ignore', windowsHide: false }).unref(),
+    // A start that fails emits 'error'; unheard, it would end the engine.
+    spawn('explorer.exe', [path], { detached: true, stdio: 'ignore', windowsHide: false })
+      .on('error', () => {})
+      .unref(),
 ) {
   const target = read(file, (db) => {
     const root = meta(db, 'root');

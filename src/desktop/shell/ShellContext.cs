@@ -104,14 +104,16 @@ namespace Vide.Desktop
         private void OnEngineExited(int code)
         {
             if (Quitting) return;
-            // Restart a crashed engine a few times; its records survive restarts.
+            // Restart a crashed engine a few times; its records survive restarts. An engine that
+            // ran ten minutes earns the budget back: VIDE lives for days in the tray.
+            if (DateTime.UtcNow - engine.StartedAt > TimeSpan.FromMinutes(10)) restarts = 0;
             if (++restarts <= 3)
             {
-                form.ShowProblem("작업 엔진이 종료되어 다시 시작하는 중입니다…");
+                form.ShowProblem("작업 엔진이 종료되어 다시 시작하는 중입니다… (코드 " + Engine.Hex(code) + ")");
                 _ = StartEngine();
                 return;
             }
-            form.ShowProblem("작업 엔진이 계속 종료됩니다 (코드 " + code + "). VIDE를 다시 실행하세요.");
+            form.ShowProblem("작업 엔진이 계속 종료됩니다 (코드 " + Engine.Hex(code) + "). VIDE를 다시 실행하세요.");
         }
 
         public void ShowWindow()

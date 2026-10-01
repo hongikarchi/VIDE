@@ -529,6 +529,24 @@ test('the child process runner: budget cuts a step off and restarts, reads outsi
   });
   assert.equal(again.output.code, 'READ_OK');
   assert.equal(runner.spawned, 2);
+  // A runner that cannot start (missing or blocked program) fails the step; the engine lives on.
+  // Before PLAN-27 step 0 the unheard 'error' ended the whole engine process.
+  const broken = new ChildRunner('dev-pack', {
+    idleMs: 60_000,
+    execPath: join(root, 'missing', 'node.exe'),
+  });
+  t.after(() => broken.close());
+  await broken.load(jig);
+  const refused = await broken.run({
+    runId: 'r4',
+    step: jig.manifest.steps[0],
+    input: {},
+    params: {},
+    overrides: [],
+    budgetMs: 10_000,
+  });
+  assert.equal(refused.t, 'fail');
+  assert.match(refused.message, /ENOENT|spawn/);
 });
 
 test('validation refuses cycles and missing inputs; the self-test runs without a host', async () => {

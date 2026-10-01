@@ -213,6 +213,8 @@ export class AccountLogin {
     if (!job || job.status.state !== 'running' || !job.status.prompt?.needsCode || !job.child.stdin)
       throw new DomainError('LOGIN_NOT_WAITING');
     if (!/^[\x21-\x7e]{4,2048}$/.test(value)) throw new DomainError('INVALID_INPUT');
+    // A login process that exits meanwhile must not end the engine through an unheard EPIPE.
+    if (!job.child.stdin.listenerCount('error')) job.child.stdin.on('error', () => {});
     job.child.stdin.write(value + '\n');
     job.status.prompt.codeSent = true;
     return { ...job.status, prompt: { ...job.status.prompt } };

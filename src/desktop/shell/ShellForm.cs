@@ -13,7 +13,7 @@ namespace Vide.Desktop
     internal sealed class ShellForm : Form
     {
         private readonly ShellContext context;
-        private readonly WebView2 view = new WebView2 { Dock = DockStyle.Fill };
+        private WebView2 view = new WebView2 { Dock = DockStyle.Fill };
         private readonly Label problem = new Label
         {
             Dock = DockStyle.Fill,
@@ -26,6 +26,9 @@ namespace Vide.Desktop
         private string origin;
         private string opened;
         private bool ready;
+        // The last work page shown, so a recreated WebView comes back to the same project.
+        private string lastPage;
+        private readonly Queue<DateTime> reloads = new Queue<DateTime>();
 
         public ShellForm(ShellContext context)
         {
@@ -85,6 +88,11 @@ namespace Vide.Desktop
                 e.Cancel = true;
                 ShellContext.OpenExternal(e.Uri);
             };
+            core.ProcessFailed += (s, e) => OnProcessFailed(e.ProcessFailedKind);
+            core.SourceChanged += (s, e) =>
+            {
+                if (origin != null && core.Source.StartsWith(origin + "/", StringComparison.Ordinal)) lastPage = core.Source;
+            };
             core.DocumentTitleChanged += (s, e) => Text = string.IsNullOrEmpty(core.DocumentTitle) ? "VIDE" : core.DocumentTitle;
             core.WebMessageReceived += (s, e) =>
             {
@@ -100,6 +108,44 @@ namespace Vide.Desktop
             };
             ready = true;
             if (opened != null) Navigate(opened);
+        }
+
+        /// <summary>
+        /// A crashed or hung page comes back by itself (2026-09-30 the window stayed on Chrome's
+        /// "Out of Memory" page until VIDE was restarted). Drafts survive in the page's storage.
+        /// </summary>
+        private void OnProcessFailed(CoreWebView2ProcessFailedKind kind)
+        {
+            if (kind == CoreWebView2ProcessFailedKind.BrowserProcessExited)
+            {
+                // The whole WebView is gone: a new control and environment, then the same page.
+                BeginInvoke((Action)Recreate);
+                return;
+            }
+            // GPU and utility processes are restarted by WebView2 itself.
+            if (kind != CoreWebView2ProcessFailedKind.RenderProcessExited
+                && kind != CoreWebView2ProcessFailedKind.RenderProcessUnresponsive
+                && kind != CoreWebView2ProcessFailedKind.FrameRenderProcessExited) return;
+            while (reloads.Count > 0 && DateTime.UtcNow - reloads.Peek() > TimeSpan.FromMinutes(1)) reloads.Dequeue();
+            if (reloads.Count >= 3)
+            {
+                ShowProblem("화면이 계속 종료됩니다. 트레이의 VIDE를 종료한 뒤 다시 실행하세요.");
+                return;
+            }
+            reloads.Enqueue(DateTime.UtcNow);
+            try { view.CoreWebView2.Reload(); }
+            catch { BeginInvoke((Action)Recreate); }
+        }
+
+        private void Recreate()
+        {
+            ready = false;
+            Controls.Remove(view);
+            try { view.Dispose(); } catch { /* Already torn down with its browser process. */ }
+            view = new WebView2 { Dock = DockStyle.Fill, Visible = false };
+            Controls.Add(view);
+            if (lastPage != null) opened = lastPage;
+            _ = Initialize();
         }
 
         /// <summary>The account website this PC is signed in to (https only), if any.</summary>

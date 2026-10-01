@@ -2,7 +2,7 @@
 id: PLAN
 title: VIDE 실행 로드맵
 status: review
-version: 0.219
+version: 0.220
 updated: 2026-10-01
 owner: agent:codex
 related: [ARCH-01, PLAN-02, PLAN-03, PLAN-22, PLAN-23, PLAN-24, PLAN-25, PLAN-26, ADR-022, ADR-025, ADR-026, SPEC-00, SPEC-01, SPEC-02, SPEC-03, SPEC-04, SPEC-05, SPEC-06, SPEC-07]
@@ -72,6 +72,7 @@ related: [ARCH-01, PLAN-02, PLAN-03, PLAN-22, PLAN-23, PLAN-24, PLAN-25, PLAN-26
 | 독립 | T-065(자료 1차), T-066(공유 스냅샷 결함) | 각 계획의 완료 기준 |
 | 2차 | T-067(구조 코어 확장) | 2차 착수 지시 뒤 |
 | 독립 | T-068(계정 관리를 AccountSwitch로, [PLAN-25](PLAN-25-accounts-to-accountswitch.md)) | PLAN-24 대화 작업의 커밋 뒤 착수 |
+| 안정성 | T-082~T-087(Sync 저장 구조와 작동 안정성, [PLAN-27](PLAN-27-sync-storage-stability.md), 근거 [RESEARCH-13](../research/RESEARCH-13-stability-audit.md)) | 0단계(진단·복구) 바로 착수. 1단계는 ARCH-01 저장 계약 확인 뒤 |
 | 바로 적용 | T-069 → T-070·071 → T-072 → T-073·074, T-075([PLAN-24](PLAN-24-ai-conversations.md#direct-apply), [ADR-022](../decisions/ADR-022-direct-apply-plan-auto.md)) | 플러그인 설치 뒤 실제 Rhino·ZWCAD에서 보호·되돌리기 확인, 브라우저 시험 |
 
 Rhino 플러그인 재빌드는 T-043 한 번이었고, 5차 보기 도구와 T-070·T-071(바로 실행)이 Rhino·ZWCAD 플러그인 재빌드를 더 요구한다. 완료 기준은 개발 빌드와 `.vide/` 합성 문서까지이며, 설치본 반영은 사용자가 요청할 때 묶음 릴리스로 한다.

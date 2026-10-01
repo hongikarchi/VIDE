@@ -94,8 +94,8 @@ export class ChildRunner implements StepRunner {
     for (const stream of [child.stdin, child.stdout, child.stderr])
       (stream as { unref?: () => void } | null)?.unref?.();
     createInterface({ input: child.stdout! }).on('line', (line) => this.receive(line));
-    createInterface({ input: child.stderr! }).on('line', (line) => this.logs.push(line));
-    child.on('exit', (code, signal) => {
+    createInterface({ input: child.stderr! }).on('line', (line) => this.log(line));
+    const ended = (reason: string) => {
       if (this.child === child) this.child = undefined;
       // Only the steps sent to this child fail; a replacement child may already hold new ones.
       for (const [runId, entry] of [...this.waiting]) {
@@ -106,10 +106,18 @@ export class ChildRunner implements StepRunner {
           t: 'fail',
           runId,
           code: 'THROW',
-          message: `실행 프로세스가 끝났습니다(${code ?? signal})`,
+          message: `실행 프로세스가 끝났습니다(${reason})`,
         });
       }
+    };
+    child.on('exit', (code, signal) => ended(String(code ?? signal)));
+    // A start that fails (ENOENT, EACCES) or a write to a child that is exiting must not end the
+    // engine (an 'error' without a listener does): its steps fail as on an exit (RESEARCH-13 §5).
+    child.on('error', (error) => {
+      this.log(String(error));
+      ended(error.message);
     });
+    child.stdin?.on('error', (error) => this.log(String(error)));
     this.send({
       t: 'load',
       jig: jig.id,
@@ -121,6 +129,11 @@ export class ChildRunner implements StepRunner {
     this.loaded = true;
     return child;
   }
+  /** The child's output, newest 500 lines (it could otherwise grow for the engine's lifetime). */
+  private log(line: string) {
+    this.logs.push(line);
+    if (this.logs.length > 500) this.logs.splice(0, this.logs.length - 500);
+  }
   private send(message: RunnerIn) {
     this.child?.stdin?.write(JSON.stringify(message) + '\n');
   }
@@ -129,11 +142,11 @@ export class ChildRunner implements StepRunner {
     try {
       message = JSON.parse(line) as RunnerOut;
     } catch {
-      this.logs.push(line);
+      this.log(line);
       return;
     }
     if (message.t === 'log') {
-      this.logs.push(`${message.runId}: ${message.text}`);
+      this.log(`${message.runId}: ${message.text}`);
       return;
     }
     const entry = this.waiting.get(message.runId);

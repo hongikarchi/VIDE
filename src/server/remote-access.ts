@@ -275,7 +275,14 @@ export class RemoteAccess {
         clearTimeout(timeout);
         reject(failure('TUNNEL_EXITED'));
       });
+      // A start that fails (blocked or quarantined file) emits 'error', maybe without 'exit'.
+      child.once('error', () => {
+        clearTimeout(timeout);
+        reject(failure('TUNNEL_START_FAILED'));
+      });
     });
+    // Without a listener an 'error' would end the engine; this one only ends the tunnel.
+    child.on('error', () => {});
     child.once('exit', () => {
       if (this.tunnel !== child) return;
       this.tunnel = undefined;
