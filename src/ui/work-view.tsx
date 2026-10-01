@@ -5,6 +5,7 @@ import type { Root } from 'react-dom/client';
 import { isDwgSdkEditMode } from '../contracts/dwg-edit-mode.ts';
 import { requestMode } from '../contracts/workspace.ts';
 import { executionLimits } from '../contracts/execution-limits.ts';
+import { undoReason } from '../contracts/direct-refusal.ts';
 import { ActivityLog, activityEntries } from './activity.tsx';
 import { conversationFilter, inConversation, onConversationFilter } from './conversations.tsx';
 import { api } from './gateway.ts';
@@ -335,20 +336,12 @@ function DirectChanges({
     </ol>
   );
 }
-const undoReasons: Record<string, string> = {
-  'not-latest': '그 뒤에 문서가 더 바뀜',
-  HOST_RESULT_UNKNOWN: '결과 확인 필요',
-  EXECUTOR_NOT_READY: '연결 없음',
-  STALE_CONNECTION: '문서가 닫히거나 바뀜',
-  TARGET_MISMATCH: '문서가 닫히거나 바뀜',
-  HOST_UNAVAILABLE: '호스트에 연결하지 못함',
-};
 const fileUndoState = (file: FileUndo) =>
   file.state === 'undone'
     ? '되돌림'
     : file.state === 'unknown'
       ? '확인 필요'
-      : `되돌리지 못함 · ${undoReasons[file.reason ?? ''] ?? file.reason ?? '거절'}`;
+      : `되돌리지 못함 · ${undoReason(file.reason)}`;
 /**
  * A multi-file request (ADR-027): rows grouped by file with each file's totals, one [되돌리기]
  * for the whole request, and what an automatic rollback or the last [되돌리기] did per file.
@@ -435,7 +428,11 @@ function FileGroups({
                 {total.removed}
               </span>
               {outcome ? (
-                <span className="direct-state" data-state={outcome.state}>
+                <span
+                  className="direct-state"
+                  data-state={outcome.state}
+                  title={outcome.reason ?? undefined}
+                >
                   {fileUndoState(outcome)}
                 </span>
               ) : null}

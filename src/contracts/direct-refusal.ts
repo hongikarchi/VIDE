@@ -71,6 +71,31 @@ const refusals: Record<string, { final: boolean; reason: (host: DirectHostName) 
   },
 };
 
+/** Why one file of a request-level undo or rollback was not undone, short (ADR-027 6). */
+const undoReasons: Record<string, string> = {
+  'not-latest': '그 뒤에 문서가 더 바뀜',
+  HOST_RESULT_UNKNOWN: '결과 확인 필요',
+  EXECUTOR_NOT_READY: '연결 없음',
+  STALE_CONNECTION: '문서가 닫히거나 바뀜',
+  TARGET_MISMATCH: '문서가 닫히거나 바뀜',
+  DOCUMENT_MISMATCH: '문서가 닫히거나 바뀜',
+  closed: '문서가 닫힘',
+  HOST_UNAVAILABLE: '호스트에 연결하지 못함',
+  HOST_BUSY: '호스트 명령 진행 중 · Esc로 끝낸 뒤 다시',
+  UNDO_UNAVAILABLE: '호스트 되돌리기 기록을 쓸 수 없음',
+  DOCUMENT_READ_ONLY: '읽기 전용 문서',
+  HOST_OWNERSHIP_MISMATCH: '연결 확인 실패 · 다시 연결',
+  UNAUTHORIZED: '연결 확인 실패 · 다시 연결',
+  EDITOR_REGISTRY_INVALID: '연결 확인 실패 · 다시 연결',
+  UNSUPPORTED_METHOD: '플러그인 업데이트 필요',
+  unknown: '호스트에 그 실행 기록이 없음(재시작 등)',
+  'undo-failed': '호스트가 되돌리지 못함',
+};
+/** The short Korean reason of an undo the host did not do; never the raw host code. */
+export function undoReason(reason: string | null | undefined) {
+  return undoReasons[reason ?? ''] ?? '호스트가 거절함';
+}
+
 /** The user-facing reason of a refusal code (unknown codes: the host's code in brackets). */
 export function refusalReason(code: string, host: DirectHostName = 'rhino') {
   return refusals[code]?.reason(host) ?? `호스트가 실행을 거절했습니다 (${code}).`;

@@ -11,6 +11,7 @@ import { documentHolder } from '../../src/contracts/request-scope.ts';
 import { hostProjectNote } from '../../src/ai/agent-connection.ts';
 import { liveLinksOf, openDocumentOf } from '../../src/server/live-links.ts';
 import { DocumentLinks } from '../../src/core/document-links.ts';
+import { undoReason } from '../../src/contracts/direct-refusal.ts';
 
 const hash = 'a'.repeat(64);
 const sourceDocument = (instance, name) => ({
@@ -1208,4 +1209,23 @@ test('Live links ask only the hosts the project links, at the same time', async 
     ],
   );
   assert.deepEqual(calls, { rhino: 1, zwcad: 0 });
+});
+
+test('A file the host did not undo is named with a Korean reason, never the raw host code', () => {
+  for (const reason of [
+    'HOST_BUSY',
+    'unknown',
+    'undo-failed',
+    'DOCUMENT_READ_ONLY',
+    'UNDO_UNAVAILABLE',
+    'HOST_OWNERSHIP_MISMATCH',
+    'SOMETHING_NEW',
+    undefined,
+  ]) {
+    const text = undoReason(reason);
+    assert.match(text, /[가-힣]/, String(reason));
+    assert.doesNotMatch(text, /[A-Z_]{4,}|undo-failed|^unknown$/, String(reason));
+  }
+  assert.equal(undoReason('not-latest'), '그 뒤에 문서가 더 바뀜');
+  assert.equal(undoReason('SOMETHING_NEW'), '호스트가 거절함');
 });
