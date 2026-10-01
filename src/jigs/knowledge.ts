@@ -3,8 +3,8 @@
 // app for now (tools/spikes/2026-09-29-knowledge-crawl, PLAN-08 K0); one file per project at
 // <data>/knowledge/<projectId>.sqlite. Originals stay on the company server; only paths are stored.
 import { DatabaseSync } from 'node:sqlite';
-import { existsSync, statSync } from 'node:fs';
-import { join, resolve, sep } from 'node:path';
+import { existsSync, realpathSync, statSync } from 'node:fs';
+import { basename, extname, join, resolve, sep } from 'node:path';
 import { spawn } from 'node:child_process';
 import { DomainError } from '../contracts/errors.ts';
 import {
@@ -234,7 +234,30 @@ function candidates(db: DatabaseSync, words: string[], filter: SearchFilter, cap
   return { rows: rows.map((row) => ({ ...row })), plan };
 }
 
-/** Open an original file (company server) with the default program. Only paths recorded in the DB. */
+/**
+ * The original of a recorded source (SPEC-08.4): only paths recorded in the DB, under its root.
+ * A path that leaves the root, by `..` or through a link or junction, is refused; a missing
+ * original is reported and nothing is created.
+ */
+function sourcePath(file: string, sourceId: number) {
+  const { base, path } = read(file, (db) => {
+    const root = meta(db, 'root');
+    const row = db.prepare('select rel_path from source where id = ?').get(sourceId) as
+      | { rel_path: string }
+      | undefined;
+    if (!root || !row) throw new DomainError('NOT_FOUND');
+    const base = resolve(root);
+    const path = resolve(base, row.rel_path);
+    if (!path.startsWith(base + sep)) throw new DomainError('INVALID_INPUT');
+    return { base, path };
+  });
+  if (!existsSync(path)) throw new DomainError('SOURCE_UNAVAILABLE');
+  const real = realpathSync(path);
+  if (!real.startsWith(realpathSync(base) + sep)) throw new DomainError('INVALID_INPUT');
+  return real;
+}
+
+/** Open an original file (company server) with this PC's default program. */
 export function openKnowledgeSource(
   file: string,
   sourceId: number,
@@ -244,20 +267,44 @@ export function openKnowledgeSource(
       .on('error', () => {})
       .unref(),
 ) {
-  const target = read(file, (db) => {
-    const root = meta(db, 'root');
-    const row = db.prepare('select rel_path from source where id = ?').get(sourceId) as
-      | { rel_path: string }
-      | undefined;
-    if (!root || !row) throw new DomainError('NOT_FOUND');
-    const base = resolve(root);
-    const path = resolve(base, row.rel_path);
-    if (!path.startsWith(base + sep)) throw new DomainError('INVALID_INPUT');
-    return path;
-  });
-  if (!existsSync(target)) throw new DomainError('SOURCE_UNAVAILABLE');
-  launch(target);
+  launch(sourcePath(file, sourceId));
   return { opened: true };
+}
+
+/** The largest original sent to a remote screen (SPEC-08.4). */
+export const SOURCE_FILE_MAX_BYTES = 200 * 1024 * 1024;
+/** Shown in the browser; everything else (hwp, xlsx, dwg, docx, html, svg …) is downloaded. */
+const INLINE_TYPES: Record<string, string> = {
+  '.pdf': 'application/pdf',
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.gif': 'image/gif',
+  '.webp': 'image/webp',
+  '.bmp': 'image/bmp',
+  '.txt': 'text/plain; charset=utf-8',
+  '.md': 'text/plain; charset=utf-8',
+  '.csv': 'text/plain; charset=utf-8',
+  '.log': 'text/plain; charset=utf-8',
+  '.json': 'text/plain; charset=utf-8',
+};
+/**
+ * An original for a remote screen (SPEC-08.4): its real path, size and how a browser gets it.
+ * Nothing runs on this PC; the caller streams the bytes.
+ */
+export function knowledgeSourceFile(file: string, sourceId: number) {
+  const path = sourcePath(file, sourceId);
+  const stat = statSync(path);
+  if (!stat.isFile()) throw new DomainError('SOURCE_UNAVAILABLE');
+  if (stat.size > SOURCE_FILE_MAX_BYTES) throw new DomainError('SOURCE_TOO_LARGE');
+  const type = INLINE_TYPES[extname(path).toLowerCase()];
+  return {
+    path,
+    size: stat.size,
+    name: basename(path),
+    contentType: type ?? 'application/octet-stream',
+    inline: !!type,
+  };
 }
 
 // --- project facts: the VIDE-side review layer over the crawler DB (SPEC-08, PLAN-22 T-065) -------

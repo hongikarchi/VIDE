@@ -1,4 +1,5 @@
-import type { IncomingMessage } from 'node:http';
+import { createReadStream } from 'node:fs';
+import type { IncomingMessage, ServerResponse } from 'node:http';
 import { z } from 'zod';
 import { DomainError } from '../core/store.ts';
 import { KnowledgeReviewStore, verdicts } from '../core/knowledge-review-store.ts';
@@ -20,6 +21,7 @@ import {
   factStatement,
   factValidity,
   knowledgeFile,
+  knowledgeSourceFile,
   openKnowledgeSource,
   recordFactReview,
   reviewLayer,
@@ -37,7 +39,23 @@ export interface FactRouteContext {
   send: (status: number, data: unknown) => void;
   /** The request came through the remote tunnel: no opening of originals on this PC. */
   remote?: boolean;
+  /** The response, for streaming an original's bytes (`…/sources/:n/file`). */
+  response?: ServerResponse;
 }
+
+/** HTTP statuses of the facts error codes; server.ts merges them into its table. */
+export const factStatuses: Record<string, number> = {
+  SOURCE_UNAVAILABLE: 404,
+  SOURCE_TOO_LARGE: 413,
+};
+const SOURCE_TEXT: Record<string, string> = {
+  SOURCE_UNAVAILABLE:
+    '원본 파일을 찾을 수 없습니다. 작업 PC에서 서버 연결과 파일 위치를 확인하세요.',
+  SOURCE_TOO_LARGE: '원본이 200 MB를 넘어 원격 화면으로 보내지 않습니다. 작업 PC에서 여세요.',
+};
+/** `filename*` of Content-Disposition (RFC 5987), with a plain ASCII fallback. */
+const disposition = (inline: boolean, name: string) =>
+  `${inline ? 'inline' : 'attachment'}; filename="${name.replace(/[^\x20-\x7e]|["\\]/g, '_')}"; filename*=UTF-8''${encodeURIComponent(name)}`;
 
 // `verdict: null` clears the verdict (the engine takes GET/POST/PUT only).
 const review = z
@@ -73,12 +91,12 @@ const count = (value: string | null, fallback: number) => {
 const PERSON = 'user';
 
 const route =
-  /^\/api\/v1\/projects\/([^/]+)\/facts(?:\/(search|rules|refs)|\/(issues|statements|sources)\/(\d+)(?:\/(review|open))?)?$/;
+  /^\/api\/v1\/projects\/([^/]+)\/facts(?:\/(search|rules|refs)|\/(issues|statements|sources)\/(\d+)(?:\/(review|open|file))?)?$/;
 
 export async function factRoutes(
   url: URL,
   request: IncomingMessage,
-  { workspace, dataDirectory, body, send, remote = false }: FactRouteContext,
+  { workspace, dataDirectory, body, send, remote = false, response }: FactRouteContext,
 ): Promise<boolean> {
   const match = route.exec(url.pathname);
   if (!match) return false;
@@ -158,9 +176,46 @@ export async function factRoutes(
     return true;
   }
   if (kind === 'sources' && action === 'open' && method === 'POST') {
-    // Opening an original runs a program on this PC: only the person at it (SPEC-08.4).
+    // Opening an original runs a program on this PC: only the person at it (SPEC-08.4). A remote
+    // screen gets the file itself instead (`…/file`).
     if (remote) throw new DomainError('FORBIDDEN');
     send(200, openKnowledgeSource(file, id));
+    return true;
+  }
+  if (kind === 'sources' && action === 'file' && method === 'GET') {
+    // The original's bytes for a browser (SPEC-08.4, the remote screen's [원본 열기]): shown when
+    // a browser can (PDF, images, text), downloaded otherwise; never run here.
+    if (!response) throw new DomainError('EXECUTOR_NOT_READY');
+    let source: ReturnType<typeof knowledgeSourceFile>;
+    let stream: ReturnType<typeof createReadStream>;
+    try {
+      source = knowledgeSourceFile(file, id);
+      stream = createReadStream(source.path);
+      await new Promise<void>((resolve, reject) => {
+        stream.once('open', () => resolve());
+        stream.once('error', () => reject(new DomainError('SOURCE_UNAVAILABLE')));
+      });
+    } catch (error) {
+      // The tab the remote screen opened shows a sentence, not an error object.
+      const text = error instanceof DomainError ? SOURCE_TEXT[error.code] : undefined;
+      if (!text) throw error;
+      response.writeHead(factStatuses[(error as DomainError).code], {
+        'Content-Type': 'text/plain; charset=utf-8',
+        'Cache-Control': 'no-store',
+      });
+      response.end(text);
+      return true;
+    }
+    // HTML, SVG and other active types go as downloads (octet-stream), never rendered here.
+    response.writeHead(200, {
+      'Content-Type': source.contentType,
+      'Content-Length': String(source.size),
+      'Content-Disposition': disposition(source.inline, source.name),
+      'X-Content-Type-Options': 'nosniff',
+      'Cache-Control': 'private, no-store',
+    });
+    stream.on('error', () => response.destroy());
+    stream.pipe(response);
     return true;
   }
   throw new DomainError('NOT_FOUND');

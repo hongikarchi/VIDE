@@ -25,7 +25,7 @@ import {
 } from '../jigs/official/structure-analysis/index.ts';
 import { makeRoutes, makeStatuses } from './make-routes.ts';
 import { syncReadRoutes } from './sync-reads.ts';
-import { factRoutes } from './facts-routes.ts';
+import { factRoutes, factStatuses } from './facts-routes.ts';
 import { ConversationService, conversationRoutes, conversationStatuses } from './conversations.ts';
 import {
   analyzeSummary,
@@ -157,6 +157,7 @@ const statuses: Record<string, number> = {
   HOST_RUNNING: 409,
   ...jigStatuses,
   ...conversationStatuses,
+  ...factStatuses,
   ...makeStatuses,
 };
 export async function startServer({
@@ -1236,7 +1237,7 @@ export async function startServer({
       )
         return;
       if (await syncReadRoutes(url, request, { links, workspace, sdk, body, send })) return;
-      const facts = { workspace, dataDirectory: dirname(filename), body, send, remote };
+      const facts = { workspace, dataDirectory: dirname(filename), body, send, remote, response };
       if (await factRoutes(url, request, facts)) return;
       if (
         await conversationRoutes(url, request, {

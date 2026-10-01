@@ -1,4 +1,5 @@
 import { api } from './gateway.ts';
+import { remoteSession } from './remote-panel.ts';
 import {
   factEvidenceSchema,
   factIssueSchema,
@@ -20,8 +21,9 @@ import {
 // crawler DB read-only and keeps VIDE's own review layer (knowledge_reviews, knowledge_source_rules,
 // ARCH-03 §10.2). Routes: GET /projects/:id/facts, /facts/search?q, /facts/issues/:n,
 // /facts/statements/:n, POST /facts/statements/:n/review, /facts/rules, /facts/sources/:n/open.
-// Reply shapes are src/contracts/facts.ts, shared with the engine. Opening an original file is a
-// person's action at this PC; the engine refuses it from a remote session.
+// Reply shapes are src/contracts/facts.ts, shared with the engine. [원본 열기] is a person's
+// action (SPEC-08.4): at this PC the default program opens the file; on a remote screen (iPad)
+// the file itself comes to a new tab (/facts/sources/:n/file) and nothing runs on the PC.
 
 export { verdicts as VERDICTS, type Verdict, type BriefItem } from '../contracts/facts.ts';
 export type Review = FactReview;
@@ -68,11 +70,15 @@ export interface FactsApi {
   review(id: number, input: ReviewInput): Promise<Review>;
   /** Leave one source file out of search and evidence, with the reason. */
   rule(sourceId: number, input: { reason: string }): Promise<FactRules>;
+  /** [원본 열기]: this PC's default program, or a new tab on a remote screen. */
   openSource(sourceId: number): Promise<void>;
+  /** The address of an original's bytes (shown or downloaded by the browser). */
+  sourceFile(sourceId: number): string;
 }
 
 export function factsApi(projectId: string): FactsApi {
   const facts = `/projects/${projectId}/facts`;
+  const sourceFile = (sourceId: number) => `api/v1${facts}/sources/${sourceId}/file`;
   let cached: Promise<Summary> | undefined;
   const summary = (fresh = false) => {
     if (!cached || fresh) {
@@ -129,8 +135,14 @@ export function factsApi(projectId: string): FactsApi {
       );
     },
     async openSource(sourceId) {
+      // Opened before any await: still the click's own gesture, so the tab is not blocked.
+      if (remoteSession()) {
+        window.open(sourceFile(sourceId), '_blank', 'noopener');
+        return;
+      }
       await api(`${facts}/sources/${sourceId}/open`, 'POST', {});
     },
+    sourceFile,
   };
 }
 

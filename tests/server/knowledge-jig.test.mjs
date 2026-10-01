@@ -4,8 +4,12 @@ import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
+import { realpathSync, symlinkSync } from 'node:fs';
+import { Writable } from 'node:stream';
 import { startServer } from '../../src/server/server.ts';
-import { openKnowledgeSource } from '../../src/jigs/knowledge.ts';
+import { factRoutes } from '../../src/server/facts-routes.ts';
+import { Store } from '../../src/core/store.ts';
+import { openKnowledgeSource, SOURCE_FILE_MAX_BYTES } from '../../src/jigs/knowledge.ts';
 
 // Project knowledge (PLAN-08 K0, SPEC-08): the facts routes read <data>/knowledge/<project>.sqlite
 // only; the old trial routes (/jigs/knowledge…) are gone, the app reads /facts.
@@ -169,4 +173,112 @@ test('knowledge jig reads one project DB: summary, issue note, search, evidence;
     await app.close();
     await rm(directory, { recursive: true, force: true });
   }
+});
+
+// SPEC-08.4 (2026-10-01): [원본 열기] opens the file with this PC's program at the PC; a remote
+// screen (iPad) gets the bytes in a new tab instead, and nothing runs on the PC. Both follow the
+// same root checks: `..` and links that leave the root are refused.
+test('originals: local opens on the PC, a remote screen gets the bytes, escapes are refused', async (t) => {
+  const directory = await mkdtemp(join(tmpdir(), 'vide-knowledge-file-'));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  const root = join(directory, 'server');
+  const outside = join(directory, 'outside');
+  await mkdir(join(root, 'docs'), { recursive: true });
+  await mkdir(outside);
+  await writeFile(join(root, 'docs', '회의록.docx'), 'docx-bytes');
+  await writeFile(join(root, 'docs', '도면 설명.pdf'), '%PDF-1.4 test');
+  await writeFile(join(root, 'docs', 'note.txt'), '스팬 13m');
+  await writeFile(join(root, 'docs', 'page.html'), '<script>alert(1)</script>');
+  await writeFile(join(outside, 'secret.txt'), 'secret');
+  // A junction inside the root that points outside it (no admin rights needed on Windows).
+  symlinkSync(outside, join(root, 'docs', 'link'), 'junction');
+  await mkdir(join(directory, 'knowledge'));
+  const store = new Store(':memory:');
+  t.after(() => store.close());
+  const project = store.createProject('원본');
+  const file = join(directory, 'knowledge', project.id + '.sqlite');
+  buildDb(file, root);
+  const db = new DatabaseSync(file);
+  db.prepare(
+    `insert into source values(3, 'docs/도면 설명.pdf', null), (4, 'docs/note.txt', null),
+      (5, 'docs/link/secret.txt', null), (6, 'docs/page.html', null), (7, 'docs/없음.pdf', null)`,
+  ).run();
+  db.close();
+  const call = async (method, path, remote) => {
+    const chunks = [];
+    const response = Object.assign(
+      new Writable({
+        write(chunk, _encoding, done) {
+          chunks.push(Buffer.from(chunk));
+          done();
+        },
+      }),
+      {
+        writeHead(status, headers) {
+          this.status = status;
+          this.headers = headers;
+        },
+      },
+    );
+    const finished = new Promise((resolve) => response.on('finish', resolve));
+    let sent;
+    await factRoutes(
+      new URL(`http://127.0.0.1/api/v1/projects/${project.id}/facts/sources/${path}`),
+      { method },
+      {
+        workspace: { store },
+        dataDirectory: directory,
+        body: async () => ({}),
+        send: (status, data) => (sent = { status, data }),
+        remote,
+        response,
+      },
+    );
+    if (sent) return sent;
+    await finished;
+    return { status: response.status, headers: response.headers, body: Buffer.concat(chunks) };
+  };
+  // At the PC: the default program opens it; a remote screen may not run anything here.
+  await assert.rejects(call('POST', '1/open', true), { code: 'FORBIDDEN' });
+  const opened = [];
+  assert.deepEqual(
+    openKnowledgeSource(file, 1, (path) => opened.push(path)),
+    { opened: true },
+  );
+  assert.equal(opened[0], realpathSync(join(root, 'docs', '회의록.docx')));
+  // A remote screen gets the file: PDF and text shown, others downloaded.
+  const pdf = await call('GET', '3/file', true);
+  assert.equal(pdf.status, 200);
+  assert.equal(pdf.headers['Content-Type'], 'application/pdf');
+  assert.match(pdf.headers['Content-Disposition'], /^inline; /);
+  assert.ok(
+    pdf.headers['Content-Disposition'].endsWith(
+      `filename*=UTF-8''${encodeURIComponent('도면 설명.pdf')}`,
+    ),
+  );
+  assert.equal(pdf.headers['X-Content-Type-Options'], 'nosniff');
+  assert.equal(pdf.body.toString(), '%PDF-1.4 test');
+  assert.equal(pdf.headers['Content-Length'], String(pdf.body.length));
+  const text = await call('GET', '4/file', true);
+  assert.equal(text.headers['Content-Type'], 'text/plain; charset=utf-8');
+  assert.equal(text.body.toString(), '스팬 13m');
+  const docx = await call('GET', '1/file', true);
+  assert.equal(docx.headers['Content-Type'], 'application/octet-stream');
+  assert.match(docx.headers['Content-Disposition'], /^attachment; /);
+  const html = await call('GET', '6/file', true);
+  assert.equal(html.headers['Content-Type'], 'application/octet-stream', 'never rendered here');
+  assert.match(html.headers['Content-Disposition'], /^attachment; /);
+  // The same file at the PC, too.
+  assert.equal((await call('GET', '4/file', false)).body.toString(), '스팬 13m');
+  // `..` and a junction out of the root are refused; a missing original is a sentence.
+  await assert.rejects(call('GET', '2/file', true), { code: 'INVALID_INPUT' });
+  await assert.rejects(call('GET', '5/file', true), { code: 'INVALID_INPUT' });
+  assert.throws(() => openKnowledgeSource(file, 5, () => assert.fail('must not open')), {
+    code: 'INVALID_INPUT',
+  });
+  const missing = await call('GET', '7/file', true);
+  assert.equal(missing.status, 404);
+  assert.match(missing.body.toString(), /원본 파일을 찾을 수 없습니다/);
+  await assert.rejects(call('GET', '99/file', true), { code: 'NOT_FOUND' });
+  assert.equal(SOURCE_FILE_MAX_BYTES, 200 * 1024 * 1024);
 });
