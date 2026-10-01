@@ -1,11 +1,13 @@
-// 참고 이미지 탭 (SPEC-09.2·09.3·09.5, PLAN-26 T-090 phase (a)): an image attachment opened from
-// its composer chip ([영역 표시]) in the row of open items. Two states of one tab: the region
-// editor ('참고 이미지 · <파일>') — brush, lasso, rectangle and eraser drawing regions A, B, C… with
-// a note each, wheel zoom, space/middle-button pan, Ctrl+Z / Ctrl+Shift+Z — and the 이해 확인 board
-// ('이해 확인 · <파일>'), which in this phase is only its frame: the reference with the regions
-// ('해석 대기'), an empty place for the generated image ('아직 없음') and an empty values table.
-// No AI is called yet. The regions are kept by the engine per project and attachment
-// (src/server/reference-boards.ts); [이해 확인] also saves the flattened input image beside them.
+// 참고 이미지 탭 (SPEC-09, PLAN-26 T-090): an image attachment opened from its composer chip
+// ([영역 표시]) in the row of open items. Two states of one tab: the region editor ('참고 이미지 ·
+// <파일>') — brush, lasso, rectangle and eraser drawing regions A, B, C… with a note each, wheel
+// zoom, space/middle-button pan, Ctrl+Z / Ctrl+Shift+Z — and the 이해 확인 board ('이해 확인 ·
+// <파일>'): [이해 확인] sends the regions with the reference to the chosen conversation's AI
+// (reference-bridge.ts), the board draws its interpretation as bubbles over the reference (VIDE
+// draws the words, never the image model), the image job's picture of our building beside it, the
+// values table, the board's state, a one-line correction per bubble (that region only, next 판)
+// and [맞음 → 모델링 반영] (the confirmed 판 as the next 자동 turn). The engine keeps the board
+// (src/server/reference-boards.ts).
 import {
   useCallback,
   useEffect,
@@ -17,11 +19,19 @@ import {
 } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import {
+  UNKNOWN_TARGET,
   effectiveRegions,
   referenceBoardSchema,
+  regionBox,
+  targetQuestions,
+  type InterpretedValue,
+  type ReferenceBoard,
   type ReferenceRegion,
   type ReferenceShape,
   type ReferenceStage,
+  type ReferenceVersion,
+  type RegionInterpretation,
+  type ValueSource,
 } from '../contracts/reference-board.ts';
 import { attachmentPreview } from './attachments.ts';
 import { api, errors } from './gateway.ts';
@@ -45,6 +55,8 @@ import {
   undo,
   type MaskHistory,
 } from './reference-mask.ts';
+import { leaderEnd, placeBubbles, type BubblePlace } from './reference-bubbles.ts';
+import { onReferenceBridge, referenceBridge, type ReferenceAi } from './reference-bridge.ts';
 import { TOKEN_FALLBACK } from './tokens.ts';
 import {
   activeWorkspace,
@@ -53,6 +65,7 @@ import {
   renameContextTab,
   type ContextTab,
 } from './workspaces.ts';
+import { Card as QuestionCard } from './question-card.tsx';
 import './reference-tab.css';
 
 type Tool = 'brush' | 'lasso' | 'rect' | 'erase';
@@ -67,7 +80,7 @@ const WIDTH_MIN = 3;
 const WIDTH_MAX = 150;
 /** The flattened input image's long side at most (SPEC-09.7 2: a small image is enough). */
 const FLAT_LONG_SIDE = 1600;
-const CHECK_TITLE = '해석은 다음 단계에서 연결됩니다';
+const NO_IMAGES = '이 모델은 이미지를 읽지 않습니다';
 
 /** The file name shown after '참고 이미지 · ' or '이해 확인 · ' in the tab label. */
 export const referenceName = (tab: Pick<ContextTab, 'label'>) =>
@@ -228,6 +241,7 @@ function Editor({
   onCheck,
   checking,
   status,
+  ai,
 }: {
   name: string;
   history: MaskHistory;
@@ -236,6 +250,7 @@ function Editor({
   onCheck: () => void;
   checking: boolean;
   status: string;
+  ai: ReferenceAi | undefined;
 }) {
   const state = history.present;
   const [tool, setTool] = useState<Tool>('brush');
@@ -563,13 +578,19 @@ function Editor({
           <button
             type="button"
             className="primary-button reference-cta"
-            title={CHECK_TITLE}
-            disabled={checking}
+            title={ai && !ai.images ? NO_IMAGES : '지금 대화의 AI에 이미지와 영역을 보냅니다'}
+            disabled={checking || !ai || !ai.images}
             onClick={onCheck}
           >
-            {checking ? '입력 이미지 만드는 중' : '이해 확인'}
+            {checking ? '보내는 중' : '이해 확인'}
           </button>
-          <p>{CHECK_TITLE}. 지금은 AI에 보내지 않고 확인 보드의 틀과 입력 이미지만 만듭니다.</p>
+          <p>
+            {!ai
+              ? '작성기에서 AI 모델을 고르세요.'
+              : !ai.images
+                ? NO_IMAGES + '. 이미지를 읽는 모델을 고르세요.'
+                : `지금 대화 · ${ai.name}에 이미지와 영역 ${effectiveRegions(regions).length}개를 보냅니다. 답이 오면 말풍선으로 보입니다.`}
+          </p>
           <p className="reference-status" role="status">
             {status}
           </p>
@@ -606,35 +627,656 @@ function draftPath(
   return <path className="reference-draft" data-tool={draft.tool} d={d} strokeWidth={px} />;
 }
 
-/** The 이해 확인 board, phase (a): its frame only (SPEC-09.5 before 답하는 중). */
-function Board({
-  name,
+/** The words of a board problem or an image job's failure (SPEC-09.4·09.7 5). */
+const IMAGE_TEXT: Record<string, string> = {
+  CODEX_UNAVAILABLE: 'Codex CLI가 없어 만들지 못했습니다',
+  CODEX_LOGIN_REQUIRED: 'Codex에 ChatGPT로 로그인되어 있지 않습니다',
+  CODEX_USAGE_LIMIT: 'ChatGPT 요금제 사용 한도에 걸렸습니다',
+  IMAGE_REFUSED: '이미지 생성이 거절됐습니다',
+  IMAGE_NOT_CREATED: '결과 이미지 파일이 없습니다',
+  IMAGE_INTERRUPTED: 'VIDE가 다시 시작돼 생성이 끊겼습니다',
+  IMAGE_FAILED: '이미지를 만들지 못했습니다',
+};
+const BOARD_ERRORS: Record<string, string> = {
+  REFERENCE_BUSY: '이 보드의 해석이 아직 진행 중입니다',
+  REFERENCE_NOT_READY: '먼저 [이해 확인]으로 해석을 받으세요',
+  REFERENCE_FROZEN: '확정한 판은 고칠 수 없습니다. [새 판으로 고치기]를 누르세요',
+  REFERENCE_TARGET_UNKNOWN: '적용 대상을 먼저 정하세요',
+  REFERENCE_IMAGES_OFF: '이 프로젝트에서 이미지 생성이 꺼져 있습니다',
+  REFERENCE_NO_VIEW: '3D 뷰 캡처가 없어 만들 수 없습니다',
+  STALE_REFERENCE: '보드가 그 사이 바뀌었습니다. 다시 확인하세요',
+};
+const boardError = (error: unknown) => {
+  const code = (error as { code?: string })?.code ?? (error as Error)?.message;
+  return (code && (BOARD_ERRORS[code] || errors[code])) || '보내지 못했습니다';
+};
+/** The bubble's sentence without the letter and the element its head already shows. */
+const bubbleLine = (region: Pick<RegionInterpretation, 'letter' | 'element' | 'line'>) => {
+  let line = region.line.trim();
+  if (line.startsWith(region.letter))
+    line = line.slice(region.letter.length).replace(/^\s*[:·.]\s*/, '');
+  if (line.startsWith(region.element))
+    line = line.slice(region.element.length).replace(/^\s*[·,:]\s*/, '');
+  return line || region.line;
+};
+const SOURCE: Record<ValueSource, string> = { user: '사용자', estimated: '추정', unknown: '모름' };
+const seconds = (ms: number) => `${Math.max(0, Math.round(ms / 1000))}초`;
+const clock = (ms: number) => {
+  const s = Math.max(0, Math.floor(ms / 1000));
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+};
+const valueText = (value: InterpretedValue) =>
+  `${value.name} ${value.value}${value.unit ? ' ' + value.unit : ''}`;
+const NOTICE_KEY = 'vide:reference-image-notice';
+const noticeSeen = () => {
+  try {
+    return localStorage.getItem(NOTICE_KEY) === '1';
+  } catch {
+    return false;
+  }
+};
+
+/**
+ * A JPEG data URL small enough for a stored request (the whole request stays under 200 KB, so an
+ * image gets about 140 KB); smaller and softer until it fits.
+ */
+export async function jpegDataUrl(
+  source: CanvasImageSource & { width: number; height: number },
+  maxChars = 150_000,
+) {
+  for (const [side, quality] of [
+    [1280, 0.78],
+    [1024, 0.72],
+    [880, 0.66],
+    [720, 0.6],
+    [560, 0.55],
+  ] as const) {
+    const k = Math.min(1, side / Math.max(source.width, source.height, 1));
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(1, Math.round(source.width * k));
+    canvas.height = Math.max(1, Math.round(source.height * k));
+    const context = canvas.getContext('2d');
+    if (!context) break;
+    context.fillStyle = '#ffffff';
+    context.fillRect(0, 0, canvas.width, canvas.height);
+    context.drawImage(source, 0, 0, canvas.width, canvas.height);
+    const url = canvas.toDataURL('image/jpeg', quality);
+    if (url.length <= maxChars) return url;
+  }
+  return undefined;
+}
+const loadImage = (src: string) =>
+  new Promise<HTMLImageElement>((done, fail) => {
+    const picture = new Image();
+    picture.onload = () => done(picture);
+    picture.onerror = () => fail(Error('IMAGE'));
+    picture.src = src;
+  });
+
+/** The bubbles over the reference (VIDE draws them: never the image model), with leader lines. */
+function Bubbles({
+  version,
   regions,
+  width,
+  height,
+  editable,
+  busyLetter,
+  onCorrect,
+}: {
+  version: ReferenceVersion;
+  regions: readonly ReferenceRegion[];
+  /** The figure on screen, in pixels. */
+  width: number;
+  height: number;
+  editable: boolean;
+  busyLetter?: string;
+  onCorrect: (letter: string, note: string) => Promise<void>;
+}) {
+  const nodes = useRef(new Map<string, HTMLElement>());
+  const [places, setPlaces] = useState<BubblePlace[]>([]);
+  const [open, setOpen] = useState<string | undefined>();
+  const [note, setNote] = useState('');
+  const [sending, setSending] = useState(false);
+  const shown = effectiveRegions(regions);
+  const anchors = version.regions.map((region) => {
+    const drawn = shown.find((entry) => entry.letter === region.letter);
+    const box = drawn && !drawn.whole ? regionBox(drawn) : [0.4, 0.4, 0.6, 0.6];
+    const x = region.anchor?.x ?? (box[0] + box[2]) / 2;
+    const y = region.anchor?.y ?? (box[1] + box[3]) / 2;
+    return { letter: region.letter, x: x * width, y: y * height };
+  });
+  const key = `${version.number}:${Math.round(width)}:${Math.round(height)}:${open ?? ''}`;
+  useLayoutEffect(() => {
+    if (!width || !height) return;
+    const next = placeBubbles(
+      anchors.map((anchor) => {
+        const node = nodes.current.get(anchor.letter);
+        return {
+          ...anchor,
+          width: node?.offsetWidth ?? 180,
+          height: node?.offsetHeight ?? 48,
+        };
+      }),
+      { width, height },
+    );
+    setPlaces(next);
+    // Measured once per 판, size and open bubble.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key]);
+  const send = async (letter: string) => {
+    if (!note.trim()) return;
+    setSending(true);
+    try {
+      await onCorrect(letter, note.trim());
+      setOpen(undefined);
+      setNote('');
+    } finally {
+      setSending(false);
+    }
+  };
+  return (
+    <div className="reference-bubbles">
+      <svg className="reference-leaders" width={width} height={height} aria-hidden="true">
+        {places.map((place) => {
+          const anchor = anchors.find((entry) => entry.letter === place.letter);
+          if (!anchor) return null;
+          const [x, y] = leaderEnd(place, anchor.x, anchor.y);
+          return (
+            <g key={place.letter}>
+              <line x1={anchor.x} y1={anchor.y} x2={x} y2={y} />
+              <circle cx={anchor.x} cy={anchor.y} r={3.5} />
+            </g>
+          );
+        })}
+      </svg>
+      {version.regions.map((region) => {
+        const place = places.find((entry) => entry.letter === region.letter);
+        const changed = version.kind !== 'all' && version.changed.includes(region.letter);
+        return (
+          <div
+            key={region.letter}
+            ref={(node) => {
+              if (node) nodes.current.set(region.letter, node);
+              else nodes.current.delete(region.letter);
+            }}
+            className="reference-bubble"
+            data-letter={region.letter}
+            data-changed={changed ? '' : undefined}
+            data-busy={busyLetter === region.letter ? '' : undefined}
+            data-open={open === region.letter ? '' : undefined}
+            style={
+              place
+                ? { left: place.left, top: place.top }
+                : { left: 0, top: 0, visibility: 'hidden' }
+            }
+          >
+            <button
+              type="button"
+              className="reference-bubble-body"
+              disabled={!editable}
+              aria-label={`영역 ${region.letter} 말풍선 · ${region.line}`}
+              title={editable ? `눌러서 영역 ${region.letter}만 고치기` : undefined}
+              onClick={() => {
+                setOpen(open === region.letter ? undefined : region.letter);
+                setNote('');
+              }}
+            >
+              <b>
+                <span className="reference-letter">{region.letter}</span>
+                {region.element}
+              </b>
+              <span>{bubbleLine(region)}</span>
+              {region.openQuestions.length ? (
+                <span className="reference-q">? {region.openQuestions.join(' · ')}</span>
+              ) : null}
+              {busyLetter === region.letter ? <em>다시 읽는 중</em> : null}
+            </button>
+            {open === region.letter ? (
+              <form
+                className="reference-correct"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  void send(region.letter);
+                }}
+              >
+                <input
+                  autoFocus
+                  value={note}
+                  maxLength={500}
+                  placeholder="예: 간격은 450, 깊이는 맞음"
+                  aria-label={`영역 ${region.letter} 고칠 내용`}
+                  onChange={(event) => setNote(event.currentTarget.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Escape') setOpen(undefined);
+                  }}
+                />
+                <button type="submit" className="primary-button" disabled={sending || !note.trim()}>
+                  이 영역만 다시
+                </button>
+                <button type="button" onClick={() => setOpen(undefined)}>
+                  취소
+                </button>
+              </form>
+            ) : null}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/** The picture of our building with the element on it (SPEC-09.5 오른쪽, 09.7). */
+function Generated({
+  board,
+  base,
+  ratio,
+  now,
+  imagesOn,
+  onCancel,
+  onRetry,
+  onToggle,
+}: {
+  board: ReferenceBoard;
+  base: string;
+  ratio: string;
+  now: number;
+  imagesOn: boolean;
+  onCancel: () => void;
+  onRetry: (number: number) => void;
+  onToggle: (on: boolean) => void;
+}) {
+  const [notice, setNotice] = useState(!noticeSeen());
+  const last = board.versions.at(-1);
+  const previous = [...board.versions]
+    .reverse()
+    .find((version) => version !== last && version.image.state === 'ready');
+  const image = last?.image;
+  const src = (number: number) => `${base}/images/${number}`;
+  let body: ReactNode;
+  let caption =
+    '입력: 지금 3D 뷰 캡처 + 영역을 그린 참고 이미지 + 해석. 실패해도 [맞음]은 누를 수 있습니다.';
+  const retry = last ? (
+    <button type="button" onClick={() => onRetry(last.number)}>
+      다시 생성
+    </button>
+  ) : null;
+  if (!last || !image)
+    body = (
+      <div className="reference-empty-card">
+        <strong>{board.pending ? '해석을 기다리는 중' : '아직 없음'}</strong>
+        <small>말풍선이 나온 뒤 우리 건물에 입혀 본 이미지를 만듭니다</small>
+      </div>
+    );
+  else if (image.state === 'ready')
+    body = (
+      <a className="reference-gen" href={src(last.number)} target="_blank" rel="noreferrer">
+        <img src={src(last.number)} alt={`우리 건물에 입혀 본 이미지 · 판 ${last.number}`} />
+      </a>
+    );
+  else if (image.state === 'running' || image.state === 'waiting') {
+    const elapsed = image.startedAt ? now - Date.parse(image.startedAt) : 0;
+    body = (
+      <div className="reference-gen">
+        {previous ? (
+          <>
+            <img src={src(previous.number)} alt={`이전 해석 · 판 ${previous.number}`} />
+            <span className="reference-band">이전 해석 · 판 {previous.number}</span>
+          </>
+        ) : null}
+        <div className="reference-gen-card" role="status">
+          <span className="reference-spinner" aria-hidden="true" />
+          <strong>
+            우리 건물에 입혀 본 이미지 · {image.state === 'running' ? '생성 중' : '생성 대기'}
+          </strong>
+          {image.state === 'running' ? (
+            <small>Codex 이미지 생성 · {clock(elapsed)} · 1분 안에 끝나지 않으면 멈춥니다</small>
+          ) : null}
+          {image.state === 'running' ? (
+            <button type="button" onClick={onCancel}>
+              생성 취소
+            </button>
+          ) : null}
+        </div>
+      </div>
+    );
+  } else {
+    const text =
+      image.state === 'timeout'
+        ? '시간 초과 · 이미지 없이 확인'
+        : image.state === 'cancelled'
+          ? '취소됨'
+          : image.state === 'off'
+            ? '이미지 생성 꺼짐'
+            : image.state === 'no-model'
+              ? '연결된 모델이 없어 만들지 않음'
+              : image.state === 'remote'
+                ? '원격 세션에서는 만들지 않음'
+                : (IMAGE_TEXT[image.code ?? ''] ?? IMAGE_TEXT.IMAGE_FAILED);
+    body = (
+      <div className="reference-empty-card" data-state={image.state}>
+        <strong>{text}</strong>
+        <small>이미지가 없어도 말풍선 판으로 [맞음]을 누를 수 있습니다</small>
+        {image.state === 'remote' ||
+        image.state === 'no-model' ||
+        (image.state === 'off' && !imagesOn)
+          ? null
+          : retry}
+      </div>
+    );
+  }
+  if (image?.state === 'ready' && image.elapsedMs !== undefined)
+    caption = `판 ${last!.number} · 걸린 시간 ${seconds(image.elapsedMs)} · 산출물에 저장됨 · 누르면 크게 봅니다. 참고용 시각화이며 모델링 기준은 확정한 해석입니다.`;
+  return (
+    <section className="reference-pane" aria-label="우리 건물에 입혀 본 이미지">
+      <div className="reference-pane-head">
+        <strong>우리 건물에 입혀 본 이미지</strong> 참고용
+        <label className="reference-toggle">
+          <input
+            type="checkbox"
+            checked={imagesOn}
+            onChange={(event) => onToggle(event.currentTarget.checked)}
+          />
+          이미지 생성
+        </label>
+      </div>
+      <div
+        className={`reference-figure${image?.state === 'ready' ? '' : ' reference-empty'}`}
+        style={{ aspectRatio: ratio }}
+        data-image={image?.state ?? 'none'}
+      >
+        {body}
+      </div>
+      <div className="reference-caption">{caption}</div>
+      {notice && imagesOn ? (
+        <p className="reference-notice">
+          이미지 생성은 ChatGPT 요금제 사용량을 씁니다(Codex · 대화의 AI와 상관없이 OpenAI로 보냄).
+          <button
+            type="button"
+            className="link-button"
+            onClick={() => {
+              try {
+                localStorage.setItem(NOTICE_KEY, '1');
+              } catch {
+                /* Shown again next time. */
+              }
+              setNotice(false);
+            }}
+          >
+            알겠음
+          </button>
+        </p>
+      ) : null}
+    </section>
+  );
+}
+
+/** [맞음] asks first where a region applies when the 판 does not say (SPEC-09.8 2). */
+function TargetCards({
+  questions,
+  onAnswer,
+  onCancel,
+}: {
+  questions: ReturnType<typeof targetQuestions>;
+  onAnswer: (targets: Record<string, string>) => void;
+  onCancel: () => void;
+}) {
+  const [choices, setChoices] = useState<Record<string, { optionId?: string; text?: string }>>({});
+  return (
+    <div className="qcards reference-targets">
+      {questions.map((question, index) => (
+        <QuestionCard
+          key={question.id}
+          question={question}
+          index={index}
+          count={questions.length}
+          choice={choices[question.id] ?? {}}
+          choose={(choice) => setChoices((all) => ({ ...all, [question.id]: choice }))}
+          disabled={false}
+        />
+      ))}
+      <footer className="qcard-actions">
+        <button type="button" className="qcard-secondary" onClick={onCancel}>
+          취소
+        </button>
+        <button
+          type="button"
+          className="qcard-primary"
+          onClick={() =>
+            onAnswer(
+              Object.fromEntries(
+                questions.map((question) => {
+                  const choice = choices[question.id] ?? {};
+                  const option =
+                    question.options.find((o) => o.id === choice.optionId) ??
+                    question.options.find((o) => o.recommended)!;
+                  return [question.letter, choice.text?.trim() || option.label];
+                }),
+              ),
+            )
+          }
+        >
+          이 답으로 진행
+        </button>
+      </footer>
+    </div>
+  );
+}
+
+const STATES = [
+  '답하는 중',
+  '말풍선 준비',
+  '이미지 생성 중',
+  '이미지 준비 / 실패',
+  '확정',
+] as const;
+function boardState(board: ReferenceBoard): (typeof STATES)[number] | '해석 대기' {
+  const last = board.versions.at(-1);
+  if (board.pending && board.pending.action !== 'confirm') return '답하는 중';
+  if (!last) return '해석 대기';
+  if (last.confirmed) return '확정';
+  if (last.image.state === 'running') return '이미지 생성 중';
+  // No image job for this 판 (off, remote, no model to draw on): the bubbles are what it has.
+  if (['waiting', 'off', 'remote', 'no-model'].includes(last.image.state)) return '말풍선 준비';
+  return '이미지 준비 / 실패';
+}
+
+/**
+ * Why the last reference turn left no 판 (SPEC-09.4): a whole check is asked again with [다시
+ * 확인]; one region's correction is sent again for that region only; a stopped turn is just
+ * stopped (the board is as it was).
+ */
+function Problem({
+  problem,
+  disabled,
+  onRecheck,
+  onRegion,
+}: {
+  problem: NonNullable<ReferenceBoard['problem']>;
+  disabled: boolean;
+  onRecheck: () => void;
+  onRegion: (letter: string, note: string) => void;
+}) {
+  const region = problem.action === 'region' && problem.letter ? problem.letter : undefined;
+  const stopped = problem.code === 'TURN_CANCELLED';
+  const retry =
+    region && problem.note ? (
+      <button
+        type="button"
+        className="link-button"
+        disabled={disabled}
+        onClick={() => onRegion(region, problem.note!)}
+      >
+        {region}만 다시
+      </button>
+    ) : region ? null : (
+      <button type="button" className="link-button" disabled={disabled} onClick={onRecheck}>
+        다시 확인
+      </button>
+    );
+  return (
+    <p
+      className="reference-problem"
+      role={stopped ? 'status' : 'alert'}
+      data-kind={stopped ? 'stopped' : 'failed'}
+    >
+      {stopped
+        ? region
+          ? `영역 ${region} 고치기를 중단했습니다 · 보드는 그대로입니다.`
+          : '해석을 중단했습니다 · 보드는 그대로입니다.'
+        : region
+          ? `영역 ${region} 고치기에 실패했습니다 · 말 답변만 확인하세요. 다른 말풍선은 그대로입니다.`
+          : '말풍선을 만들지 못했습니다 · 말 답변만 확인하세요.'}
+      {retry}
+    </p>
+  );
+}
+
+/** The 이해 확인 board (SPEC-09.4·09.5·09.6·09.8). */
+function Board({
+  projectId,
+  attachmentId,
+  name,
+  board,
+  setBoard,
   image,
   masked,
   onBack,
+  onRecheck,
 }: {
+  projectId: string;
+  attachmentId: string;
   name: string;
-  regions: readonly ReferenceRegion[];
+  board: ReferenceBoard;
+  setBoard: (board: ReferenceBoard) => void;
   image: { src: string; width: number; height: number };
   masked: string;
   onBack: () => void;
+  onRecheck: () => void;
 }) {
+  const regions = board.regions;
   const shown = effectiveRegions(regions);
   const figure = useRef<HTMLDivElement>(null);
-  const [scale, setScale] = useState(1);
+  const [size, setSize] = useState({ width: 0, height: 0 });
+  const [now, setNow] = useState(Date.now());
+  const [status, setStatus] = useState('');
+  const [asking, setAsking] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [imagesOn, setImagesOn] = useState(true);
+  const base = 'api/v1' + boardPath(projectId, attachmentId);
   useLayoutEffect(() => {
     const node = figure.current;
     if (!node) return;
-    const measure = () => setScale(node.getBoundingClientRect().width / image.width || 1);
+    const measure = () => {
+      const box = node.getBoundingClientRect();
+      setSize({ width: box.width, height: box.height });
+    };
     measure();
     const observer = new ResizeObserver(measure);
     observer.observe(node);
     return () => observer.disconnect();
   }, [image.width]);
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+  useEffect(() => {
+    let live = true;
+    api(`/projects/${encodeURIComponent(projectId)}/reference-settings`)
+      .then((value) => live && setImagesOn((value as { images?: boolean }).images !== false))
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, [projectId]);
+  const scale = size.width / image.width || 1;
   const ratio = `${image.width} / ${image.height}`;
+  const last = board.versions.at(-1);
+  const state = boardState(board);
+  const answering = !!board.pending && board.pending.action !== 'confirm';
+  const editable = !!last && !last.confirmed && !answering;
+  const confirmRequest = last?.confirmed?.requestId;
+
+  const act = async (work: () => Promise<unknown>) => {
+    setStatus('');
+    try {
+      await work();
+    } catch (error) {
+      setStatus(boardError(error));
+    }
+  };
+  const correct = async (letter: string, note: string) => {
+    const bridge = referenceBridge();
+    if (!bridge) return;
+    const capture = bridge.capture();
+    await act(async () => {
+      if (capture) await saveView(projectId, attachmentId, capture);
+      const images = await turnImages(projectId, attachmentId);
+      await bridge.send({
+        reference: { attachmentId, action: 'region', letter, note, view: !!capture },
+        images,
+        files: [{ id: attachmentId, name }],
+      });
+      setBoard(await loadBoard(projectId, attachmentId));
+    });
+  };
+  const confirm = async (targets?: Record<string, string>) => {
+    const bridge = referenceBridge();
+    if (!bridge || !last) return;
+    if (!targets && targetQuestions(last).length) {
+      setAsking(true);
+      return;
+    }
+    setAsking(false);
+    setSending(true);
+    await act(async () => {
+      // SPEC-09.8 3: the reference with its regions drawn and the last generated image, both
+      // small enough that the stored request stays under 200 KB; the original goes as the file.
+      const generated =
+        last.image.state === 'ready'
+          ? await loadImage(`${base}/images/${last.number}`)
+              .then((picture) => jpegDataUrl(picture, CONFIRM_IMAGE_CHARS))
+              .catch(() => undefined)
+          : undefined;
+      const images: { kind: 'reference'; name: string; dataUrl: string }[] = await turnImages(
+        projectId,
+        attachmentId,
+        CONFIRM_IMAGE_CHARS,
+      ).catch(() => []);
+      if (generated)
+        images.push({
+          kind: 'reference',
+          name: `생성 이미지 · 판 ${last.number}`,
+          dataUrl: generated,
+        });
+      await bridge.send({
+        reference: {
+          attachmentId,
+          action: 'confirm',
+          version: last.number,
+          ...(targets ? { targets } : {}),
+        },
+        images,
+        files: [{ id: attachmentId, name }],
+      });
+    });
+    // Sent or refused (another window confirmed it first): the board shows where it stands.
+    await loadBoard(projectId, attachmentId)
+      .then(setBoard)
+      .catch(() => {});
+    setSending(false);
+  };
+  const post = (path: string, data?: unknown) =>
+    act(async () =>
+      setBoard(
+        referenceBoardSchema.parse(
+          await api(boardPath(projectId, attachmentId) + path, 'POST', data),
+        ),
+      ),
+    );
+  const questions = last ? targetQuestions(last) : [];
+
   return (
-    <div className="reference-board">
+    <div className="reference-board" data-state={state}>
       <section className="reference-pane" aria-label="참고 이미지와 AI가 읽은 것">
         <div className="reference-pane-head">
           <strong>참고 이미지</strong> {name} · 영역 {shown.length}
@@ -654,31 +1296,65 @@ function Board({
               idPrefix="reference-board"
             />
           </div>
-          <span className="reference-waiting" data-state="waiting">
-            해석 대기
-          </span>
+          {last && size.width ? (
+            <Bubbles
+              version={last}
+              regions={regions}
+              width={size.width}
+              height={size.height}
+              editable={editable}
+              busyLetter={answering ? board.pending?.letter : undefined}
+              onCorrect={correct}
+            />
+          ) : null}
+          {answering && !board.pending?.letter ? (
+            <span className="reference-waiting" data-state="answering">
+              읽는 중
+            </span>
+          ) : !last && !answering ? (
+            <span className="reference-waiting" data-state={board.problem ? 'problem' : 'waiting'}>
+              {board.problem
+                ? board.problem.code === 'TURN_CANCELLED'
+                  ? '중단됨'
+                  : '말풍선을 만들지 못했습니다'
+                : '해석 대기'}
+            </span>
+          ) : null}
         </div>
+        {board.problem ? (
+          <Problem
+            problem={board.problem}
+            disabled={answering}
+            onRecheck={onRecheck}
+            onRegion={(letter, note) => void correct(letter, note)}
+          />
+        ) : null}
         <div className="reference-caption">
-          말풍선은 AI 해석이 오면 VIDE가 영역 위에 겹쳐 그립니다(생성 이미지에 글자를 넣지 않음).
+          말풍선 글자는 VIDE가 겹쳐 그립니다(생성 이미지에 글자를 넣지 않음).{' '}
+          {editable ? '말풍선을 누르면 그 영역만 다시 해석합니다.' : ''}
           {masked ? ` ${masked}` : ''}
         </div>
       </section>
-      <section className="reference-pane" aria-label="우리 건물에 입혀 본 이미지">
-        <div className="reference-pane-head">
-          <strong>우리 건물에 입혀 본 이미지</strong> 참고용
-        </div>
-        <div className="reference-figure reference-empty" style={{ aspectRatio: ratio }}>
-          <div className="reference-empty-card">
-            <strong>아직 없음</strong>
-            <small>이미지 생성은 다음 단계에서 연결됩니다</small>
-          </div>
-        </div>
-        <div className="reference-caption">
-          입력: 3D 뷰 캡처 + 영역을 그린 참고 이미지 + 해석. 실패해도 [맞음]은 누를 수 있습니다.
-        </div>
-      </section>
+      <Generated
+        board={board}
+        base={base}
+        ratio={ratio}
+        now={now}
+        imagesOn={imagesOn}
+        onCancel={() => void post('/image/cancel')}
+        onRetry={(number) => void post('/image', { version: number })}
+        onToggle={(on) =>
+          void act(async () => {
+            await api(`/projects/${encodeURIComponent(projectId)}/reference-settings`, 'PUT', {
+              images: on,
+            });
+            setImagesOn(on);
+            setBoard(await loadBoard(projectId, attachmentId));
+          })
+        }
+      />
       <table className="reference-values">
-        <caption>읽은 값</caption>
+        <caption>읽은 값{last ? ` · 판 ${last.number} (말풍선과 같은 해석)` : ''}</caption>
         <thead>
           <tr>
             <th>영역</th>
@@ -690,32 +1366,152 @@ function Board({
           </tr>
         </thead>
         <tbody>
-          <tr>
-            <td colSpan={6} className="reference-values-empty">
-              아직 해석이 없습니다
-            </td>
-          </tr>
+          {last ? (
+            last.regions.map((region) => (
+              <tr key={region.letter} data-letter={region.letter}>
+                <td>
+                  <span className="reference-letter">{region.letter}</span>
+                </td>
+                <td>{region.element}</td>
+                <td>
+                  {region.values.length
+                    ? region.values.map((value, index) => (
+                        <span key={index} className="reference-value">
+                          {index ? ' · ' : ''}
+                          {valueText(value)}
+                          <span className="reference-src" data-src={value.source}>
+                            {SOURCE[value.source]}
+                          </span>
+                        </span>
+                      ))
+                    : '—'}
+                </td>
+                <td>{regions.find((entry) => entry.letter === region.letter)?.note || '—'}</td>
+                <td>{region.openQuestions.join(' · ') || '—'}</td>
+                <td data-unknown={region.target === UNKNOWN_TARGET ? '' : undefined}>
+                  {region.target === UNKNOWN_TARGET ? '모름 · [맞음] 때 묻습니다' : region.target}
+                </td>
+              </tr>
+            ))
+          ) : (
+            <tr>
+              <td colSpan={6} className="reference-values-empty">
+                {answering ? 'AI가 읽는 중입니다' : '아직 해석이 없습니다'}
+              </td>
+            </tr>
+          )}
         </tbody>
       </table>
+      {last ? (
+        <section className="reference-confirm" aria-label="이해 확인">
+          <div className="reference-confirm-head">
+            이해 확인 · 판 {last.number}
+            {last.confirmed ? <span className="reference-chip">확정</span> : null}
+          </div>
+          <p>{last.summary}</p>
+          <ol>
+            {last.regions.map((region) => (
+              <li key={region.letter}>
+                <span className="reference-letter">{region.letter}</span>
+                <span>
+                  {region.line}
+                  {region.target !== UNKNOWN_TARGET ? ` · 적용: ${region.target}` : ''}
+                </span>
+              </li>
+            ))}
+          </ol>
+          {asking && !last.confirmed ? (
+            <TargetCards
+              questions={questions}
+              onAnswer={(targets) => void confirm(targets)}
+              onCancel={() => setAsking(false)}
+            />
+          ) : last.confirmed ? (
+            <div className="reference-actions">
+              <button type="button" onClick={() => void post('/continue')}>
+                새 판으로 고치기
+              </button>
+              <small>
+                판 {last.number}을 확정해 자동 모드로 보냈습니다
+                {confirmRequest ? ` · 요청 ${confirmRequest.slice(0, 8)}` : ''}. 결과와 [되돌리기]는
+                오른쪽 AI 열에 있습니다.
+              </small>
+            </div>
+          ) : (
+            <div className="reference-actions">
+              <button
+                type="button"
+                className="primary-button"
+                disabled={answering || sending}
+                onClick={() => void confirm()}
+              >
+                맞음 → 모델링 반영
+              </button>
+              <button type="button" onClick={onBack} disabled={sending || answering}>
+                다시
+              </button>
+              <small>
+                [맞음]은 이 해석을 같은 대화의 다음 턴으로 자동 모드에 보냅니다 · 열린 문서에 바로
+                적용 · 실행마다 되돌리기
+              </small>
+            </div>
+          )}
+        </section>
+      ) : null}
       <div className="reference-states" aria-label="보드 상태">
-        <span data-on="">해석 대기</span>
-        <i>→</i>
-        <span>답하는 중</span>
-        <i>→</i>
-        <span>말풍선 준비</span>
-        <i>→</i>
-        <span>이미지 생성 중</span>
-        <i>→</i>
-        <span>이미지 준비 / 실패</span>
-        <i>→</i>
-        <span>확정</span>
-        <button type="button" className="reference-back" onClick={onBack}>
+        {STATES.map((label, index) => (
+          <span key={label} data-on={state === label ? '' : undefined}>
+            {index ? <i>→ </i> : null}
+            {label}
+          </span>
+        ))}
+        {status ? (
+          <span className="reference-status" role="status">
+            {status}
+          </span>
+        ) : null}
+        <button
+          type="button"
+          className="reference-back"
+          onClick={onBack}
+          disabled={answering}
+          title={answering ? '해석이 끝난 뒤 고칠 수 있습니다' : undefined}
+        >
           영역 고치기
         </button>
       </div>
     </div>
   );
 }
+
+/** A data URL's bytes (the page's CSP does not let fetch read data: URLs). */
+const dataUrlBlob = (dataUrl: string) => {
+  const comma = dataUrl.indexOf(',');
+  const type = /^data:([^;,]+)/.exec(dataUrl)?.[1] ?? 'application/octet-stream';
+  const binary = atob(dataUrl.slice(comma + 1));
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return new Blob([bytes], { type });
+};
+async function saveView(projectId: string, attachmentId: string, dataUrl: string) {
+  const response = await fetch('api/v1' + boardPath(projectId, attachmentId) + '/view', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/octet-stream' },
+    body: dataUrlBlob(dataUrl),
+  });
+  if (!response.ok) throw Error('VIEW_NOT_SAVED');
+}
+/**
+ * The image a reference turn shows the model: the reference with the regions drawn on it (the
+ * original goes as the attachment, read with attachment_read for detail).
+ */
+async function turnImages(projectId: string, attachmentId: string, maxChars?: number) {
+  const masked = await loadImage('api/v1' + boardPath(projectId, attachmentId) + '/masked');
+  const url = await jpegDataUrl(masked, maxChars);
+  return url ? [{ kind: 'reference' as const, name: '영역을 그린 참고 이미지', dataUrl: url }] : [];
+}
+/** Each of the two images of a [맞음] turn (with the 12 KB text the request stays under 200 KB). */
+const CONFIRM_IMAGE_CHARS = 85_000;
 
 function ReferenceTab({
   projectId,
@@ -733,10 +1529,24 @@ function ReferenceTab({
   const [status, setStatus] = useState('');
   const [checking, setChecking] = useState(false);
   const [masked, setMasked] = useState('');
+  const [board, setBoard] = useState<ReferenceBoard>();
+  const [ai, setAi] = useState(() => referenceBridge()?.ai());
   const src = attachmentPreview(projectId, attachmentId);
   const loaded = useRef(false);
   const element = useRef<HTMLImageElement | null>(null);
 
+  useEffect(
+    () =>
+      onReferenceBridge(() =>
+        setAi((current) => {
+          const next = referenceBridge()?.ai();
+          return current?.model === next?.model && current?.images === next?.images
+            ? current
+            : next;
+        }),
+      ),
+    [],
+  );
   useEffect(() => {
     let live = true;
     loaded.current = false;
@@ -744,6 +1554,7 @@ function ReferenceTab({
       .then((value) => {
         if (!live) return;
         setStage(value.stage);
+        setBoard(value);
         savedRegions.current = value.regions;
         setHistoryState(createHistory(maskState(value)));
         if (value.masked)
@@ -768,6 +1579,25 @@ function ReferenceTab({
     };
   }, [projectId, attachmentId, name, src]);
 
+  // The board follows its turn and image job: often while something runs, now and then otherwise
+  // (a correction said in the chat comes as a new 판).
+  const busy = !!board?.pending || board?.versions.at(-1)?.image.state === 'running' || false;
+  useEffect(() => {
+    if (stage !== 'check') return;
+    let live = true;
+    const timer = setTimeout(
+      () =>
+        void loadBoard(projectId, attachmentId)
+          .then((value) => live && setBoard(value))
+          .catch(() => {}),
+      busy ? 1000 : 3000,
+    );
+    return () => {
+      live = false;
+      clearTimeout(timer);
+    };
+  }, [stage, busy, board, projectId, attachmentId]);
+
   // Every change is saved shortly after (the last state wins); leaving the tab saves at once.
   const latest = useRef({ history, stage, image });
   latest.current = { history, stage, image };
@@ -785,7 +1615,7 @@ function ReferenceTab({
         stage: shownStage,
         ...(picture ? { width: picture.width, height: picture.height } : {}),
       });
-      referenceBoardSchema.parse(value);
+      setBoard(referenceBoardSchema.parse(value));
       setStatus('저장됨');
     } catch (error) {
       setStatus(message(error));
@@ -829,8 +1659,13 @@ function ReferenceTab({
     );
     schedule();
   };
+  /**
+   * [이해 확인]: the flattened input image is saved, the 3D view captured for the image job, and
+   * the turn goes to the chosen conversation with both images (SPEC-09.3 6, 09.4).
+   */
   const check = async () => {
-    if (!history || !image || !element.current) return;
+    const bridge = referenceBridge();
+    if (!history || !image || !element.current || !bridge) return;
     setChecking(true);
     try {
       await flush();
@@ -852,12 +1687,25 @@ function ReferenceTab({
       setMasked(
         `입력 이미지 저장됨 · ${canvas.width}×${canvas.height} · ${Math.round(png.size / 1024)} KB`,
       );
-    } catch {
-      setMasked('입력 이미지를 저장하지 못했습니다');
+      const capture = bridge.capture();
+      if (capture) await saveView(projectId, attachmentId, capture);
+      const url = await jpegDataUrl(canvas);
+      const images = url
+        ? [{ kind: 'reference' as const, name: '영역을 그린 참고 이미지', dataUrl: url }]
+        : [];
+      changeStage('check');
+      await bridge.send({
+        reference: { attachmentId, action: 'interpret', view: !!capture },
+        images,
+        files: [{ id: attachmentId, name }],
+      });
+      setStatus('');
+      setBoard(await loadBoard(projectId, attachmentId));
+    } catch (error) {
+      setStatus(boardError(error));
     } finally {
       setChecking(false);
     }
-    changeStage('check');
   };
 
   if (failed)
@@ -868,29 +1716,42 @@ function ReferenceTab({
         </p>
       </div>
     );
-  if (!history || !image)
+  if (!history || !image || !board)
     return (
       <div className="reference-page">
         <p className="reference-loading">참고 이미지를 여는 중</p>
       </div>
     );
+  const last = board.versions.at(-1);
   return (
     <div className="reference-page" data-stage={stage}>
       <div className="reference-head">
         <h2>{referenceLabel(stage, name)}</h2>
+        {stage === 'check' && last ? (
+          <span className="reference-chip">판 {last.number}</span>
+        ) : null}
         <span className="reference-meta">
           {stage === 'check'
-            ? '해석 대기 · AI 해석은 다음 단계에서 연결됩니다'
+            ? `${boardState(board)}${ai ? ` · 지금 대화 · ${ai.name}` : ''}`
             : '첨부 원본은 바꾸지 않음 · 영역은 따로 저장'}
         </span>
+        {stage === 'check' && status ? (
+          <span className="reference-status" role="status">
+            {status}
+          </span>
+        ) : null}
       </div>
       {stage === 'check' ? (
         <Board
+          projectId={projectId}
+          attachmentId={attachmentId}
           name={name}
-          regions={history.present.regions}
+          board={{ ...board, regions: history.present.regions }}
+          setBoard={setBoard}
           image={image}
           masked={masked}
           onBack={() => changeStage('mask')}
+          onRecheck={() => void check()}
         />
       ) : (
         <Editor
@@ -901,6 +1762,7 @@ function ReferenceTab({
           onCheck={() => void check()}
           checking={checking}
           status={status}
+          ai={ai}
         />
       )}
     </div>

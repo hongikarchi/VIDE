@@ -81,6 +81,8 @@ interface ModelOption {
   name: string;
   provider: 'claude-cli' | 'codex-cli';
   efforts: string[];
+  /** Reads images (SPEC-09.3 6); absent: yes. */
+  images?: boolean;
 }
 interface SelectionRequest {
   id: string;

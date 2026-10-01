@@ -5,6 +5,11 @@
 // the ledger already holds (asked or answered) is not asked again.
 
 import { z } from 'zod';
+import {
+  REFERENCE_OUTPUT_JSON_SCHEMA,
+  referenceOutputSchema,
+  type ReferenceOutput,
+} from '../contracts/reference-board.ts';
 
 export const TURN_OUTPUT_ITEM = 'turn-output';
 export const MAX_QUESTIONS = 3;
@@ -69,12 +74,33 @@ const RULES =
   'in plain practical Korean, 2-5 options with exactly one recommended, "blocks" naming what ' +
   'waits on it, allowFree when a free answer makes sense. text: the answer or the report, in Korean.';
 
+/**
+ * The schema of a reference-image turn (SPEC-09.4, T-090): the turn output plus the board's
+ * interpretation, required (the board asked) or nullable (a chat turn that may correct it).
+ */
+export function referenceTurnSchema(reference: 'required' | 'optional') {
+  return {
+    ...TURN_OUTPUT_JSON_SCHEMA,
+    required: [...TURN_OUTPUT_JSON_SCHEMA.required, 'reference'],
+    properties: {
+      ...TURN_OUTPUT_JSON_SCHEMA.properties,
+      reference:
+        reference === 'required'
+          ? REFERENCE_OUTPUT_JSON_SCHEMA
+          : { anyOf: [REFERENCE_OUTPUT_JSON_SCHEMA, { type: 'null' }] },
+    },
+  };
+}
+
 /** The packet item that asks a turn for structured output; the CLIs turn it into their flag. */
-export function turnOutputItem() {
+export function turnOutputItem(reference?: 'required' | 'optional') {
   return {
     id: TURN_OUTPUT_ITEM,
     type: TURN_OUTPUT_ITEM,
-    data: { rules: RULES, schema: TURN_OUTPUT_JSON_SCHEMA },
+    data: {
+      rules: RULES,
+      schema: reference ? referenceTurnSchema(reference) : TURN_OUTPUT_JSON_SCHEMA,
+    },
   };
 }
 
@@ -111,6 +137,8 @@ export const turnOutputSchema = z
     questions: z.array(questionSchema).max(MAX_QUESTIONS).default([]),
     // A Codex make turn's files (T-063): make-routes.ts checks and writes them; never kept here.
     files: z.array(z.unknown()).max(50).nullable().optional(),
+    // A reference-image turn's interpretation (T-090): checked by `turnOutputResult`.
+    reference: z.unknown().optional(),
   })
   .strict()
   .refine((output) => new Set(output.questions.map((q) => q.id)).size === output.questions.length);
@@ -159,19 +187,75 @@ export function parseTurnOutput(
  * the JSON, `turnOutput` carries status and questions. A turn that did not ask for it is unchanged.
  */
 export function turnOutputResult(
-  turn: { structured?: boolean; askedQuestions?: ReadonlySet<string> } | undefined,
+  turn:
+    | {
+        structured?: boolean;
+        askedQuestions?: ReadonlySet<string>;
+        reference?: 'required' | 'optional';
+        referenceBoard?: string;
+      }
+    | undefined,
   result: { text?: unknown; structured?: unknown },
 ): Record<string, unknown> {
   if (!turn?.structured) return {};
   const parsed = parseTurnOutput(result, turn.askedQuestions);
   // The provider's raw object is not kept: only the checked fields below are stored.
-  if ('code' in parsed) return { structured: undefined, turnOutputError: parsed.code };
+  if ('code' in parsed)
+    return {
+      structured: undefined,
+      turnOutputError: parsed.code,
+      ...(turn.reference === 'required' ? { referenceError: 'REFERENCE_OUTPUT_INVALID' } : {}),
+    };
   const { output } = parsed;
   return {
     structured: undefined,
     text: output.text,
     turnOutput: { status: output.status, questions: output.questions },
+    ...(turn.reference ? referenceResult(turn.reference, output.reference) : {}),
+    // A chat turn's correction names the board it was shown (T-090).
+    ...(turn.referenceBoard && output.reference ? { referenceBoard: turn.referenceBoard } : {}),
   };
+}
+/** The checked interpretation of a reference turn, or why there is none (SPEC-09.4). */
+function referenceResult(kind: 'required' | 'optional', value: unknown) {
+  if (value === null || value === undefined)
+    return kind === 'required' ? { referenceError: 'REFERENCE_OUTPUT_MISSING' } : {};
+  const parsed = referenceOutputSchema.safeParse(value);
+  return parsed.success
+    ? { reference: parsed.data }
+    : { referenceError: 'REFERENCE_OUTPUT_INVALID' };
+}
+
+/**
+ * A board correction written as a fenced block at the end of a reply (a host or jig turn, which
+ * has no structured output: CHAT_BLOCK_RULES). Returns the text without the block and the checked
+ * interpretation (or why it is not one); undefined when the reply has no such block.
+ */
+export function takeReferenceBlock(
+  text: unknown,
+): { text: string; reference?: ReferenceOutput; referenceError?: string } | undefined {
+  if (typeof text !== 'string') return;
+  let found: { start: number; end: number; value: unknown } | undefined;
+  for (const match of text.matchAll(/```(?:json)?\s*(\{[\s\S]*?\})\s*```/g)) {
+    try {
+      const block = JSON.parse(match[1]) as unknown;
+      if (block && typeof block === 'object' && 'reference' in block)
+        found = {
+          start: match.index,
+          end: match.index + match[0].length,
+          value: (block as { reference: unknown }).reference,
+        };
+    } catch {
+      /* Not this block. */
+    }
+  }
+  if (!found) return;
+  const rest = (text.slice(0, found.start) + text.slice(found.end)).trim();
+  if (found.value === null || found.value === undefined) return { text: rest };
+  const parsed = referenceOutputSchema.safeParse(found.value);
+  return parsed.success
+    ? { text: rest, reference: parsed.data }
+    : { text: rest, referenceError: 'REFERENCE_OUTPUT_INVALID' };
 }
 
 /** One answer to a question card: an option, a free answer (when allowed), or both. */

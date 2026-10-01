@@ -61,7 +61,8 @@ interface Choice {
   text?: string;
 }
 
-function Card({
+/** One question card (also the reference board's target questions, SPEC-09.8 2). */
+export function Card({
   question,
   index,
   count,

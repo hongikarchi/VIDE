@@ -462,3 +462,277 @@ body[data-workspace='reference'] .reference-workspace {
     display: none;
   }
 }
+
+/* 이해 확인 board, T-090 (b)-(d): bubbles over the reference, the generated image, the card. */
+.reference-chip {
+  padding: 1px 7px;
+  border-radius: var(--radius-pill);
+  background: var(--bg-surface);
+  border: var(--hairline) solid var(--border);
+  color: var(--text-2);
+  font-size: var(--fs-xs);
+}
+.reference-head .reference-status {
+  margin-left: auto;
+  color: var(--warn);
+  font-size: var(--fs-sm);
+}
+.reference-bubbles {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.reference-leaders {
+  position: absolute;
+  left: 0;
+  top: 0;
+  overflow: visible;
+}
+.reference-leaders line {
+  stroke: var(--text-1);
+  stroke-width: 1.25;
+  opacity: 0.75;
+}
+.reference-leaders circle {
+  fill: var(--bg-elevated);
+  stroke: var(--text-1);
+  stroke-width: 1.25;
+}
+.reference-bubble {
+  position: absolute;
+  max-width: min(46%, 260px);
+  pointer-events: auto;
+  z-index: 1;
+}
+.reference-bubble[data-open] {
+  z-index: 2;
+}
+.reference-bubble-body {
+  display: grid;
+  gap: 2px;
+  width: 100%;
+  text-align: left;
+  padding: 6px 9px 7px;
+  background: var(--bg-elevated);
+  color: var(--text-1);
+  border: var(--hairline) solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-float);
+  font-size: var(--fs-sm);
+  line-height: 1.4;
+  cursor: pointer;
+}
+.reference-bubble-body:disabled {
+  cursor: default;
+  opacity: 1;
+}
+.reference-bubble-body:not(:disabled):hover {
+  border-color: var(--text-3);
+}
+.reference-bubble-body b {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+}
+.reference-bubble-body b .reference-letter {
+  min-width: 18px;
+  height: 18px;
+  font-size: 10.5px;
+}
+.reference-bubble[data-changed] .reference-bubble-body {
+  background: color-mix(in srgb, var(--info) 8%, var(--bg-elevated));
+  border-color: var(--info);
+}
+.reference-bubble[data-busy] .reference-bubble-body {
+  opacity: 0.7;
+}
+.reference-bubble em {
+  font-style: normal;
+  color: var(--text-3);
+  font-size: var(--fs-xs);
+}
+.reference-q {
+  color: var(--warn);
+  font-size: var(--fs-xs);
+}
+.reference-correct {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 4px;
+  padding: 6px;
+  border-radius: var(--radius-md);
+  background: var(--bg-floating);
+  border: var(--hairline) solid var(--border);
+  box-shadow: var(--shadow-float);
+}
+.reference-correct input {
+  flex: 1 1 100%;
+  min-width: 0;
+  font-size: var(--fs-sm);
+}
+.reference-correct button {
+  font-size: var(--fs-sm);
+  padding: 4px 8px;
+}
+.reference-problem {
+  margin: 0;
+  color: var(--warn);
+  font-size: var(--fs-sm);
+  display: flex;
+  gap: var(--s2);
+  align-items: center;
+}
+.reference-waiting[data-state='problem'] {
+  color: var(--warn);
+}
+.reference-toggle {
+  float: right;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--text-3);
+  font-size: var(--fs-xs);
+}
+.reference-gen {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+}
+.reference-gen img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+.reference-gen:has(.reference-gen-card) img {
+  filter: grayscale(1);
+  opacity: 0.35;
+}
+.reference-band {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  padding: 3px 8px;
+  background: var(--bg-floating);
+  color: var(--text-2);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  text-align: center;
+}
+.reference-gen-card {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  padding: var(--s4) var(--s6);
+  border-radius: var(--radius-md);
+  background: var(--bg-floating);
+  border: var(--hairline) solid var(--border);
+  text-align: center;
+}
+.reference-gen-card small {
+  color: var(--text-3);
+  font-size: var(--fs-xs);
+}
+.reference-spinner {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 2px solid var(--border);
+  border-top-color: var(--text-1);
+  animation: reference-spin 0.9s linear infinite;
+}
+@keyframes reference-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .reference-spinner {
+    animation: none;
+  }
+}
+.reference-notice {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2);
+  align-items: center;
+  color: var(--text-2);
+  font-size: var(--fs-xs);
+}
+.reference-values td {
+  vertical-align: top;
+}
+.reference-src {
+  margin-left: 4px;
+  padding: 0 5px;
+  border-radius: var(--radius-pill);
+  background: var(--bg-surface);
+  color: var(--text-3);
+  font-size: var(--fs-xs);
+}
+.reference-src[data-src='user'] {
+  background: var(--info-subtle);
+  color: var(--info);
+}
+.reference-values td[data-unknown] {
+  color: var(--warn);
+}
+.reference-confirm {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 8px;
+  padding: 10px 12px;
+  border: var(--hairline) solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-elevated);
+}
+.reference-confirm-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--fs-sm);
+  font-weight: 600;
+}
+.reference-confirm p {
+  margin: 0;
+  font-size: var(--fs-sm);
+}
+.reference-confirm ol {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 4px;
+  font-size: var(--fs-sm);
+}
+.reference-confirm li {
+  display: flex;
+  gap: 6px;
+  align-items: baseline;
+}
+.reference-confirm li .reference-letter {
+  min-width: 18px;
+  height: 18px;
+  font-size: 10.5px;
+  flex-shrink: 0;
+}
+.reference-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+.reference-actions small {
+  color: var(--text-3);
+  font-size: var(--fs-xs);
+}
+.reference-states .reference-status {
+  color: var(--warn);
+}

@@ -179,6 +179,87 @@ function ProjectInstructionsSection() {
     </section>
   );
 }
+/**
+ * Reference image check (SPEC-09.7 6, 09.10 1): images go to OpenAI too (the image job is always
+ * Codex), and the project's switch for the image job. The board's own switch is the same setting.
+ */
+function ReferenceImagesSection() {
+  const [project, setProject] = useState<{ id: string; name: string }>();
+  const [images, setImages] = useState<boolean>();
+  const [unavailable, setUnavailable] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState('');
+  useEffect(() => {
+    let live = true;
+    (async () => {
+      const projects = z.array(projectSchema).parse(await api('/projects'));
+      const wanted = new URLSearchParams(location.search).get('project');
+      const current = projects.find((p) => p.id === wanted) ?? projects[0];
+      if (!current) return;
+      const row = z
+        .object({ images: z.boolean() })
+        .parse(await api(`/projects/${encodeURIComponent(current.id)}/reference-settings`));
+      if (!live) return;
+      setProject({ id: current.id, name: current.name });
+      setImages(row.images);
+    })().catch(() => live && setUnavailable(true));
+    return () => {
+      live = false;
+    };
+  }, []);
+  const toggle = async (on: boolean) => {
+    if (!project) return;
+    setSaving(true);
+    try {
+      const row = z.object({ images: z.boolean() }).parse(
+        await api(`/projects/${encodeURIComponent(project.id)}/reference-settings`, 'PUT', {
+          images: on,
+        }),
+      );
+      setImages(row.images);
+      setMessage(
+        row.images
+          ? '다음 판부터 우리 건물에 입혀 본 이미지를 만듭니다.'
+          : '이미지를 만들지 않습니다. 진행 중인 생성도 멈춥니다.',
+      );
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : '설정을 바꾸지 못했습니다.');
+    } finally {
+      setSaving(false);
+    }
+  };
+  // An engine without project data (no boards) has no such setting.
+  if (unavailable) return null;
+  return (
+    <section className="ai-provider ai-reference-images" aria-label="참고 이미지 확인">
+      <div className="ai-provider-head">
+        <h3>참고 이미지 확인 · 이미지 생성{project ? ` · ${project.name}` : ''}</h3>
+      </div>
+      <p className="ai-intro">
+        참고 이미지와 영역은 해석을 맡은 대화의 AI로 갑니다. 확인 보드의 &apos;우리 건물에 입혀 본
+        이미지&apos;는 대화의 AI와 상관없이 항상 Codex(ChatGPT 로그인)로 만들므로, 3D 뷰 캡처와
+        영역을 그린 참고 이미지가 OpenAI로도 갑니다. 생성은 ChatGPT 요금제 사용량을 쓰고, 원격
+        세션에서는 만들지 않습니다.
+      </p>
+      <label>
+        <input
+          type="checkbox"
+          aria-label="참고 이미지 확인에서 이미지 생성"
+          checked={images ?? false}
+          disabled={images === undefined || saving}
+          onChange={(event) => {
+            void toggle(event.target.checked);
+          }}
+        />{' '}
+        이 프로젝트에서 이미지 생성
+      </label>
+      <small>
+        끄면 확인 보드의 오른쪽은 &apos;이미지 생성 꺼짐&apos;이고 말풍선 판만 만듭니다.
+      </small>
+      {message && <p role="status">{message}</p>}
+    </section>
+  );
+}
 const dialog = document.createElement('dialog');
 dialog.className = 'quantity-dialog ai-settings';
 dialog.setAttribute('aria-label', 'AI 연결 설정');
@@ -301,6 +382,7 @@ function Settings({ config, current, onStatus }: Props) {
       })}
       <RoutingSection />
       <ProjectInstructionsSection />
+      <ReferenceImagesSection />
       <div className="table-controls">
         <button
           disabled={saving || checking}

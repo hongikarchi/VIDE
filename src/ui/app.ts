@@ -58,6 +58,7 @@ import { initializeReviews } from './reviews.tsx';
 import { attachSharedFeedback } from './shared-feedback.tsx';
 import { linkedCandidates, showLinkedTargets } from './linked-targets.tsx';
 import { attachmentPreview, batchRefusal, uploadAttachments } from './attachments.ts';
+import { notifyReference, setReferenceBridge } from './reference-bridge.ts';
 import { renderWork } from './work-view.tsx';
 import {
   linkRowSchema,
@@ -1075,6 +1076,7 @@ function render(rebuildRequests = true) {
   $('body').disabled = !ready;
   for (const id of ['model', 'effort'] as const) $(id).disabled = !ready;
   syncMode();
+  notifyReference();
   if (unreadableDraft && draftHasInput(state)) unreadableDraft = false;
   if (!draftHasInput(state) && displayedResult) state.baseRequestId = displayedResult;
   if (rebuildRequests) renderRequests(state, render);
@@ -2703,6 +2705,62 @@ async function submitRequest(
     render();
   }
 }
+// The reference tab's turns (SPEC-09, T-090) go like the composer's: the chosen conversation, the
+// composer's model and document, shown and followed in the AI column; the board's data is added
+// by the engine (src/server/reference-boards.ts).
+setReferenceBridge({
+  ai: () => {
+    const chosen = models.find((m) => m.id === state.model);
+    if (!chosen) return undefined;
+    return {
+      provider: chosen.provider,
+      model: chosen.id,
+      name: chosen.name,
+      images: chosen.images !== false,
+    };
+  },
+  capture: () => {
+    if (!viewport || !objects.length) return undefined;
+    try {
+      const dataUrl = viewport.captureWithAnnotations([], { maxSize: 1280, quality: 0.82 });
+      return /^data:image\/(png|jpeg);base64,/.test(dataUrl) ? dataUrl : undefined;
+    } catch {
+      return undefined;
+    }
+  },
+  send: async (turn) => {
+    if (!project) throw Error('NO_PROJECT');
+    const projectId = currentProject().id,
+      original = state;
+    const chosen = models.find((m) => m.id === state.model);
+    const input = {
+      host: state.host || 'rhino',
+      baseRequestId: state.baseRequestId ?? null,
+      body: '',
+      pins: [],
+      sketches: [],
+      files: turn.files ?? [],
+      ...(turn.images?.length ? { images: turn.images } : {}),
+      provider: chosen?.provider ?? 'claude-cli',
+      model: state.model,
+      effort: state.effort,
+      ...modeFields(turn.reference.action === 'confirm' ? 'auto' : 'plan'),
+      id: crypto.randomUUID(),
+      conversationId: currentConversation() ?? 'default',
+      reference: turn.reference,
+    };
+    const request = await requestData(`/projects/${projectId}/requests`, 'POST', input);
+    if (project?.id === projectId && state === original) {
+      if (!state.messages.some((entry) => entry.id === request.id))
+        state.messages.push(requestMessage(request));
+      focusedWork = request.id;
+      renderMessages();
+      void conversationChips?.refresh();
+      void poll(request.id, projectId, original);
+    }
+    return request as unknown as { id: string; input: Record<string, unknown> };
+  },
+});
 async function poll(id: string, projectId = currentProject().id, original = state) {
   if (project?.id !== projectId || state !== original) return;
   if (selectedResult === undefined) selectedResult = displayedResult ?? null;

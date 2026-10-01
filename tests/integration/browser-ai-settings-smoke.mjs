@@ -51,7 +51,30 @@ try {
   // Over the 8 KB limit the button stays disabled.
   await editor.fill('가'.repeat(3000));
   assert.ok(await saveButton.isDisabled(), 'over-limit text cannot be saved');
-  console.log(JSON.stringify({ addendumSaved: true, reloaded: true, overLimitBlocked: true }));
+  // Reference image check (SPEC-09.7 6, 09.10 1): the OpenAI notice and the project's switch.
+  const reference = page.locator('section.ai-reference-images');
+  assert.match(await reference.textContent(), /OpenAI로도 갑니다/);
+  const imagesSwitch = reference.getByRole('checkbox', {
+    name: '참고 이미지 확인에서 이미지 생성',
+  });
+  await page.waitForFunction(() => !document.querySelector('.ai-reference-images input')?.disabled);
+  assert.ok(await imagesSwitch.isChecked(), 'on by default');
+  await imagesSwitch.click();
+  await reference.getByRole('status').filter({ hasText: '이미지를 만들지 않습니다' }).waitFor();
+  const projectId = await page.locator('#project-picker').inputValue();
+  const stored = await page.evaluate(
+    async (id) => (await fetch(`api/v1/projects/${id}/reference-settings`)).json(),
+    projectId,
+  );
+  assert.deepEqual(stored, { images: false });
+  console.log(
+    JSON.stringify({
+      addendumSaved: true,
+      reloaded: true,
+      overLimitBlocked: true,
+      referenceImagesOff: true,
+    }),
+  );
 } finally {
   await browser?.close();
   await app?.close?.();

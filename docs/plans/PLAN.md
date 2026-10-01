@@ -2,7 +2,7 @@
 id: PLAN
 title: VIDE 실행 로드맵
 status: review
-version: 0.222
+version: 0.223
 updated: 2026-10-01
 owner: agent:codex
 related: [ARCH-01, PLAN-02, PLAN-03, PLAN-22, PLAN-23, PLAN-24, PLAN-25, PLAN-26, PLAN-27, ADR-022, ADR-025, ADR-026, SPEC-00, SPEC-01, SPEC-02, SPEC-03, SPEC-04, SPEC-05, SPEC-06, SPEC-07]
@@ -243,7 +243,7 @@ T-001~018의 번호·지원 증거는 유지한다. 각 티켓의 현재 결과�
 | T-081 산출물 탭 | 페이지 구현·브라우저 시험 완료(설치 전) | 도면 시트·생성형 렌더링 기능(각 SPEC 먼저) | `3a9617f` |
 | T-088 대화별 모델 고정·모델 바꾸기 = 새 탭 | 구현·단위·브라우저 시험 완료(`0fb9506`) | 실제 CLI로 모델 바꾸기 인계 확인(설치본 릴리스 때) | [PLAN-24](PLAN-24-ai-conversations.md#t-088) |
 | T-089 첨부 버튼 정리·경로 기반 첨부(모든 형식, `attachment_read`) | 구현·단위·브라우저 시험 완료(2026-10-01, 커밋 전) | 실제 Claude·Codex로 첨부 이미지·텍스트 읽기 확인(설치본 릴리스 때). 후속: PDF 본문 추출, 3DM 요약, 말(@언급)로 연계 대상 고르기. 원본 위치의 파일은 T-091의 프로젝트 폴더 읽기로 대신 | [PLAN-26](PLAN-26-chat-stage.md#t-089), SPEC-01.12 |
-| T-090 참고 이미지 의도 확인 (a) 영역 표시 편집기·보드 틀 | 구현·단위·브라우저 시험 완료(2026-10-01, 커밋 전). AI 호출 없음 | (b) 해석·말풍선, (c) Codex 이미지 작업, (d) 확정 → 모델링. ARCH-01 저장 경로·라우트, Design 표현 | [PLAN-26](PLAN-26-chat-stage.md), SPEC-09 |
+| T-090 참고 이미지 의도 확인 (a)~(d) 영역 표시·해석 말풍선·Codex 이미지·확정 → 모델링 | (a)~(d) 구현·단위·브라우저 시험(가짜 공급자·가짜 이미지 작업) 완료(2026-10-01, 커밋 전). 실제 Codex 이미지 작업 실측 33–44초(합성 장면) | 실제 CLI 해석 턴은 Claude·Codex 통과(2026-10-01). 말로 고치기의 실제 CLI 확인, 실제 Rhino 사본으로 SPEC-09 완료 기준·VERIFY, Design §03·§14 표현, PRD 범위 문장 | [PLAN-26](PLAN-26-chat-stage.md), SPEC-09 |
 | T-091 프로젝트 폴더·AI 파일 읽기(`file_read`·`file_list`, 폴더 밖은 권한 질문) | 구현·단위·브라우저 시험 완료(2026-10-01, 커밋 전) | 실제 Claude·Codex로 권한 질문 답하기 확인(설치본 릴리스 때), 셸 폴더 선택 창은 다음 설치본부터 | [PLAN-26](PLAN-26-chat-stage.md#t-091), SPEC-01.13, `project-files.test.mjs`, `browser-project-folders.mjs` |
 | T-082 안정성 0단계 진단·복구 | 구현·자동 검증(`9aac8cd`) | 실제 창의 화면 복구 확인, 설치본 릴리스 | [PLAN-27](PLAN-27-sync-storage-stability.md) |
 | T-083 객체 단위 저장 | 계획 | ARCH-01 저장 계약 작성과 사용자 확인 뒤 착수 | [PLAN-27](PLAN-27-sync-storage-stability.md), [RESEARCH-13](../research/RESEARCH-13-stability-audit.md) |

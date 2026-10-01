@@ -48,7 +48,7 @@ import type { GeometryObject } from '../core/geometry.ts';
 import type { SdkExecution } from './sdk-execution.ts';
 import type { ZwcadSdkExecution } from './zwcad-sdk-execution.ts';
 import type { ConversationService, Turn } from './conversations.ts';
-import { turnOutputResult } from './turn-output.ts';
+import { takeReferenceBlock, turnOutputResult } from './turn-output.ts';
 import { makeTurnResult } from './make-routes.ts';
 import { workspaceResultSchema } from '../contracts/workspace-result.ts';
 import { bakeJobOf } from '../jigs/bake/bake.ts';
@@ -126,6 +126,8 @@ interface Options {
   folders?: ProjectFolders;
   /** Where the data folder is (never read by the file tools). */
   fileContext?: FileContext;
+  /** Every run's end with its stored request (reference boards read their turns, T-090). */
+  onFinished?: (request: StoredWork) => void | Promise<void>;
 }
 const pinsSchema = z.array(
   z
@@ -267,6 +269,7 @@ export class Execution {
       attachments,
       folders,
       fileContext,
+      onFinished,
       selectContext: choose = (body, candidates) =>
         selectContext(body, candidates, { key: () => '' }),
     }: Options = {},
@@ -290,7 +293,9 @@ export class Execution {
     this.attachments = attachments;
     this.folders = folders;
     this.fileContext = fileContext;
+    this.onFinished = onFinished;
   }
+  private readonly onFinished?: Options['onFinished'];
   executable(provider: string) {
     return (
       this.settings?.get().paths[provider] ||
@@ -593,9 +598,16 @@ export class Execution {
   async models() {
     // Explicit models only: a "CLI default" entry hid which model actually ran. ChatGPT models
     // come from the Codex CLI's own catalog; Claude Code keeps none, so the current family is listed.
-    const catalog: { id: string; name: string; provider: string; efforts: string[] }[] = [];
+    // `images`: the model reads images (SPEC-09.3 6); the Claude family does, Codex says per model.
+    const catalog: {
+      id: string;
+      name: string;
+      provider: string;
+      efforts: string[];
+      images: boolean;
+    }[] = [];
     for (const [id, name] of CLAUDE_MODELS)
-      catalog.push({ id, name, provider: 'claude-cli', efforts: claudeEfforts(id) });
+      catalog.push({ id, name, provider: 'claude-cli', efforts: claudeEfforts(id), images: true });
     // The Codex CLI keeps its model list in its folder (the default login's); without one, the
     // CLI's own default model.
     const codexCache = z.object({
@@ -606,6 +618,7 @@ export class Execution {
             visibility: z.string().optional(),
             display_name: z.string().optional(),
             supported_reasoning_levels: z.array(z.object({ effort: z.string() })).optional(),
+            input_modalities: z.array(z.string()).optional(),
           }),
         )
         .optional(),
@@ -627,6 +640,7 @@ export class Execution {
                   .map((x) => x.effort)
                   .filter((x) => ['low', 'medium', 'high', 'xhigh', 'max'].includes(x)),
               ],
+              images: model.input_modalities ? model.input_modalities.includes('image') : true,
             });
       } catch {
         /* No cached catalog in this folder. */
@@ -639,6 +653,7 @@ export class Execution {
         name: 'ChatGPT (CLI 기본 모델)',
         provider: 'codex-cli',
         efforts: ['default'],
+        images: true,
       });
     try {
       const settings = z
@@ -655,6 +670,7 @@ export class Execution {
           name: modelName(settings.model),
           provider: 'claude-cli',
           efforts: claudeEfforts(settings.model),
+          images: true,
         });
     } catch {
       /* Optional provider preferences: built-in model remains usable. */
@@ -712,9 +728,15 @@ export class Execution {
       return;
     }
     const controller = new AbortController();
-    const completion = this.traced(request, this.run(request, controller)).finally(() => {
+    const completion = this.traced(request, this.run(request, controller)).finally(async () => {
       this.active.delete(request.id);
       this.pump(request.projectId);
+      if (this.onFinished)
+        try {
+          await this.onFinished(this.workspace.get(request.projectId, request.id));
+        } catch {
+          /* A listener's failure never changes the run's outcome. */
+        }
     });
     this.active.set(request.id, { controller, completion, projectId: request.projectId });
   }
@@ -862,7 +884,27 @@ export class Execution {
   }
   private endTurn(turn: Turn, projectId: string, id: string) {
     try {
-      const done = this.workspace.get(projectId, id);
+      let done = this.workspace.get(projectId, id);
+      // A host or jig turn's reference-board correction (T-090): the fenced block leaves the
+      // text the user and the ledger read, and is kept checked for the board.
+      if (
+        turn.referenceBlock &&
+        (done.state === 'succeeded' || done.state === 'needs-confirmation') &&
+        done.result
+      ) {
+        const taken = takeReferenceBlock(done.result.text);
+        if (taken) {
+          const { text, ...fields } = taken;
+          done = this.workspace.update(projectId, id, done.state, {
+            ...done.result,
+            text,
+            ...fields,
+            ...(fields.reference && turn.referenceBoard
+              ? { referenceBoard: turn.referenceBoard }
+              : {}),
+          });
+        }
+      }
       // A turn stopped at a guard card ended normally as an AI turn (its session resumes).
       const state = done.state === 'needs-confirmation' ? 'succeeded' : done.state;
       this.conversations!.endTurn(turn, { state, result: done.result });

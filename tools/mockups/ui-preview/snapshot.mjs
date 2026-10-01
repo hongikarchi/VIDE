@@ -5,7 +5,7 @@
 // one static HTML page per screen state into a single preview file: the DOM as rendered, the
 // stylesheets inlined, the 3D view as a picture. The page has no app logic; a small switcher
 // changes screens. Usage: node tools/mockups/ui-preview/snapshot.mjs [out.html]
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { copyFile, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -16,7 +16,56 @@ import { injectProposal, proposalPayload } from './proposal-reference.mjs';
 const here = dirname(fileURLToPath(import.meta.url));
 const out = resolve(process.argv[2] ?? join(here, 'index.html'));
 const directory = await mkdtemp(join(tmpdir(), 'vide-ui-preview-'));
-const app = await startServer({ filename: join(directory, 'preview.sqlite') });
+// The reference board's states use example data: a mocked interpretation and an image job that
+// returns the captured view (no CLI is run).
+const interpretation = {
+  status: 'done',
+  text: 'A는 2~5층 전면의 수직 루버, B는 입구 위 얇은 수평 차양으로 이해했습니다. 값은 이미지에서 추정했습니다.',
+  questions: [],
+  reference: {
+    summary: '남측 파사드 전면에 수직 루버를 약 600 간격으로, 입구에 얇은 차양',
+    imagePrompt: 'Vertical timber louvers about 600 mm apart on the south facade; a thin canopy.',
+    regions: [
+      {
+        letter: 'A',
+        element: '수직 루버',
+        anchor: { x: 0.66, y: 0.36 },
+        values: [
+          { name: '간격', value: '약 600', unit: 'mm', source: 'estimated' },
+          { name: '깊이', value: '약 300', unit: 'mm', source: 'estimated' },
+        ],
+        line: 'A: 수직 루버 · 간격 약 600 · 깊이 300 느낌',
+        openQuestions: ['끝 처리', '재료'],
+        target: '남측 파사드',
+      },
+      {
+        letter: 'B',
+        element: '입구 차양',
+        anchor: null,
+        values: [
+          { name: '길이', value: '약 4', unit: 'm', source: 'estimated' },
+          { name: '색', value: '빼기', unit: null, source: 'user' },
+        ],
+        line: 'B: 입구 차양 · 형태만 · 길이 약 4 m',
+        openQuestions: [],
+        target: 'unknown',
+      },
+    ],
+  },
+};
+const app = await startServer({
+  filename: join(directory, 'preview.sqlite'),
+  providerFactory: () => ({
+    status: async () => ({ available: true }),
+    run: async () => ({ text: JSON.stringify(interpretation) }),
+  }),
+  referenceOptions: {
+    runImage: async (job) => {
+      await copyFile(job.images[0], job.outFile);
+      return { ok: true, elapsedMs: 38000, size: 1 };
+    },
+  },
+});
 const browser = await chromium.launch({ channel: 'chrome', headless: true });
 
 try {
@@ -130,19 +179,21 @@ try {
   await page.waitForFunction(() => document.querySelector('#project-picker')?.value);
   await page.waitForTimeout(1500);
 
-  const styles = await page.evaluate(() =>
-    [...document.styleSheets]
-      .map((sheet) => {
-        try {
-          return [...sheet.cssRules].map((rule) => rule.cssText).join('\n');
-        } catch {
-          return '';
-        }
-      })
-      .join('\n')
-      // Bundled font files are not published with the preview; Google Fonts stands in.
-      .replace(/@font-face\s*\{[^}]*\}/g, ''),
-  );
+  // Read after every state: the tabs load their own stylesheets (reference, outputs) on demand.
+  const collectStyles = () =>
+    page.evaluate(() =>
+      [...document.styleSheets]
+        .map((sheet) => {
+          try {
+            return [...sheet.cssRules].map((rule) => rule.cssText).join('\n');
+          } catch {
+            return '';
+          }
+        })
+        .join('\n')
+        // Bundled font files are not published with the preview; Google Fonts stands in.
+        .replace(/@font-face\s*\{[^}]*\}/g, ''),
+    );
 
   const states = [];
   const capture = async (id, label) => {
@@ -235,9 +286,10 @@ try {
   await capture('model-dark', '모델 · 다크');
   await page.locator('#rail-theme').click();
 
-  // The reference-image tab as built (SPEC-09, PLAN-26 T-090 phase (a)): an example image drawn
-  // in the page is attached, two regions are drawn and the board's frame is opened. Engine images
-  // are made data URLs so the static preview shows them.
+  // The reference-image tab as built (SPEC-09, PLAN-26 T-090): an example image drawn in the page
+  // is attached, two regions are drawn, [이해 확인] fills the board from the mocked interpretation
+  // and the example image job, and [맞음] shows the target question. Engine images are made data
+  // URLs so the static preview shows them.
   try {
     const png = await page.evaluate(() => {
       const canvas = document.createElement('canvas');
@@ -303,31 +355,62 @@ try {
       });
     await inline();
     await capture('reference-mask', '참고 이미지 · 영역 표시 (구현)');
+    // The model view stands for the 3D capture of the image job (the tab hides the model).
+    const view = await page.evaluate(
+      () => document.querySelector('#canvas canvas')?.toDataURL('image/png').split(',')[1],
+    );
+    if (view)
+      await page.evaluate(
+        async ([project, bytes]) => {
+          const id = JSON.parse(localStorage.getItem('vide:draft:' + project)).files.find(
+            (file) => file.name === 'facade.png',
+          ).id;
+          await fetch(`api/v1/projects/${project}/reference-boards/${id}/view`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/octet-stream' },
+            body: Uint8Array.from(atob(bytes), (c) => c.charCodeAt(0)),
+          });
+        },
+        [projectId, view],
+      );
+    await page.route('**/api/v1/projects/*/requests', async (route) => {
+      const request = route.request();
+      const input = request.method() === 'POST' ? request.postDataJSON() : undefined;
+      if (!input?.reference || !view) return route.continue();
+      input.reference.view = true;
+      await route.continue({ postData: JSON.stringify(input) });
+    });
+    await page.locator('#model').selectOption('claude-opus-5-5');
     await page.getByRole('button', { name: '이해 확인' }).click();
-    await page.locator('.reference-board').waitFor();
+    await page.locator('.reference-bubble').nth(1).waitFor();
+    await page
+      .locator('[data-image="ready"] img, [data-image="no-model"]')
+      .first()
+      .waitFor({ timeout: 15000 });
+    await page.waitForTimeout(300);
     await inline();
-    await capture('reference-board', '이해 확인 · 틀 (구현)');
+    await capture('reference-board', '이해 확인 · 말풍선·이미지 (구현, 예시 데이터)');
+    await page.getByRole('button', { name: '맞음 → 모델링 반영' }).click();
+    await page.locator('.reference-targets .qcard').waitFor();
+    await page.locator('.reference-board').evaluate((node) => node.scrollTo(0, node.scrollHeight));
+    await inline();
+    await capture('reference-target', '이해 확인 · 적용 대상 질문 (구현)');
+    await page.unroute('**/api/v1/projects/*/requests');
     await page.locator('.workspace-tablist .workspace-tab-close').first().click();
   } catch (error) {
     console.warn('reference image state skipped:', error.message.split('\n')[0]);
   }
 
-  // Proposals (SPEC-09, PLAN-26 T-090), not implemented: injected into the real DOM after every
-  // real screen is captured, so the real states above stay as they are. The board's right image
-  // stands on the model view captured here; the left panel is folded as a user would.
+  // The editor's proposal (SPEC-09, PLAN-26 T-090), kept beside the built editor for comparison:
+  // injected into the real DOM after every real screen is captured. The board's proposal is
+  // replaced by the built board above (예시 데이터).
   await tab('model');
   await page.waitForTimeout(700);
-  const view = page.locator('#canvas canvas').first();
-  const viewCapture = (await view.count())
-    ? 'data:image/jpeg;base64,' +
-      (await view.screenshot({ type: 'jpeg', quality: 70 })).toString('base64')
-    : '';
   await page.locator('#toggle-left').click();
   await page.evaluate(injectProposal, proposalPayload('mask'));
   await capture('proposal-mask', '제안 · 마스킹 편집기');
-  await page.evaluate(injectProposal, proposalPayload('board', viewCapture));
-  await capture('proposal-board', '제안 · 이해 확인');
 
+  const styles = await collectStyles();
   const data = JSON.stringify(states).replace(/</g, '\\u003c');
   const html = `<title>VIDE 화면 미리보기</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+KR:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">

@@ -64,6 +64,8 @@ interface ServerOptions {
     ConstructorParameters<typeof RemoteAccess>[0],
     'executable' | 'spawnProcess' | 'fetcher' | 'heartbeatMs'
   >;
+  /** Test seams for the reference boards' image job (SPEC-09.7): a fake codex or runner. */
+  referenceOptions?: Omit<ReferenceBoardsOptions, 'outputs'>;
 }
 import { readWebAsset } from './web-assets.ts';
 import { Extensions } from '../core/extensions.ts';
@@ -97,7 +99,11 @@ import { importModel, captureModel, recoverDwgImport } from './import-model.ts';
 import { AttachmentStore } from './attachments.ts';
 import { folderRoutes } from './project-files.ts';
 import { ProjectFolders } from '../core/project-folders.ts';
-import { ReferenceBoards, referenceRoutes } from './reference-boards.ts';
+import {
+  ReferenceBoards,
+  referenceRoutes,
+  type ReferenceBoardsOptions,
+} from './reference-boards.ts';
 import { renderReport } from './report.ts';
 import { RemovedProjects, removeProject } from './project-removal.ts';
 import { SyncCoalescer } from './sync-coalesce.ts';
@@ -159,6 +165,12 @@ const statuses: Record<string, number> = {
   STRUCTURE_MODEL_INVALID: 422,
   STRUCTURE_CORE_MISSING: 503,
   HOST_RUNNING: 409,
+  REFERENCE_BUSY: 409,
+  REFERENCE_NOT_READY: 409,
+  REFERENCE_FROZEN: 409,
+  REFERENCE_TARGET_UNKNOWN: 409,
+  REFERENCE_IMAGES_OFF: 409,
+  REFERENCE_NO_VIEW: 409,
   ...jigStatuses,
   ...conversationStatuses,
   ...factStatuses,
@@ -175,6 +187,7 @@ export async function startServer({
   sdkOptions,
   remoteOptions,
   connectorOptions,
+  referenceOptions,
 }: ServerOptions) {
   const store = new Store(filename),
     bootstrap = randomBytes(32).toString('hex'),
@@ -189,7 +202,11 @@ export async function startServer({
   const referenceBoards =
     filename === ':memory:'
       ? undefined
-      : new ReferenceBoards(join(dirname(filename), 'reference-boards'));
+      : new ReferenceBoards(join(dirname(filename), 'reference-boards'), {
+          ...referenceOptions,
+          // The board's view captures and generated images are the project's outputs (SPEC-09.9).
+          outputs: join(dirname(filename), 'outputs'),
+        });
   // Project folders and the AI's file tools (SPEC-01.13): the data folder is never read.
   const folders = new ProjectFolders(store.db),
     fileContext = { dataDirectory: filename === ':memory:' ? undefined : dirname(filename) };
@@ -301,7 +318,7 @@ export async function startServer({
         hosts.rhino.directory,
         hosts.zwcad.directory,
         ...(attachments ? [attachments.root] : []),
-        ...(referenceBoards ? [referenceBoards.root] : []),
+        ...(referenceBoards ? [referenceBoards.root, referenceBoards.outputs] : []),
       ],
       projectFiles: perProject,
     });
@@ -379,7 +396,11 @@ export async function startServer({
     sdk.editors.observe = (target, snapshot) => readOnly.note(target, snapshot);
   }
   // Conversations (SPEC-02.19): sessions per turn, ledger, transcript retention (30 days).
-  const conversations = new ConversationService(store, { diagnostics });
+  const conversations = new ConversationService(store, {
+    diagnostics,
+    // A reference board's data and output shape for its turns (SPEC-09.4, T-090).
+    reference: (request) => referenceBoards?.turnItem(request),
+  });
   // The per-project addendum of the AI instruction bundle (PLAN-24 지침 묶음).
   const projectInstructions = new ProjectInstructionStore(
     filename === ':memory:' ? undefined : dirname(filename),
@@ -406,7 +427,17 @@ export async function startServer({
     attachments,
     folders,
     fileContext,
+    // A reference turn's end makes the board's next 판 and starts its image job (T-090).
+    onFinished: (row) => referenceBoards?.afterTurn(row),
   });
+  if (referenceBoards)
+    referenceBoards.lookup = (projectId, requestId) => {
+      try {
+        return workspace.get(projectId, requestId);
+      } catch {
+        return undefined;
+      }
+    };
   // Signed-in services for automatic model choice; each check runs the CLIs, so it is reused briefly.
   let signedIn: { at: number; value: Promise<('claude-cli' | 'codex-cli')[]> } | undefined;
   const signedInServices = () => {
@@ -714,6 +745,7 @@ export async function startServer({
           body,
           send,
           response,
+          remote,
         })
       )
         return;
@@ -1983,6 +2015,10 @@ export async function startServer({
               : undefined;
           const old =
             existing && typeof existing.input === 'string' ? JSON.parse(existing.input) : undefined;
+          // Sent through the remote tunnel (never the browser's word): such a turn starts no image
+          // job on this PC's Codex login (SPEC-09.10 4). A retried request keeps the first mark.
+          delete input.remote;
+          if (old ? old.remote === true : remote) input.remote = true;
           const routingInput = () => ({
             body: typeof input.body === 'string' ? input.body : '',
             host: typeof input.host === 'string' ? input.host : undefined,
@@ -1992,6 +2028,23 @@ export async function startServer({
             sketches: Array.isArray(input.sketches) ? input.sketches : undefined,
             linkedTargets: Array.isArray(input.linkedTargets) ? input.linkedTargets : undefined,
           });
+          // A reference-board turn (SPEC-09, T-090): only for an image the project keeps.
+          const reference =
+            input.reference !== undefined && !old
+              ? (() => {
+                  const attachmentId = (input.reference as { attachmentId?: unknown } | null)
+                    ?.attachmentId;
+                  if (
+                    !referenceBoards ||
+                    typeof attachmentId !== 'string' ||
+                    attachments?.get(projectId, attachmentId)?.kind !== 'image'
+                  )
+                    throw new DomainError('NOT_FOUND');
+                  return { ...referenceBoards.before(projectId, input), attachmentId };
+                })()
+              : undefined;
+          if (reference && typeof input.conversationId !== 'string')
+            input.conversationId = 'default';
           // A retried request stays where it went the first time.
           if (old) {
             if (typeof old.conversationId === 'string') input.conversationId = old.conversationId;
@@ -2038,7 +2091,19 @@ export async function startServer({
           if (old?.accountProfileId) input.accountProfileId = old.accountProfileId;
           // Attachment entries take what is kept (size, type, path), never the browser's word.
           if (attachments && !old) input.files = attachments.normalize(projectId, input.files);
-          const result = workspace.submit(projectId, input);
+          // A reference turn is recorded on its board only once the request is stored.
+          const result =
+            reference && referenceBoards
+              ? await referenceBoards.prepare(
+                  projectId,
+                  input,
+                  {
+                    name: attachments?.get(projectId, reference.attachmentId)?.name ?? '',
+                    remote,
+                  },
+                  () => workspace.submit(projectId, input),
+                )
+              : workspace.submit(projectId, input);
           if (result.created) execution.start(result.request);
           const routing = result.created
             ? (result.request.input.routing as Record<string, unknown> | undefined)
@@ -2209,7 +2274,11 @@ export async function startServer({
       stopHealth();
       await remoteAccess.close();
       agentTools.close();
+      // No image job starts from here on and running ones end their codex process (T-090).
+      const boardsClosed = referenceBoards?.close();
       await execution.close();
+      await boardsClosed;
+      await referenceBoards?.idle();
       clearInterval(transcriptSweep);
       await Promise.allSettled([...importRecoveries.values()]);
       try {

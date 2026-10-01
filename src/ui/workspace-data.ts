@@ -42,6 +42,8 @@ export const modelsSchema = z.array(
     name: z.string(),
     provider: z.enum(['claude-cli', 'codex-cli']),
     efforts: z.array(z.string()).min(1),
+    /** Reads images (SPEC-09.3 6); an older engine says nothing: taken as yes. */
+    images: z.boolean().optional(),
   }),
 );
 export const providersSchema = z.array(

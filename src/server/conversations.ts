@@ -204,6 +204,25 @@ export interface Turn {
   structured?: boolean;
   /** Question IDs the ledger already holds (asked or answered): never asked again. */
   askedQuestions?: ReadonlySet<string>;
+  /**
+   * A reference-image turn (SPEC-09.4, T-090): the output carries the board's interpretation
+   * (`required`), or may carry a spoken correction of it (`optional`).
+   */
+  reference?: 'required' | 'optional';
+  /**
+   * A host or jig turn of a conversation with a reference board: no structured output, so a
+   * correction comes as a fenced block in the reply (Execution takes it out, T-090).
+   */
+  referenceBlock?: boolean;
+  /** The board (attachment id) the turn's correction belongs to. */
+  referenceBoard?: string;
+}
+/** What a reference board adds to a turn (src/server/reference-boards.ts `turnItem`). */
+export interface ReferenceTurn {
+  item: TurnItem;
+  output?: 'required' | 'optional';
+  /** A chat turn's board: the one it was shown, whatever is newest when it ends. */
+  attachmentId?: string;
 }
 export interface Hold {
   /** The conversation's line is stopped (an unresolved result, SPEC-02.19 4). */
@@ -219,6 +238,8 @@ interface Options {
    * database (none for an in-memory one: the defaults apply).
    */
   settingsFile?: string | null;
+  /** The reference board's item and output of a turn (SPEC-09, T-090); none for most turns. */
+  reference?: (request: StoredWork) => ReferenceTurn | undefined;
 }
 
 const id = z.string().regex(/^[a-zA-Z0-9-]{1,100}$/);
@@ -961,16 +982,30 @@ export class ConversationService {
     request: StoredWork,
     options: { rows: StoredWork[]; cliVersion: () => Promise<string> },
   ): Promise<Turn | undefined> {
-    const turn = await this.openTurn(request, options);
+    const opened = await this.openTurn(request, options);
+    if (!opened) return opened;
+    // A reference board's data comes with the turn (SPEC-09.4, T-090).
+    let reference: ReferenceTurn | undefined;
+    try {
+      reference = this.options.reference?.(request);
+    } catch {
+      reference = undefined;
+    }
+    const turn = reference ? { ...opened, items: [...opened.items, reference.item] } : opened;
     // A turn without the host (and not a jig review with its own format) asks for structured
     // output: done, progress or at most three question cards (PLAN-24 T-062).
-    if (!turn || request.input.jig !== undefined || hostUse(request.input) !== 'none') return turn;
+    if (request.input.jig !== undefined || hostUse(request.input) !== 'none')
+      return reference?.output === 'optional' && reference.attachmentId
+        ? { ...turn, referenceBlock: true, referenceBoard: reference.attachmentId }
+        : turn;
     const ledger = this.store.ledger(turn.conversation.id, { current: true });
     return {
       ...turn,
       structured: true,
       askedQuestions: askedQuestions(ledger),
-      items: [...turn.items, turnOutputItem()],
+      items: [...turn.items, turnOutputItem(reference?.output)],
+      ...(reference?.output ? { reference: reference.output } : {}),
+      ...(reference?.attachmentId ? { referenceBoard: reference.attachmentId } : {}),
     };
   }
   private async openTurn(

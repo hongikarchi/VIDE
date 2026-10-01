@@ -88,7 +88,9 @@ export const MAX_TURN_IMAGE_BYTES = 1_000_000;
 export const imageItemSchema = z
   .object({
     // annotated: the viewport with the turn's sketch strokes and pin markers drawn on it.
-    kind: z.enum(['viewport', 'annotated']),
+    // reference: a reference image board's input (SPEC-09.4: the regions drawn over it, the
+    // original, or the last generated image).
+    kind: z.enum(['viewport', 'annotated', 'reference']),
     name: z.string().max(100).optional(),
     dataUrl: z
       .string()
