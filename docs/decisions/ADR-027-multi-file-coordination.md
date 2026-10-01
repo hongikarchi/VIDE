@@ -2,7 +2,7 @@
 id: ADR-027
 title: 한 요청이 프로젝트의 열린 연결 파일들을 함께 읽고 고친다 — 작업 단위 되돌리기와 전부 또는 전무
 status: approved
-version: 0.1
+version: 0.2
 updated: 2026-10-01
 owner: user
 related: [FR-02, FR-04, FR-10, FR-11, FR-12, FR-16, AC-25, AC-32, AC-33, AC-38, SPEC-01, SPEC-02, ARCH-01, DESIGN, ADR-022, PLAN-24]
@@ -12,7 +12,7 @@ related: [FR-02, FR-04, FR-10, FR-11, FR-12, FR-16, AC-25, AC-32, AC-33, AC-38, 
 
 ## 결정
 
-2026-10-01 사용자 결정. **승인 범위:** 결정 1~3은 사용자가 정했다. 결정 4~7은 1~3을 구현하기 위한 구체화이며 동작 정본은 [SPEC-01](../specs/SPEC-01-project-input-sync.md).11의 5와 [SPEC-02](../specs/SPEC-02-execution-candidates.md).13·.9, 물리 계약은 [ARCH-01](../architecture/ARCH-01-system.md) §3·§4 「바로 적용 경로」, 화면은 [Design](../../Design.md) SCR-03, 작업은 [PLAN-24](../plans/PLAN-24-ai-conversations.md) T-089~T-091이다.
+2026-10-01 사용자 결정. **승인 범위:** 결정 1~3은 사용자가 정했다. 결정 4~7은 1~3을 구현하기 위한 구체화이며 동작 정본은 [SPEC-01](../specs/SPEC-01-project-input-sync.md).11의 5와 [SPEC-02](../specs/SPEC-02-execution-candidates.md).13·.9, 물리 계약은 [ARCH-01](../architecture/ARCH-01-system.md) §3·§4 「바로 적용 경로」, 화면은 [Design](../../Design.md) SCR-03, 작업은 [PLAN-24](../plans/PLAN-24-ai-conversations.md) T-092~T-094이다.
 
 1. **연결 파일은 함께 조율한다.** "VIDE 입장에서는 sync된 파일들은 다 하위에 있는 파일이니까, 동시에 조율할 수 있어야 이 프로그램의 의미가 있지." AI는 한 요청에서 그 프로젝트의 연결 파일(Synced 파일) 가운데 지금 열려 연결된 것을 대상 파일과 함께 실시간으로 읽고, 자동 모드에서는 고친다. 요청의 대상 파일은 여전히 하나(변경 핀이 있는 파일, SPEC-01.11의 5)이고, 다른 열린 연결 파일이 같은 요청의 작업 범위에 더해진다.
 2. **되돌리기는 작업 단위다.** "되돌리기 단위는 작업 단위로 취소할 수 있게." 여러 파일을 고친 요청의 VIDE [되돌리기] 한 번은 그 요청이 바꾼 것을 모든 파일에서 되돌린다. 호스트의 되돌리기 기록은 지금처럼 파일마다 실행 하나에 하나이며 VIDE가 요청으로 묶는다.

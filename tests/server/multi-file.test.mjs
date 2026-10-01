@@ -299,7 +299,7 @@ test('A scope that does not resolve linkId refuses it instead of reading the tar
   tools.close();
 });
 
-// --- writing several files in one request (T-090) -----------------------------------------------
+// --- writing several files in one request (T-093) -----------------------------------------------
 
 const fail = (code) => Object.assign(new Error(code), { code });
 const applied = (result) => result.executions.filter((entry) => entry.state === 'applied');

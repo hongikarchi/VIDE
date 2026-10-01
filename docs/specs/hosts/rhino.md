@@ -2,7 +2,7 @@
 id: HOST-RHINO
 title: Rhino 호스트 계약과 검증 범위
 status: review
-version: 0.34
+version: 0.35
 updated: 2026-10-01
 owner: agent:codex
 related: [SPEC-01, SPEC-02, FR-03, FR-04, AC-24, AC-38, OQ-03, OQ-10, ADR-022, ADR-027]
@@ -28,7 +28,7 @@ SDK의 AI query는 기본 50개·최대 100개/64 KiB 페이지와 ID 필터를 
 | H-RHINO-04 | 평면 PolylineCurve 읽기·생성·정점 변경·이동·반복 복사 | 읽기·생성·이동·복사 실증(§2.1·2.2). 12×8→12×10m 정점 변경·고정 적용·재열기에서 GUID/속성/층·무관 객체 보존 실증([검수](../../tdd/VERIFY-2026-09-24-local-product-completion.md)) | 호스트 기본 제어점 편집 후 재열기 검수, 레이어·관계 |
 | H-RHINO-05 | 닫힌 평면 경계로 수직 돌출 후보 생성·높이/경계 변경 | 실증: CLI→XY 스케치→Extrusion 저장/재열기(§2.1), 편집 창 적용에서 높이 변경(체적 24→48, §2.3), 현재 UI의 Claude 생성/핀 높이 수정 체적 480→360·원본 보존 재검증([검수](../../tdd/VERIFY-2026-09-24-local-product-completion.md)), 한 요청의 CAD 수정 경계→Rhino 돌출과 부분 실패 보존([연계 검증](../../tdd/VERIFY-2026-09-24-linked-hosts.md)) | 생성 기준 없는 임의 솔리드의 파라메트릭 편집으로 일반화 금지, 기본 Move·Save As·재열기 검수 통과([검수](../../tdd/VERIFY-2026-09-24-local-product-completion.md)); 읽기 전용 안내는 VIDE 없는 기본 Save As 대조군에서도 재현; 2026-09-28 사용자도 일반 Rhino에서 동일 안내 확인; 환경 원인·정상 반복 저장은 미해소 |
 | H-RHINO-06 | 열린 문서의 바로 실행·실행별 되돌리기·보호 확인(2026-09-30) | 실호스트 합성 문서(73개)에서 실증: `direct-execute` 추가 3개·`undoId`, 최신 [되돌리기]와 중복 되돌리기(`already`), 최신이 아닌 실행의 `not-latest` 거절, 60개 삭제의 `bulk-delete` 보류 → [진행] → 되돌리기, 레이어 삭제(`layer-delete`) 보류, `Purge`의 실행 전 거절, 예외 시 기록 되돌림, Rhino Ctrl+Z 뒤 [되돌리기]의 `already`, `capture_view`·`measure`([검수](../../tdd/VERIFY-2026-09-30-direct-apply-rhino.md)) | 실제 사용자 문서·보이는 Rhino 창에서의 캡처, Undo 메모리 한도로 기록이 사라진 경우, `fingerprint`의 `documentHash`가 revision 기반이라 되돌린 실패 실행도 값을 바꾸는 한계 |
-| H-RHINO-07 | 한 요청에서 다른 열린 연결 문서의 실시간 읽기·보기·측정·바로 실행, 작업 단위 되돌리기·실패 때 자동 되돌림(2026-10-01, [ADR-027](../../decisions/ADR-027-multi-file-coordination.md)) | 구현: 대상 Rhino 턴의 `linkId` 도구가 연결 문서마다 같은 `direct-execute`·`direct-undo`·보기 메서드를 쓴다. 모의 연결 두 개로 단위·서버 시험(PLAN-24 T-089~091) | 실제 Rhino 두 창에서 함께 고치기·[되돌리기]·자동 되돌림 확인 |
+| H-RHINO-07 | 한 요청에서 다른 열린 연결 문서의 실시간 읽기·보기·측정·바로 실행, 작업 단위 되돌리기·실패 때 자동 되돌림(2026-10-01, [ADR-027](../../decisions/ADR-027-multi-file-coordination.md)) | 구현: 대상 Rhino 턴의 `linkId` 도구가 연결 문서마다 같은 `direct-execute`·`direct-undo`·보기 메서드를 쓴다. 모의 연결 두 개로 단위·서버 시험(PLAN-24 T-092~094) | 실제 Rhino 두 창에서 함께 고치기·[되돌리기]·자동 되돌림 확인 |
 
 그룹 보존 적용: 그룹 표(ID·이름·인덱스·사용자 문자열)와 각 객체의 그룹 소속을 유지하면 그룹 안 기존 객체의 형상·일반 속성 수정도 허용한다. 그룹 생성/이름 변경/해제/구성원 추가·삭제는 적용 전에 거절한다. 잠김·참조·이력·재질 등 다른 적용 제한은 유지한다. 실제 검증 상태는 [로컬 검수](../../tdd/VERIFY-2026-09-24-local-product-completion.md)를 따른다.
 

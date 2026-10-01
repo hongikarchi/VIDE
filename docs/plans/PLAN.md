@@ -2,7 +2,7 @@
 id: PLAN
 title: VIDE 실행 로드맵
 status: review
-version: 0.224
+version: 0.225
 updated: 2026-10-01
 owner: agent:codex
 related: [ARCH-01, PLAN-02, PLAN-03, PLAN-22, PLAN-23, PLAN-24, PLAN-25, PLAN-26, PLAN-27, ADR-022, ADR-025, ADR-026, ADR-027, SPEC-00, SPEC-01, SPEC-02, SPEC-03, SPEC-04, SPEC-05, SPEC-06, SPEC-07]
@@ -101,7 +101,7 @@ related: [ARCH-01, PLAN-02, PLAN-03, PLAN-22, PLAN-23, PLAN-24, PLAN-25, PLAN-26
 | 독립 | T-068(계정 관리를 AccountSwitch로, [PLAN-25](PLAN-25-accounts-to-accountswitch.md)) | 정본 반영·코드 제거 뒤 계정 API 404·읽기 전용 카드 확인 |
 | 안정성 | T-082~T-087(Sync 저장 구조와 작동 안정성, [PLAN-27](PLAN-27-sync-storage-stability.md), 근거 [RESEARCH-13](../research/RESEARCH-13-stability-audit.md)) | 0단계(진단·복구) 바로 착수. 1단계는 ARCH-01 저장 계약 확인 뒤 |
 | 바로 적용 | T-069 → T-070·071 → T-072 → T-073·074, T-075([PLAN-24](PLAN-24-ai-conversations.md#direct-apply), [ADR-022](../decisions/ADR-022-direct-apply-plan-auto.md)) | 실제 Rhino·ZWCAD에서 보호·되돌리기 확인, 브라우저 시험 |
-| 여러 파일 조율 | T-089 → T-090 → T-091([PLAN-24](PLAN-24-ai-conversations.md#multi-file), [ADR-027](../decisions/ADR-027-multi-file-coordination.md)) | 모의 연결 두 개의 서버·브라우저 시험, 실제 Rhino 두 창 확인 |
+| 여러 파일 조율 | T-092 → T-093 → T-094([PLAN-24](PLAN-24-ai-conversations.md#multi-file), [ADR-027](../decisions/ADR-027-multi-file-coordination.md)) | 모의 연결 두 개의 서버·브라우저 시험, 실제 Rhino 두 창 확인 |
 | 대화 중심 구조 | T-076·077 → T-078 → T-079, T-080, T-081([PLAN-26](PLAN-26-chat-stage.md), [ADR-026](../decisions/ADR-026-chat-stage-and-skill-jigs.md)) | 각 티켓의 시험 통과. 화면 변경은 지금 배치 위에 하나씩 |
 
 호스트 플러그인을 바꾸는 티켓의 완료 기준은 개발 빌드와 `.vide/` 합성 문서·사본까지이며, 설치본 반영은 사용자 요청이나 웨이브 경계의 판단으로 묶음 릴리스한다.
@@ -110,7 +110,7 @@ related: [ARCH-01, PLAN-02, PLAN-03, PLAN-22, PLAN-23, PLAN-24, PLAN-25, PLAN-26
 
 ### 6.2 티켓 소유와 상세 계획
 
-T-001~018의 번호·지원 증거는 유지한다. 각 티켓의 현재 결과와 남은 조건은 §6.5, 상세 구현·시험 절차는 PLAN-02와 §7을 따른다. T-019~024·T-032·T-040(진단 로그)의 구체 작업은 PLAN-03, T-033~039는 PLAN-17이 소유한다. T-041~067은 PLAN-22·23·24가 소유하며, RESEARCH-10 작업 묶음(WP)과의 대응표는 각 계획에 있다. T-068은 PLAN-25, 바로 적용·계획/자동 모드의 T-069~075와 여러 파일 조율의 T-089~091은 PLAN-24, 대화 중심 구조·산출물 탭의 T-076~081은 PLAN-26, Sync 저장 구조와 작동 안정성의 T-082~087은 PLAN-27이 소유한다. T-025~031은 PLAN-08의 예약 번호이며 아직 등록하지 않았다. 하위 계획에 별도 현황표를 복제하지 않는다.
+T-001~018의 번호·지원 증거는 유지한다. 각 티켓의 현재 결과와 남은 조건은 §6.5, 상세 구현·시험 절차는 PLAN-02와 §7을 따른다. T-019~024·T-032·T-040(진단 로그)의 구체 작업은 PLAN-03, T-033~039는 PLAN-17이 소유한다. T-041~067은 PLAN-22·23·24가 소유하며, RESEARCH-10 작업 묶음(WP)과의 대응표는 각 계획에 있다. T-068은 PLAN-25, 바로 적용·계획/자동 모드의 T-069~075와 여러 파일 조율의 T-092~094는 PLAN-24, 대화 중심 구조·산출물 탭의 T-076~081과 첨부·참고 이미지 의도 확인의 T-089~090은 PLAN-26, Sync 저장 구조와 작동 안정성의 T-082~087은 PLAN-27이 소유한다. T-025~031은 PLAN-08의 예약 번호이며 아직 등록하지 않았다. 하위 계획에 별도 현황표를 복제하지 않는다.
 
 ### 6.3 착수 조건
 
@@ -242,9 +242,9 @@ T-001~018의 번호·지원 증거는 유지한다. 각 티켓의 현재 결과�
 | T-079 셸 정리(좁힌 범위) | 완료(설치 전): 레일의 고정 화면·대시보드·프로젝트 자료·피드백·다크/라이트, 위쪽 줄은 열린 작업본만, 연결 파일·레이어 목록 | 피드백 폼 주소(사용자), 대시보드 내용 결정 | `16eb911`, `633f694`, `browser-workspace-tabs.mjs` |
 | T-080 층 평면 보기 | 대기 | SPEC-02.17 보완 먼저 | [PLAN-26](PLAN-26-chat-stage.md) |
 | T-081 산출물 탭 | 페이지 구현·브라우저 시험 완료(설치 전) | 도면 시트·생성형 렌더링 기능(각 SPEC 먼저) | `3a9617f` |
-| T-089 다른 열린 연결 파일의 실시간 읽기 | 구현·단위 검증(설치 전). Rhino 대상 턴이 열린 Rhino 문서(조회·측정·보기)와 ZWCAD 도면(조회)을 `linkId`로 읽음 | 실제 Rhino 두 창 확인 | [PLAN-24](PLAN-24-ai-conversations.md#t-089) |
-| T-090 여러 파일 쓰기·잠금·작업 단위 되돌리기·자동 되돌림 | 구현·단위 검증(설치 전). 잠금은 기다리지 않고 `DOCUMENT_LOCKED`, 실패·중단한 여러 파일 요청은 자동으로 되돌림, `undo {all: true}` | 실제 Rhino 두 창·ZWCAD 확인, ZWCAD 대상 턴의 여러 파일 | [PLAN-24](PLAN-24-ai-conversations.md#t-090) |
-| T-091 파일별 결과·요청 [되돌리기] 화면 | 완료(설치 전) | 설치본 화면 확인 | [PLAN-24](PLAN-24-ai-conversations.md#t-091) |
+| T-092 다른 열린 연결 파일의 실시간 읽기 | 구현·단위 검증(설치 전). Rhino 대상 턴이 열린 Rhino 문서(조회·측정·보기)와 ZWCAD 도면(조회)을 `linkId`로 읽음 | 실제 Rhino 두 창 확인 | [PLAN-24](PLAN-24-ai-conversations.md#t-092) |
+| T-093 여러 파일 쓰기·잠금·작업 단위 되돌리기·자동 되돌림 | 구현·단위 검증(설치 전). 잠금은 기다리지 않고 `DOCUMENT_LOCKED`, 실패·중단한 여러 파일 요청은 자동으로 되돌림, `undo {all: true}` | 실제 Rhino 두 창·ZWCAD 확인, ZWCAD 대상 턴의 여러 파일 | [PLAN-24](PLAN-24-ai-conversations.md#t-093) |
+| T-094 파일별 결과·요청 [되돌리기] 화면 | 완료(설치 전) | 설치본 화면 확인 | [PLAN-24](PLAN-24-ai-conversations.md#t-094) |
 | T-088 대화별 모델 고정·모델 바꾸기 = 새 탭 | 구현·단위·브라우저 시험 완료(`0fb9506`) | 실제 CLI로 모델 바꾸기 인계 확인(설치본 릴리스 때) | [PLAN-24](PLAN-24-ai-conversations.md#t-088) |
 | T-089 첨부 버튼 정리·경로 기반 첨부(모든 형식, `attachment_read`) | 구현·단위·브라우저 시험 완료(2026-10-01, 커밋 전) | 실제 Claude·Codex로 첨부 이미지·텍스트 읽기 확인(설치본 릴리스 때). 후속: PDF 본문 추출, 3DM 요약, 말(@언급)로 연계 대상 고르기. 원본 위치의 파일은 T-091의 프로젝트 폴더 읽기로 대신 | [PLAN-26](PLAN-26-chat-stage.md#t-089), SPEC-01.12 |
 | T-090 참고 이미지 의도 확인 (a)~(d) 영역 표시·해석 말풍선·Codex 이미지·확정 → 모델링 | (a)~(d) 구현·단위·브라우저 시험(가짜 공급자·가짜 이미지 작업) 완료(2026-10-01, 커밋 전). 실제 Codex 이미지 작업 실측 33–44초(합성 장면) | 실제 CLI 해석 턴은 Claude·Codex 통과(2026-10-01). 말로 고치기의 실제 CLI 확인, 실제 Rhino 사본으로 SPEC-09 완료 기준·VERIFY, Design §03·§14 표현, PRD 범위 문장 | [PLAN-26](PLAN-26-chat-stage.md), SPEC-09 |

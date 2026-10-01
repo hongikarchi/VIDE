@@ -2,7 +2,7 @@
 id: PLAN-24
 title: AI 대화 세션·동시 진행·말로 하는 경로 판정 1차
 status: review
-version: 0.43
+version: 0.44
 updated: 2026-10-01
 owner: agent:claude
 related: [PLAN, PLAN-22, PLAN-23, PLAN-25, PLAN-26, PLAN-02, PLAN-05, PLAN-08, PLAN-19, FR-25, FR-24, FR-18, FR-10, FR-11, FR-12, AC-46, AC-47, AC-48, AC-38, SPEC-02, SPEC-07, ARCH-01, ARCH-03, ADR-021, ADR-014, ADR-022, ADR-025, ADR-026, ADR-027, RESEARCH-10, RESEARCH-11]
@@ -336,7 +336,9 @@ related: [PLAN, PLAN-22, PLAN-23, PLAN-25, PLAN-26, PLAN-02, PLAN-05, PLAN-08, P
 
 사용자 결정(2026-10-01, [ADR-027](../decisions/ADR-027-multi-file-coordination.md)): AI는 한 요청에서 그 프로젝트의 열린 연결 파일을 함께 읽고 고치며, 되돌리기는 요청 단위이고, 실패한 요청은 다른 파일의 적용분을 자동으로 되돌린다(전부 또는 전무). 기준: SPEC-01.11의 5, SPEC-02.6·.9의 3·.13의 6·.16, ARCH-01 §3·§4 「여러 파일 턴」, Design SCR-03 결과. 1차 범위는 Rhino 연결 문서가 대상인 바로 편집 턴이다(ZWCAD 대상 턴은 범위 밖).
 
-### T-089 · 다른 열린 연결 파일의 실시간 읽기 {#t-089}
+**번호:** 같은 날 PLAN-26이 T-089(첨부)·T-090(참고 이미지 의도 확인)을 먼저 썼으므로 이 묶음은 T-092~094다. 기능 브랜치 커밋 메시지의 T-089·T-090·T-091이 각각 T-092·T-093·T-094다.
+
+### T-092 · 다른 열린 연결 파일의 실시간 읽기 {#t-092}
 
 - **변경 범위:** `src/server/live-links.ts`(연결 행 → 열린 연결 편집기 문서, 링크 목록 경로와 같은 맞춤 규칙, `server.ts` 링크 목록도 이 함수를 씀), `agent-tools.ts`(`query`·`execute`·`capture_view`·`measure`의 선택 인수 `linkId`, 범위 옵션 `links`, `LINK_NOT_LIVE`·`DOCUMENT_LOCKED` 오류와 `next` 안내), `direct-mode.ts`(문서별 드라이버·조회 캐시·보기, 목표 문장의 열린·닫힌 연결 파일 목록), `execution.ts`(`directDriverFor`의 ZWCAD 조회, 턴에 연결 해석기 전달), 지시 `hostProjectNote`·`modeling.md`(T-062의 '살아 있는 문서는 대상 하나' 문구를 새 규칙으로), `gateway.ts` 오류 문구.
 - **검증:** `tests/server/multi-file.test.mjs` — 모의 편집기 두 개로 대상 Rhino 턴이 다른 문서를 `linkId`로 조회·측정·캡처(계획·자동), 닫힌 연결은 `LINK_NOT_LIVE`와 안내, `linkId`를 받지 않는 범위의 거절. `tests/server/host-turn-tools.test.mjs` 지시 문구.
@@ -345,7 +347,7 @@ related: [PLAN, PLAN-22, PLAN-23, PLAN-25, PLAN-26, PLAN-02, PLAN-05, PLAN-08, P
   - 증거: `tests/server/multi-file.test.mjs`(읽기 4건), `tests/server/host-turn-tools.test.mjs`(지시 문구), `npm test` 754 통과
   - 남음: 실제 Rhino 두 창·실제 CLI로 확인(설치본 묶음 때)
 
-### T-090 · 한 요청의 여러 파일 쓰기·잠금·작업 단위 되돌리기·자동 되돌림 {#t-090}
+### T-093 · 한 요청의 여러 파일 쓰기·잠금·작업 단위 되돌리기·자동 되돌림 {#t-093}
 
 - **변경 범위:** `direct-mode.ts`(문서별 실행·거절, 행의 `file`, 여러 파일 요청 판정, 실패·중단 때 보상 되돌리기와 `rollback`), `request-scope.ts`(결과의 `documents[]`를 쓰기 주장에 더함, `documentHolder`), `execution.ts`(턴 중 잠금 검사, `undo {all: true}`, 추가 지시로 끊긴 턴 표시), `server.ts` 경로.
 - **선행 조건과 선택:** 잠금은 기다리지 않고 거절(ADR-027 결정 5). 한 파일 요청은 지금 동작 그대로(ADR-027 「선택지」).
@@ -355,7 +357,7 @@ related: [PLAN, PLAN-22, PLAN-23, PLAN-25, PLAN-26, PLAN-02, PLAN-05, PLAN-08, P
   - 증거: `tests/server/multi-file.test.mjs`(쓰기·되돌리기 9건), `tests/server/direct-mode-e2e.test.mjs`(HTTP `{all: true}`), `npm test` 764 통과, `browser-concurrent-work.mjs`·`browser-links.mjs` 통과
   - 남음: 실제 Rhino 두 창·실제 ZWCAD로 함께 고치기·[되돌리기]·자동 되돌림 확인, ZWCAD 도면이 대상인 턴의 여러 파일(이번 범위 밖)
 
-### T-091 · 화면: 파일별 결과와 요청의 [되돌리기] {#t-091}
+### T-094 · 화면: 파일별 결과와 요청의 [되돌리기] {#t-094}
 
 - **변경 범위:** `src/ui/work-view.tsx`(실행을 파일별로 묶음, 요청의 [되돌리기] 하나, `rollback`·`undo` 결과 줄), `app.ts`(`undo {all: true}` 답의 거절 파일 표시), 스타일.
 - **검증:** `tests/integration/browser-direct-mode.mjs`에 두 파일 요청: 파일 머리 두 개, 요청 [되돌리기]가 `{all: true}`로 가고 행이 '되돌림', 자동 되돌림 줄. 한 파일 요청은 지금 화면 그대로.
@@ -370,7 +372,7 @@ related: [PLAN, PLAN-22, PLAN-23, PLAN-25, PLAN-26, PLAN-02, PLAN-05, PLAN-08, P
 - T-061은 T-060·PLAN-22 T-045 뒤다(세션 이어 실행은 T-059 합격 항목만). T-062는 T-061 뒤다. PLAN-22 T-063(만들기 대화)이 이 둘을 쓴다.
 - 마일스톤 표기는 S-06 결과를 먼저 보이는 순서(M5)이지만, 선행이 갖춰진 티켓은 먼저 해도 된다.
 - 바로 적용: T-069 → T-070·T-071 → T-072 → T-073·T-074. T-075는 독립이다. 실제 호스트 확인은 플러그인 재빌드·설치 뒤 묶어서 한다.
-- 여러 파일 조율: T-062·T-072 → T-089 → T-090 → T-091.
+- 여러 파일 조율: T-062·T-072 → T-092 → T-093 → T-094.
 
 ## 현황 {#status}
 
