@@ -94,6 +94,7 @@ import { RhinoWorkspace } from '../../hosts/rhino/workspace.ts';
 import { ZwcadWorkspace } from '../../hosts/zwcad/workspace.ts';
 import { dirname, join } from 'node:path';
 import { importModel, captureModel, recoverDwgImport } from './import-model.ts';
+import { AttachmentStore } from './attachments.ts';
 import { renderReport } from './report.ts';
 import { RemovedProjects, removeProject } from './project-removal.ts';
 import { SyncCoalescer } from './sync-coalesce.ts';
@@ -176,6 +177,11 @@ export async function startServer({
     bootstrap = randomBytes(32).toString('hex'),
     session = await localSession(filename === ':memory:' ? undefined : dirname(filename));
   const agentTools = new AgentTools({ origin: () => origin });
+  // Composer attachments (SPEC-01.12): kept per project in the data folder.
+  const attachments =
+    filename === ':memory:'
+      ? undefined
+      : new AttachmentStore(join(dirname(filename), 'attachments'));
   const workspace = new Workspace(store),
     removedProjects = new RemovedProjects(filename === ':memory:' ? undefined : dirname(filename)),
     listProjects = () => removedProjects.visible(store.listProjects()),
@@ -280,7 +286,11 @@ export async function startServer({
       links,
       removed: removedProjects,
       dataDirectory: data,
-      importDirectories: [hosts.rhino.directory, hosts.zwcad.directory],
+      importDirectories: [
+        hosts.rhino.directory,
+        hosts.zwcad.directory,
+        ...(attachments ? [attachments.root] : []),
+      ],
       projectFiles: perProject,
     });
     await offlineView.forget(projectId).catch(() => {});
@@ -381,6 +391,7 @@ export async function startServer({
     settings: aiSettings,
     sdk,
     zwcadSdk,
+    attachments,
   });
   // Signed-in services for automatic model choice; each check runs the CLIs, so it is reused briefly.
   let signedIn: { at: number; value: Promise<('claude-cli' | 'codex-cli')[]> } | undefined;
@@ -634,6 +645,49 @@ export async function startServer({
           ),
         );
         return;
+      }
+      // Composer attachments (SPEC-01.12, ARCH-01 §3): any file type, kept per project.
+      const attachmentRoute =
+        /^\/api\/v1\/projects\/([^/]+)\/attachments(?:\/([0-9a-f]{24})(\/view)?)?$/.exec(
+          url.pathname,
+        );
+      if (attachmentRoute) {
+        const [, projectId, attachmentId, view] = attachmentRoute;
+        store.project(projectId);
+        if (!attachments) throw new DomainError('NOT_FOUND');
+        if (request.method === 'POST' && !attachmentId) {
+          if (request.headers['content-type'] !== 'application/octet-stream')
+            throw new DomainError('INVALID_INPUT');
+          send(
+            200,
+            await attachments.save(
+              projectId,
+              url.searchParams.get('name'),
+              request,
+              url.searchParams.get('type') ?? '',
+            ),
+          );
+          return;
+        }
+        // The composer's smaller copy of a large image (what the model and the chip see).
+        if (request.method === 'POST' && attachmentId && view) {
+          if (request.headers['content-type'] !== 'application/octet-stream')
+            throw new DomainError('INVALID_INPUT');
+          send(200, await attachments.saveView(projectId, attachmentId, request));
+          return;
+        }
+        // Only kept images are served (the chip preview); nothing else leaves as a file.
+        if (request.method === 'GET' && attachmentId && !view) {
+          const image = await attachments.image(projectId, attachmentId);
+          if (!image) throw new DomainError('NOT_FOUND');
+          response.writeHead(200, {
+            'Content-Type': image.type,
+            'Cache-Control': 'private, max-age=3600',
+          });
+          response.end(image.bytes);
+          return;
+        }
+        throw new DomainError('NOT_FOUND');
       }
       // Project link files (SPEC-01.11): linked from a host plugin, listed with live status.
       const linkList = /^\/api\/v1\/projects\/([^/]+)\/links$/.exec(url.pathname);
@@ -1943,6 +1997,8 @@ export async function startServer({
           // account an older VIDE stored with it.
           z.enum(['claude-cli', 'codex-cli']).parse(input.provider);
           if (old?.accountProfileId) input.accountProfileId = old.accountProfileId;
+          // Attachment entries take what is kept (size, type, path), never the browser's word.
+          if (attachments && !old) input.files = attachments.normalize(projectId, input.files);
           const result = workspace.submit(projectId, input);
           if (result.created) execution.start(result.request);
           const routing = result.created

@@ -33,11 +33,9 @@ try {
   await page.goto(app.launchUrl);
   await page.waitForFunction(() => !document.querySelector('#body').disabled);
   assert.equal(await page.locator('#add-request').isDisabled(), true);
-  await page.locator('#attach-menu summary').click();
-  assert.equal(await page.locator('#pin').isDisabled(), true);
-  assert.equal(await page.locator('#linked-targets').isDisabled(), true);
-  assert.match(await page.locator('#linked-hint').textContent(), /2개/);
-  await page.locator('#attach-menu summary').click();
+  // The paperclip is a plain button now: no menu, no object or linked-target items (SPEC-01.12).
+  assert.equal(await page.locator('#attach-menu').count(), 0);
+  assert.equal(await page.locator('#pin, #inspect-selection, #draw, #linked-targets').count(), 0);
   assert.match(await page.locator('#host-status').textContent(), /ZWCAD 실행 준비/);
   await page.locator('#model').selectOption('test-model');
   await page.locator('#effort-menu summary').click();
@@ -208,20 +206,67 @@ try {
   await page.mouse.up();
   assert.ok((await page.locator('#right').boundingBox()).width > 370);
   assert.ok((await page.locator('.workspace').boundingBox()).width >= 260);
-  await page.locator('#files').setInputFiles([
+  // The paperclip opens the file picker at once; any type goes, kept by the engine (SPEC-01.12).
+  const [chooser] = await Promise.all([
+    page.waitForEvent('filechooser'),
+    page.locator('#attach-file').click(),
+  ]);
+  assert.equal(chooser.isMultiple(), true);
+  await chooser.setFiles([
     { name: 'valid.txt', mimeType: 'text/plain', buffer: Buffer.from('valid') },
-    { name: 'invalid.exe', mimeType: 'application/octet-stream', buffer: Buffer.from('bad') },
+    { name: 'plan.pdf', mimeType: 'application/pdf', buffer: Buffer.from('%PDF-1.4\n%test') },
+    {
+      name: 'model.3dm',
+      mimeType: 'application/octet-stream',
+      buffer: Buffer.from('3D Geometry File Format       \u0000\u0001'),
+    },
   ]);
   await page.waitForFunction(() =>
-    document.querySelector('#message').textContent.includes('50,000'),
+    ['valid.txt', 'plan.pdf', 'model.3dm'].every((name) =>
+      document.querySelector('#context').textContent.includes(name),
+    ),
   );
-  assert.equal(await page.locator('#context').textContent(), '');
-  await page
-    .locator('#files')
-    .setInputFiles({ name: 'valid.txt', mimeType: 'text/plain', buffer: Buffer.from('valid') });
-  await page.waitForFunction(() =>
-    document.querySelector('#context').textContent.includes('valid.txt'),
+  // A batch over the limits is refused whole (here: more than 20 files in one request).
+  await page.locator('#files').setInputFiles(
+    Array.from({ length: 18 }, (_, i) => ({
+      name: `note-${i}.txt`,
+      mimeType: 'text/plain',
+      buffer: Buffer.from('note ' + i),
+    })),
   );
+  await page.waitForFunction(() => document.querySelector('#message').textContent.includes('20개'));
+  assert.equal(await page.locator('#context .chip').filter({ hasText: 'note-0.txt' }).count(), 0);
+  // A pasted image becomes an attachment with a small preview served by the engine.
+  await page.locator('#body').focus();
+  await page.evaluate((png) => {
+    const bytes = Uint8Array.from(atob(png), (c) => c.charCodeAt(0));
+    const data = new DataTransfer();
+    data.items.add(new File([bytes], 'pasted.png', { type: 'image/png' }));
+    document
+      .querySelector('#body')
+      .dispatchEvent(
+        new ClipboardEvent('paste', { clipboardData: data, bubbles: true, cancelable: true }),
+      );
+  }, 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==');
+  const thumb = page.locator('#context .chip').filter({ hasText: 'pasted.png' }).locator('img');
+  await thumb.waitFor();
+  await page.waitForFunction(
+    () => document.querySelector('#context .chip img.chip-thumb')?.naturalWidth === 1,
+  );
+  const attached = await page.evaluate(async () => {
+    const id = document.querySelector('#project-picker').value;
+    return JSON.parse(localStorage.getItem('vide:draft:' + id)).files;
+  });
+  assert.deepEqual(
+    attached.map((file) => [file.name, file.kind, file.copied, 'text' in file]),
+    [
+      ['valid.txt', 'text', true, false],
+      ['plan.pdf', 'pdf', true, false],
+      ['model.3dm', 'rhino-3dm', true, false],
+      ['pasted.png', 'image', true, false],
+    ],
+  );
+  assert.ok(attached.every((file) => /^[0-9a-f]{24}$/.test(file.id) && file.path));
   const evidence = runDirectory('ui-audit');
   await page.screenshot({ path: join(evidence, 'controls-1440.png') });
   await page.locator('#model').selectOption('test-model');
@@ -300,8 +345,8 @@ try {
     .click();
   assert.equal(await settings.isVisible(), false);
   assert.equal(await page.locator('[data-request-id="failed-sync"]').isVisible(), true);
-  await page.locator('#attach-menu summary').click();
-  await page.locator('#linked-targets').click();
+  // Linked targets open from the composer's target chip, not from the paperclip (SPEC-01.12 5).
+  await page.locator('#context button.target-file').click();
   const linking = page.getByRole('dialog', { name: '연계 대상', exact: true });
   await linking.getByLabel('연계 대상 1', { exact: true }).selectOption('basis-one');
   await linking.getByLabel('연계 대상 2', { exact: true }).selectOption('basis-two');

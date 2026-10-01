@@ -80,12 +80,6 @@ try {
       },
     }),
   );
-  // Reading the host selection needs a linked, open file as the target; nothing is guessed.
-  await page.locator('#attach-menu summary').click();
-  await page.locator('#inspect-selection').click();
-  await page.waitForFunction(() =>
-    document.querySelector('#message').textContent.includes('연결 파일 목록에서 고르세요'),
-  );
   const fixtureInput = {
     id: 'inspector-fixture',
     body: 'Inspector fixture',

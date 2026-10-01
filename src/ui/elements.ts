@@ -7,11 +7,9 @@ interface Controls {
   projection: HTMLSelectElement;
   files: HTMLInputElement;
   'model-file': HTMLInputElement;
-  'attach-menu': HTMLDetailsElement;
+  'attach-file': HTMLButtonElement;
   request: HTMLButtonElement;
-  pin: HTMLButtonElement;
   'add-request': HTMLButtonElement;
-  'linked-targets': HTMLButtonElement;
   'finish-sketch': HTMLButtonElement;
   'undo-point': HTMLButtonElement;
   'import-model': HTMLButtonElement;

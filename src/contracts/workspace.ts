@@ -102,6 +102,37 @@ export const imageItemSchema = z
     const padding = data.endsWith('==') ? 2 : data.endsWith('=') ? 1 : 0;
     return (data.length / 4) * 3 - padding <= MAX_TURN_IMAGE_BYTES;
   }, 'Image is larger than 1 MB');
+/**
+ * Composer attachments (SPEC-01.12, ARCH-01 §3 「첨부 보관과 읽기 도구」): the engine keeps the file
+ * and the request names it; the AI reads it with `attachment_read`. `copied` is always true for now
+ * (a later read-only project-folder access may point `path` at the original instead).
+ */
+export const MAX_ATTACHMENT_BYTES = 200 * 1024 * 1024;
+export const MAX_REQUEST_ATTACHMENT_BYTES = 500 * 1024 * 1024;
+export const MAX_REQUEST_ATTACHMENTS = 20;
+export const attachmentIdSchema = z.string().regex(/^[0-9a-f]{24}$/);
+export const attachmentKindSchema = z.enum(['text', 'image', 'pdf', 'rhino-3dm', 'dwg', 'binary']);
+export const storedAttachmentSchema = z
+  .object({
+    id: attachmentIdSchema,
+    name: z.string().min(1).max(255),
+    size: z.number().int().min(0).max(MAX_ATTACHMENT_BYTES),
+    type: z.string().max(200),
+    kind: attachmentKindSchema,
+    path: z.string().min(1).max(1000),
+    copied: z.boolean(),
+  })
+  .passthrough();
+export type StoredAttachment = z.infer<typeof storedAttachmentSchema>;
+/** A file whose text travels in the request (before SPEC-01.12, and VIDE's own small notes). */
+const inlineFileSchema = z.object({ name: z.string(), text: z.string().max(50000) }).passthrough();
+/** The stored attachments among a request's files (inline text files have no attachment id). */
+export function storedAttachments(files: readonly unknown[]): StoredAttachment[] {
+  return files.flatMap((file) => {
+    const parsed = storedAttachmentSchema.safeParse(file);
+    return parsed.success ? [parsed.data] : [];
+  });
+}
 export const requestInputSchema = z
   .object({
     id,
@@ -134,8 +165,18 @@ export const requestInputSchema = z
     sketches: z.array(sketchSchema).max(100),
     images: z.array(imageItemSchema).max(MAX_TURN_IMAGES).optional(),
     files: z
-      .array(z.object({ name: z.string(), text: z.string().max(50000) }).passthrough())
-      .max(100),
+      .array(z.union([storedAttachmentSchema, inlineFileSchema]))
+      .max(100)
+      .refine(
+        (files) => storedAttachments(files).length <= MAX_REQUEST_ATTACHMENTS,
+        'Too many attachments',
+      )
+      .refine(
+        (files) =>
+          storedAttachments(files).reduce((sum, file) => sum + file.size, 0) <=
+          MAX_REQUEST_ATTACHMENT_BYTES,
+        'Attachments are too large',
+      ),
     host: z.enum(['rhino', 'zwcad']).optional(),
     baseRequestId: id.nullable().optional(),
     linkedTargets: z.array(linkedTargetSchema).length(2).optional(),

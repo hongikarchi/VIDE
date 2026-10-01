@@ -2,7 +2,7 @@ interface Attachment {
   name: string;
   displayName?: string;
   type?: string;
-  text: string;
+  text?: string;
 }
 interface SceneAttributes {
   id?: string;

@@ -139,8 +139,7 @@ try {
       document.querySelector('.link-row[aria-current="true"]')?.dataset.linkId === 'link-plan-1',
   );
   await page.locator('#body').fill('이 보를 옮겨줘 ');
-  await page.locator('#attach-menu summary').click();
-  await page.locator('#pin').click();
+  await page.locator('#selection-pin').click();
   await page.locator('#context .target-file').filter({ hasText: 'plan-1.dwg' }).waitFor();
   const draft = await page.evaluate(
     (id) => JSON.parse(localStorage.getItem('vide:draft:' + id)),
@@ -154,8 +153,7 @@ try {
   );
   // An object of another file joins as a reference.
   await page.locator('#objects .object').filter({ hasText: 'model.3dm r-1' }).click();
-  await page.locator('#attach-menu summary').click();
-  await page.locator('#pin').click();
+  await page.locator('#selection-pin').click();
   const withReference = await page.evaluate(
     (id) => JSON.parse(localStorage.getItem('vide:draft:' + id)),
     projectId,

@@ -9,9 +9,10 @@ export interface DraftPin {
   /** Inline token ("고정N") in the message that names this pin group. */
   label?: string;
 }
+/** An inline text file (`text`) or a kept attachment (`id`, SPEC-01.12). */
 export interface DraftFile {
   name: string;
-  text: string;
+  text?: string;
   [key: string]: unknown;
 }
 export type Point2 = [number, number];

@@ -594,6 +594,23 @@ pre {
   border: 0;
   padding: 0 3px;
 }
+/* An attached image's preview inside its chip (SPEC-01.12). */
+.chip-thumb {
+  width: 18px;
+  height: 18px;
+  object-fit: cover;
+  border-radius: var(--radius-sm);
+  border: var(--hairline) solid var(--border);
+  flex: none;
+}
+/* A file dragged over the composer (SPEC-01.12). */
+.composer.dropping {
+  border-color: var(--accent-muted);
+  background: var(--accent-subtle);
+}
+button.chip.target-file {
+  cursor: pointer;
+}
 textarea {
   width: 100%;
   display: block;
@@ -633,9 +650,6 @@ textarea {
 }
 #validation:empty {
   display: none;
-}
-#attach-menu {
-  position: relative;
 }
 .menu {
   position: absolute;
@@ -1184,11 +1198,6 @@ body.left-hidden.right-hidden main {
 .view-navigation #fit-selection {
   margin-top: 6px;
   border-top: 2px solid var(--line);
-}
-#linked-hint {
-  display: block;
-  max-width: 180px;
-  padding: 4px 8px;
 }
 #auth-status {
   color: var(--ng);
@@ -1914,8 +1923,9 @@ body.left-hidden.right-hidden main {
     opacity: 0.3;
   }
 }
-#attach-menu summary {
-  list-style: none;
+.attach-button {
+  border: 0;
+  background: transparent;
   font-size: 20px;
   display: grid;
   place-items: center;
@@ -1925,13 +1935,10 @@ body.left-hidden.right-hidden main {
   border-radius: var(--radius-sm);
   color: var(--text-2);
 }
-#attach-menu summary::-webkit-details-marker {
-  display: none;
-}
-#attach-menu summary:hover {
+.attach-button:hover {
   background: var(--soft);
 }
-#attach-menu summary svg,
+.attach-button svg,
 .send svg,
 .queue svg {
   width: 18px;

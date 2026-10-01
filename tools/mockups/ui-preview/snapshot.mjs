@@ -11,6 +11,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
 import { startServer } from '../../../src/server/server.ts';
+import { injectProposal, proposalPayload } from './proposal-reference.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const out = resolve(process.argv[2] ?? join(here, 'index.html'));
@@ -233,6 +234,22 @@ try {
   await page.locator('#rail-theme').click();
   await capture('model-dark', '모델 · 다크');
   await page.locator('#rail-theme').click();
+
+  // Proposals (SPEC-09, PLAN-26 T-090), not implemented: injected into the real DOM after every
+  // real screen is captured, so the real states above stay as they are. The board's right image
+  // stands on the model view captured here; the left panel is folded as a user would.
+  await tab('model');
+  await page.waitForTimeout(700);
+  const view = page.locator('#canvas canvas').first();
+  const viewCapture = (await view.count())
+    ? 'data:image/jpeg;base64,' +
+      (await view.screenshot({ type: 'jpeg', quality: 70 })).toString('base64')
+    : '';
+  await page.locator('#toggle-left').click();
+  await page.evaluate(injectProposal, proposalPayload('mask'));
+  await capture('proposal-mask', '제안 · 마스킹 편집기');
+  await page.evaluate(injectProposal, proposalPayload('board', viewCapture));
+  await capture('proposal-board', '제안 · 이해 확인');
 
   const data = JSON.stringify(states).replace(/</g, '\\u003c');
   const html = `<title>VIDE 화면 미리보기</title>

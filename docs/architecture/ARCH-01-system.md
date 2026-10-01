@@ -2,7 +2,7 @@
 id: ARCH-01
 title: VIDE 기술 구조와 구현 계약
 status: review
-version: 0.56
+version: 0.57
 updated: 2026-10-01
 owner: agent:codex
 related: [SPEC-00, SPEC-02, SPEC-03, SPEC-04, PLAN, PLAN-20, PLAN-24, ADR-014, ADR-015, ADR-016, ADR-017, ADR-021, ADR-022, ADR-025, PLAN-25, ARCH-03]
@@ -192,7 +192,7 @@ T-002의 첫 HTTP 구현은 프로젝트 목록·생성과 입력 목록·생성
 
 | 묶음 | 경로 | 비고 |
 |---|---|---|
-| 프로젝트·입력 | `GET·POST /projects`, `PUT·DELETE /projects/:p`, `POST …/thumbnail`, `…/inputs[/:i]`, `…/ai-instructions` | 프로젝트 삭제는 SPEC-01.1 |
+| 프로젝트·입력 | `GET·POST /projects`, `PUT·DELETE /projects/:p`, `POST …/thumbnail`, `…/inputs[/:i]`, `…/ai-instructions`, `POST …/attachments?name=`, `POST …/attachments/:a/view`, `GET …/attachments/:a` | 프로젝트 삭제는 SPEC-01.1. 첨부는 §3 「첨부 보관과 읽기 도구」 |
 | 요청(AI 턴·Sync·가져오기) | `GET·POST …/requests`, `GET …/requests/:r`, `…/:r/cancel`, `…/:r/interventions`, `…/:r/hide`, `…/:r/questions`, `…/:r/reconcile`, `…/:r/model\|open`, `…/:r/report`, `…/:r/quantities[.csv]`, `…/:r/publication-export` | 상태는 SPEC-00.10 |
 | 바로 적용 | `POST …/requests/:r/undo {executionId}`, `…/:r/confirm {executionId?}`, `…/:r/continue` | §4 「바로 적용 경로」. confirm·continue는 202 |
 | 연결 파일·Sync | `GET·POST …/links`, `PUT …/links/:l`, `POST …/links/:l/remove`, `POST …/links/:l/reads`, `…/live-sync`, `…/capture`, `…/import`, `…/imports/:i/reconcile` | §7 「프로젝트 연결 파일(Link)」 |
@@ -396,6 +396,7 @@ AI 도구의 이름은 등록부 하나가 정한다. `src/ai/agent-connection.t
 | 화면 | 대화 원장에 기록하는 턴(목적별 대화). 계산·쓰기 없음이라 계획 모드에도 남는다(`PLAN_MODE_TOOLS`) | `jig_open`(프로젝트 skill 목록의 jig를 사용자 화면에 열고 작업본을 이 대화에 묶음, `reuse: 'last' \| 'new'`, `user-only` jig는 거절), `ui_go`(화면 전환: 모델·jig·보고서·자료·만들기, 3D 투영 `plan`·`3d`). 원장 항목으로 남기고 화면이 따라 한다(RESEARCH-12 §6.3) |
 | jig 조작 | 그 대화에 jig 작업본이 열려 있을 때, 열린 작업본에만 | `jig_set`(되돌릴 수 있는 설정값 변경, 원장 기록), `jig_run`(계산 단계만) |
 | 자료 | 그 프로젝트의 자료 DB가 있을 때, 읽기만 | `project_brief`, `project_search`, `project_issue`, `project_statement`, `project_checks` |
+| 첨부 | 요청이나 같은 대화의 앞선 요청에 보관 첨부가 있을 때(모든 모드, 계획 모드 포함). `Execution.provider`가 그 턴의 범위에 더하고, 도구 없는 턴이면 이 도구만 발급 | `attachment_read`(아래 「첨부 보관과 읽기 도구」) |
 | 만들기 | `jig-make` 대화이고 초안이 열려 있을 때. `targetRef`를 생략하면 그 대화의 초안 | `jig_validate`, `jig_test`, `jig_preview`, `jig_delete_file`(초안 파일 하나, `jig.json`·금지 파일 제외), `ask_user` + Claude 파일 도구 `Read`·`Edit`·`Write`·`Glob`·`Grep`(초안 폴더만, ARCH-03 §2.3) |
 
 대화 턴은 위 행 가운데 조건을 만족하는 것을 합쳐 받는다. 모델에 주는 지시는 모드별로 다르다(`instructionFor`: 호스트 도구·대화 도구·만들기). 옛 설계의 `discover`와 자산/SDK 조회 도구는 등록부에 없다. 보기 도구는 5차 물결에서 더했다. 호스트 작업 도구의 기본 실행 인수는 다음과 같다.
@@ -417,6 +418,18 @@ VIDE 내부에서 protocolVersion, operationId, taskId, 실제 대상(hostSessio
 major 불일치는 연결 거절, minor 추가 필드는 협상된 능력 안에서 허용한다. 요청 ID는 통신 응답 대응, operationId는 재접속 후 작업 식별이다. 같은 operationId+동일 payload는 기존 상태를 반환하고 다른 payload는 거절한다. 호스트에도 실행 전 접수·시작 저널을 기록한다. CAD 변경과 저널을 하나의 원자 트랜잭션으로 만들 수 없으므로 exactly-once를 주장하지 않는다. 변경 후 응답/기록 유실은 unknown으로 조사하며 자동 재실행하지 않는다.
 
 목적별 대화(SPEC-02.19)에서는 도구 범위를 대화 종류 × jig 출처로 턴마다 발급하고 턴이 끝나면 회수한다. 발급은 `AgentTools`의 범위(scope)이며 한 범위에 호출 횟수·유효 시간 상한이 붙는다(기본값과 대화 턴의 상한은 `src/contracts/execution-limits.ts`). 도구 결과는 작게 자르고 큰 출력은 `offset`·`limit`로 나눠 읽는다. 대화 도구는 엔진 저장소(작업본·단계 결과·Sync·자료 DB)만 읽고 호스트 문서를 직접 열지 않는다. 도구별 입력 스키마의 정본은 `src/server/agent-tools.ts`의 정의다.
+
+
+### 첨부 보관과 읽기 도구
+
+SPEC-01.12(2026-10-01). 작성기의 파일·이미지 첨부는 내용을 요청에 싣지 않고 엔진이 보관한 파일을 가리킨다.
+
+- **보관:** `POST /api/v1/projects/:p/attachments?name=<파일 이름>`(본문 `application/octet-stream`)이 `<데이터 폴더>/attachments/<projectId>/<id>.<ext>`에 쓰고 `<id>.json`에 기록을 둔다. `id`는 내용 SHA-256의 앞 24자(16진)라 같은 내용은 한 번만 보관한다. 먼저 같은 폴더의 임시 파일에 받으며 해시·크기를 세고, 200MB(`MAX_ATTACHMENT_BYTES`)를 넘으면 지우고 `INPUT_TOO_LARGE`. 확장자는 이름에서 영숫자 10자까지만 쓴다. 응답과 요청의 첨부 항목은 `{id, name, size, type, kind, path, copied}`다. `kind`는 내용으로 판별한 `text | image | pdf | rhino-3dm | dwg | binary`, `type`은 판별한 MIME(이미지·PDF) 또는 브라우저가 준 형식, `path`는 보관본의 절대 경로, `copied`는 지금 늘 `true`다. 나중에 프로젝트 폴더의 읽기 전용 접근을 고르면 `copied: false`와 원본 경로를 쓸 수 있게 둔 자리이며, 그때도 엔진은 허용한 폴더 밖 경로를 열지 않는다.
+- **요청 필드:** `requestInputSchema.files`의 항목은 이전 본문 첨부 `{name, text ≤ 50,000, …}` 또는 위 보관 첨부다. 보관 첨부는 한 요청에 20개(`MAX_REQUEST_ATTACHMENTS`), 크기 합계 500MB(`MAX_REQUEST_ATTACHMENT_BYTES`)까지(`src/contracts/workspace.ts`). 접수(`POST …/requests`) 때 서버가 각 `id`를 그 프로젝트의 보관 기록과 맞춰 `size`·`type`·`kind`·`path`·`copied`를 기록 값으로 덮고, 없는 `id`는 `INVALID_INPUT`이다. 브라우저가 보낸 경로는 쓰지 않는다.
+- **미리보기·보기본:** `GET …/attachments/:id`는 `kind = image`인 보관본만(보기본이 있으면 보기본) 판별한 이미지 MIME과 `X-Content-Type-Options: nosniff`로 돌려준다(작성기 칩의 미리보기, CSP `img-src 'self'`). 그 밖은 404. 1MB를 넘는 이미지는 작성기가 긴 변 1600px JPEG를 만들어 `POST …/attachments/:id/view`(PNG·JPEG, 1MB 이하)로 보내고 `<id>.view`로 둔다. 서버에 이미지 축소 의존성은 두지 않는다.
+- **도구:** `attachment_read({id, offset?, limit?})`, 읽기 전용이고 `PLAN_MODE_TOOLS`에 든다. 허용 목록은 발급 때 정한다: 그 요청과 같은 `conversationId`의 요청들에 붙은 보관 첨부의 `id`. 목록 밖이거나 보관본이 없으면 `ATTACHMENT_NOT_FOUND`. 결과는 `text` → `{id, name, kind, size, offset, nextOffset, text}`(바이트 구간, 기본 20,000·최대 40,000바이트, UTF-8 경계 맞춤), `image`(PNG·JPEG·GIF·WebP; 1MB(`ToolImage` 상한) 이하는 원본, 넘으면 보기본) → MCP 이미지 항목(`capture_view`와 같은 `ToolImage` 경로, Claude·Codex 공통)과 메타 텍스트, 보기본이 없는 큰 이미지는 안내만, 그 밖 → `{id, name, kind, size, type, note}`. PDF 본문 추출·3DM 요약은 의존성·호스트 경로가 없어 하지 않는다(PLAN-26 T-089 후속).
+- **지시:** 턴의 연결에 `attachment_read`가 있으면 `instructionFor`가 첨부 읽는 법(패킷의 `file` 항목 `id`로 읽고, 못 읽은 내용을 지어내지 않음)을 덧붙인다. 도구가 이 하나뿐인 턴은 `attachmentOnlyInstruction`을 쓴다.
+- **삭제:** 프로젝트 삭제(`purgeProject`)가 `attachments/<projectId>` 폴더를 함께 지운다.
 
 ### 한 요청의 복수 대상 실행
 

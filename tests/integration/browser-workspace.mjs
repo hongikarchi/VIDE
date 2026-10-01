@@ -22,11 +22,6 @@ try {
   await page.waitForFunction(() =>
     document.querySelector('#connection-status').textContent.includes('연결됨'),
   );
-  await page.locator('#attach-menu summary').click();
-  await page.locator('#inspect-selection').click();
-  await page.waitForFunction(() =>
-    document.querySelector('#message').textContent.includes('연결 파일 목록에서 고르세요'),
-  );
   const records = await page.evaluate(async () => {
     const projects = await (await fetch('/api/v1/projects')).json();
     return (await fetch(`/api/v1/projects/${projects[0].id}/requests`)).json();

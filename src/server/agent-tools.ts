@@ -26,6 +26,7 @@ import { skillCatalog } from './skill-catalog.ts';
 import { MakeTurnGuard, draftsFor, makeStopNotice } from './make-routes.ts';
 import type { JigDrafts } from '../jigs/runtime/drafts.ts';
 import { turnOutputSchema } from './turn-output.ts';
+import type { AttachmentStore } from './attachments.ts';
 import { existsSync } from 'node:fs';
 import { KnowledgeReviewStore } from '../core/knowledge-review-store.ts';
 import {
@@ -109,6 +110,18 @@ const definitions = {
       .strict(),
   },
   status: { description: 'Read the current task execution status.', schema: z.object({}).strict() },
+  // Composer attachments (SPEC-01.12): this request's and its conversation's files only.
+  attachment_read: {
+    description:
+      "Read a file the user attached to this request or an earlier turn of this conversation, by the id of its 'file' item. Text comes in byte pages (offset, limit up to 40000; continue from nextOffset). PNG/JPEG/GIF/WebP images come back as an image you see. PDF, Rhino 3DM, DWG and other binary files return only name, size, type and a note on how to get their contents. Never claim to have read what this tool did not return.",
+    schema: z
+      .object({
+        id: z.string().regex(/^[0-9a-f]{24}$/),
+        offset: z.number().int().min(0).optional(),
+        limit: z.number().int().min(1).max(40000).optional(),
+      })
+      .strict(),
+  },
   cancel: {
     description:
       'Request cancellation of the current task. The result determines whether stopping was confirmed.',
@@ -396,6 +409,7 @@ const knownErrors = new Set([
   'LAYER_OPTION_UNAVAILABLE',
   'CAPTURE_FAILED',
   'MEASURE_FAILED',
+  'ATTACHMENT_NOT_FOUND',
 ]);
 /** Tools that change or occupy the target: one at a time, after the basis check. */
 // capture_view moves the camera and layers of the target for one image, so it takes the turn too.
@@ -432,6 +446,7 @@ export const PLAN_MODE_TOOLS: ReadonlySet<string> = new Set<ToolName>([
   'project_issue',
   'project_statement',
   'project_checks',
+  'attachment_read',
 ]);
 /** The handlers Plan mode keeps (PLAN_MODE_TOOLS). */
 export function planModeHandlers<H extends Handlers>(handlers: H): H {
@@ -537,6 +552,19 @@ export class AgentTools {
     return { token, revoke: () => this.#revoke(key) };
   }
 
+  /**
+   * Adds handlers to a scope already issued (the turn's attachments, ARCH-01 §3); the scope's
+   * own handlers win on a name clash. False when the token names no live scope.
+   */
+  extend(token: string, handlers: Handlers) {
+    const run = this.#runs.get(digest(token));
+    if (!run || run.abort.signal.aborted || run.expires <= this.#now()) return false;
+    for (const [name, handler] of Object.entries(handlers))
+      if (toolName(name) && typeof handler === 'function' && !run.handlers[name])
+        (run.handlers as Record<string, unknown>)[name] = handler;
+    return true;
+  }
+
   #revoke(key: string) {
     const run = this.#runs.get(key);
     if (run) {
@@ -569,7 +597,11 @@ export class AgentTools {
       };
     return this.#invoke(run, name, parsed.data);
   }
-  async #invoke(run: Run, name: ToolName, args: { targetRef?: string }): Promise<CallToolResult> {
+  async #invoke(
+    run: Run,
+    name: ToolName,
+    args: { targetRef?: string; [key: string]: unknown },
+  ): Promise<CallToolResult> {
     const error = (code: string): CallToolResult => ({
       isError: true,
       content: [{ type: 'text', text: JSON.stringify({ code }) }],
@@ -1285,7 +1317,7 @@ function makeHandlers(sources: ConversationToolSources): Handlers {
 /** A tool result that is an image: the model receives it as image content with `meta` as text. */
 export class ToolImage {
   readonly data: string;
-  readonly mimeType: 'image/png' | 'image/jpeg';
+  readonly mimeType: 'image/png' | 'image/jpeg' | 'image/gif' | 'image/webp';
   readonly meta: Record<string, unknown>;
   constructor(data: string, mimeType: ToolImage['mimeType'], meta: Record<string, unknown> = {}) {
     if (!/^[A-Za-z0-9+/]+={0,2}$/.test(data) || Buffer.byteLength(data, 'base64') > 1_000_000)
@@ -1325,6 +1357,29 @@ export function visionHandlers(
       const result = await source.measure(options);
       onUse('measure');
       return bounded(result);
+    },
+  };
+}
+
+/** attachment_read on the attachments a turn may read (`readableAttachments`). */
+export function attachmentHandlers(
+  store: Pick<AttachmentStore, 'read'>,
+  projectId: string,
+  allowed: ReadonlyMap<string, string>,
+  onUse: (name: string) => void = () => {},
+): Handlers {
+  if (!allowed.size) return {};
+  return {
+    attachment_read: async (args) => {
+      const result = await store.read(projectId, allowed, args);
+      onUse(String(allowed.get(args.id) ?? args.id));
+      if ('image' in result && typeof result.image === 'string')
+        return new ToolImage(
+          result.image,
+          result.mimeType as ToolImage['mimeType'],
+          result.about as Record<string, unknown>,
+        );
+      return result;
     },
   };
 }

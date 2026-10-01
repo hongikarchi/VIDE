@@ -13,7 +13,14 @@ import { z } from 'zod';
 import { runLinked } from './linked-execution.ts';
 // Jig review gates (sync-review rows, structure-draft-review members/nodes; SPEC-06.9).
 import { factCitations, jigCheck } from './jig-gates.ts';
-import { conversationHandlers, conversationSources, type AgentTools } from './agent-tools.ts';
+import {
+  attachmentHandlers,
+  conversationHandlers,
+  conversationSources,
+  type AgentTools,
+} from './agent-tools.ts';
+import { readableAttachments, type AttachmentStore } from './attachments.ts';
+import { storedAttachments } from '../contracts/workspace.ts';
 import type { Workspace } from '../core/workspace.ts';
 import type { StoredWork } from '../contracts/stored-work.ts';
 import type { RequestInput } from '../contracts/workspace.ts';
@@ -103,6 +110,8 @@ interface Options {
    * of `sdk`. Undefined when the basis is not an attached document (tests inject a mock host).
    */
   directDriver?: (host: 'rhino' | 'zwcad', sourceDocument: unknown) => DirectDriver | undefined;
+  /** Composer attachments (SPEC-01.12): read by the turn's attachment_read tool. */
+  attachments?: AttachmentStore;
 }
 const pinsSchema = z.array(
   z
@@ -182,6 +191,7 @@ export class Execution {
   selectContext: NonNullable<Options['selectContext']>;
   conversations?: ConversationService;
   projectInstructions?: Options['projectInstructions'];
+  attachments?: AttachmentStore;
   private injectedDirect?: Options['directDriver'];
   /**
    * Questions a Claude turn asks with its own AskUserQuestion tool (ADR-026 4, SPIKE-2026-09-30-
@@ -220,6 +230,7 @@ export class Execution {
       conversations,
       projectInstructions,
       directDriver,
+      attachments,
       selectContext: choose = (body, candidates) =>
         selectContext(body, candidates, { key: () => '' }),
     }: Options = {},
@@ -240,6 +251,7 @@ export class Execution {
     this.selectContext = choose;
     this.conversations = conversations;
     this.projectInstructions = projectInstructions;
+    this.attachments = attachments;
   }
   executable(provider: string) {
     return (
@@ -254,7 +266,7 @@ export class Execution {
       RequestInput,
       // conversationId: a conversation turn takes the wider turn limits (SPEC-02.6).
       'provider' | 'model' | 'effort' | 'executionLimits' | 'conversationId'
-    >,
+    > & { id?: string; files?: readonly unknown[] },
     agent?: unknown,
     session?: SessionOptions,
     /** The instruction bundle's mode, the project whose addendum it carries, and its host. */
@@ -271,6 +283,7 @@ export class Execution {
       this.providerFactory === createProvider
         ? (options: CliOptions) => new CodexAppServer(options)
         : this.providerFactory;
+    if (instructions) agent = this.attachmentAgent(input, agent, instructions.projectId);
     return factory({
       provider: input.provider,
       executable,
@@ -288,6 +301,52 @@ export class Execution {
         : {}),
       ...(nativeQuestions && input.provider === 'claude-cli' ? { nativeQuestions } : {}),
     });
+  }
+  /**
+   * The turn's attachments (SPEC-01.12, ARCH-01 §3): attachment_read joins the turn's tool scope,
+   * or gets a scope of its own when the turn has no tools. Only this request's and its
+   * conversation's stored attachments are readable.
+   */
+  private attachmentAgent(
+    input: Parameters<Execution['provider']>[0],
+    agent: unknown,
+    projectId: string,
+  ): unknown {
+    if (!this.attachments || !this.tools) return agent;
+    if (!input.conversationId && !storedAttachments(input.files ?? []).length) return agent;
+    let others: { files?: readonly unknown[]; conversationId?: string }[] = [];
+    if (input.conversationId)
+      try {
+        others = this.workspace.list(projectId).map((row) => row.input);
+      } catch {
+        others = [];
+      }
+    const allowed = readableAttachments(input, others);
+    if (!allowed.size) return agent;
+    const handlers = attachmentHandlers(this.attachments, projectId, allowed);
+    const current = z
+      .object({ token: z.string(), tools: z.array(z.string()) })
+      .passthrough()
+      .safeParse(agent);
+    if (current.success) {
+      if (!this.tools.extend(current.data.token, handlers)) return agent;
+      return current.data.tools.includes('attachment_read')
+        ? agent
+        : { ...current.data, tools: [...current.data.tools, 'attachment_read'] };
+    }
+    if (agent !== undefined) return agent;
+    const origin =
+      typeof this.tools.origin === 'function' ? this.tools.origin() : this.tools.origin;
+    if (!origin) return agent;
+    const limits = executionLimits(input);
+    const scope = this.tools.issue({
+      targetRef: `attachments:${input.id ?? randomUUID()}`,
+      handlers,
+      isCurrent: () => true,
+      maxCalls: Math.min(100, limits.maxToolCalls),
+      ttlMs: Math.min(600000, (limits.timeoutSeconds + 60) * 1000),
+    });
+    return { url: new URL('/mcp', origin).href, token: scope.token, tools: ['attachment_read'] };
   }
   /**
    * The handler of one turn's native questions: the cards go on the request (phase `question`,

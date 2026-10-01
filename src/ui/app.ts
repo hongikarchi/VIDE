@@ -57,6 +57,7 @@ const showAiSettings: typeof import('./ai-settings.tsx').showAiSettings = async 
 import { initializeReviews } from './reviews.tsx';
 import { attachSharedFeedback } from './shared-feedback.tsx';
 import { linkedCandidates, showLinkedTargets } from './linked-targets.tsx';
+import { attachmentPreview, batchRefusal, uploadAttachments } from './attachments.ts';
 import { renderWork } from './work-view.tsx';
 import {
   linkRowSchema,
@@ -907,26 +908,6 @@ function renderLinkPanel() {
     onInboxDismiss: dismissInboxItem,
   });
 }
-/** Composer menu entry: attach the objects selected in the target file's host window. */
-async function attachConnectedSelection() {
-  const layer = currentLayers.find((entry) => entry.key === activeLayer);
-  const connection = layer?.link?.connection;
-  if (!layer || !connection)
-    throw Error('선택을 가져올 파일을 연결 파일 목록에서 고르세요 (파일이 열려 있어야 합니다).');
-  const selection = hostSelectionSchema.parse(
-    await api(
-      `/host/selection?instance=${encodeURIComponent(connection.instance)}&document=${connection.documentId}`,
-    ),
-  );
-  const request = state.messages.find((entry) => entry.id === layer.requestId)?.request;
-  const count = attachHostSelection(state, request, selection);
-  render();
-  message(
-    selection.selectedIds.length
-      ? `${count}개 객체를 요청에 첨부했습니다.`
-      : '호스트에서 선택한 객체가 없습니다.',
-  );
-}
 let inspectorTab: NonNullable<Parameters<typeof renderInspector>[3]> = 'properties';
 initializeInspector((tab) => {
   inspectorTab = tab;
@@ -1064,9 +1045,17 @@ function setTool(next: 'select' | 'sketch') {
       : '';
   draw();
 }
-function chip(text: string, remove: () => void, title?: string, select?: () => void) {
+function chip(
+  text: string,
+  remove: () => void,
+  title?: string,
+  select?: () => void,
+  thumbnail?: string,
+) {
   const span = el('span', text, $('context'), { class: 'chip' });
   if (title) span.title = title;
+  if (thumbnail)
+    span.prepend(el('img', '', span, { class: 'chip-thumb', src: thumbnail, alt: '' }));
   if (select) {
     span.classList.add('chip-action');
     span.onclick = (event) => {
@@ -1155,11 +1144,22 @@ function render(rebuildRequests = true) {
       render();
     }),
   );
+  // Kept attachments (SPEC-01.12) carry an id; images show a small preview.
   state.files.forEach((f, i) =>
-    chip('▧ ' + (f.displayName || f.name), () => {
-      state.files.splice(i, 1);
-      render();
-    }),
+    chip(
+      (f.kind === 'image' ? '' : '▧ ') + (f.displayName || f.name),
+      () => {
+        state.files.splice(i, 1);
+        render();
+      },
+      typeof f.size === 'number' && typeof f.id === 'string'
+        ? `${f.name} · ${fileSize(f.size)}`
+        : undefined,
+      undefined,
+      f.kind === 'image' && typeof f.id === 'string' && project
+        ? attachmentPreview(currentProject().id, f.id)
+        : undefined,
+    ),
   );
   // Host panel: what is selected in Rhino/CAD right now, one click to attach (Design SCR-12).
   if (panelMode && panelView.selection.length) {
@@ -1179,12 +1179,31 @@ function render(rebuildRequests = true) {
   const target = currentLayers.find(
     (layer) => layer.requestId === (state.baseRequestId ?? displayedResult),
   );
-  if (currentLayers.length > 1 && target)
-    el('span', '대상 파일 · ' + target.name, $('context'), {
-      class: 'chip target-file',
-      title:
-        '변경 핀이 있는 파일, 없으면 마지막으로 고른 객체의 파일입니다. 다른 파일의 객체를 누르면 바뀝니다.',
-    });
+  // Linked targets (SPEC-02.14) are the request's targets, not an attachment: the target chip
+  // opens their dialog when two succeeded SDK bases exist (SPEC-01.12 5), even with one file shown.
+  const linkable = ready && !busy && linkedCandidates(state).length >= 2;
+  if ((currentLayers.length > 1 && target) || linkable) {
+    const targetChip = el(
+      linkable ? 'button' : 'span',
+      target ? '대상 파일 · ' + target.name : '연계 대상',
+      $('context'),
+      {
+        class: 'chip target-file',
+        title: [
+          target
+            ? '변경 핀이 있는 파일, 없으면 마지막으로 고른 객체의 파일입니다. 다른 파일의 객체를 누르면 바뀝니다.'
+            : '',
+          linkable ? '누르면 두 파일을 함께 다루는 연계 대상을 고릅니다.' : '',
+        ]
+          .filter(Boolean)
+          .join(' '),
+      },
+    );
+    if (linkable) {
+      targetChip.setAttribute('type', 'button');
+      targetChip.onclick = openLinkedTargets;
+    }
+  }
   // With several files the target chip already names the basis when it is on screen.
   if (
     draftHasInput(state) &&
@@ -1224,21 +1243,8 @@ function render(rebuildRequests = true) {
       return step;
     }),
   );
-  $('pin').disabled =
-    !ready ||
-    busy ||
-    !selectedIds.some((id) => {
-      const object = objects.find((o) => o.id === id && o.revision);
-      return (
-        !!object &&
-        !state.pins.some((p) => p.id === sourceIdOf(object) && p.basis === object.revision)
-      );
-    });
-  $('pin').title = '현재 모델에서 첨부하지 않은 객체를 선택하세요.';
+  $('attach-file').disabled = !ready || busy;
   $('add-request').disabled = !ready || busy || !state.body.trim();
-  $('linked-targets').disabled = !ready || busy || linkedCandidates(state).length < 2;
-  $('linked-hint').textContent =
-    linkedCandidates(state).length < 2 ? '실행에 성공한 SDK 후보 2개가 필요합니다.' : '';
 
   const inspected = objects.find((o) => o.id === state.selected);
   const active = state.messages.find(
@@ -1391,7 +1397,7 @@ function sidebar() {
     }
   });
   $('reference-list').replaceChildren();
-  // Reference files go with the next request (text formats; the AI reads their content).
+  // Reference files go with the next request (any type; the AI reads them, SPEC-01.12).
   const attach = el('button', '파일 첨부', $('reference-list'), {
     type: 'button',
     class: 'reference-attach',
@@ -1399,7 +1405,7 @@ function sidebar() {
   attach.onclick = () => $('files').click();
   el(
     'small',
-    'TXT·MD·CSV·JSON, 파일당 50KB까지. 다음 요청에 함께 보내며 AI가 내용을 읽습니다.',
+    '모든 형식, 파일당 200MB까지. 다음 요청에 함께 보내며 AI가 필요할 때 읽습니다.',
     $('reference-list'),
   );
   const files = [...state.messages.flatMap((m) => m.files), ...state.files];
@@ -1885,7 +1891,6 @@ $('body').oninput = () => {
   render();
   // Drafts save automatically per project; only a failure is worth showing.
   $('saved').textContent = draftSaved ? '' : '초안 저장 실패';
-  if (state.body.endsWith('@')) $('attach-menu').open = true;
 };
 /** Selected objects of the displayed model that can be pinned (they belong to a request basis). */
 function pinnable() {
@@ -2734,65 +2739,99 @@ $('body').onkeydown = (e) => {
     $('add-request').click();
   }
 };
-$('pin').onclick = () => {
-  $('attach-menu').open = false;
-  pinComposer.insertSelection();
-};
 $('toggle-recent').onclick = () => {
   const open = $('recent-section').dataset.open !== 'true';
   $('recent-section').dataset.open = String(open);
   $('toggle-recent').setAttribute('aria-expanded', String(open));
 };
-$('inspect-selection').onclick = () => {
-  $('attach-menu').open = false;
-  void attachConnectedSelection().catch((error) => message(readableError(error).message));
-};
-$('draw').onclick = () => {
-  $('attach-menu').open = false;
-  mobileView('model');
-  setTool('sketch');
-};
-$('attach-file').onclick = () => {
-  $('files').click();
-  $('attach-menu').open = false;
-};
-$('linked-targets').onclick = () => {
+// The paperclip opens the file picker directly (SPEC-01.12 1); pinning, sketching and linked
+// targets have their own places (selection bar, viewport pencil, target chip).
+$('attach-file').onclick = () => $('files').click();
+function openLinkedTargets() {
   if (busy) return;
-  $('attach-menu').open = false;
   const original = state;
   showLinkedTargets(state, () => {
     if (state !== original) throw Error('프로젝트가 바뀌었습니다.');
     render();
   });
-};
-$('files').onchange = async () => {
+}
+/**
+ * Composer attachments (SPEC-01.12): any type, picked, pasted or dropped; the engine keeps each
+ * file and the draft holds its record. A batch over the limits is refused as a whole.
+ */
+async function attachFiles(files: File[]) {
+  if (!files.length) return;
   try {
+    if (!project || !ready) throw Error('프로젝트를 연 뒤 첨부하세요.');
+    if (busy) throw Error('현재 요청 전송이 끝난 뒤 첨부하세요.');
+    const refusal = batchRefusal(files, state.files);
+    if (refusal) throw Error(refusal);
     const original = state;
-    const selectedFiles = Array.from($('files').files ?? []);
-    if (selectedFiles.some((f) => f.size > 50000 || !/\.(txt|md|csv|json)$/i.test(f.name)))
-      throw Error('현재 참고 자료는 파일당 50,000바이트 이하 TXT·MD·CSV·JSON을 지원합니다.');
-    const attached = [];
-    for (const f of selectedFiles) {
-      attached.push({
-        name: f.name,
-        size: f.size,
-        type: f.type,
-        text: await f.text(),
-        contentStatus: 'included',
-      });
-    }
+    message(`파일 ${files.length}개를 첨부하는 중입니다.`);
+    const kept = await uploadAttachments(currentProject().id, files);
     if (state !== original) throw Error('프로젝트가 바뀌어 파일 첨부를 취소했습니다.');
-    state.files.push(...attached);
+    // The same content attached again is one entry.
+    for (const file of kept)
+      if (!state.files.some((entry) => entry.id === file.id)) state.files.push(file);
     render();
+    message(`파일 ${kept.length}개를 첨부했습니다.`);
   } catch (cause) {
     const error = readableError(cause);
-    message(error.message);
-  } finally {
-    $('files').value = '';
+    message(errors[error.code ?? error.message] || error.message);
   }
+}
+function fileSize(bytes: number) {
+  return bytes >= 1024 * 1024
+    ? `${(bytes / 1024 / 1024).toFixed(1)}MB`
+    : `${Math.max(1, Math.round(bytes / 1024))}KB`;
+}
+$('files').onchange = () => {
+  const files = Array.from($('files').files ?? []);
+  $('files').value = '';
+  void attachFiles(files);
 };
+$('body').addEventListener('paste', (event) => {
+  const files = Array.from(event.clipboardData?.files ?? []);
+  if (!files.length) return;
+  event.preventDefault();
+  void attachFiles(files);
+});
+{
+  const composer = document.querySelector<HTMLElement>('.composer')!;
+  const carriesFiles = (event: DragEvent) =>
+    Array.from(event.dataTransfer?.types ?? []).includes('Files');
+  composer.addEventListener('dragover', (event) => {
+    if (!carriesFiles(event)) return;
+    event.preventDefault();
+    composer.classList.add('dropping');
+  });
+  composer.addEventListener('dragleave', (event) => {
+    if (!composer.contains(event.relatedTarget as Node | null))
+      composer.classList.remove('dropping');
+  });
+  composer.addEventListener('drop', (event) => {
+    composer.classList.remove('dropping');
+    if (!carriesFiles(event)) return;
+    event.preventDefault();
+    void attachFiles(Array.from(event.dataTransfer?.files ?? []));
+  });
+}
+/** The viewport selection has objects not yet pinned (the selection bar's [요청에 고정]). */
+function canPin() {
+  return (
+    ready &&
+    !busy &&
+    selectedIds.some((id) => {
+      const object = objects.find((o) => o.id === id && o.revision);
+      return (
+        !!object &&
+        !state.pins.some((p) => p.id === sourceIdOf(object) && p.basis === object.revision)
+      );
+    })
+  );
+}
 $('selection-pin').onclick = () => {
-  $('pin').click();
+  if (canPin()) pinComposer.insertSelection();
 };
 for (const button of document.querySelectorAll<HTMLButtonElement>('[data-tool]'))
   button.onclick = () => setTool(z.enum(['select', 'sketch']).parse(button.dataset.tool));
@@ -2933,7 +2972,6 @@ document.addEventListener('keydown', (e) => {
       strokes = [];
       setTool('select');
     }
-    $('attach-menu').open = false;
     const effortMenu = document.querySelector<HTMLDetailsElement>('#effort-menu')!;
     if (effortMenu.open) {
       effortMenu.open = false;
@@ -2946,7 +2984,7 @@ document.addEventListener('keydown', (e) => {
   }
 });
 document.addEventListener('pointerdown', (e) => {
-  for (const id of ['effort-menu', 'attach-menu']) {
+  for (const id of ['effort-menu']) {
     const menu = document.getElementById(id);
     if (menu instanceof HTMLDetailsElement && menu.open && !menu.contains(e.target as Node))
       menu.open = false;
