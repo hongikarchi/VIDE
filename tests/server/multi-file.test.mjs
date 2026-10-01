@@ -7,6 +7,7 @@ import { Store } from '../../src/core/store.ts';
 import { Workspace } from '../../src/core/workspace.ts';
 import { Execution } from '../../src/server/execution.ts';
 import { AgentTools } from '../../src/server/agent-tools.ts';
+import { documentHolder } from '../../src/contracts/request-scope.ts';
 
 const hash = 'a'.repeat(64);
 const sourceDocument = (instance, name) => ({
@@ -450,14 +451,20 @@ test('All or nothing: an execute refused before it ran is not applied; a single-
 });
 
 test('A rollback the host refuses is shown per file; a lost undo answer leaves the request unknown', async (t) => {
-  const { a, b, send, settled, state } = setup(t, async ({ call, turn }) => {
-    await call('execute', { code: 'add wall' });
-    await call('execute', { linkId: 'link-b', code: 'add column' });
-    if (turn === 1) a.userEdit();
-    else b.next.undo.push(() => Promise.reject(fail('TIMEOUT')));
-    throw fail('PROVIDER_TIMEOUT');
-  });
+  const { a, b, execution, project, workspace, send, submit, settled, state } = setup(
+    t,
+    async ({ call, turn }) => {
+      await call('execute', { code: 'add wall' });
+      await call('execute', { linkId: 'link-b', code: 'add column' });
+      if (turn === 1) a.userEdit();
+      else b.next.undo.push(() => Promise.reject(fail('TIMEOUT')));
+      throw fail('PROVIDER_TIMEOUT');
+    },
+  );
+  const holderOf = (instance) =>
+    documentHolder('probe', { host: 'rhino', instance, documentId: 7 }, workspace.list(project.id));
   send('refused', { mode: 'auto' });
+
   await settled();
   const refused = state('refused');
   assert.equal(refused.state, 'failed');
@@ -491,9 +498,25 @@ test('A rollback the host refuses is shown per file; a lost undo answer leaves t
   );
   // While unresolved, only the file that needs attention stays held.
   assert.deepEqual(
-    lost.result.documents.map((entry) => entry.instance),
-    ['win-b'],
+    lost.result.documents.map((entry) => [entry.instance, entry.pending]),
+    [['win-b', 'undo']],
   );
+  assert.equal(lost.result.heldOnly, true);
+  // A, rolled back and known, takes new writes; B stays refused until it is settled.
+  assert.equal(holderOf('win-a'), undefined);
+  assert.equal(holderOf('win-b')?.code, 'HOST_RESULT_UNRESOLVED');
+  assert.equal(submit('after-a', { mode: 'auto' }).state, 'queued');
+  assert.throws(() => submit('after-b', { mode: 'auto', baseRequestId: 'sync-b' }), {
+    code: 'HOST_RESULT_UNRESOLVED',
+  });
+  // [되돌리기] whose answer arrives in B settles it: the request is the failure it was.
+  const settled2 = await execution.undoRequest(project.id, 'lost');
+  assert.equal(settled2.ok, true);
+  assert.equal(settled2.request.state, 'failed');
+  assert.equal(settled2.request.result.code, 'PROVIDER_TIMEOUT');
+  assert.equal(settled2.request.result.heldOnly, undefined);
+  assert.equal(settled2.request.result.settles, undefined);
+  assert.equal(submit('after-b2', { mode: 'auto', baseRequestId: 'sync-b' }).state, 'queued');
 });
 
 test('A stopped multi-file request is rolled back; the guard of another file waits on its card', async (t) => {
@@ -586,8 +609,9 @@ test('Another request writing the file: DOCUMENT_LOCKED at once, never a wait', 
   const done = state('writes-a');
   assert.equal(done.state, 'succeeded');
   assert.equal(done.result.refused.file, 'B.3dm');
-  // Only the target was written: a single-file request.
-  assert.equal(done.result.multiFile, undefined);
+  // An execute was tried in B (refused by the lock): the request is one unit across files
+  // (ADR-027 6, SPEC-02.13 6), as with a host's refusal before execution.
+  assert.equal(done.result.multiFile, true);
 });
 
 test('A file a running turn locked holds new writes to it until the turn ends', async (t) => {
@@ -644,4 +668,248 @@ test('ZWCAD drawings through the engine driver: entity pages by handle, unknown 
   assert.equal(await run('ro'), 'DOCUMENT_READ_ONLY');
   await execution.close();
   store.close();
+});
+
+// --- unresolved files, late answers and stops (review fixes, 2026-10-01) -------------------------
+
+/** Who holds a document now (the lock check of a turn's first write there). */
+const holder = (workspace, project) => (instance) =>
+  documentHolder('probe', { host: 'rhino', instance, documentId: 7 }, workspace.list(project.id));
+
+test('[되돌리기] whose answer is lost in one file: a later one that the host answers settles the request', async (t) => {
+  const { a, b, execution, project, workspace, submit, send, settled, state } = setup(
+    t,
+    async ({ call }) => {
+      await call('execute', { code: 'add wall' });
+      await call('execute', { linkId: 'link-b', code: 'add column' });
+      return { text: '두 파일을 맞췄습니다.' };
+    },
+  );
+  const holderOf = holder(workspace, project);
+  send('auto-1', { mode: 'auto' });
+  await settled();
+  const lockList = state('auto-1').result.documents;
+  b.next.undo.push(() => Promise.reject(fail('TIMEOUT')));
+  const first = await execution.undoRequest(project.id, 'auto-1');
+  assert.equal(first.ok, false);
+  assert.equal(first.request.state, 'unknown');
+  assert.deepEqual(
+    first.files.map((file) => [file.name, file.state]),
+    [
+      ['A.3dm', 'undone'],
+      ['B.3dm', 'unknown'],
+    ],
+  );
+  assert.deepEqual(
+    first.request.result.documents.map((entry) => [entry.name, entry.pending]),
+    [['B.3dm', 'undo']],
+  );
+  // A is known (undone): only B is held meanwhile.
+  assert.equal(holderOf('win-a'), undefined);
+  assert.equal(holderOf('win-b')?.code, 'HOST_RESULT_UNRESOLVED');
+  const second = await execution.undoRequest(project.id, 'auto-1');
+  assert.equal(second.ok, true);
+  assert.ok([...a.records, ...b.records].every((record) => record.undone));
+  const back = second.request;
+  assert.equal(back.state, 'succeeded');
+  assert.equal(back.result.code, undefined);
+  assert.equal(back.result.heldOnly, undefined);
+  assert.equal(back.result.settles, undefined);
+  assert.deepEqual(back.result.documents, lockList);
+  assert.equal(holderOf('win-a'), undefined);
+  assert.equal(holderOf('win-b'), undefined);
+  assert.equal(submit('next-a', { mode: 'auto' }).state, 'queued');
+  assert.equal(submit('next-b', { mode: 'auto', baseRequestId: 'sync-b' }).state, 'queued');
+});
+
+test('A file whose execute answer was lost stays held through a later [되돌리기] of the others', async (t) => {
+  const { a, b, execution, project, workspace, send, settled, state } = setup(
+    t,
+    async ({ call }) => {
+      await call('execute', { code: 'add wall' });
+      b.next.execute.push(() => Promise.reject(fail('TIMEOUT')));
+      await call('execute', { linkId: 'link-b', code: 'add column' });
+      // The user edits A meanwhile: its rollback is refused (not the latest record).
+      a.userEdit();
+      return { text: '끝' };
+    },
+  );
+  const holderOf = holder(workspace, project);
+  send('auto-1', { mode: 'auto' });
+  await settled();
+  const lost = state('auto-1');
+  assert.equal(lost.state, 'unknown');
+  assert.deepEqual(
+    lost.result.documents.map((entry) => [entry.name, entry.pending]),
+    [['B.3dm', 'execute']],
+  );
+  assert.deepEqual(b.calls.undo, []);
+  assert.equal(holderOf('win-a'), undefined);
+  assert.equal(holderOf('win-b')?.code, 'HOST_RESULT_UNRESOLVED');
+  // The user undoes their own edit; then the request's [되돌리기] loses A's answer.
+  a.records.at(-1).undone = true;
+  a.next.undo.push(() => Promise.reject(fail('TIMEOUT')));
+  const undone = await execution.undoRequest(project.id, 'auto-1');
+  assert.equal(undone.request.state, 'unknown');
+  assert.deepEqual(
+    undone.request.result.documents.map((entry) => [entry.name, entry.pending]),
+    [
+      ['B.3dm', 'execute'],
+      ['A.3dm', 'undo'],
+    ],
+  );
+  assert.equal(holderOf('win-a')?.code, 'HOST_RESULT_UNRESOLVED');
+  assert.equal(holderOf('win-b')?.code, 'HOST_RESULT_UNRESOLVED');
+  // A settles with the next answer; B, whose execute answer was lost, stays unknown.
+  const again = await execution.undoRequest(project.id, 'auto-1');
+  assert.equal(again.request.state, 'unknown');
+  assert.deepEqual(
+    again.request.result.documents.map((entry) => entry.name),
+    ['B.3dm'],
+  );
+  assert.equal(holderOf('win-a'), undefined);
+  assert.equal(holderOf('win-b')?.code, 'HOST_RESULT_UNRESOLVED');
+});
+
+test('A stop while another file has an execute in flight: no rollback around it, it stays held, its late answer changes nothing', async (t) => {
+  const reachedB = gate(),
+    answerB = gate();
+  const { a, b, execution, project, workspace, send, settled, state } = setup(
+    t,
+    async ({ call, signal }) => {
+      await call('execute', { code: 'add wall' });
+      b.next.execute.push(async () => {
+        reachedB.open();
+        await answerB.promise;
+        return { ok: true, undoId: 'B-late', changes: { added: [], changed: [], removed: [] } };
+      });
+      // The provider gives up on abort without waiting for the tool call (claude-cli, codex).
+      void call('execute', { linkId: 'link-b', code: 'add column' });
+      await new Promise((resolve) => signal.addEventListener('abort', resolve, { once: true }));
+      throw fail('CANCELLED');
+    },
+  );
+  send('stop-1', { mode: 'auto' });
+  await reachedB.promise;
+  execution.cancel(project.id, 'stop-1');
+  await settled();
+  const stopped = state('stop-1');
+  assert.equal(stopped.state, 'unknown');
+  assert.equal(stopped.result.rollback.reason, 'cancelled');
+  assert.deepEqual(
+    stopped.result.rollback.files.map((file) => [file.name, file.state]),
+    [
+      ['A.3dm', 'undone'],
+      ['B.3dm', 'unknown'],
+    ],
+  );
+  assert.deepEqual(b.calls.undo, []);
+  assert.deepEqual(
+    stopped.result.documents.map((entry) => [entry.name, entry.pending]),
+    [['B.3dm', 'execute']],
+  );
+  assert.equal(a.records[0].undone, true);
+  const holderOf = holder(workspace, project);
+  assert.equal(holderOf('win-a'), undefined);
+  assert.equal(holderOf('win-b')?.code, 'HOST_RESULT_UNRESOLVED');
+  answerB.open();
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  const late = state('stop-1');
+  assert.equal(late.state, 'unknown');
+  assert.ok(!late.result.executions.some((entry) => entry.undoId === 'B-late'));
+});
+
+test('A one-file stop with its execute in flight stays unknown after the late answer, as before', async (t) => {
+  const reached = gate(),
+    answer = gate();
+  const { a, execution, project, send, settled, state } = setup(t, async ({ call, signal }) => {
+    a.next.execute.push(async () => {
+      reached.open();
+      await answer.promise;
+      return { ok: true, undoId: 'A-late', changes: { added: [], changed: [], removed: [] } };
+    });
+    void call('execute', { code: 'add wall' });
+    await new Promise((resolve) => signal.addEventListener('abort', resolve, { once: true }));
+    throw fail('CANCELLED');
+  });
+  send('one', { mode: 'auto' });
+  await reached.promise;
+  execution.cancel(project.id, 'one');
+  await settled();
+  assert.equal(state('one').state, 'unknown');
+  assert.deepEqual(state('one').result.documents, []);
+  assert.equal(state('one').result.heldOnly, undefined);
+  answer.open();
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  // Before, the late answer wrote the request back to 'running' with no run behind it.
+  assert.equal(state('one').state, 'unknown');
+  assert.deepEqual(state('one').result.executions, []);
+});
+
+test('A stop the provider ends STOP_UNCONFIRMED is a cancellation; an intervention keeps the changes', async (t) => {
+  let reached = gate();
+  const { a, b, execution, project, send, settled, state } = setup(
+    t,
+    async ({ call, signal, context }) => {
+      if (/대신 이렇게/.test(context.goal)) return { text: '새 조건으로 이어 갑니다.' };
+      await call('execute', { code: 'add wall' });
+      await call('execute', { linkId: 'link-b', code: 'add column' });
+      reached.open();
+      await new Promise((resolve) => signal.addEventListener('abort', resolve, { once: true }));
+      // The CLI did not exit within the grace time after the stop.
+      throw fail('STOP_UNCONFIRMED');
+    },
+  );
+  send('plain', { mode: 'auto' });
+  await reached.promise;
+  execution.cancel(project.id, 'plain');
+  await settled();
+  assert.equal(state('plain').result.rollback.reason, 'cancelled');
+  assert.ok([...a.records, ...b.records].every((record) => record.undone));
+
+  // [멈추고 이걸로]: the cut turn's changes stay for the next condition (SPEC-02.8).
+  reached = gate();
+  send('cut', { mode: 'auto', permission: 'candidate' });
+  await reached.promise;
+  execution.intervene(project.id, 'cut', {
+    ...state('cut').input,
+    id: 'cut-next',
+    body: '대신 이렇게',
+  });
+  await settled();
+  const kept = state('cut');
+  assert.equal(kept.result.rollback, undefined);
+  assert.deepEqual(
+    kept.result.executions.map((entry) => entry.state),
+    ['applied', 'applied'],
+  );
+  assert.equal(a.records.at(-1).undone, false);
+  assert.equal(b.records.at(-1).undone, false);
+});
+
+test('An unresolved request that does not name every unknown document keeps its target held', () => {
+  const doc = (instance) => ({ host: 'rhino', instance, documentId: 7 });
+  const sync = {
+    id: 'sync-a',
+    input: { id: 'sync-a', body: 'Sync', mode: 'plan' },
+    state: 'succeeded',
+    result: { sourceDocument: { ...doc('win-a'), connection: 'attached-editor' } },
+  };
+  // A multi-file turn the engine restart left unknown: its lock list, not an attention list.
+  const recovered = {
+    id: 'turn',
+    input: { id: 'turn', body: 'x', mode: 'auto', baseRequestId: 'sync-a' },
+    state: 'unknown',
+    result: { documents: [{ ...doc('win-b'), name: 'B.3dm' }] },
+  };
+  const holderOf = (rows, instance) => documentHolder('probe', doc(instance), rows)?.code;
+  assert.equal(holderOf([sync, recovered], 'win-a'), 'HOST_RESULT_UNRESOLVED');
+  assert.equal(holderOf([sync, recovered], 'win-b'), 'HOST_RESULT_UNRESOLVED');
+  // Naming every unknown document (heldOnly), it holds only those.
+  const named = { ...recovered, result: { ...recovered.result, heldOnly: true } };
+  assert.equal(holderOf([sync, named], 'win-a'), undefined);
+  assert.equal(holderOf([sync, named], 'win-b'), 'HOST_RESULT_UNRESOLVED');
+  // While it runs, it holds its target and the documents it locked.
+  const running = { ...named, state: 'running' };
+  assert.equal(holderOf([sync, running], 'win-a'), 'DOCUMENT_LOCKED');
 });

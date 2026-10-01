@@ -61,7 +61,9 @@ import { DomainError } from '../contracts/errors.ts';
 import { hostTargetSchema } from '../contracts/host-documents.ts';
 import {
   DIRECT_MAX_DELETES,
+  afterRequestUndo,
   continueBody,
+  documentKey,
   documentAfter,
   hostLeftUnknown,
   displayQuery,
@@ -1675,51 +1677,37 @@ export class Execution {
    * [되돌리기] of a whole request (POST …/requests/:rid/undo {all: true}, ADR-027 2): every applied
    * execution, in every file, last first. A file whose undo the host refuses keeps its remaining
    * executions (named in `files` and the result's `undo`); a lost undo answer leaves the request
-   * unknown on that file.
+   * unknown on that file until a later [되돌리기] the host answers there (`afterRequestUndo`).
    */
   async undoRequest(projectId: string, id: string) {
     const request = this.workspace.get(projectId, id);
     if (this.active.has(id) || ['queued', 'running'].includes(request.state))
       throw new DomainError('REVISION_CONFLICT');
     const records = executionsOf(request.result);
-    if (!records.some((entry) => entry.state === 'applied' && entry.undoId))
+    // An unresolved request runs it anyway: an unknown it can settle may have nothing left to undo.
+    if (
+      request.state !== 'unknown' &&
+      !records.some((entry) => entry.state === 'applied' && entry.undoId)
+    )
       return { ok: true, already: true, files: [], request };
+    const hostOf = (record: ExecutionRecord) =>
+      record.host ?? (request.result?.host === 'zwcad' ? 'zwcad' : 'rhino');
     const outcome = await undoExecutions(records, (record) =>
-      this.directDriverFor(
-        record.host ?? (request.result?.host === 'zwcad' ? 'zwcad' : 'rhino'),
-        record.target ?? request.result?.sourceDocument,
-        false,
-      ),
+      this.directDriverFor(hostOf(record), record.target ?? request.result?.sourceDocument, false),
     );
     // Re-read: the request may have changed while the hosts answered.
     const now = this.workspace.get(projectId, id);
-    const unknown = outcome.files.filter((file) => file.state === 'unknown');
-    const result = {
-      ...now.result,
-      executions: executionsOf(now.result).map((entry) =>
-        outcome.undone.has(entry.executionId)
-          ? { ...entry, state: 'undone' as const, undoneAt: outcome.at }
-          : entry,
-      ),
-      undo: { at: outcome.at, files: outcome.files },
-      ...(unknown.length
-        ? {
-            code: 'HOST_RESULT_UNKNOWN',
-            documents: unknown.map((file) => ({
-              host: file.host,
-              ...file.target,
-              ...(file.linkId ? { linkId: file.linkId } : {}),
-              name: file.name,
-            })),
-          }
-        : {}),
-    };
+    const target = hostTargetSchema.safeParse(now.result?.sourceDocument).data;
+    const next = afterRequestUndo(now, outcome, (record) =>
+      documentKey(hostOf(record), record.target ?? target ?? { instance: '', documentId: -1 }),
+    );
     const updated = this.workspace.update(
       projectId,
       id,
-      unknown.length ? 'unknown' : now.state,
-      result,
+      next.state as typeof now.state,
+      next.result,
     );
+
     for (const entry of records)
       if (outcome.undone.has(entry.executionId))
         this.ledgerExecution(updated, { ...entry, state: 'undone' });

@@ -42,6 +42,8 @@ interface ScopeWork {
     waitingFor?: unknown;
     /** Other documents a direct turn locked as it first wrote them (ADR-027). */
     documents?: unknown;
+    /** Unresolved, `documents` names every document whose state is unknown (ADR-027 6). */
+    heldOnly?: unknown;
   } | null;
 }
 /** Stored on a waiting request's result (`phase: 'queue'`). */
@@ -158,6 +160,8 @@ function claims(input: ScopeInput, rows: ReadonlyMap<string, ScopeWork>): Claim[
 /**
  * A request's write claims: what its input names, plus the documents its turn locked while
  * running (`result.documents`, ADR-027). Only a running, queued or unresolved request holds them.
+ * An unresolved multi-file request that names every document needing attention (`heldOnly`)
+ * holds only those: its target, once rolled back or undone, is free again.
  */
 function claimsOf(row: ScopeWork, rows: ReadonlyMap<string, ScopeWork>): Claim[] {
   const held = row.result?.documents;
@@ -172,7 +176,8 @@ function claimsOf(row: ScopeWork, rows: ReadonlyMap<string, ScopeWork>): Claim[]
           return key && host ? [{ host, key, source: true }] : [];
         })
       : [];
-  return [...claims(row.input, rows), ...extra];
+  const scoped = row.state === 'unknown' && row.result?.heldOnly === true && Array.isArray(held);
+  return [...(scoped ? [] : claims(row.input, rows)), ...extra];
 }
 
 const same = (a: Claim, b: Claim) =>

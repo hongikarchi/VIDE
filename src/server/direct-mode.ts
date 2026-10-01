@@ -290,6 +290,12 @@ export interface TurnDocument {
   documentId: number;
   linkId?: string;
   name: string;
+  /**
+   * In an unresolved request's `documents` (ADR-027 6): which answer was lost there. `execute`: an
+   * execute's (only a fingerprint check settles it); `undo`: an undo's (a later undo that the host
+   * answers settles it).
+   */
+  pending?: 'execute' | 'undo';
 }
 /** The project's other linked files as a direct turn sees them (ADR-027, SPEC-01.11 5). */
 export interface LinkedFiles {
@@ -355,16 +361,23 @@ export async function undoExecutions(
   const at = new Date().toISOString();
   const files = new Map<string, FileUndo>();
   const undone = new Set<string>();
+  // A record without its file (a confirmed re-run stored before it carried one) takes the name
+  // another record of the same document has.
+  const named = new Map<string, NonNullable<ExecutionRecord['file']>>();
+  for (const record of records)
+    if (record.file && record.target)
+      named.set(documentKey(record.host, record.target), record.file);
   for (const record of [...records].reverse()) {
     if (record.state !== 'applied' || !record.undoId) continue;
     const key = documentKey(record.host, record.target);
     let file = files.get(key);
     if (!file) {
+      const source = record.file ?? named.get(key);
       file = {
         host: record.host,
         target: record.target,
-        ...(record.file?.linkId ? { linkId: record.file.linkId } : {}),
-        name: record.file?.name ?? `${hostLabel(record.host)} 문서`,
+        ...(source?.linkId ? { linkId: source.linkId } : {}),
+        name: source?.name ?? `${hostLabel(record.host)} 문서`,
         state: skip.has(key) ? 'unknown' : 'undone',
         undone: 0,
         kept: 0,
@@ -418,7 +431,111 @@ export async function undoExecutions(
   };
 }
 
-const documentKey = (host: string, target: { instance: string; documentId: number }) =>
+/**
+ * A request after its [되돌리기] (ADR-027 2·6): undone rows marked, the attempt kept in `undo`, and
+ * what is still unknown. A lost undo answer leaves the request unknown on that document (`pending:
+ * 'undo'`) and remembers the state it settles to (`settles`); a later undo the host answers there
+ * settles it, and once no document is unknown the request is back in that state. A document whose
+ * execute answer was lost (`pending: 'execute'`), and an unknown the request does not fully name
+ * (no `heldOnly`), stay unknown: an undo cannot tell what that execute did.
+ */
+export function afterRequestUndo(
+  now: { state: string; result?: Record<string, unknown> | null },
+  outcome: { at: string; undone: ReadonlySet<string>; files: FileUndo[] },
+  where: (record: ExecutionRecord) => string,
+): { state: string; result: Record<string, unknown> } {
+  const previous = now.result ?? {};
+  const executions = executionsOf(previous).map((entry) =>
+    outcome.undone.has(entry.executionId)
+      ? { ...entry, state: 'undone' as const, undoneAt: outcome.at }
+      : entry,
+  );
+  const result: Record<string, unknown> = {
+    ...previous,
+    executions,
+    ...(outcome.files.length ? { undo: { at: outcome.at, files: outcome.files } } : {}),
+  };
+  const lost: TurnDocument[] = outcome.files
+    .filter((file) => file.state === 'unknown')
+    .map((file) => ({
+      host: file.host,
+      ...file.target,
+      ...(file.linkId ? { linkId: file.linkId } : {}),
+      name: file.name,
+      pending: 'undo',
+    }));
+  if (now.state !== 'unknown') {
+    if (!lost.length) return { state: now.state, result };
+    return {
+      state: 'unknown',
+      result: {
+        ...result,
+        code: 'HOST_RESULT_UNKNOWN',
+        documents: lost,
+        // Every other document is known: only these stay held.
+        heldOnly: true,
+        settles: {
+          state: now.state,
+          ...(typeof previous.code === 'string' ? { code: previous.code } : {}),
+          ...(Array.isArray(previous.documents) ? { documents: previous.documents } : {}),
+        },
+      },
+    };
+  }
+  const keyOf = (doc: { host: string; instance: string; documentId: number }) =>
+    documentKey(doc.host, doc);
+  // The host answered about that document's records now: its state is known again.
+  const answered = new Set(
+    outcome.files
+      .filter(
+        (file) =>
+          file.state === 'undone' || (file.state === 'refused' && file.reason === 'not-latest'),
+      )
+      .map((file) => documentKey(file.host, file.target)),
+  );
+  const applied = new Set(
+    executions.filter((entry) => entry.state === 'applied' && entry.undoId).map(where),
+  );
+  const held = new Map<string, TurnDocument>();
+  for (const doc of (Array.isArray(previous.documents)
+    ? previous.documents
+    : []) as TurnDocument[]) {
+    const key = keyOf(doc);
+    if (doc.pending === 'undo' && (answered.has(key) || !applied.has(key))) continue;
+    held.set(key, doc);
+  }
+  for (const doc of lost) if (!held.has(keyOf(doc))) held.set(keyOf(doc), doc);
+  const settles = previous.settles as
+    | { state?: unknown; code?: unknown; documents?: unknown }
+    | undefined;
+  if (!held.size && previous.heldOnly === true && typeof settles?.state === 'string') {
+    const {
+      code: _code,
+      documents: _documents,
+      heldOnly: _heldOnly,
+      settles: _settles,
+      ...rest
+    } = result;
+    return {
+      state: settles.state,
+      result: {
+        ...rest,
+        ...(typeof settles.code === 'string' ? { code: settles.code } : {}),
+        ...(Array.isArray(settles.documents) ? { documents: settles.documents } : {}),
+      },
+    };
+  }
+  const still: Record<string, unknown> = {
+    ...result,
+    code: 'HOST_RESULT_UNKNOWN',
+    documents: [...held.values()],
+  };
+  if (!held.size) delete still.heldOnly;
+  return { state: 'unknown', result: still };
+}
+/** One document of a request (its host, window and document id). */
+
+export const documentKey = (host: string, target: { instance: string; documentId: number }) =>
   JSON.stringify([host, target.instance, target.documentId]);
 const hostLabel = (host: 'rhino' | 'zwcad') => (host === 'rhino' ? 'Rhino' : 'ZWCAD');
 /** The linked-files lines of a turn goal: which file is the target, which are live, which closed. */
@@ -443,7 +560,8 @@ ${rows.join('\n')}
 Each file keeps its own units and coordinates (query returns units); do not assume a shared origin unless the request or the pins establish one. A file answering LINK_NOT_LIVE is not open now: read it from its stored Sync.${
     mode === 'auto'
       ? `
-execute with an open file's linkId edits that file directly, one undo record there per execute, under the same rules and guard as the target. This request is one unit across files: the user's [되돌리기] undoes all of it, and if the request fails or is stopped after it changed two or more files, VIDE undoes every change of this request in every file. A file another task is writing answers DOCUMENT_LOCKED: nothing ran there; leave it and tell the user.`
+execute with an open file's linkId edits that file directly, one undo record there per execute, under the same rules and guard as the target. This request is one unit across files: the user's [되돌리기] undoes all of it, and if the request fails or is stopped after it tried to change two or more files, VIDE undoes every change of this request in every file.
+ A file another task is writing answers DOCUMENT_LOCKED: nothing ran there; leave it and tell the user.`
       : ''
   }`;
 }
@@ -486,7 +604,12 @@ User request: ${input.body || '첨부한 설계 문맥을 검토해 주세요.'}
  * guarded call is recorded with its body (the confirmation re-runs it). Plan: read tools only.
  */
 export async function runDirectTurn(turn: DirectTurn) {
-  const { input, mode, driver, previous, items, signal, update } = turn;
+  const { input, mode, driver, previous, items, signal } = turn;
+  /** Set once the turn has settled: a late tool answer then changes nothing of the request. */
+  let ended = false;
+  const update = (progress: Record<string, unknown>) => {
+    if (!ended) turn.update(progress);
+  };
   const limits = executionLimits(input);
   const hostName = driver.host === 'rhino' ? 'Rhino' : 'ZWCAD';
   const targetRef = `${driver.host}-open:${driver.target.instance}`;
@@ -554,8 +677,13 @@ export async function runDirectTurn(turn: DirectTurn) {
   /** Activity text naming the file when it is not the target. */
   const named = (doc: TurnDoc, text: string) =>
     doc === primary ? text : `${doc.file.name} · ${text}`;
-  /** The documents this turn sent an execute to (two or more: a multi-file request, ADR-027). */
+  /**
+   * The documents this turn tried to execute in, refused or not (two or more: a multi-file
+   * request, ADR-027 6, SPEC-02.13 6).
+   */
   const attempted = new Set<string>();
+  /** The document whose execute has not answered yet (at most one: `uncertain` holds the rest). */
+  let inflight: TurnDoc | undefined;
   const multiFile = () => attempted.size > 1;
   /** Other documents the turn locked as it first wrote them (the request result keeps them). */
   const documents: TurnDocument[] = [];
@@ -654,6 +782,7 @@ export async function runDirectTurn(turn: DirectTurn) {
       const doc = await resolve(linkId);
       if (doc.refused?.final) return notExecuted(doc, doc.refused);
       if (attempts >= limits.maxHostCommands) throw failure('HOST_COMMAND_LIMIT');
+      attempted.add(doc.key);
       // Another file is locked as the turn first writes it; held elsewhere, it is refused at once
       // (never waits, so two turns cannot wait on each other's files).
       if (doc !== primary && !doc.claimed) {
@@ -664,7 +793,6 @@ export async function runDirectTurn(turn: DirectTurn) {
         update(state('host'));
       }
       attempts++;
-      attempted.add(doc.key);
       const executionId = randomUUID();
       const label = directLabel(input.body, attempts);
       activity.add(
@@ -675,7 +803,9 @@ export async function runDirectTurn(turn: DirectTurn) {
       update(state('host'));
       // A lost answer leaves the document state unknown: no further execute in this turn.
       uncertain = true;
-      let outcome: DirectOutcome;
+      inflight = doc;
+      let outcome: DirectOutcome | undefined;
+      let thrown: unknown;
       try {
         outcome = await doc.driver.execute({
           requestId: executionId,
@@ -684,11 +814,19 @@ export async function runDirectTurn(turn: DirectTurn) {
           guard: { confirmed: input.guardConfirmed === true, maxDeletes: DIRECT_MAX_DELETES },
         });
       } catch (error) {
+        thrown = error;
+      } finally {
+        inflight = undefined;
+      }
+      // The turn ended (stopped, timed out) before this answer: the request already reports the
+      // document unknown, and a late answer is neither recorded nor applied to its state.
+      if (ended) return { ok: false, executed: false, code: 'AGENT_SCOPE_EXPIRED' };
+      if (!outcome) {
         // Refused before it touched the document (read-only, busy, closed): nothing ran.
-        const refusal = directRefusal(doc.driver.host, error);
+        const refusal = directRefusal(doc.driver.host, thrown);
         if (!refusal) {
           doc.lost = true;
-          throw error;
+          throw thrown;
         }
         uncertain = false;
         return notExecuted(doc, refusal, true);
@@ -863,6 +1001,7 @@ export async function runDirectTurn(turn: DirectTurn) {
     if (signal.aborted && !applied) throw failure('CANCELLED');
     // A stopped multi-file request is not left half done (an intervention keeps its changes).
     if (signal.aborted && multiFile() && !turn.linked?.intervened?.()) throw failure('CANCELLED');
+    ended = true;
     return {
       ...response,
       ...state('done'),
@@ -877,33 +1016,58 @@ export async function runDirectTurn(turn: DirectTurn) {
       ),
     };
   } catch (error) {
+    ended = true;
     const code =
       error && typeof error === 'object' && 'code' in error ? String(error.code) : undefined;
+    // The provider gave up (stop, timeout) while an execute had not answered: that document's state
+    // is unknown, so it is not rolled back around and stays held (ADR-027 6). A one-file turn
+    // keeps reporting it as before (the request's own target holds it).
+    if (inflight && (inflight !== primary || multiFile())) inflight.lost = true;
+    // A stop (the signal, whatever the provider's code: CANCELLED, STOP_UNCONFIRMED) is a
+    // cancellation; an intervention keeps the changes for the next condition (SPEC-02.8).
     if (
       multiFile() &&
       executions.some((entry) => entry.state === 'applied' && entry.undoId) &&
-      !(code === 'CANCELLED' && turn.linked?.intervened?.())
+      !(signal.aborted && turn.linked?.intervened?.())
     )
-      await rollBack(code === 'CANCELLED' ? 'cancelled' : 'failed');
+      await rollBack(signal.aborted ? 'cancelled' : 'failed');
     // Only a lost execute (or undo) answer leaves a document unknown; applied records are known
-    // (and undoable), so a failing provider keeps them with the failure. While unresolved, the
-    // request holds only the documents that need attention.
+    // (and undoable), so a failing provider keeps them with the failure.
     const attention = new Map<string, TurnDocument>();
-    for (const doc of docs.values()) if (doc.lost) attention.set(doc.key, turnDocument(doc));
+    for (const doc of docs.values())
+      if (doc.lost) attention.set(doc.key, { ...turnDocument(doc), pending: 'execute' });
     for (const file of rollback?.files ?? [])
-      if (file.state === 'unknown')
+      if (file.state === 'unknown' && !attention.has(documentKey(file.host, file.target)))
         attention.set(documentKey(file.host, file.target), {
           host: file.host,
           ...file.target,
           ...(file.linkId ? { linkId: file.linkId } : {}),
           name: file.name,
+          pending: 'undo',
         });
+    // A multi-file request names every document whose state is unknown, so while unresolved it
+    // holds only those (`heldOnly`): a fully rolled-back target is free again. Otherwise (one
+    // file, or an uncertainty no document explains) its target stays held as well.
+    const heldOnly =
+      multiFile() &&
+      attention.size > 0 &&
+      (!uncertain || [...docs.values()].some((doc) => doc.lost));
     if (uncertain || attention.size)
       throw Object.assign(failure('HOST_RESULT_UNKNOWN'), {
         intent: {
           ...state('host'),
           baseRequestId: previous.id,
           documents: [...attention.values()],
+          ...(heldOnly ? { heldOnly: true } : {}),
+          // What the request settles to once its unknown files are undone ([되돌리기]).
+          ...(heldOnly && rollback
+            ? {
+                settles: {
+                  state: rollback.reason === 'cancelled' ? 'cancelled' : 'failed',
+                  ...(code ? { code } : {}),
+                },
+              }
+            : {}),
         },
         cause: error,
       });
