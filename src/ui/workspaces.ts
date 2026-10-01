@@ -35,12 +35,21 @@ export interface WorkspaceChange {
 // The data and make tabs open with PLAN-22 T-065 and T-063; the report tab is T-057.
 // 대시보드 (first draft, user request 2026-10-01) comes first; the model tab stays the default.
 // 산출물 (PLAN-26 T-081) holds 도면 · 보고서 · 렌더링; the report tab (T-057) is its 보고서 view.
-const FIXED: { id: FixedWorkspace; label: string; ready: boolean; title?: string }[] = [
+// 만들기 is part of JIG since PLAN-26 T-099 (user request 2026-10-01): it has no rail button and no
+// menu entry (`menu: false`), opens from the JIG list's cards, and the rail's JIG stays pressed on
+// it. Its id stays, because the AI's `ui_go`, the request route and `openDraft` show it by id.
+const FIXED: {
+  id: FixedWorkspace;
+  label: string;
+  ready: boolean;
+  title?: string;
+  menu?: false;
+}[] = [
   { id: 'dashboard', label: '대시보드', ready: true },
   { id: 'model', label: '모델', ready: true },
   { id: 'data', label: '자료', ready: true },
   { id: 'jig', label: 'JIG', ready: true },
-  { id: 'make', label: '만들기', ready: true },
+  { id: 'make', label: '만들기', ready: true, menu: false },
   { id: 'output', label: '산출물', ready: true, title: 'Output · 도면 · 보고서 · 렌더링' },
 ];
 const PREFIX = 'jig:';
@@ -230,11 +239,11 @@ export function renameContextTab(
 export const activeWorkspace = () => active;
 export const contextTabs = (): readonly ContextTab[] => context;
 /**
- * The rail destination the shown workspace belongs to: a jig instance's tab is JIG's; a reference
- * image's tab belongs to none.
+ * The rail destination the shown workspace belongs to: a jig instance's tab and the 만들기 screen
+ * are JIG's (T-099); a reference image's tab belongs to none.
  */
 export const workspaceDestination = (): FixedWorkspace | undefined =>
-  instanceOf(active) !== undefined
+  instanceOf(active) !== undefined || active === 'make'
     ? 'jig'
     : referenceOf(active) !== undefined
       ? undefined
@@ -357,6 +366,7 @@ function paint() {
   const select = document.createElement('select');
   select.setAttribute('aria-label', '작업공간');
   for (const tab of FIXED) {
+    if (tab.menu === false) continue;
     const option = new Option(tab.ready ? tab.label : `${tab.label} · 준비 중`, tab.id);
     option.disabled = !tab.ready;
     if (tab.title) option.title = tab.title;
@@ -373,7 +383,8 @@ function paint() {
     for (const tab of tabs) group.append(new Option(tab.label, tabId(tab)));
     select.append(group);
   }
-  select.value = active;
+  // The 만들기 screen shows as JIG, the screen it belongs to.
+  select.value = active === 'make' ? 'jig' : active;
   select.onchange = () => setWorkspace(select.value);
   narrow.append(select);
   const open = context.find((tab) => tabId(tab) === active);

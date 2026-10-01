@@ -2,7 +2,7 @@
 id: PLAN
 title: VIDE 실행 로드맵
 status: review
-version: 0.232
+version: 0.233
 updated: 2026-10-01
 owner: agent:codex
 related: [ARCH-01, PLAN-02, PLAN-03, PLAN-22, PLAN-23, PLAN-24, PLAN-25, PLAN-26, PLAN-27, ADR-022, ADR-025, ADR-026, ADR-027, SPEC-00, SPEC-01, SPEC-02, SPEC-03, SPEC-04, SPEC-05, SPEC-06, SPEC-07]
@@ -102,7 +102,7 @@ related: [ARCH-01, PLAN-02, PLAN-03, PLAN-22, PLAN-23, PLAN-24, PLAN-25, PLAN-26
 | 안정성 | T-082~T-087(Sync 저장 구조와 작동 안정성, [PLAN-27](PLAN-27-sync-storage-stability.md), 근거 [RESEARCH-13](../research/RESEARCH-13-stability-audit.md)) | 0단계(진단·복구) 바로 착수. 1단계는 ARCH-01 저장 계약 확인 뒤 |
 | 바로 적용 | T-069 → T-070·071 → T-072 → T-073·074, T-075([PLAN-24](PLAN-24-ai-conversations.md#direct-apply), [ADR-022](../decisions/ADR-022-direct-apply-plan-auto.md)) | 실제 Rhino·ZWCAD에서 보호·되돌리기 확인, 브라우저 시험 |
 | 여러 파일 조율 | T-092 → T-093 → T-094([PLAN-24](PLAN-24-ai-conversations.md#multi-file), [ADR-027](../decisions/ADR-027-multi-file-coordination.md)) | 모의 연결 두 개의 서버·브라우저 시험, 실제 Rhino 두 창 확인 |
-| 대화 중심 구조 | T-076·077 → T-078 → T-079, T-080, T-081, T-098(대시보드 할 일)([PLAN-26](PLAN-26-chat-stage.md), [ADR-026](../decisions/ADR-026-chat-stage-and-skill-jigs.md)) | 각 티켓의 시험 통과. 화면 변경은 지금 배치 위에 하나씩 |
+| 대화 중심 구조 | T-076·077 → T-078 → T-079, T-080, T-081, T-098(대시보드 할 일), T-099 → T-100 → T-101([PLAN-26](PLAN-26-chat-stage.md), [ADR-026](../decisions/ADR-026-chat-stage-and-skill-jigs.md)) | 각 티켓의 시험 통과. 화면 변경은 지금 배치 위에 하나씩 |
 
 호스트 플러그인을 바꾸는 티켓의 완료 기준은 개발 빌드와 `.vide/` 합성 문서·사본까지이며, 설치본 반영은 사용자 요청이나 웨이브 경계의 판단으로 묶음 릴리스한다.
 
@@ -110,7 +110,7 @@ related: [ARCH-01, PLAN-02, PLAN-03, PLAN-22, PLAN-23, PLAN-24, PLAN-25, PLAN-26
 
 ### 6.2 티켓 소유와 상세 계획
 
-T-001~018의 번호·지원 증거는 유지한다. 각 티켓의 현재 결과와 남은 조건은 §6.5, 상세 구현·시험 절차는 PLAN-02와 §7을 따른다. T-019~024·T-032·T-040(진단 로그)의 구체 작업은 PLAN-03, T-033~039는 PLAN-17이 소유한다. T-041~067은 PLAN-22·23·24가 소유하며, RESEARCH-10 작업 묶음(WP)과의 대응표는 각 계획에 있다. T-068은 PLAN-25, 바로 적용·계획/자동 모드의 T-069~075와 여러 파일 조율의 T-092~094는 PLAN-24, 대화 중심 구조·산출물 탭의 T-076~081과 첨부·참고 이미지 의도 확인·프로젝트 폴더의 T-089~091은 PLAN-26, Sync 저장 구조와 작동 안정성의 T-082~087은 PLAN-27, 연결 파일 보완 T-095·096은 PLAN-16이 소유한다. T-025~031은 PLAN-08의 예약 번호이며 아직 등록하지 않았다. 하위 계획에 별도 현황표를 복제하지 않는다.
+T-001~018의 번호·지원 증거는 유지한다. 각 티켓의 현재 결과와 남은 조건은 §6.5, 상세 구현·시험 절차는 PLAN-02와 §7을 따른다. T-019~024·T-032·T-040(진단 로그)의 구체 작업은 PLAN-03, T-033~039는 PLAN-17이 소유한다. T-041~067은 PLAN-22·23·24가 소유하며, RESEARCH-10 작업 묶음(WP)과의 대응표는 각 계획에 있다. T-068은 PLAN-25, 바로 적용·계획/자동 모드의 T-069~075와 여러 파일 조율의 T-092~094, 새 대화 바로 열기의 T-097은 PLAN-24, 대화 중심 구조·산출물 탭의 T-076~081과 첨부·참고 이미지 의도 확인·프로젝트 폴더의 T-089~091, 대시보드 할 일의 T-098, JIG 한 화면·아이콘·[수정하기]의 T-099~101은 PLAN-26, Sync 저장 구조와 작동 안정성의 T-082~087은 PLAN-27, 연결 파일 보완 T-095·096은 PLAN-16이 소유한다. T-025~031은 PLAN-08의 예약 번호이며 아직 등록하지 않았다. 하위 계획에 별도 현황표를 복제하지 않는다.
 
 ### 6.3 착수 조건
 
@@ -253,6 +253,9 @@ T-001~018의 번호·지원 증거는 유지한다. 각 티켓의 현재 결과�
 | T-095 다른 이름으로 저장 뒤 연결이 창을 따라감(Rhino·ZWCAD, 중복 행은 하나만 연결) | 구현·서버 시험 완료(2026-10-01, 설치 전) | 실제 Rhino·ZWCAD 창에서 다른 이름 저장 확인(설치본 반영 뒤 합성 문서) | [PLAN-16](PLAN-16-document-links.md#t-095), `link-follow.test.mjs` |
 | T-096 연결 파일을 모두 숨겨도 남던 객체(시작 때 선택 순서), 어느 파일에도 속하지 않는 결과는 '작업 결과' 행 | 구현·브라우저 시험 완료(2026-10-01, 설치 전) | 설치본에서 사용자 프로젝트로 확인 | [PLAN-16](PLAN-16-document-links.md#t-096), `browser-links.mjs` |
 | T-098 대시보드 할 일·일정(맨 위 '오늘', `agenda_*` 도구와 [되돌리기], schema 7) | 구현·단위·브라우저 시험 완료(2026-10-01, 설치 전). 검토 지적 6건 반영(되돌리기 판 검사, 편집 판 고정, 입력칸 초점, 기본 대화 호스트 턴 도구, 턴마다 안내 하나) | 실제 Claude·Codex로 '회의록에서 할 일 뽑아줘' 확인(설치본 릴리스 때). 후속: 반복 일정·캘린더 연동·자료에서 찾기 | [PLAN-26](PLAN-26-chat-stage.md#t-098), SPEC-01.14, `agenda.test.mjs`, `browser-dashboard-agenda.mjs` |
+| T-099 JIG 한 화면(레일의 만들기를 JIG에, 끝의 [새로 만들기] 카드, 작성 중 초안 카드, jig 하나에 카드 하나) | 구현·단위·브라우저 시험 완료(2026-10-01, 설치 전) | 설치본 반영(릴리스 때) | [PLAN-26](PLAN-26-chat-stage.md#t-099), `jig-list.test.mjs`, `browser-make.mjs` |
+| T-100 jig 아이콘(정해 둔 목록의 `icon`) | 계획 | T-099 뒤 | [PLAN-26](PLAN-26-chat-stage.md#t-100) |
+| T-101 [수정하기](사본 초안 → 다시 고정 → 작업본 [올리기]) | 계획 | T-099 뒤 | [PLAN-26](PLAN-26-chat-stage.md#t-101) |
 | T-082 안정성 0단계 진단·복구 | 구현·자동 검증(`9aac8cd`) | 실제 창의 화면 복구 확인, 설치본 릴리스 | [PLAN-27](PLAN-27-sync-storage-stability.md) |
 | T-083 객체 단위 저장 | 계획 | ARCH-01 저장 계약 작성과 사용자 확인 뒤 착수 | [PLAN-27](PLAN-27-sync-storage-stability.md), [RESEARCH-13](../research/RESEARCH-13-stability-audit.md) |
 | T-084 엔진 주관 Sync | 계획. 문서별 Sync 합치기는 먼저 구현(`fda1e5d`) | SPEC-01.11의 Sync 주체 보완 뒤 착수 | [PLAN-27](PLAN-27-sync-storage-stability.md) |

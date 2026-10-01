@@ -1,4 +1,6 @@
-// 만들기 tab (PLAN-22 T-063, SCR-16·18): '말로 만들기' in the JIG list creates a draft and opens it;
+// 만들기 tab (PLAN-22 T-063, SCR-16·18): '새로 만들기', the JIG list's last card (PLAN-26 T-099),
+// creates a draft and opens it in the 만들기 screen, which belongs to the rail's JIG; the draft
+// shows in the list as a '작성 중' card that opens it again;
 // the outline reads the manifest; 점검 · 시험 fill the console and unlock the pin; 미리보기 draws the
 // draft's panel.json with the official parts; pinning and discarding ask first; [가져오기] sends a
 // .vjig after a confirmation. The draft routes are mocked here (the engine side has its own tests);
@@ -154,12 +156,19 @@ try {
   await page.goto(app.launchUrl);
   await page.waitForFunction(() => document.querySelector('#project-picker')?.value);
   const rail = page.locator('.rail');
-  const makeTab = rail.locator('[data-workspace-target="make"]');
+  const jigRail = rail.locator('[data-workspace-target="jig"]');
+  // No rail button of its own: 만들기 is part of JIG.
+  assert.equal(await rail.locator('[data-workspace-target="make"]').count(), 0);
 
-  // The JIG list: '말로 만들기' card and [가져오기].
-  await rail.locator('[data-workspace-target="jig"]').click();
-  const card = page.getByRole('form', { name: '말로 만들기' });
+  // The JIG list: '새로 만들기' is its last card; [가져오기].
+  await jigRail.click();
+  const list = page.getByRole('dialog', { name: 'JIG', exact: true });
+  const card = list.getByRole('form', { name: '새로 만들기' });
   await card.waitFor();
+  assert.equal(
+    await list.locator('.jig-grid > .jig-card').last().getAttribute('aria-label'),
+    '새로 만들기',
+  );
   await page.getByRole('button', { name: '가져오기', exact: true }).first().click();
   await page.locator('input[type="file"][accept=".vjig"]').setInputFiles({
     name: 'grid.vjig',
@@ -172,12 +181,28 @@ try {
   assert.equal(imported, 'VJIG-TEST');
   assert.deepEqual(importPinned, { version: '1.0.0', confirm: true });
 
-  await card.getByLabel('도구 이름').fill('격자 기둥 배치');
+  await card.getByLabel('무엇을 하는 도구인가요?').fill('격자 기둥 배치');
   await card.getByRole('button', { name: '만들기 시작' }).click();
   const make = page.locator('.make-workspace');
   await make.getByRole('heading', { name: '격자 기둥 배치' }).waitFor();
-  assert.equal(await makeTab.getAttribute('aria-pressed'), 'true');
+  assert.equal(await jigRail.getAttribute('aria-pressed'), 'true');
   assert.equal(await page.evaluate(() => document.body.dataset.workspace), 'make');
+
+  // Back to the list: the draft is a '작성 중' card under 전체 and 내 초안 (with its count), and
+  // [이어서 만들기] opens it again.
+  await make.getByRole('button', { name: 'JIG 목록', exact: true }).click();
+  await page.waitForFunction(() => document.body.dataset.workspace === 'jig');
+  const draftCard = list.locator('.jig-card[data-source="draft"]', { hasText: '격자 기둥 배치' });
+  await draftCard.getByText('작성 중', { exact: true }).waitFor();
+  const sources = list.getByRole('navigation', { name: '출처' });
+  assert.match(await sources.getByRole('button', { name: /^내 초안/ }).textContent(), /1$/);
+  await sources.getByRole('button', { name: /^내 초안/ }).click();
+  assert.equal(await list.locator('.jig-card[data-source="official"]').count(), 0);
+  await draftCard.waitFor();
+  await sources.getByRole('button', { name: /^전체/ }).click();
+  await draftCard.getByRole('button', { name: '이어서 만들기' }).click();
+  await make.getByRole('heading', { name: '격자 기둥 배치' }).waitFor();
+  assert.equal(await jigRail.getAttribute('aria-pressed'), 'true');
   const outline = make.getByLabel('도구 설명 개요');
   await outline.getByText('1. 기둥 배치').waitFor();
   await outline.getByText('X 경간').waitFor();
@@ -220,13 +245,13 @@ try {
   assert.ok(calls.includes('POST /draft-1/pin'));
 
   // Discard asks first and deletes the draft (and its conversation's records on the engine).
-  await makeTab.click();
+  await draftCard.getByRole('button', { name: '이어서 만들기' }).click();
   await side.getByRole('button', { name: '버리기' }).click();
   await side
     .getByRole('group', { name: '버리기 확인' })
     .getByRole('button', { name: '버리기' })
     .click();
-  await page.getByRole('form', { name: '말로 만들기' }).last().waitFor();
+  await make.getByRole('form', { name: '새로 만들기' }).waitFor();
   assert.ok(calls.includes('DELETE /draft-1'));
   assert.deepEqual(errors, []);
   console.log('Make tab checks passed');

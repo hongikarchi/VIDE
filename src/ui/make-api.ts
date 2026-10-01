@@ -19,6 +19,19 @@ export const draftSummarySchema = z
     updatedAt: at,
     conversationId: z.string().nullable().optional(),
     from: z.string().optional(),
+    /** `open` while it is written; `pinned`, `archived` and `discarded` drafts are done. */
+    state: z.string().optional(),
+    /** What the JIG list's draft card reads of `jig.json` (it may not validate yet). */
+    manifest: z
+      .object({
+        id: z.string().optional(),
+        name: z.string().optional(),
+        summary: z.string().optional(),
+      })
+      .passthrough()
+      .nullable()
+      .optional()
+      .catch(undefined),
   })
   .passthrough();
 export type DraftSummary = z.infer<typeof draftSummarySchema>;

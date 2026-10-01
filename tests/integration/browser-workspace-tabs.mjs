@@ -118,7 +118,8 @@ try {
     await page
       .locator('.rail [data-workspace-target]')
       .evaluateAll((nodes) => nodes.map((node) => node.getAttribute('aria-label'))),
-    ['대시보드', '모델', '작업 이력', '자료', 'JIG', '만들기', '산출물'],
+    // 만들기 is part of JIG (PLAN-26 T-099): the list's last card; browser-make.mjs checks it.
+    ['대시보드', '모델', '작업 이력', '자료', 'JIG', '산출물'],
   );
   assert.deepEqual(await pressed(), ['model']);
   const tabs = page.getByRole('tablist', { name: '작업공간' });
@@ -215,12 +216,6 @@ try {
   assert.equal(await page.evaluate(() => document.body.dataset.workspace), 'model');
   assert.equal(await page.locator('#task-list').isVisible(), true);
   assert.equal(await page.locator('#document-tree').isVisible(), false);
-  await rail('make').click();
-  assert.deepEqual(await pressed(), ['make']);
-  assert.equal(await page.evaluate(() => document.body.dataset.workspace), 'make');
-  await rail('history').click();
-  assert.equal(await page.evaluate(() => document.body.dataset.workspace), 'model');
-  assert.equal(await page.locator('#task-list').isVisible(), true);
   await rail('model').click();
   assert.equal(await page.locator('#document-tree').isVisible(), true);
   // Keyboard: arrows move over the open tabs and wrap.
@@ -396,7 +391,6 @@ try {
     '모델',
     '자료',
     'JIG',
-    '만들기',
     '산출물',
   ]);
   await page.setViewportSize({ width: 1440, height: 900 });

@@ -4,7 +4,9 @@ import { z } from 'zod';
 import { api } from './gateway.ts';
 import { DeclaredJig } from './jig-panel/declared-jig.tsx';
 import { KnowledgeJig } from './knowledge-jig.tsx';
-import { DraftList, ImportJig, MakeCard } from './make-tab.tsx';
+import { listedTools, openDrafts, type PinnedRow } from './jig-list.ts';
+import { listDrafts, type DraftSummary } from './make-api.ts';
+import { DraftCard, ImportJig, MakeCard } from './make-tab.tsx';
 import type { Point3 } from './model.ts';
 import { openSkill } from './skill-start.ts';
 import { StructureJig } from './structure-jig.tsx';
@@ -649,8 +651,9 @@ const unitScale: Record<string, number> = {
 
 const round = (values: number[], k = 1e4) => values.map((v) => Math.round(v * k) / k);
 
-// The JIG list (SCR-18): the official catalogue, this project's jigs (installed and pinned here, or
-// being written in this checkout) with their instances, and drafts (T-063).
+// The JIG list (SCR-18): this project's jigs (installed and pinned here, or being written in this
+// checkout) with their instances, the official catalogue, the drafts being written (T-063) and, as
+// the last card, '새로 만들기' (PLAN-26 T-099: making a jig is part of this screen).
 const packageSchema = z
   .object({
     id: z.string(),
@@ -697,8 +700,9 @@ const when = (iso: string) =>
 function Gallery({ context }: { context: JigContext }) {
   const [legacy, setLegacy] = useState<Jig[]>();
   const [packages, setPackages] = useState<Package[]>([]);
-  const [pinned, setPinned] = useState<string[]>([]);
+  const [pinned, setPinned] = useState<PinnedRow[]>([]);
   const [instances, setInstances] = useState<InstanceRow[]>([]);
+  const [drafts, setDrafts] = useState<DraftSummary[]>([]);
   const [source, setSource] = useState<Source>(listSource);
   const [creating, setCreating] = useState<string>();
   /** The project jig whose [삭제] waits for confirmation. */
@@ -725,11 +729,15 @@ function Gallery({ context }: { context: JigContext }) {
           live &&
           setPinned(
             z
-              .object({ pinned: z.array(z.object({ jigId: z.string() }).passthrough()) })
-              .parse(value)
-              .pinned.map((row) => row.jigId),
+              .object({
+                pinned: z.array(z.object({ jigId: z.string(), version: z.string() }).passthrough()),
+              })
+              .parse(value).pinned,
           ),
       )
+      .catch(() => undefined);
+    void listDrafts(projectId)
+      .then((value) => live && setDrafts(openDrafts(value)))
       .catch(() => undefined);
     void api(`${project}/jig-instances`)
       .then(
@@ -742,16 +750,14 @@ function Gallery({ context }: { context: JigContext }) {
       live = false;
     };
   }, [projectId, loaded]);
-  // Installed jigs show only in the project they are pinned to.
-  const tools = packages.filter(
-    (entry) => entry.kind === 'tool' && (entry.stage !== 'project' || pinned.includes(entry.id)),
-  );
+  // One card per jig: installed jigs show only in the project they are pinned to, at that version.
+  const tools = listedTools(packages, pinned);
   const official = (legacy?.length ?? 0) + tools.filter((t) => sourceOf(t) === 'official').length;
   const counts: Record<Source, number> = {
-    all: (legacy?.length ?? 0) + tools.length,
+    all: (legacy?.length ?? 0) + tools.length + drafts.length,
     official,
     project: tools.filter((t) => sourceOf(t) === 'project').length,
-    draft: 0,
+    draft: drafts.length,
   };
   const listed = (kind: Source) => source === 'all' || source === kind;
   // [삭제] takes an installed jig off this project's list; its instances stay in the project.
@@ -798,8 +804,8 @@ function Gallery({ context }: { context: JigContext }) {
               <li key={row.id}>
                 <span>{row.title}</span>
                 <small>
-                  {when(row.updatedAt)}
-                  {row.version !== entry.version ? ` · 버전 ${row.version}` : ''}
+                  {when(row.updatedAt)} · v{row.version}
+                  {row.version !== entry.version ? ' · 이전 버전' : ''}
                 </small>
                 <button
                   type="button"
@@ -883,9 +889,7 @@ function Gallery({ context }: { context: JigContext }) {
         </p>
         {notice ? <p role="status">{notice}</p> : null}
         <ImportJig projectId={projectId} onImported={() => setLoaded((n) => n + 1)} />
-        {source === 'draft' ? <DraftList projectId={projectId} /> : null}
         <div className="jig-grid">
-          {source === 'all' || source === 'draft' ? <MakeCard projectId={projectId} /> : null}
           {listed('project') ? tools.filter((t) => sourceOf(t) === 'project').map(toolCard) : null}
           {listed('official')
             ? (legacy ?? []).map((jig) => {
@@ -928,6 +932,13 @@ function Gallery({ context }: { context: JigContext }) {
           {listed('official')
             ? tools.filter((t) => sourceOf(t) === 'official').map(toolCard)
             : null}
+          {listed('draft')
+            ? drafts.map((draft) => (
+                <DraftCard key={draft.id} projectId={projectId} draft={draft} />
+              ))
+            : null}
+          {/* The last card: a new jig (T-099); not under the official filter. */}
+          {source !== 'official' ? <MakeCard projectId={projectId} /> : null}
         </div>
       </div>
     </div>

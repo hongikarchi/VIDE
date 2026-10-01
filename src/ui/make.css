@@ -260,22 +260,27 @@ body[data-workspace='make'] .make-side {
   display: grid;
   gap: 6px;
 }
-.make-card label {
-  display: grid;
-  gap: 4px;
+/* The JIG list's last card '새로 만들기' (T-099): a sentence, [만들기 시작] and a small link. */
+.make-card {
+  border-style: dashed;
 }
-.make-starts {
-  border: 0;
-  padding: 0;
-  margin: 0;
+.make-card input {
+  width: 100%;
+}
+.make-card-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
-}
-.make-starts label {
-  display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 10px;
+  margin-top: auto;
+}
+.jig-card .make-card-actions button {
+  margin-top: 0;
+}
+.make-back {
+  justify-self: start;
+  align-self: flex-start;
+  margin-bottom: 6px;
 }
 .make-import {
   display: flex;

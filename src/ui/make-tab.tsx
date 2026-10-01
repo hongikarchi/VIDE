@@ -53,6 +53,7 @@ import {
   type DraftSummary,
   type PreviewResult,
 } from './make-api.ts';
+import { openDrafts } from './jig-list.ts';
 import { openContextTab, setWorkspace } from './workspaces.ts';
 import './make.css';
 
@@ -419,6 +420,9 @@ function MakeTab({ projectId }: { projectId: string }) {
   if (!draftId || (!detail && !notice))
     return (
       <div className="make-start">
+        <button type="button" className="link-button make-back" onClick={() => setWorkspace('jig')}>
+          JIG 목록
+        </button>
         {draftId ? (
           <p className="kit-muted" role="status">
             초안을 여는 중…
@@ -561,6 +565,10 @@ function MakeTab({ projectId }: { projectId: string }) {
   return (
     <>
       <aside className="make-outline" aria-label="도구 설명 개요">
+        {/* 만들기 belongs to JIG (T-099): the way back to the list where it started. */}
+        <button type="button" className="link-button make-back" onClick={() => setWorkspace('jig')}>
+          JIG 목록
+        </button>
         <div className="make-head">
           <small className="make-tag">
             새 도구 · 초안{m.version ? ` v${m.version}` : ''} · 내 것
@@ -1242,12 +1250,11 @@ function PanelIssues({ issues }: { issues: readonly PanelIssue[] }) {
 
 // --- Entry points in the JIG list (SCR-18) ---
 
-const STARTS: { id: DraftStart; label: string; note: string }[] = [
-  { id: 'example-grid', label: '격자 골조 배치 예에서', note: '합성 입력의 공식 예제를 본으로' },
-  { id: 'blank', label: '빈 초안에서', note: '설명서와 빈 단계만' },
-];
-
-/** '말로 만들기': name the tool, pick where it starts, and open it in the 만들기 tab. */
+/**
+ * '새로 만들기', the JIG list's last card (SCR-18, PLAN-26 T-099): one sentence of what the tool
+ * does and [만들기 시작]. The draft starts from the general grid example; [빈 초안에서] starts from a
+ * blank one. The sentence is the draft's first name; the make conversation names the tool.
+ */
 export function MakeCard({
   projectId,
   onCreated,
@@ -1256,65 +1263,89 @@ export function MakeCard({
   onCreated?: (draft: DraftSummary) => void;
 }) {
   const [name, setName] = useState('');
-  const [from, setFrom] = useState<DraftStart>('example-grid');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const start = (from: DraftStart) => {
+    if (!name.trim() || busy) return;
+    setBusy(true);
+    setError('');
+    createDraft(projectId, { name: name.trim(), from })
+      .then((draft) => {
+        setName('');
+        if (onCreated) onCreated(draft);
+        else openDraft(projectId, draft.id);
+      })
+      .catch((reason) => setError(messageOf(reason)))
+      .finally(() => setBusy(false));
+  };
   return (
     <form
       className="jig-card make-card"
-      data-source="draft"
-      aria-label="말로 만들기"
+      data-source="new"
+      aria-label="새로 만들기"
       onSubmit={(event) => {
         event.preventDefault();
-        if (!name.trim()) return;
-        setBusy(true);
-        setError('');
-        createDraft(projectId, { name: name.trim(), from })
-          .then((draft) => {
-            setName('');
-            if (onCreated) onCreated(draft);
-            else openDraft(projectId, draft.id);
-          })
-          .catch((reason) => setError(messageOf(reason)))
-          .finally(() => setBusy(false));
+        start('example-grid');
       }}
     >
       <div className="jig-card-head">
-        <strong>말로 만들기</strong>
-        <span className="pill">초안</span>
+        <strong>새로 만들기</strong>
       </div>
-      <p>
-        하고 싶은 일을 말하면 AI가 계획을 보이고, 모호한 것만 묻고, 초안 폴더에만 도구를 씁니다.
-        점검·시험을 통과하면 이 프로젝트의 jig로 고정합니다.
-      </p>
-      <label>
-        도구 이름
-        <input
-          value={name}
-          maxLength={80}
-          placeholder="예: 신설 이음 선의 쌍기둥 확인"
-          onChange={(event) => setName(event.target.value)}
-        />
-      </label>
-      <fieldset className="make-starts">
-        <legend>시작 본</legend>
-        {STARTS.map((start) => (
-          <label key={start.id} title={start.note}>
-            <input
-              type="radio"
-              name="make-start"
-              checked={from === start.id}
-              onChange={() => setFrom(start.id)}
-            />
-            {start.label}
-          </label>
-        ))}
-      </fieldset>
+      <p>무엇을 하는 도구인지 한 문장으로 적으면 AI가 계획을 보이고 초안을 만듭니다.</p>
+      <input
+        value={name}
+        maxLength={100}
+        aria-label="무엇을 하는 도구인가요?"
+        placeholder="예: 신설 이음 선마다 양쪽 기둥이 있는지 확인"
+        onChange={(event) => setName(event.target.value)}
+      />
       {error ? <small role="alert">{error}</small> : null}
-      <button type="submit" className="primary" disabled={busy || !name.trim()}>
-        {busy ? '만드는 중…' : '만들기 시작'}
-      </button>
+      <div className="make-card-actions">
+        <button type="submit" className="primary" disabled={busy || !name.trim()}>
+          {busy ? '만드는 중…' : '만들기 시작'}
+        </button>
+        <button
+          type="button"
+          className="link-button"
+          disabled={busy || !name.trim()}
+          title="격자 예제 대신 설명서와 빈 단계 하나에서 시작합니다"
+          onClick={() => start('blank')}
+        >
+          빈 초안에서
+        </button>
+      </div>
     </form>
+  );
+}
+
+const savedAt = (iso?: string) =>
+  iso
+    ? new Date(iso).toLocaleString('ko-KR', {
+        month: 'numeric',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      })
+    : '';
+
+/** A draft being written, as a JIG list card (SCR-18, T-099): '작성 중' and [이어서 만들기]. */
+export function DraftCard({ projectId, draft }: { projectId: string; draft: DraftSummary }) {
+  const name = draft.name || draft.manifest?.name || '새 도구';
+  return (
+    <article className="jig-card" data-source="draft" data-status="available">
+      <div className="jig-card-head">
+        <strong>{name}</strong>
+        <span className="pill">작성 중</span>
+      </div>
+      <p>{draft.manifest?.summary || '만들기 대화에서 쓰고 있는 초안입니다.'}</p>
+      <small>
+        내 초안{draft.version ? ` · v${draft.version}` : ''}
+        {draft.updatedAt ? ` · ${savedAt(draft.updatedAt)}` : ''}
+      </small>
+      <button type="button" onClick={() => openDraft(projectId, draft.id)}>
+        이어서 만들기
+      </button>
+    </article>
   );
 }
 
@@ -1339,8 +1370,9 @@ export function DraftList({
       live = false;
     };
   }, [given, projectId]);
-  const drafts = given ?? read;
-  if (!drafts) return null;
+  const all = given ?? read;
+  if (!all) return null;
+  const drafts = openDrafts(all);
   if (!drafts.length) return <p className="jig-intro">아직 만들고 있는 초안이 없습니다.</p>;
   return (
     <ul className="make-drafts" aria-label="내 초안">
@@ -1349,14 +1381,7 @@ export function DraftList({
           <span>{draft.name}</span>
           <small>
             {draft.version ? `v${draft.version} · ` : ''}
-            {draft.updatedAt
-              ? new Date(draft.updatedAt).toLocaleString('ko-KR', {
-                  month: 'numeric',
-                  day: 'numeric',
-                  hour: '2-digit',
-                  minute: '2-digit',
-                })
-              : ''}
+            {savedAt(draft.updatedAt)}
           </small>
           <button
             type="button"
