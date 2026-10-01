@@ -2,7 +2,7 @@
 id: PLAN-24
 title: AI 대화 세션·동시 진행·말로 하는 경로 판정 1차
 status: review
-version: 0.44
+version: 0.45
 updated: 2026-10-01
 owner: agent:claude
 related: [PLAN, PLAN-22, PLAN-23, PLAN-25, PLAN-26, PLAN-02, PLAN-05, PLAN-08, PLAN-19, FR-25, FR-24, FR-18, FR-10, FR-11, FR-12, AC-46, AC-47, AC-48, AC-38, SPEC-02, SPEC-07, ARCH-01, ARCH-03, ADR-021, ADR-014, ADR-022, ADR-025, ADR-026, ADR-027, RESEARCH-10, RESEARCH-11]
@@ -343,7 +343,7 @@ related: [PLAN, PLAN-22, PLAN-23, PLAN-25, PLAN-26, PLAN-02, PLAN-05, PLAN-08, P
 - **변경 범위:** `src/server/live-links.ts`(연결 행 → 열린 연결 편집기 문서, 링크 목록 경로와 같은 맞춤 규칙, `server.ts` 링크 목록도 이 함수를 씀), `agent-tools.ts`(`query`·`execute`·`capture_view`·`measure`의 선택 인수 `linkId`, 범위 옵션 `links`, `LINK_NOT_LIVE`·`DOCUMENT_LOCKED` 오류와 `next` 안내), `direct-mode.ts`(문서별 드라이버·조회 캐시·보기, 목표 문장의 열린·닫힌 연결 파일 목록), `execution.ts`(`directDriverFor`의 ZWCAD 조회, 턴에 연결 해석기 전달), 지시 `hostProjectNote`·`modeling.md`(T-062의 '살아 있는 문서는 대상 하나' 문구를 새 규칙으로), `gateway.ts` 오류 문구.
 - **검증:** `tests/server/multi-file.test.mjs` — 모의 편집기 두 개로 대상 Rhino 턴이 다른 문서를 `linkId`로 조회·측정·캡처(계획·자동), 닫힌 연결은 `LINK_NOT_LIVE`와 안내, `linkId`를 받지 않는 범위의 거절. `tests/server/host-turn-tools.test.mjs` 지시 문구.
 - **완료:** 위 시험과 `npm test` 통과.
-- **상태(2026-10-01):** 구현·단위 검증 완료(설치 전). 대상 Rhino 턴의 `query`·`measure`·`capture_view`가 `linkId`로 열린 연결 문서를 읽고(계획·자동), 닫힌 연결은 `LINK_NOT_LIVE`와 `next` 안내, 모르는 ID는 `NOT_FOUND`, 보기 메서드 없는 문서는 `NO_VIEW`. ZWCAD 연결 도면은 `queryEntities`로 읽는다(보기 없음). `linkId`를 처리하지 않는 범위(ZWCAD 대상·작업 사본·연계)는 처리기를 부르지 않고 `LINK_NOT_LIVE`. 지시(`hostProjectNote`, `modeling.md`)와 목표 문장의 연결 파일 목록을 바꿨다.
+- **상태(2026-10-01):** 구현·단위 검증 완료(설치 전). 대상 Rhino 턴의 `query`·`measure`·`capture_view`가 `linkId`로 열린 연결 문서를 읽고(계획·자동), 닫힌 연결은 `LINK_NOT_LIVE`와 `next` 안내, 모르는 ID는 `NOT_FOUND`, 보기 메서드 없는 문서는 `NO_VIEW`. ZWCAD 연결 도면은 `queryEntities`로 읽는다(보기 없음). `linkId`를 처리하지 않는 범위(ZWCAD 대상·작업 사본·연계)는 처리기를 부르지 않고 `LINK_NOT_LIVE`. 지시(`hostProjectNote`, `modeling.md`)와 목표 문장의 연결 파일 목록을 바꿨다. 실시간 읽기·쓰기 규칙은 그런 턴의 목표 문장만 주고, `linkId`를 받지 않는 범위의 `LINK_NOT_LIVE`는 파일을 열라고 하지 않는 안내를 붙인다. 열린 문서 조회는 연결이 있는 호스트에만 동시에 보내고(연결 없는 프로젝트는 묻지 않음), 파일 항목은 닫힌 파일로 나오며, 같은 파일이 두 창에 열려 있으면 대상 창을 고른다.
   - 증거: `tests/server/multi-file.test.mjs`(읽기 4건), `tests/server/host-turn-tools.test.mjs`(지시 문구), `npm test` 754 통과
   - 남음: 실제 Rhino 두 창·실제 CLI로 확인(설치본 묶음 때)
 
@@ -353,9 +353,9 @@ related: [PLAN, PLAN-22, PLAN-23, PLAN-25, PLAN-26, PLAN-02, PLAN-05, PLAN-08, P
 - **선행 조건과 선택:** 잠금은 기다리지 않고 거절(ADR-027 결정 5). 한 파일 요청은 지금 동작 그대로(ADR-027 「선택지」).
 - **검증:** `tests/server/multi-file.test.mjs` — 두 문서를 고친 뒤 [되돌리기] 한 번이 둘 다 되돌림, 한 문서가 `not-latest`면 그 파일만 남고 이유가 보임, 둘째 문서에서 공급자가 실패하면 첫 문서가 자동으로 되돌려짐, 자동 되돌림 거절은 `rollback`에 파일 이름, 되돌리기 답을 잃으면 `unknown`, 다른 요청이 쓰는 문서는 `DOCUMENT_LOCKED`이고 그 요청의 접수도 잠긴 문서 뒤에 섬, 실행 전 거절은 적용분이 아님, 보호 걸린 다른 문서의 [진행]. `tests/core/request-scope.test.mjs`(있으면) 또는 같은 시험에 `documentHolder`.
 - **완료:** 위 시험과 `npm test` 통과. 실제 Rhino 두 창 확인은 설치본 묶음 때.
-- **상태(2026-10-01):** 구현·단위 검증 완료(설치 전). `execute`의 `linkId`로 열린 연결 문서(Rhino, ZWCAD 연결 도면)에 바로 실행하고 행마다 `file`을 남긴다. 다른 문서는 첫 실행 때 `documentHolder`로 검사해 결과의 `documents[]`에 잠그고, 다른 요청이 쓰는 문서는 `DOCUMENT_LOCKED`(기다리지 않음, 그 파일에 대해 최종). 두 파일 이상에 실행을 시도한 요청(`multiFile`)은 실패·중단 때 `undoExecutions`로 모든 파일을 마지막 것부터 되돌리고 `rollback`에 파일별 결과를 남기며, 되돌리기 거절은 실패로 이름과 이유를, 답을 잃은 되돌리기·실행은 `unknown`으로 둔다. 추가 지시로 끊긴 턴은 되돌리지 않는다. `POST …/undo {all: true}`(`Execution.undoRequest`). 한 파일 요청은 그대로다. ZWCAD 연결 도면의 실패 분류는 `runAttached`와 같게 맞췄다(알려진 답·실행 전 거절 밖은 `HOST_RESULT_UNKNOWN`).
-  - 증거: `tests/server/multi-file.test.mjs`(쓰기·되돌리기 9건), `tests/server/direct-mode-e2e.test.mjs`(HTTP `{all: true}`), `npm test` 764 통과, `browser-concurrent-work.mjs`·`browser-links.mjs` 통과
-  - 남음: 실제 Rhino 두 창·실제 ZWCAD로 함께 고치기·[되돌리기]·자동 되돌림 확인, ZWCAD 도면이 대상인 턴의 여러 파일(이번 범위 밖)
+- **상태(2026-10-01):** 구현·단위 검증 완료(설치 전). `execute`의 `linkId`로 열린 연결 문서(Rhino, ZWCAD 연결 도면)에 바로 실행하고 행마다 `file`을 남긴다. 다른 문서는 첫 실행 때 `documentHolder`로 검사해 결과의 `documents[]`에 잠그고, 다른 요청이 쓰는 문서는 `DOCUMENT_LOCKED`(기다리지 않음, 그 파일에 대해 최종). 두 파일 이상에 실행을 시도한 요청(`multiFile`)은 실패·중단 때 `undoExecutions`로 모든 파일을 마지막 것부터 되돌리고 `rollback`에 파일별 결과를 남기며, 되돌리기 거절은 실패로 이름과 이유를, 답을 잃은 되돌리기·실행은 `unknown`으로 둔다. 추가 지시로 끊긴 턴은 되돌리지 않는다(중단은 신호로 판단, `STOP_UNCONFIRMED` 포함). `POST …/undo {all: true}`(`Execution.undoRequest`). 한 파일 요청은 그대로다. 검토 반영(2026-10-01): 결과 불명 여러 파일 요청은 확인 필요 문서만 잡고(`heldOnly`, 되돌린 대상은 풀림), 되돌리기 답만 잃은 문서는 다음 [되돌리기]로 해소돼 원래 결과로 돌아간다(`afterRequestUndo`, `settles`). 턴이 끝날 때 답을 기다리던 실행의 문서는 응답 유실로 보고 늦은 답은 요청에 쓰지 않는다. 보호 카드의 [진행]은 문서 잠금을 다시 검사하고, 여러 파일 요청의 재실행이 실패하면 자동으로 되돌린다. 잠금 거절된 시도도 여러 파일 판정에 센다. Rhino 턴의 목표 문장이 열린 ZWCAD 도면의 실행 래퍼를 알린다. jig의 바로 만들기도 문서 잠금을 검사하고 도는 동안 문서를 잡는다. ZWCAD 연결 도면의 실패 분류는 `runAttached`와 같게 맞췄다(알려진 답·실행 전 거절 밖은 `HOST_RESULT_UNKNOWN`).
+  - 증거: `tests/server/multi-file.test.mjs`(쓰기·되돌리기·잠금·결과 불명 해소·보호 카드·지시 문구 26건), `tests/server/bake-route.test.mjs`(jig 바로 만들기 잠금), `tests/server/direct-mode-e2e.test.mjs`(HTTP `{all: true}`), `npm test` 788 통과, `browser-direct-mode.mjs`·`browser-concurrent-work.mjs`·`browser-links.mjs`·`browser-conversations.mjs`·`browser-workspace-controls.mjs` 통과
+  - 남음: 실제 Rhino 두 창·실제 ZWCAD로 함께 고치기·[되돌리기]·자동 되돌림 확인, ZWCAD 도면이 대상인 턴의 여러 파일(이번 범위 밖). 실행 답을 잃은 바로 편집 요청의 해소 동작(지문 확인 또는 사용자의 '확인함')이 없어 그 문서와 대화가 계속 막힌다(이 기능 전부터의 한계). ZWCAD 연결 편집기 목록은 연결마다 소유 검사(PowerShell)를 다시 하므로 ZWCAD 연결이 있는 프로젝트의 턴 시작이 그만큼 늦다(Rhino처럼 검사 결과를 잠시 기억하는 것은 후속).
 
 ### T-094 · 화면: 파일별 결과와 요청의 [되돌리기] {#t-094}
 
