@@ -25,12 +25,33 @@ const reasons: Record<string, string> = {
 const todayLabel = (at: Date) =>
   at.toLocaleDateString('ko-KR', { month: 'long', day: 'numeric', weekday: 'long' });
 
-interface Edit {
-  id: string;
+/** Fields as the edit form holds them ('' for none). */
+interface Fields {
   text: string;
   date: string;
   time: string;
 }
+/**
+ * An edit in place: the form's fields, and the revision and fields of the item when editing began
+ * (`from`). Saving sends that revision and only what the user changed from `from`, so a change
+ * another screen made meanwhile is refused (REVISION_CONFLICT) instead of being overwritten.
+ */
+interface Edit extends Fields {
+  id: string;
+  revision: number;
+  from: Fields;
+}
+const fieldsOf = (entry: AgendaItem): Fields => ({
+  text: entry.text,
+  date: entry.date ?? '',
+  time: entry.time ?? '',
+});
+const editOf = (entry: AgendaItem): Edit => ({
+  id: entry.id,
+  revision: entry.revision,
+  ...fieldsOf(entry),
+  from: fieldsOf(entry),
+});
 
 export function AgendaToday({ projectId, shown }: { projectId: string; shown: number }) {
   const [items, setItems] = useState<AgendaItem[] | undefined>();
@@ -68,8 +89,11 @@ export function AgendaToday({ projectId, shown }: { projectId: string; shown: nu
     };
   }, [load]);
 
-  /** One write; on a conflict or a vanished item the list is read again and the reason shown. */
-  const write = async (path: string, method: string, data: unknown) => {
+  /**
+   * One write; on a conflict or a vanished item the list is read again and the reason shown.
+   * Answers true, or the error code.
+   */
+  const write = async (path: string, method: string, data: unknown): Promise<true | string> => {
     setBusy(true);
     setReason('');
     try {
@@ -80,15 +104,23 @@ export function AgendaToday({ projectId, shown }: { projectId: string; shown: nu
       const code = (error as { code?: string }).code ?? '';
       setReason(reasons[code] ?? (error as Error).message);
       if (code === 'REVISION_CONFLICT' || code === 'NOT_FOUND') void load();
-      return false;
+      return code;
     } finally {
       setBusy(false);
     }
   };
-  const add = async () => {
+  // The add box is never disabled: a disabled box loses the focus, and the next 할 일 typed after
+  // Enter would go nowhere. Enter empties the box at once; the adds are saved one after another,
+  // and one that fails comes back into the box (unless something new was typed there).
+  const adding = useRef<Promise<unknown>>(Promise.resolve());
+  const add = () => {
     if (!draft.trim()) return;
-    const parsed = parseAgendaText(draft, new Date());
-    if (await write(base, 'POST', parsed)) setDraft('');
+    const typed = draft;
+    setDraft('');
+    adding.current = adding.current.then(async () => {
+      if ((await write(base, 'POST', parseAgendaText(typed, new Date()))) !== true)
+        setDraft((now) => now || typed);
+    });
   };
   const item = (id: string) => `${base}/${encodeURIComponent(id)}`;
   const toggle = (entry: AgendaItem) =>
@@ -97,15 +129,38 @@ export function AgendaToday({ projectId, shown }: { projectId: string; shown: nu
     void write(`${item(entry.id)}/remove`, 'POST', { revision: entry.revision });
   const save = async () => {
     if (!edit) return;
-    const entry = items?.find((row) => row.id === edit.id);
-    if (!entry) return setEdit(undefined);
     if (!edit.text.trim()) return setReason('내용이 비면 [빼기]로 빼세요.');
-    const changed: Record<string, unknown> = { revision: entry.revision };
-    if (edit.text.trim() !== entry.text) changed.text = edit.text.trim();
-    if ((edit.date || null) !== entry.date) changed.date = edit.date || null;
-    if ((edit.time || null) !== entry.time) changed.time = edit.time || null;
-    if (Object.keys(changed).length > 1 && !(await write(item(entry.id), 'PUT', changed))) return;
-    setEdit(undefined);
+    const changed: Record<string, unknown> = { revision: edit.revision };
+    if (edit.text.trim() !== edit.from.text.trim()) changed.text = edit.text.trim();
+    if (edit.date !== edit.from.date) changed.date = edit.date || null;
+    if (edit.time !== edit.from.time) changed.time = edit.time || null;
+    if (Object.keys(changed).length === 1) return setEdit(undefined);
+    const result = await write(item(edit.id), 'PUT', changed);
+    if (result === true) return setEdit(undefined);
+    if (result === 'NOT_FOUND') return setEdit(undefined);
+    if (result !== 'REVISION_CONFLICT') return;
+    // Changed on another screen meanwhile: the form takes the newer item and keeps only what the
+    // user changed here; Enter again saves that over the newer one.
+    let latest: AgendaItem | undefined;
+    try {
+      latest = ((await api(base)) as { items: AgendaItem[] }).items.find(
+        (row) => row.id === edit.id,
+      );
+    } catch {
+      return;
+    }
+    if (!latest) return setEdit(undefined);
+    const fresh = editOf(latest);
+    setEdit((now) =>
+      now?.id !== edit.id
+        ? now
+        : {
+            ...fresh,
+            text: now.text !== now.from.text ? now.text : fresh.text,
+            date: now.date !== now.from.date ? now.date : fresh.date,
+            time: now.time !== now.from.time ? now.time : fresh.time,
+          },
+    );
   };
 
   const open = items?.filter((entry) => !entry.done) ?? [];
@@ -205,14 +260,7 @@ export function AgendaToday({ projectId, shown }: { projectId: string; shown: nu
             type="button"
             className="dash-agenda-text"
             title="눌러서 고치기"
-            onClick={() =>
-              setEdit({
-                id: entry.id,
-                text: entry.text,
-                date: entry.date ?? '',
-                time: entry.time ?? '',
-              })
-            }
+            onClick={() => setEdit(editOf(entry))}
           >
             {entry.text}
           </button>
@@ -275,7 +323,7 @@ export function AgendaToday({ projectId, shown }: { projectId: string; shown: nu
         className="dash-agenda-add"
         onSubmit={(event) => {
           event.preventDefault();
-          void add();
+          add();
         }}
       >
         <input
@@ -284,7 +332,6 @@ export function AgendaToday({ projectId, shown }: { projectId: string; shown: nu
           placeholder="할 일이나 일정 — 예: 내일 3시 구조 회의, 금요일 도면 제출"
           value={draft}
           maxLength={500}
-          disabled={busy}
           onChange={(event) => setDraft(event.target.value)}
         />
       </form>

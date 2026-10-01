@@ -52,11 +52,23 @@ try {
   await later.getByRole('button', { name: '구조 회의', exact: true }).waitFor();
   assert.match(await later.locator('li').first().innerText(), /15:00\s*내일/);
   assert.equal(await input.inputValue(), '');
+  // The box keeps the focus after Enter, also while a slow save is on its way (a remote
+  // session): the next 할 일 is typed straight away.
+  const slow = async (route) => {
+    if (route.request().method() === 'POST') await new Promise((done) => setTimeout(done, 300));
+    await route.continue();
+  };
+  await page.route('**/api/v1/projects/*/agenda', slow);
   for (const text of ['도면 정리', '회의록 검토', '현장 사진 분류']) {
-    await input.fill(text);
-    await input.press('Enter');
+    await page.keyboard.type(text);
+    await page.keyboard.press('Enter');
     await section.getByRole('list', { name: '오늘 할 일' }).getByText(text).waitFor();
+    assert.equal(
+      await page.evaluate(() => document.activeElement?.getAttribute('aria-label')),
+      '할 일 추가',
+    );
   }
+  await page.unroute('**/api/v1/projects/*/agenda', slow);
   const today = section.getByRole('list', { name: '오늘 할 일' });
   const texts = () => today.locator('.dash-agenda-text').allInnerTexts();
   assert.deepEqual(await texts(), ['도면 정리', '회의록 검토', '현장 사진 분류']);
@@ -86,11 +98,52 @@ try {
   await today.getByRole('button', { name: '도면 정리 — 평면도', exact: true }).waitFor();
   assert.equal(await edit.count(), 0);
 
+  // An edit open while another screen changes the item: the list is read again on focus, the
+  // save is refused (REVISION_CONFLICT) instead of writing the old date over the new one, and the
+  // form keeps the user's words over the newer date; Enter again saves them.
+  const other = (path, method, data) =>
+    page.evaluate(
+      async ([path, method, data]) => {
+        const project = document.querySelector('#project-picker').value;
+        const response = await fetch(`api/v1/projects/${project}/agenda${path}`, {
+          method,
+          headers: data ? { 'Content-Type': 'application/json' } : {},
+          body: data ? JSON.stringify(data) : undefined,
+        });
+        return response.json();
+      },
+      [path, method, data],
+    );
+  await today.getByRole('button', { name: '도면 정리 — 평면도', exact: true }).click();
+  const target = (await other('', 'GET')).items.find((item) => item.text === '도면 정리 — 평면도');
+  await other(`/${target.id}`, 'PUT', { revision: target.revision, date: '2026-01-02' });
+  const reread = () =>
+    page.waitForResponse(
+      (response) => /\/agenda$/.test(response.url()) && response.request().method() === 'GET',
+    );
+  const reading = reread();
+  await page.evaluate(() => dispatchEvent(new Event('focus')));
+  await reading;
+  await edit.fill('도면 정리 — 단면도');
+  await edit.press('Enter');
+  await section.getByRole('alert').getByText('다른 화면에서 바뀌어').waitFor();
+  const kept = (await other('', 'GET')).items.find((item) => item.id === target.id);
+  assert.deepEqual([kept.text, kept.date], ['도면 정리 — 평면도', '2026-01-02']);
+  assert.equal(await section.getByRole('textbox', { name: '날짜' }).inputValue(), '2026-01-02');
+  assert.equal(await edit.inputValue(), '도면 정리 — 단면도');
+  await edit.press('Enter');
+  await today.getByRole('button', { name: '도면 정리 — 단면도', exact: true }).waitFor();
+  const saved = (await other('', 'GET')).items.find((item) => item.id === target.id);
+  assert.deepEqual([saved.text, saved.date], ['도면 정리 — 단면도', '2026-01-02']);
+  // Back to no date, so the rest of the run sees it in 오늘 as before.
+  await other(`/${target.id}`, 'PUT', { revision: saved.revision, date: null });
+  await page.evaluate(() => dispatchEvent(new Event('focus')));
+
   // The box finishes one: it leaves the list for the '완료 1' fold.
   await today.getByRole('checkbox', { name: '회의록 검토 완료' }).click();
   const fold = section.getByRole('button', { name: '완료 1' });
   await fold.waitFor();
-  assert.deepEqual(await texts(), ['현장 사진 분류', '도면 정리 — 평면도']);
+  assert.deepEqual(await texts(), ['현장 사진 분류', '도면 정리 — 단면도']);
   if (shot) await page.screenshot({ path: join(shot, 'dashboard-agenda.png') });
 
   // Everything is kept: a reload shows the same order, the edit and the fold.
@@ -98,7 +151,7 @@ try {
   await page.waitForFunction(() => document.querySelector('#project-picker')?.value);
   await openDashboard();
   await today.getByText('현장 사진 분류').waitFor();
-  assert.deepEqual(await texts(), ['현장 사진 분류', '도면 정리 — 평면도']);
+  assert.deepEqual(await texts(), ['현장 사진 분류', '도면 정리 — 단면도']);
   await later.getByRole('button', { name: '구조 회의', exact: true }).waitFor();
   await fold.click();
   const doneList = section.getByRole('list', { name: '완료한 할 일' });
@@ -108,7 +161,7 @@ try {
   // [빼기] removes one.
   await today.getByRole('button', { name: '현장 사진 분류 빼기' }).click();
   await today.getByText('현장 사진 분류').waitFor({ state: 'detached' });
-  assert.deepEqual(await texts(), ['도면 정리 — 평면도']);
+  assert.deepEqual(await texts(), ['도면 정리 — 단면도']);
 
   assert.deepEqual(errors, []);
   console.log('dashboard agenda browser checks passed');
