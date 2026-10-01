@@ -36,7 +36,10 @@ try {
   assert.equal(rows[0].state, 'succeeded');
   assert.deepEqual(circle.boundsSize, [4, 4, 0]);
   assert.ok(Math.abs(circle.length - 4 * Math.PI) / (4 * Math.PI) < 1e-8);
-  await page.locator('#document-tree').evaluate((node) => (node.open = true));
+  await page.locator('#document-tree').evaluate((node) => {
+    node.open = true;
+    for (const row of node.querySelectorAll('.layer-row[aria-expanded="false"]')) row.click();
+  });
   await page.locator('#objects .object').first().click();
   await page.locator('#inspector-toggle').click();
   assert.ok((await page.locator('#inspector-content').innerText()).includes('Site'));

@@ -74,7 +74,10 @@ try {
     hash,
   );
   await page.getByRole('button', { name: '이 후보 보기', exact: true }).click();
-  await page.locator('#document-tree').evaluate((node) => (node.open = true));
+  await page.locator('#document-tree').evaluate((node) => {
+    node.open = true;
+    for (const row of node.querySelectorAll('.layer-row[aria-expanded="false"]')) row.click();
+  });
   await page.locator('#objects .object').first().click();
   await page.screenshot({ path: join(directory, 'import.png') });
   const rejected = await upload(unknown, 2);

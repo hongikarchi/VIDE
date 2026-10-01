@@ -1,8 +1,9 @@
-// Workspace tabs (PLAN-22 T-047, Design §03 작업공간 탭, SCR-13·18): the tab row over the centre
-// column, the JIG list tab, jig context tabs beside the 3D view (two at once, each keeping its
-// state), a new instance of a v3 jig, the per-project memory of the last tab (and a blocked
-// storage), the narrow-screen menu, the 산출물 tab's three views (PLAN-26 T-081) and the host
-// panel without tabs. No real CLI or host.
+// Workspace tabs (PLAN-22 T-047, Design §03 작업공간 탭, SCR-13·18): the rail's fixed destinations
+// and the row over the centre column that holds only what is open (user decision 2026-10-01: hidden
+// with nothing open), the JIG list, jig context tabs beside the 3D view (two at once, each keeping
+// its state), a new instance of a v3 jig, 작업 이력, the per-project memory of the last screen (and
+// a blocked storage), the narrow-screen menu, the 산출물 screen's three views (PLAN-26 T-081) and
+// the host panel without rail or tabs. No real CLI or host.
 import assert from 'node:assert/strict';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -106,36 +107,36 @@ try {
   await page.reload();
   await page.waitForFunction(() => document.querySelectorAll('#task-list .task-row').length === 2);
 
-  // The row: six fixed tabs over the centre column only; 대시보드 first, the model tab shown.
+  // The rail: the fixed destinations in order, the model screen pressed. The row over the centre
+  // holds only what is open, so with nothing open it is hidden and the 3D view takes its room.
+  const rail = (id) => page.locator(`.rail [data-workspace-target="${id}"]`);
+  const pressed = async () =>
+    page
+      .locator('.rail [data-workspace-target][aria-pressed="true"]')
+      .evaluateAll((nodes) => nodes.map((node) => node.dataset.workspaceTarget));
+  assert.deepEqual(
+    await page
+      .locator('.rail [data-workspace-target]')
+      .evaluateAll((nodes) => nodes.map((node) => node.getAttribute('aria-label'))),
+    ['대시보드', '모델', '작업 이력', '자료', 'JIG', '만들기', '산출물'],
+  );
+  assert.deepEqual(await pressed(), ['model']);
   const tabs = page.getByRole('tablist', { name: '작업공간' });
   const tab = (name) => tabs.getByRole('tab', { name, exact: true });
-  assert.deepEqual(await tabs.getByRole('tab').allTextContents(), [
-    '대시보드',
-    '모델',
-    '자료',
-    'JIG',
-    '만들기',
-    '산출물',
-  ]);
-  assert.equal(await tab('모델').getAttribute('aria-selected'), 'true');
-  // Every fixed tab is ready: 자료 and 만들기 since PLAN-22 T-065 and T-063, 산출물 (with the
-  // 보고서 view of T-057) since PLAN-26 T-081 (tests/integration/browser-report.mjs,
-  // browser-facts.mjs, browser-make.mjs).
-  for (const name of ['대시보드', '자료', 'JIG', '만들기', '산출물'])
-    assert.equal(await tab(name).getAttribute('aria-disabled'), null);
-  assert.equal(await tab('산출물').getAttribute('title'), 'Output · 도면 · 보고서 · 렌더링');
-  const row = await page.locator('.workspace-tabs').boundingBox();
+  assert.equal(await page.locator('.workspace-tabs').isVisible(), false);
   const centre = await page.locator('.workspace').boundingBox();
   const right = await page.locator('#right').boundingBox();
-  assert.ok(Math.abs(row.height - 32) <= 1, 'a 32 px row');
-  assert.ok(row.x >= centre.x - 1 && row.x + row.width <= right.x + 1, 'over the centre only');
-  assert.ok((await page.locator('#canvas canvas').boundingBox()).y >= row.y + row.height - 1);
+  assert.ok(
+    (await page.locator('.viewport-area').boundingBox()).y <= centre.y + 1,
+    'the 3D view starts at the top of the centre',
+  );
   // A draft and the selection stay through every tab change below.
   const draft = '탭을 바꿔도 남는 초안';
   await page.locator('#body').fill(draft);
 
-  // JIG tab: the list over the whole centre; the documents panel gives it its room.
-  await tab('JIG').click();
+  // JIG: the list over the whole centre; the documents panel gives it its room.
+  await rail('jig').click();
+  assert.deepEqual(await pressed(), ['jig']);
   const dialog = page.getByRole('dialog', { name: 'JIG', exact: true });
   const official = dialog.locator('.jig-card[data-source="official"]');
   await official.first().waitFor();
@@ -157,6 +158,13 @@ try {
     .click();
   const syncTab = tab(`Sync · ${projectName}`);
   assert.equal(await syncTab.getAttribute('aria-selected'), 'true');
+  // An open jig shows the row (32 px, over the centre only) and belongs to the rail's JIG.
+  assert.deepEqual(await tabs.getByRole('tab').allTextContents(), [`Sync · ${projectName}`]);
+  assert.deepEqual(await pressed(), ['jig']);
+  const row = await page.locator('.workspace-tabs').boundingBox();
+  const jigCentre = await page.locator('.workspace').boundingBox();
+  assert.ok(Math.abs(row.height - 32) <= 1, 'a 32 px row');
+  assert.ok(row.x >= jigCentre.x - 1 && row.x + row.width <= right.x + 1, 'over the centre only');
   // 0.5 mm so the 0.8 mm beam (B3) is a deviation row, as in browser-jigs.mjs.
   await dialog.getByLabel('일치 허용 (mm)').fill('0.5');
   await dialog.getByRole('button', { name: '정렬·비교 실행' }).click();
@@ -174,7 +182,8 @@ try {
 
   // A second jig from the list; the Sync tab stays in the row.
   await dialog.getByRole('button', { name: '목록', exact: true }).click();
-  assert.equal(await tab('JIG').getAttribute('aria-selected'), 'true');
+  assert.equal(await page.evaluate(() => document.body.dataset.workspace), 'jig');
+  assert.deepEqual(await pressed(), ['jig']);
   assert.equal(await syncTab.count(), 1);
   await dialog
     .locator('.jig-card', { hasText: '구조 분석' })
@@ -191,28 +200,44 @@ try {
   await dialog.getByText('탐색용 예비값입니다').waitFor();
   if (shot) await page.screenshot({ path: join(shot, 'workspace-tabs-context.png') });
 
-  // Keyboard: arrows move over the tabs that can open (the data and make tabs are skipped).
-  await tab('모델').click();
+  // The rail's 모델: the 3D view and the documents; the open jigs stay in the row.
+  await rail('model').click();
   await dialog.waitFor({ state: 'hidden' });
+  assert.deepEqual(await pressed(), ['model']);
   assert.equal(await page.locator('#left').isVisible(), true);
+  assert.equal(await page.locator('#document-tree').isVisible(), true);
   assert.equal(await page.locator('#body').inputValue(), draft);
   assert.equal(await page.locator('#selection').textContent(), 'B3');
-  await tab('모델').focus();
+  assert.ok(await tabs.isVisible());
+  // 작업 이력: the model screen's left panel on the task history (with the attached files).
+  await rail('history').click();
+  assert.deepEqual(await pressed(), ['history']);
+  assert.equal(await page.evaluate(() => document.body.dataset.workspace), 'model');
+  assert.equal(await page.locator('#task-list').isVisible(), true);
+  assert.equal(await page.locator('#document-tree').isVisible(), false);
+  await rail('make').click();
+  assert.deepEqual(await pressed(), ['make']);
+  assert.equal(await page.evaluate(() => document.body.dataset.workspace), 'make');
+  await rail('history').click();
+  assert.equal(await page.evaluate(() => document.body.dataset.workspace), 'model');
+  assert.equal(await page.locator('#task-list').isVisible(), true);
+  await rail('model').click();
+  assert.equal(await page.locator('#document-tree').isVisible(), true);
+  // Keyboard: arrows move over the open tabs and wrap.
+  await syncTab.click();
+  await syncTab.focus();
   await page.keyboard.press('ArrowRight');
-  assert.equal(await tab('자료').getAttribute('aria-selected'), 'true');
-  await page.keyboard.press('ArrowRight');
-  assert.equal(await tab('JIG').getAttribute('aria-selected'), 'true');
-  await page.keyboard.press('ArrowRight');
-  assert.equal(await tab('만들기').getAttribute('aria-selected'), 'true');
-  await page.keyboard.press('ArrowRight');
-  assert.equal(await tab('산출물').getAttribute('aria-selected'), 'true');
+  assert.equal(await structureTab.getAttribute('aria-selected'), 'true');
   await page.keyboard.press('ArrowRight');
   assert.equal(await syncTab.getAttribute('aria-selected'), 'true');
   assert.ok(await syncTab.evaluate((node) => node === document.activeElement));
   await dialog.locator('.jig-relation').waitFor();
+  // The rail's JIG opens the list, also from an open jig (the jig stays in the row).
+  await rail('jig').click();
+  assert.equal(await page.evaluate(() => document.body.dataset.workspace), 'jig');
+  assert.equal(await syncTab.getAttribute('aria-selected'), 'false');
 
   // A v3 jig: a new instance with its name and output layer opens in its own tab.
-  await tab('JIG').click();
   const grid = dialog.locator('.jig-card[data-source="project"]', {
     hasText: '격자 골조 배치 예제',
   });
@@ -236,7 +261,7 @@ try {
   // Closing its tab keeps the instance: the list offers it again.
   await page.getByRole('button', { name: `격자 골조 배치 예제 · ${projectName} 탭 닫기` }).click();
   assert.equal(await gridTab.count(), 0);
-  await tab('JIG').click();
+  await rail('jig').click();
   await grid
     .getByRole('list', { name: '격자 골조 배치 예제 작업본' })
     .getByRole('button', { name: '열기', exact: true })
@@ -252,10 +277,10 @@ try {
     'true',
   );
 
-  // 대시보드 (the rail item and the first tab): the project's name, its jigs and the latest
+  // 대시보드 (the rail's first destination): the project's name, its jigs and the latest
   // finished requests over the centre; a jig opens like the JIG list's [열기].
-  await page.locator('#rail-dashboard').click();
-  assert.equal(await tab('대시보드').getAttribute('aria-selected'), 'true');
+  await rail('dashboard').click();
+  assert.deepEqual(await pressed(), ['dashboard']);
   const board = page.getByRole('region', { name: '대시보드', exact: true });
   await board.getByRole('heading', { name: projectName, exact: true }).waitFor();
   assert.equal(await page.locator('#canvas canvas').isVisible(), false);
@@ -293,7 +318,8 @@ try {
   await dialog.getByRole('button', { name: '정렬·비교 실행' }).waitFor();
   assert.equal(await page.locator('#body').inputValue(), draft);
 
-  // Narrow screens: one menu in the centre's head instead of the row.
+  // Narrow screens: one menu in the centre's head instead of the row (it lists the fixed screens
+  // too, which below 850 px have no rail).
   await page.setViewportSize({ width: 880, height: 900 });
   assert.equal(await tabs.isVisible(), false);
   const menu = page.getByRole('combobox', { name: '작업공간' });
@@ -307,7 +333,8 @@ try {
 
   // 산출물 (PLAN-26 T-081): 도면 · 보고서 · 렌더링 at its top; 도면 and 렌더링 are pages only, their
   // actions disabled ('준비 중'). The last view is remembered per project.
-  await tab('산출물').click();
+  await rail('output').click();
+  assert.deepEqual(await pressed(), ['output']);
   assert.equal(await page.evaluate(() => document.body.dataset.workspace), 'output');
   const output = page.getByRole('region', { name: '산출물', exact: true });
   const views = output.getByRole('tablist', { name: '산출물 종류' });
@@ -352,7 +379,27 @@ try {
   await page.waitForFunction(() => document.body.dataset.workspace === 'output');
   assert.equal(await view('렌더링').getAttribute('aria-selected'), 'true');
   assert.ok(await render.isVisible());
-  await tab('모델').click();
+  await rail('model').click();
+
+  // Closing every open jig hides the row again; the model screen stays.
+  for (const name of [`Sync · ${projectName}`, `격자 골조 배치 예제 · ${projectName}`])
+    await page.getByRole('button', { name: `${name} 탭 닫기` }).click();
+  assert.equal(await page.locator('.workspace-tabs').isVisible(), false);
+  assert.deepEqual(await pressed(), ['model']);
+  // Below 850 px there is no rail: the menu stays and offers the fixed screens.
+  await page.setViewportSize({ width: 800, height: 900 });
+  assert.equal(await page.locator('.rail').isVisible(), false);
+  await page.locator('.mobile-tabs [data-mobile="model"]').click();
+  await menu.waitFor();
+  assert.deepEqual(await menu.locator('option').allTextContents(), [
+    '대시보드',
+    '모델',
+    '자료',
+    'JIG',
+    '만들기',
+    '산출물',
+  ]);
+  await page.setViewportSize({ width: 1440, height: 900 });
 
   // A storage that refuses (private window, blocked site data): the model tab, and tabs still work.
   const blocked = await browser.newContext({ viewport: { width: 1440, height: 900 } });
@@ -373,12 +420,9 @@ try {
   await guarded.waitForFunction(
     () => document.querySelectorAll('#task-list .task-row').length === 2,
   );
-  const guardedTabs = guarded.getByRole('tablist', { name: '작업공간' });
-  assert.equal(
-    await guardedTabs.getByRole('tab', { name: '모델', exact: true }).getAttribute('aria-selected'),
-    'true',
-  );
-  await guardedTabs.getByRole('tab', { name: 'JIG', exact: true }).click();
+  const guardedRail = (id) => guarded.locator(`.rail [data-workspace-target="${id}"]`);
+  assert.equal(await guardedRail('model').getAttribute('aria-pressed'), 'true');
+  await guardedRail('jig').click();
   await guarded
     .getByRole('dialog', { name: 'JIG', exact: true })
     .locator('.jig-card')
@@ -386,13 +430,14 @@ try {
     .waitFor();
   await blocked.close();
 
-  // The host panel (SCR-12) has no tab row and no jig panel.
+  // The host panel (SCR-12) has no rail, no tab row and no jig panel.
   const { origin, hash } = new URL(app.launchUrl);
   const panelPage = await newPage(context);
   await panelPage.goto(`${origin}/?panel=rhino&name=${encodeURIComponent('합성.3dm')}${hash}`);
   await panelPage.getByText('이 파일을 VIDE 프로젝트에 연결하세요').waitFor();
   assert.equal(await panelPage.locator('#workspace-tabs > *').count(), 0);
   assert.equal(await panelPage.locator('.workspace').isVisible(), false);
+  assert.equal(await panelPage.locator('.rail').isVisible(), false);
   assert.equal(await panelPage.locator('.jig-dialog').isVisible(), false);
 
   assert.deepEqual(errors, []);

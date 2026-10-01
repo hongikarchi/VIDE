@@ -56,9 +56,8 @@ try {
   const instanceId = created.body.id ?? created.body.instance?.id;
   assert.ok(instanceId, JSON.stringify(created.body));
 
-  // The 산출물 tab is ready; its 보고서 view shows the list and the report.
-  const tab = page.locator('#workspace-tabs [role="tab"][data-workspace="output"]');
-  assert.equal(await tab.getAttribute('aria-disabled'), null);
+  // The rail's 산출물 opens the screen; its 보고서 view shows the list and the report.
+  const tab = page.locator('.rail [data-workspace-target="output"]');
   await tab.click();
   assert.equal(await page.evaluate(() => document.body.dataset.workspace), 'output');
   const views = page.getByRole('tablist', { name: '산출물 종류' });
@@ -130,7 +129,7 @@ try {
   assert.equal(await page.evaluate(() => document.body.dataset.workspace), 'context');
   assert.ok(!(await screen.isVisible()));
 
-  // A last tab stored under the former 보고서 tab id opens 산출물 → 보고서.
+  // A last screen stored under the former 보고서 tab id opens 산출물 → 보고서.
   await page.evaluate(
     (id) =>
       localStorage.setItem(
@@ -142,7 +141,7 @@ try {
   await page.evaluate((id) => localStorage.setItem(`vide:output-view:${id}`, 'sheet'), projectId);
   await page.reload();
   await page.waitForFunction(() => document.body.dataset.workspace === 'output');
-  assert.equal(await tab.getAttribute('aria-selected'), 'true');
+  assert.equal(await tab.getAttribute('aria-pressed'), 'true');
   assert.equal(
     await views.getByRole('tab', { name: '보고서', exact: true }).getAttribute('aria-selected'),
     'true',
@@ -150,7 +149,7 @@ try {
   await report.waitFor();
 
   // Narrow screen: the list stacks above the page without sideways scrolling.
-  await page.locator('#workspace-tabs [role="tab"][data-workspace="model"]').click();
+  await page.locator('.rail [data-workspace-target="model"]').click();
   await page.setViewportSize({ width: 390, height: 800 });
   await page.locator('.workspace-menu select').selectOption('output');
   await report.waitFor();

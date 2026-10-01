@@ -28,21 +28,21 @@ try {
     const start = performance.now();
     render(objects, []);
     const initialMs = performance.now() - start;
-    // Large models start collapsed: one row per layer, no object rows yet.
-    const layers = container.querySelectorAll('.object-group[data-depth="0"]').length;
+    // Layers start collapsed: one row per layer, no object rows yet.
+    const layers = container.querySelectorAll('.layer-row').length;
     const lazyRows = container.querySelectorAll('.object').length;
-    const layer = container.querySelector('.object-group[data-depth="0"]');
-    layer.open = true;
-    layer.dispatchEvent(new Event('toggle'));
-    const type = layer.querySelector('.object-group[data-depth="1"]');
-    type.open = true;
-    type.dispatchEvent(new Event('toggle'));
-    const first = type.querySelector('.object');
+    const layer = container.querySelector('.layer');
+    layer.querySelector('.layer-row').click();
+    const expanded = layer.querySelector('.layer-row').getAttribute('aria-expanded') === 'true';
+    // Rows are capped per layer; the rest is reached by search or 전체 선택.
+    const capped = layer.querySelectorAll('.object').length === 400;
+    const first = layer.querySelector('.object');
     first.focus();
     const observer = new MutationObserver(() => {});
     observer.observe(container, { childList: true, subtree: true });
     const repeat = performance.now();
-    for (let i = 0; i < 100; i++) render(objects, [first.textContent.replace('Object ', '')]);
+    for (let i = 0; i < 100; i++)
+      render(objects, [first.getAttribute('aria-label').replace('Object ', '')]);
     const repeatedMs = performance.now() - repeat;
     const replaced = observer.takeRecords().length;
     observer.disconnect();
@@ -52,10 +52,56 @@ try {
     const clickCorrect = clicked.ids.length === 1 && clicked.mode === 'add';
     layer.querySelector('.group-select').click();
     const groupSelect = clicked.ids.length === 500 && clicked.mode === 'replace';
+    // Search opens from the icon and filters layers and objects; closing it clears the filter.
+    const toggle = container.querySelector('.layer-search-toggle');
+    const searchHidden = container.querySelector('.object-search').hidden;
+    toggle.click();
+    const search = container.querySelector('.object-search');
+    search.value = 'Layer 7';
+    search.dispatchEvent(new Event('input'));
+    await new Promise((resolve) => setTimeout(resolve, 250));
+    const searched =
+      !search.hidden &&
+      container.querySelectorAll('.layer-row').length === 1 &&
+      container.querySelector('.object-summary').textContent.startsWith('500개 객체 · 1개 레이어');
+    toggle.click();
+    const cleared = search.hidden && container.querySelectorAll('.layer-row').length === 20;
+    // Several files: each file's name heads its layers, and the swatch takes the layer colour.
+    render(
+      [
+        {
+          id: 'a::1',
+          name: 'Beam',
+          layer: 'a.3dm › S-BEAM',
+          layerName: 'S-BEAM',
+          documentName: 'a.3dm',
+          layerColor: '#ff0000',
+          type: 'Curve',
+        },
+        {
+          id: 'b::1',
+          name: 'Wall',
+          layer: 'b.dwg › A-WALL',
+          layerName: 'A-WALL',
+          documentName: 'b.dwg',
+          type: 'Curve',
+        },
+      ],
+      [],
+    );
+    const byFile =
+      [...container.querySelectorAll('.layer-file')].map((node) => node.textContent).join('|') ===
+        'a.3dm|b.dwg' &&
+      [...container.querySelectorAll('.layer-name')].map((node) => node.textContent).join('|') ===
+        'S-BEAM|A-WALL' &&
+      container.querySelector('.sw').style.background !== '';
     render([{ id: 'new', name: 'New object', layer: 'A', type: 'Brep' }], ['new']);
-    const small = container.querySelectorAll('.object').length === 1;
+    container.querySelector('.layer-row').click();
+    const small =
+      container.querySelectorAll('.object').length === 1 &&
+      container.querySelector('.object').getAttribute('aria-label') === 'New object';
     render([], []);
-    const empty = container.querySelectorAll('.object-group').length === 0;
+    const empty = container.querySelectorAll('.layer').length === 0;
     container.remove();
     return {
       initialMs,
@@ -63,6 +109,12 @@ try {
       replaced,
       layers,
       lazyRows,
+      expanded,
+      capped,
+      searchHidden,
+      searched,
+      cleared,
+      byFile,
       focusRetained,
       selected,
       clickCorrect,
@@ -76,7 +128,19 @@ try {
   assert.equal(result.lazyRows, 0);
   assert.equal(result.selected, 1);
   assert.ok(result.initialMs < 500, 'initial render ' + result.initialMs);
-  for (const key of ['focusRetained', 'clickCorrect', 'groupSelect', 'small', 'empty'])
+  for (const key of [
+    'expanded',
+    'capped',
+    'searchHidden',
+    'searched',
+    'cleared',
+    'byFile',
+    'focusRetained',
+    'clickCorrect',
+    'groupSelect',
+    'small',
+    'empty',
+  ])
     assert.equal(result[key], true, key);
   console.log(JSON.stringify(result));
 } finally {

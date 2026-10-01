@@ -158,16 +158,16 @@ try {
   assert.equal(await page.locator('#document-tree').isVisible(), false);
   assert.equal(await page.locator('#task-list').isVisible(), true);
   assert.equal(await page.locator('#review-list').isVisible(), true);
-  // The attached files show with the history; the rail's 프로젝트 자료 opens the 자료 tab (project DB).
+  // The attached files show with the history; the rail's 자료 opens the 자료 screen (project DB).
   assert.equal(await page.locator('#reference-list').isVisible(), true);
-  await page.getByRole('button', { name: '프로젝트 자료', exact: true }).click();
-  const workspaceTab = (name) =>
-    page.getByRole('tablist', { name: '작업공간' }).getByRole('tab', { name, exact: true });
-  assert.equal(await workspaceTab('자료').getAttribute('aria-selected'), 'true');
+  await page.getByRole('button', { name: '자료', exact: true }).click();
+  const railPressed = (id) =>
+    page.locator(`.rail [data-workspace-target="${id}"]`).getAttribute('aria-pressed');
+  assert.equal(await railPressed('data'), 'true');
   await page.locator('.facts-workspace').waitFor();
-  // The rail's 대시보드 opens the first tab.
+  // The rail's 대시보드 opens the dashboard.
   await page.getByRole('button', { name: '대시보드', exact: true }).click();
-  assert.equal(await workspaceTab('대시보드').getAttribute('aria-selected'), 'true');
+  assert.equal(await railPressed('dashboard'), 'true');
   await page.getByRole('region', { name: '대시보드' }).getByRole('heading', { level: 2 }).waitFor();
   // Feedback: a small dialog; the form address is not set yet, so its open button is disabled.
   await page.getByRole('button', { name: '피드백 보내기', exact: true }).click();
@@ -233,8 +233,9 @@ try {
   await page.screenshot({ path: join(evidence, 'settings-1440.png') });
   await settings.getByRole('button', { name: '닫기', exact: true }).click();
   await page.setViewportSize({ width: 800, height: 900 });
-  await page.locator('[data-mobile="model"]').click();
-  // Below 900 px the workspace tabs are one menu over the centre (Design §03).
+  await page.locator('button[data-mobile="model"]').click();
+  // Below 900 px the workspace row is one menu over the centre (Design §03); below 850 px it
+  // offers the fixed screens, as the rail is gone.
   assert.equal(await page.getByRole('tablist', { name: '작업공간' }).isVisible(), false);
   assert.equal(await page.getByRole('combobox', { name: '작업공간' }).inputValue(), 'model');
   await page.locator('#toggle-left').click();
@@ -325,6 +326,8 @@ try {
   assert.match(await settings.textContent(), /InstanceReference 1개/);
   await settings.getByRole('button', { name: '닫기', exact: true }).click();
   await page.locator('button[data-section="document-tree"]').click();
+  // The layer list starts collapsed; a layer row opens its objects.
+  await page.locator('#objects .layer-row').first().click();
   await page
     .locator('#objects')
     .getByRole('button', { name: 'Preserved block', exact: true })

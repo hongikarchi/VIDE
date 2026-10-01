@@ -100,9 +100,13 @@ a {
   place-items: center;
   padding: 0;
 }
-.rail button:hover,
-.rail button[aria-pressed='true'] {
+.rail button:hover {
   background: var(--bg-active);
+  color: var(--text-1);
+}
+/* The destination shown now (user decision 2026-10-01): a soft background, no side bar. */
+.rail button[aria-pressed='true'] {
+  background: var(--bg-selected);
   color: var(--text-1);
 }
 /* Icon sizes as in 참고 앱 A: 18 px for the main rail items (the global svg size), 16 px for the
@@ -1504,15 +1508,13 @@ body.left-hidden.right-hidden main {
 }
 
 /* 2026-09-28 workspace usability pass: connection card, layer tree, marquee, collapsible panels. */
+/* The left panel's sections sit flat on the panel (user decision 2026-10-01, the mockup's slot):
+   a small muted heading, then rows; no card box. */
 .connection-card {
   margin-top: 14px;
-  padding: 10px;
-  border: var(--hairline) solid var(--line);
-  border-radius: var(--radius-md);
-  background: var(--soft);
   display: flex;
   flex-direction: column;
-  gap: 7px;
+  gap: 4px;
 }
 .connection-card .card-head {
   display: flex;
@@ -1520,8 +1522,13 @@ body.left-hidden.right-hidden main {
   justify-content: space-between;
   gap: 8px;
 }
-.connection-card .caption {
+.panel-heading {
   margin: 0;
+  padding: 0 6px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-3);
+  letter-spacing: 0.2px;
 }
 .connection-card #host-target {
   margin: 0;
@@ -1588,10 +1595,22 @@ body.left-hidden.right-hidden main {
   font-size: 11px;
   text-decoration: underline dotted;
 }
+.nav-section.model-tree {
+  margin-top: 18px;
+  padding-top: 0;
+  border-top: 0;
+}
+.model-tree > summary.panel-heading {
+  padding: 0 6px 2px;
+  list-style: none;
+}
+.model-tree > summary.panel-heading::-webkit-details-marker {
+  display: none;
+}
 .model-tree > summary small {
   display: inline;
   padding: 0 0 0 6px;
-  color: var(--muted);
+  color: var(--text-4);
 }
 /* Sync coverage badge (T-043): hidden layers, hidden objects and block-internal geometry left out. */
 .model-tree > summary .coverage-badge {
@@ -1608,65 +1627,164 @@ body.left-hidden.right-hidden main {
 .model-tree > summary .coverage-badge[hidden] {
   display: none;
 }
+/* Layer list: one row per layer (colour · name · count); a row opens its objects. */
+.layer-list-head {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 0 2px;
+}
+.nav-section .layer-list-head .object-summary {
+  flex: 1;
+  min-width: 0;
+  padding: 2px 6px;
+  font-size: 11px;
+  color: var(--text-3);
+}
+.nav-section .layer-search-toggle {
+  flex: 0 0 22px;
+  width: 22px;
+  height: 22px;
+  margin: 0;
+  padding: 0;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-3);
+}
+.nav-section .layer-search-toggle[hidden] {
+  display: none;
+}
+.nav-section .layer-search-toggle:hover,
+.nav-section .layer-search-toggle[aria-expanded='true'] {
+  background: var(--bg-active);
+  color: var(--text-1);
+}
+.layer-search-toggle svg {
+  width: 14px;
+  height: 14px;
+}
 .object-search {
   width: 100%;
   padding: 6px 8px;
   border: var(--hairline) solid var(--line);
   border-radius: var(--radius-sm);
   font-size: 11px;
-  margin: 4px 0;
+  margin: 2px 0 6px;
 }
-.nav-section .object-summary {
-  padding: 2px 3px 6px;
+.object-search[hidden] {
+  display: none;
+}
+.layer-file {
+  margin: 8px 0 2px;
+  padding: 0 6px;
   font-size: 11px;
-  color: var(--muted);
+  font-weight: 500;
+  color: var(--text-2);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
-.object-group summary {
+.layer {
+  position: relative;
+}
+.nav-section .layer-row {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 5px 3px;
-  font-size: 11px;
+  gap: 8px;
+  width: 100%;
+  margin: 0;
+  padding: 4px 6px;
   border-radius: var(--radius-sm);
+  background: transparent;
+  font-size: 12.5px;
+  color: var(--text-2);
 }
-.object-group summary:hover {
-  background: var(--soft);
+.nav-section .layer-row:hover {
+  background: var(--bg-hover);
 }
-.object-group summary span {
+.nav-section .layer-row[aria-expanded='true'] {
+  color: var(--text-1);
+}
+.layer-row .sw {
+  flex: 0 0 9px;
+  width: 9px;
+  height: 9px;
+  border-radius: 2px;
+  background: var(--text-4);
+  box-shadow: inset 0 0 0 var(--hairline) var(--border);
+}
+.layer-name {
   flex: 1;
   min-width: 0;
   overflow: hidden;
-  text-overflow: ellipsis;
   white-space: nowrap;
+  text-overflow: ellipsis;
 }
-.object-group summary em {
-  font-style: normal;
-  font-size: 11px;
-  color: var(--muted);
+.layer-count {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--text-3);
 }
-.nav-section .object-group .group-select {
+/* 전체 선택 shows over the count while the row is hovered or focused. */
+.nav-section .layer > .group-select {
+  position: absolute;
+  top: 3px;
+  right: 4px;
   width: auto;
   margin: 0;
   padding: 1px 6px;
   font-size: 11px;
   border: var(--hairline) solid var(--line);
+  background: var(--bg-elevated);
   visibility: hidden;
 }
-.object-group summary:hover .group-select,
-.object-group summary:focus-within .group-select {
+.layer:hover > .group-select,
+.layer:focus-within > .group-select {
   visibility: visible;
 }
-.object-group > div {
-  padding-left: 12px;
-  border-left: var(--hairline) solid var(--line);
-  margin-left: 6px;
+.layer-objects {
+  padding: 0 0 4px;
 }
-.object-group[data-depth='1'] summary {
+.layer-objects[hidden] {
+  display: none;
+}
+.nav-section .layer-objects .object {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin: 0;
+  padding: 3px 6px 3px 23px;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  font-size: 12px;
   color: var(--text-2);
 }
-.nav-section .object {
-  padding: 4px 8px;
-  margin: 1px 0;
+.nav-section .layer-objects .object:hover {
+  background: var(--bg-hover);
+}
+.nav-section .layer-objects .object[aria-pressed='true'] {
+  background: var(--bg-selected);
+  color: var(--text-1);
+  font-weight: 600;
+}
+.object-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.object-type {
+  flex: 0 0 auto;
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--text-4);
+}
+.nav-section .layer-objects small {
+  padding: 4px 6px 4px 23px;
+  color: var(--text-3);
 }
 .selection-marquee {
   position: absolute;
@@ -2841,7 +2959,9 @@ body.panel-mode #conversation {
 }
 
 /* Workspace tabs (T-047, Design §03 작업공간 탭): a 32 px row over the centre column only; the
-   conversation column keeps its place. Below 900 px the row is one menu. */
+   conversation column keeps its place. It holds only what is open (jig instances) and hides when
+   nothing is, where the rail is shown (user decision 2026-10-01). Below 900 px the row is one menu,
+   which also lists the fixed screens and stays below 850 px, where the rail is gone. */
 .workspace > .workspace-tabs {
   grid-row: 1;
   grid-column: 1 / -1;
@@ -2854,6 +2974,11 @@ body.panel-mode #conversation {
 }
 .workspace > .workspace-tabs:empty {
   display: none;
+}
+@media (min-width: 851px) {
+  .workspace > .workspace-tabs[data-empty] {
+    display: none;
+  }
 }
 .workspace-tablist {
   display: flex;
@@ -2877,17 +3002,6 @@ body.panel-mode #conversation {
   color: var(--text-1);
   font-weight: 600;
   border-bottom-color: var(--text-1);
-}
-.workspace-tablist [role='tab'][aria-disabled='true'] {
-  opacity: 0.45;
-  cursor: default;
-  background: transparent;
-}
-.workspace-tabs-rule {
-  flex-shrink: 0;
-  width: 1px;
-  margin: 7px 6px;
-  background: var(--line);
 }
 .workspace-context-tab {
   display: flex;
@@ -4330,10 +4444,7 @@ body[data-workspace='context'] .workspace > .jig-dialog {
 .link-start {
   display: grid;
   gap: 6px;
-  padding: 10px 12px;
-  border: var(--hairline) dashed var(--line);
-  border-radius: var(--radius-sm);
-  background: var(--soft);
+  padding: 2px 6px 4px;
   font-size: 11px;
   line-height: 1.55;
 }

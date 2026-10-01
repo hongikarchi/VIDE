@@ -64,7 +64,10 @@ try {
   assert.equal(first.result.objects.length, 1);
   assert.equal(first.result.objects[0].kind, 'native');
   if (rows.length === 1) {
-    await page.locator('#document-tree').evaluate((node) => (node.open = true));
+    await page.locator('#document-tree').evaluate((node) => {
+      node.open = true;
+      for (const row of node.querySelectorAll('.layer-row[aria-expanded="false"]')) row.click();
+    });
     await page.locator('#objects .object').first().click();
     await page.locator('#selection-pin').click();
     const model = await page
@@ -105,7 +108,9 @@ try {
     assert.equal(object.nativeType, 'Extrusion');
     assert.ok(Math.abs(object.volume - 72) < 0.001);
   }
-  await page.waitForFunction(() => document.querySelectorAll('#objects .object').length === 2);
+  await page.waitForFunction(() =>
+    document.querySelector('.object-summary')?.textContent.startsWith('2개 객체'),
+  );
   await page.screenshot({ path: 'docs/assets/native-workspace/native-copy.png' });
   console.log(
     JSON.stringify({

@@ -103,10 +103,23 @@ try {
   await page.waitForFunction(() =>
     document.querySelector('.object-summary')?.textContent.startsWith('4개 객체'),
   );
-  const tree = await page.locator('#objects').textContent();
-  assert.match(tree, /plan-1\.dwg › S-BEAM/);
-  assert.match(tree, /plan-2\.dwg › S-BEAM/);
-  assert.match(tree, /model\.3dm › girder/);
+  // Each file's name heads its own layers.
+  const files = await page.locator('#objects .layer-file').allTextContents();
+  assert.deepEqual(files, ['model.3dm', 'plan-1.dwg', 'plan-2.dwg']);
+  const layers = await page
+    .locator('#objects .layer')
+    .evaluateAll((nodes) =>
+      nodes.map(
+        (node) =>
+          node.previousElementSibling?.className +
+          '|' +
+          node.querySelector('.layer-name').textContent,
+      ),
+    );
+  assert.ok(layers.some((row) => row.endsWith('|girder')));
+  assert.equal(layers.filter((row) => row.endsWith('|S-BEAM')).length, 2);
+  // A layer row opens its objects.
+  for (const row of await page.locator('#objects .layer-row').all()) await row.click();
   // Hiding a file removes it from the space and is kept for the project.
   await page.getByRole('button', { name: 'plan-2.dwg 숨기기' }).click();
   await page.waitForFunction(() =>

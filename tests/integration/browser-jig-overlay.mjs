@@ -269,7 +269,12 @@ try {
   assert.deepEqual(await jigState(), before);
   await dialog.getByRole('button', { name: '닫기' }).click();
   await dialog.waitFor({ state: 'hidden' });
+  // The rail's JIG opens the list; the same jig opens again with its state.
   await page.getByRole('button', { name: 'JIG', exact: true }).click();
+  await dialog
+    .locator('.jig-card[data-status="available"]', { hasText: 'Sync · 도면↔모델' })
+    .getByRole('button', { name: '열기' })
+    .click();
   await dialog.locator('.jig-relation').waitFor();
   assert.deepEqual(await jigState(), before);
   // Nothing of the overlay went into a request.

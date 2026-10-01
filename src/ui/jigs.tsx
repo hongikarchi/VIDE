@@ -14,7 +14,6 @@ import {
   closeContextTab,
   contextId,
   contextTabs,
-  lastJigInstance,
   onWorkspaceChange,
   openContextTab,
   renameContextTab,
@@ -1768,20 +1767,6 @@ function ParamRow({
 /** Give the jig screens the workspace: project, Syncs, viewport and conversation. */
 export function attachJigs(context: () => JigContext) {
   provide = context;
-}
-/**
- * The rail's JIG button: back to the jig used last (its tab opens again if it was closed; an older
- * jig comes back with its inputs and results), or the JIG list before any jig was opened.
- */
-export function showJigs() {
-  const active = activeWorkspace();
-  if (active === 'jig' || contextTabs().some((tab) => contextId(tab.instanceId) === active)) {
-    if (collapsed) fold(false);
-    return;
-  }
-  const last = lastJigInstance();
-  if (last) setWorkspace('jig', { instanceId: last });
-  else setWorkspace('jig');
 }
 /** The Syncs changed: open jigs get the new list without being opened again. */
 export function refreshJigs() {

@@ -138,13 +138,14 @@ try {
     pinned = false;
     return route.fulfill({ json: { unpinned: true } });
   });
-  // The rail's JIG button opens the JIG tab (the list) before any jig was used.
+  // The rail's JIG button opens the JIG list.
   await page.getByRole('button', { name: 'JIG', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'JIG', exact: true });
   await dialog.waitFor();
   const tabs = page.getByRole('tablist', { name: '작업공간' });
+  assert.equal(await page.evaluate(() => document.body.dataset.workspace), 'jig');
   assert.equal(
-    await tabs.getByRole('tab', { name: 'JIG', exact: true }).getAttribute('aria-selected'),
+    await page.locator('.rail [data-workspace-target="jig"]').getAttribute('aria-pressed'),
     'true',
   );
   // The list shows the official catalogue: the working jigs and the planned ones.
@@ -270,12 +271,17 @@ try {
   assert.ok(panel.x + panel.width <= canvas.x + 1, 'the 3D view sits beside the panel');
   assert.equal(await page.locator('#left').isVisible(), false);
   assert.ok(await dialog.getByLabel('R1 선택').isChecked(), 'the jig keeps its state');
-  // Closing the tab goes back to the model; the rail's JIG button brings the same jig back.
+  // Closing the tab goes back to the model; the rail's JIG opens the list, where the same jig
+  // opens again with its state.
   await dialog.getByRole('button', { name: '닫기' }).click();
   await dialog.waitFor({ state: 'hidden' });
   assert.equal(await syncTab.count(), 0);
   assert.equal(await page.locator('#left').isVisible(), true);
   await page.getByRole('button', { name: 'JIG', exact: true }).click();
+  await dialog
+    .locator('.jig-card[data-status="available"]', { hasText: 'Sync · 도면↔모델' })
+    .getByRole('button', { name: '열기', exact: true })
+    .click();
   await dialog.locator('.jig-relation').waitFor();
   assert.ok(await dialog.getByLabel('R1 선택').isChecked());
   assert.equal(await syncTab.getAttribute('aria-selected'), 'true');

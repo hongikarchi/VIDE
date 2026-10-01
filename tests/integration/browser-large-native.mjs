@@ -45,12 +45,18 @@ try {
     const start = performance.now();
     await page.locator('#model-file').setInputFiles(sample.filename);
     await page.waitForFunction(
-      (count) => document.querySelectorAll('#objects .object').length === count,
+      (count) =>
+        document
+          .querySelector('.object-summary')
+          ?.textContent.startsWith(count.toLocaleString() + '개 객체'),
       sample.count,
       { timeout: 120000 },
     );
     const elapsed = performance.now() - start;
-    await page.locator('#document-tree').evaluate((node) => (node.open = true));
+    await page.locator('#document-tree').evaluate((node) => {
+      node.open = true;
+      for (const row of node.querySelectorAll('.layer-row[aria-expanded="false"]')) row.click();
+    });
     await page.locator('#objects .object').last().click();
     assert.equal(await page.locator('#objects .object[aria-pressed="true"]').count(), 1);
     assert.equal(

@@ -1,9 +1,12 @@
-// Workspace tabs (Design §03 작업공간 탭, decision A4; SCR-13·18): fixed-layout tabs over the
-// centre column and one closable context tab per opened jig. A tab changes the centre, the left
-// column and the drawer only; the conversation column, drafts and the selection stay as they are.
-// There is no free docking, splitting or node editor. Below 900 px the row becomes one menu. The
-// last tab and the open context tabs are a viewer convenience remembered per project in this
-// browser's storage; a blocked or empty storage just opens the model tab.
+// Workspaces (Design §03 작업공간 탭, decision A4; SCR-13·18): fixed screens reached from the rail
+// (src/ui/workspace-panels.ts) and one closable context tab per opened jig in the row over the
+// centre column. Since 2026-10-01 (user decision) the row holds only what is open and hides when
+// nothing is; the fixed screens are the rail's. A workspace changes the centre, the left column and
+// the drawer only; the conversation column, drafts and the selection stay as they are. There is no
+// free docking, splitting or node editor. Below 900 px the row becomes one menu, which also lists
+// the fixed screens because the rail is gone below 850 px. The last screen and the open context
+// tabs are a viewer convenience remembered per project in this browser's storage; a blocked or
+// empty storage just opens the model screen.
 
 export type FixedWorkspace = 'dashboard' | 'model' | 'data' | 'jig' | 'make' | 'output';
 /** A sub-view of the 산출물 tab (src/ui/output-tab.tsx). */
@@ -48,8 +51,6 @@ let outputView: OutputView | undefined;
 let projectId: string | undefined;
 let active = 'model';
 let context: ContextTab[] = [];
-/** The jig used last (its tab open or closed), for the rail's JIG button. */
-let lastJig: string | undefined;
 let resolver: ((instanceId: string) => Promise<ContextTab | undefined>) | undefined;
 const listeners = new Set<(change: WorkspaceChange) => void>();
 let bar: HTMLElement | undefined;
@@ -129,8 +130,6 @@ function emit(closed?: ContextTab) {
   for (const listener of listeners) listener(change);
 }
 function activate(id: string) {
-  const instance = instanceOf(id);
-  if (instance !== undefined) lastJig = instance;
   active = id;
   emit();
 }
@@ -196,8 +195,9 @@ export function renameContextTab(instanceId: string, label: string, title?: stri
 }
 export const activeWorkspace = () => active;
 export const contextTabs = (): readonly ContextTab[] => context;
-/** The instance id of the jig shown last, its tab open or not. */
-export const lastJigInstance = () => lastJig;
+/** The rail destination the shown workspace belongs to: a context tab (a jig instance) is JIG's. */
+export const workspaceDestination = (): FixedWorkspace =>
+  instanceOf(active) !== undefined ? 'jig' : (active as FixedWorkspace);
 /** The 3D view is part of the model tab and of every jig context tab. */
 export const workspaceShowsViewport = () => active === 'model' || instanceOf(active) !== undefined;
 export function onWorkspaceChange(listener: (change: WorkspaceChange) => void) {
@@ -232,14 +232,11 @@ export function initializeWorkspaces(options: { projectId: string; mount: HTMLEl
     saved.active = alias.tab;
     outputView = alias.view;
   }
-  const target = saved.active && known(saved.active) ? saved.active : 'model';
-  const instance = instanceOf(target);
-  if (instance !== undefined) lastJig = instance;
-  active = target;
+  active = saved.active && known(saved.active) ? saved.active : 'model';
   emit();
 }
 
-function tabButton(id: string, label: string, ready: boolean, title?: string) {
+function tabButton(id: string, label: string, title?: string) {
   const button = document.createElement('button');
   button.type = 'button';
   button.setAttribute('role', 'tab');
@@ -249,11 +246,6 @@ function tabButton(id: string, label: string, ready: boolean, title?: string) {
   button.setAttribute('aria-selected', String(selected));
   button.tabIndex = selected ? 0 : -1;
   if (title) button.title = title;
-  if (!ready) {
-    // Visible so the layout is known, but not yet usable; the tooltip says so.
-    button.setAttribute('aria-disabled', 'true');
-    button.title = '준비 중입니다';
-  }
   button.onclick = () => setWorkspace(id);
   return button;
 }
@@ -283,26 +275,18 @@ function paint() {
   list.className = 'workspace-tablist';
   list.setAttribute('role', 'tablist');
   list.setAttribute('aria-label', '작업공간');
-  for (const tab of FIXED) list.append(tabButton(tab.id, tab.label, tab.ready, tab.title));
-  if (context.length) {
-    const rule = document.createElement('span');
-    rule.className = 'workspace-tabs-rule';
-    rule.setAttribute('aria-hidden', 'true');
-    list.append(rule);
-  }
+  // Only what is open: the fixed screens are the rail's (user decision 2026-10-01).
   for (const tab of context) {
     const id = contextId(tab.instanceId);
     const item = document.createElement('span');
     item.className = 'workspace-context-tab';
     item.toggleAttribute('data-active', id === active);
-    item.append(tabButton(id, tab.label, true, tab.title ?? tab.label));
+    item.append(tabButton(id, tab.label, tab.title ?? tab.label));
     item.append(closeButton(tab, id === active));
     list.append(item);
   }
   list.onkeydown = (event) => {
-    const tabs = [...list.querySelectorAll<HTMLButtonElement>('[role="tab"]')].filter(
-      (button) => button.getAttribute('aria-disabled') !== 'true',
-    );
+    const tabs = [...list.querySelectorAll<HTMLButtonElement>('[role="tab"]')];
     const at = tabs.findIndex((button) => button === document.activeElement);
     if (at < 0) return;
     const current = tabs[at].dataset.workspace!;
@@ -346,5 +330,7 @@ function paint() {
   if (open) narrow.append(closeButton(open, true));
 
   bar.replaceChildren(list, narrow);
+  // With nothing open the row hides where the rail is shown, so the content gets the space.
+  bar.toggleAttribute('data-empty', !context.length);
   if (focused) bar.querySelector<HTMLElement>(focused)?.focus();
 }

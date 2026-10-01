@@ -83,8 +83,10 @@ try {
       1,
     ));
   assert.deepEqual(first.result.objects[0].size, [8, 6, 6]);
-  await page.locator('#document-tree').evaluate((n) => (n.open = true));
-  await page.locator('#object-tree').evaluate((n) => (n.open = true));
+  await page.locator('#document-tree').evaluate((node) => {
+    node.open = true;
+    for (const row of node.querySelectorAll('.layer-row[aria-expanded="false"]')) row.click();
+  });
   await page.locator('#objects .object').first().click();
   await page.locator('#selection-pin').click();
   console.log('Verifying pinned follow-up');

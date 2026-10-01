@@ -58,7 +58,9 @@ try {
   assert.equal(first.result.hostExecuted, true);
   assert.equal(first.result.objects.length, 9);
   assert.ok(Math.abs(first.result.scene.reduce((sum, o) => sum + o.volume, 0) - 864) < 0.001);
-  await page.waitForFunction(() => document.querySelectorAll('#objects .object').length === 9);
+  await page.waitForFunction(() =>
+    document.querySelector('.object-summary')?.textContent.startsWith('9개 객체'),
+  );
   const second = await submit(
     'slab-5, slab-6, slab-7, slab-8 네 객체의 돌출 높이만 각각 0.25 m로 바꿔. 경계 점열과 층 기준 z, 나머지 4개 슬래브와 core는 그대로 유지해.',
     2,

@@ -15,7 +15,7 @@ try {
   await page.goto(url);
   await page.waitForFunction(() => document.querySelector('#project-picker')?.value);
   await page.goto(new URL('/?project=' + projectId, url).href);
-  await page.waitForFunction(() => document.querySelectorAll('#objects .object').length > 0);
+  await page.waitForFunction(() => document.querySelectorAll('#objects .layer-row').length > 0);
   assert.equal(await page.locator('#host-target').inputValue(), 'zwcad');
   const basis = await page.evaluate(
     (id) => JSON.parse(localStorage.getItem('vide:draft:' + id)).baseRequestId,
@@ -35,7 +35,7 @@ try {
     () => document.querySelector('#body').value === 'Independent new task',
   );
   assert.equal(await page.locator('#host-target').inputValue(), 'rhino');
-  assert.equal(await page.locator('#objects .object').count(), 0);
+  assert.equal(await page.locator('#objects .layer-row').count(), 0);
   assert.equal(
     await page.evaluate(
       (id) => JSON.parse(localStorage.getItem('vide:draft:' + id)).baseRequestId,

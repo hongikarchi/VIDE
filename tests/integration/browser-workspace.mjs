@@ -62,7 +62,10 @@ try {
   assert.ok(data.subarray(0, 32).toString().startsWith('3D Geometry File Format'));
   await page.getByRole('button', { name: '이 후보 보기', exact: true }).first().click();
   const firstNative = records.find((r) => r.result?.hostExecuted);
-  await page.locator('#document-tree').evaluate((node) => (node.open = true));
+  await page.locator('#document-tree').evaluate((node) => {
+    node.open = true;
+    for (const row of node.querySelectorAll('.layer-row[aria-expanded="false"]')) row.click();
+  });
   assert.equal(await page.locator('#objects .object').count(), firstNative.result.objects.length);
   await page.getByRole('button', { name: '이 후보 보기', exact: true }).last().click();
   await page.locator('#objects .object').first().click();
@@ -131,7 +134,10 @@ try {
   );
   assert.equal(await page.locator('#body').inputValue(), '초안 복구 검증');
   await page.fill('#body', before);
-  await page.locator('#document-tree').evaluate((node) => (node.open = true));
+  await page.locator('#document-tree').evaluate((node) => {
+    node.open = true;
+    for (const row of node.querySelectorAll('.layer-row[aria-expanded="false"]')) row.click();
+  });
   await page.locator('#objects .object').first().click();
   await page.locator('#inspector-toggle').click();
   await page.locator('[data-inspect=geometry]').click();

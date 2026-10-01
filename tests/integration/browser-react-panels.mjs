@@ -133,8 +133,11 @@ try {
     );
   await page.reload();
   await page.getByRole('button', { name: '이 후보 보기', exact: true }).click();
-  await page.waitForFunction(() => document.querySelector('#objects .object'));
-  await page.locator('#document-tree').evaluate((node) => (node.open = true));
+  await page.waitForFunction(() => document.querySelector('#objects .layer-row'));
+  await page.locator('#document-tree').evaluate((node) => {
+    node.open = true;
+    for (const row of node.querySelectorAll('.layer-row[aria-expanded="false"]')) row.click();
+  });
   await page.locator('#objects .object').first().click();
   await page.locator('#inspector-toggle').click();
   await page.getByText('표시 속성을 요청에 첨부', { exact: true }).click();

@@ -44,7 +44,10 @@ try {
   assert.equal(reference.result.scene[0].area, 200);
   assert.equal(reference.result.scene[0].length, 60);
   if (rows.length === 1) {
-    await page.locator('#document-tree').evaluate((node) => (node.open = true));
+    await page.locator('#document-tree').evaluate((node) => {
+      node.open = true;
+      for (const row of node.querySelectorAll('.layer-row[aria-expanded="false"]')) row.click();
+    });
     await page.locator('#objects .object').first().click();
     await page.locator('#selection-pin').click();
     await page.locator('#context select').selectOption('reference');
@@ -74,7 +77,9 @@ try {
   assert.ok(Math.abs(candidate.result.scene[0].volume - 600) < 1e-6);
   assert.equal(candidate.input.pins[0].basis, reference.id);
   assert.equal(candidate.input.pins[0].role, 'reference');
-  await page.waitForFunction(() => document.querySelectorAll('#objects .object').length === 1);
+  await page.waitForFunction(() =>
+    document.querySelector('.object-summary')?.textContent.startsWith('1개 객체'),
+  );
   await page.waitForFunction(() => document.querySelector('#host-target').value === 'rhino');
   await page.screenshot({ path: 'docs/assets/native-workspace/dwg-import-rhino.png' });
   console.log(

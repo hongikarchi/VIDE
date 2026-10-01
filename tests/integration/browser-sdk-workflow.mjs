@@ -71,7 +71,10 @@ try {
     .update(await readFile(first.result.filename))
     .digest('hex');
   await page.getByRole('button', { name: '이 후보 보기', exact: true }).last().click();
-  await page.locator('#document-tree').evaluate((node) => (node.open = true));
+  await page.locator('#document-tree').evaluate((node) => {
+    node.open = true;
+    for (const row of node.querySelectorAll('.layer-row[aria-expanded="false"]')) row.click();
+  });
   await page.locator('#objects .object').first().click();
   await page.locator('#selection-pin').click();
   const second =
@@ -117,7 +120,10 @@ try {
   assert.equal(recovered.result.fileHash, second.result.fileHash);
   assert.equal(recovered.result.objects[0].id, first.result.objects[0].id);
   await page.getByRole('button', { name: '이 후보 보기', exact: true }).last().click();
-  await page.locator('#document-tree').evaluate((node) => (node.open = true));
+  await page.locator('#document-tree').evaluate((node) => {
+    node.open = true;
+    for (const row of node.querySelectorAll('.layer-row[aria-expanded="false"]')) row.click();
+  });
   await page.locator('#objects .object').first().click();
   await page.screenshot({ path: join(directory, 'viewport.png') });
   const evidence = {

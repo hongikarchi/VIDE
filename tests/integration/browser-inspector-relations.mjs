@@ -24,7 +24,10 @@ try {
     candidate = rows.at(-1),
     pin = candidate.input.pins[0];
   assert.equal(candidate.result.host, 'rhino');
-  await page.locator('#document-tree').evaluate((node) => (node.open = true));
+  await page.locator('#document-tree').evaluate((node) => {
+    node.open = true;
+    for (const row of node.querySelectorAll('.layer-row[aria-expanded="false"]')) row.click();
+  });
   await page.locator('#objects .object').first().click();
   await page.locator('#inspector-toggle').click();
   await page.locator('[data-inspect="relations"]').click();

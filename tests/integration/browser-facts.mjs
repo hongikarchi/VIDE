@@ -160,9 +160,8 @@ try {
   await page.goto(app.launchUrl);
   await page.waitForFunction(() => document.querySelector('#project-picker')?.value);
 
-  // The tab is ready and takes the centre; the 3D view is hidden, the conversation column stays.
-  const tab = page.locator('#workspace-tabs [role="tab"][data-workspace="data"]');
-  assert.equal(await tab.getAttribute('aria-disabled'), null);
+  // The rail's 자료 takes the centre; the 3D view is hidden, the conversation column stays.
+  const tab = page.locator('.rail [data-workspace-target="data"]');
   await tab.click();
   assert.equal(await page.evaluate(() => document.body.dataset.workspace), 'data');
   const screen = page.locator('.facts-workspace');
@@ -238,7 +237,7 @@ try {
   await results.locator('h3', { hasText: '검색 결과 0개' }).waitFor();
 
   // A basis chip anywhere opens the fact window; 자료 탭에서 보기 brings the statement to the drawer.
-  await page.locator('#workspace-tabs [role="tab"][data-workspace="model"]').click();
+  await page.locator('.rail [data-workspace-target="model"]').click();
   await page.evaluate(() => {
     const chip = document.createElement('span');
     chip.className = 'kit-fact';

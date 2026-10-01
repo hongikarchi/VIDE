@@ -418,11 +418,8 @@ try {
   await page.route('**/jig-instances/*/bakes/*/baseline', (route) =>
     route.fulfill({ json: { recorded: 3, missing: [] } }),
   );
-  // The grid instance's context tab is showing: back to the list through the JIG workspace tab.
-  await page
-    .getByRole('tablist', { name: '작업공간' })
-    .getByRole('tab', { name: 'JIG', exact: true })
-    .click();
+  // The grid instance's context tab is showing: back to the list through the rail's JIG.
+  await page.getByRole('button', { name: 'JIG', exact: true }).click();
   const s06Card = dialog.locator('.jig-card', { hasText: 'S-06 골조 배치' });
   await s06Card.getByRole('button', { name: '새로 열기' }).click();
   await s06Card.getByLabel('출력 레이어').fill('VIDE 출력');

@@ -1,52 +1,75 @@
 import { setMobileView } from './mobile-navigation.tsx';
 import { element as $ } from './elements.ts';
+import { activeWorkspace, onWorkspaceChange, workspaceDestination } from './workspaces.ts';
+
+/** The model screen's left panel shows one section: the document tree or the task history. */
+let section = 'document-tree';
+/**
+ * The rail (user decision 2026-10-01): fixed destinations, one pressed for the screen shown. The
+ * model screen's two left-panel sections are two destinations (모델, 작업 이력); a context tab
+ * (a jig instance) belongs to JIG. Pressed is a soft background only (style.css `.rail`).
+ */
+function paintRail() {
+  const destination = workspaceDestination();
+  const current =
+    destination === 'model' && activeWorkspace() === 'model' && section === 'task-list'
+      ? 'history'
+      : destination;
+  for (const button of document.querySelectorAll<HTMLElement>('.rail [data-workspace-target]'))
+    button.setAttribute('aria-pressed', String(button.dataset.workspaceTarget === current));
+}
 export function initializeWorkspacePanels() {
   const groups = new Map<string, HTMLElement[]>();
   const documents = [$('connection-card'), $('document-tree')];
   groups.set('document-tree', documents);
-  // The rail's 프로젝트 자료 opens the 자료 tab now, so the attached files show with the history.
+  // The rail's 자료 opens the 자료 tab now, so the attached files show with the history.
   groups.set('task-list', [
     $('task-list').closest('details')!,
     $('review-list').closest('details')!,
     $('reference-list').closest('details')!,
   ]);
-  const buttons = [...document.querySelectorAll<HTMLButtonElement>('[data-section]')];
+  // The rail's 모델 and 작업 이력 open the model screen on their section (src/ui/app.ts switches it).
+  const buttons = [...document.querySelectorAll<HTMLButtonElement>('.rail [data-section]')];
   const mobileButtons: HTMLButtonElement[] = [];
   function select(id: string, expand = true) {
+    section = id;
     for (const [key, nodes] of groups)
       for (const node of nodes) {
         node.hidden = key !== id;
         if (expand && key === id && node instanceof HTMLDetailsElement) node.open = true;
       }
-    for (const button of [...buttons, ...mobileButtons])
-      button.setAttribute(
-        'aria-pressed',
-        String((button.dataset.section || button.dataset.tab) === id),
-      );
+    for (const button of mobileButtons)
+      button.setAttribute('aria-pressed', String(button.dataset.tab === id));
+    paintRail();
   }
   buttons.forEach((button) =>
     button.addEventListener('click', () => {
       if ($('left').hidden) $('toggle-left').click();
-      // Mobile navigation owns visibility of the same panels.
-      setMobileView('documents');
+      // Mobile navigation owns visibility of the same panels: 모델 is the model view there and
+      // 작업 이력 the documents view.
+      setMobileView(button.dataset.section === 'task-list' ? 'documents' : 'model');
       select(button.dataset.section!);
     }),
   );
-  select('document-tree', false);
+  onWorkspaceChange(() => paintRail());
+  // Below 850 px the rail is gone; the left panel names its two sections itself.
   const mobileTabs = document.createElement('nav');
   mobileTabs.className = 'left-panel-tabs';
   mobileTabs.setAttribute('aria-label', '문서 패널 탭');
-  buttons.forEach((button) => {
+  for (const [id, label] of [
+    ['document-tree', '작업 문서'],
+    ['task-list', '작업 이력'],
+  ]) {
     const tab = document.createElement('button');
-    tab.textContent = button.getAttribute('aria-label');
-    tab.dataset.tab = button.dataset.section;
-    tab.setAttribute('aria-pressed', String(button.dataset.section === 'document-tree'));
+    tab.textContent = label;
+    tab.dataset.tab = id;
     mobileButtons.push(tab);
     tab.onclick = () => {
-      select(button.dataset.section!);
+      select(id);
     };
     mobileTabs.append(tab);
-  });
+  }
+  select('document-tree', false);
   $('left').prepend(mobileTabs);
   const root = document.documentElement;
   let widths = { left: 266, right: 370 };

@@ -153,12 +153,11 @@ try {
 
   await page.goto(app.launchUrl);
   await page.waitForFunction(() => document.querySelector('#project-picker')?.value);
-  const tabs = page.locator('#workspace-tabs');
-  const makeTab = tabs.locator('[role="tab"][data-workspace="make"]');
-  assert.equal(await makeTab.getAttribute('aria-disabled'), null, 'the 만들기 tab is usable');
+  const rail = page.locator('.rail');
+  const makeTab = rail.locator('[data-workspace-target="make"]');
 
   // The JIG list: '말로 만들기' card and [가져오기].
-  await tabs.locator('[role="tab"][data-workspace="jig"]').click();
+  await rail.locator('[data-workspace-target="jig"]').click();
   const card = page.getByRole('form', { name: '말로 만들기' });
   await card.waitFor();
   await page.getByRole('button', { name: '가져오기', exact: true }).first().click();
@@ -177,7 +176,7 @@ try {
   await card.getByRole('button', { name: '만들기 시작' }).click();
   const make = page.locator('.make-workspace');
   await make.getByRole('heading', { name: '격자 기둥 배치' }).waitFor();
-  assert.equal(await makeTab.getAttribute('aria-selected'), 'true');
+  assert.equal(await makeTab.getAttribute('aria-pressed'), 'true');
   assert.equal(await page.evaluate(() => document.body.dataset.workspace), 'make');
   const outline = make.getByLabel('도구 설명 개요');
   await outline.getByText('1. 기둥 배치').waitFor();

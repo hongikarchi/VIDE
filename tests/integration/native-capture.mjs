@@ -71,6 +71,10 @@ try {
   assert.equal(capture.result.sourceDocument.instance, instance);
   assert.equal(capture.result.sourceDocument.documentId, documentId);
   assert.ok(capture.result.objects.length);
+  await page.locator('#document-tree').evaluate((node) => {
+    node.open = true;
+    for (const row of node.querySelectorAll('.layer-row[aria-expanded="false"]')) row.click();
+  });
   assert.equal(await page.locator('#objects .object').count(), capture.result.objects.length);
   assert.equal(capture.result.verified, true);
   const supported = capture.result.scene.find((object) => object.vertices.length);

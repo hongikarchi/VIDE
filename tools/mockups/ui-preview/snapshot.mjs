@@ -1,6 +1,7 @@
 // UI preview snapshot (VERIFY 기록 없이 쓰는 미리보기 도구, AI.md §2 tools/mockups).
 // Starts the real engine on a temporary database, opens the built UI (dist/ui, run
-// `npm run build:web` first), seeds an example project, visits each workspace tab and saves
+// `npm run build:web` first), seeds an example project, visits each rail destination (and one
+// open jig instance, which shows the row of open tabs) and saves
 // one static HTML page per screen state into a single preview file: the DOM as rendered, the
 // stylesheets inlined, the 3D view as a picture. The page has no app logic; a small switcher
 // changes screens. Usage: node tools/mockups/ui-preview/snapshot.mjs [out.html]
@@ -189,7 +190,8 @@ try {
     }, pictures);
     states.push({ id, label, ...snap });
   };
-  const tab = (id) => page.locator(`[role="tab"][data-workspace="${id}"]`).first().click();
+  // The rail's fixed destinations (src/ui/index.html `data-workspace-target`).
+  const tab = (id) => page.locator(`.rail [data-workspace-target="${id}"]`).click();
 
   await tab('dashboard');
   await capture('dashboard', '대시보드');
@@ -209,6 +211,23 @@ try {
       .first();
     if (await button.count()) await button.click();
     await capture('output-' + sub, '산출물 · ' + sub);
+  }
+  // An open jig instance (the example grid jig, a new 작업본): the row of open tabs shows.
+  await tab('jig');
+  const grid = page.locator('.jig-card', { hasText: '격자 골조 배치 예제' }).first();
+  try {
+    await grid.waitFor({ timeout: 5000 });
+    await grid.getByRole('button', { name: '새로 열기', exact: true }).click();
+    await grid.getByLabel('출력 레이어').fill('VIDE 출력');
+    await grid.getByRole('button', { name: '열기', exact: true }).click();
+    await page.waitForFunction(() => document.body.dataset.workspace === 'context');
+    await page.waitForFunction(
+      () => document.querySelector('.jig-dialog h2')?.textContent === '격자 골조 배치 예제',
+    );
+    await capture('jig-instance', 'JIG · 열린 작업본');
+    await page.locator('.workspace-tablist .workspace-tab-close').first().click();
+  } catch (error) {
+    console.warn('jig instance state skipped:', error.message.split('\n')[0]);
   }
   await tab('model');
   await page.locator('#rail-theme').click();

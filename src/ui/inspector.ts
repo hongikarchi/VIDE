@@ -7,12 +7,14 @@ import {
   Cuboid,
   Database,
   Expand,
+  FileOutput,
   Eye,
   EyeOff,
   FileText,
   Focus,
   FolderOpen,
   Grid2x2Plus,
+  Hammer,
   History,
   House,
   Layers,
@@ -26,6 +28,7 @@ import {
   Pin,
   Pyramid,
   RefreshCw,
+  Search,
   Sun,
   Trash2,
   Wrench,
@@ -134,6 +137,10 @@ const icons: Record<string, IconNode> = {
   refresh: RefreshCw,
   x: X,
   'folder-open': FolderOpen,
+  search: Search,
+  // The rail's 만들기 and 산출물 destinations.
+  make: Hammer,
+  output: FileOutput,
 };
 const attribute = (value: string | number | undefined) =>
   String(value ?? '')

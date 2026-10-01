@@ -28,14 +28,7 @@ import { renderProjectHeading } from './project-heading.tsx';
 import { setMobileView } from './mobile-navigation.tsx';
 import { showQuantities } from './quantities.tsx';
 import { attachNativeAttributes } from './native-attributes.ts';
-import {
-  attachJigs,
-  legacyJigTab,
-  overlayPicked,
-  refreshJigs,
-  showJigs,
-  type JigContext,
-} from './jigs.tsx';
+import { attachJigs, legacyJigTab, overlayPicked, refreshJigs, type JigContext } from './jigs.tsx';
 import {
   continueSkill,
   provideSkillDeps,
@@ -1484,9 +1477,11 @@ function showLayers() {
           const name = layerOf(item?.layer64);
           return {
             ...o,
-            // Several files: the object tree groups by file, then by layer.
+            // Several files: the layer list groups by file, then by layer.
             layer: many ? `${layer.name} › ${name ?? '레이어 없음'}` : name,
             layerName: name,
+            // The layer list's swatch (host layer colour, #rrggbb).
+            layerColor: item?.layerColor,
             type: item?.nativeType || o.kind,
           };
         }),
@@ -1737,17 +1732,15 @@ attachJigs(
     },
   }),
 );
-// The rail's JIG button goes back to the jig used last, or to the JIG list.
-$('jigs').onclick = () => {
-  if (project) showJigs();
-};
-// 대시보드 and 프로젝트 자료 (the project DB) open their workspace tabs.
-$('rail-dashboard').onclick = () => {
-  if (project) setWorkspace('dashboard');
-};
-$('rail-facts').onclick = () => {
-  if (project) setWorkspace('data');
-};
+// The rail's fixed destinations (user decision 2026-10-01): 대시보드 · 자료 · JIG (the list) ·
+// 만들기 · 산출물 open their screens; 모델 and 작업 이력 (data-section) open the model screen on
+// their left-panel section, wired below and in src/ui/workspace-panels.ts.
+for (const button of document.querySelectorAll<HTMLButtonElement>(
+  '.rail [data-workspace-target]:not([data-section])',
+))
+  button.onclick = () => {
+    if (project) setWorkspace(button.dataset.workspaceTarget!);
+  };
 $('rail-feedback').onclick = () => void showFeedback();
 /** The toggle shows the theme it switches to. */
 function paintThemeToggle() {
@@ -1807,7 +1800,7 @@ provideDashboard({
 function showModelView() {
   if (!workspaceShowsViewport()) setWorkspace('model');
 }
-// The documents panel belongs to the model tab: its rail buttons bring that tab back.
+// The documents panel belongs to the model screen: 모델 and 작업 이력 bring that screen back.
 for (const button of document.querySelectorAll<HTMLButtonElement>('.rail [data-section]'))
   button.addEventListener('click', () => {
     if (activeWorkspace() !== 'model') setWorkspace('model');
