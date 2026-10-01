@@ -1,4 +1,5 @@
-// The AI settings dialog's project addendum editor (PLAN-24 지침 묶음): type, save, reload, read back.
+// The AI settings dialog's project addendum editor (PLAN-24 지침 묶음): type, save, reload, read back;
+// and the 작업 중 질문 받기 switch (T-075): on by default, off kept across a reload.
 // Synthetic engine and provider; no model requests or host writes.
 import assert from 'node:assert/strict';
 import { mkdtemp, rm } from 'node:fs/promises';
@@ -67,12 +68,29 @@ try {
     projectId,
   );
   assert.deepEqual(stored, { images: false });
+  // 작업 중 질문 받기 (T-075): on by default; off is kept across a reload.
+  const questions = page.getByRole('checkbox', { name: '작업 중 질문 받기', exact: true });
+  await page.waitForFunction(() => !document.querySelector('.ai-questions input')?.disabled);
+  assert.ok(await questions.isChecked(), 'questions are on by default');
+  // A controlled switch: it changes once the engine answered the PUT.
+  await questions.click();
+  await page
+    .locator('section.ai-questions')
+    .getByRole('status')
+    .filter({ hasText: '질문 카드로 묻습니다' })
+    .waitFor();
+  await page.reload();
+  await open();
+  await page.waitForFunction(() => !document.querySelector('.ai-questions input')?.disabled);
+  assert.ok(!(await questions.isChecked()), 'off stays off after a reload');
   console.log(
     JSON.stringify({
       addendumSaved: true,
       reloaded: true,
       overLimitBlocked: true,
       referenceImagesOff: true,
+      questionsDefaultOn: true,
+      questionsOffKept: true,
     }),
   );
 } finally {

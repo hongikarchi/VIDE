@@ -74,6 +74,8 @@ import { SdkExecution } from './sdk-execution.ts';
 import { ZwcadSdkExecution } from './zwcad-sdk-execution.ts';
 import { AiSettings } from '../core/ai-settings.ts';
 import { ProjectInstructionStore } from '../ai/instructions/project-store.ts';
+import { QuestionSettings } from '../ai/question-settings.ts';
+import { closeIdleCodexAppServers } from '../ai/codex-app-server.ts';
 import { ReviewNotes } from '../core/review-notes.ts';
 import { compareReviews } from '../core/review-comparison.ts';
 import { Reviews } from '../core/reviews.ts';
@@ -405,9 +407,14 @@ export async function startServer({
   const projectInstructions = new ProjectInstructionStore(
     filename === ':memory:' ? undefined : dirname(filename),
   );
+  // Settings → AI 「작업 중 질문 받기」 (T-075): the providers' own questions mid-turn, default on.
+  const questionSettings = new QuestionSettings(
+    filename === ':memory:' ? undefined : join(dirname(filename), 'question-settings.json'),
+  );
   const execution = new Execution(workspace, {
     diagnostics,
     conversations,
+    questions: () => questionSettings.get().native,
     projectInstructions: (projectId) => projectInstructions.text(projectId),
     selectContext: (text, candidates) =>
       selectContext(text, candidates, { dataDirectory: dirname(filename) }),
@@ -962,6 +969,22 @@ export async function startServer({
         diagnostics.write('route-revert', reverted);
         send(200, { ok: true });
         return;
+      }
+      if (url.pathname === '/api/v1/settings/questions') {
+        if (request.method === 'PUT') {
+          const { native } = questionSettings.set(
+            z
+              .object({ native: z.boolean() })
+              .strict()
+              .parse(await body(request)),
+          );
+          // Off: the Codex processes no turn is using go now (a running turn ends as it is).
+          if (!native) await closeIdleCodexAppServers().catch(() => {});
+        }
+        if (request.method === 'PUT' || request.method === 'GET') {
+          send(200, questionSettings.view());
+          return;
+        }
       }
       if (url.pathname === '/api/v1/settings/routing') {
         if (request.method === 'PUT')

@@ -1,8 +1,9 @@
 // Codex through `codex app-server` (stdio JSON-RPC; SPIKE-2026-09-30-codex-app-server): an
 // alternative to one `codex exec` run per turn. One process per conversation keeps the thread
 // loaded between turns; a question the model asks with its own tool (`item/tool/requestUserInput`)
-// becomes VIDE's question card. Off unless the flag is on (`VIDE_CODEX_APP_SERVER=1`); the `exec`
-// path stays the default. The isolation of `exec` is asserted here too, from what the server
+// becomes VIDE's question card. On by default (2026-10-01 user decision, like Claude's own
+// questions, ADR-026 4); `VIDE_CODEX_APP_SERVER=0` or Settings → AI 「작업 중 질문 받기」 off sends
+// Codex through `codex exec` again. The isolation of `exec` is asserted here too, from what the server
 // reports: read-only sandbox, no approvals, no user MCP servers (only VIDE's, with this turn's
 // tools), no shell, web, apps or plugins, the developer instructions exactly the bundle's.
 
@@ -45,10 +46,10 @@ import {
 
 const error = (code: string) => new ProviderError(code);
 
-/** The flag (config): the app-server path runs only when it is on. */
+/** The flag (config): on unless `VIDE_CODEX_APP_SERVER=0`, which forces the `exec` path. */
 export const CODEX_APP_SERVER_FLAG = 'VIDE_CODEX_APP_SERVER';
 export function codexAppServerEnabled(env: NodeJS.ProcessEnv = process.env) {
-  return env[CODEX_APP_SERVER_FLAG] === '1';
+  return env[CODEX_APP_SERVER_FLAG] !== '0';
 }
 
 // --- process arguments -------------------------------------------------------------------------
@@ -314,7 +315,12 @@ interface Message {
   error?: { message?: string; code?: number };
 }
 const MAX_LINE = 8 * 1024 * 1024;
-/** One app-server process: requests with ids, notifications and server requests to listeners. */
+/**
+ * One app-server process: requests with ids, notifications and server requests to listeners. The
+ * process lives between turns, so nothing it does may take the engine down (RESEARCH-13): every
+ * stream and the child carry an 'error' listener for their whole life, and an exit nobody asked for
+ * fails the running turn with PROVIDER_EXITED (the next turn starts a fresh process).
+ */
 export class AppServerRpc {
   child: ChildProcessWithoutNullStreams;
   closed = false;
@@ -342,10 +348,15 @@ export class AppServerRpc {
       }
     });
     child.stderr.on('data', () => {});
+    // `on`, not `once`: a second 'error' without a listener would throw in the engine.
     child.stdin.on('error', () => this.fail('INPUT_DELIVERY_FAILED'));
-    child.once('error', () => this.fail('CLI_UNAVAILABLE'));
-    child.once('close', () => this.fail('PROVIDER_FAILED'));
+    child.stdout.on('error', () => this.fail('PROVIDER_EXITED'));
+    child.stderr.on('error', () => {});
+    child.on('error', () => this.fail(this.started ? 'PROVIDER_EXITED' : 'CLI_UNAVAILABLE'));
+    child.on('close', () => this.fail('PROVIDER_EXITED'));
   }
+  /** The process answered once (an 'error' before that is a spawn failure). */
+  private started = false;
   private receive(line: string) {
     let message: Message;
     try {
@@ -354,6 +365,7 @@ export class AppServerRpc {
       return this.fail('INVALID_PROVIDER_OUTPUT');
     }
     if (!message || typeof message !== 'object') return this.fail('INVALID_PROVIDER_OUTPUT');
+    this.started = true;
     if (message.id !== undefined && !message.method) {
       const waiting = this.pending.get(Number(message.id));
       if (!waiting) return;
@@ -375,7 +387,12 @@ export class AppServerRpc {
   }
   private write(message: unknown) {
     if (this.closed) return;
-    this.child.stdin.write(JSON.stringify(message) + '\n');
+    try {
+      this.child.stdin.write(JSON.stringify(message) + '\n');
+    } catch {
+      // A stream already destroyed (the process went away between two checks).
+      this.fail('INPUT_DELIVERY_FAILED');
+    }
   }
   fail(code: string) {
     if (this.closed) return;
@@ -453,6 +470,10 @@ async function dispose(entry: Live) {
 /** Closes every kept process (server shutdown, tests). */
 export async function closeCodexAppServers() {
   await Promise.all([...live.values()].map(dispose));
+}
+/** Closes the kept processes no turn is using (the questions setting was turned off). */
+export async function closeIdleCodexAppServers() {
+  await Promise.all([...live.values()].filter((entry) => !entry.busy).map(dispose));
 }
 /** The threads that have a process right now (diagnostics, tests). */
 export function liveCodexThreads() {
@@ -549,13 +570,19 @@ export class CodexAppServer extends CodexCli {
     const cwd = await mkdtemp(join(tmpdir(), 'vide-codex-'));
     let rpc: AppServerRpc | undefined;
     try {
-      const child = this.spawnProcess(this.executable, args, {
-        cwd,
-        env: this.environment(),
-        shell: false,
-        windowsHide: true,
-        stdio: ['pipe', 'pipe', 'pipe'],
-      }) as ChildProcessWithoutNullStreams;
+      let child: ChildProcessWithoutNullStreams;
+      try {
+        child = this.spawnProcess(this.executable, args, {
+          cwd,
+          env: this.environment(),
+          shell: false,
+          windowsHide: true,
+          stdio: ['pipe', 'pipe', 'pipe'],
+        }) as ChildProcessWithoutNullStreams;
+      } catch {
+        // Spawning itself threw (bad path, no permission): the same as a missing executable.
+        throw error('CLI_UNAVAILABLE');
+      }
       rpc = new AppServerRpc(child);
       await rpc.request('initialize', {
         clientInfo: { name: 'vide', title: 'VIDE', version: '1' },

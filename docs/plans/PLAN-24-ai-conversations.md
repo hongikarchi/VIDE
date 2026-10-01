@@ -2,7 +2,7 @@
 id: PLAN-24
 title: AI 대화 세션·동시 진행·말로 하는 경로 판정 1차
 status: review
-version: 0.41
+version: 0.42
 updated: 2026-10-01
 owner: agent:claude
 related: [PLAN, PLAN-22, PLAN-23, PLAN-25, PLAN-26, PLAN-02, PLAN-05, PLAN-08, PLAN-19, FR-25, FR-24, FR-18, FR-10, FR-11, FR-12, AC-46, AC-47, AC-48, AC-38, SPEC-02, SPEC-07, ARCH-01, ARCH-03, ADR-021, ADR-014, ADR-022, ADR-025, ADR-026, RESEARCH-10, RESEARCH-11]
@@ -310,14 +310,16 @@ related: [PLAN, PLAN-22, PLAN-23, PLAN-25, PLAN-26, PLAN-02, PLAN-05, PLAN-08, P
 
 ### T-075 · 공급자 자체 질문 기능 SPIKE와 어댑터 {#t-075}
 
-- **변경 범위:** Claude `AskUserQuestion`을 stream-json 제어 요청으로 받는 `claude-cli.ts` `nativeQuestions`, Codex `codex app-server` 어댑터 `src/ai/codex-app-server.ts`(`VIDE_CODEX_APP_SERVER=1`). 질문 카드 화면은 그대로 둔다(SPEC-02.19).
-- **검증:** [SPIKE-2026-09-30-native-questions-claude](../tdd/SPIKE-2026-09-30-native-questions-claude.md)·[SPIKE-2026-09-30-codex-app-server](../tdd/SPIKE-2026-09-30-codex-app-server.md), `tests/ai/native-questions.test.mjs`·`codex-app-server.test.mjs`.
-- **완료:** SPIKE 판정 기록. 기본값으로 켜는 것은 사용자 결정 뒤다.
-- **상태(2026-10-01):** SPIKE 합격. Claude는 기본으로 켬, Codex 어댑터는 꺼 둠.
+- **변경 범위:** Claude `AskUserQuestion`을 stream-json 제어 요청으로 받는 `claude-cli.ts` `nativeQuestions`, Codex `codex app-server` 어댑터 `src/ai/codex-app-server.ts`(기본 켬, `VIDE_CODEX_APP_SERVER=0`이면 끔). 설정 → AI 「작업 중 질문 받기」(`src/ai/question-settings.ts`, `/api/v1/settings/questions`, `ai-settings.tsx`). 질문 카드 화면은 그대로 둔다(SPEC-02.19).
+- **검증:** [SPIKE-2026-09-30-native-questions-claude](../tdd/SPIKE-2026-09-30-native-questions-claude.md)·[SPIKE-2026-09-30-codex-app-server](../tdd/SPIKE-2026-09-30-codex-app-server.md), `tests/ai/native-questions.test.mjs`·`codex-app-server.test.mjs`·`question-settings.test.mjs`, `browser-ai-settings-smoke.mjs`.
+- **완료:** SPIKE 판정 기록과 기본값 결정(Claude ADR-026 결정 4, Codex 2026-10-01 사용자 결정). 남은 것은 실제 대화의 장시간 사용.
+- **상태(2026-10-01):** SPIKE 합격. Claude와 Codex 모두 기본으로 켬, 설정 → AI 「작업 중 질문 받기」로 함께 끔.
   - Claude는 `--permission-prompt-tool stdio`로 `AskUserQuestion`을 같은 실행 안에서 받는다(실제 CLI 합성 턴, 150초 지연 통과). 사용자 결정 ADR-026 결정 4에 따라 대화 턴에서 기본으로 켠다(`d733f52`, [PLAN-26](PLAN-26-chat-stage.md) T-076). `VIDE_NATIVE_QUESTIONS=0`이면 끄고 구조화 출력 카드만 쓴다
-  - Codex는 `app-server`의 `requestUserInput`을 턴 중에 받고 프로세스를 대화 사이에 유지한다(격리는 스레드 설정·응답·MCP 상태로 확인). `VIDE_CODEX_APP_SERVER=1`일 때만 켜고, 엔진을 닫을 때 프로세스를 정리한다. 기본 로그인 계정이 바뀌면 다음 턴 전에 프로세스를 바꾼다(`5ec4458`)
-  - 증거: `c8443db`, `d733f52`. [SPIKE-2026-09-30-native-questions-claude](../tdd/SPIKE-2026-09-30-native-questions-claude.md), [SPIKE-2026-09-30-codex-app-server](../tdd/SPIKE-2026-09-30-codex-app-server.md), `tests/ai/native-questions.test.mjs`·`codex-app-server.test.mjs`
-  - 남음: Codex `app-server`를 기본으로 켤지 사용자 결정, 실제 대화에서 장시간 사용
+  - Codex는 `app-server`의 `requestUserInput`을 턴 중에 받고 프로세스를 대화 사이에 유지한다(격리는 스레드 설정·응답·MCP 상태로 확인). 사용자 결정(2026-10-01, "codex도 기본으로 켜야")으로 기본으로 켠다. `VIDE_CODEX_APP_SERVER=0`이거나 「작업 중 질문 받기」를 끄면 `codex exec`로 간다(주입한 공급자 팩토리는 그대로). 엔진을 닫을 때 설정과 관계없이 프로세스를 정리하고, 설정을 끄면 쉬는 프로세스를 바로 끈다. 기본 로그인 계정이 바뀌면 다음 턴 전에 프로세스를 바꾼다(`5ec4458`)
+  - 엔진 보호(RESEARCH-13의 조용한 종료): 프로세스·stdin·stdout·stderr의 `error` 수신기를 수명 내내 둔다(`once`였던 프로세스 `error`가 두 번째에 엔진을 죽일 수 있었다). 띄우지 못하면(`error` 또는 spawn 예외) `CLI_UNAVAILABLE`, 턴 중에 스스로 끝나면 `PROVIDER_EXITED`(화면 문구 추가)로 끝나고 그 프로세스는 남기지 않으며 다음 턴은 새 프로세스로 스레드를 잇는다. 쉬는 동안 끝난 프로세스도 다음 턴 전에 바꾼다
+  - 「작업 중 질문 받기」: `<data>/question-settings.json`(없으면 켬, 읽지 못하면 끔), `GET/PUT /api/v1/settings/questions`(원격 차단, 환경 변수로 꺼진 공급자 `forcedOff`), Claude 자체 질문과 Codex app-server를 함께 거른다
+  - 증거: `c8443db`, `d733f52`. [SPIKE-2026-09-30-native-questions-claude](../tdd/SPIKE-2026-09-30-native-questions-claude.md), [SPIKE-2026-09-30-codex-app-server](../tdd/SPIKE-2026-09-30-codex-app-server.md), `tests/ai/native-questions.test.mjs`·`codex-app-server.test.mjs`(띄우기 실패·턴 중 종료·쉬는 중 종료 포함)·`question-settings.test.mjs`(설정 파일·공급자 선택·경로), `browser-ai-settings-smoke.mjs`(기본 켬, 끈 값이 새로 고침 뒤에도 유지)
+  - 남음: 실제 대화에서 장시간 사용(실제 Codex CLI로 기본 켬 상태의 턴은 이번에 돌리지 않았다)
 
 ### T-088 · 대화별 모델 고정과 모델 바꾸기 = 새 탭 {#t-088}
 

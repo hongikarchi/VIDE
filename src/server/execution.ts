@@ -111,6 +111,11 @@ interface Options {
   onProviderLimit?: (provider: string) => void;
   /** Start/end, duration and failure code of every run (diagnostic log). */
   diagnostics?: Diagnostics;
+  /**
+   * Settings → AI 「작업 중 질문 받기」 (T-075): the provider's own question tool in a turn (Claude's
+   * AskUserQuestion, Codex's app-server). Default on; the environment still forces each one off.
+   */
+  questions?: () => boolean;
   /** Which earlier exchanges go with a request (Jev when a key is set; else the last six). */
   selectContext?: (body: string, candidates: ContextCandidate[]) => Promise<ContextChoice>;
   /** Conversations (SPEC-02.19): session per turn, ledger, one running turn per conversation. */
@@ -260,6 +265,7 @@ export class Execution {
       folders,
       fileContext,
       onFinished,
+      questions,
       selectContext: choose = (body, candidates) =>
         selectContext(body, candidates, { key: () => '' }),
     }: Options = {},
@@ -284,6 +290,16 @@ export class Execution {
     this.folders = folders;
     this.fileContext = fileContext;
     this.onFinished = onFinished;
+    this.questions = questions;
+  }
+  private readonly questions?: Options['questions'];
+  /** 작업 중 질문 받기 is on (an unreadable setting counts as off). */
+  questionsOn() {
+    try {
+      return this.questions?.() ?? true;
+    } catch {
+      return false;
+    }
   }
   private readonly onFinished?: Options['onFinished'];
   executable(provider: string) {
@@ -314,11 +330,13 @@ export class Execution {
     nativeQuestions?: NativeQuestionHandler,
   ) {
     const executable = this.executable(input.provider);
-    // Flag (SPIKE-2026-09-30-codex-app-server): Codex through `codex app-server` instead of
-    // `codex exec`; only replaces the default factory (tests keep their injected one).
+    // Codex through `codex app-server` (its own questions mid-turn, SPIKE-2026-09-30-codex-app-
+    // server) by default; `codex exec` when 작업 중 질문 받기 is off or VIDE_CODEX_APP_SERVER=0.
+    // Only replaces the default factory (tests keep their injected one).
     const factory =
       input.provider === 'codex-cli' &&
       codexAppServerEnabled() &&
+      this.questionsOn() &&
       this.providerFactory === createProvider
         ? (options: CliOptions) => new CodexAppServer(options)
         : this.providerFactory;
@@ -1283,9 +1301,10 @@ export class Execution {
             ...(host ? { host: target } : {}),
           },
           // A conversation turn asks with Claude's own question tool by default (ADR-026 4);
-          // VIDE_NATIVE_QUESTIONS=0 keeps the structured-output cards only. Like the Codex
-          // app-server flag, an injected provider factory (tests) opts in with =1 only.
+          // 작업 중 질문 받기 off or VIDE_NATIVE_QUESTIONS=0 keeps the structured-output cards
+          // only. Like the Codex app-server, an injected provider factory (tests) opts in with =1.
           turn &&
+            this.questionsOn() &&
             (process.env.VIDE_NATIVE_QUESTIONS === '1' ||
               (nativeQuestionsEnabled() && this.providerFactory === createProvider))
             ? this.questionHandler(projectId, id)
@@ -1753,7 +1772,8 @@ export class Execution {
     const active = [...this.active.values()];
     active.forEach((x) => x.controller.abort());
     await Promise.all(active.map((x) => x.completion));
-    // Codex app-server processes kept between turns (flag) do not outlive the engine.
-    if (codexAppServerEnabled()) await closeCodexAppServers().catch(() => {});
+    // Codex app-server processes kept between turns do not outlive the engine (whatever the
+    // setting is now: it may have been on when they started).
+    await closeCodexAppServers().catch(() => {});
   }
 }

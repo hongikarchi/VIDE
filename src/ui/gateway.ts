@@ -92,6 +92,7 @@ export const errors: Record<string, string> = {
     'AI CLI의 로그인 방식이 바뀌어 요청이 인증 없이 나갔습니다. 실행을 멈췄고 다른 계정으로 넘기지 않았습니다. CLI 판을 확인하세요.',
   TIMEOUT: '응답 시간이 초과됐습니다.',
   PROVIDER_FAILED: 'AI 공급자가 요청을 완료하지 못했습니다.',
+  PROVIDER_EXITED: 'AI 공급자 프로세스가 작업 중에 끝났습니다. 다음 요청은 새로 시작합니다.',
   PROVIDER_LIMIT:
     '이 계정의 구독 사용 한도에 걸렸습니다. 자동으로 다시 보내지 않습니다. AccountSwitch에서 계정을 바꾼 뒤 다시 보내세요.',
   UNAUTHORIZED: '서버가 표시한 실행 링크로 다시 열어 주세요.',

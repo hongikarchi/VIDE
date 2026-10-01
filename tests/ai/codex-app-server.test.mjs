@@ -112,6 +112,13 @@ function fake({
       activeTurn;
     const server = {
       send,
+      /** The process goes away by itself (crash, killed from outside). */
+      exit: (code = 1) => {
+        child.exitCode = code;
+        child.emit('exit', code);
+        child.emit('close', code);
+      },
+      child,
       notify: (method, params) => send({ method, params: { threadId: thread, ...params } }),
       get turnId() {
         return activeTurn;
@@ -219,8 +226,9 @@ afterEach(async () => {
   await closeCodexAppServers();
 });
 
-test('플래그가 켜진 때만 app-server 경로를 쓴다', () => {
-  assert.equal(codexAppServerEnabled({}), false);
+test('app-server 경로는 기본으로 켜지고 VIDE_CODEX_APP_SERVER=0일 때만 끈다', () => {
+  // 2026-10-01 user decision ("codex도 기본으로 켜야"), like Claude's own questions (ADR-026 4).
+  assert.equal(codexAppServerEnabled({}), true);
   assert.equal(codexAppServerEnabled({ VIDE_CODEX_APP_SERVER: '0' }), false);
   assert.equal(codexAppServerEnabled({ VIDE_CODEX_APP_SERVER: '1' }), true);
 });
@@ -698,4 +706,106 @@ test('API 인증이나 미로그인은 프로세스를 띄우기 전에 거절�
   const transport = fake({ auth: 'Not logged in' });
   await assert.rejects(provider(transport).run(context), { code: 'SUBSCRIPTION_LOGIN_REQUIRED' });
   assert.equal(transport.servers().length, 0);
+});
+
+test('app-server를 띄우지 못하면 CLI_UNAVAILABLE로 끝나고 엔진을 죽이지 않는다', async () => {
+  const transport = fake();
+  const children = [];
+  // The executable cannot start: 'error' (ENOENT), twice, as Windows may report it.
+  const failing = (executable, args, options) => {
+    if (args[0] !== 'app-server') return transport.spawnProcess(executable, args, options);
+    const child = new EventEmitter();
+    child.stdin = new PassThrough();
+    child.stdout = new PassThrough();
+    child.stderr = new PassThrough();
+    child.exitCode = null;
+    child.signalCode = null;
+    child.pid = undefined;
+    children.push(child);
+    queueMicrotask(() => {
+      const cause = Object.assign(new Error('spawn codex ENOENT'), { code: 'ENOENT' });
+      child.emit('error', cause);
+      child.emit('error', cause);
+      child.stdout.emit('error', cause);
+      child.stdin.emit('error', cause);
+    });
+    return child;
+  };
+  await assert.rejects(provider({ spawnProcess: failing }).run(context), {
+    code: 'CLI_UNAVAILABLE',
+  });
+  assert.equal(children.length, 1);
+  assert.deepEqual(liveCodexThreads(), []);
+  // Spawning that throws at once is the same failure, never an exception out of the engine.
+  const throwing = (executable, args, options) => {
+    if (args[0] === 'app-server') throw Object.assign(new Error('EACCES'), { code: 'EACCES' });
+    return transport.spawnProcess(executable, args, options);
+  };
+  await assert.rejects(provider({ spawnProcess: throwing }).run(context), {
+    code: 'CLI_UNAVAILABLE',
+  });
+});
+
+test('턴 중에 app-server가 끝나면 그 턴은 PROVIDER_EXITED로 끝나고 다음 턴은 새 프로세스로 잇는다', async () => {
+  const transport = fake({
+    turns: [
+      reply('첫 답'),
+      (server) => {
+        // Half way through the turn the process dies; its streams error on the way out.
+        server.notify('item/started', {
+          turnId: server.turnId,
+          item: { type: 'agentMessage', id: 'm2' },
+        });
+        server.child.stdout.emit('error', new Error('EPIPE'));
+        server.exit(3221225477);
+        server.child.emit('error', new Error('late'));
+      },
+      reply('셋째 답'),
+    ],
+  });
+  const opening = await provider(transport, {
+    session: { id: '11111111-2222-4333-8444-555555555555', resume: false },
+  }).run(context);
+  assert.equal(opening.sessionId, THREAD);
+  await assert.rejects(
+    provider(transport, { session: { id: THREAD, resume: true } }).run(context),
+    { code: 'PROVIDER_EXITED' },
+  );
+  assert.deepEqual(liveCodexThreads(), [], 'a dead process is not kept');
+  const third = await provider(transport, { session: { id: THREAD, resume: true } }).run(context);
+  assert.equal(third.text, '셋째 답');
+  assert.equal(transport.servers().length, 2, 'the next turn starts a fresh process');
+  assert.equal(transport.method('thread/resume').at(-1).params.threadId, THREAD);
+});
+
+test('쉬는 동안 app-server가 끝나도 다음 턴 전에 새로 띄운다', async () => {
+  let kept;
+  const transport = fake({
+    turns: [
+      (server) => {
+        kept = server;
+        for (const entry of reply('하나'))
+          server.send({
+            ...entry,
+            params: {
+              threadId: THREAD,
+              turnId: server.turnId,
+              ...entry.params,
+              ...(entry.method === 'turn/completed'
+                ? { turn: { id: server.turnId, ...entry.params.turn } }
+                : {}),
+            },
+          });
+      },
+      reply('둘'),
+    ],
+  });
+  await provider(transport, {
+    session: { id: '11111111-2222-4333-8444-555555555555', resume: false },
+  }).run(context);
+  assert.deepEqual(liveCodexThreads(), [THREAD]);
+  kept.exit(1);
+  const second = await provider(transport, { session: { id: THREAD, resume: true } }).run(context);
+  assert.equal(second.text, '둘');
+  assert.equal(transport.servers().length, 2);
 });
