@@ -432,9 +432,12 @@ test('격리 인자가 빠진 세션 턴은 실행하지 않는다', async () =>
   assert.ok(!transport.calls.some((call) => call.args[0] === 'exec'));
 });
 test('실패한 여는 턴의 기록은 그 thread 파일만 바로 지운다', async () => {
+  // The default login's folder (ADR-025): ~/.codex of a home this test points to.
   const home = await mkdtemp(join(tmpdir(), 'vide-codex-open-'));
+  const before = { USERPROFILE: process.env.USERPROFILE, HOME: process.env.HOME };
+  process.env.USERPROFILE = process.env.HOME = home;
   try {
-    const day = join(home, 'sessions', '2026', '09', '30');
+    const day = join(home, '.codex', 'sessions', '2026', '09', '30');
     await mkdir(day, { recursive: true });
     const kept = `rollout-2026-09-30T11-00-00-${otherThread}.jsonl`;
     await writeFile(join(day, `rollout-2026-09-30T10-00-00-${thread}.jsonl`), '{}\n');
@@ -442,7 +445,6 @@ test('실패한 여는 턴의 기록은 그 thread 파일만 바로 지운다', 
     await assert.rejects(
       new CodexCli({
         executable: process.execPath,
-        configDirectory: home,
         session: { id: '4d4d4d4d-4d4d-4d4d-8d4d-4d4d4d4d4d4d', resume: false },
         spawnProcess: fake([
           { type: 'thread.started', thread_id: thread },
@@ -454,6 +456,9 @@ test('실패한 여는 턴의 기록은 그 thread 파일만 바로 지운다', 
     );
     assert.deepEqual(await readdir(day), [kept]);
   } finally {
+    for (const [key, value] of Object.entries(before))
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
     await rm(home, { recursive: true, force: true });
   }
 });

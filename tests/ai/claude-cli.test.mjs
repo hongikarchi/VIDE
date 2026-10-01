@@ -492,14 +492,13 @@ test('구조화 출력 스키마는 포함된 turn-output 항목에서만 읽고
   assert.deepEqual(args, cliArguments(cli.instructions));
 });
 
-test('a confirmed login is reused for ten minutes per account folder; a limit or a switch asks again', async () => {
+test('a confirmed login is reused for ten minutes; a limit or a cleared login asks again', async () => {
   const fake = transport([init, result]);
   const authCalls = () => fake.calls.filter((call) => call.args[0] === 'auth').length;
-  const make = (configDirectory) =>
+  const make = () =>
     new ClaudeCli({
       executable: process.execPath,
       spawnProcess: fake.spawnProcess,
-      configDirectory,
     });
   const first = make();
   await first.run(context());
@@ -510,13 +509,10 @@ test('a confirmed login is reused for ten minutes per account folder; a limit or
   await second.run(context());
   assert.equal(authCalls(), 1, 'the second run reuses the login');
   assert.equal(second.timing.authCached, true);
-  // Another account folder is its own login.
-  await make(resolve(tmpdir(), 'vide-profile-a')).run(context());
-  assert.equal(authCalls(), 2);
-  // An account switch (or login/logout) forgets every remembered login.
+  // A cleared login (a refused run) is asked again.
   clearAuthStatus();
   await make().run(context());
-  assert.equal(authCalls(), 3);
+  assert.equal(authCalls(), 2);
   // A run refused on its subscription limit asks the login again next time.
   const limited = transport([
     init,

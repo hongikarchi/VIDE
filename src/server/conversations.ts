@@ -1,5 +1,6 @@
 // Conversations (SPEC-02.19, ADR-021, PLAN-24 T-061): a conversation is one purpose's flow of
-// turns. Its service, model and account are fixed when it opens; a Claude conversation continues
+// turns. Its service and model are fixed when it opens; every turn runs on the CLI's default login
+// of that moment (ADR-025: accounts are switched in AccountSwitch). A Claude conversation continues
 // one provider session (one CLI run per turn, `--session-id` then `--resume`), a Codex one too
 // (`exec resume <thread>`, SPIKE ④ re-test 2026-09-30; the thread is named by its first turn).
 // A provider switched off in SESSION_PROVIDERS runs the ledger method. VIDE's ledger,
@@ -26,7 +27,6 @@ import {
   type ProviderSession,
   type ProviderSessionKey,
 } from '../core/conversation-store.ts';
-import type { AccountProfiles } from '../ai/account-profiles.ts';
 import type { StoredWork } from '../contracts/stored-work.ts';
 import { hostUse, waitingOf, type WaitingFor } from '../contracts/request-scope.ts';
 import type { SessionOptions } from '../ai/claude-cli.ts';
@@ -97,7 +97,6 @@ const KIND_TITLES: Record<Kind, string> = {
 export const conversationStatuses: Record<string, number> = {
   CONVERSATION_CLOSED: 409,
   CONVERSATION_PROVIDER: 409,
-  NO_SPARE_ACCOUNT: 409,
   NO_ACTIVE_SESSION: 409,
   CONVERSATION_BOUND: 409,
 };
@@ -131,19 +130,6 @@ export interface SessionSummary {
   lastTurnAt: string | null;
 }
 /**
- * The T2 card of a turn stopped on its account's limit (SPEC-02.19 5, automatic switching off):
- * the stopped turn is not sent again; confirming moves the conversation to another account of the
- * same service, whose next turn opens a new session with the hand-over packet described here.
- */
-export interface LimitHandover {
-  kind: 'limit';
-  grade: 'T2';
-  requestId: string;
-  from: { provider: string; accountProfileId: string };
-  /** What the new session receives: the whole ledger, the latest finished turns, file names. */
-  sends: { ledgerItems: number; recentTurns: number; files: number };
-}
-/**
  * The conversation's session reached the length setting (SPEC-02.19 5): a new session with the
  * ledger and the hand-over packet is suggested ([새 세션으로 이어가기], `…/renew`); until then the
  * session goes on.
@@ -166,8 +152,12 @@ export type ConversationSummary = (
   pending: boolean;
   /** The session the next turn would resume, if any. */
   session: SessionSummary | null;
-  /** A hand-over waiting for the user's confirmation, or a suggested one. */
-  handover: LimitHandover | LengthHandover | null;
+  /**
+   * A suggested hand-over (the session reached the length setting). A turn stopped on the
+   * account's limit is not handed over: it is not sent again, and the app says to change the
+   * account in AccountSwitch (ADR-025).
+   */
+  handover: LengthHandover | null;
 };
 export type NewSessionReason =
   | 'first'
@@ -188,8 +178,6 @@ export interface Placement {
 export interface PlaceDeps {
   /** Jev's service, model and effort for this request (`requested`: the composer's service). */
   route: (requested: Provider) => Promise<Choice>;
-  /** The account a newly fixed conversation keeps. */
-  chooseAccount: (provider: Provider) => Promise<string>;
 }
 /** A packet item a turn carries (ledger, hand-over, changes elsewhere). */
 export interface TurnItem {
@@ -223,14 +211,9 @@ export interface Hold {
   waitingFor?: WaitingFor;
 }
 interface Options {
-  profiles?: Pick<AccountProfiles, 'directory'>;
   diagnostics?: Pick<Diagnostics, 'write'>;
   /** Test seam: removes one session's provider transcript (default: the CLI modules'). */
-  removeTranscript?: (
-    provider: Provider,
-    configDirectory: string | undefined,
-    sessionId: string,
-  ) => Promise<number>;
+  removeTranscript?: (provider: Provider, sessionId: string) => Promise<number>;
   /**
    * The conversation length setting's file; by default `conversation-settings.json` next to the
    * database (none for an in-memory one: the defaults apply).
@@ -273,11 +256,6 @@ const handoffInput = z
   })
   .strict();
 const closeInput = z.object({ discard: z.boolean().optional() }).strict();
-const switchInput = z
-  .object({ accountProfileId: z.string().regex(/^[a-zA-Z0-9-]{1,100}$/) })
-  .strict();
-/** The account-limit card's button: a named account, or left out for the server's choice. */
-const accountInput = switchInput.partial().strict();
 const questionKey = z.string().regex(/^[a-zA-Z0-9_-]{1,40}$/);
 /** Answers to one turn's question cards; `recommended` answers every open one with its default. */
 const answerInput = z
@@ -385,14 +363,11 @@ export function ledgerItem(items: LedgerItem[], scope: 'all' | 'since-last-turn'
   }
   return { id: 'ledger', type: 'ledger', data: { scope, items: entries, summarized, omitted } };
 }
-export async function removeTranscript(
-  provider: Provider,
-  configDirectory: string | undefined,
-  sessionId: string,
-) {
+/** Removes one session's transcript from the CLI's default folder (`~/.claude`, `~/.codex`). */
+export async function removeTranscript(provider: Provider, sessionId: string) {
   return provider === 'codex-cli'
-    ? removeCodexTranscript(configDirectory, sessionId)
-    : removeClaudeTranscript(configDirectory, sessionId);
+    ? removeCodexTranscript(undefined, sessionId)
+    : removeClaudeTranscript(undefined, sessionId);
 }
 
 export class ConversationService {
@@ -485,10 +460,10 @@ export class ConversationService {
       requests: this.store.requestIds(conversation.projectId, conversation.id).length,
       pending: conversation.id ? this.pendingChoice(conversation as Conversation) : true,
       session: active ? sessionSummary(active) : null,
-      handover: conversation.id
-        ? (this.limitHandover(conversation as Conversation) ??
-          (active ? this.lengthHandover(conversation as Conversation, active) : null))
-        : null,
+      handover:
+        conversation.id && active
+          ? this.lengthHandover(conversation as Conversation, active)
+          : null,
     };
   }
   /** The project's default conversation row, once its first turn made it. */
@@ -580,48 +555,8 @@ export class ConversationService {
       result: string | null;
     }[];
   }
-  /**
-   * The conversation's latest request stopped on its account's limit and no hand-over answered it
-   * yet: the T2 card (SPEC-02.19 5). With automatic switching on, the next request already comes
-   * on another account and opens the new session itself, so the card is only offered.
-   */
-  private limitHandover(conversation: Conversation): LimitHandover | null {
-    if (conversation.state !== 'open') return null;
-    const rows = this.latestRows(conversation.id);
-    const last = rows[0];
-    if (!last || last.state !== 'failed') return null;
-    let code: unknown, accountProfileId: unknown;
-    try {
-      code = (JSON.parse(last.result ?? 'null') as { code?: unknown } | null)?.code;
-      accountProfileId = (JSON.parse(last.input) as { accountProfileId?: unknown })
-        .accountProfileId;
-    } catch {
-      return null;
-    }
-    if (code !== 'PROVIDER_LIMIT') return null;
-    const ledger = this.store.ledger(conversation.id, { current: true });
-    if (ledger.some((item) => item.kind === 'handoff' && item.requestId === last.id)) return null;
-    const { finished, files } = this.recentWork(rows.slice(1));
-    return {
-      kind: 'limit',
-      grade: 'T2',
-      requestId: last.id,
-      from: {
-        provider: conversation.provider,
-        accountProfileId:
-          typeof accountProfileId === 'string'
-            ? accountProfileId
-            : (conversation.accountProfileId ?? 'default'),
-      },
-      sends: {
-        ledgerItems: ledger.length,
-        recentTurns: Math.min(finished, RECENT_TURNS),
-        files,
-      },
-    };
-  }
 
-  /** Opens a conversation on the service, model, effort and account it keeps until it closes. */
+  /** Opens a conversation on the service, model and effort it keeps until it closes. */
   create(
     projectId: string,
     value: {
@@ -630,7 +565,6 @@ export class ConversationService {
       provider: Provider;
       model?: string | null;
       effort?: string | null;
-      accountProfileId: string;
       jigInstanceId?: string | null;
       draftId?: string | null;
       targets?: string[] | null;
@@ -824,7 +758,6 @@ export class ConversationService {
       if (!conversation) {
         opened = true;
         const choice = await choose();
-        const accountProfileId = await deps.chooseAccount(choice.provider);
         // Two first turns at once: the one that lost the race joins the row the other made.
         conversation =
           this.defaultRow(projectId) ??
@@ -836,7 +769,6 @@ export class ConversationService {
               provider: choice.provider,
               model: choice.model ?? null,
               effort: choice.effort,
-              accountProfileId,
             },
             defaultConversationId(projectId),
             routing ? 'jev' : 'user',
@@ -855,13 +787,11 @@ export class ConversationService {
       if (mark) {
         // Opened with "자동 (Jev)" and no request yet: this first turn fixes service and model.
         const choice = await choose();
-        const accountProfileId = await deps.chooseAccount(choice.provider);
         this.store.supersede(conversation.id, mark.id, mark.id);
         conversation = this.store.update(projectId, conversation.id, {
           provider: choice.provider,
           model: choice.model ?? null,
           effort: choice.effort === 'default' ? null : choice.effort,
-          accountProfileId,
           mode: sessionMode(choice.provider, conversation.kind),
         });
         this.options.diagnostics?.write('conversation-fixed', {
@@ -876,7 +806,6 @@ export class ConversationService {
           projectId,
           conversation,
           explicit,
-          await deps.chooseAccount(explicit.provider),
           typeof input.body === 'string' ? input.body : undefined,
         );
       }
@@ -891,13 +820,7 @@ export class ConversationService {
    * stays as it is, a new one opens on that service and model, and its first session gets the
    * hand-over (the old conversation's ledger, latest turns and files). Both ledgers say so.
    */
-  private continueIn(
-    projectId: string,
-    from: Conversation,
-    choice: Choice,
-    accountProfileId: string,
-    body?: string,
-  ) {
+  private continueIn(projectId: string, from: Conversation, choice: Choice, body?: string) {
     const title =
       body?.trim() && from.id === defaultConversationId(projectId)
         ? clip(body.trim().replace(/\s+/g, ' '), 60)
@@ -910,7 +833,6 @@ export class ConversationService {
       provider: choice.provider,
       model: choice.model ?? null,
       effort: choice.effort,
-      accountProfileId,
       jigInstanceId: from.jigInstanceId,
       draftId: from.draftId,
       targets: from.targets,
@@ -923,7 +845,7 @@ export class ConversationService {
       model: conversation.model,
     });
     // The account-limit stop the old conversation shows is answered by this move.
-    const stopped = this.limitHandover(from)?.requestId;
+    const stopped = this.limitStopped(from.id);
     this.store.addLedgerItem(from.id, {
       kind: 'handoff',
       ...(stopped ? { requestId: stopped } : {}),
@@ -950,60 +872,35 @@ export class ConversationService {
    * [다른 AI로 이어 가기] (SPEC-02.19 5, confirmed T2 card): a new conversation on the chosen
    * service and model takes over; its first turn opens a session with the hand-over.
    */
-  handoffTo(projectId: string, conversationId: string, value: unknown, accountProfileId: string) {
+  handoffTo(projectId: string, conversationId: string, value: unknown) {
     const input = handoffInput.parse(value);
     const conversation = this.store.get(projectId, conversationId);
     if (conversation.state !== 'open') throw new DomainError('CONVERSATION_CLOSED');
     return this.summarize(
-      this.continueIn(
-        projectId,
-        conversation,
-        { provider: input.provider, model: input.model, effort: input.effort ?? 'default' },
-        accountProfileId,
-      ),
+      this.continueIn(projectId, conversation, {
+        provider: input.provider,
+        model: input.model,
+        effort: input.effort ?? 'default',
+      }),
     );
   }
   /**
-   * The confirmed T2 card of an account limit (SPEC-02.19 5): the conversation keeps its service
-   * and model and goes on on another account of that service. The stopped turn is not sent again;
-   * the next turn opens a new session there with the ledger and the hand-over packet.
+   * The conversation's latest request, when it stopped on the account's limit: [다른 AI로 이어 가기]
+   * records the hand-over against it (that turn is not sent again).
    */
-  switchAccount(projectId: string, conversationId: string, value: unknown) {
-    const { accountProfileId } = switchInput.parse(value);
-    const conversation = this.store.get(projectId, conversationId);
-    if (conversation.state !== 'open') throw new DomainError('CONVERSATION_CLOSED');
-    const from = conversation.accountProfileId ?? 'default';
-    if (accountProfileId === from) throw new DomainError('INVALID_INPUT');
-    if (this.options.profiles)
-      try {
-        this.options.profiles.directory(conversation.provider as Provider, accountProfileId);
-      } catch {
-        throw new DomainError('INVALID_INPUT');
-      }
-    const stopped = this.limitHandover(conversation)?.requestId;
-    for (const session of this.store.sessions(conversationId, 'active'))
-      this.store.setSessionState(session, 'handed-off');
-    const updated = this.store.update(projectId, conversationId, { accountProfileId });
-    this.store.addLedgerItem(conversationId, {
-      kind: 'handoff',
-      ...(stopped ? { requestId: stopped } : {}),
-      body: {
-        reason: 'account',
-        confirmed: 'T2',
-        from: { provider: conversation.provider, accountProfileId: from },
-        to: { provider: conversation.provider, accountProfileId },
-      },
-    });
-    this.options.diagnostics?.write('conversation-handover', {
-      conversationId,
-      reason: 'account',
-      provider: conversation.provider,
-    });
-    return this.summarize(updated);
+  private limitStopped(conversationId: string) {
+    const [last] = this.latestRows(conversationId);
+    if (!last || last.state !== 'failed') return undefined;
+    try {
+      const code = (JSON.parse(last.result ?? 'null') as { code?: unknown } | null)?.code;
+      return code === 'PROVIDER_LIMIT' ? last.id : undefined;
+    } catch {
+      return undefined;
+    }
   }
   /**
    * [새 세션으로 이어가기] on the length suggestion (SPEC-02.19 5): the active session is left and
-   * the next turn opens a new one on the same service and account with the ledger and hand-over.
+   * the next turn opens a new one on the same service with the ledger and hand-over.
    */
   renew(projectId: string, conversationId: string) {
     const conversation = this.store.get(projectId, conversationId);
@@ -1086,7 +983,9 @@ export class ConversationService {
     if (conversation.state !== 'open') throw new DomainError('CONVERSATION_CLOSED');
     const provider = request.input.provider;
     if (provider !== conversation.provider) throw new DomainError('CONVERSATION_PROVIDER');
-    const accountProfileId = request.input.accountProfileId ?? 'default';
+    // Every turn runs on the CLI's default login (ADR-025). A session an older VIDE opened on one
+    // of its own account profiles is not resumed: the next turn opens a new one ('account').
+    const accountProfileId = 'default';
     const others = rows.filter((row) => row.id !== request.id);
     const own = others.filter((row) => row.input.conversationId === conversationId);
     const since = own.at(-1)?.createdAt ?? conversation.createdAt;
@@ -1142,8 +1041,6 @@ export class ConversationService {
     // Codex names its thread itself: the row is added when the opening turn reports it.
     const pending = provider === 'codex-cli' ? { cliVersion: version } : undefined;
     if (!pending) this.store.addSession({ ...key, promptMode: 'neutral', cliVersion: version });
-    if (conversation.accountProfileId !== accountProfileId)
-      this.store.update(request.projectId, conversationId, { accountProfileId });
     const items: TurnItem[] = [ledgerItem(all(), 'all')];
     if (previous) {
       items.push(handoffItem(reason, own));
@@ -1387,19 +1284,12 @@ export class ConversationService {
     return removed;
   }
   private async removeTranscript(session: ProviderSession) {
-    let directory: string | undefined;
-    try {
-      directory = this.options.profiles?.directory(
-        session.provider as Provider,
-        session.accountProfileId,
-      );
-    } catch {
-      return 0; // The account profile is gone, and its transcripts with it.
-    }
+    // A session of one of VIDE's former account profiles lived in that profile's folder, which
+    // VIDE no longer manages (ADR-025): nothing of it is touched here.
+    if (session.accountProfileId !== 'default') return 0;
     try {
       return await (this.options.removeTranscript ?? removeTranscript)(
         session.provider as Provider,
-        directory,
         session.sessionId,
       );
     } catch (error) {
@@ -1501,8 +1391,6 @@ export interface ConversationRouteContext {
   remote?: boolean;
   /** Jev's service, model and effort for a new conversation (SPEC-02.17 5). */
   chooseModel: (input: RoutingInput, requested?: Provider) => Promise<Choice & { task?: string }>;
-  /** The account a new conversation is fixed to (SPEC-02.19 2). */
-  chooseAccount: (provider: Provider) => Promise<string>;
   /** Submits a request (the answer turn) the way `POST …/requests` does; returns it. */
   submit?: (
     projectId: string,
@@ -1516,7 +1404,7 @@ export interface ConversationRouteContext {
 export async function conversationRoutes(
   url: URL,
   request: IncomingMessage,
-  { service, body, send, remote, chooseModel, chooseAccount, submit }: ConversationRouteContext,
+  { service, body, send, remote, chooseModel, submit }: ConversationRouteContext,
 ): Promise<boolean> {
   // The conversation length setting (SPEC-02.19 5): changed only on this computer.
   if (url.pathname === '/api/v1/settings/conversations') {
@@ -1528,7 +1416,7 @@ export async function conversationRoutes(
     return true;
   }
   const route =
-    /^\/api\/v1\/projects\/([^/]+)\/conversations(?:\/([^/]+)(?:\/(close|reopen|ledger|handoff|account|answer|renew|bind))?)?$/.exec(
+    /^\/api\/v1\/projects\/([^/]+)\/conversations(?:\/([^/]+)(?:\/(close|reopen|ledger|handoff|answer|renew|bind))?)?$/.exec(
       url.pathname,
     );
   if (!route) return false;
@@ -1563,7 +1451,6 @@ export async function conversationRoutes(
         provider: choice.provider,
         model: choice.model ?? null,
         effort: choice.effort,
-        accountProfileId: await chooseAccount(choice.provider),
         jigInstanceId: input.jigInstanceId,
         draftId: input.draftId,
         targets: input.targets,
@@ -1624,27 +1511,10 @@ export async function conversationRoutes(
       service.withdraw(conversationId, answered.items);
       throw error;
     }
-  } else if (action === 'account') {
-    // The confirmed T2 card of an account limit: same service, another account (SPEC-02.19 5).
-    if (remote) throw new DomainError('FORBIDDEN');
-    const input = accountInput.parse(await body(request));
-    let accountProfileId = input.accountProfileId;
-    if (!accountProfileId) {
-      // [새 세션으로 이어가기]: the server picks a spare account of the same service.
-      const conversation = service.get(projectId, conversationId);
-      if (!conversation.provider) throw new DomainError('INVALID_INPUT');
-      accountProfileId = await chooseAccount(conversation.provider);
-      if (accountProfileId === (conversation.accountProfileId ?? 'default'))
-        throw new DomainError('NO_SPARE_ACCOUNT');
-    }
-    send(200, service.switchAccount(projectId, conversationId, { accountProfileId }));
   } else {
     if (remote) throw new DomainError('FORBIDDEN');
     const input = handoffInput.parse(await body(request));
-    send(
-      200,
-      service.handoffTo(projectId, conversationId, input, await chooseAccount(input.provider)),
-    );
+    send(200, service.handoffTo(projectId, conversationId, input));
   }
   return true;
 }

@@ -5,7 +5,6 @@ import {
   type ContextChoice,
 } from '../ai/context-selector.ts';
 import { isDwgSdkEditMode } from '../contracts/dwg-edit-mode.ts';
-import type { AccountProfiles } from '../ai/account-profiles.ts';
 import { executionLimits } from '../contracts/execution-limits.ts';
 import { modelContext } from './model-context.ts';
 import { CLAUDE_MODELS, claudeEfforts, modelName } from './model-capabilities.ts';
@@ -79,7 +78,6 @@ interface Options {
     result: Record<string, unknown>,
     signal: AbortSignal,
   ) => Promise<unknown>;
-  profiles?: AccountProfiles;
   tools?: AgentTools;
   providerFactory?: (options: CliOptions & { provider: string }) => Provider;
   host?: Host;
@@ -87,8 +85,11 @@ interface Options {
   settings?: { get: () => { paths: Partial<Record<string, string | null>> } };
   sdk?: SdkExecution;
   zwcadSdk?: ZwcadSdkExecution;
-  /** A request stopped on its account's subscription limit (so the next one can switch). */
-  onProviderLimit?: (provider: string, accountProfileId: string) => void;
+  /**
+   * A request stopped on the default login's subscription limit: shown as limited; nothing is
+   * sent again by itself (the user changes the account in AccountSwitch, ADR-025).
+   */
+  onProviderLimit?: (provider: string) => void;
   /** Start/end, duration and failure code of every run (diagnostic log). */
   diagnostics?: Diagnostics;
   /** Which earlier exchanges go with a request (Jev when a key is set; else the last six). */
@@ -170,7 +171,6 @@ export class Execution {
   workspace: Workspace;
   applyAttached?: Options['applyAttached'];
   onProviderLimit?: Options['onProviderLimit'];
-  profiles?: AccountProfiles;
   providerFactory: NonNullable<Options['providerFactory']>;
   host?: Host;
   hosts: Partial<Record<'rhino' | 'zwcad', Host>>;
@@ -214,7 +214,6 @@ export class Execution {
       sdk,
       zwcadSdk,
       tools,
-      profiles,
       applyAttached,
       onProviderLimit,
       diagnostics,
@@ -229,7 +228,6 @@ export class Execution {
     this.workspace = workspace;
     this.onProviderLimit = onProviderLimit;
     this.applyAttached = applyAttached;
-    this.profiles = profiles;
     this.providerFactory = providerFactory;
     this.host = host;
     this.active = new Map();
@@ -255,7 +253,7 @@ export class Execution {
     input: Pick<
       RequestInput,
       // conversationId: a conversation turn takes the wider turn limits (SPEC-02.6).
-      'provider' | 'model' | 'effort' | 'accountProfileId' | 'executionLimits' | 'conversationId'
+      'provider' | 'model' | 'effort' | 'executionLimits' | 'conversationId'
     >,
     agent?: unknown,
     session?: SessionOptions,
@@ -277,13 +275,6 @@ export class Execution {
       provider: input.provider,
       executable,
       session,
-      configDirectory:
-        input.provider !== 'extension'
-          ? this.profiles?.directory(
-              input.provider,
-              input.accountProfileId ?? this.profiles.list().active[input.provider],
-            )
-          : undefined,
       timeoutMs: executionLimits(input).timeoutSeconds * 1000,
       agent,
       model: input.model && input.model !== input.provider ? input.model : undefined,
@@ -347,8 +338,8 @@ export class Execution {
     const catalog: { id: string; name: string; provider: string; efforts: string[] }[] = [];
     for (const [id, name] of CLAUDE_MODELS)
       catalog.push({ id, name, provider: 'claude-cli', efforts: claudeEfforts(id) });
-    // The Codex CLI keeps its model list per account folder; a newly added account has none until
-    // its first run, so fall back to the default folder, then to the CLI's own default model.
+    // The Codex CLI keeps its model list in its folder (the default login's); without one, the
+    // CLI's own default model.
     const codexCache = z.object({
       models: z
         .array(
@@ -361,9 +352,7 @@ export class Execution {
         )
         .optional(),
     });
-    const active = this.profiles?.directory('codex-cli', this.profiles.list().active['codex-cli']);
-    const folders = [...(active ? [active] : []), join(homedir(), '.codex')];
-    for (const folder of folders) {
+    for (const folder of [join(homedir(), '.codex')]) {
       try {
         const cache = codexCache.parse(
           JSON.parse(await readFile(join(folder, 'models_cache.json'), 'utf8')),
@@ -396,18 +385,7 @@ export class Execution {
     try {
       const settings = z
         .object({ model: z.string().optional() })
-        .parse(
-          JSON.parse(
-            await readFile(
-              join(
-                this.profiles?.directory('claude-cli', this.profiles.list().active['claude-cli']) ??
-                  join(homedir(), '.claude'),
-                'settings.json',
-              ),
-              'utf8',
-            ),
-          ),
-        );
+        .parse(JSON.parse(await readFile(join(homedir(), '.claude', 'settings.json'), 'utf8')));
       // Aliases (opus, sonnet…) name a listed model; only an explicit other ID is added.
       if (
         typeof settings.model === 'string' &&
@@ -1095,11 +1073,7 @@ export class Execution {
       }
       // A refused login or a subscription limit: the remembered login is asked again.
       if (error.code === 'PROVIDER_LIMIT' || error.code === 'CLI_MODE_CHANGED') clearAuthStatus();
-      if (error.code === 'PROVIDER_LIMIT')
-        this.onProviderLimit?.(
-          String(request.input.provider),
-          String(request.input.accountProfileId ?? 'default'),
-        );
+      if (error.code === 'PROVIDER_LIMIT') this.onProviderLimit?.(String(request.input.provider));
       this.workspace.update(
         projectId,
         id,
@@ -1411,7 +1385,6 @@ export class Execution {
     for (const name of [
       'model',
       'effort',
-      'accountProfileId',
       'executionLimits',
       'host',
       'baseRequestId',

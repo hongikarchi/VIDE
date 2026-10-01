@@ -7,13 +7,14 @@
 // tools), no shell, web, apps or plugins, the developer instructions exactly the bundle's.
 
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { StringDecoder } from 'node:string_decoder';
 import type { ChildProcessWithoutNullStreams } from 'node:child_process';
 import type { AgentConnection } from './agent-connection.ts';
 import { instructionFor } from './agent-connection.ts';
 import { withRules } from './instructions/index.ts';
+import { defaultLogin } from './account-usage.ts';
 import {
   MODE_CHANGED,
   ProviderError,
@@ -59,14 +60,10 @@ export function codexAppServerEnabled(env: NodeJS.ProcessEnv = process.env) {
  * A turn with VIDE's MCP connection needs code mode (the installed Codex routes MCP through it,
  * as in `configureAgentArguments`); shell stays off either way.
  */
-export function appServerArguments({
-  codeMode = false,
-  fileStore = false,
-}: { codeMode?: boolean; fileStore?: boolean } = {}) {
+export function appServerArguments({ codeMode = false }: { codeMode?: boolean } = {}) {
   const args = ['app-server', '--listen', 'stdio://'];
   for (const value of codexIsolationConfig) args.push('-c', value);
   args.push('-c', 'sandbox_mode="read-only"');
-  if (fileStore) args.push('-c', 'cli_auth_credentials_store="file"');
   for (const flag of codexDisabledFeatures)
     if (!(codeMode && (flag === 'code_mode' || flag === 'code_mode_host')))
       args.push('--disable', flag);
@@ -501,11 +498,24 @@ const ALLOWED_ITEMS = new Set([
   'contextCompaction',
 ]);
 
+/**
+ * Who Codex's default login is (account and email of `~/.codex/auth.json`), '' when unreadable.
+ * AccountSwitch may change it between turns (ADR-025); a kept process signed in as the earlier
+ * account must not answer the next turn with that account's tokens.
+ */
+export function codexLoginKey(home = homedir()) {
+  const login = defaultLogin('codex-cli', home);
+  return login.token ? [login.account ?? '', login.email ?? ''].join('\0') : '';
+}
+
 export class CodexAppServer extends CodexCli {
   idleMs: number;
-  constructor(options: CliOptions & { idleMs?: number } = {}) {
+  /** Who the default login is now (test seam; default: `codexLoginKey`). */
+  loginKey: () => string;
+  constructor(options: CliOptions & { idleMs?: number; loginKey?: () => string } = {}) {
     super(options);
     this.idleMs = options.idleMs ?? APP_SERVER_IDLE_MS;
+    this.loginKey = options.loginKey ?? (() => codexLoginKey());
   }
   /**
    * The developer instructions: the session's neutral ones, or the bundle with the tool rules; the
@@ -520,8 +530,9 @@ export class CodexAppServer extends CodexCli {
     }
     return `${base}\n\n${questionRule}`;
   }
+  /** A kept process serves the next turn only for the same executable, login and tool mode. */
   private processKey() {
-    return JSON.stringify([this.executable, this.configDirectory ?? '', !!this.agent]);
+    return JSON.stringify([this.executable, this.loginKey(), !!this.agent]);
   }
   private threadKey() {
     return JSON.stringify([
@@ -533,7 +544,7 @@ export class CodexAppServer extends CodexCli {
   }
   private async spawnServer(): Promise<{ rpc: AppServerRpc; userServers: string[]; cwd: string }> {
     const codeMode = !!this.agent;
-    const args = appServerArguments({ codeMode, fileStore: !!this.configDirectory });
+    const args = appServerArguments({ codeMode });
     if (!appServerIsolated(args, codeMode)) throw error('UNEXPECTED_TOOL_ACCESS');
     const cwd = await mkdtemp(join(tmpdir(), 'vide-codex-'));
     let rpc: AppServerRpc | undefined;
@@ -718,8 +729,7 @@ export class CodexAppServer extends CodexCli {
     } finally {
       // The process lets go of the transcript before it is removed.
       await this.release(entry, keep);
-      if (removeThread)
-        await removeCodexTranscript(this.configDirectory, entry.threadId).catch(() => 0);
+      if (removeThread) await removeCodexTranscript(undefined, entry.threadId).catch(() => 0);
       if (folder) await rm(folder, { recursive: true, force: true }).catch(() => {});
     }
   }

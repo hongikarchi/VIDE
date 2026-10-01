@@ -1,145 +1,120 @@
 import assert from 'node:assert/strict';
-import { EventEmitter } from 'node:events';
-import { PassThrough } from 'node:stream';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { chromium } from 'playwright';
 import { startServer } from '../../src/server/server.ts';
+
+// Settings → AI shows the current account of each CLI's default login read only (ADR-025,
+// PLAN-25): email, plan, usage and the opt-in lookup, with "계정 관리는 AccountSwitch에서". No
+// adding, signing in or switching accounts in VIDE. The status bar follows the login when
+// AccountSwitch changes it, and the model list is read again. The usage answers are synthetic,
+// so the test never reads this PC's real logins.
 const root = await mkdtemp(join(tmpdir(), 'vide-account-ui-'));
-let app, browser, loginProcess;
-let authenticated = true;
+let app, browser;
 try {
   app = await startServer({
     filename: join(root, 'test.sqlite'),
-    loginOptions: {
-      spawnProcess: () => {
-        loginProcess = new EventEmitter();
-        loginProcess.stdout = new PassThrough();
-        loginProcess.stderr = new PassThrough();
-        return loginProcess;
-      },
-      kill: async () => true,
-    },
     providerFactory: () => ({
-      status: async () =>
-        authenticated
-          ? { available: true }
-          : { available: false, reason: 'SUBSCRIPTION_LOGIN_REQUIRED' },
+      status: async () => ({ available: true }),
       run: async () => ({ text: '{}' }),
     }),
   });
   browser = await chromium.launch({ channel: 'chrome', headless: true });
   const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
   page.setDefaultTimeout(10000);
+  const errors = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+  let claudeEmail = 'a@example.com';
+  const posted = [];
   let catalogReads = 0;
   page.on('request', (request) => {
     if (request.url().endsWith('/api/v1/models')) catalogReads++;
   });
   await page.route('**/api/v1/host', (route) => route.fulfill({ json: { available: false } }));
+  await page.route('**/api/v1/accounts/usage-settings', (route) => {
+    posted.push(route.request().postDataJSON());
+    return route.fulfill({ json: { settings: route.request().postDataJSON() } });
+  });
+  await page.route(/\/api\/v1\/accounts\/usage(\?.*)?$/, (route) =>
+    route.fulfill({
+      json: {
+        settings: { usageLookup: true },
+        accounts: [
+          {
+            provider: 'claude-cli',
+            signedIn: true,
+            email: claudeEmail,
+            plan: 'max',
+            session: { percent: 12, resetsAt: '2026-10-01T05:00:00Z' },
+            weekly: { percent: 40, resetsAt: '2026-10-05T00:00:00Z' },
+            limitReached: false,
+            state: 'ok',
+          },
+          { provider: 'codex-cli', signedIn: false, limitReached: false, state: 'signed-out' },
+        ],
+      },
+    }),
+  );
   await page.goto(app.launchUrl);
+  await page.waitForFunction(() => !document.querySelector('#body').disabled);
   await page.locator('#workspace-settings').click();
   await page.locator('[data-tab="ai"]').click();
+  const card = page.locator('.workspace-status-dialog .account-usage');
+  await card.getByText('Claude · a@example.com').waitFor();
+  const text = await card.textContent();
+  assert.match(text, /계정 추가·로그인·전환은 AccountSwitch에서 합니다/);
+  assert.match(text, /max/);
+  assert.match(text, /ChatGPT · 로그인 안 됨/);
+  assert.match(text, /터미널이나 AccountSwitch에서 이 서비스에 로그인하세요/);
+  // Read only: nothing adds, signs in, selects or switches an account.
+  for (const name of ['계정 추가', '사용', '이 계정 사용', '로그인', '로그아웃', '제거'])
+    assert.equal(await card.getByRole('button', { name, exact: true }).count(), 0, name);
+  assert.doesNotMatch(text, /자동 전환/);
+  // The opt-in usage lookup stays a setting of this PC.
+  await card.getByLabel('사용량 조회').uncheck();
+  for (let i = 0; i < 50 && !posted.length; i++) await page.waitForTimeout(100);
+  assert.deepEqual(posted.at(-1), { usageLookup: false });
+  // The AI connection dialog has no account management either.
   await page.locator('#ai-settings').click();
-  const section = page
-    .locator('section')
-    .filter({ has: page.getByRole('heading', { name: 'Codex · ChatGPT', exact: true }) });
-  await section.getByLabel('codex-cli 계정 이름').fill('Second ChatGPT');
-  await section.getByRole('button', { name: '계정 추가', exact: true }).click();
-  const row = section.locator('.account-block').filter({ hasText: 'Second ChatGPT' });
-  const inUse = (name) =>
-    page.waitForFunction(
-      (text) =>
-        [...document.querySelectorAll('.ai-settings .account-row[data-active="true"]')].some(
-          (node) => node.textContent.startsWith(text) && node.textContent.includes('사용 중'),
-        ),
-      name,
-    );
-  const more = async (block, name, item) => {
-    await block.getByLabel(`${name} 더보기`).click();
-    await block.getByRole('button', { name: item, exact: true }).click();
-  };
-  await row.getByRole('button', { name: '사용', exact: true }).click();
-  await inUse('Second ChatGPT');
-  await page.getByRole('button', { name: '닫기', exact: true }).click();
-  // Any ChatGPT model (the list comes from the installed Codex CLI).
+  const dialog = page.locator('dialog.ai-settings');
+  await dialog.getByRole('heading', { name: 'AI 연결', exact: true }).waitFor();
+  assert.match(await dialog.textContent(), /AccountSwitch/);
+  assert.equal(await dialog.getByRole('button', { name: '계정 추가' }).count(), 0);
+  await dialog.getByRole('button', { name: '닫기', exact: true }).click();
+  // The status bar shows the current login of the selected model's service and its usage.
+  const indicator = page.locator('.statusbar [aria-label="현재 AI 계정"]');
   await page
     .locator('#model')
     .selectOption(
-      await page.locator('#model optgroup[label="ChatGPT"] option').first().getAttribute('value'),
+      await page.locator('#model optgroup[label="Claude"] option').first().getAttribute('value'),
     );
-  await page.waitForFunction(
-    () => document.querySelector('[aria-label="현재 AI 계정"]')?.textContent === 'Second ChatGPT',
+  await page.waitForFunction(() =>
+    document
+      .querySelector('.statusbar [aria-label="현재 AI 계정"]')
+      ?.textContent.startsWith('a@example.com'),
   );
-  await page.locator('#workspace-settings').click();
-  await page.locator('[data-tab="ai"]').click();
-  await page.locator('#ai-settings').click();
-  // The official command stays available under ⋯.
-  await more(row, 'Second ChatGPT', '명령으로 로그인');
-  await section.getByLabel('공식 CLI 로그인 명령').waitFor();
-  const command = await section.getByLabel('공식 CLI 로그인 명령').inputValue();
-  assert.ok(command.includes('CODEX_HOME'));
-  assert.ok(command.includes('cli_auth_credentials_store'));
-  await section.getByRole('button', { name: '명령 닫기', exact: true }).click();
-  assert.ok((await section.textContent()).includes('사용량 조회 꺼짐'));
-  // Login shows the device link and one-time code to use in any browser; no browser opens.
-  await row.getByRole('button', { name: '로그인', exact: true }).click();
-  const panel = row.getByLabel('ChatGPT 로그인');
-  await panel.getByText('코드를 받는 중…', { exact: true }).waitFor();
-  loginProcess.stdout.write(
-    '1. Open this link\n   https://auth.openai.com/codex/device\n2. Enter this one-time code\n   WXYZ-12345\n',
+  assert.match(await indicator.textContent(), /5시간 12% · 7일 40%/);
+  // AccountSwitch puts another account in place: the indicator follows and the models are re-read.
+  const before = catalogReads;
+  claudeEmail = 'b@example.com';
+  await page.evaluate(() => window.dispatchEvent(new Event('vide-accounts-changed')));
+  await page.waitForFunction(() =>
+    document
+      .querySelector('.statusbar [aria-label="현재 AI 계정"]')
+      ?.textContent.startsWith('b@example.com'),
   );
-  await panel.locator('.login-code').filter({ hasText: 'WXYZ-12345' }).waitFor();
+  for (let i = 0; i < 50 && catalogReads === before; i++) await page.waitForTimeout(100);
+  assert.ok(catalogReads > before, 'the model list is read again for the new login');
+  // The removed account routes answer 404.
   assert.equal(
-    await panel.getByRole('link', { name: '기본 브라우저로 열기' }).getAttribute('href'),
-    'https://auth.openai.com/codex/device',
+    await page.evaluate(
+      async () => (await fetch('/api/v1/accounts/select', { method: 'POST' })).status,
+    ),
+    404,
   );
-  const standardRow = section.locator('.account-block').first();
-  assert.equal(
-    await standardRow.getByRole('button', { name: '사용', exact: true }).isDisabled(),
-    true,
-  );
-  // Cancelling leaves nothing behind in the list.
-  await panel.getByRole('button', { name: '취소', exact: true }).click();
-  await panel.getByText('멈추는 중…', { exact: true }).waitFor();
-  loginProcess.emit('close', null);
-  await panel.waitFor({ state: 'detached' });
-  assert.equal((await section.textContent()).includes('취소'), false);
-  await more(row, 'Second ChatGPT', '로그아웃');
-  await row.getByText('로그아웃하는 중…', { exact: true }).waitFor();
-  const beforeLogout = catalogReads;
-  authenticated = false;
-  loginProcess.emit('close', 0);
-  await section.getByText('로그아웃했습니다.', { exact: true }).waitFor();
-  await page.waitForTimeout(100);
-  assert.ok(catalogReads > beforeLogout, 'Terminal authentication state refreshes the catalog');
-  await inUse('Second ChatGPT');
-  page.once('dialog', (dialog) => dialog.dismiss());
-  await more(row, 'Second ChatGPT', '제거');
-  assert.equal(await row.count(), 1);
-  page.once('dialog', (dialog) => dialog.accept());
-  await more(row, 'Second ChatGPT', '제거');
-  await row.waitFor({ state: 'detached' });
-  await inUse('기존 CLI 로그인');
-  // The existing CLI login can be renamed too; an empty name restores the standard name.
-  await more(standardRow, '기존 CLI 로그인', '이름 변경');
-  await standardRow.getByLabel('기존 CLI 로그인 새 이름').fill('개인 ChatGPT');
-  await standardRow.getByRole('button', { name: '저장', exact: true }).click();
-  await inUse('개인 ChatGPT');
-  await page.getByRole('button', { name: '닫기', exact: true }).click();
-  await page.waitForFunction(
-    () => document.querySelector('[aria-label="현재 AI 계정"]')?.textContent === '개인 ChatGPT',
-  );
-  await page.locator('#workspace-settings').click();
-  await page.locator('[data-tab="ai"]').click();
-  await page.locator('#ai-settings').click();
-  await more(standardRow, '개인 ChatGPT', '이름 변경');
-  await standardRow.getByLabel('개인 ChatGPT 새 이름').fill('');
-  await standardRow.getByRole('button', { name: '저장', exact: true }).click();
-  await inUse('기존 CLI 로그인');
-  console.log(
-    'Account add/select/login instructions verified in Chromium; provider authentication mocked.',
-  );
+  assert.deepEqual(errors, []);
+  console.log('Read-only account card, AccountSwitch guidance and status bar account verified.');
 } finally {
   await browser?.close();
   await app?.close();

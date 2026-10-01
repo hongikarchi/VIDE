@@ -88,8 +88,10 @@ try {
       json: answers[JSON.parse(route.request().postData()).body] ?? { target: null },
     }),
   );
-  // Conversations with a server hand-over state (T-062): an account limit (T2) and a session past
-  // the length setting (a suggestion). The chips read them; the buttons post the hand-over.
+  // A conversation with the server's hand-over state (T-062): a session past the length setting
+  // (a suggestion). The chip reads it; the button posts the hand-over. An account limit is no
+  // server card any more (ADR-025: not sent again, change the account in AccountSwitch); its
+  // notice is read from the stopped request (tests/core/conversations-ui.test.mjs).
   const handedOver = [];
   const sends = { ledgerItems: 2, recentTurns: 1, files: 0 };
   const entry = (id, title, handover) => ({
@@ -99,7 +101,7 @@ try {
     provider: 'claude-cli',
     model: null,
     effort: null,
-    accountProfileId: 'default',
+    accountProfileId: null,
     mode: 'session',
     targets: null,
     state: 'open',
@@ -108,13 +110,6 @@ try {
     handover,
   });
   const conversationsState = {
-    'c-limit': entry('c-limit', '한도 대화', {
-      kind: 'limit',
-      grade: 'T2',
-      requestId: 'r1',
-      from: { provider: 'claude-cli', accountProfileId: 'default' },
-      sends,
-    }),
     'c-long': entry('c-long', '긴 대화', {
       kind: 'length',
       grade: 'T1',
@@ -148,7 +143,7 @@ try {
   // and the composer's model follows it.
   const tabs = page.locator('#conversation-chips [role="tab"]');
   await tabs.first().waitFor();
-  assert.equal(await tabs.count(), 3);
+  assert.equal(await tabs.count(), 2);
   assert.equal(await tabs.first().getAttribute('aria-selected'), 'true');
   await page.waitForFunction(
     () => document.querySelector('#conversation-chips .conv-ai')?.textContent === 'Claude · Sonnet',
@@ -177,11 +172,13 @@ try {
   );
   assert.deepEqual(reverted, [{ target: 'jig', by: 'rules' }]);
   assert.ok(await page.locator('#route-card').isHidden());
-  // Login is T2: a confirmation card whose button starts it; nothing runs by itself.
+  // Signing in is done outside VIDE (ADR-025): a notice that says where; nothing runs.
   await send('Codex 로그인');
-  await page.locator('#route-card').waitFor();
-  assert.match(await page.locator('#route-card').textContent(), /Codex 로그인을 시작할까요/);
-  await page.locator('#route-card button').filter({ hasText: '닫기' }).click();
+  await page.waitForFunction(() =>
+    /Codex 로그인은 터미널이나 AccountSwitch에서 합니다/.test(
+      document.querySelector('#message')?.textContent ?? '',
+    ),
+  );
   assert.ok(await page.locator('#route-card').isHidden());
   assert.equal(await page.locator('#body').inputValue(), 'Codex 로그인');
   // Already signed in: a notice, still with the way to the AI.
@@ -224,19 +221,6 @@ try {
     await page.locator('#mode-toggle [data-mode="auto"]').getAttribute('aria-checked'),
     'true',
   );
-  // The account-limit card comes from the server's state; [새 세션으로 이어가기] posts the
-  // hand-over (the server picks the spare account) and the card goes.
-  await page.locator('[data-conversation="c-limit"]').click();
-  const limitCard = page.locator('section[aria-label="계정 한도"]');
-  await limitCard.waitFor();
-  assert.match(await limitCard.textContent(), /원장 2개 · 최근 턴 1개/);
-  assert.equal(
-    await limitCard.locator('button').filter({ hasText: '다른 AI로 이어 가기' }).count(),
-    1,
-  );
-  await limitCard.locator('button').filter({ hasText: '새 세션으로 이어가기' }).click();
-  await limitCard.waitFor({ state: 'detached' });
-  assert.deepEqual(handedOver, [{ id: 'c-limit', action: 'account', body: {} }]);
   // Past the length setting a new session is suggested, not forced.
   await page.locator('[data-conversation="c-long"]').click();
   const lengthCard = page.locator('section[aria-label="대화 길이"]');
@@ -244,7 +228,7 @@ try {
   assert.match(await lengthCard.textContent(), /12턴 · 누적 15\.2만 토큰/);
   await lengthCard.locator('button').filter({ hasText: '새 세션으로 이어가기' }).click();
   await lengthCard.waitFor({ state: 'detached' });
-  assert.deepEqual(handedOver.at(-1), { id: 'c-long', action: 'renew', body: {} });
+  assert.deepEqual(handedOver, [{ id: 'c-long', action: 'renew', body: {} }]);
   // Another model in the composer: the server sends the request to a new conversation, whose tab
   // is chosen, and the composer says what happened.
   await page.locator('[data-conversation="default"]').click();

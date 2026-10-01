@@ -75,7 +75,7 @@ export function initializeWorkspaceStatus({
   const providers = el('ul', '', ai, { class: 'settings-rows' });
   const actions = el('div', '', ai, { class: 'settings-actions' });
   for (const [label, id, action] of [
-    ['AI 계정 관리', 'ai-settings', openAiSettings],
+    ['AI 연결 설정', 'ai-settings', openAiSettings],
     ['작업 상한 (시간·조회 수)', 'execution-limits', openExecutionLimits],
   ] as const) {
     el('button', label, actions, { id, type: 'button' }).onclick = () => {
@@ -120,7 +120,7 @@ export function initializeWorkspaceStatus({
   displayButton.hidden = true;
   const accountButton = el('button', '', footer, {
     id: 'status-account',
-    'aria-label': '현재 AI 계정 설정',
+    'aria-label': '현재 AI 계정 보기',
   });
   const problemButton = el('button', '오류 기록 0', footer, { 'aria-label': '오류 기록' });
   const open = (source: HTMLElement, pane: Tab = current) => {
@@ -128,7 +128,8 @@ export function initializeWorkspaceStatus({
     show(pane);
     if (!dialog.open) dialog.showModal();
   };
-  accountButton.onclick = () => openAiSettings();
+  // The current account card (read only; accounts are managed in AccountSwitch, ADR-025).
+  accountButton.onclick = () => open(accountButton, remoteSession() ? 'status' : 'ai');
   displayButton.onclick = () => open(displayButton, 'status');
   providerButton.onclick = () => open(providerButton, remoteSession() ? 'status' : 'ai');
   hostButton.onclick = () => open(hostButton, 'status');

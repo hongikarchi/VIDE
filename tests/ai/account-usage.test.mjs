@@ -1,14 +1,24 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { AccountProfiles } from '../../src/ai/account-profiles.ts';
 import { AccountUsageService } from '../../src/ai/account-usage.ts';
+import { codexLoginKey } from '../../src/ai/codex-app-server.ts';
 import { USAGE_LIMIT } from '../../src/ai/claude-cli.ts';
 
+// The current account of each CLI's default login (ADR-025): VIDE reads who it is and, with the
+// opt-in lookup, its usage; AccountSwitch changes the login and VIDE follows.
 const jwt = (payload) =>
   ['e30', Buffer.from(JSON.stringify(payload)).toString('base64url'), 'sig'].join('.');
+const codexAuth = (token, email, plan) =>
+  JSON.stringify({
+    tokens: {
+      access_token: jwt({ exp: Math.floor(Date.now() / 1000) + 3600, token }),
+      account_id: 'acct-' + token,
+      id_token: jwt({ email, 'https://api.openai.com/auth': { chatgpt_plan_type: plan } }),
+    },
+  });
 
 async function fixture(t) {
   const root = await mkdtemp(join(tmpdir(), 'vide-usage-'));
@@ -30,25 +40,10 @@ async function fixture(t) {
     join(home, '.claude.json'),
     JSON.stringify({ oauthAccount: { emailAddress: 'a@example.com' } }),
   );
-  const codexAuth = (token, email, plan) =>
-    JSON.stringify({
-      tokens: {
-        access_token: jwt({ exp: Math.floor(Date.now() / 1000) + 3600, token }),
-        account_id: 'acct-' + token,
-        id_token: jwt({ email, 'https://api.openai.com/auth': { chatgpt_plan_type: plan } }),
-      },
-    });
   await writeFile(join(home, '.codex', 'auth.json'), codexAuth('one', 'one@example.com', 'pro'));
-  const profiles = new AccountProfiles(join(root, 'profiles'), () => false);
-  const second = profiles.add('codex-cli', 'Second');
-  await writeFile(
-    join(profiles.directory('codex-cli', second.id), 'auth.json'),
-    codexAuth('two', 'two@example.com', 'plus'),
-  );
   const calls = [];
   const usage = { one: 95, two: 10 };
   const service = new AccountUsageService({
-    profiles,
     file: join(root, 'usage-settings.json'),
     home,
     fetch: async (url, init) => {
@@ -76,10 +71,10 @@ async function fixture(t) {
       });
     },
   });
-  return { service, second, calls, profiles };
+  return { service, calls, home, root };
 }
 
-test('accounts show who is signed in without any network call until usage lookup is on', async (t) => {
+test('the default logins show who is signed in without any network call until usage lookup is on', async (t) => {
   const { service, calls } = await fixture(t);
   const rows = await service.all();
   assert.equal(calls.length, 0);
@@ -88,45 +83,63 @@ test('accounts show who is signed in without any network call until usage lookup
     [
       ['claude-cli', 'a@example.com', 'max', 'off'],
       ['codex-cli', 'one@example.com', 'pro', 'off'],
-      ['codex-cli', 'two@example.com', 'plus', 'off'],
     ],
   );
+  assert.deepEqual(service.account('codex-cli'), {
+    provider: 'codex-cli',
+    signedIn: true,
+    email: 'one@example.com',
+    plan: 'pro',
+  });
   assert.ok(!JSON.stringify(rows).includes('claude-a'), 'tokens are never returned');
 });
 
-test('usage lookup reads each account once per interval and auto-switch picks the most headroom', async (t) => {
-  const { service, second, calls } = await fixture(t);
-  service.setSettings({ usageLookup: true, autoSwitch: true, threshold: 90 });
-  const [claude, one, two] = await service.all();
+test('usage lookup reads each login once per interval and follows an account changed in AccountSwitch', async (t) => {
+  const { service, calls, home } = await fixture(t);
+  service.setSettings({ usageLookup: true });
+  const [claude, codex] = await service.all();
   assert.deepEqual(claude.session, { percent: 12, resetsAt: '2026-09-29T05:00:00.000Z' });
   assert.equal(claude.weekly.percent, 40);
-  assert.equal(one.weekly.percent, 95);
-  assert.equal(two.weekly.percent, 10);
-  assert.equal(calls.length, 3);
+  assert.equal(codex.weekly.percent, 95);
+  assert.equal(calls.length, 2);
   await service.all();
-  assert.equal(calls.length, 3, 'cached within the interval');
-  // The selected ChatGPT account is at 95% (over 90%): the next request goes to the second one.
-  assert.deepEqual(await service.choose('codex-cli', 'default'), {
-    id: second.id,
-    switched: true,
-    from: 'default',
-  });
-  assert.deepEqual(await service.choose('claude-cli', 'default'), {
-    id: 'default',
-    switched: false,
-  });
-  // A request that stopped on the second account's limit makes it skipped too; with nowhere
-  // better to go the current account stays.
-  service.markLimited('codex-cli', second.id);
-  assert.deepEqual(await service.choose('codex-cli', 'default'), {
-    id: 'default',
-    switched: false,
-  });
-  service.setSettings({ autoSwitch: false });
-  assert.deepEqual(await service.choose('codex-cli', 'default'), {
-    id: 'default',
-    switched: false,
-  });
+  assert.equal(calls.length, 2, 'cached within the interval');
+  // A request stopped on the login's limit marks it, for this account only.
+  service.markLimited('codex-cli');
+  assert.ok((await service.get('codex-cli')).limitedUntil);
+  // AccountSwitch puts another ChatGPT account in place: its own usage, not the old one's limit.
+  const before = codexLoginKey(home);
+  await writeFile(join(home, '.codex', 'auth.json'), codexAuth('two', 'two@example.com', 'plus'));
+  assert.notEqual(codexLoginKey(home), before);
+  const switched = await service.get('codex-cli');
+  assert.equal(switched.email, 'two@example.com');
+  assert.equal(switched.weekly.percent, 10);
+  assert.equal(switched.limitedUntil, undefined);
+  assert.equal(calls.length, 3);
+});
+
+test('the lookup setting is kept in its file; an older file next to the former profiles is read', async (t) => {
+  const { root } = await fixture(t);
+  const legacyFile = join(root, 'cli-profiles', 'usage-settings.json');
+  await mkdir(join(root, 'cli-profiles'));
+  await writeFile(
+    legacyFile,
+    JSON.stringify({ usageLookup: true, autoSwitch: true, threshold: 90 }),
+  );
+  const file = join(root, 'data', 'usage-settings.json');
+  const service = new AccountUsageService({ file, legacyFile, home: join(root, 'home') });
+  assert.deepEqual(service.settings(), { usageLookup: true });
+  service.setSettings({ usageLookup: false });
+  assert.deepEqual(JSON.parse(await readFile(file, 'utf8')), { usageLookup: false });
+  assert.equal(
+    JSON.parse(await readFile(legacyFile, 'utf8')).autoSwitch,
+    true,
+    'the older file is left as it was',
+  );
+  // Without a file (an in-memory engine) the setting lives in memory only.
+  const memory = new AccountUsageService({ home: join(root, 'home') });
+  assert.deepEqual(memory.setSettings({ usageLookup: true }), { usageLookup: true });
+  assert.deepEqual(memory.settings(), { usageLookup: true });
 });
 
 test('subscription limit messages of both CLIs are recognised', () => {

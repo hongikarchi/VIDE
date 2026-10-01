@@ -1,15 +1,16 @@
-import { existsSync, readFileSync, writeFileSync, renameSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync, renameSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import type { Provider } from '../contracts/ai-settings.ts';
-import type { AccountProfiles } from './account-profiles.ts';
 
-// Multi-account usage (cswap-style), chosen by the user on 2026-09-29 despite the provider-terms
-// risk, and therefore opt-in: each account's own CLI login files are read to show who is signed
-// in, and — only with "usage lookup" on — its token is sent to the provider's usage endpoint.
-// Tokens are never refreshed or rewritten here (the CLI owns that), never logged or returned.
+// The current account of each CLI's own (default) login and its usage (ADR-025, PLAN-25): VIDE
+// runs every request on that login and only reads who it is. Adding, signing in and switching
+// accounts is done in AccountSwitch (or the CLI itself); VIDE never writes the login files.
+// Usage lookup (cswap-style, chosen by the user on 2026-09-29 despite the provider-terms risk) is
+// opt-in: only with it on is the login's token sent to the provider's usage endpoint. Tokens are
+// never refreshed or rewritten here (the CLI owns that), never logged or returned.
 const CLAUDE_USAGE = 'https://api.anthropic.com/api/oauth/usage';
 const CODEX_USAGE = 'https://chatgpt.com/backend-api/wham/usage';
 /** Claude's usage endpoint allows about 30 calls an hour per account. */
@@ -20,12 +21,14 @@ export interface UsageWindow {
   percent: number;
   resetsAt: string | null;
 }
-export interface AccountUsage {
+/** Who the default login of one service is, from the CLI's own files (no network). */
+export interface AccountIdentity {
   provider: Provider;
-  id: string;
   signedIn: boolean;
   email?: string;
   plan?: string;
+}
+export interface AccountUsage extends AccountIdentity {
   /** Claude: 5-hour window; Codex: its shorter window when it has one. */
   session?: UsageWindow;
   /** 7-day window. */
@@ -37,12 +40,10 @@ export interface AccountUsage {
   state: 'ok' | 'off' | 'signed-out' | 'token-expired' | 'error';
   error?: string;
 }
-const settingsSchema = z.object({
-  usageLookup: z.boolean().default(false),
-  autoSwitch: z.boolean().default(false),
-  threshold: z.number().int().min(50).max(100).default(90),
-});
+// Older files also hold `autoSwitch` and `threshold` (in-VIDE switching, removed): ignored.
+const settingsSchema = z.object({ usageLookup: z.boolean().default(false) });
 export type UsageSettings = z.infer<typeof settingsSchema>;
+export const PROVIDERS = ['claude-cli', 'codex-cli'] as const satisfies readonly Provider[];
 
 const readJson = (file: string): unknown => {
   try {
@@ -65,118 +66,127 @@ const iso = (value: unknown) =>
       ? new Date(value).toISOString()
       : null;
 
+/** The default login of one service as its CLI keeps it (`~/.claude…`, `~/.codex/auth.json`). */
+export function defaultLogin(provider: Provider, home = homedir()) {
+  if (provider === 'claude-cli') {
+    const credentials = z
+      .object({
+        claudeAiOauth: z
+          .object({
+            accessToken: z.string(),
+            expiresAt: z.number().optional(),
+            subscriptionType: z.string().optional(),
+          })
+          .passthrough(),
+      })
+      .passthrough()
+      .safeParse(readJson(join(home, '.claude', '.credentials.json'))).data?.claudeAiOauth;
+    const account = z
+      .object({ oauthAccount: z.object({ emailAddress: z.string() }).passthrough() })
+      .passthrough()
+      .safeParse(readJson(join(home, '.claude.json'))).data?.oauthAccount;
+    return {
+      token: credentials?.accessToken,
+      account: undefined as string | undefined,
+      expiresAt: credentials?.expiresAt,
+      email: account?.emailAddress,
+      plan: credentials?.subscriptionType,
+    };
+  }
+  const tokens = z
+    .object({
+      tokens: z
+        .object({ access_token: z.string(), account_id: z.string(), id_token: z.string() })
+        .passthrough(),
+    })
+    .passthrough()
+    .safeParse(readJson(join(home, '.codex', 'auth.json'))).data?.tokens;
+  const claims = jwtPayload(tokens?.id_token);
+  const access = jwtPayload(tokens?.access_token);
+  return {
+    token: tokens?.access_token,
+    account: tokens?.account_id,
+    expiresAt: typeof access?.exp === 'number' ? access.exp * 1000 : undefined,
+    email: typeof claims?.email === 'string' ? claims.email : undefined,
+    plan: claims?.['https://api.openai.com/auth']?.chatgpt_plan_type as string | undefined,
+  };
+}
+
 interface Options {
-  profiles: AccountProfiles;
-  /** Settings file (next to the account profiles). */
-  file: string;
+  /** Settings file; none keeps the settings in memory (an in-memory engine, tests). */
+  file?: string;
+  /** Read when `file` does not exist yet: the earlier place, next to VIDE's own account profiles. */
+  legacyFile?: string;
   home?: string;
   fetch?: typeof fetch;
   now?: () => number;
 }
 export class AccountUsageService {
-  private options: Required<Omit<Options, 'profiles' | 'file'>> & Options;
+  private options: Required<Pick<Options, 'home' | 'fetch' | 'now'>> & Options;
   private cache = new Map<string, AccountUsage & { fetchedAt?: number }>();
   private pending = new Map<string, Promise<AccountUsage>>();
-  constructor(options: Options) {
+  private memory: UsageSettings | undefined;
+  constructor(options: Options = {}) {
     this.options = { home: homedir(), fetch: globalThis.fetch, now: Date.now, ...options };
   }
   settings(): UsageSettings {
-    return settingsSchema.parse(readJson(this.options.file) ?? {});
+    const { file, legacyFile } = this.options;
+    if (!file) return this.memory ?? settingsSchema.parse({});
+    return settingsSchema.parse(
+      readJson(file) ?? (legacyFile ? readJson(legacyFile) : undefined) ?? {},
+    );
   }
   setSettings(next: Partial<UsageSettings>) {
     const value = settingsSchema.parse({ ...this.settings(), ...next });
-    const temporary = this.options.file + '.' + randomUUID() + '.tmp';
+    const file = this.options.file;
+    if (!file) return (this.memory = value);
+    mkdirSync(dirname(file), { recursive: true });
+    const temporary = file + '.' + randomUUID() + '.tmp';
     writeFileSync(temporary, JSON.stringify(value), { mode: 0o600 });
-    renameSync(temporary, this.options.file);
+    renameSync(temporary, file);
     return value;
   }
-  /** The CLI folder of an account ('default' = the user's own CLI login). */
-  private folder(provider: Provider, id: string) {
-    return (
-      this.options.profiles.directory(provider, id) ??
-      join(this.options.home, provider === 'claude-cli' ? '.claude' : '.codex')
-    );
-  }
-  /** Who is signed in, from the CLI's own files (no network). */
-  private identity(provider: Provider, id: string) {
-    const folder = this.folder(provider, id);
-    if (provider === 'claude-cli') {
-      const credentials = z
-        .object({
-          claudeAiOauth: z
-            .object({
-              accessToken: z.string(),
-              expiresAt: z.number().optional(),
-              subscriptionType: z.string().optional(),
-            })
-            .passthrough(),
-        })
-        .passthrough()
-        .safeParse(readJson(join(folder, '.credentials.json'))).data?.claudeAiOauth;
-      // Claude keeps account details next to its folder by default, inside it when relocated.
-      const account = z
-        .object({ oauthAccount: z.object({ emailAddress: z.string() }).passthrough() })
-        .passthrough()
-        .safeParse(
-          readJson(
-            id === 'default'
-              ? join(this.options.home, '.claude.json')
-              : join(folder, '.claude.json'),
-          ),
-        ).data?.oauthAccount;
-      return {
-        token: credentials?.accessToken,
-        expiresAt: credentials?.expiresAt,
-        email: account?.emailAddress,
-        plan: credentials?.subscriptionType,
-      };
-    }
-    const tokens = z
-      .object({
-        tokens: z
-          .object({ access_token: z.string(), account_id: z.string(), id_token: z.string() })
-          .passthrough(),
-      })
-      .passthrough()
-      .safeParse(readJson(join(folder, 'auth.json'))).data?.tokens;
-    const claims = jwtPayload(tokens?.id_token);
-    const access = jwtPayload(tokens?.access_token);
+  /** Who the default login of a service is; no network. */
+  account(provider: Provider): AccountIdentity {
+    const login = defaultLogin(provider, this.options.home);
     return {
-      token: tokens?.access_token,
-      account: tokens?.account_id,
-      expiresAt: typeof access?.exp === 'number' ? access.exp * 1000 : undefined,
-      email: typeof claims?.email === 'string' ? claims.email : undefined,
-      plan: claims?.['https://api.openai.com/auth']?.chatgpt_plan_type,
+      provider,
+      signedIn: !!login.token,
+      ...(login.email ? { email: login.email } : {}),
+      ...(login.plan ? { plan: login.plan } : {}),
     };
   }
-  private key(provider: Provider, id: string) {
-    return provider + ':' + id;
+  /**
+   * The cache key: the service and who is signed in, so an account changed in AccountSwitch never
+   * shows the previous account's usage or limit.
+   */
+  private key(provider: Provider, login: ReturnType<typeof defaultLogin>) {
+    return [provider, login.account ?? '', login.email ?? ''].join('\0');
   }
-  /** Current usage of one account; network only when lookup is on and the cache is stale. */
-  async get(provider: Provider, id: string, force = false): Promise<AccountUsage> {
-    const key = this.key(provider, id);
+  /** Current usage of a service's login; network only when lookup is on and the cache is stale. */
+  async get(provider: Provider, force = false): Promise<AccountUsage> {
+    const login = defaultLogin(provider, this.options.home);
+    const key = this.key(provider, login);
     const cached = this.cache.get(key);
-    const identity = this.identity(provider, id);
     const base = {
-      provider,
-      id,
-      signedIn: !!identity.token,
-      email: identity.email,
-      plan: identity.plan,
+      ...this.account(provider),
       limitedUntil:
         cached?.limitedUntil && Date.parse(cached.limitedUntil) > this.options.now()
           ? cached.limitedUntil
           : undefined,
     };
-    if (!identity.token)
-      return this.store(key, { ...base, limitReached: false, state: 'signed-out' });
+    if (!login.token) return this.store(key, { ...base, limitReached: false, state: 'signed-out' });
     if (!this.settings().usageLookup)
       return this.store(key, { ...base, limitReached: !!base.limitedUntil, state: 'off' });
     const age = cached?.fetchedAt ? this.options.now() - cached.fetchedAt : Infinity;
     if (cached?.fetchedAt && age < (force ? FORCED_INTERVAL_MS : MIN_INTERVAL_MS))
-      return { ...cached, ...base, limitReached: cached.limitReached || !!base.limitedUntil };
+      return this.visible({
+        ...cached,
+        ...base,
+        limitReached: cached.limitReached || !!base.limitedUntil,
+      });
     // The CLI refreshes its own token on its next run; an expired one is never refreshed here.
-    if (identity.expiresAt && identity.expiresAt < this.options.now())
+    if (login.expiresAt && login.expiresAt < this.options.now())
       return this.store(key, {
         ...(cached ?? {}),
         ...base,
@@ -185,7 +195,7 @@ export class AccountUsageService {
       });
     let running = this.pending.get(key);
     if (!running) {
-      running = this.fetchUsage(provider, identity)
+      running = this.fetchUsage(provider, login)
         .then((usage) =>
           this.store(key, {
             ...base,
@@ -209,14 +219,17 @@ export class AccountUsageService {
     }
     return running;
   }
+  private visible(value: AccountUsage & { fetchedAt?: number }): AccountUsage {
+    const { fetchedAt: _fetchedAt, ...rest } = value;
+    return rest;
+  }
   private store(key: string, value: AccountUsage & { fetchedAt?: number }) {
     this.cache.set(key, value);
-    const { fetchedAt: _fetchedAt, ...visible } = value;
-    return visible;
+    return this.visible(value);
   }
   private async fetchUsage(
     provider: Provider,
-    identity: ReturnType<AccountUsageService['identity']>,
+    login: ReturnType<typeof defaultLogin>,
   ): Promise<
     Pick<AccountUsage, 'session' | 'weekly' | 'limitReached' | 'checkedAt' | 'email' | 'plan'>
   > {
@@ -224,7 +237,7 @@ export class AccountUsageService {
     if (provider === 'claude-cli') {
       const response = await this.options.fetch(CLAUDE_USAGE, {
         headers: {
-          Authorization: 'Bearer ' + identity.token,
+          Authorization: 'Bearer ' + login.token,
           'anthropic-beta': 'oauth-2025-04-20',
         },
         signal: AbortSignal.timeout(10_000),
@@ -250,8 +263,8 @@ export class AccountUsageService {
     }
     const response = await this.options.fetch(CODEX_USAGE, {
       headers: {
-        Authorization: 'Bearer ' + identity.token,
-        'ChatGPT-Account-Id': String(identity.account ?? ''),
+        Authorization: 'Bearer ' + login.token,
+        'ChatGPT-Account-Id': String(login.account ?? ''),
         'User-Agent': 'codex_cli_rs',
       },
       signal: AbortSignal.timeout(10_000),
@@ -291,62 +304,30 @@ export class AccountUsageService {
       weekly: view(weekly),
       limitReached: !!body.rate_limit?.limit_reached,
       checkedAt,
-      email: body.email ?? identity.email,
-      plan: body.plan_type ?? identity.plan,
+      email: body.email ?? login.email,
+      plan: body.plan_type ?? login.plan,
     };
   }
-  /** Every account (the CLI's own login plus added ones) of both services. */
+  /** Both services' default logins. */
   async all(force = false) {
-    const data = this.options.profiles.list();
-    const rows: AccountUsage[] = [];
-    for (const provider of ['claude-cli', 'codex-cli'] as const)
-      for (const id of [
-        'default',
-        ...data.profiles.filter((p) => p.provider === provider).map((p) => p.id),
-      ])
-        rows.push(await this.get(provider, id, force));
-    return rows;
+    return Promise.all(PROVIDERS.map((provider) => this.get(provider, force)));
   }
-  /** A request failed on this account's limit: skip it until its reset (or for an hour). */
-  markLimited(provider: Provider, id: string) {
-    const key = this.key(provider, id);
+  /**
+   * A request failed on this login's limit: shown as limited until its reset (or for an hour).
+   * Nothing is sent again by itself; the user changes the account in AccountSwitch.
+   */
+  markLimited(provider: Provider) {
+    const login = defaultLogin(provider, this.options.home);
+    const key = this.key(provider, login);
     const cached = this.cache.get(key);
     const resets = [cached?.session, cached?.weekly]
       .filter((w) => w && w.percent >= 90 && w.resetsAt)
       .map((w) => Date.parse(w!.resetsAt!));
     const until = resets.length ? Math.max(...resets) : this.options.now() + 3600_000;
     this.cache.set(key, {
-      ...(cached ?? { provider, id, signedIn: true, state: 'ok' as const }),
+      ...(cached ?? { ...this.account(provider), state: 'ok' as const }),
       limitReached: true,
       limitedUntil: new Date(until).toISOString(),
     });
-  }
-  private load(usage: AccountUsage) {
-    if (usage.limitReached || usage.limitedUntil) return Infinity;
-    return Math.max(usage.session?.percent ?? 0, usage.weekly?.percent ?? 0);
-  }
-  /**
-   * The account for a new request: the current one unless it is signed out, limited or at the
-   * threshold; then the signed-in account of the same service with the most headroom.
-   */
-  async choose(provider: Provider, current: string) {
-    const settings = this.settings();
-    if (!settings.autoSwitch) return { id: current, switched: false };
-    const now = await this.get(provider, current);
-    if (now.signedIn && this.load(now) < settings.threshold)
-      return { id: current, switched: false };
-    const data = this.options.profiles.list();
-    const others = await Promise.all(
-      ['default', ...data.profiles.filter((p) => p.provider === provider).map((p) => p.id)]
-        .filter((id) => id !== current)
-        .map((id) => this.get(provider, id)),
-    );
-    const best = others
-      .filter((usage) => usage.signedIn && this.load(usage) < settings.threshold)
-      .sort((a, b) => this.load(a) - this.load(b))[0];
-    return best ? { id: best.id, switched: true, from: current } : { id: current, switched: false };
-  }
-  exists(provider: Provider, id: string) {
-    return existsSync(this.folder(provider, id));
   }
 }

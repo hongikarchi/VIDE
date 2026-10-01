@@ -231,7 +231,8 @@ test('site-signed tokens open local and tunnel sessions; tunnel cannot reach app
     ['/api/v1/remote/remote', 'POST'],
     ['/api/v1/remote/unlink', 'POST'],
     ['/api/v1/settings/ai', 'PUT'],
-    ['/api/v1/accounts/select', 'POST'],
+    // The usage lookup switch is this PC's setting; account management is in AccountSwitch.
+    ['/api/v1/accounts/usage-settings', 'POST'],
     ['/mcp', 'POST'],
   ]) {
     const blocked = await call(port, path, {

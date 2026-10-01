@@ -2508,11 +2508,10 @@ function runAppRoute(route: Route, body: string) {
     messageWithActions(card.text, [{ label: 'AI 작업으로 보내기', run: toAi }]);
     return;
   }
-  // Signing in, out or switching accounts happens in the account settings, where the one-time code
-  // is typed into the login window itself; the connector install and offline view in the settings.
-  const open = ['login', 'logout', 'switch_account'].includes(app.action)
-    ? () => openAiSettings()
-    : app.action === 'export'
+  // The connector install and offline view happen in the settings. (Signing in, out and switching
+  // accounts are answered with where to do it, ADR-025: those cards have no button.)
+  const open =
+    app.action === 'export'
       ? () => message('내보내기는 jig 결과 표나 검토본 화면의 내보내기 버튼에서 합니다.')
       : () => $('workspace-settings').click();
   showRouteCard(

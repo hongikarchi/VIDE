@@ -211,22 +211,45 @@ test('동일 호스트의 서로 다른 VIDE 포트가 세션 쿠키를 덮어�
   assert.equal((await first.api('/projects', { headers: { Cookie: second.cookie } })).status, 401);
 });
 
-test('account routes pin requests, drain two unresolved jobs and isolate login paths', async (t) => {
-  const calls = [];
-  const { app, api } = await fixture(t, {
-    providerFactory: (options) => ({
-      status: async () => {
-        calls.push(options);
-        return { available: true };
-      },
+test('AI accounts are read only (ADR-025): the default logins, no management routes, no account on requests', async (t) => {
+  const { api } = await fixture(t, {
+    providerFactory: () => ({
+      status: async () => ({ available: true }),
       run: async () => ({ text: '{}' }),
     }),
   });
   const post = (path, body) => api(path, { method: 'POST', body });
-  const profile = await (
-    await post('/accounts', { provider: 'codex-cli', label: 'Second' })
-  ).json();
-  const project = await (await post('/projects', { name: 'Profiles' })).json();
+  // Who each CLI's default login is; no network, never tokens.
+  const accounts = (await (await api('/accounts')).json()).accounts;
+  assert.deepEqual(
+    accounts.map((row) => row.provider),
+    ['claude-cli', 'codex-cli'],
+  );
+  for (const row of accounts) assert.equal(typeof row.signedIn, 'boolean');
+  const usage = await (await api('/accounts/usage')).json();
+  assert.deepEqual(usage.settings, { usageLookup: false });
+  assert.equal(usage.accounts.length, 2);
+  // Only the lookup switch is a setting; switching settings are gone.
+  assert.deepEqual(
+    (await (await post('/accounts/usage-settings', { usageLookup: true })).json()).settings,
+    { usageLookup: true },
+  );
+  assert.equal((await post('/accounts/usage-settings', { autoSwitch: true })).status, 400);
+  // Adding, signing in, selecting and removing accounts is done in AccountSwitch.
+  assert.equal((await post('/accounts', { provider: 'codex-cli', label: 'Second' })).status, 404);
+  for (const path of [
+    '/accounts/login',
+    '/accounts/login-command',
+    '/accounts/login/cancel',
+    '/accounts/login/code',
+    '/accounts/logout',
+    '/accounts/remove',
+    '/accounts/rename',
+    '/accounts/select',
+  ])
+    assert.equal((await post(path, { provider: 'codex-cli', id: 'x' })).status, 404, path);
+  // A request runs on the default login: it carries no account, and a client may not set one.
+  const project = await (await post('/projects', { name: 'Accounts' })).json();
   const input = {
     id: 'one',
     body: 'Read',
@@ -235,51 +258,14 @@ test('account routes pin requests, drain two unresolved jobs and isolate login p
     pins: [],
     sketches: [],
     files: [],
-    accountProfileId: 'default',
   };
-  for (const id of ['one', 'two'])
-    app.store.db
-      .prepare('INSERT INTO workspace_requests VALUES(?,?,?,?,?,?)')
-      .run(
-        id,
-        project.id,
-        JSON.stringify({ ...input, id }),
-        'unknown',
-        null,
-        new Date().toISOString(),
-      );
-  const pending = await (
-    await post('/accounts/select', { provider: 'codex-cli', id: profile.id })
-  ).json();
-  assert.equal(pending.active['codex-cli'], 'default');
-  assert.equal(pending.pending['codex-cli'], profile.id);
-  assert.ok(calls.at(-1).configDirectory.endsWith(profile.id));
-  const send = { ...input, id: 'three' };
-  delete send.accountProfileId;
-  assert.equal(
-    (await (await post(`/projects/${project.id}/requests`, send)).json()).code,
-    'PROFILE_SWITCH_PENDING',
-  );
-  assert.equal(
-    (
-      await (
-        await post('/accounts/login-command', { provider: 'codex-cli', id: profile.id })
-      ).json()
-    ).code,
-    'PROFILE_IN_USE',
-  );
-  app.store.db.prepare("UPDATE workspace_requests SET state='failed' WHERE id='one'").run();
-  assert.equal((await (await api('/accounts')).json()).active['codex-cli'], 'default');
-  app.store.db.prepare("UPDATE workspace_requests SET state='failed' WHERE id='two'").run();
-  assert.equal((await (await api('/accounts')).json()).active['codex-cli'], profile.id);
-  const submitted = await (await post(`/projects/${project.id}/requests`, send)).json();
-  assert.equal(submitted.input.accountProfileId, profile.id);
-  assert.equal((await post(`/projects/${project.id}/requests`, send)).status, 200);
+  const submitted = await (await post(`/projects/${project.id}/requests`, input)).json();
+  assert.equal(submitted.input.accountProfileId, undefined);
   assert.equal(
     (
       await (
         await post(`/projects/${project.id}/requests`, {
-          ...send,
+          ...input,
           id: 'injected',
           accountProfileId: 'default',
         })
@@ -287,116 +273,4 @@ test('account routes pin requests, drain two unresolved jobs and isolate login p
     ).code,
     'INVALID_INPUT',
   );
-});
-
-test('account removal requires logout, explicit local deletion and an idle recheck', async (t) => {
-  let authenticated = true,
-    inject;
-  const { api, app } = await fixture(t, {
-    providerFactory: () => ({
-      status: async () => {
-        inject?.();
-        return authenticated
-          ? { available: true }
-          : { available: false, reason: 'SUBSCRIPTION_LOGIN_REQUIRED' };
-      },
-    }),
-  });
-  const post = (path, body) => api(path, { method: 'POST', body });
-  const row = await (await post('/accounts', { provider: 'codex-cli', label: 'Remove' })).json();
-  const project = await (await post('/projects', { name: 'Removal' })).json();
-  const value = { provider: 'codex-cli', id: row.id, deleteLocalData: true };
-  const remove = async (input = value) => await (await post('/accounts/remove', input)).json();
-  assert.equal((await remove({ ...value, id: 'default' })).code, 'INVALID_INPUT');
-  assert.equal((await remove({ ...value, deleteLocalData: false })).code, 'INVALID_INPUT');
-  assert.equal((await remove()).code, 'PROFILE_LOGOUT_REQUIRED');
-  authenticated = false;
-  inject = () =>
-    app.store.db
-      .prepare('INSERT INTO workspace_requests VALUES(?,?,?,?,?,?)')
-      .run(
-        'late-job',
-        project.id,
-        JSON.stringify({ id: 'late-job', provider: 'codex-cli' }),
-        'unknown',
-        null,
-        new Date().toISOString(),
-      );
-  assert.equal((await remove()).code, 'PROFILE_IN_USE');
-  inject = undefined;
-  app.store.db.prepare("UPDATE workspace_requests SET state='failed' WHERE id='late-job'").run();
-  assert.deepEqual((await remove()).profiles, []);
-  assert.equal(
-    app.store.db.prepare('SELECT count(*) AS count FROM workspace_requests').get().count,
-    1,
-  );
-});
-
-test('managed login HTTP lifecycle blocks requests and selection until confirmed termination', async (t) => {
-  let child,
-    kills = 0;
-  const { api } = await fixture(t, {
-    providerFactory: () => ({
-      status: async () => ({ available: true }),
-      run: async () => ({ text: '{"message":"OK","operations":[]}' }),
-    }),
-    loginOptions: {
-      spawnProcess: () => {
-        child = new EventEmitter();
-        child.stdout = new PassThrough();
-        child.stderr = new PassThrough();
-        return child;
-      },
-      kill: async () => {
-        kills++;
-        return true;
-      },
-    },
-  });
-  const post = (path, body) => api(path, { method: 'POST', body });
-  const profile = await (
-    await post('/accounts', { provider: 'codex-cli', label: 'Managed' })
-  ).json();
-  const project = await (await post('/projects', { name: 'Login lease' })).json();
-  assert.equal(
-    (await (await post('/accounts/login', { provider: 'codex-cli', id: 'default' })).json()).code,
-    'INVALID_INPUT',
-  );
-  assert.equal(
-    (await post('/accounts/login', { provider: 'codex-cli', id: profile.id })).status,
-    202,
-  );
-  const input = {
-    id: 'during-login',
-    body: 'Review',
-    provider: 'codex-cli',
-    permission: 'review',
-    pins: [],
-    sketches: [],
-    files: [],
-  };
-  assert.equal(
-    (await (await post(`/projects/${project.id}/requests`, input)).json()).code,
-    'PROFILE_LOGIN_IN_PROGRESS',
-  );
-  assert.equal(
-    (await (await post('/accounts/select', { provider: 'codex-cli', id: profile.id })).json()).code,
-    'PROFILE_LOGIN_IN_PROGRESS',
-  );
-  assert.equal(
-    (await (await post('/accounts/login', { provider: 'codex-cli', id: profile.id })).json()).code,
-    'PROFILE_IN_USE',
-  );
-  await post('/accounts/login/cancel', { provider: 'codex-cli' });
-  assert.equal(kills, 1);
-  assert.equal((await (await api('/accounts/login')).json())[0].state, 'stopping');
-  assert.equal(
-    (await (await post(`/projects/${project.id}/requests`, input)).json()).code,
-    'PROFILE_LOGIN_IN_PROGRESS',
-  );
-  child.emit('close', null);
-  await new Promise((resolve) => setImmediate(resolve));
-  assert.equal((await (await api('/accounts/login')).json())[0].state, 'cancelled');
-  assert.equal((await (await api('/accounts')).json()).active['codex-cli'], 'default');
-  assert.equal((await post(`/projects/${project.id}/requests`, input)).status, 202);
 });

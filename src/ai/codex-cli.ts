@@ -354,7 +354,7 @@ export class CodexCli extends ClaudeCli {
         thread &&
         (cause as { code?: unknown })?.code !== 'STOP_UNCONFIRMED'
       )
-        await removeCodexTranscript(this.configDirectory, thread).catch(() => 0);
+        await removeCodexTranscript(undefined, thread).catch(() => 0);
       throw cause;
     }
     if (!this.session) return result;
@@ -371,17 +371,14 @@ export class CodexCli extends ClaudeCli {
   get eventFormat(): AgentFormat {
     return 'codex';
   }
+  /** The CLI's default login (ADR-025): no CODEX_HOME is named. */
   environment() {
-    const env = codexEnvironment();
-    if (this.configDirectory) env.CODEX_HOME = this.configDirectory;
-    return env;
+    return codexEnvironment();
   }
   arguments() {
     const args = codexArguments(this.model, this.session, this.instructions);
     if (this.effort)
       args.splice(args.length - 1, 0, '-c', `model_reasoning_effort="${this.effort}"`);
-    if (this.configDirectory)
-      args.splice(args.length - 1, 0, '-c', 'cli_auth_credentials_store="file"');
     return args;
   }
   /** Codex takes images as files (`--image`) in the run's own temporary folder; stdin keeps the packet. */
@@ -413,20 +410,12 @@ export class CodexCli extends ClaudeCli {
     return args;
   }
   async status(): Promise<ProviderStatus> {
-    const child = this.spawnProcess(
-      this.executable,
-      [
-        'login',
-        'status',
-        ...(this.configDirectory ? ['-c', 'cli_auth_credentials_store="file"'] : []),
-      ],
-      {
-        env: this.environment(),
-        shell: false,
-        windowsHide: true,
-        stdio: ['ignore', 'pipe', 'pipe'],
-      },
-    );
+    const child = this.spawnProcess(this.executable, ['login', 'status'], {
+      env: this.environment(),
+      shell: false,
+      windowsHide: true,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
     return new Promise<ProviderStatus>((resolve) => {
       let output = '',
         settled = false;

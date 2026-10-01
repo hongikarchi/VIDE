@@ -2,15 +2,16 @@ import { z } from 'zod';
 import { append as el } from './elements.ts';
 import { api } from './gateway.ts';
 
-// Settings → AI: every signed-in subscription account with its usage and reset times, the
-// opt-in usage lookup and automatic switching (cswap-style multi-account).
+// Settings → AI: the current account of each service — the CLI's default login, with its email,
+// plan, usage and reset times — read only (ADR-025, PLAN-25). Adding, signing in and switching
+// accounts is done in AccountSwitch; VIDE follows whichever account it selected. The opt-in usage
+// lookup stays here.
 const windowSchema = z.object({ percent: z.number(), resetsAt: z.string().nullable() }).optional();
-const usageSchema = z.object({
-  settings: z.object({ usageLookup: z.boolean(), autoSwitch: z.boolean(), threshold: z.number() }),
+export const accountUsageSchema = z.object({
+  settings: z.object({ usageLookup: z.boolean() }),
   accounts: z.array(
     z.object({
       provider: z.enum(['claude-cli', 'codex-cli']),
-      id: z.string(),
       signedIn: z.boolean(),
       email: z.string().optional(),
       plan: z.string().optional(),
@@ -24,12 +25,7 @@ const usageSchema = z.object({
     }),
   ),
 });
-const profilesSchema = z.object({
-  profiles: z.array(z.object({ id: z.string(), provider: z.string(), label: z.string() })),
-  active: z.record(z.string(), z.string()),
-  defaultLabels: z.record(z.string(), z.string()).optional(),
-});
-type Usage = z.infer<typeof usageSchema>;
+export type AccountUsageView = z.infer<typeof accountUsageSchema>;
 const service = { 'claude-cli': 'Claude', 'codex-cli': 'ChatGPT' } as const;
 const when = (value: string | null | undefined) => {
   if (!value) return '';
@@ -41,29 +37,29 @@ const when = (value: string | null | undefined) => {
 };
 
 export function attachAccountUsage(section: HTMLElement, dialog: HTMLDialogElement) {
-  const box = el('div', '', section, { class: 'account-usage' });
-  let data: Usage | undefined,
-    profiles: z.infer<typeof profilesSchema> | undefined,
+  const box = el('div', '', section, { class: 'account-usage', 'aria-label': '현재 AI 계정' });
+  let data: AccountUsageView | undefined,
     failure = '',
     timer: ReturnType<typeof setInterval> | undefined;
   const load = async (refresh = false) => {
     try {
-      [data, profiles] = await Promise.all([
-        api('/accounts/usage' + (refresh ? '?refresh=1' : '')).then((v) => usageSchema.parse(v)),
-        api('/accounts').then((v) => profilesSchema.parse(v)),
-      ]);
+      data = accountUsageSchema.parse(await api('/accounts/usage' + (refresh ? '?refresh=1' : '')));
       failure = '';
     } catch (error) {
       failure = error instanceof Error ? error.message : '계정 정보를 불러오지 못했습니다.';
     }
     draw();
   };
-  const save = async (next: Partial<Usage['settings']>) => {
-    await api('/accounts/usage-settings', 'POST', next);
+  const save = async (usageLookup: boolean) => {
+    await api('/accounts/usage-settings', 'POST', { usageLookup });
     await load(true);
     window.dispatchEvent(new Event('vide-accounts-changed'));
   };
-  const bar = (row: HTMLElement, label: string, value: Usage['accounts'][number]['session']) => {
+  const bar = (
+    row: HTMLElement,
+    label: string,
+    value: AccountUsageView['accounts'][number]['session'],
+  ) => {
     const line = el('div', '', row, { class: 'usage-line' });
     el('span', label, line, { class: 'usage-label' });
     const track = el('span', '', line, { class: 'usage-track' });
@@ -82,72 +78,39 @@ export function attachAccountUsage(section: HTMLElement, dialog: HTMLDialogEleme
   };
   function draw() {
     box.replaceChildren();
+    el('h3', '현재 계정 · 사용량', box);
+    el(
+      'small',
+      '요청은 각 CLI에 지금 로그인된 계정으로 보냅니다. 계정 추가·로그인·전환은 AccountSwitch에서 합니다.',
+      box,
+      { class: 'usage-note' },
+    );
     if (failure) el('p', failure, box, { class: 'remote-error' });
     if (!data) {
       el('p', '확인 중…', box);
       return;
     }
-    const options = el('div', '', box, { class: 'usage-options' });
-    const toggle = (label: string, checked: boolean, change: (value: boolean) => void) => {
-      const row = el('label', '', options, { class: 'remote-toggle' });
-      const input = el('input', '', row, { type: 'checkbox' });
-      input.checked = checked;
-      row.append(' ' + label);
-      input.onchange = () => change(input.checked);
-      return row;
-    };
-    toggle(
-      '계정별 사용량 조회',
-      data.settings.usageLookup,
-      (value) => void save({ usageLookup: value }),
-    );
-    el(
-      'small',
-      '각 계정의 로그인 정보로 Claude·ChatGPT의 비공개 사용량 주소를 조회합니다. 서비스 약관상 위험을 감수하는 선택 기능입니다(3분마다 갱신).',
-      options,
-    );
-    const auto = toggle(
-      `한도에 가까우면 자동 전환 (${data.settings.threshold}% 이상)`,
-      data.settings.autoSwitch,
-      (value) => void save({ autoSwitch: value }),
-    );
-    const threshold = el('input', '', auto, {
-      type: 'number',
-      min: '50',
-      max: '100',
-      step: '5',
-      value: String(data.settings.threshold),
-      'aria-label': '자동 전환 기준 (%)',
-      class: 'usage-threshold',
-    });
-    threshold.onchange = () => void save({ threshold: Number(threshold.value) || 90 });
-    el(
-      'small',
-      '새 요청을 보낼 때 선택된 계정이 기준 이상이거나 한도에 걸렸으면, 같은 서비스에서 여유가 가장 많은 계정으로 바꿉니다. 진행 중인 요청은 옮기지 않습니다.',
-      options,
-    );
     const list = el('ul', '', box, { class: 'settings-rows usage-list' });
     for (const account of data.accounts) {
-      const label =
-        account.id === 'default'
-          ? (profiles?.defaultLabels?.[account.provider] ?? '기존 CLI 로그인')
-          : (profiles?.profiles.find((p) => p.id === account.id)?.label ?? '추가 계정');
-      const active = profiles?.active[account.provider] === account.id;
-      const row = el('li', '', list, { class: 'usage-row' });
+      const row = el('li', '', list, { class: 'usage-row', 'data-provider': account.provider });
       const head = el('div', '', row, { class: 'usage-head' });
-      el('strong', `${service[account.provider]} · ${account.email ?? label}`, head);
-      el('small', [label, account.plan].filter(Boolean).join(' · '), head);
-      if (active) el('span', '사용 중', head, { class: 'pill', 'data-ok': 'true' });
+      el(
+        'strong',
+        `${service[account.provider]} · ${account.signedIn ? (account.email ?? '로그인됨') : '로그인 안 됨'}`,
+        head,
+      );
+      if (account.plan) el('small', account.plan, head);
       if (account.limitReached || account.limitedUntil)
         el(
           'span',
-          account.limitedUntil ? `한도 · ${when(account.limitedUntil)}까지 건너뜀` : '한도 도달',
+          account.limitedUntil ? `한도 · ${when(account.limitedUntil)}까지` : '한도 도달',
           head,
-          {
-            class: 'pill',
-          },
+          { class: 'pill' },
         );
-      if (!account.signedIn) el('p', '로그인되지 않음 · AI 계정 관리에서 로그인하세요.', row);
+      if (!account.signedIn)
+        el('p', '터미널이나 AccountSwitch에서 이 서비스에 로그인하세요.', row, {
+          class: 'usage-note',
+        });
       else if (account.state === 'off')
         el('p', '사용량 조회가 꺼져 있습니다.', row, { class: 'usage-note' });
       else {
@@ -156,26 +119,24 @@ export function attachAccountUsage(section: HTMLElement, dialog: HTMLDialogEleme
         if (account.state === 'token-expired')
           el(
             'small',
-            '로그인 토큰이 만료돼 마지막 값입니다. 이 계정을 한 번 쓰면 갱신됩니다.',
+            '로그인 토큰이 만료돼 마지막 값입니다. 이 계정으로 한 번 보내면 갱신됩니다.',
             row,
           );
         if (account.state === 'error')
           el('small', `조회 실패 (${account.error ?? '알 수 없음'})`, row);
       }
-      if (account.signedIn && !active) {
-        const use = el('button', '이 계정 사용', row, { type: 'button' });
-        use.onclick = () =>
-          void api('/accounts/select', 'POST', { provider: account.provider, id: account.id })
-            .then(() => {
-              window.dispatchEvent(new Event('vide-accounts-changed'));
-              return load();
-            })
-            .catch((error) => {
-              failure = error instanceof Error ? error.message : '전환하지 못했습니다.';
-              draw();
-            });
-      }
     }
+    const options = el('div', '', box, { class: 'usage-options' });
+    const toggle = el('label', '', options, { class: 'remote-toggle' });
+    const input = el('input', '', toggle, { type: 'checkbox' });
+    input.checked = data.settings.usageLookup;
+    toggle.append(' 사용량 조회');
+    input.onchange = () => void save(input.checked);
+    el(
+      'small',
+      '로그인 정보로 Claude·ChatGPT의 비공개 사용량 주소를 조회합니다. 서비스 약관상 위험을 감수하는 선택 기능입니다(3분마다 갱신).',
+      options,
+    );
     const refresh = el('button', '지금 새로고침', box, { type: 'button', class: 'usage-refresh' });
     refresh.onclick = () => void load(true);
   }

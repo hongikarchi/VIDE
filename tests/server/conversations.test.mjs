@@ -122,8 +122,8 @@ function setup(t, script, { codex = false } = {}) {
     project = store.createProject('conversations');
   const removed = [];
   const conversations = new ConversationService(store, {
-    removeTranscript: async (provider, directory, sessionId) => {
-      removed.push({ provider, directory, sessionId });
+    removeTranscript: async (provider, sessionId) => {
+      removed.push({ provider, sessionId });
       return 1;
     },
   });
@@ -144,7 +144,6 @@ function setup(t, script, { codex = false } = {}) {
       kind: 'ask',
       title: '법규 질문',
       provider: codex ? 'codex-cli' : 'claude-cli',
-      accountProfileId: 'default',
       ...fields,
     });
   const send = (id, fields = {}) => {
@@ -333,8 +332,8 @@ test('requests without a conversation belong to the default conversation and kee
   assert.equal(conversations.get(project.id, null).session, null);
 });
 
-test('an account switch opens a new session with the hand-over packet', async (t) => {
-  const { conversations, project, fake, open, send, settled, state } = setup(t, (turn) => [
+test('turns run on the default login: an older request account is ignored, a former profile session is not resumed', async (t) => {
+  const { store, conversations, project, fake, open, send, settled, state } = setup(t, (turn) => [
     init,
     answer(`답 ${turn + 1}`),
   ]);
@@ -345,44 +344,48 @@ test('an account switch opens a new session with the hand-over packet', async (t
     kind: 'decision',
     body: { text: '층고 4.2 m로 본다' },
   });
-  // The next turn arrives on another account (automatic switch after a limit, SPEC-02.19 5).
+  // An input that still names an account (a stored request of an older VIDE) changes nothing:
+  // the session goes on (ADR-025, AccountSwitch changes the login under the same folder).
   send('a2', {
     conversationId: conversation.id,
     accountProfileId: '11111111-2222-4333-8444-555555555555',
   });
   await settled();
   assert.equal(state('a2').state, 'succeeded');
-  const runs = fake.runs();
+  let runs = fake.runs();
+  assert.ok(runs[1].args.includes('--resume'));
+  // A session an older VIDE opened on one of its own account profiles lived in that profile's
+  // folder: it is not resumed; the next turn opens a new one on the default login with the ledger.
+  store.db
+    .prepare(
+      "UPDATE provider_sessions SET accountProfileId='11111111-2222-4333-8444-555555555555' WHERE conversationId=?",
+    )
+    .run(conversation.id);
+  send('a3', { conversationId: conversation.id });
+  await settled();
+  assert.equal(state('a3').state, 'succeeded');
+  runs = fake.runs();
   const first = runs[0].args[runs[0].args.indexOf('--session-id') + 1];
-  const second = runs[1].args[runs[1].args.indexOf('--session-id') + 1];
-  assert.ok(second && second !== first);
-  assert.ok(!runs[1].args.includes('--resume'));
-  const packet = fake.packet(runs[1]);
+  const opened = runs[2].args[runs[2].args.indexOf('--session-id') + 1];
+  assert.ok(opened && opened !== first);
+  assert.ok(!runs[2].args.includes('--resume'));
+  const packet = fake.packet(runs[2]);
   const handoff = packet.items.find((item) => item.id === 'handoff');
   assert.equal(handoff.data.reason, 'account');
-  assert.deepEqual(handoff.data.recentTurns, [{ request: 'a1', response: '답 1' }]);
   const ledger = packet.items.find((item) => item.id === 'ledger');
-  assert.deepEqual(
-    ledger.data.items.map((item) => item.kind),
-    ['result-ref', 'decision'],
-  );
+  assert.ok(ledger.data.items.some((item) => item.kind === 'decision'));
   const saved = conversations.get(project.id, conversation.id);
   assert.deepEqual(
     saved.sessions.map((session) => [session.accountProfileId, session.state, session.turns]),
     [
-      ['default', 'handed-off', 1],
-      ['11111111-2222-4333-8444-555555555555', 'active', 1],
+      ['11111111-2222-4333-8444-555555555555', 'handed-off', 2],
+      ['default', 'active', 1],
     ],
   );
-  assert.equal(saved.accountProfileId, '11111111-2222-4333-8444-555555555555');
-  assert.deepEqual(
-    saved.ledger.map((item) => item.kind),
-    ['result-ref', 'decision', 'handoff', 'result-ref'],
-  );
+  assert.equal(saved.accountProfileId, null, 'the conversation keeps no account');
 });
 
-test('an account limit stops the turn, shows the T2 card, and the confirmed switch opens a new session with the hand-over', async (t) => {
-  const other = '11111111-2222-4333-8444-555555555555';
+test('an account limit stops the turn and is not sent again; after AccountSwitch the session goes on', async (t) => {
   const { conversations, project, fake, open, send, settled, state } = setup(t, (turn) =>
     turn === 1
       ? [
@@ -397,97 +400,33 @@ test('an account limit stops the turn, shows the T2 card, and the confirmed swit
       : [init, answer(`답 ${turn + 1}`)],
   );
   const conversation = open();
-  send('m1', {
-    conversationId: conversation.id,
-    files: [{ name: '배치도.txt', text: '합성 메모' }],
-  });
+  send('m1', { conversationId: conversation.id });
   await settled();
   send('m2', { conversationId: conversation.id });
   await settled();
   assert.equal(state('m2').state, 'failed');
   assert.equal(state('m2').result.code, 'PROVIDER_LIMIT');
-  // The stopped turn is never sent again by itself.
+  // The stopped turn is never sent again by itself, and there is no account hand-over card or route.
   assert.equal(fake.runs().length, 2);
-  let saved = conversations.get(project.id, conversation.id);
-  assert.deepEqual(saved.handover, {
-    kind: 'limit',
-    grade: 'T2',
-    requestId: 'm2',
-    from: { provider: 'claude-cli', accountProfileId: 'default' },
-    sends: { ledgerItems: 1, recentTurns: 1, files: 1 },
-  });
-  assert.equal(conversations.list(project.id)[1].handover.requestId, 'm2');
-  // Confirming the card (the T2 action) is local only and needs another account.
-  const call = (value, remote = false) => {
-    let sent;
-    return conversationRoutes(
+  const saved = conversations.get(project.id, conversation.id);
+  assert.equal(saved.handover, null);
+  assert.equal(
+    await conversationRoutes(
       new URL(
         `http://127.0.0.1/api/v1/projects/${project.id}/conversations/${conversation.id}/account`,
       ),
       { method: 'POST' },
-      {
-        service: conversations,
-        body: async () => value,
-        send: (status, data) => {
-          sent = { status, data };
-        },
-        remote,
-      },
-    ).then(() => sent);
-  };
-  await assert.rejects(call({ accountProfileId: other }, true), { code: 'FORBIDDEN' });
-  await assert.rejects(call({ accountProfileId: 'default' }), { code: 'INVALID_INPUT' });
-  // [새 세션으로 이어가기] leaves the account to the server; the same account is no way out.
-  const chosen = (id) => ({ chooseAccount: async () => id });
-  await assert.rejects(
-    route(conversations, project.id, `${conversation.id}/account`, {}, chosen('default')),
-    { code: 'NO_SPARE_ACCOUNT' },
+      { service: conversations, body: async () => ({}), send: () => {} },
+    ),
+    false,
   );
-  const switched = await route(
-    conversations,
-    project.id,
-    `${conversation.id}/account`,
-    {},
-    chosen(other),
-  );
-  assert.equal(switched.status, 200);
-  assert.equal(switched.data.accountProfileId, other);
-  assert.equal(switched.data.handover, null);
-  assert.equal(switched.data.session, null);
-  // The next turn comes on that account (the server chooses from the conversation's account).
-  send('m3', { conversationId: conversation.id, accountProfileId: other });
+  // The user changes the account in AccountSwitch and sends again: same session, resumed.
+  send('m3', { conversationId: conversation.id });
   await settled();
   assert.equal(state('m3').state, 'succeeded');
   const runs = fake.runs();
   assert.equal(runs.length, 3);
-  const first = runs[0].args[runs[0].args.indexOf('--session-id') + 1];
-  const opened = runs[2].args[runs[2].args.indexOf('--session-id') + 1];
-  assert.ok(opened && opened !== first);
-  assert.ok(!runs[2].args.includes('--resume'));
-  const packet = fake.packet(runs[2]);
-  const handoff = packet.items.find((item) => item.id === 'handoff').data;
-  assert.equal(handoff.reason, 'account');
-  assert.deepEqual(handoff.recentTurns, [{ request: 'm1', response: '답 1' }]);
-  assert.deepEqual(handoff.files, ['배치도.txt']);
-  assert.deepEqual(handoff.stopped, { request: 'm2', answered: false });
-  assert.equal(packet.items.find((item) => item.id === 'ledger').data.scope, 'all');
-  saved = conversations.get(project.id, conversation.id);
-  assert.deepEqual(
-    saved.sessions.map((session) => [session.accountProfileId, session.state, session.turns]),
-    [
-      ['default', 'handed-off', 1],
-      [other, 'active', 1],
-    ],
-  );
-  const handoffs = saved.ledger.filter((item) => item.kind === 'handoff');
-  assert.deepEqual(
-    handoffs.map((item) => [item.requestId, item.body.reason, item.body.confirmed ?? null]),
-    [
-      ['m2', 'account', 'T2'],
-      ['m3', 'account', null],
-    ],
-  );
-  assert.equal(saved.handover, null);
+  assert.ok(runs[2].args.includes('--resume'));
 });
 
 test('a lost session is retried once in a new session; the old one is never resumed', async (t) => {
@@ -923,7 +862,7 @@ test('the ledger item stays under 8 KB by summarizing, then leaving out, the old
   assert.equal(kindOf(undefined, undefined), 'general');
 });
 
-/** Jev and the account chooser as `place` sees them; `routes` counts Jev's calls. */
+/** Jev as `place` sees it; `routes` counts Jev's calls. */
 function placeDeps(choice = { provider: 'claude-cli', model: 'opus', effort: 'high' }) {
   const deps = {
     routes: 0,
@@ -931,7 +870,6 @@ function placeDeps(choice = { provider: 'claude-cli', model: 'opus', effort: 'hi
       deps.routes++;
       return { ...choice, by: 'jev', task: 'complex' };
     },
-    chooseAccount: async () => 'default',
   };
   return deps;
 }
@@ -1047,7 +985,6 @@ test("the composer's own model at the first turn is kept without asking Jev", as
     title: '대화',
     provider: 'claude-cli',
     model: 'sonnet',
-    accountProfileId: 'default',
     pending: true,
   });
   assert.equal(pending.pending, true);
@@ -1182,7 +1119,7 @@ test('HTTP: conversations open with a fixed service and model, and requests join
     assert.equal(created.status, 201);
     const conversation = await created.json();
     assert.equal(conversation.provider, 'claude-cli');
-    assert.equal(conversation.accountProfileId, 'default');
+    assert.equal(conversation.accountProfileId, null, 'no account is fixed (ADR-025)');
     assert.equal(conversation.title, '법규상 이 대지의 건폐율은?');
     assert.equal(conversation.mode, 'session');
     // A named service and model are kept as given.

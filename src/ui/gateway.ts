@@ -75,13 +75,6 @@ export const errors: Record<string, string> = {
     'Rhino 반영은 완료됐습니다. Sync를 다시 실행하세요. 모델링을 다시 요청하지 않아도 됩니다.',
   APPLICATION_FAILED: '원본 반영에 실패했습니다. 후보와 적용 결과를 확인하세요.',
   HOST_BUSY: '호스트 명령이 끝난 뒤 다시 Sync하세요.',
-  PROFILE_SWITCH_PENDING: '계정 전환 대기 중입니다. 기존 작업이 끝난 뒤 보내세요.',
-  PROFILE_IN_USE: '이 공급자의 작업을 마친 뒤 계정을 변경하세요.',
-  PROFILE_LOGOUT_REQUIRED: '먼저 이 계정을 로그아웃하고 완료 여부를 확인하세요.',
-  PROFILE_CLEANUP_FAILED: '로컬 계정 파일을 정리하지 못했습니다. 계정은 목록에 유지됩니다.',
-  PROFILE_NOT_FOUND: '계정을 찾을 수 없습니다. 계정 목록을 새로고침하세요.',
-  PROFILE_PATH_INVALID: '계정 저장 경로를 확인할 수 없습니다. 실행을 중단했습니다.',
-  PROFILE_LIMIT: '계정 프로필은 최대 30개까지 등록할 수 있습니다.',
 
   UNSUPPORTED_DWG_EDIT:
     '이 DWG에서는 기존 독립 직선 경계의 이동·정점 수정만 가능합니다. 객체 추가·삭제 또는 관계가 있는 객체는 지원하지 않습니다.',
@@ -89,7 +82,8 @@ export const errors: Record<string, string> = {
     '이 호스트에 결과를 확인하지 못한 작업이 있어 새 후보 생성을 보류합니다. 검토와 기존 결과 조회는 가능합니다.',
   PROTECTED_OBJECT_CHANGED:
     '유지·참고 대상으로 지정한 객체를 바꾸는 제안이어서 실행하지 않았습니다.',
-  SUBSCRIPTION_LOGIN_REQUIRED: '구독 계정으로 CLI에 로그인하세요.',
+  SUBSCRIPTION_LOGIN_REQUIRED:
+    '이 PC의 CLI에 구독 계정으로 로그인돼 있지 않습니다. 터미널이나 AccountSwitch에서 로그인하세요.',
   CLI_PATH_REQUIRED: 'Codex 실행 경로를 설정하세요.',
   CLI_UNAVAILABLE: 'AI 실행 파일을 찾을 수 없습니다.',
   CLI_VERSION_UNSUPPORTED:
@@ -99,7 +93,7 @@ export const errors: Record<string, string> = {
   TIMEOUT: '응답 시간이 초과됐습니다.',
   PROVIDER_FAILED: 'AI 공급자가 요청을 완료하지 못했습니다.',
   PROVIDER_LIMIT:
-    '이 계정의 구독 사용 한도에 걸렸습니다. 설정 → AI에서 자동 전환을 켜 두면 다음 요청은 여유 있는 계정으로 보냅니다.',
+    '이 계정의 구독 사용 한도에 걸렸습니다. 자동으로 다시 보내지 않습니다. AccountSwitch에서 계정을 바꾼 뒤 다시 보내세요.',
   UNAUTHORIZED: '서버가 표시한 실행 링크로 다시 열어 주세요.',
   LOGIN_REQUIRED: '웹사이트 로그인이 끝났습니다. 다시 로그인한 뒤 여세요.',
   HOST_OFFLINE: '작업 PC가 꺼졌습니다. PC에서 VIDE를 켠 뒤 다시 여세요.',
@@ -112,7 +106,6 @@ Object.assign(errors, {
   HOST_COMMAND_LIMIT:
     '설정한 호스트 실행 횟수에 도달했습니다. 마지막 후보를 확인하고 후속 요청의 상한을 조정하세요.',
   AGENT_CALL_LIMIT: '설정한 도구 호출 횟수에 도달했습니다.',
-  PROFILE_LOGIN_IN_PROGRESS: '계정 로그인 종료를 기다린 뒤 요청하세요.',
   INVALID_GEOMETRY: 'AI의 형상 제안이 검증을 통과하지 못했습니다.',
   PROJECT_BUSY: '같은 대상의 작업이 진행 중입니다. 다른 문서를 선택하거나 완료를 기다리세요.',
   INTERVENTION_REVIEW_REQUIRED:

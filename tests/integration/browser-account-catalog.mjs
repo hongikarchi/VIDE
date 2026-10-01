@@ -5,17 +5,16 @@ import { join } from 'node:path';
 import { chromium } from 'playwright';
 import { startServer } from '../../src/server/server.ts';
 
+// When AccountSwitch changes a CLI's default login (ADR-025), the status bar notices it and the
+// model list is read again (Codex keeps its model list per login). The draft stays, and a chosen
+// model that the new list still has stays chosen; one it lost needs a new choice.
 const directory = await mkdtemp(join(tmpdir(), 'vide-catalog-'));
 let app, browser;
 try {
   app = await startServer({ filename: join(directory, 'workspace.sqlite') });
   browser = await chromium.launch({ channel: 'chrome', headless: true });
   const page = await browser.newPage();
-  const data = {
-    profiles: [{ id: 'second', provider: 'codex-cli', label: 'Second' }],
-    active: { 'codex-cli': 'default', 'claude-cli': 'default' },
-    pending: { 'codex-cli': null, 'claude-cli': null },
-  };
+  let codexEmail = 'one@example.com';
   const old = {
     id: 'old-model',
     name: 'Old model',
@@ -23,12 +22,28 @@ try {
     efforts: ['default', 'high'],
   };
   const next = { ...old, id: 'new-model', name: 'New model' };
-  await page.route('**/api/v1/accounts', (route) => route.fulfill({ json: data }));
+  await page.route('**/api/v1/accounts/usage', (route) =>
+    route.fulfill({
+      json: {
+        settings: { usageLookup: false },
+        accounts: [
+          { provider: 'claude-cli', signedIn: true, limitReached: false, state: 'off' },
+          {
+            provider: 'codex-cli',
+            signedIn: true,
+            email: codexEmail,
+            limitReached: false,
+            state: 'off',
+          },
+        ],
+      },
+    }),
+  );
   await page.route('**/api/v1/models', (route) =>
     route.fulfill({
       json: [
         { id: 'claude-cli', name: 'Claude', provider: 'claude-cli', efforts: ['default'] },
-        data.active['codex-cli'] === 'default' ? old : next,
+        codexEmail === 'one@example.com' ? old : next,
       ],
     }),
   );
@@ -36,46 +51,31 @@ try {
   await page.route('**/api/v1/host', (route) => route.fulfill({ json: { available: false } }));
   await page.goto(app.launchUrl);
   await page.waitForFunction(() => !document.querySelector('#body').disabled);
-  // A deferred switch for the other provider must also finish refreshing its catalog.
-  data.pending['codex-cli'] = 'second';
-  await page.evaluate(() => window.dispatchEvent(new Event('vide-accounts-changed')));
-  await page.waitForTimeout(100);
-  data.active['codex-cli'] = 'second';
-  data.pending['codex-cli'] = null;
-  await page.waitForFunction(() =>
-    [...document.querySelector('#model').options].some((o) => o.value === 'new-model'),
-  );
-  assert.equal(await page.locator('#model').inputValue(), 'claude-cli');
-  data.active['codex-cli'] = 'default';
-  await page.evaluate(() => window.dispatchEvent(new Event('vide-accounts-changed')));
-  await page.waitForFunction(() =>
-    [...document.querySelector('#model').options].some((o) => o.value === 'old-model'),
-  );
+  const label = '.statusbar small[aria-label="현재 AI 계정"]';
   await page.locator('#model').selectOption('old-model');
   await page.locator('#body').fill('Keep my explicit model choice');
   await page.waitForFunction(
-    () => document.querySelector('[aria-label="현재 AI 계정"]')?.textContent === '기존 CLI 로그인',
+    (selector) => document.querySelector(selector)?.textContent === 'one@example.com',
+    label,
   );
-  data.pending['codex-cli'] = 'second';
+  // AccountSwitch selects another ChatGPT account: the indicator sees it and the list follows.
+  codexEmail = 'two@example.com';
   await page.evaluate(() => window.dispatchEvent(new Event('vide-accounts-changed')));
-  await page.waitForFunction(() =>
-    document.querySelector('[aria-label="현재 AI 계정"]')?.textContent.includes('전환 대기'),
-  );
-  data.active['codex-cli'] = 'second';
-  data.pending['codex-cli'] = null;
   await page.waitForFunction(() =>
     [...document.querySelector('#model').options].some((o) => o.value === 'new-model'),
   );
+  // The chosen model is gone from the new list: kept shown, sending waits for a new choice.
   assert.equal(await page.locator('#model').inputValue(), 'old-model');
   assert.equal(await page.locator('#request').isDisabled(), true);
   assert.equal(await page.locator('#body').inputValue(), 'Keep my explicit model choice');
   await page.locator('#model').selectOption('new-model');
-  await page.waitForFunction(
-    () => document.querySelector('[aria-label="현재 AI 계정"]')?.textContent === 'Second',
-  );
   assert.equal(await page.locator('#request').isDisabled(), false);
+  await page.waitForFunction(
+    (selector) => document.querySelector(selector)?.textContent === 'two@example.com',
+    label,
+  );
   console.log(
-    'Pending account switch refreshes model catalog, preserves draft and requires explicit supported selection.',
+    'A login changed in AccountSwitch refreshes the model catalog, keeps the draft and asks for a supported model.',
   );
 } finally {
   await browser?.close();

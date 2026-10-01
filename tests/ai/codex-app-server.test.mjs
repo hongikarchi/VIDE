@@ -467,6 +467,22 @@ test('같은 프로세스에서 이 턴의 토큰·도구가 바뀌면 unsubscri
   );
 });
 
+test('AccountSwitch가 기본 로그인의 계정을 바꾸면 다음 턴 전에 프로세스를 다시 띄운다', async () => {
+  // ADR-025: the kept process is signed in as the account it started with; a turn after the
+  // default login changed must not go out with the earlier account's tokens.
+  const transport = fake({ turns: [reply('하나'), reply('둘'), reply('셋')] });
+  let login = 'acct-one one@example.com';
+  const make = (session) => provider(transport, { session, loginKey: () => login });
+  await make({ id: '11111111-2222-4333-8444-555555555555', resume: false }).run(context);
+  await make({ id: THREAD, resume: true }).run(context);
+  assert.equal(transport.servers().length, 1, 'same login: the kept process answers');
+  login = 'acct-two two@example.com';
+  const third = await make({ id: THREAD, resume: true }).run(context);
+  assert.equal(third.text, '셋');
+  assert.equal(transport.servers().length, 2, 'another login: a new process');
+  assert.equal(transport.method('thread/resume').at(-1).params.threadId, THREAD);
+});
+
 test('질문 처리기가 없으면 모델의 질문에서 턴을 멈추고 질문 카드를 턴 출력으로 돌려준다', async () => {
   const ask = (server) =>
     server.send({

@@ -14,8 +14,7 @@ import { OfflineView } from './offline-view.ts';
 import { Connectors, type ConnectorOptions } from './connectors.ts';
 import { appVersion, defaultRhinoPlugin, defaultZwcadConnection } from './sdk-options.ts';
 import { gzip } from 'node:zlib';
-import { AccountProfiles } from '../ai/account-profiles.ts';
-import { AccountUsageService } from '../ai/account-usage.ts';
+import { AccountUsageService, PROVIDERS } from '../ai/account-usage.ts';
 import { JIGS } from '../jigs/catalog.ts';
 import { runSync } from '../jigs/sync.ts';
 import { closeJigRuntime, jigRoutes, jigStatuses } from './jig-routes.ts';
@@ -43,7 +42,6 @@ import { Diagnostics } from './diagnostics.ts';
 import { knowledgeFile } from '../jigs/knowledge.ts';
 import { DocumentLinks, isFileLink } from '../core/document-links.ts';
 import { removeLink } from './link-removal.ts';
-import { AccountLogin } from '../ai/account-login.ts';
 import { z } from 'zod';
 import type { IncomingMessage } from 'node:http';
 import type { StoredWork } from '../contracts/stored-work.ts';
@@ -54,7 +52,6 @@ interface ServerOptions {
   filename: string;
   port?: number;
   providerFactory?: ExecutionOptions['providerFactory'];
-  loginOptions?: ConstructorParameters<typeof AccountLogin>[0];
   host?: RhinoWorkspace;
   cadHost?: ZwcadWorkspace;
   applicationOptions?: ConstructorParameters<typeof Applications>[2];
@@ -166,7 +163,6 @@ export async function startServer({
   filename,
   port = 0,
   providerFactory,
-  loginOptions,
   host,
   cadHost,
   applicationOptions,
@@ -179,7 +175,6 @@ export async function startServer({
     bootstrap = randomBytes(32).toString('hex'),
     session = await localSession(filename === ':memory:' ? undefined : dirname(filename));
   const agentTools = new AgentTools({ origin: () => origin });
-  const accountLogin = new AccountLogin(loginOptions);
   const workspace = new Workspace(store),
     removedProjects = new RemovedProjects(filename === ':memory:' ? undefined : dirname(filename)),
     listProjects = () => removedProjects.visible(store.listProjects()),
@@ -339,29 +334,16 @@ export async function startServer({
           sdk.importFile(source, (intent) => workspace.update(projectId, id, 'running', intent)),
       }
     : host;
-  const profiles = new AccountProfiles(join(dirname(filename), 'cli-profiles'), (provider) => {
-    const persisted = store.db
-      .prepare(
-        "SELECT 1 FROM workspace_requests WHERE json_extract(input,'$.provider')=? AND state IN ('queued','running','unknown') LIMIT 1",
-      )
-      .get(provider);
-    return (
-      !!persisted ||
-      accountLogin.busy(provider) ||
-      (typeof execution !== 'undefined' &&
-        [...execution.active.keys()].some((id) =>
-          store.db
-            .prepare(
-              "SELECT 1 FROM workspace_requests WHERE id=? AND json_extract(input,'$.provider')=?",
-            )
-            .get(id, provider),
-        ))
-    );
-  });
-  const accountUsage = new AccountUsageService({
-    profiles,
-    file: join(dirname(filename), 'cli-profiles', 'usage-settings.json'),
-  });
+  // The current account of each CLI's default login and its usage (ADR-025: read only; accounts are
+  // managed in AccountSwitch). The lookup setting sat next to VIDE's former account profiles.
+  const accountUsage = new AccountUsageService(
+    filename === ':memory:'
+      ? {}
+      : {
+          file: join(dirname(filename), 'usage-settings.json'),
+          legacyFile: join(dirname(filename), 'cli-profiles', 'usage-settings.json'),
+        },
+  );
   const diagnostics = new Diagnostics({
     directory: filename === ':memory:' ? undefined : dirname(filename),
   });
@@ -374,7 +356,7 @@ export async function startServer({
     sdk.editors.observe = (target, snapshot) => readOnly.note(target, snapshot);
   }
   // Conversations (SPEC-02.19): sessions per turn, ledger, transcript retention (30 days).
-  const conversations = new ConversationService(store, { profiles, diagnostics });
+  const conversations = new ConversationService(store, { diagnostics });
   // The per-project addendum of the AI instruction bundle (PLAN-24 지침 묶음).
   const projectInstructions = new ProjectInstructionStore(
     filename === ':memory:' ? undefined : dirname(filename),
@@ -385,13 +367,12 @@ export async function startServer({
     projectInstructions: (projectId) => projectInstructions.text(projectId),
     selectContext: (text, candidates) =>
       selectContext(text, candidates, { dataDirectory: dirname(filename) }),
-    onProviderLimit: (provider, id) =>
-      accountUsage.markLimited(z.enum(['claude-cli', 'codex-cli']).parse(provider), id),
+    onProviderLimit: (provider) =>
+      accountUsage.markLimited(z.enum(['claude-cli', 'codex-cli']).parse(provider)),
     applyAttached: sdk
       ? (request, result, signal) =>
           applyAttachedCandidate(workspace, applications, sdk, request, result, signal)
       : undefined,
-    profiles,
     tools: agentTools,
     providerFactory,
     host,
@@ -416,13 +397,6 @@ export async function startServer({
     dataDirectory: dirname(filename),
     log: filename !== ':memory:',
   });
-  /** The account a conversation is fixed to when it opens (SPEC-02.19 2). */
-  const conversationAccount = async (provider: 'claude-cli' | 'codex-cli') => {
-    if (accountLogin.busy(provider)) throw new DomainError('PROFILE_LOGIN_IN_PROGRESS');
-    const chosen = await accountUsage.choose(provider, profiles.selected(provider));
-    if (chosen.switched && !profiles.list().pending[provider]) profiles.select(provider, chosen.id);
-    return chosen.id;
-  };
   const withApplications = (request: StoredWork) => ({
     ...request,
     applications: store.db
@@ -1185,19 +1159,11 @@ export async function startServer({
           return;
         }
       }
-      if (url.pathname === '/api/v1/accounts') {
-        if (request.method === 'GET') {
-          send(200, profiles.list());
-          return;
-        }
-        if (request.method === 'POST') {
-          const input = z
-            .object({ provider: z.enum(['claude-cli', 'codex-cli']), label: z.string() })
-            .strict()
-            .parse(await body(request));
-          send(201, profiles.add(input.provider, input.label));
-          return;
-        }
+      // Who each CLI's default login is (no network). Accounts are added, signed in and switched
+      // in AccountSwitch (ADR-025); VIDE only reads them.
+      if (url.pathname === '/api/v1/accounts' && request.method === 'GET') {
+        send(200, { accounts: PROVIDERS.map((provider) => accountUsage.account(provider)) });
+        return;
       }
       // JIG tab: the catalogue, and the Sync jig (relation and differences of two Syncs).
       if (url.pathname === '/api/v1/jigs' && request.method === 'GET') {
@@ -1280,8 +1246,7 @@ export async function startServer({
           remote,
           chooseModel: async (routing, requested) =>
             modelRouter.route(routing, await execution.models(), signedInServices(), requested),
-          chooseAccount: conversationAccount,
-          // The answer turn of a question card (T-062): same conversation, service and account.
+          // The answer turn of a question card (T-062): same conversation and service.
           submit: async (projectId, input, askedIn) => {
             // The answer turn keeps the Plan/Auto mode of the turn that asked (ADR-022); a deleted
             // asking request leaves the route's fallback (Plan) instead of failing the answer.
@@ -1294,14 +1259,7 @@ export async function startServer({
               }
               if (asked) input.mode = requestMode(asked);
             }
-            const conversation = conversations.fix(projectId, input);
-            const provider = conversation.provider;
-            if (accountLogin.busy(provider)) throw new DomainError('PROFILE_LOGIN_IN_PROGRESS');
-            const chosen = await accountUsage.choose(
-              provider,
-              conversation.accountProfileId ?? profiles.selected(provider),
-            );
-            input.accountProfileId = chosen.id;
+            conversations.fix(projectId, input);
             const result = workspace.submit(projectId, input);
             if (result.created) execution.start(result.request);
             return result.request;
@@ -1482,7 +1440,7 @@ export async function startServer({
           return;
         }
       }
-      // Per-account sign-in, usage and reset times; switching settings.
+      // The default logins' usage and reset times, and the opt-in usage lookup (this PC only).
       if (url.pathname === '/api/v1/accounts/usage' && request.method === 'GET') {
         send(200, {
           settings: accountUsage.settings(),
@@ -1492,131 +1450,10 @@ export async function startServer({
       }
       if (url.pathname === '/api/v1/accounts/usage-settings' && request.method === 'POST') {
         const input = z
-          .object({
-            usageLookup: z.boolean().optional(),
-            autoSwitch: z.boolean().optional(),
-            threshold: z.number().int().min(50).max(100).optional(),
-          })
+          .object({ usageLookup: z.boolean() })
           .strict()
           .parse(await body(request));
         send(200, { settings: accountUsage.setSettings(input) });
-        return;
-      }
-      if (url.pathname === '/api/v1/accounts/remove' && request.method === 'POST') {
-        const input = z
-          .object({
-            provider: z.enum(['claude-cli', 'codex-cli']),
-            id: z.string().uuid(),
-            deleteLocalData: z.literal(true),
-          })
-          .strict()
-          .parse(await body(request));
-        profiles.assertIdle(input.provider);
-        profiles.directory(input.provider, input.id);
-        const status = await execution
-          .provider({ provider: input.provider, accountProfileId: input.id })
-          .status();
-        if (status.available || status.reason !== 'SUBSCRIPTION_LOGIN_REQUIRED')
-          throw new DomainError('PROFILE_LOGOUT_REQUIRED');
-        send(200, profiles.remove(input.provider, input.id));
-        return;
-      }
-      if (url.pathname === '/api/v1/accounts/rename' && request.method === 'POST') {
-        const input = z
-          .object({
-            provider: z.enum(['claude-cli', 'codex-cli']),
-            id: z.string(),
-            label: z.string().max(80),
-          })
-          .strict()
-          .parse(await body(request));
-        send(200, profiles.rename(input.provider, input.id, input.label));
-        return;
-      }
-      if (url.pathname === '/api/v1/accounts/select' && request.method === 'POST') {
-        const input = z
-          .object({ provider: z.enum(['claude-cli', 'codex-cli']), id: z.string() })
-          .strict()
-          .parse(await body(request));
-        if (accountLogin.busy(input.provider)) throw new DomainError('PROFILE_LOGIN_IN_PROGRESS');
-        const status = await execution
-          .provider({ provider: input.provider, accountProfileId: input.id })
-          .status();
-        if (!status.available) throw new DomainError('SUBSCRIPTION_LOGIN_REQUIRED');
-        send(200, profiles.select(input.provider, input.id));
-        return;
-      }
-      if (url.pathname === '/api/v1/accounts/login-command' && request.method === 'POST') {
-        const input = z
-          .object({ provider: z.enum(['claude-cli', 'codex-cli']), id: z.string() })
-          .strict()
-          .parse(await body(request));
-        profiles.assertIdle(input.provider);
-        const directory = profiles.directory(input.provider, input.id);
-        if (!directory) throw new DomainError('INVALID_INPUT');
-        const quote = (value: string) => "'" + value.replaceAll("'", "''") + "'";
-        const key = input.provider === 'codex-cli' ? 'CODEX_HOME' : 'CLAUDE_CONFIG_DIR';
-        send(200, {
-          command: `$env:${key}=${quote(directory)}; & ${quote(execution.executable(input.provider) ?? '')} ${input.provider === 'codex-cli' ? 'login -c \'cli_auth_credentials_store="file"\' -c \'forced_login_method="chatgpt"\'' : 'auth login --claudeai'}`,
-        });
-        return;
-      }
-      if (url.pathname === '/api/v1/accounts/login' && request.method === 'GET') {
-        // Sign-in addresses and codes are for this PC's screen only, never a remote device.
-        send(
-          200,
-          accountLogin
-            .list()
-            .map(({ prompt, ...status }) => (remote ? status : { ...status, prompt })),
-        );
-        return;
-      }
-      if (url.pathname === '/api/v1/accounts/login/code' && request.method === 'POST') {
-        const input = z
-          .object({ provider: z.enum(['claude-cli', 'codex-cli']), code: z.string().max(2048) })
-          .strict()
-          .parse(await body(request));
-        send(200, accountLogin.submitCode(input.provider, input.code));
-        return;
-      }
-      if (
-        ['/api/v1/accounts/login', '/api/v1/accounts/logout'].includes(url.pathname) &&
-        request.method === 'POST'
-      ) {
-        const input = z
-          .object({
-            provider: z.enum(['claude-cli', 'codex-cli']),
-            id: z.string(),
-            browser: z.boolean().optional(),
-          })
-          .strict()
-          .parse(await body(request));
-        profiles.assertIdle(input.provider);
-        const directory = profiles.directory(input.provider, input.id);
-        if (!directory) throw new DomainError('INVALID_INPUT');
-        const executable = execution.executable(input.provider);
-        if (!executable) throw new DomainError('CLI_UNAVAILABLE');
-        send(
-          202,
-          accountLogin.start({
-            operation: url.pathname.endsWith('/logout') ? 'logout' : 'login',
-            provider: input.provider,
-            profileId: input.id,
-            directory,
-            executable,
-            browser: input.browser,
-            verify: () =>
-              execution.provider({ provider: input.provider, accountProfileId: input.id }).status(),
-          }),
-        );
-        return;
-      }
-      if (url.pathname === '/api/v1/accounts/login/cancel' && request.method === 'POST') {
-        const input = z
-          .object({ provider: z.enum(['claude-cli', 'codex-cli']) })
-          .strict()
-          .parse(await body(request));
-        send(200, accountLogin.cancel(input.provider));
         return;
       }
       if (url.pathname === '/api/v1/providers' && request.method === 'GET') {
@@ -2069,23 +1906,19 @@ export async function startServer({
           // A conversation's first turn fixes its service and model (the composer's own model, else
           // Jev once); later turns keep them, and another model opens a new conversation with a
           // hand-over (SPEC-02.19 2·5). `default` is the project's default conversation.
-          const conversation =
-            typeof input.conversationId !== 'string'
-              ? undefined
-              : old
-                ? conversations.fix(projectId, input)
-                : (
-                    await conversations.place(projectId, input, {
-                      route: async (requested) =>
-                        modelRouter.route(
-                          routingInput(),
-                          await execution.models(),
-                          signedInServices(),
-                          requested,
-                        ),
-                      chooseAccount: conversationAccount,
-                    })
-                  ).conversation;
+          if (typeof input.conversationId === 'string') {
+            if (old) conversations.fix(projectId, input);
+            else
+              await conversations.place(projectId, input, {
+                route: async (requested) =>
+                  modelRouter.route(
+                    routingInput(),
+                    await execution.models(),
+                    signedInServices(),
+                    requested,
+                  ),
+              });
+          }
           if (old && isAutoModel(input.model) && old.routing) {
             // A retried automatic request keeps the service and model chosen the first time.
             input.provider = old.provider;
@@ -2105,23 +1938,10 @@ export async function startServer({
             input.effort = decision.effort;
             input.routing = decision;
           }
-          const provider = z.enum(['claude-cli', 'codex-cli']).parse(input.provider);
-          if (old) {
-            if (old.accountProfileId) input.accountProfileId = old.accountProfileId;
-          } else {
-            if (accountLogin.busy(provider)) throw new DomainError('PROFILE_LOGIN_IN_PROGRESS');
-            // Automatic switching (when on): an account near or at its limit hands the request to
-            // the signed-in account of the same service with the most headroom.
-            const chosen = await accountUsage.choose(
-              provider,
-              conversation?.accountProfileId ?? profiles.selected(provider),
-            );
-            input.accountProfileId = chosen.id;
-            if (chosen.switched) {
-              input.accountSwitchedFrom = chosen.from;
-              if (!profiles.list().pending[provider]) profiles.select(provider, chosen.id);
-            }
-          }
+          // Every request runs on the CLI's default login (ADR-025); a retried one keeps the
+          // account an older VIDE stored with it.
+          z.enum(['claude-cli', 'codex-cli']).parse(input.provider);
+          if (old?.accountProfileId) input.accountProfileId = old.accountProfileId;
           const result = workspace.submit(projectId, input);
           if (result.created) execution.start(result.request);
           const routing = result.created
@@ -2292,7 +2112,6 @@ export async function startServer({
       diagnostics.write('engine-stop');
       stopHealth();
       await remoteAccess.close();
-      await accountLogin.close();
       agentTools.close();
       await execution.close();
       clearInterval(transcriptSweep);

@@ -206,11 +206,10 @@ function setup(t, script, { codex = false } = {}) {
     kind: 'jig-run',
     title: '구조 검토',
     provider,
-    accountProfileId: 'default',
   });
   const submit = async (projectId, input) => {
     conversations.fix(projectId, input);
-    const created = workspace.submit(projectId, { accountProfileId: 'default', ...input });
+    const created = workspace.submit(projectId, input);
     execution.start(created.request);
     return created.request;
   };
@@ -244,7 +243,6 @@ function setup(t, script, { codex = false } = {}) {
         body: async () => payload,
         send: (s, d) => ((status = s), (data = d)),
         chooseModel: async () => ({ provider }),
-        chooseAccount: async () => 'default',
         submit,
       },
     );
@@ -351,7 +349,6 @@ test('a failed submit takes the recorded answers back', async (t) => {
         body: async () => ({ requestId: 'ask-1', recommended: true }),
         send: () => {},
         chooseModel: async () => ({}),
-        chooseAccount: async () => 'default',
         submit: async () => {
           throw Object.assign(new Error('busy'), { code: 'PROFILE_LOGIN_IN_PROGRESS' });
         },

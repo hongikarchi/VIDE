@@ -51,8 +51,8 @@ try {
   const settings = page.getByRole('dialog', { name: '상태 및 설정', exact: true });
   // Settings are tabs: account, AI, connected programs, (PC program), status.
   await settings.getByRole('button', { name: 'AI', exact: true }).click();
-  assert.equal(await settings.getByRole('button', { name: 'AI 계정 관리' }).isVisible(), true);
-  await settings.getByRole('button', { name: 'AI 계정 관리' }).click();
+  assert.equal(await settings.getByRole('button', { name: 'AI 연결 설정' }).isVisible(), true);
+  await settings.getByRole('button', { name: 'AI 연결 설정' }).click();
   const aiSettings = page.getByRole('dialog', { name: 'AI 연결 설정', exact: true });
   await aiSettings.waitFor();
   await aiSettings.getByRole('button', { name: '닫기', exact: true }).click();

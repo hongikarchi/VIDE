@@ -10,8 +10,9 @@ export function interventionInput(original: RequestInput, value: unknown): Reque
     next.supersedesRequestId !== undefined ||
     next.parentRequestId !== undefined ||
     next.provider === 'extension' ||
+    // The account is the CLI's default login (ADR-025); the service stays the request's own.
     next.accountProfileId !== undefined ||
-    (original.accountProfileId !== undefined && next.provider !== original.provider)
+    next.provider !== original.provider
   )
     throw new DomainError('INVALID_INPUT');
   if (
@@ -37,7 +38,6 @@ export function interventionInput(original: RequestInput, value: unknown): Reque
   const result = requestInputSchema.safeParse({
     ...next,
     executionLimits: next.executionLimits ?? original.executionLimits,
-    ...(original.accountProfileId ? { accountProfileId: original.accountProfileId } : {}),
     body: `${original.body}\n\n[추가 지시]\n${next.body}`,
     pins,
     sketches: merged(original.sketches, next.sketches),

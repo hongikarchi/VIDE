@@ -1,19 +1,17 @@
 import { z } from 'zod';
 import { api } from './gateway.ts';
 
-// Account usage bars (Design SCR-12): for each service, the current account's short window (Claude
-// 5 hours, ChatGPT its shorter window) and 7-day use as thin bars with a percentage. Shown in the
-// host panel's footer and the app's status bar. Nothing is estimated: without usage lookup the
-// bars say so.
+// Account usage bars (Design SCR-12): for each service, the current account's (the CLI's default
+// login, ADR-025) short window (Claude 5 hours, ChatGPT its shorter window) and 7-day use as thin
+// bars with a percentage. Shown in the host panel's footer and the app's status bar. Nothing is
+// estimated: without usage lookup the bars say so.
 
-const accountsSchema = z.object({ active: z.record(z.string(), z.string()) });
 const windowSchema = z.object({ percent: z.number() }).optional();
 const usageSchema = z.object({
   settings: z.object({ usageLookup: z.boolean() }).partial().optional(),
   accounts: z.array(
     z.object({
       provider: z.string(),
-      id: z.string(),
       signedIn: z.boolean().optional(),
       session: windowSchema,
       weekly: windowSchema,
@@ -50,15 +48,11 @@ export function mountUsageBars(element: HTMLElement) {
   const refresh = async () => {
     clearTimeout(timer);
     try {
-      const [accounts, usage] = await Promise.all([
-        api('/accounts').then((value) => accountsSchema.parse(value)),
-        api('/accounts/usage').then((value) => usageSchema.parse(value)),
-      ]);
+      const usage = usageSchema.parse(await api('/accounts/usage'));
       element.replaceChildren();
       let shown = 0;
       for (const service of SERVICES) {
-        const id = accounts.active[service.id];
-        const row = usage.accounts.find((a) => a.provider === service.id && a.id === id);
+        const row = usage.accounts.find((a) => a.provider === service.id);
         if (!row || row.signedIn === false) continue;
         const group = document.createElement('span');
         group.className = 'usage-service';
@@ -83,7 +77,7 @@ export function mountUsageBars(element: HTMLElement) {
         off.className = 'usage-off';
         off.textContent =
           usage.settings?.usageLookup === false
-            ? '사용량 조회 꺼짐 · 설정 → AI 계정에서 켤 수 있습니다'
+            ? '사용량 조회 꺼짐 · 설정 → AI에서 켤 수 있습니다'
             : '사용량 확인 전';
         element.append(off);
       }

@@ -51,7 +51,7 @@ function setup(t) {
   const project = store.createProject('만들기 시험');
   const removed = [];
   const conversations = new ConversationService(store, {
-    removeTranscript: async (provider, directory, sessionId) => {
+    removeTranscript: async (provider, sessionId) => {
       removed.push(sessionId);
       return 1;
     },
@@ -79,7 +79,6 @@ function setup(t) {
         body: async () => payload,
         send: (status, data) => (last = { status, data }),
         chooseModel: async () => ({ provider: 'claude-cli', model: 'sonnet', effort: 'default' }),
-        chooseAccount: async () => 'default',
       },
     );
     return last;

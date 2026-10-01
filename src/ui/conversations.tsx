@@ -33,28 +33,18 @@ const sendsSchema = z.object({
   files: z.number(),
 });
 /**
- * The server's hand-over state (conversations.ts `limitHandover`/`lengthHandover`): an account
- * limit waiting for the T2 card, or a session past the length setting (a suggestion).
+ * The server's hand-over state (conversations.ts `lengthHandover`): a session past the length
+ * setting (a suggestion). A turn stopped on the account's limit is read from the request itself.
  */
-export const handoverSchema = z.union([
-  z
-    .object({
-      kind: z.literal('limit'),
-      requestId: z.string(),
-      from: z.object({ provider: z.string(), accountProfileId: z.string() }).passthrough(),
-      sends: sendsSchema,
-    })
-    .passthrough(),
-  z
-    .object({
-      kind: z.literal('length'),
-      turns: z.number(),
-      inputTokens: z.number(),
-      limits: z.object({ maxTurns: z.number(), maxInputTokens: z.number() }),
-      sends: sendsSchema,
-    })
-    .passthrough(),
-]);
+export const handoverSchema = z
+  .object({
+    kind: z.literal('length'),
+    turns: z.number(),
+    inputTokens: z.number(),
+    limits: z.object({ maxTurns: z.number(), maxInputTokens: z.number() }),
+    sends: sendsSchema,
+  })
+  .passthrough();
 export type ServerHandover = z.infer<typeof handoverSchema>;
 export const conversationSchema = z
   .object({
@@ -121,7 +111,8 @@ export const MOVED_TEXT = '모델이 달라 새 대화로 이어서 보냈습니
 const DEFAULT_ROW = /^default(-|$)/;
 const HANDOFF_REASONS: Record<string, string> = {
   first: '첫 세션',
-  account: '계정 한도로 여유 계정의 새 세션으로 옮겼습니다',
+  // Older records (VIDE's own account profiles, before ADR-025) and a session of one of them.
+  account: '다른 계정의 새 세션으로 옮겼습니다',
   length: '대화가 길어져 원장으로 새 세션을 열었습니다',
   lost: '끊긴 턴의 세션을 다시 쓰지 않고 원장으로 새 세션을 열었습니다',
   closed: '기록을 지운 대화를 원장으로 새 세션에서 이어 갑니다',
@@ -191,35 +182,25 @@ export function chipLabel(entry: Pick<ConversationEntry, 'id' | 'kind' | 'title'
     ? entry.title
     : `${kind} · ${entry.title}`;
 }
-/** The small read-only label of a conversation's service, model and account. */
+/**
+ * The small read-only label of a conversation's service and model. The account is the CLI's
+ * current login (ADR-025), shown in the status bar.
+ */
 export function providerLabel(
-  entry: Pick<ConversationEntry, 'provider' | 'model' | 'effort' | 'accountProfileId'> & {
+  entry: Pick<ConversationEntry, 'provider' | 'model' | 'effort'> & {
     pending?: boolean;
   },
   models: readonly ModelOption[] = [],
-  accountName?: (id: string) => string | undefined,
 ) {
   if (!entry.provider || entry.pending) return '첫 요청 때 AI를 정합니다';
   const model = entry.model
     ? (models.find((option) => option.id === entry.model)?.name ?? entry.model)
     : '기본 모델';
-  const account =
-    entry.accountProfileId && entry.accountProfileId !== 'default'
-      ? (accountName?.(entry.accountProfileId) ?? entry.accountProfileId)
-      : '';
-  return [PROVIDER_LABELS[entry.provider] ?? entry.provider, model, account]
-    .filter(Boolean)
-    .join(' · ');
+  return [PROVIDER_LABELS[entry.provider] ?? entry.provider, model].filter(Boolean).join(' · ');
 }
 
 export type HandoverCard =
-  | {
-      kind: 'limit';
-      requestId: string;
-      text: string;
-      /** What the new session receives, from the server's state. */
-      sends?: string;
-    }
+  | { kind: 'limit'; requestId: string; text: string }
   | { kind: 'length'; key: string; text: string; sends: string }
   | { kind: 'record'; ledgerId: string; text: string; from?: string; to?: string };
 /** '원장 n개 · 최근 턴 n개 · 파일 n개': what a new session receives. */
@@ -233,16 +214,13 @@ export function sendsText(sends: z.infer<typeof sendsSchema>) {
 const tokenText = (tokens: number) =>
   tokens >= 10_000 ? `${Math.round(tokens / 1000) / 10}만` : tokens.toLocaleString('ko-KR');
 const LIMIT_TEXT =
-  '이 계정의 사용 한도에 닿아 턴을 멈췄습니다. 끝난 턴은 자동으로 다시 보내지 않습니다.';
+  '이 계정의 사용 한도에 닿아 턴을 멈췄습니다. 자동으로 다시 보내지 않습니다. AccountSwitch에서 계정을 바꾼 뒤 다시 보내거나 다른 AI로 이어 가세요.';
 const sideLabel = (value: unknown) => {
-  const side = value as { provider?: unknown; model?: unknown; accountProfileId?: unknown } | null;
+  const side = value as { provider?: unknown; model?: unknown } | null;
   if (!side || typeof side.provider !== 'string') return undefined;
   return [
     PROVIDER_LABELS[side.provider] ?? side.provider,
     typeof side.model === 'string' ? side.model : '',
-    typeof side.accountProfileId === 'string' && side.accountProfileId !== 'default'
-      ? side.accountProfileId
-      : '',
   ]
     .filter(Boolean)
     .join(' · ');
@@ -259,15 +237,8 @@ export function handoverCard(
   messages: RequestLike[],
 ): HandoverCard | undefined {
   if (!detail) return;
-  // The server's state comes first: it knows the stop and what a new session receives.
+  // The server's suggestion comes first: it knows what a new session receives.
   const state = detail.handover;
-  if (state?.kind === 'limit')
-    return {
-      kind: 'limit',
-      requestId: state.requestId,
-      text: LIMIT_TEXT,
-      sends: sendsText(state.sends),
-    };
   if (state?.kind === 'length')
     return {
       kind: 'length',
@@ -347,7 +318,6 @@ interface Options {
    * the composer's model follows it, so sending there keeps the conversation (SPEC-02.19 2).
    */
   onFixed?: (fixed: { provider: string; model: string | null } | null) => void;
-  accountName?: (id: string) => string | undefined;
 }
 export interface ConversationsController {
   /** New project, models, linked files or requests; a new project reloads the list. */
@@ -360,11 +330,7 @@ export interface ConversationsController {
 }
 
 const errorText = (error: unknown) =>
-  (error as { code?: unknown } | null)?.code === 'NO_SPARE_ACCOUNT'
-    ? '같은 AI의 여유 계정이 없습니다. 설정 → AI에서 계정을 더하거나 다른 AI로 이어 가세요.'
-    : error instanceof Error
-      ? error.message
-      : '요청을 처리하지 못했습니다.';
+  error instanceof Error ? error.message : '요청을 처리하지 못했습니다.';
 
 function CreateForm({
   models,
@@ -659,12 +625,12 @@ function Conversations({
     const [, provider, model] = fixedKey.split('|');
     onFixed.current?.(provider ? { provider, model: model || null } : null);
   }, [fixedKey]);
-  /** [새 세션으로 이어가기]: posts the hand-over (a spare account, or a new session). */
-  const renew = (path: string) => {
+  /** [새 세션으로 이어가기] on the length suggestion: the next turn opens a new session. */
+  const renew = () => {
     if (!current?.provider) return;
     setRenewing(true);
     setError('');
-    api(`${base}/${keyOf(current.id)}/${path}`, 'POST', {})
+    api(`${base}/${keyOf(current.id)}/renew`, 'POST', {})
       .then(reload)
       .catch((reason) => setError(errorText(reason)))
       .finally(() => setRenewing(false));
@@ -737,7 +703,7 @@ function Conversations({
             {targetNames.length ? ` · ${targetNames.join(', ')}` : ''}
           </span>
           <span className="conv-ai" title="대화를 시작할 때 정한 AI">
-            {providerLabel(current, models, options.accountName)}
+            {providerLabel(current, models)}
           </span>
           {current.provider && !current.pending ? (
             <details className="conv-menu">
@@ -817,28 +783,8 @@ function Conversations({
               <span className="conv-grade">확인 필요</span>
             </header>
             <p>{card.text}</p>
-            <small className="conv-note">
-              {card.sends
-                ? `같은 AI의 여유 계정에서 새 세션을 엽니다. 보내는 것: ${card.sends}. `
-                : ''}
-              설정 → AI에서 자동 전환을 켜 두면 다음 턴부터 같은 AI의 여유 계정으로 이어 갑니다.
-            </small>
             <div className="conv-actions">
-              {card.sends ? (
-                <button
-                  type="button"
-                  className="primary"
-                  disabled={renewing}
-                  onClick={() => renew('account')}
-                >
-                  새 세션으로 이어가기
-                </button>
-              ) : null}
-              <button
-                type="button"
-                className={card.sends ? undefined : 'primary'}
-                onClick={() => setHanding(true)}
-              >
+              <button type="button" className="primary" onClick={() => setHanding(true)}>
                 다른 AI로 이어 가기
               </button>
             </div>
@@ -852,12 +798,7 @@ function Conversations({
               <p>{card.text}</p>
               <small className="conv-note">보내는 것: {card.sends}</small>
               <div className="conv-actions">
-                <button
-                  type="button"
-                  className="primary"
-                  disabled={renewing}
-                  onClick={() => renew('renew')}
-                >
+                <button type="button" className="primary" disabled={renewing} onClick={renew}>
                   새 세션으로 이어가기
                 </button>
                 <button

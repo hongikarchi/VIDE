@@ -113,15 +113,14 @@ test('chip and AI labels', () => {
     'Claude · Sonnet',
   );
   assert.equal(ui.providerLabel(entry('c1'), models), 'Claude · Sonnet');
+  // The account is the CLI's current login (ADR-025): an older conversation's profile is not shown.
   assert.equal(
-    ui.providerLabel(entry('c1', { accountProfileId: 'p2', model: null }), models, (id) =>
-      id === 'p2' ? '두 번째 계정' : undefined,
-    ),
-    'Claude · 기본 모델 · 두 번째 계정',
+    ui.providerLabel(entry('c1', { accountProfileId: 'p2', model: null }), models),
+    'Claude · 기본 모델',
   );
 });
 
-test('hand-over card: the limit stop (T2), then the recorded hand-over', () => {
+test('hand-over card: the limit stop (no resend, AccountSwitch), then the recorded hand-over', () => {
   const detail = { id: 'c1', ledger: [] };
   const stopped = [
     request('a', 'c1', 'succeeded'),
@@ -130,6 +129,7 @@ test('hand-over card: the limit stop (T2), then the recorded hand-over', () => {
   const limit = ui.handoverCard(detail, stopped);
   assert.equal(limit.kind, 'limit');
   assert.equal(limit.requestId, 'b');
+  assert.match(limit.text, /자동으로 다시 보내지 않습니다.*AccountSwitch/);
   const answered = ui.handoverCard(
     {
       id: 'c1',

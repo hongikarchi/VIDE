@@ -84,7 +84,6 @@ export interface SessionOptions {
 }
 export interface CliOptions {
   executable?: string;
-  configDirectory?: string;
   model?: string;
   effort?: string;
   agent?: unknown;
@@ -213,15 +212,15 @@ export function supportedCliVersion(provider: CliProvider, version: string) {
 const VERSION_TTL_MS = 60000;
 const versionCache = new Map<string, { at: number; version: string }>();
 /**
- * A confirmed subscription login is reused for ten minutes per provider, executable and account
- * folder (each `auth status` / `login status` spawn is ~0.2 s before every turn). Only a login that
- * was available is kept; a refused run (changed login mode, subscription limit), a login, logout or
- * an account switch clears it (`clearAuthStatus`).
+ * A confirmed subscription login is reused for ten minutes per provider and executable (each
+ * `auth status` / `login status` spawn is ~0.2 s before every turn). Only a login that was
+ * available is kept; a refused run (changed login mode, subscription limit) clears it
+ * (`clearAuthStatus`). VIDE runs on each CLI's default login (ADR-025): AccountSwitch changes it.
  */
 export const AUTH_TTL_MS = 10 * 60_000;
 const authCache = new WeakMap<object, Map<string, { at: number; status: ProviderStatus }>>();
 let authGeneration = 0;
-/** Forgets every remembered login (account switch, login, logout, a refused run). */
+/** Forgets every remembered login (a refused run). */
 export function clearAuthStatus() {
   authGeneration++;
 }
@@ -403,9 +402,10 @@ export function withTurnRules(
   };
 }
 /**
- * Removes the transcript of one VIDE session from a Claude profile (ARCH-01 §2 record
- * management): `<profile>/projects/<folder>/<sessionId>.jsonl`, wherever the first turn ran, and
- * the project folder when it is left empty. Nothing else in the profile is touched.
+ * Removes the transcript of one VIDE session from Claude's folder (ARCH-01 §2 record management):
+ * `<folder>/projects/<project>/<sessionId>.jsonl`, wherever the first turn ran, and the project
+ * folder when it is left empty. Nothing else is touched. `configDirectory` is the default login's
+ * `~/.claude` unless a test names another.
  */
 export async function removeClaudeTranscript(
   configDirectory: string | undefined,
@@ -604,7 +604,6 @@ export class ClaudeCli {
   spawnProcess: typeof spawn;
   model?: string;
   effort?: string;
-  configDirectory?: string;
   agent?: AgentConnection;
   session?: SessionOptions;
   nativeQuestions?: NativeQuestionHandler;
@@ -616,7 +615,6 @@ export class ClaudeCli {
   timing: { authMs?: number; authCached?: boolean; spawnAt?: number; firstOutputAt?: number } = {};
   constructor({
     executable,
-    configDirectory,
     model,
     effort,
     agent,
@@ -637,12 +635,6 @@ export class ClaudeCli {
       stopGraceMs < 1
     )
       throw error('INVALID_LIMIT');
-    if (
-      configDirectory !== undefined &&
-      (!isAbsolute(configDirectory) || configDirectory.includes('\0'))
-    )
-      throw error('INVALID_PROFILE_DIRECTORY');
-    this.configDirectory = configDirectory;
     this.executable = executable;
     this.timeoutMs = timeoutMs;
     this.stopGraceMs = stopGraceMs;
@@ -672,10 +664,9 @@ export class ClaudeCli {
       },
     );
   }
+  /** The CLI's default login (ADR-025): no config folder is named. */
   environment() {
-    const env = subscriptionEnvironment();
-    if (this.configDirectory) env.CLAUDE_CONFIG_DIR = this.configDirectory;
-    return env;
+    return subscriptionEnvironment();
   }
   arguments() {
     const args = cliArguments(this.instructions);
@@ -771,7 +762,7 @@ export class ClaudeCli {
     });
   }
   private authKey() {
-    return `${authGeneration}\0${this.provider}\0${this.executable}\0${this.configDirectory ?? ''}`;
+    return `${authGeneration}\0${this.provider}\0${this.executable}`;
   }
   /** `status()` before a run: a login confirmed in the last ten minutes is not asked again. */
   async cachedStatus(): Promise<ProviderStatus> {

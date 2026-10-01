@@ -121,6 +121,10 @@ export const requestInputSchema = z
      */
     applyToSource: z.boolean().optional(),
     provider: z.enum(['claude-cli', 'codex-cli', 'extension']),
+    /**
+     * The VIDE account profile an older request ran on (before ADR-025): kept so stored requests
+     * still parse. New requests run on the CLI's default login and never carry it.
+     */
     accountProfileId: z
       .string()
       .regex(/^(default|[0-9a-f-]{36})$/)

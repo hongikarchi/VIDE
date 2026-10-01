@@ -1,4 +1,3 @@
-import { AccountSettings } from './account-settings.tsx';
 import { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { z } from 'zod';
@@ -264,14 +263,14 @@ function Settings({ config, current, onStatus }: Props) {
   return (
     <>
       <div className="quantity-head">
-        <h2>AI 계정 · 연결</h2>
+        <h2>AI 연결</h2>
         <button disabled={saving} onClick={close}>
           닫기
         </button>
       </div>
       <p className="ai-intro">
-        요청은 이 PC에서 공식 Claude Code·Codex CLI가 구독 계정으로 실행합니다. 서비스마다 계정을
-        여러 개 두고 골라 쓸 수 있습니다. 사용량과 자동 전환은 설정 → AI에서 봅니다.
+        요청은 이 PC에서 공식 Claude Code·Codex CLI가 지금 로그인된 구독 계정으로 실행합니다. 계정
+        추가·로그인·전환은 AccountSwitch에서 하고, 현재 계정과 사용량은 설정 → AI에서 봅니다.
       </p>
       {providers.map((provider) => {
         const label = provider === 'claude-cli' ? 'Claude Code' : 'Codex · ChatGPT';
@@ -284,7 +283,6 @@ function Settings({ config, current, onStatus }: Props) {
                 {states[provider] || '연결 확인 전'}
               </span>
             </div>
-            <AccountSettings provider={provider} />
             <details className="ai-advanced">
               <summary>고급 · 실행 파일 경로</summary>
               <input
@@ -322,7 +320,9 @@ function Settings({ config, current, onStatus }: Props) {
         </button>
       </div>
       <p role="status">{status}</p>
-      <small>로그인은 각 공식 CLI 창에서 진행합니다. 경로 변경은 다음 요청부터 적용됩니다.</small>
+      <small>
+        로그인은 터미널이나 AccountSwitch에서 합니다. 경로 변경은 다음 요청부터 적용됩니다.
+      </small>
     </>
   );
 }

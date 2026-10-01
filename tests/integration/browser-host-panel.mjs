@@ -76,7 +76,6 @@ try {
           accounts: [
             {
               provider: 'claude-cli',
-              id: 'default',
               signedIn: true,
               session: { percent: 62 },
               weekly: { percent: 91 },
@@ -84,7 +83,6 @@ try {
             },
             {
               provider: 'codex-cli',
-              id: 'default',
               signedIn: true,
               session: { percent: 12 },
               weekly: { percent: 40 },
@@ -173,7 +171,6 @@ try {
         accounts: [
           {
             provider: 'claude-cli',
-            id: 'default',
             signedIn: true,
             session: { percent: 100 },
             weekly: { percent: 55 },

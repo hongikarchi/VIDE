@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { interventionInput } from '../../src/core/intervention.ts';
-test('intervention inherits server-fixed account and rejects account/provider replacement', () => {
+test('intervention keeps the service, carries no account and rejects account/provider replacement', () => {
   const original = {
     id: 'one',
     body: 'Original',
@@ -14,7 +14,8 @@ test('intervention inherits server-fixed account and rejects account/provider re
   };
   const next = { ...original, id: 'two', body: 'More' };
   delete next.accountProfileId;
-  assert.equal(interventionInput(original, next).accountProfileId, 'default');
+  // Accounts are the CLI's default login (ADR-025): an older request's account is not copied on.
+  assert.equal(interventionInput(original, next).accountProfileId, undefined);
   assert.throws(
     () => interventionInput(original, { ...next, accountProfileId: 'default' }),
     /INVALID_INPUT/,

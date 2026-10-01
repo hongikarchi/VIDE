@@ -387,7 +387,6 @@ test('executions go in the conversation ledger as code items (counts only)', asy
     kind: 'ask',
     title: '벽',
     provider: 'claude-cli',
-    accountProfileId: 'default',
   });
   send('conv-1', { conversationId: conversation.id });
   await settled();

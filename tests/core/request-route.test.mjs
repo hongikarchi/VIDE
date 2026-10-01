@@ -174,10 +174,11 @@ test('words decided without Jev: login, Sync, jig words, making a jig, the file'
   const { routeCard } = await import('../../src/ui/request-route.ts');
   const login = routeRequest('codex 로그인해줘', [], [], context);
   assert.deepEqual(login.app, { action: 'login', tier: 'T2', provider: 'codex-cli' });
-  // Signed in: a notice; not signed in: a confirmation card (T2) with one button.
+  // Signed in: a notice; not signed in: where to sign in (terminal or AccountSwitch, ADR-025).
   assert.equal(routeCard(login, { signedIn: { 'codex-cli': true } }).tier, 'R');
   const card = routeCard(login);
-  assert.deepEqual([card.tier, card.run, card.toAi], ['T2', '로그인 시작', true]);
+  assert.deepEqual([card.tier, card.run, card.toAi], ['R', undefined, true]);
+  assert.match(card.text, /AccountSwitch/);
   assert.equal(routeRequest('클로드 로그아웃', []).app.action, 'logout');
   const sync = routeRequest('다른 파일 sync해줘', [], [], context);
   assert.deepEqual([sync.target, sync.app.action, sync.app.tier], ['app', 'sync_link', 'T1']);

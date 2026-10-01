@@ -2,8 +2,8 @@
 id: PLAN-25
 title: 계정 관리를 AccountSwitch로 넘기기
 status: draft
-version: 0.1
-updated: 2026-09-30
+version: 0.2
+updated: 2026-10-01
 owner: agent:claude
 related: [ADR-025, SPEC-02, ARCH-01, PLAN-06, PLAN-13, PLAN-24, FR-08, AC-47]
 ---
@@ -50,6 +50,10 @@ related: [ADR-025, SPEC-02, ARCH-01, PLAN-06, PLAN-13, PLAN-24, FR-08, AC-47]
 | `src/ui/account-settings.tsx`, `src/ui/ai-settings.tsx`, `src/ui/usage-bars.ts`, `src/ui/workspace-status.ts`, `src/ui/conversations.tsx`, `src/ui/app.ts` | 계정 관리 화면을 읽기 전용 카드로. 대화 머리의 계정 표시는 현재 기본 로그인으로 |
 | 경로 판정 규칙(`app/login/*`, 계정 전환) | 안내 답으로 |
 | 시험 | `tests/ai/account-profiles.test.mjs` 삭제, `account-usage`·`conversations`·`remote-http`·`server` 등 계정 관련 기대값 조정, `browser-accounts.mjs`는 읽기 전용 카드 시험으로 |
+
+- 결과(2026-10-01, 사용자 결정 "account switch는 외부 프로그램(AccountSwitch)으로 빼서 관리 — 우리 프로그램에서 삭제", 브랜치 `cleanup/code-2026-10-01`): 위 표대로 뺐다. `account-profiles.ts`·`account-login.ts`와 그 시험 삭제. `account-usage.ts`는 기본 로그인의 계정(이메일·요금제)과 사용량 읽기만 남기고 캐시를 로그인한 계정별로 둔다(AccountSwitch로 바뀌면 이전 계정의 한도·사용량을 보이지 않음). 사용량 조회 설정은 데이터 폴더의 `usage-settings.json`에 두고, 없으면 예전 `cli-profiles/usage-settings.json`을 읽기만 한다(`autoSwitch`·`threshold`는 무시). `/accounts`(GET, 기본 로그인 정보)·`/accounts/usage`(GET)·`/accounts/usage-settings`(POST, `usageLookup`만)만 남고 나머지 계정 경로는 404. 대화는 계정을 고정하지 않고 턴마다 기본 로그인(`accountProfileId: 'default'` 세션 행)으로 간다. 예전 VIDE 프로필에서 연 세션은 이어 쓰지 않고 새 세션('account')을 연다. 한도 T2 카드·`…/account` 경로·`NO_SPARE_ACCOUNT`는 없어지고, 한도에 걸린 턴은 다시 보내지 않으며 알림(“AccountSwitch에서 계정을 바꾼 뒤 다시 보내세요”)과 [다른 AI로 이어 가기]만 남는다. `CLAUDE_CONFIG_DIR`·`CODEX_HOME`·`cli_auth_credentials_store` 주입 제거. 오래 떠 있는 Codex app-server는 프로세스 키에 기본 로그인(`~/.codex/auth.json`의 계정·이메일)을 넣어, 바뀌면 다음 턴 전에 새로 띄운다. 저장된 `accountProfileId`는 옛 기록 읽기용으로만 두고 새 요청·대화에는 쓰지 않는다(마이그레이션 없음). 화면: 설정 → AI의 읽기 전용 카드(현재 계정·사용량·"계정 추가·로그인·전환은 AccountSwitch에서"), 상태 표시줄 계정 표시 유지(로그인이 바뀌면 모델 목록을 다시 읽음), 로그인·로그아웃·계정 전환 요청은 안내 알림으로 답한다.
+- 착수 때 확인: `browser-account-catalog`·`browser-authenticated-accounts`는 사이트 계정이 아니라 AI 계정 시험이었다. 앞의 것은 기본 로그인이 바뀔 때 모델 목록을 다시 읽는 시험으로 고쳤고, 뒤의 것(두 번째 AI 계정 실제 왕복)은 대상 기능이 없어져 지웠다.
+- 남은 것: 1단계 정본 반영(다른 세션), 5의 SPIKE(계정을 바꾼 뒤 같은 세션 `--resume`), 3단계의 실제 확인(사용자 허락 뒤), `%LOCALAPPDATA%\VIDE\cli-profiles`의 남은 `profiles.json` 행·빈 폴더 정리(사용자 데이터라 코드에서 지우지 않음. VIDE는 더 읽지 않음), 설치본 릴리스.
 
 VIDE 계정 사이트(프로젝트 공유, PLAN-10)의 계정은 이 작업과 무관하다. `browser-account-catalog`·`browser-authenticated-accounts`, `tests/sharing/*`은 사이트 계정 시험이면 건드리지 않는다(착수 때 확인).
 

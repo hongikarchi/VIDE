@@ -2678,16 +2678,11 @@ body.panel-mode #conversation {
   padding: 10px 12px;
 }
 
-/* Settings → AI: accounts with their usage (5-hour / 7-day) and reset times. */
+/* Settings → AI: the current account of each service with its usage (5-hour / 7-day) and resets. */
 .usage-options {
   display: grid;
   gap: 4px;
   margin-bottom: 12px;
-}
-.usage-threshold {
-  width: 56px;
-  margin-left: 6px;
-  padding: 2px 4px;
 }
 .usage-row {
   display: grid !important;
@@ -2723,9 +2718,6 @@ body.panel-mode #conversation {
 }
 .usage-fill[data-level='high'] {
   background: var(--ng);
-}
-.usage-row > button {
-  justify-self: start;
 }
 .usage-refresh {
   margin-top: 10px;
@@ -2796,64 +2788,6 @@ body.panel-mode #conversation {
 .ai-settings .ai-routing small {
   display: block;
   color: var(--muted);
-}
-.account-settings {
-  display: grid;
-  gap: 6px;
-}
-.account-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 4px;
-  padding: 8px 10px;
-  border-radius: var(--radius-sm);
-  background: var(--bg-surface);
-}
-.account-row[data-active='true'] {
-  background: var(--bg-selected);
-}
-.account-name {
-  flex: 1;
-  min-width: 160px;
-  font-size: 12px;
-  font-weight: 600;
-}
-.account-name small {
-  display: block;
-  font-weight: 400;
-  color: var(--muted);
-  margin-top: 2px;
-}
-.account-rename {
-  flex: 1;
-  min-width: 200px;
-  display: flex;
-  gap: 4px;
-}
-.account-rename input {
-  flex: 1;
-  min-width: 0;
-  padding: 4px 6px;
-  font-size: 12px;
-}
-.account-row button,
-.account-add button {
-  padding: 3px 8px;
-  font-size: 11px;
-}
-.account-add {
-  display: flex;
-  gap: 6px;
-  margin-top: 4px;
-}
-.ai-settings .account-add input {
-  flex: 1;
-  min-height: 30px;
-}
-.account-settings > small {
-  color: var(--muted);
-  font-size: 11px;
 }
 .ai-advanced {
   margin-top: 10px;
@@ -3972,171 +3906,6 @@ body[data-workspace='context'] .workspace > .jig-dialog {
   font-size: 11px;
   text-align: left;
   color: var(--text-2);
-}
-
-/* AI accounts: one quiet row per account; actions under ⋯; one login panel while signing in. */
-.account-block {
-  display: grid;
-  gap: 4px;
-}
-.account-badge {
-  margin-left: 6px;
-  padding: 1px 6px;
-  border-radius: var(--radius-pill);
-  font-size: 11px;
-  font-weight: 500;
-  background: var(--ok-subtle);
-  color: var(--ok);
-}
-.account-actions {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  margin-left: auto;
-}
-.account-more {
-  position: relative;
-}
-.account-more > summary {
-  list-style: none;
-  cursor: pointer;
-  padding: 2px 8px;
-  border-radius: var(--radius-sm);
-  font-size: 13px;
-  color: var(--text-3);
-}
-.account-more > summary::-webkit-details-marker {
-  display: none;
-}
-.account-more[open] > summary,
-.account-more > summary:hover {
-  background: var(--bg-hover);
-}
-.account-menu {
-  position: absolute;
-  right: 0;
-  top: calc(100% + 4px);
-  z-index: 5;
-  display: grid;
-  min-width: 170px;
-  padding: 4px;
-  border: var(--hairline) solid var(--line);
-  border-radius: var(--radius-sm);
-  background: var(--bg-elevated);
-  box-shadow: var(--shadow-float);
-}
-.account-more .account-menu button {
-  text-align: left;
-  border: 0;
-  background: transparent;
-  padding: 6px 8px;
-  font-size: 12px;
-  border-radius: var(--radius-sm);
-}
-.account-menu button:hover:not(:disabled) {
-  background: var(--soft);
-}
-.account-menu button.danger {
-  color: var(--ng);
-}
-.login-panel {
-  display: grid;
-  gap: 6px;
-  padding: 10px 12px;
-  border: var(--hairline) solid var(--border);
-  border-radius: var(--radius-sm);
-  background: var(--info-subtle);
-  font-size: 12px;
-}
-.login-head {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-}
-.login-head small {
-  color: var(--muted);
-}
-.login-head .link-button {
-  margin-left: auto;
-}
-.login-panel ol {
-  margin: 0;
-  padding-left: 18px;
-  display: grid;
-  gap: 8px;
-}
-.login-panel li {
-  display: list-item;
-}
-.login-panel li > * {
-  display: block;
-  margin-top: 4px;
-}
-.login-panel li > .login-actions {
-  display: flex;
-}
-.login-panel > small,
-.login-panel li small {
-  color: var(--muted);
-}
-.login-actions {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px;
-}
-.login-actions button,
-.login-actions a {
-  font-size: 11px;
-  padding: 3px 8px;
-  line-height: 1.6;
-}
-.login-actions a {
-  color: var(--text-2);
-}
-.login-actions input {
-  flex: 1;
-  min-width: 160px;
-  padding: 4px 6px;
-  font-family: ui-monospace, monospace;
-}
-.login-code {
-  font-size: 15px;
-  letter-spacing: 0.08em;
-  padding: 2px 8px;
-  border-radius: var(--radius-sm);
-  background: var(--bg-elevated);
-  border: var(--hairline) solid var(--line);
-}
-.login-failed {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 10px;
-  border-radius: var(--radius-sm);
-  background: var(--ng-subtle);
-  color: var(--ng);
-  font-size: 12px;
-}
-.login-failed span {
-  flex: 1;
-  min-width: 180px;
-}
-.login-command textarea {
-  width: 100%;
-  min-height: 56px;
-  font-family: ui-monospace, monospace;
-  font-size: 11px;
-}
-.account-foot {
-  color: var(--muted);
-  font-size: 11px;
-}
-.account-message {
-  margin: 0;
-  font-size: 12px;
-  color: var(--ok);
 }
 
 /* Project knowledge jig (trial): issue list by discipline, minutes-style note, evidence on request. */

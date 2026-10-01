@@ -937,27 +937,25 @@ export function routeCard(
   if (!route.app) return undefined;
   const service = route.app.provider ? SERVICE_NAME[route.app.provider] : '';
   switch (route.app.action) {
+    // Accounts are signed in and switched outside VIDE (ADR-025): the card says where.
     case 'login':
       if (route.app.provider && status.signedIn?.[route.app.provider])
         return { text: `${service}는 이미 로그인돼 있습니다.`, tier: 'R', toAi: true };
       return {
-        text: `${service || 'AI 서비스'} 로그인을 시작할까요? 로그인 창이 열리고, 일회용 코드는 그 창에 직접 입력합니다.`,
-        tier: 'T2',
-        run: '로그인 시작',
+        text: `${service || 'AI 서비스'} 로그인은 터미널이나 AccountSwitch에서 합니다. 로그인하면 VIDE가 그 계정으로 보냅니다.`,
+        tier: 'R',
         toAi: true,
       };
     case 'logout':
       return {
-        text: `${service || 'AI 서비스'}에서 로그아웃할까요? 이 계정으로 보내던 요청은 다른 계정이나 로그인 뒤에 보냅니다.`,
-        tier: 'T2',
-        run: '로그아웃',
+        text: `${service || 'AI 서비스'} 로그아웃은 터미널이나 AccountSwitch에서 합니다.`,
+        tier: 'R',
         toAi: true,
       };
     case 'switch_account':
       return {
-        text: `${service ? service + ' ' : ''}계정을 바꿀까요? 새 대화부터 바뀐 계정으로 보냅니다.`,
-        tier: 'T2',
-        run: '계정 전환',
+        text: `${service ? service + ' ' : ''}계정 전환은 AccountSwitch에서 합니다. 바꾼 뒤 보내는 요청부터 그 계정으로 갑니다.`,
+        tier: 'R',
         toAi: true,
       };
     case 'sync_link':
