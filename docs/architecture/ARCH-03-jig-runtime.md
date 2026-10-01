@@ -2,10 +2,10 @@
 id: ARCH-03
 title: jig 런타임과 저장 스키마 v5의 물리 계약
 status: review
-version: 0.4
+version: 0.5
 updated: 2026-10-01
 owner: agent:claude
-related: [FR-23, FR-24, FR-25, SPEC-02, SPEC-05, SPEC-06, SPEC-07, ADR-014, ADR-019, ADR-020, ADR-021, ADR-026, ARCH-01, ARCH-02, PLAN-22, PLAN-23, PLAN-24, PLAN-26, RESEARCH-10, RESEARCH-12]
+related: [FR-23, FR-24, FR-25, SPEC-02, SPEC-05, SPEC-06, SPEC-07, ADR-014, ADR-019, ADR-020, ADR-021, ADR-022, ADR-026, ARCH-01, ARCH-02, PLAN-22, PLAN-23, PLAN-24, PLAN-26, RESEARCH-10, RESEARCH-12]
 ---
 
 # jig 런타임과 저장 스키마 v5의 물리 계약
@@ -26,7 +26,7 @@ related: [FR-23, FR-24, FR-25, SPEC-02, SPEC-05, SPEC-06, SPEC-07, ADR-014, ADR-
 | 점검 | `src/jigs/runtime/gates.ts` | 점검 구현 전부. jig는 이름으로 고른다(§11) |
 | 묶기·점검 명령 | `src/jigs/runtime/pack.ts`, `npm run jig:pack`·`jig:validate`·`jig:test` | 제작 대화 도구 `jig_validate`·`jig_test`와 같은 코드 |
 | 공식 라이브러리 | `src/jigs/official/geometry-kit/`, `structure-analysis/`, `project-facts/` | 빌드에 포함. 구조 해석은 기존 `src/jigs/structure/core.ts`의 코어 연결과 ARCH-02 계약을 재사용 |
-| Rhino에 만들기 | `src/jigs/bake/bake.ts`, `datablock.ts`, `templates/*.cs` | 공식 틀·데이터 블록·만들기 기록(§9) |
+| Rhino에 만들기 | `src/jigs/bake/bake.ts`, `data-block.ts`, `plan.ts`, `templates/*.cs` | 공식 틀·데이터 블록·만들기 기록·바로 적용과 되돌리기(§9) |
 | 서버 경로 | `src/server/jig-routes.ts` | jig 경로 전부(§7). `server.ts`는 위임 한 줄 |
 | 화면 | `src/ui/jig-panel/`, `src/ui/kit/`(등록부 `registry.ts`) | 선언형 패널 렌더러와 공식 부품. 부품 목록·표현의 정본은 Design |
 | 프로젝트 jig 소스 | `extensions/jigs/<name>/`(1차 `s06-frame`) | 검증용 샘플 규칙(§2.2). 설치본 빌드 제외 |
@@ -380,8 +380,8 @@ export type RunnerOut =
 
 ### 6.4 Node 자식 프로세스(`dev-pack`)
 
-- 띄우기: `node --permission --allow-fs-read=<패키지 폴더> --allow-fs-read=<geometry-kit 묶음 폴더> --allow-fs-read=<runner.mjs 폴더> runner.mjs`. 경로마다 `--allow-fs-read`를 따로 준다(쉼표로 이으면 한 경로로 해석된다). 구조 라이브러리가 Node-API 코어를 worker 스레드에서 불러오므로 `--allow-worker`·`--allow-addons`를 주고 코어 폴더 `src/native/structure`(저장소의 `target/release/vide_structure.dll`, 설치본의 `app/src/native/structure/vide_structure.node`)를 읽기로 허용하며, 쓰기·자식 프로세스 허용 플래그는 주지 않는다. 런타임은 설치본의 Node 24.15다.
-- `env`에는 `PATH`, `SystemRoot`만 넘긴다(부모 환경의 키가 보이지 않게). Windows에서는 libuv가 자식 환경에 고정 필수 변수(`HOMEDRIVE`·`HOMEPATH`·`LOGONSERVER`·`SYSTEMDRIVE`·`TEMP`·`USERDOMAIN`·`USERNAME`·`USERPROFILE`·`WINDIR`)를 더하며 그 밖의 변수는 없다(기동 시험이 확인). 묶기 전 저장소 소스(`dev-source`)는 상대 import를 위해 `src/jigs/official`과 `node_modules` 읽기를 추가로 허용한다. 공식 구조 라이브러리가 재사용하는 `src/jigs/structure`와 ARCH-02 계약 `src/contracts`도 읽기만 허용한다(쓰기는 그대로 금지).
+- 띄우기: `node --permission --allow-worker --allow-addons --allow-fs-read=<패키지 폴더> --allow-fs-read=<실행기 진입 파일 폴더> [--allow-fs-read=<추가 읽기 경로>…] <child-entry.ts|.js>`(`ChildRunner.spawnArgs`, `src/jigs/runtime/child-runner.ts`. 진입 파일은 저장소에서 `child-entry.ts`, 빌드한 서버에서 `child-entry.js`). 경로마다 `--allow-fs-read`를 따로 준다(쉼표로 이으면 한 경로로 해석된다). 구조 라이브러리가 Node-API 코어를 worker 스레드에서 불러오므로 `--allow-worker`·`--allow-addons`를 주고 코어 폴더 `src/native/structure`(저장소의 `target/release/vide_structure.dll`, 설치본의 `app/src/native/structure/vide_structure.node`)를 읽기로 허용하며, 쓰기·자식 프로세스 허용 플래그는 주지 않는다. 런타임은 설치본의 Node 24.15다.
+- `env`에는 `PATH`, `SystemRoot`만 넘긴다(부모 환경의 키가 보이지 않게). Windows에서는 libuv가 자식 환경에 고정 필수 변수(`HOMEDRIVE`·`HOMEPATH`·`LOGONSERVER`·`SYSTEMDRIVE`·`TEMP`·`USERDOMAIN`·`USERNAME`·`USERPROFILE`·`WINDIR`)를 더하며 그 밖의 변수는 없다(기동 시험이 확인). 묶기 전 저장소 소스(`dev-source`)는 상대 import를 위해 `src/jigs/official`과 `node_modules` 읽기를 추가로 허용한다(`devReadPaths`, `src/jigs/runtime/pack.ts`). 공식 구조 라이브러리가 재사용하는 `src/jigs/structure`와 ARCH-02 계약 `src/contracts`도 읽기만 허용한다(쓰기는 그대로 금지).
 - 설치된 Node의 권한 모델에는 네트워크 제한이 없다. 이 실행기는 저장소에서 사람이 검토하고 이 PC에서 서명한 코드만 올린다.
 - 작업본마다 하나를 띄워 두고 유휴 5분 뒤 끝낸다.
 
@@ -417,9 +417,10 @@ jig·보고서 경로는 `src/server/jig-routes.ts`, 초안 경로(`jig-drafts`)
 | `PUT …/:iid/assembly/:role` | `{sources, transform?, confirm}` | 확정된 역할 |
 | `POST …/:iid/run` | `{until?, mode: 'geometry' \| 'preview' \| 'confirmed'}` | 단계 상태·KPI·겹침 층·표. `preview` 결과는 저장하지 않고 '미확정 미리보기'로 표시(SPEC-06) |
 | `POST …/:iid/steps/:stepId/confirm` | `{inputHash}` | 사람 단계(입력 확인·해석 확정) 기록 |
-| `POST …/:iid/bake` | `{bake: string[], linkId?, resolve?: Record<string, 'keep' \| 'overwrite' \| 'absorb'>}` | `{status: 'submitted', requestId, runId, readId, revisionKey, linkId, gates, plans[], chunks, waiting?}`(작업 보기로 추적, §9.3). 막은 점검·인자 문제는 422 `GATE_BLOCKED`(`blocked`·`problems`·`hints`), `absorb`가 수정 사항을 더했으면 200 `status: 'absorbed'`(다시 계산 뒤 다시 누름). `linkId`는 조립 역할이 연결 하나만 읽었을 때 생략할 수 있다 |
+| `POST …/:iid/bake` | `{bake: string[], linkId?, resolve?: Record<string, 'keep' \| 'overwrite' \| 'absorb'>}` | 바로 적용(연결 Rhino, §9.3의 4): 200 `{status: 'applied', runId, readId, revisionKey, linkId, gates, plans[], chunks, …만들기 결과}`, 보호·실패로 되돌렸으면 409 `BAKE_GUARDED`·422 `BAKE_FAILED`(`guarded?`·`reason?`·`undoFailed?`). 작업 사본(§9.3의 5): `{status: 'submitted', requestId, runId, readId, revisionKey, linkId, gates, plans[], chunks, waiting?}`(작업 보기로 추적). 막은 점검·인자 문제는 422 `GATE_BLOCKED`(`blocked`·`problems`·`hints`), `absorb`가 수정 사항을 더했으면 200 `status: 'absorbed'`(다시 계산 뒤 다시 누름). `linkId`는 조립 역할이 연결 하나만 읽었을 때 생략할 수 있다 |
 | `GET …/:iid/bakes?linkId=` | — | 만들기 기록(새 것 먼저, `pendingBaseline`) |
 | `POST …/:iid/bakes/:recordId/baseline` | — | 반영한 문서를 다시 읽어 기준 지문을 기록(§9.3 6). 그 실행의 객체가 하나도 없으면 409 `NOT_APPLIED` |
+| `POST …/:iid/bakes/:recordId/undo` | — | 바로 적용한 만들기 실행의 [되돌리기](§9.3의 7). 바로 적용 드라이버나 실행 기록이 없으면 409 `BAKE_UNDO_UNAVAILABLE`, 문서의 마지막 기록이 아니면 409 `BAKE_UNDO_NOT_LATEST`, 호스트 실패는 409 `BAKE_UNDO_FAILED` |
 | `GET /api/v1/projects/:id/jig-reports` | — | 보고서 탭 목록: 보고서 틀이 있는 작업본마다 `{instance, reports[]}` |
 | `GET …/:iid/reports` | — | 그 작업본 jig의 보고서 틀 목록(설명서 `reports`, 없으면 패키지의 `reports/*.json`) |
 | `GET …/:iid/reports/:name` | — | 해석된 보고서(§5.2). 보관된 단계 결과·설정값 원장·남은 조건·해석 보기를 읽고, `previewOnly` 결과는 확정으로 쓰지 않는다. 화면이 부품으로 그린다(CSP가 인라인 스타일을 막으므로 HTML을 내려보내지 않음). 일람표 CSV는 표 부품의 `csv`로 화면이 만든다 |
@@ -436,7 +437,7 @@ jig·보고서 경로는 `src/server/jig-routes.ts`, 초안 경로(`jig-drafts`)
 | `POST …/facts/sources/:n/open` | — | 원본 파일을 이 PC에서 연다. 원격 세션 403, AI 도구로 내놓지 않는다 |
 
 - 기존 `POST /api/v1/projects/:id/jigs/sync`와 구조 jig 경로(ARCH-02 §1)는 그대로다.
-- 오류 코드(잠정): `JIG_INVALID`(형식·금지 파일·부품, 응답에 `issues[]`), `JIG_SIGNATURE`(서명), `JIG_VERSION_EXISTS`(같은 id·버전, 다른 내용, 409), `PARAM_FIXED`, `OUT_OF_RANGE`, `GATE_BLOCKED`(막은 점검 이름 목록 포함), `STALE_INPUT`(읽은 문서 버전이 현재와 다름), `LAYER_ROOT_MISSING`(저장된 Sync 레이어 표가 있는데 출력 레이어가 없음), `CONFIRMATION_REQUIRED`(확인 없는 가져오기·고정), `JIG_PANEL`(`panel.json`이 §5.1 검사에 걸림, `JIG_INVALID`의 `issues[]`로). 만들기: `BAKE_NOT_COMPUTED`(422, 항목을 내는 단계가 계산되지 않음), `BAKE_JOB_MISSING`(409, 그린 본문이 엔진에 없음 — 재시작 뒤 남은 만들기 요청), `NOT_APPLIED`(409); 요청 결과 코드 `BAKE_TEMPLATE_REJECTED`(워커의 컴파일·`CodePolicy` 거절)·`BAKE_FAILED`·`BAKE_RECEIPT_MISMATCH`(영수증의 키가 계획과 다름). 초안: `DRAFT_NOT_OPEN`(409, 고정·버린 초안에 쓰거나 그 만들기 대화에 턴을 보냄), `DRAFT_OUTSIDE`·`DRAFT_FORBIDDEN_FILE`·`DRAFT_PATH_INVALID`(422, 초안 밖 경로·금지 파일·잘못된 경로), `DRAFT_TEMPLATE_MISSING`(500). 상태 번호는 ARCH-01 §1.3 매핑(400·403·404·409·422)을 따르며 `src/server/jig-routes.ts`의 `jigStatuses`와 `src/server/make-routes.ts`의 `makeStatuses`가 정본이다.
+- 오류 코드(잠정): `JIG_INVALID`(형식·금지 파일·부품, 응답에 `issues[]`), `JIG_SIGNATURE`(서명), `JIG_VERSION_EXISTS`(같은 id·버전, 다른 내용, 409), `PARAM_FIXED`, `OUT_OF_RANGE`, `GATE_BLOCKED`(막은 점검 이름 목록 포함), `STALE_INPUT`(읽은 문서 버전이 현재와 다름), `LAYER_ROOT_MISSING`(저장된 Sync 레이어 표가 있는데 출력 레이어가 없음), `CONFIRMATION_REQUIRED`(확인 없는 가져오기·고정), `JIG_PANEL`(`panel.json`이 §5.1 검사에 걸림, `JIG_INVALID`의 `issues[]`로). 만들기: `BAKE_NOT_COMPUTED`(422, 항목을 내는 단계가 계산되지 않음), `BAKE_JOB_MISSING`(409, 그린 본문이 엔진에 없음 — 재시작 뒤 남은 만들기 요청), `NOT_APPLIED`(409), 바로 적용의 `BAKE_GUARDED`(409)·`BAKE_READ_FAILED`(409)·`BAKE_UNDO_UNAVAILABLE`·`BAKE_UNDO_NOT_LATEST`·`BAKE_UNDO_FAILED`(409); 요청 결과 코드 `BAKE_TEMPLATE_REJECTED`(워커의 컴파일·`CodePolicy` 거절)·`BAKE_FAILED`·`BAKE_RECEIPT_MISMATCH`(영수증의 키가 계획과 다름). 초안: `DRAFT_NOT_OPEN`(409, 고정·버린 초안에 쓰거나 그 만들기 대화에 턴을 보냄), `DRAFT_OUTSIDE`·`DRAFT_FORBIDDEN_FILE`·`DRAFT_PATH_INVALID`(422, 초안 밖 경로·금지 파일·잘못된 경로), `DRAFT_TEMPLATE_MISSING`(500). 상태 번호는 ARCH-01 §1.3 매핑(400·403·404·409·422)을 따르며 `src/server/jig-routes.ts`의 `jigStatuses`와 `src/server/make-routes.ts`의 `makeStatuses`가 정본이다.
 - 1차 구현(T-046)의 세부: 가져오기 확인은 `?confirm=true`, 고정 확인은 본문 `confirm: true`다. 등록부는 `GET /api/v1/jigs/packages`(공식 라이브러리 + 설치 + 저장소 소스)이며 기존 `GET /api/v1/jigs`의 확장은 T-047이 한다. `POST …/reads`는 `linkId` 대신 `syncId`를 받아 저장된 Sync를 서버에서 레이어로 거를 수 있다(ZWCAD·호스트 없는 시험). `GET …/params/log`(변경 이력)·`GET …/steps/:stepId/output`(보관된 결과)이 있다. `stale-input`의 현재 판 비교값(`currentRevisions`)은 아직 경로가 채우지 않는다(연결 판 조회는 후속).
 - 능력 검사는 화면이 아니라 이 경로들, 만들기 경로, AI 도구 발급에서 한다. 원격 세션 차단 정규식에 `jigs/import`, `jigs/[^/]+/pin`, `jig-drafts/[^/]+/pin`을 더한다(원격 세션의 앱·확장 제어 금지와 같은 범위).
 
@@ -499,11 +500,12 @@ Item
 ### 9.3 실행 경로
 
 1. `POST …/:iid/bake` → 만들기 계획(항목·키·레이어·태그) → 점검 `before-bake`.
-2. 서버가 그 연결의 jig 입력 읽기를 강제로 실행한다(`purpose: 'pre-bake'`, 숨긴 객체 포함, **문서 전체** — 사람이 jig 객체를 다른 레이어로 옮겼는지는 출력 레이어만 읽어서는 알 수 없다). 읽기의 `documentHash`가 요청의 `expectedDocumentHash`가 되고, 실행 직전 작업 실행본의 문서 판이 그것과 다르면 `STALE_INPUT`으로 거절한다(다시 읽지 않고 사람이 다시 누른다). 파일 링크는 가져온 사본이 기준이다.
+2. 서버가 그 연결의 jig 입력 읽기를 강제로 실행한다(`purpose: 'pre-bake'`, 숨긴 객체 포함, **문서 전체** — 사람이 jig 객체를 다른 레이어로 옮겼는지는 출력 레이어만 읽어서는 알 수 없다). 읽기의 `documentHash`가 실행 직전 기준이 된다: 바로 적용(4)은 호스트 `fingerprint`의 `documentHash`, 작업 사본(5)은 작업 실행본의 문서 판(`expectedDocumentHash`)이 그것과 다르면 `STALE_INPUT`으로 거절한다(다시 읽지 않고 사람이 다시 누른다). 파일 링크는 가져온 사본이 기준이다.
 3. §9.4로 지울 GUID와 건너뛸 키를 정해 데이터 블록을 만든다.
-4. `workspace_requests`에 요청을 만든다: `jig: { kind: 'jig-bake', instanceId, bakeIds, linkId, readId, runId }`, `hostUse: 'write'`, `permission: 'candidate'`(`provider`는 이름뿐이며 부르지 않고, AI 턴 상한에 세지 않는다). 그린 본문은 엔진 프로세스의 작업 목록(`registerBakeJob`, 요청 ID별, 최대 64개)에 두므로 재시작 뒤 남은 만들기 요청은 `BAKE_JOB_MISSING`으로 실패한다. `Execution.run`은 이 종류를 보면 공급자를 부르지 않고 `SdkExecution.runFixed(codes[])`로 작업 실행본에서 틀을 차례로 실행한다 → 저장·재열기 확인 → 영수증 → `finishBake`가 만들기 기록(`jig_bakes`, 지문은 비움)과 결과의 `bake`(추가·교체·보존·복사본·지운 것·만들지 못함; 스키마는 `src/ui/bake-card.tsx`)를 쓴다 → 후보. 작업 보기(SCR-03)에 일반 요청처럼 보인다.
-5. 사용자가 원본에 반영하면 기존 `applyAttached` 경로를 쓴다. 작업 실행본 이후의 원본 수정은 기존 `Unchanged` 검사가 `SOURCE_CHANGED`로 막는다.
-6. 반영 뒤 `POST …/bakes/:recordId/baseline`이 문서를 다시 읽어(2와 같은 강제 읽기) 태그 `vide-run`이 이번 `runId`인 객체를 `vide-key`로 기록 항목에 대응시키고 GUID를 바로잡은 뒤 지문(`geometryHash`)·`baselineReadId`·`appliedAt`을 기록한다. 1차에서는 카드의 [반영 결과 읽기]가 부르며 반영 경로가 자동으로 부르지는 않는다(연결은 PLAN-23 T-056). 읽기 전이거나 실패한 기록의 객체는 다음 만들기에서 `pending-baseline`으로 보존한다. 이전 실행의 복사본은 `vide-run`이 달라 섞이지 않는다. 원본 반영 뒤 GUID가 작업 실행본과 같은지는 실제 Rhino 검증(`tests/integration/rhino-bake.mjs`)이 확인한다.
+4. **바로 적용(주 경로, 2026-09-30 사용자 결정·[ADR-022](../decisions/ADR-022-direct-apply-plan-auto.md)).** 연결이 Rhino 열린 문서(파일 링크가 아님)이고 엔진에 바로 적용 드라이버(ARCH-01 §4 「바로 적용 경로」의 `direct-execute`·`direct-undo`·`fingerprint`)가 있으면 `src/server/jig-routes.ts`가 `workspace_requests` 행 없이 `runDirectBake`(`src/jigs/bake/bake.ts`)를 부른다. 본문(§9.2의 묶음)마다 `direct-execute {requestId: '<실행>:<순번>', code, label: 'VIDE jig: <jig 이름>', guard: {confirmed: false, maxDeletes: 그 묶음의 지울 GUID 수}}`를 불러 본문 하나가 Rhino 되돌리기 기록 하나가 되고, 지운 객체는 모두 그 묶음의 지울 목록 안에 있어야 한다(밖이면 `BAKE_GUARDED`, `kind: 'bulk-delete'`). 보호에 걸리거나(`BAKE_GUARDED`, 그 본문은 호스트가 이미 되돌림) 본문이 실패하면(`BAKE_FAILED`) 앞선 본문의 기록을 최근 것부터 `direct-undo`로 되돌리고 오류를 돌려준다(되돌리기마저 실패하면 `undoFailed`). 끝나면 바로 문서를 다시 읽어 만들기 기록(`jig_bakes`)에 지문·`baselineReadId`·`appliedAt`을 채운다(6을 그 자리에서 수행). 그 읽기가 실패하면 영수증으로 키→객체 대응을 알 때만 지문 없이 기록을 남기고(카드의 [반영 결과 읽기]가 6으로 다시 시도), 대응을 모르면 실행을 되돌리고 `BAKE_READ_FAILED`다. 응답은 `status: 'applied'`이고 후보·적용 단계가 없다. 실행의 되돌리기 기록 번호(`undoIds`)는 엔진 프로세스 메모리에만 있다(7).
+5. **작업 사본(대체 경로).** 바로 적용 드라이버가 없거나 파일 링크면 이전 경로를 쓴다(원본 파일은 바꾸지 않는다). `workspace_requests`에 요청을 만든다: `jig: { kind: 'jig-bake', instanceId, bakeIds, linkId, readId, runId }`, `hostUse: 'write'`, `permission: 'candidate'`(`provider`는 이름뿐이며 부르지 않고, AI 턴 상한에 세지 않는다). 그린 본문은 엔진 프로세스의 작업 목록(`registerBakeJob`, 요청 ID별, 최대 64개)에 두므로 재시작 뒤 남은 만들기 요청은 `BAKE_JOB_MISSING`으로 실패한다. `Execution.run`은 이 종류를 보면 공급자를 부르지 않고 `SdkExecution.runFixed(codes[])`로 작업 실행본에서 틀을 차례로 실행한다 → 저장·재열기 확인 → 영수증 → `finishBake`가 만들기 기록(`jig_bakes`, 지문은 비움)과 결과의 `bake`(추가·교체·보존·복사본·지운 것·만들지 못함; 스키마는 `src/ui/bake-card.tsx`)를 쓴다 → 후보. 작업 보기(SCR-03)에 일반 요청처럼 보인다. 사용자가 원본에 반영하면 기존 `applyAttached` 경로를 쓰고, 작업 실행본 이후의 원본 수정은 기존 `Unchanged` 검사가 `SOURCE_CHANGED`로 막는다.
+6. 반영 뒤(5의 경로, 또는 4에서 읽기가 실패한 기록) `POST …/bakes/:recordId/baseline`이 문서를 다시 읽어(2와 같은 강제 읽기) 태그 `vide-run`이 이번 `runId`인 객체를 `vide-key`로 기록 항목에 대응시키고 GUID를 바로잡은 뒤 지문(`geometryHash`)·`baselineReadId`·`appliedAt`을 기록한다. 작업 사본 경로에서는 카드의 [반영 결과 읽기]가 부르며 반영 경로가 자동으로 부르지는 않는다(바로 적용은 4가 그 자리에서 읽는다). 읽기 전이거나 실패한 기록의 객체는 다음 만들기에서 `pending-baseline`으로 보존한다. 이전 실행의 복사본은 `vide-run`이 달라 섞이지 않는다. 원본 반영 뒤 GUID가 작업 실행본과 같은지는 실제 Rhino 검증(`tests/integration/rhino-bake.mjs`)이 확인한다.
+7. **되돌리기(바로 적용만).** `POST …/:iid/bakes/:recordId/undo` → `undoBake`가 그 실행의 되돌리기 기록을 최근 것부터 `direct-undo`한다. 첫 기록이 문서의 마지막 되돌리기 기록이 아니면 `BAKE_UNDO_NOT_LATEST`, 엔진이 그 실행을 모르면(재시작 뒤 — 4의 `undoIds`는 메모리에만 있다) `BAKE_UNDO_UNAVAILABLE`이며 이때도 Rhino의 Ctrl+Z는 쓸 수 있다. 되돌린 실행의 기록은 `appliedAt`을 비워 다음 만들기가 그 이전 만들기를 기준으로 계획한다.
 
 ### 9.4 만들기 기록과 교체 판정
 
