@@ -2,8 +2,8 @@
 id: PLAN-08
 title: 프로젝트 지식 DB — 수집·정리·질의·크리틱·팀 공유 단계 계획
 status: draft
-version: 0.5
-updated: 2026-09-29
+version: 0.6
+updated: 2026-10-01
 owner: agent:claude
 related: [RESEARCH-06, RESEARCH-10, T-032, PLAN-05, PLAN-22, PLAN-24, ADR-018, PRD, FR-08, FR-09, FR-18, FR-21, FR-22, SPEC-03, ARCH-01, AC-12, AC-14, AC-30, AC-37]
 ---
@@ -23,7 +23,8 @@ related: [RESEARCH-06, RESEARCH-10, T-032, PLAN-05, PLAN-22, PLAN-24, ADR-018, P
 - **구조 결정:** ADR-018의 공동 축적 예외(지식 기록만 여러 PC)와 팀 공용 원본 위치. K5 착수 전까지 정하면 되고, K0~K4는 로컬만으로 진행할 수 있다.
 - **RESEARCH-06 §12 결정:** 회사 정책(외부 저장·외부 AI 처리), 역할과 공개 범위, 자료 폴더, 표본 자료.
 - **동작 계약:** 채택되면 K0 결과로 새 SPEC(프로젝트 지식, 번호는 작성 시 다음 빈 번호. SPEC-06은 구조 해석, SPEC-07은 jig 플랫폼이 사용)을 먼저 쓴다. 출처·역할·상태 규칙은 SPEC-03.4를 확장한다.
-- **진행 중 작업과의 관계:** 현재 우선순위(Rhino·CAD 연결 왕복과 Sync 성능)를 막지 않는다. 아래 T-025~031은 제안 번호이며 채택 뒤 마스터 PLAN에 등록한다.
+- **진행 중 작업과의 관계:** 현재 우선순위(Rhino·CAD 연결 왕복과 Sync 성능)를 막지 않는다. 아래 T-025~031은 제안 번호이며 마스터 PLAN에 등록되지 않았다.
+- **현황(2026-10-01):** K0(실험)과 보기 시험판 K0-T·K0-T2는 끝났다([SPIKE-2026-09-29-knowledge-crawl](../tdd/SPIKE-2026-09-29-knowledge-crawl.md)). K1(자료함·검색)과 K2(검토 층)의 제품 부분은 [PLAN-22](PLAN-22-jig-platform.md#t-065) T-065(자료 1차·자료 탭·`vide/project-facts`, 동작 정본 [SPEC-08](../specs/SPEC-08-project-facts.md))와 겹치며, 그쪽에서 구현한 것을 기준으로 한다. 앱 안 수집기와 K2의 진술 추출, K3~K6은 사용자 결정(티켓 등록 여부·ADR-018 공동 축적과 공용 원본 위치) 전까지 백로그로 둔다.
 
 ## 처음부터 지킬 기록 구조
 

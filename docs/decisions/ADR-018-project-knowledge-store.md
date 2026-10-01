@@ -2,10 +2,10 @@
 id: ADR-018
 title: 프로젝트 지식의 저장 구조와 팀 공동 축적
 status: draft
-version: 0.1
-updated: 2026-09-29
+version: 0.2
+updated: 2026-10-01
 owner: agent:claude
-related: [RESEARCH-06, PLAN-08, PRD, FR-09, FR-18, ADR-009, ADR-010, ADR-015, AC-30, AC-37]
+related: [RESEARCH-06, PLAN-08, PLAN-22, SPEC-08, T-065, PRD, FR-09, FR-18, ADR-009, ADR-010, ADR-015, AC-30, AC-37]
 ---
 
 # ADR-018 · 프로젝트 지식은 쌓기만 하는 기록으로 저장하고, 지식만 팀이 함께 쌓는다
@@ -61,3 +61,7 @@ related: [RESEARCH-06, PLAN-08, PRD, FR-09, FR-18, ADR-009, ADR-010, ADR-015, AC
 - 폴더 권한을 자동으로 따라가지 않는다. 제한 자료의 진술이 공용 원본으로 퍼지지 않도록 자료별 공개 범위를 사람이 정한다.
 - 여러 사람이 같은 SQLite 파일을 공유 폴더에서 직접 쓰는 방식은 채택하지 않는다.
 - 이 결정은 C-02 채택과 역할·공개 범위 결정 없이 확정할 수 없다.
+
+## 현황 메모 (2026-10-01)
+
+PRD C-02는 2026-09-29 사용자가 채택했다(PRD §4.4). 그 뒤 [PLAN-22](../plans/PLAN-22-jig-platform.md#t-065) T-065가 이 ADR의 결정 없이 자료 1차를 만들었다: 각 PC의 로컬 SQLite에 자료·발췌(FTS5 trigram)·검토 층을 두는 src/jigs/knowledge.ts, 경로 src/server/facts-routes.ts, 자료 탭과 `vide/project-facts`, 동작 정본 [SPEC-08](../specs/SPEC-08-project-facts.md)(draft). 이는 §2.2(로컬 SQLite)와 같은 방향이지만 §2.1의 사건 기록·두 시간축, §2.3~2.5의 공동 축적·팀 공용 원본·원본 자료 정책을 정한 것은 아니다. 이 ADR의 결정 1~4와 §3 공용 원본 위치는 여전히 사용자 결정 전이다.

@@ -2,8 +2,8 @@
 id: PLAN-14
 title: JIG 탭과 Sync jig(도면↔모델)
 status: review
-version: 0.2
-updated: 2026-09-29
+version: 0.3
+updated: 2026-10-01
 owner: agent:claude
 related: [PLAN, SPEC-05, ARCH-01, FR-13, FR-18, RESEARCH-04, RESEARCH-05]
 ---
@@ -20,7 +20,7 @@ related: [PLAN, SPEC-05, ARCH-01, FR-13, FR-18, RESEARCH-04, RESEARCH-05]
 
 1. `src/jigs/sync.ts`: 요소 추출, 관계 계산(방향 후보·길이 버킷 투표·중앙값), 모호성과 후보, 기준 쌍·후보 지정, 비교 행·레이어 대응, `inRhino` 역변환.
 2. `src/jigs/catalog.ts`와 서버 경로 두 개, 실행기의 `sync-review` 경로(호스트 문맥 없음, `jigCheck`).
-3. `src/ui/jigs.tsx`: 레일의 JIG 버튼, 목록(사용 가능/준비 중), Sync jig 화면(입력 선택·허용·반경·레이어, 관계·모호 후보·요약·레이어 대응, 차이 표와 필터, 행 선택과 객체 보기, AI 검토·양방향 반영 버튼). 개발용 확장은 JIG 화면의 링크로 옮겼다가, 2026-09-29 사용자 결정으로 링크와 확장 화면(`src/ui/extensions.tsx`)을 뺐다(서버 계약·기존 결과 표시는 유지).
+3. `src/ui/jigs.tsx`: 레일의 JIG 버튼, 목록(사용 가능/준비 중), Sync jig 화면(입력 선택·허용·반경·레이어, 관계·모호 후보·요약·레이어 대응, 차이 표와 필터, 행 선택과 객체 보기, AI 검토·양방향 반영 버튼). 개발용 확장은 JIG 화면의 링크로 옮겼다가, 2026-09-29 사용자 결정으로 링크와 확장 화면을 뺐다(5af758a에서 화면 파일 삭제, 서버 계약·기존 결과 표시는 유지).
 
 ## 검증
 

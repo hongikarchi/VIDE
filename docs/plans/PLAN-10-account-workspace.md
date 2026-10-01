@@ -2,8 +2,8 @@
 id: PLAN-10
 title: 계정 웹사이트 — 로그인·프로젝트 목록·작업 PC 열기
 status: review
-version: 0.1
-updated: 2026-09-28
+version: 0.2
+updated: 2026-10-01
 owner: agent:claude
 related: [PLAN, PLAN-09, ARCH-01, T-009, T-010]
 ---
@@ -34,7 +34,6 @@ related: [PLAN, PLAN-09, ARCH-01, T-009, T-010]
 
 ## 남은 일
 
-- 실무용 엔진과 개발용 엔진의 분리(개발 중 재시작이 실무 화면에 영향을 주지 않게 고정 사본으로 실행).
 - 실제 iPad(Safari)와 실제 Rhino 문서에서의 원격 AI 수정 왕복.
 - 비밀번호 변경·분실 복구, 계정 삭제.
-- PC가 꺼져 있을 때 마지막 모델 보기(클라우드 저장, 비용 결정 필요).
+- 실무 엔진과 개발 엔진의 분리는 [PLAN-11](PLAN-11-desktop-app.md) ①(설치본 47821·개발 서버 47831)로, PC가 꺼져 있을 때의 모델 보기·요청 대기는 [PLAN-20](PLAN-20-offline-view.md)으로 옮겨 처리했다(스냅샷은 과금 결정 전까지 꺼짐).

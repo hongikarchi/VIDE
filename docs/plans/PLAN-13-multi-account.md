@@ -1,14 +1,16 @@
 ---
 id: PLAN-13
 title: 다중 AI 계정 — 사용량·초기화 시각·자동 전환
-status: review
-version: 0.3
-updated: 2026-09-29
+status: superseded
+version: 0.4
+updated: 2026-10-01
 owner: agent:claude
-related: [PLAN, SPEC-02, ARCH-01, FR-08, FR-18]
+related: [PLAN, SPEC-02, ARCH-01, FR-08, FR-18, ADR-025, PLAN-25]
 ---
 
 # 다중 AI 계정 — 사용량·초기화 시각·자동 전환
+
+> **대체됨(2026-10-01).** 다중 계정·자동 전환은 [ADR-025](../decisions/ADR-025-accounts-in-accountswitch.md)에 따라 외부 프로그램 AccountSwitch가 맡는다. VIDE는 각 CLI의 기본 로그인만 쓰고 현재 계정·사용량을 읽기 전용으로 보이며, VIDE 안의 계정 전환 제거는 [PLAN-25](PLAN-25-accounts-to-accountswitch.md)(T-068)가 진행한다. 아래 내용은 당시 계획의 기록이다.
 
 2026-09-29 사용자 요청("cswap·multi-auth급 다중 계정")의 작업이다. 동작은 [SPEC-02.18](../specs/SPEC-02-execution-candidates.md), 물리 계약은 [ARCH-01](../architecture/ARCH-01-system.md) §7 "CLI 프로필 실행 경계"가 소유한다.
 

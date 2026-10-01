@@ -1,14 +1,16 @@
 ---
 id: PLAN-06
 title: 구독 CLI 계정 프로필과 안전한 전환 계획
-status: review
-version: 0.10
-updated: 2026-09-25
+status: superseded
+version: 0.11
+updated: 2026-10-01
 owner: agent:codex
-related: [PLAN, PLAN-02, SPEC-02, ARCH-01, RESEARCH-03, T-004, T-018, FR-08, FR-18]
+related: [PLAN, PLAN-02, SPEC-02, ARCH-01, RESEARCH-03, T-004, T-018, FR-08, FR-18, ADR-025, PLAN-25]
 ---
 
 # 구독 CLI 계정 프로필과 안전한 전환 계획
+
+> **대체됨(2026-10-01).** 구독 계정 관리(추가·로그인·전환·자동 전환)는 [ADR-025](../decisions/ADR-025-accounts-in-accountswitch.md)에 따라 외부 프로그램 AccountSwitch가 맡고, VIDE는 각 CLI의 기본 로그인만 쓰며 현재 계정·사용량을 읽기 전용으로 보인다. VIDE 안의 프로필·전환 기능 제거는 [PLAN-25](PLAN-25-accounts-to-accountswitch.md)(T-068)가 진행한다. 아래 내용은 당시 계획의 기록이다.
 
 ## 1. 범위와 연구 판단
 

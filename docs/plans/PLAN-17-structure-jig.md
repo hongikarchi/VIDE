@@ -2,8 +2,8 @@
 id: PLAN-17
 title: 구조 분석 jig(J-09) 1단계 — 계획 단계 중력 검토
 status: review
-version: 0.2
-updated: 2026-09-29
+version: 0.3
+updated: 2026-10-01
 owner: agent:claude
 related: [PLAN, PLAN-22, PLAN-23, SPEC-06, ARCH-02, ADR-019, FR-23, AC-40, RESEARCH-08, RESEARCH-09, RESEARCH-10]
 ---
@@ -56,7 +56,7 @@ CAD·Rhino로 받은 강구조를 해석 모델로 구성·확정하고, 선형 
 
 ### T-037 · 입력 구성·점검·확정 {#t-037}
 
-- **변경:** `src/jigs/structure/input/`(Rhino 중심선 곡선 → 절점·부재, Brep → 축·단면 치수 추정, CAD Sync 선·문자 → 후보), 접합 규칙과 예외표, 면하중 분배와 하중 장부, 모델 점검(SPEC-06.2), AI 초안 요청(표·요약만 보냄, 결과는 계약 스키마로 검증), 확정과 모델 해시, 서버 경로와 저장.
+- **변경:** `src/jigs/structure/input.ts`(Rhino 중심선 곡선 → 절점·부재, Brep → 축·단면 치수 추정, CAD Sync 선·문자 → 후보), 접합 규칙과 예외표, 면하중 분배와 하중 장부, 모델 점검(SPEC-06.2), AI 초안 요청(표·요약만 보냄, 결과는 계약 스키마로 검증), 확정과 모델 해시, 서버 경로와 저장.
 - **시험:** 합성 Rhino·CAD Sync 입력의 초안·점검 결과 단위 시험, 잘못된 AI 초안 거절, 확정 전 해석 거절, 입력 변경 시 결과 오래됨 표시.
 - **완료:** 합성 입력 세 형태 모두 초안 → 점검 → 확정까지 동작.
 
