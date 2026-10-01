@@ -103,6 +103,10 @@ try {
       return route.fulfill({ status: 201, json: draft });
     }
     if (path === '/draft-1' && method === 'GET') return route.fulfill({ json: detail() });
+    if (path === '/draft-1/icon' && method === 'PUT') {
+      manifest.icon = request.postDataJSON().icon;
+      return route.fulfill({ json: detail() });
+    }
     if (path === '/draft-1/validate') {
       state.validate = { ok: true, issues: [], at: new Date().toISOString() };
       return route.fulfill({ json: state.validate });
@@ -207,6 +211,24 @@ try {
   await outline.getByText('1. 기둥 배치').waitFor();
   await outline.getByText('X 경간').waitFor();
   assert.ok(await outline.getByText('steps/layout.ts').isVisible());
+
+  // The icon (PLAN-26 T-100): the picker lists the fixed icons; the chosen one goes to jig.json.
+  await outline.getByRole('button', { name: '아이콘 바꾸기' }).click();
+  const icons = outline.getByRole('group', { name: '아이콘' });
+  assert.equal(await icons.getByRole('button').count(), 32);
+  assert.equal(
+    await icons.getByRole('button', { name: '도구 아이콘' }).getAttribute('aria-pressed'),
+    'true',
+  );
+  await icons.getByRole('button', { name: '골조 아이콘' }).click();
+  await icons.waitFor({ state: 'detached' });
+  assert.ok(calls.includes('PUT /draft-1/icon'));
+  await outline.getByRole('button', { name: '아이콘 바꾸기' }).click();
+  assert.equal(
+    await icons.getByRole('button', { name: '골조 아이콘' }).getAttribute('aria-pressed'),
+    'true',
+  );
+  await outline.getByRole('button', { name: '아이콘 바꾸기' }).click();
 
   // Pinning waits for 점검 and 시험.
   const side = page.locator('#right .make-side');

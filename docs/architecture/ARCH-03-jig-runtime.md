@@ -93,6 +93,7 @@ export interface JigManifest {
   kind: 'tool' | 'library';
   name: string;                      // 화면 이름(건축 용어)
   summary: string;                   // 한 문장
+  icon?: JigIcon;                    // 목록·탭·대화 칩의 그림. `src/contracts/jig-icons.ts`의 목록 이름만(T-100), 없으면 'jig'
   hosts?: { rhino?: 'required' | 'optional'; zwcad?: 'required' | 'optional' };
   uses?: { id: string; range: string }[];            // 공식 라이브러리만 대상
   inputs: InputDecl[];
@@ -428,6 +429,7 @@ jig·보고서 경로는 `src/server/jig-routes.ts`, 초안 경로(`jig-drafts`)
 | `GET·POST /api/v1/projects/:id/jig-drafts` | POST `{name, from?}` | 초안 목록·만들기(`from`은 시작 본). 201 |
 | `GET·DELETE …/jig-drafts/:did` | — | 초안 하나. `DELETE`는 버리기: 상태 `discarded`, 초안 폴더와 그 초안에 붙은 만들기 대화의 공급자 기록을 지우고 열린 대화를 닫는다. 엔진이 DELETE를 받는 경로는 이것과 jig 고정 해제(위), 프로젝트 삭제(ARCH-01)뿐이다 |
 | `POST …/jig-drafts/:did/validate·test·preview` | preview `{fixture?}` | 형식 점검·자체 시험·미리보기(계산 상자, §6.5). 마지막 결과는 초안 폴더 밖 `.results/<did>.json`에 둔다 |
+| `PUT …/jig-drafts/:did/icon` | `{icon}` | 열린 초안의 `jig.json` `icon`만 바꾼다(목록 밖 이름 `INVALID_INPUT`, 고정·버린 초안 `DRAFT_NOT_OPEN`). 등록부 항목(`GET /api/v1/jigs/packages`)·작업본 보기(`jig.icon`)·skill 카탈로그가 `icon`을 싣는다. 내장 화면 jig(Sync·구조·자료)의 아이콘은 같은 파일의 `LEGACY_JIG_ICONS` |
 | `POST …/jig-drafts/:did/pin` | `{jigId?, version?, approvedCaps?, confirm}` | 점검·자체 시험을 다시 확인한 뒤 읽기 전용 설치본(`source: ai-draft`)으로 설치하고 이 프로젝트에 고정. 확인 필요 동작, 원격 세션 403 |
 | `GET /api/v1/projects/:id/facts` | — | 자료 요약(결정·막힘·바뀜, 분야별 이슈, 건수·검토 건수) |
 | `GET …/facts/search` | `?q, kind?, discipline?, status?, excluded?, offset?, limit?` | 진술 검색. 응답 `{items, total, offset, nextOffset, excluded, capped, plan}`(형식은 `src/contracts/facts.ts`, 서버·화면 공용). `status=excluded`는 제외된 진술만, `excluded=1`은 제외된 진술도 함께, 둘 다 없으면 제외된 진술을 뺀다 |

@@ -18,7 +18,8 @@ import {
   toStorage,
   undoChange,
 } from '../../src/jigs/runtime/params.ts';
-import { listPackageFiles, loadJig } from '../../src/jigs/runtime/loader.ts';
+import { JigRegistry, listPackageFiles, loadJig } from '../../src/jigs/runtime/loader.ts';
+import { JIG_ICONS, LEGACY_JIG_ICONS } from '../../src/contracts/jig-icons.ts';
 
 // jig.json v3 (ARCH-03 §3, SPEC-07.15): the synthetic example jig is the base; each case mutates a
 // copy and expects one issue code. No S-06 values anywhere.
@@ -58,6 +59,28 @@ test('unknown fields, bad ids and wrong contract versions are schema errors', ()
   const badVersion = base();
   badVersion.contractVersion = 2;
   assert.equal(manifestSchema.safeParse(badVersion).success, false);
+});
+
+test('icon: optional, a name from the fixed list only (PLAN-26 T-100)', async () => {
+  assert.equal(base().icon, 'grid', 'the grid example names its icon');
+  const none = base();
+  delete none.icon;
+  assert.deepEqual(codes(validateManifest(none, { files, libraries })), []);
+  for (const icon of JIG_ICONS) {
+    const named = base();
+    named.icon = icon;
+    assert.deepEqual(codes(validateManifest(named, { files, libraries })), [], icon);
+  }
+  for (const icon of ['Wrench', 'rocket', '', 3]) {
+    const other = base();
+    other.icon = icon;
+    assert.deepEqual(codes(validateManifest(other, { files, libraries })), ['JIG_SCHEMA'], icon);
+  }
+  // The registry lists the icon; a built-in screen jig has a fixed one.
+  const registry = new JigRegistry({ dataDir: EXAMPLE, devRoots: [join(EXAMPLE, '..')] });
+  const listed = (await registry.list()).find((entry) => entry.id === 'project/example-grid');
+  assert.equal(listed.icon, 'grid');
+  assert.ok(Object.values(LEGACY_JIG_ICONS).every((icon) => JIG_ICONS.includes(icon)));
 });
 
 test('references: missing settings, steps, inputs and roles; duplicate ids; cycles', () => {

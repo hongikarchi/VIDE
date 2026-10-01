@@ -19,7 +19,7 @@ import {
   turnOutputResult,
   turnOutputSchema,
 } from '../../src/server/turn-output.ts';
-import { closeJigRuntime } from '../../src/server/jig-routes.ts';
+import { closeJigRuntime, jigRuntimeFor } from '../../src/server/jig-routes.ts';
 import { ConversationService, conversationRoutes } from '../../src/server/conversations.ts';
 import {
   AgentTools,
@@ -91,6 +91,30 @@ function setup(t) {
   const base = `/api/v1/projects/${project.id}/jig-drafts`;
   return { root, store, workspace, project, conversations, removed, call, conversation, base };
 }
+
+test("a draft's icon is set from the fixed list and goes into the pinned jig (PLAN-26 T-100)", async (t) => {
+  const { call, base, workspace, root } = setup(t);
+  const draft = (await call('POST', base, { name: 'icon make', from: 'blank' })).data;
+  const set = await call('PUT', `${base}/${draft.id}/icon`, { icon: 'columns' });
+  assert.equal(set.status, 200);
+  assert.equal(set.data.manifest.icon, 'columns');
+  // jig.json keeps its other fields; the icon sits after the summary.
+  const keys = Object.keys(JSON.parse(readFileSync(join(draft.path, 'jig.json'), 'utf8')));
+  assert.equal(keys[keys.indexOf('summary') + 1], 'icon');
+  await assert.rejects(
+    call('PUT', `${base}/${draft.id}/icon`, { icon: 'rocket' }),
+    /INVALID_INPUT/,
+  );
+  assert.equal((await call('POST', `${base}/${draft.id}/validate`)).data.ok, true);
+  const pinned = await call('POST', `${base}/${draft.id}/pin`, { confirm: true });
+  assert.equal(pinned.status, 200);
+  const listed = (await jigRuntimeFor(workspace, root).registry.list()).find(
+    (entry) => entry.id === 'project/icon-make',
+  );
+  assert.equal(listed.icon, 'columns');
+  // A pinned draft no longer changes.
+  await assert.rejects(call('PUT', `${base}/${draft.id}/icon`, { icon: 'grid' }), /DRAFT_NOT_OPEN/);
+});
 
 test('drafts are created, checked in the compute box, previewed and pinned by confirmation', async (t) => {
   const { call, base, store, project, root } = setup(t);

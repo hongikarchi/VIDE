@@ -8,6 +8,9 @@
 // tabs are a viewer convenience remembered per project in this browser's storage; a blocked or
 // empty storage just opens the model screen.
 
+import { isJigIcon } from '../contracts/jig-icons.ts';
+import { jigIconSvg } from './jig-icons.ts';
+
 export type FixedWorkspace = 'dashboard' | 'model' | 'data' | 'jig' | 'make' | 'output';
 /** A sub-view of the 산출물 tab (src/ui/output-tab.tsx). */
 export type OutputView = 'sheet' | 'report' | 'render';
@@ -23,6 +26,8 @@ export interface ContextTab {
   label: string;
   /** The longer name shown as the tab's tooltip. */
   title?: string;
+  /** A jig tab's icon (PLAN-26 T-100), drawn before its name. */
+  icon?: string;
 }
 export interface WorkspaceChange {
   /** A fixed tab id, or `tabId(tab)` of a context tab. */
@@ -114,6 +119,7 @@ function recall(): { active?: string; context: ContextTab[] } {
         ...(entry.kind === 'reference' ? { kind: 'reference' as const } : {}),
         label: entry.label.slice(0, 120),
         ...(typeof entry.title === 'string' ? { title: entry.title.slice(0, 300) } : {}),
+        ...(isJigIcon(entry.icon) ? { icon: entry.icon } : {}),
       }));
     return { active: typeof tab === 'string' ? tab : undefined, context: valid };
   } catch {
@@ -236,6 +242,16 @@ export function renameContextTab(
   paint();
   remember();
 }
+/** Draw a jig tab's icon (the jig screen sets it once it has read the instance). */
+export function setContextIcon(instanceId: string, icon: string | undefined) {
+  const tab = context.find((entry) => sameTab(entry, { instanceId }));
+  if (!tab || tab.icon === icon) return;
+  context = context.map((entry) =>
+    entry === tab ? { ...entry, ...(isJigIcon(icon) ? { icon } : { icon: undefined }) } : entry,
+  );
+  paint();
+  remember();
+}
 export const activeWorkspace = () => active;
 export const contextTabs = (): readonly ContextTab[] => context;
 /**
@@ -286,12 +302,18 @@ export function initializeWorkspaces(options: { projectId: string; mount: HTMLEl
   emit();
 }
 
-function tabButton(id: string, label: string, title?: string) {
+function tabButton(id: string, label: string, title?: string, icon?: string) {
   const button = document.createElement('button');
   button.type = 'button';
   button.setAttribute('role', 'tab');
   button.dataset.workspace = id;
-  button.textContent = label;
+  if (icon) {
+    // The jig's icon, like the rail's (aria-hidden: the name stays the tab's name).
+    const mark = document.createElement('span');
+    mark.className = 'workspace-tab-icon';
+    mark.innerHTML = jigIconSvg(icon);
+    button.append(mark, label);
+  } else button.textContent = label;
   const selected = id === active;
   button.setAttribute('aria-selected', String(selected));
   button.tabIndex = selected ? 0 : -1;
@@ -334,7 +356,7 @@ function paint() {
     const item = document.createElement('span');
     item.className = 'workspace-context-tab';
     item.toggleAttribute('data-active', id === active);
-    item.append(tabButton(id, tab.label, tab.title ?? tab.label));
+    item.append(tabButton(id, tab.label, tab.title ?? tab.label, tab.icon));
     item.append(closeButton(tab, id === active));
     list.append(item);
   }

@@ -5,6 +5,7 @@
   "kind": "tool",
   "name": "격자 골조 배치 예제",
   "summary": "슬래브 외곽선 안에 격자 간격·각도로 기둥을 놓고 이웃 기둥을 보로 잇는 일반 예제(합성 자료용). jig 형식 v3의 본보기이며 실제 프로젝트 값을 담지 않는다.",
+  "icon": "grid",
   "hosts": { "rhino": "optional" },
   "inputs": [
     {

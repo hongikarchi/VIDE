@@ -33,6 +33,11 @@
   background: var(--bg-selected);
   font-weight: 600;
 }
+/* A jig conversation's icon (PLAN-26 T-100), the rail's drawing at the chip's text size. */
+.conv-chip .jig-icon svg {
+  width: 14px;
+  height: 14px;
+}
 .conv-label {
   overflow: hidden;
   text-overflow: ellipsis;

@@ -2887,6 +2887,34 @@ body.panel-mode #conversation {
   text-overflow: ellipsis;
   padding-right: 4px;
 }
+/* A jig's icon (PLAN-26 T-100): the rail's drawing at the text size, same colour as the name. */
+.workspace-tab-icon,
+.jig-icon {
+  display: inline-flex;
+  flex-shrink: 0;
+  vertical-align: -3px;
+}
+.workspace-tab-icon {
+  margin-right: 5px;
+}
+.workspace-tab-icon svg,
+.jig-icon svg {
+  width: 15px;
+  height: 15px;
+}
+.jig-card-head .jig-icon svg {
+  width: 18px;
+  height: 18px;
+}
+.jig-card-head .jig-icon {
+  color: var(--text-2);
+}
+.jig-card-title {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+}
 .workspace-tab-close {
   align-self: center;
   flex-shrink: 0;

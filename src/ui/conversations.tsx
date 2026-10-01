@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { createRoot } from 'react-dom/client';
 import type { Root } from 'react-dom/client';
 import { z } from 'zod';
+import { JigIconMark, jigIconOf, jigIconsVersion, subscribeJigIcons } from './jig-icons.ts';
 import './conversations.css';
 
 // 목적별 대화 탭 (Design SCR-15, SPEC-02.19, PLAN-24 T-061·T-088): one row of tabs at the top of
@@ -142,6 +143,25 @@ export interface ChipState {
   running: boolean;
   unread: boolean;
   waiting: number;
+  /** A jig conversation's icon (PLAN-26 T-100). */
+  icon?: string;
+}
+/**
+ * The icon of a jig conversation's chip (PLAN-26 T-100): the icon of its instance's jig or of its
+ * draft, as the jig screens read them; the default jig icon until then. Other conversations have
+ * none.
+ */
+export function chipIcon(
+  entry: Pick<ConversationEntry, 'kind'> & { jigInstanceId?: unknown; draftId?: unknown },
+  lookup: (key: string | undefined) => string | undefined = jigIconOf,
+): string | undefined {
+  const instance = typeof entry.jigInstanceId === 'string' ? entry.jigInstanceId : undefined;
+  const draft = typeof entry.draftId === 'string' ? `draft:${entry.draftId}` : undefined;
+  const known = lookup(instance) ?? lookup(draft);
+  if (known) return known;
+  return instance || draft || entry.kind === 'jig-run' || entry.kind === 'jig-make'
+    ? 'jig'
+    : undefined;
 }
 /**
  * The chips' states: running while one of its requests is queued or running outside a wait,
@@ -165,12 +185,14 @@ export function chipStates(
       const unread = own.some(
         (message) => FINISHED.has(message.request?.state ?? '') && !looked?.has(message.id),
       );
+      const icon = chipIcon(entry);
       return {
         id: entry.id,
         label: chipLabel(entry),
         running: active.length > waiting.length,
         unread: !!looked && unread,
         waiting: waiting.length,
+        ...(icon ? { icon } : {}),
       };
     });
 }
@@ -434,6 +456,8 @@ function Conversations({
   const [error, setError] = useState('');
   const [seen, setSeen] = useState(() => new Map<string, Set<string>>());
   const [loaded, setLoaded] = useState(0);
+  // A chip redraws when the jig screens learn its jig's icon (T-100).
+  useSyncExternalStore(subscribeJigIcons, jigIconsVersion);
   const base = projectId ? `/projects/${projectId}/conversations` : '';
 
   useEffect(() => {
@@ -571,6 +595,7 @@ function Conversations({
                 ◌
               </span>
             ) : null}
+            {chip.icon ? <JigIconMark icon={chip.icon} /> : null}
             <span className="conv-label">{chip.label}</span>
             {chip.waiting ? <span className="conv-wait">대기 {chip.waiting}</span> : null}
           </button>

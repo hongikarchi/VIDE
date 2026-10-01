@@ -8,6 +8,7 @@
 import { z } from 'zod';
 import { GATES, isGateName, type GateLevel, type GateName } from './gates.ts';
 import { buildGraph, parseRead } from './graph.ts';
+import { JIG_ICONS } from '../../contracts/jig-icons.ts';
 
 export const CONTRACT_VERSION = 3;
 export const JIG_ID = /^(vide|project)\/[a-z0-9]+(-[a-z0-9]+)*$/;
@@ -304,6 +305,8 @@ export const manifestSchema = z
     kind: z.enum(['tool', 'library']),
     name: z.string().min(1).max(100),
     summary: z.string().min(1).max(300),
+    /** How the jig looks in the lists: a name from VIDE's fixed icon list (PLAN-26 T-100). */
+    icon: z.enum(JIG_ICONS).optional(),
     hosts: z
       .object({
         rhino: z.enum(['required', 'optional']).optional(),

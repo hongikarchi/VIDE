@@ -76,7 +76,7 @@ export async function makeRoutes(
   context: MakeRouteContext,
 ): Promise<boolean> {
   const route =
-    /^\/api\/v1\/projects\/([^/]+)\/jig-drafts(?:\/([^/]+)(?:\/(validate|test|preview|pin))?)?$/.exec(
+    /^\/api\/v1\/projects\/([^/]+)\/jig-drafts(?:\/([^/]+)(?:\/(validate|test|preview|pin|icon))?)?$/.exec(
       url.pathname,
     );
   if (!route) return false;
@@ -112,6 +112,16 @@ export async function makeRoutes(
           transcriptsRemoved += await service.purge(conversation.id);
         }
     send(200, { draft, transcriptsRemoved });
+    return true;
+  }
+  // The draft's icon (PLAN-26 T-100): a name from the fixed list into its jig.json.
+  if (action === 'icon') {
+    if (method !== 'PUT') return false;
+    const { icon } = z
+      .object({ icon: z.string().max(40) })
+      .strict()
+      .parse(await body(request));
+    send(200, drafts.setIcon(projectId, draftId, icon));
     return true;
   }
   if (method !== 'POST') return false;

@@ -69,6 +69,14 @@ body[data-workspace='dashboard'] .dashboard-workspace {
 button.dash-tile:hover {
   background: var(--bg-hover);
 }
+/* The jig's icon before its kind line (PLAN-26 T-100). */
+.dash-k .jig-icon {
+  margin-right: 4px;
+}
+.dash-k .jig-icon svg {
+  width: 13px;
+  height: 13px;
+}
 .dash-k,
 .dash-d {
   font-size: 11px;

@@ -35,6 +35,7 @@ import {
   X,
 } from 'lucide';
 import type { IconNode } from 'lucide';
+import { JIG_ICON_NODES } from './jig-icons.ts';
 type InspectorTab = 'properties' | 'geometry' | 'relations' | 'history';
 interface InspectorObject {
   id: string;
@@ -107,7 +108,9 @@ function showInspector(open: boolean) {
 }
 // Icon shapes are lucide's (ISC licence, https://lucide.dev), as in 참고 앱 A: 24 x 24, stroke 2.
 // The names stay VIDE's own so data-icon attributes and iconSvg() callers do not change.
+// The jig icons (PLAN-26 T-100) come first; VIDE's own names below keep their drawings.
 const icons: Record<string, IconNode> = {
+  ...JIG_ICON_NODES,
   extension: Grid2x2Plus,
   jig: Wrench,
   // View: perspective (converging) and parallel projection, fit selection, fit all.

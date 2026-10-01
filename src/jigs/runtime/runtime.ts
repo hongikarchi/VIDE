@@ -98,6 +98,8 @@ export interface InstanceView {
     kind: 'tool' | 'library';
     summary: string;
     source: string;
+    /** `jig.json` `icon` (PLAN-26 T-100), when it names one. */
+    icon?: string;
   };
   title: string;
   status: JigInstanceRow['status'];
@@ -364,6 +366,7 @@ export class JigRuntime {
         kind: jig.manifest.kind,
         summary: jig.manifest.summary,
         source: jig.source,
+        ...(jig.manifest.icon ? { icon: jig.manifest.icon } : {}),
       },
       title: instance.title,
       status: instance.status,

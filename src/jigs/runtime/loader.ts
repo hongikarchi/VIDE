@@ -203,6 +203,8 @@ export interface RegistryEntry {
   kind: 'tool' | 'library';
   name: string;
   summary: string;
+  /** The jig's icon from the fixed list (`jig.json` `icon`), when it names one. */
+  icon?: string;
   source: JigSource;
   stage: 'official' | 'project' | 'dev';
   path?: string;
@@ -354,6 +356,7 @@ const summary = (jig: LoadedJig): RegistryEntry => ({
   kind: jig.manifest.kind,
   name: jig.manifest.name,
   summary: jig.manifest.summary,
+  ...(jig.manifest.icon ? { icon: jig.manifest.icon } : {}),
   source: jig.source,
   stage: 'project',
   capabilities: jig.manifest.capabilities.map((c) => ({ name: c.name, reason: c.reason })),

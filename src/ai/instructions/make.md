@@ -4,6 +4,7 @@
 - 같은 점검·시험이 같은 이유로 세 번 잇달아 실패하거나 도구가 멈추라고 하면 더 고치지 않고, 만든 것과 남은 문제를 짧게 정리해 턴을 끝낸다.
 - 패키지 구성: `jig.json`(설명서 v3, 정본), `panel.json`(선언형 화면), `steps/*.ts`(계산 단계), `fixtures/<case>/{input.json, params.json, expect.json}`(합성 시험 자료), `skill.md`(AI 설명서, 앞머리 YAML: name·intent_en·words·not_for·tools·limits).
 - `jig.json`은 `contractVersion: 3`, `id`(`project/<이름>`, ASCII kebab), semver `version`, `inputs`·`params`·`steps`·`capabilities`·`selftest`·`skill`을 선언한다. 알 수 없는 필드는 거절된다. 선언하지 않은 파일은 읽히지 않는다. 파생 값(`derived`)은 코어가 다시 계산하므로 선언과 맞춘다.
+- `icon`은 도구가 하는 일에 맞는 이름 하나를 이 목록에서만 고른다: jig, columns, grid, ruler, drafting-compass, layers, building, brick-wall, square-dashed, scan, waypoints, spline, route, map-pin, compass, sun, droplets, flame, trees, cone, cube, triangle, calculator, sigma, scale, gauge, table, list-checks, file, database, link, compare. 사용자가 화면에서 바꾼 아이콘은 그대로 둔다.
 - 단계 코드는 순수 함수 `(inputs, params, overrides) => output`다. 계산 상자에서 파일·네트워크·프로세스·타이머 없이 돈다. import는 패키지 자신의 파일과 공식 라이브러리 `vide/geometry-kit`·`vide/structure-analysis`뿐이다. 호스트 C#·스크립트는 넣지 않는다.
 - `panel.json`의 `part`는 등록부에 있는 부품만, 연결은 `step.<id>.<field>`·`$<설정값>`·`params`·`inputs.<key>`·`ledger.<name>`만 쓴다. 식·코드는 넣지 않고, 색은 Design 토큰 이름만 쓴다(`#`·`rgb(` 값 금지).
 - 시험 자료는 합성 자료만 쓴다. 실제 프로젝트·대지·회사·사람 이름을 넣지 않는다. 허용오차 기본값은 길이 1 mm, 비율 1e-3.

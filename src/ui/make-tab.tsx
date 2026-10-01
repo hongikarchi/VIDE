@@ -44,6 +44,7 @@ import {
   makeConversation,
   pinDraft,
   previewDraft,
+  setDraftIcon,
   testDraft,
   validateDraft,
   type DraftDetail,
@@ -53,6 +54,7 @@ import {
   type DraftSummary,
   type PreviewResult,
 } from './make-api.ts';
+import { JIG_ICONS, JIG_ICON_LABELS, JigIconMark, jigIcon, noteJigIcon } from './jig-icons.ts';
 import { openDrafts } from './jig-list.ts';
 import { openContextTab, setWorkspace } from './workspaces.ts';
 import './make.css';
@@ -273,7 +275,8 @@ function MakeTab({ projectId }: { projectId: string }) {
   );
   const [detail, setDetail] = useState<DraftDetail>();
   const [notice, setNotice] = useState('');
-  const [busy, setBusy] = useState<'validate' | 'test' | 'preview' | 'pin' | 'delete'>();
+  const [busy, setBusy] = useState<'validate' | 'test' | 'preview' | 'pin' | 'delete' | 'icon'>();
+  const [picking, setPicking] = useState(false);
   const [asking, setAsking] = useState<'pin' | 'delete'>();
   const [center, setCenter] = useState<'screen' | 'flow' | 'skill'>('screen');
   const [fixture, setFixture] = useState<string>();
@@ -332,6 +335,10 @@ function MakeTab({ projectId }: { projectId: string }) {
       window.removeEventListener('vide:make-shown', again);
     };
   }, [draftId, projectId, read]);
+  // The make conversation's chip draws the draft's icon (T-100).
+  useEffect(() => {
+    if (detail) noteJigIcon(`draft:${detail.draft.id}`, detail.manifest.icon);
+  }, [detail]);
   // The authoring conversation goes to the right column when a draft opens.
   useEffect(() => {
     if (!detail || conversationFor.current === detail.draft.id) return;
@@ -411,6 +418,14 @@ function MakeTab({ projectId }: { projectId: string }) {
       conversationFor.current = undefined;
       setDraftId(undefined);
       readList();
+    });
+  // The draft's icon goes into its jig.json; the list shows it once the draft is pinned (T-100).
+  const chooseIcon = (icon: string) =>
+    id &&
+    void act('icon', async () => {
+      await setDraftIcon(projectId, id, icon);
+      setPicking(false);
+      await read(id);
     });
   const choose = (next: string | undefined) => {
     rememberDraft(projectId, next);
@@ -586,7 +601,36 @@ function MakeTab({ projectId }: { projectId: string }) {
             <option value="">새 초안…</option>
           </select>
         </div>
-        <h3>{name}</h3>
+        <h3 className="make-title">
+          <JigIconMark icon={m.icon} />
+          {name}
+        </h3>
+        <button
+          type="button"
+          className="link-button make-icon-toggle"
+          aria-expanded={picking}
+          onClick={() => setPicking((open) => !open)}
+        >
+          아이콘 바꾸기
+        </button>
+        {picking ? (
+          <div className="make-icons" role="group" aria-label="아이콘">
+            {JIG_ICONS.map((icon) => (
+              <button
+                key={icon}
+                type="button"
+                title={JIG_ICON_LABELS[icon]}
+                aria-label={`${JIG_ICON_LABELS[icon]} 아이콘`}
+                aria-pressed={jigIcon(m.icon) === icon}
+                disabled={!!busy}
+                onClick={() => chooseIcon(icon)}
+              >
+                <JigIconMark icon={icon} />
+              </button>
+            ))}
+            <small className="kit-muted">아이콘은 고정할 때 jig에 함께 들어갑니다.</small>
+          </div>
+        ) : null}
         {m.summary ? <p className="make-summary">{m.summary}</p> : null}
         {m.inputs.length ? (
           <p className="kit-muted">입력: {m.inputs.map((i) => i.title || i.key).join(', ')}</p>
@@ -1334,7 +1378,10 @@ export function DraftCard({ projectId, draft }: { projectId: string; draft: Draf
   return (
     <article className="jig-card" data-source="draft" data-status="available">
       <div className="jig-card-head">
-        <strong>{name}</strong>
+        <span className="jig-card-title">
+          <JigIconMark icon={draft.manifest?.icon} />
+          <strong>{name}</strong>
+        </span>
         <span className="pill">작성 중</span>
       </div>
       <p>{draft.manifest?.summary || '만들기 대화에서 쓰고 있는 초안입니다.'}</p>

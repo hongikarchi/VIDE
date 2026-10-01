@@ -27,6 +27,7 @@ export const draftSummarySchema = z
         id: z.string().optional(),
         name: z.string().optional(),
         summary: z.string().optional(),
+        icon: z.string().optional(),
       })
       .passthrough()
       .nullable()
@@ -193,6 +194,7 @@ export const manifestSchema = z
     version: z.string().optional(),
     name: z.string().optional(),
     summary: z.string().optional(),
+    icon: z.string().optional().catch(undefined),
     inputs: z
       .array(
         z
@@ -331,6 +333,10 @@ export async function pinDraft(projectId: string, draftId: string) {
   return pinResultSchema.parse(
     await api(`${one(projectId, draftId)}/pin`, 'POST', { confirm: true }),
   );
+}
+/** Change the draft's icon (`jig.json` `icon`, one of the fixed list; PLAN-26 T-100). */
+export async function setDraftIcon(projectId: string, draftId: string, icon: string) {
+  await api(`${one(projectId, draftId)}/icon`, 'PUT', { icon });
 }
 /** Discard the draft: its folder and its authoring conversation's provider transcripts. */
 export async function deleteDraft(projectId: string, draftId: string) {

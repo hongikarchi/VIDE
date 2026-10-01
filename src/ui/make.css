@@ -277,6 +277,39 @@ body[data-workspace='make'] .make-side {
 .jig-card .make-card-actions button {
   margin-top: 0;
 }
+/* The draft's icon and its picker (T-100): the fixed list as a grid, the chosen one soft-filled. */
+.make-title {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.make-title .jig-icon svg {
+  width: 18px;
+  height: 18px;
+}
+.make-icons {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(30px, 1fr));
+  gap: 2px;
+  margin: 6px 0;
+}
+.make-icons button {
+  display: grid;
+  place-items: center;
+  height: 30px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-2);
+}
+.make-icons button[aria-pressed='true'] {
+  background: var(--bg-selected);
+  color: var(--text-1);
+}
+.make-icons small {
+  grid-column: 1 / -1;
+}
 .make-back {
   justify-self: start;
   align-self: flex-start;

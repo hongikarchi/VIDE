@@ -10,6 +10,7 @@ import { join } from 'node:path';
 import { JigStore } from '../core/jig-store.ts';
 import type { Workspace } from '../core/workspace.ts';
 import { JIGS } from '../jigs/catalog.ts';
+import { LEGACY_JIG_ICONS } from '../contracts/jig-icons.ts';
 import { OFFICIAL_JIG_ROUTING } from '../ui/request-route.ts';
 import {
   DEFAULT_OPEN,
@@ -64,6 +65,7 @@ export async function skillCatalog(
       kind: 'instance',
       scope: pinned.has(jig.id) || used.has(jig.id) ? 'project' : 'available',
       version: jig.version,
+      ...(jig.manifest.icon ? { icon: jig.manifest.icon } : {}),
       description: front.description ?? jig.manifest.summary,
       ...(front.examples ? { examples: front.examples } : {}),
       ...(front.intent_en ? { intent: front.intent_en } : {}),
@@ -81,6 +83,7 @@ export async function skillCatalog(
       name: legacy.name,
       kind: 'legacy',
       scope: 'official',
+      ...(LEGACY_JIG_ICONS[legacy.id] ? { icon: LEGACY_JIG_ICONS[legacy.id] } : {}),
       description: legacy.summary,
       intent: routing.intent,
       words: routing.words,

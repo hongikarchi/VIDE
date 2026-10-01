@@ -7,6 +7,7 @@
 import { useEffect, useState } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { api } from './gateway.ts';
+import { JigIconMark } from './jig-icons.ts';
 import type { SkillEntry } from './skill-catalog.ts';
 import { openSkill } from './skill-start.ts';
 import { setWorkspace } from './workspaces.ts';
@@ -153,7 +154,10 @@ function Jigs({ projectId, shown }: { projectId: string; shown: number }) {
               title={entry.description || entry.name}
               onClick={() => start(entry)}
             >
-              <span className="dash-k">jig{entry.version ? ` · 버전 ${entry.version}` : ''}</span>
+              <span className="dash-k">
+                <JigIconMark icon={entry.icon} />
+                jig{entry.version ? ` · 버전 ${entry.version}` : ''}
+              </span>
               <span className="dash-t">{entry.name}</span>
               {entry.description ? <span className="dash-d">{entry.description}</span> : null}
             </button>

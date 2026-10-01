@@ -97,6 +97,25 @@ test('chip states: running, waiting count, unread after the chip was looked at, 
   assert.equal(waitingOnly[0].waiting, 1);
 });
 
+test('a jig conversation chip shows its jig icon, the default until it is known (PLAN-26 T-100)', () => {
+  const known = { i1: 'columns', 'draft:d1': 'grid' };
+  const lookup = (key) => (key ? known[key] : undefined);
+  assert.equal(
+    ui.chipIcon(entry('c1', { kind: 'jig-run', jigInstanceId: 'i1' }), lookup),
+    'columns',
+  );
+  assert.equal(ui.chipIcon(entry('c1', { kind: 'jig-make', draftId: 'd1' }), lookup), 'grid');
+  assert.equal(ui.chipIcon(entry('c1', { kind: 'jig-run', jigInstanceId: 'i2' }), lookup), 'jig');
+  assert.equal(
+    ui.chipIcon(entry('c1', { kind: 'general', jigInstanceId: 'i1' }), lookup),
+    'columns',
+  );
+  assert.equal(ui.chipIcon(entry('c1'), lookup), undefined);
+  const [chip] = ui.chipStates([entry('c1', { kind: 'jig-run' })], [], new Map());
+  assert.equal(chip.icon, 'jig');
+  assert.equal('icon' in ui.chipStates([entry('c2')], [], new Map())[0], false);
+});
+
 test('chip and AI labels', () => {
   assert.equal(ui.chipLabel(entry(null)), '기본 대화');
   assert.equal(ui.chipLabel(entry('c1', { kind: 'ask', title: '주차 대수' })), '질문 · 주차 대수');

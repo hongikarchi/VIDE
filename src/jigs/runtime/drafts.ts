@@ -46,6 +46,7 @@ import {
   type LoadedJig,
 } from './loader.ts';
 import { JIG_ID, SEMVER, type ManifestIssue } from './manifest.ts';
+import { isJigIcon } from '../../contracts/jig-icons.ts';
 import {
   DEFAULT_TOLERANCE,
   compareExpected,
@@ -399,6 +400,32 @@ export class JigDrafts {
     if (bytes > DRAFT_LIMITS.fileBytes) throw new DomainError('INPUT_TOO_LARGE');
     mkdirSync(dirname(target), { recursive: true });
     writeFileSync(target, content);
+  }
+  /**
+   * Sets the icon of an open draft (`jig.json` `icon`, one of the fixed list; PLAN-26 T-100). The
+   * rest of `jig.json` stays as written; the pin carries the icon into the installed version.
+   */
+  setIcon(projectId: string, draftId: string, icon: string): DraftView {
+    if (!isJigIcon(icon)) throw new DomainError('INVALID_INPUT');
+    const dir = this.open(projectId, draftId).path;
+    let raw: unknown;
+    try {
+      raw = readManifestFile(dir);
+    } catch {
+      raw = undefined;
+    }
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw))
+      throw new DomainError('DRAFT_PATH_INVALID');
+    const { icon: _old, ...rest } = raw as Record<string, unknown>;
+    // The icon sits after the summary, where the template and the docs put it.
+    const next: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(rest)) {
+      next[key] = value;
+      if (key === 'summary') next.icon = icon;
+    }
+    if (!('icon' in next)) next.icon = icon;
+    this.writeIn(dir, 'jig.json', JSON.stringify(next, null, 2) + '\n');
+    return this.get(projectId, draftId);
   }
   /** Writes one file of an open draft; a forbidden or outside path is refused. */
   writeFile(projectId: string, draftId: string, path: string, content: string | Uint8Array) {

@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { api } from './gateway.ts';
 import { DeclaredJig } from './jig-panel/declared-jig.tsx';
 import { KnowledgeJig } from './knowledge-jig.tsx';
+import { JigIconMark, legacyJigIcon, noteJigIcon } from './jig-icons.ts';
 import { listedTools, openDrafts, type PinnedRow } from './jig-list.ts';
 import { listDrafts, type DraftSummary } from './make-api.ts';
 import { DraftCard, ImportJig, MakeCard } from './make-tab.tsx';
@@ -19,6 +20,7 @@ import {
   onWorkspaceChange,
   openContextTab,
   renameContextTab,
+  setContextIcon,
   setContextResolver,
   setWorkspace,
   type ContextTab,
@@ -184,7 +186,13 @@ const instanceViewSchema = z
   .object({
     id: z.string(),
     jig: z
-      .object({ id: z.string(), version: z.string(), name: z.string(), summary: z.string() })
+      .object({
+        id: z.string(),
+        version: z.string(),
+        name: z.string(),
+        summary: z.string(),
+        icon: z.string().optional(),
+      })
       .passthrough(),
     title: z.string(),
     status: z.string(),
@@ -504,6 +512,9 @@ function instanceHost(jig: OpenJig): JigHost {
     const instance = instanceViewSchema.parse(value);
     update({ instance });
     renameContextTab(jig.instanceId, instance.title, `${instance.jig.name} · ${instance.title}`);
+    // The tab and the conversation chip draw the jig's icon (T-100).
+    setContextIcon(jig.instanceId, instance.jig.icon ?? 'jig');
+    noteJigIcon(jig.instanceId, instance.jig.icon);
     return instance;
   };
   async function act<T>(work: () => Promise<T>): Promise<T | undefined> {
@@ -614,7 +625,12 @@ setContextResolver(async (instanceId) => {
         `/projects/${encodeURIComponent(projectId)}/jig-instances/${encodeURIComponent(instanceId)}`,
       ),
     );
-    return { instanceId, label: view.title, title: `${view.jig.name} · ${view.title}` };
+    return {
+      instanceId,
+      label: view.title,
+      title: `${view.jig.name} · ${view.title}`,
+      icon: view.jig.icon ?? 'jig',
+    };
   } catch {
     // The instance is gone or unreadable: the list is the way back.
     setWorkspace('jig');
@@ -632,6 +648,7 @@ function legacyTab(kind: LegacyKind): ContextTab {
     instanceId: `legacy:${kind}`,
     label: project ? `${LEGACY[kind].purpose} · ${project}` : LEGACY[kind].title,
     title: LEGACY[kind].title,
+    icon: legacyJigIcon(kind),
   };
 }
 const mm = (metres: number) => `${Math.round(metres * 10000) / 10} mm`;
@@ -663,6 +680,7 @@ const packageSchema = z
     summary: z.string(),
     stage: z.enum(['official', 'project', 'dev']),
     corrupt: z.boolean().optional(),
+    icon: z.string().optional(),
   })
   .passthrough();
 type Package = z.infer<typeof packageSchema>;
@@ -751,7 +769,7 @@ function Gallery({ context }: { context: JigContext }) {
     };
   }, [projectId, loaded]);
   // One card per jig: installed jigs show only in the project they are pinned to, at that version.
-  const tools = listedTools(packages, pinned);
+  const tools = useMemo(() => listedTools(packages, pinned), [packages, pinned]);
   const official = (legacy?.length ?? 0) + tools.filter((t) => sourceOf(t) === 'official').length;
   const counts: Record<Source, number> = {
     all: (legacy?.length ?? 0) + tools.length + drafts.length,
@@ -760,6 +778,11 @@ function Gallery({ context }: { context: JigContext }) {
     draft: drafts.length,
   };
   const listed = (kind: Source) => source === 'all' || source === kind;
+  // The conversation chips show an instance's jig icon (T-100): remember what the list read.
+  useEffect(() => {
+    for (const row of instances)
+      noteJigIcon(row.id, tools.find((entry) => entry.id === row.jigId)?.icon);
+  }, [instances, tools]);
   // [삭제] takes an installed jig off this project's list; its instances stay in the project.
   const remove = async (entry: Package) => {
     setRemoving(undefined);
@@ -785,7 +808,10 @@ function Gallery({ context }: { context: JigContext }) {
         data-status={entry.corrupt ? 'planned' : 'available'}
       >
         <div className="jig-card-head">
-          <strong>{entry.name}</strong>
+          <span className="jig-card-title">
+            <JigIconMark icon={entry.icon} />
+            <strong>{entry.name}</strong>
+          </span>
           <span className="pill" data-ok={String(!entry.corrupt)}>
             {entry.corrupt ? '열 수 없음' : '사용 가능'}
           </span>
@@ -902,7 +928,10 @@ function Gallery({ context }: { context: JigContext }) {
                     data-status={jig.status}
                   >
                     <div className="jig-card-head">
-                      <strong>{jig.name}</strong>
+                      <span className="jig-card-title">
+                        <JigIconMark icon={legacyJigIcon(jig.id)} />
+                        <strong>{jig.name}</strong>
+                      </span>
                       <span className="pill" data-ok={String(jig.status === 'available')}>
                         {jig.status === 'available' ? '사용 가능' : '준비 중'}
                       </span>

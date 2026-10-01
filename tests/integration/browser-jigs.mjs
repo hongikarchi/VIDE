@@ -162,6 +162,16 @@ try {
   });
   await installed.waitFor();
   assert.match(await installed.textContent(), /가져온 설명서로 그리는 합성 jig/);
+  // Every card draws its jig's icon (PLAN-26 T-100): the default for a jig without one, the fixed
+  // one of a built-in screen jig, the grid example's own.
+  assert.equal(await installed.locator('.jig-card-head .jig-icon svg').count(), 1);
+  const iconOf = (card) =>
+    card.locator('.jig-card-head .jig-icon svg').evaluate((svg) => svg.innerHTML);
+  const syncCard = dialog.locator('.jig-card', { hasText: 'Sync · 도면↔모델' });
+  const gridCard = dialog.locator('.jig-card', { hasText: '격자 골조 배치 예제' });
+  const syncIcon = await iconOf(syncCard);
+  assert.notEqual(syncIcon, await iconOf(installed));
+  assert.notEqual(await iconOf(gridCard), await iconOf(installed));
   await installed.getByRole('button', { name: '삭제', exact: true }).click();
   await installed
     .getByRole('group', { name: '합성 점검 jig 삭제 확인' })
@@ -177,6 +187,11 @@ try {
   // The jig opens in its own context tab.
   const syncTab = tabs.getByRole('tab', { name: `Sync · ${projectName}`, exact: true });
   assert.equal(await syncTab.getAttribute('aria-selected'), 'true');
+  // The tab draws the jig's icon before its name; the name stays the tab's accessible name.
+  assert.equal(
+    await syncTab.locator('.workspace-tab-icon svg').evaluate((svg) => svg.innerHTML),
+    syncIcon,
+  );
   assert.match(
     await dialog.getByLabel('Rhino Sync').locator('option:checked').textContent(),
     /model\.3dm/,

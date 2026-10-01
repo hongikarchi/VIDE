@@ -43,6 +43,8 @@ export interface SkillEntry {
   kind: 'instance' | 'legacy';
   scope: SkillScope;
   version?: string;
+  /** The jig's icon (PLAN-26 T-100): `jig.json` `icon`, or the fixed one of a built-in screen. */
+  icon?: string;
   description?: string;
   examples?: string[];
   intent?: string;
