@@ -411,6 +411,25 @@ test('[확인함] closes an unresolved request and keeps its record (T-102)', ()
       applicationId: 'app-1',
     });
     assert.equal(execution.acknowledge(project.id, 'lost-apply').state, 'unknown');
+    // A legacy linked request: its unknown host child is closed by the parent's [확인함].
+    workspace.submit(project.id, { ...input, id: 'linked-parent', permission: 'candidate' });
+    workspace.update(project.id, 'linked-parent', 'failed', { code: 'HOST_RESULT_UNKNOWN' });
+    // Children are stored by the linked executor, not submitted.
+    store.db
+      .prepare('INSERT INTO workspace_requests VALUES(?,?,?,?,?,?)')
+      .run(
+        'linked-child',
+        project.id,
+        JSON.stringify({ ...input, id: 'linked-child', parentRequestId: 'linked-parent' }),
+        'running',
+        null,
+        new Date().toISOString(),
+      );
+    workspace.update(project.id, 'linked-child', 'unknown', { code: 'HOST_RESULT_UNKNOWN' });
+    assert.equal(execution.acknowledge(project.id, 'linked-parent').state, 'failed');
+    const child = workspace.get(project.id, 'linked-child');
+    assert.equal(child.state, 'interrupted');
+    assert.equal(typeof child.result.acknowledgedAt, 'string');
   } finally {
     store.close();
   }

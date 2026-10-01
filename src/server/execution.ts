@@ -1798,6 +1798,11 @@ export class Execution {
    */
   acknowledge(projectId: string, id: string) {
     const request = this.workspace.get(projectId, id);
+    // A legacy linked request ends succeeded or failed while a host child of it stays unknown
+    // (children are not listed on their own): its [확인함] closes those children.
+    for (const child of this.workspace.list(projectId))
+      if (child.input.parentRequestId === id && child.state === 'unknown')
+        this.acknowledge(projectId, child.id);
     if (request.state !== 'unknown') return request;
     // An application to the source has its own command row and reconcile ('결과 다시 확인'):
     // closing only the request would leave that row unknown and its document refused.

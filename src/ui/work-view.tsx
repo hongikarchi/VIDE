@@ -931,7 +931,12 @@ function WorkView({
             <Candidate message={message} projectId={projectId} actions={actions} />
           ) : null}
           {result?.code ? <p>{errorLabels[result.code] || result.code}</p> : null}
-          {request.state === 'unknown' && !result?.applicationId ? (
+          {(request.state === 'unknown' && !result?.applicationId) ||
+          messages.some(
+            (entry) =>
+              entry.request?.input?.parentRequestId === message.id &&
+              entry.request.state === 'unknown',
+          ) ? (
             <Action
               latch
               error={actions.error}
