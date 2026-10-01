@@ -88,6 +88,7 @@ export const jigStatuses: Record<string, number> = {
   UNIT_MISMATCH: 422,
   GATE_BLOCKED: 422,
   LAYER_ROOT_MISSING: 422,
+  LAYER_PATH_INVALID: 422,
   CONFIRMATION_REQUIRED: 422,
   STALE_INPUT: 409,
   BAKE_NOT_COMPUTED: 422,
@@ -372,16 +373,12 @@ export async function jigRoutes(
       }
       if (method === 'POST') {
         const { layerRootLater: _later, ...input } = createInstance.parse(await body(request));
-        const layerExists = (layerRoot: string) => layerExistsIn(workspace, projectId, layerRoot);
         send(
           200,
           await rt.createInstance(
             projectId,
             { ...input, layerRoot: input.layerRoot ?? '' },
-            {
-              layerExists,
-              layerRootLater: !input.layerRoot,
-            },
+            { layerRootLater: !input.layerRoot },
           ),
         );
         return true;
@@ -394,12 +391,7 @@ export async function jigRoutes(
         .object({ layerRoot: z.string().trim().min(1).max(1000) })
         .strict()
         .parse(await body(request));
-      send(
-        200,
-        await rt.setLayerRoot(projectId, instanceId, layerRoot, {
-          layerExists: (root) => layerExistsIn(workspace, projectId, root),
-        }),
-      );
+      send(200, await rt.setLayerRoot(projectId, instanceId, layerRoot));
       return true;
     }
     if (!rest) {
@@ -800,23 +792,6 @@ export async function jigRoutes(
     return true;
   }
   return false;
-}
-
-/**
- * Whether an output layer exists in a linked document: stored Sync layer tables are the evidence;
- * undefined when no Sync has a layer table yet.
- */
-function layerExistsIn(workspace: Workspace, projectId: string, layerRoot: string) {
-  const tables = workspace
-    .list(projectId)
-    .filter(
-      (entry) =>
-        entry.state === 'succeeded' &&
-        Array.isArray((entry.result as { layers?: unknown })?.layers),
-    )
-    .map((entry) => (entry.result as { layers: { fullPath?: unknown }[] }).layers);
-  if (!tables.length) return undefined;
-  return tables.some((table) => table.some((layer) => layer.fullPath === layerRoot));
 }
 
 /** The attached editor's direct commands: the context's own, else the engine's SDK methods. */

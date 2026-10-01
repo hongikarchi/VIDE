@@ -54,10 +54,23 @@ test('a request-opened instance has no output layer until Rhino에 만들기 ask
     // Rhino에 만들기 stops first and asks for the layer.
     const bake = await api(`${base}/jig-instances/${instance}/bake`, 'POST', { bake: ['beams'] });
     assert.deepEqual([bake.status, bake.json.code], [422, 'LAYER_ROOT_MISSING']);
+    // The path text is checked (no empty level, no stray ':', at most 7 levels for a root) …
+    for (const layerRoot of [
+      'VIDE::::격자',
+      'VIDE:::격자',
+      'VIDE:: 격자',
+      'a::b::c::d::e::f::g::h',
+    ])
+      assert.deepEqual(
+        (await api(`${base}/jig-instances/${instance}/layer-root`, 'PUT', { layerRoot })).json.code,
+        'LAYER_PATH_INVALID',
+        layerRoot,
+      );
+    // … but the layer need not exist: Rhino에 만들기 makes every missing level (ARCH-03 §9.5).
     const set = await api(`${base}/jig-instances/${instance}/layer-root`, 'PUT', {
-      layerRoot: 'VIDE::격자',
+      layerRoot: 'VIDE::격자::새 층',
     });
-    assert.deepEqual([set.status, set.json.body.layerRoot], [200, 'VIDE::격자']);
+    assert.deepEqual([set.status, set.json.body.layerRoot], [200, 'VIDE::격자::새 층']);
     // A set output layer never changes (SPEC-07.4).
     assert.equal(
       (await api(`${base}/jig-instances/${instance}/layer-root`, 'PUT', { layerRoot: 'B' })).status,

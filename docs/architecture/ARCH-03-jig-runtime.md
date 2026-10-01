@@ -2,8 +2,8 @@
 id: ARCH-03
 title: jig 런타임과 저장 스키마 v5의 물리 계약
 status: review
-version: 0.92
-updated: 2026-10-01
+version: 0.93
+updated: 2026-10-02
 owner: agent:claude
 related: [FR-23, FR-24, FR-25, SPEC-02, SPEC-05, SPEC-06, SPEC-07, ADR-014, ADR-019, ADR-020, ADR-021, ADR-022, ADR-026, ARCH-01, ARCH-02, PLAN-22, PLAN-23, PLAN-24, PLAN-26, RESEARCH-10, RESEARCH-12]
 ---
@@ -203,7 +203,7 @@ export interface JigInstance {
   id: string; projectId: string;
   jig: string; version: string;                    // 버전 고정
   title: string;
-  layerRoot: string;                               // fixedAtPin. 연결 문서에 이미 있는 레이어(skill 시작으로 만든 작업본은 §9.5)
+  layerRoot: string;                               // fixedAtPin. 'A::B' 경로, 연결 문서에 없어도 됨(§9.5). skill 시작 작업본은 빈 값으로 열림
   assembly: Record<string, AssembledRole>;
   params: Record<string, ParamValue>;
   zones: Record<string, { id: string; shape: [number, number][]; source: ParamValue }[]>;
@@ -442,7 +442,7 @@ jig·보고서 경로는 `src/server/jig-routes.ts`, 초안 경로(`jig-drafts`)
 | `GET …/facts/sources/:n/file` | — | 원격 화면의 [원본 열기](SPEC-08.4): 원본 바이트를 그 브라우저로 스트리밍한다. 자료 DB 루트 아래 경로만(`..`·링크·junction으로 벗어나면 거절), 200 MB 넘으면 `SOURCE_TOO_LARGE`. PDF·이미지·텍스트는 `inline`, 그 밖(HTML·SVG 등 실행될 수 있는 형식 포함)은 `attachment`로 내려받게 하고 `X-Content-Type-Options: nosniff`, `Cache-Control: private, no-store`. 이 PC에서 프로그램을 실행하지 않는다. 실패는 한국어 한 문장(text/plain)으로 답한다 |
 
 - 기존 `POST /api/v1/projects/:id/jigs/sync`와 구조 jig 경로(ARCH-02 §1)는 그대로다.
-- 오류 코드(잠정): `JIG_INVALID`(형식·금지 파일·부품, 응답에 `issues[]`), `JIG_SIGNATURE`(서명), `JIG_VERSION_EXISTS`(같은 id·버전, 다른 내용, 409), `JIG_NOT_FORKABLE`(422, 단계가 jig 밖을 가져와 사본을 만들 수 없음), `JIG_VERSION_NOT_NEWER`(409, 고정 버전이 작업본보다 높지 않아 올릴 수 없음), `PARAM_FIXED`, `OUT_OF_RANGE`, `GATE_BLOCKED`(막은 점검 이름 목록 포함), `STALE_INPUT`(읽은 문서 버전이 현재와 다름), `LAYER_ROOT_MISSING`(저장된 Sync 레이어 표가 있는데 출력 레이어가 없음), `CONFIRMATION_REQUIRED`(확인 없는 가져오기·고정), `JIG_PANEL`(`panel.json`이 §5.1 검사에 걸림, `JIG_INVALID`의 `issues[]`로). 만들기: `BAKE_NOT_COMPUTED`(422, 항목을 내는 단계가 계산되지 않음), `BAKE_JOB_MISSING`(409, 그린 본문이 엔진에 없음 — 재시작 뒤 남은 만들기 요청), `NOT_APPLIED`(409), 바로 적용의 `BAKE_GUARDED`(409)·`BAKE_READ_FAILED`(409)·`BAKE_UNDO_UNAVAILABLE`·`BAKE_UNDO_NOT_LATEST`·`BAKE_UNDO_FAILED`(409); 요청 결과 코드 `BAKE_TEMPLATE_REJECTED`(워커의 컴파일·`CodePolicy` 거절)·`BAKE_FAILED`·`BAKE_RECEIPT_MISMATCH`(영수증의 키가 계획과 다름). 초안: `DRAFT_NOT_OPEN`(409, 고정·버린 초안에 쓰거나 그 만들기 대화에 턴을 보냄), `DRAFT_OUTSIDE`·`DRAFT_FORBIDDEN_FILE`·`DRAFT_PATH_INVALID`(422, 초안 밖 경로·금지 파일·잘못된 경로), `DRAFT_TEMPLATE_MISSING`(500). 상태 번호는 ARCH-01 §1.3 매핑(400·403·404·409·422)을 따르며 `src/server/jig-routes.ts`의 `jigStatuses`와 `src/server/make-routes.ts`의 `makeStatuses`가 정본이다.
+- 오류 코드(잠정): `JIG_INVALID`(형식·금지 파일·부품, 응답에 `issues[]`), `JIG_SIGNATURE`(서명), `JIG_VERSION_EXISTS`(같은 id·버전, 다른 내용, 409), `JIG_NOT_FORKABLE`(422, 단계가 jig 밖을 가져와 사본을 만들 수 없음), `JIG_VERSION_NOT_NEWER`(409, 고정 버전이 작업본보다 높지 않아 올릴 수 없음), `PARAM_FIXED`, `OUT_OF_RANGE`, `GATE_BLOCKED`(막은 점검 이름 목록 포함), `STALE_INPUT`(읽은 문서 버전이 현재와 다름), `LAYER_ROOT_MISSING`(422, 출력 레이어를 아직 정하지 않은 작업본의 만들기 — 화면이 묻는다), `LAYER_PATH_INVALID`(422, §9.5의 경로 규칙 위반), `CONFIRMATION_REQUIRED`(확인 없는 가져오기·고정), `JIG_PANEL`(`panel.json`이 §5.1 검사에 걸림, `JIG_INVALID`의 `issues[]`로). 만들기: `BAKE_NOT_COMPUTED`(422, 항목을 내는 단계가 계산되지 않음), `BAKE_JOB_MISSING`(409, 그린 본문이 엔진에 없음 — 재시작 뒤 남은 만들기 요청), `NOT_APPLIED`(409), 바로 적용의 `BAKE_GUARDED`(409)·`BAKE_READ_FAILED`(409)·`BAKE_UNDO_UNAVAILABLE`·`BAKE_UNDO_NOT_LATEST`·`BAKE_UNDO_FAILED`(409); 요청 결과 코드 `BAKE_TEMPLATE_REJECTED`(워커의 컴파일·`CodePolicy` 거절)·`BAKE_FAILED`·`BAKE_RECEIPT_MISMATCH`(영수증의 키가 계획과 다름). 초안: `DRAFT_NOT_OPEN`(409, 고정·버린 초안에 쓰거나 그 만들기 대화에 턴을 보냄), `DRAFT_OUTSIDE`·`DRAFT_FORBIDDEN_FILE`·`DRAFT_PATH_INVALID`(422, 초안 밖 경로·금지 파일·잘못된 경로), `DRAFT_TEMPLATE_MISSING`(500). 상태 번호는 ARCH-01 §1.3 매핑(400·403·404·409·422)을 따르며 `src/server/jig-routes.ts`의 `jigStatuses`와 `src/server/make-routes.ts`의 `makeStatuses`가 정본이다.
 - 1차 구현(T-046)의 세부: 가져오기 확인은 `?confirm=true`, 고정 확인은 본문 `confirm: true`다. 등록부는 `GET /api/v1/jigs/packages`(공식 라이브러리 + 설치 + 저장소 소스)이며 기존 `GET /api/v1/jigs`의 확장은 T-047이 한다. `POST …/reads`는 `linkId` 대신 `syncId`를 받아 저장된 Sync를 서버에서 레이어로 거를 수 있다(ZWCAD·호스트 없는 시험). `GET …/params/log`(변경 이력)·`GET …/steps/:stepId/output`(보관된 결과)이 있다. `stale-input`의 현재 판 비교값(`currentRevisions`)은 아직 경로가 채우지 않는다(연결 판 조회는 후속).
 - 능력 검사는 화면이 아니라 이 경로들, 만들기 경로, AI 도구 발급에서 한다. 원격 세션 차단 정규식에 `jigs/import`, `jigs/[^/]+/pin`, `jig-drafts/[^/]+/pin`을 더한다(원격 세션의 앱·확장 제어 금지와 같은 범위).
 
@@ -530,9 +530,9 @@ Item
 
 ### 9.5 레이어
 
-- `layerRoot`는 작업본을 만들 때 정하고(`fixedAtPin`) 연결 문서에 이미 있는 레이어여야 한다. 틀은 그 아래 한 단계 레이어만 켜짐·풀림으로 만든다.
-- **skill 시작으로 만든 작업본**(§5.3)의 `layerRoot`는 틀을 채운 기본값(`VIDE/s06-frame/1` 등)이라 연결 문서에 없을 수 있다. 이 작업본은 만들 때 존재 검사(`LAYER_ROOT_MISSING`)를 하지 않고, 계산·보기에는 `layerRoot`를 쓰지 않는다. Rhino에 만들기는 아래의 여러 단계 레이어 생성이 들어오기 전까지 `layerRoot`가 문서에 없으면 `LAYER_ROOT_MISSING`으로 막고 이유를 보인다. 여러 단계 레이어 생성(부모 재귀 생성)은 PLAN-26 T-076이 PLAN-22의 부모 탐색 수정과 함께 다룬다.
-- 두 단계 이상 새 레이어는 원본 반영 코드(`EditorApplication.TargetLayer`)가 새 부모를 찾지 못해 원본 루트에 생길 수 있으므로 허용하지 않는다. 부모 재귀 탐색 수정은 플러그인 재빌드와 함께 PLAN-22가 다룬다.
+- `layerRoot`는 작업본을 만들 때(또는 skill 시작 작업본은 처음 만들기 때 `PUT …/layer-root`로) 한 번 정하고(`fixedAtPin`) 바꾸지 않는다. `::`로 나눈 경로이며 **연결 문서에 없어도 된다**(2026-10-02). 엔진은 존재를 검사하지 않고 글자만 검사한다(`src/contracts/layer-path.ts`): 빈 단계, 단계 이름 앞뒤 빈칸, 이름 안의 `:`(`a:::b`처럼 단계를 밀어내는 경우 포함)·제어 문자, 단계 이름 100자 초과, 만들기 레이어까지 합쳐 8단계 초과(루트는 7단계까지)를 `LAYER_PATH_INVALID`로 거절한다. 이 검사 전 저장된 작업본의 경로는 만들기 준비(`prepareBake`)가 같은 규칙으로 막는다.
+- 틀(`templates/*.cs`의 같은 블록)은 `layerRoot::layer`를 위 단계부터 한 단계씩 찾는다: 각 단계는 **바로 위 단계의 id를 부모로 가진 같은 이름 레이어**(대소문자 무시)이고, 없으면 그 부모 아래 켜짐·풀림으로 새로 만든다. 전체 경로 문자열 검색(`FindByFullPath`)이나 이름만으로 찾지 않으므로 다른 곳의 같은 이름 레이어를 쓰거나 새 하위 레이어가 문서 루트에 생기지 않는다. 이미 있는 레이어의 속성은 바꾸지 않는다. 바로 적용에서는 틀 본문이 `direct-execute`의 실행 기록 하나 안에서 돌므로 새로 만든 레이어도 그 만들기와 함께 한 번에 되돌려진다. 틀은 플러그인 코드를 부를 수 없어(`CodePolicy`가 `Vide` 이름공간을 막음) 같은 걸음을 C# 글로 가진다.
+- 원본 반영 코드(`EditorApplication.TargetLayer`)도 같은 규칙이다(`hosts/rhino/worker/LayerPaths.cs`): 후보 3dm 레이어의 부모 사슬을 후보 표의 부모 id로 따라가고(문서 밖 레이어의 `FullPath`는 부모 이름을 모를 수 있어 쓰지 않는다), 각 단계를 같은 id → 위 단계 아래 같은 이름 → 새로 만들기 순으로 정한다. 한 단계가 새것이면 그 아래는 모두 새것이며 부모 다음 순서로 만든다. 부모 id를 표에서 찾지 못하거나 순환이면 루트로 두지 않고 `UNSUPPORTED_APPLICATION`으로 거절한다. 새 레이어는 반영의 실행 기록 하나 안에서 만든다.
 - 원본 반영은 레이어 속성(켜짐·잠금)을 옮기지 않는다. 출력 레이어가 꺼져 있으면 VIDE가 켜지 않고 점검으로 막는다.
 
 ## 10. 저장: 스키마 v5

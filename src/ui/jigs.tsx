@@ -483,7 +483,9 @@ const jigErrors: Record<string, string> = {
   OUT_OF_RANGE: '정해진 범위 밖의 값입니다.',
   UNIT_MISMATCH: '단위가 맞지 않습니다.',
   GATE_BLOCKED: '점검에 막혔습니다. 단계에 적힌 이유를 확인하세요.',
-  LAYER_ROOT_MISSING: '연결 모델에 없는 레이어입니다. 연결 파일에 있는 레이어를 고르세요.',
+  LAYER_ROOT_MISSING: '출력 레이어가 아직 없습니다. Rhino에 만들기에서 정하세요.',
+  LAYER_PATH_INVALID:
+    "레이어 이름을 쓸 수 없습니다. 단계는 '::'로 나누고, 빈 단계·':'·7단계 넘는 경로는 쓸 수 없습니다.",
   STALE_INPUT: '읽은 문서가 그 뒤에 바뀌었습니다. 입력을 다시 읽은 뒤 계산하세요.',
   JIG_INVALID: '이 jig의 설명서에 문제가 있어 열 수 없습니다.',
   JIG_NOT_FORKABLE: '저장소에서 만든 jig는 아직 사본으로 고칠 수 없습니다.',
@@ -1155,8 +1157,8 @@ function NewInstance({
         </datalist>
       ) : null}
       <small>
-        jig는 이 레이어 바로 아래 한 단계에만 만듭니다. 출력 레이어는 나중에 바꿀 수 없고, 바꾸려면
-        새로 엽니다.
+        jig는 이 레이어 아래에 만듭니다. 연결 모델에 없으면 Rhino에 만들 때 단계마다 새로
+        만듭니다(예: VIDE::골조::3층). 출력 레이어는 나중에 바꿀 수 없고, 바꾸려면 새로 엽니다.
       </small>
       {error ? <p role="status">{error}</p> : null}
       <div>

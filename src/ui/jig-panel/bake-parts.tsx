@@ -233,7 +233,7 @@ export function BakePart({
       if (!ok && body.code === 'LAYER_ROOT_MISSING') {
         setNeedLayer(ids);
         setNotice(
-          '이 작업본은 요청으로 열어 출력 레이어가 아직 없습니다. 연결 모델에 있는 레이어를 적으면 그 바로 아래 한 단계에 만듭니다.',
+          "이 작업본은 요청으로 열어 출력 레이어가 아직 없습니다. 레이어를 적으면 그 아래에 만듭니다. 연결 모델에 없는 단계는 새로 만듭니다('::'로 나눔, 예: VIDE::골조::3층).",
         );
         return;
       }
@@ -380,8 +380,8 @@ export function BakePart({
               setBusy(false);
               if (!ok) {
                 setNotice(
-                  body.code === 'LAYER_ROOT_MISSING'
-                    ? '연결 모델에 없는 레이어입니다. 연결 파일에 있는 레이어를 적으세요.'
+                  body.code === 'LAYER_PATH_INVALID'
+                    ? "쓸 수 없는 레이어 이름입니다. 단계는 '::'로 나누고, 빈 단계·':'·7단계 넘는 경로는 쓸 수 없습니다."
                     : errorText(body, '출력 레이어를 정하지 못했습니다.'),
                 );
                 return;
@@ -395,7 +395,7 @@ export function BakePart({
           <input
             value={layer}
             maxLength={1000}
-            placeholder="연결 모델의 레이어 이름"
+            placeholder="예: VIDE::골조::3층"
             onChange={(event) => setLayer(event.target.value)}
           />
           <button type="submit" disabled={busy || !layer.trim()}>

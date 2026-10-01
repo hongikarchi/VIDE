@@ -335,7 +335,7 @@ function fixture(t, options = {}) {
 }
 
 /** Pack, install and pin the bake jig; link the fake document; store its Sync; make an instance. */
-async function ready(f) {
+async function ready(f, { root: layerRoot = ROOT } = {}) {
   const { root, dataDir, jigStore, workspace, links, project, document, call } = f;
   const packed = await packJig(bakeJig(root), { dataDir, bundle: false, skipTests: true });
   await importPack(packed.bytes, { store: jigStore, dataDir });
@@ -376,7 +376,7 @@ async function ready(f) {
     jig: 'project/bake-test',
     version: '0.1.0',
     title: '만들기 시험 작업본',
-    layerRoot: ROOT,
+    layerRoot,
   });
   assert.equal(created.status, 200, JSON.stringify(created.data));
   const iid = created.data.id;
@@ -1056,6 +1056,23 @@ test('bake (direct): runs in the attached document with undo records, baseline a
   assert.equal(bake3.data.plans[0].replaced.length, columns.length - 1);
   assert.deepEqual(bake3.data.plans[0].deleted, []);
   assert.equal(bake3.data.plans[0].copies, 0);
+});
+
+test('bake (direct): an output root not in the document yet, several levels deep, is made by the bodies (ARCH-03 §9.5)', async (t) => {
+  const f = fixture(t, { direct: true });
+  const root = 'VIDE::새 공정::3층';
+  assert.ok(![...f.document.doc.layers.keys()].some((name) => name.startsWith('VIDE::새')));
+  const { base, iid } = await ready(f, { root });
+  const bake = await f.call('POST', `${base}/${iid}/bake`, { bake: ['columns', 'beams'] });
+  assert.equal(bake.status, 200, JSON.stringify(bake.data));
+  assert.equal(bake.data.status, 'applied');
+  const headers = decodeCodes(f.calls.direct.map((c) => c.code)).map((d) => d.header.layerPath);
+  assert.deepEqual(headers.sort(), [`${root}::jig 기둥`, `${root}::jig 보`].sort());
+  // Each body walks the levels under their own parents and makes the missing ones there.
+  for (const { code } of f.calls.direct) {
+    assert.match(code, /ParentLayerId == layerParent/);
+    assert.doesNotMatch(code, /FindByFullPath|BAKE_LAYER_ROOT/);
+  }
 });
 
 test('bake (direct): a failing body undoes the bodies before it; the document is as it was', async (t) => {

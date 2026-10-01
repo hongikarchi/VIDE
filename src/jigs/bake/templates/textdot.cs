@@ -12,16 +12,19 @@ var jigId = Str(); var instanceId = Str(); var bakeId = Str(); var runId = Str()
 var ox = F64(); var oy = F64(); var oz = F64();
 var scale = RhinoMath.UnitScale(UnitSystem.Meters, doc.ModelUnitSystem);
 Point3d Vec() { var x = F32(); var y = F32(); var z = F32(); return new Point3d((ox + x) * scale, (oy + y) * scale, (oz + z) * scale); }
-// The output layer: one level under the fixed parent, on and unlocked (SPEC-07.12 2, ARCH-03 §9.5).
-var separator = layerPath.LastIndexOf("::");
-if (separator < 0) throw new Exception("BAKE_LAYER");
-var layerIndex = doc.Layers.FindByFullPath(layerPath, -1);
-if (layerIndex < 0)
+// The output layer (SPEC-07.12 2, ARCH-03 §9.5): every level of layerPath is found under its own
+// parent (never by name elsewhere, never at the root unless it is the first level) and made there,
+// on and unlocked, when missing. Existing levels keep their properties. Up to 8 levels.
+var layerNames = layerPath.Split(new[] { "::" }, StringSplitOptions.None);
+if (layerNames.Length < 2 || layerNames.Length > 8) throw new Exception("BAKE_LAYER");
+var layerIndex = -1; var layerParent = Guid.Empty;
+foreach (var layerName in layerNames)
 {
-    var parentIndex = doc.Layers.FindByFullPath(layerPath.Substring(0, separator), -1);
-    if (parentIndex < 0) throw new Exception("BAKE_LAYER_ROOT");
-    layerIndex = doc.Layers.Add(new Rhino.DocObjects.Layer { Name = layerPath.Substring(separator + 2), ParentLayerId = doc.Layers[parentIndex].Id, IsVisible = true, IsLocked = false });
+    if (layerName.Trim().Length == 0 || layerName.Trim() != layerName || layerName.Contains(":")) throw new Exception("BAKE_LAYER");
+    var level = doc.Layers.FirstOrDefault(l => !l.IsDeleted && l.ParentLayerId == layerParent && string.Equals(l.Name, layerName, StringComparison.OrdinalIgnoreCase));
+    layerIndex = level != null ? level.Index : doc.Layers.Add(new Rhino.DocObjects.Layer { Name = layerName, ParentLayerId = layerParent, IsVisible = true, IsLocked = false });
     if (layerIndex < 0) throw new Exception("BAKE_LAYER_ADD");
+    layerParent = doc.Layers[layerIndex].Id;
 }
 // Delete only the GUIDs VIDE listed, and only when they carry this instance's and bake's tags.
 var removed = 0; var nDelete = I32();

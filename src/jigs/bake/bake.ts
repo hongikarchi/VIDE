@@ -13,6 +13,7 @@ import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { DomainError } from '../../contracts/errors.ts';
 import { directRefusal } from '../../contracts/direct-refusal.ts';
+import { layerPathProblem } from '../../contracts/layer-path.ts';
 import type { JigBake, JigStore } from '../../core/jig-store.ts';
 import type { HostTarget } from '../../contracts/host-documents.ts';
 import { runGates, type GateResult } from '../runtime/gates.ts';
@@ -175,6 +176,7 @@ export async function prepareBake(ctx: BakeContext, input: BakeInput): Promise<P
   const { runtime, store } = ctx;
   const view = await runtime.view(input.projectId, input.instanceId);
   // Opened from a request without an output layer (ADR-026): asked for before anything is made.
+  // A root that is not in the document yet is fine: the template makes every missing level.
   if (!view.body.layerRoot) throw new DomainError('LAYER_ROOT_MISSING');
   const jig = await runtime.registry.resolve(view.jig.id, view.jig.version);
   const decls = input.bakeIds.map((id) => {
@@ -233,6 +235,9 @@ export async function prepareBake(ctx: BakeContext, input: BakeInput): Promise<P
   for (const { decl, items, inputHash, stepId } of extracted) {
     const layerPath = layerPathOf(view.body.layerRoot, decl);
     layers.push(layerPath);
+    // Missing levels are made by the template (ARCH-03 §9.5); only the path text must be usable.
+    const pathProblem = layerPathProblem(layerPath);
+    if (pathProblem) problems.push(`${decl.id}: 출력 레이어 ${layerPath} — ${pathProblem}`);
     const { prior, pending } = recordsOf(store, input.instanceId, decl.id, linkId);
     const plan = planBake({
       instanceId: input.instanceId,

@@ -16,6 +16,7 @@ import {
   renderTemplate,
 } from '../../src/jigs/bake/templates.ts';
 import { absorbedOf, curveOf, extractItems, planBake } from '../../src/jigs/bake/plan.ts';
+import { layerPathProblem, layerRootProblem } from '../../src/contracts/layer-path.ts';
 import {
   BUILTIN_BAKES,
   bakeDeclOf,
@@ -151,6 +152,39 @@ test('templates: one placeholder each; rendering only inserts base64 and keeps e
     assert.match(inserted, /^[A-Za-z0-9+/=]+$/);
     assert.equal(rendered.templateHash, template.hash);
   }
+});
+
+test('templates: the output layer is made level by level under its own parent, never looked up by name at the root', () => {
+  // ARCH-03 §9.5: one block, the same in every template, so a several-level new layer is made in place.
+  const blocks = ['curves', 'sweep-h', 'extrude-column', 'textdot'].map((name) => {
+    const text = loadTemplate(`vide.bake.${name}@1`).text;
+    const start = text.indexOf('// The output layer');
+    return text.slice(start, text.indexOf('\n}\n', start) + 3);
+  });
+  assert.ok(blocks.every((block) => block === blocks[0]));
+  assert.match(blocks[0], /ParentLayerId == layerParent/);
+  assert.match(blocks[0], /ParentLayerId = layerParent/);
+  assert.match(blocks[0], /layerNames\.Length > 8/);
+  assert.doesNotMatch(blocks[0], /FindByFullPath|BAKE_LAYER_ROOT/);
+});
+
+test('layer paths: levels are checked as text; existence is not (the bake makes missing levels)', () => {
+  for (const ok of ['VIDE', 'VIDE::s06-frame::작업본 1', 'a::b::c::d::e::f::g::h'])
+    assert.equal(layerPathProblem(ok), undefined, ok);
+  for (const bad of [
+    '',
+    '::a',
+    'a::',
+    'a::::b',
+    'a:::b',
+    'a:b',
+    'a:: b',
+    'a\nb',
+    'a::b::c::d::e::f::g::h::i',
+  ])
+    assert.ok(layerPathProblem(bad), JSON.stringify(bad));
+  assert.equal(layerRootProblem('a::b::c::d::e::f::g'), undefined);
+  assert.ok(layerRootProblem('a::b::c::d::e::f::g::h'), 'a root leaves one level for the bake');
 });
 
 test('keys with quotes, newlines or code characters are refused by bake-args-safe and can never reach the C# text', () => {

@@ -11,6 +11,7 @@ import { dirname, join } from 'node:path';
 import { gunzipSync, gzipSync } from 'node:zlib';
 import { DomainError } from '../../contracts/errors.ts';
 import { isNewerVersion } from '../../contracts/jig-version.ts';
+import { layerRootProblem } from '../../contracts/layer-path.ts';
 import type { JigInstanceRow, JigRead, JigStore, StepStatus } from '../../core/jig-store.ts';
 import { ChildRunner, type ChildRunnerOptions } from './child-runner.ts';
 import { ComputeBoxRunner } from './compute-box.ts';
@@ -263,14 +264,14 @@ export class JigRuntime {
       conversationId?: string;
     },
     options: {
-      layerExists?: (layerRoot: string) => boolean | undefined;
       /** Opened from a request (ADR-026): the output layer is asked at Rhino에 만들기. */
       layerRootLater?: boolean;
     } = {},
   ): Promise<InstanceView> {
     if (!input.layerRoot && !options.layerRootLater) throw new DomainError('INVALID_INPUT');
-    if (input.layerRoot && options.layerExists?.(input.layerRoot) === false)
-      throw new DomainError('LAYER_ROOT_MISSING');
+    // The root need not exist in the document: the bake makes every missing level (ARCH-03 §9.5).
+    if (input.layerRoot && layerRootProblem(input.layerRoot))
+      throw new DomainError('LAYER_PATH_INVALID');
     const pinned = this.store.pinned(projectId).find((p) => p.jigId === input.jig);
     const jig = await this.registry.resolve(input.jig, input.version ?? pinned?.version);
     if (jig.manifest.kind !== 'tool') throw new DomainError('INVALID_INPUT');
@@ -296,12 +297,11 @@ export class JigRuntime {
     projectId: string,
     instanceId: string,
     layerRoot: string,
-    options: { layerExists?: (layerRoot: string) => boolean | undefined } = {},
   ): Promise<InstanceView> {
     const instance = this.store.instance(projectId, instanceId);
     const body = bodyOf(instance.body);
     if (body.layerRoot) throw new DomainError('INVALID_INPUT');
-    if (options.layerExists?.(layerRoot) === false) throw new DomainError('LAYER_ROOT_MISSING');
+    if (layerRootProblem(layerRoot)) throw new DomainError('LAYER_PATH_INVALID');
     this.save(instance, { ...body, layerRoot });
     return this.view(projectId, instanceId);
   }

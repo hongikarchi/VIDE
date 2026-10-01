@@ -153,7 +153,9 @@ const MESSAGES: Record<string, string> = {
   PARAM_FIXED: '이 설정값은 이 프로젝트의 jig를 만들 때 정해져 바꿀 수 없습니다.',
   OUT_OF_RANGE: '설정값이 허용 범위를 벗어났습니다.',
   UNIT_MISMATCH: '설정값의 단위가 맞지 않습니다.',
-  LAYER_ROOT_MISSING: '연결 모델에 없는 레이어입니다. Rhino에 있는 레이어 이름을 쓰세요.',
+  LAYER_ROOT_MISSING: '출력 레이어가 아직 없습니다. Rhino에 만들기에서 정하세요.',
+  LAYER_PATH_INVALID:
+    "레이어 이름을 쓸 수 없습니다. 단계는 '::'로 나누고, 빈 단계·':'·7단계 넘는 경로는 쓸 수 없습니다.",
   STALE_INPUT: '읽은 문서가 바뀌었습니다. 입력을 다시 읽으세요.',
   STALE_REFERENCE: '읽어 둔 입력을 찾을 수 없습니다. 연결 파일을 다시 읽으세요.',
   NOT_FOUND: '대상을 찾을 수 없습니다.',

@@ -3,7 +3,7 @@ id: PLAN
 title: VIDE 실행 로드맵
 status: review
 version: 0.235
-updated: 2026-10-01
+updated: 2026-10-02
 owner: agent:codex
 related: [ARCH-01, PLAN-02, PLAN-03, PLAN-22, PLAN-23, PLAN-24, PLAN-25, PLAN-26, PLAN-27, ADR-022, ADR-025, ADR-026, ADR-027, SPEC-00, SPEC-01, SPEC-02, SPEC-03, SPEC-04, SPEC-05, SPEC-06, SPEC-07]
 ---
@@ -236,7 +236,7 @@ T-001~018의 번호·지원 증거는 유지한다. 각 티켓의 현재 결과�
 | T-074 jig 만들기의 바로 적용 | 완료(합성 문서, S-06 사본 상단선·부재) | 기둥 부재 만들기(T-056) | [SPIKE](../tdd/SPIKE-2026-09-30-jig-bake.md), [VERIFY m3](../tdd/VERIFY-2026-09-30-s06-frame-m3.md) |
 | T-075 공급자 자체 질문 | SPIKE 합격. Claude·Codex 모두 기본으로 켬(Codex는 2026-10-01 사용자 결정). 설정 → AI 「AI가 작업 도중에 묻기」로 함께 끄고(두 공급자 모두 대화 턴에서 멈췄다 같은 실행으로 이어 감, 2026-10-02), `VIDE_NATIVE_QUESTIONS=0`·`VIDE_CODEX_APP_SERVER=0`은 공급자별로 끈다. app-server가 띄우기 실패·종료해도 엔진은 살아 있고 다음 턴은 새 프로세스 | 실제 대화의 장시간 사용 | [Claude SPIKE](../tdd/SPIKE-2026-09-30-native-questions-claude.md), [Codex SPIKE](../tdd/SPIKE-2026-09-30-codex-app-server.md), `tests/ai/question-settings.test.mjs` |
 | AI 동등성 A/B(PLAN-24 지침 묶음) | 재실행 기준 VIDE 5/5 성공, 시간은 터미널의 2~4배. 관찰 1(되돌리기 뒤 열린 기록)·3(`IsValid`)·4(빈 캡처)는 `d8fb2ba`에서 고침 | 같은 절차로 다시 재기, 공정한 B(사람이 실행) | [SPIKE](../tdd/SPIKE-2026-09-30-ai-parity-ab.md), [지침 묶음 SPIKE](../tdd/SPIKE-2026-09-30-instruction-bundle.md) |
-| T-076 skill 시작·카탈로그·`jig_open`·`ui_go` | 구현·단위·브라우저 시험 완료 | 실제 Claude CLI의 자체 질문 + jig 대화, 확신 낮을 때 두 갈래 질문, `summary.kpi` | [PLAN-26](PLAN-26-chat-stage.md) |
+| T-076 skill 시작·카탈로그·`jig_open`·`ui_go` | 구현·단위·브라우저 시험 완료. 여러 단계 새 출력 레이어 생성(틀·`EditorApplication.TargetLayer`) 2026-10-02 구현, 플러그인 Release 빌드 통과(설치 전) | Rhino 사본에서 3단계 새 레이어 만들기 + 되돌리기 한 번(Rhino를 닫은 뒤), 플러그인 재설치, 실제 Claude CLI의 자체 질문 + jig 대화, 확신 낮을 때 두 갈래 질문, `summary.kpi` | [PLAN-26](PLAN-26-chat-stage.md) |
 | T-077 토큰층·CSS 정리 | 완료 | 기능용 색 리터럴(`app.ts` 붓 색 등) | [PLAN-26](PLAN-26-chat-stage.md) |
 | T-078 정적 목업 | 종료. 검토 결과를 T-079에 넘기고 목업은 폐기(`3a9617f`). 화면 검토는 `tools/mockups/ui-preview/` | — | [PLAN-26](PLAN-26-chat-stage.md) |
 | T-079 셸 정리(좁힌 범위) | 완료(설치 전): 레일의 고정 화면·대시보드·프로젝트 자료·피드백·다크/라이트, 위쪽 줄은 열린 작업본만, 연결 파일·레이어 목록 | 피드백 폼 주소(사용자). 대시보드 내용은 T-098로 정함 | `16eb911`, `633f694`, `browser-workspace-tabs.mjs` |

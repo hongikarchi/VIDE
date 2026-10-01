@@ -46,7 +46,7 @@ internal sealed class EditorApplication(RhinoDoc document, string directory, Fun
         internal List<Guid> Removed = new();
         internal HashSet<string> Updated = new();
         internal HashSet<string> Added = new();
-        /** Layers to add in order; Parent is the staged index of a new parent, or -1 (live parent or root). */
+        /** Layers to add in order; Parent is the staged index of a new parent, or -1 (its ParentLayerId is already a live layer, or it is top level). */
         internal List<(Layer Layer, int Parent)> NewLayers = new();
         public void Dispose() { foreach (var item in Items.Values) item.Dispose(); }
     }
@@ -69,29 +69,30 @@ internal sealed class EditorApplication(RhinoDoc document, string directory, Fun
     }
 
     /// <summary>
-    /// The live layer for a candidate layer: same id, else same full path, else a new one (index -1-n into
-    /// the staged list). A new layer's parent is found the same way, recursively, so a new sublayer of a
-    /// new parent is staged after its parent and never lands in the root.
+    /// The live layer for a candidate layer, level by level from its top-level ancestor (ARCH-03 §9.5):
+    /// each level is the live layer with the same id, else the live layer of that name under the level
+    /// above, else a new layer staged under it (index -1-n into the staged list). Once a level is new,
+    /// every level below it is new too, staged after its parent, so a several-level new layer keeps
+    /// its nesting and never lands in the root. Existing layers are used as they are.
     /// </summary>
     private int TargetLayer(Rhino.FileIO.File3dm candidate, int index, Plan plan)
     {
         var layer = candidate.AllLayers.FirstOrDefault(item => item.Index == index) ?? throw new InvalidOperationException("UNSUPPORTED_APPLICATION");
-        var existing = document.Layers.FirstOrDefault(item => !item.IsDeleted && item.Id == layer.Id) ??
-            document.Layers.FirstOrDefault(item => !item.IsDeleted && item.FullPath == layer.FullPath);
-        if (existing != null) return existing.Index;
-        var stagedAt = plan.NewLayers.FindIndex(item => item.Layer.Id == layer.Id);
-        if (stagedAt >= 0) return -1 - stagedAt;
-        var staged = new Layer { Name = layer.Name, Color = layer.Color, Id = layer.Id };
-        var stagedParent = -1;
-        var parent = layer.ParentLayerId == Guid.Empty ? null : candidate.AllLayers.FirstOrDefault(item => item.Id == layer.ParentLayerId);
-        if (parent != null)
+        int? at = null; // null: the document root; >= 0: a live layer; < 0: a staged one
+        foreach (var level in LayerPaths.Chain(candidate.AllLayers, layer))
         {
-            var target = TargetLayer(candidate, parent.Index, plan);
-            if (target >= 0) staged.ParentLayerId = document.Layers[target].Id;
-            else stagedParent = -1 - target;
+            var live = document.Layers.FirstOrDefault(item => !item.IsDeleted && item.Id == level.Id);
+            if (live == null && at is not < 0)
+                live = LayerPaths.Child(document, at is { } parent ? document.Layers[parent].Id : Guid.Empty, level.Name);
+            if (live != null) { at = live.Index; continue; }
+            var stagedAt = plan.NewLayers.FindIndex(item => item.Layer.Id == level.Id);
+            if (stagedAt >= 0) { at = -1 - stagedAt; continue; }
+            var staged = new Layer { Name = level.Name, Color = level.Color, Id = level.Id };
+            if (at is >= 0) staged.ParentLayerId = document.Layers[at.Value].Id;
+            plan.NewLayers.Add((staged, at is < 0 ? -1 - at.Value : -1));
+            at = -1 - (plan.NewLayers.Count - 1);
         }
-        plan.NewLayers.Add((staged, stagedParent));
-        return -1 - (plan.NewLayers.Count - 1);
+        return at ?? throw new InvalidOperationException("UNSUPPORTED_APPLICATION");
     }
 
     private Plan Prepare(string filename, string hash, ChangeSet changes)

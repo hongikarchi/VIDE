@@ -2,8 +2,8 @@
 id: PLAN-22
 title: jig 플랫폼 1차 — 작업본·형식·실행·Rhino에 만들기·만들기 대화
 status: review
-version: 0.3
-updated: 2026-10-01
+version: 0.4
+updated: 2026-10-02
 owner: agent:claude
 related: [PLAN, PLAN-23, PLAN-24, ADR-022, FR-24, FR-23, FR-18, AC-41, AC-43, AC-44, AC-45, SPEC-07, SPEC-05, SPEC-01, SPEC-06, ARCH-03, ARCH-01, ADR-020, ADR-021, ADR-014, RESEARCH-10]
 ---
@@ -96,7 +96,7 @@ RESEARCH-10 §15.2의 임시 표지 가운데 이 계획이 맡는 것이다. �
     - 레이어 필터 읽기와 숨긴 객체 포함 인자. 숨긴 객체 포함은 만들기 직전 읽기에만 쓴다
   - `hosts/rhino/worker/WorkerScene.cs`: 블록 정의·변환(`DisplayScene`의 `definitions` 형식), 레이어 표, 누락 수, 레이어 필터
   - `src/server/sdk-execution.ts`: export 인자를 `launchRhinoWorker`로 넘긴다
-  - `hosts/rhino/worker/EditorApplication.cs`: `TargetLayer`가 새로 만들 부모 레이어를 재귀로 찾는다. 두 단계 새 레이어가 원본 루트에 생기는 결함을 고친다. 1차 만들기 틀은 한 단계 새 레이어만 쓴다(ARCH-03 §9.5)
+  - `hosts/rhino/worker/EditorApplication.cs`: `TargetLayer`가 후보 레이어의 부모 사슬을 부모 id로 따라가 단계마다 같은 id → 위 단계 아래 같은 이름 → 새로 만들기로 정한다(`LayerPaths.cs`). 두 단계 이상 새 레이어가 원본 루트에 생기는 결함을 고쳤다(2026-10-02, Release 빌드 통과·설치 전, 실제 Rhino 확인은 PLAN-26 T-076). 만들기 틀도 여러 단계 새 레이어를 같은 규칙으로 만든다(ARCH-03 §9.5)
   - `src/contracts/native-model.ts`: 범위·레이어 표 타입
   - 화면 범위 배지(예: "꺼진 레이어 1개(96개)·블록 내부 14개는 가져오지 않았습니다"). 표시용 Sync가 무엇을 담는지는 현행 그대로다
 - **선행:** 없음. **Rhino 플러그인 재빌드 1회**(이 티켓의 세 C# 파일을 한 번에).

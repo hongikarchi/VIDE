@@ -2,8 +2,8 @@
 id: PLAN-26
 title: 대화가 화면과 작업을 이끄는 구조 — skill 시작, 토큰 정리, 셸 정리, 산출물 탭
 status: review
-version: 0.8
-updated: 2026-10-01
+version: 0.9
+updated: 2026-10-02
 owner: agent:claude
 related: [ADR-026, ADR-022, ADR-021, ADR-020, SPEC-01, SPEC-02, SPEC-07, ARCH-03, ARCH-01, DESIGN, RESEARCH-12, PLAN-22, PLAN-24, FR-18, FR-24, FR-25, AC-48]
 ---
@@ -18,7 +18,7 @@ related: [ADR-026, ADR-022, ADR-021, ADR-020, SPEC-01, SPEC-02, SPEC-07, ARCH-03
 
 | 티켓 | 내용 | 선행 | 상태(2026-10-01) |
 |---|---|---|---|
-| T-076 | 단계 0: skill 시작, skill 카탈로그 로더, AI 도구 `jig_open`·`ui_go`, 공급자 자체 질문 기본 | ADR-026, 이 계획 | 구현·단위·브라우저 시험 완료(2026-10-01). 남음: 실제 Claude CLI에서 자체 질문+jig 대화 확인, 확신 낮을 때 두 갈래 질문(M6), `summary.kpi` |
+| T-076 | 단계 0: skill 시작, skill 카탈로그 로더, AI 도구 `jig_open`·`ui_go`, 공급자 자체 질문 기본 | ADR-026, 이 계획 | 구현·단위·브라우저 시험 완료(2026-10-01). 여러 단계 새 출력 레이어 생성 구현·단위·브라우저 시험·플러그인 Release 빌드 완료(2026-10-02, 설치 전). 남음: Rhino 사본 확인(아래 「실제 Rhino 확인」), 실제 Claude CLI에서 자체 질문+jig 대화 확인, 확신 낮을 때 두 갈래 질문(M6), `summary.kpi` |
 | T-077 | 토큰층과 CSS 리터럴 정리 | ADR-026, Design §02 | 완료(2026-10-01): UI CSS 색 리터럴 0, 왼쪽 막대 제거, 선택/초과 색 분리. 남음: 기능용 리터럴(`app.ts` 붓 색 등) |
 | T-078 | 대화 열 + 무대 정적 목업과 VERIFY | ADR-026 결정 5 | 종료(2026-10-01): 목업 6판까지 검토 결과(색·글꼴 좋음, 대화 열 오른쪽, 작성기·상태줄 유지, 레일 유지, 홈과 대시보드 분리)를 T-079에 반영하고 목업은 폐기. 이후 화면 검토는 실제 빌드 미리보기 `tools/mockups/ui-preview/snapshot.mjs` |
 | T-079 | 셸 정리: 사용자가 목업에서 명시한 항목만 지금 배치 위에 반영 | T-078 검토 | 구현·시험 완료(2026-10-01, 설치 전): 레일 대시보드·프로젝트 자료·피드백(구글폼)·다크/라이트, 대시보드 탭(초안), 연결 파일 행 정리(Live 초록 불·파일에서 열기 유지), lucide 아이콘·Inter/Noto Sans KR/JetBrains Mono 글꼴. 남음: 구글폼 주소(사용자). 대시보드 내용은 2026-10-01 사용자 결정으로 '오늘(할 일·일정)'을 맨 위에 두기로 했다(T-098). 작업공간 탭 줄·왼쪽 패널 제거는 하지 않음. 레일·위쪽 줄 역할 나눔(2026-10-01 사용자 결정): 레일이 고정 화면(대시보드·모델·작업 이력·자료·JIG·산출물)을 맡고 위쪽 줄은 열린 작업본만, 열린 것이 없으면 숨김 — 구현·시험 완료(browser-workspace-tabs). 레일의 '만들기'는 같은 날 사용자 요청으로 JIG에 합쳤다(T-099) |
@@ -45,12 +45,13 @@ related: [ADR-026, ADR-022, ADR-021, ADR-020, SPEC-01, SPEC-02, SPEC-07, ARCH-03
 | `src/ui/app.ts`(jig 분기 `runAppRoute`), `src/ui/jigs.tsx` | `startSkill(jigId, request, mode)` 한 경로: 작업본 재사용·기본 `layerRoot`로 생성 → 문맥 탭 → 대화 묶기 → 원장·판정 기록 → `from_request` 적용 → `preview` 자동 계산 → 결과 요약. 요청 글을 지우지 않는다. [일반 대화로](SPEC-02.17의 3). 계획 모드는 재사용·묶기까지와 체크리스트·[진행] |
 | `src/server/conversations.ts` | 대화의 `jigInstanceId` 묶기(SPEC-02.19의 1의 규칙), 서로 가리키는 줄 |
 | `src/server/agent-tools.ts`, `src/ai/agent-connection.ts` | `jig_open`·`ui_go` 발급, 계획 모드 도구 집합(`PLAN_MODE_TOOLS`)에 두 도구 추가, `jig_set`·`jig_run`은 계획 모드 제외 유지 |
-| `src/jigs/runtime/manifest.ts`, `src/server/jig-routes.ts` | `open`·`autorun`·`from_request`·`summary` 허용(`.strict()` 유지), skill 시작 작업본의 `layerRoot` 존재 검사 면제와 만들기 때 `LAYER_ROOT_MISSING` |
+| `src/jigs/runtime/manifest.ts`, `src/server/jig-routes.ts` | `open`·`autorun`·`from_request`·`summary` 허용(`.strict()` 유지), skill 시작 작업본은 출력 레이어 없이 열고 만들기 때 `LAYER_ROOT_MISSING`으로 묻기 |
+| `src/contracts/layer-path.ts`, `src/jigs/runtime/runtime.ts`, `src/jigs/bake/templates/*.cs`, `hosts/rhino/worker/LayerPaths.cs`·`EditorApplication.cs` (2026-10-02) | 출력 레이어 존재 검사 제거(`LAYER_PATH_INVALID` 글자 검사만), 틀과 원본 반영이 여러 단계 새 레이어를 단계마다 제 부모 아래 만든다(ARCH-03 §9.5) |
 | 질문 어댑터(T-075에서 꺼 둔 것) | 공급자 자체 질문 기능을 기본으로 켜고, 없는 공급자·경로는 VIDE 카드 |
 | `extensions/jigs/s06-frame/skill.md`, `jig.json` | `description`·`examples`, `from_request`(예: `spanMax`·`beamSpacing_m`·`layoutSource`), `summary.kpi`. 합성 자료만 |
 | 문서 | ARCH-01 §3 도구 목록·계획 모드 도구, SPEC-01.10 단서(다른 세션의 편집이 커밋된 뒤). 구현과 다르면 ARCH-03 §5.3을 고친다 |
 
-**선행·외부 조건:** ADR-026·SPEC·ARCH-03 반영(완료). ARCH-01·SPEC-01은 다른 세션이 편집 중이라 그 뒤에 고친다. 기본 출력 레이어(`VIDE/<jig>/<n>`)를 Rhino에 실제로 만드는 여러 단계 레이어 생성은 Rhino 플러그인 재빌드가 필요해(ARCH-03 §9.5, PLAN-22) 이 티켓의 완료 조건에서 뺀다. 그때까지 그 작업본의 Rhino에 만들기는 이유를 보이고 막는다.
+**선행·외부 조건:** ADR-026·SPEC·ARCH-03 반영(완료). ARCH-01·SPEC-01은 다른 세션이 편집 중이라 그 뒤에 고친다. 연결 문서에 없는 출력 레이어의 여러 단계 생성은 2026-10-02 구현했다(ARCH-03 §9.5). 바로 적용의 만들기 틀은 엔진 쪽 글이라 엔진 갱신만으로 바뀌고, 원본 반영(`EditorApplication`)은 플러그인 재설치가 필요하다(Rhino를 닫은 뒤).
 
 **검증 — 정상**
 
@@ -68,6 +69,8 @@ related: [ADR-026, ADR-022, ADR-021, ADR-020, SPEC-01, SPEC-02, SPEC-07, ARCH-03
 - [일반 대화로] → 새로 만든 작업본 삭제, 설정값 되돌림, 이전 화면, 같은 글의 AI 턴, 되돌림 기록. 사람이 손댄 작업본은 지우지 않는다.
 - 해석 확정·Rhino에 만들기를 AI·자동 계산이 누르지 않는다(도구 목록에 없음, 서버 경계에서 거절).
 - 자체 질문 기능이 없는 공급자 → 같은 모양의 VIDE 카드. 원격 세션 → 원래 경로의 제한 그대로.
+
+**실제 Rhino 확인(할 일, Rhino를 닫은 뒤):** `.vide/` 아래 Rhino 사본에서 3단계 새 레이어(예: `VIDE::골조 시험::3층`) 아래로 Rhino에 만들기 → 레이어가 문서 루트가 아니라 제자리에 켜짐·풀림으로 생기고 기존 같은 이름 레이어를 쓰지 않음 → [되돌리기] 한 번에 객체와 새 레이어가 함께 사라짐. 결과는 VERIFY로 남긴다. 원본 반영 경로(후보 적용)의 여러 단계 새 레이어는 새 플러그인 설치 뒤 함께 본다.
 
 **완료:** S-06(합성·사본)에서 "구조 분석 해줘"가 누르지 않고 미리보기 결과까지 가고, [일반 대화로] 한 번으로 복구되며, 위 단위·브라우저 시험이 통과한다. ARCH-03 §5.3·ARCH-01 §3이 코드와 맞는다. PLAN §6.5를 갱신한다.
 

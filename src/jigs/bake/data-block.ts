@@ -61,7 +61,7 @@ export interface DataBlockHeader {
   instanceId: string;
   bakeId: string;
   runId: string;
-  /** `layerRoot::layer` — one level under the fixed parent (ARCH-03 §9.5). */
+  /** `layerRoot::layer`; the template makes every missing level under its own parent (ARCH-03 §9.5). */
   layerPath: string;
   /** GUIDs the template may delete (only those tagged with this instance and bake). */
   deleteIds: string[];
