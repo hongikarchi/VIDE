@@ -7,7 +7,8 @@ import { DatabaseSync } from 'node:sqlite';
 import { startServer } from '../../src/server/server.ts';
 import { openKnowledgeSource } from '../../src/jigs/knowledge.ts';
 
-// Project knowledge jig (trial, PLAN-08 K0): read-only views over <data>/knowledge/<project>.sqlite.
+// Project knowledge (PLAN-08 K0, SPEC-08): the facts routes read <data>/knowledge/<project>.sqlite
+// only; the old trial routes (/jigs/knowledge…) are gone, the app reads /facts.
 function buildDb(file, root) {
   const db = new DatabaseSync(file);
   db.exec(`
@@ -74,7 +75,7 @@ test('knowledge jig reads one project DB: summary, issue note, search, evidence;
       return { status: reply.status, body: await reply.json() };
     };
     const project = (await api('/projects', 'POST', { name: '지식' })).body;
-    assert.deepEqual((await api(`/projects/${project.id}/jigs/knowledge`)).body, {
+    assert.deepEqual((await api(`/projects/${project.id}/facts`)).body, {
       available: false,
     });
     const jigs = (await api('/jigs')).body;
@@ -85,7 +86,7 @@ test('knowledge jig reads one project DB: summary, issue note, search, evidence;
     await mkdir(join(directory, 'knowledge'));
     buildDb(join(directory, 'knowledge', project.id + '.sqlite'), root);
 
-    const summary = (await api(`/projects/${project.id}/jigs/knowledge`)).body;
+    const summary = (await api(`/projects/${project.id}/facts`)).body;
     assert.equal(summary.available, true);
     assert.equal(summary.counts.statements, 2, 'unsupported statements are not counted');
     assert.equal(summary.disciplines[0].label, '구조');
@@ -110,12 +111,12 @@ test('knowledge jig reads one project DB: summary, issue note, search, evidence;
       'now',
     );
     writable.close();
-    const briefed = (await api(`/projects/${project.id}/jigs/knowledge`)).body;
+    const briefed = (await api(`/projects/${project.id}/facts`)).body;
     assert.equal(briefed.brief.overview, '개요');
     assert.equal(briefed.brief.decided[0].issue, 1);
     assert.equal(briefed.disciplines[0].brief.state, '정리 중');
 
-    const issue = (await api(`/projects/${project.id}/jigs/knowledge/issues/1`)).body;
+    const issue = (await api(`/projects/${project.id}/facts/issues/1`)).body;
     assert.equal(issue.note.conclusions[0].cite[0], 1);
     assert.deepEqual(
       issue.statements.map((s) => s.id),
@@ -124,36 +125,33 @@ test('knowledge jig reads one project DB: summary, issue note, search, evidence;
     assert.equal(issue.statements[1].party, '구조사', 'aliases resolve to the merged party');
 
     const found = (
-      await api(`/projects/${project.id}/jigs/knowledge/search?q=${encodeURIComponent('보 춤')}`)
+      await api(`/projects/${project.id}/facts/search?q=${encodeURIComponent('보 춤')}`)
     ).body;
     assert.deepEqual(
-      found.map((s) => s.id),
+      found.items.map((s) => s.id),
       [2, 1],
       'both words must match; newest first',
     );
     const byKind = (
       await api(
-        `/projects/${project.id}/jigs/knowledge/search?q=${encodeURIComponent('스팬')}&kind=decision`,
+        `/projects/${project.id}/facts/search?q=${encodeURIComponent('스팬')}&kind=decision`,
       )
     ).body;
     assert.deepEqual(
-      byKind.map((s) => s.id),
+      byKind.items.map((s) => s.id),
       [2],
     );
 
-    const evidence = (await api(`/projects/${project.id}/jigs/knowledge/statements/1`)).body;
+    const evidence = (await api(`/projects/${project.id}/facts/statements/1`)).body;
     assert.match(evidence.text, /13m 이하/);
     assert.equal(evidence.path, 'docs/회의록.docx');
-    assert.equal((await api(`/projects/${project.id}/jigs/knowledge/issues/99`)).status, 404);
+    assert.equal((await api(`/projects/${project.id}/facts/issues/99`)).status, 404);
     // The original is on the company server; a missing file is reported, never created.
     assert.equal(
-      (await api(`/projects/${project.id}/jigs/knowledge/sources/1/open`, 'POST')).body.code,
+      (await api(`/projects/${project.id}/facts/sources/1/open`, 'POST')).body.code,
       'SOURCE_UNAVAILABLE',
     );
-    assert.equal(
-      (await api('/projects/00000000-0000-4000-8000-000000000000/jigs/knowledge')).status,
-      404,
-    );
+    assert.equal((await api('/projects/00000000-0000-4000-8000-000000000000/facts')).status, 404);
 
     // Opening only follows paths recorded under the root.
     const file = join(directory, 'knowledge', project.id + '.sqlite');

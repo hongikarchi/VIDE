@@ -12,6 +12,7 @@ import {
   type KnowledgeReview,
   type KnowledgeReviewStore,
 } from '../core/knowledge-review-store.ts';
+import type { FactState, FactStatus } from '../contracts/facts.ts';
 
 export const DISCIPLINES: Record<string, string> = {
   structure: '구조',
@@ -233,34 +234,6 @@ function candidates(db: DatabaseSync, words: string[], filter: SearchFilter, cap
   return { rows: rows.map((row) => ({ ...row })), plan };
 }
 
-/** Statements matching words in content, subject, party or the excerpt text; optional filters. */
-export function knowledgeSearch(
-  file: string,
-  query: string,
-  { kind, discipline, limit = 100 }: { kind?: string; discipline?: string; limit?: number } = {},
-) {
-  return read(
-    file,
-    (db) =>
-      candidates(db, searchWords(query), { kind, discipline }, Math.min(Math.max(limit, 1), 300))
-        .rows,
-  );
-}
-
-/** The full excerpt behind a statement (the evidence), with its file path and location. */
-export function knowledgeEvidence(file: string, statementId: number) {
-  return read(file, (db) => {
-    const row = db
-      .prepare(
-        `select st.id, st.content, st.quote, e.text, e.locator, s.id as sourceId, s.rel_path as path
-         from statement st join excerpt e on e.id = st.excerpt_id join source s on s.id = e.source_id where st.id = ?`,
-      )
-      .get(statementId);
-    if (!row) throw new DomainError('NOT_FOUND');
-    return { ...row, root: meta(db, 'root') };
-  });
-}
-
 /** Open an original file (company server) with the default program. Only paths recorded in the DB. */
 export function openKnowledgeSource(
   file: string,
@@ -292,13 +265,7 @@ export function openKnowledgeSource(
 // read. Rejected, contaminated and excluded-source statements leave search, tools and basis lookup.
 
 type ReviewSource = Pick<KnowledgeReviewStore, 'reviews' | 'sourceRules'>;
-export type FactState =
-  | 'confirmed'
-  | 'unconfirmed'
-  | 'superseded'
-  | 'rejected'
-  | 'contaminated'
-  | 'excluded-source';
+export type { FactState };
 export interface FactRule {
   pattern: string;
   reason: string | null;
@@ -377,7 +344,10 @@ export function factOf(row: KnowledgeStatement, layer: FactLayer): FactStatement
   };
 }
 function reviewCounts(layer: FactLayer) {
-  const counts: Record<string, number> = Object.fromEntries(verdicts.map((v) => [v, 0]));
+  const counts = Object.fromEntries(verdicts.map((v) => [v, 0])) as Record<
+    (typeof verdicts)[number],
+    number
+  >;
   for (const review of layer.reviews.values()) counts[review.verdict]++;
   return { ...counts, rules: layer.rules.length };
 }
@@ -388,7 +358,7 @@ export function factBrief(file: string, layer: FactLayer) {
   return summary.available ? { ...summary, reviews: reviewCounts(layer) } : summary;
 }
 
-export type FactStatus = 'confirmed' | 'unconfirmed' | 'excluded';
+export type { FactStatus };
 const SEARCH_CAP = 1000;
 /**
  * Statement search with the review layer (SPEC-08.3): confirmed first, excluded statements left out

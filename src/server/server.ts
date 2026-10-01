@@ -40,14 +40,7 @@ import {
 import { AUTO_MODELS, ModelRouter, isAutoModel } from '../ai/model-router.ts';
 import { startHealthLog } from './health.ts';
 import { Diagnostics } from './diagnostics.ts';
-import {
-  knowledgeEvidence,
-  knowledgeFile,
-  knowledgeIssue,
-  knowledgeSearch,
-  knowledgeSummary,
-  openKnowledgeSource,
-} from '../jigs/knowledge.ts';
+import { knowledgeFile } from '../jigs/knowledge.ts';
 import { DocumentLinks, isFileLink } from '../core/document-links.ts';
 import { removeLink } from './link-removal.ts';
 import { AccountLogin } from '../ai/account-login.ts';
@@ -536,11 +529,12 @@ export async function startServer({
       if (!url.pathname.startsWith('/api/v1/')) throw new DomainError('NOT_FOUND');
       if (
         !['GET', 'POST', 'PUT'].includes(request.method || '') &&
-        // Discarding a jig draft (ARCH-03 §7 `DELETE …/jig-drafts/:did`, T-064).
-        // and deleting a project with its data (after the app's confirmation).
+        // Discarding a jig draft (ARCH-03 §7 `DELETE …/jig-drafts/:did`, T-064), taking a jig off
+        // the project's list ([삭제] → `DELETE …/jigs/:jigId/pin`) and deleting a project with its
+        // data (after the app's confirmation).
         !(
           request.method === 'DELETE' &&
-          /^\/api\/v1\/projects\/[^/]+(\/jig-drafts\/[^/]+)?$/.test(url.pathname)
+          /^\/api\/v1\/projects\/[^/]+(\/jig-drafts\/[^/]+|\/jigs\/[^/]+\/pin)?$/.test(url.pathname)
         )
       ) {
         send(405, { code: 'METHOD_NOT_ALLOWED', requestId });
@@ -1483,43 +1477,6 @@ export async function startServer({
           };
           structures.save(projectId, record);
           send(200, { ...record.confirmed, stale: false });
-          return;
-        }
-      }
-      // Project knowledge jig (trial, read-only): issue notes, search and evidence of one project's DB.
-      const knowledge =
-        /^\/api\/v1\/projects\/([^/]+)\/jigs\/knowledge(?:\/(issues|statements|sources)\/(\d+)(\/open)?|\/(search))?$/.exec(
-          url.pathname,
-        );
-      if (knowledge) {
-        store.project(knowledge[1]);
-        const file = knowledgeFile(dirname(filename), knowledge[1]);
-        const [, , kind, id, openPath, search] = knowledge;
-        if (request.method === 'GET' && !kind && !search) {
-          send(200, knowledgeSummary(file));
-          return;
-        }
-        if (request.method === 'GET' && search) {
-          const params = url.searchParams;
-          send(
-            200,
-            knowledgeSearch(file, params.get('q') ?? '', {
-              kind: params.get('kind') || undefined,
-              discipline: params.get('discipline') || undefined,
-            }),
-          );
-          return;
-        }
-        if (request.method === 'GET' && kind === 'issues' && !openPath) {
-          send(200, knowledgeIssue(file, Number(id)));
-          return;
-        }
-        if (request.method === 'GET' && kind === 'statements' && !openPath) {
-          send(200, knowledgeEvidence(file, Number(id)));
-          return;
-        }
-        if (request.method === 'POST' && kind === 'sources' && openPath) {
-          send(200, openKnowledgeSource(file, Number(id)));
           return;
         }
       }

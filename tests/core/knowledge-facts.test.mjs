@@ -17,7 +17,6 @@ import {
   factSearch,
   factStatement,
   factValidity,
-  knowledgeSearch,
   recordFactReview,
   reviewLayer,
   sourceRuleTest,
@@ -117,8 +116,6 @@ test('search: 3+ character words use the trigram index, 2-character words LIKE, 
     } finally {
       await plain.done();
     }
-    // The legacy jig search keeps returning an array.
-    assert.deepEqual(ids(knowledgeSearch(t.file, '보 춤')), [2, 1]);
   } finally {
     await t.done();
   }

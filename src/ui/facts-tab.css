@@ -118,21 +118,6 @@ body[data-workspace='data'] .facts-workspace {
   justify-content: space-between;
   align-items: center;
 }
-.facts-suspects {
-  margin-top: 14px;
-}
-.facts-suspect {
-  display: grid;
-  gap: 4px;
-  margin: 6px 0;
-  padding: 8px;
-  border: var(--hairline) solid var(--warn-muted);
-  border-radius: var(--radius-sm);
-  background: var(--warn-subtle);
-}
-.facts-suspects h4 {
-  color: var(--warn);
-}
 .knowledge-statement[aria-current='true'] {
   border-color: currentColor;
 }

@@ -1,6 +1,6 @@
 // The 자료 workspace tab (PLAN-22 T-065, Design SCR-19, PRD C-02, ADR-018): the left column holds
 // search (`/`), the 보기 (정해진 것 · 막힌 것 · 바뀐 것), the disciplines with their issue counts,
-// the status filter (확정 · 미확정 · 제외) and the cards of suspected contamination; the centre shows
+// the status filter (확정 · 미확정 · 제외) and the number of source rules; the centre shows
 // the KPI strip, the status report, an issue note or the search results; the drawer below shows the
 // chosen statement's excerpt, [원본 열기] and the review actions. The views are the ones of the
 // knowledge jig (src/ui/knowledge-jig.tsx); the data comes from the facts routes (src/ui/facts-api.ts).
@@ -15,7 +15,6 @@ import {
   type Review,
   type Statement,
   type Summary,
-  type Suspect,
 } from './facts-api.ts';
 import {
   FactDetail,
@@ -41,6 +40,8 @@ type View =
       query: string;
       excludedOnly: boolean;
       statements: Statement[];
+      total: number;
+      nextOffset: number | null;
       excluded: number;
     };
 
@@ -49,73 +50,6 @@ const REVIEWED = 'vide:facts-reviewed';
 
 const withReview = (statements: Statement[], id: number, review: Review) =>
   statements.map((s) => (s.id === id ? { ...s, review } : s));
-
-/** Cards of statements that look like they came from elsewhere; recorded only when confirmed. */
-function SuspectCards({
-  projectId,
-  suspects,
-  onRecorded,
-}: {
-  projectId: string;
-  suspects: readonly Suspect[];
-  onRecorded: () => void;
-}) {
-  const [dismissed, setDismissed] = useState<ReadonlySet<number>>(new Set());
-  const [busy, setBusy] = useState<number>();
-  const [message, setMessage] = useState('');
-  const shown = suspects.filter((s) => !dismissed.has(s.sourceId));
-  if (!shown.length) return null;
-  return (
-    <section className="facts-suspects" aria-label="오염 의심 묶음">
-      <h4>⚠ 오염 의심 묶음</h4>
-      {shown.map((suspect) => (
-        <article key={suspect.sourceId} className="facts-suspect" data-source={suspect.sourceId}>
-          <strong title={suspect.path}>{suspect.path.split('/').at(-1)}</strong>
-          <small className="knowledge-meta">
-            진술 {suspect.statements}개{suspect.reason ? ` · ${suspect.reason}` : ''}
-          </small>
-          <div className="fact-actions">
-            <button
-              type="button"
-              disabled={busy !== undefined}
-              onClick={async () => {
-                setBusy(suspect.sourceId);
-                setMessage('');
-                try {
-                  await factsFor(projectId).rule(suspect.sourceId, {
-                    reason: suspect.reason || '오염 의심 묶음 확인',
-                    ...(suspect.pattern ? { pattern: suspect.pattern } : {}),
-                  });
-                  setDismissed(new Set([...dismissed, suspect.sourceId]));
-                  onRecorded();
-                } catch (error) {
-                  setMessage(error instanceof Error ? error.message : '기록하지 못했습니다.');
-                } finally {
-                  setBusy(undefined);
-                }
-              }}
-            >
-              오염으로 제외
-            </button>
-            <button
-              type="button"
-              className="link-button"
-              title="기록하지 않고 이 카드만 닫습니다"
-              onClick={() => setDismissed(new Set([...dismissed, suspect.sourceId]))}
-            >
-              아님
-            </button>
-          </div>
-        </article>
-      ))}
-      {message ? (
-        <small className="knowledge-meta" role="alert">
-          {message}
-        </small>
-      ) : null}
-    </section>
-  );
-}
 
 function FactsTab({ projectId }: { projectId: string }) {
   const client = factsFor(projectId);
@@ -226,13 +160,35 @@ function FactsTab({ projectId }: { projectId: string }) {
       setLoading(false);
     }
   };
+  // [더 보기]: the next page of the same search, appended.
+  const more = async () => {
+    if (view.kind !== 'search' || view.nextOffset === null) return;
+    const shown = view;
+    setLoading(true);
+    try {
+      const result = await client.search(shown.query, {
+        kind,
+        excluded: shown.excludedOnly,
+        offset: shown.nextOffset ?? 0,
+      });
+      setView({
+        ...shown,
+        statements: [...shown.statements, ...result.statements],
+        total: result.total,
+        nextOffset: result.nextOffset,
+      });
+    } catch {
+      setError('검색하지 못했습니다.');
+    } finally {
+      setLoading(false);
+    }
+  };
   const select = (statement: Statement) => setSelected({ id: statement.id, statement });
 
   if (error && !summary) return <p className="jig-intro">{error}</p>;
   if (!summary) return <p className="jig-intro">불러오는 중…</p>;
   if (!summary.available) return <p className="jig-intro">{NO_DB}</p>;
-  const reviews = summary.reviews ?? {};
-  const legacy = client.mode() !== 'facts';
+  const reviews = summary.reviews;
 
   return (
     <>
@@ -324,18 +280,8 @@ function FactsTab({ projectId }: { projectId: string }) {
             </button>
           ))}
         </div>
-        {summary.rules?.length ? (
-          <small className="knowledge-meta">제외 규칙 {summary.rules.length}개 적용 중</small>
-        ) : null}
-        <SuspectCards
-          projectId={projectId}
-          suspects={summary.suspects ?? []}
-          onRecorded={() => void load(true)}
-        />
-        {legacy ? (
-          <small className="knowledge-meta">
-            이 엔진은 검토 기록을 지원하지 않아 확정·오염 표시는 쓸 수 없습니다.
-          </small>
+        {reviews.rules ? (
+          <small className="knowledge-meta">제외 규칙 {reviews.rules}개 적용 중</small>
         ) : null}
       </aside>
       <div className="facts-main">
@@ -345,13 +291,13 @@ function FactsTab({ projectId }: { projectId: string }) {
             { label: '진술', value: summary.counts.statements.toLocaleString() },
             {
               label: '확정',
-              value: legacy ? undefined : String(reviews.confirmed ?? 0),
+              value: String(reviews.confirmed),
               empty: '기록 없음',
             },
             { label: '이슈', value: String(summary.counts.issues) },
             {
               label: '오염 표시',
-              value: legacy ? undefined : String(reviews.contaminated ?? 0),
+              value: String(reviews.contaminated),
               empty: '기록 없음',
               note: reviews.rejected ? `기각 ${reviews.rejected}` : undefined,
             },
@@ -373,6 +319,7 @@ function FactsTab({ projectId }: { projectId: string }) {
           onSelect={select}
           onShowExcluded={() => void search(true)}
           onBack={() => void search(false)}
+          onMore={() => void more()}
         />
       </div>
       <section className="facts-drawer" aria-label="근거 원문" hidden={!selected}>
@@ -408,6 +355,7 @@ function Centre({
   onSelect,
   onShowExcluded,
   onBack,
+  onMore,
 }: {
   projectId: string;
   summary: AvailableSummary;
@@ -418,6 +366,7 @@ function Centre({
   onSelect: (statement: Statement) => void;
   onShowExcluded: () => void;
   onBack: () => void;
+  onMore: () => void;
 }) {
   if (view.kind === 'report')
     return <Report summary={summary} only={view.only} onOpen={onOpenIssue} />;
@@ -457,10 +406,10 @@ function Centre({
   return (
     <section className="facts-results" aria-label="검색 결과">
       <h3>
-        {view.excludedOnly ? '제외된 진술' : '검색 결과'} {shown.length}개{' '}
+        {view.excludedOnly ? '제외된 진술' : '검색 결과'} {standing ? shown.length : view.total}개{' '}
         <small className="knowledge-meta">
           ‘{view.query}’ · 내용에 검색어가 있는 것 먼저, 최신순
-          {standing ? ` · 상태 필터 적용(전체 ${view.statements.length})` : ''}
+          {standing ? ` · 상태 필터 적용(전체 ${view.total})` : ''}
         </small>
       </h3>
       {view.excludedOnly ? (
@@ -487,6 +436,11 @@ function Centre({
       ) : (
         <p className="jig-intro">맞는 진술이 없습니다.</p>
       )}
+      {view.nextOffset !== null ? (
+        <button type="button" className="link-button facts-more" onClick={onMore}>
+          더 보기 ({view.statements.length}/{view.total})
+        </button>
+      ) : null}
     </section>
   );
 }

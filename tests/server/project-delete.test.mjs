@@ -393,3 +393,19 @@ test('a project deleted on the account site is deleted here after its work ends,
     [kept.id],
   );
 });
+
+test('[삭제] on the jig list reaches the unpin route over HTTP instead of the method gate', async (t) => {
+  const { app, api, directory } = await open();
+  t.after(async () => {
+    await app.close();
+    await rm(directory, { recursive: true, force: true });
+  });
+  const project = (await api('/projects', 'POST', { name: '핀 해제' })).body;
+  const path = `/projects/${project.id}/jigs/${encodeURIComponent('project/none')}/pin`;
+  // Not pinned: the route answers NOT_FOUND (it used to stop at 405 METHOD_NOT_ALLOWED).
+  const reply = await api(path, 'DELETE');
+  assert.equal(reply.status, 404);
+  assert.equal(reply.body.code, 'NOT_FOUND');
+  // Other DELETE paths stay closed.
+  assert.equal((await api(`/projects/${project.id}/jigs`, 'DELETE')).status, 405);
+});

@@ -19,14 +19,31 @@ import './facts-tab.css';
 // blocked, recently changed — project page, then each discipline), issue notes like meeting minutes
 // behind it, evidence only on request. The pieces are shared by the 자료 workspace tab
 // (src/ui/facts-tab.tsx), the fact window of a basis chip (src/ui/jig-panel/basis-parts.tsx) and the
-// older JIG-list entry (`KnowledgeJig`). Review actions (확정·기각·오염) are a person's actions and
-// only show when the engine keeps the review layer (facts routes); the crawler DB is never written.
+// older JIG-list entry (`KnowledgeJig`). Review actions (확정·기각·오염) are a person's actions,
+// recorded in VIDE's review layer (facts routes); the crawler DB is never written.
 
 export { KIND };
 const base = (path: string) => path.split('/').at(-1);
 
-/** The review state of a statement as a chip: 확정 · 기각 · 오염 (with the reason) or 미확정. */
-export function ReviewChip({ review }: { review?: Review | null }) {
+/**
+ * The review state of a statement as a chip: 확정 · 기각 · 오염 (with the reason), 제외 (a source
+ * rule, without a verdict) or 미확정.
+ */
+export function ReviewChip({
+  review,
+  excluded,
+  reason,
+}: {
+  review?: Review | null;
+  excluded?: boolean;
+  reason?: string | null;
+}) {
+  if (!review && excluded)
+    return (
+      <span className="fact-standing" data-standing="excluded" title={reason ?? undefined}>
+        ⚠ 제외{reason ? ` · ${reason}` : ''}
+      </span>
+    );
   if (!review)
     return (
       <span className="fact-standing" data-standing="unconfirmed">
@@ -86,20 +103,6 @@ export function ReviewActions({
   const [wholeSource, setWholeSource] = useState(false);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
-  const [mode, setMode] = useState(client.mode());
-  useEffect(() => {
-    let live = true;
-    void client.ready().then((value) => live && setMode(value));
-    return () => {
-      live = false;
-    };
-  }, [client]);
-  if (mode !== 'facts')
-    return (
-      <small className="knowledge-meta">
-        이 엔진은 검토 기록을 지원하지 않습니다. 앱을 업데이트하면 확정·오염 표시를 쓸 수 있습니다.
-      </small>
-    );
   // Confirming is a person's act: the engine records who from the session, not from this form.
   const action = ACTIONS.find((entry) => entry.verdict === pending);
   const submit = async (verdict: Verdict) => {
@@ -212,24 +215,23 @@ export function FactDetail({
       .then((value) => {
         if (!live) return;
         setEvidence(value);
-        const found = value.review ?? value.statement?.review;
-        if (found !== undefined) setReview(found);
+        setReview(value.review);
       })
       .catch(() => live && setError('진술을 읽지 못했습니다.'));
     return () => {
       live = false;
     };
   }, [client, statementId]);
-  const statement = known ?? evidence?.statement ?? undefined;
-  const content = statement?.content ?? evidence?.content ?? '';
-  const quote = statement?.quote ?? evidence?.quote ?? '';
-  const path = evidence?.path ?? statement?.path ?? '';
-  const sourceId = evidence?.sourceId ?? statement?.sourceId;
+  const statement = known ?? evidence;
+  const content = statement?.content ?? '';
+  const quote = statement?.quote ?? '';
+  const path = statement?.path ?? '';
+  const sourceId = statement?.sourceId;
   return (
     <article className="fact-detail" data-statement={statementId}>
       <header>
         {statement ? <span className="pill">{KIND[statement.kind] ?? statement.kind}</span> : null}{' '}
-        <ReviewChip review={review} />{' '}
+        <ReviewChip review={review} excluded={statement?.excluded} reason={statement?.reason} />{' '}
         <small className="knowledge-meta">
           진술 {statementId}
           {statement
@@ -305,7 +307,11 @@ export function StatementRow({
     >
       <div>
         <span className="pill">{KIND[statement.kind] ?? statement.kind}</span>{' '}
-        <ReviewChip review={statement.review} />{' '}
+        <ReviewChip
+          review={statement.review}
+          excluded={statement.excluded}
+          reason={statement.reason}
+        />{' '}
         <small className="knowledge-meta">
           {statement.saidOn ?? '날짜 없음'} · {statement.party || '주체 미상'}
         </small>

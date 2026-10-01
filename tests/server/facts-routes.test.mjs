@@ -9,6 +9,14 @@ import { KnowledgeReviewStore } from '../../src/core/knowledge-review-store.ts';
 import { reviewLayer } from '../../src/jigs/knowledge.ts';
 import { AgentTools, conversationHandlers } from '../../src/server/agent-tools.ts';
 import { buildFactsDb } from '../core/knowledge-facts.test.mjs';
+import {
+  factEvidenceSchema,
+  factIssueSchema,
+  factRulesSchema,
+  factSearchSchema,
+  factSummarySchema,
+  recordedReviewSchema,
+} from '../../src/contracts/facts.ts';
 
 // SPEC-08 routes (/api/v1/projects/:id/facts…) and the project_* conversation tools.
 test('facts routes: brief, search, fact window, people-only reviews, source rules, refs', async () => {
@@ -37,15 +45,20 @@ test('facts routes: brief, search, fact window, people-only reviews, source rule
     const other = (await api('/projects', 'POST', { name: '다른' })).body;
     const base = `/projects/${project.id}/facts`;
     assert.deepEqual((await api(base)).body, { available: false }, 'no DB is not an error');
+    // Every reply below is parsed with the app's schemas (src/contracts/facts.ts): a field the
+    // engine stops sending, or sends in another shape, fails here and not only in the app.
+    factSummarySchema.parse((await api(base)).body);
 
     await mkdir(join(directory, 'knowledge'));
     buildFactsDb(join(directory, 'knowledge', project.id + '.sqlite'));
-    const brief = (await api(base)).body;
+    const brief = factSummarySchema.parse((await api(base)).body);
     assert.equal(brief.available, true);
     assert.equal(brief.counts.statements, 5);
     assert.equal(brief.reviews.confirmed, 0);
 
-    const search = (await api(`${base}/search?q=${encodeURIComponent('스팬은')}`)).body;
+    const search = factSearchSchema.parse(
+      (await api(`${base}/search?q=${encodeURIComponent('스팬은')}`)).body,
+    );
     assert.deepEqual(
       search.items.map((row) => row.ref),
       ['S5', 'S2', 'S1'],
@@ -56,6 +69,7 @@ test('facts routes: brief, search, fact window, people-only reviews, source rule
     const confirmed = await api(`${base}/statements/1/review`, 'POST', { verdict: 'confirmed' });
     assert.equal(confirmed.status, 200);
     assert.equal(confirmed.body.by, 'user');
+    recordedReviewSchema.parse(confirmed.body);
     assert.equal(
       (await api(`${base}/statements/3/review`, 'POST', { verdict: 'contaminated' })).status,
       400,
@@ -74,6 +88,7 @@ test('facts routes: brief, search, fact window, people-only reviews, source rule
       200,
     );
     const rules = await api(`${base}/rules`, 'POST', { sourceId: 3, reason: '다른 현장' });
+    factRulesSchema.parse(rules.body);
     assert.deepEqual(rules.body.rules, [
       { pattern: 'other-project/배치도 메모.txt', reason: '다른 현장' },
     ]);
@@ -81,17 +96,18 @@ test('facts routes: brief, search, fact window, people-only reviews, source rule
     assert.deepEqual(after.items.map((row) => row.id).sort(), [1, 2, 4]);
     assert.equal(after.items[0].id, 1, 'confirmed first');
     assert.equal(after.excluded, 2);
-    const hidden = (await api(`${base}/search?q=&status=excluded`)).body;
+    const hidden = factSearchSchema.parse((await api(`${base}/search?q=&status=excluded`)).body);
     assert.deepEqual(hidden.items.map((row) => row.state).sort(), [
       'contaminated',
       'excluded-source',
     ]);
 
-    const window = (await api(`${base}/statements/5`)).body;
+    const window = factEvidenceSchema.parse((await api(`${base}/statements/5`)).body);
     assert.equal(window.state, 'excluded-source');
     assert.equal(window.reason, '다른 현장');
     assert.match(window.text, /다른 현장/);
-    const issue = (await api(`${base}/issues/1`)).body;
+    const issue = factIssueSchema.parse((await api(`${base}/issues/1`)).body);
+    assert.equal(factSummarySchema.parse((await api(base)).body).reviews.rules, 1);
     assert.deepEqual(
       issue.statements.map((row) => row.id),
       [1, 2],
@@ -107,6 +123,7 @@ test('facts routes: brief, search, fact window, people-only reviews, source rule
     // Removing a verdict or a rule brings the statement back.
     const removed = await api(`${base}/statements/3/review`, 'POST', { verdict: null });
     assert.equal(removed.body.state, 'unconfirmed', JSON.stringify(removed));
+    factEvidenceSchema.parse(removed.body);
     await api(`${base}/rules`, 'POST', { pattern: 'other-project/배치도 메모.txt', remove: true });
     assert.equal((await api(`${base}/search?q=`)).body.excluded, 0);
 

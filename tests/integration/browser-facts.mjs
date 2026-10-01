@@ -1,15 +1,24 @@
 // 자료 workspace tab (PLAN-22 T-065, Design SCR-19): the tab opens over the centre, shows the KPI
 // strip and the status report, opens an issue note, searches (a 2-letter and a 3-letter word), shows
 // a statement's excerpt in the drawer, records 확정 and 오염 with a reason, leaves excluded statements
-// out until '제외된 n건 보기', records a suspected-contamination card only when confirmed, and a
-// basis chip (`data-fact-statement`) opens the fact window with a way to the tab. The facts routes
-// are answered here with synthetic data, so the test does not depend on a crawler DB.
+// out until '제외된 n건 보기' (asked with `status=excluded`), leaves a whole source file out through
+// POST /facts/rules, and a basis chip (`data-fact-statement`) opens the fact window with a way to the
+// tab. The facts routes are answered here with synthetic data, so the test does not depend on a
+// crawler DB; every answer is parsed with the engine's reply schemas (src/contracts/facts.ts).
 import assert from 'node:assert/strict';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { chromium } from 'playwright';
 import { startServer } from '../../src/server/server.ts';
+import {
+  factEvidenceSchema,
+  factIssueSchema,
+  factRulesSchema,
+  factSearchSchema,
+  factSummarySchema,
+  recordedReviewSchema,
+} from '../../src/contracts/facts.ts';
 
 const shot = process.env.VIDE_SHOT_DIR;
 const directory = await mkdtemp(join(tmpdir(), 'vide-facts-'));
@@ -25,20 +34,53 @@ const statement = (id, content, extra = {}) => ({
   sourceId: id * 10,
   path: `회의록/회의-${id}.txt`,
   locator: 'p1',
+  ref: `S${id}`,
+  state: 'unconfirmed',
+  excluded: false,
+  reason: null,
   review: null,
   ...extra,
 });
+/** A statement as the engine sends it after the review layer and the source rules. */
+const layered = (s) => {
+  const verdict = s.review?.verdict;
+  const ruled = rules.some((rule) => rule.pattern === s.path);
+  const state =
+    verdict === 'confirmed' || verdict === 'corrected'
+      ? 'confirmed'
+      : verdict === 'rejected' || verdict === 'contaminated'
+        ? verdict
+        : ruled
+          ? 'excluded-source'
+          : 'unconfirmed';
+  return {
+    ...s,
+    state,
+    excluded: ['rejected', 'contaminated', 'excluded-source'].includes(state),
+    reason: s.review?.reason ?? (ruled ? '합성 규칙' : null),
+  };
+};
 const statements = [
   statement(11, '기둥 경간은 9 m로 한다.'),
   statement(12, '보 춤은 700 mm 이하로 한다.'),
   statement(13, '다른 현장의 하중 조건 메모', { kind: 'info' }),
 ];
 const excludedStatement = statement(14, '철회된 경간 안', {
-  review: { verdict: 'rejected', reason: '이후 회의에서 철회', by: 'user', at: '2026-09-02' },
+  review: {
+    verdict: 'rejected',
+    reason: '이후 회의에서 철회',
+    correction: null,
+    supersededBy: null,
+    by: 'user',
+    at: '2026-09-02',
+  },
 });
+const all = () => [...statements, excludedStatement].map(layered);
+const count = (verdict) => all().filter((s) => s.review?.verdict === verdict).length;
 const summary = () => ({
   available: true,
   builtAt: '2026-09-20T00:00:00Z',
+  sizeBytes: 4096,
   brief: {
     overview: '합성 자료의 현황 요약입니다.',
     asOf: '2026-09-20',
@@ -54,22 +96,39 @@ const summary = () => ({
       label: '구조',
       brief: { state: '경간 정리 중', decided: [], blocked: [], changed: [] },
       issues: [
-        { id: 1, title: '경간과 보 춤', status: 'open', summary: '요약', statements: 2, open: 1 },
+        {
+          id: 1,
+          discipline: 'structure',
+          title: '경간과 보 춤',
+          status: 'open',
+          summary: '요약',
+          statements: 2,
+          open: 1,
+        },
       ],
     },
   ],
   reviews: {
-    confirmed: statements.filter((s) => s.review?.verdict === 'confirmed').length,
-    contaminated: statements.filter((s) => s.review?.verdict === 'contaminated').length,
-    rejected: 1,
+    confirmed: count('confirmed'),
+    rejected: count('rejected'),
+    contaminated: count('contaminated'),
+    superseded: 0,
+    corrected: 0,
+    rules: rules.length,
   },
-  rules: rules.map((pattern) => ({ pattern, reason: '합성' })),
-  suspects: rules.length
-    ? []
-    : [{ sourceId: 130, path: '다른현장/메모.txt', reason: '다른 프로젝트 폴더', statements: 1 }],
 });
 const rules = [];
 const posted = [];
+const searches = [];
+const searchPage = (items, excluded) => ({
+  items,
+  total: items.length,
+  offset: 0,
+  nextOffset: null,
+  excluded,
+  capped: false,
+  plan: { fts: true, words: [] },
+});
 
 let app, browser;
 try {
@@ -94,21 +153,23 @@ try {
     const url = new URL(route.request().url());
     const path = url.pathname.replace(/^.*\/facts/, '');
     const method = route.request().method();
-    if (method === 'GET' && path === '') return route.fulfill({ json: summary() });
+    if (method === 'GET' && path === '')
+      return route.fulfill({ json: factSummarySchema.parse(summary()) });
     if (method === 'GET' && path === '/search') {
       const q = url.searchParams.get('q') ?? '';
-      if (url.searchParams.get('excluded') === '1')
-        return route.fulfill({ json: { statements: [excludedStatement], excluded: 1 } });
-      const found = statements.filter(
-        (s) => s.content.includes(q) && !['rejected', 'contaminated'].includes(s.review?.verdict),
-      );
-      return route.fulfill({ json: { statements: found, excluded: q === '경간' ? 1 : 0 } });
+      searches.push(Object.fromEntries(url.searchParams));
+      const found = all().filter((s) => s.content.includes(q));
+      const hidden = found.filter((s) => s.excluded);
+      const items =
+        url.searchParams.get('status') === 'excluded' ? hidden : found.filter((s) => !s.excluded);
+      return route.fulfill({ json: factSearchSchema.parse(searchPage(items, hidden.length)) });
     }
     const issue = /^\/issues\/(\d+)$/.exec(path);
     if (method === 'GET' && issue)
       return route.fulfill({
-        json: {
+        json: factIssueSchema.parse({
           id: 1,
+          discipline: 'structure',
           title: '경간과 보 춤',
           label: '구조',
           status: 'open',
@@ -119,24 +180,21 @@ try {
             conditions: [],
             history: [],
           },
-          statements: statements.slice(0, 2),
-        },
+          statements: all().slice(0, 2),
+          excluded: 0,
+        }),
       });
     const one = /^\/statements\/(\d+)$/.exec(path);
     if (method === 'GET' && one) {
-      const found = statements.find((s) => s.id === Number(one[1]));
+      const found = all().find((s) => s.id === Number(one[1]));
       if (!found) return route.fulfill({ status: 404, json: { code: 'NOT_FOUND' } });
       return route.fulfill({
-        json: {
-          id: found.id,
+        json: factEvidenceSchema.parse({
+          ...found,
           text: `회의 발췌: ${found.content} 이상.`,
-          locator: found.locator,
-          path: found.path,
-          sourceId: found.sourceId,
+          issue: { id: 1, discipline: 'structure' },
           root: null,
-          statement: found,
-          review: found.review,
-        },
+        }),
       });
     }
     const review = /^\/statements\/(\d+)\/review$/.exec(path);
@@ -144,15 +202,28 @@ try {
       const body = route.request().postDataJSON();
       posted.push({ review: Number(review[1]), ...body });
       const target = statements.find((s) => s.id === Number(review[1]));
-      target.review = { ...body, by: 'user', at: '2026-09-30T00:00:00Z' };
-      return route.fulfill({ json: target.review });
+      target.review = {
+        verdict: body.verdict,
+        reason: body.reason ?? null,
+        correction: null,
+        supersededBy: null,
+        by: 'user',
+        at: '2026-09-30T00:00:00Z',
+      };
+      return route.fulfill({
+        json: recordedReviewSchema.parse({
+          projectId: 'p',
+          statementId: target.id,
+          ...target.review,
+        }),
+      });
     }
-    const rule = /^\/sources\/(\d+)\/rule$/.exec(path);
-    if (method === 'POST' && rule) {
+    if (method === 'POST' && path === '/rules') {
       const body = route.request().postDataJSON();
-      posted.push({ rule: Number(rule[1]), ...body });
-      rules.push(body.pattern ?? `source:${rule[1]}`);
-      return route.fulfill({ json: { pattern: rules.at(-1), reason: body.reason } });
+      posted.push({ rule: body.sourceId, ...body });
+      const source = statements.find((s) => s.sourceId === body.sourceId);
+      rules.push({ pattern: source.path, reason: body.reason ?? null });
+      return route.fulfill({ json: factRulesSchema.parse({ rules }) });
     }
     return route.fulfill({ status: 404, json: { code: 'NOT_FOUND' } });
   });
@@ -208,6 +279,9 @@ try {
   await results.getByRole('button', { name: '제외된 1건 보기' }).click();
   await results.locator('h3', { hasText: '제외된 진술' }).waitFor();
   assert.match(await results.textContent(), /이후 회의에서 철회/);
+  // Only the left-out ones: `status=excluded` (the engine's `excluded=1` would list them all).
+  assert.equal(searches.at(-1).status, 'excluded');
+  assert.equal(searches.at(-1).excluded, undefined);
   await search.fill('하중 조건');
   await search.press('Enter');
   await results.locator('h3', { hasText: '검색 결과 1개' }).waitFor();
@@ -228,8 +302,8 @@ try {
   );
   assert.equal(posted.at(-2).reason, '다른 프로젝트 폴더의 파일');
 
-  // The suspect card went with the rule; a status filter narrows the results.
-  await screen.locator('.facts-suspect').waitFor({ state: 'detached' });
+  // The summary now counts the rule; a status filter narrows the results.
+  await screen.getByText('제외 규칙 1개 적용 중').waitFor();
   await screen
     .getByRole('group', { name: '상태 필터' })
     .getByRole('button', { name: '확정', exact: true })

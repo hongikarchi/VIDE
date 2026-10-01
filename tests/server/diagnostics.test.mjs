@@ -75,7 +75,7 @@ test('an internal error is logged with the request number shown to the user; run
     // A damaged knowledge DB makes the reader throw an unexpected error.
     await mkdir(join(directory, 'knowledge'));
     await writeFile(join(directory, 'knowledge', project.id + '.sqlite'), 'not a database');
-    const failed = await api(`/projects/${project.id}/jigs/knowledge`);
+    const failed = await api(`/projects/${project.id}/facts`);
     assert.equal(failed.status, 500);
     const { code, requestId } = await failed.json();
     assert.equal(code, 'INTERNAL_ERROR');
@@ -101,7 +101,7 @@ test('an internal error is logged with the request number shown to the user; run
     const log = await lines(directory, day);
     const error = log.find((line) => line.event === 'server-error');
     assert.equal(error.requestId, requestId);
-    assert.equal(error.path, `/api/v1/projects/${project.id}/jigs/knowledge`);
+    assert.equal(error.path, `/api/v1/projects/${project.id}/facts`);
     assert.ok(error.stack);
     assert.ok(log.some((line) => line.event === 'engine-start'));
     const end = log.find((line) => line.event === 'request-end' && line.requestId === 'diag-run');

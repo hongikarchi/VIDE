@@ -6,13 +6,9 @@ import { DomainError } from './store.ts';
 // statements, source exclusion rules and project roots. The crawler DB stays read-only; these rows
 // are VIDE's own. Data access only: who may confirm (people only) is decided by PLAN-22 T-065.
 
-export const verdicts = [
-  'confirmed',
-  'rejected',
-  'contaminated',
-  'superseded',
-  'corrected',
-] as const;
+// The verdict list is shared with the app (src/contracts/facts.ts).
+export { verdicts } from '../contracts/facts.ts';
+import { verdicts } from '../contracts/facts.ts';
 const text = z.string().max(4000);
 const statementId = z.number().int().nonnegative();
 const newReview = z

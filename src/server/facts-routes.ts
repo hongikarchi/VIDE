@@ -4,6 +4,14 @@ import { DomainError } from '../core/store.ts';
 import { KnowledgeReviewStore, verdicts } from '../core/knowledge-review-store.ts';
 import type { Workspace } from '../core/workspace.ts';
 import {
+  factStatusSchema,
+  type FactEvidence,
+  type FactIssue,
+  type FactRules,
+  type FactSearch,
+  type FactSummary,
+} from '../contracts/facts.ts';
+import {
   excludeFactSource,
   factBrief,
   factIssue,
@@ -56,7 +64,7 @@ const refs = z
     factRefs: z.array(z.string().max(40)).max(100).optional(),
   })
   .strict();
-const statusFilter = z.enum(['confirmed', 'unconfirmed', 'excluded']).optional();
+const statusFilter = factStatusSchema.optional();
 const count = (value: string | null, fallback: number) => {
   const n = Number(value);
   return value !== null && Number.isFinite(n) ? n : fallback;
@@ -84,7 +92,7 @@ export async function factRoutes(
   const params = url.searchParams;
 
   if (!list && !kind && method === 'GET') {
-    send(200, factBrief(file, layer()));
+    send(200, factBrief(file, layer()) satisfies FactSummary);
     return true;
   }
   if (list === 'search' && method === 'GET') {
@@ -97,13 +105,13 @@ export async function factRoutes(
         excluded: params.get('excluded') === '1',
         offset: count(params.get('offset'), 0),
         limit: count(params.get('limit'), 50),
-      }),
+      }) satisfies FactSearch,
     );
     return true;
   }
   if (list === 'rules') {
     if (method === 'GET') {
-      send(200, { rules: store.sourceRules(projectId) });
+      send(200, { rules: store.sourceRules(projectId) } satisfies FactRules);
       return true;
     }
     if (method === 'POST') {
@@ -122,7 +130,7 @@ export async function factRoutes(
         input.reason ?? null,
         PERSON,
       );
-      send(200, { rules });
+      send(200, { rules } satisfies FactRules);
       return true;
     }
   }
@@ -132,11 +140,11 @@ export async function factRoutes(
     return true;
   }
   if (kind === 'issues' && !action && method === 'GET') {
-    send(200, factIssue(file, layer(), id));
+    send(200, factIssue(file, layer(), id) satisfies FactIssue);
     return true;
   }
   if (kind === 'statements' && !action && method === 'GET') {
-    send(200, factStatement(file, layer(), id));
+    send(200, factStatement(file, layer(), id) satisfies FactEvidence);
     return true;
   }
   if (kind === 'statements' && action === 'review' && (method === 'POST' || method === 'PUT')) {
@@ -146,7 +154,7 @@ export async function factRoutes(
       return true;
     }
     store.removeReview(projectId, id);
-    send(200, factStatement(file, layer(), id));
+    send(200, factStatement(file, layer(), id) satisfies FactEvidence);
     return true;
   }
   if (kind === 'sources' && action === 'open' && method === 'POST') {
