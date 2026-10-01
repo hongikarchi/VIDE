@@ -404,6 +404,13 @@ test('[확인함] closes an unresolved request and keeps its record (T-102)', ()
     assert.equal(back.result.code, undefined);
     assert.equal(back.result.settles, undefined);
     assert.equal(back.result.heldOnly, undefined);
+    // An application to the source is settled by its own reconcile, never by [확인함].
+    workspace.submit(project.id, { ...input, id: 'lost-apply', permission: 'candidate' });
+    workspace.update(project.id, 'lost-apply', 'unknown', {
+      code: 'HOST_RESULT_UNKNOWN',
+      applicationId: 'app-1',
+    });
+    assert.equal(execution.acknowledge(project.id, 'lost-apply').state, 'unknown');
   } finally {
     store.close();
   }

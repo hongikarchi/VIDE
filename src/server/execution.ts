@@ -1799,6 +1799,9 @@ export class Execution {
   acknowledge(projectId: string, id: string) {
     const request = this.workspace.get(projectId, id);
     if (request.state !== 'unknown') return request;
+    // An application to the source has its own command row and reconcile ('결과 다시 확인'):
+    // closing only the request would leave that row unknown and its document refused.
+    if (typeof request.result?.applicationId === 'string') return request;
     if (this.active.has(id)) throw new DomainError('REVISION_CONFLICT');
     const {
       heldOnly: _heldOnly,
