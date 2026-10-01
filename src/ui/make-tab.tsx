@@ -642,8 +642,9 @@ function MakeTab({ projectId }: { projectId: string }) {
         {m.summary ? <p className="make-summary">{m.summary}</p> : null}
         {/* 입력 → 단계 → 결과 (T-101): what the jig takes, how it works and what it makes. */}
         <Outline title="입력" count={m.inputs.length}>
+          {/* A note may list ten roles: it wraps under the name (make-io), never squeezes it. */}
           {inputsOf(m).map((input) => (
-            <li key={input.key}>
+            <li key={input.key} className="make-io">
               <span>{input.title}</span>
               <small>{input.note}</small>
             </li>
@@ -676,7 +677,7 @@ function MakeTab({ projectId }: { projectId: string }) {
         </Outline>
         <Outline title="결과" count={resultsOf(m).length}>
           {resultsOf(m).map((result) => (
-            <li key={result.key}>
+            <li key={result.key} className="make-io">
               <span>{result.title}</span>
               <small>{result.note}</small>
             </li>

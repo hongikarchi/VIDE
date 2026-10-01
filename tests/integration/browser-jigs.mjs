@@ -195,6 +195,24 @@ try {
             { role: 'column', title: '기존 기둥', required: false },
           ],
         },
+        // As long as S-06's: ten roles under a short name.
+        {
+          key: 'model',
+          title: '입력 조립',
+          kind: 'assembly',
+          roles: [
+            '슬래브 경계',
+            '보이드',
+            '설치 불가 영역',
+            '기존 기초',
+            '기존 기둥',
+            '그린 기둥',
+            '그린 거더',
+            '신설 이음',
+            '층 레벨',
+            '코어 벽',
+          ].map((title, i) => ({ role: `r${i}`, title, required: i < 2 })),
+        },
       ],
       params: [],
       steps: [{ id: 'check', title: '점검', kind: 'code' }],
@@ -302,6 +320,28 @@ try {
   );
   await outline.getByText('대지 경계').waitFor();
   assert.match(await outline.textContent(), /입력 조립 · 슬래브, 기존 기둥\(선택\)/);
+  // A long note wraps under the name: the name stays on one line and nothing runs past the outline.
+  const ioRows = await outline.locator('.make-group li').evaluateAll((items) =>
+    items
+      .filter((li) =>
+        /^(입력|결과)/.test(li.closest('.make-group').querySelector('summary').textContent),
+      )
+      .map((li) => {
+        const name = li.querySelector('span');
+        const note = li.querySelector('small');
+        const line = parseFloat(getComputedStyle(name).lineHeight) || 20;
+        const group = li.closest('.make-group').getBoundingClientRect();
+        return {
+          text: name.textContent,
+          oneLine: name.getBoundingClientRect().height < line * 1.5,
+          inside: li.getBoundingClientRect().right <= group.right + 1,
+          fits: note.scrollWidth <= note.clientWidth + 1,
+        };
+      }),
+  );
+  assert.ok(ioRows.some((row) => row.text === '입력 조립'));
+  for (const row of ioRows)
+    assert.deepEqual(row, { ...row, oneLine: true, inside: true, fits: true });
   assert.match(await outline.textContent(), /Rhino에 만들기 · 선/);
   assert.match(await outline.textContent(), /보고서 · 점검 보고서/);
   await make.getByRole('tab', { name: '흐름' }).click();
