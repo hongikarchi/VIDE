@@ -134,8 +134,13 @@ const panelView: {
 } = { file: panelParams.get('name') ?? '', state: 'checking', detail: '', selection: [] };
 // Rhino's shared pinned set for the attached document, mirrored from the Rhino plugin.
 let hostPinned: string[] = [],
-  hostSelectionVersion = -1,
   hostPinBasis: string | undefined;
+// Per linked Rhino document ("instance|documentId"): the pinned set last applied and the selection
+// counter last seen. Two linked files keep their own, so following another file neither replays
+// its selection over a click in VIDE nor treats its pins as changed.
+const hostDocumentKey = (target: HostTarget) => `${target.instance}|${target.documentId}`;
+const hostPinsApplied = new Map<string, string[]>(),
+  hostSelectionSeen = new Map<string, number>();
 let project: { id: string; name: string } | undefined,
   ready = false,
   busy = false,
@@ -3098,7 +3103,18 @@ async function attachPanelSelection() {
     const target = connectedTarget;
     if (!target) throw Error('파일이 연결되지 않았습니다.');
     if (panelHost === 'rhino') {
-      await setHostPins([...new Set([...hostPinned, ...panelView.selection])]);
+      // Rhino's selection now, not the last poll's (a click right after picking the next object).
+      const catalog = hostDocumentsSchema.parse(await api('/host/attached-documents'));
+      const item = catalog.documents.find(
+        (doc) =>
+          (doc.instance ?? catalog.instance) === target.instance && doc.id === target.documentId,
+      );
+      const selected = item ? (item.selectedIds ?? []) : panelView.selection;
+      await setHostPins([...new Set([...(item?.pinnedIds ?? hostPinned), ...selected])]);
+      // The pinned objects leave the "선택 N개 첨부" chip at once; the next poll confirms.
+      panelView.selection = selected.filter((id) => !hostPinned.includes(id));
+      render();
+      void pollHostLink();
       if (!rhinoBasis(target)) message('첨부했습니다. 요청에 포함하려면 먼저 Sync 하세요.');
       return;
     }
@@ -3114,23 +3130,34 @@ async function attachPanelSelection() {
     message(readableError(cause).message);
   }
 }
-/** Rhino's pinned set is the source of truth while a Rhino document is attached. */
+/**
+ * Rhino's pinned set is the source of truth for the pins it holds while a Rhino document is
+ * attached. Pins made in VIDE (inline "[고정N]" tokens, 요청에 고정) are the user's own and stay.
+ */
 function applyHostPins(ids: string[]) {
   hostPinned = ids;
-  const target = connectedTarget,
-    basis = target && rhinoBasis(target);
+  const target = connectedTarget;
+  if (!target) return;
+  const key = hostDocumentKey(target);
+  // What Rhino's set held before for this document, or holds now: only those pins change.
+  const managed = new Set([...(hostPinsApplied.get(key) ?? []), ...ids]);
+  hostPinsApplied.set(key, ids);
+  const basis = rhinoBasis(target);
   hostPinBasis = basis?.id;
   if (!basis) return;
-  const available = basis.request.result?.objects ?? [];
-  // Rhino's set replaces the pins of every Sync of this document, not only the newest one.
+  const available = new Map((basis.request.result?.objects ?? []).map((item) => [item.id, item]));
+  // Rhino's set replaces its pins on every Sync of this document, not only the newest one.
   const sameDocument = (id: string) => {
     const source = state.messages.find((entry) => entry.id === id)?.request.result?.sourceDocument;
     return source?.instance === target.instance && source.documentId === target.documentId;
   };
   state.pins = [
-    ...state.pins.filter((pin) => pin.basis !== basis.id && !sameDocument(pin.basis)),
+    ...state.pins.filter(
+      (pin) =>
+        pin.label || !managed.has(pin.id) || (pin.basis !== basis.id && !sameDocument(pin.basis)),
+    ),
     ...ids.flatMap((id) => {
-      const object = available.find((item) => item.id === id);
+      const object = available.get(id);
       return object ? [{ id, name: object.name, role: 'target' as const, basis: basis.id }] : [];
     }),
   ];
@@ -3146,16 +3173,54 @@ async function setHostPins(ids: string[]) {
 }
 let hostLinkPolling = false;
 async function pollHostLink() {
-  const target = connectedTarget;
   // One status call at a time: a slow host must not pile up overlapping polls.
-  if (!ready || !target || document.hidden || hostLinkPolling) return;
+  if (!ready || !connectedTarget || document.hidden || hostLinkPolling) return;
   hostLinkPolling = true;
   try {
     const catalog = hostDocumentsSchema.parse(await api('/host/attached-documents'));
-    const item = catalog.documents.find(
-      (doc) =>
-        (doc.instance ?? catalog.instance) === target.instance && doc.id === target.documentId,
-    );
+    const documentOf = (target: HostTarget) =>
+      catalog.documents.find(
+        (doc) =>
+          (doc.instance ?? catalog.instance) === target.instance && doc.id === target.documentId,
+      );
+    // Picking objects in another linked Rhino window makes that file the one the page follows
+    // (SPEC-01.11 4); every linked document's counter is kept so no old pick replays later.
+    if (!panelMode)
+      for (const link of links) {
+        const connection = link.connection;
+        if (link.host !== 'rhino' || !connection) continue;
+        const doc = documentOf(connection);
+        if (doc?.selectionVersion === undefined) continue;
+        const key = hostDocumentKey(connection);
+        const seen = hostSelectionSeen.get(key);
+        if (
+          seen !== undefined &&
+          seen !== doc.selectionVersion &&
+          doc.selectedIds?.length &&
+          key !== hostDocumentKey(connectedTarget) &&
+          currentLayers.some((layer) => layer.key === link.id)
+        ) {
+          activeLayer = link.id;
+          applyActiveLayer();
+          renderLinkPanel();
+          // Mirror this pick below, as for the file already followed.
+          hostSelectionSeen.set(key, seen);
+          break;
+        }
+      }
+    const target = connectedTarget;
+    if (!target) return;
+    const targetKey = hostDocumentKey(target);
+    hostPinned = hostPinsApplied.get(targetKey) ?? [];
+    const item = documentOf(target);
+    if (!panelMode)
+      for (const link of links) {
+        const connection = link.connection;
+        const doc = connection && documentOf(connection);
+        const key = connection && hostDocumentKey(connection);
+        if (doc?.selectionVersion !== undefined && key && key !== targetKey)
+          hostSelectionSeen.set(key, doc.selectionVersion);
+      }
     if (!item) {
       if (panelMode && panelView.state !== 'lost') {
         panelView.state = 'lost';
@@ -3193,18 +3258,25 @@ async function pollHostLink() {
     }
     const pinned = item.pinnedIds ?? [];
     // Re-resolve when Rhino's pins change or a new Sync basis arrives.
-    if (pinned.join() !== hostPinned.join() || (pinned.length && basis?.id !== hostPinBasis)) {
+    if (
+      !hostPinsApplied.has(targetKey) ||
+      pinned.join() !== hostPinned.join() ||
+      (pinned.length && basis?.id !== hostPinBasis)
+    ) {
       applyHostPins(pinned);
       render();
     }
-    if (item.selectionVersion !== undefined && item.selectionVersion !== hostSelectionVersion) {
-      hostSelectionVersion = item.selectionVersion;
+    const seen = hostSelectionSeen.get(targetKey);
+    if (item.selectionVersion !== undefined && item.selectionVersion !== seen) {
+      hostSelectionSeen.set(targetKey, item.selectionVersion);
+      // A file followed just now (a click in VIDE) starts from its current pick, not a replay.
+      if (seen === undefined && !panelMode) return;
       // Mirror Rhino's selection in the viewport when this document is the one on screen.
       const basis = displayedResult ?? rhinoBasis(target)?.id;
-      const mirrored = basis
-        ? (item.selectedIds ?? []).flatMap((id) => displayIdOf(objects, basis, id) ?? [])
-        : [];
-      if (mirrored.length || selectedIds.length) {
+      const picked = item.selectedIds ?? [];
+      const mirrored = basis ? picked.flatMap((id) => displayIdOf(objects, basis, id) ?? []) : [];
+      // Objects Rhino has but the last Sync does not yet keep VIDE's selection as it is.
+      if (mirrored.length || (!picked.length && selectedIds.length)) {
         selectedIds = mirrored;
         state.selected = mirrored.at(-1) ?? null;
         render();

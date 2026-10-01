@@ -174,6 +174,39 @@ try {
     () => !document.querySelector('#context').textContent.includes('고정'),
   );
   assert.deepEqual(pinPosts.at(-1).ids, []);
+  // A "[고정N]" token made in the composer is the user's own: Rhino's pinned set changing after it
+  // (another attach, another client) must not drop its pins while the token text stays.
+  selected = [wall];
+  selectionVersion++;
+  await page.locator('#body').focus();
+  await page.locator('.pin-ghost').filter({ hasText: '고정 · 1개' }).click();
+  await page.waitForFunction(() => document.querySelector('#body').value.includes('[고정1 · 1개]'));
+  const draftPins = () =>
+    page.evaluate((id) => JSON.parse(localStorage.getItem('vide:draft:' + id)).pins, projectId);
+  await page.waitForFunction(
+    (id) =>
+      JSON.parse(localStorage.getItem('vide:draft:' + id) ?? '{"pins":[]}').pins.some(
+        (pin) => pin.label === '고정1',
+      ),
+    projectId,
+  );
+  pinned = [slab];
+  selectionVersion++;
+  await page.waitForFunction(() =>
+    document.querySelector('#context').textContent.includes('고정 객체 1개'),
+  );
+  await new Promise((resolve) => setTimeout(resolve, 1500));
+  const kept = await draftPins();
+  assert.ok(
+    kept.some((pin) => pin.id === wall && pin.label === '고정1'),
+    'token pin kept: ' + JSON.stringify(kept),
+  );
+  assert.ok(kept.some((pin) => pin.id === slab && !pin.label));
+  await page.locator('#context .chip button').click();
+  await page.waitForFunction(
+    () => !document.querySelector('#context').textContent.includes('고정 객체'),
+  );
+  await page.locator('#body').fill('');
   // Shift+Tab cycles the work mode.
   await page.locator('#body').focus();
   const before = await page.locator('#mode-toggle').getAttribute('data-mode');
