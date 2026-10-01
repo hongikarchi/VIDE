@@ -266,6 +266,24 @@ function chooseConversation(id: string) {
   press();
 }
 
+/** The 새로 만들기 sentence of a draft just made, waiting for its make conversation to open. */
+const firstWords = new Map<string, string>();
+/**
+ * Put the 새로 만들기 sentence in the composer once the draft's make conversation is chosen
+ * (SPEC-07.16 step 0), unless something is already typed there. It is not sent: the person sends
+ * it, and that first turn shows the plan.
+ */
+function prefillComposer(draftId: string) {
+  const words = firstWords.get(draftId);
+  firstWords.delete(draftId);
+  const composer = document.getElementById('body');
+  if (!words || !(composer instanceof HTMLTextAreaElement) || composer.value.trim()) return;
+  composer.value = words;
+  // The app keeps the composer's text through its input handler.
+  composer.dispatchEvent(new Event('input', { bubbles: true }));
+  composer.focus();
+}
+
 // --- The tab ---
 
 function MakeTab({ projectId }: { projectId: string }) {
@@ -344,8 +362,12 @@ function MakeTab({ projectId }: { projectId: string }) {
     if (!detail || conversationFor.current === detail.draft.id) return;
     conversationFor.current = detail.draft.id;
     const known = detail.conversationId;
+    const draftId = detail.draft.id;
     (known ? Promise.resolve(known) : makeConversation(projectId, detail.draft))
-      .then(chooseConversation)
+      .then((id) => {
+        chooseConversation(id);
+        prefillComposer(draftId);
+      })
       .catch((error) => setNotice(`제작 대화를 열지 못했습니다: ${messageOf(error)}`));
   }, [detail, projectId]);
   // The plan card and the decisions sit in the right column, under the conversation chips.
@@ -1398,7 +1420,9 @@ function PanelIssues({ issues }: { issues: readonly PanelIssue[] }) {
 /**
  * '새로 만들기', the JIG list's last card (SCR-18, PLAN-26 T-099): one sentence of what the tool
  * does and [만들기 시작]. The draft starts from the general grid example; [빈 초안에서] starts from a
- * blank one. The sentence is the draft's first name; the make conversation names the tool.
+ * blank one. The sentence is the draft's first name, and it waits in the composer of the draft's
+ * make conversation (SPEC-07.16 step 0): sending it is the first turn, where the AI shows the plan.
+ * Nothing is sent by itself — the person picks the model and presses send.
  */
 export function MakeCard({
   projectId,
@@ -1416,6 +1440,7 @@ export function MakeCard({
     setError('');
     createDraft(projectId, { name: name.trim(), from })
       .then((draft) => {
+        firstWords.set(draft.id, name.trim());
         setName('');
         if (onCreated) onCreated(draft);
         else openDraft(projectId, draft.id);
@@ -1436,7 +1461,10 @@ export function MakeCard({
       <div className="jig-card-head">
         <strong>새로 만들기</strong>
       </div>
-      <p>무엇을 하는 도구인지 한 문장으로 적으면 AI가 계획을 보이고 초안을 만듭니다.</p>
+      <p>
+        무엇을 하는 도구인지 한 문장으로 적으세요. 초안을 만들고 그 문장을 오른쪽 만들기 대화에 넣어
+        둡니다. 보내면 AI가 계획부터 보입니다.
+      </p>
       <input
         value={name}
         maxLength={100}

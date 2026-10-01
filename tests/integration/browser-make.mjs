@@ -185,12 +185,22 @@ try {
   assert.equal(imported, 'VJIG-TEST');
   assert.deepEqual(importPinned, { version: '1.0.0', confirm: true });
 
+  // The card says what happens to the sentence (SPEC-07.16 step 0).
+  await card.getByText('그 문장을 오른쪽 만들기 대화에 넣어 둡니다').waitFor();
+  const sent = [];
+  page.on('request', (request) => {
+    if (request.method() === 'POST' && /\/requests$/.test(new URL(request.url()).pathname))
+      sent.push(request.url());
+  });
   await card.getByLabel('무엇을 하는 도구인가요?').fill('격자 기둥 배치');
   await card.getByRole('button', { name: '만들기 시작' }).click();
   const make = page.locator('.make-workspace');
   await make.getByRole('heading', { name: '격자 기둥 배치' }).waitFor();
   assert.equal(await jigRail.getAttribute('aria-pressed'), 'true');
   assert.equal(await page.evaluate(() => document.body.dataset.workspace), 'make');
+  // The sentence waits in the make conversation's composer; nothing is sent by itself.
+  await page.waitForFunction(() => document.querySelector('#body')?.value === '격자 기둥 배치');
+  assert.deepEqual(sent, []);
 
   // Back to the list: the draft is a '작성 중' card under 전체 and 내 초안 (with its count), and
   // [이어서 만들기] opens it again.
