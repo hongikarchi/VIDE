@@ -29,6 +29,7 @@ import type { ParamDecl, StepDecl } from './manifest.ts';
 import { devReadPaths } from './pack.ts';
 import {
   applyChanges,
+  checkValue,
   displayUnit,
   initialParams,
   storageUnit,
@@ -301,6 +302,45 @@ export class JigRuntime {
     if (body.layerRoot) throw new DomainError('INVALID_INPUT');
     if (options.layerExists?.(layerRoot) === false) throw new DomainError('LAYER_ROOT_MISSING');
     this.save(instance, { ...body, layerRoot });
+    return this.view(projectId, instanceId);
+  }
+
+  /**
+   * [올리기] (SPEC-07.4, PLAN-26 T-101): the person moves an instance to the version pinned to its
+   * project — never automatically. A setting the new version still declares keeps its value when
+   * the new declaration accepts it (else its default); every computed step becomes '다시 계산
+   * 필요'. A human step keeps its confirmation, which the next run compares by input fingerprint
+   * (as after a setting change). Already at the pinned version, nothing changes.
+   */
+  async upgrade(projectId: string, instanceId: string): Promise<InstanceView> {
+    const instance = this.store.instance(projectId, instanceId);
+    const pinned = this.store.pinned(projectId).find((row) => row.jigId === instance.jigId);
+    if (!pinned) throw new DomainError('NOT_FOUND');
+    if (pinned.version === instance.version) return this.view(projectId, instanceId);
+    const jig = await this.registry.resolve(instance.jigId, pinned.version);
+    if (jig.manifest.kind !== 'tool') throw new DomainError('INVALID_INPUT');
+    const body = bodyOf(instance.body);
+    const params = initialParams(jig.manifest);
+    for (const decl of jig.manifest.params) {
+      const kept = body.params[decl.key];
+      if (!kept || kept.by === 'default') continue;
+      try {
+        params[decl.key] = { ...kept, value: checkValue(decl, kept.value) };
+      } catch {
+        /* the new version no longer accepts the value: its default */
+      }
+    }
+    this.markStale(
+      jig,
+      instanceId,
+      this.store.runs(instanceId).map((run) => run.stepId),
+    );
+    this.bump(instanceId);
+    this.store.updateInstance(projectId, instanceId, {
+      version: jig.version,
+      body: { ...body, params } as unknown as Record<string, unknown>,
+      status: instance.status === 'new' ? 'new' : 'stale',
+    });
     return this.view(projectId, instanceId);
   }
 

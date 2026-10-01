@@ -398,6 +398,11 @@ export async function jigRoutes(
       send(200, await rt.view(projectId, instanceId));
       return true;
     }
+    // [올리기] (SPEC-07.4, PLAN-26 T-101): the instance moves to its project's pinned version.
+    if (rest === 'upgrade' && method === 'POST') {
+      send(200, await rt.upgrade(projectId, instanceId));
+      return true;
+    }
     if (rest === 'params' && method === 'PUT') {
       const input = setParams.parse(await body(request));
       send(

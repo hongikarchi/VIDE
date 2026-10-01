@@ -6,8 +6,8 @@ import { DeclaredJig } from './jig-panel/declared-jig.tsx';
 import { KnowledgeJig } from './knowledge-jig.tsx';
 import { JigIconMark, legacyJigIcon, noteJigIcon } from './jig-icons.ts';
 import { listedTools, openDrafts, type PinnedRow } from './jig-list.ts';
-import { listDrafts, type DraftSummary } from './make-api.ts';
-import { DraftCard, ImportJig, MakeCard } from './make-tab.tsx';
+import { createDraft, listDrafts, type DraftSummary } from './make-api.ts';
+import { DraftCard, ImportJig, MakeCard, openDraft } from './make-tab.tsx';
 import type { Point3 } from './model.ts';
 import { openSkill } from './skill-start.ts';
 import { StructureJig } from './structure-jig.tsx';
@@ -725,6 +725,10 @@ function Gallery({ context }: { context: JigContext }) {
   const [creating, setCreating] = useState<string>();
   /** The project jig whose [삭제] waits for confirmation. */
   const [removing, setRemoving] = useState<string>();
+  /** The instance whose [올리기] waits for confirmation (T-101). */
+  const [upgrading, setUpgrading] = useState<string>();
+  /** The jig whose [수정하기] copy is being made. */
+  const [forking, setForking] = useState<string>();
   const [notice, setNotice] = useState('');
   const [loaded, setLoaded] = useState(0);
   const projectId = context.projectId;
@@ -797,9 +801,49 @@ function Gallery({ context }: { context: JigContext }) {
       setNotice(`‘${entry.name}’을 삭제하지 못했습니다. ${jigError(error)}`);
     }
   };
+  // [수정하기] (SPEC-07.3, T-101): an installed version never changes; a copy of it becomes a draft
+  // with the same id and the next patch version, opened in the 만들기 screen. An open copy of the
+  // jig is opened again instead of making another.
+  const edit = async (entry: Package) => {
+    const open = drafts.find((draft) => draft.manifest?.id === entry.id);
+    if (open) return openDraft(projectId, open.id);
+    setForking(entry.id);
+    try {
+      const draft = await createDraft(projectId, {
+        from: { jig: entry.id, version: entry.version },
+      });
+      openDraft(projectId, draft.id);
+    } catch (error) {
+      setNotice(`‘${entry.name}’의 사본을 만들지 못했습니다. ${jigError(error)}`);
+    } finally {
+      setForking(undefined);
+    }
+  };
+  // [올리기] (SPEC-07.4, T-101): the person moves an instance to the version pinned here.
+  const upgrade = async (entry: Package, row: InstanceRow) => {
+    setUpgrading(undefined);
+    try {
+      await api(
+        `/projects/${encodeURIComponent(projectId)}/jig-instances/${encodeURIComponent(row.id)}/upgrade`,
+        'POST',
+        {},
+      );
+      setNotice(
+        `‘${row.title}’을 v${entry.version}로 올렸습니다. 모든 단계를 다시 계산해야 합니다.`,
+      );
+      void mounted.get(row.id)?.host?.refresh();
+      setLoaded((n) => n + 1);
+    } catch (error) {
+      setNotice(`‘${row.title}’을 올리지 못했습니다. ${jigError(error)}`);
+    }
+  };
   const toolCard = (entry: Package) => {
     const key = `${entry.id}@${entry.version}`;
     const rows = instances.filter((row) => row.jigId === entry.id);
+    const pinnedHere = pinned.some(
+      (row) => row.jigId === entry.id && row.version === entry.version,
+    );
+    const editable = !entry.corrupt && entry.id.startsWith('project/');
     return (
       <article
         key={key}
@@ -833,6 +877,15 @@ function Gallery({ context }: { context: JigContext }) {
                   {when(row.updatedAt)} · v{row.version}
                   {row.version !== entry.version ? ' · 이전 버전' : ''}
                 </small>
+                {row.version !== entry.version && pinnedHere ? (
+                  <button
+                    type="button"
+                    title={`v${entry.version}로 올립니다 · 모든 단계를 다시 계산해야 합니다`}
+                    onClick={() => setUpgrading(row.id)}
+                  >
+                    올리기
+                  </button>
+                ) : null}
                 <button
                   type="button"
                   onClick={() =>
@@ -859,6 +912,23 @@ function Gallery({ context }: { context: JigContext }) {
             ))}
           </ul>
         ) : null}
+        {rows.some((row) => row.id === upgrading) ? (
+          <div className="jig-remove" role="group" aria-label="올리기 확인">
+            <small>
+              ‘{rows.find((row) => row.id === upgrading)?.title}’을 v{entry.version}로 올립니다. 새
+              버전이 받는 설정값만 남고 모든 단계를 다시 계산해야 합니다.
+            </small>{' '}
+            <button
+              type="button"
+              onClick={() => void upgrade(entry, rows.find((row) => row.id === upgrading)!)}
+            >
+              올리기
+            </button>{' '}
+            <button type="button" onClick={() => setUpgrading(undefined)}>
+              취소
+            </button>
+          </div>
+        ) : null}
         {entry.corrupt ? null : creating === key ? (
           <NewInstance
             entry={entry}
@@ -871,6 +941,16 @@ function Gallery({ context }: { context: JigContext }) {
             새로 열기
           </button>
         )}
+        {editable ? (
+          <button
+            type="button"
+            disabled={forking === entry.id}
+            title="이 jig의 사본을 초안으로 만들어 고칩니다 · 고정한 버전은 바뀌지 않습니다"
+            onClick={() => void edit(entry)}
+          >
+            {forking === entry.id ? '사본 만드는 중…' : '수정하기'}
+          </button>
+        ) : null}
         {entry.stage !== 'project' ? null : removing === key ? (
           <div className="jig-remove" role="group" aria-label={`${entry.name} 삭제 확인`}>
             <small>
@@ -942,17 +1022,26 @@ function Gallery({ context }: { context: JigContext }) {
                       {jig.basis ? ` · 근거 ${jig.basis}` : ''}
                     </small>
                     {jig.status === 'available' && kind ? (
-                      <button
-                        type="button"
-                        onClick={() =>
-                          void (
-                            openSkill(jig.id, { mode: 'auto', by: 'user', openOnly: true }) ??
-                            Promise.reject(new Error('NOT_READY'))
-                          ).catch(() => openContextTab(legacyTab(kind)))
-                        }
-                      >
-                        열기
-                      </button>
+                      <>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            void (
+                              openSkill(jig.id, { mode: 'auto', by: 'user', openOnly: true }) ??
+                              Promise.reject(new Error('NOT_READY'))
+                            ).catch(() => openContextTab(legacyTab(kind)))
+                          }
+                        >
+                          열기
+                        </button>
+                        {/* A built-in screen has no jig.json to copy (T-101). */}
+                        <button type="button" disabled aria-describedby={`jig-fixed-${jig.id}`}>
+                          수정하기
+                        </button>
+                        <small id={`jig-fixed-${jig.id}`}>
+                          기본 화면 jig는 아직 수정할 수 없습니다
+                        </small>
+                      </>
                     ) : null}
                   </article>
                 );

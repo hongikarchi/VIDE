@@ -12,9 +12,16 @@ import {
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Store } from '../../src/core/store.ts';
-import { JigDrafts, draftsRoot, failureReason, scanDraft } from '../../src/jigs/runtime/drafts.ts';
+import {
+  JigDrafts,
+  draftsRoot,
+  failureReason,
+  nextPatch,
+  scanDraft,
+} from '../../src/jigs/runtime/drafts.ts';
 import { draftPathRefusal } from '../../src/ai/agent-connection.ts';
 import { JigStore } from '../../src/core/jig-store.ts';
+import { listPackageFiles } from '../../src/jigs/runtime/loader.ts';
 
 function setup() {
   const dir = mkdtempSync(join(tmpdir(), 'vide-drafts-'));
@@ -180,6 +187,62 @@ test('pinning installs a read-only ai-draft package and pins it; discarding remo
     assert.equal(discarded.state, 'discarded');
     assert.ok(!existsSync(other.path));
     assert.equal(t.drafts.list(t.projectId).length, 1);
+  } finally {
+    t.close();
+  }
+});
+
+test('[수정하기] copies a pinned jig into a writable draft with the same id and the next patch version (T-101)', async () => {
+  const t = setup();
+  try {
+    const first = t.drafts.create(t.projectId, { name: 'fork me', from: 'blank' });
+    const pinned = await t.drafts.pin(t.projectId, first.id);
+    assert.equal(pinned.version, '0.1.0');
+    const jigs = new JigStore(t.store.db);
+    const installed = jigs.package('project/fork-me', '0.1.0');
+    const source = {
+      dir: installed.path,
+      id: 'project/fork-me',
+      version: '0.1.0',
+      name: 'fork me',
+    };
+    const fork = t.drafts.fork(t.projectId, source);
+    assert.equal(fork.state, 'open');
+    assert.equal(fork.manifest.id, 'project/fork-me');
+    assert.equal(fork.version, '0.1.1');
+    assert.deepEqual(fork.origin && [fork.origin.jigId, fork.origin.version, fork.origin.name], [
+      'project/fork-me',
+      '0.1.0',
+      'fork me',
+    ]);
+    assert.ok(!existsSync(join(fork.path, '.results')), 'the origin is kept outside the folder');
+    assert.deepEqual(fork.files.map((file) => file.path).sort(), listPackageFiles(installed.path));
+    // The copy is writable (the install is read-only) and the install did not change.
+    t.drafts.writeFile(
+      t.projectId,
+      fork.id,
+      'steps/main.ts',
+      'export const main = () => ({ items: [], total: 6 });\n',
+    );
+    assert.equal(
+      JSON.parse(readFileSync(join(installed.path, 'jig.json'), 'utf8')).version,
+      '0.1.0',
+    );
+    // A second open copy goes one patch further; a library or official id is refused.
+    assert.equal(t.drafts.fork(t.projectId, source).version, '0.1.2');
+    assert.throws(
+      () => t.drafts.fork(t.projectId, { ...source, id: 'vide/fork-me' }),
+      /INVALID_INPUT/,
+    );
+    // Pinning the copy re-pins the same jig at the new version: one row per jig in the project.
+    const repinned = await t.drafts.pin(t.projectId, fork.id);
+    assert.deepEqual([repinned.id, repinned.version], ['project/fork-me', '0.1.1']);
+    assert.deepEqual(
+      jigs.pinned(t.projectId).map((row) => [row.jigId, row.version]),
+      [['project/fork-me', '0.1.1']],
+    );
+    assert.equal(jigs.packages('project/fork-me').length, 2, 'the older version stays installed');
+    assert.equal(nextPatch(['0.3.1', '0.10.0', '0.9.9', 'x']), '0.10.1');
   } finally {
     t.close();
   }

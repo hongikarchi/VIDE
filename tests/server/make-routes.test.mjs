@@ -116,6 +116,70 @@ test("a draft's icon is set from the fixed list and goes into the pinned jig (PL
   await assert.rejects(call('PUT', `${base}/${draft.id}/icon`, { icon: 'grid' }), /DRAFT_NOT_OPEN/);
 });
 
+test('[수정하기] forks the pinned jig by route; re-pin moves the list; [올리기] moves an instance (T-101)', async (t) => {
+  const { call, base, workspace, root, project } = setup(t);
+  const first = (await call('POST', base, { name: 'upgrade me', from: 'blank' })).data;
+  assert.equal((await call('POST', `${base}/${first.id}/pin`, { confirm: true })).status, 200);
+  const runtime = jigRuntimeFor(workspace, root);
+  const instance = await runtime.createInstance(
+    project.id,
+    { jig: 'project/upgrade-me', title: '작업본 1', layerRoot: '' },
+    { layerRootLater: true },
+  );
+  await runtime.setParams(project.id, instance.id, {
+    values: [{ key: 'count', value: 5 }],
+    by: 'user',
+  });
+  await runtime.run(project.id, instance.id, { mode: 'geometry' });
+  assert.equal(
+    (await runtime.view(project.id, instance.id)).steps.find((s) => s.id === 'main').status,
+    'done',
+  );
+  // Nothing newer is pinned yet: [올리기] changes nothing.
+  assert.equal((await runtime.upgrade(project.id, instance.id)).jig.version, '0.1.0');
+
+  // The fork: the pinned version by default, the jig's name, the next patch version.
+  const forked = await call('POST', base, { from: { jig: 'project/upgrade-me' } });
+  assert.equal(forked.status, 201);
+  assert.deepEqual(
+    [forked.data.manifest.id, forked.data.version, forked.data.name, forked.data.origin.version],
+    ['project/upgrade-me', '0.1.1', 'upgrade me', '0.1.0'],
+  );
+  await assert.rejects(call('POST', base, { from: { jig: 'project/missing' } }), /NOT_FOUND/);
+  await assert.rejects(call('POST', base, { from: { jig: 'vide/geometry-kit' } }));
+  await assert.rejects(call('POST', base, { from: 'example-grid' }));
+  // The copy's count setting now allows at most 4: a kept value it refuses falls to the default.
+  const manifest = JSON.parse(readFileSync(join(forked.data.path, 'jig.json'), 'utf8'));
+  manifest.params[0].range.max = 4;
+  manifest.params[0].default = 2;
+  writeFileSync(join(forked.data.path, 'jig.json'), JSON.stringify(manifest, null, 2) + '\n');
+  writeFileSync(
+    join(forked.data.path, 'fixtures', 'basic', 'params.json'),
+    JSON.stringify({ count: 2 }),
+  );
+  writeFileSync(
+    join(forked.data.path, 'fixtures', 'basic', 'expect.json'),
+    JSON.stringify({ steps: { main: { total: 3 } } }),
+  );
+  const repinned = await call('POST', `${base}/${forked.data.id}/pin`, { confirm: true });
+  assert.equal(repinned.status, 200, JSON.stringify(repinned.data));
+  assert.deepEqual(
+    new JigStore(workspace.store.db).pinned(project.id).map((row) => [row.jigId, row.version]),
+    [['project/upgrade-me', '0.1.1']],
+  );
+  // The instance keeps its version until [올리기].
+  assert.equal((await runtime.view(project.id, instance.id)).jig.version, '0.1.0');
+  const upgraded = await runtime.upgrade(project.id, instance.id);
+  assert.equal(upgraded.jig.version, '0.1.1');
+  assert.equal(upgraded.status, 'stale');
+  assert.equal(upgraded.steps.find((s) => s.id === 'main').status, 'stale');
+  const count = upgraded.params.find((p) => p.key === 'count');
+  assert.deepEqual([count.value, count.by], [2, 'default']);
+  // An instance of a jig no longer on the project's list cannot move.
+  new JigStore(workspace.store.db).unpin(project.id, 'project/upgrade-me');
+  await assert.rejects(runtime.upgrade(project.id, instance.id), /NOT_FOUND/);
+});
+
 test('drafts are created, checked in the compute box, previewed and pinned by confirmation', async (t) => {
   const { call, base, store, project, root } = setup(t);
   assert.equal((await call('GET', '/api/v1/projects/x/other')).status, 0);

@@ -206,9 +206,17 @@ export function main(_inputs: unknown, params: MainParams) {
 }
 
 export interface DraftResults {
+  /** The installed jig a [수정하기] draft copies (PLAN-26 T-101); kept outside the draft folder. */
+  origin?: DraftOrigin;
   validate?: ValidationReport & { at: string };
   test?: SelftestReport & { at: string };
   preview?: DraftPreview & { at: string };
+}
+export interface DraftOrigin {
+  jigId: string;
+  version: string;
+  name: string;
+  at: string;
 }
 export interface DraftPreview {
   ok: boolean;
@@ -245,6 +253,26 @@ export interface DraftOptions {
   box?: ComputeBoxOptions;
   /** Called after a pinned package is installed (the registry forgets its cache). */
   onInstalled?: (id: string, version: string) => void;
+}
+
+/** `a.b.c` as numbers (a pre-release tag is ignored); for ordering versions of one jig. */
+const parts = (version: string) =>
+  version
+    .split('-')[0]
+    .split('.')
+    .map((part) => Number(part) || 0);
+function newer(a: string, b: string) {
+  const [x, y] = [parts(a), parts(b)];
+  for (let i = 0; i < 3; i++) if ((x[i] ?? 0) !== (y[i] ?? 0)) return (x[i] ?? 0) > (y[i] ?? 0);
+  return false;
+}
+/** The patch after the highest of the versions given (`0.3.1`, `0.3.2` → `0.3.3`). */
+export function nextPatch(versions: readonly string[]): string {
+  const top = versions
+    .filter((v) => SEMVER.test(v))
+    .reduce((a, b) => (newer(b, a) ? b : a), '0.0.0');
+  const [major, minor, patch] = parts(top);
+  return `${major}.${minor}.${patch + 1}`;
 }
 
 const slug = (name: string) =>
@@ -372,6 +400,64 @@ export class JigDrafts {
       this.db
         .prepare("INSERT INTO jig_drafts VALUES(?,?,?,?,'open',?,?)")
         .run(draftId, projectId, null, dir, at, at);
+    } catch (error) {
+      rmSync(dir, { recursive: true, force: true });
+      throw error;
+    }
+    return this.get(projectId, draftId);
+  }
+
+  /**
+   * [수정하기] (SPEC-07.3, PLAN-26 T-101): a new draft that copies an installed or checkout jig. An
+   * installed version never changes; the copy keeps the jig's id and gets the next free patch
+   * version — after every installed version of that id, every open draft of it and the source —
+   * so pinning it later re-pins the same jig at a new version. The files are copied one by one
+   * under the draft path rule (writable, unlike the read-only install); the `dist/` bundle is left
+   * out because the steps are edited as sources. Where the copy came from is kept beside the
+   * drafts, never in the folder the AI writes.
+   */
+  fork(
+    projectId: string,
+    source: { dir: string; id: string; version: string; name: string },
+  ): DraftView {
+    if (!JIG_ID.test(source.id) || !source.id.startsWith('project/'))
+      throw new DomainError('INVALID_INPUT');
+    const others = this.store
+      .drafts(projectId, 'open')
+      .map((draft) => this.view(draft).manifest)
+      .filter((manifest) => manifest?.id === source.id)
+      .map((manifest) => String(manifest?.version ?? ''));
+    const version = nextPatch([
+      source.version,
+      ...this.store.packages(source.id).map((row) => row.version),
+      ...others,
+    ]);
+    const draftId = randomUUID();
+    const dir = join(this.root, draftId);
+    mkdirSync(this.root, { recursive: true });
+    try {
+      mkdirSync(dir, { recursive: true });
+      for (const path of listPackageFiles(source.dir)) {
+        if (path.startsWith('dist/')) continue;
+        this.writeIn(dir, path, readFileSync(join(source.dir, ...path.split('/'))));
+      }
+      // Derived values depend on where a jig runs; the copy runs as an AI draft and the core
+      // recomputes them, so a declaration made for the source is dropped.
+      const { derived: _derived, ...raw } = readManifestFile(dir) as Record<string, unknown>;
+      writeFileSync(
+        join(dir, 'jig.json'),
+        JSON.stringify({ ...raw, id: source.id, version }, null, 2) + '\n',
+      );
+      const at = new Date().toISOString();
+      this.db
+        .prepare("INSERT INTO jig_drafts VALUES(?,?,?,?,'open',?,?)")
+        .run(draftId, projectId, null, dir, at, at);
+      this.keep(draftId, 'origin', {
+        jigId: source.id,
+        version: source.version,
+        name: source.name,
+        at,
+      });
     } catch (error) {
       rmSync(dir, { recursive: true, force: true });
       throw error;

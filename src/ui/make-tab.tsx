@@ -546,6 +546,12 @@ function MakeTab({ projectId }: { projectId: string }) {
                 </strong>
                 <span>어디에: 이 프로젝트의 JIG 목록 · AI가 쓴 초안(계산 상자에서 실행)</span>
                 <span>영향: 점검을 다시 확인한 뒤 고정합니다. 고정한 버전은 바뀌지 않습니다.</span>
+                {detail.origin ? (
+                  <span>
+                    이 프로젝트의 목록에서 v{detail.origin.version} 대신 이 버전이 보입니다. 열어 둔
+                    작업본은 JIG 목록의 [올리기]로 옮깁니다.
+                  </span>
+                ) : null}
                 <div className="kit-actions">
                   <button type="button" className="primary" disabled={!!busy} onClick={pin}>
                     고정
@@ -586,7 +592,9 @@ function MakeTab({ projectId }: { projectId: string }) {
         </button>
         <div className="make-head">
           <small className="make-tag">
-            새 도구 · 초안{m.version ? ` v${m.version}` : ''} · 내 것
+            {detail.origin
+              ? `수정 · ${detail.origin.name || detail.origin.jigId} v${detail.origin.version}의 사본${m.version ? ` → v${m.version}` : ''}`
+              : `새 도구 · 초안${m.version ? ` v${m.version}` : ''} · 내 것`}
           </small>
           <select
             aria-label="초안"
@@ -632,9 +640,15 @@ function MakeTab({ projectId }: { projectId: string }) {
           </div>
         ) : null}
         {m.summary ? <p className="make-summary">{m.summary}</p> : null}
-        {m.inputs.length ? (
-          <p className="kit-muted">입력: {m.inputs.map((i) => i.title || i.key).join(', ')}</p>
-        ) : null}
+        {/* 입력 → 단계 → 결과 (T-101): what the jig takes, how it works and what it makes. */}
+        <Outline title="입력" count={m.inputs.length}>
+          {inputsOf(m).map((input) => (
+            <li key={input.key}>
+              <span>{input.title}</span>
+              <small>{input.note}</small>
+            </li>
+          ))}
+        </Outline>
         <Outline title="단계" count={m.steps.length}>
           {railOf(m, lastSteps).map((step, i) => (
             <li key={step.id} data-state={step.state}>
@@ -657,6 +671,14 @@ function MakeTab({ projectId }: { projectId: string }) {
                   : String(s.displayValue)}{' '}
                 {s.displayUnit} <FactBadge setting={s} />
               </small>
+            </li>
+          ))}
+        </Outline>
+        <Outline title="결과" count={resultsOf(m).length}>
+          {resultsOf(m).map((result) => (
+            <li key={result.key}>
+              <span>{result.title}</span>
+              <small>{result.note}</small>
             </li>
           ))}
         </Outline>
@@ -775,11 +797,40 @@ function MakeTab({ projectId }: { projectId: string }) {
               </p>
             )
           ) : center === 'flow' ? (
-            m.steps.length ? (
-              <StepRail steps={railOf(m, lastSteps)} />
-            ) : (
-              <p className="kit-muted">아직 단계가 없습니다.</p>
-            )
+            <div className="make-flow">
+              <section aria-label="입력">
+                <h4>입력</h4>
+                <ul>
+                  {inputsOf(m).map((input) => (
+                    <li key={input.key}>
+                      {input.title} <small>{input.note}</small>
+                    </li>
+                  ))}
+                </ul>
+                {m.inputs.length ? null : <p className="kit-muted">입력이 없습니다.</p>}
+              </section>
+              <section aria-label="단계">
+                <h4>단계</h4>
+                {m.steps.length ? (
+                  <StepRail steps={railOf(m, lastSteps)} />
+                ) : (
+                  <p className="kit-muted">아직 단계가 없습니다.</p>
+                )}
+              </section>
+              <section aria-label="결과">
+                <h4>결과</h4>
+                <ul>
+                  {resultsOf(m).map((result) => (
+                    <li key={result.key}>
+                      {result.title} <small>{result.note}</small>
+                    </li>
+                  ))}
+                </ul>
+                {resultsOf(m).length ? null : (
+                  <p className="kit-muted">화면에 보이는 결과만 있습니다.</p>
+                )}
+              </section>
+            </div>
           ) : detail.skill ? (
             <pre className="make-skill" aria-label="설명서">
               {detail.skill}
@@ -831,6 +882,55 @@ function Outline({
       <ul>{children}</ul>
     </details>
   );
+}
+
+const INPUT_KINDS: Record<string, string> = {
+  assembly: '입력 조립',
+  'sync-layers': '연결 파일 레이어',
+  zone: '그린 구역',
+  facts: '프로젝트 자료',
+  'table-file': '표 파일',
+  'jig-output': '다른 jig의 결과',
+};
+/** The outline's 입력: each declared input, an assembly's roles named under it (T-101). */
+export function inputsOf(m: DraftManifest): { key: string; title: string; note: string }[] {
+  return m.inputs.map((input) => {
+    const roles = (input.roles ?? []).map(
+      (role) => `${role.title || role.role}${role.required === false ? '(선택)' : ''}`,
+    );
+    const kind = INPUT_KINDS[input.kind] ?? input.kind;
+    return {
+      key: input.key,
+      title: input.title || input.key,
+      note: roles.length ? `${kind} · ${roles.join(', ')}` : kind,
+    };
+  });
+}
+const BAKE_TEMPLATES: Record<string, string> = {
+  'vide.bake.curves@1': '선',
+  'vide.bake.sweep-h@1': 'H형 부재',
+  'vide.bake.extrude-column@1': '기둥',
+  'vide.bake.textdot@1': '부호 문자',
+};
+/** The outline's 결과: what Rhino에 만들기 makes, the reports and the outputs other jigs read. */
+export function resultsOf(m: DraftManifest): { key: string; title: string; note: string }[] {
+  return [
+    ...m.bake.map((bake) => ({
+      key: `bake:${bake.id}`,
+      title: `Rhino에 만들기 · ${BAKE_TEMPLATES[bake.template] ?? bake.template}`,
+      note: bake.layer ? `레이어 ${bake.layer}` : '',
+    })),
+    ...m.reports.map((report) => ({
+      key: `report:${report.id}`,
+      title: `보고서 · ${report.title || report.id}`,
+      note: '',
+    })),
+    ...m.outputs.map((output) => ({
+      key: `output:${output.key}`,
+      title: `다른 jig로 · ${output.key}`,
+      note: output.from,
+    })),
+  ];
 }
 
 /** Every part name used in a panel (for the outline's 화면 chips). */

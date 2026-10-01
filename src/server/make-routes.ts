@@ -8,6 +8,7 @@ import type { IncomingMessage } from 'node:http';
 import { z } from 'zod';
 import { DomainError } from '../core/store.ts';
 import type { Workspace } from '../core/workspace.ts';
+import { JigStore } from '../core/jig-store.ts';
 import { DRAFT_LIMITS, DRAFT_TEMPLATES, JigDrafts, failureReason } from '../jigs/runtime/drafts.ts';
 import { JigInvalidError } from '../jigs/runtime/loader.ts';
 import type { ConversationService } from './conversations.ts';
@@ -36,12 +37,26 @@ export const makeStatuses: Record<string, number> = {
 };
 
 const id = z.string().regex(/^[a-zA-Z0-9-]{1,100}$/);
-const createInput = z
-  .object({
-    name: z.string().trim().min(1).max(100),
-    from: z.enum(DRAFT_TEMPLATES).optional(),
-  })
-  .strict();
+/**
+ * A new draft: from a starting example (`name` required), or with `from: {jig, version?}` a copy of
+ * an installed or checkout jig ([수정하기], PLAN-26 T-101; the version defaults to the one pinned
+ * to this project, and the name is the jig's).
+ */
+const createInput = z.union([
+  z
+    .object({
+      name: z.string().trim().min(1).max(100),
+      from: z.enum(DRAFT_TEMPLATES).optional(),
+    })
+    .strict(),
+  z
+    .object({
+      from: z
+        .object({ jig: z.string().min(1).max(200), version: z.string().max(50).optional() })
+        .strict(),
+    })
+    .strict(),
+]);
 const previewInput = z
   .object({
     fixture: z
@@ -92,7 +107,28 @@ export async function makeRoutes(
     }
     if (method !== 'POST') return false;
     const input = createInput.parse(await body(request));
-    send(201, drafts.create(projectId, input));
+    if ('name' in input) {
+      send(201, drafts.create(projectId, input));
+      return true;
+    }
+    const { jig: jigId, version } = input.from;
+    const pinned = new JigStore(workspace.store.db)
+      .pinned(projectId)
+      .find((row) => row.jigId === jigId);
+    const jig = await jigRuntimeFor(workspace, context.dataDirectory).registry.resolve(
+      jigId,
+      version ?? pinned?.version,
+    );
+    if (jig.manifest.kind !== 'tool') throw new DomainError('INVALID_INPUT');
+    send(
+      201,
+      drafts.fork(projectId, {
+        dir: jig.dir,
+        id: jig.id,
+        version: jig.version,
+        name: jig.manifest.name,
+      }),
+    );
     return true;
   }
   const draftId = id.parse(rawDraft);

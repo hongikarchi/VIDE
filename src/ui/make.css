@@ -334,3 +334,18 @@ body[data-workspace='make'] .make-side {
     max-height: 40vh;
   }
 }
+/* 흐름 (T-101): 입력, the step rail and 결과 as three plain lists, no connecting lines. */
+.make-flow {
+  display: grid;
+  gap: 14px;
+}
+.make-flow h4 {
+  margin: 0 0 4px;
+}
+.make-flow ul {
+  margin: 0;
+  padding-left: 18px;
+}
+.make-flow small {
+  color: var(--muted);
+}

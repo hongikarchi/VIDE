@@ -123,13 +123,23 @@ try {
             stage: 'project',
             capabilities: [],
           },
+          {
+            id: 'project/check-sample',
+            version: '0.1.1',
+            kind: 'tool',
+            name: '합성 점검 jig',
+            summary: '가져온 설명서로 그리는 합성 jig',
+            source: 'ai-draft',
+            stage: 'project',
+            capabilities: [],
+          },
         ],
       },
     });
   });
   await page.route('**/api/v1/projects/*/jigs', (route) =>
     route.fulfill({
-      json: { pinned: pinned ? [{ jigId: 'project/check-sample', version: '0.1.0' }] : [] },
+      json: { pinned: pinned ? [{ jigId: 'project/check-sample', version: '0.1.1' }] : [] },
     }),
   );
   await page.route('**/api/v1/projects/*/jigs/*/pin', (route) => {
@@ -137,6 +147,68 @@ try {
     unpinned.push(new URL(route.request().url()).pathname);
     pinned = false;
     return route.fulfill({ json: { unpinned: true } });
+  });
+  // An instance of the older version ([올리기] moves it), the [수정하기] copy draft (T-101).
+  let oldVersion = '0.1.0';
+  const upgraded = [],
+    forks = [];
+  await page.route('**/api/v1/projects/*/jig-instances', async (route) => {
+    if (route.request().method() !== 'GET') return route.fallback();
+    const { instances } = await (await route.fetch()).json();
+    const row = {
+      id: 'inst-old',
+      jigId: 'project/check-sample',
+      version: oldVersion,
+      title: '작업본 A',
+      status: 'computed',
+      createdAt: '2026-10-01T00:00:00.000Z',
+      updatedAt: '2026-10-01T00:00:00.000Z',
+    };
+    await route.fulfill({ json: { instances: [...instances, row] } });
+  });
+  await page.route('**/api/v1/projects/*/jig-instances/inst-old/upgrade', (route) => {
+    upgraded.push('inst-old');
+    oldVersion = '0.1.1';
+    return route.fulfill({ json: { id: 'inst-old' } });
+  });
+  const fork = {
+    id: 'fork-1',
+    name: '합성 점검 jig',
+    version: '0.1.2',
+    state: 'open',
+    conversationId: 'conv-fork',
+    origin: { jigId: 'project/check-sample', version: '0.1.1', name: '합성 점검 jig' },
+    manifest: {
+      id: 'project/check-sample',
+      version: '0.1.2',
+      name: '합성 점검 jig',
+      summary: '가져온 설명서로 그리는 합성 jig',
+      inputs: [
+        {
+          key: 'site',
+          title: '대지 경계',
+          kind: 'assembly',
+          roles: [
+            { role: 'slab', title: '슬래브', required: true },
+            { role: 'column', title: '기존 기둥', required: false },
+          ],
+        },
+      ],
+      params: [],
+      steps: [{ id: 'check', title: '점검', kind: 'code' }],
+      bake: [{ id: 'lines', template: 'vide.bake.curves@1', layer: '점검선' }],
+      reports: [{ id: 'main', file: 'reports/main.json', title: '점검 보고서' }],
+    },
+  };
+  await page.route(/\/api\/v1\/projects\/[^/]+\/jig-drafts(\/fork-1)?$/, async (route) => {
+    const request = route.request();
+    if (request.url().endsWith('/fork-1'))
+      return route.fulfill({ json: { ...fork, files: [{ path: 'jig.json' }] } });
+    if (request.method() === 'POST') {
+      forks.push(request.postDataJSON());
+      return route.fulfill({ status: 201, json: fork });
+    }
+    return route.fulfill({ json: { drafts: forks.length ? [fork] : [] } });
   });
   // The rail's JIG button opens the JIG list.
   await page.getByRole('button', { name: 'JIG', exact: true }).click();
@@ -172,6 +244,59 @@ try {
   const syncIcon = await iconOf(syncCard);
   assert.notEqual(syncIcon, await iconOf(installed));
   assert.notEqual(await iconOf(gridCard), await iconOf(installed));
+
+  // [수정하기] and [올리기] (PLAN-26 T-101). Two installed versions of the jig, 0.1.1 pinned here:
+  // one card at the pinned version; an instance on 0.1.0 shows '이전 버전' and [올리기].
+  assert.equal(await installed.count(), 1);
+  assert.match(await installed.textContent(), /버전 0\.1\.1/);
+  const oldRow = installed
+    .getByRole('list', { name: '합성 점검 jig 작업본' })
+    .getByRole('listitem');
+  assert.match(await oldRow.textContent(), /v0\.1\.0 · 이전 버전/);
+  await oldRow.getByRole('button', { name: '올리기', exact: true }).click();
+  await installed
+    .getByRole('group', { name: '올리기 확인' })
+    .getByRole('button', { name: '올리기', exact: true })
+    .click();
+  await dialog
+    .getByText('‘작업본 A’을 v0.1.1로 올렸습니다. 모든 단계를 다시 계산해야 합니다.')
+    .waitFor();
+  assert.deepEqual(upgraded, ['inst-old']);
+  await page.waitForFunction(
+    () => !document.querySelector('.jig-instances')?.textContent?.includes('이전 버전'),
+  );
+  // A built-in screen jig has nothing to copy: [수정하기] is off, with the reason.
+  assert.equal(
+    await syncCard.getByRole('button', { name: '수정하기', exact: true }).isDisabled(),
+    true,
+  );
+  await syncCard.getByText('기본 화면 jig는 아직 수정할 수 없습니다').waitFor();
+  // [수정하기] makes a copy draft (same id, next version) and opens it in the 만들기 screen,
+  // whose outline shows what the jig takes, how it works and what it makes.
+  await installed.getByRole('button', { name: '수정하기', exact: true }).click();
+  const make = page.locator('.make-workspace');
+  const outline = make.getByLabel('도구 설명 개요');
+  await outline.getByText('수정 · 합성 점검 jig v0.1.1의 사본 → v0.1.2').waitFor();
+  assert.deepEqual(forks, [{ from: { jig: 'project/check-sample', version: '0.1.1' } }]);
+  assert.equal(await page.evaluate(() => document.body.dataset.workspace), 'make');
+  assert.equal(
+    await page.locator('.rail [data-workspace-target="jig"]').getAttribute('aria-pressed'),
+    'true',
+  );
+  await outline.getByText('대지 경계').waitFor();
+  assert.match(await outline.textContent(), /입력 조립 · 슬래브, 기존 기둥\(선택\)/);
+  assert.match(await outline.textContent(), /Rhino에 만들기 · 선/);
+  assert.match(await outline.textContent(), /보고서 · 점검 보고서/);
+  await make.getByRole('tab', { name: '흐름' }).click();
+  for (const name of ['입력', '단계', '결과'])
+    await make.locator('.make-flow').getByRole('region', { name, exact: true }).waitFor();
+  // Back in the list, [수정하기] opens the copy being written instead of making another.
+  await make.getByRole('button', { name: 'JIG 목록', exact: true }).click();
+  await installed.getByRole('button', { name: '수정하기', exact: true }).click();
+  await outline.getByText('수정 · 합성 점검 jig v0.1.1의 사본 → v0.1.2').waitFor();
+  assert.equal(forks.length, 1);
+  await make.getByRole('button', { name: 'JIG 목록', exact: true }).click();
+  await installed.waitFor();
   await installed.getByRole('button', { name: '삭제', exact: true }).click();
   await installed
     .getByRole('group', { name: '합성 점검 jig 삭제 확인' })

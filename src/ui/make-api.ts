@@ -10,6 +10,12 @@ import { api, errors } from './gateway.ts';
 
 const at = z.string().optional();
 
+/** The installed jig a [수정하기] draft copies (PLAN-26 T-101). */
+export const draftOriginSchema = z
+  .object({ jigId: z.string(), version: z.string(), name: z.string().default('') })
+  .passthrough();
+export type DraftOrigin = z.infer<typeof draftOriginSchema>;
+
 export const draftSummarySchema = z
   .object({
     id: z.string(),
@@ -21,6 +27,7 @@ export const draftSummarySchema = z
     from: z.string().optional(),
     /** `open` while it is written; `pinned`, `archived` and `discarded` drafts are done. */
     state: z.string().optional(),
+    origin: draftOriginSchema.optional().catch(undefined),
     /** What the JIG list's draft card reads of `jig.json` (it may not validate yet). */
     manifest: z
       .object({
@@ -171,10 +178,13 @@ export const draftDetailSchema = z
       .optional(),
     turns: z.number().optional(),
     savedAt: at,
+    origin: draftOriginSchema.optional().catch(undefined),
   })
   .passthrough();
 export interface DraftDetail {
   draft: DraftSummary;
+  /** Set when the draft is a [수정하기] copy of an installed jig. */
+  origin?: DraftOrigin;
   manifest: DraftManifest;
   files: DraftFile[];
   skill?: string;
@@ -198,9 +208,46 @@ export const manifestSchema = z
     inputs: z
       .array(
         z
-          .object({ key: z.string(), title: z.string().default(''), kind: z.string() })
+          .object({
+            key: z.string(),
+            title: z.string().default(''),
+            kind: z.string(),
+            roles: z
+              .array(
+                z
+                  .object({
+                    role: z.string(),
+                    title: z.string().default(''),
+                    required: z.boolean().optional(),
+                  })
+                  .passthrough(),
+              )
+              .catch([])
+              .optional(),
+          })
           .passthrough(),
       )
+      .catch([])
+      .default([]),
+    /** What the jig makes (PLAN-26 T-101 outline 결과): Rhino items, reports, outputs. */
+    bake: z
+      .array(
+        z
+          .object({
+            id: z.string(),
+            template: z.string().default(''),
+            layer: z.string().default(''),
+          })
+          .passthrough(),
+      )
+      .catch([])
+      .default([]),
+    reports: z
+      .array(z.object({ id: z.string(), title: z.string().default('') }).passthrough())
+      .catch([])
+      .default([]),
+    outputs: z
+      .array(z.object({ key: z.string(), from: z.string().default('') }).passthrough())
       .catch([])
       .default([]),
     params: z
@@ -282,6 +329,7 @@ export function readDetail(value: unknown): DraftDetail {
     ...(raw.plan ? { plan: raw.plan.items } : {}),
     ...(raw.turns !== undefined ? { turns: raw.turns } : {}),
     ...(raw.savedAt ? { savedAt: raw.savedAt } : {}),
+    ...(raw.origin ? { origin: raw.origin } : draft.origin ? { origin: draft.origin } : {}),
   };
 }
 
@@ -296,9 +344,13 @@ export async function listDrafts(projectId: string): Promise<DraftSummary[]> {
   return z.array(draftSummarySchema).parse(list);
 }
 export type DraftStart = 'example-grid' | 'blank';
+/**
+ * A new draft: from a starting example, or ([수정하기], PLAN-26 T-101) a copy of an installed jig
+ * that keeps its id and gets the next patch version.
+ */
 export async function createDraft(
   projectId: string,
-  input: { name: string; from?: DraftStart },
+  input: { name: string; from?: DraftStart } | { from: { jig: string; version?: string } },
 ): Promise<DraftSummary> {
   const value = await api(base(projectId), 'POST', input);
   const record = value && typeof value === 'object' && 'draft' in value ? value.draft : value;

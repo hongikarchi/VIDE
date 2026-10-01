@@ -410,6 +410,7 @@ jig·보고서 경로는 `src/server/jig-routes.ts`, 초안 경로(`jig-drafts`)
 | `DELETE /api/v1/projects/:id/jigs/:jigId/pin` | — | JIG 목록의 [삭제]: 이 프로젝트의 jig 목록에서 뺀다(`project_jigs` 행만 지움). 설치본과 그 jig로 만든 인스턴스는 남는다 |
 | `GET·POST /api/v1/projects/:id/jig-instances` | POST `{jig, version?, title, layerRoot}` | 작업본. `layerRoot`가 연결 문서에 없으면 422 |
 | `GET …/jig-instances/:iid` | — | 작업본 + 단계 상태 요약 |
+| `POST …/:iid/upgrade` | — | [올리기](SPEC-07.4, T-101): 작업본을 이 프로젝트의 고정 버전으로 옮긴다. 계산한 단계는 `stale`, 사람 단계는 입력 지문으로 다시 비교, 새 버전이 받는 설정값만 유지(아니면 기본값), 작업본 상태 `stale`. 이미 고정 버전이면 그대로, 고정이 없으면 404 |
 | `PUT …/:iid/params` | `{values:[{key, value}], by, reason?, requestId?}` | 다시 계산 요약 + `jig_param_log.seq`. `fixedAtPin` 값은 422 `PARAM_FIXED` |
 | `POST …/:iid/params/undo` | `{seq}` | 그 변경을 되돌림 |
 | `POST …/:iid/overrides` | `{add?: Override[], remove?: string[]}` | 갱신된 수정 사항 |
@@ -426,7 +427,7 @@ jig·보고서 경로는 `src/server/jig-routes.ts`, 초안 경로(`jig-drafts`)
 | `GET /api/v1/projects/:id/jig-reports` | — | 보고서 탭 목록: 보고서 틀이 있는 작업본마다 `{instance, reports[]}` |
 | `GET …/:iid/reports` | — | 그 작업본 jig의 보고서 틀 목록(설명서 `reports`, 없으면 패키지의 `reports/*.json`) |
 | `GET …/:iid/reports/:name` | — | 해석된 보고서(§5.2). 보관된 단계 결과·설정값 원장·남은 조건·해석 보기를 읽고, `previewOnly` 결과는 확정으로 쓰지 않는다. 화면이 부품으로 그린다(CSP가 인라인 스타일을 막으므로 HTML을 내려보내지 않음). 일람표 CSV는 표 부품의 `csv`로 화면이 만든다 |
-| `GET·POST /api/v1/projects/:id/jig-drafts` | POST `{name, from?}` | 초안 목록·만들기(`from`은 시작 본). 201 |
+| `GET·POST /api/v1/projects/:id/jig-drafts` | POST `{name, from?}` 또는 `{from: {jig, version?}}` | 초안 목록·만들기(`from`은 시작 본). 201. `from`이 jig이면 [수정하기](T-101): 등록부에서 그 버전(없으면 이 프로젝트의 고정 버전)을 찾아 `project/` 도구 jig만 사본으로 만든다 — 패키지 파일을 초안 경로 규칙으로 하나씩 복사(`dist/` 묶음과 `derived` 선언은 빼고), id 유지, 버전은 그 id의 설치본·열린 초안·원본 중 가장 높은 것의 패치 +1. 출처 `{jigId, version, name, at}`는 `.results/<did>.json`의 `origin`에 두고 초안 보기에 실린다. 없는 jig 404, 그 밖 `INVALID_INPUT` |
 | `GET·DELETE …/jig-drafts/:did` | — | 초안 하나. `DELETE`는 버리기: 상태 `discarded`, 초안 폴더와 그 초안에 붙은 만들기 대화의 공급자 기록을 지우고 열린 대화를 닫는다. 엔진이 DELETE를 받는 경로는 이것과 jig 고정 해제(위), 프로젝트 삭제(ARCH-01)뿐이다 |
 | `POST …/jig-drafts/:did/validate·test·preview` | preview `{fixture?}` | 형식 점검·자체 시험·미리보기(계산 상자, §6.5). 마지막 결과는 초안 폴더 밖 `.results/<did>.json`에 둔다 |
 | `PUT …/jig-drafts/:did/icon` | `{icon}` | 열린 초안의 `jig.json` `icon`만 바꾼다(목록 밖 이름 `INVALID_INPUT`, 고정·버린 초안 `DRAFT_NOT_OPEN`). 등록부 항목(`GET /api/v1/jigs/packages`)·작업본 보기(`jig.icon`)·skill 카탈로그가 `icon`을 싣는다. 내장 화면 jig(Sync·구조·자료)의 아이콘은 같은 파일의 `LEGACY_JIG_ICONS` |
