@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
 import { evidencePath } from './run-directory.mjs';
+import { savedReviews } from './browser-support.mjs';
 const [playwright, launch, projectId] = process.argv.slice(2);
 const { chromium } = await import(pathToFileURL(playwright).href),
   { url } = JSON.parse(await readFile(launch, 'utf8'));
@@ -47,12 +48,7 @@ try {
   await page.screenshot({ path: evidencePath('docs/assets/native-workspace/saved-review.png') });
   await viewer.getByRole('button', { name: '닫기', exact: true }).click();
   await page.reload();
-  await page
-    .locator('#review-list')
-    .locator('..')
-    .evaluate((node) => (node.open = true));
-  await page
-    .locator('#review-list')
+  await (await savedReviews(page))
     .getByRole('button', { name: '검토 후보 · 레이어별 수량', exact: true })
     .first()
     .click();

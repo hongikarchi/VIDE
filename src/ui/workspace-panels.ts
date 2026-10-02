@@ -22,12 +22,8 @@ export function initializeWorkspacePanels() {
   const groups = new Map<string, HTMLElement[]>();
   const documents = [$('connection-card'), $('document-tree')];
   groups.set('document-tree', documents);
-  // The rail's 자료 opens the 자료 tab now, so the attached files show with the history.
-  groups.set('task-list', [
-    $('task-list').closest('details')!,
-    $('review-list').closest('details')!,
-    $('reference-list').closest('details')!,
-  ]);
+  // 작업 이력 is the request list only (T-109): 검토본 live in 산출물, attachments in each work view.
+  groups.set('task-list', [$('task-list').closest('details')!]);
   // The rail's 모델 and 작업 이력 open the model screen on their section (src/ui/app.ts switches it).
   const buttons = [...document.querySelectorAll<HTMLButtonElement>('.rail [data-section]')];
   const mobileButtons: HTMLButtonElement[] = [];

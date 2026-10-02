@@ -3,7 +3,8 @@ import { createRoot } from 'react-dom/client';
 import { z } from 'zod';
 import type { Root } from 'react-dom/client';
 import { isDwgSdkEditMode } from '../contracts/dwg-edit-mode.ts';
-import { requestMode } from '../contracts/workspace.ts';
+import { requestMode, storedAttachments } from '../contracts/workspace.ts';
+import { attachmentPreview } from './attachments.ts';
 import { executionLimits } from '../contracts/execution-limits.ts';
 import { undoReason } from '../contracts/direct-refusal.ts';
 import { ActivityLog, activityEntries } from './activity.tsx';
@@ -712,7 +713,7 @@ function WorkView({
             : 'Rhino 작업 사본'
         : `${models.find((model) => model.id === message.model)?.name || legacyModels[message.model] || message.model} · ${message.effort === 'default' ? '기본 강도' : message.effort}`;
   const base = message.baseRequestId ? related.get(message.baseRequestId) : undefined;
-  const attachments = [...message.sketches, ...message.files].map((item) => item.name);
+  const reviews = actions.reviewsOf(message.id);
   const jig = jigOf(message);
   const jigCheck = (result as { jigCheck?: { unknown?: string[] } } | undefined)?.jigCheck;
   // The latest verified change while the work is still running (the candidate comes at the end).
@@ -805,10 +806,12 @@ function WorkView({
               </dd>
             </>
           ) : null}
-          {attachments.length ? (
+          {message.sketches.length || message.files.length ? (
             <>
               <dt>첨부</dt>
-              <dd>{attachments.join(' · ')}</dd>
+              <dd>
+                <Attachments message={message} projectId={projectId} />
+              </dd>
             </>
           ) : null}
           {!imported && message.provider !== 'extension' ? (
@@ -930,6 +933,22 @@ function WorkView({
           ) : result?.hostExecuted ? (
             <Candidate message={message} projectId={projectId} actions={actions} />
           ) : null}
+          {reviews.length ? (
+            <p className="work-reviews">
+              <span>이 작업으로 만든 검토본</span>
+              {reviews.map((row) => (
+                <button
+                  key={row.id}
+                  type="button"
+                  className="link-button"
+                  title={new Date(row.createdAt).toLocaleString('ko-KR')}
+                  onClick={() => actions.openReview(row)}
+                >
+                  {row.title}
+                </button>
+              ))}
+            </p>
+          ) : null}
           {result?.code ? <p>{errorLabels[result.code] || result.code}</p> : null}
           {(request.state === 'unknown' && !result?.applicationId) ||
           messages.some(
@@ -1020,6 +1039,48 @@ function WorkView({
         </details>
       ) : null}
     </article>
+  );
+}
+
+const fileSize = (bytes: number) =>
+  bytes >= 1024 * 1024
+    ? `${(bytes / 1024 / 1024).toFixed(1)}MB`
+    : `${Math.max(1, Math.round(bytes / 1024))}KB`;
+/**
+ * The request's attachments (T-109; the work history no longer lists them): a kept image opens
+ * from the engine's attachment route in a new tab; other kept files show their name and size (the
+ * engine serves only images, SPEC-01.12 4); sketches and VIDE's own small notes show their name.
+ */
+function Attachments({ message, projectId }: { message: Message; projectId: string }) {
+  return (
+    <span className="work-attachments">
+      {message.sketches.map((sketch, index) => (
+        <span key={'s' + index}>{String(sketch.name ?? '스케치 ' + (index + 1))}</span>
+      ))}
+      {message.files.map((file, index) => {
+        const stored = storedAttachments([file])[0];
+        const name = String(file.displayName || file.name);
+        if (!stored) return <span key={'f' + index}>{name}</span>;
+        return stored.kind === 'image' && projectId ? (
+          <a
+            key={'f' + index}
+            href={attachmentPreview(projectId, stored.id)}
+            target="_blank"
+            rel="noopener"
+            title={`${stored.name} · ${fileSize(stored.size)} · 새 탭에서 보기`}
+          >
+            {name}
+          </a>
+        ) : (
+          <span
+            key={'f' + index}
+            title={`${stored.name} · ${fileSize(stored.size)} · AI가 첨부 도구로 읽습니다`}
+          >
+            {name} · {fileSize(stored.size)}
+          </span>
+        );
+      })}
+    </span>
   );
 }
 

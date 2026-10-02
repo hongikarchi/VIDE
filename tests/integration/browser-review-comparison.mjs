@@ -1,4 +1,4 @@
-import { installBrowserSupport } from './browser-support.mjs';
+import { installBrowserSupport, savedReviews } from './browser-support.mjs';
 // Existing synthetic 8x6x6 -> 8x6x4.5 candidates; no AI or native writes.
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
@@ -36,10 +36,7 @@ try {
     ids.push((await viewer.locator('iframe').getAttribute('src')).split('/').at(-2));
     await viewer.getByRole('button', { name: '닫기', exact: true }).click();
   }
-  await page
-    .locator('#review-list')
-    .locator('..')
-    .evaluate((node) => (node.open = true));
+  await savedReviews(page);
   await page.getByRole('button', { name: '검토본 비교', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: '검토본 비교', exact: true });
   await dialog.waitFor();

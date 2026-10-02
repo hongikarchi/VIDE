@@ -1,4 +1,4 @@
-import { installBrowserSupport } from './browser-support.mjs';
+import { installBrowserSupport, savedReviews } from './browser-support.mjs';
 // Local immutable review feedback, response-loss retry and draft adoption; no AI or host writes.
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
@@ -23,12 +23,7 @@ try {
   );
   await page.evaluate((projectId) => localStorage.removeItem('vide:draft:' + projectId), projectId);
   await page.goto(new URL('/?project=' + projectId, url).href);
-  await page
-    .locator('#review-list')
-    .locator('..')
-    .evaluate((node) => (node.open = true));
-  await page
-    .locator('#review-list')
+  await (await savedReviews(page))
     .getByRole('button', { name: 'A/B 검증 0', exact: true })
     .first()
     .click();
@@ -65,8 +60,7 @@ try {
   await last.getByRole('button', { name: '요청 초안에 첨부' }).click();
   await viewer.getByRole('status').filter({ hasText: '기준 후보를 먼저' }).waitFor();
   await last.getByRole('button', { name: '기준 후보 열기' }).click();
-  await page
-    .locator('#review-list')
+  await (await savedReviews(page))
     .getByRole('button', { name: 'A/B 검증 0', exact: true })
     .first()
     .click();

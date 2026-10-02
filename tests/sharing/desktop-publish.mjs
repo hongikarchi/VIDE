@@ -187,7 +187,8 @@ export async function verifyDesktopPublish({
     const feedback = join(directory, 'feedback.json');
     await (await feedbackDownload).saveAs(feedback);
     await desktop.getByRole('button', { name: '닫기', exact: true }).click();
-    await desktop.getByText('검토본', { exact: true }).click();
+    // 외부 의견 sits in the 산출물 screen's head (T-109).
+    await desktop.locator('.rail [data-workspace-target="output"]').click();
     await desktop.getByRole('button', { name: '외부 의견', exact: true }).click();
     await desktop.getByLabel('외부 의견 파일').setInputFiles(feedback);
     await desktop

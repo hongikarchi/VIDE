@@ -326,7 +326,7 @@ try {
   if (shot) await page.screenshot({ path: join(shot, 'workspace-tabs-880.png') });
   await page.setViewportSize({ width: 1440, height: 900 });
 
-  // 산출물 (PLAN-26 T-081): 도면 · 보고서 · 렌더링 at its top; 도면 and 렌더링 are pages only, their
+  // 산출물 (PLAN-26 T-081, T-109): 도면 · 보고서 · 검토본 · 렌더링 at its top; 도면 and 렌더링 are pages only, their
   // actions disabled ('준비 중'). The last view is remembered per project.
   await rail('output').click();
   assert.deepEqual(await pressed(), ['output']);
@@ -337,7 +337,14 @@ try {
   assert.equal(await page.locator('#canvas canvas').isVisible(), false);
   assert.equal(await page.locator('#left').isVisible(), false);
   const view = (name) => views.getByRole('tab', { name, exact: true });
-  assert.deepEqual(await views.getByRole('tab').allTextContents(), ['도면', '보고서', '렌더링']);
+  assert.deepEqual(await views.getByRole('tab').allTextContents(), [
+    '도면',
+    '보고서',
+    '검토본',
+    '렌더링',
+  ]);
+  // 외부 의견 (SPEC-04.7) sits at the head's right over every view (T-109).
+  assert.ok(await output.getByRole('button', { name: '외부 의견', exact: true }).isVisible());
   assert.equal(await view('도면').getAttribute('aria-selected'), 'true');
   const sheets = output.getByRole('tabpanel', { name: '도면' });
   await sheets.getByText('아직 시트가 없습니다').waitFor();
@@ -354,6 +361,13 @@ try {
     .waitFor();
   assert.equal(await sheets.isVisible(), false);
   await view('보고서').focus();
+  await page.keyboard.press('ArrowRight');
+  // 검토본 (T-109): the saved 검토본 moved here from the work history.
+  assert.equal(await view('검토본').getAttribute('aria-selected'), 'true');
+  await output
+    .getByRole('tabpanel', { name: '검토본' })
+    .getByText('저장한 검토본이 없습니다.')
+    .waitFor();
   await page.keyboard.press('ArrowRight');
   assert.equal(await view('렌더링').getAttribute('aria-selected'), 'true');
   const render = output.getByRole('tabpanel', { name: '렌더링' });

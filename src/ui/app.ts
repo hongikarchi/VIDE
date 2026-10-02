@@ -55,7 +55,7 @@ import {
 } from './workspaces.ts';
 const showAiSettings: typeof import('./ai-settings.tsx').showAiSettings = async (onStatus) =>
   (await import('./ai-settings.tsx')).showAiSettings(onStatus);
-import { initializeReviews } from './reviews.tsx';
+import { initializeReviews, onReviewsChange, openReview, reviewsOf } from './reviews.tsx';
 import { attachSharedFeedback } from './shared-feedback.tsx';
 import { attachmentPreview, batchRefusal, uploadAttachments } from './attachments.ts';
 import { notifyReference, setReferenceBridge } from './reference-bridge.ts';
@@ -443,6 +443,8 @@ const reviews = initializeReviews(
   (id) => {
     selectedResult = id;
     renderMessages();
+    // Opened from 산출물 (T-109): the candidate is seen in the model screen.
+    showModelView();
     message('의견 작성 당시 후보를 열었습니다.');
   },
   (note) => {
@@ -455,6 +457,11 @@ const reviews = initializeReviews(
     message('외부 의견의 원문과 공간 입력을 초안에 첨부했습니다. 확인한 뒤 보내세요.');
   },
 );
+// A saved or re-read 검토본 list re-links the request rows and the work view (T-109).
+onReviewsChange(() => {
+  sidebar();
+  renderConversation();
+});
 const viewportEmpty = initializeViewportEmpty($('canvas').parentElement!);
 let connectedTarget: HostTarget | undefined;
 // Asked the plugin once to drop a link removed in VIDE; its reload gives the panel a fresh page.
@@ -1414,6 +1421,25 @@ function sidebar() {
         'data-state': request.state,
       });
     open.onclick = () => focusWork(m.id);
+    // The 검토본 saved from this request (T-109): they are listed in 산출물; the row links them.
+    const saved = reviewsOf(project?.id, m.id);
+    if (saved.length && project) {
+      const projectId = project.id;
+      const link = el(
+        'button',
+        saved.length > 1 ? `이 작업으로 만든 검토본 ${saved.length}` : '이 작업으로 만든 검토본',
+        row,
+        {
+          class: 'link-button task-review',
+          type: 'button',
+          title:
+            saved.length > 1
+              ? '가장 최근 검토본을 엽니다. 모두 보기는 산출물 › 검토본'
+              : saved[0].title,
+        },
+      );
+      link.onclick = () => openReview(projectId, saved[0]);
+    }
     if (request && !['queued', 'running'].includes(request.state)) {
       const remove = el('button', '×', row, {
         class: 'task-remove',
@@ -1429,21 +1455,6 @@ function sidebar() {
       };
     }
   });
-  $('reference-list').replaceChildren();
-  // Reference files go with the next request (any type; the AI reads them, SPEC-01.12).
-  const attach = el('button', '파일 첨부', $('reference-list'), {
-    type: 'button',
-    class: 'reference-attach',
-  });
-  attach.onclick = () => $('files').click();
-  el(
-    'small',
-    '모든 형식, 파일당 200MB까지. 다음 요청에 함께 보내며 AI가 필요할 때 읽습니다.',
-    $('reference-list'),
-  );
-  const files = [...state.messages.flatMap((m) => m.files), ...state.files];
-  if (!files.length) el('small', '첨부한 파일이 없습니다.', $('reference-list'));
-  files.forEach((f) => el('small', f.name, $('reference-list'), { class: 'reference-file' }));
 }
 let appliedSelection: string | null | undefined;
 /** The selection a start restored (draft basis or newest result); it never un-hides a file. */
@@ -1683,6 +1694,10 @@ function renderConversation() {
       selectedResult = id;
       renderMessages();
       await reviews.create(id, captureViewport());
+    },
+    reviewsOf: (id) => reviewsOf(project?.id, id),
+    openReview: (row) => {
+      if (project) openReview(project.id, row);
     },
     changed: renderMessages,
     error: message,
@@ -2639,7 +2654,7 @@ function runAppRoute(route: Route, body: string) {
   // accounts are answered with where to do it, ADR-025: those cards have no button.)
   const open =
     app.action === 'export'
-      ? () => message('내보내기는 jig 결과 표나 검토본 화면의 내보내기 버튼에서 합니다.')
+      ? () => message('내보내기는 jig 결과 표나 산출물 › 검토본 화면의 내보내기 버튼에서 합니다.')
       : () => $('workspace-settings').click();
   showRouteCard(
     card.text,

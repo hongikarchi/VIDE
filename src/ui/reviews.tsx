@@ -182,6 +182,125 @@ function SaveReview({
     </>
   );
 }
+/**
+ * The saved 검토본 of the shown project (T-109, user decision 2026-10-02): listed in the 산출물
+ * screen's 검토본 view and linked from each request ('이 작업으로 만든 검토본'). The work history
+ * keeps only the request list.
+ */
+let listed: { projectId: string; rows: ReviewRow[] } | undefined;
+const listeners = new Set<() => void>();
+const publish = () => listeners.forEach((listener) => listener());
+/** Saved 검토본 of a project (empty until the list is read). */
+export function reviewRows(projectId: string | undefined): ReviewRow[] {
+  return projectId && listed?.projectId === projectId ? listed.rows : [];
+}
+const newestFirst = (rows: ReviewRow[]) =>
+  [...rows].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+/** The 검토본 saved from one request, newest first. */
+export function reviewsOf(projectId: string | undefined, requestId: string): ReviewRow[] {
+  return newestFirst(reviewRows(projectId).filter((row) => row.requestId === requestId));
+}
+export function onReviewsChange(listener: () => void) {
+  listeners.add(listener);
+  return () => void listeners.delete(listener);
+}
+let shared:
+  | {
+      actions: NoteActions;
+      getProject: () => string | undefined;
+      onSharedAdopt: (note: ReceivedFeedback) => void;
+      refresh: () => Promise<void>;
+    }
+  | undefined;
+/** Open one saved 검토본 (the read dialog: content, notes, HTML download). */
+export function openReview(projectId: string, row: ReviewRow) {
+  if (!shared) return;
+  generation++;
+  dialog.className = 'review-dialog';
+  dialog.setAttribute('aria-label', '저장한 검토본');
+  modal.render(<ReviewContent key={generation} {...{ projectId, row, actions: shared.actions }} />);
+  if (!dialog.open) dialog.showModal();
+}
+/** Open the 외부 의견 inbox (SPEC-04.7): import, received list, basis and adopt. */
+export function openSharedFeedback(projectId: string, onCount?: (count: number) => void) {
+  if (!shared) return;
+  const { actions, getProject, onSharedAdopt } = shared;
+  generation++;
+  dialog.className = 'quantity-dialog';
+  dialog.setAttribute('aria-label', '외부 의견');
+  modal.render(
+    <>
+      <button onClick={() => dialog.close()}>닫기</button>
+      <SharedFeedback
+        key={generation}
+        projectId={projectId}
+        onBasis={actions.onBasis}
+        onCount={onCount}
+        onAdopt={(note) => {
+          if (getProject() !== projectId) throw Error('프로젝트가 변경되었습니다.');
+          onSharedAdopt(note);
+          dialog.close();
+        }}
+      />
+    </>,
+  );
+  if (!dialog.open) dialog.showModal();
+}
+/** How many 외부 의견 this project has received (the badge in the 산출물 screen). */
+export async function sharedFeedbackCount(projectId: string) {
+  return z.array(z.unknown()).parse(await api(`/projects/${projectId}/shared-feedback`)).length;
+}
+/** The 검토본 view of the 산출물 screen: [검토본 비교] and every saved 검토본, newest first. */
+export function ReviewSection({ projectId, shown }: { projectId: string; shown: number }) {
+  const [, setVersion] = useState(0);
+  const [status, setStatus] = useState('');
+  useEffect(() => onReviewsChange(() => setVersion((n) => n + 1)), []);
+  useEffect(() => {
+    setStatus('');
+    void shared?.refresh().catch((error: unknown) => setStatus(errorText(error)));
+  }, [projectId, shown]);
+  const rows = newestFirst(reviewRows(projectId));
+  return (
+    <div className="output-review">
+      <div className="output-side-head">
+        <p className="caption">저장한 검토본</p>
+        {rows.length > 1 ? (
+          <button
+            type="button"
+            onClick={() => {
+              void showReviewComparison(projectId).catch((error: unknown) =>
+                setStatus(errorText(error)),
+              );
+            }}
+          >
+            검토본 비교
+          </button>
+        ) : null}
+      </div>
+      <p className="output-note">
+        작업 보기의 [검토본 저장]으로 남긴 화면·입력·표·적용 상태입니다. 열어도 현재 모델은 바뀌지
+        않습니다.
+      </p>
+      {status ? <p role="status">{status}</p> : null}
+      {rows.length ? (
+        <ul className="output-review-list" aria-label="저장한 검토본">
+          {rows.map((row) => (
+            <li key={row.id}>
+              <button type="button" onClick={() => openReview(projectId, row)}>
+                {row.title}
+              </button>
+              <span className="output-review-meta">
+                {new Date(row.createdAt).toLocaleString('ko-KR')}
+              </span>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="output-empty">저장한 검토본이 없습니다.</p>
+      )}
+    </div>
+  );
+}
 export function initializeReviews(
   getProject: () => string | undefined,
   notify: (message: string) => void,
@@ -189,7 +308,6 @@ export function initializeReviews(
   onBasis: NoteActions['onBasis'],
   onSharedAdopt: (note: ReceivedFeedback) => void,
 ) {
-  const list = createRoot(document.getElementById('review-list')!);
   let refreshGeneration = 0;
   const actions: NoteActions = {
     onAdopt: (note, review) => {
@@ -201,73 +319,20 @@ export function initializeReviews(
       dialog.close();
     },
   };
-  function open(projectId: string, row: ReviewRow) {
-    generation++;
-    dialog.className = 'review-dialog';
-    dialog.setAttribute('aria-label', '저장한 검토본');
-    modal.render(<ReviewContent key={generation} {...{ projectId, row, actions }} />);
-    if (!dialog.open) dialog.showModal();
-  }
   async function refresh() {
     const projectId = getProject(),
       current = ++refreshGeneration;
     if (!projectId) {
-      list.render(null);
+      listed = undefined;
+      publish();
       return;
     }
     const rows = z.array(reviewRowSchema).parse(await api(`/projects/${projectId}/reviews`));
     if (current !== refreshGeneration || getProject() !== projectId) return;
-    list.render(
-      <>
-        <button
-          onClick={() => {
-            generation++;
-            dialog.className = 'quantity-dialog';
-            dialog.setAttribute('aria-label', '외부 의견');
-            modal.render(
-              <>
-                <button onClick={() => dialog.close()}>닫기</button>
-                <SharedFeedback
-                  key={generation}
-                  projectId={projectId}
-                  onBasis={actions.onBasis}
-                  onAdopt={(note) => {
-                    if (getProject() !== projectId) throw Error('프로젝트가 변경되었습니다.');
-                    onSharedAdopt(note);
-                    dialog.close();
-                  }}
-                />
-              </>,
-            );
-            if (!dialog.open) dialog.showModal();
-          }}
-        >
-          외부 의견
-        </button>
-        {!rows.length ? <small>저장한 검토본이 없습니다.</small> : null}
-        {rows.length > 1 ? (
-          <button
-            onClick={() => {
-              void showReviewComparison(projectId).catch((error: unknown) =>
-                notify(errorText(error)),
-              );
-            }}
-          >
-            검토본 비교
-          </button>
-        ) : null}
-        {rows.map((row) => (
-          <button
-            key={row.id}
-            title={new Date(row.createdAt).toLocaleString('ko-KR')}
-            onClick={() => open(projectId, row)}
-          >
-            {row.title}
-          </button>
-        ))}
-      </>,
-    );
+    listed = { projectId, rows };
+    publish();
   }
+  shared = { actions, getProject, onSharedAdopt, refresh };
   async function create(requestId: string, image: string) {
     if (busy) return;
     const projectId = getProject();
@@ -282,8 +347,8 @@ export function initializeReviews(
         key={current}
         {...{ projectId, requestId, image, views }}
         onSaved={(row) => {
-          open(projectId, row);
-          notify('검토본을 저장했습니다.');
+          openReview(projectId, row);
+          notify('검토본을 저장했습니다. 산출물의 검토본에서 다시 열 수 있습니다.');
           void refresh().catch((error) =>
             notify('검토본은 저장됐지만 목록을 갱신하지 못했습니다: ' + errorText(error)),
           );

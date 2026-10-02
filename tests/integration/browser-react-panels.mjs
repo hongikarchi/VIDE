@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { chromium } from 'playwright';
 import { startServer } from '../../src/server/server.ts';
+import { savedReviews } from './browser-support.mjs';
 const directory = await mkdtemp(join(tmpdir(), 'vide-react-'));
 let app, browser;
 try {
@@ -283,6 +284,42 @@ try {
       JSON.stringify({ code: 'HOST_RESULT_UNKNOWN' }),
       new Date().toISOString(),
     );
+  // T-109: a request's attachments show in its work view (the history has no 참고 자료 list).
+  const attached = {
+    ...fixtureInput,
+    id: 'attachment-history',
+    body: 'Attachment history',
+    files: [
+      {
+        id: 'a'.repeat(24),
+        name: 'plan.png',
+        size: 2048,
+        type: 'image/png',
+        kind: 'image',
+        path: 'attachments/plan.png',
+        copied: true,
+      },
+      {
+        id: 'b'.repeat(24),
+        name: 'spec.pdf',
+        size: 3 * 1024 * 1024,
+        type: 'application/pdf',
+        kind: 'pdf',
+        path: 'attachments/spec.pdf',
+        copied: true,
+      },
+    ],
+  };
+  app.store.db
+    .prepare('INSERT INTO workspace_requests VALUES(?,?,?,?,?,?)')
+    .run(
+      attached.id,
+      second,
+      JSON.stringify(attached),
+      'failed',
+      JSON.stringify({ code: 'PROVIDER_FAILED' }),
+      new Date().toISOString(),
+    );
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto(app.origin + '/?project=' + second);
   // The work history lists requests; a row opens that work on the right.
@@ -290,6 +327,21 @@ try {
     await page.locator('button[data-section="task-list"]').click();
     await page.locator(`[data-task-id="${id}"] .task-open`).click();
   };
+
+  await openWork('attachment-history');
+  const attachments = page.locator(
+    '.work-view[data-request-id="attachment-history"] .work-attachments',
+  );
+  await attachments.waitFor();
+  const image = attachments.getByRole('link', { name: 'plan.png', exact: true });
+  assert.equal(
+    await image.getAttribute('href'),
+    `api/v1/projects/${second}/attachments/${'a'.repeat(24)}`,
+  );
+  assert.equal(await image.getAttribute('target'), '_blank');
+  assert.equal(await attachments.getByRole('link').count(), 1);
+  assert.match(await attachments.textContent(), /spec.pdf · 3.0MB/);
+  assert.equal(await page.locator('#reference-list').count(), 0);
 
   await openWork('unknown-history');
   const unknownCard = page.locator('.work-view[data-request-id="unknown-history"]');
@@ -435,9 +487,18 @@ try {
     .filter({ hasText: '같은 의견을 다시 확인할 수 있습니다.' })
     .waitFor();
   await savedReview.getByRole('button', { name: '닫기', exact: true }).click();
-  await page.locator('[data-section="task-list"]').click();
+  // T-109: the work view and the request's history row link the 검토본 made from it.
   await page
-    .locator('#review-list')
+    .locator('.work-view[data-request-id="application-fixture"] .work-reviews')
+    .getByRole('button', { name: 'Fixture review', exact: true })
+    .waitFor();
+  await page.locator('button[data-section="task-list"]').click();
+  const madeHere = page.locator('[data-task-id="application-fixture"] .task-review');
+  assert.equal(await madeHere.textContent(), '이 작업으로 만든 검토본');
+  await madeHere.click();
+  await savedReview.waitFor();
+  await savedReview.getByRole('button', { name: '닫기', exact: true }).click();
+  await (await savedReviews(page))
     .getByRole('button', { name: 'Fixture review', exact: true })
     .click();
   await savedReview.locator('summary').click();
@@ -459,8 +520,7 @@ try {
   await savedReview.getByRole('button', { name: '닫기', exact: true }).click();
   await page.locator('#body').fill('');
   await page.getByRole('button', { name: '이 후보 보기', exact: true }).click();
-  await page
-    .locator('#review-list')
+  await (await savedReviews(page))
     .getByRole('button', { name: 'Fixture review', exact: true })
     .click();
   await savedReview.locator('summary').click();
@@ -506,7 +566,7 @@ try {
   );
   assert.ok(nextReview.id);
   await page.reload();
-  await page.locator('[data-section="task-list"]').click();
+  await savedReviews(page);
   await page.getByRole('button', { name: '검토본 비교', exact: true }).click();
   const comparison = page.getByRole('dialog', { name: '검토본 비교', exact: true });
   await comparison.getByRole('status').filter({ hasText: '체적 +6 m³' }).waitFor();

@@ -7,6 +7,7 @@ import { applicationResultSchema } from '../contracts/workspace-result.ts';
 import { uiRequestSchema as workspaceRequestSchema } from './workspace-data.ts';
 import type { UiRequest as Request, UiMessage as Message } from './workspace-data.ts';
 import type { z } from 'zod';
+import type { ReviewRow } from '../contracts/reviews.ts';
 // Result actions shared by the work view: candidate display, application, downloads.
 // Requests made before explicit models were listed ran each CLI's own default model.
 export const legacyModels: Record<string, string> = {
@@ -18,6 +19,9 @@ export interface Actions {
   candidate: (id: string) => void;
   selection: (requestId: string | undefined, id: string) => void;
   saveReview: (id: string) => Promise<void>;
+  /** The 검토본 saved from a request, newest first, and opening one (T-109). */
+  reviewsOf: (id: string) => ReviewRow[];
+  openReview: (row: ReviewRow) => void;
   report: (id: string) => void;
   changed: () => void;
   restore: (request: Request) => void;

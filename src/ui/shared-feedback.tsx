@@ -60,15 +60,21 @@ export function SharedFeedback({
   projectId,
   onAdopt,
   onBasis,
+  onCount,
 }: {
   projectId: string;
   onAdopt: (note: ReceivedFeedback) => void;
   onBasis: (id: string) => void;
+  /** The received count changed (the 산출물 badge follows it). */
+  onCount?: (count: number) => void;
 }) {
-  const [notes, setNotes] = useState<ReceivedFeedback[]>([]),
+  const [notes, setNotes] = useState<ReceivedFeedback[] | undefined>(),
     [status, setStatus] = useState(''),
     [busy, setBusy] = useState(false);
   const base = `/projects/${projectId}/shared-feedback`;
+  useEffect(() => {
+    if (notes) onCount?.(notes.length);
+  }, [notes, onCount]);
   useEffect(() => {
     let active = true;
     void api(base)
@@ -89,7 +95,7 @@ export function SharedFeedback({
       const value = receivedFeedbackSchema.parse(
         await api(base, 'POST', JSON.parse(await file.text())),
       );
-      setNotes((previous) => [value, ...previous.filter((note) => note.id !== value.id)]);
+      setNotes((previous = []) => [value, ...previous.filter((note) => note.id !== value.id)]);
       setStatus('의견을 로컬에 보관했습니다. 아직 작업 입력으로 채택하거나 실행하지 않았습니다.');
     } catch (error) {
       setStatus(error instanceof Error ? error.message : '의견을 가져오지 못했습니다.');
@@ -125,7 +131,7 @@ export function SharedFeedback({
         />
       </label>
       <p role="status">{status}</p>
-      {notes.map((note) => (
+      {(notes ?? []).map((note) => (
         <article key={note.id} className="review-notes">
           <h3>{note.original.manifest.title}</h3>
           <small>

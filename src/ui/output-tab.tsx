@@ -1,18 +1,23 @@
 // 산출물 workspace tab (PLAN-26 T-081, user request 2026-10-01): one tab where outputs are made,
-// with three views switched at its top — 도면 (sheets like Revit's), 보고서 (the report screen of
+// with views switched at its top — 도면 (sheets like Revit's), 보고서 (the report screen of
 // PLAN-22 T-057, src/ui/report-tab.tsx, unchanged) and 렌더링 (generated images through a node
 // flow like ComfyUI). Only the page is built now: 도면 and 렌더링 are placeholders whose controls
 // are disabled ('준비 중'); no server call is made for them. The last view is remembered per
 // project in this browser's storage, like the workspace tab.
+// T-109 (user decision 2026-10-02): the saved 검토본 moved here from the work history as a fourth
+// view, and the 외부 의견 inbox (SPEC-04.7) sits at the head's right with its count — it is about
+// shared outputs, so it stays visible over every view rather than inside 검토본.
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { showReports } from './report-tab.tsx';
+import { ReviewSection, openSharedFeedback, sharedFeedbackCount } from './reviews.tsx';
 import type { OutputView } from './workspaces.ts';
 import './output-tab.css';
 
 const VIEWS: { id: OutputView; label: string }[] = [
   { id: 'sheet', label: '도면' },
   { id: 'report', label: '보고서' },
+  { id: 'review', label: '검토본' },
   { id: 'render', label: '렌더링' },
 ];
 const isView = (value: unknown): value is OutputView => VIEWS.some((view) => view.id === value);
@@ -135,6 +140,7 @@ function OutputTab({ projectId, first }: { projectId: string; first?: OutputView
   const [shown, setShown] = useState(0);
   const reportMount = useRef<HTMLDivElement>(null);
   const tabs = useRef<HTMLDivElement>(null);
+  const [feedback, setFeedback] = useState<number | undefined>();
 
   useEffect(() => rememberView(projectId, view), [projectId, view]);
   useEffect(() => {
@@ -154,6 +160,16 @@ function OutputTab({ projectId, first }: { projectId: string; first?: OutputView
   useEffect(() => {
     if (view === 'report' && reportMount.current) showReports(projectId, reportMount.current);
   }, [projectId, view, shown]);
+  // The 외부 의견 count is read whenever the tab is shown (a failed read hides the number only).
+  useEffect(() => {
+    let alive = true;
+    void sharedFeedbackCount(projectId)
+      .then((count) => alive && setFeedback(count))
+      .catch(() => alive && setFeedback(undefined));
+    return () => {
+      alive = false;
+    };
+  }, [projectId, shown]);
 
   const keys = (event: KeyboardEvent) => {
     const at = VIEWS.findIndex((entry) => entry.id === view);
@@ -191,6 +207,21 @@ function OutputTab({ projectId, first }: { projectId: string; first?: OutputView
             </button>
           ))}
         </div>
+        <div className="output-share" aria-label="웹 공유">
+          <button
+            type="button"
+            className="output-feedback"
+            title="웹 공유로 받은 의견 파일을 가져오고, 기준 후보를 열거나 요청 초안에 첨부합니다"
+            onClick={() => openSharedFeedback(projectId, setFeedback)}
+          >
+            외부 의견
+            {feedback ? (
+              <span className="output-badge" aria-label={`${feedback}건`}>
+                {feedback}
+              </span>
+            ) : null}
+          </button>
+        </div>
       </div>
       <section
         className="output-pane output-pane-sheet"
@@ -207,6 +238,14 @@ function OutputTab({ projectId, first }: { projectId: string; first?: OutputView
         hidden={view !== 'report'}
         ref={reportMount}
       />
+      <section
+        className="output-pane output-pane-review"
+        role="tabpanel"
+        aria-label="검토본"
+        hidden={view !== 'review'}
+      >
+        {view === 'review' ? <ReviewSection projectId={projectId} shown={shown} /> : null}
+      </section>
       <section
         className="output-pane output-pane-render"
         role="tabpanel"

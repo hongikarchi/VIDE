@@ -156,9 +156,13 @@ try {
   await page.locator('[data-section="task-list"]').click();
   assert.equal(await page.locator('#document-tree').isVisible(), false);
   assert.equal(await page.locator('#task-list').isVisible(), true);
-  assert.equal(await page.locator('#review-list').isVisible(), true);
-  // The attached files show with the history; the rail's 자료 opens the 자료 screen (project DB).
-  assert.equal(await page.locator('#reference-list').isVisible(), true);
+  // 작업 이력 is the request list only (T-109): 검토본 are in 산출물, attachments in each work view.
+  assert.equal(await page.locator('#review-list').count(), 0);
+  assert.equal(await page.locator('#reference-list').count(), 0);
+  assert.equal(
+    await page.locator('.rail [data-workspace-target="history"]').getAttribute('title'),
+    '작업 이력 · 요청 기록',
+  );
   await page.getByRole('button', { name: '자료', exact: true }).click();
   const railPressed = (id) =>
     page.locator(`.rail [data-workspace-target="${id}"]`).getAttribute('aria-pressed');
@@ -285,7 +289,7 @@ try {
   assert.equal(await page.getByRole('combobox', { name: '작업공간' }).inputValue(), 'model');
   await page.locator('#toggle-left').click();
   await page.locator('.left-panel-tabs').getByRole('button', { name: '작업 이력' }).click();
-  assert.equal(await page.locator('#review-list').isVisible(), true);
+  assert.equal(await page.locator('#task-list').isVisible(), true);
   await page.screenshot({ path: join(evidence, 'controls-800.png') });
   await page.setViewportSize({ width: 1440, height: 900 });
   const project = await page.locator('#project-picker').inputValue();

@@ -13,7 +13,7 @@ import { jigIconSvg } from './jig-icons.ts';
 
 export type FixedWorkspace = 'dashboard' | 'model' | 'data' | 'jig' | 'make' | 'output';
 /** A sub-view of the 산출물 tab (src/ui/output-tab.tsx). */
-export type OutputView = 'sheet' | 'report' | 'render';
+export type OutputView = 'sheet' | 'report' | 'review' | 'render';
 /**
  * An item opened in its own tab. A jig (the default kind): `instanceId` is a jig instance (작업본)
  * id, or `legacy:<jigId>` for older jigs. A reference image (SPEC-09.2, PLAN-26 T-090):

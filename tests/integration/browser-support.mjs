@@ -44,3 +44,17 @@ export async function installBrowserSupport(page, { fixtures = false } = {}) {
     route.fulfill({ contentType: 'text/javascript', body: code }),
   );
 }
+/**
+ * The saved 검토본 list (T-109): it lives in 산출물 › 검토본, not in the work history. Opens that
+ * view and returns the list.
+ */
+export async function savedReviews(page) {
+  await page.locator('.rail [data-workspace-target="output"]').click();
+  await page
+    .getByRole('tablist', { name: '산출물 종류' })
+    .getByRole('tab', { name: '검토본', exact: true })
+    .click();
+  const list = page.locator('.output-pane-review');
+  await list.waitFor();
+  return list;
+}

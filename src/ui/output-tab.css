@@ -321,3 +321,86 @@ body[data-workspace='output'] .output-workspace {
     padding: 12px;
   }
 }
+
+/* T-109: the 외부 의견 inbox at the head's right, with its count. */
+.output-share {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.output-feedback {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  padding: 0 10px;
+  font-size: var(--fs-sm);
+}
+.output-badge {
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 9px;
+  background: var(--bg-hover);
+  color: var(--text-1);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  line-height: 18px;
+  text-align: center;
+}
+
+/* T-109: the saved 검토본 (moved here from the work history). */
+.output-pane-review {
+  overflow: auto;
+}
+.output-review {
+  max-width: 720px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px;
+}
+.output-review .caption,
+.output-review .output-note {
+  margin: 0;
+}
+.output-review-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  border: var(--hairline) solid var(--border);
+  border-radius: var(--radius-sm);
+}
+.output-review-list li + li {
+  border-top: var(--hairline) solid var(--border-subtle);
+}
+.output-review-list li {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  padding-right: 12px;
+}
+.output-review-list li:hover {
+  background: var(--bg-hover);
+}
+.output-review-list button {
+  flex: 1;
+  min-width: 0;
+  padding: 8px 12px;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  color: var(--text-1);
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.output-review-meta {
+  flex: none;
+  color: var(--text-3);
+  font-size: var(--fs-sm);
+}
