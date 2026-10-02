@@ -34,6 +34,9 @@ internal static class DirectScripts
         @"\bRhinoApp\b",
         @"\.(Command|Exit|OpenFileName|OpenFileNames|SaveFileName|BrowseForFolder|Write3dmFile|WriteFile|ReadFile|Import|Export|SaveAs|Close|Undo|Redo|BeginUndoRecord|EndUndoRecord|ClearUndoRecords|AddCustomUndoEvent)\b",
         @"(?<![\w.])(Command|Exit)[ \t]*\(",
+        @"\.Save\w*[ \t]*\(",
+        @"(?<![\w.])(getattr|setattr|delattr|globals|locals|vars)[ \t]*\(",
+        @"\b__(builtins|dict|class|subclasses|bases|mro|globals|code|getattribute|loader|spec)__\b",
         @"^[ \t]*from[ \t]+(rhinoscriptsyntax|rhinoscript)(\.\w+)?[ \t]+import\b[^\n#]*(\*|\b(Command|Exit)\b)",
     ];
     internal const string PythonPurge = @"\b(Purge\w*|Compact)[ \t]*\(";
@@ -85,7 +88,7 @@ internal static class DirectScripts
             list.Add("_" + word);
         }
         if (denied.Count > 0)
-            return new([$"Rhino command not permitted in VIDE: {string.Join(", ", denied.Select(w => "_" + w))}. Opening, closing or quitting documents, reading files or scripts from disk, application options, plug-ins, units and undo stay with the user; use RhinoCommon C# or another command instead. New, Close, Undo, Redo and Insert pass only as an option right after the command that owns it (-Layer New, Polyline Undo/Close)."], null, null);
+            return new([$"Rhino command not permitted in VIDE: {string.Join(", ", denied.Select(w => "_" + w))}. Opening, closing or quitting documents, reading files or scripts from disk, application options, plug-ins, units and undo stay with the user; use RhinoCommon C# or another command instead. New, Close and Undo pass only as an option right after the command that owns it (-Layer New, Polyline Undo/Close); Redo and Insert are always refused."], null, null);
         var kind = GuardSeverity.FirstOrDefault(held.ContainsKey);
         return kind == null ? new(null, null, null) : new(null, kind, GuardDetail(held));
     }
@@ -107,7 +110,7 @@ internal static class DirectScripts
         var hits = PythonDeny.Select(pattern => Regex.Match(source, pattern, RegexOptions.Multiline)).Where(m => m.Success)
             .Select(m => m.Value.Trim() is var v && v.Length > 80 ? v[..80] : m.Value.Trim()).ToArray();
         if (hits.Length > 0)
-            return new([$"Python not permitted in VIDE: {string.Join(" | ", hits)}. No file, network, process, reflection, application, command or undo access; use Rhino, rhinoscriptsyntax and scriptcontext.doc geometry and tables only (Rhino commands go in execute.command)."], null, null);
+            return new([$"Python not permitted in VIDE: {string.Join(" | ", hits)}. No file, network, process, reflection (getattr, __builtins__), application, command, save or undo access; use Rhino, rhinoscriptsyntax and scriptcontext.doc geometry and tables only (Rhino commands go in execute.command)."], null, null);
         if (Regex.IsMatch(source, PythonPurge, RegexOptions.Multiline))
             return new(null, "purge", "사용하지 않는 항목 정리(Purge)는 되돌릴 수 없습니다.");
         return new(null, null, null);

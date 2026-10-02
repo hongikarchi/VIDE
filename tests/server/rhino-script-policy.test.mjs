@@ -70,6 +70,13 @@ test('opening, quitting, scripts from disk, options, plug-ins, units and undo ar
   }
 });
 
+test('the refusal says Redo and Insert are always refused, as the policy does', () => {
+  const verdict = checkRhinoCommand('_Polyline 0,0,0 1,0,0 _Redo');
+  assert.equal(verdict.ok, false);
+  assert.match(verdict.diagnostics[0], /Redo and Insert are always refused/);
+  assert.doesNotMatch(verdict.diagnostics[0], /Undo, Redo and Insert pass/);
+});
+
 test('commands that write files or purge are held for the card with their kind', () => {
   assert.equal(checkRhinoCommand('_-SaveAs "C:\\b.3dm"').guard.kind, 'save-as');
   const save = checkRhinoCommand('_Save');
@@ -149,12 +156,25 @@ test('Python: geometry and tables pass; file, network, process, application and 
     'import rhinoscriptsyntax as rs\nc = rs.Command\nc("_Save")',
     'from rhinoscriptsyntax import Command as run',
     'from rhinoscriptsyntax.application import Command',
+    // Saving the document from Python skips the save card (review finding, 2026-10-02).
+    'import scriptcontext as sc\nsc.doc.Save()',
+    'sc.doc.SaveAs(r"C:\\a.3dm")',
+    'sc.doc.SaveAsTemplate(path)',
+    'sc.doc.SaveWithOptions (opts)',
+    // Reflection builds a denied name from strings.
+    "getattr(sc.doc, 'Write3dm' + 'File')(p, o)",
+    "f = getattr(__builtins__, 'op' + 'en')",
+    'g = globals()',
+    'sc.doc.__class__.__subclasses__()',
   ]) {
     const verdict = checkRhinoPython(source);
     assert.equal(verdict.ok, false, source);
     assert.match(verdict.diagnostics[0], /not permitted/);
   }
   assert.equal(checkRhinoPython('sc.doc.Materials.Compact()').guard.kind, 'purge');
+  // Names that merely contain Save, or attributes read directly, still pass.
+  for (const source of ['saved = 3\nprint(saved)', 'rs.ObjectName(i, "SaveMe")', 'n = sc.doc.Name'])
+    assert.deepEqual(checkRhinoPython(source), { ok: true }, source);
 });
 
 test('the Rhino plugin keeps the same lists as the engine', () => {

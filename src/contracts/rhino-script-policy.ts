@@ -93,6 +93,11 @@ export const PYTHON_DENY = [
   String.raw`\bRhinoApp\b`,
   String.raw`\.(Command|Exit|OpenFileName|OpenFileNames|SaveFileName|BrowseForFolder|Write3dmFile|WriteFile|ReadFile|Import|Export|SaveAs|Close|Undo|Redo|BeginUndoRecord|EndUndoRecord|ClearUndoRecords|AddCustomUndoEvent)\b`,
   String.raw`(?<![\w.])(Command|Exit)[ \t]*\(`,
+  // Any save of the document (Save, SaveAs, SaveAsTemplate, SaveWithOptions, …) writes a file.
+  String.raw`\.Save\w*[ \t]*\(`,
+  // Reflection reaches denied names through strings (getattr(sc.doc, 'Write3dm' + 'File')).
+  String.raw`(?<![\w.])(getattr|setattr|delattr|globals|locals|vars)[ \t]*\(`,
+  String.raw`\b__(builtins|dict|class|subclasses|bases|mro|globals|code|getattribute|loader|spec)__\b`,
   String.raw`^[ \t]*from[ \t]+(rhinoscriptsyntax|rhinoscript)(\.\w+)?[ \t]+import\b[^\n#]*(\*|\b(Command|Exit)\b)`,
 ];
 /** Python that purges (not undoable): held for confirmation like the C# purge. */
@@ -174,7 +179,7 @@ export function checkRhinoCommand(script: string): ScriptVerdict {
     return {
       ok: false,
       diagnostics: [
-        `Rhino command not permitted in VIDE: ${[...denied].map(shown).join(', ')}. Opening, closing or quitting documents, reading files or scripts from disk, application options, plug-ins, units and undo stay with the user; use RhinoCommon C# or another command instead. New, Close, Undo, Redo and Insert pass only as an option right after the command that owns it (-Layer New, Polyline Undo/Close).`,
+        `Rhino command not permitted in VIDE: ${[...denied].map(shown).join(', ')}. Opening, closing or quitting documents, reading files or scripts from disk, application options, plug-ins, units and undo stay with the user; use RhinoCommon C# or another command instead. New, Close and Undo pass only as an option right after the command that owns it (-Layer New, Polyline Undo/Close); Redo and Insert are always refused.`,
       ],
     };
   const kind = GUARD_SEVERITY.find((each) => held[each]?.length);
@@ -191,7 +196,7 @@ export function checkRhinoPython(source: string): ScriptVerdict {
     return {
       ok: false,
       diagnostics: [
-        `Python not permitted in VIDE: ${hits.join(' | ')}. No file, network, process, reflection, application, command or undo access; use Rhino, rhinoscriptsyntax and scriptcontext.doc geometry and tables only (Rhino commands go in execute.command).`,
+        `Python not permitted in VIDE: ${hits.join(' | ')}. No file, network, process, reflection (getattr, __builtins__), application, command, save or undo access; use Rhino, rhinoscriptsyntax and scriptcontext.doc geometry and tables only (Rhino commands go in execute.command).`,
       ],
     };
   if (new RegExp(PYTHON_PURGE, 'm').test(source))

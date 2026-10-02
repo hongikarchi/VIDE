@@ -38,6 +38,11 @@ test('Rhino direct execution runs in one undo record and generated code cannot c
     'RhinoDocUndoRecord',
   ])
     assert.ok(policy.includes(member), member);
+  // Saving the document from generated code skips the save card: Save* is denied, and a save
+  // started during any run that is not a confirmed command macro refuses it (review finding, 2026-10-02).
+  assert.ok(policy.includes('symbol.Name.StartsWith("Save", StringComparison.Ordinal)'));
+  assert.ok(direct.includes('RhinoDoc.BeginSaveDocument += Saving'));
+  assert.ok(direct.includes('var saveAllowed = language == "command" && guard.Confirmed;'));
   // Read-only validity checks inherited from CommonObject are allowed; Rhino.Runtime stays denied otherwise.
   assert.ok(policy.includes('"Rhino.Runtime"'));
   assert.match(

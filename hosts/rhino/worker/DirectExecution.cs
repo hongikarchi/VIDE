@@ -130,15 +130,25 @@ internal sealed class DirectExecutor : IDisposable
         RhinoDoc.ReplaceRhinoObject += Replaced;
         RhinoDoc.ModifyObjectAttributes += Modified;
         RhinoDoc.LayerTableEvent += Layer;
+        // A save (or any file write through the document) is allowed only from a confirmed command
+        // macro; from C#, Python or an unconfirmed run it is a violation, refused after the run
+        // with the record undone (RhinoCommon cannot cancel it, so a written file stays; ADR-029).
+        var saveAllowed = language == "command" && guard.Confirmed;
+        string? saved = null;
+        void Saving(object? s, DocumentSaveEventArgs e) { saved ??= e.FileName ?? ""; }
+        RhinoDoc.BeginSaveDocument += Saving;
         try { value = run(output); }
         catch (Exception error) { failure = error is TargetInvocationException { InnerException: not null } inner ? inner.InnerException! : error; }
         finally
         {
+            RhinoDoc.BeginSaveDocument -= Saving;
             RhinoDoc.ReplaceRhinoObject -= Replaced;
             RhinoDoc.ModifyObjectAttributes -= Modified;
             RhinoDoc.LayerTableEvent -= Layer;
             document.EndUndoRecord(serial);
         }
+        if (saved != null && !saveAllowed && failure is not ScriptPolicyException)
+            failure = new ScriptPolicyException($"Saving or writing a file is not permitted from {language} in VIDE ({Path.GetFileName(saved)}); a save goes in execute.command and waits on the user's confirmation.");
         // Commands may leave records of their own beside this one (if Rhino does not fold them
         // into the open record): the execution is then all of them, undone together.
         var last = document.NextUndoRecordSerialNumber - 1;

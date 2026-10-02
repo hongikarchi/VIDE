@@ -42,7 +42,7 @@ internal static class CodePolicy
                     if ((!objectTableRead && DeniedNamespaces.Any(prefix => ns == prefix || ns.StartsWith(prefix + ".", StringComparison.Ordinal))) ||
                         name is "System.Environment" or "System.AppDomain" or "System.Type" or "System.Activator" or "System.Console" or "Rhino.RhinoApp" ||
                         symbol.Name == "GetType" && name == "object" ||
-                        name == "Rhino.RhinoDoc" && (symbol.IsStatic || symbol.Name is "Dispose" or "Close" or "Write3dmFile" or "WriteFile" or "ReadFile" or "Import" or "Export") ||
+                        name == "Rhino.RhinoDoc" && (symbol.IsStatic || symbol.Name is "Dispose" or "Close" or "Write3dmFile" or "WriteFile" or "ReadFile" or "Import" or "Export" || symbol.Name.StartsWith("Save", StringComparison.Ordinal)) ||
                         // Undo is VIDE's safety net for direct execution; generated code never controls it.
                         name == "Rhino.RhinoDoc" && symbol.Name is "Undo" or "Redo" or "BeginUndoRecord" or "EndUndoRecord" or "ClearUndoRecords" or "AddCustomUndoEvent" or "UndoRecordingEnabled" ||
                         name == "Rhino.RhinoDocUndoRecord")
