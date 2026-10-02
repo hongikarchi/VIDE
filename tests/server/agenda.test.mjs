@@ -232,3 +232,51 @@ test('over HTTP: the dashboard routes, and [되돌리기] of a recorded AI write
   });
   assert.deepEqual([twice.status, twice.json.code], [409, 'AGENDA_UNDONE']);
 });
+
+test('kinds (schema 8): 할 일 by default, 회의 and 마감 kept, and a date-only move keeps the time', async (t) => {
+  const store = await storeOf(t);
+  const agenda = new Agenda(store, { now: () => new Date(2026, 9, 1, 10, 0) });
+  const project = store.createProject('달력');
+  const plain = agenda.add(project.id, { text: '도면 정리' });
+  assert.equal(plain.kind, 'task');
+  const meeting = agenda.add(project.id, {
+    text: '구조 회의',
+    date: '2026-10-02',
+    time: '15:00',
+    kind: 'meeting',
+  });
+  assert.equal(meeting.kind, 'meeting');
+  assert.throws(() => agenda.add(project.id, { text: 'x', kind: 'party' }), {
+    code: 'INVALID_INPUT',
+  });
+  // The calendar's drag sends only the date: the time and kind stay.
+  const moved = agenda.set(project.id, meeting.id, { revision: 1, date: '2026-10-05' });
+  assert.deepEqual([moved.date, moved.time, moved.kind], ['2026-10-05', '15:00', 'meeting']);
+  const due = agenda.set(project.id, plain.id, { revision: 1, kind: 'deadline' });
+  assert.deepEqual([due.kind, due.text], ['deadline', '도면 정리']);
+  // [되돌리기] restores a recorded kind; an older record without one leaves the kind as it is.
+  agenda.revert(project.id, [
+    {
+      op: 'set',
+      id: plain.id,
+      text: due.text,
+      revision: due.revision,
+      before: { text: '도면 정리', date: null, time: null, doneAt: null, kind: 'task' },
+    },
+  ]);
+  assert.equal(agenda.get(project.id, plain.id).kind, 'task');
+  const again = agenda.set(project.id, plain.id, { revision: 3, kind: 'deadline' });
+  agenda.revert(project.id, [
+    {
+      op: 'set',
+      id: plain.id,
+      text: again.text,
+      revision: again.revision,
+      before: { text: '도면 정리 이전', date: null, time: null, doneAt: null },
+    },
+  ]);
+  assert.deepEqual(
+    [agenda.get(project.id, plain.id).text, agenda.get(project.id, plain.id).kind],
+    ['도면 정리 이전', 'deadline'],
+  );
+});

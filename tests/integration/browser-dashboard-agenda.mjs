@@ -2,8 +2,10 @@
 // time read from the words ('내일 3시 …' goes under 예정 at 15:00), the box finishes one into the
 // '완료 n' fold, a click edits in place, ↑ and drag reorder, and everything survives a reload;
 // [완료 비우기] clears the fold. A 기본 대화 turn whose AI adds and then changes a 할 일 (two writes)
-// gets one notice with one [되돌리기], which stays past 9 s and takes both back. Synthetic project
-// and provider only; no real CLI or host.
+// gets one notice with one [되돌리기], which stays past 9 s and takes both back. [달력] (T-110)
+// shows the month: a day's click prefills the add box, a drag moves only the date, the 날짜 없음
+// box takes and gives dates, and '회의'/'까지' give the 회의/마감 kinds. Synthetic project and
+// provider only; no real CLI or host.
 import assert from 'node:assert/strict';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -74,6 +76,8 @@ try {
   const later = section.getByRole('list', { name: '예정' });
   await later.getByRole('button', { name: '구조 회의', exact: true }).waitFor();
   assert.match(await later.locator('li').first().innerText(), /15:00\s*내일/);
+  // '회의' in the words makes it a 회의: a small label on the row.
+  assert.equal(await later.locator('li').first().locator('.dash-agenda-kind').innerText(), '회의');
   assert.equal(await input.inputValue(), '');
   // The box keeps the focus after Enter, also while a slow save is on its way (a remote
   // session): the next 할 일 is typed straight away.
@@ -199,6 +203,97 @@ try {
   await notice.getByText('되돌렸습니다.').waitFor();
   await today.getByText('구조 회의 — 3층').waitFor({ state: 'detached' });
   assert.deepEqual(await texts(), ['도면 정리 — 단면도']);
+
+  // [목록 | 달력] (T-110): the month of this project's 할 일; the undated one sits in 날짜 없음.
+  const iso = (at) =>
+    `${at.getFullYear()}-${String(at.getMonth() + 1).padStart(2, '0')}-${String(at.getDate()).padStart(2, '0')}`;
+  const todayIso = iso(new Date());
+  await section.getByRole('button', { name: '달력', exact: true }).click();
+  const calendar = section.locator('.dash-cal-month');
+  await calendar.waitFor();
+  const undatedBox = section.getByRole('group', { name: '날짜 없음' });
+  await undatedBox.getByText('도면 정리 — 단면도').waitFor();
+  const day = (date) => calendar.locator(`[data-date="${date}"]`);
+  // The 회의 added at the start shows on its day with the 회의 dot.
+  const tomorrowIso = iso(new Date(Date.now() + 86400000));
+  if ((await day(tomorrowIso).count()) === 1)
+    assert.equal(
+      await day(tomorrowIso)
+        .locator('.dash-cal-item', { hasText: '구조 회의' })
+        .getAttribute('data-kind'),
+      'meeting',
+    );
+  // A click on today: that day's list below, and the add box starts with its date.
+  await day(todayIso).click();
+  assert.equal(await day(todayIso).getAttribute('aria-pressed'), 'true');
+  assert.equal(await input.inputValue(), `${todayIso} `);
+  assert.equal(
+    await page.evaluate(() => document.activeElement?.getAttribute('aria-label')),
+    '할 일 추가',
+  );
+  await page.keyboard.type('설비 미팅');
+  await page.keyboard.press('Enter');
+  const dayList = section.getByRole('list', { name: /할 일$/ }).last();
+  await dayList.getByRole('button', { name: '설비 미팅', exact: true }).waitFor();
+  assert.equal(await dayList.locator('.dash-agenda-kind').first().innerText(), '회의');
+  await day(todayIso)
+    .locator('.dash-cal-item[data-kind="meeting"]', { hasText: '설비 미팅' })
+    .waitFor();
+  // The box starts again with the picked day.
+  assert.equal(await input.inputValue(), `${todayIso} `);
+  // '까지' is read as a 마감 (shown in the preview), not dropped.
+  await input.fill('금요일까지 보고서');
+  await section.locator('.dash-agenda-hint .dash-agenda-kind', { hasText: '마감' }).waitFor();
+  await input.fill('');
+
+  // Drag to another day: only the date is saved (the time and the kind stay).
+  const days = await calendar
+    .locator('[data-date]')
+    .evaluateAll((cells) => cells.map((cell) => cell.getAttribute('data-date')));
+  const at = days.indexOf(todayIso);
+  const otherDay = days[at + 1 < days.length ? at + 1 : at - 1];
+  const meetingBefore = (await other('', 'GET')).items.find((item) => item.text === '설비 미팅');
+  await other(`/${meetingBefore.id}`, 'PUT', { revision: meetingBefore.revision, time: '10:00' });
+  await page.evaluate(() => dispatchEvent(new Event('focus')));
+  await day(todayIso).locator('.dash-cal-item', { hasText: '10:00' }).waitFor();
+  await day(todayIso).locator('.dash-cal-item', { hasText: '설비 미팅' }).dragTo(day(otherDay));
+  await day(otherDay).locator('.dash-cal-item', { hasText: '설비 미팅' }).waitFor();
+  const meetingAfter = (await other('', 'GET')).items.find((item) => item.id === meetingBefore.id);
+  assert.deepEqual(
+    [meetingAfter.date, meetingAfter.time, meetingAfter.kind, meetingAfter.revision],
+    [otherDay, '10:00', 'meeting', meetingBefore.revision + 2],
+  );
+  // The undated one onto a day gets that date; back onto 날짜 없음 loses it again.
+  await undatedBox
+    .locator('.dash-cal-item', { hasText: '도면 정리 — 단면도' })
+    .dragTo(day(todayIso));
+  await day(todayIso).locator('.dash-cal-item', { hasText: '도면 정리 — 단면도' }).waitFor();
+  assert.equal(
+    (await other('', 'GET')).items.find((item) => item.text === '도면 정리 — 단면도').date,
+    todayIso,
+  );
+  await day(todayIso)
+    .locator('.dash-cal-item', { hasText: '도면 정리 — 단면도' })
+    .dragTo(undatedBox);
+  await undatedBox.locator('.dash-cal-item', { hasText: '도면 정리 — 단면도' }).waitFor();
+  assert.equal(
+    (await other('', 'GET')).items.find((item) => item.text === '도면 정리 — 단면도').date,
+    null,
+  );
+  // Months move; [이번 달] comes back.
+  const label = await calendar.locator('.dash-cal-label').innerText();
+  await calendar.getByRole('button', { name: '다음 달' }).click();
+  assert.notEqual(await calendar.locator('.dash-cal-label').innerText(), label);
+  await calendar.getByRole('button', { name: '이번 달' }).click();
+  assert.equal(await calendar.locator('.dash-cal-label').innerText(), label);
+  if (shot) await page.screenshot({ path: join(shot, 'dashboard-calendar.png') });
+  // The view is remembered by this browser.
+  await page.reload();
+  await page.waitForFunction(() => document.querySelector('#project-picker')?.value);
+  await openDashboard();
+  await calendar.waitFor();
+  await section.getByRole('button', { name: '목록', exact: true }).click();
+  await today.getByText('도면 정리 — 단면도').waitFor();
 
   assert.deepEqual(errors, []);
   console.log('dashboard agenda browser checks passed');

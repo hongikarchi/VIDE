@@ -96,6 +96,19 @@ test('agenda_add and agenda_set are T1 writes in the ledger; revert takes back o
   assert.deepEqual([two.reverted, two.skipped], [1, 0]);
   const back = agenda.get(project.id, kept.id);
   assert.deepEqual([back.text, back.done], ['기존 할 일', false]);
+  // kind: a meeting added and an item marked as a deadline; [되돌리기] takes the kind back too.
+  const meeting = await handlers.agenda_add({
+    items: [{ text: '설비 회의', date: '2026-10-06', kind: 'meeting' }],
+  });
+  assert.equal(meeting.added[0].kind, 'meeting');
+  assert.equal(ledger.at(-1).body.changes[0].kind, 'meeting');
+  const due = await handlers.agenda_set({ items: [{ id: kept.id, kind: 'deadline' }] });
+  assert.equal(due.changed[0].kind, 'deadline');
+  assert.equal(ledger.at(-1).body.changes[0].before.kind, 'task');
+  agenda.revert(project.id, ledger.at(-1).body.changes);
+  agenda.revert(project.id, ledger.at(-2).body.changes);
+  assert.equal(agenda.get(project.id, kept.id).kind, 'task');
+  ledger.splice(-2);
   // A set the user changed again afterwards is left alone.
   await handlers.agenda_set({ items: [{ id: kept.id, text: 'AI가 바꿈' }] });
   const now = agenda.get(project.id, kept.id);

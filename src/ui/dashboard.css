@@ -300,6 +300,222 @@ button.dash-tile:hover {
 .dash-agenda-done {
   margin-top: 10px;
 }
+.dash-agenda-kind {
+  padding: 0 5px;
+  border-radius: var(--radius-sm);
+  font-size: 11px;
+  line-height: 16px;
+  background: var(--bg-recessed);
+  color: var(--text-2);
+}
+.dash-agenda-kind[data-kind='meeting'] {
+  background: var(--info-subtle);
+  color: var(--info);
+}
+.dash-agenda-kind[data-kind='deadline'] {
+  background: var(--warn-subtle);
+  color: var(--warn);
+}
+.dash-agenda-hint .dash-agenda-kind {
+  margin-left: 6px;
+}
+/* [목록 | 달력]: a small segmented switch at the right of the 오늘 head. */
+.dash-agenda-views {
+  display: inline-flex;
+  align-self: center;
+  border: var(--hairline) solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+.dash-agenda-views button {
+  border: 0;
+  border-radius: 0;
+  padding: 3px 10px;
+  font-size: 12px;
+  background: var(--bg-elevated);
+  color: var(--text-2);
+}
+.dash-agenda-views button + button {
+  border-left: var(--hairline) solid var(--border);
+}
+.dash-agenda-views button[aria-pressed='true'] {
+  background: var(--bg-active);
+  color: var(--text-1);
+  font-weight: 600;
+}
+/* 달력 (T-110): the month beside the 날짜 없음 box; the picked day and a drop target get the soft
+   selected background, today's date a filled circle. No side bars. */
+.dash-cal {
+  margin-top: 10px;
+}
+.dash-cal-body {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+.dash-cal-month {
+  flex: 1;
+  min-width: 0;
+}
+.dash-cal-nav {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+.dash-cal-label {
+  font-size: 13px;
+  min-width: 92px;
+  text-align: center;
+}
+.dash-cal-step {
+  padding: 1px 8px;
+  border-color: transparent;
+  background: none;
+  color: var(--text-2);
+}
+.dash-cal-step:hover {
+  background: var(--bg-hover);
+}
+.dash-cal-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  border-top: var(--hairline) solid var(--border-subtle);
+  border-left: var(--hairline) solid var(--border-subtle);
+}
+.dash-cal-weekday {
+  padding: 4px 6px;
+  font-size: 11px;
+  color: var(--text-3);
+  border-right: var(--hairline) solid var(--border-subtle);
+  border-bottom: var(--hairline) solid var(--border-subtle);
+}
+.dash-cal-day {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  min-height: 78px;
+  padding: 3px 4px 4px;
+  border-right: var(--hairline) solid var(--border-subtle);
+  border-bottom: var(--hairline) solid var(--border-subtle);
+  cursor: pointer;
+}
+.dash-cal-day:hover {
+  background: var(--bg-hover);
+}
+.dash-cal-day[aria-pressed='true'],
+.dash-cal-day[data-over],
+.dash-cal-undated[data-over] {
+  background: var(--bg-selected);
+}
+.dash-cal-day[data-outside] .dash-cal-date {
+  color: var(--text-4);
+}
+.dash-cal-date {
+  align-self: flex-start;
+  min-width: 20px;
+  height: 20px;
+  border-radius: var(--radius-pill);
+  font: 11px/20px var(--font-mono);
+  text-align: center;
+  color: var(--text-2);
+}
+.dash-cal-day[data-today] .dash-cal-date {
+  background: var(--accent);
+  color: var(--cta-text);
+}
+.dash-cal-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  padding: 1px 3px;
+  border-radius: var(--radius-sm);
+  font-size: 11px;
+  line-height: 15px;
+  color: var(--text-1);
+  cursor: grab;
+}
+.dash-cal-item:hover {
+  background: var(--bg-active);
+}
+.dash-cal-item[data-done] {
+  color: var(--text-3);
+  text-decoration: line-through;
+}
+.dash-cal-item[data-dragging] {
+  opacity: 0.5;
+}
+.dash-cal-dot {
+  flex-shrink: 0;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--text-3);
+}
+.dash-cal-item[data-kind='meeting'] .dash-cal-dot {
+  background: var(--info);
+}
+.dash-cal-item[data-kind='deadline'] .dash-cal-dot {
+  background: var(--warn);
+}
+.dash-cal-time {
+  flex-shrink: 0;
+  font: 10px var(--font-mono);
+  color: var(--text-3);
+}
+.dash-cal-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dash-cal-more {
+  font-size: 11px;
+  color: var(--text-3);
+}
+.dash-cal-undated {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  width: 180px;
+  flex-shrink: 0;
+  padding: 0 6px 8px;
+  border: var(--hairline) solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+}
+.dash-cal-undated .dash-folder-sub {
+  margin-top: 8px;
+}
+.dash-cal-hint {
+  margin: 0;
+  font-size: 11px;
+  color: var(--text-3);
+}
+.dash-cal-picked {
+  margin-top: 12px;
+}
+@media (max-width: 700px) {
+  .dash-cal-body {
+    flex-direction: column;
+  }
+  .dash-cal-undated {
+    width: auto;
+    align-self: stretch;
+  }
+  .dash-cal-day {
+    min-height: 48px;
+  }
+  /* Narrow days show the dots only; the picked day's list below gives the words. */
+  .dash-cal-title,
+  .dash-cal-time {
+    display: none;
+  }
+  .dash-cal-day .dash-cal-item {
+    display: inline-flex;
+  }
+}
 @media (max-width: 850px) {
   .dash-page {
     padding: 16px;

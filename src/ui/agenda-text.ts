@@ -1,6 +1,9 @@
-// 대시보드의 할 일 (SPEC-01.14 2): reading a date and time out of what the user typed, on this PC,
-// with no AI call — '내일 3시 구조 회의', '금요일까지 보고서', '10/7 14:00 현장 회의'. The words
-// that gave the date or time leave the text; when nothing is read the text stays as typed.
+// 대시보드의 할 일 (SPEC-01.14 2): reading a date, a time and a kind out of what the user typed, on
+// this PC, with no AI call — '내일 3시 구조 회의', '금요일까지 보고서', '10/7 14:00 현장 회의'. The
+// words that gave the date or time leave the text; when nothing is read the text stays as typed.
+// '까지' after the date or time (or the word '마감') makes it a 마감, '회의'/'미팅' a 회의.
+
+import type { AgendaKind } from '../contracts/agenda.ts';
 
 /** app.ts fires this after the AI added or changed 할 일, or [되돌리기] took it back. */
 export const AGENDA_CHANGED = 'vide:agenda-changed';
@@ -24,7 +27,14 @@ export interface ParsedAgenda {
   text: string;
   date: string | null;
   time: string | null;
+  kind: AgendaKind;
 }
+/** The small label a kind shows ('할 일' is the plain one and shows none in the list). */
+export const KIND_LABELS: Record<AgendaKind, string> = {
+  task: '할 일',
+  meeting: '회의',
+  deadline: '마감',
+};
 
 const WEEKDAYS = '일월화수목금토';
 // A token stands alone: after the start or a space, before the end, a space or a particle.
@@ -97,17 +107,26 @@ function clock(
   return [hour, minute];
 }
 
-/** Reads the first date and the first time in the text (today = the PC's local day). */
+/** '마감'/'회의'/'미팅' in the words ('회의록' is not a meeting). */
+const DEADLINE_WORD = /마감/;
+const MEETING_WORD = /회의(?!록)|미팅/;
+
+/**
+ * Reads the first date and the first time in the text (today = the PC's local day), and the kind:
+ * '까지' right after the date or time, or the word '마감', is a 마감; '회의'/'미팅' a 회의; else 할 일.
+ */
 export function parseAgendaText(input: string, now = new Date()): ParsedAgenda {
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   let text = input;
   let date: string | null = null,
-    time: string | null = null;
+    time: string | null = null,
+    until = false;
   for (const { re, read } of timePatterns) {
     const m = re.exec(text);
     const value = m && read(m);
     if (!m || !value) continue;
     time = `${pad(value[0])}:${pad(value[1])}`;
+    until ||= m[0].endsWith('까지');
     text = text.slice(0, m.index) + text.slice(m.index + m[0].length);
     break;
   }
@@ -116,14 +135,17 @@ export function parseAgendaText(input: string, now = new Date()): ParsedAgenda {
     const value = m && read(m, today);
     if (!m || !value) continue;
     date = isoDate(value);
+    until ||= m[0].endsWith('까지');
     text = text.slice(0, m.index) + text.slice(m.index + m[0].length);
     break;
   }
   const rest = text.replace(/\s+/g, ' ').trim();
+  const kind: AgendaKind =
+    until || DEADLINE_WORD.test(input) ? 'deadline' : MEETING_WORD.test(input) ? 'meeting' : 'task';
   // Only a date or a time and no words left: keep what was typed as the text too.
-  if ((!date && !time) || !rest) return { text: input.trim(), date, time };
+  if ((!date && !time) || !rest) return { text: input.trim(), date, time, kind };
   if (time && !date) date = isoDate(today);
-  return { text: rest, date, time };
+  return { text: rest, date, time, kind };
 }
 
 /** Where an item stands against today (SPEC-01.14 3). */
@@ -213,3 +235,32 @@ export class AgendaTurns {
     return ready;
   }
 }
+
+// 대시보드 › 오늘 › 달력 (SPEC-01.14 3): one month, weeks starting on Sunday.
+/** The first day of the month `value` falls in, 'YYYY-MM-01'. */
+export const monthOf = (value: string) => `${value.slice(0, 7)}-01`;
+/** The first day of the month `by` months from `month`. */
+export function shiftMonth(month: string, by: number) {
+  const at = fromIso(month);
+  return isoDate(new Date(at.getFullYear(), at.getMonth() + by, 1));
+}
+/** Every day of the weeks that hold the month, Sunday first (35 or 42 days, or 28 for a February). */
+export function monthDays(month: string) {
+  const first = fromIso(month);
+  const start = addDays(first, -first.getDay());
+  const last = new Date(first.getFullYear(), first.getMonth() + 1, 0);
+  const weeks = Math.ceil((first.getDay() + last.getDate()) / 7);
+  return Array.from({ length: weeks * 7 }, (_, index) => isoDate(addDays(start, index)));
+}
+/** '2026년 10월'. */
+export function monthLabel(month: string) {
+  const at = fromIso(month);
+  return `${at.getFullYear()}년 ${at.getMonth() + 1}월`;
+}
+/** '10월 7일 (수)'. */
+export function dayLabel(value: string) {
+  const at = fromIso(value);
+  return `${at.getMonth() + 1}월 ${at.getDate()}일 (${WEEKDAYS[at.getDay()]})`;
+}
+/** The weekday letters, Sunday first. */
+export const WEEKDAY_LETTERS = [...WEEKDAYS];

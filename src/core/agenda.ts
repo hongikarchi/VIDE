@@ -11,7 +11,7 @@ import {
 import { DomainError, type Store } from './store.ts';
 
 /**
- * A project's 할 일 (SPEC-01.14, ARCH-01 §3 「대시보드의 할 일」, schema 7). Edits carry the
+ * A project's 할 일 (SPEC-01.14, ARCH-01 §3 「대시보드의 할 일」, schema 7–8). Edits carry the
  * revision read last (REVISION_CONFLICT otherwise, like table-views.ts); reordering changes only
  * `ord`. Data access only: who may write is the server's.
  */
@@ -26,6 +26,7 @@ const decode = (row: Record<string, unknown>): AgendaItem =>
     text: row.text,
     date: row.date ?? null,
     time: row.time ?? null,
+    kind: row.kind ?? 'task',
     done: row.doneAt != null,
     doneAt: row.doneAt ?? null,
     order: row.ord,
@@ -80,8 +81,21 @@ export class Agenda {
         time = input.time ?? null,
         date = input.date ?? (time ? localDate(this.now()) : null);
       this.store.db
-        .prepare('INSERT INTO agenda_items VALUES(?,?,?,?,?,NULL,?,?,1,?,?)')
-        .run(id, projectId, input.text.trim(), date, time, (count.last ?? 0) + 1, source, at, at);
+        .prepare(
+          'INSERT INTO agenda_items(id,projectId,text,date,time,doneAt,ord,source,revision,createdAt,updatedAt,kind) VALUES(?,?,?,?,?,NULL,?,?,1,?,?,?)',
+        )
+        .run(
+          id,
+          projectId,
+          input.text.trim(),
+          date,
+          time,
+          (count.last ?? 0) + 1,
+          source,
+          at,
+          at,
+          input.kind ?? 'task',
+        );
       return this.get(projectId, id);
     });
   }
@@ -100,9 +114,18 @@ export class Agenda {
         input.done === undefined ? before.doneAt : input.done ? (before.doneAt ?? at) : null;
       this.store.db
         .prepare(
-          'UPDATE agenda_items SET text=?,date=?,time=?,doneAt=?,revision=revision+1,updatedAt=? WHERE projectId=? AND id=?',
+          'UPDATE agenda_items SET text=?,date=?,time=?,kind=?,doneAt=?,revision=revision+1,updatedAt=? WHERE projectId=? AND id=?',
         )
-        .run(input.text?.trim() ?? before.text, date, time, doneAt, at, projectId, id);
+        .run(
+          input.text?.trim() ?? before.text,
+          date,
+          time,
+          input.kind ?? before.kind,
+          doneAt,
+          at,
+          projectId,
+          id,
+        );
       return this.get(projectId, id);
     });
   }
@@ -140,7 +163,7 @@ export class Agenda {
   }
   /**
    * Takes back what an AI write changed ([되돌리기]): an added item is removed, a changed one gets
-   * its earlier text, date, time and done state back. An item removed since, or changed or
+   * its earlier text, date, time, kind (when recorded) and done state back. An item removed since, or changed or
    * finished after the write (its revision moved on, an added one too), is left as it is and
    * counted as skipped. The changes go newest first; an item a later change in the same list was
    * taken back on counts as being at the revision before that change (an add then a set of one
@@ -166,12 +189,21 @@ export class Agenda {
             .run(projectId, change.id);
           reverted++;
         } else {
-          const { text, date, time, doneAt } = change.before;
+          const { text, date, time, doneAt, kind } = change.before;
           this.store.db
             .prepare(
-              'UPDATE agenda_items SET text=?,date=?,time=?,doneAt=?,revision=revision+1,updatedAt=? WHERE projectId=? AND id=?',
+              'UPDATE agenda_items SET text=?,date=?,time=?,kind=coalesce(?,kind),doneAt=?,revision=revision+1,updatedAt=? WHERE projectId=? AND id=?',
             )
-            .run(text, date, time, doneAt, this.now().toISOString(), projectId, change.id);
+            .run(
+              text,
+              date,
+              time,
+              kind ?? null,
+              doneAt,
+              this.now().toISOString(),
+              projectId,
+              change.id,
+            );
           rewound.set(change.id, change.revision - 1);
           reverted++;
         }

@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 
 /** v5 and later cannot be opened by an older installation (UNSUPPORTED_SCHEMA); see ARCH-03 §10.1. */
-export const schemaVersion = 7;
+export const schemaVersion = 8;
 export const baselineSchema = `
         CREATE TABLE IF NOT EXISTS projects(id TEXT PRIMARY KEY, name TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS connections(id TEXT PRIMARY KEY, projectId TEXT NOT NULL REFERENCES projects(id),
@@ -108,6 +108,10 @@ const agendaItems = `CREATE TABLE IF NOT EXISTS agenda_items(id TEXT PRIMARY KEY
   doneAt TEXT, ord REAL NOT NULL, source TEXT NOT NULL CHECK(source IN ('user','ai')),
   revision INTEGER NOT NULL, createdAt TEXT NOT NULL, updatedAt TEXT NOT NULL);
 CREATE INDEX IF NOT EXISTS agenda_items_project ON agenda_items(projectId, ord);`;
+// The kind of a 할 일 (SPEC-01.14 1, ARCH-01 §3): existing rows become '할 일' (task). The column is
+// added at the end, so every write names its columns.
+const agendaKinds = `ALTER TABLE agenda_items ADD COLUMN kind TEXT NOT NULL DEFAULT 'task'
+  CHECK(kind IN ('task','meeting','deadline'));`;
 export const migrations: Migration[] = [
   { version: 2, sql: baselineSchema },
   { version: 3, sql: hiddenRequests },
@@ -115,6 +119,7 @@ export const migrations: Migration[] = [
   { version: 5, sql: conversationsAndJigs },
   { version: 6, sql: projectFolders },
   { version: 7, sql: agendaItems },
+  { version: 8, sql: agendaKinds },
 ];
 
 /** Caller holds the exclusive controller lock. Never migrates user model files. */

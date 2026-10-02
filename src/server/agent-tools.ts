@@ -34,6 +34,7 @@ import {
   AGENDA_TEXT_MAX,
   agendaDateSchema,
   agendaTimeSchema,
+  agendaKindSchema,
   type AgendaChange,
   type AgendaItem,
 } from '../contracts/agenda.ts';
@@ -351,12 +352,12 @@ const definitions = {
   // The project's 할 일 (SPEC-01.14): read, and T1 writes recorded in the ledger with an undo.
   agenda_list: {
     description:
-      "List this project's 할 일 (the dashboard's to-do list). An item with a time is a 일정 (schedule). Dates are the PC's local 'YYYY-MM-DD', times 'HH:MM'; today is given. Done items only with done:true.",
+      "List this project's 할 일 (the dashboard's to-do list and calendar). An item with a time is a 일정 (schedule); kind is task (할 일), meeting (회의) or deadline (마감). Dates are the PC's local 'YYYY-MM-DD', times 'HH:MM'; today is given. Done items only with done:true.",
     schema: z.object({ targetRef: scoped, done: z.boolean().optional() }).strict(),
   },
   agenda_add: {
     description:
-      "Add 할 일 to this project's dashboard list when the user's words ask for it (e.g. '내일 3시 구조 회의 넣어줘', or items from meeting notes they asked you to collect). Write the date as 'YYYY-MM-DD' and the time as 'HH:MM' (24 h) yourself; leave them out when the words give none. Applied at once and recorded in the conversation; the user gets [되돌리기]. List the added items in your reply.",
+      "Add 할 일 to this project's dashboard list when the user's words ask for it (e.g. '내일 3시 구조 회의 넣어줘', or items from meeting notes they asked you to collect). Write the date as 'YYYY-MM-DD' and the time as 'HH:MM' (24 h) yourself; leave them out when the words give none. kind: 'meeting' for a meeting, 'deadline' for something due by a date ('금요일까지 보고서'); leave it out for anything else (task). Applied at once and recorded in the conversation; the user gets [되돌리기]. List the added items in your reply.",
     schema: z
       .object({
         targetRef: scoped,
@@ -367,6 +368,7 @@ const definitions = {
                 text: z.string().min(1).max(AGENDA_TEXT_MAX),
                 date: agendaDateSchema.optional(),
                 time: agendaTimeSchema.optional(),
+                kind: agendaKindSchema.optional(),
               })
               .strict(),
           )
@@ -377,7 +379,7 @@ const definitions = {
   },
   agenda_set: {
     description:
-      "Change 할 일 of this project when the user's words ask for it: text, date/time (null clears) or done. ids come from agenda_list. Applied at once and recorded in the conversation; the user gets [되돌리기]. Say what changed in your reply.",
+      "Change 할 일 of this project when the user's words ask for it: text, date/time (null clears), kind (task, meeting, deadline) or done. ids come from agenda_list. Applied at once and recorded in the conversation; the user gets [되돌리기]. Say what changed in your reply.",
     schema: z
       .object({
         targetRef: scoped,
@@ -389,6 +391,7 @@ const definitions = {
                 text: z.string().min(1).max(AGENDA_TEXT_MAX).optional(),
                 date: agendaDateSchema.nullable().optional(),
                 time: agendaTimeSchema.nullable().optional(),
+                kind: agendaKindSchema.optional(),
                 done: z.boolean().optional(),
               })
               .strict(),
@@ -1212,6 +1215,7 @@ const agendaRow = (item: AgendaItem) => ({
   text: item.text,
   date: item.date,
   time: item.time,
+  kind: item.kind,
   done: item.done,
   ...(item.source === 'ai' ? { by: 'ai' } : {}),
 });
@@ -1256,6 +1260,7 @@ export function agendaHandlers({
             text: item.text,
             date: item.date,
             time: item.time,
+            kind: item.kind,
             revision: item.revision,
           })),
         );
@@ -1280,6 +1285,7 @@ export function agendaHandlers({
             date: before.date,
             time: before.time,
             doneAt: before.doneAt,
+            kind: before.kind,
           },
         });
       }

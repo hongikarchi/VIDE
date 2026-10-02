@@ -3,18 +3,34 @@
 // later dates sit under '예정' by date, finished ones fold under '완료 n'. Enter adds (a date and
 // time are read from the words on this PC, agenda-text.ts), the box finishes, a click on the text
 // edits in place, [빼기] removes, drag or ↑↓ reorders. iPad sessions may edit too. The section
-// reads its own data (`…/agenda`) and again when shown, on focus and after an AI write.
+// reads its own data (`…/agenda`) and again when shown, on focus and after an AI write. A
+// [목록 | 달력] switch shows the same items as one month (dashboard-calendar.tsx, T-110); each
+// item is a 할 일, 회의 or 마감, read from the words and shown as a small label.
 import { useCallback, useEffect, useRef, useState, type DragEvent } from 'react';
 import { api } from './gateway.ts';
-import type { AgendaItem } from '../contracts/agenda.ts';
+import type { AgendaItem, AgendaKind } from '../contracts/agenda.ts';
 import {
   AGENDA_CHANGED,
+  KIND_LABELS,
   agendaWhen,
   dateLabel,
   isoDate,
+  monthOf,
   parseAgendaText,
   shortDate,
 } from './agenda-text.ts';
+import { AgendaCalendar } from './dashboard-calendar.tsx';
+
+type View = 'list' | 'calendar';
+const VIEW_KEY = 'vide.agenda.view';
+/** The view this viewer chose last (browser storage only; it may be missing). */
+const storedView = (): View => {
+  try {
+    return localStorage.getItem(VIEW_KEY) === 'calendar' ? 'calendar' : 'list';
+  } catch {
+    return 'list';
+  }
+};
 
 const reasons: Record<string, string> = {
   REVISION_CONFLICT: '다른 화면에서 바뀌어 최신 목록을 다시 읽었습니다.',
@@ -30,6 +46,7 @@ interface Fields {
   text: string;
   date: string;
   time: string;
+  kind: AgendaKind;
 }
 /**
  * An edit in place: the form's fields, and the revision and fields of the item when editing began
@@ -45,6 +62,7 @@ const fieldsOf = (entry: AgendaItem): Fields => ({
   text: entry.text,
   date: entry.date ?? '',
   time: entry.time ?? '',
+  kind: entry.kind,
 });
 const editOf = (entry: AgendaItem): Edit => ({
   id: entry.id,
@@ -62,6 +80,10 @@ export function AgendaToday({ projectId, shown }: { projectId: string; shown: nu
   const [reason, setReason] = useState('');
   const [busy, setBusy] = useState(false);
   const [dragging, setDragging] = useState<string | undefined>();
+  const [view, setView] = useState<View>(storedView);
+  const [month, setMonth] = useState(() => monthOf(isoDate(new Date())));
+  const [picked, setPicked] = useState<string | undefined>();
+  const box = useRef<HTMLInputElement>(null);
   const base = `/projects/${encodeURIComponent(projectId)}/agenda`;
   const now = new Date();
   const today = isoDate(now);
@@ -114,12 +136,15 @@ export function AgendaToday({ projectId, shown }: { projectId: string; shown: nu
   // and one that fails comes back into the box (unless something new was typed there).
   const adding = useRef<Promise<unknown>>(Promise.resolve());
   const add = () => {
-    if (!draft.trim()) return;
+    // Nothing but the date a picked day put in the box: nothing to add yet.
+    if (!draft.trim() || /^\d{4}-\d{2}-\d{2}$/.test(draft.trim())) return;
     const typed = draft;
-    setDraft('');
+    // On the calendar the box starts again with the picked day's date.
+    const start = view === 'calendar' && picked ? `${picked} ` : '';
+    setDraft(start);
     adding.current = adding.current.then(async () => {
       if ((await write(base, 'POST', parseAgendaText(typed, new Date()))) !== true)
-        setDraft((now) => now || typed);
+        setDraft((now) => (now.trim() && now !== start ? now : typed));
     });
   };
   const item = (id: string) => `${base}/${encodeURIComponent(id)}`;
@@ -134,6 +159,7 @@ export function AgendaToday({ projectId, shown }: { projectId: string; shown: nu
     if (edit.text.trim() !== edit.from.text.trim()) changed.text = edit.text.trim();
     if (edit.date !== edit.from.date) changed.date = edit.date || null;
     if (edit.time !== edit.from.time) changed.time = edit.time || null;
+    if (edit.kind !== edit.from.kind) changed.kind = edit.kind;
     if (Object.keys(changed).length === 1) return setEdit(undefined);
     const result = await write(item(edit.id), 'PUT', changed);
     if (result === true) return setEdit(undefined);
@@ -159,6 +185,7 @@ export function AgendaToday({ projectId, shown }: { projectId: string; shown: nu
             text: now.text !== now.from.text ? now.text : fresh.text,
             date: now.date !== now.from.date ? now.date : fresh.date,
             time: now.time !== now.from.time ? now.time : fresh.time,
+            kind: now.kind !== now.from.kind ? now.kind : fresh.kind,
           },
     );
   };
@@ -178,6 +205,23 @@ export function AgendaToday({ projectId, shown }: { projectId: string; shown: nu
     if (from < 0 || to < 0 || to >= ids.length || from === to) return;
     ids.splice(to, 0, ...ids.splice(from, 1));
     void write(`${base}/order`, 'POST', { ids });
+  };
+  /** The calendar's drag: only the date is sent (the time and the rest stay). */
+  const moveTo = (entry: AgendaItem, date: string | null) =>
+    void write(item(entry.id), 'PUT', { revision: entry.revision, date });
+  const choose = (next: View) => {
+    setView(next);
+    try {
+      localStorage.setItem(VIEW_KEY, next);
+    } catch {
+      // Only a convenience; the list is the default.
+    }
+  };
+  /** A day picked on the calendar: its list below, and the add box starts with its date. */
+  const pick = (date: string) => {
+    setPicked(date);
+    setDraft((now) => `${date} ${now.replace(/^\d{4}-\d{2}-\d{2}\s*/, '')}`);
+    box.current?.focus();
   };
 
   const row = (entry: AgendaItem, index?: number) => {
@@ -248,6 +292,17 @@ export function AgendaToday({ projectId, shown }: { projectId: string; shown: nu
               value={edit.time}
               onChange={(event) => setEdit({ ...edit, time: event.target.value })}
             />
+            <select
+              aria-label="종류"
+              value={edit.kind}
+              onChange={(event) => setEdit({ ...edit, kind: event.target.value as AgendaKind })}
+            >
+              {(Object.keys(KIND_LABELS) as AgendaKind[]).map((kind) => (
+                <option key={kind} value={kind}>
+                  {KIND_LABELS[kind]}
+                </option>
+              ))}
+            </select>
             <button type="submit" disabled={busy}>
               저장
             </button>
@@ -267,6 +322,11 @@ export function AgendaToday({ projectId, shown }: { projectId: string; shown: nu
         )}
         {editing ? null : (
           <span className="dash-agenda-meta">
+            {entry.kind !== 'task' ? (
+              <span className="dash-agenda-kind" data-kind={entry.kind}>
+                {KIND_LABELS[entry.kind]}
+              </span>
+            ) : null}
             {entry.time ? <span className="dash-agenda-time">{entry.time}</span> : null}
             {entry.date && (when !== 'today' || entry.done)
               ? entry.done
@@ -312,12 +372,27 @@ export function AgendaToday({ projectId, shown }: { projectId: string; shown: nu
     );
   };
 
-  const preview = draft.trim() ? parseAgendaText(draft, now) : undefined;
+  const preview =
+    draft.trim() && !/^\d{4}-\d{2}-\d{2}$/.test(draft.trim())
+      ? parseAgendaText(draft, now)
+      : undefined;
   return (
     <section className="dash-section dash-agenda" aria-label="오늘">
       <div className="dash-section-head">
         <h3>오늘</h3>
         <span className="dash-agenda-day">{todayLabel(now)}</span>
+        <div className="dash-agenda-views" role="group" aria-label="보기">
+          {(['list', 'calendar'] as const).map((value) => (
+            <button
+              key={value}
+              type="button"
+              aria-pressed={view === value}
+              onClick={() => choose(value)}
+            >
+              {value === 'list' ? '목록' : '달력'}
+            </button>
+          ))}
+        </div>
       </div>
       <form
         className="dash-agenda-add"
@@ -327,6 +402,7 @@ export function AgendaToday({ projectId, shown }: { projectId: string; shown: nu
         }}
       >
         <input
+          ref={box}
           type="text"
           aria-label="할 일 추가"
           placeholder="할 일이나 일정 — 예: 내일 3시 구조 회의, 금요일 도면 제출"
@@ -339,6 +415,11 @@ export function AgendaToday({ projectId, shown }: { projectId: string; shown: nu
         <p className="dash-agenda-hint" aria-live="polite">
           {preview.date ? dateLabel(preview.date, today).replace(/^지남 · /, '') : ''}
           {preview.time ? ` ${preview.time}` : ''} · {preview.text}
+          {preview.kind !== 'task' ? (
+            <span className="dash-agenda-kind" data-kind={preview.kind}>
+              {KIND_LABELS[preview.kind]}
+            </span>
+          ) : null}
         </p>
       ) : null}
       {reason ? (
@@ -350,6 +431,18 @@ export function AgendaToday({ projectId, shown }: { projectId: string; shown: nu
         <p className="dash-empty">할 일을 읽지 못했습니다.</p>
       ) : !items ? (
         <p className="dash-empty">읽는 중…</p>
+      ) : view === 'calendar' ? (
+        <AgendaCalendar
+          items={items}
+          today={today}
+          month={month}
+          selected={picked}
+          busy={busy}
+          onMonth={setMonth}
+          onSelect={pick}
+          onMove={moveTo}
+          row={(entry) => row(entry)}
+        />
       ) : !current.length ? (
         <p className="dash-empty">
           {open.length ? '오늘 할 일은 다 했습니다.' : '할 일이 없습니다. 위 칸에 적고 Enter.'}
@@ -359,7 +452,7 @@ export function AgendaToday({ projectId, shown }: { projectId: string; shown: nu
           {current.map((entry, index) => row(entry, index))}
         </ul>
       )}
-      {later.length ? (
+      {view === 'list' && later.length ? (
         <>
           <h4 className="dash-folder-sub">예정 {later.length}</h4>
           <ul className="dash-agenda-list" aria-label="예정">
@@ -367,7 +460,7 @@ export function AgendaToday({ projectId, shown }: { projectId: string; shown: nu
           </ul>
         </>
       ) : null}
-      {done.length ? (
+      {view === 'list' && done.length ? (
         <div className="dash-agenda-done">
           <div className="dash-section-head">
             <button

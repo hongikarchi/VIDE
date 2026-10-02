@@ -320,3 +320,43 @@ test('a database newer than this code is refused unchanged, as an older release 
   assert.throws(() => new Store(file), { code: 'UNSUPPORTED_SCHEMA' });
   assert.deepEqual(readFileSync(file), bytes);
 });
+
+test('schema 8 gives the 할 일 of a schema 7 database the kind task and refuses an unknown kind', (t) => {
+  const root = mkdtempSync(join(tmpdir(), 'vide-schema7-'));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const file = join(root, 'vide.sqlite');
+  const db = new DatabaseSync(file);
+  db.exec(
+    'CREATE TABLE schema_version(version INTEGER NOT NULL); INSERT INTO schema_version VALUES(7);' +
+      migrations
+        .filter((step) => step.version <= 7)
+        .map((step) => step.sql)
+        .join('\n'),
+  );
+  db.exec("INSERT INTO projects VALUES('p','existing')");
+  db.prepare('INSERT INTO agenda_items VALUES(?,?,?,?,?,NULL,?,?,1,?,?)').run(
+    'a1',
+    'p',
+    '보고서',
+    '2026-10-09',
+    null,
+    1,
+    'user',
+    't1',
+    't1',
+  );
+  db.close();
+  const store = new Store(file);
+  try {
+    assert.equal(store.db.prepare('SELECT version FROM schema_version').get().version, 8);
+    assert.equal(
+      store.db.prepare("SELECT kind FROM agenda_items WHERE id='a1'").get().kind,
+      'task',
+    );
+    assert.throws(() => store.db.prepare("UPDATE agenda_items SET kind='party'").run());
+  } finally {
+    store.close();
+  }
+  const [backup] = readdirSync(file + '.backups');
+  assert.match(backup, /^schema-7-/);
+});

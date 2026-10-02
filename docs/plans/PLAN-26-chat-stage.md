@@ -2,13 +2,13 @@
 id: PLAN-26
 title: 대화가 화면과 작업을 이끄는 구조 — skill 시작, 토큰 정리, 셸 정리, 산출물 탭
 status: review
-version: 0.9
+version: 0.10
 updated: 2026-10-02
 owner: agent:claude
 related: [ADR-026, ADR-022, ADR-021, ADR-020, SPEC-01, SPEC-02, SPEC-07, ARCH-03, ARCH-01, DESIGN, RESEARCH-12, PLAN-22, PLAN-24, FR-18, FR-24, FR-25, AC-48]
 ---
 
-# 대화가 화면과 작업을 이끄는 구조 (T-076~T-081, T-089~T-091, T-098~T-101, T-103)
+# 대화가 화면과 작업을 이끄는 구조 (T-076~T-081, T-089~T-091, T-098~T-101, T-103, T-110)
 
 기준: [ADR-026](../decisions/ADR-026-chat-stage-and-skill-jigs.md)(2026-10-01 사용자 결정), 조사는 [RESEARCH-12](../research/RESEARCH-12-ui-chat-driven-structure.md). 진행 상황의 정본은 [PLAN §6.5](PLAN.md)이다.
 
@@ -28,6 +28,7 @@ related: [ADR-026, ADR-022, ADR-021, ADR-020, SPEC-01, SPEC-02, SPEC-07, ARCH-03
 | T-099 | JIG 한 화면: 레일의 만들기를 JIG에 합침, 목록 끝의 [새로 만들기] 카드, 작성 중 초안 카드, jig 하나에 카드 하나 | 사용자 요청 2026-10-01 | 구현·단위·브라우저 시험 완료(2026-10-01, 설치 전) |
 | T-100 | jig 아이콘: 정해 둔 목록에서 고르는 `jig.json`의 `icon`, 카드·문맥 탭·대화 칩·대시보드에 표시 | T-099 | 구현·단위·브라우저 시험 완료(2026-10-01, 설치 전) |
 | T-101 | [수정하기]: 고정한 jig의 사본 초안(같은 id·버전 +0.0.1) → 다시 고정 → 작업본 [올리기] | T-099 | 구현·단위·브라우저 시험 완료(2026-10-01, 설치 전). 단계가 jig 밖을 가져오는 저장소 jig(S-06)는 사본을 만들지 않는다(검토 지적 반영) |
+| T-110 | 대시보드 달력: '오늘'의 [목록 \| 달력], 이 프로젝트의 한 달 보기, 할 일 종류(할 일·회의·마감, schema 8) | T-098, 사용자 결정 2026-10-02 | 구현·단위·브라우저 시험 완료(2026-10-02, 설치 전). 주 보기·구글 캘린더·여러 프로젝트 달력은 하지 않음 |
 | T-103 | 작성기의 대상 파일 칩·연계 대상 창 폐지: 고칠 연결 파일은 AI가 정하고, 다른 파일의 핀도 변경 핀 | ADR-027, 사용자 질문 2026-10-02 | 구현·단위·브라우저 시험 완료(2026-10-02, 설치 전) |
 
 `src/ui/app.ts`·`src/ui/style.css`는 여러 세션이 함께 고친다. 티켓마다 깨끗한 worktree에서 작업하고 자기 파일만 스테이징한다. 커밋·설치본 릴리스는 사용자 요청이나 웨이브 경계의 판단에 따른다.
@@ -237,6 +238,26 @@ related: [ADR-026, ADR-022, ADR-021, ADR-020, SPEC-01, SPEC-02, SPEC-07, ARCH-03
 **검증 — 실패:** 오래된 `revision`으로 고침·빼기 → `REVISION_CONFLICT`(화면은 최신 목록을 다시 읽음). 없는 항목 → `NOT_FOUND`. 빈 내용·없는 날짜(2/30)·24:00 → `INVALID_INPUT`. 같은 쓰기의 두 번째 [되돌리기] → `AGENDA_UNDONE`. 새로고침 뒤에는 지난 턴의 [되돌리기]를 다시 띄우지 않는다(대화 기록에 남기는 것은 후속). 계획 모드 턴에는 `agenda_add`가 없다.
 
 **완료:** 위 시험 통과와 PLAN §6.5 갱신. 실제 CLI로 '회의록에서 할 일 뽑아줘'를 한 번 해 보는 확인은 설치본 릴리스 때.
+
+<a id="t-110"></a>
+## T-110 · 대시보드 달력과 할 일 종류
+
+**목적·기준:** 사용자 결정(2026-10-02) '대시보드 켈린더 좋아요~ 구글 캘린더 연동은 아직. 여러 프로젝트 합친 달력도 아직.'과 같은 날 추천안 수락. 동작 정본은 [SPEC-01.14](../specs/SPEC-01-project-input-sync.md)의 1(종류)·2(종류 읽기)·3(달력)·8(범위 밖), 저장·경로·도구는 ARCH-01 §3 「대시보드의 할 일」, 화면은 Design §03 「대시보드의 오늘」·「대시보드의 달력」·SCR-20. 이 프로젝트의 항목만, 월 보기만. 주 보기·구글 캘린더 연동·여러 프로젝트 달력은 이번 범위 밖.
+
+| 대상 | 변경 |
+|---|---|
+| `src/core/migrations.ts`, `src/contracts/agenda.ts`, `src/core/agenda.ts` | schema 8: `agenda_items.kind`(`task`·`meeting`·`deadline`, 기본 `task`, CHECK). 열이 끝에 붙어 INSERT는 열 이름을 적는다. 더하기·고치기의 `kind`, 되돌리기 기록의 `kind`(이전 기록은 종류 유지) |
+| `src/server/agent-tools.ts` | `agenda_list` 행의 `kind`, `agenda_add`·`agenda_set`의 `kind` 인자와 설명('까지'는 마감, 회의는 회의), 원장 `changes`의 `kind`·`before.kind` |
+| `src/ui/agenda-text.ts` | 종류 읽기(날짜·시각 뒤 '까지'·'마감' → 마감, '회의'·'미팅' → 회의, '회의록' 제외), `KIND_LABELS`, 달력 도우미 `monthDays`·`shiftMonth`·`monthOf`·`monthLabel`·`dayLabel` |
+| `src/ui/dashboard-calendar.tsx`(신설), `src/ui/dashboard-agenda.tsx`, `src/ui/dashboard.css` | [목록 \| 달력] 전환(브라우저 저장소 `vide.agenda.view`), 월 격자(종류 점·짧은 내용·'+n'), 날 누르기 → 그날 목록 + 입력칸 날짜 채움·초점, 다른 날로 끌기 → `PUT {revision, date}`, '날짜 없음' 상자(끌어 놓으면 날짜 비움), 목록 행·미리보기의 종류 표시, 편집의 종류 고르기 |
+
+**선행·외부 조건:** 없음. schema 8은 이 티켓이 쓴다(같은 묶음의 T-107·T-108은 스키마를 바꾸지 않거나 9를 쓴다).
+
+**검증 — 정상:** 단위 `tests/core/agenda-text.test.mjs`(종류: '금요일까지 보고서' 마감·내용 '보고서', '오후 5시까지' 마감, '수요일 설비 미팅' 회의, '회의록 정리' 할 일, '내일부터' 할 일; 달 격자 35·42·28일, 달 넘김·라벨), `tests/server/agenda.test.mjs`(기본 `task`, 회의 더하기, 없는 종류 거절, 날짜만 보낸 고치기는 시각·종류 유지, 종류 고치기, 되돌리기가 기록된 종류를 돌리고 이전 기록은 종류 유지), `tests/server/agenda-tools.test.mjs`(`agenda_add`의 `kind`와 원장 기록, `agenda_set`의 `before.kind`, 되돌리기), `tests/core/migrations.test.mjs`(schema 7 → 8 백업 뒤 기존 행 `task`, 없는 종류 CHECK 거절). 브라우저 `tests/integration/browser-dashboard-agenda.mjs`('내일 3시 구조 회의' 행의 '회의' 표시, [달력] → 날짜 없음 상자, 내일 칸의 회의 점, 오늘 칸 누름 → 입력칸 날짜·초점, '설비 미팅' Enter → 그날 회의, 미리보기의 '마감', 다른 날로 끌기 → 날짜만 바뀜(시각·종류 유지), 날짜 없음 ↔ 날 끌기, 다음 달·[이번 달], 새로고침 뒤 달력 보기 기억). 전체 `npm test`·`npm run typecheck`·prettier.
+
+**검증 — 실패:** 없는 종류 → `INVALID_INPUT`(DB CHECK도 거절). 다른 화면이 먼저 고친 항목을 끌어 놓음 → `REVISION_CONFLICT`와 최신 목록 다시 읽기(SPEC-01.14의 5, 기존 쓰기 경로). 날짜만 채워진 입력칸의 Enter는 아무것도 더하지 않는다.
+
+**완료:** 위 시험 통과와 PLAN §6.5 갱신. 실제 Claude·Codex가 '금요일까지 보고서 넣어줘'에 `kind: 'deadline'`을 주는지는 설치본 릴리스 때.
 
 <a id="t-099"></a>
 ## T-099 · JIG 한 화면: 목록 끝의 [새로 만들기], 작성 중 초안 카드, jig 하나에 카드 하나
