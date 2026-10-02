@@ -214,6 +214,7 @@ import { homedir } from 'node:os';
 import { readFile } from 'node:fs/promises';
 import { geometryContract, interpret, protectGeometry } from '../core/geometry.ts';
 import { Diagnostics, requestStages, type RunMarks } from './diagnostics.ts';
+import { withTrace } from '../core/breadcrumbs.ts';
 import { clearAuthStatus } from '../ai/claude-cli.ts';
 import {
   KeptClaudeCli,
@@ -891,7 +892,10 @@ export class Execution {
       return;
     }
     const controller = new AbortController();
-    const completion = this.traced(request, this.run(request, controller)).finally(async () => {
+    const completion = this.traced(
+      request,
+      withTrace({ requestId: request.id }, () => this.run(request, controller)),
+    ).finally(async () => {
       this.active.delete(request.id);
       this.pump(request.projectId);
       if (this.onFinished)
@@ -1026,7 +1030,10 @@ export class Execution {
         this.workspace.wait(projectId, request.id, admission.waitingFor);
         return;
       }
-      await this.traced(request, this.run(request, controller));
+      await this.traced(
+        request,
+        withTrace({ requestId: request.id }, () => this.run(request, controller)),
+      );
     })()
       .catch(() => {
         this.workspace.update(projectId, request.id, 'interrupted', {

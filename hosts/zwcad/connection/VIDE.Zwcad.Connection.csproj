@@ -25,5 +25,6 @@
     <Compile Include="..\worker\SdkCompiler.cs" Link="SdkCompiler.cs" />
     <Compile Include="..\worker\CompilerDependencies.cs" Link="CompilerDependencies.cs" />
     <Compile Include="..\..\common\PanelPage.cs" Link="PanelPage.cs" />
+    <Compile Include="..\..\common\DiagnosticLog.cs" Link="DiagnosticLog.cs" />
   </ItemGroup>
 </Project>

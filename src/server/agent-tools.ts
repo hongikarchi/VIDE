@@ -12,6 +12,7 @@ import {
   type ConversationScope,
 } from '../ai/agent-connection.ts';
 import { DomainError } from '../core/store.ts';
+import { currentTrace, diagnostic } from '../core/breadcrumbs.ts';
 import { DocumentLinks } from '../core/document-links.ts';
 import type { Workspace } from '../core/workspace.ts';
 import { structureSummarySchema, type StructureSummary } from '../contracts/structure-model.ts';
@@ -472,6 +473,8 @@ interface Run {
   expires: number;
   abort: AbortController;
   busy: boolean;
+  /** The request whose run issued this scope (diagnostic lines only). */
+  requestId?: string;
 }
 function toolName(value: string): value is ToolName {
   return Object.hasOwn(definitions, value);
@@ -718,6 +721,7 @@ export class AgentTools {
       expires: this.#now() + ttlMs,
       abort: new AbortController(),
       busy: false,
+      requestId: currentTrace()?.requestId,
     };
     this.#runs.set(key, run);
     return { token, revoke: () => this.#revoke(key) };
@@ -766,7 +770,42 @@ export class AgentTools {
         isError: true,
         content: [{ type: 'text', text: JSON.stringify({ code: 'INVALID_INPUT' }) }],
       };
-    return this.#invoke(run, name, parsed.data);
+    return this.#logged(run, name, parsed.data);
+  }
+  /**
+   * One tool call with its diagnostic line (T-126): the tool, its time, the answer's size and its
+   * code. Never the arguments or the answer itself.
+   */
+  async #logged(
+    run: Run,
+    name: ToolName,
+    args: { targetRef?: string; linkId?: string; [key: string]: unknown },
+  ): Promise<CallToolResult> {
+    const began = performance.now();
+    const result = await this.#invoke(run, name, args);
+    try {
+      let bytes = 0,
+        code: string | undefined;
+      for (const part of result.content ?? []) {
+        if (part.type === 'text') {
+          bytes += Buffer.byteLength(part.text);
+          if (result.isError && code === undefined)
+            code = /"code":"([A-Z][A-Z0-9_]{1,63})"/.exec(part.text)?.[1];
+        } else if (part.type === 'image') bytes += Math.floor((part.data.length * 3) / 4);
+      }
+      diagnostic('tool-call', {
+        ...(run.requestId ? { requestId: run.requestId } : {}),
+        tool: name,
+        ms: Math.round(performance.now() - began),
+        bytes,
+        ok: !result.isError,
+        ...(result.isError ? { code: code ?? 'UNKNOWN' } : {}),
+        ...(args.linkId ? { linkId: String(args.linkId).slice(0, 80) } : {}),
+      });
+    } catch {
+      /* Diagnostics never change a tool's answer. */
+    }
+    return result;
   }
   async #invoke(
     run: Run,
@@ -865,7 +904,7 @@ export class AgentTools {
         name,
         { description: definition.description, inputSchema: definition.schema },
         async (args: { targetRef?: string }): Promise<CallToolResult> => {
-          return this.#invoke(run, name, args);
+          return this.#logged(run, name, args);
         },
       );
     }

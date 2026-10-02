@@ -2,7 +2,7 @@
 id: ARCH-01
 title: VIDE 기술 구조와 구현 계약
 status: review
-version: 0.75
+version: 0.76
 updated: 2026-10-02
 owner: agent:codex
 related: [SPEC-00, SPEC-02, SPEC-03, SPEC-04, SPEC-09, PLAN, PLAN-20, PLAN-24, ADR-014, ADR-015, ADR-016, ADR-017, ADR-021, ADR-022, ADR-025, ADR-027, ADR-028, ADR-029, ADR-030, PLAN-25, PLAN-26, PLAN-27, ARCH-03]
@@ -810,6 +810,23 @@ R2 조건부 쓰기/체크섬은 [공식 Workers API](https://developers.cloudfl
 - 이전 대화 선별(2026-09-29, [PLAN-19](../plans/PLAN-19-request-routing.md)): `src/ai/context-selector.ts`가 이전 대화 6개 초과 시 Jev System One(`jev-1.13.0`, 최근 20개 각각 Noul, 5초)으로 고른다. 키는 `readJevKey`(환경 `TYPESAFE_API_KEY` 또는 `<데이터>/typesafe.env`). 진단 기록 `context {request, by: all|jev|fallback, ms, sent, of, reason?}`. Sync 진단 `sync {request, host, state, ms, hostMs, objects}`, `live-sync {ms}`.
 - 요청 경로 판정(2026-09-29, PLAN-19): `POST /api/v1/projects/:id/route {body ≤4000, subjects[≤60]{id,label}}` → `{target: view|document, action?, subject?, confidence, ms}` 또는 `{target: null}`(규칙으로). `src/ai/request-router.ts`가 Jev System One에 `target`·`action`(hide·isolate·unhide·select·fit)·`subject`(s0…·none) 세 Choice를 3초 제한으로 묻고, 확신 0.6 미만·오류는 null. 파일·프로그램 말은 호출 없이 document. 화면(`src/ui/request-route.ts`)은 대상 묶음 id를 `selection`·`kind:<종류>`·`layer:<이름>`(객체 수 순 30개)로 만든다. 진단 `route {by: jev|rules, target?, action?, ms?}`. 보내는 이전 대화는 하나당 요청 2,000자·답 6,000자로 자른다.
 - 호스트 패널(2026-09-29, [PLAN-21](../plans/PLAN-21-host-panel.md), Design SCR-12): Rhino 패널(Eto `WebView`)과 ZWCAD 팔레트(WebView2 WinForms, 데이터 `<데이터>/webview-zwcad`, 로더는 플러그인 옆 `WebView2Loader.dll`)가 같은 페이지를 연다: `<로컬 주소>/?panel=rhino|zwcad&name=<파일>[&project=<id>&instance=<연결>&document=<번호>]&theme=light|dark#<세션 토큰>`. `instance`가 없으면 연결 전 화면이다. 페이지는 플러그인 동작을 `vide://link|unlink|live|reload|open-vide` 이동으로 요청하고 플러그인이 취소한 뒤 실행한다(공통 `hosts/common/PanelPage.cs`). `launch.json`이 없으면 플러그인이 만든 'VIDE 실행' 화면을 보이고 1초마다 다시 확인한다. 화면의 사용량 막대는 `GET /api/v1/accounts` + `/accounts/usage`(2분 간격)를 쓴다.
+
+### 진단 기록(T-126, [ADR-031](../decisions/ADR-031-stock-first.md) 9)
+
+모든 부분이 `<데이터>\logs`에 날짜별 JSON 줄 파일을 남기고 14일 뒤 지운다. 줄에는 시각(`at`)·버전(`v`)·프로세스 세션(`sid`)·`event`가 있고, ID·코드·시간·크기·예외 스택만 담는다. 요청 문장·파일·문서 내용·키는 남기지 않으며 로그는 AI에게 보내지 않는다.
+
+| 파일 | 쓰는 곳 | 주요 줄 |
+|---|---|---|
+| `engine-YYYY-MM-DD.jsonl` | 엔진(`src/server/diagnostics.ts`) | `request-start/-stages/-end`, `sync`(실패면 `code`·`phase`), `sync-failed`, `live-sync`/`live-sync-failed {code}`, `api-error {method, path(:id), status, code, requestId, projectId?, request?}`, `server-error`, `tool-call {requestId, tool, ms, bytes, ok, code?}`, `cli-start/-exit {provider, cliVersion, model, effort, kind, resume?, code, signal?, ms, stderrTail?}`, `host-refused {code, final}`, `client-error`, `health`, `step`(브레드크럼) |
+| `engine-stderr-YYYY-MM-DD.log`, `engine-exits.jsonl` | PC 프로그램(`Engine.cs`) | 엔진 표준 오류, 종료 코드 |
+| `shell-YYYY-MM-DD.jsonl` | PC 프로그램(`ShellLog.cs`) | 시작·종료, 트레이 동작, 업데이트 단계·적용, 엔진 시작·종료·재시작, WebView 실패·다시 불러오기·새로 만들기, 덤프 경로 |
+| `rhino-…`, `zwcad-…jsonl` | 호스트 플러그인(`hosts/common/DiagnosticLog.cs`) | `plugin-load {rhino/zwcad 버전}`, `call {method, ms, bytesIn, bytesOut, ok, code?}`(예외면 형식·메시지·스택), 자주 묻는 상태 조회는 1분 합계 `calls-summary` |
+
+- **쓰기:** 엔진은 줄을 메모리에 모아 1초 또는 64 KB마다 한 번 붙여 쓴다(호출 쪽은 디스크를 기다리지 않음, 10,000줄 측정 줄당 약 3 µs, 이전의 줄마다 동기 append는 약 85 µs). 브레드크럼·충돌·`exit` 줄은 즉시 쓰고, 프로세스가 끝날 때 모인 줄을 동기로 쓴다. 하루 파일은 64 MB(플러그인·셸 32 MB)에서 멈추고 `log-cap` 한 줄과 버린 줄 수(`log-cap-dropped`)를 남긴다. 같은 경로·코드의 반복 `api-error`는 10초에 한 줄과 `repeated` 수로 줄인다. 플러그인·셸은 같은 방식으로 1초마다 풀 스레드에서 쓴다.
+- **요청 연결:** 요청 실행은 `withTrace`(AsyncLocalStorage, `src/core/breadcrumbs.ts`) 안에서 돌아 그 안의 줄에 `requestId`가 붙는다. AI 도구 범위는 발급 때의 요청을 기억한다. 바깥 텍스트(CLI 오류 출력, 화면 오류)는 `scrub`으로 키·토큰·Windows 사용자 이름을 지우고 2 KB로 자른다.
+- **화면 오류:** `POST /api/v1/diagnostics/client {kind, message, stack?, source?, line?, column?, route?, version?}` → `client-error`(분당 20줄, 같은 메시지는 1분에 한 번).
+- **진단 묶음:** `POST /api/v1/diagnostics/bundle {days?, dumps?}`(이 PC만) 또는 `node tools/diagnostics/bundle.mjs`가 `<데이터>\diagnostics\vide-diagnostics-<시각>.zip`(최근 3개)을 만든다. 날짜 로그·종료 기록·`about.json`(버전·OS·플러그인 파일 목록·데이터 폴더 파일 이름과 크기)·`settings.json`(설정 파일 요약)만 넣고, `launch.json`·`local-session.key`·`remote-host.json`·`typesafe.env`·`cli-profiles`·DB는 넣지 않는다. 덤프는 `dumps`일 때 최신 하나만. 읽기는 `node tools/diagnostics/view.mjs [--day] [--failures] [--request <id>]`.
+- **덤프:** ProcDump는 전체 덤프(`-ma`)로 붙고 최근 3개만 남긴다(`CrashDumps.cs`).
 
 ## 7. 개발 기반과 변경 경계
 

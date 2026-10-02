@@ -74,6 +74,8 @@ ADR-032를 사용자가 확인한 뒤 ARCH-01 §5에 반영하고 구현한다. 
 - Node v24.15.0 심볼로 콜스택을 확인한다.
 - T-123으로 큰 이동이 사라진 뒤에도 재현되는지 본다.
 
+**진행(2026-10-02):** `-ma`·최근 3개 유지·덤프 경로를 `shell` 로그에 남기는 것까지 구현(셸 빌드 오류 0). 엔진 stderr는 이미 `engine-stderr-*.log`로 남는다. 심볼 확인과 T-123 뒤 재현 확인은 남음(설치본 갱신 필요).
+
 ## T-126 진단 기록 (ADR-031 9)
 
 - 로그 쓰기를 모아서 쓰는 방식으로 바꾼다(엔진을 기다리게 하지 않음). 모든 줄에 VIDE 버전을 붙인다.
@@ -85,3 +87,11 @@ ADR-032를 사용자가 확인한 뒤 ARCH-01 §5에 반영하고 구현한다. 
 - [진단 묶음 내보내기]: 로그·종료 기록·버전·설정 요약을 하나로 묶는다(사용자 원문 제외). 로그를 요청별로 보는 스크립트(`tools/`).
 
 **검증:** 실패 경로마다 로그 줄이 남는 시험, 쓰기가 요청 처리 시간을 늘리지 않는 시험, 원문·키가 로그에 없는 시험.
+
+**진행(2026-10-02) — 구현·자동 검증, 화면 연결·설치본 확인 남음.** 줄 형식·파일은 [ARCH-01](../architecture/ARCH-01-system.md) §6 「진단 기록」.
+- 엔진: 모아 쓰기(1초·64 KB, 종료·충돌 때 동기), 줄마다 `v`·`sid`, 하루 64 MB 상한과 알림 줄. 줄당 약 3 µs(이전 동기 append 약 85 µs).
+- 실패 코드: `sync`(실패 `code`·`phase`)·`sync-failed`·`live-sync-failed`, 모든 `DomainError` 응답(`api-error`, 경로는 `:id`), `host-refused`.
+- AI 턴: `tool-call`(요청 ID·도구·ms·크기·코드), `cli-start`/`cli-exit`(CLI 버전·모델·effort·종료 코드·실패 시 stderr 끝 2 KB, 키 제거). `src/ai`는 `ClaudeCli` 생성자의 spawn 감싸기 한 곳만 바꿨다.
+- Rhino·ZWCAD 플러그인 `rhino-*`/`zwcad-*.jsonl`, 셸 `shell-*.jsonl`(공용 `hosts/common/DiagnosticLog.cs`). 세 C# 빌드 오류 0.
+- 화면 오류 수신 `POST /api/v1/diagnostics/client`, 진단 묶음 `POST /api/v1/diagnostics/bundle`·`tools/diagnostics/bundle.mjs`, 보기 `tools/diagnostics/view.mjs`.
+- 남은 것: 화면 쪽 연결(`window` `error`/`unhandledrejection` → client 엔드포인트, 설정의 [진단 묶음 내보내기] 단추) — 화면 작업 세션 뒤. 설치본 갱신 뒤 실제 로그 확인.

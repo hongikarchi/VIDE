@@ -42,16 +42,18 @@ try {
   // the account website can open it and an open page reconnects. Busy port: any free port.
   // A crash is recorded before Node ends the process (behaviour unchanged).
   const crashLog = new Diagnostics({ directory });
-  process.on('uncaughtExceptionMonitor', (error, origin) =>
-    crashLog.write('engine-crash', { origin, ...Diagnostics.error(error) }),
-  );
+  // Lines are gathered and written together (T-126): a crash writes what is gathered first.
+  process.on('uncaughtExceptionMonitor', (error, origin) => {
+    Diagnostics.flushAll();
+    crashLog.write('engine-crash', { origin, ...Diagnostics.error(error) }, true);
+  });
   // A promise nobody waited on must not end the engine and every open page with it (Node's
   // default): it is recorded and work goes on (PLAN-27 step 0, RESEARCH-13 §5).
   process.on('unhandledRejection', (error) =>
-    crashLog.write('engine-unhandled', Diagnostics.error(error)),
+    crashLog.write('engine-unhandled', Diagnostics.error(error), true),
   );
   // Any exit Node still runs code for (a native crash or a kill runs none: the shell logs those).
-  process.on('exit', (code) => crashLog.write('engine-exit', { code }));
+  process.on('exit', (code) => crashLog.write('engine-exit', { code }, true));
   const options = {
     filename: join(directory, 'vide.sqlite'),
     onShutdown: () => void close(),
@@ -93,7 +95,11 @@ try {
     join(directory, 'startup-error.json'),
     JSON.stringify({ code, at: new Date().toISOString() }),
   ).catch(() => {});
-  new Diagnostics({ directory }).write('startup-failed', { code, ...Diagnostics.error(error) });
+  new Diagnostics({ directory }).write(
+    'startup-failed',
+    { code, ...Diagnostics.error(error) },
+    true,
+  );
   console.error('VIDE_STARTUP_FAILED ' + code);
   process.exitCode = 1;
 }

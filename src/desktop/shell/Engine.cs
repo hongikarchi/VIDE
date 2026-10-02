@@ -82,6 +82,7 @@ namespace Vide.Desktop
             process.Start();
             process.BeginOutputReadLine();
             process.BeginErrorReadLine();
+            ShellLog.Write("engine-start", new System.Collections.Generic.Dictionary<string, object> { ["pid"] = process.Id });
             CrashDumps.Attach(process.Id);
             return ready.Task;
         }
@@ -95,6 +96,14 @@ namespace Vide.Desktop
             {
                 int pid = -1;
                 try { pid = own.Id; } catch { /* Gone before we asked. */ }
+                ShellLog.Write("engine-exit", new System.Collections.Generic.Dictionary<string, object>
+                {
+                    ["pid"] = pid,
+                    ["code"] = code,
+                    ["hex"] = Hex(code),
+                    ["uptimeSec"] = (int)(DateTime.UtcNow - started).TotalSeconds,
+                    ["asked"] = asked,
+                }, true);
                 string line = "{\"at\":\"" + DateTime.UtcNow.ToString("o") + "\",\"event\":\"engine-exit\",\"pid\":" + pid
                     + ",\"code\":" + code + ",\"hex\":\"" + Hex(code) + "\",\"uptimeSec\":"
                     + (int)(DateTime.UtcNow - started).TotalSeconds + ",\"asked\":" + (asked ? "true" : "false") + "}";

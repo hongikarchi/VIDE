@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtemp, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { Diagnostics } from '../../src/server/diagnostics.ts';
+import { Diagnostics, SESSION_ID, routeOf } from '../../src/server/diagnostics.ts';
 import { startServer } from '../../src/server/server.ts';
 
 const lines = async (directory, day) =>
@@ -28,7 +28,10 @@ test('diagnostic lines go to a dated file; files older than the keep period are 
       requestId: 'r1',
       ...Diagnostics.error(Object.assign(new Error('boom'), { code: 'E_X' })),
     });
+    log.close();
     const [line] = await lines(directory, '2026-09-29');
+    assert.equal(line.sid, SESSION_ID);
+    assert.equal(typeof line.v, 'string');
     assert.deepEqual(
       [line.event, line.requestId, line.message, line.code],
       ['probe', 'r1', 'boom', 'E_X'],
@@ -97,6 +100,7 @@ test('an internal error is logged with the request number shown to the user; run
     )
       await new Promise((resolve) => setTimeout(resolve, 20));
     await new Promise((resolve) => setTimeout(resolve, 50));
+    app.diagnostics.flush();
     const day = new Date().toISOString().slice(0, 10);
     const log = await lines(directory, day);
     const error = log.find((line) => line.event === 'server-error');

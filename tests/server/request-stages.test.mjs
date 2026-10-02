@@ -104,10 +104,11 @@ test('a direct turn writes its step times to the log and its end time to the res
     };
     return provider;
   };
+  let diagnostics;
   const execution = new Execution(workspace, {
     tools,
     providerFactory,
-    diagnostics: new Diagnostics({ directory }),
+    diagnostics: (diagnostics = new Diagnostics({ directory })),
     directDriver: () => driver,
   });
   t.after(async () => {
@@ -139,6 +140,7 @@ test('a direct turn writes its step times to the log and its end time to the res
   assert.equal(done.state, 'succeeded');
   assert.equal(done.result.appliedDirectly, true);
   assert.ok(Number.isFinite(Date.parse(done.result.endedAt)));
+  diagnostics.flush();
   const day = new Date().toISOString().slice(0, 10);
   const log = (await readFile(join(directory, 'logs', `engine-${day}.jsonl`), 'utf8'))
     .trim()

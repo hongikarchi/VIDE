@@ -19,7 +19,49 @@ public sealed class WorkerPlugin : PlugIn
     protected override LoadReturnCode OnLoad(ref string errorMessage)
     {
         Rhino.UI.Panels.RegisterPanel(this, typeof(ConnectionPanel), "VIDE", GetType().Assembly, string.Empty, Rhino.UI.PanelType.PerDoc);
+        PluginLog.Started();
         return LoadReturnCode.Success;
+    }
+}
+
+/// <summary>
+/// The plugin's diagnostic log, logs\rhino-YYYY-MM-DD.jsonl (T-126): plugin and Rhino versions at
+/// load, every host call (method, time, sizes, code) and exceptions with their stack. Never
+/// document contents.
+/// </summary>
+internal static class PluginLog
+{
+    internal static readonly Vide.HostPanel.DiagnosticLog Log = Create();
+    private static Vide.HostPanel.DiagnosticLog Create()
+    {
+        var assembly = typeof(PluginLog).Assembly;
+        string built = "";
+        try { built = File.GetLastWriteTimeUtc(assembly.Location).ToString("yyyyMMddHHmm"); } catch { /* Unknown build time. */ }
+        var log = new Vide.HostPanel.DiagnosticLog("rhino", assembly.GetName().Version + "+" + built);
+        // Polled several times a second by the engine: counted per minute unless slow or failed.
+        log.Frequent("attachedStatus", "fingerprint", "displayChanges", "inspectEditor", "status");
+        return log;
+    }
+    private static bool started;
+    internal static void Started()
+    {
+        if (started) return;
+        started = true;
+        Log.Write("plugin-load", new Dictionary<string, object>
+        {
+            ["rhino"] = RhinoApp.Version.ToString(),
+            ["pid"] = Environment.ProcessId,
+            ["worker"] = Environment.GetEnvironmentVariable("VIDE_WORKER_SESSION") != null,
+        });
+        // Exceptions nobody caught whose stack passes through VIDE code.
+        AppDomain.CurrentDomain.UnhandledException += (s, e) =>
+        {
+            if (e.ExceptionObject is Exception error && (error.StackTrace ?? "").Contains("Vide.")) Log.Error("unhandled", error);
+        };
+        TaskScheduler.UnobservedTaskException += (s, e) =>
+        {
+            if ((e.Exception.ToString()).Contains("Vide.")) Log.Error("unobserved-task", e.Exception);
+        };
     }
 }
 
@@ -94,6 +136,10 @@ public sealed class WorkerCommand : Command
         using (var timeout = new CancellationTokenSource(CallTime))
         {
             var stream = client.GetStream();
+            // Each call's method, time and sizes for the plugin log (T-126); never its content.
+            var clock = Stopwatch.StartNew();
+            string method = "?";
+            long bytesIn = 0, bytesOut = 0;
             try
             {
                 var header = new byte[4];
@@ -101,10 +147,12 @@ public sealed class WorkerCommand : Command
                 var length = System.Buffers.Binary.BinaryPrimitives.ReadInt32BigEndian(header);
                 if (length < 1) return;
                 if (length > FrameBytes) throw new InvalidOperationException("HOST_REQUEST_TOO_LARGE");
+                bytesIn = length;
                 var data = new byte[length];
                 await stream.ReadExactlyAsync(data, timeout.Token);
                 using var json = JsonDocument.Parse(data);
                 var request = json.RootElement.GetProperty("params").Clone();
+                if (request.TryGetProperty("method", out var named) && named.ValueKind == JsonValueKind.String) method = named.GetString() ?? "?";
                 var supplied = request.GetProperty("token").GetString() ?? "";
                 if (!CryptographicOperations.FixedTimeEquals(Encoding.UTF8.GetBytes(supplied), Encoding.UTF8.GetBytes(token)))
                     throw new InvalidOperationException("UNAUTHORIZED");
@@ -125,15 +173,24 @@ public sealed class WorkerCommand : Command
                 {
                     var body = new byte[SuccessPrefix.Length + raw.Bytes.Length + 1];
                     SuccessPrefix.CopyTo(body, 0); raw.Bytes.CopyTo(body, SuccessPrefix.Length); body[^1] = (byte)'}';
+                    bytesOut = body.Length;
                     await Reply(stream, body, timeout.Token);
+                    PluginLog.Log.Call(method, clock.Elapsed.TotalMilliseconds, bytesIn, bytesOut);
                     return;
                 }
-                await Reply(stream, new { status = "success", result }, timeout.Token);
+                var encoded = JsonSerializer.SerializeToUtf8Bytes(new { status = "success", result });
+                bytesOut = encoded.Length;
+                await Reply(stream, encoded, timeout.Token);
+                PluginLog.Log.Call(method, clock.Elapsed.TotalMilliseconds, bytesIn, bytesOut);
             }
             catch (Exception error)
             {
+                string code = error is InvalidOperationException ? error.Message : "HOST_RESULT_UNKNOWN";
+                // A coded refusal is a short line; anything else keeps its type and stack.
+                bool coded = error is InvalidOperationException && System.Text.RegularExpressions.Regex.IsMatch(code, "^[A-Z][A-Z0-9_]{1,63}$");
+                PluginLog.Log.Call(method, clock.Elapsed.TotalMilliseconds, bytesIn, bytesOut, coded ? code : error.GetType().Name, coded ? null : error);
                 try { await Reply(stream, new { status = "success", result = new { ok = false,
-                    code = error is InvalidOperationException ? error.Message : "HOST_RESULT_UNKNOWN" } }, timeout.Token); } catch { /* Disconnected caller cannot receive the failure; persisted receipt remains authoritative. */ }
+                    code } }, timeout.Token); } catch { /* Disconnected caller cannot receive the failure; persisted receipt remains authoritative. */ }
             }
         }
     }

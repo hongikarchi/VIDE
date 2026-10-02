@@ -40,17 +40,24 @@ namespace Vide.Desktop
             Updater = new Updater(string.IsNullOrWhiteSpace(source) ? Settings.UpdateSource : source);
             Updater.Changed += () => ui.Post(_ => OnUpdateChanged(), null);
 
+            ShellLog.Watch();
+            ShellLog.Write("shell-start", new Dictionary<string, object>
+            {
+                ["pid"] = Process.GetCurrentProcess().Id,
+                ["background"] = background,
+                ["update"] = Updater.State,
+            });
             var menu = new ContextMenuStrip();
-            var open = menu.Items.Add("VIDE 열기", null, (s, e) => ShowWindow());
+            var open = menu.Items.Add("VIDE 열기", null, (s, e) => { ShellLog.Tray("open"); ShowWindow(); });
             open.Font = new Font(open.Font, FontStyle.Bold);
-            menu.Items.Add("웹사이트에서 모든 프로젝트", null, (s, e) => OpenExternal(Site()));
+            menu.Items.Add("웹사이트에서 모든 프로젝트", null, (s, e) => { ShellLog.Tray("site"); OpenExternal(Site()); });
             menu.Items.Add(new ToolStripSeparator());
-            updateItem = new ToolStripMenuItem("업데이트 확인", null, (s, e) => OnUpdateClick());
+            updateItem = new ToolStripMenuItem("업데이트 확인", null, (s, e) => { ShellLog.Tray("update:" + Updater.State); OnUpdateClick(); });
             menu.Items.Add(updateItem);
             menu.Items.Add(new ToolStripSeparator());
-            menu.Items.Add("종료", null, (s, e) => Quit());
+            menu.Items.Add("종료", null, (s, e) => { ShellLog.Tray("quit"); Quit(); });
             tray = new NotifyIcon { Icon = AppIcon, Text = "VIDE", ContextMenuStrip = menu, Visible = true };
-            tray.DoubleClick += (s, e) => ShowWindow();
+            tray.DoubleClick += (s, e) => { ShellLog.Tray("double-click"); ShowWindow(); };
             OnUpdateChanged();
 
             showSignal = new EventWaitHandle(false, EventResetMode.AutoReset, Program.ShowEventName);
@@ -92,12 +99,14 @@ namespace Vide.Desktop
             }
             catch (EngineException error)
             {
+                ShellLog.Write("engine-start-failed", new Dictionary<string, object> { ["code"] = error.Code }, true);
                 form.ShowProblem(error.Code == "CONTROLLER_BUSY"
                     ? "이미 다른 VIDE 작업 엔진이 이 사용자 데이터를 쓰고 있습니다. 개발용 서버를 종료한 뒤 다시 실행하세요."
                     : "작업 엔진을 시작하지 못했습니다 (" + error.Code + "). 사용자 데이터 폴더의 startup-error.json을 확인하세요.");
             }
             catch (Exception error)
             {
+                ShellLog.Error("engine-start-failed", error);
                 form.ShowProblem("작업 엔진을 시작하지 못했습니다: " + error.Message);
             }
         }
@@ -108,6 +117,13 @@ namespace Vide.Desktop
             // Restart a crashed engine a few times; its records survive restarts. An engine that
             // ran ten minutes earns the budget back: VIDE lives for days in the tray.
             if (DateTime.UtcNow - engine.StartedAt > TimeSpan.FromMinutes(10)) restarts = 0;
+            ShellLog.Write("engine-restart", new Dictionary<string, object>
+            {
+                ["code"] = Engine.Hex(code),
+                ["attempt"] = restarts + 1,
+                ["late"] = restarts + 1 > 3 && !lateRetryUsed,
+                ["givenUp"] = restarts + 1 > 3 && lateRetryUsed,
+            }, true);
             if (++restarts <= 3)
             {
                 form.ShowProblem("작업 엔진이 종료되어 다시 시작하는 중입니다… (코드 " + Engine.Hex(code) + ")");
@@ -153,6 +169,7 @@ namespace Vide.Desktop
         {
             if (Quitting) return;
             Quitting = true;
+            ShellLog.Write("shell-quit", new Dictionary<string, object> { ["applyUpdate"] = applyUpdate, ["update"] = Updater.State }, true);
             updateTimer.Stop();
             tray.Visible = false;
             try { form?.Close(); } catch { /* Closing anyway. */ }
@@ -199,9 +216,10 @@ namespace Vide.Desktop
                 Settings.Save();
                 try { Settings.ApplyAutostart(Paths.Launcher); } catch { /* Reported by state. */ }
             }
-            else if (type == "update:check") _ = Updater.Check();
+            else if (type == "update:check") { ShellLog.Write("window-action", new Dictionary<string, object> { ["action"] = "update:check" }); _ = Updater.Check(); }
             else if (type == "update:apply" && Updater.State == "ready")
             {
+                ShellLog.Write("window-action", new Dictionary<string, object> { ["action"] = "update:apply" });
                 Quit(true);
                 return;
             }

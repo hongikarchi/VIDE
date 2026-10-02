@@ -50,6 +50,27 @@ export async function runDocumentSync(
   projectId: string,
   target: DocumentSyncTarget,
 ): Promise<{ result: StoredWork; shared?: Shared }> {
+  const began = performance.now();
+  try {
+    return await syncDocument(context, projectId, target);
+  } catch (error) {
+    // A Sync that throws instead of recording a failed request is logged with its code (T-126).
+    const code = (error as { code?: unknown } | null)?.code;
+    context.diagnostics.write('sync-failed', {
+      request: target.id,
+      projectId,
+      ms: Math.round(performance.now() - began),
+      code: typeof code === 'string' ? code : 'INTERNAL_ERROR',
+      ...(typeof code === 'string' ? {} : { name: (error as Error | null)?.name }),
+    });
+    throw error;
+  }
+}
+async function syncDocument(
+  context: DocumentSyncContext,
+  projectId: string,
+  target: DocumentSyncTarget,
+): Promise<{ result: StoredWork; shared?: Shared }> {
   const { workspace, sdk, zwcadSdk, documentSyncs, diagnostics } = context;
   const own = await sdk?.editors.has(target.instance);
   const cadOwn = await zwcadSdk?.editors.has(target.instance);
@@ -91,14 +112,31 @@ export async function runDocumentSync(
             : undefined,
         cadOwn ? 'zwcad' : 'rhino',
       );
-      const scene = (captured.result as { scene?: unknown[] } | null)?.scene;
+      const outcome = captured.result as {
+        scene?: unknown[];
+        code?: unknown;
+        phase?: unknown;
+        objectCount?: unknown;
+        bytes?: unknown;
+      } | null;
+      const scene = outcome?.scene;
       diagnostics.write('sync', {
         request: target.id,
+        projectId,
         host: cadOwn ? 'zwcad' : 'rhino',
         state: captured.state,
         ms: Math.round(performance.now() - began),
         hostMs,
         objects: Array.isArray(scene) ? scene.length : undefined,
+        // A failed Sync names its code and the step it stopped in (T-126).
+        ...(captured.state !== 'succeeded'
+          ? {
+              code: typeof outcome?.code === 'string' ? outcome.code : undefined,
+              phase: typeof outcome?.phase === 'string' ? outcome.phase : undefined,
+              ...(typeof outcome?.objectCount === 'number' ? { objects: outcome.objectCount } : {}),
+              ...(typeof outcome?.bytes === 'number' ? { bytes: outcome.bytes } : {}),
+            }
+          : {}),
       });
       if (!cadOwn) context.liveSync?.record(projectId, captured);
       return captured;

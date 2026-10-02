@@ -5,7 +5,7 @@
 // card parser. Execution (execution.ts) chooses the path and settles the request state.
 
 import { randomUUID } from 'node:crypto';
-import { breadcrumb } from '../core/breadcrumbs.ts';
+import { breadcrumb, diagnostic } from '../core/breadcrumbs.ts';
 import { z } from 'zod';
 import { executionLimits } from '../contracts/execution-limits.ts';
 import type { RequestInput, RequestMode } from '../contracts/workspace.ts';
@@ -968,6 +968,12 @@ export async function runDirectTurn(turn: DirectTurn) {
    */
   const notExecuted = (doc: TurnDoc, refusal: DirectRefusal, fresh = false) => {
     if (fresh) {
+      // The host's refusal with its code (T-126): codes and ids only, never the reason text.
+      diagnostic('host-refused', {
+        code: refusal.code,
+        final: refusal.final,
+        ...(doc.file.linkId ? { linkId: doc.file.linkId } : {}),
+      });
       doc.refused = refusal;
       refused = { ...refusal, ...(doc === primary ? {} : { file: doc.file.name }) };
       refusedKey = doc.key;

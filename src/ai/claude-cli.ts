@@ -23,6 +23,7 @@ import {
   type InstructionMode,
 } from './instructions/index.ts';
 import compat from './cli-compat.json' with { type: 'json' };
+import { watchedSpawn } from './cli-log.ts';
 
 export class ProviderError extends Error {
   code: string;
@@ -680,7 +681,13 @@ export class ClaudeCli {
     this.executable = executable;
     this.timeoutMs = timeoutMs;
     this.stopGraceMs = stopGraceMs;
-    this.spawnProcess = spawnProcess;
+    // Every CLI process this provider starts is logged: version, exit, error tail (T-126).
+    this.spawnProcess = watchedSpawn(spawnProcess, () => ({
+      provider: this.provider,
+      version: versionCache.get(`${this.provider}\0${this.executable}`)?.version,
+      model: this.model,
+      effort: this.effort,
+    }));
     this.spawnIdentity = spawnProcess;
     if (nativeQuestions !== undefined && typeof nativeQuestions !== 'function')
       throw error('INVALID_NATIVE_QUESTIONS');

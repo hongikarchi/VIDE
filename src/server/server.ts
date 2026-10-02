@@ -39,8 +39,15 @@ import {
 import { AUTO_MODELS, ModelRouter, isAutoModel } from '../ai/model-router.ts';
 import { PinCarryError, carryPins } from './pin-carry.ts';
 import { startHealthLog } from './health.ts';
-import { Diagnostics } from './diagnostics.ts';
-import { BIG_JSON, breadcrumb, setBreadcrumbSink } from '../core/breadcrumbs.ts';
+import { Diagnostics, RepeatGate, routeOf } from './diagnostics.ts';
+import { writeDiagnosticBundle } from './diagnostic-bundle.ts';
+import {
+  BIG_JSON,
+  breadcrumb,
+  scrub,
+  setBreadcrumbSink,
+  setDiagnosticSink,
+} from '../core/breadcrumbs.ts';
 import { knowledgeFile } from '../jigs/knowledge.ts';
 import {
   DocumentLinks,
@@ -152,6 +159,12 @@ const equal = (a: unknown, b: string) =>
  * with its images, a jig model). Bigger inputs (files, models) use their own streaming routes.
  */
 export const JSON_BODY_BYTES = 64 * 1024 * 1024;
+/** An error's own upper-case code (a DomainError's, a provider's, a host's), else undefined. */
+const errorCodeOf = (error: unknown) => {
+  const code =
+    error && typeof error === 'object' && 'code' in error ? (error as { code: unknown }).code : '';
+  return typeof code === 'string' && /^[A-Z][A-Z0-9_]{1,63}$/.test(code) ? code : undefined;
+};
 async function body(request: IncomingMessage): Promise<Record<string, unknown>> {
   if (request.headers['content-type']?.split(';')[0] !== 'application/json')
     throw new DomainError('JSON_REQUIRED');
@@ -418,7 +431,19 @@ export async function startServer({
     if (!liveSync) throw new DomainError('RESYNC_REQUIRED');
     const began = performance.now();
     breadcrumb('live-sync-begin');
-    const synced = await liveSync.run(projectId, input);
+    let synced: Awaited<ReturnType<typeof liveSync.run>>;
+    try {
+      synced = await liveSync.run(projectId, input);
+    } catch (error) {
+      // Every failed Live Sync with its code (T-126); the user sees the same code.
+      diagnostics.write('live-sync-failed', {
+        projectId,
+        ms: Math.round(performance.now() - began),
+        code: errorCodeOf(error) ?? 'INTERNAL_ERROR',
+        ...(error instanceof DomainError ? {} : Diagnostics.error(error)),
+      });
+      throw error;
+    }
     diagnostics.write('live-sync', {
       ms: Math.round(performance.now() - began),
       ...('delta' in synced
@@ -484,8 +509,18 @@ export async function startServer({
   const diagnostics = new Diagnostics({
     directory: filename === ':memory:' ? undefined : dirname(filename),
   });
-  if (filename !== ':memory:')
-    setBreadcrumbSink((step, fields) => diagnostics.write('step', { step, ...fields }));
+  const diagnosticSink = (event: string, fields: Record<string, unknown>) =>
+    diagnostics.write(event, fields);
+  const apiErrorRepeats = new RepeatGate();
+  // Error reports of the app's pages (window error / unhandled rejection): 20 a minute at most.
+  const clientErrors = new RepeatGate(60_000);
+  let clientWindow = { at: 0, count: 0 };
+  if (filename !== ':memory:') {
+    // A breadcrumb is on disk before its heavy step starts (a native crash runs no exit code).
+    setBreadcrumbSink((step, fields) => diagnostics.write('step', { step, ...fields }, true));
+    // The AI providers' and agent tools' own lines (T-126).
+    setDiagnosticSink(diagnosticSink);
+  }
   // An attached document Rhino opened read-only: one log entry with what could explain it.
   if (sdk && filename !== ':memory:') {
     const readOnly = new ReadOnlyWatch({
@@ -1185,6 +1220,63 @@ export async function startServer({
           .parse(await body(request));
         diagnostics.write('route-revert', reverted);
         send(200, { ok: true });
+        return;
+      }
+      // A page's own error (window `error` / `unhandledrejection`) for the engine log (T-126):
+      // message and stack cut and cleaned of keys, at most 20 a minute, the same one once a minute.
+      if (url.pathname === '/api/v1/diagnostics/client' && request.method === 'POST') {
+        const report = z
+          .object({
+            kind: z.string().max(40).optional(),
+            message: z.string().optional(),
+            stack: z.string().optional(),
+            source: z.string().optional(),
+            line: z.number().int().optional(),
+            column: z.number().int().optional(),
+            route: z.string().optional(),
+            version: z.string().optional(),
+          })
+          .parse(await body(request));
+        const now = Date.now();
+        if (now - clientWindow.at >= 60_000) clientWindow = { at: now, count: 0 };
+        const message = scrub(report.message ?? '', 500);
+        const repeated =
+          clientWindow.count < 20 ? clientErrors.note(report.kind, message) : undefined;
+        if (repeated !== undefined) {
+          clientWindow.count++;
+          diagnostics.write('client-error', {
+            kind: report.kind ?? 'error',
+            message,
+            ...(report.stack ? { stack: scrub(report.stack, 2000) } : {}),
+            ...(report.source
+              ? {
+                  source: scrub(report.source.split('?')[0], 200),
+                  line: report.line,
+                  column: report.column,
+                }
+              : {}),
+            ...(report.route ? { route: routeOf(scrub(report.route, 200)).path } : {}),
+            ...(report.version ? { pageVersion: report.version.slice(0, 40) } : {}),
+            ...(remote ? { remote: true } : {}),
+            ...(repeated ? { repeated } : {}),
+          });
+        }
+        send(200, { logged: repeated !== undefined });
+        return;
+      }
+      // [진단 묶음 내보내기] (T-126): logs, exit records, versions and a settings summary in one
+      // zip under <data>/diagnostics. Never keys, logins, the DB or request text. This PC only.
+      if (url.pathname === '/api/v1/diagnostics/bundle' && request.method === 'POST') {
+        if (remote || filename === ':memory:') throw new DomainError('FORBIDDEN');
+        const options = z
+          .object({
+            dumps: z.boolean().optional(),
+            days: z.number().int().min(1).max(14).optional(),
+          })
+          .strict()
+          .parse(await body(request));
+        diagnostics.flush();
+        send(200, await writeDiagnosticBundle({ directory: dirname(filename), ...options }));
         return;
       }
       if (url.pathname === '/api/v1/settings/questions') {
@@ -2455,6 +2547,29 @@ export async function startServer({
           path: (request.url || '').split('?')[0],
           ...Diagnostics.error(error),
         });
+      // Every error the user sees, with its code (T-126): the path without its ids plus the
+      // project/request/conversation it named. A sign-in check refusing a page is not logged.
+      else {
+        const route = routeOf(request.url || '');
+        const code = error instanceof DomainError ? error.code : 'INVALID_INPUT';
+        // A page before sign-in and missing static files are not failures.
+        const quiet =
+          code === 'UNAUTHORIZED' || (code === 'NOT_FOUND' && !route.path.startsWith('/api/'));
+        // A polled path failing the same way is written once per 10 s with the repeats counted.
+        const repeated = quiet ? undefined : apiErrorRepeats.note(request.method, route.path, code);
+        if (repeated !== undefined)
+          diagnostics.write('api-error', {
+            requestId,
+            method: request.method,
+            ...route,
+            status: error instanceof DomainError ? (statuses[error.code] ?? 400) : 400,
+            code,
+            ...(error instanceof z.ZodError
+              ? { fields: error.issues.slice(0, 5).map((issue) => issue.path.join('.')) }
+              : {}),
+            ...(repeated ? { repeated } : {}),
+          });
+      }
       if (!response.headersSent)
         send(
           error instanceof DomainError
@@ -2578,6 +2693,8 @@ export async function startServer({
         const analysis = analysisWorkerStats();
         if (!analysis.running && analysis.queued === 0) await closeAnalysisWorker();
         store.close();
+        setDiagnosticSink(undefined, diagnosticSink);
+        diagnostics.close();
       }
     },
   };

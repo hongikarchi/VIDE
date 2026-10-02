@@ -9,12 +9,14 @@ namespace Vide.Desktop
     /// Crash dumps of the engine for diagnosis (PLAN-27 §0): engine deaths with 0xC0000409 leave no
     /// Windows error report, so when the user placed Sysinternals ProcDump in &lt;data&gt;\tools it is
     /// attached to every engine process. It writes a dump on an unhandled exception (a fail-fast
-    /// included) and on termination (a kill from outside). Dumps of exits VIDE asked for are removed
-    /// on the next start; the newest five dumps are kept. Without the tool nothing happens.
+    /// included) and on termination (a kill from outside). Dumps are full (-ma: threads, modules and
+    /// memory, T-125 — the -mp dumps of 2026-10-02 had empty thread and module lists), so only the
+    /// newest three are kept. Dumps of exits VIDE asked for are removed on the next start. Each
+    /// written dump's path goes to the shell log. Without the tool nothing happens.
     /// </summary>
     internal static class CrashDumps
     {
-        private const int Keep = 5;
+        private const int Keep = 3;
         private static string Folder => Path.Combine(Paths.Data, "crashdumps");
         private static string AskedFile => Path.Combine(Folder, "asked-stop.txt");
 
@@ -26,7 +28,7 @@ namespace Vide.Desktop
                 if (!File.Exists(tool)) return;
                 Directory.CreateDirectory(Folder);
                 Prune();
-                var start = new ProcessStartInfo(tool, "-accepteula -e -t -mp " + pid + " \"" + Folder + "\"")
+                var start = new ProcessStartInfo(tool, "-accepteula -e -t -ma " + pid + " \"" + Folder + "\"")
                 {
                     UseShellExecute = false,
                     CreateNoWindow = true,
@@ -43,10 +45,12 @@ namespace Vide.Desktop
                 dumper.BeginOutputReadLine();
                 dumper.BeginErrorReadLine();
                 Log("attached to engine pid " + pid);
+                ShellLog.Write("procdump-attach", new System.Collections.Generic.Dictionary<string, object> { ["pid"] = pid, ["mode"] = "ma", ["keep"] = Keep });
             }
             catch (Exception error)
             {
                 Log("attach failed: " + error.Message);
+                ShellLog.Error("procdump-attach-failed", error);
             }
         }
 
@@ -84,6 +88,13 @@ namespace Vide.Desktop
         private static void Log(string line)
         {
             if (string.IsNullOrWhiteSpace(line)) return;
+            // ProcDump names each dump it starts ("Dump 1 initiated: C:\…\node.exe_….dmp") and then
+            // reports it complete ("Dump 1 complete: 812 MB written in 3.1 seconds").
+            var dump = System.Text.RegularExpressions.Regex.Match(line, @"([A-Za-z]:\\[^""]*?\.dmp)", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            if (dump.Success)
+                ShellLog.Write("crash-dump", new System.Collections.Generic.Dictionary<string, object> { ["path"] = dump.Groups[1].Value }, true);
+            else if (System.Text.RegularExpressions.Regex.IsMatch(line, @"Dump \d+ complete", System.Text.RegularExpressions.RegexOptions.IgnoreCase))
+                ShellLog.Write("crash-dump-complete", new System.Collections.Generic.Dictionary<string, object> { ["report"] = line.Trim() }, true);
             try
             {
                 string folder = Path.Combine(Paths.Data, "logs");

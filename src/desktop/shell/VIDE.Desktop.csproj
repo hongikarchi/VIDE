@@ -26,4 +26,8 @@
   <ItemGroup>
     <Reference Include="System.Web.Extensions" />
   </ItemGroup>
+  <!-- The diagnostic log shared with the Rhino and ZWCAD plugins (T-126). -->
+  <ItemGroup>
+    <Compile Include="..\..\..\hosts\common\DiagnosticLog.cs" Link="DiagnosticLog.cs" />
+  </ItemGroup>
 </Project>

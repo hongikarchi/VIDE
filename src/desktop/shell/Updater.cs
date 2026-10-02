@@ -80,20 +80,33 @@ namespace Vide.Desktop
         public void ApplyAndRestart()
         {
             var asset = pending?.TargetFullRelease ?? manager?.UpdatePendingRestart;
-            if (asset != null) manager.ApplyUpdatesAndRestart(asset);
+            if (asset != null)
+            {
+                ShellLog.Write("update-apply", new Dictionary<string, object> { ["mode"] = "restart", ["version"] = asset.Version.ToString() }, true);
+                manager.ApplyUpdatesAndRestart(asset);
+            }
         }
 
         /// <summary>At exit: apply a downloaded update after this process ends, without restarting.</summary>
         public void ApplyAtExit()
         {
             var asset = pending?.TargetFullRelease ?? manager?.UpdatePendingRestart;
-            if (asset != null) manager.WaitExitThenApplyUpdates(asset, true, false);
+            if (asset != null)
+            {
+                ShellLog.Write("update-apply", new Dictionary<string, object> { ["mode"] = "at-exit", ["version"] = asset.Version.ToString() }, true);
+                manager.WaitExitThenApplyUpdates(asset, true, false);
+            }
         }
 
         private void Set(string state)
         {
             State = state;
             if (state != "error") Error = null;
+            // Each update step (checking, downloading, ready, current, error) for the shell log.
+            var fields = new Dictionary<string, object> { ["state"] = state };
+            if (Available != null && state != "current" && state != "checking") fields["available"] = Available;
+            if (state == "error" && Error != null) fields["error"] = Error.Length > 300 ? Error.Substring(0, 300) : Error;
+            ShellLog.Write("update", fields);
             Changed?.Invoke();
         }
 

@@ -19,5 +19,6 @@
   <!-- The host panel page helpers, shared with the ZWCAD palette (Design SCR-12). -->
   <ItemGroup>
     <Compile Include="..\..\common\PanelPage.cs" Link="PanelPage.cs" />
+    <Compile Include="..\..\common\DiagnosticLog.cs" Link="DiagnosticLog.cs" />
   </ItemGroup>
 </Project>

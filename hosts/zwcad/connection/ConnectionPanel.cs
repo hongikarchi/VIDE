@@ -17,13 +17,46 @@ namespace Vide.Zwcad.Connection
     /// <summary>Loaded at ZWCAD startup ("연결 프로그램" install): open the VIDE CAD panel once.</summary>
     public sealed class ConnectionStartup : IExtensionApplication
     {
-        public void Initialize() { Cad.Idle += ShowOnce; }
+        public void Initialize() { PluginLog.Started(); Cad.Idle += ShowOnce; }
         private static void ShowOnce(object sender, EventArgs e)
         {
             Cad.Idle -= ShowOnce;
             try { new ConnectionCommands().Show(); } catch { /* No UI yet; VIDECADPANEL opens it. */ }
         }
-        public void Terminate() { }
+        public void Terminate() { PluginLog.Log.Flush(); }
+    }
+
+    /// <summary>
+    /// The plugin's diagnostic log, logs\zwcad-YYYY-MM-DD.jsonl (T-126): plugin and ZWCAD versions at
+    /// load, every host call (method, time, sizes, code) and exceptions with their stack. Never
+    /// drawing contents.
+    /// </summary>
+    internal static class PluginLog
+    {
+        internal static readonly DiagnosticLog Log = Create();
+        private static DiagnosticLog Create()
+        {
+            var assembly = typeof(PluginLog).Assembly;
+            string built = "";
+            try { built = File.GetLastWriteTimeUtc(assembly.Location).ToString("yyyyMMddHHmm"); } catch { /* Unknown build time. */ }
+            var log = new DiagnosticLog("zwcad", assembly.GetName().Version + "+" + built);
+            // Polled several times a second by the engine: counted per minute unless slow or failed.
+            log.Frequent("attachedStatus", "fingerprint", "selection", "displayChanges");
+            return log;
+        }
+        private static bool started;
+        internal static void Started()
+        {
+            if (started) return;
+            started = true;
+            string version = "";
+            try { version = Cad.Version.ToString(); } catch { /* Unknown host version. */ }
+            Log.Write("plugin-load", new Dictionary<string, object> { ["zwcad"] = version, ["pid"] = Process.GetCurrentProcess().Id });
+            AppDomain.CurrentDomain.UnhandledException += (s, e) =>
+            {
+                if (e.ExceptionObject is System.Exception error && (error.StackTrace ?? "").Contains("Vide.")) Log.Error("unhandled", error);
+            };
+        }
     }
 
     public sealed class ConnectionCommands

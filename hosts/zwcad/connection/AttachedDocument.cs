@@ -185,11 +185,16 @@ namespace Vide.Zwcad.Connection
                 using (client) {
                     client.ReceiveTimeout = 10000; client.SendTimeout = 30000;
                     var stream = client.GetStream();
+                    // Each call's method, time and sizes for the plugin log (T-126); never its content.
+                    var clock = Stopwatch.StartNew();
+                    string method = "?"; long bytesIn = 0, bytesOut = 0;
                     try {
                         int size = IPAddress.NetworkToHostOrder(BitConverter.ToInt32(Read(stream, 4), 0));
                         if (size < 1 || size > 1024 * 1024) throw new InvalidOperationException("INVALID_REQUEST");
+                        bytesIn = size;
                         var envelope = new JavaScriptSerializer().Deserialize<Dictionary<string, object>>(Encoding.UTF8.GetString(Read(stream, size)));
                         var request = (Dictionary<string, object>)envelope["params"];
+                        method = Value(request, "method") ?? "?";
                         string supplied = Value(request, "token"); int difference = 0;
                         if (supplied == null || supplied.Length != token.Length) throw new InvalidOperationException("UNAUTHORIZED");
                         for (int i = 0; i < token.Length; i++) difference |= supplied[i] ^ token[i];
@@ -213,19 +218,25 @@ namespace Vide.Zwcad.Connection
                             } catch (System.Exception error) { completion.TrySetException(error); }
                         });
                         if (!completion.Task.Wait(60000)) { completion.TrySetCanceled(); throw new InvalidOperationException("HOST_BUSY"); }
-                        Reply(stream, completion.Task.Result);
+                        bytesOut = Reply(stream, completion.Task.Result);
+                        PluginLog.Log.Call(method, clock.Elapsed.TotalMilliseconds, bytesIn, bytesOut);
                     } catch (System.Exception error) {
                         var cause = error is AggregateException ? ((AggregateException)error).GetBaseException() : error;
-                        try { Reply(stream, new { ok = false, code = cause is InvalidOperationException ? cause.Message : "HOST_READ_FAILED", exceptionType = cause.GetType().FullName }); } catch (IOException) { }
+                        string code = cause is InvalidOperationException ? cause.Message : "HOST_READ_FAILED";
+                        // A coded refusal is a short line; anything else keeps its type and stack.
+                        bool coded = cause is InvalidOperationException && System.Text.RegularExpressions.Regex.IsMatch(code ?? "", "^[A-Z][A-Z0-9_]{1,63}$");
+                        PluginLog.Log.Call(method, clock.Elapsed.TotalMilliseconds, bytesIn, bytesOut, coded ? code : cause.GetType().Name, coded ? null : cause);
+                        try { Reply(stream, new { ok = false, code, exceptionType = cause.GetType().FullName }); } catch (IOException) { }
                     }
                 }
             }
         }
         private static string Value(Dictionary<string, object> request, string key) { object value; return request.TryGetValue(key, out value) ? Convert.ToString(value) : null; }
         private static byte[] Read(Stream stream, int size) { var bytes = new byte[size]; int at = 0; while (at < size) { int n = stream.Read(bytes, at, size - at); if (n == 0) throw new EndOfStreamException(); at += n; } return bytes; }
-        private static void Reply(Stream stream, object result) {
+        private static long Reply(Stream stream, object result) {
             var body = Encoding.UTF8.GetBytes(new JavaScriptSerializer { MaxJsonLength = Int32.MaxValue }.Serialize(new { status = "success", result }));
             var header = BitConverter.GetBytes(IPAddress.HostToNetworkOrder(body.Length)); stream.Write(header, 0, 4); stream.Write(body, 0, body.Length);
+            return body.Length;
         }
         public void Dispose()
         {

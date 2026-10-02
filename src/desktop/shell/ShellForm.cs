@@ -65,6 +65,7 @@ namespace Vide.Desktop
             }
             catch (Exception error)
             {
+                ShellLog.Error("webview-init-failed", error);
                 ShowProblem("창을 표시하지 못했습니다. Microsoft Edge WebView2 런타임을 확인하세요. (" + error.Message + ")");
                 return;
             }
@@ -116,6 +117,7 @@ namespace Vide.Desktop
         /// </summary>
         private void OnProcessFailed(CoreWebView2ProcessFailedKind kind)
         {
+            ShellLog.Write("webview-failed", new Dictionary<string, object> { ["kind"] = kind.ToString(), ["reloadsInMinute"] = reloads.Count });
             if (kind == CoreWebView2ProcessFailedKind.BrowserProcessExited)
             {
                 // The whole WebView is gone: a new control and environment, then the same page.
@@ -129,16 +131,19 @@ namespace Vide.Desktop
             while (reloads.Count > 0 && DateTime.UtcNow - reloads.Peek() > TimeSpan.FromMinutes(1)) reloads.Dequeue();
             if (reloads.Count >= 3)
             {
+                ShellLog.Write("webview-given-up", new Dictionary<string, object> { ["kind"] = kind.ToString() }, true);
                 ShowProblem("화면이 계속 종료됩니다. 트레이의 VIDE를 종료한 뒤 다시 실행하세요.");
                 return;
             }
             reloads.Enqueue(DateTime.UtcNow);
+            ShellLog.Write("webview-reload", new Dictionary<string, object> { ["kind"] = kind.ToString() });
             try { view.CoreWebView2.Reload(); }
             catch { BeginInvoke((Action)Recreate); }
         }
 
         private void Recreate()
         {
+            ShellLog.Write("webview-recreate");
             ready = false;
             Controls.Remove(view);
             try { view.Dispose(); } catch { /* Already torn down with its browser process. */ }
