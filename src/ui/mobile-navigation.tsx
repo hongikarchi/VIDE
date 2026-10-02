@@ -1,25 +1,12 @@
-import { useSyncExternalStore } from 'react';
+// The mobile tab bar's buttons (below 850 px): 모델 and 작업. The shown view is the layout slice's
+// (src/ui/store/layout.ts), which also writes body[data-mobile] for the CSS.
+import { layoutState, setMobileView, type MobileView } from './store/layout.ts';
+import { useStore } from './store/core.ts';
 
-export type MobileView = 'model' | 'input' | 'documents';
-const eventName = 'vide:mobile-view';
-
-export function setMobileView(view: MobileView): void {
-  document.body.dataset.mobile = view;
-  document.dispatchEvent(new Event(eventName));
-}
-
-function subscribe(listener: () => void): () => void {
-  document.addEventListener(eventName, listener);
-  return () => document.removeEventListener(eventName, listener);
-}
-
-function currentView(): MobileView {
-  const view = document.body.dataset.mobile;
-  return view === 'input' || view === 'documents' ? view : 'model';
-}
+export { setMobileView, type MobileView };
 
 export function MobileNavigation() {
-  const view = useSyncExternalStore(subscribe, currentView);
+  const view = useStore(layoutState, (s) => s.mobileView);
   return (
     <>
       <button

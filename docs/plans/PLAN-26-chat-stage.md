@@ -395,3 +395,5 @@ related: [ADR-026, ADR-016, ADR-022, ADR-021, ADR-020, SPEC-01, SPEC-02, SPEC-07
 **검증 — 실패:** 연결 끊김 배너·재연결, 프로젝트 없는 첫 렌더, 초안 복원 실패, 토스트 액션이 기준선과 같게 동작한다(기존 브라우저 시험).
 
 **완료:** F는 위 검사가 기준선과 같고 DOM 비교 차이가 의도한 감싸개뿐일 때. 전체는 `index.html`이 루트 하나, 셸 요소를 React가 그리고 남은 명령형 영역이 `#canvas`·`#objects` 어댑터·`#display-popover`·외부 직계 자식 컨테이너뿐, 셸 컨테이너 안 외부 삽입 0, 위 검증 통과, 결과는 VERIFY 기록. 설치본 릴리스는 통합 뒤 한 번.
+
+- **지역 A 결과(2026-10-02, 브랜치 `t113-a`):** 레일(눌림·홈 링크·테마 전환)·왼쪽 패널(섹션 탭·섹션 숨김·호스트 이름·Sync 범위 배지·작업 이력)·작업공간 탭 줄·가장자리 접기·패널 너비 손잡이(`.workspace` 직계 포털)·모바일 탭을 `store/layout.ts`와 `workspaces.ts`의 `workspacesState`로 렌더한다. 공개 API는 그대로이고 `#right`의 `hidden`은 `togglePanel` 한 곳이 쓴다. 18개 상태의 지역 DOM 직렬화가 기준선(003a896)과 바이트 단위로 같고, 브라우저 사슬 38개 중 36개 통과(`s06-jig`·`structure-jig`는 기준선 003a896에서도 실패, `npm test`의 s06 해석 13건 실패와 같은 원인으로 보임). 남은 명령형: `#project-heading`·`#host-document-controls`(자체 루트), `#objects` 어댑터, `#host-target`·`#model-file`·`#import-model` 배선.
