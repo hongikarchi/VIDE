@@ -1617,20 +1617,34 @@ export function visionHandlers(
   };
 }
 
+/**
+ * Image bytes one turn's file_read and attachment_read may show the model (ARCH-01 §3). Each image
+ * is already at most 1 MB; the total keeps a turn that reads a whole folder of pictures from piling
+ * them into the provider's thread. Past it the tool answers with a note instead of the image.
+ */
+export const TURN_IMAGE_BYTES = 16_000_000;
+export type ImageBudget = { left: number };
+export const imageBudget = (bytes = TURN_IMAGE_BYTES): ImageBudget => ({ left: bytes });
+/** A read result as the model gets it: an image within the turn's budget, or a note. */
+function shownRead(result: Record<string, unknown>, budget: ImageBudget) {
+  if (!('image' in result) || typeof result.image !== 'string') return result;
+  const about = result.about as Record<string, unknown>;
+  const bytes = Buffer.byteLength(result.image, 'base64');
+  if (bytes > budget.left)
+    return {
+      ...about,
+      note: `This turn has already been shown its ${Math.round(TURN_IMAGE_BYTES / 1e6)} MB of images, so this one is not shown. Work from the images you have, or tell the user which ones to look at in a next turn.`,
+    };
+  budget.left -= bytes;
+  return new ToolImage(result.image, result.mimeType as ToolImage['mimeType'], about);
+}
+
 /** file_list and file_read of one turn (SPEC-01.13) through its `FileAccess`. */
-export function fileHandlers(access: FileAccess): Handlers {
+export function fileHandlers(access: FileAccess, budget = imageBudget()): Handlers {
   return {
     file_list: (args, { signal }) => access.list(args, signal),
-    file_read: async (args, { signal }) => {
-      const result = await access.read(args, signal);
-      if ('image' in result && typeof result.image === 'string')
-        return new ToolImage(
-          result.image,
-          result.mimeType as ToolImage['mimeType'],
-          result.about as Record<string, unknown>,
-        );
-      return result;
-    },
+    file_read: async (args, { signal }) =>
+      shownRead((await access.read(args, signal)) as Record<string, unknown>, budget),
   };
 }
 
@@ -1640,19 +1654,14 @@ export function attachmentHandlers(
   projectId: string,
   allowed: ReadonlyMap<string, string>,
   onUse: (name: string) => void = () => {},
+  budget = imageBudget(),
 ): Handlers {
   if (!allowed.size) return {};
   return {
     attachment_read: async (args) => {
       const result = await store.read(projectId, allowed, args);
       onUse(String(allowed.get(args.id) ?? args.id));
-      if ('image' in result && typeof result.image === 'string')
-        return new ToolImage(
-          result.image,
-          result.mimeType as ToolImage['mimeType'],
-          result.about as Record<string, unknown>,
-        );
-      return result;
+      return shownRead(result, budget);
     },
   };
 }

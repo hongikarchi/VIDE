@@ -171,6 +171,49 @@ test('inside the folders files are read at once: lists page, text pages, images;
   assert.match(rules, /FILE_ACCESS_DENIED do not ask again/);
 });
 
+test('file_read shows images up to 1 MB each and 16 MB per turn; a large image is never loaded', async (t) => {
+  const { project, data, root } = await tree(t);
+  const folders = db(t);
+  folders.add('p1', project, 'project');
+  const photos = join(project, '레퍼런스');
+  await mkdir(photos);
+  // Synthetic JPEGs (the type is sniffed from the first bytes): 20 of 0.9 MB and 6 of 25 MB.
+  const jpeg = (size) =>
+    Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.alloc(size - 4, 7)]);
+  for (let i = 0; i < 20; i++) await writeFile(join(photos, `small-${i}.jpg`), jpeg(900_000));
+  for (let i = 0; i < 6; i++) await writeFile(join(photos, `large-${i}.jpg`), jpeg(25_000_000));
+  const access = new FileAccess({
+    folders,
+    projectId: 'p1',
+    context: { dataDirectory: data, home: root },
+    ask: async () => 'deny',
+  });
+  const tools = new AgentTools({ origin: 'http://127.0.0.1:47999' });
+  const scope = tools.issue({
+    targetRef: 'files:t',
+    isCurrent: () => true,
+    maxCalls: 100,
+    handlers: fileHandlers(access),
+  });
+  const read = (name) => tools.call(scope.token, 'file_read', { path: join('레퍼런스', name) });
+  globalThis.gc?.();
+  const before = process.memoryUsage();
+  for (let i = 0; i < 6; i++) {
+    const large = await read(`large-${i}.jpg`);
+    assert.equal(large.content.length, 1);
+    assert.match(JSON.parse(large.content[0].text).note, /larger than 1000000 bytes/);
+  }
+  // Six 25 MB files cost what their 64 KB heads cost, not 150 MB.
+  const grown = process.memoryUsage().arrayBuffers - before.arrayBuffers;
+  assert.ok(grown < 20_000_000, `array buffers grew ${grown} bytes`);
+  const shown = [];
+  for (let i = 0; i < 20; i++) shown.push((await read(`small-${i}.jpg`)).content[0].type);
+  // 17 × 0.9 MB fit in 16 MB; the rest come back as a note the model can act on.
+  assert.deepEqual([shown.filter((type) => type === 'image').length, shown.at(-1)], [17, 'text']);
+  const over = await read('small-0.jpg');
+  assert.match(JSON.parse(over.content[0].text).note, /already been shown its 16 MB of images/);
+});
+
 test('outside the folders: the question, and once / always / deny each as the user answered', async (t) => {
   const { project, outside, data, root } = await tree(t);
   const folders = db(t);

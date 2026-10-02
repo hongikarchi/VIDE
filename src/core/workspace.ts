@@ -31,6 +31,8 @@ const decode = (row: unknown): StoredWork | null => {
   return decoded as StoredWork;
 };
 
+type LightRow = { id: string; state: string; i: number; r: number | null };
+
 /** A listed request without its display geometry (see `Workspace.list`). */
 function withoutGeometry(work: StoredWork): StoredWork {
   const result = work.result;
@@ -104,17 +106,33 @@ export class Workspace {
       .prepare(
         'SELECT id,state,octet_length(input) AS i,octet_length(result) AS r FROM workspace_requests WHERE projectId=? ORDER BY rowid',
       )
-      .all(projectId) as { id: string; state: string; i: number; r: number | null }[];
-    return rows.map((row) => {
-      const key = `${row.state}|${row.i}|${row.r ?? -1}`;
-      const known = this.light.get(row.id);
-      if (known?.key === key && known.projectId === projectId) return known.work;
-      const work = withoutGeometry(this.get(projectId, row.id));
-      this.light.set(row.id, { key, projectId, work });
-      return work;
-    });
+      .all(projectId) as LightRow[];
+    return rows.map((row) => this.#light(projectId, row));
   }
   private light = new Map<string, { key: string; projectId: string; work: StoredWork }>();
+  #light(projectId: string, row: LightRow): StoredWork {
+    const key = `${row.state}|${row.i}|${row.r ?? -1}`;
+    const known = this.light.get(row.id);
+    if (known?.key === key && known.projectId === projectId) return known.work;
+    const work = withoutGeometry(this.get(projectId, row.id));
+    this.light.set(row.id, { key, projectId, work });
+    return work;
+  }
+  /**
+   * One request without its display geometry (as `list` gives it, `sceneOmitted`), decoded once per
+   * stored change. Checks that need a request's state, host, document or object ids use this: a
+   * display Sync of a large document is tens of MB, and decoding it again for each pin of a request
+   * held the engine for seconds and near 2 GB of heap (PLAN-27, 2026-10-02). Read-only: the object
+   * is shared with `list`.
+   */
+  summary(projectId: string, id: string): StoredWork {
+    const row = this.store.db
+      .prepare(
+        'SELECT id,state,octet_length(input) AS i,octet_length(result) AS r FROM workspace_requests WHERE projectId=? AND id=?',
+      )
+      .get(projectId, id) as LightRow | undefined;
+    return row ? this.#light(projectId, row) : fail('NOT_FOUND');
+  }
   /** Remove a finished request from the conversation view; the record and its links stay. */
   hide(projectId: string, id: string) {
     const request = this.get(projectId, id);
@@ -173,9 +191,17 @@ export class Workspace {
     projectId: string,
     input: Pick<RequestInput, 'id' | 'baseRequestId' | 'host'>,
   ): StoredWork | undefined {
+    const base = this.baseline(projectId, input);
+    return base && this.get(projectId, base.id);
+  }
+  /** `basis` without its display geometry (`summary`): for checks that need no model. */
+  baseline(
+    projectId: string,
+    input: Pick<RequestInput, 'id' | 'baseRequestId' | 'host'>,
+  ): StoredWork | undefined {
     if (input.baseRequestId === null) return undefined;
-    if (input.baseRequestId) return this.get(projectId, input.baseRequestId);
-    const latest = this.list(projectId)
+    if (input.baseRequestId) return this.summary(projectId, input.baseRequestId);
+    return this.list(projectId)
       .filter(
         (request) =>
           request.id !== input.id &&
@@ -183,7 +209,6 @@ export class Workspace {
           (request.result.host || 'rhino') === (input.host || 'rhino'),
       )
       .at(-1);
-    return latest && this.get(projectId, latest.id);
   }
   /** The user document (`sourceDocument` key) a request's chain stands on, if identified. */
   private documentOf(projectId: string, id: string | null | undefined): string | undefined {
@@ -192,7 +217,7 @@ export class Workspace {
       visited.add(id);
       let row;
       try {
-        row = this.get(projectId, id);
+        row = this.summary(projectId, id);
       } catch {
         return;
       }
@@ -243,7 +268,7 @@ export class Workspace {
       )
     )
       fail('PROJECT_BUSY');
-    merged.baseRequestId = this.basis(projectId, predecessor.input)?.id ?? null;
+    merged.baseRequestId = this.baseline(projectId, predecessor.input)?.id ?? null;
     return this.insert(projectId, merged, predecessorId);
   }
   private insert(projectId: string, value: unknown, predecessorId?: string) {
@@ -270,7 +295,7 @@ export class Workspace {
     if (targets) {
       const documentKeys = new Set<string>();
       for (const item of targets) {
-        const source = this.get(projectId, item.baseRequestId);
+        const source = this.summary(projectId, item.baseRequestId);
         // A Sync of a document open in Rhino/ZWCAD is a valid target too: Rhino captures a work
         // copy when the request runs, ZWCAD is edited in place.
         const openDocument =
@@ -303,7 +328,7 @@ export class Workspace {
         }
       }
     }
-    const baseline = targets ? undefined : this.basis(projectId, input);
+    const baseline = targets ? undefined : this.baseline(projectId, input);
     if (!targets && input.baseRequestId && !baseline?.result?.hostExecuted) fail('STALE_REFERENCE');
     if (baseline && (baseline.result?.host || 'rhino') !== target) fail('TARGET_MISMATCH');
     if (input.applyToSource) {
@@ -329,7 +354,7 @@ export class Workspace {
       const pin = parsedPin.data;
       let source;
       try {
-        source = this.get(projectId, pin.basis);
+        source = this.summary(projectId, pin.basis);
       } catch {
         fail('STALE_REFERENCE');
       }

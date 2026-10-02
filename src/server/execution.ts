@@ -26,6 +26,7 @@ import {
   conversationHandlers,
   conversationSources,
   fileHandlers,
+  imageBudget,
   type AgentTools,
   type ProjectToolHandlers,
 } from './agent-tools.ts';
@@ -169,6 +170,26 @@ const pinsSchema = z.array(
 const executionResultSchema = workspaceResultSchema.extend({
   referenceOnly: z.boolean().optional(),
 });
+/**
+ * A stored model result checked without copying its display geometry: the schema's parse copies
+ * every vertex array, which for a large document's Sync (78 MB JSON) took 0.25 s and ~230 MB more
+ * heap per call. `scene` and `definitions` keep their stored (host-validated) arrays.
+ */
+function parsedModel(result: unknown) {
+  const { scene, definitions, ...rest } = (result ?? {}) as Record<string, unknown>;
+  const parsed = executionResultSchema.parse(rest);
+  const geometry = z
+    .object({
+      scene: z.array(z.object({ id: z.string() }).passthrough()).optional(),
+      definitions: z.record(z.string(), z.object({}).passthrough()).optional(),
+    })
+    .parse({ scene, definitions });
+  return {
+    ...parsed,
+    ...(geometry.scene ? { scene: geometry.scene } : {}),
+    ...(geometry.definitions ? { definitions: geometry.definitions } : {}),
+  } as z.infer<typeof executionResultSchema>;
+}
 const errorSchema = z
   .object({ code: z.string().optional(), intent: z.record(z.string(), z.unknown()).optional() })
   .passthrough();
@@ -418,6 +439,8 @@ export class Execution {
   ): unknown {
     if (!this.tools) return agent;
     const handlers: Parameters<AgentTools['issue']>[0]['handlers'] = {};
+    // One image allowance for the turn's attachment_read and file_read together.
+    const images = imageBudget();
     if (this.attachments && (input.conversationId || storedAttachments(input.files ?? []).length)) {
       let others: { files?: readonly unknown[]; conversationId?: string }[] = [];
       if (input.conversationId)
@@ -428,10 +451,13 @@ export class Execution {
         }
       const allowed = readableAttachments(input, others);
       if (allowed.size)
-        Object.assign(handlers, attachmentHandlers(this.attachments, projectId, allowed));
+        Object.assign(
+          handlers,
+          attachmentHandlers(this.attachments, projectId, allowed, undefined, images),
+        );
     }
     if (this.folders && requestId)
-      Object.assign(handlers, fileHandlers(this.fileAccess(input, projectId, requestId)));
+      Object.assign(handlers, fileHandlers(this.fileAccess(input, projectId, requestId), images));
     const conversationId = input.conversationId;
     if (hostTurn && conversationId && this.conversations) {
       const conversations = this.conversations;
@@ -1083,9 +1109,7 @@ export class Execution {
         try {
           result = await this.sdk.runFixed({
             input,
-            previous: basis
-              ? { ...basis, result: executionResultSchema.parse(basis.result) }
-              : undefined,
+            previous: basis ? { ...basis, result: parsedModel(basis.result) } : undefined,
             codes: bake.codes,
             expectedDocumentHash: bake.expectedDocumentHash,
             signal: controller.signal,
@@ -1164,9 +1188,7 @@ export class Execution {
         return;
       }
       const basis = jigReview ? undefined : this.workspace.basis(projectId, input);
-      const previous = basis
-        ? { ...basis, result: executionResultSchema.parse(basis.result) }
-        : undefined;
+      const previous = basis ? { ...basis, result: parsedModel(basis.result) } : undefined;
       // The drawing open in ZWCAD (connection plugin) is edited directly by its own path.
       const openCadDrawing =
         previous?.result.host === 'zwcad' &&
@@ -1181,8 +1203,9 @@ export class Execution {
         input.permission === 'candidate'
       )
         throw { code: 'ZWCAD_REFERENCE_ONLY' };
+      // A pin needs its source's object row, not its display model (PLAN-27, 2026-10-02).
       const referenced = pins.map((pin) => {
-        const source = this.workspace.get(projectId, pin.basis),
+        const source = this.workspace.summary(projectId, pin.basis),
           result = executionResultSchema.parse(source.result);
         return {
           role: pin.role,
