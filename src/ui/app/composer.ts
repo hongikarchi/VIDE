@@ -3,7 +3,7 @@
 import { requestAdmission, waitingOf } from '../../contracts/request-scope.ts';
 import { requestMode } from '../../contracts/workspace.ts';
 import { attachmentPreview, batchRefusal, addViewCopy, uploadAttachments } from '../attachments.ts';
-import { element as $, append as el, readableError } from '../elements.ts';
+import { element as $, readableError } from '../elements.ts';
 import { models, chooseModel, draftHasInput, objects, validate, packet } from '../model.ts';
 import {
   rememberConversation,
@@ -44,7 +44,7 @@ import { interventionTargetDraft } from '../linked-draft.ts';
 import { requestData, requestMessage, modelsSchema } from '../workspace-data.ts';
 import { waitingText } from '../request-scope.ts';
 import { setReferenceBridge } from '../reference-bridge.ts';
-import { draftState, type WorkMode } from '../store/draft.ts';
+import { draftState, paintComposer, type ContextItem, type WorkMode } from '../store/draft.ts';
 import { sessionState } from '../store/session.ts';
 import { sketchState } from '../store/sketch.ts';
 import { selectionState } from '../store/selection.ts';
@@ -110,11 +110,9 @@ export function setMode(next: WorkMode) {
 /** Keeps the draft's permission field in step with the mode and draws the toggle. */
 export function syncMode() {
   draftState.state.permission = draftState.mode === 'plan' ? 'review' : 'candidate';
-  for (const button of document.querySelectorAll<HTMLButtonElement>('#mode-toggle [data-mode]')) {
-    button.setAttribute('aria-checked', String(button.dataset.mode === draftState.mode));
-    button.disabled = !sessionState.ready;
-  }
-  $('mode-toggle').dataset.mode = draftState.mode;
+  draftState.view.mode = draftState.mode;
+  draftState.view.ready = sessionState.ready;
+  paintComposer();
   $('mode-status').textContent =
     draftState.mode === 'plan' ? '계획 · 문서를 바꾸지 않음' : '자동 · 열린 문서에 바로 적용';
 }
@@ -207,7 +205,9 @@ export function switchDraft(next: string | null) {
 }
 export const focusDraft = () =>
   JSON.stringify({ draft: draftSnapshot(draftState.state), strokes: sketchState.strokes });
-export function chip(
+/** A chip over the message box (`#context`), drawn by shell/composer.tsx. */
+function chip(
+  items: ContextItem[],
   text: string,
   remove: () => void,
   title?: string,
@@ -215,43 +215,29 @@ export function chip(
   thumbnail?: string,
   action?: { label: string; title: string; run: () => void },
 ) {
-  const span = el('span', text, $('context'), { class: 'chip' });
-  if (title) span.title = title;
-  if (thumbnail)
-    span.prepend(el('img', '', span, { class: 'chip-thumb', src: thumbnail, alt: '' }));
-  if (select) {
-    span.classList.add('chip-action');
-    span.onclick = (event) => {
-      if (event.target === span) select();
-    };
-  }
-  if (action) {
-    const button = el('button', action.label, span, { type: 'button', class: 'chip-mask' });
-    button.title = action.title;
-    button.onclick = action.run;
-  }
-  const b = el('button', '×', span, { 'aria-label': `${text} 제외` });
-  b.onclick = remove;
+  items.push({ kind: 'chip', text, remove, title, select, thumbnail, action });
 }
 /** Model menu grouped by service; an older draft's "CLI default" becomes that service's first model. */
 export function fillModels() {
-  $('model').replaceChildren();
   const labels: Record<string, string> = { 'claude-cli': 'Claude', 'codex-cli': 'ChatGPT' };
   // "자동 (Jev)" picks the service itself, so it sits first, outside the service groups.
   const automatic = (model: { id: string }) => model.id === 'auto';
-  for (const model of models.filter(automatic))
-    el('option', model.name, $('model'), { value: model.id });
+  const choice = (model: { id: string; name: string }) => ({ id: model.id, name: model.name });
   const listed = models.filter((m) => !automatic(m));
-  for (const provider of [...new Set(listed.map((m) => m.provider))]) {
-    const group = el('optgroup', '', $('model'), { label: labels[provider] ?? provider });
-    for (const model of listed.filter((m) => m.provider === provider))
-      el('option', model.name, group, { value: model.id });
-  }
+  draftState.view.models = {
+    first: models.filter(automatic).map(choice),
+    groups: [...new Set(listed.map((m) => m.provider))].map((provider) => ({
+      label: labels[provider] ?? provider,
+      options: listed.filter((m) => m.provider === provider).map(choice),
+    })),
+  };
+  draftState.view.extraModels = [];
   if (!models.some((m) => m.id === draftState.state.model)) {
     const first = models.find((m) => m.provider === draftState.state.model);
     if (first) chooseModel(draftState.state, first.id);
   }
-  $('model').value = draftState.state.model;
+  draftState.view.model = draftState.state.model;
+  paintComposer();
 }
 /** Selected objects of the displayed model that can be pinned (they belong to a request basis). */
 export function pinnable() {
@@ -669,8 +655,8 @@ export function sendComposer() {
   }
   if (draftState.routing) return;
   draftState.routing = true;
+  paintComposer();
   const body = draftState.state.body;
-  $('request').setAttribute('aria-busy', 'true');
   hideRouteCard();
   void decideRoute(body)
     .then(({ route, instanceId, planFirst }) => {
@@ -682,7 +668,7 @@ export function sendComposer() {
     })
     .finally(() => {
       draftState.routing = false;
-      $('request').removeAttribute('aria-busy');
+      paintComposer();
     });
 }
 export async function submitRequest(
@@ -833,20 +819,20 @@ export function fileSize(bytes: number) {
 
 export function initComposer1() {
   fillModels();
-  $('model').onchange = () => {
-    draftState.modelFollowsConversation = false;
-    chooseModel(draftState.state, $('model').value);
-    void refreshAccount();
-    render();
-  };
-  $('effort').oninput = () => {
-    draftState.state.effort =
-      models.find((m) => m.id === draftState.state.model)?.efforts[$('effort').valueAsNumber] ||
-      'default';
-    render();
-  };
-  for (const button of document.querySelectorAll<HTMLButtonElement>('#mode-toggle [data-mode]'))
-    button.onclick = () => setMode(button.dataset.mode === 'plan' ? 'plan' : 'auto');
+  Object.assign(draftState.actions, {
+    chooseModel(id: string) {
+      draftState.modelFollowsConversation = false;
+      chooseModel(draftState.state, id);
+      void refreshAccount();
+      render();
+    },
+    chooseEffort(index: number) {
+      draftState.state.effort =
+        models.find((m) => m.id === draftState.state.model)?.efforts[index] || 'default';
+      render();
+    },
+    setMode,
+  });
   $('body').oninput = () => {
     draftState.state.body = $('body').value;
     // Pins whose inline token was deleted from the message leave the request.
@@ -856,7 +842,8 @@ export function initComposer1() {
     );
     render();
     // Drafts save automatically per project; only a failure is worth showing.
-    $('saved').textContent = draftState.draftSaved ? '' : '초안 저장 실패';
+    draftState.view.saved = draftState.draftSaved ? '' : '초안 저장 실패';
+    paintComposer();
   };
   pinComposer = attachPinTokens($('body'), {
     selection: () => {
@@ -918,7 +905,7 @@ export function initComposer2() {
    * The check before sending (SPEC-09.11): an image attachment with reference words, or a path to
    * images in the words, asks with one line over the composer; [그냥 보내기] sends as before.
    */
-  $('request').onclick = () => {
+  draftState.actions.send = () => {
     if (
       sessionState.busy ||
       draftState.routing ||
@@ -959,12 +946,12 @@ export function initComposer2() {
     const projectId = sessionState.project.id,
       conversation = draftState.draftConversation;
     draftState.routing = true;
-    $('request').setAttribute('aria-busy', 'true');
+    paintComposer();
     void imagesAtPaths(api, projectId, paths)
       .catch(() => undefined)
       .then((found) => {
         draftState.routing = false;
-        $('request').removeAttribute('aria-busy');
+        paintComposer();
         if (sessionState.project?.id !== projectId || draftState.draftConversation !== conversation)
           return;
         if (!found?.path || !found.images.length) {
@@ -1068,40 +1055,15 @@ export function initComposer2() {
 }
 
 export function initComposer3() {
-  // The paperclip opens the file picker directly (SPEC-01.12 1); pinning and sketching have their
+  // Picked (the paperclip), pasted or dropped files (SPEC-01.12 1); pinning and sketching have their
   // own places (selection bar, viewport pencil). Which linked files to change is the AI's (T-103).
-  $('attach-file').onclick = () => $('files').click();
-  $('files').onchange = () => {
-    const files = Array.from($('files').files ?? []);
-    $('files').value = '';
-    void attachFiles(files);
-  };
+  draftState.actions.attach = (files) => void attachFiles(files);
   $('body').addEventListener('paste', (event) => {
     const files = Array.from(event.clipboardData?.files ?? []);
     if (!files.length) return;
     event.preventDefault();
     void attachFiles(files);
   });
-  {
-    const composer = document.querySelector<HTMLElement>('.composer')!;
-    const carriesFiles = (event: DragEvent) =>
-      Array.from(event.dataTransfer?.types ?? []).includes('Files');
-    composer.addEventListener('dragover', (event) => {
-      if (!carriesFiles(event)) return;
-      event.preventDefault();
-      composer.classList.add('dropping');
-    });
-    composer.addEventListener('dragleave', (event) => {
-      if (!composer.contains(event.relatedTarget as Node | null))
-        composer.classList.remove('dropping');
-    });
-    composer.addEventListener('drop', (event) => {
-      composer.classList.remove('dropping');
-      if (!carriesFiles(event)) return;
-      event.preventDefault();
-      void attachFiles(Array.from(event.dataTransfer?.files ?? []));
-    });
-  }
 }
 
 export function initComposer4() {
@@ -1128,7 +1090,7 @@ export function initComposer4() {
 }
 
 export function initComposer5() {
-  $('add-request').onclick = () => {
+  draftState.actions.queue = () => {
     if (!draftState.state.body.trim()) return;
     draftState.state.instructions ??= [];
     draftState.state.instructions.push(draftState.state.body);
@@ -1153,8 +1115,11 @@ export function initComposer5() {
 
 /** render(): the composer is usable only once the page is ready; the mode toggle follows. */
 export function paintComposerReady() {
+  // `#body` is uncontrolled (pin-tokens.ts reads `disabled` in this same render()).
   $('body').disabled = !sessionState.ready;
-  for (const id of ['model', 'effort'] as const) $(id).disabled = !sessionState.ready;
+  draftState.view.modelDisabled = !sessionState.ready;
+  // `#effort` follows the same flag; paintSettings() narrows it to models with several steps.
+  draftState.view.effort.disabled = !sessionState.ready;
   syncMode();
 }
 /** render(): a draft without input follows the shown result as its basis. */
@@ -1179,9 +1144,10 @@ export function saveDraft() {
 }
 /** render(): the attached context chips over the message box. */
 export function paintContext() {
-  $('context').replaceChildren();
+  const items: ContextItem[] = [];
   if (draftState.state.linkedTargets?.length)
     chip(
+      items,
       '연계 묶음 · ' +
         draftState.state.linkedTargets
           .map(
@@ -1207,6 +1173,7 @@ export function paintContext() {
   ).length;
   if (loosePins.length || pendingPins)
     chip(
+      items,
       `📌 고정 객체 ${loosePins.length}개${pendingPins ? ` · Sync 대기 ${pendingPins}개` : ''}`,
       () => {
         draftState.state.pins = draftState.state.pins.filter((pin) => pin.label);
@@ -1225,7 +1192,7 @@ export function paintContext() {
       },
     );
   draftState.state.sketches.forEach((s, i) =>
-    chip('⌁ ' + s.name, () => {
+    chip(items, '⌁ ' + s.name, () => {
       draftState.state.sketches.splice(i, 1);
       render();
     }),
@@ -1233,6 +1200,7 @@ export function paintContext() {
   // Kept attachments (SPEC-01.12) carry an id; images show a small preview.
   draftState.state.files.forEach((f, i) =>
     chip(
+      items,
       (f.kind === 'image' ? '' : '▧ ') + (f.displayName || f.name),
       () => {
         draftState.state.files.splice(i, 1);
@@ -1257,19 +1225,12 @@ export function paintContext() {
     ),
   );
   // Host panel: what is selected in Rhino/CAD right now, one click to attach (Design SCR-12).
-  if (panelMode && panelView.selection.length) {
-    const chip = el(
-      'button',
-      `${panelHost === 'zwcad' ? 'CAD' : 'Rhino'} 선택 ${panelView.selection.length}개 첨부`,
-      $('context'),
-      {
-        type: 'button',
-        class: 'chip selection-chip',
-        title: '지금 고른 객체를 이 요청의 대상으로 첨부합니다',
-      },
-    );
-    chip.onclick = () => void attachPanelSelection();
-  }
+  if (panelMode && panelView.selection.length)
+    items.push({
+      kind: 'selection',
+      text: `${panelHost === 'zwcad' ? 'CAD' : 'Rhino'} 선택 ${panelView.selection.length}개 첨부`,
+      run: () => void attachPanelSelection(),
+    });
   // Several files on screen form one space; only a draft whose basis is off screen says so.
   if (
     draftHasInput(draftState.state) &&
@@ -1277,49 +1238,49 @@ export function paintContext() {
     draftState.state.baseRequestId !== selectionState.displayedResult &&
     !linksState.currentLayers.some((layer) => layer.requestId === draftState.state.baseRequestId)
   ) {
-    if (draftState.state.baseRequestId) {
-      const basis = el('button', '입력 기준 보기', $('context'));
-      basis.onclick = () => {
-        selectionState.selectedResult = draftState.state.baseRequestId;
-        renderMessages();
-      };
-    } else el('small', '새 작업 기준', $('context'));
+    if (draftState.state.baseRequestId)
+      items.push({
+        kind: 'basis',
+        run: () => {
+          selectionState.selectedResult = draftState.state.baseRequestId;
+          renderMessages();
+        },
+      });
+    else items.push({ kind: 'new-basis' });
   }
+  draftState.view.context = items;
+  paintComposer();
 }
 /** render(): the model menu, the effort slider and the attach/queue buttons. */
 export function paintSettings() {
-  const selected = models.find((m) => m.id === draftState.state.model);
-  if (
-    !selected &&
-    !Array.from($('model').options).some((option) => option.value === draftState.state.model)
-  )
-    el('option', draftState.state.model + ' · 사용 확인 필요', $('model'), {
-      value: draftState.state.model,
-    });
-  $('model').value = draftState.state.model;
+  const view = draftState.view;
+  const model = draftState.state.model;
+  const selected = models.find((m) => m.id === model);
+  const listed = [
+    ...view.models.first,
+    ...view.models.groups.flatMap((group) => group.options),
+  ].some((choice) => choice.id === model);
+  // A model off the list (an older draft's) stays in the menu until it is filled again.
+  if (!selected && !listed && !view.extraModels.includes(model))
+    view.extraModels = [...view.extraModels, model];
+  view.model = model;
   const efforts = selected?.efforts || [draftState.state.effort];
-  $('effort').max = String(Math.max(0, efforts.length - 1));
-  $('effort').value = String(Math.max(0, efforts.indexOf(draftState.state.effort)));
-  $('effort').disabled = !sessionState.ready || efforts.length < 2;
   const effortLabel = draftState.state.effort === 'default' ? '기본값' : draftState.state.effort;
-  $('effort-label').textContent = effortLabel;
-  $('effort').setAttribute('aria-valuetext', effortLabel);
-  $('effort').title = efforts.join(' → ');
-  $('effort').style.setProperty(
-    '--effort-fill',
-    `${efforts.length > 1 ? (efforts.indexOf(draftState.state.effort) / (efforts.length - 1)) * 100 : 0}%`,
-  );
-  $('effort-steps').replaceChildren(
-    ...efforts.map((effort) => {
-      const step = document.createElement('span');
-      step.textContent = effort === 'default' ? '기본' : effort;
-      step.dataset.active = String(effort === draftState.state.effort);
-      return step;
-    }),
-  );
-  $('attach-file').disabled = !sessionState.ready || sessionState.busy;
-  $('add-request').disabled =
-    !sessionState.ready || sessionState.busy || !draftState.state.body.trim();
+  view.effort = {
+    max: Math.max(0, efforts.length - 1),
+    index: Math.max(0, efforts.indexOf(draftState.state.effort)),
+    disabled: !sessionState.ready || efforts.length < 2,
+    label: effortLabel,
+    title: efforts.join(' → '),
+    fill: `${efforts.length > 1 ? (efforts.indexOf(draftState.state.effort) / (efforts.length - 1)) * 100 : 0}%`,
+    steps: efforts.map((effort) => ({
+      text: effort === 'default' ? '기본' : effort,
+      active: effort === draftState.state.effort,
+    })),
+  };
+  view.attachDisabled = !sessionState.ready || sessionState.busy;
+  view.addDisabled = !sessionState.ready || sessionState.busy || !draftState.state.body.trim();
+  paintComposer();
 }
 /** render(): [보내기] follows the draft, the request admission and the page state. */
 export function paintSendButton() {
@@ -1330,18 +1291,21 @@ export function paintSendButton() {
     draftState.state.messages.map((entry) => entry.request),
   );
   const conflict = admission.code;
-  $('request').disabled =
-    !sessionState.ready ||
-    !sessionState.project ||
-    sessionState.busy ||
-    !!conflict ||
-    !!validate(draftState.state);
-  $('request').title =
-    validate(draftState.state) ||
-    (conflict && errors[conflict]) ||
-    (admission.waitingFor
-      ? `보내면 대기합니다: ${waitingText(admission.waitingFor)} · Ctrl+Enter`
-      : '보내기 · Ctrl+Enter');
+  draftState.view.send = {
+    disabled:
+      !sessionState.ready ||
+      !sessionState.project ||
+      sessionState.busy ||
+      !!conflict ||
+      !!validate(draftState.state),
+    title:
+      validate(draftState.state) ||
+      (conflict && errors[conflict]) ||
+      (admission.waitingFor
+        ? `보내면 대기합니다: ${waitingText(admission.waitingFor)} · Ctrl+Enter`
+        : '보내기 · Ctrl+Enter'),
+  };
+  paintComposer();
 }
 
 /** Escape (shortcut order 50): closes the effort menu and gives its summary the focus. */
