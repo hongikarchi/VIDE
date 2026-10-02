@@ -27,6 +27,7 @@ export const directGuardKinds = [
   'bulk-delete',
   'layer-delete',
   'purge',
+  'save',
   'save-as',
   'export',
   'publish',

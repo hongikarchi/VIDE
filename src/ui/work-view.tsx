@@ -39,7 +39,7 @@ const modeLabel = (message: Message) =>
       : '자동 · 열린 문서에 바로 적용';
 
 // Direct mode (user decision 2026-09-30): each execution is one host undo record. The result
-// lists them with their changes; a guarded one (bulk deletion, layer deletion, purge, save-as,
+// lists them with their changes; a guarded one (bulk deletion, layer deletion, purge, save, save-as,
 // export, publishing) was undone by the host and waits for [진행]. A 계획 turn returns a plan.
 const changeSchema = z
   .object({
@@ -204,6 +204,7 @@ const guardLabels: Record<string, string> = {
   'bulk-delete': '대량 삭제',
   'layer-delete': '레이어 삭제',
   purge: '사용하지 않는 항목 정리',
+  save: '원본 파일 덮어쓰기',
   'save-as': '다른 이름으로 저장',
   export: '경로로 내보내기',
   publish: '외부 게시',

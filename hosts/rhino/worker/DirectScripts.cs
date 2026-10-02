@@ -14,10 +14,13 @@ namespace Vide.Worker;
 internal static class DirectScripts
 {
     internal static readonly string[] CommandDeny = ["exit", "quit", "open", "worksession", "revert", "runscript", "loadscript", "readcommandfile", "runpythonscript", "editpythonscript", "scripteditor", "rhinocode", "options", "documentproperties", "units", "pluginmanager", "loadplugin", "packagemanager", "grasshopper", "grasshopperplayer", "readviewsfromfile", "sendmail", "packtextures", "clearundo", "undomultiple", "redomultiple", "undoselected", "pause", "multipause"];
-    internal static readonly string[] CommandDenyAtStart = ["new", "close", "undo", "redo", "insert"];
+    // Refused anywhere except as an option right after the command that owns it (CommandOptionOwners).
+    internal static readonly string[] CommandDenyUnlessOption = ["new", "close", "undo", "redo", "insert"];
     internal static readonly string[] CommandDenyPrefix = ["import"];
+    internal static readonly string[] GuardSeverity = ["save", "save-as", "purge", "export", "publish"];
     internal static readonly Dictionary<string, string> CommandConfirm = new() { ["saveas"] = "save-as", ["savesmall"] = "save-as", ["saveastemplate"] = "save-as", ["incrementalsave"] = "save-as", ["viewcapturetofile"] = "export", ["print"] = "publish", ["purge"] = "purge" };
-    internal static readonly Dictionary<string, string> CommandConfirmAtStart = new() { ["save"] = "save-as" };
+    internal static readonly Dictionary<string, string> CommandConfirmUnlessOption = new() { ["save"] = "save" };
+    internal static readonly Dictionary<string, string[]> CommandOptionOwners = new() { ["new"] = ["layer"], ["close"] = ["polyline", "curve", "interpcrv", "interpcrvonsrf"], ["undo"] = ["polyline", "curve", "interpcrv", "interpcrvonsrf", "lines", "points"], ["save"] = ["namedview", "namedcplane", "namedposition", "snapshots"] };
     internal static readonly Dictionary<string, string> CommandConfirmPrefix = new() { ["export"] = "export" };
     internal static readonly string[] PythonDeny =
     [
@@ -29,20 +32,24 @@ internal static class DirectScripts
         @"\bRhino\.(FileIO|PlugIns|UI|ApplicationSettings|Runtime|Commands)\b",
         @"^[ \t]*from[ \t]+Rhino(\.\w+)?[ \t]+import\b[^\n#]*\b(FileIO|PlugIns|UI|ApplicationSettings|Runtime|Commands|RhinoApp)\b",
         @"\bRhinoApp\b",
-        @"\.(Command|Exit|OpenFileName|OpenFileNames|SaveFileName|BrowseForFolder|Write3dmFile|WriteFile|ReadFile|Import|Export|SaveAs|Close|Undo|Redo|BeginUndoRecord|EndUndoRecord|ClearUndoRecords|AddCustomUndoEvent)[ \t]*\(",
+        @"\.(Command|Exit|OpenFileName|OpenFileNames|SaveFileName|BrowseForFolder|Write3dmFile|WriteFile|ReadFile|Import|Export|SaveAs|Close|Undo|Redo|BeginUndoRecord|EndUndoRecord|ClearUndoRecords|AddCustomUndoEvent)\b",
+        @"(?<![\w.])(Command|Exit)[ \t]*\(",
+        @"^[ \t]*from[ \t]+(rhinoscriptsyntax|rhinoscript)(\.\w+)?[ \t]+import\b[^\n#]*(\*|\b(Command|Exit)\b)",
     ];
     internal const string PythonPurge = @"\b(Purge\w*|Compact)[ \t]*\(";
 
     /// <summary>A refusal (diagnostics), a guard to hold (kind, detail) or neither.</summary>
     internal sealed record Verdict(string[]? Denied, string? GuardKind, string? GuardDetail);
 
-    private static readonly HashSet<string> StartBreaks = ["enter", "escape", "cancel"];
-    // The macro's words, each with whether it stands where a command starts (engine: commandWords).
-    internal static List<(string Word, bool Start)> CommandWords(string script)
+    private static readonly HashSet<string> StartBreaks = ["enter", "escape", "cancel", "close"];
+    // The macro's words, each with whether it stands where a command starts and the command it
+    // follows (the word at the last command position) (engine: commandWords).
+    internal static List<(string Word, bool Start, string Command)> CommandWords(string script)
     {
-        var words = new List<(string, bool)>();
+        var words = new List<(string, bool, string)>();
         var tokens = Regex.Split(Regex.Replace(script, "\"[^\"]*\"?", " \"\" "), @"(\s+)");
         var start = true;
+        var command = "";
         foreach (var token in tokens)
         {
             if (token.Length == 0) continue;
@@ -50,8 +57,13 @@ internal static class DirectScripts
             if (token == "\"\"") { start = false; continue; }
             var bang = token.StartsWith('!');
             var word = token.TrimStart('!', '_', '-', '\'', '&', '.').Split('=')[0].ToLowerInvariant();
-            if (word.Length > 0) words.Add((word, start || bang));
+            if (word.Length > 0)
+            {
+                if (start || bang) command = word;
+                words.Add((word, start || bang, command));
+            }
             start = StartBreaks.Contains(word);
+            if (start) command = "";
         }
         return words;
     }
@@ -59,24 +71,35 @@ internal static class DirectScripts
     internal static Verdict CheckCommand(string script)
     {
         var denied = new List<string>();
-        string? kind = null;
-        var held = new List<string>();
-        foreach (var (word, start) in CommandWords(script))
+        var held = new Dictionary<string, List<string>>();
+        foreach (var (word, start, command) in CommandWords(script))
         {
-            if (CommandDeny.Contains(word) || (start && CommandDenyAtStart.Contains(word)) || CommandDenyPrefix.Any(word.StartsWith))
+            var option = !start && CommandOptionOwners.TryGetValue(word, out var owners) && owners.Contains(command);
+            if (CommandDeny.Contains(word) || (!option && CommandDenyUnlessOption.Contains(word)) || CommandDenyPrefix.Any(word.StartsWith))
             { if (!denied.Contains(word)) denied.Add(word); continue; }
             var hit = CommandConfirm.TryGetValue(word, out var k) ? k
-                : start && CommandConfirmAtStart.TryGetValue(word, out var s) ? s
+                : !option && CommandConfirmUnlessOption.TryGetValue(word, out var s) ? s
                 : CommandConfirmPrefix.Where(entry => word.StartsWith(entry.Key)).Select(entry => entry.Value).FirstOrDefault();
             if (hit == null) continue;
-            kind ??= hit;
-            if (kind == hit) held.Add("_" + word);
+            if (!held.TryGetValue(hit, out var list)) held[hit] = list = [];
+            list.Add("_" + word);
         }
         if (denied.Count > 0)
-            return new([$"Rhino command not permitted in VIDE: {string.Join(", ", denied.Select(w => "_" + w))}. Opening, closing or quitting documents, reading files or scripts from disk, application options, plug-ins, units and undo stay with the user; use RhinoCommon C# or another command instead."], null, null);
-        if (kind != null)
-            return new(null, kind, kind == "purge" ? $"사용하지 않는 항목 정리({string.Join(", ", held)})는 되돌릴 수 없습니다." : $"파일을 쓰는 Rhino 명령({string.Join(", ", held)})을 실행합니다.");
-        return new(null, null, null);
+            return new([$"Rhino command not permitted in VIDE: {string.Join(", ", denied.Select(w => "_" + w))}. Opening, closing or quitting documents, reading files or scripts from disk, application options, plug-ins, units and undo stay with the user; use RhinoCommon C# or another command instead. New, Close, Undo, Redo and Insert pass only as an option right after the command that owns it (-Layer New, Polyline Undo/Close)."], null, null);
+        var kind = GuardSeverity.FirstOrDefault(held.ContainsKey);
+        return kind == null ? new(null, null, null) : new(null, kind, GuardDetail(held));
+    }
+
+    // Every held word of every kind (engine: guardDetail): the user confirms all of them at once.
+    internal static string GuardDetail(Dictionary<string, List<string>> held)
+    {
+        string List(params string[] kinds) => string.Join(", ", kinds.SelectMany(kind => held.TryGetValue(kind, out var words) ? words : []));
+        var parts = new List<string>();
+        if (held.ContainsKey("save")) parts.Add($"열린 원본 파일을 덮어씁니다({List("save")}).");
+        if (held.ContainsKey("save-as") || held.ContainsKey("export")) parts.Add($"파일을 쓰는 Rhino 명령({List("save-as", "export")})을 실행합니다.");
+        if (held.ContainsKey("publish")) parts.Add($"인쇄 명령({List("publish")})을 실행합니다.");
+        if (held.ContainsKey("purge")) parts.Add($"사용하지 않는 항목 정리({List("purge")})는 되돌릴 수 없습니다.");
+        return string.Join(" ", parts);
     }
 
     internal static Verdict CheckPython(string source)
@@ -94,41 +117,62 @@ internal static class DirectScripts
     internal static bool DeniedCommand(string englishName)
     {
         var name = englishName.ToLowerInvariant();
-        return CommandDeny.Contains(name) || CommandDenyAtStart.Contains(name) || CommandDenyPrefix.Any(name.StartsWith);
+        return CommandDeny.Contains(name) || CommandDenyUnlessOption.Contains(name) || CommandDenyPrefix.Any(name.StartsWith);
     }
     /// <summary>The guard a command that started during a run trips (save, export, print, purge).</summary>
     internal static string? GuardOfCommand(string englishName)
     {
         var name = englishName.ToLowerInvariant();
         return CommandConfirm.TryGetValue(name, out var kind) ? kind
-            : CommandConfirmAtStart.TryGetValue(name, out var start) ? start
+            : CommandConfirmUnlessOption.TryGetValue(name, out var start) ? start
             : CommandConfirmPrefix.Where(entry => name.StartsWith(entry.Key)).Select(entry => entry.Value).FirstOrDefault();
+    }
+
+    // Watches the Rhino commands that start while a script runs: each is logged, and a refused one
+    // (or a guarded one the user did not confirm) is a violation the caller turns into a refusal
+    // after the run, so the execution's record is undone. RhinoCommon cannot cancel a command
+    // from BeginCommand, so a file it already wrote stays written (ADR-029 remaining risk 2).
+    private sealed class CommandMonitor : IDisposable
+    {
+        internal readonly List<string> Started = [];
+        internal string? Violation;
+        private readonly StringBuilder output;
+        private readonly Func<string, bool> refused;
+        internal CommandMonitor(StringBuilder output, Func<string, bool> refused)
+        {
+            this.output = output;
+            this.refused = refused;
+            Rhino.Commands.Command.BeginCommand += Begin;
+            Rhino.Commands.Command.EndCommand += End;
+        }
+        private void Begin(object? sender, Rhino.Commands.CommandEventArgs e)
+        {
+            Started.Add(e.CommandEnglishName);
+            if (refused(e.CommandEnglishName)) Violation ??= e.CommandEnglishName;
+        }
+        private void End(object? sender, Rhino.Commands.CommandEventArgs e) => output.AppendLine($"{e.CommandEnglishName}: {e.CommandResult}");
+        public void Dispose()
+        {
+            Rhino.Commands.Command.BeginCommand -= Begin;
+            Rhino.Commands.Command.EndCommand -= End;
+        }
     }
 
     /// <summary>Run a command macro in this document; the started commands and their results go to the log.</summary>
     internal static object? RunCommand(RhinoDoc document, string script, StringBuilder output, bool confirmed)
     {
-        var started = new List<string>();
-        string? violation = null;
-        void Begin(object? sender, Rhino.Commands.CommandEventArgs e)
-        {
-            started.Add(e.CommandEnglishName);
-            if (DeniedCommand(e.CommandEnglishName) || (!confirmed && GuardOfCommand(e.CommandEnglishName) != null))
-                violation ??= e.CommandEnglishName;
-        }
-        void End(object? sender, Rhino.Commands.CommandEventArgs e) => output.AppendLine($"{e.CommandEnglishName}: {e.CommandResult}");
-        Rhino.Commands.Command.BeginCommand += Begin;
-        Rhino.Commands.Command.EndCommand += End;
         bool ran;
-        try { ran = RhinoApp.RunScript(document.RuntimeSerialNumber, script, false); }
-        finally
+        string? violation;
+        string[] started;
+        using (var monitor = new CommandMonitor(output, name => DeniedCommand(name) || (!confirmed && GuardOfCommand(name) != null)))
         {
-            Rhino.Commands.Command.BeginCommand -= Begin;
-            Rhino.Commands.Command.EndCommand -= End;
+            ran = RhinoApp.RunScript(document.RuntimeSerialNumber, script, false);
+            violation = monitor.Violation;
+            started = monitor.Started.Take(50).ToArray();
         }
         if (violation != null) throw new ScriptPolicyException($"Rhino command not permitted in VIDE: {violation} (started through an alias or a nested macro).");
         if (!ran) throw new InvalidOperationException("Rhino did not run the command script (unknown command, or a command needs input the macro did not give).");
-        return new { commands = started.Take(50).ToArray() };
+        return new { commands = started };
     }
 
     /// <summary>Run a Rhino 8 Python 3 script; scriptcontext.doc is the document, print() goes to the log.</summary>
@@ -148,8 +192,20 @@ internal static class DirectScripts
             RecordDocumentUndo = false,
             AutoApplyParams = false,
         };
-        try { code.Run(context); }
-        finally { output.Append(Encoding.UTF8.GetString(stream.ToArray())); }
+        // Python may reach a Rhino command past the static check (an alias of rs.Command, getattr):
+        // a refused or guarded command started during the run undoes the record and refuses
+        // (Python's only confirmable guard is purge, so a file-writing command is never confirmed here).
+        string? violation;
+        Exception? error = null;
+        using (var monitor = new CommandMonitor(output, name => DeniedCommand(name) || GuardOfCommand(name) != null))
+        {
+            try { code.Run(context); }
+            catch (Exception failure) { error = failure; }
+            finally { output.Append(Encoding.UTF8.GetString(stream.ToArray())); }
+            violation = monitor.Violation;
+        }
+        if (violation != null) throw new ScriptPolicyException($"Rhino command not permitted in VIDE: {violation} (started from Python; Rhino commands go in execute.command).");
+        if (error != null) System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(error).Throw();
         return null;
     }
 }

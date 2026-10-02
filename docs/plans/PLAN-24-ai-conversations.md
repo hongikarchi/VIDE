@@ -359,11 +359,11 @@ related: [PLAN, PLAN-22, PLAN-23, PLAN-25, PLAN-26, PLAN-02, PLAN-05, PLAN-08, P
 - **선행:** T-070·T-072(바로 실행·실행 기록), T-093(`linkId`).
 - **검증:**
   - 정상: `tests/server/direct-mode.test.mjs` — 명령·Python이 `language`를 달고 호스트에 가서 각각 기록 하나(`undoId`)로 남음, 형식 둘·없음은 `EXECUTE_FORM_INVALID`, 내보내기 명령은 호스트를 부르지 않고 보류 → [진행]이 같은 형식·`confirmed`로 실행, Python purge 보류
-  - 실패: 같은 시험 — 열기·디스크 스크립트 명령과 `import os`·`open()` Python은 호스트를 부르지 않고 `CODE_POLICY_REJECTED`와 진단. `tests/server/rhino-script-policy.test.mjs` — 옵션 이름과 겹치는 명령(`-Layer _New`, `-NamedView _Save`, 폴리라인 `_Undo`·`_Close`)은 통과, 거절·확인 목록, Python 허용·거절 예, 플러그인 목록이 엔진 목록과 같음. `tests/core/host-documents-contract.test.mjs` — 채널이 `language`를 보내고 플러그인의 정책 거절(별칭으로 시작된 명령)을 결과로 읽음
+  - 실패: 같은 시험 — 열기·디스크 스크립트 명령과 `import os`·`open()` Python은 호스트를 부르지 않고 `CODE_POLICY_REJECTED`와 진단. `tests/server/rhino-script-policy.test.mjs` — 옵션 이름과 겹치는 명령(`-Layer _New`, `-NamedView _Save`, 폴리라인 `_Undo`·`_Close`)은 통과, 묻지 않는 명령 뒤의 `_Save`·`_Close`·`_Undo`·`_New`·`_Insert`(`_SelAll _Save` 등)와 `_Close` 뒤 `_Undo`는 보류·거절, 보호 명령 여럿은 카드 하나에 모두(가장 무거운 종류), `_Save`는 `save`(원본 덮어쓰기), 거절·확인 목록, Python 허용·거절 예(`from rhinoscriptsyntax import *`·`c = rs.Command` 포함), 플러그인 목록(옵션 주인·심각도 포함)이 엔진 목록과 같음. `tests/core/host-documents-contract.test.mjs` — 채널이 `language`를 보내고 플러그인의 정책 거절(별칭으로 시작된 명령)을 결과로 읽음
   - 빌드: `dotnet build hosts/rhino/worker/VIDE.Worker.csproj`(경고·오류 0)
-  - 실제 Rhino(남음): 합성 문서에서 `_-SelDup _Enter` 뒤 [되돌리기]와 Ctrl+Z가 한 단계인지, 명령 기록이 합쳐지지 않으면 묶음 되돌리기, Python 3의 `rs.AddPoint`·`print` 로그·첫 실행 시간, `_-Export` 보류 → [진행], 별칭 거절 명령의 되돌림
+  - 실제 Rhino(남음): 합성 문서에서 `_-SelDup _Enter` 뒤 [되돌리기]와 Ctrl+Z가 한 단계인지, 명령 기록이 합쳐지지 않으면 묶음 되돌리기, Python 3의 `rs.AddPoint`·`print` 로그·첫 실행 시간, `_-Export` 보류 → [진행], 별칭·Python에서 시작된 거절 명령의 되돌림, 묶음의 일부 Ctrl+Z → [되돌리기]와 Ctrl+Z → Ctrl+Y → [되돌리기]
 - **완료:** 위 자동 시험·빌드 통과와 실제 Rhino 확인.
-- **상태(2026-10-02):** 구현·단위 시험·플러그인 빌드 완료(브랜치 `feat/rhino-commands`, 설치 전). 남음: 실제 Rhino 8 확인(에이전트는 Rhino를 열지 않으므로 사용자 확인 또는 설치본 묶음 때), ADR-029 결정 2~5의 사용자 확인.
+- **상태(2026-10-02):** 구현·단위 시험·플러그인 빌드 완료(브랜치 `feat/rhino-commands`, 설치 전). 검토 지적 반영: 옵션 낱말은 주인 명령 바로 뒤에서만, 보호 명령 여럿은 카드 하나에 모두, `save` 종류, Python 실행 중 명령 감시, 묶음 되돌림 상태의 Ctrl+Z/Ctrl+Y 추적. 남음: 실제 Rhino 8 확인(에이전트는 Rhino를 열지 않으므로 사용자 확인 또는 설치본 묶음 때), ADR-029 결정 2~5의 사용자 확인.
 
 ## 여러 파일 조율 {#multi-file}
 

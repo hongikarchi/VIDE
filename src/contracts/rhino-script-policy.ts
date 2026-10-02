@@ -7,7 +7,9 @@
 // CodePolicy it is defence in depth, not an OS security boundary.
 
 /** The direct-mode guard kinds a script can trip before it runs (a subset of directGuardKinds). */
-export type DirectGuardKind = 'save-as' | 'export' | 'publish' | 'purge';
+export type DirectGuardKind = 'save' | 'save-as' | 'export' | 'publish' | 'purge';
+/** Most severe first: a macro that trips several kinds shows the first on its card (all words in the detail). */
+export const GUARD_SEVERITY: DirectGuardKind[] = ['save', 'save-as', 'purge', 'export', 'publish'];
 
 export const executeLanguages = ['csharp', 'command', 'python'] as const;
 export type ExecuteLanguage = (typeof executeLanguages)[number];
@@ -45,8 +47,12 @@ export const COMMAND_DENY = [
   'pause',
   'multipause',
 ];
-/** Refused at a command position only (they are also option names inside other commands). */
-export const COMMAND_DENY_AT_START = ['new', 'close', 'undo', 'redo', 'insert'];
+/**
+ * Refused wherever they appear, except as an option of the command that owns them
+ * (COMMAND_OPTION_OWNERS): a command that asks nothing (_SelAll) is followed by the next command,
+ * so "not at the start of a line" does not make a word an option.
+ */
+export const COMMAND_DENY_UNLESS_OPTION = ['new', 'close', 'undo', 'redo', 'insert'];
 /** Every token starting with these is refused (Import, ImportLayouts, ImportNamedViews, …). */
 export const COMMAND_DENY_PREFIX = ['import'];
 /** Held for the user's confirmation wherever they appear. */
@@ -59,8 +65,19 @@ export const COMMAND_CONFIRM: Record<string, DirectGuardKind> = {
   print: 'publish',
   purge: 'purge',
 };
-/** Held for confirmation at a command position only (NamedView has a Save option). */
-export const COMMAND_CONFIRM_AT_START: Record<string, DirectGuardKind> = { save: 'save-as' };
+/** Held for confirmation (overwrites the open file) unless an option of its owning command. */
+export const COMMAND_CONFIRM_UNLESS_OPTION: Record<string, DirectGuardKind> = { save: 'save' };
+/**
+ * The commands whose option a shared word is, when it follows that command before any _Enter,
+ * _Escape, _Cancel, new line or _Close (Close ends the drawing command). Only commands that keep
+ * prompting after the option: Line ends after two points, so its next word is a new command.
+ */
+export const COMMAND_OPTION_OWNERS: Record<string, string[]> = {
+  new: ['layer'],
+  close: ['polyline', 'curve', 'interpcrv', 'interpcrvonsrf'],
+  undo: ['polyline', 'curve', 'interpcrv', 'interpcrvonsrf', 'lines', 'points'],
+  save: ['namedview', 'namedcplane', 'namedposition', 'snapshots'],
+};
 /** Every token starting with these is held for confirmation (Export, ExportWithOrigin, …). */
 export const COMMAND_CONFIRM_PREFIX: Record<string, DirectGuardKind> = { export: 'export' };
 
@@ -74,7 +91,9 @@ export const PYTHON_DENY = [
   String.raw`\bRhino\.(FileIO|PlugIns|UI|ApplicationSettings|Runtime|Commands)\b`,
   String.raw`^[ \t]*from[ \t]+Rhino(\.\w+)?[ \t]+import\b[^\n#]*\b(FileIO|PlugIns|UI|ApplicationSettings|Runtime|Commands|RhinoApp)\b`,
   String.raw`\bRhinoApp\b`,
-  String.raw`\.(Command|Exit|OpenFileName|OpenFileNames|SaveFileName|BrowseForFolder|Write3dmFile|WriteFile|ReadFile|Import|Export|SaveAs|Close|Undo|Redo|BeginUndoRecord|EndUndoRecord|ClearUndoRecords|AddCustomUndoEvent)[ \t]*\(`,
+  String.raw`\.(Command|Exit|OpenFileName|OpenFileNames|SaveFileName|BrowseForFolder|Write3dmFile|WriteFile|ReadFile|Import|Export|SaveAs|Close|Undo|Redo|BeginUndoRecord|EndUndoRecord|ClearUndoRecords|AddCustomUndoEvent)\b`,
+  String.raw`(?<![\w.])(Command|Exit)[ \t]*\(`,
+  String.raw`^[ \t]*from[ \t]+(rhinoscriptsyntax|rhinoscript)(\.\w+)?[ \t]+import\b[^\n#]*(\*|\b(Command|Exit)\b)`,
 ];
 /** Python that purges (not undoable): held for confirmation like the C# purge. */
 export const PYTHON_PURGE = String.raw`\b(Purge\w*|Compact)[ \t]*\(`;
@@ -83,10 +102,14 @@ export type ScriptVerdict =
   | { ok: true; guard?: { kind: DirectGuardKind; detail: string } }
   | { ok: false; diagnostics: string[] };
 
-const START_BREAKS = new Set(['enter', 'escape', 'cancel']);
-/** The command words of a macro: each with whether it stands where a command starts. */
+const START_BREAKS = new Set(['enter', 'escape', 'cancel', 'close']);
+/**
+ * The command words of a macro: each with whether it stands where a command starts, and the
+ * command it follows (the word at the last command position).
+ */
 export function commandWords(script: string) {
-  const words: { word: string; start: boolean }[] = [];
+  const words: { word: string; start: boolean; command: string }[] = [];
+  let command = '';
   // A quoted string is a value (a name, a path), never a command.
   const tokens = script.replace(/"[^"]*"?/g, ' "" ').split(/(\s+)/);
   let start = true;
@@ -105,24 +128,37 @@ export function commandWords(script: string) {
       .replace(/^[!_\-'&.]+/, '')
       .split('=')[0]!
       .toLowerCase();
-    if (word) words.push({ word, start: start || bang });
+    if (word) {
+      if (start || bang) command = word;
+      words.push({ word, start: start || bang, command });
+    }
     start = START_BREAKS.has(word);
+    if (start) command = '';
   }
   return words;
 }
 const shown = (word: string) => '_' + word;
+/** The card detail naming every held word of every kind (the user confirms all of them at once). */
+export function guardDetail(held: Partial<Record<DirectGuardKind, string[]>>) {
+  const list = (kinds: DirectGuardKind[]) => kinds.flatMap((kind) => held[kind] ?? []).join(', ');
+  const parts: string[] = [];
+  if (held.save?.length) parts.push(`열린 원본 파일을 덮어씁니다(${list(['save'])}).`);
+  if (held['save-as']?.length || held.export?.length)
+    parts.push(`파일을 쓰는 Rhino 명령(${list(['save-as', 'export'])})을 실행합니다.`);
+  if (held.publish?.length) parts.push(`인쇄 명령(${list(['publish'])})을 실행합니다.`);
+  if (held.purge?.length)
+    parts.push(`사용하지 않는 항목 정리(${list(['purge'])})는 되돌릴 수 없습니다.`);
+  return parts.join(' ');
+}
 /** The policy verdict of a Rhino command macro (before it runs). */
 export function checkRhinoCommand(script: string): ScriptVerdict {
   const denied = new Set<string>();
-  let guard: { kind: DirectGuardKind; words: string[] } | undefined;
-  const hold = (kind: DirectGuardKind, word: string) => {
-    if (!guard) guard = { kind, words: [] };
-    if (guard.kind === kind) guard.words.push(shown(word));
-  };
-  for (const { word, start } of commandWords(script)) {
+  const held: Partial<Record<DirectGuardKind, string[]>> = {};
+  for (const { word, start, command } of commandWords(script)) {
+    const option = !start && (COMMAND_OPTION_OWNERS[word]?.includes(command) ?? false);
     if (
       COMMAND_DENY.includes(word) ||
-      (start && COMMAND_DENY_AT_START.includes(word)) ||
+      (!option && COMMAND_DENY_UNLESS_OPTION.includes(word)) ||
       COMMAND_DENY_PREFIX.some((prefix) => word.startsWith(prefix))
     ) {
       denied.add(word);
@@ -130,28 +166,19 @@ export function checkRhinoCommand(script: string): ScriptVerdict {
     }
     const kind =
       COMMAND_CONFIRM[word] ??
-      (start ? COMMAND_CONFIRM_AT_START[word] : undefined) ??
+      (option ? undefined : COMMAND_CONFIRM_UNLESS_OPTION[word]) ??
       Object.entries(COMMAND_CONFIRM_PREFIX).find(([prefix]) => word.startsWith(prefix))?.[1];
-    if (kind) hold(kind, word);
+    if (kind) (held[kind] ??= []).push(shown(word));
   }
   if (denied.size)
     return {
       ok: false,
       diagnostics: [
-        `Rhino command not permitted in VIDE: ${[...denied].map(shown).join(', ')}. Opening, closing or quitting documents, reading files or scripts from disk, application options, plug-ins, units and undo stay with the user; use RhinoCommon C# or another command instead.`,
+        `Rhino command not permitted in VIDE: ${[...denied].map(shown).join(', ')}. Opening, closing or quitting documents, reading files or scripts from disk, application options, plug-ins, units and undo stay with the user; use RhinoCommon C# or another command instead. New, Close, Undo, Redo and Insert pass only as an option right after the command that owns it (-Layer New, Polyline Undo/Close).`,
       ],
     };
-  if (guard)
-    return {
-      ok: true,
-      guard: {
-        kind: guard.kind,
-        detail:
-          guard.kind === 'purge'
-            ? `사용하지 않는 항목 정리(${guard.words.join(', ')})는 되돌릴 수 없습니다.`
-            : `파일을 쓰는 Rhino 명령(${guard.words.join(', ')})을 실행합니다.`,
-      },
-    };
+  const kind = GUARD_SEVERITY.find((each) => held[each]?.length);
+  if (kind) return { ok: true, guard: { kind, detail: guardDetail(held) } };
   return { ok: true };
 }
 /** The policy verdict of a Python script (before it runs). */

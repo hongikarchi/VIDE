@@ -8,11 +8,13 @@ import {
   checkRhinoPython,
   commandWords,
   COMMAND_DENY,
-  COMMAND_DENY_AT_START,
+  COMMAND_DENY_UNLESS_OPTION,
   COMMAND_DENY_PREFIX,
   COMMAND_CONFIRM,
-  COMMAND_CONFIRM_AT_START,
+  COMMAND_CONFIRM_UNLESS_OPTION,
   COMMAND_CONFIRM_PREFIX,
+  COMMAND_OPTION_OWNERS,
+  GUARD_SEVERITY,
   PYTHON_DENY,
   PYTHON_PURGE,
 } from '../../src/contracts/rhino-script-policy.ts';
@@ -27,6 +29,9 @@ test('everyday commands pass; options that share a name with a command do not tr
     '_Polyline 0,0,0 10,0,0 _Undo 5,5,0 _Close',
     '_SelLayer "A::B" _Enter _Join',
     '_-Make2D _Enter',
+    '_-Snapshots _Save "A" _Enter',
+    '_Curve 0,0,0 5,5,0 10,0,0 _Close',
+    '_-Points 0,0,0 1,0,0 _Undo 2,0,0 _Enter',
   ])
     assert.deepEqual(checkRhinoCommand(script), { ok: true }, script);
 });
@@ -47,6 +52,17 @@ test('opening, quitting, scripts from disk, options, plug-ins, units and undo ar
     ['_SelAll _Enter _Undo', '_undo'],
     ['_ClearUndo', '_clearundo'],
     ['_Line _Pause _Pause', '_pause'],
+    // A command that asks nothing is followed by the next command on the same line: the shared
+    // words are options only right after the command that owns them (review finding, 2026-10-02).
+    ['_SelNone _Close', '_close'],
+    ['_SelAll _Undo', '_undo'],
+    ['_SelAll _Delete _New', '_new'],
+    ['_SelNone _-Insert "x.3dm" _Enter _Enter', '_insert'],
+    ['_SelAll _Redo', '_redo'],
+    // Close ends Polyline, so the Undo after it is the Undo command; Line ends after two points.
+    ['_Polyline 0,0,0 1,0,0 2,1,0 _Close _Undo', '_undo'],
+    ['_Line 0,0,0 1,0,0 _Undo', '_undo'],
+    ['_SelName Layer _New', '_new'],
   ]) {
     const verdict = checkRhinoCommand(script);
     assert.equal(verdict.ok, false, script);
@@ -56,7 +72,9 @@ test('opening, quitting, scripts from disk, options, plug-ins, units and undo ar
 
 test('commands that write files or purge are held for the card with their kind', () => {
   assert.equal(checkRhinoCommand('_-SaveAs "C:\\b.3dm"').guard.kind, 'save-as');
-  assert.equal(checkRhinoCommand('_Save').guard.kind, 'save-as');
+  const save = checkRhinoCommand('_Save');
+  assert.equal(save.guard.kind, 'save');
+  assert.match(save.guard.detail, /열린 원본 파일을 덮어씁니다\(_save\)/);
   assert.equal(checkRhinoCommand('_-Export "C:\\a.dwg" _Enter').guard.kind, 'export');
   assert.equal(checkRhinoCommand('_-ExportWithOrigin 0,0,0 "a.dwg"').guard.kind, 'export');
   assert.equal(checkRhinoCommand('_-Print _Go').guard.kind, 'publish');
@@ -67,12 +85,42 @@ test('commands that write files or purge are held for the card with their kind',
   assert.equal(checkRhinoCommand('_Save _Exit').ok, false);
 });
 
+test('a save after a command that asks nothing is still held (not taken for an option)', () => {
+  for (const script of ['_SelAll _Save', '_NoEcho _Save', '_SelAll _Join _Save']) {
+    const verdict = checkRhinoCommand(script);
+    assert.equal(verdict.ok, true, script);
+    assert.equal(verdict.guard?.kind, 'save', script);
+  }
+  // NamedView's Save option is still an option, also after the view name.
+  assert.deepEqual(checkRhinoCommand('_-NamedView _Save Top _Enter'), { ok: true });
+});
+
+test('a macro with several guarded commands names all of them; the card takes the most severe', () => {
+  const both = checkRhinoCommand('_-Export "a.dwg" _Enter _-SaveAs "b.3dm" _Enter');
+  assert.equal(both.guard.kind, 'save-as');
+  assert.match(both.guard.detail, /_export/);
+  assert.match(both.guard.detail, /_saveas/);
+  const purgeSave = checkRhinoCommand('_-Purge _Enter _Save');
+  assert.equal(purgeSave.guard.kind, 'save');
+  assert.match(purgeSave.guard.detail, /원본 파일을 덮어씁니다\(_save\)/);
+  assert.match(purgeSave.guard.detail, /정리\(_purge\)/);
+  const print = checkRhinoCommand('_-Print _Go _Enter _-Export "a.dwg" _Enter');
+  assert.equal(print.guard.kind, 'export');
+  assert.match(print.guard.detail, /인쇄 명령\(_print\)/);
+  assert.deepEqual(GUARD_SEVERITY, ['save', 'save-as', 'purge', 'export', 'publish']);
+});
+
 test('command words: prefixes, quoted values and command positions', () => {
   assert.deepEqual(commandWords('!_-SelDup _Enter "a b" _Delete=Yes\n_Join'), [
-    { word: 'seldup', start: true },
-    { word: 'enter', start: false },
-    { word: 'delete', start: false },
-    { word: 'join', start: true },
+    { word: 'seldup', start: true, command: 'seldup' },
+    { word: 'enter', start: false, command: 'seldup' },
+    { word: 'delete', start: false, command: '' },
+    { word: 'join', start: true, command: 'join' },
+  ]);
+  assert.deepEqual(commandWords('_SelAll _Join _Save'), [
+    { word: 'selall', start: true, command: 'selall' },
+    { word: 'join', start: false, command: 'selall' },
+    { word: 'save', start: false, command: 'selall' },
   ]);
 });
 
@@ -96,6 +144,11 @@ test('Python: geometry and tables pass; file, network, process, application and 
     'import rhinoscriptsyntax as rs\nrs.Command("_Save")',
     'import scriptcontext as sc\nsc.doc.Undo()',
     'import clr',
+    // Commands reached without a dotted call (review finding, 2026-10-02).
+    'from rhinoscriptsyntax import *\nCommand("_-Export a.dwg")',
+    'import rhinoscriptsyntax as rs\nc = rs.Command\nc("_Save")',
+    'from rhinoscriptsyntax import Command as run',
+    'from rhinoscriptsyntax.application import Command',
   ]) {
     const verdict = checkRhinoPython(source);
     assert.equal(verdict.ok, false, source);
@@ -122,10 +175,22 @@ test('the Rhino plugin keeps the same lists as the engine', () => {
     );
   };
   assert.deepEqual(array('CommandDeny'), COMMAND_DENY);
-  assert.deepEqual(array('CommandDenyAtStart'), COMMAND_DENY_AT_START);
+  assert.deepEqual(array('CommandDenyUnlessOption'), COMMAND_DENY_UNLESS_OPTION);
+  assert.deepEqual(array('GuardSeverity'), GUARD_SEVERITY);
   assert.deepEqual(array('CommandDenyPrefix'), COMMAND_DENY_PREFIX);
   assert.deepEqual(map('CommandConfirm'), COMMAND_CONFIRM);
-  assert.deepEqual(map('CommandConfirmAtStart'), COMMAND_CONFIRM_AT_START);
+  assert.deepEqual(map('CommandConfirmUnlessOption'), COMMAND_CONFIRM_UNLESS_OPTION);
+  const owners = /CommandOptionOwners = new\(\) \{(.*)\};/.exec(cs)?.[1];
+  assert.ok(owners, 'CommandOptionOwners');
+  assert.deepEqual(
+    Object.fromEntries(
+      [...owners.matchAll(/\["([^"]*)"\] = \[([^\]]*)\]/g)].map((m) => [
+        m[1],
+        [...m[2].matchAll(/"([^"]*)"/g)].map((w) => w[1]),
+      ]),
+    ),
+    COMMAND_OPTION_OWNERS,
+  );
   assert.deepEqual(map('CommandConfirmPrefix'), COMMAND_CONFIRM_PREFIX);
   const python = /PythonDeny =\s*\[([\s\S]*?)\n\s*\];/.exec(cs)?.[1];
   assert.ok(python);

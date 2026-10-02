@@ -37,14 +37,22 @@ internal sealed class DirectExecutor : IDisposable
 
     private void UndoRedo(object? sender, Rhino.Commands.UndoRedoEventArgs e)
     {
-        if (e.IsBeginUndo)
-        {
-            watching?.Add(e.UndoSerialNumber); undone.Add(e.UndoSerialNumber); if (records.ContainsKey(e.UndoSerialNumber)) records[e.UndoSerialNumber] = true;
-            // Ctrl+Z on any record of a group leaves the execution (partly) undone: VIDE does not undo it again.
-            foreach (var group in groups)
-                if (e.UndoSerialNumber > group.Key && e.UndoSerialNumber <= group.Value && records.ContainsKey(group.Key)) records[group.Key] = true;
-        }
-        if (e.IsBeginRedo) { undone.Remove(e.UndoSerialNumber); if (records.ContainsKey(e.UndoSerialNumber)) records[e.UndoSerialNumber] = false; }
+        var serial = e.UndoSerialNumber;
+        if (e.IsBeginUndo) { watching?.Add(serial); undone.Add(serial); }
+        else if (e.IsBeginRedo) undone.Remove(serial);
+        else return;
+        if (records.ContainsKey(serial) && !groups.ContainsKey(serial)) records[serial] = e.IsBeginUndo;
+        // A group (an execution whose commands left records of their own) counts as undone only
+        // when all its records are: Ctrl+Z on the newest leaves it partly applied, and Ctrl+Y on
+        // any of them applies it again. [되돌리기] then undoes what is left.
+        foreach (var group in groups)
+            if (serial >= group.Key && serial <= group.Value && records.ContainsKey(group.Key)) records[group.Key] = GroupUndone(group.Key, group.Value);
+    }
+    private bool GroupUndone(uint first, uint last)
+    {
+        for (var s = first; s <= last; s++)
+            if (!undone.Contains(s) && !discarded.Contains(s)) return false;
+        return true;
     }
 
     internal sealed record GuardOptions(bool Confirmed, int MaxDeletes)
