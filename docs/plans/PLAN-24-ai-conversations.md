@@ -2,10 +2,10 @@
 id: PLAN-24
 title: AI 대화 세션·동시 진행·말로 하는 경로 판정 1차
 status: review
-version: 0.52
+version: 0.53
 updated: 2026-10-02
 owner: agent:claude
-related: [PLAN, PLAN-22, PLAN-23, PLAN-25, PLAN-26, PLAN-02, PLAN-05, PLAN-08, PLAN-19, FR-25, FR-24, FR-18, FR-10, FR-11, FR-12, AC-46, AC-47, AC-48, AC-38, SPEC-02, SPEC-07, ARCH-01, ARCH-03, ADR-021, ADR-014, ADR-022, ADR-025, ADR-026, ADR-027, RESEARCH-10, RESEARCH-11]
+related: [PLAN, PLAN-22, PLAN-23, PLAN-25, PLAN-26, PLAN-02, PLAN-05, PLAN-08, PLAN-19, FR-25, FR-24, FR-18, FR-10, FR-11, FR-12, AC-46, AC-47, AC-48, AC-38, SPEC-02, SPEC-07, ARCH-01, ARCH-03, ADR-021, ADR-014, ADR-022, ADR-025, ADR-026, ADR-027, ADR-028, RESEARCH-10, RESEARCH-11]
 ---
 
 # AI 대화 세션·동시 진행·말로 하는 경로 판정 1차
@@ -398,6 +398,33 @@ related: [PLAN, PLAN-22, PLAN-23, PLAN-25, PLAN-26, PLAN-02, PLAN-05, PLAN-08, P
 - **완료:** 위 시험과 `npm run typecheck`·`format:check` 통과.
 - **상태(2026-10-02):** 구현·단위 시험 완료(브랜치 `fix/unknown-no-block`, 설치 전). 남음: 설치본에서 사용자의 막힌 요청을 [확인함]으로 닫고 다음 Rhino 요청이 진행되는지 확인.
 
+## AI CLI 동등성 {#cli-parity}
+
+2026-10-02 사용자 결정 [ADR-028](../decisions/ADR-028-ai-cli-parity.md). 동작 정본은 SPEC-02.19의 3·5, 물리 계약은 ARCH-01 §2 「대화 세션의 CLI 실행」·「AI 실행 인자」, 실측은 [SPIKE-2026-10-02-claude-persistent-process](../tdd/SPIKE-2026-10-02-claude-persistent-process.md). FR-25.
+
+### T-104 · Claude 대화당 프로세스 하나 {#t-104}
+
+- **목적/기준:** "Claude도 대화마다 프로세스 하나를 띄워 두고 턴을 입력 스트림으로 넣는 방식으로 바꾸자"(ADR-028 1). 둘째 턴부터 CLI 기동·로그인·MCP 연결 비용을 없앤다. SPEC-02.19의 3(턴마다 권한을 새로 줌)은 그대로.
+- **변경 범위:** 새 `src/ai/claude-process.ts`(`KeptClaudeCli`: 세션별 프로세스, 열쇠 = 실행 파일·기본 로그인·세션 플래그를 뺀 인자, 열쇠가 다르면 끝내고 `--resume`, 쉬면 10분, `closeClaudeProcesses`, 턴 끝 = 하위 에이전트 보고 뒤 마지막 `result`, 중단 = `interrupt` 뒤 2초 안에 안 끝나면 프로세스 종료, 시험용 `killProcess`·`settleMs`·`loginKey`), 새 `src/ai/agent-relay.ts`(프로세스 토큰 → 그 턴의 범위 토큰, `AgentTools.handle`이 풂), `src/ai/claude-cli.ts`(시작·호출 이벤트 검사·실패 분류·결과를 `initValid`·`assistantEvent`·`failureCode`·`resultOf`로 나눠 함께 씀, `parseProviderEvent`), `src/server/execution.ts`(기본 공급자일 때 세션 턴을 `KeptClaudeCli`로, `close`에서 모두 끔, `VIDE_CLAUDE_PERSISTENT=0`이면 전과 같음), `src/server/diagnostics.ts`(`request-stages`의 `processReused`). 출력 상한(ADR-028 2): `claude-cli.ts`·`codex-app-server.ts`의 전체 1 MB·한 덩어리 8 MB 상한을 한 줄 16 MB(`MAX_EVENT_LINE`)로.
+- **선행:** T-061·T-075(세션·질문 도구). 없음.
+- **검증:**
+  - 정상: `tests/ai/claude-process.test.mjs` — 두 턴이 한 프로세스(둘째 턴 `processReused`, 사용자 메시지 둘, 턴마다 `turn-rules`), effort가 바뀐 턴은 끝내고 `--resume`으로 새 프로세스, 쉬는 시간·엔진 종료로 끝남, 하위 에이전트 보고 뒤 마지막 답과 사용량 합, 보고 뒤 자체 턴이 없으면 앞 답, 이어 쓰는 표준 입력의 질문 카드·이미지, 프로세스 토큰이 턴 동안만 턴 토큰으로 풀림, 전체 2 MB 넘는 출력도 답
+  - 실패: 중단 요청을 따른 턴은 `CANCELLED`로 끝나고 프로세스가 남음, 따르지 않으면 끝냄(종료를 못 보면 `STOP_UNCONFIRMED`이고 'stopped'를 알리지 않음), 턴 중에 죽은 프로세스는 `PROVIDER_FAILED`이고 다음 턴은 새 프로세스, 기록 없는 이어 실행은 `SESSION_LOST`, 16 MB 넘는 한 줄은 `OUTPUT_TOO_LARGE`, 다른 세션 ID의 시작 이벤트는 `SESSION_LOST`. 회귀: `tests/ai/claude-cli.test.mjs`(단발에 전체 상한 없음), `npm test`
+  - 실측: SPIKE(실제 Claude 2.1.287 한 프로세스 2턴: 둘째 턴 시작 7 ms, 시작 이벤트가 턴마다 옴, 하위 에이전트 배경 실행과 자체 턴)
+- **완료:** 위 시험과 `typecheck`·`format:check` 통과. 실제 CLI로 VIDE MCP가 붙은 대화 2턴·중단 1회를 확인(설치본 또는 개발 엔진).
+- **상태(2026-10-02):** 구현·단위 시험 완료(브랜치 `feat/cli-parity`, 설치 전). 남음: 실제 CLI에서 MCP 중계 토큰으로 둘째 턴의 도구 호출, `interrupt`의 실제 동작, Rhino 대화 턴의 시간 비교(`request-stages`의 `processReused`·`firstOutputMs - spawnMs`).
+
+### T-105 · 하위 에이전트·할 일·웹 도구, 세션 길이 기본값 {#t-105}
+
+- **목적/기준:** "서브에이전트와 TodoWrite은 있어야지", "Claude는 WebSearch·WebFetch, Codex는 web_search를 켜자", "기본값을 모델 문맥 한도 수준으로 올리자"(ADR-028 3~5). SPEC-02.19의 3(허용 범위)·5(대화가 길어짐).
+- **변경 범위:** `src/ai/agent-connection.ts`(`BuiltinTools`, `CLAUDE_WORK_TOOLS`·`CLAUDE_SUBAGENT_CALL`·`CLAUDE_WEB_TOOLS`, `builtinRule`, `turnRules`·`configureAgentArguments`·`allowedAgentEvent`의 `builtin`), `src/ai/claude-cli.ts`(옵션 `builtinTools`, VIDE 연결이 있을 때만), `src/ai/codex-cli.ts`·`codex-app-server.ts`(`web_search="live"`와 그 검사, `webSearch` 항목), 새 `src/ai/web-settings.ts`와 `GET/PUT /api/v1/settings/web`(원격 차단은 설정 경로 규칙), `src/server/execution.ts`(모델링·만들기·세션이 있는 자료 턴에 `{work, web}`), `src/ui/ai-settings.tsx` 「AI 웹 검색」, `src/server/conversations.ts` 기본값 100턴·800k.
+- **선행:** 없음.
+- **검증:**
+  - 정상: `tests/ai/agent-connection.test.mjs`(내장 도구 인자·규칙·이벤트, Codex `web_search="live"`), `tests/ai/codex-cli.test.mjs`·`codex-app-server.test.mjs`(웹이 있는 턴만 live, 검사가 그 값을 요구), `tests/server/builtin-tools.test.mjs`(대화 턴에 `{work: true, web: true}`, 끄면 `web: false`, 잘못된 값 400), `tests/server/make-acceptance.test.mjs`(만들기 턴의 `--tools`), `tests/server/conversations.test.mjs`(기본값 100·800000), `tests/integration/browser-ai-settings-smoke.mjs`(스위치 기본 켬, 끄면 다시 열어도 꺼짐)
+  - 실패: 내장 도구가 없는 턴의 `Agent`·`WebFetch` 호출, VIDE 연결 없는 턴의 내장 도구, 웹이 꺼진 턴의 `web_search` 항목은 `UNEXPECTED_TOOL_CALL`/`UNEXPECTED_TOOL_ACCESS`
+- **완료:** 위 시험과 `typecheck`·`format:check` 통과. 실제 CLI로 하위 에이전트가 VIDE MCP 도구만 쓰는지, 웹 검색 한 번을 확인.
+- **상태(2026-10-02):** 구현·단위·브라우저 시험 완료(브랜치 `feat/cli-parity`, 설치 전). 하위 에이전트가 부모의 내장 도구 목록만 갖는 것은 실제 CLI로 확인(SPIKE). 남음: VIDE MCP가 붙은 턴에서 하위 에이전트의 `mcp__vide__*` 사용, 실제 웹 검색(Claude·Codex).
+
 ## 순서와 의존
 
 - T-049는 M1에서 PLAN-22 T-046과 함께 한다.
@@ -406,6 +433,7 @@ related: [PLAN, PLAN-22, PLAN-23, PLAN-25, PLAN-26, PLAN-02, PLAN-05, PLAN-08, P
 - 마일스톤 표기는 S-06 결과를 먼저 보이는 순서(M5)이지만, 선행이 갖춰진 티켓은 먼저 해도 된다.
 - 바로 적용: T-069 → T-070·T-071 → T-072 → T-073·T-074. T-075는 독립이다. 실제 호스트 확인은 플러그인 재빌드·설치 뒤 묶어서 한다.
 - 여러 파일 조율: T-062·T-072 → T-092 → T-093 → T-094 → T-102.
+- AI CLI 동등성: T-104·T-105는 서로 독립이며 T-061·T-075 뒤다.
 
 ## 현황 {#status}
 
