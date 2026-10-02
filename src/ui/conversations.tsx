@@ -1,8 +1,7 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
-import { createRoot } from 'react-dom/client';
-import type { Root } from 'react-dom/client';
 import { z } from 'zod';
 import { JigIconMark, jigIconOf, jigIconsVersion, subscribeJigIcons } from './jig-icons.ts';
+import { workState } from './store/work.ts';
 import './conversations.css';
 
 // 목적별 대화 탭 (Design SCR-15, SPEC-02.19, PLAN-24 T-061·T-088): one row of tabs at the top of
@@ -321,24 +320,24 @@ export function handoverCard(
 
 // --- The chosen conversation, which the work view filters by. ---
 
-let filter: string | null | undefined;
-const listeners = new Set<() => void>();
-/** The chosen conversation (`null` the default one); `undefined` when no chips are mounted. */
-export const conversationFilter = () => filter;
-/** Called whenever the chosen conversation changes (the work view re-renders on it). */
+/**
+ * The chosen conversation (`null` the default one); `undefined` when no chips are mounted. It lives
+ * in the work slice (src/ui/store/work.ts `filter`), which the work view renders from.
+ */
+export const conversationFilter = () => workState.filter;
+/** Called whenever the chosen conversation changes. */
 export function onConversationFilter(listener: () => void) {
-  listeners.add(listener);
-  return () => listeners.delete(listener);
-}
-function setFilter(next: string | null | undefined) {
-  if (next === filter) return;
-  filter = next;
-  for (const listener of listeners) listener();
+  let last = workState.filter;
+  return workState.subscribe(() => {
+    if (workState.filter === last) return;
+    last = workState.filter;
+    listener();
+  });
 }
 
 // --- Components ---
 
-interface Options {
+export interface Options {
   projectId?: string;
   models?: ModelOption[];
   targets?: TargetOption[];
@@ -436,19 +435,20 @@ function HandoverConfirm({
   );
 }
 
-function Conversations({
-  api,
-  options,
-  version,
-  select,
-  selected,
-}: {
+export interface ConversationsProps {
   api: ApiCall;
   options: Options;
   version: number;
   select: (id: string | null) => void;
   selected: string | null;
-}) {
+}
+/**
+ * The chips at the top of the right column (`#conversation-chips`). The app (src/ui/app/thread.ts
+ * `mountConversationScreens`) keeps the options, the chosen conversation and the reload counter in
+ * the work slice; the chosen conversation is the work view's filter and goes to `onChange` for the
+ * composer.
+ */
+export function Conversations({ api, options, version, select, selected }: ConversationsProps) {
   const { projectId, models = [], targets = [], messages = [] } = options;
   const [list, setList] = useState<ConversationEntry[]>([]);
   const [detail, setDetail] = useState<ConversationDetail>();
@@ -773,62 +773,4 @@ function Conversations({
       ) : null}
     </div>
   );
-}
-
-/**
- * Mounts the chips into `container` (the top of the right column). The app passes its `api`
- * (src/ui/gateway.ts) and keeps the chips current with `update`; the chosen conversation is the
- * work view's filter and goes to `onChange` for the composer.
- */
-export function mountConversations(
-  container: HTMLElement,
-  api: ApiCall,
-  initial: Options = {},
-): ConversationsController {
-  const root: Root = createRoot(container);
-  let options: Options = { ...initial };
-  let selected: string | null = initial.selected ?? null;
-  let version = 0;
-  const render = () =>
-    root.render(
-      <Conversations
-        api={api}
-        options={options}
-        version={version}
-        selected={selected}
-        select={select}
-      />,
-    );
-  function select(id: string | null) {
-    if (id === selected && filter !== undefined) return;
-    selected = id;
-    setFilter(id);
-    options.onChange?.(id);
-    render();
-  }
-  setFilter(selected);
-  render();
-  return {
-    update(patch) {
-      if (patch.projectId !== undefined && patch.projectId !== options.projectId) {
-        options = { ...options, ...patch };
-        version++;
-        select(null);
-        render();
-        return;
-      }
-      options = { ...options, ...patch };
-      render();
-    },
-    async refresh() {
-      version++;
-      render();
-    },
-    active: () => selected,
-    select,
-    unmount() {
-      root.unmount();
-      setFilter(undefined);
-    },
-  };
 }

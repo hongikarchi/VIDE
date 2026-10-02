@@ -1,6 +1,5 @@
 import { z } from 'zod';
 import { storedAttachmentSchema, type StoredAttachment } from '../contracts/workspace.ts';
-import { append as el } from './elements.ts';
 
 /**
  * The check before sending (SPEC-09.11, PLAN-26 T-090 (e)): an image attachment with words that
@@ -66,6 +65,11 @@ export async function attachImagePath(
   );
 }
 
+/**
+ * The one-line card in the composer's proposal slot (`#route-card`, Design SCR-15), drawn by
+ * src/ui/shell/reference-check-card.tsx; this module stays free of the DOM (the server tests import
+ * its word rules).
+ */
 export interface ReferenceCardOptions {
   /** Images named by a path in the words; absent for an attached image. */
   found?: PathImages;
@@ -73,43 +77,4 @@ export interface ReferenceCardOptions {
   pick?: (image: PathImages['images'][number]) => void;
   send: () => void;
   close: () => void;
-}
-/** The one-line card in the composer's proposal slot (`#route-card`, Design SCR-15). */
-export function renderReferenceCard(card: HTMLElement, options: ReferenceCardOptions) {
-  card.replaceChildren();
-  card.classList.add('reference-check');
-  card.classList.remove('route-row');
-  el('p', '참고 이미지로 먼저 확인할까요?', card);
-  const { found } = options;
-  if (found?.images.length) {
-    const list = el('div', '', card, {
-      class: 'reference-check-list',
-      role: 'list',
-      'aria-label': '경로의 이미지',
-    });
-    for (const image of found.images) {
-      const button = el('button', image.name, list, {
-        type: 'button',
-        role: 'listitem',
-        title: `${image.path} · 첨부하고 영역 표시`,
-      });
-      button.onclick = () => options.pick?.(image);
-    }
-    if (found.kind === 'folder')
-      el(
-        'small',
-        found.total > found.images.length
-          ? `앞 ${found.images.length}개 · 전체 ${found.total}개`
-          : `${found.total}개`,
-        card,
-        { class: 'reference-check-note', title: found.path ?? '' },
-      );
-  }
-  const row = el('div', '', card, { class: 'route-card-actions' });
-  if (options.mark)
-    el('button', '영역 표시', row, { type: 'button', class: 'primary-button' }).onclick =
-      options.mark;
-  el('button', '그냥 보내기', row, { type: 'button' }).onclick = options.send;
-  el('button', '닫기', row, { type: 'button' }).onclick = options.close;
-  card.hidden = false;
 }

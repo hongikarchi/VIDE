@@ -395,3 +395,5 @@ related: [ADR-026, ADR-016, ADR-022, ADR-021, ADR-020, SPEC-01, SPEC-02, SPEC-07
 **검증 — 실패:** 연결 끊김 배너·재연결, 프로젝트 없는 첫 렌더, 초안 복원 실패, 토스트 액션이 기준선과 같게 동작한다(기존 브라우저 시험).
 
 **완료:** F는 위 검사가 기준선과 같고 DOM 비교 차이가 의도한 감싸개뿐일 때. 전체는 `index.html`이 루트 하나, 셸 요소를 React가 그리고 남은 명령형 영역이 `#canvas`·`#objects` 어댑터·`#display-popover`·외부 직계 자식 컨테이너뿐, 셸 컨테이너 안 외부 삽입 0, 위 검증 통과, 결과는 VERIFY 기록. 설치본 릴리스는 통합 뒤 한 번.
+
+**결과 C(2026-10-02):** 오른쪽 열(대화 칩·작업 보기·대기열·질문 카드·`#route-card`·`#toggle-recent`·`.make-side`)을 `store/work.ts` 상태에서 그리는 컴포넌트로 옮겼다(`shell/right-column.tsx`·`route-card.tsx`·`part-boundary.tsx`). `conversations`·`work-view`·`requests`·`question-card`의 모듈 루트와 `reference-check.ts`의 DOM 카드를 없앴다. 부팅 직후 셸 DOM 비교 차이 0, 브라우저 사슬 38개 중 36개 통과(s06-jig·structure-jig는 worktree에 구조 코어 미빌드). 패널 머리·카드·바닥은 E의 PanelChrome 전까지 정적 컨테이너다.

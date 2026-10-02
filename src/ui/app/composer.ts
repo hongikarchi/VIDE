@@ -35,7 +35,6 @@ import { type SkillStart, startSkill, continueSkill, revertSkill } from '../skil
 import { setWorkspace } from '../workspaces.ts';
 import {
   referenceIntent,
-  renderReferenceCard,
   pathCandidates,
   imagesAtPaths,
   attachImagePath,
@@ -69,6 +68,7 @@ import {
   hideSkillRow,
   showRouteCard,
   showPlanFirstCard,
+  showReferenceCard,
   interventionReason,
   currentConversation,
   poll,
@@ -936,7 +936,7 @@ export function initComposer2() {
     );
     if (image && referenceIntent(words)) {
       const key = 'a:' + (image.id as string);
-      renderReferenceCard($('route-card'), {
+      showReferenceCard({
         mark: () => {
           referenceAnswered.add(key);
           hideRouteCard();
@@ -976,7 +976,7 @@ export function initComposer2() {
           for (const path of paths) referenceAnswered.add('p:' + path);
           hideRouteCard();
         };
-        renderReferenceCard($('route-card'), {
+        showReferenceCard({
           found,
           pick: (picked) => {
             answer();

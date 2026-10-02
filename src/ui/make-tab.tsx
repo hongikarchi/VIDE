@@ -57,6 +57,7 @@ import {
 import { JIG_ICONS, JIG_ICON_LABELS, JigIconMark, jigIcon, noteJigIcon } from './jig-icons.ts';
 import { openDrafts } from './jig-list.ts';
 import { openContextTab, setWorkspace } from './workspaces.ts';
+import { offerMakeSide } from './store/work.ts';
 import './make.css';
 
 type Value = number | string | boolean;
@@ -371,16 +372,14 @@ function MakeTab({ projectId }: { projectId: string }) {
       .catch((error) => setNotice(`제작 대화를 열지 못했습니다: ${messageOf(error)}`));
   }, [detail, projectId]);
   // The plan card and the decisions sit in the right column, under the conversation chips.
-  useEffect(() => {
-    const chips = document.getElementById('conversation-chips');
-    if (!chips) return;
-    const element = document.createElement('section');
-    element.className = 'make-side';
-    element.setAttribute('aria-label', '제작 진행');
-    chips.after(element);
-    setSide(element);
-    return () => element.remove();
-  }, []);
+  // The AI column renders the section (src/ui/shell/right-column.tsx) and hands it over.
+  useEffect(
+    () =>
+      offerMakeSide((element) => {
+        if (element) setSide(element);
+      }),
+    [],
+  );
 
   const act = async <T,>(kind: NonNullable<typeof busy>, work: () => Promise<T>) => {
     setBusy(kind);
