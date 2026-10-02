@@ -8,6 +8,7 @@ import { useStore } from '../store/core.ts';
 import { draftState, type ContextItem } from '../store/draft.ts';
 import { useComposerHeight } from '../composer-height.ts';
 import { ConnectionBanner } from './connection-banner.tsx';
+import { PartBoundary } from './part-boundary.tsx';
 
 /**
  * The message box with the inline pin layers (pin-tokens.ts paints the backdrop, places the ghost
@@ -80,7 +81,7 @@ function ContextChip({ item }: { item: ContextItem }) {
 }
 
 export const Composer = memo(function Composer() {
-  useStore(draftState, (slice) => slice.version);
+  const version = useStore(draftState, (slice) => slice.version);
   const view = draftState.view;
   const actions = draftState.actions;
   const resize = useComposerHeight();
@@ -136,9 +137,12 @@ export const Composer = memo(function Composer() {
           }}
         >
           <div id="context" aria-label="첨부한 문맥">
-            {view.context.map((item, index) => (
-              <ContextChip key={item.kind + index} item={item} />
-            ))}
+            {/* Data-driven parts keep #body and the composer ids if they fail to draw. */}
+            <PartBoundary name="context" reset={version}>
+              {view.context.map((item, index) => (
+                <ContextChip key={item.kind + index} item={item} />
+              ))}
+            </PartBoundary>
           </div>
           <label className="sr-only" htmlFor="body">
             메시지
@@ -230,25 +234,27 @@ export const Composer = memo(function Composer() {
             ref={model}
             disabled={view.modelDisabled}
           >
-            {view.models.first.map((choice) => (
-              <option key={choice.id} value={choice.id}>
-                {choice.name}
-              </option>
-            ))}
-            {view.models.groups.map((group) => (
-              <optgroup key={group.label} label={group.label}>
-                {group.options.map((choice) => (
-                  <option key={choice.id} value={choice.id}>
-                    {choice.name}
-                  </option>
-                ))}
-              </optgroup>
-            ))}
-            {view.extraModels.map((id) => (
-              <option key={'extra:' + id} value={id}>
-                {id + ' · 사용 확인 필요'}
-              </option>
-            ))}
+            <PartBoundary name="model-options" reset={version}>
+              {view.models.first.map((choice) => (
+                <option key={choice.id} value={choice.id}>
+                  {choice.name}
+                </option>
+              ))}
+              {view.models.groups.map((group) => (
+                <optgroup key={group.label} label={group.label}>
+                  {group.options.map((choice) => (
+                    <option key={choice.id} value={choice.id}>
+                      {choice.name}
+                    </option>
+                  ))}
+                </optgroup>
+              ))}
+              {view.extraModels.map((id) => (
+                <option key={'extra:' + id} value={id}>
+                  {id + ' · 사용 확인 필요'}
+                </option>
+              ))}
+            </PartBoundary>
           </select>
           <details className="effort-control" id="effort-menu">
             <summary title="추론 강도">

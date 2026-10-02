@@ -13,6 +13,15 @@ export interface SliceControls {
 }
 export type Slice<T extends object> = T & SliceControls;
 
+/** Told after any slice's `bump()`: a failed screen region retries on the next state change. */
+const anySliceListeners = new Set<() => void>();
+
+/** Subscribes to every slice's `bump()` (src/ui/shell/region-boundary.tsx). */
+export function subscribeAnySlice(listener: () => void): () => void {
+  anySliceListeners.add(listener);
+  return () => anySliceListeners.delete(listener);
+}
+
 export function createSlice<T extends object>(fields: T): Slice<T> {
   const listeners = new Set<() => void>();
   let version = 0;
@@ -23,6 +32,7 @@ export function createSlice<T extends object>(fields: T): Slice<T> {
       value: () => {
         version++;
         for (const listener of [...listeners]) listener();
+        for (const listener of [...anySliceListeners]) listener();
       },
       enumerable: false,
     },

@@ -4,6 +4,7 @@
 import { useStore } from '../store/core.ts';
 import { workState, type RouteCardContent } from '../store/work.ts';
 import type { ReferenceCardOptions } from '../reference-check.ts';
+import { PartBoundary } from './part-boundary.tsx';
 
 function ReferenceCheckCard({ options }: { options: ReferenceCardOptions }) {
   const { found } = options;
@@ -135,7 +136,11 @@ export function RouteCard() {
       aria-label="요청 제안"
       hidden={card.hidden}
     >
-      {card.content ? <Content content={card.content} /> : null}
+      {card.content ? (
+        <PartBoundary name="route-card" reset={card}>
+          <Content content={card.content} />
+        </PartBoundary>
+      ) : null}
     </div>
   );
 }

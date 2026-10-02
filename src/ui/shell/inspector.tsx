@@ -7,6 +7,7 @@ import { useStore } from '../store/core.ts';
 import { viewerState } from '../store/viewer.ts';
 import { InspectorContent } from '../inspector-content.tsx';
 import type { InspectorTab } from '../inspector.ts';
+import { PartBoundary } from './part-boundary.tsx';
 import { viewportActions as act } from './viewport-actions.ts';
 
 const TABS: [InspectorTab, string][] = [
@@ -122,7 +123,10 @@ export const Inspector = memo(function Inspector() {
             ))}
           </nav>
           <div id="inspector-content" ref={content}>
-            <InspectorContent {...(inspector?.content ?? { empty: true })} />
+            {/* The old #inspector-content root: a render error empties only this container. */}
+            <PartBoundary name="inspector-content" reset={viewerState.version}>
+              <InspectorContent {...(inspector?.content ?? { empty: true })} />
+            </PartBoundary>
           </div>
         </div>
       </section>
