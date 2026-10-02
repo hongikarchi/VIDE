@@ -2,18 +2,23 @@
 // list, work history, coverage badge, theme toggle and panel folding.
 import { z } from 'zod';
 import { createObjectList } from '../object-list.ts';
-import { element as $, readableError, append as el } from '../elements.ts';
+import { element as $, readableError } from '../elements.ts';
 import { initializeWorkspacePanels } from '../workspace-panels.ts';
 import { refreshDashboard } from '../dashboard.tsx';
 import { renderLinks } from '../links.tsx';
 import { draftHasInput, objects } from '../model.ts';
 import { api, labels, errors } from '../gateway.ts';
 import { reviewsOf, openReview } from '../reviews.tsx';
-import { setWorkspace, workspaceShowsViewport, activeWorkspace } from '../workspaces.ts';
-import { showFeedback } from '../feedback.ts';
-import { currentTheme, setTheme } from '../theme.ts';
-import { iconSvg } from '../inspector.ts';
-import { type MobileView, setMobileView } from '../mobile-navigation.tsx';
+import { setWorkspace, workspaceShowsViewport } from '../workspaces.ts';
+import {
+  layoutState,
+  paintThemeToggle,
+  revealPanel,
+  setMobileView,
+  togglePanel,
+  type HistoryRow,
+  type MobileView,
+} from '../store/layout.ts';
 import { removeProjectDrafts } from '../draft-storage.ts';
 import { renderProjectHeading } from '../project-heading.tsx';
 import { requestMessage } from '../workspace-data.ts';
@@ -53,13 +58,6 @@ export function syncCoverageBadge(coverage?: {
   omittedBlockInternal?: number;
   hiddenLayers?: { path: string; count: number }[];
 }) {
-  let badge = document.getElementById('sync-coverage');
-  if (!badge) {
-    badge = document.createElement('small');
-    badge.id = 'sync-coverage';
-    badge.className = 'coverage-badge';
-    $('document-host').after(badge);
-  }
   const layers = coverage?.hiddenLayers ?? [];
   const onLayers = layers.reduce((sum, layer) => sum + layer.count, 0);
   const hidden = (coverage?.omittedHidden ?? 0) - onLayers;
@@ -73,9 +71,12 @@ export function syncCoverageBadge(coverage?: {
       : '',
     coverage?.omittedFiltered ? `레이어 밖 ${coverage.omittedFiltered.toLocaleString()}개` : '',
   ].filter(Boolean);
-  badge.hidden = parts.length === 0;
-  badge.textContent = parts.length ? `${parts.join('·')}는 가져오지 않았습니다` : '';
-  badge.title = layers.map((layer) => `${layer.path} (${layer.count})`).join('\n');
+  // The badge (beside the host name) exists from the first render on, hidden when it says nothing.
+  layoutState.coverage = {
+    text: parts.length ? `${parts.join('·')}는 가져오지 않았습니다` : '',
+    title: layers.map((layer) => `${layer.path} (${layer.count})`).join('\n'),
+  };
+  layoutState.bump();
 }
 export function renderLinkPanel() {
   renderPanel();
@@ -251,89 +252,58 @@ export async function hideRequest(id: string) {
 }
 /** Work history: every request, newest first, with its state; opens it in the conversation. */
 export function sidebar() {
-  $('task-list').replaceChildren();
-  if (!draftState.state.messages.length) el('small', '아직 요청이 없습니다.', $('task-list'));
   const shown = focusedMessage();
   const listed = draftState.state.messages.filter((m) => !m.request?.input?.parentRequestId);
-  [...listed].reverse().forEach((m, i) => {
+  const rows = [...listed].reverse().map((m, i): HistoryRow => {
     const request = m.request;
-    const row = el('div', '', $('task-list'), { class: 'task-row', 'data-task-id': m.id });
-    if (m.id === shown?.id) row.setAttribute('aria-current', 'true');
-    const open = el('button', '', row, { class: 'task-open', type: 'button' });
-    el('span', m.body || `첨부 검토 ${listed.length - i}`, open, { class: 'task-title' });
-    const meta = el('span', '', open, { class: 'task-meta' });
+    const row: HistoryRow = {
+      id: m.id,
+      title: m.body || `첨부 검토 ${listed.length - i}`,
+      current: m.id === shown?.id,
+      host: m.host === 'zwcad' ? 'ZWCAD' : 'Rhino',
+      open: () => focusWork(m.id),
+    };
     if (request?.createdAt)
-      el(
-        'span',
-        new Date(request.createdAt).toLocaleString('ko-KR', {
-          month: 'numeric',
-          day: 'numeric',
-          hour: '2-digit',
-          minute: '2-digit',
-        }),
-        meta,
-      );
-    el('span', m.host === 'zwcad' ? 'ZWCAD' : 'Rhino', meta);
+      row.time = new Date(request.createdAt).toLocaleString('ko-KR', {
+        month: 'numeric',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      });
     if (request)
-      el('span', labels[request.state] || request.state, meta, {
-        class: 'card-state',
-        'data-state': request.state,
-      });
-    open.onclick = () => focusWork(m.id);
-    if (request && !['queued', 'running'].includes(request.state)) {
-      const remove = el('button', '×', row, {
-        class: 'task-remove',
-        type: 'button',
-        title: '목록에서 지우기 (모델과 작업 기록은 보존)',
-        'aria-label': '목록에서 지우기',
-      });
-      remove.onclick = () => {
+      row.state = { label: labels[request.state] || request.state, value: request.state };
+    if (request && !['queued', 'running'].includes(request.state))
+      row.remove = () => {
         if (confirm('이 작업을 목록에서 지울까요? 모델과 작업 기록은 보존됩니다.'))
           void hideRequest(m.id).catch((error: unknown) =>
             message(error instanceof Error ? error.message : '지우지 못했습니다.'),
           );
       };
-    }
     // The 검토본 saved from this request (T-109): they are listed in 산출물; the row links them.
-    // Appended after × so the title and × share the first line and the link wraps below.
     const saved = reviewsOf(sessionState.project?.id, m.id);
     if (saved.length && sessionState.project) {
       const projectId = sessionState.project.id;
-      const link = el(
-        'button',
-        saved.length > 1 ? `이 작업으로 만든 검토본 ${saved.length}` : '이 작업으로 만든 검토본',
-        row,
-        {
-          class: 'link-button task-review',
-          type: 'button',
-          title:
-            saved.length > 1
-              ? '가장 최근 검토본을 엽니다. 모두 보기는 산출물 › 검토본'
-              : saved[0].title,
-        },
-      );
-      link.onclick = () => openReview(projectId, saved[0]);
+      row.review = {
+        text:
+          saved.length > 1 ? `이 작업으로 만든 검토본 ${saved.length}` : '이 작업으로 만든 검토본',
+        title:
+          saved.length > 1
+            ? '가장 최근 검토본을 엽니다. 모두 보기는 산출물 › 검토본'
+            : saved[0].title,
+        open: () => openReview(projectId, saved[0]),
+      };
     }
+    return row;
   });
+  layoutState.history = { empty: !draftState.state.messages.length, rows };
+  layoutState.bump();
 }
-/** The toggle shows the theme it switches to. */
-export function paintThemeToggle() {
-  const toggle = $('rail-theme');
-  const dark = currentTheme() === 'dark';
-  const label = dark ? '라이트 테마로 전환' : '다크 테마로 전환';
-  toggle.dataset.icon = dark ? 'sun' : 'moon';
-  toggle.innerHTML = iconSvg(toggle.dataset.icon);
-  toggle.title = label;
-  toggle.setAttribute('aria-label', label);
-}
+export { paintThemeToggle };
 /** A result shown from the conversation needs the 3D view: leave the JIG list for the model. */
 export function showModelView() {
   if (!workspaceShowsViewport()) setWorkspace('model');
 }
-/** Opens a folded side panel the way its edge toggle does (focus included); open stays open. */
-export function revealPanel(side: 'left' | 'right') {
-  if ($(side).hidden) $(`toggle-${side}`).click();
-}
+export { revealPanel };
 export function mobileView(view: MobileView) {
   setMobileView(view);
 }
@@ -381,9 +351,9 @@ export async function deleteProject() {
 export function renderHeading() {
   renderPanel();
   // Link back to the account site's project list when this PC is signed in.
-  const home = $('rail-home') as HTMLAnchorElement;
-  home.hidden = !sessionState.accountSite;
-  if (sessionState.accountSite) home.href = sessionState.accountSite;
+  layoutState.homeShown = !!sessionState.accountSite;
+  if (sessionState.accountSite) layoutState.homeHref = sessionState.accountSite;
+  layoutState.bump();
   if (!sessionState.project) return;
   renderProjectHeading({
     projects: sessionState.projects,
@@ -404,47 +374,17 @@ export function initLeft1() {
 }
 
 export function initLeft2() {
-  // The rail's fixed destinations (user decision 2026-10-01): 대시보드 · 자료 · JIG (the list) ·
-  // 만들기 · 산출물 open their screens; 모델 and 작업 이력 (data-section) open the model screen on
-  // their left-panel section, wired below and in src/ui/workspace-panels.ts.
-  for (const button of document.querySelectorAll<HTMLButtonElement>(
-    '.rail [data-workspace-target]:not([data-section])',
-  ))
-    button.onclick = () => {
-      if (sessionState.project) setWorkspace(button.dataset.workspaceTarget!);
-    };
-  $('rail-feedback').onclick = () => void showFeedback();
-  $('rail-theme').onclick = () => {
-    setTheme(currentTheme() === 'dark' ? 'light' : 'dark');
-    paintThemeToggle();
-  };
+  // The rail's fixed destinations (user decision 2026-10-01) are wired in src/ui/shell/rail.tsx:
+  // 대시보드 · 자료 · JIG (the list) · 산출물 open their screens; 모델 and 작업 이력 open the
+  // model screen on their left-panel section. The theme toggle shows the theme it switches to.
   paintThemeToggle();
 }
 
-export function initLeft3() {
-  // The documents panel belongs to the model screen: 모델 and 작업 이력 bring that screen back.
-  for (const button of document.querySelectorAll<HTMLButtonElement>('.rail [data-section]'))
-    button.addEventListener('click', () => {
-      if (activeWorkspace() !== 'model') setWorkspace('model');
-    });
-}
+/** The rail's 모델 and 작업 이력 bring the model screen back: src/ui/shell/rail.tsx. */
+export function initLeft3() {}
 
-export function initLeft4() {
-  for (const side of ['left', 'right'])
-    $(`toggle-${side}`).onclick = () => {
-      if (matchMedia('(max-width:850px)').matches) {
-        $(side).hidden = false;
-        mobileView(side === 'left' ? 'documents' : 'input');
-        return;
-      }
-      $(side).hidden = !$(side).hidden;
-      document.body.classList.toggle(`${side}-hidden`, Boolean($(side).hidden));
-      $(`toggle-${side}`).setAttribute('aria-expanded', String(!$(side).hidden));
-      $(`toggle-${side}`).textContent =
-        side === 'left' ? ($(side).hidden ? '›' : '‹') : $(side).hidden ? '‹' : '›';
-      $(`toggle-${side}`).focus();
-    };
-}
+/** The edge toggles fold the side panels: src/ui/shell/edge-toggles.tsx, store/layout.ts. */
+export function initLeft4() {}
 
 export function initLeft5() {
   $('import-model').onclick = () => {
@@ -511,7 +451,7 @@ export function paintHostTarget() {
 }
 /** render(): the document panel's host name and what the host left out of the model. */
 export function paintDocumentHost(active: ActiveRequest) {
-  $('document-host').textContent =
+  layoutState.documentHost =
     (active?.result?.host || draftState.state.host) === 'zwcad' ? 'ZWCAD' : 'Rhino';
   syncCoverageBadge(active?.result?.displayCoverage);
 }
@@ -520,6 +460,6 @@ export function paintDocumentHost(active: ActiveRequest) {
 export function panelToggleKeys(e: KeyboardEvent): ShortcutResult {
   if (e.altKey && e.shiftKey && ['KeyL', 'KeyR'].includes(e.code)) {
     e.preventDefault();
-    $(`toggle-${e.code === 'KeyL' ? 'left' : 'right'}`).click();
+    togglePanel(e.code === 'KeyL' ? 'left' : 'right');
   }
 }
