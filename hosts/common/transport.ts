@@ -1,5 +1,14 @@
 import { createConnection } from 'node:net';
 
+/**
+ * The one host transport cap kept (ADR-031 7): a frame either way is at most 16 MB, so a corrupt
+ * length never allocates gigabytes. Reads are paged below it; one object larger than a frame comes
+ * back as its bounding box (`oversized`), never as a failed Sync.
+ */
+export const HOST_FRAME_BYTES = 16 * 1024 * 1024;
+/** Long host work (a Sync page, an execution): generous, it only ends a lost call (ADR-031 7). */
+export const HOST_CALL_MS = 600_000;
+
 export interface HostTransportOptions {
   port: number;
   timeoutMs?: number;
@@ -14,7 +23,7 @@ export function sendHostCommand(
   {
     port,
     timeoutMs = 30000,
-    maxResponseBytes = 16 * 1024 * 1024,
+    maxResponseBytes = HOST_FRAME_BYTES,
     beforeSend,
   }: HostTransportOptions,
 ): Promise<unknown> {
@@ -49,6 +58,8 @@ export function sendHostCommand(
       if (finished) return;
       const data = Buffer.from(JSON.stringify({ type, params })),
         header = Buffer.alloc(4);
+      // Nothing was sent yet, so this fails cleanly instead of leaving the result unknown.
+      if (data.length > HOST_FRAME_BYTES) return fail('HOST_REQUEST_TOO_LARGE');
       header.writeUInt32BE(data.length);
       sent = true;
       socket.write(Buffer.concat([header, data]));

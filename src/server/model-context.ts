@@ -63,3 +63,46 @@ export function modelContext(model: Model | undefined, priorityIds: string[]) {
     },
   ];
 }
+
+/** Pins sent to the AI in full; the rest go as one summary (ADR-031 7: pins have no count cap). */
+export const PIN_DETAILS = 200;
+const PIN_SUMMARY_ID_BYTES = 32 * 1024;
+
+/**
+ * A turn's pins as context items: the first {@link PIN_DETAILS} each as an object reference, the
+ * rest as one `object-reference-summary` with counts per role (and layer, when a pin names one)
+ * and as many ids as fit a small budget. Write protection still uses every pin.
+ */
+export function pinContext(pins: Record<string, unknown>[]) {
+  const items: { id: string; type: string; data: unknown }[] = pins
+    .slice(0, PIN_DETAILS)
+    .map((data, i) => ({ id: `pin-${i}`, type: 'object-reference', data }));
+  const rest = pins.slice(PIN_DETAILS);
+  if (!rest.length) return items;
+  const byRole: Record<string, number> = {};
+  const byLayer: Record<string, number> = {};
+  const ids: string[] = [];
+  let bytes = 0;
+  for (const pin of rest) {
+    const role = String(pin.role);
+    byRole[role] = (byRole[role] ?? 0) + 1;
+    if (typeof pin.layer === 'string') byLayer[pin.layer] = (byLayer[pin.layer] ?? 0) + 1;
+    const id = String(pin.id);
+    if (bytes + id.length + 3 > PIN_SUMMARY_ID_BYTES) continue;
+    bytes += id.length + 3;
+    ids.push(id);
+  }
+  items.push({
+    id: 'pin-summary',
+    type: 'object-reference-summary',
+    data: {
+      count: rest.length,
+      byRole,
+      ...(Object.keys(byLayer).length ? { byLayer } : {}),
+      ids,
+      idsOmitted: rest.length - ids.length,
+      instruction: `${pins.length} objects are pinned; the first ${PIN_DETAILS} are listed one by one and the rest only here. Query the document for these ids when the task needs their details.`,
+    },
+  });
+  return items;
+}

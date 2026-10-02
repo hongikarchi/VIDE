@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { hostTargetSchema } from '../../src/contracts/host-documents.ts';
+import { DIRECT_MAX_DELETES, hostTargetSchema } from '../../src/contracts/host-documents.ts';
 const movementSchema = z.object({ id: z.string(), delta: z.array(z.number()).length(3) });
 export type Movement = z.infer<typeof movementSchema>;
 export const applicationPayloadSchema = hostTargetSchema.extend({
@@ -35,9 +35,9 @@ export const directExecuteInputSchema = z.object({
   guard: z
     .object({
       confirmed: z.boolean().default(false),
-      maxDeletes: z.number().int().min(0).max(100000).default(50),
+      maxDeletes: z.number().int().min(0).default(DIRECT_MAX_DELETES),
     })
-    .default({ confirmed: false, maxDeletes: 50 }),
+    .default({ confirmed: false, maxDeletes: DIRECT_MAX_DELETES }),
 });
 export type DirectExecuteInput = z.input<typeof directExecuteInputSchema>;
 const changedObjectSchema = z.object({

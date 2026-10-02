@@ -9,7 +9,6 @@ namespace Vide.Worker;
 
 internal static class WorkerScene
 {
-    internal const int MaxObjects = 20000;
     internal sealed record Measurements(double? Area, double? Volume, double? Length);
     internal static string Id(RhinoObject obj) => obj.Attributes.GetUserString("vide-id") ?? obj.Id.ToString();
     internal static string Fingerprint(RhinoObject obj)
@@ -20,8 +19,8 @@ internal static class WorkerScene
 
     internal static void Validate(RhinoDoc doc)
     {
+        // No document object count cap (ADR-031 7): reads are paged.
         var objects = doc.Objects.GetObjectList(ObjectType.AnyObject).ToArray();
-        if (objects.Length > MaxObjects) throw new InvalidOperationException("IMPORT_LIMIT");
         var ids = new HashSet<string>();
         foreach (var obj in objects)
         {
@@ -42,15 +41,15 @@ internal static class WorkerScene
     // row-major transform, the same shape as DisplayScene; `scope` limits the read to layers and
     // includes hidden objects when asked (files opened in VIDE, ARCH-03 §8).
     internal static object Export(RhinoDoc doc, Func<RhinoObject, string, Measurements?>? cached = null,
-        Action<RhinoObject, string, Measurements>? observed = null, int offset = 0, int limit = MaxObjects, int revision = 0, bool displayOnly = false,
-        ReadScope? scope = null)
+        Action<RhinoObject, string, Measurements>? observed = null, int offset = 0, int limit = int.MaxValue, int revision = 0, bool displayOnly = false,
+        ReadScope? scope = null, bool boxOnly = false)
     {
         var scale = displayOnly ? RhinoMath.UnitScale(doc.ModelUnitSystem, UnitSystem.Meters) : 1.0;
         if (!double.IsFinite(scale) || scale <= 0 || (displayOnly && doc.ModelUnitSystem is UnitSystem.None or UnitSystem.CustomUnits))
             throw new InvalidOperationException("UNKNOWN_UNITS");
         scope ??= ReadScope.Display;
         var ordered = DisplayScene.Listed(doc, scope);
-        if (offset < 0 || offset > ordered.Length || limit < 1 || limit > MaxObjects)
+        if (offset < 0 || offset > ordered.Length || limit < 1)
             throw new InvalidOperationException("INVALID_PAGE");
         var survey = ReadSurvey.Of(doc, ordered, scope);
         var objects = new List<object>();
@@ -70,13 +69,13 @@ internal static class WorkerScene
             var brep = geometry as Brep ?? converted;
             var curve = geometry as Curve;
             object? block = null;
-            if (geometry is InstanceReferenceGeometry reference && doc.InstanceDefinitions.FindId(reference.ParentIdefId) is { IsDeleted: false } definition)
+            if (!boxOnly && geometry is InstanceReferenceGeometry reference && doc.InstanceDefinitions.FindId(reference.ParentIdefId) is { IsDeleted: false } definition)
             {
                 var key = definition.Id.ToString();
                 if (!definitions.ContainsKey(key)) definitions[key] = DefinitionJson(doc, definition, scale);
                 block = new { definition = key, transform = DisplayScene.TransformOf(reference.Xform, scale) };
             }
-            if (brep != null && geometry.IsValid)
+            if (!boxOnly && brep != null && geometry.IsValid)
             {
                 using var local = brep.DuplicateBrep();
                 var center = bounds.Center;
@@ -84,12 +83,15 @@ internal static class WorkerScene
                 var meshes = Mesh.CreateFromBrep(local, MeshingParameters.FastRenderMesh) ?? [];
                 foreach (var mesh in meshes) { AddMesh(mesh, center, vertices, indices); mesh.Dispose(); }
             }
-            else if (geometry is Mesh nativeMesh && geometry.IsValid) AddMesh(nativeMesh, Point3d.Origin, vertices, indices);
-            if (curve != null && geometry.IsValid)
+            else if (!boxOnly && geometry is Mesh nativeMesh && geometry.IsValid) AddMesh(nativeMesh, Point3d.Origin, vertices, indices);
+            if (!boxOnly && curve != null && geometry.IsValid)
             {
                 if (curve.TryGetPolyline(out var polyline)) foreach (var point in polyline) AddPoint(point, line);
                 else foreach (var parameter in curve.DivideByCount(128, true) ?? []) AddPoint(curve.PointAt(parameter), line);
             }
+            // One object larger than a host reply (16 MB, ADR-031 7): its bounding box stands in for it
+            // and the row says so; the Sync continues.
+            if (boxOnly) BoxMesh(bounds, vertices, indices);
             var geometryOptions = new Rhino.FileIO.SerializationOptions { WriteUserData = true, WriteRenderMeshes = false, WriteAnalysisMeshes = false };
             var geometryHash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(geometry.ToJSON(geometryOptions)))).ToLowerInvariant();
             var measurements = displayOnly ? new Measurements(null, null, null) : cached?.Invoke(obj, geometryHash);
@@ -124,6 +126,7 @@ internal static class WorkerScene
                 ["displayColor"] = Hex(obj.Attributes.DrawColor(doc)), ["layerColor"] = Hex(doc.Layers[obj.Attributes.LayerIndex].Color), ["materialColor"] = MaterialColor(obj),
             };
             if (block != null) row["block"] = block;
+            if (boxOnly) row["oversized"] = true;
             scene.Add(row);
         }
         return new { objects, scene, definitions, coverage = survey.Coverage, layers = survey.Layers, measurementVersion = 1,
@@ -155,6 +158,15 @@ internal static class WorkerScene
     {
         try { var material = obj.GetMaterial(true); return material == null ? null : Hex(material.DiffuseColor); }
         catch (Exception) { return null; }
+    }
+    /** The 8 corners and 12 triangles of a bounding box, in the same coordinates as AddMesh. */
+    internal static void BoxMesh(BoundingBox bounds, List<double> vertices, List<int> indices)
+    {
+        var offset = vertices.Count / 3;
+        foreach (var corner in bounds.GetCorners()) AddPoint(corner, vertices);
+        // GetCorners: 0-3 bottom (min Z) counter-clockwise, 4-7 top in the same order.
+        int[] faces = [0, 2, 1, 0, 3, 2, 4, 5, 6, 4, 6, 7, 0, 1, 5, 0, 5, 4, 1, 2, 6, 1, 6, 5, 2, 3, 7, 2, 7, 6, 3, 0, 4, 3, 4, 7];
+        foreach (var index in faces) indices.Add(offset + index);
     }
     private static void AddPoint(Point3d point, List<double> vertices) { vertices.Add(point.X); vertices.Add(point.Y); vertices.Add(point.Z); }
     private static void AddMesh(Mesh mesh, Point3d origin, List<double> vertices, List<int> indices)

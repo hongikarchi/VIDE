@@ -7,7 +7,7 @@ import { access, copyFile, mkdir, readFile } from 'node:fs/promises';
 import { isAbsolute, join } from 'node:path';
 import { z } from 'zod';
 import { launchOwnedHost } from '../common/owned-process.ts';
-import { sendHostCommand } from '../common/transport.ts';
+import { HOST_CALL_MS, sendHostCommand } from '../common/transport.ts';
 import { modelChangesSchema } from '../../src/contracts/model-changes.ts';
 import type { ReadScope } from '../../src/contracts/native-model.ts';
 
@@ -225,7 +225,11 @@ export async function launchRhinoWorker({
           documentId: identity.documentId,
           method,
         },
-        { port: identity.port, timeoutMs: 60000, beforeSend: () => lease.verify(identity.port) },
+        {
+          port: identity.port,
+          timeoutMs: HOST_CALL_MS,
+          beforeSend: () => lease.verify(identity.port),
+        },
       );
     };
     return {

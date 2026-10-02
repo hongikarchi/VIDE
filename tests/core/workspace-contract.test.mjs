@@ -10,7 +10,7 @@ const input = () => ({
   sketches: [],
   files: [],
 });
-test('shared request boundary rejects invalid coordinates, oversized content and unsafe extension permissions', () => {
+test('shared request boundary rejects invalid coordinates and unsafe extension permissions', () => {
   for (const points of [
     [
       [0, Infinity],
@@ -30,9 +30,13 @@ test('shared request boundary rejects invalid coordinates, oversized content and
       false,
     );
   }
+  // Body and inline file length have no cap (ADR-031 7).
   for (const change of [
     { body: 'x'.repeat(20001) },
     { files: [{ name: 'a', text: 'x'.repeat(50001) }] },
+  ])
+    assert.equal(requestInputSchema.safeParse({ ...input(), ...change }).success, true);
+  for (const change of [
     { provider: 'extension', permission: 'candidate', extension: 'test', extensionVersion: '1' },
     { provider: 'extension', mode: 'auto', extension: 'test', extensionVersion: '1' },
     { mode: 'review' },
@@ -113,7 +117,6 @@ test('brush sketches carry world XYZ strokes while plane sketches stay valid', (
         },
       ],
     },
-    { ...brush, strokes: Array.from({ length: 11 }, () => ({ ...stroke, points: long })) },
     {
       unit: 'm',
       role: 'path',
@@ -124,6 +127,12 @@ test('brush sketches carry world XYZ strokes while plane sketches stay valid', (
     },
   ])
     assert.equal(sketches.safeParse([invalid]).success, false);
+  // Strokes and points have no count cap (ADR-031 7).
+  assert.ok(
+    sketches.safeParse([
+      { ...brush, strokes: Array.from({ length: 11 }, () => ({ ...stroke, points: long })) },
+    ]).success,
+  );
 });
 
 test('mode replaces permission: old values map review to plan and candidate/apply to auto', () => {

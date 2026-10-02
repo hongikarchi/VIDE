@@ -139,7 +139,7 @@ namespace Vide.Zwcad.Connection
         private object DirectExecute(Dictionary<string, object> request)
         {
             string code = Value(request, "code") ?? "", label = Value(request, "label") ?? "VIDE AI", requestId = Value(request, "requestId");
-            bool confirmed = false; int maxDeletes = 50; object value;
+            bool confirmed = false; int maxDeletes = 500; object value;
             if (request.TryGetValue("guard", out value) && value is Dictionary<string, object> guard)
             {
                 confirmed = String.Equals(Value(guard, "confirmed"), "true", StringComparison.OrdinalIgnoreCase);

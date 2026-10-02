@@ -32,6 +32,15 @@ related: [ADR-031, ADR-032, RESEARCH-14, PLAN-27, SPEC-02, ARCH-01]
 
 **검증:** 상한을 넘는 합성 입력(객체 3만 개 문서, 핀 1만 개, 긴 본문, 큰 첨부)이 실패하지 않고 처리되거나 잘려서 알려지는 시험. 전체 `npm test`.
 
+**진행(2026-10-02, 엔진·계약·호스트 쪽 구현, main 합치기 전):**
+
+- 객체 수 20,000(C# `WorkerScene.MaxObjects`·`DisplayScene.Listed`·측정 캐시, TS 계약·`scene-pages`·`editor-channel`·jig 입력)과 레이어 범위 2,000을 없앴다. 3dm 가져오기 500·모델 업로드 64MB·첨부 크기/개수·본문 2만 자·인라인 파일 5만 자·요청 저장 200KB·저장 JSON 1MB·핀 100·스케치/획/점 수·편집 창 핀 5,000/선택 2,000·할 일 1,000·검토 200·표 보기 200·jig 진단 원본 8/객체 5만/레이어 픽 8·구조 편집 목록 수도 없앴다.
+- 호스트 프레임은 요청·응답 모두 16MB(`HOST_FRAME_BYTES`) 하나로 모았다. 넘는 요청은 보내기 전에 `HOST_REQUEST_TOO_LARGE`. 호출 시간은 600초(`HOST_CALL_MS`, C# `CallTime`). 응답 한 덩어리보다 큰 객체 하나는 경계 상자(`oversized`)로 오고 표시 미지원 안내에 `(16 MB 초과 · 상자로 표시)`로 세어지며 Sync는 이어진다(표시 Sync는 호스트가, 작업 사본 읽기는 `boxOnly` 재조회로).
+- HTTP JSON 본문은 메모리 보호로 64MB(`JSON_BODY_BYTES`). 오프라인 스냅샷은 사이트 요청 한도 아래 95MB. 대량 삭제 확인은 500개, 상수 하나(`DIRECT_MAX_DELETES`, `src/contracts/host-documents.ts`)로 모았다.
+- AI에는 핀 앞 200개를 그대로, 나머지는 역할·레이어별 수와 ID 요약 하나로 보낸다(`pinContext`). 핀 확인은 Sync마다 ID 집합을 한 번만 만든다.
+- 시험: `tests/server/no-caps.test.mjs`(3만 객체 페이지, 큰 객체 하나의 상자, 16MB 넘는 요청, 핀 1만·긴 본문·많은 첨부, 핀 요약, 3만 객체 Sync 위 핀 1,000 저장). 실호스트 확인은 남았다(플러그인 재설치 필요).
+- 남은 것: 화면(`src/ui/**`)의 핀 100 안내(`ui/model.ts`)·첨부 안내·`INPUT_TOO_LARGE` 문구("1 MB")는 화면 작업 세션 몫. 공유 웹 뷰어의 64MiB 표시 한도(`WEB_MODEL_LIMIT`, `src/sharing/web`)와 ZWCAD 표시 응답 128MiB는 그대로다.
+
 ## T-122 순정 도구 (RESEARCH-14 §3~§6, ADR-031 8)
 
 - Claude·Codex의 기본 읽기(Read·Glob·Grep), 셸, 파일 쓰기를 켠다. 작업 범위는 프로젝트 작업 폴더다. 그 밖의 폴더는 그때마다 사용자 승인 카드를 거친다.

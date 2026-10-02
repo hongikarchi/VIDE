@@ -52,7 +52,7 @@ export async function importModel(
   let size = 0;
   for await (const chunk of request) {
     size += chunk.length;
-    if (size > 64 * 1024 * 1024) throw new DomainError('INPUT_TOO_LARGE');
+    // No size cap of its own (ADR-031 7).
     chunks.push(chunk);
   }
   const bytes = Buffer.concat(chunks);

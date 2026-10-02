@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { resolve, isAbsolute } from 'node:path';
 import { inspectWindowsProcess } from '../common/owned-process.ts';
-import { sendHostCommand } from '../common/transport.ts';
+import { HOST_CALL_MS, sendHostCommand } from '../common/transport.ts';
 import { readScenePages } from './scene-pages.ts';
 import { viewMethods } from './view-tools.ts';
 import {
@@ -53,12 +53,12 @@ const changesPageSchema = z.object({
   definitions: z.record(z.string().uuid(), displayDefinitionSchema).optional(),
   // The document survey after the change (T-043 plugin); absent from an older plugin.
   coverage: sourceCoverageSchema.optional(),
-  layers: z.array(displayLayerSchema).max(20000).optional(),
+  layers: z.array(displayLayerSchema).optional(),
   page: z.object({
     cursor: z.number().int().nonnegative(),
     nextCursor: z.number().int().nonnegative(),
     changes: z.number().int().nonnegative(),
-    total: z.number().int().nonnegative().max(20000),
+    total: z.number().int().nonnegative(),
     revision: z.number().int().nonnegative(),
   }),
 });
@@ -204,8 +204,8 @@ export function editorMethods(
           live: z.boolean(),
           busy: z.boolean(),
           selectionVersion: z.number().int().nonnegative().optional(),
-          selectedIds: z.array(z.string().uuid()).max(2000).optional(),
-          pinnedIds: z.array(z.string().uuid()).max(5000).optional(),
+          selectedIds: z.array(z.string().uuid()).optional(),
+          pinnedIds: z.array(z.string().uuid()).optional(),
           linkIds: z.array(z.string().max(100)).max(50).optional(),
         }),
         await call('attachedStatus'),
@@ -371,7 +371,7 @@ export function resumeEditor(
         {
           port: identity.port,
           timeoutMs: ['displayPage', 'displayChanges', 'direct-execute'].includes(method)
-            ? 180000
+            ? HOST_CALL_MS
             : 60000,
           beforeSend: async () => {
             const at = owners.get(owner);

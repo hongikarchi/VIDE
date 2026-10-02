@@ -146,6 +146,12 @@ const equal = (a: unknown, b: string) =>
   typeof a === 'string' &&
   Buffer.byteLength(a) === Buffer.byteLength(b) &&
   timingSafeEqual(Buffer.from(a), Buffer.from(b));
+/**
+ * A JSON request body is held in memory, so a broken or hostile client cannot stream gigabytes:
+ * the same memory guard as the host frame (ADR-031 7), set well above any real request (a request
+ * with its images, a jig model). Bigger inputs (files, models) use their own streaming routes.
+ */
+export const JSON_BODY_BYTES = 64 * 1024 * 1024;
 async function body(request: IncomingMessage): Promise<Record<string, unknown>> {
   if (request.headers['content-type']?.split(';')[0] !== 'application/json')
     throw new DomainError('JSON_REQUIRED');
@@ -153,7 +159,7 @@ async function body(request: IncomingMessage): Promise<Record<string, unknown>> 
   const chunks: Buffer[] = [];
   for await (const chunk of request) {
     size += chunk.length;
-    if (size > 1024 * 1024) throw new DomainError('INPUT_TOO_LARGE');
+    if (size > JSON_BODY_BYTES) throw new DomainError('INPUT_TOO_LARGE');
     chunks.push(chunk);
   }
   try {
@@ -1657,8 +1663,8 @@ export async function startServer({
                     .object({
                       syncId: z.string(),
                       mode: z.enum(['curves', 'breps', 'cad']),
-                      layers: z.array(z.string()).max(500).optional(),
-                      objectIds: z.array(z.string()).max(20000).optional(),
+                      layers: z.array(z.string()).optional(),
+                      objectIds: z.array(z.string()).optional(),
                       cad: z
                         .object({
                           levels_m: z.array(z.number().finite()).min(1).max(50),
@@ -1857,7 +1863,7 @@ export async function startServer({
       }
       if (url.pathname === '/api/v1/host/pins' && request.method === 'POST') {
         const input = hostTargetSchema
-          .extend({ ids: z.array(z.string().uuid()).max(5000) })
+          .extend({ ids: z.array(z.string().uuid()) })
           .parse(await body(request));
         if (!sdk) throw new DomainError('STALE_CONNECTION');
         try {

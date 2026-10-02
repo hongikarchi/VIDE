@@ -52,7 +52,7 @@ export class TableViews {
         )
         .run(name, query, updatedAt, projectId, id);
     } else {
-      if (this.list(projectId).length >= 200) throw new DomainError('TABLE_VIEW_LIMIT');
+      // No count cap per project (ADR-031 7).
       id = randomUUID();
       this.store.db
         .prepare('INSERT INTO table_views VALUES(?,?,?,?,1,?)')

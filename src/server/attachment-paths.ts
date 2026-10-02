@@ -2,7 +2,6 @@ import { createReadStream } from 'node:fs';
 import { readdir, realpath, stat } from 'node:fs/promises';
 import { basename, isAbsolute, join, resolve } from 'node:path';
 import { DomainError } from '../core/store.ts';
-import { MAX_ATTACHMENT_BYTES } from '../contracts/workspace.ts';
 import { describeFile, type AttachmentStore } from './attachments.ts';
 import { deniedPath, secretName, type FileContext } from './project-files.ts';
 
@@ -114,7 +113,6 @@ export async function attachFromPath(
   if (deniedPath(target, context) || secretName(basename(target))) throw error('FILE_FORBIDDEN');
   const info = await stat(target);
   if (!info.isFile()) throw error('INVALID_INPUT');
-  if (info.size > MAX_ATTACHMENT_BYTES) throw error('INPUT_TOO_LARGE');
   if ((await describeFile(target)).kind !== 'image') throw error('INVALID_INPUT');
   return store.save(projectId, basename(path), createReadStream(target));
 }

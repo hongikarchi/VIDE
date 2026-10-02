@@ -56,6 +56,11 @@ export const nativeSceneSchema = z.object({
   block: z
     .object({ definition: z.string().uuid(), transform: z.array(z.number()).length(16) })
     .optional(),
+  /**
+   * The object alone is larger than a host reply (16 MB, ADR-031 7): the geometry is its bounding
+   * box and the coverage counts it as not shown in full.
+   */
+  oversized: z.literal(true).optional(),
 });
 export const displaySceneSchema = nativeSceneSchema.extend({ valid: z.boolean() });
 const count = z.number().int().nonnegative();
@@ -65,7 +70,7 @@ const count = z.number().int().nonnegative();
  */
 export const readScopeSchema = z
   .object({
-    layers: z.array(z.string().min(1).max(1000)).max(2000).optional(),
+    layers: z.array(z.string().min(1).max(1000)).optional(),
     includeHidden: z.boolean().optional(),
   })
   .strict();
@@ -83,7 +88,7 @@ export const sourceCoverageSchema = z.object({
   /** Objects inside block definitions; they travel with the definitions, never as objects. */
   omittedBlockInternal: count,
   /** Hidden layers with the number of objects each one kept out of the read. */
-  hiddenLayers: z.array(z.object({ path: z.string(), count })).max(20000),
+  hiddenLayers: z.array(z.object({ path: z.string(), count })),
 });
 /** One layer of the document, empty layers included; `order` is the layer panel order. */
 export const displayLayerSchema = z.object({
@@ -109,10 +114,11 @@ export const displayCoverageSchema = z.object({
 });
 export const displayModelSchema = z
   .object({
-    objects: z.array(displayObjectSchema).max(20000),
-    scene: z.array(displaySceneSchema).max(20000),
+    // No object count cap (ADR-031 7): the host pages its reads.
+    objects: z.array(displayObjectSchema),
+    scene: z.array(displaySceneSchema),
     definitions: z.record(z.string().uuid(), displayDefinitionSchema).optional(),
-    layers: z.array(displayLayerSchema).max(20000).optional(),
+    layers: z.array(displayLayerSchema).optional(),
     measurementVersion: z.literal(1).optional(),
     displayCoverage: displayCoverageSchema.optional(),
     measurementStats: z

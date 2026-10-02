@@ -41,7 +41,7 @@ function rhinoHost() {
       assert.ok(label && label.length <= 80);
       if (code.startsWith('bad'))
         return { ok: false, code: 'COMPILE_ERROR', diagnostics: ['CS1002: ; expected'] };
-      const removes = code.startsWith('wipe') ? 60 : 0;
+      const removes = code.startsWith('wipe') ? 600 : 0;
       // The worker runs inside the record, counts the deletions, and undoes a guarded run.
       if (removes > guard.maxDeletes && !guard.confirmed)
         return {
@@ -256,7 +256,7 @@ test('Auto over HTTP: two executes are two undo records; [되돌리기] only und
   assert.equal(executes.length, 3);
   for (const command of executes) {
     assert.equal(typeof command.requestId, 'string');
-    assert.deepEqual(command.guard, { confirmed: false, maxDeletes: 50 });
+    assert.deepEqual(command.guard, { confirmed: false, maxDeletes: 500 });
     assert.match(command.label, /^VIDE AI \d: /);
   }
   assert.equal(done.result.mode, 'auto');
@@ -294,7 +294,7 @@ test('Auto over HTTP: a tripped guard waits on its card; [진행] re-runs the bo
   const answers = [];
   const { api, path, send, settled, host } = await setup(t, async ({ call }) => {
     answers.push(await call('execute', { code: 'wipe old layer' }));
-    return { text: '객체 60개 삭제는 확인이 필요합니다.' };
+    return { text: '객체 600개 삭제는 확인이 필요합니다.' };
   });
   // The old permission value still maps: candidate is Auto.
   await send('guard-1', { permission: 'candidate' });
@@ -315,13 +315,13 @@ test('Auto over HTTP: a tripped guard waits on its card; [진행] re-runs the bo
   assert.equal(confirmed.body.state, 'succeeded');
   const rerun = host.calls.filter((c) => c.method === 'direct-execute').at(-1);
   assert.equal(rerun.code, 'wipe old layer');
-  assert.deepEqual(rerun.guard, { confirmed: true, maxDeletes: 50 });
+  assert.deepEqual(rerun.guard, { confirmed: true, maxDeletes: 500 });
   const [first, applied] = confirmed.body.result.executions;
   assert.equal(first.state, 'confirmed');
   assert.equal(first.code, undefined);
   assert.equal(applied.state, 'applied');
   assert.equal(applied.confirms, held.executionId);
-  assert.equal(applied.changes.removed.length, 60);
+  assert.equal(applied.changes.removed.length, 600);
   // The confirmed run is its own undo record, undoable from VIDE.
   const undone = await api(`${path}/guard-1/undo`, 'POST', { executionId: applied.executionId });
   assert.equal(undone.body.ok, true);

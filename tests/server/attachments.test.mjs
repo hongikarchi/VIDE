@@ -80,17 +80,18 @@ test('the store keeps each content once, under the project, with what the conten
   assert.equal(sniff(Buffer.from([0xc3, 0x28])).kind, 'binary');
 });
 
-test('an upload over 200 MB stops and leaves nothing behind', async (t) => {
+test('an upload has no size cap; one that breaks off leaves nothing behind', async (t) => {
+  assert.equal(MAX_ATTACHMENT_BYTES, Number.POSITIVE_INFINITY);
   const store = new AttachmentStore(join(await folder(t), 'attachments'));
-  async function* huge() {
-    const block = Buffer.alloc(16 * 1024 * 1024);
-    for (let sent = 0; sent <= MAX_ATTACHMENT_BYTES; sent += block.length) yield block;
+  async function* broken() {
+    yield Buffer.alloc(16 * 1024 * 1024);
+    throw Object.assign(new Error('aborted'), { code: 'ECONNRESET' });
   }
-  await assert.rejects(store.save('p1', 'big.bin', huge()), { code: 'INPUT_TOO_LARGE' });
+  await assert.rejects(store.save('p1', 'big.bin', broken()), { code: 'ECONNRESET' });
   assert.deepEqual(await readdir(store.directory('p1')), []);
 });
 
-test('the request takes up to 20 kept attachments and 500 MB, and still reads inline text files', () => {
+test('the request takes any number and size of kept attachments, and still reads inline text files', () => {
   const kept = (i, size = 1) => ({
     id: i.toString(16).padStart(24, '0'),
     name: `f${i}.bin`,
@@ -108,15 +109,16 @@ test('the request takes up to 20 kept attachments and 500 MB, and still reads in
     ).success,
     true,
   );
+  // No count or size cap (ADR-031 7).
   assert.equal(
     requestInputSchema.safeParse(input(Array.from({ length: 21 }, (_, i) => kept(i)))).success,
-    false,
+    true,
   );
   assert.equal(
     requestInputSchema.safeParse(
       input([kept(1, 200 * 1024 * 1024), kept(2, 200 * 1024 * 1024), kept(3, 200 * 1024 * 1024)]),
     ).success,
-    false,
+    true,
   );
   assert.equal(requestInputSchema.safeParse(input([{ name: 'x', id: 'nope' }])).success, false);
 });

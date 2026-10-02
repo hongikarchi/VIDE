@@ -4,7 +4,12 @@ interface Keyed {
   id: string;
   nativeId?: string;
 }
-type SceneItem = Keyed & DisplayGeometry & { block?: { definition: string } };
+type SceneItem = Keyed & DisplayGeometry & { block?: { definition: string }; oversized?: boolean };
+/**
+ * The omission type of an object larger than one host reply: it is drawn as its bounding box, and
+ * the coverage notice lists it with the types not shown in full (ADR-031 7).
+ */
+export const OVERSIZED_TYPE_SUFFIX = ' (16 MB 초과 · 상자로 표시)';
 /** Shared block definition display (definition space); only its content matters here. */
 interface DefinitionItem {
   vertices: number[];
@@ -33,9 +38,13 @@ export function displayCoverage(scene: SceneItem[], definitions?: Record<string,
     const visible = item.block
       ? item.valid !== false && shown(definitions?.[item.block.definition])
       : !!sceneRepresentation(item);
-    if (!visible) {
+    if (!visible || item.oversized) {
       omitted++;
-      const type = item.valid === false ? `${item.nativeType} (invalid)` : String(item.nativeType);
+      const type = item.oversized
+        ? `${item.nativeType}${OVERSIZED_TYPE_SUFFIX}`
+        : item.valid === false
+          ? `${item.nativeType} (invalid)`
+          : String(item.nativeType);
       omittedTypes[type] = (omittedTypes[type] ?? 0) + 1;
     }
   }

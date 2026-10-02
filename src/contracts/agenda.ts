@@ -18,8 +18,7 @@ export const agendaTimeSchema = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/);
 export const agendaKindSchema = z.enum(['task', 'meeting', 'deadline']);
 export type AgendaKind = z.infer<typeof agendaKindSchema>;
 export const AGENDA_TEXT_MAX = 500;
-/** Items one project keeps (open and done together). */
-export const AGENDA_MAX_ITEMS = 1000;
+
 const text = z
   .string()
   .max(AGENDA_TEXT_MAX)
@@ -68,7 +67,7 @@ export type AgendaUpdate = z.infer<typeof agendaUpdateSchema>;
 
 /** `POST …/agenda/order`: the ids in their new order (the shown ones; others keep their place). */
 export const agendaOrderSchema = z
-  .object({ ids: z.array(z.string().min(1).max(100)).min(1).max(AGENDA_MAX_ITEMS) })
+  .object({ ids: z.array(z.string().min(1).max(100)).min(1) })
   .strict();
 
 /**

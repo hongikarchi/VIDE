@@ -95,7 +95,7 @@ export class Reviews {
     )
       throw new DomainError('INVALID_INPUT');
     validatePreview(input.image);
-    if (this.list(projectId).length >= 200) throw new DomainError('REVIEW_LIMIT');
+    // No count cap per project (ADR-031 7).
     const table = quantities(request, input.query),
       id = randomUUID(),
       createdAt = new Date().toISOString(),

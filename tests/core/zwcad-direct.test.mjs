@@ -80,7 +80,7 @@ test('directMode maps the old permission values and reads the guard confirmation
   assert.equal(directMode({ mode: 'auto', guard: { confirmed: true } }).confirmed, true);
   assert.equal(directMode({ guardConfirmed: true }).confirmed, true);
   assert.equal(directMode({}).mode, 'auto');
-  assert.equal(DIRECT_MAX_DELETES, 50);
+  assert.equal(DIRECT_MAX_DELETES, 500);
 });
 
 test('direct-execute sends the contract fields and parses changes, guard and undo answers', async (t) => {
@@ -90,7 +90,7 @@ test('direct-execute sends the contract fields and parses changes, guard and und
         ? {
             ok: false,
             code: 'GUARD_CONFIRMATION_REQUIRED',
-            guarded: { kind: 'bulk-delete', detail: '객체 80개 삭제 (기준 50개)', count: 80 },
+            guarded: { kind: 'bulk-delete', detail: '객체 800개 삭제 (기준 500개)', count: 800 },
             log: ['VIDEAIRUN · x'],
             pending: { added: 0, changed: 0, removed: 80 },
           }
@@ -118,7 +118,7 @@ test('direct-execute sends the contract fields and parses changes, guard and und
   const sent = host.calls.at(-1);
   assert.equal(sent.method, 'direct-execute');
   assert.equal(sent.token, token);
-  assert.deepEqual(sent.guard, { confirmed: false, maxDeletes: 50 });
+  assert.deepEqual(sent.guard, { confirmed: false, maxDeletes: 500 });
   assert.equal(sent.label, '벽 추가');
 
   const held = await attached.directExecute(host.target, {
@@ -253,7 +253,7 @@ test('a confirmed re-run releases the guard; plan mode never writes', async (t) 
     },
   );
   await sdk.run(confirmed);
-  assert.deepEqual(host.calls.at(-1).guard, { confirmed: true, maxDeletes: 50 });
+  assert.deepEqual(host.calls.at(-1).guard, { confirmed: true, maxDeletes: 500 });
 
   const { task: plan } = task(host, { mode: 'plan' }, async () => {
     const read = await handlers().execute({ code: 'return 3;' });

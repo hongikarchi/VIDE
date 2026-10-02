@@ -32,7 +32,7 @@ internal sealed class WorkerExecutor(RhinoDoc document, string directory)
         {
             if (uncertain) throw new InvalidOperationException("HOST_RESULT_UNKNOWN");
             var offset = method == "exportPage" ? request.GetProperty("offset").GetInt32() : 0;
-            var limit = method == "exportPage" ? request.GetProperty("limit").GetInt32() : WorkerScene.MaxObjects;
+            var limit = method == "exportPage" ? request.GetProperty("limit").GetInt32() : int.MaxValue;
             if (offset < 0 || limit < 1 || (method == "exportPage" && limit > 1000))
                 throw new InvalidOperationException("INVALID_PAGE");
             if (request.TryGetProperty("revision", out var exportRevision)) {
@@ -41,7 +41,6 @@ internal sealed class WorkerExecutor(RhinoDoc document, string directory)
             var cached = new Dictionary<string, WorkerScene.Measurements>();
             if (request.TryGetProperty("measurementCache", out var values))
             {
-                if (values.GetArrayLength() > WorkerScene.MaxObjects) throw new InvalidOperationException("INVALID_MEASUREMENT_CACHE");
                 foreach (var item in values.EnumerateArray())
                 {
                     double? Read(string key) { var value=item.GetProperty(key); if(value.ValueKind==JsonValueKind.Null)return null;
@@ -53,7 +52,6 @@ internal sealed class WorkerExecutor(RhinoDoc document, string directory)
             var geometryCache = new Dictionary<string, (string hash, WorkerScene.Measurements value)>();
             if (request.TryGetProperty("geometryMeasurementCache", out var geometryValues))
             {
-                if (geometryValues.GetArrayLength() > WorkerScene.MaxObjects) throw new InvalidOperationException("INVALID_MEASUREMENT_CACHE");
                 foreach (var item in geometryValues.EnumerateArray())
                 {
                     double? Read(string key) { var value = item.GetProperty(key); if (value.ValueKind == JsonValueKind.Null) return null;
@@ -78,7 +76,8 @@ internal sealed class WorkerExecutor(RhinoDoc document, string directory)
                 if (context != initialMeasurementContext) return null;
                 return geometryCache.TryGetValue(id, out var match) && match.hash == geometryHash ? match.value :
                     modelBasis.SameMeasurements(obj) && cached.TryGetValue(id, out var value) ? value : null;
-            }, (obj, hash, value) => nextMeasurements[WorkerScene.Id(obj)] = (hash, value), offset, limit, revision, scope: scope);
+            }, (obj, hash, value) => nextMeasurements[WorkerScene.Id(obj)] = (hash, value), offset, limit, revision, scope: scope,
+                boxOnly: request.TryGetProperty("boxOnly", out var box) && box.ValueKind == JsonValueKind.True);
             var currentIds = document.Objects.GetObjectList(Rhino.DocObjects.ObjectType.AnyObject).Select(WorkerScene.Id).ToHashSet();
             foreach (var id in nextMeasurements.Keys.Where(id => !currentIds.Contains(id)).ToArray()) nextMeasurements.Remove(id);
             lastMeasurements = nextMeasurements;

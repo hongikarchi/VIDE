@@ -6,7 +6,6 @@ import { finished } from 'node:stream/promises';
 import { z } from 'zod';
 import { DomainError } from '../core/store.ts';
 import {
-  MAX_ATTACHMENT_BYTES,
   attachmentIdSchema,
   attachmentKindSchema,
   storedAttachments,
@@ -150,7 +149,7 @@ export class AttachmentStore {
 
   /**
    * Keeps one uploaded file: streamed to a temporary file while hashed and counted, then renamed
-   * to its content name. Over MAX_ATTACHMENT_BYTES the upload stops with INPUT_TOO_LARGE.
+   * to its content name. There is no size cap (ADR-031 7).
    */
   async save(
     projectId: string,
@@ -170,7 +169,6 @@ export class AttachmentStore {
       for await (const raw of body) {
         const chunk = typeof raw === 'string' ? Buffer.from(raw) : raw;
         size += chunk.length;
-        if (size > MAX_ATTACHMENT_BYTES) throw new DomainError('INPUT_TOO_LARGE');
         if (head.length < 65536)
           head = Buffer.concat([head, chunk.subarray(0, 65536 - head.length)]);
         hash.update(chunk);

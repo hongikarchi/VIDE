@@ -18,12 +18,13 @@ import {
   type VisionSource,
 } from './agent-tools.ts';
 import { directRefusal, type DirectRefusal } from '../contracts/direct-refusal.ts';
+import { DIRECT_MAX_DELETES } from '../contracts/host-documents.ts';
+/** Auto-mode guard (ADR-031 7): one constant for every host, kept in contracts/host-documents.ts. */
+export { DIRECT_MAX_DELETES };
 import type { LiveLink } from './live-links.ts';
 import { ZWCAD_EXECUTE_WRAPPER } from './zwcad-sdk-execution.ts';
 import { checkExecuteScript, type ExecuteLanguage } from '../contracts/rhino-script-policy.ts';
 
-/** Auto-mode guard: deleting more objects than this in one execute needs the user's confirmation. */
-export const DIRECT_MAX_DELETES = 50;
 export const directGuardKinds = [
   'bulk-delete',
   'layer-delete',

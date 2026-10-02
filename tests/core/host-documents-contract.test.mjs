@@ -47,7 +47,7 @@ const fake = (replies, sent = []) =>
 
 test('direct-execute input defaults the guard and bounds the code', () => {
   const input = directExecuteInputSchema.parse({ requestId: 'r1', code: 'var a = 1;' });
-  assert.deepEqual(input.guard, { confirmed: false, maxDeletes: 50 });
+  assert.deepEqual(input.guard, { confirmed: false, maxDeletes: 500 });
   assert.equal(directExecuteInputSchema.safeParse({ requestId: 'r1', code: '' }).success, false);
   assert.equal(
     directExecuteInputSchema.safeParse({
@@ -88,7 +88,7 @@ test('direct-execute returns changes with an undo id and sends the guard', async
   assert.equal(result.ok, true);
   assert.equal(result.undoId, '42');
   assert.equal(result.changes.added[0].layer, '구조::보');
-  assert.deepEqual(sent[0].guard, { confirmed: false, maxDeletes: 50 });
+  assert.deepEqual(sent[0].guard, { confirmed: false, maxDeletes: 500 });
   assert.equal(sent[0].method, 'direct-execute');
 });
 

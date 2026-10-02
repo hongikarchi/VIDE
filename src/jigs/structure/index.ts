@@ -113,26 +113,22 @@ export function analyzeConfirmed(input: unknown): {
   return { model, ledger: distributed.ledger, issues, result };
 }
 
-const names = z.array(z.string().max(120)).max(20000);
+// Edit lists have no count cap (ADR-031 7); the request body guard is the only bound.
+const names = z.array(z.string().max(120));
 const point = z.tuple([z.number().finite(), z.number().finite(), z.number().finite()]);
-/** Small edits the screen sends instead of a whole model (requests are limited to 1 MB). */
+/** Small edits the screen sends instead of a whole model. */
 export const draftEditsSchema = z
   .object({
-    sections: z
-      .array(z.object({ members: names, name: z.string().max(60) }).strict())
-      .max(200)
-      .optional(),
+    sections: z.array(z.object({ members: names, name: z.string().max(60) }).strict()).optional(),
     roles: z
       .array(
         z
           .object({ members: names, role: z.enum(['column', 'girder', 'beam', 'brace', 'other']) })
           .strict(),
       )
-      .max(200)
       .optional(),
     supports: z
       .array(z.object({ nodes: names, fixity: z.enum(['pin', 'fixed', 'free']) }).strict())
-      .max(200)
       .optional(),
     joints: z
       .array(
@@ -140,7 +136,6 @@ export const draftEditsSchema = z
           .object({ member: z.string(), end: z.enum(['i', 'j']), value: z.enum(['rigid', 'pin']) })
           .strict(),
       )
-      .max(5000)
       .optional(),
     areaLoads: z
       .array(
@@ -148,13 +143,12 @@ export const draftEditsSchema = z
           .object({
             id: z.string().max(60),
             pattern: z.enum(['D', 'L']),
-            polygon_m: z.array(point).min(3).max(200),
+            polygon_m: z.array(point).min(3),
             value_kPa: z.number().finite(),
             spanDirection: z.enum(['X', 'Y']).optional(),
           })
           .strict(),
       )
-      .max(200)
       .optional(),
     combinations: z
       .array(
@@ -171,7 +165,6 @@ export const draftEditsSchema = z
           .strict(),
       )
       .min(1)
-      .max(30)
       .optional(),
   })
   .strict();

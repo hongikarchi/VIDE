@@ -38,7 +38,7 @@ internal sealed class AttachedConnection : IDisposable
     /** Pins are shared by every VIDE view of this document (browser and Rhino panel). */
     internal void SetPins(IEnumerable<Guid> ids)
     {
-        lock (pinned) { pinned.Clear(); foreach (var id in ids.Take(5000)) pinned.Add(id); }
+        lock (pinned) { pinned.Clear(); foreach (var id in ids) pinned.Add(id); }
         selectionVersion++;
         PinsChanged?.Invoke();
     }
@@ -112,7 +112,7 @@ internal sealed class AttachedConnection : IDisposable
             return new { ok = true, documentId = DocumentId, name = document.Name ?? "Untitled", path = document.Path ?? "", units = document.ModelUnitSystem.ToString(),
                 objectCount = document.Objects.Count, modified = document.Modified, generation, live, busy = RhinoApp.InCommand > 0,
                 selectionVersion,
-                selectedIds = document.Objects.GetSelectedObjects(false, false).Take(2000).Select(o => o.Id.ToString()).ToArray(),
+                selectedIds = document.Objects.GetSelectedObjects(false, false).Select(o => o.Id.ToString()).ToArray(),
                 pinnedIds = Pinned.Select(id => id.ToString()).ToArray(), linkIds = LinkIdStore.All(document) };
         if (request.GetProperty("method").GetString() == "setPins")
         {

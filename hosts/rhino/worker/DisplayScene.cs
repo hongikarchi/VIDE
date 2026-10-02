@@ -17,14 +17,13 @@ internal sealed record RawJson(byte[] Bytes);
  */
 internal sealed record ReadScope(HashSet<string>? Layers, bool IncludeHidden)
 {
-    internal const int MaxLayers = 2000;
     internal static readonly ReadScope Display = new(null, false);
     internal static ReadScope From(JsonElement request)
     {
         HashSet<string>? layers = null;
         if (request.TryGetProperty("layers", out var list) && list.ValueKind != JsonValueKind.Null)
         {
-            if (list.ValueKind != JsonValueKind.Array || list.GetArrayLength() > MaxLayers) throw new InvalidOperationException("INVALID_INPUT");
+            if (list.ValueKind != JsonValueKind.Array) throw new InvalidOperationException("INVALID_INPUT");
             layers = new HashSet<string>(StringComparer.Ordinal);
             foreach (var item in list.EnumerateArray())
             {
@@ -123,6 +122,8 @@ internal sealed class DisplayScene
         internal List<string[]> Attributes = [];
         internal bool AttributesComplete = true;
         internal Shape? Shape;
+        /** Larger than a host reply on its own: sent as its bounding box (ADR-031 7). */
+        internal bool Oversized;
         internal GeometryBase? Work;
     }
     private readonly Dictionary<Guid, Shape> shapes = new();
@@ -142,9 +143,8 @@ internal sealed class DisplayScene
             : doc.Objects.GetObjectList(ObjectType.AnyObject);
         if (scope.Layers is { } layers)
             objects = objects.Where(obj => layers.Contains(doc.Layers[obj.Attributes.LayerIndex].FullPath));
-        var ordered = objects.OrderBy(obj => obj.Id).ToArray();
-        if (ordered.Length > WorkerScene.MaxObjects) throw new InvalidOperationException("IMPORT_LIMIT");
-        return ordered;
+        // No object count cap (ADR-031 7): reads are paged.
+        return objects.OrderBy(obj => obj.Id).ToArray();
     }
 
     /** Row-major 4x4 in display meters: the linear part is unit-free, the translation is scaled. */
@@ -394,18 +394,45 @@ internal sealed class DisplayScene
         var included = new HashSet<Guid>();
         foreach (var item in entries)
         {
+            var size = SizeOf(item, included);
+            // One object larger than a whole page (so than a 16 MB reply): its bounding box stands in
+            // for it and the row is marked, and the Sync continues (ADR-031 7).
+            if (item?.Shape is { } large && size > PageBytes)
+            {
+                item.Shape = Box(large);
+                item.Oversized = true;
+                size = SizeOf(item, included);
+            }
             var shape = item?.Shape;
-            long size = shape == null ? 64 : shape.Vertices.Length + shape.Indices.Length + shape.Line.Length
-                + (shape.Segments?.Length ?? 0) + (shape.Texts?.Length ?? 0)
-                + 2 * (item!.Name.Length + item.Layer.Length) + item.Attributes.Sum(pair => pair[0].Length + pair[1].Length + 8) + 1024;
-            // A definition travels once per page with the first instance that needs it.
-            if (shape?.Definition is { } id && !included.Contains(id))
-                lock (definitions) if (definitions.TryGetValue(id, out var definition)) size += definition.Size;
             if (count > 0 && bytes + size > PageBytes) break;
             if (shape?.Definition is { } used) included.Add(used);
             bytes += size; count++;
         }
         return count;
+    }
+
+    private long SizeOf(Item? item, HashSet<Guid> included)
+    {
+        var shape = item?.Shape;
+        long size = shape == null ? 64 : shape.Vertices.Length + shape.Indices.Length + shape.Line.Length
+            + (shape.Segments?.Length ?? 0) + (shape.Texts?.Length ?? 0)
+            + 2 * (item!.Name.Length + item.Layer.Length) + item.Attributes.Sum(pair => pair[0].Length + pair[1].Length + 8) + 1024;
+        // A definition travels once per page with the first instance that needs it.
+        if (shape?.Definition is { } id && !included.Contains(id))
+            lock (definitions) if (definitions.TryGetValue(id, out var definition)) size += definition.Size;
+        return size;
+    }
+
+    /** The shape's bounding box as a mesh (display meters), without segments, labels or block. */
+    private static Shape Box(Shape shape)
+    {
+        var o = shape.Origin; var d = shape.BoundsSize;
+        var bounds = new BoundingBox(o[0], o[1], o[2], o[0] + d[0], o[1] + d[1], o[2] + d[2]);
+        var vertices = new List<double>(); var indices = new List<int>();
+        WorkerScene.BoxMesh(bounds, vertices, indices);
+        var vertexJson = Numbers(vertices, 1); var indexJson = Integers(indices);
+        return new Shape(shape.Serial, shape.NativeType, shape.Valid, shape.Origin, shape.BoundsSize, vertexJson, indexJson, EmptyArray,
+            Hash("oversized", Encoding.UTF8.GetBytes(shape.Hash)));
     }
 
     private byte[] Write(IEnumerable<Item> items, IEnumerable<Guid> removed, ReadSurvey survey, Action<Utf8JsonWriter> page)
@@ -456,6 +483,7 @@ internal sealed class DisplayScene
                 writer.WriteBoolean("attributesComplete", item.AttributesComplete); writer.WriteBoolean("valid", shape.Valid);
                 writer.WriteString("displayColor", item.DisplayColor); writer.WriteString("layerColor", item.LayerColor);
                 if (item.MaterialColor == null) writer.WriteNull("materialColor"); else writer.WriteString("materialColor", item.MaterialColor);
+                if (item.Oversized) writer.WriteBoolean("oversized", true);
                 writer.WriteEndObject();
             }
             writer.WriteEndArray();

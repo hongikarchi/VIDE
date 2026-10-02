@@ -50,17 +50,11 @@ export const planeSketchSchema = z.object({
   plane: z.enum(['XY', 'XZ', 'YZ']),
   unit: z.literal('m'),
   role: sketchRole,
-  points: z
-    .array(z.tuple([coordinate, coordinate]))
-    .min(2)
-    .max(1000),
+  points: z.array(z.tuple([coordinate, coordinate])).min(2),
 });
 export const sketchStrokeSchema = z
   .object({
-    points: z
-      .array(z.tuple([coordinate, coordinate, coordinate]))
-      .min(2)
-      .max(2000),
+    points: z.array(z.tuple([coordinate, coordinate, coordinate])).min(2),
     color: z.string().regex(/^#[0-9a-fA-F]{6}$/),
     width: z.number().min(0.5).max(64),
   })
@@ -74,13 +68,9 @@ export const brushSketchSchema = z
     placement: z.enum(['surface', 'view', 'plane']),
     plane: z.enum(['XY', 'XZ', 'YZ']).optional(),
     planeOffset: coordinate.optional(),
-    strokes: z.array(sketchStrokeSchema).min(1).max(200),
+    strokes: z.array(sketchStrokeSchema).min(1),
   })
-  .passthrough()
-  .refine(
-    (value) => value.strokes.reduce((sum, stroke) => sum + stroke.points.length, 0) <= 20000,
-    'Sketch has too many points',
-  );
+  .passthrough();
 export const sketchSchema = z.union([planeSketchSchema.passthrough(), brushSketchSchema]);
 /** Images a turn shows the model (PLAN-24): at most 3, each a PNG/JPEG data URL of at most 1 MB. */
 export const MAX_TURN_IMAGES = 3;
@@ -107,18 +97,19 @@ export const imageItemSchema = z
 /**
  * Composer attachments (SPEC-01.12, ARCH-01 §3 「첨부 보관과 읽기 도구」): the engine keeps the file
  * and the request names it; the AI reads it with `attachment_read`. `copied` is always true for now
- * (a later read-only project-folder access may point `path` at the original instead).
+ * (a later read-only project-folder access may point `path` at the original instead). Attachments
+ * have no size or count cap (ADR-031 7); the constants stay, unbounded, for the screen's checks.
  */
-export const MAX_ATTACHMENT_BYTES = 200 * 1024 * 1024;
-export const MAX_REQUEST_ATTACHMENT_BYTES = 500 * 1024 * 1024;
-export const MAX_REQUEST_ATTACHMENTS = 20;
+export const MAX_ATTACHMENT_BYTES = Number.POSITIVE_INFINITY;
+export const MAX_REQUEST_ATTACHMENT_BYTES = Number.POSITIVE_INFINITY;
+export const MAX_REQUEST_ATTACHMENTS = Number.POSITIVE_INFINITY;
 export const attachmentIdSchema = z.string().regex(/^[0-9a-f]{24}$/);
 export const attachmentKindSchema = z.enum(['text', 'image', 'pdf', 'rhino-3dm', 'dwg', 'binary']);
 export const storedAttachmentSchema = z
   .object({
     id: attachmentIdSchema,
     name: z.string().min(1).max(255),
-    size: z.number().int().min(0).max(MAX_ATTACHMENT_BYTES),
+    size: z.number().int().min(0),
     type: z.string().max(200),
     kind: attachmentKindSchema,
     path: z.string().min(1).max(1000),
@@ -127,7 +118,7 @@ export const storedAttachmentSchema = z
   .passthrough();
 export type StoredAttachment = z.infer<typeof storedAttachmentSchema>;
 /** A file whose text travels in the request (before SPEC-01.12, and VIDE's own small notes). */
-const inlineFileSchema = z.object({ name: z.string(), text: z.string().max(50000) }).passthrough();
+const inlineFileSchema = z.object({ name: z.string(), text: z.string() }).passthrough();
 /** The stored attachments among a request's files (inline text files have no attachment id). */
 export function storedAttachments(files: readonly unknown[]): StoredAttachment[] {
   return files.flatMap((file) => {
@@ -139,7 +130,9 @@ export const requestInputSchema = z
   .object({
     id,
     executionLimits: executionLimitsSchema.optional(),
-    body: z.string().max(20000),
+    // Body, pins, sketches and files have no count or length cap (ADR-031 7); the AI gets the
+    // first pins in full and a summary of the rest (model-context.ts `pinContext`).
+    body: z.string(),
     // Filled from each other on parse (see overwrite below): `mode` is the contract, `permission`
     // stays for the code paths that still read it (review = plan, candidate = auto).
     mode: requestModeSchema.optional(),
@@ -163,22 +156,10 @@ export const requestInputSchema = z
       .regex(/^(default|[0-9a-f-]{36})$/)
       .optional(),
     // Pin identity and basis are checked against project data by Workspace.
-    pins: z.array(z.unknown()).max(100),
-    sketches: z.array(sketchSchema).max(100),
+    pins: z.array(z.unknown()),
+    sketches: z.array(sketchSchema),
     images: z.array(imageItemSchema).max(MAX_TURN_IMAGES).optional(),
-    files: z
-      .array(z.union([storedAttachmentSchema, inlineFileSchema]))
-      .max(100)
-      .refine(
-        (files) => storedAttachments(files).length <= MAX_REQUEST_ATTACHMENTS,
-        'Too many attachments',
-      )
-      .refine(
-        (files) =>
-          storedAttachments(files).reduce((sum, file) => sum + file.size, 0) <=
-          MAX_REQUEST_ATTACHMENT_BYTES,
-        'Attachments are too large',
-      ),
+    files: z.array(z.union([storedAttachmentSchema, inlineFileSchema])),
     host: z.enum(['rhino', 'zwcad']).optional(),
     baseRequestId: id.nullable().optional(),
     linkedTargets: z.array(linkedTargetSchema).length(2).optional(),
@@ -245,9 +226,9 @@ export type RequestInput = z.infer<typeof requestInputSchema>;
 
 export const executionProgressSchema = z
   .object({
-    queries: z.number().int().min(0).max(100),
-    attempts: z.number().int().min(0).max(48),
-    completed: z.number().int().min(0).max(48),
+    queries: z.number().int().min(0),
+    attempts: z.number().int().min(0),
+    completed: z.number().int().min(0),
   })
   .refine((value) => value.completed <= value.attempts);
 export type ExecutionProgress = z.infer<typeof executionProgressSchema>;

@@ -39,7 +39,7 @@ function mockHost() {
           reverted: true,
           guarded: {
             kind: 'bulk-delete',
-            detail: '객체 60개를 지웁니다 (기준 50개).',
+            detail: '객체 600개를 지웁니다 (기준 500개).',
             deletes: 60,
           },
           log: '',
@@ -452,7 +452,7 @@ test('the default Rhino driver reads pages once per revision and passes undo to 
     assert.equal(first.page.total, 2);
     await driver.query({ objectIds: ['b'] });
     assert.equal(calls.filter(([kind]) => kind === 'read').length, 1);
-    const guard = { confirmed: false, maxDeletes: 50 };
+    const guard = { confirmed: false, maxDeletes: 500 };
     await driver.execute({ requestId: 'r', code: 'x', label: 'L', guard });
     await driver.query({});
     assert.equal(calls.filter(([kind]) => kind === 'read').length, 2);

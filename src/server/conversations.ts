@@ -252,7 +252,7 @@ const createInput = z
     kind: z.enum(conversationKinds).optional(),
     title: z.string().trim().min(1).max(500).optional(),
     /** The first request's text: names the conversation and lets Jev choose service and model. */
-    body: z.string().max(20000).optional(),
+    body: z.string().optional(),
     provider: providerSchema.optional(),
     model: modelSchema.optional(),
     effort: effortSchema.optional(),

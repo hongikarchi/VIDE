@@ -8,10 +8,10 @@ import { membership } from './projects';
 // file as a small view-only snapshot (geometry, no source file) when its owner turned that on for
 // the project, and picks up requests left on the site when it comes back. One snapshot per linked
 // file (replaced, never versioned), a per-account and a site-wide byte cap, and a per-snapshot
-// size well under the 100 MB request limit. The account's R2 is already past the free 10 GB, so
+// size just under the platform's 100 MB request limit (ADR-031 7). The account's R2 is already past the free 10 GB, so
 // every stored byte is billed: the site-wide cap defaults to 0 (off) until paying for storage is
 // an approved decision (RESEARCH-10 §13.6, §16 C3). The upload pause is applied in worker.ts.
-const SNAPSHOT_MAX_BYTES = 50 * 1024 * 1024;
+const SNAPSHOT_MAX_BYTES = 95 * 1024 * 1024;
 const QUEUE_BODY = 4000;
 const QUEUE_OPEN_PER_PROJECT = 20;
 const MB = 1024 * 1024;

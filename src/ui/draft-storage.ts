@@ -7,10 +7,10 @@ import type { DraftState } from './model.ts';
 // older drafts (the composer's former `applyToSource`) are dropped when they are read.
 const draftSchema = z.object({
   executionLimits: requestInputSchema.shape.executionLimits,
-  body: z.string().max(20000),
-  instructions: z.array(z.string().max(20000)).max(100).default([]),
+  body: z.string(),
+  instructions: z.array(z.string()).default([]),
   host: z.enum(['rhino', 'zwcad']).default('rhino'),
-  pins: z.array(draftPinSchema).max(100),
+  pins: z.array(draftPinSchema),
   sketches: requestInputSchema.shape.sketches,
   files: requestInputSchema.shape.files,
   model: z.string().min(1).max(110),

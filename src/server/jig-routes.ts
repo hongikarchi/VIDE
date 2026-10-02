@@ -109,19 +109,17 @@ const bakeHints: Record<string, string> = {
   'analysis-confirmed': '해석을 확정한 뒤 만드세요',
 };
 
-/** Most Syncs one diagnosis reads (linked documents) and objects it takes over all roles. */
-const MAX_SOURCES = 8;
-const MAX_OBJECTS = 50000;
+// A diagnosis has no cap on the Syncs, layers or objects it reads (ADR-031 7).
 const MAX_PACK_BYTES = 16 * 1024 * 1024;
 
 const id = z.string().min(1).max(200);
 const pick = z.object({ syncId: id, layer: z.string().max(500) }).strict();
 const diagnoseInput = z
   .object({
-    sources: z.array(id).min(1).max(MAX_SOURCES),
+    sources: z.array(id).min(1),
     roles: z
       .object(
-        Object.fromEntries(ROLE_KEYS.map((role) => [role, z.array(pick).max(8).optional()])) as {
+        Object.fromEntries(ROLE_KEYS.map((role) => [role, z.array(pick).optional()])) as {
           [K in (typeof ROLE_KEYS)[number]]: z.ZodOptional<z.ZodArray<typeof pick>>;
         },
       )
@@ -157,7 +155,7 @@ const createInstance = z
     version: z.string().max(50).optional(),
     title: z.string().min(1).max(500),
     layerRoot: z.string().min(1).max(1000).optional(),
-    params: z.array(paramChange).max(100).optional(),
+    params: z.array(paramChange).optional(),
     conversationId: id.optional(),
     /**
      * Opened from a request (startSkill, ADR-026): no output layer yet. Computing works; Rhino에
@@ -169,7 +167,7 @@ const createInstance = z
   .refine((input) => !!input.layerRoot !== !!input.layerRootLater);
 const setParams = z
   .object({
-    values: z.array(paramChange).min(1).max(100),
+    values: z.array(paramChange).min(1),
     by: by.optional(),
     reason: z.string().max(2000).optional(),
     requestId: id.optional(),
@@ -177,11 +175,11 @@ const setParams = z
   .strict();
 const overridesInput = z
   .object({
-    add: z.array(overrideSchema).max(200).optional(),
-    remove: z.array(id).max(200).optional(),
+    add: z.array(overrideSchema).optional(),
+    remove: z.array(id).optional(),
   })
   .strict();
-const zonesInput = z.object({ zones: z.record(z.string(), z.array(zoneSchema).max(200)) }).strict();
+const zonesInput = z.object({ zones: z.record(z.string(), z.array(zoneSchema)) }).strict();
 const readInput = readScopeSchema
   .extend({
     linkId: id.optional(),
@@ -192,13 +190,8 @@ const readInput = readScopeSchema
 const assemblyInput = z
   .object({
     sources: z
-      .array(
-        z
-          .object({ readId: id, layers: z.array(z.string().min(1).max(1000)).min(1).max(200) })
-          .strict(),
-      )
-      .min(1)
-      .max(20),
+      .array(z.object({ readId: id, layers: z.array(z.string().min(1).max(1000)).min(1) }).strict())
+      .min(1),
     transform: transformSchema.optional(),
     confirm: z.boolean(),
     reason: z.string().max(500).optional(),
@@ -750,7 +743,7 @@ export async function jigRoutes(
 
   if (action === 'layers' && method === 'GET') {
     const ids = [...new Set((url.searchParams.get('syncIds') ?? '').split(',').filter(Boolean))];
-    if (!ids.length || ids.length > MAX_SOURCES) throw new DomainError('INVALID_INPUT');
+    if (!ids.length) throw new DomainError('INVALID_INPUT');
     const sources = ids.map((syncId) => {
       const result = syncResult(syncId);
       return { syncId, document: documentName(result), layers: syncLayers(result) };
@@ -761,7 +754,6 @@ export async function jigRoutes(
   if (action === 'diagnose' && method === 'POST') {
     const input = diagnoseInput.parse(await body(request));
     const inputs: DiagnoseInputs = { definitions: {} };
-    let objects = 0;
     for (const role of ROLE_KEYS) {
       const picks = input.roles[role];
       if (!picks) continue;
@@ -773,8 +765,6 @@ export async function jigRoutes(
         rows.push(...read.rows);
         inputs.definitions![syncId] = { ...inputs.definitions![syncId], ...read.definitions };
       }
-      objects += rows.length;
-      if (objects > MAX_OBJECTS) throw new DomainError('INPUT_TOO_LARGE');
       inputs[role] = rows;
     }
     const start = performance.now();

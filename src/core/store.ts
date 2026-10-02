@@ -31,9 +31,8 @@ function canonical(value: unknown): string {
   fail('INVALID_INPUT');
 }
 function json(value: unknown) {
-  const result = canonical(value);
-  if (Buffer.byteLength(result) > 1024 * 1024) fail('INPUT_TOO_LARGE');
-  return result;
+  // No size cap (ADR-031 7): a host command's payload or result is stored whole.
+  return canonical(value);
 }
 function text(value: unknown, max = 10000): string {
   if (typeof value !== 'string' || !value.trim() || value.length > max) fail('INVALID_INPUT');

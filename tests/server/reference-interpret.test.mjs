@@ -461,20 +461,8 @@ test('over HTTP: 이해 확인 → 판 1 and its image, B corrected → 판 2, [
   assert.equal(refused.data.code, 'REFERENCE_TARGET_UNKNOWN');
   const stale = await send({ action: 'confirm', version: 1, targets: { B: '새 레이어' } });
   assert.equal(stale.status, 409);
-  // A request the workspace refuses (here: too large) leaves the 판 unconfirmed.
-  const huge = await send(
-    { action: 'confirm', version: 2, targets: { B: '새 레이어에 따로 만들기' } },
-    {
-      images: [
-        {
-          kind: 'reference',
-          name: '큼',
-          dataUrl: 'data:image/png;base64,' + Buffer.alloc(160_000).toString('base64'),
-        },
-      ],
-    },
-  );
-  assert.equal(huge.status, 413, JSON.stringify(huge.data));
+  // A request the workspace refuses leaves the 판 unconfirmed: the board unit test below covers
+  // it (requests have no size cap of their own any more, ADR-031 7).
   assert.equal((await board()).versions[1].confirmed, null);
   const confirmed = await send(
     { action: 'confirm', version: 2, targets: { B: '새 레이어에 따로 만들기' } },

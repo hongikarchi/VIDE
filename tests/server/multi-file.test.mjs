@@ -375,7 +375,7 @@ test('Auto edits two files; one [되돌리기] undoes the whole request in both,
     [['win-b', 'link-b']],
   );
   assert.match(seen[0].context.goal, /execute with an open file's linkId edits that file/);
-  assert.deepEqual(b.calls.execute[0].guard, { confirmed: false, maxDeletes: 50 });
+  assert.deepEqual(b.calls.execute[0].guard, { confirmed: false, maxDeletes: 500 });
 
   const undone = await execution.undoRequest(project.id, 'auto-1');
   assert.equal(undone.ok, true);
@@ -571,7 +571,7 @@ test('A stopped multi-file request is rolled back; the guard of another file wai
       b.next.execute.push(() => ({
         ok: false,
         reverted: true,
-        guarded: { kind: 'bulk-delete', detail: '객체 60개를 지웁니다 (기준 50개).' },
+        guarded: { kind: 'bulk-delete', detail: '객체 600개를 지웁니다 (기준 500개).' },
       }));
       const held = await call('execute', { linkId: 'link-b', code: 'wipe old' });
       assert.equal(held.value.guarded.kind, 'bulk-delete');
@@ -597,7 +597,7 @@ test('A stopped multi-file request is rolled back; the guard of another file wai
   const confirmed = await execution.confirm(project.id, 'guard-1', held.executionId);
   assert.equal(confirmed.state, 'succeeded');
   assert.equal(b.calls.execute.at(-1).code, 'wipe old');
-  assert.deepEqual(b.calls.execute.at(-1).guard, { confirmed: true, maxDeletes: 50 });
+  assert.deepEqual(b.calls.execute.at(-1).guard, { confirmed: true, maxDeletes: 500 });
 });
 
 /** A promise and its resolver. */
@@ -725,7 +725,7 @@ test('ZWCAD drawings through the engine driver: entity pages by handle, unknown 
   const driver = execution.directDriverFor('zwcad', { instance: '4321:99', documentId: 1 }, false);
   await driver.query({ objectIds: ['cad-1A2', '3F'] });
   assert.deepEqual(calls[0][2], { offset: 0, limit: 100, handles: ['1A2', '3F'] });
-  const guard = { confirmed: false, maxDeletes: 50 };
+  const guard = { confirmed: false, maxDeletes: 500 };
   const run = async (code) =>
     (await driver.execute({ requestId: 'r', code, label: 'x', guard })).code;
   assert.equal(await run('slow'), 'HOST_RESULT_UNKNOWN');
@@ -985,7 +985,7 @@ const guardOnce = (doc) =>
   doc.next.execute.push(() => ({
     ok: false,
     reverted: true,
-    guarded: { kind: 'bulk-delete', detail: '객체 60개를 지웁니다 (기준 50개).' },
+    guarded: { kind: 'bulk-delete', detail: '객체 600개를 지웁니다 (기준 500개).' },
   }));
 /** A applied, then B's execute held by the guard: the request waits on its card. */
 const appliedThenGuarded =

@@ -53,16 +53,16 @@ test('native pages preserve all identities and one revision until complete', asy
   assert.equal(bulky.objects.length, 10713);
   assert.equal(result.measurementStats.measuredObjects, 10713);
 });
-test('only an explicit oversized read reduces page size; singular overflow stops', async () => {
-  const limits = [];
+test('only an explicit oversized read reduces page size; one object asks for its box once', async () => {
+  const calls = [];
   await assert.rejects(
-    readScenePages(async ({ limit }) => {
-      limits.push(limit);
+    readScenePages(async ({ limit, boxOnly }) => {
+      calls.push(boxOnly ? `${limit} box` : limit);
       return { ok: false, code: 'HOST_RESULT_TOO_LARGE' };
     }),
     { code: 'HOST_RESULT_TOO_LARGE' },
   );
-  assert.deepEqual(limits, [1000, 500, 250, 125, 62, 31, 15, 7, 3, 1]);
+  assert.deepEqual(calls, [1000, 500, 250, 125, 62, 31, 15, 7, 3, 1, '1 box']);
 });
 for (const mode of ['duplicate', 'changed-revision', 'changed-total', 'empty', 'bad-offset'])
   test(`native page rejects ${mode} without returning partial success`, async () => {

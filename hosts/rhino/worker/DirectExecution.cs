@@ -61,7 +61,7 @@ internal sealed class DirectExecutor : IDisposable
         {
             if (!request.TryGetProperty("guard", out var guard) || guard.ValueKind != JsonValueKind.Object) return new(false, 50);
             var confirmed = guard.TryGetProperty("confirmed", out var c) && c.ValueKind == JsonValueKind.True;
-            var max = guard.TryGetProperty("maxDeletes", out var m) && m.ValueKind == JsonValueKind.Number ? Math.Clamp(m.GetInt32(), 0, 100000) : 50;
+            var max = guard.TryGetProperty("maxDeletes", out var m) && m.ValueKind == JsonValueKind.Number ? Math.Max(m.GetInt32(), 0) : 500;
             return new(confirmed, max);
         }
     }

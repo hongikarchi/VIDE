@@ -1,4 +1,9 @@
 import { z } from 'zod';
+/**
+ * Auto-mode guard, the one place for every host (ADR-031 7): deleting more objects than this in
+ * one execute is undone and waits for the user's confirmation card.
+ */
+export const DIRECT_MAX_DELETES = 500;
 export const hostTargetSchema = z.object({
   instance: z.string().regex(/^\d+:\d+(?::[a-f0-9-]{36})?$/),
   documentId: z.number().int().positive().max(4294967295),
@@ -22,8 +27,8 @@ export const hostDocumentsSchema = z.object({
       live: z.boolean().optional(),
       hostBusy: z.boolean().optional(),
       selectionVersion: z.number().int().nonnegative().optional(),
-      selectedIds: z.array(z.string()).max(2000).optional(),
-      pinnedIds: z.array(z.string()).max(5000).optional(),
+      selectedIds: z.array(z.string()).optional(),
+      pinnedIds: z.array(z.string()).optional(),
       /** VIDE link ids stored in the document (ADR-030), one per project it was linked to. */
       linkIds: z.array(z.string().max(100)).max(50).optional(),
     }),

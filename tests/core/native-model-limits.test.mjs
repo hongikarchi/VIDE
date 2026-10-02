@@ -3,8 +3,8 @@ import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { nativeModelSchema } from '../../src/contracts/native-model.ts';
 
-test('native model admits 20000 matched identities and rejects oversized or incomplete models', () => {
-  const objects = Array.from({ length: 20000 }, (_, i) => ({
+test('native model admits 30000 matched identities (no count cap) and rejects incomplete models', () => {
+  const objects = Array.from({ length: 30000 }, (_, i) => ({
     id: String(i),
     nativeId: randomUUID(),
     kind: 'native',
@@ -31,11 +31,11 @@ test('native model admits 20000 matched identities and rejects oversized or inco
   }));
   assert.equal(nativeModelSchema.safeParse({ objects, scene }).success, true);
   assert.equal(nativeModelSchema.safeParse({ objects, scene: scene.slice(1) }).success, false);
-  const extra = { ...objects[0], id: 'extra', nativeId: randomUUID() };
+  // A row whose identity does not match its object is still refused.
   assert.equal(
     nativeModelSchema.safeParse({
-      objects: [...objects, extra],
-      scene: [...scene, { ...scene[0], id: extra.id, nativeId: extra.nativeId }],
+      objects,
+      scene: [{ ...scene[0], nativeId: randomUUID() }, ...scene.slice(1)],
     }).success,
     false,
   );

@@ -101,7 +101,7 @@ export class RhinoWorkspace {
         detail: response.message,
       });
     const scene = sceneOutput(response.output);
-    if (scene.length > 500 || scene.some((o) => !o.valid))
+    if (scene.some((o) => !o.valid))
       throw Object.assign(new Error('IMPORT_LIMIT'), { code: 'IMPORT_LIMIT' });
     const objects = scene.map((o) => ({
       id: o.id,

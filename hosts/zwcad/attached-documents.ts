@@ -5,7 +5,7 @@ import { sendHostCommand } from '../common/transport.ts';
 import { inspectWindowsProcess } from '../common/owned-process.ts';
 import { DomainError } from '../../src/contracts/errors.ts';
 import { workspaceResultSchema } from '../../src/contracts/workspace-result.ts';
-import type { HostTarget } from '../../src/contracts/host-documents.ts';
+import { DIRECT_MAX_DELETES, type HostTarget } from '../../src/contracts/host-documents.ts';
 
 const connectionSchema = z.object({
   attached: z.literal(true),
@@ -293,7 +293,7 @@ export class AttachedZwcadDocuments {
     await this.discover();
     const guard = {
       confirmed: input.guard?.confirmed === true,
-      maxDeletes: input.guard?.maxDeletes ?? 50,
+      maxDeletes: input.guard?.maxDeletes ?? DIRECT_MAX_DELETES,
     };
     return directExecuteResultSchema.parse(
       await this.call(

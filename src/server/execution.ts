@@ -6,7 +6,7 @@ import {
 } from '../ai/context-selector.ts';
 import { isDwgSdkEditMode } from '../contracts/dwg-edit-mode.ts';
 import { executionLimits } from '../contracts/execution-limits.ts';
-import { modelContext } from './model-context.ts';
+import { modelContext, pinContext } from './model-context.ts';
 import { CLAUDE_MODELS, claudeEfforts, modelName } from './model-capabilities.ts';
 import {
   documentHolder,
@@ -1183,7 +1183,7 @@ export class Execution {
       }
       const pins = pinsSchema.parse(input.pins);
       const items: { id: string; type: string; data: unknown }[] = [
-        ...pins.map((data, i) => ({ id: `pin-${i}`, type: 'object-reference', data })),
+        ...pinContext(pins),
         ...input.sketches.map((data, i) => ({ id: `sketch-${i}`, type: 'sketch', data })),
         ...input.files.map((data, i) => ({ id: `file-${i}`, type: 'file', data })),
         // Images go to the model as image content (PLAN-24; the CLI adapters split them out).

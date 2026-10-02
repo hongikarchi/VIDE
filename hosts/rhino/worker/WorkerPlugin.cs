@@ -81,10 +81,17 @@ public sealed class WorkerCommand : Command
         return Result.Failure;
     }
 
+    /**
+     * The one transport cap kept (ADR-031 7): a frame either way is at most 16 MB, so a corrupt length
+     * never allocates gigabytes. Processing time is generous; it only ends a lost call.
+     */
+    internal const int FrameBytes = 16 * 1024 * 1024;
+    internal static readonly TimeSpan CallTime = TimeSpan.FromSeconds(600);
+
     internal static async Task Serve(TcpClient client, string token, string session, int pid, string ticks, Func<JsonElement, object> dispatch)
     {
         using (client)
-        using (var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(180)))
+        using (var timeout = new CancellationTokenSource(CallTime))
         {
             var stream = client.GetStream();
             try
@@ -92,7 +99,8 @@ public sealed class WorkerCommand : Command
                 var header = new byte[4];
                 await stream.ReadExactlyAsync(header, timeout.Token);
                 var length = System.Buffers.Binary.BinaryPrimitives.ReadInt32BigEndian(header);
-                if (length < 1 || length > 4 * 1024 * 1024) return;
+                if (length < 1) return;
+                if (length > FrameBytes) throw new InvalidOperationException("HOST_REQUEST_TOO_LARGE");
                 var data = new byte[length];
                 await stream.ReadExactlyAsync(data, timeout.Token);
                 using var json = JsonDocument.Parse(data);
@@ -136,7 +144,7 @@ public sealed class WorkerCommand : Command
 
     private static async Task Reply(NetworkStream stream, byte[] body, CancellationToken cancel)
     {
-        if (body.Length > 16 * 1024 * 1024) throw new InvalidOperationException("HOST_RESULT_TOO_LARGE");
+        if (body.Length > FrameBytes) throw new InvalidOperationException("HOST_RESULT_TOO_LARGE");
         var header = new byte[4];
         System.Buffers.Binary.BinaryPrimitives.WriteInt32BigEndian(header, body.Length);
         await stream.WriteAsync(header, cancel); await stream.WriteAsync(body, cancel);

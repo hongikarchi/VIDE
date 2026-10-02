@@ -383,8 +383,8 @@ export class Workspace {
     if (input.supersedesRequestId !== undefined && input.supersedesRequestId !== predecessorId)
       fail('INVALID_INPUT');
     // Keep the original serialization for existing idempotency records.
+    // No size cap of its own (ADR-031 7): the HTTP body guard is the only one.
     const serialized = JSON.stringify(value);
-    if (Buffer.byteLength(serialized) > 200000) fail('INPUT_TOO_LARGE');
     const existing = this.store.db
       .prepare('SELECT * FROM workspace_requests WHERE id=?')
       .get(input.id);
@@ -451,6 +451,8 @@ export class Workspace {
       )
         fail('STALE_REFERENCE');
     }
+    // Pins have no count cap (ADR-031 7): each basis's object ids are looked up once.
+    const basisIds = new Map<string, Set<string>>();
     for (const value of input.pins) {
       const parsedPin = pinSchema.safeParse(value);
       if (!parsedPin.success) fail('STALE_REFERENCE');
@@ -461,8 +463,13 @@ export class Workspace {
       } catch {
         fail('STALE_REFERENCE');
       }
-      if (!source.result?.hostExecuted || !source.result.objects?.some((o) => o.id === pin.id))
-        fail('STALE_REFERENCE');
+      if (!source.result?.hostExecuted) fail('STALE_REFERENCE');
+      let known = basisIds.get(pin.basis);
+      if (!known) {
+        known = new Set((source.result.objects ?? []).map((o) => o.id));
+        basisIds.set(pin.basis, known);
+      }
+      if (!known.has(pin.id)) fail('STALE_REFERENCE');
       if (
         (targets
           ? targets.some((t) => t.host === (source.result!.host || 'rhino'))

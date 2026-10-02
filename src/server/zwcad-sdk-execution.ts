@@ -14,6 +14,8 @@ import { workspaceResultSchema } from '../contracts/workspace-result.ts';
 import type { SdkExecution } from './sdk-execution.ts';
 import type { AgentTools } from './agent-tools.ts';
 import { directRefusal, type DirectRefusal } from '../contracts/direct-refusal.ts';
+import { DIRECT_MAX_DELETES } from '../contracts/host-documents.ts';
+export { DIRECT_MAX_DELETES };
 type Task = Parameters<SdkExecution['run']>[0];
 type Worker = Awaited<ReturnType<typeof launchZwcadWorker>>;
 type Receipt = Extract<Awaited<ReturnType<Worker['execute']>>, { ok: true }>;
@@ -52,8 +54,6 @@ function verifyProtected(
   }
 }
 const failure = (code: string) => Object.assign(new Error(code), { code });
-/** Auto-mode guard: erasing more entities than this in one execute needs confirmation. */
-export const DIRECT_MAX_DELETES = 50;
 /**
  * What ZWCAD's direct-execute wrapper gives the code: the drawing's own turns and a Rhino turn that
  * edits a linked drawing (ADR-027 4) say the same.

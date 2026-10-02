@@ -20,7 +20,7 @@ interface RefGate {
   noun: string;
 }
 
-const ids = z.array(z.string()).max(20000);
+const ids = z.array(z.string());
 /** Text of the files attached to the request (the jig table goes as an attachment). */
 function attachedText(input: Record<string, unknown>) {
   const files = z

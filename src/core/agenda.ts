@@ -1,6 +1,5 @@
 import { randomUUID } from 'node:crypto';
 import {
-  AGENDA_MAX_ITEMS,
   agendaCreateSchema,
   agendaItemSchema,
   agendaOrderSchema,
@@ -75,7 +74,7 @@ export class Agenda {
       const count = this.store.db
         .prepare('SELECT count(*) AS n, max(ord) AS last FROM agenda_items WHERE projectId=?')
         .get(projectId) as { n: number; last: number | null };
-      if (count.n >= AGENDA_MAX_ITEMS) throw new DomainError('AGENDA_LIMIT');
+      // No item count cap (ADR-031 7).
       const id = randomUUID(),
         at = this.now().toISOString(),
         time = input.time ?? null,

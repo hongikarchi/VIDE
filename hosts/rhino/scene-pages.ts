@@ -12,13 +12,13 @@ import { displayCoverage } from '../../src/core/display-delta.ts';
 const pageSchema = z.object({
   offset: z.number().int().nonnegative(),
   nextOffset: z.number().int().nonnegative(),
-  total: z.number().int().min(0).max(20000),
+  total: z.number().int().min(0),
   revision: z.number().int().nonnegative(),
 });
 /** The host's survey of the read (T-043 plugin); absent from an older plugin's pages. */
 const surveySchema = z.object({
   coverage: sourceCoverageSchema.optional(),
-  layers: z.array(displayLayerSchema).max(20000).optional(),
+  layers: z.array(displayLayerSchema).optional(),
 });
 const failure = (code: string) => Object.assign(new Error(code), { code });
 
@@ -46,8 +46,9 @@ export function withSurvey<
 
 /**
  * Only explicit oversized read replies may retry; execution is never repeated. A document has no
- * total size cap (PLAN-28): each page already fits one host reply, so only one object larger than
- * a reply fails the read.
+ * object count or total size cap (ADR-031 7): pages shrink until they fit one host reply (16 MB)
+ * and grow back after, and one object larger than a reply is read again as its bounding box
+ * (`oversized`, counted in the coverage), so the read continues.
  */
 export async function readScenePages(
   call: (params: Record<string, unknown>) => Promise<unknown>,
@@ -61,7 +62,8 @@ export async function readScenePages(
     limit = 1000,
     revision: number | undefined,
     total: number | undefined,
-    bytes = 0;
+    bytes = 0,
+    boxOnly = false;
   const objects: NativeModel['objects'] = [],
     scene: NativeModel['scene'] = [];
   const definitions: NonNullable<NativeModel['definitions']> = {};
@@ -77,12 +79,17 @@ export async function readScenePages(
       ...(revision === undefined ? {} : { revision }),
       ...(scope.layers ? { layers: scope.layers } : {}),
       ...(scope.includeHidden ? { includeHidden: true } : {}),
+      ...(boxOnly ? { boxOnly: true } : {}),
       ...cache,
     });
     const error = z.object({ ok: z.literal(false), code: z.string() }).safeParse(raw);
     if (error.success) {
       if (error.data.code === 'HOST_RESULT_TOO_LARGE' && limit > 1) {
         limit = Math.max(1, Math.floor(limit / 2));
+        continue;
+      }
+      if (error.data.code === 'HOST_RESULT_TOO_LARGE' && !boxOnly) {
+        boxOnly = true;
         continue;
       }
       throw failure(error.data.code);
@@ -118,6 +125,9 @@ export async function readScenePages(
     measurementStats.measuredObjects += model.measurementStats?.measuredObjects ?? 0;
     measurementStats.reusedObjects += model.measurementStats?.reusedObjects ?? 0;
     offset = page.nextOffset;
+    // After a shrunken page (or one object's box) the next pages grow back.
+    boxOnly = false;
+    limit = Math.min(1000, limit * 2);
   } while (total === undefined || offset < total);
   return schema.parse(
     withSurvey(
