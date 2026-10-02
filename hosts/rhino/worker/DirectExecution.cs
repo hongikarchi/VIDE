@@ -26,6 +26,8 @@ internal sealed class DirectExecutor : IDisposable
     // Every record of this document currently undone (any origin), and this connection's empty
     // records Rhino discarded: serials that no longer stand between a record and the undo top.
     private readonly HashSet<uint> undone = new(), discarded = new();
+    // Executions whose commands left records of their own: first serial -> last serial.
+    private readonly Dictionary<uint, uint> groups = new();
     internal DirectExecutor(RhinoDoc doc)
     {
         document = doc;
@@ -35,7 +37,13 @@ internal sealed class DirectExecutor : IDisposable
 
     private void UndoRedo(object? sender, Rhino.Commands.UndoRedoEventArgs e)
     {
-        if (e.IsBeginUndo) { watching?.Add(e.UndoSerialNumber); undone.Add(e.UndoSerialNumber); if (records.ContainsKey(e.UndoSerialNumber)) records[e.UndoSerialNumber] = true; }
+        if (e.IsBeginUndo)
+        {
+            watching?.Add(e.UndoSerialNumber); undone.Add(e.UndoSerialNumber); if (records.ContainsKey(e.UndoSerialNumber)) records[e.UndoSerialNumber] = true;
+            // Ctrl+Z on any record of a group leaves the execution (partly) undone: VIDE does not undo it again.
+            foreach (var group in groups)
+                if (e.UndoSerialNumber > group.Key && e.UndoSerialNumber <= group.Value && records.ContainsKey(group.Key)) records[group.Key] = true;
+        }
         if (e.IsBeginRedo) { undone.Remove(e.UndoSerialNumber); if (records.ContainsKey(e.UndoSerialNumber)) records[e.UndoSerialNumber] = false; }
     }
 
@@ -69,15 +77,34 @@ internal sealed class DirectExecutor : IDisposable
         var label = request.TryGetProperty("label", out var l) && l.ValueKind == JsonValueKind.String ? l.GetString()! : "VIDE AI 편집";
         label = label.Length > 80 ? label[..80] : label.Length == 0 ? "VIDE AI 편집" : label;
         var guard = GuardOptions.From(request);
-        var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(code + "\n" + label))).ToLowerInvariant();
+        // ADR-029: a C# body (default), a Rhino command macro or a Python 3 script.
+        var language = request.TryGetProperty("language", out var lang) && lang.ValueKind == JsonValueKind.String ? lang.GetString() : "csharp";
+        if (language is not ("csharp" or "command" or "python")) throw new InvalidOperationException("INVALID_INPUT");
+        var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(language + "\n" + code + "\n" + label))).ToLowerInvariant();
         if (receipts.TryGetValue(requestId, out var prior))
             return prior.hash == hash ? prior.result : throw new InvalidOperationException("OPERATION_CONFLICT");
         if (document.IsReadOnly) throw new InvalidOperationException("DOCUMENT_READ_ONLY");
 
-        var compiled = Compile(code, requestId);
-        if (compiled.Failure != null) return compiled.Failure;
-        if (compiled.Purges && !guard.Confirmed)
-            return Guarded("purge", "사용하지 않는 항목 정리(Purge)는 되돌릴 수 없습니다.", "");
+        Func<StringBuilder, object?> run;
+        if (language == "csharp")
+        {
+            var compiled = Compile(code, requestId);
+            if (compiled.Failure != null) return compiled.Failure;
+            if (compiled.Purges && !guard.Confirmed)
+                return Guarded("purge", "사용하지 않는 항목 정리(Purge)는 되돌릴 수 없습니다.", "");
+            run = output => Assembly.Load(compiled.Bytes!).GetType("TaskCode")!.GetMethod("Run")!.Invoke(null, [document, output]);
+        }
+        else
+        {
+            var verdict = language == "command" ? DirectScripts.CheckCommand(code) : DirectScripts.CheckPython(code);
+            if (verdict.Denied != null) return new { ok = false, code = "CODE_POLICY_REJECTED", diagnostics = verdict.Denied };
+            if (verdict.GuardKind != null && !guard.Confirmed) return Guarded(verdict.GuardKind, verdict.GuardDetail!, "");
+            // Commands and scriptcontext act on Rhino's active document only.
+            if (RhinoDoc.ActiveDoc != document) throw new InvalidOperationException("DOCUMENT_NOT_ACTIVE");
+            run = language == "command"
+                ? output => DirectScripts.RunCommand(document, code, output, guard.Confirmed)
+                : output => DirectScripts.RunPython(document, code, output);
+        }
 
         var before = Snapshot();
         var touched = new HashSet<Guid>();
@@ -95,11 +122,7 @@ internal sealed class DirectExecutor : IDisposable
         RhinoDoc.ReplaceRhinoObject += Replaced;
         RhinoDoc.ModifyObjectAttributes += Modified;
         RhinoDoc.LayerTableEvent += Layer;
-        try
-        {
-            var assembly = Assembly.Load(compiled.Bytes!);
-            value = assembly.GetType("TaskCode")!.GetMethod("Run")!.Invoke(null, [document, output]);
-        }
+        try { value = run(output); }
         catch (Exception error) { failure = error is TargetInvocationException { InnerException: not null } inner ? inner.InnerException! : error; }
         finally
         {
@@ -108,15 +131,23 @@ internal sealed class DirectExecutor : IDisposable
             RhinoDoc.LayerTableEvent -= Layer;
             document.EndUndoRecord(serial);
         }
+        // Commands may leave records of their own beside this one (if Rhino does not fold them
+        // into the open record): the execution is then all of them, undone together.
+        var last = document.NextUndoRecordSerialNumber - 1;
+        for (var later = serial + 1; later <= last; later++)
+            if (!discarded.Contains(later)) { groups[serial] = last; break; }
         var changes = Changes(before, touched);
         var log = Log(output);
         var any = changes.Any || layersEdited;
         if (failure != null)
         {
             // A failed run leaves nothing half done: its record is undone when it changed anything.
-            if (!any) discarded.Add(serial);
-            var reverted = !any || UndoRecord(serial);
+            if (!any) { discarded.Add(serial); groups.Remove(serial); }
+            var reverted = !any || UndoExecution(serial);
             document.Views.Redraw();
+            // A refused command started during the run (an alias): the AI corrects it like a policy refusal.
+            if (failure is ScriptPolicyException && reverted)
+                return new { ok = false, code = "CODE_POLICY_REJECTED", reverted, log, diagnostics = new[] { Short(failure.Message) } };
             return new { ok = false, code = reverted ? "EXECUTION_FAILED" : "HOST_RESULT_UNKNOWN", reverted, log,
                 exceptionType = failure.GetType().FullName, message = Short(failure.Message) };
         }
@@ -127,7 +158,7 @@ internal sealed class DirectExecutor : IDisposable
             {
                 var detail = kind == "bulk-delete" ? $"객체 {changes.RemovedCount}개를 지웁니다 (기준 {guard.MaxDeletes}개)."
                     : $"레이어 {changes.LayersRemoved.Count}개를 지웁니다: " + string.Join(", ", changes.LayersRemoved.Take(10));
-                if (!UndoRecord(serial)) return new { ok = false, code = "HOST_RESULT_UNKNOWN", reverted = false, log };
+                if (!UndoExecution(serial)) return new { ok = false, code = "HOST_RESULT_UNKNOWN", reverted = false, log };
                 document.Views.Redraw();
                 return Guarded(kind, detail, log, changes.RemovedCount, changes.LayersRemoved.Count);
             }
@@ -135,7 +166,7 @@ internal sealed class DirectExecutor : IDisposable
         document.Views.Redraw();
         string? undoId = null;
         if (any) { records[serial] = false; undoId = serial.ToString(System.Globalization.CultureInfo.InvariantCulture); }
-        else discarded.Add(serial);
+        else { discarded.Add(serial); groups.Remove(serial); }
         var result = new { ok = true, undoId, changes = changes.Report(), log, value = Value(value), units = document.ModelUnitSystem.ToString() };
         receipts[requestId] = (hash, result);
         return result;
@@ -153,15 +184,48 @@ internal sealed class DirectExecutor : IDisposable
         if (isUndone) return new { ok = true, already = true };
         // Latest: every record made after it is undone or was an empty record of ours (a run of
         // several bodies is undone newest first, so the next-newest becomes the latest).
-        for (var later = serial + 1; later < document.NextUndoRecordSerialNumber; later++)
+        for (var later = (groups.TryGetValue(serial, out var end) ? end : serial) + 1; later < document.NextUndoRecordSerialNumber; later++)
             if (!undone.Contains(later) && !discarded.Contains(later)) return new { ok = false, reason = "not-latest" };
-        if (!UndoRecord(serial)) return new { ok = false, reason = "undo-failed" };
+        if (!UndoExecution(serial)) return new { ok = false, reason = "undo-failed" };
         document.Views.Redraw();
         return new { ok = true };
     }
 
     /// <summary>`fingerprint`: the connection's cheap change token (same basis as inspect).</summary>
     internal static object Fingerprint(string documentHash, int revision) => new { ok = true, documentHash, revision };
+
+    // An execution whose commands left several records (groups): undo newest first until a record
+    // before the execution comes up, which is redone. Otherwise exactly its one record.
+    private bool UndoExecution(uint serial)
+    {
+        if (!groups.TryGetValue(serial, out var last)) return UndoRecord(serial);
+        var undid = false;
+        for (var step = 0; step <= last - serial + 1; step++)
+        {
+            var seen = watching = new List<uint>();
+            try
+            {
+                var next = document.NextUndoRecordSerialNumber;
+                var ok = document.Undo();
+                CloseOwnRecord(next);
+                if (!ok || seen.Count == 0) break;
+                if (seen.Any(s => s < serial))
+                {
+                    next = document.NextUndoRecordSerialNumber;
+                    document.Redo();
+                    CloseOwnRecord(next);
+                    break;
+                }
+                undid = true;
+                if (seen.Contains(serial)) break;
+            }
+            finally { watching = null; }
+        }
+        if (!undid) return false;
+        for (var s = serial; s <= last; s++) undone.Add(s);
+        if (records.ContainsKey(serial)) records[serial] = true;
+        return true;
+    }
 
     // Undo exactly `serial`. If Rhino undid a different record (ours was empty or already gone), redo it.
     private bool UndoRecord(uint serial)

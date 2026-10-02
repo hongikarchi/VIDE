@@ -649,3 +649,106 @@ test('a refused confirmed re-run keeps the guard card with the reason', async (t
   assert.equal(again.state, 'succeeded');
   assert.equal(again.result.refused, undefined);
 });
+
+// ADR-029 (T-106): Rhino command macros and Python 3 scripts beside the C# body.
+test('Auto: a Rhino command and a Python script run as their own undo records with their form', async (t) => {
+  const answers = [];
+  const { host, send, settled, state } = setup(t, async ({ call }) => {
+    answers.push(await call('execute', { command: '_-SelDup _Enter' }));
+    answers.push(
+      await call('execute', { python: 'import rhinoscriptsyntax as rs\nrs.AddPoint((0,0,0))' }),
+    );
+    answers.push(await call('execute', { code: 'add wall', command: '_SelAll' }));
+    answers.push(await call('execute', {}));
+    return { text: '끝' };
+  });
+  send('forms-1');
+  await settled();
+  assert.equal(state('forms-1').state, 'succeeded');
+  assert.deepEqual(
+    host.calls.execute.map((c) => [c.language, c.code]),
+    [
+      ['command', '_-SelDup _Enter'],
+      ['python', 'import rhinoscriptsyntax as rs\nrs.AddPoint((0,0,0))'],
+    ],
+  );
+  assert.equal(answers[0].value.ok, true);
+  assert.equal(answers[0].value.undoId, '11');
+  assert.equal(answers[1].value.undoId, '12');
+  // Two forms, or none, never reach the host.
+  assert.equal(answers[2].value.code, 'EXECUTE_FORM_INVALID');
+  assert.equal(answers[3].value.code, 'EXECUTE_FORM_INVALID');
+  assert.deepEqual(
+    state('forms-1').result.executions.map((r) => [r.state, r.undoId]),
+    [
+      ['applied', '11'],
+      ['applied', '12'],
+    ],
+  );
+});
+
+test('a refused command or Python never reaches the host; the AI gets the diagnostics', async (t) => {
+  const answers = [];
+  const { host, send, settled, state } = setup(t, async ({ call }) => {
+    answers.push(await call('execute', { command: '_-Open "C:\\x.3dm"' }));
+    answers.push(await call('execute', { command: '_SelAll _-RunPythonScript (print 1)' }));
+    answers.push(await call('execute', { python: 'import os\nos.remove("a")' }));
+    answers.push(await call('execute', { python: 'f = open("a.txt")' }));
+    return { text: '허용되지 않음' };
+  });
+  send('deny-1');
+  await settled();
+  assert.equal(host.calls.execute.length, 0);
+  for (const answer of answers) {
+    assert.equal(answer.value.ok, false);
+    assert.equal(answer.value.executed, false);
+    assert.equal(answer.value.code, 'CODE_POLICY_REJECTED');
+  }
+  assert.match(answers[0].value.diagnostics[0], /_open/);
+  assert.match(answers[1].value.diagnostics[0], /_runpythonscript/);
+  assert.match(answers[2].value.diagnostics[0], /import os/);
+  const done = state('deny-1');
+  assert.equal(done.state, 'succeeded');
+  assert.equal(done.result.executions.length, 0);
+});
+
+test('a command that writes a file waits on the card before it runs; [진행] runs it with its form', async (t) => {
+  const answers = [];
+  const { execution, host, send, settled, state, project } = setup(t, async ({ call }) => {
+    answers.push(await call('execute', { command: '_-Export "C:\\out.dwg" _Enter' }));
+    return { text: '내보내기는 확인이 필요합니다.' };
+  });
+  send('cmd-guard');
+  await settled();
+  const waiting = state('cmd-guard');
+  assert.equal(waiting.state, 'needs-confirmation');
+  assert.equal(host.calls.execute.length, 0);
+  assert.equal(answers[0].value.guarded.kind, 'export');
+  const [held] = waiting.result.executions;
+  assert.equal(held.state, 'guarded');
+  assert.equal(held.language, 'command');
+
+  const confirmed = await execution.confirm(project.id, 'cmd-guard', held.executionId);
+  assert.equal(confirmed.state, 'succeeded');
+  const rerun = host.calls.execute.at(-1);
+  assert.equal(rerun.language, 'command');
+  assert.equal(rerun.code, '_-Export "C:\\out.dwg" _Enter');
+  assert.equal(rerun.guard.confirmed, true);
+});
+
+test('Python that purges waits on the card like the C# purge', async (t) => {
+  const answers = [];
+  const { host, send, settled, state } = setup(t, async ({ call }) => {
+    answers.push(
+      await call('execute', {
+        python: 'import scriptcontext as sc\nsc.doc.Layers.Purge(3, True)',
+      }),
+    );
+    return { text: '확인 필요' };
+  });
+  send('py-purge');
+  await settled();
+  assert.equal(host.calls.execute.length, 0);
+  assert.equal(answers[0].value.guarded.kind, 'purge');
+  assert.equal(state('py-purge').state, 'needs-confirmation');
+});

@@ -202,7 +202,7 @@ export class ZwcadSdkExecution {
     };
     const handlers: {
       query: (args?: QueryPageOptions) => Promise<unknown>;
-      execute: (args: { code: string }) => Promise<unknown>;
+      execute: (args: { code?: string }) => Promise<unknown>;
     } = {
       // The project's records beside the drawing (T-062); the drawing's own tools follow.
       ...projectTools,
@@ -216,6 +216,8 @@ export class ZwcadSdkExecution {
         });
       },
       execute: async ({ code }) => {
+        // Only a C# body here; Rhino commands and Python run in direct mode only (ADR-029).
+        if (typeof code !== 'string') throw failure('EXECUTE_FORM_UNSUPPORTED');
         if (signal.aborted) throw failure('CANCELLED');
         if (write && refused?.final) return notExecuted(refused);
         if (attempts >= executionLimits(input).maxHostCommands) throw failure('HOST_COMMAND_LIMIT');
@@ -468,7 +470,7 @@ User request: ${input.body || '첨부한 설계 문맥을 검토해 주세요.'}
       const targetRef = 'zwcad:' + worker.identity.sessionId;
       const handlers: {
         query: (args?: QueryPageOptions) => Promise<unknown>;
-        execute?: (args: { code: string }) => Promise<unknown>;
+        execute?: (args: { code?: string }) => Promise<unknown>;
       } = {
         // The project's records beside the work copy (T-062).
         ...projectTools,
@@ -481,6 +483,8 @@ User request: ${input.body || '첨부한 설계 문맥을 검토해 주세요.'}
       };
       if (input.permission === 'candidate')
         handlers.execute = async ({ code }) => {
+          // Only a C# body here; Rhino commands and Python run in direct mode only (ADR-029).
+          if (typeof code !== 'string') throw failure('EXECUTE_FORM_UNSUPPORTED');
           if (signal.aborted) throw failure('CANCELLED');
           if (uncertain) throw failure('HOST_RESULT_UNKNOWN');
           if (attempts >= executionLimits(input).maxHostCommands)

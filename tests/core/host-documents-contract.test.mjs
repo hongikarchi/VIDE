@@ -148,3 +148,34 @@ test('direct-undo reports not-latest and fingerprint returns the change token', 
   await assert.rejects(channel.directUndo('abc'), { code: 'INVALID_INPUT' });
   assert.deepEqual(await channel.fingerprint(), { ok: true, documentHash: hash, revision: 7 });
 });
+
+// ADR-029 (T-106): the form travels to the plugin; a policy refusal the plugin found is a result.
+test('direct-execute sends a command or Python form and reads the plugin policy refusal', async () => {
+  assert.equal(
+    directExecuteInputSchema.safeParse({ requestId: 'r1', code: 'x', language: 'lisp' }).success,
+    false,
+  );
+  const sent = [];
+  const channel = fake(
+    {
+      'direct-execute': {
+        ok: false,
+        code: 'CODE_POLICY_REJECTED',
+        reverted: true,
+        log: 'Save: Success\n',
+        diagnostics: ['Rhino command not permitted in VIDE: Save (started through an alias)'],
+      },
+    },
+    sent,
+  );
+  const result = await channel.directExecute({
+    requestId: 'r2',
+    code: '_-SelDup _Enter',
+    language: 'command',
+    label: '중복 선택',
+  });
+  assert.equal(sent[0].language, 'command');
+  assert.equal(result.ok, false);
+  assert.equal(result.code, 'CODE_POLICY_REJECTED');
+  assert.match(result.diagnostics[0], /alias/);
+});

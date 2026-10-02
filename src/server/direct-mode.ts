@@ -19,6 +19,7 @@ import {
 import { directRefusal, type DirectRefusal } from '../contracts/direct-refusal.ts';
 import type { LiveLink } from './live-links.ts';
 import { ZWCAD_EXECUTE_WRAPPER } from './zwcad-sdk-execution.ts';
+import { checkExecuteScript, type ExecuteLanguage } from '../contracts/rhino-script-policy.ts';
 
 /** Auto-mode guard: deleting more objects than this in one execute needs the user's confirmation. */
 export const DIRECT_MAX_DELETES = 50;
@@ -33,7 +34,10 @@ export const directGuardKinds = [
 export type DirectGuardKind = (typeof directGuardKinds)[number];
 export interface DirectCommand {
   requestId: string;
+  /** The body: a C# method body, a Rhino command macro or a Python script (`language`). */
   code: string;
+  /** ADR-029: Rhino only; left out, C#. */
+  language?: ExecuteLanguage;
   label: string;
   guard: { confirmed: boolean; maxDeletes: number };
 }
@@ -76,6 +80,8 @@ export interface ExecutionRecord {
   guarded?: { kind: string; detail: string };
   /** Kept only while guarded: [진행] re-runs this body with the guard released. */
   code?: string;
+  /** The body's form when it is not C# (ADR-029: a Rhino command macro or Python). */
+  language?: ExecuteLanguage;
   /** The guarded execution a confirmed run released. */
   confirms?: string;
   /** The document's change token right after this execution (absent when it could not be read). */
@@ -618,7 +624,7 @@ function rhinoGoal(turn: DirectTurn, targetRef: string, linkedNote = '') {
   return `Target is the document open in the user's Rhino 8 (${targetRef}). It is NOT a copy.
 ${
   mode === 'auto'
-    ? `Auto mode: every execute runs directly in that document as ONE undo record; the user can revert it with Rhino Ctrl+Z or VIDE [되돌리기]. Deleting more than ${DIRECT_MAX_DELETES} objects, deleting layers or purging is held back until the user confirms: such an execute returns ok:false with "guarded" and nothing stays applied. Then stop and say what needs confirmation; never split the work to stay under the limit.`
+    ? `Auto mode: every execute runs directly in that document as ONE undo record; the user can revert it with Rhino Ctrl+Z or VIDE [되돌리기]. Deleting more than ${DIRECT_MAX_DELETES} objects, deleting layers, purging or a command that writes files (save, export, print) is held back until the user confirms: such an execute returns ok:false with "guarded" and nothing stays applied. Then stop and say what needs confirmation; never split the work to stay under the limit.`
     : `${PLAN_RULES} There is no execute in this mode.`
 }
 Units are the document's own model units (query returns "units"); sketches and other hosts' geometry are metres, convert explicitly.
@@ -630,7 +636,11 @@ Use query (pages, objectIds) to observe native IDs, layers and bounds${
   }.${
     mode === 'auto'
       ? `
-execute takes a C# method body. The wrapper imports System, System.Linq, Rhino, Rhino.Geometry and supplies RhinoDoc doc and StringBuilder output (its lines come back as log). Do not declare a class or method. Never save, open or export documents, run Rhino commands, show UI, or use files, processes, network or reflection. Return a small JSON-serializable value (at most 16 KiB) to observe results; never Rhino objects. Each successful execute returns undoId and the added/changed/removed objects.
+execute takes exactly one of three forms; each call is ONE undo step whatever the form.
+- code: a C# method body. The wrapper imports System, System.Linq, Rhino, Rhino.Geometry and supplies RhinoDoc doc and StringBuilder output (its lines come back as log). Do not declare a class or method. No Rhino commands, UI, files, processes, network or reflection here. Return a small JSON-serializable value (at most 16 KiB) to observe results; never Rhino objects.
+- command: a Rhino command macro run in this document, e.g. "_-SelDup _Enter" or '_SelLayer "Walls" _Enter _Join'. Use it when a built-in command already does the job (SelDup, Join, Explode, MergeAllFaces, Make2D, Purge). Use English names with "_", the dash forms (-Layer, -Export) so no dialog opens, give every prompt its answer and end with _Enter; a missing answer leaves Rhino waiting. The log lists the commands that ran and their results. Save, export and print wait on the user's confirmation; open, import, close, quit, scripts from disk, options, plug-ins, units and undo are refused.
+- python: a Rhino 8 Python 3 script (import rhinoscriptsyntax as rs, scriptcontext as sc, Rhino; sc.doc is this document; print() comes back as log). Use it for loops and logic that read better in Python. No files, network, processes, os/sys, rs.Command or undo.
+Each successful execute returns undoId and the added/changed/removed objects.
 Keep existing IDs, layers and attributes unless the request changes them; modify objects in place (ModifyAttributes, Replace) rather than delete and redraw.${kept} Work in few, complete executes and check the result with query${turn.driver.vision ? ' or capture_view' : ''}. Compile diagnostics allow correction; after an uncertain result never execute again.`
       : kept
   }
@@ -828,12 +838,38 @@ export async function runDirectTurn(turn: DirectTurn) {
     };
   };
   if (mode === 'auto')
-    handlers.execute = async ({ code, linkId }) => {
-      if (typeof code !== 'string') throw failure('INVALID_INPUT');
+    handlers.execute = async (args) => {
+      const { linkId } = args;
+      // One form per call (ADR-029): a C# body, a Rhino command macro or a Python script.
+      const forms = (['code', 'command', 'python'] as const).filter(
+        (key) => typeof args[key] === 'string',
+      );
+      if (forms.length !== 1) throw failure('INVALID_INPUT');
+      const language: ExecuteLanguage =
+        forms[0] === 'command' ? 'command' : forms[0] === 'python' ? 'python' : 'csharp';
+      const code = args[forms[0]!] as string;
       if (signal.aborted) throw failure('CANCELLED');
       if (uncertain) throw failure('HOST_RESULT_UNKNOWN');
       const doc = await resolve(linkId);
       if (doc.refused?.final) return notExecuted(doc, doc.refused);
+      if (language !== 'csharp' && doc.driver.host !== 'rhino')
+        throw failure('EXECUTE_FORM_UNSUPPORTED');
+      // A command or script the policy refuses never reaches the host; the AI may correct it.
+      const verdict = checkExecuteScript(language, code);
+      if (!verdict.ok) {
+        activity.add(
+          'error',
+          named(doc, '실행 거절 · 허용되지 않는 명령/스크립트 · AI가 수정해 다시 시도'),
+          verdict.diagnostics.join('\n'),
+        );
+        update(state('model'));
+        return {
+          ok: false,
+          executed: false,
+          code: 'CODE_POLICY_REJECTED',
+          diagnostics: verdict.diagnostics,
+        };
+      }
       // An earlier answer in this file was lost and the turn has not read it yet: it is told
       // first and nothing runs, so it does not repeat that work blindly (SPEC-02.13 7).
       const unresolved = told(doc);
@@ -859,12 +895,45 @@ export async function runDirectTurn(turn: DirectTurn) {
       attempts++;
       const executionId = randomUUID();
       const label = directLabel(input.body, attempts);
+      const form =
+        language === 'command' ? ' · Rhino 명령' : language === 'python' ? ' · Python' : '';
       activity.add(
         'execute',
-        named(doc, `${hostLabel(doc.driver.host)} 문서에 바로 실행 ${attempts}회차`),
+        named(doc, `${hostLabel(doc.driver.host)} 문서에 바로 실행 ${attempts}회차${form}`),
         code,
       );
       update(state('host'));
+      const record = {
+        executionId,
+        host: doc.driver.host,
+        target: doc.driver.target,
+        file: doc.file,
+        label,
+        at: new Date().toISOString(),
+      };
+      const held = (detail: { kind: string; detail: string }) => {
+        guarded = {
+          ...record,
+          at: new Date().toISOString(),
+          state: 'guarded',
+          undoId: null,
+          guarded: { kind: detail.kind, detail: detail.detail },
+          code,
+          ...(language === 'csharp' ? {} : { language }),
+        };
+        executions.push(guarded);
+        turn.onExecution?.(guarded);
+        activity.add('error', named(doc, `확인 필요 · ${detail.detail} · 되돌려 둠`));
+        update(state('host'));
+        return {
+          ok: false,
+          guarded: guarded.guarded,
+          reverted: true,
+          next: 'Nothing stays applied. Stop here and tell the user what needs confirmation; the card re-runs this execute after they confirm.',
+        };
+      };
+      // A command that writes files or purges waits on the card before anything runs.
+      if (verdict.guard && input.guardConfirmed !== true) return held(verdict.guard);
       // A lost answer leaves the document state unknown: no further execute in this turn.
       uncertain = true;
       inflight = doc;
@@ -874,6 +943,7 @@ export async function runDirectTurn(turn: DirectTurn) {
         outcome = await doc.driver.execute({
           requestId: executionId,
           code,
+          ...(language === 'csharp' ? {} : { language }),
           label,
           guard: { confirmed: input.guardConfirmed === true, maxDeletes: DIRECT_MAX_DELETES },
         });
@@ -909,33 +979,7 @@ export async function runDirectTurn(turn: DirectTurn) {
       // The host answered this one: an earlier passing refusal (busy) no longer describes it.
       doc.refused = undefined;
       if (refusedKey === doc.key) refused = undefined;
-      const record = {
-        executionId,
-        host: doc.driver.host,
-        target: doc.driver.target,
-        file: doc.file,
-        label,
-        at: new Date().toISOString(),
-      };
-      if (!outcome.ok && outcome.guarded) {
-        guarded = {
-          ...record,
-          state: 'guarded',
-          undoId: null,
-          guarded: { kind: outcome.guarded.kind, detail: outcome.guarded.detail },
-          code,
-        };
-        executions.push(guarded);
-        turn.onExecution?.(guarded);
-        activity.add('error', named(doc, `확인 필요 · ${outcome.guarded.detail} · 되돌려 둠`));
-        update(state('host'));
-        return {
-          ok: false,
-          guarded: guarded.guarded,
-          reverted: true,
-          next: 'Nothing stays applied. Stop here and tell the user what needs confirmation; the card re-runs this execute after they confirm.',
-        };
-      }
+      if (!outcome.ok && outcome.guarded) return held(outcome.guarded);
       const refusal = !outcome.ok && !outcome.guarded && directRefusal(doc.driver.host, outcome);
       if (refusal) return notExecuted(doc, refusal, true);
       if (!outcome.ok) {

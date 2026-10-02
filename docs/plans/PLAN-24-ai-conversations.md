@@ -5,7 +5,7 @@ status: review
 version: 0.53
 updated: 2026-10-02
 owner: agent:claude
-related: [PLAN, PLAN-22, PLAN-23, PLAN-25, PLAN-26, PLAN-02, PLAN-05, PLAN-08, PLAN-19, FR-25, FR-24, FR-18, FR-10, FR-11, FR-12, AC-46, AC-47, AC-48, AC-38, SPEC-02, SPEC-07, ARCH-01, ARCH-03, ADR-021, ADR-014, ADR-022, ADR-025, ADR-026, ADR-027, ADR-028, RESEARCH-10, RESEARCH-11]
+related: [PLAN, PLAN-22, PLAN-23, PLAN-25, PLAN-26, PLAN-02, PLAN-05, PLAN-08, PLAN-19, FR-25, FR-24, FR-18, FR-10, FR-11, FR-12, AC-46, AC-47, AC-48, AC-38, SPEC-02, SPEC-07, ARCH-01, ARCH-03, ADR-021, ADR-014, ADR-022, ADR-025, ADR-026, ADR-027, ADR-029, ADR-028, RESEARCH-10, RESEARCH-11]
 ---
 
 # AI 대화 세션·동시 진행·말로 하는 경로 판정 1차
@@ -349,6 +349,22 @@ related: [PLAN, PLAN-22, PLAN-23, PLAN-25, PLAN-26, PLAN-02, PLAN-05, PLAN-08, P
 - **완료:** 위 시험 통과.
 - **상태(2026-10-01):** 구현·단위·브라우저 시험 완료(브랜치 `feature/fast-new-conversation`). 설치본 확인은 묶음 릴리스 때.
 
+### T-106 · AI의 Rhino 명령·Python 실행 {#t-106}
+
+- **목적/기준:** 2026-10-02 사용자 결정 "Rhino 명령, Python은 열어줘야지"([ADR-029](../decisions/ADR-029-rhino-commands-python.md), RESEARCH-11 §3의 '명령을 쓰지 않는다'를 대체). 자동 모드의 열린 Rhino 문서에서 `execute`가 C# 말고도 Rhino 명령 매크로·Python 3 스크립트를 받는다. 실행 하나가 되돌리기 한 단계이고 위험 명령은 거절하거나 확인 카드에 건다. 기준: SPEC-02.11의 4·.13의 4, ARCH-01 §4 「바로 적용 경로」, HOST-RHINO H-RHINO-08.
+- **변경 범위:**
+  - 엔진: `src/contracts/rhino-script-policy.ts`(명령 거절·확인 목록, 명령 자리 판정, Python 금지 패턴, `checkExecuteScript`), `src/server/agent-tools.ts`(`execute`의 `code`·`command`·`python` 중 하나, `EXECUTE_FORM_INVALID`·`EXECUTE_FORM_UNSUPPORTED`와 안내), `src/server/direct-mode.ts`(형식 판정, 실행 전 정책 거절·보류 행, `language`를 호스트와 보류 행에 실음, 목표 문장), `src/server/execution.ts`·`sdk-execution.ts`(드라이버·[진행]이 `language`를 넘김), 작업 사본·ZWCAD·연계 처리기의 C# 전용 검사, `src/contracts/direct-refusal.ts`(`DOCUMENT_NOT_ACTIVE`), `hosts/rhino/application-contract.ts`(`language`)
+  - 플러그인: `hosts/rhino/worker/DirectScripts.cs`(같은 목록, `RhinoApp.RunScript`, `Rhino.Runtime.Code` Python 3, 실행 중 시작된 명령 확인), `DirectExecution.cs`(세 형식을 같은 기록 안에서 실행, 따로 남은 기록 묶음 되돌리기), `VIDE.Worker.csproj`(`Rhino.Runtime.Code.dll` 참조)
+  - 지시: `src/ai/instructions/modeling.md`·`modeling-rhino.md`(언제 명령·C#·Python을 쓰는지, 실행 하나가 되돌리기 한 단계)
+- **선행:** T-070·T-072(바로 실행·실행 기록), T-093(`linkId`).
+- **검증:**
+  - 정상: `tests/server/direct-mode.test.mjs` — 명령·Python이 `language`를 달고 호스트에 가서 각각 기록 하나(`undoId`)로 남음, 형식 둘·없음은 `EXECUTE_FORM_INVALID`, 내보내기 명령은 호스트를 부르지 않고 보류 → [진행]이 같은 형식·`confirmed`로 실행, Python purge 보류
+  - 실패: 같은 시험 — 열기·디스크 스크립트 명령과 `import os`·`open()` Python은 호스트를 부르지 않고 `CODE_POLICY_REJECTED`와 진단. `tests/server/rhino-script-policy.test.mjs` — 옵션 이름과 겹치는 명령(`-Layer _New`, `-NamedView _Save`, 폴리라인 `_Undo`·`_Close`)은 통과, 거절·확인 목록, Python 허용·거절 예, 플러그인 목록이 엔진 목록과 같음. `tests/core/host-documents-contract.test.mjs` — 채널이 `language`를 보내고 플러그인의 정책 거절(별칭으로 시작된 명령)을 결과로 읽음
+  - 빌드: `dotnet build hosts/rhino/worker/VIDE.Worker.csproj`(경고·오류 0)
+  - 실제 Rhino(남음): 합성 문서에서 `_-SelDup _Enter` 뒤 [되돌리기]와 Ctrl+Z가 한 단계인지, 명령 기록이 합쳐지지 않으면 묶음 되돌리기, Python 3의 `rs.AddPoint`·`print` 로그·첫 실행 시간, `_-Export` 보류 → [진행], 별칭 거절 명령의 되돌림
+- **완료:** 위 자동 시험·빌드 통과와 실제 Rhino 확인.
+- **상태(2026-10-02):** 구현·단위 시험·플러그인 빌드 완료(브랜치 `feat/rhino-commands`, 설치 전). 남음: 실제 Rhino 8 확인(에이전트는 Rhino를 열지 않으므로 사용자 확인 또는 설치본 묶음 때), ADR-029 결정 2~5의 사용자 확인.
+
 ## 여러 파일 조율 {#multi-file}
 
 사용자 결정(2026-10-01, [ADR-027](../decisions/ADR-027-multi-file-coordination.md)): AI는 한 요청에서 그 프로젝트의 열린 연결 파일을 함께 읽고 고치며, 되돌리기는 요청 단위이고, 실패한 요청은 다른 파일의 적용분을 자동으로 되돌린다(전부 또는 전무). 기준: SPEC-01.11의 5, SPEC-02.6·.9의 3·.13의 6·.16, ARCH-01 §3·§4 「여러 파일 턴」, Design SCR-03 결과. 1차 범위는 Rhino 연결 문서가 대상인 바로 편집 턴이다(ZWCAD 대상 턴은 범위 밖).
@@ -431,7 +447,7 @@ related: [PLAN, PLAN-22, PLAN-23, PLAN-25, PLAN-26, PLAN-02, PLAN-05, PLAN-08, P
 - T-059와 T-060은 바로 시작할 수 있다. T-060은 세션과 독립이다.
 - T-061은 T-060·PLAN-22 T-045 뒤다(세션 이어 실행은 T-059 합격 항목만). T-062는 T-061 뒤다. PLAN-22 T-063(만들기 대화)이 이 둘을 쓴다.
 - 마일스톤 표기는 S-06 결과를 먼저 보이는 순서(M5)이지만, 선행이 갖춰진 티켓은 먼저 해도 된다.
-- 바로 적용: T-069 → T-070·T-071 → T-072 → T-073·T-074. T-075는 독립이다. 실제 호스트 확인은 플러그인 재빌드·설치 뒤 묶어서 한다.
+- 바로 적용: T-069 → T-070·T-071 → T-072 → T-073·T-074. T-075는 독립이다. T-106(Rhino 명령·Python)은 T-072·T-093 뒤다. 실제 호스트 확인은 플러그인 재빌드·설치 뒤 묶어서 한다.
 - 여러 파일 조율: T-062·T-072 → T-092 → T-093 → T-094 → T-102.
 - AI CLI 동등성: T-104·T-105는 서로 독립이며 T-061·T-075 뒤다.
 

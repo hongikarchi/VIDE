@@ -124,7 +124,7 @@ export async function runLinked(options: {
       ...projectTools,
       query: (args: { targetRef: string } & QueryPageOptions) => dispatch('query', args),
       ...(request.input.permission === 'candidate'
-        ? { execute: (args: { targetRef: string; code: string }) => dispatch('execute', args) }
+        ? { execute: (args: { targetRef: string; code?: string }) => dispatch('execute', args) }
         : {}),
     };
     scope = tools.issue({

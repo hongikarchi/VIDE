@@ -2,10 +2,10 @@
 id: RESEARCH-11
 title: VIDE 안의 AI와 터미널 Claude Code의 차이 — 원인·물결별 조치·A/B 비교 방법·스킬 이식표
 status: draft
-version: 0.1
-updated: 2026-09-30
+version: 0.2
+updated: 2026-10-02
 owner: agent:claude
-related: [FR-25, SPEC-02, ARCH-01, ADR-014, ADR-021, PLAN-24, RESEARCH-10, RESEARCH-04]
+related: [FR-25, SPEC-02, ARCH-01, ADR-014, ADR-021, PLAN-24, RESEARCH-10, RESEARCH-04, ADR-029]
 ---
 
 # VIDE 안의 AI와 터미널 Claude Code의 차이
@@ -47,7 +47,7 @@ related: [FR-25, SPEC-02, ARCH-01, ADR-014, ADR-021, PLAN-24, RESEARCH-10, RESEA
 
 - **격리는 유지한다.** 공급자 skill·plugin·전역 MCP·개인 설정은 계속 끈다. 켜면 AI가 사용자가 열어 둔 Rhino에 직접 써서 작업 사본·후보·반영을 우회한다(RESEARCH-10 §1.2 4행). 필요한 skill은 내용을 묶음 안으로 옮긴다.
 - **쓰기 경로는 작업 사본 → 후보 → 반영이다(ADR-014).** 터미널처럼 열린 문서에 바로 쓰지 않는다. ZWCAD 직접 편집은 기존 규칙(SPEC-02)을 그대로 따른다.
-- **Rhino 명령은 쓰지 않는다.** `_-Purge`·`_-Export`·`_SelDup`이 맡던 일은 RhinoCommon으로 대신하거나 보고만 한다. 내보내기 실행은 사용자의 동작이다.
+- **Rhino 명령은 쓰지 않는다.** `_-Purge`·`_-Export`·`_SelDup`이 맡던 일은 RhinoCommon으로 대신하거나 보고만 한다. 내보내기 실행은 사용자의 동작이다. (2026-10-02 [ADR-029](../decisions/ADR-029-rhino-commands-python.md)로 대체: 자동 모드의 열린 Rhino 문서에서는 AI가 Rhino 명령과 Python 3도 실행한다.)
 - 모델·effort 선택은 Jev가 정한 대로 둔다(RESEARCH-10 §8.3).
 
 ## 4. A/B 비교 방법(Rhino가 비어 있을 때 실행)

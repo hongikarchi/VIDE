@@ -37,6 +37,12 @@ const refusals: Record<string, { final: boolean; reason: (host: DirectHostName) 
     reason: (host) =>
       `${hostLabel(host)}가 되돌리기 기록을 시작하지 못해 실행하지 않았습니다. 진행 중인 명령을 끝낸 뒤 다시 요청하세요.`,
   },
+  // ADR-029: Rhino commands and Python act on Rhino's active document only.
+  DOCUMENT_NOT_ACTIVE: {
+    final: false,
+    reason: (host) =>
+      `연결한 문서가 ${hostLabel(host)}의 활성 문서가 아니라 명령·Python을 실행하지 않았습니다. 그 문서 창을 앞으로 가져온 뒤 다시 요청하세요.`,
+  },
   TARGET_MISMATCH: { final: true, reason: reconnect },
   STALE_CONNECTION: { final: true, reason: reconnect },
   DOCUMENT_MISMATCH: { final: true, reason: reconnect },

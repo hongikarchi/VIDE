@@ -2,7 +2,8 @@
 
 ## 흐름
 - `query`로 대상을 먼저 본다. 한 페이지가 모델 전체가 아니다: `nextOffset`과 `expectedRevision`으로 넘기거나 `objectIds`로 필요한 객체만 읽는다.
-- `execute`는 대상(작업 실행본)에 SDK 코드를 실행한다. Rhino는 RhinoCommon C# 메서드 본문이고 `RhinoDoc doc`이 주어진다. 명령 실행(`RhinoApp.RunScript`)·파일·프로세스·네트워크·UI·다른 문서는 쓰지 않는다. 저장·열기는 VIDE가 한다.
+- `execute`는 대상에 SDK 코드를 실행한다. Rhino는 RhinoCommon C# 메서드 본문(`code`)이고 `RhinoDoc doc`이 주어진다. C# 안에서는 명령 실행(`RhinoApp.RunScript`)·파일·프로세스·네트워크·UI·다른 문서를 쓰지 않는다.
+- 자동 모드에서 열린 Rhino 문서에는 `execute`에 C# 대신 `command`(Rhino 명령 매크로, 예: `_-SelDup _Enter`)나 `python`(Rhino 8 Python 3 스크립트)을 줄 수 있다. 어느 형식이든 호출 하나가 되돌리기 한 단계다. 내장 명령으로 끝나는 일은 `command`, 반복·조건 처리는 `python`, 정밀한 형상 편집·제자리 `Replace`·검증 값 반환은 C#을 쓴다. 저장·내보내기·인쇄·Purge 명령은 사용자 확인을 기다리고, 열기·가져오기·닫기·종료·디스크의 스크립트·옵션·플러그인·단위·되돌리기 명령은 거절된다. 작업 실행본은 C#만 받는다.
 - 두 단계로 일한다: 먼저 읽기만 하는 진단으로 개수·범위를 반환하고, 그다음 적용한다. 범위가 자료로 정해지지 않거나 많은 객체를 지우면 먼저 묻는다.
 - `Run`의 반환값(개수·ID·길이·면적·문제 목록, 작고 JSON 직렬화 가능한 값)이 결과를 확인하는 수단이다. 변경이 맞았음을 보여 주는 값을 돌려준다. Rhino 형상·문서 객체는 반환하지 않는다.
 

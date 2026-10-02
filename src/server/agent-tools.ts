@@ -86,8 +86,16 @@ const definitions = {
   },
   execute: {
     description:
-      'Run SDK code in a document: with linkId any open linked file of the project (the goal lists them; pick the file or files the request is about), without it the turn\'s starting document. In Auto mode it is the open user document: each call runs directly in it as ONE undo record (Ctrl+Z / VIDE [되돌리기] reverts it) and returns undoId and the added/changed/removed objects. Bulk deletion above the limit, layer deletion and purge are held back: such a call returns ok:false with "guarded" and nothing stays applied; then stop and tell the user what needs confirmation. Plan mode has no execute. Each file keeps its own undo records.',
-    schema: z.object({ targetRef: target, linkId, code: z.string().min(1).max(65536) }).strict(),
+      'Run work in a document: with linkId any open linked file of the project (the goal lists them; pick the file or files the request is about), without it the turn\'s starting document. Give exactly one of: code (an SDK C# method body), command (a Rhino command macro such as "_-SelDup _Enter"; Auto mode on an open Rhino document only) or python (a Rhino 8 Python 3 script using Rhino, rhinoscriptsyntax and scriptcontext.doc; Auto mode on an open Rhino document only). In Auto mode it is the open user document: each call runs directly in it as ONE undo record (Ctrl+Z / VIDE [되돌리기] reverts it) and returns undoId and the added/changed/removed objects. Bulk deletion above the limit, layer deletion, purge and commands that write files (save, export, print) are held back: such a call returns ok:false with "guarded" and nothing stays applied; then stop and tell the user what needs confirmation. Commands or Python that open, close or quit documents, read files or scripts from disk, change options, plug-ins or units, or control undo are refused (CODE_POLICY_REJECTED). Plan mode has no execute. Each file keeps its own undo records.',
+    schema: z
+      .object({
+        targetRef: target,
+        linkId,
+        code: z.string().min(1).max(65536).optional(),
+        command: z.string().min(1).max(4096).optional(),
+        python: z.string().min(1).max(65536).optional(),
+      })
+      .strict(),
   },
   // The AI's eyes (PLAN-24): an image of the target's model view and measurements of its objects.
   capture_view: {
@@ -480,6 +488,7 @@ if (
   throw new Error('agent tool names differ from their definitions');
 const knownErrors = new Set([
   'INVALID_INPUT',
+  'EXECUTE_FORM_UNSUPPORTED',
   'QUERY_RESULT_TOO_LARGE',
   'STALE_REFERENCE',
   'HOST_OWNERSHIP_MISMATCH',
@@ -522,6 +531,10 @@ const errorHints: Record<string, string> = {
     'That linked file is not open and connected now. Read it from its stored Sync with links_layers and sync_sample, do not edit it, and tell the user it must be open in its host to be edited.',
   DOCUMENT_LOCKED:
     'Another running task is writing that file. Nothing ran there; do not retry it in this turn. Tell the user.',
+  EXECUTE_FORM_INVALID:
+    'Nothing ran. Give exactly one of code (C#), command (a Rhino command macro) or python (a Python 3 script).',
+  EXECUTE_FORM_UNSUPPORTED:
+    'Nothing ran. This target runs only a C# body in code; Rhino commands and Python run only in Auto mode on an open Rhino document.',
 };
 /** LINK_NOT_LIVE from a turn that never reaches other files live (the file may well be open). */
 const noLinksHint =
@@ -780,6 +793,12 @@ export class AgentTools {
       'targetRef' in definitions[name].schema.shape
     )
       return error('TARGET_MISMATCH');
+    // execute takes one form: a C# body, a Rhino command macro or a Python script (ADR-029).
+    if (
+      name === 'execute' &&
+      ['code', 'command', 'python'].filter((key) => typeof args[key] === 'string').length !== 1
+    )
+      return error('EXECUTE_FORM_INVALID');
     const controlled = controlledTools.has(name);
     if (controlled && run.busy) return error('AGENT_BUSY');
     if (run.remaining <= 0) return error('AGENT_CALL_LIMIT');

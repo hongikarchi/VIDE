@@ -2000,6 +2000,7 @@ export class Execution {
       outcome = await driver.execute({
         requestId: runId,
         code: entry.code,
+        ...(entry.language ? { language: entry.language } : {}),
         label: entry.label,
         guard: { confirmed: true, maxDeletes: DIRECT_MAX_DELETES },
       });

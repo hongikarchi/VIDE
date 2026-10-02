@@ -25,6 +25,11 @@ export const directExecuteInputSchema = z.object({
   requestId: z.string().min(1).max(100),
   /** C# method body; `doc` (the document, its own units) and `output` (StringBuilder log) are in scope. */
   code: z.string().min(1).max(65536),
+  /**
+   * ADR-029: how `code` runs. csharp (default) as above; command, a Rhino command macro run by
+   * RhinoApp.RunScript; python, a Rhino 8 Python 3 script (scriptcontext.doc is the document).
+   */
+  language: z.enum(['csharp', 'command', 'python']).optional(),
   label: z.string().max(80).optional(),
   guard: z
     .object({

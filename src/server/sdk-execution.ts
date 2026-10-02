@@ -248,9 +248,19 @@ export class SdkExecution {
     target: HostTarget,
     code: string,
     guard: { confirmed: boolean; maxDeletes: number },
-    { requestId, label }: { requestId: string; label: string },
+    {
+      requestId,
+      label,
+      language,
+    }: { requestId: string; label: string; language?: 'csharp' | 'command' | 'python' },
   ) {
-    return this.editors.directExecute(target, { requestId, code, label, guard });
+    return this.editors.directExecute(target, {
+      requestId,
+      code,
+      label,
+      guard,
+      ...(language && language !== 'csharp' ? { language } : {}),
+    });
   }
   /** [되돌리기]: host undo of that record, only while it is the document's latest one. */
   undoDirect(target: HostTarget, undoId: string) {
@@ -601,7 +611,7 @@ export class SdkExecution {
       const targetRef = 'rhino:' + worker.identity.sessionId;
       const handlers: {
         query: (args?: QueryPageOptions) => Promise<unknown>;
-        execute?: (args: { code: string }) => Promise<unknown>;
+        execute?: (args: { code?: string }) => Promise<unknown>;
       } = {
         query: async (args) => {
           const result = await worker!.query();
@@ -622,6 +632,8 @@ export class SdkExecution {
       );
       if (input.permission === 'candidate')
         handlers.execute = async ({ code }) => {
+          // Only a C# body here; Rhino commands and Python run in direct mode only (ADR-029).
+          if (typeof code !== 'string') throw failure('EXECUTE_FORM_UNSUPPORTED');
           if (signal.aborted) throw failure('CANCELLED');
           if (uncertain) throw failure('HOST_RESULT_UNKNOWN');
           if (attempts >= executionLimits(input).maxHostCommands)

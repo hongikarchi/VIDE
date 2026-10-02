@@ -1,7 +1,11 @@
 # Rhino know-how
 
 ## Where code runs
-- `execute` code is the body of `object Run(RhinoDoc doc)` with `using System; System.Linq; Rhino; Rhino.Geometry`. Use full names for other namespaces (`Rhino.DocObjects`, `Rhino.Render`). Commands, `RhinoApp`, file I/O, UI and reflection are rejected (no `_SelDup`, `_Purge`, `_Export`): use RhinoCommon.
+- `execute` `code` is the body of `object Run(RhinoDoc doc)` with `using System; System.Linq; Rhino; Rhino.Geometry`. Use full names for other namespaces (`Rhino.DocObjects`, `Rhino.Render`). Inside C#, commands, `RhinoApp`, file I/O, UI and reflection are rejected.
+- In Auto mode on an open Rhino document, `execute` also takes `command` (a Rhino command macro) or `python` (a Rhino 8 Python 3 script); a working copy takes C# only. Each call is one undo step, whatever the form. Pick the form:
+  - `command` when a built-in command already does the job (`_-SelDup _Enter`, `_SelLayer "A" _Enter _Join`, `_MergeAllFaces`, `_-Purge`). Dash forms, English names with `_`, every prompt answered, end with `_Enter`. Save/export/print and purge wait on the user's confirmation; open, import, close, quit, scripts from disk, options, plug-ins, units and undo are refused.
+  - `python` for loops and logic that read better in Python, with `rhinoscriptsyntax` and `scriptcontext.doc`. No files, network, processes, `os`/`sys`, `rs.Command` or undo.
+  - `code` (C#) for exact geometry work, in-place `Replace`, attribute edits and anything that must return a checked value.
 - Return a small object from `Run` (counts, ids, lengths, areas, problems): it is how you check the result.
 - The target is a working copy; the user's file changes only when the user applies the candidate. Never say the file was changed, saved or exported.
 - A working copy made by VIDE import is in meters: never change `ModelUnitSystem`. An editing copy of the user's file keeps that file's units: read `units` from `query` and convert. Use `doc.ModelAbsoluteTolerance`. Angles are radians (`ModelAngleToleranceRadians`).
@@ -41,7 +45,7 @@
 
 ## Document housekeeping
 - Purge unused block definitions, empty groups and empty layers, deepest layers first. Skip the current layer and layers that hold block-definition geometry.
-- Linetypes, hatch patterns and dimension styles need `_Purge`, which is not available here. Report them.
+- Linetypes, hatch patterns and dimension styles need `_Purge`: in Auto mode send it as a `command` (it waits on the user's confirmation, since purge cannot be undone); in a working copy report them.
 - A layer without a material gets a white matte PBR material named after the layer. Create the PBR render content directly (`PhysicallyBasedMaterialType`, base colour white, metallic 0, roughness 1). Not `CreateBasicMaterial` (it drops PBR). Purge before you add materials.
 
 ## Preparing exports (the export itself is the user's action)
