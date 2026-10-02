@@ -16,7 +16,7 @@ import {
   dateLabel,
   isoDate,
   monthOf,
-  parseAgendaText,
+  parseAgendaDraft,
   shortDate,
 } from './agenda-text.ts';
 import { AgendaCalendar } from './dashboard-calendar.tsx';
@@ -143,7 +143,7 @@ export function AgendaToday({ projectId, shown }: { projectId: string; shown: nu
     const start = view === 'calendar' && picked ? `${picked} ` : '';
     setDraft(start);
     adding.current = adding.current.then(async () => {
-      if ((await write(base, 'POST', parseAgendaText(typed, new Date()))) !== true)
+      if ((await write(base, 'POST', parseAgendaDraft(typed, new Date()))) !== true)
         setDraft((now) => (now.trim() && now !== start ? now : typed));
     });
   };
@@ -374,7 +374,7 @@ export function AgendaToday({ projectId, shown }: { projectId: string; shown: nu
 
   const preview =
     draft.trim() && !/^\d{4}-\d{2}-\d{2}$/.test(draft.trim())
-      ? parseAgendaText(draft, now)
+      ? parseAgendaDraft(draft, now)
       : undefined;
   return (
     <section className="dash-section dash-agenda" aria-label="오늘">

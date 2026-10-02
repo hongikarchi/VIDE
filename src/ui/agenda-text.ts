@@ -107,15 +107,40 @@ function clock(
   return [hour, minute];
 }
 
-/** '마감'/'회의'/'미팅' in the words ('회의록' is not a meeting). */
-const DEADLINE_WORD = /마감/;
-const MEETING_WORD = /회의(?!록)|미팅/;
+/**
+ * '마감' as a word of its own ('설계 도서 마감', '마감일은 금요일'), not the finishing work of a
+ * building: '마감재', '외부 마감 상세', '마감 공사' are not a 마감. '회의'/'미팅' ('회의록',
+ * '회의실' are not a meeting).
+ */
+const FINISH_WORK = '상세|디테일|공사|공정|작업|자재|재료|도면|면|선|색|부위|부분|계획|마무리';
+const DEADLINE_WORD = new RegExp(
+  `${START}마감(?:일|날)?(?:까지|이다|임|은|는|이|을|에)?(?=$|\\s|[,.!])(?!\\s*(?:${FINISH_WORK})(?=$|\\s|[,.]|은|는|이|을|의|에|및|과|와))`,
+);
+const MEETING_WORD = /회의(?!록|실)|미팅/;
 
 /**
  * Reads the first date and the first time in the text (today = the PC's local day), and the kind:
  * '까지' right after the date or time, or the word '마감', is a 마감; '회의'/'미팅' a 회의; else 할 일.
  */
 export function parseAgendaText(input: string, now = new Date()): ParsedAgenda {
+  return readAgenda(input, now).parsed;
+}
+
+const PICKED_DATE = /^(\d{4}-\d{2}-\d{2})\s+/;
+/**
+ * The add box on the calendar starts with the picked day ('2026-10-07 '). A date the user typed
+ * after it wins ('금요일까지 보고서' stays a 마감 on Friday); otherwise the picked day is the date.
+ */
+export function parseAgendaDraft(draft: string, now = new Date()): ParsedAgenda {
+  const picked = PICKED_DATE.exec(draft);
+  if (picked) {
+    const own = readAgenda(draft.slice(picked[0].length), now);
+    if (own.dateRead) return own.parsed;
+  }
+  return parseAgendaText(draft, now);
+}
+
+function readAgenda(input: string, now: Date): { parsed: ParsedAgenda; dateRead: boolean } {
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   let text = input;
   let date: string | null = null,
@@ -143,9 +168,11 @@ export function parseAgendaText(input: string, now = new Date()): ParsedAgenda {
   const kind: AgendaKind =
     until || DEADLINE_WORD.test(input) ? 'deadline' : MEETING_WORD.test(input) ? 'meeting' : 'task';
   // Only a date or a time and no words left: keep what was typed as the text too.
-  if ((!date && !time) || !rest) return { text: input.trim(), date, time, kind };
+  const dateRead = Boolean(date);
+  if ((!date && !time) || !rest)
+    return { parsed: { text: input.trim(), date, time, kind }, dateRead };
   if (time && !date) date = isoDate(today);
-  return { text: rest, date, time, kind };
+  return { parsed: { text: rest, date, time, kind }, dateRead };
 }
 
 /** Where an item stands against today (SPEC-01.14 3). */

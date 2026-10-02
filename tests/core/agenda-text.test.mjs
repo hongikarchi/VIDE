@@ -11,6 +11,7 @@ import {
   monthDays,
   monthLabel,
   monthOf,
+  parseAgendaDraft,
   parseAgendaText,
   shiftMonth,
 } from '../../src/ui/agenda-text.ts';
@@ -106,6 +107,42 @@ test("kinds: '까지' is a 마감 (not dropped), '회의'/'미팅' a 회의, oth
   assert.equal(read('이번주 월요일 회의록 정리').kind, 'task');
   assert.equal(read('금요일 도면 제출').kind, 'task');
   assert.equal(read('내일부터 현장 상주').kind, 'task');
+});
+
+test("'마감' only as a word of its own: the finishing work of a building is not a 마감", () => {
+  assert.equal(read('내일 3시 외벽 마감재 회의').kind, 'meeting');
+  assert.equal(read('마감재 샘플 받기').kind, 'task');
+  assert.equal(read('금요일 내부 마감 상세 검토').kind, 'task');
+  assert.equal(read('외부 마감 공사 일정 확인').kind, 'task');
+  assert.equal(read('회의실 예약').kind, 'task');
+  assert.equal(read('설계 도서 마감').kind, 'deadline');
+  assert.equal(read('입찰 마감일은 금요일').kind, 'deadline');
+  assert.equal(read('보고서 마감, 금요일').kind, 'deadline');
+  assert.equal(read('마감 회의').kind, 'deadline');
+});
+
+test('the calendar add box: a date the user typed wins over the picked day', () => {
+  const draft = (text) => parseAgendaDraft(text, now);
+  assert.deepEqual(draft('2026-10-07 금요일까지 보고서'), {
+    text: '보고서',
+    date: '2026-10-02',
+    time: null,
+    kind: 'deadline',
+  });
+  assert.deepEqual(draft('2026-10-07 설비 미팅'), {
+    text: '설비 미팅',
+    date: '2026-10-07',
+    time: null,
+    kind: 'meeting',
+  });
+  assert.deepEqual(draft('2026-10-07 3시 현장 점검'), {
+    text: '현장 점검',
+    date: '2026-10-07',
+    time: '15:00',
+    kind: 'task',
+  });
+  assert.equal(draft('2026-10-07 10/9 견적 회신').date, '2026-10-09');
+  assert.equal(draft('내일 구조 검토').date, '2026-10-02');
 });
 
 test('where an item stands, its label and the AI notice', () => {
