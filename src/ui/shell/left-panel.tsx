@@ -3,12 +3,10 @@
 // layout slice (src/ui/store/layout.ts); src/ui/app/left.ts fills the slice. Kept imperative:
 // #project-heading and #host-document-controls (their own React roots), #objects (the object list
 // adapter), the import button and the hidden host select and file input (wired in app/left.ts).
-// Every direct child of the <aside> renders unconditionally: the status lines (StatusLines) leave
-// it at start, so React must never need them as an insertion point.
+// The three status lines live in the settings dialog's status tab (shell/status-lines.tsx).
 import { memo } from 'react';
 import { useStore } from '../store/core.ts';
 import { layoutState, selectSection, type HistoryRow, type Section } from '../store/layout.ts';
-import { StatusLines } from './status-lines.tsx';
 
 const SECTIONS: [Section, string][] = [
   ['document-tree', '작업 문서'],
@@ -155,7 +153,6 @@ export const LeftPanel = memo(function LeftPanel() {
           <summary>작업 이력</summary>
           <TaskHistory />
         </details>
-        <StatusLines />
       </aside>
     </>
   );

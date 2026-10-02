@@ -1,14 +1,10 @@
-// StatusLines (PLAN-26 T-113, region E): the three status lines `#connection-status`,
+// Status lines (PLAN-26 T-113, region E): the three status lines `#connection-status`,
 // `#host-status` and `#auth-status`, drawn from store/session.ts. They live in the settings dialog's
 // status tab (shell/settings-dialog.tsx renders them there; before the move they sat in #left and
-// were moved at start). LeftPanel still places <StatusLines/> in #left, where it renders nothing.
+// were moved at start).
 import { memo } from 'react';
 import { useStore } from '../store/core.ts';
 import { sessionState } from '../store/session.ts';
-
-export const StatusLines = memo(function StatusLines() {
-  return null;
-});
 
 /** The lines themselves, in the status tab's connection section. */
 export const ConnectionLines = memo(function ConnectionLines() {

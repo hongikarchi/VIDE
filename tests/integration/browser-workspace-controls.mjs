@@ -230,7 +230,7 @@ try {
       document.querySelector('#context').textContent.includes(name),
     ),
   );
-  // A batch over the limits is refused whole (here: more than 20 files in one request).
+  // There is no attachment count cap (T-121): a batch of 18 more files is attached whole.
   await page.locator('#files').setInputFiles(
     Array.from({ length: 18 }, (_, i) => ({
       name: `note-${i}.txt`,
@@ -238,8 +238,10 @@ try {
       buffer: Buffer.from('note ' + i),
     })),
   );
-  await page.waitForFunction(() => document.querySelector('#message').textContent.includes('20개'));
-  assert.equal(await page.locator('#context .chip').filter({ hasText: 'note-0.txt' }).count(), 0);
+  await page.waitForFunction(() =>
+    document.querySelector('#message').textContent.includes('파일 18개를 첨부했습니다'),
+  );
+  assert.equal(await page.locator('#context .chip').filter({ hasText: 'note-17.txt' }).count(), 1);
   // A pasted image becomes an attachment with a small preview served by the engine.
   await page.locator('#body').focus();
   await page.evaluate((png) => {
@@ -267,6 +269,7 @@ try {
       ['valid.txt', 'text', true, false],
       ['plan.pdf', 'pdf', true, false],
       ['model.3dm', 'rhino-3dm', true, false],
+      ...Array.from({ length: 18 }, (_, i) => [`note-${i}.txt`, 'text', true, false]),
       ['pasted.png', 'image', true, false],
     ],
   );
