@@ -557,81 +557,84 @@ let connectedTarget: HostTarget | undefined;
 let panelUnlinking = false;
 // Request whose display is refreshed in place (Live Sync): keep the camera, rebuild only changes.
 let liveRefresh: string | undefined;
-const liveReplySchema = z.union([
-  z.object({ resync: z.literal(true) }),
-  z.object({ retry: z.string() }),
+/** The revision of each shown Sync this page holds; the engine raises it in place (T-084). */
+const heldRevision = new Map<string, number>();
+/** The display revision the links list gives a request now (none: not a file's shown Sync). */
+const listedRevision = (id: string) =>
+  links.find((link) => link.display?.requestId === id)?.display?.revision;
+const deltaReplySchema = z.union([
+  z.object({ full: z.literal(true) }).passthrough(),
   z.object({
-    requestId: z.string(),
-    basisId: z.string(),
-    request: z.record(z.string(), z.unknown()),
-    delta: z.object({
-      objects: z.array(z.object({ id: z.string(), nativeId: z.string() }).passthrough()),
-      scene: z.array(z.object({ id: z.string(), nativeId: z.string() }).passthrough()),
-      removed: z.array(z.string()),
-      definitions: z.record(z.string(), z.unknown()).optional(),
-    }),
+    revision: z.number(),
+    objects: z.array(z.object({ id: z.string(), nativeId: z.string() }).passthrough()),
+    scene: z.array(z.object({ id: z.string(), nativeId: z.string() }).passthrough()),
+    removed: z.array(z.string()),
+    definitions: z.record(z.string(), z.unknown()).optional(),
   }),
 ]);
-/** SPEC-01.11 Live Sync: apply only the objects Rhino changed to the latest display Sync. */
-async function liveSyncHostDocument(target: HostTarget): Promise<boolean | 'retry'> {
-  const basis = state.messages
-    .filter(
-      (entry) =>
-        entry.request?.state === 'succeeded' &&
-        entry.request.result?.displayOnly === true &&
-        entry.request.result.sourceDocument?.instance === target.instance &&
-        entry.request.result.sourceDocument.documentId === target.documentId,
-    )
-    .at(-1);
-  if (basis?.request.result?.sceneOmitted && !basis.request.result.scene) {
-    // Waits for the viewport's fetch when it already started; still without meshes, a full Sync.
-    await loadFullResult(basis.id);
-    const loaded = state.messages.find((entry) => entry.id === basis.id)?.request.result;
-    if (!loaded?.scene) return false;
-    return liveSyncHostDocument(target);
+const refreshing = new Set<string>();
+/**
+ * SPEC-01.11 Live Sync, shown: the engine changed a file's shown Sync in place (its display
+ * revision rose); only the changed objects are fetched and merged into the model this page holds.
+ */
+async function refreshDisplay(projectId: string, display: { requestId: string; revision: number }) {
+  const id = display.requestId;
+  const entry = state.messages.find((item) => item.id === id);
+  const result = entry?.request.result;
+  const held = heldRevision.get(id) ?? 1;
+  // Not drawn yet: the whole fetch brings the latest anyway.
+  if (!entry || !result?.objects || !result.scene || display.revision <= held) return;
+  if (refreshing.has(id) || loadingResults.has(id)) return;
+  refreshing.add(id);
+  try {
+    const reply = deltaReplySchema.parse(
+      await api(`/projects/${projectId}/requests/${id}/delta?since=${held}`),
+    );
+    if (project?.id !== projectId) return;
+    const index = state.messages.findIndex((item) => item.id === id);
+    const current = state.messages[index]?.request.result;
+    if (index < 0 || !current?.objects || !current.scene) return;
+    if ('full' in reply) {
+      // Too far behind (or no longer stored per object): read the request whole again.
+      heldRevision.delete(id);
+      state.messages[index] = {
+        ...state.messages[index],
+        request: {
+          ...state.messages[index].request,
+          result: { ...current, scene: undefined, sceneOmitted: true },
+        },
+      };
+      liveRefresh = id;
+      await loadFullResult(id);
+      return;
+    }
+    type Definitions = NonNullable<typeof current.definitions>;
+    const merged = applyDisplayDelta<
+      (typeof current.objects)[number],
+      (typeof current.scene)[number],
+      Definitions[string]
+    >(
+      { objects: current.objects, scene: current.scene, definitions: current.definitions },
+      reply as unknown as {
+        objects: typeof current.objects;
+        scene: typeof current.scene;
+        removed: string[];
+        definitions?: Definitions;
+      },
+    );
+    const next = state.messages[index];
+    state.messages[index] = {
+      ...next,
+      request: { ...next.request, result: { ...current, ...merged } },
+    };
+    heldRevision.set(id, reply.revision);
+    liveRefresh = id;
+    renderMessages();
+  } catch {
+    /* The next poll tries again. */
+  } finally {
+    refreshing.delete(id);
   }
-  const result = basis?.request.result;
-  const revision = result?.sourceDocument?.revision;
-  if (!basis || !result?.objects || !result.scene || typeof revision !== 'number') return false;
-  const reply = liveReplySchema.parse(
-    await api(`/projects/${currentProject().id}/live-sync`, 'POST', {
-      ...target,
-      basisId: basis.id,
-      revision,
-    }),
-  );
-  if ('resync' in reply) return false;
-  if ('retry' in reply) return 'retry';
-  type Definitions = NonNullable<typeof result.definitions>;
-  const merged = applyDisplayDelta<
-    (typeof result.objects)[number],
-    (typeof result.scene)[number],
-    Definitions[string]
-  >(
-    { objects: result.objects, scene: result.scene, definitions: result.definitions },
-    reply.delta as unknown as {
-      objects: typeof result.objects;
-      scene: typeof result.scene;
-      removed: string[];
-      definitions?: Definitions;
-    },
-  );
-  // The reply carries only the request summary; the merged arrays are attached after parsing.
-  const next = requestMessage(reply.request);
-  next.request.result = { ...next.request.result, ...merged };
-  const index = state.messages.findIndex((entry) => entry.id === reply.requestId);
-  if (index >= 0) state.messages[index] = next;
-  else state.messages.push(next);
-  const link = links.find((entry) => entry.id === basis.request.input.linkId);
-  if (reply.requestId !== basis.id) {
-    if (link) {
-      link.lastSync = { requestId: reply.requestId, at: new Date().toISOString() };
-      if (layerOverride.get(link.id) === basis.id) layerOverride.delete(link.id);
-    } else if (transientResult === basis.id) transientResult = reply.requestId;
-  }
-  liveRefresh = reply.requestId;
-  renderMessages();
-  return true;
 }
 // Linked files (SPEC-01.11): files linked from the host plugins, drawn together as layers. No file
 // is the main one; the composer targets the file of the last picked object (or the chosen row).
@@ -640,6 +643,10 @@ let links: LinkRow[] = [],
   linkSignature = '',
   linksPolling = false,
   linkSyncing = false;
+/** What the empty view last showed for the engine's Syncs. */
+let engineView: 'loading' | 'idle' | 'failed' | undefined;
+/** This page, for its draft leases on the files it uses (`GET …/links?page=&hold=`). */
+const pageId = crypto.randomUUID();
 const linkNotes = new Map<string, string>();
 /** A candidate (or older Sync) shown in a file's place instead of its latest Sync. */
 const layerOverride = new Map<string, string>();
@@ -655,7 +662,6 @@ interface Layer {
   link?: LinkRow;
 }
 let currentLayers: Layer[] = [];
-const seenGeneration = new Map<string, number>();
 /** The link whose own record a request is (its Sync, or for a file item an older import). */
 const ownerOf = (request: { input: Record<string, unknown> }) =>
   links.find((link) => belongsToLink({ ...link, file: link.kind === 'file' }, request));
@@ -759,22 +765,29 @@ async function setLinkHidden(link: LinkRow, hidden: boolean) {
     message(readableError(error).message);
   }
 }
-/** Draft or running work based on this file holds its automatic updates (SPEC-01.11 보류). */
-function syncHeld(link: LinkRow) {
+/**
+ * A draft based on this file holds its automatic updates (SPEC-01.11 보류): the page tells the
+ * engine with each links poll (a 5 s lease). Queued or running work the engine sees itself.
+ */
+function draftHolds(link: LinkRow) {
   const uses = (id?: string | null) => !!id && linkOfRequest(id) === link.id;
-  if (
-    (draftHasInput(state) || pendingSketch()) &&
+  return (
+    (draftHasInput(state) || !!pendingSketch()) &&
     (uses(state.baseRequestId) || state.pins.some((pin) => uses(pin.basis)))
-  )
-    return true;
-  return state.messages.some(
-    (entry) =>
-      ['queued', 'running'].includes(entry.request?.state) &&
-      (uses(entry.request.input.baseRequestId) ||
-        (entry.request.input.linkedTargets ?? []).some((target) => uses(target.baseRequestId))),
   );
 }
-async function syncLink(link: LinkRow, mode: 'first' | 'auto' | 'manual') {
+/** The links panel's line for the engine's Sync of a file (T-084). */
+function syncNote(link: LinkRow): string | undefined {
+  const sync = link.sync;
+  if (!sync) return undefined;
+  if (sync.state === 'syncing') return 'Sync 중';
+  if (sync.state === 'held') return '자동 Sync 보류 · 이 파일 기준 작업 중';
+  if (sync.state === 'waiting') return '변경 중 · 곧 다시 Sync';
+  if (sync.state === 'failed') return errors[sync.code ?? ''] || 'Sync 실패';
+  return undefined;
+}
+/** ⟳ (and 지금 Sync): a fresh read the user asked for; automatic Syncs are the engine's (T-084). */
+async function syncLink(link: LinkRow) {
   const connection = link.connection;
   if (!connection || !project || linkSyncing) return;
   const projectId = project.id,
@@ -784,32 +797,19 @@ async function syncLink(link: LinkRow, mode: 'first' | 'auto' | 'manual') {
   renderLinkPanel();
   if (!currentLayers.length) viewportEmpty.sync('loading');
   try {
-    if (mode === 'auto' && link.host === 'rhino' && link.lastSync) {
-      const live = await liveSyncHostDocument(target);
-      if (live === 'retry') {
-        linkNotes.set(link.id, '변경 중 · 곧 다시 Sync');
-        return;
-      }
-      if (live) {
-        linkNotes.delete(link.id);
-        viewportEmpty.sync('idle');
-        return;
-      }
-    }
     const request = await requestData(`/projects/${projectId}/capture`, 'POST', {
       ...target,
       id: crypto.randomUUID(),
       linkId: link.id,
-      // Automatic Syncs from several open pages share one read; the user's own always runs.
-      ...(mode === 'manual' ? { fresh: true } : {}),
+      // The user's own Sync never joins one the engine is running.
+      fresh: true,
     });
     if (project?.id !== projectId) return;
     if (!state.messages.some((entry) => entry.id === request.id))
       state.messages.push(requestMessage(request));
     if (request.result?.hostExecuted) {
       link.lastSync = { requestId: request.id, at: request.createdAt ?? new Date().toISOString() };
-      if (mode === 'manual') layerOverride.delete(link.id);
-      if (mode === 'first') fitNext = true;
+      layerOverride.delete(link.id);
       linkNotes.delete(link.id);
       viewportEmpty.sync('idle');
     } else {
@@ -833,8 +833,17 @@ async function pollLinks() {
   linksPolling = true;
   const projectId = project.id;
   try {
-    const next = z.array(linkRowSchema).parse(await api(`/projects/${projectId}/links`));
+    // Files the draft uses: the engine holds their automatic Syncs while this page renews the
+    // lease (5 s); without a draft on a file the lease lapses on its own.
+    const hold = links.filter(draftHolds).map((link) => link.id);
+    const query = hold.length
+      ? '?' + new URLSearchParams({ page: pageId, hold: hold.join(',') }).toString()
+      : '';
+    const next = z.array(linkRowSchema).parse(await api(`/projects/${projectId}/links${query}`));
     if (project?.id !== projectId) return;
+    // A file's first Sync is framed in view.
+    if (next.some((link) => link.lastSync && !links.find((old) => old.id === link.id)?.lastSync))
+      fitNext = true;
     links = next;
     conversationChips?.update({ targets: next.map((link) => ({ id: link.id, name: link.name })) });
     linksLoaded = true;
@@ -872,35 +881,41 @@ async function pollLinks() {
     // Syncs made elsewhere (another window, the Rhino panel) are fetched once.
     for (const link of links) {
       const id = link.lastSync?.requestId;
-      if (id && !state.messages.some((entry) => entry.id === id))
-        state.messages.push(requestMessage(await api(`/projects/${projectId}/requests/${id}`)));
+      if (id && !state.messages.some((entry) => entry.id === id)) {
+        const revision = listedRevision(id);
+        const fetched = requestMessage(await api(`/projects/${projectId}/requests/${id}`));
+        if (revision !== undefined) heldRevision.set(id, revision);
+        state.messages.push(fetched);
+      }
     }
+    // The engine's Sync state per file, and Live Syncs in place merged as changes only.
+    let syncing = false;
+    for (const link of links) {
+      if (!linkSyncing) {
+        const note = syncNote(link);
+        if (note) linkNotes.set(link.id, note);
+        else linkNotes.delete(link.id);
+      }
+      if (link.sync?.state === 'syncing') syncing = true;
+      if (link.display) void refreshDisplay(projectId, link.display);
+    }
+    // An empty view says the engine is reading a file, or that its Sync failed.
+    const shown =
+      currentLayers.length || linkSyncing || loadingResults.size
+        ? undefined
+        : syncing
+          ? 'loading'
+          : links.some((link) => link.sync?.state === 'failed')
+            ? 'failed'
+            : 'idle';
+    if (shown && shown !== engineView) viewportEmpty.sync(shown);
+    engineView = shown;
     const signature = JSON.stringify(links.map((link) => [link.id, link.hidden, link.lastSync]));
     if (signature !== linkSignature) {
       linkSignature = signature;
       renderMessages();
     } else applyActiveLayer();
     renderLinkPanel();
-    for (const link of links) {
-      const connection = link.connection;
-      if (linkSyncing || !connection || connection.hostBusy) continue;
-      const seen = seenGeneration.get(link.id);
-      const first = !link.lastSync && seen === undefined;
-      const changed = seen !== undefined && connection.generation > seen;
-      // Opened again while VIDE was closed: a Live file catches up once.
-      const reopened = seen === undefined && !!link.lastSync && connection.live;
-      if (!first && !changed && !reopened) {
-        if (seen === undefined) seenGeneration.set(link.id, connection.generation);
-        continue;
-      }
-      if (!first && syncHeld(link)) {
-        linkNotes.set(link.id, '자동 Sync 보류 · 이 파일 기준 작업 중');
-        continue;
-      }
-      seenGeneration.set(link.id, connection.generation);
-      await syncLink(link, first ? 'first' : 'auto');
-      break;
-    }
   } catch {
     /* Transient; the next poll retries and the last display stays. */
   } finally {
@@ -984,7 +999,7 @@ function renderLinkPanel() {
       renderLinkPanel();
     },
     onToggle: (link) => void setLinkHidden(link, !link.hidden),
-    onSync: (link) => void syncLink(link, 'manual'),
+    onSync: (link) => void syncLink(link),
     onRemove: (link) => {
       if (
         !confirm(
@@ -1650,7 +1665,10 @@ function loadFullResult(id: string): Promise<void> {
   viewportEmpty.sync('loading');
   const loading = (async () => {
     try {
+      // The fetch carries at least the display revision listed now (Live Syncs merge after it).
+      const revision = listedRevision(id);
       const full = requestMessage(await api(`/projects/${currentProject().id}/requests/${id}`));
+      if (revision !== undefined) heldRevision.set(id, revision);
       const index = state.messages.findIndex((entry) => entry.id === id);
       if (index >= 0) state.messages[index] = full;
       viewportEmpty.sync('idle');
@@ -2778,7 +2796,7 @@ function runAppRoute(route: Route, body: string) {
         label: 'Sync 받기',
         action: () => {
           clearComposer();
-          void syncLink(link, 'manual');
+          void syncLink(link);
         },
       },
       toAi,
@@ -3684,7 +3702,7 @@ function renderPanel() {
           entry.connection?.instance === target?.instance &&
           entry.connection?.documentId === target?.documentId,
       );
-      if (link) void syncLink(link, 'manual');
+      if (link) void syncLink(link);
       else
         message(
           '이 파일이 아직 이 프로젝트의 연결 파일 목록에 없습니다. ⋯ → 다른 프로젝트에 연결로 다시 연결하세요.',

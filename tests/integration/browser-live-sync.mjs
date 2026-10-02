@@ -1,8 +1,12 @@
-// Live Sync in the browser: a Rhino change updates the displayed Sync with only the changed
-// objects (no full capture), and an untrackable connection falls back to a full Sync.
+// Live Sync in the browser after T-084 (ARCH-01 §7 「엔진 주관 Sync」): the engine Syncs and changes
+// the stored display in place; the page never starts a Sync or a Live Sync itself. It follows the
+// links list: a new Sync is fetched once, a raised display revision brings only the changed objects
+// (`…/delta?since=`), the engine's state shows on the row, and a draft on the file is reported as a
+// lease. Here the test plays the engine by writing to the workspace directly.
 import assert from 'node:assert/strict';
 import { mkdir } from 'node:fs/promises';
-import { resolve, join } from 'node:path';
+import { join } from 'node:path';
+import { randomUUID } from 'node:crypto';
 import { chromium } from 'playwright';
 import { startServer } from '../../src/server/server.ts';
 import { Workspace } from '../../src/core/workspace.ts';
@@ -35,6 +39,15 @@ const box = (nativeId, x, hash) => ({
 });
 const a = box('11111111-1111-4111-8111-111111111111', 0, 'a1'),
   b = box('22222222-2222-4222-8222-222222222222', 3, 'b1');
+const sourceDocument = (revision) => ({
+  instance,
+  documentId: 7,
+  documentHash: String(revision).padStart(64, '0'),
+  revision,
+  name: 'Attached test',
+  capturedAt: new Date().toISOString(),
+  connection: 'attached-editor',
+});
 let app, browser;
 try {
   app = await startServer({ filename: join(directory, 'workspace.sqlite') });
@@ -49,7 +62,6 @@ try {
       json: [{ id: 'codex-cli', name: 'ChatGPT', provider: 'codex-cli', efforts: ['default'] }],
     }),
   );
-  let generation = 0;
   const catalog = () => ({
     instance,
     documents: [
@@ -62,7 +74,7 @@ try {
         modified: true,
         host: 'rhino',
         connection: 'attached-editor',
-        generation,
+        generation: 0,
         live: true,
         hostBusy: false,
       },
@@ -70,62 +82,67 @@ try {
   });
   for (const path of ['documents', 'attached-documents'])
     await page.route(`**/api/v1/host/${path}`, (route) => route.fulfill({ json: catalog() }));
-  let captures = 0,
-    syncId;
-  const sourceDocument = (revision) => ({
-    instance,
-    documentId: 7,
-    documentHash: String(revision).padStart(64, '0'),
-    revision,
-    name: 'Attached test',
-    capturedAt: new Date().toISOString(),
-    connection: 'attached-editor',
+  // The page must not Sync on its own any more.
+  const started = [];
+  await page.route('**/api/v1/projects/*/capture', (route) => {
+    started.push('capture');
+    return route.fulfill({ status: 500, json: { code: 'UNEXPECTED' } });
   });
-  await page.route('**/api/v1/projects/*/capture', async (route) => {
-    captures++;
-    const target = route.request().postDataJSON(),
-      projectId = new URL(route.request().url()).pathname.split('/')[4];
-    assert.equal(target.linkId, 'link-a');
-    workspace.submit(projectId, {
-      id: target.id,
-      linkId: target.linkId,
-      body: 'Sync',
-      permission: 'candidate',
-      provider: 'codex-cli',
-      pins: [],
-      sketches: [],
-      files: [],
-      source: 'document',
-      host: 'rhino',
-    });
-    syncId = target.id;
+  await page.route('**/api/v1/projects/*/live-sync', (route) => {
+    started.push('live-sync');
+    return route.fulfill({ status: 500, json: { code: 'UNEXPECTED' } });
+  });
+  const deltas = [];
+  let fullFetches = 0,
+    slowFull = false;
+  await page.route('**/api/v1/projects/*/requests/**', async (route) => {
+    const url = new URL(route.request().url());
+    if (route.request().method() === 'GET' && url.pathname.endsWith('/delta'))
+      deltas.push(url.search);
+    else if (route.request().method() === 'GET' && /\/requests\/[^/]+$/.test(url.pathname)) {
+      fullFetches++;
+      if (slowFull) await new Promise((r) => setTimeout(r, 1500));
+    }
+    await route.fallback();
+  });
+  // The engine's Sync state (a scheduler needs a host; here the list carries it).
+  let engineSync;
+  const leases = [];
+  await page.goto(app.launchUrl);
+  await page.waitForFunction(() => !document.querySelector('#body').disabled);
+  const projectId = await page.locator('#project-picker').inputValue();
+  const now = new Date().toISOString();
+  app.store.db
+    .prepare('INSERT INTO document_links VALUES(?,?,?,?,?,?,?,0,?,?)')
+    .run('link-a', projectId, 'rhino', 'Attached test', null, instance, 7, now, now);
+  await page.route('**/api/v1/projects/*/links*', async (route) => {
+    const url = new URL(route.request().url());
+    if (route.request().method() !== 'GET' || !url.pathname.endsWith('/links'))
+      return route.continue();
+    leases.push(url.searchParams.get('hold') ?? '');
+    const rows = await (await route.fetch()).json();
     await route.fulfill({
-      json: workspace.update(projectId, target.id, 'succeeded', {
-        host: 'rhino',
-        hostExecuted: true,
-        verified: false,
-        displayOnly: true,
-        executionMode: 'sdk',
-        text: 'Sync complete',
-        sourceDocument: sourceDocument(1),
-        objects: [a.object, b.object],
-        scene: [a.scene, b.scene],
-      }),
+      json: rows.map((row) => ({
+        ...row,
+        connection: {
+          instance,
+          documentId: 7,
+          live: true,
+          generation: 0,
+          objectCount: 2,
+          units: 'Millimeters',
+          modified: true,
+          hostBusy: false,
+        },
+        ...(engineSync ? { sync: engineSync } : {}),
+      })),
     });
   });
-  const lives = [];
-  let liveReply;
-  await page.route('**/api/v1/projects/*/live-sync', async (route) => {
-    const body = route.request().postDataJSON();
-    lives.push(body);
-    const reply = liveReply(body);
-    await route.fulfill({ json: reply });
-  });
-  const moved = box(b.object.nativeId, 5, 'b2');
-  const summary = (revision) => ({
-    id: syncId,
-    input: {
-      id: syncId,
+  // The engine's first Sync of the file: the page shows it without a click.
+  const syncId = randomUUID();
+  const engineFullSync = (id, objects) => {
+    workspace.submit(projectId, {
+      id,
       linkId: 'link-a',
       body: 'Sync',
       permission: 'candidate',
@@ -135,144 +152,128 @@ try {
       files: [],
       source: 'document',
       host: 'rhino',
-    },
-    state: 'succeeded',
-    createdAt: new Date().toISOString(),
-    result: {
+      sourceDocument: { instance, documentId: 7 },
+    });
+    workspace.update(projectId, id, 'succeeded', {
       host: 'rhino',
       hostExecuted: true,
+      verified: false,
       displayOnly: true,
       executionMode: 'sdk',
       text: 'Sync complete',
-      sourceDocument: sourceDocument(revision),
-    },
-  });
-  await page.goto(app.launchUrl);
-  await page.waitForFunction(() => !document.querySelector('#body').disabled);
-  // The Rhino document is linked to the project; the open connection is added to the list here.
-  const projectId = await page.locator('#project-picker').inputValue();
-  const now = new Date().toISOString();
-  app.store.db
-    .prepare('INSERT INTO document_links VALUES(?,?,?,?,?,?,?,0,?,?)')
-    .run('link-a', projectId, 'rhino', 'Attached test', null, instance, 7, now, now);
-  await page.route('**/api/v1/projects/*/links', async (route) => {
-    if (route.request().method() !== 'GET') return route.continue();
-    const rows = await (await route.fetch()).json();
-    await route.fulfill({
-      json: rows.map((row) => ({
-        ...row,
-        connection: {
-          instance,
-          documentId: 7,
-          live: true,
-          generation,
-          objectCount: 2,
-          units: 'Millimeters',
-          modified: true,
-          hostBusy: false,
-        },
-      })),
+      sourceDocument: sourceDocument(1),
+      objects: objects.map((item) => item.object),
+      scene: objects.map((item) => item.scene),
     });
-  });
-  // The first Sync of a linked file needs no click.
+  };
+  engineSync = { state: 'syncing', at: now };
+  await page.waitForFunction(() =>
+    document.querySelector('.link-row')?.textContent.includes('Sync 중'),
+  );
+  engineFullSync(syncId, [a, b]);
+  engineSync = { state: 'idle', at: now };
   await page.waitForFunction(() =>
     document.querySelector('.object-summary')?.textContent?.startsWith('2개 객체'),
   );
   const objectSummary = () => page.locator('.object-summary').first().textContent();
-  assert.match(await objectSummary(), /^2개 객체/);
   const messages = await page.locator('#task-list .task-row').count();
+  const fetchedOnce = fullFetches;
 
-  // One object moved in Rhino: only it is fetched and the same Sync is updated in place.
-  liveReply = (body) => ({
-    requestId: syncId,
-    basisId: body.basisId,
-    created: false,
-    since: body.revision,
-    revision: 2,
-    request: summary(2),
-    delta: { objects: [moved.object], scene: [moved.scene], removed: [] },
-  });
-  generation++;
-  while (lives.length < 1) await new Promise((r) => setTimeout(r, 50));
-  assert.deepEqual(lives[0], { instance, documentId: 7, basisId: syncId, revision: 1 });
-  await page.waitForFunction(
-    () => !document.querySelector('.link-row')?.textContent.includes('Sync 중'),
+  // The engine's Live Sync in place: one object moved. Only the change is fetched.
+  const moved = box(b.object.nativeId, 5, 'b2');
+  workspace.applyDelta(
+    projectId,
+    syncId,
+    { objects: [moved.object], scene: [moved.scene], removed: [] },
+    { sourceDocument: sourceDocument(2) },
   );
+  while (deltas.length < 1) await new Promise((r) => setTimeout(r, 50));
+  assert.equal(deltas[0], '?since=1');
   assert.match(await objectSummary(), /^2개 객체/);
-  assert.equal(captures, 1);
   assert.equal(await page.locator('#task-list .task-row').count(), messages);
 
-  // A deletion reported by Rhino removes the object from the list and the viewport.
-  liveReply = (body) => {
-    assert.equal(body.revision, 2);
-    return {
-      requestId: syncId,
-      basisId: body.basisId,
-      created: false,
-      since: body.revision,
-      revision: 3,
-      request: summary(3),
-      delta: { objects: [], scene: [], removed: [a.object.nativeId] },
-    };
-  };
-  generation++;
+  // A deletion in Rhino removes the object from the list and the viewport.
+  workspace.applyDelta(
+    projectId,
+    syncId,
+    { objects: [], scene: [], removed: [a.object.nativeId] },
+    { sourceDocument: sourceDocument(3) },
+  );
   await page.waitForFunction(() =>
     document.querySelector('.object-summary')?.textContent?.startsWith('1개 객체'),
   );
-  assert.equal(captures, 1);
+  assert.equal(deltas.at(-1), '?since=2');
+  assert.equal(fullFetches, fetchedOnce, 'a Live Sync must not fetch the model whole');
 
-  // A connection that cannot report changes falls back to a full Sync.
-  liveReply = () => ({ resync: true });
-  generation++;
-  while (captures < 2) await new Promise((r) => setTimeout(r, 50));
+  // A draft on this file holds the engine's automatic Syncs: the page renews a lease with each
+  // links poll while the draft lasts, and stops when it is cleared.
+  await page.locator('#body').fill('이 파일의 벽을 올려줘');
+  while (!leases.includes('link-a')) await new Promise((r) => setTimeout(r, 50));
+  await page.locator('#body').fill('');
+  const cleared = leases.length;
+  await new Promise((r) => setTimeout(r, 3500));
+  assert.ok(leases.slice(cleared + 1).every((hold) => hold === ''));
+
+  // A moving document: the row says the engine will try again.
+  engineSync = { state: 'waiting', code: 'SOURCE_CHANGED', at: now };
+  await page.waitForFunction(() =>
+    document.querySelector('.link-row')?.textContent.includes('변경 중 · 곧 다시 Sync'),
+  );
+  engineSync = { state: 'idle', at: now };
+
+  // A full Sync by the engine (the Live Sync could not continue): the new Sync is shown.
+  const second = randomUUID();
+  engineFullSync(second, [a, b]);
   await page.waitForFunction(() =>
     document.querySelector('.object-summary')?.textContent?.startsWith('2개 객체'),
   );
-  assert.equal(lives.length, 3);
 
-  // Opened again with the file still live (installed 0.2.12): the list omits the Sync's meshes, the
-  // viewport is still fetching them when the catch-up Live Sync starts, and the page must wait for
-  // that fetch instead of spinning until the renderer runs out of memory.
-  let fullFetches = 0;
-  await page.route('**/api/v1/projects/*/requests/*', async (route) => {
-    const path = new URL(route.request().url()).pathname;
-    if (route.request().method() !== 'GET' || !path.endsWith('/' + syncId)) return route.fallback();
-    fullFetches++;
-    await new Promise((r) => setTimeout(r, 1500));
-    await route.fallback();
-  });
-  liveReply = (body) => ({
-    requestId: syncId,
-    basisId: body.basisId,
-    created: false,
-    since: body.revision,
-    revision: body.revision + 1,
-    request: summary(body.revision + 1),
-    delta: { objects: [], scene: [], removed: [] },
-  });
+  // Opened again while the meshes are still loading, then a Live Sync: the page waits for its
+  // fetch and merges the change after it, staying responsive.
+  slowFull = true;
   await page.reload();
+  const moved2 = box(a.object.nativeId, 9, 'a9');
+  await new Promise((r) => setTimeout(r, 300));
+  workspace.applyDelta(
+    projectId,
+    second,
+    { objects: [], scene: [], removed: [b.object.nativeId] },
+    { sourceDocument: sourceDocument(4) },
+  );
   const responsive = () =>
     Promise.race([page.evaluate(() => true), new Promise((r) => setTimeout(() => r(false), 3000))]);
-  const reopenedStart = Date.now();
-  while (lives.length < 4 && Date.now() - reopenedStart < 15000) {
-    assert.equal(await responsive(), true, 'the page froze during the catch-up Live Sync');
+  const reopened = Date.now();
+  while (Date.now() - reopened < 4000) {
+    assert.equal(await responsive(), true, 'the page froze while the meshes loaded');
     await new Promise((r) => setTimeout(r, 200));
   }
-  assert.equal(lives.length, 4);
-  assert.equal(lives[3].basisId, syncId);
-  assert.ok(fullFetches >= 1);
   await page.waitForFunction(() =>
-    document.querySelector('.object-summary')?.textContent?.startsWith('2개 객체'),
+    document.querySelector('.object-summary')?.textContent?.startsWith('1개 객체'),
   );
-  assert.equal(captures, 2);
+  workspace.applyDelta(
+    projectId,
+    second,
+    { objects: [moved2.object], scene: [moved2.scene], removed: [] },
+    { sourceDocument: sourceDocument(5) },
+  );
+  const before = deltas.length;
+  while (deltas.length === before) await new Promise((r) => setTimeout(r, 50));
+  await page.waitForFunction(() =>
+    document.querySelector('.object-summary')?.textContent?.startsWith('1개 객체'),
+  );
+
+  assert.deepEqual(started, [], 'the page started a Sync itself');
+  assert.ok(leases.length > 3);
   assert.deepEqual(errors, []);
   await page.screenshot({ path: join(directory, 'live-sync.png') });
   console.log(
     JSON.stringify({
       passed: true,
-      liveUpdateWithoutCapture: true,
+      pageStartsNoSync: true,
+      deltaOnly: true,
       removalApplied: true,
-      resyncFallback: true,
+      engineStateShown: true,
+      draftLease: true,
       reopenedWhileMeshesLoad: true,
       directory,
     }),

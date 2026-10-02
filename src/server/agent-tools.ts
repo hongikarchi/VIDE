@@ -914,7 +914,7 @@ export interface ConversationToolSources {
   requestId?: string;
   /** The linked files the conversation names as its targets. */
   targetLinkIds?: readonly string[] | null;
-  workspace: Pick<Workspace, 'list' | 'get'>;
+  workspace: Pick<Workspace, 'list' | 'get'> & Partial<Pick<Workspace, 'model'>>;
   jigs?: Pick<JigRuntime, 'list' | 'view' | 'output' | 'setParams' | 'run'>;
   links?: Pick<DocumentLinks, 'list' | 'get'>;
   /** Records a ledger item of the conversation (a setting the AI changed, a screen action). */
@@ -1012,6 +1012,13 @@ function latestSync(
     .filter((row) => row.state === 'succeeded' && row.input.linkId === linkId)
     .at(-1);
   if (!entry) return undefined;
+  // Layers and samples need no coordinates: a model stored per object is read from its meta.
+  const view = workspace.model?.(projectId, entry.id);
+  if (view)
+    return {
+      syncId: entry.id,
+      model: { ...entry.result, objects: view.rows(), scene: view.sceneMeta() } as ReadModel,
+    };
   const full = workspace.get(projectId, entry.id);
   return Array.isArray(full.result?.scene)
     ? { syncId: full.id, model: full.result as unknown as ReadModel }

@@ -31,6 +31,16 @@ export const linkRowSchema = z.object({
     .nullable(),
   lastSync: z.object({ requestId: z.string(), at: z.string().optional() }).nullable(),
   lastError: z.string().optional(),
+  /** The engine's Sync of this file (T-084): it Syncs; the page only shows it. */
+  sync: z
+    .object({
+      state: z.enum(['idle', 'syncing', 'held', 'waiting', 'failed']),
+      code: z.string().optional(),
+      at: z.string(),
+    })
+    .optional(),
+  /** The stored display to show: its revision rises with each Live Sync in place. */
+  display: z.object({ requestId: z.string(), revision: z.number() }).nullable().optional(),
   /** A one-time note (SPEC-01.11 1, T-107): the row followed its window, or the id was stored. */
   notice: z
     .union([

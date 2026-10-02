@@ -12,15 +12,7 @@ import { CopyFiles, within } from './capture-cleanup.ts';
 import { z } from 'zod';
 import { launchRhinoWorker, workerResultSchema } from '../../hosts/rhino/worker-client.ts';
 import type { RequestInput } from '../contracts/workspace.ts';
-import {
-  nativeModelSchema,
-  displayObjectSchema,
-  displaySceneSchema,
-  displayDefinitionSchema,
-  type ReadScope,
-} from '../contracts/native-model.ts';
-import { applyDisplayDelta } from '../core/display-delta.ts';
-import { withSurvey } from '../../hosts/rhino/scene-pages.ts';
+import { nativeModelSchema, type ReadScope } from '../contracts/native-model.ts';
 import {
   AgentTools,
   visionHandlers,
@@ -298,30 +290,18 @@ export class SdkExecution {
   }
 
   /**
-   * Live Sync: objects changed since `since` on the same attached connection, merged into `basis`.
-   * RESYNC_REQUIRED means the caller must fall back to a full Sync.
+   * Live Sync: objects changed since `since` on the same attached connection. Only the change page
+   * and the small result fields come back (PLAN-27 1단계): the caller applies the page to the
+   * stored model without reading it whole. RESYNC_REQUIRED means a full Sync is needed.
    */
   async liveSync(
     target: HostTarget,
-    basis: { objects: unknown[]; scene: unknown[]; sourceDocument: Record<string, unknown> },
+    basis: { sourceDocument: Record<string, unknown> },
     since: number,
   ) {
     // The stored basis was validated when it was read from Rhino; only changed items are checked here.
-    if (
-      !Array.isArray(basis.objects) ||
-      !Array.isArray(basis.scene) ||
-      basis.sourceDocument.instance !== target.instance
-    )
-      throw failure('RESYNC_REQUIRED');
+    if (basis.sourceDocument.instance !== target.instance) throw failure('RESYNC_REQUIRED');
     const delta = await this.editors.changes(target, since);
-    const merged = applyDisplayDelta(
-      basis as {
-        objects: z.infer<typeof displayObjectSchema>[];
-        scene: z.infer<typeof displaySceneSchema>[];
-        definitions?: Record<string, z.infer<typeof displayDefinitionSchema>>;
-      },
-      delta,
-    );
     const source = delta.source;
     return {
       delta: {
@@ -330,9 +310,9 @@ export class SdkExecution {
         removed: delta.removed,
         definitions: delta.definitions,
       },
+      // The plugin surveys the document with every change page; an older plugin sends none.
+      survey: { coverage: delta.coverage, layers: delta.layers },
       result: {
-        // The plugin surveys the document with every change page; an older plugin sends none.
-        ...withSurvey(merged, { coverage: delta.coverage, layers: delta.layers }),
         sourceDocument: {
           ...basis.sourceDocument,
           ...target,

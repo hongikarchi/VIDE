@@ -1,3 +1,4 @@
+import { storedItem } from '../core/model-move.ts';
 import { inspectorOptions } from '../../hosts/zwcad/inspector.ts';
 import { ZwcadEditors } from '../../hosts/zwcad/editor-sessions.ts';
 import { randomUUID } from 'node:crypto';
@@ -36,13 +37,16 @@ function verifyProtected(
   model: z.infer<typeof modelSchema>,
   protection: z.infer<typeof protectionSchema>,
 ) {
+  // Stored display coordinates are float32 differences (ARCH-01 §5): both sides compare in that
+  // form, so an unchanged object read again matches its stored copy.
+  const form = (item: unknown) => (item === undefined ? undefined : storedItem(item));
   for (const expected of protection) {
     if (
       !expected.object ||
       JSON.stringify(expected.object) !==
         JSON.stringify(model.objects.find((object) => object.id === expected.id)) ||
-      JSON.stringify(expected.scene) !==
-        JSON.stringify(model.scene.find((scene) => scene.id === expected.id))
+      JSON.stringify(form(expected.scene)) !==
+        JSON.stringify(form(model.scene.find((scene) => scene.id === expected.id)))
     )
       throw failure('PRESERVED_OBJECT_CHANGED');
   }

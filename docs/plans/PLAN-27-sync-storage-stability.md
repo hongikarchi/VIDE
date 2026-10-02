@@ -2,7 +2,7 @@
 id: PLAN-27
 title: Sync 저장 구조와 작동 안정성 — 진단·복구, 객체 단위 저장, 엔진 주관 Sync
 status: draft
-version: 0.4
+version: 0.5
 updated: 2026-10-02
 owner: agent:claude
 related: [RESEARCH-13, SPEC-01, ARCH-01, PLAN-16, PLAN-18, PLAN-24, FR-02, FR-03, FR-16]
@@ -72,7 +72,7 @@ Rhino 패널의 같은 복구(플러그인 재빌드·Rhino 재시작 필요)는
 
 ## 1단계 — 객체 단위 저장 (T-083)
 
-**상태(2026-10-02): 계약 사용자 확인, 구현 중.** 저장 계약은 ARCH-01 §5 「Sync 표시 형상의 객체 단위 저장(T-083)」이 소유한다. 이 절은 작업 순서와 검증만 적는다.
+**상태(2026-10-02): 계약 사용자 확인, 구현·자동 검증(미커밋), 사용자 DB 사본 측정·설치본 확인 남음.** 저장 계약은 ARCH-01 §5 「Sync 표시 형상의 객체 단위 저장(T-083)」이 소유한다. 이 절은 작업 순서와 검증만 적는다.
 
 2026-10-02 사용자 결정(모두 제안대로):
 - 저장된 표시 형상은 float32 차이(0.001 mm)로 둔다. 측정값과 `geometryHash`는 바뀌지 않는다.
@@ -87,6 +87,22 @@ Rhino 패널의 같은 복구(플러그인 재빌드·Rhino 재시작 필요)는
 - 합성 1만 개 객체(정점 100만 개) 측정: 처음 저장 약 0.3초, 바뀌지 않은 전체 Sync 저장 약 0.3초(새 판 0개), 10개 바뀐 Live Sync 적용 1~2.5 ms, 전체 다시 만들기 약 0.2초, VGT1 이어 붙이기 약 0.15초(20.9 MB), `deltaSince` 1~13 ms.
 - 시험: `tests/core/model-store.test.mjs`·`model-move.test.mjs`(새), `geometry-transfer.test.mjs`·`migrations.test.mjs`(고침).
 - 남음: 순서 4~7·9와 순서 8의 엔진 시작 연결(`Workspace`·`LiveSync`·`server.ts`·`main.ts`), 그 시험.
+
+**진행(2026-10-02, 2차) — 연결·자동 검증:**
+- `Workspace`: `update`가 `scene` 배열이 있는 결과를 같은 SAVEPOINT 안에서 `ModelStore.store`로 나누고 행에는 `modelStore: 'manifest'`를 둔다(`MODEL_STORE_UNSUPPORTED`는 JSON 유지, `scene`이 없는 결과는 목록을 지움). `parentId`는 같은 `linkId`(없으면 같은 문서)의 직전 성공 Sync, `documentRevision`은 `sourceDocument.revision`. `get`·`list({full})`은 목록으로 다시 만들고, `pruned`는 `scene: []`·`modelPruned: true`. `list`·`summary`는 `rows()`로 `objects`를 붙이고 캐시 키에 목록 `revision`을 더했다. 새 `model`·`brief`(작은 결과만)·`applyDelta`(제자리 또는 복사본). `purge` 뒤 `sweep`.
+- `LiveSync.apply`: `brief`로 기준 확인, 옮기지 않은 기준은 그 자리에서 옮긴 뒤 적용. `sdk.liveSync`는 변경 페이지와 `survey`·`sourceDocument`만 돌려준다. `displayCoverage`는 바뀐·지운 키의 저장된 항목만 풀어 이전 값에서 고쳐 센다(정의 표시 여부가 바뀐 때만 전체를 센다). 응답 모양은 같고 `displayRevision`·`timing`을 더했다.
+- `server.ts`: 단건 VGT1은 `ModelView.geometry`, `GET …/requests/:r/delta?since=&base=`, 직전 측정은 `previousMeasurements`(SQL·meta), 합치기 재사용 판단은 `summary`. `sync-reads.ts`·`jig-routes.ts`는 `list()`. `agent-tools`의 `links_layers`·`sync_sample`은 `rows`·`sceneMeta`(형상 없음). `zwcad-sdk-execution`의 보호 객체 비교는 양쪽을 `storedItem`으로 바꾼 뒤 비교.
+- 실행 기준(`execution.ts` `parsedModel`, `model-context`, `query-page`)은 턴마다 `get` 한 번(목록에서 다시 만들기)으로 두었다. 고정·제출 확인은 형상을 열지 않는다(`large-sync-pins`: 제출 때 `load` 0번, 실행 때 1번).
+- 엔진 시작: 주소를 열기 전 `Store.compact()`(남은 빈 공간), 연 뒤 `maintainModels`(전체 `sweep` → `moveRows` → 프로젝트별 `retain` → 한가할 때 VACUUM, 바쁘면 1분 뒤 다시). 옮기기는 행마다 나눠 한다(`moveRowAsync`): 해석 → 200개씩 인코딩 → 판을 먼저 넣고 → 짧은 트랜잭션으로 목록·결과 → 200개씩 대조, 어긋나면 원래 JSON으로 되돌림. 준비 중 행이 바뀌면 다음 시작으로 미룬다.
+- 측정(합성 1만 개 객체, 정점 100만 개, 실제 `Workspace`·`LiveSync` 경로, `tests/server/live-sync-storage.test.mjs`):
+  - Live Sync(10개 변경·1개 삭제): 전체 4 ms, 엔진 처리 3~4 ms, DB +40 KB, 기준 형상 읽기 0번.
+  - 바뀌지 않은 전체 Sync: 저장 약 0.6초, DB +2.9 MB(합성 키). Rhino GUID 키로는 약 4.0 MB(색인을 줄여도 3.1 MB). **목표 약 1 MB에는 못 미친다.** 줄 하나가 `requestId`(36 B)를 본표와 두 색인에 반복하고 `versionId`가 64자 16진이기 때문이다. 1 MB에 가까이 가려면 목록 줄을 정수 목록 번호·32 B 지문으로 바꾸는 schema 변경이 필요하다(사용자 결정).
+  - 처음 저장 약 0.65초 가운데 약 0.3초는 목록 줄의 외래 키 확인(`object_versions`가 형상을 품은 WITHOUT ROWID 표라 조회가 느림)이다.
+  - 옮기기(파일 DB, 35 MB JSON 행 8개 = 268 MB): 합계 27초(행당 3~4초), 이벤트 루프 최대 멈춤 약 0.7~1.2초(목록 트랜잭션·VACUUM), VACUUM 0.8초, 268 MB → 81 MB.
+  - 사용자 DB 사본(2026-10-02, 676 MB, Sync 행 20개 중 큰 행 9개): 옮기기 34초, 실패 0, 큰 행 9개 모두 다시 만든 objects·scene 개수와 ID 목록이 원래와 같음, VACUUM 0.75초, 676 MB → 119 MB. 한 행을 모델째 다시 만드는 `get`은 약 1초(옮기기 전 JSON 해석과 비슷).
+- 시험: 새로 `tests/core/model-store-wiring.test.mjs`, `tests/server/live-sync-storage.test.mjs`, `tests/server/request-delta.test.mjs`. 고침 `tests/core/model-move.test.mjs`(나눠 옮기기·되돌리기·보존·VACUUM), `tests/server/live-sync.test.mjs`(새 `liveSync` 반환), `tests/server/large-sync-pins.test.mjs`(`load` 횟수). 나머지 표의 시험(capture·sync-coalesce·zwcad-*·query-page·sdk-execution·workspace-list·migrations)은 고치지 않고 통과.
+- 남음: 사용자 DB 사본(`.vide/` 아래)으로 옮기기 시간·크기 측정, 설치본 확인, ARCH-01 §5 문구 정리(아래 다른 점).
+- ARCH-01 §5와 다른 점: 판을 목록보다 먼저 넣는 나눠 옮기기(대조는 커밋 뒤, 어긋나면 되돌림), 기준이 옮겨지지 않은 Live Sync는 그 자리에서 옮김, `pruned` 읽기 모양(`scene: []`·`modelPruned`).
 
 요지:
 - **객체 판:** 객체 하나의 표시 형상과 속성이다. 내용 지문으로 이름 붙이고 한 번만 저장한다. 형상은 지금의 VGT1 형식(배열마다 float64 원점 + float32 차이)으로 둔다. 같은 모델(객체 1만 개, 정점 100만 개) 실측: JSON 64.8 MB → 18.2 MB, 만들기 254 ms → 13 ms, 읽기 105 ms → 1 ms, 오차 0.001 mm.
@@ -139,7 +155,7 @@ Rhino 패널의 같은 복구(플러그인 재빌드·Rhino 재시작 필요)는
 
 ## 2단계 — Sync를 엔진이 주관 (T-084)
 
-**상태(2026-10-02): SPEC-01.11의 10(Sync 주관)과 ARCH-01 §7 「엔진 주관 Sync(T-084)」 사용자 확인.** 확인한 세부: VIDE 창이 없어도 엔진이 Live 파일을 Sync한다. ⟳·지금 Sync·플러그인 Sync는 진행 중인 자동 Sync에 합류하지 않고 새로 읽는다. 편집 중 실패(`SOURCE_CHANGED`, 호스트 바쁨)는 30초까지 다시 하고 그 뒤 다음 변경이나 ⟳를 기다리며, 행에는 '변경 중 · 곧 다시 Sync'를 보인다. 초안 보류는 화면의 5초 임대로 한다. 화면 쪽은 1단계의 `delta` 조회를 쓰므로 1단계 순서 7 뒤에 바꾼다. 엔진 쪽 스케줄러(순서 1~4)는 1단계와 나란히 시작할 수 있다.
+**상태(2026-10-02): SPEC-01.11의 10(Sync 주관)과 ARCH-01 §7 「엔진 주관 Sync(T-084)」 사용자 확인. 구현·자동 검증(미커밋, 아래 결과).** 확인한 세부: VIDE 창이 없어도 엔진이 Live 파일을 Sync한다. ⟳·지금 Sync·플러그인 Sync는 진행 중인 자동 Sync에 합류하지 않고 새로 읽는다. 편집 중 실패(`SOURCE_CHANGED`, 호스트 바쁨)는 30초까지 다시 하고 그 뒤 다음 변경이나 ⟳를 기다리며, 행에는 '변경 중 · 곧 다시 Sync'를 보인다. 초안 보류는 화면의 5초 임대로 한다. 화면 쪽은 1단계의 `delta` 조회를 쓰므로 1단계 순서 7 뒤에 바꾼다. 엔진 쪽 스케줄러(순서 1~4)는 1단계와 나란히 시작할 수 있다.
 
 - 엔진이 연결된 문서의 변경 번호를 직접 보고, 문서당 한 번 전체 Sync·Live Sync를 한다.
 - 같은 문서의 동시 Sync는 하나로 합친다.
@@ -163,6 +179,16 @@ Rhino 패널의 같은 복구(플러그인 재빌드·Rhino 재시작 필요)는
 **검증:**
 - 창과 패널을 함께 연 상태에서 Rhino 변경 한 번에 Sync·Live Sync가 한 번만 일어나는지(엔진 기록 `sync-scheduler`·`live-sync`)
 - 기존 `browser-live-sync`·`browser-links`·`browser-rhino-panel`
+
+**결과(2026-10-02) — 구현·자동 검증(미커밋), 실제 Rhino 확인 남음:**
+- 순서 1: `runDocumentSync`(`src/server/document-sync.ts`). `POST …/capture`는 이를 부르고 `fresh`를 기본값으로 둔다(이제 이 경로로 오는 Sync는 모두 사용자 것).
+- 순서 2: `SyncScheduler`(`src/server/sync-scheduler.ts`). 1초마다 열린 문서(0.7초 안의 읽기는 연결 목록과 함께 씀)를 `matchLinks`로 맞추고, 문서별 상태로 첫 Sync·`generation` 증가·다시 연 Live 파일을 판단한다. Rhino 표시 Sync가 기준이면 Live Sync(`resync`면 전체 Sync), 아니면 전체 Sync. `SOURCE_CHANGED`·`HOST_BUSY`·`PROJECT_BUSY`·`WORKSPACE_CAPACITY`는 실패 행을 지우고 1·2·4·8·…초 뒤(합계 30초 안) 다시, 그 뒤 `waiting`으로 다음 변경을 기다린다. ⟳로 새 Sync가 생기면 대기를 푼다. 호스트가 바쁘면 건너뛴다. VIDE가 연 작업 사본 창은 첫 Sync만 한다. 창이 없어도 돈다(`server.ts`에서 시작·종료).
+- 순서 3: `GET …/links?page=&hold=` 5초 임대, 연결 행에 `sync {state, code?, at}`·`display {requestId, revision}`.
+- 순서 4: `LiveSync`는 같은 문서의 실행 중 전체 Sync(`documentSyncs.current`)를 기다린 뒤 판단한다. `latest` 맵은 그대로 LiveSync 안에 있고 스케줄러는 연결의 마지막 성공 Sync를 기준으로 넘긴다.
+- 순서 5·6: 화면은 자동 `capture`·`/live-sync`를 부르지 않는다. 연결 목록의 `display.revision`이 늘면 `…/delta?since=`로 바뀐 객체만 받아 `applyDisplayDelta`로 합치고(`full`이면 다시 받음), 요청 ID가 바뀌면 그 요청을 받는다. 초안이 쓰는 파일만 `hold`로 보내고(초안이 없으면 질의 문자열 없음), 행 문구는 `sync.state`에서 만든다. Rhino 패널도 같은 페이지라 함께 바뀌었다. 대화별 초안 코드는 그대로다.
+- 시험: 새로 `tests/server/sync-scheduler.test.mjs`(변경 한 번에 한 번, 화면 0·3개와 임대, 요청·AI 쓰기 보류, 재시도·30초 대기·⟳, 호스트 바쁨, 작업 사본 첫 Sync). 통합 `browser-live-sync`(엔진 역할을 시험이 하고 화면은 Sync를 시작하지 않음·`delta`만·임대·상태 문구·메시 받는 중 재열기), `browser-links`·`browser-rhino-panel`·`browser-attached-sync`·`browser-pin-tokens`(첫 Sync를 엔진 쪽에서 쓰도록, 연결 목록 경로를 질의 문자열 포함으로) 고침.
+- 다른 점: 화면 Sync 실패의 '오류 기록' 확인 대신 행 문구로 원인을 보인다(`browser-attached-sync`). 창이 숨겨진 동안(`document.hidden`)은 목록 조회를 쉬므로 초안 임대가 5초 뒤 풀린다.
+- 남음: 실제 Rhino 창·패널을 함께 연 상태의 한 번 확인(엔진 기록 `sync-scheduler`·`live-sync`), 실 호스트가 필요한 `browser-owned-editor`·`browser-zwcad-editor`는 돌리지 않았다.
 
 ## 3단계 — 화면 (T-085)
 

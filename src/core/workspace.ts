@@ -11,6 +11,7 @@ import { storedWorkSchema, storedResultSchema } from '../contracts/stored-work.t
 import type { StoredWork } from '../contracts/stored-work.ts';
 import { z } from 'zod';
 import { BIG_JSON, breadcrumb } from './breadcrumbs.ts';
+import { ModelStore, type ModelDelta, type ModelView, type StoredModel } from './model-store.ts';
 
 function fail(code: string): never {
   throw new DomainError(code);
@@ -34,7 +35,12 @@ const decode = (row: unknown): StoredWork | null => {
   return decoded as StoredWork;
 };
 
-type LightRow = { id: string; state: string; i: number; r: number | null };
+type LightRow = { id: string; state: string; i: number; r: number | null; m: number | null };
+const LIGHT_COLUMNS =
+  'w.id,w.state,octet_length(w.input) AS i,octet_length(w.result) AS r,m.revision AS m FROM workspace_requests w LEFT JOIN sync_manifests m ON m.requestId=w.id';
+/** Requests whose display part is stored per object (ARCH-01 §5, T-083). */
+const modelStoreOf = (work: StoredWork) =>
+  (work.result as { modelStore?: unknown } | null)?.modelStore;
 
 /** A listed request without its display geometry (see `Workspace.list`). */
 function withoutGeometry(work: StoredWork): StoredWork {
@@ -47,8 +53,11 @@ function withoutGeometry(work: StoredWork): StoredWork {
 /** Durable browser jobs, separate from the host command queue. */
 export class Workspace {
   readonly store: Store;
+  /** Display geometry of results stored per object (ARCH-01 §5 「Sync 표시 형상의 객체 단위 저장」). */
+  readonly models: ModelStore;
   constructor(store: Store) {
     this.store = store;
+    this.models = new ModelStore(store.db);
     store.db.exec(`
       UPDATE workspace_requests SET state=CASE WHEN state='running' AND json_extract(result,'$.phase')='host' THEN 'unknown' ELSE 'interrupted' END WHERE state IN ('queued','running');`);
   }
@@ -104,11 +113,9 @@ export class Workspace {
       return this.store.db
         .prepare('SELECT * FROM workspace_requests WHERE projectId=? ORDER BY rowid')
         .all(projectId)
-        .map((row) => decode(row)!);
+        .map((row) => this.expand(decode(row)!));
     const rows = this.store.db
-      .prepare(
-        'SELECT id,state,octet_length(input) AS i,octet_length(result) AS r FROM workspace_requests WHERE projectId=? ORDER BY rowid',
-      )
+      .prepare(`SELECT ${LIGHT_COLUMNS} WHERE w.projectId=? ORDER BY w.rowid`)
       .all(projectId) as LightRow[];
     return rows.map((row) => this.#light(projectId, row));
   }
@@ -118,10 +125,11 @@ export class Workspace {
   }
   private light = new Map<string, { key: string; projectId: string; work: StoredWork }>();
   #light(projectId: string, row: LightRow): StoredWork {
-    const key = `${row.state}|${row.i}|${row.r ?? -1}`;
+    // A Live Sync in place can leave the result the same size: the manifest revision tells.
+    const key = `${row.state}|${row.i}|${row.r ?? -1}|${row.m ?? -1}`;
     const known = this.light.get(row.id);
     if (known?.key === key && known.projectId === projectId) return known.work;
-    const work = withoutGeometry(this.get(projectId, row.id));
+    const work = this.lightWork(projectId, row.id);
     this.light.set(row.id, { key, projectId, work });
     return work;
   }
@@ -134,9 +142,7 @@ export class Workspace {
    */
   summary(projectId: string, id: string): StoredWork {
     const row = this.store.db
-      .prepare(
-        'SELECT id,state,octet_length(input) AS i,octet_length(result) AS r FROM workspace_requests WHERE projectId=? AND id=?',
-      )
+      .prepare(`SELECT ${LIGHT_COLUMNS} WHERE w.projectId=? AND w.id=?`)
       .get(projectId, id) as LightRow | undefined;
     return row ? this.#light(projectId, row) : fail('NOT_FOUND');
   }
@@ -157,7 +163,8 @@ export class Workspace {
     return this.store.tx(() => {
       const deleted: StoredWork[] = [];
       for (const id of ids) {
-        const request = this.get(projectId, id);
+        // The stored row without its model: callers read small fields (work folders, inputs).
+        const request = this.raw(projectId, id);
         if (['queued', 'running'].includes(request.state)) fail('PROJECT_BUSY');
         const referenced =
           db.prepare('SELECT 1 FROM publication_exports WHERE requestId=? LIMIT 1').get(id) ||
@@ -174,6 +181,8 @@ export class Workspace {
         this.light.delete(id);
         deleted.push(request);
       }
+      // Object versions only the deleted Syncs used (their manifests went with the rows).
+      if (deleted.length) this.models.sweep(projectId);
       return deleted;
     });
   }
@@ -186,6 +195,10 @@ export class Workspace {
     );
   }
   get(projectId: string, id: string): StoredWork {
+    return this.expand(this.raw(projectId, id));
+  }
+  /** The stored row as it is: a per-object result keeps its `modelStore` marker and no model. */
+  private raw(projectId: string, id: string): StoredWork {
     return (
       decode(
         this.store.db
@@ -193,6 +206,89 @@ export class Workspace {
           .get(projectId, id),
       ) ?? fail('NOT_FOUND')
     );
+  }
+  /**
+   * The result in the shape it was written (`objects`, `scene`, `definitions` rebuilt from the
+   * manifest). A Sync whose manifest was pruned (ARCH-01 §5 「정리」) has no geometry left: it reads
+   * as an empty scene marked `modelPruned`.
+   */
+  private expand(work: StoredWork): StoredWork {
+    const marker = modelStoreOf(work);
+    if (!marker) return work;
+    const { modelStore: _marker, ...rest } = work.result as Record<string, unknown>;
+    const model = marker === 'manifest' ? this.models.load(work.projectId, work.id) : undefined;
+    return {
+      ...work,
+      result: (model
+        ? { ...rest, ...model }
+        : { ...rest, scene: [], modelPruned: true }) as StoredWork['result'],
+    };
+  }
+  /** `list`'s form of one request: no display geometry, object rows from the manifest's meta. */
+  private lightWork(projectId: string, id: string): StoredWork {
+    const work = this.raw(projectId, id);
+    const marker = modelStoreOf(work);
+    if (!marker) return withoutGeometry(work);
+    const { modelStore: _marker, ...rest } = work.result as Record<string, unknown>;
+    const header = marker === 'manifest' ? this.models.header(projectId, id) : undefined;
+    const view = header && this.models.view(projectId, id);
+    return {
+      ...work,
+      result: {
+        ...rest,
+        ...(view && header.objectCount !== null ? { objects: view.rows() } : {}),
+        ...(view ? {} : { modelPruned: true }),
+        sceneOmitted: true,
+      } as StoredWork['result'],
+    };
+  }
+  /**
+   * Lazy reads of a request stored per object (`keys`, `object`, `scene`, `rows`, `geometry`);
+   * undefined for a result kept as JSON (not moved yet, without a scene, or pruned).
+   */
+  model(projectId: string, id: string): ModelView | undefined {
+    return this.models.view(projectId, id);
+  }
+  /** One request with only the result fields kept as JSON (no `objects`, `scene`, `definitions`). */
+  brief(projectId: string, id: string): StoredWork {
+    const work = this.raw(projectId, id);
+    if (!modelStoreOf(work)) return withoutGeometry(work);
+    const { modelStore: _marker, ...rest } = work.result as Record<string, unknown>;
+    return { ...work, result: rest as StoredWork['result'] };
+  }
+  /**
+   * Live Sync on a stored model (ARCH-01 §5 「쓰기」): the change page goes into the manifest of
+   * `id` in place, or, when `into` names a request already submitted for it, into a copy of the
+   * manifest there that takes `id`'s small result (the basis is referenced and must not change).
+   * `patch` sets small result fields. Nothing else of the model is read or decoded.
+   */
+  applyDelta(
+    projectId: string,
+    id: string,
+    delta: ModelDelta,
+    patch: Record<string, unknown>,
+    into?: string,
+  ) {
+    const db = this.store.db;
+    db.exec('SAVEPOINT workspace_delta');
+    try {
+      let target = id;
+      if (into) {
+        const basis = this.raw(projectId, id);
+        db.prepare(
+          "UPDATE workspace_requests SET state='succeeded', result=? WHERE id=? AND projectId=?",
+        ).run(JSON.stringify(basis.result), into, projectId);
+        this.models.copyManifest(projectId, id, into);
+        target = into;
+      }
+      const applied = this.models.applyDelta(projectId, target, delta, patch);
+      db.exec('RELEASE workspace_delta');
+      this.light.delete(target);
+      return { ...applied, requestId: target };
+    } catch (error) {
+      db.exec('ROLLBACK TO workspace_delta; RELEASE workspace_delta');
+      throw error;
+    }
   }
   basis(
     projectId: string,
@@ -295,7 +391,7 @@ export class Workspace {
     if (existing) {
       if (existing.projectId !== projectId || existing.input !== serialized)
         fail('REVISION_CONFLICT');
-      return { request: decode(existing)!, created: false };
+      return { request: this.expand(decode(existing)!), created: false };
     }
     const target = input.host || 'rhino';
     const targets = input.linkedTargets;
@@ -477,13 +573,7 @@ export class Workspace {
       fail('NOT_FOUND');
     if (result !== null && !storedResultSchema.safeParse(result).success)
       fail('INVALID_HOST_RESULT');
-    const text = result === null ? null : JSON.stringify(result);
-    const big = text !== null && text.length >= BIG_JSON;
-    if (big) breadcrumb('write-big', { id, bytes: text.length });
-    this.store.db
-      .prepare('UPDATE workspace_requests SET state=?,result=? WHERE id=? AND projectId=?')
-      .run(state, text, id, projectId);
-    if (big) breadcrumb('write-big-done', { id });
+    this.write(projectId, id, state, result as Record<string, unknown> | null);
     this.light.delete(id);
     const updated = this.get(projectId, id);
     if (typeof updated.input.parentRequestId === 'string') {
@@ -511,6 +601,110 @@ export class Workspace {
       }
     }
     return updated;
+  }
+  /**
+   * Stores a result. One with a `scene` array keeps its `objects`, `scene` and `definitions` per
+   * object (ModelStore) and the rest as JSON marked `modelStore: 'manifest'`, in one transaction
+   * (ARCH-01 §5). A model storage cannot rebuild exactly (MODEL_STORE_UNSUPPORTED) stays JSON.
+   */
+  private write(
+    projectId: string,
+    id: string,
+    state: RequestState,
+    result: Record<string, unknown> | null,
+  ) {
+    const db = this.store.db;
+    const plain = (value: Record<string, unknown> | null) => {
+      const text = value === null ? null : JSON.stringify(value);
+      const big = text !== null && text.length >= BIG_JSON;
+      if (big) breadcrumb('write-big', { id, bytes: text.length });
+      db.prepare('UPDATE workspace_requests SET state=?,result=? WHERE id=? AND projectId=?').run(
+        state,
+        text,
+        id,
+        projectId,
+      );
+      if (big) breadcrumb('write-big-done', { id });
+    };
+    db.exec('SAVEPOINT workspace_write');
+    try {
+      if (result && Array.isArray(result.scene)) {
+        const { objects, scene, definitions, sceneOmitted: _omitted, ...rest } = result;
+        const model = { scene } as StoredModel;
+        if (objects !== undefined) model.objects = objects as StoredModel['objects'];
+        if (definitions !== undefined)
+          model.definitions = definitions as StoredModel['definitions'];
+        const source = rest.sourceDocument as { revision?: unknown } | undefined;
+        db.exec('SAVEPOINT workspace_model');
+        try {
+          plain({ ...rest, modelStore: 'manifest' });
+          this.models.store(projectId, id, model, {
+            parentId: this.previousSync(projectId, id),
+            documentRevision: typeof source?.revision === 'number' ? source.revision : null,
+          });
+          db.exec('RELEASE workspace_model');
+        } catch (error) {
+          db.exec('ROLLBACK TO workspace_model; RELEASE workspace_model');
+          if ((error as { code?: unknown }).code !== 'MODEL_STORE_UNSUPPORTED') throw error;
+          this.dropModel(projectId, id);
+          plain(result);
+        }
+      } else {
+        this.dropModel(projectId, id);
+        plain(result);
+      }
+      db.exec('RELEASE workspace_write');
+    } catch (error) {
+      db.exec('ROLLBACK TO workspace_write; RELEASE workspace_write');
+      throw error;
+    }
+  }
+  /** A result written without a model leaves no manifest behind (nor versions only it used). */
+  private dropModel(projectId: string, id: string) {
+    if (!this.models.header(projectId, id)) return;
+    const versions = this.store.db
+      .prepare('SELECT versionId FROM sync_manifest_items WHERE requestId=?')
+      .all(id)
+      .map((row) => String(row.versionId));
+    this.store.db.prepare('DELETE FROM sync_manifests WHERE requestId=?').run(id);
+    this.models.sweep(projectId, versions);
+  }
+  /**
+   * The Sync this one follows (`sync_manifests.parentId`): the newest other successful stored
+   * Sync of the same linked file, or without a link of the same open document.
+   */
+  private previousSync(projectId: string, id: string): string | null {
+    const row = this.store.db
+      .prepare('SELECT input FROM workspace_requests WHERE id=? AND projectId=?')
+      .get(id, projectId) as { input: string } | undefined;
+    if (!row) return null;
+    const input = JSON.parse(row.input) as {
+      source?: unknown;
+      linkId?: unknown;
+      sourceDocument?: { instance?: unknown; documentId?: unknown };
+    };
+    if (input.source !== 'document') return null;
+    const base = `SELECT w.id FROM sync_manifests m JOIN workspace_requests w ON w.id=m.requestId
+      WHERE m.projectId=? AND w.id<>? AND w.state='succeeded'
+        AND json_extract(w.input,'$.source')='document'`;
+    const found =
+      typeof input.linkId === 'string'
+        ? this.store.db
+            .prepare(`${base} AND json_extract(w.input,'$.linkId')=? ORDER BY w.rowid DESC LIMIT 1`)
+            .get(projectId, id, input.linkId)
+        : this.store.db
+            .prepare(
+              `${base} AND json_extract(w.input,'$.sourceDocument.instance')=?
+                AND json_extract(w.input,'$.sourceDocument.documentId')=?
+                ORDER BY w.rowid DESC LIMIT 1`,
+            )
+            .get(
+              projectId,
+              id,
+              String(input.sourceDocument?.instance ?? ''),
+              Number(input.sourceDocument?.documentId ?? -1),
+            );
+    return found ? String(found.id) : null;
   }
   createLinkedChild(parent: StoredWork, childId: string, index: number): StoredWork {
     const target = parent.input.linkedTargets?.[index];

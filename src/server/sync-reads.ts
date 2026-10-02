@@ -46,7 +46,7 @@ export async function syncReadRoutes(
   if (isFileLink(link)) {
     // A file opened in VIDE: the work copy of its latest import is read again with the scope.
     const latest = workspace
-      .list(projectId, { full: true })
+      .list(projectId)
       .filter(
         (entry) =>
           entry.state === 'succeeded' &&

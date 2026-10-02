@@ -8,6 +8,8 @@ import { chromium } from 'playwright';
 import { startServer } from '../../src/server/server.ts';
 import { Workspace } from '../../src/core/workspace.ts';
 import { runDirectory } from './run-directory.mjs';
+// The links list, with or without a page's draft lease (`?page=&hold=`, T-084).
+const linksUrl = /\/api\/v1\/projects\/[^/]+\/links(\?.*)?$/;
 
 const directory = runDirectory('browser-pin-tokens');
 await mkdir(directory, { recursive: true });
@@ -73,8 +75,6 @@ try {
   });
   for (const path of ['documents', 'attached-documents'])
     await page.route(`**/api/v1/host/${path}`, (route) => route.fulfill({ json: catalog() }));
-  let captures = 0,
-    syncId;
   const sourceDocument = (revision) => ({
     instance,
     documentId: 7,
@@ -83,37 +83,6 @@ try {
     name: 'Attached test',
     capturedAt: new Date().toISOString(),
     connection: 'attached-editor',
-  });
-  await page.route('**/api/v1/projects/*/capture', async (route) => {
-    captures++;
-    const target = route.request().postDataJSON(),
-      projectId = new URL(route.request().url()).pathname.split('/')[4];
-    workspace.submit(projectId, {
-      id: target.id,
-      linkId: target.linkId,
-      body: 'Sync',
-      permission: 'candidate',
-      provider: 'codex-cli',
-      pins: [],
-      sketches: [],
-      files: [],
-      source: 'document',
-      host: 'rhino',
-    });
-    syncId = target.id;
-    await route.fulfill({
-      json: workspace.update(projectId, target.id, 'succeeded', {
-        host: 'rhino',
-        hostExecuted: true,
-        verified: false,
-        displayOnly: true,
-        executionMode: 'sdk',
-        text: 'Sync complete',
-        sourceDocument: sourceDocument(1),
-        objects: [a.object, b.object],
-        scene: [a.scene, b.scene],
-      }),
-    });
   });
   const posted = [];
   await page.route('**/api/v1/projects/*/requests', async (route) => {
@@ -129,7 +98,7 @@ try {
   app.store.db
     .prepare('INSERT INTO document_links VALUES(?,?,?,?,?,?,?,0,?,?)')
     .run('link-a', projectId, 'rhino', 'Attached test', null, instance, 7, now, now);
-  await page.route('**/api/v1/projects/*/links', async (route) => {
+  await page.route(linksUrl, async (route) => {
     if (route.request().method() !== 'GET') return route.continue();
     const rows = await (await route.fetch()).json();
     await route.fulfill({
@@ -147,6 +116,31 @@ try {
         },
       })),
     });
+  });
+  // The engine's first Sync of the file (T-084): written here, shown without a click.
+  const syncId = 'engine-sync';
+  workspace.submit(projectId, {
+    id: syncId,
+    linkId: 'link-a',
+    body: 'Sync',
+    permission: 'candidate',
+    provider: 'codex-cli',
+    pins: [],
+    sketches: [],
+    files: [],
+    source: 'document',
+    host: 'rhino',
+  });
+  workspace.update(projectId, syncId, 'succeeded', {
+    host: 'rhino',
+    hostExecuted: true,
+    verified: false,
+    displayOnly: true,
+    executionMode: 'sdk',
+    text: 'Sync complete',
+    sourceDocument: sourceDocument(1),
+    objects: [a.object, b.object],
+    scene: [a.scene, b.scene],
   });
   await page.waitForFunction(() =>
     document.querySelector('.object-summary')?.textContent?.startsWith('2개 객체'),

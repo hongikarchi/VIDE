@@ -49,7 +49,12 @@ test('a request pinning 8 objects of a large Sync decodes that Sync at most once
   workspace.submit(project.id, { ...base, id: 'sync', body: 'sync', pins: [] });
   const model = largeSync();
   workspace.update(project.id, 'sync', 'succeeded', model);
-  assert.ok(JSON.stringify(model).length > 10_000_000, 'the Sync is a large stored row');
+  assert.ok(JSON.stringify(model).length > 10_000_000, 'the Sync is a large model');
+  // Stored per object (PLAN-27 1단계): pins and checks never rebuild the whole model.
+  assert.ok(workspace.model(project.id, 'sync'));
+  let loads = 0;
+  const load = workspace.models.load.bind(workspace.models);
+  workspace.models.load = (...args) => (loads++, load(...args));
   let task;
   const execution = new Execution(workspace, {
     sdk: {
@@ -77,11 +82,13 @@ test('a request pinning 8 objects of a large Sync decodes that Sync at most once
     });
     // The geometry-free row is decoded once and kept; before: once per pin plus the basis (9).
     assert.ok(onSubmit <= 1, `submit decoded the Sync ${onSubmit} times`);
+    assert.equal(loads, 0, 'submit rebuilt the stored model');
     const onRun = await largeDecodes(async () => {
       execution.start(request);
       await Promise.all([...execution.active.values()].map((item) => item.completion));
     });
     assert.ok(onRun <= 1, `the run decoded the Sync ${onRun} times`);
+    assert.equal(loads, 1, 'the run rebuilds its basis once');
     assert.equal(workspace.get(project.id, 'pinned').state, 'succeeded');
     // The run still gets the whole model and every pinned object.
     assert.equal(task.previous.result.scene.length, 400);

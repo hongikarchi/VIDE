@@ -7,6 +7,8 @@ import { chromium } from 'playwright';
 import { startServer } from '../../src/server/server.ts';
 import { Workspace } from '../../src/core/workspace.ts';
 import { runDirectory } from './run-directory.mjs';
+// The links list, with or without a page's draft lease (`?page=&hold=`, T-084).
+const linksUrl = /\/api\/v1\/projects\/[^/]+\/links(\?.*)?$/;
 
 const directory = runDirectory('browser-rhino-panel');
 await mkdir(directory, { recursive: true });
@@ -61,17 +63,8 @@ try {
     selectionVersion++;
     await route.fulfill({ json: { ok: true, pinnedIds: pinned, selectionVersion } });
   });
-  let release;
-  const held = new Promise((resolve) => {
-    release = resolve;
-  });
-  let captures = 0;
-  await page.route('**/api/v1/projects/*/capture', async (route) => {
-    captures++;
-    // The first Sync of the linked file waits so a pin can be made before any Sync exists.
-    await held;
-    const target = route.request().postDataJSON(),
-      projectId = new URL(route.request().url()).pathname.split('/')[4];
+  // A Sync of the linked file: the engine's own (T-084) or the panel's Sync button (capture).
+  const storeSync = (projectId, target) => {
     const input = {
       id: target.id,
       linkId: target.linkId,
@@ -85,28 +78,33 @@ try {
       host: 'rhino',
     };
     workspace.submit(projectId, input);
-    await route.fulfill({
-      json: workspace.update(projectId, input.id, 'succeeded', {
-        host: 'rhino',
-        hostExecuted: true,
-        displayOnly: true,
-        executionMode: 'sdk',
-        text: 'Sync complete',
-        sourceDocument: {
-          instance,
-          documentId: 7,
-          documentHash: 'a'.repeat(64),
-          name: 'Panel test.3dm',
-          capturedAt: new Date().toISOString(),
-          connection: 'attached-editor',
-        },
-        objects: [
-          { id: wall, name: 'North wall', kind: 'native', origin: [0, 0, 0] },
-          { id: slab, name: 'Slab', kind: 'native', origin: [0, 0, 0] },
-        ],
-        scene: [],
-      }),
+    return workspace.update(projectId, input.id, 'succeeded', {
+      host: 'rhino',
+      hostExecuted: true,
+      displayOnly: true,
+      executionMode: 'sdk',
+      text: 'Sync complete',
+      sourceDocument: {
+        instance,
+        documentId: 7,
+        documentHash: 'a'.repeat(64),
+        name: 'Panel test.3dm',
+        capturedAt: new Date().toISOString(),
+        connection: 'attached-editor',
+      },
+      objects: [
+        { id: wall, name: 'North wall', kind: 'native', origin: [0, 0, 0] },
+        { id: slab, name: 'Slab', kind: 'native', origin: [0, 0, 0] },
+      ],
+      scene: [],
     });
+  };
+  let captures = 0;
+  await page.route('**/api/v1/projects/*/capture', async (route) => {
+    captures++;
+    const target = route.request().postDataJSON(),
+      projectId = new URL(route.request().url()).pathname.split('/')[4];
+    await route.fulfill({ json: storeSync(projectId, target) });
   });
   // The plugin linked this document to the project and opened the panel for it.
   const projectId = 'panel-project';
@@ -115,7 +113,7 @@ try {
   app.store.db
     .prepare('INSERT INTO document_links VALUES(?,?,?,?,?,?,?,0,?,?)')
     .run('link-panel', projectId, 'rhino', 'Panel test.3dm', null, instance, 7, now, now);
-  await page.route('**/api/v1/projects/*/links', async (route) => {
+  await page.route(linksUrl, async (route) => {
     if (route.request().method() !== 'GET') return route.continue();
     const rows = await (await route.fetch()).json();
     await route.fulfill({
@@ -154,15 +152,17 @@ try {
     document.querySelector('#context').textContent.includes('Sync 대기 1개'),
   );
   assert.deepEqual(pinPosts.at(-1).ids, [wall]);
-  // The linked file's Sync resolves the pending pin into the request draft.
-  release();
+  // The engine's first Sync of the linked file resolves the pending pin into the request draft;
+  // the panel never starts it.
+  assert.equal(captures, 0);
+  storeSync(projectId, { id: 'engine-sync-1', linkId: 'link-panel' });
   await page.waitForFunction(() =>
     document.querySelector('#context').textContent.includes('고정 객체 1개'),
   );
   // The panel's Sync button forces another Sync of the same linked file.
   await page.locator('.host-panel-head').getByRole('button', { name: 'Sync', exact: true }).click();
   await page.waitForFunction(() => document.querySelector('#right'));
-  while (captures < 2) await new Promise((resolve) => setTimeout(resolve, 20));
+  while (captures < 1) await new Promise((resolve) => setTimeout(resolve, 20));
   // Pins changed in Rhino (another client) appear in the panel without a reload.
   pinned = [wall, slab];
   selectionVersion++;

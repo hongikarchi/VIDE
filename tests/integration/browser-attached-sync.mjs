@@ -5,6 +5,8 @@ import { chromium } from 'playwright';
 import { startServer } from '../../src/server/server.ts';
 import { Workspace } from '../../src/core/workspace.ts';
 import { runDirectory } from './run-directory.mjs';
+// The links list, with or without a page's draft lease (`?page=&hold=`, T-084).
+const linksUrl = /\/api\/v1\/projects\/[^/]+\/links(\?.*)?$/;
 
 // A Rhino document linked to the project (SPEC-01.11): first Sync without a click, failure display,
 // draft protection of automatic Sync, the explicit apply packet, and a closed file.
@@ -27,9 +29,7 @@ try {
   const instance = '42:100:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
   let generation = 0,
     captures = 0,
-    connected = true,
-    rejectCapture = true,
-    releaseCapture;
+    connected = true;
   const document = {
     instance,
     id: 7,
@@ -55,8 +55,13 @@ try {
   app.store.db
     .prepare('INSERT INTO document_links VALUES(?,?,?,?,?,?,?,0,?,?)')
     .run('link-a', projectId, 'rhino', 'Attached test', null, instance, 7, now, now);
-  await page.route('**/api/v1/projects/*/links', async (route) => {
+  // The engine Syncs the file itself (T-084); with no host here the test plays it: it writes the
+  // Sync and the list carries the engine's state. The page never asks for a Sync on its own.
+  let engineSync;
+  const leases = [];
+  await page.route(linksUrl, async (route) => {
     if (route.request().method() !== 'GET') return route.continue();
+    leases.push(new URL(route.request().url()).searchParams.get('hold') ?? '');
     const rows = await (await route.fetch()).json();
     await route.fulfill({
       json: rows.map((row) => ({
@@ -73,62 +78,28 @@ try {
               hostBusy: false,
             }
           : null,
+        ...(engineSync ? { sync: { ...engineSync, at: now } } : {}),
       })),
     });
   });
   await page.route('**/api/v1/projects/*/capture', async (route) => {
     captures++;
-    const target = route.request().postDataJSON(),
-      project = new URL(route.request().url()).pathname.split('/')[4];
-    assert.equal(target.instance, instance);
-    assert.equal(target.linkId, 'link-a');
-    const input = {
-      id: target.id,
-      linkId: target.linkId,
-      body: 'Sync',
-      permission: 'review',
-      provider: 'codex-cli',
-      pins: [],
-      sketches: [],
-      files: [],
-      source: 'document',
-      host: 'rhino',
-    };
-    workspace.submit(project, input);
-    if (rejectCapture) {
-      await new Promise((resolve) => {
-        releaseCapture = resolve;
-      });
-      const failed = workspace.update(project, input.id, 'failed', {
-        hostExecuted: false,
-        code: 'IMPORT_LIMIT',
-      });
-      await route.fulfill({ json: failed });
-      return;
-    }
-    const request = workspace.update(project, input.id, 'succeeded', {
-      host: 'rhino',
-      hostExecuted: true,
-      verified: false,
-      displayOnly: true,
-      executionMode: 'sdk',
-      text: 'Sync complete',
-      sourceDocument: {
-        instance,
-        documentId: 7,
-        documentHash: 'a'.repeat(64),
-        name: 'Attached test',
-        capturedAt: new Date().toISOString(),
-        connection: 'attached-editor',
-      },
-      objects: [
-        { id: 'box', name: 'Native mass', kind: 'box', origin: [0, 0, 0], size: [2, 3, 4] },
-      ],
-      scene: [],
-    });
-    await route.fulfill({ json: request });
+    await route.fulfill({ status: 500, json: { code: 'UNEXPECTED' } });
   });
-  // The linked open file syncs without any click.
+  const input = (id) => ({
+    id,
+    linkId: 'link-a',
+    body: 'Sync',
+    permission: 'review',
+    provider: 'codex-cli',
+    pins: [],
+    sketches: [],
+    files: [],
+    source: 'document',
+    host: 'rhino',
+  });
+  // The engine reads the linked open file without any click: the empty view says so.
+  engineSync = { state: 'syncing' };
   await page.waitForFunction(
     () => window.document.querySelector('#viewport-empty').dataset.state === 'loading',
   );
@@ -136,21 +107,43 @@ try {
     await page.locator('#viewport-empty').evaluate((n) => getComputedStyle(n).pointerEvents),
     'none',
   );
-  while (!releaseCapture) await new Promise((resolve) => setTimeout(resolve, 10));
-  releaseCapture();
+  // Its Sync failed: the empty view says so and the file's row names the cause.
+  workspace.submit(projectId, input('failed-sync'));
+  workspace.update(projectId, 'failed-sync', 'failed', {
+    hostExecuted: false,
+    code: 'IMPORT_LIMIT',
+  });
+  engineSync = { state: 'failed', code: 'IMPORT_LIMIT' };
   await page.waitForFunction(
     () => window.document.querySelector('#viewport-empty').dataset.state === 'failed',
   );
   assert.equal(await page.locator('#viewport-empty').isVisible(), true);
   await page.screenshot({ path: join(directory, 'empty-sync-failed.png') });
-  await page.getByRole('button', { name: '오류 기록', exact: true }).click();
-  const status = page.getByRole('dialog', { name: '상태 및 설정', exact: true });
-  assert.match(await status.textContent(), /IMPORT_LIMIT/);
-  await status.getByRole('button', { name: '닫기', exact: true }).click();
-  // After a reload the file syncs again (first Sync not yet done).
-  rejectCapture = false;
-  captures = 0;
-  await page.reload();
+  // The file's row names the cause the engine reported.
+  await page.waitForFunction(() =>
+    window.document.querySelector('.link-row')?.textContent.includes('객체 수 한도'),
+  );
+  // The engine's next Sync succeeds: the file is shown.
+  workspace.submit(projectId, input('engine-sync'));
+  workspace.update(projectId, 'engine-sync', 'succeeded', {
+    host: 'rhino',
+    hostExecuted: true,
+    verified: false,
+    displayOnly: true,
+    executionMode: 'sdk',
+    text: 'Sync complete',
+    sourceDocument: {
+      instance,
+      documentId: 7,
+      documentHash: 'a'.repeat(64),
+      name: 'Attached test',
+      capturedAt: new Date().toISOString(),
+      connection: 'attached-editor',
+    },
+    objects: [{ id: 'box', name: 'Native mass', kind: 'box', origin: [0, 0, 0], size: [2, 3, 4] }],
+    scene: [],
+  });
+  engineSync = { state: 'idle' };
   const row = page.locator('.link-row[data-link-id="link-a"]');
   await page.waitForFunction(
     () => !window.document.querySelector('.link-row')?.textContent.includes('Sync 전'),
@@ -165,20 +158,25 @@ try {
   );
   assert.equal(await page.getByRole('link', { name: '3dm 내려받기', exact: true }).count(), 0);
   assert.equal(await page.getByRole('button', { name: 'Rhino에서 열기', exact: true }).count(), 0);
-  assert.equal(captures, 1);
-  // A draft based on this file holds its automatic Sync; other input is kept.
+  // A draft based on this file holds the engine's automatic Sync (a lease the page renews); other
+  // input is kept.
   await page.locator('#body').fill('Do not lose my draft');
   generation++;
+  while (!leases.includes('link-a')) await new Promise((resolve) => setTimeout(resolve, 20));
+  engineSync = { state: 'held' };
   await page.waitForFunction(() =>
     window.document.querySelector('.link-row')?.textContent.includes('보류'),
   );
-  assert.equal(captures, 1);
   assert.equal(await page.locator('#body').inputValue(), 'Do not lose my draft');
   await page.locator('#body').fill('');
+  const released = leases.length;
+  while (leases.length < released + 2) await new Promise((resolve) => setTimeout(resolve, 20));
+  assert.equal(leases.at(-1), '');
+  engineSync = { state: 'idle' };
   await page.waitForFunction(
     () => !window.document.querySelector('.link-row')?.textContent.includes('보류'),
   );
-  assert.equal(captures, 2);
+  assert.equal(captures, 0);
   await page.locator('#model').selectOption('codex-cli');
   // 자동 (default): the AI edits the open document directly inside one undo record.
   await page.locator('#mode-toggle [data-mode="auto"]').click();

@@ -96,3 +96,4 @@
 {"request":"jev로 자동 선택을 했는데, 레이어 정리에 대해서 GPT-6-Luna low를 추천해줬어. geometry를 만드는 작업이 아니면 claude","files":["src/ai/model-router.ts","docs/plans/PLAN-05-decision-layer-evaluation.md"]}
 {"request":"같은 문서에 쓰는 작업에 대해서 B대화가 A대화가 끝날 때까지 생각도 하지 못하는거는 비효율적. 파일을 수정하는 행위만 순차적으로","files":["src/contracts/request-scope.ts","src/server/direct-mode.ts","src/server/execution.ts","src/ui/request-scope.ts"]}
 {"request":"레퍼런스 이미지 넣으면 마스킹하고 확인 받는 기능이 안 보이고 그냥 알아서 만들어버리네 / 이미지 대신 폴더 경로를 적은 경우에도","files":["src/ui/reference-check.ts","src/ui/app.ts","src/server/attachment-paths.ts","src/ui/work-view.tsx"]}
+{"request":"1만 객체는 전체 라이노 파일인데, 이거를 매 작업마다 다 보낸거야? 너무 비효율적인데 / T-083 / T-084는 지금 바로 하는게 좋겠네","files":["src/core/model-store.ts","src/core/model-move.ts","src/core/workspace.ts","src/server/live-sync.ts","src/server/sdk-execution.ts","src/server/server.ts","src/server/document-sync.ts","src/server/sync-scheduler.ts","src/ui/app.ts","src/ui/links.tsx"]}

@@ -16,6 +16,14 @@ export class SyncCoalescer<T> {
     this.reuseMs = options.reuseMs ?? 2000;
     this.now = options.now ?? Date.now;
   }
+  /** True while no Sync runs. */
+  idle() {
+    return this.running.size === 0;
+  }
+  /** The Sync of `key` running now, if any (a Live Sync waits for it, T-084). */
+  current(key: string): Promise<T> | undefined {
+    return this.running.get(key);
+  }
   /**
    * Runs `task` for `key`, or shares the running or just finished one. `reusable` decides whether
    * a finished result still stands (same document revision); a failed check runs fresh.

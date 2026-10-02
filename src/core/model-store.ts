@@ -39,6 +39,16 @@ type Version = {
   geometry: Uint8Array | null;
 };
 type Kind = 'object' | 'definition';
+/** One encoded, fingerprinted object or definition (see `ModelStore.prepare`). */
+export type PreparedVersion = Version;
+/** A model encoded and fingerprinted, ready to store (`ModelStore.prepare`). */
+export type PreparedModel = {
+  order: string[];
+  versions: Version[];
+  defs: (readonly [string, Version])[];
+  hasObjects: boolean;
+  hasDefinitions: boolean;
+};
 
 /** Removed-key records older than this many manifest revisions are dropped (ARCH-01 §5). */
 export const REMOVED_HISTORY = 100;
@@ -222,6 +232,25 @@ export class ModelView {
     }
     return out;
   }
+  /**
+   * `scene[]` items without their coordinate arrays (meta only: ids, layer, measurements, block),
+   * in display order. For readers that never draw: layer counts, samples, measured values.
+   */
+  sceneMeta(): Item[] {
+    const out: Item[] = [];
+    for (const row of this.store.db
+      .prepare(
+        `SELECT v.meta FROM sync_manifest_items i JOIN object_versions v
+          ON v.projectId=i.projectId AND v.id=i.versionId
+          WHERE i.requestId=? AND i.kind='object' ORDER BY i.position`,
+      )
+      .iterate(this.requestId)) {
+      const scene = (parseMeta(String(row.meta)) as { scene?: Item }).scene;
+      if (scene && typeof scene === 'object')
+        out.push(Object.fromEntries(Object.entries(scene).filter(([, v]) => v !== '$bin')));
+    }
+    return out;
+  }
   /** VGT1 of the request (`root` is the stored request with its small result). */
   geometry(root: Record<string, unknown>): Uint8Array {
     return this.store.geometry(this.projectId, this.requestId, root);
@@ -235,7 +264,7 @@ export class ModelStore {
     this.db = db;
   }
   /** Runs `write` in one SAVEPOINT (nests inside a caller's transaction). */
-  private tx<T>(write: () => T): T {
+  tx<T>(write: () => T): T {
     const name = `model_store_${this.depth++}`;
     this.db.exec(`SAVEPOINT ${name}`);
     try {
@@ -271,18 +300,8 @@ export class ModelStore {
     );
   }
 
-  /**
-   * Stores the display part of a result as the manifest of `requestId` (the request row must
-   * exist). Storing again over an existing manifest raises its revision and marks only the keys
-   * whose version changed, so `deltaSince` serves it too. Throws MODEL_STORE_UNSUPPORTED for a
-   * model that cannot be rebuilt from one position per key (the caller keeps it as JSON).
-   */
-  store(
-    projectId: string,
-    requestId: string,
-    model: StoredModel,
-    options: { parentId?: string | null; documentRevision?: number | null } = {},
-  ) {
+  /** Checks a model's keys and order (MODEL_STORE_UNSUPPORTED when it cannot be stored). */
+  private shape(model: StoredModel) {
     if (!Array.isArray(model.scene)) fail('MODEL_STORE_UNSUPPORTED');
     if (model.objects !== undefined && !Array.isArray(model.objects))
       fail('MODEL_STORE_UNSUPPORTED');
@@ -303,12 +322,78 @@ export class ModelStore {
       sceneKeys.push(key);
     }
     const order = sequence(objectKeys, sceneKeys);
-    const versions = order.map((key) =>
-      objectVersion(objects.get(key), scene.has(key) ? encodeItem(scene.get(key)) : undefined),
-    );
-    const defs = Object.entries(definitions ?? {}).map(
-      ([key, value]) => [key, definitionVersion(value)] as const,
-    );
+    const version = (key: string) =>
+      objectVersion(objects.get(key), scene.has(key) ? encodeItem(scene.get(key)) : undefined);
+    return { order, version, definitions, hasObjects: model.objects !== undefined };
+  }
+  private prepared(shape: ReturnType<ModelStore['shape']>, versions: Version[]): PreparedModel {
+    return {
+      order: shape.order,
+      versions,
+      defs: Object.entries(shape.definitions ?? {}).map(
+        ([key, value]) => [key, definitionVersion(value)] as const,
+      ),
+      hasObjects: shape.hasObjects,
+      hasDefinitions: !!shape.definitions,
+    };
+  }
+  /** Encodes and fingerprints every object and definition of a model (no database access). */
+  prepare(model: StoredModel): PreparedModel {
+    const shape = this.shape(model);
+    return this.prepared(shape, shape.order.map(shape.version));
+  }
+  /** `prepare` in batches, letting the event loop run between them (moving large rows). */
+  async prepareAsync(model: StoredModel, pause: () => Promise<void>, batch = 500) {
+    const shape = this.shape(model);
+    const versions: Version[] = [];
+    for (let at = 0; at < shape.order.length; at += batch) {
+      for (const key of shape.order.slice(at, at + batch)) versions.push(shape.version(key));
+      await pause();
+    }
+    return this.prepared(shape, versions);
+  }
+  /**
+   * Inserts versions ahead of their manifest (they are immutable and named by content, so this
+   * needs no transaction with it; a version no manifest ends up using is swept). Returns how many
+   * were new.
+   */
+  insertVersions(projectId: string, versions: readonly PreparedVersion[]) {
+    return this.tx(() => {
+      let written = 0;
+      for (const version of versions) written += this.insertVersion(projectId, version);
+      return written;
+    });
+  }
+
+  /**
+   * Stores the display part of a result as the manifest of `requestId` (the request row must
+   * exist). Storing again over an existing manifest raises its revision and marks only the keys
+   * whose version changed, so `deltaSince` serves it too. Throws MODEL_STORE_UNSUPPORTED for a
+   * model that cannot be rebuilt from one position per key (the caller keeps it as JSON).
+   */
+  store(
+    projectId: string,
+    requestId: string,
+    model: StoredModel,
+    options: { parentId?: string | null; documentRevision?: number | null } = {},
+  ) {
+    return this.storePrepared(projectId, requestId, this.prepare(model), options);
+  }
+  /**
+   * `store` of a model already prepared (`prepare`, `prepareAsync`). `versionsInserted`: its
+   * versions were inserted ahead (`insertVersions`), so only the manifest is written.
+   */
+  storePrepared(
+    projectId: string,
+    requestId: string,
+    prepared: PreparedModel,
+    options: {
+      parentId?: string | null;
+      documentRevision?: number | null;
+      versionsInserted?: boolean;
+    } = {},
+  ) {
+    const { order, versions, defs } = prepared;
     return this.tx(() => {
       const old = this.header(projectId, requestId);
       const revision = (old?.revision ?? 0) + 1;
@@ -335,8 +420,8 @@ export class ModelStore {
           options.parentId ?? old?.parentId ?? null,
           options.documentRevision ?? null,
           revision,
-          model.objects ? order.length : null,
-          definitions ? defs.length : null,
+          prepared.hasObjects ? order.length : null,
+          prepared.hasDefinitions ? defs.length : null,
           now,
         );
       this.db.prepare('DELETE FROM sync_manifest_items WHERE requestId=?').run(requestId);
@@ -347,7 +432,7 @@ export class ModelStore {
       let written = 0,
         bytes = 0;
       const put = (kind: Kind, key: string, position: number, version: Version) => {
-        const added = this.insertVersion(projectId, version);
+        const added = options.versionsInserted ? 0 : this.insertVersion(projectId, version);
         written += added;
         if (added) bytes += version.text.length + (version.geometry?.byteLength ?? 0);
         const before = previous.get(`${kind}|${key}`);

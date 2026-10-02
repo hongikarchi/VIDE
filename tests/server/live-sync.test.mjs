@@ -58,9 +58,9 @@ const moved = (where, basis, since) => {
   const next = item('b', 'h2-moved');
   return {
     delta: { objects: [next.object], scene: [next.scene], removed: ['a'] },
+    survey: {},
+    // Only the change page and small fields come back (PLAN-27 1단계): no merged model.
     result: {
-      objects: [next.object],
-      scene: [next.scene],
       sourceDocument: {
         ...basis.sourceDocument,
         documentHash: 's'.repeat(64),

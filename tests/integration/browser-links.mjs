@@ -6,6 +6,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { chromium } from 'playwright';
 import { startServer } from '../../src/server/server.ts';
+// The links list, with or without a page's draft lease (`?page=&hold=`, T-084).
+const linksUrl = /\/api\/v1\/projects\/[^/]+\/links(\?.*)?$/;
 const directory = await mkdtemp(join(tmpdir(), 'vide-links-'));
 let app, browser;
 try {
@@ -203,7 +205,7 @@ try {
     },
     lastSync: null,
   };
-  await page.route('**/api/v1/projects/*/links', async (route) => {
+  await page.route(linksUrl, async (route) => {
     if (route.request().method() !== 'GET') return route.continue();
     const real = await (await route.fetch()).json();
     await route.fulfill({
@@ -213,11 +215,19 @@ try {
       ],
     });
   });
-  await page.route('**/api/v1/projects/*/capture', async (route) => {
-    captured = route.request().postDataJSON();
-    const input = {
+  // The engine Syncs a newly linked open file itself (T-084, ARCH-01 §7); the page only shows it.
+  const pageSyncs = [];
+  await page.route('**/api/v1/projects/*/capture', (route) => {
+    pageSyncs.push(route.request().postDataJSON());
+    return route.fulfill({ status: 500, json: { code: 'UNEXPECTED' } });
+  });
+  captured = { id: 'sync-new' };
+  app.store.db.prepare('INSERT INTO workspace_requests VALUES(?,?,?,?,?,?)').run(
+    captured.id,
+    projectId,
+    JSON.stringify({
       id: captured.id,
-      linkId: captured.linkId,
+      linkId: 'link-new',
       provider: 'codex-cli',
       host: 'rhino',
       source: 'document',
@@ -226,27 +236,19 @@ try {
       pins: [],
       sketches: [],
       files: [],
-    };
-    await route.fulfill({
-      json: {
-        id: captured.id,
-        input,
-        state: 'succeeded',
-        createdAt: at(0),
-        result: {
-          hostExecuted: true,
-          executionMode: 'sdk',
-          host: 'rhino',
-          displayOnly: true,
-          objects: [{ id: 'n-1', name: 'new 1', kind: 'native', nativeId: 'n-1' }],
-          scene: [
-            { id: 'n-1', nativeId: 'n-1', nativeType: 'Curve', segments: [0, 1, 0, 1, 1, 0] },
-          ],
-          sourceDocument: { name: 'new.3dm', capturedAt: at(0), instance: '7:8', documentId: 3 },
-        },
-      },
-    });
-  });
+    }),
+    'succeeded',
+    JSON.stringify({
+      hostExecuted: true,
+      executionMode: 'sdk',
+      host: 'rhino',
+      displayOnly: true,
+      objects: [{ id: 'n-1', name: 'new 1', kind: 'native', nativeId: 'n-1' }],
+      scene: [{ id: 'n-1', nativeId: 'n-1', nativeType: 'Curve', segments: [0, 1, 0, 1, 1, 0] }],
+      sourceDocument: { name: 'new.3dm', capturedAt: at(0), instance: '7:8', documentId: 3 },
+    }),
+    at(0),
+  );
   await page.locator('.link-row[data-link-id="link-new"]').waitFor();
   await page.waitForFunction(() =>
     document.querySelector('.link-row[data-link-id="link-new"]')?.textContent.includes('Live'),
@@ -254,17 +256,15 @@ try {
   await page.waitForFunction(() =>
     document.querySelector('#objects')?.textContent.includes('new.3dm'),
   );
-  assert.equal(captured.linkId, 'link-new');
-  assert.equal(captured.instance, '7:8');
-  assert.equal(captured.documentId, 3);
+  assert.deepEqual(pageSyncs, []);
   // A row that followed its window says so once, with [새 항목으로 분리]; a closed duplicate of an
   // open window offers [합치기] (SPEC-01.11 1, T-107). The engine's answers are faked here; the
   // engine side is tests/server/link-choice.test.mjs.
   const actions = [];
   let followed = true,
     merged = false;
-  await page.unroute('**/api/v1/projects/*/links');
-  await page.route('**/api/v1/projects/*/links', async (route) => {
+  await page.unroute(linksUrl);
+  await page.route(linksUrl, async (route) => {
     if (route.request().method() !== 'GET') return route.continue();
     const real = await (await route.fetch()).json();
     await route.fulfill({
@@ -313,7 +313,7 @@ try {
   await duplicate.getByRole('button', { name: '합치기' }).click();
   await page.waitForFunction(() => !document.querySelector('[data-link-id="link-plan-1"]'));
   assert.deepEqual(actions[1], ['merge', 'link-plan-1', 'link-new']);
-  await page.unroute('**/api/v1/projects/*/links');
+  await page.unroute(linksUrl);
   assert.deepEqual(errors, []);
   // Hidden files leave the space on every start (SPEC-01.11 4, T-096): with no saved draft, and
   // with a draft whose basis is the Sync that was on screen when VIDE last closed.

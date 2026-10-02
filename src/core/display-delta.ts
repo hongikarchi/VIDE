@@ -74,3 +74,41 @@ export function applyDisplayDelta<O extends Keyed, S extends SceneItem, D = Defi
     ...(definitions ? { definitions } : {}),
   };
 }
+
+type Coverage = ReturnType<typeof displayCoverage>;
+/**
+ * `displayCoverage` after a change page, from the counts before it: `before` are the stored items
+ * of the changed and removed keys, `after` the page's items (PLAN-27 1단계: a Live Sync never
+ * decodes the whole model). `definitionOf` gives the definition a block instance shows after the
+ * page. Undefined when the counts before are unknown; the caller then counts the whole model.
+ */
+export function coverageAfter(
+  previous: Partial<Coverage> | undefined,
+  before: SceneItem[],
+  after: SceneItem[],
+  definitionOf: (id: string) => DefinitionItem | undefined,
+): Coverage | undefined {
+  if (
+    !previous ||
+    typeof previous.total !== 'number' ||
+    typeof previous.omitted !== 'number' ||
+    !previous.omittedTypes
+  )
+    return undefined;
+  const definitions = new Proxy({} as Record<string, DefinitionItem>, {
+    get: (_target, id) => (typeof id === 'string' ? definitionOf(id) : undefined),
+  });
+  const gone = displayCoverage(before, definitions);
+  const come = displayCoverage(after, definitions);
+  const omittedTypes: Record<string, number> = { ...previous.omittedTypes };
+  for (const [type, count] of Object.entries(gone.omittedTypes))
+    omittedTypes[type] = (omittedTypes[type] ?? 0) - count;
+  for (const [type, count] of Object.entries(come.omittedTypes))
+    omittedTypes[type] = (omittedTypes[type] ?? 0) + count;
+  for (const [type, count] of Object.entries(omittedTypes))
+    if (count <= 0) delete omittedTypes[type];
+  const total = previous.total - gone.total + come.total;
+  const omitted = previous.omitted - gone.omitted + come.omitted;
+  if (total < 0 || omitted < 0) return undefined;
+  return { total, displayed: total - omitted, omitted, omittedTypes };
+}

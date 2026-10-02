@@ -895,7 +895,7 @@ async function readForJig(
   if (link.host === 'rhino' && sdk) {
     if (isFileLink(link)) {
       const latest = workspace
-        .list(projectId, { full: true })
+        .list(projectId)
         .filter(
           (entry) =>
             entry.state === 'succeeded' &&

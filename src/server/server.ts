@@ -102,11 +102,12 @@ import { Store, DomainError } from '../core/store.ts';
 import { Workspace } from '../core/workspace.ts';
 import { requestMode } from '../contracts/workspace.ts';
 import { Execution } from './execution.ts';
-import { captureMeasurements } from '../core/measurement-cache.ts';
+import { ModelStore } from '../core/model-store.ts';
+import { maintainModels } from '../core/model-move.ts';
 import { RhinoWorkspace } from '../../hosts/rhino/workspace.ts';
 import { ZwcadWorkspace } from '../../hosts/zwcad/workspace.ts';
 import { dirname, join } from 'node:path';
-import { importModel, captureModel, recoverDwgImport } from './import-model.ts';
+import { importModel, recoverDwgImport } from './import-model.ts';
 import { AttachmentStore } from './attachments.ts';
 import { attachmentPathRoutes } from './attachment-paths.ts';
 import { folderRoutes } from './project-files.ts';
@@ -121,6 +122,8 @@ import {
 import { renderReport } from './report.ts';
 import { RemovedProjects, removeProject } from './project-removal.ts';
 import { SyncCoalescer } from './sync-coalesce.ts';
+import { documentKey, runDocumentSync, type DocumentSyncContext } from './document-sync.ts';
+import { SyncScheduler, type ScheduledDocument } from './sync-scheduler.ts';
 import { ReadOnlyWatch } from './read-only-watch.ts';
 import { sweepCopies, unsettledCopies, within } from './capture-cleanup.ts';
 
@@ -246,9 +249,15 @@ export async function startServer({
   const sdk = sdkOptions
     ? new SdkExecution({ ...sdkOptions, tools: agentTools, origin: () => origin })
     : undefined;
-  const liveSync = sdk ? new LiveSync(workspace, sdk) : undefined;
   // Automatic document Syncs of the same document share one read (PLAN-27 T-087).
   const documentSyncs = new SyncCoalescer<StoredWork>();
+  // A Live Sync waits for a full Sync of the same document that runs now (ARCH-01 §7).
+  const liveSync = sdk
+    ? new LiveSync(workspace, sdk, {
+        settled: async (projectId, instance, documentId) =>
+          documentSyncs.current(documentKey(projectId, 'rhino', instance, documentId)),
+      })
+    : undefined;
   const connectors = new Connectors({
     directory: dirname(filename),
     bundledRhino: sdkOptions?.plugin ?? defaultRhinoPlugin(),
@@ -388,6 +397,74 @@ export async function startServer({
           sdk.importFile(source, (intent) => workspace.update(projectId, id, 'running', intent)),
       }
     : host;
+  const syncContext: DocumentSyncContext = {
+    workspace,
+    sdk,
+    zwcadSdk,
+    rhinoImport,
+    host,
+    documentSyncs,
+    liveSync,
+    diagnostics: { write: (event, fields) => diagnostics.write(event, fields) },
+  };
+  /** A Live Sync with its engine record (PLAN-27 0단계). */
+  async function runLiveSync(projectId: string, input: unknown) {
+    if (!liveSync) throw new DomainError('RESYNC_REQUIRED');
+    const began = performance.now();
+    breadcrumb('live-sync-begin');
+    const synced = await liveSync.run(projectId, input);
+    diagnostics.write('live-sync', {
+      ms: Math.round(performance.now() - began),
+      ...('delta' in synced
+        ? {
+            changed: synced.delta.objects.length,
+            removed: synced.delta.removed.length,
+            created: synced.created,
+            ...synced.timing,
+          }
+        : 'retry' in synced
+          ? { retry: synced.retry }
+          : { resync: true }),
+    });
+    return synced;
+  }
+  // Open documents of the connected hosts: the links list reads them (every open page polls it)
+  // and the Sync scheduler reuses a read younger than 0.7 s instead of asking the hosts again.
+  const readOpen = async () => [
+    ...((await sdk?.editors.list(true).catch(() => null))?.documents ?? []),
+    ...((await zwcadSdk?.editors.attached.list().catch(() => [])) ?? []),
+  ];
+  let openRead: { at: number; documents: ReturnType<typeof readOpen> } | undefined;
+  const openDocuments = (fresh = false) => {
+    const now = Date.now();
+    if (fresh || !openRead || now - openRead.at > 700)
+      openRead = {
+        at: now,
+        documents: readOpen(),
+      };
+    return openRead.documents;
+  };
+  // The engine Syncs linked files itself, with or without an open page (T-084, ARCH-01 §7).
+  const scheduler =
+    sdk || zwcadSdk
+      ? new SyncScheduler({
+          workspace,
+          links,
+          projects: () => listProjects(),
+          open: () => openDocuments(),
+          fullSync: (projectId, target) => runDocumentSync(syncContext, projectId, target),
+          isOwnedOpen: async (link) =>
+            link.host === 'rhino'
+              ? await sdk?.editors.has(link.instance)
+              : await zwcadSdk?.editors.has(link.instance),
+          ...(liveSync
+            ? {
+                liveSync: (projectId, input) => runLiveSync(projectId, input),
+              }
+            : {}),
+          log: (event, data) => diagnostics.write(event, data),
+        })
+      : undefined;
   // The current account of each CLI's default login and its usage (ADR-025: read only; accounts are
   // managed in AccountSwitch). The lookup setting sat next to VIDE's former account profiles.
   const accountUsage = new AccountUsageService(
@@ -829,10 +906,15 @@ export async function startServer({
       const linkItem = /^\/api\/v1\/projects\/([^/]+)\/links\/([^/]+)$/.exec(url.pathname);
       if (linkList && request.method === 'GET') {
         store.project(linkList[1]);
-        const open = [
-          ...((await sdk?.editors.list(true).catch(() => null))?.documents ?? []),
-          ...((await zwcadSdk?.editors.attached.list().catch(() => [])) ?? []),
-        ];
+        // A page's draft holds automatic Syncs of the files it uses for 5 s (ARCH-01 §7 ③).
+        const page = url.searchParams.get('page');
+        if (page && /^[\w-]{1,100}$/.test(page))
+          scheduler?.hold(
+            linkList[1],
+            page,
+            (url.searchParams.get('hold') ?? '').split(',').filter(Boolean).slice(0, 50),
+          );
+        const open = [...(await openDocuments(true))];
         const requests = workspace.list(linkList[1]);
         // Files opened in VIDE before they were listed join the list once, hidden. A removed file
         // hides its imports, so it does not come back.
@@ -937,6 +1019,18 @@ export async function startServer({
                     }
                   : null,
               lastSync: last ? { requestId: last.id, at: last.createdAt } : null,
+              // The engine's Sync of this file and the stored display the page should show:
+              // the revision rises with each Live Sync in place (T-084).
+              ...(() => {
+                const sync = scheduler?.status(linkList[1], doc as ScheduledDocument | undefined);
+                return sync ? { sync } : {};
+              })(),
+              display: last
+                ? {
+                    requestId: last.id,
+                    revision: workspace.models.header(linkList[1], last.id)?.revision ?? 0,
+                  }
+                : null,
               ...(latest && latest !== last && ['failed', 'unknown'].includes(latest.state)
                 ? { lastError: latest.result?.code ?? latest.state }
                 : {}),
@@ -1227,102 +1321,19 @@ export async function startServer({
           .parse(await body(request));
         if (target.linkId) links.get(capture[1], target.linkId);
         const projectId = capture[1];
-        const own = await sdk?.editors.has(target.instance);
-        const cadOwn = await zwcadSdk?.editors.has(target.instance);
-        const attached =
-          !cadOwn &&
-          own &&
-          (await sdk!.editors.connectionKind(target.instance)) === 'attached-editor';
-        const { result: synced, shared } = await documentSyncs.run(
-          [projectId, cadOwn ? 'zwcad' : 'rhino', target.instance, target.documentId].join('|'),
-          async () => {
-            // Sync timing (PLAN-18 step 3): the host read (meshing, pages) and the rest (checks, storing).
-            const began = performance.now();
-            breadcrumb('sync-begin', { request: target.id });
-            let hostMs: number | undefined;
-            const timed =
-              <T>(read: () => Promise<T>) =>
-              async () => {
-                const start = performance.now();
-                try {
-                  return await read();
-                } finally {
-                  hostMs = Math.round(performance.now() - start);
-                }
-              };
-            const captured = await captureModel(
-              capture[1],
-              target,
-              workspace,
-              own ? rhinoImport : host,
-              cadOwn
-                ? timed(async () => zwcadSdk!.editors.capture(target))
-                : own
-                  ? timed(async () =>
-                      sdk!.syncEditor(
-                        target,
-                        (intent) => workspace.update(capture[1], target.id, 'running', intent),
-                        // Attached display reads never measure; skip parsing every stored model.
-                        attached
-                          ? []
-                          : captureMeasurements(workspace.list(capture[1], { full: true }), target),
-                      ),
-                    )
-                  : undefined,
-              cadOwn ? 'zwcad' : 'rhino',
-            );
-            const scene = (captured.result as { scene?: unknown[] } | null)?.scene;
-            diagnostics.write('sync', {
-              request: target.id,
-              host: cadOwn ? 'zwcad' : 'rhino',
-              state: captured.state,
-              ms: Math.round(performance.now() - began),
-              hostMs,
-              objects: Array.isArray(scene) ? scene.length : undefined,
-            });
-            if (!cadOwn) liveSync?.record(capture[1], captured);
-            return captured;
-          },
-          {
-            fresh: target.fresh,
-            // Reused only while the attached document is still at the revision that Sync read.
-            reusable: async (done) => {
-              if (!attached) return false;
-              const current = workspace.get(projectId, done.id);
-              const hash = (
-                current.result?.sourceDocument as { documentHash?: unknown } | undefined
-              )?.documentHash;
-              return (
-                current.state === 'succeeded' &&
-                typeof hash === 'string' &&
-                (await sdk!.fingerprint(target)).documentHash === hash
-              );
-            },
-          },
-        );
-        if (shared)
-          diagnostics.write('sync-shared', { request: target.id, shared, with: synced.id });
+        // Every Sync asked here is the user's (⟳, 지금 Sync, the plugin's Sync): automatic ones are
+        // the engine's own (T-084), so this one never joins another read (ARCH-01 §7).
+        const { result: synced, shared } = await runDocumentSync(syncContext, projectId, {
+          ...target,
+          fresh: target.fresh ?? true,
+        });
         send(200, shared === 'reused' ? workspace.get(projectId, synced.id) : synced);
         return;
       }
       const live = /^\/api\/v1\/projects\/([^/]+)\/live-sync$/.exec(url.pathname);
       if (live && request.method === 'POST') {
         if (!liveSync) throw new DomainError('RESYNC_REQUIRED');
-        const began = performance.now();
-        breadcrumb('live-sync-begin');
-        const synced = await liveSync.run(live[1], await body(request));
-        diagnostics.write('live-sync', {
-          ms: Math.round(performance.now() - began),
-          ...('delta' in synced
-            ? {
-                changed: synced.delta.objects.length,
-                removed: synced.delta.removed.length,
-                created: synced.created,
-              }
-            : 'retry' in synced
-              ? { retry: synced.retry }
-              : { resync: true }),
-        });
+        const synced = await runLiveSync(live[1], await body(request));
         send(200, synced);
         return;
       }
@@ -2167,14 +2178,40 @@ export async function startServer({
         send(200, withApplications((await importRecoveries.get(key))!));
         return;
       }
+      // Changes of a stored model since a manifest revision (ARCH-01 §5, T-084 notifications).
+      const requestDelta = /^\/api\/v1\/projects\/([^/]+)\/requests\/([^/]+)\/delta$/.exec(
+        url.pathname,
+      );
+      if (requestDelta && request.method === 'GET') {
+        const [, projectId, id] = requestDelta;
+        store.project(projectId);
+        const since = Number(url.searchParams.get('since') ?? '');
+        const base = url.searchParams.get('base') || undefined;
+        if (!workspace.model(projectId, id)) {
+          // Not stored per object (yet): the caller reads the request whole.
+          workspace.summary(projectId, id);
+          send(200, { requestId: id, full: true });
+          return;
+        }
+        const delta = workspace.models.deltaSince(projectId, id, since, base);
+        if (delta.full) send(200, delta);
+        else deliver(200, GEOMETRY_TYPE, Buffer.from(ModelStore.deltaGeometry(delta)));
+        return;
+      }
       if (job) {
         const [, projectId, id, cancel] = job;
         // One request in full as binary geometry when the workspace asks for it (PLAN-18).
         if (request.method === 'GET' && id && accepts(GEOMETRY_TYPE)) {
+          // A model stored per object is joined from its stored buffers (ARCH-01 §5 「API 응답」).
+          const view = workspace.model(projectId, id);
           deliver(
             200,
             GEOMETRY_TYPE,
-            Buffer.from(encodeGeometry(withApplications(workspace.get(projectId, id)))),
+            Buffer.from(
+              view
+                ? view.geometry(withApplications(workspace.brief(projectId, id)))
+                : encodeGeometry(withApplications(workspace.get(projectId, id))),
+            ),
           );
           return;
         }
@@ -2431,6 +2468,16 @@ export async function startServer({
       else response.end();
     }
   });
+  // Space a move or prune left free (VACUUM skipped while the last run was busy) goes back to the
+  // disk before the address opens (ARCH-01 §5 「기존 결과 옮기기」).
+  if (filename !== ':memory:') {
+    const started = performance.now();
+    if (store.compact())
+      diagnostics.write('model-vacuum', {
+        ms: Math.round(performance.now() - started),
+        at: 'start',
+      });
+  }
   try {
     await new Promise<void>((resolve, reject) => {
       server.once('error', reject);
@@ -2456,6 +2503,19 @@ export async function startServer({
     version: appVersion(),
   });
   const stopHealth = filename === ':memory:' ? () => {} : startHealthLog(diagnostics);
+  scheduler?.start();
+  // Sync results stored as whole JSON move to per-object storage in the background, then old
+  // Syncs are pruned and the file compacted when idle (PLAN-27 1단계, ARCH-01 §5).
+  const maintenance =
+    filename === ':memory:'
+      ? Promise.resolve()
+      : maintainModels(store.db, {
+          log: (event, data) => diagnostics.write(event, data),
+          stopped: () => stopping,
+          idle: () => !stopping && documentSyncs.idle() && (scheduler?.idle() ?? true),
+        })
+          .then(() => undefined)
+          .catch((error) => diagnostics.write('model-move-failed', Diagnostics.error(error)));
   // Copies and work folders left by earlier runs (T-087): older than a day and not in use.
   // Only folders inside this engine's own data folder are swept.
   const own = (path: string) => (within(dirname(filename), path) ? path : undefined);
@@ -2482,7 +2542,13 @@ export async function startServer({
     close: async () => {
       stopping = true;
       diagnostics.write('engine-stop');
+      // The move stops after its current row (that row is one transaction).
+      await Promise.race([
+        maintenance,
+        new Promise((resolve) => setTimeout(resolve, 5000).unref()),
+      ]);
       stopHealth();
+      await scheduler?.stop();
       await remoteAccess.close();
       agentTools.close();
       // No image job starts from here on and running ones end their codex process (T-090).
