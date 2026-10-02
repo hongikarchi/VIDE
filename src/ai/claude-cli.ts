@@ -425,7 +425,8 @@ export function withTurnRules(
 }
 /**
  * Removes the transcript of one VIDE session from Claude's folder (ARCH-01 §2 record management):
- * `<folder>/projects/<project>/<sessionId>.jsonl`, wherever the first turn ran, and the project
+ * `<folder>/projects/<project>/<sessionId>.jsonl` with its `<sessionId>/` folder (subagents),
+ * wherever the first turn ran, and the project
  * folder when it is left empty. Nothing else is touched. `configDirectory` is the default login's
  * `~/.claude` unless a test names another.
  */
@@ -450,6 +451,8 @@ export async function removeClaudeTranscript(
     } catch {
       continue;
     }
+    // The session's own folder: its subagents' transcripts (`<id>/subagents/`, ADR-028).
+    await rm(join(projects, folder, id), { recursive: true, force: true }).catch(() => {});
     try {
       if (!(await readdir(join(projects, folder))).length) await rmdir(join(projects, folder));
     } catch {

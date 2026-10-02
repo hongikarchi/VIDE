@@ -456,6 +456,9 @@ test('기록 삭제는 그 세션의 파일과 비게 된 프로젝트 폴더만
     await mkdir(join(root, 'projects', 'C--tmp-one'), { recursive: true });
     await mkdir(join(root, 'projects', 'C--tmp-two'), { recursive: true });
     await writeFile(join(root, 'projects', 'C--tmp-one', id + '.jsonl'), '{}\n');
+    // Subagent transcripts live in the session's own folder (ADR-028).
+    await mkdir(join(root, 'projects', 'C--tmp-one', id, 'subagents'), { recursive: true });
+    await writeFile(join(root, 'projects', 'C--tmp-one', id, 'subagents', 'agent-a.jsonl'), '{}\n');
     await writeFile(join(root, 'projects', 'C--tmp-two', id + '.jsonl'), '{}\n');
     await writeFile(join(root, 'projects', 'C--tmp-two', other + '.jsonl'), '{}\n');
     await writeFile(join(root, 'settings.json'), '{}');

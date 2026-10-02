@@ -37,6 +37,7 @@ related: [ADR-028, PLAN-24, ARCH-01, SPEC-02, RESEARCH-11]
 | 하위 에이전트 실행 | **배경 실행이다.** 호출 결과는 곧바로 'Async agent launched'이고, 이벤트 `system/task_started` → 그 턴의 `result`('기다리는 중' 같은 중간 답) → 하위 에이전트의 `assistant`(`parent_tool_use_id` 있음) → `system/task_updated`·`system/task_notification` → **CLI가 스스로 시작한 턴**(시작 이벤트 + `result`)이 온다. 마지막 `result`가 실제 답이다 |
 | 하위 에이전트의 도구 | 하위 에이전트가 나열한 자기 도구: `Agent, WebFetch, WebSearch` — 부모의 `--tools` 목록과 같고 셸·파일 도구가 없다 |
 | `TodoWrite` | 2.1.287에서는 목록에 없다. `--tools`에 `TodoWrite,TaskCreate,TaskUpdate,TaskList,TaskGet`을 넣으면 목록은 `Task, TaskCreate, TaskGet, TaskList, TaskUpdate, WebFetch, WebSearch`(할 일 목록은 Task* 도구로 바뀜). `CLAUDE_CODE_ENABLE_TODO_TOOLS=1`·`CLAUDE_CODE_ENABLE_TASKS=1`을 줘도 같다 |
+| 하위 에이전트 기록 | 세션 기록 `<세션>.jsonl` 옆의 `<세션>/subagents/agent-<id>.jsonl`·`.meta.json`에 남는다(기록 삭제가 이 폴더도 지우게 고침) |
 | 모르는 이름 | `--tools`의 모르는 이름(`Agent`, `TodoWrite`)은 오류 없이 빠진다 |
 
 ## 구현에 반영한 것
