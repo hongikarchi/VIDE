@@ -2,11 +2,13 @@
 // settings. Static markup moved from index.html; it has no state or props and never re-renders
 // until its region makes it stateful.
 import { memo } from 'react';
+import { ConnectionBanner } from './connection-banner.tsx';
 
 export const Composer = memo(function Composer() {
   return (
     <>
       <div className="composer-wrap">
+        <ConnectionBanner />
         <div
           id="composer-resize"
           role="separator"
