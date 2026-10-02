@@ -1,11 +1,23 @@
+// The object inspector's content (PLAN-26 T-113, region B): buildInspectorView() turns the picked
+// object, its result and the tab into what the panel shows; shell/inspector.tsx draws it from the
+// viewer slice. renderInspector() draws the same content into a given element (test fixtures).
 import { renderInspectorContent } from './inspector-content.tsx';
 import type { InspectorContentProps } from './inspector-content.tsx';
 import { nativeAttributes } from './native-attributes.ts';
-import { iconSvg, paintIcons } from './icons.ts';
+import { iconSvg } from './icons.ts';
 
 // Re-exported: the inspector module was the icon set's home before PLAN-26 T-113.
 export { iconSvg };
-type InspectorTab = 'properties' | 'geometry' | 'relations' | 'history';
+export type InspectorTab = 'properties' | 'geometry' | 'relations' | 'history';
+export interface InspectorView {
+  /** The #selection title: the object's name or '선택 없음'. */
+  title: string;
+  /** The #selection-kind line. */
+  kind: string;
+  /** Changes with the object and the tab; the content scrolls back to the top when it does. */
+  key: string;
+  content: InspectorContentProps;
+}
 interface InspectorObject {
   id: string;
   name: string;
@@ -56,106 +68,21 @@ interface References {
   quantities?: (request: InspectorRequest | undefined, object: InspectorObject) => void;
   attachAttributes?: (request: InspectorRequest | undefined, object: InspectorObject) => void;
 }
-function $<T extends HTMLElement = HTMLElement>(id: string): T {
-  const element = document.getElementById(id);
-  if (!element) throw Error('Missing inspector element: ' + id);
-  return element as T;
-}
-
-// The panel stays as the user left it, with or without a selection, across reloads.
-let expanded = (() => {
-  try {
-    return localStorage.getItem('vide:inspector-open') === 'true';
-  } catch {
-    return false;
-  }
-})();
-const inspected = new WeakMap<HTMLElement, string>();
-function showInspector(open: boolean) {
-  $('inspector').classList.toggle('collapsed', !open);
-  $('inspector-toggle').setAttribute('aria-expanded', String(open));
-}
-export function initializeInspector(onTab: (tab: InspectorTab) => void) {
-  paintIcons();
-  for (const button of document.querySelectorAll<HTMLButtonElement>('[data-inspect]'))
-    button.onclick = () => {
-      document
-        .querySelectorAll<HTMLButtonElement>('[data-inspect]')
-        .forEach((b) => b.setAttribute('aria-pressed', String(b === button)));
-      const tab = button.dataset.inspect;
-      if (tab && ['properties', 'geometry', 'relations', 'history'].includes(tab))
-        onTab(tab as InspectorTab);
-    };
-  const handle = $('inspector-resize');
-  const resize = (height: number) => {
-    const max = Math.max(
-      120,
-      Math.min(480, (document.querySelector<HTMLElement>('.workspace')?.clientHeight ?? 640) - 160),
-    );
-    height = Math.min(max, Math.max(120, height));
-    $('inspector').style.setProperty('--inspector-height', height + 'px');
-    handle.setAttribute('aria-valuemax', String(max));
-    handle.setAttribute('aria-valuenow', String(Math.round(height)));
-  };
-  let drag: { y: number; height: number } | null = null;
-  handle.onpointerdown = (e) => {
-    if (e.button !== 0) return;
-    drag = { y: e.clientY, height: $('inspector').clientHeight };
-    handle.setPointerCapture(e.pointerId);
-    e.preventDefault();
-  };
-  handle.onpointermove = (e) => {
-    if (drag) resize(drag.height + drag.y - e.clientY);
-  };
-  handle.onpointerup = handle.onpointercancel = () => {
-    drag = null;
-  };
-  handle.onkeydown = (e) => {
-    if (['ArrowUp', 'ArrowDown', 'Home', 'End'].includes(e.key)) {
-      e.preventDefault();
-      resize(
-        e.key === 'Home'
-          ? 120
-          : e.key === 'End'
-            ? 480
-            : $('inspector').clientHeight + (e.key === 'ArrowUp' ? 20 : -20),
-      );
-    }
-  };
-  // The whole header bar toggles the panel; the chevron button is its keyboard target.
-  $('inspector-toggle').closest<HTMLElement>('.inspector-head')!.onclick = () => {
-    expanded = !expanded;
-    try {
-      localStorage.setItem('vide:inspector-open', String(expanded));
-    } catch {
-      /* Per-viewer convenience only. */
-    }
-    showInspector(expanded);
-  };
-  showInspector(expanded);
-}
-export function renderInspector(
+/** What the inspector shows for the picked object (none: '선택 없음') on a tab. */
+export function buildInspectorView(
   object: InspectorObject | undefined | null,
   result: InspectorResult | undefined | null,
   request: InspectorRequest | undefined,
   tab: InspectorTab = 'properties',
   references: References = {},
-  content = $('inspector-content'),
-) {
-  const key = `${object?.id || ''}:${tab}`;
-  if (inspected.get(content) !== key) {
-    content.scrollTop = 0;
-    inspected.set(content, key);
-  }
-  showInspector(expanded);
-  $('selection').textContent = object?.name || '선택 없음';
-  $('selection-kind').textContent = object
-    ? `${result?.host === 'zwcad' ? 'ZWCAD' : 'Rhino'} · 작업 사본`
-    : '';
-  if (!object) {
-    renderInspectorContent(content, { empty: true });
-    return;
-  }
+): InspectorView {
+  const view = (content: InspectorContentProps): InspectorView => ({
+    title: object?.name || '선택 없음',
+    kind: object ? `${result?.host === 'zwcad' ? 'ZWCAD' : 'Rhino'} · 작업 사본` : '',
+    key: `${object?.id || ''}:${tab}`,
+    content,
+  });
+  if (!object) return view({ empty: true });
   if (tab === 'relations') {
     const links: { basis: string; id: string; label: string }[] = [];
     const basis = request?.input?.baseRequestId || result?.baseRequestId;
@@ -180,7 +107,7 @@ export function renderInspector(
           ' · ' +
           pin.name,
       });
-    renderInspectorContent(content, {
+    return view({
       links: links.map((link) => {
         const source = references.get?.(link.basis),
           target = source?.result?.objects?.find((item) => item.id === link.id);
@@ -195,7 +122,6 @@ export function renderInspector(
         };
       }),
     });
-    return;
   }
   const native = result?.scene?.find((item) => item.id === object.id);
   const number = (value: unknown, unit = '') =>
@@ -269,7 +195,7 @@ export function renderInspector(
   )
     properties.push(['화면 표현', '미지원 · 목록·네이티브 파일에 보존']);
   const attributes = tab === 'properties' ? nativeAttributes(native) : null;
-  renderInspectorContent(content, {
+  return view({
     rows: properties,
     quantities:
       tab === 'properties' && references.quantities
@@ -285,3 +211,23 @@ export function renderInspector(
         : undefined,
   });
 }
+/**
+ * Draws the inspector content into `content` (its own root): the test fixtures' path. The work
+ * screen's inspector is drawn by shell/inspector.tsx from the viewer slice instead.
+ */
+export function renderInspector(
+  object: InspectorObject | undefined | null,
+  result: InspectorResult | undefined | null,
+  request: InspectorRequest | undefined,
+  tab: InspectorTab = 'properties',
+  references: References = {},
+  content: HTMLElement,
+) {
+  const view = buildInspectorView(object, result, request, tab, references);
+  if (inspected.get(content) !== view.key) {
+    content.scrollTop = 0;
+    inspected.set(content, view.key);
+  }
+  renderInspectorContent(content, view.content);
+}
+const inspected = new WeakMap<HTMLElement, string>();
