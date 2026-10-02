@@ -2,7 +2,7 @@
 id: PLAN
 title: VIDE 실행 로드맵
 status: review
-version: 0.243
+version: 0.244
 updated: 2026-10-02
 owner: agent:codex
 related: [ARCH-01, PLAN-02, PLAN-03, PLAN-22, PLAN-23, PLAN-24, PLAN-25, PLAN-26, PLAN-27, ADR-022, ADR-025, ADR-026, ADR-027, ADR-028, ADR-029, ADR-030, SPEC-00, SPEC-01, SPEC-02, SPEC-03, SPEC-04, SPEC-05, SPEC-06, SPEC-07]
@@ -268,7 +268,7 @@ T-001~018의 번호·지원 증거는 유지한다. 각 티켓의 현재 결과�
 | T-109 작업 이력 정리(요청 목록만, 검토본은 산출물, 외부 의견 배지, 첨부는 작업 보기) | 구현·브라우저 시험 완료(2026-10-02, 설치 전) | 이미지 외 첨부는 작업 보기에서 열 수 없음(엔진이 이미지만 내보냄, 열기가 필요하면 SPEC-01.12 먼저). 설치본 반영 | [PLAN-26](PLAN-26-chat-stage.md#t-109), SPEC-01.12의 4, Design §03·§09, `browser-react-panels.mjs`, `browser-workspace-tabs.mjs`, `browser-workspace-controls.mjs` |
 | T-111 같은 파일의 여러 대화: 실행만 차례대로(문서별 `ExecuteQueue`, 바뀐 문서는 `DOCUMENT_CHANGED`로 다시 조회), 지난 보호 카드 정리·늦은 행동의 409 문구 | 구현·단위 시험 완료(2026-10-02, 설치 전). `npm test` 953/953 | 설치본에서 두 대화 동시 실행·대기 문구·재조회 확인, 추가 지시(`intervene`)의 409 문구 | [PLAN-24](PLAN-24-ai-conversations.md), SPEC-02.9, SPEC-02 보호 확인 |
 | T-112 2026-10-02 사용자 보고 묶음: 대화별 초안(본문·첨부·고정·모드·effort)·마지막 대화 탭, Purge 오탐(`Mesh.Compact`), Jev 배분(형상 만들기·바꾸기만 ChatGPT), 단어 하나 jig 오열림, Rhino 재시작 뒤 고정 옮기기(`pin-carry.ts`), 엔진 종료 진단(ProcDump·작업 기록·늦은 재시작 1회) | 구현·단위·일부 브라우저 시험 완료(2026-10-02, 설치 전). 레이어 정리 제안 문장 Jev 실호출 → Claude | Rhino 플러그인 재설치 뒤 Purge·고정 옮기기 실호스트 확인, 하네스 전용 브라우저 시험, 다음 엔진 종료의 덤프 분석 | SPEC-02.16·02.17·02.19, PLAN-05 §7.2a, [PLAN-27](PLAN-27-sync-storage-stability.md) §0 |
-| T-113 화면 뼈대 React 전환(index.html·app.ts 직접 DOM → `shell/*` 정적·상태 컴포넌트, `store/*` 조각, `app/*` 지역 모듈; id·클래스·접근성 계약 유지) | 진행 중 — F(기반 단계: 조각 스토어, app.ts 지역 모듈 분해·`boot.ts` 순서, 정적 셸·루트 하나, 동작 변경 없음). 2026-10-02 착수, 기준선 `a5a5fc0`(`npm test` 969, 브라우저 사슬 통과) | F 병합 뒤 지역 A~E 병렬 → 통합(E→A→B→D→C). 완료 뒤 설치본 릴리스와 Rhino 패널 WebView2 확인 | [PLAN-26](PLAN-26-chat-stage.md#t-113), ARCH-01 「웹 화면 구조」, ADR-016 |
+| T-113 화면 뼈대 React 전환(index.html·app.ts 직접 DOM → `shell/*` 정적·상태 컴포넌트, `store/*` 조각, `app/*` 지역 모듈; id·클래스·접근성 계약 유지) | 구현·통합 완료(2026-10-02) — F(조각 스토어·`app/*` 지역 모듈·셸 루트 하나) 뒤 지역 A~E를 상태 기반 컴포넌트로 옮겨 main에 E→A→B→D→C로 병합. `npm test` 986/986, `npm run test:browser` 전체 통과. 기준선 `a5a5fc0`과 30단계 정규화 DOM 비교 차이는 `#root` 감싸개와 닫힌 대화상자 4개의 위치뿐, 스크린숏 29장 픽셀 차이 0 | 설치본 릴리스, 사용자가 연 Rhino 패널 WebView2 확인과 VERIFY 기록. ARCH-01 「웹 화면 구조」에 적은 남은 명령형 영역 정리 | [PLAN-26](PLAN-26-chat-stage.md#t-113), ARCH-01 「웹 화면 구조」, ADR-016 |
 | T-082 안정성 0단계 진단·복구 | 구현·자동 검증(`9aac8cd`) | 실제 창의 화면 복구 확인, 설치본 릴리스 | [PLAN-27](PLAN-27-sync-storage-stability.md) |
 | T-083 객체 단위 저장 | 구현·자동 검증(2026-10-02, 미커밋). `Workspace`(저장·읽기·`model`·`brief`·`applyDelta`)·`LiveSync`(목록에 제자리/복사본 적용)·단건 VGT1·`…/delta`·직전 측정 SQL·엔진 시작의 옮기기·보존·VACUUM 연결. 합성 1만 개: Live Sync 엔진 3~4 ms, 바뀌지 않은 전체 Sync DB +2.9 MB(Rhino GUID 키 약 4 MB) | 사용자 DB 사본 옮기기 측정, 설치본 확인. 전체 Sync DB 증가 약 1 MB 목표는 지금 표 구조로 못 미침(결정 필요, PLAN-27) | [PLAN-27](PLAN-27-sync-storage-stability.md), [RESEARCH-13](../research/RESEARCH-13-stability-audit.md) |
 | T-084 엔진 주관 Sync | 구현·자동 검증(2026-10-02, 미커밋). `runDocumentSync`(`document-sync.ts`)·`SyncScheduler`(1초, 재시도·대기·보류·임대, 작업 사본 첫 Sync)·연결 행 `sync`·`display`·화면은 알림과 `delta`로만 갱신(⟳만 `capture`) | 실제 Rhino 창·패널 동시 확인, 설치본 확인 | [PLAN-27](PLAN-27-sync-storage-stability.md) |

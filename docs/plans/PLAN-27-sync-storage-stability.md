@@ -136,7 +136,7 @@ Rhino 패널의 같은 복구(플러그인 재빌드·Rhino 재시작 필요)는
 | `src/server/server.ts:1505-1506`, `1592-1607`; `src/server/jig-routes.ts:744`, `866`; `src/jigs/sync.ts:73`; `src/jigs/structure/input.ts:215`, `249`; `src/jigs/runtime/runtime.ts:148-168`, `568`; `src/jigs/bake/plan.ts:262` | Sync jig·구조 jig·jig 실행 입력 | 그대로(`get`). 1607행은 `sceneOmitted`도 받으므로 유지 |
 | `src/server/sdk-execution.ts:564` | 직전 모델 측정 전달 | 그대로 |
 | SQL로 `result` 읽기: `src/core/workspace.ts:53`, `src/server/project-removal.ts:73-75`, `src/server/capture-cleanup.ts:83-84`, `src/server/conversations.ts:570`, `src/server/offline-view.ts:93` | 작은 필드만 읽음 | 그대로(옮긴 뒤 더 빨라짐) |
-| 화면: `src/ui/app.ts:497-525`(Live Sync 병합), `1589-1643`(레이어 합성), `src/ui/history.tsx:113`, `src/ui/inspector.ts:289`, `src/ui/native-attributes.ts:51` | 받은 결과로 표시 | 1단계는 그대로(응답 모양 같음). 3단계(T-085)에서 바꿈 |
+| 화면: `src/ui/app/links-sync.ts`의 `refreshDisplay`(Live Sync 병합)·`visibleLayers`·`showLayers`(레이어 합성), `src/ui/history.tsx:113`, `src/ui/inspector.ts:289`, `src/ui/native-attributes.ts:51` | 받은 결과로 표시 | 1단계는 그대로(응답 모양 같음). 3단계(T-085)에서 바꿈 |
 
 **시험:**
 - 새로:
@@ -166,10 +166,10 @@ Rhino 패널의 같은 복구(플러그인 재빌드·Rhino 재시작 필요)는
 
 **구현 순서:**
 1. `src/server/server.ts:1204-1292`의 전체 Sync를 `runDocumentSync`(`src/server/document-sync.ts`, 새)로 빼고 `POST …/capture`는 이를 부른다(동작 같음).
-2. `src/server/sync-scheduler.ts`(새): 1초 주기, 문서별 상태, 첫 Sync·변경·다시 연 Live 파일 판단(지금 `src/ui/app.ts:796-813`의 규칙), Live Sync·전체 Sync 선택, 재시도(1·2·4·8초, 최대 30초), 보류 판단(요청 기준·`holdWrite`·바로 적용·화면 임대). `src/server/main.ts`·`server.ts`에서 시작·종료.
+2. `src/server/sync-scheduler.ts`(새): 1초 주기, 문서별 상태, 첫 Sync·변경·다시 연 Live 파일 판단(옛 화면 `pollLinks`의 규칙, 지금 `src/ui/app/links-sync.ts`), Live Sync·전체 Sync 선택, 재시도(1·2·4·8초, 최대 30초), 보류 판단(요청 기준·`holdWrite`·바로 적용·화면 임대). `src/server/main.ts`·`server.ts`에서 시작·종료.
 3. 보류 임대: `GET …/links?page=&hold=`를 받아 페이지별 5초 임대. 연결 행에 `sync`·`display`를 더한다(`server.ts:895-925` 부근).
 4. `LiveSync`(`src/server/live-sync.ts`): `latest` 맵을 스케줄러와 함께 쓰고, 같은 키의 실행 중 전체 Sync를 기다린다.
-5. 화면(`src/ui/app.ts`): `pollLinks`의 자동 Sync 시작(796~813행)과 `liveSyncHostDocument`(487~540행)의 `POST …/live-sync` 호출을 지운다. 연결 행의 `display.revision`이 늘면 `delta?since=`로 받아 `applyDisplayDelta`로 합친다. `syncHeld`(674~686행)는 초안 임대 보고로만 남기고, `syncLink`(688행~)는 ⟳(`manual`)만 남긴다. 행 표시(`linkNotes`)는 `sync.state`에서 만든다.
+5. 화면(당시 `src/ui/app.ts`, T-113 뒤 `src/ui/app/links-sync.ts`): `pollLinks`의 자동 Sync 시작과 `liveSyncHostDocument`의 `POST …/live-sync` 호출을 지운다. 연결 행의 `display.revision`이 늘면 `delta?since=`로 받아 `applyDisplayDelta`로 합친다. `syncHeld`는 초안 임대 보고로만 남기고, `syncLink`는 ⟳(`manual`)만 남긴다. 행 표시(`linkNotes`)는 `sync.state`에서 만든다.
 6. Rhino 패널·ZWCAD 팔레트는 같은 페이지이므로 5로 함께 바뀐다(플러그인 수정 없음).
 
 **시험:**

@@ -2,7 +2,7 @@
 id: ARCH-01
 title: VIDE 기술 구조와 구현 계약
 status: review
-version: 0.76
+version: 0.77
 updated: 2026-10-02
 owner: agent:codex
 related: [SPEC-00, SPEC-02, SPEC-03, SPEC-04, SPEC-09, PLAN, PLAN-20, PLAN-24, ADR-014, ADR-015, ADR-016, ADR-017, ADR-021, ADR-022, ADR-025, ADR-027, ADR-028, ADR-029, ADR-030, PLAN-25, PLAN-26, PLAN-27, ARCH-03]
@@ -84,8 +84,8 @@ T-113([PLAN-26](../plans/PLAN-26-chat-stage.md#t-113), 2026-10-02 사용자 승�
 |---|---|---|
 | `src/ui/main.tsx` | 글꼴 → 셸 루트(`#root`) 하나를 `flushSync`로 그린 뒤 `app/boot.ts`를 불러 실행 | StrictMode 없음(일회성 연결 토큰·WebGL·폴러가 두 번 생김). pagehide에 셸 루트를 언마운트하지 않음(뷰포트 해제가 먼저) |
 | `src/ui/index.html` | `<head>`(CSP·스타일·진입 스크립트)와 `<div id="root" class="root">` | `.root{display:contents}`라 레이아웃은 루트가 없을 때와 같음 |
-| `src/ui/shell/` | `Shell.tsx`가 지역 컴포넌트(모바일 탭·레일·왼쪽 패널·작업공간·AI 열·작성기·상태 표시줄·토스트·설정 대화상자 자리)를 DOM 순서대로 조립 | 지역이 상태화하기 전까지 정적(상태·props 없음, 다시 렌더하지 않음). `.workspace`·`.viewport-area`는 React 형제와 외부 직계 자식을 함께 두는 컨테이너. 정적 자식이 있는 마운트 컨테이너는 소유 지역 외에는 React가 다시 그리지 않음. 지역마다 `RegionBoundary`로 감싸 한 지역의 렌더 오류가 셸 루트 전체(`#canvas`·작성기·다른 지역)를 내리지 않게 함(모바일 탭 단추는 따로 감싸 예전 별도 루트와 같이 `#mobile-navigation`만 비움). 다른 곳으로 옮겨지는 노드(상태 줄 `<p>`)는 경계·조건부 렌더가 직접 지우는 최상위 노드가 되지 않게 둠 |
-| `src/ui/store/` | `core.ts`(변경 가능한 조각 객체 + `version`·`bump`·`subscribe`, `useStore`는 `useSyncExternalStore`)와 소비 범위별 조각(`session`·`draft`·`work`·`selection`·`sketch`·`viewer`·`links`·`toast`) | 하나의 전역 객체로 모으지 않음. 프레임마다 바뀌는 카메라 값은 넣지 않음. DOM 접근 없음 |
+| `src/ui/shell/` | `Shell.tsx`가 지역 컴포넌트(모바일 탭·레일·왼쪽 패널·작업공간 탭·뷰포트 크롬·인스펙터·AI 열·작성기·상태 표시줄·토스트·설정 대화상자)를 DOM 순서대로 조립하고, 각 지역은 `store/` 조각을 `useStore`로 읽어 그림(T-113 지역 A~E) | 단추 동작은 셸이 `app/` 모듈을 불러오지 않도록 조각의 `actions`·`shell/viewport-actions.ts` 표를 거침(`boot.ts`의 `init*()`가 예전과 같은 시점에 채움). 명령형으로 남는 곳: `#canvas`(three.js), `#objects`(객체 목록 어댑터), `#display-settings` 팝오버, `#body`의 값·`disabled`(비제어 textarea, `pin-tokens.ts`가 같은 렌더 안에서 읽음), `#effort-menu` 열림, `#mode-status`·`#usage-bars`·`#status-account`의 자식, 설정 대화상자의 계정·사용량·연결 프로그램·PC 프로그램 절 내용, `#right`의 `hidden`(`togglePanel`), 자체 `createRoot`를 쓰는 `#project-heading`·`#host-document-controls`·패널 모드 머리·카드·작업공간 내용 탭·대화상자. 지역마다 `RegionBoundary`, AI 열의 옛 별도 루트 자리마다 `PartBoundary`로 감싸 렌더 오류가 그 컨테이너만 비움. `.workspace` 직계의 패널 너비 손잡이는 포털로 맨 끝에 둠 |
+| `src/ui/store/` | `core.ts`(변경 가능한 조각 객체 + `version`·`bump`·`subscribe`, `useStore`는 `useSyncExternalStore`)와 소비 범위별 조각(`session`·`draft`·`work`·`selection`·`sketch`·`viewer`·`links`·`toast`, 지역 단계에서 더한 `layout`(레일·패널 접기·너비·모바일 보기)·`status`(설정 대화상자·상태 줄·연결 배너)) | 하나의 전역 객체로 모으지 않음. 카메라는 보기·투영이 바뀔 때만 넣고 프레임마다 넣지 않음. 조각은 DOM에 접근하지 않음(예외: `layout.ts`의 동작 함수가 CSS용 `body` 플래그(`data-mobile`·`*-hidden`)·너비 CSS 변수·포커스와 `#right`의 `hidden`을 씀) |
 | `src/ui/app/` | 화면 명령형 코드의 지역 모듈: `context.ts`(패널 모드·현재 프로젝트), `boot.ts`(초기화 순서·연결·패널 모드·호스트 링크 폴링), `status.ts`(토스트·상태 줄·설정 열기), `left.ts`(레일·왼쪽 패널·패널 접기), `viewport.ts`(뷰포트·스케치·선택), `composer.ts`(작성기·전송·요청 판별), `thread.ts`(작업 보기·대화·제안 카드·요청 폴링), `links-sync.ts`(연결 파일 Sync·레이어 합성), `glue.ts`(jig·대시보드·검토본·skill 연결), `render.ts`(`render()`·`renderMessages()` 호출 순서), `shortcuts.ts`(단축키 등록부) | 모듈은 선언과 `init*()`만 내보내고 최상위 부작용을 두지 않음. `boot.ts`가 `init*()`를 정해진 순서로 부름. 지역 간 호출은 내보낸 함수(파사드) 이름으로 하고 시그니처는 추가만 허용 |
 
 Node 시험이 직접 불러오는 화면 모듈(`reference-check.ts`·`conversations.tsx`·`connection-recovery.ts`)에는 DOM 부작용이나 JSX를 넣지 않는다. 아이콘은 `icons.ts`의 `paintIcons()`가 자식이 없는 `[data-icon]` 노드만 채운다.
