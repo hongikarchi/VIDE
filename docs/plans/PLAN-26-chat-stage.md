@@ -395,3 +395,5 @@ related: [ADR-026, ADR-016, ADR-022, ADR-021, ADR-020, SPEC-01, SPEC-02, SPEC-07
 **검증 — 실패:** 연결 끊김 배너·재연결, 프로젝트 없는 첫 렌더, 초안 복원 실패, 토스트 액션이 기준선과 같게 동작한다(기존 브라우저 시험).
 
 **완료:** F는 위 검사가 기준선과 같고 DOM 비교 차이가 의도한 감싸개뿐일 때. 전체는 `index.html`이 루트 하나, 셸 요소를 React가 그리고 남은 명령형 영역이 `#canvas`·`#objects` 어댑터·`#display-popover`·외부 직계 자식 컨테이너뿐, 셸 컨테이너 안 외부 삽입 0, 위 검증 통과, 결과는 VERIFY 기록. 설치본 릴리스는 통합 뒤 한 번.
+
+**결과 · B(2026-10-02, 브랜치 `t113-b`):** 뷰포트 크롬(공간 도구·보기 버튼·투영 토글)·스케치 도구 막대·선택 막대·`#tool-hint`·`#viewport-empty`·인스펙터(제목·탭·높이 손잡이·`#inspector-content` 직접 자식 렌더)를 `sketch`·`selection`·`viewer` 조각에서 그리는 컴포넌트로 바꿨다(`shell/viewport-actions.ts`가 동작 표, `inspector.ts`는 순수 `buildInspectorView`와 fixture용 `renderInspector`). three.js 뷰어·`#projection` 네이티브 change·`display-settings.ts`는 명령형 유지, 카메라는 view·projection이 바뀔 때만 조각에 넣는다. 부팅·스케치·인스펙터 세 상태의 정규화 DOM이 F 빌드와 같다. `test:browser` 사슬 38개를 하나씩 돌려 s06-jig·structure-jig만 실패(구조 해석 worker `unavailable`, `npm test`의 s06 13건과 같은 원인, UI 변경과 무관).

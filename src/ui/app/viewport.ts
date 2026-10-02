@@ -1,8 +1,12 @@
 // 3D viewport and inspector (PLAN-26 T-113, region B): selection, sketch tool and brush, captures,
-// view buttons and the project card thumbnail.
+// view buttons and the project card thumbnail. The controls around the viewer are React components
+// (shell/viewport-area.tsx, shell/inspector.tsx) drawn from the selection, sketch and viewer slices:
+// this module changes those slices and raises their version where it used to write the DOM, in the
+// same render() order. The three.js viewer itself stays imperative inside #canvas.
 import { z } from 'zod';
 import { workspaceShowsViewport } from '../workspaces.ts';
-import { renderInspector, initializeInspector, iconSvg } from '../inspector.ts';
+import { buildInspectorView } from '../inspector.ts';
+import { paintIcons } from '../icons.ts';
 import { showQuantities } from '../quantities.tsx';
 import { attachNativeAttributes } from '../native-attributes.ts';
 import { type SelectMode } from '../object-list.ts';
@@ -17,8 +21,9 @@ import { selectionState } from '../store/selection.ts';
 import { draftState } from '../store/draft.ts';
 import { linksState } from '../store/links.ts';
 import { viewerState } from '../store/viewer.ts';
-import { sketchState } from '../store/sketch.ts';
+import { sketchState, type BrushFields } from '../store/sketch.ts';
 import { sessionState } from '../store/session.ts';
+import { viewportActions } from '../shell/viewport-actions.ts';
 import { isTyping, type ShortcutResult } from './shortcuts.ts';
 import { currentProject } from './context.ts';
 import { applyActiveLayer } from './links-sync.ts';
@@ -88,29 +93,25 @@ export function annotatedCapture() {
 export function pendingSketch() {
   return sketchState.strokes.length > 0;
 }
+/** Shows the strokes and redraws the sketch toolbar (the strokes change in place). */
 export function draw() {
   viewerState.viewport?.sketches(draftState.state.sketches, sketchState.strokes);
-  $('finish-sketch').disabled = !sketchState.strokes.length;
-  $('undo-point').disabled = !pendingSketch();
-  $('clear-sketch').disabled = !pendingSketch();
+  sketchState.bump();
 }
-export const followSurface = () => $('brush-surface').getAttribute('aria-pressed') !== 'false';
+export const followSurface = () => sketchState.brush.surface;
+/** Applies the brush to the viewer and redraws the toolbar. */
 export function brushSettings() {
-  const width = $('brush-width').valueAsNumber || 4;
-  $('brush-width-value').textContent = String(width);
-  for (const swatch of document.querySelectorAll<HTMLButtonElement>('.swatch'))
-    swatch.setAttribute('aria-pressed', String(swatch.dataset.color === $('brush-color').value));
-  viewerState.viewport?.brush({
-    color: $('brush-color').value,
-    width,
-    surface: followSurface(),
-    erase: $('brush-eraser').getAttribute('aria-pressed') === 'true',
-  });
+  const { color, width, surface, erase } = sketchState.brush;
+  sketchState.brushShown = true;
+  viewerState.viewport?.brush({ color, width, surface, erase });
   draw();
 }
-export function setEraser(on: boolean) {
-  $('brush-eraser').setAttribute('aria-pressed', String(on));
+function setBrush(next: Partial<BrushFields>) {
+  sketchState.brush = { ...sketchState.brush, ...next };
   brushSettings();
+}
+export function setEraser(on: boolean) {
+  setBrush({ erase: on });
 }
 /** Attach the drawn strokes to the message as one sketch. */
 export function attachStrokes() {
@@ -132,16 +133,9 @@ export function setTool(next: 'select' | 'sketch') {
       return;
     }
   sketchState.tool = next;
-  document
-    .querySelectorAll<HTMLButtonElement>('[data-tool]')
-    .forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.tool === sketchState.tool)));
-  $('sketch-tools').hidden = sketchState.tool !== 'sketch';
+  sketchState.toolChosen = true;
   viewerState.viewport?.mode(sketchState.tool);
   if (sketchState.tool === 'sketch') brushSettings();
-  $('tool-hint').textContent =
-    sketchState.tool === 'sketch'
-      ? '펜·드래그로 그리기 · 손가락/우클릭 회전 · 두 손가락/Shift+우클릭 이동 · 휠·핀치 확대 · 위/앞/옆 보기는 그 평면에 그리기'
-      : '';
   draw();
 }
 /** A small viewport image for the project card on the account website (signed-in PCs only). */
@@ -189,16 +183,23 @@ export function canPin() {
     })
   );
 }
+/** Sets the hidden #projection select and sends it a change, as thread.ts's ui_go does. */
+function showView(view: 'axon' | 'plan' | 'front' | 'side') {
+  $('projection').value = view;
+  $('projection').dispatchEvent(new Event('change'));
+}
 
 export function initViewport1() {
-  viewportEmpty = initializeViewportEmpty($('canvas').parentElement!);
+  viewportEmpty = initializeViewportEmpty();
 }
 
 export function initViewport2() {
-  initializeInspector((tab) => {
+  // The other regions' static `data-icon` buttons (this region draws its own icons).
+  paintIcons();
+  viewportActions.inspectorTab = (tab) => {
     viewerState.inspectorTab = tab;
     render();
-  });
+  };
   try {
     viewerState.viewport = createViewport(
       $('canvas'),
@@ -216,25 +217,11 @@ export function initViewport2() {
         draw();
       },
       (camera) => {
-        document
-          .querySelectorAll<HTMLButtonElement>('[data-view]')
-          .forEach((button) =>
-            button.setAttribute('aria-pressed', String(button.dataset.view === camera.view)),
-          );
-        const toggle = $('projection-toggle');
-        toggle.dataset.projection = camera.projection;
-        // The icon shows the current projection; the button switches to the other one.
-        toggle.innerHTML = iconSvg(
-          camera.projection === 'perspective' ? 'perspective' : 'orthographic',
-        );
-        toggle.title =
-          camera.projection === 'perspective'
-            ? '지금 원근 투영 · 눌러서 평행(직교) 투영'
-            : '지금 평행(직교) 투영 · 눌러서 원근 투영';
-        toggle.setAttribute(
-          'aria-label',
-          camera.projection === 'perspective' ? '평행 투영으로 전환' : '원근 투영으로 전환',
-        );
+        // Reported on every controls change: the slice changes only with the view or projection.
+        const shown = viewerState.camera;
+        if (shown?.view === camera.view && shown.projection === camera.projection) return;
+        viewerState.camera = { view: camera.view, projection: camera.projection };
+        viewerState.bump();
       },
     );
   } catch {
@@ -246,32 +233,20 @@ export function initViewport2() {
 }
 
 export function initViewport3() {
-  $('selection-pin').onclick = () => {
+  viewportActions.pinSelection = () => {
     if (canPin()) pinComposer.insertSelection();
   };
-  for (const button of document.querySelectorAll<HTMLButtonElement>('[data-tool]'))
-    button.onclick = () => setTool(z.enum(['select', 'sketch']).parse(button.dataset.tool));
-  for (const id of ['brush-color', 'brush-width'] as const)
-    $(id).addEventListener('input', brushSettings);
-  $('brush-surface').onclick = () => {
-    $('brush-surface').setAttribute('aria-pressed', String(!followSurface()));
-    brushSettings();
-  };
-  for (const swatch of document.querySelectorAll<HTMLButtonElement>('.swatch')) {
-    // The page CSP blocks inline style attributes; set each swatch's color through the CSSOM.
-    swatch.style.setProperty('--swatch', swatch.dataset.color ?? '#d0473a');
-    swatch.onclick = () => {
-      $('brush-color').value = swatch.dataset.color ?? '#d0473a';
-      setEraser(false);
-    };
-  }
-  $('brush-eraser').onclick = () =>
-    setEraser($('brush-eraser').getAttribute('aria-pressed') !== 'true');
-  $('clear-sketch').onclick = () => {
+  viewportActions.tool = (tool) => setTool(tool);
+  viewportActions.brushColor = (color) => setBrush({ color });
+  viewportActions.brushWidth = (width) => setBrush({ width: width || 4 });
+  viewportActions.surface = () => setBrush({ surface: !sketchState.brush.surface });
+  viewportActions.swatch = (color) => setBrush({ color, erase: false });
+  viewportActions.eraser = () => setEraser(!sketchState.brush.erase);
+  viewportActions.clearSketch = () => {
     sketchState.strokes = [];
     draw();
   };
-  $('finish-sketch').onclick = () => {
+  viewportActions.finishSketch = () => {
     try {
       attachStrokes();
       setTool('select');
@@ -281,15 +256,16 @@ export function initViewport3() {
       message(readableError(cause).message);
     }
   };
-  $('cancel-sketch').onclick = () => {
+  viewportActions.cancelSketch = () => {
     sketchState.strokes = [];
     setTool('select');
   };
-  $('undo-point').onclick = () => {
+  viewportActions.undoStroke = () => {
     sketchState.strokes.pop();
     draw();
   };
-  $('fit-view').onclick = () => viewerState.viewport?.fit();
+  viewportActions.fitView = () => viewerState.viewport?.fit();
+  // A native listener: thread.ts and the view buttons send this select a non-bubbling change.
   $('projection').onchange = () => {
     if ($('projection').value === 'axon') viewerState.viewport?.home();
     else
@@ -306,18 +282,14 @@ export function initViewport4() {
 }
 
 export function initViewport5() {
-  for (const button of document.querySelectorAll<HTMLButtonElement>('[data-view]'))
-    button.onclick = () => {
-      $('projection').value = z.enum(['axon', 'plan', 'front', 'side']).parse(button.dataset.view);
-      $('projection').dispatchEvent(new Event('change'));
-    };
-  $('fit-selection').onclick = () => {
+  viewportActions.view = showView;
+  viewportActions.fitSelection = () => {
     if (draftState.state.selected) viewerState.viewport?.fit(draftState.state.selected);
     else message('먼저 객체를 선택하세요.');
   };
-  $('projection-toggle').onclick = () => {
+  viewportActions.toggleProjection = () => {
     viewerState.viewport?.projection(
-      $('projection-toggle').dataset.projection === 'perspective' ? 'orthographic' : 'perspective',
+      viewerState.camera?.projection === 'perspective' ? 'orthographic' : 'perspective',
     );
   };
 }
@@ -336,12 +308,12 @@ export function normalizeSelection() {
 /** render(): the viewport selection, the inspector title and the selection bar. */
 export function paintSelection() {
   viewerState.viewport?.select(selectionState.selectedIds);
-  $('selection').textContent =
+  viewerState.selectionTitle =
     selectionState.selectedIds.length > 1
       ? `${selectionState.selectedIds.length.toLocaleString()}개 객체 선택`
       : objects.find((o) => o.id === draftState.state.selected)?.name || '';
-  $('selection-bar').hidden = !selectionState.selectedIds.length;
-  $('selection-count').textContent = `${selectionState.selectedIds.length.toLocaleString()}개 선택`;
+  viewerState.bump();
+  selectionState.bump();
 }
 /** render(): the inspector of the picked object; returns the request it was read from. */
 export function paintInspector() {
@@ -353,7 +325,7 @@ export function paintInspector() {
         ? inspected.revision
         : selectionState.displayedResult),
   )?.request;
-  renderInspector(
+  const view = buildInspectorView(
     inspected && { ...inspected, id: sourceIdOf(inspected) },
     active?.result,
     active,
@@ -395,14 +367,18 @@ export function paintInspector() {
       },
     },
   );
+  viewerState.selectionTitle = view.title;
+  viewerState.inspector = view;
+  viewerState.bump();
   return active;
 }
 export type ActiveRequest = ReturnType<typeof paintInspector>;
 /** render(): after the inspector, the multi-selection title and the empty-view state. */
 export function paintSelectionTitle(active: ActiveRequest) {
-  if (selectionState.selectedIds.length > 1)
-    $('selection').textContent =
-      `${selectionState.selectedIds.length.toLocaleString()}개 객체 선택`;
+  if (selectionState.selectedIds.length > 1) {
+    viewerState.selectionTitle = `${selectionState.selectedIds.length.toLocaleString()}개 객체 선택`;
+    viewerState.bump();
+  }
   viewportEmpty.modelShown(Boolean(active?.result?.hostExecuted) || sketchState.tool === 'sketch');
 }
 
@@ -410,22 +386,22 @@ export function paintSelectionTitle(active: ActiveRequest) {
 export function sketchKeys(e: KeyboardEvent): ShortcutResult {
   if (sketchState.tool === 'sketch' && !isTyping(e)) {
     if (e.key === 'e' || e.key === 'E') {
-      setEraser($('brush-eraser').getAttribute('aria-pressed') !== 'true');
+      setEraser(!sketchState.brush.erase);
       return 'stop';
     }
     if (e.key === 's' || e.key === 'S') {
-      $('brush-surface').click();
+      viewportActions.surface();
       return 'stop';
     }
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
       e.preventDefault();
-      $('undo-point').click();
+      // The button is disabled without strokes, so its click did nothing then.
+      if (pendingSketch()) viewportActions.undoStroke();
       return 'stop';
     }
     if (e.key === '[' || e.key === ']') {
-      const width = $('brush-width').valueAsNumber + (e.key === ']' ? 1 : -1);
-      $('brush-width').value = String(Math.min(24, Math.max(1, width)));
-      brushSettings();
+      const width = sketchState.brush.width + (e.key === ']' ? 1 : -1);
+      setBrush({ width: Math.min(24, Math.max(1, width)) });
       return 'stop';
     }
   }
