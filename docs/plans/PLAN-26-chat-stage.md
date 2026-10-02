@@ -2,13 +2,13 @@
 id: PLAN-26
 title: 대화가 화면과 작업을 이끄는 구조 — skill 시작, 토큰 정리, 셸 정리, 산출물 탭
 status: review
-version: 0.11
+version: 0.12
 updated: 2026-10-02
 owner: agent:claude
-related: [ADR-026, ADR-022, ADR-021, ADR-020, SPEC-01, SPEC-02, SPEC-07, ARCH-03, ARCH-01, DESIGN, RESEARCH-12, PLAN-22, PLAN-24, FR-18, FR-24, FR-25, AC-48]
+related: [ADR-026, ADR-016, ADR-022, ADR-021, ADR-020, SPEC-01, SPEC-02, SPEC-07, ARCH-03, ARCH-01, DESIGN, RESEARCH-12, PLAN-22, PLAN-24, FR-18, FR-24, FR-25, AC-48]
 ---
 
-# 대화가 화면과 작업을 이끄는 구조 (T-076~T-081, T-089~T-091, T-098~T-101, T-103, T-109, T-110)
+# 대화가 화면과 작업을 이끄는 구조 (T-076~T-081, T-089~T-091, T-098~T-101, T-103, T-109, T-110, T-113)
 
 기준: [ADR-026](../decisions/ADR-026-chat-stage-and-skill-jigs.md)(2026-10-01 사용자 결정), 조사는 [RESEARCH-12](../research/RESEARCH-12-ui-chat-driven-structure.md). 진행 상황의 정본은 [PLAN §6.5](PLAN.md)이다.
 
@@ -371,3 +371,27 @@ related: [ADR-026, ADR-022, ADR-021, ADR-020, SPEC-01, SPEC-02, SPEC-07, ARCH-03
 **검증 — 실패:** 외부 의견 수를 읽지 못하면 배지만 숨긴다. 검토본 목록을 읽지 못하면 검토본 보기에 이유를 보인다.
 
 **완료:** 위 시험 통과, `npm run typecheck`·`format:check`·`npm test`, PLAN §6.5 갱신. 설치본 반영은 릴리스 때.
+
+## T-113 · 화면 뼈대 React 전환: index.html·app.ts 직접 DOM → 셸 컴포넌트와 명시 상태 {#t-113}
+
+**목적·기준:** ARCH-01 §1.2 표(웹 화면 행 "DOM 직접 갱신을 컴포넌트와 명시적 상태로 전환", UI 상태 행)와 [ADR-016](../decisions/ADR-016-typescript-react-vite.md)을 화면 뼈대 전체에 한 번에 적용한다(사용자 승인 2026-10-02). 동작 보존 리팩터링이라 새 FR·SPEC은 없다. 화면 모습·CSS 클래스·요소 id·접근성 이름·localStorage 키·`body`/`html` 플래그는 바꾸지 않는다. 구조의 정본은 ARCH-01 「웹 화면 구조」다.
+
+**범위와 순서:**
+
+1. **기반 단계 F**(에이전트 1명, 먼저 병합): 동작을 하나도 바꾸지 않고 구조만 나눈다.
+   - `src/ui/store/`: `core.ts`(변경 가능한 조각 객체 + `bump`·`subscribe`·`useStore`, `useSyncExternalStore`)와 조각 `session`·`draft`·`work`·`selection`·`sketch`·`viewer`·`links`·`toast`. `app.ts`의 모듈 최상위 `let`은 모두 이 조각의 같은 이름 필드가 된다(`project` → `session.project`). TS 좁히기를 지키려고 `get()` 대신 속성 접근을 쓴다.
+   - `src/ui/app/`: `app.ts`를 지역 모듈로 기계적으로 나눈다. 각 모듈은 선언과 `init*()`만 내보내고 `boot.ts`가 원래 최상위 실행 순서대로 부른다(가져오기 순서·순환 참조로 실행 순서가 바뀌지 않게). `render()`·`renderMessages()`는 `render.ts`가 원래 호출 순서 그대로 지역의 그리기 함수를 부른다. 줄→모듈 대응은 스크립트로 빠짐·겹침 0을 확인한다. `app.ts`는 `boot.ts`를 부르는 얇은 진입으로 남긴다.
+   - `src/ui/shell/`: 지금 `index.html`의 마크업을 스크립트로 옮긴 정적 컴포넌트(상태·props 없음, 다시 렌더하지 않음). `Shell.tsx`가 `#mobile-navigation`(따로 있던 루트를 합침)부터 `#message`, `SettingsDialog` 자리까지 지금 DOM 순서로 한 번 마운트한다(`flushSync`, StrictMode 없음, pagehide에 언마운트하지 않음). `#left`의 상태 줄 `<p>` 셋은 E 소유 `status-lines.tsx`로 뗀다. 지역마다 `region-boundary.tsx`의 오류 경계로 감싸 한 지역의 렌더 오류가 루트 전체를 내리지 않게 한다(모바일 탭 단추는 따로 감싸 예전 별도 루트와 같은 범위만 비움). `index.html`은 `<head>`와 루트 하나만 남긴다.
+   - 그 밖: 아이콘 채우기를 `icons.ts`의 `paintIcons()`로(자식이 있는 노드는 건너뜀), 작성기 높이 조절을 `workspace-panels.ts`에서 `composer-height.ts`로, 단축키를 `app/shortcuts.ts` 등록부(순서 고정, 처리기가 멈춤/계속을 돌려줌)로 뗀다. 지역 간 파사드(`revealPanel`·`setBody`·`message`·`messageWithActions`·`showRouteCard`·`hideRouteCard`·`focusWork`·`openSettings`·`setConnectionStatus`·`setHostStatus`·`render`·`renderMessages`·`poll`·`submitRequest`·`sendComposer`·`captureViewport`·`annotatedCapture`·`applySelection`·`mobileView`·`focusDraft`·`switchDraft`)는 F가 지금 코드를 그대로 옮겨 만들고, 이후 시그니처는 추가만 허용한다.
+2. **지역 단계 A~E**(F 병합 뒤 병렬, 지역마다 자기 `app/<지역>.ts`·`shell/*`·조각만 고침): A 레일·왼쪽 패널·작업공간 탭·레이아웃, B 뷰포트·인스펙터, C AI 열 상단·작업 보기·요청 폴링, D 작성기, E 상태 표시줄·토스트·설정 대화상자·부팅·패널 모드 껍데기. 정적 셸 JSX를 상태 기반 컴포넌트로 바꾸고 자기 영역의 DOM 직접 쓰기를 조각 갱신으로 바꾼다. 외부 삽입을 없앨 때는 상태화와 같은 커밋에서 한다.
+3. **통합:** 병합 F → E → A → B → D → C. 병합마다 아래 검증 전체.
+
+**지킬 계약:** `.workspace`·`.viewport-area`는 React 형제와 외부 직계 자식(jigs·dashboard·facts·make·output·reference 탭, 패널 너비 손잡이)을 함께 두는 컨테이너다(`style.css`의 `.workspace > …` 직계 규칙). 정적 자식이 있는 마운트 컨테이너(`#conversation`·`#request-count`·`#inspector-content`·`#task-list` 등)는 소유 지역이 바꾸기 전까지 React가 다시 그리지 않는다. 값 속성은 `defaultValue`, 의미 있는 공백 텍스트는 그대로 둔다. `#body`·`#projection`의 네이티브 `input`·`change` 리스너를 유지한다. Node 시험이 불러오는 UI 모듈(`reference-check.ts`·`conversations.tsx`·`connection-recovery.ts`)에는 DOM·JSX를 넣지 않는다. 카메라 값은 프레임마다 조각에 넣지 않는다. `createRoot` 정리 기준은 셸 컨테이너 안에 한정한다(탭·대화상자의 정당한 루트는 그대로).
+
+**선행·외부 조건:** 착수 시 `git status` 깨끗, 브라우저 사슬 기준선 초록(2026-10-02 HEAD `a5a5fc0`: `npm test` 969, `npm run test:browser` 통과). CI(`verify:all`)가 브라우저 시험을 돌린다.
+
+**검증 — 정상:** `npm run typecheck`·`npm run format:check`·`npm test`·`npm run docs:check`, `npm run test:browser` 전체. F는 부팅 직후 셸 DOM을 기준선(HEAD 빌드)과 정규화해 비교한다(루트 감싸개 외 차이 0). 지역·통합 단계는 지역별 시험 묶음, `?panel=rhino|zwcad` 380px, 주요 화면 다크·라이트 전후 스크린숏 비교를 더한다.
+
+**검증 — 실패:** 연결 끊김 배너·재연결, 프로젝트 없는 첫 렌더, 초안 복원 실패, 토스트 액션이 기준선과 같게 동작한다(기존 브라우저 시험).
+
+**완료:** F는 위 검사가 기준선과 같고 DOM 비교 차이가 의도한 감싸개뿐일 때. 전체는 `index.html`이 루트 하나, 셸 요소를 React가 그리고 남은 명령형 영역이 `#canvas`·`#objects` 어댑터·`#display-popover`·외부 직계 자식 컨테이너뿐, 셸 컨테이너 안 외부 삽입 0, 위 검증 통과, 결과는 VERIFY 기록. 설치본 릴리스는 통합 뒤 한 번.

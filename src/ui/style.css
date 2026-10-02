@@ -4723,3 +4723,8 @@ body.panel-mode .mode-toggle {
 .link-row .link-result-mark {
   color: var(--text-3);
 }
+
+/* The React shell root (PLAN-26 T-113): no box of its own, so the layout is the one without it. */
+.root {
+  display: contents;
+}

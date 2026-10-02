@@ -2,7 +2,7 @@
 id: ARCH-03
 title: jig 런타임과 저장 스키마 v5의 물리 계약
 status: review
-version: 0.93
+version: 0.94
 updated: 2026-10-02
 owner: agent:claude
 related: [FR-23, FR-24, FR-25, SPEC-02, SPEC-05, SPEC-06, SPEC-07, ADR-014, ADR-019, ADR-020, ADR-021, ADR-022, ADR-026, ARCH-01, ARCH-02, PLAN-22, PLAN-23, PLAN-24, PLAN-26, RESEARCH-10, RESEARCH-12]
@@ -32,7 +32,7 @@ related: [FR-23, FR-24, FR-25, SPEC-02, SPEC-05, SPEC-06, SPEC-07, ADR-014, ADR-
 | 프로젝트 jig 소스 | `extensions/jigs/<name>/`(1차 `s06-frame`) | 검증용 샘플 규칙(§2.2). 설치본 빌드 제외 |
 | 기존 jig | `src/jigs/catalog.ts`, `sync.ts`, `structure/`, `knowledge.ts` | 그대로 둔다(ARCH-01 §JIG 탭과 Sync jig, ARCH-02). 구조 저장 `<data>/structure/<projectId>.json`을 작업본으로 옮기는 일은 2차 |
 
-새 코드는 새 파일에 둔다. `src/ui/app.ts`·`src/server/server.ts`·`src/ui/style.css`에는 초기화·위임 몇 줄만 더한다.
+새 코드는 새 파일에 둔다. `src/ui/app/`의 지역 모듈(초기화 순서는 `boot.ts`, ARCH-01 「웹 화면 구조」)·`src/server/server.ts`·`src/ui/style.css`에는 초기화·위임 몇 줄만 더한다.
 
 ## 2. 패키지
 

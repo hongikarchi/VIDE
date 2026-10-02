@@ -1,0 +1,575 @@
+// Linked files (PLAN-26 T-113, frozen after step F): Sync, Live Sync deltas, the offline view and
+// inbox, and the layers composed into one scene.
+import { z } from 'zod';
+import { applyDisplayDelta } from '../../core/display-delta.ts';
+import { belongsToLink } from '../../contracts/link-requests.ts';
+import { api, errors } from '../gateway.ts';
+import { draftHasInput, objects } from '../model.ts';
+import { element as $, readableError } from '../elements.ts';
+import { type LinkRow, linkRowSchema, offlineStatusSchema, type InboxItem } from '../links.tsx';
+import { requestData, requestMessage } from '../workspace-data.ts';
+import { hostAction } from '../host-panel.tsx';
+import { layerSignature, composeLayers } from '../layers.ts';
+import { linksState, type Layer } from '../store/links.ts';
+import { draftState } from '../store/draft.ts';
+import { sessionState } from '../store/session.ts';
+import { selectionState } from '../store/selection.ts';
+import { workState } from '../store/work.ts';
+import { viewerState } from '../store/viewer.ts';
+import { setBody } from './composer.ts';
+import { renderMessages, render } from './render.ts';
+import { panelMode, currentProject, panelParams } from './context.ts';
+import { viewportEmpty, pendingSketch, scheduleThumbnail } from './viewport.ts';
+import { renderLinkPanel } from './left.ts';
+import { message } from './status.ts';
+
+/** The revision of each shown Sync this page holds; the engine raises it in place (T-084). */
+export const heldRevision = new Map<string, number>();
+/** The display revision the links list gives a request now (none: not a file's shown Sync). */
+export const listedRevision = (id: string) =>
+  linksState.links.find((link) => link.display?.requestId === id)?.display?.revision;
+export const deltaReplySchema = z.union([
+  z.object({ full: z.literal(true) }).passthrough(),
+  z.object({
+    revision: z.number(),
+    objects: z.array(z.object({ id: z.string(), nativeId: z.string() }).passthrough()),
+    scene: z.array(z.object({ id: z.string(), nativeId: z.string() }).passthrough()),
+    removed: z.array(z.string()),
+    definitions: z.record(z.string(), z.unknown()).optional(),
+  }),
+]);
+export const refreshing = new Set<string>();
+/**
+ * SPEC-01.11 Live Sync, shown: the engine changed a file's shown Sync in place (its display
+ * revision rose); only the changed objects are fetched and merged into the model this page holds.
+ */
+export async function refreshDisplay(
+  projectId: string,
+  display: { requestId: string; revision: number },
+) {
+  const id = display.requestId;
+  const entry = draftState.state.messages.find((item) => item.id === id);
+  const result = entry?.request.result;
+  const held = heldRevision.get(id) ?? 1;
+  // Not drawn yet: the whole fetch brings the latest anyway.
+  if (!entry || !result?.objects || !result.scene || display.revision <= held) return;
+  if (refreshing.has(id) || loadingResults.has(id)) return;
+  refreshing.add(id);
+  try {
+    const reply = deltaReplySchema.parse(
+      await api(`/projects/${projectId}/requests/${id}/delta?since=${held}`),
+    );
+    if (sessionState.project?.id !== projectId) return;
+    const index = draftState.state.messages.findIndex((item) => item.id === id);
+    const current = draftState.state.messages[index]?.request.result;
+    if (index < 0 || !current?.objects || !current.scene) return;
+    if ('full' in reply) {
+      // Too far behind (or no longer stored per object): read the request whole again.
+      heldRevision.delete(id);
+      draftState.state.messages[index] = {
+        ...draftState.state.messages[index],
+        request: {
+          ...draftState.state.messages[index].request,
+          result: { ...current, scene: undefined, sceneOmitted: true },
+        },
+      };
+      linksState.liveRefresh = id;
+      await loadFullResult(id);
+      return;
+    }
+    type Definitions = NonNullable<typeof current.definitions>;
+    const merged = applyDisplayDelta<
+      (typeof current.objects)[number],
+      (typeof current.scene)[number],
+      Definitions[string]
+    >(
+      { objects: current.objects, scene: current.scene, definitions: current.definitions },
+      reply as unknown as {
+        objects: typeof current.objects;
+        scene: typeof current.scene;
+        removed: string[];
+        definitions?: Definitions;
+      },
+    );
+    const next = draftState.state.messages[index];
+    draftState.state.messages[index] = {
+      ...next,
+      request: { ...next.request, result: { ...current, ...merged } },
+    };
+    heldRevision.set(id, reply.revision);
+    linksState.liveRefresh = id;
+    renderMessages();
+  } catch {
+    /* The next poll tries again. */
+  } finally {
+    refreshing.delete(id);
+  }
+}
+// Linked files (SPEC-01.11, src/ui/store/links.ts): drawn together as layers.
+/** This page, for its draft leases on the files it uses (`GET …/links?page=&hold=`). */
+export const pageId = crypto.randomUUID();
+export const linkNotes = new Map<string, string>();
+/** A candidate (or older Sync) shown in a file's place instead of its latest Sync. */
+export const layerOverride = new Map<string, string>();
+/** The link whose own record a request is (its Sync, or for a file item an older import). */
+export const ownerOf = (request: { input: Record<string, unknown> }) =>
+  linksState.links.find((link) => belongsToLink({ ...link, file: link.kind === 'file' }, request));
+/** The linked file a request belongs to: its own link, or the link of its basis chain. */
+export function linkOfRequest(id: string | null | undefined): string | undefined {
+  let current = id ? draftState.state.messages.find((entry) => entry.id === id) : undefined;
+  for (let depth = 0; current && depth < 30; depth++) {
+    const owner = ownerOf(current.request);
+    if (owner) return owner.id;
+    const base = current.request.input.baseRequestId ?? current.request.result?.baseRequestId;
+    current =
+      typeof base === 'string'
+        ? draftState.state.messages.find((entry) => entry.id === base)
+        : undefined;
+  }
+  return undefined;
+}
+/** The shown result that belongs to no linked file: its row "작업 결과 · <이름>" (SPEC-01.11 4). */
+export function transientLayer(): Layer | undefined {
+  const entry = linksState.transientResult
+    ? draftState.state.messages.find((item) => item.id === linksState.transientResult)
+    : undefined;
+  if (!entry) return undefined;
+  const name = entry.request.result?.sourceDocument?.name || entry.body.slice(0, 40) || '결과';
+  return { key: 'result:' + entry.id, requestId: entry.id, name: '작업 결과 · ' + name };
+}
+export function visibleLayers(): Layer[] {
+  const layers: Layer[] = [];
+  for (const link of linksState.links) {
+    if (link.hidden) continue;
+    const requestId = layerOverride.get(link.id) ?? link.lastSync?.requestId;
+    if (requestId && draftState.state.messages.some((entry) => entry.id === requestId))
+      layers.push({ key: link.id, requestId, name: link.name, link });
+  }
+  const transient = transientLayer();
+  if (transient && !layers.some((layer) => layer.requestId === transient.requestId))
+    layers.push(transient);
+  return layers;
+}
+/**
+ * Open a result: a linked file's candidate takes that file's place; anything else shows beside.
+ * `restored` (the selection a restart brings back): a file's own Sync shows as its latest Sync
+ * and a hidden file stays hidden (SPEC-01.11 4).
+ */
+export function showRequest(id: string, restored = false) {
+  const link = linksState.links.find((entry) => entry.id === linkOfRequest(id));
+  if (link) {
+    const entry = draftState.state.messages.find((item) => item.id === id);
+    if (link.lastSync?.requestId === id || (restored && entry && ownerOf(entry.request) === link))
+      layerOverride.delete(link.id);
+    else layerOverride.set(link.id, id);
+    if (link.hidden && !restored) void setLinkHidden(link, false);
+    linksState.transientResult = undefined;
+    linksState.activeLayer = link.id;
+  } else {
+    linksState.transientResult = id;
+    linksState.activeLayer = 'result:' + id;
+  }
+  linksState.fitNext = true;
+}
+/** The composer's target follows the active layer (SPEC-01.11 요청 대상). */
+export function applyActiveLayer() {
+  if (!linksState.currentLayers.some((layer) => layer.key === linksState.activeLayer)) {
+    const newest = [...linksState.currentLayers].sort((a, b) =>
+      String(
+        draftState.state.messages.find((entry) => entry.id === a.requestId)?.request.createdAt ??
+          '',
+      ).localeCompare(
+        String(
+          draftState.state.messages.find((entry) => entry.id === b.requestId)?.request.createdAt ??
+            '',
+        ),
+      ),
+    );
+    linksState.activeLayer = newest.at(-1)?.key;
+  }
+  const active = linksState.currentLayers.find((layer) => layer.key === linksState.activeLayer);
+  selectionState.displayedResult = active?.requestId;
+  const result = draftState.state.messages.find(
+    (entry) => entry.id === selectionState.displayedResult,
+  )?.request.result;
+  if (result && !draftHasInput(draftState.state)) {
+    draftState.state.host = result.host || 'rhino';
+    $('host-target').value = draftState.state.host;
+  }
+  const connection = active?.link?.connection;
+  if (!panelMode)
+    linksState.connectedTarget =
+      connection && active?.link?.host === 'rhino'
+        ? { instance: connection.instance, documentId: connection.documentId }
+        : undefined;
+  viewportEmpty.connection(
+    linksState.links.find((link) => link.connection)
+      ? {
+          key: linksState.links.find((link) => link.connection)!.id,
+          name: linksState.links.find((link) => link.connection)!.name,
+          host: linksState.links.find((link) => link.connection)!.host,
+        }
+      : undefined,
+  );
+}
+export async function setLinkHidden(link: LinkRow, hidden: boolean) {
+  link.hidden = hidden;
+  renderMessages();
+  renderLinkPanel();
+  try {
+    await api(`/projects/${currentProject().id}/links/${link.id}`, 'PUT', { hidden });
+  } catch (error) {
+    message(readableError(error).message);
+  }
+}
+/**
+ * A draft based on this file holds its automatic updates (SPEC-01.11 보류): the page tells the
+ * engine with each links poll (a 5 s lease). Queued or running work the engine sees itself.
+ */
+export function draftHolds(link: LinkRow) {
+  const uses = (id?: string | null) => !!id && linkOfRequest(id) === link.id;
+  return (
+    (draftHasInput(draftState.state) || !!pendingSketch()) &&
+    (uses(draftState.state.baseRequestId) || draftState.state.pins.some((pin) => uses(pin.basis)))
+  );
+}
+/** The links panel's line for the engine's Sync of a file (T-084). */
+export function syncNote(link: LinkRow): string | undefined {
+  const sync = link.sync;
+  if (!sync) return undefined;
+  if (sync.state === 'syncing') return 'Sync 중';
+  if (sync.state === 'held') return '자동 Sync 보류 · 이 파일 기준 작업 중';
+  if (sync.state === 'waiting') return '변경 중 · 곧 다시 Sync';
+  if (sync.state === 'failed') return errors[sync.code ?? ''] || 'Sync 실패';
+  return undefined;
+}
+/** ⟳ (and 지금 Sync): a fresh read the user asked for; automatic Syncs are the engine's (T-084). */
+export async function syncLink(link: LinkRow) {
+  const connection = link.connection;
+  if (!connection || !sessionState.project || linksState.linkSyncing) return;
+  const projectId = sessionState.project.id,
+    target = { instance: connection.instance, documentId: connection.documentId };
+  linksState.linkSyncing = true;
+  linkNotes.set(link.id, 'Sync 중');
+  renderLinkPanel();
+  if (!linksState.currentLayers.length) viewportEmpty.sync('loading');
+  try {
+    const request = await requestData(`/projects/${projectId}/capture`, 'POST', {
+      ...target,
+      id: crypto.randomUUID(),
+      linkId: link.id,
+      // The user's own Sync never joins one the engine is running.
+      fresh: true,
+    });
+    if (sessionState.project?.id !== projectId) return;
+    if (!draftState.state.messages.some((entry) => entry.id === request.id))
+      draftState.state.messages.push(requestMessage(request));
+    if (request.result?.hostExecuted) {
+      link.lastSync = { requestId: request.id, at: request.createdAt ?? new Date().toISOString() };
+      layerOverride.delete(link.id);
+      linkNotes.delete(link.id);
+      viewportEmpty.sync('idle');
+    } else {
+      linkNotes.set(link.id, errors[request.result?.code ?? ''] || 'Sync 실패');
+      viewportEmpty.sync(linksState.currentLayers.length ? 'idle' : 'failed');
+    }
+  } catch (error) {
+    linkNotes.set(link.id, readableError(error).message);
+    viewportEmpty.sync(linksState.currentLayers.length ? 'idle' : 'failed');
+  } finally {
+    linksState.linkSyncing = false;
+    if (sessionState.project?.id === projectId) {
+      renderMessages();
+      render();
+      renderLinkPanel();
+    }
+  }
+}
+export async function pollLinks() {
+  if (!sessionState.project || !sessionState.ready || document.hidden || linksState.linksPolling)
+    return;
+  linksState.linksPolling = true;
+  const projectId = sessionState.project.id;
+  try {
+    // Files the draft uses: the engine holds their automatic Syncs while this page renews the
+    // lease (5 s); without a draft on a file the lease lapses on its own.
+    const hold = linksState.links.filter(draftHolds).map((link) => link.id);
+    const query = hold.length
+      ? '?' + new URLSearchParams({ page: pageId, hold: hold.join(',') }).toString()
+      : '';
+    const next = z.array(linkRowSchema).parse(await api(`/projects/${projectId}/links${query}`));
+    if (sessionState.project?.id !== projectId) return;
+    // A file's first Sync is framed in view.
+    if (
+      next.some(
+        (link) => link.lastSync && !linksState.links.find((old) => old.id === link.id)?.lastSync,
+      )
+    )
+      linksState.fitNext = true;
+    linksState.links = next;
+    workState.conversationChips?.update({
+      targets: next.map((link) => ({ id: link.id, name: link.name })),
+    });
+    linksState.linksLoaded = true;
+    // The host panel works on its own file: requests from it target that file.
+    if (panelMode && linksState.connectedTarget) {
+      const own = linksState.links.find(
+        (link) =>
+          link.connection?.instance === linksState.connectedTarget?.instance &&
+          link.connection?.documentId === linksState.connectedTarget?.documentId,
+      );
+      if (own && linksState.activeLayer !== own.id) {
+        linksState.activeLayer = own.id;
+        applyActiveLayer();
+      }
+      // Removed from the project in VIDE (SPEC-01.11 9): the plugin drops its link as well.
+      const target = linksState.connectedTarget;
+      if (
+        !linksState.panelUnlinking &&
+        panelParams.get('project') === projectId &&
+        !linksState.links.some(
+          (link) =>
+            (link.instance === target.instance && link.documentId === target.documentId) ||
+            (link.connection?.instance === target.instance &&
+              link.connection.documentId === target.documentId),
+        )
+      ) {
+        linksState.panelUnlinking = true;
+        hostAction('unlink');
+      }
+    }
+    if (linksState.offlineAsked !== projectId) {
+      linksState.offlineAsked = projectId;
+      void pollOffline();
+    }
+    // Syncs made elsewhere (another window, the Rhino panel) are fetched once.
+    for (const link of linksState.links) {
+      const id = link.lastSync?.requestId;
+      if (id && !draftState.state.messages.some((entry) => entry.id === id)) {
+        const revision = listedRevision(id);
+        const fetched = requestMessage(await api(`/projects/${projectId}/requests/${id}`));
+        if (revision !== undefined) heldRevision.set(id, revision);
+        draftState.state.messages.push(fetched);
+      }
+    }
+    // The engine's Sync state per file, and Live Syncs in place merged as changes only.
+    let syncing = false;
+    for (const link of linksState.links) {
+      if (!linksState.linkSyncing) {
+        const note = syncNote(link);
+        if (note) linkNotes.set(link.id, note);
+        else linkNotes.delete(link.id);
+      }
+      if (link.sync?.state === 'syncing') syncing = true;
+      if (link.display) void refreshDisplay(projectId, link.display);
+    }
+    // An empty view says the engine is reading a file, or that its Sync failed.
+    const shown =
+      linksState.currentLayers.length || linksState.linkSyncing || loadingResults.size
+        ? undefined
+        : syncing
+          ? 'loading'
+          : linksState.links.some((link) => link.sync?.state === 'failed')
+            ? 'failed'
+            : 'idle';
+    if (shown && shown !== linksState.engineView) viewportEmpty.sync(shown);
+    linksState.engineView = shown;
+    const signature = JSON.stringify(
+      linksState.links.map((link) => [link.id, link.hidden, link.lastSync]),
+    );
+    if (signature !== linksState.linkSignature) {
+      linksState.linkSignature = signature;
+      renderMessages();
+    } else applyActiveLayer();
+    renderLinkPanel();
+  } catch {
+    /* Transient; the next poll retries and the last display stays. */
+  } finally {
+    linksState.linksPolling = false;
+  }
+}
+// Offline view on the account site and requests left there (PLAN-20).
+export async function pollOffline(change?: Promise<unknown>) {
+  if (!sessionState.project || !sessionState.ready) return;
+  const projectId = sessionState.project.id;
+  try {
+    const status = offlineStatusSchema.parse(
+      (await change) ?? (await api(`/projects/${projectId}/offline-view`)),
+    );
+    if (sessionState.project?.id !== projectId) return;
+    linksState.offlineState = { projectId, status };
+    renderLinkPanel();
+  } catch (error) {
+    if (change) message(readableError(error).message);
+  }
+}
+export function useInboxItem(item: InboxItem) {
+  draftState.state.body = item.body;
+  setBody(item.body);
+  if (item.linkId && linksState.links.some((link) => link.id === item.linkId)) {
+    linksState.activeLayer = item.linkId;
+    applyActiveLayer();
+  }
+  render();
+  $('body').focus();
+  message('사이트에서 남긴 요청을 작성기에 넣었습니다. 내용을 확인하고 보내세요.');
+  dismissInboxItem(item);
+}
+export function dismissInboxItem(item: InboxItem) {
+  void pollOffline(
+    api(`/projects/${item.projectId}/offline-view/inbox/${item.id}/dismiss`, 'POST', {}),
+  );
+}
+/** The request list omits display meshes; fetch one request in full when it is shown. */
+// One fetch per request; a second caller waits for the same one.
+export const loadingResults = new Map<string, Promise<void>>();
+export function loadFullResult(id: string): Promise<void> {
+  const pending = loadingResults.get(id);
+  if (pending || !sessionState.project) return pending ?? Promise.resolve();
+  viewportEmpty.sync('loading');
+  const loading = (async () => {
+    try {
+      // The fetch carries at least the display revision listed now (Live Syncs merge after it).
+      const revision = listedRevision(id);
+      const full = requestMessage(await api(`/projects/${currentProject().id}/requests/${id}`));
+      if (revision !== undefined) heldRevision.set(id, revision);
+      const index = draftState.state.messages.findIndex((entry) => entry.id === id);
+      if (index >= 0) draftState.state.messages[index] = full;
+      viewportEmpty.sync('idle');
+      renderMessages();
+    } catch (error) {
+      viewportEmpty.sync('failed');
+      message(readableError(error).message);
+    }
+  })().finally(() => loadingResults.delete(id));
+  loadingResults.set(id, loading);
+  return loading;
+}
+/** Draw every visible layer together (SPEC-01.11); rebuild only when the layer set changed. */
+export function showLayers() {
+  const layers = visibleLayers();
+  for (const layer of layers) {
+    const result = draftState.state.messages.find((entry) => entry.id === layer.requestId)?.request
+      .result;
+    if (result?.hostExecuted && !result.scene && result.sceneOmitted) {
+      void loadFullResult(layer.requestId);
+      return;
+    }
+  }
+  const drawable = layers.flatMap((layer) => {
+    const result = draftState.state.messages.find((entry) => entry.id === layer.requestId)?.request
+      .result;
+    return result?.hostExecuted && result.objects && result.scene ? [{ layer, result }] : [];
+  });
+  linksState.currentLayers = drawable.map(({ layer }) => layer);
+  const signature = layerSignature(linksState.currentLayers);
+  const refresh =
+    linksState.liveRefresh !== undefined &&
+    linksState.currentLayers.some((layer) => layer.requestId === linksState.liveRefresh);
+  linksState.liveRefresh = undefined;
+  if (signature === linksState.shownSignature && !refresh && !linksState.fitNext) {
+    applyActiveLayer();
+    return;
+  }
+  const decoder = new TextDecoder();
+  const layerOf = (value?: string) => {
+    if (!value) return undefined;
+    try {
+      return decoder.decode(Uint8Array.from(atob(value), (c) => c.charCodeAt(0)));
+    } catch {
+      return undefined;
+    }
+  };
+  const many = drawable.length > 1;
+  const composed = composeLayers(
+    drawable.map(({ layer, result }) => {
+      const native = new Map(result.scene!.map((item) => [item.id, item]));
+      return {
+        key: layer.key,
+        name: layer.name,
+        requestId: layer.requestId,
+        objects: result.objects!.map((o) => {
+          const item = native.get(o.id);
+          const name = layerOf(item?.layer64);
+          return {
+            ...o,
+            // Several files: the layer list groups by file, then by layer.
+            layer: many ? `${layer.name} › ${name ?? '레이어 없음'}` : name,
+            layerName: name,
+            // The layer list's swatch (host layer colour, #rrggbb).
+            layerColor: item?.layerColor,
+            type: item?.nativeType || o.kind,
+          };
+        }),
+        scene: result.scene!,
+        definitions: result.definitions,
+      };
+    }),
+  );
+  objects.splice(0, objects.length, ...(composed.objects as unknown as typeof objects));
+  if (!linksState.shownSignature || linksState.fitNext)
+    viewerState.viewport?.replace(composed.scene, composed.definitions);
+  else viewerState.viewport?.update(composed.scene, composed.definitions);
+  linksState.shownSignature = signature;
+  linksState.fitNext = false;
+  applyActiveLayer();
+  render();
+  if (drawable.length) scheduleThumbnail();
+}
+
+export function initLinksSync1() {
+  setInterval(() => void pollLinks(), 1500);
+  setInterval(() => {
+    if (!document.hidden) void pollOffline();
+  }, 15_000);
+}
+
+/** renderMessages(): the chosen result becomes a layer once the links are known. */
+export function applyShownSelection() {
+  // Applied once the project's links are known: before that every result would look like one
+  // that belongs to no file and stay drawn after its file is hidden (SPEC-01.11 4).
+  if (selectionState.selectedResult !== selectionState.appliedSelection && linksState.linksLoaded) {
+    selectionState.appliedSelection = selectionState.selectedResult;
+    if (selectionState.selectedResult)
+      showRequest(
+        selectionState.selectedResult,
+        selectionState.selectedResult === selectionState.restoredSelection,
+      );
+    else if (selectionState.selectedResult === null) {
+      linksState.transientResult = undefined;
+      linksState.activeLayer = undefined;
+    }
+    selectionState.restoredSelection = undefined;
+  }
+  // A result shown beside the files that now belongs to one (its file was linked or listed since)
+  // follows that file and its visibility; a file's own Sync is shown as that file's.
+  const owner = linksState.transientResult
+    ? linksState.links.find((link) => link.id === linkOfRequest(linksState.transientResult))
+    : undefined;
+  if (owner && linksState.transientResult) {
+    const entry = draftState.state.messages.find((item) => item.id === linksState.transientResult);
+    if (
+      entry &&
+      ownerOf(entry.request) !== owner &&
+      owner.lastSync?.requestId !== linksState.transientResult &&
+      !layerOverride.has(owner.id)
+    )
+      layerOverride.set(owner.id, linksState.transientResult);
+    if (linksState.activeLayer === 'result:' + linksState.transientResult)
+      linksState.activeLayer = owner.id;
+    linksState.transientResult = undefined;
+  }
+  // A project without linked files shows its latest result, as before links existed.
+  if (
+    linksState.linksLoaded &&
+    !linksState.links.length &&
+    selectionState.selectedResult === undefined
+  )
+    linksState.transientResult = draftState.state.messages
+      .filter(
+        (entry) =>
+          entry.request?.result?.hostExecuted &&
+          (entry.request.result.host || 'rhino') === (draftState.state.host || 'rhino'),
+      )
+      .at(-1)?.id;
+}

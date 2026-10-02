@@ -2,16 +2,17 @@
 import '@fontsource-variable/inter';
 import '@fontsource-variable/noto-sans-kr';
 import '@fontsource-variable/jetbrains-mono';
+import { flushSync } from 'react-dom';
 import { createRoot } from 'react-dom/client';
-import { MobileNavigation } from './mobile-navigation.tsx';
+import { Shell } from './shell/Shell.tsx';
 
-const navigation = document.getElementById('mobile-navigation');
-if (!navigation) throw new Error('Mobile navigation mount is missing');
-const root = createRoot(navigation);
-root.render(<MobileNavigation />);
-window.addEventListener('pagehide', (event) => {
-  if (!event.persisted) root.unmount();
-});
+// The shell is drawn once and synchronously (PLAN-26 T-113), so the screen code started below finds
+// every element. No StrictMode: the start would run twice (one-time connect token, WebGL, polls).
+// The root is not unmounted on pagehide: the screen code disposes the viewport then and needs it.
+const mount = document.getElementById('root');
+if (!mount) throw new Error('Shell mount is missing');
+const root = createRoot(mount);
+flushSync(() => root.render(<Shell />));
 
-// Legacy panels retain ownership of their DOM until their individual migration.
+// The regions' imperative code (src/ui/app/) keeps its DOM until each region's migration.
 await import('./app.ts');
