@@ -1,15 +1,18 @@
 // Notices and status lines (PLAN-26 T-113, region E): the toast, the settings dialog's status lines,
-// the AI settings and the account indicator.
+// the connection banner, the AI settings and the account indicator. These write store/toast.ts,
+// store/session.ts and store/status.ts; the shell components (shell/toast.tsx, status-bar.tsx,
+// status-lines.tsx, settings-dialog.tsx, connection-banner.tsx) draw them.
 import { waitingOf } from '../../contracts/request-scope.ts';
 import { executionLimits } from '../../contracts/execution-limits.ts';
 import { errors, labels, api } from '../gateway.ts';
 import { showExecutionLimits } from '../execution-limits.tsx';
 import { initializeWorkspaceStatus } from '../workspace-status.ts';
-import { element as $, append as el } from '../elements.ts';
+import { element as $ } from '../elements.ts';
 import { accountIndicator } from '../account-indicator.ts';
 import { models } from '../model.ts';
 import { hostStatusSchema, providersSchema } from '../workspace-data.ts';
-import { sessionState } from '../store/session.ts';
+import { sessionState, type SessionFields } from '../store/session.ts';
+import { statusState } from '../store/status.ts';
 import { draftState } from '../store/draft.ts';
 import { selectionState } from '../store/selection.ts';
 import { toastState } from '../store/toast.ts';
@@ -30,19 +33,49 @@ export function openExecutionLimits() {
   });
 }
 export let workspaceStatus!: ReturnType<typeof initializeWorkspaceStatus>;
+const hideToast = () => {
+  toastState.hidden = true;
+  toastState.bump();
+};
 export const message = (text: string) => {
   clearTimeout(toastState.toastTimer);
-  $('message').textContent = text;
-  $('message').hidden = false;
-  toastState.toastTimer = setTimeout(() => ($('message').hidden = true), 4500);
+  toastState.text = text;
+  toastState.actions = undefined;
+  toastState.hidden = false;
+  toastState.generation++;
+  toastState.bump();
+  toastState.toastTimer = setTimeout(hideToast, 4500);
 };
 /** The settings dialog's status tab line for the AI services (`#connection-status`). */
 export function setConnectionStatus(text: string) {
-  $('connection-status').textContent = text;
+  sessionState.connection = { ...sessionState.connection, providersText: text };
+  sessionState.bump();
 }
 /** The settings dialog's status tab line for the hosts (`#host-status`). */
 export function setHostStatus(text: string) {
-  $('host-status').textContent = text;
+  sessionState.connection = { ...sessionState.connection, hostText: text };
+  sessionState.bump();
+}
+/**
+ * The status tab's lost-session line (`#auth-status`): shown with `text`, hidden without. `link`
+ * adds the project list link (a page opened from another device).
+ */
+export function setAuthStatus(text: string | undefined, link = false) {
+  sessionState.connection = {
+    ...sessionState.connection,
+    auth:
+      text === undefined ? { hidden: true, text: '', link: false } : { hidden: false, text, link },
+  };
+  sessionState.bump();
+}
+/** The lost-engine banner above the composer (`#connection-banner`). */
+export function setConnectionBanner(change: Partial<SessionFields['banner']>) {
+  sessionState.banner = { ...sessionState.banner, ...change };
+  sessionState.bump();
+}
+/** What the banner's [다시 연결] does. */
+export function onReconnect(run: () => void) {
+  statusState.actions = { ...statusState.actions, reconnect: run };
 }
 /** Opens the settings dialog the way the rail's ⚙ does (src/ui/workspace-status.ts). */
 export function openSettings() {
@@ -71,17 +104,12 @@ export function messageWithActions(
   { keep = false }: { keep?: boolean } = {},
 ) {
   clearTimeout(toastState.toastTimer);
-  const box = $('message');
-  box.replaceChildren(text + ' ');
-  for (const { label, run } of actions) {
-    const button = el('button', label, box, { type: 'button', class: 'message-action' });
-    button.onclick = () => {
-      box.hidden = true;
-      run();
-    };
-  }
-  box.hidden = false;
-  if (!keep) toastState.toastTimer = setTimeout(() => (box.hidden = true), 9000);
+  toastState.text = text;
+  toastState.actions = actions;
+  toastState.hidden = false;
+  toastState.generation++;
+  toastState.bump();
+  if (!keep) toastState.toastTimer = setTimeout(hideToast, 9000);
 }
 /** A notice with one action button (e.g. send a view-only request to the AI after all). */
 export function messageWithAction(text: string, label: string, action: () => void) {
@@ -154,13 +182,17 @@ export function paintStatus() {
         label: `${(entry.body || '작업').slice(0, 120)} · ${entry.request?.result?.code ?? ''}`,
       })),
   );
-  $('work-count').textContent = `${draftState.state.messages.length}개 작업`;
+  const workCount = `${draftState.state.messages.length}개 작업`;
   const waitingCount = draftState.state.messages.filter((m) => waitingOf(m.request)).length;
-  $('workspace-status').textContent = draftState.state.messages.some((m) =>
+  const workspaceText = draftState.state.messages.some((m) =>
     ['queued', 'running'].includes(m.request?.state),
   )
     ? '작업 진행 중' + (waitingCount ? ` · 대기 ${waitingCount}` : '')
     : sessionState.project
       ? '로컬 작업 공간 · ' + sessionState.project.name
       : '연결 중';
+  if (statusState.workCount === workCount && statusState.workspaceText === workspaceText) return;
+  statusState.workCount = workCount;
+  statusState.workspaceText = workspaceText;
+  statusState.bump();
 }

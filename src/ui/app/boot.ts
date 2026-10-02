@@ -9,7 +9,7 @@ import {
 } from '../../contracts/host-documents.ts';
 import { setTheme } from '../theme.ts';
 import { renderLinkCard, renderPanelHeader } from '../host-panel.tsx';
-import { element as $, readableError, append as el } from '../elements.ts';
+import { element as $, readableError } from '../elements.ts';
 import { api, connect, errors } from '../gateway.ts';
 import { attachHostSelection, objects, models } from '../model.ts';
 import { displayIdOf } from '../layers.ts';
@@ -36,6 +36,9 @@ import {
 import {
   setConnectionStatus,
   setHostStatus,
+  setAuthStatus,
+  setConnectionBanner,
+  onReconnect,
   message,
   workspaceStatus,
   refreshAccount,
@@ -368,9 +371,6 @@ export async function initializeWorkspace() {
     message(errors[error.code ?? ''] || error.message);
   }
 }
-export let connectionBanner!: HTMLDivElement;
-export let connectionText!: HTMLSpanElement;
-export let reconnectButton!: HTMLButtonElement;
 export const lostText = (code: string) =>
   remoteSession()
     ? (code === 'UNAUTHORIZED'
@@ -380,9 +380,8 @@ export const lostText = (code: string) =>
       ? '로컬 인증이 만료됐습니다. 트레이의 VIDE 아이콘이나 실행 링크로 다시 연 뒤 [다시 연결]을 누르세요. 초안은 유지됩니다.'
       : '작업 엔진에 연결할 수 없습니다. 엔진이 다시 켜지면 자동으로 이어집니다. 초안은 유지됩니다.';
 export function showLost(text: string) {
-  connectionText.textContent = text;
   // Opened from another device: the PC restarted or went off. Reopen from the project list.
-  if (remoteSession()) el('a', '프로젝트 목록에서 다시 열기', connectionText, { href: '/' });
+  setConnectionBanner({ text, link: remoteSession() });
 }
 export let recovery!: ReturnType<typeof connectionRecovery>;
 
@@ -434,14 +433,8 @@ export async function boot() {
   }
   setInterval(() => void pollHostLink(), 1200);
   // A lost engine locks the composer only until it answers again (engine restart, sleep): the
-  // banner above the composer says why and retries by itself, [다시 연결] checks at once.
-  connectionBanner = document.createElement('div');
-  connectionBanner.id = 'connection-banner';
-  connectionBanner.setAttribute('role', 'alert');
-  connectionBanner.hidden = true;
-  connectionText = el('span', '', connectionBanner);
-  reconnectButton = el('button', '다시 연결', connectionBanner, { type: 'button' });
-  document.querySelector('.composer-wrap')?.prepend(connectionBanner);
+  // banner above the composer (shell/connection-banner.tsx) says why and retries by itself,
+  // [다시 연결] checks at once.
   recovery = connectionRecovery({
     probe: () => probeEngine(),
     onState(next) {
@@ -451,12 +444,11 @@ export async function boot() {
           ? '작업 엔진 연결을 다시 확인하는 중… 초안은 유지됩니다.'
           : lostText(next === 'unauthorized' ? 'UNAUTHORIZED' : sessionState.lostCode),
       );
-      reconnectButton.disabled = next === 'checking';
+      setConnectionBanner({ checking: next === 'checking' });
     },
     async onRecovered() {
-      connectionBanner.hidden = true;
-      $('auth-status').hidden = true;
-      $('auth-status').textContent = '';
+      setConnectionBanner({ hidden: true });
+      setAuthStatus(undefined);
       // Never loaded (the first start failed): load now. Otherwise unlock and refresh what polls.
       if (!sessionState.project) {
         await initializeWorkspace();
@@ -472,22 +464,17 @@ export async function boot() {
       await refreshConnectionStatus().catch(() => {});
     },
   });
-  reconnectButton.onclick = () => recovery.retry();
+  onReconnect(() => recovery.retry());
   window.addEventListener('focus', () => recovery.retry());
   window.addEventListener('vide:connection-lost', (event) => {
     sessionState.ready = false;
     const code = (event as CustomEvent<string>).detail;
     sessionState.lostCode = code;
     const text = lostText(code);
-    $('auth-status').hidden = false;
-    $('auth-status').textContent = text;
-    if (remoteSession()) {
-      el('a', '프로젝트 목록에서 다시 열기', $('auth-status'), { href: '/' });
-      if (!recovery.active) message(text);
-    }
+    setAuthStatus(text, remoteSession());
+    if (remoteSession() && !recovery.active) message(text);
     showLost(text);
-    connectionBanner.hidden = false;
-    reconnectButton.disabled = false;
+    setConnectionBanner({ hidden: false, checking: false });
     setConnectionStatus('연결 상태 확인 필요');
     setHostStatus('호스트 상태 확인 필요');
     recovery.lost();

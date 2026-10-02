@@ -1,8 +1,229 @@
-// SettingsDialog (PLAN-26 T-113, region E): the settings dialog's place after the toast. Until region
-// E moves the dialog here, src/ui/workspace-status.ts still builds it and appends it to <body>, so
-// this renders nothing.
-import { memo } from 'react';
+// SettingsDialog (PLAN-26 T-113, region E): the settings dialog `.workspace-status-dialog`, one topic
+// per tab: account, AI, connected programs, this program, status. Drawn from store/status.ts and the
+// connection lines in store/session.ts; src/ui/workspace-status.ts is its controller (opening,
+// closing, the tab, the actions). The account, usage, programs and PC program sections are rendered
+// empty and filled by their panels (remote-panel, account-usage-panel, connectors-panel,
+// desktop-panel), which own their content; React never gives those sections children.
+import { memo, type ReactNode } from 'react';
+import { useStore } from '../store/core.ts';
+import { statusState, tabHidden, type SettingsTab } from '../store/status.ts';
+import { sessionState } from '../store/session.ts';
+import { ConnectionLines } from './status-lines.tsx';
+import { problemNotices } from './status-bar.tsx';
+
+const tabs: [SettingsTab, string][] = [
+  ['account', '계정 · 원격 접속'],
+  ['ai', 'AI'],
+  ['programs', '연결 프로그램'],
+  ['desktop', 'PC 프로그램'],
+  ['status', '상태 · 오류'],
+];
+
+const TabButton = memo(function TabButton({ id, label }: { id: SettingsTab; label: string }) {
+  const current = useStore(statusState, (s) => s.tab);
+  const hidden = useStore(statusState, (s) => tabHidden(id, s));
+  return (
+    <button
+      type="button"
+      data-tab={id}
+      aria-pressed={current === id}
+      hidden={hidden}
+      onClick={() => statusState.actions.show(id)}
+    >
+      {label}
+    </button>
+  );
+});
+
+const Pane = memo(function Pane({ id, children }: { id: SettingsTab; children: ReactNode }) {
+  const current = useStore(statusState, (s) => s.tab);
+  return (
+    <div className="settings-pane" data-pane={id} hidden={current !== id}>
+      {children}
+    </div>
+  );
+});
+
+/** The AI services as rows, read from the `#connection-status` line ("Claude 연결됨 · …"). */
+const ProviderRows = memo(function ProviderRows() {
+  const text = useStore(sessionState, (s) => s.connection.providersText);
+  const rows = text.split(' · ').flatMap((part) => {
+    const match = /^(Claude|ChatGPT) (.+)$/.exec(part);
+    return match ? [[match[1]!, match[2]!] as const] : [];
+  });
+  return (
+    <ul className="settings-rows">
+      {rows.map(([name, state], index) => (
+        <li key={index}>
+          <strong>{name}</strong>
+          <span className="pill" data-ok={String(state === '연결됨')}>
+            {state}
+          </span>
+        </li>
+      ))}
+    </ul>
+  );
+});
+
+const DisplaySection = memo(function DisplaySection() {
+  const coverage = useStore(statusState, (s) => s.coverage);
+  return (
+    <section hidden={!coverage}>
+      {coverage ? (
+        <>
+          <h3>현재 모델 표시</h3>
+          <p>{`전체 ${coverage.total.toLocaleString()}개 · 화면 표시 ${coverage.displayed.toLocaleString()}개 · 표현 미지원 ${coverage.omitted.toLocaleString()}개`}</p>
+          {coverage.omitted ? (
+            <>
+              <p>화면 표현 미지원 객체도 목록·네이티브 파일에 보존됩니다.</p>
+              <small>
+                {Object.entries(coverage.omittedTypes)
+                  .map(([kind, count]) => `${kind} ${count.toLocaleString()}개`)
+                  .join(' · ') || null}
+              </small>
+            </>
+          ) : null}
+        </>
+      ) : null}
+    </section>
+  );
+});
+
+// What went wrong recently and where to look: failed requests (open them for the cause and a retry)
+// and this session's connection notices. Solved problems simply stop appearing.
+const ProblemsSection = memo(function ProblemsSection() {
+  useStore(statusState, (s) => s.version);
+  useStore(sessionState, (s) => s.connection.auth);
+  const failures = statusState.failures;
+  const rows = problemNotices();
+  return (
+    <section>
+      <h3>문제가 있었던 작업</h3>
+      <small>
+        실패했거나 결과를 확인하지 못한 요청입니다. 누르면 그 작업으로 이동해 원인과 다시 보내기를
+        볼 수 있습니다. 목록에서 지우려면 작업 이력의 ×를 누르세요.
+      </small>
+      {!failures.length ? (
+        <p className="usage-note">문제가 있었던 작업이 없습니다.</p>
+      ) : (
+        <ul className="settings-rows problem-list">
+          {failures
+            .slice(-20)
+            .reverse()
+            .map((row, index) => {
+              const detail = [
+                row.reason,
+                row.code,
+                row.at &&
+                  new Date(row.at).toLocaleString('ko-KR', {
+                    month: 'numeric',
+                    day: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                  }),
+              ]
+                .filter(Boolean)
+                .join(' · ');
+              return (
+                <li key={index}>
+                  <div className="problem-text">
+                    <strong>{(row.title ?? row.label) || null}</strong>
+                    <small>{detail || null}</small>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      statusState.actions.close();
+                      statusState.actions.openFailure(row.id);
+                    }}
+                  >
+                    작업 보기
+                  </button>
+                </li>
+              );
+            })}
+        </ul>
+      )}
+      {rows.length ? (
+        <>
+          <h3 className="problem-notices">이번 실행 중 알림</h3>
+          <ul className="settings-rows problem-list">
+            {rows.slice(-20).map((row, index) => (
+              <li key={index}>{row || null}</li>
+            ))}
+          </ul>
+        </>
+      ) : null}
+    </section>
+  );
+});
 
 export const SettingsDialog = memo(function SettingsDialog() {
-  return null;
+  return (
+    <dialog className="workspace-status-dialog" aria-label="상태 및 설정">
+      <div className="quantity-head">
+        <h2>설정</h2>
+        <button onClick={() => statusState.actions.close()}>닫기</button>
+      </div>
+      <div className="settings-layout">
+        <nav className="settings-nav" aria-label="설정 분류">
+          {tabs.map(([id, label]) => (
+            <TabButton key={id} id={id} label={label} />
+          ))}
+        </nav>
+        <div className="settings-panes">
+          <Pane id="account">
+            <section className="remote-panel" />
+          </Pane>
+          <Pane id="ai">
+            <section className="settings-ai">
+              <h3>AI</h3>
+              <small>
+                요청은 이 PC에 로그인된 Claude·ChatGPT 구독 계정으로 실행됩니다. 모델은 입력창
+                아래에서 고릅니다.
+              </small>
+              <ProviderRows />
+              <div className="settings-actions">
+                <button
+                  id="ai-settings"
+                  type="button"
+                  onClick={() => {
+                    statusState.actions.close();
+                    statusState.actions.openAiSettings();
+                  }}
+                >
+                  AI 연결 설정
+                </button>
+                <button
+                  id="execution-limits"
+                  type="button"
+                  onClick={() => {
+                    statusState.actions.close();
+                    statusState.actions.openExecutionLimits();
+                  }}
+                >
+                  작업 상한 (시간·조회 수)
+                </button>
+              </div>
+            </section>
+            <section />
+          </Pane>
+          <Pane id="programs">
+            <section className="remote-panel" />
+          </Pane>
+          <Pane id="desktop">
+            <section className="remote-panel" />
+          </Pane>
+          <Pane id="status">
+            <section>
+              <h3>연결 상태</h3>
+              <ConnectionLines />
+            </section>
+            <DisplaySection />
+            <ProblemsSection />
+          </Pane>
+        </div>
+      </div>
+    </dialog>
+  );
 });
