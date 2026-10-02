@@ -4027,6 +4027,23 @@ body[data-workspace='context'] .workspace > .jig-dialog {
   text-align: left;
   color: var(--text-2);
 }
+/* A row's one-time note or cleanup offer (SPEC-01.11 1): one small line under the name. */
+.link-row .link-note {
+  grid-column: 2 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 8px;
+  font-size: var(--fs-xs);
+  color: var(--text-2);
+}
+.link-row .link-note .link-button {
+  color: var(--accent);
+  font-size: var(--fs-xs);
+}
+.link-row .link-note .link-button:hover {
+  text-decoration: underline;
+}
 
 /* Project knowledge jig (trial): issue list by discipline, minutes-style note, evidence on request. */
 .knowledge-search {

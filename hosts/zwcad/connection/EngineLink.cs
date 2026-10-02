@@ -97,10 +97,33 @@ namespace Vide.Zwcad.Connection
                 return Project(Json.Deserialize<Dictionary<string, object>>(await Read(await client.PostAsync("/api/v1/projects", Body(new { name })))));
         }
 
-        internal static async Task Link(string projectId, string instance)
+        private static string Code(string text)
         {
+            try { return Convert.ToString(Json.Deserialize<Dictionary<string, object>>(text)["code"]); }
+            catch (ArgumentException) { return ""; }
+            catch (KeyNotFoundException) { return ""; }
+            catch (InvalidOperationException) { return ""; }
+        }
+
+        /// <summary>
+        /// Link this drawing (SPEC-01.11 1) with the link id it stores for the project (ADR-030) and,
+        /// after a LINK_CHOICE, the user's answer ("new" or a row id). Returns the linked row's id, or
+        /// the choice to ask when VIDE cannot tell which row this drawing continues.
+        /// </summary>
+        internal static async Task<Tuple<string, LinkChoice>> Link(string projectId, string instance, string storedId, string replace)
+        {
+            var body = new Dictionary<string, object> { { "host", "zwcad" }, { "instance", instance }, { "documentId", 1 }, { "ask", true } };
+            if (storedId != null) body["storedId"] = storedId;
+            if (replace != null) body["replace"] = replace;
             using (var client = await Session())
-                await Read(await client.PostAsync("/api/v1/projects/" + Uri.EscapeDataString(projectId) + "/links", Body(new { host = "zwcad", instance, documentId = 1 })));
+            using (var reply = await client.PostAsync("/api/v1/projects/" + Uri.EscapeDataString(projectId) + "/links", Body(body)))
+            {
+                var text = await reply.Content.ReadAsStringAsync();
+                if (reply.StatusCode == HttpStatusCode.Conflict && Code(text) == "LINK_CHOICE")
+                    return Tuple.Create((string)null, LinkChoice.From(Json.Deserialize<Dictionary<string, object>>(text)));
+                if (!reply.IsSuccessStatusCode) { await Read(reply); return null; }
+                return Tuple.Create(Convert.ToString(Json.Deserialize<Dictionary<string, object>>(text)["id"]), (LinkChoice)null);
+            }
         }
 
         /// <summary>Connect the drawing, choose a project and link it (VIDE then syncs it at once).</summary>
@@ -115,16 +138,101 @@ namespace Vide.Zwcad.Connection
                     if (dialog.ShowDialog() != DialogResult.OK || dialog.Chosen == null) return;
                     project = dialog.Chosen;
                 }
+                var created = !AttachedDocument.Connections.ContainsKey(doc);
                 var connection = AttachedDocument.Connect(doc);
-                await Link(project.Id, connection.Instance);
+                var stored = LinkIdStore.Read(doc, project.Id);
+                var linked = await Link(project.Id, connection.Instance, stored, null);
+                if (linked.Item2 != null)
+                {
+                    // Which row this drawing continues (SPEC-01.11 1): asked only when it is unclear.
+                    string answer;
+                    using (var dialog = new LinkChoiceDialog(Path.GetFileName(doc.Name), linked.Item2))
+                    {
+                        if (dialog.ShowDialog() != DialogResult.OK || dialog.Chosen == null)
+                        {
+                            if (created) connection.Dispose();
+                            doc.Editor.WriteMessage("\nVIDE: Link를 취소했습니다.\n");
+                            return;
+                        }
+                        answer = dialog.Chosen;
+                    }
+                    linked = await Link(project.Id, connection.Instance, stored, answer);
+                }
                 connection.LinkedProject = project;
-                doc.Editor.WriteMessage("\nVIDE: '" + Path.GetFileName(doc.Name) + "'을(를) 프로젝트 '" + project.Name + "'에 연결했습니다. VIDE에 곧 표시됩니다.\n");
+                var wrote = linked.Item1 != null && LinkIdStore.Write(doc, project.Id, linked.Item1);
+                doc.Editor.WriteMessage("\nVIDE: '" + Path.GetFileName(doc.Name) + "'을(를) 프로젝트 '" + project.Name + "'에 연결했습니다. VIDE에 곧 표시됩니다." +
+                    (wrote ? " 연결 ID를 문서에 저장했습니다. 저장하면 다음에도 이어집니다." : "") + "\n");
             }
             catch (Exception error)
             {
                 MessageBox.Show(error.Message, "VIDE", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             }
             finally { done?.Invoke(); }
+        }
+    }
+
+    /// <summary>The engine's LINK_CHOICE: "copy" (the stored id is open in another window) or "closed".</summary>
+    internal sealed class LinkChoice
+    {
+        internal string Reason;
+        internal string Default;
+        internal List<Tuple<string, string>> Choices = new List<Tuple<string, string>>();
+
+        internal static LinkChoice From(Dictionary<string, object> value)
+        {
+            var choice = new LinkChoice { Reason = Convert.ToString(value["reason"]), Default = Convert.ToString(value["default"]) };
+            foreach (var item in ((System.Collections.ArrayList)value["choices"]).Cast<Dictionary<string, object>>())
+            {
+                object path; item.TryGetValue("path", out path);
+                var text = "기존 '" + Convert.ToString(item["name"]) + "' 대체 (기록 이어짐 · Sync " + Convert.ToString(item["syncs"]) + "회)" +
+                    (path == null || Convert.ToString(path).Length == 0 ? "" : " · " + Convert.ToString(path));
+                choice.Choices.Add(Tuple.Create(Convert.ToString(item["id"]), text));
+            }
+            return choice;
+        }
+    }
+
+    /// <summary>
+    /// Which linked file this drawing continues (SPEC-01.11 1, Design SCR-12): an existing row (its
+    /// Sync history continues) or a new linked file. The default is what VIDE would pick on its own.
+    /// </summary>
+    internal sealed class LinkChoiceDialog : Form
+    {
+        internal string Chosen { get; private set; }
+
+        internal LinkChoiceDialog(string documentName, LinkChoice choice)
+        {
+            Text = "VIDE 연결 · " + documentName;
+            Width = 480; Height = 320; StartPosition = FormStartPosition.CenterScreen; MinimizeBox = false; MaximizeBox = false;
+            var layout = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown, WrapContents = false, AutoScroll = true, Padding = new Padding(12) };
+            layout.Controls.Add(new Label
+            {
+                AutoSize = true, MaximumSize = new System.Drawing.Size(430, 0),
+                Text = choice.Reason == "copy"
+                    ? "이 도면은 다른 창에 열려 있는 연결 파일과 같은 연결 ID를 갖고 있습니다(파일 사본). 어느 쪽으로 연결할까요?"
+                    : "이 프로젝트에 이 도면일 수 있는 닫힌 연결 파일이 있습니다. 어느 쪽으로 연결할까요?",
+            });
+            var options = new List<Tuple<string, RadioButton>>();
+            foreach (var item in choice.Choices.Concat(new[] { Tuple.Create("new", "새 연결 파일로 추가") }))
+            {
+                var button = new RadioButton { Text = item.Item2, AutoSize = true, MaximumSize = new System.Drawing.Size(430, 0), Checked = item.Item1 == choice.Default };
+                options.Add(Tuple.Create(item.Item1, button));
+                layout.Controls.Add(button);
+            }
+            var ok = new Button { Text = "연결", Width = 90 };
+            var cancel = new Button { Text = "취소", Width = 90, DialogResult = DialogResult.Cancel };
+            ok.Click += (_, __) =>
+            {
+                Chosen = options.Where(option => option.Item2.Checked).Select(option => option.Item1).FirstOrDefault();
+                if (Chosen == null) return;
+                DialogResult = DialogResult.OK;
+                Close();
+            };
+            var buttons = new FlowLayoutPanel { FlowDirection = FlowDirection.RightToLeft, Dock = DockStyle.Bottom, AutoSize = true, Padding = new Padding(12, 0, 12, 12) };
+            buttons.Controls.Add(ok); buttons.Controls.Add(cancel);
+            Controls.Add(layout);
+            Controls.Add(buttons);
+            AcceptButton = ok; CancelButton = cancel;
         }
     }
 

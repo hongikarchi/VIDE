@@ -40,7 +40,11 @@ import { AUTO_MODELS, ModelRouter, isAutoModel } from '../ai/model-router.ts';
 import { startHealthLog } from './health.ts';
 import { Diagnostics } from './diagnostics.ts';
 import { knowledgeFile } from '../jigs/knowledge.ts';
-import { DocumentLinks, isFileLink } from '../core/document-links.ts';
+import {
+  DocumentLinks,
+  isFileLink,
+  type OpenDocument as LinkedDocument,
+} from '../core/document-links.ts';
 import { followOpenDocuments } from './live-links.ts';
 import { linkRequests, removeLink } from './link-removal.ts';
 import { importedName } from '../contracts/link-requests.ts';
@@ -847,9 +851,46 @@ export async function startServer({
             const syncs = linkRequests(link, requests);
             const last = syncs.filter((entry) => entry.state === 'succeeded').at(-1);
             const latest = syncs.at(-1);
+            const notice = file ? undefined : links.notice(link.id);
+            // Cleanup the list offers (SPEC-01.11 1, T-107): a closed duplicate of an open window's
+            // row merges into it; a closed row with no record can be taken out.
+            const open = !!doc || ownedOpen.has(link.id);
+            const twin = open
+              ? undefined
+              : rows.find(
+                  (other) =>
+                    other.id !== link.id &&
+                    !isFileLink(other) &&
+                    other.host === link.host &&
+                    other.instance === link.instance &&
+                    other.documentId === link.documentId &&
+                    matched.has(other.id),
+                );
+            const cleanup =
+              file || open
+                ? undefined
+                : twin
+                  ? { kind: 'merge' as const, into: twin.id, intoName: twin.name }
+                  : syncs.length === 0
+                    ? { kind: 'empty' as const }
+                    : undefined;
             return {
               ...link,
               kind: file ? 'file' : 'host',
+              ...(notice
+                ? {
+                    notice:
+                      notice.kind === 'followed'
+                        ? {
+                            kind: notice.kind,
+                            reason: notice.reason,
+                            from: notice.from,
+                            to: notice.to,
+                          }
+                        : { kind: notice.kind },
+                  }
+                : {}),
+              ...(cleanup ? { cleanup } : {}),
               connection: ownedOpen.has(link.id)
                 ? {
                     instance: link.instance,
@@ -885,11 +926,19 @@ export async function startServer({
       if (linkList && request.method === 'POST') {
         store.project(linkList[1]);
         const target = hostTargetSchema
-          .extend({ host: z.enum(['rhino', 'zwcad']) })
+          .extend({
+            host: z.enum(['rhino', 'zwcad']),
+            // ADR-030: the link id the document stores for this project, read by the plugin.
+            storedId: z.string().min(1).max(100).optional(),
+            // The answer to a LINK_CHOICE: that row continues (its history too) or a new row.
+            replace: z.union([z.literal('new'), z.string().min(1).max(100)]).optional(),
+            // The plugin can show the choice (T-107); older plugins link as before.
+            ask: z.boolean().optional(),
+          })
           .strict()
           .parse(await body(request));
         // Attached (plugin) documents and work copies VIDE opened itself can both be linked.
-        const open =
+        const open: LinkedDocument[] =
           target.host === 'rhino'
             ? ((await sdk?.editors.list())?.documents ?? [])
             : ((await zwcadSdk?.editors.list()) ?? []);
@@ -897,16 +946,41 @@ export async function startServer({
           (item) => item.instance === target.instance && item.id === target.documentId,
         );
         if (!doc) throw new DomainError('STALE_CONNECTION');
-        send(
-          201,
-          links.link(linkList[1], {
-            host: target.host,
-            name: doc.name,
-            ...('path' in doc && doc.path ? { path: doc.path } : {}),
-            instance: target.instance,
-            documentId: target.documentId,
-          }),
-        );
+        const input = {
+          host: target.host,
+          name: doc.name,
+          ...(doc.path ? { path: doc.path } : {}),
+          instance: target.instance,
+          documentId: target.documentId,
+          ...(target.storedId ? { storedId: target.storedId } : {}),
+          ...(target.replace ? { replace: target.replace } : {}),
+        };
+        // Ambiguous Links ask first (SPEC-01.11 1): a copy of a linked file open in a second
+        // window, or closed rows that could be this document. The plugin asks and links again
+        // with `replace`.
+        const choice = target.ask
+          ? links.linkChoice(
+              linkList[1],
+              input,
+              open.map((item) => ({ ...item, host: target.host })),
+            )
+          : undefined;
+        if (choice) {
+          const requests = workspace.list(linkList[1]);
+          send(409, {
+            code: 'LINK_CHOICE',
+            ...choice,
+            choices: choice.choices.map((entry) => ({
+              ...entry,
+              syncs: linkRequests(links.get(linkList[1], entry.id), requests).length,
+            })),
+          });
+          return;
+        }
+        const linked = links.link(linkList[1], input);
+        // The plugin stores this id in the document now (ADR-030); the list says so once.
+        if (target.ask && target.storedId !== linked.id) links.note(linked.id, { kind: 'stored' });
+        send(201, linked);
         return;
       }
       if (linkItem && request.method === 'PUT') {
@@ -1054,6 +1128,49 @@ export async function startServer({
       if (offlineDismiss && request.method === 'POST') {
         await offlineView.dismiss(offlineDismiss[1], offlineDismiss[2]);
         send(200, await offlineView.status(offlineDismiss[1]));
+        return;
+      }
+      // The links list's one-time notes and cleanup (SPEC-01.11 1, T-107).
+      const linkAction =
+        /^\/api\/v1\/projects\/([^/]+)\/links\/([^/]+)\/(split|merge|dismiss)$/.exec(url.pathname);
+      if (linkAction && request.method === 'POST') {
+        const [, projectId, linkId, action] = linkAction;
+        store.project(projectId);
+        if (action === 'dismiss') {
+          links.dismiss(projectId, linkId);
+          send(200, { ok: true });
+          return;
+        }
+        if (action === 'split') {
+          const created = links.split(projectId, linkId);
+          // The window's document now carries the new row's id (ADR-030); an older plugin or a
+          // closed window keeps the old one, which the next Link answers by choice.
+          const target = { instance: created.instance, documentId: created.documentId };
+          const writing =
+            created.host === 'rhino'
+              ? sdk?.editors.setLinkId(target, projectId, created.id)
+              : zwcadSdk?.editors.attached.setLinkId(target, projectId, created.id);
+          const stored = writing
+            ? await writing.then(
+                () => true,
+                () => false,
+              )
+            : false;
+          send(201, { ...created, stored });
+          return;
+        }
+        const { into } = z
+          .object({ into: z.string().min(1).max(100) })
+          .strict()
+          .parse(await body(request));
+        const source = links.get(projectId, linkId);
+        if (
+          linkRequests(source, workspace.list(projectId)).some((entry) =>
+            ['queued', 'running'].includes(entry.state),
+          )
+        )
+          throw new DomainError('PROJECT_BUSY');
+        send(200, links.merge(projectId, linkId, into));
         return;
       }
       const linkRemove = /^\/api\/v1\/projects\/([^/]+)\/links\/([^/]+)\/remove$/.exec(

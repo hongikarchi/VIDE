@@ -32,6 +32,8 @@ const statusSchema = z.object({
   generation: z.number().int().nonnegative(),
   live: z.boolean(),
   hostBusy: z.boolean(),
+  /** VIDE link ids stored in the drawing (ADR-030), one per project it was linked to. */
+  linkIds: z.array(z.string().max(100)).max(50).optional(),
 });
 const pageSchema = z.object({
   ok: z.literal(true),
@@ -236,12 +238,23 @@ export class AttachedZwcadDocuments {
           generation: status.generation,
           live: status.live,
           hostBusy: status.hostBusy,
+          ...(status.linkIds ? { linkIds: status.linkIds } : {}),
         });
       } catch {
         /* Closed/busy sessions do not reopen or replace user windows. */
       }
     }
     return result;
+  }
+  /**
+   * Store a project's VIDE link id in the drawing's named object dictionary (ADR-030); the drawing
+   * is modified until the user saves it.
+   */
+  async setLinkId(target: HostTarget, projectId: string, linkId: string) {
+    await this.discover();
+    return z
+      .object({ ok: z.literal(true), linkIds: z.array(z.string()) })
+      .parse(await this.call(target, 'setLinkId', { projectId, linkId }));
   }
   async inspect(target: HostTarget) {
     await this.discover();

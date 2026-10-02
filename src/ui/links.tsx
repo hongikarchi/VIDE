@@ -31,6 +31,25 @@ export const linkRowSchema = z.object({
     .nullable(),
   lastSync: z.object({ requestId: z.string(), at: z.string().optional() }).nullable(),
   lastError: z.string().optional(),
+  /** A one-time note (SPEC-01.11 1, T-107): the row followed its window, or the id was stored. */
+  notice: z
+    .union([
+      z.object({
+        kind: z.literal('followed'),
+        reason: z.enum(['renamed', 'reopened']),
+        from: z.string(),
+        to: z.string(),
+      }),
+      z.object({ kind: z.literal('stored') }),
+    ])
+    .optional(),
+  /** Cleanup offered for a closed row: merge into the open row of its window, or take it out. */
+  cleanup: z
+    .union([
+      z.object({ kind: z.literal('merge'), into: z.string(), intoName: z.string() }),
+      z.object({ kind: z.literal('empty') }),
+    ])
+    .optional(),
 });
 export type LinkRow = z.infer<typeof linkRowSchema>;
 /** PLAN-20: saved views on the account site and requests left there. */
@@ -82,6 +101,12 @@ interface Props {
   onRemove: (link: LinkRow) => void;
   onFocus: (link: LinkRow) => void;
   onBackToSync: (link: LinkRow) => void;
+  /** [새 항목으로 분리]: the window gets a new row, this one keeps its history (T-107). */
+  onSplit: (link: LinkRow) => void;
+  /** Closes the row's one-time note. */
+  onDismiss: (link: LinkRow) => void;
+  /** [합치기]: this closed duplicate's records go to the open row of the same window. */
+  onMerge: (link: LinkRow, into: string) => void;
   offline?: OfflineStatus;
   onOffline: (enabled: boolean) => void;
   onInboxUse: (item: InboxItem) => void;
@@ -359,6 +384,7 @@ function LinkList(props: Props) {
               onClick={() => props.onRemove(link)}
               dangerouslySetInnerHTML={{ __html: iconSvg('x') }}
             />
+            <LinkNote {...props} link={link} />
             {props.candidates.has(link.id) ? (
               <button
                 type="button"
@@ -373,6 +399,60 @@ function LinkList(props: Props) {
       })}
       {results}
     </ul>
+  );
+}
+/**
+ * The row's one-time note and cleanup offer (SPEC-01.11 1, Design §03): "'A' → 'B'로 따라감" with
+ * [새 항목으로 분리], the stored link id, or a closed duplicate's [합치기] and an empty row's [빼기].
+ */
+function LinkNote({ link, ...props }: Props & { link: LinkRow }) {
+  const notice = link.notice;
+  const cleanup = link.cleanup;
+  if (!notice && !cleanup) return null;
+  return (
+    <div className="link-note" data-note={notice?.kind ?? cleanup?.kind}>
+      {notice?.kind === 'followed' ? (
+        <>
+          <span>
+            {notice.reason === 'renamed'
+              ? `'${notice.from}' → '${notice.to}'로 따라감`
+              : `'${notice.from}'을(를) 다시 연 창으로 따라감`}
+          </span>
+          <button type="button" className="link-button" onClick={() => props.onSplit(link)}>
+            새 항목으로 분리
+          </button>
+          <button type="button" className="link-button" onClick={() => props.onDismiss(link)}>
+            확인
+          </button>
+        </>
+      ) : notice?.kind === 'stored' ? (
+        <>
+          <span>연결 ID를 문서에 저장했습니다. 저장하면 다음에도 이어집니다</span>
+          <button type="button" className="link-button" onClick={() => props.onDismiss(link)}>
+            확인
+          </button>
+        </>
+      ) : cleanup?.kind === 'merge' ? (
+        <>
+          <span>같은 창의 중복 항목</span>
+          <button
+            type="button"
+            className="link-button"
+            title={`이 항목의 Sync 기록을 '${cleanup.intoName}'(으)로 옮기고 이 항목을 뺍니다`}
+            onClick={() => props.onMerge(link, cleanup.into)}
+          >
+            합치기
+          </button>
+        </>
+      ) : cleanup?.kind === 'empty' ? (
+        <>
+          <span>기록 없음</span>
+          <button type="button" className="link-button" onClick={() => props.onRemove(link)}>
+            빼기
+          </button>
+        </>
+      ) : null}
+    </div>
   );
 }
 let root: ReturnType<typeof createRoot> | undefined;

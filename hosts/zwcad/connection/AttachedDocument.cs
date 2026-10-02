@@ -92,11 +92,21 @@ namespace Vide.Zwcad.Connection
                     bool? modified = null;
                     if (Application.DocumentManager.MdiActiveDocument == Document) modified = Convert.ToInt32(Application.GetSystemVariable("DBMOD")) != 0;
                     return new { ok = true, name = Path.GetFileName(Document.Name), path = Document.Name, units = Document.Database.Insunits.ToString(),
-                        objectCount = space.Cast<ObjectId>().Count(), documentHash = Fingerprint(), revision, generation, live = Live, modified, hostBusy = Busy };
+                        objectCount = space.Cast<ObjectId>().Count(), documentHash = Fingerprint(), revision, generation, live = Live, modified, hostBusy = Busy,
+                        linkIds = LinkIdStore.All(Document.Database, tx) };
                 }
             }
             if (method == "fingerprint") return new { ok = true, documentHash = Fingerprint(), revision };
             if (Busy) throw new InvalidOperationException("HOST_BUSY");
+            // ADR-030: [새 항목으로 분리] in VIDE gives this drawing a new link id.
+            if (method == "setLinkId") {
+                string projectId = Value(request, "projectId") ?? "", linkId = Value(request, "linkId") ?? "";
+                if (projectId.Length == 0 || projectId.Length > 100 || linkId.Length == 0 || linkId.Length > 100) throw new InvalidOperationException("INVALID_INPUT");
+                LinkIdStore.Write(Document, projectId, linkId);
+                using (Document.LockDocument())
+                using (var tx = Document.Database.TransactionManager.StartTransaction())
+                    return new { ok = true, linkIds = LinkIdStore.All(Document.Database, tx) };
+            }
             if (method == "direct-execute") return DirectExecute(request);
             if (method == "direct-undo") return DirectUndo(Value(request, "undoId"));
             if (method == "displayPage") {

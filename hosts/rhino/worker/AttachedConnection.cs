@@ -113,12 +113,21 @@ internal sealed class AttachedConnection : IDisposable
                 objectCount = document.Objects.Count, modified = document.Modified, generation, live, busy = RhinoApp.InCommand > 0,
                 selectionVersion,
                 selectedIds = document.Objects.GetSelectedObjects(false, false).Take(2000).Select(o => o.Id.ToString()).ToArray(),
-                pinnedIds = Pinned.Select(id => id.ToString()).ToArray() };
+                pinnedIds = Pinned.Select(id => id.ToString()).ToArray(), linkIds = LinkIdStore.All(document) };
         if (request.GetProperty("method").GetString() == "setPins")
         {
             var ids = request.GetProperty("ids").EnumerateArray().Select(e => Guid.Parse(e.GetString()!)).ToArray();
             SetPins(ids);
             return new { ok = true, pinnedIds = Pinned.Select(id => id.ToString()).ToArray(), selectionVersion };
+        }
+        // ADR-030: [새 항목으로 분리] in VIDE gives this document a new link id.
+        if (request.GetProperty("method").GetString() == "setLinkId")
+        {
+            var projectId = request.GetProperty("projectId").GetString() ?? "";
+            var linkId = request.GetProperty("linkId").GetString() ?? "";
+            if (projectId.Length is 0 or > 100 || linkId.Length is 0 or > 100) throw new InvalidOperationException("INVALID_INPUT");
+            LinkIdStore.Write(document, projectId, linkId);
+            return new { ok = true, linkIds = LinkIdStore.All(document) };
         }
         if (RhinoApp.InCommand > 0) throw new InvalidOperationException("HOST_BUSY");
         var method = request.GetProperty("method").GetString();

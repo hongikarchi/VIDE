@@ -24,6 +24,8 @@ export const hostDocumentsSchema = z.object({
       selectionVersion: z.number().int().nonnegative().optional(),
       selectedIds: z.array(z.string()).max(2000).optional(),
       pinnedIds: z.array(z.string()).max(5000).optional(),
+      /** VIDE link ids stored in the document (ADR-030), one per project it was linked to. */
+      linkIds: z.array(z.string().max(100)).max(50).optional(),
     }),
   ),
 });

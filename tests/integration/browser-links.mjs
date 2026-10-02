@@ -257,6 +257,58 @@ try {
   assert.equal(captured.linkId, 'link-new');
   assert.equal(captured.instance, '7:8');
   assert.equal(captured.documentId, 3);
+  // A row that followed its window says so once, with [새 항목으로 분리]; a closed duplicate of an
+  // open window offers [합치기] (SPEC-01.11 1, T-107). The engine's answers are faked here; the
+  // engine side is tests/server/link-choice.test.mjs.
+  const actions = [];
+  let followed = true,
+    merged = false;
+  await page.unroute('**/api/v1/projects/*/links');
+  await page.route('**/api/v1/projects/*/links', async (route) => {
+    if (route.request().method() !== 'GET') return route.continue();
+    const real = await (await route.fetch()).json();
+    await route.fulfill({
+      json: [
+        ...real
+          .filter((row) => !merged || row.id !== 'link-plan-1')
+          .map((row) =>
+            row.id === 'link-plan-1'
+              ? { ...row, cleanup: { kind: 'merge', into: 'link-new', intoName: 'new.3dm' } }
+              : row,
+          ),
+        {
+          ...newLink,
+          lastSync: { requestId: captured.id, at: at(0) },
+          ...(followed
+            ? { notice: { kind: 'followed', reason: 'renamed', from: 'old.3dm', to: 'new.3dm' } }
+            : {}),
+        },
+      ],
+    });
+  });
+  const linkOf = (route) => new URL(route.request().url()).pathname.split('/').at(-2);
+  await page.route('**/api/v1/projects/*/links/*/split', async (route) => {
+    actions.push(['split', linkOf(route)]);
+    followed = false;
+    await route.fulfill({ status: 201, json: { ...newLink, id: 'link-split', stored: true } });
+  });
+  await page.route('**/api/v1/projects/*/links/*/merge', async (route) => {
+    actions.push(['merge', linkOf(route), route.request().postDataJSON().into]);
+    merged = true;
+    await route.fulfill({ json: { link: newLink, moved: 1 } });
+  });
+  const note = page.locator('.link-row[data-link-id="link-new"] .link-note');
+  await note.waitFor();
+  assert.match(await note.textContent(), /'old\.3dm' → 'new\.3dm'로 따라감/);
+  await note.getByRole('button', { name: '새 항목으로 분리' }).click();
+  await note.waitFor({ state: 'detached' });
+  assert.deepEqual(actions, [['split', 'link-new']]);
+  const duplicate = page.locator('.link-row[data-link-id="link-plan-1"] .link-note');
+  assert.match(await duplicate.textContent(), /같은 창의 중복 항목/);
+  await duplicate.getByRole('button', { name: '합치기' }).click();
+  await page.waitForFunction(() => !document.querySelector('[data-link-id="link-plan-1"]'));
+  assert.deepEqual(actions[1], ['merge', 'link-plan-1', 'link-new']);
+  await page.unroute('**/api/v1/projects/*/links');
   assert.deepEqual(errors, []);
   // Hidden files leave the space on every start (SPEC-01.11 4, T-096): with no saved draft, and
   // with a draft whose basis is the Sync that was on screen when VIDE last closed.

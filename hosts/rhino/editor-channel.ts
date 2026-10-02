@@ -206,6 +206,7 @@ export function editorMethods(
           selectionVersion: z.number().int().nonnegative().optional(),
           selectedIds: z.array(z.string().uuid()).max(2000).optional(),
           pinnedIds: z.array(z.string().uuid()).max(5000).optional(),
+          linkIds: z.array(z.string().max(100)).max(50).optional(),
         }),
         await call('attachedStatus'),
       );
@@ -219,6 +220,16 @@ export function editorMethods(
           selectionVersion: z.number().int().nonnegative(),
         }),
         await call('setPins', { ids }),
+      );
+    },
+    /**
+     * Store a project's VIDE link id in the document (ADR-030, [새 항목으로 분리]); the document is
+     * modified until the user saves it.
+     */
+    async setLinkId(projectId: string, linkId: string) {
+      return editorReply(
+        z.object({ ok: z.literal(true), linkIds: z.array(z.string()) }),
+        await call('setLinkId', { projectId, linkId }),
       );
     },
     async inspectEditor() {

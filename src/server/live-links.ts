@@ -8,6 +8,7 @@
 import {
   isFileLink,
   matchOpenDocuments,
+  type MatchHow,
   type DocumentLink,
   type DocumentLinks,
   type OpenDocument as LinkedDocument,
@@ -22,10 +23,13 @@ export interface OpenTarget {
   instance: string;
   documentId: number;
 }
-/** Which open document each row shows (row id → document; `session`: matched by its window). */
+/**
+ * Which open document each row shows (row id → document; `session`: matched by its window, `how`:
+ * by its window, by the link id stored in the document, or by path).
+ */
 export type LinkMatches<D extends OpenDocument = OpenDocument> = Map<
   string,
-  { document: D; session: boolean }
+  { document: D; session: boolean; how: MatchHow }
 >;
 /**
  * The links list's matcher. `prefer` (a host turn's target) only breaks a tie the matcher leaves:
@@ -69,8 +73,8 @@ export async function followOpenDocuments<D extends OpenDocument>(
     )
       ownedOpen.add(link.id);
   const matched = matchLinks(links.list(projectId), open, prefer);
-  for (const [id, { document, session }] of matched)
-    if (session || !ownedOpen.has(id)) links.follow(projectId, id, document);
+  for (const [id, { document, session, how }] of matched)
+    if (session || !ownedOpen.has(id)) links.follow(projectId, id, document, how);
   return { rows: links.list(projectId), matched, ownedOpen };
 }
 /** A linked file and, when a connected (plugin-attached) window holds it now, where it is. */

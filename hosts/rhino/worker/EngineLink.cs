@@ -47,15 +47,21 @@ internal static class EngineLink
         return client;
     }
 
+    private static string Code(string text)
+    {
+        try { return JsonDocument.Parse(text).RootElement.GetProperty("code").GetString() ?? ""; }
+        catch (JsonException) { return ""; }
+        catch (KeyNotFoundException) { return ""; }
+        catch (InvalidOperationException) { return ""; }
+    }
+
+    private static InvalidOperationException Failure(string code, HttpResponseMessage reply) =>
+        new(code == "STALE_CONNECTION" ? "VIDE가 이 문서의 연결을 아직 찾지 못했습니다. 잠시 후 다시 Link 하세요." : "VIDE 요청 실패 (" + (code.Length > 0 ? code : ((int)reply.StatusCode).ToString()) + ")");
+
     private static async Task<T> Read<T>(HttpResponseMessage reply)
     {
         var text = await reply.Content.ReadAsStringAsync();
-        if (!reply.IsSuccessStatusCode)
-        {
-            var code = "";
-            try { code = JsonDocument.Parse(text).RootElement.GetProperty("code").GetString() ?? ""; } catch (JsonException) { } catch (KeyNotFoundException) { }
-            throw new InvalidOperationException(code == "STALE_CONNECTION" ? "VIDE가 이 문서의 연결을 아직 찾지 못했습니다. 잠시 후 다시 Link 하세요." : "VIDE 요청 실패 (" + (code.Length > 0 ? code : ((int)reply.StatusCode).ToString()) + ")");
-        }
+        if (!reply.IsSuccessStatusCode) throw Failure(Code(text), reply);
         return JsonSerializer.Deserialize<T>(text, Json)!;
     }
 
@@ -71,31 +77,125 @@ internal static class EngineLink
         return await Read<EngineProject>(await client.PostAsJsonAsync("/api/v1/projects", new { name }));
     }
 
-    internal static async Task Link(string projectId, string instance, uint documentId)
+    /// <summary>
+    /// Link this document (SPEC-01.11 1). With the link id the document stores for the project
+    /// (ADR-030) and, after a LINK_CHOICE, the user's answer ("new" or a row id). The engine answers
+    /// the linked row, or the choice to ask when it cannot tell which row this document continues.
+    /// </summary>
+    internal static async Task<(LinkedRow? Linked, LinkChoice? Choice)> Link(string projectId, string instance, uint documentId, string? storedId, string? replace)
     {
         using var client = await Session();
-        await Read<JsonElement>(await client.PostAsJsonAsync($"/api/v1/projects/{Uri.EscapeDataString(projectId)}/links", new { host = "rhino", instance, documentId }));
+        var body = new Dictionary<string, object> { ["host"] = "rhino", ["instance"] = instance, ["documentId"] = documentId, ["ask"] = true };
+        if (storedId != null) body["storedId"] = storedId;
+        if (replace != null) body["replace"] = replace;
+        using var reply = await client.PostAsJsonAsync($"/api/v1/projects/{Uri.EscapeDataString(projectId)}/links", body);
+        var text = await reply.Content.ReadAsStringAsync();
+        if (reply.StatusCode == HttpStatusCode.Conflict && Code(text) == "LINK_CHOICE")
+            return (null, JsonSerializer.Deserialize<LinkChoice>(text, Json));
+        if (!reply.IsSuccessStatusCode) throw Failure(Code(text), reply);
+        return (JsonSerializer.Deserialize<LinkedRow>(text, Json), null);
+    }
+
+    /// <summary>Runs on Rhino's UI thread (dialogs and document writes) and returns its value.</summary>
+    private static Task<T> OnUi<T>(Func<T> work)
+    {
+        var done = new TaskCompletionSource<T>(TaskCreationOptions.RunContinuationsAsynchronously);
+        RhinoApp.InvokeOnUiThread(new Action(() =>
+        {
+            try { done.SetResult(work()); }
+            catch (Exception error) { done.SetException(error); }
+        }));
+        return done.Task;
     }
 
     /// <summary>Connect this document, choose a project and link it (VIDE then syncs it at once).</summary>
     internal static async void LinkDocument(RhinoDoc doc)
     {
+        var created = false;
         try
         {
             if (doc.IsHeadless) return;
-            var project = new ProjectDialog(doc.Name ?? "제목 없는 문서").ShowModal();
+            var name = doc.Name ?? "제목 없는 문서";
+            var project = new ProjectDialog(name).ShowModal();
             if (project == null) return;
+            created = AttachedConnection.Current?.DocumentId != doc.RuntimeSerialNumber;
             AttachedConnection.Connect(doc);
             var connection = AttachedConnection.Current!;
-            await Link(project.Id, connection.Instance, connection.DocumentId);
+            var stored = LinkIdStore.Read(doc, project.Id);
+            var (linked, choice) = await Link(project.Id, connection.Instance, connection.DocumentId, stored, null);
+            if (choice != null)
+            {
+                // Which row this document continues (SPEC-01.11 1): asked only when it is unclear.
+                var answer = await OnUi(() => new LinkChoiceDialog(name, choice).ShowModal());
+                if (answer == null)
+                {
+                    if (created && AttachedConnection.Current == connection) { connection.Dispose(); AttachedConnection.Current = null; }
+                    RhinoApp.WriteLine("VIDE: Link를 취소했습니다.");
+                    return;
+                }
+                (linked, _) = await Link(project.Id, connection.Instance, connection.DocumentId, stored, answer);
+            }
             connection.LinkedProject = project;
-            RhinoApp.WriteLine($"VIDE: '{doc.Name}'을(를) 프로젝트 '{project.Name}'에 연결했습니다. VIDE에 곧 표시됩니다.");
+            var wrote = linked != null && await OnUi(() => LinkIdStore.Write(doc, project.Id, linked.Id));
+            RhinoApp.WriteLine($"VIDE: '{doc.Name}'을(를) 프로젝트 '{project.Name}'에 연결했습니다. VIDE에 곧 표시됩니다." +
+                (wrote ? " 연결 ID를 문서에 저장했습니다. 저장하면 다음에도 이어집니다." : ""));
         }
         catch (Exception error)
         {
             RhinoApp.WriteLine("VIDE Link 실패: " + error.Message);
             MessageBox.Show(error.Message, "VIDE", MessageBoxType.Warning);
         }
+    }
+}
+
+internal sealed record LinkedRow(string Id, string Name);
+internal sealed record LinkChoiceItem(string Id, string Name, string? Path, string Match, int Syncs);
+/// <summary>The engine's LINK_CHOICE: "copy" (the stored id is open in another window) or "closed".</summary>
+internal sealed record LinkChoice(string Reason, string Default, List<LinkChoiceItem> Choices);
+
+/// <summary>
+/// Which linked file this document continues (SPEC-01.11 1, Design SCR-12): an existing row (its
+/// Sync history continues) or a new linked file. The default is what VIDE would pick on its own.
+/// </summary>
+internal sealed class LinkChoiceDialog : Dialog<string?>
+{
+    internal LinkChoiceDialog(string documentName, LinkChoice choice)
+    {
+        Title = "VIDE 연결 · " + documentName;
+        Padding = new Padding(12);
+        Resizable = true;
+        var options = new RadioButtonList { Orientation = Orientation.Vertical, Spacing = new Size(0, 6) };
+        foreach (var item in choice.Choices)
+            options.Items.Add(new ListItem
+            {
+                Key = item.Id,
+                Text = $"기존 '{item.Name}' 대체 (기록 이어짐 · Sync {item.Syncs}회)" + (string.IsNullOrEmpty(item.Path) ? "" : " · " + item.Path),
+            });
+        options.Items.Add(new ListItem { Key = "new", Text = "새 연결 파일로 추가" });
+        options.SelectedKey = choice.Default;
+        var ok = new Button { Text = "연결" };
+        var cancel = new Button { Text = "취소" };
+        ok.Click += (_, _) => Close(options.SelectedKey);
+        cancel.Click += (_, _) => Close(null);
+        DefaultButton = ok;
+        AbortButton = cancel;
+        Content = new StackLayout
+        {
+            Spacing = 10,
+            HorizontalContentAlignment = HorizontalAlignment.Stretch,
+            Items =
+            {
+                new Label
+                {
+                    Wrap = WrapMode.Word,
+                    Text = choice.Reason == "copy"
+                        ? "이 문서는 다른 창에 열려 있는 연결 파일과 같은 연결 ID를 갖고 있습니다(파일 사본). 어느 쪽으로 연결할까요?"
+                        : "이 프로젝트에 이 문서일 수 있는 닫힌 연결 파일이 있습니다. 어느 쪽으로 연결할까요?",
+                },
+                options,
+                new StackLayout { Orientation = Orientation.Horizontal, Spacing = 6, HorizontalContentAlignment = HorizontalAlignment.Right, Items = { null, cancel, ok } },
+            },
+        };
     }
 }
 

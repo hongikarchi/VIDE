@@ -189,6 +189,7 @@ export class EditorSessions {
                 selectionVersion: snapshot.selectionVersion,
                 selectedIds: snapshot.selectedIds,
                 pinnedIds: snapshot.pinnedIds,
+                ...(snapshot.linkIds ? { linkIds: snapshot.linkIds } : {}),
               }
             : {}),
         });
@@ -213,6 +214,14 @@ export class EditorSessions {
     if (!worker || worker.identity.documentId !== target.documentId)
       throw failure('STALE_CONNECTION');
     return worker.setPins(ids);
+  }
+  /** Store a project's link id in an attached document (ADR-030). */
+  async setLinkId(target: HostTarget, projectId: string, linkId: string) {
+    await this.discover();
+    const worker = this.attached.get(target.instance);
+    if (!worker || worker.identity.documentId !== target.documentId)
+      throw failure('STALE_CONNECTION');
+    return worker.setLinkId(projectId, linkId);
   }
   private seen<T extends { source: { readOnly?: boolean; name?: string } }>(
     target: HostTarget,

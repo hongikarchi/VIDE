@@ -923,6 +923,45 @@ function renderLinkPanel() {
         })
         .catch((error: unknown) => message(readableError(error).message));
     },
+    onSplit: (link) =>
+      void api(`/projects/${currentProject().id}/links/${link.id}/split`, 'POST', {})
+        .then((reply) => {
+          if (!z.object({ stored: z.boolean() }).parse(reply).stored)
+            message(
+              '새 항목으로 나눴습니다. 문서에 새 연결 ID를 쓰지 못했으니 다음에 Link할 때 새 항목을 고르세요.',
+            );
+          return pollLinks();
+        })
+        .catch((error: unknown) => message(readableError(error).message)),
+    onDismiss: (link) => {
+      link.notice = undefined;
+      renderLinkPanel();
+      void api(`/projects/${currentProject().id}/links/${link.id}/dismiss`, 'POST', {}).catch(
+        () => undefined,
+      );
+    },
+    onMerge: (link, into) => {
+      const target = links.find((entry) => entry.id === into);
+      if (
+        !confirm(
+          `${link.name}의 Sync 기록을 ${target?.name ?? '같은 창의 항목'}(으)로 옮기고 이 항목을 목록에서 뺄까요? 파일과 객체는 그대로입니다.`,
+        )
+      )
+        return;
+      void api(`/projects/${currentProject().id}/links/${link.id}/merge`, 'POST', { into })
+        .then(() => {
+          // Its requests now belong to the other row: the conversation reads them that way too.
+          for (const entry of state.messages)
+            if (entry.request.input.linkId === link.id) entry.request.input.linkId = into;
+          links = links.filter((entry) => entry.id !== link.id);
+          layerOverride.delete(link.id);
+          renderMessages();
+          render();
+          renderLinkPanel();
+          return pollLinks();
+        })
+        .catch((error: unknown) => message(readableError(error).message));
+    },
     onFocus: (link) => {
       if (link.hidden) void setLinkHidden(link, false);
       activeLayer = link.id;
