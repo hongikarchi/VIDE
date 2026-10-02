@@ -133,6 +133,11 @@ interface Options {
    * AskUserQuestion, Codex's app-server). Default on; the environment still forces each one off.
    */
   questions?: () => boolean;
+  /**
+   * Settings → AI 「AI 웹 검색」 (ADR-028, T-105): the provider's own web tools in conversation, host
+   * and make turns. Default on.
+   */
+  web?: () => boolean;
   /** Which earlier exchanges go with a request (Jev when a key is set; else the last six). */
   selectContext?: (body: string, candidates: ContextCandidate[]) => Promise<ContextChoice>;
   /** Conversations (SPEC-02.19): session per turn, ledger, one running turn per conversation. */
@@ -209,6 +214,11 @@ import { readFile } from 'node:fs/promises';
 import { geometryContract, interpret, protectGeometry } from '../core/geometry.ts';
 import { Diagnostics, requestStages, type RunMarks } from './diagnostics.ts';
 import { clearAuthStatus } from '../ai/claude-cli.ts';
+import {
+  KeptClaudeCli,
+  claudePersistentEnabled,
+  closeClaudeProcesses,
+} from '../ai/claude-process.ts';
 
 export { HOST_TURN_PROJECT_TOOLS };
 /**
@@ -312,6 +322,7 @@ export class Execution {
       onFinished,
       liveLinks,
       questions,
+      web,
       selectContext: choose = (body, candidates) =>
         selectContext(body, candidates, { key: () => '' }),
     }: Options = {},
@@ -338,6 +349,16 @@ export class Execution {
     this.fileContext = fileContext;
     this.onFinished = onFinished;
     this.questions = questions;
+    this.web = web;
+  }
+  private readonly web?: Options['web'];
+  /** AI 웹 검색 is on (an unreadable setting counts as off). */
+  webOn() {
+    try {
+      return this.web?.() ?? true;
+    } catch {
+      return false;
+    }
   }
   private readonly questions?: Options['questions'];
   /** AI가 작업 도중에 묻기 is on (an unreadable setting counts as off). */
@@ -386,13 +407,30 @@ export class Execution {
     // Codex through `codex app-server` (its own questions mid-turn, SPIKE-2026-09-30-codex-app-
     // server) by default; `codex exec` when AI가 작업 도중에 묻기 is off or VIDE_CODEX_APP_SERVER=0.
     // Only replaces the default factory (tests keep their injected one).
+    // Claude's conversation turns run in the conversation's kept process (ADR-028, T-104) unless
+    // VIDE_CLAUDE_PERSISTENT=0; single runs keep one process per run.
     const factory =
       input.provider === 'codex-cli' &&
       codexAppServerEnabled() &&
       this.questionsOn() &&
       this.providerFactory === createProvider
         ? (options: CliOptions) => new CodexAppServer(options)
-        : this.providerFactory;
+        : input.provider === 'claude-cli' &&
+            session &&
+            claudePersistentEnabled() &&
+            this.providerFactory === createProvider
+          ? (options: CliOptions) => new KeptClaudeCli(options)
+          : this.providerFactory;
+    // The provider's own tools (ADR-028, T-105): subagents and the to-do list in conversation,
+    // host (modeling) and make turns; the public web there too while AI 웹 검색 is on. A jig's AI
+    // review and the other single runs get none. Effective only with a VIDE connection.
+    const builtinTools =
+      instructions &&
+      (instructions.mode === 'modeling' ||
+        instructions.mode === 'make' ||
+        (instructions.mode === 'data' && session))
+        ? { work: true, web: this.webOn() }
+        : undefined;
     // A jig's AI review reads only its attached table: no project file tools there.
     if (instructions)
       agent = this.readAgent(
@@ -420,6 +458,7 @@ export class Execution {
       // Either provider's own question tool (SPEC-02.19 6): Claude's AskUserQuestion, Codex's
       // requestUserInput on the app-server. Without it Codex stops at a question (answer next turn).
       ...(nativeQuestions ? { nativeQuestions } : {}),
+      ...(builtinTools ? { builtinTools } : {}),
     });
   }
   /**
@@ -2183,5 +2222,6 @@ export class Execution {
     // Codex app-server processes kept between turns do not outlive the engine (whatever the
     // setting is now: it may have been on when they started).
     await closeCodexAppServers().catch(() => {});
+    await closeClaudeProcesses().catch(() => {});
   }
 }

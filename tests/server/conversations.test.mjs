@@ -633,14 +633,15 @@ test('a session past the length setting goes on with a suggestion; [새 세션�
   };
   assert.equal(conversations.get(project.id, conversation.id).handover, null);
   for (let turn = 1; turn < SESSION_MAX_TURNS; turn++) conversations.store.recordTurn(key, 100);
-  // At 12 turns a new session is suggested (T1), not forced: the next turn still resumes.
+  // At the turn limit (100 by default, ADR-028) a new session is suggested (T1), not forced: the
+  // next turn still resumes.
   let saved = conversations.get(project.id, conversation.id);
   assert.deepEqual(saved.handover, {
     kind: 'length',
     grade: 'T1',
     turns: SESSION_MAX_TURNS,
     inputTokens: 10 + 100 * (SESSION_MAX_TURNS - 1),
-    limits: { maxTurns: 12, maxInputTokens: 150000 },
+    limits: { maxTurns: 100, maxInputTokens: 800000 },
     sends: { ledgerItems: 1, recentTurns: 1, files: 0 },
   });
   send('m2', { conversationId: conversation.id });
@@ -694,7 +695,7 @@ test('the length setting is read from its file, saved locally only, and applies 
   t.after(() => store.close());
   const settingsFile = join(directory, 'conversation-settings.json');
   const service = new ConversationService(store, { settingsFile });
-  assert.deepEqual(service.limits(), { maxTurns: 12, maxInputTokens: 150000 });
+  assert.deepEqual(service.limits(), { maxTurns: 100, maxInputTokens: 800000 });
   const call = (method, value, remote = false) => {
     let sent;
     return conversationRoutes(
@@ -708,7 +709,7 @@ test('the length setting is read from its file, saved locally only, and applies 
       },
     ).then((handled) => (handled ? sent : undefined));
   };
-  assert.deepEqual((await call('GET')).data, { maxTurns: 12, maxInputTokens: 150000 });
+  assert.deepEqual((await call('GET')).data, { maxTurns: 100, maxInputTokens: 800000 });
   await assert.rejects(call('PUT', { maxTurns: 4, maxInputTokens: 50000 }, true), {
     code: 'FORBIDDEN',
   });

@@ -405,6 +405,15 @@ test('격리 인자가 빠진 세션 턴은 실행하지 않는다', async () =>
   const withAgent = configureAgentArguments(cli.arguments(), 'codex', cli.agent, { neutral: true });
   assert.equal(codexTurnIsolated(withAgent, session, cli.agent, cli.instructions), true);
   assert.equal(codexTurnIsolated(withAgent, session, undefined, cli.instructions), false);
+  // Web search (ADR-028): live only in a turn that has it, and then it must be live.
+  const web = { web: true };
+  const withWeb = configureAgentArguments(cli.arguments(), 'codex', cli.agent, {
+    neutral: true,
+    builtin: web,
+  });
+  assert.equal(codexTurnIsolated(withWeb, session, cli.agent, cli.instructions, web), true);
+  assert.equal(codexTurnIsolated(withWeb, session, cli.agent, cli.instructions), false);
+  assert.equal(codexTurnIsolated(withAgent, session, cli.agent, cli.instructions, web), false);
   // The developer instructions are the bundle with the session rules (PLAN-24 지침 묶음).
   assert.equal(codexTurnIsolated(withAgent, session, cli.agent), false);
   assert.equal(

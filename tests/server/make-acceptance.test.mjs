@@ -486,7 +486,11 @@ test('M5 replay: a make-conversation writes, checks and asks; the pinned jig mat
   );
   assert.equal(first.state, 'succeeded', JSON.stringify(first.result));
   assert.equal(argOf(seen.args, '--add-dir'), draft.path);
-  assert.equal(argOf(seen.args, '--tools'), 'Read,Edit,Write,Glob,Grep');
+  // The draft's file tools, then Claude's own subagent, to-do and web tools (ADR-028).
+  assert.equal(
+    argOf(seen.args, '--tools'),
+    'Read,Edit,Write,Glob,Grep,Task,TodoWrite,TaskCreate,TaskGet,TaskList,TaskUpdate,WebSearch,WebFetch',
+  );
   assert.ok(seen.args.includes('--restricted') && seen.args.includes('--json-schema'));
   assert.deepEqual(seen['steps/grid.ts'], {
     error: false,

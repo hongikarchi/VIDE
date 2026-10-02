@@ -1,5 +1,6 @@
 // The AI settings dialog's project addendum editor (PLAN-24 지침 묶음): type, save, reload, read back;
-// and the AI가 작업 도중에 묻기 switch (T-075): on by default, off kept across a reload.
+// the AI가 작업 도중에 묻기 switch (T-075) and the AI 웹 검색 switch (T-105): on by default, off kept
+// across a reload.
 // Synthetic engine and provider; no model requests or host writes.
 import assert from 'node:assert/strict';
 import { mkdtemp, rm } from 'node:fs/promises';
@@ -83,6 +84,20 @@ try {
   await open();
   await page.waitForFunction(() => !document.querySelector('.ai-questions input')?.disabled);
   assert.ok(!(await questions.isChecked()), 'off stays off after a reload');
+  // AI 웹 검색 (ADR-028, T-105): on by default; off is kept across a reload.
+  const web = page.getByRole('checkbox', { name: 'AI 웹 검색', exact: true });
+  await page.waitForFunction(() => !document.querySelector('.ai-web input')?.disabled);
+  assert.ok(await web.isChecked(), 'web is on by default');
+  await web.click();
+  await page
+    .locator('section.ai-web')
+    .getByRole('status')
+    .filter({ hasText: 'AI는 웹을 쓰지 않습니다' })
+    .waitFor();
+  await page.reload();
+  await open();
+  await page.waitForFunction(() => !document.querySelector('.ai-web input')?.disabled);
+  assert.ok(!(await web.isChecked()), 'web off stays off after a reload');
   console.log(
     JSON.stringify({
       addendumSaved: true,
@@ -91,6 +106,8 @@ try {
       referenceImagesOff: true,
       questionsDefaultOn: true,
       questionsOffKept: true,
+      webDefaultOn: true,
+      webOffKept: true,
     }),
   );
 } finally {

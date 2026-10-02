@@ -29,6 +29,7 @@ import { turnOutputSchema } from './turn-output.ts';
 import type { AttachmentStore } from './attachments.ts';
 import type { FileAccess } from './project-files.ts';
 import { existsSync } from 'node:fs';
+import { resolveAgentToken } from '../ai/agent-relay.ts';
 import { Agenda, localDate } from '../core/agenda.ts';
 import {
   AGENDA_TEXT_MAX,
@@ -813,7 +814,9 @@ export class AgentTools {
     response: ServerResponse,
     readBody: (request: IncomingMessage) => Promise<unknown>,
   ) {
-    const token = /^Bearer ([a-f0-9]{64})$/.exec(request.headers.authorization || '')?.[1];
+    const bearer = /^Bearer ([a-f0-9]{64})$/.exec(request.headers.authorization || '')?.[1];
+    // A kept Claude process carries its own token, standing for the running turn's (ADR-028).
+    const token = bearer && resolveAgentToken(bearer);
     const key = token && digest(token),
       run = key && this.#runs.get(key);
     if (!run || run.expires <= this.#now()) {

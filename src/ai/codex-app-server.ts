@@ -13,10 +13,11 @@ import { join } from 'node:path';
 import { StringDecoder } from 'node:string_decoder';
 import type { ChildProcessWithoutNullStreams } from 'node:child_process';
 import type { AgentConnection } from './agent-connection.ts';
-import { instructionFor } from './agent-connection.ts';
+import { builtinRule, instructionFor } from './agent-connection.ts';
 import { withRules } from './instructions/index.ts';
 import { defaultLogin } from './account-usage.ts';
 import {
+  MAX_EVENT_LINE,
   MODE_CHANGED,
   ProviderError,
   SESSION_LOST,
@@ -120,8 +121,13 @@ export function appServerThreadConfig(
   userServers: readonly string[],
   connection?: AgentConnection,
   effort?: string,
+  web = false,
 ) {
-  const config: { [key: string]: Json } = { web_search: 'disabled', project_doc_max_bytes: 0 };
+  const config: { [key: string]: Json } = {
+    // Web search only for a turn that has it (Settings → AI 「AI 웹 검색」, ADR-028).
+    web_search: web && connection ? 'live' : 'disabled',
+    project_doc_max_bytes: 0,
+  };
   for (const name of userServers) {
     if (!SERVER_NAME.test(name)) throw error('UNEXPECTED_TOOL_ACCESS');
     if (!(connection && name === 'vide')) config[`mcp_servers.${name}.enabled`] = false;
@@ -144,7 +150,12 @@ export interface ThreadParams {
 /** The thread parameters carry the isolation (asserted before they are sent). */
 export function threadParamsIsolated(
   params: ThreadParams,
-  expected: { instructions: string; userServers: readonly string[]; connection?: AgentConnection },
+  expected: {
+    instructions: string;
+    userServers: readonly string[];
+    connection?: AgentConnection;
+    web?: boolean;
+  },
 ) {
   const { config } = params;
   const serverKeys = Object.keys(config).filter((key) => key.startsWith('mcp_servers'));
@@ -159,7 +170,7 @@ export function threadParamsIsolated(
     params.approvalPolicy === 'never' &&
     params.developerInstructions === expected.instructions &&
     !('baseInstructions' in params) &&
-    config.web_search === 'disabled' &&
+    config.web_search === (expected.web && expected.connection ? 'live' : 'disabled') &&
     config.project_doc_max_bytes === 0 &&
     serverKeys.length === wanted.size &&
     serverKeys.every((key) => wanted.has(key)) &&
@@ -314,7 +325,7 @@ interface Message {
   result?: unknown;
   error?: { message?: string; code?: number };
 }
-const MAX_LINE = 8 * 1024 * 1024;
+
 /**
  * One app-server process: requests with ids, notifications and server requests to listeners. The
  * process lives between turns, so nothing it does may take the engine down (RESEARCH-13): every
@@ -339,13 +350,16 @@ export class AppServerRpc {
     let buffer = '';
     child.stdout.on('data', (chunk: Buffer) => {
       buffer += decoder.write(chunk);
-      if (buffer.length > MAX_LINE) return this.fail('OUTPUT_TOO_LARGE');
       let end;
       while ((end = buffer.indexOf('\n')) >= 0) {
         const line = buffer.slice(0, end);
         buffer = buffer.slice(end + 1);
+        // One message per line: only a single line past the cap ends the process (ADR-028).
+        if (line.length > MAX_EVENT_LINE) return this.fail('OUTPUT_TOO_LARGE');
         if (line.trim()) this.receive(line);
+        if (this.closed) return;
       }
+      if (buffer.length > MAX_EVENT_LINE) return this.fail('OUTPUT_TOO_LARGE');
     });
     child.stderr.on('data', () => {});
     // `on`, not `once`: a second 'error' without a listener would throw in the engine.
@@ -546,7 +560,7 @@ export class CodexAppServer extends CodexCli {
     let base: string;
     if (this.session || !this.agent) base = codexInstructions(this.session, this.instructions);
     else {
-      const own = instructionFor(this.agent, 'codex');
+      const own = instructionFor(this.agent, 'codex') + builtinRule(this.builtin, 'codex');
       base = this.instructions ? withRules(this.instructions, own) : own;
     }
     return `${base}\n\n${questionRule}`;
@@ -561,6 +575,7 @@ export class CodexAppServer extends CodexCli {
       this.model ?? '',
       this.effort ?? '',
       this.agent ? [this.agent.url, this.agent.token, this.agent.tools] : null,
+      !!this.builtin?.web,
     ]);
   }
   private async spawnServer(): Promise<{ rpc: AppServerRpc; userServers: string[]; cwd: string }> {
@@ -615,9 +630,16 @@ export class CodexAppServer extends CodexCli {
       approvalPolicy: 'never',
       developerInstructions: instructions,
       ...(this.model ? { model: this.model } : {}),
-      config: appServerThreadConfig(userServers, this.agent, this.effort),
+      config: appServerThreadConfig(userServers, this.agent, this.effort, !!this.builtin?.web),
     };
-    if (!threadParamsIsolated(params, { instructions, userServers, connection: this.agent }))
+    if (
+      !threadParamsIsolated(params, {
+        instructions,
+        userServers,
+        connection: this.agent,
+        web: !!this.builtin?.web,
+      })
+    )
       throw error('UNEXPECTED_TOOL_ACCESS');
     let response: ThreadResponse;
     try {
@@ -725,7 +747,9 @@ export class CodexAppServer extends CodexCli {
         /* UI cannot change execution state. */
       }
     };
-    let prepared = this.session ? withTurnRules(context, this.agent, 'codex') : context;
+    let prepared = this.session
+      ? withTurnRules(context, this.agent, 'codex', this.builtin)
+      : context;
     if (this.agent?.draftDir) prepared = await withDraftFiles(prepared, this.agent.draftDir);
     prepared = withQuestionRule(prepared);
     const selected = buildPacket(prepared);
@@ -880,6 +904,12 @@ export class CodexAppServer extends CodexCli {
                 return stop('UNEXPECTED_TOOL_CALL');
               if (message.method === 'item/started')
                 progress({ state: 'running', phase: 'tool', tool: String(item.tool) });
+              return;
+            }
+            // Web search items only in a turn that has it (ADR-028).
+            if (item.type === 'webSearch' && this.builtin?.web) {
+              if (message.method === 'item/started')
+                progress({ state: 'running', phase: 'tool', tool: 'web_search' });
               return;
             }
             if (!ALLOWED_ITEMS.has(String(item.type))) return stop('UNEXPECTED_TOOL_CALL');

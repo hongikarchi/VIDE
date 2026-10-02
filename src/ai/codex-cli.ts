@@ -11,7 +11,12 @@ import type {
   ProviderStatus,
   SessionOptions,
 } from './claude-cli.ts';
-import { draftPathRefusal, type AgentConnection, type AgentFormat } from './agent-connection.ts';
+import {
+  draftPathRefusal,
+  type AgentConnection,
+  type AgentFormat,
+  type BuiltinTools,
+} from './agent-connection.ts';
 import { ClaudeCli, ProviderError, killOwnedProcess } from './claude-cli.ts';
 import { withRules } from './instructions/index.ts';
 
@@ -130,6 +135,7 @@ export function codexTurnIsolated(
   session: SessionOptions,
   connection?: AgentConnection,
   bundle = '',
+  builtin?: BuiltinTools,
 ) {
   const config = (key: string) =>
     args.filter((value, index) => args[index - 1] === '-c' && value.startsWith(key + '='));
@@ -149,7 +155,9 @@ export function codexTurnIsolated(
         config('sandbox_mode')[0] === 'sandbox_mode="read-only"'
       : args[args.indexOf('--sandbox') + 1] === 'read-only' && !config('sandbox_mode').length) &&
     config('approval_policy').join() === 'approval_policy="never"' &&
-    config('web_search').join() === 'web_search="disabled"' &&
+    // Web search only when the turn has it (Settings → AI 「AI 웹 검색」, ADR-028).
+    config('web_search').join() ===
+      (connection && builtin?.web ? 'web_search="live"' : 'web_search="disabled"') &&
     config('project_doc_max_bytes').join() === 'project_doc_max_bytes=0' &&
     instructions.length === 1 &&
     instructions[0] ===
@@ -296,7 +304,7 @@ export class CodexCli extends ClaudeCli {
     const base = this.spawnProcess as unknown as (...values: unknown[]) => ReturnType<typeof spawn>;
     this.spawnProcess = ((command: string, args: string[], spawnOptions: unknown) => {
       if (!this.session || args[0] !== 'exec') return base(command, args, spawnOptions);
-      if (!codexTurnIsolated(args, this.session, this.agent, this.instructions))
+      if (!codexTurnIsolated(args, this.session, this.agent, this.instructions, this.builtin))
         throw new ProviderError('UNEXPECTED_TOOL_ACCESS');
       const child = base(command, args, spawnOptions);
       let pending = '';

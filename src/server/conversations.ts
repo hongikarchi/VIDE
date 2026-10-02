@@ -53,11 +53,12 @@ export const SESSION_PROVIDERS: Record<Provider, boolean> = {
   'codex-cli': true,
 };
 /**
- * Past these a new session with the ledger is suggested (SPEC-02.19 5; PLAN-24 starting values):
- * the defaults of the conversation length setting (`<data>/conversation-settings.json`).
+ * Past these a new session with the ledger is suggested (SPEC-02.19 5): the defaults of the
+ * conversation length setting (`<data>/conversation-settings.json`), at the level of the models'
+ * context (ADR-028; 2026-10-02 user decision "기본값을 모델 문맥 한도 수준으로 올리자").
  */
-export const SESSION_MAX_TURNS = 12;
-export const SESSION_MAX_INPUT_TOKENS = 150_000;
+export const SESSION_MAX_TURNS = 100;
+export const SESSION_MAX_INPUT_TOKENS = 800_000;
 export const sessionLimitsSchema = z
   .object({
     maxTurns: z.number().int().min(2).max(200),

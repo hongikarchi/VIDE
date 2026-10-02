@@ -544,3 +544,14 @@ test('a login that is not available is never remembered', async () => {
   loggedIn = true;
   assert.equal((await cli().run(context())).text, '분석 응답');
 });
+
+test('a run has no total output cap (ADR-028): more than 1 MB of events still answers', async () => {
+  const text = 'x'.repeat(400 * 1024);
+  const big = { type: 'assistant', message: { content: [{ type: 'text', text }] } };
+  const fake = transport([init, big, big, big, result]);
+  const value = await new ClaudeCli({
+    executable: process.execPath,
+    spawnProcess: fake.spawnProcess,
+  }).run(context());
+  assert.equal(value.text, '분석 응답');
+});

@@ -73,7 +73,14 @@ export interface RunMarks {
   /** The provider was made for the run (the engine's own preparation ends here). */
   providerAt?: number;
   /** What the provider measured: its login check and when the CLI started and first answered. */
-  provider?: { authMs?: number; authCached?: boolean; spawnAt?: number; firstOutputAt?: number };
+  provider?: {
+    authMs?: number;
+    authCached?: boolean;
+    spawnAt?: number;
+    firstOutputAt?: number;
+    /** The turn ran in a kept Claude process (ADR-028): spawnAt is when the turn was written. */
+    processReused?: boolean;
+  };
 }
 const MODEL_NOTES = new Set(['thinking', 'message', 'model']);
 const TOOL_EVENTS = new Set(['query', 'execute', 'result', 'error']);
@@ -111,6 +118,7 @@ export function requestStages(
     authCached: marks.provider?.authCached,
     spawnMs: since(marks.provider?.spawnAt),
     firstOutputMs: since(marks.provider?.firstOutputAt),
+    processReused: marks.provider?.processReused,
     firstNoteMs: since(firstNote),
     firstToolMs: since(tools[0]?.at),
     lastToolMs: since(lastTool),

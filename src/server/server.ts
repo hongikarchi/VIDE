@@ -78,6 +78,7 @@ import { AiSettings } from '../core/ai-settings.ts';
 import { ProjectInstructionStore } from '../ai/instructions/project-store.ts';
 import { QuestionSettings } from '../ai/question-settings.ts';
 import { closeIdleCodexAppServers } from '../ai/codex-app-server.ts';
+import { WebSettings } from '../ai/web-settings.ts';
 import { ReviewNotes } from '../core/review-notes.ts';
 import { compareReviews } from '../core/review-comparison.ts';
 import { Reviews } from '../core/reviews.ts';
@@ -414,10 +415,15 @@ export async function startServer({
   const questionSettings = new QuestionSettings(
     filename === ':memory:' ? undefined : join(dirname(filename), 'question-settings.json'),
   );
+  // Settings → AI 「AI 웹 검색」 (ADR-028, T-105): the providers' own web tools, default on.
+  const webSettings = new WebSettings(
+    filename === ':memory:' ? undefined : join(dirname(filename), 'web-settings.json'),
+  );
   const execution = new Execution(workspace, {
     diagnostics,
     conversations,
     questions: () => questionSettings.get().native,
+    web: () => webSettings.get().web,
     projectInstructions: (projectId) => projectInstructions.text(projectId),
     selectContext: (text, candidates) =>
       selectContext(text, candidates, { dataDirectory: dirname(filename) }),
@@ -998,6 +1004,19 @@ export async function startServer({
         }
         if (request.method === 'PUT' || request.method === 'GET') {
           send(200, questionSettings.view());
+          return;
+        }
+      }
+      if (url.pathname === '/api/v1/settings/web') {
+        if (request.method === 'PUT')
+          webSettings.set(
+            z
+              .object({ web: z.boolean() })
+              .strict()
+              .parse(await body(request)),
+          );
+        if (request.method === 'PUT' || request.method === 'GET') {
+          send(200, webSettings.get());
           return;
         }
       }

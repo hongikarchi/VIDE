@@ -170,6 +170,68 @@ function QuestionsSection() {
     </section>
   );
 }
+/**
+ * AI 웹 검색 (ADR-028, T-105): in conversation, modeling and jig-making turns the AI may read the
+ * public web with its provider's own tools (Claude WebSearch·WebFetch, Codex web_search). Default on.
+ */
+function WebSection() {
+  const [web, setWeb] = useState<boolean>();
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState('');
+  const read = (value: unknown) => (value as { web?: unknown } | null)?.web === true;
+  useEffect(() => {
+    let live = true;
+    api('/settings/web')
+      .then((value) => live && setWeb(read(value)))
+      .catch(() => live && setMessage('웹 검색 설정을 읽지 못했습니다.'));
+    return () => {
+      live = false;
+    };
+  }, []);
+  const toggle = async (next: boolean) => {
+    setSaving(true);
+    try {
+      setWeb(read(await api('/settings/web', 'PUT', { web: next })));
+      setMessage(
+        next
+          ? '다음 요청부터 AI가 필요하면 웹을 검색하고 페이지를 읽습니다.'
+          : '다음 요청부터 AI는 웹을 쓰지 않습니다.',
+      );
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : '설정을 바꾸지 못했습니다.');
+    } finally {
+      setSaving(false);
+    }
+  };
+  return (
+    <section className="ai-provider ai-web" aria-label="AI 웹 검색">
+      <div className="ai-provider-head">
+        <h3>AI 웹 검색</h3>
+        <span className="pill" data-ok={String(Boolean(web))} role="status">
+          {web === undefined ? '확인 중' : web ? '켜짐' : '꺼짐'}
+        </span>
+      </div>
+      <p className="ai-intro">
+        켜면: 대화·모델링·jig 만들기에서 AI가 필요할 때 웹을 검색하고 공개된 페이지를 읽습니다
+        (Claude Code는 WebSearch·WebFetch, Codex는 web_search). 웹 내용은 자료로만 다루고 출처를
+        밝히며, 프로젝트 자료를 웹으로 보내지 않습니다. Rhino·CAD 문서나 파일은 바꾸지 않습니다.
+      </p>
+      <label>
+        <input
+          type="checkbox"
+          aria-label="AI 웹 검색"
+          checked={web ?? false}
+          disabled={web === undefined || saving}
+          onChange={(event) => {
+            void toggle(event.target.checked);
+          }}
+        />{' '}
+        AI 웹 검색
+      </label>
+      {message && <p role="status">{message}</p>}
+    </section>
+  );
+}
 /** The addendum limit the engine enforces (src/ai/instructions/project-store.ts). */
 const ADDENDUM_MAX_BYTES = 8 * 1024;
 const addendumSchema = z.object({ text: z.string(), updatedAt: z.string().nullable() });
@@ -458,6 +520,7 @@ function Settings({ config, current, onStatus }: Props) {
       })}
       <RoutingSection />
       <QuestionsSection />
+      <WebSection />
       <ProjectInstructionsSection />
       <ReferenceImagesSection />
       <div className="table-controls">

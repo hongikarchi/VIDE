@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import type { ChildProcess, ChildProcessWithoutNullStreams } from 'node:child_process';
-import type { AgentConnection, AgentFormat } from './agent-connection.ts';
+import type { AgentConnection, AgentFormat, BuiltinTools } from './agent-connection.ts';
 import { spawn } from 'node:child_process';
 import { mkdtemp, readdir, rm, rmdir, unlink } from 'node:fs/promises';
 import { homedir, tmpdir } from 'node:os';
@@ -10,6 +10,7 @@ import {
   agentConnection,
   configureAgentArguments,
   allowedAgentEvent,
+  builtinAllowed,
   neutralInstruction,
   noToolsInstruction,
   turnRules,
@@ -105,6 +106,11 @@ export interface CliOptions {
    * which shows the question cards and returns the answers (null: the user closed them).
    */
   nativeQuestions?: NativeQuestionHandler;
+  /**
+   * The provider's own tools the turn may use beside VIDE's (ADR-028, T-105): subagents and the
+   * to-do list (`work`), the public web (`web`). Only a turn with a VIDE connection gets them.
+   */
+  builtinTools?: BuiltinTools;
 }
 const sessionSchema = z.object({
   id: z.string().regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/),
@@ -236,7 +242,18 @@ const errorText = (event: Record<string, unknown>) => {
   collect(event);
   return parts.join(' ').slice(0, 2000);
 };
-type ProviderEvent = z.infer<typeof eventSchema>;
+export type ProviderEvent = z.infer<typeof eventSchema>;
+/** One stdout line as a provider event; undefined when it is not one. */
+export function parseProviderEvent(line: string): ProviderEvent | undefined {
+  try {
+    const event = eventSchema.parse(JSON.parse(line));
+    return event && typeof event.type === 'string' ? event : undefined;
+  } catch {
+    return undefined;
+  }
+}
+/** The error words of a failed event (classification only; never shown). */
+export { errorText as providerErrorText };
 
 /** Select only data explicitly included by the local controller; never attach project directories. */
 export function buildPacket({ goal, items, includedIds, revision }: ProviderContext) {
@@ -393,8 +410,13 @@ export function withTurnRules(
   context: ProviderContext,
   connection?: AgentConnection,
   format: AgentFormat = 'claude',
+  builtin?: BuiltinTools,
 ) {
-  const item = { id: 'turn-rules', type: 'turn-rules', data: turnRules(connection, format) };
+  const item = {
+    id: 'turn-rules',
+    type: 'turn-rules',
+    data: turnRules(connection, format, builtin),
+  };
   return {
     ...context,
     items: [item, ...context.items],
@@ -582,6 +604,12 @@ export async function answerToolRequest(
   };
 }
 
+/**
+ * The largest single stdout line (one stream-json event or JSON-RPC message) a run accepts
+ * (ADR-028): a turn as a whole has no output cap, only each event has.
+ */
+export const MAX_EVENT_LINE = 16 * 1024 * 1024;
+
 export function killOwnedProcess(child: ChildProcess): Promise<boolean> {
   return new Promise((resolve) => {
     if (child.exitCode !== null || child.signalCode !== null) return resolve(true);
@@ -607,12 +635,22 @@ export class ClaudeCli {
   agent?: AgentConnection;
   session?: SessionOptions;
   nativeQuestions?: NativeQuestionHandler;
+  /** The provider's own tools of this turn (ADR-028); effective only with a VIDE connection. */
+  builtin?: BuiltinTools;
   /** The instruction bundle of every run of this provider (PLAN-24 지침 묶음). */
   instructions: string;
   /** The spawn function given (the login cache is kept per spawn function: tests inject fakes). */
   private readonly spawnIdentity: object;
   /** Milliseconds of the last run's steps (diagnostic log): login check, CLI start, first output. */
-  timing: { authMs?: number; authCached?: boolean; spawnAt?: number; firstOutputAt?: number } = {};
+  timing: {
+    authMs?: number;
+    authCached?: boolean;
+    /** When the CLI started, or (a kept process) when the turn was written to it. */
+    spawnAt?: number;
+    firstOutputAt?: number;
+    /** The turn ran in a process kept from an earlier turn (ADR-028). */
+    processReused?: boolean;
+  } = {};
   constructor({
     executable,
     model,
@@ -626,6 +664,7 @@ export class ClaudeCli {
     stopGraceMs = 5000,
     spawnProcess = spawn,
     nativeQuestions,
+    builtinTools,
   }: CliOptions = {}) {
     if (typeof executable !== 'string' || !isAbsolute(executable)) throw error('CLI_PATH_REQUIRED');
     if (
@@ -653,6 +692,11 @@ export class ClaudeCli {
     this.model = model;
     this.effort = effort;
     this.agent = agentConnection(agent);
+    // Built-in tools come only with a VIDE connection (a turn without one has no tools at all).
+    this.builtin =
+      this.agent && builtinTools && (builtinTools.work || builtinTools.web)
+        ? Object.freeze({ work: !!builtinTools.work, web: !!builtinTools.web })
+        : undefined;
     if (session !== undefined && !sessionSchema.safeParse(session).success)
       throw error('INVALID_SESSION');
     this.session = session;
@@ -836,6 +880,103 @@ export class ClaudeCli {
       });
     });
   }
+  /**
+   * A Claude `system/init` event names only tools this turn may have: none without a connection,
+   * else VIDE's MCP tools of the turn, its file tools (make), its built-in tools (ADR-028) and the
+   * CLI's own output/question tools when the run asked for them (`extra`). VIDE's MCP server is
+   * the only one and connected.
+   */
+  initValid(event: ProviderEvent, extra: (name: string) => boolean) {
+    const tools = Array.isArray(event.tools)
+      ? event.tools.filter((name) => !extra(name))
+      : undefined;
+    return this.agent
+      ? Array.isArray(tools) &&
+          tools.every((name) => allowedAgentEvent({ name }, 'claude', this.agent, this.builtin)) &&
+          Array.isArray(event.mcp_servers) &&
+          event.mcp_servers.length === 1 &&
+          event.mcp_servers[0].name === 'vide' &&
+          event.mcp_servers[0].status === 'connected'
+      : Array.isArray(tools) &&
+          !tools.length &&
+          Array.isArray(event.mcp_servers) &&
+          !event.mcp_servers.length;
+  }
+  /**
+   * A Claude `assistant` event (a subagent's too): its text and thinking go to the activity log, a
+   * tool call is reported; false when it calls a tool this turn does not have.
+   */
+  assistantEvent(
+    event: ProviderEvent,
+    progress: (event: Progress) => void,
+    outputTool: (name: unknown) => boolean,
+    questionTool: (name: unknown) => boolean,
+  ) {
+    for (const item of (typeof event.message === 'object' ? event.message.content : undefined) ||
+      []) {
+      if (
+        (item.type === 'text' || item.type === 'thinking') &&
+        typeof (item.text ?? item.thinking) === 'string'
+      )
+        progress({
+          state: 'running',
+          phase: 'model',
+          kind: item.type === 'thinking' ? 'thinking' : 'message',
+          text: String(item.text ?? item.thinking),
+        });
+      if (item.type === 'tool_use') {
+        if (questionTool(item.name)) continue;
+        if (!outputTool(item.name) && !allowedAgentEvent(item, 'claude', this.agent, this.builtin))
+          return false;
+        progress({
+          state: 'running',
+          phase: 'tool',
+          tool: builtinAllowed(item.name, this.builtin)
+            ? item.name
+            : item.name?.slice('mcp__vide__'.length),
+        });
+      }
+    }
+    return true;
+  }
+  /**
+   * Why a run failed, from its error texts: a changed login mode stops here (another account would
+   * fail the same way); a subscription limit is told apart so another account can take the next
+   * request; a resumed session without its transcript is reopened by hand-over (SPEC-02.19 5).
+   * The remembered login is asked again after the first two.
+   */
+  failureCode(failureText: string, errorOutput: string) {
+    const failed = MODE_CHANGED.test(failureText)
+      ? 'CLI_MODE_CHANGED'
+      : USAGE_LIMIT.test(failureText)
+        ? 'PROVIDER_LIMIT'
+        : this.session?.resume && SESSION_LOST.test(failureText + ' ' + errorOutput)
+          ? 'SESSION_LOST'
+          : 'PROVIDER_FAILED';
+    if (failed === 'CLI_MODE_CHANGED' || failed === 'PROVIDER_LIMIT') this.forgetAuth();
+    return failed;
+  }
+  /** The turn's answer from its final result event (`usage`: a sum over several, else its own). */
+  resultOf(
+    final: ProviderEvent & { result: string },
+    selected: ReturnType<typeof buildPacket>,
+    usage = final.usage,
+  ): ProviderResult {
+    return {
+      text: final.result,
+      revision: selected.packet.revision,
+      manifest: selected.manifest,
+      ...(final.structured_output !== undefined ? { structured: final.structured_output } : {}),
+      usage: {
+        inputTokens: usage?.input_tokens ?? null,
+        outputTokens: usage?.output_tokens ?? null,
+        cacheReadTokens: usage?.cache_read_input_tokens ?? usage?.cached_input_tokens ?? null,
+        cacheCreationTokens:
+          usage?.cache_creation_input_tokens ?? usage?.cache_write_input_tokens ?? null,
+        subscriptionRemaining: null,
+      },
+    };
+  }
   async run(
     context: ProviderContext,
     {
@@ -844,7 +985,7 @@ export class ClaudeCli {
     }: { signal?: AbortSignal; onProgress?: (event: Progress) => void } = {},
   ): Promise<ProviderResult> {
     const selected = buildPacket(
-      this.session ? withTurnRules(context, this.agent, this.eventFormat) : context,
+      this.session ? withTurnRules(context, this.agent, this.eventFormat, this.builtin) : context,
     );
     if (signal?.aborted) throw error('CANCELLED');
     this.timing = {};
@@ -879,6 +1020,7 @@ export class ClaudeCli {
             {
               neutral: !!this.session,
               bundle: this.instructions,
+              builtin: this.builtin,
             },
           ),
           !!questions,
@@ -895,7 +1037,6 @@ export class ClaudeCli {
       const result = await new Promise<ProviderResult>((resolve, reject) => {
         const decoder = new StringDecoder('utf8');
         let buffer = '',
-          bytes = 0,
           final: ProviderEvent | undefined,
           initialized = false,
           stopReason: string | undefined,
@@ -989,7 +1130,7 @@ export class ClaudeCli {
             if (event.type.startsWith('item.')) {
               if (
                 !['agent_message', 'reasoning', 'plan', 'error'].includes(event.item?.type ?? '') &&
-                !allowedAgentEvent(event, 'codex', this.agent)
+                !allowedAgentEvent(event, 'codex', this.agent, this.builtin)
               ) {
                 stop('UNEXPECTED_TOOL_CALL');
                 return;
@@ -1027,54 +1168,20 @@ export class ClaudeCli {
             return;
           }
           if (event.type === 'system' && event.subtype === 'init') {
-            const tools = Array.isArray(event.tools)
-              ? event.tools.filter((name) => !outputTool(name) && !questionTool(name))
-              : undefined;
-            const valid = this.agent
-              ? Array.isArray(tools) &&
-                tools.every((name) => allowedAgentEvent({ name }, 'claude', this.agent)) &&
-                Array.isArray(event.mcp_servers) &&
-                event.mcp_servers.length === 1 &&
-                event.mcp_servers[0].name === 'vide' &&
-                event.mcp_servers[0].status === 'connected'
-              : Array.isArray(tools) &&
-                !tools.length &&
-                Array.isArray(event.mcp_servers) &&
-                !event.mcp_servers.length;
-            if (!valid) {
+            if (!this.initValid(event, (name) => outputTool(name) || questionTool(name))) {
               stop('UNEXPECTED_TOOL_ACCESS');
               return;
             }
             initialized = true;
             progress({ state: 'running', phase: 'model' });
           }
-          if (event.type === 'assistant')
-            for (const item of (typeof event.message === 'object'
-              ? event.message.content
-              : undefined) || []) {
-              if (
-                (item.type === 'text' || item.type === 'thinking') &&
-                typeof (item.text ?? item.thinking) === 'string'
-              )
-                progress({
-                  state: 'running',
-                  phase: 'model',
-                  kind: item.type === 'thinking' ? 'thinking' : 'message',
-                  text: String(item.text ?? item.thinking),
-                });
-              if (item.type === 'tool_use') {
-                if (questionTool(item.name)) continue;
-                if (!outputTool(item.name) && !allowedAgentEvent(item, 'claude', this.agent)) {
-                  stop('UNEXPECTED_TOOL_CALL');
-                  return;
-                }
-                progress({
-                  state: 'running',
-                  phase: 'tool',
-                  tool: item.name?.slice('mcp__vide__'.length),
-                });
-              }
-            }
+          if (
+            event.type === 'assistant' &&
+            !this.assistantEvent(event, progress, outputTool, questionTool)
+          ) {
+            stop('UNEXPECTED_TOOL_CALL');
+            return;
+          }
           if (event.type === 'result') {
             // The stream-json input of a native-question run stays open until the result.
             if (questions) processChild.stdin.end();
@@ -1085,15 +1192,17 @@ export class ClaudeCli {
         processChild.stdout.on('data', (chunk) => {
           if (settled || stopReason) return;
           this.timing.firstOutputAt ??= Date.now();
-          bytes += chunk.length;
-          if (bytes > 1024 * 1024) return stop('OUTPUT_TOO_LARGE');
           buffer += decoder.write(chunk);
           let end;
           while ((end = buffer.indexOf('\n')) >= 0) {
             const line = buffer.slice(0, end);
             buffer = buffer.slice(end + 1);
+            if (line.length > MAX_EVENT_LINE) return stop('OUTPUT_TOO_LARGE');
             if (line.trim()) parse(line);
+            if (settled || stopReason) return;
           }
+          // One event per line: only a single line past the cap stops the run (ADR-028).
+          if (buffer.length > MAX_EVENT_LINE) return stop('OUTPUT_TOO_LARGE');
         });
         processChild.stderr.on('data', (chunk: Buffer) => {
           if (errorOutput.length < 4096) errorOutput += chunk.toString('utf8');
@@ -1111,38 +1220,11 @@ export class ClaudeCli {
             // A changed login mode stops here (another account would fail the same way); a
             // subscription limit is told apart so another account can take the next request; a
             // resumed session without its transcript is reopened by hand-over (SPEC-02.19 5).
-            const failed = MODE_CHANGED.test(failureText)
-              ? 'CLI_MODE_CHANGED'
-              : USAGE_LIMIT.test(failureText)
-                ? 'PROVIDER_LIMIT'
-                : this.session?.resume && SESSION_LOST.test(failureText + ' ' + errorOutput)
-                  ? 'SESSION_LOST'
-                  : 'PROVIDER_FAILED';
-            // The remembered login is asked again on the next run.
-            if (failed === 'CLI_MODE_CHANGED' || failed === 'PROVIDER_LIMIT') this.forgetAuth();
-            return finish(error(failed));
+            return finish(error(this.failureCode(failureText, errorOutput)));
           }
           if (!initialized || final?.subtype !== 'success' || typeof final.result !== 'string')
             return finish(error('INCOMPLETE_RESULT'));
-          finish(null, {
-            text: final.result,
-            revision: selected.packet.revision,
-            manifest: selected.manifest,
-            ...(final.structured_output !== undefined
-              ? { structured: final.structured_output }
-              : {}),
-            usage: {
-              inputTokens: final.usage?.input_tokens ?? null,
-              outputTokens: final.usage?.output_tokens ?? null,
-              cacheReadTokens:
-                final.usage?.cache_read_input_tokens ?? final.usage?.cached_input_tokens ?? null,
-              cacheCreationTokens:
-                final.usage?.cache_creation_input_tokens ??
-                final.usage?.cache_write_input_tokens ??
-                null,
-              subscriptionRemaining: null,
-            },
-          });
+          finish(null, this.resultOf(final as ProviderEvent & { result: string }, selected));
         });
         if (signal?.aborted) abort();
         if (!stopReason) {

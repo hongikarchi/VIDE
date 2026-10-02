@@ -886,3 +886,25 @@ test('쉬는 동안 app-server가 끝나도 다음 턴 전에 새로 띄운다',
   assert.equal(second.text, '둘');
   assert.equal(transport.servers().length, 2);
 });
+
+test('web search (ADR-028): the thread config turns it live only with a connection, and the check expects it', () => {
+  const agent = connection();
+  const live = appServerThreadConfig([], agent, undefined, true);
+  assert.equal(live.web_search, 'live');
+  assert.equal(appServerThreadConfig([], undefined, undefined, true).web_search, 'disabled');
+  assert.equal(appServerThreadConfig([], agent).web_search, 'disabled');
+  const params = (config) => ({
+    cwd: 'x',
+    sandbox: 'read-only',
+    approvalPolicy: 'never',
+    developerInstructions: 'i',
+    config,
+  });
+  const expected = { instructions: 'i', userServers: [], connection: agent };
+  assert.equal(threadParamsIsolated(params(live), { ...expected, web: true }), true);
+  assert.equal(threadParamsIsolated(params(live), expected), false);
+  assert.equal(
+    threadParamsIsolated(params(appServerThreadConfig([], agent)), { ...expected, web: true }),
+    false,
+  );
+});
