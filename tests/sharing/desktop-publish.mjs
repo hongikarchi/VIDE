@@ -189,7 +189,7 @@ export async function verifyDesktopPublish({
     await desktop.getByRole('button', { name: '닫기', exact: true }).click();
     // 외부 의견 sits in the 산출물 screen's head (T-109).
     await desktop.locator('.rail [data-workspace-target="output"]').click();
-    await desktop.getByRole('button', { name: '외부 의견', exact: true }).click();
+    await desktop.getByRole('button', { name: /^외부 의견/ }).click();
     await desktop.getByLabel('외부 의견 파일').setInputFiles(feedback);
     await desktop
       .getByText('의견을 로컬에 보관했습니다. 아직 작업 입력으로 채택하거나 실행하지 않았습니다.', {

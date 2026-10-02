@@ -1421,7 +1421,22 @@ function sidebar() {
         'data-state': request.state,
       });
     open.onclick = () => focusWork(m.id);
+    if (request && !['queued', 'running'].includes(request.state)) {
+      const remove = el('button', '×', row, {
+        class: 'task-remove',
+        type: 'button',
+        title: '목록에서 지우기 (모델과 작업 기록은 보존)',
+        'aria-label': '목록에서 지우기',
+      });
+      remove.onclick = () => {
+        if (confirm('이 작업을 목록에서 지울까요? 모델과 작업 기록은 보존됩니다.'))
+          void hideRequest(m.id).catch((error: unknown) =>
+            message(error instanceof Error ? error.message : '지우지 못했습니다.'),
+          );
+      };
+    }
     // The 검토본 saved from this request (T-109): they are listed in 산출물; the row links them.
+    // Appended after × so the title and × share the first line and the link wraps below.
     const saved = reviewsOf(project?.id, m.id);
     if (saved.length && project) {
       const projectId = project.id;
@@ -1439,20 +1454,6 @@ function sidebar() {
         },
       );
       link.onclick = () => openReview(projectId, saved[0]);
-    }
-    if (request && !['queued', 'running'].includes(request.state)) {
-      const remove = el('button', '×', row, {
-        class: 'task-remove',
-        type: 'button',
-        title: '목록에서 지우기 (모델과 작업 기록은 보존)',
-        'aria-label': '목록에서 지우기',
-      });
-      remove.onclick = () => {
-        if (confirm('이 작업을 목록에서 지울까요? 모델과 작업 기록은 보존됩니다.'))
-          void hideRequest(m.id).catch((error: unknown) =>
-            message(error instanceof Error ? error.message : '지우지 못했습니다.'),
-          );
-      };
     }
   });
 }

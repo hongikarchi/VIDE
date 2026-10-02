@@ -103,7 +103,7 @@ try {
   assert.deepEqual(feedback, []);
   // 외부 의견 sits in the 산출물 screen's head (T-109).
   await page.locator('.rail [data-workspace-target="output"]').click();
-  await page.getByRole('button', { name: '외부 의견', exact: true }).click();
+  await page.getByRole('button', { name: /^외부 의견/ }).click();
   await page.getByLabel('외부 의견 파일').waitFor();
   await page.getByRole('button', { name: '닫기', exact: true }).click();
   if (dwgFixture) {

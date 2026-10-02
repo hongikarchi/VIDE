@@ -585,6 +585,41 @@ try {
   await quantities.getByRole('button', { name: '현재 후보와 비교', exact: true }).click();
   await quantities.locator('.comparison-result').filter({ hasText: '체적 +6 m³' }).waitFor();
   await quantities.getByRole('button', { name: '닫기', exact: true }).click();
+  // T-109: a second 검토본 from the same request: the history row shows the count and opens the
+  // newest; × stays on the row's first line and the link wraps below it.
+  const newer = await page.evaluate(
+    async ({ projectId, requestId, image }) =>
+      await (
+        await fetch(`/api/v1/projects/${projectId}/reviews`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ requestId, title: 'Newer review', image, query: {} }),
+        })
+      ).json(),
+    { projectId: second, requestId: applicable.id, image: snapshot.image },
+  );
+  assert.ok(newer.id);
+  await page.reload();
+  await page.locator('button[data-section="task-list"]').click();
+  const twoMade = page.locator('[data-task-id="application-fixture"] .task-review');
+  await page.waitForFunction(
+    () =>
+      document.querySelector('[data-task-id="application-fixture"] .task-review')?.textContent ===
+      '이 작업으로 만든 검토본 2',
+  );
+  const box = async (selector) =>
+    await page.locator(`[data-task-id="application-fixture"] ${selector}`).boundingBox();
+  const [openBox, removeBox, linkBox] = [
+    await box('.task-open'),
+    await box('.task-remove'),
+    await box('.task-review'),
+  ];
+  assert.ok(removeBox.x > openBox.x + openBox.width - 1, '× at the right of the title');
+  assert.ok(removeBox.y < openBox.y + openBox.height, '× on the first line');
+  assert.ok(linkBox.y > openBox.y + openBox.height / 2, 'the link below the title');
+  await twoMade.click();
+  await savedReview.getByRole('heading', { name: 'Newer review', exact: true }).waitFor();
+  await savedReview.getByRole('button', { name: '닫기', exact: true }).click();
   assert.deepEqual(errors, []);
   console.log(
     JSON.stringify({

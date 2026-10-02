@@ -388,6 +388,61 @@ try {
   await page.waitForFunction(() => document.body.dataset.workspace === 'output');
   assert.equal(await view('렌더링').getAttribute('aria-selected'), 'true');
   assert.ok(await render.isVisible());
+  // [외부 의견 n] (T-109): the badge counts the received 외부 의견, follows an import, and a failed
+  // read hides only the number. The endpoint is stubbed (its server side: shared-feedback.test).
+  const feedbackNote = (n) => ({
+    id: 'feedback-' + n,
+    projectId,
+    requestId: 'request',
+    receivedAt: new Date(0).toISOString(),
+    source: 'file',
+    original: {
+      format: 'vide-feedback-v1',
+      origin: 'https://review.example',
+      projectId: 'remote',
+      publicationId: 'published',
+      exportId: 'export',
+      manifest: { title: 'Model', objectIds: ['object'], assets: [] },
+      comment: {
+        id: 'comment-' + n,
+        authorId: 'person',
+        receivedAt: 1,
+        input: { body: 'note ' + n, objectId: null },
+      },
+    },
+  });
+  const received = [feedbackNote(1)];
+  let feedbackFails = false;
+  await page.route('**/api/v1/projects/*/shared-feedback', (route) => {
+    if (route.request().method() === 'POST') {
+      received.unshift(feedbackNote(received.length + 1));
+      return route.fulfill({ json: received[0] });
+    }
+    if (feedbackFails) return route.fulfill({ status: 500, json: { code: 'TEST' } });
+    return route.fulfill({ json: received });
+  });
+  const feedbackButton = output.locator('.output-feedback');
+  const badge = feedbackButton.locator('.output-badge');
+  await rail('model').click();
+  await rail('output').click();
+  await badge.filter({ hasText: /^1$/ }).waitFor();
+  // The count joins the button's name, so lookups match its start.
+  assert.ok(await output.getByRole('button', { name: /^외부 의견/ }).isVisible());
+  await feedbackButton.click();
+  await page.getByLabel('외부 의견 파일').setInputFiles({
+    name: 'feedback.json',
+    mimeType: 'application/json',
+    buffer: Buffer.from(JSON.stringify(feedbackNote(9).original)),
+  });
+  await badge.filter({ hasText: /^2$/ }).waitFor();
+  await page.getByRole('button', { name: '닫기', exact: true }).click();
+  feedbackFails = true;
+  await rail('model').click();
+  await rail('output').click();
+  await badge.waitFor({ state: 'detached' });
+  assert.ok(await feedbackButton.isVisible());
+  assert.equal((await feedbackButton.textContent()).trim(), '외부 의견');
+  await page.unroute('**/api/v1/projects/*/shared-feedback');
   await rail('model').click();
 
   // Closing every open jig hides the row again; the model screen stays.

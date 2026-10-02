@@ -364,7 +364,7 @@ related: [ADR-026, ADR-022, ADR-021, ADR-020, SPEC-01, SPEC-02, SPEC-07, ARCH-03
 
 **선행·외부 조건:** 없음. 이미지 외 첨부(PDF 등)를 화면에서 열려면 엔진이 그 파일을 내보내야 하므로 SPEC-01.12를 먼저 고친다(이 티켓 밖).
 
-**검증 — 정상:** `browser-react-panels.mjs`(작업 보기의 첨부 링크·이름·크기, 참고 자료 목록 없음, 검토본 저장 뒤 작업 보기·이력 행의 링크로 열기, 산출물 › 검토본의 목록·[검토본 비교]), `browser-workspace-tabs.mjs`(산출물 보기 네 개, 검토본 빈 목록, [외부 의견]), `browser-workspace-controls.mjs`(이력에 검토본·참고 자료 구역 없음, 레일 설명), `browser-report.mjs`. 실호스트 흐름이 필요한 `browser-reviews`·`browser-review-notes`·`browser-review-comparison`과 공유 서버·설치 패키지가 필요한 `tests/sharing/desktop-publish.mjs`·`portable-package.mjs`는 새 위치로 고쳤지만 이번에 돌리지 않았다.
+**검증 — 정상:** `browser-react-panels.mjs`(작업 보기의 첨부 링크·이름·크기, 참고 자료 목록 없음, 검토본 저장 뒤 작업 보기·이력 행의 링크로 열기, 같은 요청의 검토본이 둘이면 행 링크에 개수가 붙고 가장 최근 것을 엶, ×가 행 첫 줄 오른쪽에 남고 링크는 그 아래, 산출물 › 검토본의 목록·[검토본 비교]), `browser-workspace-tabs.mjs`(산출물 보기 네 개, 검토본 빈 목록, [외부 의견]의 건수 배지: 받은 수 표시·파일 가져오기 뒤 갱신·읽기 실패 때 숫자만 숨김, 엔드포인트는 가로챔), `browser-workspace-controls.mjs`(이력에 검토본·참고 자료 구역 없음, 레일 설명), `browser-report.mjs`. 실호스트 흐름이 필요한 `browser-reviews`·`browser-review-notes`·`browser-review-comparison`과 공유 서버·설치 패키지가 필요한 `tests/sharing/desktop-publish.mjs`·`portable-package.mjs`는 새 위치로 고쳤지만 이번에 돌리지 않았다.
 
 **검증 — 실패:** 외부 의견 수를 읽지 못하면 배지만 숨긴다. 검토본 목록을 읽지 못하면 검토본 보기에 이유를 보인다.
 
