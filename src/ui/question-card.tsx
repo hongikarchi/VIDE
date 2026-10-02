@@ -1,6 +1,4 @@
 import { useState } from 'react';
-import { createRoot } from 'react-dom/client';
-import type { Root } from 'react-dom/client';
 import { z } from 'zod';
 import './question-card.css';
 
@@ -12,10 +10,9 @@ import './question-card.css';
 // `POST …/conversations/:cid/answer`, which records them in the ledger and sends them as the next
 // turn of the same conversation.
 //
-// Mount (app.ts `renderQuestionCards`, for the chosen conversation's latest turn):
-//   const cards = mountQuestionCards(element, api, { projectId, conversationId, requestId,
-//     turnOutput: request.result.turnOutput, onAnswered: (next) => select(next.id) });
-//   cards.update({ ...same, turnOutput }) on refresh; cards.unmount() when the work changes.
+// Shown in `#question-cards` (src/ui/shell/right-column.tsx) for the chosen conversation's latest
+// turn (src/ui/app/thread.ts `renderQuestionCards`): `<QuestionCards api options />`, keyed by the
+// request, so another turn's cards start with no choices.
 
 export type ApiCall = (path: string, method?: string, data?: unknown) => Promise<unknown>;
 
@@ -125,7 +122,11 @@ export function Card({
   );
 }
 
-export function QuestionCards({ api, options }: { api: ApiCall; options: QuestionCardsOptions }) {
+export interface QuestionCardsProps {
+  api: ApiCall;
+  options: QuestionCardsOptions;
+}
+export function QuestionCards({ api, options }: QuestionCardsProps) {
   const parsed = turnOutputSchema.safeParse(options.turnOutput);
   const [choices, setChoices] = useState<Record<string, Choice>>({});
   const [busy, setBusy] = useState(false);
@@ -219,26 +220,4 @@ export function QuestionCards({ api, options }: { api: ApiCall; options: Questio
       )}
     </div>
   );
-}
-
-export interface QuestionCardsController {
-  update: (options: QuestionCardsOptions) => void;
-  unmount: () => void;
-}
-export function mountQuestionCards(
-  container: HTMLElement,
-  api: ApiCall,
-  options: QuestionCardsOptions,
-): QuestionCardsController {
-  const root: Root = createRoot(container);
-  const render = (value: QuestionCardsOptions) =>
-    root.render(
-      <QuestionCards
-        key={value.requestId + (value.answerPath ? ':native' : '')}
-        api={api}
-        options={value}
-      />,
-    );
-  render(options);
-  return { update: render, unmount: () => root.unmount() };
 }

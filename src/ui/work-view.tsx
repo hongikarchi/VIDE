@@ -1,14 +1,12 @@
 import { useEffect, useState } from 'react';
-import { createRoot } from 'react-dom/client';
 import { z } from 'zod';
-import type { Root } from 'react-dom/client';
 import { isDwgSdkEditMode } from '../contracts/dwg-edit-mode.ts';
 import { requestMode, storedAttachments } from '../contracts/workspace.ts';
 import { attachmentPreview } from './attachments.ts';
 import { executionLimits } from '../contracts/execution-limits.ts';
 import { undoReason } from '../contracts/direct-refusal.ts';
 import { ActivityLog, activityEntries } from './activity.tsx';
-import { conversationFilter, inConversation, onConversationFilter } from './conversations.tsx';
+import { inConversation } from './conversations.tsx';
 import { api } from './gateway.ts';
 import { executeWaitOf, guardOpen, heldRowLabel, waitingText } from './request-scope.ts';
 import {
@@ -231,7 +229,7 @@ export interface DirectActions {
 export interface ReferenceActions {
   reference?: (file: { id: string; name: string }) => void;
 }
-type ViewActions = Actions & DirectActions & ReferenceActions;
+export type ViewActions = Actions & DirectActions & ReferenceActions;
 const changeCount = (execution: DirectExecution) => ({
   added: execution.changes?.added?.length ?? 0,
   changed: execution.changes?.changed?.length ?? 0,
@@ -1119,9 +1117,6 @@ function Attachments({
   );
 }
 
-const roots = new Map<HTMLElement, Root>();
-type RenderArgs = Parameters<typeof renderWork>;
-const lastArgs = new Map<HTMLElement, RenderArgs>();
 /**
  * The work shown under the chosen conversation (SCR-15, PLAN-24 T-061): the focused request when
  * it belongs to it, else the conversation's latest running (or latest) request, chosen the way
@@ -1141,55 +1136,45 @@ export function workInConversation(
     listed.at(-1)
   );
 }
-export function renderWork(
-  element: HTMLElement,
-  focused: Message | undefined,
-  messages: Message[],
-  models: { id: string; name: string }[],
-  projectId: string | undefined,
-  actions: ViewActions,
-): void {
-  lastArgs.set(element, [element, focused, messages, models, projectId, actions]);
-  let root = roots.get(element);
-  if (!root) {
-    root = createRoot(element);
-    roots.set(element, root);
-  }
-  const filter = conversationFilter();
+export interface WorkThreadProps {
+  focused: Message | undefined;
+  messages: Message[];
+  models: { id: string; name: string }[];
+  projectId: string | undefined;
+  actions: ViewActions;
+  /** The chosen conversation (`undefined` without chips). */
+  filter: string | null | undefined;
+}
+/** The work view's content (`#conversation`, src/ui/shell/right-column.tsx). */
+export function WorkThread({
+  focused,
+  messages,
+  models,
+  projectId,
+  actions,
+  filter,
+}: WorkThreadProps) {
   const shown = workInConversation(focused, messages, filter);
   // Requests of other conversations stay in `related` (base and child lookups) but not in the
   // "진행 중인 다른 작업" line.
   const others =
     filter === undefined ? messages : messages.filter((entry) => inConversation(entry, filter));
-  root.render(
-    shown ? (
-      <WorkView
-        key={shown.id}
-        message={shown}
-        messages={messages}
-        conversation={others}
-        models={models}
-        projectId={projectId ?? ''}
-        actions={actions}
-      />
-    ) : (
-      <div className="chat-empty">
-        {filter === undefined
-          ? '요청을 보내면 진행 단계와 결과가 여기에 표시됩니다.'
-          : '이 대화에는 아직 작업이 없습니다. 요청을 보내면 여기에 표시됩니다.'}
-        <span className="chat-empty-history"> 지난 작업은 왼쪽 작업 이력에서 엽니다.</span>
-      </div>
-    ),
+  return shown ? (
+    <WorkView
+      key={shown.id}
+      message={shown}
+      messages={messages}
+      conversation={others}
+      models={models}
+      projectId={projectId ?? ''}
+      actions={actions}
+    />
+  ) : (
+    <div className="chat-empty">
+      {filter === undefined
+        ? '요청을 보내면 진행 단계와 결과가 여기에 표시됩니다.'
+        : '이 대화에는 아직 작업이 없습니다. 요청을 보내면 여기에 표시됩니다.'}
+      <span className="chat-empty-history"> 지난 작업은 왼쪽 작업 이력에서 엽니다.</span>
+    </div>
   );
 }
-// Choosing another conversation chip re-renders the work view with the same inputs.
-onConversationFilter(() => {
-  for (const args of lastArgs.values()) renderWork(...args);
-});
-window.addEventListener('pagehide', (event) => {
-  if (!event.persisted) {
-    for (const root of roots.values()) root.unmount();
-    roots.clear();
-    lastArgs.clear();
-  }
-});

@@ -1,8 +1,9 @@
 // AI column (PLAN-26 T-113, region C): conversation chips, question cards, the work view and history
-// focus, route cards, the request poll and the AI's screen actions.
-import { renderRequests } from '../requests.tsx';
+// focus, route cards, the request poll and the AI's screen actions. The column's elements are
+// React's (src/ui/shell/right-column.tsx); this module writes the work slice (src/ui/store/work.ts)
+// and raises it, and the column renders from it.
 import { requestData, requestMessage } from '../workspace-data.ts';
-import { element as $, append as el, readableError } from '../elements.ts';
+import { element as $, readableError } from '../elements.ts';
 import { api, requestAction, errors } from '../gateway.ts';
 import {
   models,
@@ -13,7 +14,7 @@ import {
   validate,
 } from '../model.ts';
 import { removeDraft } from '../draft-storage.ts';
-import { renderWork } from '../work-view.tsx';
+import { WorkThread } from '../work-view.tsx';
 import { linkedRequestDraft, interventionTargetDraft } from '../linked-draft.ts';
 import { reviewsOf, openReview } from '../reviews.tsx';
 import { jigRouteText } from '../request-route.ts';
@@ -22,7 +23,15 @@ import { AgendaTurns, AGENDA_CHANGED, type AgendaTurn, agendaNotice } from '../a
 import { setWorkspace } from '../workspaces.ts';
 import { sessionState } from '../store/session.ts';
 import { draftState } from '../store/draft.ts';
-import { workState, type QuestionCardsModule } from '../store/work.ts';
+import {
+  workState,
+  type QuestionCardsModule,
+  type RouteCardContent,
+  type RouteCardState,
+} from '../store/work.ts';
+import type { ConversationsController, ConversationsProps, Options } from '../conversations.tsx';
+import type { ReferenceCardOptions } from '../reference-check.ts';
+import type { ComponentType } from 'react';
 import { linksState } from '../store/links.ts';
 import { selectionState } from '../store/selection.ts';
 import { viewerState } from '../store/viewer.ts';
@@ -76,9 +85,12 @@ export function renderQuestionCards() {
     (last?.request?.state === 'succeeded'
       ? (last.request.result as { turnOutput?: unknown } | null | undefined)?.turnOutput
       : undefined);
-  if (!workState.mountCards || !conversationId || !last || !turnOutput) {
-    workState.questionCards?.unmount();
-    workState.questionCards = undefined;
+  const cardsModule = workState.questionModule;
+  if (!cardsModule || !conversationId || !last || !turnOutput) {
+    if (workState.questionCards) {
+      workState.questionCards = undefined;
+      workState.bump();
+    }
     return;
   }
   const projectId = currentProject().id;
@@ -104,9 +116,16 @@ export function renderQuestionCards() {
         if (!native) void poll(id, projectId);
       }),
   };
-  if (workState.questionCards) workState.questionCards.update(options);
-  else workState.questionCards = workState.mountCards($('question-cards'), api, options);
+  // Another turn (or the native questions of a running one) starts with no choices.
+  workState.questionCards = {
+    View: cardsModule.QuestionCards,
+    props: { api, options },
+    key: `${cardsMount}:${last.id}${native ? ':native' : ''}`,
+  };
+  workState.bump();
 }
+/** Raised when the screens load again (a project opened): the cards start afresh. */
+let cardsMount = 0;
 /** The conversation the next request goes to; undefined = the project's default conversation. */
 export const currentConversation = () => workState.conversationChips?.active() ?? undefined;
 /** The default conversation's row on the server (src/server/conversations.ts). */
@@ -121,31 +140,89 @@ export async function mountConversationScreens() {
   try {
     const chips = await conversationScreens['../conversations.tsx']?.();
     workState.conversationChips?.unmount();
-    workState.conversationChips = chips?.mountConversations($('conversation-chips'), api, {
-      ...conversationOptions(),
-      selected: draftState.draftConversation,
-      onChange: (id) => {
-        switchDraft(id);
-        renderMessages();
-      },
-      onClosed: (id) => {
-        if (sessionState.project) removeDraft(sessionState.project.id, id);
-      },
-      onFixed: followConversationModel,
-      // [+] opens a tab at once (T-097): the next thing is to type.
-      onCreated: () => $('body').focus(),
-    });
+    workState.conversationChips = chips
+      ? conversationChipsOf(chips.Conversations, {
+          ...conversationOptions(),
+          selected: draftState.draftConversation,
+          onChange: (id) => {
+            switchDraft(id);
+            renderMessages();
+          },
+          onClosed: (id) => {
+            if (sessionState.project) removeDraft(sessionState.project.id, id);
+          },
+          onFixed: followConversationModel,
+          // [+] opens a tab at once (T-097): the next thing is to type.
+          onCreated: () => $('body').focus(),
+        })
+      : undefined;
   } catch {
     workState.conversationChips = undefined;
   }
   try {
-    workState.mountCards = (await questionScreens['../question-card.tsx']?.())?.mountQuestionCards;
+    workState.questionModule = await questionScreens['../question-card.tsx']?.();
   } catch {
-    workState.mountCards = undefined;
+    workState.questionModule = undefined;
   }
-  workState.questionCards?.unmount();
+  cardsMount++;
   workState.questionCards = undefined;
+  workState.bump();
   renderQuestionCards();
+}
+let chipsMount = 0;
+/**
+ * The chips in `#conversation-chips` (a new mount each time the screens load): the options, the
+ * chosen conversation and the reload counter live here and in the work slice; the chosen one is
+ * the work view's filter (`workState.filter`) and goes to `onChange` for the composer.
+ */
+function conversationChipsOf(
+  View: ComponentType<ConversationsProps>,
+  initial: Options,
+): ConversationsController {
+  const key = ++chipsMount;
+  let options: Options = { ...initial };
+  let selected: string | null = initial.selected ?? null;
+  let version = 0;
+  let mounted = true;
+  const paint = () => {
+    if (!mounted) return;
+    workState.chips = { View, key, props: { api, options, version, selected, select } };
+    workState.bump();
+  };
+  function select(id: string | null) {
+    if (id === selected && workState.filter !== undefined) return;
+    selected = id;
+    workState.filter = id;
+    options.onChange?.(id);
+    paint();
+  }
+  workState.filter = selected;
+  paint();
+  return {
+    update(patch) {
+      if (patch.projectId !== undefined && patch.projectId !== options.projectId) {
+        options = { ...options, ...patch };
+        version++;
+        select(null);
+        paint();
+        return;
+      }
+      options = { ...options, ...patch };
+      paint();
+    },
+    async refresh() {
+      version++;
+      paint();
+    },
+    active: () => selected,
+    select,
+    unmount() {
+      mounted = false;
+      workState.chips = undefined;
+      workState.filter = undefined;
+      workState.bump();
+    },
+  };
 }
 /** The work shown on the right: the one chosen in the work history, else the newest running. */
 export function focusedMessage() {
@@ -162,81 +239,86 @@ export function focusWork(id: string) {
   mobileView('input');
   sidebar();
   renderConversation();
-  $('thread').scrollTop = 0;
+  // The work view goes back to its top (src/ui/shell/right-column.tsx `Thread`).
+  workState.focusToken++;
+  workState.bump();
 }
 export function renderConversation() {
-  renderWork(
-    $('conversation'),
-    focusedMessage(),
-    draftState.state.messages,
-    models,
-    sessionState.project?.id,
-    {
-      // A sent image attachment reopens its reference-image tab (SPEC-09.2 2); not in host panels.
-      ...(panelMode ? {} : { reference: openReferenceTab }),
-      restore: (request) => {
-        if (sessionState.busy) throw Error('현재 전송이 끝난 뒤 복원하세요.');
-        const draft = request.input.linkedTargets
-          ? linkedRequestDraft(draftState.state, request)
-          : request.result?.recovered
-            ? recoveredRequestDraft(draftState.state, request)
-            : failedRequestDraft(draftState.state, request);
-        if (
-          (draftState.state.linkedTargets?.length ||
-            draftState.state.body.trim() ||
-            (draftState.state.instructions || []).length ||
-            draftState.state.pins.length ||
-            draftState.state.sketches.length ||
-            draftState.state.files.length ||
-            pendingSketch()) &&
-          !confirm('현재 작성 중인 초안을 저장된 요청 입력으로 바꿀까요?')
-        )
-          return;
-        Object.assign(draftState.state, draft);
-        selectionState.selectedResult = draft.baseRequestId ?? null;
-        selectionState.appliedSelection = undefined;
-        selectionState.displayedResult = undefined;
-        linksState.shownSignature = '';
-        objects.splice(0, objects.length);
-        viewerState.viewport?.replace([]);
-        sketchState.strokes = [];
-        setBody(draftState.state.body);
-        render();
-        renderMessages();
-        revealPanel('right');
-        mobileView('input');
-        message('원 입력과 기준을 복원했습니다. 설정을 확인한 뒤 보내세요.');
+  workState.thread = {
+    View: WorkThread,
+    props: {
+      focused: focusedMessage(),
+      messages: draftState.state.messages,
+      models,
+      projectId: sessionState.project?.id,
+      actions: {
+        // A sent image attachment reopens its reference-image tab (SPEC-09.2 2); not in host panels.
+        ...(panelMode ? {} : { reference: openReferenceTab }),
+        restore: (request) => {
+          if (sessionState.busy) throw Error('현재 전송이 끝난 뒤 복원하세요.');
+          const draft = request.input.linkedTargets
+            ? linkedRequestDraft(draftState.state, request)
+            : request.result?.recovered
+              ? recoveredRequestDraft(draftState.state, request)
+              : failedRequestDraft(draftState.state, request);
+          if (
+            (draftState.state.linkedTargets?.length ||
+              draftState.state.body.trim() ||
+              (draftState.state.instructions || []).length ||
+              draftState.state.pins.length ||
+              draftState.state.sketches.length ||
+              draftState.state.files.length ||
+              pendingSketch()) &&
+            !confirm('현재 작성 중인 초안을 저장된 요청 입력으로 바꿀까요?')
+          )
+            return;
+          Object.assign(draftState.state, draft);
+          selectionState.selectedResult = draft.baseRequestId ?? null;
+          selectionState.appliedSelection = undefined;
+          selectionState.displayedResult = undefined;
+          linksState.shownSignature = '';
+          objects.splice(0, objects.length);
+          viewerState.viewport?.replace([]);
+          sketchState.strokes = [];
+          setBody(draftState.state.body);
+          render();
+          renderMessages();
+          revealPanel('right');
+          mobileView('input');
+          message('원 입력과 기준을 복원했습니다. 설정을 확인한 뒤 보내세요.');
+        },
+        candidate: (id) => {
+          selectionState.selectedResult = id;
+          selectionState.appliedSelection = undefined;
+          renderMessages();
+          showModelView();
+        },
+        selection: (requestId, id) => {
+          selectInResult(requestId, id);
+          showModelView();
+        },
+        report: downloadReport,
+        saveReview: async (id) => {
+          selectionState.selectedResult = id;
+          renderMessages();
+          await reviews.create(id, captureViewport());
+        },
+        reviewsOf: (id) => reviewsOf(sessionState.project?.id, id),
+        openReview: (row) => {
+          if (sessionState.project) openReview(sessionState.project.id, row);
+        },
+        changed: renderMessages,
+        error: message,
+        focus: focusWork,
+        intervene: (id) => {
+          void submitRequest(id);
+        },
+        interventionReason: (id) => interventionReason(id),
+        direct: directAction,
       },
-      candidate: (id) => {
-        selectionState.selectedResult = id;
-        selectionState.appliedSelection = undefined;
-        renderMessages();
-        showModelView();
-      },
-      selection: (requestId, id) => {
-        selectInResult(requestId, id);
-        showModelView();
-      },
-      report: downloadReport,
-      saveReview: async (id) => {
-        selectionState.selectedResult = id;
-        renderMessages();
-        await reviews.create(id, captureViewport());
-      },
-      reviewsOf: (id) => reviewsOf(sessionState.project?.id, id),
-      openReview: (row) => {
-        if (sessionState.project) openReview(sessionState.project.id, row);
-      },
-      changed: renderMessages,
-      error: message,
-      focus: focusWork,
-      intervene: (id) => {
-        void submitRequest(id);
-      },
-      interventionReason: (id) => interventionReason(id),
-      direct: directAction,
     },
-  );
+  };
+  workState.bump();
 }
 /**
  * Direct-mode actions of the work view: [되돌리기] (…/undo {executionId}), the guard card's
@@ -313,22 +395,27 @@ export function interventionReason(id: string): string | undefined {
   )
     return '이미 추가 지시가 대기 중입니다.';
 }
+function setRouteCard(patch: Partial<RouteCardState>) {
+  workState.routeCard = { ...workState.routeCard, ...patch };
+  workState.bump();
+}
+function showCard(content: RouteCardContent) {
+  setRouteCard({ content, hidden: false });
+}
 /** '계획부터 할까요?' over the composer: plan once (the toggle stays), or run in 자동 now. */
 export function showPlanFirstCard() {
-  const card = $('route-card');
-  card.replaceChildren();
-  el('p', 'Jev · 여러 단계나 여러 파일이 걸린 요청입니다. 계획부터 할까요?', card);
-  const row = el('div', '', card, { class: 'route-card-actions' });
-  el('button', '계획부터', row, { type: 'button', class: 'primary-button' }).onclick = () => {
-    hideRouteCard();
-    void submitRequest(undefined, 'plan');
-  };
-  el('button', '바로 진행', row, { type: 'button' }).onclick = () => {
-    hideRouteCard();
-    void submitRequest(undefined, 'auto');
-  };
-  el('button', '닫기', row, { type: 'button' }).onclick = hideRouteCard;
-  card.hidden = false;
+  showCard({
+    kind: 'plan-first',
+    plan: () => {
+      hideRouteCard();
+      void submitRequest(undefined, 'plan');
+    },
+    auto: () => {
+      hideRouteCard();
+      void submitRequest(undefined, 'auto');
+    },
+    close: () => hideRouteCard(),
+  });
 }
 /** A proposal card over the composer (jig to open, T2 app action): one button carries it out. */
 export function showRouteCard(
@@ -336,23 +423,34 @@ export function showRouteCard(
   run: { label: string; action: () => void } | undefined,
   toAi: () => void,
 ) {
-  const card = $('route-card');
-  card.replaceChildren();
-  el('p', text, card);
-  const row = el('div', '', card, { class: 'route-card-actions' });
-  if (run)
-    el('button', run.label, row, { type: 'button', class: 'primary-button' }).onclick = () => {
-      hideRouteCard();
-      run.action();
-    };
-  el('button', 'AI 작업으로 보내기', row, { type: 'button' }).onclick = toAi;
-  el('button', '닫기', row, { type: 'button' }).onclick = hideRouteCard;
-  card.hidden = false;
+  showCard({
+    kind: 'proposal',
+    text,
+    run: run && {
+      label: run.label,
+      action: () => {
+        hideRouteCard();
+        run.action();
+      },
+    },
+    toAi: () => toAi(),
+    close: () => hideRouteCard(),
+  });
+}
+/**
+ * The check before sending (SPEC-09.11, Design SCR-15): '참고 이미지로 먼저 확인할까요?' with the
+ * images a path in the words names, [영역 표시], [그냥 보내기] and [닫기].
+ */
+export function showReferenceCard(options: ReferenceCardOptions) {
+  setRouteCard({
+    content: { kind: 'reference', options },
+    hidden: false,
+    referenceCheck: true,
+    routeRow: false,
+  });
 }
 export function hideRouteCard() {
-  $('route-card').classList.remove('route-row', 'reference-check');
-  $('route-card').hidden = true;
-  $('route-card').replaceChildren();
+  setRouteCard({ content: null, hidden: true, routeRow: false, referenceCheck: false });
 }
 /**
  * The route row of a jig start (SPEC-07.18 3·7, RESEARCH-12 §6.2 M5): what opened, the checklist,
@@ -360,50 +458,43 @@ export function hideRouteCard() {
  */
 export function renderSkillRow(options: { status?: string; progress?: () => void } = {}) {
   const shown = workState.shownSkill;
-  const card = $('route-card');
-  card.replaceChildren();
   if (!shown) {
-    card.hidden = true;
+    setRouteCard({ content: null, hidden: true });
     return;
   }
-  card.classList.add('route-row');
   const start = shown.start;
-  el(
-    'p',
-    `${shown.route.by === 'jev' ? 'Jev · ' : ''}jig · ${jigRouteText(
-      start?.name ?? shown.route.jig?.name ?? '',
-    )}${options.status ? ' · ' + options.status : ''}`,
-    card,
-    { class: 'route-row-head' },
-  );
+  const head = `${shown.route.by === 'jev' ? 'Jev · ' : ''}jig · ${jigRouteText(
+    start?.name ?? shown.route.jig?.name ?? '',
+  )}${options.status ? ' · ' + options.status : ''}`;
+  let steps: { text: string; done: boolean }[] | undefined;
+  let note: string | undefined;
   if (start && !start.legacy) {
-    const list = el('ul', '', card, { class: 'route-row-steps' });
-    for (const item of skillChecklist(start))
-      el('li', `${item.done ? '✓' : '□'} ${item.text}`, list, { 'data-done': String(item.done) });
+    steps = skillChecklist(start).map((item) => ({ text: item.text, done: item.done }));
     const summary = start.summary;
     if (summary && (summary.waiting.length || summary.failed.length))
-      el(
-        'p',
-        [
-          summary.waiting.length ? `사람 확인 대기: ${summary.waiting.join(', ')}` : '',
-          summary.failed.length ? `멈춘 단계: ${summary.failed.join(', ')}` : '',
-        ]
-          .filter(Boolean)
-          .join(' · '),
-        card,
-        { class: 'route-row-note' },
-      );
+      note = [
+        summary.waiting.length ? `사람 확인 대기: ${summary.waiting.join(', ')}` : '',
+        summary.failed.length ? `멈춘 단계: ${summary.failed.join(', ')}` : '',
+      ]
+        .filter(Boolean)
+        .join(' · ');
   }
-  const row = el('div', '', card, { class: 'route-card-actions' });
-  if (options.progress)
-    el('button', '진행', row, { type: 'button', class: 'primary-button' }).onclick =
-      options.progress;
-  el('button', '일반 대화로', row, { type: 'button' }).onclick = () => void skillToChat();
-  card.hidden = false;
+  const progress = options.progress;
+  setRouteCard({
+    content: {
+      kind: 'skill',
+      head,
+      steps,
+      note,
+      progress: progress && (() => progress()),
+      toChat: () => void skillToChat(),
+    },
+    hidden: false,
+    routeRow: true,
+  });
 }
 export function hideSkillRow() {
   workState.shownSkill = undefined;
-  $('route-card').classList.remove('route-row');
   hideRouteCard();
 }
 /**
@@ -580,15 +671,12 @@ export async function downloadReport(id: string) {
   }
 }
 
-export function initThread1() {
-  $('toggle-recent').onclick = () => {
-    const open = $('recent-section').dataset.open !== 'true';
-    $('recent-section').dataset.open = String(open);
-    $('toggle-recent').setAttribute('aria-expanded', String(open));
-  };
-}
+/** The AI column's start: its elements and handlers are React's now (right-column.tsx). */
+export function initThread1() {}
 
 /** render(): the request queue under the work view (rebuilt unless only a draft field changed). */
 export function paintRequestQueue(rebuildRequests: boolean) {
-  if (rebuildRequests) renderRequests(draftState.state, render);
+  if (!rebuildRequests) return;
+  workState.queue = { state: draftState.state, onChange: render };
+  workState.bump();
 }
