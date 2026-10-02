@@ -398,7 +398,7 @@ test('a closed duplicate of an open window merges into it; an empty closed row i
 
 test('a merge between UUID rows shows the moved Syncs on the target at once', async (t) => {
   const windows = [{ instance: W1, name: 'plan.dwg', path: 'D:\\w\\plan.dwg' }];
-  const { api, insert, sync, base } = await zwcadEngine(t, windows);
+  const { app, project, api, insert, sync, base } = await zwcadEngine(t, windows);
   // Same-length ids: the moved request's stored input keeps its size, so the list's decoded
   // copies must be dropped by the merge itself.
   const target = randomUUID();
@@ -406,6 +406,17 @@ test('a merge between UUID rows shows the moved Syncs on the target at once', as
   insert(target, 'plan.dwg', 'D:\\w\\plan.dwg', W1);
   insert(source, 'plan-old.dwg', 'D:\\w\\plan-old.dwg', W1, 7200);
   sync('s-source', source);
+  // Conversations that name the source as a target file name the target instead (review
+  // finding, 2026-10-02), once even when they already named both.
+  const conversation = (id, targets) =>
+    app.store.db
+      .prepare(
+        "INSERT INTO conversations(id,projectId,kind,title,provider,targets,state,createdAt,updatedAt) VALUES(?,?,'chat','t','claude',?,'open','2026-10-02T00:00:00.000Z','2026-10-02T00:00:00.000Z')",
+      )
+      .run(id, project.id, JSON.stringify(targets));
+  conversation('c-source', [source]);
+  conversation('c-both', [source, target]);
+  conversation('c-other', ['elsewhere']);
   let list = await api(base);
   const byId = (id) => list.find((row) => row.id === id);
   assert.equal(byId(target).lastSync, null);
@@ -419,6 +430,13 @@ test('a merge between UUID rows shows the moved Syncs on the target at once', as
     [target],
   );
   assert.equal(byId(target).lastSync?.requestId, 's-source');
+  const targetsOf = (id) =>
+    JSON.parse(
+      app.store.db.prepare('SELECT targets FROM conversations WHERE id=?').get(id).targets,
+    );
+  assert.deepEqual(targetsOf('c-source'), [target]);
+  assert.deepEqual(targetsOf('c-both'), [target]);
+  assert.deepEqual(targetsOf('c-other'), ['elsewhere']);
 });
 
 test('matcher: session, then the stored id, then path; one row per open document', () => {

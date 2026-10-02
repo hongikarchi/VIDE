@@ -485,6 +485,20 @@ export class DocumentLinks {
         .run(into, projectId, from).changes;
       for (const table of ['jig_reads', 'jig_bakes'])
         this.db.prepare(`UPDATE ${table} SET linkId=? WHERE linkId=?`).run(into, from);
+      // A conversation that names `from` as a target file names `into` instead (once).
+      const named = this.db
+        .prepare(
+          'SELECT id, targets FROM conversations WHERE projectId=? AND targets IS NOT NULL AND EXISTS (SELECT 1 FROM json_each(conversations.targets) WHERE value=?)',
+        )
+        .all(projectId, from) as { id: string; targets: string }[];
+      for (const row of named) {
+        const targets = [
+          ...new Set((JSON.parse(row.targets) as string[]).map((t) => (t === from ? into : t))),
+        ];
+        this.db
+          .prepare('UPDATE conversations SET targets=? WHERE id=?')
+          .run(JSON.stringify(targets), row.id);
+      }
       this.db.prepare('DELETE FROM document_links WHERE projectId=? AND id=?').run(projectId, from);
       forget?.(movedIds);
       this.db.exec('COMMIT');
