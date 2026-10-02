@@ -395,3 +395,5 @@ related: [ADR-026, ADR-016, ADR-022, ADR-021, ADR-020, SPEC-01, SPEC-02, SPEC-07
 **검증 — 실패:** 연결 끊김 배너·재연결, 프로젝트 없는 첫 렌더, 초안 복원 실패, 토스트 액션이 기준선과 같게 동작한다(기존 브라우저 시험).
 
 **완료:** F는 위 검사가 기준선과 같고 DOM 비교 차이가 의도한 감싸개뿐일 때. 전체는 `index.html`이 루트 하나, 셸 요소를 React가 그리고 남은 명령형 영역이 `#canvas`·`#objects` 어댑터·`#display-popover`·외부 직계 자식 컨테이너뿐, 셸 컨테이너 안 외부 삽입 0, 위 검증 통과, 결과는 VERIFY 기록. 설치본 릴리스는 통합 뒤 한 번.
+
+**결과 · D 작성기(2026-10-02, 브랜치 `t113-d`):** `shell/composer.tsx`가 문맥 칩·모드 전환·모델 메뉴·effort·첨부/대기/보내기 단추·`#saved`·높이 손잡이(`composer-height.ts`의 `useComposerHeight`)를 `draftState.view`에서 그린다. `app/composer.ts`의 그리기 함수는 화면 값만 계산해 조각에 넣고 `paintComposer()`(마이크로태스크 한 번의 `bump`)를 부른다. `#body`는 비제어 textarea로 네이티브 `input`·`keydown`·`paste` 리스너를 유지하고, `.body-field`는 JSX가 그리며 `pin-tokens.ts`는 감싸지 않고 붙는다. `#model`은 네이티브 `change` 리스너를 유지한다. 기준선 빌드와 작성기 DOM을 7개 상태에서 비교해 차이 0. 브라우저 사슬 38개 중 36개 통과, `s06-jig`·`structure-jig`는 기준선 `003a896`에서도 같은 곳에서 실패(`npm test`의 s06 실패 12건과 같은 원인으로 보임).

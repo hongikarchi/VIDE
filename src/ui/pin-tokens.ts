@@ -41,19 +41,14 @@ interface Options {
   focusToken: (label: string) => void;
 }
 
+/**
+ * Attaches to the composer's `.body-field` (drawn by shell/composer.tsx: `.body-backdrop`, the
+ * textarea, `.pin-ghost`); it does not wrap or move the textarea (PLAN-26 T-113).
+ */
 export function attachPinTokens(textarea: HTMLTextAreaElement, options: Options) {
-  const field = document.createElement('div');
-  field.className = 'body-field';
-  textarea.replaceWith(field);
-  const backdrop = document.createElement('div');
-  backdrop.className = 'body-backdrop';
-  backdrop.setAttribute('aria-hidden', 'true');
-  const ghost = document.createElement('button');
-  ghost.type = 'button';
-  ghost.className = 'pin-ghost';
-  ghost.hidden = true;
-  ghost.title = '선택한 객체를 이 위치에 고정합니다';
-  field.append(backdrop, textarea, ghost);
+  const field = textarea.parentElement!;
+  const backdrop = field.querySelector<HTMLElement>(':scope > .body-backdrop')!;
+  const ghost = field.querySelector<HTMLButtonElement>(':scope > .pin-ghost')!;
   let caret = textarea.value.length;
 
   // Same box and text metrics as the textarea, so painted glyphs sit exactly under its caret.
