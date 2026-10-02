@@ -287,8 +287,11 @@ try {
     });
   });
   const linkOf = (route) => new URL(route.request().url()).pathname.split('/').at(-2);
+  let releaseSplit;
+  const splitHeld = new Promise((resolve) => (releaseSplit = resolve));
   await page.route('**/api/v1/projects/*/links/*/split', async (route) => {
     actions.push(['split', linkOf(route)]);
+    await splitHeld;
     followed = false;
     await route.fulfill({ status: 201, json: { ...newLink, id: 'link-split', stored: true } });
   });
@@ -301,8 +304,10 @@ try {
   await note.waitFor();
   assert.match(await note.textContent(), /'old\.3dm' → 'new\.3dm'로 따라감/);
   await note.getByRole('button', { name: '새 항목으로 분리' }).click();
+  // The note leaves while the split is still running, so a second click cannot split again.
   await note.waitFor({ state: 'detached' });
   assert.deepEqual(actions, [['split', 'link-new']]);
+  releaseSplit();
   const duplicate = page.locator('.link-row[data-link-id="link-plan-1"] .link-note');
   assert.match(await duplicate.textContent(), /같은 창의 중복 항목/);
   await duplicate.getByRole('button', { name: '합치기' }).click();

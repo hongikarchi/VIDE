@@ -321,8 +321,11 @@ test('a Save As shows "따라감" once; [새 항목으로 분리] gives the wind
     list.every((row) => !row.notice && !row.cleanup?.kind?.startsWith('merge')),
     true,
   );
-  // The notice is gone: splitting again is refused.
-  assert.equal((await api(`${base}/${linked.id}/split`, 'POST', {})).status, 409);
+  // The notice is gone: splitting again is refused with its own code (the screen says so and
+  // re-reads the list instead of an unrelated 'stale reference' message).
+  const again = await api(`${base}/${linked.id}/split`, 'POST', {});
+  assert.equal(again.status, 409);
+  assert.equal(again.code, 'LINK_NOTICE_GONE');
 });
 
 test('a row reconnected by path to a reopened window says so once', async (t) => {
@@ -531,7 +534,7 @@ test('DocumentLinks: replace with an unknown row is NOT_FOUND; split needs a fol
     /NOT_FOUND/,
   );
   const row = links.link(p, { host: 'rhino', name: 'a.3dm', instance: 'i', documentId: 1 });
-  assert.throws(() => links.split(p, row.id), /STALE_REFERENCE/);
+  assert.throws(() => links.split(p, row.id), /LINK_NOTICE_GONE/);
   // A first save (no earlier path) is no "따라감" notice.
   links.follow(p, row.id, {
     host: 'rhino',

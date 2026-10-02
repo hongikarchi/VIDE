@@ -422,7 +422,7 @@ export class DocumentLinks {
   split(projectId: string, id: string) {
     const link = this.get(projectId, id);
     const notice = this.notices.get(id);
-    if (isFileLink(link) || notice?.kind !== 'followed') throw new DomainError('STALE_REFERENCE');
+    if (isFileLink(link) || notice?.kind !== 'followed') throw new DomainError('LINK_NOTICE_GONE');
     const { previous } = notice;
     const now = new Date().toISOString();
     const created = randomUUID();

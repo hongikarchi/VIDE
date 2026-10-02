@@ -115,6 +115,7 @@ Object.assign(errors, {
   WORKSPACE_CAPACITY:
     '프로젝트의 AI 작업 상한(기본 3개)에 도달했습니다. 요청은 대기열에 서서 앞 작업이 끝나면 시작합니다.',
   STALE_REFERENCE: '첨부한 객체가 이전 후보 기준입니다. 현재 모델에서 다시 첨부해 주세요.',
+  LINK_NOTICE_GONE: '이미 나눴거나 따라감 알림이 사라졌습니다. 연결 파일 목록을 새로 고칩니다.',
   HOST_RESULT_UNKNOWN: '호스트 응답을 확인하지 못했습니다. 자동 재실행하지 않았습니다.',
 });
 

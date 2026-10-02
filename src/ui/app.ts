@@ -923,7 +923,11 @@ function renderLinkPanel() {
         })
         .catch((error: unknown) => message(readableError(error).message));
     },
-    onSplit: (link) =>
+    onSplit: (link) => {
+      // The note (and its buttons) leaves at once, so a second click cannot split again.
+      const notice = link.notice;
+      link.notice = undefined;
+      renderLinkPanel();
       void api(`/projects/${currentProject().id}/links/${link.id}/split`, 'POST', {})
         .then((reply) => {
           if (!z.object({ stored: z.boolean() }).parse(reply).stored)
@@ -932,7 +936,15 @@ function renderLinkPanel() {
             );
           return pollLinks();
         })
-        .catch((error: unknown) => message(readableError(error).message)),
+        .catch((error: unknown) => {
+          const failure = readableError(error);
+          message(failure.message);
+          // Already split, or the notice is gone (an engine restart): the list tells which.
+          if (failure.code === 'LINK_NOTICE_GONE') return pollLinks();
+          link.notice = notice;
+          renderLinkPanel();
+        });
+    },
     onDismiss: (link) => {
       link.notice = undefined;
       renderLinkPanel();
