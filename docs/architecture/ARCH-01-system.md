@@ -2,7 +2,7 @@
 id: ARCH-01
 title: VIDE 기술 구조와 구현 계약
 status: review
-version: 0.71
+version: 0.72
 updated: 2026-10-02
 owner: agent:codex
 related: [SPEC-00, SPEC-02, SPEC-03, SPEC-04, SPEC-09, PLAN, PLAN-20, PLAN-24, ADR-014, ADR-015, ADR-016, ADR-017, ADR-021, ADR-022, ADR-025, ADR-027, ADR-028, ADR-029, ADR-030, PLAN-25, ARCH-03]

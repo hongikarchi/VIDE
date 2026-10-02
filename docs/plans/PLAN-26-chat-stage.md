@@ -2,7 +2,7 @@
 id: PLAN-26
 title: 대화가 화면과 작업을 이끄는 구조 — skill 시작, 토큰 정리, 셸 정리, 산출물 탭
 status: review
-version: 0.10
+version: 0.11
 updated: 2026-10-02
 owner: agent:claude
 related: [ADR-026, ADR-022, ADR-021, ADR-020, SPEC-01, SPEC-02, SPEC-07, ARCH-03, ARCH-01, DESIGN, RESEARCH-12, PLAN-22, PLAN-24, FR-18, FR-24, FR-25, AC-48]

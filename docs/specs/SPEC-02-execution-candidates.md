@@ -2,10 +2,10 @@
 id: SPEC-02
 title: 실행·개입·바로 적용·되돌리기
 status: review
-version: 0.50
+version: 0.51
 updated: 2026-10-02
 owner: agent:codex
-related: [FR-04, FR-08, FR-10, FR-11, FR-12, FR-15, FR-16, FR-18, FR-24, FR-25, AC-17, AC-24, AC-32, AC-33, AC-38, AC-46, AC-47, AC-48, ADR-021, ADR-022, ADR-025, ADR-026, ADR-027, ADR-029, ADR-028, PLAN-25]
+related: [FR-04, FR-08, FR-10, FR-11, FR-12, FR-15, FR-16, FR-18, FR-24, FR-25, AC-17, AC-24, AC-32, AC-33, AC-38, AC-46, AC-47, AC-48, ADR-021, ADR-022, ADR-025, ADR-026, ADR-027, ADR-028, ADR-029, PLAN-25]
 ---
 
 # 실행·개입·바로 적용·되돌리기

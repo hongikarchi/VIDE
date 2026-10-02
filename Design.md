@@ -2,7 +2,7 @@
 id: DESIGN
 title: VIDE 시각·상호작용 기준
 status: review
-version: 0.86
+version: 0.87
 updated: 2026-10-02
 owner: user
 related: [FR-02, FR-03, FR-13, FR-16, FR-19, FR-22, FR-23, FR-24, FR-25, AC-19, AC-22, AC-25, AC-33, AC-34, AC-35, AC-38, AC-39, AC-40, AC-41, AC-42, AC-43, AC-44, AC-45, AC-46, AC-47, AC-48, OQ-04, ADR-003, ADR-004, ADR-009, ADR-010, ADR-019, ADR-020, ADR-021, ADR-022, ADR-025, ADR-026, ADR-027, ADR-030]

@@ -2,7 +2,7 @@
 id: PLAN
 title: VIDE 실행 로드맵
 status: review
-version: 0.238
+version: 0.239
 updated: 2026-10-02
 owner: agent:codex
 related: [ARCH-01, PLAN-02, PLAN-03, PLAN-22, PLAN-23, PLAN-24, PLAN-25, PLAN-26, PLAN-27, ADR-022, ADR-025, ADR-026, ADR-027, ADR-030, SPEC-00, SPEC-01, SPEC-02, SPEC-03, SPEC-04, SPEC-05, SPEC-06, SPEC-07]
