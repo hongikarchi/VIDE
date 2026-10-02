@@ -416,3 +416,61 @@ test('a turn has no total output cap; one line past 16 MB stops it', async () =>
     code: 'OUTPUT_TOO_LARGE',
   });
 });
+
+test('a subagent that reported before the result: the turn waits for the CLI turn that reads the report', async () => {
+  let turns = 0;
+  const fake = fakeCli((message, child) => {
+    if (message.type !== 'user') return;
+    turns++;
+    if (turns === 1) {
+      child.send(init());
+      child.send({ type: 'system', subtype: 'task_started', task_id: 't1' });
+      child.send({ type: 'system', subtype: 'task_notification', task_id: 't1' });
+      child.send(result('중간 답'));
+      setTimeout(() => {
+        child.send(init());
+        child.send(result('보고를 읽은 답'));
+      }, 40);
+      return;
+    }
+    setTimeout(() => {
+      child.send(init());
+      child.send(result('둘째 턴의 답'));
+    }, 30);
+  });
+  const first = await provider(fake, { settleMs: 150 }).run(context());
+  assert.equal(first.text, '보고를 읽은 답');
+  const second = await provider(fake, { session: { id: SESSION, resume: true } }).run(context());
+  assert.equal(second.text, '둘째 턴의 답');
+  assert.equal(fake.runs.length, 1);
+});
+
+test('output while no turn listens ends the kept process; the next turn resumes in a new one', async () => {
+  let turns = 0;
+  const fake = fakeCli((message, child) => {
+    if (message.type !== 'user') return;
+    turns++;
+    child.send(init());
+    if (turns === 1) {
+      child.send({ type: 'system', subtype: 'task_started', task_id: 't1' });
+      child.send({ type: 'system', subtype: 'task_notification', task_id: 't1' });
+      child.send(result('먼저 낸 답'));
+      // The CLI's own turn starts after VIDE stopped waiting (settle 30 ms).
+      setTimeout(() => {
+        child.send(init());
+        child.send(result('늦은 답'));
+      }, 80);
+      return;
+    }
+    child.send(result('둘째 턴의 답'));
+  });
+  const first = await provider(fake).run(context());
+  assert.equal(first.text, '먼저 낸 답');
+  assert.deepEqual(liveClaudeSessions(), [SESSION]);
+  await new Promise((resolve) => setTimeout(resolve, 150));
+  assert.deepEqual(liveClaudeSessions(), [], 'the process that spoke between turns is ended');
+  const second = await provider(fake, { session: { id: SESSION, resume: true } }).run(context());
+  assert.equal(second.text, '둘째 턴의 답');
+  assert.equal(fake.runs.length, 2);
+  assert.ok(fake.runs[1].args.includes('--resume'));
+});

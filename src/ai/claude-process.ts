@@ -118,7 +118,10 @@ class Kept {
         if (!line.trim()) continue;
         const event = parseProviderEvent(line);
         if (!event) return this.fail('INVALID_PROVIDER_OUTPUT');
-        this.listener?.({ event });
+        // Output while no turn listens (a turn the CLI opened itself after VIDE ended the last
+        // one): its events would be read as the next turn's answer. The process is not used again.
+        if (!this.listener) return this.stale();
+        this.listener({ event });
       }
       if (buffer.length > MAX_EVENT_LINE) this.fail('OUTPUT_TOO_LARGE');
     });
@@ -144,6 +147,12 @@ class Kept {
     this.broken = true;
     if (this.listener) this.listener({ failed: code });
     else void this.kill(this.child);
+  }
+  /** Output no turn reads: the process is ended (now if idle, else when its turn releases it). */
+  stale() {
+    if (this.closed) return;
+    this.broken = true;
+    if (!this.busy) void dispose(this);
   }
   listen(listener?: (signal: Signal) => void) {
     this.listener = listener;
@@ -351,6 +360,14 @@ export class KeptClaudeCli extends ClaudeCli {
         grace: ReturnType<typeof setTimeout> | undefined;
       // Subagents the turn started in the background (task ids), until each reports.
       const pending = new Set<string>();
+      // A subagent reported since the last init: the CLI may open a turn of its own to read the
+      // report (SPIKE-2026-10-02 ②), even when the report came before the result.
+      let reported = false;
+      const waitOrComplete = () => {
+        clearTimeout(settle);
+        if (reported && !final?.is_error) settle = setTimeout(complete, this.settleMs);
+        else complete();
+      };
       const asking = new AbortController();
       const finish = (err: Error | null, value?: ProviderResult) => {
         if (settled) return;
@@ -476,6 +493,7 @@ export class KeptClaudeCli extends ClaudeCli {
         if (event.type === 'system') {
           if (event.subtype === 'init') {
             clearTimeout(settle);
+            reported = false;
             if (
               (typeof event.session_id === 'string' && event.session_id !== entry.sessionId) ||
               !this.initValid(event, (name) => outputTool(name) || questionTool(name))
@@ -499,11 +517,9 @@ export class KeptClaudeCli extends ClaudeCli {
                 TASK_DONE.has(String((event as { status?: unknown }).status))))
           ) {
             pending.delete(task);
+            reported = true;
             // The CLI reads the report in a turn of its own; without one the last result stands.
-            if (final && !pending.size) {
-              clearTimeout(settle);
-              settle = setTimeout(complete, this.settleMs);
-            }
+            if (final && !pending.size) waitOrComplete();
           }
           return;
         }
@@ -517,7 +533,7 @@ export class KeptClaudeCli extends ClaudeCli {
           final = event;
           usage = addUsage(usage, event.usage);
           if (event.is_error) failureText += ' ' + providerErrorText(event);
-          if (!pending.size) complete();
+          if (!pending.size) waitOrComplete();
         }
       };
       if (signal?.aborted) {

@@ -422,10 +422,12 @@ export class Execution {
           ? (options: CliOptions) => new KeptClaudeCli(options)
           : this.providerFactory;
     // The provider's own tools (ADR-028, T-105): subagents and the to-do list in conversation,
-    // host (modeling) and make turns; the public web there too while AI 웹 검색 is on. A jig's AI
-    // review and the other single runs get none. Effective only with a VIDE connection.
+    // host (modeling) and make turns of a conversation; the public web there too while AI 웹 검색
+    // is on. A jig's AI review and single runs (a host request outside a conversation included)
+    // get none. Effective only with a VIDE connection.
     const builtinTools =
       instructions &&
+      input.conversationId &&
       (instructions.mode === 'modeling' ||
         instructions.mode === 'make' ||
         (instructions.mode === 'data' && session))
