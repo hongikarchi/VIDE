@@ -1170,7 +1170,10 @@ export async function startServer({
           )
         )
           throw new DomainError('PROJECT_BUSY');
-        send(200, links.merge(projectId, linkId, into));
+        send(
+          200,
+          links.merge(projectId, linkId, into, (ids) => workspace.forget(ids)),
+        );
         return;
       }
       const linkRemove = /^\/api\/v1\/projects\/([^/]+)\/links\/([^/]+)\/remove$/.exec(

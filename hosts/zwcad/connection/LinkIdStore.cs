@@ -51,15 +51,26 @@ namespace Vide.Zwcad.Connection
             }
         }
 
-        /// <summary>Stores the id; false when the drawing already holds it (nothing is modified).</summary>
+        /// <summary>
+        /// Stores the id; false when the drawing already holds it. The value is compared with the
+        /// dictionaries open for read and the transaction ends without a commit, so an equal value
+        /// opens nothing for write (no ObjectModified, no DBMOD, no revision).
+        /// </summary>
         internal static bool Write(Document doc, string projectId, string linkId)
         {
             using (doc.LockDocument())
             using (var tx = doc.Database.TransactionManager.StartTransaction())
             {
                 var nod = (DBDictionary)tx.GetObject(doc.Database.NamedObjectsDictionaryId, OpenMode.ForRead);
-                DBDictionary links;
-                if (nod.Contains(Name)) links = (DBDictionary)tx.GetObject(nod.GetAt(Name), OpenMode.ForWrite);
+                DBDictionary links = nod.Contains(Name)
+                    ? (DBDictionary)tx.GetObject(nod.GetAt(Name), OpenMode.ForRead)
+                    : null;
+                if (links != null && links.Contains(projectId) && Text(tx, links.GetAt(projectId)) == linkId)
+                {
+                    tx.Abort();
+                    return false;
+                }
+                if (links != null) links.UpgradeOpen();
                 else
                 {
                     nod.UpgradeOpen();
@@ -70,7 +81,6 @@ namespace Vide.Zwcad.Connection
                 var data = new ResultBuffer(new TypedValue((int)DxfCode.Text, linkId));
                 if (links.Contains(projectId))
                 {
-                    if (Text(tx, links.GetAt(projectId)) == linkId) { tx.Commit(); return false; }
                     var record = (Xrecord)tx.GetObject(links.GetAt(projectId), OpenMode.ForWrite);
                     record.Data = data;
                 }

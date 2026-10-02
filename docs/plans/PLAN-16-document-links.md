@@ -134,7 +134,7 @@ related: [PLAN, SPEC-01, DESIGN, ARCH-01, ADR-030, FR-01, FR-02, FR-03, FR-16]
   - `src/server/server.ts`: `POST …/links`의 `storedId`·`replace`·`ask`와 409 `LINK_CHOICE`(후보마다 Sync 수), `GET …/links`의 `notice`·`cleanup`, `POST …/links/:l/split·merge·dismiss`. `src/server/live-links.ts`는 `how`를 `follow`에 넘긴다.
   - 화면 `src/ui/links.tsx`·`app.ts`·`style.css`: 행 아래 한 줄 알림과 [새 항목으로 분리]·[확인]·[합치기](확인 창)·[빼기].
   - 플러그인(Rhino `EngineLink.cs`, ZWCAD `EngineLink.cs`): Link에 `ask: true`와 저장된 ID를 보내고 409 `LINK_CHOICE`면 선택 창(`LinkChoiceDialog`)을 띄워 답으로 다시 Link한다. 취소하면 이번에 만든 연결을 끊는다.
-- **검증:** `tests/server/link-choice.test.mjs` — 닫힌 같은 경로 행이 있을 때만 묻고 기본은 그 행, 답(`replace`)으로 이어지고 기록 유지, 새 항목을 고르면 닫힌 행과 기록 그대로, 모호하지 않은 Link와 이전 플러그인(`ask` 없음)의 경로 재연결, 다른 이름 저장의 따라감 알림(두 번 저장해도 처음 이름)과 [분리](이전 행은 기록과 이전 이름으로 닫힘, 새 행은 창, 문서에 새 ID 쓰기), 다시 연 창의 경로 재연결 알림과 분리, 같은 창 중복 행의 [합치기](요청 이동, 실행 중이면 409)와 기록 없는 행의 '빼기' 제안. `tests/integration/browser-links.mjs`에 목록 알림·[새 항목으로 분리]·[합치기] 단계(엔진 답은 가짜)를 더했다. 기존 `link-follow.test.mjs` 통과.
+- **검증:** `tests/server/link-choice.test.mjs` — 닫힌 같은 경로 행이 있을 때만 묻고 기본은 그 행, 답(`replace`)으로 이어지고 기록 유지, 새 항목을 고르면 닫힌 행과 기록 그대로, 모호하지 않은 Link와 이전 플러그인(`ask` 없음)의 경로 재연결, 다른 이름 저장의 따라감 알림(두 번 저장해도 처음 이름)과 [분리](이전 행은 기록과 이전 이름으로 닫힘, 새 행은 창, 문서에 새 ID 쓰기), 다시 연 창의 경로 재연결 알림과 분리, 같은 창 중복 행의 [합치기](요청 이동, 실행 중이면 409)와 기록 없는 행의 '빼기' 제안, 길이가 같은 UUID 행끼리 합친 직후 목록의 대상 행 `lastSync`(합치기가 `Workspace.forget`으로 옮긴 요청의 해석 캐시를 지움). `tests/integration/browser-links.mjs`에 목록 알림·[새 항목으로 분리]·[합치기] 단계(엔진 답은 가짜)를 더했다. 기존 `link-follow.test.mjs` 통과.
 - **남은 것:** 실제 Rhino·ZWCAD에서 선택 창의 모양과 취소 뒤 연결 상태 확인(설치본 반영 뒤 합성 문서).
 
 <a id="t-108"></a>
@@ -142,7 +142,7 @@ related: [PLAN, SPEC-01, DESIGN, ARCH-01, ADR-030, FR-01, FR-02, FR-03, FR-16]
 ### T-108 문서 안의 연결 ID
 
 - **변경:**
-  - Rhino `hosts/rhino/worker/LinkIdStore.cs`(문서 사용자 문자열 `VIDE`/`link:<projectId>`), `AttachedConnection.cs`: `attachedStatus`에 `linkIds`, 새 메서드 `setLinkId`. ZWCAD `hosts/zwcad/connection/LinkIdStore.cs`(명명 객체 사전 `VIDE_LINKS`), `AttachedDocument.cs`: 같은 두 가지. Link가 끝나면 플러그인이 ID를 쓰고, 처음 쓰면 명령줄에 "연결 ID를 문서에 저장했습니다. 저장하면 다음에도 이어집니다."를 붙인다.
+  - Rhino `hosts/rhino/worker/LinkIdStore.cs`(문서 사용자 문자열 `VIDE`/`link:<projectId>`), `AttachedConnection.cs`: `attachedStatus`에 `linkIds`, 새 메서드 `setLinkId`. ZWCAD `hosts/zwcad/connection/LinkIdStore.cs`(명명 객체 사전 `VIDE_LINKS`), `AttachedDocument.cs`: 같은 두 가지(ZWCAD는 같은 값이면 사전을 읽기로만 열고 커밋하지 않아 문서가 수정되지 않음). Link가 끝나면 플러그인이 ID를 쓰고, 처음 쓰면 명령줄에 "연결 ID를 문서에 저장했습니다. 저장하면 다음에도 이어집니다."를 붙인다.
   - 엔진: `hostDocumentsSchema`·Rhino `editor-channel.ts`·`editor-sessions.ts`·ZWCAD `attached-documents.ts`가 `linkIds`를 전하고 `setLinkId`를 부른다. `matchOpenDocuments`는 같은 창 → 저장된 ID → 경로 순이다. [새 항목으로 분리]는 그 창 문서에 새 ID를 쓴다(못 쓰면 화면이 알림).
-- **검증:** `link-choice.test.mjs` — 이동·이름 바꾸기·재시작 뒤 저장된 ID가 같은 경로의 다른 닫힌 행보다 먼저 이어짐, 저장된 ID가 있으면 Link가 묻지 않음, 같은 ID의 사본이 두 창에 열리면 두 번째 창의 Link가 묻고(기본 새 항목) 두 행이 각자 연결됨, 대조 순서(같은 ID가 두 창이면 먼저 나온 창만), Rhino 편집기 채널로 `linkIds`가 오고 [분리]가 `setLinkId`를 부름. Rhino(`VIDE.Worker.csproj`)·ZWCAD(`VIDE.Zwcad.Connection.csproj`) 플러그인은 빌드만 확인했다.
+- **검증:** `link-choice.test.mjs` — 이동·이름 바꾸기·재시작 뒤 저장된 ID가 같은 경로의 다른 닫힌 행보다 먼저 이어짐, 저장된 ID가 있으면 Link가 묻지 않음, 같은 ID의 사본이 두 창에 열리면 두 번째 창의 Link가 묻고(기본 새 항목) 두 행이 각자 연결됨, 대조 순서(같은 ID가 두 창이면 행의 경로에 있는 창, 없으면 먼저 나온 창만, 사본이 먼저 나와도 원본이 행을 지님), Rhino 편집기 채널로 `linkIds`가 오고 [분리]가 `setLinkId`를 부름. Rhino(`VIDE.Worker.csproj`)·ZWCAD(`VIDE.Zwcad.Connection.csproj`) 플러그인은 빌드만 확인했다.
 - **남은 것:** 실제 Rhino 8·ZWCAD에서 ID 쓰기가 문서를 '수정됨'으로 만들고 저장·다른 이름 저장·다시 열기 뒤 유지되는지, `attachedStatus`의 `linkIds` 보고와 [분리] 뒤 다시 쓴 ID, 사본 두 창의 질문을 설치본 반영 뒤 합성 문서로 확인한다(에이전트는 사용자 문서와 호스트를 열지 않음).

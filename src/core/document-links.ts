@@ -127,19 +127,20 @@ export function matchOpenDocuments<D extends OpenDocument>(rows: DocumentLink[],
     if (own) matched.set(own.id, { document, session: true, how: 'session' });
   }
   const claimed = () => new Set([...matched.values()].map((entry) => entry.document));
-  let taken = claimed();
-  for (const document of open) {
-    if (taken.has(document) || !document.linkIds?.length) continue;
-    const row = hostRows.find(
-      (candidate) =>
-        candidate.host === host(document) &&
-        document.linkIds!.includes(candidate.id) &&
-        !matched.has(candidate.id) &&
-        !windowOpen(candidate),
+  const taken = claimed();
+  // A row's stored id in several open documents (the file and a copy of it): the one at the row's
+  // path keeps the row, else the window listed first.
+  for (const row of hostRows) {
+    if (matched.has(row.id) || windowOpen(row)) continue;
+    const carriers = open.filter(
+      (document) =>
+        !taken.has(document) && host(document) === row.host && document.linkIds?.includes(row.id),
     );
-    if (row) {
+    const document =
+      carriers.find((item) => samePath(row.path, savedPath(item.path))) ?? carriers[0];
+    if (document) {
       matched.set(row.id, { document, session: false, how: 'stored' });
-      taken = claimed();
+      taken.add(document);
     }
   }
   for (const document of open) {
@@ -459,15 +460,24 @@ export class DocumentLinks {
   /**
    * [합치기] (SPEC-01.11 1, T-107): `from`'s records move to `into` (its Sync and import requests,
    * jig reads and bakes) and `from` leaves the list. Both are host rows of one host. The caller
-   * checks that no request of `from` is running.
+   * checks that no request of `from` is running. The moved requests' input changes in SQL, so
+   * `forget` drops them from the caller's decoded copies (Workspace keeps them keyed by state and
+   * stored size, and one UUID for another leaves the size unchanged).
    */
-  merge(projectId: string, from: string, into: string) {
+  merge(projectId: string, from: string, into: string, forget?: (requestIds: string[]) => void) {
     const source = this.get(projectId, from);
     const target = this.get(projectId, into);
     if (from === into || isFileLink(source) || isFileLink(target) || source.host !== target.host)
       throw new DomainError('INVALID_INPUT');
     this.db.exec('BEGIN IMMEDIATE');
     try {
+      const movedIds = (
+        this.db
+          .prepare(
+            "SELECT id FROM workspace_requests WHERE projectId=? AND json_extract(input, '$.linkId')=?",
+          )
+          .all(projectId, from) as { id: string }[]
+      ).map((row) => row.id);
       const moved = this.db
         .prepare(
           "UPDATE workspace_requests SET input=json_set(input, '$.linkId', ?) WHERE projectId=? AND json_extract(input, '$.linkId')=?",
@@ -476,6 +486,7 @@ export class DocumentLinks {
       for (const table of ['jig_reads', 'jig_bakes'])
         this.db.prepare(`UPDATE ${table} SET linkId=? WHERE linkId=?`).run(into, from);
       this.db.prepare('DELETE FROM document_links WHERE projectId=? AND id=?').run(projectId, from);
+      forget?.(movedIds);
       this.db.exec('COMMIT');
       this.notices.delete(from);
       return { link: this.get(projectId, into), moved: Number(moved) };

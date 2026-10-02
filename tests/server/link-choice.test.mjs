@@ -396,6 +396,31 @@ test('a closed duplicate of an open window merges into it; an empty closed row i
   assert.equal((await api(`${base}/dup2/merge`, 'POST', { into: 'day1' })).status, 409);
 });
 
+test('a merge between UUID rows shows the moved Syncs on the target at once', async (t) => {
+  const windows = [{ instance: W1, name: 'plan.dwg', path: 'D:\\w\\plan.dwg' }];
+  const { api, insert, sync, base } = await zwcadEngine(t, windows);
+  // Same-length ids: the moved request's stored input keeps its size, so the list's decoded
+  // copies must be dropped by the merge itself.
+  const target = randomUUID();
+  const source = randomUUID();
+  insert(target, 'plan.dwg', 'D:\\w\\plan.dwg', W1);
+  insert(source, 'plan-old.dwg', 'D:\\w\\plan-old.dwg', W1, 7200);
+  sync('s-source', source);
+  let list = await api(base);
+  const byId = (id) => list.find((row) => row.id === id);
+  assert.equal(byId(target).lastSync, null);
+  assert.equal(byId(source).cleanup?.kind, 'merge');
+  const merged = await api(`${base}/${source}/merge`, 'POST', { into: target });
+  assert.equal(merged.status, 200);
+  assert.equal(merged.moved, 1);
+  list = await api(base);
+  assert.deepEqual(
+    list.map((row) => row.id),
+    [target],
+  );
+  assert.equal(byId(target).lastSync?.requestId, 's-source');
+});
+
 test('matcher: session, then the stored id, then path; one row per open document', () => {
   const at = (s) => new Date(Date.now() - s * 1000).toISOString();
   const row = (id, path, instance) => ({
@@ -439,6 +464,37 @@ test('matcher: session, then the stored id, then path; one row per open document
     [...two.values()].map((entry) => entry.document.instance),
     ['a'],
   );
+});
+
+test('matcher: a copy listed first does not take the row from the file at its path', () => {
+  const at = new Date(Date.now() - 10_000).toISOString();
+  const row = {
+    id: 'x',
+    projectId: 'p',
+    host: 'rhino',
+    name: 'plan.3dm',
+    path: 'D:\\w\\plan.3dm',
+    instance: 'gone',
+    documentId: 1,
+    hidden: false,
+    linkedAt: at,
+    updatedAt: at,
+  };
+  const copy = {
+    host: 'rhino',
+    instance: 'b',
+    id: 1,
+    name: 'plan-copy.3dm',
+    path: 'D:\\w\\plan-copy.3dm',
+    linkIds: ['x'],
+  };
+  const original = { ...copy, instance: 'a', name: 'plan.3dm', path: 'D:\\w\\plan.3dm' };
+  const matched = matchOpenDocuments([row], [copy, original]);
+  assert.equal(matched.get('x').document.instance, 'a');
+  assert.equal(matched.get('x').how, 'stored');
+  // Neither at the row's path: the window listed first, as before.
+  const moved = matchOpenDocuments([{ ...row, path: 'E:\\old.3dm' }], [copy, original]);
+  assert.equal(moved.get('x').document.instance, 'b');
 });
 
 test('DocumentLinks: replace with an unknown row is NOT_FOUND; split needs a follow notice', () => {

@@ -109,6 +109,10 @@ export class Workspace {
       .all(projectId) as LightRow[];
     return rows.map((row) => this.#light(projectId, row));
   }
+  /** Drops decoded copies of requests whose input another class rewrote in SQL (a link merge). */
+  forget(ids: Iterable<string>) {
+    for (const id of ids) this.light.delete(id);
+  }
   private light = new Map<string, { key: string; projectId: string; work: StoredWork }>();
   #light(projectId: string, row: LightRow): StoredWork {
     const key = `${row.state}|${row.i}|${row.r ?? -1}`;
