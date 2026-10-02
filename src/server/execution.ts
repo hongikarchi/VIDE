@@ -1962,12 +1962,25 @@ export class Execution {
       entry?.code && entry.target
         ? this.directDriverFor(entry.host ?? 'rhino', entry.target, false)
         : undefined;
+    // An earlier refusal of this [진행] no longer describes the request once it runs again.
+    const { refused: _refused, ...base } = (request.result ?? {}) as Record<string, unknown>;
+    if (entry?.code && entry.target && !driver) {
+      // The held body's document is closed or reopened as another window: re-running the whole
+      // turn with every guard released would approve guards the user never saw (saves, exports
+      // in other files). Nothing runs; the card stays with the reason (review finding, 2026-10-02).
+      const host = entry.host ?? 'rhino';
+      const name = entry.file?.name ?? `${host === 'zwcad' ? 'ZWCAD' : 'Rhino'} 문서`;
+      const refusal = directRefusal(host, { code: 'STALE_CONNECTION' })!;
+      return this.workspace.update(projectId, id, 'needs-confirmation', {
+        ...base,
+        phase: undefined,
+        refused: { code: refusal.code, reason: refusal.reason, file: name },
+      });
+    }
     if (!entry?.code || !driver) {
       this.start({ ...request, input: { ...request.input, guardConfirmed: true } });
       return this.workspace.get(projectId, id);
     }
-    // An earlier refusal of this [진행] no longer describes the request once it runs again.
-    const { refused: _refused, ...base } = (request.result ?? {}) as Record<string, unknown>;
     const name = entry.file?.name ?? `${driver.host === 'zwcad' ? 'ZWCAD' : 'Rhino'} 문서`;
     // A multi-file request waiting on its card holds no document (SPEC-02.13 4): the document is
     // checked again before the re-run, refused at once when another request writes it (SPEC-02.9

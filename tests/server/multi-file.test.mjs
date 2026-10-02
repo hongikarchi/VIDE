@@ -987,6 +987,35 @@ test('[진행] in a file another request is writing is refused DOCUMENT_LOCKED a
   assert.equal(confirmed.result.refused, undefined);
 });
 
+test('[진행] whose file was reopened as another window runs nothing and never re-runs the turn', async (t) => {
+  let a,
+    b,
+    turns = 0;
+  const ctx = setup(t, (turn) => {
+    turns++;
+    return appliedThenGuarded(a, b)(turn);
+  });
+  ({ a, b } = ctx);
+  const { execution, project, send, settled, state } = ctx;
+  send('guard-1', { mode: 'auto' });
+  await settled();
+  assert.equal(state('guard-1').state, 'needs-confirmation');
+  const before = { turns, a: a.calls.execute.length, b: b.calls.execute.length };
+  // B closed and reopened: a new window, so the held body's document has no driver now.
+  b.driver.target.instance = 'win-b2';
+  const refused = await execution.confirm(project.id, 'guard-1');
+  await settled();
+  assert.equal(refused.state, 'needs-confirmation');
+  assert.equal(refused.result.refused.code, 'STALE_CONNECTION');
+  assert.equal(refused.result.refused.file, 'B.3dm');
+  assert.match(refused.result.refused.reason, /다시 연결/);
+  // Nothing ran: no blanket re-run of the turn with every guard released.
+  assert.equal(turns, before.turns);
+  assert.equal(a.calls.execute.length, before.a);
+  assert.equal(b.calls.execute.length, before.b);
+  assert.equal(state('guard-1').input.guardConfirmed, undefined);
+});
+
 test('[진행] that fails in another file rolls the request back in every file', async (t) => {
   let a, b;
   const ctx = setup(t, (turn) => appliedThenGuarded(a, b)(turn));
