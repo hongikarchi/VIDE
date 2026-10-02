@@ -311,7 +311,11 @@ try {
   assert.equal(await syncTab.getAttribute('aria-selected'), 'true');
   assert.equal(await gridTab.count(), 1);
   await dialog.getByRole('button', { name: '정렬·비교 실행' }).waitFor();
-  assert.equal(await page.locator('#body').inputValue(), draft);
+  // Opening a jig from the list chose its own conversation, whose draft is its own (SPEC-02.19
+  // 1); the draft typed in the default conversation comes back on its tab.
+  assert.equal(await page.locator('#body').inputValue(), '');
+  await page.locator('#conversation-chips [role="tab"]').first().click();
+  await page.waitForFunction((text) => document.querySelector('#body')?.value === text, draft);
 
   // Narrow screens: one menu in the centre's head instead of the row (it lists the fixed screens
   // too, which below 850 px have no rail).
