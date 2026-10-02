@@ -13,11 +13,12 @@ import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { StringDecoder } from 'node:string_decoder';
 import type { ChildProcessWithoutNullStreams } from 'node:child_process';
-import { configureAgentArguments } from './agent-connection.ts';
+import { configureAgentArguments, workFolderArguments } from './agent-connection.ts';
 import { bindAgentRelay, unbindAgentRelay } from './agent-relay.ts';
 import { defaultLogin } from './account-usage.ts';
 import {
   ClaudeCli,
+  IdleClock,
   MAX_EVENT_LINE,
   NATIVE_QUESTION_TOOL,
   ProviderError,
@@ -237,14 +238,18 @@ export class KeptClaudeCli extends ClaudeCli {
   }
   /** The turn's process arguments: the session turn's, always reading stream-json input. */
   private async processArgs(schema: string | undefined) {
-    const args = nativeQuestionArguments(
-      configureAgentArguments(
-        await this.withOutputSchema(this.arguments(), schema, ''),
-        'claude',
-        this.agent,
-        { neutral: true, bundle: this.instructions, builtin: this.builtin },
+    const args = workFolderArguments(
+      nativeQuestionArguments(
+        configureAgentArguments(
+          await this.withOutputSchema(this.arguments(), schema, ''),
+          'claude',
+          this.agent,
+          { neutral: true, bundle: this.instructions, builtin: this.builtin },
+        ),
+        !!this.nativeQuestions,
       ),
-      !!this.nativeQuestions,
+      this.builtin?.files,
+      { neutral: true, connected: !!this.agent },
     );
     if (!args.includes('--input-format')) args.push('--input-format', 'stream-json');
     return args;
@@ -266,7 +271,13 @@ export class KeptClaudeCli extends ClaudeCli {
     if (signal?.aborted) throw error('CANCELLED');
     const schema = outputSchemaOf(context);
     const args = await this.processArgs(schema);
-    const key = JSON.stringify([this.executable, this.loginKey(), processArguments(args)]);
+    // The working directory (the project work folder) is part of what the process started with.
+    const key = JSON.stringify([
+      this.executable,
+      this.loginKey(),
+      this.builtin?.files?.cwd ?? '',
+      processArguments(args),
+    ]);
     progress({ state: 'starting' });
     const { entry, reused } = await this.acquire(args, key);
     this.timing.processReused = reused;
@@ -315,7 +326,8 @@ export class KeptClaudeCli extends ClaudeCli {
     let child: ChildProcessWithoutNullStreams;
     try {
       child = this.spawnProcess(this.executable, args, {
-        cwd,
+        // The project work folder (ADR-031 8); the temporary folder otherwise.
+        cwd: this.builtin?.files?.cwd ?? cwd,
         env,
         shell: false,
         windowsHide: true,
@@ -347,6 +359,8 @@ export class KeptClaudeCli extends ClaudeCli {
     progress: (event: Progress) => void,
   ): Promise<ProviderResult> {
     const questions = this.nativeQuestions;
+    // Question cards and the work folder's file permissions come over the control channel.
+    const prompts = !!questions || !!this.builtin?.files;
     const outputTool = (name: unknown) => structured && name === 'StructuredOutput';
     const questionTool = (name: unknown) => !!questions && name === NATIVE_QUESTION_TOOL;
     return new Promise<ProviderResult>((resolve, reject) => {
@@ -373,7 +387,7 @@ export class KeptClaudeCli extends ClaudeCli {
         if (settled) return;
         settled = true;
         asking.abort();
-        clearTimeout(timer);
+        clock.stop();
         clearTimeout(settle);
         clearTimeout(grace);
         signal?.removeEventListener('abort', abort);
@@ -401,7 +415,7 @@ export class KeptClaudeCli extends ClaudeCli {
         if (settled || stopReason) return false;
         stopReason = reason;
         asking.abort();
-        clearTimeout(timer);
+        clock.stop();
         clearTimeout(settle);
         progress({ state: 'stopping', reason });
         return true;
@@ -426,7 +440,8 @@ export class KeptClaudeCli extends ClaudeCli {
         if (halt(reason)) end();
       };
       const abort = () => stop('CANCELLED');
-      let timer = setTimeout(() => stop('TIMEOUT'), this.timeoutMs);
+      // Only time without output counts (ADR-031 8).
+      const clock = new IdleClock(this.timeoutMs, () => stop('TIMEOUT'));
       signal?.addEventListener('abort', abort, { once: true });
       const complete = () => {
         if (settled || stopReason) return;
@@ -446,20 +461,22 @@ export class KeptClaudeCli extends ClaudeCli {
           subtype?: unknown;
           tool_name?: unknown;
           input?: unknown;
+          blocked_path?: unknown;
         };
-        if (!id || !questions) return fail('INVALID_PROVIDER_OUTPUT');
+        if (!id || !prompts) return fail('INVALID_PROVIDER_OUTPUT');
         const reply = (response: Record<string, unknown> | string) => {
           if (!settled && !stopReason) entry.write(controlResponse(id, response));
         };
         if (request.subtype !== 'can_use_tool') return reply('unsupported');
         // The time the person takes is not run time.
-        clearTimeout(timer);
-        progress({ state: 'running', phase: 'question' });
-        answerToolRequest(request, questions, asking.signal).then(
+        clock.hold();
+        const asks = request.tool_name === NATIVE_QUESTION_TOOL && !!questions;
+        if (asks) progress({ state: 'running', phase: 'question' });
+        answerToolRequest(request, questions, asking.signal, this.toolPermission).then(
           (response) => {
             if (settled || stopReason) return;
-            timer = setTimeout(() => stop('TIMEOUT'), this.timeoutMs);
-            progress({ state: 'running', phase: 'model' });
+            clock.release();
+            if (asks) progress({ state: 'running', phase: 'model' });
             reply(response);
           },
           () => fail('QUESTION_FAILED'),
@@ -484,6 +501,7 @@ export class KeptClaudeCli extends ClaudeCli {
           );
         }
         const { event } = signalled;
+        clock.claudeEvent(event);
         if (event.type === 'control_response') return;
         if (stopReason) {
           if (event.type === 'result') stopped();
@@ -494,15 +512,10 @@ export class KeptClaudeCli extends ClaudeCli {
           if (event.subtype === 'init') {
             clearTimeout(settle);
             reported = false;
-            if (
-              (typeof event.session_id === 'string' && event.session_id !== entry.sessionId) ||
-              !this.initValid(event, (name) => outputTool(name) || questionTool(name))
-            )
-              return fail(
-                typeof event.session_id === 'string' && event.session_id !== entry.sessionId
-                  ? 'SESSION_LOST'
-                  : 'UNEXPECTED_TOOL_ACCESS',
-              );
+            if (typeof event.session_id === 'string' && event.session_id !== entry.sessionId)
+              return fail('SESSION_LOST');
+            // An unexpected tool list is a warning; the CLI refuses what the turn did not allow.
+            this.initChecked(event, (name) => outputTool(name) || questionTool(name), progress);
             initialized = true;
             entry.validated = true;
             progress({ state: 'running', phase: 'model' });
@@ -525,8 +538,7 @@ export class KeptClaudeCli extends ClaudeCli {
         }
         if (event.type === 'assistant') {
           clearTimeout(settle);
-          if (!this.assistantEvent(event, progress, outputTool, questionTool))
-            return fail('UNEXPECTED_TOOL_CALL');
+          this.assistantEvent(event, progress, outputTool, questionTool);
           return;
         }
         if (event.type === 'result') {

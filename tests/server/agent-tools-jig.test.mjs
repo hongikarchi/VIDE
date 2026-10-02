@@ -392,7 +392,7 @@ test('scope: other conversation target refused, no write tools without an open j
   assert.equal(body(await closed.call('jig_list', { targetRef: T })).code, 'AGENT_UNAUTHORIZED');
 });
 
-test('large outputs come as an outline; an oversized page is refused, not cut', async () => {
+test('large outputs come as an outline; an oversized page is cut with where to read on (ADR-031 3)', async () => {
   const tools = new AgentTools({ origin: 'http://127.0.0.1:47999' });
   const { sources } = fakeSources();
   sources.jigs.output = () => ({ big: 'x'.repeat(60_000), rows: Array(20).fill('y'.repeat(5000)) });
@@ -411,7 +411,11 @@ test('large outputs come as an outline; an oversized page is refused, not cut', 
     stepId: 'assemble',
     path: 'rows',
   });
-  assert.equal(body(direct).code, 'QUERY_RESULT_TOO_LARGE');
+  const page = body(direct);
+  assert.equal(page.truncated, true);
+  assert.ok(page.items.length > 0 && page.items.length < 20);
+  assert.equal(page.nextOffset, page.items.length);
+  assert.match(page.next, /offset/);
 });
 
 test('the turn rules name the target, the open jig and the linked files; tools take them left out', async () => {

@@ -12,11 +12,12 @@ import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { StringDecoder } from 'node:string_decoder';
 import type { ChildProcessWithoutNullStreams } from 'node:child_process';
-import type { AgentConnection } from './agent-connection.ts';
+import type { AgentConnection, WorkFolders } from './agent-connection.ts';
 import { builtinRule, instructionFor } from './agent-connection.ts';
 import { withRules } from './instructions/index.ts';
 import { defaultLogin } from './account-usage.ts';
 import {
+  IdleClock,
   MAX_EVENT_LINE,
   MODE_CHANGED,
   ProviderError,
@@ -37,8 +38,10 @@ import {
 } from './claude-cli.ts';
 import {
   CodexCli,
-  codexDisabledFeatures,
+  codexDisabled,
   codexInstructions,
+  codexSandbox,
+  codexWritableRoots,
   codexIsolationConfig,
   makeOutputSchema,
   removeCodexTranscript,
@@ -62,11 +65,16 @@ export function codexAppServerEnabled(env: NodeJS.ProcessEnv = process.env) {
  * A turn with VIDE's MCP connection needs code mode (the installed Codex routes MCP through it,
  * as in `configureAgentArguments`); shell stays off either way.
  */
-export function appServerArguments({ codeMode = false }: { codeMode?: boolean } = {}) {
+export function appServerArguments({
+  codeMode = false,
+  files,
+}: { codeMode?: boolean; files?: WorkFolders } = {}) {
   const args = ['app-server', '--listen', 'stdio://'];
   for (const value of codexIsolationConfig) args.push('-c', value);
   args.push('-c', 'sandbox_mode="read-only"');
-  for (const flag of codexDisabledFeatures)
+  // A turn with a work folder keeps Codex's shell and image viewer (ADR-031 8); the thread's
+  // sandbox and approvals then scope them.
+  for (const flag of codexDisabled(files))
     if (!(codeMode && (flag === 'code_mode' || flag === 'code_mode_host')))
       args.push('--disable', flag);
   if (codeMode) args.push('--enable', 'code_mode', '--enable', 'code_mode_host');
@@ -74,7 +82,7 @@ export function appServerArguments({ codeMode = false }: { codeMode?: boolean } 
   return args;
 }
 /** The process arguments carry the isolation (asserted before spawning). */
-export function appServerIsolated(args: readonly string[], codeMode: boolean) {
+export function appServerIsolated(args: readonly string[], codeMode: boolean, shell = false) {
   const configs = args.filter((_, index) => args[index - 1] === '-c');
   const disabled = (flag: string) =>
     args.some((value, index) => value === flag && args[index - 1] === '--disable');
@@ -88,9 +96,8 @@ export function appServerIsolated(args: readonly string[], codeMode: boolean) {
     configs.includes('sandbox_mode="read-only"') &&
     !configs.some((value) => value.startsWith('mcp_servers') && value !== 'mcp_servers={}') &&
     !configs.some((value) => value.startsWith('developer_instructions')) &&
-    ['shell_tool', 'unified_exec', 'apps', 'plugins', 'hooks', 'browser_use', 'computer_use'].every(
-      disabled,
-    ) &&
+    ['unified_exec', 'apps', 'plugins', 'hooks', 'browser_use', 'computer_use'].every(disabled) &&
+    (shell ? !disabled('shell_tool') : disabled('shell_tool')) &&
     (codeMode
       ? enabled('code_mode') && enabled('code_mode_host')
       : disabled('code_mode') && disabled('code_mode_host')) &&
@@ -117,17 +124,33 @@ export function videServerConfig(connection: AgentConnection): { [key: string]: 
  * The thread's config overrides: web search off, every MCP server of the user's config off, and
  * VIDE's server with this turn's tools when the turn has a connection.
  */
+/**
+ * The work folder sandbox's config (ADR-031 8): the folder's other roots writable, no network, and
+ * the temporary folders left out (Codex adds them by default, so a write there would not ask).
+ */
+export function workspaceWriteConfig(files?: WorkFolders): { [key: string]: Json } {
+  return {
+    writable_roots: codexWritableRoots(files),
+    network_access: false,
+    exclude_tmpdir_env_var: true,
+    exclude_slash_tmp: true,
+  };
+}
 export function appServerThreadConfig(
   userServers: readonly string[],
   connection?: AgentConnection,
   effort?: string,
   web = false,
+  files?: WorkFolders,
 ) {
   const config: { [key: string]: Json } = {
     // Web search only for a turn that has it (Settings → AI 「AI 웹 검색」, ADR-028).
     web_search: web && connection ? 'live' : 'disabled',
     project_doc_max_bytes: 0,
   };
+  // Writes in the work folder only, without network (ADR-031 8).
+  if (codexSandbox(files) === 'workspace-write')
+    config.sandbox_workspace_write = workspaceWriteConfig(files);
   for (const name of userServers) {
     if (!SERVER_NAME.test(name)) throw error('UNEXPECTED_TOOL_ACCESS');
     if (!(connection && name === 'vide')) config[`mcp_servers.${name}.enabled`] = false;
@@ -155,9 +178,11 @@ export function threadParamsIsolated(
     userServers: readonly string[];
     connection?: AgentConnection;
     web?: boolean;
+    files?: WorkFolders;
   },
 ) {
   const { config } = params;
+  const sandbox = codexSandbox(expected.files);
   const serverKeys = Object.keys(config).filter((key) => key.startsWith('mcp_servers'));
   const wanted = new Set(
     expected.userServers
@@ -166,8 +191,13 @@ export function threadParamsIsolated(
   );
   if (expected.connection) wanted.add('mcp_servers.vide');
   return (
-    params.sandbox === 'read-only' &&
-    params.approvalPolicy === 'never' &&
+    params.sandbox === sandbox &&
+    // A work folder asks the user outside it (Codex's approvals reach VIDE's permission handler).
+    params.approvalPolicy === (expected.files ? 'untrusted' : 'never') &&
+    (sandbox === 'workspace-write'
+      ? JSON.stringify(config.sandbox_workspace_write) ===
+        JSON.stringify(workspaceWriteConfig(expected.files))
+      : !('sandbox_workspace_write' in config)) &&
     params.developerInstructions === expected.instructions &&
     !('baseInstructions' in params) &&
     config.web_search === (expected.web && expected.connection ? 'live' : 'disabled') &&
@@ -187,13 +217,17 @@ interface ThreadResponse {
   approvalPolicy?: unknown;
   instructionSources?: unknown;
 }
-/** What the server says the thread runs with: read-only, no network, no approvals, no AGENTS.md. */
-export function threadResponseIsolated(response: ThreadResponse) {
+/**
+ * What the server says the thread runs with: read-only (a work folder: writes there), no network,
+ * no approvals (a work folder: asked outside it), no AGENTS.md.
+ */
+export function threadResponseIsolated(response: ThreadResponse, files?: WorkFolders) {
   return (
     typeof response?.thread?.id === 'string' &&
-    response.sandbox?.type === 'readOnly' &&
+    response.sandbox?.type ===
+      (codexSandbox(files) === 'workspace-write' ? 'workspaceWrite' : 'readOnly') &&
     response.sandbox.networkAccess !== true &&
-    response.approvalPolicy === 'never' &&
+    response.approvalPolicy === (files ? 'untrusted' : 'never') &&
     Array.isArray(response.instructionSources) &&
     response.instructionSources.length === 0
   );
@@ -525,12 +559,25 @@ type RunOptions = {
    */
   onQuestion?: NativeQuestionHandler;
 };
+/** Items that are the model's own text (anything else is a tool item, reported or refused). */
 const ALLOWED_ITEMS = new Set([
   'userMessage',
   'agentMessage',
   'reasoning',
   'plan',
   'contextCompaction',
+]);
+/** Codex's own tool items of a turn with a work folder (ADR-031 8). */
+const WORK_ITEMS: Record<string, string> = {
+  commandExecution: 'shell',
+  fileChange: 'apply_patch',
+  imageView: 'view_image',
+};
+/** The approval requests a work folder turn answers (each goes to VIDE's permission handler). */
+const APPROVALS = new Set([
+  'item/commandExecution/requestApproval',
+  'item/fileChange/requestApproval',
+  'item/permissions/requestApproval',
 ]);
 
 /**
@@ -552,13 +599,18 @@ export class CodexAppServer extends CodexCli {
     this.idleMs = options.idleMs ?? APP_SERVER_IDLE_MS;
     this.loginKey = options.loginKey ?? (() => codexLoginKey());
   }
+  /** The app-server answers Codex's approvals, so its turns get the work folder (ADR-031 8). */
+  workFoldersSupported() {
+    return true;
+  }
   /**
    * The developer instructions: the session's neutral ones, or the bundle with the tool rules; the
    * question tool's rule after either.
    */
   developerInstructions() {
     let base: string;
-    if (this.session || !this.agent) base = codexInstructions(this.session, this.instructions);
+    if (this.session || !this.agent)
+      base = codexInstructions(this.session, this.instructions, this.builtin?.files);
     else {
       const own = instructionFor(this.agent, 'codex') + builtinRule(this.builtin, 'codex');
       base = this.instructions ? withRules(this.instructions, own) : own;
@@ -567,7 +619,7 @@ export class CodexAppServer extends CodexCli {
   }
   /** A kept process serves the next turn only for the same executable, login and tool mode. */
   private processKey() {
-    return JSON.stringify([this.executable, this.loginKey(), !!this.agent]);
+    return JSON.stringify([this.executable, this.loginKey(), !!this.agent, !!this.builtin?.files]);
   }
   private threadKey() {
     return JSON.stringify([
@@ -576,12 +628,15 @@ export class CodexAppServer extends CodexCli {
       this.effort ?? '',
       this.agent ? [this.agent.url, this.agent.token, this.agent.tools] : null,
       !!this.builtin?.web,
+      this.builtin?.files ?? null,
     ]);
   }
   private async spawnServer(): Promise<{ rpc: AppServerRpc; userServers: string[]; cwd: string }> {
-    const codeMode = !!this.agent;
-    const args = appServerArguments({ codeMode });
-    if (!appServerIsolated(args, codeMode)) throw error('UNEXPECTED_TOOL_ACCESS');
+    const files = this.builtin?.files;
+    // The installed Codex runs VIDE's MCP tools and its own shell through the code-mode host.
+    const codeMode = !!this.agent || !!files;
+    const args = appServerArguments({ codeMode, files });
+    if (!appServerIsolated(args, codeMode, !!files)) throw error('UNEXPECTED_TOOL_ACCESS');
     const cwd = await mkdtemp(join(tmpdir(), 'vide-codex-'));
     let rpc: AppServerRpc | undefined;
     try {
@@ -623,14 +678,25 @@ export class CodexAppServer extends CodexCli {
     resumeId: string | undefined,
   ) {
     const instructions = this.developerInstructions();
+    const files = this.builtin?.files;
     const params: ThreadParams = {
       ...(resumeId ? { threadId: resumeId, excludeTurns: true } : { ephemeral: !this.session }),
-      cwd,
-      sandbox: 'read-only',
-      approvalPolicy: 'never',
+      // The project work folder is the thread's working directory (ADR-031 8).
+      cwd: files?.cwd ?? cwd,
+      sandbox: codexSandbox(files),
+      // Codex asks before every command it does not know as safe and every file change, so each
+      // reaches VIDE's gate: inside the work folder allowed at once, outside asked. Codex's own
+      // sandbox is not relied on (on this platform it did not stop a write outside its roots).
+      approvalPolicy: files ? 'untrusted' : 'never',
       developerInstructions: instructions,
       ...(this.model ? { model: this.model } : {}),
-      config: appServerThreadConfig(userServers, this.agent, this.effort, !!this.builtin?.web),
+      config: appServerThreadConfig(
+        userServers,
+        this.agent,
+        this.effort,
+        !!this.builtin?.web,
+        files,
+      ),
     };
     if (
       !threadParamsIsolated(params, {
@@ -638,6 +704,7 @@ export class CodexAppServer extends CodexCli {
         userServers,
         connection: this.agent,
         web: !!this.builtin?.web,
+        files,
       })
     )
       throw error('UNEXPECTED_TOOL_ACCESS');
@@ -652,7 +719,7 @@ export class CodexAppServer extends CodexCli {
       if (resumeId && SESSION_LOST.test(detail)) throw error('SESSION_LOST');
       throw cause;
     }
-    if (!threadResponseIsolated(response)) throw error('UNEXPECTED_TOOL_ACCESS');
+    if (!threadResponseIsolated(response, files)) throw error('UNEXPECTED_TOOL_ACCESS');
     const threadId = response.thread!.id as string;
     if (resumeId && threadId !== resumeId) throw error('SESSION_LOST');
     const servers: McpStatus[] = [];
@@ -769,8 +836,7 @@ export class CodexAppServer extends CodexCli {
     } catch (cause) {
       const code = (cause as { code?: unknown })?.code;
       // A stop the process did not confirm, or a broken process: it is not reused.
-      if (code === 'STOP_UNCONFIRMED' || entry.rpc.closed || code === 'UNEXPECTED_TOOL_CALL')
-        keep = false;
+      if (code === 'STOP_UNCONFIRMED' || entry.rpc.closed) keep = false;
       // A failed opening turn: nobody can resume it, and only this run knows its thread.
       if (opened && this.session && code !== 'STOP_UNCONFIRMED') {
         keep = false;
@@ -815,7 +881,7 @@ export class CodexAppServer extends CodexCli {
       const finish = (err: Error | null, value?: { status: string }) => {
         if (settled) return;
         settled = true;
-        clearTimeout(timer);
+        clock.stop();
         clearTimeout(grace);
         signal?.removeEventListener('abort', abort);
         questionAbort.abort();
@@ -825,6 +891,7 @@ export class CodexAppServer extends CodexCli {
       const stop = (reason: string) => {
         if (settled || stopReason) return;
         stopReason = reason;
+        clock.stop();
         if (reason !== 'QUESTION') progress({ state: 'stopping', reason });
         const interrupt = turnId
           ? rpc.request('turn/interrupt', { threadId, turnId }, this.stopGraceMs)
@@ -836,8 +903,12 @@ export class CodexAppServer extends CodexCli {
         }, this.stopGraceMs);
       };
       const abort = () => stop('CANCELLED');
-      let timer = setTimeout(() => stop('TIMEOUT'), this.timeoutMs);
+      // Only time without output counts (ADR-031 8): every message of this thread re-arms it, and a
+      // tool item that has not completed (a long host execute, a shell command) holds it.
+      const clock = new IdleClock(this.timeoutMs, () => stop('TIMEOUT'));
       signal?.addEventListener('abort', abort, { once: true });
+      // The paths of each file change item, for its approval request (which names only the item).
+      const changes = new Map<string, string[]>();
       const handle = (message: Message) => {
         if (message.method === 'vide/closed') {
           if (asked && stopReason === 'QUESTION') return finish(null, { status: 'interrupted' });
@@ -849,11 +920,70 @@ export class CodexAppServer extends CodexCli {
           return;
         }
         const ownTurn = (id: unknown) => !turnId || id === turnId;
+        if (!settled && !stopReason) clock.arm();
         if (message.id !== undefined && message.method) {
-          // A server request: only the model's question tool is answered; approvals never.
+          // A work folder turn's approvals go to VIDE's permission handler: outside the folder the
+          // user is asked; a refusal declines only that call and the turn goes on (ADR-031 8).
+          if (APPROVALS.has(message.method) && ownTurn(params.turnId)) {
+            const requestId = message.id;
+            const answer = (allow: boolean) =>
+              rpc.respond(
+                requestId,
+                message.method === 'item/permissions/requestApproval'
+                  ? allow
+                    ? { permissions: params.permissions ?? {}, scope: 'turn' }
+                    : { permissions: {}, scope: 'turn' }
+                  : { decision: allow ? 'accept' : 'decline' },
+              );
+            const permission = this.builtin?.files ? this.toolPermission : undefined;
+            if (!permission) return answer(false);
+            const request =
+              message.method === 'item/commandExecution/requestApproval'
+                ? {
+                    tool: 'Bash',
+                    input: { command: String(params.command ?? ''), cwd: params.cwd ?? null },
+                    // Network access is always the user's question.
+                    escalation: !!params.networkApprovalContext,
+                  }
+                : message.method === 'item/fileChange/requestApproval'
+                  ? {
+                      tool: 'Write',
+                      input: {
+                        paths: [
+                          ...(changes.get(String(params.itemId)) ?? []),
+                          ...(typeof params.grantRoot === 'string' ? [params.grantRoot] : []),
+                        ],
+                      },
+                      // Paths unknown: the user is asked about the change itself.
+                      escalation: !(changes.get(String(params.itemId)) ?? []).length,
+                    }
+                  : {
+                      tool: 'permissions',
+                      input: {
+                        read: params.permissions?.fileSystem?.read ?? [],
+                        write: params.permissions?.fileSystem?.write ?? [],
+                        network: !!params.permissions?.network?.enabled,
+                      },
+                      escalation: true,
+                    };
+            clock.hold();
+            void permission(request, questionAbort.signal).then(
+              (decision) => {
+                if (settled || stopReason) return;
+                clock.release();
+                answer(decision.allow);
+              },
+              () => {
+                if (settled || stopReason) return;
+                clock.release();
+                answer(false);
+              },
+            );
+            return;
+          }
+          // Any other server request is refused; only the model's question tool is answered.
           if (message.method !== 'item/tool/requestUserInput' || !ownTurn(params.turnId)) {
             rpc.refuse(message.id, 'not allowed');
-            if (message.method !== 'item/tool/requestUserInput') stop('UNEXPECTED_TOOL_CALL');
             return;
           }
           const questions = (Array.isArray(params.questions) ? params.questions : []).filter(
@@ -873,11 +1003,11 @@ export class CodexAppServer extends CodexCli {
           }
           // The time the person takes is not run time (as on Claude): the turn's clock stops
           // while the card waits and starts over with the answer.
-          clearTimeout(timer);
+          clock.hold();
           void onQuestion(cards, questionAbort.signal).then(
             (answers) => {
               if (settled || stopReason) return;
-              timer = setTimeout(() => stop('TIMEOUT'), this.timeoutMs);
+              clock.release();
               // Closed without answers (null): the model goes on without them, as on Claude.
               rpc.respond(requestId, nativeAnswers(questions, cards, sources, answers ?? []));
               progress({ state: 'running', phase: 'model' });
@@ -895,24 +1025,44 @@ export class CodexAppServer extends CodexCli {
           case 'item/completed': {
             if (!ownTurn(params.turnId)) return;
             const item = params.item ?? {};
-            if (item.type === 'mcpToolCall') {
-              if (
-                !this.agent ||
-                item.server !== 'vide' ||
-                !this.agent.tools.includes(String(item.tool ?? ''))
-              )
-                return stop('UNEXPECTED_TOOL_CALL');
+            const type = String(item.type ?? '');
+            // A tool item holds the idle clock until it completes.
+            if (!ALLOWED_ITEMS.has(type) && typeof item.id === 'string') {
+              if (message.method === 'item/started') clock.toolStarted(item.id);
+              else clock.toolEnded(item.id);
+            }
+            if (type === 'fileChange' && typeof item.id === 'string' && Array.isArray(item.changes))
+              changes.set(
+                item.id,
+                item.changes
+                  .map((change: { path?: unknown }) => change?.path)
+                  .filter((path: unknown): path is string => typeof path === 'string'),
+              );
+            const known =
+              (type === 'mcpToolCall' &&
+                !!this.agent &&
+                item.server === 'vide' &&
+                this.agent.tools.includes(String(item.tool ?? ''))) ||
+              (type === 'webSearch' && !!this.builtin?.web) ||
+              (!!WORK_ITEMS[type] && !!this.builtin?.files);
+            if (!ALLOWED_ITEMS.has(type)) {
+              // A tool the turn does not have was refused by Codex's own configuration; it is
+              // reported and the turn goes on (ADR-031 8).
               if (message.method === 'item/started')
-                progress({ state: 'running', phase: 'tool', tool: String(item.tool) });
+                progress({
+                  state: 'running',
+                  phase: 'tool',
+                  tool:
+                    type === 'mcpToolCall'
+                      ? String(item.tool ?? 'mcp').slice(0, 100)
+                      : (WORK_ITEMS[type] ?? (type === 'webSearch' ? 'web_search' : type)).slice(
+                          0,
+                          100,
+                        ),
+                  ...(known ? {} : { reason: 'TOOL_REFUSED' }),
+                });
               return;
             }
-            // Web search items only in a turn that has it (ADR-028).
-            if (item.type === 'webSearch' && this.builtin?.web) {
-              if (message.method === 'item/started')
-                progress({ state: 'running', phase: 'tool', tool: 'web_search' });
-              return;
-            }
-            if (!ALLOWED_ITEMS.has(String(item.type))) return stop('UNEXPECTED_TOOL_CALL');
             if (message.method !== 'item/completed') return;
             if (item.type === 'agentMessage' && typeof item.text === 'string') {
               lastText = item.text;
@@ -946,11 +1096,25 @@ export class CodexAppServer extends CodexCli {
         }
       };
       const unlisten = rpc.listen(handle);
+      const files = this.builtin?.files;
       rpc
         .request<{ turn?: { id?: unknown } }>('turn/start', {
           threadId,
           input,
           ...(schema ? { outputSchema: JSON.parse(schema) } : {}),
+          // The work folder sandbox of this turn (ADR-031 8): writes there, no network.
+          ...(files?.cwd ? { cwd: files.cwd } : {}),
+          ...(codexSandbox(files) === 'workspace-write'
+            ? {
+                sandboxPolicy: {
+                  type: 'workspaceWrite',
+                  writableRoots: [...(files?.cwd ? [files.cwd] : []), ...codexWritableRoots(files)],
+                  networkAccess: false,
+                  excludeTmpdirEnvVar: true,
+                  excludeSlashTmp: true,
+                },
+              }
+            : {}),
         })
         .then(
           (started) => {

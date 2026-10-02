@@ -25,7 +25,7 @@ import { turnOutputItem, parseTurnOutput } from '../../src/server/turn-output.ts
 
 const THREAD = '01a0f0a1-ed17-7cf0-99d7-d515efb01a67';
 const OTHER = '01a0f0a9-360f-7151-9642-f659fcabf813';
-const connection = (token = 'a'.repeat(64), tools = ['status']) => ({
+const connection = (token = 'a'.repeat(64), tools = ['measure']) => ({
   url: 'http://127.0.0.1:47000/mcp',
   token,
   tools,
@@ -261,7 +261,7 @@ test('스레드 설정은 사용자 MCP 서버를 모두 끄고 VIDE 서버만 �
   const config = appServerThreadConfig(['rhino', 'blender'], vide, 'high');
   assert.equal(config['mcp_servers.rhino.enabled'], false);
   assert.equal(config['mcp_servers.blender.enabled'], false);
-  assert.deepEqual(config['mcp_servers.vide'].enabled_tools, ['status']);
+  assert.deepEqual(config['mcp_servers.vide'].enabled_tools, ['measure']);
   assert.equal(config['mcp_servers.vide'].http_headers.Authorization, `Bearer ${vide.token}`);
   assert.equal(config.web_search, 'disabled');
   assert.equal(config.model_reasoning_effort, 'high');
@@ -290,7 +290,10 @@ test('스레드 설정은 사용자 MCP 서버를 모두 끄고 VIDE 서버만 �
       ...params,
       config: {
         ...config,
-        'mcp_servers.vide': { ...config['mcp_servers.vide'], enabled_tools: ['status', 'execute'] },
+        'mcp_servers.vide': {
+          ...config['mcp_servers.vide'],
+          enabled_tools: ['measure', 'execute'],
+        },
       },
     },
   ])
@@ -309,6 +312,25 @@ test('서버가 보고한 스레드와 MCP 상태로 격리를 다시 확인한�
   assert.ok(!threadResponseIsolated({ ...ok, sandbox: { type: 'readOnly', networkAccess: true } }));
   assert.ok(!threadResponseIsolated({ ...ok, approvalPolicy: 'on-request' }));
   assert.ok(!threadResponseIsolated({ ...ok, instructionSources: ['C:/x/AGENTS.md'] }));
+  // A work folder turn (ADR-031 8): writes there, asks outside, still no network.
+  const files = { cwd: 'C:\w', dirs: [], attachments: [] };
+  const work = {
+    ...ok,
+    sandbox: { type: 'workspaceWrite', networkAccess: false },
+    approvalPolicy: 'untrusted',
+  };
+  assert.ok(threadResponseIsolated(work, files));
+  assert.ok(!threadResponseIsolated(ok, files));
+  assert.ok(
+    !threadResponseIsolated(
+      { ...work, sandbox: { type: 'workspaceWrite', networkAccess: true } },
+      files,
+    ),
+  );
+  assert.ok(threadResponseIsolated(ok, { ...files, readOnly: true }) === false);
+  assert.ok(
+    threadResponseIsolated({ ...ok, approvalPolicy: 'untrusted' }, { ...files, readOnly: true }),
+  );
 
   const vide = connection();
   const off = { name: 'rhino', runtimeStatus: 'disabled', httpOrigin: null };
@@ -316,7 +338,7 @@ test('서버가 보고한 스레드와 MCP 상태로 격리를 다시 확인한�
     name: 'vide',
     runtimeStatus: 'connected',
     httpOrigin: 'http://127.0.0.1:47000',
-    tools: { status: {} },
+    tools: { measure: {} },
   };
   assert.ok(mcpStatusIsolated([off], undefined));
   assert.ok(mcpStatusIsolated([off, on], vide));
@@ -324,7 +346,7 @@ test('서버가 보고한 스레드와 MCP 상태로 격리를 다시 확인한�
   assert.ok(!mcpStatusIsolated([off, on], undefined));
   assert.ok(!mcpStatusIsolated([off], vide));
   assert.ok(!mcpStatusIsolated([off, { ...on, httpOrigin: 'http://127.0.0.1:9' }], vide));
-  assert.ok(!mcpStatusIsolated([off, { ...on, tools: { status: {}, execute: {} } }], vide));
+  assert.ok(!mcpStatusIsolated([off, { ...on, tools: { measure: {}, execute: {} } }], vide));
 });
 
 test('requestUserInput 질문을 질문 카드로 바꾸고 답을 원래 선택지 이름으로 돌려준다', () => {
@@ -453,7 +475,7 @@ test('대화: 한 프로세스를 턴 사이에 유지하고, 도구가 바뀌�
   assert.ok(appServerIsolated(transport.servers()[1].args, true));
   const [resume] = transport.method('thread/resume');
   assert.equal(resume.params.threadId, THREAD);
-  assert.deepEqual(resume.params.config['mcp_servers.vide'].enabled_tools, ['status']);
+  assert.deepEqual(resume.params.config['mcp_servers.vide'].enabled_tools, ['measure']);
 });
 
 test('같은 프로세스에서 이 턴의 토큰·도구가 바뀌면 unsubscribe 후 resume으로 다시 설정한다', async () => {
@@ -464,7 +486,7 @@ test('같은 프로세스에서 이 턴의 토큰·도구가 바뀌면 unsubscri
   }).run(context);
   await provider(transport, {
     session: { id: THREAD, resume: true },
-    agent: connection('b'.repeat(64), ['status', 'query']),
+    agent: connection('b'.repeat(64), ['measure', 'query']),
   }).run(context);
   assert.equal(transport.servers().length, 1);
   assert.equal(transport.method('thread/unsubscribe').length, 1);
@@ -700,21 +722,27 @@ test('사용자 MCP 서버가 켜져 있거나 샌드박스가 다르면 턴을 
   }
 });
 
-test('셸·파일·웹 항목이나 허용되지 않은 도구 호출은 턴을 멈춘다', async () => {
+test('허용되지 않은 도구 항목은 그 호출만 거절로 알리고 턴은 계속된다 (ADR-031 8)', async () => {
   for (const item of [
-    { type: 'commandExecution', command: 'dir' },
-    { type: 'fileChange' },
-    { type: 'webSearch' },
-    { type: 'mcpToolCall', server: 'rhino', tool: 'run_command' },
-    { type: 'mcpToolCall', server: 'vide', tool: 'execute' },
+    { type: 'commandExecution', id: 'c1', command: 'dir' },
+    { type: 'fileChange', id: 'f1' },
+    { type: 'webSearch', id: 'w1' },
+    { type: 'mcpToolCall', id: 'x1', server: 'rhino', tool: 'run_command' },
+    { type: 'mcpToolCall', id: 'x2', server: 'vide', tool: 'execute' },
   ]) {
     const transport = fake({
-      turns: [(server) => server.notify('item/started', { turnId: server.turnId, item })],
+      turns: [reply('계속한 답', [{ method: 'item/started', params: { item } }])],
     });
-    await assert.rejects(provider(transport, { agent: connection() }).run(context), {
-      code: 'UNEXPECTED_TOOL_CALL',
+    const progress = [];
+    const result = await provider(transport, { agent: connection() }).run(context, {
+      onProgress: (event) => progress.push(event),
     });
-    assert.equal(transport.method('turn/interrupt').length, 1);
+    assert.equal(result.text, '계속한 답');
+    assert.ok(
+      progress.some((event) => event.reason === 'TOOL_REFUSED'),
+      JSON.stringify(item),
+    );
+    assert.equal(transport.method('turn/interrupt').length, 0);
   }
   // VIDE's own tool of this turn passes.
   const transport = fake({
@@ -722,7 +750,7 @@ test('셸·파일·웹 항목이나 허용되지 않은 도구 호출은 턴을 
       reply('도구 결과 7', [
         {
           method: 'item/started',
-          params: { item: { type: 'mcpToolCall', server: 'vide', tool: 'status' } },
+          params: { item: { type: 'mcpToolCall', server: 'vide', tool: 'measure' } },
         },
       ]),
     ],
@@ -732,22 +760,111 @@ test('셸·파일·웹 항목이나 허용되지 않은 도구 호출은 턴을 
     onProgress: (event) => progress.push(event),
   });
   assert.equal(result.text, '도구 결과 7');
-  assert.ok(progress.some((event) => event.phase === 'tool' && event.tool === 'status'));
+  assert.ok(
+    progress.some((event) => event.phase === 'tool' && event.tool === 'measure' && !event.reason),
+  );
 });
 
-test('승인 요청은 거절하고 턴을 멈춘다', async () => {
+test('작업 폴더 없는 턴의 승인 요청은 거절(decline)하고 턴은 계속된다', async () => {
   const transport = fake({
     turns: [
-      (server) =>
-        server.send({
+      reply('승인 없이 끝', [
+        {
           id: 11,
           method: 'item/commandExecution/requestApproval',
-          params: { threadId: THREAD, turnId: server.turnId, command: 'dir' },
-        }),
+          params: { threadId: THREAD, command: 'dir' },
+        },
+      ]),
     ],
   });
-  await assert.rejects(provider(transport).run(context), { code: 'UNEXPECTED_TOOL_CALL' });
-  assert.ok(transport.responses.find((entry) => entry.id === 11).error);
+  const result = await provider(transport).run(context);
+  assert.equal(result.text, '승인 없이 끝');
+  assert.equal(transport.responses.find((entry) => entry.id === 11).result.decision, 'decline');
+});
+
+test('작업 폴더 턴: 셸·쓰기 샌드박스로 열고, 승인 요청은 VIDE 권한 처리기로 묻는다', async () => {
+  const work = { cwd: 'C:\\work\\project', dirs: ['C:\\work\\refs'], attachments: [] };
+  const asked = [];
+  const transport = fake({
+    threadResponse: {
+      sandbox: { type: 'workspaceWrite', networkAccess: false },
+      approvalPolicy: 'untrusted',
+    },
+    turns: [
+      (server) => {
+        const turnId = server.turnId;
+        server.notify('item/started', {
+          turnId,
+          item: { type: 'fileChange', id: 'f9', changes: [{ path: 'D:\\out\\a.txt' }] },
+        });
+        server.send({
+          id: 21,
+          method: 'item/fileChange/requestApproval',
+          params: { threadId: THREAD, turnId, itemId: 'f9' },
+        });
+        server.send({
+          id: 22,
+          method: 'item/commandExecution/requestApproval',
+          params: {
+            threadId: THREAD,
+            turnId,
+            command: 'curl example.com',
+            cwd: 'C:\\work\\project',
+          },
+        });
+        // Codex goes on once both answers are in.
+        setTimeout(() => {
+          for (const entry of reply('폴더 밖 실행'))
+            server.notify(entry.method, {
+              turnId,
+              ...entry.params,
+              ...(entry.method === 'turn/completed'
+                ? { turn: { id: turnId, ...entry.params.turn } }
+                : {}),
+            });
+        }, 50);
+      },
+    ],
+  });
+  const result = await provider(transport, {
+    builtinTools: { files: work },
+    toolPermission: async (request) => {
+      asked.push(request);
+      return request.tool === 'Write' ? { allow: true } : { allow: false, message: 'no' };
+    },
+  }).run(context);
+  assert.equal(result.text, '폴더 밖 실행');
+  const args = transport.servers()[0].args;
+  assert.ok(appServerIsolated(args, true, true), 'code mode carries the shell');
+  assert.ok(!args.some((value, i) => value === 'shell_tool' && args[i - 1] === '--disable'));
+  const [start] = transport.method('thread/start');
+  assert.equal(start.params.cwd, work.cwd);
+  assert.equal(start.params.sandbox, 'workspace-write');
+  assert.equal(start.params.approvalPolicy, 'untrusted');
+  assert.deepEqual(start.params.config.sandbox_workspace_write, {
+    writable_roots: work.dirs,
+    network_access: false,
+    exclude_tmpdir_env_var: true,
+    exclude_slash_tmp: true,
+  });
+  const [turn] = transport.method('turn/start');
+  assert.deepEqual(turn.params.sandboxPolicy, {
+    type: 'workspaceWrite',
+    writableRoots: [work.cwd, ...work.dirs],
+    networkAccess: false,
+    excludeTmpdirEnvVar: true,
+    excludeSlashTmp: true,
+  });
+  assert.deepEqual(
+    asked.map((request) => [request.tool, request.escalation]),
+    [
+      ['Write', false],
+      ['Bash', false],
+    ],
+  );
+  assert.deepEqual(asked[0].input.paths, ['D:\\out\\a.txt']);
+  assert.equal(transport.responses.find((entry) => entry.id === 21).result.decision, 'accept');
+  assert.equal(transport.responses.find((entry) => entry.id === 22).result.decision, 'decline');
 });
 
 test('없는 스레드를 이으면 SESSION_LOST, 구독 한도는 PROVIDER_LIMIT로 알린다', async () => {

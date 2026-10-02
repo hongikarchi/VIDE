@@ -2,7 +2,7 @@
 id: PLAN-28
 title: 순정 우선 — 상한·자체 도구 정리, 모델 전체 JSON 전송 제거, 프로젝트별 DB
 status: draft
-version: 0.1
+version: 0.2
 updated: 2026-10-02
 owner: agent:claude
 related: [ADR-031, ADR-032, RESEARCH-14, PLAN-27, SPEC-02, ARCH-01]
@@ -52,6 +52,11 @@ related: [ADR-031, ADR-032, RESEARCH-14, PLAN-27, SPEC-02, ARCH-01]
 - Rhino·ZWCAD 문서 변경은 VIDE `execute`로만 한다(되돌리기·기록).
 
 **검증:** 실제 CLI 실행 인자 시험, 허용 밖 호출 시 턴이 계속되는 시험, 출력 없는 시간 제한 시험, 폴더 밖 접근 승인 흐름 시험. 실제 Claude·Codex로 한 번씩 확인.
+
+**진행(2026-10-02, 작업 브랜치):** 구현·시험 완료, main 합침 전.
+- **반영:** Claude는 작업 폴더 도구가 있는 턴에서 `--restricted`/`--safe-mode`를 빼고 `Read,Glob,Grep,Edit,Write,Bash`를 미리 허용 없이 켜며 `--add-dir`·`--permission-prompt-tool stdio`로 작업 폴더 밖 사용을 엔진의 `WorkFolderGate`에 묻는다. Codex는 app-server 경로에서 `workspace-write`·`approvalPolicy: untrusted`·셸·code mode로 열고 승인 요청을 같은 게이트에 묻는다(`codex exec`는 승인 통로가 없어 도구 없음). 허용 밖 호출·시작 목록 불일치는 경고만, 턴 시간은 `IdleClock`(출력 없는 시간, 카드·도구 대기 중 멈춤). 도구 결과는 잘라서 `truncated`·`nextOffset`, `capture_view`는 큰 이미지를 줄여 다시 찍음, 패킷 이미지는 20장·5 MB까지(넘으면 안내만). `AGENT_CALL_LIMIT`·`HOST_COMMAND_LIMIT` 제거, 범위 유효 시간은 호출 사이 시간. `status`·`cancel`·`attachment_read`·`file_list`·`file_read` 삭제(첨부는 보관 경로로 읽음). 결과 미확인·문서 변경은 실행 결과의 `notices`, 답 유실 뒤 읽기 허용(`HOST_RESULT_UNKNOWN`), 읽기 도구 병렬, 스크립트 정책은 파일·프로세스·네트워크·코드 적재·문서 닫기·저장·되돌리기 규칙만(엔진·`CodePolicy.cs`·`DirectScripts.cs`), 대량 삭제 기준 500. 오류 코드에 `next` 힌트, 스키마 오류에 `fields`.
+- **실측:** 실제 Claude 2.1.287(haiku)로 작업 폴더 안 읽기는 묻지 않고, 밖 읽기는 게이트를 거쳐 허용, 밖 쓰기는 거절 뒤 턴이 이어짐(단발·대화 프로세스 모두). 실제 Codex 0.157.1 app-server로 셸이 작업 폴더에서 돌고 밖 쓰기는 게이트가 거절해 파일이 생기지 않음. 처음 `on-request`에서는 Codex가 Windows에서 루트 밖에 승인 없이 써서 `untrusted`로 바꿨다.
+- **남은 것:** 화면(`src/ui/**`): 작업 상한 창의 호출·실행 수 입력(이제 무의미)과 `AGENT_CALL_LIMIT`·`HOST_COMMAND_LIMIT` 문구 정리, 권한 카드는 기존 질문 카드(`file-access`)를 그대로 쓴다. 호스트(`hosts/**`, T-121 쪽): 레이어 삭제(`layer-delete`) 보호 판정 제거 여부, ZWCAD 쪽 대량 삭제 기본값(엔진이 500을 보냄). 셸 판정은 명령 인자의 경로만 본다(프로그램이 스스로 여는 경로는 못 봄).
 
 ## T-123 모델 전체 JSON 전송 제거 (RESEARCH-14 §1)
 

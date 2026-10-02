@@ -5,10 +5,13 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 namespace Vide.Worker;
 
-// Defense in depth for generated method bodies, not an OS security boundary.
+// Defense in depth for generated method bodies, not an OS security boundary. Since ADR-031 8
+// (T-122) it keeps only the escape rules: files, network, processes, reflection and runtime,
+// plug-ins, closing or saving the document, and VIDE's undo record. Threads, UI, application
+// settings, commands' types and the console pass.
 internal static class CodePolicy
 {
-    private static readonly string[] DeniedNamespaces = ["System.IO", "System.Net", "System.Reflection", "System.Diagnostics", "System.Runtime", "System.Threading", "Microsoft.Win32", "Microsoft.CodeAnalysis", "Rhino.FileIO", "Rhino.Runtime", "Rhino.PlugIns", "Rhino.Commands", "Rhino.UI", "Rhino.ApplicationSettings", "Vide"];
+    private static readonly string[] DeniedNamespaces = ["System.IO", "System.Net", "System.Reflection", "System.Diagnostics", "System.Runtime", "Microsoft.Win32", "Microsoft.CodeAnalysis", "Rhino.FileIO", "Rhino.Runtime", "Rhino.PlugIns", "Vide"];
     public static string[] Check(CSharpCompilation compilation)
     {
         var failures = new HashSet<string>();
@@ -40,7 +43,9 @@ internal static class CodePolicy
                     // Validity checks inherited from CommonObject (brep.IsValid) are read-only; the rest of Rhino.Runtime stays denied.
                     if (name == "Rhino.Runtime.CommonObject" && symbol.Name is "IsValid" or "IsValidWithLog" or "IsDocumentControlled") continue;
                     if ((!objectTableRead && DeniedNamespaces.Any(prefix => ns == prefix || ns.StartsWith(prefix + ".", StringComparison.Ordinal))) ||
-                        name is "System.Environment" or "System.AppDomain" or "System.Type" or "System.Activator" or "System.Console" or "Rhino.RhinoApp" ||
+                        name is "System.Environment" or "System.AppDomain" or "System.Type" or "System.Activator" ||
+                        // RhinoApp runs commands and scripts or quits Rhino through these; the rest of it (WriteLine, version) passes.
+                        name == "Rhino.RhinoApp" && symbol.Name is "RunScript" or "RunMenuScript" or "Exit" or "ExecuteCommand" or "SendKeystrokes" ||
                         symbol.Name == "GetType" && name == "object" ||
                         name == "Rhino.RhinoDoc" && (symbol.IsStatic || symbol.Name is "Dispose" or "Close" or "Write3dmFile" or "WriteFile" or "ReadFile" or "Import" or "Export" || symbol.Name.StartsWith("Save", StringComparison.Ordinal)) ||
                         // Undo is VIDE's safety net for direct execution; generated code never controls it.

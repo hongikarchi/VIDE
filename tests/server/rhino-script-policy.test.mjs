@@ -36,7 +36,15 @@ test('everyday commands pass; options that share a name with a command do not tr
     assert.deepEqual(checkRhinoCommand(script), { ok: true }, script);
 });
 
-test('opening, quitting, scripts from disk, options, plug-ins, units and undo are refused', () => {
+test('opening, quitting, scripts from disk, plug-ins and undo are refused; options, units and Grasshopper pass (ADR-031 8)', () => {
+  for (const script of [
+    '_-Options _Enter',
+    '_-Units _Millimeters _Enter',
+    '_Line _Pause _Pause',
+    '_-Grasshopper _Enter',
+    '_-DocumentProperties _Enter',
+  ])
+    assert.equal(checkRhinoCommand(script).ok, true, script);
   for (const [script, word] of [
     ['_Exit', '_exit'],
     ['!_-Open "C:\\a.3dm"', '_open'],
@@ -44,14 +52,11 @@ test('opening, quitting, scripts from disk, options, plug-ins, units and undo ar
     ['_-ImportLayouts', '_importlayouts'],
     ['_-RunScript (Command "_Exit")', '_runscript'],
     ['_-RunPythonScript "C:\\a.py"', '_runpythonscript'],
-    ['_-Options _Enter', '_options'],
     ['_-PlugInManager', '_pluginmanager'],
-    ['_-Units _Millimeters', '_units'],
     ['_New', '_new'],
     ['_Undo', '_undo'],
     ['_SelAll _Enter _Undo', '_undo'],
     ['_ClearUndo', '_clearundo'],
-    ['_Line _Pause _Pause', '_pause'],
     // A command that asks nothing is followed by the next command on the same line: the shared
     // words are options only right after the command that owns them (review finding, 2026-10-02).
     ['_SelNone _Close', '_close'],
@@ -131,9 +136,16 @@ test('command words: prefixes, quoted values and command positions', () => {
   ]);
 });
 
-test('Python: geometry and tables pass; file, network, process, application and undo access are refused', () => {
+test('Python: geometry, tables, threads and getattr pass; file, network, process, code loading and undo are refused', () => {
   for (const source of [
     'import rhinoscriptsyntax as rs\nrs.AddLine((0,0,0),(1,0,0))',
+    // Since ADR-031 8 only escape rules stay.
+    "name = getattr(obj, 'Name', None)",
+    'import threading',
+    'import Rhino\nRhino.RhinoApp.WriteLine("x")',
+    'from Rhino import RhinoApp',
+    'value = input',
+    'g = globals()',
     'import scriptcontext as sc\nimport Rhino\nfrom Rhino.Geometry import Point3d\nsc.doc.Objects.AddPoint(Point3d(0,0,0))',
     'import math, re\npattern = re.compile("A")\nprint(math.pi)',
     'from System.Drawing import Color',
@@ -161,10 +173,8 @@ test('Python: geometry and tables pass; file, network, process, application and 
     'sc.doc.SaveAs(r"C:\\a.3dm")',
     'sc.doc.SaveAsTemplate(path)',
     'sc.doc.SaveWithOptions (opts)',
-    // Reflection builds a denied name from strings.
-    "getattr(sc.doc, 'Write3dm' + 'File')(p, o)",
+    // The interpreter's escape hatches stay refused.
     "f = getattr(__builtins__, 'op' + 'en')",
-    'g = globals()',
     'sc.doc.__class__.__subclasses__()',
   ]) {
     const verdict = checkRhinoPython(source);

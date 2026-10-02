@@ -404,7 +404,7 @@ test('M5 replay: a make-conversation writes, checks and asks; the pinned jig mat
         seen.retest = await side.tool('jig_test');
         return side.end({ status: 'done', text: '점검·시험 통과.', questions: [] });
       }
-      // Turn 3: a write to an agent instruction file is refused before it lands.
+      // Turn 3: a write to an agent instruction file is refused; the turn goes on.
       side.use('Write', { file_path: join(side.draftDir, 'CLAUDE.md'), content: 'x' });
       return side.end({ status: 'done', text: '끝', questions: [] });
     } finally {
@@ -534,10 +534,10 @@ test('M5 replay: a make-conversation writes, checks and asks; the pinned jig mat
   });
   assert.equal(seen.retest.data.ok, true);
 
-  // Turn 3: a forbidden file write stops the turn; nothing lands in the folder.
+  // Turn 3: a forbidden file write is refused (only that call; the CLI's restricted mode and the
+  // draft scan keep it out, ADR-031 8) and the turn goes on; nothing lands in the folder.
   const third = await turn('00000000-0000-4000-8000-000000000003', 'CLAUDE.md도 만들어 줘.');
-  assert.equal(third.state, 'failed');
-  assert.equal(third.result?.code ?? third.error?.code, 'UNEXPECTED_TOOL_CALL');
+  assert.equal(third.state, 'succeeded', JSON.stringify(third.result));
   assert.equal(existsSync(join(draft.path, 'CLAUDE.md')), false);
 
   // A forbidden file put there by other means refuses validation and the pin.

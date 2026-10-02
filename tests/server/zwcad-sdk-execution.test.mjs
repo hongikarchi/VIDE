@@ -258,7 +258,7 @@ for (const failAfterWrite of [false, true])
       }),
   );
 
-test('request command cap refuses an extra native write and preserves recovery intent', () =>
+test('no host command cap: writes past the old maxHostCommands still run (ADR-031 7)', () =>
   fixture(async ({ sdk, task, worker, scope }) => {
     let calls = 0;
     const original = worker.execute;
@@ -275,17 +275,18 @@ test('request command cap refuses an extra native write and preserves recovery i
         },
         provider: () => ({
           run: async () => {
-            assert.equal(scope().maxCalls, 3);
-            assert.equal(scope().ttlMs, 90000);
+            // Neither a call cap nor a fixed lifetime is passed any more.
+            assert.equal(scope().maxCalls, undefined);
+            assert.equal(scope().ttlMs, undefined);
             await scope().handlers.execute({ code: 'one' });
-            await scope().handlers.execute({ code: 'must not execute' });
-            return { text: 'unreachable' };
+            await scope().handlers.execute({ code: 'two' });
+            throw Object.assign(new Error('stop here'), { code: 'PROVIDER_FAILED' });
           },
         }),
       }),
-      (error) => error.code === 'HOST_RESULT_UNKNOWN' && error.cause.code === 'HOST_COMMAND_LIMIT',
+      (error) => error.code === 'PROVIDER_FAILED' || error.cause?.code === 'PROVIDER_FAILED',
     );
-    assert.equal(calls, 1);
+    assert.equal(calls, 2);
   }));
 
 test('linked unchanged target retains a verified source without an empty write', () =>

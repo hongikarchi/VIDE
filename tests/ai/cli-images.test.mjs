@@ -45,17 +45,22 @@ test('buildPacket moves image items out of the JSON packet and keeps their place
   assert.deepEqual(buildPacket({ ...context([]) }).images, []);
 });
 
-test('image items are limited to 3 per turn, 1 MB each, PNG or JPEG data URLs', () => {
-  const four = Array.from({ length: 4 }, () => `data:image/png;base64,${png}`);
-  assert.throws(() => buildPacket(context(four)), { code: 'CONTEXT_TOO_LARGE' });
+test('image items past 20 per turn or 5 MB each are left out with a note, not refused (ADR-031 3)', () => {
+  const many = Array.from({ length: 21 }, () => `data:image/png;base64,${png}`);
+  const selected = buildPacket(context(many));
+  assert.equal(selected.images.length, 20);
+  assert.match(selected.packet.items.at(-1).data.omitted, /20 images/);
   assert.throws(() => buildPacket(context(['data:image/gif;base64,R0lGOD=='])), {
     code: 'INVALID_CONTEXT',
   });
   assert.throws(() => buildPacket(context(['https://example.invalid/a.png'])), {
     code: 'INVALID_CONTEXT',
   });
-  const big = Buffer.alloc(1_000_001).toString('base64');
-  assert.throws(() => packetImage(`data:image/png;base64,${big}`), { code: 'CONTEXT_TOO_LARGE' });
+  const big = Buffer.alloc(5_000_001).toString('base64');
+  assert.equal(packetImage(`data:image/png;base64,${big}`), undefined);
+  const left = buildPacket(context([`data:image/png;base64,${big}`]));
+  assert.equal(left.images.length, 0);
+  assert.match(left.packet.items.at(-1).data.omitted, /larger than 5 MB/);
   assert.equal(
     packetImage(`data:image/png;base64,${Buffer.alloc(1_000_000).toString('base64')}`).mediaType,
     'image/png',

@@ -54,7 +54,7 @@ async function fixture(t) {
   return { store, workspace, tools, project, request };
 }
 const payload = (result) => JSON.parse(result.content[0].text);
-test('multiple target scope accepts exactly its explicit set and internal dispatch shares expiry and limits', async () => {
+test('multiple target scope accepts exactly its explicit set and internal dispatch shares expiry', async () => {
   let now = 1,
     calls = 0;
   const tools = new AgentTools({ now: () => now });
@@ -71,16 +71,14 @@ test('multiple target scope accepts exactly its explicit set and internal dispat
   );
   assert.equal(payload(await tools.call(scope.token, 'query', { targetRef: 'one' })), 1);
   assert.equal(payload(await tools.call(scope.token, 'query', { targetRef: 'two' })), 2);
-  assert.equal(
-    payload(await tools.call(scope.token, 'query', { targetRef: 'one' })).code,
-    'AGENT_CALL_LIMIT',
-  );
+  // Tool calls are not counted (ADR-031 7): maxCalls is accepted and ignored.
+  assert.equal(payload(await tools.call(scope.token, 'query', { targetRef: 'one' })), 3);
   now = 20;
   assert.equal(
     payload(await tools.call(scope.token, 'query', { targetRef: 'one' })).code,
     'AGENT_SCOPE_EXPIRED',
   );
-  assert.equal(calls, 2);
+  assert.equal(calls, 3);
   scope.revoke();
   tools.close();
 });
@@ -283,7 +281,7 @@ test('linked target startup failure releases the ready target without calling th
   );
 });
 
-test('linked policy correction and call limit preserve candidates for restart without replay', async (t) => {
+test('linked policy correction and a failed provider preserve candidates for restart without replay', async (t) => {
   const { workspace, tools, project, request } = await fixture(t);
   request.executionLimits = { maxToolCalls: 4, maxHostCommands: 4, timeoutSeconds: 60 };
   const parent = workspace.submit(project.id, request).request;
@@ -337,16 +335,14 @@ test('linked policy correction and call limit preserve candidates for restart wi
         assert.equal(payload(await call('execute', 'a', 'unsafe')).code, 'CODE_POLICY_REJECTED');
         assert.equal(payload(await call('execute', 'a', 'valid')).ok, true);
         assert.equal(payload(await call('query', 'a')).writes, 1);
-        const limited = payload(await call('execute', 'b', 'valid'));
-        assert.equal(limited.code, 'AGENT_CALL_LIMIT');
-        throw Object.assign(Error('limit'), { code: limited.code });
+        throw Object.assign(Error('failed'), { code: 'PROVIDER_FAILED' });
       },
     }),
   });
   const reopened = new Workspace(workspace.store);
   const result = reopened.get(project.id, parent.id);
   assert.equal(result.state, 'failed');
-  assert.equal(result.result.code, 'AGENT_CALL_LIMIT');
+  assert.equal(result.result.code, 'PROVIDER_FAILED');
   assert.equal(writes, 1);
   assert.ok(result.result.targetResults.every((row) => row.candidate));
   const state = initial();

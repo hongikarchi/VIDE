@@ -22,18 +22,16 @@ import { factCitations, jigCheck } from './jig-gates.ts';
 import {
   HOST_TURN_PROJECT_TOOLS,
   agendaHandlers,
-  attachmentHandlers,
   conversationHandlers,
   conversationSources,
-  fileHandlers,
-  imageBudget,
   type AgentTools,
   type ProjectToolHandlers,
 } from './agent-tools.ts';
 import {
-  FileAccess,
+  WorkFolderGate,
   turnGrants,
   type FileContext,
+  type PermissionAction,
   type PermissionAnswer,
   type TurnGrants,
 } from './project-files.ts';
@@ -41,7 +39,6 @@ import type { ProjectFolders } from '../core/project-folders.ts';
 import { Agenda } from '../core/agenda.ts';
 import { activityLog, type ActivityEntry } from './activity.ts';
 import { readableAttachments, type AttachmentStore } from './attachments.ts';
-import { storedAttachments } from '../contracts/workspace.ts';
 import type { Workspace } from '../core/workspace.ts';
 import type { StoredWork } from '../contracts/stored-work.ts';
 import type { RequestInput } from '../contracts/workspace.ts';
@@ -150,11 +147,11 @@ interface Options {
    * of `sdk`. Undefined when the basis is not an attached document (tests inject a mock host).
    */
   directDriver?: (host: 'rhino' | 'zwcad', sourceDocument: unknown) => DirectDriver | undefined;
-  /** Composer attachments (SPEC-01.12): read by the turn's attachment_read tool. */
+  /** Composer attachments (SPEC-01.12): read at their path by the CLI's own Read (ADR-031 8). */
   attachments?: AttachmentStore;
-  /** Project folders (SPEC-01.13): read by the turn's file_list/file_read tools. */
+  /** Project folders (SPEC-01.13): the work folder of the CLI's own file and shell tools. */
   folders?: ProjectFolders;
-  /** Where the data folder is (never read by the file tools). */
+  /** Where the data folder is (never reached by the file tools). */
   fileContext?: FileContext;
   /** Every run's end with its stored request (reference boards read their turns, T-090). */
   onFinished?: (request: StoredWork) => void | Promise<void>;
@@ -240,8 +237,10 @@ export function hostTurnProjectHandlers(
 
 /** The card id of the file permission question (SPEC-01.13 3). */
 export const FILE_PERMISSION_CARD = 'file-access';
-/** How long a file tool waits for the permission answer: within Codex's 60 s MCP tool timeout. */
-export const CODEX_PERMISSION_WAIT_MS = 50_000;
+/**
+ * How long a file permission question waits for the person (both CLIs now wait on their own
+ * permission request, not on an MCP tool call with a timeout).
+ */
 export const PERMISSION_WAIT_MS = 300_000;
 /** `entries` added to an activity list once each, in time order. */
 export function mergeActivity(current: unknown, entries: readonly ActivityEntry[]) {
@@ -287,7 +286,7 @@ export class Execution {
       answer: (answers: NativeQuestionAnswer[] | null, remote?: boolean) => void;
     }
   >();
-  /** Project folders (SPEC-01.13): the file tools of every instructed turn. */
+  /** Project folders (SPEC-01.13): the work folder of every instructed turn (ADR-031 8). */
   folders?: ProjectFolders;
   fileContext?: FileContext;
   /** One request's permission answers and file tool lines, until the request ends. */
@@ -435,7 +434,8 @@ export class Execution {
         (instructions.mode === 'data' && session))
         ? { work: true, web: this.webOn() }
         : undefined;
-    // A jig's AI review reads only its attached table: no project file tools there.
+    // A jig's AI review reads only its attached table: no project file tools there. A make turn
+    // keeps its draft folder's own file tools (T-063) and gets no work folder.
     if (instructions)
       agent = this.readAgent(
         input,
@@ -444,6 +444,14 @@ export class Execution {
         instructions.mode === 'review' ? undefined : instructions.requestId,
         instructions.mode === 'modeling',
       );
+    const work =
+      instructions && instructions.mode !== 'review' && instructions.mode !== 'make'
+        ? this.workFolders(input, instructions.projectId, instructions.requestId)
+        : undefined;
+    const tools =
+      builtinTools || work
+        ? { ...(builtinTools ?? {}), ...(work ? { files: work.files } : {}) }
+        : undefined;
     return factory({
       provider: input.provider,
       executable,
@@ -462,8 +470,50 @@ export class Execution {
       // Either provider's own question tool (SPEC-02.19 6): Claude's AskUserQuestion, Codex's
       // requestUserInput on the app-server. Without it Codex stops at a question (answer next turn).
       ...(nativeQuestions ? { nativeQuestions } : {}),
-      ...(builtinTools ? { builtinTools } : {}),
+      ...(tools ? { builtinTools: tools } : {}),
+      ...(work ? { toolPermission: work.permission } : {}),
     });
+  }
+  /**
+   * The turn's project work folder (ADR-031 8, SPEC-01.13): the CLI's own Read, Glob, Grep, Edit,
+   * Write and Bash (Codex: shell, apply_patch, view_image) run in the first project folder and
+   * reach the project's other folders; the turn's stored attachments are read at their path. A
+   * use outside asks the user on the request's card (conversation turns; elsewhere it is refused).
+   * Plan turns write no file. Undefined without the folder store.
+   */
+  private workFolders(
+    input: Parameters<Execution['provider']>[0],
+    projectId: string,
+    requestId: string | undefined,
+  ) {
+    let others: { files?: readonly unknown[]; conversationId?: string }[] = [];
+    if (input.conversationId)
+      try {
+        others = this.workspace.list(projectId).map((row) => row.input);
+      } catch {
+        others = [];
+      }
+    const allowed = this.attachments ? readableAttachments(input, others) : new Map();
+    const attachments: string[] = [];
+    for (const id of allowed.keys()) {
+      const stored = this.attachments!.get(projectId, id);
+      if (stored) attachments.push(stored.path);
+    }
+    // Neither a folder store nor anything attached: the turn has no file tools.
+    if (!this.folders && !attachments.length) return undefined;
+    const readOnly = requestMode(input) === 'plan';
+    const gate = this.fileGate(input, projectId, requestId, attachments, readOnly);
+    const scope = gate.scope();
+    return {
+      files: {
+        ...(scope.cwd ? { cwd: scope.cwd } : {}),
+        dirs: [...scope.write.slice(1), ...scope.read],
+        attachments,
+        ...(readOnly ? { readOnly: true } : {}),
+      },
+      permission: (request: Parameters<WorkFolderGate['decide']>[0], signal: AbortSignal) =>
+        gate.decide(request, signal),
+    };
   }
   /**
    * The turn's read tools (ARCH-01 §3): attachment_read for this request's and its conversation's
@@ -482,25 +532,6 @@ export class Execution {
   ): unknown {
     if (!this.tools) return agent;
     const handlers: Parameters<AgentTools['issue']>[0]['handlers'] = {};
-    // One image allowance for the turn's attachment_read and file_read together.
-    const images = imageBudget();
-    if (this.attachments && (input.conversationId || storedAttachments(input.files ?? []).length)) {
-      let others: { files?: readonly unknown[]; conversationId?: string }[] = [];
-      if (input.conversationId)
-        try {
-          others = this.workspace.list(projectId).map((row) => row.input);
-        } catch {
-          others = [];
-        }
-      const allowed = readableAttachments(input, others);
-      if (allowed.size)
-        Object.assign(
-          handlers,
-          attachmentHandlers(this.attachments, projectId, allowed, undefined, images),
-        );
-    }
-    if (this.folders && requestId)
-      Object.assign(handlers, fileHandlers(this.fileAccess(input, projectId, requestId), images));
     const conversationId = input.conversationId;
     if (hostTurn && conversationId && this.conversations) {
       const conversations = this.conversations;
@@ -529,40 +560,53 @@ export class Execution {
     const origin =
       typeof this.tools.origin === 'function' ? this.tools.origin() : this.tools.origin;
     if (!origin) return agent;
-    const limits = executionLimits(input);
     const scope = this.tools.issue({
       targetRef: `attachments:${requestId ?? input.id ?? randomUUID()}`,
       handlers,
       isCurrent: () => true,
-      maxCalls: Math.min(100, limits.maxToolCalls),
-      ttlMs: Math.min(600000, (limits.timeoutSeconds + 60) * 1000),
     });
     return { url: new URL('/mcp', origin).href, token: scope.token, tools: names };
   }
   /**
-   * One turn's project file access (SPEC-01.13): the request's permission answers, the question on
-   * the request's cards (conversation turns only: elsewhere no card is shown, so it is refused) and
-   * each use in the request's activity.
+   * One turn's work folder gate (SPEC-01.13, ADR-031 8): the request's permission answers, the
+   * question on the request's cards (conversation turns only: elsewhere no card is shown, so a use
+   * outside the folder is refused) and each asked or refused use in the request's activity.
    */
-  private fileAccess(
+  private fileGate(
     input: Parameters<Execution['provider']>[0],
     projectId: string,
-    requestId: string,
+    requestId: string | undefined,
+    attachments: readonly string[],
+    readOnly: boolean,
   ) {
-    let grants = this.fileGrants.get(requestId);
-    if (!grants) this.fileGrants.set(requestId, (grants = turnGrants()));
-    const waitMs = input.provider === 'codex-cli' ? CODEX_PERMISSION_WAIT_MS : PERMISSION_WAIT_MS;
-    return new FileAccess({
-      folders: this.folders!,
+    let grants = requestId ? this.fileGrants.get(requestId) : undefined;
+    if (!grants) {
+      grants = turnGrants();
+      if (requestId) this.fileGrants.set(requestId, grants);
+    }
+    return new WorkFolderGate({
+      ...(this.folders ? { folders: this.folders } : {}),
       projectId,
       context: this.fileContext,
       grants,
+      attachments,
+      readOnly,
       ask:
-        typeof input.conversationId === 'string'
-          ? (folder, path, signal) =>
-              this.askFilePermission(projectId, requestId, folder, path, signal, waitMs)
+        typeof input.conversationId === 'string' && requestId
+          ? (folder, path, signal, action) =>
+              this.askFilePermission(
+                projectId,
+                requestId,
+                folder,
+                path,
+                signal,
+                PERMISSION_WAIT_MS,
+                action,
+              )
           : undefined,
-      onUse: (text) => this.noteFileUse(projectId, requestId, text),
+      onUse: (text) => {
+        if (requestId) this.noteFileUse(projectId, requestId, text);
+      },
     });
   }
   /** One line of the request's activity per file tool call (path only), shown while it runs. */
@@ -610,18 +654,42 @@ export class Execution {
     path: string,
     signal: AbortSignal,
     waitMs: number,
+    action: PermissionAction = 'read',
   ): Promise<PermissionAnswer> {
-    const card = {
-      id: FILE_PERMISSION_CARD,
-      title: `AI가 프로젝트 폴더 밖의 파일을 읽으려 합니다 · ${path}`,
-      blocks: 'AI 파일 읽기',
-      options: [
-        { id: 'once', label: '이번만', hint: `이 요청 동안 ${folder} 읽기 허용` },
-        { id: 'always', label: '이 폴더는 항상', hint: `${folder}를 읽기 허용 폴더에 추가` },
-        { id: 'deny', label: '거절', hint: '읽지 않고 AI에 거절로 알림', recommended: true },
-      ],
-      allowFree: false,
-    };
+    // Reading may be allowed for good ([이 폴더는 항상]); writing and running are asked each time.
+    const card =
+      action === 'read'
+        ? {
+            id: FILE_PERMISSION_CARD,
+            title: `AI가 프로젝트 작업 폴더 밖의 파일을 읽으려 합니다 · ${path}`,
+            blocks: 'AI 파일 읽기',
+            options: [
+              { id: 'once', label: '이번만', hint: `이 요청 동안 ${folder} 읽기 허용` },
+              { id: 'always', label: '이 폴더는 항상', hint: `${folder}를 읽기 허용 폴더에 추가` },
+              { id: 'deny', label: '거절', hint: '읽지 않고 AI에 거절로 알림', recommended: true },
+            ],
+            allowFree: false,
+          }
+        : {
+            id: FILE_PERMISSION_CARD,
+            title:
+              action === 'write'
+                ? `AI가 프로젝트 작업 폴더 밖에 파일을 쓰려 합니다 · ${path}`
+                : `AI가 프로젝트 작업 폴더 밖에서 명령을 실행하려 합니다 · ${path}`,
+            blocks: action === 'write' ? 'AI 파일 쓰기' : 'AI 명령 실행',
+            options: [
+              {
+                id: 'once',
+                label: '이번만',
+                hint:
+                  action === 'write'
+                    ? `이 요청 동안 ${folder}에 쓰기 허용`
+                    : `이 요청 동안 ${folder}에서 실행 허용`,
+              },
+              { id: 'deny', label: '거절', hint: '하지 않고 AI에 거절로 알림', recommended: true },
+            ],
+            allowFree: false,
+          };
     let before: Record<string, unknown> | null = null;
     try {
       before = this.workspace.get(projectId, requestId).result;
@@ -1471,8 +1539,6 @@ export class Execution {
           ? this.tools.issueConversation(sources, {
               readOnly: runMode === 'plan',
               isCurrent: () => !controller.signal.aborted,
-              maxCalls: executionLimits(input).maxToolCalls,
-              ttlMs: Math.min(600000, (executionLimits(input).timeoutSeconds + 60) * 1000),
             })
           : undefined;
       // The bundle's mode (PLAN-24 지침 묶음): host edit, jig making, jig review or data.

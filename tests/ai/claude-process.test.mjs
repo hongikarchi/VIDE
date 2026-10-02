@@ -255,6 +255,7 @@ test('a resumed session without its transcript is SESSION_LOST', async () => {
 });
 
 test('the turn waits for the subagents it started and answers with the last result', async () => {
+  const warnings = [];
   const fake = fakeCli((message, child) => {
     if (message.type !== 'user') return;
     child.send(init());
@@ -283,10 +284,18 @@ test('the turn waits for the subagents it started and answers with the last resu
     },
     builtinTools: { work: true },
   })
-    .run(context())
+    .run(context(), { onProgress: (event) => warnings.push(event) })
     .catch((cause) => cause);
-  // The connection needs VIDE's server in the init event; this fake reports none.
-  assert.equal(value.code, 'UNEXPECTED_TOOL_ACCESS');
+  // The connection needs VIDE's server in the init event; this fake reports none: a warning, and
+  // the turn goes on (ADR-031 8).
+  assert.equal(value.text, '최종 답');
+  assert.ok(
+    warnings.some(
+      (event) => event.state === 'provider-warning' && event.reason === 'UNEXPECTED_TOOL_ACCESS',
+    ),
+  );
+  // The turn succeeded, so its process is kept: end it so the next fake starts its own.
+  await closeClaudeProcesses();
 
   const fake2 = fakeCli((message, child) => {
     if (message.type !== 'user') return;

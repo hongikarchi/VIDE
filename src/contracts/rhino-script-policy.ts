@@ -1,9 +1,11 @@
 // Rhino command scripts and Python in direct mode (ADR-029, user decision 2026-10-02 "Rhino 명령,
 // Python은 열어줘야지"). The AI's `execute` may send a Rhino command macro or a Python 3 script
 // besides a C# body. This is the policy both the engine (before calling the host) and the Rhino
-// plugin (DirectScripts.cs, the same lists) apply: commands that open, close or quit, read files
-// or scripts from disk, change application options or plug-ins, or control undo are refused;
-// commands that write files (save, export, print) and purge wait on the guard card. Like
+// plugin (DirectScripts.cs, the same lists) apply. Since ADR-031 8 (T-122) it keeps only the
+// escape rules: commands and code that open, close or quit documents or Rhino, read files or
+// scripts from disk, load plug-ins, reach the network or other processes, or take over VIDE's undo
+// record are refused; options, units, Grasshopper, threads, reflection by name and the like pass.
+// Commands that write files (save, export, print) and purge wait on the guard card. Like
 // CodePolicy it is defence in depth, not an OS security boundary.
 
 /** The direct-mode guard kinds a script can trip before it runs (a subset of directGuardKinds). */
@@ -29,13 +31,9 @@ export const COMMAND_DENY = [
   'editpythonscript',
   'scripteditor',
   'rhinocode',
-  'options',
-  'documentproperties',
-  'units',
   'pluginmanager',
   'loadplugin',
   'packagemanager',
-  'grasshopper',
   'grasshopperplayer',
   'readviewsfromfile',
   'sendmail',
@@ -44,8 +42,6 @@ export const COMMAND_DENY = [
   'undomultiple',
   'redomultiple',
   'undoselected',
-  'pause',
-  'multipause',
 ];
 /**
  * Refused wherever they appear, except as an option of the command that owns them
@@ -81,23 +77,22 @@ export const COMMAND_OPTION_OWNERS: Record<string, string[]> = {
 /** Every token starting with these is held for confirmation (Export, ExportWithOrigin, …). */
 export const COMMAND_CONFIRM_PREFIX: Record<string, DirectGuardKind> = { export: 'export' };
 
-/** Python source patterns refused (file, network, process, reflection, application, undo). */
+/** Python source patterns refused (file, network, process, code loading, application exit, undo). */
 export const PYTHON_DENY = [
-  String.raw`^[ \t]*(import|from)[ \t]+[^\n#]*\b(os|sys|subprocess|socket|shutil|ctypes|urllib|urllib2|urllib3|http|requests|pathlib|io|glob|tempfile|ftplib|smtplib|multiprocessing|threading|asyncio|winreg|_winreg|importlib|webbrowser|pickle|marshal|zipfile|tarfile|sqlite3|signal|clr)\b`,
-  String.raw`(?<![\w.])(open|__import__|exec|eval|compile|execfile|input|raw_input|breakpoint)[ \t]*\(`,
-  String.raw`\bSystem\.(IO|Net|Diagnostics|Reflection|Threading|Runtime|Environment|AppDomain|Activator|Type)\b`,
-  String.raw`^[ \t]*from[ \t]+System(\.\w+)?[ \t]+import\b[^\n#]*\b(IO|Net|Diagnostics|Reflection|Threading|Runtime|Environment|AppDomain|Activator|Type)\b`,
+  String.raw`^[ \t]*(import|from)[ \t]+[^\n#]*\b(os|sys|subprocess|socket|shutil|ctypes|urllib|urllib2|urllib3|http|requests|pathlib|io|glob|tempfile|ftplib|smtplib|multiprocessing|winreg|_winreg|importlib|webbrowser|pickle|marshal|zipfile|tarfile|sqlite3|signal|clr)\b`,
+  String.raw`(?<![\w.])(open|__import__|exec|eval|compile|execfile)[ \t]*\(`,
+  String.raw`\bSystem\.(IO|Net|Diagnostics|Reflection|Runtime|Environment|AppDomain|Activator|Type)\b`,
+  String.raw`^[ \t]*from[ \t]+System(\.\w+)?[ \t]+import\b[^\n#]*\b(IO|Net|Diagnostics|Reflection|Runtime|Environment|AppDomain|Activator|Type)\b`,
   String.raw`\bMicrosoft\.Win32\b`,
-  String.raw`\bRhino\.(FileIO|PlugIns|UI|ApplicationSettings|Runtime|Commands)\b`,
-  String.raw`^[ \t]*from[ \t]+Rhino(\.\w+)?[ \t]+import\b[^\n#]*\b(FileIO|PlugIns|UI|ApplicationSettings|Runtime|Commands|RhinoApp)\b`,
-  String.raw`\bRhinoApp\b`,
+  String.raw`\bRhino\.(FileIO|PlugIns|Runtime)\b`,
+  String.raw`^[ \t]*from[ \t]+Rhino(\.\w+)?[ \t]+import\b[^\n#]*\b(FileIO|PlugIns|Runtime)\b`,
+  String.raw`\bRhinoApp\.(RunScript|RunMenuScript|Exit|ExecuteCommand|SendKeystrokes)\b`,
   String.raw`\.(Command|Exit|OpenFileName|OpenFileNames|SaveFileName|BrowseForFolder|Write3dmFile|WriteFile|ReadFile|Import|Export|SaveAs|Close|Undo|Redo|BeginUndoRecord|EndUndoRecord|ClearUndoRecords|AddCustomUndoEvent)\b`,
   String.raw`(?<![\w.])(Command|Exit)[ \t]*\(`,
   // Any save of the document (Save, SaveAs, SaveAsTemplate, SaveWithOptions, …) writes a file.
   String.raw`\.Save\w*[ \t]*\(`,
-  // Reflection reaches denied names through strings (getattr(sc.doc, 'Write3dm' + 'File')).
-  String.raw`(?<![\w.])(getattr|setattr|delattr|globals|locals|vars)[ \t]*\(`,
-  String.raw`\b__(builtins|dict|class|subclasses|bases|mro|globals|code|getattribute|loader|spec)__\b`,
+  // The interpreter's own escape hatches (builtins, other modules' globals, code objects).
+  String.raw`\b__(builtins|subclasses|globals|code|loader|spec)__\b`,
   String.raw`^[ \t]*from[ \t]+(rhinoscriptsyntax|rhinoscript)(\.\w+)?[ \t]+import\b[^\n#]*(\*|\b(Command|Exit)\b)`,
 ];
 /**
@@ -184,7 +179,7 @@ export function checkRhinoCommand(script: string): ScriptVerdict {
     return {
       ok: false,
       diagnostics: [
-        `Rhino command not permitted in VIDE: ${[...denied].map(shown).join(', ')}. Opening, closing or quitting documents, reading files or scripts from disk, application options, plug-ins, units and undo stay with the user; use RhinoCommon C# or another command instead. New, Close and Undo pass only as an option right after the command that owns it (-Layer New, Polyline Undo/Close); Redo and Insert are always refused.`,
+        `Rhino command not permitted in VIDE: ${[...denied].map(shown).join(', ')}. Opening, closing or quitting documents, reading files or scripts from disk, plug-ins, mail and undo stay with the user; use RhinoCommon C# or another command instead. New, Close and Undo pass only as an option right after the command that owns it (-Layer New, Polyline Undo/Close); Redo and Insert are always refused.`,
       ],
     };
   const kind = GUARD_SEVERITY.find((each) => held[each]?.length);
@@ -201,7 +196,7 @@ export function checkRhinoPython(source: string): ScriptVerdict {
     return {
       ok: false,
       diagnostics: [
-        `Python not permitted in VIDE: ${hits.join(' | ')}. No file, network, process, reflection (getattr, __builtins__), application, command, save or undo access; use Rhino, rhinoscriptsyntax and scriptcontext.doc geometry and tables only (Rhino commands go in execute.command).`,
+        `Python not permitted in VIDE: ${hits.join(' | ')}. No file, network, process, code loading (__import__, exec, clr), application exit, command, save or undo access; use Rhino, rhinoscriptsyntax and scriptcontext.doc (Rhino commands go in execute.command).`,
       ],
     };
   if (new RegExp(PYTHON_PURGE, 'm').test(source))

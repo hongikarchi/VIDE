@@ -629,6 +629,28 @@ test('a lost execute answer still leaves the turn unknown', async (t) => {
   assert.equal(host.calls.execute.length, 1);
 });
 
+test('after a lost execute answer the turn still reads the document; only execute answers HOST_RESULT_UNKNOWN (ADR-031 8)', async (t) => {
+  const answers = [];
+  const { host, send, settled, state } = setup(t, async ({ call }) => {
+    answers.push(await call('execute', { code: 'add wall' }));
+    answers.push(await call('query', {}));
+    answers.push(await call('execute', { code: 'add door' }));
+    return { text: '끝' };
+  });
+  host.driver.execute = async (command) => {
+    host.calls.execute.push(command);
+    throw thrown('HOST_RESULT_UNKNOWN');
+  };
+  send('lost-read');
+  await settled();
+  assert.equal(state('lost-read').state, 'unknown');
+  assert.equal(answers[1].error, false, JSON.stringify(answers[1].value));
+  assert.equal(answers[2].error, true);
+  assert.equal(answers[2].value.code, 'HOST_RESULT_UNKNOWN');
+  assert.match(answers[2].value.next, /You may still read it/);
+  assert.equal(host.calls.execute.length, 1);
+});
+
 test('a refused confirmed re-run keeps the guard card with the reason', async (t) => {
   const { execution, host, send, settled, state, project } = setup(t, async ({ call }) => {
     await call('execute', { code: 'wipe old layer' });

@@ -244,9 +244,10 @@ test('a three-turn Claude conversation resumes one session and re-asserts isolat
   assert.equal(saved.requests, 3);
 });
 
-test('a turn whose start event lists a tool stops, and the session is still resumed afterwards', async (t) => {
+test('a turn that fails stops, and the session is still resumed afterwards', async (t) => {
+  // An unexpected tool list no longer fails a turn (ADR-031 8); a provider error does.
   const { fake, open, send, settled, state, conversations } = setup(t, (turn) =>
-    turn === 1 ? [{ ...init, tools: ['Bash'] }, answer('x')] : [init, answer('ok')],
+    turn === 1 ? [init, { ...answer('x'), is_error: true }] : [init, answer('ok')],
   );
   const conversation = open();
   send('t1', { conversationId: conversation.id });
@@ -254,7 +255,7 @@ test('a turn whose start event lists a tool stops, and the session is still resu
   send('t2', { conversationId: conversation.id });
   await settled();
   assert.equal(state('t2').state, 'failed');
-  assert.equal(state('t2').result.code, 'UNEXPECTED_TOOL_ACCESS');
+  assert.equal(state('t2').result.code, 'PROVIDER_FAILED');
   send('t3', { conversationId: conversation.id });
   await settled();
   assert.equal(state('t3').state, 'succeeded');
@@ -274,7 +275,7 @@ test('a turn whose start event lists a tool stops, and the session is still resu
 
 test('an opening turn that fails is not resumed: the next turn opens a fresh session ID', async (t) => {
   const { fake, open, send, settled, state, conversations } = setup(t, (turn) =>
-    turn === 0 ? [{ ...init, tools: ['Bash'] }, answer('x')] : [init, answer('ok')],
+    turn === 0 ? [init, { ...answer('x'), is_error: true }] : [init, answer('ok')],
   );
   const conversation = open();
   send('f1', { conversationId: conversation.id });

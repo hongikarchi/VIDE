@@ -27,8 +27,6 @@ import { skillCatalog } from './skill-catalog.ts';
 import { MakeTurnGuard, draftsFor, makeStopNotice } from './make-routes.ts';
 import type { JigDrafts } from '../jigs/runtime/drafts.ts';
 import { turnOutputSchema } from './turn-output.ts';
-import type { AttachmentStore } from './attachments.ts';
-import type { FileAccess } from './project-files.ts';
 import { existsSync } from 'node:fs';
 import { resolveAgentToken } from '../ai/agent-relay.ts';
 import { Agenda, localDate } from '../core/agenda.ts';
@@ -87,7 +85,7 @@ const definitions = {
   },
   execute: {
     description:
-      'Run work in a document: with linkId any open linked file of the project (the goal lists them; pick the file or files the request is about), without it the turn\'s starting document. Give exactly one of: code (an SDK C# method body), command (a Rhino command macro such as "_-SelDup _Enter"; Auto mode on an open Rhino document only) or python (a Rhino 8 Python 3 script using Rhino, rhinoscriptsyntax and scriptcontext.doc; Auto mode on an open Rhino document only). In Auto mode it is the open user document: each call runs directly in it as ONE undo record (Ctrl+Z / VIDE [되돌리기] reverts it) and returns undoId and the added/changed/removed objects. Bulk deletion above the limit, layer deletion, purge and commands that write files (save, export, print) are held back: such a call returns ok:false with "guarded" and nothing stays applied; then stop and tell the user what needs confirmation. Commands or Python that open, close or quit documents, read files or scripts from disk, change options, plug-ins or units, or control undo are refused (CODE_POLICY_REJECTED). Plan mode has no execute. Each file keeps its own undo records.',
+      'Run work in a document: with linkId any open linked file of the project (the goal lists them; pick the file or files the request is about), without it the turn\'s starting document. Give exactly one of: code (an SDK C# method body), command (a Rhino command macro such as "_-SelDup _Enter"; Auto mode on an open Rhino document only) or python (a Rhino 8 Python 3 script using Rhino, rhinoscriptsyntax and scriptcontext.doc; Auto mode on an open Rhino document only). In Auto mode it is the open user document: each call runs directly in it as ONE undo record (Ctrl+Z / VIDE [되돌리기] reverts it) and returns undoId and the added/changed/removed objects. Deleting more than 500 objects at once, layer deletion, purge and commands that write files (save, export, print) are held back: such a call returns ok:false with "guarded" and nothing stays applied; then stop and tell the user what needs confirmation. Commands or Python that open, close or quit documents, read files or scripts from disk, load plug-ins, reach the network or other processes, or control undo are refused (CODE_POLICY_REJECTED). Plan mode has no execute. Each file keeps its own undo records.',
     schema: z
       .object({
         targetRef: target,
@@ -137,48 +135,8 @@ const definitions = {
       })
       .strict(),
   },
-  status: { description: 'Read the current task execution status.', schema: z.object({}).strict() },
-  // Composer attachments (SPEC-01.12): this request's and its conversation's files only.
-  attachment_read: {
-    description:
-      "Read a file the user attached to this request or an earlier turn of this conversation, by the id of its 'file' item. Text comes in byte pages (offset, limit up to 40000; continue from nextOffset). PNG/JPEG/GIF/WebP images come back as an image you see. PDF, Rhino 3DM, DWG and other binary files return only name, size, type and a note on how to get their contents. Never claim to have read what this tool did not return.",
-    schema: z
-      .object({
-        id: z.string().regex(/^[0-9a-f]{24}$/),
-        offset: z.number().int().min(0).optional(),
-        limit: z.number().int().min(1).max(40000).optional(),
-      })
-      .strict(),
-  },
-  // Project files (SPEC-01.13): read-only, through the engine; outside the folders the user is asked.
-  file_list: {
-    description:
-      "List this project's folders (leave path out), or one folder's entries (folders first, then files, by name) a page at a time; pattern filters names with * and ?. Paths outside the project folders ask the user first (FILE_ACCESS_DENIED when refused: do not ask again this turn). Key, login and VIDE data files are never listed.",
-    schema: z
-      .object({
-        path: z.string().min(1).max(1024).optional(),
-        pattern: z.string().min(1).max(200).optional(),
-        offset: z.number().int().min(0).optional(),
-        limit: z.number().int().min(1).max(200).optional(),
-      })
-      .strict(),
-  },
-  file_read: {
-    description:
-      'Read a file by absolute path (or relative to the first project folder). Text comes in byte pages (offset, limit up to 40000; continue from nextOffset). PNG/JPEG/GIF/WebP up to 1 MB come back as an image you see. PDF, 3DM, DWG and other binary files return name, size, type and a note. Inside the project folders it reads at once; outside, the user is asked (FILE_ACCESS_DENIED when refused: do not ask again this turn). FILE_FORBIDDEN: keys, logins, VIDE data, or a link leading out of a folder; never retry. Read-only: there is no write tool.',
-    schema: z
-      .object({
-        path: z.string().min(1).max(1024),
-        offset: z.number().int().min(0).optional(),
-        limit: z.number().int().min(1).max(40000).optional(),
-      })
-      .strict(),
-  },
-  cancel: {
-    description:
-      'Request cancellation of the current task. The result determines whether stopping was confirmed.',
-    schema: z.object({}).strict(),
-  },
+  // status and cancel (no handler) and attachment_read, file_list and file_read are gone (ADR-031 8,
+  // T-122): the CLI's own Read, Glob and Grep read the project work folder and the attachments.
   // Conversation tools (PLAN-24 T-062): the conversation's project only. Reads are T1; jig_set and
   // jig_run act only on the jig the conversation has open, and nothing here writes a host document.
   jig_list: {
@@ -459,7 +417,9 @@ interface ScopeOptions {
   targetRef: string | string[];
   handlers: Handlers;
   isCurrent: () => boolean | Promise<boolean>;
+  /** Accepted for callers that still pass it; tool calls are not counted (ADR-031 7). */
   maxCalls?: number;
+  /** Time without a call before the scope lapses (each call starts it again). */
   ttlMs?: number;
   /** The handlers resolve `linkId` on the document tools (a direct host turn, ADR-027). */
   links?: boolean;
@@ -469,12 +429,14 @@ interface Run {
   links: boolean;
   handlers: Handlers;
   isCurrent: ScopeOptions['isCurrent'];
-  remaining: number;
+  ttlMs: number;
   expires: number;
   abort: AbortController;
   busy: boolean;
   /** The request whose run issued this scope (diagnostic lines only). */
   requestId?: string;
+  /** The capture before this one (captures wait for each other). */
+  capture: Promise<unknown>;
 }
 function toolName(value: string): value is ToolName {
   return Object.hasOwn(definitions, value);
@@ -499,7 +461,6 @@ const knownErrors = new Set([
   'HOST_UNAVAILABLE',
   'HOST_RESULT_UNKNOWN',
   'HOST_REJECTED',
-  'HOST_COMMAND_LIMIT',
   'EXECUTOR_NOT_READY',
   'CANCELLED',
   'NOT_FOUND',
@@ -519,17 +480,28 @@ const knownErrors = new Set([
   'LAYER_OPTION_UNAVAILABLE',
   'CAPTURE_FAILED',
   'MEASURE_FAILED',
-  'ATTACHMENT_NOT_FOUND',
-  'FILE_NOT_FOUND',
-  'FILE_FORBIDDEN',
-  'FILE_ACCESS_DENIED',
   'LINK_NOT_LIVE',
   'DOCUMENT_LOCKED',
   'HOST_RESULT_UNRESOLVED',
   'AGENDA_LIMIT',
 ]);
-/** What the model should do next after these errors (ADR-027): sent beside the code. */
+/** What the model should do next after these errors (ADR-027, ADR-031): sent beside the code. */
 const errorHints: Record<string, string> = {
+  STALE_REFERENCE:
+    'The task this tool belongs to moved on (stopped, or its basis changed). Read the current state again before acting; do not repeat a write from memory.',
+  AGENT_BUSY:
+    'Another write of this turn is still running. Wait for its answer, then call again; reads may run side by side.',
+  HOST_RESULT_UNKNOWN:
+    "An earlier execute in this turn lost its answer, so the document's state is unknown. You may still read it (query, capture_view, measure); no further execute runs in this turn. Tell the user what to check.",
+  AGENT_SCOPE_EXPIRED:
+    'This turn has ended or was stopped; its tools no longer answer. Finish your reply without them.',
+  TARGET_MISMATCH:
+    "targetRef does not name this turn's target. Leave targetRef out, or use the one the turn rules name.",
+  INVALID_INPUT:
+    'The arguments do not fit the tool. Fix the fields listed in `fields` and call again.',
+  NOT_FOUND: 'Nothing with that id exists here. List or query first to get a current id.',
+  HOST_UNAVAILABLE:
+    'The host connection is not available now. Nothing ran. Tell the user to check that the file is open and connected.',
   LINK_NOT_LIVE:
     'That linked file is not open and connected now. Read it from its stored Sync with links_layers and sync_sample, do not edit it, and tell the user it must be open in its host to be edited.',
   DOCUMENT_LOCKED:
@@ -574,8 +546,7 @@ const projectScoped: ReadonlySet<string> = new Set([
 ]);
 /** The handlers of HOST_TURN_PROJECT_TOOLS a host turn spreads into its scope. */
 export type ProjectToolHandlers = Pick<Handlers, (typeof HOST_TURN_PROJECT_TOOLS)[number]>;
-/** Tools that change or occupy the target: one at a time, after the basis check. */
-// capture_view moves the camera and layers of the target for one image, so it takes the turn too.
+/** Tools that read or change the target: each passes the basis check first. */
 const controlledTools = new Set<ToolName>([
   'execute',
   'query',
@@ -584,6 +555,17 @@ const controlledTools = new Set<ToolName>([
   'capture_view',
 ]);
 /**
+ * Writes run one at a time per turn (AGENT_BUSY for a second one); reads run side by side
+ * (ADR-031 8). capture_view moves the camera and layers of the target for one image, so two
+ * captures wait for each other instead of failing.
+ */
+const writeTools = new Set<ToolName>(['execute', 'jig_set', 'jig_run']);
+/**
+ * A scope's lifetime between two calls (ADR-031 8): each call starts it again, so a turn that keeps
+ * working never loses its tools; the turn's end revokes the scope anyway.
+ */
+export const AGENT_SCOPE_IDLE_MS = 60 * 60 * 1000;
+/**
  * Plan mode (ADR-022 2): the AI reads, measures, captures, plans and asks; nothing that writes a
  * document, a jig setting or a draft file.
  */
@@ -591,8 +573,6 @@ export const PLAN_MODE_TOOLS: ReadonlySet<string> = new Set<ToolName>([
   'query',
   'capture_view',
   'measure',
-  'status',
-  'cancel',
   'jig_list',
   'jig_state',
   'jig_output',
@@ -609,9 +589,6 @@ export const PLAN_MODE_TOOLS: ReadonlySet<string> = new Set<ToolName>([
   'project_issue',
   'project_statement',
   'project_checks',
-  'attachment_read',
-  'file_list',
-  'file_read',
   'agenda_list',
 ]);
 /** The handlers Plan mode keeps (PLAN_MODE_TOOLS). */
@@ -644,8 +621,8 @@ export class AgentTools {
     sources: ConversationToolSources,
     {
       isCurrent = () => true,
-      maxCalls = 20,
-      ttlMs = 120000,
+      maxCalls,
+      ttlMs = AGENT_SCOPE_IDLE_MS,
       readOnly = false,
     }: {
       isCurrent?: ScopeOptions['isCurrent'];
@@ -683,8 +660,8 @@ export class AgentTools {
     targetRef,
     handlers,
     isCurrent,
-    maxCalls = 20,
-    ttlMs = 120000,
+    maxCalls,
+    ttlMs = AGENT_SCOPE_IDLE_MS,
     links = false,
   }: ScopeOptions) {
     const targets = Array.isArray(targetRef) ? targetRef : [targetRef];
@@ -699,12 +676,10 @@ export class AgentTools {
       Object.entries(handlers).some(
         ([name, handler]) => !toolName(name) || typeof handler !== 'function',
       ) ||
-      !Number.isInteger(maxCalls) ||
-      maxCalls < 1 ||
-      maxCalls > 100 ||
+      (maxCalls !== undefined && (!Number.isInteger(maxCalls) || maxCalls < 1)) ||
       !Number.isFinite(ttlMs) ||
       ttlMs < 1 ||
-      ttlMs > 600000
+      ttlMs > 24 * 60 * 60 * 1000
     )
       throw failure('INVALID_AGENT_SCOPE');
     // Bound retained capabilities even when callers forget to release completed runs.
@@ -717,11 +692,12 @@ export class AgentTools {
       links,
       handlers: { ...handlers },
       isCurrent,
-      remaining: maxCalls,
+      ttlMs,
       expires: this.#now() + ttlMs,
       abort: new AbortController(),
       busy: false,
       requestId: currentTrace()?.requestId,
+      capture: Promise.resolve(),
     };
     this.#runs.set(key, run);
     return { token, revoke: () => this.#revoke(key) };
@@ -768,7 +744,16 @@ export class AgentTools {
     if (!parsed.success)
       return {
         isError: true,
-        content: [{ type: 'text', text: JSON.stringify({ code: 'INVALID_INPUT' }) }],
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify({
+              code: 'INVALID_INPUT',
+              fields: schemaFields(parsed.error),
+              next: errorHints.INVALID_INPUT,
+            }),
+          },
+        ],
       };
     return this.#logged(run, name, parsed.data);
   }
@@ -822,6 +807,8 @@ export class AgentTools {
       ],
     });
     if (run.abort.signal.aborted || run.expires <= this.#now()) return error('AGENT_SCOPE_EXPIRED');
+    // A turn that keeps calling keeps its tools (the lifetime is the time between calls).
+    run.expires = this.#now() + run.ttlMs;
     // Another linked file only where the handlers resolve it; elsewhere never the target instead.
     if (args.linkId !== undefined && linkTools.has(name) && !run.links)
       return error('LINK_NOT_LIVE', noLinksHint);
@@ -841,10 +828,16 @@ export class AgentTools {
     )
       return error('EXECUTE_FORM_INVALID');
     const controlled = controlledTools.has(name);
-    if (controlled && run.busy) return error('AGENT_BUSY');
-    if (run.remaining <= 0) return error('AGENT_CALL_LIMIT');
-    run.remaining--;
-    if (controlled) run.busy = true;
+    const write = writeTools.has(name);
+    if (write && run.busy) return error('AGENT_BUSY');
+    if (write) run.busy = true;
+    // Two captures of one turn take turns (each moves the view for its image).
+    let captured = () => {};
+    if (name === 'capture_view') {
+      const before = run.capture;
+      run.capture = new Promise<void>((done) => (captured = done));
+      await before;
+    }
     try {
       if (controlled && !(await run.isCurrent())) return error('STALE_REFERENCE');
       // Conditions may change while the revision check is awaiting storage.
@@ -871,7 +864,8 @@ export class AgentTools {
         knownErrors.has(code) || /^[A-Z][A-Z0-9_]{2,63}$/.test(code) ? code : 'AGENT_TOOL_FAILED',
       );
     } finally {
-      if (controlled) run.busy = false;
+      if (write) run.busy = false;
+      captured();
     }
   }
   async handle(
@@ -884,7 +878,7 @@ export class AgentTools {
     const token = bearer && resolveAgentToken(bearer);
     const key = token && digest(token),
       run = key && this.#runs.get(key);
-    if (!run || run.expires <= this.#now()) {
+    if (!run || run.expires <= this.#now() || run.abort.signal.aborted) {
       if (run && key) this.#revoke(key);
       response.writeHead(401, { 'Content-Type': 'application/json' });
       response.end(JSON.stringify({ code: 'AGENT_UNAUTHORIZED' }));
@@ -989,13 +983,60 @@ export interface ConversationToolSources {
     returned?: Map<number, FactState>;
   };
 }
-/** Each tool result stays small: the model pages instead of receiving a whole output. */
-const RESULT_BYTES = 48 * 1024;
+/**
+ * A tool result's size (ADR-031 3): about what the stock MCP output keeps. A larger one is cut, not
+ * refused: a page keeps the rows that fit and points at the next one, anything else keeps its
+ * first part, and both say `truncated: true` with how to read on.
+ */
+export const RESULT_BYTES = 96 * 1024;
 const sizeOf = (value: unknown) => Buffer.byteLength(JSON.stringify(value) ?? '');
-const bounded = <T>(value: T): T => {
-  if (sizeOf(value) > RESULT_BYTES) throw new DomainError('QUERY_RESULT_TOO_LARGE');
-  return value;
+export const bounded = <T>(value: T): T => {
+  if (sizeOf(value) <= RESULT_BYTES) return value;
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    const record = value as Record<string, unknown>;
+    // The first array field (a page's items, issues, rows): keep the rows that fit.
+    const key = Object.keys(record).find((name) => Array.isArray(record[name]));
+    if (key) {
+      const rows = record[key] as unknown[];
+      const offset = typeof record.offset === 'number' ? record.offset : 0;
+      let low = 0,
+        high = rows.length;
+      const shaped = (count: number) => ({
+        ...record,
+        [key]: rows.slice(0, count),
+        truncated: true,
+        ...('nextOffset' in record || 'offset' in record
+          ? { nextOffset: offset + count }
+          : { omitted: rows.length - count }),
+        next:
+          'nextOffset' in record || 'offset' in record
+            ? `Only the first ${count} of ${rows.length} rows fit; read on with offset ${offset + count}, or ask for less (a smaller limit, a path, ids).`
+            : `Only the first ${count} of ${rows.length} entries of ${key} fit; ask for less (a path, ids, a narrower request) to see the rest.`,
+      });
+      while (low < high) {
+        const middle = Math.ceil((low + high) / 2);
+        if (sizeOf(shaped(middle)) <= RESULT_BYTES) low = middle;
+        else high = middle - 1;
+      }
+      const cut = shaped(low);
+      if (sizeOf(cut) <= RESULT_BYTES) return cut as T;
+    }
+  }
+  const text = JSON.stringify(value) ?? '';
+  return {
+    truncated: true,
+    partial: text.slice(0, RESULT_BYTES - 512),
+    bytes: Buffer.byteLength(text),
+    next: 'The result was cut at its first part (JSON text). Ask for less at once (a path, a smaller limit, ids) to read the rest.',
+  } as T;
 };
+/** Which fields of a tool's arguments failed its schema (the model fixes those). */
+function schemaFields(error: z.ZodError) {
+  return error.issues.slice(0, 10).map((issue) => ({
+    field: issue.path.length ? issue.path.join('.') : '(arguments)',
+    problem: issue.message,
+  }));
+}
 const pageOf = <T>(rows: readonly T[], offset = 0, limit = 50) => {
   const items = rows.slice(offset, offset + limit);
   const next = offset + items.length;
@@ -1651,13 +1692,16 @@ function makeHandlers(sources: ConversationToolSources): Handlers {
 
 // --- the AI's eyes (PLAN-24) ---------------------------------------------------------------------
 
+/** The largest image a tool result carries (the provider's per-image size). */
+export const TOOL_IMAGE_BYTES = 5_000_000;
 /** A tool result that is an image: the model receives it as image content with `meta` as text. */
 export class ToolImage {
   readonly data: string;
   readonly mimeType: 'image/png' | 'image/jpeg' | 'image/gif' | 'image/webp';
   readonly meta: Record<string, unknown>;
   constructor(data: string, mimeType: ToolImage['mimeType'], meta: Record<string, unknown> = {}) {
-    if (!/^[A-Za-z0-9+/]+={0,2}$/.test(data) || Buffer.byteLength(data, 'base64') > 1_000_000)
+    if (!/^[A-Za-z0-9+/]+={0,2}$/.test(data)) throw new DomainError('INVALID_INPUT');
+    if (Buffer.byteLength(data, 'base64') > TOOL_IMAGE_BYTES)
       throw new DomainError('QUERY_RESULT_TOO_LARGE');
     this.data = data;
     this.mimeType = mimeType;
@@ -1684,9 +1728,28 @@ export function visionHandlers(
 ): Handlers {
   return {
     capture_view: async ({ targetRef: _target, linkId: _link, ...options }) => {
-      const { data, mimeType, ...meta } = await source.captureView(options);
-      onUse('capture_view');
-      return new ToolImage(data, mimeType, meta);
+      // Too large an image is taken again smaller instead of failing (ADR-031 3): half the size
+      // each time, at most three times.
+      let size = { width: options.width ?? 1200, height: options.height ?? 800 };
+      for (let attempt = 0; ; attempt++) {
+        const { data, mimeType, ...meta } = await source.captureView(
+          attempt ? { ...options, ...size } : options,
+        );
+        if (Buffer.byteLength(data, 'base64') <= TOOL_IMAGE_BYTES || attempt >= 3) {
+          onUse('capture_view');
+          if (Buffer.byteLength(data, 'base64') > TOOL_IMAGE_BYTES)
+            return {
+              truncated: true,
+              ...meta,
+              next: 'The view image stayed too large even at a small size; frame fewer objects (fitIds) or hide layers.',
+            };
+          return new ToolImage(data, mimeType, attempt ? { ...meta, reduced: size } : meta);
+        }
+        size = {
+          width: Math.max(64, Math.floor(size.width / 2)),
+          height: Math.max(64, Math.floor(size.height / 2)),
+        };
+      }
     },
     measure: async ({ targetRef: _target, linkId: _link, ...options }) => {
       if (!options.ids?.length && !options.distances?.length)
@@ -1694,55 +1757,6 @@ export function visionHandlers(
       const result = await source.measure(options);
       onUse('measure');
       return bounded(result);
-    },
-  };
-}
-
-/**
- * Image bytes one turn's file_read and attachment_read may show the model (ARCH-01 §3). Each image
- * is already at most 1 MB; the total keeps a turn that reads a whole folder of pictures from piling
- * them into the provider's thread. Past it the tool answers with a note instead of the image.
- */
-export const TURN_IMAGE_BYTES = 16_000_000;
-export type ImageBudget = { left: number };
-export const imageBudget = (bytes = TURN_IMAGE_BYTES): ImageBudget => ({ left: bytes });
-/** A read result as the model gets it: an image within the turn's budget, or a note. */
-function shownRead(result: Record<string, unknown>, budget: ImageBudget) {
-  if (!('image' in result) || typeof result.image !== 'string') return result;
-  const about = result.about as Record<string, unknown>;
-  const bytes = Buffer.byteLength(result.image, 'base64');
-  if (bytes > budget.left)
-    return {
-      ...about,
-      note: `This turn has already been shown its ${Math.round(TURN_IMAGE_BYTES / 1e6)} MB of images, so this one is not shown. Work from the images you have, or tell the user which ones to look at in a next turn.`,
-    };
-  budget.left -= bytes;
-  return new ToolImage(result.image, result.mimeType as ToolImage['mimeType'], about);
-}
-
-/** file_list and file_read of one turn (SPEC-01.13) through its `FileAccess`. */
-export function fileHandlers(access: FileAccess, budget = imageBudget()): Handlers {
-  return {
-    file_list: (args, { signal }) => access.list(args, signal),
-    file_read: async (args, { signal }) =>
-      shownRead((await access.read(args, signal)) as Record<string, unknown>, budget),
-  };
-}
-
-/** attachment_read on the attachments a turn may read (`readableAttachments`). */
-export function attachmentHandlers(
-  store: Pick<AttachmentStore, 'read'>,
-  projectId: string,
-  allowed: ReadonlyMap<string, string>,
-  onUse: (name: string) => void = () => {},
-  budget = imageBudget(),
-): Handlers {
-  if (!allowed.size) return {};
-  return {
-    attachment_read: async (args) => {
-      const result = await store.read(projectId, allowed, args);
-      onUse(String(allowed.get(args.id) ?? args.id));
-      return shownRead(result, budget);
     },
   };
 }

@@ -1409,8 +1409,9 @@ test('A file the host did not undo is named with a Korean reason, never the raw 
 });
 
 // SPEC-02.13 7 (T-102, T-103): an earlier answer lost in another linked file is told to the turn
-// the first time it reads or writes that file, not only for the starting document.
-test('An unresolved result in another linked file is told before the turn writes or reads it there', async (t) => {
+// the first time it reads or writes that file, not only for the starting document. Since ADR-031 8
+// (T-122) it is a notice on the answer: the execute runs.
+test('An unresolved result in another linked file is told when the turn first writes or reads it there', async (t) => {
   const answers = {};
   const { workspace, project, b, send, settled, state, seen } = setup(t, async ({ call, turn }) => {
     if (turn === 1) {
@@ -1446,11 +1447,12 @@ test('An unresolved result in another linked file is told before the turn writes
   await settled();
   // The turn starts in A: no note at the start, since nothing is unresolved there.
   assert.ok(!seen[0].context.items.some((item) => item.id === 'unresolved-results'));
-  assert.equal(answers.first.value.code, 'HOST_RESULT_UNRESOLVED');
-  assert.equal(answers.first.value.executed, false);
-  assert.equal(answers.first.value.unresolved.requests[0].requestId, 'lost-b');
+  assert.equal(answers.first.value.ok, true);
+  assert.equal(answers.first.value.notices[0].code, 'HOST_RESULT_UNRESOLVED');
+  assert.equal(answers.first.value.notices[0].unresolved.requests[0].requestId, 'lost-b');
   assert.equal(answers.second.value.ok, true);
-  assert.equal(b.calls.execute.length, 1);
+  assert.equal(answers.second.value.notices, undefined);
+  assert.equal(b.calls.execute.length, 2);
   assert.equal(state('again').state, 'succeeded');
   // Read first: the query carries the note once, and the write then runs.
   send('read-first', { mode: 'auto' });
@@ -1458,7 +1460,7 @@ test('An unresolved result in another linked file is told before the turn writes
   assert.equal(answers.query.value.unresolved.requests[0].requestId, 'lost-b');
   assert.equal(answers.again.value.unresolved, undefined);
   assert.equal(answers.write.value.ok, true);
-  assert.equal(b.calls.execute.length, 2);
+  assert.equal(b.calls.execute.length, 3);
 });
 
 // --- Execute-only turns on one file (SPEC-02.9 3, 2026-10-02 user decision) -----------------------
@@ -1469,7 +1471,7 @@ const until = async (check) => {
 };
 const whoOf = (context) => /User request: (\S+)/.exec(context.goal)?.[1];
 
-test('Two conversations on one file query side by side; executes take turns; a stale execute is refused, then runs after a new query; a Plan read is not held', async (t) => {
+test('Two conversations on one file query side by side; executes take turns; a stale execute runs with a notice; a Plan read is not held', async (t) => {
   const a = mockDocument('A', 'win-a', { fingerprint: true });
   const t1InHost = gate(),
     letHost = gate(),
@@ -1527,15 +1529,13 @@ test('Two conversations on one file query side by side; executes take turns; a s
   }
   await settled();
   assert.equal(answers.t1.value.ok, true);
-  assert.equal(answers.stale.value.code, 'DOCUMENT_CHANGED');
-  assert.equal(answers.stale.value.executed, false);
-  assert.match(
-    answers.stale.value.reason,
-    /다른 대화가 이 파일을 고쳤습니다 · 다시 조회한 뒤 실행하세요/,
-  );
-  assert.match(answers.stale.value.next, /Query it again/);
+  // The document changed under T2 (ADR-031 8): its execute runs and says so.
+  assert.equal(answers.stale.value.ok, true);
+  assert.equal(answers.stale.value.notices[0].code, 'DOCUMENT_CHANGED');
+  assert.match(answers.stale.value.notices[0].next, /query it again/);
   assert.equal(answers.retry.value.ok, true);
-  assert.equal(a.calls.execute.length, 2);
+  assert.equal(answers.retry.value.notices, undefined);
+  assert.equal(a.calls.execute.length, 3);
   assert.equal(state('t1').state, 'succeeded');
   const t2 = state('t2');
   assert.equal(t2.state, 'succeeded');
@@ -1544,7 +1544,7 @@ test('Two conversations on one file query side by side; executes take turns; a s
   assert.equal(t2.result.executeWait, undefined);
 });
 
-test("A person's edit after the turn read the file refuses its execute until it reads again", async (t) => {
+test("A person's edit after the turn read the file is told on its execute, which runs", async (t) => {
   const a = mockDocument('A', 'win-a', { fingerprint: true });
   const queried = gate(),
     edited = gate();
@@ -1567,9 +1567,11 @@ test("A person's edit after the turn read the file refuses its execute until it 
   a.userEdit();
   edited.open();
   await settled();
-  assert.equal(answers.stale.value.code, 'DOCUMENT_CHANGED');
+  assert.equal(answers.stale.value.ok, true);
+  assert.equal(answers.stale.value.notices[0].code, 'DOCUMENT_CHANGED');
   assert.equal(answers.ok.value.ok, true);
-  assert.equal(a.calls.execute.length, 1);
+  assert.equal(answers.ok.value.notices, undefined);
+  assert.equal(a.calls.execute.length, 2);
   assert.equal(state('edit').state, 'succeeded');
 });
 

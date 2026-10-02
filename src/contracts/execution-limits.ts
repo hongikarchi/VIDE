@@ -1,5 +1,10 @@
 import { z } from 'zod';
 
+/**
+ * A request's limits (SPEC-02.6). Since ADR-031 8 (T-122) only `timeoutSeconds` acts, as the time
+ * a turn may go without any output (idle, not elapsed); `maxToolCalls` and `maxHostCommands` stay
+ * in the contract for stored requests and the limits panel but no longer stop a turn.
+ */
 export const executionLimitsSchema = z
   .object({
     maxToolCalls: z.number().int().min(1).max(100),

@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import type { ChildProcess, ChildProcessWithoutNullStreams } from 'node:child_process';
 import type { AgentConnection, AgentFormat, BuiltinTools } from './agent-connection.ts';
+import { workFolders } from './agent-connection.ts';
 import { spawn } from 'node:child_process';
 import { mkdtemp, readdir, rm, rmdir, unlink } from 'node:fs/promises';
 import { homedir, tmpdir } from 'node:os';
@@ -15,6 +16,7 @@ import {
   noToolsInstruction,
   turnRules,
   instructionModeFor,
+  workFolderArguments,
 } from './agent-connection.ts';
 import {
   bundleFor,
@@ -112,7 +114,28 @@ export interface CliOptions {
    * to-do list (`work`), the public web (`web`). Only a turn with a VIDE connection gets them.
    */
   builtinTools?: BuiltinTools;
+  /**
+   * The engine's answer to a built-in file or shell tool use the CLI asks about (ADR-031 8): inside
+   * the project work folder it allows, outside it asks the user. Without it every such use is
+   * refused.
+   */
+  toolPermission?: ToolPermissionHandler;
 }
+/** One built-in tool use the CLI asks VIDE about (Claude `can_use_tool`, Codex approvals). */
+export interface ToolPermissionRequest {
+  /** Claude's tool name; Codex approvals as `Bash` (a command), `Write` (file changes) or `permissions`. */
+  tool: string;
+  input: Record<string, unknown>;
+  /** The path the CLI named as outside its working directories, when it named one. */
+  blockedPath?: string;
+  /** Codex asked to leave its sandbox (always a question for the user). */
+  escalation?: boolean;
+}
+export type ToolPermissionAnswer = { allow: true } | { allow: false; message: string };
+export type ToolPermissionHandler = (
+  request: ToolPermissionRequest,
+  signal: AbortSignal,
+) => Promise<ToolPermissionAnswer>;
 const sessionSchema = z.object({
   id: z.string().regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/),
   resume: z.boolean(),
@@ -285,14 +308,25 @@ export function buildPacket({ goal, items, includedIds, revision }: ProviderCont
       data: item.data,
     }));
   // Image items (PLAN-24) go to the model as images; the packet keeps their place and metadata.
+  // Past the provider's own limits an image is left out with a note instead of failing the turn
+  // (ADR-031 3): the model is told and can ask for a smaller one.
   const images: PacketImage[] = [];
   for (const entry of data)
     if (entry.type === 'image') {
       const { dataUrl, ...meta } = (entry.data ?? {}) as { dataUrl?: unknown };
-      images.push(packetImage(dataUrl));
+      const image = packetImage(dataUrl);
+      if (!image || images.length >= MAX_PACKET_IMAGES) {
+        entry.data = {
+          ...meta,
+          omitted: !image
+            ? `This image is larger than ${MAX_PACKET_IMAGE_BYTES / 1e6} MB and was not sent; ask the user for a smaller one if you need it.`
+            : `Only ${MAX_PACKET_IMAGES} images go with one turn; this one was not sent.`,
+        };
+        continue;
+      }
+      images.push(image);
       entry.data = { ...meta, image: images.length };
     }
-  if (images.length > MAX_PACKET_IMAGES) throw error('CONTEXT_TOO_LARGE');
   const packet = { goal, revision, items: data };
   const serialized = JSON.stringify(packet);
   if (Buffer.byteLength(serialized) > 256 * 1024) throw error('CONTEXT_TOO_LARGE');
@@ -315,21 +349,23 @@ export function buildPacket({ goal, items, includedIds, revision }: ProviderCont
     images,
   };
 }
-/** A picture for the model (PLAN-24): base64 PNG or JPEG, at most 3 per turn and 1 MB each. */
+/**
+ * A picture for the model (PLAN-24): base64 PNG or JPEG. A turn carries up to 20 of them, each up to
+ * the provider's per-image size (ADR-031 3); more or larger ones are left out with a note.
+ */
 export interface PacketImage {
   mediaType: 'image/png' | 'image/jpeg';
   data: string;
 }
-export const MAX_PACKET_IMAGES = 3;
-export const MAX_PACKET_IMAGE_BYTES = 1_000_000;
-/** A data URL of an image item; anything else is an invalid context. */
-export function packetImage(dataUrl: unknown): PacketImage {
+export const MAX_PACKET_IMAGES = 20;
+export const MAX_PACKET_IMAGE_BYTES = 5_000_000;
+/** A data URL of an image item (undefined when too large); anything else is an invalid context. */
+export function packetImage(dataUrl: unknown): PacketImage | undefined {
   const match =
     typeof dataUrl === 'string' &&
     /^data:(image\/png|image\/jpeg);base64,([A-Za-z0-9+/]+={0,2})$/.exec(dataUrl);
   if (!match) throw error('INVALID_CONTEXT');
-  if (Buffer.byteLength(match[2], 'base64') > MAX_PACKET_IMAGE_BYTES)
-    throw error('CONTEXT_TOO_LARGE');
+  if (Buffer.byteLength(match[2], 'base64') > MAX_PACKET_IMAGE_BYTES) return undefined;
   return { mediaType: match[1] as PacketImage['mediaType'], data: match[2] };
 }
 
@@ -576,20 +612,38 @@ export function controlResponse(requestId: string, response: Record<string, unkn
   );
 }
 /**
- * The answer to one `can_use_tool` request: AskUserQuestion goes to the cards, anything else is
- * denied (VIDE's own tools are pre-allowed and never prompt).
+ * The answer to one `can_use_tool` request: AskUserQuestion goes to the cards, a built-in file or
+ * shell tool to the engine's permission handler (ADR-031 8), anything else is denied (VIDE's own
+ * tools are pre-allowed and never prompt). A denial only refuses that call; the turn goes on.
  */
 export async function answerToolRequest(
-  request: { tool_name?: unknown; input?: unknown },
-  handler: NativeQuestionHandler,
+  request: { tool_name?: unknown; input?: unknown; blocked_path?: unknown },
+  handler: NativeQuestionHandler | undefined,
   signal: AbortSignal,
+  permission?: ToolPermissionHandler,
 ): Promise<Record<string, unknown>> {
+  const input = (request.input && typeof request.input === 'object' ? request.input : {}) as Record<
+    string,
+    unknown
+  >;
   // The CLI's own structured-output tool (a turn's --json-schema answer) writes nothing; in the
   // `default` mode a native-question run uses, it may ask before it answers.
-  if (request.tool_name === 'StructuredOutput')
-    return { behavior: 'allow', updatedInput: (request.input ?? {}) as Record<string, unknown> };
-  if (request.tool_name !== NATIVE_QUESTION_TOOL)
-    return { behavior: 'deny', message: 'This tool is not available in VIDE.' };
+  if (request.tool_name === 'StructuredOutput') return { behavior: 'allow', updatedInput: input };
+  if (request.tool_name !== NATIVE_QUESTION_TOOL || !handler) {
+    if (!permission || typeof request.tool_name !== 'string' || !request.tool_name)
+      return { behavior: 'deny', message: 'This tool is not available in VIDE.' };
+    const answer = await permission(
+      {
+        tool: request.tool_name,
+        input,
+        ...(typeof request.blocked_path === 'string' ? { blockedPath: request.blocked_path } : {}),
+      },
+      signal,
+    );
+    return answer.allow
+      ? { behavior: 'allow', updatedInput: input }
+      : { behavior: 'deny', message: answer.message };
+  }
   const cards = nativeQuestionCards(request.input);
   if (!cards)
     return {
@@ -613,6 +667,65 @@ export async function answerToolRequest(
  * (ADR-028): a turn as a whole has no output cap, only each event has.
  */
 export const MAX_EVENT_LINE = 16 * 1024 * 1024;
+
+/**
+ * A turn's clock (ADR-031 8): only time without any output counts. Every event re-arms it; it is
+ * held while the person answers a question card and while a tool call has not answered (a long
+ * host execute or a subagent is work, not silence). `stop()` ends it for good.
+ */
+export class IdleClock {
+  #ms: number;
+  #onIdle: () => void;
+  #timer: ReturnType<typeof setTimeout> | undefined;
+  #held = 0;
+  #tools = new Set<string>();
+  #stopped = false;
+  constructor(ms: number, onIdle: () => void) {
+    this.#ms = ms;
+    this.#onIdle = onIdle;
+    this.arm();
+  }
+  arm() {
+    clearTimeout(this.#timer);
+    if (this.#stopped || this.#held || this.#tools.size) return;
+    this.#timer = setTimeout(() => {
+      if (!this.#stopped) this.#onIdle();
+    }, this.#ms);
+  }
+  hold() {
+    this.#held++;
+    clearTimeout(this.#timer);
+  }
+  release() {
+    this.#held = Math.max(0, this.#held - 1);
+    this.arm();
+  }
+  /** A tool call started (`id`) or answered. */
+  toolStarted(id: string) {
+    this.#tools.add(id);
+    this.arm();
+  }
+  toolEnded(id: string) {
+    this.#tools.delete(id);
+    this.arm();
+  }
+  /** A Claude stream event: its tool calls (assistant) and tool results (user) are tracked. */
+  claudeEvent(event: ProviderEvent) {
+    const content = typeof event.message === 'object' ? event.message.content : undefined;
+    for (const item of content ?? []) {
+      if (item.type === 'tool_use' && typeof item.id === 'string') this.#tools.add(item.id);
+      if (item.type === 'tool_result' && typeof item.tool_use_id === 'string')
+        this.#tools.delete(item.tool_use_id);
+    }
+    // The turn's end clears what the stream never answered (a call the CLI dropped).
+    if (event.type === 'result') this.#tools.clear();
+    this.arm();
+  }
+  stop() {
+    this.#stopped = true;
+    clearTimeout(this.#timer);
+  }
+}
 
 export function killOwnedProcess(child: ChildProcess): Promise<boolean> {
   return new Promise((resolve) => {
@@ -639,8 +752,13 @@ export class ClaudeCli {
   agent?: AgentConnection;
   session?: SessionOptions;
   nativeQuestions?: NativeQuestionHandler;
-  /** The provider's own tools of this turn (ADR-028); effective only with a VIDE connection. */
+  /**
+   * The provider's own tools of this turn: subagents, to-do and web (ADR-028) only with a VIDE
+   * connection; the work folder's file and shell tools (ADR-031 8) with or without one.
+   */
   builtin?: BuiltinTools;
+  /** The engine's answer to a file or shell tool use outside what the CLI allows itself. */
+  toolPermission?: ToolPermissionHandler;
   /** The instruction bundle of every run of this provider (PLAN-24 지침 묶음). */
   instructions: string;
   /** The spawn function given (the login cache is kept per spawn function: tests inject fakes). */
@@ -669,6 +787,7 @@ export class ClaudeCli {
     spawnProcess = spawn,
     nativeQuestions,
     builtinTools,
+    toolPermission,
   }: CliOptions = {}) {
     if (typeof executable !== 'string' || !isAbsolute(executable)) throw error('CLI_PATH_REQUIRED');
     if (
@@ -702,11 +821,16 @@ export class ClaudeCli {
     this.model = model;
     this.effort = effort;
     this.agent = agentConnection(agent);
-    // Built-in tools come only with a VIDE connection (a turn without one has no tools at all).
+    // Subagents, to-do and web come only with a VIDE connection; the work folder's file and shell
+    // tools (ADR-031 8) also in a turn without one.
+    const files = workFolders(builtinTools?.files);
+    const work = !!this.agent && !!builtinTools?.work,
+      web = !!this.agent && !!builtinTools?.web;
     this.builtin =
-      this.agent && builtinTools && (builtinTools.work || builtinTools.web)
-        ? Object.freeze({ work: !!builtinTools.work, web: !!builtinTools.web })
-        : undefined;
+      work || web || files ? Object.freeze({ work, web, ...(files ? { files } : {}) }) : undefined;
+    if (toolPermission !== undefined && typeof toolPermission !== 'function')
+      throw error('INVALID_TOOL_PERMISSION');
+    this.toolPermission = toolPermission;
     if (session !== undefined && !sessionSchema.safeParse(session).success)
       throw error('INVALID_SESSION');
     this.session = session;
@@ -908,13 +1032,27 @@ export class ClaudeCli {
           event.mcp_servers[0].name === 'vide' &&
           event.mcp_servers[0].status === 'connected'
       : Array.isArray(tools) &&
-          !tools.length &&
+          tools.every((name) => allowedAgentEvent({ name }, 'claude', undefined, this.builtin)) &&
           Array.isArray(event.mcp_servers) &&
           !event.mcp_servers.length;
   }
   /**
+   * The init check no longer ends a turn (ADR-031 8): the CLI itself refuses every tool the turn
+   * did not allow (`--tools`, the permission mode and VIDE's permission handler), so an unexpected
+   * entry is reported as a warning and the turn goes on.
+   */
+  initChecked(
+    event: ProviderEvent,
+    extra: (name: string) => boolean,
+    progress: (event: Progress) => void,
+  ) {
+    if (!this.initValid(event, extra))
+      progress({ state: 'provider-warning', reason: 'UNEXPECTED_TOOL_ACCESS' });
+  }
+  /**
    * A Claude `assistant` event (a subagent's too): its text and thinking go to the activity log, a
-   * tool call is reported; false when it calls a tool this turn does not have.
+   * tool call is reported. A call of a tool this turn does not have is refused by the CLI itself
+   * (only that call; ADR-031 8): it is reported as refused and the turn goes on.
    */
   assistantEvent(
     event: ProviderEvent,
@@ -936,8 +1074,18 @@ export class ClaudeCli {
         });
       if (item.type === 'tool_use') {
         if (questionTool(item.name)) continue;
-        if (!outputTool(item.name) && !allowedAgentEvent(item, 'claude', this.agent, this.builtin))
-          return false;
+        if (
+          !outputTool(item.name) &&
+          !allowedAgentEvent(item, 'claude', this.agent, this.builtin)
+        ) {
+          progress({
+            state: 'running',
+            phase: 'tool',
+            tool: typeof item.name === 'string' ? item.name.slice(0, 100) : 'unknown',
+            reason: 'TOOL_REFUSED',
+          });
+          continue;
+        }
         progress({
           state: 'running',
           phase: 'tool',
@@ -1011,32 +1159,40 @@ export class ClaudeCli {
     // Native questions (flag): AskUserQuestion is offered and answered over the control channel.
     const questions = this.eventFormat === 'claude' ? this.nativeQuestions : undefined;
     const questionTool = (name: unknown) => !!questions && name === NATIVE_QUESTION_TOOL;
+    // The work folder's file and shell tools ask VIDE over the same channel (ADR-031 8).
+    const files = this.eventFormat === 'claude' ? this.builtin?.files : undefined;
+    const prompts = !!questions || !!files;
     let child: ChildProcessWithoutNullStreams | undefined;
     try {
       const env = this.environment();
       delete env.VIDE_AGENT_TOKEN;
       if (this.agent) env.VIDE_AGENT_TOKEN = this.agent.token;
+      const args = nativeQuestionArguments(
+        configureAgentArguments(
+          await this.withImages(
+            await this.withOutputSchema(this.arguments(), schema, cwd),
+            selected.images,
+            cwd,
+          ),
+          this.eventFormat,
+          this.agent,
+          {
+            neutral: !!this.session,
+            bundle: this.instructions,
+            builtin: this.builtin,
+          },
+        ),
+        !!questions,
+      );
       child = this.spawnProcess(
         this.executable,
-        nativeQuestionArguments(
-          configureAgentArguments(
-            await this.withImages(
-              await this.withOutputSchema(this.arguments(), schema, cwd),
-              selected.images,
-              cwd,
-            ),
-            this.eventFormat,
-            this.agent,
-            {
-              neutral: !!this.session,
-              bundle: this.instructions,
-              builtin: this.builtin,
-            },
-          ),
-          !!questions,
-        ),
+        this.eventFormat === 'claude'
+          ? workFolderArguments(args, files, { neutral: !!this.session, connected: !!this.agent })
+          : args,
         {
-          cwd,
+          // The work folder is the CLI's own working directory; the temporary folder keeps the
+          // run's files (images, schema) either way.
+          cwd: this.builtin?.files?.cwd ?? cwd,
           env,
           shell: false,
           windowsHide: true,
@@ -1071,7 +1227,7 @@ export class ClaudeCli {
           if (settled) return;
           settled = true;
           asking.abort();
-          clearTimeout(timer);
+          clock.stop();
           clearTimeout(grace);
           signal?.removeEventListener('abort', abort);
           err ? reject(err) : resolve(value!);
@@ -1079,6 +1235,7 @@ export class ClaudeCli {
         const stop = (reason: string) => {
           if (settled || stopReason) return;
           stopReason = reason;
+          clock.stop();
           asking.abort();
           progress({ state: 'stopping', reason });
           void killOwnedProcess(processChild);
@@ -1091,28 +1248,32 @@ export class ClaudeCli {
           }, this.stopGraceMs);
         };
         const abort = () => stop('CANCELLED');
-        let timer = setTimeout(() => stop('TIMEOUT'), this.timeoutMs);
+        // Only time without output counts (ADR-031 8).
+        const clock = new IdleClock(this.timeoutMs, () => stop('TIMEOUT'));
         signal?.addEventListener('abort', abort, { once: true });
-        // A control request of a native-question run: the time the user takes is not run time.
+        // A control request (a question card, a file permission): the time the user takes is not
+        // run time.
         const control = (event: ProviderEvent) => {
           const id = typeof event.request_id === 'string' ? event.request_id : undefined;
           const request = (event.request ?? {}) as {
             subtype?: unknown;
             tool_name?: unknown;
             input?: unknown;
+            blocked_path?: unknown;
           };
-          if (!id || !questions) return stop('INVALID_PROVIDER_OUTPUT');
+          if (!id || !prompts) return stop('INVALID_PROVIDER_OUTPUT');
           const reply = (response: Record<string, unknown> | string) => {
             if (!settled && !stopReason) processChild.stdin.write(controlResponse(id, response));
           };
           if (request.subtype !== 'can_use_tool') return reply('unsupported');
-          clearTimeout(timer);
-          progress({ state: 'running', phase: 'question' });
-          answerToolRequest(request, questions, asking.signal).then(
+          clock.hold();
+          const asks = request.tool_name === NATIVE_QUESTION_TOOL && !!questions;
+          if (asks) progress({ state: 'running', phase: 'question' });
+          answerToolRequest(request, questions, asking.signal, this.toolPermission).then(
             (response) => {
               if (settled || stopReason) return;
-              timer = setTimeout(() => stop('TIMEOUT'), this.timeoutMs);
-              progress({ state: 'running', phase: 'model' });
+              clock.release();
+              if (asks) progress({ state: 'running', phase: 'model' });
               reply(response);
             },
             () => stop('QUESTION_FAILED'),
@@ -1138,13 +1299,18 @@ export class ClaudeCli {
               progress({ state: 'running', phase: 'model' });
             }
             if (event.type.startsWith('item.')) {
+              // A tool the turn does not have is refused by Codex's own configuration; the event
+              // is reported and the turn goes on (ADR-031 8).
               if (
                 !['agent_message', 'reasoning', 'plan', 'error'].includes(event.item?.type ?? '') &&
                 !allowedAgentEvent(event, 'codex', this.agent, this.builtin)
-              ) {
-                stop('UNEXPECTED_TOOL_CALL');
-                return;
-              }
+              )
+                progress({
+                  state: 'running',
+                  phase: 'tool',
+                  tool: String(event.item?.type ?? 'unknown').slice(0, 100),
+                  reason: 'TOOL_REFUSED',
+                });
               if (event.item?.type === 'mcp_tool_call')
                 progress({ state: 'running', phase: 'tool', tool: event.item.tool });
               if (event.item?.type === 'error') progress({ state: 'provider-warning' });
@@ -1178,23 +1344,16 @@ export class ClaudeCli {
             return;
           }
           if (event.type === 'system' && event.subtype === 'init') {
-            if (!this.initValid(event, (name) => outputTool(name) || questionTool(name))) {
-              stop('UNEXPECTED_TOOL_ACCESS');
-              return;
-            }
+            this.initChecked(event, (name) => outputTool(name) || questionTool(name), progress);
             initialized = true;
             progress({ state: 'running', phase: 'model' });
           }
-          if (
-            event.type === 'assistant' &&
-            !this.assistantEvent(event, progress, outputTool, questionTool)
-          ) {
-            stop('UNEXPECTED_TOOL_CALL');
-            return;
-          }
+          if (event.type === 'assistant')
+            this.assistantEvent(event, progress, outputTool, questionTool);
+          clock.claudeEvent(event);
           if (event.type === 'result') {
-            // The stream-json input of a native-question run stays open until the result.
-            if (questions) processChild.stdin.end();
+            // The stream-json input of a run with prompts stays open until the result.
+            if (prompts) processChild.stdin.end();
             final = event;
             if (event.is_error) failureText += ' ' + errorText(event);
           }
@@ -1202,6 +1361,7 @@ export class ClaudeCli {
         processChild.stdout.on('data', (chunk) => {
           if (settled || stopReason) return;
           this.timing.firstOutputAt ??= Date.now();
+          clock.arm();
           buffer += decoder.write(chunk);
           let end;
           while ((end = buffer.indexOf('\n')) >= 0) {
@@ -1239,7 +1399,7 @@ export class ClaudeCli {
         if (signal?.aborted) abort();
         if (!stopReason) {
           progress({ state: 'starting' });
-          if (questions)
+          if (prompts)
             processChild.stdin.write(this.inputOf(selected.packet, selected.images, true));
           else processChild.stdin.end(this.inputOf(selected.packet, selected.images));
         }

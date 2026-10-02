@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import { startServer } from '../../src/server/server.ts';
 
 // ADR-028 / T-105: conversation, host and make turns get the provider's own subagent and to-do
-// tools, and its web tools while Settings → AI 「AI 웹 검색」 is on (default). Synthetic provider.
+// tools, and its web tools while Settings → AI 「AI 웹 검색」 is on (default); ADR-031 8 / T-122:
+// and the work folder's file and shell tools. Synthetic provider.
 
 test('conversation turns get the work tools and the web tools while AI 웹 검색 is on', async () => {
   const runs = [];
@@ -67,14 +68,18 @@ test('conversation turns get the work tools and the web tools while AI 웹 검�
       throw new Error('turn did not finish');
     };
     await send('turn-1');
-    assert.deepEqual(runs.at(-1).options.builtinTools, { work: true, web: true });
+    // The work folder's own file and shell tools (ADR-031 8): this project has no folder yet, so
+    // the CLI works in a temporary folder; a Plan turn (review) writes no file.
+    const files = { dirs: [], attachments: [], readOnly: true };
+    assert.deepEqual(runs.at(-1).options.builtinTools, { work: true, web: true, files });
+    assert.equal(typeof runs.at(-1).options.toolPermission, 'function');
     assert.ok(runs.at(-1).options.session, 'a conversation turn has a session');
     // Off: the next turn keeps the work tools and has no web.
     assert.deepEqual(await (await api('/settings/web', 'PUT', { web: false })).json(), {
       web: false,
     });
     await send('turn-2');
-    assert.deepEqual(runs.at(-1).options.builtinTools, { work: true, web: false });
+    assert.deepEqual(runs.at(-1).options.builtinTools, { work: true, web: false, files });
     assert.equal((await api('/settings/web', 'PUT', { web: 'yes' })).status, 400);
   } finally {
     await app.close();

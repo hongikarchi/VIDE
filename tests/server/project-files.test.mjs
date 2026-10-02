@@ -3,18 +3,20 @@ import assert from 'node:assert/strict';
 import { mkdtemp, mkdir, rm, symlink, writeFile } from 'node:fs/promises';
 import { join, parse } from 'node:path';
 import { tmpdir } from 'node:os';
-import { Client } from '@modelcontextprotocol/sdk/client/index.js';
-import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { Store } from '../../src/core/store.ts';
 import { ProjectFolders } from '../../src/core/project-folders.ts';
-import { FileAccess, checkFolder, deniedPath, turnGrants } from '../../src/server/project-files.ts';
-import { AgentTools, PLAN_MODE_TOOLS, fileHandlers } from '../../src/server/agent-tools.ts';
-import { agentConnection, agentToolNames, instructionFor } from '../../src/ai/agent-connection.ts';
+import {
+  WorkFolderGate,
+  checkFolder,
+  commandPaths,
+  deniedPath,
+  turnGrants,
+} from '../../src/server/project-files.ts';
 import { Execution, FILE_PERMISSION_CARD } from '../../src/server/execution.ts';
 import { startServer } from '../../src/server/server.ts';
 
-// Project folders and the AI's file tools (SPEC-01.13, ARCH-01 §3 「프로젝트 폴더와 파일 읽기
-// 도구」, PLAN-26 T-091). Synthetic files in a temporary folder only.
+// Project folders and the AI's work folder (SPEC-01.13, ARCH-01 §3 「프로젝트 폴더와 파일 도구」,
+// PLAN-26 T-091, ADR-031 8 T-122). Synthetic files in a temporary folder only.
 const PNG = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==',
   'base64',
@@ -100,196 +102,201 @@ test('a project folder is an existing folder that is not a drive root, VIDE data
   assert.deepEqual(folders.remove('p1', outside.toUpperCase()).length, 1);
 });
 
-test('inside the folders files are read at once: lists page, text pages, images; no question', async (t) => {
-  const { project, data, root } = await tree(t);
+test('the work folder: inside it the CLI tools are allowed at once, attachments are read, no question', async (t) => {
+  const { project, outside, data, root } = await tree(t);
   const folders = db(t);
   folders.add('p1', project, 'project');
+  folders.add('p1', join(outside, 'more'), 'read');
+  const attachment = join(data, 'attachments', 'p1', 'abc.png');
   const asked = [];
   const used = [];
-  const access = new FileAccess({
+  const gate = new WorkFolderGate({
     folders,
     projectId: 'p1',
     context: { dataDirectory: data, home: root },
-    ask: async (folder) => {
-      asked.push(folder);
+    attachments: [attachment],
+    ask: async (...args) => {
+      asked.push(args);
       return 'deny';
     },
     onUse: (text) => used.push(text),
   });
-  const roots = await access.list({});
-  assert.deepEqual(roots.folders, [{ path: project, kind: 'project', exists: true }]);
-  const listed = await access.list({ path: project });
-  // Folders first; secret files are never listed.
-  assert.deepEqual(
-    listed.entries.map((e) => [e.name, e.kind]),
-    [
-      ['도면', 'dir'],
-      ['escape', 'dir'],
-      ['model.3dm', 'file'],
-      ['notes.txt', 'file'],
-    ],
-  );
-  const page = await access.list({ path: project, limit: 1, offset: 1 });
-  assert.deepEqual([page.entries[0].name, page.nextOffset, page.total], ['escape', 2, 4]);
-  assert.deepEqual(
-    (await access.list({ path: project, pattern: '*.TXT' })).entries.map((e) => e.name),
-    ['notes.txt'],
-  );
-  // Relative paths are under the first project folder; text comes in byte pages.
-  const first = await access.read({ path: 'notes.txt', limit: 8 });
-  assert.deepEqual([first.text, first.nextOffset], ['첫 줄\n', 8]);
-  const rest = await access.read({ path: join(project, 'notes.txt'), offset: 8 });
-  assert.deepEqual([rest.text, rest.nextOffset], ['둘째 줄\n', null]);
-  assert.match((await access.read({ path: 'model.3dm' })).note, /Rhino model file/);
-  // Through the tool: an image comes back as image content.
-  const tools = new AgentTools({ origin: 'http://127.0.0.1:47999' });
-  const scope = tools.issue({
-    targetRef: 'files:t',
-    isCurrent: () => true,
-    handlers: fileHandlers(access),
-  });
-  const image = await tools.call(scope.token, 'file_read', { path: join('도면', 'plan.png') });
-  assert.deepEqual(
-    [image.content[0].type, image.content[0].mimeType, JSON.parse(image.content[1].text).name],
-    ['image', 'image/png', 'plan.png'],
-  );
-  const missing = await tools.call(scope.token, 'file_read', { path: 'none.txt' });
-  assert.deepEqual(JSON.parse(missing.content[0].text), { code: 'FILE_NOT_FOUND' });
-  // Never: a secret file inside the folder, or a junction that leads out (no question either).
-  for (const path of ['.env', 'id_rsa', join('escape', 'a.txt')]) {
-    const refused = await tools.call(scope.token, 'file_read', { path });
-    assert.deepEqual(JSON.parse(refused.content[0].text), { code: 'FILE_FORBIDDEN' }, path);
-  }
+  const signal = new AbortController().signal;
+  assert.deepEqual(gate.scope(), { cwd: project, write: [project], read: [join(outside, 'more')] });
+  const allow = { allow: true };
+  for (const request of [
+    { tool: 'Read', input: { file_path: join(project, 'notes.txt') } },
+    { tool: 'Read', input: { file_path: 'notes.txt' } },
+    { tool: 'Glob', input: { pattern: '**/*.png' } },
+    { tool: 'Grep', input: { pattern: 'x', path: join(project, '도면') } },
+    { tool: 'Write', input: { file_path: join(project, 'new', 'out.txt'), content: 'x' } },
+    { tool: 'Edit', input: { file_path: join(project, 'notes.txt') } },
+    { tool: 'Bash', input: { command: 'ls -la && cat notes.txt > copy.txt' } },
+    { tool: 'Bash', input: { command: `type "${join(project, 'notes.txt')}"` } },
+    // A read folder is read without asking; the attachment is read at its path.
+    { tool: 'Read', input: { file_path: join(outside, 'more', 'c.txt') } },
+    { tool: 'Read', input: { file_path: attachment } },
+  ])
+    assert.deepEqual(await gate.decide(request, signal), allow, JSON.stringify(request));
   assert.deepEqual(asked, []);
-  assert.ok(used.includes(`파일 읽기 · ${join(project, 'notes.txt')}`));
-  assert.ok(used.includes(`파일 읽기 거절 · ${join(project, '.env')}`));
-  // Registry: both tools exist, Plan mode keeps them, and the rules say how to use them.
-  assert.ok(agentToolNames.includes('file_read') && agentToolNames.includes('file_list'));
-  assert.ok(PLAN_MODE_TOOLS.has('file_read') && PLAN_MODE_TOOLS.has('file_list'));
-  const rules = instructionFor({ url: 'x', token: 'x', tools: ['file_list', 'file_read'] });
-  assert.match(rules, /file_list\(\) names this project's folders/);
-  assert.match(rules, /FILE_ACCESS_DENIED do not ask again/);
-});
-
-test('file_read shows images up to 1 MB each and 16 MB per turn; a large image is never loaded', async (t) => {
-  const { project, data, root } = await tree(t);
-  const folders = db(t);
-  folders.add('p1', project, 'project');
-  const photos = join(project, '레퍼런스');
-  await mkdir(photos);
-  // Synthetic JPEGs (the type is sniffed from the first bytes): 20 of 0.9 MB and 6 of 25 MB.
-  const jpeg = (size) =>
-    Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.alloc(size - 4, 7)]);
-  for (let i = 0; i < 20; i++) await writeFile(join(photos, `small-${i}.jpg`), jpeg(900_000));
-  for (let i = 0; i < 6; i++) await writeFile(join(photos, `large-${i}.jpg`), jpeg(25_000_000));
-  const access = new FileAccess({
-    folders,
-    projectId: 'p1',
-    context: { dataDirectory: data, home: root },
-    ask: async () => 'deny',
-  });
-  const tools = new AgentTools({ origin: 'http://127.0.0.1:47999' });
-  const scope = tools.issue({
-    targetRef: 'files:t',
-    isCurrent: () => true,
-    maxCalls: 100,
-    handlers: fileHandlers(access),
-  });
-  const read = (name) => tools.call(scope.token, 'file_read', { path: join('레퍼런스', name) });
-  globalThis.gc?.();
-  const before = process.memoryUsage();
-  for (let i = 0; i < 6; i++) {
-    const large = await read(`large-${i}.jpg`);
-    assert.equal(large.content.length, 1);
-    assert.match(JSON.parse(large.content[0].text).note, /larger than 1000000 bytes/);
+  // Keys, logins and VIDE data are never reached, inside the folder or not, and never asked.
+  for (const request of [
+    { tool: 'Read', input: { file_path: join(project, '.env') } },
+    { tool: 'Read', input: { file_path: join(data, 'store.sqlite') } },
+    { tool: 'Bash', input: { command: `cat ${join(root, '.ssh', 'id_rsa')}` } },
+  ]) {
+    const answer = await gate.decide(request, signal);
+    assert.equal(answer.allow, false);
+    assert.match(answer.message, /FILE_FORBIDDEN/);
   }
-  // Six 25 MB files cost what their 64 KB heads cost, not 150 MB.
-  const grown = process.memoryUsage().arrayBuffers - before.arrayBuffers;
-  assert.ok(grown < 20_000_000, `array buffers grew ${grown} bytes`);
-  const shown = [];
-  for (let i = 0; i < 20; i++) shown.push((await read(`small-${i}.jpg`)).content[0].type);
-  // 17 × 0.9 MB fit in 16 MB; the rest come back as a note the model can act on.
-  assert.deepEqual([shown.filter((type) => type === 'image').length, shown.at(-1)], [17, 'text']);
-  const over = await read('small-0.jpg');
-  assert.match(JSON.parse(over.content[0].text).note, /already been shown its 16 MB of images/);
+  // A junction inside the folder that leads out of it is outside (asked, here refused).
+  const escaped = await gate.decide(
+    { tool: 'Read', input: { file_path: join(project, 'escape', 'a.txt') } },
+    signal,
+  );
+  assert.equal(escaped.allow, false);
+  assert.deepEqual(asked.at(-1).slice(0, 2), [outside, join(project, 'escape', 'a.txt')]);
+  // Tools that are not file or shell tools are refused, not asked.
+  assert.equal(
+    (await gate.decide({ tool: 'mcp__rhino__run_command', input: {} }, signal)).allow,
+    false,
+  );
+  assert.ok(used.includes(`파일 거절 · ${join(project, '.env')}`));
 });
 
-test('outside the folders: the question, and once / always / deny each as the user answered', async (t) => {
-  const { project, outside, data, root } = await tree(t);
+test('outside the work folder each use asks: once / always / deny, write and run asked as such', async (t) => {
+  const { project, outside, other, data, root } = await tree(t);
   const folders = db(t);
   folders.add('p1', project, 'project');
-  const answers = ['once', 'deny', 'always'];
+  const answers = ['once', 'deny', 'once', 'always'];
   const asked = [];
   const grants = turnGrants();
-  const access = new FileAccess({
-    folders,
-    projectId: 'p1',
-    context: { dataDirectory: data, home: root },
-    grants,
-    ask: async (folder, path) => {
-      asked.push([folder, path]);
-      return answers.shift();
-    },
-  });
-  // once: this folder for the rest of the request, without asking again.
-  assert.equal((await access.read({ path: join(outside, 'a.txt') })).text, '밖 A');
-  assert.equal((await access.read({ path: join(outside, 'b.txt') })).text, '밖 B');
-  assert.deepEqual(asked, [[outside, join(outside, 'a.txt')]]);
-  assert.deepEqual(grants.allowed, [outside]);
-  // A new request (new grants) asks again; deny refuses and is not asked again in that request.
-  const second = new FileAccess({
-    folders,
-    projectId: 'p1',
-    context: { dataDirectory: data, home: root },
-    ask: async (folder, path) => {
-      asked.push([folder, path]);
-      return answers.shift();
-    },
-  });
-  await assert.rejects(second.read({ path: join(outside, 'a.txt') }), {
-    code: 'FILE_ACCESS_DENIED',
-  });
-  await assert.rejects(second.list({ path: join(outside, 'more') }), {
-    code: 'FILE_ACCESS_DENIED',
-  });
+  const make = (extra = {}) =>
+    new WorkFolderGate({
+      folders,
+      projectId: 'p1',
+      context: { dataDirectory: data, home: root },
+      grants,
+      ask: async (folder, path, _signal, action) => {
+        asked.push([folder, path, action]);
+        return answers.shift();
+      },
+      ...extra,
+    });
+  const signal = new AbortController().signal;
+  const gate = make();
+  // once: reading this folder for the rest of the request, without asking again.
+  assert.equal(
+    (await gate.decide({ tool: 'Read', input: { file_path: join(outside, 'a.txt') } }, signal))
+      .allow,
+    true,
+  );
+  assert.equal(
+    (await gate.decide({ tool: 'Grep', input: { pattern: 'x', path: outside } }, signal)).allow,
+    true,
+  );
+  assert.deepEqual(asked, [[outside, join(outside, 'a.txt'), 'read']]);
+  // Writing there is its own question (a read grant does not cover it): refused.
+  const refused = await gate.decide(
+    { tool: 'Write', input: { file_path: join(outside, 'w.txt'), content: 'x' } },
+    signal,
+  );
+  assert.equal(refused.allow, false);
+  assert.match(refused.message, /FILE_ACCESS_DENIED/);
+  assert.deepEqual(asked.at(-1), [outside, join(outside, 'w.txt'), 'write']);
+  // Refused once, not asked again in this request.
+  assert.equal(
+    (await gate.decide({ tool: 'Edit', input: { file_path: join(outside, 'b.txt') } }, signal))
+      .allow,
+    false,
+  );
   assert.equal(asked.length, 2);
-  // always: the folder becomes a read folder of the project (a list asks for the folder itself).
-  const third = new FileAccess({
-    folders,
-    projectId: 'p1',
-    context: { dataDirectory: data, home: root },
-    ask: async (folder, path) => {
-      asked.push([folder, path]);
-      return answers.shift();
-    },
-  });
-  const more = await third.list({ path: join(outside, 'more') });
-  assert.deepEqual(asked.at(-1), [join(outside, 'more'), join(outside, 'more')]);
-  assert.deepEqual(
-    more.entries.map((e) => e.name),
-    ['c.txt'],
+  // A shell command naming a path outside asks to run there.
+  assert.equal(
+    (await gate.decide({ tool: 'Bash', input: { command: `dir "${other}"` } }, signal)).allow,
+    true,
+  );
+  assert.deepEqual(asked.at(-1), [other, other, 'run']);
+  // always (reading): the folder becomes a read folder of the project.
+  const more = join(outside, 'more');
+  const fresh = make({ grants: turnGrants() });
+  assert.equal(
+    (await fresh.decide({ tool: 'Read', input: { file_path: join(more, 'c.txt') } }, signal)).allow,
+    true,
   );
   assert.deepEqual(
     folders.list('p1').map((f) => [f.path, f.kind]),
     [
       [project, 'project'],
-      [join(outside, 'more'), 'read'],
+      [more, 'read'],
     ],
   );
   // Without a question (no card can be shown) a path outside is refused; a read folder is read.
-  const silent = new FileAccess({
+  const silent = new WorkFolderGate({
     folders,
     projectId: 'p1',
     context: { dataDirectory: data, home: root },
   });
-  await assert.rejects(silent.read({ path: join(outside, 'a.txt') }), {
-    code: 'FILE_ACCESS_DENIED',
+  assert.equal(
+    (await silent.decide({ tool: 'Read', input: { file_path: join(outside, 'a.txt') } }, signal))
+      .allow,
+    false,
+  );
+  assert.equal(
+    (await silent.decide({ tool: 'Read', input: { file_path: join(more, 'c.txt') } }, signal))
+      .allow,
+    true,
+  );
+  // A Plan turn writes no file, inside the folder either.
+  const plan = new WorkFolderGate({ folders, projectId: 'p1', readOnly: true });
+  assert.equal(
+    (await plan.decide({ tool: 'Write', input: { file_path: join(project, 'x.txt') } }, signal))
+      .allow,
+    false,
+  );
+  // Codex's escalation of a command that names no path asks about the command itself.
+  const escalations = [];
+  const codex = new WorkFolderGate({
+    folders,
+    projectId: 'p1',
+    ask: async (folder, path, _signal, action) => {
+      escalations.push([path, action]);
+      return 'once';
+    },
   });
-  assert.equal((await silent.read({ path: join(outside, 'more', 'c.txt') })).text, '밖 C');
-  // VIDE's data folder is never read, even when asked.
-  await assert.rejects(silent.read({ path: join(data, 'store.sqlite') }), {
-    code: 'FILE_FORBIDDEN',
-  });
+  const command = {
+    tool: 'Bash',
+    input: { command: 'npm install', cwd: project },
+    escalation: true,
+  };
+  assert.equal((await codex.decide(command, signal)).allow, true);
+  assert.equal((await codex.decide(command, signal)).allow, true);
+  assert.deepEqual(escalations, [['npm install', 'run']]);
+});
+
+test('shell command paths: drive, quoted, Git Bash and home paths are found', () => {
+  const home = 'C:\\Users\\me';
+  assert.deepEqual(
+    commandPaths('cp "C:\\A B\\x.txt" /d/out/ && cat ~/notes.md > D:\\y.txt', home).sort(),
+    ['C:\\A B\\x.txt', 'D:\\out', 'D:\\y.txt', join(home, 'notes.md')].sort(),
+  );
+  assert.deepEqual(commandPaths('ls -la && grep -r foo src', home), []);
+  // The program is not a path the command touches (Codex wraps every command in PowerShell).
+  assert.deepEqual(
+    commandPaths(
+      `"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'type a.txt'`,
+      home,
+    ),
+    [],
+  );
+  // A script given to the shell is scanned too.
+  assert.deepEqual(
+    commandPaths(
+      `"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'Set-Content -Path D:\\out\\d.txt -Value x'`,
+      home,
+    ),
+    ['D:\\out\\d.txt'],
+  );
 });
 
 test('the engine asks on the request cards: answers, a remote "always" is once, no answer refuses', async () => {
@@ -341,7 +348,7 @@ test('the engine asks on the request cards: answers, a remote "always" is once, 
   assert.throws(() => execution.answerQuestions('p1', 'r1', []), { code: 'NOT_FOUND' });
 });
 
-test('over HTTP: dashboard folders, and a turn reads inside, asks outside and logs the paths', async (t) => {
+test('over HTTP: dashboard folders, and a turn works in the folder, asks outside and logs the paths', async (t) => {
   const directory = await mkdtemp(join(tmpdir(), 'vide-project-files-http-'));
   const files = await tree(t);
   const results = [];
@@ -349,25 +356,22 @@ test('over HTTP: dashboard folders, and a turn reads inside, asks outside and lo
     filename: join(directory, 'store.sqlite'),
     host: { status: async () => ({ available: true }) },
     providerFactory: (options) => ({
+      // The CLI's own tools (ADR-031 8): the provider gets the work folder and the gate.
       run: async () => {
-        const agent = agentConnection(options.agent);
-        const client = new Client({ name: 'synthetic-agent', version: '1.0.0' });
-        await client.connect(
-          new StreamableHTTPClientTransport(new URL(agent.url), {
-            requestInit: { headers: { Authorization: `Bearer ${agent.token}` } },
-          }),
+        const work = options.builtinTools?.files;
+        results.push(work?.cwd === files.project);
+        const ask = (request) => options.toolPermission(request, new AbortController().signal);
+        results.push(
+          (await ask({ tool: 'Read', input: { file_path: join(files.project, 'notes.txt') } }))
+            .allow,
         );
-        const names = (await client.listTools()).tools.map((tool) => tool.name);
-        results.push(names.includes('file_read') && names.includes('file_list'));
-        const call = async (name, args) => {
-          const out = await client.callTool({ name, arguments: args });
-          return out.content[0].type === 'text' ? JSON.parse(out.content[0].text) : out.content[0];
-        };
-        results.push((await call('file_list', {})).folders.length);
-        results.push((await call('file_read', { path: 'notes.txt' })).text);
-        results.push((await call('file_read', { path: join(files.outside, 'a.txt') })).text);
-        results.push((await call('file_read', { path: join(files.other, 'd.txt') })).code);
-        await client.close();
+        results.push(
+          (await ask({ tool: 'Read', input: { file_path: join(files.outside, 'a.txt') } })).allow,
+        );
+        results.push(
+          (await ask({ tool: 'Bash', input: { command: `type "${join(files.other, 'd.txt')}"` } }))
+            .allow,
+        );
         return { text: JSON.stringify({ message: '읽었습니다', operations: [] }) };
       },
       status: async () => ({ available: true }),
@@ -441,15 +445,13 @@ test('over HTTP: dashboard folders, and a turn reads inside, asks outside and lo
     else await new Promise((resolve) => setTimeout(resolve, 20));
   }
   assert.equal(done?.state, 'succeeded', JSON.stringify(done?.result));
-  assert.deepEqual(results, [true, 1, '첫 줄\n둘째 줄\n', '밖 A', 'FILE_ACCESS_DENIED']);
+  assert.deepEqual(results, [true, true, true, false]);
   const lines = done.result.activity.map((entry) => entry.text);
   for (const line of [
-    '폴더 목록 · 프로젝트 폴더',
-    `파일 읽기 · ${join(files.project, 'notes.txt')}`,
-    `파일 읽기 · ${join(files.outside, 'a.txt')}`,
-    `파일 읽기 거절 · ${join(files.other, 'd.txt')}`,
+    `파일 읽기 허용 · ${join(files.outside, 'a.txt')}`,
+    `명령 실행 거절 · ${join(files.other, 'd.txt')}`,
   ])
-    assert.ok(lines.includes(line), line);
+    assert.ok(lines.includes(line), line + ' in ' + JSON.stringify(lines));
   // Removing the folder; deleting the project removes its rows.
   assert.deepEqual((await api(`${base}/folders/remove`, 'POST', { path: files.project })).json, {
     folders: [],

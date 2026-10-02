@@ -423,7 +423,7 @@ test('jig_delete_file deletes in the draft only and is a registered make tool', 
   assert.deepEqual(await run('jig.json'), { code: 'DRAFT_PATH_INVALID' });
   assert.deepEqual(await run('../other.ts'), { code: 'DRAFT_OUTSIDE' });
   assert.deepEqual(await run('.claude/settings.json'), { code: 'DRAFT_FORBIDDEN_FILE' });
-  assert.deepEqual(await run('steps/none.ts'), { code: 'NOT_FOUND' });
+  assert.equal((await run('steps/none.ts')).code, 'NOT_FOUND');
   scope.revoke();
   tools.close();
   assert.match(instructionFor(scope.connection), /jig_delete_file/);

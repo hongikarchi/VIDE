@@ -2,10 +2,10 @@
 id: ADR-028
 title: VIDE 안의 AI CLI를 터미널에 가깝게 — 대화당 Claude 프로세스 하나, 하위 에이전트·할 일·웹 도구, 출력 상한, 긴 세션
 status: review
-version: 0.1
+version: 0.2
 updated: 2026-10-02
 owner: agent:claude
-related: [FR-25, SPEC-02, ARCH-01, PLAN-24, RESEARCH-11, ADR-014, ADR-021, ADR-026]
+related: [FR-25, SPEC-02, ARCH-01, PLAN-24, RESEARCH-11, ADR-014, ADR-021, ADR-026, ADR-031]
 ---
 
 # VIDE 안의 AI CLI를 터미널에 가깝게
@@ -21,6 +21,8 @@ related: [FR-25, SPEC-02, ARCH-01, PLAN-24, RESEARCH-11, ADR-014, ADR-021, ADR-0
 5. **웹 검색.** "Claude는 WebSearch·WebFetch, Codex는 web_search를 켜자." 4와 같은 턴에서 Claude는 `WebSearch`·`WebFetch`, Codex는 `web_search="live"`를 쓴다. 설정 → AI 「AI 웹 검색」(기본 켬, `<data>/web-settings.json`)으로 끌 수 있다. 계획 모드 턴도 받는다(문서를 바꾸지 않는다). 턴 규칙은 웹 내용을 자료로만 다루고 출처를 밝히며 프로젝트 자료·파일 내용·토큰을 웹 도구로 보내지 말라고 적는다.
 
 ## 대체하는 것
+
+- **ADR-031 8이 바꾼 것(2026-10-02, T-122):** 아래 첫 항목과 결정 4의 '셸·파일 쓰기·다른 MCP 없음' 가운데 셸과 파일 쓰기는 [ADR-031](ADR-031-stock-first.md) 8로 바뀌었다. 지시 묶음을 받는 턴(jig AI 검토·만들기 턴 제외)은 CLI의 기본 읽기·검색·쓰기·셸 도구를 프로젝트 작업 폴더 안에서 쓰고, 밖은 그때마다 사용자 승인을 받는다(SPEC-01.13). 그 턴의 Claude는 `--restricted`를 쓰지 않는다(작업 폴더 밖을 묻지 않고 거절하므로). 다른 MCP 서버·개인 설정·플러그인은 계속 끈다. 허용 밖 호출이 턴을 멈추던 검사는 그 호출만 거절하는 것으로, 턴 시간은 출력 없는 시간으로 바뀌었다(ARCH-01 §2 「AI 실행 인자」).
 
 - [RESEARCH-11](../research/RESEARCH-11-ai-parity.md) §3의 '격리는 유지한다'는 위 4·5의 도구만큼 좁아진다. 공급자 skill·plugin·전역 MCP·개인 설정은 계속 끈다(`--safe-mode`/`--restricted`, `--strict-mcp-config`, `--setting-sources ""`, Codex `--ignore-user-config`·`--disable` 목록 그대로). 셸·파일 쓰기(만들기 턴의 초안 폴더 밖)·다른 MCP 서버는 계속 없다.
 - [ADR-021](../decisions/ADR-021-conversation-sessions.md)·ARCH-01 §2의 '턴 하나 = CLI 실행 하나'는 Claude 대화 턴에서 '대화 하나 = 프로세스 하나(열쇠가 바뀌면 이어 받는 새 프로세스)'가 된다. 턴마다 권한을 새로 주고 회수하는 SPEC-02.19의 3은 그대로다.

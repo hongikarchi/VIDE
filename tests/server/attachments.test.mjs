@@ -4,21 +4,14 @@ import { mkdtemp, readdir, rm } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { Client } from '@modelcontextprotocol/sdk/client/index.js';
-import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import {
   AttachmentStore,
   readableAttachments,
   sniff,
   MAX_VIEWABLE_IMAGE_BYTES,
 } from '../../src/server/attachments.ts';
-import { AgentTools, PLAN_MODE_TOOLS, attachmentHandlers } from '../../src/server/agent-tools.ts';
-import {
-  agentConnection,
-  agentToolNames,
-  instructionFor,
-  turnRules,
-} from '../../src/ai/agent-connection.ts';
+import { AgentTools } from '../../src/server/agent-tools.ts';
+import { agentConnection, agentToolNames, turnRules } from '../../src/ai/agent-connection.ts';
 import { Execution } from '../../src/server/execution.ts';
 import { requestInputSchema, MAX_ATTACHMENT_BYTES } from '../../src/contracts/workspace.ts';
 import { startServer } from '../../src/server/server.ts';
@@ -123,7 +116,7 @@ test('the request takes any number and size of kept attachments, and still reads
   assert.equal(requestInputSchema.safeParse(input([{ name: 'x', id: 'nope' }])).success, false);
 });
 
-test('attachment_read pages text, shows images and describes the rest; only the allowed ids', async (t) => {
+test('the store reads pages of text, images and descriptions; only the allowed ids', async (t) => {
   const store = new AttachmentStore(join(await folder(t), 'attachments'));
   const long = '가'.repeat(30000); // 90,000 bytes of 3-byte characters
   const text = await store.save('p1', 'long.txt', chunks(long));
@@ -135,43 +128,32 @@ test('attachment_read pages text, shows images and describes the rest; only the 
     { conversationId: 'c2', files: [other] },
   ]);
   assert.deepEqual([...allowed.keys()].sort(), [text.id, image.id, pdf.id].sort());
-  const tools = new AgentTools();
-  const scope = tools.issue({
-    targetRef: 'attachments:r1',
-    isCurrent: () => true,
-    handlers: attachmentHandlers(store, 'p1', allowed),
-  });
-  const call = async (args) => tools.call(scope.token, 'attachment_read', args);
-  const first = JSON.parse((await call({ id: text.id })).content[0].text);
+  const call = (args) => store.read('p1', allowed, args);
+  const first = await call({ id: text.id });
   assert.equal(first.kind, 'text');
   assert.equal(first.offset, 0);
   assert.equal(first.nextOffset, 19998); // cut back to a whole character
   assert.equal(first.text, '가'.repeat(6666));
-  const second = JSON.parse(
-    (await call({ id: text.id, offset: 19998, limit: 40000 })).content[0].text,
-  );
+  const second = await call({ id: text.id, offset: 19998, limit: 40000 });
   assert.equal(second.text, '가'.repeat(13333));
   // An offset inside a character starts at the next whole one.
-  const inside = JSON.parse((await call({ id: text.id, offset: 1, limit: 6 })).content[0].text);
+  const inside = await call({ id: text.id, offset: 1, limit: 6 });
   assert.equal(inside.offset, 3);
   assert.equal(inside.text, '가');
   const shown = await call({ id: image.id });
-  assert.equal(shown.content[0].type, 'image');
-  assert.equal(shown.content[0].mimeType, 'image/png');
-  assert.equal(shown.content[0].data, PNG.toString('base64'));
-  assert.equal(JSON.parse(shown.content[1].text).name, 'shot.png');
-  const described = JSON.parse((await call({ id: pdf.id })).content[0].text);
+  assert.equal(shown.mimeType, 'image/png');
+  assert.equal(shown.image, PNG.toString('base64'));
+  assert.equal(shown.about.name, 'shot.png');
+  const described = await call({ id: pdf.id });
   assert.equal(described.kind, 'pdf');
   assert.match(described.note, /not available/);
   // Another conversation's attachment and an unknown id are refused alike.
-  for (const id of [other.id, 'f'.repeat(24)]) {
-    const refused = await call({ id });
-    assert.equal(refused.isError, true);
-    assert.equal(JSON.parse(refused.content[0].text).code, 'ATTACHMENT_NOT_FOUND');
-  }
-  assert.equal((await call({ id: '../x' })).isError, true);
-  assert.ok(PLAN_MODE_TOOLS.has('attachment_read'));
-  assert.ok(agentToolNames.includes('attachment_read'));
+  for (const id of [other.id, 'f'.repeat(24), '../x'])
+    await assert.rejects(call({ id }), (error) =>
+      ['ATTACHMENT_NOT_FOUND', 'INVALID_INPUT'].includes(error.code),
+    );
+  // The CLI's own Read reads them at their path now (ADR-031 8): no VIDE tool for it.
+  assert.ok(!agentToolNames.includes('attachment_read'));
 });
 
 test('a large image is shown through its view copy, or described without one', async (t) => {
@@ -191,32 +173,44 @@ test('a large image is shown through its view copy, or described without one', a
   assert.deepEqual((await store.image('p1', kept.id)).bytes, PNG);
 });
 
-test('a turn gets attachment_read: added to its scope, or alone, with rules that name it', async (t) => {
+test('a turn reads its attachments at their path with the CLI tools (ADR-031 8)', async (t) => {
   const store = new AttachmentStore(join(await folder(t), 'attachments'));
   const kept = await store.save('p1', 'brief.txt', chunks('요구 사항'));
   const tools = new AgentTools({ origin: 'http://127.0.0.1:47999' });
-  const agents = [];
+  const seen = [];
   const execution = new Execution(
     { list: () => [] },
     {
       tools,
       attachments: store,
       providerFactory: (options) => {
-        agents.push(options.agent);
+        seen.push(options);
         return { run: async () => ({ text: '' }), status: async () => ({}) };
       },
     },
   );
   const own = input([kept]);
-  // A turn without tools gets a scope of its own with only attachment_read.
+  const signal = new AbortController().signal;
+  // A turn without VIDE tools gets no MCP scope, only the work folder with its attachment.
   execution.provider(own, undefined, undefined, { mode: 'data', projectId: 'p1' });
-  const alone = agentConnection(agents.at(-1));
-  assert.deepEqual(alone.tools, ['attachment_read']);
-  const read = await tools.call(alone.token, 'attachment_read', { id: kept.id });
-  assert.equal(JSON.parse(read.content[0].text).text, '요구 사항');
-  assert.match(instructionFor(alone), /attachment_read\(\{id\}\)/);
-  assert.match(turnRules(alone), /attachment_read/);
-  // A host turn keeps its tools and gains attachment_read on the same token.
+  const alone = seen.at(-1);
+  assert.equal(alone.agent, undefined);
+  assert.deepEqual(alone.builtinTools.files.attachments, [kept.path]);
+  assert.deepEqual(
+    await alone.toolPermission({ tool: 'Read', input: { file_path: kept.path } }, signal),
+    { allow: true },
+  );
+  // Another file of the attachment folder is not the turn's (no question outside a conversation).
+  const other = await alone.toolPermission(
+    { tool: 'Read', input: { file_path: join(store.directory('p1'), 'x.txt') } },
+    signal,
+  );
+  assert.equal(other.allow, false);
+  assert.match(
+    turnRules(undefined, 'claude', alone.builtinTools),
+    /attached files are read at the path/,
+  );
+  // A host turn keeps its tools; the attachment comes the same way.
   const host = tools.issue({
     targetRef: 'rhino:doc',
     isCurrent: () => true,
@@ -233,17 +227,13 @@ test('a turn gets attachment_read: added to its scope, or alone, with rules that
     undefined,
     { mode: 'modeling', projectId: 'p1' },
   );
-  const joined = agentConnection(agents.at(-1));
-  assert.deepEqual(joined.tools, ['query', 'attachment_read']);
-  assert.equal(
-    (await tools.call(host.token, 'attachment_read', { id: kept.id })).isError,
-    undefined,
-  );
-  assert.match(instructionFor(joined), /Use query to observe/);
-  assert.match(instructionFor(joined), /attachment_read/);
-  // No attachments: nothing changes.
+  const joined = agentConnection(seen.at(-1).agent);
+  assert.deepEqual(joined.tools, ['query']);
+  assert.deepEqual(seen.at(-1).builtinTools.files.attachments, [kept.path]);
+  // No attachments and no folder store: no file tools at all.
   execution.provider(input([]), undefined, undefined, { mode: 'data', projectId: 'p1' });
-  assert.equal(agents.at(-1), undefined);
+  assert.equal(seen.at(-1).agent, undefined);
+  assert.equal(seen.at(-1).builtinTools, undefined);
 });
 
 test('over HTTP: upload any type, preview images only, requests keep the kept record', async (t) => {
@@ -253,22 +243,14 @@ test('over HTTP: upload any type, preview images only, requests keep the kept re
     filename: join(directory, 'store.sqlite'),
     providerFactory: (options) => ({
       run: async () => {
-        // The model reads the attachment over MCP while the turn runs.
-        const agent = agentConnection(options.agent);
-        const client = new Client({ name: 'synthetic-agent', version: '1.0.0' });
-        await client.connect(
-          new StreamableHTTPClientTransport(new URL(agent.url), {
-            requestInit: { headers: { Authorization: `Bearer ${agent.token}` } },
-          }),
-        );
-        const listed = await client.listTools();
-        seen.push(listed.tools.map((tool) => tool.name));
-        const file = await client.callTool({
-          name: 'attachment_read',
-          arguments: { id: seen.id },
-        });
-        seen.push(file.content[0].type);
-        await client.close();
+        // The model reads the attachment with the CLI's own Read at its kept path (ADR-031 8).
+        const signal = new AbortController().signal;
+        seen.push(options.builtinTools.files.attachments);
+        for (const path of [seen.path, 'C:/Windows/win.ini'])
+          seen.push(
+            (await options.toolPermission({ tool: 'Read', input: { file_path: path } }, signal))
+              .allow,
+          );
         return { text: JSON.stringify({ message: '읽었습니다', operations: [] }) };
       },
       status: async () => ({ available: true }),
@@ -312,7 +294,7 @@ test('over HTTP: upload any type, preview images only, requests keep the kept re
   const requests = `/projects/${project.id}/requests`;
   const unknown = { ...image, id: 'e'.repeat(24) };
   assert.equal((await call(requests, 'POST', JSON.stringify(input([unknown])))).status, 400);
-  seen.id = image.id;
+  seen.path = image.path;
   const forged = { ...image, size: 1, path: 'C:/Windows/win.ini' };
   const accepted = await call(
     requests,
@@ -328,8 +310,8 @@ test('over HTTP: upload any type, preview images only, requests keep the kept re
   }
   assert.equal(stored.input.files[0].path, image.path);
   assert.equal(stored.input.files[0].size, PNG.length);
-  // Every instructed turn also has the project file tools (SPEC-01.13).
-  assert.deepEqual(seen.slice(0, 2), [['attachment_read', 'file_list', 'file_read'], 'image']);
+  // The kept path is the turn's attachment; the forged path is not read.
+  assert.deepEqual(seen.slice(0, 3), [[image.path], true, false]);
   // Deleting the project deletes its attachments.
   assert.equal((await call(`/projects/${project.id}`, 'DELETE')).status, 200);
   assert.equal(existsSync(model.path), false);

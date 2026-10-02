@@ -13,9 +13,11 @@ import type {
 } from './claude-cli.ts';
 import {
   draftPathRefusal,
+  workFolderRule,
   type AgentConnection,
   type AgentFormat,
   type BuiltinTools,
+  type WorkFolders,
 } from './agent-connection.ts';
 import { ClaudeCli, ProviderError, killOwnedProcess } from './claude-cli.ts';
 import { withRules } from './instructions/index.ts';
@@ -48,8 +50,12 @@ export const codexSingleInstruction =
  * The developer instructions of a run: the instruction `bundle` (PLAN-24 지침 묶음; Codex keeps its
  * own base instructions) followed by the session's or the single run's rules.
  */
-export function codexInstructions(session?: SessionOptions, bundle = '') {
-  const rules = session ? codexSessionInstruction : codexSingleInstruction;
+export function codexInstructions(session?: SessionOptions, bundle = '', files?: WorkFolders) {
+  // A single run without VIDE's tools but with a work folder: the folder rule follows (a session
+  // turn carries it in its own rules item).
+  const rules = session
+    ? codexSessionInstruction
+    : codexSingleInstruction + (files ? workFolderRule(files, 'codex') : '');
   return bundle ? withRules(bundle, rules) : rules;
 }
 /**
@@ -64,6 +70,26 @@ export const codexIsolationConfig = [
   'mcp_servers={}',
   'project_doc_max_bytes=0',
 ] as const;
+/**
+ * Codex's own shell and image viewer: off in a turn without a work folder, on in an app-server turn
+ * with one (ADR-031 8), where every command and file change it does not know as safe reaches
+ * VIDE's permission handler. A `codex exec` turn (no approval channel) keeps them off.
+ */
+export const CODEX_WORK_FEATURES = ['shell_tool', 'view_image'] as const;
+/** The features a run switches off: all of `codexDisabledFeatures`, less the work tools when it has them. */
+export function codexDisabled(files?: WorkFolders) {
+  return codexDisabledFeatures.filter(
+    (flag) => !(files && (CODEX_WORK_FEATURES as readonly string[]).includes(flag)),
+  );
+}
+/** The sandbox of a run: writes in the work folder (a Plan turn reads only), none without one. */
+export function codexSandbox(files?: WorkFolders) {
+  return files && !files.readOnly ? 'workspace-write' : 'read-only';
+}
+/** The writable roots of a work folder sandbox (the working directory is writable by itself). */
+export function codexWritableRoots(files?: WorkFolders) {
+  return files && !files.readOnly ? [...files.dirs] : [];
+}
 export const codexDisabledFeatures = [
   'shell_tool',
   'unified_exec',
@@ -299,6 +325,12 @@ export class CodexCli extends ClaudeCli {
     )
       throw new ProviderError('INVALID_MODEL');
     this.model = options.model;
+    // `codex exec` has no approval channel: its turns keep the shell off and get no work folder
+    // (the app-server path has them, ADR-031 8).
+    if (this.builtin?.files && !this.workFoldersSupported()) {
+      const { files: _files, ...rest } = this.builtin;
+      this.builtin = rest.work || rest.web ? Object.freeze(rest) : undefined;
+    }
     // A session turn: its isolation is asserted before spawning, and its thread is read from the
     // first event (a resumed turn that reports another thread is stopped as a lost session).
     const base = this.spawnProcess as unknown as (...values: unknown[]) => ReturnType<typeof spawn>;
@@ -378,6 +410,10 @@ export class CodexCli extends ClaudeCli {
   }
   get eventFormat(): AgentFormat {
     return 'codex';
+  }
+  /** Whether this path answers Codex's approvals (the app-server does; `exec` cannot). */
+  workFoldersSupported() {
+    return false;
   }
   /** The CLI's default login (ADR-025): no CODEX_HOME is named. */
   environment() {

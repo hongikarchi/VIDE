@@ -105,12 +105,17 @@ test('capture_view returns image content with the camera as text; measure return
   assert.deepEqual(used, ['capture_view', 'measure']);
 });
 
-test('vision tools refuse bad input, other targets and oversize images', async () => {
+test('vision tools refuse bad input and other targets; an oversize image is taken again smaller', async () => {
   const tools = new AgentTools();
+  const asked = [];
   const big = {
     ...source(),
-    async captureView() {
-      return { mimeType: 'image/png', data: Buffer.alloc(1_000_001).toString('base64') };
+    async captureView(options) {
+      asked.push([options.width, options.height]);
+      // Larger than a provider image at full size; fits at a quarter.
+      return (options.width ?? 1200) > 300
+        ? { mimeType: 'image/png', data: Buffer.alloc(5_000_001).toString('base64') }
+        : { mimeType: 'image/png', data: Buffer.alloc(10).toString('base64'), width: 300 };
     },
   };
   const scope = tools.issue({
@@ -129,10 +134,14 @@ test('vision tools refuse bad input, other targets and oversize images', async (
     code(await tools.call(scope.token, 'capture_view', { targetRef: 'rhino:other' })),
     'TARGET_MISMATCH',
   );
-  assert.equal(
-    code(await tools.call(scope.token, 'capture_view', { targetRef: 'rhino:synthetic' })),
-    'QUERY_RESULT_TOO_LARGE',
-  );
+  const smaller = await tools.call(scope.token, 'capture_view', { targetRef: 'rhino:synthetic' });
+  assert.equal(smaller.content[0].type, 'image');
+  assert.deepEqual(JSON.parse(smaller.content[1].text).reduced, { width: 300, height: 200 });
+  assert.deepEqual(asked, [
+    [undefined, undefined],
+    [600, 400],
+    [300, 200],
+  ]);
   assert.equal(
     code(await tools.call(scope.token, 'measure', { targetRef: 'rhino:synthetic' })),
     'INVALID_INPUT',
@@ -146,12 +155,10 @@ test('vision tools refuse bad input, other targets and oversize images', async (
     ),
     'INVALID_INPUT',
   );
-  assert.throws(() => new ToolImage('not base64!', 'image/png'), {
-    code: 'QUERY_RESULT_TOO_LARGE',
-  });
+  assert.throws(() => new ToolImage('not base64!', 'image/png'), { code: 'INVALID_INPUT' });
 });
 
-test('capture_view is one-at-a-time and checks the basis like query and execute', async () => {
+test('capture_view checks the basis like query and execute', async () => {
   const tools = new AgentTools();
   let current = true;
   const scope = tools.issue({

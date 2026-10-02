@@ -122,16 +122,22 @@ test('구독 경로는 API 키·대체 endpoint·주입 인증 및 사용자 설
   assert.ok(args.includes('chosen-model'));
   assert.ok(!args.some((x) => x.includes('dangerously')));
 });
-test('도구 실행 이벤트·턴 실패·불완전 출력·잘못된 이벤트를 성공으로 취급하지 않는다', async () => {
+test('허용 밖 도구 이벤트는 그 호출만 거절로 알리고 턴은 계속된다 (ADR-031 8)', async () => {
+  const transport = fake([
+    success[0],
+    { type: 'item.started', item: { type: 'command_execution' } },
+    ...success.slice(1),
+  ]);
+  const seen = [];
+  const value = await new CodexCli({
+    executable: process.execPath,
+    spawnProcess: transport.spawnProcess,
+  }).run(context, { onProgress: (event) => seen.push(event) });
+  assert.ok(value.text);
+  assert.ok(seen.some((event) => event.reason === 'TOOL_REFUSED'));
+});
+test('턴 실패·불완전 출력·잘못된 이벤트를 성공으로 취급하지 않는다', async () => {
   const cases = [
-    [
-      [
-        success[0],
-        { type: 'item.started', item: { type: 'command_execution' } },
-        ...success.slice(1),
-      ],
-      'UNEXPECTED_TOOL_CALL',
-    ],
     [[success[0], { type: 'turn.failed' }], 'PROVIDER_FAILED'],
     // A subscription limit is its own code so the next request can use another account.
     [

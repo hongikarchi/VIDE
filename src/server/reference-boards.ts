@@ -75,7 +75,7 @@ const OUTPUT_RULES =
 const INTERPRET_RULES =
   "Reference image check (SPEC-09). The turn shows the reference with the user's regions drawn " +
   'over it as translucent fills with letter badges (the image); the original reference is the ' +
-  "turn's `file` item: read it with attachment_read when you need its detail. `regions` lists " +
+  "turn's `file` item: read it at its path with the file tools when you need its detail. `regions` lists " +
   "each region: letter, the user's note (may be empty) and " +
   'box [x0, y0, x1, y1] in fractions of the image. Read only what the regions mark, following ' +
   'the notes. ' +

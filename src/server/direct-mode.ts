@@ -738,7 +738,6 @@ execute with a ZWCAD file's linkId takes a C# method body for ZWCAD, not RhinoCo
 
 function rhinoGoal(turn: DirectTurn, targetRef: string, linkedNote = '') {
   const { input, mode } = turn;
-  const limits = executionLimits(input);
   const kept = turn.protectedIds?.length
     ? ` Preserved/reference objects (never change): ${turn.protectedIds.slice(0, 100).join(', ')}.`
     : '';
@@ -759,7 +758,7 @@ Use query (pages, objectIds) to observe native IDs, layers and bounds${
       ? `
 execute takes exactly one of three forms; each call is ONE undo step whatever the form.
 - code: a C# method body. The wrapper imports System, System.Linq, Rhino, Rhino.Geometry and supplies RhinoDoc doc and StringBuilder output (its lines come back as log). Do not declare a class or method. No Rhino commands, UI, files, processes, network or reflection here. Return a small JSON-serializable value (at most 16 KiB) to observe results; never Rhino objects.
-- command: a Rhino command macro run in this document, e.g. "_-SelDup _Enter" or '_SelLayer "Walls" _Enter _Join'. Use it when a built-in command already does the job (SelDup, Join, Explode, MergeAllFaces, Make2D, Purge). Use English names with "_", the dash forms (-Layer, -Export) so no dialog opens, give every prompt its answer and end with _Enter; a missing answer leaves Rhino waiting. The log lists the commands that ran and their results. Save, export and print wait on the user's confirmation; open, import, close, quit, scripts from disk, options, plug-ins, units and undo are refused.
+- command: a Rhino command macro run in this document, e.g. "_-SelDup _Enter" or '_SelLayer "Walls" _Enter _Join'. Use it when a built-in command already does the job (SelDup, Join, Explode, MergeAllFaces, Make2D, Purge). Use English names with "_", the dash forms (-Layer, -Export) so no dialog opens, give every prompt its answer and end with _Enter; a missing answer leaves Rhino waiting. The log lists the commands that ran and their results. Save, export and print wait on the user's confirmation; open, import, close, quit, scripts from disk, plug-ins and undo are refused.
 - python: a Rhino 8 Python 3 script (import rhinoscriptsyntax as rs, scriptcontext as sc, Rhino; sc.doc is this document; print() comes back as log). Use it for loops and logic that read better in Python. No files, network, processes, os/sys, rs.Command or undo.
 Each successful execute returns undoId and the added/changed/removed objects.
 Keep existing IDs, layers and attributes unless the request changes them; modify objects in place (ModifyAttributes, Replace) rather than delete and redraw.${kept} Work in few, complete executes and check the result with query${turn.driver.vision ? ' or capture_view' : ''}. Compile diagnostics allow correction; after an uncertain result never execute again.`
@@ -767,7 +766,7 @@ Keep existing IDs, layers and attributes unless the request changes them; modify
   }
 When a dimension is missing but a standard or conventional value exists, use it and state the assumption; ask only when no reasonable value exists.
 ${linkedNote}
-Limits: ${limits.maxToolCalls} tool calls, ${limits.maxHostCommands} executes, ${limits.timeoutSeconds} seconds. Stop at the limit and report remaining work.
+There is no cap on tool calls or executes; the turn stops only after ${executionLimits(input).timeoutSeconds} seconds without any output.
 Reply in Korean with what actually changed in the document${mode === 'auto' ? ' (and that Ctrl+Z or [되돌리기] reverts it)' : ''}.
 User request: ${input.body || '첨부한 설계 문맥을 검토해 주세요.'}`;
 }
@@ -784,7 +783,6 @@ export async function runDirectTurn(turn: DirectTurn) {
   const update = (progress: Record<string, unknown>) => {
     if (!ended) turn.update(progress);
   };
-  const limits = executionLimits(input);
   const hostName = driver.host === 'rhino' ? 'Rhino' : 'ZWCAD';
   const targetRef = `${driver.host}-open:${driver.target.instance}`;
   const activity = activityLog();
@@ -1026,18 +1024,16 @@ export async function runDirectTurn(turn: DirectTurn) {
           diagnostics: verdict.diagnostics,
         };
       }
-      // An earlier answer in this file was lost and the turn has not read it yet: it is told
-      // first and nothing runs, so it does not repeat that work blindly (SPEC-02.13 7).
+      // An earlier answer in this file was lost and the turn has not read it yet: the execute runs
+      // and its answer carries the notice (ADR-031 8: a notice, not a refusal; SPEC-02.13 7).
       const unresolved = told(doc);
+      const notices: Record<string, unknown>[] = [];
       if (unresolved)
-        return {
-          ok: false,
-          executed: false,
+        notices.push({
           code: 'HOST_RESULT_UNRESOLVED',
           unresolved,
-          next: `Nothing ran and ${doc.file.name} is unchanged. Check its current state first (a query with this linkId, or inspect it inside the execute itself if a query fails), then execute only what is still missing. Your next execute there runs.`,
-        };
-      if (attempts >= limits.maxHostCommands) throw failure('HOST_COMMAND_LIMIT');
+          next: `An earlier request's answer in ${doc.file.name} was lost: check its current state (a query with this linkId, or inside the execute) before you build on it, and do not repeat work that is already there.`,
+        });
       attempted.add(doc.key);
       // Another file is locked as the turn first writes it; held elsewhere, it is refused at once
       // (never waits, so two turns cannot wait on each other's files).
@@ -1070,14 +1066,17 @@ export async function runDirectTurn(turn: DirectTurn) {
       try {
         if (uncertain) throw failure('HOST_RESULT_UNKNOWN');
         // The document changed since this turn last read it (another conversation's execute, a
-        // person's edit): nothing is sent; the AI reads again and executes what is still missing.
+        // person's edit): the execute runs and its answer says so (ADR-031 8: a notice, not a
+        // refusal); the AI reads again if its code depended on what it read.
         if (doc.seen !== undefined) {
           const now = await tokenOf(doc.driver);
-          if (now !== undefined && now !== doc.seen)
-            return {
-              ...notExecuted(doc, staleRefusal, true),
-              next: `Nothing ran and ${doc === primary ? 'the document' : doc.file.name} is unchanged. Query it again${doc === primary ? '' : ' (with this linkId)'}, then execute only what is still missing.`,
-            };
+          if (now !== undefined && now !== doc.seen) {
+            notices.push({
+              code: staleRefusal.code,
+              next: `${doc === primary ? 'The document' : doc.file.name} changed since you last read it (another conversation or the user). This execute ran on it as it is now; query it again${doc === primary ? '' : ' (with this linkId)'} if your code depended on what you read.`,
+            });
+            activity.add('host', named(doc, '마지막 조회 뒤 문서가 바뀜 · 현재 문서에 실행'));
+          }
         }
         attempts++;
         const executionId = randomUUID();
@@ -1181,7 +1180,7 @@ export async function runDirectTurn(turn: DirectTurn) {
             (outcome.diagnostics ?? []).join('\n') || outcome.code,
           );
           update(state('model'));
-          return outcome;
+          return notices.length ? { ...outcome, notices } : outcome;
         }
         const changes = boundedChanges(outcome.changes);
         if (outcome.undoId) {
@@ -1212,6 +1211,7 @@ export async function runDirectTurn(turn: DirectTurn) {
           executionId,
           undoId: outcome.undoId ?? null,
           changes,
+          ...(notices.length ? { notices } : {}),
           log: outcome.log,
           ...(outcome.value !== undefined &&
           Buffer.byteLength(JSON.stringify(outcome.value ?? null)) <= 16384
@@ -1271,9 +1271,9 @@ export async function runDirectTurn(turn: DirectTurn) {
   const scope = turn.tools.issue({
     targetRef,
     handlers: handlers as Parameters<AgentTools['issue']>[0]['handlers'],
-    isCurrent: () => !signal.aborted && !uncertain,
-    maxCalls: limits.maxToolCalls,
-    ttlMs: Math.min(600000, (limits.timeoutSeconds + 60) * 1000),
+    // Reads stay open after a lost execute answer (ADR-031 8): only execute refuses then, with
+    // HOST_RESULT_UNKNOWN, so the AI can still look at the document.
+    isCurrent: () => !signal.aborted,
     links: true,
   });
   try {

@@ -136,19 +136,29 @@ test('API fallback과 커스텀 환경 설정을 구독 자식 프로세스에�
   assert.deepEqual(env, { PATH: 'ok' });
 });
 
-test('도구 권한이나 호출이 발견되면 성공 결과가 와도 거절한다', async () => {
-  for (const events of [
-    [{ ...init, tools: ['Bash'] }, result],
+test('허용 밖 도구가 보이거나 불려도 턴은 계속되고 그 호출만 거절로 알린다 (ADR-031 8)', async () => {
+  for (const [events, expected] of [
+    [[{ ...init, tools: ['Bash'] }, result], 'provider-warning'],
     [
-      init,
-      { type: 'assistant', message: { content: [{ type: 'tool_use', name: 'Write' }] } },
-      result,
+      [
+        init,
+        { type: 'assistant', message: { content: [{ type: 'tool_use', name: 'Write' }] } },
+        result,
+      ],
+      'TOOL_REFUSED',
     ],
   ]) {
     const fake = transport(events),
+      seen = [],
       cli = new ClaudeCli({ executable: process.execPath, spawnProcess: fake.spawnProcess });
-    await assert.rejects(cli.run(context()), (error) =>
-      ['UNEXPECTED_TOOL_ACCESS', 'UNEXPECTED_TOOL_CALL'].includes(error.code),
+    const value = await cli.run(context(), { onProgress: (event) => seen.push(event) });
+    assert.equal(value.text, result.result);
+    assert.ok(
+      seen.some((event) =>
+        expected === 'provider-warning'
+          ? event.state === 'provider-warning' && event.reason === 'UNEXPECTED_TOOL_ACCESS'
+          : event.reason === 'TOOL_REFUSED' && event.tool === 'Write',
+      ),
     );
   }
 });

@@ -224,7 +224,6 @@ export class ZwcadSdkExecution {
         if (typeof code !== 'string') throw failure('EXECUTE_FORM_UNSUPPORTED');
         if (signal.aborted) throw failure('CANCELLED');
         if (write && refused?.final) return notExecuted(refused);
-        if (attempts >= executionLimits(input).maxHostCommands) throw failure('HOST_COMMAND_LIMIT');
         attempts++;
         report('execute', `${write ? 'ZWCAD 도면 수정' : 'ZWCAD 도면 읽기'} ${attempts}회차`, code);
         if (write) {
@@ -336,8 +335,6 @@ export class ZwcadSdkExecution {
       targetRef,
       handlers,
       isCurrent: () => !signal.aborted && !uncertain,
-      maxCalls: executionLimits(input).maxToolCalls,
-      ttlMs: Math.min(600000, (executionLimits(input).timeoutSeconds + 60) * 1000),
     });
     const goal = `Target is the drawing open in the user's ZWCAD 2023 (${targetRef}). It is NOT a copy: ${write ? 'Auto mode: every successful execute is committed to that drawing immediately as one UNDO step (the user can revert it with ZWCAD U or VIDE [되돌리기]). Erasing more than ' + DIRECT_MAX_DELETES + ' entities, deleting layers or purging definitions is held back until the user confirms: such an execute returns ok:false with "guarded"; then stop and say what needs confirmation instead of working around it.' : 'Plan mode: execute runs read-only (its transaction is always discarded). Read, measure and plan; do not change the drawing. End with a plan: steps (title, objects, risk) and any questions.'}
 Native coordinates are drawing units (usually millimetres; query returns "units"). Other hosts' geometry and sketches are metres, so convert explicitly.
@@ -345,7 +342,7 @@ Use query (offset/limit pages, objectIds = entity handles) to inspect entities: 
 execute takes a C# method body. ${ZWCAD_EXECUTE_WRAPPER}
 
 Keep existing handles, layers and colours unless the request changes them; edit entities in place rather than erasing and redrawing. Do not touch protected/reference objects. Work in few, complete executes; query after writing to confirm. When a dimension is missing but a standard or conventional value exists, use it and say so.
-Limits: ${executionLimits(input).maxToolCalls} tool calls, ${executionLimits(input).maxHostCommands} executes, ${executionLimits(input).timeoutSeconds} seconds. Reply in Korean with what actually changed in the drawing (and that ZWCAD's UNDO reverts it).
+There is no cap on tool calls or executes; the turn stops only after ${executionLimits(input).timeoutSeconds} seconds without any output. Reply in Korean with what actually changed in the drawing (and that ZWCAD's UNDO reverts it).
 User request: ${input.body || '첨부한 설계 문맥을 검토해 주세요.'}`;
     try {
       report('host', '열린 ZWCAD 도면에 연결');
@@ -491,8 +488,6 @@ User request: ${input.body || '첨부한 설계 문맥을 검토해 주세요.'}
           if (typeof code !== 'string') throw failure('EXECUTE_FORM_UNSUPPORTED');
           if (signal.aborted) throw failure('CANCELLED');
           if (uncertain) throw failure('HOST_RESULT_UNKNOWN');
-          if (attempts >= executionLimits(input).maxHostCommands)
-            throw failure('HOST_COMMAND_LIMIT');
           attempts++;
           const operationId = randomUUID();
           currentOperation = operationId;
@@ -547,13 +542,11 @@ User request: ${input.body || '첨부한 설계 문맥을 검토해 주세요.'}
         targetRef,
         handlers,
         isCurrent: () => !signal.aborted && !uncertain,
-        maxCalls: executionLimits(input).maxToolCalls,
-        ttlMs: Math.min(600000, (executionLimits(input).timeoutSeconds + 60) * 1000),
       });
       const goal = `Target is ZWCAD 2023, dedicated work copy ${targetRef}. Native SDK coordinates are millimetres; attached UI geometry and sketches are metres, so convert explicitly. Permission: ${input.permission}.
 Use query to inspect objects and native handles. For candidate permission use execute with a C# method body. The wrapper imports System, System.Linq, ZwSoft.ZwCAD.DatabaseServices, ZwSoft.ZwCAD.Geometry and supplies Database db and Transaction tr. Use tr.GetObject and the model-space BlockTableRecord; append new entities and register with tr.AddNewlyCreatedDBObject. The controller owns transaction commit, saving and readback. Do not open/save files, commit transactions, invoke shell/network/reflection, or access active documents. Return only small JSON-serializable values, never SDK objects.
 The currently verified viewer supports independent planar XY straight LWPolylines and LINE entities with both endpoints at the same Z. Preserve each native type and handle when editing; a LINE remains a LINE. Unsupported geometry is rejected, not silently omitted. Use given dimensions and sketch coordinates; ask for missing critical values. Preserve existing handles, layers, colors and protected/reference objects; edit existing entities instead of replacing them unnecessarily. Other-host references are read-only. Query after success. Compilation/policy errors allow correction; an uncertain write forbids another execute. Respond in Korean with actual results.
-Limits: ${executionLimits(input).maxToolCalls} tool calls, ${executionLimits(input).maxHostCommands} host commands, ${executionLimits(input).timeoutSeconds} seconds for the AI response. Stop at the limit and report remaining work.
+There is no cap on tool calls or host commands; the turn stops only after ${executionLimits(input).timeoutSeconds} seconds without any output.
 User request: ${input.body || '첨부한 설계 문맥을 검토해 주세요.'}`;
       const response = await provider({
         url: options.origin() + '/mcp',

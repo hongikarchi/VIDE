@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { startServer } from '../../src/server/server.ts';
+import { AgentTools, RESULT_BYTES, bounded } from '../../src/server/agent-tools.ts';
 
 async function fixture(t) {
   const directory = await mkdtemp(join(tmpdir(), 'vide-mcp-test-'));
@@ -108,7 +109,7 @@ test('MCP rejects missing credentials, cross-origin calls, malformed inputs and 
   const scope = app.agentTools.issue({
     targetRef: 'synthetic:A',
     isCurrent: () => true,
-    handlers: { status: () => ({ state: 'idle' }) },
+    handlers: { measure: () => ({ state: 'idle' }) },
   });
   const headers = { Authorization: `Bearer ${scope.token}`, 'Content-Type': 'application/json' };
   assert.equal((await fetch(app.origin + '/mcp')).status, 401);
@@ -129,12 +130,13 @@ test('MCP rejects missing credentials, cross-origin calls, malformed inputs and 
   );
 });
 
-test('stale basis, exhausted budget and revoked scope prevent executor invocation', async (t) => {
+test('a stale basis prevents executor invocation; tool calls are not counted (ADR-031 7)', async (t) => {
   const { app, connect } = await fixture(t);
   let current = false,
     executions = 0;
   const scope = app.agentTools.issue({
     targetRef: 'synthetic:A',
+    // Accepted for old callers; no longer a cap.
     maxCalls: 2,
     isCurrent: () => current,
     handlers: {
@@ -149,11 +151,93 @@ test('stale basis, exhausted budget and revoked scope prevent executor invocatio
     name: 'execute',
     arguments: { targetRef: 'synthetic:A', code: 'synthetic code' },
   };
-  assert.equal(payload(await client.callTool(request)).code, 'STALE_REFERENCE');
+  const stale = payload(await client.callTool(request));
+  assert.equal(stale.code, 'STALE_REFERENCE');
+  assert.match(stale.next, /Read the current state again/);
   current = true;
-  assert.deepEqual(payload(await client.callTool(request)), { synthetic: true });
-  assert.equal(payload(await client.callTool(request)).code, 'AGENT_CALL_LIMIT');
-  assert.equal(executions, 1);
+  for (let i = 0; i < 5; i++)
+    assert.deepEqual(payload(await client.callTool(request)), { synthetic: true });
+  assert.equal(executions, 5);
+});
+
+test('reads run side by side; only a second write is AGENT_BUSY; schema errors name the field', async () => {
+  const tools = new AgentTools();
+  let open;
+  const gate = new Promise((resolve) => (open = resolve));
+  let running = 0,
+    most = 0;
+  const scope = tools.issue({
+    targetRef: 'synthetic:A',
+    isCurrent: () => true,
+    handlers: {
+      query: async () => {
+        running++;
+        most = Math.max(most, running);
+        await gate;
+        running--;
+        return { ok: true };
+      },
+      execute: async () => {
+        await gate;
+        return { ran: true };
+      },
+    },
+  });
+  const read = () => tools.call(scope.token, 'query', { targetRef: 'synthetic:A' });
+  const reads = [read(), read(), read()];
+  const write = tools.call(scope.token, 'execute', { targetRef: 'synthetic:A', code: 'x' });
+  await new Promise((resolve) => setTimeout(resolve, 5));
+  const busy = JSON.parse(
+    (await tools.call(scope.token, 'execute', { targetRef: 'synthetic:A', code: 'y' })).content[0]
+      .text,
+  );
+  assert.equal(busy.code, 'AGENT_BUSY');
+  assert.match(busy.next, /reads may run side by side/);
+  open();
+  await Promise.all([...reads, write]);
+  assert.equal(most, 3);
+  const invalid = JSON.parse(
+    (await tools.call(scope.token, 'query', { targetRef: 'synthetic:A', limit: 'ten' })).content[0]
+      .text,
+  );
+  assert.equal(invalid.code, 'INVALID_INPUT');
+  assert.deepEqual(
+    invalid.fields.map((entry) => entry.field),
+    ['limit'],
+  );
+});
+
+test('a large tool result is cut with truncated and where to read on, not refused (ADR-031 3)', () => {
+  const rows = Array.from({ length: 400 }, (_, i) => ({ id: i, text: 'x'.repeat(500) }));
+  const page = bounded({ total: 400, offset: 0, items: rows, nextOffset: null });
+  assert.equal(page.truncated, true);
+  assert.ok(page.items.length > 0 && page.items.length < 400);
+  assert.equal(page.nextOffset, page.items.length);
+  assert.ok(Buffer.byteLength(JSON.stringify(page)) <= RESULT_BYTES);
+  const blob = bounded({ text: 'y'.repeat(RESULT_BYTES * 2) });
+  assert.equal(blob.truncated, true);
+  assert.ok(blob.partial.length < RESULT_BYTES);
+  assert.match(blob.next, /Ask for less/);
+  const small = { a: 1 };
+  assert.equal(bounded(small), small);
+});
+
+test('a scope keeps its tools while the turn keeps calling (the lifetime runs between calls)', async () => {
+  let now = 0;
+  const tools = new AgentTools({ now: () => now });
+  const scope = tools.issue({
+    targetRef: 'synthetic:A',
+    ttlMs: 100,
+    isCurrent: () => true,
+    handlers: { measure: () => ({ ok: true }) },
+  });
+  const call = () => tools.call(scope.token, 'measure', { targetRef: 'synthetic:A', ids: ['a'] });
+  for (let i = 0; i < 5; i++) {
+    now += 90;
+    assert.equal(JSON.parse((await call()).content[0].text).ok, true);
+  }
+  now += 101;
+  assert.equal(JSON.parse((await call()).content[0].text).code, 'AGENT_SCOPE_EXPIRED');
 });
 
 test('concurrent execution is rejected; revocation during basis check blocks late execution', async (t) => {
@@ -198,7 +282,7 @@ test('expired tokens cannot initialize MCP and backend exceptions do not leak lo
     targetRef: 'synthetic:A',
     ttlMs: 1,
     isCurrent: () => true,
-    handlers: { status: () => ({}) },
+    handlers: { measure: () => ({}) },
   });
   await new Promise((resolve) => setTimeout(resolve, 5));
   assert.equal(

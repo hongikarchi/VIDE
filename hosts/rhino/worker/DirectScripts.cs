@@ -13,7 +13,7 @@ namespace Vide.Worker;
 // compared by tests/server/rhino-script-policy.test.mjs. Defence in depth, not an OS boundary.
 internal static class DirectScripts
 {
-    internal static readonly string[] CommandDeny = ["exit", "quit", "open", "worksession", "revert", "runscript", "loadscript", "readcommandfile", "runpythonscript", "editpythonscript", "scripteditor", "rhinocode", "options", "documentproperties", "units", "pluginmanager", "loadplugin", "packagemanager", "grasshopper", "grasshopperplayer", "readviewsfromfile", "sendmail", "packtextures", "clearundo", "undomultiple", "redomultiple", "undoselected", "pause", "multipause"];
+    internal static readonly string[] CommandDeny = ["exit", "quit", "open", "worksession", "revert", "runscript", "loadscript", "readcommandfile", "runpythonscript", "editpythonscript", "scripteditor", "rhinocode", "pluginmanager", "loadplugin", "packagemanager", "grasshopperplayer", "readviewsfromfile", "sendmail", "packtextures", "clearundo", "undomultiple", "redomultiple", "undoselected"];
     // Refused anywhere except as an option right after the command that owns it (CommandOptionOwners).
     internal static readonly string[] CommandDenyUnlessOption = ["new", "close", "undo", "redo", "insert"];
     internal static readonly string[] CommandDenyPrefix = ["import"];
@@ -24,19 +24,18 @@ internal static class DirectScripts
     internal static readonly Dictionary<string, string> CommandConfirmPrefix = new() { ["export"] = "export" };
     internal static readonly string[] PythonDeny =
     [
-        @"^[ \t]*(import|from)[ \t]+[^\n#]*\b(os|sys|subprocess|socket|shutil|ctypes|urllib|urllib2|urllib3|http|requests|pathlib|io|glob|tempfile|ftplib|smtplib|multiprocessing|threading|asyncio|winreg|_winreg|importlib|webbrowser|pickle|marshal|zipfile|tarfile|sqlite3|signal|clr)\b",
-        @"(?<![\w.])(open|__import__|exec|eval|compile|execfile|input|raw_input|breakpoint)[ \t]*\(",
-        @"\bSystem\.(IO|Net|Diagnostics|Reflection|Threading|Runtime|Environment|AppDomain|Activator|Type)\b",
-        @"^[ \t]*from[ \t]+System(\.\w+)?[ \t]+import\b[^\n#]*\b(IO|Net|Diagnostics|Reflection|Threading|Runtime|Environment|AppDomain|Activator|Type)\b",
+        @"^[ \t]*(import|from)[ \t]+[^\n#]*\b(os|sys|subprocess|socket|shutil|ctypes|urllib|urllib2|urllib3|http|requests|pathlib|io|glob|tempfile|ftplib|smtplib|multiprocessing|winreg|_winreg|importlib|webbrowser|pickle|marshal|zipfile|tarfile|sqlite3|signal|clr)\b",
+        @"(?<![\w.])(open|__import__|exec|eval|compile|execfile)[ \t]*\(",
+        @"\bSystem\.(IO|Net|Diagnostics|Reflection|Runtime|Environment|AppDomain|Activator|Type)\b",
+        @"^[ \t]*from[ \t]+System(\.\w+)?[ \t]+import\b[^\n#]*\b(IO|Net|Diagnostics|Reflection|Runtime|Environment|AppDomain|Activator|Type)\b",
         @"\bMicrosoft\.Win32\b",
-        @"\bRhino\.(FileIO|PlugIns|UI|ApplicationSettings|Runtime|Commands)\b",
-        @"^[ \t]*from[ \t]+Rhino(\.\w+)?[ \t]+import\b[^\n#]*\b(FileIO|PlugIns|UI|ApplicationSettings|Runtime|Commands|RhinoApp)\b",
-        @"\bRhinoApp\b",
+        @"\bRhino\.(FileIO|PlugIns|Runtime)\b",
+        @"^[ \t]*from[ \t]+Rhino(\.\w+)?[ \t]+import\b[^\n#]*\b(FileIO|PlugIns|Runtime)\b",
+        @"\bRhinoApp\.(RunScript|RunMenuScript|Exit|ExecuteCommand|SendKeystrokes)\b",
         @"\.(Command|Exit|OpenFileName|OpenFileNames|SaveFileName|BrowseForFolder|Write3dmFile|WriteFile|ReadFile|Import|Export|SaveAs|Close|Undo|Redo|BeginUndoRecord|EndUndoRecord|ClearUndoRecords|AddCustomUndoEvent)\b",
         @"(?<![\w.])(Command|Exit)[ \t]*\(",
         @"\.Save\w*[ \t]*\(",
-        @"(?<![\w.])(getattr|setattr|delattr|globals|locals|vars)[ \t]*\(",
-        @"\b__(builtins|dict|class|subclasses|bases|mro|globals|code|getattribute|loader|spec)__\b",
+        @"\b__(builtins|subclasses|globals|code|loader|spec)__\b",
         @"^[ \t]*from[ \t]+(rhinoscriptsyntax|rhinoscript)(\.\w+)?[ \t]+import\b[^\n#]*(\*|\b(Command|Exit)\b)",
     ];
     // Same as PYTHON_PURGE (src/contracts/rhino-script-policy.ts): Compact( counts only on a document table or the
