@@ -2,10 +2,10 @@
 id: PLAN-16
 title: 프로젝트 연결 파일(Link)과 여러 파일의 한 공간
 status: review
-version: 0.9
-updated: 2026-10-01
+version: 1.0
+updated: 2026-10-02
 owner: agent:claude
-related: [PLAN, SPEC-01, DESIGN, ARCH-01, FR-01, FR-02, FR-03, FR-16]
+related: [PLAN, SPEC-01, DESIGN, ARCH-01, ADR-030, FR-01, FR-02, FR-03, FR-16]
 ---
 
 # 프로젝트 연결 파일(Link)과 여러 파일의 한 공간
@@ -120,3 +120,29 @@ related: [PLAN, SPEC-01, DESIGN, ARCH-01, FR-01, FR-02, FR-03, FR-16]
   - 파일 소속은 엔진과 같은 규칙(`belongsToLink`, `src/contracts/link-requests.ts`)으로 판단한다.
   - 어느 파일에도 속하지 않는 결과는 목록의 '작업 결과 · <이름>' 행과 닫기로 보인다(Design §03). 닫으면 다음 시작에도 다시 열리지 않는다.
 - **검증:** `browser-links.mjs`에 두 시작 경로(초안 없음, 지난 Sync를 기준으로 가진 초안)를 더했다: 모든 파일 숨김 → 빈 화면, 다시 시작해도 빈 화면·숨김 유지·엔진에 보이기 요청 없음, 새 Sync가 이전 Sync와 겹쳐 그려지지 않음, 연결 전 Sync를 작업 이력에서 열면 '작업 결과' 행이 생기고 닫으면 빈 화면, 다음 시작에도 닫힌 채. 이전 코드에서는 이 단계가 실패한다. 조사 때의 재현 스크립트(초안 기준·새 Sync·연결 전 Sync·이전 불러오기)도 모두 빈 화면이 됐다. `npm run test:browser`의 나머지 시험도 통과했다. `browser-s06-jig`만 입력 조립 단계에서 시간 초과로 실패하는데, 연결 파일을 쓰지 않는 시험이고 수정 전 `main`(`b7b4d0e`)에서도 같은 단계에서 실패한다(이 PC의 구조 코어 DLL은 2026-09-29 빌드).
+
+## 2026-10-02 모호한 Link의 선택·따라감 알림·정리와 문서 안의 연결 ID (사용자 결정)
+
+사용자 결정: "sync 부분은 추천대로 갈게. 그리고 D5처럼 묶을 수 있게 연결 ID를 문서 안에 저장하는 거 좋은 것 같아." 추천 내용은 (1) 모호할 때만 Link에서 대체/새 항목을 묻기, (2) 자동 따라가기를 목록에 한 번 알리고 [새 항목으로 분리], (3) 중복 항목 [합치기]·기록 없는 항목 [빼기]이다. 결정 기록은 [ADR-030](../decisions/ADR-030-link-id-in-document.md), 동작은 [SPEC-01.11](../specs/SPEC-01-project-input-sync.md)의 1과 패널 문단, 물리 계약은 [ARCH-01](../architecture/ARCH-01-system.md) §7 「프로젝트 연결 파일(Link)」의 '문서 안의 연결 ID와 모호한 Link', 화면은 [Design](../../Design.md) §03 연결 파일 목록과 SCR-12 '이을 연결 고르기'. DB 스키마는 바꾸지 않는다.
+
+<a id="t-107"></a>
+
+### T-107 Link 선택·따라감 알림·합치기/빼기
+
+- **변경:**
+  - `src/core/document-links.ts`: `linkChoice`(물을지와 후보·기본값), `link`의 `replace`·`storedId` 순서와 같은 창 다른 행의 닫힘 표시(`closed:<uuid>`), 메모리 알림(`notice`·`note`·`dismiss`), `follow`의 `how`와 따라감 알림(첫 `from`·`previous` 유지), `split`, `merge`(요청 `input.linkId`·jig 읽기/만들기 `linkId` 이동).
+  - `src/server/server.ts`: `POST …/links`의 `storedId`·`replace`·`ask`와 409 `LINK_CHOICE`(후보마다 Sync 수), `GET …/links`의 `notice`·`cleanup`, `POST …/links/:l/split·merge·dismiss`. `src/server/live-links.ts`는 `how`를 `follow`에 넘긴다.
+  - 화면 `src/ui/links.tsx`·`app.ts`·`style.css`: 행 아래 한 줄 알림과 [새 항목으로 분리]·[확인]·[합치기](확인 창)·[빼기].
+  - 플러그인(Rhino `EngineLink.cs`, ZWCAD `EngineLink.cs`): Link에 `ask: true`와 저장된 ID를 보내고 409 `LINK_CHOICE`면 선택 창(`LinkChoiceDialog`)을 띄워 답으로 다시 Link한다. 취소하면 이번에 만든 연결을 끊는다.
+- **검증:** `tests/server/link-choice.test.mjs` — 닫힌 같은 경로 행이 있을 때만 묻고 기본은 그 행, 답(`replace`)으로 이어지고 기록 유지, 새 항목을 고르면 닫힌 행과 기록 그대로, 모호하지 않은 Link와 이전 플러그인(`ask` 없음)의 경로 재연결, 다른 이름 저장의 따라감 알림(두 번 저장해도 처음 이름)과 [분리](이전 행은 기록과 이전 이름으로 닫힘, 새 행은 창, 문서에 새 ID 쓰기), 다시 연 창의 경로 재연결 알림과 분리, 같은 창 중복 행의 [합치기](요청 이동, 실행 중이면 409)와 기록 없는 행의 '빼기' 제안. `tests/integration/browser-links.mjs`에 목록 알림·[새 항목으로 분리]·[합치기] 단계(엔진 답은 가짜)를 더했다. 기존 `link-follow.test.mjs` 통과.
+- **남은 것:** 실제 Rhino·ZWCAD에서 선택 창의 모양과 취소 뒤 연결 상태 확인(설치본 반영 뒤 합성 문서).
+
+<a id="t-108"></a>
+
+### T-108 문서 안의 연결 ID
+
+- **변경:**
+  - Rhino `hosts/rhino/worker/LinkIdStore.cs`(문서 사용자 문자열 `VIDE`/`link:<projectId>`), `AttachedConnection.cs`: `attachedStatus`에 `linkIds`, 새 메서드 `setLinkId`. ZWCAD `hosts/zwcad/connection/LinkIdStore.cs`(명명 객체 사전 `VIDE_LINKS`), `AttachedDocument.cs`: 같은 두 가지. Link가 끝나면 플러그인이 ID를 쓰고, 처음 쓰면 명령줄에 "연결 ID를 문서에 저장했습니다. 저장하면 다음에도 이어집니다."를 붙인다.
+  - 엔진: `hostDocumentsSchema`·Rhino `editor-channel.ts`·`editor-sessions.ts`·ZWCAD `attached-documents.ts`가 `linkIds`를 전하고 `setLinkId`를 부른다. `matchOpenDocuments`는 같은 창 → 저장된 ID → 경로 순이다. [새 항목으로 분리]는 그 창 문서에 새 ID를 쓴다(못 쓰면 화면이 알림).
+- **검증:** `link-choice.test.mjs` — 이동·이름 바꾸기·재시작 뒤 저장된 ID가 같은 경로의 다른 닫힌 행보다 먼저 이어짐, 저장된 ID가 있으면 Link가 묻지 않음, 같은 ID의 사본이 두 창에 열리면 두 번째 창의 Link가 묻고(기본 새 항목) 두 행이 각자 연결됨, 대조 순서(같은 ID가 두 창이면 먼저 나온 창만), Rhino 편집기 채널로 `linkIds`가 오고 [분리]가 `setLinkId`를 부름. Rhino(`VIDE.Worker.csproj`)·ZWCAD(`VIDE.Zwcad.Connection.csproj`) 플러그인은 빌드만 확인했다.
+- **남은 것:** 실제 Rhino 8·ZWCAD에서 ID 쓰기가 문서를 '수정됨'으로 만들고 저장·다른 이름 저장·다시 열기 뒤 유지되는지, `attachedStatus`의 `linkIds` 보고와 [분리] 뒤 다시 쓴 ID, 사본 두 창의 질문을 설치본 반영 뒤 합성 문서로 확인한다(에이전트는 사용자 문서와 호스트를 열지 않음).
