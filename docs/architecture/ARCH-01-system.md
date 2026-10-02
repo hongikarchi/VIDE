@@ -2,10 +2,10 @@
 id: ARCH-01
 title: VIDE 기술 구조와 구현 계약
 status: review
-version: 0.73
+version: 0.74
 updated: 2026-10-02
 owner: agent:codex
-related: [SPEC-00, SPEC-02, SPEC-03, SPEC-04, SPEC-09, PLAN, PLAN-20, PLAN-24, ADR-014, ADR-015, ADR-016, ADR-017, ADR-021, ADR-022, ADR-025, ADR-027, ADR-028, ADR-029, ADR-030, PLAN-25, ARCH-03]
+related: [SPEC-00, SPEC-02, SPEC-03, SPEC-04, SPEC-09, PLAN, PLAN-20, PLAN-24, ADR-014, ADR-015, ADR-016, ADR-017, ADR-021, ADR-022, ADR-025, ADR-027, ADR-028, ADR-029, ADR-030, PLAN-25, PLAN-27, ARCH-03]
 ---
 
 # VIDE 기술 구조와 구현 계약
@@ -536,7 +536,7 @@ Roslyn/호스트 런타임 버전 충돌·첫 컴파일 지연·반복 실행 �
 **여러 파일 턴(ADR-027, 2026-10-01).** 동작 정본은 SPEC-01.11의 5·SPEC-02.13의 6·SPEC-02.9의 3이다. 1차 범위는 Rhino 연결 문서가 대상인 바로 편집 턴(`runDirectTurn`, `src/server/direct-mode.ts`)이다.
 - **파일 해석:** 도구 인수 `linkId`를 그 프로젝트의 연결 행(`DocumentLinks`)에서 찾고, 링크 목록 경로(`GET …/links`)와 같은 대조·따라가기 단계(`followOpenDocuments`, `src/server/live-links.ts`: 아래 「연결 파일」의 `matchOpenDocuments` 세션 우선 대조와 `DocumentLinks.follow`)로 지금 열린 문서(Rhino `editors.list(true)`, ZWCAD `editors.attached.list()`)에 맞추고, 그 문서가 **연결 편집기**(`connection: 'attached-editor'`)일 때만 열린 파일로 본다. 그래서 목록이 연결로 보이는 행과 턴의 열린 행이 같고, 창 하나는 열린 행 하나이며, 목록의 마지막 조회 뒤 다른 이름으로 저장한 창도 턴이 새 이름으로 본다. 맞는 문서가 없거나 파일 항목(`file:`, 목록에는 닫힌 파일로 나옴)·VIDE가 연 작업 사본이면 `LINK_NOT_LIVE`, 그 프로젝트의 연결이 아니면 `NOT_FOUND`. 자기 창이 닫힌 행을 경로로 이을 때 같은 경로가 두 창에 열려 있으면 턴의 대상 창, 다음은 처음 나온 창을 고른다(`matchLinks`의 `prefer`). 대상 문서와 같은 문서면 대상의 드라이버를 쓴다. 열린 문서 조회는 그 프로젝트에 연결이 있는 호스트에만 동시에 보내고, 호스트 연결이 없는 프로젝트(한 파일 요청)는 호스트를 묻지 않는다(`Execution.liveLinks`). 턴 시작 때 열린·닫힌 연결 파일 목록(ID·이름·호스트)을 목표 문장에 싣는다. 해석한 드라이버는 그 턴 동안 문서마다 하나이며 실행 뒤 그 문서의 조회 캐시만 무효로 한다.
 - **도구별:** Rhino 문서는 `query`(`readLayers` 페이지)·`capture_view`·`measure`(`directView`)·`execute`(`direct-execute`). ZWCAD 도면은 `query`(`queryEntities`)·`execute`(`direct-execute`)이고 보기 메서드가 없어 `capture_view`·`measure`는 `NO_VIEW`. ZWCAD 답의 `COMPILE_ERROR`·`CODE_POLICY_REJECTED`·`EXECUTION_FAILED`·`GUARD_CONFIRMATION_REQUIRED` 밖의 실패는 실행 전 거절이 아니면 `HOST_RESULT_UNKNOWN`으로 읽는다(`runAttached`와 같은 규칙). 자동 모드 목표 문장은 대상 밖의 열린 ZWCAD 도면이 있을 때만 ZWCAD 실행 래퍼(`ZWCAD_EXECUTE_WRAPPER`, `src/server/zwcad-sdk-execution.ts`: `Database db`·`Transaction tr`, Commit/Abort 금지, 핸들 ID, 도면 단위)를 덧붙인다. ZWCAD 대상 턴의 목표와 같은 문장이다. `AgentTools.issue`의 `links: true` 범위만 `linkId`를 처리기로 넘기고, 다른 범위에서 `linkId`를 준 문서 도구는 처리기를 부르지 않고 `LINK_NOT_LIVE`다. 오류 답에는 `next`를 붙인다: `links: true` 범위의 닫힌 파일은 저장 기록 도구로 읽고 사용자에게 열어 달라고 하라는 안내, `linkId`를 받지 않는 범위는 '이 턴은 다른 파일을 실시간으로 다루지 못하니 저장 기록으로만 읽고 열어 달라고 하지 말라'는 안내. 공통 지시(`hostProjectNote`)는 실시간 읽기·쓰기를 약속하지 않고, 그 규칙은 그런 턴의 목표 문장만 준다.
-- **잠금:** 대상 문서 밖의 문서에 첫 `execute`를 보내기 전에 `Execution`이 그 문서를 검사한다(`documentHolder`, `src/contracts/request-scope.ts`): 다른 대기 중이 아닌 `queued`·`running` 요청의 쓰기 주장(입력의 대상 + 결과의 `documents[]`)에 그 문서가 있으면 `DOCUMENT_LOCKED`. 결과 불명 요청은 잠금 사유가 아니다(T-102). 통과하면 결과의 `documents: [{host, instance, documentId, linkId?, name?}]`에 더한다(같은 동기 구간이라 두 턴이 동시에 통과하지 않는다). `requestAdmission`은 진행 중 요청의 `documents[]`도 쓰기 주장으로 센다. 잠금 거절은 실행 전 거절과 같은 모양(`{ok: false, executed: false, code, reason, next}`)으로 AI에 돌려주고 문서별 '실행하지 않음'으로 기록한다. 대기는 하지 않는다. jig의 바로 만들기(`jig-routes.ts`, 연결 편집기 문서)도 실행 전에 같은 검사를 해 잡혀 있으면 `BAKE_FAILED`(`reason: DOCUMENT_LOCKED`, `refused` 문장)로 거절하고, 도는 동안 `Workspace.holdWrite`로 그 문서의 짧은 쓰기 주장을 둔다. 요청 표에 남지 않는 이 주장은 `Workspace.claimRows`가 접수(`submit`·`admission`·`release`)와 턴 중 잠금·보호 카드 검사에 더하며, 끝나면 `Execution.resume`이 기다리던 요청을 다시 판정한다.
+- **잠금:** 대상 문서 밖의 문서에 첫 `execute`를 보내기 전에 `Execution`이 그 문서를 검사한다(`documentHolder`, `src/contracts/request-scope.ts`): 다른 대기 중이 아닌 `queued`·`running` 요청의 쓰기 주장(입력의 대상 + 결과의 `documents[]`)에 그 문서가 있으면 `DOCUMENT_LOCKED`. 결과 불명 요청은 잠금 사유가 아니다(T-102). 통과하면 결과의 `documents: [{host, instance, documentId, linkId?, name?}]`에 더한다(같은 동기 구간이라 두 턴이 동시에 통과하지 않는다). `requestAdmission`은 진행 중 요청의 `documents[]`도 쓰기 주장으로 센다. 잠금 거절은 실행 전 거절과 같은 모양(`{ok: false, executed: false, code, reason, next}`)으로 AI에 돌려주고 문서별 '실행하지 않음'으로 기록한다. 대기는 하지 않는다. jig의 바로 만들기(`jig-routes.ts`, 연결 편집기 문서)도 실행 전에 같은 검사를 해 잡혀 있으면 `BAKE_FAILED`(`reason: DOCUMENT_LOCKED`, `refused` 문장)로 거절하고, 도는 동안 `Workspace.holdWrite`로 그 문서의 짧은 쓰기 주장을 둔다. 요청 표에 남지 않는 이 주장은 `Workspace.claimRows`가 접수(`submit`·`admission`·`release`)와 턴 중 잠금·보호 카드 검사에 더하며, 끝나면 `Execution.resume`이 기다리던 요청을 다시 판정한다. **실행만 차례대로(2026-10-02, SPEC-02.9 3):** 열린 Rhino 문서의 바로 편집 턴(연결 편집기 Sync 기준, `linkedTargets`·`applyToSource`·jig 아님)의 쓰기 주장과 그 턴이 잠근 `documents[]`는 `direct`로 표시되고, `direct`끼리는 접수에서 서로 기다리지 않으며 `documentHolder(…, {serialized: true})`(턴 중 잠금·보호 카드)에서도 서로 잡지 않는다. 대신 `direct-mode.ts`의 `ExecuteQueue`(엔진 프로세스 하나, 문서 키별 FIFO)가 턴의 `execute`, 보호 카드 재실행, [되돌리기]·자동 되돌림(`queuedDriver`)을 문서마다 하나씩 보낸다. 기다리는 턴의 진행 결과에는 `executeWait: {kind: 'execute', key, host, position, conversationId, title?}`가 붙는다. 턴은 문서의 `fingerprint().documentHash`를 턴 시작·조회 직전·자기 실행 직후에 기억하고, 차례를 얻은 뒤 값이 다르면 호스트에 보내지 않고 `DOCUMENT_CHANGED`(실행 전 거절 모양, `final: false`)를 돌려준다. 조회 캐시(`displayQuery`)는 토큰이 바뀌면 다시 읽는다.
 - **보호 카드의 [진행]:** 여러 파일 요청이거나 보류한 실행이 대상 밖 문서에 있으면 다시 실행하기 전에 `documentHolder`로 그 문서를 검사하고, 잡혀 있으면 실행하지 않고 `needs-confirmation`에 `refused: {code: DOCUMENT_LOCKED, reason, file}`을 남긴다. 다시 실행한 행은 보류 행의 `file`을 이어받는다. 여러 파일 요청의 재실행이 실패하면(`ok: false`, 답 유실, `reverted: false`) `Execution.rollBackConfirmed`가 위 자동 되돌림과 같은 규칙으로 적용된 행을 되돌리고 `rollback: {reason: 'failed', …}`을 남긴다. 답을 잃은 그 문서는 건너뛰고 `documents[]`에 `pending: 'execute'`로 남는다. 한 파일 요청의 [진행]은 그대로다.
 - **실행 기록:** 모든 행에 `file: {linkId?, name}`을 싣는다. 실행 전 거절의 `final`(읽기 전용 문서·연결 끊김)은 그 문서에만 적용한다. 응답을 잃은 실행은 지금처럼 그 턴의 다음 실행을 모두 막는다.
 - **여러 파일 요청:** 실행을 시도한 문서가 둘 이상인 요청(`multiFile: true`, 호스트의 실행 전 거절·잠금 거절된 시도도 센다). 요청이 오류·중단(중단은 공급자의 코드가 아니라 요청의 중단 신호로 판단해 `CANCELLED`·`STOP_UNCONFIRMED` 모두 `reason: 'cancelled'`, 추가 지시로 끊긴 경우 제외)으로 끝나면 `runDirectTurn`이 적용된 실행(`state: applied`, `undoId` 있음)을 마지막 것부터 문서별 `direct-undo`로 되돌린다. 한 문서에서 거절되면 그 문서의 더 앞 실행은 건너뛰고(마지막 기록이 아니므로) 다른 문서는 계속한다. 응답을 잃은 실행이 있는 문서는 되돌리지 않는다. 턴이 끝날 때 답을 기다리던 `execute`의 문서도 응답을 잃은 것으로 본다(한 파일 턴의 대상은 지금처럼 `documents: []`). 턴이 끝난 뒤 온 도구 답은 요청 결과·상태에 쓰지 않는다. 결과의 `rollback: {at, reason: 'failed' | 'cancelled', files: [{host, target, linkId?, name, state: 'undone' | 'refused' | 'unknown', undone, kept, reason?}]}`에 남기고(파일은 요청이 처음 쓴 순서, 공통 함수 `undoExecutions`) 행을 `undone`으로 바꾼다. 결과 불명이면 결과의 `documents[]`에는 확인이 필요한 문서를 잃은 답의 종류(`pending: 'execute' | 'undo'`)와 함께 남긴다. 여러 파일 요청이 그런 문서를 모두 알면 `heldOnly: true`를 두고, `claimsOf`(`src/contracts/request-scope.ts`)는 그 요청의 입력 대상을 빼고 이 문서들만 쓰기 주장으로 센다. `heldOnly`가 없는 결과 불명(한 파일 요청, 재시작으로 `unknown`이 된 요청)은 지금처럼 대상도 주장한다. 자동 되돌림의 되돌리기 답만 잃었으면 `settles: {state: 'failed' | 'cancelled', code?}`(모두 해소되면 돌아갈 결과)를 둔다. 실행 전 거절은 결과의 `refused: {code, reason, file?}`(대상 밖 파일이면 이름)로 남고 실패·중단한 요청에도 남는다. 거절이 있으면 요청 코드는 원래 코드 그대로(화면이 `rollback`을 보임), 되돌리기 답을 잃으면 요청은 `unknown`(`HOST_RESULT_UNKNOWN`)이다.
@@ -605,7 +605,7 @@ Rhino 편집 적용은 그룹 표의 ID·이름·인덱스·사용자 문자열�
 
 Git에서 스냅샷·부모 참조·변경되지 않은 자료 재사용을 차용하되 Git CLI나 전체 객체 내용 주소 저장소를 첫 구현의 선행 조건으로 만들지 않는다. 기존 SQLite·작업 기록·파일 보관을 확장한다. 기록·캐시·체크포인트 생성에 LLM을 호출하지 않는다. [Git 스냅샷 원리](https://git-scm.com/book/en/v2/Getting-Started-What-is-Git%3F).
 
-현재 DB는 §7의 schema 8과 순차 마이그레이션(`src/core/migrations.ts`: 2 기본 표, 3 숨긴 요청, 4 연결 파일 `document_links`, 5 대화·jig 표 — ARCH-03 §10, 6 프로젝트 폴더 `project_folders` — §3 「프로젝트 폴더와 파일 읽기 도구」, 7 할 일 `agenda_items`, 8 할 일 종류 `agenda_items.kind` — §3 「대시보드의 할 일」)을 사용하며 새 객체/캐시/체크포인트 테이블은 미구현이다. schema 3은 대화 목록에서 지운 요청을 `hidden_requests(projectId, requestId, hiddenAt)`로 기록한다. 요청 기록·결과·연결은 지우지 않으며, 요청 목록 조회와 AI 대화 문맥에서만 제외한다. 확장은 단일 제어 잠금→백업→버전별 마이그레이션 트랜잭션→무결성/기존 자료 대조를 따른다. 실패 시 신규 쓰기를 열지 않고 원본/백업과 진단을 보존한다. 새 DB뿐 아니라 기존 프로젝트·파일 참조 승계와 중간 종료를 시험한다.
+현재 DB는 §7의 schema 9와 순차 마이그레이션(`src/core/migrations.ts`: 2 기본 표, 3 숨긴 요청, 4 연결 파일 `document_links`, 5 대화·jig 표 — ARCH-03 §10, 6 프로젝트 폴더 `project_folders` — §3 「프로젝트 폴더와 파일 읽기 도구」, 7 할 일 `agenda_items`, 8 할 일 종류 `agenda_items.kind` — §3 「대시보드의 할 일」, 9 객체 판·Sync 목록 — 아래 「Sync 표시 형상의 객체 단위 저장(T-083)」)을 사용하며 캐시/체크포인트 테이블은 미구현이다. schema 9의 표는 만들어지지만 요청 결과의 쓰기·읽기를 그 표로 옮기는 연결은 PLAN-27 1단계의 남은 순서다. schema 3은 대화 목록에서 지운 요청을 `hidden_requests(projectId, requestId, hiddenAt)`로 기록한다. 요청 기록·결과·연결은 지우지 않으며, 요청 목록 조회와 AI 대화 문맥에서만 제외한다. 확장은 단일 제어 잠금→백업→버전별 마이그레이션 트랜잭션→무결성/기존 자료 대조를 따른다. 실패 시 신규 쓰기를 열지 않고 원본/백업과 진단을 보존한다. 새 DB뿐 아니라 기존 프로젝트·파일 참조 승계와 중간 종료를 시험한다.
 
 현재 전체 문서 지문과 호스트별 객체 제한은 이벤트 추적으로 자동 대체되지 않는다. 애드인의 이벤트 구독이 누락되었거나 연속성이 끊기면 캐시를 신뢰하지 않고 문서 재조회·강한 비교를 수행한다. 이벤트와 지문이 충돌하면 오래된 이벤트 기록을 우선하지 않는다. 자체 SDK 객체 상한의 실측 지원 여부는 호스트 지원표와 L5 검수로 확인한다.
 
@@ -653,7 +653,64 @@ AI 과업 완료 또는 명시적 저장/체크포인트 시 .3dm/.dwg와 데이
 
 ### 측정 후 추가할 저장 최적화
 
-객체별 불변 blob·내용 해시 중복 제거·세밀한 관계 의존 색인·mark/sweep GC는 파일 크기/체크포인트 시간/갱신 비용 측정 후 필요할 때 도입한다. 도입 시 직렬화 결정성·삭제 참조·게시본/백업 보존을 검증한다. 자동 병합·고급 브랜치 UI는 FR-20의 후속 범위다. 첫 연결을 위해 이 저장소 전체를 먼저 구현하지 않는다.
+Sync 표시 형상의 객체별 불변 blob·내용 지문 중복 제거·참조 없는 판 정리는 측정 결과에 따라 아래 「Sync 표시 형상의 객체 단위 저장」으로 도입한다. 체크포인트·관계 의존 색인은 여전히 필요할 때 도입하며, 도입 시 직렬화 결정성·삭제 참조·게시본/백업 보존을 검증한다. 자동 병합·고급 브랜치 UI는 FR-20의 후속 범위다.
+
+### Sync 표시 형상의 객체 단위 저장(T-083)
+
+[PLAN-27](../plans/PLAN-27-sync-storage-stability.md) 1단계의 물리 계약이다. 뜻(무엇을 Sync로 보이고 언제 갱신하는지)은 SPEC-01.11이 정하고, 이 절은 저장·조회 형식만 정한다. 계약은 2026-10-02 사용자가 확인했다(표시 형상의 float32 차이 저장, 기존 결과 옮기기, 아래 「정리」의 보존 규칙 포함). 저장 모듈은 `src/core/model-store.ts`(`ModelStore`), 옮기기는 `src/core/model-move.ts`다.
+
+**바꾸는 이유(2026-10-02 설치본 실측).**
+- 10,117개 객체 문서(Brep 4,649, Mesh 2,594, 블록 1,269, 곡선 1,267, 100 KB 넘는 메시 71개 ≈31 MB)의 Sync 결과 한 행이 88 MB이고 그중 `scene` 배열이 84.6 MB다.
+- 그날 오전에만 같은 문서의 전체 사본 8개(각 78~94 MB, 합계 666 MB)가 DB에 쌓였다. 전체 Sync마다, 그리고 기준 Sync를 다른 요청이 참조할 때의 Live Sync마다 JSON 행 전체를 새로 쓰기 때문이다.
+- Live Sync는 변경 하나에도 88 MB 행을 다시 해석·병합·직렬화해 통째로 쓴다(`src/server/live-sync.ts:86-117`).
+- 이런 무거운 Sync 직후 엔진이 `0xC0000409`로 거듭 끝났다(원인은 미확정, PLAN-27 0단계 기록).
+
+**대상.** 결과에 `scene` 배열이 있는 모든 요청 결과(연결 문서 Sync·Live Sync, 파일 불러오기, 형상을 담은 실행 결과)의 `objects[]`·`scene[]`·`definitions{}`. 그 밖의 결과 필드(`sourceDocument`, `layers`, `displayCoverage`, `measurementVersion`, `text`, `code` 등)는 지금처럼 `workspace_requests.result` JSON에 남는다. `scene`이 없는 결과는 바꾸지 않는다.
+
+**표(schema 9, `src/core/migrations.ts`).**
+
+| 표 | 열·제약 |
+|---|---|
+| `object_versions` | `projectId`(→projects), `id`(내용 지문), `kind`(`object`\|`definition`), `meta` TEXT, `geometry` BLOB NULL, `size` INTEGER. 기본 키 `(projectId, id)`. 한 번 쓰면 바꾸지 않는다 |
+| `sync_manifests` | `requestId` 기본 키(→workspace_requests, ON DELETE CASCADE), `projectId`, `parentId` NULL(이 목록을 복사·이어 온 이전 Sync), `documentRevision` NULL(읽은 호스트 문서의 변경 번호 = `sourceDocument.revision`), `revision` INTEGER(이 목록이 바뀔 때마다 1 증가), `objectCount`(결과에 `objects` 배열이 없었으면 NULL), `definitionCount`(`definitions`가 없었으면 NULL), `updatedAt` |
+| `sync_manifest_items` | `requestId`(→sync_manifests, ON DELETE CASCADE), `projectId`, `kind`, `key`(객체는 `nativeId ?? id` — `applyDisplayDelta`와 같은 키, 정의는 GUID), `position`(객체 순서, 정의는 `definitions`의 키 순서), `versionId`, `revision`(이 줄이 마지막으로 바뀐 목록 revision). 기본 키 `(requestId, kind, key)`, `(projectId, versionId)` → `object_versions` 외래 키, 색인 `(projectId, versionId)`·`(requestId, revision)` |
+| `sync_manifest_removed` | `requestId`(CASCADE), `kind`, `key`, `revision`. Live Sync가 지운 줄의 기록(화면 증분용, 아래 조회). 목록 revision이 100번 넘게 지난 기록은 지운다 |
+
+**객체 판.**
+- 객체 하나 = `objects[]` 행과 같은 키의 `scene[]` 행 한 쌍(한쪽만 있으면 그쪽만). 정의 하나 = `definitions[GUID]` 값. 목록의 위치 하나로 `objects`와 `scene`의 순서를 함께 되살리므로, 키가 겹치거나 두 배열의 순서가 서로 어긋나는 결과는 `MODEL_STORE_UNSUPPORTED`로 JSON에 둔다.
+- `meta`: `{object?, scene?}` 또는 `{definition}`. `scene`·`definition`에서는 `vertices`·`line`·`segments`·`indices` 배열을 빼고 그 키 자리에 문자열 `"$bin"`을 둔다(키 순서를 지켜 이어 붙인 VGT1이 지금 응답과 바이트 단위로 같게 하려는 것). 측정값(`area`·`volume`·`length`)·`geometryHash`·속성·블록 `transform`은 `meta`에 숫자 그대로 남는다.
+- `geometry`: 빠진 배열만 담은 VGT1 컨테이너 하나(`src/contracts/geometry-transfer.ts`의 형식을 객체 단위로 쓴다). 머리 JSON은 `{vertices?, line?, segments?, indices?}` 자리마다 `$bin` 참조이고, 좌표 배열은 배열마다 첫 점을 float64 원점으로, 정점을 그 원점과의 float32 차이로 둔다. `indices`는 u16/u32. 배열이 없으면 NULL. 같은 모델 실측: JSON 64.8 MB → 18.2 MB, 만들기 254 ms → 13 ms, 읽기 105 ms → 1 ms, 오차 0.001 mm.
+- `id` = SHA-256(`kind` ‖ 키 정렬 JSON의 `meta` ‖ `geometry` 바이트) 16진(`versionId`, `src/core/model-store.ts`. `geometry-transfer.ts`는 화면도 쓰므로 Node 해시를 두지 않는다). 지문은 저장 정밀도(float32 차이)로 바꾼 뒤의 바이트로 계산하므로 같은 객체를 다시 읽으면 같은 판이 된다. 키는 `objects[].id`가 아니라 내용이라, 객체가 그대로면 Sync가 몇 번이든 판은 하나다.
+- 표시 형상은 저장 단계에서 float32 차이로 바뀐다(화면은 이미 이 값을 받고 있음, 2026-10-02 사용자 수락). 측정·`geometryHash`·호스트 적용은 이 값을 쓰지 않는다. 저장된 `scene` 배열을 원래 JSON과 숫자 그대로 비교하는 코드는 같은 변환 뒤에 비교하거나 지문으로 비교한다.
+
+**쓰기.** 모두 `Workspace`(`src/core/workspace.ts`)가 한 트랜잭션으로 한다.
+- 전체 Sync·불러오기·실행 결과(`update(…, result)`에 `scene` 배열): 객체·정의마다 판을 만들어 `INSERT OR IGNORE`, 목록 행·줄을 쓰고, `result` JSON에서는 `objects`·`scene`·`definitions`를 빼고 `modelStore: 'manifest'`를 둔다. 바뀌지 않은 객체는 이미 있는 판을 가리키므로 새로 쓰는 것은 목록 줄(객체당 약 100 B)과 바뀐 판뿐이다. `parentId`는 같은 연결 파일(`input.linkId`, 없으면 같은 문서)의 직전 성공 Sync다.
+- Live Sync(`applyDelta`): 기준 Sync의 목록과 `result`의 작은 필드만 읽는다. 바뀐·새 객체와 정의의 판을 넣고, 그 줄만 `versionId`·`revision`을 바꾸거나 새 줄을 뒤에 붙이고(`position` = 최댓값 + 1), 지운 객체의 줄을 빼고 `sync_manifest_removed`에 남긴다. `result`의 `sourceDocument`(revision·documentHash)·`layers`·`displayCoverage`만 고친다(플러그인이 변경 페이지마다 보내는 값을 쓰고, 없을 때만 목록의 `meta`로 다시 센다). 형상 전체를 읽거나 해석하지 않는다.
+- 참조된 기준: 다른 요청이 기준 Sync를 참조하면(지금과 같은 판정, `input`에 그 ID) 기준은 고치지 않는다. 새 요청 행(`captureInput`)과 목록을 만들고 `INSERT … SELECT`로 줄만 복사한 뒤(판은 공유) 같은 Live Sync를 새 목록에 적용한다. 복사본은 부모의 `revision`과 줄 `revision`을 이어받고 `parentId`가 부모다.
+- 쓰기 뒤 그 쓰기에서 빠진 판(교체·삭제된 줄이 가리키던 것) 가운데 어떤 줄도 가리키지 않는 것을 지운다.
+
+**읽기와 하위 호환.**
+- `Workspace.get(projectId, id)`: 지금과 같은 모양(`objects`·`scene`·`definitions`를 채운 결과)을 목록에서 다시 만든다. 기존 호출부는 그대로 동작한다. `modelStore`가 없는 행(옮기기 전)은 지금처럼 JSON을 그대로 읽는다.
+- `Workspace.summary`·`list`: `result` JSON에 `meta`의 `object`만 모은 `objects`를 붙이고 `sceneOmitted: true`(지금 응답과 같음). 형상은 열지 않는다. 해석 캐시 키에 목록의 `revision`을 더한다(제자리 Live Sync는 `result` 크기가 같을 수 있음).
+- `Workspace.model(projectId, id)`(새, 지연 조회): `result`(형상 없음), `keys()`, `object(key)`·`scene(key)`(그 객체 하나만 해석), `rows(keys?)`(`meta`만), `geometry()`(아래 이진 응답용, 숫자로 풀지 않음). 한 객체·일부 객체·측정값만 필요한 호출부는 `get` 대신 이것을 쓴다(목록은 PLAN-27 1단계).
+- 직전 측정 재사용(§5 「수동 Sync의 객체별 측정 재사용」)은 `list({full: true})` 대신 직전 Sync 목록의 `meta`에서 `id`·`geometryHash`·측정값만 SQL로 읽는다.
+
+**API 응답.**
+- `GET …/requests`: 지금과 같다(`scene`·`definitions` 없음, `sceneOmitted`).
+- `GET …/requests/:r`에 `Accept: application/vnd.vide.geometry`: 지금과 같은 VGT1 컨테이너를 저장된 객체별 버퍼를 이어 붙이고 각 `$bin` 오프셋만 고쳐 만든다(좌표를 풀거나 다시 인코딩하지 않음). 화면(`src/ui/gateway.ts`)은 바꾸지 않아도 된다. 이 헤더가 없으면 지금처럼 JSON(느린 경로, 시험·호환용).
+- `GET …/requests/:r/delta?since=<revision>[&base=<parentId>]`(새, T-084의 알림용): `revision`이 `since`보다 큰 줄의 `objects`·`scene`·`definitions`와 `removed`, 지금 `revision`을 VGT1로 준다. 모양은 지금 Live Sync 응답의 `delta`와 같아 화면의 `applyDisplayDelta`를 그대로 쓴다. `base`가 이 목록의 `parentId`이면 부모 revision에서 이어 준다. `since`가 지운 기록보다 오래됐으면 `full: true`로 알려 전체를 받게 한다.
+- `POST …/live-sync` 응답(`delta` JSON과 요약)은 바꾸지 않는다.
+
+**기존 결과 옮기기.**
+- schema 9 마이그레이션은 표만 만든다. 기존 `migrateDatabase`가 그 전에 백업 하나를 `vide.sqlite.backups`에 만든다(`VACUUM INTO`, quick_check).
+- 엔진이 주소를 연 뒤 백그라운드에서 `scene`이 남은 행(`json_type(result,'$.scene')='array'`, 대기·실행 중이 아닌 행)을 한 행씩 옮긴다(2026-10-02 사용자 확인). 행마다 한 트랜잭션: 해석 → 판·목록 쓰기 → `result` 다시 쓰기 → 다시 만든 모델과 원래 모델(같은 float32 변환 뒤)의 객체 ID·지문 대조. 어긋나면 그 행을 되돌리고 `model-move-failed`를 기록한 채 JSON으로 둔다. 행 사이에 이벤트 루프를 놓아 준다. 진행은 `model-move {request, bytes, versions, ms}`로 기록한다. 중간에 끝나도 남은 행은 다음 시작에 이어 옮기며, 그동안 읽기는 두 형식을 모두 받는다.
+- 다 옮기면 대기·실행 중 요청이 없을 때 `VACUUM`을 한 번 한다. 그때 못 하면 다음 시작 때 주소를 열기 전에 한다.
+
+**정리.**
+- 어떤 줄도 가리키지 않는 판은 쓰기 직후(그 쓰기의 후보만), `workspace.purge` 뒤, 엔진 시작 때(전체) 지운다. 프로젝트 삭제(`src/core/store.ts`)는 그 프로젝트의 목록·판을 함께 지운다.
+- 보존 규칙(2026-10-02 사용자 결정, T-087에서 앞당김, `ModelStore.retain`): 문서(연결 파일 `input.linkId`, 없으면 호스트·인스턴스·문서 번호)마다 최근 Sync 목록 20개와, 무엇이 가리키는 Sync 목록(다른 요청의 입력·기준 `baseRequestId`·핀, 검토본·검토 의견, 비교, 웹 게시·공유 의견, jig 읽기·만들기, 대화 기록)은 남긴다. 그 밖의 Sync 목록(입력 `source: 'document'`인 요청의 것)은 지우고 요청 결과에 `modelStore: 'pruned'`를 남긴 뒤, 어떤 줄도 가리키지 않게 된 판을 지운다. 대기·실행 중 요청의 목록과 Sync가 아닌 결과(불러오기·실행 결과)의 목록은 이 규칙으로 지우지 않는다. 요청 행 자체는 지우지 않는다.
+
+**목표값(객체 1만 개).** Live Sync 한 번의 엔진 처리 100 ms 안팎(객체 수와 무관), 바뀌지 않은 문서의 전체 Sync 한 번에 DB 증가 약 1 MB(목록 줄), 고정·요청 확인이 형상을 해석하지 않음.
 
 
 <a id="detail-5"></a>
@@ -735,7 +792,7 @@ R2 조건부 쓰기/체크섬은 [공식 Workers API](https://developers.cloudfl
 
 [PLAN-11](../plans/PLAN-11-desktop-app.md)의 물리 계약이다. `src/desktop/shell`(.NET Framework 4.8 WinForms, WebView2, Velopack)의 `VIDE.exe`가 `runtime\node.exe app\src\server\main.ts --parent-stdin --no-browser`를 자식으로 띄우고 출력의 실행 주소를 창에 연다. 표준 입력을 닫으면 엔진이 정상 종료한다. 설치 루트는 `%LOCALAPPDATA%\VIDE.App`(`current\`, `packages\`, `Update.exe`, 고정 실행 스텁 `VIDE.exe`), 데이터는 `%LOCALAPPDATA%\VIDE`, 창 저장소는 `<데이터>\webview`, 셸 설정은 `<데이터>\desktop.json`이다. 단일 실행은 `Local\VIDE.Desktop` 뮤텍스와 Show/Quit 이벤트로 한다. 자동 실행은 `HKCU\…\Run\VIDE = "<스텁>" --background`다. 창의 설정 화면과 셸은 WebView2 메시지(`desktop:get|set`, `update:check|apply` ↔ `desktop:state`)로만 통신하고 로컬 주소 외의 이동은 기본 브라우저로 연다. 업데이트는 `UpdateSource`(폴더·URL) 또는 GitHub Releases(`hongikarchi/VIDE`)를 쓴다. 엔진의 `GET /api/v1/connectors`, `POST /api/v1/connectors/rhino8/install`(원격 세션 차단)은 포함된 `VIDE.Worker.rhp`를 `<데이터>\plugins\rhino\<버전>-<해시8>\`에 복사하고 `HKCU\Software\McNeel\Rhinoceros\8.0\Plug-ins\6bde756c-…\PlugIn\FileName`을 바꾼다(Rhino 실행 중 409 `HOST_RUNNING`). 개발 서버 `--dev`는 `.vide/dev-data`와 47831을 쓴다.
 - 전송: 원격 응답은 16 KB를 넘으면 gzip(level 4)으로 보낸다. `GET /api/v1/projects/:id/requests` 목록은 결과의 `scene`·`definitions`를 빼고 `sceneOmitted: true`를 붙이며, 화면은 표시할 요청만 단건 조회로 받는다.
-- 표시용 이진 전송(2026-09-29, [PLAN-18](../plans/PLAN-18-render-performance.md)): `GET /api/v1/projects/:id/requests/:rid`에 `Accept: application/vnd.vide.geometry`가 있으면 같은 내용을 `VGT1` 컨테이너로 준다(`src/contracts/geometry-transfer.ts`): `VGT1` + u32 머리 길이 + JSON 머리 + 4바이트 정렬 버퍼. `result.scene[]`와 `result.definitions{}` 항목의 `vertices`·`line`·`segments`는 `{"$bin":[offset,length,"f",ox,oy,oz]}`(첫 점 기준 float32, 원점 float64), `indices`는 `"u16"`/`"u32"`로 바뀐다. 오류 응답은 JSON이다. 작업 화면(`src/ui/gateway.ts`)은 단건 조회에 이 헤더를 붙이고 숫자 배열로 되돌린다. 저장은 JSON 그대로다.
+- 표시용 이진 전송(2026-09-29, [PLAN-18](../plans/PLAN-18-render-performance.md)): `GET /api/v1/projects/:id/requests/:rid`에 `Accept: application/vnd.vide.geometry`가 있으면 같은 내용을 `VGT1` 컨테이너로 준다(`src/contracts/geometry-transfer.ts`): `VGT1` + u32 머리 길이 + JSON 머리 + 4바이트 정렬 버퍼. `result.scene[]`와 `result.definitions{}` 항목의 `vertices`·`line`·`segments`는 `{"$bin":[offset,length,"f",ox,oy,oz]}`(첫 점 기준 float32, 원점 float64), `indices`는 `"u16"`/`"u32"`로 바뀐다. 오류 응답은 JSON이다. 작업 화면(`src/ui/gateway.ts`)은 단건 조회에 이 헤더를 붙이고 숫자 배열로 되돌린다. 저장은 T-083 전까지 JSON이고, 그 뒤에는 §5 「Sync 표시 형상의 객체 단위 저장(T-083)」의 객체별 VGT1을 이어 붙여 응답한다.
 - 이전 대화 선별(2026-09-29, [PLAN-19](../plans/PLAN-19-request-routing.md)): `src/ai/context-selector.ts`가 이전 대화 6개 초과 시 Jev System One(`jev-1.13.0`, 최근 20개 각각 Noul, 5초)으로 고른다. 키는 `readJevKey`(환경 `TYPESAFE_API_KEY` 또는 `<데이터>/typesafe.env`). 진단 기록 `context {request, by: all|jev|fallback, ms, sent, of, reason?}`. Sync 진단 `sync {request, host, state, ms, hostMs, objects}`, `live-sync {ms}`.
 - 요청 경로 판정(2026-09-29, PLAN-19): `POST /api/v1/projects/:id/route {body ≤4000, subjects[≤60]{id,label}}` → `{target: view|document, action?, subject?, confidence, ms}` 또는 `{target: null}`(규칙으로). `src/ai/request-router.ts`가 Jev System One에 `target`·`action`(hide·isolate·unhide·select·fit)·`subject`(s0…·none) 세 Choice를 3초 제한으로 묻고, 확신 0.6 미만·오류는 null. 파일·프로그램 말은 호출 없이 document. 화면(`src/ui/request-route.ts`)은 대상 묶음 id를 `selection`·`kind:<종류>`·`layer:<이름>`(객체 수 순 30개)로 만든다. 진단 `route {by: jev|rules, target?, action?, ms?}`. 보내는 이전 대화는 하나당 요청 2,000자·답 6,000자로 자른다.
 - 호스트 패널(2026-09-29, [PLAN-21](../plans/PLAN-21-host-panel.md), Design SCR-12): Rhino 패널(Eto `WebView`)과 ZWCAD 팔레트(WebView2 WinForms, 데이터 `<데이터>/webview-zwcad`, 로더는 플러그인 옆 `WebView2Loader.dll`)가 같은 페이지를 연다: `<로컬 주소>/?panel=rhino|zwcad&name=<파일>[&project=<id>&instance=<연결>&document=<번호>]&theme=light|dark#<세션 토큰>`. `instance`가 없으면 연결 전 화면이다. 페이지는 플러그인 동작을 `vide://link|unlink|live|reload|open-vide` 이동으로 요청하고 플러그인이 취소한 뒤 실행한다(공통 `hosts/common/PanelPage.cs`). `launch.json`이 없으면 플러그인이 만든 'VIDE 실행' 화면을 보이고 1초마다 다시 확인한다. 화면의 사용량 막대는 `GET /api/v1/accounts` + `/accounts/usage`(2분 간격)를 쓴다.
@@ -772,7 +829,7 @@ R2 조건부 쓰기/체크섬은 [공식 Workers API](https://developers.cloudfl
 
 Rhino 패널은 기존 RHP 안의 Eto `ConnectionPanel`을 `PanelType.PerDoc`로 등록하고 `VIDEPanel` 명령으로 연다. 어셈블리 GUID와 플러그인 GUID를 일치시킨다. 문서 런타임 번호로 기존 AttachedConnection을 조작하며 별도 MCP를 추가하지 않는다(2026-09-29 PLAN-21부터 패널 본문은 Eto `WebView`로 VIDE 페이지를 연다, §6 「PC 프로그램」의 호스트 패널). 사용자가 VIDE 열기를 누르면 LocalAppData/VIDE/launch.json의 loopback HTTP 주소를 기본 브라우저로 연다. 인증 주소는 로그/상태 텍스트에 출력하지 않는다. 패널 타이머는 연결·Live·조회 시각 표시만 갱신하고 형상을 조회하거나 저장하지 않는다.
 
-플러그인은 객체·속성·층·정의·재질 변경 이벤트마다 해당 객체의 변경 revision을 기록하고, Live Sync가 켜져 있으면 0.5초 idle 후 세대를 갱신한다. 제어 화면은 가벼운 연결 상태를 1초 주기로 조회한다. 세대가 바뀌면 마지막 표시 Sync의 revision 이후 변경·삭제된 객체만 `displayChanges`로 받아 그 Sync에 병합한다. 다른 요청이 참조한 Sync는 덮어쓰지 않고 병합한 새 기록을 만든다. 연결이 바뀌었거나 revision을 추적할 수 없으면 전체 표시 Sync(`displayPage`)로 돌아간다. 연결 문서의 표시 기준값(`documentHash`)은 연결 session·revision 토큰이며 표시 조회에서 전체 기하 해시를 계산하지 않는다. 후보 캡처는 이 토큰과 내용 지문(`contentHash`)을 함께 남기고, 원본 적용은 내용 지문으로 검증한다. 표시 형상은 객체 GUID·런타임 번호별로 캐시하고, 페이지는 12 MiB 예산으로 끊으며, 메싱·직렬화는 UI 스레드 밖에서 병렬로 한다. 블록은 정의(중첩 전개 포함)의 메시·선분·문자를 표시 모델의 `definitions[정의 GUID]`에 한 번만 싣고, 인스턴스 항목은 `block.definition`과 미터 단위 행 우선 4×4 `block.transform`만 싣는다. 뷰포트는 정의별 GPU 형상을 인스턴스끼리 공유한다. 치수·문자는 `segments`(xyz 끝점 쌍)와 `texts`(CAD와 같은 문자 표시 형식, XY 평면), 해치는 패턴 선·경계를 `segments`로, 단색 채움은 메시로 싣는다. 증분 조회는 바뀐 인스턴스가 참조하는 정의를 함께 보내며, 정의·치수 스타일이 바뀌면 캐시를 비우고 해당 객체를 변경으로 기록한다. 네이티브 블록·주석은 수정하지 않는다. PowerShell 소유 확인은 연결별로 60초 재사용하되 매 호출 PID 생존을 확인하고 통신 실패 시 무효화한다. 적용/명령 중 취득은 보류하고 자동 취득은 단일 실행·초안 보호·실패 후 수동 재개를 따른다.
+플러그인은 객체·속성·층·정의·재질 변경 이벤트마다 해당 객체의 변경 revision을 기록하고, Live Sync가 켜져 있으면 0.5초 idle 후 세대를 갱신한다. 제어 화면은 가벼운 연결 상태를 1초 주기로 조회한다(T-084부터는 엔진이 조회한다, 아래 「엔진 주관 Sync(T-084)」). 세대가 바뀌면 마지막 표시 Sync의 revision 이후 변경·삭제된 객체만 `displayChanges`로 받아 그 Sync에 병합한다. 다른 요청이 참조한 Sync는 덮어쓰지 않고 병합한 새 기록을 만든다. 연결이 바뀌었거나 revision을 추적할 수 없으면 전체 표시 Sync(`displayPage`)로 돌아간다. 연결 문서의 표시 기준값(`documentHash`)은 연결 session·revision 토큰이며 표시 조회에서 전체 기하 해시를 계산하지 않는다. 후보 캡처는 이 토큰과 내용 지문(`contentHash`)을 함께 남기고, 원본 적용은 내용 지문으로 검증한다. 표시 형상은 객체 GUID·런타임 번호별로 캐시하고, 페이지는 12 MiB 예산으로 끊으며, 메싱·직렬화는 UI 스레드 밖에서 병렬로 한다. 블록은 정의(중첩 전개 포함)의 메시·선분·문자를 표시 모델의 `definitions[정의 GUID]`에 한 번만 싣고, 인스턴스 항목은 `block.definition`과 미터 단위 행 우선 4×4 `block.transform`만 싣는다. 뷰포트는 정의별 GPU 형상을 인스턴스끼리 공유한다. 치수·문자는 `segments`(xyz 끝점 쌍)와 `texts`(CAD와 같은 문자 표시 형식, XY 평면), 해치는 패턴 선·경계를 `segments`로, 단색 채움은 메시로 싣는다. 증분 조회는 바뀐 인스턴스가 참조하는 정의를 함께 보내며, 정의·치수 스타일이 바뀌면 캐시를 비우고 해당 객체를 변경으로 기록한다. 네이티브 블록·주석은 수정하지 않는다. PowerShell 소유 확인은 연결별로 60초 재사용하되 매 호출 PID 생존을 확인하고 통신 실패 시 무효화한다. 적용/명령 중 취득은 보류하고 자동 취득은 단일 실행·초안 보호·실패 후 수동 재개를 따른다.
 
 (2026-09-30 ADR-022로 대체: 연결 Rhino 수정은 자동 모드의 `direct-execute`가 된다. 아래 문단은 이전 경로의 기록이다.) 연결 Rhino 수정은 요청의 `applyToSource: true`와 `permission: candidate`로 기록한다. 명시적 baseRequestId의 attached-editor Rhino 캡처만 허용하고 개입 시 동일 권한을 유지한다. Execution은 검증 후보를 먼저 영속화하고 Applications.prepare/confirm을 호출한다. 적용 식별자와 결과를 남기고 성공 후 captureEditor로 갱신한다. 쓰기 결과 불명확 시 후보를 보존하고 동일 적용 영수증을 조회한다.
 
@@ -803,9 +860,20 @@ SPEC-01.11. 스키마 v4의 `document_links(id, projectId, host, name, path, ins
 - **`POST …/links/:l/merge {into}`:** 같은 호스트의 다른 호스트 행으로만(파일 항목·자기 자신은 `INVALID_INPUT`). 그 행의 요청이 대기·실행 중이면 `PROJECT_BUSY`. 한 트랜잭션에서 `workspace_requests.input`의 `$.linkId`를 `json_set`으로 바꾸고 `jig_reads`·`jig_bakes`의 `linkId`를 바꾸고, `conversations.targets`(연결 ID 배열)에서 그 행을 대상 행으로 바꿔(중복 제거) 대화의 대상 파일을 잇게 한 뒤 행을 지운다. 옮긴 요청은 `Workspace.forget`으로 `list`의 해석 캐시(상태·저장 크기 키)에서 뺀다(UUID끼리 바꾸면 크기가 같아 캐시가 그대로 남기 때문). 응답 `{link, moved}`.
 - **`POST …/links/:l/dismiss`:** 알림을 지운다.
 
-플러그인은 사용자 권한으로 `%LOCALAPPDATA%/VIDE/launch.json`의 실행 주소(127.0.0.1)와 실행 토큰으로 `/api/v1/session`에 세션을 만든 뒤(Origin 헤더 포함) 프로젝트 목록 조회·Link를 호출한다. 호출은 호스트 UI 스레드 밖에서 하며, VIDE는 Link 응답을 바로 돌려주고 첫 Sync는 화면(연결 목록 폴링)이 수행한다. VIDE가 연 작업 사본 창(`/requests/:id/open`)도 같은 연결로 등록하며, 그 창은 열림 여부만 확인한다(자동 갱신 없음, ⟳로 Sync). 엔진이 플러그인 문서에 다시 요청하는 동안 플러그인이 UI 스레드에서 기다리지 않는다.
+플러그인은 사용자 권한으로 `%LOCALAPPDATA%/VIDE/launch.json`의 실행 주소(127.0.0.1)와 실행 토큰으로 `/api/v1/session`에 세션을 만든 뒤(Origin 헤더 포함) 프로젝트 목록 조회·Link를 호출한다. 호출은 호스트 UI 스레드 밖에서 하며, VIDE는 Link 응답을 바로 돌려주고 첫 Sync는 화면(연결 목록 폴링)이 수행한다(T-084부터는 엔진의 `SyncScheduler`, 아래 「엔진 주관 Sync(T-084)」). VIDE가 연 작업 사본 창(`/requests/:id/open`)도 같은 연결로 등록하며, 그 창은 열림 여부만 확인한다(자동 갱신 없음, ⟳로 Sync). 엔진이 플러그인 문서에 다시 요청하는 동안 플러그인이 UI 스레드에서 기다리지 않는다.
 
 화면은 보이기 연결마다 그 연결의 표시 결과(마지막 Sync 또는 사용자가 연 작업 사본 결과)를 레이어로 두고 하나의 장면으로 합친다. 여러 레이어일 때 장면·객체 ID는 `레이어키::원래ID`로 구분하고 객체의 `sourceId`·`revision`(기준 요청)으로 핀·검사를 원래 기준에 되돌린다. Live Sync 변경분은 해당 레이어에만 합쳐 증분 갱신한다.
+
+### 엔진 주관 Sync(T-084)
+
+SPEC-01.11의 10을 구현하는 물리 계약이다(PLAN-27 2단계). 저장은 §5 「Sync 표시 형상의 객체 단위 저장(T-083)」을 쓴다. 2026-10-02 사용자 확인: VIDE 창이 하나도 없어도 엔진이 Live 파일을 Sync하고, ⟳·지금 Sync·플러그인 Sync는 진행 중인 자동 Sync에 합류하지 않고 새로 읽으며, 편집 중 실패는 30초까지 다시 하고(행에 '변경 중 · 곧 다시 Sync'), 초안 보류는 화면의 5초 임대로 한다.
+
+- **`SyncScheduler`(`src/server/sync-scheduler.ts`, 새):** 연결된 열린 문서가 하나라도 있으면 1초마다 열린 문서 목록(Rhino `editors.list`, ZWCAD `attached.list`)을 읽고 `matchOpenDocuments`로 연결 행에 맞춘다. 문서 키 `[projectId, host, instance, documentId]`마다 `{seenGeneration, state, retryAt, attempts}`를 메모리에 둔다. 무엇을 할지는 지금 `src/ui/app.ts`의 `pollLinks`(첫 Sync, `generation` 증가, 다시 연 Live 파일)와 같은 규칙으로 정하고, 그 연결의 마지막 Sync가 Rhino 표시 Sync면 `LiveSync.run`, 아니면 전체 Sync를 한다. 요청 ID는 엔진이 만든다.
+- **전체 Sync 함수:** `server.ts`의 `POST …/capture` 본문(1204~1292행)을 `runDocumentSync(projectId, target, {linkId, fresh})`로 빼서 스케줄러와 `POST …/capture`(⟳·지금 Sync, `fresh: true`)가 같은 `documentSyncs` 합치기 키로 부른다. Live Sync도 같은 키의 실행 중 전체 Sync가 있으면 그것을 기다린 뒤 판단한다.
+- **보류:** 스케줄러가 판단한다. ① 그 연결의 요청이 대기·실행 중이고 그 요청의 `baseRequestId`·`linkedTargets[].baseRequestId`·핀 기준이 이 연결의 Sync이거나, ② `Workspace.holdWrite`의 짧은 쓰기·바로 적용 실행이 그 문서에 있으면 보류한다. ③ 화면 초안은 `GET …/links?page=<pageId>&hold=<linkId,…>`로 알린다. 보류 표시는 페이지별 임대이며 5초 동안 같은 `page`의 조회가 없으면 풀린다. 보류가 풀리면 쌓인 변경(AI 편집 결과 포함, SPEC-02.16)을 Sync 한 번으로 반영한다.
+- **재시도:** `SOURCE_CHANGED`·`HOST_BUSY`·`PROJECT_BUSY`·`WORKSPACE_CAPACITY`는 실패로 저장하지 않고 1·2·4·8초 뒤(최대 30초) 다시 한다. 그 사이 `generation`이 또 바뀌면 다시 0부터 센다. 30초가 지나면 `state: 'waiting'`으로 두고 다음 변경이나 ⟳를 기다린다.
+- **알림:** `GET …/links` 행에 `sync: {state: 'idle'|'syncing'|'held'|'waiting'|'failed', code?, at}`과 `display: {requestId, revision}`(마지막 Sync와 그 목록 revision)를 더한다. 화면은 지금처럼 이 조회를 1.5초마다 하고, `requestId`가 같고 `revision`만 늘면 `GET …/requests/:r/delta?since=`로 변경분만, `requestId`가 바뀌면 `delta?base=<이전 ID>&since=` 또는 전체(VGT1)를 받는다. 화면은 `POST …/live-sync`와 자동 `POST …/capture`를 부르지 않는다(⟳만 `capture`에 `fresh: true`).
+- **기록:** `sync-scheduler {document, action: live|full|held|retry|wait, generation, ms}`.
 
 ### JIG 탭과 Sync jig
 

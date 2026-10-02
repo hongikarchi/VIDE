@@ -2,7 +2,13 @@ import { z } from 'zod';
 import { workspaceRequestSchema } from '../contracts/workspace-result.ts';
 import { GEOMETRY_TYPE, decodeGeometry } from '../contracts/geometry-transfer.ts';
 export const projectSchema = z.object({ id: z.string(), name: z.string() }).passthrough();
-export async function api(path: string, method = 'GET', data?: unknown): Promise<unknown> {
+/** `quiet`: codes the caller handles itself (no app-wide error notice is raised for them). */
+export async function api(
+  path: string,
+  method = 'GET',
+  data?: unknown,
+  { quiet = [] }: { quiet?: readonly string[] } = {},
+): Promise<unknown> {
   let response;
   // One request in full carries its display geometry as binary (PLAN-18); errors stay JSON.
   const geometry = method === 'GET' && /^\/projects\/[^/]+\/requests\/[^/?]+$/.test(path);
@@ -31,9 +37,34 @@ export async function api(path: string, method = 'GET', data?: unknown): Promise
     const code = z
       .union([z.object({ code: z.string() }), z.object({ error: z.string() })])
       .safeParse(result).data;
-    throw apiError(code ? ('code' in code ? code.code : code.error) : 'REQUEST_FAILED');
+    // A refusal may carry its own sentence (PINS_NOT_FOUND names how many pins were not found).
+    const reason = z.object({ reason: z.string() }).safeParse(result).data?.reason;
+    const name = code ? ('code' in code ? code.code : code.error) : 'REQUEST_FAILED';
+    throw apiError(name, reason, quiet.includes(name));
   }
   return result;
+}
+/**
+ * A request action ([진행]·[되돌리기]·[확인함]·추가 지시, POST …/requests/:rid/<action>). A 409
+ * (REVISION_CONFLICT) there means the request already ended or is running again, not another
+ * screen's edit (SPEC-02.13 4): the request is read again (`reread`) and the error says so.
+ */
+export async function requestAction(
+  path: string,
+  body: unknown,
+  reread: () => Promise<unknown>,
+): Promise<unknown> {
+  try {
+    return await api(path, 'POST', body, { quiet: ['REVISION_CONFLICT'] });
+  } catch (error) {
+    if ((error as { code?: unknown } | null)?.code !== 'REVISION_CONFLICT') throw error;
+    try {
+      await reread();
+    } catch {
+      /* The message still holds; the next poll reads it. */
+    }
+    throw Object.assign(new Error(errors.REQUEST_SETTLED), { code: 'REQUEST_SETTLED' });
+  }
 }
 export async function connect() {
   const token = location.hash.slice(1);
@@ -160,9 +191,11 @@ Object.assign(errors, {
   UNSUPPORTED_APPLICATION:
     '이 후보는 현재 원본 적용을 지원하지 않습니다. 후보 파일을 내려받거나 별도 Rhino 문서로 열어 작업을 이어가세요.',
 });
-function apiError(code: string) {
-  if (typeof window !== 'undefined')
-    window.dispatchEvent(new CustomEvent('vide:api-error', { detail: errors[code] || code }));
+function apiError(code: string, reason?: string, quiet = false) {
+  if (!quiet && typeof window !== 'undefined')
+    window.dispatchEvent(
+      new CustomEvent('vide:api-error', { detail: reason || errors[code] || code }),
+    );
   if (
     typeof window !== 'undefined' &&
     [
@@ -175,7 +208,7 @@ function apiError(code: string) {
     ].includes(code)
   )
     window.dispatchEvent(new CustomEvent('vide:connection-lost', { detail: code }));
-  return Object.assign(new Error(errors[code] || `요청 처리 오류 (${code})`), { code });
+  return Object.assign(new Error(reason || errors[code] || `요청 처리 오류 (${code})`), { code });
 }
 
 Object.assign(errors, {
@@ -234,6 +267,10 @@ Object.assign(errors, {
     '그 연결 파일은 지금 열려 연결되어 있지 않아 실시간으로 읽거나 고칠 수 없습니다. AI는 마지막 Sync 기록으로만 읽습니다. 호스트에서 파일을 열고 연결한 뒤 다시 요청하세요.',
   DOCUMENT_LOCKED:
     '다른 작업이 그 파일을 고치는 중이라 이 요청에서는 그 파일을 바꾸지 않았습니다. 그 작업이 끝난 뒤 다시 요청하세요.',
+  // Execute-only turns on one file (SPEC-02.9 3): the turn read it before another change.
+  DOCUMENT_CHANGED: '다른 대화가 이 파일을 고쳤습니다 · 다시 조회한 뒤 실행하세요.',
+  // A late [진행]·[되돌리기]·[확인함] on a request that already ended or runs again (409).
+  REQUEST_SETTLED: '이 작업은 이미 끝났거나 진행 중입니다. 최신 상태로 다시 읽었습니다.',
   UNDO_PARTIAL:
     '일부 파일은 되돌리지 못했습니다. 결과에 남은 파일을 호스트에서 Ctrl+Z(ZWCAD는 U)로 순서대로 되돌리세요.',
 });

@@ -8,6 +8,8 @@ import { Workspace } from '../../src/core/workspace.ts';
 import { Execution } from '../../src/server/execution.ts';
 import { AgentTools } from '../../src/server/agent-tools.ts';
 import { documentHolder, unresolvedFor } from '../../src/contracts/request-scope.ts';
+import { ExecuteQueue, displayQuery, executeWaitText } from '../../src/server/direct-mode.ts';
+import { executeWaitOf, guardOpen, heldRowLabel, waitingText } from '../../src/ui/request-scope.ts';
 
 /**
  * What a document meets from other requests: a write holding it (DOCUMENT_LOCKED), else an
@@ -36,10 +38,30 @@ const sourceDocument = (instance, name) => ({
 });
 
 /** One attached document: an undo stack answering direct-execute/direct-undo like the worker. */
-export function mockDocument(name, instance, { vision = true } = {}) {
+export function mockDocument(name, instance, { vision = true, fingerprint = false } = {}) {
   const calls = { execute: [], undo: [], query: 0, capture: 0, measure: 0 };
   const records = [];
   let serial = 10;
+  // The document's change token (`fingerprint: true`): moves on every change, like the worker's.
+  let revision = 0;
+  /** The default answer of an execute (scripted overrides may call it after waiting). */
+  const apply = (command) => {
+    if (command.code.startsWith('bad'))
+      return { ok: false, code: 'COMPILE_ERROR', diagnostics: ['CS1002: ; expected'] };
+    const undoId = `${name}-${++serial}`;
+    records.push({ undoId, undone: false });
+    revision++;
+    return {
+      ok: true,
+      undoId,
+      changes: {
+        added: [{ nativeId: `${name}-obj-${serial}`, hash, layer: 'Walls' }],
+        changed: [],
+        removed: [],
+      },
+      log: '',
+    };
+  };
   // Per-call overrides: the next execute (or undo) answers this instead.
   const next = { execute: [], undo: [] };
   const driver = {
@@ -49,20 +71,7 @@ export function mockDocument(name, instance, { vision = true } = {}) {
       calls.execute.push(command);
       const scripted = next.execute.shift();
       if (scripted) return scripted(command);
-      if (command.code.startsWith('bad'))
-        return { ok: false, code: 'COMPILE_ERROR', diagnostics: ['CS1002: ; expected'] };
-      const undoId = `${name}-${++serial}`;
-      records.push({ undoId, undone: false });
-      return {
-        ok: true,
-        undoId,
-        changes: {
-          added: [{ nativeId: `${name}-obj-${serial}`, hash, layer: 'Walls' }],
-          changed: [],
-          removed: [],
-        },
-        log: '',
-      };
+      return apply(command);
     },
     async undo(undoId) {
       calls.undo.push(undoId);
@@ -74,6 +83,7 @@ export function mockDocument(name, instance, { vision = true } = {}) {
       if (records.filter((entry) => !entry.undone).at(-1) !== record)
         return { ok: false, reason: 'not-latest' };
       record.undone = true;
+      revision++;
       return { ok: true };
     },
     async query() {
@@ -94,10 +104,16 @@ export function mockDocument(name, instance, { vision = true } = {}) {
           }),
         }
       : {}),
+    ...(fingerprint
+      ? { fingerprint: async () => ({ documentHash: `${name}-rev-${revision}`, revision }) }
+      : {}),
   };
   /** A later edit by the user in this document (makes earlier records not the latest). */
-  const userEdit = () => records.push({ undoId: `${name}-user-${records.length}`, undone: false });
-  return { driver, calls, records, next, userEdit, name };
+  const userEdit = () => {
+    records.push({ undoId: `${name}-user-${records.length}`, undone: false });
+    revision++;
+  };
+  return { driver, calls, records, next, userEdit, name, apply };
 }
 
 /** A provider whose turn is a script over the MCP scope it was given (called in-process). */
@@ -591,7 +607,7 @@ const gate = () => {
   return { promise, open };
 };
 
-test('Another request writing the file: DOCUMENT_LOCKED at once, never a wait', async (t) => {
+test('Another conversation editing the file directly: the executes take turns, no DOCUMENT_LOCKED', async (t) => {
   const holdB = gate(),
     runningB = gate(),
     holdA = gate(),
@@ -603,29 +619,54 @@ test('Another request writing the file: DOCUMENT_LOCKED at once, never a wait', 
       await holdB.promise;
       return { text: 'B 작업 끝' };
     }
-    // A's turn: B is being written by the other request, so nothing runs there.
-    answers.locked = await call('execute', { linkId: 'link-b', code: 'add column' });
+    // A's turn writes B while B's own turn is still thinking (SPEC-02.9 3).
+    answers.other = await call('execute', { linkId: 'link-b', code: 'add column' });
     answers.own = await call('execute', { code: 'add wall' });
     aWrote.open();
     await holdA.promise;
-    // The refusal is final for that file in this turn.
-    answers.again = await call('execute', { linkId: 'link-b', code: 'add column' });
     return { text: '완료' };
   });
   send('writes-b', { mode: 'auto', baseRequestId: 'sync-b' });
   await runningB.promise;
   send('writes-a', { mode: 'auto' });
+  assert.equal(state('writes-a').state, 'running');
   await aWrote.promise;
+  assert.equal(answers.other.value.ok, true);
+  assert.equal(answers.own.value.ok, true);
+  assert.equal(b.calls.execute.length, 1);
+  holdB.open();
+  holdA.open();
+  await settled();
+  const done = state('writes-a');
+  assert.equal(done.state, 'succeeded');
+  assert.equal(done.result.multiFile, true);
+  assert.equal(done.result.refused, undefined);
+});
+
+test('A file a turn-level write holds: DOCUMENT_LOCKED at once, never a wait', async (t) => {
+  const answers = {};
+  const { b, workspace, project, send, settled, state } = setup(t, async ({ call }) => {
+    answers.locked = await call('execute', { linkId: 'link-b', code: 'add column' });
+    answers.own = await call('execute', { code: 'add wall' });
+    // The refusal is final for that file in this turn.
+    answers.again = await call('execute', { linkId: 'link-b', code: 'add column' });
+    return { text: '완료' };
+  });
+  // A jig's direct bake writes B (a write that does not take turns per execute).
+  const release = workspace.holdWrite(project.id, {
+    host: 'rhino',
+    instance: 'win-b',
+    documentId: 7,
+  });
+  send('writes-a', { mode: 'auto' });
+  await settled();
+  release();
   assert.equal(answers.locked.value.code, 'DOCUMENT_LOCKED');
   assert.equal(answers.locked.value.executed, false);
   assert.match(answers.locked.value.reason, /B\.3dm/);
   assert.equal(answers.own.value.ok, true);
-  assert.equal(b.calls.execute.length, 0);
-  holdB.open();
-  await execution.completion('writes-b');
-  holdA.open();
-  await settled();
   assert.equal(answers.again.value.code, 'DOCUMENT_LOCKED');
+  assert.equal(b.calls.execute.length, 0);
   const done = state('writes-a');
   assert.equal(done.state, 'succeeded');
   assert.equal(done.result.refused.file, 'B.3dm');
@@ -634,10 +675,10 @@ test('Another request writing the file: DOCUMENT_LOCKED at once, never a wait', 
   assert.equal(done.result.multiFile, true);
 });
 
-test('A file a running turn locked holds new writes to it until the turn ends', async (t) => {
+test('A file a running turn locked: another direct turn runs at once, a jig bake is refused', async (t) => {
   const holdA = gate(),
     aLocked = gate();
-  const { send, settled, state } = setup(t, async ({ call, agent }) => {
+  const { send, settled, state, workspace, project } = setup(t, async ({ call, agent }) => {
     if (agent.targetRef === 'rhino-open:win-b') return { text: 'B 작업' };
     const done = await call('execute', { linkId: 'link-b', code: 'add column' });
     assert.equal(done.value.ok, true);
@@ -647,14 +688,18 @@ test('A file a running turn locked holds new writes to it until the turn ends', 
   });
   send('locks-b', { mode: 'auto' });
   await aLocked.promise;
-  const queued = send('then-b', { mode: 'auto', baseRequestId: 'sync-b' });
-  const waiting = state(queued.id);
-  assert.equal(waiting.state, 'queued');
-  assert.equal(waiting.result.waitingFor.kind, 'document');
-  assert.equal(waiting.result.waitingFor.after, 'locks-b');
-  holdA.open();
+  try {
+    send('then-b', { mode: 'auto', baseRequestId: 'sync-b' });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    assert.equal(state('then-b').state, 'succeeded');
+    // A jig's direct bake does not take turns per execute: the locked file refuses it.
+    const rows = workspace.claimRows(project.id);
+    const doc = { host: 'rhino', instance: 'win-b', documentId: 7 };
+    assert.deepEqual(documentHolder('bake', doc, rows), { code: 'DOCUMENT_LOCKED', by: 'locks-b' });
+  } finally {
+    holdA.open();
+  }
   await settled();
-  assert.equal(state('then-b').state, 'succeeded');
 });
 
 test('ZWCAD drawings through the engine driver: entity pages by handle, unknown failures stay unknown', async () => {
@@ -953,34 +998,29 @@ const appliedThenGuarded =
     return { text: '확인이 필요합니다.' };
   };
 
-test('[진행] in a file another request is writing is refused DOCUMENT_LOCKED and runs nothing', async (t) => {
-  const holdB = gate(),
-    runningB = gate();
+test('[진행] in a file a turn-level write holds is refused DOCUMENT_LOCKED and runs nothing', async (t) => {
   let b;
-  const { execution, project, send, settled, state, ...rest } = setup(t, async (turn) => {
-    if (turn.agent.targetRef === 'rhino-open:win-b') {
-      runningB.open();
-      await holdB.promise;
-      return { text: 'B 작업 끝' };
-    }
-    return appliedThenGuarded(rest.a, b)(turn);
-  });
+  const { execution, project, workspace, send, settled, state, ...rest } = setup(t, (turn) =>
+    appliedThenGuarded(rest.a, b)(turn),
+  );
   b = rest.b;
   send('guard-1', { mode: 'auto' });
   await settled();
   const waiting = state('guard-1');
   assert.equal(waiting.state, 'needs-confirmation');
   assert.equal(waiting.result.multiFile, true);
-  send('writes-b', { mode: 'auto', baseRequestId: 'sync-b' });
-  await runningB.promise;
+  const release = workspace.holdWrite(project.id, {
+    host: 'rhino',
+    instance: 'win-b',
+    documentId: 7,
+  });
   const calls = b.calls.execute.length;
   const refused = await execution.confirm(project.id, 'guard-1');
   assert.equal(refused.state, 'needs-confirmation');
   assert.equal(refused.result.refused.code, 'DOCUMENT_LOCKED');
   assert.equal(refused.result.refused.file, 'B.3dm');
   assert.equal(b.calls.execute.length, calls);
-  holdB.open();
-  await settled();
+  release();
   // Once B is free the card runs.
   const confirmed = await execution.confirm(project.id, 'guard-1');
   assert.equal(confirmed.state, 'succeeded');
@@ -1076,6 +1116,17 @@ test('A one-file [진행] that fails keeps the turn’s executes, as before', as
   assert.equal(failed.result.rollback, undefined);
   assert.equal(applied(failed.result).length, 1);
   assert.deepEqual(a.calls.undo, []);
+  // The held row ends with the request: no card is left to press (SPEC-02.13 4).
+  assert.equal(failed.result.guarded, undefined);
+  assert.deepEqual(
+    failed.result.executions.filter((entry) => entry.state === 'guarded'),
+    [],
+  );
+  const ended = failed.result.executions.find((entry) => entry.state === 'failed');
+  assert.ok(ended);
+  assert.equal(ended.code, undefined);
+  // A late [진행] on the ended request answers REVISION_CONFLICT (the screen re-reads it).
+  await assert.rejects(execution.confirm(project.id, 'guard-1'), { code: 'REVISION_CONFLICT' });
 });
 
 test('A confirmed re-run names its file, so the request [되돌리기] names it too', async (t) => {
@@ -1408,4 +1459,196 @@ test('An unresolved result in another linked file is told before the turn writes
   assert.equal(answers.again.value.unresolved, undefined);
   assert.equal(answers.write.value.ok, true);
   assert.equal(b.calls.execute.length, 2);
+});
+
+// --- Execute-only turns on one file (SPEC-02.9 3, 2026-10-02 user decision) -----------------------
+
+const until = async (check) => {
+  for (let i = 0; i < 400 && !check(); i++) await new Promise((resolve) => setTimeout(resolve, 5));
+  assert.ok(check());
+};
+const whoOf = (context) => /User request: (\S+)/.exec(context.goal)?.[1];
+
+test('Two conversations on one file query side by side; executes take turns; a stale execute is refused, then runs after a new query; a Plan read is not held', async (t) => {
+  const a = mockDocument('A', 'win-a', { fingerprint: true });
+  const t1InHost = gate(),
+    letHost = gate(),
+    bothQueried = gate(),
+    planRead = gate();
+  const answers = {};
+  const queriedBy = new Set();
+  const { send, settled, state } = setup(
+    t,
+    async ({ call, context }) => {
+      const who = whoOf(context);
+      if (who === 'P') {
+        answers.plan = await call('query', {});
+        planRead.open();
+        return { text: '계획' };
+      }
+      await call('query', {});
+      queriedBy.add(who);
+      if (queriedBy.size === 2) bothQueried.open();
+      // Both turns have read the file before either executes: they ran side by side.
+      await bothQueried.promise;
+      if (who === 'T1') {
+        answers.t1 = await call('execute', { code: 'add wall' });
+        return { text: 'T1 끝' };
+      }
+      await t1InHost.promise;
+      answers.stale = await call('execute', { code: 'add column' });
+      await call('query', {});
+      answers.retry = await call('execute', { code: 'add column' });
+      return { text: 'T2 끝' };
+    },
+    { documents: { a } },
+  );
+  a.next.execute.push(async (command) => {
+    t1InHost.open();
+    await letHost.promise;
+    return a.apply(command);
+  });
+  send('t1', { mode: 'auto', body: 'T1' });
+  send('t2', { mode: 'auto', body: 'T2' });
+  try {
+    await t1InHost.promise;
+    // T2's execute waits for T1's (nothing more reached the host) and says so.
+    await until(() => executeWaitOf(state('t2').result));
+    const wait = executeWaitOf(state('t2').result);
+    assert.equal(wait.kind, 'execute');
+    assert.equal(waitingText(wait), '다른 대화가 이 파일을 고치는 중 · 대기');
+    assert.equal(a.calls.execute.length, 1);
+    // A Plan turn reads the file while T1's execute is in the host.
+    send('plan', { mode: 'plan', body: 'P' });
+    await planRead.promise;
+    assert.ok(answers.plan.value.objects);
+  } finally {
+    letHost.open();
+  }
+  await settled();
+  assert.equal(answers.t1.value.ok, true);
+  assert.equal(answers.stale.value.code, 'DOCUMENT_CHANGED');
+  assert.equal(answers.stale.value.executed, false);
+  assert.match(
+    answers.stale.value.reason,
+    /다른 대화가 이 파일을 고쳤습니다 · 다시 조회한 뒤 실행하세요/,
+  );
+  assert.match(answers.stale.value.next, /Query it again/);
+  assert.equal(answers.retry.value.ok, true);
+  assert.equal(a.calls.execute.length, 2);
+  assert.equal(state('t1').state, 'succeeded');
+  const t2 = state('t2');
+  assert.equal(t2.state, 'succeeded');
+  // The refusal is gone once the retry ran; the wait text is gone once it got its turn.
+  assert.equal(t2.result.refused, undefined);
+  assert.equal(t2.result.executeWait, undefined);
+});
+
+test("A person's edit after the turn read the file refuses its execute until it reads again", async (t) => {
+  const a = mockDocument('A', 'win-a', { fingerprint: true });
+  const queried = gate(),
+    edited = gate();
+  const answers = {};
+  const { send, settled, state } = setup(
+    t,
+    async ({ call }) => {
+      await call('query', {});
+      queried.open();
+      await edited.promise;
+      answers.stale = await call('execute', { code: 'add wall' });
+      await call('query', {});
+      answers.ok = await call('execute', { code: 'add wall' });
+      return { text: '완료' };
+    },
+    { documents: { a } },
+  );
+  send('edit', { mode: 'auto' });
+  await queried.promise;
+  a.userEdit();
+  edited.open();
+  await settled();
+  assert.equal(answers.stale.value.code, 'DOCUMENT_CHANGED');
+  assert.equal(answers.ok.value.ok, true);
+  assert.equal(a.calls.execute.length, 1);
+  assert.equal(state('edit').state, 'succeeded');
+});
+
+test('An execute right after a fresh start runs at once; its own executes never make the next stale', async (t) => {
+  const a = mockDocument('A', 'win-a', { fingerprint: true });
+  const answers = {};
+  const { send, settled } = setup(
+    t,
+    async ({ call }) => {
+      answers.first = await call('execute', { code: 'add wall' });
+      answers.second = await call('execute', { code: 'add door' });
+      return { text: '완료' };
+    },
+    { documents: { a } },
+  );
+  send('edit', { mode: 'auto' });
+  await settled();
+  assert.equal(answers.first.value.ok, true);
+  assert.equal(answers.second.value.ok, true);
+  assert.equal(a.calls.execute.length, 2);
+});
+
+test('ExecuteQueue: one at a time in arrival order; a stopped wait leaves the line; the wait names the one ahead', async () => {
+  const queue = new ExecuteQueue();
+  const order = [];
+  const first = await queue.acquire('doc', { requestId: 'r1', title: '레이어 정리' });
+  const heard = [];
+  const controller = new AbortController();
+  const second = queue.acquire(
+    'doc',
+    { requestId: 'r2' },
+    { onWait: (ahead) => heard.push(ahead) },
+  );
+  const stopped = queue.acquire('doc', { requestId: 'r3' }, { signal: controller.signal });
+  const third = queue.acquire('doc', { requestId: 'r4' });
+  void second.then(() => order.push('r2'));
+  void third.then(() => order.push('r4'));
+  assert.deepEqual(
+    heard.map((entry) => entry.title),
+    ['레이어 정리'],
+  );
+  assert.equal(executeWaitText(heard[0]), '«레이어 정리» 대화가 이 파일을 고치는 중 · 대기');
+  controller.abort();
+  await assert.rejects(stopped, { code: 'CANCELLED' });
+  await new Promise((resolve) => setTimeout(resolve, 5));
+  assert.deepEqual(order, []);
+  first();
+  (await second)();
+  (await third)();
+  assert.deepEqual(order, ['r2', 'r4']);
+  assert.deepEqual(queue.line('doc'), []);
+  // Another document never waits.
+  (await queue.acquire('other', { requestId: 'r5' }))();
+});
+
+test('Query pages are read again when the document token moved', async () => {
+  let reads = 0;
+  const pages = displayQuery(async () => ({
+    objects: [{ id: String(++reads) }],
+    units: 'Millimeters',
+  }));
+  await pages.page({}, 'rev-1');
+  await pages.page({}, 'rev-1');
+  assert.equal(reads, 1);
+  await pages.page({}, 'rev-2');
+  assert.equal(reads, 2);
+});
+
+test('A held row offers [진행] only while its request waits; an ended request shows it not run', () => {
+  assert.equal(guardOpen('guarded', 'needs-confirmation'), true);
+  for (const state of ['failed', 'interrupted', 'cancelled', 'succeeded', 'unknown', 'running'])
+    assert.equal(guardOpen('guarded', state), false);
+  assert.equal(heldRowLabel('guarded', 'failed'), '진행하지 않음 (요청 종료)');
+  assert.equal(heldRowLabel('guarded', 'interrupted'), '진행하지 않음 (요청 종료)');
+  assert.equal(heldRowLabel('guarded', 'needs-confirmation'), undefined);
+  assert.equal(heldRowLabel('guarded', 'running'), undefined);
+  assert.equal(heldRowLabel('applied', 'failed'), undefined);
+  assert.equal(
+    waitingText({ kind: 'execute', key: 'k', position: 1, title: '레이어 정리' }),
+    '«레이어 정리» 대화가 이 파일을 고치는 중 · 대기',
+  );
 });

@@ -37,8 +37,10 @@ import {
   StructureStore,
 } from '../jigs/structure/index.ts';
 import { AUTO_MODELS, ModelRouter, isAutoModel } from '../ai/model-router.ts';
+import { PinCarryError, carryPins } from './pin-carry.ts';
 import { startHealthLog } from './health.ts';
 import { Diagnostics } from './diagnostics.ts';
+import { BIG_JSON, breadcrumb, setBreadcrumbSink } from '../core/breadcrumbs.ts';
 import { knowledgeFile } from '../jigs/knowledge.ts';
 import {
   DocumentLinks,
@@ -106,6 +108,7 @@ import { ZwcadWorkspace } from '../../hosts/zwcad/workspace.ts';
 import { dirname, join } from 'node:path';
 import { importModel, captureModel, recoverDwgImport } from './import-model.ts';
 import { AttachmentStore } from './attachments.ts';
+import { attachmentPathRoutes } from './attachment-paths.ts';
 import { folderRoutes } from './project-files.ts';
 import { ProjectFolders } from '../core/project-folders.ts';
 import { Agenda } from '../core/agenda.ts';
@@ -398,6 +401,8 @@ export async function startServer({
   const diagnostics = new Diagnostics({
     directory: filename === ':memory:' ? undefined : dirname(filename),
   });
+  if (filename !== ':memory:')
+    setBreadcrumbSink((step, fields) => diagnostics.write('step', { step, ...fields }));
   // An attached document Rhino opened read-only: one log entry with what could explain it.
   if (sdk && filename !== ':memory:') {
     const readOnly = new ReadOnlyWatch({
@@ -527,8 +532,12 @@ export async function startServer({
       response.writeHead(status, { 'Content-Type': contentType });
       response.end(payload);
     };
-    const send = (status: number, data: unknown) =>
-      deliver(status, 'application/json; charset=utf-8', JSON.stringify(data));
+    const send = (status: number, data: unknown) => {
+      const text = JSON.stringify(data);
+      if (text.length >= BIG_JSON)
+        breadcrumb('send-big', { path: request.url?.split('?')[0], bytes: text.length });
+      deliver(status, 'application/json; charset=utf-8', text);
+    };
     const accepts = (type: string) => String(request.headers.accept ?? '').includes(type);
     try {
       if (!remote && request.headers.host !== authority) throw new DomainError('FORBIDDEN');
@@ -715,6 +724,18 @@ export async function startServer({
         );
         return;
       }
+      // Images named by a path in the composer's words (SPEC-09.11): listed and copied here only.
+      if (
+        await attachmentPathRoutes(url, request.method, {
+          attachments,
+          context: fileContext,
+          project: (projectId) => store.project(projectId),
+          body: () => body(request),
+          send,
+          remote,
+        })
+      )
+        return;
       // Composer attachments (SPEC-01.12, ARCH-01 §3): any file type, kept per project.
       const attachmentRoute =
         /^\/api\/v1\/projects\/([^/]+)\/attachments(?:\/([0-9a-f]{24})(\/view)?)?$/.exec(
@@ -1217,6 +1238,7 @@ export async function startServer({
           async () => {
             // Sync timing (PLAN-18 step 3): the host read (meshing, pages) and the rest (checks, storing).
             const began = performance.now();
+            breadcrumb('sync-begin', { request: target.id });
             let hostMs: number | undefined;
             const timed =
               <T>(read: () => Promise<T>) =>
@@ -1287,6 +1309,7 @@ export async function startServer({
       if (live && request.method === 'POST') {
         if (!liveSync) throw new DomainError('RESYNC_REQUIRED');
         const began = performance.now();
+        breadcrumb('live-sync-begin');
         const synced = await liveSync.run(live[1], await body(request));
         diagnostics.write('live-sync', {
           ms: Math.round(performance.now() - began),
@@ -2204,6 +2227,8 @@ export async function startServer({
           // job on this PC's Codex login (SPEC-09.10 4). A retried request keeps the first mark.
           delete input.remote;
           if (old ? old.remote === true : remote) input.remote = true;
+          // Pins on a Sync of a closed Rhino window move to the reopened one (SPEC-02.16).
+          if (!old) carryPins(workspace, projectId, input);
           const routingInput = () => ({
             body: typeof input.body === 'string' ? input.body : '',
             host: typeof input.host === 'string' ? input.host : undefined,
@@ -2399,6 +2424,7 @@ export async function startServer({
                 : error instanceof z.ZodError
                   ? 'INVALID_INPUT'
                   : 'INTERNAL_ERROR',
+            ...(error instanceof PinCarryError ? { reason: error.reason } : {}),
             requestId,
           },
         );

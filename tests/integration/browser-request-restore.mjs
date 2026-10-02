@@ -69,7 +69,7 @@ try {
   assert.equal(await page.locator('#model').inputValue(), 'retired-model');
   assert.ok(await page.locator('#request').isDisabled());
   const draft = await page.evaluate(
-    (id) => JSON.parse(localStorage.getItem('vide:draft:' + id)),
+    (id) => JSON.parse(localStorage.getItem('vide:draft:' + id + ':default')),
     project,
   );
   assert.equal(draft.baseRequestId, base.id);

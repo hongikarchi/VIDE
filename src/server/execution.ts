@@ -79,6 +79,7 @@ import {
   displayQuery,
   executionsOf,
   publicRecord,
+  queuedDriver,
   runDirectTurn,
   takePlan,
   undoExecutions,
@@ -1348,6 +1349,7 @@ export class Execution {
           tools: this.tools,
           origin,
           projectTools,
+          holder: this.holderOf(projectId, input.conversationId),
           targetName:
             typeof (previous.result.sourceDocument as { name?: unknown } | undefined)?.name ===
             'string'
@@ -1356,10 +1358,12 @@ export class Execution {
           linked: {
             list: () => this.liveLinks(projectId, { host: direct.host, ...direct.target }),
             driver: (host, document) => this.directDriverFor(host, document, false),
-            // Another file is locked on its first write; held elsewhere it is refused, never
-            // waited for (ADR-027 5, SPEC-02.9 3).
+            // Another file is locked on its first write; held by a write that does not take turns
+            // per execute it is refused, never waited for (ADR-027 5, SPEC-02.9 3).
             claim: (document) =>
-              documentHolder(id, document, this.workspace.claimRows(projectId))?.code,
+              documentHolder(id, document, this.workspace.claimRows(projectId), {
+                serialized: true,
+              })?.code,
             unresolved: (document) =>
               unresolvedNote(unresolvedOn(id, document, this.workspace.claimRows(projectId)))?.data,
             intervened: () => this.intervened.has(id),
@@ -1646,6 +1650,18 @@ export class Execution {
 
   // --- Plan / Auto and direct execution (ADR-022) -----------------------------------------------
 
+  /** A request's conversation and its title, shown to a turn waiting behind its execute. */
+  private holderOf(projectId: string, conversationId: unknown) {
+    const id = typeof conversationId === 'string' ? conversationId : null;
+    let title: string | undefined;
+    try {
+      title = this.conversations?.list(projectId).find((entry) => entry.id === id)?.title;
+    } catch {
+      /* No title: the wait text says '다른 대화'. */
+    }
+    return { conversationId: id, ...(title ? { title } : {}) };
+  }
+
   /**
    * The attached document a direct turn writes to (or a stored execution undoes). `attachedOnly`:
    * the source must name an attached editor connection (a request's basis); stored execution
@@ -1683,7 +1699,7 @@ export class Execution {
           }
         },
         undo: (undoId) => sdk.undoDirect(target, undoId),
-        query: (options) => reads.page(options),
+        query: (options, token) => reads.page(options, token),
         vision: () => sdk.directView(target),
         fingerprint: () => sdk.fingerprint(target),
       };
@@ -1835,7 +1851,12 @@ export class Execution {
       false,
     );
     if (!driver) throw new DomainError('EXECUTOR_NOT_READY');
-    const answer = await driver.undo(entry.undoId);
+    // In the document's execute turn (SPEC-02.9 3): never between another conversation's execute
+    // and its record.
+    const answer = await queuedDriver(driver, {
+      requestId: id,
+      ...this.holderOf(projectId, request.input.conversationId),
+    }).undo(entry.undoId);
     if (!answer.ok)
       return {
         ok: false,
@@ -1917,9 +1938,15 @@ export class Execution {
       return { ok: true, already: true, files: [], request };
     const hostOf = (record: ExecutionRecord) =>
       record.host ?? (request.result?.host === 'zwcad' ? 'zwcad' : 'rhino');
-    const outcome = await undoExecutions(records, (record) =>
-      this.directDriverFor(hostOf(record), record.target ?? request.result?.sourceDocument, false),
-    );
+    const who = { requestId: id, ...this.holderOf(projectId, request.input.conversationId) };
+    const outcome = await undoExecutions(records, (record) => {
+      const driver = this.directDriverFor(
+        hostOf(record),
+        record.target ?? request.result?.sourceDocument,
+        false,
+      );
+      return driver && queuedDriver(driver, who);
+    });
     // Re-read: the request may have changed while the hosts answered.
     const now = this.workspace.get(projectId, id);
     const target = hostTargetSchema.safeParse(now.result?.sourceDocument).data;
@@ -1996,6 +2023,7 @@ export class Execution {
             id,
             { host: driver.host, ...driver.target },
             this.workspace.claimRows(projectId),
+            { serialized: true },
           )
         : undefined;
     if (held)
@@ -2010,7 +2038,12 @@ export class Execution {
     let outcome: Awaited<ReturnType<DirectDriver['execute']>> | undefined;
     let lost: unknown;
     try {
-      outcome = await driver.execute({
+      // The re-run takes the document's execute turn (SPEC-02.9 3); no stale check: the user
+      // confirmed this body.
+      outcome = await queuedDriver(driver, {
+        requestId: id,
+        ...this.holderOf(projectId, request.input.conversationId),
+      }).execute({
         requestId: runId,
         code: entry.code,
         ...(entry.language ? { language: entry.language } : {}),
@@ -2049,10 +2082,15 @@ export class Execution {
       };
       // All or nothing (ADR-027 3): the request ends failed, so what it applied elsewhere goes.
       if (multi) return this.rollBackConfirmed(request, base, entry, driver, undefined, failed);
+      // The held row ends failed with the request (no card is left to press again).
+      const { guarded: _held, ...ended } = base;
       return this.workspace.update(projectId, id, 'failed', {
-        ...base,
+        ...ended,
         phase: undefined,
         ...failed,
+        executions: executions.map((e) =>
+          e.executionId === entry.executionId ? publicRecord({ ...e, state: 'failed' }) : e,
+        ),
       });
     }
     const applied: ExecutionRecord = {
@@ -2102,14 +2140,17 @@ export class Execution {
     const here = documentKey(driver.host, driver.target);
     const hostOf = (record: ExecutionRecord) =>
       record.host ?? (request.result?.host === 'zwcad' ? 'zwcad' : 'rhino');
+    const who = { requestId: id, ...this.holderOf(projectId, request.input.conversationId) };
     const outcome = await undoExecutions(
       executions,
-      (record) =>
-        this.directDriverFor(
+      (record) => {
+        const target = this.directDriverFor(
           hostOf(record),
           record.target ?? request.result?.sourceDocument,
           false,
-        ),
+        );
+        return target && queuedDriver(target, who);
+      },
       { skip: lost ? new Set([here]) : undefined },
     );
     const name = entry.file?.name ?? `${driver.host === 'zwcad' ? 'ZWCAD' : 'Rhino'} 문서`;
@@ -2133,15 +2174,19 @@ export class Execution {
         ? `실패해서 자동으로 되돌림 · 되돌리지 못한 파일 ${left.map((file) => file.name).join(', ')}`
         : `실패해서 자동으로 되돌림 · 파일 ${outcome.files.length}개`,
     );
+    // The held row ends failed with the request (no card is left to press again).
+    const { guarded: _held, ...ended } = base;
     const result: Record<string, unknown> = {
-      ...base,
+      ...ended,
       ...failed,
       phase: unknown.length ? 'host' : undefined,
       activity: activity.entries,
       executions: executions.map((record) =>
         outcome.undone.has(record.executionId)
           ? { ...record, state: 'undone' as const, undoneAt: outcome.at }
-          : record,
+          : record.executionId === entry.executionId
+            ? publicRecord({ ...record, state: 'failed' })
+            : record,
       ),
       rollback: { at: outcome.at, reason: 'failed', files: outcome.files },
     };

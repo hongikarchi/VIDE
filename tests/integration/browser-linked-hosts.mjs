@@ -201,10 +201,13 @@ try {
   // The composer no longer offers linked targets (T-103); a pre-T-103 linked draft still sends
   // them, so the draft is written the way that dialog saved it (server support stays).
   await page.waitForFunction(() => !document.querySelector('#body').disabled);
-  await page.waitForFunction((id) => !!localStorage.getItem('vide:draft:' + id), project.id);
+  await page.waitForFunction(
+    (id) => !!localStorage.getItem('vide:draft:' + id + ':default'),
+    project.id,
+  );
   await page.evaluate(
     ({ id, secondHost }) => {
-      const key = 'vide:draft:' + id;
+      const key = 'vide:draft:' + id + ':default';
       const draft = JSON.parse(localStorage.getItem(key));
       draft.linkedTargets = [
         { baseRequestId: 'cad-basis', host: 'zwcad' },

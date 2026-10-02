@@ -57,3 +57,83 @@ export function restoreDraft(value: unknown, messages: DraftState['messages']) {
     messages,
   };
 }
+
+/**
+ * Drafts are kept per conversation (SPEC-02.19 1, 2026-10-02): `vide:draft:<project>:<conversation>`,
+ * `default` for the project's default conversation. The single draft of earlier versions
+ * (`vide:draft:<project>`) becomes the default conversation's once.
+ */
+export const draftKey = (projectId: string, conversation: string | null) =>
+  `vide:draft:${projectId}:${conversation ?? 'default'}`;
+export function migrateProjectDraft(projectId: string) {
+  try {
+    const legacy = 'vide:draft:' + projectId;
+    const old = localStorage.getItem(legacy);
+    if (old === null) return;
+    if (localStorage.getItem(draftKey(projectId, null)) === null)
+      localStorage.setItem(draftKey(projectId, null), old);
+    localStorage.removeItem(legacy);
+  } catch {
+    /* Storage may be unavailable. */
+  }
+}
+/** A sent draft that is no longer on screen: its input goes, its mode and effort stay. */
+export function clearStoredDraft(key: string) {
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return;
+    const draft = JSON.parse(raw) as Record<string, unknown>;
+    Object.assign(draft, {
+      body: '',
+      instructions: [],
+      pins: [],
+      sketches: [],
+      files: [],
+      linkedTargets: undefined,
+      coordinateBasis: undefined,
+    });
+    localStorage.setItem(key, JSON.stringify(draft));
+  } catch {
+    /* Storage may be unavailable or the draft unreadable; it is checked again when restored. */
+  }
+}
+export function removeDraft(projectId: string, conversation: string) {
+  try {
+    localStorage.removeItem(draftKey(projectId, conversation));
+  } catch {
+    /* Storage may be unavailable. */
+  }
+}
+/** Every draft of a deleted project, and its remembered conversation tab. */
+export function removeProjectDrafts(projectId: string) {
+  try {
+    const prefix = 'vide:draft:' + projectId;
+    const keys: string[] = [];
+    for (let index = 0; index < localStorage.length; index++) {
+      const key = localStorage.key(index);
+      if (key && (key === prefix || key.startsWith(prefix + ':'))) keys.push(key);
+    }
+    for (const key of keys) localStorage.removeItem(key);
+    localStorage.removeItem(conversationKey(projectId));
+  } catch {
+    /* Storage may be unavailable. */
+  }
+}
+/** The conversation tab last viewed in a project, reopened after a restart (null = default). */
+const conversationKey = (projectId: string) => 'vide:conversation:' + projectId;
+export function lastConversation(projectId: string): string | null {
+  try {
+    const id = localStorage.getItem(conversationKey(projectId));
+    return id && /^\S{1,200}$/.test(id) ? id : null;
+  } catch {
+    return null;
+  }
+}
+export function rememberConversation(projectId: string, conversation: string | null) {
+  try {
+    if (conversation) localStorage.setItem(conversationKey(projectId), conversation);
+    else localStorage.removeItem(conversationKey(projectId));
+  } catch {
+    /* Preference only. */
+  }
+}

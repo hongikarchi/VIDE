@@ -23,6 +23,7 @@ namespace Vide.Desktop
         private readonly System.Windows.Forms.Timer updateTimer = new System.Windows.Forms.Timer();
         private ShellForm form;
         private int restarts;
+        private bool lateRetryUsed;
         public DesktopSettings Settings { get; }
         public Updater Updater { get; }
         public bool Quitting { get; private set; }
@@ -111,6 +112,19 @@ namespace Vide.Desktop
             {
                 form.ShowProblem("작업 엔진이 종료되어 다시 시작하는 중입니다… (코드 " + Engine.Hex(code) + ")");
                 _ = StartEngine();
+                return;
+            }
+            // One more try a minute later before giving up: an engine left off reads as "VIDE broke".
+            if (!lateRetryUsed)
+            {
+                lateRetryUsed = true;
+                form.ShowProblem("작업 엔진이 계속 종료됩니다 (코드 " + Engine.Hex(code) + "). 1분 뒤 한 번 더 시작합니다.");
+                Task.Delay(60_000).ContinueWith(_ => ui.Post(__ =>
+                {
+                    if (Quitting) return;
+                    restarts = 0;
+                    _ = StartEngine();
+                }, null));
                 return;
             }
             form.ShowProblem("작업 엔진이 계속 종료됩니다 (코드 " + Engine.Hex(code) + "). VIDE를 다시 실행하세요.");

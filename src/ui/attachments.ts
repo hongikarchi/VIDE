@@ -100,6 +100,23 @@ export async function uploadAttachments(
   return kept;
 }
 
+/**
+ * The view copy of a large image the engine copied from a path (SPEC-09.11 2): read back from
+ * the engine and reduced here, as a picked file is. Failing leaves the image without one.
+ */
+export async function addViewCopy(projectId: string, record: StoredAttachment) {
+  if (record.kind !== 'image' || record.size <= VIEW_COPY_ABOVE) return;
+  try {
+    const response = await fetch(attachmentPreview(projectId, record.id));
+    if (!response.ok) return;
+    const blob = await response.blob();
+    const view = await viewCopy(new File([blob], record.name, { type: blob.type }));
+    if (view)
+      await post(`/projects/${encodeURIComponent(projectId)}/attachments/${record.id}/view`, view);
+  } catch {
+    /* The AI is told the image is too large. */
+  }
+}
 /** The chip preview of a kept image (served by the engine; CSP allows only 'self' images). */
 export const attachmentPreview = (projectId: string, id: string) =>
   `api/v1/projects/${encodeURIComponent(projectId)}/attachments/${id}`;

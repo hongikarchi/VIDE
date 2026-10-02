@@ -82,6 +82,7 @@ namespace Vide.Desktop
             process.Start();
             process.BeginOutputReadLine();
             process.BeginErrorReadLine();
+            CrashDumps.Attach(process.Id);
             return ready.Task;
         }
 
@@ -134,6 +135,7 @@ namespace Vide.Desktop
         public void Stop()
         {
             stopping = true;
+            CrashDumps.MarkAskedStop();
             var current = process;
             if (current == null) return;
             try

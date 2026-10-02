@@ -2,7 +2,7 @@
 id: PLAN-27
 title: Sync 저장 구조와 작동 안정성 — 진단·복구, 객체 단위 저장, 엔진 주관 Sync
 status: draft
-version: 0.2
+version: 0.4
 updated: 2026-10-02
 owner: agent:claude
 related: [RESEARCH-13, SPEC-01, ARCH-01, PLAN-16, PLAN-18, PLAN-24, FR-02, FR-03, FR-16]
@@ -72,38 +72,96 @@ Rhino 패널의 같은 복구(플러그인 재빌드·Rhino 재시작 필요)는
 
 ## 1단계 — 객체 단위 저장 (T-083)
 
-먼저 ARCH-01에 저장 계약을 쓰고 사용자 확인을 받는다.
+**상태(2026-10-02): 계약 사용자 확인, 구현 중.** 저장 계약은 ARCH-01 §5 「Sync 표시 형상의 객체 단위 저장(T-083)」이 소유한다. 이 절은 작업 순서와 검증만 적는다.
 
-- **객체 판:** 객체 하나의 표시 형상과 속성이다. 내용 지문으로 이름 붙이고 한 번만 저장한다.
-  - 형상은 바이너리로 둔다. 객체마다 기준점은 float64로 두고, 정점은 기준점과의 차이를 float32로 둔다. 지금의 VGT1 전송 형식을 저장에도 쓴다.
-  - 같은 모델(객체 1만 개, 정점 100만 개)로 잰 값: JSON 64.8 MB → 18.2 MB, 만들기 254 ms → 13 ms, 읽기 105 ms → 1 ms, 오차 0.001 mm.
+2026-10-02 사용자 결정(모두 제안대로):
+- 저장된 표시 형상은 float32 차이(0.001 mm)로 둔다. 측정값과 `geometryHash`는 바뀌지 않는다.
+- 기존 행은 엔진이 주소를 연 뒤 백그라운드에서 한 행에 한 트랜잭션으로 옮긴다. 백업은 지금의 마이그레이션 백업 하나, VACUUM은 한가할 때나 다음 시작 때.
+- 보존: 문서마다 최근 Sync 목록 20개와 참조된 Sync를 남기고 나머지 목록과 참조 없는 판을 지운다(T-087에서 앞당김, 규칙은 ARCH-01 §5 「정리」).
+
+**진행(2026-10-02, 1차) — 독립 층 구현·단위 시험, 연결 전:** 다른 작업과 겹치는 파일(`workspace.ts`, `server.ts` 등)을 건드리지 않는 순서 1·2·3·8의 모듈만 만들었다.
+- 순서 1: `encodeItem`·`decodeItem`·`joinGeometry`(`geometry-transfer.ts`). 이어 붙인 VGT1이 지금의 `encodeGeometry` 결과와 바이트 단위로 같다. 지문 `versionId`는 `src/core/model-store.ts`에 둔다(이 형식 파일은 화면도 써서 Node 해시를 둘 수 없음).
+- 순서 2: schema 9(`object_versions`·`sync_manifests`·`sync_manifest_items`·`sync_manifest_removed`, CASCADE). 프로젝트 삭제(`Store.deleteProject`)가 판도 지운다.
+- 순서 3: `ModelStore`(`store`·`applyDelta`·`copyManifest`·`load`·`view`·`geometry`·`deltaSince`·`deltaGeometry`·`sweep`·`retain`).
+- 순서 8: `model-move.ts`(`moveRow`·`pendingRows`·`moveRows`·`vacuumWhenIdle`). 엔진 시작에 붙이는 것은 남음.
+- 합성 1만 개 객체(정점 100만 개) 측정: 처음 저장 약 0.3초, 바뀌지 않은 전체 Sync 저장 약 0.3초(새 판 0개), 10개 바뀐 Live Sync 적용 1~2.5 ms, 전체 다시 만들기 약 0.2초, VGT1 이어 붙이기 약 0.15초(20.9 MB), `deltaSince` 1~13 ms.
+- 시험: `tests/core/model-store.test.mjs`·`model-move.test.mjs`(새), `geometry-transfer.test.mjs`·`migrations.test.mjs`(고침).
+- 남음: 순서 4~7·9와 순서 8의 엔진 시작 연결(`Workspace`·`LiveSync`·`server.ts`·`main.ts`), 그 시험.
+
+요지:
+- **객체 판:** 객체 하나의 표시 형상과 속성이다. 내용 지문으로 이름 붙이고 한 번만 저장한다. 형상은 지금의 VGT1 형식(배열마다 float64 원점 + float32 차이)으로 둔다. 같은 모델(객체 1만 개, 정점 100만 개) 실측: JSON 64.8 MB → 18.2 MB, 만들기 254 ms → 13 ms, 읽기 105 ms → 1 ms, 오차 0.001 mm.
 - **Sync 목록:** 그 시점의 (객체 ID → 객체 판) 목록과 부모 Sync, 문서 변경 번호를 가진다.
-- **전체 Sync:** 바뀌지 않은 객체는 기존 판을 가리킨다.
-- **Live Sync:** 바뀐 객체 판만 쓰고 목록의 그 줄만 바꾼다. 다른 요청이 참조 중인 Sync면 목록만 복사한 새 Sync를 만든다.
-- **기존 결과 이전과 하위 호환:**
-  - 기존 `workspace_requests.result`의 형상은 한 번 옮기고 VACUUM한다(옮기기 전 백업 1개).
-  - 작업 이력·고정·비교·검토본·웹 게시가 옛 Sync를 계속 열어야 한다.
-  - 요청 목록과 한 요청 조회는 지금 응답 모양을 유지한다. 형상은 바이너리로 준다.
+- **전체 Sync**는 바뀌지 않은 객체에 기존 판을 가리킨다. **Live Sync**는 바뀐 판과 목록의 그 줄만 쓴다. 다른 요청이 참조 중인 Sync면 목록만 복사한 새 Sync를 만든다.
+- 기존 결과는 백업 1개 뒤 한 행씩 옮기고 VACUUM한다. `Workspace.get`과 요청 API는 지금 모양을 유지한다.
+
+**구현 순서:**
+1. 형식(`src/contracts/geometry-transfer.ts`): `encodeGeometry`의 항목 단위 `pack`을 `encodeItem(item) → {meta, geometry}`·`decodeItem(meta, geometry)`로 꺼내고, 객체별 VGT1을 이어 붙여 기존 VGT1 응답을 만드는 `joinGeometry`를 더한다. 지문 함수 `versionId(kind, meta, geometry)`(키 정렬 JSON + SHA-256).
+2. 스키마(`src/core/migrations.ts`): schema 9에 `object_versions`·`sync_manifests`·`sync_manifest_items`·`sync_manifest_removed`와 색인. `schemaVersion` 9.
+3. 저장소(`src/core/model-store.ts`, 새): `storeModel(projectId, requestId, result, parentId)`, `applyDelta(projectId, requestId, delta, patch)`, `copyManifest(from, to)`, `loadModel(requestId)`(전체), `ModelView`(지연: `keys`·`object`·`scene`·`rows`·`geometry`), `deltaSince(requestId, since, base?)`, `sweepVersions(projectId, candidates?)`.
+4. `Workspace`(`src/core/workspace.ts`): `update`(466~484행)가 `scene` 배열이 있는 결과를 `storeModel`로 나눠 쓴다. `decode`(21~31행)·`get`(186~195행)·`list({full})`(104~107행)은 `modelStore: 'manifest'`면 `loadModel`로 채운다. `withoutGeometry`·`#light`·`summary`(36~44, 113~139행)는 형상 없이 `meta`의 `object`만 모으고 캐시 키에 목록 `revision`을 더한다. `purge`(155~178행) 뒤 `sweepVersions`. 새 `model(projectId, id)`.
+5. Live Sync(`src/server/live-sync.ts:86-117`, `src/server/sdk-execution.ts:305-340`): `sdk.liveSync`는 기준 모델 대신 기준 `sourceDocument`만 받아 변경분(`delta`)과 작은 필드만 돌려준다(전체 병합 `applyDisplayDelta` 제거). `LiveSync.apply`는 `summary`로 기준을 확인하고, 참조 중이면 `captureInput` 새 행 + `copyManifest`, 아니면 제자리 `applyDelta`. 응답 모양은 그대로.
+6. 무거운 읽기를 지연 조회로 바꾼다(아래 표의 '바꿈'). 나머지는 `get`이 같은 모양을 주므로 그대로 두고 시험으로 확인한다.
+7. API(`src/server/server.ts`): 단건 VGT1 응답(2159~2163행)을 `joinGeometry`로 만들고, `GET …/requests/:r/delta?since=&base=`를 더한다(2단계 알림용). 목록 응답(2180~2190행)은 그대로.
+8. 옮기기(`src/core/model-move.ts`, 새, `src/server/main.ts`에서 주소를 연 뒤 시작): 행마다 트랜잭션·대조·기록, 끝나면 한가할 때 VACUUM(`Store.compact` 강제), 남은 행은 다음 시작에 이어서. 프로젝트 삭제(`src/core/store.ts:242`)는 목록·판도 지운다.
+9. ARCH-01 §5·§6 「PC 프로그램」(VGT1 저장 문구)·§7을 구현 결과에 맞춘다.
+
+**`scene`·`objects`를 읽는 곳(2026-10-02 HEAD 기준):**
+
+| 위치 | 하는 일 | 1단계 처리 |
+|---|---|---|
+| `src/server/server.ts:1254`, `src/core/measurement-cache.ts:14-35` | 직전 Sync의 측정 재사용. 프로젝트 전체를 `list({full: true})`로 해석 | 바꿈: 직전 목록의 `meta`만 SQL로 |
+| `src/server/sync-reads.ts:49`, `src/server/jig-routes.ts:898` | 파일 항목의 마지막 불러오기 찾기에 `list({full: true})` | 바꿈: `list()`(형상 없음) 뒤 필요한 한 행만 |
+| `src/server/server.ts:1277`, `1291` | 합치기 재사용 판단에 `get`(documentHash만 필요) | 바꿈: `summary` |
+| `src/server/live-sync.ts:86-117` | 기준 전체 해석·병합·재기록 | 바꿈(순서 5) |
+| `src/server/server.ts:2159-2171` | 단건 조회(VGT1·JSON) | 바꿈: VGT1은 `joinGeometry` |
+| `src/server/execution.ts:183-197`(`parsedModel`), `1153`, `1232`, `1316-1320`, `1535-1553`; `src/server/agent-tools.ts:1016`; `src/server/model-context.ts:9`; `src/server/query-page.ts:59-84` | 실행 기준·AI 도구·질의의 객체별 조회 | 바꿈: `model()`의 `object`·`scene`·`rows`(가능한 곳부터), 나머지는 `get` 유지 |
+| `src/core/quantities.ts:47-49`, `src/core/reviews.ts:106-135`, `src/core/comparison.ts:45-49`, `src/core/extensions.ts:155`, `src/server/report.ts:94`, `src/core/publication.ts:42-49`, `src/server/offline-snapshot.ts:146` | 수량·검토본·비교·확장·보고서·웹 게시·오프라인 보기 | 그대로(`get`). 시험으로 확인 |
+| `src/server/zwcad-sdk-execution.ts:44-45`, `435` | 저장된 `scene` 항목과 새 항목을 JSON 문자열로 비교 | 바꿈: 같은 float32 변환 뒤 비교(또는 지문) |
+| `src/server/server.ts:1505-1506`, `1592-1607`; `src/server/jig-routes.ts:744`, `866`; `src/jigs/sync.ts:73`; `src/jigs/structure/input.ts:215`, `249`; `src/jigs/runtime/runtime.ts:148-168`, `568`; `src/jigs/bake/plan.ts:262` | Sync jig·구조 jig·jig 실행 입력 | 그대로(`get`). 1607행은 `sceneOmitted`도 받으므로 유지 |
+| `src/server/sdk-execution.ts:564` | 직전 모델 측정 전달 | 그대로 |
+| SQL로 `result` 읽기: `src/core/workspace.ts:53`, `src/server/project-removal.ts:73-75`, `src/server/capture-cleanup.ts:83-84`, `src/server/conversations.ts:570`, `src/server/offline-view.ts:93` | 작은 필드만 읽음 | 그대로(옮긴 뒤 더 빨라짐) |
+| 화면: `src/ui/app.ts:497-525`(Live Sync 병합), `1589-1643`(레이어 합성), `src/ui/history.tsx:113`, `src/ui/inspector.ts:289`, `src/ui/native-attributes.ts:51` | 받은 결과로 표시 | 1단계는 그대로(응답 모양 같음). 3단계(T-085)에서 바꿈 |
+
+**시험:**
+- 새로:
+  - `tests/core/model-store.test.mjs`: 판 중복 제거, 지문 안정성, `applyDelta` 추가·변경·삭제, 복사본 revision 승계, 참조 없는 판 정리, 프로젝트 삭제.
+  - `tests/core/model-move.test.mjs`: 옛 JSON 행을 옮긴 뒤 `get` 결과가 같은 float32 변환 뒤 원본과 같음, 중간 종료 뒤 이어 옮기기, 대조 실패 시 행 유지.
+  - `tests/server/live-sync-storage.test.mjs`: 객체 1만 개 합성 기준에서 Live Sync 한 번이 기준 형상을 해석하지 않고 DB가 바뀐 판만큼만 늘어남, 처리 시간 기록.
+  - `tests/server/request-delta.test.mjs`: `delta?since`·`base`·`full`.
+- 고침: `tests/core/migrations.test.mjs`(schema 9), `tests/core/workspace-list.test.mjs`(형상 없는 목록·캐시 키), `tests/core/geometry-transfer.test.mjs`(`encodeItem`·`joinGeometry`가 기존 `encodeGeometry`와 같은 결과로 풀림), `tests/server/live-sync.test.mjs`(제자리·복사본 저장 확인을 목록으로), `tests/server/large-sync-pins.test.mjs`(형상 해석 0번 유지), `tests/server/capture.test.mjs`, `tests/server/sync-coalesce.test.mjs`, `tests/server/zwcad-sdk-execution.test.mjs`·`zwcad-edit.test.mjs`(비교 방식), `tests/server/query-page.test.mjs`, `tests/server/sdk-execution.test.mjs`(`liveSync` 인자).
+- 그대로 통과 확인: `tests/core/{comparison,quantities,reviews,publication,extensions,measurement-cache,sync-jig,display-delta}.test.mjs`, `tests/sharing/*`, 통합 `browser-live-sync`·`browser-large-native`·`rhino-large-sync`·`rhino-sync-perf`.
 
 **검증:**
 - 이전 전후 같은 요청의 객체·형상 동일성(지문)
-- 사용자 DB 사본으로 이전 시간과 크기 확인
+- 사용자 DB 사본(`.vide/` 아래)으로 옮기는 시간, 옮긴 뒤 DB 크기, VACUUM 시간
 - 위 기능들의 기존 시험
-- Live Sync 한 번의 엔진 처리 시간(목표: 객체 수와 무관하게 100 ms 안팎)
+- Live Sync 한 번의 엔진 처리 시간(목표: 객체 수와 무관하게 100 ms 안팎), 바뀌지 않은 문서의 전체 Sync 한 번의 DB 증가(목표: 약 1 MB)
 
 ## 2단계 — Sync를 엔진이 주관 (T-084)
 
-SPEC-01.11의 Sync 주체를 먼저 고친다.
+**상태(2026-10-02): SPEC-01.11의 10(Sync 주관)과 ARCH-01 §7 「엔진 주관 Sync(T-084)」 사용자 확인.** 확인한 세부: VIDE 창이 없어도 엔진이 Live 파일을 Sync한다. ⟳·지금 Sync·플러그인 Sync는 진행 중인 자동 Sync에 합류하지 않고 새로 읽는다. 편집 중 실패(`SOURCE_CHANGED`, 호스트 바쁨)는 30초까지 다시 하고 그 뒤 다음 변경이나 ⟳를 기다리며, 행에는 '변경 중 · 곧 다시 Sync'를 보인다. 초안 보류는 화면의 5초 임대로 한다. 화면 쪽은 1단계의 `delta` 조회를 쓰므로 1단계 순서 7 뒤에 바꾼다. 엔진 쪽 스케줄러(순서 1~4)는 1단계와 나란히 시작할 수 있다.
 
 - 엔진이 연결된 문서의 변경 번호를 직접 보고, 문서당 한 번 전체 Sync·Live Sync를 한다.
 - 같은 문서의 동시 Sync는 하나로 합친다.
-- 데스크톱 창·Rhino 패널·브라우저 탭은 결과 알림만 받는다. 알림은 가벼운 변경 번호 폴링이나 이벤트 스트림으로 한다.
+- 데스크톱 창·Rhino 패널·브라우저 탭은 결과 알림만 받는다(연결 목록 조회에 상태·표시 revision을 더함).
 - 초안·고정·실행 중 작업에 따른 자동 갱신 보류는 엔진이 판단한다(SPEC-01.11 6).
-- Sync 중 편집으로 `SOURCE_CHANGED`가 나면 잠시 뒤 다시 한다.
+- Sync 중 편집으로 `SOURCE_CHANGED`가 나면 잠시 뒤 다시 한다(30초까지).
 - AI가 문서를 고치는 중에는 Sync가 기다린다.
 
+**구현 순서:**
+1. `src/server/server.ts:1204-1292`의 전체 Sync를 `runDocumentSync`(`src/server/document-sync.ts`, 새)로 빼고 `POST …/capture`는 이를 부른다(동작 같음).
+2. `src/server/sync-scheduler.ts`(새): 1초 주기, 문서별 상태, 첫 Sync·변경·다시 연 Live 파일 판단(지금 `src/ui/app.ts:796-813`의 규칙), Live Sync·전체 Sync 선택, 재시도(1·2·4·8초, 최대 30초), 보류 판단(요청 기준·`holdWrite`·바로 적용·화면 임대). `src/server/main.ts`·`server.ts`에서 시작·종료.
+3. 보류 임대: `GET …/links?page=&hold=`를 받아 페이지별 5초 임대. 연결 행에 `sync`·`display`를 더한다(`server.ts:895-925` 부근).
+4. `LiveSync`(`src/server/live-sync.ts`): `latest` 맵을 스케줄러와 함께 쓰고, 같은 키의 실행 중 전체 Sync를 기다린다.
+5. 화면(`src/ui/app.ts`): `pollLinks`의 자동 Sync 시작(796~813행)과 `liveSyncHostDocument`(487~540행)의 `POST …/live-sync` 호출을 지운다. 연결 행의 `display.revision`이 늘면 `delta?since=`로 받아 `applyDisplayDelta`로 합친다. `syncHeld`(674~686행)는 초안 임대 보고로만 남기고, `syncLink`(688행~)는 ⟳(`manual`)만 남긴다. 행 표시(`linkNotes`)는 `sync.state`에서 만든다.
+6. Rhino 패널·ZWCAD 팔레트는 같은 페이지이므로 5로 함께 바뀐다(플러그인 수정 없음).
+
+**시험:**
+- 새로: `tests/server/sync-scheduler.test.mjs`(가짜 편집기 목록으로 확인): 변경 한 번에 Sync 한 번, 화면 0·3개에서 같음, 보류 중 Sync 없음과 풀린 뒤 한 번, `SOURCE_CHANGED` 뒤 재시도·30초 뒤 대기, AI 쓰기 중 대기, ⟳는 합류하지 않음.
+- 고침: `tests/server/sync-coalesce.test.mjs`, `tests/server/live-sync.test.mjs`, 통합 `tests/integration/browser-live-sync.mjs`(화면이 `/live-sync`를 부르지 않고 알림으로 갱신)·`browser-links`·`browser-rhino-panel`.
+
 **검증:**
-- 창과 패널을 함께 연 상태에서 Rhino 변경 한 번에 Sync·Live Sync가 한 번만 일어나는지
+- 창과 패널을 함께 연 상태에서 Rhino 변경 한 번에 Sync·Live Sync가 한 번만 일어나는지(엔진 기록 `sync-scheduler`·`live-sync`)
 - 기존 `browser-live-sync`·`browser-links`·`browser-rhino-panel`
 
 ## 3단계 — 화면 (T-085)
@@ -142,7 +200,7 @@ SPEC-01.11의 Sync 주체를 먼저 고친다.
 ## 5단계 — 정리 (T-087)
 
 - 아무 Sync 목록도 가리키지 않는 객체 판을 지운다.
-- 옛 Sync 목록은 파일별 최근 몇 개와 참조된 것만 남긴다. 몇 개를 남길지는 착수 때 SPEC-01.11에 정한다.
+- 옛 Sync 목록은 문서마다 최근 20개와 참조된 것(핀·요청 입력·기준, 검토본·비교·웹 게시·공유 의견, jig 읽기·만들기, 대화 기록)만 남기고, 그 밖의 목록을 지운 뒤 참조 없는 판을 지운다(2026-10-02 사용자 결정, 1단계로 앞당김, 규칙은 ARCH-01 §5 「정리」, `ModelStore.retain`).
 - 그 밖의 정리:
   - 이전 백업(`vide.sqlite.backups`)은 최근 2개만 남긴다.
   - `rhino-connections` 사본과 `sdk-models` 작업 폴더도 정리한다.

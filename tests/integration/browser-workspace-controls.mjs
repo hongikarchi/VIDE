@@ -259,7 +259,7 @@ try {
   );
   const attached = await page.evaluate(async () => {
     const id = document.querySelector('#project-picker').value;
-    return JSON.parse(localStorage.getItem('vide:draft:' + id)).files;
+    return JSON.parse(localStorage.getItem('vide:draft:' + id + ':default')).files;
   });
   assert.deepEqual(
     attached.map((file) => [file.name, file.kind, file.copied, 'text' in file]),

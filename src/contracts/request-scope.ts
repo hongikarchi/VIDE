@@ -1,7 +1,8 @@
 /**
  * Concurrent intake (SPEC-02.9, ARCH-03 §10.3): which host documents a request uses, whom it waits
- * behind and the project limit of AI turns. Overlapping writes wait their turn instead of being
- * refused, and an unresolved result never refuses or stops later work (SPEC-02.9 5, T-102): the
+ * behind and the project limit of AI turns. AI turns that edit an open Rhino document directly run
+ * side by side and take turns only per execute (2026-10-02 user decision; the execute queue is in
+ * direct-mode.ts). Other overlapping writes wait their turn instead of being refused, and an unresolved result never refuses or stops later work (SPEC-02.9 5, T-102): the
  * next turn on that document is only told about it. Scheduling identity only; this never
  * authorizes native writes or resolves unknown results.
  */
@@ -50,8 +51,12 @@ interface ScopeWork {
 }
 /** Stored on a waiting request's result (`phase: 'queue'`). */
 export interface WaitingFor {
-  /** `document`: another write holds the same document; `project`: the AI turn limit is reached. */
-  kind: 'document' | 'project';
+  /**
+   * `document`: another write holds the same document; `project`: the AI turn limit is reached;
+   * `execute`: a running turn's execute waits for another conversation's execute (not stored as
+   * `queued`: the running turn's progress carries it as `executeWait`).
+   */
+  kind: 'document' | 'project' | 'execute';
   key: string;
   /** 1 = next in line. */
   position: number;
@@ -60,6 +65,9 @@ export interface WaitingFor {
   after?: string;
   /** The AI turn limit in force (project). */
   limit?: number;
+  /** The conversation of the request it waits behind (execute), and its title when known. */
+  conversationId?: string | null;
+  title?: string;
 }
 export interface Admission {
   /** Refused: nothing is stored. */
@@ -72,6 +80,11 @@ interface Claim {
   key: string | null;
   /** Writes the user's own document (source apply, or a CAD drawing edited in place). */
   source: boolean;
+  /**
+   * An AI turn editing an open Rhino document directly (or a document such a turn locked): its
+   * writes take turns per execute (direct-mode.ts), so two such claims never wait on each other.
+   */
+  direct?: boolean;
 }
 
 const jigKind = (input: ScopeInput) =>
@@ -123,6 +136,18 @@ function documentKey(value: unknown): string | undefined {
   return JSON.stringify(['document', value.instance, value.documentId]);
 }
 
+/** A Sync of an open document through the attached editor (a direct turn's basis). */
+const attachedDisplay = (result: ScopeWork['result']) => {
+  const source = result?.sourceDocument;
+  return (
+    (result as { displayOnly?: unknown } | null | undefined)?.displayOnly === true &&
+    !!source &&
+    typeof source === 'object' &&
+    'connection' in source &&
+    source.connection === 'attached-editor'
+  );
+};
+
 function claims(input: ScopeInput, rows: ReadonlyMap<string, ScopeWork>): Claim[] {
   const use = hostUse(input);
   const host = input.host || 'rhino';
@@ -132,11 +157,15 @@ function claims(input: ScopeInput, rows: ReadonlyMap<string, ScopeWork>): Claim[
     return [{ host, key: documentKey(input.sourceDocument) ?? null, source: false }];
   if (input.source === 'file')
     return [{ host, key: JSON.stringify(['candidate', input.id]), source: false }];
-  const claim = (target: string, key: string | null): Claim => ({
+  const claim = (target: string, key: string | null, direct = false): Claim => ({
     host: target,
     key,
     source: input.applyToSource === true || target === 'zwcad',
+    ...(direct ? { direct } : {}),
   });
+  // The direct path of execution.ts: an Auto Rhino turn on an attached (display) Sync.
+  const directTurn =
+    host === 'rhino' && !input.applyToSource && !input.linkedTargets && !jigKind(input);
   const resolve = (target: string, basis: string | null | undefined): Claim => {
     if (basis === undefined) return claim(target, null);
     if (basis === null) return claim(target, JSON.stringify(['candidate', input.id]));
@@ -147,7 +176,7 @@ function claims(input: ScopeInput, rows: ReadonlyMap<string, ScopeWork>): Claim[
       const row = rows.get(id);
       if (!row || (row.input.host || 'rhino') !== target) return claim(target, null);
       const document = documentKey(row.result?.sourceDocument);
-      if (document) return claim(target, document);
+      if (document) return claim(target, document, directTurn && attachedDisplay(row.result));
       const parent = row.input.baseRequestId ?? row.result?.baseRequestId;
       if (typeof parent !== 'string') return claim(target, JSON.stringify(['candidate', id]));
       id = parent;
@@ -175,7 +204,8 @@ function claimsOf(row: ScopeWork, rows: ReadonlyMap<string, ScopeWork>): Claim[]
             entry && typeof entry === 'object' && 'host' in entry && typeof entry.host === 'string'
               ? entry.host
               : undefined;
-          return key && host ? [{ host, key, source: true }] : [];
+          // Locked by a direct turn as it first wrote them: its executes there take turns.
+          return key && host ? [{ host, key, source: true, direct: true }] : [];
         })
       : [];
   const scoped = row.state === 'unknown' && row.result?.heldOnly === true && Array.isArray(held);
@@ -184,10 +214,15 @@ function claimsOf(row: ScopeWork, rows: ReadonlyMap<string, ScopeWork>): Claim[]
 
 const same = (a: Claim, b: Claim) =>
   a.host === b.host && (a.key === null || b.key === null || a.key === b.key);
+/** Two direct claims of one identified document share it: their executes take turns instead. */
+const shared = (a: Claim, b: Claim) =>
+  !!a.direct && !!b.direct && a.key !== null && a.key === b.key;
 
 /**
  * Admission of a request against the requests ahead of it (for a new one, all stored requests): it
  * runs now or waits for the same document's earlier write, or for a free AI turn (SPEC-02.9 1-5).
+ * Direct turns on one open Rhino document do not wait for each other (their executes take turns),
+ * and a read never waits for one.
  * An unresolved result ahead never refuses it (`unresolvedFor` names it to the turn instead).
  */
 export function requestAdmission(
@@ -217,7 +252,11 @@ export function requestAdmission(
     if ((hostUse(row.input) ?? 'write') !== 'write') return;
     for (const theirs of claimsOf(row, byId))
       for (const claim of mine)
-        if (same(claim, theirs) && (use === 'write' || theirs.source))
+        if (
+          same(claim, theirs) &&
+          !shared(claim, theirs) &&
+          (use === 'write' || (theirs.source && !theirs.direct))
+        )
           return {
             host: theirs.host,
             // Either side without an identified document stands behind the whole host.
@@ -251,16 +290,24 @@ export function requestAdmission(
  * A running turn's first write to a document other than its target (ADR-027, SPEC-02.9 3): never
  * waits. `DOCUMENT_LOCKED` when another queued or running write holds that document (its target or
  * a document its turn locked); undefined when the turn may lock it. An unresolved result there
- * does not hold it.
+ * does not hold it. `serialized`: the caller's executes take turns in the execute queue
+ * (a direct turn, a guard's re-run), so another direct turn on that document does not hold it.
  */
 export function documentHolder(
   requestId: string,
   document: { host: string; instance: string; documentId: number },
   rows: readonly ScopeWork[],
+  { serialized = false }: { serialized?: boolean } = {},
 ): { code: 'DOCUMENT_LOCKED'; by: string } | undefined {
   const byId = new Map(rows.map((row) => [row.id, row]));
-  const mine: Claim = { host: document.host, key: documentKey(document) ?? null, source: true };
-  const overlaps = (row: ScopeWork) => claimsOf(row, byId).some((theirs) => same(mine, theirs));
+  const mine: Claim = {
+    host: document.host,
+    key: documentKey(document) ?? null,
+    source: true,
+    ...(serialized ? { direct: true } : {}),
+  };
+  const overlaps = (row: ScopeWork) =>
+    claimsOf(row, byId).some((theirs) => same(mine, theirs) && !shared(mine, theirs));
   for (const row of rows) {
     if (row.id === requestId || hostUse(row.input) === 'none') continue;
     if (

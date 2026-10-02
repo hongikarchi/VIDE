@@ -2,7 +2,12 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { Store } from '../../src/core/store.ts';
 import { Workspace } from '../../src/core/workspace.ts';
-import { hostUse, requestAdmission, unresolvedFor } from '../../src/contracts/request-scope.ts';
+import {
+  documentHolder,
+  hostUse,
+  requestAdmission,
+  unresolvedFor,
+} from '../../src/contracts/request-scope.ts';
 
 const instance = '1:2:356ff01d-b586-460c-8e2b-8c9f3c083e96';
 
@@ -83,24 +88,26 @@ test('three AI turns run at once; the fourth waits for a free turn; retries stay
   );
 });
 
-test('two writes to one document queue in order; another document runs at once', (t) => {
+test('two turn-level writes to one drawing queue in order; another drawing runs at once', (t) => {
   const { workspace, project, submit, sync, finish } = fixture(t);
-  sync('a', 1);
-  sync('b', 1);
-  sync('c', 2);
-  assert.equal(submit('edit-a', { baseRequestId: 'a' }).result, null);
+  // ZWCAD turns run their own loop and still take turns per request (SPEC-02.9 3).
+  const cad = { host: 'zwcad' };
+  sync('a', 1, 'zwcad');
+  sync('b', 1, 'zwcad');
+  sync('c', 2, 'zwcad');
+  assert.equal(submit('edit-a', { ...cad, baseRequestId: 'a' }).result, null);
   // A newer Sync of the same document is the same document.
-  const second = submit('edit-b', { baseRequestId: 'b' });
+  const second = submit('edit-b', { ...cad, baseRequestId: 'b' });
   assert.equal(second.state, 'queued');
   assert.deepEqual(second.result.waitingFor, {
     kind: 'document',
     key: JSON.stringify(['document', instance, 1]),
-    host: 'rhino',
+    host: 'zwcad',
     after: 'edit-a',
     position: 1,
   });
-  assert.equal(submit('edit-c', { baseRequestId: 'c' }).result, null);
-  assert.equal(submit('edit-a2', { baseRequestId: 'a' }).result.waitingFor.position, 2);
+  assert.equal(submit('edit-c', { ...cad, baseRequestId: 'c' }).result, null);
+  assert.equal(submit('edit-a2', { ...cad, baseRequestId: 'a' }).result.waitingFor.position, 2);
   // The document stays held while the first write runs.
   assert.deepEqual(workspace.release(project.id), []);
   finish('edit-a');
@@ -250,11 +257,48 @@ test('a host use declaration cannot let a write skip write contention', (t) => {
 
 test('restart keeps a waiting request with its place and reason but does not run it', (t) => {
   const { store, project, submit, sync } = fixture(t);
-  sync('doc-1', 1);
-  submit('first', { baseRequestId: 'doc-1' });
-  submit('second', { baseRequestId: 'doc-1', body: 'keep this condition' });
+  sync('doc-1', 1, 'zwcad');
+  submit('first', { host: 'zwcad', baseRequestId: 'doc-1' });
+  submit('second', { host: 'zwcad', baseRequestId: 'doc-1', body: 'keep this condition' });
   const restored = new Workspace(store).get(project.id, 'second');
   assert.equal(restored.state, 'interrupted');
   assert.equal(restored.input.body, 'keep this condition');
   assert.equal(restored.result.waitingFor.after, 'first');
+});
+
+test('direct turns on one open Rhino document run side by side; turn-level writes still wait (SPEC-02.9 3)', (t) => {
+  const { workspace, project, submit, sync } = fixture(t);
+  sync('doc-1', 1);
+  sync('doc-1b', 1);
+  // Two conversations' Auto turns on the same attached document: neither waits (executes take
+  // turns in the engine's execute queue instead).
+  assert.equal(submit('edit-a', { baseRequestId: 'doc-1', mode: 'auto' }).result, null);
+  assert.equal(submit('edit-b', { baseRequestId: 'doc-1b', mode: 'auto' }).result, null);
+  // A Plan turn reads at once.
+  assert.equal(submit('plan', { baseRequestId: 'doc-1', mode: 'plan' }).result, null);
+  // A Sync of the document is not held back by direct turns.
+  assert.equal(sync('doc-1c', 1).state, 'succeeded');
+  // A source apply of that document still waits for the running direct turns.
+  assert.equal(
+    submit('apply', { baseRequestId: 'doc-1', applyToSource: true }).result.waitingFor.after,
+    'edit-a',
+  );
+  // A jig bake of the document is refused while a direct turn targets it, but another direct
+  // turn's first write there is not (its execute takes a turn).
+  const doc = { host: 'rhino', instance, documentId: 1 };
+  const rows = workspace.claimRows(project.id);
+  assert.equal(documentHolder('bake', doc, rows)?.code, 'DOCUMENT_LOCKED');
+  assert.equal(documentHolder('other-turn', doc, rows, { serialized: true }), undefined);
+});
+
+test('a direct turn waits for a turn-level write of its document', (t) => {
+  const { workspace, project, submit, sync } = fixture(t);
+  workspace.aiTurns = 4;
+  sync('doc-1', 1);
+  submit('apply', { baseRequestId: 'doc-1', applyToSource: true });
+  assert.equal(
+    submit('edit', { baseRequestId: 'doc-1', mode: 'auto' }).result.waitingFor.after,
+    'apply',
+  );
+  void project;
 });

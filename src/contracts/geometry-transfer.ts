@@ -16,7 +16,8 @@ const align = (n: number) => (n + 3) & ~3;
 const isNumbers = (value: unknown): value is number[] =>
   Array.isArray(value) && value.length > 0 && typeof value[0] === 'number';
 
-export function encodeGeometry(value: unknown): Uint8Array {
+/** Packs the coordinate and index arrays of items into 4-byte aligned buffers (see header). */
+function packer() {
   const buffers: Uint8Array[] = [];
   let offset = 0;
   const add = (bytes: Uint8Array) => {
@@ -61,6 +62,27 @@ export function encodeGeometry(value: unknown): Uint8Array {
     if (isNumbers(out.indices)) out.indices = indices(out.indices as number[]);
     return out;
   };
+  return { pack, buffers, size: () => offset };
+}
+
+/** "VGT1" | u32 header length | header JSON | pad | buffers (already aligned). */
+function container(header: unknown, buffers: Uint8Array[], size: number): Uint8Array {
+  const json = new TextEncoder().encode(JSON.stringify(header));
+  const start = align(8 + json.byteLength);
+  const out = new Uint8Array(start + size);
+  out.set(MAGIC, 0);
+  new DataView(out.buffer).setUint32(4, json.byteLength, true);
+  out.set(json, 8);
+  let at = start;
+  for (const bytes of buffers) {
+    out.set(bytes, at);
+    at += bytes.byteLength;
+  }
+  return out;
+}
+
+export function encodeGeometry(value: unknown): Uint8Array {
+  const { pack, buffers, size } = packer();
   const root = value as { result?: { scene?: unknown; definitions?: unknown } } | null;
   let header: unknown = value;
   const result = root?.result;
@@ -73,18 +95,86 @@ export function encodeGeometry(value: unknown): Uint8Array {
       );
     header = { ...root, result: next };
   }
-  const json = new TextEncoder().encode(JSON.stringify(header));
-  const start = align(8 + json.byteLength);
-  const out = new Uint8Array(start + offset);
-  out.set(MAGIC, 0);
-  new DataView(out.buffer).setUint32(4, json.byteLength, true);
-  out.set(json, 8);
-  let at = start;
-  for (const bytes of buffers) {
-    out.set(bytes, at);
-    at += bytes.byteLength;
+  return container(header, buffers, size());
+}
+
+// Per-object storage (PLAN-27 1단계, ARCH-01 §5 「Sync 표시 형상의 객체 단위 저장」). A scene item
+// or block definition is kept as `meta` (the item with each moved array replaced by the string
+// "$bin" at its own key, so the key order survives) and `geometry`, a VGT1 container whose header
+// is `{field: {$bin: […]}}` for the moved arrays only. Stored coordinates are the float32 offsets
+// the screen already receives. `joinGeometry` concatenates stored containers into the same VGT1 as
+// `encodeGeometry` of the whole request without decoding a coordinate.
+const SLOT = '$bin';
+export type EncodedItem = { meta: unknown; geometry: Uint8Array | null };
+
+export function encodeItem(item: unknown): EncodedItem {
+  const { pack, buffers, size } = packer();
+  const packed = pack(item);
+  if (!size() || !packed || typeof packed !== 'object') return { meta: item, geometry: null };
+  const meta: Record<string, unknown> = {};
+  const header: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(packed as Record<string, unknown>)) {
+    const moved = !!value && typeof value === 'object' && Array.isArray((value as Reference).$bin);
+    meta[key] = moved ? SLOT : value;
+    if (moved) header[key] = value;
   }
+  return { meta, geometry: container(header, buffers, size()) };
+}
+
+export function decodeItem(meta: unknown, geometry: Uint8Array | null | undefined): unknown {
+  if (!geometry || !meta || typeof meta !== 'object') return meta;
+  const parts = decodeGeometry(geometry) as Record<string, unknown>;
+  const out: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(meta as Record<string, unknown>))
+    out[key] = value === SLOT && key in parts ? parts[key] : value;
   return out;
+}
+
+/** Header and aligned buffer region of a stored item container. */
+function split(geometry: Uint8Array) {
+  if (geometry.byteLength < 8 || MAGIC.some((v, i) => geometry[i] !== v))
+    throw new Error('GEOMETRY_FORMAT');
+  const view = new DataView(geometry.buffer, geometry.byteOffset, geometry.byteLength);
+  const length = view.getUint32(4, true);
+  if (8 + length > geometry.byteLength) throw new Error('GEOMETRY_FORMAT');
+  const text = new TextDecoder().decode(geometry.subarray(8, 8 + length));
+  return {
+    header: JSON.parse(text) as Record<string, Reference>,
+    region: geometry.subarray(align(8 + length)),
+  };
+}
+
+/**
+ * One VGT1 container from stored items, equal to `encodeGeometry` of `root` with those items as
+ * `scene` and `definitions` (buffers in this order). `at: 'result'` puts them in `root.result` (a
+ * request), `'root'` at the top level (a delta). Only each `$bin` offset is shifted.
+ */
+export function joinGeometry(
+  root: Record<string, unknown>,
+  items: { scene?: EncodedItem[]; definitions?: [string, EncodedItem][] },
+  at: 'result' | 'root' = 'result',
+): Uint8Array {
+  const buffers: Uint8Array[] = [];
+  let size = 0;
+  const place = ({ meta, geometry }: EncodedItem) => {
+    if (!geometry || !meta || typeof meta !== 'object') return meta;
+    const { header, region } = split(geometry);
+    const out: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(meta as Record<string, unknown>)) {
+      const ref = value === SLOT ? header[key] : undefined;
+      out[key] = ref ? { $bin: [ref.$bin[0] + size, ...ref.$bin.slice(1)] } : value;
+    }
+    if (region.byteLength) buffers.push(region);
+    size += region.byteLength;
+    return out;
+  };
+  const target: Record<string, unknown> = {
+    ...((at === 'result' ? root.result : root) as Record<string, unknown>),
+  };
+  if (items.scene) target.scene = items.scene.map(place);
+  if (items.definitions)
+    target.definitions = Object.fromEntries(items.definitions.map(([k, v]) => [k, place(v)]));
+  return container(at === 'result' ? { ...root, result: target } : target, buffers, size);
 }
 
 export function decodeGeometry(input: ArrayBuffer | Uint8Array): unknown {

@@ -183,10 +183,13 @@ try {
   await page.locator('.pin-ghost').filter({ hasText: '고정 · 1개' }).click();
   await page.waitForFunction(() => document.querySelector('#body').value.includes('[고정1 · 1개]'));
   const draftPins = () =>
-    page.evaluate((id) => JSON.parse(localStorage.getItem('vide:draft:' + id)).pins, projectId);
+    page.evaluate(
+      (id) => JSON.parse(localStorage.getItem('vide:draft:' + id + ':default')).pins,
+      projectId,
+    );
   await page.waitForFunction(
     (id) =>
-      JSON.parse(localStorage.getItem('vide:draft:' + id) ?? '{"pins":[]}').pins.some(
+      JSON.parse(localStorage.getItem('vide:draft:' + id + ':default') ?? '{"pins":[]}').pins.some(
         (pin) => pin.label === '고정1',
       ),
     projectId,

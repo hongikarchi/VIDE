@@ -352,6 +352,10 @@ interface Options {
   onFixed?: (fixed: { provider: string; model: string | null } | null) => void;
   /** [+] opened a new tab and chose it: the app puts the cursor in the composer. */
   onCreated?: () => void;
+  /** The tab chosen when the chips mount (the last one viewed); an unknown one falls back. */
+  selected?: string | null;
+  /** [대화 닫기] closed this conversation (after the default one was chosen): its draft goes. */
+  onClosed?: (id: string) => void;
 }
 export interface ConversationsController {
   /** New project, models, linked files or requests; a new project reloads the list. */
@@ -680,6 +684,7 @@ function Conversations({
                     api(`${base}/${id}/close`, 'POST', {})
                       .then(() => {
                         select(null);
+                        options.onClosed?.(id);
                         reload();
                       })
                       .catch((reason) => setError(errorText(reason)));
@@ -782,7 +787,7 @@ export function mountConversations(
 ): ConversationsController {
   const root: Root = createRoot(container);
   let options: Options = { ...initial };
-  let selected: string | null = null;
+  let selected: string | null = initial.selected ?? null;
   let version = 0;
   const render = () =>
     root.render(

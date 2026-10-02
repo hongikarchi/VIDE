@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 
 /** v5 and later cannot be opened by an older installation (UNSUPPORTED_SCHEMA); see ARCH-03 §10.1. */
-export const schemaVersion = 8;
+export const schemaVersion = 9;
 export const baselineSchema = `
         CREATE TABLE IF NOT EXISTS projects(id TEXT PRIMARY KEY, name TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS connections(id TEXT PRIMARY KEY, projectId TEXT NOT NULL REFERENCES projects(id),
@@ -112,6 +112,30 @@ CREATE INDEX IF NOT EXISTS agenda_items_project ON agenda_items(projectId, ord);
 // added at the end, so every write names its columns.
 const agendaKinds = `ALTER TABLE agenda_items ADD COLUMN kind TEXT NOT NULL DEFAULT 'task'
   CHECK(kind IN ('task','meeting','deadline'));`;
+// Display geometry of Sync results per object (PLAN-27 1단계, ARCH-01 §5 「Sync 표시 형상의 객체 단위
+// 저장」): immutable object versions named by content, one manifest per request result. Existing
+// rows are moved later, one per transaction (src/core/model-move.ts); this step only adds tables.
+const objectManifests = `CREATE TABLE IF NOT EXISTS object_versions(
+  projectId TEXT NOT NULL REFERENCES projects(id), id TEXT NOT NULL,
+  kind TEXT NOT NULL CHECK(kind IN ('object','definition')), meta TEXT NOT NULL, geometry BLOB,
+  size INTEGER NOT NULL, PRIMARY KEY(projectId, id)) WITHOUT ROWID;
+CREATE TABLE IF NOT EXISTS sync_manifests(
+  requestId TEXT PRIMARY KEY REFERENCES workspace_requests(id) ON DELETE CASCADE,
+  projectId TEXT NOT NULL, parentId TEXT, documentRevision INTEGER, revision INTEGER NOT NULL,
+  objectCount INTEGER, definitionCount INTEGER, updatedAt TEXT NOT NULL);
+CREATE INDEX IF NOT EXISTS sync_manifests_project ON sync_manifests(projectId);
+CREATE TABLE IF NOT EXISTS sync_manifest_items(
+  requestId TEXT NOT NULL REFERENCES sync_manifests(requestId) ON DELETE CASCADE,
+  projectId TEXT NOT NULL, kind TEXT NOT NULL CHECK(kind IN ('object','definition')),
+  key TEXT NOT NULL, position INTEGER NOT NULL, versionId TEXT NOT NULL, revision INTEGER NOT NULL,
+  PRIMARY KEY(requestId, kind, key),
+  FOREIGN KEY(projectId, versionId) REFERENCES object_versions(projectId, id)) WITHOUT ROWID;
+CREATE INDEX IF NOT EXISTS sync_manifest_items_version ON sync_manifest_items(projectId, versionId);
+CREATE INDEX IF NOT EXISTS sync_manifest_items_revision ON sync_manifest_items(requestId, revision);
+CREATE TABLE IF NOT EXISTS sync_manifest_removed(
+  requestId TEXT NOT NULL REFERENCES sync_manifests(requestId) ON DELETE CASCADE,
+  kind TEXT NOT NULL, key TEXT NOT NULL, revision INTEGER NOT NULL,
+  PRIMARY KEY(requestId, kind, key)) WITHOUT ROWID;`;
 export const migrations: Migration[] = [
   { version: 2, sql: baselineSchema },
   { version: 3, sql: hiddenRequests },
@@ -120,6 +144,7 @@ export const migrations: Migration[] = [
   { version: 6, sql: projectFolders },
   { version: 7, sql: agendaItems },
   { version: 8, sql: agendaKinds },
+  { version: 9, sql: objectManifests },
 ];
 
 /** Caller holds the exclusive controller lock. Never migrates user model files. */

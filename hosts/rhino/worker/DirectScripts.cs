@@ -39,7 +39,9 @@ internal static class DirectScripts
         @"\b__(builtins|dict|class|subclasses|bases|mro|globals|code|getattribute|loader|spec)__\b",
         @"^[ \t]*from[ \t]+(rhinoscriptsyntax|rhinoscript)(\.\w+)?[ \t]+import\b[^\n#]*(\*|\b(Command|Exit)\b)",
     ];
-    internal const string PythonPurge = @"\b(Purge\w*|Compact)[ \t]*\(";
+    // Same as PYTHON_PURGE (src/contracts/rhino-script-policy.ts): Compact( counts only on a document table or the
+    // document; geometry Mesh/Brep.Compact is not a purge. A table bound to an alias is not recognised.
+    internal const string PythonPurge = @"\bPurge\w*[ \t]*\(|(?:\.(?:Layers|Materials|Linetypes|InstanceDefinitions|DimStyles|HatchPatterns|Fonts|Groups|Objects|Views|NamedViews|RenderMaterials|Bitmaps|Textures)|\bdoc)\.Compact[ \t]*\(";
 
     /// <summary>A refusal (diagnostics), a guard to hold (kind, detail) or neither.</summary>
     internal sealed record Verdict(string[]? Denied, string? GuardKind, string? GuardDetail);

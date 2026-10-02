@@ -348,7 +348,10 @@ test('schema 8 gives the 할 일 of a schema 7 database the kind task and refuse
   db.close();
   const store = new Store(file);
   try {
-    assert.equal(store.db.prepare('SELECT version FROM schema_version').get().version, 8);
+    assert.equal(
+      store.db.prepare('SELECT version FROM schema_version').get().version,
+      schemaVersion,
+    );
     assert.equal(
       store.db.prepare("SELECT kind FROM agenda_items WHERE id='a1'").get().kind,
       'task',
@@ -359,4 +362,59 @@ test('schema 8 gives the 할 일 of a schema 7 database the kind task and refuse
   }
   const [backup] = readdirSync(file + '.backups');
   assert.match(backup, /^schema-7-/);
+});
+
+test('schema 9 adds per-object model tables to a schema 8 database after a backup; manifests go with their request', (t) => {
+  const root = mkdtempSync(join(tmpdir(), 'vide-schema8-'));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const file = join(root, 'vide.sqlite');
+  const db = new DatabaseSync(file);
+  db.exec(
+    'CREATE TABLE schema_version(version INTEGER NOT NULL); INSERT INTO schema_version VALUES(8);' +
+      migrations
+        .filter((step) => step.version <= 8)
+        .map((step) => step.sql)
+        .join('\n'),
+  );
+  db.exec("INSERT INTO projects VALUES('p','existing')");
+  db.prepare('INSERT INTO workspace_requests VALUES(?,?,?,?,?,?)').run(
+    'sync',
+    'p',
+    '{"source":"document"}',
+    'succeeded',
+    JSON.stringify({ objects: [{ id: 'a' }], scene: [{ id: 'a', vertices: [0, 0, 0] }] }),
+    't1',
+  );
+  const before = requestRows(db);
+  db.close();
+  const store = new Store(file);
+  try {
+    assert.equal(store.db.prepare('SELECT version FROM schema_version').get().version, 9);
+    // Existing rows are not rewritten by the migration (they move later, row by row).
+    assert.deepEqual(requestRows(store.db), before);
+    for (const table of [
+      'object_versions',
+      'sync_manifests',
+      'sync_manifest_items',
+      'sync_manifest_removed',
+    ])
+      assert.ok(tableNames(store.db).includes(table), table);
+    store.db.exec(`INSERT INTO object_versions VALUES('p','v1','object','{}',NULL,2);
+      INSERT INTO sync_manifests VALUES('sync','p',NULL,1,1,1,NULL,'t');
+      INSERT INTO sync_manifest_items VALUES('sync','p','object','a',0,'v1',1);
+      INSERT INTO sync_manifest_removed VALUES('sync','object','b',1);`);
+    // A row must point at an existing version.
+    assert.throws(() =>
+      store.db.exec(
+        "INSERT INTO sync_manifest_items VALUES('sync','p','object','c',1,'missing',1)",
+      ),
+    );
+    store.db.exec("DELETE FROM workspace_requests WHERE id='sync'");
+    for (const table of ['sync_manifests', 'sync_manifest_items', 'sync_manifest_removed'])
+      assert.equal(store.db.prepare(`SELECT count(*) AS n FROM ${table}`).get().n, 0, table);
+  } finally {
+    store.close();
+  }
+  const [backup] = readdirSync(file + '.backups');
+  assert.match(backup, /^schema-8-/);
 });

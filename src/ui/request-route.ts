@@ -604,7 +604,9 @@ export function decisiveRoute(body: string, context: RouteContext = {}): Route |
   // its setting; a phrase naming another jig opens that one.
   const settingFirst =
     !!found && (!!param || !!several) && (found.jig.id === context.openJig || found.score < 2);
-  if (found && !settingFirst)
+  // A single word (score 1) is too weak to open a jig by itself ('06-사선격자형이 좋아' is not the
+  // grid jig, 2026-10-02): Jev judges it, and without Jev the request goes to the conversation.
+  if (found && found.score >= 2 && !settingFirst)
     return {
       target: 'jig',
       by: 'rules',

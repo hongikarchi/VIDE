@@ -10,6 +10,7 @@ import type { RequestInput, RequestState } from '../contracts/workspace.ts';
 import { storedWorkSchema, storedResultSchema } from '../contracts/stored-work.ts';
 import type { StoredWork } from '../contracts/stored-work.ts';
 import { z } from 'zod';
+import { BIG_JSON, breadcrumb } from './breadcrumbs.ts';
 
 function fail(code: string): never {
   throw new DomainError(code);
@@ -21,6 +22,8 @@ const pinSchema = z
 const decode = (row: unknown): StoredWork | null => {
   if (!row) return null;
   const value = encodedRow.parse(row);
+  if (value.result && value.result.length >= BIG_JSON)
+    breadcrumb('parse-big', { id: value.id, bytes: value.result.length });
   const decoded = {
     ...value,
     input: JSON.parse(value.input),
@@ -474,9 +477,13 @@ export class Workspace {
       fail('NOT_FOUND');
     if (result !== null && !storedResultSchema.safeParse(result).success)
       fail('INVALID_HOST_RESULT');
+    const text = result === null ? null : JSON.stringify(result);
+    const big = text !== null && text.length >= BIG_JSON;
+    if (big) breadcrumb('write-big', { id, bytes: text.length });
     this.store.db
       .prepare('UPDATE workspace_requests SET state=?,result=? WHERE id=? AND projectId=?')
-      .run(state, result === null ? null : JSON.stringify(result), id, projectId);
+      .run(state, text, id, projectId);
+    if (big) breadcrumb('write-big-done', { id });
     this.light.delete(id);
     const updated = this.get(projectId, id);
     if (typeof updated.input.parentRequestId === 'string') {

@@ -201,7 +201,7 @@ export async function verifyDesktopPublish({
       .getByRole('button', { name: '외부 의견을 요청 초안에 첨부', exact: true })
       .click();
     const draft = await desktop.evaluate(
-      (id) => JSON.parse(localStorage.getItem('vide:draft:' + id)),
+      (id) => JSON.parse(localStorage.getItem('vide:draft:' + id + ':default')),
       local.id,
     );
     assert.equal(draft.baseRequestId, id);
@@ -222,8 +222,8 @@ export async function verifyDesktopPublish({
       .waitFor();
     await desktop.waitForFunction(
       (id) =>
-        JSON.parse(localStorage.getItem('vide:draft:' + id) || 'null')?.files?.some((file) =>
-          file.name.startsWith('Shared-feedback-'),
+        JSON.parse(localStorage.getItem('vide:draft:' + id + ':default') || 'null')?.files?.some(
+          (file) => file.name.startsWith('Shared-feedback-'),
         ),
       local.id,
     );

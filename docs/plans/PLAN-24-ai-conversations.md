@@ -2,7 +2,7 @@
 id: PLAN-24
 title: AI 대화 세션·동시 진행·말로 하는 경로 판정 1차
 status: review
-version: 0.54
+version: 0.55
 updated: 2026-10-02
 owner: agent:claude
 related: [PLAN, PLAN-22, PLAN-23, PLAN-25, PLAN-26, PLAN-02, PLAN-05, PLAN-08, PLAN-19, FR-25, FR-24, FR-18, FR-10, FR-11, FR-12, AC-46, AC-47, AC-48, AC-38, SPEC-02, SPEC-07, ARCH-01, ARCH-03, ADR-021, ADR-014, ADR-022, ADR-025, ADR-026, ADR-027, ADR-028, ADR-029, RESEARCH-10, RESEARCH-11]
@@ -441,6 +441,21 @@ related: [PLAN, PLAN-22, PLAN-23, PLAN-25, PLAN-26, PLAN-02, PLAN-05, PLAN-08, P
 - **완료:** 위 시험과 `typecheck`·`format:check` 통과. 실제 CLI로 하위 에이전트가 VIDE MCP 도구만 쓰는지, 웹 검색 한 번을 확인.
 - **상태(2026-10-02):** 구현·단위·브라우저 시험 완료(브랜치 `feat/cli-parity`, 설치 전). 하위 에이전트가 부모의 내장 도구 목록만 갖는 것은 실제 CLI로 확인(SPIKE). 남음: VIDE MCP가 붙은 턴에서 하위 에이전트의 `mcp__vide__*` 사용, 실제 웹 검색(Claude·Codex).
 
+### T-111 · 같은 파일의 여러 대화: 실행만 차례대로, 지난 보호 카드 정리 {#t-111}
+
+- **목적/기준:** 2026-10-02 사용자 결정 — 같은 문서를 여는 여러 대화가 앞 대화의 턴 전체를 기다리지 않고 함께 생각·조회하며, 문서에 보내는 실행만 문서별로 하나씩 한다. 끝난 요청에 남은 [진행] 카드와 그 카드가 부르는 '다른 화면에서 내용이 변경됐습니다' 409 문구를 없앤다. 기준: SPEC-02.9 동시 접수의 2·3·4(개정), SPEC-02.13의 4(카드의 수명)·6(보호 확인·차례), ARCH-01 접수·잠금 절, ADR-027(여러 파일 전부 또는 전무 유지).
+- **변경 범위:**
+  - `src/contracts/request-scope.ts`: 연결 편집기 Sync 기준의 Rhino 바로 편집 턴과 그 턴이 잠근 `documents[]`를 `direct` 주장으로 표시. `direct`끼리는 `requestAdmission`에서 기다리지 않고, 읽기는 `direct` 쓰기를 기다리지 않음. `documentHolder(…, {serialized})`는 `direct` 보유자를 잠금으로 보지 않음(ZWCAD 자기 루프·원본 반영·연계·jig 만들기 같은 턴 단위 쓰기는 그대로). `WaitingFor.kind: 'execute'`(`conversationId`, `title`)
+  - `src/server/direct-mode.ts`: `ExecuteQueue`(문서 키별 FIFO, 중단 시 줄에서 빠짐), `queuedDriver`, `staleRefusal`(`DOCUMENT_CHANGED`), `executeWaitText`. 턴은 시작·조회 직전·자기 실행 직후의 `fingerprint` 토큰을 기억하고 차례를 얻은 뒤 다르면 실행하지 않음. 기다리는 동안 진행 결과에 `executeWait`. 자동 되돌림은 큐를 거침. `displayQuery`는 토큰이 바뀌면 다시 읽음. `ExecutionRecord.state`에 `failed`
+  - `src/server/execution.ts`: 턴에 대화 제목(`holderOf`)과 `serialized` 잠금 검사 전달, 보호 카드 재실행·[되돌리기]·요청 되돌리기·재실행 실패 되돌림을 `queuedDriver`로. 재실행 실패 때 보류 행을 `failed`로 바꾸고 `result.guarded`를 지움
+  - 화면: `src/ui/request-scope.ts`(`execute` 대기 문구, `executeWaitOf`, `guardOpen`, `heldRowLabel`), `src/ui/work-view.tsx`(확인 대기일 때만 [진행], 끝난 요청의 보류 행은 '진행하지 않음 (요청 종료)', 단계에 실행 대기 문구), `src/ui/gateway.ts`(`api`의 `quiet`, `requestAction`: 409면 다시 읽고 '이 작업은 이미 끝났거나 진행 중입니다. 최신 상태로 다시 읽었습니다.', `DOCUMENT_CHANGED` 문구), `src/ui/app.ts` `directAction`이 `requestAction` 사용
+- **선행:** T-093·T-102.
+- **검증:**
+  - 정상: `tests/server/multi-file.test.mjs`(두 대화가 함께 조회 → 실행은 차례 → 뒤 실행은 `DOCUMENT_CHANGED` → 다시 조회 뒤 성공, 대기 중 `executeWait`, 실행 중에도 계획 턴의 조회는 진행, 사람 편집 뒤 실행 거절, `ExecuteQueue` 순서·중단, 조회 캐시 무효화, 보류 행 표시 규칙, 한 파일 [진행] 실패 뒤 보류 행 `failed`·카드 없음·늦은 [진행]은 409), `tests/core/request-scope.test.mjs`(바로 편집 턴 동시 접수, 턴 단위 쓰기는 대기, jig 만들기는 `DOCUMENT_LOCKED`), `tests/server/concurrent-intake.test.mjs`(두 바로 편집 턴 동시 시작, 턴 단위 대기열 시험은 ZWCAD로), `tests/core/request-action.test.mjs`(409 → 다시 읽기·문구, 전역 오류 알림 없음)
+  - 실패: 턴 단위 쓰기가 잡은 다른 파일은 `DOCUMENT_LOCKED`(기다리지 않음), 보호 카드 [진행]도 같음
+- **완료:** 위 시험과 `npm run typecheck`·`npm test` 통과. 설치본에서 같은 Rhino 문서에 두 대화를 동시에 보내 대기 문구·거절 뒤 재조회가 보이는지 확인.
+- **상태(2026-10-02):** 구현·단위 시험 완료(설치 전). 남음: 설치본 확인, 추가 지시(`intervene`)의 409 문구는 `directAction` 밖이라 그대로.
+
 ## 순서와 의존
 
 - T-049는 M1에서 PLAN-22 T-046과 함께 한다.
@@ -448,7 +463,7 @@ related: [PLAN, PLAN-22, PLAN-23, PLAN-25, PLAN-26, PLAN-02, PLAN-05, PLAN-08, P
 - T-061은 T-060·PLAN-22 T-045 뒤다(세션 이어 실행은 T-059 합격 항목만). T-062는 T-061 뒤다. PLAN-22 T-063(만들기 대화)이 이 둘을 쓴다.
 - 마일스톤 표기는 S-06 결과를 먼저 보이는 순서(M5)이지만, 선행이 갖춰진 티켓은 먼저 해도 된다.
 - 바로 적용: T-069 → T-070·T-071 → T-072 → T-073·T-074. T-075는 독립이다. T-106(Rhino 명령·Python)은 T-072·T-093 뒤다. 실제 호스트 확인은 플러그인 재빌드·설치 뒤 묶어서 한다.
-- 여러 파일 조율: T-062·T-072 → T-092 → T-093 → T-094 → T-102.
+- 여러 파일 조율: T-062·T-072 → T-092 → T-093 → T-094 → T-102 → T-111.
 - AI CLI 동등성: T-104·T-105는 서로 독립이며 T-061·T-075 뒤다.
 
 ## 현황 {#status}

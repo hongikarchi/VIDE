@@ -238,7 +238,7 @@ try {
   await page.locator('[data-tool="select"]').click();
   assert.equal(await page.locator('#sketch-tools').isHidden(), true);
   const brushSketch = await page.evaluate(
-    (id) => JSON.parse(localStorage.getItem('vide:draft:' + id)).sketches.at(-1),
+    (id) => JSON.parse(localStorage.getItem('vide:draft:' + id + ':default')).sketches.at(-1),
     first,
   );
   assert.equal(brushSketch.placement, 'view');
@@ -361,7 +361,7 @@ try {
     () => document.querySelector('#body').value === 'Restore exact original',
   );
   const restored = await page.evaluate(
-    (id) => JSON.parse(localStorage.getItem('vide:draft:' + id)),
+    (id) => JSON.parse(localStorage.getItem('vide:draft:' + id + ':default')),
     second,
   );
   assert.equal(restored.body, failed.body);

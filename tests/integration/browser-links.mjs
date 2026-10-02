@@ -143,7 +143,7 @@ try {
   // No target-file chip: which linked files a request changes is the AI's (T-103).
   assert.equal(await page.locator('#context .target-file').count(), 0);
   const draft = await page.evaluate(
-    (id) => JSON.parse(localStorage.getItem('vide:draft:' + id)),
+    (id) => JSON.parse(localStorage.getItem('vide:draft:' + id + ':default')),
     projectId,
   );
   assert.equal(draft.baseRequestId, 'sync-plan-1');
@@ -156,7 +156,7 @@ try {
   await page.locator('#objects .object').filter({ hasText: 'model.3dm r-1' }).click();
   await page.locator('#selection-pin').click();
   const withOther = await page.evaluate(
-    (id) => JSON.parse(localStorage.getItem('vide:draft:' + id)),
+    (id) => JSON.parse(localStorage.getItem('vide:draft:' + id + ':default')),
     projectId,
   );
   assert.deepEqual(
@@ -172,7 +172,7 @@ try {
   await page.waitForFunction(() => document.querySelectorAll('.link-row').length === 2);
   await page.waitForFunction(
     (id) =>
-      JSON.parse(localStorage.getItem('vide:draft:' + id)).pins.every(
+      JSON.parse(localStorage.getItem('vide:draft:' + id + ':default')).pins.every(
         (pin) => pin.basis !== 'sync-rhino',
       ),
     projectId,
@@ -414,7 +414,10 @@ async function hiddenStart(browser, draftBase) {
     const empty = () =>
       page.waitForFunction(() => document.querySelector('#viewport-empty')?.hidden === false);
     const draft = () =>
-      page.evaluate((id) => JSON.parse(localStorage.getItem('vide:draft:' + id)), projectId);
+      page.evaluate(
+        (id) => JSON.parse(localStorage.getItem('vide:draft:' + id + ':default')),
+        projectId,
+      );
     const restart = async () => {
       await page.reload();
       await page.locator('.link-row').nth(1).waitFor();
@@ -423,7 +426,11 @@ async function hiddenStart(browser, draftBase) {
       await restart();
       await shows('3개 객체');
       assert.ok((await draft()).baseRequestId, 'the draft keeps the shown Sync as its basis');
-    } else await page.evaluate((id) => localStorage.removeItem('vide:draft:' + id), projectId);
+    } else
+      await page.evaluate(
+        (id) => localStorage.removeItem('vide:draft:' + id + ':default'),
+        projectId,
+      );
     await restart();
     await shows('3개 객체');
     assert.equal(await page.locator('.link-result').count(), 0);

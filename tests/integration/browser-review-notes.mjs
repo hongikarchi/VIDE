@@ -21,7 +21,10 @@ try {
   await page.waitForFunction(() =>
     document.querySelector('#connection-status').textContent.includes('연결됨'),
   );
-  await page.evaluate((projectId) => localStorage.removeItem('vide:draft:' + projectId), projectId);
+  await page.evaluate(
+    (projectId) => localStorage.removeItem('vide:draft:' + projectId + ':default'),
+    projectId,
+  );
   await page.goto(new URL('/?project=' + projectId, url).href);
   await (await savedReviews(page))
     .getByRole('button', { name: 'A/B 검증 0', exact: true })
@@ -68,7 +71,7 @@ try {
   await viewer.locator('article').last().getByRole('button', { name: '요청 초안에 첨부' }).click();
   await viewer.waitFor({ state: 'hidden' });
   const draft = await page.evaluate(
-    (projectId) => JSON.parse(localStorage.getItem('vide:draft:' + projectId)),
+    (projectId) => JSON.parse(localStorage.getItem('vide:draft:' + projectId + ':default')),
     projectId,
   );
   assert.ok(draft.instructions.includes(submission.body));
@@ -77,7 +80,7 @@ try {
   await page.reload();
   await page.getByRole('button', { name: '검토본 저장', exact: true }).first().waitFor();
   const restored = await page.evaluate(
-    (projectId) => JSON.parse(localStorage.getItem('vide:draft:' + projectId)),
+    (projectId) => JSON.parse(localStorage.getItem('vide:draft:' + projectId + ':default')),
     projectId,
   );
   assert.equal(restored.baseRequestId, rows.at(-1).requestId);

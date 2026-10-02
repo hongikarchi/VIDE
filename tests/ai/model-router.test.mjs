@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { ModelRouter, choose, readJevKey } from '../../src/ai/model-router.ts';
+import { DOMAINS, ModelRouter, choose, readJevKey } from '../../src/ai/model-router.ts';
 import { subscriptionEnvironment } from '../../src/ai/claude-cli.ts';
 import { codexEnvironment } from '../../src/ai/codex-cli.ts';
 
@@ -27,9 +27,11 @@ const reply = (choice, confidence, domain) => async (_url, init) => {
   );
 };
 
-test('every sign-in combination has a choice; ChatGPT first, lighter models for read-only questions', () => {
-  // Both signed in: ChatGPT (GPT-6-Luna for questions, GPT-6-Astra for modelling).
-  assert.equal(pick('lookup', both), 'codex-cli:gpt-6-luna:low');
+test('every sign-in combination has a choice; geometry changes on ChatGPT, lookups on Claude', () => {
+  // Both signed in: lookups go to Claude (Sonnet 5) even about geometry (user, 2026-10-02);
+  // creating or changing geometry goes to ChatGPT (GPT-6-Astra).
+  assert.equal(pick('lookup', both), 'claude-cli:claude-sonnet-5:low');
+  assert.equal(pick('lookup', both, catalog, 'geometry'), 'claude-cli:claude-sonnet-5:low');
   assert.equal(pick('simple_edit', both), 'codex-cli:gpt-6-astra:low');
   assert.equal(pick('complex', both), 'codex-cli:gpt-6-astra:medium');
   assert.equal(pick('analysis', both), 'codex-cli:gpt-6-astra:high');
@@ -41,7 +43,8 @@ test('every sign-in combination has a choice; ChatGPT first, lighter models for 
   // Only ChatGPT.
   assert.equal(pick('lookup', ['codex-cli']), 'codex-cli:gpt-6-luna:low');
   assert.equal(pick('analysis', ['codex-cli']), 'codex-cli:gpt-6-astra:high');
-  // Data, information and jig work prefer Claude when both are signed in; ChatGPT otherwise.
+  // Data, information, organising and jig work prefer Claude when both are signed in; ChatGPT otherwise.
+  assert.equal(pick('simple_edit', both, catalog, 'data'), 'claude-cli:claude-opus-5-5:low');
   assert.equal(pick('lookup', both, catalog, 'data'), 'claude-cli:claude-sonnet-5:low');
   assert.equal(pick('complex', both, catalog, 'data'), 'claude-cli:claude-opus-5-5:medium');
   assert.equal(pick('analysis', both, catalog, 'data'), 'claude-cli:claude-opus-5-5:high');
@@ -120,11 +123,25 @@ test('Jev decides when confident; no key, low confidence or errors fall back to 
       ['data', 'claude-cli', 'claude-opus-5-5', 'high'],
     );
     assert.deepEqual(Object.keys(reply.last.questions), ['task', 'domain']);
-    // An unsure domain counts as 3D.
+    // An unsure domain falls back by task: a lookup counts as data (Claude), the rest as geometry.
     const vague = await route({
       fetchImpl: reply('analysis', 0.8, { choice: 'data', confidence: 0.4 }),
     });
     assert.deepEqual([vague.domain, vague.provider], ['geometry', 'codex-cli']);
+    const vagueLookup = await route({
+      fetchImpl: reply('lookup', 0.8, { choice: 'geometry', confidence: 0.4 }),
+    });
+    assert.deepEqual(
+      [vagueLookup.domain, vagueLookup.provider, vagueLookup.model],
+      ['data', 'claude-cli', 'claude-sonnet-5'],
+    );
+    // Organising layers (2026-10-02 request) is data: Claude even when it renames or moves layers.
+    const organise = await route({
+      fetchImpl: reply('simple_edit', 0.8, { choice: 'data', confidence: 0.8 }),
+    });
+    assert.deepEqual([organise.domain, organise.provider], ['data', 'claude-cli']);
+    assert.match(DOMAINS.data, /organising layers/);
+    assert.doesNotMatch(DOMAINS.geometry, /layers/);
     const nobody = await route({ fetchImpl: reply('complex', 0.9) }, []);
     assert.deepEqual(
       [nobody.by, nobody.reason, nobody.provider],

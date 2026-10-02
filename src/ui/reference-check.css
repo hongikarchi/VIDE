@@ -1,0 +1,51 @@
+/* The check before sending (SPEC-09.11, Design SCR-15): the route card's box, a list of names. */
+.route-card.reference-check p {
+  margin-bottom: 6px;
+}
+.reference-check-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  max-height: 120px;
+  overflow-y: auto;
+  margin-bottom: 4px;
+}
+.reference-check-list button {
+  font-size: 12px;
+  padding: 2px 8px;
+  border: var(--hairline) solid var(--line);
+  border-radius: var(--radius-sm, 4px);
+  background: var(--bg-elevated, transparent);
+  color: var(--text-1);
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.reference-check-list button:hover {
+  background: var(--soft);
+}
+.reference-check-note {
+  display: block;
+  color: var(--text-2);
+  font-size: 11px;
+  margin-bottom: 8px;
+}
+/* A sent image attachment's [영역 표시] in the work view (SPEC-09.2 2). */
+.work-attachment-image {
+  display: inline-flex;
+  gap: 6px;
+  align-items: baseline;
+}
+.work-reference-mark {
+  border: 0;
+  background: none;
+  padding: 0;
+  font-size: 12px;
+  color: var(--text-2);
+  text-decoration: underline dotted;
+  cursor: pointer;
+}
+.work-reference-mark:hover {
+  color: var(--text-1);
+}

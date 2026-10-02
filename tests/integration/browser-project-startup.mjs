@@ -18,12 +18,12 @@ try {
   await page.waitForFunction(() => document.querySelectorAll('#objects .layer-row').length > 0);
   assert.equal(await page.locator('#host-target').inputValue(), 'zwcad');
   const basis = await page.evaluate(
-    (id) => JSON.parse(localStorage.getItem('vide:draft:' + id)).baseRequestId,
+    (id) => JSON.parse(localStorage.getItem('vide:draft:' + id + ':default')).baseRequestId,
     projectId,
   );
   assert.ok(basis);
   await page.evaluate((id) => {
-    const key = 'vide:draft:' + id,
+    const key = 'vide:draft:' + id + ':default',
       draft = JSON.parse(localStorage.getItem(key));
     draft.baseRequestId = null;
     draft.host = 'rhino';
@@ -38,7 +38,7 @@ try {
   assert.equal(await page.locator('#objects .layer-row').count(), 0);
   assert.equal(
     await page.evaluate(
-      (id) => JSON.parse(localStorage.getItem('vide:draft:' + id)).baseRequestId,
+      (id) => JSON.parse(localStorage.getItem('vide:draft:' + id + ':default')).baseRequestId,
       projectId,
     ),
     null,

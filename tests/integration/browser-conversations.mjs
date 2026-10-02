@@ -5,15 +5,18 @@
 // the chosen tab, and another model sends the request to a new conversation (its tab is chosen).
 // T-097: [+] opens an empty '새 대화' tab at once (no form), the composer takes the cursor, and the
 // first request names the tab.
+// 2026-10-02: the composer's draft (words, attachments, mode) is per tab and the last tab comes back
+// after a reload (SPEC-02.19 1); an image with reference words or a path to images asks before
+// sending (SPEC-09.11).
 import assert from 'node:assert/strict';
-import { mkdtemp, rm } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { chromium } from 'playwright';
 import { startServer } from '../../src/server/server.ts';
 
 const directory = await mkdtemp(join(tmpdir(), 'vide-conversations-'));
-let app, browser;
+let app, browser, pictures;
 try {
   app = await startServer({ filename: join(directory, 'test.sqlite') });
   browser = await chromium.launch({ channel: 'chrome', headless: true });
@@ -43,11 +46,16 @@ try {
   // Sending to the AI is only recorded (no CLI runs here). One request comes back moved to a new
   // conversation, the way the server answers another model than the conversation's.
   let moved;
-  const served = {};
-  await page.route(/\/requests(\/[^/]+)?$/, (route) => {
+  const served = {},
+    polled = [],
+    accepted = ['초안 ', '이런 느낌으로', '이 스타일처럼'],
+    held = { body: '', gate: Promise.resolve(), release: () => {} };
+  await page.route(/\/requests(\/[^/]+)?$/, async (route) => {
     const [, id] = /\/requests(?:\/([^/]+))?$/.exec(new URL(route.request().url()).pathname);
-    if (route.request().method() !== 'POST')
+    if (route.request().method() !== 'POST') {
+      if (id) polled.push(id);
       return id && served[id] ? route.fulfill({ json: served[id] }) : route.continue();
+    }
     if (id) return route.continue();
     const input = JSON.parse(route.request().postData());
     posted.push(input);
@@ -60,6 +68,13 @@ try {
         requests: 1,
       };
       served[input.id] = { id: input.id, state: 'queued', input, result: null };
+      return route.fulfill({ status: 202, json: served[input.id] });
+    }
+    // Drafts per conversation and the reference check (SPEC-02.19 1, SPEC-09.11): accepted, and
+    // one is held until the test lets it go (a tab switched while it is in flight).
+    if (accepted.some((text) => input.body.startsWith(text))) {
+      served[input.id] = { id: input.id, state: 'queued', input, result: null };
+      if (input.body === held.body) await held.gate;
       return route.fulfill({ status: 202, json: served[input.id] });
     }
     if (input.body !== '다른 모델로 이어서')
@@ -98,6 +113,10 @@ try {
     },
     '다른 모델로 이어서': { target: 'document', by: 'jev' },
     '보 간격 검토해줘': { target: 'document', by: 'jev' },
+    '초안 B 보내기': { target: 'document', by: 'jev' },
+    '초안 늦게': { target: 'document', by: 'jev' },
+    '이런 느낌으로 만들어줘': { target: 'document', by: 'jev' },
+    '이 스타일처럼 해줘': { target: 'document', by: 'jev' },
   };
   await page.route(/\/route$/, (route) =>
     route.fulfill({
@@ -330,12 +349,210 @@ try {
   await menu.locator('button').filter({ hasText: '대화 닫기' }).click();
   await page.locator('[data-conversation="c-plus-2"]').waitFor({ state: 'detached' });
   assert.deepEqual(handedOver, [{ id: 'c-plus-2', action: 'close', body: {} }]);
+
+  // Drafts per conversation (SPEC-02.19 1, 2026-10-02): words, attachments, mode stay with the tab.
+  const projectId = await page.locator('#project-picker').inputValue();
+  const stored = (conversation) =>
+    page.evaluate(
+      (key) => JSON.parse(localStorage.getItem(key) ?? 'null'),
+      `vide:draft:${projectId}:${conversation}`,
+    );
+  // Closing a tab dropped its draft; the default conversation is chosen again.
+  assert.equal(await stored('c-plus-2'), null);
+  await page.waitForFunction(
+    () =>
+      document.querySelector('[data-conversation="default"]')?.getAttribute('aria-selected') ===
+      'true',
+  );
+  const chooseTab = async (key) => {
+    await page.locator(`[data-conversation="${key}"]`).click();
+    await page.waitForFunction(
+      (k) =>
+        document.querySelector(`[data-conversation="${k}"]`)?.getAttribute('aria-selected') ===
+        'true',
+      key,
+    );
+  };
+  const modeOn = (value) =>
+    page.locator(`#mode-toggle [data-mode="${value}"]`).getAttribute('aria-checked');
+  await page.locator('#body').fill('A 초안');
+  await page.locator('#files').setInputFiles({
+    name: 'a-note.txt',
+    mimeType: 'text/plain',
+    buffer: Buffer.from('메모'),
+  });
+  await page.locator('#context .chip').filter({ hasText: 'a-note.txt' }).waitFor();
+  // Another tab: empty composer, no chip; then back, A's words and attachment return.
+  await chooseTab('c-long');
+  assert.equal(await page.locator('#body').inputValue(), '');
+  assert.equal(await page.locator('#context .chip').filter({ hasText: 'a-note.txt' }).count(), 0);
+  await page.locator('#body').fill('B 초안');
+  await chooseTab('default');
+  assert.equal(await page.locator('#body').inputValue(), 'A 초안');
+  await page.locator('#context .chip').filter({ hasText: 'a-note.txt' }).waitFor();
+  // 계획 in A does not change B.
+  await page.locator('#mode-toggle [data-mode="plan"]').click();
+  assert.equal(await modeOn('plan'), 'true');
+  await chooseTab('c-long');
+  assert.equal(await page.locator('#body').inputValue(), 'B 초안');
+  assert.equal(await modeOn('auto'), 'true');
+  // Sending in B clears only B's draft.
+  posted.length = 0;
+  await send('초안 B 보내기');
+  for (let i = 0; i < 40 && !posted.length; i++) await page.waitForTimeout(50);
+  assert.deepEqual(
+    posted.map((input) => [input.conversationId, input.body, input.mode]),
+    [['c-long', '초안 B 보내기', 'auto']],
+  );
+  await page.waitForFunction(() => document.querySelector('#body').value === '');
+  assert.equal((await stored('c-long')).body, '');
+  assert.equal((await stored('default')).body, 'A 초안');
+  // A tab switched while a send is in flight: the sent tab's draft is cleared, the chosen tab's
+  // words stay, and the sent request is still followed.
+  let release;
+  held.body = '초안 늦게';
+  held.gate = new Promise((done) => (release = done));
+  posted.length = 0;
+  await send('초안 늦게');
+  for (let i = 0; i < 40 && !posted.length; i++) await page.waitForTimeout(50);
+  await chooseTab('default');
+  assert.equal(await page.locator('#body').inputValue(), 'A 초안');
+  release();
+  const lateId = posted[0].id;
+  for (let i = 0; i < 60 && !polled.includes(lateId); i++) await page.waitForTimeout(50);
+  assert.ok(polled.includes(lateId), 'the request sent before the switch is still polled');
+  assert.equal(await page.locator('#body').inputValue(), 'A 초안');
+  assert.equal((await stored('c-long')).body, '');
+  assert.equal((await stored('default')).body, 'A 초안');
+  // After a reload the last tab viewed comes back with its draft; the other keeps its own.
+  await chooseTab('c-long');
+  await page.locator('#body').fill('B 다시');
+  await page.reload();
+  await page.waitForFunction(() => !document.querySelector('#body').disabled);
+  await page.waitForFunction(
+    () =>
+      document.querySelector('[data-conversation="c-long"]')?.getAttribute('aria-selected') ===
+      'true',
+  );
+  assert.equal(await page.locator('#body').inputValue(), 'B 다시');
+  assert.equal(await modeOn('auto'), 'true');
+  await chooseTab('default');
+  assert.equal(await page.locator('#body').inputValue(), 'A 초안');
+  await page.locator('#context .chip').filter({ hasText: 'a-note.txt' }).waitFor();
+  assert.equal(await modeOn('plan'), 'true');
+  await page.locator('#mode-toggle [data-mode="auto"]').click();
+
+  // The check before sending (SPEC-09.11): an image with reference words asks first.
+  await page
+    .locator('#context .chip')
+    .filter({ hasText: 'a-note.txt' })
+    .getByRole('button', { name: /제외/ })
+    .click();
+  const dot = await page.evaluate(() => {
+    const canvas = document.createElement('canvas');
+    canvas.width = 40;
+    canvas.height = 30;
+    const context = canvas.getContext('2d');
+    context.fillStyle = 'rgb(120 90 60)';
+    context.fillRect(0, 0, 40, 30);
+    return canvas.toDataURL('image/png').split(',')[1];
+  });
+  await page.locator('#files').setInputFiles({
+    name: 'look.png',
+    mimeType: 'image/png',
+    buffer: Buffer.from(dot, 'base64'),
+  });
+  await page.locator('#context .chip').filter({ hasText: 'look.png' }).waitFor();
+  posted.length = 0;
+  await send('이런 느낌으로 만들어줘');
+  const card = page.locator('#route-card');
+  await card.waitFor();
+  assert.match(await card.textContent(), /참고 이미지로 먼저 확인할까요\?/);
+  assert.equal(await card.getByRole('button', { name: '영역 표시' }).count(), 1);
+  await page.waitForTimeout(200);
+  assert.deepEqual(posted, [], 'nothing is sent while the card asks');
+  // [그냥 보내기] sends as before, with the image.
+  await card.getByRole('button', { name: '그냥 보내기' }).click();
+  for (let i = 0; i < 40 && !posted.length; i++) await page.waitForTimeout(50);
+  assert.deepEqual(
+    posted.map((input) => [input.body, input.files.map((file) => file.name)]),
+    [['이런 느낌으로 만들어줘', ['look.png']]],
+  );
+  assert.ok(await card.isHidden());
+  // The sent request's image attachment reopens its reference tab (SPEC-09.2 2).
+  const mark = page.locator('#conversation .work-reference-mark');
+  await mark.first().waitFor();
+  await mark.first().click();
+  await page.waitForFunction(() => document.body.dataset.workspace === 'reference');
+  assert.equal(
+    await page.locator('.workspace-tablist [role="tab"][aria-selected="true"]').textContent(),
+    '참고 이미지 · look.png',
+  );
+  // A file that is not an image does not ask.
+  await page.locator('#files').setInputFiles({
+    name: 'plain.txt',
+    mimeType: 'text/plain',
+    buffer: Buffer.from('글'),
+  });
+  await page.locator('#context .chip').filter({ hasText: 'plain.txt' }).waitFor();
+  posted.length = 0;
+  await send('이 스타일처럼 해줘');
+  for (let i = 0; i < 40 && !posted.length; i++) await page.waitForTimeout(50);
+  assert.deepEqual(
+    posted.map((input) => input.body),
+    ['이 스타일처럼 해줘'],
+  );
+  assert.ok(await card.isHidden());
+  // A folder of images named in the words: its images are listed, one is picked, attached and
+  // its reference tab opens. Other files and key files are not listed.
+  // (Outside the engine's data folder, which is never read.)
+  pictures = await mkdtemp(join(tmpdir(), 'vide-pictures-'));
+  const folder = join(pictures, '05_레퍼런스', '기둥');
+  await mkdir(folder, { recursive: true });
+  await writeFile(join(folder, '기둥 2.png'), Buffer.from(dot, 'base64'));
+  await writeFile(join(folder, '기둥 1.png'), Buffer.from(dot, 'base64'));
+  await writeFile(join(folder, 'notes.txt'), '메모');
+  posted.length = 0;
+  await send(`${folder} 이 폴더 기둥 느낌으로`);
+  await card.locator('.reference-check-list').waitFor();
+  assert.deepEqual(await card.locator('.reference-check-list button').allTextContents(), [
+    '기둥 1.png',
+    '기둥 2.png',
+  ]);
+  assert.deepEqual(posted, []);
+  await card.locator('.reference-check-list button').first().click();
+  await page.locator('#context .chip').filter({ hasText: '기둥 1.png' }).waitFor();
+  await page.waitForFunction(() => document.body.dataset.workspace === 'reference');
+  assert.equal(
+    await page.locator('.workspace-tablist [role="tab"][aria-selected="true"]').textContent(),
+    '참고 이미지 · 기둥 1.png',
+  );
+  assert.ok(await card.isHidden());
+  assert.deepEqual(posted, [], 'picking an image does not send');
+  // Only images are copied, and key folders are never read (SPEC-01.13 4).
+  const copy = (path) =>
+    page.evaluate(
+      async ({ id, path }) =>
+        (
+          await (
+            await fetch(`api/v1/projects/${id}/attachments/from-path`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ path }),
+            })
+          ).json()
+        ).code,
+      { id: projectId, path },
+    );
+  assert.equal(await copy(join(folder, 'notes.txt')), 'INVALID_INPUT');
+  assert.equal(await copy(join(homedir(), '.ssh', 'look.png')), 'FILE_FORBIDDEN');
   assert.deepEqual(errors, []);
   console.log(
-    'browser conversations: route cards, AI fallback, tabs with a fixed AI, a model change to a new tab, hand-over cards, [+] opening a tab at once and closing it before a request pass',
+    'browser conversations: route cards, AI fallback, tabs with a fixed AI, a model change to a new tab, hand-over cards, [+] opening a tab at once and closing it before a request, drafts per tab and the reference check before sending pass',
   );
 } finally {
   await browser?.close();
   await app?.close();
   await rm(directory, { recursive: true, force: true });
+  if (pictures) await rm(pictures, { recursive: true, force: true });
 }

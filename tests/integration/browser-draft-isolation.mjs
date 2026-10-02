@@ -40,7 +40,7 @@ try {
   await candidates.last().click();
   assert.equal(
     await page.evaluate(
-      (id) => JSON.parse(localStorage.getItem('vide:draft:' + id)).baseRequestId,
+      (id) => JSON.parse(localStorage.getItem('vide:draft:' + id + ':default')).baseRequestId,
       a.id,
     ),
     saved.state.baseRequestId,
@@ -51,7 +51,7 @@ try {
   assert.equal(await page.locator('#body').inputValue(), 'Project A saved draft');
   assert.equal(
     await page.evaluate(
-      (id) => JSON.parse(localStorage.getItem('vide:draft:' + id)).baseRequestId,
+      (id) => JSON.parse(localStorage.getItem('vide:draft:' + id + ':default')).baseRequestId,
       a.id,
     ),
     saved.state.baseRequestId,
@@ -93,7 +93,7 @@ try {
   await ready();
   assert.equal(
     await page.evaluate(
-      (id) => JSON.parse(localStorage.getItem('vide:draft:' + id)).baseRequestId,
+      (id) => JSON.parse(localStorage.getItem('vide:draft:' + id + ':default')).baseRequestId,
       a.id,
     ),
     null,

@@ -100,8 +100,13 @@ export const PYTHON_DENY = [
   String.raw`\b__(builtins|dict|class|subclasses|bases|mro|globals|code|getattribute|loader|spec)__\b`,
   String.raw`^[ \t]*from[ \t]+(rhinoscriptsyntax|rhinoscript)(\.\w+)?[ \t]+import\b[^\n#]*(\*|\b(Command|Exit)\b)`,
 ];
-/** Python that purges (not undoable): held for confirmation like the C# purge. */
-export const PYTHON_PURGE = String.raw`\b(Purge\w*|Compact)[ \t]*\(`;
+/**
+ * Python that purges (not undoable): held for confirmation like the C# purge. Any Purge*( call counts, but
+ * Compact( only on a document table or the document (sc.doc.InstanceDefinitions.Compact(), sc.doc.Compact()),
+ * because mesh.Compact()/brep.Compact() only tidy geometry in memory. A table bound to an alias
+ * (t = sc.doc.InstanceDefinitions; t.Compact()) is not recognised; C# resolves the receiver type instead.
+ */
+export const PYTHON_PURGE = String.raw`\bPurge\w*[ \t]*\(|(?:\.(?:Layers|Materials|Linetypes|InstanceDefinitions|DimStyles|HatchPatterns|Fonts|Groups|Objects|Views|NamedViews|RenderMaterials|Bitmaps|Textures)|\bdoc)\.Compact[ \t]*\(`;
 
 export type ScriptVerdict =
   | { ok: true; guard?: { kind: DirectGuardKind; detail: string } }

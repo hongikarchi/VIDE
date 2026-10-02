@@ -90,7 +90,7 @@ try {
   assert.equal(await textChip.getByRole('button', { name: '영역 표시' }).count(), 0);
   const attachmentId = await page.evaluate(
     (id) =>
-      JSON.parse(localStorage.getItem('vide:draft:' + id)).files.find(
+      JSON.parse(localStorage.getItem('vide:draft:' + id + ':default')).files.find(
         (file) => file.name === 'facade.png',
       ).id,
     projectId,

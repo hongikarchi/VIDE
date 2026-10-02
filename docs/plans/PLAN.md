@@ -2,7 +2,7 @@
 id: PLAN
 title: VIDE 실행 로드맵
 status: review
-version: 0.240
+version: 0.242
 updated: 2026-10-02
 owner: agent:codex
 related: [ARCH-01, PLAN-02, PLAN-03, PLAN-22, PLAN-23, PLAN-24, PLAN-25, PLAN-26, PLAN-27, ADR-022, ADR-025, ADR-026, ADR-027, ADR-028, ADR-029, ADR-030, SPEC-00, SPEC-01, SPEC-02, SPEC-03, SPEC-04, SPEC-05, SPEC-06, SPEC-07]
@@ -128,7 +128,7 @@ T-001~018의 번호·지원 증거는 유지한다. 각 티켓의 현재 결과�
 **지금 진행 중**
 
 - T-068([PLAN-25](PLAN-25-accounts-to-accountswitch.md)): VIDE 안의 계정 관리·전환을 빼고 기본 로그인만 쓴다. 정본 반영(1단계)과 코드 제거(2단계)가 진행 중이다.
-- T-083~087([PLAN-27](PLAN-27-sync-storage-stability.md)): T-082(0단계) 뒤 1단계 객체 단위 저장. ARCH-01 저장 계약을 먼저 쓰고 사용자 확인을 받는다. 5단계의 사본·작업 폴더 정리와 2단계의 문서별 Sync 합치기, 읽기 전용 감지 기록은 앞당겨 구현했다(`fda1e5d`, 설치본 확인 남음).
+- T-083~087([PLAN-27](PLAN-27-sync-storage-stability.md)): T-083(1단계 객체 단위 저장)·T-084(2단계 엔진 주관 Sync)는 2026-10-02 착수했고, 저장 계약(ARCH-01 §5)과 Sync 주관(SPEC-01.11의 10, ARCH-01 §7)은 같은 날 사용자가 확인했다. 5단계의 사본·작업 폴더 정리와 2단계의 문서별 Sync 합치기, 읽기 전용 감지 기록은 앞당겨 구현했다(`fda1e5d`, 설치본 확인 남음).
 - T-071: ZWCAD 바로 실행의 실호스트 재실행(0.2.11 이상 연결 플러그인).
 
 **작업 계획별 현황(T 번호가 없는 계획)**
@@ -266,9 +266,11 @@ T-001~018의 번호·지원 증거는 유지한다. 각 티켓의 현재 결과�
 | T-101 [수정하기](사본 초안 → 다시 고정 → 작업본 [올리기]) | 구현·단위·브라우저 시험 완료(2026-10-01, 설치 전) | 단계가 jig 밖을 가져오는 저장소 jig(S-06)는 사본을 만들지 않음(`JIG_NOT_FORKABLE`, 카드에 흐린 [수정하기]와 이유). S-06 사본은 상자 라이브러리만 쓰도록 다시 쓰는 후속 작업 뒤 가능. 설치본 반영 | [PLAN-26](PLAN-26-chat-stage.md#t-101), `drafts.test.mjs`, `make-routes.test.mjs`, `browser-jigs.mjs` |
 | T-103 대상 파일 칩·연계 대상 창 폐지(고칠 연결 파일은 AI가 정함) | 구현·단위·브라우저 시험 완료(2026-10-02, 설치 전). 통합 검토 보완: 같은 호스트의 다른 연결 파일 변경 핀을 오래된 참조로 거절하던 접수 검사 수정(`workspace-pins.test.mjs`) | ZWCAD 도면에서 시작하는 요청은 여전히 다른 파일을 저장된 Sync로만 읽음(후속). `linkedTargets`는 이전 연계 요청용으로 엔진에 남김. 설치본 반영 | [PLAN-26](PLAN-26-chat-stage.md#t-103), SPEC-01.11의 5, ADR-027 후속 결정, `multi-file.test.mjs`, `browser-links.mjs`, `browser-workspace-controls.mjs` |
 | T-109 작업 이력 정리(요청 목록만, 검토본은 산출물, 외부 의견 배지, 첨부는 작업 보기) | 구현·브라우저 시험 완료(2026-10-02, 설치 전) | 이미지 외 첨부는 작업 보기에서 열 수 없음(엔진이 이미지만 내보냄, 열기가 필요하면 SPEC-01.12 먼저). 설치본 반영 | [PLAN-26](PLAN-26-chat-stage.md#t-109), SPEC-01.12의 4, Design §03·§09, `browser-react-panels.mjs`, `browser-workspace-tabs.mjs`, `browser-workspace-controls.mjs` |
+| T-111 같은 파일의 여러 대화: 실행만 차례대로(문서별 `ExecuteQueue`, 바뀐 문서는 `DOCUMENT_CHANGED`로 다시 조회), 지난 보호 카드 정리·늦은 행동의 409 문구 | 구현·단위 시험 완료(2026-10-02, 설치 전). `npm test` 953/953 | 설치본에서 두 대화 동시 실행·대기 문구·재조회 확인, 추가 지시(`intervene`)의 409 문구 | [PLAN-24](PLAN-24-ai-conversations.md), SPEC-02.9, SPEC-02 보호 확인 |
+| T-112 2026-10-02 사용자 보고 묶음: 대화별 초안(본문·첨부·고정·모드·effort)·마지막 대화 탭, Purge 오탐(`Mesh.Compact`), Jev 배분(형상 만들기·바꾸기만 ChatGPT), 단어 하나 jig 오열림, Rhino 재시작 뒤 고정 옮기기(`pin-carry.ts`), 엔진 종료 진단(ProcDump·작업 기록·늦은 재시작 1회) | 구현·단위·일부 브라우저 시험 완료(2026-10-02, 설치 전). 레이어 정리 제안 문장 Jev 실호출 → Claude | Rhino 플러그인 재설치 뒤 Purge·고정 옮기기 실호스트 확인, 하네스 전용 브라우저 시험, 다음 엔진 종료의 덤프 분석 | SPEC-02.16·02.17·02.19, PLAN-05 §7.2a, [PLAN-27](PLAN-27-sync-storage-stability.md) §0 |
 | T-082 안정성 0단계 진단·복구 | 구현·자동 검증(`9aac8cd`) | 실제 창의 화면 복구 확인, 설치본 릴리스 | [PLAN-27](PLAN-27-sync-storage-stability.md) |
-| T-083 객체 단위 저장 | 계획 | ARCH-01 저장 계약 작성과 사용자 확인 뒤 착수 | [PLAN-27](PLAN-27-sync-storage-stability.md), [RESEARCH-13](../research/RESEARCH-13-stability-audit.md) |
-| T-084 엔진 주관 Sync | 계획. 문서별 Sync 합치기는 먼저 구현(`fda1e5d`) | SPEC-01.11의 Sync 주체 보완 뒤 착수 | [PLAN-27](PLAN-27-sync-storage-stability.md) |
+| T-083 객체 단위 저장 | 진행 중(2026-10-02 계약 사용자 확인). 형식(`encodeItem`·`joinGeometry`)·schema 9·`ModelStore`·옮기기 모듈 구현과 단위 시험(합성 1만 개에서 Live Sync 적용 1~2.5 ms) | `Workspace`·`LiveSync`·API·엔진 시작 연결(다른 작업 끝난 뒤), 사용자 DB 사본 옮기기 측정 | [PLAN-27](PLAN-27-sync-storage-stability.md), [RESEARCH-13](../research/RESEARCH-13-stability-audit.md) |
+| T-084 엔진 주관 Sync | 진행 중(2026-10-02 SPEC-01.11의 10·ARCH-01 §7 사용자 확인). 문서별 Sync 합치기는 먼저 구현(`fda1e5d`) | `runDocumentSync`·`SyncScheduler`·보류 임대 구현. 화면 쪽은 T-083의 `delta` 조회 뒤 | [PLAN-27](PLAN-27-sync-storage-stability.md) |
 | T-085 화면 | 계획 | T-083 뒤 | [PLAN-27](PLAN-27-sync-storage-stability.md) |
 | T-086 상한 | 계획 | T-083~085 뒤 | [PLAN-27](PLAN-27-sync-storage-stability.md) |
 | T-087 정리·Rhino/ZWCAD 쪽 | 계획. 사본·작업 폴더 정리와 읽기 전용 감지 기록은 먼저 구현(`fda1e5d`) | 설치본 확인, 나머지 정리·호스트 쪽 항목 | [PLAN-27](PLAN-27-sync-storage-stability.md) |

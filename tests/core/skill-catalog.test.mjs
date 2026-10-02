@@ -127,8 +127,24 @@ test('routing candidates: the project jig wins the same words; skill words are g
   assert.equal(structure.reason, 'jig 열기');
   // Without the project jig the official one still opens (the fallback list).
   assert.equal(decisiveRoute('구조 분석 해줘', { jigs: officialRouteJigs() }).jig.id, 'structure');
-  // A single topic word opens the jig only when nothing acts on objects and nothing is asked.
-  assert.equal(decisiveRoute('진단 돌려줘', context).jig.id, 'project/s06-frame');
+  // A single word never opens a jig by rule (2026-10-02): Jev judges it, and without Jev the
+  // request goes to the conversation as a file turn.
+  assert.equal(decisiveRoute('진단 돌려줘', context), undefined);
+  const grid = {
+    jigs: [
+      {
+        id: 'project/example-grid',
+        name: '격자 골조 배치 예제',
+        words: ['격자', '기둥 배치', '보 연결', '경간', '예제'],
+        source: 'skill',
+      },
+    ],
+  };
+  const sentence = '06-사선격자형이 좋아. 디벨롭해보자';
+  assert.equal(decisiveRoute(sentence, grid), undefined);
+  assert.equal(routeRequest(sentence, [], [], grid).target, 'document');
+  // A phrase still opens it.
+  assert.equal(decisiveRoute('기둥 배치 해보자', grid)?.jig?.id, 'project/example-grid');
   assert.equal(decisiveRoute('기둥 숨겨', context), undefined);
   assert.equal(routeRequest('기둥 숨겨', [], [], context).target, 'view');
   assert.notEqual(decisiveRoute('기둥 몇 개야?', context)?.target, 'jig');

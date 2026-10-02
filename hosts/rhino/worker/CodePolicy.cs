@@ -53,12 +53,17 @@ internal static class CodePolicy
         return failures.Take(12).ToArray();
     }
 
-    /// <summary>Whether the code calls a Rhino table Purge/Compact, which undo cannot restore (direct-mode guard).</summary>
+    /// <summary>Whether the code calls a document table Purge/Compact, which undo cannot restore (direct-mode guard).</summary>
+    /// <remarks>Only document tables (Rhino.DocObjects.Tables: LayerTable, InstanceDefinitionTable, ObjectTable, …) and RhinoDoc count.
+    /// Geometry methods of the same name (Mesh.Compact, Brep.Compact) only tidy an in-memory object and are not purges.</remarks>
     public static bool Purges(CSharpCompilation compilation) => compilation.SyntaxTrees.Any(tree =>
     {
         var model = compilation.GetSemanticModel(tree);
         return tree.GetRoot().DescendantNodes().OfType<InvocationExpressionSyntax>().Any(call =>
             model.GetSymbolInfo(call).Symbol is IMethodSymbol method && (method.Name.StartsWith("Purge", StringComparison.Ordinal) || method.Name == "Compact") &&
-            method.ContainingNamespace.ToDisplayString().StartsWith("Rhino", StringComparison.Ordinal));
+            IsDocumentTable(method.ContainingType));
     });
+
+    private static bool IsDocumentTable(INamedTypeSymbol? type) =>
+        type is not null && (type.ContainingNamespace.ToDisplayString() == "Rhino.DocObjects.Tables" || type.ToDisplayString() == "Rhino.RhinoDoc");
 }

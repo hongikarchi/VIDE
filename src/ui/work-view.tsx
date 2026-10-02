@@ -10,6 +10,7 @@ import { undoReason } from '../contracts/direct-refusal.ts';
 import { ActivityLog, activityEntries } from './activity.tsx';
 import { conversationFilter, inConversation, onConversationFilter } from './conversations.tsx';
 import { api } from './gateway.ts';
+import { executeWaitOf, guardOpen, heldRowLabel, waitingText } from './request-scope.ts';
 import {
   Action,
   Candidate,
@@ -226,7 +227,11 @@ export interface DirectActions {
     body?: Record<string, unknown>,
   ) => Promise<void>;
 }
-type ViewActions = Actions & DirectActions;
+/** A sent image attachment's [영역 표시] (SPEC-09.2 2): app.ts opens its reference-image tab. */
+export interface ReferenceActions {
+  reference?: (file: { id: string; name: string }) => void;
+}
+type ViewActions = Actions & DirectActions & ReferenceActions;
 const changeCount = (execution: DirectExecution) => ({
   added: execution.changes?.added?.length ?? 0,
   changed: execution.changes?.changed?.length ?? 0,
@@ -296,7 +301,9 @@ function DirectChanges({
       {executions.map((execution, index) => {
         const count = changeCount(execution);
         const state = execution.state;
-        const guarded = state === 'guarded' ? execution.guarded : undefined;
+        // [진행] only while the request waits on it; an ended request's held row is not run.
+        const guarded = guardOpen(state, message.request?.state) ? execution.guarded : undefined;
+        const ended = heldRowLabel(state, message.request?.state);
         return (
           <li key={execution.id} className="direct-execution" data-state={state}>
             <div className="direct-row">
@@ -304,7 +311,7 @@ function DirectChanges({
               <span className="direct-count">
                 추가 {count.added} · 변경 {count.changed} · 삭제 {count.removed}
               </span>
-              <span className="direct-state">{executionStates[state] ?? state}</span>
+              <span className="direct-state">{ended ?? executionStates[state] ?? state}</span>
               {undoEach && ['applied', 'confirmed'].includes(state) && execution.undoId !== null ? (
                 <Action
                   latch
@@ -620,6 +627,7 @@ function StageList({
   const active = stages.findIndex((stage) => stage.state === 'active');
   const here = active < 0 ? 0 : active;
   const waiting = request?.result?.phase === 'waiting';
+  const executeWait = running ? executeWaitOf(request?.result) : undefined;
   const note = running
     ? [...activityEntries(request?.result?.activity)]
         .reverse()
@@ -648,6 +656,9 @@ function StageList({
             <>
               {waiting ? (
                 <small className="stage-note">추가 지시 접수 · 이전 작업 종료 대기</small>
+              ) : null}
+              {executeWait ? (
+                <small className="stage-note">{waitingText(executeWait)}</small>
               ) : null}
               {note ? <p className="stage-ai">AI: {note.text}</p> : null}
               <Interventions message={message} projectId={projectId} actions={actions} />
@@ -811,7 +822,11 @@ function WorkView({
             <>
               <dt>첨부</dt>
               <dd>
-                <Attachments message={message} projectId={projectId} />
+                <Attachments
+                  message={message}
+                  projectId={projectId}
+                  reference={actions.reference}
+                />
               </dd>
             </>
           ) : null}
@@ -1052,7 +1067,15 @@ const fileSize = (bytes: number) =>
  * from the engine's attachment route in a new tab; other kept files show their name and size (the
  * engine serves only images, SPEC-01.12 4); sketches and VIDE's own small notes show their name.
  */
-function Attachments({ message, projectId }: { message: Message; projectId: string }) {
+function Attachments({
+  message,
+  projectId,
+  reference,
+}: {
+  message: Message;
+  projectId: string;
+  reference?: ReferenceActions['reference'];
+}) {
   return (
     <span className="work-attachments">
       {message.sketches.map((sketch, index) => (
@@ -1063,15 +1086,26 @@ function Attachments({ message, projectId }: { message: Message; projectId: stri
         const name = String(file.displayName || file.name);
         if (!stored) return <span key={'f' + index}>{name}</span>;
         return stored.kind === 'image' && projectId ? (
-          <a
-            key={'f' + index}
-            href={attachmentPreview(projectId, stored.id)}
-            target="_blank"
-            rel="noopener"
-            title={`${stored.name} · ${fileSize(stored.size)} · 새 탭에서 보기`}
-          >
-            {name}
-          </a>
+          <span key={'f' + index} className="work-attachment-image">
+            <a
+              href={attachmentPreview(projectId, stored.id)}
+              target="_blank"
+              rel="noopener"
+              title={`${stored.name} · ${fileSize(stored.size)} · 새 탭에서 보기`}
+            >
+              {name}
+            </a>
+            {reference ? (
+              <button
+                type="button"
+                className="work-reference-mark"
+                title="참고 이미지 탭에서 원하는 부분을 영역으로 표시합니다"
+                onClick={() => reference({ id: stored.id, name })}
+              >
+                영역 표시
+              </button>
+            ) : null}
+          </span>
         ) : (
           <span
             key={'f' + index}

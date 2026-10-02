@@ -1,6 +1,8 @@
 // Automatic model choice ("자동 (Jev)"): Jev reads the request and picks a task type and a domain
-// (3D or data); a priority table turns them into service, model and effort among the signed-in
-// services. Working hypothesis
+// (geometry work or the rest); a priority table turns them into service, model and effort among the
+// signed-in services. User decision 2026-10-02 (supersedes 2026-09-29): only creating or changing
+// geometry goes to ChatGPT; lookups, explanations, proposals and organising (layers, names, file
+// structure) go to Claude. Working hypothesis
 // (user, 2026-09-29): a strong model at low effort is faster and better than a weaker model at high
 // effort, so modelling tasks stay on the top model and vary effort. Every decision and its outcome
 // go to <data>/logs/model-routing.jsonl so the table can be tuned from real runs (PLAN-05 §7).
@@ -25,7 +27,7 @@ export const TASKS = {
   lookup:
     'Read-only question about the model, drawing or project: count, list, measure, find, explain. Nothing is changed.',
   simple_edit:
-    'A small, clear change to existing objects: move, delete, rename, change layer or color, offset or extend a few elements.',
+    'A small, clear change to existing objects or their attributes: move, delete, offset or extend a few elements, rename them, or change their layer or color.',
   complex:
     'Creating or substantially changing geometry in several steps or across many objects: generate a pattern, model a stair or facade, rebuild a layout.',
   analysis:
@@ -35,17 +37,18 @@ export type Task = keyof typeof TASKS;
 /** The second question: what the request is about. It decides the service when both are signed in. */
 export const DOMAINS = {
   geometry:
-    '3D models and drawings: geometry, objects, layers, positions, shapes, modelling or drafting in Rhino or CAD.',
-  data: 'Data and information: documents, tables, text, project records, interpreting results, writing code or building a tool (jig).',
+    'Creating or changing shapes and objects in Rhino or CAD: modelling, drafting, moving, copying, deleting, offsetting, extending or rebuilding geometry.',
+  data: 'Everything that does not create or change shapes: questions and lookups, explanations, advice and proposals, organising layers, names, colors and file structure, documents, tables, project records, interpreting results, writing code or building a tool (jig).',
 } as const;
 export type Domain = keyof typeof DOMAINS;
 export type Provider = 'claude-cli' | 'codex-cli';
 
 /**
  * Priority per domain and task: the first candidate whose service is signed in and whose model is
- * listed wins (user, 2026-09-29): 3D work goes to ChatGPT (GPT-6-Astra; GPT-6-Luna for questions),
- * data, information, interpretation and jig building go to Claude (Opus 5.5; Sonnet 5 for questions).
- * The other service follows as the fallback when the preferred one is not signed in.
+ * listed wins (user, 2026-10-02): creating or changing geometry goes to ChatGPT (GPT-6-Astra);
+ * lookups (even about geometry), explanations, proposals, organising, interpretation and jig building
+ * go to Claude (Opus 5.5; Sonnet 5 for questions). The other service follows as the fallback when the
+ * preferred one is not signed in.
  */
 const GPT = (model: string, effort: string): [Provider, string, string] => [
   'codex-cli',
@@ -60,10 +63,10 @@ const CLAUDE = (model: string, effort: string): [Provider, string, string] => [
 export const PRIORITY: Record<Domain, Record<Task, [Provider, string, string][]>> = {
   geometry: {
     lookup: [
-      GPT('gpt-6-luna', 'low'),
-      GPT('gpt-6-astra', 'low'),
       CLAUDE('claude-sonnet-5', 'low'),
       CLAUDE('claude-opus-5-5', 'low'),
+      GPT('gpt-6-luna', 'low'),
+      GPT('gpt-6-astra', 'low'),
     ],
     simple_edit: [GPT('gpt-6-astra', 'low'), CLAUDE('claude-opus-5-5', 'low')],
     complex: [GPT('gpt-6-astra', 'medium'), CLAUDE('claude-opus-5-5', 'medium')],
@@ -82,8 +85,11 @@ export const PRIORITY: Record<Domain, Record<Task, [Provider, string, string][]>
   },
 };
 const FALLBACK: Task = 'complex';
-/** VIDE is mostly model and drawing work; an unclear domain counts as 3D. */
-const FALLBACK_DOMAIN: Domain = 'geometry';
+/**
+ * The domain when Jev gave none or was unsure: a lookup changes nothing, so it counts as data (Claude);
+ * any other task counts as geometry, since VIDE is mostly model and drawing work.
+ */
+export const fallbackDomain = (task: Task): Domain => (task === 'lookup' ? 'data' : 'geometry');
 const MIN_CONFIDENCE = 0.5;
 const ORDER = ['low', 'medium', 'high', 'xhigh', 'max'];
 
@@ -141,7 +147,7 @@ export function choose(
   task: Task,
   catalog: CatalogModel[],
   available: Provider[],
-  domain: Domain = FALLBACK_DOMAIN,
+  domain: Domain = fallbackDomain(task),
 ): Choice | undefined {
   const priority = PRIORITY[domain][task];
   for (const [provider, id, effort] of priority) {
@@ -221,7 +227,7 @@ export class ModelRouter {
       task: Task,
       confidence: number,
       reason?: string,
-      domain: Domain = FALLBACK_DOMAIN,
+      domain: Domain = fallbackDomain(task),
       domainConfidence = 0,
     ): Promise<RoutingDecision> => {
       const services = await signedIn;
@@ -272,14 +278,15 @@ export class ModelRouter {
       const answers = ((await response.json()) as { answers?: Record<string, Answer> }).answers;
       const task = answers?.task?.choice as Task | undefined;
       const confidence = Number(answers?.task?.confidence ?? 0);
-      // The domain only chooses between signed-in services; an unsure answer counts as 3D.
+      // The domain only chooses between signed-in services; an unsure answer falls back by task
+      // (fallbackDomain: lookup → data, the rest → geometry).
       const domainConfidence = Number(answers?.domain?.confidence ?? 0);
       const domain =
         answers?.domain?.choice &&
         answers.domain.choice in DOMAINS &&
         domainConfidence >= MIN_CONFIDENCE
           ? (answers.domain.choice as Domain)
-          : FALLBACK_DOMAIN;
+          : undefined;
       if (!task || !(task in TASKS))
         return decide('fallback', FALLBACK, 0, 'NO_ANSWER', domain, domainConfidence);
       if (confidence < MIN_CONFIDENCE)

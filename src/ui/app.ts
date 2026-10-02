@@ -6,7 +6,25 @@ import { executionLimits } from '../contracts/execution-limits.ts';
 import { showExecutionLimits } from './execution-limits.tsx';
 import { requestAdmission, waitingOf } from '../contracts/request-scope.ts';
 import { waitingText } from './request-scope.ts';
-import { draftSnapshot, restoreDraft } from './draft-storage.ts';
+import {
+  clearStoredDraft,
+  draftKey,
+  draftSnapshot,
+  lastConversation,
+  migrateProjectDraft,
+  rememberConversation,
+  removeDraft,
+  removeProjectDrafts,
+  restoreDraft,
+} from './draft-storage.ts';
+import {
+  attachImagePath,
+  imagesAtPaths,
+  pathCandidates,
+  referenceIntent,
+  renderReferenceCard,
+} from './reference-check.ts';
+import './reference-check.css';
 import { z } from 'zod';
 import { requestMode } from '../contracts/workspace.ts';
 import { belongsToLink } from '../contracts/link-requests.ts';
@@ -57,7 +75,7 @@ const showAiSettings: typeof import('./ai-settings.tsx').showAiSettings = async 
   (await import('./ai-settings.tsx')).showAiSettings(onStatus);
 import { initializeReviews, onReviewsChange, openReview, reviewsOf } from './reviews.tsx';
 import { attachSharedFeedback } from './shared-feedback.tsx';
-import { attachmentPreview, batchRefusal, uploadAttachments } from './attachments.ts';
+import { addViewCopy, attachmentPreview, batchRefusal, uploadAttachments } from './attachments.ts';
 import { notifyReference, setReferenceBridge } from './reference-bridge.ts';
 import { renderWork } from './work-view.tsx';
 import {
@@ -90,7 +108,7 @@ import {
 } from './request-route.ts';
 import { renderRequests } from './requests.tsx';
 import { iconSvg, initializeInspector, renderInspector } from './inspector.ts';
-import { api, connect, errors, labels } from './gateway.ts';
+import { api, connect, errors, labels, requestAction } from './gateway.ts';
 import { remoteSession } from './remote-panel.ts';
 import { connectionRecovery, probeEngine } from './connection-recovery.ts';
 import { applyDisplayDelta } from '../core/display-delta.ts';
@@ -149,6 +167,8 @@ let project: { id: string; name: string } | undefined,
   selectedResult: string | null | undefined,
   draftSaved = false,
   unreadableDraft = false,
+  // The conversation whose draft the composer holds (null = the default conversation).
+  draftConversation: string | null = null,
   // Projects for the heading, and the account website when this PC is signed in.
   projects: { id: string; name: string }[] = [],
   accountSite: string | undefined;
@@ -342,6 +362,68 @@ function followConversationModel(fixed: { provider: string; model: string | null
   void refreshAccount();
   render();
 }
+/**
+ * Another conversation tab was chosen (SPEC-02.19 1, 2026-10-02): the composer's draft (words,
+ * request list, attachments, pins, sketches, mode, effort) stays with the tab it was written in
+ * and the chosen tab's own draft comes back. The draft object is changed in place, so polls and a
+ * send in flight (they compare `state`) go on. A tab without a draft starts empty with the mode
+ * and effort of the tab before it; the model follows the conversation (`onFixed`).
+ */
+function switchDraft(next: string | null) {
+  if (!project || next === draftConversation) return;
+  const projectId = project.id;
+  // Strokes drawn but not attached belong to the draft they were drawn for.
+  if (pendingSketch())
+    try {
+      attachStrokes();
+    } catch {
+      strokes = [];
+    }
+  render(false);
+  draftConversation = next;
+  if (!panelMode) rememberConversation(projectId, next);
+  hideRouteCard();
+  unreadableDraft = false;
+  let restored: ReturnType<typeof restoreDraft> | undefined;
+  try {
+    const raw = localStorage.getItem(draftKey(projectId, next));
+    if (raw) restored = restoreDraft(JSON.parse(raw), state.messages);
+  } catch {
+    unreadableDraft = true;
+    message('이 대화의 저장된 초안을 확인할 수 없습니다. 작업 이력은 유지됩니다.');
+  }
+  Object.assign(state, {
+    body: '',
+    instructions: [],
+    pins: [],
+    sketches: [],
+    files: [],
+    linkedTargets: undefined,
+    coordinateBasis: undefined,
+    baseRequestId: displayedResult,
+  });
+  if (restored) {
+    // The selection and the shared request list stay as they are.
+    const draft: Partial<typeof restored> = { ...restored };
+    delete draft.selected;
+    delete draft.messages;
+    Object.assign(state, draft);
+    // The draft's model is the user's choice; a fixed conversation still overrides it (onFixed).
+    modelFollowsConversation = false;
+    if (!models.some((m) => m.id === state.model)) {
+      const first = models.find((m) => m.provider === state.model) ?? models[0];
+      if (first) chooseModel(state, first.id);
+    }
+    mode = state.permission === 'review' ? 'plan' : 'auto';
+    if (draftHasInput(state) && state.baseRequestId && state.baseRequestId !== selectedResult) {
+      selectedResult = state.baseRequestId;
+      appliedSelection = undefined;
+    }
+  }
+  $('body').value = state.body;
+  render();
+  draw();
+}
 const conversationOptions = () => ({
   projectId: currentProject().id,
   models: models.map(({ id, name, provider }) => ({ id, name, provider })),
@@ -354,7 +436,14 @@ async function mountConversationScreens() {
     conversationChips?.unmount();
     conversationChips = chips?.mountConversations($('conversation-chips'), api, {
       ...conversationOptions(),
-      onChange: () => renderMessages(),
+      selected: draftConversation,
+      onChange: (id) => {
+        switchDraft(id);
+        renderMessages();
+      },
+      onClosed: (id) => {
+        if (project) removeDraft(project.id, id);
+      },
       onFixed: followConversationModel,
       // [+] opens a tab at once (T-097): the next thing is to type.
       onCreated: () => $('body').focus(),
@@ -1182,7 +1271,7 @@ function render(rebuildRequests = true) {
   if (project && !unreadableDraft)
     try {
       localStorage.setItem(
-        'vide:draft:' + currentProject().id,
+        draftKey(currentProject().id, draftConversation),
         JSON.stringify(draftSnapshot(state)),
       );
       draftSaved = true;
@@ -1268,15 +1357,8 @@ function render(rebuildRequests = true) {
         ? {
             label: '영역 표시',
             title: '참고 이미지 탭에서 원하는 부분을 영역으로 표시합니다',
-            run: () => {
-              const name = f.displayName || f.name;
-              openContextTab({
-                instanceId: f.id as string,
-                kind: 'reference',
-                label: `참고 이미지 · ${name}`,
-                title: `참고 이미지 · ${name} · 영역 표시`,
-              });
-            },
+            run: () =>
+              openReferenceTab({ id: f.id as string, name: String(f.displayName || f.name) }),
           }
         : undefined,
     ),
@@ -1698,6 +1780,8 @@ function focusWork(id: string) {
 }
 function renderConversation() {
   renderWork($('conversation'), focusedMessage(), state.messages, models, project?.id, {
+    // A sent image attachment reopens its reference-image tab (SPEC-09.2 2); not in host panels.
+    ...(panelMode ? {} : { reference: openReferenceTab }),
     restore: (request) => {
       if (busy) throw Error('현재 전송이 끝난 뒤 복원하세요.');
       const draft = request.input.linkedTargets
@@ -1774,7 +1858,10 @@ async function directAction(
   body: Record<string, unknown> = {},
 ) {
   const projectId = currentProject().id;
-  const reply = (await api(`/projects/${projectId}/requests/${id}/${action}`, 'POST', body)) as {
+  // A 409 here: the request already ended or runs again; it is read again (SPEC-02.13 4).
+  const reply = (await requestAction(`/projects/${projectId}/requests/${id}/${action}`, body, () =>
+    poll(id, projectId),
+  )) as {
     ok?: unknown;
     reason?: unknown;
     id?: unknown;
@@ -2269,7 +2356,7 @@ function showRouteCard(
   card.hidden = false;
 }
 function hideRouteCard() {
-  $('route-card').classList.remove('route-row');
+  $('route-card').classList.remove('route-row', 'reference-check');
   $('route-card').hidden = true;
   $('route-card').replaceChildren();
 }
@@ -2767,7 +2854,123 @@ function runViewRequest(route: Route, body: string) {
     }),
   );
 }
+/** An image attachment's reference-image tab for marking regions (SPEC-09.2, PLAN-26 T-090). */
+function openReferenceTab(file: { id: string; name: string }) {
+  // Opened once, the check before sending does not ask about it again (SPEC-09.11 4).
+  referenceAnswered.add('a:' + file.id);
+  openContextTab({
+    instanceId: file.id,
+    kind: 'reference',
+    label: `참고 이미지 · ${file.name}`,
+    title: `참고 이미지 · ${file.name} · 영역 표시`,
+  });
+}
+/** Attachments and paths already answered on the check before sending (SPEC-09.11 4). */
+const referenceAnswered = new Set<string>();
+/**
+ * The check before sending (SPEC-09.11): an image attachment with reference words, or a path to
+ * images in the words, asks with one line over the composer; [그냥 보내기] sends as before.
+ */
 $('request').onclick = () => {
+  if (busy || routing || panelMode || !project || validate(state)) return sendComposer();
+  const words = [state.body, ...(state.instructions ?? [])].join('\n');
+  const image = state.files.find(
+    (file) =>
+      file.kind === 'image' &&
+      typeof file.id === 'string' &&
+      !referenceAnswered.has('a:' + file.id),
+  );
+  if (image && referenceIntent(words)) {
+    const key = 'a:' + (image.id as string);
+    renderReferenceCard($('route-card'), {
+      mark: () => {
+        referenceAnswered.add(key);
+        hideRouteCard();
+        openReferenceTab({
+          id: image.id as string,
+          name: String(image.displayName || image.name),
+        });
+      },
+      send: () => {
+        referenceAnswered.add(key);
+        hideRouteCard();
+        sendComposer();
+      },
+      close: hideRouteCard,
+    });
+    return;
+  }
+  const paths = pathCandidates(words).filter((path) => !referenceAnswered.has('p:' + path));
+  if (!paths.length) return sendComposer();
+  const projectId = project.id,
+    conversation = draftConversation;
+  routing = true;
+  $('request').setAttribute('aria-busy', 'true');
+  void imagesAtPaths(api, projectId, paths)
+    .catch(() => undefined)
+    .then((found) => {
+      routing = false;
+      $('request').removeAttribute('aria-busy');
+      if (project?.id !== projectId || draftConversation !== conversation) return;
+      if (!found?.path || !found.images.length) {
+        for (const path of paths) referenceAnswered.add('p:' + path);
+        return sendComposer();
+      }
+      // Every reading of the words is answered at once, so the same path does not ask again.
+      const answer = () => {
+        for (const path of paths) referenceAnswered.add('p:' + path);
+        hideRouteCard();
+      };
+      renderReferenceCard($('route-card'), {
+        found,
+        pick: (picked) => {
+          answer();
+          void attachPathImage(picked.path);
+        },
+        send: () => {
+          answer();
+          sendComposer();
+        },
+        close: hideRouteCard,
+      });
+    });
+};
+const pathRefusals: Record<string, string> = {
+  FILE_FORBIDDEN: '이 위치의 파일은 읽지 않습니다(키·로그인·VIDE 데이터 폴더).',
+  FILE_NOT_FOUND: '그 파일이 이 PC에 없습니다.',
+  FORBIDDEN: '원격 세션에서는 이 PC의 경로를 읽지 않습니다.',
+};
+/** A picked image of a path in the words becomes an attachment and opens its reference tab. */
+async function attachPathImage(path: string) {
+  try {
+    if (!project || !ready) throw Error('프로젝트를 연 뒤 첨부하세요.');
+    if (busy) throw Error('현재 요청 전송이 끝난 뒤 첨부하세요.');
+    const projectId = project.id,
+      conversation = draftConversation;
+    message('이미지를 첨부하는 중입니다.');
+    const kept = await attachImagePath(api, projectId, path);
+    if (project?.id !== projectId || draftConversation !== conversation)
+      throw Error('대화가 바뀌어 이미지 첨부를 취소했습니다.');
+    if (!state.files.some((entry) => entry.id === kept.id)) {
+      const refusal = batchRefusal([], [...state.files, kept]);
+      if (refusal) throw Error(refusal);
+      state.files.push(kept);
+    }
+    render();
+    // A large image gets the smaller copy the model sees, as a picked file does.
+    void addViewCopy(projectId, kept);
+    openReferenceTab({ id: kept.id, name: kept.name });
+    message(`${kept.name}을(를) 첨부했습니다.`);
+  } catch (cause) {
+    const error = readableError(cause);
+    message(
+      pathRefusals[error.code ?? error.message] ||
+        errors[error.code ?? error.message] ||
+        error.message,
+    );
+  }
+}
+function sendComposer() {
   if (!state.body.trim() || state.linkedTargets || busy) {
     void submitRequest();
     return;
@@ -2789,7 +2992,7 @@ $('request').onclick = () => {
       routing = false;
       $('request').removeAttribute('aria-busy');
     });
-};
+}
 async function submitRequest(
   predecessorId?: string,
   sendMode: WorkMode = mode,
@@ -2799,6 +3002,8 @@ async function submitRequest(
     return;
   busy = true;
   render();
+  // The draft being sent: another tab chosen meanwhile keeps its own draft (SPEC-02.19 1).
+  const sentDraft = draftConversation;
   const predecessor =
     predecessorId && state.messages.find((entry) => entry.id === predecessorId)?.request;
   const chosen = predecessorId ? undefined : currentConversation();
@@ -2811,6 +3016,12 @@ async function submitRequest(
       !state.linkedTargets &&
       !worksOnFile(state.body) &&
       !!(await jigConversation(chosen)));
+  // Another tab chosen while its jig was looked up: that tab's draft is not what was meant.
+  if (draftConversation !== sentDraft) {
+    busy = false;
+    render();
+    return;
+  }
   const input = {
     ...packet(predecessor ? interventionTargetDraft(state, predecessor) : state),
     ...modeFields(predecessor ? modeOf(predecessor.input) : sendMode),
@@ -2830,14 +3041,16 @@ async function submitRequest(
     if (project?.id !== projectId || state !== original) return;
     if (!state.messages.some((entry) => entry.id === request.id))
       state.messages.push(requestMessage(request));
-    state.body = '';
-    state.instructions = [];
-    state.pins = [];
-    state.sketches = [];
-    state.files = [];
-    state.linkedTargets = undefined;
-    state.coordinateBasis = undefined;
-    $('body').value = '';
+    if (draftConversation === sentDraft) {
+      state.body = '';
+      state.instructions = [];
+      state.pins = [];
+      state.sketches = [];
+      state.files = [];
+      state.linkedTargets = undefined;
+      state.coordinateBasis = undefined;
+      $('body').value = '';
+    } else clearStoredDraft(draftKey(projectId, sentDraft));
     if (selectedResult === undefined) selectedResult = displayedResult ?? null;
     foregroundRequest = { id: request.id, selected: selectedResult, draft: focusDraft() };
     focusedWork = request.id;
@@ -3007,10 +3220,13 @@ async function attachFiles(files: File[]) {
     if (busy) throw Error('현재 요청 전송이 끝난 뒤 첨부하세요.');
     const refusal = batchRefusal(files, state.files);
     if (refusal) throw Error(refusal);
-    const original = state;
+    const original = state,
+      conversation = draftConversation;
     message(`파일 ${files.length}개를 첨부하는 중입니다.`);
     const kept = await uploadAttachments(currentProject().id, files);
     if (state !== original) throw Error('프로젝트가 바뀌어 파일 첨부를 취소했습니다.');
+    if (draftConversation !== conversation)
+      throw Error('대화가 바뀌어 파일 첨부를 취소했습니다. 그 대화에서 다시 첨부하세요.');
     // The same content attached again is one entry.
     for (const file of kept)
       if (!state.files.some((entry) => entry.id === file.id)) state.files.push(file);
@@ -3276,11 +3492,7 @@ async function deleteProject() {
   const id = project.id;
   try {
     await api(`/projects/${encodeURIComponent(id)}`, 'DELETE');
-    try {
-      localStorage.removeItem('vide:draft:' + id);
-    } catch {
-      /* Storage may be unavailable. */
-    }
+    removeProjectDrafts(id);
     const next = projects.find((entry) => entry.id !== id);
     // With none left, the start page makes a new one.
     location.search = next ? '?project=' + encodeURIComponent(next.id) : '';
@@ -3693,13 +3905,18 @@ async function initializeWorkspace() {
     renderHeading();
     loadMode(project.id);
     let restored = false;
+    // Drafts are per conversation; the last viewed tab comes back (SPEC-02.19 1). Host panels
+    // have no chips and keep the default conversation's draft.
+    migrateProjectDraft(project.id);
+    draftConversation = panelMode ? null : lastConversation(project.id);
     try {
-      const raw = localStorage.getItem('vide:draft:' + project.id);
+      const raw = localStorage.getItem(draftKey(project.id, draftConversation));
       if (raw) {
         state = restoreDraft(JSON.parse(raw), state.messages);
         selectedResult = state.baseRequestId ?? null;
         restored = true;
         $('body').value = state.body;
+        mode = state.permission === 'review' ? 'plan' : 'auto';
       }
     } catch {
       unreadableDraft = true;

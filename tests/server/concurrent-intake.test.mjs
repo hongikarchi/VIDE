@@ -134,19 +134,19 @@ test('three conversations (model edit, CAD edit, question) are accepted and comp
   assert.ok(!log.includes('start question'));
 });
 
-test('two writers to one document: the second waits in line, then runs after the first', async (t) => {
+test('two turn-level writers to one drawing: the second waits in line, then runs after the first', async (t) => {
   const { workspace, project, execution, gate, release, log, send, sync, state, settled } =
     setup(t);
-  sync('model', 1);
+  sync('model', 1, 'zwcad');
   gate('first');
-  send('first', { baseRequestId: 'model' });
-  const second = send('second', { baseRequestId: 'model' });
+  send('first', { host: 'zwcad', baseRequestId: 'model' });
+  const second = send('second', { host: 'zwcad', baseRequestId: 'model' });
   assert.equal(second.state, 'queued');
   assert.equal(second.result.phase, 'queue');
   assert.deepEqual(second.result.waitingFor, {
     kind: 'document',
     key: JSON.stringify(['document', instance, 1]),
-    host: 'rhino',
+    host: 'zwcad',
     after: 'first',
     position: 1,
   });
@@ -191,16 +191,16 @@ test('reads, jig reads and reviews are not refused while a document is edited', 
 test('a waiting request can be cancelled and the next one moves up', async (t) => {
   const { workspace, project, execution, gate, release, log, send, sync, state, settled } =
     setup(t);
-  sync('model', 1);
+  sync('model', 1, 'zwcad');
   gate('a');
-  send('a', { baseRequestId: 'model' });
-  send('b', { baseRequestId: 'model' });
-  assert.equal(send('c', { baseRequestId: 'model' }).result.waitingFor.position, 2);
+  send('a', { host: 'zwcad', baseRequestId: 'model' });
+  send('b', { host: 'zwcad', baseRequestId: 'model' });
+  assert.equal(send('c', { host: 'zwcad', baseRequestId: 'model' }).result.waitingFor.position, 2);
   assert.equal(execution.cancel(project.id, 'b').state, 'cancelled');
   assert.deepEqual(workspace.get(project.id, 'c').result.waitingFor, {
     kind: 'document',
     key: JSON.stringify(['document', instance, 1]),
-    host: 'rhino',
+    host: 'zwcad',
     after: 'a',
     position: 1,
   });
@@ -237,16 +237,16 @@ test('the fourth AI turn waits for a free turn and starts when one ends', async 
 
 test('[멈추고 이걸로] keeps the stopped request’s place ahead of the ones waiting behind it', async (t) => {
   const { execution, project, gate, log, send, sync, state, settled } = setup(t);
-  sync('model', 1);
+  sync('model', 1, 'zwcad');
   gate('a');
-  send('a', { baseRequestId: 'model' });
-  send('b', { baseRequestId: 'model' });
+  send('a', { host: 'zwcad', baseRequestId: 'model' });
+  send('b', { host: 'zwcad', baseRequestId: 'model' });
   execution.intervene(project.id, 'a', {
     id: 'a2',
     body: 'a2',
     provider: 'claude-cli',
     permission: 'candidate',
-    host: 'rhino',
+    host: 'zwcad',
     pins: [],
     sketches: [],
     files: [],
@@ -260,17 +260,17 @@ test('[멈추고 이걸로] keeps the stopped request’s place ahead of the one
 test('replacing a request that is still waiting withdraws it and keeps its place', async (t) => {
   const { workspace, project, execution, gate, release, log, send, sync, state, settled } =
     setup(t);
-  sync('model', 1);
+  sync('model', 1, 'zwcad');
   gate('a');
-  send('a', { baseRequestId: 'model' });
-  send('b', { baseRequestId: 'model' });
-  send('c', { baseRequestId: 'model' });
+  send('a', { host: 'zwcad', baseRequestId: 'model' });
+  send('b', { host: 'zwcad', baseRequestId: 'model' });
+  send('c', { host: 'zwcad', baseRequestId: 'model' });
   const replaced = execution.intervene(project.id, 'b', {
     id: 'b2',
     body: 'b2',
     provider: 'claude-cli',
     permission: 'candidate',
-    host: 'rhino',
+    host: 'zwcad',
     pins: [],
     sketches: [],
     files: [],
@@ -284,4 +284,19 @@ test('replacing a request that is still waiting withdraws it and keeps its place
   await settled();
   assert.deepEqual(log, ['start a', 'end a', 'start b2', 'end b2', 'start c', 'end c']);
   assert.deepEqual(['b2', 'c'].map(state), ['succeeded', 'succeeded']);
+});
+
+test('two direct turns on one open Rhino document start together (executes take turns, SPEC-02.9 3)', async (t) => {
+  const { gate, release, send, sync, state, settled } = setup(t);
+  sync('model', 1);
+  gate('first');
+  gate('second');
+  send('first', { baseRequestId: 'model' });
+  const second = send('second', { baseRequestId: 'model' });
+  assert.equal(second.result, null);
+  assert.deepEqual(['first', 'second'].map(state), ['running', 'running']);
+  release('first');
+  release('second');
+  await settled();
+  assert.deepEqual(['first', 'second'].map(state), ['succeeded', 'succeeded']);
 });

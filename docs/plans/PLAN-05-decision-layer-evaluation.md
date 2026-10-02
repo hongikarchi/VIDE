@@ -2,8 +2,8 @@
 id: PLAN-05
 title: 판정 계층의 실효성 평가 계획
 status: review
-version: 0.6
-updated: 2026-09-29
+version: 0.7
+updated: 2026-10-02
 owner: agent:codex
 related: [PLAN, PLAN-02, SPEC-02, ARCH-01, RESEARCH-02, RESEARCH-07, T-004, T-018, T-032, FR-08, FR-18]
 ---
@@ -77,7 +77,7 @@ Jev와 별도 소형 구독 모델의 분류 호출은 모두 추가 왕복 비�
 4. **제안 모드:** 기준을 넘으면 기본 꺼짐 설정으로 “추천 + 사용자 확인”을 연다. 모델 추천은 선택 칸의 추천 표시, 대상 찾기는 의도 카드의 대상 후보다. 실패·시간 초과·저신뢰는 기존 경로로 넘긴다.
 5. **기본값 검토:** 실사용 비교 뒤에만 기본값 적용을 사용자와 정한다.
 
-### 7.2a 모델·effort 자동 선택 — 2026-09-29 구현
+### 7.2a 모델·effort 자동 선택 — 2026-09-29 구현, 2026-10-02 분야 배분 변경
 
 사용자 결정(2026-09-29): 섀도 모드를 거치지 않고 바로 구현한다. 가설이 맞는지는 이후 로그를 보고 표를 고친다.
 
@@ -85,23 +85,23 @@ Jev와 별도 소형 구독 모델의 분류 호출은 모두 추가 왕복 비�
 
 - **선택 방식:** 모델 목록 끝에 **“자동 (Jev)”** 하나를 둔다. 켜는 것은 사용자가 모델 칸에서 고를 때뿐이다. 서비스(Claude·ChatGPT)도 서버가 정한다.
 - **판정과 우선순위(`src/ai/model-router.ts`):** 제출 시 서버가 두 가지를 동시에 확인한다.
-  - Jev Choice로 작업 유형과 분야를 판정한다. 분야는 3D(모델·도면·형상)와 데이터(문서·표·정보 해석·코드·JIG 제작) 둘이다.
+  - Jev Choice로 작업 유형과 분야를 판정한다. 분야는 형상(Rhino·CAD에서 형상·객체를 만들거나 바꾸는 일)과 데이터(조회·설명·조언·제안, 레이어·이름·색·파일 구조 정리, 문서·표·정보 해석·코드·JIG 제작) 둘이다. 레이어는 형상 분야에 넣지 않는다.
   - 로그인된 서비스를 확인한다. CLI로 확인하므로 결과를 60초간 재사용한다.
 
-  분야·작업 유형의 우선순위 목록에서 로그인된 첫 후보를 고른다. 사용자 결정(2026-09-29): 모든 로그인 조합을 따지고, 둘 다 로그인돼 있으면 3D는 ChatGPT, 데이터·정보 해석·JIG 제작은 Claude를 쓴다.
+  분야·작업 유형의 우선순위 목록에서 로그인된 첫 후보를 고른다. 사용자 결정(2026-09-29): 모든 로그인 조합을 따진다. 사용자 결정(2026-10-02, 2026-09-29의 분야 배분을 대체): **형상을 만들거나 바꾸는 일만 ChatGPT(Codex)로 보내고, 조회·설명·제안·정리(레이어 이름 바꾸기·옮기기·정리 포함)는 Claude로 보낸다.** 계기는 "…그거에 맞는 레이어 정리 방안을 제안해줘"가 3D로 판정되어 ChatGPT로 간 요청이다.
 
   | 분야 · 작업 유형 | 둘 다 로그인 | ChatGPT만 | Claude만 |
   |---|---|---|---|
-  | 3D · 조회 | GPT-6-Luna · low | GPT-6-Luna · low | Sonnet 5 · low |
-  | 3D · 단순 수정 | GPT-6-Astra · low | GPT-6-Astra · low | Opus 5.5 · low |
-  | 3D · 복합 생성 | GPT-6-Astra · medium | GPT-6-Astra · medium | Opus 5.5 · medium |
-  | 3D · 해석 | GPT-6-Astra · high | GPT-6-Astra · high | Opus 5.5 · high |
+  | 형상 · 조회 | Sonnet 5 · low | GPT-6-Luna · low | Sonnet 5 · low |
+  | 형상 · 단순 수정 | GPT-6-Astra · low | GPT-6-Astra · low | Opus 5.5 · low |
+  | 형상 · 복합 생성 | GPT-6-Astra · medium | GPT-6-Astra · medium | Opus 5.5 · medium |
+  | 형상 · 해석 | GPT-6-Astra · high | GPT-6-Astra · high | Opus 5.5 · high |
   | 데이터 · 조회 | Sonnet 5 · low | GPT-6-Luna · low | Sonnet 5 · low |
-  | 데이터 · 단순 수정 | Opus 5.5 · low | GPT-6-Astra · low | Opus 5.5 · low |
+  | 데이터 · 단순 수정(레이어·이름·색 정리 등) | Opus 5.5 · low | GPT-6-Astra · low | Opus 5.5 · low |
   | 데이터 · 복합(JIG 제작 등) | Opus 5.5 · medium | GPT-6-Astra · medium | Opus 5.5 · medium |
   | 데이터 · 해석 | Opus 5.5 · high | GPT-6-Astra · high | Opus 5.5 · high |
 
-  - 분야 판정 확신이 0.5 미만이면 3D로 본다.
+  - 분야 판정이 없거나 확신이 0.5 미만이면 작업 유형으로 정한다: 조회는 데이터, 나머지는 형상으로 본다.
   - 목록에 없는 모델은 건너뛴다. 모델 목록이 없는 서비스는 그 CLI의 기본 모델을 쓴다.
   - 모델이 지원하지 않는 effort는 가까운 낮은 단계로 내린다.
   - 아무 서비스도 로그인되어 있지 않으면 요청에 온 서비스를 유지하고 사유 `NO_SERVICE`를 남긴다.

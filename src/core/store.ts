@@ -239,7 +239,9 @@ export class Store {
         'DELETE FROM publication_exports WHERE projectId=?',
         'DELETE FROM table_views WHERE projectId=?',
         'DELETE FROM hidden_requests WHERE projectId=?',
+        // Sync manifests go with their request rows (ON DELETE CASCADE); then the object versions.
         'DELETE FROM workspace_requests WHERE projectId=?',
+        'DELETE FROM object_versions WHERE projectId=?',
         'DELETE FROM document_links WHERE projectId=?',
         'DELETE FROM approvals WHERE projectId=?',
         'DELETE FROM commands WHERE projectId=?',

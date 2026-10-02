@@ -171,7 +171,20 @@ test('Python: geometry and tables pass; file, network, process, application and 
     assert.equal(verdict.ok, false, source);
     assert.match(verdict.diagnostics[0], /not permitted/);
   }
-  assert.equal(checkRhinoPython('sc.doc.Materials.Compact()').guard.kind, 'purge');
+  for (const source of [
+    'sc.doc.Materials.Compact()',
+    'sc.doc.InstanceDefinitions.Compact(True)',
+    'sc.doc.Layers.Purge(i, True)',
+    'rs.PurgeLayer("Old")',
+  ])
+    assert.equal(checkRhinoPython(source).guard?.kind, 'purge', source);
+  // Geometry Compact (mesh/brep tidy in memory) is not a document purge.
+  for (const source of [
+    'mesh.Compact()',
+    'brep.Compact()',
+    'm = Rhino.Geometry.Mesh()\nm.Compact()',
+  ])
+    assert.deepEqual(checkRhinoPython(source), { ok: true }, source);
   // Names that merely contain Save, or attributes read directly, still pass.
   for (const source of ['saved = 3\nprint(saved)', 'rs.ObjectName(i, "SaveMe")', 'n = sc.doc.Name'])
     assert.deepEqual(checkRhinoPython(source), { ok: true }, source);

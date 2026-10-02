@@ -5,6 +5,7 @@
 // card parser. Execution (execution.ts) chooses the path and settles the request state.
 
 import { randomUUID } from 'node:crypto';
+import { breadcrumb } from '../core/breadcrumbs.ts';
 import { z } from 'zod';
 import { executionLimits } from '../contracts/execution-limits.ts';
 import type { RequestInput, RequestMode } from '../contracts/workspace.ts';
@@ -60,8 +61,11 @@ export interface DirectDriver {
   target: { instance: string; documentId: number };
   execute(command: DirectCommand): Promise<DirectOutcome>;
   undo(undoId: string): Promise<{ ok: boolean; reason?: string; [key: string]: unknown }>;
-  /** A bounded page of the document as it is now (query tool). */
-  query(options: QueryPageOptions): Promise<unknown>;
+  /**
+   * A bounded page of the document as it is now (query tool). `token`: the document's change token
+   * read just before (a driver that caches pages reads again when it differs).
+   */
+  query(options: QueryPageOptions, token?: string): Promise<unknown>;
   /** capture_view and measure; absent when the connection has no view methods. */
   vision?: () => Promise<VisionSource>;
   /** The document's change token right after an applied execute (kept in its record). */
@@ -74,8 +78,12 @@ export interface ExecutionRecord {
   target: { instance: string; documentId: number };
   label: string;
   at: string;
-  /** applied: in the document (undoable); undone: [되돌리기] ran; guarded: held, waiting on the card. */
-  state: 'applied' | 'undone' | 'guarded' | 'confirmed';
+  /**
+   * applied: in the document (undoable); undone: [되돌리기] ran; guarded: held, waiting on the card;
+   * confirmed: the card's [진행] re-ran it (the re-run is its own row); failed: that re-run failed
+   * and the request ended (no card left).
+   */
+  state: 'applied' | 'undone' | 'guarded' | 'confirmed' | 'failed';
   undoId: string | null;
   changes?: DirectOutcome['changes'];
   guarded?: { kind: string; detail: string };
@@ -114,6 +122,108 @@ export async function documentAfter(
   }
 }
 const failure = (code: string) => Object.assign(new Error(code), { code });
+
+/** Who holds or waits for a document's execute turn (its conversation's title for the wait text). */
+export interface ExecuteHolder {
+  requestId: string;
+  conversationId?: string | null;
+  title?: string;
+}
+/**
+ * The per-document execute queue (SPEC-02.9 3, 2026-10-02 user decision): turns on one open
+ * document think and query side by side; only what is sent to the document (an execute, a guard's
+ * re-run, an undo) runs one at a time, in arrival order. In-process: the engine is one process.
+ */
+export class ExecuteQueue {
+  private readonly lines = new Map<string, ExecuteHolder[]>();
+  private readonly tails = new Map<string, Promise<void>>();
+  /** The entries of a document's line, the one executing first. */
+  line(key: string): readonly ExecuteHolder[] {
+    return this.lines.get(key) ?? [];
+  }
+  /**
+   * Waits for the document's turn and returns its release. `onWait` hears the entry ahead when it
+   * has to wait; an abort while waiting rejects with CANCELLED and leaves the line as it was.
+   */
+  async acquire(
+    key: string,
+    who: ExecuteHolder,
+    { signal, onWait }: { signal?: AbortSignal; onWait?: (ahead: ExecuteHolder) => void } = {},
+  ): Promise<() => void> {
+    if (signal?.aborted) throw failure('CANCELLED');
+    const line = this.lines.get(key) ?? [];
+    this.lines.set(key, line);
+    const entry = { ...who };
+    const ahead = line[line.length - 1];
+    line.push(entry);
+    const previous = this.tails.get(key) ?? Promise.resolve();
+    let open!: () => void;
+    const mine = new Promise<void>((resolve) => (open = resolve));
+    const tail = previous.then(() => mine);
+    this.tails.set(key, tail);
+    let released = false;
+    const release = () => {
+      if (released) return;
+      released = true;
+      const at = line.indexOf(entry);
+      if (at >= 0) line.splice(at, 1);
+      if (!line.length && this.lines.get(key) === line) this.lines.delete(key);
+      open();
+      if (this.tails.get(key) === tail) this.tails.delete(key);
+    };
+    if (ahead) {
+      onWait?.(ahead);
+      try {
+        await new Promise<void>((resolve, reject) => {
+          const stop = () => reject(failure('CANCELLED'));
+          signal?.addEventListener('abort', stop, { once: true });
+          previous.then(() => {
+            signal?.removeEventListener('abort', stop);
+            resolve();
+          });
+        });
+      } catch (error) {
+        release();
+        throw error;
+      }
+    }
+    return release;
+  }
+  /** Runs `task` in the document's turn. */
+  async run<T>(key: string, who: ExecuteHolder, task: () => Promise<T>, signal?: AbortSignal) {
+    const release = await this.acquire(key, who, { signal });
+    try {
+      return await task();
+    } finally {
+      release();
+    }
+  }
+}
+/** The engine's execute queue (shared by direct turns, guard re-runs and undos). */
+export const executeQueue = new ExecuteQueue();
+/** A driver whose execute and undo take the document's turn in the queue (undo, re-run, rollback). */
+export function queuedDriver(
+  driver: DirectDriver,
+  who: ExecuteHolder,
+  queue: ExecuteQueue = executeQueue,
+): DirectDriver {
+  const key = documentKey(driver.host, driver.target);
+  return {
+    ...driver,
+    execute: (command) => queue.run(key, who, () => driver.execute(command)),
+    undo: (undoId) => queue.run(key, who, () => driver.undo(undoId)),
+  };
+}
+/** The refusal of an execute whose document changed since the turn last read it (SPEC-02.9 3). */
+export const staleRefusal: DirectRefusal = {
+  code: 'DOCUMENT_CHANGED',
+  final: false,
+  reason:
+    '다른 대화가 이 파일을 고쳤습니다 · 다시 조회한 뒤 실행하세요 (another conversation or the user changed this file since you last read it: query it again, then execute only what is still missing)',
+};
+/** The progress text of an execute waiting for another conversation's (SPEC-02.9 3). */
+export const executeWaitText = (ahead: ExecuteHolder) =>
+  `${ahead.title ? `«${ahead.title}» 대화가` : '다른 대화가'} 이 파일을 고치는 중 · 대기`;
 const LIST_LIMIT = 200;
 /** What the model sees of a change set: counts and at most LIST_LIMIT rows per list. */
 export function boundedChanges(changes: DirectOutcome['changes']) {
@@ -290,6 +400,10 @@ export interface DirectTurn {
   linked?: LinkedFiles;
   /** The target document's name (its records and the result group it). */
   targetName?: string;
+  /** The execute queue (SPEC-02.9 3); the engine's own when left out. */
+  executeQueue?: ExecuteQueue;
+  /** This turn's conversation, shown to a turn waiting behind its execute. */
+  holder?: { conversationId?: string | null; title?: string };
 }
 /** A document a turn works on, as its records and the request result name it. */
 export interface TurnDocument {
@@ -694,6 +808,11 @@ export async function runDirectTurn(turn: DirectTurn) {
     lost?: boolean;
     /** Earlier unresolved results here (another file), told once before the turn acts on it. */
     unresolved?: unknown;
+    /**
+     * The document's change token this turn last saw (turn start, before a query, after its own
+     * execute); an execute against another token is refused as stale (SPEC-02.9 3).
+     */
+    seen?: string;
   }
   let links: LiveLink[] = turn.linked ? await turn.linked.list().catch(() => []) : [];
   const primaryKey = documentKey(driver.host, driver.target);
@@ -709,6 +828,23 @@ export async function runDirectTurn(turn: DirectTurn) {
     },
   };
   const docs = new Map<string, TurnDoc>([[primaryKey, primary]]);
+  const queue = turn.executeQueue ?? executeQueue;
+  const who: ExecuteHolder = {
+    requestId: input.id,
+    conversationId: turn.holder?.conversationId ?? null,
+    ...(turn.holder?.title ? { title: turn.holder.title } : {}),
+  };
+  /** The document's change token now (undefined: the connection cannot say). */
+  const tokenOf = async (target: DirectDriver) => {
+    if (!target.fingerprint) return undefined;
+    try {
+      const now = await target.fingerprint();
+      return typeof now?.documentHash === 'string' ? now.documentHash : undefined;
+    } catch {
+      return undefined;
+    }
+  };
+  primary.seen = await tokenOf(driver);
   /** The document a tool call names: the target, or an open linked file (LINK_NOT_LIVE else). */
   const resolve = async (linkId: unknown): Promise<TurnDoc> => {
     if (linkId === undefined || linkId === primary.file.linkId) return primary;
@@ -727,6 +863,7 @@ export async function runDirectTurn(turn: DirectTurn) {
     const linked = turn.linked.driver(link.host, link.open);
     if (!linked) throw failure('LINK_NOT_LIVE');
     const doc: TurnDoc = { key, driver: linked, file: { linkId: link.id, name: link.name } };
+    doc.seen = await tokenOf(linked);
     doc.unresolved = turn.linked.unresolved?.(turnDocument(doc));
     docs.set(key, doc);
     return doc;
@@ -787,7 +924,13 @@ export async function runDirectTurn(turn: DirectTurn) {
     ...(turn.projectTools as Record<string, Handler>),
     query: async ({ targetRef: _target, linkId, ...args }) => {
       const doc = await resolve(linkId);
-      const page = await doc.driver.query(args as QueryPageOptions);
+      breadcrumb('ai-query', { request: input.id });
+      // Read before the page: a change after this token makes a later execute stale (never one
+      // the page already shows as unseen).
+      const token = await tokenOf(doc.driver);
+      if (token !== undefined) doc.seen = token;
+      const page = await doc.driver.query(args as QueryPageOptions, token);
+      breadcrumb('ai-query-done', { request: input.id, bytes: JSON.stringify(page)?.length });
       queries++;
       activity.add('query', named(doc, `문서 조회 ${queries}회차`));
       update(state('query'));
@@ -893,140 +1036,179 @@ export async function runDirectTurn(turn: DirectTurn) {
         documents.push(turnDocument(doc));
         update(state('host'));
       }
-      attempts++;
-      const executionId = randomUUID();
-      const label = directLabel(input.body, attempts);
-      const form =
-        language === 'command' ? ' · Rhino 명령' : language === 'python' ? ' · Python' : '';
-      activity.add(
-        'execute',
-        named(doc, `${hostLabel(doc.driver.host)} 문서에 바로 실행 ${attempts}회차${form}`),
-        code,
-      );
-      update(state('host'));
-      const record = {
-        executionId,
-        host: doc.driver.host,
-        target: doc.driver.target,
-        file: doc.file,
-        label,
-        at: new Date().toISOString(),
-      };
-      const held = (detail: { kind: string; detail: string }) => {
-        guarded = {
-          ...record,
-          at: new Date().toISOString(),
-          state: 'guarded',
-          undoId: null,
-          guarded: { kind: detail.kind, detail: detail.detail },
-          code,
-          ...(language === 'csharp' ? {} : { language }),
-        };
-        executions.push(guarded);
-        turn.onExecution?.(guarded);
-        activity.add('error', named(doc, `확인 필요 · ${detail.detail} · 되돌려 둠`));
-        update(state('host'));
-        return {
-          ok: false,
-          guarded: guarded.guarded,
-          reverted: true,
-          next: 'Nothing stays applied. Stop here and tell the user what needs confirmation; the card re-runs this execute after they confirm.',
-        };
-      };
-      // A command that writes files or purges waits on the card before anything runs.
-      if (verdict.guard && input.guardConfirmed !== true) return held(verdict.guard);
-      // A lost answer leaves the document state unknown: no further execute in this turn.
-      uncertain = true;
-      inflight = doc;
-      let outcome: DirectOutcome | undefined;
-      let thrown: unknown;
+      // One execute at a time per document (SPEC-02.9 3): another conversation's goes first.
+      const release = await queue.acquire(doc.key, who, {
+        signal,
+        onWait: (ahead) => {
+          const text = executeWaitText(ahead);
+          activity.add('host', named(doc, text));
+          update({
+            ...state('model'),
+            executeWait: {
+              kind: 'execute',
+              key: doc.key,
+              host: doc.driver.host,
+              position: Math.max(1, queue.line(doc.key).length - 1),
+              conversationId: ahead.conversationId ?? null,
+              ...(ahead.title ? { title: ahead.title } : {}),
+            },
+          });
+        },
+      });
       try {
-        outcome = await doc.driver.execute({
-          requestId: executionId,
+        if (uncertain) throw failure('HOST_RESULT_UNKNOWN');
+        // The document changed since this turn last read it (another conversation's execute, a
+        // person's edit): nothing is sent; the AI reads again and executes what is still missing.
+        if (doc.seen !== undefined) {
+          const now = await tokenOf(doc.driver);
+          if (now !== undefined && now !== doc.seen)
+            return {
+              ...notExecuted(doc, staleRefusal, true),
+              next: `Nothing ran and ${doc === primary ? 'the document' : doc.file.name} is unchanged. Query it again${doc === primary ? '' : ' (with this linkId)'}, then execute only what is still missing.`,
+            };
+        }
+        attempts++;
+        const executionId = randomUUID();
+        const label = directLabel(input.body, attempts);
+        const form =
+          language === 'command' ? ' · Rhino 명령' : language === 'python' ? ' · Python' : '';
+        activity.add(
+          'execute',
+          named(doc, `${hostLabel(doc.driver.host)} 문서에 바로 실행 ${attempts}회차${form}`),
           code,
-          ...(language === 'csharp' ? {} : { language }),
+        );
+        update(state('host'));
+        const record = {
+          executionId,
+          host: doc.driver.host,
+          target: doc.driver.target,
+          file: doc.file,
           label,
-          guard: { confirmed: input.guardConfirmed === true, maxDeletes: DIRECT_MAX_DELETES },
-        });
-      } catch (error) {
-        thrown = error;
-      } finally {
-        inflight = undefined;
-      }
-      // The turn ended (stopped, timed out) before this answer: the request already reports the
-      // document unknown, and a late answer is neither recorded nor applied to its state.
-      if (ended) return { ok: false, executed: false, code: 'AGENT_SCOPE_EXPIRED' };
-      if (!outcome) {
-        // Refused before it touched the document (read-only, busy, closed): nothing ran.
-        const refusal = directRefusal(doc.driver.host, thrown);
-        if (!refusal) {
+          at: new Date().toISOString(),
+        };
+        const held = (detail: { kind: string; detail: string }) => {
+          guarded = {
+            ...record,
+            at: new Date().toISOString(),
+            state: 'guarded',
+            undoId: null,
+            guarded: { kind: detail.kind, detail: detail.detail },
+            code,
+            ...(language === 'csharp' ? {} : { language }),
+          };
+          executions.push(guarded);
+          turn.onExecution?.(guarded);
+          activity.add('error', named(doc, `확인 필요 · ${detail.detail} · 되돌려 둠`));
+          update(state('host'));
+          return {
+            ok: false,
+            guarded: guarded.guarded,
+            reverted: true,
+            next: 'Nothing stays applied. Stop here and tell the user what needs confirmation; the card re-runs this execute after they confirm.',
+          };
+        };
+        // A command that writes files or purges waits on the card before anything runs.
+        if (verdict.guard && input.guardConfirmed !== true) return held(verdict.guard);
+        // A lost answer leaves the document state unknown: no further execute in this turn.
+        uncertain = true;
+        inflight = doc;
+        let outcome: DirectOutcome | undefined;
+        let thrown: unknown;
+        breadcrumb('ai-execute', { execution: executionId });
+        try {
+          outcome = await doc.driver.execute({
+            requestId: executionId,
+            code,
+            ...(language === 'csharp' ? {} : { language }),
+            label,
+            guard: { confirmed: input.guardConfirmed === true, maxDeletes: DIRECT_MAX_DELETES },
+          });
+        } catch (error) {
+          thrown = error;
+        } finally {
+          inflight = undefined;
+          breadcrumb('ai-execute-done', { execution: executionId });
+        }
+        // The turn ended (stopped, timed out) before this answer: the request already reports the
+        // document unknown, and a late answer is neither recorded nor applied to its state.
+        if (ended) return { ok: false, executed: false, code: 'AGENT_SCOPE_EXPIRED' };
+        if (!outcome) {
+          // Refused before it touched the document (read-only, busy, closed): nothing ran.
+          const refusal = directRefusal(doc.driver.host, thrown);
+          if (!refusal) {
+            doc.lost = true;
+            throw thrown;
+          }
+          uncertain = false;
+          return notExecuted(doc, refusal, true);
+        }
+        // A change the host could not revert: as unknown as a lost answer (stays uncertain).
+        if (hostLeftUnknown(outcome)) {
           doc.lost = true;
-          throw thrown;
+          activity.add(
+            'error',
+            named(doc, '실행 결과를 되돌리지 못함 · 문서 상태 확인 필요'),
+            outcome.code,
+          );
+          throw failure('HOST_RESULT_UNKNOWN');
         }
         uncertain = false;
-        return notExecuted(doc, refusal, true);
-      }
-      // A change the host could not revert: as unknown as a lost answer (stays uncertain).
-      if (hostLeftUnknown(outcome)) {
-        doc.lost = true;
-        activity.add(
-          'error',
-          named(doc, '실행 결과를 되돌리지 못함 · 문서 상태 확인 필요'),
-          outcome.code,
-        );
-        throw failure('HOST_RESULT_UNKNOWN');
-      }
-      uncertain = false;
-      // The host answered this one: an earlier passing refusal (busy) no longer describes it.
-      doc.refused = undefined;
-      if (refusedKey === doc.key) refused = undefined;
-      if (!outcome.ok && outcome.guarded) return held(outcome.guarded);
-      const refusal = !outcome.ok && !outcome.guarded && directRefusal(doc.driver.host, outcome);
-      if (refusal) return notExecuted(doc, refusal, true);
-      if (!outcome.ok) {
-        activity.add(
-          'error',
-          named(doc, '실행 거절 · AI가 수정해 다시 시도'),
-          (outcome.diagnostics ?? []).join('\n') || outcome.code,
-        );
-        update(state('model'));
-        return outcome;
-      }
-      const changes = boundedChanges(outcome.changes);
-      if (outcome.undoId) {
-        applied++;
-        const document = await documentAfter(doc.driver, outcome);
-        const entry: ExecutionRecord = {
-          ...record,
-          state: 'applied',
-          undoId: outcome.undoId,
-          changes: outcome.changes,
-          ...(document ? { document } : {}),
+        // What this turn has now seen of the document (its own change, or the revert of a guard).
+        const after = await documentAfter(doc.driver, outcome);
+        if (after) doc.seen = after.documentHash;
+        // The host answered this one: an earlier passing refusal (busy) no longer describes it.
+        doc.refused = undefined;
+        if (refusedKey === doc.key) refused = undefined;
+        if (!outcome.ok && outcome.guarded) return held(outcome.guarded);
+        const refusal = !outcome.ok && !outcome.guarded && directRefusal(doc.driver.host, outcome);
+        if (refusal) return notExecuted(doc, refusal, true);
+        if (!outcome.ok) {
+          activity.add(
+            'error',
+            named(doc, '실행 거절 · AI가 수정해 다시 시도'),
+            (outcome.diagnostics ?? []).join('\n') || outcome.code,
+          );
+          update(state('model'));
+          return outcome;
+        }
+        const changes = boundedChanges(outcome.changes);
+        if (outcome.undoId) {
+          applied++;
+          const document = after;
+          const entry: ExecutionRecord = {
+            ...record,
+            state: 'applied',
+            undoId: outcome.undoId,
+            changes: outcome.changes,
+            ...(document ? { document } : {}),
+          };
+          executions.push(entry);
+          turn.onExecution?.(entry);
+          activity.add(
+            'result',
+            named(
+              doc,
+              `문서에 반영 · 추가 ${countOf(outcome.changes, 'added')} · 수정 ${countOf(outcome.changes, 'changed')} · 삭제 ${countOf(outcome.changes, 'removed')} · 되돌리기 1단계`,
+            ),
+          );
+        } else activity.add('result', named(doc, '실행 성공 · 바뀐 객체 없음'));
+        update(state('host'));
+        return {
+          ok: true,
+          executionId,
+          undoId: outcome.undoId ?? null,
+          changes,
+          log: outcome.log,
+          ...(outcome.value !== undefined &&
+          Buffer.byteLength(JSON.stringify(outcome.value ?? null)) <= 16384
+            ? { value: outcome.value }
+            : outcome.value !== undefined
+              ? { valueOmitted: true }
+              : {}),
         };
-        executions.push(entry);
-        turn.onExecution?.(entry);
-        activity.add(
-          'result',
-          named(
-            doc,
-            `문서에 반영 · 추가 ${countOf(outcome.changes, 'added')} · 수정 ${countOf(outcome.changes, 'changed')} · 삭제 ${countOf(outcome.changes, 'removed')} · 되돌리기 1단계`,
-          ),
-        );
-      } else activity.add('result', named(doc, '실행 성공 · 바뀐 객체 없음'));
-      update(state('host'));
-      return {
-        ok: true,
-        executionId,
-        undoId: outcome.undoId ?? null,
-        changes,
-        log: outcome.log,
-        ...(outcome.value !== undefined &&
-        Buffer.byteLength(JSON.stringify(outcome.value ?? null)) <= 16384
-          ? { value: outcome.value }
-          : outcome.value !== undefined
-            ? { valueOmitted: true }
-            : {}),
-      };
+      } finally {
+        release();
+      }
     };
   /**
    * All or nothing (ADR-027 3): a multi-file request that ends failed or stopped undoes what it
@@ -1036,7 +1218,10 @@ export async function runDirectTurn(turn: DirectTurn) {
     const lost = new Set([...docs.values()].filter((doc) => doc.lost).map((doc) => doc.key));
     const outcome = await undoExecutions(
       executions,
-      (record) => docs.get(documentKey(record.host, record.target))?.driver,
+      (record) => {
+        const doc = docs.get(documentKey(record.host, record.target));
+        return doc && queuedDriver(doc.driver, who, queue);
+      },
       { skip: lost },
     );
     for (const entry of executions)
@@ -1191,9 +1376,12 @@ export function publicRecord({ code: _code, ...entry }: ExecutionRecord) {
   return entry;
 }
 
-/** Rhino query pages from the attached document, read once per document revision of this turn. */
+/**
+ * Rhino query pages from the attached document, read once per document revision of this turn: after
+ * its own execute, or when the document's change token moved (another conversation, a person).
+ */
 export function displayQuery(read: () => Promise<Record<string, unknown>>) {
-  let cached: { model: Record<string, unknown>; revision: number } | undefined;
+  let cached: { model: Record<string, unknown>; revision: number; token?: string } | undefined;
   let revision = 0;
   return {
     /** After an execute the next query reads the document again. */
@@ -1201,8 +1389,11 @@ export function displayQuery(read: () => Promise<Record<string, unknown>>) {
       revision++;
       cached = undefined;
     },
-    async page(options: QueryPageOptions) {
-      if (!cached || cached.revision !== revision) cached = { model: await read(), revision };
+    /** `token`: the document's change token now; another than the cached page's reads again. */
+    async page(options: QueryPageOptions, token?: string) {
+      if (token !== undefined && cached && cached.token !== token) revision++;
+      if (!cached || cached.revision !== revision)
+        cached = { model: await read(), revision, ...(token !== undefined ? { token } : {}) };
       const units = typeof cached.model.units === 'string' ? cached.model.units : undefined;
       return queryPage({ revision, units, model: cached.model }, options, revision);
     },

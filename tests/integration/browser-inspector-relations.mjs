@@ -44,7 +44,7 @@ try {
   assert.equal(await page.locator('#body').inputValue(), 'Keep editing this Rhino candidate');
   assert.equal(await page.locator('#selection').innerText(), pin.name);
   const draft = await page.evaluate(
-    (id) => JSON.parse(localStorage.getItem('vide:draft:' + id)),
+    (id) => JSON.parse(localStorage.getItem('vide:draft:' + id + ':default')),
     projectId,
   );
   assert.equal(draft.baseRequestId, candidate.id);
