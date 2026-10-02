@@ -89,6 +89,11 @@ export interface ExecutionRecord {
   guarded?: { kind: string; detail: string };
   /** Kept only while guarded: [진행] re-runs this body with the guard released. */
   code?: string;
+  /**
+   * The applied body in full (2026-10-02): a later turn or conversation can read and rerun what
+   * made a change instead of only its 4000-character activity line.
+   */
+  body?: string;
   /** The body's form when it is not C# (ADR-029: a Rhino command macro or Python). */
   language?: ExecuteLanguage;
   /** The guarded execution a confirmed run released. */
@@ -1023,7 +1028,7 @@ export async function runDirectTurn(turn: DirectTurn) {
           executed: false,
           code: 'HOST_RESULT_UNRESOLVED',
           unresolved,
-          next: `Nothing ran and ${doc.file.name} is unchanged. Read it first (query with this linkId), then execute again only what is still missing.`,
+          next: `Nothing ran and ${doc.file.name} is unchanged. Check its current state first (a query with this linkId, or inspect it inside the execute itself if a query fails), then execute only what is still missing. Your next execute there runs.`,
         };
       if (attempts >= limits.maxHostCommands) throw failure('HOST_COMMAND_LIMIT');
       attempted.add(doc.key);
@@ -1181,6 +1186,8 @@ export async function runDirectTurn(turn: DirectTurn) {
             undoId: outcome.undoId,
             changes: outcome.changes,
             ...(document ? { document } : {}),
+            body: code,
+            ...(language === 'csharp' ? {} : { language }),
           };
           executions.push(entry);
           turn.onExecution?.(entry);

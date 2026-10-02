@@ -1323,11 +1323,13 @@ export async function startServer({
         const projectId = capture[1];
         // Every Sync asked here is the user's (⟳, 지금 Sync, the plugin's Sync): automatic ones are
         // the engine's own (T-084), so this one never joins another read (ARCH-01 §7).
-        const { result: synced, shared } = await runDocumentSync(syncContext, projectId, {
+        const { result: synced } = await runDocumentSync(syncContext, projectId, {
           ...target,
           fresh: target.fresh ?? true,
         });
-        send(200, shared === 'reused' ? workspace.get(projectId, synced.id) : synced);
+        // The request without its display geometry (object rows only): the window fetches the
+        // geometry as binary (`GET …/requests/:r`), never the whole model as JSON (2026-10-02).
+        send(200, workspace.summary(projectId, synced.id));
         return;
       }
       const live = /^\/api\/v1\/projects\/([^/]+)\/live-sync$/.exec(url.pathname);

@@ -1798,7 +1798,7 @@ export class Execution {
   private ledgerExecution(request: StoredWork, record: Partial<ExecutionRecord>) {
     const conversationId = request.input.conversationId;
     if (!this.conversations || typeof conversationId !== 'string') return;
-    const { code: _code, changes, ...entry } = record;
+    const { code: _code, body: _body, changes, ...entry } = record;
     const count = (key: 'added' | 'changed' | 'removed') =>
       Array.isArray(changes?.[key]) ? (changes[key] as unknown[]).length : 0;
     try {

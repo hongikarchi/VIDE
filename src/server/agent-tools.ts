@@ -531,6 +531,8 @@ const errorHints: Record<string, string> = {
     'That linked file is not open and connected now. Read it from its stored Sync with links_layers and sync_sample, do not edit it, and tell the user it must be open in its host to be edited.',
   DOCUMENT_LOCKED:
     'Another running task is writing that file. Nothing ran there; do not retry it in this turn. Tell the user.',
+  HOST_RESULT_TOO_LARGE:
+    'The host could not send that read in one piece. Read less at once: name layers or objectIds, or a smaller limit, and continue with nextOffset.',
   EXECUTE_FORM_INVALID:
     'Nothing ran. Give exactly one of code (C#), command (a Rhino command macro) or python (a Python 3 script).',
   EXECUTE_FORM_UNSUPPORTED:
@@ -823,7 +825,12 @@ export class AgentTools {
         cause && typeof cause === 'object' && 'code' in cause && typeof cause.code === 'string'
           ? cause.code
           : '';
-      return error(knownErrors.has(code) ? code : 'AGENT_TOOL_FAILED');
+      // Any coded failure reaches the model as its own code, so it sees the real cause (a page
+      // too large, a host refusal) instead of a generic failure. Uncoded errors keep their text
+      // private.
+      return error(
+        knownErrors.has(code) || /^[A-Z][A-Z0-9_]{2,63}$/.test(code) ? code : 'AGENT_TOOL_FAILED',
+      );
     } finally {
       if (controlled) run.busy = false;
     }

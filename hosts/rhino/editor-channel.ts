@@ -132,7 +132,7 @@ export function editorMethods(
       const model = await readScenePages(
         (params) => call('displayPage', params),
         {},
-        128 * 1024 * 1024,
+        Infinity,
         true,
         scope,
       );

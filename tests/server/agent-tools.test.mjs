@@ -220,4 +220,20 @@ test('expired tokens cannot initialize MCP and backend exceptions do not leak lo
     payload(await client.callTool({ name: 'query', arguments: { targetRef: 'synthetic:A' } })),
     { code: 'AGENT_TOOL_FAILED' },
   );
+  // A coded failure reaches the model as its own code (ADR-031), with its hint when there is one.
+  const sized = app.agentTools.issue({
+    targetRef: 'synthetic:A',
+    isCurrent: () => true,
+    handlers: {
+      query: () => {
+        throw Object.assign(new Error('private path'), { code: 'HOST_RESULT_TOO_LARGE' });
+      },
+    },
+  });
+  const sizedClient = await connect(sized.token);
+  const told = payload(
+    await sizedClient.callTool({ name: 'query', arguments: { targetRef: 'synthetic:A' } }),
+  );
+  assert.equal(told.code, 'HOST_RESULT_TOO_LARGE');
+  assert.match(told.next, /nextOffset/);
 });

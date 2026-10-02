@@ -44,11 +44,15 @@ export function withSurvey<
   };
 }
 
-/** Only explicit oversized read replies may retry; execution is never repeated. */
+/**
+ * Only explicit oversized read replies may retry; execution is never repeated. A document has no
+ * total size cap (PLAN-28): each page already fits one host reply, so only one object larger than
+ * a reply fails the read.
+ */
 export async function readScenePages(
   call: (params: Record<string, unknown>) => Promise<unknown>,
   caches: Record<string, unknown> = {},
-  maxBytes = 32 * 1024 * 1024,
+  maxBytes = Infinity,
   displayOnly = false,
   scope: ReadScope = {},
 ): Promise<NativeModel> {

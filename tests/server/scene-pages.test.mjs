@@ -44,6 +44,13 @@ test('native pages preserve all identities and one revision until complete', asy
   });
   assert.equal(calls, 11);
   assert.equal(result.objects.length, 10713);
+  // No total cap by default (ADR-031): only an explicit budget stops a long read.
+  const bulky = await readScenePages(async ({ offset, limit }) => {
+    const reply = page(items.slice(offset, offset + limit), offset, items.length);
+    reply.padding = 'x'.repeat(4 * 1024 * 1024);
+    return reply;
+  });
+  assert.equal(bulky.objects.length, 10713);
   assert.equal(result.measurementStats.measuredObjects, 10713);
 });
 test('only an explicit oversized read reduces page size; singular overflow stops', async () => {
