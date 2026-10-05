@@ -2,8 +2,8 @@
 id: PLAN-28
 title: 순정 우선 — 상한·자체 도구 정리, 모델 전체 JSON 전송 제거, 프로젝트별 DB
 status: draft
-version: 0.2
-updated: 2026-10-02
+version: 0.3
+updated: 2026-10-06
 owner: agent:claude
 related: [ADR-031, ADR-032, RESEARCH-14, PLAN-27, SPEC-02, ARCH-01]
 ---
@@ -60,13 +60,21 @@ related: [ADR-031, ADR-032, RESEARCH-14, PLAN-27, SPEC-02, ARCH-01]
 
 ## T-123 모델 전체 JSON 전송 제거 (RESEARCH-14 §1)
 
-- ⟳는 Live Sync로 처리하고, 전체 읽기는 처음 한 번과 Live가 불가능할 때만 한다.
-- 요청 목록에서 Sync의 `objects[]`를 빼고, 필요한 화면만 따로 받는다.
-- AI 턴은 모델 전체를 조립하지 않는다.
-- AI `query`는 문서 전체를 다시 읽지 않고 호스트에 필요한 것만 묻는다.
-- 화면은 VGT1을 풀지 않고 그대로 쓴다(PLAN-27 T-085와 같은 작업).
+**담당·순서(2026-10-06 사용자 결정 "여기에서 한번에 다 처리"):** 화면 파일이 겹치는 [PLAN-27](PLAN-27-sync-storage-stability.md) 3단계 T-085(화면)와 한 세션에서 함께 한다. T-120에서 ⟳ 응답의 형상만 뺐다. 엔진 쪽(1~4)을 먼저 하고 화면(5, T-085)을 이어서 한다. 물리 계약은 [ARCH-01](../architecture/ARCH-01-system.md) §5 「Sync 표시 형상의 객체 단위 저장」의 API 응답과 §7 「엔진 주관 Sync」·「웹 화면 구조」가 소유한다.
 
-선행: PLAN-27 T-084·T-085를 하는 세션과 순서를 맞춘다.
+| 순서 | 변경 | 위치 |
+|---|---|---|
+| 1 | ⟳·지금 Sync·플러그인 Sync(`POST …/capture`)는 그 문서의 마지막 Rhino 표시 Sync가 Live로 이어질 수 있으면 `LiveSync.run`으로 바뀐 객체만 호스트에 묻는다. 처음, 기준 없음, Live 불가(`resync`), ZWCAD·작업 사본, 재시도 대상 실패(`SOURCE_CHANGED` 등)면 지금처럼 전체를 새로 읽는다. 진행 중인 자동 Sync에 합류하지 않는 규칙(SPEC-01.11의 10)은 그대로다. 응답은 형상·객체 줄 없는 요청 | `src/server/document-sync.ts`(`runUserSync`), `server.ts` |
+| 2 | `GET …/requests`·`POST …/capture` 응답의 표시 Sync(`displayOnly`) 행에서 `objects[]`를 빼고 `objectsOmitted: true`·`objectCount`를 둔다. 객체 줄이 필요한 화면은 새 `GET …/requests/:r/objects[?ids=]`(형상 없는 JSON)로 받는다. 엔진 안의 `Workspace.list`·`summary`(고정 확인 등)는 그대로 | `server.ts`, `src/core/workspace.ts` |
+| 3 | AI 턴의 기준이 표시 Sync면 `brief`(작은 결과)와 지연 조회 `ModelView`만 쓴다. 모델 요약(`modelContext`)은 우선 객체와 앞 100개의 줄만 읽는다. 작업 사본 후보·DWG 불러오기 같은 비표시 기준은 보호 비교·측정 재사용에 모델이 필요해 지금처럼 한 번 읽는다 | `src/server/execution.ts`, `model-context.ts` |
+| 4 | Rhino 바로 적용 턴의 `query`는 문서 전체를 다시 읽지 않는다. 그 문서의 마지막 저장 Sync(`ModelView`의 객체 줄·측정 meta)에 그 Sync 이후 바뀐 객체(`editors.changes`)를 덮어 쪽을 만든다. 저장 Sync가 없거나 Live가 불가능하면 지금처럼 전체를 읽는다. 측정 줄에는 좌표 배열을 싣지 않는다 | `src/server/direct-mode.ts`(`displayQuery`), `execution.ts` |
+| 5 | 화면은 VGT1을 숫자 배열로 풀지 않고 형식화 배열 그대로 GPU에 올린다(PLAN-27 3단계 T-085의 점검표) | `src/contracts/geometry-transfer.ts`, `src/ui/**` |
+
+**시험:**
+- 새로: `tests/server/user-sync-live.test.mjs`(⟳가 기준이 있으면 Live로, 없으면·`resync`면 전체로, 응답에 `objects`·`scene` 없음), `tests/server/request-objects.test.mjs`(목록·capture 응답 크기와 `objectsOmitted`, `…/objects?ids=`), `tests/server/direct-query-store.test.mjs`(합성 1만 개: `query`가 전체 읽기를 부르지 않고 변경만 묻고 덮어 씀, 저장 Sync 없으면 전체 읽기), `tests/core/geometry-transfer.test.mjs`의 형식화 풀기, 통합 `tests/integration/browser-large-sync.mjs`(아래 측정).
+- 고침: `model-context`·`large-sync-pins`(턴에서 `load` 0번)·`capture`·`workspace-list` 시험, 통합 `browser-live-sync`·`browser-links`·`browser-rhino-panel`.
+
+**완료 기준:** ⟳·요청 목록·AI 턴·`query` 어디에서도 모델 전체 JSON을 보내거나 조립하지 않음(응답 크기·호출 경로 시험). PLAN-27 1~3단계 완료 기준의 합성 1만 개 측정.
 
 ## T-124 프로젝트별 DB (ADR-032)
 

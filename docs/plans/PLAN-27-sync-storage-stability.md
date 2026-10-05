@@ -2,8 +2,8 @@
 id: PLAN-27
 title: Sync 저장 구조와 작동 안정성 — 진단·복구, 객체 단위 저장, 엔진 주관 Sync
 status: draft
-version: 0.5
-updated: 2026-10-02
+version: 0.6
+updated: 2026-10-06
 owner: agent:claude
 related: [RESEARCH-13, SPEC-01, ARCH-01, PLAN-16, PLAN-18, PLAN-24, FR-02, FR-03, FR-16]
 ---
@@ -192,14 +192,23 @@ Rhino 패널의 같은 복구(플러그인 재빌드·Rhino 재시작 필요)는
 
 ## 3단계 — 화면 (T-085)
 
-- 형상을 바이너리 그대로 GPU에 올린다(숫자 배열로 풀지 않음).
-- Live Sync는 바뀐 객체만 다시 그린다.
-- 화면에 보이지 않는 Sync의 형상은 메모리에서 버리고 필요할 때 다시 받는다.
-- Rhino 패널은 3D 장면을 만들지 않는다.
-- 많이 선택했을 때 선택 계산은 색인으로 한다(지금은 전체 선택 시 키 입력마다 0.65초).
-- 작업 상태 확인과 Live Sync 재시도는 실패해도 다시 시도하고, 요청에 시간 제한을 둔다.
+**담당(2026-10-06 사용자 결정):** [PLAN-28](PLAN-28-stock-first.md) T-123과 한 세션에서 함께 한다. 화면 구조는 T-113의 React 셸을 유지한다(조각에서 그리고, 뷰포트는 `#canvas` 안에서 명령형). 물리 계약은 ARCH-01 §1.1 「웹 화면 구조」와 §7 「엔진 주관 Sync」.
 
-**검증:** 합성 1만 개 모델로 전체 Sync 5회 뒤 화면 메모리 증가가 없을 것, Live Sync 한 번에 주 스레드 멈춤 50 ms 이하, 전체 선택 키 입력 지연.
+| 항목 | 변경 | 위치 |
+|---|---|---|
+| 바이너리 그대로 | `decodeGeometry(…, {typed: true})`: 좌표는 응답 버퍼 위의 `Float32Array`(배열 원점 `origin`을 붙임), 색인은 `Uint16Array`/`Uint32Array` 그대로. 뷰포트는 이 배열을 그대로 `BufferAttribute`로 올리고 원점을 물체 위치로 둔다. 숫자 배열(`number[]`)도 지금처럼 받는다 | `src/contracts/geometry-transfer.ts`, `src/ui/gateway.ts`, `src/ui/viewport.ts`, `src/core/display-coordinates.ts` |
+| 바뀐 객체만 | Live Sync(`update`)는 바뀐·지운 객체가 든 그리기 묶음만 다시 만들고 새 객체만 칠한다(지금은 묶음 전체를 다시 만듦). 레이어 합성은 바뀌지 않은 항목을 다시 만들지 않는다 | `src/ui/viewport.ts`, `src/ui/app/links-sync.ts` |
+| 안 보이는 Sync 버리기 | 레이어에 없는 결과의 `scene`·`definitions`(표시 Sync는 `objects`도)를 메시지에서 지우고 `sceneOmitted`로 둔다. 다시 보일 때 받는다 | `src/ui/app/links-sync.ts` |
+| Rhino 패널 | 패널 모드는 뷰포트(WebGL)를 만들지 않고 형상을 받지 않는다. 객체 줄이 필요하면 `…/objects`로 받는다 | `src/ui/app/viewport.ts`, `boot.ts`, `links-sync.ts` |
+| 선택 색인 | 화면 객체를 ID로 찾는 색인(`objectById`)을 두고, 선택 정리·고정 가능 판단·선택 칠하기의 `find`·`some`·`includes` 제곱 계산을 없앤다 | `src/ui/model.ts`, `src/ui/app/viewport.ts`, `composer.ts` |
+| 다시 시도·시간 제한 | 모든 `api` 호출에 시간 제한(일반 30초, 형상 120초, 넘으면 `NETWORK_TIMEOUT`). 작업 상태 확인(`poll`)은 실패해도 1.2초에서 10초까지 늘려 가며 계속하고 알림은 한 번만. 연결 목록·변경분 조회는 다음 주기에 다시 함 | `src/ui/gateway.ts`, `src/ui/app/thread.ts`, `links-sync.ts` |
+| 객체 줄을 따로 받기 | 목록에서 빠진 표시 Sync의 `objects`가 필요한 곳(패널 고정·선택, 초안 복원, 복구·연계 후속 초안)은 `…/objects`로 받거나 엔진의 확인에 맡긴다 | `src/ui/app/boot.ts`, `draft-storage.ts`, `model.ts`, `linked-draft.ts` |
+
+**시험:** 통합 `tests/integration/browser-large-sync.mjs`(새, 합성 1만 개·정점 100만 개, `--measure`는 숫자만): Live Sync 엔진 처리, 화면의 가장 긴 주 스레드 작업, 전체 Sync 5회 뒤 힙·GPU 버퍼, 전체 선택 뒤 키 입력, 목록 응답 크기. 고침: `browser-live-sync`·`browser-links`·`browser-rhino-panel`·`browser-viewport-display`·`browser-large-model`, `tests/core/geometry-transfer.test.mjs`.
+
+**검증:** 합성 1만 개 모델로 전체 Sync 5회 뒤 화면 메모리 증가가 없을 것, Live Sync 한 번에 주 스레드 멈춤 50 ms 이하, 전체 선택 키 입력 지연(전후 측정).
+
+**착수 전 측정(2026-10-06, `0c3b184`, 헤드리스 Chrome·SwiftShader, `browser-large-sync.mjs --measure`):** 첫 표시 2.6초(가장 긴 작업 1,084 ms), Live Sync 10개 엔진 10 ms·화면 가장 긴 작업 135 ms, 전체 선택 1.6초·그 뒤 글자 입력 1.39초(가장 긴 작업 784 ms), 전체 Sync 5회 동안 힙 348 → 602 MB(회당 약 64 MB), 요청 목록 9.2 MB(Sync 6개).
 
 ## 4단계 — 상한 (T-086)
 
