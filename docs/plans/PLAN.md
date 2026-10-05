@@ -272,8 +272,8 @@ T-001~018의 번호·지원 증거는 유지한다. 각 티켓의 현재 결과�
 | T-082 안정성 0단계 진단·복구 | 구현·자동 검증(`9aac8cd`) | 실제 창의 화면 복구 확인, 설치본 릴리스 | [PLAN-27](PLAN-27-sync-storage-stability.md) |
 | T-083 객체 단위 저장 | 구현·커밋(`b884282`), 설치본 0.2.18 반영. 설치 DB 옮기기 654 → 119 MB, 42초. `Workspace`(저장·읽기·`model`·`brief`·`applyDelta`)·`LiveSync`(목록에 제자리/복사본 적용)·단건 VGT1·`…/delta`·직전 측정 SQL·엔진 시작의 옮기기·보존·VACUUM. 합성 1만 개: Live Sync 엔진 3~4 ms, 바뀌지 않은 전체 Sync DB +2.9 MB(Rhino GUID 키 약 4 MB) | 전체 Sync DB 증가 약 1 MB 목표는 지금 표 구조로 못 미침(결정 필요, PLAN-27) | [PLAN-27](PLAN-27-sync-storage-stability.md), [RESEARCH-13](../research/RESEARCH-13-stability-audit.md) |
 | T-084 엔진 주관 Sync | 구현·커밋(`b884282`), 설치본 0.2.18 반영. `runDocumentSync`(`document-sync.ts`)·`SyncScheduler`(1초, 재시도·대기·보류·임대, 작업 사본 첫 Sync)·연결 행 `sync`·`display`·화면은 알림과 `delta`로만 갱신(⟳만 `capture`) | 실제 Rhino 창·패널 동시 확인 | [PLAN-27](PLAN-27-sync-storage-stability.md) |
-| T-085 화면 | 진행(2026-10-06, T-123과 한 세션). 착수 전 측정은 PLAN-27 3단계 | 구현·측정, 실제 Rhino 패널 확인 | [PLAN-27](PLAN-27-sync-storage-stability.md) |
-| T-123 모델 전체 JSON 전송 제거 | 진행(2026-10-06, T-085와 함께, 2026-10-06 사용자 결정). T-120의 ⟳ 응답 형상 제거는 반영됨 | ⟳ Live, 목록 `objects` 제거, AI 턴·`query` 지연 조회, 실제 Rhino 확인 | [PLAN-28](PLAN-28-stock-first.md) |
+| T-085 화면 | 구현·자동 검증(2026-10-06, T-123과 한 세션). 합성 1만 개: Live Sync 화면 멈춤 135 ms → 50 ms 넘는 작업 없음, 전체 Sync 5회 화면 힙 증가 없음, 전체 선택 뒤 키 입력 1.39초 → 35 ms 이하(PLAN-27 3단계) | 실제 Rhino 창·패널 확인, 설치본 반영 | [PLAN-27](PLAN-27-sync-storage-stability.md) |
+| T-123 모델 전체 JSON 전송 제거 | 구현·자동 검증(2026-10-06, T-085와 함께, 사용자 결정). ⟳는 Live Sync 먼저, 목록에서 표시 Sync 객체 줄 제거(9.2 MB → 5.8 KB), AI 턴·`query`는 저장 Sync 지연 조회와 변경분만 | 실제 Rhino 창의 ⟳·`query` 확인, 설치본 반영 | [PLAN-28](PLAN-28-stock-first.md) |
 | T-086 상한 | 계획 | T-083~085 뒤 | [PLAN-27](PLAN-27-sync-storage-stability.md) |
 | T-087 정리·Rhino/ZWCAD 쪽 | 계획. 사본·작업 폴더 정리와 읽기 전용 감지 기록은 먼저 구현(`fda1e5d`) | 설치본 확인, 나머지 정리·호스트 쪽 항목 | [PLAN-27](PLAN-27-sync-storage-stability.md) |
 

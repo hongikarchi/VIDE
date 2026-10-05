@@ -76,6 +76,14 @@ related: [ADR-031, ADR-032, RESEARCH-14, PLAN-27, SPEC-02, ARCH-01]
 
 **완료 기준:** ⟳·요청 목록·AI 턴·`query` 어디에서도 모델 전체 JSON을 보내거나 조립하지 않음(응답 크기·호출 경로 시험). PLAN-27 1~3단계 완료 기준의 합성 1만 개 측정.
 
+**진행(2026-10-06) — 구현·자동 검증, 실제 Rhino 확인 남음.**
+- 1: `runUserSync`(`document-sync.ts`). 기준은 `LiveSync.basisOf`, 없으면 그 문서의 마지막 성공 표시 Sync. 기록 `user-sync {action}`.
+- 2: 목록·capture 응답의 `listed()`(`server.ts`), `GET …/requests/:r/objects[?ids=]`, 한 요청의 목록 모양 `GET …/requests/:r?view=summary`. 합성 1만 개 Sync 5개 + 후보 1개의 목록 응답이 50 KB 아래(시험), 화면 측정에서 Sync 6개 9.2 MB → 5.8 KB.
+- 3: `Execution.previousOf`·`ModelView.entries`·`count`. 표시 Sync 기준 턴에서 `load` 0번, 큰 JSON 해석 0번(시험).
+- 4: `displayQuery`의 읽기를 `storedDisplay` + `sdk.liveSync`(변경만) + `overlayDisplay`로. 합성 1만 개에서 한 쪽 약 70 ms, 전체 읽기 0번(시험). 저장 Sync가 없거나 `RESYNC_REQUIRED`면 `readLayers`.
+- 5: PLAN-27 3단계 결과.
+- 남음: 실제 Rhino 창에서 ⟳가 Live로 끝나는지(엔진 기록 `user-sync`), 바로 적용 턴의 `query`가 변경만 묻는지, 패널 고정·선택. 작업 사본 후보·DWG 불러오기 같은 비표시 기준은 지금처럼 모델을 한 번 읽는다.
+
 ## T-124 프로젝트별 DB (ADR-032)
 
 ADR-032를 사용자가 확인한 뒤 ARCH-01 §5에 반영하고 구현한다. 공용 `app.sqlite`와 `projects\<ID>\project.sqlite`, 시작 때 한 번 이행(백업·검사·실패 시 그대로), 지식 DB를 프로젝트 폴더로 옮김. AI 턴에는 자기 프로젝트 폴더만 읽기 전용으로 연다. 선행: PLAN-27의 저장 작업이 끝난 뒤.
