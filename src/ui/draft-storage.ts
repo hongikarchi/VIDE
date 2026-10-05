@@ -47,7 +47,11 @@ export function restoreDraft(value: unknown, messages: DraftState['messages']) {
   // Preserve each pin's original basis. Never silently retarget it to the latest model.
   for (const pin of draft.pins) {
     const basis = messages.find((message) => message.id === pin.basis)?.request.result;
-    if (!basis?.hostExecuted || !basis.objects?.some((object) => object.id === pin.id))
+    // A display Sync listed without its rows (T-123): the engine checks the pin when it is sent.
+    if (
+      !basis?.hostExecuted ||
+      (!basis.objectsOmitted && !basis.objects?.some((object) => object.id === pin.id))
+    )
       throw Error('초안에 첨부된 객체의 기준을 확인할 수 없습니다.');
   }
   return {

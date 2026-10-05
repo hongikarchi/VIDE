@@ -106,6 +106,32 @@ export const linkedCandidates = (state: DraftState) =>
       message.request.result?.executionMode === 'sdk',
   );
 export const objects: DraftObject[] = [];
+/**
+ * The shown objects by id (T-085): selection and pin checks look objects up here instead of
+ * scanning `objects` once per selected id (select-all of 10,000 objects took 0.65 s per key).
+ * Rebuilt when `objects` was replaced (`objectsChanged`, or a different length or ends).
+ */
+let index:
+  | { map: Map<string, DraftObject>; length: number; first?: DraftObject; last?: DraftObject }
+  | undefined;
+export function objectsChanged() {
+  index = undefined;
+}
+export function objectById(id: string | null | undefined): DraftObject | undefined {
+  if (
+    !index ||
+    index.length !== objects.length ||
+    index.first !== objects[0] ||
+    index.last !== objects[objects.length - 1]
+  )
+    index = {
+      map: new Map(objects.map((object) => [object.id, object])),
+      length: objects.length,
+      first: objects[0],
+      last: objects[objects.length - 1],
+    };
+  return id == null ? undefined : index.map.get(id);
+}
 /** Replaced by the engine's catalog on connect; this entry only fills the menu before that. */
 export const models: ModelOption[] = [
   {
@@ -304,7 +330,8 @@ export function attachHostSelection(
     throw Error('선택한 Rhino 문서의 작업 사본을 먼저 가져오세요.');
   if (source.documentHash !== selection.documentHash)
     throw Error('원본이 취득 후 변경됐습니다. 작업 사본을 다시 가져온 뒤 선택을 첨부하세요.');
-  const selected = selection.selectedIds.map((id) => available.find((object) => object.id === id));
+  const availableById = new Map(available.map((object) => [object.id, object]));
+  const selected = selection.selectedIds.map((id) => availableById.get(id));
   if (selected.some((object) => !object))
     throw Error(
       '현재 후보에 없는 선택 객체가 있습니다. 원본 작업 사본에서 선택을 다시 확인하세요.',

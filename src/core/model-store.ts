@@ -175,9 +175,11 @@ export class ModelView {
   readonly revision: number;
   private store: ModelStore;
   private projectId: string;
+  private objectCount: number | null;
   constructor(store: ModelStore, projectId: string, header: Header) {
     this.store = store;
     this.projectId = projectId;
+    this.objectCount = header.objectCount;
     this.requestId = header.requestId;
     this.revision = header.revision;
   }
@@ -250,6 +252,70 @@ export class ModelView {
         out.push(Object.fromEntries(Object.entries(scene).filter(([, v]) => v !== '$bin')));
     }
     return out;
+  }
+  /** How many objects the result lists (its `objects` rows; scene items without them). */
+  count(): number {
+    if (this.objectCount !== null) return this.objectCount;
+    return Number(
+      this.store.db
+        .prepare(
+          "SELECT count(*) AS n FROM sync_manifest_items WHERE requestId=? AND kind='object'",
+        )
+        .get(this.requestId)!.n,
+    );
+  }
+  /**
+   * Object rows and scene meta (no coordinate arrays) of the given object ids, or of the first
+   * `limit` objects in display order (T-123: an AI turn reads what it sends, not the model). An id
+   * is looked up as a manifest key first (`nativeId ?? id`), then among the rows' own ids.
+   * `limit: Infinity` reads every object (still without coordinates).
+   */
+  entries(options: { ids?: readonly string[]; limit?: number }): { object?: Item; scene?: Item }[] {
+    const db = this.store.db;
+    const shape = (text: string) => {
+      const meta = parseMeta(text) as { object?: Item; scene?: Item };
+      const scene =
+        meta.scene && typeof meta.scene === 'object'
+          ? Object.fromEntries(Object.entries(meta.scene).filter(([, v]) => v !== '$bin'))
+          : undefined;
+      return { ...(meta.object ? { object: meta.object } : {}), ...(scene ? { scene } : {}) };
+    };
+    const join = `FROM sync_manifest_items i JOIN object_versions v
+      ON v.projectId=i.projectId AND v.id=i.versionId WHERE i.requestId=? AND i.kind='object'`;
+    if (!options.ids)
+      return db
+        .prepare(`SELECT v.meta ${join} ORDER BY i.position LIMIT ?`)
+        .all(
+          this.requestId,
+          options.limit === Infinity ? -1 : Math.max(0, Math.floor(options.limit ?? 0)),
+        )
+        .map((row) => shape(String(row.meta)));
+    const one = db.prepare(`SELECT v.meta ${join} AND i.key=?`);
+    const found = new Map<string, ReturnType<typeof shape>>();
+    // An object row and its scene item under different keys (a scene item without `nativeId`)
+    // are completed by one scan of the manifest.
+    const incomplete = new Set<string>();
+    for (const id of new Set(options.ids)) {
+      const row = one.get(this.requestId, id);
+      const entry = row ? shape(String(row.meta)) : {};
+      found.set(id, entry);
+      if (!entry.object || !entry.scene) incomplete.add(id);
+    }
+    if (incomplete.size)
+      for (const row of db.prepare(`SELECT v.meta ${join}`).iterate(this.requestId)) {
+        const entry = shape(String(row.meta));
+        const id = String(entry.object?.id ?? entry.scene?.id ?? '');
+        if (!incomplete.has(id)) continue;
+        const known = found.get(id)!;
+        known.object ??= entry.object;
+        known.scene ??= entry.scene;
+        if (known.object && known.scene) {
+          incomplete.delete(id);
+          if (!incomplete.size) break;
+        }
+      }
+    for (const [id, entry] of found) if (!entry.object && !entry.scene) found.delete(id);
+    return options.ids.flatMap((id) => (found.has(id) ? [found.get(id)!] : []));
   }
   /** VGT1 of the request (`root` is the stored request with its small result). */
   geometry(root: Record<string, unknown>): Uint8Array {

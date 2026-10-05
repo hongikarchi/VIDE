@@ -4,10 +4,11 @@ import { z } from 'zod';
 import { applyDisplayDelta } from '../../core/display-delta.ts';
 import { belongsToLink } from '../../contracts/link-requests.ts';
 import { api, errors } from '../gateway.ts';
-import { draftHasInput, objects } from '../model.ts';
+import { draftHasInput, objects, objectsChanged } from '../model.ts';
 import { element as $, readableError } from '../elements.ts';
 import { type LinkRow, linkRowSchema, offlineStatusSchema, type InboxItem } from '../links.tsx';
 import { requestData, requestMessage } from '../workspace-data.ts';
+import { withObjects } from '../object-rows.ts';
 import { hostAction } from '../host-panel.tsx';
 import { layerSignature, composeLayers } from '../layers.ts';
 import { linksState, type Layer } from '../store/links.ts';
@@ -52,7 +53,9 @@ export async function refreshDisplay(
   const result = entry?.request.result;
   const held = heldRevision.get(id) ?? 1;
   // Not drawn yet: the whole fetch brings the latest anyway.
-  if (!entry || !result?.objects || !result.scene || display.revision <= held) return;
+  // The panels hold object rows only (no scene): the change page updates the rows (T-085).
+  if (!entry || !result?.objects || (!result.scene && !panelMode) || display.revision <= held)
+    return;
   if (refreshing.has(id) || loadingResults.has(id)) return;
   refreshing.add(id);
   try {
@@ -62,7 +65,7 @@ export async function refreshDisplay(
     if (sessionState.project?.id !== projectId) return;
     const index = draftState.state.messages.findIndex((item) => item.id === id);
     const current = draftState.state.messages[index]?.request.result;
-    if (index < 0 || !current?.objects || !current.scene) return;
+    if (index < 0 || !current?.objects || (!current.scene && !panelMode)) return;
     if ('full' in reply) {
       // Too far behind (or no longer stored per object): read the request whole again.
       heldRevision.delete(id);
@@ -78,15 +81,16 @@ export async function refreshDisplay(
       return;
     }
     type Definitions = NonNullable<typeof current.definitions>;
+    type Scene = NonNullable<typeof current.scene>;
     const merged = applyDisplayDelta<
       (typeof current.objects)[number],
-      (typeof current.scene)[number],
+      Scene[number],
       Definitions[string]
     >(
-      { objects: current.objects, scene: current.scene, definitions: current.definitions },
+      { objects: current.objects, scene: current.scene ?? [], definitions: current.definitions },
       reply as unknown as {
         objects: typeof current.objects;
-        scene: typeof current.scene;
+        scene: Scene;
         removed: string[];
         definitions?: Definitions;
       },
@@ -94,7 +98,10 @@ export async function refreshDisplay(
     const next = draftState.state.messages[index];
     draftState.state.messages[index] = {
       ...next,
-      request: { ...next.request, result: { ...current, ...merged } },
+      request: {
+        ...next.request,
+        result: current.scene ? { ...current, ...merged } : { ...current, objects: merged.objects },
+      },
     };
     heldRevision.set(id, reply.revision);
     linksState.liveRefresh = id;
@@ -346,9 +353,11 @@ export async function pollLinks() {
     for (const link of linksState.links) {
       const id = link.lastSync?.requestId;
       if (id && !draftState.state.messages.some((entry) => entry.id === id)) {
-        const revision = listedRevision(id);
-        const fetched = requestMessage(await api(`/projects/${projectId}/requests/${id}`));
-        if (revision !== undefined) heldRevision.set(id, revision);
+        // As the list shows it (T-123): its geometry is fetched when it is drawn (showLayers).
+        const fetched = requestMessage(
+          await api(`/projects/${projectId}/requests/${id}?view=summary`),
+        );
+        if (draftState.state.messages.some((entry) => entry.id === id)) continue;
         draftState.state.messages.push(fetched);
       }
     }
@@ -445,9 +454,112 @@ export function loadFullResult(id: string): Promise<void> {
   loadingResults.set(id, loading);
   return loading;
 }
+/** The object list's row of each Sync row, while that row and its scene item stay the same. */
+const listedRows = new WeakMap<
+  object,
+  { row: object; item: unknown; many: boolean; layer: string }
+>();
+/** Layer names by their base64 form: decoded once, not once per object and redraw (T-085). */
+const layerNames = new Map<string, string | undefined>();
+function layerOf(value?: string) {
+  if (!value) return undefined;
+  if (layerNames.has(value)) return layerNames.get(value);
+  let name: string | undefined;
+  try {
+    name = new TextDecoder().decode(Uint8Array.from(atob(value), (c) => c.charCodeAt(0)));
+  } catch {
+    name = undefined;
+  }
+  if (layerNames.size > 20_000) layerNames.clear();
+  layerNames.set(value, name);
+  return name;
+}
+/**
+ * Display Syncs that are not drawn give up their geometry and object rows (T-085): five full Syncs
+ * of a large document kept five models in the page. Showing one again fetches it.
+ */
+function releaseHidden(kept: Set<string>) {
+  const messages = draftState.state.messages;
+  for (let index = 0; index < messages.length; index++) {
+    const entry = messages[index];
+    const result = entry.request.result;
+    if (
+      !result?.scene ||
+      result.displayOnly !== true ||
+      kept.has(entry.id) ||
+      loadingResults.has(entry.id) ||
+      refreshing.has(entry.id)
+    )
+      continue;
+    const { scene: _scene, definitions: _definitions, objects, ...rest } = result;
+    messages[index] = {
+      ...entry,
+      request: {
+        ...entry.request,
+        result: {
+          ...rest,
+          sceneOmitted: true,
+          ...(objects ? { objectsOmitted: true, objectCount: objects.length } : {}),
+        },
+      },
+    };
+    heldRevision.delete(entry.id);
+  }
+}
+const loadingRows = new Set<string>();
+let panelSignature = '';
+/** Row arrays the panel's object list was composed from (a Live Sync gives a new array). */
+let panelRows = new WeakSet<object>();
+function showPanelLayers(layers: Layer[]) {
+  linksState.currentLayers = layers;
+  const projectId = sessionState.project?.id;
+  const sources = layers.flatMap((layer) => {
+    const result = draftState.state.messages.find((entry) => entry.id === layer.requestId)?.request
+      .result;
+    if (result?.objects) return [{ layer, objects: result.objects }];
+    if (result?.objectsOmitted && projectId && !loadingRows.has(layer.requestId)) {
+      loadingRows.add(layer.requestId);
+      void withObjects(projectId, layer.requestId)
+        .then(() => {
+          if (sessionState.project?.id === projectId) renderMessages();
+        })
+        .catch(() => {
+          /* The next redraw asks again. */
+        })
+        .finally(() => loadingRows.delete(layer.requestId));
+    }
+    return [];
+  });
+  const signature = sources
+    .map(({ layer, objects: rows }) => `${layer.key}=${layer.requestId}:${rows.length}`)
+    .join('|');
+  const changed = sources.some(({ objects: rows }) => !panelRows.has(rows));
+  if (signature !== panelSignature || changed) {
+    panelSignature = signature;
+    panelRows = new WeakSet(sources.map(({ objects: rows }) => rows));
+    const composed = composeLayers(
+      sources.map(({ layer, objects: rows }) => ({
+        key: layer.key,
+        name: layer.name,
+        requestId: layer.requestId,
+        objects: rows.map((row) => ({ ...row, type: row.kind })),
+        scene: [],
+      })),
+    );
+    objects.splice(0, objects.length, ...(composed.objects as unknown as typeof objects));
+    objectsChanged();
+  }
+  applyActiveLayer();
+}
 /** Draw every visible layer together (SPEC-01.11); rebuild only when the layer set changed. */
 export function showLayers() {
   const layers = visibleLayers();
+  // The Rhino and ZWCAD panels draw no 3D scene and fetch no geometry (T-085): their object list
+  // (Rhino's selection, pins) comes from the layers' object rows.
+  if (panelMode) {
+    showPanelLayers(layers);
+    return;
+  }
   for (const layer of layers) {
     const result = draftState.state.messages.find((entry) => entry.id === layer.requestId)?.request
       .result;
@@ -471,15 +583,6 @@ export function showLayers() {
     applyActiveLayer();
     return;
   }
-  const decoder = new TextDecoder();
-  const layerOf = (value?: string) => {
-    if (!value) return undefined;
-    try {
-      return decoder.decode(Uint8Array.from(atob(value), (c) => c.charCodeAt(0)));
-    } catch {
-      return undefined;
-    }
-  };
   const many = drawable.length > 1;
   const composed = composeLayers(
     drawable.map(({ layer, result }) => {
@@ -490,8 +593,12 @@ export function showLayers() {
         requestId: layer.requestId,
         objects: result.objects!.map((o) => {
           const item = native.get(o.id);
+          // An unchanged row after a Live Sync keeps its listed form (T-085).
+          const known = listedRows.get(o);
+          if (known && known.item === item && known.many === many && known.layer === layer.name)
+            return known.row as typeof o;
           const name = layerOf(item?.layer64);
-          return {
+          const row = {
             ...o,
             // Several files: the layer list groups by file, then by layer.
             layer: many ? `${layer.name} › ${name ?? '레이어 없음'}` : name,
@@ -500,6 +607,8 @@ export function showLayers() {
             layerColor: item?.layerColor,
             type: item?.nativeType || o.kind,
           };
+          listedRows.set(o, { row, item, many, layer: layer.name });
+          return row;
         }),
         scene: result.scene!,
         definitions: result.definitions,
@@ -507,11 +616,21 @@ export function showLayers() {
     }),
   );
   objects.splice(0, objects.length, ...(composed.objects as unknown as typeof objects));
+  objectsChanged();
   if (!linksState.shownSignature || linksState.fitNext)
     viewerState.viewport?.replace(composed.scene, composed.definitions);
   else viewerState.viewport?.update(composed.scene, composed.definitions);
   linksState.shownSignature = signature;
   linksState.fitNext = false;
+  releaseHidden(
+    new Set(
+      [
+        ...linksState.currentLayers.map((layer) => layer.requestId),
+        selectionState.displayedResult,
+        selectionState.selectedResult,
+      ].filter((id): id is string => typeof id === 'string'),
+    ),
+  );
   applyActiveLayer();
   render();
   if (drawable.length) scheduleThumbnail();

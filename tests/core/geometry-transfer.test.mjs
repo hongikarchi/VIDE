@@ -153,3 +153,47 @@ test('joining stored items gives the same VGT1 bytes as encoding the whole reque
   assert.deepEqual(decoded.removed, ['z']);
   assert.deepEqual(decoded.scene[0], decodeGeometry(whole).result.scene[0]);
 });
+
+// T-085: the screen keeps received geometry binary. Coordinates stay float32 views on the answer
+// with their array origin, indices stay Uint16/Uint32 views; world values match the number decode.
+test('typed decode keeps coordinate and index arrays as views on the received buffer', async () => {
+  const { coordinate, isPacked } = await import('../../src/contracts/geometry-transfer.ts');
+  const { displayCoordinates } = await import('../../src/core/display-coordinates.ts');
+  const { workspaceResultSchema } = await import('../../src/contracts/workspace-result.ts');
+  const many = Array.from({ length: 70000 }, (_, i) => i);
+  const bytes = encodeGeometry({
+    id: 'r',
+    result: {
+      scene: [
+        {
+          id: 'a',
+          vertices: [200000.25, 500000.5, 12, 200001.25, 500000.5, 12, 200000.25, 500001.5, 13],
+          indices: [0, 1, 2],
+          line: [1, 2, 3, 4, 5, 6],
+        },
+        { id: 'b', vertices: many.flatMap((i) => [i, 0, 0]), indices: many },
+      ],
+      definitions: { d: { hash: 'd', vertices: [5, 5, 5, 6, 5, 5], indices: [], segments: [] } },
+    },
+  });
+  const plain = decodeGeometry(bytes);
+  const typed = decodeGeometry(bytes, { typed: true });
+  const [a, b] = typed.result.scene;
+  assert.ok(isPacked(a.vertices));
+  assert.deepEqual(a.vertices.origin, [200000.25, 500000.5, 12]);
+  assert.equal(a.vertices.buffer, b.vertices.buffer, 'one buffer for the whole answer');
+  assert.ok(a.indices instanceof Uint16Array);
+  assert.ok(b.indices instanceof Uint32Array);
+  for (let i = 0; i < 9; i++)
+    assert.ok(Math.abs(coordinate(a.vertices, i) - plain.result.scene[0].vertices[i]) < 1e-3);
+  assert.deepEqual(Array.from(b.indices.slice(0, 5)), [0, 1, 2, 3, 4]);
+  assert.ok(isPacked(typed.result.definitions.d.vertices));
+  // The viewport uploads the received array as it is, its origin as the object position.
+  const display = displayCoordinates(a.vertices);
+  assert.equal(display.local, a.vertices);
+  assert.deepEqual(display.origin, [200000.25, 500000.5, 12]);
+  // The result schema accepts the typed arrays without copying them.
+  const parsed = workspaceResultSchema.parse(typed.result);
+  assert.equal(parsed.scene[0].vertices, a.vertices);
+  assert.equal(parsed.scene[1].indices, b.indices);
+});

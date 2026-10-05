@@ -1,5 +1,14 @@
-/** Keep GPU float32 positions local; retain the world origin in the object transform. */
-export function displayCoordinates(positions: readonly number[]) {
+import { isPacked, type Positions } from '../contracts/geometry-transfer.ts';
+
+/**
+ * Keep GPU float32 positions local; retain the world origin in the object transform. A received
+ * binary array (`PackedPositions`, T-085) is already local to its first point: it is used as it is.
+ */
+export function displayCoordinates(positions: Positions): {
+  origin: [number, number, number];
+  local: Float32Array;
+} {
+  if (isPacked(positions)) return { origin: [...positions.origin], local: positions };
   const min = [Infinity, Infinity, Infinity],
     max = [-Infinity, -Infinity, -Infinity];
   for (let i = 0; i < positions.length; i++) {

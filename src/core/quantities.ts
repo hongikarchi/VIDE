@@ -5,7 +5,7 @@ export interface SourceScene {
   id: string;
   nativeType?: string;
   layer64?: string;
-  line?: number[];
+  line?: ArrayLike<number>;
   length?: number | null;
   area?: number | null;
   volume?: number | null;
@@ -24,7 +24,7 @@ type Metric = 'length' | 'area' | 'volume';
 const metrics: Metric[] = ['length', 'area', 'volume'];
 const known = (value: unknown): number | null =>
   typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : null;
-function lengthOf(line: number[] | undefined): number | null {
+function lengthOf(line: ArrayLike<number> | undefined): number | null {
   if (
     !Array.isArray(line) ||
     line.length < 6 ||

@@ -1390,6 +1390,40 @@ export function publicRecord({ code: _code, ...entry }: ExecutionRecord) {
   return entry;
 }
 
+const GEOMETRY_FIELDS = new Set(['vertices', 'indices', 'line', 'segments']);
+type Row = Record<string, unknown>;
+/**
+ * A query model from a stored display Sync and the objects Rhino reports changed since it (T-123):
+ * the stored rows in display order with changed ones replaced, removed ones left out and new ones
+ * appended (the order `applyDisplayDelta` gives). Scene rows carry no coordinate arrays.
+ */
+export function overlayDisplay(
+  stored: { object?: Row; scene?: Row }[],
+  delta: { objects: Row[]; scene: Row[]; removed: string[] },
+) {
+  const keyOf = (row: Row) => String(row.nativeId ?? row.id);
+  const lean = (row: Row) =>
+    Object.fromEntries(Object.entries(row).filter(([key]) => !GEOMETRY_FIELDS.has(key)));
+  const removed = new Set(delta.removed);
+  const objects = new Map(delta.objects.map((row) => [keyOf(row), row]));
+  const scene = new Map(delta.scene.map((row) => [keyOf(row), lean(row)]));
+  const outObjects: Row[] = [],
+    outScene: Row[] = [];
+  for (const entry of stored) {
+    const key = keyOf((entry.object ?? entry.scene)!);
+    if (removed.has(key)) continue;
+    const object = objects.get(key) ?? entry.object;
+    objects.delete(key);
+    if (object) outObjects.push(object);
+    const item = scene.get(key) ?? entry.scene;
+    scene.delete(key);
+    if (item) outScene.push(item);
+  }
+  outObjects.push(...objects.values());
+  outScene.push(...scene.values());
+  return { objects: outObjects, scene: outScene };
+}
+
 /**
  * Rhino query pages from the attached document, read once per document revision of this turn: after
  * its own execute, or when the document's change token moved (another conversation, a person).

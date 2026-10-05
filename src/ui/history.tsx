@@ -24,7 +24,7 @@ export interface Actions {
   openReview: (row: ReviewRow) => void;
   report: (id: string) => void;
   changed: () => void;
-  restore: (request: Request) => void;
+  restore: (request: Request) => void | Promise<void>;
   error: (message: string) => void;
   /** Open another work in the work view. */
   focus: (id: string) => void;

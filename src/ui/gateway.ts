@@ -3,35 +3,63 @@ import { workspaceRequestSchema } from '../contracts/workspace-result.ts';
 import { GEOMETRY_TYPE, decodeGeometry } from '../contracts/geometry-transfer.ts';
 export const projectSchema = z.object({ id: z.string(), name: z.string() }).passthrough();
 /** `quiet`: codes the caller handles itself (no app-wide error notice is raised for them). */
+/**
+ * How long a call may take before it fails with NETWORK_TIMEOUT (T-085): a poll that never answers
+ * must not stop the polling. Reads 30 s, a model's geometry 120 s, actions (a full Sync of a large
+ * document, a submitted turn) 10 minutes.
+ */
+export const API_TIMEOUT = { read: 30_000, geometry: 120_000, action: 600_000 };
 export async function api(
   path: string,
   method = 'GET',
   data?: unknown,
-  { quiet = [] }: { quiet?: readonly string[] } = {},
+  { quiet = [], timeoutMs }: { quiet?: readonly string[]; timeoutMs?: number } = {},
 ): Promise<unknown> {
   let response;
   // One request in full carries its display geometry as binary (PLAN-18); errors stay JSON.
   const geometry = method === 'GET' && /^\/projects\/[^/]+\/requests\/[^/?]+$/.test(path);
+  const delta = method === 'GET' && /^\/projects\/[^/]+\/requests\/[^/?]+\/delta/.test(path);
+  const limit =
+    timeoutMs ??
+    (method !== 'GET'
+      ? API_TIMEOUT.action
+      : geometry || delta
+        ? API_TIMEOUT.geometry
+        : API_TIMEOUT.read);
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), limit);
   try {
-    response = await fetch('api/v1' + path, {
-      method,
-      headers: {
-        ...(data ? { 'Content-Type': 'application/json' } : {}),
-        ...(geometry ? { Accept: `${GEOMETRY_TYPE}, application/json` } : {}),
-      },
-      body: data ? JSON.stringify(data) : undefined,
-    });
-  } catch {
-    throw apiError('NETWORK_UNAVAILABLE');
+    try {
+      response = await fetch('api/v1' + path, {
+        method,
+        headers: {
+          ...(data ? { 'Content-Type': 'application/json' } : {}),
+          ...(geometry ? { Accept: `${GEOMETRY_TYPE}, application/json` } : {}),
+        },
+        body: data ? JSON.stringify(data) : undefined,
+        signal: controller.signal,
+      });
+    } catch {
+      // A read that timed out is retried by its poll; no notice for each one.
+      if (controller.signal.aborted) throw apiError('NETWORK_TIMEOUT', undefined, method === 'GET');
+      throw apiError('NETWORK_UNAVAILABLE');
+    }
+    let result;
+    try {
+      // Geometry stays binary: coordinate and index arrays are typed views on the answer (T-085).
+      result = response.headers?.get('Content-Type')?.startsWith(GEOMETRY_TYPE)
+        ? decodeGeometry(await response.arrayBuffer(), { typed: true })
+        : await response.json();
+    } catch {
+      if (controller.signal.aborted) throw apiError('NETWORK_TIMEOUT', undefined, method === 'GET');
+      throw apiError('INVALID_RESPONSE');
+    }
+    return finish(response, result, quiet);
+  } finally {
+    clearTimeout(timer);
   }
-  let result;
-  try {
-    result = response.headers?.get('Content-Type')?.startsWith(GEOMETRY_TYPE)
-      ? decodeGeometry(await response.arrayBuffer())
-      : await response.json();
-  } catch {
-    throw apiError('INVALID_RESPONSE');
-  }
+}
+function finish(response: Response, result: unknown, quiet: readonly string[]) {
   if (!response.ok) {
     // The PC answers {code}; the account site relaying it answers {error} (PC off, unreachable).
     const code = z
@@ -179,6 +207,7 @@ Object.assign(errors, {
   NETWORK_UNAVAILABLE:
     '로컬 서버에 연결하지 못했습니다. 서버 실행 상태를 확인하세요. 전송한 작업은 이력에서 상태를 확인한 뒤 다시 요청하세요.',
   INVALID_RESPONSE: '서버 응답을 읽지 못했습니다. 작업 이력을 새로 확인하세요.',
+  NETWORK_TIMEOUT: '로컬 서버가 제때 답하지 않았습니다. 잠시 뒤 다시 확인합니다.',
   REQUEST_FAILED: '요청을 처리하지 못했습니다. 작업 이력을 확인하세요.',
   STALE_CONNECTION: 'Rhino 문서 연결이 바뀌었습니다. 열린 문서를 다시 조회하고 대상을 선택하세요.',
   SOURCE_CHANGED:

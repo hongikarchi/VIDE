@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { isPacked, type PackedPositions } from './geometry-transfer.ts';
 import { requestStateSchema, executionProgressSchema } from './workspace.ts';
 // Fields consumed by the workspace UI. Unknown host metadata is preserved for later adapters.
 // CAD per-run/per-annotation display style: resolved ACI, true colour, lineweight (mm), layer colour.
@@ -20,15 +21,24 @@ const text = z
     ...cadStyle,
   })
   .passthrough();
+// Coordinate and index arrays: plain numbers (JSON) or the received binary kept as it is (T-085,
+// `decodeGeometry(…, {typed: true})`: a `Float32Array` with its `origin`, `Uint16Array`/`Uint32Array`).
+// Typed arrays are checked by type only and never copied.
+const positions = z.union([z.array(z.number()), z.custom<PackedPositions>(isPacked)]);
+const indexArray = z.union([
+  z.array(z.number()),
+  z.instanceof(Uint16Array),
+  z.instanceof(Uint32Array),
+]);
 const scene = z
   .object({
     id: z.string(),
     nativeId: z.string().optional(),
     nativeType: z.string().optional(),
-    vertices: z.array(z.number()).optional(),
-    indices: z.array(z.number()).optional(),
-    line: z.array(z.number()).optional(),
-    segments: z.array(z.number()).optional(),
+    vertices: positions.optional(),
+    indices: indexArray.optional(),
+    line: positions.optional(),
+    segments: positions.optional(),
     origin: z.array(z.number()).optional(),
     boundsSize: z.array(z.number()).optional(),
     length: z.number().nullish(),
@@ -64,9 +74,9 @@ const scene = z
 const definition = z
   .object({
     hash: z.string(),
-    vertices: z.array(z.number()),
-    indices: z.array(z.number()),
-    segments: z.array(z.number()),
+    vertices: positions,
+    indices: indexArray,
+    segments: positions,
     texts: z.array(text).max(20000).optional(),
   })
   .passthrough();
@@ -145,6 +155,9 @@ export const workspaceResultSchema = z
     definitions: z.record(z.string(), definition).optional(),
     /** List responses leave display meshes out; fetch the request to show it. */
     sceneOmitted: z.boolean().optional(),
+    // A display Sync in the request list: its object rows are left out (T-123, `…/objects`).
+    objectsOmitted: z.boolean().optional(),
+    objectCount: z.number().int().nonnegative().optional(),
     extensionResult: z
       .object({
         rows: z.array(

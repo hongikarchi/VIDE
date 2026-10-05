@@ -37,7 +37,8 @@ export function composeLayers<O extends { id: string }, S extends { id: string }
         documentKey: layer.key,
         documentName: layer.name,
       });
-    for (const item of layer.scene) scene.push({ ...item, id: display(item.id) });
+    // One layer keeps the items as they are (no copy of 10,000 items per redraw, T-085).
+    for (const item of layer.scene) scene.push(many ? { ...item, id: display(item.id) } : item);
     // Block definitions are keyed by content hash, so layers can share one table.
     Object.assign(definitions, layer.definitions ?? {});
   }

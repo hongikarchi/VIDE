@@ -57,6 +57,7 @@ import {
   initLeft5,
 } from './left.ts';
 import { panelMode, panelParams, panelView, panelHost, initContext1 } from './context.ts';
+import { fetchRows, knownRow, withObjects } from '../object-rows.ts';
 import { render, renderMessages } from './render.ts';
 import { syncLink, applyActiveLayer, pollLinks, initLinksSync1 } from './links-sync.ts';
 import {
@@ -136,6 +137,9 @@ export async function attachPanelSelection() {
         `/host/selection?instance=${encodeURIComponent(target.instance)}&document=${target.documentId}`,
       ),
     );
+    // The basis's rows, when the panel holds the Sync without them (T-123).
+    const basis = rhinoBasis(target);
+    if (basis && sessionState.project) await withObjects(sessionState.project.id, basis.id);
     const count = attachHostSelection(draftState.state, rhinoBasis(target)?.request, selection);
     render();
     message(count ? `${count}개 객체를 요청에 첨부했습니다.` : '먼저 Sync 하세요.');
@@ -158,7 +162,21 @@ export function applyHostPins(ids: string[]) {
   const basis = rhinoBasis(target);
   linksState.hostPinBasis = basis?.id;
   if (!basis) return;
-  const available = new Map((basis.request.result?.objects ?? []).map((item) => [item.id, item]));
+  // A Sync the panel holds without its rows (T-123): the pinned ids' rows are fetched, then applied.
+  const missing = ids.filter((id) => !knownRow(basis.id, id));
+  if (missing.length && basis.request.result?.objectsOmitted && sessionState.project) {
+    const projectId = sessionState.project.id;
+    void fetchRows(projectId, basis.id, missing)
+      .then((added) => {
+        if (added && sessionState.project?.id === projectId && linksState.hostPinned === ids) {
+          applyHostPins(ids);
+          render();
+        }
+      })
+      .catch(() => {
+        /* The next host poll applies the pins again. */
+      });
+  }
   // Rhino's set replaces its pins on every Sync of this document, not only the newest one.
   const sameDocument = (id: string) => {
     const source = draftState.state.messages.find((entry) => entry.id === id)?.request.result
@@ -171,7 +189,7 @@ export function applyHostPins(ids: string[]) {
         pin.label || !managed.has(pin.id) || (pin.basis !== basis.id && !sameDocument(pin.basis)),
     ),
     ...ids.flatMap((id) => {
-      const object = available.get(id);
+      const object = knownRow(basis.id, id);
       return object ? [{ id, name: object.name, role: 'target' as const, basis: basis.id }] : [];
     }),
   ];

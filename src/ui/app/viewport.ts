@@ -10,7 +10,7 @@ import { paintIcons } from '../icons.ts';
 import { showQuantities } from '../quantities.tsx';
 import { attachNativeAttributes } from '../native-attributes.ts';
 import { type SelectMode } from '../object-list.ts';
-import { objects, attachBrushSketch } from '../model.ts';
+import { objects, objectById, attachBrushSketch } from '../model.ts';
 import { displayIdOf, sourceIdOf } from '../layers.ts';
 import { initializeViewportEmpty } from '../viewport-empty.ts';
 import { element as $, readableError } from '../elements.ts';
@@ -25,7 +25,7 @@ import { sketchState, type BrushFields } from '../store/sketch.ts';
 import { sessionState } from '../store/session.ts';
 import { viewportActions } from '../shell/viewport-actions.ts';
 import { isTyping, type ShortcutResult } from './shortcuts.ts';
-import { currentProject } from './context.ts';
+import { currentProject, panelMode } from './context.ts';
 import { applyActiveLayer } from './links-sync.ts';
 import { renderLinkPanel, mobileView } from './left.ts';
 import { render, renderMessages } from './render.ts';
@@ -37,9 +37,12 @@ export function applySelection(ids: string[], mode: SelectMode) {
   if (mode === 'replace') selectionState.selectedIds = [...new Set(ids)];
   else if (mode === 'add')
     selectionState.selectedIds = [...new Set([...selectionState.selectedIds, ...ids])];
-  else selectionState.selectedIds = selectionState.selectedIds.filter((id) => !ids.includes(id));
+  else {
+    const removed = new Set(ids);
+    selectionState.selectedIds = selectionState.selectedIds.filter((id) => !removed.has(id));
+  }
   draftState.state.selected = selectionState.selectedIds.at(-1) ?? null;
-  const picked = objects.find((object) => object.id === draftState.state.selected);
+  const picked = objectById(draftState.state.selected);
   if (typeof picked?.documentKey === 'string' && picked.documentKey !== linksState.activeLayer) {
     linksState.activeLayer = picked.documentKey;
     applyActiveLayer();
@@ -173,9 +176,9 @@ export function canPin() {
     sessionState.ready &&
     !sessionState.busy &&
     selectionState.selectedIds.some((id) => {
-      const object = objects.find((o) => o.id === id && o.revision);
+      const object = objectById(id);
       return (
-        !!object &&
+        !!object?.revision &&
         !draftState.state.pins.some(
           (p) => p.id === sourceIdOf(object) && p.basis === object.revision,
         )
@@ -200,33 +203,35 @@ export function initViewport2() {
     viewerState.inspectorTab = tab;
     render();
   };
-  try {
-    viewerState.viewport = createViewport(
-      $('canvas'),
-      objects,
-      (ids, mode, source) =>
-        source.source === 'overlay' ? overlayPicked(source) : applySelection(ids, mode),
-      (event) => {
-        if (event.type === 'stroke') {
-          if (sketchState.strokes.length >= 200) {
-            message('스케치 하나에 200획까지 그릴 수 있습니다. 먼저 첨부하세요.');
-            return;
-          }
-          sketchState.strokes.push(event.stroke);
-        } else sketchState.strokes.splice(event.index, 1);
-        draw();
-      },
-      (camera) => {
-        // Reported on every controls change: the slice changes only with the view or projection.
-        const shown = viewerState.camera;
-        if (shown?.view === camera.view && shown.projection === camera.projection) return;
-        viewerState.camera = { view: camera.view, projection: camera.projection };
-        viewerState.bump();
-      },
-    );
-  } catch {
-    message('3D 뷰포트를 열 수 없습니다. WebGL 지원을 확인하세요.');
-  }
+  // The Rhino and ZWCAD panels show no 3D scene: no WebGL viewport is made there (T-085).
+  if (!panelMode)
+    try {
+      viewerState.viewport = createViewport(
+        $('canvas'),
+        objects,
+        (ids, mode, source) =>
+          source.source === 'overlay' ? overlayPicked(source) : applySelection(ids, mode),
+        (event) => {
+          if (event.type === 'stroke') {
+            if (sketchState.strokes.length >= 200) {
+              message('스케치 하나에 200획까지 그릴 수 있습니다. 먼저 첨부하세요.');
+              return;
+            }
+            sketchState.strokes.push(event.stroke);
+          } else sketchState.strokes.splice(event.index, 1);
+          draw();
+        },
+        (camera) => {
+          // Reported on every controls change: the slice changes only with the view or projection.
+          const shown = viewerState.camera;
+          if (shown?.view === camera.view && shown.projection === camera.projection) return;
+          viewerState.camera = { view: camera.view, projection: camera.projection };
+          viewerState.bump();
+        },
+      );
+    } catch {
+      message('3D 뷰포트를 열 수 없습니다. WebGL 지원을 확인하세요.');
+    }
   initializeDisplaySettings($('display-settings') as HTMLButtonElement, (settings) =>
     viewerState.viewport?.display(settings),
   );
@@ -297,13 +302,19 @@ export function initViewport5() {
 /** render(): the multi-selection follows the primary selection and the objects shown. */
 export function normalizeSelection() {
   // Other panels may set a single primary selection; keep the multi-selection consistent.
-  if (draftState.state.selected && !selectionState.selectedIds.includes(draftState.state.selected))
+  // The primary selection is the last selected id (applySelection); an `includes` scan of a large
+  // selection on every render was the select-all key lag (T-085).
+  const ids = selectionState.selectedIds;
+  if (
+    draftState.state.selected &&
+    ids.at(-1) !== draftState.state.selected &&
+    !ids.includes(draftState.state.selected)
+  )
     selectionState.selectedIds = [draftState.state.selected];
   if (!draftState.state.selected && selectionState.selectedIds.length)
     selectionState.selectedIds = [];
-  selectionState.selectedIds = selectionState.selectedIds.filter((id) =>
-    objects.some((o) => o.id === id),
-  );
+  if (selectionState.selectedIds.some((id) => !objectById(id)))
+    selectionState.selectedIds = selectionState.selectedIds.filter((id) => objectById(id));
 }
 /** render(): the viewport selection, the inspector title and the selection bar. */
 export function paintSelection() {
@@ -311,13 +322,13 @@ export function paintSelection() {
   viewerState.selectionTitle =
     selectionState.selectedIds.length > 1
       ? `${selectionState.selectedIds.length.toLocaleString()}개 객체 선택`
-      : objects.find((o) => o.id === draftState.state.selected)?.name || '';
+      : objectById(draftState.state.selected)?.name || '';
   viewerState.bump();
   selectionState.bump();
 }
 /** render(): the inspector of the picked object; returns the request it was read from. */
 export function paintInspector() {
-  const inspected = objects.find((o) => o.id === draftState.state.selected);
+  const inspected = objectById(draftState.state.selected);
   const active = draftState.state.messages.find(
     (m) =>
       m.id ===

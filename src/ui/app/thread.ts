@@ -46,6 +46,7 @@ import {
   focusDraft,
 } from './composer.ts';
 import { currentProject, panelMode } from './context.ts';
+import { withObjects } from '../object-rows.ts';
 import { renderMessages, render } from './render.ts';
 import { openReferenceTab, reviews, skillDeps, jigConversations } from './glue.ts';
 import { pendingSketch, selectInResult, captureViewport } from './viewport.ts';
@@ -254,8 +255,16 @@ export function renderConversation() {
       actions: {
         // A sent image attachment reopens its reference-image tab (SPEC-09.2 2); not in host panels.
         ...(panelMode ? {} : { reference: openReferenceTab }),
-        restore: (request) => {
+        restore: async (request) => {
           if (sessionState.busy) throw Error('현재 전송이 끝난 뒤 복원하세요.');
+          // Follow-up drafts map pins through their bases' object rows, which the request list
+          // leaves out of display Syncs (T-123).
+          const project = sessionState.project?.id;
+          const bases = [
+            ...(request.input.linkedTargets ?? []).map((target) => target.baseRequestId),
+            request.result?.recovered ? request.input.baseRequestId : undefined,
+          ].filter((id): id is string => typeof id === 'string');
+          if (project) await Promise.all(bases.map((id) => withObjects(project, id)));
           const draft = request.input.linkedTargets
             ? linkedRequestDraft(draftState.state, request)
             : request.result?.recovered
@@ -598,6 +607,8 @@ export function followAgenda(conversationId: string, turn: AgendaTurn) {
     { keep: true },
   );
 }
+/** Failed status reads in a row per request: the next try waits longer, up to 10 s (T-085). */
+const pollFailures = new Map<string, number>();
 export async function poll(
   id: string,
   projectId = currentProject().id,
@@ -636,14 +647,20 @@ export async function poll(
         selectionState.selectedResult = request.id;
       workState.foregroundRequest = undefined;
     }
+    pollFailures.delete(id);
     renderMessages();
     render();
     if (['queued', 'running'].includes(request.state))
       setTimeout(() => poll(id, projectId, original), 1200);
   } catch (cause) {
-    const error = readableError(cause);
     if (sessionState.project?.id !== projectId || draftState.state !== original) return;
-    message('작업 상태 연결이 끊겼습니다. 새로고침하면 저장된 기록을 다시 읽습니다.');
+    // A request that is gone (removed with its file) is not read again.
+    if ((cause as { code?: unknown } | null)?.code === 'NOT_FOUND') return;
+    // The status is read again (1.2 s, doubling to 10 s); the notice is shown once per outage.
+    const failures = (pollFailures.get(id) ?? 0) + 1;
+    pollFailures.set(id, failures);
+    if (failures === 1) message('작업 상태 연결이 끊겼습니다. 다시 연결되면 이어서 확인합니다.');
+    setTimeout(() => poll(id, projectId, original), Math.min(10_000, 1200 * 2 ** (failures - 1)));
   }
 }
 export async function downloadReport(id: string) {

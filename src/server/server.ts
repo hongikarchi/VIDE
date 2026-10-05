@@ -129,7 +129,12 @@ import {
 import { renderReport } from './report.ts';
 import { RemovedProjects, removeProject } from './project-removal.ts';
 import { SyncCoalescer } from './sync-coalesce.ts';
-import { documentKey, runDocumentSync, type DocumentSyncContext } from './document-sync.ts';
+import {
+  documentKey,
+  runDocumentSync,
+  runUserSync,
+  type DocumentSyncContext,
+} from './document-sync.ts';
 import { SyncScheduler, type ScheduledDocument } from './sync-scheduler.ts';
 import { ReadOnlyWatch } from './read-only-watch.ts';
 import { sweepCopies, unsettledCopies, within } from './capture-cleanup.ts';
@@ -610,6 +615,24 @@ export async function startServer({
         result: row.result ? JSON.parse(z.string().parse(row.result)) : null,
       })),
   });
+  /**
+   * A request as the request list and the user's Sync answer show it (T-123): never a whole model.
+   * A display Sync also leaves out its object rows (`objectsOmitted`, `objectCount`); a screen that
+   * needs them reads `GET …/requests/:r/objects`.
+   */
+  const listed = (request: StoredWork): StoredWork => {
+    const result = request.result as Record<string, unknown> | null;
+    if (!result) return request;
+    const { scene, definitions: _definitions, ...rest } = result;
+    const light: Record<string, unknown> = scene === undefined ? { ...result } : rest;
+    if (scene !== undefined || result.sceneOmitted) light.sceneOmitted = true;
+    if (result.displayOnly === true && Array.isArray(result.objects)) {
+      delete light.objects;
+      light.objectsOmitted = true;
+      light.objectCount = result.objects.length;
+    }
+    return { ...request, result: light as StoredWork['result'] };
+  };
   let origin = '',
     authority = '',
     stopping = false;
@@ -1415,19 +1438,23 @@ export async function startServer({
             linkId: z.string().uuid().optional(),
             /** The user asked for this Sync (↻, 지금 Sync): never shared with another. */
             fresh: z.boolean().optional(),
+            /** Read the whole document even when a Live Sync could continue the shown one. */
+            full: z.boolean().optional(),
           })
           .parse(await body(request));
         if (target.linkId) links.get(capture[1], target.linkId);
         const projectId = capture[1];
         // Every Sync asked here is the user's (⟳, 지금 Sync, the plugin's Sync): automatic ones are
-        // the engine's own (T-084), so this one never joins another read (ARCH-01 §7).
-        const { result: synced } = await runDocumentSync(syncContext, projectId, {
-          ...target,
-          fresh: target.fresh ?? true,
-        });
-        // The request without its display geometry (object rows only): the window fetches the
-        // geometry as binary (`GET …/requests/:r`), never the whole model as JSON (2026-10-02).
-        send(200, workspace.summary(projectId, synced.id));
+        // the engine's own (T-084), so this one never joins another read (ARCH-01 §7). It asks the
+        // host only for what changed when the shown Sync can be continued (T-123).
+        const { result: synced } = await runUserSync(
+          { ...syncContext, ...(liveSync ? { live: runLiveSync } : {}) },
+          projectId,
+          target,
+        );
+        // The request without its display geometry or object rows: the window fetches the geometry
+        // as binary (`GET …/requests/:r`), never the whole model as JSON (2026-10-02, T-123).
+        send(200, listed(workspace.summary(projectId, synced.id)));
         return;
       }
       const live = /^\/api\/v1\/projects\/([^/]+)\/live-sync$/.exec(url.pathname);
@@ -2278,6 +2305,26 @@ export async function startServer({
         send(200, withApplications((await importRecoveries.get(key))!));
         return;
       }
+      // The object rows of one request, without geometry (T-123): what the request list leaves out
+      // of a display Sync. `ids` (comma separated) limits them to those objects.
+      const requestObjects = /^\/api\/v1\/projects\/([^/]+)\/requests\/([^/]+)\/objects$/.exec(
+        url.pathname,
+      );
+      if (requestObjects && request.method === 'GET') {
+        const [, projectId, id] = requestObjects;
+        store.project(projectId);
+        const wanted = url.searchParams.get('ids');
+        const ids = wanted ? new Set(wanted.split(',').filter(Boolean)) : undefined;
+        const view = workspace.model(projectId, id);
+        const rows = view
+          ? view.rows()
+          : ((workspace.summary(projectId, id).result?.objects ?? []) as { id: string }[]);
+        send(200, {
+          requestId: id,
+          objects: ids ? rows.filter((row) => ids.has(String(row.id))) : rows,
+        });
+        return;
+      }
       // Changes of a stored model since a manifest revision (ARCH-01 §5, T-084 notifications).
       const requestDelta = /^\/api\/v1\/projects\/([^/]+)\/requests\/([^/]+)\/delta$/.exec(
         url.pathname,
@@ -2300,6 +2347,11 @@ export async function startServer({
       }
       if (job) {
         const [, projectId, id, cancel] = job;
+        // One request as the list shows it (`?view=summary`, T-123): no geometry, no Sync rows.
+        if (request.method === 'GET' && id && url.searchParams.get('view') === 'summary') {
+          send(200, listed(withApplications(workspace.summary(projectId, id))));
+          return;
+        }
         // One request in full as binary geometry when the workspace asks for it (PLAN-18).
         if (request.method === 'GET' && id && accepts(GEOMETRY_TYPE)) {
           // A model stored per object is joined from its stored buffers (ARCH-01 §5 「API 응답」).
@@ -2335,10 +2387,7 @@ export async function startServer({
                         const { images: _images, ...input } = row.input;
                         row = { ...row, input: input as typeof row.input };
                       }
-                      const result = row.result;
-                      if (!result || !Array.isArray(result.scene)) return row;
-                      const { scene: _scene, definitions: _definitions, ...rest } = result;
-                      return { ...row, result: { ...rest, sceneOmitted: true } };
+                      return listed(row);
                     });
                 })(),
           );

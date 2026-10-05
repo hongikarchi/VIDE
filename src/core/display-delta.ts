@@ -12,8 +12,8 @@ type SceneItem = Keyed & DisplayGeometry & { block?: { definition: string }; ove
 export const OVERSIZED_TYPE_SUFFIX = ' (16 MB 초과 · 상자로 표시)';
 /** Shared block definition display (definition space); only its content matters here. */
 interface DefinitionItem {
-  vertices: number[];
-  segments: number[];
+  vertices: ArrayLike<number>;
+  segments: ArrayLike<number>;
   texts: unknown[];
 }
 export interface DisplayDelta<O extends Keyed, S extends SceneItem, D = DefinitionItem> {

@@ -102,3 +102,70 @@ test('a request pinning 8 objects of a large Sync decodes that Sync at most once
     store.close();
   }
 });
+
+// PLAN-28 T-123: an AI turn on a display Sync never assembles its model. The basis is the small
+// result and a lazy view; the model summary reads the pinned objects and the first ones only.
+test('a turn on a large display Sync rebuilds no model and summarizes from the stored rows', async () => {
+  const store = new Store(':memory:'),
+    workspace = new Workspace(store),
+    project = store.createProject('test');
+  const base = { provider: 'claude-cli', permission: 'candidate', sketches: [], files: [] };
+  workspace.submit(project.id, { ...base, id: 'sync', body: 'sync', pins: [] });
+  // A display Sync's object row and scene item share the native id (one manifest key each).
+  const model = largeSync();
+  model.scene = model.scene.map((item, i) => ({ ...item, nativeId: model.objects[i].nativeId }));
+  workspace.update(project.id, 'sync', 'succeeded', {
+    ...model,
+    displayOnly: true,
+    executionMode: 'sdk',
+    sourceDocument: {
+      instance: '1:2:356ff01d-b586-460c-8e2b-8c9f3c083e96',
+      documentId: 7,
+      documentHash: 'd'.repeat(64),
+      revision: 3,
+      name: 'Large',
+      capturedAt: '2026-10-06T00:00:00.000Z',
+      connection: 'attached-editor',
+    },
+  });
+  let loads = 0;
+  const load = workspace.models.load.bind(workspace.models);
+  workspace.models.load = (...args) => (loads++, load(...args));
+  let task;
+  const execution = new Execution(workspace, {
+    sdk: {
+      run: async (value) => {
+        task = value;
+        return { text: 'Read only', hostExecuted: false };
+      },
+    },
+  });
+  try {
+    const request = workspace.submit(project.id, {
+      ...base,
+      id: 'turn',
+      body: '기둥 대안',
+      baseRequestId: 'sync',
+      pins: [{ id: 'object-321', basis: 'sync', role: 'target' }],
+    }).request;
+    const decodes = await largeDecodes(async () => {
+      execution.start(request);
+      await Promise.all([...execution.active.values()].map((item) => item.completion));
+    });
+    assert.equal(decodes, 0);
+    assert.equal(loads, 0, 'the turn rebuilt the display Sync');
+    assert.equal(workspace.get(project.id, 'turn').state, 'succeeded');
+    assert.equal(task.previous.id, 'sync');
+    assert.equal(task.previous.result.scene, undefined);
+    assert.equal(task.previous.result.sourceDocument.revision, 3);
+    const model = task.items.find((item) => item.id === 'working-model').data;
+    assert.equal(model[0].id, 'object-321', 'the pinned object comes first');
+    assert.equal(model.length, 100);
+    const summary = task.items.find((item) => item.id === 'model-context-summary').data;
+    assert.equal(summary.total, 400);
+    const measured = task.items.find((item) => item.id === 'measurements').data;
+    assert.equal(measured[0].area, 321);
+  } finally {
+    store.close();
+  }
+});

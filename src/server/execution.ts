@@ -74,6 +74,7 @@ import {
   hostLeftUnknown,
   lockRefusal,
   displayQuery,
+  overlayDisplay,
   executionsOf,
   publicRecord,
   queuedDriver,
@@ -1221,12 +1222,12 @@ export class Execution {
       const bake = bakeJobOf(request);
       if (bake) {
         if (!this.sdk) throw { code: 'EXECUTOR_NOT_READY' };
-        const basis = this.workspace.basis(projectId, input);
+        const { previous: bakeBasis } = this.previousOf(projectId, input, false);
         let result: Record<string, unknown>;
         try {
           result = await this.sdk.runFixed({
             input,
-            previous: basis ? { ...basis, result: parsedModel(basis.result) } : undefined,
+            previous: bakeBasis,
             codes: bake.codes,
             expectedDocumentHash: bake.expectedDocumentHash,
             signal: controller.signal,
@@ -1304,8 +1305,12 @@ export class Execution {
         });
         return;
       }
-      const basis = jigReview ? undefined : this.workspace.basis(projectId, input);
-      const previous = basis ? { ...basis, result: parsedModel(basis.result) } : undefined;
+      const sdk = jigReview ? undefined : target === 'rhino' ? this.sdk : this.zwcadSdk;
+      // The basis without its model when it is a display Sync (T-123); the old host path without
+      // an SDK compares and builds from the whole model.
+      const { previous, view: previousView } = jigReview
+        ? { previous: undefined, view: undefined }
+        : this.previousOf(projectId, input, !sdk && !!host);
       // The drawing open in ZWCAD (connection plugin) is edited directly by its own path.
       const openCadDrawing =
         previous?.result.host === 'zwcad' &&
@@ -1379,12 +1384,12 @@ export class Execution {
       if (conversation.length)
         items.push({ id: 'conversation', type: 'conversation', data: conversation });
       if (turn) items.push(...turn.items);
-      const sdk = jigReview ? undefined : target === 'rhino' ? this.sdk : this.zwcadSdk;
       if (sdk)
         items.push(
           ...modelContext(
             previous?.result,
             pins.filter((pin) => pin.basis === previous?.id).map((pin) => pin.id),
+            previousView,
           ),
         );
       else if (host)
@@ -1736,6 +1741,49 @@ export class Execution {
   }
 
   /**
+   * The newest stored display Sync of an attached Rhino document (any project: the document is the
+   * same), with its lazy view and the document revision it shows (T-123 `query`).
+   */
+  private storedDisplay(target: { instance: string; documentId: number }) {
+    const row = this.workspace.store.db
+      .prepare(
+        `SELECT w.id, w.projectId, json_extract(w.result,'$.sourceDocument') AS source
+          FROM workspace_requests w JOIN sync_manifests m ON m.requestId=w.id
+          WHERE w.state='succeeded' AND json_extract(w.result,'$.displayOnly')=1
+            AND json_extract(w.result,'$.sourceDocument.instance')=?
+            AND json_extract(w.result,'$.sourceDocument.documentId')=?
+          ORDER BY w.rowid DESC LIMIT 1`,
+      )
+      .get(target.instance, target.documentId) as
+      | { id: string; projectId: string; source: string }
+      | undefined;
+    if (!row) return undefined;
+    const sourceDocument = JSON.parse(row.source) as Record<string, unknown>;
+    const view = this.workspace.model(row.projectId, row.id);
+    if (!view || typeof sourceDocument.revision !== 'number') return undefined;
+    return { view, revision: sourceDocument.revision, sourceDocument };
+  }
+  /**
+   * A turn's basis (T-123). A display Sync stored per object gives its small result and a lazy view
+   * (`Workspace.model`): nothing of its model is decoded. Any other basis (a work copy candidate, a
+   * DWG import) and `needsModel` read the stored model once, as protection checks compare it.
+   */
+  private previousOf(
+    projectId: string,
+    input: Pick<RequestInput, 'id' | 'baseRequestId' | 'host'>,
+    needsModel: boolean,
+  ) {
+    const base = this.workspace.baseline(projectId, input);
+    if (!base) return { previous: undefined, view: undefined };
+    const view = needsModel ? undefined : this.workspace.model(projectId, base.id);
+    if (view && (base.result as { displayOnly?: unknown } | null)?.displayOnly === true) {
+      const brief = this.workspace.brief(projectId, base.id);
+      return { previous: { ...brief, result: parsedModel(brief.result) }, view };
+    }
+    const full = this.workspace.get(projectId, base.id);
+    return { previous: { ...full, result: parsedModel(full.result) }, view: undefined };
+  }
+  /**
    * The attached document a direct turn writes to (or a stored execution undoes). `attachedOnly`:
    * the source must name an attached editor connection (a request's basis); stored execution
    * targets carry only instance and document.
@@ -1757,7 +1805,21 @@ export class Execution {
     // An executor without the direct methods (an older or stub one) keeps the work copy path.
     if (host === 'rhino' && typeof this.sdk?.runDirect === 'function') {
       const sdk = this.sdk;
+      // A query reads the document's stored Sync and asks Rhino only for what changed since it
+      // (T-123); without a stored Sync, or when Rhino cannot tell the changes, the whole document.
       const reads = displayQuery(async () => {
+        const stored = this.storedDisplay(target);
+        if (stored)
+          try {
+            const changed = await sdk.liveSync(target, stored, stored.revision);
+            const entries = stored.view.entries({ limit: Infinity });
+            return {
+              ...overlayDisplay(entries, changed.delta as never),
+              units: changed.result.sourceDocument.units,
+            };
+          } catch {
+            /* Rhino cannot tell (RESYNC_REQUIRED) or the read failed: read the document. */
+          }
         const { sourceDocument, ...model } = await sdk.readLayers(target, {});
         return { ...model, units: sourceDocument.units };
       });

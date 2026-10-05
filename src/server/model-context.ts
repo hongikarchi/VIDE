@@ -3,11 +3,51 @@ import type { workspaceResultSchema } from '../contracts/workspace-result.ts';
 
 type Model = z.infer<typeof workspaceResultSchema>;
 
-/** Initial orientation only. Native queries and write protection retain the full model. */
-export function modelContext(model: Model | undefined, priorityIds: string[]) {
-  const objects = model?.objects ?? [];
-  const scene = new Map((model?.scene ?? []).map((item) => [item.id, item]));
+type Row = { id: string; [key: string]: unknown };
+/** A stored model read lazily (`ModelView.entries`/`count`, T-123): the turn never loads it whole. */
+export interface ModelEntries {
+  count(): number;
+  entries(options: { ids?: readonly string[]; limit?: number }): {
+    object?: Record<string, unknown>;
+    scene?: Record<string, unknown>;
+  }[];
+}
+
+/**
+ * Initial orientation only. Native queries and write protection retain the full model. `view`: a
+ * display Sync stored per object; only the pinned objects and the first ones are read from it.
+ */
+export function modelContext(model: Model | undefined, priorityIds: string[], view?: ModelEntries) {
   const priority = new Set(priorityIds);
+  let objects: Model['objects'] & Row[];
+  let scene: Map<string, NonNullable<Model['scene']>[number]>;
+  let total: number;
+  if (view) {
+    // The pinned objects, then the first ones in display order (an object row and its scene item
+    // may be two manifest entries: twice the rows cover the first hundred objects).
+    const read = [
+      ...view.entries({ ids: [...priority] }),
+      ...view.entries({ limit: 2 * (100 + priority.size) }),
+    ];
+    const seen = new Set<string>();
+    objects = [] as unknown as typeof objects;
+    scene = new Map();
+    for (const entry of read) {
+      const object = entry.object as Row | undefined;
+      if (object && !seen.has(object.id)) {
+        seen.add(object.id);
+        objects.push(object);
+      }
+      const item = entry.scene as { id?: unknown } | undefined;
+      if (item && typeof item.id === 'string' && !scene.has(item.id))
+        scene.set(item.id, item as never);
+    }
+    total = view.count();
+  } else {
+    objects = (model?.objects ?? []) as typeof objects;
+    scene = new Map((model?.scene ?? []).map((item) => [item.id, item]));
+    total = objects.length;
+  }
   const ordered = [
     ...objects.filter((item) => priority.has(item.id)),
     ...objects.filter((item) => !priority.has(item.id)),
@@ -53,9 +93,9 @@ export function modelContext(model: Model | undefined, priorityIds: string[]) {
       id: 'model-context-summary',
       type: 'model-summary',
       data: {
-        total: objects.length,
+        total,
         included: selected.length,
-        omitted: objects.length - selected.length,
+        omitted: total - selected.length,
         geometryDetailsIncluded: false,
         instruction:
           'Initial metadata summary, not full geometry or a complete measurement report. Query the authorized target for required current data. Never infer omitted objects, dimensions or totals. Pins and protected IDs remain authoritative.',

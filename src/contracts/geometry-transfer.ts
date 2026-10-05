@@ -177,7 +177,30 @@ export function joinGeometry(
   return container(at === 'result' ? { ...root, result: target } : target, buffers, size);
 }
 
-export function decodeGeometry(input: ArrayBuffer | Uint8Array): unknown {
+/**
+ * A coordinate array kept as received (T-085): float32 offsets from `origin`, the array's first
+ * point. The screen uploads it to the GPU as it is; `point(array, i)` gives world coordinates.
+ */
+export type PackedPositions = Float32Array & { origin: [number, number, number] };
+/** Coordinates as plain numbers (JSON, older paths) or as received binary (`PackedPositions`). */
+export type Positions = readonly number[] | PackedPositions;
+/** Index arrays as plain numbers or as received binary. */
+export type Indices = readonly number[] | Uint16Array | Uint32Array;
+export const isPacked = (value: unknown): value is PackedPositions =>
+  value instanceof Float32Array && Array.isArray((value as { origin?: unknown }).origin);
+/** World coordinate `i` (x, y or z by `i % 3`) of a plain or packed array. */
+export const coordinate = (values: Positions, i: number) =>
+  isPacked(values) ? values.origin[i % 3] + values[i] : values[i];
+
+/**
+ * `typed`: coordinate arrays stay views on the received buffer (`PackedPositions`) and index arrays
+ * stay `Uint16Array`/`Uint32Array` — nothing is unpacked into number arrays (T-085). Without it
+ * every array is restored as plain numbers.
+ */
+export function decodeGeometry(
+  input: ArrayBuffer | Uint8Array,
+  { typed = false }: { typed?: boolean } = {},
+): unknown {
   const bytes = input instanceof Uint8Array ? input : new Uint8Array(input);
   if (bytes.byteLength < 8 || MAGIC.some((v, i) => bytes[i] !== v))
     throw new Error('GEOMETRY_FORMAT');
@@ -192,6 +215,7 @@ export function decodeGeometry(input: ArrayBuffer | Uint8Array): unknown {
     if (base + offset + count * size > end) throw new Error('GEOMETRY_FORMAT');
     if (type === 'f') {
       const local = new Float32Array(data.buffer, base + offset, count);
+      if (typed) return Object.assign(local, { origin: [ox, oy, oz] as [number, number, number] });
       const out = new Array<number>(count);
       for (let i = 0; i < count; i += 3) {
         out[i] = ox + local[i];
@@ -204,7 +228,7 @@ export function decodeGeometry(input: ArrayBuffer | Uint8Array): unknown {
       type === 'u16'
         ? new Uint16Array(data.buffer, base + offset, count)
         : new Uint32Array(data.buffer, base + offset, count);
-    return Array.from(view);
+    return typed ? view : Array.from(view);
   };
   return JSON.parse(new TextDecoder().decode(data.subarray(8, 8 + length)), (_key, value) =>
     value && typeof value === 'object' && Array.isArray(value.$bin) ? restore(value.$bin) : value,

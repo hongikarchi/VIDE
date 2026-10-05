@@ -1,9 +1,11 @@
+import type { Indices, Positions } from '../contracts/geometry-transfer.ts';
+
 export interface DisplayGeometry {
   valid?: boolean;
-  vertices?: number[];
-  indices?: number[];
-  line?: number[];
-  segments?: number[];
+  vertices?: Positions;
+  indices?: Indices;
+  line?: Positions;
+  segments?: Positions;
   nativeType?: string;
   origin?: number[];
   /** CAD solid hatch loops (flattened xyz) and text annotations. */
@@ -11,10 +13,10 @@ export interface DisplayGeometry {
   texts?: { p: number[] }[];
 }
 type Representation =
-  | { type: 'mesh'; positions: number[]; indices: number[] }
-  | { type: 'line' | 'segments' | 'point'; positions: number[] }
+  | { type: 'mesh'; positions: Positions; indices: Indices }
+  | { type: 'line' | 'segments' | 'point'; positions: Positions }
   // Text/fill-only CAD items: rendered from their annotations; positions is an anchor point.
-  | { type: 'annotation'; positions: number[] };
+  | { type: 'annotation'; positions: Positions };
 export function sceneRepresentation(object: DisplayGeometry): Representation | null {
   if (object.valid === false) return null;
   if (object.vertices?.length && object.indices?.length)

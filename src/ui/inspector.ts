@@ -30,8 +30,8 @@ interface InspectorObject {
 }
 interface InspectorScene {
   id: string;
-  vertices?: number[];
-  line?: number[];
+  vertices?: ArrayLike<number>;
+  line?: ArrayLike<number>;
   boundsSize?: number[];
   length?: number | null;
   area?: number | null;

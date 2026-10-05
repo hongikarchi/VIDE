@@ -4,7 +4,15 @@ import { requestAdmission, waitingOf } from '../../contracts/request-scope.ts';
 import { requestMode } from '../../contracts/workspace.ts';
 import { attachmentPreview, batchRefusal, addViewCopy, uploadAttachments } from '../attachments.ts';
 import { element as $, readableError } from '../elements.ts';
-import { models, chooseModel, draftHasInput, objects, validate, packet } from '../model.ts';
+import {
+  models,
+  chooseModel,
+  draftHasInput,
+  objects,
+  objectById,
+  validate,
+  packet,
+} from '../model.ts';
 import {
   rememberConversation,
   restoreDraft,
@@ -242,8 +250,8 @@ export function fillModels() {
 /** Selected objects of the displayed model that can be pinned (they belong to a request basis). */
 export function pinnable() {
   return selectionState.selectedIds.flatMap((id) => {
-    const object = objects.find((o) => o.id === id && o.revision);
-    return object ? [object] : [];
+    const object = objectById(id);
+    return object?.revision ? [object] : [];
   });
 }
 export let pinComposer!: ReturnType<typeof attachPinTokens>;

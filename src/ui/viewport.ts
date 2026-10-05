@@ -1,6 +1,12 @@
 import { creaseEdges } from './crease-edges.ts';
 import { sceneRepresentation } from '../core/scene-representation.ts';
 import { displayCoordinates } from '../core/display-coordinates.ts';
+import {
+  coordinate,
+  isPacked,
+  type Indices,
+  type Positions,
+} from '../contracts/geometry-transfer.ts';
 import type { DisplayGeometry } from '../core/scene-representation.ts';
 import type { Point2, Point3, DraftStroke } from './model.ts';
 import { planePoint } from './model.ts';
@@ -163,15 +169,67 @@ const surfaceMaterial = () =>
 /** Rhino block definition display, in definition space (meters). */
 interface BlockDefinition {
   hash: string;
-  vertices: number[];
-  indices: number[];
-  segments: number[];
+  vertices: Positions;
+  indices: Indices;
+  segments: Positions;
   texts?: CadText[];
 }
 interface SharedBlock {
   origin: THREE.Vector3;
   surface?: THREE.BufferGeometry;
   wire?: THREE.BufferGeometry;
+}
+/** The offset `matrix` moves points by, less `origin`, when it only translates; else undefined. */
+function translationOf(matrix: THREE.Matrix4, origin: THREE.Vector3) {
+  const e = matrix.elements;
+  if (
+    e[0] !== 1 ||
+    e[1] !== 0 ||
+    e[2] !== 0 ||
+    e[3] !== 0 ||
+    e[4] !== 0 ||
+    e[5] !== 1 ||
+    e[6] !== 0 ||
+    e[7] !== 0 ||
+    e[8] !== 0 ||
+    e[9] !== 0 ||
+    e[10] !== 1 ||
+    e[11] !== 0 ||
+    e[15] !== 1
+  )
+    return undefined;
+  return [e[12] - origin.x, e[13] - origin.y, e[14] - origin.z] as const;
+}
+/** An index array as a GPU attribute: received binary goes as it is (T-085). */
+function indexAttribute(indices: Indices) {
+  if (indices instanceof Uint16Array || indices instanceof Uint32Array)
+    return new THREE.BufferAttribute(indices, 1);
+  const max = indices.reduce((top, value) => (value > top ? value : top), 0);
+  return new THREE.BufferAttribute(
+    max < 0x10000 ? Uint16Array.from(indices) : Uint32Array.from(indices),
+    1,
+  );
+}
+/** `values` (plain or packed) relative to `origin`, as float32 for the GPU. */
+function relativeTo(values: Positions, origin: ArrayLike<number>) {
+  const out = new Float32Array(values.length);
+  if (isPacked(values)) {
+    const dx = values.origin[0] - origin[0],
+      dy = values.origin[1] - origin[1],
+      dz = values.origin[2] - origin[2];
+    for (let i = 0; i < out.length; i += 3) {
+      out[i] = values[i] + dx;
+      out[i + 1] = values[i + 1] + dy;
+      out[i + 2] = values[i + 2] + dz;
+    }
+    return out;
+  }
+  for (let i = 0; i < out.length; i += 3) {
+    out[i] = values[i] - origin[0];
+    out[i + 1] = values[i + 1] - origin[1];
+    out[i + 2] = values[i + 2] - origin[2];
+  }
+  return out;
 }
 function disposeObject(object: THREE.Object3D) {
   object.traverse((item) => {
@@ -265,21 +323,16 @@ export function createViewport(
   function sharedBlock(definition: BlockDefinition) {
     let shared = blockGeometry.get(definition.hash);
     if (shared) return shared;
-    // Local coordinates around the definition's first point keep float32 precision.
-    const anchor = (definition.vertices.length ? definition.vertices : definition.segments).slice(
-      0,
-      3,
+    // Local coordinates around the definition's first point keep float32 precision; a received
+    // binary array is already local to that point and goes to the GPU as it is (T-085).
+    const first = definition.vertices.length ? definition.vertices : definition.segments;
+    const origin = new THREE.Vector3(
+      first.length ? coordinate(first, 0) : 0,
+      first.length ? coordinate(first, 1) : 0,
+      first.length ? coordinate(first, 2) : 0,
     );
-    const origin = new THREE.Vector3(anchor[0] ?? 0, anchor[1] ?? 0, anchor[2] ?? 0);
-    const local = (values: number[]) => {
-      const out = new Float32Array(values.length);
-      for (let i = 0; i < values.length; i += 3) {
-        out[i] = values[i] - origin.x;
-        out[i + 1] = values[i + 1] - origin.y;
-        out[i + 2] = values[i + 2] - origin.z;
-      }
-      return out;
-    };
+    const local = (values: Positions) =>
+      isPacked(values) && values === first ? values : relativeTo(values, origin.toArray());
     shared = { origin };
     if (definition.vertices.length && definition.indices.length) {
       shared.surface = new THREE.BufferGeometry();
@@ -287,7 +340,7 @@ export function createViewport(
         'position',
         new THREE.BufferAttribute(local(definition.vertices), 3),
       );
-      shared.surface.setIndex(definition.indices);
+      shared.surface.setIndex(indexAttribute(definition.indices));
       shared.surface.computeVertexNormals();
     }
     if (definition.segments.length) {
@@ -345,17 +398,29 @@ export function createViewport(
     dirty = true;
     const next = new Map(data.map((object) => [object.id, object]));
     const kept = new Set<string>();
+    // Live Sync (T-085): what changed, so only the chunks holding it are drawn again.
+    const gone: string[] = [],
+      recolored: RenderObject[] = [];
     for (const mesh of meshes) {
       const object = incremental ? next.get(mesh.userData.id) : undefined;
       if (object?.geometryHash && object.geometryHash === mesh.userData.geometryHash) {
         kept.add(object.id);
-        mesh.userData.colors = {
+        const colors = {
           object: objectColor(object),
           layer: hexColor(object.layerColor),
           material: hexColor(object.materialColor),
         };
+        const before = mesh.userData.colors as typeof colors | undefined;
+        if (
+          before?.object !== colors.object ||
+          before?.layer !== colors.layer ||
+          before?.material !== colors.material
+        )
+          recolored.push(mesh);
+        mesh.userData.colors = colors;
         continue;
       }
+      gone.push(mesh.userData.id);
       scene.remove(mesh);
       releasePlot(mesh);
       disposeObject(mesh);
@@ -421,7 +486,7 @@ export function createViewport(
           new THREE.PointsMaterial({ color: 0x69766c, size: 9, sizeAttenuation: false }),
         );
       else if (representation.type === 'mesh') {
-        geometry.setIndex(representation.indices);
+        geometry.setIndex(indexAttribute(representation.indices));
         geometry.computeVertexNormals();
         mesh = new THREE.Mesh(geometry, surfaceMaterial());
       } else if (representation.type === 'segments' || annotationOnly)
@@ -437,13 +502,10 @@ export function createViewport(
       // A surface that also carries wire segments (e.g. a solid hatch and its boundary).
       if (representation.type === 'mesh' && object.segments?.length) {
         const wire = new THREE.BufferGeometry();
-        const points = new Float32Array(object.segments.length);
-        for (let i = 0; i < points.length; i += 3) {
-          points[i] = object.segments[i] - origin[0];
-          points[i + 1] = object.segments[i + 1] - origin[1];
-          points[i + 2] = object.segments[i + 2] - origin[2];
-        }
-        wire.setAttribute('position', new THREE.BufferAttribute(points, 3));
+        wire.setAttribute(
+          'position',
+          new THREE.BufferAttribute(relativeTo(object.segments, origin), 3),
+        );
         mesh.add(new THREE.LineSegments(wire, new THREE.LineBasicMaterial({ color: WIRE })));
       }
       // CAD: per-segment styles plus fills and texts as children of the same pickable object.
@@ -465,7 +527,14 @@ export function createViewport(
       meshes.push(mesh);
       byId.set(object.id, mesh);
     }
-    applyDisplay();
+    if (!incremental) {
+      applyDisplay();
+      return;
+    }
+    // Only new, rebuilt and recoloured objects are painted, and only their chunks rebuilt.
+    const added = meshes.filter((mesh) => !kept.has(mesh.userData.id));
+    for (const mesh of [...added, ...recolored]) paint(mesh);
+    rebatchChanged(gone, added, recolored);
   }
   /** Crease edges are built lazily (only when shown) so large models stay cheap. */
   function edgesOf(mesh: THREE.Mesh) {
@@ -802,7 +871,14 @@ export function createViewport(
   const onLayer = (object: THREE.Object3D, layer: number) => object.layers.set(layer);
   /** The parts of an object that a chunk may draw; empty when it must be drawn by itself. */
   function batchParts(object: RenderObject) {
-    if (display.plot || !object.visible || selectedIds.has(object.userData.id)) return undefined;
+    // Selected objects are drawn in their chunk with the selection colour (a select-all of 10,000
+    // objects drew 10,000 meshes one by one, T-085); ghosted selection keeps its own opacity.
+    if (
+      display.plot ||
+      !object.visible ||
+      (display.mode === 'ghosted' && selectedIds.has(object.userData.id))
+    )
+      return undefined;
     if (object instanceof THREE.Points) return undefined;
     if (object instanceof THREE.Mesh) {
       const edges = object.userData.edges as THREE.LineSegments | undefined;
@@ -862,24 +938,51 @@ export function createViewport(
           normalAttribute = mesh.geometry.getAttribute('normal'),
           color = (mesh.material as THREE.MeshStandardMaterial).color,
           base = v;
-        for (let i = 0; i < position.count; i++, v++) {
-          point.fromBufferAttribute(position, i).applyMatrix4(mesh.matrixWorld).sub(batch.origin);
-          positions[v * 3] = point.x;
-          positions[v * 3 + 1] = point.y;
-          positions[v * 3 + 2] = point.z;
-          if (normalAttribute) {
-            normal.fromBufferAttribute(normalAttribute, i).applyNormalMatrix(normalMatrix);
-            normals[v * 3] = normal.x;
-            normals[v * 3 + 1] = normal.y;
-            normals[v * 3 + 2] = normal.z;
+        // Most objects are only moved to their origin: their vertices are copied with one offset
+        // (a Live Sync rebuilds whole chunks, T-085); blocks and other transforms take the matrix.
+        const shift = translationOf(mesh.matrixWorld, batch.origin);
+        if (shift && position instanceof THREE.BufferAttribute && position.itemSize === 3) {
+          const source = position.array as ArrayLike<number>,
+            normalSource =
+              normalAttribute instanceof THREE.BufferAttribute && normalAttribute.itemSize === 3
+                ? (normalAttribute.array as ArrayLike<number>)
+                : undefined;
+          for (let i = 0; i < position.count; i++, v++) {
+            const at = v * 3,
+              from = i * 3;
+            positions[at] = source[from] + shift[0];
+            positions[at + 1] = source[from + 1] + shift[1];
+            positions[at + 2] = source[from + 2] + shift[2];
+            if (normalSource) {
+              normals[at] = normalSource[from];
+              normals[at + 1] = normalSource[from + 1];
+              normals[at + 2] = normalSource[from + 2];
+            }
+            colors[at] = color.r;
+            colors[at + 1] = color.g;
+            colors[at + 2] = color.b;
           }
-          colors[v * 3] = color.r;
-          colors[v * 3 + 1] = color.g;
-          colors[v * 3 + 2] = color.b;
-        }
+        } else
+          for (let i = 0; i < position.count; i++, v++) {
+            point.fromBufferAttribute(position, i).applyMatrix4(mesh.matrixWorld).sub(batch.origin);
+            positions[v * 3] = point.x;
+            positions[v * 3 + 1] = point.y;
+            positions[v * 3 + 2] = point.z;
+            if (normalAttribute) {
+              normal.fromBufferAttribute(normalAttribute, i).applyNormalMatrix(normalMatrix);
+              normals[v * 3] = normal.x;
+              normals[v * 3 + 1] = normal.y;
+              normals[v * 3 + 2] = normal.z;
+            }
+            colors[v * 3] = color.r;
+            colors[v * 3 + 1] = color.g;
+            colors[v * 3 + 2] = color.b;
+          }
         const index = mesh.geometry.index;
-        if (index) for (let i = 0; i < index.count; i++) indices[n++] = base + index.getX(i);
-        else for (let i = 0; i < position.count; i++) indices[n++] = base + i;
+        if (index) {
+          const list = index.array as ArrayLike<number>;
+          for (let i = 0; i < index.count; i++) indices[n++] = base + list[i];
+        } else for (let i = 0; i < position.count; i++) indices[n++] = base + i;
       }
       const geometry = new THREE.BufferGeometry();
       geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
@@ -914,11 +1017,22 @@ export function createViewport(
             ? line.geometry.getAttribute('color')
             : undefined,
           color = (line.material as THREE.LineBasicMaterial).color;
+        const shift = translationOf(line.matrixWorld, batch.origin);
+        const flat =
+          shift && position instanceof THREE.BufferAttribute && position.itemSize === 3
+            ? (position.array as ArrayLike<number>)
+            : undefined;
         const put = (i: number) => {
-          point.fromBufferAttribute(position, i).applyMatrix4(line.matrixWorld).sub(batch.origin);
-          positions[v * 3] = point.x;
-          positions[v * 3 + 1] = point.y;
-          positions[v * 3 + 2] = point.z;
+          if (flat && shift) {
+            positions[v * 3] = flat[i * 3] + shift[0];
+            positions[v * 3 + 1] = flat[i * 3 + 1] + shift[1];
+            positions[v * 3 + 2] = flat[i * 3 + 2] + shift[2];
+          } else {
+            point.fromBufferAttribute(position, i).applyMatrix4(line.matrixWorld).sub(batch.origin);
+            positions[v * 3] = point.x;
+            positions[v * 3 + 1] = point.y;
+            positions[v * 3 + 2] = point.z;
+          }
           colors[v * 3] = painted ? painted.getX(i) : color.r;
           colors[v * 3 + 1] = painted ? painted.getY(i) : color.g;
           colors[v * 3 + 2] = painted ? painted.getZ(i) : color.b;
@@ -944,42 +1058,87 @@ export function createViewport(
     }
     for (const drawn of batch.drawn) batchRoot.add(drawn);
   }
+  /** The open chunk of each cell and kind (a full chunk opens the next one). */
+  let openChunk = new Map<string, number>();
+  /** Puts an object into its cell's open chunk; returns the chunk key. */
+  function assignBatch(object: RenderObject) {
+    object.updateWorldMatrix(true, false);
+    const at = new THREE.Vector3().setFromMatrixPosition(object.matrixWorld);
+    const cell = `${Math.floor(at.x / CELL)}:${Math.floor(at.y / CELL)}:${Math.floor(at.z / CELL)}`;
+    const kind = object instanceof THREE.Mesh ? 'm' : 'l';
+    const group = kind + '|' + cell;
+    const index = openChunk.get(group) ?? 0;
+    let key = group + '|' + index;
+    let batch = batches.get(key);
+    if (batch && batch.members.length >= CHUNK) {
+      openChunk.set(group, index + 1);
+      key = group + '|' + (index + 1);
+      batch = batches.get(key);
+    }
+    if (!batch) {
+      batch = {
+        members: [],
+        drawn: [],
+        origin: new THREE.Vector3(
+          Math.floor(at.x / CELL) * CELL,
+          Math.floor(at.y / CELL) * CELL,
+          Math.floor(at.z / CELL) * CELL,
+        ),
+      };
+      batches.set(key, batch);
+    }
+    batch.members.push(object);
+    batchOfId.set(object.userData.id, key);
+    return key;
+  }
   /** Regroup every object into chunks and rebuild all merged geometry. */
   function rebatchAll() {
     for (const batch of batches.values()) disposeBatch(batch);
     batches = new Map();
     batchOfId = new Map();
-    const open = new Map<string, number>();
-    for (const object of meshes) {
-      object.updateWorldMatrix(true, false);
-      const at = new THREE.Vector3().setFromMatrixPosition(object.matrixWorld);
-      const cell = `${Math.floor(at.x / CELL)}:${Math.floor(at.y / CELL)}:${Math.floor(at.z / CELL)}`;
-      const kind = object instanceof THREE.Mesh ? 'm' : 'l';
-      const group = kind + '|' + cell;
-      const index = open.get(group) ?? 0;
-      let key = group + '|' + index;
-      let batch = batches.get(key);
-      if (batch && batch.members.length >= CHUNK) {
-        open.set(group, index + 1);
-        key = group + '|' + (index + 1);
-        batch = undefined;
-      }
-      if (!batch) {
-        batch = {
-          members: [],
-          drawn: [],
-          origin: new THREE.Vector3(
-            Math.floor(at.x / CELL) * CELL,
-            Math.floor(at.y / CELL) * CELL,
-            Math.floor(at.z / CELL) * CELL,
-          ),
-        };
-        batches.set(key, batch);
-      }
-      batch.members.push(object);
-      batchOfId.set(object.userData.id, key);
-    }
+    openChunk = new Map();
+    for (const object of meshes) assignBatch(object);
     for (const batch of batches.values()) buildBatch(batch);
+    dirty = true;
+  }
+  /**
+   * Live Sync (T-085): removed and rebuilt objects leave their chunks, new ones join their cell's
+   * open chunk, and only those chunks (and the chunks of recoloured objects) are built again.
+   */
+  function rebatchChanged(
+    gone: readonly string[],
+    added: readonly RenderObject[],
+    recolored: readonly RenderObject[],
+  ) {
+    const touched = new Set<string>();
+    const goneIds = new Set(gone);
+    for (const id of gone) {
+      const key = batchOfId.get(id);
+      if (!key) continue;
+      batchOfId.delete(id);
+      touched.add(key);
+    }
+    for (const key of touched) {
+      const batch = batches.get(key);
+      if (batch)
+        batch.members = batch.members.filter(
+          (member) => !goneIds.has(member.userData.id) || byId.get(member.userData.id) === member,
+        );
+    }
+    for (const object of added) touched.add(assignBatch(object));
+    for (const object of recolored) {
+      const key = batchOfId.get(object.userData.id);
+      if (key) touched.add(key);
+    }
+    for (const key of touched) {
+      const batch = batches.get(key);
+      if (!batch) continue;
+      if (batch.members.length) buildBatch(batch);
+      else {
+        disposeBatch(batch);
+        batches.delete(key);
+      }
+    }
     dirty = true;
   }
   /** Rebuild only the chunks holding these objects (selection changes). */

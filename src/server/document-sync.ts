@@ -20,7 +20,7 @@ export interface DocumentSyncContext {
   rhinoImport: Parameters<typeof captureModel>[3];
   host: Parameters<typeof captureModel>[3];
   documentSyncs: SyncCoalescer<StoredWork>;
-  liveSync?: Pick<LiveSync, 'record'>;
+  liveSync?: Pick<LiveSync, 'record'> & Partial<Pick<LiveSync, 'basisOf'>>;
   diagnostics: Pick<Diagnostics, 'write'>;
 }
 export interface DocumentSyncTarget {
@@ -159,4 +159,109 @@ async function syncDocument(
   );
   if (shared) diagnostics.write('sync-shared', { request: target.id, shared, with: result.id });
   return { result, shared };
+}
+
+/** What a user's Sync did: a Live Sync of the shown basis, or a full read of the document. */
+export type UserSyncAction = 'live' | 'full';
+type LiveReply = { resync: true } | { retry: string } | { requestId: string };
+
+/**
+ * ⟳, 지금 Sync and the plugin's Sync (ARCH-01 §7 「사용자 Sync」, T-123): never joined to an
+ * automatic Sync, always asked of the host. When the document's newest Sync is a Rhino display
+ * Sync that a Live Sync can continue, only the objects changed since it are read (`live`); the
+ * first Sync, a basis a Live Sync cannot continue (`resync`, a retried code, no basis, ZWCAD, a work
+ * copy) and `full` read the whole document (`runDocumentSync`).
+ */
+export async function runUserSync(
+  context: DocumentSyncContext & {
+    live?: (projectId: string, input: unknown) => Promise<LiveReply>;
+  },
+  projectId: string,
+  target: DocumentSyncTarget & { full?: boolean },
+): Promise<{ result: StoredWork; action: UserSyncAction }> {
+  const began = performance.now();
+  const basis =
+    target.full || !context.live ? undefined : userSyncBasis(context, projectId, target);
+  if (basis) {
+    let reply: LiveReply | undefined;
+    try {
+      reply = await context.live!(projectId, {
+        instance: target.instance,
+        documentId: target.documentId,
+        basisId: basis.id,
+        revision: basis.revision,
+      });
+    } catch {
+      reply = undefined;
+    }
+    if (reply && 'requestId' in reply) {
+      context.diagnostics.write('user-sync', {
+        request: reply.requestId,
+        projectId,
+        action: 'live',
+        ms: Math.round(performance.now() - began),
+      });
+      return { result: context.workspace.summary(projectId, reply.requestId), action: 'live' };
+    }
+  }
+  const { result } = await runDocumentSync(context, projectId, {
+    ...target,
+    fresh: target.fresh ?? true,
+  });
+  context.diagnostics.write('user-sync', {
+    request: result.id,
+    projectId,
+    action: 'full',
+    ms: Math.round(performance.now() - began),
+  });
+  return { result, action: 'full' };
+}
+
+/** The newest Rhino display Sync of the document a Live Sync can continue, with its revision. */
+function userSyncBasis(
+  context: DocumentSyncContext & { liveSync?: Partial<Pick<LiveSync, 'basisOf'>> },
+  projectId: string,
+  target: DocumentSyncTarget,
+) {
+  const { workspace } = context;
+  const continues = (id: string | undefined) => {
+    if (!id) return undefined;
+    let row: StoredWork;
+    try {
+      row = workspace.brief(projectId, id);
+    } catch {
+      return undefined;
+    }
+    const result = row.result as Record<string, unknown> | null;
+    const source = result?.sourceDocument as Record<string, unknown> | undefined;
+    if (
+      row.state !== 'succeeded' ||
+      result?.displayOnly !== true ||
+      (result.host ?? 'rhino') !== 'rhino' ||
+      source?.connection !== 'attached-editor' ||
+      source.instance !== target.instance ||
+      source.documentId !== target.documentId ||
+      typeof source.revision !== 'number'
+    )
+      return undefined;
+    return { id: row.id, revision: source.revision };
+  };
+  const known = continues(
+    context.liveSync?.basisOf?.(projectId, target.instance, target.documentId),
+  );
+  if (known) return known;
+  const newest = workspace
+    .list(projectId)
+    .filter((row) => {
+      const source = row.result?.sourceDocument as Record<string, unknown> | undefined;
+      return (
+        row.state === 'succeeded' &&
+        row.result?.displayOnly === true &&
+        source?.instance === target.instance &&
+        source.documentId === target.documentId &&
+        (!target.linkId || row.input.linkId === target.linkId)
+      );
+    })
+    .at(-1);
+  return continues(newest?.id);
 }
