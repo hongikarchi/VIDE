@@ -64,7 +64,8 @@ async function fixture(t) {
           primary_window: {
             used_percent: usage[who],
             limit_window_seconds: 604800,
-            reset_at: 1791066305,
+            // Ahead of the real clock: a fixed past reset makes the limit mark expire at once.
+            reset_at: Math.floor(Date.now() / 1000) + 7 * 86400,
           },
           secondary_window: null,
         },

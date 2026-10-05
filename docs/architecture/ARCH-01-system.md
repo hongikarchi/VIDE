@@ -627,6 +627,10 @@ Git에서 스냅샷·부모 참조·변경되지 않은 자료 재사용을 차�
 
 현재 전체 문서 지문과 호스트별 객체 제한은 이벤트 추적으로 자동 대체되지 않는다. 애드인의 이벤트 구독이 누락되었거나 연속성이 끊기면 캐시를 신뢰하지 않고 문서 재조회·강한 비교를 수행한다. 이벤트와 지문이 충돌하면 오래된 이벤트 기록을 우선하지 않는다. 자체 SDK 객체 상한의 실측 지원 여부는 호스트 지원표와 L5 검수로 확인한다.
 
+### 프로젝트별 DB 나누기(T-124 1단계, 검토 중)
+
+[ADR-032](../decisions/ADR-032-per-project-database.md)(`status: review`)의 구현 1단계다. 엔진은 아직 위의 `vide.sqlite` 하나를 쓴다. `src/core/project-split.ts`가 `<data>/vide.sqlite`를 공용 `app.sqlite`와 `projects/<projectId>/project.sqlite`로 나누고 지식 DB를 `projects/<projectId>/knowledge.sqlite`로 옮긴다. 두 파일은 같은 마이그레이션의 전체 schema를 갖고 자기 표에만 행이 있으며, 프로젝트 DB의 `projects`에는 외래 키 기준으로 그 프로젝트 한 행만 둔다. 표 분류·이행 순서·검사·실패 시 되돌리기는 ADR-032 「표 분류」·「이행」이 정한다. 엔진 시작 때 호출하고 `Store`를 나누는 연결은 T-123 뒤 2단계다.
+
 ### 첫 구현의 세 가지 기록
 
 | 기록 | 저장 방식·필드 |
