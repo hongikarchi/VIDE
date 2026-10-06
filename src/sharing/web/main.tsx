@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { z } from 'zod';
 import { api, sessionSchema, projectsSchema, message, type Session, type Project } from './api';
@@ -9,6 +9,8 @@ import { Review } from './review';
 import { OfflineProject } from './offline';
 import { Reports } from './reports';
 import { Privacy } from './privacy';
+// The block editor loads only when notes are opened.
+const ProjectNotes = lazy(() => import('./notes').then((m) => ({ default: m.ProjectNotes })));
 import './style.css';
 
 const displayName = (session: Session) =>
@@ -29,6 +31,7 @@ function Signed({ session, signOut }: { session: Session; signOut: () => void })
       () => new URL(location.href).searchParams.get('admin') === 'reports',
     ),
     [admin, setAdmin] = useState(false),
+    [notesId, setNotesId] = useState(() => new URL(location.href).searchParams.get('notes') || ''),
     [status, setStatus] = useState('');
   const { hosts, thisPc } = useHosts();
   const user = useRef(session.user.id);
@@ -74,6 +77,7 @@ function Signed({ session, signOut }: { session: Session; signOut: () => void })
       setReviewing(params.get('review') || '');
       setOfflineId(params.get('offline') || '');
       setReports(params.get('admin') === 'reports');
+      setNotesId(params.get('notes') || '');
     };
     window.addEventListener('popstate', back);
     return () => window.removeEventListener('popstate', back);
@@ -101,6 +105,8 @@ function Signed({ session, signOut }: { session: Session; signOut: () => void })
   }
   const review = projects?.find((project) => project.id === reviewing);
   const offline = review ? undefined : projects?.find((project) => project.id === offlineId);
+  const notesProject =
+    review || offline ? undefined : projects?.find((project) => project.id === notesId);
   return (
     <div className="site">
       <header className="topbar">
@@ -110,6 +116,7 @@ function Signed({ session, signOut }: { session: Session; signOut: () => void })
             setReviewing('');
             setOfflineId('');
             setReports(false);
+            setNotesId('');
             history.pushState(null, '', '/');
           }}
         >
@@ -118,6 +125,7 @@ function Signed({ session, signOut }: { session: Session; signOut: () => void })
         {review ? <span className="crumb">/ {review.name} · 공유 검토</span> : null}
         {offline ? <span className="crumb">/ {offline.name} · PC 없이 보기</span> : null}
         {reports ? <span className="crumb">/ 오류·성능 보고</span> : null}
+        {notesProject ? <span className="crumb">/ {notesProject.name} · 노트·일지</span> : null}
         <span className="spacer" />
         {admin && !reports ? (
           <button
@@ -162,7 +170,22 @@ function Signed({ session, signOut }: { session: Session; signOut: () => void })
           project={offline}
           pcOnline={!!hosts?.find((host) => host.id === offline.host_id)?.online}
           notice={offlineNotice}
+          openNotes={(noteId) => {
+            setOfflineId('');
+            setNotesId(offline.id);
+            history.pushState(
+              null,
+              '',
+              '/?notes=' +
+                encodeURIComponent(offline.id) +
+                (noteId ? '&note=' + encodeURIComponent(noteId) : ''),
+            );
+          }}
         />
+      ) : notesProject ? (
+        <Suspense fallback={<p className="empty">불러오는 중…</p>}>
+          <ProjectNotes key={notesProject.id} project={notesProject} user={displayName(session)} />
+        </Suspense>
       ) : (
         <Home
           projects={projects}
@@ -177,6 +200,10 @@ function Signed({ session, signOut }: { session: Session; signOut: () => void })
             setOfflineNotice(notice ?? '');
             setOfflineId(project.id);
             history.pushState(null, '', '/?offline=' + encodeURIComponent(project.id));
+          }}
+          notes={(project) => {
+            setNotesId(project.id);
+            history.pushState(null, '', '/?notes=' + encodeURIComponent(project.id));
           }}
         />
       )}

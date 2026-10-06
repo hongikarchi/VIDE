@@ -1,9 +1,12 @@
 import { betterAuth } from 'better-auth';
+import type { NoteRoom } from './note-room';
 
 export interface Env {
   DB: D1Database;
   ASSETS: R2Bucket;
   WEB?: Fetcher;
+  /** Shared notes: one Durable Object per note (ADR-034); without it the notes routes answer 503. */
+  NOTES?: DurableObjectNamespace<NoteRoom>;
   EMAIL?: SendEmail;
   AUTH_MODE?: string;
   UPLOADS_ENABLED?: string;

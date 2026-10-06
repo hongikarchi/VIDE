@@ -5,7 +5,7 @@ status: review
 version: 0.248
 updated: 2026-10-06
 owner: agent:codex
-related: [ARCH-01, PLAN-02, PLAN-03, PLAN-22, PLAN-23, PLAN-24, PLAN-25, PLAN-26, PLAN-27, PLAN-29, PLAN-31, ADR-033, ADR-022, ADR-025, ADR-026, ADR-027, ADR-028, ADR-029, ADR-030, SPEC-00, SPEC-01, SPEC-02, SPEC-03, SPEC-04, SPEC-05, SPEC-06, SPEC-07, PLAN-30, PLAN-33, ADR-035]
+related: [ARCH-01, PLAN-02, PLAN-03, PLAN-22, PLAN-23, PLAN-24, PLAN-25, PLAN-26, PLAN-27, PLAN-29, PLAN-31, ADR-033, ADR-022, ADR-025, ADR-026, ADR-027, ADR-028, ADR-029, ADR-030, SPEC-00, SPEC-01, SPEC-02, SPEC-03, SPEC-04, SPEC-05, SPEC-06, SPEC-07, PLAN-30, PLAN-33, ADR-035, PLAN-32, ADR-034]
 ---
 
 # VIDE 실행 로드맵
@@ -280,6 +280,7 @@ T-001~018의 번호·지원 증거는 유지한다. 각 티켓의 현재 결과�
 | T-135~T-137 대시보드 할 일(2026-10-06 사용자 요청 셋): 할 일·일정 두 구역(전환 없앰, 할 일 행을 달력으로 끌기), [글·파일에서 할 일 만들기](기본 대화의 호스트 없는 자동 턴, 미리보기 없음, 턴 단위 [되돌리기]), 오늘 진행 n/m과 [퇴근하기](오늘 완료 빼기 + 하루 기록 `day_log`, schema 10) | 구현·자동 검증(2026-10-06, 작업 가지). 가짜 공급자 브라우저 시험(글 파일 → 항목 → [되돌리기], 퇴근하기) | T-138 실제 Claude·Codex 뽑기 확인, 설치본 반영 | [PLAN-30](PLAN-30-dashboard-agenda.md), SPEC-01.14의 2·3·9·10, `agenda.test.mjs`, `agenda-text.test.mjs`, `migrations.test.mjs`, `browser-dashboard-agenda.mjs` |
 | T-150~T-154 PC가 꺼져도 프로젝트 열기(ADR-035, 2026-10-06 사용자 결정 "모델은 안 보여도 그냥 접속이 가능하면 좋겠음"): 사이트의 PC 없이 보기 화면(할 일 읽기·쓰기, 작업 이력 요약, 노트 자리, 저장된 모델 자리), 열기 실패 대신 그 화면, PC의 할 일·이력 요약 올리기와 사이트 변경 적용(나중 쓰기·충돌 메모) | T-151~153 구현·자동 검증(2026-10-06, 작업 가지). T-150 정본은 첨삭(SPEC-04 R-01·R-02, PRD R-76)으로 수락 대기 | 원격 D1 `0009`(PLAN-32의 `0008` 뒤)·Worker 배포·설치본 반영, iPad 실제 확인(T-154), SPEC-04 R-02 확인 | [PLAN-33](PLAN-33-offline-project.md) |
 | T-155~T-159 오류·성능 정보(ADR-036, 2026-10-06 사용자 결정 "설치할 때 동의하면 가능하도록"): 첫 실행 동의 카드·설정 스위치, 허용 목록 요약을 시작·하루 한 번 전송(보낼 상자·재시도), 충돌 뒤 진단 묶음 질문, 사이트 D1 `0010`·한도·관리자 화면·CSV·`tools/diagnostics/reports.mjs` | 구현·자동 검증(2026-10-06, 작업 가지). 묶음 받기는 사이트 스위치로 꺼 둠(R2 정리 전) | 사이트 배포(사용자 지시 뒤)·설치본 확인, 안내 문구 법률 검토, R2 뒤 묶음 켜기 | [PLAN-34](PLAN-34-telemetry.md) |
+| T-145~T-149 공유 노트·협의 사항·일지(ADR-034, 2026-10-06 사용자 결정: 사이트 원본, 구성원 모두 편집, "실시간으로 바로"): 노트마다 SQLite Durable Object 하나의 Yjs 실시간 공동 편집, D1 `notes`의 Markdown 사본, 하루 하나의 일지, VIDE 레일 노트·일지와 사이트 프로젝트 메뉴의 같은 블록 편집기, PC 복제본의 오프라인 편집 합치기, AI가 읽는 `notes/*.md` 사본, 협의 사항 체크 항목 → 할 일, `appendJournal` | 구현·자동 검증(2026-10-06, 작업 가지). Miniflare D1+DO 두 클라이언트 수렴·권한·일지·D1 사본, PC 오프라인 병합, Chrome 두 창과 VIDE↔사이트 실제 소켓 수렴. 배포 안 함 | PRD 첨삭 R-77(FR-26·AC-49) 결정, 리드: [퇴근하기] → `appendJournal` 연결(PLAN-30 합친 뒤), 사용자: D1 `0008`·DO 이행 `v1-notes` 배포와 두 기기 확인 | [PLAN-32](PLAN-32-shared-notes.md), SPEC-10, `notes.mjs`, `shared-notes.test.mjs` |
 | T-086 상한 | 계획 | T-083~085 뒤 | [PLAN-27](PLAN-27-sync-storage-stability.md) |
 | T-087 정리·Rhino/ZWCAD 쪽 | 계획. 사본·작업 폴더 정리와 읽기 전용 감지 기록은 먼저 구현(`fda1e5d`) | 설치본 확인, 나머지 정리·호스트 쪽 항목 | [PLAN-27](PLAN-27-sync-storage-stability.md) |
 

@@ -26,10 +26,16 @@ export async function agendaRoutes(
     body,
     send,
     ledger,
+    dayEnded,
   }: {
     agenda: Agenda;
     body: () => Promise<Record<string, unknown>>;
     send: (status: number, value: unknown) => void;
+    /**
+     * After [퇴근하기]: the day's line also goes to today's shared journal note (SPEC-10.5). Best
+     * effort and not awaited: 퇴근하기 never waits for or fails on the account site.
+     */
+    dayEnded?: (projectId: string, entry: { date: string; text: string }) => void;
     /** The conversation ledger: one item of a project's conversation, and recording the undo. */
     ledger: {
       item: (projectId: string, conversationId: string, ledgerId: string) => LedgerItem;
@@ -63,9 +69,15 @@ export async function agendaRoutes(
       if (value) query[key] = value;
     }
     send(200, { entries: agenda.log(projectId, query) });
-  } else if (method === 'POST' && name === 'day-end' && !remove)
-    send(200, agenda.dayEnd(projectId));
-  else if (method === 'POST' && remove) {
+  } else if (method === 'POST' && name === 'day-end' && !remove) {
+    const result = agenda.dayEnd(projectId);
+    send(200, result);
+    try {
+      dayEnded?.(projectId, result.entry);
+    } catch {
+      /* The journal line is best effort (SPEC-10.5). */
+    }
+  } else if (method === 'POST' && remove) {
     const input = await body();
     send(200, { items: agenda.remove(projectId, name, input.revision) });
   } else if (method === 'POST' && name === 'order')

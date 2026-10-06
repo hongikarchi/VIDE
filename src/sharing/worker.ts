@@ -14,6 +14,9 @@ import {
   receiveBundle,
   receiveReport,
 } from './telemetry';
+import { noteSocket, notesRoute } from './notes';
+
+export { NoteRoom } from './note-room';
 
 async function handle(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
   try {
@@ -82,6 +85,9 @@ async function handle(request: Request, env: Env, ctx: ExecutionContext): Promis
       if (env.WEB && ['GET', 'HEAD'].includes(request.method)) return env.WEB.fetch(request);
       throw new HttpError(404, 'NOT_FOUND');
     }
+    // A note's live socket: its one-minute ticket is the credential (notes.ts).
+    if (url.pathname === '/api/notes/socket' && request.method === 'GET')
+      return await noteSocket(request, env);
     // Work PCs authenticate with the account login once, then their host key; no browser session.
     if (url.pathname.startsWith('/api/hosts/device/')) {
       const devicePath = url.pathname.slice('/api/hosts/device/'.length).split('/');
@@ -145,6 +151,8 @@ async function handle(request: Request, env: Env, ctx: ExecutionContext): Promis
       return await commentRoute(request, env, actor, path[2], path[4]);
     if (path[1] === 'projects' && path[2] && path[3] === 'publications')
       return await publicationRoute(request, env, actor, path[2], path.slice(4));
+    if (path[1] === 'projects' && path[2] && path[3] === 'notes')
+      return await notesRoute(request, env, actor.id, path[2], path.slice(4));
     if (
       path[1] === 'projects' &&
       path[2] &&
@@ -163,8 +171,10 @@ async function handle(request: Request, env: Env, ctx: ExecutionContext): Promis
 }
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
-    const result = await handle(request, env, ctx),
-      response = new Response(result.body, result);
+    const result = await handle(request, env, ctx);
+    // An accepted note socket goes back as it is (a copied Response would lose the WebSocket).
+    if (result.status === 101) return result;
+    const response = new Response(result.body, result);
     response.headers.set('Referrer-Policy', 'no-referrer');
     response.headers.set('X-Content-Type-Options', 'nosniff');
     // A relayed work PC page keeps the PC's own security policy.
@@ -174,7 +184,7 @@ export default {
     }
     response.headers.set(
       'Content-Security-Policy',
-      "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; connect-src 'self' http://127.0.0.1:*; frame-ancestors 'none'; base-uri 'none'; form-action 'self'",
+      `default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; connect-src 'self' ${env.AUTH_ORIGIN.replace(/^http/, 'ws')} http://127.0.0.1:*; frame-ancestors 'none'; base-uri 'none'; form-action 'self'`,
     );
     return response;
   },

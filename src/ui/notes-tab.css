@@ -1,0 +1,29 @@
+/* 노트·일지 workspace tab (SPEC-10, Design SCR-23): the notes list and the open note fill the
+   centre; the conversation column stays. */
+.notes-tab {
+  display: none;
+}
+body[data-workspace='notes'] .workspace > :not(.workspace-tabs):not(.notes-tab) {
+  display: none !important;
+}
+body[data-workspace='notes'] .notes-tab {
+  grid-row: 2 / -1;
+  grid-column: 1 / -1;
+  min-height: 0;
+  display: block;
+  background: var(--bg-elevated);
+  color: var(--text-1);
+}
+@media (min-width: 851px) {
+  body[data-workspace='notes'] #left,
+  body[data-workspace='notes'] #toggle-left,
+  body[data-workspace='notes'] .panel-resize-left {
+    display: none;
+  }
+  body[data-workspace='notes'] main {
+    grid-template-columns: minmax(260px, 1fr) var(--right-width, 370px);
+  }
+  body[data-workspace='notes'].right-hidden main {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

@@ -268,15 +268,82 @@ function SnapshotView({ snapshot, hidden }: { snapshot: Snapshot; hidden: Set<st
   );
 }
 
+const notesSchema = z.object({
+  notes: z.array(
+    z.object({
+      id: z.string(),
+      title: z.string(),
+      kind: z.string(),
+      updatedAt: z.number(),
+      updatedByName: z.string().nullable().optional(),
+    }),
+  ),
+});
+const NOTE_KIND: Record<string, string> = { discussion: '협의 사항', journal: '일지' };
+
+/** The project's shared notes (SPEC-10) are the site's own: they open whether the PC is on or not. */
+function OfflineNotes({
+  projectId,
+  open,
+}: {
+  projectId: string;
+  open?: (noteId?: string) => void;
+}) {
+  const [notes, setNotes] = useState<z.infer<typeof notesSchema>['notes'] | null>(null);
+  useEffect(() => {
+    let live = true;
+    api(`/projects/${encodeURIComponent(projectId)}/notes`)
+      .then((value) => live && setNotes(notesSchema.parse(value).notes))
+      .catch(() => live && setNotes([]));
+    return () => {
+      live = false;
+    };
+  }, [projectId]);
+  return (
+    <section className="offline-section offline-notes" aria-label="노트" data-slot="notes">
+      <div className="offline-section-head">
+        <h2>노트·일지</h2>
+        {open ? (
+          <button type="button" onClick={() => open()}>
+            노트·일지 열기
+          </button>
+        ) : null}
+      </div>
+      {notes === null ? <p className="muted">불러오는 중…</p> : null}
+      {notes?.length === 0 ? (
+        <p className="muted">
+          아직 노트가 없습니다. [노트·일지 열기]에서 오늘 일지나 노트를 만드세요.
+        </p>
+      ) : null}
+      {notes?.length ? (
+        <ul className="offline-notes-list">
+          {notes.slice(0, 6).map((note) => (
+            <li key={note.id}>
+              <button type="button" onClick={() => open?.(note.id)}>
+                <strong>{note.title}</strong>
+                {NOTE_KIND[note.kind] ? <small> · {NOTE_KIND[note.kind]}</small> : null}
+                {note.updatedByName ? <small> · {note.updatedByName}</small> : null}
+              </button>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </section>
+  );
+}
+
 export function OfflineProject({
   project,
   pcOnline,
   notice,
+  openNotes,
 }: {
   project: Project;
   pcOnline: boolean;
   /** Why the PC could not be opened (an update it needs), shown above the page. */
   notice?: string;
+  /** Opens the project's 노트·일지 page (one note when given). */
+  openNotes?: (noteId?: string) => void;
 }) {
   const [files, setFiles] = useState<SnapshotInfo[] | null>(null),
     [chosen, setChosen] = useState(''),
@@ -370,11 +437,7 @@ export function OfflineProject({
           <OfflineAgenda projectId={project.id} />
           <OfflineHistory projectId={project.id} />
         </div>
-        {/* Notes (PLAN-32) appear here through that work; nothing is stored for them by this page. */}
-        <section className="offline-section offline-notes" aria-label="노트" data-slot="notes">
-          <h2>노트</h2>
-          <p className="muted">노트는 준비 중입니다.</p>
-        </section>
+        <OfflineNotes projectId={project.id} open={openNotes} />
         <section className="offline-model">
           <h2>저장된 모델</h2>
           {files === null ? <p className="muted">불러오는 중…</p> : null}

@@ -25,12 +25,13 @@ export function registerShortcut(order: number, handler: ShortcutHandler) {
   handlers.sort((a, b) => a.order - b.order);
 }
 
-/** A key typed into a field is text, not a shortcut. */
+/** A key typed into a field (or an editable text such as a note, SPEC-10) is text, not a shortcut. */
 export function isTyping(event: KeyboardEvent) {
   return (
     event.target instanceof HTMLInputElement ||
     event.target instanceof HTMLTextAreaElement ||
-    event.target instanceof HTMLSelectElement
+    event.target instanceof HTMLSelectElement ||
+    (event.target instanceof HTMLElement && event.target.isContentEditable)
   );
 }
 

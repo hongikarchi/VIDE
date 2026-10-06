@@ -462,6 +462,15 @@ export class RemoteAccess {
       })
       .catch(() => (this.error = 'PROJECT_SYNC_FAILED'));
   }
+  /**
+   * A call to the site's PC routes with this PC's host key (shared notes, SPEC-10). Undefined when
+   * the PC is not linked; a network failure rejects.
+   */
+  async deviceFetch(path: string, method = 'GET', data?: unknown) {
+    await this.load();
+    if (!this.device) return undefined;
+    return this.request('/api/hosts/device' + path, method, data);
+  }
   /** Send a small preview image for the project card on the account site. */
   async pushThumbnail(projectId: string, image: string) {
     await this.load();

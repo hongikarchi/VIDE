@@ -446,7 +446,7 @@ try {
   const stored = JSON.stringify((await d1.prepare('SELECT * FROM project_history').all()).results);
   for (const secret of ['secret-model', 'private.pdf', 'scene'])
     assert.ok(!stored.includes(secret));
-  // Owner only: a shared member gets 403, another account 404, for reading and writing.
+  // Every member (user decision 2026-10-06): a shared member reads and writes, another account 404.
   const malloryId = (
     await d1.prepare("SELECT id FROM user WHERE email='mallory@users.vide.invalid'").first()
   ).id;
@@ -454,17 +454,27 @@ try {
     .prepare("INSERT INTO project_members(project_id,user_id,role) VALUES(?,?,'commenter')")
     .bind(project.id, malloryId)
     .run();
-  for (const [who, status] of [
-    [mallory, 403],
-    [eve, 404],
-  ]) {
-    assert.equal((await api('/agenda', { cookie: who.cookie })).status, status);
-    assert.equal((await api('/history', { cookie: who.cookie })).status, status);
-    assert.equal(
-      (await api('/agenda', { method: 'POST', cookie: who.cookie, data: { text: 'x' } })).status,
-      status,
-    );
-  }
+  assert.equal((await api('/agenda', { cookie: eve.cookie })).status, 404);
+  assert.equal((await api('/history', { cookie: eve.cookie })).status, 404);
+  assert.equal(
+    (await api('/agenda', { method: 'POST', cookie: eve.cookie, data: { text: 'x' } })).status,
+    404,
+  );
+  assert.equal((await api('/snapshots', { cookie: eve.cookie })).status, 404);
+  assert.equal((await api('/agenda', { cookie: mallory.cookie })).status, 200);
+  assert.equal((await api('/history', { cookie: mallory.cookie })).status, 200);
+  assert.equal((await api('/snapshots', { cookie: mallory.cookie })).status, 200);
+  const memberItem = await api('/agenda', {
+    method: 'POST',
+    cookie: mallory.cookie,
+    data: { text: '참여자가 더한 일' },
+  });
+  assert.equal(memberItem.status, 201);
+  assert.equal(
+    (await api(`/agenda/${memberItem.value.id}`, { method: 'DELETE', cookie: mallory.cookie }))
+      .status,
+    200,
+  );
   // Edits wait for the PC, shown over the PC's copy; one waiting edit per item.
   const added = await api('/agenda', {
     method: 'POST',
@@ -672,7 +682,7 @@ try {
       snapshots: true,
       quota: true,
       uploadPause: true,
-      ownerOnly: true,
+      membersOnly: true,
       queue: true,
       offlineProject: true,
       browser,

@@ -1,0 +1,380 @@
+/* 노트·일지 (Design SCR-23). Works on the account site and in VIDE: tokens fall back to plain
+   values where the site has no VIDE token. Selected rows use a soft background, no side bars. */
+.notes-workspace {
+  --n-line: var(--border-subtle, #e8e7e3);
+  --n-muted: var(--text-3, #737373);
+  --n-faint: var(--text-4, #a0a0a0);
+  --n-selected: var(--bg-selected, #0000000a);
+  --n-hover: var(--bg-hover, #eeedea);
+  --n-accent: var(--accent, #d0664a);
+  --n-radius: var(--radius-sm, 6px);
+  display: grid;
+  grid-template-columns: minmax(220px, 280px) minmax(0, 1fr);
+  min-height: 0;
+  height: 100%;
+  font-size: var(--fs-md, 13px);
+}
+.notes-side {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border-right: 1px solid var(--n-line);
+  min-height: 0;
+  overflow: hidden;
+}
+.notes-new {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.notes-new button,
+.notes-filter button,
+.note-meta button,
+.note-toolbar button {
+  border: 1px solid var(--n-line);
+  background: transparent;
+  border-radius: var(--n-radius);
+  padding: 4px 9px;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+.notes-new button:hover,
+.notes-filter button:hover,
+.note-meta button:hover,
+.note-toolbar button:hover {
+  background: var(--n-hover);
+}
+.notes-new .notes-today {
+  background: var(--cta-bg, #121212);
+  color: var(--cta-text, #fff);
+  border-color: transparent;
+}
+.notes-new .notes-today:hover {
+  background: var(--cta-bg-hover, #3a3a3a);
+}
+.notes-search {
+  border: 1px solid var(--n-line);
+  border-radius: var(--n-radius);
+  padding: 6px 8px;
+  font: inherit;
+  background: transparent;
+  color: inherit;
+}
+.notes-filter {
+  display: flex;
+  gap: 4px;
+}
+.notes-filter button {
+  border-color: transparent;
+  padding: 3px 8px;
+  color: var(--n-muted);
+}
+.notes-filter button.active {
+  background: var(--bg-active, #e5e4e0);
+  color: inherit;
+  font-weight: 600;
+}
+.notes-offline {
+  margin: 0;
+  color: var(--warn, #a8660b);
+  font-size: var(--fs-sm, 12px);
+}
+.notes-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  overflow: auto;
+  min-height: 0;
+}
+.notes-list button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: 0;
+  border-radius: var(--n-radius);
+  background: transparent;
+  padding: 7px 8px;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+.notes-list button:hover {
+  background: var(--n-hover);
+}
+.notes-list button.selected {
+  background: var(--n-selected);
+}
+.notes-row-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.notes-row-head strong {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.notes-kind {
+  font-size: 11px;
+  border-radius: 4px;
+  padding: 0 5px;
+  flex: none;
+}
+.notes-kind.discussion {
+  background: var(--info-subtle, #2f5aa817);
+  color: var(--info, #2f5aa8);
+}
+.notes-kind.journal {
+  background: var(--ok-subtle, #2f7d4f1a);
+  color: var(--ok, #2f7d4f);
+}
+.notes-row-meta {
+  display: block;
+  color: var(--n-muted);
+  font-size: var(--fs-xs, 11px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.notes-empty,
+.notes-placeholder {
+  color: var(--n-muted);
+  padding: 8px;
+}
+.notes-placeholder {
+  max-width: 460px;
+  margin: 48px auto;
+  line-height: 1.6;
+}
+.notes-main {
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+}
+.note-open {
+  max-width: 820px;
+  margin: 0 auto;
+  padding: 20px 28px 64px;
+}
+.note-head {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+.note-title,
+.note-title-fixed {
+  font-size: var(--fs-xl, 20px);
+  font-weight: 700;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  padding: 2px 0;
+  margin: 0;
+  font-family: inherit;
+  outline: none;
+}
+.note-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  color: var(--n-muted);
+  font-size: var(--fs-sm, 12px);
+}
+.note-meta select {
+  font: inherit;
+  border: 1px solid var(--n-line);
+  border-radius: var(--n-radius);
+  padding: 2px 4px;
+  background: transparent;
+  color: inherit;
+}
+.note-meta .spacer {
+  flex: 1;
+}
+.note-status.ok {
+  color: var(--ok, #2f7d4f);
+}
+.note-meta .note-action {
+  color: inherit;
+  font-weight: 600;
+}
+.note-meta .note-danger {
+  color: var(--ng, #b42323);
+}
+.note-meta .note-quiet {
+  border-color: transparent;
+  color: var(--n-faint);
+}
+.note-message,
+.note-tip,
+.note-hint {
+  margin: 0;
+  font-size: var(--fs-sm, 12px);
+  color: var(--n-muted);
+}
+.note-toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  gap: 4px;
+  padding: 6px 0;
+  background: var(--bg, #fff);
+  border-bottom: 1px solid var(--n-line);
+}
+.note-toolbar button {
+  min-width: 30px;
+  border-color: transparent;
+  font-weight: 600;
+}
+.note-toolbar button.active {
+  background: var(--bg-active, #e5e4e0);
+}
+.note-body {
+  min-height: 50vh;
+  outline: none;
+  padding: 12px 0;
+  line-height: 1.65;
+  font-size: 14px;
+}
+.note-body p {
+  margin: 0.35em 0;
+}
+.note-body h1 {
+  font-size: 1.5em;
+  margin: 0.9em 0 0.3em;
+}
+.note-body h2 {
+  font-size: 1.2em;
+  margin: 0.8em 0 0.3em;
+}
+.note-body blockquote {
+  margin: 0.5em 0;
+  padding-left: 12px;
+  color: var(--n-muted);
+  border-left: 3px solid var(--n-line);
+}
+.note-body hr {
+  border: 0;
+  border-top: 1px solid var(--n-line);
+  margin: 1em 0;
+}
+.note-body ul[data-type='taskList'] {
+  list-style: none;
+  padding-left: 2px;
+}
+.note-body ul[data-type='taskList'] li {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+}
+.note-body ul[data-type='taskList'] li > label {
+  flex: none;
+  margin-top: 0.3em;
+}
+.note-body ul[data-type='taskList'] li > div {
+  flex: 1;
+}
+.note-body ul[data-type='taskList'] li[data-checked='true'] > div {
+  color: var(--n-faint);
+  text-decoration: line-through;
+}
+.note-body p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  color: var(--n-faint);
+  float: left;
+  height: 0;
+  pointer-events: none;
+}
+.note-body code {
+  font-family: var(--font-mono, monospace);
+  background: var(--bg-recessed, #f2f1ee);
+  border-radius: 4px;
+  padding: 0 3px;
+}
+.collaboration-carets__caret {
+  position: relative;
+  margin-left: -1px;
+  margin-right: -1px;
+  border-left: 1px solid;
+  border-right: 1px solid;
+  word-break: normal;
+  pointer-events: none;
+}
+.collaboration-carets__label {
+  position: absolute;
+  top: -1.4em;
+  left: -1px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: normal;
+  color: #fff;
+  padding: 1px 4px;
+  border-radius: 3px 3px 3px 0;
+  white-space: nowrap;
+  user-select: none;
+}
+@media (max-width: 700px) {
+  .notes-workspace {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto 1fr;
+  }
+  .notes-side {
+    border-right: 0;
+    border-bottom: 1px solid var(--n-line);
+    max-height: 40vh;
+  }
+  .note-open {
+    padding: 12px 16px 48px;
+  }
+}
+/* TipTap/ProseMirror base rules (TipTap's own injected style is off: the CSP has no inline style). */
+.notes-workspace .ProseMirror {
+  position: relative;
+  word-wrap: break-word;
+  white-space: pre-wrap;
+  white-space: break-spaces;
+  font-variant-ligatures: none;
+  font-feature-settings: 'liga' 0;
+}
+.notes-workspace .ProseMirror [contenteditable='false'] {
+  white-space: normal;
+}
+.notes-workspace .ProseMirror pre {
+  white-space: pre-wrap;
+}
+.notes-workspace img.ProseMirror-separator {
+  display: inline !important;
+  border: none !important;
+  margin: 0 !important;
+  width: 0 !important;
+  height: 0 !important;
+}
+.notes-workspace .ProseMirror-gapcursor {
+  display: none;
+  pointer-events: none;
+  position: absolute;
+  margin: 0;
+}
+.notes-workspace .ProseMirror-gapcursor::after {
+  content: '';
+  display: block;
+  position: absolute;
+  top: -2px;
+  width: 20px;
+  border-top: 1px solid currentColor;
+}
+.notes-workspace .ProseMirror-focused .ProseMirror-gapcursor {
+  display: block;
+}
+.notes-workspace .ProseMirror-hideselection *::selection {
+  background: transparent;
+}
+.notes-workspace .ProseMirror-hideselection {
+  caret-color: transparent;
+}

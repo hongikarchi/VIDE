@@ -168,7 +168,7 @@ export async function offlineDeviceRoute(
   return undefined;
 }
 
-/** Owner calls from the site: saved views of linked files and requests for the PC. */
+/** Member calls from the site: saved views of linked files and requests for the PC. */
 export async function offlineRoute(
   request: Request,
   env: Env,
@@ -177,10 +177,10 @@ export async function offlineRoute(
   path: string[],
 ): Promise<Response> {
   const db = env.DB;
-  // The PC's model is the owner's own work; shared members see only what was published.
-  if ((await membership(db, project, actor.id)) !== 'owner')
-    throw new HttpError(403, 'OWNER_REQUIRED');
-  // 할 일 and the work history summary (PLAN-33), under the same owner rule.
+  // Every member of the project sees the page without its PC (user decision 2026-10-06,
+  // SPEC-04.10 6); another account gets PROJECT_NOT_FOUND (404) from the membership check.
+  await membership(db, project, actor.id);
+  // 할 일 and the work history summary (PLAN-33), under the same member rule.
   if (path[0] === 'agenda' || path[0] === 'history')
     return summaryRoute(request, env, actor, project, path);
   if (path[0] === 'snapshots') {

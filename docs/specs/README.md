@@ -2,8 +2,8 @@
 id: INDEX-SPECS
 title: VIDE 기능 명세 · 사용자 작업과 기능 목록
 status: review
-version: 0.14
-updated: 2026-10-01
+version: 0.15
+updated: 2026-10-06
 owner: user
 related: []
 ---
@@ -29,6 +29,7 @@ VIDE에서 설계자는 Rhino·ZWCAD의 모델과 도면을 보고, 객체를 �
 | 작은 작업 도구(jig)로 조건을 바꿔 보며 계산·만들기 | [SPEC-07](SPEC-07-jig-platform.md) · SPEC-07.1 | 설정값을 바꾸면 AI 없이 다시 계산되고, 다시 만들 때 사람이 고친 객체가 보존되는가 |
 | 목적별 대화 여러 개를 동시에 진행 | [SPEC-02](SPEC-02-execution-candidates.md) · SPEC-02.19 | 대화가 앞 턴을 이어가고, 목적이 다른 대화가 서로 막지 않으며, 같은 문서 쓰기는 차례를 기다리는가 |
 | 프로젝트 자료를 찾고 확정해 설정값의 근거로 쓰기 | [SPEC-08](SPEC-08-project-facts.md) · SPEC-08.1 | 2·3글자 검색, 사람만 확정·오염 표시, 제외된 진술이 도구·근거에서 빠지고 AI가 도구가 준 진술만 인용하는가 |
+| 구성원과 노트·협의 사항·매일 일지를 함께 쓰기 | [SPEC-10](SPEC-10-shared-notes.md) · SPEC-10.1 | 같은 노트를 동시에 고쳐도 모두 합쳐지고, 협의 사항의 체크 항목이 할 일로 가며, AI가 PC 사본을 읽는가 |
 
 ## 구체적인 첫 지원안과 확인된 사실
 
@@ -46,7 +47,7 @@ VIDE에서 설계자는 Rhino·ZWCAD의 모델과 도면을 보고, 객체를 �
 | FR-04 | [SPEC-02](SPEC-02-execution-candidates.md) · [SPEC-06](SPEC-06-structure-analysis.md) | — |
 | FR-05 | [SPEC-00](SPEC-00-common.md) · [SPEC-01](SPEC-01-project-input-sync.md) | — |
 | FR-06 | [SPEC-01](SPEC-01-project-input-sync.md) · [SPEC-04](SPEC-04-web-review.md) | — |
-| FR-07 | [SPEC-01](SPEC-01-project-input-sync.md) · [SPEC-04](SPEC-04-web-review.md) | — |
+| FR-07 | [SPEC-01](SPEC-01-project-input-sync.md) · [SPEC-04](SPEC-04-web-review.md) · [SPEC-10](SPEC-10-shared-notes.md) | SPEC-10은 공유 노트·일지(2026-10-06 요청, PRD FR-26 제안 R-77) |
 | FR-08 | [SPEC-02](SPEC-02-execution-candidates.md) · [SPEC-05](SPEC-05-extensions-install.md) | — |
 | FR-09 | [SPEC-03](SPEC-03-data-history-export.md) · [SPEC-08](SPEC-08-project-facts.md) | SPEC-08은 프로젝트 자료(C-02): 검색·검토·근거·AI 자료 도구 |
 | FR-10 | [SPEC-02](SPEC-02-execution-candidates.md) · [SPEC-06](SPEC-06-structure-analysis.md) · [SPEC-07](SPEC-07-jig-platform.md) | — |
@@ -55,16 +56,17 @@ VIDE에서 설계자는 Rhino·ZWCAD의 모델과 도면을 보고, 객체를 �
 | FR-13 | [SPEC-05](SPEC-05-extensions-install.md) · [SPEC-07](SPEC-07-jig-platform.md) | — |
 | FR-14 | [SPEC-03](SPEC-03-data-history-export.md) · [SPEC-06](SPEC-06-structure-analysis.md) · [SPEC-07](SPEC-07-jig-platform.md) | — |
 | FR-15 | [SPEC-02](SPEC-02-execution-candidates.md) · [SPEC-05](SPEC-05-extensions-install.md) · [SPEC-07](SPEC-07-jig-platform.md) | — |
-| FR-16 | [SPEC-00](SPEC-00-common.md) · [SPEC-01](SPEC-01-project-input-sync.md) · [SPEC-02](SPEC-02-execution-candidates.md) · [SPEC-03](SPEC-03-data-history-export.md) · [SPEC-04](SPEC-04-web-review.md) · [SPEC-05](SPEC-05-extensions-install.md) · [SPEC-06](SPEC-06-structure-analysis.md) · [SPEC-07](SPEC-07-jig-platform.md) | — |
+| FR-16 | [SPEC-00](SPEC-00-common.md) · [SPEC-01](SPEC-01-project-input-sync.md) · [SPEC-02](SPEC-02-execution-candidates.md) · [SPEC-03](SPEC-03-data-history-export.md) · [SPEC-04](SPEC-04-web-review.md) · [SPEC-05](SPEC-05-extensions-install.md) · [SPEC-06](SPEC-06-structure-analysis.md) · [SPEC-07](SPEC-07-jig-platform.md) · [SPEC-10](SPEC-10-shared-notes.md)(SPEC-10.6) | — |
 | FR-17 | [SPEC-05](SPEC-05-extensions-install.md) · [SPEC-07](SPEC-07-jig-platform.md) | — |
 | FR-18 | [SPEC-00](SPEC-00-common.md) · [SPEC-02](SPEC-02-execution-candidates.md) · [SPEC-03](SPEC-03-data-history-export.md) · [SPEC-04](SPEC-04-web-review.md) · [SPEC-05](SPEC-05-extensions-install.md) · [SPEC-08](SPEC-08-project-facts.md)(SPEC-08.5·7) · [SPEC-06](SPEC-06-structure-analysis.md) · [SPEC-07](SPEC-07-jig-platform.md) | — |
-| FR-19 | [SPEC-00](SPEC-00-common.md) · [SPEC-04](SPEC-04-web-review.md) | — |
+| FR-19 | [SPEC-00](SPEC-00-common.md) · [SPEC-04](SPEC-04-web-review.md) · [SPEC-10](SPEC-10-shared-notes.md) | — |
 | FR-20 | 후속 확장 | PRD §14의 이번 범위 밖 |
 | FR-21 | 후속 확장 | PRD §14의 이번 범위 밖(구조 분석은 FR-23) |
 | FR-22 | [SPEC-03](SPEC-03-data-history-export.md) · [SPEC-07](SPEC-07-jig-platform.md) | — |
 | FR-23 | [SPEC-06](SPEC-06-structure-analysis.md) · [SPEC-07](SPEC-07-jig-platform.md) | 구조 분석 jig와 프로젝트 구조 jig(입력 조립·진단·배치·간섭·단면·일람표·Rhino에 만들기) |
 | FR-24 | [SPEC-07](SPEC-07-jig-platform.md) · [SPEC-05](SPEC-05-extensions-install.md)(SPEC-05.8) · [SPEC-08](SPEC-08-project-facts.md)(SPEC-08.6) · [SPEC-02](SPEC-02-execution-candidates.md)(SPEC-02.13·17·19) · [SPEC-06](SPEC-06-structure-analysis.md) | jig 플랫폼: 작업본·형식·실행·Rhino에 만들기·만들기 대화 |
 | FR-25 | [SPEC-02](SPEC-02-execution-candidates.md)(SPEC-02.9·17·19·20) · [SPEC-07](SPEC-07-jig-platform.md)(SPEC-07.18) · [SPEC-08](SPEC-08-project-facts.md)(SPEC-08.7) | 대화 세션·동시 진행·말로 하는 경로 판정 |
+| <ins>FR-26</ins> | <ins>[SPEC-10](SPEC-10-shared-notes.md)</ins> | <ins>공유 노트·협의 사항·일지 — PRD 첨삭 제안(R-77) 수락 전</ins> |
 
 호스트 계약·실험 범위: [Rhino](hosts/rhino.md) · [ZWCAD](hosts/zwcad.md).
 

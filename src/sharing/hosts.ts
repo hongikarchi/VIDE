@@ -4,6 +4,7 @@ import type { Actor } from './projects';
 import { signIn } from './accounts';
 import { offlineDeviceRoute, pendingQueue } from './offline';
 import { pendingAgendaEdits, summaryDeviceRoute } from './summary';
+import { notesRoute } from './notes';
 
 // Work PCs: a desktop VIDE (with Rhino/CAD attached) signs in once with the account's ID and
 // password and receives a host key. It then reports by heartbeat that it is on, its local address
@@ -245,6 +246,9 @@ export async function hostDeviceRoute(
     if (!result.meta.changes) throw new HttpError(404, 'PROJECT_NOT_FOUND');
     return json({ ok: true });
   }
+  // Shared notes as the PC's account (SPEC-10): list, open, journal append and live tickets.
+  if (path[0] === 'projects' && path[1] && path[2] === 'notes')
+    return notesRoute(request, env, row.user_id, projectId(path[1]), path.slice(3));
   const offlineReply =
     (await offlineDeviceRoute(request, env, row, path)) ??
     (await summaryDeviceRoute(request, env, row, path));

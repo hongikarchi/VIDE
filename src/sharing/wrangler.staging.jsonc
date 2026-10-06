@@ -24,6 +24,11 @@
     "SNAPSHOTS_ENABLED": "false",
     "SNAPSHOT_TOTAL_MB": "0"
   },
+  // Shared notes (ADR-034): one SQLite-backed Durable Object per note (the free plan's only DO kind).
+  "durable_objects": {
+    "bindings": [{ "name": "NOTES", "class_name": "NoteRoom" }]
+  },
+  "migrations": [{ "tag": "v1-notes", "new_sqlite_classes": ["NoteRoom"] }],
   "r2_buckets": [
     {
       "binding": "ASSETS",

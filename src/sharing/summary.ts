@@ -7,7 +7,7 @@ import type { HostRow } from './hosts';
 // answer's first lines, state, time, file names; never the model, attachments or the AI model).
 // 할 일 edits made on the site wait in a queue, one pending edit per item, until the PC applies
 // them (last write wins by time, a conflict is noted in the item) and uploads its list again.
-// Only the owner sees and edits these (SPEC-04.10: members see what was published).
+// Every project member sees and edits these (SPEC-04.10 6, user decision 2026-10-06).
 
 const AGENDA_TEXT_MAX = 500;
 const AGENDA_ITEMS_MAX = 500;

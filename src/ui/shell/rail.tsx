@@ -25,8 +25,8 @@ import { currentTheme, setTheme } from '../theme.ts';
 import { iconSvg } from '../icons.ts';
 
 /**
- * 대시보드 · 자료 · JIG (the list) · 산출물 open their screens once a project is open. Order (user
- * 2026-10-06): 홈 · 대시보드 · 자료 · 모델 · 이력 · JIG · 산출물.
+ * 대시보드 · 자료 · 노트·일지 · JIG (the list) · 산출물 open their screens once a project is open. Order (user
+ * 2026-10-06): 홈 · 대시보드 · 자료 · 노트·일지 · 모델 · 이력 · JIG · 산출물.
  */
 function openTarget(target: string) {
   if (sessionState.project) setWorkspace(target);
@@ -89,6 +89,15 @@ export const Rail = memo(function Rail() {
           data-icon="database"
           aria-pressed={pressed('data')}
           onClick={() => openTarget('data')}
+        />
+        <button
+          id="rail-notes"
+          data-workspace-target="notes"
+          title="노트·일지 · 구성원이 함께 쓰는 노트·협의 사항·작업 일지"
+          aria-label="노트·일지"
+          data-icon="notebook"
+          aria-pressed={pressed('notes')}
+          onClick={() => openTarget('notes')}
         />
         <button
           data-workspace-target="model"

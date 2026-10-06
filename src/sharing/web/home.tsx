@@ -41,8 +41,9 @@ interface Props {
    * requests for the PC. `notice` says why the PC could not be opened.
    */
   offline: (project: Project, notice?: string) => void;
+  notes: (project: Project) => void;
 }
-export function Home({ projects, hosts, thisPc, refresh, review, offline }: Props) {
+export function Home({ projects, hosts, thisPc, refresh, review, offline, notes }: Props) {
   const [creating, setCreating] = useState(false),
     [name, setName] = useState(''),
     [renaming, setRenaming] = useState(''),
@@ -99,8 +100,10 @@ export function Home({ projects, hosts, thisPc, refresh, review, offline }: Prop
   }
   async function open(project: Project) {
     if (opening) return;
+    // A shared member cannot open the owner's PC: the project opens on the site without it
+    // (SPEC-04.10 6, every member).
     if (project.role !== 'owner') {
-      review(project);
+      offline(project);
       return;
     }
     // No PC to open it on (off, signed out, or none chosen and none on): the project opens on the
@@ -267,17 +270,24 @@ export function Home({ projects, hosts, thisPc, refresh, review, offline }: Prop
                       이름 바꾸기
                     </button>
                   ) : null}
-                  {!shared ? (
-                    <button
-                      role="menuitem"
-                      onClick={() => {
-                        setMenu('');
-                        offline(project);
-                      }}
-                    >
-                      PC 없이 열기 (할 일·작업 이력)
-                    </button>
-                  ) : null}
+                  <button
+                    role="menuitem"
+                    onClick={() => {
+                      setMenu('');
+                      offline(project);
+                    }}
+                  >
+                    PC 없이 열기 (할 일·작업 이력)
+                  </button>
+                  <button
+                    role="menuitem"
+                    onClick={() => {
+                      setMenu('');
+                      notes(project);
+                    }}
+                  >
+                    노트·일지
+                  </button>
                   <button
                     role="menuitem"
                     onClick={() => {

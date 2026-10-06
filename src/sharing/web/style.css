@@ -576,6 +576,10 @@ button.ghost {
   display: grid;
   background: #fff;
 }
+.notes-page {
+  height: calc(100dvh - 56px);
+  background: #fff;
+}
 @media (max-width: 560px) {
   .topbar {
     padding: 0 16px;
@@ -914,4 +918,23 @@ button.ghost {
     padding: 16px;
     overflow-x: auto;
   }
+}
+.offline-notes-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.offline-notes-list button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: 0;
+  padding: 6px 4px;
+  background: transparent;
+}
+.offline-notes-list button:hover {
+  background: #0000000a;
+}
+.offline-notes-list small {
+  color: var(--muted);
 }

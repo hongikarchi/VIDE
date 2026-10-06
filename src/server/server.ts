@@ -134,6 +134,8 @@ import { checkFolder, folderRoutes } from './project-files.ts';
 import { ProjectFolders } from '../core/project-folders.ts';
 import { Agenda } from '../core/agenda.ts';
 import { agendaRoutes, agendaStatuses } from './agenda-routes.ts';
+import { SharedNotes } from './shared-notes.ts';
+import { notesRoutes, notesStatuses } from './notes-routes.ts';
 import {
   ReferenceBoards,
   referenceRoutes,
@@ -231,6 +233,7 @@ const statuses: Record<string, number> = {
   ...factStatuses,
   ...makeStatuses,
   ...agendaStatuses,
+  ...notesStatuses,
 };
 export async function startServer({
   filename,
@@ -330,7 +333,10 @@ export async function startServer({
     activity: () => store.projectActivity(),
     onQueue: (items) => offlineView.receive(items),
     onAgendaEdits: (edits) => offlineView.applyEdits(edits),
-    afterHeartbeat: () => void offlineView.tick().catch(() => {}),
+    afterHeartbeat: () => {
+      void offlineView.tick().catch(() => {});
+      notesTick();
+    },
     onProjects: (projects) => {
       for (const project of projects) {
         // Deleted on the account site: removed here too, rows and files (SPEC-01.1). A project
@@ -360,6 +366,20 @@ export async function startServer({
       };
     },
   });
+  // Shared notes (SPEC-10): this PC as a member of the site; a Markdown copy for the AI.
+  const sharedNotes =
+    filename === ':memory:'
+      ? undefined
+      : new SharedNotes({ remote: remoteAccess, dataDirectory: dirname(filename), agenda });
+  // The copies of every project's notes refresh every ten minutes (and whenever notes are shown).
+  let notesRefreshed = 0;
+  function notesTick() {
+    if (!sharedNotes || Date.now() - notesRefreshed < 10 * 60_000) return;
+    notesRefreshed = Date.now();
+    void (async () => {
+      for (const project of listProjects()) await sharedNotes.list(project.id).catch(() => {});
+    })();
+  }
   // Offline view and site request inbox (PLAN-20).
   const offlineView = new OfflineView({
     directory: filename === ':memory:' ? undefined : dirname(filename),
@@ -1010,6 +1030,11 @@ export async function startServer({
           agenda,
           body: () => body(request),
           send,
+          // [퇴근하기] → today's 일지 on the site, queued on this PC when the site is unreachable.
+          dayEnded: (projectId, entry) =>
+            void sharedNotes
+              ?.appendJournal(projectId, `퇴근 기록 · ${entry.text}`, entry.date)
+              .catch(() => {}),
           ledger: {
             item: (projectId, conversationId, ledgerId) => {
               conversations.store.get(projectId, conversationId);
@@ -1023,6 +1048,17 @@ export async function startServer({
               conversations.store.supersede(conversationId, ledgerId, undo.id);
             },
           },
+        })
+      )
+        return;
+      // 노트·일지 (SPEC-10): the site's shared notes through this PC's account link.
+      if (
+        await notesRoutes(url, request, response, {
+          notes: sharedNotes,
+          project: (projectId) => store.project(projectId),
+          user: async () => (await remoteAccess.status()).username,
+          body: () => body(request),
+          send,
         })
       )
         return;
@@ -2918,6 +2954,7 @@ export async function startServer({
       stopHealth();
       await telemetry.close();
       await scheduler?.stop();
+      await sharedNotes?.close().catch(() => {});
       await remoteAccess.close();
       await offlineView.close();
       agentTools.close();

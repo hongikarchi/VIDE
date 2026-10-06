@@ -12,7 +12,7 @@ import { isJigIcon } from '../contracts/jig-icons.ts';
 import { createSlice } from './store/core.ts';
 import { commitNow } from './store/layout.ts';
 
-export type FixedWorkspace = 'dashboard' | 'model' | 'data' | 'jig' | 'make' | 'output';
+export type FixedWorkspace = 'dashboard' | 'model' | 'data' | 'notes' | 'jig' | 'make' | 'output';
 /** A sub-view of the 산출물 tab (src/ui/output-tab.tsx). */
 export type OutputView = 'sheet' | 'report' | 'review' | 'render';
 /**
@@ -53,6 +53,8 @@ const FIXED: {
 }[] = [
   { id: 'dashboard', label: '대시보드', ready: true },
   { id: 'data', label: '자료', ready: true },
+  // 노트·일지 (SPEC-10, user request 2026-10-06): the members' shared notes from the account site.
+  { id: 'notes', label: '노트·일지', ready: true },
   { id: 'model', label: '모델', ready: true },
   { id: 'jig', label: 'JIG', ready: true },
   { id: 'make', label: '만들기', ready: true, menu: false },
@@ -146,6 +148,7 @@ function emit(closed?: ContextTab) {
     tabs.active === 'jig' ||
     tabs.active === 'output' ||
     tabs.active === 'data' ||
+    tabs.active === 'notes' ||
     tabs.active === 'make'
       ? tabs.active
       : referenceOf(tabs.active) !== undefined
@@ -160,6 +163,9 @@ function emit(closed?: ContextTab) {
   // The 자료 screen also loads when its tab is first shown (src/ui/facts-tab.tsx, PLAN-22 T-065).
   if (tabs.active === 'data' && projectId)
     void import('./facts-tab.tsx').then((screen) => screen.showFacts(projectId!));
+  // The 노트·일지 screen (src/ui/notes-tab.tsx, SPEC-10) loads its block editor when first shown.
+  if (tabs.active === 'notes' && projectId)
+    void import('./notes-tab.tsx').then((screen) => screen.showNotes(projectId!));
   // The 산출물 screen loads when its tab is first shown (src/ui/output-tab.tsx); its 보고서 view
   // is the report screen (src/ui/report-tab.tsx).
   if (tabs.active === 'output' && projectId) {

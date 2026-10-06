@@ -1,4 +1,4 @@
-import { isAbsolute, relative, resolve, sep } from 'node:path';
+import { isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { z } from 'zod';
 import { withRules, type InstructionMode } from './instructions/index.ts';
 export type AgentFormat = 'claude' | 'codex';
@@ -146,6 +146,7 @@ export function workFolderRule(folders: WorkFolders, format: AgentFormat = 'clau
     ' Reading, writing or running anything outside those folders asks the user each time: make the call and VIDE shows the question (do not ask for it in your reply first); when the user refuses, do not try that again in this turn and say which file or folder you needed.' +
     (folders.records
       ? ` This project's own records are readable without a question at ${JSON.stringify(folders.records)} (project.sqlite; knowledge.sqlite): open them read-only and change nothing.` +
+        ` The members' shared notes, 협의 사항 (meeting points) and daily 일지 (work journal) are copied there as Markdown in ${JSON.stringify(join(folders.records, 'notes'))} (README.md lists them; journal-YYYY-MM-DD.md is one day): read them with Read, Glob or Grep for what the team wrote or decided; they are the account site's, never write them.` +
         " Keys, logins and VIDE's other data are never read."
       : " Keys, logins and VIDE's own data are never read.") +
     (folders.attachments.length
