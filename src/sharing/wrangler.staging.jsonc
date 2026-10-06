@@ -25,7 +25,8 @@
     "UPLOADS_ENABLED": "true",
     "SNAPSHOTS_ENABLED": "true",
     "SNAPSHOT_TOTAL_MB": "5000",
-    "TELEMETRY_BUNDLES_ENABLED": "true"
+    "TELEMETRY_BUNDLES_ENABLED": "true",
+    "SNAPSHOT_BILLING_DECISION": "ADR-038"
   },
   // Shared notes (ADR-034): one SQLite-backed Durable Object per note (the free plan's only DO kind).
   "durable_objects": {

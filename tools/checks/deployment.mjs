@@ -50,15 +50,17 @@ export function verifyStaging(
     throw Error('DEPLOYMENT_BUCKET_MISMATCH');
   if (
     config.vars?.AUTH_MODE !== 'manual-approval' ||
-    config.vars?.UPLOADS_ENABLED !== 'false' ||
+    // Uploads stay off unless an approved R2 decision (C3) is named (ADR-038).
+    (config.vars?.UPLOADS_ENABLED !== 'false' &&
+      !decisionRecorded(config.vars?.SNAPSHOT_BILLING_DECISION)) ||
     config.vars?.AUTH_ORIGIN !== 'https://vide-sharing-staging.archivibe.workers.dev' ||
     config.send_email?.length ||
     config.routes?.length
   )
     throw Error('DEPLOYMENT_FREE_TRIAL_POLICY_MISMATCH');
-  // PC snapshots store bytes in R2, which is already past the free 10 GB. Both settings must be
-  // written out (the Worker treats a missing switch as on), and turning either on needs an
-  // approved billing decision named in SNAPSHOT_BILLING_DECISION (RESEARCH-10 §13.6).
+  // PC snapshots store bytes in R2. Both settings must be written out (the Worker treats a missing
+  // switch as on), and turning either on needs an approved R2 decision (C3, RESEARCH-10 §13.6)
+  // named in SNAPSHOT_BILLING_DECISION: ADR-038 (R2 cleared, free tier with caps, 2026-10-06).
   const { SNAPSHOTS_ENABLED: enabled, SNAPSHOT_TOTAL_MB: totalMb } = config.vars ?? {};
   if (
     (enabled !== 'true' && enabled !== 'false') ||
@@ -79,6 +81,6 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
   );
   verifyStaging(config);
   console.log(
-    'Staging configuration matches the approved account, D1, R2 and free-only policy (uploads and snapshots off). This is not a live account/billing check.',
+    'Staging configuration matches the approved account, D1, R2 and free-only policy (uploads and snapshots off unless an approved R2 decision is named: ADR-038). This is not a live account/billing check.',
   );
 }

@@ -14,7 +14,8 @@ test('deployment rejects alternate accounts, storage and accidental uploads or e
     (c) => (c.name = 'production'),
     (c) => (c.d1_databases[0].database_id = 'wrong'),
     (c) => (c.r2_buckets[0].bucket_name = 'private'),
-    (c) => (c.vars.UPLOADS_ENABLED = 'true'),
+    // Uploads on without an approved R2 decision (C3, ADR-038).
+    (c) => delete c.vars.SNAPSHOT_BILLING_DECISION,
     (c) => (c.send_email = [{ name: 'EMAIL' }]),
   ]) {
     const changed = structuredClone(config);
@@ -23,11 +24,20 @@ test('deployment rejects alternate accounts, storage and accidental uploads or e
   }
 });
 test('deployment keeps PC snapshots off until an approved billing decision (C3) is recorded', () => {
-  const config = JSON.parse(
+  const current = JSON.parse(
     readFileSync('src/sharing/wrangler.staging.jsonc', 'utf8').replace(/^\s*\/\/.*$/gm, ''),
   );
-  assert.equal(config.vars.SNAPSHOTS_ENABLED, 'false');
-  assert.equal(config.vars.SNAPSHOT_TOTAL_MB, '0');
+  // Staging names ADR-038 (R2 cleared, free tier with caps) for its snapshots and uploads.
+  assert.equal(current.vars.SNAPSHOT_BILLING_DECISION, 'ADR-038');
+  assert.doesNotThrow(() => verifyStaging(current, ''));
+  // The rules below start from snapshots and uploads off, with no decision named.
+  const config = structuredClone(current);
+  Object.assign(config.vars, {
+    SNAPSHOTS_ENABLED: 'false',
+    SNAPSHOT_TOTAL_MB: '0',
+    UPLOADS_ENABLED: 'false',
+  });
+  delete config.vars.SNAPSHOT_BILLING_DECISION;
   // Settings left out (the Worker would treat a missing switch as on) or malformed.
   for (const change of [
     (c) => delete c.vars.SNAPSHOTS_ENABLED,
