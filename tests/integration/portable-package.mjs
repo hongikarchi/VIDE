@@ -42,6 +42,8 @@ const env = {
   ...process.env,
   VIDE_DATA_DIR: data,
   VIDE_PORT: '0',
+  // The work screen opens without the first-run sign-in or the tool fetch (ADR-039).
+  VIDE_SIGN_IN_REQUIRED: '0',
   PATH: join(process.env.WINDIR, 'System32'),
 };
 delete env.VIDE_CODEX_PATH;

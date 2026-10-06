@@ -202,7 +202,7 @@ const errorSchema = z
   .passthrough();
 const errorData = (cause: unknown) => errorSchema.safeParse(cause).data ?? {};
 
-import { installedCodex } from '../ai/paths.ts';
+import { claudeExecutable, codexExecutable } from '../ai/paths.ts';
 import { createProvider } from '../ai/providers.ts';
 import {
   CodexAppServer,
@@ -378,9 +378,7 @@ export class Execution {
   executable(provider: string) {
     return (
       this.settings?.get().paths[provider] ||
-      (provider === 'claude-cli'
-        ? process.env.VIDE_CLAUDE_PATH || join(homedir(), '.local', 'bin', 'claude.exe')
-        : process.env.VIDE_CODEX_PATH || installedCodex())
+      (provider === 'claude-cli' ? claudeExecutable() : codexExecutable())
     );
   }
   provider(
@@ -865,7 +863,7 @@ export class Execution {
         )
         .optional(),
     });
-    for (const folder of [join(homedir(), '.codex')]) {
+    for (const folder of [process.env.CODEX_HOME || join(homedir(), '.codex')]) {
       try {
         const cache = codexCache.parse(
           JSON.parse(await readFile(join(folder, 'models_cache.json'), 'utf8')),
@@ -900,7 +898,14 @@ export class Execution {
     try {
       const settings = z
         .object({ model: z.string().optional() })
-        .parse(JSON.parse(await readFile(join(homedir(), '.claude', 'settings.json'), 'utf8')));
+        .parse(
+          JSON.parse(
+            await readFile(
+              join(process.env.CLAUDE_CONFIG_DIR || join(homedir(), '.claude'), 'settings.json'),
+              'utf8',
+            ),
+          ),
+        );
       // Aliases (opus, sonnet…) name a listed model; only an explicit other ID is added.
       if (
         typeof settings.model === 'string' &&

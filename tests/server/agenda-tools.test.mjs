@@ -109,6 +109,38 @@ test('agenda_add and agenda_set are T1 writes in the ledger; revert takes back o
   agenda.revert(project.id, ledger.at(-2).body.changes);
   assert.equal(agenda.get(project.id, kept.id).kind, 'task');
   ledger.splice(-2);
+  // A 협의 over a time range with its place and people (PLAN-39); [되돌리기] of a set restores them.
+  const talk = await handlers.agenda_add({
+    items: [
+      {
+        text: '구조 협의',
+        date: '2026-10-08',
+        time: '14:00',
+        endTime: '16:00',
+        kind: 'meeting',
+        location: '현장 사무실',
+        attendees: '김 대리',
+      },
+      { text: '현장 점검', date: '2026-10-07', endDate: '2026-10-09', kind: 'receipt' },
+    ],
+  });
+  assert.deepEqual(
+    [talk.added[0].endTime, talk.added[0].location, talk.added[0].attendees],
+    ['16:00', '현장 사무실', '김 대리'],
+  );
+  assert.deepEqual([talk.added[1].endDate, talk.added[1].kind], ['2026-10-09', 'receipt']);
+  const moved = await handlers.agenda_set({
+    items: [{ id: talk.added[0].id, location: '본사', attendees: null }],
+  });
+  assert.deepEqual([moved.changed[0].location, moved.changed[0].attendees], ['본사', undefined]);
+  assert.deepEqual(
+    [ledger.at(-1).body.changes[0].before.location, ledger.at(-1).body.changes[0].before.endTime],
+    ['현장 사무실', '16:00'],
+  );
+  agenda.revert(project.id, ledger.at(-1).body.changes);
+  assert.equal(agenda.get(project.id, talk.added[0].id).attendees, '김 대리');
+  agenda.revert(project.id, ledger.at(-2).body.changes);
+  ledger.splice(-2);
   // A set the user changed again afterwards is left alone.
   await handlers.agenda_set({ items: [{ id: kept.id, text: 'AI가 바꿈' }] });
   const now = agenda.get(project.id, kept.id);

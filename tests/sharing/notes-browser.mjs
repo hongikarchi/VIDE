@@ -1,5 +1,7 @@
 // SPEC-10 browser check: two members open the same note on the account site and see each other's
-// typing (Yjs over the note socket), the journal's 오늘 opens today's entry.
+// typing (Yjs over the note socket). One kind on screen (T-184): a single [새 노트], no kind
+// filter or picker, an editable title with the '제목 없음' placeholder, and a journal (the
+// [퇴근하기] note) whose title changes like any other, marked only '퇴근 기록'.
 import assert from 'node:assert/strict';
 import { join } from 'node:path';
 
@@ -28,7 +30,14 @@ export async function verifyNotesBrowser({ origin, alice, bob, project, director
     const a = await signIn(alice);
     await a.getByRole('button', { name: `${project.name} 메뉴` }).click();
     await a.getByRole('menuitem', { name: '노트·일지' }).click();
+    for (const gone of ['오늘 일지', '새 협의 사항'])
+      assert.equal(await a.getByRole('button', { name: gone }).count(), 0, `no [${gone}]`);
+    assert.equal(await a.getByRole('tablist', { name: '종류' }).count(), 0, 'no kind filter');
     await a.getByRole('button', { name: '새 노트' }).click();
+    // A new note's title is empty and reads '제목 없음' until written.
+    assert.equal(await a.getByLabel('노트 제목').inputValue(), '');
+    assert.equal(await a.getByLabel('노트 제목').getAttribute('placeholder'), '제목 없음');
+    assert.equal(await a.getByRole('combobox', { name: '종류' }).count(), 0, 'no kind picker');
     await a.getByLabel('노트 제목').fill('현장 회의');
     await a.getByLabel('노트 제목').press('Enter');
     await a.getByText('실시간 연결됨').waitFor();
@@ -69,12 +78,23 @@ export async function verifyNotesBrowser({ origin, alice, bob, project, director
     if (process.env.VIDE_SHOT) await a.screenshot({ path: process.env.VIDE_SHOT });
     else await a.screenshot({ path: join(directory, 'notes-site.png') });
 
-    // 오늘 일지 opens (or makes) today's journal entry.
-    await b.getByRole('button', { name: '오늘 일지' }).click();
-    await b.getByRole('heading', { name: /일지$/ }).waitFor();
+    // The day's journal (made by [퇴근하기]) is a note like any other: its title changes.
+    await b.getByRole('button', { name: /^현장 일지/ }).click();
+    const title = b.getByLabel('노트 제목');
+    await b.waitForFunction(
+      () => document.querySelector('.note-title')?.value === '현장 일지',
+      undefined,
+      { timeout: 15000 },
+    );
+    await b.locator('.note-meta').getByText('퇴근 기록').waitFor();
+    await title.fill('현장 일지 — 기초');
+    await title.press('Enter');
+    await b.getByRole('button', { name: /^현장 일지 — 기초/ }).waitFor();
     // The PC-off page lists the notes and opens one (the notes are the site's own).
     await a.goto(`${origin}/?offline=${project.id}`);
     const slot = a.getByRole('region', { name: '노트', exact: true });
+    await slot.getByRole('button', { name: /현장 일지 — 기초 · 퇴근 기록/ }).waitFor();
+    assert.equal(await slot.getByText('협의 사항').count(), 0, 'no kind shown in the PC-off list');
     await slot.getByRole('button', { name: /현장 회의/ }).click();
     await a.getByLabel('노트 제목').waitFor();
     assert.equal(await a.getByLabel('노트 제목').inputValue(), '현장 회의');

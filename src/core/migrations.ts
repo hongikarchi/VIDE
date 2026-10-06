@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 
 /** v5 and later cannot be opened by an older installation (UNSUPPORTED_SCHEMA); see ARCH-03 §10.1. */
-export const schemaVersion = 10;
+export const schemaVersion = 11;
 export const baselineSchema = `
         CREATE TABLE IF NOT EXISTS projects(id TEXT PRIMARY KEY, name TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS connections(id TEXT PRIMARY KEY, projectId TEXT NOT NULL REFERENCES projects(id),
@@ -118,6 +118,20 @@ const dayLog = `CREATE TABLE IF NOT EXISTS day_log(id TEXT PRIMARY KEY,
   projectId TEXT NOT NULL REFERENCES projects(id), date TEXT NOT NULL, kind TEXT NOT NULL,
   text TEXT NOT NULL, body TEXT NOT NULL, createdAt TEXT NOT NULL, updatedAt TEXT NOT NULL,
   UNIQUE(projectId, date, kind));`;
+// 할 일 over a period, with 접수, 위치 and 참석자 (SPEC-01.14 1, ARCH-01 §3, PLAN-39 T-180): SQLite
+// cannot change a CHECK in place, so the table is made again and the rows move by column name.
+// Nothing references agenda_items; the index goes with the old table and is made again.
+const agendaFields = `CREATE TABLE agenda_items_v11(id TEXT PRIMARY KEY,
+  projectId TEXT NOT NULL REFERENCES projects(id), text TEXT NOT NULL, date TEXT, time TEXT,
+  doneAt TEXT, ord REAL NOT NULL, source TEXT NOT NULL CHECK(source IN ('user','ai')),
+  revision INTEGER NOT NULL, createdAt TEXT NOT NULL, updatedAt TEXT NOT NULL,
+  kind TEXT NOT NULL DEFAULT 'task' CHECK(kind IN ('task','meeting','receipt','deadline')),
+  endDate TEXT, endTime TEXT, location TEXT, attendees TEXT);
+INSERT INTO agenda_items_v11(id,projectId,text,date,time,doneAt,ord,source,revision,createdAt,updatedAt,kind)
+  SELECT id,projectId,text,date,time,doneAt,ord,source,revision,createdAt,updatedAt,kind FROM agenda_items;
+DROP TABLE agenda_items;
+ALTER TABLE agenda_items_v11 RENAME TO agenda_items;
+CREATE INDEX IF NOT EXISTS agenda_items_project ON agenda_items(projectId, ord);`;
 // Display geometry of Sync results per object (PLAN-27 1단계, ARCH-01 §5 「Sync 표시 형상의 객체 단위
 // 저장」): immutable object versions named by content, one manifest per request result. Existing
 // rows are moved later, one per transaction (src/core/model-move.ts); this step only adds tables.
@@ -152,6 +166,7 @@ export const migrations: Migration[] = [
   { version: 8, sql: agendaKinds },
   { version: 9, sql: objectManifests },
   { version: 10, sql: dayLog },
+  { version: 11, sql: agendaFields },
 ];
 
 /** Caller holds the exclusive controller lock. Never migrates user model files. */

@@ -66,8 +66,32 @@ const iso = (value: unknown) =>
       ? new Date(value).toISOString()
       : null;
 
-/** The default login of one service as its CLI keeps it (`~/.claude…`, `~/.codex/auth.json`). */
-export function defaultLogin(provider: Provider, home = homedir()) {
+/**
+ * The files of a service's default login: `~/.claude…`, `~/.codex/auth.json`, or the folder the PC
+ * names in CLAUDE_CONFIG_DIR / CODEX_HOME (the CLI then keeps `.claude.json` inside it too).
+ */
+export function loginFiles(
+  provider: Provider,
+  home = homedir(),
+  env: Record<string, string | undefined> = process.env,
+) {
+  if (provider === 'claude-cli') {
+    const folder = env.CLAUDE_CONFIG_DIR;
+    return {
+      credentials: join(folder || join(home, '.claude'), '.credentials.json'),
+      account: folder ? join(folder, '.claude.json') : join(home, '.claude.json'),
+    };
+  }
+  return { credentials: join(env.CODEX_HOME || join(home, '.codex'), 'auth.json'), account: '' };
+}
+
+/** The default login of one service as its CLI keeps it (`loginFiles`). */
+export function defaultLogin(
+  provider: Provider,
+  home = homedir(),
+  env: Record<string, string | undefined> = process.env,
+) {
+  const files = loginFiles(provider, home, env);
   if (provider === 'claude-cli') {
     const credentials = z
       .object({
@@ -80,11 +104,11 @@ export function defaultLogin(provider: Provider, home = homedir()) {
           .passthrough(),
       })
       .passthrough()
-      .safeParse(readJson(join(home, '.claude', '.credentials.json'))).data?.claudeAiOauth;
+      .safeParse(readJson(files.credentials)).data?.claudeAiOauth;
     const account = z
       .object({ oauthAccount: z.object({ emailAddress: z.string() }).passthrough() })
       .passthrough()
-      .safeParse(readJson(join(home, '.claude.json'))).data?.oauthAccount;
+      .safeParse(readJson(files.account)).data?.oauthAccount;
     return {
       token: credentials?.accessToken,
       account: undefined as string | undefined,
@@ -100,7 +124,7 @@ export function defaultLogin(provider: Provider, home = homedir()) {
         .passthrough(),
     })
     .passthrough()
-    .safeParse(readJson(join(home, '.codex', 'auth.json'))).data?.tokens;
+    .safeParse(readJson(files.credentials)).data?.tokens;
   const claims = jwtPayload(tokens?.id_token);
   const access = jwtPayload(tokens?.access_token);
   return {

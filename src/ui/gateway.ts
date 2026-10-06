@@ -123,6 +123,9 @@ export async function sharedProjectList(): Promise<SharedProjectEntry[]> {
     return [];
   }
 }
+const onboardingSchema = z
+  .object({ signInRequired: z.boolean().default(false), linked: z.boolean().default(false) })
+  .passthrough();
 export async function connect() {
   const token = location.hash.slice(1);
   if (token) {
@@ -135,18 +138,28 @@ export async function connect() {
     history.replaceState(null, '', location.pathname + location.search);
   }
   const projects = z.array(projectSchema).parse(await api('/projects'));
+  // The installed program's first run (ADR-039, SPEC-05.6 「첫 실행」): the VIDE account sign-in
+  // before the work screen, and no project made without asking. Off for dev servers and tests.
+  const gate = onboardingSchema.parse(
+    await api('/onboarding', 'GET', undefined, { quiet: ['NOT_FOUND'] }).catch(() => ({})),
+  );
+  if (gate.signInRequired && !gate.linked && location.protocol !== 'https:')
+    return { firstRun: 'sign-in' as const, projects };
   const wanted = new URLSearchParams(location.search).get('project');
   // A project of another member's PC opens as a remote project (SPEC-04.11 3).
   if (wanted && !projects.some((p) => p.id === wanted)) {
     const shared = await sharedProjectList();
     const remote = shared.find((p) => p.id === wanted);
-    if (remote) return { remote, shared, projects, project: undefined, requests: [] };
+    if (remote)
+      return { firstRun: undefined, remote, shared, projects, project: undefined, requests: [] };
   }
+  if (!projects.length && gate.signInRequired) return { firstRun: 'project' as const, projects };
   const project =
     projects.find((p) => p.id === wanted) ||
     projects[0] ||
     projectSchema.parse(await api('/projects', 'POST', { name: '새 프로젝트' }));
   return {
+    firstRun: undefined,
     remote: undefined,
     shared: undefined,
     project,
@@ -181,7 +194,8 @@ export const errors: Record<string, string> = {
   SUBSCRIPTION_LOGIN_REQUIRED:
     '이 PC의 CLI에 구독 계정으로 로그인돼 있지 않습니다. 터미널이나 AccountSwitch에서 로그인하세요.',
   CLI_PATH_REQUIRED: 'Codex 실행 경로를 설정하세요.',
-  CLI_UNAVAILABLE: 'AI 실행 파일을 찾을 수 없습니다.',
+  CLI_UNAVAILABLE:
+    'AI 실행 파일을 찾을 수 없습니다. Claude Code 또는 Codex CLI를 설치하거나(공식 설치·npm 전역·PATH에서 찾습니다) 설정 → AI 연결 → 고급의 실행 파일 경로에 넣으세요.',
   CLI_VERSION_UNSUPPORTED:
     'AI CLI의 판이 VIDE가 확인한 범위 밖이라 실행하지 않았습니다. 확인된 판을 설치하거나 VIDE 업데이트를 기다리세요.',
   CLI_MODE_CHANGED:
@@ -291,7 +305,8 @@ Object.assign(errors, {
 });
 
 Object.assign(errors, {
-  INVALID_CLI_PATH: '설치된 claude.exe 또는 codex.exe의 로컬 전체 경로를 입력하세요.',
+  INVALID_CLI_PATH:
+    '설치된 claude.exe·claude.cmd 또는 codex.exe·codex.cmd의 로컬 전체 경로를 입력하세요.',
   CLI_FILE_MISSING: '해당 경로에 실행 파일이 없습니다.',
   AUTH_TIMEOUT: '로그인 상태 확인 시간이 초과됐습니다.',
   AUTH_INVALID: '공식 CLI의 구독 로그인 상태를 확인할 수 없습니다.',

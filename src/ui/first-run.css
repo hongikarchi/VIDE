@@ -1,0 +1,138 @@
+/* First run: VIDE account sign-in and project choice (SPEC-05.6 「첫 실행」, Design SCR-26). */
+#first-run {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  overflow: auto;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 10vh 16px 32px;
+  background: var(--bg);
+  color: var(--text-1);
+}
+.first-run-card {
+  width: 100%;
+  max-width: 420px;
+  box-sizing: border-box;
+  padding: 28px;
+  background: var(--bg-elevated);
+  border: var(--hairline) solid var(--border);
+  border-radius: var(--radius-lg);
+}
+.first-run-card h1 {
+  margin: 4px 0 6px;
+  font-size: 20px;
+  font-weight: 600;
+}
+.first-run-card h3 {
+  margin: 14px 0 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-2);
+}
+.first-run-mark {
+  margin: 0;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--text-3);
+  font-size: 11px;
+}
+.first-run-note,
+.first-run-who,
+.first-run-label small {
+  color: var(--text-3);
+  font-size: 12px;
+}
+.first-run-who {
+  margin: 0 0 4px;
+}
+.first-run-form,
+.first-run-label {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.first-run-form {
+  margin-top: 14px;
+}
+.first-run-card input {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  padding: 8px 10px;
+  border: var(--hairline) solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  color: var(--text-1);
+  font: inherit;
+}
+.first-run-password,
+.first-run-create > div {
+  display: flex;
+  gap: 6px;
+}
+.first-run-primary,
+.first-run-secondary {
+  border-radius: var(--radius-sm);
+  font: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.first-run-primary {
+  padding: 8px 14px;
+  border: 0;
+  background: var(--cta-bg);
+  color: var(--cta-text);
+}
+.first-run-form > .first-run-primary {
+  width: 100%;
+}
+.first-run-primary:hover:not(:disabled) {
+  background: var(--cta-bg-hover);
+}
+.first-run-primary:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.first-run-secondary {
+  padding: 4px 10px;
+  border: var(--hairline) solid var(--border);
+  background: var(--bg-elevated);
+  color: var(--text-2);
+}
+.first-run-error {
+  margin: 0;
+  color: var(--ng);
+  font-size: 12px;
+}
+.first-run-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.first-run-list button {
+  width: 100%;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--text-1);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.first-run-list button:hover {
+  background: var(--bg-selected);
+}
+.first-run-ai {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  align-items: center;
+  margin: 18px 0 0;
+  padding-top: 12px;
+  border-top: var(--hairline) solid var(--border-subtle);
+  color: var(--text-3);
+  font-size: 12px;
+}

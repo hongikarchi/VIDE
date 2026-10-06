@@ -307,7 +307,7 @@ const notesSchema = z.object({
     }),
   ),
 });
-const NOTE_KIND: Record<string, string> = { discussion: '협의 사항', journal: '일지' };
+// One kind on screen, 노트 (SPEC-10.2); only a journal, the dated note [퇴근하기] writes to, is marked.
 
 /** The project's shared notes (SPEC-10) are the site's own: they open whether the PC is on or not. */
 function OfflineNotes({
@@ -339,17 +339,15 @@ function OfflineNotes({
       </div>
       {notes === null ? <p className="muted">불러오는 중…</p> : null}
       {notes?.length === 0 ? (
-        <p className="muted">
-          아직 노트가 없습니다. [노트·일지 열기]에서 오늘 일지나 노트를 만드세요.
-        </p>
+        <p className="muted">아직 노트가 없습니다. [노트·일지 열기]에서 새 노트를 만드세요.</p>
       ) : null}
       {notes?.length ? (
         <ul className="offline-notes-list">
           {notes.slice(0, 6).map((note) => (
             <li key={note.id}>
               <button type="button" onClick={() => open?.(note.id)}>
-                <strong>{note.title}</strong>
-                {NOTE_KIND[note.kind] ? <small> · {NOTE_KIND[note.kind]}</small> : null}
+                <strong>{note.title.trim() || '제목 없음'}</strong>
+                {note.kind === 'journal' ? <small> · 퇴근 기록</small> : null}
                 {note.updatedByName ? <small> · {note.updatedByName}</small> : null}
               </button>
             </li>

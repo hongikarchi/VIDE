@@ -10,7 +10,7 @@
 
 import { isJigIcon } from '../contracts/jig-icons.ts';
 import { createSlice } from './store/core.ts';
-import { commitNow } from './store/layout.ts';
+import { applyScreenFold, commitNow } from './store/layout.ts';
 
 export type FixedWorkspace = 'dashboard' | 'model' | 'data' | 'notes' | 'jig' | 'make' | 'output';
 /** A sub-view of the 산출물 tab (src/ui/output-tab.tsx). */
@@ -154,6 +154,9 @@ function emit(closed?: ContextTab) {
       : referenceOf(tabs.active) !== undefined
         ? 'reference'
         : 'context';
+  // The AI column folds on the dashboard and opens on the work screens, each as last left
+  // (Design §03 「대시보드의 AI 열」).
+  applyScreenFold(document.body.dataset.workspace);
   // The 대시보드 screen reads the project's state when it is shown (src/ui/dashboard.tsx).
   if (tabs.active === 'dashboard' && projectId)
     void import('./dashboard.tsx').then((screen) => screen.showDashboard(projectId!));

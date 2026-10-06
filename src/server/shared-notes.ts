@@ -6,9 +6,10 @@ import * as awarenessProtocol from 'y-protocols/awareness';
 import { z } from 'zod';
 import {
   actionItems,
-  NOTE_KIND_LABEL,
   NOTE_KINDS,
+  noteLabel,
   noteMarkdown,
+  noteTitle,
   type NoteKind,
 } from '../contracts/note-doc.ts';
 import { NoteSocket, type NoteSocketStatus } from '../contracts/note-socket.ts';
@@ -27,7 +28,7 @@ import { localDate } from '../core/agenda.ts';
  *  - writes a Markdown copy of every note (`notes/<id>.md`, `notes/journal-<date>.md`,
  *    `notes/README.md`) inside the project's records folder, which the AI reads with its
  *    built-in Read tool (ADR-031 6),
- *  - sends a 협의 사항 note's open check-list items to the project's 할 일, and appends the day's
+ *  - sends a note's open check-list items to the project's 할 일, and appends the day's
  *    summary to the site's journal entry (queued here when the site is unreachable).
  */
 const noteSchema = z
@@ -156,8 +157,8 @@ export class SharedNotes {
   }
   private markdownFile(note: SharedNote, body: string) {
     return (
-      `# ${note.title}\n\n` +
-      `<!-- VIDE 공유 노트 · ${NOTE_KIND_LABEL[note.kind]} · id ${note.id}` +
+      `# ${noteTitle(note)}\n\n` +
+      `<!-- VIDE 공유 노트 · ${noteLabel(note.kind)} · id ${note.id}` +
       `${note.journalDate ? ` · 날짜 ${note.journalDate}` : ''} · 마지막 수정 ${when(note.updatedAt)}` +
       `${note.updatedByName ? ` (${note.updatedByName})` : ''} · 원본은 계정 사이트 -->\n\n` +
       body.trim() +
@@ -193,13 +194,13 @@ export class SharedNotes {
     await this.write(
       join(folder, 'README.md'),
       '# 공유 노트·일지\n\n' +
-        '이 프로젝트 구성원이 계정 사이트에서 함께 쓰는 노트·협의 사항·일지의 사본이다. ' +
+        '이 프로젝트 구성원이 계정 사이트에서 함께 쓰는 노트의 사본이다(일지는 [퇴근하기]가 날짜별로 기록하는 노트). ' +
         '원본은 사이트이며 이 파일들은 VIDE가 다시 쓴다(직접 고쳐도 사이트에 반영되지 않는다).\n\n' +
-        '| 제목 | 종류 | 파일 | 마지막 수정 |\n|---|---|---|---|\n' +
+        '| 제목 | 구분 | 파일 | 마지막 수정 |\n|---|---|---|---|\n' +
         sorted
           .map(
             (note) =>
-              `| ${note.title.replace(/\|/g, '/')} | ${NOTE_KIND_LABEL[note.kind]} | ${fileOf(note)} | ${when(note.updatedAt)} |`,
+              `| ${noteTitle(note).replace(/\|/g, '/')} | ${noteLabel(note.kind)} | ${fileOf(note)} | ${when(note.updatedAt)} |`,
           )
           .join('\n') +
         '\n',
@@ -210,6 +211,18 @@ export class SharedNotes {
     );
     for (const name of await readdir(folder).catch(() => [] as string[]))
       if (name.endsWith('.md') && !keep.has(name)) await unlink(join(folder, name)).catch(() => {});
+    // A removed note's replica goes too, unless it holds edits the site has not received or the
+    // note is open here.
+    const listed = new Set(notes.filter((note) => !note.deleted).map((note) => note.id));
+    const states = await readdir(join(folder, '.yjs')).catch(() => [] as string[]);
+    for (const name of states) {
+      const noteId = name.replace(/\.bin$/, '');
+      if (name === noteId || !NOTE_ID.test(noteId) || listed.has(noteId)) continue;
+      if (states.includes(`${noteId}.pending`)) continue;
+      if (this.replicas.has(`${projectId}:${noteId}`) || this.opening.has(`${projectId}:${noteId}`))
+        continue;
+      await unlink(join(folder, '.yjs', name)).catch(() => {});
+    }
   }
 
   // ── Site calls ──────────────────────────────────────────────────────────────────────────────
@@ -396,7 +409,7 @@ export class SharedNotes {
     const note: SharedNote = meta ?? {
       id: replica.noteId,
       projectId: replica.projectId,
-      title: replica.title || '제목 없음',
+      title: replica.title,
       kind: 'note',
       journalDate: null,
       createdAt: Date.now(),
@@ -500,7 +513,7 @@ export class SharedNotes {
     await this.sendQueuedJournal(projectId);
   }
 
-  // ── 협의 사항 → 할 일, 퇴근하기 → 일지 ─────────────────────────────────────────────────────
+  // ── 노트 → 할 일, 퇴근하기 → 일지 ─────────────────────────────────────────────────────────
   /**
    * Engine API (SPEC-10.4): the open check-list items of a note go to the project's 할 일, each
    * once (an open item with the same text is skipped). Reads the live replica when open, else the

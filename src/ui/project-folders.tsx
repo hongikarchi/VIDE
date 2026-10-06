@@ -58,7 +58,14 @@ const reasons: Record<string, string> = {
   INVALID_INPUT: '전체 경로를 넣으세요(예: C:\\Users\\…\\프로젝트 폴더).',
 };
 
-export function ProjectFolders({ projectId }: { projectId: string }) {
+export function ProjectFolders({
+  projectId,
+  onCount,
+}: {
+  projectId: string;
+  /** Told how many project folders there are (the dashboard's folded line, PLAN-39). */
+  onCount?: (count: number) => void;
+}) {
   const [folders, setFolders] = useState<Folder[] | undefined>();
   const [failed, setFailed] = useState(false);
   const [typing, setTyping] = useState(false);
@@ -81,6 +88,9 @@ export function ProjectFolders({ projectId }: { projectId: string }) {
   useEffect(() => {
     if (typing) field.current?.focus();
   }, [typing]);
+  useEffect(() => {
+    if (folders) onCount?.(folders.filter((folder) => folder.kind === 'project').length);
+  }, [folders, onCount]);
 
   const change = async (action: 'add' | 'remove', value: string) => {
     setBusy(true);

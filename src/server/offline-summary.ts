@@ -48,7 +48,11 @@ export function agendaShare(store: Store, agenda: Agenda, projectId: string) {
           text: item.text,
           date: item.date,
           time: item.time,
+          endDate: item.endDate,
+          endTime: item.endTime,
           kind: item.kind,
+          location: item.location,
+          attendees: item.attendees,
           doneAt: item.doneAt,
           order: item.order,
           revision: item.revision,
@@ -166,7 +170,7 @@ export function historySummary(store: Store, links: DocumentLinks, projectId: st
   };
 }
 
-const KIND_NAMES = { task: '할 일', meeting: '회의', deadline: '마감' } as const;
+const KIND_NAMES = { task: '할 일', meeting: '협의', receipt: '접수', deadline: '마감' } as const;
 /** What a site edit wanted, in a few words (for the conflict note). */
 function describe(fields: AgendaEdit['fields'], removed = false) {
   if (removed) return '삭제';
@@ -174,6 +178,10 @@ function describe(fields: AgendaEdit['fields'], removed = false) {
   if (fields.text !== undefined) parts.push(`내용 "${clip(fields.text, 60)}"`);
   if (fields.date !== undefined) parts.push(`날짜 ${fields.date ?? '없음'}`);
   if (fields.time !== undefined) parts.push(`시각 ${fields.time ?? '없음'}`);
+  if (fields.endDate !== undefined) parts.push(`끝 날짜 ${fields.endDate ?? '없음'}`);
+  if (fields.endTime !== undefined) parts.push(`끝 시각 ${fields.endTime ?? '없음'}`);
+  if (fields.location !== undefined) parts.push(`위치 ${clip(fields.location ?? '없음', 40)}`);
+  if (fields.attendees !== undefined) parts.push(`참석자 ${clip(fields.attendees ?? '없음', 40)}`);
   if (fields.kind !== undefined) parts.push(KIND_NAMES[fields.kind]);
   if (fields.done !== undefined) parts.push(fields.done ? '완료' : '미완료');
   return parts.join(', ') || '변경';
@@ -192,9 +200,11 @@ function noted(text: string, note: string) {
   );
 }
 const fieldsOf = (fields: AgendaEdit['fields']) => {
-  const { text, date, time, kind, done } = fields;
+  const { text, date, time, endDate, endTime, kind, location, attendees, done } = fields;
   return Object.fromEntries(
-    Object.entries({ text, date, time, kind, done }).filter(([, value]) => value !== undefined),
+    Object.entries({ text, date, time, endDate, endTime, kind, location, attendees, done }).filter(
+      ([, value]) => value !== undefined,
+    ),
   );
 };
 

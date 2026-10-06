@@ -365,6 +365,78 @@ test('schema 8 gives the 할 일 of a schema 7 database the kind task and refuse
   assert.match(backup, /^schema-7-/);
 });
 
+test('schema 11 makes the 할 일 table again: rows, order, kinds and done states kept, 접수 and the new fields added', (t) => {
+  const root = mkdtempSync(join(tmpdir(), 'vide-schema10-'));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const file = join(root, 'vide.sqlite');
+  const db = new DatabaseSync(file);
+  db.exec(
+    'CREATE TABLE schema_version(version INTEGER NOT NULL); INSERT INTO schema_version VALUES(10);' +
+      migrations
+        .filter((step) => step.version <= 10)
+        .map((step) => step.sql)
+        .join('\n'),
+  );
+  db.exec("INSERT INTO projects VALUES('p','existing')");
+  const insert = db.prepare(
+    'INSERT INTO agenda_items(id,projectId,text,date,time,doneAt,ord,source,revision,createdAt,updatedAt,kind) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)',
+  );
+  insert.run(
+    'a1',
+    'p',
+    '구조 회의',
+    '2026-10-07',
+    '15:00',
+    null,
+    2,
+    'ai',
+    3,
+    't1',
+    't2',
+    'meeting',
+  );
+  insert.run('a2', 'p', '보고서', '2026-10-09', null, 't3', 1, 'user', 2, 't1', 't3', 'deadline');
+  insert.run('a3', 'p', '도면 정리', null, null, null, 3, 'user', 1, 't1', 't1', 'task');
+  const rows = (handle) =>
+    handle
+      .prepare(
+        'SELECT id,projectId,text,date,time,doneAt,ord,source,revision,createdAt,updatedAt,kind FROM agenda_items ORDER BY ord',
+      )
+      .all()
+      .map((row) => ({ ...row }));
+  const before = rows(db);
+  db.close();
+  const store = new Store(file);
+  try {
+    assert.equal(
+      store.app.prepare('SELECT version FROM schema_version').get().version,
+      schemaVersion,
+    );
+    assert.deepEqual(rows(store.app), before);
+    for (const row of store.app
+      .prepare('SELECT endDate,endTime,location,attendees FROM agenda_items')
+      .all())
+      assert.deepEqual(
+        { ...row },
+        { endDate: null, endTime: null, location: null, attendees: null },
+      );
+    // The index is made again; 접수 is a kind now, an unknown one still is not.
+    assert.ok(
+      store.app
+        .prepare(
+          "SELECT name FROM sqlite_master WHERE type='index' AND name='agenda_items_project'",
+        )
+        .get(),
+    );
+    store.app.prepare("UPDATE agenda_items SET kind='receipt' WHERE id='a3'").run();
+    assert.throws(() => store.app.prepare("UPDATE agenda_items SET kind='party'").run());
+  } finally {
+    store.close();
+  }
+  const [backup] = readdirSync(file + '.backups');
+  assert.match(backup, /^schema-10-/);
+});
+
 test('schema 9 adds per-object model tables to a schema 8 database after a backup; manifests go with their request', (t) => {
   const root = mkdtempSync(join(tmpdir(), 'vide-schema8-'));
   t.after(() => rmSync(root, { recursive: true, force: true }));

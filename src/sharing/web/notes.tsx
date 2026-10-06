@@ -3,7 +3,7 @@ import { NoteSocket } from '../../contracts/note-socket';
 import { NotesWorkspace, type NoteItem, type NotesBackend } from '../../ui/notes/notes-workspace';
 import { api, type Project } from './api';
 
-// SPEC-10: a project's shared notes, 협의 사항 and daily journal on the account site. Every
+// SPEC-10: a project's shared notes on the account site (one kind on screen, 노트). Every
 // project member edits; the live editor connects to the note's Durable Object with a one-minute
 // ticket per attempt (notes.ts).
 export function ProjectNotes({ project, user }: { project: Project; user: string }) {
@@ -16,8 +16,7 @@ export function ProjectNotes({ project, user }: { project: Project; user: string
         notes: ((await api(base)) as { notes: NoteItem[] }).notes,
         online: true,
       }),
-      create: async (kind) => (await api(base, 'POST', { kind })) as NoteItem,
-      journal: async (date) => (await api(base + '/journal', 'POST', { date })) as NoteItem,
+      create: async () => (await api(base, 'POST', { kind: 'note' })) as NoteItem,
       update: async (id, input) => (await api(`${base}/${id}`, 'PATCH', input)) as NoteItem,
       remove: async (id) => {
         await api(`${base}/${id}`, 'DELETE');

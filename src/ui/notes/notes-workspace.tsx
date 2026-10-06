@@ -1,14 +1,16 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import * as Y from 'yjs';
 import { Awareness } from 'y-protocols/awareness';
-import { NOTE_KIND_LABEL, type NoteKind } from '../../contracts/note-doc';
+import { noteTitle, type NoteKind } from '../../contracts/note-doc';
 import { NoteEditor, userColor } from './note-editor';
 import './notes.css';
 
 /**
- * 노트·일지 (SPEC-10, Design SCR-23): the list of a project's shared notes, 협의 사항 and daily
- * journal, and the open note's live editor. The same screen on the account site and in VIDE; each
- * passes its own backend (site API and socket, or the PC engine and its local stream).
+ * 노트·일지 (SPEC-10, Design SCR-23): the list of a project's shared notes and the open note's
+ * live editor. The same screen on the account site and in VIDE; each passes its own backend (site
+ * API and socket, or the PC engine and its local stream). Every note looks the same here
+ * (2026-10-06 사용자 결정 "노트로 통일"): no kind to pick or filter; a journal — the dated note
+ * [퇴근하기] writes to — only carries a small '퇴근 기록' mark.
  */
 export interface NoteItem {
   id: string;
@@ -29,9 +31,8 @@ export interface NoteLinkStatus {
 export interface NotesBackend {
   user: string;
   list(): Promise<{ notes: NoteItem[]; online: boolean }>;
-  create(kind: 'note' | 'discussion'): Promise<NoteItem>;
-  journal(date: string): Promise<NoteItem>;
-  update(id: string, input: { title?: string; kind?: NoteKind }): Promise<NoteItem>;
+  create(): Promise<NoteItem>;
+  update(id: string, input: { title?: string }): Promise<NoteItem>;
   remove(id: string): Promise<void>;
   /** Connects `doc` to the note; returns the disconnect. */
   connect(
@@ -45,16 +46,6 @@ export interface NotesBackend {
   /** Where 할 일 sending happens when this screen cannot (the account site). */
   agendaHint?: string;
 }
-type Filter = 'all' | NoteKind;
-const FILTERS: [Filter, string][] = [
-  ['all', '전체'],
-  ['note', '노트'],
-  ['discussion', '협의 사항'],
-  ['journal', '일지'],
-];
-const pad = (n: number) => String(n).padStart(2, '0');
-export const todayLocal = (at = new Date()) =>
-  `${at.getFullYear()}-${pad(at.getMonth() + 1)}-${pad(at.getDate())}`;
 const ago = (at: number) => {
   const minutes = Math.round((Date.now() - at) / 60000);
   if (minutes < 1) return '방금';
@@ -119,7 +110,7 @@ function OpenNote({
     () => ({ name: backend.user, color: userColor(backend.user) }),
     [backend.user],
   );
-  async function save(input: { title?: string; kind?: NoteKind }) {
+  async function save(input: { title?: string }) {
     try {
       onChanged(await backend.update(note.id, input));
     } catch (error) {
@@ -138,34 +129,20 @@ function OpenNote({
           ? '맞추는 중…'
           : '연결 중…';
   return (
-    <section className="note-open" aria-label={note.title}>
+    <section className="note-open" aria-label={noteTitle(note)}>
       <header className="note-head">
-        {note.kind === 'journal' ? (
-          <h2 className="note-title-fixed">{note.title}</h2>
-        ) : (
-          <input
-            className="note-title"
-            aria-label="노트 제목"
-            value={title}
-            maxLength={200}
-            onChange={(event) => setTitle(event.target.value)}
-            onBlur={() => title.trim() !== note.title && void save({ title: title.trim() })}
-            onKeyDown={(event) => event.key === 'Enter' && event.currentTarget.blur()}
-          />
-        )}
+        <input
+          className="note-title"
+          aria-label="노트 제목"
+          placeholder={noteTitle({ ...note, title: '' })}
+          value={title}
+          maxLength={200}
+          onChange={(event) => setTitle(event.target.value)}
+          onBlur={() => title.trim() !== note.title && void save({ title: title.trim() })}
+          onKeyDown={(event) => event.key === 'Enter' && event.currentTarget.blur()}
+        />
         <div className="note-meta">
-          {note.kind === 'journal' ? (
-            <span className="note-kind">일지</span>
-          ) : (
-            <select
-              aria-label="종류"
-              value={note.kind}
-              onChange={(event) => void save({ kind: event.target.value as NoteKind })}
-            >
-              <option value="note">노트</option>
-              <option value="discussion">협의 사항</option>
-            </select>
-          )}
+          {note.kind === 'journal' ? <span className="note-kind">퇴근 기록</span> : null}
           <span
             className={`note-status ${status.synced && !status.pending ? 'ok' : ''}`}
             role="status"
@@ -179,31 +156,29 @@ function OpenNote({
             </span>
           ) : null}
           <span className="spacer" />
-          {note.kind === 'discussion' ? (
-            backend.toAgenda ? (
-              <button
-                type="button"
-                className="note-action"
-                onClick={async () => {
-                  try {
-                    const result = await backend.toAgenda!(note.id);
-                    setMessage(
-                      result.added
-                        ? `할 일 ${result.added}개를 보냈습니다.${result.skipped ? ` 이미 있는 ${result.skipped}개는 건너뜀.` : ''}`
-                        : result.skipped
-                          ? '보낼 새 할 일이 없습니다(모두 이미 할 일에 있음).'
-                          : '체크 목록(☐)에 적은 항목이 없습니다.',
-                    );
-                  } catch (error) {
-                    setMessage(errorText(error));
-                  }
-                }}
-              >
-                할 일로 보내기
-              </button>
-            ) : backend.agendaHint ? (
-              <span className="note-hint">{backend.agendaHint}</span>
-            ) : null
+          {backend.toAgenda ? (
+            <button
+              type="button"
+              className="note-action"
+              onClick={async () => {
+                try {
+                  const result = await backend.toAgenda!(note.id);
+                  setMessage(
+                    result.added
+                      ? `할 일 ${result.added}개를 보냈습니다.${result.skipped ? ` 이미 있는 ${result.skipped}개는 건너뜀.` : ''}`
+                      : result.skipped
+                        ? '보낼 새 할 일이 없습니다(모두 이미 할 일에 있음).'
+                        : '체크 목록(☐)에 적은 항목이 없습니다.',
+                  );
+                } catch (error) {
+                  setMessage(errorText(error));
+                }
+              }}
+            >
+              할 일로 보내기
+            </button>
+          ) : backend.agendaHint ? (
+            <span className="note-hint">{backend.agendaHint}</span>
           ) : null}
           {confirm ? (
             <button
@@ -232,12 +207,9 @@ function OpenNote({
             {message}
           </p>
         ) : null}
-        {note.kind === 'discussion' ? (
-          <p className="note-tip">
-            협의할 일은 체크 목록(☐)으로 적으면 [할 일로 보내기]로 프로젝트 할 일에 넣을 수
-            있습니다.
-          </p>
-        ) : null}
+        <p className="note-tip">
+          할 일은 체크 목록(☐)으로 적으면 [할 일로 보내기]로 프로젝트 할 일에 넣을 수 있습니다.
+        </p>
       </header>
       {ready ? (
         <NoteEditor key={note.id} doc={doc} awareness={awareness} user={user} />
@@ -259,7 +231,6 @@ export function NotesWorkspace({
 }) {
   const [notes, setNotes] = useState<NoteItem[] | null>(null);
   const [online, setOnline] = useState(true);
-  const [filter, setFilter] = useState<Filter>('all');
   const [query, setQuery] = useState('');
   const [openId, setOpenId] = useState(initial ?? '');
   const [message, setMessage] = useState('');
@@ -282,45 +253,30 @@ export function NotesWorkspace({
     setOpenId(note.id);
     onOpen?.(note.id);
   };
-  const run = (task: () => Promise<NoteItem>) => async () => {
+  const create = async () => {
     try {
       setMessage('');
-      open(await task());
+      open(await backend.create());
     } catch (error) {
       setMessage(errorText(error));
     }
   };
   const words = query.trim().toLowerCase();
   const shown = (notes ?? [])
-    .filter((note) => filter === 'all' || note.kind === filter)
     .filter(
       (note) =>
         !words ||
-        note.title.toLowerCase().includes(words) ||
+        noteTitle(note).toLowerCase().includes(words) ||
         (note.excerpt ?? '').toLowerCase().includes(words),
     )
-    .sort((a, b) =>
-      a.kind === 'journal' && b.kind === 'journal'
-        ? (b.journalDate ?? '').localeCompare(a.journalDate ?? '')
-        : b.updatedAt - a.updatedAt,
-    );
+    .sort((a, b) => b.updatedAt - a.updatedAt);
   const current = notes?.find((note) => note.id === openId);
   return (
     <div className="notes-workspace">
       <aside className="notes-side" aria-label="노트 목록">
         <div className="notes-new">
-          <button
-            type="button"
-            className="notes-today"
-            onClick={run(() => backend.journal(todayLocal()))}
-          >
-            오늘 일지
-          </button>
-          <button type="button" onClick={run(() => backend.create('note'))}>
+          <button type="button" className="notes-create" onClick={() => void create()}>
             새 노트
-          </button>
-          <button type="button" onClick={run(() => backend.create('discussion'))}>
-            새 협의 사항
           </button>
         </div>
         <input
@@ -331,20 +287,6 @@ export function NotesWorkspace({
           value={query}
           onChange={(event) => setQuery(event.target.value)}
         />
-        <div className="notes-filter" role="tablist" aria-label="종류">
-          {FILTERS.map(([value, label]) => (
-            <button
-              key={value}
-              type="button"
-              role="tab"
-              aria-selected={filter === value}
-              className={filter === value ? 'active' : ''}
-              onClick={() => setFilter(value)}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
         {!online ? (
           <p className="notes-offline" role="status">
             계정 사이트에 연결되지 않아 마지막 사본을 보입니다.
@@ -371,12 +313,8 @@ export function NotesWorkspace({
                 onClick={() => open(note)}
               >
                 <span className="notes-row-head">
-                  <strong>{note.title}</strong>
-                  {note.kind !== 'note' ? (
-                    <small className={`notes-kind ${note.kind}`}>
-                      {NOTE_KIND_LABEL[note.kind]}
-                    </small>
-                  ) : null}
+                  <strong className={note.title.trim() ? '' : 'untitled'}>{noteTitle(note)}</strong>
+                  {note.kind === 'journal' ? <small className="notes-kind">퇴근 기록</small> : null}
                 </span>
                 <small className="notes-row-meta">
                   {ago(note.updatedAt)}
@@ -406,8 +344,8 @@ export function NotesWorkspace({
           />
         ) : (
           <p className="notes-placeholder">
-            왼쪽에서 노트를 고르거나 [오늘 일지]로 오늘의 작업 기록을 시작하세요. 프로젝트 구성원
-            모두가 같은 노트를 동시에 고칠 수 있습니다.
+            왼쪽에서 노트를 고르거나 [새 노트]로 시작하세요. 프로젝트 구성원 모두가 같은 노트를
+            동시에 고칠 수 있습니다.
           </p>
         )}
       </div>

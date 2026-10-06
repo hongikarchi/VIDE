@@ -31,8 +31,7 @@ function backendFor(projectId: string): NotesBackend & { setUser(name: string): 
       if (value.user) backend.user = value.user;
       return value;
     },
-    create: async (kind: 'note' | 'discussion') => (await api(base, 'POST', { kind })) as NoteItem,
-    journal: async (date: string) => (await api(base + '/journal', 'POST', { date })) as NoteItem,
+    create: async () => (await api(base, 'POST', { kind: 'note' })) as NoteItem,
     update: async (id: string, input: object) =>
       (await api(`${base}/${id}`, 'PUT', input)) as NoteItem,
     remove: async (id: string) => {

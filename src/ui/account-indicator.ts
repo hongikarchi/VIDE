@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { api } from './gateway.ts';
+import { accountSwitchLink, accountSwitchSchema } from './account-switch-link.ts';
 
 const window5 = z.object({ percent: z.number() }).optional();
 const usageSchema = z.object({
@@ -13,16 +14,22 @@ const usageSchema = z.object({
       limitReached: z.boolean(),
     }),
   ),
+  accountSwitch: accountSwitchSchema,
 });
 /**
  * The status bar's current account of the selected model's service: the CLI's default login
  * (ADR-025) by its email and, when usage lookup is on, its usage. Never paths or credentials.
  * When AccountSwitch changes a login, `vide-accounts-changed` goes out (the model list follows).
+ * Read again when the VIDE window gets focus (back from AccountSwitch, PLAN-38 T-175); signed out,
+ * [AccountSwitch 열기] or its install link sits next to it.
  */
 export function accountIndicator(parent: HTMLElement, provider: () => string) {
   const label = document.createElement('small');
   label.setAttribute('aria-label', '현재 AI 계정');
   parent.append(label);
+  const action = document.createElement('span');
+  action.className = 'account-switch-action';
+  parent.append(action);
   let signature: string | undefined;
   let generation = 0,
     timer: ReturnType<typeof setTimeout> | undefined;
@@ -51,12 +58,21 @@ export function accountIndicator(parent: HTMLElement, provider: () => string) {
       ].filter(Boolean);
       label.textContent =
         name + (row?.limitReached ? ' · 한도' : used.length ? ' · ' + used.join(' · ') : '');
+      action.replaceChildren();
+      if (row && !row.signedIn) accountSwitchLink(action, usage.accountSwitch, { small: true });
     } catch {
       if (current === generation) label.textContent = '계정 확인 필요';
     }
     timer = setTimeout(() => void refresh(), 120_000);
   };
   window.addEventListener('vide-accounts-changed', () => void refresh());
+  // Back in VIDE (e.g. from AccountSwitch): read the login now, at most every 2 seconds.
+  let focused = 0;
+  window.addEventListener('focus', () => {
+    if (Date.now() - focused < 2000) return;
+    focused = Date.now();
+    void refresh();
+  });
   window.addEventListener('pagehide', () => {
     generation++;
     clearTimeout(timer);

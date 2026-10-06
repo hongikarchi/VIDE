@@ -8,7 +8,8 @@ import { attachJigs, type JigContext, legacyJigTab } from '../jigs.tsx';
 import { displayIdOf } from '../layers.ts';
 import { requestData, requestMessage } from '../workspace-data.ts';
 import { provideDashboard } from '../dashboard.tsx';
-import { labels, api } from '../gateway.ts';
+import { api } from '../gateway.ts';
+import { AGENDA_ASK } from '../shell/agenda-helper.tsx';
 import {
   activeWorkspace,
   contextTabs,
@@ -28,10 +29,17 @@ import { linksState } from '../store/links.ts';
 import { revealPanel, mobileView, showModelView, sidebar } from './left.ts';
 import { message } from './status.ts';
 import { render, renderMessages } from './render.ts';
-import { renderConversation, poll, focusWork } from './thread.ts';
+import { renderConversation, poll } from './thread.ts';
 import { currentProject } from './context.ts';
 import { selectInResult } from './viewport.ts';
-import { modeFields, modeOf, jigParamsChanged, referenceAnswered } from './composer.ts';
+import {
+  modeFields,
+  modeOf,
+  jigParamsChanged,
+  referenceAnswered,
+  setBody,
+  submitRequest,
+} from './composer.ts';
 
 export let reviews!: ReturnType<typeof initializeReviews>;
 /** Layer paths in the stored Syncs, newest first: the output layers a jig instance may use. */
@@ -278,25 +286,18 @@ export function initGlue3() {
               : 'closed',
         ...(link.lastSync?.at ? { lastSync: link.lastSync.at } : {}),
       })),
-      recent: draftState.state.messages
-        .filter(
-          (entry) =>
-            entry.source !== 'document' &&
-            !entry.request?.input?.parentRequestId &&
-            !['queued', 'running'].includes(entry.request.state),
-        )
-        .slice(-5)
-        .reverse()
-        .map((entry) => ({
-          id: entry.id,
-          title: entry.body || '첨부 검토',
-          state: entry.request.state,
-          stateLabel: labels[entry.request.state] || entry.request.state,
-          ...(entry.request.createdAt ? { at: String(entry.request.createdAt) } : {}),
-        })),
     }),
-    openRequest: (id) => focusWork(id),
-    notice: (text) => message(text),
+  });
+  // 할 일 도우미 (Design §03 「대시보드의 AI 열」, PLAN-39 T-181): a quick request goes to the 기본
+  // 대화 as a hostless Auto turn, as if typed there; its progress and answer show below.
+  addEventListener(AGENDA_ASK, (event) => {
+    const text = (event as CustomEvent<string>).detail;
+    if (!text || sessionState.busy || !sessionState.project) return;
+    workState.conversationChips?.select(null);
+    draftState.state.body = text;
+    setBody(text);
+    render();
+    void submitRequest(undefined, 'auto', { hostUse: 'none' });
   });
 }
 

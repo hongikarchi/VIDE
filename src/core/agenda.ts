@@ -14,7 +14,7 @@ import {
 import { DomainError, type Store } from './store.ts';
 
 /**
- * A project's 할 일 (SPEC-01.14, ARCH-01 §3 「대시보드의 할 일」, schema 7–8). Edits carry the
+ * A project's 할 일 (SPEC-01.14, ARCH-01 §3 「대시보드의 할 일」, schema 7–8, 11). Edits carry the
  * revision read last (REVISION_CONFLICT otherwise, like table-views.ts); reordering changes only
  * `ord`. Data access only: who may write is the server's.
  */
@@ -23,13 +23,53 @@ const pad = (n: number) => String(n).padStart(2, '0');
 export const localDate = (at = new Date()) =>
   `${at.getFullYear()}-${pad(at.getMonth() + 1)}-${pad(at.getDate())}`;
 
+/** The day `days` after a 'YYYY-MM-DD' (before it when negative). */
+const shiftDate = (value: string, days: number) => {
+  const [y, m, d] = value.split('-').map(Number);
+  return localDate(new Date(y, m - 1, d + days));
+};
+const dayNumber = (value: string) => {
+  const [y, m, d] = value.split('-').map(Number);
+  return Math.round(Date.UTC(y, m - 1, d) / 86400000);
+};
+const minutesOf = (value: string) => Number(value.slice(0, 2)) * 60 + Number(value.slice(3, 5));
+const clockOf = (minutes: number) => `${pad(Math.floor(minutes / 60))}:${pad(minutes % 60)}`;
+/** 위치 and 참석자: trimmed, and empty is none. */
+const freeText = (value: string | null | undefined) => value?.trim() || null;
+interface Span {
+  date: string | null;
+  time: string | null;
+  endDate: string | null;
+  endTime: string | null;
+}
+/**
+ * The rules of a period (SPEC-01.14 1·4, ARCH-01 §3): a time without a date is today's; no date,
+ * no times and no end day; no start time, no end time; an end day equal to the start is none; the
+ * end never before the start (INVALID_INPUT).
+ */
+function settle(span: Span, today: string): Span {
+  let { date, endDate, endTime } = span;
+  const { time } = span;
+  if (time && !date) date = today;
+  if (!date) return { date: null, time: null, endDate: null, endTime: null };
+  if (!time) endTime = null;
+  if (endDate === date) endDate = null;
+  if (endDate && endDate < date) throw new DomainError('INVALID_INPUT');
+  if (endTime && !endDate && time && endTime <= time) throw new DomainError('INVALID_INPUT');
+  return { date, time, endDate, endTime };
+}
+
 const decode = (row: Record<string, unknown>): AgendaItem =>
   agendaItemSchema.parse({
     id: row.id,
     text: row.text,
     date: row.date ?? null,
     time: row.time ?? null,
+    endDate: row.endDate ?? null,
+    endTime: row.endTime ?? null,
     kind: row.kind ?? 'task',
+    location: row.location ?? null,
+    attendees: row.attendees ?? null,
     done: row.doneAt != null,
     doneAt: row.doneAt ?? null,
     order: row.ord,
@@ -89,52 +129,78 @@ export class Agenda {
         .get(projectId) as { n: number; last: number | null };
       // No item count cap (ADR-031 7).
       const id = randomUUID(),
-        at = this.now().toISOString(),
-        time = input.time ?? null,
-        date = input.date ?? (time ? localDate(this.now()) : null);
+        at = this.now().toISOString();
+      const span = settle(
+        {
+          date: input.date ?? null,
+          time: input.time ?? null,
+          endDate: input.endDate ?? null,
+          endTime: input.endTime ?? null,
+        },
+        localDate(this.now()),
+      );
       this.store
         .db(projectId)
         .prepare(
-          'INSERT INTO agenda_items(id,projectId,text,date,time,doneAt,ord,source,revision,createdAt,updatedAt,kind) VALUES(?,?,?,?,?,NULL,?,?,1,?,?,?)',
+          'INSERT INTO agenda_items(id,projectId,text,date,time,doneAt,ord,source,revision,createdAt,updatedAt,kind,endDate,endTime,location,attendees) VALUES(?,?,?,?,?,NULL,?,?,1,?,?,?,?,?,?,?)',
         )
         .run(
           id,
           projectId,
           input.text.trim(),
-          date,
-          time,
+          span.date,
+          span.time,
           (count.last ?? 0) + 1,
           source,
           at,
           at,
           input.kind ?? 'task',
+          span.endDate,
+          span.endTime,
+          freeText(input.location),
+          freeText(input.attendees),
         );
       return this.get(projectId, id);
     });
   }
-  /** Changes the fields given; a stale revision is REVISION_CONFLICT. Clearing the date clears the time. */
+  /**
+   * Changes the fields given; a stale revision is REVISION_CONFLICT. Clearing the date clears the
+   * times and the end day. A new start day alone moves the end day with it (the period is kept), a
+   * new start time alone moves the end time with it (cleared when it would pass midnight).
+   */
   set(projectId: string, id: string, value: unknown): AgendaItem {
     const input = parsed(agendaUpdateSchema, value);
     return this.store.tx(this.store.db(projectId), () => {
       const before = this.get(projectId, id);
       if (input.revision !== before.revision) throw new DomainError('REVISION_CONFLICT');
-      let date = input.date === undefined ? before.date : input.date;
-      let time = input.time === undefined ? before.time : input.time;
-      if (input.date === null && input.time === undefined) time = null;
-      if (time && !date) date = localDate(this.now());
+      const date = input.date === undefined ? before.date : input.date;
+      const time = input.time !== undefined ? input.time : input.date === null ? null : before.time;
+      let endDate = input.endDate === undefined ? before.endDate : input.endDate;
+      let endTime = input.endTime === undefined ? before.endTime : input.endTime;
+      if (input.endDate === undefined && before.endDate && before.date && date)
+        endDate = shiftDate(before.endDate, dayNumber(date) - dayNumber(before.date));
+      if (input.endTime === undefined && before.endTime && before.time && time && !endDate) {
+        const end = minutesOf(time) + minutesOf(before.endTime) - minutesOf(before.time);
+        endTime = end < 24 * 60 ? clockOf(end) : null;
+      }
+      const span = settle({ date, time, endDate, endTime }, localDate(this.now()));
       const at = this.now().toISOString();
       const doneAt =
         input.done === undefined ? before.doneAt : input.done ? (before.doneAt ?? at) : null;
       this.store
         .db(projectId)
         .prepare(
-          'UPDATE agenda_items SET text=?,date=?,time=?,kind=?,doneAt=?,revision=revision+1,updatedAt=? WHERE projectId=? AND id=?',
+          'UPDATE agenda_items SET text=?,date=?,time=?,endDate=?,endTime=?,kind=?,location=?,attendees=?,doneAt=?,revision=revision+1,updatedAt=? WHERE projectId=? AND id=?',
         )
         .run(
           input.text?.trim() ?? before.text,
-          date,
-          time,
+          span.date,
+          span.time,
+          span.endDate,
+          span.endTime,
           input.kind ?? before.kind,
+          input.location === undefined ? before.location : freeText(input.location),
+          input.attendees === undefined ? before.attendees : freeText(input.attendees),
           doneAt,
           at,
           projectId,
@@ -210,10 +276,16 @@ export class Agenda {
           reverted++;
         } else {
           const { text, date, time, doneAt, kind } = change.before;
+          // The fields recorded from schema 11 on go back too; an older record leaves them.
+          const later = (['endDate', 'endTime', 'location', 'attendees'] as const).filter(
+            (key) => change.before[key] !== undefined,
+          );
           this.store
             .db(projectId)
             .prepare(
-              'UPDATE agenda_items SET text=?,date=?,time=?,kind=coalesce(?,kind),doneAt=?,revision=revision+1,updatedAt=? WHERE projectId=? AND id=?',
+              `UPDATE agenda_items SET text=?,date=?,time=?,kind=coalesce(?,kind),doneAt=?,${later
+                .map((key) => `${key}=?,`)
+                .join('')}revision=revision+1,updatedAt=? WHERE projectId=? AND id=?`,
             )
             .run(
               text,
@@ -221,6 +293,7 @@ export class Agenda {
               time,
               kind ?? null,
               doneAt,
+              ...later.map((key) => change.before[key] ?? null),
               this.now().toISOString(),
               projectId,
               change.id,

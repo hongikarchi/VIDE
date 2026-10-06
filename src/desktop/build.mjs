@@ -201,6 +201,14 @@ await writeFile(
 사용자 데이터: %LOCALAPPDATA%\VIDE (설치·업데이트·제거가 지우지 않습니다).
 Rhino·ZWCAD와 공식 Claude Code/Codex CLI는 별도 설치본을 사용합니다. Rhino 플러그인은 VIDE 설정 → 연결 프로그램에서 설치합니다.
 
+설치 순서
+1. VIDE: 처음 열면 VIDE 계정 로그인 화면이 나옵니다. 계정이 없으면 웹사이트에서 가입 코드로 만듭니다.
+2. Claude Code 또는 Codex CLI: 공식 설치, npm 전역 설치(npm i -g @anthropic-ai/claude-code / @openai/codex), PATH 순서로 찾습니다. 다른 곳이면 설정 → AI 연결 → 고급에 경로를 넣습니다.
+3. AccountSwitch(https://github.com/hongikarchi/AccountSwitch/releases/latest): 여러 계정을 쓰면 권장합니다. 계정이 하나면 터미널의 claude 또는 codex login으로 로그인해도 됩니다.
+4. 플러그인: VIDE 설정 → 연결 프로그램에서 Rhino 8·ZWCAD 플러그인을 설치합니다.
+5. Link: Rhino·ZWCAD 패널의 Link로 문서를 프로젝트에 연결합니다.
+원격 접속(다른 기기에서 열기)은 기본으로 꺼져 있습니다. 필요한 공식 cloudflared는 처음 실행할 때 데이터 폴더의 bin에 받아 둡니다(설치본에는 들어 있지 않습니다).
+
 포함 런타임: Node.js ${process.version}, Three.js ${pkg.dependencies.three}. 고지는 licenses 폴더에 있습니다.
 백업(앱 종료 후): runtime\node.exe app\src\desktop\backup.mjs create <데이터 폴더> <새 백업 폴더>
 

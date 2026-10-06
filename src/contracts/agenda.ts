@@ -1,10 +1,12 @@
 import { z } from 'zod';
 
 /**
- * A project's 할 일 (SPEC-01.14, ARCH-01 §3 「대시보드의 할 일」, schema 7–8): one list per project.
- * An item with a time is shown as 일정 in the same list. Its kind (schema 8) is '할 일', '회의' or
- * '마감' (task | meeting | deadline). Dates and times are the PC's local calendar ('YYYY-MM-DD',
- * 'HH:MM'), never converted to UTC.
+ * A project's 할 일 (SPEC-01.14, ARCH-01 §3 「대시보드의 할 일」, schema 7–8, 11): one list per
+ * project. A dated item shows on the calendar; one with no start time is all day. `endDate` (after
+ * `date`) makes it span several days, `endTime` (after `time` on the same day) gives a time range.
+ * Its kind is '할 일', '협의', '접수' or '마감' (task | meeting | receipt | deadline; `meeting` kept
+ * its id when '회의' became '협의', 2026-10-06). 협의 is an event with no done check; the others are
+ * checked off. Dates and times are the PC's local calendar ('YYYY-MM-DD', 'HH:MM'), never UTC.
  */
 export const agendaDateSchema = z
   .string()
@@ -15,9 +17,14 @@ export const agendaDateSchema = z
     return date.getFullYear() === y && date.getMonth() === m - 1 && date.getDate() === d;
   });
 export const agendaTimeSchema = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/);
-export const agendaKindSchema = z.enum(['task', 'meeting', 'deadline']);
+export const agendaKindSchema = z.enum(['task', 'meeting', 'receipt', 'deadline']);
 export type AgendaKind = z.infer<typeof agendaKindSchema>;
 export const AGENDA_TEXT_MAX = 500;
+export const AGENDA_LOCATION_MAX = 200;
+export const AGENDA_ATTENDEES_MAX = 300;
+/** 위치 and 참석자 (free text; empty is none). */
+const location = z.string().max(AGENDA_LOCATION_MAX);
+const attendees = z.string().max(AGENDA_ATTENDEES_MAX);
 
 const text = z
   .string()
@@ -29,7 +36,13 @@ export const agendaItemSchema = z.object({
   text: z.string(),
   date: agendaDateSchema.nullable(),
   time: agendaTimeSchema.nullable(),
+  /** The last day of an item over several days (after `date`); null: one day. */
+  endDate: agendaDateSchema.nullable(),
+  /** The end of its time range (after `time` on the same day); null: no range. */
+  endTime: agendaTimeSchema.nullable(),
   kind: agendaKindSchema,
+  location: z.string().nullable(),
+  attendees: z.string().nullable(),
   done: z.boolean(),
   doneAt: z.string().nullable(),
   /** Position in the user's order (smaller first); only its order means anything. */
@@ -47,7 +60,11 @@ export const agendaCreateSchema = z
     text,
     date: agendaDateSchema.nullable().optional(),
     time: agendaTimeSchema.nullable().optional(),
+    endDate: agendaDateSchema.nullable().optional(),
+    endTime: agendaTimeSchema.nullable().optional(),
     kind: agendaKindSchema.optional(),
+    location: location.nullable().optional(),
+    attendees: attendees.nullable().optional(),
   })
   .strict();
 export type AgendaCreate = z.infer<typeof agendaCreateSchema>;
@@ -59,7 +76,11 @@ export const agendaUpdateSchema = z
     text: text.optional(),
     date: agendaDateSchema.nullable().optional(),
     time: agendaTimeSchema.nullable().optional(),
+    endDate: agendaDateSchema.nullable().optional(),
+    endTime: agendaTimeSchema.nullable().optional(),
     kind: agendaKindSchema.optional(),
+    location: location.nullable().optional(),
+    attendees: attendees.nullable().optional(),
     done: z.boolean().optional(),
   })
   .strict();
@@ -109,6 +130,11 @@ export const agendaChangeSchema = z.discriminatedUnion('op', [
       doneAt: z.string().nullable(),
       /** Recorded from schema 8 on; an older record leaves the kind as it is. */
       kind: agendaKindSchema.optional(),
+      /** Recorded from schema 11 on; an older record leaves these as they are. */
+      endDate: z.string().nullable().optional(),
+      endTime: z.string().nullable().optional(),
+      location: z.string().nullable().optional(),
+      attendees: z.string().nullable().optional(),
     }),
   }),
 ]);

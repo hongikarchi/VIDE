@@ -2,10 +2,10 @@
 id: PLAN-09
 title: 원격 기기에서 작업 PC 열기 (iPad 스케치 → AI → Rhino)
 status: review
-version: 0.2
-updated: 2026-09-28
+version: 0.3
+updated: 2026-10-06
 owner: agent:claude
-related: [PLAN, PLAN-02, ARCH-01, T-009, T-010]
+related: [PLAN, PLAN-02, ARCH-01, T-009, T-010, PLAN-38, ADR-039]
 ---
 
 # 원격 기기에서 작업 PC 열기
@@ -30,6 +30,7 @@ related: [PLAN, PLAN-02, ARCH-01, T-009, T-010]
 
 ## 남은 일
 
+- 원격 접속 도구 준비(2026-10-06 사용자 결정, [ADR-039](../decisions/ADR-039-sign-in-first-run.md)): 설치본에는 cloudflared가 없다. [PLAN-38](PLAN-38-onboarding.md) T-177에서 설치 뒤 첫 실행 때 엔진이 고정 판을 받아 SHA-256을 확인해 `<데이터>\bin`에 두고, 원격을 켤 때 없으면 그때 받는다. 로그인(위 구조 2)은 원격 접속을 켜지 않는다(기본 끔, 체크로 켬). 실제 새 PC에서 받기·켜기 확인이 남았다.
 - 실제 iPad(Safari·펜) 사용성과 실제 Rhino 문서의 원격 AI 수정 왕복 확인. 원격 요청은 로컬과 같은 실행 경로를 쓰지만 이 경로로 실측하지는 않았다.
 - CAD(ZWCAD) 연결 문서의 AI 수정은 연결 도면 쪽에서 아직 지원하지 않는다(PLAN-07). 원격에서도 CAD는 보기·Sync만 된다.
 - 임시 터널 주소는 켤 때마다 바뀌고 서비스 보장이 없다. 상시 운영은 도메인·정식 터널·Access 로그인 결정 뒤에 옮긴다.

@@ -22,6 +22,8 @@ const debugPort = 9300 + Math.floor(Math.random() * 400);
 const env = {
   ...process.env,
   VIDE_DATA_DIR: data,
+  // The work screen opens without the first-run sign-in or the tool fetch (ADR-039).
+  VIDE_SIGN_IN_REQUIRED: '0',
   ...(packaged ? {} : { VIDE_DESKTOP_APP: resolve('.') }),
   WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: `--remote-debugging-port=${debugPort}`,
 };

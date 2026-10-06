@@ -54,10 +54,18 @@ try {
   );
   // Any exit Node still runs code for (a native crash or a kill runs none: the shell logs those).
   process.on('exit', (code) => crashLog.write('engine-exit', { code }, true));
+  // The installed program (not --dev) opens on the VIDE account sign-in when this PC is not signed
+  // in, and fetches the remote access tool once (ADR-039). VIDE_SIGN_IN_REQUIRED=0|1 overrides.
+  const installed =
+    process.env.VIDE_SIGN_IN_REQUIRED === undefined
+      ? !dev
+      : process.env.VIDE_SIGN_IN_REQUIRED === '1';
   const options = {
     filename: join(directory, 'vide.sqlite'),
     onShutdown: () => void close(),
     sdkOptions: sdkOptions(directory),
+    signInRequired: installed,
+    prefetchTools: installed,
   };
   try {
     try {

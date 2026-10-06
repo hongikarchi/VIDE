@@ -1,39 +1,47 @@
-// 대시보드 › 할 일 · 일정 (SPEC-01.14, Design SCR-20, PLAN-30): the project's 할 일 as two areas
-// over the same items (2026-10-06, '달력이랑 to-do list는 분리될 것'). '할 일' shows what is open
-// for today — past-due, today's and undated items — in the user's order, under a 오늘 head with
-// the day's progress n/m; later dates fold under '예정 n', finished ones under '완료 n'. When
-// today's items are all done it offers [퇴근하기] (finished items go to the day log, tomorrow's
-// first items show). [글·파일에서 할 일 만들기] (dashboard-agenda-extract.tsx) has the AI collect
-// items from pasted notes or files. '일정' is the month (dashboard-calendar.tsx) with its own add
-// box; a row of either area dragged onto a day changes only its date.
-// Enter adds (a date and time are read from the words on this PC, agenda-text.ts), the box
-// finishes, a click on the text edits in place, [빼기] removes, drag or ↑↓ reorders. iPad sessions
-// may edit too. The board reads its own data (`…/agenda`) and again when shown, on focus and after
-// an AI write.
-import {
-  useCallback,
-  useEffect,
-  useRef,
-  useState,
-  type DragEvent,
-  type ReactNode,
-  type RefObject,
-} from 'react';
+// 대시보드 › 할 일 · 일정 (SPEC-01.14, Design SCR-20, PLAN-30, PLAN-39): the project's 할 일 as two
+// areas over the same items. '할 일' (a fixed column on the left, 2026-10-06 user choice '안 A: 할
+// 일 | 큰 달력') shows what is open for today — past-due, today's (an item over several days while
+// today falls in it) and undated items — in the user's order, under a 오늘 head with the day's
+// progress n/m; later dates fold under '예정 n', finished ones under '완료 n'. A 협의 has no done
+// check and leaves the list once its day is over. When today's items are all done it offers
+// [퇴근하기] (finished items go to the day log, tomorrow's first items show). [글·파일에서 할 일
+// 만들기] (dashboard-agenda-extract.tsx) has the AI collect items from pasted notes or files.
+// '일정' is the large month (dashboard-calendar.tsx): a day opens the 일정 form for a new item, an
+// item opens it for that item (dashboard-agenda-form.tsx); a row of either area dragged onto a day
+// moves it there with its period kept.
+// Enter adds (a date, time and range are read from the words on this PC, agenda-text.ts), the box
+// finishes, a click on the text edits in place with the same fields as the form, [빼기] removes,
+// drag or ↑↓ reorders. iPad sessions may edit too. The board reads its own data (`…/agenda`) and
+// again when shown, on focus and after an AI write.
+import { useCallback, useEffect, useRef, useState, type DragEvent, type ReactNode } from 'react';
 import { api } from './gateway.ts';
-import type { AgendaItem, AgendaKind, DayLogEntry } from '../contracts/agenda.ts';
+import type { AgendaItem, DayLogEntry } from '../contracts/agenda.ts';
 import {
   AGENDA_CHANGED,
   KIND_LABELS,
   agendaWhen,
   dateLabel,
+  isEvent,
   isoDate,
+  lastDay,
   monthOf,
   parseAgendaDraft,
   shortDate,
+  spanLabel,
+  timeLabel,
   todayProgress,
 } from './agenda-text.ts';
-import { AGENDA_DRAG, AgendaCalendar } from './dashboard-calendar.tsx';
+import { AGENDA_DRAG, AgendaCalendar, type CalendarAnchor } from './dashboard-calendar.tsx';
 import { AgendaFromText } from './dashboard-agenda-extract.tsx';
+import {
+  AgendaForm,
+  FIELD_KEYS,
+  blankFields,
+  changedFields,
+  createBody,
+  fieldsOf,
+  type AgendaFields,
+} from './dashboard-agenda-form.tsx';
 
 const reasons: Record<string, string> = {
   REVISION_CONFLICT: '다른 화면에서 바뀌어 최신 목록을 다시 읽었습니다.',
@@ -45,54 +53,39 @@ const todayLabel = (at: Date) =>
   at.toLocaleDateString('ko-KR', { month: 'long', day: 'numeric', weekday: 'long' });
 const byDateTime = (a: AgendaItem, b: AgendaItem) =>
   `${a.date} ${a.time ?? '99'}`.localeCompare(`${b.date} ${b.time ?? '99'}`);
-/** Nothing but the date a picked day put in the box: nothing to add yet. */
+/** Nothing but a date: nothing to add yet. */
 const onlyDate = (draft: string) => /^\d{4}-\d{2}-\d{2}$/.test(draft.trim());
 
-/** Fields as the edit form holds them ('' for none). */
-interface Fields {
-  text: string;
-  date: string;
-  time: string;
-  kind: AgendaKind;
-}
 /**
- * An edit in place: the form's fields, and the revision and fields of the item when editing began
- * (`from`). Saving sends that revision and only what the user changed from `from`, so a change
- * another screen made meanwhile is refused (REVISION_CONFLICT) instead of being overwritten.
+ * An edit of one item, in place of its row or over the calendar: the form's fields, and the
+ * revision and fields of the item when editing began (`from`). Saving sends that revision and only
+ * what the user changed from `from`, so a change another screen made meanwhile is refused
+ * (REVISION_CONFLICT) instead of being overwritten.
  */
-interface Edit extends Fields {
+interface Edit {
   id: string;
   revision: number;
-  from: Fields;
+  fields: AgendaFields;
+  from: AgendaFields;
+  where: 'row' | 'calendar';
 }
-const fieldsOf = (entry: AgendaItem): Fields => ({
-  text: entry.text,
-  date: entry.date ?? '',
-  time: entry.time ?? '',
-  kind: entry.kind,
-});
-const editOf = (entry: AgendaItem): Edit => ({
+const editOf = (entry: AgendaItem, where: Edit['where']): Edit => ({
   id: entry.id,
   revision: entry.revision,
-  ...fieldsOf(entry),
+  fields: fieldsOf(entry),
   from: fieldsOf(entry),
+  where,
 });
 
-/** One add box: Enter adds, the line below shows the date, time and kind read from the words. */
+/** The add box: Enter adds, the line below shows the date, time and kind read from the words. */
 function AddBox({
-  label,
-  placeholder,
   draft,
   today,
-  box,
   onDraft,
   onAdd,
 }: {
-  label: string;
-  placeholder: string;
   draft: string;
   today: string;
-  box?: RefObject<HTMLInputElement | null>;
   onDraft: (value: string) => void;
   onAdd: () => void;
 }) {
@@ -108,10 +101,9 @@ function AddBox({
         }}
       >
         <input
-          ref={box}
           type="text"
-          aria-label={label}
-          placeholder={placeholder}
+          aria-label="할 일 추가"
+          placeholder="할 일 — 예: 내일 3시 구조 협의, 금요일 도면 제출"
           value={draft}
           maxLength={500}
           onChange={(event) => onDraft(event.target.value)}
@@ -119,8 +111,12 @@ function AddBox({
       </form>
       {preview && (preview.date || preview.time) ? (
         <p className="dash-agenda-hint" aria-live="polite">
-          {preview.date ? dateLabel(preview.date, today).replace(/^지남 · /, '') : ''}
-          {preview.time ? ` ${preview.time}` : ''} · {preview.text}
+          {preview.date
+            ? preview.endDate
+              ? spanLabel(preview)
+              : dateLabel(preview.date, today).replace(/^지남 · /, '')
+            : ''}
+          {preview.time ? ` ${timeLabel(preview)}` : ''} · {preview.text}
           {preview.kind !== 'task' ? (
             <span className="dash-agenda-kind" data-kind={preview.kind}>
               {KIND_LABELS[preview.kind]}
@@ -137,16 +133,15 @@ export function AgendaBoard({ projectId, shown }: { projectId: string; shown: nu
   const [dayEnd, setDayEnd] = useState<DayLogEntry | undefined>();
   const [failed, setFailed] = useState(false);
   const [taskDraft, setTaskDraft] = useState('');
-  const [planDraft, setPlanDraft] = useState('');
   const [edit, setEdit] = useState<Edit | undefined>();
+  /** A new 일정 being written in the calendar's form: its day and fields. */
+  const [adding, setAdding] = useState<{ date: string; fields: AgendaFields } | undefined>();
   const [showLater, setShowLater] = useState(false);
   const [showDone, setShowDone] = useState(false);
   const [reason, setReason] = useState('');
   const [busy, setBusy] = useState(false);
   const [dragging, setDragging] = useState<string | undefined>();
   const [month, setMonth] = useState(() => monthOf(isoDate(new Date())));
-  const [picked, setPicked] = useState<string | undefined>();
-  const planBox = useRef<HTMLInputElement>(null);
   const base = `/projects/${encodeURIComponent(projectId)}/agenda`;
   const now = new Date();
   const today = isoDate(now);
@@ -198,20 +193,16 @@ export function AgendaBoard({ projectId, shown }: { projectId: string; shown: nu
       setBusy(false);
     }
   };
-  // The add boxes are never disabled: a disabled box loses the focus, and the next 할 일 typed
-  // after Enter would go nowhere. Enter empties the box at once; the adds are saved one after
-  // another, and one that fails comes back into its box (unless something new was typed there).
-  const adding = useRef<Promise<unknown>>(Promise.resolve());
-  const addFrom = (
-    draft: string,
-    setDraft: (update: (now: string) => string) => void,
-    start = '',
-  ) => {
+  // The add box is never disabled: a disabled box loses the focus, and the next 할 일 typed after
+  // Enter would go nowhere. Enter empties the box at once; the adds are saved one after another,
+  // and one that fails comes back into the box (unless something new was typed there).
+  const adds = useRef<Promise<unknown>>(Promise.resolve());
+  const addFrom = (draft: string) => {
     if (!draft.trim() || onlyDate(draft)) return;
-    setDraft(() => start);
-    adding.current = adding.current.then(async () => {
+    setTaskDraft('');
+    adds.current = adds.current.then(async () => {
       if ((await write(base, 'POST', parseAgendaDraft(draft, new Date()))) !== true)
-        setDraft((now) => (now.trim() && now !== start ? now : draft));
+        setTaskDraft((now) => (now.trim() ? now : draft));
     });
   };
   const item = (id: string) => `${base}/${encodeURIComponent(id)}`;
@@ -221,16 +212,11 @@ export function AgendaBoard({ projectId, shown }: { projectId: string; shown: nu
     void write(`${item(entry.id)}/remove`, 'POST', { revision: entry.revision });
   const save = async () => {
     if (!edit) return;
-    if (!edit.text.trim()) return setReason('내용이 비면 [빼기]로 빼세요.');
-    const changed: Record<string, unknown> = { revision: edit.revision };
-    if (edit.text.trim() !== edit.from.text.trim()) changed.text = edit.text.trim();
-    if (edit.date !== edit.from.date) changed.date = edit.date || null;
-    if (edit.time !== edit.from.time) changed.time = edit.time || null;
-    if (edit.kind !== edit.from.kind) changed.kind = edit.kind;
-    if (Object.keys(changed).length === 1) return setEdit(undefined);
-    const result = await write(item(edit.id), 'PUT', changed);
-    if (result === true) return setEdit(undefined);
-    if (result === 'NOT_FOUND') return setEdit(undefined);
+    if (!edit.fields.text.trim()) return setReason('내용이 비면 [빼기]로 빼세요.');
+    const changed = changedFields(edit.fields, edit.from);
+    if (!Object.keys(changed).length) return setEdit(undefined);
+    const result = await write(item(edit.id), 'PUT', { revision: edit.revision, ...changed });
+    if (result === true || result === 'NOT_FOUND') return setEdit(undefined);
     if (result !== 'REVISION_CONFLICT') return;
     // Changed on another screen meanwhile: the form takes the newer item and keeps only what the
     // user changed here; Enter again saves that over the newer one.
@@ -243,31 +229,46 @@ export function AgendaBoard({ projectId, shown }: { projectId: string; shown: nu
       return;
     }
     if (!latest) return setEdit(undefined);
-    const fresh = editOf(latest);
-    setEdit((now) =>
-      now?.id !== edit.id
-        ? now
-        : {
-            ...fresh,
-            text: now.text !== now.from.text ? now.text : fresh.text,
-            date: now.date !== now.from.date ? now.date : fresh.date,
-            time: now.time !== now.from.time ? now.time : fresh.time,
-            kind: now.kind !== now.from.kind ? now.kind : fresh.kind,
-          },
-    );
+    const fresh = editOf(latest, edit.where);
+    setEdit((now) => {
+      if (now?.id !== edit.id) return now;
+      const fields = { ...fresh.fields };
+      for (const key of FIELD_KEYS)
+        if (now.fields[key] !== now.from[key]) Object.assign(fields, { [key]: now.fields[key] });
+      return { ...fresh, fields };
+    });
+  };
+  /** [날짜 빼기] in the form: the item leaves the calendar for the undated 할 일. */
+  const clearDate = async () => {
+    if (!edit) return;
+    const result = await write(item(edit.id), 'PUT', { revision: edit.revision, date: null });
+    if (result === true || result === 'NOT_FOUND') setEdit(undefined);
+  };
+  const removeEdited = async () => {
+    if (!edit) return;
+    const result = await write(`${item(edit.id)}/remove`, 'POST', { revision: edit.revision });
+    if (result === true || result === 'NOT_FOUND') setEdit(undefined);
+  };
+  const addPlanned = async () => {
+    if (!adding?.fields.text.trim()) return;
+    if ((await write(base, 'POST', createBody(adding.fields))) === true) setAdding(undefined);
   };
 
   const open = items?.filter((entry) => !entry.done) ?? [];
-  const current = open.filter((entry) => agendaWhen(entry, today) !== 'later');
+  const current = open.filter((entry) =>
+    ['overdue', 'today', 'undated'].includes(agendaWhen(entry, today)),
+  );
   const later = open.filter((entry) => agendaWhen(entry, today) === 'later').sort(byDateTime);
   const done = (items?.filter((entry) => entry.done) ?? []).sort((a, b) =>
     (b.doneAt ?? '').localeCompare(a.doneAt ?? ''),
   );
   const progress = todayProgress(items ?? [], today);
-  const dueOpen = open.some((entry) => entry.date && entry.date <= today);
+  const dueOpen = open.some((entry) => !isEvent(entry) && entry.date && entry.date <= today);
   /** Left work today: the day's entry is there and nothing new was finished or is due since. */
   const ended = Boolean(dayEnd) && !dueOpen && progress.doneToday === 0;
-  const nextDay = open.filter((entry) => entry.date === tomorrow).sort(byDateTime);
+  const nextDay = open
+    .filter((entry) => entry.date && entry.date <= tomorrow && lastDay(entry)! >= tomorrow)
+    .sort(byDateTime);
   /** Moves one item of the 할 일 list to another place and saves the order of that list. */
   const move = (id: string, to: number) => {
     const ids = current.map((entry) => entry.id);
@@ -276,110 +277,85 @@ export function AgendaBoard({ projectId, shown }: { projectId: string; shown: nu
     ids.splice(to, 0, ...ids.splice(from, 1));
     void write(`${base}/order`, 'POST', { ids });
   };
-  /** The calendar's drag: only the date is sent (the time and the rest stay). */
-  const moveTo = (entry: AgendaItem, date: string | null) =>
+  /** The calendar's drag: only the start day is sent (the engine keeps the period). */
+  const moveTo = (entry: AgendaItem, date: string) =>
     void write(item(entry.id), 'PUT', { revision: entry.revision, date });
-  /** A day picked on the calendar: its list below, and the 일정 box starts with its date. */
   const pick = (date: string) => {
-    setPicked(date);
-    setPlanDraft((now) => `${date} ${now.replace(/^\d{4}-\d{2}-\d{2}\s*/, '')}`);
-    planBox.current?.focus();
+    setEdit(undefined);
+    setAdding({ date, fields: blankFields(date) });
   };
+  const openItem = (entry: AgendaItem) => {
+    setAdding(undefined);
+    setEdit(editOf(entry, 'calendar'));
+  };
+  const closeForm = useCallback(() => {
+    setAdding(undefined);
+    setEdit((now) => (now?.where === 'calendar' ? undefined : now));
+  }, []);
 
   const row = (entry: AgendaItem, index?: number) => {
     const when = agendaWhen(entry, today);
-    const editing = edit?.id === entry.id;
+    const editing = edit?.id === entry.id && edit.where === 'row';
+    const event = isEvent(entry) && !entry.done;
     const reorder = index !== undefined && !entry.done;
     const at = index ?? 0;
     return (
       <li
         key={entry.id}
         className="dash-agenda-row"
-        data-when={entry.done ? 'done' : when}
+        data-when={entry.done ? 'done' : event ? 'event' : when}
         data-editing={editing || undefined}
         data-dragging={dragging === entry.id || undefined}
         draggable={!entry.done && !editing}
-        onDragStart={(event: DragEvent) => {
+        onDragStart={(drag: DragEvent) => {
           if (entry.done) return;
-          event.dataTransfer.effectAllowed = 'move';
-          event.dataTransfer.setData('text/plain', entry.id);
-          // Lets the calendar take it: a day changes only its date.
-          event.dataTransfer.setData(AGENDA_DRAG, entry.id);
+          drag.dataTransfer.effectAllowed = 'move';
+          drag.dataTransfer.setData('text/plain', entry.id);
+          // Lets the calendar take it: a day moves it there.
+          drag.dataTransfer.setData(AGENDA_DRAG, entry.id);
           setDragging(entry.id);
         }}
         onDragEnd={() => setDragging(undefined)}
-        onDragOver={(event: DragEvent) => {
-          if (reorder && dragging) event.preventDefault();
+        onDragOver={(drag: DragEvent) => {
+          if (reorder && dragging) drag.preventDefault();
         }}
-        onDrop={(event: DragEvent) => {
-          event.preventDefault();
-          const id = event.dataTransfer.getData('text/plain') || dragging;
+        onDrop={(drag: DragEvent) => {
+          drag.preventDefault();
+          const id = drag.dataTransfer.getData('text/plain') || dragging;
           setDragging(undefined);
           if (reorder && id) move(id, at);
         }}
       >
-        <input
-          type="checkbox"
-          aria-label={`${entry.text} 완료`}
-          checked={entry.done}
-          disabled={busy}
-          onChange={() => toggle(entry)}
-        />
+        {event ? (
+          <span className="dash-agenda-event" aria-hidden="true" />
+        ) : (
+          <input
+            type="checkbox"
+            aria-label={`${entry.text} 완료`}
+            checked={entry.done}
+            disabled={busy}
+            onChange={() => toggle(entry)}
+          />
+        )}
         {editing ? (
-          <form
-            className="dash-agenda-edit"
-            onSubmit={(event) => {
-              event.preventDefault();
-              void save();
-            }}
-            onKeyDown={(event) => {
-              if (event.key === 'Escape') setEdit(undefined);
-            }}
-          >
-            <input
-              type="text"
-              aria-label="할 일 고치기"
-              autoFocus
-              value={edit.text}
-              maxLength={500}
-              onChange={(event) => setEdit({ ...edit, text: event.target.value })}
-            />
-            <input
-              type="date"
-              aria-label="날짜"
-              value={edit.date}
-              onChange={(event) => setEdit({ ...edit, date: event.target.value })}
-            />
-            <input
-              type="time"
-              aria-label="시각"
-              value={edit.time}
-              onChange={(event) => setEdit({ ...edit, time: event.target.value })}
-            />
-            <select
-              aria-label="종류"
-              value={edit.kind}
-              onChange={(event) => setEdit({ ...edit, kind: event.target.value as AgendaKind })}
-            >
-              {(Object.keys(KIND_LABELS) as AgendaKind[]).map((kind) => (
-                <option key={kind} value={kind}>
-                  {KIND_LABELS[kind]}
-                </option>
-              ))}
-            </select>
-            <button type="submit" disabled={busy}>
-              저장
-            </button>
-            <button type="button" className="link-button" onClick={() => setEdit(undefined)}>
-              취소
-            </button>
-          </form>
+          <AgendaForm
+            variant="row"
+            fields={edit.fields}
+            busy={busy}
+            submitLabel="저장"
+            onChange={(fields) => setEdit({ ...edit, fields })}
+            onSubmit={() => void save()}
+            onCancel={() => setEdit(undefined)}
+          />
         ) : (
           <button
             type="button"
             className="dash-agenda-text"
             title="눌러서 고치기"
-            onClick={() => setEdit(editOf(entry))}
+            onClick={() => {
+              setAdding(undefined);
+              setEdit(editOf(entry, 'row'));
+            }}
           >
             {entry.text}
           </button>
@@ -391,12 +367,19 @@ export function AgendaBoard({ projectId, shown }: { projectId: string; shown: nu
                 {KIND_LABELS[entry.kind]}
               </span>
             ) : null}
-            {entry.time ? <span className="dash-agenda-time">{entry.time}</span> : null}
-            {entry.date && (when !== 'today' || entry.done)
-              ? entry.done
-                ? shortDate(entry.date)
-                : dateLabel(entry.date, today)
-              : null}
+            {entry.location ? (
+              <span className="dash-agenda-where" title={entry.location}>
+                @{entry.location}
+              </span>
+            ) : null}
+            {entry.time ? <span className="dash-agenda-time">{timeLabel(entry)}</span> : null}
+            {entry.date && entry.endDate
+              ? spanLabel(entry)
+              : entry.date && (when !== 'today' || entry.done)
+                ? entry.done
+                  ? shortDate(entry.date)
+                  : dateLabel(entry.date, today)
+                : null}
             {entry.source === 'ai' ? <span className="dash-agenda-by">AI</span> : null}
           </span>
         )}
@@ -447,7 +430,7 @@ export function AgendaBoard({ projectId, shown }: { projectId: string; shown: nu
         <ul className="dash-day-end-next" aria-label="내일 할 일">
           {nextDay.slice(0, 3).map((entry) => (
             <li key={entry.id}>
-              {entry.time ? <span className="dash-agenda-time">{entry.time}</span> : null}
+              {entry.time ? <span className="dash-agenda-time">{timeLabel(entry)}</span> : null}
               <span>{entry.text}</span>
               {entry.kind !== 'task' ? (
                 <span className="dash-agenda-kind" data-kind={entry.kind}>
@@ -476,6 +459,43 @@ export function AgendaBoard({ projectId, shown }: { projectId: string; shown: nu
       </button>
     </div>
   ) : null;
+
+  /** The open 일정 form over the calendar: a new one on a day, or the item clicked there. */
+  const calendarForm: { anchor: CalendarAnchor; content: ReactNode } | undefined = adding
+    ? {
+        anchor: `day:${adding.date}`,
+        content: (
+          <AgendaForm
+            key={`day:${adding.date}`}
+            variant="popover"
+            fields={adding.fields}
+            busy={busy}
+            submitLabel="추가"
+            onChange={(fields) => setAdding({ ...adding, fields })}
+            onSubmit={() => void addPlanned()}
+            onCancel={() => setAdding(undefined)}
+          />
+        ),
+      }
+    : edit?.where === 'calendar'
+      ? {
+          anchor: `item:${edit.id}`,
+          content: (
+            <AgendaForm
+              key={`item:${edit.id}`}
+              variant="popover"
+              fields={edit.fields}
+              busy={busy}
+              submitLabel="저장"
+              onChange={(fields) => setEdit({ ...edit, fields })}
+              onSubmit={() => void save()}
+              onCancel={() => setEdit(undefined)}
+              onRemove={() => void removeEdited()}
+              onClearDate={() => void clearDate()}
+            />
+          ),
+        }
+      : undefined;
 
   const body = (content: ReactNode) =>
     failed ? (
@@ -508,12 +528,10 @@ export function AgendaBoard({ projectId, shown }: { projectId: string; shown: nu
           </div>
           {finish}
           <AddBox
-            label="할 일 추가"
-            placeholder="할 일 — 예: 내일 3시 구조 회의, 금요일 도면 제출"
             draft={taskDraft}
             today={today}
             onDraft={setTaskDraft}
-            onAdd={() => addFrom(taskDraft, setTaskDraft)}
+            onAdd={() => addFrom(taskDraft)}
           />
           <AgendaFromText projectId={projectId} />
           {reason ? (
@@ -586,27 +604,22 @@ export function AgendaBoard({ projectId, shown }: { projectId: string; shown: nu
         <section className="dash-section dash-schedule" aria-label="일정">
           <div className="dash-section-head">
             <h3>일정</h3>
+            <button type="button" className="link-button" onClick={() => pick(today)}>
+              + 일정
+            </button>
           </div>
-          <AddBox
-            label="일정 추가"
-            placeholder="일정 — 예: 10/8 2시 설비 미팅"
-            draft={planDraft}
-            today={today}
-            box={planBox}
-            onDraft={setPlanDraft}
-            onAdd={() => addFrom(planDraft, setPlanDraft, picked ? `${picked} ` : '')}
-          />
           {body(
             <AgendaCalendar
               items={items ?? []}
               today={today}
               month={month}
-              selected={picked}
               busy={busy}
               onMonth={setMonth}
-              onSelect={pick}
+              onPick={pick}
+              onOpen={openItem}
               onMove={moveTo}
-              row={(entry) => row(entry)}
+              form={calendarForm}
+              onClose={closeForm}
             />,
           )}
         </section>

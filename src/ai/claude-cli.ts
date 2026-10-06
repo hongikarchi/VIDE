@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { launchable } from './paths.ts';
 import type { ChildProcess, ChildProcessWithoutNullStreams } from 'node:child_process';
 import type { AgentConnection, AgentFormat, BuiltinTools } from './agent-connection.ts';
 import { workFolders } from './agent-connection.ts';
@@ -375,9 +376,8 @@ export function subscriptionEnvironment(source = process.env) {
   for (const key of Object.keys(env)) {
     if (
       // TYPESAFE_*: the Jev key is VIDE's own and never reaches the CLI.
-      /^(ANTHROPIC_|CLAUDE_CODE_|CLAUDE_CONFIG_DIR$|CLAUDE_AGENT_SDK_|CLAUDE_ENV_FILE$|TYPESAFE_)/i.test(
-        key,
-      )
+      // CLAUDE_CONFIG_DIR set on this PC is the CLI's default login and stays (PLAN-38 T-175).
+      /^(ANTHROPIC_|CLAUDE_CODE_|CLAUDE_AGENT_SDK_|CLAUDE_ENV_FILE$|TYPESAFE_)/i.test(key)
     )
       delete env[key];
   }
@@ -801,7 +801,8 @@ export class ClaudeCli {
     this.timeoutMs = timeoutMs;
     this.stopGraceMs = stopGraceMs;
     // Every CLI process this provider starts is logged: version, exit, error tail (T-126).
-    this.spawnProcess = watchedSpawn(spawnProcess, () => ({
+    // An npm install's `cli.js` or `.cmd` shim starts on Node (PLAN-38 T-175, launchTarget).
+    this.spawnProcess = watchedSpawn(launchable(spawnProcess), () => ({
       provider: this.provider,
       version: versionCache.get(`${this.provider}\0${this.executable}`)?.version,
       model: this.model,

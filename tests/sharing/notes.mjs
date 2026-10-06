@@ -386,6 +386,42 @@ try {
     ).value.kind,
     'journal',
   );
+  // Titles (T-184): a new note starts empty (screens show '제목 없음'), an emptied title stays
+  // empty, and a journal's title changes while its date keeps it the day's entry.
+  const untitled = await call(base, { method: 'POST', cookie: bob.cookie, data: {} });
+  assert.equal(untitled.status, 201);
+  assert.equal(untitled.value.title, '');
+  assert.equal(untitled.value.kind, 'note');
+  const renamed = await call(`${base}/${untitled.value.id}`, {
+    method: 'PATCH',
+    cookie: alice.cookie,
+    data: { title: '  창호 협의  ' },
+  });
+  assert.equal(renamed.value.title, '창호 협의');
+  const emptied = await call(`${base}/${untitled.value.id}`, {
+    method: 'PATCH',
+    cookie: alice.cookie,
+    data: { title: '' },
+  });
+  assert.equal(emptied.value.title, '', 'an emptied title is not put back');
+  const journalRenamed = await call(`${base}/${j1.value.id}`, {
+    method: 'PATCH',
+    cookie: bob.cookie,
+    data: { title: '현장 일지' },
+  });
+  assert.equal(journalRenamed.value.title, '현장 일지');
+  assert.equal(journalRenamed.value.journalDate, day);
+  const sameDay = await call(`${base}/journal`, {
+    method: 'POST',
+    cookie: alice.cookie,
+    data: { date: day },
+  });
+  assert.equal(sameDay.value.id, j1.value.id, 'a renamed journal is still the day entry');
+  assert.equal(sameDay.value.title, '현장 일지');
+  assert.equal(
+    (await call(`${base}/${untitled.value.id}`, { method: 'DELETE', cookie: bob.cookie })).status,
+    200,
+  );
   assert.equal(
     (await call(`${base}/${other.value.id}`, { method: 'DELETE', cookie: bob.cookie })).status,
     403,

@@ -194,6 +194,11 @@ try {
   let status = await pc.link('alice', alice.password, 'Studio PC', origin);
   assert.equal(status.linked, true);
   assert.equal(status.username, 'alice');
+  // Signing in leaves remote access off (ADR-039 3); the user turns it on.
+  assert.equal(status.remote, false);
+  assert.equal(status.running, false);
+  status = await pc.setRemote(true);
+  assert.equal(status.remote, true);
   while (!(await pc.status()).running) await new Promise((r) => setTimeout(r, 10));
   await pc.heartbeat();
   // The check did not leave a browser session behind for the PC.

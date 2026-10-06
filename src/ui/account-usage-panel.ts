@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { append as el } from './elements.ts';
 import { api } from './gateway.ts';
+import { accountSwitchLink, accountSwitchSchema } from './account-switch-link.ts';
 
 // Settings → AI: the current account of each service — the CLI's default login, with its email,
 // plan, usage and reset times — read only (ADR-025, PLAN-25). Adding, signing in and switching
@@ -24,6 +25,7 @@ export const accountUsageSchema = z.object({
       error: z.string().optional(),
     }),
   ),
+  accountSwitch: accountSwitchSchema,
 });
 export type AccountUsageView = z.infer<typeof accountUsageSchema>;
 const service = { 'claude-cli': 'Claude', 'codex-cli': 'ChatGPT' } as const;
@@ -90,6 +92,9 @@ export function attachAccountUsage(section: HTMLElement, dialog: HTMLDialogEleme
       el('p', '확인 중…', box);
       return;
     }
+    // [AccountSwitch 열기] or its install link (SPEC-02.18 1).
+    if (data.accountSwitch)
+      accountSwitchLink(el('div', '', box, { class: 'account-switch-row' }), data.accountSwitch);
     const list = el('ul', '', box, { class: 'settings-rows usage-list' });
     for (const account of data.accounts) {
       const row = el('li', '', list, { class: 'usage-row', 'data-provider': account.provider });
@@ -147,5 +152,9 @@ export function attachAccountUsage(section: HTMLElement, dialog: HTMLDialogEleme
       timer = setInterval(() => void load(), 60_000);
     }
   }).observe(dialog, { attributes: true, attributeFilter: ['open'] });
+  // Back from AccountSwitch: show the login it selected at once (PLAN-38 T-175).
+  window.addEventListener('focus', () => {
+    if (dialog.open) void load();
+  });
   draw();
 }

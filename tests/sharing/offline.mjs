@@ -408,10 +408,17 @@ try {
     await pc.uploadSummary('bbbbbbbb-1111-4111-8111-111111111111', 'agenda', [pcItem]),
     'PROJECT_NOT_FOUND',
   );
+  // A kind this site does not know is a 할 일, not a refused list (PLAN-39); a bad date still is.
   assert.equal(
     await pc.uploadSummary(project.id, 'agenda', [{ ...pcItem, kind: 'party' }]),
+    undefined,
+  );
+  assert.equal((await api('/agenda', { cookie: alice.cookie })).value.items[0].kind, 'task');
+  assert.equal(
+    await pc.uploadSummary(project.id, 'agenda', [{ ...pcItem, date: '2026-13-01' }]),
     'INVALID_INPUT',
   );
+  assert.equal(await pc.uploadSummary(project.id, 'agenda', [pcItem]), undefined);
   // The PC goes off: opening answers HOST_OFFLINE (the site page then opens the project without
   // its PC), the iPad relay page links there, and 할 일·history still answer.
   await d1.prepare('UPDATE remote_hosts SET last_seen=0').run();
@@ -578,6 +585,53 @@ try {
   );
   await pc.heartbeat();
   assert.equal(siteEdits.length, 2, 'delivered once');
+  // PLAN-39: the period, 위치, 참석자 and 접수 travel with the copy; a waiting date change on the
+  // site keeps the period (as the PC will).
+  const period = {
+    ...pcItem,
+    id: 'item-3',
+    text: '허가 서류 접수',
+    kind: 'receipt',
+    date: '2026-10-07',
+    endDate: '2026-10-09',
+    time: '14:00',
+    endTime: '16:00',
+    location: '구청 민원실',
+    attendees: '김 대리, 설비 업체',
+    order: 3,
+    revision: 1,
+  };
+  assert.equal(await pc.uploadSummary(project.id, 'agenda', [period]), undefined);
+  const shared = (await api('/agenda', { cookie: alice.cookie })).value.items[0];
+  assert.deepEqual(
+    [shared.kind, shared.endDate, shared.endTime, shared.location, shared.attendees],
+    ['receipt', '2026-10-09', '16:00', '구청 민원실', '김 대리, 설비 업체'],
+  );
+  assert.equal(
+    (
+      await api('/agenda/item-3', {
+        method: 'PATCH',
+        cookie: alice.cookie,
+        data: { date: '2026-10-12', revision: 1 },
+      })
+    ).status,
+    200,
+  );
+  const shifted = (await api('/agenda', { cookie: alice.cookie })).value.items[0];
+  assert.deepEqual(
+    [shifted.date, shifted.endDate, shifted.pending],
+    ['2026-10-12', '2026-10-14', true],
+  );
+  assert.equal(
+    (
+      await api('/agenda/item-3', {
+        method: 'PATCH',
+        cookie: alice.cookie,
+        data: { location: 'x'.repeat(201) },
+      })
+    ).status,
+    400,
+  );
   // Sharing turned off on the PC: the copy and the summary leave the site.
   assert.equal(await pc.deleteSummary(project.id), true);
   assert.equal((await api('/agenda', { cookie: alice.cookie })).value.sharedAt, null);
@@ -650,11 +704,13 @@ try {
       await page.getByText('plan.dwg · 객체 32개').waitFor();
       // PLAN-33: the banner, 할 일 (editable, waiting for the PC) and the history summary.
       await page.getByText('PC가 꺼져 있어 지금 모델은 보이지 않습니다').waitFor();
-      await page.getByRole('button', { name: '회의구조 검토 회의' }).waitFor();
+      await page.getByRole('button', { name: '협의구조 검토 회의' }).waitFor();
       await page.getByLabel('새 할 일', { exact: true }).fill('도면 번호 정리');
       await page.getByRole('button', { name: '추가', exact: true }).click();
       await page.getByText('PC 반영 대기').first().waitFor();
-      await page.getByLabel('구조 검토 회의 완료').check();
+      // A 협의 has no done check (PLAN-39); a 할 일 has.
+      assert.equal(await page.getByLabel('구조 검토 회의 완료').count(), 0);
+      await page.getByLabel('도면 번호 정리 완료').check();
       await page.getByText('작업 PC가 아직 작업 이력 요약을 올리지 않았습니다.').waitFor();
       await page.locator('[data-testid="offline-canvas"] canvas').first().waitFor();
       await page.waitForTimeout(500);

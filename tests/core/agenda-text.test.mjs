@@ -16,11 +16,17 @@ import {
   shiftMonth,
   todayProgress,
   extractionBody,
+  spanLabel,
+  timeLabel,
+  weekLanes,
 } from '../../src/ui/agenda-text.ts';
 
 // Thursday 2026-10-01, 10:20 local.
 const now = new Date(2026, 9, 1, 10, 20);
-const read = (text) => parseAgendaText(text, now);
+/** The end day and time are named only when a range was read. */
+const compact = ({ endDate, endTime, ...rest }) =>
+  endDate || endTime ? { ...rest, endDate, endTime } : rest;
+const read = (text) => compact(parseAgendaText(text, now));
 
 test('relative days, weekdays and afternoon hours from Korean phrases', () => {
   assert.deepEqual(read('내일 3시 구조 회의'), {
@@ -46,7 +52,8 @@ test('relative days, weekdays and afternoon hours from Korean phrases', () => {
     text: '도면 제출',
     date: '2026-10-02',
     time: null,
-    kind: 'deadline',
+    // '제출' makes a 접수 even with '까지' (2026-10-06).
+    kind: 'receipt',
   });
   assert.equal(read('목요일 정기 회의').date, '2026-10-01');
   assert.equal(read('수요일 정기 회의').date, '2026-10-07');
@@ -98,7 +105,7 @@ test('nothing read leaves the text as typed', () => {
   assert.deepEqual(read('내일'), { text: '내일', date: '2026-10-02', time: null, kind: 'task' });
 });
 
-test("kinds: '까지' is a 마감 (not dropped), '회의'/'미팅' a 회의, others 할 일", () => {
+test("kinds: '까지' is a 마감 (not dropped), '협의'/'회의'/'미팅' a 협의, '제출'/'접수' a 접수, others 할 일", () => {
   assert.equal(read('금요일까지 보고서').kind, 'deadline');
   assert.equal(read('금요일까지 보고서').text, '보고서');
   assert.equal(read('오후 5시까지 견적 회신').kind, 'deadline');
@@ -107,8 +114,61 @@ test("kinds: '까지' is a 마감 (not dropped), '회의'/'미팅' a 회의, oth
   assert.equal(read('수요일 설비 미팅').kind, 'meeting');
   assert.equal(read('1시간 회의 준비').kind, 'meeting');
   assert.equal(read('이번주 월요일 회의록 정리').kind, 'task');
-  assert.equal(read('금요일 도면 제출').kind, 'task');
+  assert.equal(read('금요일 도면 제출').kind, 'receipt');
   assert.equal(read('내일부터 현장 상주').kind, 'task');
+  // 2026-10-06: '협의' is the 회의 kind's name; '접수'/'제출' make a 접수 (even with '까지').
+  assert.equal(read('내일 2시 구조 협의').kind, 'meeting');
+  assert.equal(read('협의서 작성').kind, 'task');
+  assert.equal(read('10/9 건축 허가 접수').kind, 'receipt');
+  assert.equal(read('금요일까지 구조계산서 제출').kind, 'receipt');
+  assert.equal(read('접수처 전화번호 확인').kind, 'task');
+  assert.equal(read('제출 서류 마감').kind, 'deadline');
+});
+
+test('ranges: times and days joined by ~, - or 부터…까지; the closing 까지 is no 마감', () => {
+  assert.deepEqual(read('2시~4시 구조 협의'), {
+    text: '구조 협의',
+    date: '2026-10-01',
+    time: '14:00',
+    kind: 'meeting',
+    endDate: null,
+    endTime: '16:00',
+  });
+  assert.deepEqual(read('내일 2시부터 4시까지 설비 점검'), {
+    text: '설비 점검',
+    date: '2026-10-02',
+    time: '14:00',
+    kind: 'task',
+    endDate: null,
+    endTime: '16:00',
+  });
+  assert.equal(read('10/8 14:00-15:30 현장 협의').endTime, '15:30');
+  assert.equal(read('10/8 10시 ~ 12시 회의').endTime, '12:00');
+  // '오후 8시~10시': the end before the start is read 12 hours later.
+  assert.equal(read('오후 8시~10시 야간 타설').endTime, '22:00');
+  assert.deepEqual(read('10/7~10/9 현장 점검'), {
+    text: '현장 점검',
+    date: '2026-10-07',
+    time: null,
+    kind: 'task',
+    endDate: '2026-10-09',
+    endTime: null,
+  });
+  assert.equal(read('10월 7일~9일 현장 상주').endDate, '2026-10-09');
+  const until = read('10/7부터 10/9까지 현장 점검');
+  assert.deepEqual([until.date, until.endDate, until.kind], ['2026-10-07', '2026-10-09', 'task']);
+  // Not a range: an end before the start stays in the text, the 까지 after one date is a 마감.
+  assert.equal(read('10/9~10/7 점검').endDate, undefined);
+  assert.equal(read('금요일까지 보고서').kind, 'deadline');
+  // '하루 종일' after a date leaves the text: an all-day item.
+  assert.deepEqual(read('10/7 하루 종일 현장'), {
+    text: '현장',
+    date: '2026-10-07',
+    time: null,
+    kind: 'task',
+  });
+  assert.equal(timeLabel({ time: '14:00', endTime: '16:00' }), '14:00~16:00');
+  assert.equal(spanLabel({ date: '2026-10-07', endDate: '2026-10-09' }), '10/7~10/9 (금)');
 });
 
 test("'마감' only as a word of its own: the finishing work of a building is not a 마감", () => {
@@ -124,7 +184,7 @@ test("'마감' only as a word of its own: the finishing work of a building is no
 });
 
 test('the calendar add box: a date the user typed wins over the picked day', () => {
-  const draft = (text) => parseAgendaDraft(text, now);
+  const draft = (text) => compact(parseAgendaDraft(text, now));
   assert.deepEqual(draft('2026-10-07 금요일까지 보고서'), {
     text: '보고서',
     date: '2026-10-02',
@@ -152,6 +212,19 @@ test('where an item stands, its label and the AI notice', () => {
   assert.equal(agendaWhen({ date: '2026-09-30', done: false }, '2026-10-01'), 'overdue');
   assert.equal(agendaWhen({ date: '2026-10-01', done: false }, '2026-10-01'), 'today');
   assert.equal(agendaWhen({ date: '2026-10-09', done: false }, '2026-10-01'), 'later');
+  // Over several days: today's while today falls in it, overdue once its last day passed.
+  const span = { date: '2026-09-29', endDate: '2026-10-02', done: false };
+  assert.equal(agendaWhen(span, '2026-10-01'), 'today');
+  assert.equal(agendaWhen(span, '2026-10-03'), 'overdue');
+  // A 협의 that passed is just past (no 지남).
+  assert.equal(
+    agendaWhen({ date: '2026-09-30', kind: 'meeting', done: false }, '2026-10-01'),
+    'past',
+  );
+  assert.equal(
+    agendaWhen({ date: '2026-10-01', kind: 'meeting', done: false }, '2026-10-01'),
+    'today',
+  );
   assert.equal(dateLabel('2026-10-02', '2026-10-01'), '내일');
   assert.equal(dateLabel('2026-09-30', '2026-10-01'), '지남 · 9/30 (수)');
   assert.equal(dateLabel('2026-10-07', '2026-10-01'), '10/7 (수)');
@@ -266,6 +339,56 @@ test('오늘 진행 and 퇴근: dated items up to today count, undated ones neve
   });
   // Something finished only yesterday: nothing to leave with today.
   assert.equal(todayProgress([item(null, yesterday)], today).finished, false);
+  // A 협의 has no done check: today's or yesterday's never counts nor blocks 퇴근.
+  const meeting = (date) => ({ date, done: false, doneAt: null, kind: 'meeting' });
+  assert.deepEqual(
+    todayProgress([meeting(today), meeting('2026-10-05'), item(today, at(9))], today),
+    {
+      total: 1,
+      done: 1,
+      doneToday: 1,
+      finished: true,
+    },
+  );
+});
+
+test('a week of the month: bars over several days first, five lines, then +n', () => {
+  const week = [
+    '2026-10-04',
+    '2026-10-05',
+    '2026-10-06',
+    '2026-10-07',
+    '2026-10-08',
+    '2026-10-09',
+    '2026-10-10',
+  ];
+  const at = (id, date, extra = {}) => ({ id, date, time: null, order: 0, ...extra });
+  const { placed, more } = weekLanes(week, [
+    at('one', '2026-10-07', { time: '10:00' }),
+    at('span', '2026-10-06', { endDate: '2026-10-08' }),
+    at('across', '2026-09-30', { endDate: '2026-10-05' }),
+    at('allday', '2026-10-07'),
+    at('next', '2026-10-12'),
+  ]);
+  const by = Object.fromEntries(placed.map((place) => [place.item.id, place]));
+  assert.ok(!by.next, 'next week is not in this one');
+  // The bar from last week comes first and is cut at the week's start.
+  assert.deepEqual(
+    [by.across.from, by.across.to, by.across.lane, by.across.before],
+    [0, 1, 0, true],
+  );
+  assert.deepEqual([by.span.from, by.span.to, by.span.lane], [2, 4, 0]);
+  // One-day items after the bars: all day before timed.
+  assert.deepEqual([by.allday.from, by.allday.lane], [3, 1]);
+  assert.deepEqual([by.one.from, by.one.lane], [3, 2]);
+  assert.deepEqual(more, [0, 0, 0, 0, 0, 0, 0]);
+  // Seven items on one day: five lines show, two are '+2'.
+  const busy = Array.from({ length: 7 }, (_, index) =>
+    at(`d${index}`, '2026-10-08', { order: index }),
+  );
+  const crowded = weekLanes(week, busy);
+  assert.equal(crowded.placed.length, 5);
+  assert.deepEqual(crowded.more, [0, 0, 0, 0, 2, 0, 0]);
 });
 
 test('글·파일에서 할 일 만들기: the turn’s words carry today, the tools, assignees and the text', () => {
@@ -276,7 +399,10 @@ test('글·파일에서 할 일 만들기: the turn’s words carry today, the t
   assert.match(body, /오늘은 2026-10-01 \(목\)입니다/);
   assert.match(body, /agenda_add/);
   assert.match(body, /agenda_list/);
-  assert.match(body, /\(담당: 이름\)/);
+  assert.match(body, /attendees/);
+  assert.match(body, /location/);
+  assert.match(body, /'receipt'/);
+  assert.match(body, /endTime/);
   assert.match(body, /묻지 말고/);
   assert.ok(body.endsWith('---\n금요일까지 도면 제출 — 김 대리\n다음 주 화 2시 설비 회의'));
   // Files only: no text block.

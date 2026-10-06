@@ -1,8 +1,8 @@
 ---
 id: PLAN-32
-title: 공유 노트·협의 사항·일지 — 실시간 공동 편집(T-145~T-149)
+title: 공유 노트·협의 사항·일지 — 실시간 공동 편집(T-145~T-149, T-184)
 status: draft
-version: 0.2
+version: 0.3
 updated: 2026-10-06
 owner: agent:claude
 related: [ADR-034, SPEC-10, SPEC-01, SPEC-04, ARCH-01, PLAN-30, FR-07, FR-16, FR-18, FR-19]
@@ -82,6 +82,24 @@ Worker 자체의 무료 요청 하루 100,000건은 PC 중계·heartbeat와 함�
 2. D1 이행: `cd src/sharing && npx wrangler d1 migrations apply vide-sharing-staging --remote -c wrangler.staging.jsonc`(`0008-notes.sql`).
 3. Worker + DO 배포: `npx wrangler deploy -c wrangler.staging.jsonc`. 처음 배포가 DO 이행 `v1-notes`(`new_sqlite_classes: NoteRoom`)를 적용한다. 태그를 바꾸거나 지우지 않는다(이후 DO 변경은 새 태그를 덧붙임).
 4. 확인: 사이트 프로젝트 메뉴 → 노트·일지, 두 기기에서 같은 노트, PC VIDE의 레일 노트·일지(설치본 갱신 뒤).
+
+## T-184 노트 화면 통일·제목 고치기·사본 확인
+
+근거: 2026-10-06 사용자 요청·결정 — "노트 부분에서 문서 제목을 못 바꿈. 그리고 노트/협의사항/일지 이렇게 구분되어있는데 그 구분이 좀 이상함. 그냥 일단 노트로 통일시켜놓고, 차차 필요한 기능을 추가하는게 나을 듯. 그리고 여기에 노트한 사항들이 DB랑 연동되는지도 확인해볼 필요가 있을 듯." 선택: "화면만 '노트'로 통일"(데이터·사이트 구조 유지). 기준 SPEC-10.1·10.2·10.3 4~5·10.4 1·10.5 1·10.7, Design SCR-23, ADR-034 결정 1의 메모, ARCH-01 §6 「공유 노트」.
+
+조사(코드 확인): 제목 저장 경로(화면 → 엔진 PUT → 사이트 PATCH → D1)는 끝까지 이어져 있었고, 제목 칸이 고정 제목과 같은 모양이라 고칠 수 있는 칸으로 보이지 않았다. 일지는 화면이 제목을 고정했다. 노트는 사이트 원본 + PC Markdown 사본이며 `knowledge.sqlite`·`project_search`에는 들어가지 않는다(이번에 연결하지 않음). AI 할 일 지시가 노트를 `project_search`로 읽으라고 잘못 안내했다. 지운 노트의 `.yjs/<id>.bin`이 PC에 남았다.
+
+| 변경 | 위치 |
+|---|---|
+| 제목 칸: 가리키면 옅은 바탕, 누르면 테두리, placeholder '제목 없음'(일지는 날짜 제목), 일지도 같은 칸 | `src/ui/notes/notes-workspace.tsx`, `notes.css` |
+| 화면 통일: [새 노트] 하나, 종류 거르기·종류 고르기·종류 배지·[오늘 일지] 제거, 일지에만 '퇴근 기록', [할 일로 보내기]와 안내 줄은 모든 노트, 최근 고친 순 | `src/ui/notes/notes-workspace.tsx`, `notes.css`, `src/ui/notes-tab.tsx`, `src/sharing/web/notes.tsx` |
+| 'PC 없이 보기' 노트 목록: 종류 표시 대신 일지에만 '퇴근 기록', 빈 제목 '제목 없음' | `src/sharing/web/offline.tsx` |
+| 표시 제목·구분 함수(`noteTitle`, `noteLabel`) | `src/contracts/note-doc.ts` |
+| 사이트: 새 노트 기본 제목은 빈 값, 제목을 비우면 빈 값으로 저장(이전 값으로 되돌리지 않음) | `src/sharing/notes.ts` |
+| PC 사본: 머리·README의 구분('노트'·'일지'), 빈 제목 표시, 지운 노트의 `.yjs` 복제본 정리(`.pending`·열린 복제본은 남김) | `src/server/shared-notes.ts` |
+| AI 지시: 노트 폴더 안내를 '노트(일지 포함)'로, 할 일 모으기는 노트 폴더 파일을 읽도록(`project_search` 안내 제거) | `src/ai/agent-connection.ts`(지시 두 곳만) |
+
+**검증:** `tests/server/shared-notes.test.mjs`(구분·빈 제목 사본, 노트 작성 → `notes/<id>.md` 내용 확인, 지운 노트의 `.yjs` 정리와 `.pending` 보존, 지시 문구), `tests/sharing/notes.mjs`(빈 제목 만들기·비우기, 일지 제목 바꾸기와 날짜 고정·같은 일지에 붙이기), `tests/sharing/notes-browser.mjs`·`notes-pc-browser.mjs`(새 노트 하나, 종류 칸 없음, 제목 칸 placeholder, 일지 제목 고치기, 협의 사항 행도 [할 일로 보내기]). 데이터 이행은 없다(D1 `kind` 그대로).
 
 ## 실제 확인(대기)
 

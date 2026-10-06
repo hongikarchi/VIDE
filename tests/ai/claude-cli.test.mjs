@@ -133,7 +133,8 @@ test('API fallback과 커스텀 환경 설정을 구독 자식 프로세스에�
     CLAUDE_CODE_OAUTH_TOKEN: 'hidden',
     CLAUDE_CONFIG_DIR: 'other',
   });
-  assert.deepEqual(env, { PATH: 'ok' });
+  // CLAUDE_CONFIG_DIR set on the PC is the CLI's default login and stays (PLAN-38 T-175).
+  assert.deepEqual(env, { PATH: 'ok', CLAUDE_CONFIG_DIR: 'other' });
 });
 
 test('허용 밖 도구가 보이거나 불려도 턴은 계속되고 그 호출만 거절로 알린다 (ADR-031 8)', async () => {

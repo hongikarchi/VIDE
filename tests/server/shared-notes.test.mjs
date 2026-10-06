@@ -1,9 +1,10 @@
 // SPEC-10 on the PC without a site: the Markdown copy and README for the AI, the turn rule that
-// names the notes folder, 협의 사항 check-list items → 할 일, the local stream of a note to the
-// PC screen, and offline edits kept on disk. The site round trip is tests/sharing/notes.mjs.
+// names the notes folder, a note's check-list items → 할 일, the local stream of a note to the
+// PC screen, offline edits kept on disk, and one kind on screen (a 협의 사항 copy reads 노트, an
+// empty title '제목 없음'; T-184). The site round trip is tests/sharing/notes.mjs.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -87,7 +88,7 @@ test('the notes copy is Markdown the AI reads, named in the turn rule', async ()
     const folder = join(data, 'projects', PROJECT, 'notes');
     const copy = await readFile(join(folder, `${NOTE}.md`), 'utf8');
     assert.match(copy, /^# 구조 협의/);
-    assert.match(copy, /협의 사항 · id/);
+    assert.match(copy, /VIDE 공유 노트 · 노트 · id/, 'a 협의 사항 reads as a 노트');
     assert.match(copy, /- \[ \] 구조사무소에 경간 확인/);
     assert.match(await readFile(join(folder, 'journal-2026-10-06.md'), 'utf8'), /기둥 배치 검토/);
     const readme = await readFile(join(folder, 'README.md'), 'utf8');
@@ -101,6 +102,7 @@ test('the notes copy is Markdown the AI reads, named in the turn rule', async ()
     });
     assert.ok(rule.includes(JSON.stringify(folder)), 'rule names the notes folder');
     assert.match(rule, /never write them/);
+    assert.match(rule, /project_search does not search them/, 'notes are files, not search');
 
     // 협의 사항 → 할 일: open check-list items only, once.
     const first = await notes.toAgenda(PROJECT, NOTE);
@@ -157,6 +159,72 @@ test('the notes copy is Markdown the AI reads, named in the turn rule', async ()
     assert.ok(existsSync(join(folder, '.yjs', `${NOTE}.pending`)), 'unsent edit marked');
     assert.match(await readFile(join(folder, `${NOTE}.md`), 'utf8'), /오프라인 메모/);
     await offline.close();
+    await notes.close();
+  } finally {
+    await rm(data, { recursive: true, force: true });
+  }
+});
+
+test('a new untitled note: written here, copied to notes/<id>.md; removed notes leave no replica', async () => {
+  const data = await mkdtemp(join(tmpdir(), 'vide-notes-'));
+  const GONE = '2d0f3a4b-5c6d-4e7f-8a91-a2b3c4d5e6f7';
+  const UNSENT = '3e1a4b5c-6d7e-4f80-9a12-b3c4d5e6f708';
+  try {
+    let listed = [note({ title: '', kind: 'note', snapshot: '' })];
+    const notes = new SharedNotes({
+      remote: {
+        site: 'https://site.example',
+        deviceFetch: async (path, method = 'GET') => {
+          if (method === 'GET' && path.startsWith(`/projects/${PROJECT}/notes`))
+            return Response.json({ notes: listed });
+          throw new TypeError('fetch failed');
+        },
+      },
+      dataDirectory: data,
+      agenda: { list: () => [], add: () => ({}) },
+      WebSocket: Closed,
+    });
+    const folder = join(data, 'projects', PROJECT, 'notes');
+    // Replicas of notes the site no longer lists: one fully sent, one with unsent edits.
+    await mkdir(join(folder, '.yjs'), { recursive: true });
+    await writeFile(join(folder, '.yjs', `${GONE}.bin`), new Uint8Array([0, 0]));
+    await writeFile(join(folder, '.yjs', `${UNSENT}.bin`), new Uint8Array([0, 0]));
+    await writeFile(join(folder, '.yjs', `${UNSENT}.pending`), '1');
+    await notes.list(PROJECT);
+    assert.match(await readFile(join(folder, `${NOTE}.md`), 'utf8'), /^# 제목 없음\n/);
+    assert.match(await readFile(join(folder, 'README.md'), 'utf8'), /\| 제목 없음 \| 노트 \|/);
+    assert.ok(!existsSync(join(folder, '.yjs', `${GONE}.bin`)), "a removed note's replica goes");
+    assert.ok(existsSync(join(folder, '.yjs', `${UNSENT}.bin`)), 'unsent edits are kept');
+
+    // Writing in the note on this PC: the Markdown copy the AI reads follows.
+    const events = [];
+    const stop = await notes.stream(PROJECT, NOTE, 'screen-cccc', (e) => events.push(e));
+    const screen = new Y.Doc();
+    Y.applyUpdate(screen, fromBase64(events[0].state));
+    let update;
+    screen.on('update', (u) => (update = u));
+    const item = new Y.XmlElement('taskItem');
+    item.setAttribute('checked', false);
+    const paragraph = new Y.XmlElement('paragraph');
+    const run = new Y.XmlText();
+    run.insert(0, '창호 상세 회신');
+    paragraph.insert(0, [run]);
+    item.insert(0, [paragraph]);
+    const list = new Y.XmlElement('taskList');
+    list.insert(0, [item]);
+    screen.getXmlFragment(NOTE_FIELD).insert(0, [list]);
+    await notes.receive(PROJECT, NOTE, 'screen-cccc', { update: toBase64(update) });
+    await notes.flushLocal();
+    const copy = await readFile(join(folder, `${NOTE}.md`), 'utf8');
+    assert.match(copy, /^# 제목 없음/);
+    assert.match(copy, /- \[ \] 창호 상세 회신/);
+    // An open note's replica stays even if a list no longer shows it.
+    listed = [];
+    await notes.list(PROJECT);
+    assert.ok(existsSync(join(folder, '.yjs', `${NOTE}.bin`)), 'the open replica is kept');
+    stop();
+    // The list opened the unsent note to send it; let that finish before closing.
+    await notes.pushPending(PROJECT);
     await notes.close();
   } finally {
     await rm(data, { recursive: true, force: true });

@@ -16,8 +16,11 @@ const HISTORY_ITEMS_MAX = 100;
 const HISTORY_BODY_MAX = 600;
 const HISTORY_ANSWER_MAX = 400;
 const HISTORY_FILES_MAX = 10;
-const KINDS = ['task', 'meeting', 'deadline'] as const;
+// 'meeting' shows as '협의' and 'receipt' (접수) came with PLAN-39 (SPEC-01.14 1).
+const KINDS = ['task', 'meeting', 'receipt', 'deadline'] as const;
 type Kind = (typeof KINDS)[number];
+const AGENDA_LOCATION_MAX = 200;
+const AGENDA_ATTENDEES_MAX = 300;
 
 const invalid = (): never => {
   throw new HttpError(400, 'INVALID_INPUT');
@@ -33,6 +36,21 @@ const isTime = (value: unknown): value is string =>
 const isKind = (value: unknown): value is Kind => KINDS.includes(value as Kind);
 const shortText = (value: unknown, max: number) =>
   typeof value === 'string' && value.length <= max ? value : invalid();
+/** 위치 / 참석자 from a site edit: free text within its length; empty is none. */
+const freeText = (value: unknown, max: number) => {
+  if (value === null) return null;
+  if (typeof value !== 'string' || value.length > max) return invalid();
+  return value.trim() || null;
+};
+/** The day `days` after a 'YYYY-MM-DD'. */
+const shiftDate = (value: string, days: number) => {
+  const [y, m, d] = value.split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1, d + days)).toISOString().slice(0, 10);
+};
+const dayNumber = (value: string) => {
+  const [y, m, d] = value.split('-').map(Number);
+  return Math.round(Date.UTC(y, m - 1, d) / 86400000);
+};
 const itemId = (value: unknown) =>
   typeof value === 'string' && /^[A-Za-z0-9:_-]{1,100}$/.test(value) ? value : invalid();
 
@@ -41,7 +59,11 @@ export interface AgendaFields {
   text?: string;
   date?: string | null;
   time?: string | null;
+  endDate?: string | null;
+  endTime?: string | null;
   kind?: Kind;
+  location?: string | null;
+  attendees?: string | null;
   done?: boolean;
 }
 export function agendaFields(input: Record<string, unknown>, add: boolean): AgendaFields {
@@ -59,7 +81,18 @@ export function agendaFields(input: Record<string, unknown>, add: boolean): Agen
     if (input.time !== null && !isTime(input.time)) invalid();
     fields.time = input.time as string | null;
   }
+  if (input.endDate !== undefined) {
+    if (input.endDate !== null && !isDate(input.endDate)) invalid();
+    fields.endDate = input.endDate as string | null;
+  }
+  if (input.endTime !== undefined) {
+    if (input.endTime !== null && !isTime(input.endTime)) invalid();
+    fields.endTime = input.endTime as string | null;
+  }
   if (input.kind !== undefined) fields.kind = isKind(input.kind) ? input.kind : invalid();
+  if (input.location !== undefined) fields.location = freeText(input.location, AGENDA_LOCATION_MAX);
+  if (input.attendees !== undefined)
+    fields.attendees = freeText(input.attendees, AGENDA_ATTENDEES_MAX);
   if (input.done !== undefined) {
     if (typeof input.done !== 'boolean' || add) invalid();
     fields.done = input.done as boolean;
@@ -74,7 +107,11 @@ export interface AgendaView {
   text: string;
   date: string | null;
   time: string | null;
+  endDate: string | null;
+  endTime: string | null;
   kind: Kind;
+  location: string | null;
+  attendees: string | null;
   done: boolean;
   order: number;
   /** The PC's revision of the item (0: added on the site, not on the PC yet). */
@@ -109,7 +146,11 @@ export function agendaView(mirror: AgendaView[], edits: PendingEdit[]): AgendaVi
         text: '',
         date: null,
         time: null,
+        endDate: null,
+        endTime: null,
         kind: 'task',
+        location: null,
+        attendees: null,
         done: false,
         order: ++last,
         revision: 0,
@@ -119,15 +160,26 @@ export function agendaView(mirror: AgendaView[], edits: PendingEdit[]): AgendaVi
       items.push(item);
     }
     if (!item) continue;
-    const { text, date, time, kind, done } = edit.fields;
+    const { text, date, time, endDate, endTime, kind, location, attendees, done } = edit.fields;
     if (text !== undefined) item.text = text;
     if (date !== undefined) {
+      // A new start day alone moves the end day with it (the period is kept), as on the PC.
+      if (date && item.date && item.endDate && endDate === undefined)
+        item.endDate = shiftDate(item.endDate, dayNumber(date) - dayNumber(item.date));
       item.date = date;
-      // Clearing the date clears the time, as on the PC.
-      if (date === null && time === undefined) item.time = null;
+      // Clearing the date clears the times and the end day, as on the PC.
+      if (date === null) {
+        if (time === undefined) item.time = null;
+        item.endDate = null;
+        item.endTime = null;
+      }
     }
     if (time !== undefined) item.time = time;
+    if (endDate !== undefined) item.endDate = endDate;
+    if (endTime !== undefined) item.endTime = endTime;
     if (kind !== undefined) item.kind = kind;
+    if (location !== undefined) item.location = location;
+    if (attendees !== undefined) item.attendees = attendees;
     if (done !== undefined) item.done = done;
     item.updatedAt = at;
     item.pending = true;
@@ -140,7 +192,11 @@ interface MirrorRow {
   text: string;
   date: string | null;
   time: string | null;
+  end_date: string | null;
+  end_time: string | null;
   kind: Kind;
+  location: string | null;
+  attendees: string | null;
   done_at: string | null;
   ord: number;
   revision: number;
@@ -181,7 +237,11 @@ async function mirror(db: D1Database, project: string): Promise<AgendaView[]> {
     text: row.text,
     date: row.date,
     time: row.time,
-    kind: row.kind,
+    endDate: row.end_date ?? null,
+    endTime: row.end_time ?? null,
+    kind: isKind(row.kind) ? row.kind : 'task',
+    location: row.location ?? null,
+    attendees: row.attendees ?? null,
     done: row.done_at !== null,
     order: row.ord,
     revision: row.revision,
@@ -424,10 +484,16 @@ export async function summaryDeviceRoute(
       const date = item.date ?? null,
         time = item.time ?? null,
         doneAt = item.doneAt ?? null;
+      // Newer fields are taken leniently: a kind this site does not know is a '할 일', and a
+      // period, 위치 or 참석자 it cannot read is left out, so one item never refuses the list.
+      const endDate = date !== null && isDate(item.endDate) ? item.endDate : null,
+        endTime = time !== null && isTime(item.endTime) ? item.endTime : null;
+      const clipped = (value: unknown, max: number) =>
+        typeof value === 'string' && value.trim() ? value.slice(0, max) : null;
       if (
         (date !== null && !isDate(date)) ||
         (time !== null && !isTime(time)) ||
-        !isKind(item.kind) ||
+        typeof item.kind !== 'string' ||
         typeof item.order !== 'number' ||
         !Number.isFinite(item.order) ||
         !Number.isSafeInteger(item.revision) ||
@@ -439,7 +505,11 @@ export async function summaryDeviceRoute(
         text: shortText(item.text, AGENDA_TEXT_MAX),
         date,
         time,
-        kind: item.kind as Kind,
+        endDate,
+        endTime,
+        kind: isKind(item.kind) ? item.kind : 'task',
+        location: clipped(item.location, AGENDA_LOCATION_MAX),
+        attendees: clipped(item.attendees, AGENDA_ATTENDEES_MAX),
         doneAt: doneAt === null ? null : shortText(doneAt, 40),
         order: item.order as number,
         revision: item.revision as number,
@@ -451,7 +521,7 @@ export async function summaryDeviceRoute(
       ...list.map((item) =>
         db
           .prepare(
-            'INSERT INTO project_agenda(project_id,item_id,text,date,time,kind,done_at,ord,revision,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?)',
+            'INSERT INTO project_agenda(project_id,item_id,text,date,time,kind,done_at,ord,revision,updated_at,end_date,end_time,location,attendees) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
           )
           .bind(
             project,
@@ -464,6 +534,10 @@ export async function summaryDeviceRoute(
             item.order,
             item.revision,
             item.updatedAt,
+            item.endDate,
+            item.endTime,
+            item.location,
+            item.attendees,
           ),
       ),
       upsert('agenda_at'),

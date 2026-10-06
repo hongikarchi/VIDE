@@ -1,17 +1,14 @@
-// 대시보드 workspace tab (Design SCR-20, user requests 2026-10-01): the project's 할 일 and 일정
-// as two areas (SPEC-01.14, dashboard-agenda.tsx) first, then its name, the linked files, its
-// folders on this PC (SPEC-01.13), this project's jigs and the latest finished requests.
-// Apart from the 할 일 and the folders it reads only existing state (app.ts gives it through
-// `provideDashboard`) and the skill catalog; a jig starts through startSkill like the JIG list's
-// [열기]. Each section is one small component, easy to drop or replace.
+// 대시보드 workspace tab (Design SCR-20, user requests 2026-10-01 and 2026-10-06): the project's
+// name, then its 할 일 column and the large month (SPEC-01.14, dashboard-agenda.tsx; layout '안 A',
+// PLAN-39), and below them one folded line for the linked files and its folders on this PC
+// (SPEC-01.13). The jigs and the latest requests are not here (2026-10-06, '대시보드에서는 Jig,
+// 최근 작업 필요없을 듯': the JIG screen and the work history have them). Apart from the 할 일 and
+// the folders it reads only existing state (app.ts gives it through `provideDashboard`).
 import { useEffect, useState } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { api } from './gateway.ts';
-import { JigIconMark } from './jig-icons.ts';
-import type { SkillEntry } from './skill-catalog.ts';
-import { openSkill } from './skill-start.ts';
-import { setWorkspace } from './workspaces.ts';
 import { ProjectFolders } from './project-folders.tsx';
+import { useStore } from './store/core.ts';
+import { layoutState, togglePanel } from './store/layout.ts';
 import { AgendaBoard } from './dashboard-agenda.tsx';
 import './dashboard.css';
 
@@ -22,34 +19,23 @@ export interface DashboardLink {
   state: 'live' | 'connected' | 'closed' | 'file';
   lastSync?: string;
 }
-export interface DashboardRequest {
-  id: string;
-  title: string;
-  state: string;
-  stateLabel: string;
-  at?: string;
-}
 export interface DashboardData {
   projectName: string;
   links: DashboardLink[];
   linksLoaded: boolean;
-  /** Finished requests, newest first. */
-  recent: DashboardRequest[];
 }
 interface DashboardSource {
   data: () => DashboardData;
-  /** Show a request in the conversation column. */
-  openRequest: (id: string) => void;
-  /** A jig that did not open: say why. */
-  notice: (text: string) => void;
 }
 
 let source: DashboardSource | undefined;
 let root: Root | undefined;
 let shownFor: string | undefined;
 const REFRESH = 'vide:dashboard-refresh';
-/** The tab was shown again: read the jig list again too. */
+/** The tab was shown again: read the 할 일 again too. */
 const SHOWN = 'vide:dashboard-shown';
+/** Whether the folded line of files and folders is open (a viewer convenience). */
+const MORE_KEY = 'vide:dashboard-more';
 
 /** app.ts registers where the dashboard reads the project's state. */
 export function provideDashboard(next: DashboardSource) {
@@ -105,91 +91,62 @@ function Links({ data }: { data: DashboardData }) {
   );
 }
 
-function Jigs({ projectId, shown }: { projectId: string; shown: number }) {
-  const [jigs, setJigs] = useState<SkillEntry[] | undefined>();
-  const [failed, setFailed] = useState(false);
-  useEffect(() => {
-    let live = true;
-    api(`/projects/${encodeURIComponent(projectId)}/skills`)
-      .then((value) => {
-        if (!live) return;
-        const list = ((value as { skills?: SkillEntry[] } | null)?.skills ?? []) as SkillEntry[];
-        setJigs(list.filter((entry) => entry.scope === 'project'));
-        setFailed(false);
-      })
-      .catch(() => live && setFailed(true));
-    return () => {
-      live = false;
-    };
-  }, [projectId, shown]);
-  const start = (entry: SkillEntry) =>
-    void (
-      openSkill(entry.id, { mode: 'auto', by: 'user', openOnly: true }) ??
-      Promise.reject(new Error('NOT_READY'))
-    ).catch(() => {
-      source?.notice(`'${entry.name}'을(를) 열지 못했습니다. JIG 목록에서 여세요.`);
-      setWorkspace('jig');
-    });
+/**
+ * The AI column's edge toggle on the dashboard (Design §03 「대시보드의 AI 열」): the work screens'
+ * toggle sits over the 3D view, which the dashboard hides, so the page has its own at its right.
+ */
+function AiToggle() {
+  const folded = useStore(layoutState, (slice) => slice.rightFolded);
   return (
-    <section className="dash-section" aria-label="이 프로젝트의 jig">
-      <h3>이 프로젝트의 jig</h3>
-      {failed ? (
-        <p className="dash-empty">jig 목록을 읽지 못했습니다.</p>
-      ) : !jigs ? (
-        <p className="dash-empty">읽는 중…</p>
-      ) : !jigs.length ? (
-        <p className="dash-empty">
-          이 프로젝트에서 쓴 jig가 없습니다.{' '}
-          <button type="button" className="link-button" onClick={() => setWorkspace('jig')}>
-            JIG 목록 열기
-          </button>
-        </p>
-      ) : (
-        <div className="dash-grid">
-          {jigs.map((entry) => (
-            <button
-              type="button"
-              className="dash-tile"
-              key={entry.id}
-              title={entry.description || entry.name}
-              onClick={() => start(entry)}
-            >
-              <span className="dash-k">
-                <JigIconMark icon={entry.icon} />
-                jig{entry.version ? ` · 버전 ${entry.version}` : ''}
-              </span>
-              <span className="dash-t">{entry.name}</span>
-              {entry.description ? <span className="dash-d">{entry.description}</span> : null}
-            </button>
-          ))}
-        </div>
-      )}
-    </section>
+    <button
+      type="button"
+      className="dash-ai-toggle"
+      aria-label="작업 패널 접기/펼치기"
+      aria-expanded={!folded}
+      title={folded ? 'AI 열 펼치기 · Alt+Shift+R' : 'AI 열 접기 · Alt+Shift+R'}
+      onClick={() => togglePanel('right')}
+    >
+      {folded ? '‹' : '›'}
+    </button>
   );
 }
 
-function Recent({ data }: { data: DashboardData }) {
+/**
+ * The linked files and the project folders as one folded line under the 할 일 and the month
+ * (Design §03 「대시보드의 아래 줄」); opened, the tiles and the folder list as before. The folders
+ * stay mounted while folded, so the line can say how many there are.
+ */
+function More({ projectId, data }: { projectId: string; data: DashboardData }) {
+  const [open, setOpen] = useState(() => {
+    try {
+      return localStorage.getItem(MORE_KEY) === 'open';
+    } catch {
+      return false;
+    }
+  });
+  const [folders, setFolders] = useState<number | undefined>();
   return (
-    <section className="dash-section" aria-label="최근 작업">
-      <h3>최근 작업</h3>
-      {!data.recent.length ? (
-        <p className="dash-empty">끝난 요청이 아직 없습니다.</p>
-      ) : (
-        <ul className="dash-rows">
-          {data.recent.map((row) => (
-            <li key={row.id}>
-              <button type="button" onClick={() => source?.openRequest(row.id)}>
-                <span className="dash-row-title">{row.title}</span>
-                <span className="dash-row-meta" data-state={row.state}>
-                  {row.stateLabel}
-                  {row.at ? ` · ${when(row.at)}` : ''}
-                </span>
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
-    </section>
+    <details
+      className="dash-more"
+      open={open}
+      onToggle={(event) => {
+        const next = (event.currentTarget as HTMLDetailsElement).open;
+        setOpen(next);
+        try {
+          localStorage.setItem(MORE_KEY, next ? 'open' : 'closed');
+        } catch {
+          /* Kept for this session only. */
+        }
+      }}
+    >
+      <summary>
+        연결 파일 {data.linksLoaded ? data.links.length : '…'} · 프로젝트 폴더 {folders ?? '…'}
+      </summary>
+      <div className="dash-more-body">
+        <Links data={data} />
+        <ProjectFolders projectId={projectId} onCount={setFolders} />
+      </div>
+    </details>
   );
 }
 
@@ -211,19 +168,18 @@ function Dashboard({ projectId }: { projectId: string }) {
   const live = data.links.filter((link) => link.state === 'live').length;
   return (
     <div className="dash-page">
-      <header>
-        <h2>{data.projectName}</h2>
-        <p className="dash-lead">
-          {data.linksLoaded ? `연결 파일 ${data.links.length}` : '연결 파일 읽는 중'}
-          {live ? ` · Live ${live}` : ''}
-          {data.recent[0]?.at ? ` · 최근 작업 ${when(data.recent[0].at)}` : ''}
-        </p>
+      <header className="dash-head">
+        <div>
+          <h2>{data.projectName}</h2>
+          <p className="dash-lead">
+            {data.linksLoaded ? `연결 파일 ${data.links.length}` : '연결 파일 읽는 중'}
+            {live ? ` · Live ${live}` : ''}
+          </p>
+        </div>
+        <AiToggle />
       </header>
       <AgendaBoard projectId={projectId} shown={shown} />
-      <Links data={data} />
-      <ProjectFolders projectId={projectId} />
-      <Jigs projectId={projectId} shown={shown} />
-      <Recent data={data} />
+      <More projectId={projectId} data={data} />
     </div>
   );
 }

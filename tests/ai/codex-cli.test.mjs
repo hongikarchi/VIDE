@@ -105,7 +105,8 @@ test('구독 경로는 API 키·대체 endpoint·주입 인증 및 사용자 설
       CODEX_ACCESS_TOKEN: 'secret',
       CODEX_HOME: 'other',
     }),
-    { PATH: 'keep' },
+    // CODEX_HOME set on the PC is the CLI's default login and stays (PLAN-38 T-175).
+    { PATH: 'keep', CODEX_HOME: 'other' },
   );
   const args = codexArguments('chosen-model');
   for (const item of [

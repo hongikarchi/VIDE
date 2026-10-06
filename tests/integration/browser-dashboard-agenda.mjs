@@ -1,11 +1,15 @@
-// 대시보드 › 할 일 · 일정 (SPEC-01.14, Design SCR-20, PLAN-26 T-098·T-110, PLAN-30 T-135~T-137):
-// two areas over one list — '할 일' (오늘 with n/m, Enter adds with the date and time read from
-// the words, the box finishes into '완료 n', a click edits in place, ↑ and drag reorder, '예정 n'
-// folded) and '일정' (the month: a day's click prefills its own add box, a drag moves only the
-// date, a 할 일 row dragged onto a day too, the 날짜 없음 box takes and gives dates). A 기본 대화
-// turn whose AI adds and then changes a 할 일 gets one notice with one [되돌리기]. [글·파일에서 할 일
-// 만들기]: a text file dropped on the panel goes as a hostless turn whose AI adds three items in two
-// writes; one [되돌리기] takes all back, and no second notice shows. When today's items are done,
+// 대시보드 › 할 일 · 일정 (SPEC-01.14, Design SCR-20, PLAN-26 T-098·T-110, PLAN-30 T-135~T-137,
+// PLAN-39 T-180~T-183): layout '안 A' — a fixed '할 일' column (오늘 with n/m, Enter adds with the
+// date, time and range read from the words, the box finishes into '완료 n', a click edits in place,
+// ↑ and drag reorder, '예정 n' folded) beside the large month (a day's [+] opens the 일정 form:
+// 협의 with a time range, 위치 and 참석자; an item over several days is a bar, dragged it keeps its
+// period; an item opens the same form to change, take the date off or remove it; a 할 일 row
+// dragged onto a day moves there). No add box, 날짜 없음 box or day list under the month. The AI
+// column opens folded on the dashboard and keeps its fold apart from the model screen; opened, the
+// 할 일 도우미 sends a hostless 기본 대화 turn. A 기본 대화 turn whose AI adds and then changes a 할 일
+// gets one notice with one [되돌리기]. [글·파일에서 할 일 만들기]: a text file dropped on the panel
+// goes as a hostless turn whose AI adds three items in two writes; one [되돌리기] takes all back,
+// and no second notice shows. When today's items are done (a 협의 has no check and never blocks),
 // [퇴근하기] takes the finished ones off into the day log and shows tomorrow's. Synthetic project
 // and provider only; no real CLI or host.
 import assert from 'node:assert/strict';
@@ -20,6 +24,8 @@ import { agentConnection } from '../../src/ai/agent-connection.ts';
 
 /** What the extraction turn's AI read from the attached file (the path in its context). */
 const readFiles = [];
+/** The 할 일 도우미 requests the AI got. */
+const helperGoals = [];
 /**
  * A provider whose AI writes 할 일: a composer turn adds and then changes one item (two writes);
  * a 글·파일 turn reads the attached file and adds its lines in two agenda_add calls.
@@ -38,6 +44,12 @@ const writingProvider = (options) => ({
     );
     const call = async (name, args) =>
       JSON.parse((await client.callTool({ name, arguments: args })).content[0].text);
+    if (String(context?.goal ?? '').includes('[할 일 도우미]')) {
+      helperGoals.push(String(context.goal));
+      await call('agenda_list', {});
+      await client.close();
+      return { text: JSON.stringify({ message: '오늘은 할 일이 없습니다.', operations: [] }) };
+    }
     if (String(context?.goal ?? '').includes('[글·파일에서 할 일 만들기]')) {
       // The CLI reads the kept attachment by its path, as its own Read tool would.
       const path = /"path":"([^"]+\.txt)"/.exec(JSON.stringify(context.items))?.[1];
@@ -102,6 +114,27 @@ try {
     return b.x >= a.x + a.width - 1 && Math.abs(b.y - a.y) < 2;
   };
   assert.ok(await side(), 'the two areas stand side by side');
+  // '안 A': the 할 일 column has a fixed width, the month takes the rest; no jig, no recent work.
+  const [todoBox, monthBox] = [await section.boundingBox(), await schedule.boundingBox()];
+  assert.ok(Math.abs(todoBox.width - 320) < 2, `할 일 column ${todoBox.width}px`);
+  assert.ok(monthBox.width > 2 * todoBox.width, 'the month takes the rest');
+  assert.equal(await board.getByRole('region', { name: '이 프로젝트의 jig' }).count(), 0);
+  assert.equal(await board.getByRole('region', { name: '최근 작업' }).count(), 0);
+  // Linked files and folders are one folded line under them.
+  const more = board.locator('details.dash-more');
+  assert.match(await more.locator('summary').innerText(), /^연결 파일 \d+ · 프로젝트 폴더 \d+$/);
+  assert.equal(await board.getByRole('region', { name: '연결 파일' }).isVisible(), false);
+  // The AI column opens folded on the dashboard; the model screen keeps it open.
+  const right = page.locator('#right');
+  assert.equal(await right.isVisible(), false);
+  // The work screens' edge toggle sits over the hidden 3D view; the dashboard has its own.
+  const aiToggle = board.getByRole('button', { name: '작업 패널 접기/펼치기' });
+  assert.equal(await aiToggle.getAttribute('aria-expanded'), 'false');
+  const openModel = () => page.locator('.rail [data-workspace-target="model"]').click();
+  await openModel();
+  await right.waitFor();
+  await openDashboard();
+  await right.waitFor({ state: 'hidden' });
 
   const input = section.getByRole('textbox', { name: '할 일 추가' });
   // The words give the date and time: tomorrow 15:00, under the folded 예정.
@@ -115,8 +148,13 @@ try {
   const later = section.getByRole('list', { name: '예정' });
   await later.getByRole('button', { name: '구조 회의', exact: true }).waitFor();
   assert.match(await later.locator('li').first().innerText(), /15:00\s*내일/);
-  // '회의' in the words makes it a 회의: a small label on the row.
-  assert.equal(await later.locator('li').first().locator('.dash-agenda-kind').innerText(), '회의');
+  // '회의' in the words makes it a 협의 (2026-10-06): a small label and no done check.
+  assert.equal(await later.locator('li').first().locator('.dash-agenda-kind').innerText(), '협의');
+  assert.equal(await later.locator('li').first().locator('input[type="checkbox"]').count(), 0);
+  // A range in the words: the preview shows the start and end.
+  await input.fill('내일 2시~4시 구조 협의');
+  await section.getByText('내일 14:00~16:00 · 구조 협의').waitFor();
+  await input.fill('');
   assert.equal(await input.inputValue(), '');
   // The box keeps the focus after Enter, also while a slow save is on its way (a remote
   // session): the next 할 일 is typed straight away.
@@ -196,7 +234,10 @@ try {
   await section.getByRole('alert').getByText('다른 화면에서 바뀌어').waitFor();
   const kept = (await other('', 'GET')).items.find((item) => item.id === target.id);
   assert.deepEqual([kept.text, kept.date], ['도면 정리 — 평면도', '2026-01-02']);
-  assert.equal(await section.getByRole('textbox', { name: '날짜' }).inputValue(), '2026-01-02');
+  assert.equal(
+    await section.getByRole('textbox', { name: '날짜', exact: true }).inputValue(),
+    '2026-01-02',
+  );
   assert.equal(await edit.inputValue(), '도면 정리 — 단면도');
   await edit.press('Enter');
   await today.getByRole('button', { name: '도면 정리 — 단면도', exact: true }).waitFor();
@@ -230,6 +271,39 @@ try {
   await today.getByRole('button', { name: '현장 사진 분류 빼기' }).click();
   await today.getByText('현장 사진 분류').waitFor({ state: 'detached' });
   assert.deepEqual(await texts(), ['도면 정리 — 단면도']);
+
+  // The edge toggle opens the AI column on the dashboard: the 할 일 도우미 sits on top. Its quick
+  // request goes to the 기본 대화 as a hostless Auto turn.
+  await aiToggle.click();
+  await right.waitFor();
+  const helper = page.getByRole('region', { name: '할 일 도우미' });
+  await helper.waitFor();
+  await helper.getByRole('button', { name: '오늘 브리핑' }).click();
+  await page.waitForFunction(async () => {
+    const project = document.querySelector('#project-picker').value;
+    const list = await (await fetch(`api/v1/projects/${project}/requests`)).json();
+    const row = (list.requests ?? list).find((entry) =>
+      String(entry.input?.body ?? '').startsWith('[할 일 도우미]'),
+    );
+    return row?.state === 'succeeded';
+  });
+  const asked = await page.evaluate(async () => {
+    const project = document.querySelector('#project-picker').value;
+    const list = await (await fetch(`api/v1/projects/${project}/requests`)).json();
+    return (list.requests ?? list).find((entry) =>
+      String(entry.input?.body ?? '').startsWith('[할 일 도우미]'),
+    )?.input;
+  });
+  assert.deepEqual([asked.hostUse, asked.mode], ['none', 'auto']);
+  assert.match(asked.conversationId, /^default/);
+  assert.equal(helperGoals.length, 1);
+  await page.locator('#conversation').getByText('오늘은 할 일이 없습니다.').waitFor();
+  // Opened on the dashboard, it stays open there; the model screen's own fold is apart.
+  await openModel();
+  assert.equal(await helper.count(), 0);
+  await right.waitFor();
+  await openDashboard();
+  await helper.waitFor();
 
   // The AI writes twice in one 기본 대화 turn: one notice when the turn ends, kept past 9 s.
   await page.locator('#body').fill('구조 회의 넣어줘');
@@ -270,7 +344,7 @@ try {
       .locator('li', { hasText: '다음 주 화요일 설비 회의' })
       .locator('.dash-agenda-kind')
       .innerText(),
-    '회의',
+    '협의',
   );
   // The turn went to the 기본 대화 without a host, in Auto mode.
   const sent = await page.evaluate(async () => {
@@ -291,96 +365,161 @@ try {
   await status.getByRole('button', { name: '닫기' }).click();
   await section.getByRole('button', { name: '글·파일에서 할 일 만들기' }).waitFor();
 
-  // 일정 (T-110, T-135): the month of this project's 할 일; the undated one sits in 날짜 없음.
+  // 일정 (T-110, T-135, PLAN-39 T-182): the large month of this project's dated 할 일. No add box,
+  // no 날짜 없음 box and no day list under it; the undated one is only in the 할 일 list.
   const iso = (at) =>
     `${at.getFullYear()}-${String(at.getMonth() + 1).padStart(2, '0')}-${String(at.getDate()).padStart(2, '0')}`;
   const todayIso = iso(new Date());
   const calendar = schedule.locator('.dash-cal-month');
-  const undatedBox = schedule.getByRole('group', { name: '날짜 없음' });
-  await undatedBox.getByText('도면 정리 — 단면도').waitFor();
-  const day = (date) => calendar.locator(`[data-date="${date}"]`);
-  // The 회의 added at the start shows on its day with the 회의 dot.
+  assert.equal(await schedule.getByRole('textbox', { name: '일정 추가' }).count(), 0);
+  assert.equal(await schedule.getByRole('group', { name: '날짜 없음' }).count(), 0);
+  assert.equal(
+    await calendar.locator('.dash-cal-item', { hasText: '도면 정리 — 단면도' }).count(),
+    0,
+  );
+  const day = (date) => calendar.locator(`.dash-cal-day[data-date="${date}"]`);
+  const chip = (text) => calendar.locator('.dash-cal-item', { hasText: text });
+  const cell = await day(todayIso).boundingBox();
+  assert.ok(cell.height >= 120, `a day is ${cell.height}px tall`);
+  // The 협의 added at the start shows on its day with the 협의 dot.
   const tomorrowIso = iso(new Date(Date.now() + 86400000));
   if ((await day(tomorrowIso).count()) === 1)
-    assert.equal(
-      await day(tomorrowIso)
-        .locator('.dash-cal-item', { hasText: '구조 회의' })
-        .getAttribute('data-kind'),
-      'meeting',
-    );
-  // A click on today: that day's list below, and the 일정 box starts with its date.
-  const planInput = schedule.getByRole('textbox', { name: '일정 추가' });
-  await day(todayIso).click();
-  assert.equal(await day(todayIso).getAttribute('aria-pressed'), 'true');
-  assert.equal(await planInput.inputValue(), `${todayIso} `);
-  assert.equal(
-    await page.evaluate(() => document.activeElement?.getAttribute('aria-label')),
-    '일정 추가',
-  );
-  await page.keyboard.type('설비 미팅');
-  await page.keyboard.press('Enter');
-  const dayList = schedule.getByRole('list', { name: /할 일$/ }).last();
-  await dayList.getByRole('button', { name: '설비 미팅', exact: true }).waitFor();
-  assert.equal(await dayList.locator('.dash-agenda-kind').first().innerText(), '회의');
+    assert.equal(await chip('구조 회의').getAttribute('data-kind'), 'meeting');
+  // A day's [+]: the 일정 form under it, for a 협의 from 10:00 to 11:00 with its place and people.
   await day(todayIso)
-    .locator('.dash-cal-item[data-kind="meeting"]', { hasText: '설비 미팅' })
-    .waitFor();
-  // The box starts again with the picked day.
-  assert.equal(await planInput.inputValue(), `${todayIso} `);
-  // '까지' is read as a 마감 (shown in the preview), not dropped.
-  await planInput.fill('금요일까지 보고서');
-  await schedule.locator('.dash-agenda-hint .dash-agenda-kind', { hasText: '마감' }).waitFor();
-  await planInput.fill('');
-
-  // Drag to another day: only the date is saved (the time and the kind stay).
-  const days = await calendar
-    .locator('[data-date]')
-    .evaluateAll((cells) => cells.map((cell) => cell.getAttribute('data-date')));
-  const at = days.indexOf(todayIso);
-  const otherDay = days[at + 1 < days.length ? at + 1 : at - 1];
-  const meetingBefore = (await other('', 'GET')).items.find((item) => item.text === '설비 미팅');
-  await other(`/${meetingBefore.id}`, 'PUT', { revision: meetingBefore.revision, time: '10:00' });
-  await page.evaluate(() => dispatchEvent(new Event('focus')));
-  await day(todayIso).locator('.dash-cal-item', { hasText: '10:00' }).waitFor();
-  await day(todayIso).locator('.dash-cal-item', { hasText: '설비 미팅' }).dragTo(day(otherDay));
-  await day(otherDay).locator('.dash-cal-item', { hasText: '설비 미팅' }).waitFor();
-  const meetingAfter = (await other('', 'GET')).items.find((item) => item.id === meetingBefore.id);
-  assert.deepEqual(
-    [meetingAfter.date, meetingAfter.time, meetingAfter.kind, meetingAfter.revision],
-    [otherDay, '10:00', 'meeting', meetingBefore.revision + 2],
-  );
-  // The undated one onto a day gets that date; back onto 날짜 없음 loses it again.
-  await undatedBox
-    .locator('.dash-cal-item', { hasText: '도면 정리 — 단면도' })
-    .dragTo(day(todayIso));
-  await day(todayIso).locator('.dash-cal-item', { hasText: '도면 정리 — 단면도' }).waitFor();
+    .getByRole('button', { name: /일정 추가$/ })
+    .click();
+  const addForm = schedule.getByRole('dialog', { name: '일정 추가' });
+  await addForm.waitFor();
+  assert.equal(await day(todayIso).getAttribute('aria-pressed'), 'true');
   assert.equal(
-    (await other('', 'GET')).items.find((item) => item.text === '도면 정리 — 단면도').date,
+    await addForm.getByRole('textbox', { name: '날짜', exact: true }).inputValue(),
     todayIso,
   );
-  await day(todayIso)
-    .locator('.dash-cal-item', { hasText: '도면 정리 — 단면도' })
-    .dragTo(undatedBox);
-  await undatedBox.locator('.dash-cal-item', { hasText: '도면 정리 — 단면도' }).waitFor();
   assert.equal(
-    (await other('', 'GET')).items.find((item) => item.text === '도면 정리 — 단면도').date,
-    null,
+    await page.evaluate(() => document.activeElement?.getAttribute('aria-label')),
+    '일정 제목',
   );
+  await page.keyboard.type('설비 협의');
+  await addForm.getByRole('combobox', { name: '종류' }).selectOption('meeting');
+  await addForm.getByRole('checkbox', { name: '하루 종일' }).uncheck();
+  await addForm.getByLabel('시각', { exact: true }).fill('10:00');
+  await addForm.getByLabel('끝 시각').fill('11:00');
+  await addForm.getByRole('textbox', { name: '위치' }).fill('현장 사무실');
+  await addForm.getByRole('textbox', { name: '참석자' }).fill('김 대리, 설비 업체');
+  if (shot) await page.screenshot({ path: join(shot, 'dashboard-event-form.png') });
+  await addForm.getByRole('button', { name: '추가' }).click();
+  await addForm.waitFor({ state: 'detached' });
+  await calendar.locator('.dash-cal-item[data-kind="meeting"]', { hasText: '설비 협의' }).waitFor();
+  const talk = (await other('', 'GET')).items.find((item) => item.text === '설비 협의');
+  assert.deepEqual(
+    [talk.date, talk.time, talk.endTime, talk.kind, talk.location, talk.attendees],
+    [todayIso, '10:00', '11:00', 'meeting', '현장 사무실', '김 대리, 설비 업체'],
+  );
+  // In the 할 일 list today: no done check, its place and its time range.
+  const talkRow = today.locator('li', { hasText: '설비 협의' });
+  assert.equal(await talkRow.locator('input[type="checkbox"]').count(), 0);
+  assert.match(await talkRow.innerText(), /@현장 사무실/);
+  assert.match(await talkRow.innerText(), /10:00~11:00/);
+  // A period too: from a day over three days, all day — a bar across them.
+  const days = await calendar
+    .locator('.dash-cal-day')
+    .evaluateAll((cells) => cells.map((cell) => cell.getAttribute('data-date')));
+  const at = days.indexOf(todayIso);
+  const startIso = days[at % 7 <= 4 ? at : at - 2];
+  const endIso = days[days.indexOf(startIso) + 2];
+  await day(startIso)
+    .getByRole('button', { name: /일정 추가$/ })
+    .click();
+  await addForm.getByRole('textbox', { name: '일정 제목' }).fill('현장 점검');
+  assert.ok(await addForm.getByRole('checkbox', { name: '하루 종일' }).isChecked());
+  await addForm.getByLabel('끝 날짜').fill(endIso);
+  await addForm.getByRole('button', { name: '추가' }).click();
+  const bar = calendar.locator('.dash-cal-item[data-span]', { hasText: '현장 점검' });
+  await bar.waitFor();
+  if (shot) await page.screenshot({ path: join(shot, 'dashboard-period.png') });
+  const barBox = await bar.boundingBox();
+  assert.ok(barBox.width > cell.width * 2.5, `the bar spans three days (${barBox.width}px)`);
+  // Dragged a week on, it keeps its three days.
+  const weekOn = days[days.indexOf(startIso) + 7] ?? days[days.indexOf(startIso) - 7];
+  await bar.dragTo(day(weekOn), { targetPosition: { x: 10, y: 10 } });
+  const shift = (date, by) => {
+    const [y, m, d] = date.split('-').map(Number);
+    return iso(new Date(y, m - 1, d + by));
+  };
+  await page.waitForFunction(
+    async ([date]) => {
+      const project = document.querySelector('#project-picker').value;
+      const list = await (await fetch(`api/v1/projects/${project}/agenda`)).json();
+      return list.items.find((item) => item.text === '현장 점검')?.date === date;
+    },
+    [weekOn],
+  );
+  const walked = (await other('', 'GET')).items.find((item) => item.text === '현장 점검');
+  assert.deepEqual([walked.date, walked.endDate], [weekOn, shift(weekOn, 2)]);
+  // An item opens the same form: change its place, take its date off, or remove it.
+  await chip('설비 협의').click();
+  const editForm = schedule.getByRole('dialog', { name: '일정 고치기' });
+  await editForm.waitFor();
+  await editForm.getByRole('textbox', { name: '위치' }).fill('본사 회의실');
+  await editForm.getByRole('button', { name: '저장' }).click();
+  await editForm.waitFor({ state: 'detached' });
+  assert.equal(
+    (await other('', 'GET')).items.find((item) => item.text === '설비 협의').location,
+    '본사 회의실',
+  );
+  await calendar.locator('.dash-cal-item[data-span]', { hasText: '현장 점검' }).first().click();
+  await editForm.getByRole('button', { name: '날짜 빼기' }).click();
+  await editForm.waitFor({ state: 'detached' });
+  await today.getByRole('button', { name: '현장 점검', exact: true }).waitFor();
+  const undated = (await other('', 'GET')).items.find((item) => item.text === '현장 점검');
+  assert.deepEqual([undated.date, undated.endDate], [null, null]);
+  // Esc closes the form; [삭제] removes the item.
+  await day(todayIso)
+    .getByRole('button', { name: /일정 추가$/ })
+    .click();
+  await addForm.waitFor();
+  await page.keyboard.press('Escape');
+  await addForm.waitFor({ state: 'detached' });
+  await today.getByRole('button', { name: '현장 점검 빼기' }).click();
+  await today.getByText('현장 점검').waitFor({ state: 'detached' });
+
+  // Drag to another day: only the date is saved (the time and the kind stay).
+  const otherDay = days[at + 1 < days.length ? at + 1 : at - 1];
+  const meetingBefore = (await other('', 'GET')).items.find((item) => item.text === '설비 협의');
+  await chip('설비 협의').dragTo(day(otherDay), { targetPosition: { x: 10, y: 10 } });
+  await day(otherDay).waitFor();
+  await page.waitForFunction(
+    async ([date]) => {
+      const project = document.querySelector('#project-picker').value;
+      const list = await (await fetch(`api/v1/projects/${project}/agenda`)).json();
+      return list.items.find((item) => item.text === '설비 협의')?.date === date;
+    },
+    [otherDay],
+  );
+  const meetingAfter = (await other('', 'GET')).items.find((item) => item.id === meetingBefore.id);
+  assert.deepEqual(
+    [meetingAfter.date, meetingAfter.time, meetingAfter.endTime, meetingAfter.kind],
+    [otherDay, '10:00', '11:00', 'meeting'],
+  );
+  assert.equal(meetingAfter.revision, meetingBefore.revision + 1);
   // A row of the 할 일 area dragged onto a day of the month gets that date, nothing else.
   const rowBefore = (await other('', 'GET')).items.find(
     (item) => item.text === '도면 정리 — 단면도',
   );
-  await today.locator('li', { hasText: '도면 정리 — 단면도' }).dragTo(day(otherDay));
-  await day(otherDay).locator('.dash-cal-item', { hasText: '도면 정리 — 단면도' }).waitFor();
+  await today
+    .locator('li', { hasText: '도면 정리 — 단면도' })
+    .dragTo(day(otherDay), { targetPosition: { x: 10, y: 10 } });
+  await chip('도면 정리 — 단면도').waitFor();
   const rowAfter = (await other('', 'GET')).items.find((item) => item.id === rowBefore.id);
   assert.deepEqual(
     [rowAfter.date, rowAfter.text, rowAfter.kind],
     [otherDay, rowBefore.text, rowBefore.kind],
   );
-  await day(otherDay)
-    .locator('.dash-cal-item', { hasText: '도면 정리 — 단면도' })
-    .dragTo(undatedBox);
-  await undatedBox.locator('.dash-cal-item', { hasText: '도면 정리 — 단면도' }).waitFor();
+  // Back to no date for the rest of the run.
+  await other(`/${rowAfter.id}`, 'PUT', { revision: rowAfter.revision, date: null });
+  await page.evaluate(() => dispatchEvent(new Event('focus')));
+  await chip('도면 정리 — 단면도').waitFor({ state: 'detached' });
   // Months move; [이번 달] comes back.
   const label = await calendar.locator('.dash-cal-label').innerText();
   await calendar.getByRole('button', { name: '다음 달' }).click();

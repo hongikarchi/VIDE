@@ -101,7 +101,6 @@ const STATE: Record<string, string> = {
   running: '진행 중',
   queued: '대기',
 };
-const NOTE_KIND: Record<string, string> = { discussion: '협의 사항', journal: '일지' };
 const INSTRUCTIONS_MAX_BYTES = 8 * 1024;
 
 function Instructions({
@@ -303,8 +302,9 @@ function RemoteProject({
                 <ul className="remote-list">
                   {notes.notes.slice(0, 6).map((note) => (
                     <li key={note.id}>
-                      {note.title}
-                      {NOTE_KIND[note.kind] ? <small> · {NOTE_KIND[note.kind]}</small> : null}
+                      {note.title.trim() || '제목 없음'}
+                      {/* One kind on screen (SPEC-10.2): only a journal is marked. */}
+                      {note.kind === 'journal' ? <small> · 퇴근 기록</small> : null}
                     </li>
                   ))}
                 </ul>

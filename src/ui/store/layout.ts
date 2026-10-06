@@ -119,10 +119,62 @@ export function togglePanel(side: Side) {
   const hidden = !(side === 'left' ? layoutState.leftHidden : layoutState.rightHidden);
   setHidden(side, hidden);
   if (side === 'left') layoutState.leftFolded = hidden;
-  else layoutState.rightFolded = hidden;
+  else {
+    layoutState.rightFolded = hidden;
+    rememberFold(hidden);
+  }
   document.body.classList.toggle(`${side}-hidden`, hidden);
   commitNow(layoutState);
   document.getElementById(`toggle-${side}`)?.focus();
+}
+
+/**
+ * The AI column's fold, kept apart for the dashboard and the other screens (Design §03 「대시보드의
+ * AI 열」, PLAN-39 T-181): the dashboard opens with it folded, the work screens with it open, and a
+ * fold made on one does not carry to the other. A viewer convenience kept in this browser's
+ * storage; blocked storage just starts from those defaults.
+ */
+const FOLD_KEY = 'vide:right-folded';
+type FoldScreen = 'dashboard' | 'work';
+const folds: Partial<Record<FoldScreen, boolean>> = (() => {
+  try {
+    const saved = JSON.parse(localStorage.getItem(FOLD_KEY) ?? 'null') as unknown;
+    if (!saved || typeof saved !== 'object') return {};
+    const value = saved as Record<string, unknown>;
+    return Object.fromEntries(
+      (['dashboard', 'work'] as const)
+        .filter((key) => typeof value[key] === 'boolean')
+        .map((key) => [key, value[key]]),
+    );
+  } catch {
+    return {};
+  }
+})();
+const foldScreen = (workspace = document.body.dataset.workspace): FoldScreen =>
+  workspace === 'dashboard' ? 'dashboard' : 'work';
+function rememberFold(hidden: boolean) {
+  folds[foldScreen()] = hidden;
+  try {
+    localStorage.setItem(FOLD_KEY, JSON.stringify(folds));
+  } catch {
+    /* The fold still works for this session. */
+  }
+}
+/** A screen was shown: the AI column folds or opens as that screen had it (wide screens only). */
+export function applyScreenFold(workspace: string) {
+  if (document.body.classList.contains('panel-mode') || matchMedia('(max-width:850px)').matches)
+    return;
+  const screen = foldScreen(workspace);
+  const hidden = folds[screen] ?? screen === 'dashboard';
+  if (hidden === layoutState.rightFolded && hidden === layoutState.rightHidden) {
+    const right = document.getElementById('right');
+    if (right && right.hidden !== hidden) right.hidden = hidden;
+    return;
+  }
+  setHidden('right', hidden);
+  layoutState.rightFolded = hidden;
+  document.body.classList.toggle('right-hidden', hidden);
+  commitNow(layoutState);
 }
 /** Opens a folded side panel the way its edge toggle does (focus included); open stays open. */
 export function revealPanel(side: Side) {

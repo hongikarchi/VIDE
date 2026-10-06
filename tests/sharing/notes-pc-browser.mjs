@@ -66,6 +66,10 @@ export async function verifyNotesPc({
     const screen = pc.getByRole('region', { name: '노트·일지', exact: true });
     await screen.getByRole('button', { name: /^구조 협의/ }).click();
     await screen.getByText('실시간 연결됨').waitFor();
+    // One kind on screen (T-184): a 협의 사항 row is a plain note, with no kind shown or picked.
+    assert.equal(await screen.getByText('협의 사항', { exact: true }).count(), 0);
+    assert.equal(await screen.getByRole('combobox', { name: '종류' }).count(), 0);
+    assert.equal(await screen.getByRole('button', { name: '새 협의 사항' }).count(), 0);
     const body = (page) => page.getByLabel('노트 본문');
     const line = (page, text) => body(page).locator('p', { hasText: text }).first();
     // The whole note is there before the caret is placed.

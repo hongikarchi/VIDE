@@ -15,13 +15,22 @@ test('CLI settings persist paths, enforce revisions and reject credentials, shel
     assert.throws(() => settings.save({ revision: 0, paths }), { code: 'REVISION_CONFLICT' });
     for (const path of [
       'cmd.exe /c codex',
-      'C:/Tools/codex.cmd',
+      'C:/Tools/codex.bat',
+      'C:/Tools/node.cmd',
       'https://example.com/codex.exe',
       '\\\\server\\share\\codex.exe',
     ])
       assert.throws(() => settings.save({ revision: 1, paths: { ...paths, 'codex-cli': path } }), {
         code: 'INVALID_CLI_PATH',
       });
+    // npm's `.cmd` shim of the CLI is accepted (PLAN-38 T-175); VIDE starts the script it names.
+    assert.equal(
+      new AiSettings(new Store(':memory:'), () => true).save({
+        revision: 0,
+        paths: { 'claude-cli': 'C:/npm/claude.cmd', 'codex-cli': 'C:/npm/codex.cmd' },
+      }).paths['claude-cli'],
+      'C:\\npm\\claude.cmd',
+    );
     assert.throws(() => settings.save({ revision: 1, paths, token: 'secret' }), {
       code: 'INVALID_INPUT',
     });

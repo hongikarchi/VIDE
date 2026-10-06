@@ -23,11 +23,12 @@ import { ClaudeCli, ProviderError, killOwnedProcess } from './claude-cli.ts';
 import { withRules } from './instructions/index.ts';
 
 // Reuse the bounded JSONL process lifecycle; authentication/arguments/events differ by provider.
+// CODEX_HOME set on this PC is the CLI's default login and stays (PLAN-38 T-175).
 export function codexEnvironment(source = process.env) {
   const env = { ...source };
   for (const key of Object.keys(env)) {
     if (
-      /^(OPENAI_|CODEX_API_KEY$|CODEX_ACCESS_TOKEN$|CODEX_AUTH_|CODEX_THREAD_ID$|CODEX_INTERNAL_|CODEX_HOME$|CODEX_CONFIG_|TYPESAFE_)/i.test(
+      /^(OPENAI_|CODEX_API_KEY$|CODEX_ACCESS_TOKEN$|CODEX_AUTH_|CODEX_THREAD_ID$|CODEX_INTERNAL_|CODEX_CONFIG_|TYPESAFE_)/i.test(
         key,
       )
     )
@@ -415,7 +416,7 @@ export class CodexCli extends ClaudeCli {
   workFoldersSupported() {
     return false;
   }
-  /** The CLI's default login (ADR-025): no CODEX_HOME is named. */
+  /** The CLI's default login (ADR-025): VIDE names no CODEX_HOME; one set on the PC stays. */
   environment() {
     return codexEnvironment();
   }

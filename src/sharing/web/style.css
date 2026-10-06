@@ -809,6 +809,16 @@ button.ghost {
 .offline-agenda-list .badge {
   margin-right: 4px;
 }
+/* 협의 has no done check (PLAN-39): the box's place stays so the rows line up. */
+.offline-agenda-event {
+  display: inline-block;
+  width: 13px;
+  flex-shrink: 0;
+}
+.offline-agenda-where {
+  flex-basis: 100%;
+  padding-left: 19px;
+}
 .offline-agenda-list button.ghost {
   padding: 2px 8px;
 }

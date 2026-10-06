@@ -32,6 +32,8 @@ import { existsSync } from 'node:fs';
 import { resolveAgentToken } from '../ai/agent-relay.ts';
 import { Agenda, localDate } from '../core/agenda.ts';
 import {
+  AGENDA_ATTENDEES_MAX,
+  AGENDA_LOCATION_MAX,
   AGENDA_TEXT_MAX,
   agendaDateSchema,
   agendaTimeSchema,
@@ -518,12 +520,12 @@ const definitions = {
   // The project's 할 일 (SPEC-01.14): read, and T1 writes recorded in the ledger with an undo.
   agenda_list: {
     description:
-      "List this project's 할 일 (the dashboard's to-do list and calendar). An item with a time is a 일정 (schedule); kind is task (할 일), meeting (회의) or deadline (마감). Dates are the PC's local 'YYYY-MM-DD', times 'HH:MM'; today is given. Done items only with done:true.",
+      "List this project's 할 일 (the dashboard's to-do list and calendar). A dated item is on the calendar; no time means all day, endDate a span of days, endTime a time range. kind is task (할 일), meeting (협의: a meeting or consultation, an event with no done check), receipt (접수: a submission or filing) or deadline (마감). location and attendees are free text. Dates are the PC's local 'YYYY-MM-DD', times 'HH:MM'; today is given. Done items only with done:true.",
     schema: z.object({ targetRef: scoped, done: z.boolean().optional() }).strict(),
   },
   agenda_add: {
     description:
-      "Add 할 일 to this project's dashboard list when the user's words ask for it (e.g. '내일 3시 구조 회의 넣어줘', or items from meeting notes they asked you to collect). Write the date as 'YYYY-MM-DD' and the time as 'HH:MM' (24 h) yourself; leave them out when the words give none. kind: 'meeting' for a meeting, 'deadline' for something due by a date ('금요일까지 보고서'); leave it out for anything else (task). Applied at once and recorded in the conversation; the user gets [되돌리기]. List the added items in your reply.",
+      "Add 할 일 to this project's dashboard list when the user's words ask for it (e.g. '내일 3시 구조 회의 넣어줘', or items from meeting notes they asked you to collect). Write the date as 'YYYY-MM-DD' and the time as 'HH:MM' (24 h) yourself; leave them out when the words give none (no time = all day). A time range gives endTime ('2시~4시' → 14:00, 16:00), several days give endDate ('10/7~10/9'). kind: 'meeting' for a meeting or 협의, 'receipt' for a submission or filing (제출·접수), 'deadline' for something due by a date ('금요일까지 보고서'); leave it out for anything else (task). location: the place; attendees: who takes part or is in charge, as written ('김 대리, 설비 업체'). Applied at once and recorded in the conversation; the user gets [되돌리기]. List the added items in your reply.",
     schema: z
       .object({
         targetRef: scoped,
@@ -534,7 +536,11 @@ const definitions = {
                 text: z.string().min(1).max(AGENDA_TEXT_MAX),
                 date: agendaDateSchema.optional(),
                 time: agendaTimeSchema.optional(),
+                endDate: agendaDateSchema.optional(),
+                endTime: agendaTimeSchema.optional(),
                 kind: agendaKindSchema.optional(),
+                location: z.string().max(AGENDA_LOCATION_MAX).optional(),
+                attendees: z.string().max(AGENDA_ATTENDEES_MAX).optional(),
               })
               .strict(),
           )
@@ -545,7 +551,7 @@ const definitions = {
   },
   agenda_set: {
     description:
-      "Change 할 일 of this project when the user's words ask for it: text, date/time (null clears), kind (task, meeting, deadline) or done. ids come from agenda_list. Applied at once and recorded in the conversation; the user gets [되돌리기]. Say what changed in your reply.",
+      "Change 할 일 of this project when the user's words ask for it: text, date/time and endDate/endTime (null clears; a new date alone moves the end day with it), kind (task, meeting, receipt, deadline), location, attendees or done. ids come from agenda_list. Applied at once and recorded in the conversation; the user gets [되돌리기]. Say what changed in your reply.",
     schema: z
       .object({
         targetRef: scoped,
@@ -557,7 +563,11 @@ const definitions = {
                 text: z.string().min(1).max(AGENDA_TEXT_MAX).optional(),
                 date: agendaDateSchema.nullable().optional(),
                 time: agendaTimeSchema.nullable().optional(),
+                endDate: agendaDateSchema.nullable().optional(),
+                endTime: agendaTimeSchema.nullable().optional(),
                 kind: agendaKindSchema.optional(),
+                location: z.string().max(AGENDA_LOCATION_MAX).nullable().optional(),
+                attendees: z.string().max(AGENDA_ATTENDEES_MAX).nullable().optional(),
                 done: z.boolean().optional(),
               })
               .strict(),
@@ -1547,7 +1557,11 @@ const agendaRow = (item: AgendaItem) => ({
   text: item.text,
   date: item.date,
   time: item.time,
+  ...(item.endDate ? { endDate: item.endDate } : {}),
+  ...(item.endTime ? { endTime: item.endTime } : {}),
   kind: item.kind,
+  ...(item.location ? { location: item.location } : {}),
+  ...(item.attendees ? { attendees: item.attendees } : {}),
   done: item.done,
   ...(item.source === 'ai' ? { by: 'ai' } : {}),
 });
@@ -1618,6 +1632,10 @@ export function agendaHandlers({
             time: before.time,
             doneAt: before.doneAt,
             kind: before.kind,
+            endDate: before.endDate,
+            endTime: before.endTime,
+            location: before.location,
+            attendees: before.attendees,
           },
         });
       }

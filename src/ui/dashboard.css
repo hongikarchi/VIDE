@@ -1,5 +1,6 @@
-/* 대시보드 workspace tab (first draft): the project's name, linked files, jigs and latest requests
-   over the centre column. Colours, lines and radii come from tokens.css. */
+/* 대시보드 workspace tab (Design SCR-20): the project's name, the 할 일 column beside the large month
+   (layout '안 A', PLAN-39) and the folded line of linked files and folders, over the centre column.
+   Colours, lines and radii come from tokens.css. */
 .dashboard-workspace {
   display: none;
 }
@@ -32,7 +33,24 @@ body[data-workspace='dashboard'] .dashboard-workspace {
   flex-direction: column;
   gap: 22px;
   padding: 24px 28px;
-  max-width: 1080px;
+}
+.dash-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+.dash-ai-toggle {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  background: none;
+  font-size: 20px;
+  color: var(--muted);
+}
+.dash-ai-toggle:hover {
+  color: var(--text-1);
 }
 .dash-page h2 {
   margin: 0;
@@ -69,14 +87,6 @@ body[data-workspace='dashboard'] .dashboard-workspace {
 button.dash-tile:hover {
   background: var(--bg-hover);
 }
-/* The jig's icon before its kind line (PLAN-26 T-100). */
-.dash-k .jig-icon {
-  margin-right: 4px;
-}
-.dash-k .jig-icon svg {
-  width: 13px;
-  height: 13px;
-}
 .dash-k,
 .dash-d {
   font-size: 11px;
@@ -94,38 +104,6 @@ button.dash-tile:hover {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-.dash-rows {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  border-top: var(--hairline) solid var(--border-subtle);
-}
-.dash-rows button {
-  width: 100%;
-  display: flex;
-  gap: 12px;
-  align-items: baseline;
-  border: 0;
-  border-bottom: var(--hairline) solid var(--border-subtle);
-  border-radius: 0;
-  padding: 8px 4px;
-  text-align: left;
-}
-.dash-rows button:hover {
-  background: var(--bg-hover);
-}
-.dash-row-title {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.dash-row-meta {
-  flex-shrink: 0;
-  font-size: 12px;
-  color: var(--text-3);
 }
 .dash-section-head {
   display: flex;
@@ -216,8 +194,9 @@ button.dash-tile:hover {
 }
 .dash-agenda-row {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 10px;
+  gap: 2px 10px;
   min-height: 34px;
   padding: 3px 4px;
   border-bottom: var(--hairline) solid var(--border-subtle);
@@ -235,7 +214,8 @@ button.dash-tile:hover {
   margin: 0;
 }
 .dash-agenda-text {
-  flex: 1;
+  /* A row with a place and a time range goes on to a second line in the narrow column. */
+  flex: 1 1 120px;
   min-width: 0;
   border: 0;
   padding: 4px 2px;
@@ -257,6 +237,7 @@ button.dash-tile:hover {
   display: flex;
   gap: 6px;
   flex-shrink: 0;
+  margin-left: auto;
   font-size: 12px;
   color: var(--text-3);
 }
@@ -274,6 +255,7 @@ button.dash-tile:hover {
   display: flex;
   gap: 2px;
   flex-shrink: 0;
+  margin-left: auto;
 }
 .dash-agenda-tools button {
   padding: 2px 7px;
@@ -312,15 +294,31 @@ button.dash-tile:hover {
   background: var(--info-subtle);
   color: var(--info);
 }
+.dash-agenda-kind[data-kind='receipt'] {
+  background: var(--ok-subtle);
+  color: var(--ok);
+}
 .dash-agenda-kind[data-kind='deadline'] {
   background: var(--warn-subtle);
   color: var(--warn);
 }
+/* A 협의 has no done check: the box's place stays so the rows line up (PLAN-39). */
+.dash-agenda-event {
+  flex-shrink: 0;
+  width: 13px;
+}
+.dash-agenda-where {
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .dash-agenda-hint .dash-agenda-kind {
   margin-left: 6px;
 }
-/* 할 일 · 일정 (PLAN-30 T-135): two areas side by side when the row is wide, stacked when narrow
-   (a container query, so opening the right panel re-fits them). */
+/* 할 일 · 일정 (PLAN-30 T-135, PLAN-39 T-181 '안 A'): a fixed 할 일 column beside the month that
+   takes the rest when the row is wide, stacked when narrow (a container query, so opening the
+   right panel re-fits them). */
 .dash-agenda-board {
   container-type: inline-size;
 }
@@ -329,9 +327,9 @@ button.dash-tile:hover {
   grid-template-columns: minmax(0, 1fr);
   gap: 22px;
 }
-@container (min-width: 860px) {
+@container (min-width: 960px) {
   .dash-agenda-pair {
-    grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
+    grid-template-columns: 320px minmax(0, 1fr);
     gap: 20px;
   }
 }
@@ -497,19 +495,12 @@ button.dash-tile:hover {
 .dash-extract-failed {
   color: var(--warn);
 }
-/* 달력 (T-110): the month beside the 날짜 없음 box; the picked day and a drop target get the soft
-   selected background, today's date a filled circle. No side bars. */
+/* 달력 (T-110, PLAN-39 T-182): one row per week, each a grid of 7 days by lines; a day fills its
+   column under the lines, items lie over it (bars across days). The open day and an item's drop
+   day get the soft selected background, today's date a filled circle. No side bars. */
 .dash-cal {
-  margin-top: 10px;
-}
-.dash-cal-body {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-.dash-cal-month {
-  flex: 1;
-  min-width: 0;
+  position: relative;
+  margin-top: 6px;
 }
 .dash-cal-nav {
   display: flex;
@@ -531,11 +522,14 @@ button.dash-tile:hover {
 .dash-cal-step:hover {
   background: var(--bg-hover);
 }
-.dash-cal-grid {
+.dash-cal-weekdays,
+.dash-cal-week {
   display: grid;
   grid-template-columns: repeat(7, minmax(0, 1fr));
-  border-top: var(--hairline) solid var(--border-subtle);
   border-left: var(--hairline) solid var(--border-subtle);
+}
+.dash-cal-weekdays {
+  border-top: var(--hairline) solid var(--border-subtle);
 }
 .dash-cal-weekday {
   padding: 4px 6px;
@@ -544,13 +538,17 @@ button.dash-tile:hover {
   border-right: var(--hairline) solid var(--border-subtle);
   border-bottom: var(--hairline) solid var(--border-subtle);
 }
+.dash-cal-week {
+  /* The date, five lines of items, then '+n'. */
+  grid-template-rows: 24px repeat(5, 19px) minmax(18px, 1fr);
+  row-gap: 1px;
+  min-height: 120px;
+}
 .dash-cal-day {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
+  grid-row: 1 / -1;
+  position: relative;
   min-width: 0;
-  min-height: 78px;
-  padding: 3px 4px 4px;
+  padding: 3px 4px;
   border-right: var(--hairline) solid var(--border-subtle);
   border-bottom: var(--hairline) solid var(--border-subtle);
   cursor: pointer;
@@ -559,15 +557,14 @@ button.dash-tile:hover {
   background: var(--bg-hover);
 }
 .dash-cal-day[aria-pressed='true'],
-.dash-cal-day[data-over],
-.dash-cal-undated[data-over] {
+.dash-cal-day[data-over] {
   background: var(--bg-selected);
 }
 .dash-cal-day[data-outside] .dash-cal-date {
   color: var(--text-4);
 }
 .dash-cal-date {
-  align-self: flex-start;
+  display: inline-block;
   min-width: 20px;
   height: 20px;
   border-radius: var(--radius-pill);
@@ -579,20 +576,72 @@ button.dash-tile:hover {
   background: var(--accent);
   color: var(--cta-text);
 }
+.dash-cal-plus {
+  position: absolute;
+  top: 3px;
+  right: 4px;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border-color: transparent;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--text-3);
+  font-size: 13px;
+  line-height: 18px;
+  opacity: 0;
+}
+.dash-cal-day:hover .dash-cal-plus,
+.dash-cal-plus:focus-visible {
+  opacity: 1;
+}
+.dash-cal-plus:hover {
+  background: var(--bg-active);
+  color: var(--text-1);
+}
 .dash-cal-item {
+  z-index: 1;
   display: flex;
   align-items: center;
   gap: 4px;
   min-width: 0;
-  padding: 1px 3px;
+  margin: 0 3px;
+  padding: 0 4px;
+  border: 0;
   border-radius: var(--radius-sm);
+  background: none;
   font-size: 11px;
-  line-height: 15px;
+  line-height: 19px;
+  text-align: left;
   color: var(--text-1);
   cursor: grab;
 }
 .dash-cal-item:hover {
   background: var(--bg-active);
+}
+/* An item over several days: a bar across its days in the soft colour of its kind; an end cut by
+   the week's edge is square. */
+.dash-cal-item[data-span] {
+  background: var(--bg-recessed);
+}
+.dash-cal-item[data-span][data-kind='meeting'] {
+  background: var(--info-subtle);
+}
+.dash-cal-item[data-span][data-kind='receipt'] {
+  background: var(--ok-subtle);
+}
+.dash-cal-item[data-span][data-kind='deadline'] {
+  background: var(--warn-subtle);
+}
+.dash-cal-item[data-before] {
+  margin-left: 0;
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+}
+.dash-cal-item[data-after] {
+  margin-right: 0;
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
 }
 .dash-cal-item[data-done] {
   color: var(--text-3);
@@ -611,6 +660,9 @@ button.dash-tile:hover {
 .dash-cal-item[data-kind='meeting'] .dash-cal-dot {
   background: var(--info);
 }
+.dash-cal-item[data-kind='receipt'] .dash-cal-dot {
+  background: var(--ok);
+}
 .dash-cal-item[data-kind='deadline'] .dash-cal-dot {
   background: var(--warn);
 }
@@ -626,44 +678,123 @@ button.dash-tile:hover {
   white-space: nowrap;
 }
 .dash-cal-more {
+  z-index: 1;
+  padding: 0 7px;
   font-size: 11px;
   color: var(--text-3);
+  pointer-events: none;
 }
-.dash-cal-undated {
+/* The 일정 form (SPEC-01.14 3): a popover under the day or item clicked. */
+.dash-event-pop {
+  position: absolute;
+  z-index: 5;
+  width: 320px;
+  box-sizing: border-box;
+  padding: 12px;
+  border: var(--hairline) solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-elevated);
+  box-shadow: var(--shadow-float);
+}
+.dash-event-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.dash-event-form input[type='text'],
+.dash-agenda-edit input[type='text'] {
+  min-width: 0;
+  box-sizing: border-box;
+}
+.dash-event-title {
+  font-weight: 600;
+}
+.dash-event-line {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 3px 8px;
-  padding: 0 6px 8px;
-  border: var(--hairline) solid var(--border-subtle);
-  border-radius: var(--radius-sm);
+  gap: 6px;
 }
-.dash-cal-undated .dash-folder-sub {
-  flex-basis: 100%;
-  margin-top: 8px;
+.dash-event-line input[type='date'] {
+  flex: 1 1 120px;
+  min-width: 0;
 }
-.dash-cal-undated .dash-cal-item {
-  max-width: 200px;
+.dash-event-line input[type='time'] {
+  flex: 0 1 96px;
+  min-width: 0;
 }
-.dash-cal-hint {
-  margin: 0;
-  font-size: 11px;
+.dash-event-label {
+  width: 26px;
+  font-size: 12px;
   color: var(--text-3);
 }
-.dash-cal-picked {
+.dash-event-allday {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--text-2);
+}
+.dash-event-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.dash-event-gap {
+  flex: 1;
+}
+.dash-event-remove {
+  color: var(--warn);
+}
+/* A 할 일 row edited in place has the same fields, wrapped. */
+.dash-agenda-edit .dash-event-title,
+.dash-agenda-edit .dash-event-actions {
+  flex: 1 1 100%;
+}
+.dash-agenda-edit .dash-event-line,
+.dash-agenda-edit > input[type='text']:not(.dash-event-title) {
+  flex: 1 1 200px;
+}
+/* The folded line of linked files and folders (Design §03 「대시보드의 아래 줄」). */
+.dash-more > summary {
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--text-3);
+}
+.dash-more > summary:hover {
+  color: var(--text-1);
+}
+.dash-more-body {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
   margin-top: 12px;
 }
-/* A narrow 일정 area: days show the dots only; the picked day's list below gives the words. */
+/* 할 일 도우미 over the AI column on the dashboard (Design §03 「대시보드의 AI 열」). */
+.agenda-helper {
+  padding: 8px 14px 10px;
+  border-bottom: var(--hairline) solid var(--border-subtle);
+}
+.agenda-helper h3 {
+  margin: 0 0 4px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-3);
+}
+.agenda-helper-asks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  font-size: 12px;
+}
+/* A narrow 일정 area: items show their dot only; an item's form gives the words. */
 @container (max-width: 480px) {
-  .dash-cal-day {
-    min-height: 48px;
+  .dash-cal-week {
+    min-height: 72px;
   }
-  .dash-cal-day .dash-cal-title,
-  .dash-cal-day .dash-cal-time {
+  .dash-cal-item .dash-cal-title,
+  .dash-cal-item .dash-cal-time {
     display: none;
-  }
-  .dash-cal-day .dash-cal-item {
-    display: inline-flex;
   }
 }
 @media (max-width: 850px) {

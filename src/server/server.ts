@@ -10,6 +10,7 @@ import { GEOMETRY_TYPE, encodeGeometry } from '../contracts/geometry-transfer.ts
 import { applyAttachedCandidate } from './attached-application.ts';
 import { LiveSync } from './live-sync.ts';
 import { DEFAULT_SHARING_ORIGIN, RemoteAccess } from './remote-access.ts';
+import { accountSwitchInfo, openAccountSwitch } from '../ai/account-switch.ts';
 import { OfflineView } from './offline-view.ts';
 import { ConversationMirror } from './conversation-mirror.ts';
 import { Connectors, type ConnectorOptions } from './connectors.ts';
@@ -80,8 +81,16 @@ interface ServerOptions {
   /** Test seams for the remote tunnel process and Worker calls. */
   remoteOptions?: Pick<
     ConstructorParameters<typeof RemoteAccess>[0],
-    'executable' | 'spawnProcess' | 'fetcher' | 'heartbeatMs'
+    'executable' | 'spawnProcess' | 'fetcher' | 'heartbeatMs' | 'download'
   >;
+  /**
+   * The installed PC program's first run (ADR-039, SPEC-05.6 「첫 실행」): a PC not signed in to the
+   * VIDE account gets the sign-in screen instead of the work screen. Off for the development server
+   * and tests.
+   */
+  signInRequired?: boolean;
+  /** Fetch the remote access tool (cloudflared) in the background after start (PLAN-38 T-177). */
+  prefetchTools?: boolean;
   /** Test seams for the reference boards' image job (SPEC-09.7): a fake codex or runner. */
   referenceOptions?: Omit<ReferenceBoardsOptions, 'outputs'>;
   /** Test seam: the one-time split of an old `vide.sqlite` (ADR-032). */
@@ -115,6 +124,7 @@ import { listDocuments, inspectDocument } from '../../hosts/rhino/documents.ts';
 import { compareCandidates, relatedCandidates } from '../core/comparison.ts';
 import { quantities, quantitiesCsv } from '../core/quantities.ts';
 import { createServer } from 'node:http';
+import { existsSync } from 'node:fs';
 import { randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import { readFile, unlink, writeFile } from 'node:fs/promises';
 import { DomainError } from '../core/store.ts';
@@ -252,6 +262,8 @@ export async function startServer({
   referenceOptions,
   storeSplit,
   telemetryOptions,
+  signInRequired = false,
+  prefetchTools = false,
 }: ServerOptions) {
   const { store, event: storeEvent } = await openStore(filename, storeSplit),
     bootstrap = randomBytes(32).toString('hex'),
@@ -906,7 +918,7 @@ export async function startServer({
           (url.pathname.startsWith('/api/v1/remote') && request.method !== 'GET') ||
           url.pathname.startsWith('/api/v1/connectors') ||
           (request.method !== 'GET' &&
-            /^\/api\/v1\/(accounts|settings|extensions)(\/|$)/.test(url.pathname)) ||
+            /^\/api\/v1\/(accounts|accountswitch|settings|extensions)(\/|$)/.test(url.pathname)) ||
           // Deleting a whole project and its data is done at this PC.
           (request.method === 'DELETE' && /^\/api\/v1\/projects\/[^/]+$/.test(url.pathname)) ||
           // The project's AI instructions steer every later turn: changed on this PC only.
@@ -942,6 +954,11 @@ export async function startServer({
       }
       if (url.pathname === '/api/v1/remote' && request.method === 'GET') {
         send(200, await remoteAccess.status());
+        return;
+      }
+      // The first-run gate (ADR-039): whether the work screen waits for the VIDE account sign-in.
+      if (url.pathname === '/api/v1/onboarding' && request.method === 'GET') {
+        send(200, { signInRequired, linked: (await remoteAccess.status()).linked });
         return;
       }
       const remoteAction = /^\/api\/v1\/remote\/(link|unlink|remote)$/.exec(url.pathname);
@@ -1863,6 +1880,13 @@ export async function startServer({
             resolved: Object.fromEntries(
               ['claude-cli', 'codex-cli'].map((id) => [id, execution.executable(id) || null]),
             ),
+            // Whether that file is there (the first-run screen's 설치 안 됨, SPEC-05.6).
+            found: Object.fromEntries(
+              ['claude-cli', 'codex-cli'].map((id) => {
+                const path = execution.executable(id);
+                return [id, !!path && existsSync(path)];
+              }),
+            ),
           });
           return;
         }
@@ -1870,7 +1894,16 @@ export async function startServer({
       // Who each CLI's default login is (no network). Accounts are added, signed in and switched
       // in AccountSwitch (ADR-025); VIDE only reads them.
       if (url.pathname === '/api/v1/accounts' && request.method === 'GET') {
-        send(200, { accounts: PROVIDERS.map((provider) => accountUsage.account(provider)) });
+        send(200, {
+          accounts: PROVIDERS.map((provider) => accountUsage.account(provider)),
+          accountSwitch: accountSwitchInfo(),
+        });
+        return;
+      }
+      // Start AccountSwitch (installed on this PC) for the user to sign in or switch (T-175).
+      if (url.pathname === '/api/v1/accountswitch/open' && request.method === 'POST') {
+        if (!openAccountSwitch()) throw new DomainError('ACCOUNTSWITCH_MISSING');
+        send(200, { opened: true });
         return;
       }
       // JIG tab: the catalogue, and the Sync jig (relation and differences of two Syncs).
@@ -2175,6 +2208,7 @@ export async function startServer({
         send(200, {
           settings: accountUsage.settings(),
           accounts: await accountUsage.all(url.searchParams.get('refresh') === '1'),
+          accountSwitch: accountSwitchInfo(),
         });
         return;
       }
@@ -2989,6 +3023,11 @@ export async function startServer({
   authority = `127.0.0.1:${address.port}`;
   origin = `http://${authority}`;
   void remoteAccess.init();
+  // The installed program fetches the remote access tool once, quietly (ADR-039 2).
+  if (prefetchTools) {
+    const prefetch = setTimeout(() => void remoteAccess.prefetch(), 5000);
+    prefetch.unref?.();
+  }
   // Provider transcripts of conversations closed 30 days ago (SPEC-02.19 1): at start, then daily.
   const sweepTranscripts = () => void conversations.sweep().catch(() => {});
   sweepTranscripts();

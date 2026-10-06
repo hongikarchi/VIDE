@@ -93,7 +93,7 @@ export const Rail = memo(function Rail() {
         <button
           id="rail-notes"
           data-workspace-target="notes"
-          title="노트·일지 · 구성원이 함께 쓰는 노트·협의 사항·작업 일지"
+          title="노트·일지 · 구성원이 함께 쓰는 노트"
           aria-label="노트·일지"
           data-icon="notebook"
           aria-pressed={pressed('notes')}

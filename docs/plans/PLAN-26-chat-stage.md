@@ -2,10 +2,10 @@
 id: PLAN-26
 title: 대화가 화면과 작업을 이끄는 구조 — skill 시작, 토큰 정리, 셸 정리, 산출물 탭
 status: review
-version: 0.13
-updated: 2026-10-02
+version: 0.14
+updated: 2026-10-06
 owner: agent:claude
-related: [ADR-026, ADR-016, ADR-022, ADR-021, ADR-020, SPEC-01, SPEC-02, SPEC-07, ARCH-03, ARCH-01, DESIGN, RESEARCH-12, PLAN-22, PLAN-24, FR-18, FR-24, FR-25, AC-48]
+related: [ADR-026, ADR-016, ADR-022, ADR-021, ADR-020, SPEC-01, SPEC-02, SPEC-07, ARCH-03, ARCH-01, DESIGN, RESEARCH-12, PLAN-22, PLAN-24, PLAN-40, FR-18, FR-24, FR-25, AC-48]
 ---
 
 # 대화가 화면과 작업을 이끄는 구조 (T-076~T-081, T-089~T-091, T-098~T-101, T-103, T-109, T-110, T-113)
@@ -281,6 +281,8 @@ related: [ADR-026, ADR-016, ADR-022, ADR-021, ADR-020, SPEC-01, SPEC-02, SPEC-07
 **검증 — 실패:** 문장이 비면 [만들기 시작]·[빈 초안에서]가 꺼짐, 초안 만들기 실패는 카드 안 한 줄. 고정·버린 초안은 카드로 보이지 않는다.
 
 **완료:** 위 시험과 `npm test`·`npm run typecheck`·prettier 통과, PLAN §6.5 갱신.
+
+**후속:** 카드 안의 문장 입력·[빈 초안에서]·격자 예제 기본 시작은 2026-10-06 사용자 요청으로 거두었다. 카드는 누르기만 하는 입구가 되고 만들기 화면의 시작 양식이 그 자리를 맡는다 — [PLAN-40](PLAN-40-jig-start-brief.md) T-185·T-186.
 
 <a id="t-100"></a>
 ## T-100 · jig 아이콘: 정해 둔 목록에서 고른 `icon`을 카드·탭·칩·대시보드에

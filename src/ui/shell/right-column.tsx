@@ -12,6 +12,7 @@ import { PendingRequests } from '../requests.tsx';
 import { Composer } from './composer.tsx';
 import { PartBoundary } from './part-boundary.tsx';
 import { RouteCard } from './route-card.tsx';
+import { AgendaHelper } from './agenda-helper.tsx';
 
 /** Filled and shown by the panel-mode start; React never redraws these containers. */
 const PanelTop = memo(function PanelTop() {
@@ -152,6 +153,7 @@ export const RightColumn = memo(function RightColumn() {
         <div className="chat-heading">
           <h2>AI WORK</h2>
         </div>
+        <AgendaHelper />
         <ConversationChips />
         <MakeSide />
         <RecentSection />

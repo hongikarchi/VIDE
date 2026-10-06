@@ -10,11 +10,18 @@ import * as Y from 'yjs';
 export const NOTE_FIELD = 'default';
 export const NOTE_KINDS = ['note', 'discussion', 'journal'] as const;
 export type NoteKind = (typeof NOTE_KINDS)[number];
-export const NOTE_KIND_LABEL: Record<NoteKind, string> = {
-  note: '노트',
-  discussion: '협의 사항',
-  journal: '일지',
-};
+/**
+ * Screens show one kind, 노트 (2026-10-06 사용자 결정 "노트로 통일"): a 협의 사항 row is a 노트;
+ * only a journal, the dated note [퇴근하기] writes to, is told apart as '일지'.
+ */
+export const noteLabel = (kind: NoteKind) => (kind === 'journal' ? '일지' : '노트');
+/** The title as shown: an empty title reads '제목 없음' (a journal's, its date title). */
+export function noteTitle(note: { title: string; kind: NoteKind; journalDate?: string | null }) {
+  return (
+    note.title.trim() ||
+    (note.kind === 'journal' && note.journalDate ? journalTitle(note.journalDate) : '제목 없음')
+  );
+}
 /** Markdown kept in D1 and the PC copy is cut here (a D1 row stays far below its 2 MB limit). */
 export const NOTE_SNAPSHOT_MAX = 400_000;
 
@@ -179,7 +186,7 @@ export function appendParagraphs(doc: Y.Doc, text: string, origin?: unknown) {
 }
 
 /**
- * The open action items of a 협의 사항 note: its unchecked check-list items (`- [ ] …`), each
+ * The open action items of a note: its unchecked check-list items (`- [ ] …`), each
  * one line. Checked items and plain text are left out.
  */
 export function actionItems(markdown: string): string[] {

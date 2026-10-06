@@ -35,6 +35,8 @@ try {
   await page.waitForFunction(() => document.querySelector('#project-picker')?.value);
   await page.locator('.rail [data-workspace-target="dashboard"]').click();
   const board = page.getByRole('region', { name: '대시보드', exact: true });
+  // The folders sit in the dashboard's folded line (PLAN-39 T-181); opened, it stays open.
+  await board.locator('details.dash-more > summary').click();
   const section = board.getByRole('region', { name: '프로젝트 폴더' });
   await section.getByText('프로젝트 폴더를 정하면 AI가 그 안의 파일을 직접 읽습니다.').waitFor();
 

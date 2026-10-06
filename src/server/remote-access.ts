@@ -5,6 +5,8 @@ import { readFile, writeFile, rename, unlink } from 'node:fs/promises';
 import { join } from 'node:path';
 import { z } from 'zod';
 import { DomainError } from '../core/store.ts';
+import { onPath } from '../ai/paths.ts';
+import { downloadCloudflared } from './cloudflared.ts';
 
 // Account link of this work PC. The PC signs in once with the VIDE account (ID/password) and keeps
 // only a host key. While linked it reports to the account site that it is on, its local address
@@ -45,7 +47,10 @@ const queuedSchema = z.array(
   }),
 );
 export type QueuedRequest = z.infer<typeof queuedSchema>[number];
-/** A 할 일 edit made on the account site, for this PC to apply (PLAN-33). */
+/**
+ * A 할 일 edit made on the account site, for this PC to apply (PLAN-33; the period, 위치 and 참석자
+ * from PLAN-39). A kind this PC does not know drops only that field, never the round's edits.
+ */
 const agendaEditSchema = z.object({
   id: z.string().uuid(),
   projectId: z.string(),
@@ -56,7 +61,11 @@ const agendaEditSchema = z.object({
       text: z.string().max(500).optional(),
       date: z.string().nullable().optional(),
       time: z.string().nullable().optional(),
-      kind: z.enum(['task', 'meeting', 'deadline']).optional(),
+      endDate: z.string().nullable().optional(),
+      endTime: z.string().nullable().optional(),
+      kind: z.enum(['task', 'meeting', 'receipt', 'deadline']).optional().catch(undefined),
+      location: z.string().max(200).nullable().optional(),
+      attendees: z.string().max(300).nullable().optional(),
       done: z.boolean().optional(),
     })
     .strip(),
@@ -79,6 +88,8 @@ export interface RemoteStatus {
   remote: boolean;
   running: boolean;
   starting: boolean;
+  /** The remote access tool is being fetched (first use on this PC, PLAN-38 T-177). */
+  downloading?: boolean;
   url?: string;
   lastHeartbeat?: string;
   error?: string;
@@ -101,6 +112,8 @@ interface Options {
   /** Runs after each successful heartbeat (offline view uploads). */
   afterHeartbeat?: () => void;
   executable?: string;
+  /** Fetches cloudflared to the given path (default: the official release, `cloudflared.ts`). */
+  download?: (target: string) => Promise<unknown>;
   fetcher?: typeof fetch;
   spawnProcess?: typeof spawn;
   heartbeatMs?: number;
@@ -118,14 +131,17 @@ export function cloudflaredPath(directory: string) {
     ),
   ])
     if (candidate && existsSync(candidate)) return candidate;
-  return undefined;
+  return onPath(['cloudflared.exe']);
 }
+/** Errors of the tunnel and its tool: shown only while remote access is on. */
+const tunnelError = (code: string | undefined) => !!code && /^(CLOUDFLARED_|TUNNEL_)/.test(code);
 
 export class RemoteAccess {
   private device: Device | undefined;
   private loaded: Promise<void> | undefined;
   private tunnel: ChildProcess | undefined;
   private starting: Promise<RemoteStatus> | undefined;
+  private fetching: Promise<string> | undefined;
   private url: string | undefined;
   private timer: ReturnType<typeof setInterval> | undefined;
   private lastHeartbeat: string | undefined;
@@ -189,9 +205,11 @@ export class RemoteAccess {
       remote: !!this.device?.remote,
       running: !!this.url,
       starting: !!this.starting && !this.url,
+      downloading: !!this.fetching,
       url: this.url,
       lastHeartbeat: this.lastHeartbeat,
-      error: this.error,
+      // A tunnel or tool error is not shown while remote access is off.
+      error: !this.device?.remote && tunnelError(this.error) ? undefined : this.error,
     };
   }
   /** Sign this PC in to the account; the password is used once and never stored. */
@@ -221,13 +239,13 @@ export class RemoteAccess {
       .parse(await response.json());
     if (this.device) await this.unlink();
     this.closed = false;
+    // Signing in does not turn on remote access (ADR-039 3): the user turns it on in Settings.
     await this.save(
-      deviceSchema.parse({ workerOrigin: origin, name, username, remote: true, ...reply }),
+      deviceSchema.parse({ workerOrigin: origin, name, username, remote: false, ...reply }),
     );
     // Existing local projects join the account list with their ids.
     for (const project of this.options.projects?.() ?? []) await this.pushProject(project);
     this.beat();
-    void this.start().catch(() => {});
     return this.status();
   }
   async unlink() {
@@ -254,7 +272,11 @@ export class RemoteAccess {
     if (!this.device) throw failure('ACCOUNT_NOT_LINKED');
     await this.save({ ...this.device, remote: enabled });
     if (enabled) void this.start().catch(() => {});
-    else await this.stop();
+    else {
+      // A tunnel or tool failure means nothing once remote access is off.
+      if (tunnelError(this.error)) this.error = undefined;
+      await this.stop();
+    }
     return this.status();
   }
   /** Start presence reports now and every 15 seconds. */
@@ -270,11 +292,40 @@ export class RemoteAccess {
     if (this.tunnel) return this.status();
     return (this.starting ??= this.open().finally(() => (this.starting = undefined)));
   }
+  /** cloudflared's path; fetched into `<data>\bin` when this PC has none (ADR-039 2). */
+  private async tool() {
+    const found = this.options.executable ?? cloudflaredPath(this.options.directory);
+    if (found) return found;
+    const target = join(this.options.directory, 'bin', 'cloudflared.exe');
+    this.fetching ??= (async () => {
+      try {
+        await (this.options.download ?? downloadCloudflared)(target);
+        if (!existsSync(target)) throw failure('CLOUDFLARED_DOWNLOAD_FAILED');
+        return target;
+      } finally {
+        this.fetching = undefined;
+      }
+    })();
+    return this.fetching;
+  }
+  /**
+   * The installed program's first run fetches the tool in the background so turning remote access
+   * on later needs no wait. A failure is quiet: turning remote access on fetches again.
+   */
+  async prefetch() {
+    try {
+      return !!(await this.tool());
+    } catch {
+      return false;
+    }
+  }
   private async open() {
-    const executable = this.options.executable ?? cloudflaredPath(this.options.directory);
-    if (!executable) {
-      this.error = 'CLOUDFLARED_MISSING';
-      throw failure('CLOUDFLARED_MISSING');
+    let executable: string;
+    try {
+      executable = await this.tool();
+    } catch (error) {
+      this.error = error instanceof DomainError ? error.code : 'CLOUDFLARED_DOWNLOAD_FAILED';
+      throw error instanceof DomainError ? error : failure('CLOUDFLARED_DOWNLOAD_FAILED');
     }
     this.error = undefined;
     const child = (this.options.spawnProcess ?? spawn)(

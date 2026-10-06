@@ -4,10 +4,13 @@
 
 ## 설치 (사용자)
 
-1. [Releases](https://github.com/hongikarchi/VIDE/releases/latest)에서 `VIDE.App-win-Setup.exe`를 받아 실행합니다. 관리자 권한이 필요 없고, 이후 업데이트는 자동입니다.
-2. VIDE 설정 → **연결 프로그램**에서 Rhino 8·ZWCAD 플러그인을 설치합니다. 설치할 때 해당 프로그램을 닫아 두세요.
-3. Rhino나 ZWCAD 패널에서 **Link**를 눌러 문서를 프로젝트에 연결합니다.
-4. AI는 이 PC에 로그인된 Claude Code 또는 Codex CLI를 씁니다.
+1. **VIDE:** [Releases](https://github.com/hongikarchi/VIDE/releases/latest)에서 `VIDE.App-win-Setup.exe`를 받아 실행합니다. 관리자 권한이 필요 없고, 이후 업데이트는 자동입니다. 처음 열면 VIDE 계정 로그인 화면이 나옵니다. 계정이 없으면 [웹사이트](https://vide-sharing-staging.archivibe.workers.dev)에서 가입 코드로 만든 뒤 로그인하고, 프로젝트를 고르거나 이름을 넣어 만듭니다.
+2. **AI CLI:** [Claude Code](https://docs.claude.com/en/docs/claude-code/setup) 또는 [Codex CLI](https://github.com/openai/codex)를 설치합니다. VIDE는 공식 설치 위치(Claude는 `%USERPROFILE%\.local\bin\claude.exe`), npm 전역 설치(`npm i -g @anthropic-ai/claude-code`, `npm i -g @openai/codex`), PATH 순서로 찾습니다. 다른 곳에 두었으면 설정 → AI 연결 → 고급에 실행 파일 경로를 넣습니다.
+3. **AccountSwitch:** [AccountSwitch](https://github.com/hongikarchi/AccountSwitch/releases/latest)를 설치하고 그 안에서 Claude·ChatGPT 계정에 로그인합니다. 여러 계정을 바꿔 가며 쓰면 권장합니다. 계정이 하나뿐이면 설치하지 않고 터미널에서 `claude`(처음 실행 때 로그인) 또는 `codex login`으로 로그인해도 됩니다. VIDE는 지금 CLI에 로그인된 계정을 그대로 쓰고, 계정 전환은 AccountSwitch에서 합니다.
+4. **플러그인:** VIDE 설정 → **연결 프로그램**에서 Rhino 8·ZWCAD 플러그인을 설치합니다. 설치할 때 해당 프로그램을 닫아 두세요.
+5. **Link:** Rhino나 ZWCAD 패널에서 **Link**를 눌러 문서를 프로젝트에 연결합니다.
+
+다른 기기(아이패드 등)에서 여는 원격 접속은 기본으로 꺼져 있고, 설정 → VIDE 계정에서 켭니다. 필요한 공식 도구(cloudflared)는 VIDE가 처음 실행할 때 배경에서 받아 두고, 그때 받지 못했으면 원격 접속을 켤 때 받습니다.
 
 의견과 문제는 VIDE 왼쪽 아래 **피드백** 버튼(구글폼)으로 보내 주세요.
 

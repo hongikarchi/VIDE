@@ -6,7 +6,9 @@
 // app's conversation column (chips, work view, question cards); this screen adds the plan card,
 // the progress line and the two decisions, [버리기] and [이 프로젝트의 jig로 고정] (확인 필요).
 // Nothing here writes to a host: a preview draws lines on this screen only. The JIG list's
-// '말로 만들기' card, the draft list and [가져오기] (.vjig) are exported from here too.
+// '새로 만들기' card, the draft list and [가져오기] (.vjig) are exported from here too. With no draft
+// open, the tab shows the 시작 양식 (PLAN-40 T-185): [계획 받기] makes the draft and sends the form
+// as the make conversation's first turn.
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { createRoot, type Root } from 'react-dom/client';
@@ -57,7 +59,35 @@ import {
 import { JIG_ICONS, JIG_ICON_LABELS, JigIconMark, jigIcon, noteJigIcon } from './jig-icons.ts';
 import { openDrafts } from './jig-list.ts';
 import { openContextTab, setWorkspace } from './workspaces.ts';
-import { offerMakeSide } from './store/work.ts';
+import { offerMakeSide, workState } from './store/work.ts';
+import {
+  INPUTS,
+  LAYER_SHAPES,
+  NOT_WHEN_EXAMPLES,
+  OUTPUTS,
+  PARAM_TYPES,
+  STEP_BY,
+  WHEN_EXAMPLES,
+  ZONE_SHAPES,
+  PHASES,
+  briefPrompt,
+  briefReady,
+  emptyBrief,
+  emptyCheck,
+  emptyParam,
+  emptyStep,
+  keepBrief,
+  keptBrief,
+  phaseOf,
+  planOf,
+  untouched,
+  type Brief,
+  type BriefCheck,
+  type BriefInput,
+  type BriefOutput,
+  type BriefParam,
+  type BriefStep,
+} from './make-brief.ts';
 import './make.css';
 
 type Value = number | string | boolean;
@@ -167,15 +197,6 @@ export function settingsOf(
     return setting;
   });
 }
-const PHASES = ['계획', '질문', '작성', '시험', '미리보기', '고정'] as const;
-type Phase = (typeof PHASES)[number];
-/** Where the authoring stands, from what the engine reports about the draft. */
-export function phaseOf(detail: DraftDetail): Phase {
-  if (detail.preview) return '미리보기';
-  if (detail.test || detail.validate) return '시험';
-  if (detail.files.some((file) => file.path.startsWith('steps/'))) return '작성';
-  return '계획';
-}
 /** Why [이 프로젝트의 jig로 고정] cannot be pressed yet (undefined: it can). */
 export function pinBlocked(detail: DraftDetail): string | undefined {
   if (!detail.validate) return '점검을 먼저 해야 합니다';
@@ -189,26 +210,6 @@ export function pinBlocked(detail: DraftDetail): string | undefined {
     return '점검 뒤 파일이 바뀌었습니다. 점검·시험을 다시 하세요';
   return undefined;
 }
-/** The plan card: the engine's plan when it keeps one, otherwise what the draft already has. */
-export function planOf(detail: DraftDetail) {
-  if (detail.plan?.length) return detail.plan;
-  const m = detail.manifest;
-  const has = (path: string) => detail.files.some((file) => file.path === path);
-  const items = [
-    { title: `입력 ${m.inputs.length}개`, done: m.inputs.length > 0 },
-    { title: `설정값 ${m.params.length}개`, done: m.params.length > 0 },
-    { title: `단계 ${m.steps.length}개`, done: m.steps.length > 0 },
-    { title: '화면 (panel.json)', done: has('panel.json') },
-    {
-      title: '시험 자료',
-      done: detail.files.some((file) => file.path.startsWith('fixtures/')),
-    },
-    { title: '결과 확인 (시험 통과)', done: !!detail.test?.ok },
-  ];
-  const current = items.findIndex((item) => !item.done);
-  return items.map((item, i) => ({ ...item, current: i === current }));
-}
-
 // --- Mounting ---
 
 let root: Root | undefined;
@@ -232,6 +233,17 @@ export function showMake(projectId: string) {
     root.render(<MakeTab key={projectId} projectId={projectId} />);
   }
   window.dispatchEvent(new Event('vide:make-shown'));
+}
+/**
+ * Open the 만들기 tab on the 시작 양식 (the JIG list's [새로 만들기], PLAN-40 T-185): no draft is made
+ * yet, and the last draft shown does not open again.
+ */
+export function openBrief(projectId: string) {
+  wanted = undefined;
+  rememberDraft(projectId, undefined);
+  for (const listener of listeners) listener(undefined);
+  setWorkspace('make');
+  showMake(projectId);
 }
 /** Open a draft in the 만들기 tab (from the JIG list or after creating one). */
 export function openDraft(projectId: string, draftId: string) {
@@ -267,23 +279,56 @@ function chooseConversation(id: string) {
   press();
 }
 
-/** The 새로 만들기 sentence of a draft just made, waiting for its make conversation to open. */
-const firstWords = new Map<string, string>();
+/** The first turn of a draft just made from the 시작 양식, waiting for its make conversation. */
+const firstTurns = new Map<string, string>();
+const pause = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 /**
- * Put the 새로 만들기 sentence in the composer once the draft's make conversation is chosen
- * (SPEC-07.16 step 0), unless something is already typed there. It is not sent: the person sends
- * it, and that first turn shows the plan.
+ * Send words as a turn of the make conversation (PLAN-40 T-185): the 시작 양식's first turn and
+ * [만들기 시작]. Only into that conversation, once it is the chosen one; words already typed in the
+ * composer stay and nothing is sent ('kept'). When sending cannot start (no model, the app busy),
+ * the words wait in the composer ('typed'). The turn skips request routing: it is the make
+ * conversation's turn by construction.
  */
-function prefillComposer(draftId: string) {
-  const words = firstWords.get(draftId);
-  firstWords.delete(draftId);
+export async function sendMakeTurn(
+  conversationId: string,
+  text: string,
+): Promise<'sent' | 'typed' | 'kept' | 'missed'> {
+  const chosen = () => workState.conversationChips?.active() === conversationId;
+  for (let i = 0; i < 40 && !chosen(); i++) {
+    if (i % 10 === 5) {
+      await workState.conversationChips?.refresh().catch(() => undefined);
+      workState.conversationChips?.select(conversationId);
+    }
+    await pause(200);
+  }
+  if (!chosen()) return 'missed';
+  // The chosen conversation's own draft lands in the composer first.
+  await pause(100);
   const composer = document.getElementById('body');
-  if (!words || !(composer instanceof HTMLTextAreaElement) || composer.value.trim()) return;
-  composer.value = words;
+  if (!(composer instanceof HTMLTextAreaElement)) return 'missed';
+  if (composer.value.trim() && composer.value !== text) return 'kept';
+  composer.value = text;
   // The app keeps the composer's text through its input handler.
   composer.dispatchEvent(new Event('input', { bubbles: true }));
+  for (let i = 0; i < 40; i++) {
+    if (!chosen() || composer.value !== text) return 'typed';
+    const send = document.getElementById('request');
+    if (send instanceof HTMLButtonElement && !send.disabled && !composer.disabled) {
+      const { submitRequest } = await import('./app/composer.ts');
+      await submitRequest();
+      return composer.value === text ? 'typed' : 'sent';
+    }
+    await pause(250);
+  }
   composer.focus();
+  return 'typed';
 }
+const TURN_NOTICE: Record<'typed' | 'kept' | 'missed', string> = {
+  typed: '보낼 말을 오른쪽 입력 칸에 넣어 두었습니다. 보내기를 누르면 이어집니다.',
+  kept: '입력 칸에 적어 둔 말이 있어 보내지 않았습니다. 그 말을 보내거나 지운 뒤 다시 누르세요.',
+  missed:
+    '제작 대화를 고르지 못해 보내지 않았습니다. 오른쪽 대화 칩에서 이 초안의 대화를 고르세요.',
+};
 
 // --- The tab ---
 
@@ -301,6 +346,11 @@ function MakeTab({ projectId }: { projectId: string }) {
   const [fixture, setFixture] = useState<string>();
   const [side, setSide] = useState<HTMLElement>();
   const conversationFor = useRef<string | undefined>(undefined);
+  /** The draft's make conversation once it is known (it may be made after the draft is read). */
+  const [conversation, setConversation] = useState<string>();
+  /** [만들기 시작] is being sent; bumped after it is kept so the plan card reads it again. */
+  const [starting, setStarting] = useState(false);
+  const [, setKeptVersion] = useState(0);
 
   useEffect(() => {
     const listener = (id: string | undefined) => setDraftId(id);
@@ -364,10 +414,18 @@ function MakeTab({ projectId }: { projectId: string }) {
     conversationFor.current = detail.draft.id;
     const known = detail.conversationId;
     const draftId = detail.draft.id;
+    setConversation(known);
     (known ? Promise.resolve(known) : makeConversation(projectId, detail.draft))
       .then((id) => {
+        setConversation(id);
         chooseConversation(id);
-        prefillComposer(draftId);
+        // The 시작 양식 goes as the first turn by itself (SPEC-07.16 step 0, 2026-10-06).
+        const turn = firstTurns.get(draftId);
+        firstTurns.delete(draftId);
+        if (turn)
+          void sendMakeTurn(id, turn).then((result) => {
+            if (result !== 'sent') setNotice(TURN_NOTICE[result]);
+          });
       })
       .catch((error) => setNotice(`제작 대화를 열지 못했습니다: ${messageOf(error)}`));
   }, [detail, projectId]);
@@ -465,13 +523,14 @@ function MakeTab({ projectId }: { projectId: string }) {
           </p>
         ) : (
           <>
-            <MakeCard
+            <MakeBrief
               projectId={projectId}
               onCreated={(draft) => {
                 readList();
                 choose(draft.id);
               }}
             />
+            <h3 className="make-drafts-title">내 초안</h3>
             <DraftList projectId={projectId} drafts={drafts} onOpen={choose} />
             {notice ? <p role="alert">{notice}</p> : null}
           </>
@@ -491,8 +550,25 @@ function MakeTab({ projectId }: { projectId: string }) {
   const m = detail.manifest;
   const name = m.name || detail.draft.name;
   const block = pinBlocked(detail);
-  const phase = phaseOf(detail);
-  const plan = planOf(detail);
+  const kept = keptBrief(detail.draft.id);
+  // Writing starts with [만들기 시작] or with files written after the starting point (SPEC-07.16).
+  const writing = !!kept?.started || !untouched(detail);
+  const phase = phaseOf(detail, writing);
+  const plan = planOf(detail, { writing, ...(kept?.brief ? { brief: kept.brief } : {}) });
+  const startWriting = () => {
+    if (!conversation || starting) return;
+    const draftId = detail.draft.id;
+    setStarting(true);
+    setNotice('');
+    void sendMakeTurn(conversation, '만들기 시작')
+      .then((result) => {
+        if (result === 'sent') {
+          keepBrief(draftId, { ...(keptBrief(draftId) ?? {}), started: true });
+          setKeptVersion((n) => n + 1);
+        } else setNotice(TURN_NOTICE[result]);
+      })
+      .finally(() => setStarting(false));
+  };
   const lastSteps = detail.preview?.steps.length
     ? detail.preview.steps
     : (detail.test?.cases[0]?.steps ?? []);
@@ -522,7 +598,9 @@ function MakeTab({ projectId }: { projectId: string }) {
             <div className="make-head">
               <strong>계획</strong>
               <small>
-                {plan.filter((item) => item.done).length}/{plan.length} 완료
+                {!writing && kept?.brief
+                  ? `양식 ${plan.filter((item) => item.done).length}칸`
+                  : `${plan.filter((item) => item.done).length}/${plan.length} 완료`}
               </small>
             </div>
             <ul>
@@ -533,8 +611,19 @@ function MakeTab({ projectId }: { projectId: string }) {
               ))}
             </ul>
             <small className="kit-muted">
-              계획과 질문은 아래 대화에서 주고받습니다. 질문 카드에 답하면 AI가 이어서 씁니다.
+              계획과 질문은 아래 대화에서 주고받습니다. 계획이 맞으면 [만들기 시작]을 누르세요.
             </small>
+            {!writing ? (
+              <button
+                type="button"
+                className="primary make-go"
+                disabled={!conversation || starting || !!busy}
+                onClick={startWriting}
+                data-action="start-writing"
+              >
+                {starting ? '보내는 중…' : '만들기 시작'}
+              </button>
+            ) : null}
           </section>
           <div className="make-decide">
             <small className="kit-muted">
@@ -1417,73 +1506,424 @@ function PanelIssues({ issues }: { issues: readonly PanelIssue[] }) {
 // --- Entry points in the JIG list (SCR-18) ---
 
 /**
- * '새로 만들기', the JIG list's last card (SCR-18, PLAN-26 T-099): one sentence of what the tool
- * does and [만들기 시작]. The draft starts from the general grid example; [빈 초안에서] starts from a
- * blank one. The sentence is the draft's first name, and it waits in the composer of the draft's
- * make conversation (SPEC-07.16 step 0): sending it is the first turn, where the AI shows the plan.
- * Nothing is sent by itself — the person picks the model and presses send.
+ * '새로 만들기', the JIG list's last card (SCR-18, PLAN-40 T-185): the whole dashed card is one
+ * button that opens the 만들기 tab on the 시작 양식. No draft is made until [계획 받기].
  */
-export function MakeCard({
+export function MakeCard({ projectId }: { projectId: string }) {
+  return (
+    <button
+      type="button"
+      className="jig-card make-card"
+      data-source="new"
+      aria-label="새로 만들기"
+      onClick={() => openBrief(projectId)}
+    >
+      <span className="make-card-plus" aria-hidden="true">
+        +
+      </span>
+      <strong>새로 만들기</strong>
+    </button>
+  );
+}
+
+const toggled = <T,>(list: readonly T[], item: T) =>
+  list.includes(item) ? list.filter((x) => x !== item) : [...list, item];
+
+/**
+ * The 시작 양식 (SPEC-07.16 step 0, Design SCR-16, PLAN-40 T-185): what the tool is for (required)
+ * and, if the person wants, what it reads, what it lets them adjust, how it decides, what it gives
+ * and when it passes. [계획 받기] makes the draft (blank unless the example is chosen) and its first
+ * turn is this form in sentences, sent by itself once the make conversation is open.
+ */
+export function MakeBrief({
   projectId,
   onCreated,
 }: {
   projectId: string;
   onCreated?: (draft: DraftSummary) => void;
 }) {
-  const [name, setName] = useState('');
+  const [brief, setBrief] = useState<Brief>(emptyBrief);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
-  const start = (from: DraftStart) => {
-    if (!name.trim() || busy) return;
+  const set = (patch: Partial<Brief>) => setBrief((b) => ({ ...b, ...patch }));
+  const setParam = (i: number, patch: Partial<BriefParam>) =>
+    setBrief((b) => ({ ...b, params: b.params.map((p, j) => (j === i ? { ...p, ...patch } : p)) }));
+  const setStep = (i: number, patch: Partial<BriefStep>) =>
+    setBrief((b) => ({ ...b, steps: b.steps.map((p, j) => (j === i ? { ...p, ...patch } : p)) }));
+  const setCheck = (i: number, patch: Partial<BriefCheck>) =>
+    setBrief((b) => ({ ...b, checks: b.checks.map((p, j) => (j === i ? { ...p, ...patch } : p)) }));
+  const drop = (key: 'params' | 'steps' | 'checks', i: number) =>
+    setBrief((b) => ({ ...b, [key]: b[key].filter((_, j) => j !== i) }));
+  const addTo = (base: string, example: string) =>
+    base.trim() ? (base.includes(example) ? base : `${base.trim()}\n${example}`) : example;
+  const ready = briefReady(brief);
+  const submit = () => {
+    if (!ready || busy) return;
     setBusy(true);
     setError('');
-    createDraft(projectId, { name: name.trim(), from })
+    createDraft(projectId, { name: brief.purpose.trim(), from: brief.start })
       .then((draft) => {
-        firstWords.set(draft.id, name.trim());
-        setName('');
+        keepBrief(draft.id, { brief, started: false });
+        firstTurns.set(draft.id, briefPrompt(brief));
+        setBrief(emptyBrief());
         if (onCreated) onCreated(draft);
         else openDraft(projectId, draft.id);
       })
       .catch((reason) => setError(messageOf(reason)))
       .finally(() => setBusy(false));
   };
+  const chip = (on: boolean, label: string, toggle: () => void) => (
+    <button key={label} type="button" className="make-chip" aria-pressed={on} onClick={toggle}>
+      {label}
+    </button>
+  );
+  const check = (key: BriefOutput, label: string) => (
+    <label key={key} className="make-check">
+      <input
+        type="checkbox"
+        checked={brief.outputs.includes(key)}
+        onChange={() => set({ outputs: toggled(brief.outputs, key) })}
+      />
+      {label}
+    </label>
+  );
   return (
     <form
-      className="jig-card make-card"
-      data-source="new"
-      aria-label="새로 만들기"
+      className="make-brief"
+      aria-label="시작 양식"
       onSubmit={(event) => {
         event.preventDefault();
-        start('example-grid');
+        submit();
       }}
     >
-      <div className="jig-card-head">
-        <strong>새로 만들기</strong>
+      <div className="make-head">
+        <h2>새 도구 만들기</h2>
+        <small className="kit-muted">목적만 적어도 됩니다</small>
       </div>
-      <p>
-        무엇을 하는 도구인지 한 문장으로 적으세요. 초안을 만들고 그 문장을 오른쪽 만들기 대화에 넣어
-        둡니다. 보내면 AI가 계획부터 보입니다.
-      </p>
-      <input
-        value={name}
-        maxLength={100}
-        aria-label="무엇을 하는 도구인가요?"
-        placeholder="예: 신설 이음 선마다 양쪽 기둥이 있는지 확인"
-        onChange={(event) => setName(event.target.value)}
-      />
-      {error ? <small role="alert">{error}</small> : null}
-      <div className="make-card-actions">
-        <button type="submit" className="primary" disabled={busy || !name.trim()}>
-          {busy ? '만드는 중…' : '만들기 시작'}
-        </button>
+      <label className="make-field">
+        <strong>무엇을 하는 도구인가요?</strong>
+        <input
+          value={brief.purpose}
+          maxLength={100}
+          placeholder="예: 신설 이음 선마다 양쪽 기둥이 있는지 확인"
+          onChange={(event) => set({ purpose: event.target.value })}
+        />
+      </label>
+      <div className="make-when">
+        <div className="make-field">
+          <label className="make-field">
+            <span>언제 쓰나</span>
+            <textarea
+              rows={2}
+              value={brief.when}
+              onChange={(event) => set({ when: event.target.value })}
+            />
+          </label>
+          <div className="make-chips" role="group" aria-label="언제 쓰나 예문">
+            {WHEN_EXAMPLES.map((text) =>
+              chip(false, text, () => set({ when: addTo(brief.when, text) })),
+            )}
+          </div>
+        </div>
+        <div className="make-field">
+          <label className="make-field">
+            <span>쓰지 않을 때</span>
+            <textarea
+              rows={2}
+              value={brief.notWhen}
+              onChange={(event) => set({ notWhen: event.target.value })}
+            />
+          </label>
+          <div className="make-chips" role="group" aria-label="쓰지 않을 때 예문">
+            {NOT_WHEN_EXAMPLES.map((text) =>
+              chip(false, text, () => set({ notWhen: addTo(brief.notWhen, text) })),
+            )}
+          </div>
+        </div>
+      </div>
+
+      <fieldset>
+        <legend>무엇을 읽나</legend>
+        <div className="make-chips" role="group" aria-label="입력">
+          {INPUTS.map((input) =>
+            chip(brief.inputs.includes(input.key), input.label, () =>
+              set({ inputs: toggled<BriefInput>(brief.inputs, input.key) }),
+            ),
+          )}
+        </div>
+        {brief.inputs.includes('layers') ? (
+          <div className="make-chips make-sub" role="group" aria-label="레이어에서 읽는 형상">
+            <small>형상</small>
+            {LAYER_SHAPES.map((shape) =>
+              chip(brief.layerShapes.includes(shape), shape, () =>
+                set({ layerShapes: toggled<string>(brief.layerShapes, shape) }),
+              ),
+            )}
+          </div>
+        ) : null}
+        {brief.inputs.includes('zone') ? (
+          <div className="make-chips make-sub" role="group" aria-label="그리는 모양">
+            <small>모양</small>
+            {ZONE_SHAPES.map((shape) =>
+              chip(brief.zoneShapes.includes(shape), shape, () =>
+                set({ zoneShapes: toggled<string>(brief.zoneShapes, shape) }),
+              ),
+            )}
+          </div>
+        ) : null}
+      </fieldset>
+
+      <fieldset>
+        <legend>무엇을 조절하나</legend>
+        {brief.params.length ? (
+          <div className="make-table-wrap">
+            <table className="make-rows" aria-label="설정값">
+              <thead>
+                <tr>
+                  <th>이름</th>
+                  <th>종류</th>
+                  <th>단위</th>
+                  <th>기본값</th>
+                  <th>범위</th>
+                  <th>근거</th>
+                  <th aria-label="지우기" />
+                </tr>
+              </thead>
+              <tbody>
+                {brief.params.map((p, i) => (
+                  <tr key={i}>
+                    <td>
+                      <input
+                        aria-label="설정값 이름"
+                        value={p.name}
+                        placeholder="예: 기둥 간격"
+                        onChange={(event) => setParam(i, { name: event.target.value })}
+                      />
+                    </td>
+                    <td>
+                      <select
+                        aria-label="종류"
+                        value={p.type}
+                        onChange={(event) => {
+                          const type = PARAM_TYPES.find((t) => t.key === event.target.value);
+                          if (type) setParam(i, { type: type.key, unit: type.unit });
+                        }}
+                      >
+                        {PARAM_TYPES.map((t) => (
+                          <option key={t.key} value={t.key}>
+                            {t.label}
+                          </option>
+                        ))}
+                      </select>
+                    </td>
+                    <td>
+                      <input
+                        aria-label="단위"
+                        className="make-short"
+                        value={p.unit}
+                        onChange={(event) => setParam(i, { unit: event.target.value })}
+                      />
+                    </td>
+                    <td>
+                      <input
+                        aria-label="기본값"
+                        className="make-short"
+                        value={p.value}
+                        onChange={(event) => setParam(i, { value: event.target.value })}
+                      />
+                    </td>
+                    <td className="make-range">
+                      <input
+                        aria-label="최소"
+                        className="make-short"
+                        value={p.min}
+                        onChange={(event) => setParam(i, { min: event.target.value })}
+                      />
+                      ~
+                      <input
+                        aria-label="최대"
+                        className="make-short"
+                        value={p.max}
+                        onChange={(event) => setParam(i, { max: event.target.value })}
+                      />
+                    </td>
+                    <td>
+                      <select
+                        aria-label="근거"
+                        value={p.basis}
+                        onChange={(event) =>
+                          setParam(i, {
+                            basis: event.target.value === 'confirmed' ? 'confirmed' : 'assumed',
+                          })
+                        }
+                      >
+                        <option value="assumed">가정</option>
+                        <option value="confirmed">확정</option>
+                      </select>
+                    </td>
+                    <td>
+                      <button
+                        type="button"
+                        className="link-button"
+                        aria-label="설정값 지우기"
+                        onClick={() => drop('params', i)}
+                      >
+                        ×
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : null}
         <button
           type="button"
           className="link-button"
-          disabled={busy || !name.trim()}
-          title="격자 예제 대신 설명서와 빈 단계 하나에서 시작합니다"
-          onClick={() => start('blank')}
+          onClick={() => set({ params: [...brief.params, emptyParam()] })}
         >
-          빈 초안에서
+          설정값 추가
+        </button>
+      </fieldset>
+
+      <fieldset>
+        <legend>어떻게 판단하나</legend>
+        {brief.steps.length ? (
+          <ol className="make-steps" aria-label="계산 단계">
+            {brief.steps.map((step, i) => (
+              <li key={i}>
+                <input
+                  aria-label="단계 이름"
+                  value={step.name}
+                  placeholder="예: 이음 선 찾기"
+                  onChange={(event) => setStep(i, { name: event.target.value })}
+                />
+                <select
+                  aria-label="맡는 쪽"
+                  value={step.by}
+                  onChange={(event) =>
+                    setStep(i, {
+                      by: STEP_BY.find((b) => b.key === event.target.value)?.key ?? 'code',
+                    })
+                  }
+                >
+                  {STEP_BY.map((b) => (
+                    <option key={b.key} value={b.key}>
+                      {b.label}
+                    </option>
+                  ))}
+                </select>
+                <input
+                  aria-label="한 줄 설명"
+                  value={step.note}
+                  placeholder="무엇을 하는지 한 줄"
+                  onChange={(event) => setStep(i, { note: event.target.value })}
+                />
+                <button
+                  type="button"
+                  className="link-button"
+                  aria-label="단계 지우기"
+                  onClick={() => drop('steps', i)}
+                >
+                  ×
+                </button>
+              </li>
+            ))}
+          </ol>
+        ) : null}
+        <button
+          type="button"
+          className="link-button"
+          onClick={() => set({ steps: [...brief.steps, emptyStep()] })}
+        >
+          단계 추가
+        </button>
+      </fieldset>
+
+      <fieldset>
+        <legend>무엇을 내놓나</legend>
+        <div className="make-chips">
+          {check('preview', '3D 미리보기선')}
+          {check('table', '표')}
+          {check('report', '보고서')}
+          {check('handoff', '다른 jig로 넘김')}
+        </div>
+        <div className="make-chips make-sub" role="group" aria-label="Rhino에 만들기">
+          <small>Rhino에 만들기</small>
+          {OUTPUTS.filter((o) => o.group).map((o) => check(o.key, o.label))}
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>무엇이면 통과인가</legend>
+        {brief.checks.map((row, i) => (
+          <div key={i} className="make-check-row">
+            <input
+              aria-label="통과 조건"
+              value={row.text}
+              placeholder="예: 기둥 간격 ≤ 12 m"
+              onChange={(event) => setCheck(i, { text: event.target.value })}
+            />
+            <select
+              aria-label="어기면"
+              value={row.level}
+              onChange={(event) =>
+                setCheck(i, { level: event.target.value === 'warn' ? 'warn' : 'block' })
+              }
+            >
+              <option value="block">막음</option>
+              <option value="warn">주의</option>
+            </select>
+            <button
+              type="button"
+              className="link-button"
+              aria-label="통과 조건 지우기"
+              onClick={() => drop('checks', i)}
+            >
+              ×
+            </button>
+          </div>
+        ))}
+        <button
+          type="button"
+          className="link-button"
+          onClick={() => set({ checks: [...brief.checks, emptyCheck()] })}
+        >
+          통과 조건 추가
+        </button>
+      </fieldset>
+
+      <fieldset>
+        <legend>시작점</legend>
+        <div className="make-chips" role="radiogroup" aria-label="시작점">
+          <label className="make-check">
+            <input
+              type="radio"
+              name="make-start"
+              checked={brief.start === 'blank'}
+              onChange={() => set({ start: 'blank' })}
+            />
+            빈 초안
+          </label>
+          <label className="make-check">
+            <input
+              type="radio"
+              name="make-start"
+              checked={brief.start === 'example-grid'}
+              onChange={() => set({ start: 'example-grid' })}
+            />
+            본보기: 격자 예제
+          </label>
+        </div>
+      </fieldset>
+
+      <div className="make-brief-foot">
+        <small className="kit-muted">
+          목적 말고는 비워도 됩니다. 비운 칸은 AI가 가정으로 채워 계획에 적습니다.
+        </small>
+        {error ? <small role="alert">{error}</small> : null}
+        <button type="submit" className="primary" disabled={busy || !ready}>
+          {busy ? '만드는 중…' : '계획 받기'}
         </button>
       </div>
     </form>

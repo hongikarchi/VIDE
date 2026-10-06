@@ -3,7 +3,10 @@ import { z } from 'zod';
 import { ApiError, api, message } from './api';
 
 // PLAN-33: the project's 할 일 (read and written here; the PC applies the changes when it is on)
-// and a read-only summary of its work history, as the PC last shared them (SPEC-04.10).
+// and a read-only summary of its work history, as the PC last shared them (SPEC-04.10). PLAN-39:
+// the kinds 할 일·협의·접수·마감 (협의 has no done check), the period, 위치 and 참석자 are shown; a
+// kind this page does not know shows as a 할 일 instead of failing the whole list.
+const KINDS = ['task', 'meeting', 'receipt', 'deadline'] as const;
 const agendaSchema = z.object({
   sharedAt: z.number().nullable(),
   pending: z.number(),
@@ -13,7 +16,11 @@ const agendaSchema = z.object({
       text: z.string(),
       date: z.string().nullable(),
       time: z.string().nullable(),
-      kind: z.enum(['task', 'meeting', 'deadline']),
+      endDate: z.string().nullable().catch(null).default(null),
+      endTime: z.string().nullable().catch(null).default(null),
+      kind: z.enum(KINDS).catch('task'),
+      location: z.string().nullable().catch(null).default(null),
+      attendees: z.string().nullable().catch(null).default(null),
       done: z.boolean(),
       revision: z.number(),
       pending: z.boolean(),
@@ -42,7 +49,14 @@ const when = (time: number | string) =>
     hour: '2-digit',
     minute: '2-digit',
   });
-const KIND: Record<AgendaItem['kind'], string> = { task: '', meeting: '회의', deadline: '마감' };
+const KIND: Record<AgendaItem['kind'], string> = {
+  task: '',
+  meeting: '협의',
+  receipt: '접수',
+  deadline: '마감',
+};
+/** '14:00~16:00', '~10/9', '@현장 사무실 · 김 대리' — what the row says beside its date. */
+const shortDay = (value: string) => `${Number(value.slice(5, 7))}/${Number(value.slice(8, 10))}`;
 const STATE: Record<string, string> = {
   succeeded: '완료',
   failed: '실패',
@@ -153,13 +167,17 @@ export function OfflineAgenda({ projectId }: { projectId: string }) {
       <ul className="offline-agenda-list">
         {data?.items.map((item) => (
           <li key={item.id} data-done={String(item.done)}>
-            <input
-              type="checkbox"
-              aria-label={`${item.text} 완료`}
-              checked={item.done}
-              disabled={busy}
-              onChange={(event) => void edit(item, { done: event.target.checked })}
-            />
+            {item.kind === 'meeting' && !item.done ? (
+              <span className="offline-agenda-event" aria-hidden="true" />
+            ) : (
+              <input
+                type="checkbox"
+                aria-label={`${item.text} 완료`}
+                checked={item.done}
+                disabled={busy}
+                onChange={(event) => void edit(item, { done: event.target.checked })}
+              />
+            )}
             {editing === item.id ? (
               <input
                 autoFocus
@@ -193,7 +211,20 @@ export function OfflineAgenda({ projectId }: { projectId: string }) {
               disabled={busy}
               onChange={(event) => void edit(item, { date: event.target.value || null })}
             />
-            {item.time ? <small className="muted">{item.time}</small> : null}
+            {item.endDate ? <small className="muted">~{shortDay(item.endDate)}</small> : null}
+            {item.time ? (
+              <small className="muted">
+                {item.time}
+                {item.endTime ? `~${item.endTime}` : ''}
+              </small>
+            ) : null}
+            {item.location || item.attendees ? (
+              <small className="muted offline-agenda-where">
+                {[item.location ? `@${item.location}` : '', item.attendees ?? '']
+                  .filter(Boolean)
+                  .join(' · ')}
+              </small>
+            ) : null}
             {item.pending ? <small className="offline-pending">PC 반영 대기</small> : null}
             <button
               className="ghost"

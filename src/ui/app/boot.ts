@@ -12,6 +12,7 @@ import { renderLinkCard, renderPanelHeader } from '../host-panel.tsx';
 import { element as $, readableError } from '../elements.ts';
 import { api, connect, errors, sharedProjectList } from '../gateway.ts';
 import { mountRemoteProject } from '../remote-project.tsx';
+import { mountFirstRun } from '../first-run.tsx';
 import { attachHostSelection, objects, models } from '../model.ts';
 import { displayIdOf } from '../layers.ts';
 import { mountUsageBars } from '../usage-bars.ts';
@@ -329,6 +330,13 @@ export async function pollHostLink() {
 export async function initializeWorkspace() {
   try {
     const linked = await connect();
+    // Not signed in to the VIDE account yet, or no project to open (ADR-039): the first-run
+    // screen (SCR-26) instead of the work screen; it reopens the page with the chosen project.
+    if (linked.firstRun) {
+      document.title = 'VIDE';
+      mountFirstRun(linked.firstRun);
+      return;
+    }
     // A shared project of another member's PC: the remote project page instead of the work
     // screen (SPEC-04.11 3); nothing of this PC's work screen loads.
     if (linked.remote) {

@@ -29,7 +29,6 @@
   gap: 6px;
 }
 .notes-new button,
-.notes-filter button,
 .note-meta button,
 .note-toolbar button {
   border: 1px solid var(--n-line);
@@ -41,17 +40,16 @@
   cursor: pointer;
 }
 .notes-new button:hover,
-.notes-filter button:hover,
 .note-meta button:hover,
 .note-toolbar button:hover {
   background: var(--n-hover);
 }
-.notes-new .notes-today {
+.notes-new .notes-create {
   background: var(--cta-bg, #121212);
   color: var(--cta-text, #fff);
   border-color: transparent;
 }
-.notes-new .notes-today:hover {
+.notes-new .notes-create:hover {
   background: var(--cta-bg-hover, #3a3a3a);
 }
 .notes-search {
@@ -61,20 +59,6 @@
   font: inherit;
   background: transparent;
   color: inherit;
-}
-.notes-filter {
-  display: flex;
-  gap: 4px;
-}
-.notes-filter button {
-  border-color: transparent;
-  padding: 3px 8px;
-  color: var(--n-muted);
-}
-.notes-filter button.active {
-  background: var(--bg-active, #e5e4e0);
-  color: inherit;
-  font-weight: 600;
 }
 .notes-offline {
   margin: 0;
@@ -117,19 +101,14 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.notes-row-head strong.untitled {
+  color: var(--n-muted);
+}
+/* Only a journal (the dated note [퇴근하기] writes to) is marked; every other note looks alike. */
 .notes-kind {
   font-size: 11px;
-  border-radius: 4px;
-  padding: 0 5px;
+  color: var(--n-muted);
   flex: none;
-}
-.notes-kind.discussion {
-  background: var(--info-subtle, #2f5aa817);
-  color: var(--info, #2f5aa8);
-}
-.notes-kind.journal {
-  background: var(--ok-subtle, #2f7d4f1a);
-  color: var(--ok, #2f7d4f);
 }
 .notes-row-meta {
   display: block;
@@ -165,17 +144,29 @@
   gap: 6px;
   margin-bottom: 10px;
 }
-.note-title,
-.note-title-fixed {
+/* The title is a field: a soft background on hover and a line while editing show it can change. */
+.note-title {
   font-size: var(--fs-xl, 20px);
   font-weight: 700;
-  border: 0;
+  border: 1px solid transparent;
+  border-radius: var(--n-radius);
   background: transparent;
   color: inherit;
-  padding: 2px 0;
-  margin: 0;
+  padding: 2px 6px;
+  margin: 0 -7px;
   font-family: inherit;
   outline: none;
+  cursor: text;
+}
+.note-title::placeholder {
+  color: var(--n-faint);
+}
+.note-title:hover {
+  background: var(--n-hover);
+}
+.note-title:focus {
+  border-color: var(--n-line);
+  background: var(--n-selected);
 }
 .note-meta {
   display: flex;

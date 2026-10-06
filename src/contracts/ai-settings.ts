@@ -34,6 +34,8 @@ export const aiSettingsUpdateSchema = z
 
 export const aiSettingsResponseSchema = aiSettingsSchema.extend({
   resolved: z.object({ 'claude-cli': z.string().nullable(), 'codex-cli': z.string().nullable() }),
+  /** Whether the resolved file is there (the first-run screen's 설치 안 됨, PLAN-38 T-178). */
+  found: z.object({ 'claude-cli': z.boolean(), 'codex-cli': z.boolean() }).optional(),
 });
 export type AiSettingsResponse = z.infer<typeof aiSettingsResponseSchema>;
 export const providerStatusSchema = z.array(

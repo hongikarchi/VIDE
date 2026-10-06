@@ -275,30 +275,24 @@ try {
     'true',
   );
 
-  // 대시보드 (the rail's first destination): the project's name, its jigs and the latest
-  // finished requests over the centre; a jig opens like the JIG list's [열기].
+  // 대시보드 (the rail's first destination): the project's name, its 할 일 and month over the
+  // centre, the linked files folded below; no jigs and no latest requests (2026-10-06, PLAN-39
+  // T-181: the JIG screen and the work history have them). The AI column opens folded there.
   await rail('dashboard').click();
   assert.deepEqual(await pressed(), ['dashboard']);
   const board = page.getByRole('region', { name: '대시보드', exact: true });
   await board.getByRole('heading', { name: projectName, exact: true }).waitFor();
   assert.equal(await page.locator('#canvas canvas').isVisible(), false);
   assert.equal(await page.locator('#left').isVisible(), false);
+  assert.equal(await board.getByRole('region', { name: '최근 작업' }).count(), 0);
+  assert.equal(await board.getByRole('region', { name: '이 프로젝트의 jig' }).count(), 0);
+  assert.equal(await page.locator('#right').isVisible(), false);
+  await board.locator('details.dash-more > summary').click();
   assert.ok(await board.getByRole('region', { name: '연결 파일' }).isVisible());
-  assert.deepEqual(
-    (
-      await board
-        .getByRole('region', { name: '최근 작업' })
-        .locator('.dash-row-title')
-        .allTextContents()
-    ).sort(),
-    ['rhino sync', 'zwcad sync'],
-  );
-  const boardJig = board
-    .getByRole('region', { name: '이 프로젝트의 jig' })
-    .getByRole('button', { name: /격자 골조 배치 예제/ });
-  await boardJig.waitFor();
   if (shot) await page.screenshot({ path: join(shot, 'workspace-tabs-dashboard.png') });
-  await boardJig.click();
+  // The open jig's tab is still in the row; it brings the jig back, the AI column open again.
+  await gridTab.click();
+  await page.locator('#right').waitFor();
   await page.waitForFunction(
     () => document.querySelector('.jig-dialog h2')?.textContent === '격자 골조 배치 예제',
   );

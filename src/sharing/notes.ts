@@ -132,11 +132,12 @@ function kindOf(value: unknown, fallback: NoteKind = 'note'): NoteKind {
     throw new HttpError(400, 'INVALID_KIND');
   return value as NoteKind;
 }
+/** A title as given (absent: `fallback`). It may be empty: screens show it as '제목 없음'. */
 function titleOf(value: unknown, fallback: string) {
   if (value === undefined) return fallback;
   if (typeof value !== 'string' || value.length > TITLE_MAX)
     throw new HttpError(400, 'INVALID_INPUT');
-  return value.trim() || fallback;
+  return value.trim();
 }
 
 async function journal(env: Env, user: string, project: string, date: unknown) {
@@ -220,7 +221,7 @@ export async function notesRoute(
     const now = Date.now(),
       id = crypto.randomUUID(),
       kind = kindOf(input.kind),
-      title = titleOf(input.title, kind === 'discussion' ? '협의 사항' : '제목 없음');
+      title = titleOf(input.title, '');
     await db
       .prepare(
         'INSERT INTO notes(id,project_id,title,kind,created_by,created_at,updated_at,updated_by) VALUES(?,?,?,?,?,?,?,?)',

@@ -284,6 +284,102 @@ test('kinds (schema 8): 할 일 by default, 회의 and 마감 kept, and a date-o
   );
 });
 
+test('periods, 접수, 위치, 참석자 (schema 11): the rules of a period, and moves that keep it', async (t) => {
+  const store = await storeOf(t);
+  const agenda = new Agenda(store, { now: () => new Date(2026, 9, 1, 10, 0) });
+  const project = store.createProject('기간');
+  const site = agenda.add(project.id, {
+    text: '현장 점검',
+    date: '2026-10-07',
+    endDate: '2026-10-09',
+    location: ' 현장 사무실 ',
+    attendees: '김 대리, 설비 업체',
+  });
+  assert.deepEqual(
+    [site.date, site.endDate, site.time, site.endTime, site.location, site.attendees],
+    ['2026-10-07', '2026-10-09', null, null, '현장 사무실', '김 대리, 설비 업체'],
+  );
+  const talk = agenda.add(project.id, {
+    text: '구조 협의',
+    date: '2026-10-08',
+    time: '14:00',
+    endTime: '16:00',
+    kind: 'meeting',
+  });
+  assert.deepEqual([talk.time, talk.endTime, talk.endDate], ['14:00', '16:00', null]);
+  assert.equal(agenda.add(project.id, { text: '허가 접수', kind: 'receipt' }).kind, 'receipt');
+  // An end day equal to the start is none; no start time, no end time; empty text is none.
+  const same = agenda.add(project.id, {
+    text: '하루',
+    date: '2026-10-07',
+    endDate: '2026-10-07',
+    endTime: '12:00',
+    location: '  ',
+  });
+  assert.deepEqual([same.endDate, same.endTime, same.location], [null, null, null]);
+  // The end never before the start.
+  for (const bad of [
+    { date: '2026-10-07', endDate: '2026-10-06' },
+    { date: '2026-10-07', time: '14:00', endTime: '13:00' },
+    { date: '2026-10-07', time: '14:00', endTime: '14:00' },
+  ])
+    assert.throws(() => agenda.add(project.id, { text: 'x', ...bad }), { code: 'INVALID_INPUT' });
+  assert.throws(() => agenda.add(project.id, { text: 'x', location: 'a'.repeat(201) }), {
+    code: 'INVALID_INPUT',
+  });
+  // Several days, the end time may be earlier in the day than the start.
+  const night = agenda.add(project.id, {
+    text: '야간 타설',
+    date: '2026-10-07',
+    time: '22:00',
+    endDate: '2026-10-08',
+    endTime: '06:00',
+  });
+  assert.deepEqual([night.endDate, night.endTime], ['2026-10-08', '06:00']);
+  // A new start day alone moves the end day with it (the calendar's drag).
+  const moved = agenda.set(project.id, site.id, { revision: 1, date: '2026-10-12' });
+  assert.deepEqual([moved.date, moved.endDate], ['2026-10-12', '2026-10-14']);
+  // A new start time alone keeps the length; past midnight the end time goes.
+  const later = agenda.set(project.id, talk.id, { revision: 1, time: '15:30' });
+  assert.equal(later.endTime, '17:30');
+  const late = agenda.set(project.id, talk.id, { revision: 2, time: '23:00' });
+  assert.equal(late.endTime, null);
+  // Clearing the date clears the times and the end day; the place and people stay.
+  const cleared = agenda.set(project.id, moved.id, { revision: moved.revision, date: null });
+  assert.deepEqual([cleared.date, cleared.endDate, cleared.location], [null, null, '현장 사무실']);
+  const named = agenda.set(project.id, cleared.id, {
+    revision: cleared.revision,
+    location: null,
+    attendees: '이 소장',
+  });
+  assert.deepEqual([named.location, named.attendees], [null, '이 소장']);
+  // [되돌리기] restores the recorded period, place and people.
+  agenda.revert(project.id, [
+    {
+      op: 'set',
+      id: named.id,
+      text: named.text,
+      revision: named.revision,
+      before: {
+        text: '현장 점검',
+        date: '2026-10-07',
+        time: null,
+        doneAt: null,
+        kind: 'task',
+        endDate: '2026-10-09',
+        endTime: null,
+        location: '현장 사무실',
+        attendees: '김 대리, 설비 업체',
+      },
+    },
+  ]);
+  const back = agenda.get(project.id, named.id);
+  assert.deepEqual(
+    [back.date, back.endDate, back.location, back.attendees],
+    ['2026-10-07', '2026-10-09', '현장 사무실', '김 대리, 설비 업체'],
+  );
+});
+
 test('퇴근하기 (schema 10): today’s finished items go to the day log; again the same day adds to it', async (t) => {
   const store = await storeOf(t);
   let now = new Date(2026, 9, 5, 17, 0);

@@ -38,8 +38,10 @@ export class AiSettings {
         typeof value !== 'string' ||
         value.length > 1024 ||
         !/^[A-Za-z]:[\\/]/.test(value) ||
-        win32.basename(value).toLowerCase() !==
-          (provider === 'claude-cli' ? 'claude.exe' : 'codex.exe')
+        // The native program or npm's `.cmd` shim (PLAN-38 T-175).
+        !(
+          provider === 'claude-cli' ? ['claude.exe', 'claude.cmd'] : ['codex.exe', 'codex.cmd']
+        ).includes(win32.basename(value).toLowerCase())
       ) {
         throw new DomainError('INVALID_CLI_PATH');
       }

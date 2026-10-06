@@ -42,7 +42,7 @@ body[data-workspace='make'] .make-side {
   display: grid;
   align-content: start;
   gap: 12px;
-  max-width: 640px;
+  max-width: 760px;
 }
 .make-head {
   display: flex;
@@ -270,22 +270,179 @@ body[data-workspace='make'] .make-side {
   display: grid;
   gap: 6px;
 }
-/* The JIG list's last card '새로 만들기' (T-099): a sentence, [만들기 시작] and a small link. */
-.make-card {
+/* The JIG list's last card '새로 만들기' (T-099, PLAN-40 T-185): the whole dashed card is a button. */
+.jig-card.make-card {
   border-style: dashed;
+  background: transparent;
+  align-items: center;
+  justify-content: center;
+  flex-direction: row;
+  gap: 8px;
+  min-height: 120px;
+  color: var(--text-2);
+  text-align: center;
 }
-.make-card input {
+.jig-card.make-card:hover {
+  background: var(--bg-hover);
+  color: inherit;
+}
+.make-card-plus {
+  font-size: 20px;
+  line-height: 1;
+}
+/* The 시작 양식 (PLAN-40 T-185, Design SCR-16): one form, plain words, everything but the purpose
+   optional. */
+.make-brief {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: var(--hairline) solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--bg-elevated);
+}
+.make-brief h2 {
+  margin: 0;
+  font-size: 16px;
+}
+.make-brief fieldset {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 10px 0 0;
+  border: 0;
+  border-top: var(--hairline) solid var(--soft);
+  min-width: 0;
+}
+.make-brief legend {
+  padding: 0;
+  font-weight: 600;
+}
+.make-field {
+  display: grid;
+  gap: 4px;
+}
+.make-field input,
+.make-field textarea,
+.make-steps input,
+.make-check-row input {
   width: 100%;
+  min-width: 0;
 }
-.make-card-actions {
+/* The app's textarea is the borderless composer box; the form's are plain fields. */
+.make-brief textarea {
+  min-height: 0;
+  padding: 4px 6px;
+  line-height: 1.5;
+  border: var(--hairline) solid var(--line);
+  border-radius: var(--radius-sm);
+}
+.make-field {
+  align-content: start;
+}
+.make-range {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+.make-when {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px 10px;
+}
+.make-chips {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 10px;
-  margin-top: auto;
+  gap: 6px;
 }
-.jig-card .make-card-actions button {
-  margin-top: 0;
+.make-chips > small {
+  color: var(--muted);
+  font-size: 12px;
+}
+.make-sub {
+  padding-left: 12px;
+}
+.make-chip {
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 12px;
+}
+.make-chip[aria-pressed='true'] {
+  background: var(--soft);
+  border-color: var(--text-3);
+}
+.make-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+}
+.make-table-wrap {
+  overflow-x: auto;
+}
+.make-rows {
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.make-rows th {
+  text-align: left;
+  font-weight: 500;
+  color: var(--muted);
+  font-size: 12px;
+  padding: 0 4px 2px;
+}
+.make-rows td {
+  padding: 2px 4px;
+  white-space: nowrap;
+}
+.make-rows td input:not(.make-short) {
+  width: 140px;
+}
+.make-short {
+  width: 56px;
+}
+.make-steps {
+  margin: 0;
+  padding-left: 20px;
+  display: grid;
+  gap: 4px;
+}
+.make-steps li,
+.make-check-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1.4fr) auto;
+  gap: 6px;
+  align-items: center;
+}
+.make-check-row {
+  grid-template-columns: minmax(0, 1fr) auto auto;
+}
+.make-brief fieldset > .link-button {
+  justify-self: start;
+}
+.make-brief-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+}
+.make-brief-foot .kit-muted {
+  margin-right: auto;
+}
+.make-drafts-title {
+  margin: 4px 0 0;
+  font-size: 14px;
+}
+.make-go {
+  margin-top: 8px;
+  width: 100%;
+}
+@media (max-width: 640px) {
+  .make-when,
+  .make-steps li {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 /* The draft's icon and its picker (T-100): the fixed list as a grid, the chosen one soft-filled. */
 .make-title {

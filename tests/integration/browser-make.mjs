@@ -1,6 +1,8 @@
-// 만들기 tab (PLAN-22 T-063, SCR-16·18): '새로 만들기', the JIG list's last card (PLAN-26 T-099),
-// creates a draft and opens it in the 만들기 screen, which belongs to the rail's JIG; the draft
-// shows in the list as a '작성 중' card that opens it again;
+// 만들기 tab (PLAN-22 T-063, SCR-16·18): '새로 만들기', the JIG list's last card (PLAN-26 T-099), is
+// one button that opens the 시작 양식 (PLAN-40 T-185); [계획 받기] creates a blank draft, opens it in
+// the 만들기 screen, which belongs to the rail's JIG, and sends the form as the make conversation's
+// first turn; [만들기 시작] under the plan card sends '만들기 시작'; the draft shows in the list as
+// a '작성 중' card that opens it again;
 // the outline reads the manifest; 점검 · 시험 fill the console and unlock the pin; 미리보기 draws the
 // draft's panel.json with the official parts; pinning and discarding ask first; [가져오기] sends a
 // .vjig after a confirmation. The draft routes are mocked here (the engine side has its own tests);
@@ -79,14 +81,16 @@ try {
   };
   const columns = (span) =>
     [0, 1, 2].flatMap((i) => [0, 1].map((j) => ({ key: `C${i}${j}`, at: [i * span, j * 6, 0] })));
-  const draft = { id: 'draft-1', name: '격자 기둥 배치', version: '0.1.0' };
+  // Made now with the starting point's files: nothing written after it (the plan comes first).
+  const createdAt = new Date().toISOString();
+  const draft = { id: 'draft-1', name: '격자 기둥 배치', version: '0.1.0', createdAt };
   let drafts = [];
   let state = { validate: null, test: null, preview: null };
   const files = ['jig.json', 'panel.json', 'skill.md', 'steps/layout.ts', 'fixtures/basic.json'];
   const detail = () => ({
     draft,
     manifest,
-    files: files.map((path) => ({ path })),
+    files: files.map((path) => ({ path, updatedAt: createdAt })),
     skill: '# 격자 기둥 배치\n\n두 방향 경간으로 기둥을 둡니다.',
     conversationId: 'conv-make',
     ...state,
@@ -98,7 +102,7 @@ try {
     calls.push(`${method} ${path || '/'}`);
     if (path === '' && method === 'GET') return route.fulfill({ json: { drafts } });
     if (path === '' && method === 'POST') {
-      assert.deepEqual(request.postDataJSON(), { name: '격자 기둥 배치', from: 'example-grid' });
+      assert.deepEqual(request.postDataJSON(), { name: '격자 기둥 배치', from: 'blank' });
       drafts = [draft];
       return route.fulfill({ status: 201, json: draft });
     }
@@ -157,6 +161,51 @@ try {
     return route.fulfill({ json: { pinned: { jigId: 'project/imported', version: '1.0.0' } } });
   });
 
+  // The draft's make conversation, listed with the project's conversations; its turns are mocked.
+  const makeEntry = {
+    id: 'conv-make',
+    kind: 'jig-make',
+    title: '격자 기둥 배치 · 만들기',
+    provider: null,
+    model: null,
+    effort: null,
+    accountProfileId: null,
+    mode: 'session',
+    targets: null,
+    state: 'open',
+    requests: 0,
+    pending: true,
+    session: null,
+    handover: null,
+  };
+  await page.route(/\/api\/v1\/projects\/[^/]+\/conversations(\/.*)?$/, async (route) => {
+    const rest = /\/conversations(\/.*)?$/.exec(new URL(route.request().url()).pathname)[1] ?? '';
+    if (route.request().method() !== 'GET') return route.continue();
+    if (rest === '/conv-make')
+      return route.fulfill({ json: { ...makeEntry, ledger: [], sessions: [] } });
+    if (rest) return route.continue();
+    const listed = await (await route.fetch()).json();
+    return route.fulfill({ json: [...listed, makeEntry] });
+  });
+  const turns = new Map();
+  await page.route(/\/api\/v1\/projects\/[^/]+\/requests(\/[^/]+)?$/, async (route) => {
+    const request = route.request();
+    const id = /\/requests\/([^/]+)$/.exec(new URL(request.url()).pathname)?.[1];
+    if (request.method() === 'POST' && !id) {
+      const input = request.postDataJSON();
+      const turn = {
+        id: input.id,
+        input,
+        state: 'succeeded',
+        result: { text: '계획입니다.', hostExecuted: false },
+      };
+      turns.set(input.id, turn);
+      return route.fulfill({ json: turn });
+    }
+    if (id && turns.has(id)) return route.fulfill({ json: turns.get(id) });
+    return route.continue();
+  });
+
   await page.goto(app.launchUrl);
   await page.waitForFunction(() => document.querySelector('#project-picker')?.value);
   const rail = page.locator('.rail');
@@ -164,15 +213,16 @@ try {
   // No rail button of its own: 만들기 is part of JIG.
   assert.equal(await rail.locator('[data-workspace-target="make"]').count(), 0);
 
-  // The JIG list: '새로 만들기' is its last card; [가져오기].
+  // The JIG list: '새로 만들기' is its last card, one button with no field in it; [가져오기].
   await jigRail.click();
   const list = page.getByRole('dialog', { name: 'JIG', exact: true });
-  const card = list.getByRole('form', { name: '새로 만들기' });
+  const card = list.getByRole('button', { name: '새로 만들기', exact: true });
   await card.waitFor();
   assert.equal(
     await list.locator('.jig-grid > .jig-card').last().getAttribute('aria-label'),
     '새로 만들기',
   );
+  assert.equal(await card.locator('input').count(), 0);
   await page.getByRole('button', { name: '가져오기', exact: true }).first().click();
   await page.locator('input[type="file"][accept=".vjig"]').setInputFiles({
     name: 'grid.vjig',
@@ -185,22 +235,75 @@ try {
   assert.equal(imported, 'VJIG-TEST');
   assert.deepEqual(importPinned, { version: '1.0.0', confirm: true });
 
-  // The card says what happens to the sentence (SPEC-07.16 step 0).
-  await card.getByText('그 문장을 오른쪽 만들기 대화에 넣어 둡니다').waitFor();
-  const sent = [];
-  page.on('request', (request) => {
-    if (request.method() === 'POST' && /\/requests$/.test(new URL(request.url()).pathname))
-      sent.push(request.url());
-  });
-  await card.getByLabel('무엇을 하는 도구인가요?').fill('격자 기둥 배치');
-  await card.getByRole('button', { name: '만들기 시작' }).click();
+  // The composer's AI (the person's last choice carries over to the new make conversation).
+  await page.locator('#model').selectOption('codex-cli');
+  // The card opens the 시작 양식 in the 만들기 screen; no draft is made yet.
+  await card.click();
   const make = page.locator('.make-workspace');
-  await make.getByRole('heading', { name: '격자 기둥 배치' }).waitFor();
-  assert.equal(await jigRail.getAttribute('aria-pressed'), 'true');
+  const brief = make.getByRole('form', { name: '시작 양식' });
+  await brief.waitFor();
   assert.equal(await page.evaluate(() => document.body.dataset.workspace), 'make');
-  // The sentence waits in the make conversation's composer; nothing is sent by itself.
-  await page.waitForFunction(() => document.querySelector('#body')?.value === '격자 기둥 배치');
-  assert.deepEqual(sent, []);
+  assert.equal(await jigRail.getAttribute('aria-pressed'), 'true');
+  assert.ok(!calls.includes('POST /'));
+  const getPlan = brief.getByRole('button', { name: '계획 받기' });
+  // Only the purpose is required.
+  assert.equal(await getPlan.isDisabled(), true);
+  // The structured parts: input chips (with the shapes of host layers), a setting row, a step
+  // row, outputs, a pass condition, the starting point (blank by default).
+  await brief.getByRole('button', { name: '호스트 레이어', exact: true }).click();
+  await brief
+    .getByRole('group', { name: '레이어에서 읽는 형상' })
+    .getByRole('button', { name: '점' })
+    .click();
+  await brief.getByRole('button', { name: '설정값 추가' }).click();
+  await brief.getByRole('textbox', { name: '설정값 이름' }).fill('X 경간');
+  await brief.getByRole('textbox', { name: '기본값' }).fill('8');
+  await brief.getByRole('button', { name: '단계 추가' }).click();
+  await brief.getByRole('textbox', { name: '단계 이름' }).fill('기둥 배치');
+  await brief.getByRole('button', { name: '단계 추가' }).click();
+  await brief.getByRole('button', { name: '단계 지우기' }).last().click();
+  assert.equal(await brief.getByRole('textbox', { name: '단계 이름' }).count(), 1);
+  await brief.getByLabel('3D 미리보기선').check();
+  await brief.getByLabel('기둥 돌출').check();
+  await brief.getByRole('button', { name: '통과 조건 추가' }).click();
+  await brief.getByRole('textbox', { name: '통과 조건' }).fill('경간 ≤ 12 m');
+  assert.equal(await brief.getByLabel('빈 초안').isChecked(), true);
+  assert.equal(await getPlan.isDisabled(), true);
+  await brief.getByLabel('무엇을 하는 도구인가요?').fill('격자 기둥 배치');
+  await getPlan.click();
+  await make.getByRole('heading', { name: '격자 기둥 배치' }).waitFor();
+  // The form goes as the make conversation's first turn by itself (SPEC-07.16 step 0).
+  await page.waitForFunction(() => document.querySelector('#body')?.value === '');
+  const firstTurn = await (async () => {
+    for (let i = 0; i < 50 && !turns.size; i++) await page.waitForTimeout(100);
+    return [...turns.values()][0]?.input;
+  })();
+  assert.ok(firstTurn, 'the first turn was sent');
+  assert.equal(firstTurn.conversationId, 'conv-make');
+  assert.match(firstTurn.body, /■ 목적: 격자 기둥 배치/);
+  assert.match(firstTurn.body, /호스트 레이어 \[sync-layers\]: 점/);
+  assert.match(firstTurn.body, /X 경간 · 길이 \(m\) · 기본값 8m/);
+  assert.match(firstTurn.body, /1\. 기둥 배치 · 맡는 쪽 계산/);
+  assert.match(firstTurn.body, /Rhino에 만들기: 기둥 돌출/);
+  assert.match(firstTurn.body, /경간 ≤ 12 m \(어기면 막음\)/);
+  assert.match(firstTurn.body, /코드와 파일을 쓰지 말고/);
+
+  // Before [만들기 시작] the starting point's files are not 작성: 계획, and the plan card is the form.
+  const side = page.locator('#right .make-side');
+  const phases = side.getByRole('list', { name: '진행' });
+  assert.equal(await phases.locator('[aria-current="step"]').textContent(), '계획');
+  const planCard = side.getByRole('region', { name: '계획' });
+  await planCard.getByText('목적 · 격자 기둥 배치').waitFor();
+  await planCard.getByText('양식 6칸').waitFor();
+  await planCard.getByText('통과 조건 1개').waitFor();
+  // [만들기 시작] sends '만들기 시작' to the make conversation; writing starts.
+  await planCard.getByRole('button', { name: '만들기 시작' }).click();
+  for (let i = 0; i < 50 && turns.size < 2; i++) await page.waitForTimeout(100);
+  const second = [...turns.values()][1]?.input;
+  assert.equal(second?.body, '만들기 시작');
+  assert.equal(second?.conversationId, 'conv-make');
+  await planCard.getByRole('button', { name: '만들기 시작' }).waitFor({ state: 'detached' });
+  assert.equal(await phases.locator('[aria-current="step"]').textContent(), '작성');
 
   // Back to the list: the draft is a '작성 중' card under 전체 and 내 초안 (with its count), and
   // [이어서 만들기] opens it again.
@@ -241,7 +344,6 @@ try {
   await outline.getByRole('button', { name: '아이콘 바꾸기' }).click();
 
   // Pinning waits for 점검 and 시험.
-  const side = page.locator('#right .make-side');
   const pin = side.getByRole('button', { name: '이 프로젝트의 jig로 고정' });
   assert.equal(await pin.isDisabled(), true);
   await side.getByText('점검을 먼저 해야 합니다').waitFor();
@@ -283,7 +385,7 @@ try {
     .getByRole('group', { name: '버리기 확인' })
     .getByRole('button', { name: '버리기' })
     .click();
-  await make.getByRole('form', { name: '새로 만들기' }).waitFor();
+  await make.getByRole('form', { name: '시작 양식' }).waitFor();
   assert.ok(calls.includes('DELETE /draft-1'));
   assert.deepEqual(errors, []);
   console.log('Make tab checks passed');
