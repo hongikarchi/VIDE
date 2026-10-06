@@ -52,8 +52,8 @@ const FIXED: {
   menu?: false;
 }[] = [
   { id: 'dashboard', label: '대시보드', ready: true },
-  { id: 'model', label: '모델', ready: true },
   { id: 'data', label: '자료', ready: true },
+  { id: 'model', label: '모델', ready: true },
   { id: 'jig', label: 'JIG', ready: true },
   { id: 'make', label: '만들기', ready: true, menu: false },
   { id: 'output', label: '산출물', ready: true, title: 'Output · 도면 · 보고서 · 검토본 · 렌더링' },

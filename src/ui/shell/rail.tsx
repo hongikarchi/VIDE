@@ -24,7 +24,10 @@ import { showFeedback } from '../feedback.ts';
 import { currentTheme, setTheme } from '../theme.ts';
 import { iconSvg } from '../icons.ts';
 
-/** 대시보드 · 자료 · JIG (the list) · 산출물 open their screens once a project is open. */
+/**
+ * 대시보드 · 자료 · JIG (the list) · 산출물 open their screens once a project is open. Order (user
+ * 2026-10-06): 홈 · 대시보드 · 자료 · 모델 · 이력 · JIG · 산출물.
+ */
 function openTarget(target: string) {
   if (sessionState.project) setWorkspace(target);
 }
@@ -79,6 +82,15 @@ export const Rail = memo(function Rail() {
           onClick={() => openTarget('dashboard')}
         />
         <button
+          id="rail-facts"
+          data-workspace-target="data"
+          title="자료 · 이 프로젝트의 DB"
+          aria-label="자료"
+          data-icon="database"
+          aria-pressed={pressed('data')}
+          onClick={() => openTarget('data')}
+        />
+        <button
           data-workspace-target="model"
           data-section="document-tree"
           title="모델 · 3D 뷰와 작업 문서"
@@ -95,15 +107,6 @@ export const Rail = memo(function Rail() {
           data-icon="history"
           aria-pressed={pressed('history')}
           onClick={() => openSection('task-list')}
-        />
-        <button
-          id="rail-facts"
-          data-workspace-target="data"
-          title="자료 · 이 프로젝트의 DB"
-          aria-label="자료"
-          data-icon="database"
-          aria-pressed={pressed('data')}
-          onClick={() => openTarget('data')}
         />
         <button
           id="jigs"
