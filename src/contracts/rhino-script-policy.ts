@@ -13,7 +13,11 @@ export type DirectGuardKind = 'save' | 'save-as' | 'export' | 'publish' | 'purge
 /** Most severe first: a macro that trips several kinds shows the first on its card (all words in the detail). */
 export const GUARD_SEVERITY: DirectGuardKind[] = ['save', 'save-as', 'purge', 'export', 'publish'];
 
-export const executeLanguages = ['csharp', 'command', 'python'] as const;
+/**
+ * `gh-bake` (ADR-033) is not written by the AI: gh_bake sends its bake request (JSON) through the same
+ * direct-execute path, so a bake is one Rhino undo record with the usual change report and guards.
+ */
+export const executeLanguages = ['csharp', 'command', 'python', 'gh-bake'] as const;
 export type ExecuteLanguage = (typeof executeLanguages)[number];
 
 // Lists kept identical in hosts/rhino/worker/DirectScripts.cs (tests/server/rhino-script-policy).

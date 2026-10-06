@@ -114,6 +114,20 @@ export interface ChangeSet {
   capture: string;
   changes: { added: string[]; modified: string[]; removed: string[] };
 }
+/** The Grasshopper methods of the Rhino plugin (ADR-033, hosts/rhino/worker/Grasshopper). */
+export const grasshopperMethods = [
+  'gh-state',
+  'gh-components',
+  'gh-apply',
+  'gh-solve',
+  'gh-outputs',
+  'gh-capture',
+  'gh-open',
+  'gh-save',
+] as const;
+export type GrasshopperMethod = (typeof grasshopperMethods)[number];
+/** A Grasshopper undo record VIDE made (`gh:<document id>:<record id>`). */
+export const GH_UNDO_ID = /^gh:[0-9a-f-]{36}:[0-9a-f-]{36}$/i;
 function editorReply<T>(schema: z.ZodType<T>, value: unknown): T {
   const error = z.object({ ok: z.literal(false), code: z.string() }).safeParse(value);
   if (error.success) throw failure(error.data.code);
@@ -262,11 +276,24 @@ export function editorMethods(
     },
     /** Host undo of that execution's record; `not-latest` when anything was recorded after it. */
     async directUndo(undoId: string) {
-      if (!/^\d+$/.test(undoId)) throw failure('INVALID_INPUT');
+      // A Rhino record serial, or a Grasshopper record (`gh:<document>:<record>`, ADR-033).
+      if (!/^\d+$/.test(undoId) && !GH_UNDO_ID.test(undoId)) throw failure('INVALID_INPUT');
       const value = await call('direct-undo', { undoId });
       const error = z.object({ ok: z.literal(false), code: z.string() }).safeParse(value);
       if (error.success) throw failure(error.data.code);
       return directUndoResultSchema.parse(value);
+    },
+    /**
+     * A Grasshopper method of this Rhino process (ADR-033): `gh-state`, `gh-components`,
+     * `gh-apply`, `gh-solve`, `gh-outputs`, `gh-capture`, `gh-open`, `gh-save`. The answer is the
+     * plugin's own JSON; a coded refusal (`{ok:false, code}`) throws that code.
+     */
+    async grasshopper(method: GrasshopperMethod, params: Record<string, unknown> = {}) {
+      if (!grasshopperMethods.includes(method)) throw failure('INVALID_INPUT');
+      const value = await call(method, params);
+      const error = z.object({ ok: z.literal(false), code: z.string() }).safeParse(value);
+      if (error.success) throw failure(error.data.code);
+      return value as Record<string, unknown>;
     },
     /** The connection's cheap change token and revision. */
     async fingerprint() {
@@ -380,9 +407,12 @@ export function resumeEditor(
         },
         {
           port: identity.port,
-          timeoutMs: ['displayPage', 'displayChanges', 'direct-execute'].includes(method)
-            ? HOST_CALL_MS
-            : 60000,
+          // A solve or an opened definition can take as long as an execute.
+          timeoutMs:
+            ['displayPage', 'displayChanges', 'direct-execute'].includes(method) ||
+            method.startsWith('gh-')
+              ? HOST_CALL_MS
+              : 60000,
           beforeSend: async () => {
             const at = owners.get(owner);
             if (at !== undefined && Date.now() - at < OWNERSHIP_REUSE_MS && alive(identity.pid))

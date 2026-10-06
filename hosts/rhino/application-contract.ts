@@ -30,7 +30,8 @@ export const directExecuteInputSchema = z.object({
    * ADR-029: how `code` runs. csharp (default) as above; command, a Rhino command macro run by
    * RhinoApp.RunScript; python, a Rhino 8 Python 3 script (scriptcontext.doc is the document).
    */
-  language: z.enum(['csharp', 'command', 'python']).optional(),
+  // gh-bake (ADR-033): `code` is a Grasshopper bake request (JSON), never agent code.
+  language: z.enum(['csharp', 'command', 'python', 'gh-bake']).optional(),
   label: z.string().max(80).optional(),
   guard: z
     .object({
@@ -93,7 +94,8 @@ export type DirectExecuteResult = z.infer<typeof directExecuteResultSchema>;
 export const directUndoResultSchema = z.object({
   ok: z.boolean(),
   already: z.boolean().optional(),
-  reason: z.enum(['not-latest', 'unknown', 'undo-failed']).optional(),
+  // gh-not-latest (ADR-033): a later record sits above it in Grasshopper's own undo list.
+  reason: z.enum(['not-latest', 'gh-not-latest', 'unknown', 'undo-failed']).optional(),
 });
 export const documentFingerprintSchema = z.object({
   ok: z.literal(true),

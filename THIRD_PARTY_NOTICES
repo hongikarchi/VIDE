@@ -1,0 +1,38 @@
+Third-party notices
+===================
+
+VIDE includes code ported from the projects below. Ported files keep an SPDX
+header naming their source.
+
+Vino
+----
+- Source: C:\Users\user\Desktop\Vino (src/Vino.Grasshopper)
+- License: Apache License 2.0
+- Copyright 2026 Vino contributors
+- Used in: hosts/rhino/worker/Grasshopper/GhScript.cs (Rhino 8 script
+  component source, sockets and type-hint converters, reduced) and the
+  slider range/value order in hosts/rhino/worker/Grasshopper/GhApply.cs.
+
+Vino's Grasshopper script-component behavior is in turn derived from:
+
+Wireify
+-------
+- Source: https://github.com/ifylab/wireify
+- Pinned commit (as recorded by Vino): 33aad3bd1f490d82bd9894f1dcb8f8711a517b54
+- License: Apache License 2.0
+- Copyright: Hossein Zargar and Wireify contributors
+
+Vino's canvas behavior references Cordyceps (no Cordyceps code is copied into
+VIDE; listed because the ported Vino files acknowledge it):
+
+Cordyceps
+---------
+- Source: https://github.com/brookstalley/cordyceps
+- Pinned commit (as recorded by Vino): af2b2c687d5fa8191d2f740f7b546ece01999c07
+- License: MIT
+- Copyright (c) 2026 Brooks Talley
+
+The Apache License 2.0 text: https://www.apache.org/licenses/LICENSE-2.0
+
+Grasshopper.dll, GH_IO.dll and RhinoCommon.dll are build-time references to the
+user's licensed Rhino 8 installation and are not redistributed.

@@ -2,7 +2,12 @@ import { randomUUID } from 'node:crypto';
 import { join, resolve, relative, isAbsolute, dirname } from 'node:path';
 import { z } from 'zod';
 import { mkdir, readFile, writeFile, rename, readdir, lstat } from 'node:fs/promises';
-import { editorConnectionSchema, resumeEditor, type ChangeSet } from './editor-channel.ts';
+import {
+  editorConnectionSchema,
+  resumeEditor,
+  type ChangeSet,
+  type GrasshopperMethod,
+} from './editor-channel.ts';
 import { launchRhinoWorker } from './worker-client.ts';
 import type { HostTarget, HostDocuments } from '../../src/contracts/host-documents.ts';
 import type { ReadScope } from '../../src/contracts/native-model.ts';
@@ -315,6 +320,14 @@ export class EditorSessions {
   }
   async fingerprint(target: HostTarget) {
     return (await this.attachedWorker(target)).fingerprint();
+  }
+  /** Grasshopper of the attached document's Rhino (ADR-033). */
+  async grasshopper(
+    target: HostTarget,
+    method: GrasshopperMethod,
+    params: Record<string, unknown> = {},
+  ) {
+    return (await this.attachedWorker(target)).grasshopper(method, params);
   }
   async changes(target: HostTarget, since: number) {
     if ((await this.connectionKind(target.instance)) !== 'attached-editor')

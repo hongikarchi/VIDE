@@ -6,6 +6,10 @@
     <Nullable>enable</Nullable>
     <TargetExt>.rhp</TargetExt>
     <RhinoSystem Condition="'$(RhinoSystem)' == ''">C:\Program Files\Rhino 8\System</RhinoSystem>
+    <!-- Grasshopper ships with Rhino 8 (ADR-033); referenced like RhinoCommon, never copied. -->
+    <RhinoGrasshopper Condition="'$(RhinoGrasshopper)' == ''">$(RhinoSystem)\..\Plug-ins\Grasshopper</RhinoGrasshopper>
+    <!-- The Grasshopper canvas is a WinForms control (GH_Canvas, canvas images). -->
+    <UseWindowsForms>true</UseWindowsForms>
     <OutputPath>../../../.vide/build/rhino-worker/bin/</OutputPath>
   </PropertyGroup>
   <ItemGroup>
@@ -14,7 +18,14 @@
     <!-- Rhino 8 Python 3 for direct mode (ADR-029). -->
     <Reference Include="Rhino.Runtime.Code"><HintPath>$(RhinoSystem)\Rhino.Runtime.Code.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="Microsoft.CodeAnalysis"><HintPath>$(RhinoSystem)\Microsoft.CodeAnalysis.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="Grasshopper"><HintPath>$(RhinoGrasshopper)\Grasshopper.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="GH_IO"><HintPath>$(RhinoGrasshopper)\GH_IO.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="Microsoft.CodeAnalysis.CSharp"><HintPath>$(RhinoSystem)\Microsoft.CodeAnalysis.CSharp.dll</HintPath><Private>false</Private></Reference>
+  </ItemGroup>
+  <!-- WinForms is referenced for the canvas types only; no implicit WinForms/Drawing usings. -->
+  <ItemGroup>
+    <Using Remove="System.Windows.Forms" />
+    <Using Remove="System.Drawing" />
   </ItemGroup>
   <!-- The host panel page helpers, shared with the ZWCAD palette (Design SCR-12). -->
   <ItemGroup>

@@ -165,6 +165,8 @@ internal sealed class AttachedConnection : IDisposable
         // Direct mode: the AI's code in this document, one undo record per execution.
         if (method == "direct-execute") return direct.Execute(request);
         if (method == "direct-undo") return direct.Undo(request);
+        // Grasshopper (ADR-033): the canvas tools of this Rhino process, beside its document.
+        if (method != null && method.StartsWith("gh-", StringComparison.Ordinal)) return Gh.GhGate.Dispatch(method, request, document);
         if (method == "fingerprint") return DirectExecutor.Fingerprint(RevisionHash(), readRevision);
         return editor.Dispatch(request);
     }

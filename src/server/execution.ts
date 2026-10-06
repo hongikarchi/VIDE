@@ -30,6 +30,7 @@ import {
 import {
   WorkFolderGate,
   ownProjectData,
+  workFolderScope,
   turnGrants,
   type FileContext,
   type PermissionAction,
@@ -37,6 +38,7 @@ import {
   type TurnGrants,
 } from './project-files.ts';
 import type { ProjectFolders } from '../core/project-folders.ts';
+import type { GrasshopperMethod } from '../../hosts/rhino/editor-channel.ts';
 import { Agenda } from '../core/agenda.ts';
 import { activityLog, type ActivityEntry } from './activity.ts';
 import { readableAttachments, type AttachmentStore } from './attachments.ts';
@@ -1453,6 +1455,8 @@ export class Execution {
               unresolvedNote(unresolvedOn(id, document, this.workspace.claimRows(projectId)))?.data,
             intervened: () => this.intervened.has(id),
           },
+          // gh_open / gh_save reach only the project work folder (ADR-033 6, ADR-031 8).
+          workFolders: () => workFolderScope(this.folders, projectId, this.fileContext).write,
           protectedIds: pins
             .filter((pin) => pin.role !== 'target' && pin.basis === previous.id)
             .map((pin) => pin.id),
@@ -1867,6 +1871,13 @@ export class Execution {
         query: (options, token) => reads.page(options, token),
         vision: () => sdk.directView(target),
         fingerprint: () => sdk.fingerprint(target),
+        // Grasshopper of that Rhino (ADR-033), when the executor has the method.
+        ...(typeof sdk.grasshopper === 'function'
+          ? {
+              grasshopper: (method: GrasshopperMethod, params?: Record<string, unknown>) =>
+                sdk.grasshopper(target, method, params),
+            }
+          : {}),
       };
     }
     if (host === 'zwcad' && this.zwcadSdk) {

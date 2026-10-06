@@ -27,6 +27,7 @@ import { skillCatalog } from './skill-catalog.ts';
 import { MakeTurnGuard, draftsFor, makeStopNotice } from './make-routes.ts';
 import type { JigDrafts } from '../jigs/runtime/drafts.ts';
 import { turnOutputSchema } from './turn-output.ts';
+import { GH_READ_TOOLS, GH_WRITE_TOOLS } from './grasshopper-tools.ts';
 import { existsSync } from 'node:fs';
 import { resolveAgentToken } from '../ai/agent-relay.ts';
 import { Agenda, localDate } from '../core/agenda.ts';
@@ -77,6 +78,84 @@ const page = {
   offset: z.number().int().min(0).optional(),
   limit: z.number().int().min(1).max(100).optional(),
 };
+// Grasshopper (ADR-033): canvas objects by instance id; a socket by name, nickname or index.
+/** Left out, the document on the Grasshopper canvas (gh_state lists them all). */
+const ghDocument = z.string().uuid().optional();
+const ghId = z.string().min(1).max(100);
+const ghIds = z.array(ghId).min(1);
+const ghSocket = z.union([z.string().min(1).max(200), z.number().int().min(0)]);
+const ghEnd = z.object({ id: ghId, param: ghSocket.optional() }).strict();
+const ghParam = z
+  .object({ id: ghId, param: ghSocket.optional(), side: z.enum(['input', 'output']).optional() })
+  .strict();
+const ghArea = z.tuple([z.number(), z.number(), z.number(), z.number()]);
+const ghScriptSocket = z.union([
+  z.string().min(1).max(100),
+  z
+    .object({
+      name: z.string().min(1).max(100),
+      typeHint: z.string().min(1).max(60).optional(),
+      access: z.enum(['item', 'list', 'tree']).optional(),
+    })
+    .strict(),
+]);
+const ghOp = z
+  .object({
+    op: z.enum([
+      'add',
+      'delete',
+      'move',
+      'connect',
+      'disconnect',
+      'set',
+      'script',
+      'group',
+      'ungroup',
+      'select',
+    ]),
+    id: ghId.optional(),
+    ref: z.string().min(1).max(60).optional(),
+    guid: z.string().uuid().optional(),
+    name: z.string().min(1).max(200).optional(),
+    script: z.enum(['python', 'csharp']).optional(),
+    x: z.number().optional(),
+    y: z.number().optional(),
+    dx: z.number().optional(),
+    dy: z.number().optional(),
+    nickname: z.string().min(1).max(200).optional(),
+    from: ghEnd.optional(),
+    to: ghEnd.optional(),
+    replace: z.boolean().optional(),
+    param: ghSocket.optional(),
+    value: z.union([z.number(), z.boolean()]).optional(),
+    min: z.number().optional(),
+    max: z.number().optional(),
+    decimals: z.number().int().min(0).max(12).optional(),
+    text: z.string().optional(),
+    items: z
+      .array(
+        z.union([
+          z.string(),
+          z.object({ name: z.string().min(1), expression: z.string().optional() }).strict(),
+        ]),
+      )
+      .optional(),
+    selected: z.union([z.number().int().min(0), z.string()]).optional(),
+    data: z.unknown().optional(),
+    preview: z.boolean().optional(),
+    locked: z.boolean().optional(),
+    source: z.string().optional(),
+    inputs: z.array(ghScriptSocket).optional(),
+    outputs: z.array(ghScriptSocket).optional(),
+    ids: z.array(ghId).optional(),
+    add: z.union([z.boolean(), z.array(ghId)]).optional(),
+    remove: z.array(ghId).optional(),
+    color: z
+      .string()
+      .regex(/^#[0-9a-fA-F]{6}([0-9a-fA-F]{2})?$/)
+      .optional(),
+  })
+  .strict();
 const definitions = {
   query: {
     description:
@@ -132,6 +211,125 @@ const definitions = {
           )
           .max(20)
           .optional(),
+      })
+      .strict(),
+  },
+  // Grasshopper (ADR-033): the user's own Grasshopper in the Rhino the document is open in.
+  gh_state: {
+    description:
+      'Read the Grasshopper canvas (the Rhino of the starting document, or of an open linked file by linkId): open documents, and for one document (ghDocument, default the one on the canvas) its objects in canvas order: id (instance), kind (component, script, param, slider, panel, toggle, valueList, button), component guid, name, nickname, position and bounds, inputs with their sources ({id, param}), outputs, item counts, runtime level and messages, preview, slider/panel/toggle/value list values; groups and scribbles. ids or area [x0,y0,x1,y1] narrow it (ids also return script source); since (the revision of an earlier answer) returns only objects changed after it plus removed ids. Pages with offset/nextOffset. Read before you edit, and again with since when others (the user, another conversation) may have edited.',
+    schema: z
+      .object({
+        targetRef: target,
+        linkId,
+        ghDocument,
+        ids: ghIds.optional(),
+        area: ghArea.optional(),
+        since: z.number().int().min(0).optional(),
+        offset: z.number().int().min(0).optional(),
+        limit: z.number().int().min(1).max(1000).optional(),
+      })
+      .strict(),
+  },
+  gh_components: {
+    description:
+      'Search the installed Grasshopper components (all plug-ins) by words of the name, nickname, category or description: guid, name, category/subcategory, inputs and outputs (name, type, access). Add components by this guid; never write a guid from memory.',
+    schema: z
+      .object({
+        targetRef: target,
+        linkId,
+        query: z.string().min(1).max(200),
+        category: z.string().min(1).max(100).optional(),
+        obsolete: z.boolean().optional(),
+        limit: z.number().int().min(1).max(100).optional(),
+      })
+      .strict(),
+  },
+  gh_apply: {
+    description:
+      "Edit the Grasshopper canvas: ops run in order as ONE Grasshopper undo record (Ctrl+Z in Grasshopper or VIDE [되돌리기] reverts it), then one solution (solve:false skips it). Batch a whole change in one call. ops: add {guid | name | script:'python'|'csharp', x, y, nickname?, ref?} (later ops address it as \"$ref\"; values and script fields may ride along); delete {id}; move {id, x,y | dx,dy}; connect {from:{id, param?}, to:{id, param?}, replace?}; disconnect {to, from?}; set {id, value | min/max/decimals (slider) | text (panel, scribble) | value (toggle) | items/selected (value list) | param+data (a component input's own values) | data (a parameter's values) | nickname | preview | locked}; script {id, source?, inputs?, outputs?} (Python 3 or C# script component; sockets [{name, typeHint?, access?}] in order; removed sockets must be unwired); group {ids, name?, color?} or {id, add?, remove?}; ungroup {id}; select {ids, add?}. A socket param is its nickname, name or index; a slider, panel or other floating parameter needs none. Buttons are never set. Each op answers alone: one whose object was deleted (by the user or another conversation) fails with its code and the rest still apply. Objects you do not name never move. Returns undoId, revision (pass it as since next time), per-op results, created refs, runtime messages of what changed, the solution's problems, and a notice when someone else changed the same objects after your since.",
+    schema: z
+      .object({
+        targetRef: target,
+        linkId,
+        ghDocument,
+        ops: z.array(ghOp).min(1),
+        since: z.number().int().min(0).optional(),
+        solve: z.boolean().optional(),
+      })
+      .strict(),
+  },
+  gh_solve: {
+    description:
+      'Run one Grasshopper solution now (expire: ids recomputed first; all: everything). Returns the time and the objects with warnings or errors. A solver the user switched off stays off and is reported.',
+    schema: z
+      .object({
+        targetRef: target,
+        linkId,
+        ghDocument,
+        expire: ghIds.optional(),
+        all: z.boolean().optional(),
+      })
+      .strict(),
+  },
+  gh_outputs: {
+    description:
+      'Read the data of Grasshopper outputs (params: {id, param?, side?}; a floating parameter needs no param): paths, item count, types, the first items as text (items, offset/nextOffset) and the bounding box of geometry in model units. Quote these instead of guessing.',
+    schema: z
+      .object({
+        targetRef: target,
+        linkId,
+        ghDocument,
+        params: z.array(ghParam).min(1),
+        items: z.number().int().min(0).max(500).optional(),
+        offset: z.number().int().min(0).optional(),
+      })
+      .strict(),
+  },
+  gh_bake: {
+    description:
+      "Bake Grasshopper outputs (params) into the Rhino document as one execute: one Rhino undo record ([되돌리기] reverts it), objects on layer (full path, default 'Grasshopper', made when missing) with the user string vide-gh-source. Returns the added objects like execute.",
+    schema: z
+      .object({
+        targetRef: target,
+        linkId,
+        ghDocument,
+        params: z.array(ghParam).min(1),
+        layer: z.string().min(1).max(1000).optional(),
+      })
+      .strict(),
+  },
+  gh_capture: {
+    description:
+      'See the Grasshopper canvas: a PNG of the document on the canvas framed on ids, an area [x0,y0,x1,y1] or everything (default 1200x800). Nothing changes. Use capture_view for the Rhino viewport preview.',
+    schema: z
+      .object({
+        targetRef: target,
+        linkId,
+        ghDocument,
+        ids: ghIds.optional(),
+        area: ghArea.optional(),
+        width: z.number().int().min(64).max(2400).optional(),
+        height: z.number().int().min(64).max(2400).optional(),
+      })
+      .strict(),
+  },
+  gh_open: {
+    description:
+      'Start or show Grasshopper: with path, open that .gh/.ghx definition (only inside the project work folder; elsewhere GH_OUTSIDE_WORK_FOLDER, so ask the user to open it); without path, show the canvas and make a new document when none is open.',
+    schema: z
+      .object({ targetRef: target, linkId, path: z.string().min(1).max(1024).optional() })
+      .strict(),
+  },
+  gh_save: {
+    description:
+      'Save a Grasshopper document to a .gh/.ghx path inside the project work folder (VIDE never saves elsewhere; the user saves other files in Grasshopper).',
+    schema: z
+      .object({
+        targetRef: target,
+        linkId,
+        ghDocument,
+        path: z.string().min(1).max(1024),
       })
       .strict(),
   },
@@ -512,12 +710,28 @@ const errorHints: Record<string, string> = {
     'Nothing ran. Give exactly one of code (C#), command (a Rhino command macro) or python (a Python 3 script).',
   EXECUTE_FORM_UNSUPPORTED:
     'Nothing ran. This target runs only a C# body in code; Rhino commands and Python run only in Auto mode on an open Rhino document.',
+  GH_NOT_LOADED:
+    'Grasshopper is not running in that Rhino. gh_open starts it (Auto); in Plan mode tell the user.',
+  GH_NO_DOCUMENT:
+    'Grasshopper has no document open. gh_open opens a definition of the work folder or a new canvas.',
+  GH_DOCUMENT_NOT_FOUND: 'No open Grasshopper document has that id. Read gh_state for the list.',
+  GH_DOCUMENT_NOT_ACTIVE:
+    "That Grasshopper document is not the one on the canvas; VIDE does not switch the user's canvas. Leave ghDocument out or ask the user.",
+  GH_OUTSIDE_WORK_FOLDER:
+    'VIDE opens and saves Grasshopper files only inside the project work folder. Ask the user to open or save that file in Grasshopper.',
 };
 /** LINK_NOT_LIVE from a turn that never reaches other files live (the file may well be open). */
 const noLinksHint =
   'This kind of turn cannot reach other linked files live (only a request that starts in an open Rhino document can). Read them from their stored Sync with links_layers and sync_sample and do not edit them; do not ask the user to open the file.';
 /** The host document tools whose linkId names another linked file (links_layers keeps its own). */
-const linkTools: ReadonlySet<string> = new Set(['query', 'execute', 'capture_view', 'measure']);
+const linkTools: ReadonlySet<string> = new Set([
+  'query',
+  'execute',
+  'capture_view',
+  'measure',
+  ...GH_READ_TOOLS,
+  ...GH_WRITE_TOOLS,
+]);
 /**
  * The project read tools a host modeling turn gets beside its host tools (SPEC-02.6, T-062):
  * linked files' layers, Sync samples and the project facts. They read VIDE's own records, never a
@@ -559,7 +773,7 @@ const controlledTools = new Set<ToolName>([
  * (ADR-031 8). capture_view moves the camera and layers of the target for one image, so two
  * captures wait for each other instead of failing.
  */
-const writeTools = new Set<ToolName>(['execute', 'jig_set', 'jig_run']);
+const writeTools = new Set<ToolName>(['execute', 'jig_set', 'jig_run', ...GH_WRITE_TOOLS]);
 /**
  * A scope's lifetime between two calls (ADR-031 8): each call starts it again, so a turn that keeps
  * working never loses its tools; the turn's end revokes the scope anyway.
@@ -573,6 +787,8 @@ export const PLAN_MODE_TOOLS: ReadonlySet<string> = new Set<ToolName>([
   'query',
   'capture_view',
   'measure',
+  // Grasshopper reads (ADR-033); its edits are Auto only.
+  ...GH_READ_TOOLS,
   'jig_list',
   'jig_state',
   'jig_output',

@@ -2,10 +2,10 @@
 id: ARCH-01
 title: VIDE 기술 구조와 구현 계약
 status: review
-version: 0.83
+version: 0.84
 updated: 2026-10-06
 owner: agent:codex
-related: [ADR-032, SPEC-00, SPEC-02, SPEC-03, SPEC-04, SPEC-09, PLAN, PLAN-20, PLAN-24, ADR-014, ADR-015, ADR-016, ADR-017, ADR-021, ADR-022, ADR-025, ADR-027, ADR-028, ADR-029, ADR-030, PLAN-25, PLAN-26, PLAN-27, PLAN-28, ARCH-03]
+related: [ADR-033, PLAN-29, ADR-032, SPEC-00, SPEC-02, SPEC-03, SPEC-04, SPEC-09, PLAN, PLAN-20, PLAN-24, ADR-014, ADR-015, ADR-016, ADR-017, ADR-021, ADR-022, ADR-025, ADR-027, ADR-028, ADR-029, ADR-030, PLAN-25, PLAN-26, PLAN-27, PLAN-28, ARCH-03]
 ---
 
 # VIDE 기술 구조와 구현 계약
@@ -417,6 +417,7 @@ AI 도구의 이름은 등록부 하나가 정한다. `src/ai/agent-connection.t
 |---|---|---|
 | 모델링(호스트 작업) | 자동 모드: Rhino·ZWCAD 연결 문서를 쓰는 턴(ADR-022). 계획 모드: 같은 대상을 읽기만 하는 턴 | 자동: `query`, `execute`(= `direct-execute`, 호출 하나가 되돌리기 기록 하나). 계획: `query`. `query`·`execute`·`capture_view`·`measure`는 선택 인수 `linkId`(연결 파일 ID)를 받는다: 생략하면 대상 문서, 주면 같은 프로젝트의 열린 연결 문서(ADR-027, 아래 「여러 파일 턴」). 범위가 `linkId`를 받지 않는 턴(ZWCAD 대상·작업 사본·연계 요청)은 `LINK_NOT_LIVE`. 처리기가 없던 `status`·`cancel`은 지웠다(ADR-031 8) |
 | 보기(Rhino) | Rhino 대상의 모델링 턴(바로 편집은 연결이 보기 메서드를 가질 때만. 없으면 목표 문장에도 넣지 않는다) | `capture_view`(대상의 모델 화면 PNG, 기본 1200×800·한 변 최대 1600 px, `fitIds`·`namedView`, 이 이미지에만 레이어 켜고 끄기, 문서 변경 없음, 한 번에 하나), `measure`(객체별 bbox·길이·면적·닫힌 솔리드 부피 최대 50개, 객체·점 쌍의 최단 거리 최대 20쌍, 모델 단위) |
+| Grasshopper(ADR-033, 2026-10-06) | 연결 Rhino 문서의 바로 편집 턴에서 연결이 `grasshopper` 메서드를 가질 때(`DirectDriver.grasshopper`). 읽기 넷은 계획·자동, 쓰기 다섯은 자동만이고 턴 안에서 한 번에 하나(`writeTools`). 모두 `linkId`로 다른 열린 Rhino 연결 문서의 Grasshopper를 고른다. 처리기는 `src/server/grasshopper-tools.ts`, 호스트 메서드는 `gh-state`·`gh-components`·`gh-apply`·`gh-solve`·`gh-outputs`·`gh-capture`·`gh-open`·`gh-save`(`hosts/rhino/worker/Grasshopper/*`, 호출 시간 600초) | 읽기: `gh_state`(문서 목록·객체·소켓·연결·값·메시지·그룹, `ids`·`area`·`since`·`offset`/`nextOffset`), `gh_components`(설치 컴포넌트 검색, guid·입출력), `gh_outputs`(경로·개수·형식·앞 항목·경계 상자), `gh_capture`(보이는 캔버스 문서의 PNG). 쓰기: `gh_apply`(`ops[]` 차례 적용 → `GH_UndoRecord` 하나, `undoId` `gh:<문서>:<기록>`, 작업별 `results[]`·`$ref`·`revision`·`notices`(`GH_CHANGED_BY_OTHERS`), 기록은 `executions[]`에 `kind: 'grasshopper'`), `gh_solve`, `gh_bake`(본문을 `direct-execute` `language: gh-bake`로: Rhino 기록 하나·실행 대기열), `gh_open`·`gh_save`(프로젝트 작업 폴더 안 경로만, `GH_OUTSIDE_WORK_FOLDER`). 캔버스 쓰기는 문서 잠금·실행 대기열을 쓰지 않고(다른 대화와 동시), 여러 파일 요청의 자동 되돌림에서 빠진다. `direct-undo`의 `gh:` ID는 그 문서 되돌리기 목록의 첫 기록일 때만 되돌리고 아니면 `gh-not-latest` |
 | 대화 읽기(jig·구조·Sync) | 목적별 대화의 턴. 대상은 `conversation:<대화 ID>` | `jig_list`, `jig_state`, `jig_output`, `structure_summary`, `structure_checks`, `links_layers`, `sync_sample` |
 | 화면 | 대화 원장에 기록하는 턴(목적별 대화). 계산·쓰기 없음이라 계획 모드에도 남는다(`PLAN_MODE_TOOLS`) | `jig_open`(프로젝트 skill 목록의 jig를 사용자 화면에 열고 작업본을 이 대화에 묶음, `reuse: 'last' \| 'new'`, `user-only` jig는 거절), `ui_go`(화면 전환: 모델·jig·보고서·자료·만들기, 3D 투영 `plan`·`3d`). 원장 항목으로 남기고 화면이 따라 한다(RESEARCH-12 §6.3) |
 | jig 조작 | 그 대화에 jig 작업본이 열려 있을 때, 열린 작업본에만 | `jig_set`(되돌릴 수 있는 설정값 변경, 원장 기록), `jig_run`(계산 단계만) |
@@ -439,7 +440,7 @@ VIDE 내부에서 protocolVersion, operationId, taskId, 실제 대상(hostSessio
 
 결과에는 operationId, 상태, 실제 대상, 변경 전후 기준, 실제 호스트에서 관측한 추가/수정/삭제, 진단과 자산 참조를 담는다. 빠른 작업은 실제 결과를 바로 반환하고 장기 작업만 operation handle과 진행 통지로 전환한다. 상태는 SPEC-00.10을 따르고 코드가 출력한 성공 문장을 실행 성공으로 취급하지 않는다. 컴파일 실패는 쓰기 전 실패이며 실행 예외는 사후 조사 전 미반영으로 단정하지 않는다.
 
-필수 차단은 권한·대상·중복 쓰기·손상 입력에 적용한다(ADR-031 8). 문서가 마지막 조회 뒤 바뀐 것(`DOCUMENT_CHANGED`)과 앞 요청의 결과 미확인(`HOST_RESULT_UNRESOLVED`)은 실행을 막지 않고 실행 결과의 `notices[]`로 알린다. 한 턴에서 실행의 답을 잃으면(`uncertain`) 그 턴의 다음 실행만 `HOST_RESULT_UNKNOWN`으로 답하고 조회·보기·측정은 계속된다. 쓰기 도구(`execute`·`jig_set`·`jig_run`)만 한 번에 하나이고(겹치면 `AGENT_BUSY`), 읽기 도구는 함께 돈다(`capture_view`끼리는 차례로 기다린다). 코드 스타일·권장 조회 순서·예제 불일치로 거절하지 않는다. 오류 때 필요한 진단만 반환하고 전체 지침을 반복하지 않는다: 오류 코드에는 다음 행동(`next`, `errorHints`)을 붙이고, 입력 스키마 오류는 `INVALID_INPUT`과 함께 틀린 필드(`fields[{field, problem}]`)를 준다. 프롬프트 대신 일반 코드가 기록·검사를 수행한다.
+필수 차단은 권한·대상·중복 쓰기·손상 입력에 적용한다(ADR-031 8). 문서가 마지막 조회 뒤 바뀐 것(`DOCUMENT_CHANGED`)과 앞 요청의 결과 미확인(`HOST_RESULT_UNRESOLVED`)은 실행을 막지 않고 실행 결과의 `notices[]`로 알린다. 한 턴에서 실행의 답을 잃으면(`uncertain`) 그 턴의 다음 실행만 `HOST_RESULT_UNKNOWN`으로 답하고 조회·보기·측정은 계속된다. 쓰기 도구(`execute`·`jig_set`·`jig_run`, Grasshopper 쓰기 다섯)만 턴 안에서 한 번에 하나이고(겹치면 `AGENT_BUSY`), 읽기 도구는 함께 돈다(`capture_view`끼리는 차례로 기다린다). 코드 스타일·권장 조회 순서·예제 불일치로 거절하지 않는다. 오류 때 필요한 진단만 반환하고 전체 지침을 반복하지 않는다: 오류 코드에는 다음 행동(`next`, `errorHints`)을 붙이고, 입력 스키마 오류는 `INVALID_INPUT`과 함께 틀린 필드(`fields[{field, problem}]`)를 준다. 프롬프트 대신 일반 코드가 기록·검사를 수행한다.
 
 제어 메시지는 초기 1 MiB 제한, 큰 형상/코드는 자산으로 분리한다. 자산은 opaque ID·해시·크기·형식으로 검증하며 사용자 제공 절대 경로를 그대로 열지 않는다. 파일을 임시 위치에 쓴 뒤 검증·확정하고, AI 응답에는 작은 요약/페이지/참조만 보낸다. 수치 제한은 실모델 시험으로 조정한다.
 

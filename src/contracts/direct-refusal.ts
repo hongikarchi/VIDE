@@ -96,6 +96,8 @@ const undoReasons: Record<string, string> = {
   UNSUPPORTED_METHOD: '플러그인 업데이트 필요',
   unknown: '호스트에 그 실행 기록이 없음(재시작 등)',
   'undo-failed': '호스트가 되돌리지 못함',
+  'gh-not-latest':
+    '그 뒤에 Grasshopper에서 다른 편집이 있음 · Grasshopper의 Ctrl+Z로 되돌리거나 나중 편집부터 되돌리기',
 };
 /** The short Korean reason of an undo the host did not do; never the raw host code. */
 export function undoReason(reason: string | null | undefined) {

@@ -2,10 +2,10 @@
 id: PLAN
 title: VIDE 실행 로드맵
 status: review
-version: 0.246
+version: 0.247
 updated: 2026-10-06
 owner: agent:codex
-related: [ARCH-01, PLAN-02, PLAN-03, PLAN-22, PLAN-23, PLAN-24, PLAN-25, PLAN-26, PLAN-27, ADR-022, ADR-025, ADR-026, ADR-027, ADR-028, ADR-029, ADR-030, SPEC-00, SPEC-01, SPEC-02, SPEC-03, SPEC-04, SPEC-05, SPEC-06, SPEC-07]
+related: [ARCH-01, PLAN-02, PLAN-03, PLAN-22, PLAN-23, PLAN-24, PLAN-25, PLAN-26, PLAN-27, PLAN-29, ADR-033, ADR-022, ADR-025, ADR-026, ADR-027, ADR-028, ADR-029, ADR-030, SPEC-00, SPEC-01, SPEC-02, SPEC-03, SPEC-04, SPEC-05, SPEC-06, SPEC-07]
 ---
 
 # VIDE 실행 로드맵
@@ -274,6 +274,7 @@ T-001~018의 번호·지원 증거는 유지한다. 각 티켓의 현재 결과�
 | T-084 엔진 주관 Sync | 구현·커밋(`b884282`), 설치본 0.2.18 반영. `runDocumentSync`(`document-sync.ts`)·`SyncScheduler`(1초, 재시도·대기·보류·임대, 작업 사본 첫 Sync)·연결 행 `sync`·`display`·화면은 알림과 `delta`로만 갱신(⟳만 `capture`) | 실제 Rhino 창·패널 동시 확인 | [PLAN-27](PLAN-27-sync-storage-stability.md) |
 | T-085 화면 | 구현·자동 검증(2026-10-06, T-123과 한 세션). 합성 1만 개: Live Sync 화면 멈춤 135 ms → 50 ms 넘는 작업 없음, 전체 Sync 5회 화면 힙 증가 없음, 전체 선택 뒤 키 입력 1.39초 → 35 ms 이하(PLAN-27 3단계) | 실제 Rhino 창·패널 확인, 설치본 반영 | [PLAN-27](PLAN-27-sync-storage-stability.md) |
 | T-123 모델 전체 JSON 전송 제거 | 구현·자동 검증(2026-10-06, T-085와 함께, 사용자 결정). ⟳는 Live Sync 먼저, 목록에서 표시 Sync 객체 줄 제거(9.2 MB → 5.8 KB), AI 턴·`query`는 저장 Sync 지연 조회와 변경분만. 독립 검토 지적 반영(같은 날): ⟳ 성공이 '변경 중'·실패 표시를 지움, 초안 보류 중 ⟳는 복사본에 씀, '전체 다시 읽기'(행 메뉴·Shift+⟳), jig 객체 찾기·패널 변경분·상태 확인에서 형상 전송 제거, 쓰기 시간 초과 문구·상태 확인 상한. 블록 정의 표시 수의 전체 읽기는 알려진 예외(PLAN-28) | 실제 Rhino 창의 ⟳·`query` 확인, 설치본 반영 | [PLAN-28](PLAN-28-stock-first.md) |
+| T-130~T-132 Grasshopper 얇은 도구(ADR-033, 2026-10-06 사용자 결정 "무거운 검증 계층 없이"): Rhino 턴의 `gh_state`·`gh_components`·`gh_apply`·`gh_solve`·`gh_outputs`·`gh_bake`·`gh_capture`·`gh_open`·`gh_save`, 호출 하나 = Grasshopper 되돌리기 하나, 잠금 없는 동시 캔버스 편집 | 구현·자동 검증(2026-10-06, 작업 가지). 플러그인 빌드 통과, 가짜 호스트 시험(묶음·작업별 실패·`since`·`gh-not-latest`·두 대화 동시 적용·굽기·작업 폴더) | T-133 실제 Rhino 8·Grasshopper 확인(사용자 창, 합성 정의), 설치본 반영 | [PLAN-29](PLAN-29-grasshopper.md) |
 | T-086 상한 | 계획 | T-083~085 뒤 | [PLAN-27](PLAN-27-sync-storage-stability.md) |
 | T-087 정리·Rhino/ZWCAD 쪽 | 계획. 사본·작업 폴더 정리와 읽기 전용 감지 기록은 먼저 구현(`fda1e5d`) | 설치본 확인, 나머지 정리·호스트 쪽 항목 | [PLAN-27](PLAN-27-sync-storage-stability.md) |
 

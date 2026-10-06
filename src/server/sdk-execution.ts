@@ -6,6 +6,8 @@ import { activityLog } from './activity.ts';
 import { mkdir, readFile, access } from 'node:fs/promises';
 import { createReadStream } from 'node:fs';
 import { EditorSessions } from '../../hosts/rhino/editor-sessions.ts';
+import type { GrasshopperMethod } from '../../hosts/rhino/editor-channel.ts';
+import type { ExecuteLanguage } from '../contracts/rhino-script-policy.ts';
 import type { HostTarget } from '../contracts/host-documents.ts';
 import { join, resolve, relative, isAbsolute, dirname } from 'node:path';
 import { CopyFiles, within } from './capture-cleanup.ts';
@@ -245,7 +247,7 @@ export class SdkExecution {
       requestId,
       label,
       language,
-    }: { requestId: string; label: string; language?: 'csharp' | 'command' | 'python' },
+    }: { requestId: string; label: string; language?: ExecuteLanguage },
   ) {
     return this.editors.directExecute(target, {
       requestId,
@@ -261,6 +263,10 @@ export class SdkExecution {
   }
   fingerprint(target: HostTarget) {
     return this.editors.fingerprint(target);
+  }
+  /** Grasshopper of the attached document's Rhino (ADR-033): the gh_* tools' host calls. */
+  grasshopper(target: HostTarget, method: GrasshopperMethod, params: Record<string, unknown> = {}) {
+    return this.editors.grasshopper(target, method, params);
   }
   /** capture_view and measure on the attached document (the editor connection's view methods). */
   directView(target: HostTarget): Promise<VisionSource> {

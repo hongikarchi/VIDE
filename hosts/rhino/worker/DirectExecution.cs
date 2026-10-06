@@ -87,7 +87,8 @@ internal sealed class DirectExecutor : IDisposable
         var guard = GuardOptions.From(request);
         // ADR-029: a C# body (default), a Rhino command macro or a Python 3 script.
         var language = request.TryGetProperty("language", out var lang) && lang.ValueKind == JsonValueKind.String ? lang.GetString() : "csharp";
-        if (language is not ("csharp" or "command" or "python")) throw new InvalidOperationException("INVALID_INPUT");
+        // ADR-033: `gh-bake` bakes Grasshopper outputs (its body is the bake request) as one execute.
+        if (language is not ("csharp" or "command" or "python" or "gh-bake")) throw new InvalidOperationException("INVALID_INPUT");
         var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(language + "\n" + code + "\n" + label))).ToLowerInvariant();
         if (receipts.TryGetValue(requestId, out var prior))
             return prior.hash == hash ? prior.result : throw new InvalidOperationException("OPERATION_CONFLICT");
@@ -102,6 +103,8 @@ internal sealed class DirectExecutor : IDisposable
                 return Guarded("purge", "사용하지 않는 항목 정리(Purge)는 되돌릴 수 없습니다.", "");
             run = output => Assembly.Load(compiled.Bytes!).GetType("TaskCode")!.GetMethod("Run")!.Invoke(null, [document, output]);
         }
+        else if (language == "gh-bake")
+            run = output => Gh.GhGate.Bake(document, code, output);
         else
         {
             var verdict = language == "command" ? DirectScripts.CheckCommand(code) : DirectScripts.CheckPython(code);
@@ -197,6 +200,8 @@ internal sealed class DirectExecutor : IDisposable
     internal object Undo(JsonElement request)
     {
         var text = request.GetProperty("undoId").GetString() ?? "";
+        // A Grasshopper canvas record (gh_apply, ADR-033): undone in Grasshopper's own undo list.
+        if (text.StartsWith("gh:", StringComparison.Ordinal)) return Gh.GhGate.Undo(text);
         if (!uint.TryParse(text, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var serial) ||
             !records.TryGetValue(serial, out var isUndone)) return new { ok = false, reason = "unknown" };
         if (isUndone) return new { ok = true, already = true };

@@ -275,6 +275,16 @@ export const agentToolNames = [
   'agenda_list',
   'agenda_add',
   'agenda_set',
+  // Grasshopper (ADR-033)
+  'gh_state',
+  'gh_components',
+  'gh_apply',
+  'gh_solve',
+  'gh_outputs',
+  'gh_bake',
+  'gh_capture',
+  'gh_open',
+  'gh_save',
 ] as const;
 const names: readonly string[] = agentToolNames;
 export const agentInstruction =

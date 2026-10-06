@@ -2,10 +2,10 @@
 id: HOST-RHINO
 title: Rhino 호스트 계약과 검증 범위
 status: review
-version: 0.37
+version: 0.38
 updated: 2026-10-06
 owner: agent:codex
-related: [SPEC-01, SPEC-02, FR-03, FR-04, AC-24, AC-38, OQ-03, OQ-10, ADR-022, ADR-027, ADR-029]
+related: [SPEC-01, SPEC-02, FR-03, FR-04, AC-24, AC-38, OQ-03, OQ-10, ADR-022, ADR-027, ADR-029, ADR-033]
 ---
 
 # Rhino 호스트 계약과 검증 범위
@@ -31,6 +31,9 @@ SDK의 AI query는 기본 50개·최대 100개/64 KiB 페이지와 ID 필터를 
 | H-RHINO-07 | 한 요청에서 다른 열린 연결 문서의 실시간 읽기·보기·측정·바로 실행, 작업 단위 되돌리기·실패 때 자동 되돌림(2026-10-01, [ADR-027](../../decisions/ADR-027-multi-file-coordination.md)) | 구현: 대상 Rhino 턴의 `linkId` 도구가 연결 문서마다 같은 `direct-execute`·`direct-undo`·보기 메서드를 쓴다. 모의 연결 두 개로 단위·서버 시험(PLAN-24 T-092~094) | 실제 Rhino 두 창에서 함께 고치기·[되돌리기]·자동 되돌림 확인 |
 | H-RHINO-09 | 열린 문서 표시 Sync·Live 변경의 바이너리 형상(2026-10-06, T-128, [ARCH-01](../../architecture/ARCH-01-system.md) §5 「호스트 표시 페이지의 바이너리 형상」): 엔진이 `geometry: vgt1`로 물으면 `displayPage`·`displayChanges`가 좌표·색인을 VGT1로 보내고, 이전 플러그인의 JSON 답도 그대로 받음 | 구현: `DisplayScene.cs`의 VGT1 응답(`RawFrame`), 같은 값에서 만든 버퍼가 엔진 저장 버퍼와 바이트 단위로 같음(C# 작성 논리의 복제본으로 대조), `geometryHash`는 전과 같음. 합성 1만 개에서 페이지 26.3→16.5 MB, 엔진 읽기 약 490→180~310 ms, 읽은 모델 메모리 약 44→20 MB(`binary-pages` 시험). 플러그인 빌드 통과 | 실제 Rhino 8에서 새 플러그인으로 첫 Sync·전체 다시 읽기·Live 변경, 블록·주석·16 MB 넘는 객체(상자)의 VGT1 페이지, 이전 Sync와 같은 `geometryHash`·저장 판 재사용 |
 | H-RHINO-08 | 바로 실행의 Rhino 명령 매크로·Python 3 스크립트(2026-10-02, [ADR-029](../../decisions/ADR-029-rhino-commands-python.md)): 실행 하나가 되돌리기 한 단계, 위험 명령 거절·저장/내보내기/인쇄/Purge 확인 | 구현: `direct-execute`의 `language: command` → `RhinoApp.RunScript`, `python` → Rhino 8 `Rhino.Runtime.Code` Python 3 메모리 실행, 같은 `BeginUndoRecord` 안. 명령이 따로 남긴 기록은 실행 하나로 묶어 되돌림(`DirectScripts.cs`·`DirectExecution.cs`). 엔진 정책·모의 호스트 시험(PLAN-24 T-106), 플러그인 빌드 통과 | 실제 Rhino 8에서: 명령 기록이 VIDE 기록 안으로 합쳐지는지(아니면 묶음 되돌리기), Python 3 실행기의 첫 초기화 시간·`scriptcontext.doc`, 입력이 모자란 매크로의 대기, 별칭·Python으로 숨은 거절 명령의 실행 뒤 되돌림, Ctrl+Z/Ctrl+Y로 일부만 되돌린 묶음의 [되돌리기] |
+| H-RHINO-10 | 연결 문서의 Rhino에 있는 Grasshopper 캔버스 읽기·편집(2026-10-06, [ADR-033](../../decisions/ADR-033-grasshopper-thin-tools.md)): `gh-state`(문서·객체·소켓·연결·값·메시지·그룹, `ids`·`area`·`since`, 페이지), `gh-components`(설치 컴포넌트 검색), `gh-apply`(작업 묶음 = `GH_UndoRecord` 하나, 작업별 실패, 계산 한 번), `gh-solve`, `gh-outputs`, `gh-capture`; VIDE [되돌리기]는 그 문서의 가장 새 Grasshopper 기록일 때만(`gh-not-latest`). 잠금 없음: 여러 대화·사용자가 같은 캔버스를 동시에 고치고 나중 쓰기가 이김, 문서별 변경 번호로 `since` 읽기·다른 사람 편집 알림 | 구현: `hosts/rhino/worker/Grasshopper/*`(플러그인 빌드 통과, Grasshopper 없이도 로드), 엔진 도구·가짜 호스트 시험(PLAN-29 T-130·T-131). Grasshopper API 표면은 설치본 어셈블리의 리플렉션·IL로 확인 | 실제 Rhino 8·Grasshopper에서 PLAN-29 T-133의 1~3·5~7·10·11 |
+| H-RHINO-11 | Grasshopper 스크립트 컴포넌트(Python 3·C#, IronPython 2는 소스만) 소스 쓰기와 소켓 이름·순서·형식 힌트·접근(2026-10-06, ADR-033) | 구현: `GhScript.cs`(Vino 이식, RhinoCode 표면을 리플렉션으로), 연결된 소켓 삭제 거절(`GH_SOCKET_WIRED`), 콘솔 출력 `out` 유지 | 실제 Rhino 8에서 T-133의 4. Rhino 서비스 릴리스마다 RhinoCode 표면(`SetSource`·`ReBuild`·`IScriptParameter`) 확인 |
+| H-RHINO-12 | Grasshopper 출력 굽기·정의 열기/저장(2026-10-06, ADR-033): `gh_bake`는 `direct-execute`(`language: gh-bake`)로 Rhino 되돌리기 기록 하나, 사용자 문자열 `vide-gh-source`; `gh-open`·`gh-save`는 엔진이 프로젝트 작업 폴더 안 경로만 보냄 | 구현: `GhBake.cs`, `GhTools.cs`, 엔진 작업 폴더 검사 시험 | 실제 Rhino 8에서 T-133의 8·9, 누락 컴포넌트가 있는 정의를 열 때 대화상자 여부 |
 
 그룹 보존 적용: 그룹 표(ID·이름·인덱스·사용자 문자열)와 각 객체의 그룹 소속을 유지하면 그룹 안 기존 객체의 형상·일반 속성 수정도 허용한다. 그룹 생성/이름 변경/해제/구성원 추가·삭제는 적용 전에 거절한다. 잠김·참조·이력·재질 등 다른 적용 제한은 유지한다. 실제 검증 상태는 [로컬 검수](../../tdd/VERIFY-2026-09-24-local-product-completion.md)를 따른다.
 

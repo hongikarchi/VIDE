@@ -29,6 +29,14 @@ const MODE_FILES: Record<InstructionMode, readonly string[]> = {
   review: ['data'],
 };
 const HOST_FRAGMENT: Record<string, InstructionHost> = { rhino: 'rhino', cad: 'zwcad' };
+/**
+ * Files a modeling bundle adds for one host beyond its `modeling-<host>` fragment: Grasshopper's
+ * tools (ADR-033) come with every Rhino turn. A bundle without a host carries them too.
+ */
+const HOST_EXTRA: Record<InstructionHost, readonly string[]> = {
+  rhino: ['grasshopper'],
+  zwcad: [],
+};
 let cache: Map<string, string> | undefined;
 /** The bundle files, read once (the folder ships with the engine; see src/desktop/build.mjs). */
 function files() {
@@ -105,6 +113,10 @@ export function bundleFor(
       parts.push(text);
     }
   }
+  if (mode === 'modeling')
+    for (const [owner, extra] of Object.entries(HOST_EXTRA) as [InstructionHost, string[]][])
+      if (!host || host === owner)
+        for (const name of extra) if (all.has(name)) parts.push(all.get(name)!);
   let rules = parts.join('\n\n');
   if (rules.length > BUNDLE_MAX_CHARS) rules = cutChars(rules, BUNDLE_MAX_CHARS - CUT.length) + CUT;
   const notes = sanitizeAddendum(projectAddendum);
