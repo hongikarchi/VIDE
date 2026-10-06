@@ -159,7 +159,10 @@ test('site-signed tokens open local and tunnel sessions; tunnel cannot reach app
     );
   } while (!status.running);
   assert.equal(status.url, `https://${TUNNEL}`);
-  assert.equal(heartbeats.at(-1).body.url, `https://${TUNNEL}`);
+  assert.equal(
+    heartbeats.filter((call) => call.url.endsWith('/heartbeat')).at(-1).body.url,
+    `https://${TUNNEL}`,
+  );
   const remote = { host: TUNNEL, origin: `https://${TUNNEL}` };
   // The web page itself loads (compressed) before login; the API does not.
   const page = await call(port, '/', { ...remote, gzip: true });
@@ -307,6 +310,6 @@ test('site-signed tokens open local and tunnel sessions; tunnel cannot reach app
     cookie: localCookie,
     body: { enabled: false },
   });
-  assert.equal(heartbeats.at(-1).body.url, null);
+  assert.equal(heartbeats.filter((call) => call.url.endsWith('/heartbeat')).at(-1).body.url, null);
   assert.equal((await call(port, '/api/v1/projects', { ...remote, cookie })).status, 403);
 });

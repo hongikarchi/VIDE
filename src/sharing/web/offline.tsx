@@ -4,10 +4,13 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { z } from 'zod';
 import { api, message, type Project } from './api';
 import { decodeSnapshot, type Snapshot } from '../../contracts/offline-snapshot';
+import { OfflineAgenda, OfflineHistory } from './offline-summary';
 
-// PLAN-20: a project while its work PC is off. The last saved view of each linked file (stored by
-// the PC when its owner turned it on) and requests left for the PC, which it picks up when it is
-// on again. Nothing here changes the model; the PC shows the requests for the user to send.
+// PLAN-20, PLAN-33: a project while its work PC is off (SPEC-04.10). 할 일 (editable; the PC
+// applies the changes when it is on), the work history summary, a place for notes (PLAN-32), the
+// last saved view of each linked file when the PC stores one, and requests left for the PC, which
+// it picks up when it is on again. Nothing here changes the model; the PC shows the requests for
+// the user to send.
 const snapshotsSchema = z.object({
   snapshots: z.array(
     z.object({
@@ -265,7 +268,16 @@ function SnapshotView({ snapshot, hidden }: { snapshot: Snapshot; hidden: Set<st
   );
 }
 
-export function OfflineProject({ project, pcOnline }: { project: Project; pcOnline: boolean }) {
+export function OfflineProject({
+  project,
+  pcOnline,
+  notice,
+}: {
+  project: Project;
+  pcOnline: boolean;
+  /** Why the PC could not be opened (an update it needs), shown above the page. */
+  notice?: string;
+}) {
   const [files, setFiles] = useState<SnapshotInfo[] | null>(null),
     [chosen, setChosen] = useState(''),
     [snapshot, setSnapshot] = useState<Snapshot | null>(null),
@@ -340,62 +352,87 @@ export function OfflineProject({ project, pcOnline }: { project: Project; pcOnli
     : [];
   return (
     <main className="offline-page">
-      <section className="offline-model">
-        {files === null ? <p className="muted">불러오는 중…</p> : null}
-        {files?.length === 0 ? (
-          <p className="muted offline-empty">
-            저장된 모델이 없습니다. 작업 PC의 VIDE에서 이 프로젝트의 링크 파일 목록 → “PC가 꺼져도
-            사이트에서 보기”를 켜면, 다음 Sync부터 보기용 모델이 여기에 저장됩니다.
+      <div className="offline-main">
+        {!pcOnline ? (
+          <p className="banner offline-banner" role="status">
+            {files?.length
+              ? 'PC가 꺼져 있어 지금 모델은 보이지 않습니다. 아래는 마지막으로 저장된 모델입니다.'
+              : 'PC가 꺼져 있어 모델은 보이지 않습니다.'}{' '}
+            할 일은 여기서 고치면 PC가 켜질 때 반영됩니다.
           </p>
         ) : null}
-        {files && files.length > 1 ? (
-          <div className="offline-files" role="tablist">
-            {files.map((file) => (
-              <button
-                key={file.linkId}
-                role="tab"
-                aria-selected={file.linkId === chosen}
-                aria-pressed={file.linkId === chosen}
-                onClick={() => setChosen(file.linkId)}
-              >
-                {file.name}
-              </button>
-            ))}
-          </div>
-        ) : null}
-        {current ? (
-          <p className="muted offline-meta">
-            {current.name} · 객체 {current.objectCount.toLocaleString()}개 ·{' '}
-            {when(current.capturedAt)} Sync · {megabytes(current.size)} · 보기 전용
+        {notice ? (
+          <p className="banner offline-banner" role="status">
+            {notice}
           </p>
         ) : null}
-        {loading ? <p className="muted">모델을 여는 중…</p> : null}
-        {snapshot ? (
-          <div className="offline-stage">
-            <SnapshotView snapshot={snapshot} hidden={hidden} />
-            {layerNames.length > 1 ? (
-              <details className="offline-layers">
-                <summary>레이어 {layerNames.length}</summary>
-                {layerNames.map((layer) => (
-                  <label key={layer}>
-                    <input
-                      type="checkbox"
-                      checked={!hidden.has(layer)}
-                      onChange={(event) => {
-                        const next = new Set(hidden);
-                        if (event.target.checked) next.delete(layer);
-                        else next.add(layer);
-                        setHidden(next);
-                      }}
-                    />
-                    {layer || '(레이어 없음)'}
-                  </label>
-                ))}
-              </details>
-            ) : null}
-          </div>
-        ) : null}
-      </section>
+        <div className="offline-summary">
+          <OfflineAgenda projectId={project.id} />
+          <OfflineHistory projectId={project.id} />
+        </div>
+        {/* Notes (PLAN-32) appear here through that work; nothing is stored for them by this page. */}
+        <section className="offline-section offline-notes" aria-label="노트" data-slot="notes">
+          <h2>노트</h2>
+          <p className="muted">노트는 준비 중입니다.</p>
+        </section>
+        <section className="offline-model">
+          <h2>저장된 모델</h2>
+          {files === null ? <p className="muted">불러오는 중…</p> : null}
+          {files?.length === 0 ? (
+            <p className="muted offline-empty">
+              저장된 모델이 없습니다. 작업 PC의 VIDE에서 이 프로젝트의 링크 파일 목록 → “PC가 꺼져도
+              사이트에서 보기”를 켜면, 다음 Sync부터 보기용 모델이 여기에 저장됩니다.
+            </p>
+          ) : null}
+          {files && files.length > 1 ? (
+            <div className="offline-files" role="tablist">
+              {files.map((file) => (
+                <button
+                  key={file.linkId}
+                  role="tab"
+                  aria-selected={file.linkId === chosen}
+                  aria-pressed={file.linkId === chosen}
+                  onClick={() => setChosen(file.linkId)}
+                >
+                  {file.name}
+                </button>
+              ))}
+            </div>
+          ) : null}
+          {current ? (
+            <p className="muted offline-meta">
+              {current.name} · 객체 {current.objectCount.toLocaleString()}개 ·{' '}
+              {when(current.capturedAt)} Sync · {megabytes(current.size)} · 보기 전용
+            </p>
+          ) : null}
+          {loading ? <p className="muted">모델을 여는 중…</p> : null}
+          {snapshot ? (
+            <div className="offline-stage">
+              <SnapshotView snapshot={snapshot} hidden={hidden} />
+              {layerNames.length > 1 ? (
+                <details className="offline-layers">
+                  <summary>레이어 {layerNames.length}</summary>
+                  {layerNames.map((layer) => (
+                    <label key={layer}>
+                      <input
+                        type="checkbox"
+                        checked={!hidden.has(layer)}
+                        onChange={(event) => {
+                          const next = new Set(hidden);
+                          if (event.target.checked) next.delete(layer);
+                          else next.add(layer);
+                          setHidden(next);
+                        }}
+                      />
+                      {layer || '(레이어 없음)'}
+                    </label>
+                  ))}
+                </details>
+              ) : null}
+            </div>
+          ) : null}
+        </section>
+      </div>
       <aside className="offline-queue">
         <h2>작업 PC에 요청 남기기</h2>
         <p className="muted">

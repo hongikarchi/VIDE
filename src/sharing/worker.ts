@@ -112,7 +112,11 @@ async function handle(request: Request, env: Env, ctx: ExecutionContext): Promis
       return await commentRoute(request, env, actor, path[2], path[4]);
     if (path[1] === 'projects' && path[2] && path[3] === 'publications')
       return await publicationRoute(request, env, actor, path[2], path.slice(4));
-    if (path[1] === 'projects' && path[2] && (path[3] === 'snapshots' || path[3] === 'queue'))
+    if (
+      path[1] === 'projects' &&
+      path[2] &&
+      ['snapshots', 'queue', 'agenda', 'history'].includes(path[3])
+    )
       return await offlineRoute(request, env, actor, path[2], path.slice(3));
     if (path[1] === 'projects') return await projectRoute(request, env, actor, path.slice(2));
     if (path[1] === 'hosts') return await hostRoute(request, env, actor, path.slice(2));

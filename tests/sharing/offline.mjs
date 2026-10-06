@@ -104,13 +104,15 @@ const options = (settings = {}) => {
   };
 };
 mf = new Miniflare(options());
-const call = async (path, { method = 'GET', data, cookie } = {}) => {
+const call = async (path, { method = 'GET', data, cookie, ip } = {}) => {
   const response = await mf.dispatchFetch(origin + path, {
     method,
     headers: {
       Origin: origin,
       'Content-Type': 'application/json',
       ...(cookie ? { Cookie: cookie } : {}),
+      // A separate client for the sign-in rate limit.
+      ...(ip ? { 'cf-connecting-ip': ip } : {}),
     },
     ...(data ? { body: JSON.stringify(data) } : {}),
   });
@@ -137,13 +139,14 @@ try {
     for (const statement of sql.split(';').filter((v) => v.trim()))
       await db.prepare(statement).run();
   }
-  const account = async (username) => {
+  const account = async (username, ip) => {
     const password = randomBytes(20).toString('hex');
     assert.equal(
       (
         await call('/api/account/sign-up', {
           method: 'POST',
           data: { username, password, code: 'test-code' },
+          ip,
         })
       ).status,
       201,
@@ -151,11 +154,13 @@ try {
     const response = await call('/api/account/sign-in', {
       method: 'POST',
       data: { username, password },
+      ip,
     });
     return { cookie: response.cookie, password };
   };
   const alice = await account('alice'),
-    eve = await account('eve');
+    eve = await account('eve'),
+    mallory = await account('mallory', '192.0.2.77');
 
   const { RemoteAccess } = await import('../../src/server/remote-access.ts');
   const { buildSnapshot, packSnapshot } = await import('../../src/server/offline-snapshot.ts');
@@ -163,7 +168,8 @@ try {
   const hostDirectory = join(directory, 'host');
   await mkdir(hostDirectory, { recursive: true });
   const project = { id: 'aaaaaaaa-1111-4111-8111-111111111111', name: 'Tower' };
-  const inbox = [];
+  const inbox = [],
+    siteEdits = [];
   const pc = new RemoteAccess({
     directory: hostDirectory,
     port: () => 1234,
@@ -172,6 +178,11 @@ try {
     onQueue: (items) => {
       inbox.push(...items);
       return items.map((item) => item.id);
+    },
+    // PLAN-33: 할 일 edits made on the site (the PC side is covered by offline-view.test.mjs).
+    onAgendaEdits: async (edits) => {
+      siteEdits.push(...edits);
+      return edits.map((edit) => ({ id: edit.id, editedAt: edit.editedAt, outcome: 'applied' }));
     },
     fetcher: (url, init) => mf.dispatchFetch(String(url), init),
     spawnProcess: () => {
@@ -348,6 +359,220 @@ try {
     (await call(`/api/projects/${project.id}/snapshots`, { cookie: alice.cookie })).value.snapshots,
     [],
   );
+  // PLAN-33: the project without its PC — 할 일 (read and written), history summary (read only).
+  // The D1 stub of before the settings changes above is gone.
+  const d1 = await mf.getD1Database('DB');
+  const api = (path, options) => call(`/api/projects/${project.id}${path}`, options);
+  // Nothing shared yet: the page says so, and 할 일 cannot be written.
+  assert.deepEqual((await api('/agenda', { cookie: alice.cookie })).value, {
+    sharedAt: null,
+    pending: 0,
+    items: [],
+  });
+  assert.equal(
+    (await api('/agenda', { method: 'POST', cookie: alice.cookie, data: { text: 'x' } })).value
+      .error,
+    'AGENDA_NOT_SHARED',
+  );
+  const pcItem = {
+    id: 'item-1',
+    text: '구조 검토 회의',
+    date: '2026-10-07',
+    time: '14:00',
+    kind: 'meeting',
+    doneAt: null,
+    order: 1,
+    revision: 3,
+    updatedAt: '2026-10-06T00:00:00.000Z',
+  };
+  assert.equal(await pc.uploadSummary(project.id, 'agenda', [pcItem]), undefined);
+  assert.equal(
+    await pc.uploadSummary(project.id, 'history', [
+      {
+        id: 'r1',
+        body: '2층 보를 H-400으로 바꿔줘',
+        answer: '바꿨습니다.',
+        state: 'succeeded',
+        createdAt: '2026-10-06T00:00:00.000Z',
+        files: ['tower.3dm'],
+        // Fields beyond the summary are never kept by the site (ADR-035).
+        model: 'secret-model',
+        attachments: ['private.pdf'],
+        scene: [{ id: 'a' }],
+      },
+    ]),
+    undefined,
+  );
+  // Another PC cannot write it; a bad item is refused whole.
+  assert.equal(
+    await pc.uploadSummary('bbbbbbbb-1111-4111-8111-111111111111', 'agenda', [pcItem]),
+    'PROJECT_NOT_FOUND',
+  );
+  assert.equal(
+    await pc.uploadSummary(project.id, 'agenda', [{ ...pcItem, kind: 'party' }]),
+    'INVALID_INPUT',
+  );
+  // The PC goes off: opening answers HOST_OFFLINE (the site page then opens the project without
+  // its PC), the iPad relay page links there, and 할 일·history still answer.
+  await d1.prepare('UPDATE remote_hosts SET last_seen=0').run();
+  assert.equal(
+    (
+      await call(`/api/projects/${project.id}/open`, {
+        method: 'POST',
+        cookie: alice.cookie,
+        data: {},
+      })
+    ).value.error,
+    'HOST_OFFLINE',
+  );
+  const relayPage = await mf.dispatchFetch(`${origin}/pc/${pc.hostId}/?project=${project.id}`, {
+    headers: { Cookie: alice.cookie, Accept: 'text/html,application/xhtml+xml' },
+  });
+  assert.equal(relayPage.status, 503);
+  const relayHtml = await relayPage.text();
+  assert.ok(relayHtml.includes(`href="/?offline=${project.id}"`), relayHtml);
+  const history = (await api('/history', { cookie: alice.cookie })).value;
+  assert.ok(history.sharedAt);
+  assert.deepEqual(history.items, [
+    {
+      id: 'r1',
+      body: '2층 보를 H-400으로 바꿔줘',
+      answer: '바꿨습니다.',
+      state: 'succeeded',
+      files: ['tower.3dm'],
+      createdAt: '2026-10-06T00:00:00.000Z',
+    },
+  ]);
+  const stored = JSON.stringify((await d1.prepare('SELECT * FROM project_history').all()).results);
+  for (const secret of ['secret-model', 'private.pdf', 'scene'])
+    assert.ok(!stored.includes(secret));
+  // Owner only: a shared member gets 403, another account 404, for reading and writing.
+  const malloryId = (
+    await d1.prepare("SELECT id FROM user WHERE email='mallory@users.vide.invalid'").first()
+  ).id;
+  await d1
+    .prepare("INSERT INTO project_members(project_id,user_id,role) VALUES(?,?,'commenter')")
+    .bind(project.id, malloryId)
+    .run();
+  for (const [who, status] of [
+    [mallory, 403],
+    [eve, 404],
+  ]) {
+    assert.equal((await api('/agenda', { cookie: who.cookie })).status, status);
+    assert.equal((await api('/history', { cookie: who.cookie })).status, status);
+    assert.equal(
+      (await api('/agenda', { method: 'POST', cookie: who.cookie, data: { text: 'x' } })).status,
+      status,
+    );
+  }
+  // Edits wait for the PC, shown over the PC's copy; one waiting edit per item.
+  const added = await api('/agenda', {
+    method: 'POST',
+    cookie: alice.cookie,
+    data: { text: '현장 사진 정리', date: '2026-10-08' },
+  });
+  assert.equal(added.status, 201);
+  assert.equal(
+    (
+      await api(`/agenda/${added.value.id}`, {
+        method: 'PATCH',
+        cookie: alice.cookie,
+        data: { text: '현장 사진 정리·업로드' },
+      })
+    ).status,
+    200,
+  );
+  assert.equal(
+    (
+      await api('/agenda/item-1', {
+        method: 'PATCH',
+        cookie: alice.cookie,
+        data: { done: true, revision: 3 },
+      })
+    ).status,
+    200,
+  );
+  assert.equal(
+    (await api('/agenda/item-1', { method: 'PATCH', cookie: alice.cookie, data: { date: null } }))
+      .status,
+    200,
+  );
+  assert.equal(
+    (await api('/agenda/nope', { method: 'PATCH', cookie: alice.cookie, data: { done: true } }))
+      .value.error,
+    'AGENDA_ITEM_NOT_FOUND',
+  );
+  assert.equal(
+    (
+      await api('/agenda/item-1', {
+        method: 'PATCH',
+        cookie: alice.cookie,
+        data: { date: '2026-02-30' },
+      })
+    ).status,
+    400,
+  );
+  // An item added and removed before the PC took it never reaches the PC.
+  const dropped = await api('/agenda', {
+    method: 'POST',
+    cookie: alice.cookie,
+    data: { text: '취소' },
+  });
+  assert.equal(
+    (await api(`/agenda/${dropped.value.id}`, { method: 'DELETE', cookie: alice.cookie })).status,
+    200,
+  );
+  let view = (await api('/agenda', { cookie: alice.cookie })).value;
+  assert.equal(view.pending, 2);
+  assert.deepEqual(
+    view.items.map((item) => [item.text, item.done, item.date, item.time, item.pending]),
+    [
+      ['구조 검토 회의', true, null, null, true],
+      ['현장 사진 정리·업로드', false, '2026-10-08', null, true],
+    ],
+  );
+  // The PC comes back: the edits arrive with the heartbeat, folded, and are confirmed.
+  await pc.heartbeat();
+  assert.deepEqual(
+    siteEdits.map((edit) => [edit.op, edit.itemId === 'item-1', edit.fields, edit.baseRevision]),
+    [
+      ['add', false, { text: '현장 사진 정리·업로드', date: '2026-10-08' }, null],
+      ['set', true, { done: true, date: null }, 3],
+    ],
+  );
+  // The PC uploads its list with the edits applied; nothing waits any more.
+  assert.equal(
+    await pc.uploadSummary(project.id, 'agenda', [
+      { ...pcItem, date: null, time: null, doneAt: '2026-10-06T01:00:00.000Z', revision: 4 },
+      {
+        ...pcItem,
+        id: 'item-2',
+        text: '현장 사진 정리·업로드',
+        kind: 'task',
+        time: null,
+        date: '2026-10-08',
+        order: 2,
+        revision: 1,
+      },
+    ]),
+    undefined,
+  );
+  view = (await api('/agenda', { cookie: alice.cookie })).value;
+  assert.equal(view.pending, 0);
+  assert.deepEqual(
+    view.items.map((item) => [item.id, item.done, item.pending]),
+    [
+      ['item-1', true, false],
+      ['item-2', false, false],
+    ],
+  );
+  await pc.heartbeat();
+  assert.equal(siteEdits.length, 2, 'delivered once');
+  // Sharing turned off on the PC: the copy and the summary leave the site.
+  assert.equal(await pc.deleteSummary(project.id), true);
+  assert.equal((await api('/agenda', { cookie: alice.cookie })).value.sharedAt, null);
+  assert.deepEqual((await api('/history', { cookie: alice.cookie })).value.items, []);
+
   let browser = false;
   if (process.argv.includes('--browser')) {
     // A drawing-like file: a grid of lines, a slab and labels, then the PC goes off.
@@ -396,6 +621,8 @@ try {
       ),
       undefined,
     );
+    // 할 일 shared again for the page below (PLAN-33).
+    assert.equal(await pc.uploadSummary(project.id, 'agenda', [pcItem]), undefined);
     await pc.close();
     const { chromium } = await import('playwright');
     const chrome = await chromium.launch({ channel: 'chrome', headless: true });
@@ -411,6 +638,14 @@ try {
       // The PC is off: opening the project shows the saved model instead of an error.
       await page.getByRole('button', { name: 'Tower 열기' }).click();
       await page.getByText('plan.dwg · 객체 32개').waitFor();
+      // PLAN-33: the banner, 할 일 (editable, waiting for the PC) and the history summary.
+      await page.getByText('PC가 꺼져 있어 지금 모델은 보이지 않습니다').waitFor();
+      await page.getByRole('button', { name: '회의구조 검토 회의' }).waitFor();
+      await page.getByLabel('새 할 일', { exact: true }).fill('도면 번호 정리');
+      await page.getByRole('button', { name: '추가', exact: true }).click();
+      await page.getByText('PC 반영 대기').first().waitFor();
+      await page.getByLabel('구조 검토 회의 완료').check();
+      await page.getByText('작업 PC가 아직 작업 이력 요약을 올리지 않았습니다.').waitFor();
       await page.locator('[data-testid="offline-canvas"] canvas').first().waitFor();
       await page.waitForTimeout(500);
       if (process.env.VIDE_SHOT) await page.screenshot({ path: process.env.VIDE_SHOT });
@@ -439,6 +674,7 @@ try {
       uploadPause: true,
       ownerOnly: true,
       queue: true,
+      offlineProject: true,
       browser,
     }),
   );

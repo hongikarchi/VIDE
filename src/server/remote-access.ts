@@ -45,6 +45,30 @@ const queuedSchema = z.array(
   }),
 );
 export type QueuedRequest = z.infer<typeof queuedSchema>[number];
+/** A 할 일 edit made on the account site, for this PC to apply (PLAN-33). */
+const agendaEditSchema = z.object({
+  id: z.string().uuid(),
+  projectId: z.string(),
+  itemId: z.string().max(100),
+  op: z.enum(['add', 'set', 'remove']),
+  fields: z
+    .object({
+      text: z.string().max(500).optional(),
+      date: z.string().nullable().optional(),
+      time: z.string().nullable().optional(),
+      kind: z.enum(['task', 'meeting', 'deadline']).optional(),
+      done: z.boolean().optional(),
+    })
+    .strip(),
+  baseRevision: z.number().int().nullable(),
+  editedAt: z.number().int(),
+});
+export type AgendaEdit = z.infer<typeof agendaEditSchema>;
+export type AgendaEditResult = {
+  id: string;
+  editedAt: number;
+  outcome: 'applied' | 'conflict' | 'missing';
+};
 const failure = (code: string) => new DomainError(code);
 
 export interface RemoteStatus {
@@ -72,6 +96,8 @@ interface Options {
   onProjects?: (projects: CloudProject[]) => void;
   /** Requests left on the site; returns the ids kept, which the site then marks delivered. */
   onQueue?: (items: QueuedRequest[]) => Promise<string[]> | string[];
+  /** 할 일 edits made on the site; returns what was done with each, which the site then records. */
+  onAgendaEdits?: (edits: AgendaEdit[]) => Promise<AgendaEditResult[]>;
   /** Runs after each successful heartbeat (offline view uploads). */
   afterHeartbeat?: () => void;
   executable?: string;
@@ -383,6 +409,7 @@ export class RemoteAccess {
         .object({
           projects: cloudProjectsSchema.default([]),
           queue: queuedSchema.catch([]).default([]),
+          agendaEdits: z.array(agendaEditSchema).catch([]).default([]),
         })
         .passthrough()
         .parse(await response.json());
@@ -397,6 +424,13 @@ export class RemoteAccess {
             await this.request('/api/hosts/device/queue/delivered', 'POST', { ids: kept }).catch(
               () => undefined,
             );
+        }
+        if (reply.agendaEdits.length && this.options.onAgendaEdits) {
+          const results = await this.options.onAgendaEdits(reply.agendaEdits);
+          if (results.length)
+            await this.request('/api/hosts/device/agenda-edits/applied', 'POST', {
+              items: results,
+            }).catch(() => undefined);
         }
         this.options.afterHeartbeat?.();
       }
@@ -478,6 +512,40 @@ export class RemoteAccess {
     } catch {
       return 'SNAPSHOT_UPLOAD_FAILED';
     }
+  }
+  /**
+   * Replace the project's 할 일 copy or work history summary on the account site (PLAN-33).
+   * Returns an error code, or undefined when stored.
+   */
+  async uploadSummary(
+    projectId: string,
+    part: 'agenda' | 'history',
+    items: unknown[],
+  ): Promise<string | undefined> {
+    await this.load();
+    if (!this.device) return 'ACCOUNT_UNLINKED';
+    try {
+      const response = await this.request(
+        `/api/hosts/device/projects/${encodeURIComponent(projectId)}/${part}`,
+        'PUT',
+        { items },
+      );
+      if (response.ok) return undefined;
+      const reply = (await response.json().catch(() => ({}))) as { error?: unknown };
+      return typeof reply.error === 'string' ? reply.error : 'SUMMARY_UPLOAD_FAILED';
+    } catch {
+      return 'SUMMARY_UPLOAD_FAILED';
+    }
+  }
+  /** Remove the project's 할 일 copy and history summary from the site (sharing turned off). */
+  async deleteSummary(projectId: string) {
+    await this.load();
+    if (!this.device) return false;
+    const response = await this.request(
+      `/api/hosts/device/projects/${encodeURIComponent(projectId)}/summary`,
+      'DELETE',
+    ).catch(() => undefined);
+    return !!response?.ok;
   }
   async deleteSnapshot(projectId: string, linkId: string) {
     await this.load();

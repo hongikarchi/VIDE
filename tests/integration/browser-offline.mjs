@@ -1,5 +1,6 @@
 // PLAN-20 in the VIDE window: the per-project switch for the saved view on the account site and
 // the inbox of requests left there ("작성기로" puts the text in the composer; nothing is sent).
+// PLAN-33: the switch for 할 일 and the work history summary on the site (on by default).
 import assert from 'node:assert/strict';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -56,7 +57,9 @@ try {
   await page.route('**/offline-view**', async (route) => {
     const request = route.request();
     calls.push(`${request.method()} ${new URL(request.url()).pathname.split('/offline-view')[1]}`);
-    if (request.method() === 'PUT') {
+    if (request.method() === 'PUT' && 'summary' in request.postDataJSON())
+      status = { ...status, summary: request.postDataJSON().summary };
+    else if (request.method() === 'PUT') {
       const enabled = request.postDataJSON().enabled;
       status = {
         ...status,
@@ -81,13 +84,19 @@ try {
   assert.equal(await toggle.isChecked(), false);
   await toggle.check();
   await panel.getByText('1개 저장 · 2.2 MB').waitFor();
+  // PLAN-33: 할 일 and the history summary go to the site unless turned off for the project.
+  const summary = panel.getByLabel('할 일·작업 이력 요약을 사이트에 올리기');
+  assert.equal(await summary.isChecked(), true);
+  await summary.uncheck();
+  assert.equal(await summary.isChecked(), false);
   // "작성기로": the request text goes to the composer for the user to read and send.
   await panel.getByRole('button', { name: '작성기로' }).click();
   await page.waitForFunction(
     () => document.querySelector('#body').value === 'X3열 보를 H-400으로 바꿔줘',
   );
   await panel.getByText('사이트에서 남긴 요청').waitFor({ state: 'detached' });
-  assert.ok(calls.includes('PUT '), calls.join(','));
+  assert.equal(calls.filter((call) => call === 'PUT ').length, 2, calls.join(','));
+  assert.equal(status.summary, false);
   assert.ok(calls.some((call) => call.endsWith('/dismiss')));
   if (process.env.VIDE_SHOT) await page.screenshot({ path: process.env.VIDE_SHOT });
   assert.deepEqual(errors, []);

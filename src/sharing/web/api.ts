@@ -19,6 +19,11 @@ const errors: Record<string, string> = {
   HOST_CHOICE_REQUIRED: '프로젝트를 열 작업 PC를 켜 주세요.',
   HOST_UPDATE_REQUIRED:
     '작업 PC의 VIDE를 업데이트해야 합니다. PC의 VIDE 설정 → PC 프로그램에서 업데이트하세요.',
+  AGENDA_NOT_SHARED:
+    '작업 PC가 아직 할 일을 사이트에 올리지 않았습니다. PC의 VIDE를 업데이트하고 켜면 나타납니다.',
+  AGENDA_ITEM_NOT_FOUND: '그 사이 바뀐 할 일입니다. 목록을 새로 불러왔습니다.',
+  AGENDA_EDITS_FULL: 'PC에 아직 반영되지 않은 할 일 변경이 너무 많습니다. PC를 켠 뒤 다시 하세요.',
+  INVALID_INPUT: '입력을 확인해 주세요.',
   INVALID_LOGIN: '아이디 또는 비밀번호를 확인해 주세요.',
   INVALID_SIGNUP_CODE: '가입 코드가 올바르지 않습니다.',
   USERNAME_TAKEN: '이미 사용 중인 아이디입니다.',

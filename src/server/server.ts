@@ -320,6 +320,7 @@ export async function startServer({
     projects: listProjects,
     activity: () => store.projectActivity(),
     onQueue: (items) => offlineView.receive(items),
+    onAgendaEdits: (edits) => offlineView.applyEdits(edits),
     afterHeartbeat: () => void offlineView.tick().catch(() => {}),
     onProjects: (projects) => {
       for (const project of projects) {
@@ -357,6 +358,7 @@ export async function startServer({
     workspace,
     links,
     remote: remoteAccess,
+    agenda,
   });
   /**
    * Deletes a project on this PC, asked in the app or on the account site (SPEC-01.1): its rows,
@@ -1395,11 +1397,13 @@ export async function startServer({
         return;
       }
       if (offline && request.method === 'PUT') {
-        const { enabled } = z
-          .object({ enabled: z.boolean() })
+        // `enabled`: saved models (PLAN-20); `summary`: 할 일 and history summary (PLAN-33).
+        const { enabled, summary } = z
+          .object({ enabled: z.boolean().optional(), summary: z.boolean().optional() })
           .strict()
           .parse(await body(request));
-        await offlineView.setEnabled(offline[1], enabled);
+        if (enabled !== undefined) await offlineView.setEnabled(offline[1], enabled);
+        if (summary !== undefined) await offlineView.setSummary(offline[1], summary);
         send(200, await offlineView.status(offline[1]));
         return;
       }
@@ -2858,6 +2862,7 @@ export async function startServer({
       stopHealth();
       await scheduler?.stop();
       await remoteAccess.close();
+      await offlineView.close();
       agentTools.close();
       // No image job starts from here on and running ones end their codex process (T-090).
       const boardsClosed = referenceBoards?.close();

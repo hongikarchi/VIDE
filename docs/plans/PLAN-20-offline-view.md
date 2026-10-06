@@ -2,8 +2,8 @@
 id: PLAN-20
 title: 작업 PC가 꺼져 있을 때 — 저장된 모델 보기와 요청 대기
 status: review
-version: 0.1
-updated: 2026-09-29
+version: 0.2
+updated: 2026-10-06
 owner: agent:claude
 related: [PLAN, PLAN-10, SPEC-04, ARCH-01, FR-18, FR-19]
 ---
@@ -35,6 +35,8 @@ related: [PLAN, PLAN-10, SPEC-04, ARCH-01, FR-18, FR-19]
 - VIDE 화면(`tests/integration/browser-offline.mjs`): 요청함 표시, 스위치 켜기와 저장 상태, "작성기로"가 작성기에 넣고 요청함에서 빠짐.
 
 ## 남은 일
+
+- PC가 꺼져도 프로젝트 자체(할 일·작업 이력 요약·노트)를 여는 일은 [PLAN-33](PLAN-33-offline-project.md)이 이어받았다. 이 계획의 저장된 모델·요청은 그 화면 안에 그대로 있다.
 
 - 배포: 원격 D1에 `0007` 적용과 Worker 배포는 사용자 확인 후 한다. 배포 전까지 PC의 저장은 사이트가 404로 거절해 저장 실패로 표시된다.
 - 실제 PC 확인: 사용자 PC에서 켜기 → Sync → 다른 기기에서 PC 끈 채 보기·요청 → PC 켜서 받기.

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { z } from 'zod';
-import { api, message, type Project } from './api';
+import { ApiError, api, message, type Project } from './api';
 import { HostStrip, type Host } from './hosts';
 
 // Account home: every project of the account, recent work first. Opening one goes to the work PC
@@ -10,6 +10,14 @@ const openSchema = z.object({
   remote: z.string().url().nullable(),
   local: z.string().url().nullable(),
 });
+
+/** Answers of "open" after which the project opens on the site without its PC. */
+const OFFLINE_OPEN = [
+  'HOST_OFFLINE',
+  'HOST_NOT_FOUND',
+  'HOST_CHOICE_REQUIRED',
+  'HOST_UPDATE_REQUIRED',
+];
 
 function ago(time: number) {
   const minutes = Math.round((Date.now() - time) / 60_000);
@@ -28,8 +36,11 @@ interface Props {
   thisPc: string;
   refresh: () => Promise<void>;
   review: (project: Project) => void;
-  /** The saved model and requests for the PC (PLAN-20). */
-  offline: (project: Project) => void;
+  /**
+   * The project without its PC (PLAN-20, PLAN-33): 할 일, work history summary, saved model and
+   * requests for the PC. `notice` says why the PC could not be opened.
+   */
+  offline: (project: Project, notice?: string) => void;
 }
 export function Home({ projects, hosts, thisPc, refresh, review, offline }: Props) {
   const [creating, setCreating] = useState(false),
@@ -92,9 +103,11 @@ export function Home({ projects, hosts, thisPc, refresh, review, offline }: Prop
       review(project);
       return;
     }
-    // The PC is off: show the saved model and let requests wait for it.
+    // No PC to open it on (off, signed out, or none chosen and none on): the project opens on the
+    // site without its PC (SPEC-04.10), never a dead end.
     const pc = hostOf(project);
-    if (pc && !pc.online) {
+    const anyOnline = !!hosts?.some((host) => host.online);
+    if ((pc && !pc.online) || (!pc && !anyOnline)) {
       offline(project);
       return;
     }
@@ -116,8 +129,12 @@ export function Home({ projects, hosts, thisPc, refresh, review, offline }: Prop
       }
       location.href = target;
     } catch (error) {
-      setStatus(message(error));
       setOpening('');
+      if (error instanceof ApiError && OFFLINE_OPEN.includes(error.code)) {
+        offline(project, error.code === 'HOST_UPDATE_REQUIRED' ? error.message : undefined);
+        return;
+      }
+      setStatus(message(error));
     }
   }
   return (
@@ -258,7 +275,7 @@ export function Home({ projects, hosts, thisPc, refresh, review, offline }: Prop
                         offline(project);
                       }}
                     >
-                      저장된 모델·요청 남기기
+                      PC 없이 열기 (할 일·작업 이력)
                     </button>
                   ) : null}
                   <button

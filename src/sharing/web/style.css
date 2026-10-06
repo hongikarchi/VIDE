@@ -732,6 +732,101 @@ button.ghost {
   border: 1px dashed var(--line);
   border-radius: 6px;
 }
+/* PLAN-33: the project without its PC — 할 일, work history summary, notes slot */
+.offline-main {
+  min-width: 0;
+  display: grid;
+  gap: 16px;
+  align-content: start;
+}
+.offline-banner {
+  margin: 0;
+}
+.offline-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 16px;
+  align-items: start;
+}
+.offline-section h2,
+.offline-model h2 {
+  font-size: 16px;
+  margin: 0 0 6px;
+}
+.offline-section-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.offline-agenda-add {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+.offline-agenda-add input:first-child {
+  flex: 1 1 160px;
+  min-width: 0;
+}
+.offline-agenda-list,
+.offline-history-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 4px;
+}
+.offline-agenda-list li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 0;
+  border-bottom: 1px solid var(--line);
+  flex-wrap: wrap;
+}
+.offline-agenda-list li[data-done='true'] .offline-agenda-text {
+  color: var(--muted);
+  text-decoration: line-through;
+}
+.offline-agenda-text {
+  flex: 1 1 120px;
+  min-width: 0;
+  text-align: left;
+  border: 0;
+  padding: 4px 2px;
+  background: none;
+  overflow-wrap: anywhere;
+}
+.offline-agenda-list input[type='date'] {
+  font-size: 12px;
+}
+.offline-agenda-list .badge {
+  margin-right: 4px;
+}
+.offline-agenda-list button.ghost {
+  padding: 2px 8px;
+}
+.offline-pending {
+  color: var(--coral);
+}
+.offline-history-list li {
+  padding: 6px 0;
+  border-bottom: 1px solid var(--line);
+  display: grid;
+  gap: 2px;
+}
+.offline-history-list li p {
+  margin: 0;
+  color: var(--muted);
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+.offline-history-list li strong {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
 @media (max-width: 800px) {
   .offline-page {
     grid-template-columns: 1fr;

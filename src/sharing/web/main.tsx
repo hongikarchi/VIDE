@@ -22,6 +22,7 @@ function Signed({ session, signOut }: { session: Session; signOut: () => void })
     [offlineId, setOfflineId] = useState(
       () => new URL(location.href).searchParams.get('offline') || '',
     ),
+    [offlineNotice, setOfflineNotice] = useState(''),
     [status, setStatus] = useState('');
   const { hosts, thisPc } = useHosts();
   const user = useRef(session.user.id);
@@ -99,7 +100,7 @@ function Signed({ session, signOut }: { session: Session; signOut: () => void })
           VIDE
         </button>
         {review ? <span className="crumb">/ {review.name} · 공유 검토</span> : null}
-        {offline ? <span className="crumb">/ {offline.name} · 저장된 모델</span> : null}
+        {offline ? <span className="crumb">/ {offline.name} · PC 없이 보기</span> : null}
         <span className="spacer" />
         <span className="user">{displayName(session)}</span>
         <button className="ghost" onClick={signOut}>
@@ -128,6 +129,7 @@ function Signed({ session, signOut }: { session: Session; signOut: () => void })
           key={offline.id}
           project={offline}
           pcOnline={!!hosts?.find((host) => host.id === offline.host_id)?.online}
+          notice={offlineNotice}
         />
       ) : (
         <Home
@@ -139,7 +141,8 @@ function Signed({ session, signOut }: { session: Session; signOut: () => void })
             setReviewing(project.id);
             history.pushState(null, '', '/?review=' + encodeURIComponent(project.id));
           }}
-          offline={(project) => {
+          offline={(project, notice) => {
+            setOfflineNotice(notice ?? '');
             setOfflineId(project.id);
             history.pushState(null, '', '/?offline=' + encodeURIComponent(project.id));
           }}

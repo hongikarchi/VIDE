@@ -18,8 +18,12 @@ export function isPcPath(pathname: string) {
 
 const escape = (value: string) => value.replace(/[&<>"']/g, (char) => `&#${char.charCodeAt(0)};`);
 /** Shown to a page load while the PC is off or between tunnels; it retries by itself. */
-function page(status: number, title: string, detail: string) {
-  const html = `<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="refresh" content="5"><title>VIDE</title></head><body><main><h1>${escape(title)}</h1><p>${escape(detail)}</p><p>5초마다 다시 연결을 시도합니다.</p><p><a href="/">프로젝트 목록으로</a></p></main></body></html>`;
+function page(status: number, title: string, detail: string, project?: string) {
+  // The project opened without its PC (PLAN-33): 할 일, notes and the work history summary.
+  const offline = project
+    ? `<p><a href="/?offline=${encodeURIComponent(project)}">PC 없이 이 프로젝트 열기 (할 일·작업 이력)</a></p>`
+    : '';
+  const html = `<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="refresh" content="5"><title>VIDE</title></head><body><main><h1>${escape(title)}</h1><p>${escape(detail)}</p><p>5초마다 다시 연결을 시도합니다.</p>${offline}<p><a href="/">프로젝트 목록으로</a></p></main></body></html>`;
   return new Response(html, {
     status,
     headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' },
@@ -30,7 +34,10 @@ export async function pcProxy(request: Request, env: Env, userId: string | undef
   const url = new URL(request.url);
   const [, hostId, rest] = PREFIX.exec(url.pathname) ?? [];
   if (!hostId) throw new HttpError(404, 'NOT_FOUND');
-  const navigation = request.headers.get('Sec-Fetch-Mode') === 'navigate';
+  // A page load: Safari before 16.4 (older iPads) sends no Sec-Fetch-Mode, only an HTML Accept.
+  const navigation =
+    request.headers.get('Sec-Fetch-Mode') === 'navigate' ||
+    (request.method === 'GET' && !!request.headers.get('Accept')?.startsWith('text/html'));
   // Relative addresses in the workspace resolve against "/pc/<id>/".
   if (!rest) return Response.redirect(`${url.origin}/pc/${hostId}/${url.search}`, 302);
   if (!userId) {
@@ -42,6 +49,7 @@ export async function pcProxy(request: Request, env: Env, userId: string | undef
     .first<HostRow>();
   if (!host) throw new HttpError(404, 'HOST_NOT_FOUND');
   if (!online(host) || !host.url) {
+    const project = url.searchParams.get('project');
     if (navigation)
       return page(
         503,
@@ -49,6 +57,7 @@ export async function pcProxy(request: Request, env: Env, userId: string | undef
         !online(host)
           ? `${host.name}이(가) 꺼져 있습니다. PC에서 VIDE를 켜 주세요.`
           : `${host.name}의 원격 접속이 꺼져 있습니다. PC의 VIDE 설정에서 켜 주세요.`,
+        project && /^[A-Za-z0-9-]{8,64}$/.test(project) ? project : undefined,
       );
     throw new HttpError(503, !online(host) ? 'HOST_OFFLINE' : 'HOST_REMOTE_OFF');
   }

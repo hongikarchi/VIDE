@@ -237,6 +237,17 @@ export function renderLinkPanel() {
       }
       void pollOffline(api(`/projects/${projectId}/offline-view`, 'PUT', { enabled }));
     },
+    onSummary: (summary) => {
+      const projectId = currentProject().id;
+      if (linksState.offlineState?.projectId === projectId) {
+        linksState.offlineState = {
+          projectId,
+          status: { ...linksState.offlineState.status, summary },
+        };
+        renderLinkPanel();
+      }
+      void pollOffline(api(`/projects/${projectId}/offline-view`, 'PUT', { summary }));
+    },
     onInboxUse: useInboxItem,
     onInboxDismiss: dismissInboxItem,
   });

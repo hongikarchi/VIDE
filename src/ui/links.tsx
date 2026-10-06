@@ -66,6 +66,10 @@ export type LinkRow = z.infer<typeof linkRowSchema>;
 /** PLAN-20: saved views on the account site and requests left there. */
 export const offlineStatusSchema = z.object({
   enabled: z.boolean(),
+  /** PLAN-33: 할 일 and the work history summary on the site (on unless turned off). */
+  summary: z.boolean().default(true),
+  summaryAt: z.string().nullable().default(null),
+  summaryError: z.string().nullable().default(null),
   linked: z.boolean(),
   files: z.array(
     z.object({
@@ -121,6 +125,7 @@ interface Props {
   onMerge: (link: LinkRow, into: string) => void;
   offline?: OfflineStatus;
   onOffline: (enabled: boolean) => void;
+  onSummary: (on: boolean) => void;
   onInboxUse: (item: InboxItem) => void;
   onInboxDismiss: (item: InboxItem) => void;
 }
@@ -214,12 +219,39 @@ function OfflineSwitch(props: Props) {
   );
 }
 
+/**
+ * PLAN-33: the project opens on the account site while this PC is off, with its 할 일 (editable
+ * there) and a summary of the work history (request, the answer's first lines, state, time, file
+ * names; no model or attachments). On unless turned off; off removes them from the site.
+ */
+function SummarySwitch(props: Props) {
+  const offline = props.offline;
+  if (!offline?.linked) return null;
+  return (
+    <label
+      className="link-offline"
+      title="켜면 PC가 꺼져 있어도 계정 사이트에서 이 프로젝트를 열 수 있습니다: 할 일(사이트에서 고치면 PC가 켜질 때 반영)과 작업 이력 요약(요청 글·답의 첫 줄·상태·시각·파일 이름). 모델·첨부·AI 모델 이름은 올리지 않습니다. 끄면 사이트의 사본을 지웁니다."
+    >
+      <input
+        type="checkbox"
+        checked={offline.summary}
+        onChange={(event) => props.onSummary(event.target.checked)}
+      />
+      할 일·작업 이력 요약을 사이트에 올리기
+      {offline.summary && offline.summaryError ? (
+        <small>올리기 실패: {OFFLINE_ERRORS[offline.summaryError] ?? offline.summaryError}</small>
+      ) : null}
+    </label>
+  );
+}
+
 function Links(props: Props) {
   return (
     <>
       <Inbox {...props} />
       <LinkList {...props} />
       <OfflineSwitch {...props} />
+      <SummarySwitch {...props} />
     </>
   );
 }

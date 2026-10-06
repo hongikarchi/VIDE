@@ -1,20 +1,57 @@
 import { readFile, rename, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { z } from 'zod';
+import { Agenda } from '../core/agenda.ts';
 import type { DocumentLinks } from '../core/document-links.ts';
 import type { Store } from '../core/store.ts';
 import type { Workspace } from '../core/workspace.ts';
 import { buildSnapshot, packSnapshot, type SyncResult } from './offline-snapshot.ts';
-import type { QueuedRequest, RemoteAccess } from './remote-access.ts';
+import type { AgendaEdit, AgendaEditResult, QueuedRequest, RemoteAccess } from './remote-access.ts';
+import { agendaShare, applyAgendaEdit, historySummary } from './offline-summary.ts';
 
 // Offline view and request queue (PLAN-20). Per project, the owner may let this PC keep a
 // view-only snapshot of each linked file on the account site, so the model can be looked at while
 // the PC is off; requests left there come back here as an inbox to bring into the composer. They
 // never run on their own: the user reads and sends them.
+//
+// PLAN-33 (ADR-035): independently of the snapshots, every project of a signed-in PC shares its
+// 할 일 and a summary of its work history with the site, so the project opens there while the PC
+// is off, unless the owner turned that off for the project. 할 일 edits made on the site come back
+// with the heartbeat and are applied here (offline-summary.ts).
 const MIN_INTERVAL_MS = 10 * 60_000;
+/** A failed summary upload is tried again after this; the history at most this often too. */
+const SUMMARY_RETRY_MS = 60_000;
 
 const stateSchema = z.object({
-  projects: z.record(z.string(), z.object({ enabled: z.boolean() })).default({}),
+  projects: z
+    .record(
+      z.string(),
+      // `summary` (PLAN-33): 할 일 and history summary on the site; on unless turned off.
+      z.object({ enabled: z.boolean(), summary: z.boolean().optional() }),
+    )
+    .default({}),
+  summaries: z
+    .record(
+      z.string(),
+      z.object({
+        agenda: z.string().optional(),
+        history: z.string().optional(),
+        at: z.number().optional(),
+        error: z.object({ code: z.string(), at: z.number() }).optional(),
+      }),
+    )
+    .default({}),
+  /** Site 할 일 edits done here, by edit id: the version done and the item an add made. */
+  applied: z
+    .record(
+      z.string(),
+      z.object({
+        editedAt: z.number(),
+        outcome: z.enum(['applied', 'conflict', 'missing']),
+        itemId: z.string().optional(),
+      }),
+    )
+    .default({}),
   uploaded: z
     .record(
       z.string(),
@@ -49,7 +86,11 @@ interface Options {
   store: Store;
   workspace: Workspace;
   links: DocumentLinks;
-  remote: Pick<RemoteAccess, 'uploadSnapshot' | 'deleteSnapshot' | 'hostId'>;
+  remote: Pick<
+    RemoteAccess,
+    'uploadSnapshot' | 'deleteSnapshot' | 'uploadSummary' | 'deleteSummary' | 'hostId'
+  >;
+  agenda?: Agenda;
   now?: () => number;
 }
 
@@ -58,9 +99,13 @@ export class OfflineView {
   private loaded: Promise<void> | undefined;
   private busy: Promise<unknown> = Promise.resolve();
   private ticking: Promise<void> | undefined;
+  private closed = false;
+  private historyChecked = new Map<string, number>();
   private options: Options;
+  private agenda: Agenda;
   constructor(options: Options) {
     this.options = options;
+    this.agenda = options.agenda ?? new Agenda(options.store);
   }
   private get now() {
     return this.options.now?.() ?? Date.now();
@@ -117,8 +162,12 @@ export class OfflineView {
   async status(projectId: string) {
     await this.load();
     const enabled = this.state.projects[projectId]?.enabled ?? false;
+    const shared = this.state.summaries[projectId];
     return {
       enabled,
+      summary: this.summaryOn(projectId),
+      summaryAt: shared?.at ? new Date(shared.at).toISOString() : null,
+      summaryError: shared?.error?.code ?? null,
       linked: !!this.options.remote.hostId,
       files: this.options.links
         .list(projectId)
@@ -146,11 +195,33 @@ export class OfflineView {
     };
   }
 
+  private summaryOn(projectId: string) {
+    return this.state.projects[projectId]?.summary ?? true;
+  }
+
+  /** 할 일 and the history summary on the site for this project (PLAN-33); off removes them. */
+  setSummary(projectId: string, on: boolean) {
+    return this.serial(async () => {
+      await this.load();
+      this.options.store.project(projectId);
+      this.state.projects[projectId] = {
+        enabled: this.state.projects[projectId]?.enabled ?? false,
+        summary: on,
+      };
+      if (!on) {
+        await this.options.remote.deleteSummary(projectId);
+        delete this.state.summaries[projectId];
+      }
+      await this.save();
+      if (on) void this.tick(true);
+    });
+  }
+
   setEnabled(projectId: string, enabled: boolean) {
     return this.serial(async () => {
       await this.load();
       this.options.store.project(projectId);
-      this.state.projects[projectId] = { enabled };
+      this.state.projects[projectId] = { ...this.state.projects[projectId], enabled };
       if (!enabled) {
         // Turning it off removes what this PC stored on the site.
         for (const [linkId, uploaded] of Object.entries(this.state.uploaded))
@@ -170,6 +241,7 @@ export class OfflineView {
     return this.serial(async () => {
       await this.load();
       delete this.state.projects[projectId];
+      delete this.state.summaries[projectId];
       for (const [linkId, uploaded] of Object.entries(this.state.uploaded))
         if (uploaded.projectId === projectId) {
           await this.options.remote.deleteSnapshot(projectId, linkId).catch(() => undefined);
@@ -186,13 +258,25 @@ export class OfflineView {
    * call during a run waits for that run.
    */
   tick(force = false): Promise<void> {
-    if (!this.options.remote.hostId) return Promise.resolve();
+    if (!this.options.remote.hostId || this.closed) return Promise.resolve();
     return (this.ticking ??= this.run(force).finally(() => {
       this.ticking = undefined;
     }));
   }
+  /** Engine stop: no new uploads, and the one running (and its state file write) ends first. */
+  async close() {
+    this.closed = true;
+    await this.ticking?.catch(() => undefined);
+    await this.busy;
+  }
   private async run(force: boolean) {
     await this.load();
+    // 할 일 and history summaries first: small, and they do not depend on the snapshot switch.
+    for (const project of this.options.store.listProjects()) {
+      if (this.closed) return;
+      if (!this.summaryOn(project.id)) continue;
+      await this.serial(() => this.share(project.id, force));
+    }
     for (const [projectId, setting] of Object.entries(this.state.projects)) {
       if (!setting.enabled) continue;
       let links;
@@ -251,6 +335,79 @@ export class OfflineView {
       this.state.uploaded[link.id] = { projectId, requestId, revision, at: this.now, size };
     }
     await this.save();
+  }
+
+  /**
+   * Uploads the project's 할 일 and history summary when they changed since the last upload
+   * (`agendaOnly`: the 할 일 alone, right after site edits were applied). A failure is tried
+   * again a minute later.
+   */
+  private async share(projectId: string, force: boolean, agendaOnly = false) {
+    const shared = (this.state.summaries[projectId] ??= {});
+    if (!force && shared.error && this.now - shared.error.at < SUMMARY_RETRY_MS) return;
+    let changed = false,
+      code: string | undefined;
+    try {
+      const agenda = agendaShare(this.options.store, this.agenda, projectId);
+      if (agenda.key !== shared.agenda) {
+        code = await this.options.remote.uploadSummary(projectId, 'agenda', agenda.items());
+        if (!code) shared.agenda = agenda.key;
+        changed = true;
+      }
+      // The history is read at most once a minute per project (its key reads the request inputs).
+      const due =
+        force || this.now - (this.historyChecked.get(projectId) ?? -Infinity) >= SUMMARY_RETRY_MS;
+      if (!code && !agendaOnly && due) {
+        this.historyChecked.set(projectId, this.now);
+        const history = historySummary(this.options.store, this.options.links, projectId);
+        if (history.key !== shared.history) {
+          code = await this.options.remote.uploadSummary(projectId, 'history', history.items());
+          if (!code) shared.history = history.key;
+          changed = true;
+        }
+      }
+    } catch {
+      code = 'SUMMARY_BUILD_FAILED';
+      changed = true;
+    }
+    if (!changed) return;
+    if (code) shared.error = { code, at: this.now };
+    else {
+      delete shared.error;
+      shared.at = this.now;
+    }
+    await this.save();
+  }
+
+  /**
+   * 할 일 edits made on the site (PLAN-33): each applied once per version (last write wins by
+   * time; a conflict is noted in the item), then the project's 할 일 goes back to the site before
+   * the results are confirmed, so the site never shows the list without the edit.
+   */
+  applyEdits(edits: AgendaEdit[]): Promise<AgendaEditResult[]> {
+    return this.serial(async () => {
+      await this.load();
+      const results: AgendaEditResult[] = [];
+      const touched = new Set<string>();
+      for (const edit of edits) {
+        const done = this.state.applied[edit.id];
+        if (done?.editedAt === edit.editedAt) {
+          results.push({ id: edit.id, editedAt: edit.editedAt, outcome: done.outcome });
+          continue;
+        }
+        const { outcome, itemId } = applyAgendaEdit(this.agenda, edit, done?.itemId);
+        this.state.applied[edit.id] = { editedAt: edit.editedAt, outcome, itemId };
+        results.push({ id: edit.id, editedAt: edit.editedAt, outcome });
+        if (outcome !== 'missing') touched.add(edit.projectId);
+      }
+      // A small record: the oldest go first.
+      const ids = Object.keys(this.state.applied);
+      for (const id of ids.slice(0, Math.max(0, ids.length - 500))) delete this.state.applied[id];
+      await this.save();
+      for (const projectId of touched)
+        if (this.summaryOn(projectId)) await this.share(projectId, true, true);
+      return results;
+    });
   }
 
   /** Requests from the site join the inbox; returns the ids now kept here. */

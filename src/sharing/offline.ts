@@ -3,6 +3,7 @@ import type { Env } from './auth';
 import type { HostRow } from './hosts';
 import type { Actor } from './projects';
 import { membership } from './projects';
+import { summaryRoute } from './summary';
 
 // PLAN-20: the account site while the work PC is off. The PC uploads the last Sync of each linked
 // file as a small view-only snapshot (geometry, no source file) when its owner turned that on for
@@ -179,6 +180,9 @@ export async function offlineRoute(
   // The PC's model is the owner's own work; shared members see only what was published.
   if ((await membership(db, project, actor.id)) !== 'owner')
     throw new HttpError(403, 'OWNER_REQUIRED');
+  // 할 일 and the work history summary (PLAN-33), under the same owner rule.
+  if (path[0] === 'agenda' || path[0] === 'history')
+    return summaryRoute(request, env, actor, project, path);
   if (path[0] === 'snapshots') {
     if (path.length === 1 && request.method === 'GET') {
       const rows = await db
