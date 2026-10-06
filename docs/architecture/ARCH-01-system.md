@@ -2,10 +2,10 @@
 id: ARCH-01
 title: VIDE 기술 구조와 구현 계약
 status: review
-version: 0.85
+version: 0.86
 updated: 2026-10-06
 owner: agent:codex
-related: [ADR-033, PLAN-29, PLAN-31, ADR-032, SPEC-00, SPEC-02, SPEC-03, SPEC-04, SPEC-09, PLAN, PLAN-20, PLAN-24, ADR-014, ADR-015, ADR-016, ADR-017, ADR-021, ADR-022, ADR-025, ADR-027, ADR-028, ADR-029, ADR-030, PLAN-25, PLAN-26, PLAN-27, PLAN-28, ARCH-03, PLAN-30, ADR-035, PLAN-33, ADR-036, PLAN-34, ADR-034, PLAN-32, SPEC-10]
+related: [ADR-033, PLAN-29, PLAN-31, ADR-032, SPEC-00, SPEC-02, SPEC-03, SPEC-04, SPEC-09, PLAN, PLAN-20, PLAN-24, ADR-014, ADR-015, ADR-016, ADR-017, ADR-021, ADR-022, ADR-025, ADR-027, ADR-028, ADR-029, ADR-030, PLAN-25, PLAN-26, PLAN-27, PLAN-28, ARCH-03, PLAN-30, ADR-035, PLAN-33, ADR-036, PLAN-34, ADR-034, PLAN-32, SPEC-10, ADR-037, PLAN-35]
 ---
 
 # VIDE 기술 구조와 구현 계약
@@ -858,6 +858,53 @@ R2 조건부 쓰기/체크섬은 [공식 Workers API](https://developers.cloudfl
 - **AI**: 턴 지시(`workFolderRule`)가 기록 폴더의 `notes/`와 README·일지 파일 이름을 알린다. 읽기는 기록 폴더 규칙 그대로(묻지 않고 읽기, 쓰기 거절).
 - **화면**: 공통 `src/ui/notes/notes-workspace.tsx`(목록·열린 노트, `NotesBackend` 주입)·`note-editor.tsx`(TipTap 3: StarterKit(undoRedo 끔)·TaskList·TaskItem(중첩)·Placeholder·Collaboration(`field: default`)·CollaborationCaret(awareness `user {name, color}`, 편집 불가 caret, CSSOM 색); 편집기와 확장은 문서마다 한 번 만들고(`memo`), 첫 동기화 뒤(오프라인이면 2초 뒤) 만든다; StarterKit의 `trailingNode`·`undoRedo`는 끔; CSP가 인라인 style을 막으므로 `injectCSS: false`와 기본 규칙을 `notes.css`에 둠)·`notes.css`. 작업 화면의 단축키는 편집 가능한 글(`isContentEditable`)에서 쓰지 않는다(`src/ui/app/shortcuts.ts` `isTyping`). 사이트 `src/sharing/web/notes.tsx`(`?notes=<project>&note=<id>`, 지연 로드 청크)는 `NoteSocket`, VIDE `src/ui/notes-tab.tsx`(고정 화면 `notes`, 레일 `#rail-notes`)는 엔진 SSE + POST(입력 40ms 묶음, 다시 붙으면 `vector` 기준으로 빠진 갱신을 보냄)를 쓴다.
 - **의존성**: 루트 `yjs` 13.6.33, `y-protocols` 1.0.7, `lib0` 0.2.119, `@tiptap/core`·`react`·`pm`·`starter-kit`·`extension-collaboration`·`extension-collaboration-caret`·`extension-list` 3.31.4, `@tiptap/y-tiptap` 3.0.9. Worker 묶음도 루트의 `yjs`를 쓴다(한 벌만 두어 Yjs 이중 적재를 피함).
+
+### 데이터 위치(ADR-037)
+
+[ADR-037](../decisions/ADR-037-team-shared-project-layer.md)의 원칙: 팀이 함께 보는 가벼운 것(글·목록·설정)은 사이트, 무거운 것(모델 형상·첨부·원본 파일)과 PC별 키·설정은 PC다. 이 표가 저장 위치 전체의 정본이며 다른 절은 물리 형식만 적는다. `<데이터>`는 설치본 `%LOCALAPPDATA%\VIDE`, 개발 서버 `.vide/dev-data`다.
+
+| 위치 | 무엇 | 원본·사본 | 정본 절 |
+|---|---|---|---|
+| PC `<데이터>/app.sqlite` | 프로젝트 목록(이 PC)·연결 파일 기록·AI 설정·확장·계정 사용량 등 프로젝트 밖 기록 | 원본(이 PC의 프로젝트). 사이트 목록과는 id로 맞춤 | §5 「프로젝트별 DB」 |
+| PC `<데이터>/projects/<id>/project.sqlite` | 요청·결과·Sync 표시 형상·대화·jig·검토본·할 일·자료 검토(`knowledge_reviews`·`knowledge_source_rules`) | 요청·형상·대화는 원본. 자료 검토·규칙은 로그인한 PC에서 사이트의 사본 | §5, ARCH-03 §10.2 |
+| PC `<데이터>/projects/<id>/knowledge.sqlite` | 정리된 자료 DB(진술·발췌·출처 경로·이슈·현황 요약) | 수집한 PC는 원본(크롤러 결과), 다른 PC는 사이트에서 받은 사본(`meta.vide_copy`) | 「팀 공유 프로젝트 층」 |
+| PC `<데이터>/projects/<id>/notes/` | 공유 노트의 Markdown·Yjs 복제본·보내지 못한 편집 | 사본(원본은 사이트) | 「공유 노트」 |
+| PC `<데이터>/ai-instructions/<id>.json` | 프로젝트 AI 지시 | 사본(원본은 사이트; 로그인 전에는 이 PC가 원본) | 「팀 공유 프로젝트 층」 |
+| PC `<데이터>/shared-layer/` | 공유받은 프로젝트 목록 사본(`projects.json`), 프로젝트별 자료 묶음 판·검토 보낼 상자(`<id>.json`) | 사본·대기열 | 「팀 공유 프로젝트 층」 |
+| PC `<데이터>/models/`·`cad-models/`·`sdk-models/`·`zwcad-sdk-models/` | 작업 사본·가져오기 사본·호스트 실행본 | 원본(사이트에 올리지 않음) | §4 |
+| PC `<데이터>/attachments/`·`reference-boards/`·`outputs/`·`structure/` | 첨부·참고 이미지 보드·산출물·구조 jig 설정 | 원본(올리지 않음) | §3, SPEC-09 |
+| PC 사용자 폴더 | 프로젝트 폴더·원본 도면·자료 원본 | 사용자 원본. VIDE는 경로만 기록 | SPEC-01.13, SPEC-08.4 |
+| PC 설정·키 | `remote-host.json`(PC 호스트 키), `local-session.key`, `typesafe.env`(Jev 키), `*-settings.json`(질문·웹·경로·사용량), `cli-profiles/`, `desktop.json`, `offline-view.json`, `removed-projects.json`, `launch.json` | PC 전용(올리지 않음) | 「PC 프로그램」 |
+| PC 기록 | `logs/`(진단 기록), `crashdumps/`, 오류·성능 보고 보낼 상자 | PC 전용. 보고는 동의한 요약만 사이트로(ADR-036) | 「진단 기록」·「오류·성능 보고」 |
+| PC 창·도구 | `webview/`·`webview-zwcad/`(WebView2 저장소), `plugins/`, `bin/`, `tools/` | PC 전용 | 「PC 프로그램」 |
+| 사이트 D1 계정 | `user`·`session`·`account`·`verification`·`rateLimit`(0001), 아이디 계정(0006) | 원본 | 「로그인·프로젝트 공유 계약」 |
+| 사이트 D1 프로젝트 | `projects`(이름·소유자·돌리는 PC·미리보기 그림)·`project_members`·`invitations`(0002)·`join_requests`(0004) | 원본(목록·멤버, ADR-037 1) | 「팀 공유 프로젝트 층」 |
+| 사이트 D1 게시·의견 | `publications`·`comments`(0003) | 원본 | SPEC-04 |
+| 사이트 D1 PC | `remote_hosts`(PC 이름·키·주소·상태)·`remote_host_pairings`(0005) | 원본 | 「계정 웹사이트와 작업 PC」 |
+| 사이트 D1 PC 없이 보기 | `project_snapshots`(저장본 정보)·`queued_requests`(0007), `project_agenda`·`agenda_edits`·`project_history`(이력 요약)·`project_summaries`(0009) | 할 일·이력 요약은 PC 원본의 사본, 사이트 변경 대기열은 원본 | SPEC-04.9·04.10 |
+| 사이트 D1 노트 | `notes`(Markdown 사본, 0008) | 사본(본문 정본은 DO) | 「공유 노트」 |
+| 사이트 D1 팀 공유 층 | `project_instructions`·`knowledge_sets`·`knowledge_rows`·`knowledge_reviews`·`knowledge_rules`(0011) | 지시·검토·규칙은 원본, 자료 묶음은 수집 PC가 올린 원본 | 「팀 공유 프로젝트 층」 |
+| 사이트 D1 대화 사본 | 요청·답·대화 전문의 글 사본(0012, PLAN-36) | PC 원본의 사본 | PLAN-36 |
+| 사이트 D1 보고 | `telemetry_reports`·`telemetry_limits`·`telemetry_bundles`(0010) | 원본(동의한 요약) | 「오류·성능 보고」 |
+| 사이트 R2 | 게시본 파일, PC 없이 보기 저장본(`snapshots/<project>/<link>`, 상한 5 GB), 진단 묶음(스위치) | 게시본은 원본, 저장본은 PC Sync의 보기 전용 사본 | SPEC-04, PLAN-20, ADR-036 |
+| 사이트 Durable Object | `NoteRoom`의 Yjs 갱신(노트 본문) | 원본 | 「공유 노트」 |
+| Cloudflare 터널 | 원격 세션의 요청·응답이 지나감(저장 안 함) | — | 「계정 웹사이트와 작업 PC」 |
+| 외부 AI(Anthropic·OpenAI, 사용자 구독 CLI) | 요청 글, 첨부·참고 이미지, 프로젝트 AI 지시, 모델 문맥·도구 결과, 자료 도구가 돌려준 진술 | 공급자 정책에 따름(VIDE가 지우지 못함) | §2, FR-18 |
+| 외부 Jev(Typesafe) | 경로 판정·이전 대화 선별을 위한 요청 글과 이전 요청 제목 | 공급자 정책에 따름 | 「PC 프로그램」 |
+
+### 팀 공유 프로젝트 층(ADR-037, SPEC-04.11, PLAN-35)
+
+- **D1** `0011-shared-project-layer.sql`: `project_instructions(project_id PK → projects ON DELETE CASCADE, text, revision, edited_at, updated_at, updated_by)` · `knowledge_sets(project_id PK, revision, pending_revision, built_at, counts JSON, host_id, updated_at, updated_by)` · `knowledge_rows(project_id, revision, tbl, row_key, body JSON, PK(project_id, revision, tbl, row_key))` · `knowledge_reviews(project_id, statement_id, verdict(NULL = 지움), correction, superseded_by, reason, by_name, edited_at, updated_at, updated_by, PK(project_id, statement_id))` · `knowledge_rules(project_id, pattern, reason, removed 0|1, edited_at, updated_at, updated_by, PK(project_id, pattern))`, 바뀐 순 색인 `(project_id, updated_at)`.
+- **API**(`src/sharing/shared-layer.ts`; 브라우저 `/api/projects/:id/(instructions|knowledge…)`, PC `/api/hosts/device/projects/:id/(instructions|knowledge…)`): 모든 경로가 구성원(역할 무관)을 확인하고 아니면 404 `PROJECT_NOT_FOUND`.
+  - `GET instructions` → `{text, revision, updatedAt, updatedByName}`(없으면 `revision 0`). `PUT instructions {text ≤ 8 KB, baseRevision, editedAt?}` → 행이 없거나 `baseRevision = revision`이면 적용, 아니면 `editedAt ≥ edited_at`일 때만 적용(나중 쓰기). 응답 `{applied, text, revision, updatedAt, updatedByName, conflict?: {text, revision, updatedAt, updatedByName}}`. 적용됐으면 `conflict`는 덮인 글, 거절됐으면 응답 본문이 남은 글이다.
+  - `GET knowledge` → `{revision, builtAt, counts, updatedAt, changedAt}`(`changedAt` = 검토·규칙의 마지막 `updated_at`). `GET knowledge/rows?table=&after=&limit≤500` → 확정된 `revision`의 행(`row_key` 순)과 `next`. `GET knowledge/reviews?since=` → `{reviews, rules, at}`. `POST knowledge/reviews {reviews:[{statementId, verdict|null, correction, supersededBy, reason, by, editedAt}], rules:[{pattern, reason, removed, editedAt}], since}` → 각 행은 `editedAt`이 더 나중일 때만 덮고, `since` 뒤 바뀐 행을 돌려준다.
+  - PC 전용(브라우저는 403 `DEVICE_ONLY`): `POST knowledge/begin {builtAt}` → `{revision}`(`pending_revision = revision + 1`, 남은 미완료 행 지움) · `PUT knowledge/rows {revision, table, rows ≤ 200}`(본문 2 MB) · `POST knowledge/commit {revision, counts}` → `revision` 확정, 이전 판 행 지움. 표·열은 `src/contracts/knowledge-pack.ts`의 `KNOWLEDGE_TABLES`(meta·source·excerpt·statement·party_alias·issue·statement_issue·brief)만 받는다.
+  - PC 목록 `GET /api/hosts/device/projects` → `{projects:[{id, name, role, ownerName, hostId, hostName, hostOnline, here, updatedAt, instructionsRevision, knowledgeRevision, knowledgeChangedAt}]}`(구성원인 지우지 않은 프로젝트 500개). 구성원 보기 `GET /api/hosts/device/projects/:id/member/(agenda|history|snapshots)`는 PC 계정을 구성원으로 SPEC-04.10의 같은 응답을 준다.
+- **PC 엔진**(`src/server/shared-project.ts` `SharedProjects`, `RemoteAccess.deviceFetch`): heartbeat 뒤 2분마다 목록을 받고(`<데이터>/shared-layer/projects.json`), 이 PC 프로젝트마다 판이 달라진 지시를 받고 보낼 지시를 보내며, 자료 묶음과 검토를 맞춘다. 로컬 API: `GET /api/v1/shared-projects` → `{linked, online, error?, projects}`(이 PC에 있는 프로젝트 제외), `GET /api/v1/shared-projects/:id` → `{project, online, agenda, history, notes, snapshots, knowledge, instructions, site}`, `GET|PUT /api/v1/shared-projects/:id/instructions`. `GET|PUT /api/v1/projects/:id/ai-instructions` 응답에 `{revision, pending, shared: unlinked|synced|pending, updatedByName, conflict}`가 붙고 `POST …/ai-instructions/conflict`가 충돌 안내를 지운다(원격 세션은 쓰기 불가).
+- **지시 사본**(`ProjectInstructionStore`): 파일 `{text, updatedAt, revision?, pending?, editedAt?, updatedByName?, conflict?}`. 로컬 저장은 `pending`; 보낼 때 `baseRevision`·`editedAt`; 받은 판이 더 크고 `pending`이 아니면 덮음. 턴은 `text()`로 사본을 그대로 읽는다.
+- **자료 묶음**: 수집 PC 판단 = 자료 DB가 있고 `meta.vide_copy`가 없음. 지문 = 파일 크기·수정 시각(`-wal` 포함). 다르면 begin → 표마다 200행씩(발췌는 진술이 가리키는 것만, 글 20,000자; 출처는 그 발췌의 것만) → commit(`counts {files, mails, excerpts}`). 다른 PC는 사이트 `revision`이 사본의 `meta.vide_copy`와 다르면 표를 모두 받아 `knowledge.sqlite.copy`에 같은 열의 표·`excerpt_fts`(trigram)·`run(started = builtAt)`·`meta.vide_counts`를 만들고 이름을 바꿔 덮는다. `knowledgeSummary`는 `meta.vide_counts`가 있으면 그 수를 쓴다. 이 PC에 프로젝트가 있을 때만 받는다.
+- **검토·규칙**: `facts-routes.ts`의 기록 뒤 `onReviewChange`가 `<데이터>/shared-layer/<id>.json`의 보낼 상자에 쌓고, 맞출 때 보낸 뒤 받은 행을 `KnowledgeReviewStore`에 적고(보낼 상자에 남은 것은 다시 적용) `since`를 둔다.
+- **화면**: `src/ui/project-heading.tsx`의 `<optgroup label="공유받은 프로젝트">`. `?project=<id>`가 공유받은 프로젝트면 `src/ui/gateway.ts` `connect()`가 `remote`를 돌려주고 `src/ui/app/boot.ts`가 작업 화면 대신 `src/ui/remote-project.tsx`를 띄운다. 사이트 `offline.tsx`의 PC 없이 보기 화면에 AI 지시 칸.
 
 ### PC 프로그램
 

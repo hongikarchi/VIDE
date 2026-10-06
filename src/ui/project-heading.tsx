@@ -8,8 +8,14 @@ interface Project {
   id: string;
   name: string;
 }
+/** A project shared with this PC's account (ADR-037 1): opens as a remote project. */
+interface SharedProject extends Project {
+  ownerName?: string | null;
+  hostOnline?: boolean;
+}
 interface Props {
   projects: Project[];
+  shared?: SharedProject[];
   selected: string;
   select: (id: string) => void;
   create: (name: string) => Promise<void>;
@@ -17,7 +23,15 @@ interface Props {
   /** Deletes the selected project and its data; called only after the inline confirmation. */
   remove: () => Promise<void>;
 }
-function ProjectHeading({ projects, selected, select, create, rename, remove }: Props) {
+function ProjectHeading({
+  projects,
+  shared = [],
+  selected,
+  select,
+  create,
+  rename,
+  remove,
+}: Props) {
   const [editing, setEditing] = useState<'new' | 'rename' | 'delete' | null>(null),
     [value, setValue] = useState(''),
     [busy, setBusy] = useState(false);
@@ -99,11 +113,32 @@ function ProjectHeading({ projects, selected, select, create, rename, remove }: 
         value={selected}
         onChange={(event) => select(event.target.value)}
       >
-        {projects.map((project) => (
-          <option key={project.id} value={project.id}>
-            {project.name}
-          </option>
-        ))}
+        {shared.length ? (
+          <optgroup label="이 PC의 프로젝트">
+            {projects.map((project) => (
+              <option key={project.id} value={project.id}>
+                {project.name}
+              </option>
+            ))}
+          </optgroup>
+        ) : (
+          projects.map((project) => (
+            <option key={project.id} value={project.id}>
+              {project.name}
+            </option>
+          ))
+        )}
+        {shared.length ? (
+          <optgroup label="공유받은 프로젝트">
+            {shared.map((project) => (
+              <option key={project.id} value={project.id}>
+                {project.name}
+                {project.ownerName ? ` · ${project.ownerName}` : ''}
+                {project.hostOnline === false ? ' (PC 꺼짐)' : ''}
+              </option>
+            ))}
+          </optgroup>
+        ) : null}
       </select>
       <button
         id="rename-project"

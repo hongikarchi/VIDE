@@ -8,6 +8,8 @@ export interface SessionFields {
   busy: boolean;
   // Projects for the heading, and the account website when this PC is signed in.
   projects: { id: string; name: string }[];
+  /** Projects shared with this PC's account that are not on this PC (ADR-037 1). */
+  sharedProjects: { id: string; name: string; ownerName?: string | null; hostOnline?: boolean }[];
   accountSite: string | undefined;
   /** Who is signed in (the providers' status), for the login card (SPEC-02.17 3). */
   providerSignedIn: Partial<Record<Service, boolean>>;
@@ -39,6 +41,7 @@ export const sessionState = createSlice<SessionFields>({
   ready: false,
   busy: false,
   projects: [],
+  sharedProjects: [],
   accountSite: undefined,
   providerSignedIn: {},
   catalogGeneration: 0,

@@ -136,6 +136,8 @@ import { Agenda } from '../core/agenda.ts';
 import { agendaRoutes, agendaStatuses } from './agenda-routes.ts';
 import { SharedNotes } from './shared-notes.ts';
 import { notesRoutes, notesStatuses } from './notes-routes.ts';
+import { SharedProjects } from './shared-project.ts';
+import { KnowledgeReviewStore } from '../core/knowledge-review-store.ts';
 import {
   ReferenceBoards,
   referenceRoutes,
@@ -336,6 +338,8 @@ export async function startServer({
     afterHeartbeat: () => {
       void offlineView.tick().catch(() => {});
       notesTick();
+      // The shared project layer (ADR-037): member list, instructions and knowledge copies.
+      void sharedProjects.tick().catch(() => {});
     },
     onProjects: (projects) => {
       for (const project of projects) {
@@ -401,6 +405,7 @@ export async function startServer({
       ? [
           join(data, 'structure', `${projectId}.json`),
           join(data, 'ai-instructions', `${projectId}.json`),
+          join(data, 'shared-layer', `${projectId}.json`),
           ...(knowledge
             ? [
                 ...['', '-wal', '-shm'].map((end) => knowledge + end),
@@ -614,6 +619,19 @@ export async function startServer({
   const projectInstructions = new ProjectInstructionStore(
     filename === ':memory:' ? undefined : dirname(filename),
   );
+  // The team's shared project layer (ADR-037 1-3, PLAN-35): the site is the source of the project
+  // list, the AI instructions and the organized knowledge; this PC keeps copies.
+  const sharedProjects = new SharedProjects({
+    remote: remoteAccess,
+    dataDirectory: filename === ':memory:' ? undefined : dirname(filename),
+    instructions: projectInstructions,
+    localProjects: listProjects,
+    reviews: () => new KnowledgeReviewStore(store),
+    knowledgeFile: (projectId) =>
+      filename !== ':memory:' && /^[0-9a-f-]{36}$/i.test(projectId)
+        ? knowledgeFile(dirname(filename), projectId)
+        : undefined,
+  });
   // Settings → AI 「AI가 작업 도중에 묻기」 (T-075): the providers' own questions mid-turn, default on.
   const questionSettings = new QuestionSettings(
     filename === ':memory:' ? undefined : join(dirname(filename), 'question-settings.json'),
@@ -876,7 +894,9 @@ export async function startServer({
           (request.method === 'DELETE' && /^\/api\/v1\/projects\/[^/]+$/.test(url.pathname)) ||
           // The project's AI instructions steer every later turn: changed on this PC only.
           (request.method !== 'GET' &&
-            /^\/api\/v1\/projects\/[^/]+\/ai-instructions$/.test(url.pathname)) ||
+            /^\/api\/v1\/(projects\/[^/]+\/ai-instructions(\/conflict)?|shared-projects\/[^/]+\/instructions)$/.test(
+              url.pathname,
+            )) ||
           // Releasing a direct-mode guard (bulk erase, layer deletion, purge) is confirmed at the
           // PC whose document it changes; [되돌리기] and the plan's [진행] stay remote.
           /^\/api\/v1\/projects\/[^/]+\/requests\/[^/]+\/confirm$/.test(url.pathname) ||
@@ -1751,14 +1771,49 @@ export async function startServer({
         return;
       }
       // The project's addendum to the AI instruction bundle (PLAN-24 지침 묶음), ≤ 8 KB.
-      const aiInstructions = /^\/api\/v1\/projects\/([^/]+)\/ai-instructions$/.exec(url.pathname);
-      if (aiInstructions && (request.method === 'GET' || request.method === 'PUT')) {
+      // On a PC signed in to the account site the text is the copy of the site's (ADR-037 2).
+      const aiInstructions = /^\/api\/v1\/projects\/([^/]+)\/ai-instructions(\/conflict)?$/.exec(
+        url.pathname,
+      );
+      if (aiInstructions && aiInstructions[2] && request.method === 'POST') {
         store.project(aiInstructions[1]);
+        send(200, sharedProjects.dismissConflict(aiInstructions[1]));
+        return;
+      }
+      if (
+        aiInstructions &&
+        !aiInstructions[2] &&
+        (request.method === 'GET' || request.method === 'PUT')
+      ) {
+        store.project(aiInstructions[1]);
+        if (request.method === 'PUT')
+          send(200, await sharedProjects.saveInstructions(aiInstructions[1], await body(request)));
+        else {
+          send(200, sharedProjects.instructionState(aiInstructions[1]));
+          // The site's newer text shows on the next read.
+          void sharedProjects.instructions(aiInstructions[1]).catch(() => {});
+        }
+        return;
+      }
+      // Shared projects of the account (ADR-037 1, SPEC-04.11): listed beside this PC's projects
+      // and opened as remote projects (what the site has; no model, Sync or AI here).
+      if (url.pathname === '/api/v1/shared-projects' && request.method === 'GET') {
+        send(200, await sharedProjects.list());
+        return;
+      }
+      const sharedProject = /^\/api\/v1\/shared-projects\/([^/]+)(\/instructions)?$/.exec(
+        url.pathname,
+      );
+      if (sharedProject && !sharedProject[2] && request.method === 'GET') {
+        send(200, await sharedProjects.view(sharedProject[1]));
+        return;
+      }
+      if (sharedProject && sharedProject[2] && ['GET', 'PUT'].includes(request.method ?? '')) {
         send(
           200,
           request.method === 'PUT'
-            ? projectInstructions.save(aiInstructions[1], await body(request))
-            : projectInstructions.get(aiInstructions[1]),
+            ? await sharedProjects.saveInstructions(sharedProject[1], await body(request))
+            : await sharedProjects.instructions(sharedProject[1]),
         );
         return;
       }
@@ -1855,7 +1910,18 @@ export async function startServer({
       )
         return;
       if (await syncReadRoutes(url, request, { links, workspace, sdk, body, send })) return;
-      const facts = { workspace, dataDirectory: dirname(filename), body, send, remote, response };
+      const facts = {
+        workspace,
+        dataDirectory: dirname(filename),
+        body,
+        send,
+        remote,
+        response,
+        onReviewChange: (
+          projectId: string,
+          change: Parameters<SharedProjects['recordChange']>[1],
+        ) => sharedProjects.recordChange(projectId, change),
+      };
       if (await factRoutes(url, request, facts)) return;
       if (
         await conversationRoutes(url, request, {

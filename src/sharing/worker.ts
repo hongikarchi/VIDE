@@ -15,6 +15,7 @@ import {
   receiveReport,
 } from './telemetry';
 import { noteSocket, notesRoute } from './notes';
+import { sharedLayerRoute } from './shared-layer';
 
 export { NoteRoom } from './note-room';
 
@@ -151,6 +152,12 @@ async function handle(request: Request, env: Env, ctx: ExecutionContext): Promis
       return await commentRoute(request, env, actor, path[2], path[4]);
     if (path[1] === 'projects' && path[2] && path[3] === 'publications')
       return await publicationRoute(request, env, actor, path[2], path.slice(4));
+    // The project's AI instructions and organized knowledge (PLAN-35, ADR-037 2-3).
+    if (path[1] === 'projects' && path[2] && ['instructions', 'knowledge'].includes(path[3]))
+      return (
+        (await sharedLayerRoute(request, env, actor.id, path[2], path.slice(3))) ??
+        json({ error: 'NOT_FOUND' }, 404)
+      );
     if (path[1] === 'projects' && path[2] && path[3] === 'notes')
       return await notesRoute(request, env, actor.id, path[2], path.slice(4));
     if (

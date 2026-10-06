@@ -5,6 +5,7 @@ import { signIn } from './accounts';
 import { offlineDeviceRoute, pendingQueue } from './offline';
 import { pendingAgendaEdits, summaryDeviceRoute } from './summary';
 import { notesRoute } from './notes';
+import { memberProjects, memberView, sharedLayerRoute } from './shared-layer';
 
 // Work PCs: a desktop VIDE (with Rhino/CAD attached) signs in once with the account's ID and
 // password and receives a host key. It then reports by heartbeat that it is on, its local address
@@ -186,6 +187,23 @@ export async function hostDeviceRoute(
       // A site whose D1 lacks 0009 yet still answers the heartbeat.
       agendaEdits: offline ? [] : await pendingAgendaEdits(db, row).catch(() => []),
     });
+  }
+  // Every project this PC's account is a member of (ADR-037 1, PLAN-35).
+  if (path[0] === 'projects' && path.length === 1 && request.method === 'GET')
+    return memberProjects(env, row);
+  // A shared project's PC-off view, its AI instructions and knowledge, as the PC's account.
+  if (path[0] === 'projects' && path[1] && path[2] === 'member')
+    return memberView(request, env, row, projectId(path[1]), path.slice(3));
+  if (path[0] === 'projects' && path[1] && ['instructions', 'knowledge'].includes(path[2])) {
+    const reply = await sharedLayerRoute(
+      request,
+      env,
+      row.user_id,
+      projectId(path[1]),
+      path.slice(2),
+      row,
+    );
+    if (reply) return reply;
   }
   if (path[0] === 'projects' && path.length === 1 && request.method === 'POST') {
     // A project created or renamed on the PC joins the account's list, keeping the PC's id.

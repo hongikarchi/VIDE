@@ -368,6 +368,7 @@ export function renderHeading() {
   if (!sessionState.project) return;
   renderProjectHeading({
     projects: sessionState.projects,
+    shared: sessionState.sharedProjects,
     selected: sessionState.project.id,
     select: selectProject,
     create: createProject,

@@ -4857,3 +4857,17 @@ body.panel-mode .mode-toggle {
   font-size: 11px;
   white-space: pre;
 }
+
+/* The project AI instructions' conflict notice (SPEC-04.11 4, Design SCR-24). */
+.ai-instructions-conflict {
+  background: var(--warn-subtle);
+  border-radius: 6px;
+  padding: 8px 12px;
+  margin: 0 0 8px;
+}
+.ai-instructions-conflict pre {
+  white-space: pre-wrap;
+  max-height: 9em;
+  overflow: auto;
+  font-size: 12px;
+}

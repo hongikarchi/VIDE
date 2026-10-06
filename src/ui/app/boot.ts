@@ -10,7 +10,8 @@ import {
 import { setTheme } from '../theme.ts';
 import { renderLinkCard, renderPanelHeader } from '../host-panel.tsx';
 import { element as $, readableError } from '../elements.ts';
-import { api, connect, errors } from '../gateway.ts';
+import { api, connect, errors, sharedProjectList } from '../gateway.ts';
+import { mountRemoteProject } from '../remote-project.tsx';
 import { attachHostSelection, objects, models } from '../model.ts';
 import { displayIdOf } from '../layers.ts';
 import { mountUsageBars } from '../usage-bars.ts';
@@ -328,6 +329,13 @@ export async function pollHostLink() {
 export async function initializeWorkspace() {
   try {
     const linked = await connect();
+    // A shared project of another member's PC: the remote project page instead of the work
+    // screen (SPEC-04.11 3); nothing of this PC's work screen loads.
+    if (linked.remote) {
+      document.title = `${linked.remote.name} · VIDE`;
+      mountRemoteProject(linked.remote.id, linked.projects, linked.shared ?? []);
+      return;
+    }
     // Usage needs the session that connect() just opened; a retried start mounts it once.
     if (!sessionState.usageMounted) mountUsageBars(panelMode ? $('panel-footer') : $('usage-bars'));
     sessionState.usageMounted = true;
@@ -345,6 +353,12 @@ export async function initializeWorkspace() {
     sessionState.projects = linked.projects;
     document.title = `${sessionState.project.name} · VIDE`;
     renderHeading();
+    // Projects shared with this PC's account join the picker when the site answers (ADR-037 1).
+    void sharedProjectList().then((shared) => {
+      if (!shared.length) return;
+      sessionState.sharedProjects = shared;
+      renderHeading();
+    });
     loadMode(sessionState.project.id);
     let restored = false;
     // Drafts are per conversation; the last viewed tab comes back (SPEC-02.19 1). Host panels

@@ -332,6 +332,120 @@ function OfflineNotes({
   );
 }
 
+const instructionsSchema = z.object({
+  text: z.string(),
+  revision: z.number(),
+  updatedAt: z.number().nullable(),
+  updatedByName: z.string().nullable(),
+});
+const INSTRUCTIONS_MAX_BYTES = 8 * 1024;
+
+/**
+ * The project's AI instructions (SPEC-04.11 4, ADR-037 2): the site keeps the original and any
+ * member edits it; each work PC puts its copy into its AI turns. A save made on an older copy is
+ * kept only when it is the later edit; the other text is shown.
+ */
+function OfflineInstructions({ projectId }: { projectId: string }) {
+  const [row, setRow] = useState<z.infer<typeof instructionsSchema> | null>(null);
+  const [text, setText] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [status, setStatus] = useState('');
+  const [other, setOther] = useState<string | null>(null);
+  const path = `/projects/${encodeURIComponent(projectId)}/instructions`;
+  useEffect(() => {
+    let live = true;
+    api(path)
+      .then((value) => {
+        if (!live) return;
+        const parsed = instructionsSchema.parse(value);
+        setRow(parsed);
+        setText(parsed.text);
+      })
+      .catch(() => live && setStatus('AI 지시를 불러오지 못했습니다.'));
+    return () => {
+      live = false;
+    };
+  }, [path]);
+  const size = new TextEncoder().encode(text).length;
+  async function save() {
+    if (!row) return;
+    setBusy(true);
+    try {
+      const reply = z
+        .object({
+          applied: z.boolean(),
+          conflict: z.object({ text: z.string() }).optional(),
+        })
+        .passthrough()
+        .parse(await api(path, 'PUT', { text, baseRevision: row.revision, editedAt: Date.now() }));
+      const next = instructionsSchema.parse(reply);
+      setRow(next);
+      if (!reply.applied) {
+        setOther(text);
+        setText(next.text);
+        setStatus('그 사이 다른 구성원이 더 나중에 고쳤습니다. 남은 지시를 보입니다.');
+      } else {
+        setOther(reply.conflict ? reply.conflict.text : null);
+        setStatus(
+          reply.conflict
+            ? '저장했습니다. 다른 구성원이 고친 지시와 겹쳐 그 글을 아래에 남깁니다.'
+            : '저장했습니다. 작업 PC는 다음 연결 때 받아 AI 요청에 넣습니다.',
+        );
+      }
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : '저장하지 못했습니다.');
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <section
+      className="offline-section offline-instructions"
+      aria-label="AI 지시"
+      data-slot="instructions"
+    >
+      <div className="offline-section-head">
+        <h2>AI 지시</h2>
+      </div>
+      <p className="muted">
+        이 프로젝트의 AI 요청마다 함께 보내는 참고 사항입니다. 구성원 누구나 고칠 수 있습니다.
+        {row?.updatedByName ? ` 마지막 수정: ${row.updatedByName}` : ''}
+      </p>
+      <textarea
+        aria-label="프로젝트 AI 지시"
+        rows={5}
+        value={text}
+        disabled={!row || busy}
+        onChange={(event) => setText(event.target.value)}
+      />
+      <div className="offline-section-head">
+        <small className="muted">
+          {size.toLocaleString()} / {INSTRUCTIONS_MAX_BYTES.toLocaleString()} 바이트
+        </small>
+        <button
+          type="button"
+          className="primary"
+          disabled={!row || busy || size > INSTRUCTIONS_MAX_BYTES || text === row.text}
+          onClick={() => void save()}
+        >
+          지시 저장
+        </button>
+      </div>
+      {status ? (
+        <p className="status" role="status">
+          {status}
+        </p>
+      ) : null}
+      {other !== null ? (
+        <details className="offline-instructions-other" open>
+          <summary>남지 못한 글</summary>
+          <pre>{other}</pre>
+        </details>
+      ) : null}
+    </section>
+  );
+}
+
 export function OfflineProject({
   project,
   pcOnline,
@@ -438,6 +552,7 @@ export function OfflineProject({
           <OfflineHistory projectId={project.id} />
         </div>
         <OfflineNotes projectId={project.id} open={openNotes} />
+        <OfflineInstructions projectId={project.id} />
         <section className="offline-model">
           <h2>저장된 모델</h2>
           {files === null ? <p className="muted">불러오는 중…</p> : null}

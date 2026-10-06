@@ -234,7 +234,32 @@ function WebSection() {
 }
 /** The addendum limit the engine enforces (src/ai/instructions/project-store.ts). */
 const ADDENDUM_MAX_BYTES = 8 * 1024;
-const addendumSchema = z.object({ text: z.string(), updatedAt: z.string().nullable() });
+const addendumSchema = z
+  .object({
+    text: z.string(),
+    updatedAt: z.string().nullable(),
+    // How the copy stands against the account site (ADR-037 2, SPEC-04.11 4).
+    shared: z.enum(['unlinked', 'synced', 'pending']).optional(),
+    updatedByName: z.string().nullable().optional(),
+    conflict: z
+      .object({
+        text: z.string(),
+        updatedByName: z.string().nullable(),
+        updatedAt: z.number().nullable(),
+      })
+      .nullable()
+      .optional(),
+  })
+  .passthrough();
+type Addendum = z.infer<typeof addendumSchema>;
+const sharedLine = (row: Addendum | undefined) =>
+  !row?.shared
+    ? ''
+    : row.shared === 'unlinked'
+      ? '이 PC에만 저장(계정 로그인 전)'
+      : row.shared === 'pending'
+        ? '사이트 반영 대기 — 연결되면 보냅니다'
+        : `사이트와 공유됨${row.updatedByName ? ` · 마지막 수정 ${row.updatedByName}` : ''}`;
 /**
  * The project's addendum to the AI instruction bundle (PLAN-24 지침 묶음): notes the AI reads as
  * data with every request of this project (terms, layer rules, preferences). The project is the
@@ -244,6 +269,7 @@ function ProjectInstructionsSection() {
   const [project, setProject] = useState<{ id: string; name: string }>();
   const [text, setText] = useState('');
   const [saved, setSaved] = useState<string>();
+  const [row, setRow] = useState<Addendum>();
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
   useEffect(() => {
@@ -260,6 +286,7 @@ function ProjectInstructionsSection() {
       setProject({ id: current.id, name: current.name });
       setText(row.text);
       setSaved(row.text);
+      setRow(row);
     })().catch(() => live && setMessage('프로젝트 AI 지침을 읽지 못했습니다.'));
     return () => {
       live = false;
@@ -275,7 +302,12 @@ function ProjectInstructionsSection() {
       );
       setText(row.text);
       setSaved(row.text);
-      setMessage('저장했습니다. 다음 요청부터 적용됩니다.');
+      setRow(row);
+      setMessage(
+        row.conflict
+          ? '저장했습니다. 다른 구성원의 수정과 겹쳤습니다. 위 안내를 확인하세요.'
+          : '저장했습니다. 다음 요청부터 적용됩니다.',
+      );
     } catch (error) {
       setMessage(error instanceof Error ? error.message : '지침을 저장하지 못했습니다.');
     } finally {
@@ -291,6 +323,29 @@ function ProjectInstructionsSection() {
         이 프로젝트의 AI 요청마다 함께 보내는 참고 사항입니다. 용어, 레이어·이름 규칙, 단위, 선호를
         적어 두세요. AI는 참고 자료로만 읽고, VIDE의 권한·대상·반영 규칙은 바뀌지 않습니다.
       </p>
+      {row?.conflict && project ? (
+        <div className="ai-instructions-conflict" role="status">
+          <p>다른 구성원의 수정과 겹쳤습니다. 더 나중에 고친 지시가 남았습니다.</p>
+          <details open>
+            <summary>
+              남지 못한 글{row.conflict.updatedByName ? ` · ${row.conflict.updatedByName}` : ''}
+            </summary>
+            <pre>{row.conflict.text}</pre>
+          </details>
+          <button
+            type="button"
+            onClick={() => {
+              void api(
+                `/projects/${encodeURIComponent(project.id)}/ai-instructions/conflict`,
+                'POST',
+                {},
+              ).then((value) => setRow(addendumSchema.parse(value)));
+            }}
+          >
+            확인
+          </button>
+        </div>
+      ) : null}
       <textarea
         aria-label="프로젝트 AI 지침"
         rows={6}
@@ -303,6 +358,7 @@ function ProjectInstructionsSection() {
       <div className="table-controls">
         <small>
           {size.toLocaleString()} / {ADDENDUM_MAX_BYTES.toLocaleString()} 바이트
+          {sharedLine(row) ? ` · ${sharedLine(row)}` : ''}
         </small>
         <button
           disabled={!project || saving || size > ADDENDUM_MAX_BYTES || text === saved}

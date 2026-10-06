@@ -278,7 +278,8 @@ test('GET/PUT /projects/:id/ai-instructions: 저장·조회, 8 KB 상한, 없는
     };
     const project = (await api('/projects', 'POST', { name: '지침' })).json;
     const path = `/projects/${project.id}/ai-instructions`;
-    assert.deepEqual((await api(path)).json, { text: '', updatedAt: null });
+    // Not signed in to the account site: the copy is this PC's own (ADR-037 2).
+    assert.deepEqual((await api(path)).json, { text: '', updatedAt: null, shared: 'unlinked' });
     const put = await api(path, 'PUT', { text: '치수는 mm로 답한다.' });
     assert.equal(put.status, 200);
     assert.equal(put.json.text, '치수는 mm로 답한다.');

@@ -118,16 +118,25 @@ export function knowledgeSummary(file: string) {
       }))
       .filter((d) => d.issues.length);
     const last = db.prepare('select max(started) as at from run').get() as { at: string | null };
+    // A copy received from the site (ADR-037 3) carries the crawl's own counts of what it left out.
+    let copied: { files?: number; mails?: number; excerpts?: number } = {};
+    try {
+      copied = JSON.parse(
+        (hasTable(db, 'meta') && meta(db, 'vide_counts')) || '{}',
+      ) as typeof copied;
+    } catch {
+      /* Counted below. */
+    }
     return {
       available: true as const,
       builtAt: last.at,
       sizeBytes: statSync(file).size,
       counts: {
-        files: count(db, 'select count(*) as n from source where skip is null'),
-        excerpts: count(db, 'select count(*) as n from excerpt'),
+        files: copied.files ?? count(db, 'select count(*) as n from source where skip is null'),
+        excerpts: copied.excerpts ?? count(db, 'select count(*) as n from excerpt'),
         statements: count(db, `select count(*) as n from statement st where ${VERIFIED}`),
         issues: issues.length,
-        mails: count(db, 'select count(*) as n from mail'),
+        mails: copied.mails ?? count(db, 'select count(*) as n from mail'),
       },
       brief: briefs.project ?? null,
       disciplines,

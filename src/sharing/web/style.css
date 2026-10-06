@@ -938,3 +938,17 @@ button.ghost {
 .offline-notes-list small {
   color: var(--muted);
 }
+
+/* The project's AI instructions on the PC-off page (SPEC-04.11 4). */
+.offline-instructions textarea {
+  width: 100%;
+  box-sizing: border-box;
+  font: inherit;
+  margin: 8px 0;
+}
+.offline-instructions-other pre {
+  white-space: pre-wrap;
+  max-height: 9em;
+  overflow: auto;
+  font-size: 12px;
+}

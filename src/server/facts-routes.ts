@@ -41,6 +41,22 @@ export interface FactRouteContext {
   remote?: boolean;
   /** The response, for streaming an original's bytes (`…/sources/:n/file`). */
   response?: ServerResponse;
+  /** A review or source rule recorded here, for the account site (ADR-037 3, shared-project.ts). */
+  onReviewChange?: (
+    projectId: string,
+    change: {
+      review?: {
+        statementId: number;
+        verdict: (typeof verdicts)[number] | null;
+        correction?: string | null;
+        supersededBy?: number | null;
+        reason?: string | null;
+        by: string;
+        editedAt: number;
+      };
+      rule?: { pattern: string; reason: string | null; removed: boolean; editedAt: number };
+    },
+  ) => void;
 }
 
 /** HTTP statuses of the facts error codes; server.ts merges them into its table. */
@@ -96,7 +112,15 @@ const route =
 export async function factRoutes(
   url: URL,
   request: IncomingMessage,
-  { workspace, dataDirectory, body, send, remote = false, response }: FactRouteContext,
+  {
+    workspace,
+    dataDirectory,
+    body,
+    send,
+    remote = false,
+    response,
+    onReviewChange,
+  }: FactRouteContext,
 ): Promise<boolean> {
   const match = route.exec(url.pathname);
   if (!match) return false;
@@ -137,9 +161,13 @@ export async function factRoutes(
       if (input.remove) {
         if (!input.pattern) throw new DomainError('INVALID_INPUT');
         store.removeSourceRule(projectId, input.pattern);
+        onReviewChange?.(projectId, {
+          rule: { pattern: input.pattern, reason: null, removed: true, editedAt: Date.now() },
+        });
         send(200, { rules: store.sourceRules(projectId) });
         return true;
       }
+      const before = new Map(store.sourceRules(projectId).map((r) => [r.pattern, r.reason]));
       const rules = excludeFactSource(
         store,
         file,
@@ -148,6 +176,16 @@ export async function factRoutes(
         input.reason ?? null,
         PERSON,
       );
+      for (const rule of rules)
+        if (!before.has(rule.pattern) || before.get(rule.pattern) !== rule.reason)
+          onReviewChange?.(projectId, {
+            rule: {
+              pattern: rule.pattern,
+              reason: rule.reason,
+              removed: false,
+              editedAt: Date.now(),
+            },
+          });
       send(200, { rules } satisfies FactRules);
       return true;
     }
@@ -168,10 +206,17 @@ export async function factRoutes(
   if (kind === 'statements' && action === 'review' && (method === 'POST' || method === 'PUT')) {
     const { verdict, ...input } = review.parse(await body(request));
     if (verdict) {
-      send(200, recordFactReview(store, file, projectId, id, { verdict, ...input }, PERSON));
+      const recorded = recordFactReview(store, file, projectId, id, { verdict, ...input }, PERSON);
+      onReviewChange?.(projectId, {
+        review: { statementId: id, verdict, ...input, by: PERSON, editedAt: Date.now() },
+      });
+      send(200, recorded);
       return true;
     }
     store.removeReview(projectId, id);
+    onReviewChange?.(projectId, {
+      review: { statementId: id, verdict: null, by: PERSON, editedAt: Date.now() },
+    });
     send(200, factStatement(file, layer(), id) satisfies FactEvidence);
     return true;
   }

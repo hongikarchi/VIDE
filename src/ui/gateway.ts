@@ -99,6 +99,30 @@ export async function requestAction(
     throw Object.assign(new Error(errors.REQUEST_SETTLED), { code: 'REQUEST_SETTLED' });
   }
 }
+/** A project shared with this PC's account and not on this PC (ADR-037 1, SPEC-04.11). */
+export const sharedProjectEntrySchema = z
+  .object({
+    id: z.string(),
+    name: z.string(),
+    ownerName: z.string().nullable().optional(),
+    hostName: z.string().nullable().optional(),
+    hostOnline: z.boolean().optional(),
+  })
+  .passthrough();
+export type SharedProjectEntry = z.infer<typeof sharedProjectEntrySchema>;
+/** The shared projects; none when the PC is not signed in or the list cannot be read. */
+export async function sharedProjectList(): Promise<SharedProjectEntry[]> {
+  try {
+    return z.object({ projects: z.array(sharedProjectEntrySchema) }).parse(
+      await api('/shared-projects', 'GET', undefined, {
+        quiet: ['NOT_FOUND', 'REQUEST_FAILED', 'NETWORK_UNAVAILABLE', 'NETWORK_TIMEOUT'],
+        timeoutMs: 20_000,
+      }),
+    ).projects;
+  } catch {
+    return [];
+  }
+}
 export async function connect() {
   const token = location.hash.slice(1);
   if (token) {
@@ -112,11 +136,19 @@ export async function connect() {
   }
   const projects = z.array(projectSchema).parse(await api('/projects'));
   const wanted = new URLSearchParams(location.search).get('project');
+  // A project of another member's PC opens as a remote project (SPEC-04.11 3).
+  if (wanted && !projects.some((p) => p.id === wanted)) {
+    const shared = await sharedProjectList();
+    const remote = shared.find((p) => p.id === wanted);
+    if (remote) return { remote, shared, projects, project: undefined, requests: [] };
+  }
   const project =
     projects.find((p) => p.id === wanted) ||
     projects[0] ||
     projectSchema.parse(await api('/projects', 'POST', { name: '새 프로젝트' }));
   return {
+    remote: undefined,
+    shared: undefined,
     project,
     projects: projects.length ? projects : [project],
     requests: z.array(workspaceRequestSchema).parse(await api(`/projects/${project.id}/requests`)),

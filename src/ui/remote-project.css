@@ -1,0 +1,89 @@
+/* Remote project page (SPEC-04.11 3, Design SCR-24). */
+#remote-project {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  overflow: auto;
+  background: var(--bg);
+  color: var(--text);
+}
+.remote-project {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 16px;
+}
+.remote-head {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 12px;
+}
+.remote-head select {
+  min-width: 0;
+  max-width: 100%;
+}
+.remote-banner {
+  background: var(--info-subtle);
+  color: var(--text);
+  border-radius: 6px;
+  padding: 8px 12px;
+  margin: 0 0 12px;
+}
+.remote-error {
+  color: var(--ng, #c33);
+}
+.remote-muted {
+  color: var(--text-3);
+}
+.remote-body {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+}
+@media (max-width: 760px) {
+  .remote-body {
+    grid-template-columns: 1fr;
+  }
+}
+.remote-section {
+  border-top: 1px solid var(--border-subtle);
+  padding: 10px 0;
+}
+.remote-section h2 {
+  font-size: 14px;
+  margin: 0 0 8px;
+}
+.remote-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 6px;
+}
+.remote-list li.done {
+  color: var(--text-3);
+  text-decoration: line-through;
+}
+.remote-section textarea {
+  width: 100%;
+  box-sizing: border-box;
+  font: inherit;
+}
+.remote-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+.remote-conflict {
+  background: var(--warn-subtle);
+  border-radius: 6px;
+  padding: 8px 12px;
+  margin-bottom: 8px;
+}
+.remote-conflict pre {
+  white-space: pre-wrap;
+  max-height: 9em;
+  overflow: auto;
+  font-size: 12px;
+}
