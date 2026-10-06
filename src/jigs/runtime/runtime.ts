@@ -138,6 +138,16 @@ const decode64 = (value: unknown) => {
     return '';
   }
 };
+/**
+ * The scene rows of a model: an array, or a stored list read one row at a time (`Workspace.lazy`,
+ * T-129) whose coordinates decode only for the rows a reader takes.
+ */
+function sceneRows(model: ReadModel): Iterable<Record<string, unknown>> {
+  const scene = model.scene as unknown;
+  return scene && typeof scene === 'object' && Symbol.iterator in scene
+    ? (scene as Iterable<Record<string, unknown>>)
+    : [];
+}
 /** Rows of the named layers (exact full path) with the block definitions they use. */
 export function rowsOfLayers(model: ReadModel, layers: readonly string[]) {
   const wanted = new Set(layers);
@@ -145,7 +155,7 @@ export function rowsOfLayers(model: ReadModel, layers: readonly string[]) {
   const definitions: Record<string, unknown> = {};
   const all = (model.definitions ?? {}) as Record<string, unknown>;
   const rows: Record<string, unknown>[] = [];
-  for (const row of Array.isArray(model.scene) ? model.scene : []) {
+  for (const row of sceneRows(model)) {
     if (!row || typeof row !== 'object') continue;
     let layer = names.get(row.layer64);
     if (layer === undefined) names.set(row.layer64, (layer = decode64(row.layer64)));
@@ -161,7 +171,7 @@ export function rowsOfLayers(model: ReadModel, layers: readonly string[]) {
 export function layersOf(model: ReadModel): { fullPath: string; objectCount: number }[] {
   const counts = new Map<string, number>();
   const names = new Map<unknown, string>();
-  for (const row of Array.isArray(model.scene) ? model.scene : []) {
+  for (const row of sceneRows(model)) {
     if (!row || typeof row !== 'object') continue;
     let layer = names.get(row.layer64);
     if (layer === undefined) names.set(row.layer64, (layer = decode64(row.layer64)));

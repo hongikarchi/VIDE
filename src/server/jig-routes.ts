@@ -43,6 +43,7 @@ import {
 } from '../jigs/runtime/report-format.ts';
 import { jigReportInputs, renderJigReport, type JigReportLedgerRow } from './report.ts';
 import { ConversationStore } from '../core/conversation-store.ts';
+import { isItemList } from '../core/model-store.ts';
 import { skillCatalog } from './skill-catalog.ts';
 import { diagnose, type DiagnoseInputs } from '../../extensions/jigs/s06-frame/steps/diagnose.ts';
 import { ROLE_KEYS } from '../../extensions/jigs/s06-frame/steps/labels.ts';
@@ -728,13 +729,14 @@ export async function jigRoutes(
   );
   if (!route) return false;
   const [, projectId, action] = route;
-  // One stored Sync with its display geometry; a Sync that is not finished cannot be read.
+  // One stored Sync read lazily (T-129): layer lists decode no coordinates, a role decodes only
+  // its layers' rows. A Sync that is not finished cannot be read.
   const results = new Map<string, Record<string, unknown>>();
   const syncResult = (syncId: string) => {
     const known = results.get(syncId);
     if (known) return known;
-    const saved = workspace.get(projectId, syncId);
-    if (saved.state !== 'succeeded' || !saved.result || !Array.isArray(saved.result.scene))
+    const saved = workspace.lazy(projectId, syncId);
+    if (saved.state !== 'succeeded' || !saved.result || !isItemList(saved.result.scene))
       throw new DomainError('STALE_REFERENCE');
     const result = saved.result as Record<string, unknown>;
     results.set(syncId, result);
@@ -754,16 +756,35 @@ export async function jigRoutes(
   if (action === 'diagnose' && method === 'POST') {
     const input = diagnoseInput.parse(await body(request));
     const inputs: DiagnoseInputs = { definitions: {} };
+    // One read per Sync of every picked layer (T-129), then each role takes its layers' rows in
+    // scene order with the definitions they use: equal to `roleRows` per role and Sync.
+    const picked = new Map<string, ReturnType<typeof roleRows>>();
+    const readSync = (syncId: string) => {
+      let read = picked.get(syncId);
+      if (!read) {
+        const layers = ROLE_KEYS.flatMap((role) =>
+          (input.roles[role] ?? []).filter((p) => p.syncId === syncId).map((p) => p.layer),
+        );
+        picked.set(syncId, (read = roleRows(syncResult(syncId), syncId, layers)));
+      }
+      return read;
+    };
     for (const role of ROLE_KEYS) {
       const picks = input.roles[role];
       if (!picks) continue;
       const rows: NonNullable<DiagnoseInputs[typeof role]> = [];
       for (const syncId of new Set(picks.map((p) => p.syncId))) {
         if (!input.sources.includes(syncId)) throw new DomainError('INVALID_INPUT');
-        const layers = picks.filter((p) => p.syncId === syncId).map((p) => p.layer);
-        const read = roleRows(syncResult(syncId), syncId, layers);
-        rows.push(...read.rows);
-        inputs.definitions![syncId] = { ...inputs.definitions![syncId], ...read.definitions };
+        const layers = new Set(picks.filter((p) => p.syncId === syncId).map((p) => p.layer));
+        const read = readSync(syncId);
+        const definitions: typeof read.definitions = {};
+        for (const row of read.rows) {
+          if (!layers.has(row.layer)) continue;
+          rows.push({ ...row });
+          const name = row.block?.definition;
+          if (name && read.definitions[name]) definitions[name] = read.definitions[name];
+        }
+        inputs.definitions![syncId] = { ...inputs.definitions![syncId], ...definitions };
       }
       inputs[role] = rows;
     }
@@ -851,9 +872,10 @@ async function readForJig(
   input: { linkId?: string; syncId?: string; layers: string[]; includeHidden: boolean },
 ): Promise<{ linkId: string; revisionKey: string; model: ReadModel }> {
   const { workspace, links, sdk } = context;
+  // The stored Sync read lazily (T-129): only the picked layers' rows are decoded.
   const fromSync = (syncId: string, linkId: string) => {
-    const saved = workspace.get(projectId, syncId);
-    if (saved.state !== 'succeeded' || !saved.result || !Array.isArray(saved.result.scene))
+    const saved = workspace.lazy(projectId, syncId);
+    if (saved.state !== 'succeeded' || !saved.result || !isItemList(saved.result.scene))
       throw new DomainError('STALE_REFERENCE');
     const result = saved.result as ReadModel;
     const source = (result.sourceDocument ?? {}) as Record<string, unknown>;

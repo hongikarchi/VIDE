@@ -2,6 +2,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { DomainError, type Store } from './store.ts';
 import type { Workspace } from './workspace.ts';
+import { StoredList } from './model-store.ts';
 import { feedbackFileSchema, receivedFeedbackSchema } from '../contracts/shared-feedback.ts';
 
 function canonical(value: unknown): string {
@@ -18,6 +19,46 @@ function canonical(value: unknown): string {
   return JSON.stringify(value) ?? 'null';
 }
 const hash = (value: unknown) => createHash('sha256').update(canonical(value)).digest('hex');
+/**
+ * `hash` of a request result read lazily (`Workspace.lazy`, T-129): the same canonical text fed to
+ * the hash piece by piece, a stored list as an array one item at a time, so the model is never
+ * assembled or held as one string. Equal to `hash` of the whole result.
+ */
+function resultHash(value: unknown): string {
+  const digest = createHash('sha256');
+  let buffer = '';
+  const out = (text: string) => {
+    buffer += text;
+    if (buffer.length >= 1 << 16) {
+      digest.update(buffer);
+      buffer = '';
+    }
+  };
+  const feed = (value: unknown): void => {
+    if (Array.isArray(value) || value instanceof StoredList) {
+      out('[');
+      let first = true;
+      for (const item of value as Iterable<unknown>) {
+        if (!first) out(',');
+        first = false;
+        feed(item);
+      }
+      out(']');
+    } else if (value && typeof value === 'object') {
+      out('{');
+      Object.entries(value)
+        .sort(([a], [b]) => a.localeCompare(b))
+        .forEach(([key, item], index) => {
+          out((index ? ',' : '') + JSON.stringify(key) + ':');
+          feed(item);
+        });
+      out('}');
+    } else out(JSON.stringify(value) ?? 'null');
+  };
+  feed(value);
+  digest.update(buffer);
+  return digest.digest('hex');
+}
 const exportRow = z.object({
   id: z.string(),
   projectId: z.string(),
@@ -48,12 +89,12 @@ export class SharedFeedback {
     this.workspace = workspace;
   }
   record(projectId: string, requestId: string, manifest: unknown) {
-    const request = this.workspace.get(projectId, requestId),
+    const request = this.workspace.lazy(projectId, requestId),
       id = randomUUID();
     this.store
       .db(projectId)
       .prepare('INSERT INTO publication_exports VALUES(?,?,?,?,?)')
-      .run(id, projectId, requestId, hash(manifest), hash(request.result));
+      .run(id, projectId, requestId, hash(manifest), resultHash(request.result));
     return id;
   }
   receive(projectId: string, raw: unknown) {
@@ -69,7 +110,7 @@ export class SharedFeedback {
     const basis = exportRow.parse(row);
     if (
       hash(original.manifest) !== basis.manifestHash ||
-      hash(this.workspace.get(projectId, basis.requestId).result) !== basis.sourceHash
+      resultHash(this.workspace.lazy(projectId, basis.requestId).result) !== basis.sourceHash
     )
       throw new DomainError('STALE_REFERENCE');
     if (

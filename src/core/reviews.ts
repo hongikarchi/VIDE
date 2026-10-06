@@ -3,12 +3,14 @@ import type { Store } from './store.ts';
 import { reviewRowSchema } from '../contracts/reviews.ts';
 import { quantityTableSchema } from '../contracts/quantities.ts';
 import { workspaceResultSchema, applicationResultSchema } from '../contracts/workspace-result.ts';
+import { sceneItems, sceneListSchema } from './scene-items.ts';
+/** A candidate: its scene an array, or a stored list checked item by item as read (T-129). */
 export const candidateSchema = z.object({
   id: z.string(),
   createdAt: z.string(),
   result: workspaceResultSchema.extend({
     objects: workspaceResultSchema.shape.objects.unwrap(),
-    scene: workspaceResultSchema.shape.scene.unwrap(),
+    scene: sceneListSchema,
   }),
 });
 const snapshotSchema = reviewRowSchema.extend({
@@ -103,9 +105,24 @@ export class Reviews {
       createdAt = new Date().toISOString(),
       title = input.title.trim();
     const result = request.result;
-    const model = result.objects.map(({ nativeId, ...object }) => {
-      const { nativeId: ignored, ...geometry } =
-        result.scene.find((item) => item.id === object.id) || {};
+    // One pass over the scene (T-129): each object row is hashed with the first scene item of its
+    // id (as `find` gave it) when that item is read; the rest of the item is not kept.
+    type Row = {
+      id: string;
+      name: string;
+      kind: string;
+      comparable: boolean;
+      geometryHash: string;
+    };
+    const model: Row[] = new Array(result.objects.length);
+    const waiting = new Map<string, number[]>();
+    result.objects.forEach((object, index) => {
+      const slots = waiting.get(object.id);
+      if (slots) slots.push(index);
+      else waiting.set(object.id, [index]);
+    });
+    const row = (index: number, geometry: Record<string, unknown>): Row => {
+      const { nativeId, ...object } = result.objects[index];
       return {
         id: object.id,
         name: object.name,
@@ -115,7 +132,20 @@ export class Reviews {
           .update(JSON.stringify({ object, geometry }))
           .digest('hex'),
       };
-    });
+    };
+    const displayUnsupported: string[] = [];
+    const frozenScene: Record<string, unknown>[] = [];
+    for (const item of sceneItems(result.scene)) {
+      if (!sceneRepresentation(item)) displayUnsupported.push(item.nativeType || '미상');
+      const { id, nativeId, nativeType, area, volume } = item;
+      frozenScene.push({ id, nativeId, nativeType, area, volume });
+      const slots = waiting.get(item.id);
+      if (!slots) continue;
+      waiting.delete(item.id);
+      const { nativeId: ignored, ...geometry } = item;
+      for (const index of slots) model[index] = row(index, geometry);
+    }
+    for (const slots of waiting.values()) for (const index of slots) model[index] = row(index, {});
     const frozen = {
       id: request.id,
       createdAt: request.createdAt,
@@ -127,20 +157,12 @@ export class Reviews {
       },
       result: {
         hostExecuted: true,
-        displayUnsupported: result.scene
-          .filter((object) => !sceneRepresentation(object))
-          .map((object) => object.nativeType || '미상'),
+        displayUnsupported,
         verified: result.verified,
         host: result.host,
         text: result.text,
         objects: result.objects.map(({ id, name, kind }) => ({ id, name, kind })),
-        scene: result.scene.map(({ id, nativeId, nativeType, area, volume }) => ({
-          id,
-          nativeId,
-          nativeType,
-          area,
-          volume,
-        })),
+        scene: frozenScene,
       },
       applications: (request.applications || []).map((application) => ({
         id: application.id,

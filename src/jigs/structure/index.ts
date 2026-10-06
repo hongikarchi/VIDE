@@ -66,14 +66,20 @@ export interface StructureDraftRecord {
   model: StructureModelInput;
   issues: DraftIssue[];
   checks: DraftIssue[];
-  sources: { syncId: string; documentKey: string; mode: DraftSource['mode'] }[];
+  /** `revision`: the Sync's manifest revision when drafted (a Live Sync in place raises it). */
+  sources: {
+    syncId: string;
+    documentKey: string;
+    mode: DraftSource['mode'];
+    revision?: number;
+  }[];
 }
 
 export interface StructureRecord {
   confirmedAt: string;
   modelHash: string;
   model: StructureModel;
-  sources: { syncId: string; documentKey: string }[];
+  sources: { syncId: string; documentKey: string; revision?: number }[];
   ledger: LedgerRow[];
   issues: DraftIssue[];
   result: StructureResult;

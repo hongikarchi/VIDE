@@ -429,7 +429,10 @@ User request: ${input.body || '첨부한 설계 문맥을 검토해 주세요.'}
       .map((pin) => pinSchema.parse(pin))
       .filter((pin) => pin.basis === previous?.id && pin.role !== 'target')
       .map((pin) => pin.id);
-    const baseline = previous ? modelSchema.parse(previous.result) : undefined;
+    // The basis model is checked only for what protection compares (T-129): without a preserved
+    // pin nothing of it is read.
+    const baseline =
+      previous && protectedIds.length ? modelSchema.parse(previous.result) : undefined;
     const protection = protectedIds.map((id) => ({
       id,
       object: baseline?.objects.find((object) => object.id === id),

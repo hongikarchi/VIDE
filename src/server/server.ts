@@ -62,6 +62,7 @@ import type { IncomingMessage } from 'node:http';
 import type { StoredWork } from '../contracts/stored-work.ts';
 import { hostTargetSchema } from '../contracts/host-documents.ts';
 import { candidateSchema } from '../core/reviews.ts';
+import { lazyCandidate } from '../core/scene-items.ts';
 type ExecutionOptions = NonNullable<ConstructorParameters<typeof Execution>[1]>;
 interface ServerOptions {
   filename: string;
@@ -113,7 +114,7 @@ import type { splitProjectDatabase } from '../core/project-split.ts';
 import { Workspace } from '../core/workspace.ts';
 import { requestMode } from '../contracts/workspace.ts';
 import { Execution } from './execution.ts';
-import { ModelStore } from '../core/model-store.ts';
+import { ModelStore, isItemList } from '../core/model-store.ts';
 import { maintainModels } from '../core/model-move.ts';
 import { RhinoWorkspace } from '../../hosts/rhino/workspace.ts';
 import { ZwcadWorkspace } from '../../hosts/zwcad/workspace.ts';
@@ -1520,7 +1521,7 @@ export async function startServer({
       }
       if (publicExport && request.method === 'POST') {
         const bundle = createPublicationBundle(
-          workspace.get(publicExport[1], publicExport[2]),
+          lazyCandidate(workspace, publicExport[1], publicExport[2]),
           await body(request),
         );
         const bytes = Buffer.concat(bundle.chunks);
@@ -1541,11 +1542,12 @@ export async function startServer({
           after = reviews.get(projectId, url.searchParams.get('after') || '');
         let related = false;
         try {
+          // The chain needs ids only (T-129); a missing request still answers NOT_FOUND.
           related = relatedCandidates(
             workspace,
             projectId,
-            workspace.get(projectId, before.requestId),
-            workspace.get(projectId, after.requestId),
+            workspace.brief(projectId, before.requestId),
+            workspace.brief(projectId, after.requestId),
           );
         } catch (error) {
           if (!(error instanceof DomainError) || error.code !== 'NOT_FOUND') throw error;
@@ -1576,7 +1578,9 @@ export async function startServer({
             reviews.create(
               review[1],
               input,
-              withApplications(workspace.get(review[1], z.string().parse(input.requestId))),
+              withApplications(
+                lazyCandidate(workspace, review[1], z.string().parse(input.requestId)),
+              ),
             ),
           );
           return;
@@ -1611,7 +1615,7 @@ export async function startServer({
       if (report && request.method === 'POST') {
         const html = renderReport(
           store.project(report[1]),
-          withApplications(workspace.get(report[1], report[2])),
+          withApplications(lazyCandidate(workspace, report[1], report[2])),
           (await body(request)).image,
         );
         response.writeHead(200, {
@@ -1693,9 +1697,10 @@ export async function startServer({
           })
           .strict()
           .parse(await body(request));
+        // Read lazily (T-129): one scene row decoded at a time, none kept but the elements.
         const source = (id: string, host: 'rhino' | 'zwcad') => {
-          const saved = workspace.get(syncJig[1], id);
-          if (saved.state !== 'succeeded' || !saved.result || !Array.isArray(saved.result.scene))
+          const saved = workspace.lazy(syncJig[1], id);
+          if (saved.state !== 'succeeded' || !saved.result || !isItemList(saved.result.scene))
             throw new DomainError('STALE_REFERENCE');
           if ((saved.result.host || 'rhino') !== host) throw new DomainError('TARGET_MISMATCH');
           return saved.result as Record<string, unknown>;
@@ -1758,7 +1763,7 @@ export async function startServer({
             if (askedIn) {
               let asked: { mode?: unknown; permission?: unknown } | undefined;
               try {
-                asked = workspace.get(projectId, askedIn).input;
+                asked = workspace.brief(projectId, askedIn).input;
               } catch {
                 asked = undefined;
               }
@@ -1780,18 +1785,25 @@ export async function startServer({
       if (structureJig) {
         const projectId = structureJig[1];
         const action = structureJig[2];
+        // A Sync read lazily (T-129): only the picked layers' rows decode their coordinates.
         const syncResult = (id: string) => {
-          const saved = workspace.get(projectId, id);
-          if (saved.state !== 'succeeded' || !saved.result || !Array.isArray(saved.result.scene))
+          const saved = workspace.lazy(projectId, id);
+          if (saved.state !== 'succeeded' || !saved.result || !isItemList(saved.result.scene))
             throw new DomainError('STALE_REFERENCE');
           return saved;
         };
-        // A result is out of date when its Sync is gone or a newer Sync of the same document exists.
-        const stale = (sources: { syncId: string; documentKey: string }[]) => {
+        // A result is out of date when its Sync is gone, was changed in place by a Live Sync (its
+        // manifest revision moved) or a newer Sync of the same document exists.
+        const stale = (sources: { syncId: string; documentKey: string; revision?: number }[]) => {
           const rows = workspace.list(projectId);
           return sources.some((source) => {
             const saved = rows.find((row) => row.id === source.syncId);
             if (!saved) return true;
+            if (
+              source.revision !== undefined &&
+              workspace.model(projectId, source.syncId)?.revision !== source.revision
+            )
+              return true;
             return rows.some(
               (row) =>
                 row.state === 'succeeded' &&
@@ -1863,6 +1875,7 @@ export async function startServer({
               ...source,
               host: result.host === 'zwcad' ? ('zwcad' as const) : ('rhino' as const),
               documentId: structureDocumentKey(result),
+              revision: workspace.model(projectId, source.syncId)?.revision,
               result,
             };
           });
@@ -1878,6 +1891,7 @@ export async function startServer({
                 syncId: s.syncId,
                 documentKey: s.documentId,
                 mode: s.mode,
+                ...(s.revision === undefined ? {} : { revision: s.revision }),
               })),
             },
           };
@@ -1930,9 +1944,10 @@ export async function startServer({
             confirmedAt: new Date().toISOString(),
             modelHash: summary.modelHash,
             model: out.model,
-            sources: record.draft.sources.map(({ syncId, documentKey }) => ({
+            sources: record.draft.sources.map(({ syncId, documentKey, revision }) => ({
               syncId,
               documentKey,
+              ...(revision === undefined ? {} : { revision }),
             })),
             ledger: out.ledger ?? [],
             issues: summary.issues,
@@ -2143,8 +2158,8 @@ export async function startServer({
       const comparison = /^\/api\/v1\/projects\/([^/]+)\/comparison$/.exec(url.pathname);
       if (comparison && request.method === 'GET') {
         const projectId = comparison[1],
-          before = workspace.get(projectId, url.searchParams.get('before') || ''),
-          after = workspace.get(projectId, url.searchParams.get('after') || '');
+          before = lazyCandidate(workspace, projectId, url.searchParams.get('before') || ''),
+          after = lazyCandidate(workspace, projectId, url.searchParams.get('after') || '');
         send(
           200,
           compareCandidates(before, after, relatedCandidates(workspace, projectId, before, after)),
@@ -2188,7 +2203,7 @@ export async function startServer({
         );
       if (table && request.method === 'GET') {
         const data = quantities(
-          candidateSchema.parse(workspace.get(table[1], table[2])),
+          candidateSchema.parse(lazyCandidate(workspace, table[1], table[2])),
           Object.fromEntries(url.searchParams),
         );
         if (table[3] === 'quantities') {

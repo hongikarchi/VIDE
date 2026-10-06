@@ -2,7 +2,7 @@
 id: PLAN-28
 title: 순정 우선 — 상한·자체 도구 정리, 모델 전체 JSON 전송 제거, 프로젝트별 DB
 status: draft
-version: 0.4
+version: 0.5
 updated: 2026-10-06
 owner: agent:claude
 related: [ADR-031, ADR-032, RESEARCH-14, PLAN-27, SPEC-02, ARCH-01]
@@ -152,3 +152,23 @@ ADR-032를 사용자가 확인한 뒤 ARCH-01 §5에 반영하고 구현한다. 
   - 남은 확인: 실제 Rhino에서 초안 고정 중 ⟳ 여러 번(복사본 하나, 화면 전체 다시 받기 없음), 편집 중 ⟳의 재시도.
 - **T-128 (다음):** Rhino→엔진 전체 읽기(첫 Sync, 전체 다시 읽기)를 VGT1 바이너리 쪽으로 바꾼다(ADR-031 5의 마지막 경로). ZWCAD도 Live Sync로 한다.
 - **T-129 (다음):** jig 입력, 검토 비교, 보고서, 게시, 오프라인 스냅샷, 작업 사본 실행이 모델 전체 대신 `ModelView`의 필요한 객체만 읽는다.
+
+## T-129 필요한 객체만 읽기 (ADR-031 5)
+
+**진행(2026-10-06) — 구현·자동 검증, 커밋은 작업 브랜치.** 계약은 [ARCH-01](../architecture/ARCH-01-system.md) §5 「읽기와 하위 호환」의 `Workspace.lazy`.
+- 지연 읽기: `ModelView.lazy`(목록을 한 줄씩 읽는 `StoredList`, 좌표는 처음 읽힐 때 그 객체만 푸는 `lazyItem`, 정의는 키별), `Workspace.lazy`(객체 줄은 `summary` 캐시), 검사하는 독자용 `src/core/scene-items.ts`(`sceneItems`·`lazyCandidate`).
+- 바꾼 독자: 구조 jig 레이어 목록·진단(Sync마다 고른 레이어를 한 번 읽음), `readForJig`의 저장 Sync 경로, Sync jig, 구조 해석 jig 초안(레이어·객체를 먼저 거름, CAD는 고른 레이어만), jig 런타임 `rowsOfLayers`·`layersOf`, 수량표(한 번 훑기, 이전의 객체마다 `find` 없음)·비교(객체별 표현 해시)·보고서·검토본·웹 게시(고른 객체만 풀고 검사)·공유 의견 기준 해시(같은 정규 문자열을 조각으로 해시)·확장 실행, 오프라인 스냅샷. 요청 사슬 확인과 답 턴의 이전 입력은 `brief`.
+- 구조 jig '오래됨': 초안·확정 기록의 `sources[].revision`(그때의 목록 revision)이 지금과 다르면 오래됨. 이전 기록(revision 없음)은 지금처럼 ID·생성 시각만 본다.
+- 남김: 작업 사본 실행 결과(`exportModel`)는 새 후보 모델이라 전체를 저장해야 하고, 전송 형식은 호스트 연결(T-128) 쪽이다. 표시 Sync 기준 실행의 `captureEditor`는 파일 없는 기준이라 캡처가 필요하다. 작업 사본·DWG 기준 턴의 `previousOf`는 보호 비교·측정 재사용 때문에 그대로이고, ZWCAD 작업 사본 실행은 보호 핀이 있을 때만 기준 모델을 검사한다.
+- 측정(합성 1만 개 Sync: 메시 5천·선 5천, DB 30 MB, 엔진 요청 목록이 데워진 상태, 이전=main 6100ee5의 `get` 경로, 이후=`lazy`). 시간은 측정용 표본 없이, 메모리는 반복 중 1천 개마다 GC 뒤 살아 있는 힙의 최댓값(시작 대비). 출력 해시는 이전·이후 같음.
+
+| 독자 | 시간 이전 → 이후 | 살아 있는 힙 최대 이전 → 이후 |
+|---|---|---|
+| 수량표(`…/quantities`) | 761 → 531 ms | 35 → 3 MB |
+| 오프라인 스냅샷 | 729 → 808 ms | 86 → 54 MB(나머지는 스냅샷 버킷) |
+| 구조 jig 레이어 목록 | 521 → 388 ms | 32 → 0 MB |
+| 구조 jig 진단(한 레이어) | 445 → 340 ms | 32 → 1 MB |
+| 웹 게시(객체 3개) | 524 → 390 ms | 33 → 2 MB |
+
+- 목록 한 번 훑기(객체 1만 개)는 판 표 조인 때문에 약 300 ms라, 같은 Sync를 여러 번 훑지 않게 했다(진단은 Sync마다 한 번, 객체 줄은 `summary` 캐시).
+- 시험: 새 `tests/server/lazy-model-readers.test.mjs`(`ModelView.lazy` = `load`, 독자 13종의 출력이 전체 모델에서와 같음, HTTP 경로 7개가 `ModelStore.load` 0번, 제자리 Live Sync 뒤 구조 초안 '오래됨').

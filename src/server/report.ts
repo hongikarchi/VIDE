@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { workspaceResultSchema, applicationResultSchema } from '../contracts/workspace-result.ts';
 import { quantityTableSchema } from '../contracts/quantities.ts';
+import { sceneItems, sceneListSchema } from '../core/scene-items.ts';
 const reportSchema = z.object({
   id: z.string(),
   createdAt: z.string(),
@@ -23,7 +24,8 @@ const reportSchema = z.object({
     verified: z.boolean().optional(),
     displayUnsupported: z.array(z.string()).optional(),
     objects: z.array(z.object({ id: z.string(), name: z.string(), kind: z.string().optional() })),
-    scene: workspaceResultSchema.shape.scene.unwrap(),
+    // An array, or a stored list checked item by item as read (`Workspace.lazy`, T-129).
+    scene: sceneListSchema,
   }),
   applications: z.array(applicationResultSchema).optional(),
 });
@@ -39,6 +41,14 @@ const escape = (value: unknown) =>
   );
 const number = (value: unknown) =>
   typeof value === 'number' && Number.isFinite(value) ? value.toFixed(3) : '—';
+
+/** Native types of scene items the 3D view cannot show, one item at a time (T-129). */
+function unsupportedTypes(scene: z.infer<typeof sceneListSchema>) {
+  const out: string[] = [];
+  for (const object of sceneItems(scene))
+    if (!sceneRepresentation(object)) out.push(object.nativeType || '미상');
+  return out;
+}
 
 export function renderReport(
   projectValue: unknown,
@@ -88,12 +98,7 @@ export function renderReport(
     )
     .join(' · ');
   const unsupported =
-    request.result.displayUnsupported ??
-    (snapshot
-      ? []
-      : request.result.scene
-          .filter((object) => !sceneRepresentation(object))
-          .map((object) => object.nativeType || '미상'));
+    request.result.displayUnsupported ?? (snapshot ? [] : unsupportedTypes(request.result.scene));
   const filter =
     [
       table.query.search && '검색: ' + table.query.search,

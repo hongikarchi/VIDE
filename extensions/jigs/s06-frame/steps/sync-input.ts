@@ -52,17 +52,27 @@ function layerNames() {
 }
 const numbers = (value: unknown) =>
   Array.isArray(value) && value.length ? (value as number[]) : undefined;
-const rowsOf = (result: Row) =>
-  Array.isArray(result.scene) ? (result.scene as unknown[]).filter(isRow) : [];
+/**
+ * A non-empty coordinate array. A stored row read lazily (`lazyItem` of geometry-transfer, T-129)
+ * holds a moved array as a getter; it is never empty, so it is told without decoding it.
+ */
+const filled = (row: Row, key: string) =>
+  typeof Object.getOwnPropertyDescriptor(row, key)?.get === 'function' || !!numbers(row[key]);
+const iterable = (value: unknown): value is Iterable<unknown> =>
+  !!value && typeof value === 'object' && Symbol.iterator in value;
+/** Scene rows of an array or a stored list read lazily (`Workspace.lazy`, T-129). */
+function* rowsOf(result: Row): Generator<Row> {
+  if (iterable(result.scene)) for (const row of result.scene) if (isRow(row)) yield row;
+}
 function isRow(value: unknown): value is Row {
   return !!value && typeof value === 'object' && !Array.isArray(value);
 }
 
 export function objectKind(row: Row): ObjectKind {
   if (isRow(row.block)) return 'block';
-  if (numbers(row.line)) return 'curve';
-  if (numbers(row.vertices)) return 'mesh';
-  if (numbers(row.segments)) return 'wire';
+  if (filled(row, 'line')) return 'curve';
+  if (filled(row, 'vertices')) return 'mesh';
+  if (filled(row, 'segments')) return 'wire';
   return 'other';
 }
 
@@ -129,8 +139,8 @@ export function roleRows(
     rows.push(out);
   }
   // Names from the object list, looked up only for the rows taken.
-  if (unnamed.size && Array.isArray(result.objects))
-    for (const object of result.objects as unknown[]) {
+  if (unnamed.size && iterable(result.objects))
+    for (const object of result.objects) {
       if (!isRow(object) || typeof object.name !== 'string' || !object.name) continue;
       const out = unnamed.get(String(object.id));
       if (out && !out.name) out.name = object.name;

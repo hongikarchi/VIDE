@@ -222,7 +222,8 @@ export class OfflineView {
     let size = 0;
     let objects = 0;
     try {
-      const work = this.options.workspace.get(projectId, requestId);
+      // Read lazily (T-129): one scene item decoded at a time, definitions only as blocks use them.
+      const work = this.options.workspace.lazy(projectId, requestId);
       const snapshot = buildSnapshot((work.result ?? {}) as SyncResult, {
         name: link.name,
         host: link.host,

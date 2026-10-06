@@ -68,16 +68,27 @@ const b64 = (value: unknown) => {
 };
 const distance = (a: Point, b: Point) => Math.hypot(a[0] - b[0], a[1] - b[1]);
 
-/** Elements of a stored Sync result (Rhino curves as polylines, CAD entities as segment pairs). */
-export function elements(result: Record<string, unknown>, host: 'rhino' | 'zwcad'): Element[] {
-  const scene = Array.isArray(result.scene) ? (result.scene as Record<string, unknown>[]) : [];
-  const names = new Map(
-    (Array.isArray(result.objects) ? (result.objects as Record<string, unknown>[]) : []).map(
-      (object) => [String(object.id), typeof object.name === 'string' ? object.name : undefined],
-    ),
-  );
+const listOf = (value: unknown): Iterable<Record<string, unknown>> =>
+  value && typeof value === 'object' && Symbol.iterator in value
+    ? (value as Iterable<Record<string, unknown>>)
+    : [];
+/**
+ * Elements of a stored Sync result (Rhino curves as polylines, CAD entities as segment pairs).
+ * `scene`/`objects` may be stored lists read one row at a time (`Workspace.lazy`, T-129); with
+ * `layers`, rows of other layers are skipped before their coordinates are read.
+ */
+export function elements(
+  result: Record<string, unknown>,
+  host: 'rhino' | 'zwcad',
+  layers?: readonly string[],
+): Element[] {
+  const wanted = layers && new Set(layers);
+  const names = new Map<string, string | undefined>();
+  for (const object of listOf(result.objects))
+    names.set(String(object.id), typeof object.name === 'string' ? object.name : undefined);
   const out: Element[] = [];
-  for (const row of scene) {
+  for (const row of listOf(result.scene)) {
+    if (wanted && !wanted.has(b64(row.layer64))) continue;
     const flat =
       Array.isArray(row.line) && (row.line as number[]).length >= 6
         ? (row.line as number[])

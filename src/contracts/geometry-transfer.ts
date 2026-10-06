@@ -130,6 +130,44 @@ export function decodeItem(meta: unknown, geometry: Uint8Array | null | undefine
   return out;
 }
 
+/**
+ * `decodeItem` deferred (T-129): the item's JSON fields as they are and each moved array as a
+ * getter that decodes the item's container on first read. A reader that looks only at ids, layers
+ * or measurements decodes nothing; the arrays it does read equal `decodeItem`'s.
+ */
+export function lazyItem(meta: unknown, geometry: Uint8Array | null | undefined): unknown {
+  if (!geometry || !meta || typeof meta !== 'object') return meta;
+  let parts: Record<string, unknown> | undefined;
+  const out: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(meta as Record<string, unknown>)) {
+    if (value !== SLOT) {
+      out[key] = value;
+      continue;
+    }
+    Object.defineProperty(out, key, {
+      enumerable: true,
+      configurable: true,
+      get() {
+        parts ??= decodeGeometry(geometry) as Record<string, unknown>;
+        return key in parts ? parts[key] : value;
+      },
+      set(next: unknown) {
+        Object.defineProperty(out, key, {
+          value: next,
+          writable: true,
+          enumerable: true,
+          configurable: true,
+        });
+      },
+    });
+  }
+  return out;
+}
+/** Whether `item[key]` is a moved coordinate array not decoded yet (`lazyItem`): never empty. */
+export function lazyArray(item: object, key: string): boolean {
+  return typeof Object.getOwnPropertyDescriptor(item, key)?.get === 'function';
+}
+
 /** Header and aligned buffer region of a stored item container. */
 function split(geometry: Uint8Array) {
   if (geometry.byteLength < 8 || MAGIC.some((v, i) => geometry[i] !== v))

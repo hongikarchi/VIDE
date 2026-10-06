@@ -6,13 +6,30 @@ type Candidate = z.infer<typeof candidateSchema>;
 import { DomainError } from './store.ts';
 import { quantities } from './quantities.ts';
 import { modelChangesSchema } from '../contracts/model-changes.ts';
+import { createHash } from 'node:crypto';
+import { sceneItems, type SceneItem } from './scene-items.ts';
 function representation(
   object: Candidate['result']['objects'][number] | undefined,
-  scene: Candidate['result']['scene'][number] | undefined,
+  scene: SceneItem | undefined,
 ) {
   const { nativeId, ...attributes } = object ?? {};
   const { nativeId: ignored, ...geometry } = scene ?? {};
   return JSON.stringify({ attributes, geometry: scene ? geometry : null });
+}
+/**
+ * The representation of each object id (its first object row and first scene item, as `find`
+ * gave them), as a hash: one pass over the scene, one item at a time (T-129). Equal hashes are
+ * equal representations.
+ */
+function representations(candidate: Candidate) {
+  const objects = new Map<string, Candidate['result']['objects'][number]>();
+  for (const object of candidate.result.objects)
+    if (!objects.has(object.id)) objects.set(object.id, object);
+  const hash = (text: string) => createHash('sha256').update(text).digest('hex');
+  const out = new Map<string, string>();
+  for (const item of sceneItems(candidate.result.scene))
+    if (!out.has(item.id)) out.set(item.id, hash(representation(objects.get(item.id), item)));
+  return (id: string) => out.get(id) ?? hash(representation(objects.get(id), undefined));
 }
 export function compareCandidates(beforeValue: unknown, afterValue: unknown, related: boolean) {
   const before = candidateSchema.parse(beforeValue),
@@ -29,6 +46,8 @@ export function compareCandidates(beforeValue: unknown, afterValue: unknown, rel
     right = quantities(after),
     rows: (Comparison['rows'][number] & { before: unknown; after: unknown })[] = [];
   const ids = new Set([...left.rows.map((r) => r.id), ...right.rows.map((r) => r.id)]);
+  const beforeOf = compatible ? representations(before) : undefined,
+    afterOf = compatible ? representations(after) : undefined;
   for (const id of ids) {
     const a = left.rows.find((r) => r.id === id),
       b = right.rows.find((r) => r.id === id);
@@ -40,14 +59,7 @@ export function compareCandidates(beforeValue: unknown, afterValue: unknown, rel
           ? 'removed'
           : nativeModified.has(id)
             ? 'changed'
-            : representation(
-                  before.result.objects.find((o) => o.id === id),
-                  before.result.scene.find((o) => o.id === id),
-                ) ===
-                representation(
-                  after.result.objects.find((o) => o.id === id),
-                  after.result.scene.find((o) => o.id === id),
-                )
+            : beforeOf!(id) === afterOf!(id)
               ? 'unchanged'
               : 'changed';
     const delta: Comparison['rows'][number]['delta'] = { length: null, area: null, volume: null };
@@ -84,7 +96,8 @@ export function relatedCandidates(
     const seen = new Set<string>();
     while (id && !seen.has(id)) {
       seen.add(id);
-      const item = workspace.get(projectId, id);
+      // Only the chain's ids: the request's small result, never its model (T-129).
+      const item = workspace.brief(projectId, id);
       id = item.result?.baseRequestId || item.input?.baseRequestId;
     }
     return seen;

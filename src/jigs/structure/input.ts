@@ -191,6 +191,12 @@ export function solidAxis(
   return { a: flip ? b : a, b: flip ? a : b, depth, width, webAlongY: vertical && dw > du };
 }
 
+/** Scene or object rows: an array, or a stored list read one row at a time (T-129). */
+const listOf = (value: unknown): Iterable<Record<string, unknown>> =>
+  value && typeof value === 'object' && Symbol.iterator in value
+    ? (value as Iterable<Record<string, unknown>>)
+    : [];
+
 function collectPieces(
   source: DraftSource,
   issues: DraftIssue[],
@@ -212,22 +218,17 @@ function collectPieces(
   };
   if (source.mode === 'curves') {
     // 3D polylines straight from the scene (the plan-view Sync helper drops vertical curves).
-    const rows = Array.isArray(source.result.scene)
-      ? (source.result.scene as Record<string, unknown>[])
-      : [];
-    const names = new Map(
-      (Array.isArray(source.result.objects)
-        ? (source.result.objects as Record<string, unknown>[])
-        : []
-      ).map((o) => [String(o.id), typeof o.name === 'string' ? o.name : '']),
-    );
-    for (const row of rows) {
-      const flat = Array.isArray(row.line) ? (row.line as number[]) : [];
-      if (flat.length < 6) continue;
+    const names = new Map<string, string>();
+    for (const o of listOf(source.result.objects))
+      names.set(String(o.id), typeof o.name === 'string' ? o.name : '');
+    for (const row of listOf(source.result.scene)) {
+      // Layer and object first: a stored row decodes its coordinates only when it is taken.
       const id = String(row.id);
       const nativeId = String(row.nativeId ?? row.id);
       const layer = decode(row.layer64);
       if (!wantLayer(layer) || !wantObject(id, nativeId)) continue;
+      const flat = Array.isArray(row.line) ? (row.line as number[]) : [];
+      if (flat.length < 6) continue;
       const points: Point[] = [];
       for (let i = 0; i + 2 < flat.length; i += 3) points.push([flat[i], flat[i + 1], flat[i + 2]]);
       const name = decode(row.name64) || names.get(id) || '';
@@ -246,18 +247,11 @@ function collectPieces(
         });
     }
   } else if (source.mode === 'breps') {
-    const rows = Array.isArray(source.result.scene)
-      ? (source.result.scene as Record<string, unknown>[])
-      : [];
-    for (const row of rows) {
-      const vertices = Array.isArray(row.vertices) ? (row.vertices as number[]) : [];
+    for (const row of listOf(source.result.scene)) {
       const layer = decode(row.layer64);
-      if (
-        vertices.length < 12 ||
-        !wantLayer(layer) ||
-        !wantObject(String(row.id), String(row.nativeId ?? ''))
-      )
-        continue;
+      if (!wantLayer(layer) || !wantObject(String(row.id), String(row.nativeId ?? ''))) continue;
+      const vertices = Array.isArray(row.vertices) ? (row.vertices as number[]) : [];
+      if (vertices.length < 12) continue;
       const axis = solidAxis(vertices);
       if (!axis) continue;
       const attrs = attributes(row);
@@ -305,7 +299,7 @@ function collectPieces(
       });
       return pieces;
     }
-    const all = elements(source.result, 'zwcad');
+    const all = elements(source.result, 'zwcad', [...cad.beamLayers, ...cad.columnLayers]);
     const levels = [...cad.levels_m].sort((x, y) => x - y);
     const base = cad.base_m ?? 0;
     for (const e of all.filter((x) => cad.beamLayers.includes(x.layer)))

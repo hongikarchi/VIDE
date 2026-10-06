@@ -2,6 +2,7 @@ import { z } from 'zod';
 import type { Store } from './store.ts';
 import type { Workspace } from './workspace.ts';
 import { candidateSchema } from './reviews.ts';
+import { lazyCandidate, sceneItems, type SceneItem } from './scene-items.ts';
 import manifest from '../../extensions/object-summary/manifest.json' with { type: 'json' };
 import { run } from '../../extensions/object-summary/index.ts';
 import { DomainError } from './store.ts';
@@ -108,7 +109,8 @@ export class Extensions {
       new Set(input.objectIds).size !== input.objectIds.length
     )
       throw new DomainError('INVALID_INPUT');
-    const source = this.workspace.get(projectId, input.requestId);
+    // The model read lazily (T-129): object rows, and the scene scanned once for the picked ids.
+    const source = lazyCandidate(this.workspace, projectId, input.requestId);
     if (!source.result?.hostExecuted) throw new DomainError('STALE_REFERENCE');
     const objects = input.objectIds.map((id) =>
       source.result?.objects?.find((object) => object.id === id),
@@ -150,9 +152,13 @@ export class Extensions {
     });
     try {
       const model = candidateSchema.parse(source).result;
+      const scene = new Map<string, SceneItem>();
+      const picked = new Set(selected.map((object) => object.id));
+      for (const item of sceneItems(model.scene, (id) => picked.has(id as string)))
+        if (!scene.has(item.id)) scene.set(item.id, item);
       const context = {
         objects: selected.map((object) => {
-          const native = model.scene.find((item) => item.id === object.id);
+          const native = scene.get(object.id);
           return {
             id: object.id,
             type: native?.nativeType || model.objects.find((item) => item.id === object.id)!.kind,

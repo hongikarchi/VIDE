@@ -13,6 +13,7 @@ import {
   decodeItem,
   encodeItem,
   joinGeometry,
+  lazyItem,
   type EncodedItem,
 } from '../contracts/geometry-transfer.ts';
 
@@ -168,6 +169,27 @@ export type DeltaSince =
       definitions: [string, EncodedItem][];
       removed: string[];
     };
+
+/**
+ * A stored list read again from the manifest on every iteration, one item at a time (T-129): a
+ * reader keeps only what it takes. `toJSON` gives the whole list (a reader that serialises it).
+ */
+export class StoredList<T = Item> implements Iterable<T> {
+  private readonly open: () => Iterator<T>;
+  constructor(open: () => Iterator<T>) {
+    this.open = open;
+  }
+  [Symbol.iterator](): Iterator<T> {
+    return this.open();
+  }
+  toJSON(): T[] {
+    return [...this];
+  }
+}
+/** An array or a `StoredList`: what a lazily read result (`Workspace.lazy`) may hold. */
+export function isItemList(value: unknown): value is Iterable<Item> {
+  return Array.isArray(value) || value instanceof StoredList;
+}
 
 /** Lazy reads of one stored model: nothing is decoded until asked for. */
 export class ModelView {
@@ -335,6 +357,69 @@ export class ModelView {
   /** VGT1 of the request (`root` is the stored request with its small result). */
   geometry(root: Record<string, unknown>): Uint8Array {
     return this.store.geometry(this.projectId, this.requestId, root);
+  }
+  /**
+   * Stored object rows in display order, one meta (and its geometry bytes when `geometry`) at a
+   * time.
+   */
+  private *stored(geometry: boolean): Generator<{ meta: Item; geometry: Uint8Array | null }> {
+    for (const row of this.store.db
+      .prepare(
+        `SELECT v.meta${geometry ? ', v.geometry' : ''} FROM sync_manifest_items i JOIN object_versions v
+          ON v.projectId=i.projectId AND v.id=i.versionId
+          WHERE i.requestId=? AND i.kind='object' ORDER BY i.position`,
+      )
+      .iterate(this.requestId))
+      yield {
+        meta: parseMeta(String(row.meta)) as Item,
+        geometry: geometry ? bytesOf(row.geometry) : null,
+      };
+  }
+  /**
+   * The display part as `load` gives it, read lazily (T-129): `objects` and `scene` are
+   * `StoredList`s (scene items are `lazyItem`s: coordinates decode on first read) and
+   * `definitions` decodes one definition when it is first read. Equal to `load` item by item.
+   */
+  lazy(): { objects?: StoredList<Item>; scene: StoredList<Item>; definitions?: Item } {
+    const header = this.store.header(this.projectId, this.requestId);
+    const view = this;
+    const objects = new StoredList<Item>(function* () {
+      for (const { meta } of view.stored(false))
+        if (meta.object !== undefined) yield meta.object as Item;
+    });
+    const scene = new StoredList<Item>(function* () {
+      for (const { meta, geometry } of view.stored(true))
+        if (meta.scene !== undefined) yield lazyItem(meta.scene, geometry) as Item;
+    });
+    return {
+      ...(header?.objectCount === null ? {} : { objects }),
+      scene,
+      ...(header?.definitionCount === null ? {} : { definitions: this.lazyDefinitions() }),
+    };
+  }
+  /** Block definitions as a record whose values decode when first read. */
+  private lazyDefinitions(): Item {
+    const keys = this.store.db
+      .prepare(
+        "SELECT key FROM sync_manifest_items WHERE requestId=? AND kind='definition' ORDER BY position",
+      )
+      .all(this.requestId)
+      .map((row) => String(row.key));
+    const known = new Set(keys);
+    const decoded = new Map<string, unknown>();
+    const read = (key: string) => {
+      if (!decoded.has(key)) decoded.set(key, this.definition(key));
+      return decoded.get(key);
+    };
+    return new Proxy({} as Item, {
+      get: (_target, key) => (typeof key === 'string' && known.has(key) ? read(key) : undefined),
+      has: (_target, key) => typeof key === 'string' && known.has(key),
+      ownKeys: () => keys,
+      getOwnPropertyDescriptor: (_target, key) =>
+        typeof key === 'string' && known.has(key)
+          ? { value: read(key), writable: false, enumerable: true, configurable: true }
+          : undefined,
+    });
   }
 }
 

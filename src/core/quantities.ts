@@ -1,6 +1,8 @@
 import { quantityQuerySchema } from '../contracts/quantities.ts';
 import type { QuantityQuery, QuantityTable } from '../contracts/quantities.ts';
 import { DomainError } from './store.ts';
+import { StoredList } from './model-store.ts';
+import { sceneItems } from './scene-items.ts';
 export interface SourceScene {
   id: string;
   nativeType?: string;
@@ -17,7 +19,8 @@ export interface SourceRequest {
     hostExecuted?: boolean;
     host?: string;
     objects: { id: string; name: string; kind?: string }[];
-    scene: SourceScene[];
+    /** An array, or a stored list read (and checked) one item at a time (T-129). */
+    scene: readonly SourceScene[] | StoredList;
   };
 }
 type Metric = 'length' | 'area' | 'volume';
@@ -44,20 +47,42 @@ function lengthOf(line: ArrayLike<number> | undefined): number | null {
 export function quantities(request: SourceRequest, rawQuery: unknown = {}): QuantityTable {
   const query = quantityQuery(rawQuery);
   const result = request.result;
-  if (!result?.hostExecuted || !Array.isArray(result.scene)) throw new DomainError('NOT_FOUND');
+  if (!result?.hostExecuted || !(Array.isArray(result.scene) || result.scene instanceof StoredList))
+    throw new DomainError('NOT_FOUND');
+  // One pass over the scene keeping the first item of each id (as `find` did), measured values
+  // only: a stored scene is read one item at a time and no coordinate array is kept (T-129).
+  const native = new Map<
+    string,
+    Pick<SourceScene, 'nativeType' | 'layer64'> & {
+      length: number | null;
+      area: number | null;
+      volume: number | null;
+      lineLength: number | null;
+    }
+  >();
+  for (const item of sceneItems<SourceScene>(result.scene)) {
+    if (native.has(item.id)) continue;
+    const length = known(item.length);
+    native.set(item.id, {
+      nativeType: item.nativeType,
+      layer64: item.layer64,
+      length,
+      area: known(item.area),
+      volume: known(item.volume),
+      lineLength: length === null ? lengthOf(item.line) : null,
+    });
+  }
   const rows = result.objects.map((object) => {
-    const native = result.scene.find((s) => s.id === object.id);
+    const found = native.get(object.id);
     return {
       id: object.id,
       name: object.name,
-      type: native?.nativeType || object.kind || '미상',
+      type: found?.nativeType || object.kind || '미상',
       layer:
-        native?.layer64 !== undefined
-          ? Buffer.from(native.layer64, 'base64').toString('utf8')
-          : null,
-      length: known(native?.length) ?? (object.kind !== 'native' ? lengthOf(native?.line) : null),
-      area: known(native?.area),
-      volume: known(native?.volume),
+        found?.layer64 !== undefined ? Buffer.from(found.layer64, 'base64').toString('utf8') : null,
+      length: found?.length ?? (object.kind !== 'native' ? (found?.lineLength ?? null) : null),
+      area: found?.area ?? null,
+      volume: found?.volume ?? null,
     };
   });
   const filtered = rows.filter(

@@ -3,6 +3,8 @@ import { z } from 'zod';
 import { workspaceRequestSchema } from '../contracts/workspace-result.ts';
 import { sceneRepresentation } from './scene-representation.ts';
 import { DomainError } from './store.ts';
+import { StoredList } from './model-store.ts';
+import { sceneItemSchema, type SceneItem } from './scene-items.ts';
 
 const selectionSchema = z
   .object({
@@ -31,8 +33,14 @@ export interface PublicScene {
 export function createPublicationBundle(rawRequest: unknown, rawSelection: unknown) {
   const parsed = selectionSchema.safeParse(rawSelection);
   if (!parsed.success) throw new DomainError('INVALID_INPUT');
-  const selection = parsed.data,
-    request = workspaceRequestSchema.parse(rawRequest),
+  const selection = parsed.data;
+  // A stored scene read lazily (`Workspace.lazy`, T-129) is scanned once for its ids; only the
+  // selected items are decoded and checked. An array scene is checked whole, as before.
+  const raw = rawRequest as { result?: Record<string, unknown> | null } | null;
+  const stored = raw?.result?.scene instanceof StoredList ? raw.result.scene : undefined;
+  const request = workspaceRequestSchema.parse(
+      stored ? { ...raw, result: { ...raw!.result, scene: [] } } : rawRequest,
+    ),
     result = request.result;
   if (
     request.state !== 'succeeded' ||
@@ -44,10 +52,25 @@ export function createPublicationBundle(rawRequest: unknown, rawSelection: unkno
     throw new DomainError('RESULT_NOT_VERIFIED');
   if (new Set(selection.objectIds).size !== selection.objectIds.length)
     throw new DomainError('DUPLICATE_OBJECT');
-  const objectsById = new Map(result.objects.map((object) => [object.id, object])),
+  const objectsById = new Map(result.objects.map((object) => [object.id, object]));
+  if (objectsById.size !== result.objects.length) throw new DomainError('AMBIGUOUS_OBJECT');
+  let geometryById: Map<string, SceneItem>;
+  if (stored) {
+    const wanted = new Set(selection.objectIds);
+    const ids = new Set<string>();
+    let count = 0;
+    geometryById = new Map();
+    for (const item of stored) {
+      count++;
+      const id = z.string().parse(item.id);
+      ids.add(id);
+      if (wanted.has(id)) geometryById.set(id, sceneItemSchema.parse(item));
+    }
+    if (ids.size !== count) throw new DomainError('AMBIGUOUS_OBJECT');
+  } else {
     geometryById = new Map(result.scene.map((object) => [object.id, object]));
-  if (objectsById.size !== result.objects.length || geometryById.size !== result.scene.length)
-    throw new DomainError('AMBIGUOUS_OBJECT');
+    if (geometryById.size !== result.scene.length) throw new DomainError('AMBIGUOUS_OBJECT');
+  }
   const objects: PublicObject[] = selection.objectIds.map((id) => {
     const object = objectsById.get(id),
       source = geometryById.get(id);

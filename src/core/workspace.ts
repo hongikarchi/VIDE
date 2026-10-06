@@ -12,7 +12,13 @@ import type { StoredWork } from '../contracts/stored-work.ts';
 import { z } from 'zod';
 import { BIG_JSON, breadcrumb } from './breadcrumbs.ts';
 import type { DatabaseSync } from 'node:sqlite';
-import { ModelStore, type ModelDelta, type ModelView, type StoredModel } from './model-store.ts';
+import {
+  ModelStore,
+  StoredList,
+  type ModelDelta,
+  type ModelView,
+  type StoredModel,
+} from './model-store.ts';
 
 function fail(code: string): never {
   throw new DomainError(code);
@@ -239,6 +245,29 @@ export class Workspace {
         ? { ...rest, ...model }
         : { ...rest, scene: [], modelPruned: true }) as StoredWork['result'],
     };
+  }
+  /**
+   * `get` without assembling the model (T-129): a result stored per object has `objects` and
+   * `scene` as `StoredList`s read from the manifest one item at a time (scene coordinates decode
+   * when first read) and `definitions` decoded per key. A JSON or pruned result reads as `get`.
+   * For readers that take part of a model (jig inputs, review, report, publication, offline view).
+   */
+  lazy(projectId: string, id: string): StoredWork {
+    const work = this.raw(projectId, id);
+    const view = modelStoreOf(work) === 'manifest' ? this.model(projectId, id) : undefined;
+    if (!view) return this.expand(work);
+    const { modelStore: _marker, ...rest } = work.result as Record<string, unknown>;
+    const model = view.lazy();
+    // Object rows are meta only: `summary` decodes them once per stored change (shared with
+    // `list`, read-only), so iterating them again does not scan the manifest again.
+    if (model.objects)
+      model.objects = new StoredList(() => {
+        const rows = this.summary(projectId, id).result?.objects;
+        return (Array.isArray(rows) ? rows : [])[Symbol.iterator]() as Iterator<
+          Record<string, unknown>
+        >;
+      });
+    return { ...work, result: { ...rest, ...model } as StoredWork['result'] };
   }
   /** `list`'s form of one request: no display geometry, object rows from the manifest's meta. */
   private lightWork(projectId: string, id: string): StoredWork {

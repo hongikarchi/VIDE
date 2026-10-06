@@ -37,7 +37,8 @@ interface Definition {
   texts?: { s: string; p: number[]; h: number; r: number }[];
 }
 export interface SyncResult {
-  scene?: unknown[];
+  /** An array, or a stored list read one item at a time (`Workspace.lazy`, T-129). */
+  scene?: Iterable<unknown>;
   definitions?: Record<string, unknown>;
   sourceDocument?: { name?: unknown; units?: unknown; capturedAt?: unknown };
 }
