@@ -295,10 +295,11 @@ export class EditorSessions {
   async capture(target: HostTarget) {
     return (await this.get(target)).captureEditor(randomUUID());
   }
-  async display(target: HostTarget, scope: ReadScope = {}) {
+  /** `typed`: the display Sync keeps the binary pages' arrays for storage (T-128). */
+  async display(target: HostTarget, scope: ReadScope = {}, geometry: { typed?: boolean } = {}) {
     if ((await this.connectionKind(target.instance)) !== 'attached-editor')
       throw failure('TARGET_MISMATCH');
-    return this.seen(target, await (await this.get(target)).displayEditor(scope));
+    return this.seen(target, await (await this.get(target)).displayEditor(scope, geometry));
   }
   /** Direct mode runs only in a document the user attached (never an owned editing copy). */
   private async attachedWorker(target: HostTarget) {

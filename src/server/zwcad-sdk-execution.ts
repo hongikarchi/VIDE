@@ -406,6 +406,39 @@ User request: ${input.body || '첨부한 설계 문맥을 검토해 주세요.'}
       scope.revoke();
     }
   }
+  /**
+   * Live Sync of an attached drawing (T-128, like `SdkExecution.liveSync`): only the entities
+   * changed after `since`, with the plugin's own counts of the whole drawing after them (rows of
+   * omitted entities never exist here, so they cannot be counted from the change page).
+   */
+  async liveSync(
+    target: { instance: string; documentId: number },
+    basis: { sourceDocument: Record<string, unknown> },
+    since: number,
+  ) {
+    if (basis.sourceDocument.instance !== target.instance)
+      throw Object.assign(new Error('RESYNC_REQUIRED'), { code: 'RESYNC_REQUIRED' });
+    const delta = await this.editors.attached.changes(target, since);
+    return {
+      delta: { objects: delta.objects, scene: delta.scene, removed: delta.removed },
+      survey: {},
+      displayCoverage: delta.displayCoverage,
+      result: {
+        sourceDocument: {
+          ...basis.sourceDocument,
+          ...target,
+          connection: 'attached-editor' as const,
+          documentHash: delta.source.documentHash,
+          revision: delta.revision,
+          name: delta.source.name,
+          units: delta.source.units,
+          selectedIds: [],
+          capturedAt: new Date().toISOString(),
+        },
+        displayWarnings: delta.displayWarnings,
+      },
+    };
+  }
   /** [되돌리기] for one direct execute on the attached drawing (only while it is the latest change). */
   async undo(sourceDocument: unknown, undoId: string) {
     const basis = z.object({ instance: z.string(), documentId: z.number() }).parse(sourceDocument);

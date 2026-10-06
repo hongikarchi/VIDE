@@ -90,62 +90,174 @@ namespace Vide.Zwcad.Connection
                 default: throw new InvalidOperationException("UNKNOWN_UNITS");
             }
         }
-        internal static object Page(Database db, int offset, int limit, long revision)
+        /**
+         * One model space entity read for display: its object row and scene item, or the omission type
+         * when nothing of it is shown; the unsupported children it reported either way.
+         */
+        internal sealed class EntityRead
         {
-            double scale = Scale(db);
+            internal string Handle;
+            internal object Object;
+            internal Dictionary<string, object> Item;
+            internal string Omitted;
+            internal readonly Dictionary<string, int> Warnings = new Dictionary<string, int>();
+            internal int Coordinates;
+        }
+        private static EntityRead Read(Transaction tx, ObjectId oid, Context context)
+        {
+            var read = new EntityRead { Handle = oid.Handle.ToString() };
+            try {
+                var entity = tx.GetObject(oid, OpenMode.ForRead) as Entity;
+                if (entity == null) return null;
+                var display = new Display();
+                context.Unsupported = new Dictionary<string, int>();
+                var own = Resolve(entity, null, context);
+                Collect(entity, context, Matrix3d.Identity, null, new HashSet<ObjectId>(), new List<Point2d[]>(), display);
+                string handle = entity.Handle.ToString();
+                read.Handle = handle;
+                if (!display.Empty) {
+                    string id = "cad-" + handle;
+                    var segments = new List<double>();
+                    foreach (var line in display.Lines) for (int p = 3; p < line.Length; p += 3) {
+                        for (int axis = 0; axis < 3; axis++) segments.Add(line[p - 3 + axis]);
+                        for (int axis = 0; axis < 3; axis++) segments.Add(line[p + axis]);
+                    }
+                    read.Object = new { id, nativeId = handle, name = entity.Layer + " / " + handle, kind = "polyline" };
+                    var item = new Dictionary<string, object> {
+                        { "id", id }, { "nativeId", handle }, { "nativeType", entity.GetType().Name }, { "segments", segments },
+                        { "layer64", Convert.ToBase64String(Encoding.UTF8.GetBytes(entity.Layer)) }, { "color", entity.ColorIndex },
+                        { "colorIndex", own.Aci }, { "lineWeight", own.Lw }, { "valid", true },
+                    };
+                    if (own.Rgb != null) item["displayColor"] = own.Rgb;
+                    if (own.LayerHex != null) item["layerColor"] = own.LayerHex;
+                    if (display.Runs.Count > 0) item["segmentStyles"] = display.Runs;
+                    if (display.Fills.Count > 0) item["fills"] = display.Fills;
+                    if (display.Texts.Count > 0) item["texts"] = display.Texts;
+                    read.Item = item;
+                    read.Coordinates = display.CoordinateCount;
+                }
+                else read.Omitted = context.Unsupported.Count == 0 ? "Hidden" : entity.GetType().Name;
+                // Report unsupported children even when a block has some supported content.
+                foreach (var item in context.Unsupported) Increment(read.Warnings, item.Key, item.Value);
+            } catch (DisplayLimitException) {
+                read.Item = null; read.Object = null; read.Omitted = "OversizedDisplay"; read.Warnings.Clear(); Increment(read.Warnings, "OversizedDisplay");
+            } catch (ZwSoft.ZwCAD.Runtime.Exception) {
+                read.Item = null; read.Object = null; read.Omitted = "UnreadableObject"; read.Warnings.Clear(); Increment(read.Warnings, "UnreadableObject");
+            }
+            return read;
+        }
+        private static Context ContextOf(Transaction tx, Database db) =>
+            new Context { Tx = tx, Scale = Scale(db), Layers = (LayerTable)tx.GetObject(db.LayerTableId, OpenMode.ForRead) };
+
+        /** A page of model space; `seen` receives every entity read (Live Sync's display state). */
+        internal static object Page(Database db, int offset, int limit, long revision, out int next, out int total, Action<EntityRead> seen = null)
+        {
             using (var tx = db.TransactionManager.StartTransaction()) {
                 var table = (BlockTable)tx.GetObject(db.BlockTableId, OpenMode.ForRead);
                 var space = (BlockTableRecord)tx.GetObject(table[BlockTableRecord.ModelSpace], OpenMode.ForRead);
                 var ids = space.Cast<ObjectId>().ToArray();
                 if (offset < 0 || offset > ids.Length || limit < 1 || limit > 250) throw new InvalidOperationException("INVALID_PAGE");
-                var context = new Context { Tx = tx, Scale = scale, Layers = (LayerTable)tx.GetObject(db.LayerTableId, OpenMode.ForRead) };
+                var context = ContextOf(tx, db);
                 var objects = new List<object>(); var scene = new List<object>();
                 var omitted = new Dictionary<string, int>(); var warnings = new Dictionary<string, int>(); int displayed = 0, read = 0, pageCoordinates = 0;
                 foreach (var oid in ids.Skip(offset).Take(limit)) {
                     read++;
-                    try {
-                        var entity = tx.GetObject(oid, OpenMode.ForRead) as Entity;
-                        if (entity == null) continue;
-                        var display = new Display();
-                        context.Unsupported = new Dictionary<string, int>();
-                        var own = Resolve(entity, null, context);
-                        Collect(entity, context, Matrix3d.Identity, null, new HashSet<ObjectId>(), new List<Point2d[]>(), display);
-                        string handle = entity.Handle.ToString();
-                        if (!display.Empty) {
-                            string id = "cad-" + handle;
-                            var segments = new List<double>();
-                            foreach (var line in display.Lines) for (int p = 3; p < line.Length; p += 3) {
-                                for (int axis = 0; axis < 3; axis++) segments.Add(line[p - 3 + axis]);
-                                for (int axis = 0; axis < 3; axis++) segments.Add(line[p + axis]);
-                            }
-                            objects.Add(new { id, nativeId = handle, name = entity.Layer + " / " + handle, kind = "polyline" });
-                            var item = new Dictionary<string, object> {
-                                { "id", id }, { "nativeId", handle }, { "nativeType", entity.GetType().Name }, { "segments", segments },
-                                { "layer64", Convert.ToBase64String(Encoding.UTF8.GetBytes(entity.Layer)) }, { "color", entity.ColorIndex },
-                                { "colorIndex", own.Aci }, { "lineWeight", own.Lw }, { "valid", true },
-                            };
-                            if (own.Rgb != null) item["displayColor"] = own.Rgb;
-                            if (own.LayerHex != null) item["layerColor"] = own.LayerHex;
-                            if (display.Runs.Count > 0) item["segmentStyles"] = display.Runs;
-                            if (display.Fills.Count > 0) item["fills"] = display.Fills;
-                            if (display.Texts.Count > 0) item["texts"] = display.Texts;
-                            scene.Add(item);
-                            displayed++; pageCoordinates += display.CoordinateCount;
-                        }
-                        else Increment(omitted, context.Unsupported.Count == 0 ? "Hidden" : entity.GetType().Name);
-                        // Report unsupported children even when a block has some supported content.
-                        foreach (var item in context.Unsupported) Increment(warnings, item.Key, item.Value);
-                    } catch (DisplayLimitException) {
-                        Increment(omitted, "OversizedDisplay"); Increment(warnings, "OversizedDisplay");
-                    } catch (ZwSoft.ZwCAD.Runtime.Exception) {
-                        Increment(omitted, "UnreadableObject"); Increment(warnings, "UnreadableObject");
-                    }
+                    var entity = Read(tx, oid, context);
+                    if (entity == null) continue;
+                    seen?.Invoke(entity);
+                    if (entity.Item != null) { objects.Add(entity.Object); scene.Add(entity.Item); displayed++; pageCoordinates += entity.Coordinates; }
+                    else Increment(omitted, entity.Omitted);
+                    foreach (var item in entity.Warnings) Increment(warnings, item.Key, item.Value);
                     if (pageCoordinates > 2000000) break;
                 }
+                next = offset + read; total = ids.Length;
                 return new { ok = true, offset, total = ids.Length, next = offset + read, revision,
                     objects, scene, displayed, omitted = read - displayed, omittedTypes = omitted, displayWarnings = warnings };
             }
         }
+
+        /**
+         * Live Sync (T-128): the model space entities among `changed` (in handle order, from `cursor`),
+         * read like a page; those no longer in model space are `removed`. Any change that alters how
+         * other entities draw (a layer, a block definition or its content, a text or dimension style,
+         * an XCLIP boundary) asks for a full read (RESYNC_REQUIRED). Paper space edits are ignored.
+         */
+        internal static object Changes(Database db, IEnumerable<ObjectId> changed, int cursor, long revision,
+            Action<EntityRead> seen, Action<string> gone, Func<object> coverage)
+        {
+            using (var tx = db.TransactionManager.StartTransaction()) {
+                var table = (BlockTable)tx.GetObject(db.BlockTableId, OpenMode.ForRead);
+                var model = table[BlockTableRecord.ModelSpace];
+                // Handle order → the model space entity a change stands for, and whether it is gone.
+                var effective = new SortedDictionary<long, KeyValuePair<ObjectId, bool>>();
+                foreach (var id in changed) {
+                    var entity = ModelSpaceEntity(tx, id, model, out bool resync, out bool removed);
+                    if (resync) throw new InvalidOperationException("RESYNC_REQUIRED");
+                    if (!entity.IsNull) effective[entity.Handle.Value] = new KeyValuePair<ObjectId, bool>(entity, removed);
+                }
+                var list = effective.Values.ToArray();
+                if (cursor < 0 || cursor > list.Length) throw new InvalidOperationException("INVALID_PAGE");
+                var context = ContextOf(tx, db);
+                var objects = new List<object>(); var scene = new List<object>(); var removedHandles = new List<string>();
+                int consumed = 0, upserts = 0, pageCoordinates = 0;
+                foreach (var entry in list.Skip(cursor)) {
+                    if (upserts == 250 || pageCoordinates > 2000000) break;
+                    consumed++;
+                    var handle = entry.Key.Handle.ToString();
+                    if (entry.Value) { removedHandles.Add(handle); gone(handle); continue; }
+                    upserts++;
+                    var read = Read(tx, entry.Key, context);
+                    if (read == null) { removedHandles.Add(handle); gone(handle); continue; }
+                    seen(read);
+                    if (read.Item != null) { objects.Add(read.Object); scene.Add(read.Item); pageCoordinates += read.Coordinates; }
+                    // Still in model space but not shown any more: its row leaves the display.
+                    else removedHandles.Add(handle);
+                }
+                return new { ok = true, cursor, next = cursor + consumed, changes = list.Length, revision,
+                    objects, scene, removed = removedHandles, coverage = cursor + consumed >= list.Length ? coverage() : null };
+            }
+        }
+
+        /**
+         * The model space entity a changed object stands for: itself, or the entity that owns it (an
+         * attribute, a polyline vertex); ObjectId.Null when the change shows nowhere (paper space, a
+         * dictionary, a viewport). `removed`: that entity is gone (erased, or no longer readable).
+         * `resync`: the change alters other entities' display.
+         */
+        private static ObjectId ModelSpaceEntity(Transaction tx, ObjectId id, ObjectId model, out bool resync, out bool removed)
+        {
+            resync = false; removed = false;
+            DBObject obj;
+            try { obj = tx.GetObject(id, OpenMode.ForRead, true); }
+            // Unreadable (an undone append): if it was a shown row, its row leaves the display.
+            catch (ZwSoft.ZwCAD.Runtime.Exception) { removed = true; return id; }
+            if (obj is LayerTableRecord || obj is TextStyleTableRecord || obj is DimStyleTableRecord || obj is SpatialFilter) { resync = true; return ObjectId.Null; }
+            var record = obj as BlockTableRecord;
+            if (record != null) { resync = !record.IsLayout && !Dimensional(record); return ObjectId.Null; }
+            var entity = obj as Entity;
+            if (entity == null) return ObjectId.Null;
+            for (int depth = 0; depth < 4; depth++) {
+                if (entity.OwnerId == model) {
+                    removed = entity.IsErased;
+                    return entity.ObjectId;
+                }
+                DBObject owner;
+                try { owner = tx.GetObject(entity.OwnerId, OpenMode.ForRead, true); }
+                catch (ZwSoft.ZwCAD.Runtime.Exception) { return ObjectId.Null; }
+                var space = owner as BlockTableRecord;
+                // Paper space never shows; a block definition's content draws in every insert.
+                if (space != null) { resync = !space.IsLayout && !Dimensional(space); return ObjectId.Null; }
+                var parent = owner as Entity;
+                if (parent == null) return ObjectId.Null;
+                // An erased attribute or vertex changes its owner, which is read again.
+                entity = parent;
+            }
+            resync = true;
+            return ObjectId.Null;
+        }
+        // A dimension's own anonymous block (*D…): dimensions draw from their native graphics instead.
+        private static bool Dimensional(BlockTableRecord record) =>
+            record.IsAnonymous && record.Name.StartsWith("*D", StringComparison.OrdinalIgnoreCase);
         private static void Increment(Dictionary<string, int> counts, string type, int n = 1)
         { int current; counts.TryGetValue(type, out current); counts[type] = current + n; }
 

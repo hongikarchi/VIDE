@@ -6,9 +6,14 @@
 // Coordinates are float32 offsets from the array's first point (float64 in the header), so survey
 // coordinates keep sub-millimetre precision for objects up to kilometres in size. Everything else
 // (ids, attributes, measurements, texts) stays JSON. Decoding restores plain number arrays.
+// The Rhino plugin answers display pages in the same container when asked (T-128, ARCH-01 §5): its
+// header is the reply `{status, result: page}`, and the arrays are the bytes ModelStore stores.
 
 export const GEOMETRY_TYPE = 'application/vnd.vide.geometry';
 const MAGIC = [0x56, 0x47, 0x54, 0x31]; // "VGT1"
+/** A host reply frame that is a VGT1 container rather than JSON text (T-128). */
+export const isGeometryFrame = (bytes: Uint8Array) =>
+  bytes.byteLength >= 8 && MAGIC.every((v, i) => bytes[i] === v);
 const POSITION_FIELDS = ['vertices', 'line', 'segments'] as const;
 type Reference = { $bin: [number, number, 'f' | 'u16' | 'u32', number, number, number] };
 
@@ -54,12 +59,34 @@ function packer() {
       $bin: [add(new Uint8Array(array.buffer)), values.length, small ? 'u16' : 'u32', 0, 0, 0],
     };
   };
+  // A binary host page's arrays (T-128) are already these bytes: they are stored as they are.
+  const bytesOf = (array: Float32Array | Uint16Array | Uint32Array) =>
+    add(new Uint8Array(array.buffer, array.byteOffset, array.byteLength));
   const pack = (item: unknown) => {
     if (!item || typeof item !== 'object') return item;
     const out: Record<string, unknown> = { ...(item as Record<string, unknown>) };
-    for (const field of POSITION_FIELDS)
-      if (isNumbers(out[field])) out[field] = positions(out[field] as number[]);
-    if (isNumbers(out.indices)) out.indices = indices(out.indices as number[]);
+    for (const field of POSITION_FIELDS) {
+      const value = out[field];
+      if (isPacked(value) && value.length >= 3 && value.length % 3 === 0)
+        out[field] = { $bin: [bytesOf(value), value.length, 'f', ...value.origin] };
+      else if (isPacked(value)) out[field] = unpackPositions(value);
+      else if (isNumbers(value)) out[field] = positions(value);
+    }
+    const index = out.indices;
+    if (index instanceof Uint16Array || index instanceof Uint32Array)
+      out.indices = index.length
+        ? {
+            $bin: [
+              bytesOf(index),
+              index.length,
+              index instanceof Uint16Array ? 'u16' : 'u32',
+              0,
+              0,
+              0,
+            ],
+          }
+        : [];
+    else if (isNumbers(index)) out.indices = indices(index);
     return out;
   };
   return { pack, buffers, size: () => offset };
@@ -229,6 +256,50 @@ export const isPacked = (value: unknown): value is PackedPositions =>
 /** World coordinate `i` (x, y or z by `i % 3`) of a plain or packed array. */
 export const coordinate = (values: Positions, i: number) =>
   isPacked(values) ? values.origin[i % 3] + values[i] : values[i];
+/** World coordinates of a packed array as plain numbers (what `decodeGeometry` gives untyped). */
+export function unpackPositions(values: PackedPositions): number[] {
+  const [ox, oy, oz] = values.origin;
+  const out = new Array<number>(values.length);
+  for (let i = 0; i < values.length; i += 3) {
+    out[i] = ox + values[i];
+    out[i + 1] = oy + values[i + 1];
+    out[i + 2] = oz + values[i + 2];
+  }
+  return out;
+}
+const GEOMETRY_FIELDS = [...POSITION_FIELDS, 'indices'] as const;
+const isIndices = (value: unknown): value is Uint16Array | Uint32Array =>
+  value instanceof Uint16Array || value instanceof Uint32Array;
+/**
+ * A scene item or block definition of a binary host page (T-128) with its typed arrays restored as
+ * plain numbers, in place: the page then is exactly the JSON page an older plugin sends.
+ */
+export function plainGeometry<T>(item: T): T {
+  if (!item || typeof item !== 'object') return item;
+  const record = item as Record<string, unknown>;
+  for (const field of GEOMETRY_FIELDS) {
+    const value = record[field];
+    if (isPacked(value)) record[field] = unpackPositions(value);
+    else if (isIndices(value)) record[field] = Array.from(value);
+  }
+  return item;
+}
+/**
+ * Keeps the typed arrays of an item and gives each a `toJSON`, so any JSON written from it (a
+ * result kept as JSON, a log) shows plain numbers as before; nothing is copied until then.
+ */
+export function jsonSafeGeometry<T>(item: T): T {
+  if (!item || typeof item !== 'object') return item;
+  const record = item as Record<string, unknown>;
+  for (const field of GEOMETRY_FIELDS) {
+    const value = record[field];
+    if (isPacked(value))
+      Object.defineProperty(value, 'toJSON', { value: () => unpackPositions(value) });
+    else if (isIndices(value))
+      Object.defineProperty(value, 'toJSON', { value: () => Array.from(value) });
+  }
+  return item;
+}
 
 /**
  * `typed`: coordinate arrays stay views on the received buffer (`PackedPositions`) and index arrays
@@ -268,7 +339,24 @@ export function decodeGeometry(
         : new Uint32Array(data.buffer, base + offset, count);
     return typed ? view : Array.from(view);
   };
-  return JSON.parse(new TextDecoder().decode(data.subarray(8, 8 + length)), (_key, value) =>
-    value && typeof value === 'object' && Array.isArray(value.$bin) ? restore(value.$bin) : value,
-  );
+  // A walk over objects only (number arrays are skipped): a JSON.parse reviver visits every value
+  // and costs about as much as the parse again (T-128).
+  const walk = (value: unknown): unknown => {
+    if (Array.isArray(value)) {
+      for (let i = 0; i < value.length; i++) {
+        const item = value[i];
+        if (item && typeof item === 'object') value[i] = walk(item);
+      }
+      return value;
+    }
+    const record = value as Record<string, unknown>;
+    if (Array.isArray(record.$bin)) return restore(record.$bin as Reference['$bin']);
+    for (const key in record) {
+      const item = record[key];
+      if (item && typeof item === 'object') record[key] = walk(item);
+    }
+    return record;
+  };
+  const header: unknown = JSON.parse(new TextDecoder().decode(data.subarray(8, 8 + length)));
+  return header && typeof header === 'object' ? walk(header) : header;
 }

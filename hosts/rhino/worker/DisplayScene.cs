@@ -10,6 +10,8 @@ namespace Vide.Worker;
 
 /** Pre-serialized JSON sent as the reply result without re-serialization. */
 internal sealed record RawJson(byte[] Bytes);
+/** A whole reply frame body sent as it is (a VGT1 display page, T-128): the engine reads it by its magic. */
+internal sealed record RawFrame(byte[] Bytes);
 
 /**
  * What one read lists (ARCH-03 §8): only the layers named (exact full paths), and hidden objects or
@@ -96,21 +98,31 @@ internal sealed class ReadSurvey
 
 // Display-only reads of an attached document. Meshes are cached per object until Rhino replaces it; the UI
 // thread only snapshots attributes and duplicates uncached geometry, meshing runs in parallel off it.
+//
+// Wire format (ARCH-01 §5 「호스트 표시 페이지의 바이너리 형상」, T-128): when the engine asks with
+// `geometry: "vgt1"` the reply frame is one VGT1 container — "VGT1" | u32 LE header length | header JSON
+// ({"status":"success","result":page}) | pad to 4 | buffers — in which every coordinate array of 3+ values
+// is {"$bin":[offset, count, "f", ox, oy, oz]} (float32 offsets from its first point) and every index array
+// is {"$bin":[offset, count, "u16"|"u32", 0, 0, 0]}: the bytes the engine's ModelStore stores for the same
+// item. Without the flag (an older engine) the page is JSON text as before. Both carry the same coordinates
+// (meters rounded to 1 µm) and the same geometryHash.
 internal sealed class DisplayScene
 {
     internal const int MaxPageObjects = 1000;
     // Below the 16 MiB reply cap, so a page never has to be discarded and recomputed.
     private const int PageBytes = 12 * 1024 * 1024;
     private static readonly byte[] EmptyArray = "[]"u8.ToArray();
+    private static readonly double[] NoNumbers = [];
+    private static readonly int[] NoIndices = [];
     // Block instances carry only their definition and transform; annotations and hatches carry wire
-    // segments and text labels.
+    // segments and text labels. Coordinates are display meters rounded to 1 µm.
     private sealed record Shape(uint Serial, string NativeType, bool Valid, double[] Origin, double[] BoundsSize,
-        byte[] Vertices, byte[] Indices, byte[] Line, string Hash, byte[]? Segments = null, byte[]? Texts = null,
+        double[] Vertices, int[] Indices, double[] Line, string Hash, double[]? Segments = null, byte[]? Texts = null,
         Guid? Definition = null, string? DefinitionHash = null, double[]? Transform = null);
     /** Flattened block definition geometry in definition space (meters), shared by its instances. */
-    private sealed record Definition(string Hash, byte[] Vertices, byte[] Indices, byte[] Segments, byte[] Texts)
+    private sealed record Definition(string Hash, double[] Vertices, int[] Indices, double[] Segments, byte[] Texts)
     {
-        internal long Size => Vertices.Length + Indices.Length + Segments.Length + Texts.Length + 256;
+        internal long Size(bool binary) => Bytes(Vertices, binary) + Bytes(Indices, binary) + Bytes(Segments, binary) + Texts.Length + 256;
     }
     private readonly Dictionary<Guid, Definition> definitions = new();
     private sealed class Item
@@ -165,8 +177,11 @@ internal sealed class DisplayScene
         return scale;
     }
 
-    /** UI thread: page of the listed objects (the display Sync, or a layer-limited read). The returned work runs on a pool thread. */
-    internal Func<object> Page(RhinoDoc doc, int offset, int limit, int revision, ReadScope scope)
+    /**
+     * UI thread: page of the listed objects (the display Sync, or a layer-limited read). The returned work runs
+     * on a pool thread. `binary`: the reply is a VGT1 frame (see the class comment).
+     */
+    internal Func<object> Page(RhinoDoc doc, int offset, int limit, int revision, ReadScope scope, bool binary = false)
     {
         var scale = Scale(doc);
         var ordered = Listed(doc, scope);
@@ -179,19 +194,19 @@ internal sealed class DisplayScene
         return () =>
         {
             Build(items, scale);
-            var count = Fit(items.Select(item => (Item?)item));
-            return new RawJson(Write(items.Take(count), [], survey, writer =>
+            var count = Fit(items.Select(item => (Item?)item), binary);
+            return Write(items.Take(count), [], survey, binary, writer =>
             {
                 writer.WriteStartObject("page");
                 writer.WriteNumber("offset", offset); writer.WriteNumber("nextOffset", offset + count);
                 writer.WriteNumber("total", total); writer.WriteNumber("revision", revision);
                 writer.WriteEndObject();
-            }));
+            });
         };
     }
 
     /** UI thread: objects changed after a revision, in GUID order; absent ones are reported as removed. */
-    internal Func<object> Changes(RhinoDoc doc, IReadOnlyDictionary<Guid, int> changedAt, int since, int cursor, int revision)
+    internal Func<object> Changes(RhinoDoc doc, IReadOnlyDictionary<Guid, int> changedAt, int since, int cursor, int revision, bool binary = false)
     {
         var scale = Scale(doc);
         var listed = Visible(doc);
@@ -216,17 +231,17 @@ internal sealed class DisplayScene
         return () =>
         {
             Build(entries.Where(entry => entry.Item != null).Select(entry => entry.Item!).ToList(), scale);
-            var consumed = Fit(entries.Select(entry => entry.Item));
+            var consumed = Fit(entries.Select(entry => entry.Item), binary);
             var taken = entries.Take(consumed).ToList();
-            return new RawJson(Write(taken.Where(entry => entry.Item != null).Select(entry => entry.Item!),
-                taken.Where(entry => entry.Item == null).Select(entry => entry.Id), survey, writer =>
+            return Write(taken.Where(entry => entry.Item != null).Select(entry => entry.Item!),
+                taken.Where(entry => entry.Item == null).Select(entry => entry.Id), survey, binary, writer =>
                 {
                     writer.WriteStartObject("page");
                     writer.WriteNumber("cursor", cursor); writer.WriteNumber("nextCursor", cursor + consumed);
                     writer.WriteNumber("changes", ids.Length); writer.WriteNumber("total", total);
                     writer.WriteNumber("revision", revision);
                     writer.WriteEndObject();
-                }));
+                });
         };
     }
 
@@ -268,9 +283,9 @@ internal sealed class DisplayScene
         lock (definitions) if (definitions.TryGetValue(definition.Id, out var cached)) return cached;
         var parts = new DisplayParts(doc, scale);
         parts.AddDefinition(definition, Transform.Identity, 0, [definition.Id]);
-        var vertices = Numbers(parts.Vertices, 1); var indices = Integers(parts.Indices);
-        var segments = Numbers(parts.Segments, 1); var texts = TextsJson(parts.Texts);
-        var result = new Definition(Hash(definition.Id.ToString(), vertices, indices, segments, texts), vertices, indices, segments, texts);
+        var vertices = Round(parts.Vertices, 1); var indices = parts.Indices.ToArray();
+        var segments = Round(parts.Segments, 1); var texts = TextsJson(parts.Texts);
+        var result = new Definition(Hash(definition.Id.ToString(), Json(vertices), Json(indices), Json(segments), texts), vertices, indices, segments, texts);
         lock (definitions) definitions[definition.Id] = result;
         return result;
     }
@@ -283,7 +298,7 @@ internal sealed class DisplayScene
         var origin = bounds.IsValid ? new[] { bounds.Min.X * scale, bounds.Min.Y * scale, bounds.Min.Z * scale } : new[] { 0.0, 0, 0 };
         var size = bounds.IsValid ? new[] { (bounds.Max.X - bounds.Min.X) * scale, (bounds.Max.Y - bounds.Min.Y) * scale, (bounds.Max.Z - bounds.Min.Z) * scale } : new[] { 0.0, 0, 0 };
         var hash = Hash(definitionHash ?? "missing", Encoding.UTF8.GetBytes(string.Join(",", transform.Select(v => v.ToString("R", System.Globalization.CultureInfo.InvariantCulture)))));
-        return new Shape(obj.RuntimeSerialNumber, "InstanceReference", valid, origin, size, EmptyArray, EmptyArray, EmptyArray, hash,
+        return new Shape(obj.RuntimeSerialNumber, "InstanceReference", valid, origin, size, NoNumbers, NoIndices, NoNumbers, hash,
             Definition: valid ? definition!.Id : null, DefinitionHash: definitionHash, Transform: valid ? transform : null);
     }
 
@@ -294,13 +309,13 @@ internal sealed class DisplayScene
         if (!bounds.IsValid) throw new InvalidOperationException("INVALID_GEOMETRY");
         var parts = new DisplayParts(doc, scale);
         if (geometry.IsValid) parts.Add(geometry, Transform.Identity);
-        var vertices = Numbers(parts.Vertices, 1); var indices = Integers(parts.Indices);
-        var segments = Numbers(parts.Segments, 1); var texts = TextsJson(parts.Texts);
+        var vertices = Round(parts.Vertices, 1); var indices = parts.Indices.ToArray();
+        var segments = Round(parts.Segments, 1); var texts = TextsJson(parts.Texts);
         var type = geometry.ObjectType.ToString();
         return new Shape(obj.RuntimeSerialNumber, type, geometry.IsValid,
             [bounds.Min.X * scale, bounds.Min.Y * scale, bounds.Min.Z * scale],
             [(bounds.Max.X - bounds.Min.X) * scale, (bounds.Max.Y - bounds.Min.Y) * scale, (bounds.Max.Z - bounds.Min.Z) * scale],
-            vertices, indices, EmptyArray, Hash(type, vertices, indices, segments, texts), Segments: segments, Texts: texts);
+            vertices, indices, NoNumbers, Hash(type, Json(vertices), Json(indices), Json(segments), texts), Segments: segments, Texts: texts);
     }
 
     private static string Hash(string kind, params byte[][] parts)
@@ -376,32 +391,34 @@ internal sealed class DisplayScene
                 if (curve.TryGetPolyline(out var polyline)) foreach (var point in polyline) AddPoint(point, line);
                 else foreach (var parameter in curve.DivideByCount(128, true) ?? []) AddPoint(curve.PointAt(parameter), line);
             }
-            var vertexJson = Numbers(vertices, scale); var indexJson = Integers(indices); var lineJson = Numbers(line, scale);
+            var rounded = Round(vertices, scale); var faces = indices.ToArray(); var wire = Round(line, scale);
+            // The hash is taken over the JSON number text, as before the binary pages: a Sync read either
+            // way gives every object the same geometryHash (review comparison, measurement reuse).
             using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
-            hash.AppendData(Encoding.UTF8.GetBytes(item.NativeType)); hash.AppendData(vertexJson); hash.AppendData(indexJson); hash.AppendData(lineJson);
+            hash.AppendData(Encoding.UTF8.GetBytes(item.NativeType)); hash.AppendData(Json(rounded)); hash.AppendData(Json(faces)); hash.AppendData(Json(wire));
             return new Shape(item.Serial, item.NativeType, valid,
                 [bounds.Min.X * scale, bounds.Min.Y * scale, bounds.Min.Z * scale],
                 [(bounds.Max.X - bounds.Min.X) * scale, (bounds.Max.Y - bounds.Min.Y) * scale, (bounds.Max.Z - bounds.Min.Z) * scale],
-                vertexJson, indexJson, lineJson, Convert.ToHexString(hash.GetHashAndReset()).ToLowerInvariant());
+                rounded, faces, wire, Convert.ToHexString(hash.GetHashAndReset()).ToLowerInvariant());
         }
         finally { geometry.Dispose(); item.Work = null; }
     }
 
     // Count of leading entries that fit the byte budget; always at least one.
-    private int Fit(IEnumerable<Item?> entries)
+    private int Fit(IEnumerable<Item?> entries, bool binary)
     {
         var bytes = 0L; var count = 0;
         var included = new HashSet<Guid>();
         foreach (var item in entries)
         {
-            var size = SizeOf(item, included);
+            var size = SizeOf(item, included, binary);
             // One object larger than a whole page (so than a 16 MB reply): its bounding box stands in
             // for it and the row is marked, and the Sync continues (ADR-031 7).
             if (item?.Shape is { } large && size > PageBytes)
             {
                 item.Shape = Box(large);
                 item.Oversized = true;
-                size = SizeOf(item, included);
+                size = SizeOf(item, included, binary);
             }
             var shape = item?.Shape;
             if (count > 0 && bytes + size > PageBytes) break;
@@ -411,15 +428,19 @@ internal sealed class DisplayScene
         return count;
     }
 
-    private long SizeOf(Item? item, HashSet<Guid> included)
+    // Upper bounds of an array's reply bytes: float32/uint32 binary, or JSON number text.
+    private static long Bytes(double[] values, bool binary) => binary ? values.Length * 4L + 64 : values.Length * 18L + 2;
+    private static long Bytes(int[] values, bool binary) => binary ? values.Length * 4L + 64 : values.Length * 11L + 2;
+
+    private long SizeOf(Item? item, HashSet<Guid> included, bool binary)
     {
         var shape = item?.Shape;
-        long size = shape == null ? 64 : shape.Vertices.Length + shape.Indices.Length + shape.Line.Length
-            + (shape.Segments?.Length ?? 0) + (shape.Texts?.Length ?? 0)
+        long size = shape == null ? 64 : Bytes(shape.Vertices, binary) + Bytes(shape.Indices, binary) + Bytes(shape.Line, binary)
+            + (shape.Segments == null ? 0 : Bytes(shape.Segments, binary)) + (shape.Texts?.Length ?? 0)
             + 2 * (item!.Name.Length + item.Layer.Length) + item.Attributes.Sum(pair => pair[0].Length + pair[1].Length + 8) + 1024;
         // A definition travels once per page with the first instance that needs it.
         if (shape?.Definition is { } id && !included.Contains(id))
-            lock (definitions) if (definitions.TryGetValue(id, out var definition)) size += definition.Size;
+            lock (definitions) if (definitions.TryGetValue(id, out var definition)) size += definition.Size(binary);
         return size;
     }
 
@@ -430,17 +451,70 @@ internal sealed class DisplayScene
         var bounds = new BoundingBox(o[0], o[1], o[2], o[0] + d[0], o[1] + d[1], o[2] + d[2]);
         var vertices = new List<double>(); var indices = new List<int>();
         WorkerScene.BoxMesh(bounds, vertices, indices);
-        var vertexJson = Numbers(vertices, 1); var indexJson = Integers(indices);
-        return new Shape(shape.Serial, shape.NativeType, shape.Valid, shape.Origin, shape.BoundsSize, vertexJson, indexJson, EmptyArray,
+        return new Shape(shape.Serial, shape.NativeType, shape.Valid, shape.Origin, shape.BoundsSize, Round(vertices, 1), indices.ToArray(), NoNumbers,
             Hash("oversized", Encoding.UTF8.GetBytes(shape.Hash)));
     }
 
-    private byte[] Write(IEnumerable<Item> items, IEnumerable<Guid> removed, ReadSurvey survey, Action<Utf8JsonWriter> page)
+    /** The binary section of a VGT1 reply: 4-byte aligned buffers the header's $bin entries point into. */
+    private sealed class Region
+    {
+        internal readonly ArrayBufferWriter<byte> Bytes = new(1 << 20);
+        internal int Add(ReadOnlySpan<byte> data)
+        {
+            var at = Bytes.WrittenCount;
+            data.CopyTo(Bytes.GetSpan(data.Length)); Bytes.Advance(data.Length);
+            var pad = (4 - data.Length % 4) % 4;
+            if (pad > 0) { Bytes.GetSpan(pad)[..pad].Clear(); Bytes.Advance(pad); }
+            return at;
+        }
+    }
+
+    /** A coordinate array: binary float32 offsets from its first point, or JSON numbers (also when empty). */
+    private static void Positions(Utf8JsonWriter writer, string name, double[] values, Region? region)
+    {
+        if (region == null || values.Length < 3 || values.Length % 3 != 0) { Numbers(writer, name, values); return; }
+        double ox = values[0], oy = values[1], oz = values[2];
+        var local = new float[values.Length];
+        for (var i = 0; i < values.Length; i += 3)
+        {
+            local[i] = (float)(values[i] - ox); local[i + 1] = (float)(values[i + 1] - oy); local[i + 2] = (float)(values[i + 2] - oz);
+        }
+        var at = region.Add(System.Runtime.InteropServices.MemoryMarshal.AsBytes(local.AsSpan()));
+        Reference(writer, name, at, values.Length, "f", ox, oy, oz);
+    }
+    /** An index array: binary uint16 when every index fits, else uint32 (the engine's choice too), or JSON. */
+    private static void Indices(Utf8JsonWriter writer, string name, int[] values, Region? region)
+    {
+        if (region == null || values.Length == 0 || values.Any(value => value < 0)) { Integers(writer, name, values); return; }
+        var small = values.Max() < 0x10000;
+        int at;
+        if (small)
+        {
+            var array = new ushort[values.Length];
+            for (var i = 0; i < values.Length; i++) array[i] = (ushort)values[i];
+            at = region.Add(System.Runtime.InteropServices.MemoryMarshal.AsBytes(array.AsSpan()));
+        }
+        else at = region.Add(System.Runtime.InteropServices.MemoryMarshal.AsBytes(values.AsSpan()));
+        Reference(writer, name, at, values.Length, small ? "u16" : "u32", 0, 0, 0);
+    }
+    private static void Reference(Utf8JsonWriter writer, string name, int offset, int count, string type, double ox, double oy, double oz)
+    {
+        writer.WriteStartObject(name);
+        writer.WriteStartArray("$bin");
+        writer.WriteNumberValue(offset); writer.WriteNumberValue(count); writer.WriteStringValue(type);
+        writer.WriteNumberValue(ox); writer.WriteNumberValue(oy); writer.WriteNumberValue(oz);
+        writer.WriteEndArray();
+        writer.WriteEndObject();
+    }
+
+    private object Write(IEnumerable<Item> items, IEnumerable<Guid> removed, ReadSurvey survey, bool binary, Action<Utf8JsonWriter> page)
     {
         var list = items.ToList();
+        var region = binary ? new Region() : null;
         var buffer = new ArrayBufferWriter<byte>(1 << 20);
         using (var writer = new Utf8JsonWriter(buffer))
         {
+            if (binary) { writer.WriteStartObject(); writer.WriteString("status", "success"); writer.WritePropertyName("result"); }
             writer.WriteStartObject();
             writer.WriteStartArray("objects");
             foreach (var item in list)
@@ -461,10 +535,10 @@ internal sealed class DisplayScene
                 writer.WriteString("nativeType", shape.NativeType); writer.WriteString("geometryHash", shape.Hash);
                 writer.WriteString("name64", Encode(item.Name));
                 Point(writer, "origin", shape.Origin); Point(writer, "boundsSize", shape.BoundsSize);
-                writer.WritePropertyName("vertices"); writer.WriteRawValue(shape.Vertices, true);
-                writer.WritePropertyName("indices"); writer.WriteRawValue(shape.Indices, true);
-                writer.WritePropertyName("line"); writer.WriteRawValue(shape.Line, true);
-                if (shape.Segments != null) { writer.WritePropertyName("segments"); writer.WriteRawValue(shape.Segments, true); }
+                Positions(writer, "vertices", shape.Vertices, region);
+                Indices(writer, "indices", shape.Indices, region);
+                Positions(writer, "line", shape.Line, region);
+                if (shape.Segments != null) Positions(writer, "segments", shape.Segments, region);
                 if (shape.Texts != null && shape.Texts.Length > 2) { writer.WritePropertyName("texts"); writer.WriteRawValue(shape.Texts, true); }
                 if (shape.Definition is { } definition && shape.Transform != null)
                 {
@@ -495,9 +569,9 @@ internal sealed class DisplayScene
                 if (definition == null) continue;
                 writer.WriteStartObject(id.ToString());
                 writer.WriteString("hash", definition.Hash);
-                writer.WritePropertyName("vertices"); writer.WriteRawValue(definition.Vertices, true);
-                writer.WritePropertyName("indices"); writer.WriteRawValue(definition.Indices, true);
-                writer.WritePropertyName("segments"); writer.WriteRawValue(definition.Segments, true);
+                Positions(writer, "vertices", definition.Vertices, region);
+                Indices(writer, "indices", definition.Indices, region);
+                Positions(writer, "segments", definition.Segments, region);
                 writer.WritePropertyName("texts"); writer.WriteRawValue(definition.Texts, true);
                 writer.WriteEndObject();
             }
@@ -511,8 +585,18 @@ internal sealed class DisplayScene
             writer.WritePropertyName("layers"); writer.WriteRawValue(JsonSerializer.SerializeToUtf8Bytes(survey.Layers), true);
             page(writer);
             writer.WriteEndObject();
+            if (binary) writer.WriteEndObject();
         }
-        return buffer.WrittenSpan.ToArray();
+        if (region == null) return new RawJson(buffer.WrittenSpan.ToArray());
+        // "VGT1" | u32 LE header length | header JSON | pad to 4 | buffers.
+        var header = buffer.WrittenSpan;
+        var start = (8 + header.Length + 3) & ~3;
+        var frame = new byte[start + region.Bytes.WrittenCount];
+        "VGT1"u8.CopyTo(frame);
+        System.Buffers.Binary.BinaryPrimitives.WriteUInt32LittleEndian(frame.AsSpan(4), (uint)header.Length);
+        header.CopyTo(frame.AsSpan(8));
+        region.Bytes.WrittenSpan.CopyTo(frame.AsSpan(start));
+        return new RawFrame(frame);
     }
 
     private static void Point(Utf8JsonWriter writer, string name, double[] values)
@@ -521,26 +605,45 @@ internal sealed class DisplayScene
         foreach (var value in values) writer.WriteNumberValue(value);
         writer.WriteEndArray();
     }
-    // Display coordinates in meters, rounded to 1 µm: far below display precision, ~40% fewer bytes.
-    private static byte[] Numbers(List<double> values, double scale)
+    // Display coordinates in meters, rounded to 1 µm: far below display precision, ~40% fewer JSON bytes.
+    private static double[] Round(List<double> values, double scale)
     {
-        var buffer = new ArrayBufferWriter<byte>(values.Count * 12 + 2);
+        var rounded = new double[values.Count];
+        for (var i = 0; i < rounded.Length; i++)
+        {
+            var scaled = Math.Round(values[i] * scale, 6);
+            if (!double.IsFinite(scaled)) throw new InvalidOperationException("INVALID_GEOMETRY");
+            rounded[i] = scaled;
+        }
+        return rounded;
+    }
+    private static void Numbers(Utf8JsonWriter writer, string name, double[] values)
+    {
+        writer.WriteStartArray(name);
+        foreach (var value in values) writer.WriteNumberValue(value);
+        writer.WriteEndArray();
+    }
+    private static void Integers(Utf8JsonWriter writer, string name, int[] values)
+    {
+        writer.WriteStartArray(name);
+        foreach (var value in values) writer.WriteNumberValue(value);
+        writer.WriteEndArray();
+    }
+    /** The JSON array text of the values (what geometryHash is taken over). */
+    private static byte[] Json(double[] values)
+    {
+        var buffer = new ArrayBufferWriter<byte>(values.Length * 12 + 2);
         using (var writer = new Utf8JsonWriter(buffer))
         {
             writer.WriteStartArray();
-            foreach (var value in values)
-            {
-                var scaled = Math.Round(value * scale, 6);
-                if (!double.IsFinite(scaled)) throw new InvalidOperationException("INVALID_GEOMETRY");
-                writer.WriteNumberValue(scaled);
-            }
+            foreach (var value in values) writer.WriteNumberValue(value);
             writer.WriteEndArray();
         }
         return buffer.WrittenSpan.ToArray();
     }
-    private static byte[] Integers(List<int> values)
+    private static byte[] Json(int[] values)
     {
-        var buffer = new ArrayBufferWriter<byte>(values.Count * 6 + 2);
+        var buffer = new ArrayBufferWriter<byte>(values.Length * 6 + 2);
         using (var writer = new Utf8JsonWriter(buffer))
         {
             writer.WriteStartArray();

@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { resolve, isAbsolute } from 'node:path';
 import { inspectWindowsProcess } from '../common/owned-process.ts';
 import { HOST_CALL_MS, sendHostCommand } from '../common/transport.ts';
-import { readScenePages } from './scene-pages.ts';
+import { plainPage, readScenePages } from './scene-pages.ts';
 import { viewMethods } from './view-tools.ts';
 import {
   directExecuteInputSchema,
@@ -126,8 +126,12 @@ export function editorMethods(
   return {
     // View image and measurements (the AI's eyes); the worker client spreads these methods too.
     ...viewMethods(call),
-    /** The display Sync, or with `scope` a layer-limited read (hidden objects too when asked). */
-    async displayEditor(scope: ReadScope = {}) {
+    /**
+     * The display Sync, or with `scope` a layer-limited read (hidden objects too when asked). Pages
+     * come as VGT1 binary (T-128; an older plugin answers JSON). `typed`: the arrays stay typed for
+     * storage (the display Sync); otherwise they are plain numbers.
+     */
+    async displayEditor(scope: ReadScope = {}, { typed = false }: { typed?: boolean } = {}) {
       const before = editorReply(editorSnapshotSchema, await call('inspectEditor'));
       const model = await readScenePages(
         (params) => call('displayPage', params),
@@ -135,6 +139,7 @@ export function editorMethods(
         Infinity,
         true,
         scope,
+        { binary: true, typed },
       );
       const after = editorReply(editorSnapshotSchema, await call('inspectEditor'));
       if (before.documentHash !== after.documentHash) throw failure('SOURCE_CHANGED');
@@ -152,13 +157,18 @@ export function editorMethods(
         total = 0,
         survey: Pick<ChangesPage, 'coverage' | 'layers'> = {};
       do {
+        // Binary pages (T-128) are restored to plain numbers: a change page is small and feeds
+        // queries and coverage as well as storage.
         const page = editorReply(
           changesPageSchema,
-          await call('displayChanges', {
-            since,
-            cursor,
-            ...(revision === undefined ? {} : { revision }),
-          }),
+          plainPage(
+            await call('displayChanges', {
+              since,
+              cursor,
+              geometry: 'vgt1',
+              ...(revision === undefined ? {} : { revision }),
+            }),
+          ),
         );
         if (
           !validChanges(page) ||

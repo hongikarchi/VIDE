@@ -149,7 +149,7 @@ internal sealed class AttachedConnection : IDisposable
             // A layer-limited or hidden-inclusive read (jig input, ARCH-03 §8) uses the same method and revision.
             var scope = ReadScope.From(request);
             LastDisplayRead = DateTime.Now;
-            return display.Page(document, offset, limit, readRevision, scope);
+            return display.Page(document, offset, limit, readRevision, scope, Binary(request));
         }
         if (method == "displayChanges")
         {
@@ -160,7 +160,7 @@ internal sealed class AttachedConnection : IDisposable
                 if (basis.GetInt32() != readRevision) throw new InvalidOperationException("SOURCE_CHANGED");
             } else if (cursor > 0) throw new InvalidOperationException("STALE_REFERENCE");
             LastDisplayRead = DateTime.Now;
-            return display.Changes(document, objectRevisions, since, cursor, readRevision);
+            return display.Changes(document, objectRevisions, since, cursor, readRevision, Binary(request));
         }
         // Direct mode: the AI's code in this document, one undo record per execution.
         if (method == "direct-execute") return direct.Execute(request);
@@ -168,6 +168,9 @@ internal sealed class AttachedConnection : IDisposable
         if (method == "fingerprint") return DirectExecutor.Fingerprint(RevisionHash(), readRevision);
         return editor.Dispatch(request);
     }
+    /** The engine reads VGT1 display pages (T-128); an older engine never asks and gets JSON. */
+    private static bool Binary(JsonElement request) =>
+        request.TryGetProperty("geometry", out var format) && format.ValueKind == JsonValueKind.String && format.GetString() == "vgt1";
     private string RevisionHash() => Convert.ToHexString(SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(
         session + ":" + readRevision + ":" + document.ModelUnitSystem))).ToLowerInvariant();
     private void SelectionChanged(object? sender, RhinoObjectSelectionEventArgs e) { if (e.Document == document) selectionVersion++; }

@@ -31,10 +31,19 @@ namespace Vide.Zwcad.Connection
         private readonly ConcurrentQueue<Action> pending = new ConcurrentQueue<Action>();
         private bool disposed, dirty;
         private long revision, generation;
-        private DateTime changedAt;
+        private DateTime changedTime;
         /// <summary>The last direct execute (undoId) and the drawing revision right after it.</summary>
         private string lastUndo; private long lastUndoRevision;
         private TaskCompletionSource<object> undoing; private long undoingRevision;
+        // Live Sync (T-128): the revision each changed object last changed at, and per model space
+        // entity how the display shows it (row or omission type, unsupported children), complete once
+        // a full read finished in this session and kept current by every change page.
+        private readonly Dictionary<ObjectId, long> changedAt = new Dictionary<ObjectId, long>();
+        private sealed class Shown { internal string Omitted; internal Dictionary<string, int> Warnings; }
+        private Dictionary<string, Shown> shown, building;
+        private long buildingRevision = -1; private int buildingNext;
+        private static Shown ShownOf(AttachedDisplay.EntityRead read) =>
+            new Shown { Omitted = read.Item == null ? read.Omitted : null, Warnings = read.Warnings };
 
         internal static AttachedDocument Connect(Document doc)
         {
@@ -65,15 +74,32 @@ namespace Vide.Zwcad.Connection
             Application.Idle += Idle;
             Task.Run((Action)Listen);
         }
-        private void Changed(object sender, ObjectEventArgs e) { revision++; dirty = true; changedAt = DateTime.UtcNow; }
-        private void Erased(object sender, ObjectErasedEventArgs e) { revision++; dirty = true; changedAt = DateTime.UtcNow; }
+        private void Changed(object sender, ObjectEventArgs e) { revision++; dirty = true; changedTime = DateTime.UtcNow; Track(e.DBObject); }
+        private void Erased(object sender, ObjectErasedEventArgs e) { revision++; dirty = true; changedTime = DateTime.UtcNow; Track(e.DBObject); }
+        private void Track(DBObject obj)
+        {
+            try { if (obj != null && !obj.ObjectId.IsNull) changedAt[obj.ObjectId] = revision; }
+            // Without the id this change cannot be followed: the next Live Sync reads everything.
+            catch (System.Exception) { shown = null; }
+        }
+        /** The whole drawing's display counts from the Live state (the last page of a change read). */
+        private object Coverage()
+        {
+            var omittedTypes = new Dictionary<string, int>(); var warnings = new Dictionary<string, int>(); int displayed = 0;
+            foreach (var entry in shown.Values) {
+                if (entry.Omitted == null) displayed++; else Add(omittedTypes, entry.Omitted, 1);
+                foreach (var item in entry.Warnings) Add(warnings, item.Key, item.Value);
+            }
+            return new { total = shown.Count, displayed, omitted = shown.Count - displayed, omittedTypes, displayWarnings = warnings };
+        }
+        private static void Add(Dictionary<string, int> counts, string key, int n) { int current; counts.TryGetValue(key, out current); counts[key] = current + n; }
         private void Closing(object sender, DocumentCollectionEventArgs e) { if (e.Document == Document) Dispose(); }
         internal void Sync() { generation++; dirty = false; }
         private bool Busy => !String.IsNullOrEmpty(Document.CommandInProgress);
         private void Idle(object sender, EventArgs e)
         {
             if (disposed) return;
-            if (Live && dirty && !Busy && (DateTime.UtcNow - changedAt).TotalSeconds >= 1) Sync();
+            if (Live && dirty && !Busy && (DateTime.UtcNow - changedTime).TotalSeconds >= 1) Sync();
             Action action; if (pending.TryDequeue(out action)) action();
         }
         private string Fingerprint()
@@ -93,7 +119,7 @@ namespace Vide.Zwcad.Connection
                     if (Application.DocumentManager.MdiActiveDocument == Document) modified = Convert.ToInt32(Application.GetSystemVariable("DBMOD")) != 0;
                     return new { ok = true, name = Path.GetFileName(Document.Name), path = Document.Name, units = Document.Database.Insunits.ToString(),
                         objectCount = space.Cast<ObjectId>().Count(), documentHash = Fingerprint(), revision, generation, live = Live, modified, hostBusy = Busy,
-                        linkIds = LinkIdStore.All(Document.Database, tx) };
+                        linkIds = LinkIdStore.All(Document.Database, tx), liveChanges = true };
                 }
             }
             if (method == "fingerprint") return new { ok = true, documentHash = Fingerprint(), revision };
@@ -111,8 +137,33 @@ namespace Vide.Zwcad.Connection
             if (method == "direct-undo") return DirectUndo(Value(request, "undoId"));
             if (method == "displayPage") {
                 if (Value(request, "revision") != revision.ToString()) throw new InvalidOperationException("SOURCE_CHANGED");
+                int offset = Convert.ToInt32(request["offset"]), next, total;
+                // A full read served page after page at one revision becomes the Live state.
+                if (offset == 0) { building = new Dictionary<string, Shown>(); buildingRevision = revision; buildingNext = 0; }
+                if (building != null && (buildingRevision != revision || offset != buildingNext)) building = null;
+                var record = building;
                 using (Document.LockDocument()) {
-                    object result = AttachedDisplay.Page(Document.Database, Convert.ToInt32(request["offset"]), Convert.ToInt32(request["limit"]), revision);
+                    object result = AttachedDisplay.Page(Document.Database, offset, Convert.ToInt32(request["limit"]), revision, out next, out total,
+                        record == null ? null : (Action<AttachedDisplay.EntityRead>)(read => record[read.Handle] = ShownOf(read)));
+                    if (record != null) {
+                        buildingNext = next;
+                        if (next >= total) { shown = record; building = null; }
+                    }
+                    LastRead = DateTime.Now; return result;
+                }
+            }
+            // Live Sync (T-128): the entities changed after `since`, while this session knows the display.
+            if (method == "displayChanges") {
+                long since = Convert.ToInt64(request["since"]); int cursor = Convert.ToInt32(request["cursor"]);
+                if (shown == null || since < 0 || since > revision) throw new InvalidOperationException("RESYNC_REQUIRED");
+                string basis = Value(request, "revision");
+                if (basis != null) { if (basis != revision.ToString()) throw new InvalidOperationException("SOURCE_CHANGED"); }
+                else if (cursor > 0) throw new InvalidOperationException("STALE_REFERENCE");
+                var ids = changedAt.Where(entry => entry.Value > since).Select(entry => entry.Key).ToList();
+                var state = shown;
+                using (Document.LockDocument()) {
+                    object result = AttachedDisplay.Changes(Document.Database, ids, cursor, revision,
+                        read => state[read.Handle] = ShownOf(read), handle => state.Remove(handle), Coverage);
                     LastRead = DateTime.Now; return result;
                 }
             }

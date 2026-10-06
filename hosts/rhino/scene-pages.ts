@@ -8,6 +8,32 @@ import {
   type ReadScope,
 } from '../../src/contracts/native-model.ts';
 import { displayCoverage } from '../../src/core/display-delta.ts';
+import { jsonSafeGeometry, plainGeometry } from '../../src/contracts/geometry-transfer.ts';
+import { packedDisplayModelSchema } from '../../src/contracts/native-model.ts';
+
+/** The scene items and block definitions of a page or model (where geometry arrays live). */
+function geometryItems(value: unknown): unknown[] {
+  const { scene, definitions } = (value ?? {}) as { scene?: unknown; definitions?: unknown };
+  return [
+    ...(Array.isArray(scene) ? scene : []),
+    ...(definitions && typeof definitions === 'object' ? Object.values(definitions) : []),
+  ];
+}
+/** A binary page's typed arrays as plain numbers (the JSON page an older plugin sends). */
+export function plainPage<T>(page: T): T {
+  for (const item of geometryItems(page)) plainGeometry(item);
+  return page;
+}
+
+/**
+ * How a read asks for and keeps geometry (T-128). `binary`: ask the plugin for VGT1 pages (an older
+ * plugin ignores it and answers JSON). `typed`: a display read keeps the typed arrays up to
+ * ModelStore instead of restoring number arrays (each gets a `toJSON`, so JSON of it is unchanged).
+ */
+export interface PageGeometry {
+  binary?: boolean;
+  typed?: boolean;
+}
 
 const pageSchema = z.object({
   offset: z.number().int().nonnegative(),
@@ -56,8 +82,14 @@ export async function readScenePages(
   maxBytes = Infinity,
   displayOnly = false,
   scope: ReadScope = {},
+  geometry: PageGeometry = {},
 ): Promise<NativeModel> {
-  const schema = displayOnly ? displayModelSchema : nativeModelSchema;
+  const typed = displayOnly && geometry.typed === true;
+  // A typed model's arrays may be typed views (`PackedDisplayModel`); only the display Sync asks
+  // for it and hands the model to storage as it is.
+  const schema = (
+    typed ? packedDisplayModelSchema : displayOnly ? displayModelSchema : nativeModelSchema
+  ) as typeof nativeModelSchema;
   let offset = 0,
     limit = 1000,
     revision: number | undefined,
@@ -80,6 +112,7 @@ export async function readScenePages(
       ...(scope.layers ? { layers: scope.layers } : {}),
       ...(scope.includeHidden ? { includeHidden: true } : {}),
       ...(boxOnly ? { boxOnly: true } : {}),
+      ...(geometry.binary ? { geometry: 'vgt1' } : {}),
       ...cache,
     });
     const error = z.object({ ok: z.literal(false), code: z.string() }).safeParse(raw);
@@ -94,8 +127,12 @@ export async function readScenePages(
       }
       throw failure(error.data.code);
     }
-    bytes += Buffer.byteLength(JSON.stringify(raw));
-    if (bytes > maxBytes) throw failure('HOST_RESULT_TOO_LARGE');
+    for (const item of geometryItems(raw)) (typed ? jsonSafeGeometry : plainGeometry)(item);
+    // Only a read with a total cap measures its pages (writing them as JSON again costs time).
+    if (maxBytes !== Infinity) {
+      bytes += Buffer.byteLength(JSON.stringify(raw));
+      if (bytes > maxBytes) throw failure('HOST_RESULT_TOO_LARGE');
+    }
     const page = pageSchema.parse(z.object({ page: pageSchema }).parse(raw).page);
     const model = schema.parse(raw);
     if (

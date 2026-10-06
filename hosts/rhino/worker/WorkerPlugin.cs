@@ -169,6 +169,13 @@ public sealed class WorkerCommand : Command
                 var result = await completion.Task.WaitAsync(timeout.Token);
                 // Heavy work that no longer touches the document runs off Rhino's UI thread.
                 if (result is Func<object> deferred) result = await Task.Run(deferred).WaitAsync(timeout.Token);
+                if (result is RawFrame frame)
+                {
+                    bytesOut = frame.Bytes.Length;
+                    await Reply(stream, frame.Bytes, timeout.Token);
+                    PluginLog.Log.Call(method, clock.Elapsed.TotalMilliseconds, bytesIn, bytesOut);
+                    return;
+                }
                 if (result is RawJson raw)
                 {
                     var body = new byte[SuccessPrefix.Length + raw.Bytes.Length + 1];

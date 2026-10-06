@@ -53,6 +53,24 @@ const shown = (definition: unknown) => {
       (value.texts?.length ?? 0) > 0)
   );
 };
+type RhinoChanges = Awaited<ReturnType<SdkExecution['liveSync']>>;
+/**
+ * What a host answers a Live Sync with: Rhino's change page, or ZWCAD's (T-128), which also brings
+ * the whole drawing's display counts and extra result fields (`displayWarnings`).
+ */
+export type LiveChanges = {
+  delta: ModelDelta;
+  survey: Partial<RhinoChanges['survey']>;
+  displayCoverage?: ReturnType<typeof displayCoverage>;
+  result: RhinoChanges['result'] & Record<string, unknown>;
+};
+export interface LiveSource {
+  liveSync(
+    target: { instance: string; documentId: number },
+    basis: { sourceDocument: Record<string, unknown> },
+    since: number,
+  ): Promise<LiveChanges>;
+}
 /** Outcomes that are not failures: a full Sync instead, or try again on the next change. */
 export const LIVE_RETRY = ['SOURCE_CHANGED', 'HOST_BUSY', 'PROJECT_BUSY', 'WORKSPACE_CAPACITY'];
 
@@ -71,12 +89,12 @@ export class LiveSync {
   private copies = new Map<string, string>();
   private queue = new Map<string, Promise<unknown>>();
   private workspace: Workspace;
-  private sdk: Pick<SdkExecution, 'liveSync'>;
+  private sdk: LiveSource;
   /** Waits for a full Sync of the same document that is running now (T-084). */
   private settled: (projectId: string, instance: string, documentId: number) => Promise<unknown>;
   constructor(
     workspace: Workspace,
-    sdk: Pick<SdkExecution, 'liveSync'>,
+    sdk: LiveSource,
     options: {
       settled?: (projectId: string, instance: string, documentId: number) => Promise<unknown>;
     } = {},
@@ -151,7 +169,7 @@ export class LiveSync {
     // Changes since the older of the two displays bring both up to date.
     const since = Math.min(input.revision, parsed.data.sourceDocument.revision);
     const target = { instance: input.instance, documentId: input.documentId };
-    let merged: Awaited<ReturnType<SdkExecution['liveSync']>>;
+    let merged: LiveChanges;
     const asked = performance.now();
     try {
       merged = await this.sdk.liveSync(target, parsed.data, since);
@@ -173,27 +191,29 @@ export class LiveSync {
     const replaced = [...new Set([...delta.removed, ...delta.scene.map(keyOf)])]
       .map((item) => view.scene(item))
       .filter((item) => item !== undefined) as Scene;
+    // A host that counts the whole document itself (ZWCAD) gives the counts after the page.
     const counts =
-      (!flipped &&
+      merged.displayCoverage ??
+      ((!flipped &&
         coverageAfter(
           parsed.data.displayCoverage as Parameters<typeof coverageAfter>[0],
           replaced,
           delta.scene as unknown as Scene,
           (id) => definitionOf(id) as Definition | undefined,
         )) ||
-      (() => {
-        // Counts unknown or a block definition appeared or emptied: count the whole model once.
-        const whole = this.workspace.get(projectId, basis.id).result as unknown as {
-          objects: { id: string }[];
-          scene: Scene;
-          definitions?: Record<string, Definition>;
-        };
-        const next = applyDisplayDelta(whole, delta as never);
-        return displayCoverage(next.scene as Scene, next.definitions as never);
-      })();
+        (() => {
+          // Counts unknown or a block definition appeared or emptied: count the whole model once.
+          const whole = this.workspace.get(projectId, basis.id).result as unknown as {
+            objects: { id: string }[];
+            scene: Scene;
+            definitions?: Record<string, Definition>;
+          };
+          const next = applyDisplayDelta(whole, delta as never);
+          return displayCoverage(next.scene as Scene, next.definitions as never);
+        })());
     const { coverage, layers } = merged.survey;
     const patch: Item = {
-      sourceDocument: merged.result.sourceDocument,
+      ...merged.result,
       displayCoverage: {
         ...counts,
         ...(coverage
@@ -221,7 +241,13 @@ export class LiveSync {
     if (referenced) {
       savedId = randomUUID();
       const linkId = typeof basis.input.linkId === 'string' ? basis.input.linkId : undefined;
-      this.workspace.submit(projectId, captureInput({ id: savedId, ...target, linkId }));
+      this.workspace.submit(
+        projectId,
+        captureInput(
+          { id: savedId, ...target, linkId },
+          basis.input.host === 'zwcad' ? 'zwcad' : 'rhino',
+        ),
+      );
     }
     const applied = this.workspace.applyDelta(
       projectId,

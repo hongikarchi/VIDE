@@ -213,7 +213,8 @@ export class SdkExecution {
   ) {
     if ((await this.editors.connectionKind(target.instance)) !== 'attached-editor')
       return this.captureEditor(target, update, measurements);
-    const { source, ...model } = await this.editors.display(target);
+    // The Sync's geometry stays as the binary pages delivered it, up to storage (T-128).
+    const { source, ...model } = await this.editors.display(target, {}, { typed: true });
     return {
       ...model,
       displayOnly: true,

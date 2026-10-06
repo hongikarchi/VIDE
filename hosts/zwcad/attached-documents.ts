@@ -34,6 +34,29 @@ const statusSchema = z.object({
   hostBusy: z.boolean(),
   /** VIDE link ids stored in the drawing (ADR-030), one per project it was linked to. */
   linkIds: z.array(z.string().max(100)).max(50).optional(),
+  /** The plugin answers `displayChanges` (Live Sync, T-128); absent from an older plugin. */
+  liveChanges: z.boolean().optional(),
+});
+const countsSchema = z.record(z.string(), z.number().int().nonnegative());
+/** One Live Sync change page (T-128): changed rows, removed handles, and on the last page the counts. */
+const changesSchema = z.object({
+  ok: z.literal(true),
+  cursor: z.number().int().nonnegative(),
+  next: z.number().int().nonnegative(),
+  changes: z.number().int().nonnegative(),
+  revision: z.number().int().nonnegative(),
+  objects: workspaceResultSchema.shape.objects.unwrap(),
+  scene: workspaceResultSchema.shape.scene.unwrap(),
+  removed: z.array(z.string()),
+  coverage: z
+    .object({
+      total: z.number().int().nonnegative(),
+      displayed: z.number().int().nonnegative(),
+      omitted: z.number().int().nonnegative(),
+      omittedTypes: countsSchema,
+      displayWarnings: countsSchema,
+    })
+    .nullable(),
 });
 const pageSchema = z.object({
   ok: z.literal(true),
@@ -198,7 +221,9 @@ export class AttachedZwcadDocuments {
       {
         port: identity.port,
         timeoutMs: 70000,
-        maxResponseBytes: method === 'displayPage' ? 128 * 1024 * 1024 : 16 * 1024 * 1024,
+        maxResponseBytes: ['displayPage', 'displayChanges'].includes(method)
+          ? 128 * 1024 * 1024
+          : 16 * 1024 * 1024,
         beforeSend: verify
           ? async () => {
               const actual = await inspectWindowsProcess(identity.pid, identity.port);
@@ -396,9 +421,72 @@ export class AttachedZwcadDocuments {
         documentHash: status.documentHash,
         name: status.name,
         units: status.units,
+        // The revision a Live Sync continues from; only a plugin that reports changes has one.
+        ...(status.liveChanges ? { revision: status.revision } : {}),
         capturedAt: new Date().toISOString(),
         selectedIds: [],
       },
+    };
+  }
+  /**
+   * Live Sync (T-128): the model space entities changed after revision `since`, as rows, removed
+   * handles and the drawing's display counts after them. RESYNC_REQUIRED when the plugin cannot
+   * tell (an older plugin, no full read in its session, a layer or block definition changed).
+   */
+  async changes(target: HostTarget, since: number) {
+    await this.discover();
+    const objects: z.infer<typeof changesSchema>['objects'] = [],
+      scene: z.infer<typeof changesSchema>['scene'] = [],
+      removed: string[] = [];
+    let cursor = 0,
+      revision: number | undefined,
+      changes = 0,
+      coverage: z.infer<typeof changesSchema>['coverage'] = null;
+    do {
+      let page: z.infer<typeof changesSchema>;
+      try {
+        page = changesSchema.parse(
+          await this.call(
+            target,
+            'displayChanges',
+            { since, cursor, ...(revision === undefined ? {} : { revision }) },
+            false,
+          ),
+        );
+      } catch (error) {
+        // An older plugin has no such method: a full read, as before.
+        if ((error as { code?: unknown }).code === 'UNSUPPORTED_METHOD')
+          throw new DomainError('RESYNC_REQUIRED');
+        throw error;
+      }
+      if (
+        page.cursor !== cursor ||
+        page.next > page.changes ||
+        (page.next === cursor && cursor < page.changes) ||
+        page.objects.length !== page.scene.length ||
+        page.objects.some((object, i) => page.scene[i].id !== object.id) ||
+        (revision !== undefined && (page.revision !== revision || page.changes !== changes))
+      )
+        throw new DomainError('HOST_INVALID_RESPONSE');
+      objects.push(...page.objects);
+      scene.push(...page.scene);
+      removed.push(...page.removed);
+      ({ revision, changes } = page);
+      cursor = page.next;
+      if (page.coverage) coverage = page.coverage;
+    } while (cursor < changes);
+    if (!coverage) throw new DomainError('HOST_INVALID_RESPONSE');
+    const after = statusSchema.parse(await this.call(target, 'attachedStatus', {}, false));
+    if (after.revision !== revision) throw new DomainError('SOURCE_CHANGED');
+    const { displayWarnings, ...counts } = coverage;
+    return {
+      objects,
+      scene,
+      removed,
+      revision: revision!,
+      displayCoverage: counts,
+      displayWarnings,
+      source: after,
     };
   }
 }

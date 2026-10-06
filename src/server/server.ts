@@ -285,11 +285,25 @@ export async function startServer({
   // Automatic document Syncs of the same document share one read (PLAN-27 T-087).
   const documentSyncs = new SyncCoalescer<StoredWork>();
   // A Live Sync waits for a full Sync of the same document that runs now (ARCH-01 §7).
+  // ZWCAD drawings follow the same Live Sync (T-128); the drawing's connection decides the host.
   const liveSync = sdk
-    ? new LiveSync(workspace, sdk, {
-        settled: async (projectId, instance, documentId) =>
-          documentSyncs.current(documentKey(projectId, 'rhino', instance, documentId)),
-      })
+    ? new LiveSync(
+        workspace,
+        {
+          liveSync: async (target, basis, since) =>
+            (await zwcadSdk?.editors.attached.has(target.instance))
+              ? zwcadSdk!.liveSync(target, basis, since)
+              : sdk.liveSync(target, basis, since),
+        },
+        {
+          settled: async (projectId, instance, documentId) =>
+            Promise.all(
+              (['rhino', 'zwcad'] as const).map((host) =>
+                documentSyncs.current(documentKey(projectId, host, instance, documentId)),
+              ),
+            ),
+        },
+      )
     : undefined;
   const connectors = new Connectors({
     directory: dirname(filename),

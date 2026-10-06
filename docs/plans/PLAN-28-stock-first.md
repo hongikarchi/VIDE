@@ -153,7 +153,7 @@ ADR-032를 사용자가 확인한 뒤 ARCH-01 §5에 반영하고 구현한다. 
   - JSON으로 표시 Sync를 달라는 `GET …/requests/:r`는 `406 GEOMETRY_BINARY_REQUIRED`. 화면·패널·원격 중계는 VGT1을 받으므로 영향 없음.
   - `…/objects`는 `ids`·`native`가 없으면 2000줄씩 쪽(`offset`·`limit`·`nextOffset`)으로 주고 패널 `withObjects`가 차례로 받는다.
   - 남은 확인: 실제 Rhino에서 초안 고정 중 ⟳ 여러 번(복사본 하나, 화면 전체 다시 받기 없음), 편집 중 ⟳의 재시도.
-- **T-128 (다음):** Rhino→엔진 전체 읽기(첫 Sync, 전체 다시 읽기)를 VGT1 바이너리 쪽으로 바꾼다(ADR-031 5의 마지막 경로). ZWCAD도 Live Sync로 한다.
+- **T-128:** Rhino→엔진 전체 읽기(첫 Sync, 전체 다시 읽기)를 VGT1 바이너리 쪽으로 바꾼다(ADR-031 5의 마지막 경로). ZWCAD도 Live Sync로 한다. 진행은 아래 「T-128」.
 - **T-129 (다음):** jig 입력, 검토 비교, 보고서, 게시, 오프라인 스냅샷, 작업 사본 실행이 모델 전체 대신 `ModelView`의 필요한 객체만 읽는다.
 
 ## T-129 필요한 객체만 읽기 (ADR-031 5)
@@ -175,3 +175,16 @@ ADR-032를 사용자가 확인한 뒤 ARCH-01 §5에 반영하고 구현한다. 
 
 - 목록 한 번 훑기(객체 1만 개)는 판 표 조인 때문에 약 300 ms라, 같은 Sync를 여러 번 훑지 않게 했다(진단은 Sync마다 한 번, 객체 줄은 `summary` 캐시).
 - 시험: 새 `tests/server/lazy-model-readers.test.mjs`(`ModelView.lazy` = `load`, 독자 13종의 출력이 전체 모델에서와 같음, HTTP 경로 7개가 `ModelStore.load` 0번, 제자리 Live Sync 뒤 구조 초안 '오래됨').
+
+## T-128 Rhino 표시 페이지 바이너리, ZWCAD Live Sync
+
+물리 계약은 [ARCH-01](../architecture/ARCH-01-system.md) §5 「호스트 표시 페이지의 바이너리 형상」과 §7 「현재 ZWCAD의 읽기 연결」의 「ZWCAD Live Sync」, 지원 상태는 [Rhino](../specs/hosts/rhino.md) H-RHINO-09·[ZWCAD](../specs/hosts/zwcad.md) H-ZWCAD-11.
+
+**진행(2026-10-06) — 구현·자동 검증, 실제 Rhino·ZWCAD 확인 남음.**
+- Rhino: 엔진이 `displayPage`·`displayChanges`에 `geometry: "vgt1"`을 붙이고, 새 플러그인(`DisplayScene.cs`)은 응답 틀 본문을 VGT1 컨테이너로 보낸다(머리 JSON에 페이지, 좌표·색인은 버퍼). 이전 플러그인은 JSON으로 답하고 그대로 읽힌다(연결 절차 없음). 16 MB 틀·12 MiB 페이지 예산·큰 객체 상자 규칙은 그대로이며 예산은 바이너리 크기로 센다. `geometryHash`는 전처럼 JSON 숫자 문자열로 계산한다.
+- 엔진: 전송이 VGT1 본문을 알아보고 형식화 배열로 푼다. 표시 Sync는 배열을 숫자로 풀지 않고 `ModelStore`까지 넘기며(`packedDisplayModelSchema`, 배열마다 `toJSON`) 저장이 그 바이트를 그대로 쓴다. 레이어 범위 읽기·`query` 전체 읽기·Live 변경은 숫자 배열로 되돌린다. `decodeGeometry`의 reviver를 객체만 도는 함수로 바꿨다(화면도 같은 함수).
+- 측정(합성 1만 개: 상자 메시 6천·원기둥 메시 2천·곡선 2천, `node --expose-gc --test tests/server/binary-pages.test.mjs`, 플러그인 응답을 미리 만든 뒤 엔진 쪽만): 페이지 합계 JSON 26.3 MB → VGT1 16.5 MB, 읽기(전송·검사·모델 조립) 약 490~590 ms → 약 180~310 ms, 객체별 저장 인코딩 약 90 ms → 약 45 ms, 읽은 모델이 차지하는 메모리 약 44 MB → 약 18~22 MB. 같은 VGT1을 숫자 배열로 풀면(레이어 범위 읽기) 읽기는 JSON과 비슷하다(약 545 ms). 객체 줄·ID·해시 같은 JSON 부분이 남아 바이트는 약 37 % 준다.
+- C# 작성 논리(정렬·리틀 엔디언·`$bin`·u16/u32 선택·원점 숫자 표기)는 같은 코드의 콘솔 복제본으로 만든 틀이 엔진의 `encodeGeometry`와 바이트 단위로 같음을 확인했다(복제본은 남기지 않음). Rhino 런타임 안의 `DisplayScene` 자체는 실제 Rhino에서 확인해야 한다.
+- ZWCAD: 연결 플러그인(`AttachedDocument.cs`·`AttachedDisplay.cs`)이 바뀐 ObjectId·revision을 남기고, 한 세션에서 끝까지 이어 읽은 `displayPage`를 표시 상태로 가진다. `displayChanges`는 바뀐 모형 공간 개체의 줄과 지운 Handle, 마지막 페이지에 도면 전체 표시 수를 준다. 레이어·블록 정의·문자/치수 스타일·XCLIP 변경, 끝난 전체 읽기가 없을 때, 이전 플러그인(`UNSUPPORTED_METHOD`)은 `RESYNC_REQUIRED`로 전체 읽기. `attachedStatus.liveChanges`가 있을 때만 Sync에 revision을 넣는다. 엔진은 `ZwcadSdkExecution.liveSync`·`AttachedZwcadDocuments.changes`, `LiveSync`가 호스트의 표시 수(`displayCoverage`)와 결과 필드(`displayWarnings`)를 받고 복사본 요청의 호스트를 기준대로 둔다. 자동 Sync·⟳의 Rhino 한정 조건을 풀었다(`sync-scheduler.ts`·`document-sync.ts`, ZWCAD Sync도 `LiveSync.record`). ZWCAD 편집 범위는 바뀌지 않았다.
+- 시험: 새 `tests/server/binary-pages.test.mjs`(실제 전송으로 VGT1↔JSON 같은 페이지, 형식화 배열의 저장 바이트가 JSON 경로와 같음, 저장·다시 읽기, 이전 플러그인 JSON, 큰 객체 상자, Live 변경 페이지, 1만 개 측정), `tests/server/zwcad-live-sync.test.mjs`(변경 페이지 읽기·표시 수, 이전 플러그인·움직인 도면, `liveChanges`일 때만 revision, 저장 도면 갱신, ⟳의 Live·RESYNC), 공용 `tests/fixtures/host-pages.mjs`. 두 플러그인 빌드 오류 0.
+- 남은 것: 플러그인 재설치 뒤 실제 Rhino 8(첫 Sync·전체 다시 읽기·Live 변경, 블록·주석·큰 객체 페이지, 이전 Sync와 같은 `geometryHash`)과 실제 ZWCAD 2023(이벤트로 받은 개체 열기, 속성·정점 변경의 소유 개체, 치수 익명 블록, 큰 도면의 표시 수) 확인.

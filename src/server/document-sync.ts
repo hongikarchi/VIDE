@@ -138,7 +138,8 @@ async function syncDocument(
             }
           : {}),
       });
-      if (!cadOwn) context.liveSync?.record(projectId, captured);
+      // A ZWCAD drawing whose plugin reports changes is a Live basis too (T-128).
+      context.liveSync?.record(projectId, captured);
       return captured;
     },
     {
@@ -171,11 +172,11 @@ const TRANSIENT = ['SOURCE_CHANGED', 'HOST_BUSY'];
 
 /**
  * ⟳, 지금 Sync and the plugin's Sync (ARCH-01 §7 「사용자 Sync」, T-123): never joined to an
- * automatic Sync, always asked of the host. When the document's newest Sync is a Rhino display
- * Sync that a Live Sync can continue, only the objects changed since it are read (`live`). A
+ * automatic Sync, always asked of the host. When the document's newest Sync is a Rhino or ZWCAD
+ * (T-128) display Sync that a Live Sync can continue, only the objects changed since it are read (`live`). A
  * transient refusal (`retry`: the document changed during the read, the host busy) is asked again
  * a few times after a short wait. The first Sync, a basis a Live Sync cannot continue (`resync`,
- * retries used up, no basis, ZWCAD, a work copy) and `full` read the whole document
+ * retries used up, no basis, an older ZWCAD plugin, a work copy) and `full` read the whole document
  * (`runDocumentSync`).
  */
 export async function runUserSync(
@@ -273,7 +274,7 @@ function userSyncBasis(
     if (
       row.state !== 'succeeded' ||
       result?.displayOnly !== true ||
-      (result.host ?? 'rhino') !== 'rhino' ||
+      !['rhino', 'zwcad'].includes(String(result.host ?? 'rhino')) ||
       source?.connection !== 'attached-editor' ||
       source.instance !== target.instance ||
       source.documentId !== target.documentId ||

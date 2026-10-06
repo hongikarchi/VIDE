@@ -385,7 +385,7 @@ export class SyncScheduler {
       if (
         this.options.liveSync &&
         last &&
-        link.host === 'rhino' &&
+        // ZWCAD too (T-128): its Syncs carry a revision only when the plugin reports changes.
         basis?.displayOnly === true &&
         typeof revision === 'number'
       ) {

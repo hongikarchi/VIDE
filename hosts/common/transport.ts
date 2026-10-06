@@ -1,4 +1,5 @@
 import { createConnection } from 'node:net';
+import { decodeGeometry, isGeometryFrame } from '../../src/contracts/geometry-transfer.ts';
 
 /**
  * The one host transport cap kept (ADR-031 7): a frame either way is at most 16 MB, so a corrupt
@@ -91,7 +92,11 @@ export function sendHostCommand(
       bodyBytes += count;
       if (bodyBytes < buffer.length) return;
       try {
-        const response = JSON.parse(buffer.toString('utf8'));
+        // A binary display page (T-128) is one VGT1 container: its arrays stay typed views on the
+        // frame; the reader restores or keeps them. Every other reply is JSON text.
+        const response = isGeometryFrame(buffer)
+          ? (decodeGeometry(buffer, { typed: true }) as { status?: unknown; result?: unknown })
+          : JSON.parse(buffer.toString('utf8'));
         if (response.status === 'error') return fail('HOST_REJECTED');
         finish(null, response.result ?? response);
       } catch {
