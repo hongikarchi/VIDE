@@ -192,11 +192,14 @@ async function body(request: IncomingMessage): Promise<Record<string, unknown>> 
     throw new DomainError('INVALID_INPUT');
   }
 }
+/** Object rows per page of `GET …/requests/:r/objects` without `ids`/`native` (T-127). */
+const OBJECT_PAGE = 2000;
 const statuses: Record<string, number> = {
   NOT_FOUND: 404,
   FORBIDDEN: 403,
   UNAUTHORIZED: 401,
   JSON_REQUIRED: 415,
+  GEOMETRY_BINARY_REQUIRED: 406,
   INPUT_TOO_LARGE: 413,
   REVISION_CONFLICT: 409,
   TARGET_MISMATCH: 409,
@@ -999,6 +1002,8 @@ export async function startServer({
             linkList[1],
             page,
             (url.searchParams.get('hold') ?? '').split(',').filter(Boolean).slice(0, 50),
+            // The Syncs the draft uses: a user's Live Sync never edits them in place (T-127).
+            (url.searchParams.get('basis') ?? '').split(',').filter(Boolean).slice(0, 200),
           );
         const open = [...(await openDocuments(true))];
         const requests = workspace.list(linkList[1]);
@@ -1479,6 +1484,7 @@ export async function startServer({
             ...(scheduler
               ? {
                   holds: (id, where) => scheduler.holds(id, where),
+                  heldBases: (id) => scheduler.heldBases(id),
                   synced: (id, where) => scheduler.userSynced(id, where),
                 }
               : {}),
@@ -2341,7 +2347,8 @@ export async function startServer({
       }
       // The object rows of one request, without geometry (T-123): what the request list leaves out
       // of a display Sync. `ids` (comma separated) limits them to those objects, `native` to those
-      // Rhino ids (any case: a jig names objects by their Rhino id).
+      // Rhino ids (any case: a jig names objects by their Rhino id). Without either the rows come
+      // in pages (`offset`, `limit` up to OBJECT_PAGE, T-127); `nextOffset` names the next page.
       const requestObjects = /^\/api\/v1\/projects\/([^/]+)\/requests\/([^/]+)\/objects$/.exec(
         url.pathname,
       );
@@ -2355,6 +2362,26 @@ export async function startServer({
           ? new Set(nativeWanted.toLowerCase().split(',').filter(Boolean))
           : undefined;
         const view = workspace.model(projectId, id);
+        if (!ids && !natives) {
+          const offset = Math.max(0, Math.floor(Number(url.searchParams.get('offset') ?? 0)) || 0);
+          const limit = Math.min(
+            OBJECT_PAGE,
+            Math.max(1, Math.floor(Number(url.searchParams.get('limit') ?? OBJECT_PAGE)) || 1),
+          );
+          // One row more tells whether another page follows.
+          const rows = view
+            ? view.rowsPage(offset, limit + 1)
+            : ((workspace.summary(projectId, id).result?.objects ?? []) as unknown[]).slice(
+                offset,
+                offset + limit + 1,
+              );
+          send(200, {
+            requestId: id,
+            objects: rows.slice(0, limit),
+            ...(rows.length > limit ? { nextOffset: offset + limit } : {}),
+          });
+          return;
+        }
         const rows = view
           ? view.rows()
           : ((workspace.summary(projectId, id).result?.objects ?? []) as {
@@ -2419,6 +2446,10 @@ export async function startServer({
           return;
         }
         if (request.method === 'GET') {
+          // A display Sync's model is binary only (T-127): as JSON it is tens of MB. Readers that
+          // need its rows or state use `/objects` or `?view=summary`.
+          if (id && workspace.summary(projectId, id).result?.displayOnly === true)
+            throw new DomainError('GEOMETRY_BINARY_REQUIRED');
           send(
             200,
             id

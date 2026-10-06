@@ -7,6 +7,8 @@ import { draftState } from './store/draft.ts';
 
 const rowsSchema = z.object({
   objects: z.array(z.object({ id: z.string(), name: z.string() }).passthrough()),
+  /** More rows follow from here (the whole list comes in pages, T-127). */
+  nextOffset: z.number().int().positive().optional(),
 });
 type Row = z.infer<typeof rowsSchema>['objects'][number];
 /** Rows fetched by id, per request (a Live Sync in place keeps the id: missing ids are asked). */
@@ -42,9 +44,17 @@ export async function withObjects(projectId: string, requestId: string) {
   const entry = draftState.state.messages.find((item) => item.id === requestId);
   const result = entry?.request.result;
   if (!entry || !result || result.objects || !result.objectsOmitted) return;
-  const reply = rowsSchema.parse(
-    await api(`/projects/${projectId}/requests/${encodeURIComponent(requestId)}/objects`),
-  );
+  // The whole list comes in pages (T-127): a 10k-object Sync is not one answer.
+  const rows: Row[] = [];
+  for (let offset: number | undefined = 0; offset !== undefined; ) {
+    const reply = rowsSchema.parse(
+      await api(
+        `/projects/${projectId}/requests/${encodeURIComponent(requestId)}/objects?offset=${offset}`,
+      ),
+    );
+    rows.push(...reply.objects);
+    offset = reply.nextOffset;
+  }
   const index = draftState.state.messages.findIndex((item) => item.id === requestId);
   const current = draftState.state.messages[index];
   if (!current?.request.result || current.request.result.objects) return;
@@ -53,7 +63,7 @@ export async function withObjects(projectId: string, requestId: string) {
     ...current,
     request: {
       ...current.request,
-      result: { ...rest, objects: reply.objects as typeof rest.objects },
+      result: { ...rest, objects: rows as typeof rest.objects },
     },
   };
 }

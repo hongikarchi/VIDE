@@ -115,6 +115,64 @@ export async function refreshDisplay(
     refreshing.delete(id);
   }
 }
+/**
+ * A ⟳ that wrote a new Sync (a copy of the shown one that a draft keeps, T-127): the page builds it
+ * from the shown Sync it holds and the change since (`delta?base=`), not by fetching it whole.
+ * Returns false when it cannot (the shown one is not held here, the engine answers `full`).
+ */
+async function continueFrom(
+  projectId: string,
+  request: Awaited<ReturnType<typeof requestData>>,
+  basisId: string,
+) {
+  const basis = draftState.state.messages.find((item) => item.id === basisId)?.request.result;
+  const held = heldRevision.get(basisId);
+  if (!basis?.objects || (!basis.scene && !panelMode) || held === undefined) return false;
+  try {
+    const reply = deltaReplySchema.parse(
+      await api(
+        `/projects/${projectId}/requests/${encodeURIComponent(request.id)}/delta?${new URLSearchParams(
+          { since: String(held), base: basisId, ...(panelMode ? { view: 'rows' } : {}) },
+        ).toString()}`,
+      ),
+    );
+    if ('full' in reply || sessionState.project?.id !== projectId) return false;
+    type Definitions = NonNullable<typeof basis.definitions>;
+    type Scene = NonNullable<typeof basis.scene>;
+    const merged = applyDisplayDelta<
+      (typeof basis.objects)[number],
+      Scene[number],
+      Definitions[string]
+    >(
+      { objects: basis.objects, scene: basis.scene ?? [], definitions: basis.definitions },
+      reply as unknown as {
+        objects: typeof basis.objects;
+        scene: Scene;
+        removed: string[];
+        definitions?: Definitions;
+      },
+    );
+    const entry = requestMessage(request);
+    const {
+      sceneOmitted: _scene,
+      objectsOmitted: _objects,
+      ...light
+    } = (entry.request.result ?? {}) as NonNullable<typeof entry.request.result>;
+    entry.request = {
+      ...entry.request,
+      result: basis.scene ? { ...light, ...merged } : { ...light, objects: merged.objects },
+    };
+    const index = draftState.state.messages.findIndex((item) => item.id === request.id);
+    if (index >= 0) draftState.state.messages[index] = entry;
+    else draftState.state.messages.push(entry);
+    heldRevision.set(request.id, reply.revision);
+    linksState.liveRefresh = request.id;
+    return true;
+  } catch {
+    // The whole fetch (`loadFullResult`) shows it instead.
+    return false;
+  }
+}
 // Linked files (SPEC-01.11, src/ui/store/links.ts): drawn together as layers.
 /** This page, for its draft leases on the files it uses (`GET …/links?page=&hold=`). */
 export const pageId = crypto.randomUUID();
@@ -262,6 +320,8 @@ export async function syncLink(link: LinkRow, full = false) {
   if (!connection || !sessionState.project || linksState.linkSyncing) return;
   const projectId = sessionState.project.id,
     target = { instance: connection.instance, documentId: connection.documentId };
+  // The Sync shown now: a Live Sync into a new copy is drawn from it and the change (T-127).
+  const shown = link.display?.requestId ?? link.lastSync?.requestId;
   linksState.linkSyncing = true;
   linkNotes.set(link.id, 'Sync 중');
   renderLinkPanel();
@@ -275,6 +335,17 @@ export async function syncLink(link: LinkRow, full = false) {
       fresh: true,
       ...(full ? { full: true } : {}),
     });
+    if (sessionState.project?.id !== projectId) return;
+    if (
+      shown &&
+      shown !== request.id &&
+      request.result?.displayOnly === true &&
+      !draftState.state.messages.find((entry) => entry.id === request.id)?.request.result?.scene
+    )
+      await continueFrom(projectId, request, shown);
+    // A Live Sync in place on the shown Sync: its change now, not on the next links poll.
+    else if (shown === request.id && request.result?.displayOnly === true)
+      await refreshDisplay(projectId, { requestId: shown, revision: Number.MAX_SAFE_INTEGER });
     if (sessionState.project?.id !== projectId) return;
     if (!draftState.state.messages.some((entry) => entry.id === request.id))
       draftState.state.messages.push(requestMessage(request));
@@ -308,8 +379,21 @@ export async function pollLinks() {
     // Files the draft uses: the engine holds their automatic Syncs while this page renews the
     // lease (5 s); without a draft on a file the lease lapses on its own.
     const hold = linksState.links.filter(draftHolds).map((link) => link.id);
+    // The Syncs the draft uses: a ⟳ meanwhile never changes them in place (T-127).
+    const bases = [
+      ...new Set(
+        [draftState.state.baseRequestId, ...draftState.state.pins.map((pin) => pin.basis)].filter(
+          (id): id is string => typeof id === 'string' && !!id,
+        ),
+      ),
+    ];
     const query = hold.length
-      ? '?' + new URLSearchParams({ page: pageId, hold: hold.join(',') }).toString()
+      ? '?' +
+        new URLSearchParams({
+          page: pageId,
+          hold: hold.join(','),
+          ...(bases.length ? { basis: bases.join(',') } : {}),
+        }).toString()
       : '';
     const next = z.array(linkRowSchema).parse(await api(`/projects/${projectId}/links${query}`));
     if (sessionState.project?.id !== projectId) return;

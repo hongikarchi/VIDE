@@ -144,6 +144,11 @@ ADR-032를 사용자가 확인한 뒤 ARCH-01 §5에 반영하고 구현한다. 
 - T-123·T-085(v0.2.20)를 RESEARCH-14 §1과 대조해 검토했다. 그 결과 두 가지를 고쳤다.
   - 오프라인 보기는 Sync 목록의 revision까지 비교한다. Live Sync가 같은 Sync를 제자리에서 고쳐도 다시 올라간다(`offline-view.ts`).
   - Live Sync가 기준을 제자리에서 고칠지 판단할 때 정리(prune)와 같은 참조 확인(`ModelStore.references`)을 쓴다. 검토본·게시·공유 의견·jig 읽기와 만들기·대화 기록이 가리키는 Sync는 복사본으로 바뀐다. 그래서 구조 jig의 '오래됨' 판정도 다시 듣는다.
-- **T-127 (다음):** 초안이 잡혀 있을 때 ⟳마다 새 Sync와 목록 전체 복사가 생기는 문제를 고친다(복사본 한 번, 그 뒤 제자리 수정, 화면은 `delta?base=`). 일시적 실패(`SOURCE_CHANGED`·`HOST_BUSY`)는 전체 읽기 대신 Live로 다시 시도한다. `GET /requests/:r`의 표시 Sync JSON 응답을 거절한다. 패널의 `/objects`를 쪽으로 나눈다.
+- **T-127 (구현·자동 검증, 2026-10-06):** 초안이 잡혀 있을 때 ⟳마다 새 Sync와 목록 전체 복사가 생기는 문제를 고친다(복사본 한 번, 그 뒤 제자리 수정, 화면은 `delta?base=`). 일시적 실패(`SOURCE_CHANGED`·`HOST_BUSY`)는 전체 읽기 대신 Live로 다시 시도한다. `GET /requests/:r`의 표시 Sync JSON 응답을 거절한다. 패널의 `/objects`를 쪽으로 나눈다.
+  - 보류 중 복사본은 기준마다 한 번 만들고(`LiveSync`가 문서별로 기억), 보류 중의 다음 ⟳는 그 복사본을 제자리에서 고친다. 그 복사본을 참조하는 것(`ModelStore.references`)이나 초안이 쓰는 Sync(화면이 `GET …/links?basis=`로 알림, `SyncScheduler.heldBases`)가 있으면 다시 복사한다. 화면은 새 복사본을 보이던 Sync와 `delta?base=&since=`로 만들고, 제자리 변경은 ⟳ 직후 `delta?since=`로 받는다.
+  - `SOURCE_CHANGED`·`HOST_BUSY`는 0.3·0.8·1.5초 뒤 Live로 다시 묻고 그 뒤에야 전체를 읽는다(`user-sync`의 `attempts`).
+  - JSON으로 표시 Sync를 달라는 `GET …/requests/:r`는 `406 GEOMETRY_BINARY_REQUIRED`. 화면·패널·원격 중계는 VGT1을 받으므로 영향 없음.
+  - `…/objects`는 `ids`·`native`가 없으면 2000줄씩 쪽(`offset`·`limit`·`nextOffset`)으로 주고 패널 `withObjects`가 차례로 받는다.
+  - 남은 확인: 실제 Rhino에서 초안 고정 중 ⟳ 여러 번(복사본 하나, 화면 전체 다시 받기 없음), 편집 중 ⟳의 재시도.
 - **T-128 (다음):** Rhino→엔진 전체 읽기(첫 Sync, 전체 다시 읽기)를 VGT1 바이너리 쪽으로 바꾼다(ADR-031 5의 마지막 경로). ZWCAD도 Live Sync로 한다.
 - **T-129 (다음):** jig 입력, 검토 비교, 보고서, 게시, 오프라인 스냅샷, 작업 사본 실행이 모델 전체 대신 `ModelView`의 필요한 객체만 읽는다.

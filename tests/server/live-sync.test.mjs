@@ -143,3 +143,59 @@ test('unknown connection state falls back to a full Sync; a moving document retr
     { resync: true },
   );
 });
+
+test('a held file gets one copy; later Live Syncs update that copy in place (T-127)', async (t) => {
+  const { workspace, project, live } = setup(t, moved);
+  const count = () => workspace.list(project.id).length;
+  const first = await live.run(project.id, { ...target, basisId: 'sync', revision: 4, keep: true });
+  assert.equal(first.created, true);
+  const copy = first.requestId;
+  assert.equal(count(), 2);
+  // The draft's Sync stays as it was.
+  assert.equal(workspace.get(project.id, 'sync').result.sourceDocument.revision, 4);
+  // Next ⟳ while the draft still holds the file: the copy changes in place, no new Sync.
+  const second = await live.run(project.id, { ...target, basisId: copy, revision: 7, keep: true });
+  assert.equal(second.requestId, copy);
+  assert.equal(second.created, false);
+  assert.equal(count(), 2);
+  assert.equal(workspace.get(project.id, copy).result.sourceDocument.revision, 10);
+  assert.equal(workspace.get(project.id, 'sync').result.sourceDocument.revision, 4);
+  // A draft that pinned the copy meanwhile keeps it too: the change goes to a new copy.
+  const third = await live.run(project.id, {
+    ...target,
+    basisId: copy,
+    revision: 10,
+    keep: true,
+    held: [copy],
+  });
+  assert.equal(third.created, true);
+  assert.notEqual(third.requestId, copy);
+  assert.equal(workspace.get(project.id, copy).result.sourceDocument.revision, 10);
+  assert.equal(count(), 3);
+});
+
+test('the held copy is not edited in place once something references it (T-127)', async (t) => {
+  const { workspace, project, live } = setup(t, moved);
+  const first = await live.run(project.id, { ...target, basisId: 'sync', revision: 4, keep: true });
+  workspace.submit(project.id, {
+    id: 'edit',
+    body: 'raise the wall',
+    permission: 'candidate',
+    provider: 'codex-cli',
+    host: 'rhino',
+    pins: [],
+    sketches: [],
+    files: [],
+    baseRequestId: first.requestId,
+  });
+  workspace.update(project.id, 'edit', 'failed', { code: 'PROVIDER_FAILED' });
+  const next = await live.run(project.id, {
+    ...target,
+    basisId: first.requestId,
+    revision: 7,
+    keep: true,
+  });
+  assert.equal(next.created, true);
+  assert.notEqual(next.requestId, first.requestId);
+  assert.equal(workspace.get(project.id, first.requestId).result.sourceDocument.revision, 7);
+});

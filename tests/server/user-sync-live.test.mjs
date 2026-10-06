@@ -49,6 +49,8 @@ function setup(t, live) {
     host: {},
     documentSyncs: new SyncCoalescer(),
     diagnostics: { write: (event, fields) => written.push({ event, ...fields }) },
+    // Short waits between Live Sync attempts after a transient refusal (T-127).
+    liveRetryMs: [1, 1],
     live: async (projectId, input) => {
       lives.push(input);
       return live(input);
@@ -88,17 +90,52 @@ test('⟳ reads the whole document the first time, when Live cannot continue, an
   assert.equal(synced.action, 'full');
   assert.equal(lives.length, 1);
   assert.equal(reads.length, 2);
-  // A retried code (the document moves) also reads whole, as ⟳ did before.
+  // A transient code (the document moves) is asked again as a Live Sync a few times, then read
+  // whole (T-127).
   reply = { retry: 'SOURCE_CHANGED' };
   synced = await runUserSync(context, project.id, { id: 'third', ...target });
   assert.equal(synced.action, 'full');
+  assert.equal(lives.length, 4);
   assert.equal(reads.length, 3);
   // `full` never tries a Live Sync.
   synced = await runUserSync(context, project.id, { id: 'fourth', ...target, full: true });
   assert.equal(synced.action, 'full');
-  assert.equal(lives.length, 2);
+  assert.equal(lives.length, 4);
   // Another document's Sync is no basis.
   synced = await runUserSync(context, project.id, { id: 'fifth', ...target, documentId: 8 });
   assert.equal(synced.action, 'full');
-  assert.equal(lives.length, 2);
+  assert.equal(lives.length, 4);
+});
+
+test('⟳ asks the Live Sync again after a transient refusal before reading whole (T-127)', async (t) => {
+  const replies = [{ retry: 'HOST_BUSY' }, { retry: 'SOURCE_CHANGED' }];
+  const { workspace, project, reads, lives, written, context } = setup(
+    t,
+    (input) => replies.shift() ?? { requestId: input.basisId },
+  );
+  workspace.submit(project.id, captureInput({ id: 's1', ...target }));
+  workspace.update(project.id, 's1', 'succeeded', display(4));
+  const synced = await runUserSync(context, project.id, { id: 'new', ...target });
+  assert.equal(synced.action, 'live');
+  assert.equal(lives.length, 3);
+  assert.deepEqual(reads, []);
+  assert.equal(written.find((line) => line.event === 'user-sync').attempts, 3);
+  // A code that does not pass on its own reads whole at once.
+  replies.push({ retry: 'PROJECT_BUSY' });
+  lives.length = 0;
+  assert.equal((await runUserSync(context, project.id, { id: 'next', ...target })).action, 'full');
+  assert.equal(lives.length, 1);
+  assert.equal(reads.length, 1);
+});
+
+test('⟳ on a held file names the Syncs the drafts use (T-127)', async (t) => {
+  const { workspace, project, lives, context } = setup(t, (input) => ({
+    requestId: input.basisId,
+  }));
+  workspace.submit(project.id, captureInput({ id: 's1', ...target }));
+  workspace.update(project.id, 's1', 'succeeded', display(4));
+  context.holds = () => true;
+  context.heldBases = () => ['s0'];
+  await runUserSync(context, project.id, { id: 'new', ...target });
+  assert.deepEqual(lives, [{ ...target, basisId: 's1', revision: 4, keep: true, held: ['s0'] }]);
 });

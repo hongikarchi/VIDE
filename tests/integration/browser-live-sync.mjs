@@ -297,6 +297,71 @@ try {
   assert.equal(body.full, true);
   assert.equal(body.linkId, 'link-a');
   assert.equal(await menu.count(), 0);
+
+  // ⟳ while a draft holds the file (T-127): the engine writes the change into a copy once; the
+  // page builds the copy from the Sync it shows and the change (`delta?base=`), never fetching it
+  // whole. The next ⟳ changes that copy in place and the page asks only that change at once.
+  await page.unroute('**/api/v1/projects/*/capture');
+  const copyId = randomUUID();
+  const c = box('33333333-3333-4333-8333-333333333333', 6, 'c1');
+  const light = (id) => {
+    const { objects, ...result } = workspace.summary(projectId, id).result;
+    return {
+      ...workspace.summary(projectId, id),
+      result: { ...result, objectsOmitted: true, objectCount: objects?.length ?? 0 },
+    };
+  };
+  let copyPresses = 0;
+  await page.route('**/api/v1/projects/*/capture', (route) => {
+    copyPresses++;
+    if (copyPresses === 1) {
+      workspace.submit(projectId, {
+        id: copyId,
+        linkId: 'link-a',
+        body: 'Sync',
+        permission: 'candidate',
+        provider: 'codex-cli',
+        pins: [],
+        sketches: [],
+        files: [],
+        source: 'document',
+        host: 'rhino',
+        sourceDocument: { instance, documentId: 7 },
+      });
+      workspace.applyDelta(
+        projectId,
+        second,
+        { objects: [c.object], scene: [c.scene], removed: [] },
+        { sourceDocument: sourceDocument(6) },
+        copyId,
+      );
+    } else
+      workspace.applyDelta(
+        projectId,
+        copyId,
+        { objects: [], scene: [], removed: [c.object.nativeId] },
+        { sourceDocument: sourceDocument(7) },
+      );
+    return route.fulfill({ json: light(copyId) });
+  });
+  const fullBeforeCopy = fullFetches;
+  const deltasBeforeCopy = deltas.length;
+  await sync.click();
+  await page.waitForFunction(() =>
+    document.querySelector('.object-summary')?.textContent?.startsWith('2개 객체'),
+  );
+  assert.ok(
+    deltas.slice(deltasBeforeCopy).some((search) => search.includes(`base=${second}`)),
+    `the copy came from the shown Sync and its change: ${deltas.slice(deltasBeforeCopy)}`,
+  );
+  const deltasBeforeInPlace = deltas.length;
+  await sync.click();
+  await page.waitForFunction(() =>
+    document.querySelector('.object-summary')?.textContent?.startsWith('1개 객체'),
+  );
+  assert.ok(deltas.length > deltasBeforeInPlace);
+  assert.equal(fullFetches, fullBeforeCopy, 'a ⟳ into a copy must not fetch the model whole');
+  assert.equal(copyPresses, 2);
   assert.deepEqual(errors, []);
   await page.screenshot({ path: join(directory, 'live-sync.png') });
   console.log(
@@ -309,6 +374,7 @@ try {
       draftLease: true,
       reopenedWhileMeshesLoad: true,
       fullReread: true,
+      heldCopyByDelta: true,
       directory,
     }),
   );

@@ -234,6 +234,21 @@ export class ModelView {
     }
     return out;
   }
+  /** One page of the object rows in display order (T-127 `/objects?offset=&limit=`). */
+  rowsPage(offset: number, limit: number): Item[] {
+    const out: Item[] = [];
+    for (const row of this.store.db
+      .prepare(
+        `SELECT v.meta FROM sync_manifest_items i JOIN object_versions v
+          ON v.projectId=i.projectId AND v.id=i.versionId
+          WHERE i.requestId=? AND i.kind='object' ORDER BY i.position LIMIT ? OFFSET ?`,
+      )
+      .iterate(this.requestId, limit, offset)) {
+      const object = (parseMeta(String(row.meta)) as { object?: Item }).object;
+      if (object) out.push(object);
+    }
+    return out;
+  }
   /**
    * `scene[]` items without their coordinate arrays (meta only: ids, layer, measurements, block),
    * in display order. For readers that never draw: layer counts, samples, measured values.

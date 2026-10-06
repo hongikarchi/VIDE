@@ -83,7 +83,7 @@ export class SyncScheduler {
   /** Page → draft lease: the files whose automatic Syncs it holds, until when. */
   private readonly leases = new Map<
     string,
-    { projectId: string; links: Set<string>; until: number }
+    { projectId: string; links: Set<string>; bases: Set<string>; until: number }
   >();
   private timer: NodeJS.Timeout | undefined;
   private ticking: Promise<void> | undefined;
@@ -120,15 +120,27 @@ export class SyncScheduler {
   /**
    * A page holds the automatic Syncs of these files while its draft uses them (ARCH-01 §7 ③). The
    * lease ends when the page stops renewing it (`leaseMs`, 5 s) or renews it with no files.
+   * `bases` are the Syncs the draft uses (its pins, its follow-up base): a user's Live Sync never
+   * edits those in place (T-127).
    */
-  hold(projectId: string, page: string, linkIds: string[]) {
+  hold(projectId: string, page: string, linkIds: string[], bases: string[] = []) {
     if (!linkIds.length) this.leases.delete(page);
     else
       this.leases.set(page, {
         projectId,
         links: new Set(linkIds),
+        bases: new Set(bases),
         until: this.now() + (this.options.leaseMs ?? 5000),
       });
+  }
+  /** The Syncs the drafts of pages holding files of this project use now (T-127). */
+  heldBases(projectId: string) {
+    const now = this.now();
+    const bases = new Set<string>();
+    for (const lease of this.leases.values())
+      if (lease.projectId === projectId && lease.until >= now)
+        for (const id of lease.bases) bases.add(id);
+    return [...bases];
   }
   private key(projectId: string, document: ScheduledDocument) {
     return [projectId, document.host ?? 'rhino', document.instance ?? '', document.id].join('|');

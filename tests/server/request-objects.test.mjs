@@ -89,10 +89,38 @@ test('the request list leaves out display Sync rows; …/objects gives them on r
   assert.equal(candidate.result.objects.length, 3);
   assert.equal(candidate.result.objectsOmitted, undefined);
 
+  // The whole list comes in pages (T-127): the panel asks page after page.
   const rows = await get(`${base}/sync-4/objects`);
   assert.equal(rows.body.requestId, 'sync-4');
-  assert.equal(rows.body.objects.length, 10_000);
+  assert.equal(rows.body.objects.length, 2000);
+  assert.equal(rows.body.nextOffset, 2000);
   assert.equal(rows.body.objects[0].vertices, undefined);
+  const names = [];
+  for (let offset = 0; offset !== undefined; ) {
+    const page = await get(`${base}/sync-4/objects?offset=${offset}`);
+    names.push(...page.body.objects.map((row) => row.name));
+    offset = page.body.nextOffset;
+  }
+  assert.equal(names.length, 10_000);
+  assert.equal(names[9999], 'Slab 9999');
+  const small = await get(`${base}/sync-4/objects?offset=9998&limit=5`);
+  assert.deepEqual(
+    small.body.objects.map((row) => row.name),
+    ['Slab 9998', 'Slab 9999'],
+  );
+  assert.equal(small.body.nextOffset, undefined);
+  const capped = await get(`${base}/sync-4/objects?limit=100000`);
+  assert.equal(capped.body.objects.length, 2000);
+  // A result that is not stored per object pages the same way.
+  const candidateRows = await get(`${base}/candidate/objects?limit=2`);
+  assert.equal(candidateRows.body.objects.length, 2);
+  assert.equal(candidateRows.body.nextOffset, 2);
+  // A display Sync's whole model never travels as JSON: binary (VGT1, request-delta) or the
+  // summary (T-127). Other results still answer as JSON.
+  const whole = await get(`${base}/sync-4`);
+  assert.equal(whole.status, 406);
+  assert.equal(whole.body.code, 'GEOMETRY_BINARY_REQUIRED');
+  assert.equal((await get(`${base}/candidate`)).body.result.objects.length, 3);
   const some = await get(`${base}/sync-4/objects?ids=${key(7)},${key(9999)},missing`);
   assert.deepEqual(
     some.body.objects.map((row) => row.name),

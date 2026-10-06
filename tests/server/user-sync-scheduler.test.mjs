@@ -103,6 +103,7 @@ function setup(t) {
     live: (projectId, input) => live.run(projectId, input),
     // As the capture route wires them (server.ts).
     holds: (projectId, where) => scheduler.holds(projectId, where),
+    heldBases: (projectId) => scheduler.heldBases(projectId),
     synced: (projectId, where) => scheduler.userSynced(projectId, where),
   };
   return {
@@ -172,6 +173,28 @@ test('⟳ while a draft holds the file writes the Live Sync into a copy; the sho
   assert.equal(copy.sourceDocument.revision, 5);
   assert.equal(copy.scene[0].geometryHash, 'a-5');
   assert.equal(s.workspace.get(s.project.id, result.id).input.linkId, s.link.id);
+  // While the draft still holds the file, the next ⟳ updates that copy in place (T-127): one copy
+  // per held Sync, not one per ⟳.
+  s.scheduler.hold(s.project.id, 'window', [s.link.id], ['shown']);
+  const held = await runUserSync(s.context, s.project.id, {
+    id: 'press-again',
+    ...target,
+    linkId: s.link.id,
+    fresh: true,
+  });
+  assert.equal(held.action, 'live');
+  assert.equal(held.result.id, result.id);
+  assert.equal(s.workspace.get(s.project.id, 'shown').result.sourceDocument.revision, 4);
+  // A draft that now uses the copy (a pin on it) keeps it as well: the change goes to a new copy.
+  s.scheduler.hold(s.project.id, 'window', [s.link.id], ['shown', result.id]);
+  const pinned = await runUserSync(s.context, s.project.id, {
+    id: 'press-pinned',
+    ...target,
+    linkId: s.link.id,
+    fresh: true,
+  });
+  assert.notEqual(pinned.result.id, result.id);
+  s.scheduler.hold(s.project.id, 'window', []);
   // Without the draft the next ⟳ continues the copy in place.
   s.advance(6000);
   assert.equal(s.scheduler.holds(s.project.id, { ...target, linkId: s.link.id }), false);
@@ -181,5 +204,5 @@ test('⟳ while a draft holds the file writes the Live Sync into a copy; the sho
     linkId: s.link.id,
     fresh: true,
   });
-  assert.equal(next.result.id, result.id);
+  assert.equal(next.result.id, pinned.result.id);
 });

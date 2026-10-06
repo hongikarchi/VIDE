@@ -164,13 +164,19 @@ async function syncDocument(
 /** What a user's Sync did: a Live Sync of the shown basis, or a full read of the document. */
 export type UserSyncAction = 'live' | 'full';
 type LiveReply = { resync: true } | { retry: string } | { requestId: string };
+/** Waits between Live Sync attempts of a user's Sync after a transient refusal (T-127). */
+export const LIVE_RETRY_MS = [300, 800, 1500] as const;
+/** Refusals that pass on their own: a user's Sync asks the Live Sync again (T-127). */
+const TRANSIENT = ['SOURCE_CHANGED', 'HOST_BUSY'];
 
 /**
  * ⟳, 지금 Sync and the plugin's Sync (ARCH-01 §7 「사용자 Sync」, T-123): never joined to an
  * automatic Sync, always asked of the host. When the document's newest Sync is a Rhino display
- * Sync that a Live Sync can continue, only the objects changed since it are read (`live`); the
- * first Sync, a basis a Live Sync cannot continue (`resync`, a retried code, no basis, ZWCAD, a work
- * copy) and `full` read the whole document (`runDocumentSync`).
+ * Sync that a Live Sync can continue, only the objects changed since it are read (`live`). A
+ * transient refusal (`retry`: the document changed during the read, the host busy) is asked again
+ * a few times after a short wait. The first Sync, a basis a Live Sync cannot continue (`resync`,
+ * retries used up, no basis, ZWCAD, a work copy) and `full` read the whole document
+ * (`runDocumentSync`).
  */
 export async function runUserSync(
   context: DocumentSyncContext & {
@@ -180,6 +186,10 @@ export async function runUserSync(
      * Sync then writes into a copy and the shown Sync the draft uses stays as it is (SPEC-01.11 6).
      */
     holds?: (projectId: string, target: DocumentSyncTarget) => boolean;
+    /** The Syncs held drafts use (pins, follow-up base): a Live Sync never edits them in place. */
+    heldBases?: (projectId: string) => string[];
+    /** Waits before asking a Live Sync again after a transient refusal (`retry`). */
+    liveRetryMs?: readonly number[];
     /** The document is up to date: the engine's wait or failure shown on its row is over. */
     synced?: (projectId: string, target: DocumentSyncTarget) => void;
   },
@@ -187,17 +197,24 @@ export async function runUserSync(
   target: DocumentSyncTarget & { full?: boolean },
 ): Promise<{ result: StoredWork; action: UserSyncAction }> {
   const began = performance.now();
-  const basis =
-    target.full || !context.live ? undefined : userSyncBasis(context, projectId, target);
-  if (basis) {
+  const delays = context.liveRetryMs ?? LIVE_RETRY_MS;
+  // A transient refusal (the document changed while read, the host busy) is asked again as a Live
+  // Sync after a short wait; only then the whole document is read (T-127).
+  for (let attempt = 0; attempt <= delays.length; attempt++) {
+    const basis =
+      target.full || !context.live ? undefined : userSyncBasis(context, projectId, target);
+    if (!basis) break;
     let reply: LiveReply | undefined;
     try {
+      const keep = context.holds?.(projectId, target);
+      const held = keep ? context.heldBases?.(projectId) : undefined;
       reply = await context.live!(projectId, {
         instance: target.instance,
         documentId: target.documentId,
         basisId: basis.id,
         revision: basis.revision,
-        ...(context.holds?.(projectId, target) ? { keep: true } : {}),
+        ...(keep ? { keep: true } : {}),
+        ...(held?.length ? { held } : {}),
       });
     } catch {
       reply = undefined;
@@ -208,10 +225,19 @@ export async function runUserSync(
         projectId,
         action: 'live',
         ms: Math.round(performance.now() - began),
+        ...(attempt ? { attempts: attempt + 1 } : {}),
       });
       context.synced?.(projectId, target);
       return { result: context.workspace.summary(projectId, reply.requestId), action: 'live' };
     }
+    if (
+      !reply ||
+      !('retry' in reply) ||
+      !TRANSIENT.includes(reply.retry) ||
+      attempt === delays.length
+    )
+      break;
+    await new Promise((resolve) => setTimeout(resolve, delays[attempt]));
   }
   const { result } = await runDocumentSync(context, projectId, {
     ...target,

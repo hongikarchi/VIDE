@@ -2,7 +2,7 @@
 id: ARCH-01
 title: VIDE 기술 구조와 구현 계약
 status: review
-version: 0.82
+version: 0.83
 updated: 2026-10-06
 owner: agent:codex
 related: [ADR-032, SPEC-00, SPEC-02, SPEC-03, SPEC-04, SPEC-09, PLAN, PLAN-20, PLAN-24, ADR-014, ADR-015, ADR-016, ADR-017, ADR-021, ADR-022, ADR-025, ADR-027, ADR-028, ADR-029, ADR-030, PLAN-25, PLAN-26, PLAN-27, PLAN-28, ARCH-03]
@@ -719,7 +719,7 @@ Sync 표시 형상의 객체별 불변 blob·내용 지문 중복 제거·참조
 **쓰기.** 모두 `Workspace`(`src/core/workspace.ts`)가 한 트랜잭션으로 한다.
 - 전체 Sync·불러오기·실행 결과(`update(…, result)`에 `scene` 배열): 객체·정의마다 판을 만들어 `INSERT OR IGNORE`, 목록 행·줄을 쓰고, `result` JSON에서는 `objects`·`scene`·`definitions`를 빼고 `modelStore: 'manifest'`를 둔다. 바뀌지 않은 객체는 이미 있는 판을 가리키므로 새로 쓰는 것은 목록 줄(객체당 약 100 B)과 바뀐 판뿐이다. `parentId`는 같은 연결 파일(`input.linkId`, 없으면 같은 문서)의 직전 성공 Sync다.
 - Live Sync(`applyDelta`): 기준 Sync의 목록과 `result`의 작은 필드만 읽는다. 바뀐·새 객체와 정의의 판을 넣고, 그 줄만 `versionId`·`revision`을 바꾸거나 새 줄을 뒤에 붙이고(`position` = 최댓값 + 1), 지운 객체의 줄을 빼고 `sync_manifest_removed`에 남긴다. `result`의 `sourceDocument`(revision·documentHash)·`layers`·`displayCoverage`만 고친다(플러그인이 변경 페이지마다 보내는 값을 쓰고, 없을 때만 목록의 `meta`로 다시 센다). 형상 전체를 읽거나 해석하지 않는다.
-- 참조된 기준: 다른 요청이 기준 Sync를 참조하면(지금과 같은 판정, `input`에 그 ID) 기준은 고치지 않는다. 새 요청 행(`captureInput`)과 목록을 만들고 `INSERT … SELECT`로 줄만 복사한 뒤(판은 공유) 같은 Live Sync를 새 목록에 적용한다. 복사본은 부모의 `revision`과 줄 `revision`을 이어받고 `parentId`가 부모다.
+- 참조된 기준: 다른 요청이 기준 Sync를 참조하면(지금과 같은 판정, `input`에 그 ID) 기준은 고치지 않는다. 새 요청 행(`captureInput`)과 목록을 만들고 `INSERT … SELECT`로 줄만 복사한 뒤(판은 공유) 같은 Live Sync를 새 목록에 적용한다. 복사본은 부모의 `revision`과 줄 `revision`을 이어받고 `parentId`가 부모다. 보류(`keep`) 때문에 만든 복사본은 `LiveSync`가 문서마다 기억해, 보류가 이어지는 동안의 다음 Live Sync는 그 복사본을 제자리에서 고친다(T-127). 그 복사본을 다른 것이 참조하거나(`ModelStore.references`) 초안이 쓰고 있으면(`held`, 아래 「사용자 Sync」) 다시 복사한다.
 - 쓰기 뒤 그 쓰기에서 빠진 판(교체·삭제된 줄이 가리키던 것) 가운데 어떤 줄도 가리키지 않는 것을 지운다.
 
 **읽기와 하위 호환.**
@@ -731,8 +731,8 @@ Sync 표시 형상의 객체별 불변 blob·내용 지문 중복 제거·참조
 **API 응답.**
 - `GET …/requests`: `scene`·`definitions` 없음(`sceneOmitted`). 표시 Sync(`displayOnly: true`) 행은 `objects`도 빼고 `objectsOmitted: true`·`objectCount`를 둔다(T-123, 2026-10-06). `POST …/capture` 응답도 같은 모양이다. 엔진 안의 `Workspace.list`·`summary`는 고정 확인 등을 위해 `objects`를 그대로 가진다(형상 없음, 캐시).
 - `GET …/requests/:r?view=summary`(새, T-123): 그 요청 하나를 목록과 같은 모양으로 준다(형상·표시 Sync 객체 줄 없음).
-- `GET …/requests/:r/objects[?ids=<id,…>][&native=<Rhino id,…>]`(새, T-123): 그 요청의 `objects[]` 줄만 JSON(`{requestId, objects}`)으로 준다. 형상은 열지 않는다. `ids`가 있으면 그 객체만, `native`가 있으면 그 Rhino ID(대소문자 무관)의 객체만. 목록에서 빠진 객체 줄이 필요한 화면(Rhino 패널의 고정·선택, 후속 초안, 외부 의견 첨부, jig의 객체 찾기)이 쓴다.
-- `GET …/requests/:r`에 `Accept: application/vnd.vide.geometry`: 지금과 같은 VGT1 컨테이너를 저장된 객체별 버퍼를 이어 붙이고 각 `$bin` 오프셋만 고쳐 만든다(좌표를 풀거나 다시 인코딩하지 않음). 화면(`src/ui/gateway.ts`)은 바꾸지 않아도 된다. 이 헤더가 없으면 지금처럼 JSON(느린 경로, 시험·호환용).
+- `GET …/requests/:r/objects[?ids=<id,…>][&native=<Rhino id,…>][&offset=&limit=]`(새, T-123): 그 요청의 `objects[]` 줄만 JSON(`{requestId, objects, nextOffset?}`)으로 준다. 형상은 열지 않는다. `ids`가 있으면 그 객체만, `native`가 있으면 그 Rhino ID(대소문자 무관)의 객체만. 둘 다 없으면 표시 순서로 한 쪽(`limit` 기본·최대 2000, `offset` 기본 0)만 주고 다음 쪽이 있으면 `nextOffset`을 붙인다(T-127, 화면 `withObjects`가 차례로 받음). 목록에서 빠진 객체 줄이 필요한 화면(Rhino 패널의 고정·선택, 후속 초안, 외부 의견 첨부, jig의 객체 찾기)이 쓴다.
+- `GET …/requests/:r`에 `Accept: application/vnd.vide.geometry`: 지금과 같은 VGT1 컨테이너를 저장된 객체별 버퍼를 이어 붙이고 각 `$bin` 오프셋만 고쳐 만든다(좌표를 풀거나 다시 인코딩하지 않음). 화면(`src/ui/gateway.ts`)은 바꾸지 않아도 된다. 이 헤더가 없으면 JSON이지만, 표시 Sync(`displayOnly`)는 모델 전체를 JSON으로 보내지 않고 `406 GEOMETRY_BINARY_REQUIRED`로 거절한다(T-127). 상태·객체 줄은 `?view=summary`·`…/objects`로 읽는다.
 - `GET …/requests/:r/delta?since=<revision>[&base=<parentId>]`(새, T-084의 알림용): `revision`이 `since`보다 큰 줄의 `objects`·`scene`·`definitions`와 `removed`, 지금 `revision`을 VGT1로 준다. 모양은 지금 Live Sync 응답의 `delta`와 같아 화면의 `applyDisplayDelta`를 그대로 쓴다. `base`가 이 목록의 `parentId`이면 부모 revision에서 이어 준다. `since`가 지운 기록보다 오래됐으면 `full: true`로 알려 전체를 받게 한다. `&view=rows`이면 형상 없이 `objects`·`removed`·`revision`만 JSON으로 준다(`scene: []`, 호스트 패널용).
 - `POST …/live-sync` 응답(`delta` JSON과 요약)은 바꾸지 않는다.
 
@@ -926,7 +926,7 @@ SPEC-01.11의 10을 구현하는 물리 계약이다(PLAN-27 2단계). 저장은
 - **재시도:** `SOURCE_CHANGED`·`HOST_BUSY`·`PROJECT_BUSY`·`WORKSPACE_CAPACITY`는 실패로 저장하지 않고 1·2·4·8초 뒤(최대 30초) 다시 한다. 그 사이 `generation`이 또 바뀌면 다시 0부터 센다. 30초가 지나면 `state: 'waiting'`으로 두고 다음 변경이나 ⟳를 기다린다.
 - **알림:** `GET …/links` 행에 `sync: {state: 'idle'|'syncing'|'held'|'waiting'|'failed', code?, at}`과 `display: {requestId, revision}`(마지막 Sync와 그 목록 revision)를 더한다. 화면은 지금처럼 이 조회를 1.5초마다 하고, `requestId`가 같고 `revision`만 늘면 `GET …/requests/:r/delta?since=`로 변경분만, `requestId`가 바뀌면 `delta?base=<이전 ID>&since=` 또는 전체(VGT1)를 받는다. 화면은 `POST …/live-sync`와 자동 `POST …/capture`를 부르지 않는다(⟳만 `capture`에 `fresh: true`).
 - **기록:** `sync-scheduler {document, action: live|full|held|retry|wait, generation, ms}`.
-- **사용자 Sync(T-123, 2026-10-06):** ⟳·지금 Sync·플러그인 Sync(`POST …/capture`, `fresh`)는 `runUserSync`(`src/server/document-sync.ts`)를 거친다. 그 문서의 기준(`LiveSync.basisOf`, 없으면 연결의 마지막 성공 Sync)이 Rhino 표시 Sync이고 `sourceDocument.revision`이 있으면 `LiveSync.run`(같은 문서의 실행 중 전체 Sync가 끝난 뒤 그 revision 이후 변경만 호스트에 물음)을 하고, `resync`·재시도 대상 실패·기준 없음·ZWCAD·작업 사본이면 `runDocumentSync`로 전체를 새로 읽는다. 요청 본문 `full: true`(목록 행 메뉴의 '전체 다시 읽기', Shift+⟳)는 늘 전체를 읽는다. 엔진이 그 문서의 자동 Sync를 보류하고 있으면(`SyncScheduler.holds`: 화면의 초안 임대, 그 파일 기준 작업, 그 문서 쓰기) `LiveSync.run`에 `keep: true`를 주어 변경을 기준 Sync의 목록 복사본에 쓴다(초안이 쓰는 기준은 그대로). 성공하면(Live·전체) `SyncScheduler.userSynced`가 그 문서의 대기·실패 표시와 재시도를 지운다(Live Sync는 같은 ID를 고치므로 ID 비교로는 알 수 없다). 응답은 형상·객체 줄 없는 요청이고, Live로 끝나면 기준 Sync(또는 복사본)의 ID다. 기록 `user-sync {request, action: live|full, ms}`.
+- **사용자 Sync(T-123, 2026-10-06):** ⟳·지금 Sync·플러그인 Sync(`POST …/capture`, `fresh`)는 `runUserSync`(`src/server/document-sync.ts`)를 거친다. 그 문서의 기준(`LiveSync.basisOf`, 없으면 연결의 마지막 성공 Sync)이 Rhino 표시 Sync이고 `sourceDocument.revision`이 있으면 `LiveSync.run`(같은 문서의 실행 중 전체 Sync가 끝난 뒤 그 revision 이후 변경만 호스트에 물음)을 하고, `resync`·재시도 대상 실패·기준 없음·ZWCAD·작업 사본이면 `runDocumentSync`로 전체를 새로 읽는다. 요청 본문 `full: true`(목록 행 메뉴의 '전체 다시 읽기', Shift+⟳)는 늘 전체를 읽는다. 엔진이 그 문서의 자동 Sync를 보류하고 있으면(`SyncScheduler.holds`: 화면의 초안 임대, 그 파일 기준 작업, 그 문서 쓰기) `LiveSync.run`에 `keep: true`와 `held`(화면들이 임대와 함께 알린 초안의 기준 Sync ID, `GET …/links?hold=&basis=`, `SyncScheduler.heldBases`)를 주어 변경을 기준 Sync의 목록 복사본에 쓴다(초안이 쓰는 기준은 그대로). 복사는 보류된 기준마다 한 번이고, 보류 중의 다음 ⟳는 그 복사본을 제자리에서 고친다(T-127). 화면은 새 복사본을 지금 보이는 Sync와 `delta?base=<그 ID>&since=`로 만들고, 제자리 변경은 곧바로 `delta?since=`로 받는다. Live Sync가 `retry` 중 `SOURCE_CHANGED`·`HOST_BUSY`로 답하면 0.3·0.8·1.5초 뒤 Live Sync를 다시 묻고(`LIVE_RETRY_MS`), 그래도 안 되면 전체를 읽는다. 성공하면(Live·전체) `SyncScheduler.userSynced`가 그 문서의 대기·실패 표시와 재시도를 지운다(Live Sync는 같은 ID를 고치므로 ID 비교로는 알 수 없다). 응답은 형상·객체 줄 없는 요청이고, Live로 끝나면 기준 Sync(또는 복사본)의 ID다. 기록 `user-sync {request, action: live|full, ms, attempts?}`.
 
 ### JIG 탭과 Sync jig
 

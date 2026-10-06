@@ -19,6 +19,8 @@ const inputSchema = hostTargetSchema.extend({
    * into a copy of its manifest, as for a basis another request references.
    */
   keep: z.boolean().optional(),
+  /** Syncs the drafts that hold the file use now (pins, follow-up base): never edited in place. */
+  held: z.array(z.string()).max(200).optional(),
 });
 const basisSchema = z
   .object({
@@ -58,11 +60,15 @@ export const LIVE_RETRY = ['SOURCE_CHANGED', 'HOST_BUSY', 'PROJECT_BUSY', 'WORKS
  * SPEC-01.11 Live Sync: applies only the objects Rhino reports as changed to the latest display
  * Sync of the document, in its stored manifest (PLAN-27 1단계, ARCH-01 §5): the stored model is
  * never read whole. A Sync that other requests already reference, or that a draft holds (`keep`),
- * is never rewritten; a copy of its manifest becomes the new basis instead. Unknown state means
- * RESYNC_REQUIRED (a full Sync).
+ * is never rewritten; a copy of its manifest becomes the new basis instead. While the draft keeps
+ * holding the file, later Live Syncs update that copy in place (T-127) unless something references
+ * it or a draft uses it, so one held basis gets one copy. Unknown state means RESYNC_REQUIRED (a
+ * full Sync).
  */
 export class LiveSync {
   private latest = new Map<string, string>();
+  /** Per document: the copy a held Live Sync made (T-127), continued in place while held. */
+  private copies = new Map<string, string>();
   private queue = new Map<string, Promise<unknown>>();
   private workspace: Workspace;
   private sdk: Pick<SdkExecution, 'liveSync'>;
@@ -87,7 +93,9 @@ export class LiveSync {
     const basis = basisSchema.safeParse(request.result);
     if (request.state === 'succeeded' && basis.success) {
       const { instance, documentId } = basis.data.sourceDocument;
-      this.latest.set(this.key(projectId, instance, documentId), request.id);
+      const key = this.key(projectId, instance, documentId);
+      this.latest.set(key, request.id);
+      this.copies.delete(key);
     }
   }
   /** The newest basis this engine knows for a document (recorded or continued by a Live Sync). */
@@ -202,8 +210,12 @@ export class LiveSync {
     // Anything that points at the basis (a request, review, publication, jig read or bake, a
     // conversation's pins) keeps it as it was: the change goes to a new Sync instead, so a
     // structure jig sees its input as stale and a review still shows what it reviewed.
+    // A draft's hold keeps the Sync it uses; the copy this engine made for that hold is not the
+    // draft's, so it is continued in place unless a draft uses it or something points at it.
+    const ownCopy = this.copies.get(key) === basis.id && !input.held?.includes(basis.id);
     const referenced =
-      input.keep ||
+      (input.keep && !ownCopy) ||
+      !!input.held?.includes(basis.id) ||
       this.workspace.models(projectId).references(projectId, [basis.id]).has(basis.id);
     let savedId = basis.id;
     if (referenced) {
@@ -219,6 +231,8 @@ export class LiveSync {
       referenced ? savedId : undefined,
     );
     this.latest.set(key, savedId);
+    if (referenced && input.keep) this.copies.set(key, savedId);
+    else if (!input.keep) this.copies.delete(key);
     const saved = this.workspace.brief(projectId, savedId);
     return {
       requestId: savedId,

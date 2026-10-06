@@ -74,11 +74,17 @@ test('request geometry and deltas over HTTP', async (t) => {
   workspace.submit(project.id, captureInput({ id: 's1', ...target }));
   workspace.update(project.id, 's1', 'succeeded', result(['a', 'b', 'c']));
 
-  // The joined VGT1 decodes to the JSON answer.
+  // The joined VGT1 decodes to the stored model; a display Sync is never sent whole as JSON
+  // (T-127).
   const json = await get(`${base}/s1`);
+  assert.equal(json.status, 406);
+  assert.equal(json.body.code, 'GEOMETRY_BINARY_REQUIRED');
   const binary = await get(`${base}/s1`, GEOMETRY_TYPE);
   assert.ok(binary.type.startsWith(GEOMETRY_TYPE));
-  assert.equal(canonicalJson(binary.body.result), canonicalJson(json.body.result));
+  assert.equal(
+    canonicalJson(binary.body.result),
+    canonicalJson(JSON.parse(JSON.stringify(workspace.get(project.id, 's1').result))),
+  );
   assert.equal(binary.body.result.scene.length, 3);
   assert.deepEqual(Object.keys(binary.body.result.definitions), ['d1']);
 
