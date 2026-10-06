@@ -291,3 +291,53 @@ export function dayLabel(value: string) {
 }
 /** The weekday letters, Sunday first. */
 export const WEEKDAY_LETTERS = [...WEEKDAYS];
+
+/** Where today stands (SPEC-01.14 3·10): the 오늘 progress n/m and whether 퇴근하기 is offered. */
+export interface TodayProgress {
+  /** Items dated today or earlier: the open ones and those finished today (m). */
+  total: number;
+  /** Of those, the finished ones (n). */
+  done: number;
+  /** Every item finished today, undated ones too (what 퇴근하기 takes off the list). */
+  doneToday: number;
+  /** Nothing dated today or earlier is open and something was finished today. */
+  finished: boolean;
+}
+/** The local date of a timestamp ('doneAt'), 'YYYY-MM-DD'. */
+export const dayOf = (at: string) => isoDate(new Date(at));
+export function todayProgress(
+  items: readonly { date: string | null; done: boolean; doneAt: string | null }[],
+  today: string,
+): TodayProgress {
+  const finishedToday = (item: { doneAt: string | null }) =>
+    Boolean(item.doneAt && dayOf(item.doneAt) === today);
+  const due = items.filter(
+    (item) => item.date && item.date <= today && (!item.done || finishedToday(item)),
+  );
+  const done = due.filter((item) => item.done).length;
+  const doneToday = items.filter((item) => item.done && finishedToday(item)).length;
+  return { total: due.length, done, doneToday, finished: done === due.length && doneToday > 0 };
+}
+
+/**
+ * 글·파일에서 할 일 만들기 (SPEC-01.14 9): the turn's words. The instruction goes before what the
+ * user pasted; the attached files travel as the request's files (read by their kept path).
+ */
+export function extractionBody(text: string, now: Date, files: readonly string[] = []) {
+  const typed = text.trim();
+  const from = [typed ? '글' : '', files.length ? `첨부 파일(${files.join(', ')})` : '']
+    .filter(Boolean)
+    .join('과 ');
+  const lines = [
+    `[글·파일에서 할 일 만들기] 아래 ${from}에서 할 일·회의·마감을 뽑아 agenda_add로 이 프로젝트 할 일에 바로 넣어 주세요.`,
+    `오늘은 ${isoDate(now)} (${WEEKDAYS[now.getDay()]})입니다. '내일'·'금요일까지' 같은 날짜는 오늘 기준으로 'YYYY-MM-DD'로, 시각은 'HH:MM'(24시간)으로 적고, 없으면 비웁니다.`,
+    "회의는 kind 'meeting', 기한까지 할 일은 'deadline', 그 밖은 kind를 비웁니다. 담당자가 적혀 있으면 내용 끝에 '(담당: 이름)'을 붙입니다.",
+    '먼저 agenda_list로 지금 목록을 읽고 같은 항목은 다시 넣지 않습니다. 묻지 말고 바로 넣은 뒤 넣은 항목을 짧게 알려 주세요. 넣을 것이 없으면 그렇다고만 답합니다.',
+  ];
+  return typed ? `${lines.join('\n')}\n\n---\n${typed}` : lines.join('\n');
+}
+/**
+ * The requests the dashboard sent (글·파일에서 할 일 만들기): the dashboard shows their result and
+ * [되돌리기] itself, so the conversation's notice (followAppActions) is not shown for them again.
+ */
+export const dashboardAgendaRequests = new Set<string>();

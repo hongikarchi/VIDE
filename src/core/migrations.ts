@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 
 /** v5 and later cannot be opened by an older installation (UNSUPPORTED_SCHEMA); see ARCH-03 §10.1. */
-export const schemaVersion = 9;
+export const schemaVersion = 10;
 export const baselineSchema = `
         CREATE TABLE IF NOT EXISTS projects(id TEXT PRIMARY KEY, name TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS connections(id TEXT PRIMARY KEY, projectId TEXT NOT NULL REFERENCES projects(id),
@@ -112,6 +112,12 @@ CREATE INDEX IF NOT EXISTS agenda_items_project ON agenda_items(projectId, ord);
 // added at the end, so every write names its columns.
 const agendaKinds = `ALTER TABLE agenda_items ADD COLUMN kind TEXT NOT NULL DEFAULT 'task'
   CHECK(kind IN ('task','meeting','deadline'));`;
+// The project's day log (SPEC-01.14 10, ARCH-01 §3, PLAN-30 T-137): one row per date and kind;
+// 퇴근하기 writes 'day-end'. No CHECK on kind: a later shared-notes or journal feature adds its own.
+const dayLog = `CREATE TABLE IF NOT EXISTS day_log(id TEXT PRIMARY KEY,
+  projectId TEXT NOT NULL REFERENCES projects(id), date TEXT NOT NULL, kind TEXT NOT NULL,
+  text TEXT NOT NULL, body TEXT NOT NULL, createdAt TEXT NOT NULL, updatedAt TEXT NOT NULL,
+  UNIQUE(projectId, date, kind));`;
 // Display geometry of Sync results per object (PLAN-27 1단계, ARCH-01 §5 「Sync 표시 형상의 객체 단위
 // 저장」): immutable object versions named by content, one manifest per request result. Existing
 // rows are moved later, one per transaction (src/core/model-move.ts); this step only adds tables.
@@ -145,6 +151,7 @@ export const migrations: Migration[] = [
   { version: 7, sql: agendaItems },
   { version: 8, sql: agendaKinds },
   { version: 9, sql: objectManifests },
+  { version: 10, sql: dayLog },
 ];
 
 /** Caller holds the exclusive controller lock. Never migrates user model files. */

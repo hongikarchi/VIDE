@@ -4,8 +4,12 @@ import {
   agendaItemSchema,
   agendaOrderSchema,
   agendaUpdateSchema,
+  dayLogEntrySchema,
+  dayLogQuerySchema,
   type AgendaChange,
   type AgendaItem,
+  type DayLogDone,
+  type DayLogEntry,
 } from '../contracts/agenda.ts';
 import { DomainError, type Store } from './store.ts';
 
@@ -34,6 +38,12 @@ const decode = (row: Record<string, unknown>): AgendaItem =>
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   });
+const decodeLog = (row: Record<string, unknown>): DayLogEntry =>
+  dayLogEntrySchema.parse({ ...row, body: JSON.parse(String(row.body)) });
+/** The one line a day-end entry reads as: '2026-10-06 · 완료 3 · 도면 정리, 회의록 검토'. */
+export const dayEndLine = (date: string, done: readonly DayLogDone[]) =>
+  `${date} · 완료 ${done.length}` +
+  (done.length ? ` · ${done.map((item) => item.text).join(', ')}` : '');
 function parsed<T>(
   schema: { safeParse(value: unknown): { success: boolean; data?: T } },
   value: unknown,
@@ -221,5 +231,66 @@ export class Agenda {
       }
       return { reverted, skipped, items: this.list(projectId) };
     });
+  }
+  /**
+   * 퇴근하기 (SPEC-01.14 10): the items finished today (their doneAt falls on this PC's local
+   * today) leave the list, and the day's 'day-end' entry of the day log gets them and its one-line
+   * summary again. Done again the same day, the entry grows. Items finished on an earlier day stay.
+   */
+  dayEnd(projectId: string): { entry: DayLogEntry; items: AgendaItem[] } {
+    this.store.project(projectId);
+    const db = this.store.db(projectId);
+    const read = () =>
+      db
+        .prepare("SELECT * FROM day_log WHERE projectId=? AND date=? AND kind='day-end'")
+        .get(projectId, localDate(this.now())) as Record<string, unknown> | undefined;
+    return this.store.tx(db, () => {
+      const today = localDate(this.now());
+      const finished = this.list(projectId).filter(
+        (item) => item.doneAt && localDate(new Date(item.doneAt)) === today,
+      );
+      const row = read();
+      const before = row ? decodeLog(row) : undefined;
+      const done: DayLogDone[] = [
+        ...(before?.body.done ?? []),
+        ...finished.map(({ id, text, kind, date, time, doneAt, source }) => ({
+          id,
+          text,
+          kind,
+          date,
+          time,
+          doneAt,
+          source,
+        })),
+      ];
+      const at = this.now().toISOString();
+      const body = JSON.stringify({ ...(before?.body ?? {}), done });
+      if (before)
+        db.prepare('UPDATE day_log SET text=?, body=?, updatedAt=? WHERE id=?').run(
+          dayEndLine(today, done),
+          body,
+          at,
+          before.id,
+        );
+      else
+        db.prepare(
+          'INSERT INTO day_log(id,projectId,date,kind,text,body,createdAt,updatedAt) VALUES(?,?,?,?,?,?,?,?)',
+        ).run(randomUUID(), projectId, today, 'day-end', dayEndLine(today, done), body, at, at);
+      const remove = db.prepare('DELETE FROM agenda_items WHERE projectId=? AND id=?');
+      for (const item of finished) remove.run(projectId, item.id);
+      return { entry: decodeLog(read()!), items: this.list(projectId) };
+    });
+  }
+  /** The day log, newest date first; `from`/`to` (inclusive) narrow it. */
+  log(projectId: string, value: unknown = {}): DayLogEntry[] {
+    const { from, to } = parsed(dayLogQuerySchema, value);
+    this.store.project(projectId);
+    return this.store
+      .db(projectId)
+      .prepare(
+        'SELECT * FROM day_log WHERE projectId=? AND date>=? AND date<=? ORDER BY date DESC, kind',
+      )
+      .all(projectId, from ?? '0000-00-00', to ?? '9999-99-99')
+      .map((row) => decodeLog(row as Record<string, unknown>));
   }
 }

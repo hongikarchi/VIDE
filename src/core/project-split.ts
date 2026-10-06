@@ -53,6 +53,7 @@ export const projectTables: Record<string, string> = {
   project_roots: 'projectId=?',
   project_folders: 'projectId=?',
   agenda_items: 'projectId=?',
+  day_log: 'projectId=?',
   object_versions: 'projectId=?',
   sync_manifests: 'projectId=?',
   sync_manifest_items: 'projectId=?',

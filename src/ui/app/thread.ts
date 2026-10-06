@@ -19,7 +19,13 @@ import { linkedRequestDraft, interventionTargetDraft } from '../linked-draft.ts'
 import { reviewsOf, openReview } from '../reviews.tsx';
 import { jigRouteText } from '../request-route.ts';
 import { skillChecklist, startSkill } from '../skill-start.ts';
-import { AgendaTurns, AGENDA_CHANGED, type AgendaTurn, agendaNotice } from '../agenda-text.ts';
+import {
+  AgendaTurns,
+  AGENDA_CHANGED,
+  type AgendaTurn,
+  agendaNotice,
+  dashboardAgendaRequests,
+} from '../agenda-text.ts';
 import { setWorkspace } from '../workspaces.ts';
 import { sessionState } from '../store/session.ts';
 import { draftState } from '../store/draft.ts';
@@ -532,7 +538,8 @@ export async function followAppActions(conversationId: string, finished?: string
     if (body.appAction === 'agenda') {
       performedActions.add(item.id);
       if ((item.createdAt ?? '') >= pageOpened) {
-        agendaTurns.add(item);
+        // The dashboard shows the result of its own 할 일 turns (SPEC-01.14 9).
+        if (!item.requestId || !dashboardAgendaRequests.has(item.requestId)) agendaTurns.add(item);
         dispatchEvent(new Event(AGENDA_CHANGED));
       }
       continue;

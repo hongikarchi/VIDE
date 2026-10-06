@@ -189,7 +189,7 @@ button.dash-tile:hover {
   font-size: 12px;
   color: var(--warn);
 }
-/* 대시보드 › 오늘 (SPEC-01.14, Design SCR-20): one list of 할 일; a row being edited or dragged gets
+/* 대시보드 › 할 일 (SPEC-01.14, Design SCR-20): the 할 일 list; a row being edited or dragged gets
    the soft selected background (no side bars). */
 .dash-agenda-day {
   font-size: 12px;
@@ -319,29 +319,183 @@ button.dash-tile:hover {
 .dash-agenda-hint .dash-agenda-kind {
   margin-left: 6px;
 }
-/* [목록 | 달력]: a small segmented switch at the right of the 오늘 head. */
-.dash-agenda-views {
-  display: inline-flex;
-  align-self: center;
-  border: var(--hairline) solid var(--border);
-  border-radius: var(--radius-sm);
-  overflow: hidden;
+/* 할 일 · 일정 (PLAN-30 T-135): two areas side by side when the row is wide, stacked when narrow
+   (a container query, so opening the right panel re-fits them). */
+.dash-agenda-board {
+  container-type: inline-size;
 }
-.dash-agenda-views button {
-  border: 0;
-  border-radius: 0;
-  padding: 3px 10px;
-  font-size: 12px;
-  background: var(--bg-elevated);
+.dash-agenda-pair {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 22px;
+}
+@container (min-width: 860px) {
+  .dash-agenda-pair {
+    grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
+    gap: 20px;
+  }
+}
+.dash-schedule {
+  container-type: inline-size;
+  min-width: 0;
+}
+.dash-today-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.dash-today-head h4 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+.dash-today-progress {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+}
+.dash-today-count {
+  font: 12px var(--font-mono);
   color: var(--text-2);
 }
-.dash-agenda-views button + button {
-  border-left: var(--hairline) solid var(--border);
+.dash-today-bar {
+  display: inline-block;
+  width: 72px;
+  height: 4px;
+  border-radius: var(--radius-pill);
+  background: var(--bg-recessed);
+  overflow: hidden;
 }
-.dash-agenda-views button[aria-pressed='true'] {
-  background: var(--bg-active);
-  color: var(--text-1);
-  font-weight: 600;
+.dash-today-bar > span {
+  display: block;
+  height: 100%;
+  border-radius: var(--radius-pill);
+  background: var(--accent);
+}
+/* 퇴근하기 (SPEC-01.14 10): a calm box, no celebration. */
+.dash-day-end {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+  margin-bottom: 10px;
+  padding: 10px 12px;
+  border-radius: var(--radius-md);
+  background: var(--bg-recessed);
+}
+.dash-day-end-title {
+  flex: 1;
+  margin: 0;
+  font-size: 13px;
+}
+.dash-day-end-count {
+  color: var(--text-3);
+}
+.dash-day-end .dash-folder-sub {
+  flex-basis: 100%;
+  margin: 0;
+}
+.dash-day-end-next {
+  flex-basis: 100%;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 12px;
+}
+.dash-day-end-next li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.dash-day-end-none {
+  flex-basis: 100%;
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-3);
+}
+.dash-agenda-fold {
+  margin-top: 10px;
+}
+/* 글·파일에서 할 일 만들기 (SPEC-01.14 9). */
+.dash-extract-open {
+  margin-top: 6px;
+  font-size: 12px;
+}
+.dash-extract {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 8px;
+  padding: 8px;
+  border: var(--hairline) solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+}
+.dash-extract[data-over] {
+  background: var(--bg-selected);
+}
+.dash-extract textarea {
+  width: 100%;
+  box-sizing: border-box;
+  resize: vertical;
+  padding: 7px 10px;
+  border: var(--hairline) solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-elevated);
+  font: inherit;
+}
+.dash-extract-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.dash-extract-files {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
+}
+.dash-extract-file {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  max-width: 220px;
+  padding: 0 2px 0 7px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-recessed);
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dash-extract-file button {
+  padding: 0 4px;
+  border-color: transparent;
+  background: none;
+  color: var(--text-3);
+}
+.dash-extract-actions {
+  display: flex;
+  gap: 6px;
+  margin-left: auto;
+}
+.dash-extract-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--text-2);
+}
+.dash-extract-failed {
+  color: var(--warn);
 }
 /* 달력 (T-110): the month beside the 날짜 없음 box; the picked day and a drop target get the soft
    selected background, today's date a filled circle. No side bars. */
@@ -350,8 +504,8 @@ button.dash-tile:hover {
 }
 .dash-cal-body {
   display: flex;
-  gap: 12px;
-  align-items: flex-start;
+  flex-direction: column;
+  gap: 10px;
 }
 .dash-cal-month {
   flex: 1;
@@ -477,16 +631,19 @@ button.dash-tile:hover {
 }
 .dash-cal-undated {
   display: flex;
-  flex-direction: column;
-  gap: 3px;
-  width: 180px;
-  flex-shrink: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 3px 8px;
   padding: 0 6px 8px;
   border: var(--hairline) solid var(--border-subtle);
   border-radius: var(--radius-sm);
 }
 .dash-cal-undated .dash-folder-sub {
+  flex-basis: 100%;
   margin-top: 8px;
+}
+.dash-cal-undated .dash-cal-item {
+  max-width: 200px;
 }
 .dash-cal-hint {
   margin: 0;
@@ -496,20 +653,13 @@ button.dash-tile:hover {
 .dash-cal-picked {
   margin-top: 12px;
 }
-@media (max-width: 700px) {
-  .dash-cal-body {
-    flex-direction: column;
-  }
-  .dash-cal-undated {
-    width: auto;
-    align-self: stretch;
-  }
+/* A narrow 일정 area: days show the dots only; the picked day's list below gives the words. */
+@container (max-width: 480px) {
   .dash-cal-day {
     min-height: 48px;
   }
-  /* Narrow days show the dots only; the picked day's list below gives the words. */
-  .dash-cal-title,
-  .dash-cal-time {
+  .dash-cal-day .dash-cal-title,
+  .dash-cal-day .dash-cal-time {
     display: none;
   }
   .dash-cal-day .dash-cal-item {

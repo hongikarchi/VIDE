@@ -169,6 +169,13 @@ function fill(db, p, n) {
     at,
   );
   run(
+    "INSERT INTO day_log VALUES(?,?,'2026-10-06','day-end','2026-10-06 · 완료 0','{\"done\":[]}',?,?)",
+    `day-${p}`,
+    p,
+    at,
+    at,
+  );
+  run(
     "INSERT INTO object_versions VALUES(?,?,'object','{}',?,3)",
     p,
     `v-${p}`,

@@ -283,3 +283,113 @@ test('kinds (schema 8): 할 일 by default, 회의 and 마감 kept, and a date-o
     ['도면 정리 이전', 'deadline'],
   );
 });
+
+test('퇴근하기 (schema 10): today’s finished items go to the day log; again the same day adds to it', async (t) => {
+  const store = await storeOf(t);
+  let now = new Date(2026, 9, 5, 17, 0);
+  const agenda = new Agenda(store, { now: () => now });
+  const project = store.createProject('퇴근'),
+    other = store.createProject('다른');
+  // Finished yesterday: stays in the 완료 fold.
+  const old = agenda.add(project.id, { text: '어제 끝낸 일', date: '2026-10-05' });
+  agenda.set(project.id, old.id, { revision: 1, done: true });
+  now = new Date(2026, 9, 6, 9, 0);
+  const a = agenda.add(project.id, { text: '도면 정리', date: '2026-10-06' });
+  const b = agenda.add(project.id, { text: '회의록 검토' });
+  const later = agenda.add(project.id, {
+    text: '설비 회의',
+    date: '2026-10-07',
+    time: '10:00',
+    kind: 'meeting',
+  });
+  const loose = agenda.add(project.id, { text: '자료 찾기' });
+  agenda.set(project.id, a.id, { revision: 1, done: true });
+  agenda.set(project.id, b.id, { revision: 1, done: true });
+  now = new Date(2026, 9, 6, 18, 30);
+  const first = agenda.dayEnd(project.id);
+  assert.equal(first.entry.date, '2026-10-06');
+  assert.equal(first.entry.kind, 'day-end');
+  assert.equal(first.entry.text, '2026-10-06 · 완료 2 · 도면 정리, 회의록 검토');
+  assert.deepEqual(
+    first.entry.body.done.map((item) => [item.id, item.text, item.kind]),
+    [
+      [a.id, '도면 정리', 'task'],
+      [b.id, '회의록 검토', 'task'],
+    ],
+  );
+  // Off the list: yesterday's finished one, tomorrow's and the open undated one stay.
+  assert.deepEqual(
+    first.items.map((item) => item.text),
+    ['어제 끝낸 일', '설비 회의', '자료 찾기'],
+  );
+  assert.equal(agenda.get(project.id, later.id).time, '10:00');
+  // Finishing one more and leaving again: the same day's entry grows.
+  agenda.set(project.id, loose.id, { revision: 1, done: true });
+  const second = agenda.dayEnd(project.id);
+  assert.equal(second.entry.id, first.entry.id);
+  assert.equal(second.entry.text, '2026-10-06 · 완료 3 · 도면 정리, 회의록 검토, 자료 찾기');
+  // Leaving with nothing new finished keeps the entry as it is.
+  assert.equal(agenda.dayEnd(project.id).entry.body.done.length, 3);
+  // The log by date, newest first; a bad date is refused.
+  now = new Date(2026, 9, 7, 19, 0);
+  agenda.set(project.id, later.id, { revision: 1, done: true });
+  agenda.dayEnd(project.id);
+  assert.deepEqual(
+    agenda.log(project.id).map((entry) => entry.date),
+    ['2026-10-07', '2026-10-06'],
+  );
+  assert.deepEqual(
+    agenda.log(project.id, { from: '2026-10-07', to: '2026-10-07' }).map((entry) => entry.text),
+    ['2026-10-07 · 완료 1 · 설비 회의'],
+  );
+  assert.deepEqual(agenda.log(other.id), []);
+  assert.throws(() => agenda.log(project.id, { from: '10/7' }), { code: 'INVALID_INPUT' });
+  // Deleting the project deletes its day log (SPEC-01.1).
+  store.deleteProject(project.id);
+  assert.equal(
+    soleDb(store).prepare('SELECT count(*) AS n FROM day_log WHERE projectId=?').get(project.id).n,
+    0,
+  );
+});
+
+test('over HTTP: 퇴근하기 and the day log', async (t) => {
+  const directory = await mkdtemp(join(tmpdir(), 'vide-agenda-dayend-'));
+  const app = await startServer({ filename: join(directory, 'store.sqlite') });
+  t.after(async () => {
+    await app.close();
+    await rm(directory, { recursive: true, force: true });
+  });
+  const login = await fetch(app.origin + '/api/v1/session', {
+    method: 'POST',
+    headers: { Origin: app.origin, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ token: new URL(app.launchUrl).hash.slice(1) }),
+  });
+  const headers = {
+    Origin: app.origin,
+    'Content-Type': 'application/json',
+    Cookie: login.headers.get('set-cookie').split(';')[0],
+  };
+  const api = async (path, method = 'GET', data) => {
+    const response = await fetch(app.origin + '/api/v1' + path, {
+      method,
+      headers,
+      body: data ? JSON.stringify(data) : undefined,
+    });
+    return { status: response.status, json: await response.json().catch(() => null) };
+  };
+  const project = (await api('/projects', 'POST', { name: '퇴근' })).json;
+  const base = `/projects/${project.id}/agenda`;
+  const item = (await api(base, 'POST', { text: '도면 정리' })).json.item;
+  await api(`${base}/${item.id}`, 'PUT', { revision: 1, done: true });
+  const ended = await api(`${base}/day-end`, 'POST', {});
+  assert.equal(ended.status, 200);
+  assert.deepEqual(ended.json.items, []);
+  assert.match(ended.json.entry.text, /^\d{4}-\d{2}-\d{2} · 완료 1 · 도면 정리$/);
+  const day = ended.json.entry.date;
+  const log = await api(`${base}/log?from=${day}&to=${day}`);
+  assert.deepEqual(
+    log.json.entries.map((entry) => entry.text),
+    [ended.json.entry.text],
+  );
+  assert.equal((await api(`${base}/log?from=x`)).status, 400);
+});

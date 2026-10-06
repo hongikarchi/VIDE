@@ -244,6 +244,7 @@ test('schema 5 migrates a schema 4 database after a backup without rewriting req
       'project_roots',
       'project_folders',
       'agenda_items',
+      'day_log',
     ])
       assert.ok(tableNames(store.app).includes(table), table);
     // conversationId is not indexed (ARCH-03 §10.1).
@@ -389,7 +390,10 @@ test('schema 9 adds per-object model tables to a schema 8 database after a backu
   db.close();
   const store = new Store(file);
   try {
-    assert.equal(store.app.prepare('SELECT version FROM schema_version').get().version, 9);
+    assert.equal(
+      store.app.prepare('SELECT version FROM schema_version').get().version,
+      schemaVersion,
+    );
     // Existing rows are not rewritten by the migration (they move later, row by row).
     assert.deepEqual(requestRows(store.app), before);
     for (const table of [

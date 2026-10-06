@@ -1,7 +1,8 @@
-// 대시보드 › 오늘 › 달력 (SPEC-01.14 3, Design SCR-20, PLAN-26 T-110): this project's 할 일 in one
-// month. A day shows short titles with a dot for the kind; a click picks the day (its list below,
-// the add box prefilled by the parent); dragging an item to another day saves only its date, to
-// the '날짜 없음' box clears it. Items without a date sit in that box beside the month.
+// 대시보드 › 일정 (SPEC-01.14 3, Design SCR-20, PLAN-26 T-110, PLAN-30 T-135): this project's 할 일
+// in one month. A day shows short titles with a dot for the kind; a click picks the day (its list
+// below, the 일정 add box prefilled by the parent); dragging an item — from the month or a row of
+// the 할 일 area — to another day saves only its date, to the '날짜 없음' box clears it. Items
+// without a date sit in that box below the month.
 import { useState, type DragEvent, type ReactNode } from 'react';
 import type { AgendaItem } from '../contracts/agenda.ts';
 import {
@@ -14,6 +15,8 @@ import {
   shiftMonth,
 } from './agenda-text.ts';
 
+/** The drag type a 할 일 row carries so a day of the month takes it (the item id). */
+export const AGENDA_DRAG = 'application/x-vide-agenda';
 /** Titles a day shows before '+n'. */
 const DAY_ITEMS = 3;
 const byTime = (a: AgendaItem, b: AgendaItem) =>
@@ -81,7 +84,7 @@ export function AgendaCalendar({
   const target = (date: string | null) => ({
     'data-over': over === (date ?? 'none') || undefined,
     onDragOver: (event: DragEvent) => {
-      if (!dragging) return;
+      if (!dragging && !event.dataTransfer.types.includes(AGENDA_DRAG)) return;
       event.preventDefault();
       event.dataTransfer.dropEffect = 'move';
       setOver(date ?? 'none');

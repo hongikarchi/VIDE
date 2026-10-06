@@ -14,6 +14,8 @@ import {
   parseAgendaDraft,
   parseAgendaText,
   shiftMonth,
+  todayProgress,
+  extractionBody,
 } from '../../src/ui/agenda-text.ts';
 
 // Thursday 2026-10-01, 10:20 local.
@@ -220,4 +222,65 @@ test('the month view: whole weeks from Sunday, moving months, labels', () => {
   assert.equal(monthOf('2026-10-17'), '2026-10-01');
   assert.equal(monthLabel('2026-10-01'), '2026년 10월');
   assert.equal(dayLabel('2026-10-07'), '10월 7일 (수)');
+});
+
+test('오늘 진행 and 퇴근: dated items up to today count, undated ones never block', () => {
+  const today = '2026-10-06';
+  const at = (h) => new Date(2026, 9, 6, h).toISOString();
+  const yesterday = new Date(2026, 9, 5, 18).toISOString();
+  const item = (date, doneAt = null) => ({ date, done: Boolean(doneAt), doneAt });
+  // Nothing yet: no progress, no 퇴근.
+  assert.deepEqual(todayProgress([], today), { total: 0, done: 0, doneToday: 0, finished: false });
+  const open = [
+    item('2026-10-05'),
+    item(today),
+    item(today, at(10)),
+    item(null),
+    item('2026-10-07'),
+  ];
+  assert.deepEqual(todayProgress(open, today), {
+    total: 3,
+    done: 1,
+    doneToday: 1,
+    finished: false,
+  });
+  // All dated ones done; the open undated one does not block, nor does yesterday's finished one.
+  const finished = [
+    item('2026-10-05', at(9)),
+    item(today, at(10)),
+    item(null),
+    item('2026-10-04', yesterday),
+  ];
+  assert.deepEqual(todayProgress(finished, today), {
+    total: 2,
+    done: 2,
+    doneToday: 2,
+    finished: true,
+  });
+  // Only undated work finished today: 퇴근 is offered with no n/m.
+  assert.deepEqual(todayProgress([item(null, at(11))], today), {
+    total: 0,
+    done: 0,
+    doneToday: 1,
+    finished: true,
+  });
+  // Something finished only yesterday: nothing to leave with today.
+  assert.equal(todayProgress([item(null, yesterday)], today).finished, false);
+});
+
+test('글·파일에서 할 일 만들기: the turn’s words carry today, the tools, assignees and the text', () => {
+  const body = extractionBody('  금요일까지 도면 제출 — 김 대리\n다음 주 화 2시 설비 회의 ', now, [
+    '회의록.txt',
+  ]);
+  assert.match(body, /^\[글·파일에서 할 일 만들기\] 아래 글과 첨부 파일\(회의록\.txt\)에서/);
+  assert.match(body, /오늘은 2026-10-01 \(목\)입니다/);
+  assert.match(body, /agenda_add/);
+  assert.match(body, /agenda_list/);
+  assert.match(body, /\(담당: 이름\)/);
+  assert.match(body, /묻지 말고/);
+  assert.ok(body.endsWith('---\n금요일까지 도면 제출 — 김 대리\n다음 주 화 2시 설비 회의'));
+  // Files only: no text block.
+  const files = extractionBody('', now, ['minutes.pdf']);
+  assert.match(files, /아래 첨부 파일\(minutes\.pdf\)에서/);
+  assert.ok(!files.includes('---'));
 });

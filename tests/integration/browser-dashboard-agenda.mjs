@@ -1,13 +1,15 @@
-// 대시보드 › 오늘 (SPEC-01.14, Design SCR-20, PLAN-26 T-098): Enter adds a 할 일 with the date and
-// time read from the words ('내일 3시 …' goes under 예정 at 15:00), the box finishes one into the
-// '완료 n' fold, a click edits in place, ↑ and drag reorder, and everything survives a reload;
-// [완료 비우기] clears the fold. A 기본 대화 turn whose AI adds and then changes a 할 일 (two writes)
-// gets one notice with one [되돌리기], which stays past 9 s and takes both back. [달력] (T-110)
-// shows the month: a day's click prefills the add box, a drag moves only the date, the 날짜 없음
-// box takes and gives dates, and '회의'/'까지' give the 회의/마감 kinds. Synthetic project and
-// provider only; no real CLI or host.
+// 대시보드 › 할 일 · 일정 (SPEC-01.14, Design SCR-20, PLAN-26 T-098·T-110, PLAN-30 T-135~T-137):
+// two areas over one list — '할 일' (오늘 with n/m, Enter adds with the date and time read from
+// the words, the box finishes into '완료 n', a click edits in place, ↑ and drag reorder, '예정 n'
+// folded) and '일정' (the month: a day's click prefills its own add box, a drag moves only the
+// date, a 할 일 row dragged onto a day too, the 날짜 없음 box takes and gives dates). A 기본 대화
+// turn whose AI adds and then changes a 할 일 gets one notice with one [되돌리기]. [글·파일에서 할 일
+// 만들기]: a text file dropped on the panel goes as a hostless turn whose AI adds three items in two
+// writes; one [되돌리기] takes all back, and no second notice shows. When today's items are done,
+// [퇴근하기] takes the finished ones off into the day log and shows tomorrow's. Synthetic project
+// and provider only; no real CLI or host.
 import assert from 'node:assert/strict';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { chromium } from 'playwright';
@@ -16,10 +18,15 @@ import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/
 import { startServer } from '../../src/server/server.ts';
 import { agentConnection } from '../../src/ai/agent-connection.ts';
 
-/** A provider whose AI writes 할 일 twice in one turn: agenda_add, then agenda_set on that item. */
+/** What the extraction turn's AI read from the attached file (the path in its context). */
+const readFiles = [];
+/**
+ * A provider whose AI writes 할 일: a composer turn adds and then changes one item (two writes);
+ * a 글·파일 turn reads the attached file and adds its lines in two agenda_add calls.
+ */
 const writingProvider = (options) => ({
   status: async () => ({ available: true }),
-  run: async () => {
+  run: async (context) => {
     const agent = options.agent && agentConnection(options.agent);
     if (!agent?.tools.includes('agenda_add'))
       return { text: JSON.stringify({ message: '할 일 도구가 없습니다.', operations: [] }) };
@@ -31,6 +38,25 @@ const writingProvider = (options) => ({
     );
     const call = async (name, args) =>
       JSON.parse((await client.callTool({ name, arguments: args })).content[0].text);
+    if (String(context?.goal ?? '').includes('[글·파일에서 할 일 만들기]')) {
+      // The CLI reads the kept attachment by its path, as its own Read tool would.
+      const path = /"path":"([^"]+\.txt)"/.exec(JSON.stringify(context.items))?.[1];
+      const text = path ? await readFile(path.replace(/\\\\/g, '\\'), 'utf8') : '';
+      readFiles.push(text);
+      const lines = text.split(/\r?\n/).filter((line) => line.trim());
+      const item = (line) => ({ text: line, ...(/회의/.test(line) ? { kind: 'meeting' } : {}) });
+      await call('agenda_add', { items: lines.slice(0, 2).map(item) });
+      await call('agenda_add', { items: lines.slice(2).map(item) });
+      await client.close();
+      return {
+        text: JSON.stringify({
+          status: 'done',
+          text: `${lines.length}개를 넣었습니다.`,
+          questions: [],
+          reference: null,
+        }),
+      };
+    }
     const { added } = await call('agenda_add', { items: [{ text: '구조 회의' }] });
     await call('agenda_set', { items: [{ id: added[0].id, text: '구조 회의 — 3층' }] });
     await client.close();
@@ -60,19 +86,32 @@ try {
   const openDashboard = () => page.locator('.rail [data-workspace-target="dashboard"]').click();
   await openDashboard();
   const board = page.getByRole('region', { name: '대시보드', exact: true });
-  const section = board.getByRole('region', { name: '오늘', exact: true });
+  const section = board.getByRole('region', { name: '할 일', exact: true });
+  const schedule = board.getByRole('region', { name: '일정', exact: true });
   await section.getByText('할 일이 없습니다.').waitFor();
-  // The 오늘 section is the first section of the dashboard.
+  // Two areas, 할 일 first and 일정 beside it on a wide screen; no [목록 | 달력] switch.
   assert.equal(
     await board.locator('section.dash-section').first().getAttribute('aria-label'),
-    '오늘',
+    '할 일',
   );
+  await schedule.locator('.dash-cal-month').waitFor();
+  assert.equal(await board.getByRole('button', { name: '목록', exact: true }).count(), 0);
+  assert.equal(await board.getByRole('button', { name: '달력', exact: true }).count(), 0);
+  const side = async () => {
+    const [a, b] = [await section.boundingBox(), await schedule.boundingBox()];
+    return b.x >= a.x + a.width - 1 && Math.abs(b.y - a.y) < 2;
+  };
+  assert.ok(await side(), 'the two areas stand side by side');
 
   const input = section.getByRole('textbox', { name: '할 일 추가' });
-  // The words give the date and time: tomorrow 15:00, under 예정.
+  // The words give the date and time: tomorrow 15:00, under the folded 예정.
   await input.fill('내일 3시 구조 회의');
   await section.getByText('내일 15:00 · 구조 회의').waitFor();
   await input.press('Enter');
+  const laterFold = section.getByRole('button', { name: /^예정 \d+$/ });
+  await laterFold.waitFor();
+  assert.equal(await laterFold.getAttribute('aria-expanded'), 'false');
+  await laterFold.click();
   const later = section.getByRole('list', { name: '예정' });
   await later.getByRole('button', { name: '구조 회의', exact: true }).waitFor();
   assert.match(await later.locator('li').first().innerText(), /15:00\s*내일/);
@@ -85,6 +124,7 @@ try {
     if (route.request().method() === 'POST') await new Promise((done) => setTimeout(done, 300));
     await route.continue();
   };
+  await input.focus();
   await page.route('**/api/v1/projects/*/agenda', slow);
   for (const text of ['도면 정리', '회의록 검토', '현장 사진 분류']) {
     await page.keyboard.type(text);
@@ -179,6 +219,7 @@ try {
   await openDashboard();
   await today.getByText('현장 사진 분류').waitFor();
   assert.deepEqual(await texts(), ['현장 사진 분류', '도면 정리 — 단면도']);
+  await laterFold.click();
   await later.getByRole('button', { name: '구조 회의', exact: true }).waitFor();
   await fold.click();
   const doneList = section.getByRole('list', { name: '완료한 할 일' });
@@ -204,14 +245,58 @@ try {
   await today.getByText('구조 회의 — 3층').waitFor({ state: 'detached' });
   assert.deepEqual(await texts(), ['도면 정리 — 단면도']);
 
-  // [목록 | 달력] (T-110): the month of this project's 할 일; the undated one sits in 날짜 없음.
+  // [글·파일에서 할 일 만들기] (T-136): a text file dropped on the panel; the hostless turn's AI
+  // reads it and adds three items in two writes; they show at once, with one [되돌리기].
+  await section.getByRole('button', { name: '글·파일에서 할 일 만들기' }).click();
+  const panel = section.getByRole('group', { name: '글·파일에서 할 일 만들기' });
+  const make = panel.getByRole('button', { name: '할 일 만들기' });
+  assert.ok(await make.isDisabled());
+  const notes = '다음 주 화요일 설비 회의\n도면 제출 — 김 대리\n현장 사진 정리\n';
+  const dropped = await page.evaluateHandle((text) => {
+    const transfer = new DataTransfer();
+    transfer.items.add(new File([text], '회의록.txt', { type: 'text/plain' }));
+    return transfer;
+  }, notes);
+  await panel.dispatchEvent('drop', { dataTransfer: dropped });
+  await panel.getByText('회의록.txt').waitFor();
+  await make.click();
+  const status = section.getByRole('status', { name: '글·파일에서 할 일 만들기' });
+  await status.getByText('3개를 더했습니다.').waitFor();
+  for (const text of ['다음 주 화요일 설비 회의', '도면 제출 — 김 대리', '현장 사진 정리'])
+    await today.getByRole('button', { name: text, exact: true }).waitFor();
+  assert.deepEqual(readFiles, [notes]);
+  assert.equal(
+    await today
+      .locator('li', { hasText: '다음 주 화요일 설비 회의' })
+      .locator('.dash-agenda-kind')
+      .innerText(),
+    '회의',
+  );
+  // The turn went to the 기본 대화 without a host, in Auto mode.
+  const sent = await page.evaluate(async () => {
+    const project = document.querySelector('#project-picker').value;
+    const list = await (await fetch(`api/v1/projects/${project}/requests`)).json();
+    return (list.requests ?? list).find((row) =>
+      String(row.input?.body ?? '').startsWith('[글·파일에서 할 일 만들기]'),
+    )?.input;
+  });
+  assert.deepEqual([sent.hostUse, sent.mode, sent.files.length], ['none', 'auto', 1]);
+  // The conversation's own notice is not shown again for this turn.
+  await page.waitForTimeout(1500);
+  assert.ok(!(await notice.innerText()).includes('설비 회의'));
+  await status.getByRole('button', { name: '되돌리기' }).click();
+  await status.getByText('되돌렸습니다.').waitFor();
+  await today.getByText('현장 사진 정리').waitFor({ state: 'detached' });
+  assert.deepEqual(await texts(), ['도면 정리 — 단면도']);
+  await status.getByRole('button', { name: '닫기' }).click();
+  await section.getByRole('button', { name: '글·파일에서 할 일 만들기' }).waitFor();
+
+  // 일정 (T-110, T-135): the month of this project's 할 일; the undated one sits in 날짜 없음.
   const iso = (at) =>
     `${at.getFullYear()}-${String(at.getMonth() + 1).padStart(2, '0')}-${String(at.getDate()).padStart(2, '0')}`;
   const todayIso = iso(new Date());
-  await section.getByRole('button', { name: '달력', exact: true }).click();
-  const calendar = section.locator('.dash-cal-month');
-  await calendar.waitFor();
-  const undatedBox = section.getByRole('group', { name: '날짜 없음' });
+  const calendar = schedule.locator('.dash-cal-month');
+  const undatedBox = schedule.getByRole('group', { name: '날짜 없음' });
   await undatedBox.getByText('도면 정리 — 단면도').waitFor();
   const day = (date) => calendar.locator(`[data-date="${date}"]`);
   // The 회의 added at the start shows on its day with the 회의 dot.
@@ -223,28 +308,29 @@ try {
         .getAttribute('data-kind'),
       'meeting',
     );
-  // A click on today: that day's list below, and the add box starts with its date.
+  // A click on today: that day's list below, and the 일정 box starts with its date.
+  const planInput = schedule.getByRole('textbox', { name: '일정 추가' });
   await day(todayIso).click();
   assert.equal(await day(todayIso).getAttribute('aria-pressed'), 'true');
-  assert.equal(await input.inputValue(), `${todayIso} `);
+  assert.equal(await planInput.inputValue(), `${todayIso} `);
   assert.equal(
     await page.evaluate(() => document.activeElement?.getAttribute('aria-label')),
-    '할 일 추가',
+    '일정 추가',
   );
   await page.keyboard.type('설비 미팅');
   await page.keyboard.press('Enter');
-  const dayList = section.getByRole('list', { name: /할 일$/ }).last();
+  const dayList = schedule.getByRole('list', { name: /할 일$/ }).last();
   await dayList.getByRole('button', { name: '설비 미팅', exact: true }).waitFor();
   assert.equal(await dayList.locator('.dash-agenda-kind').first().innerText(), '회의');
   await day(todayIso)
     .locator('.dash-cal-item[data-kind="meeting"]', { hasText: '설비 미팅' })
     .waitFor();
   // The box starts again with the picked day.
-  assert.equal(await input.inputValue(), `${todayIso} `);
+  assert.equal(await planInput.inputValue(), `${todayIso} `);
   // '까지' is read as a 마감 (shown in the preview), not dropped.
-  await input.fill('금요일까지 보고서');
-  await section.locator('.dash-agenda-hint .dash-agenda-kind', { hasText: '마감' }).waitFor();
-  await input.fill('');
+  await planInput.fill('금요일까지 보고서');
+  await schedule.locator('.dash-agenda-hint .dash-agenda-kind', { hasText: '마감' }).waitFor();
+  await planInput.fill('');
 
   // Drag to another day: only the date is saved (the time and the kind stay).
   const days = await calendar
@@ -280,6 +366,21 @@ try {
     (await other('', 'GET')).items.find((item) => item.text === '도면 정리 — 단면도').date,
     null,
   );
+  // A row of the 할 일 area dragged onto a day of the month gets that date, nothing else.
+  const rowBefore = (await other('', 'GET')).items.find(
+    (item) => item.text === '도면 정리 — 단면도',
+  );
+  await today.locator('li', { hasText: '도면 정리 — 단면도' }).dragTo(day(otherDay));
+  await day(otherDay).locator('.dash-cal-item', { hasText: '도면 정리 — 단면도' }).waitFor();
+  const rowAfter = (await other('', 'GET')).items.find((item) => item.id === rowBefore.id);
+  assert.deepEqual(
+    [rowAfter.date, rowAfter.text, rowAfter.kind],
+    [otherDay, rowBefore.text, rowBefore.kind],
+  );
+  await day(otherDay)
+    .locator('.dash-cal-item', { hasText: '도면 정리 — 단면도' })
+    .dragTo(undatedBox);
+  await undatedBox.locator('.dash-cal-item', { hasText: '도면 정리 — 단면도' }).waitFor();
   // Months move; [이번 달] comes back.
   const label = await calendar.locator('.dash-cal-label').innerText();
   await calendar.getByRole('button', { name: '다음 달' }).click();
@@ -287,13 +388,51 @@ try {
   await calendar.getByRole('button', { name: '이번 달' }).click();
   assert.equal(await calendar.locator('.dash-cal-label').innerText(), label);
   if (shot) await page.screenshot({ path: join(shot, 'dashboard-calendar.png') });
-  // The view is remembered by this browser.
+
+  // 오늘 n/m and 퇴근하기 (T-137): a 할 일 for today; when every item due today or earlier is done,
+  // the calm box offers [퇴근하기] although an undated one is still open.
+  await input.fill('오늘 현장 확인');
+  await input.press('Enter');
+  await today.getByRole('button', { name: '현장 확인', exact: true }).waitFor();
+  const progress = section.getByLabel('오늘 진행');
+  assert.match(await progress.innerText(), /^0\/\d+/);
+  for (;;) {
+    const due = today.locator('li[data-when="today"], li[data-when="overdue"]');
+    if (!(await due.count())) break;
+    const name = await due.first().locator('input[type="checkbox"]').getAttribute('aria-label');
+    await due.first().locator('input[type="checkbox"]').click();
+    await today.getByRole('checkbox', { name }).waitFor({ state: 'detached' });
+  }
+  const leave = section.getByRole('status', { name: '퇴근' });
+  await leave.getByText('오늘 할 일을 다 했습니다.').waitFor();
+  assert.match(await progress.innerText(), /^(\d+)\/\1/);
+  await today.getByText('도면 정리 — 단면도').waitFor();
+  if (shot) await page.screenshot({ path: join(shot, 'dashboard-day-end.png') });
+  await leave.getByRole('button', { name: '퇴근하기' }).click();
+  await leave.getByText('퇴근했습니다').waitFor();
+  await leave.getByRole('list', { name: '내일 할 일' }).getByText('구조 회의').waitFor();
+  // Today's finished items left the list for the day log; the undated one stays.
+  const after = (await other('', 'GET')).items;
+  assert.ok(!after.some((item) => item.text === '현장 확인'));
+  assert.ok(after.some((item) => item.text === '도면 정리 — 단면도' && !item.done));
+  const log = await other(`/log?from=${todayIso}&to=${todayIso}`, 'GET');
+  assert.equal(log.entries.length, 1);
+  assert.match(log.entries[0].text, new RegExp(`^${todayIso} · 완료 \\d+ · .*현장 확인`));
+  // A reload still shows the day as ended.
   await page.reload();
   await page.waitForFunction(() => document.querySelector('#project-picker')?.value);
   await openDashboard();
-  await calendar.waitFor();
-  await section.getByRole('button', { name: '목록', exact: true }).click();
-  await today.getByText('도면 정리 — 단면도').waitFor();
+  await leave.getByText('퇴근했습니다').waitFor();
+
+  // Narrow: the two areas stack.
+  await page.setViewportSize({ width: 700, height: 900 });
+  await page.waitForFunction(() => {
+    const [a, b] = [...document.querySelectorAll('.dash-agenda-pair > section')].map((el) =>
+      el.getBoundingClientRect(),
+    );
+    return b && b.top >= a.bottom - 1;
+  });
+  assert.ok(!(await side()));
 
   assert.deepEqual(errors, []);
   console.log('dashboard agenda browser checks passed');

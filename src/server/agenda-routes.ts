@@ -7,7 +7,8 @@ import { z } from 'zod';
 /**
  * 대시보드의 할 일 (SPEC-01.14, ARCH-01 §3): `GET·POST …/agenda`, `PUT …/agenda/:id`,
  * `POST …/agenda/order`, `POST …/agenda/:id/remove`, `POST …/agenda/remove-done` and
- * `POST …/agenda/undo` (an AI write's [되돌리기]). Removing is a POST like the folders routes, so
+ * `POST …/agenda/undo` (an AI write's [되돌리기]), `GET …/agenda/log` and `POST …/agenda/day-end`
+ * (퇴근하기, the day log). Removing is a POST like the folders routes, so
  * the DELETE whitelist stays as it is. Remote sessions may use all of them (SPEC-01.14 5).
  */
 export const agendaStatuses: Record<string, number> = { AGENDA_LIMIT: 409, AGENDA_UNDONE: 409 };
@@ -54,7 +55,17 @@ export async function agendaRoutes(
     } else throw new DomainError('NOT_FOUND');
     return true;
   }
-  if (method === 'POST' && remove) {
+  // The day log and 퇴근하기 (SPEC-01.14 10, schema 10).
+  if (method === 'GET' && name === 'log' && !remove) {
+    const query: Record<string, string> = {};
+    for (const key of ['from', 'to']) {
+      const value = url.searchParams.get(key);
+      if (value) query[key] = value;
+    }
+    send(200, { entries: agenda.log(projectId, query) });
+  } else if (method === 'POST' && name === 'day-end' && !remove)
+    send(200, agenda.dayEnd(projectId));
+  else if (method === 'POST' && remove) {
     const input = await body();
     send(200, { items: agenda.remove(projectId, name, input.revision) });
   } else if (method === 'POST' && name === 'order')

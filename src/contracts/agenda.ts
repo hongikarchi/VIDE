@@ -113,3 +113,35 @@ export const agendaChangeSchema = z.discriminatedUnion('op', [
   }),
 ]);
 export type AgendaChange = z.infer<typeof agendaChangeSchema>;
+
+/**
+ * The project's day log (SPEC-01.14 10, ARCH-01 §3, schema 10): one entry per date and kind.
+ * 퇴근하기 writes 'day-end' — a one-line summary and the items finished that day, taken off the
+ * list. The shape is kept plain (date, kind, text, body) so a later shared-notes or work-journal
+ * feature can read these entries and write its own kinds beside them.
+ */
+export const dayLogDoneSchema = z.object({
+  id: z.string(),
+  text: z.string(),
+  kind: agendaKindSchema,
+  date: z.string().nullable(),
+  time: z.string().nullable(),
+  doneAt: z.string().nullable(),
+  source: z.enum(['user', 'ai']),
+});
+export type DayLogDone = z.infer<typeof dayLogDoneSchema>;
+export const dayLogEntrySchema = z.object({
+  id: z.string(),
+  date: agendaDateSchema,
+  kind: z.string(),
+  /** '2026-10-06 · 완료 3 · 도면 정리, 회의록 검토, 구조 회의'. */
+  text: z.string(),
+  body: z.object({ done: z.array(dayLogDoneSchema) }).passthrough(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+export type DayLogEntry = z.infer<typeof dayLogEntrySchema>;
+/** `GET …/agenda/log?from=&to=`: both optional, inclusive. */
+export const dayLogQuerySchema = z
+  .object({ from: agendaDateSchema.optional(), to: agendaDateSchema.optional() })
+  .strict();
