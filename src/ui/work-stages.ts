@@ -34,7 +34,6 @@ export interface StageInput {
   phase?: string;
   activity: Entry[];
   progress?: { queries: number; attempts: number; completed: number };
-  maxHostCommands?: number;
   hostExecuted?: boolean;
   /** When the request was received (ms). */
   startedAt?: number;
@@ -146,8 +145,7 @@ function stageStates(input: StageInput): {
     '',
     counts[2] ? `조회 ${counts[2]}회` : '',
     counts[3] || errors
-      ? `실행 ${counts[3]}${input.maxHostCommands ? '/' + input.maxHostCommands : ''}회` +
-        (errors ? ` · 오류 ${errors}회 (AI가 고쳐 다시 시도)` : '')
+      ? `실행 ${counts[3]}회` + (errors ? ` · 오류 ${errors}회 (AI가 고쳐 다시 시도)` : '')
       : '',
     counts[4] ? `검증 성공 ${counts[4]}회` : '',
   ];
@@ -243,7 +241,7 @@ function directStages(
     '',
     counts[2] ? `조회 ${counts[2]}회` : '',
     counts[3] || errors
-      ? `실행 ${counts[3]}${input.maxHostCommands ? '/' + input.maxHostCommands : ''}회` +
+      ? `실행 ${counts[3]}회` +
         (undo ? ` · 되돌리기 ${undo}단계` : '') +
         (errors ? ` · 오류 ${errors}회 (AI가 고쳐 다시 시도)` : '')
       : '',

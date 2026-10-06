@@ -31,19 +31,28 @@ try {
     await page.locator('#execution-limits').click();
   };
   await open();
-  await page.getByLabel('도구 호출 수', { exact: true }).fill('8');
-  await page.getByLabel('대상별 호스트 실행 수', { exact: true }).fill('3');
-  await page.getByLabel('AI 응답 시간 (초)', { exact: true }).fill('60');
+  // Since T-122 only the idle wait acts: the call and execute counts are gone from the dialog.
+  const dialog = page.getByRole('dialog', { name: 'AI 응답 대기', exact: true });
+  assert.equal(await dialog.getByRole('spinbutton').count(), 1);
+  assert.equal(await dialog.getByText('도구 호출', { exact: false }).count(), 0);
+  await page.getByLabel('응답 없이 기다리는 시간 (초)', { exact: true }).fill('10');
+  await page.getByRole('button', { name: '적용', exact: true }).click();
+  // Out of range (30~600): the field's own check keeps the dialog open.
+  assert.equal(await dialog.isVisible(), true);
+  await page.getByLabel('응답 없이 기다리는 시간 (초)', { exact: true }).fill('60');
   await page.getByRole('button', { name: '적용', exact: true }).click();
   await page.reload();
   await page.waitForFunction(
     () => document.querySelector('#body')?.value === 'Review with bounded execution',
   );
   await open();
-  assert.equal(await page.getByLabel('도구 호출 수', { exact: true }).inputValue(), '8');
-  assert.equal(await page.getByLabel('대상별 호스트 실행 수', { exact: true }).inputValue(), '3');
-  assert.equal(await page.getByLabel('AI 응답 시간 (초)', { exact: true }).inputValue(), '60');
-  const bounds = await page.getByRole('dialog', { name: '작업 상한', exact: true }).boundingBox();
+  assert.equal(
+    await page.getByLabel('응답 없이 기다리는 시간 (초)', { exact: true }).inputValue(),
+    '60',
+  );
+  const bounds = await page
+    .getByRole('dialog', { name: 'AI 응답 대기', exact: true })
+    .boundingBox();
   assert.ok(bounds.width <= 440 && bounds.x >= 0 && bounds.y >= 0);
   await page.getByRole('button', { name: '취소', exact: true }).click();
   await page.locator('#request').click();
@@ -57,15 +66,14 @@ try {
     await new Promise((resolve) => setTimeout(resolve, 100));
   }
   assert.equal(saved?.state, 'succeeded');
-  assert.deepEqual(JSON.parse(saved.input).executionLimits, {
-    maxToolCalls: 8,
-    maxHostCommands: 3,
-    timeoutSeconds: 60,
-  });
+  // The contract still carries the two old counts (stored requests parse); they keep their values.
+  const limits = JSON.parse(saved.input).executionLimits;
+  assert.equal(limits.timeoutSeconds, 60);
+  assert.ok(Number.isInteger(limits.maxToolCalls) && Number.isInteger(limits.maxHostCommands));
   assert.equal(actualTimeout, 60000);
   assert.deepEqual(errors, []);
   console.log(
-    'Chromium: execution limit editing, cancellation, draft reload, actual API submission and provider timeout passed. Provider response mocked.',
+    'Chromium: idle wait editing (no call/execute counts), range refusal, cancellation, draft reload, actual API submission and provider timeout passed. Provider response mocked.',
   );
 } finally {
   await browser?.close();

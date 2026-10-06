@@ -393,10 +393,6 @@ export function initLeft5() {
   $('model-file').onchange = async () => {
     const file = $('model-file').files?.[0];
     if (!file || !sessionState.project) return;
-    if (file.size > 64 * 1024 * 1024) {
-      message('현재 파일 크기는 64MB까지 지원합니다.');
-      return;
-    }
     sessionState.busy = true;
     $('import-model').disabled = true;
     render();

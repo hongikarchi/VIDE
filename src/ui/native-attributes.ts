@@ -54,7 +54,6 @@ export function attachNativeAttributes(
     throw Error('첨부할 원본 사용자 속성이 없습니다.');
   const name = `Attributes-${request.id}-${object.id}.json`;
   if (state.files.some((file) => file.name === name)) throw Error('이미 첨부한 속성입니다.');
-  if (state.files.length >= 100) throw Error('첨부 자료는 100개까지입니다.');
   const text = JSON.stringify({
     source: 'Rhino ObjectAttributes user text',
     basis: request.id,
@@ -63,6 +62,5 @@ export function attachNativeAttributes(
     complete: attributes.complete,
     attributes: attributes.entries,
   });
-  if (text.length > 50000) throw Error('속성 첨부가 너무 큽니다.');
   state.files.push({ name, displayName: '속성 · ' + object.name, type: 'native-attributes', text });
 }

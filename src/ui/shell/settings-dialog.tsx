@@ -4,7 +4,9 @@
 // closing, the tab, the actions). The account, usage, programs and PC program sections are rendered
 // empty and filled by their panels (remote-panel, account-usage-panel, connectors-panel,
 // desktop-panel), which own their content; React never gives those sections children.
-import { memo, type ReactNode } from 'react';
+import { memo, useState, type ReactNode } from 'react';
+import { z } from 'zod';
+import { api } from '../gateway.ts';
 import { useStore } from '../store/core.ts';
 import { statusState, tabHidden, type SettingsTab } from '../store/status.ts';
 import { sessionState } from '../store/session.ts';
@@ -158,6 +160,80 @@ const ProblemsSection = memo(function ProblemsSection() {
   );
 });
 
+const bundleSchema = z.object({ file: z.string(), bytes: z.number().optional() }).passthrough();
+const size = (bytes?: number) =>
+  bytes === undefined
+    ? ''
+    : bytes < 1024 * 1024
+      ? ` · ${Math.max(1, Math.round(bytes / 1024))} KB`
+      : ` · ${(bytes / 1024 / 1024).toFixed(1)} MB`;
+
+// [진단 묶음 내보내기] (T-126): the engine zips logs, exit records, versions and a settings summary
+// under the data folder's diagnostics folder and answers the file's path. This PC only.
+const DiagnosticsSection = memo(function DiagnosticsSection() {
+  const [state, setState] = useState<
+    { busy: true } | { file: string; bytes?: number } | { error: string } | null
+  >(null);
+  const [copied, setCopied] = useState(false);
+  const busy = state !== null && 'busy' in state;
+  return (
+    <section className="settings-diagnostics">
+      <h3>진단 묶음</h3>
+      <small>
+        문제를 알릴 때 보낼 파일을 만듭니다. 기록·종료 기록·버전·설정 요약을 묶고, 요청 글·파일
+        내용·로그인 정보는 넣지 않습니다.
+      </small>
+      <div className="settings-actions">
+        <button
+          id="diagnostic-bundle"
+          type="button"
+          disabled={busy}
+          onClick={async () => {
+            setState({ busy: true });
+            setCopied(false);
+            try {
+              const value = bundleSchema.parse(
+                await api('/diagnostics/bundle', 'POST', {}, { quiet: ['FORBIDDEN'] }),
+              );
+              setState({ file: value.file, bytes: value.bytes });
+            } catch (error) {
+              setState({
+                error:
+                  (error as { code?: unknown } | null)?.code === 'FORBIDDEN'
+                    ? '진단 묶음은 이 PC의 VIDE 창에서만 만들 수 있습니다.'
+                    : '진단 묶음을 만들지 못했습니다. 잠시 뒤 다시 누르세요.',
+              });
+            }
+          }}
+        >
+          {busy ? '만드는 중…' : '진단 묶음 내보내기'}
+        </button>
+      </div>
+      {state && 'file' in state ? (
+        <div className="diagnostic-file" role="status">
+          <small>{`만들었습니다${size(state.bytes)}`}</small>
+          <code>{state.file}</code>
+          <button
+            type="button"
+            onClick={() => {
+              void navigator.clipboard
+                ?.writeText(state.file)
+                .then(() => setCopied(true))
+                .catch(() => {});
+            }}
+          >
+            {copied ? '복사됨' : '경로 복사'}
+          </button>
+        </div>
+      ) : state && 'error' in state ? (
+        <p className="usage-note" role="status">
+          {state.error}
+        </p>
+      ) : null}
+    </section>
+  );
+});
+
 export const SettingsDialog = memo(function SettingsDialog() {
   return (
     <dialog className="workspace-status-dialog" aria-label="상태 및 설정">
@@ -202,7 +278,7 @@ export const SettingsDialog = memo(function SettingsDialog() {
                     statusState.actions.openExecutionLimits();
                   }}
                 >
-                  작업 상한 (시간·조회 수)
+                  AI 응답 대기 시간
                 </button>
               </div>
             </section>
@@ -221,6 +297,7 @@ export const SettingsDialog = memo(function SettingsDialog() {
             </section>
             <DisplaySection />
             <ProblemsSection />
+            <DiagnosticsSection />
           </Pane>
         </div>
       </div>

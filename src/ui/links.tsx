@@ -130,7 +130,7 @@ const time = (value?: string) =>
 const OFFLINE_ERRORS: Record<string, string> = {
   SNAPSHOT_QUOTA: '계정 저장 용량 초과',
   SNAPSHOT_SITE_FULL: '사이트 저장 용량 초과',
-  SNAPSHOT_TOO_LARGE: '모델이 너무 큼(50 MB)',
+  SNAPSHOT_TOO_LARGE: '모델이 너무 큼(95 MB)',
   SNAPSHOTS_DISABLED: '사이트에서 꺼짐',
   PROJECT_NOT_FOUND: '계정 목록에 없는 프로젝트',
   NOT_FOUND: '사이트 업데이트 전',

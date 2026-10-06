@@ -5,6 +5,10 @@ import '@fontsource-variable/jetbrains-mono';
 import { flushSync } from 'react-dom';
 import { createRoot } from 'react-dom/client';
 import { Shell } from './shell/Shell.tsx';
+import { reportClientErrors } from './client-errors.ts';
+
+// The page's own errors go to the engine log from the start (T-126).
+reportClientErrors();
 
 // The shell is drawn once and synchronously (PLAN-26 T-113), so the screen code started below finds
 // every element. No StrictMode: the start would run twice (one-time connect token, WebGL, polls).

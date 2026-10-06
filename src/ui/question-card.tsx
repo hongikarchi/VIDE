@@ -78,9 +78,7 @@ export function Card({
   return (
     <section className="qcard" aria-label={`질문 ${index + 1}/${count}`}>
       <header className="qcard-head">
-        <span>
-          질문 {index + 1}/{count}
-        </span>
+        <span>{permission(question) ? '권한 확인' : `질문 ${index + 1}/${count}`}</span>
         {question.blocks ? (
           <span className="qcard-blocks">답 전까지 {question.blocks} 대기</span>
         ) : null}
@@ -121,6 +119,12 @@ export function Card({
     </section>
   );
 }
+
+/**
+ * The engine's file permission card (T-122, `file-access`: 이번만 · 이 폴더는 항상 · 거절) asks
+ * for leave, not for a design choice: its head and the recommended button say so.
+ */
+const permission = (question: TurnQuestion) => question.id === 'file-access';
 
 export interface QuestionCardsProps {
   api: ApiCall;
@@ -206,7 +210,7 @@ export function QuestionCards({ api, options }: QuestionCardsProps) {
             disabled={busy}
             onClick={() => send(true)}
           >
-            권장값으로 진행 · 가정으로 기록
+            {questions.every(permission) ? '거절하고 계속' : '권장값으로 진행 · 가정으로 기록'}
           </button>
           <button
             type="button"

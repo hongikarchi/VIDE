@@ -2767,6 +2767,27 @@ body.panel-mode #conversation {
 .settings-pane .problem-notices {
   margin-top: 18px;
 }
+.settings-diagnostics {
+  margin-top: 18px;
+}
+.diagnostic-file {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 4px 8px;
+  align-items: center;
+  margin-top: 10px;
+  padding: 8px 10px;
+  border-radius: var(--radius-md);
+  background: var(--bg-hover);
+}
+.diagnostic-file small {
+  grid-column: 1 / -1;
+  color: var(--muted);
+}
+.diagnostic-file code {
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
 
 /* AI accounts dialog: one card per service, one line per account, advanced paths folded. */
 .ai-settings {

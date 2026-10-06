@@ -1,36 +1,13 @@
 import { z } from 'zod';
-import {
-  MAX_ATTACHMENT_BYTES,
-  MAX_REQUEST_ATTACHMENTS,
-  MAX_REQUEST_ATTACHMENT_BYTES,
-  storedAttachmentSchema,
-  storedAttachments,
-  type StoredAttachment,
-} from '../contracts/workspace.ts';
+import { storedAttachmentSchema, type StoredAttachment } from '../contracts/workspace.ts';
 
 /**
  * Composer attachments (SPEC-01.12): any file, picked, pasted or dropped, is kept by the engine and
  * the request carries only its record. A large image also gets a smaller view copy for the model.
  */
-const MB = 1024 * 1024;
 /** Images above this size get a view copy (the model is shown at most 1 MB, ARCH-01 §3). */
 const VIEW_COPY_ABOVE = 1_000_000;
 const VIEW_LONG_SIDE = 1600;
-
-/** Why this batch cannot join the draft (the whole batch is refused), or undefined. */
-export function batchRefusal(files: readonly File[], draftFiles: readonly unknown[]) {
-  const kept = storedAttachments(draftFiles);
-  if (files.some((file) => file.size > MAX_ATTACHMENT_BYTES))
-    return `파일당 ${MAX_ATTACHMENT_BYTES / MB}MB까지 첨부할 수 있습니다.`;
-  if (kept.length + files.length > MAX_REQUEST_ATTACHMENTS)
-    return `한 요청에 파일은 ${MAX_REQUEST_ATTACHMENTS}개까지 첨부할 수 있습니다.`;
-  const total =
-    kept.reduce((sum, file) => sum + file.size, 0) +
-    files.reduce((sum, file) => sum + file.size, 0);
-  if (total > MAX_REQUEST_ATTACHMENT_BYTES)
-    return `한 요청의 첨부는 합계 ${MAX_REQUEST_ATTACHMENT_BYTES / MB}MB까지입니다.`;
-  return undefined;
-}
 
 async function post(path: string, body: Blob) {
   let response: Response;

@@ -38,3 +38,11 @@ test('stale document, different instance and absent objects never partially appe
     assert.deepEqual(state.pins, []);
   }
 });
+test('a selection of any size is attached: no pin cap on screen (T-121, ADR-031 7)', () => {
+  const objects = Array.from({ length: 1500 }, (_, i) => ({ id: 'o' + i, name: 'Object ' + i }));
+  const big = { ...request, result: { ...request.result, objects } };
+  const state = initial();
+  const selection = { ...source, selectedIds: objects.map((object) => object.id) };
+  assert.equal(attachHostSelection(state, big, selection), 1500);
+  assert.equal(state.pins.length, 1500);
+});

@@ -239,7 +239,7 @@ export function chooseModel(s: DraftState, id: string) {
 }
 export function validate(s: DraftState) {
   if (s.executionLimits && !executionLimitsSchema.safeParse(s.executionLimits).success)
-    return '작업 상한을 확인하세요.';
+    return 'AI 응답 대기 시간을 확인하세요.';
   if (
     s.linkedTargets &&
     (s.linkedTargets.length !== 2 ||
@@ -252,7 +252,6 @@ export function validate(s: DraftState) {
     (!Array.isArray(s.instructions) || s.instructions.some((t) => typeof t !== 'string'))
   )
     return '요청 목록을 확인하세요.';
-  if (requestBody(s).length > 20000) return '요청 묶음은 20,000자까지 입력할 수 있습니다.';
   if (!requestBody(s).trim() && !s.pins.length && !s.sketches.length && !s.files.length)
     return '메시지나 참조를 추가하세요.';
   const m = models.find((m) => m.id === s.model);
@@ -290,9 +289,6 @@ export function attachBrushSketch(
     .filter((stroke) => stroke.points.length >= 2)
     .map((stroke) => structuredClone(stroke));
   if (!valid.length) throw Error('선을 그리세요.');
-  if (valid.length > 200) throw Error('스케치 하나에 200획까지 첨부할 수 있습니다.');
-  if (valid.reduce((sum, stroke) => sum + stroke.points.length, 0) > 20000)
-    throw Error('스케치 점이 너무 많습니다. 나누어 첨부하세요.');
   s.sketches.push({
     id: crypto.randomUUID(),
     name: `스케치 ${s.sketches.length + 1}`,
@@ -342,8 +338,6 @@ export function attachHostSelection(
   const additions = valid.filter(
     (object) => !state.pins.some((pin) => pin.id === object.id && pin.basis === request.id),
   );
-  if (state.pins.length + additions.length > 100)
-    throw Error('요청에 첨부할 수 있는 객체는 100개까지입니다.');
   state.pins.push(
     ...additions.map((object) => ({
       id: object.id,
@@ -359,21 +353,14 @@ export function attachHostSelection(
 export function attachReviewNote(state: DraftState, note: ReviewNote, review: Review) {
   if (state.baseRequestId !== review.requestId)
     throw Error('다른 후보를 보고 있습니다. 기준 후보를 먼저 열어 대상을 확인하세요.');
-  if (
-    requestBody({ ...state, instructions: [...(state.instructions || []), note.body] }).length >
-    20000
-  )
-    throw Error('요청 묶음은 20,000자까지 입력할 수 있습니다.');
   const name = 'Review-' + note.id + '.md';
   if (state.files.some((file) => file.name === name))
     throw Error('이미 요청 초안에 첨부한 의견입니다.');
-  if (state.files.length >= 100) throw Error('첨부 자료는 100개까지입니다.');
   const object = review.payload.model.find((object) => object.id === note.objectId);
   if (note.objectId && !object) throw Error('검토본의 대상 객체를 확인할 수 없습니다.');
   const existing = object && state.pins.find((pin) => pin.id === object.id);
   if (existing && (existing.basis !== review.requestId || existing.role !== 'target'))
     throw Error('첨부된 객체의 기준과 역할을 먼저 확인하세요.');
-  if (object && !existing && state.pins.length >= 100) throw Error('요청 객체는 100개까지입니다.');
   const text = JSON.stringify(
     {
       reviewId: review.id,

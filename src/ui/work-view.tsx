@@ -3,7 +3,6 @@ import { z } from 'zod';
 import { isDwgSdkEditMode } from '../contracts/dwg-edit-mode.ts';
 import { requestMode, storedAttachments } from '../contracts/workspace.ts';
 import { attachmentPreview } from './attachments.ts';
-import { executionLimits } from '../contracts/execution-limits.ts';
 import { undoReason } from '../contracts/direct-refusal.ts';
 import { ActivityLog, activityEntries } from './activity.tsx';
 import { inConversation } from './conversations.tsx';
@@ -542,7 +541,6 @@ export function stagesOf(message: Message, now = Date.now()) {
     phase: result?.phase,
     activity: activityEntries(result?.activity),
     progress: result?.progress,
-    maxHostCommands: request?.input ? executionLimits(request.input).maxHostCommands : undefined,
     // The open document edited directly (ADR-022) has its own stages (no save-and-reopen check).
     direct:
       typeof (result as { appliedDirectly?: unknown } | undefined)?.appliedDirectly === 'boolean',

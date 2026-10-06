@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, rm, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { chromium } from 'playwright';
@@ -284,6 +284,41 @@ try {
   assert.equal(await page.locator('#effort-menu').getAttribute('open'), null);
   await page.locator('#workspace-settings').click();
   await page.screenshot({ path: join(evidence, 'settings-1440.png') });
+  // [진단 묶음 내보내기] (T-126): the engine writes the zip and the pane shows its path.
+  await settings.getByRole('button', { name: '상태 · 오류', exact: true }).click();
+  await settings.getByRole('button', { name: '진단 묶음 내보내기', exact: true }).click();
+  const bundlePath = await settings.locator('.diagnostic-file code').textContent();
+  assert.match(bundlePath, /\.zip$/);
+  assert.ok((await stat(bundlePath)).size > 0);
+  assert.equal(
+    await settings.getByRole('button', { name: '경로 복사', exact: true }).isVisible(),
+    true,
+  );
+  // The page's own errors go to the engine log, never with the address's query or hash.
+  const [clientReport] = await Promise.all([
+    page.waitForRequest('**/api/v1/diagnostics/client'),
+    page.evaluate(() =>
+      window.dispatchEvent(
+        new ErrorEvent('error', {
+          message: 'probe',
+          error: new RangeError('probe'),
+          filename: location.origin + '/assets/probe.js?x=1',
+          lineno: 3,
+          colno: 7,
+        }),
+      ),
+    ),
+  ]);
+  const sentReport = clientReport.postDataJSON();
+  assert.equal(sentReport.message, 'RangeError: probe');
+  assert.equal(
+    sentReport.source,
+    (await page.evaluate(() => location.origin)) + '/assets/probe.js',
+  );
+  assert.equal(sentReport.line, 3);
+  assert.equal(sentReport.route, await page.evaluate(() => location.pathname));
+  // A keepalive request's body is not readable here; the engine's answer status is.
+  assert.equal((await clientReport.response()).status(), 200);
   await settings.getByRole('button', { name: '닫기', exact: true }).click();
   await page.setViewportSize({ width: 800, height: 900 });
   await page.locator('button[data-mobile="model"]').click();

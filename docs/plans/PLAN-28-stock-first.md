@@ -39,7 +39,8 @@ related: [ADR-031, ADR-032, RESEARCH-14, PLAN-27, SPEC-02, ARCH-01]
 - HTTP JSON 본문은 메모리 보호로 64MB(`JSON_BODY_BYTES`). 오프라인 스냅샷은 사이트 요청 한도 아래 95MB. 대량 삭제 확인은 500개, 상수 하나(`DIRECT_MAX_DELETES`, `src/contracts/host-documents.ts`)로 모았다.
 - AI에는 핀 앞 200개를 그대로, 나머지는 역할·레이어별 수와 ID 요약 하나로 보낸다(`pinContext`). 핀 확인은 Sync마다 ID 집합을 한 번만 만든다.
 - 시험: `tests/server/no-caps.test.mjs`(3만 객체 페이지, 큰 객체 하나의 상자, 16MB 넘는 요청, 핀 1만·긴 본문·많은 첨부, 핀 요약, 3만 객체 Sync 위 핀 1,000 저장). 실호스트 확인은 남았다(플러그인 재설치 필요).
-- 남은 것: 화면(`src/ui/**`)의 핀 100 안내(`ui/model.ts`)·첨부 안내·`INPUT_TOO_LARGE` 문구("1 MB")는 화면 작업 세션 몫. 공유 웹 뷰어의 64MiB 표시 한도(`WEB_MODEL_LIMIT`, `src/sharing/web`)와 ZWCAD 표시 응답 128MiB는 그대로다.
+- 화면(2026-10-06): 핀 100(`model.ts`·고정 토큰), 본문 2만 자, 스케치 200획·점 2만, 첨부 개수·크기(`attachments.ts`의 `batchRefusal` 삭제), 속성·외부 의견 첨부 한도, 3dm 가져오기 64MB 거절을 화면에서 없앴다. `INPUT_TOO_LARGE` 문구는 수치 없이(엔진의 64MB JSON 보호 등은 남음), 오프라인 스냅샷 문구는 95 MB. 시험 `tests/core/host-selection.test.mjs`(핀 1,500).
+- 남은 것: 공유 웹 뷰어의 64MiB 표시 한도(`WEB_MODEL_LIMIT`, `src/sharing/web`)와 ZWCAD 표시 응답 128MiB는 그대로다.
 
 ## T-122 순정 도구 (RESEARCH-14 §3~§6, ADR-031 8)
 
@@ -56,7 +57,8 @@ related: [ADR-031, ADR-032, RESEARCH-14, PLAN-27, SPEC-02, ARCH-01]
 **진행(2026-10-02, 작업 브랜치):** 구현·시험 완료, main 합침 전.
 - **반영:** Claude는 작업 폴더 도구가 있는 턴에서 `--restricted`/`--safe-mode`를 빼고 `Read,Glob,Grep,Edit,Write,Bash`를 미리 허용 없이 켜며 `--add-dir`·`--permission-prompt-tool stdio`로 작업 폴더 밖 사용을 엔진의 `WorkFolderGate`에 묻는다. Codex는 app-server 경로에서 `workspace-write`·`approvalPolicy: untrusted`·셸·code mode로 열고 승인 요청을 같은 게이트에 묻는다(`codex exec`는 승인 통로가 없어 도구 없음). 허용 밖 호출·시작 목록 불일치는 경고만, 턴 시간은 `IdleClock`(출력 없는 시간, 카드·도구 대기 중 멈춤). 도구 결과는 잘라서 `truncated`·`nextOffset`, `capture_view`는 큰 이미지를 줄여 다시 찍음, 패킷 이미지는 20장·5 MB까지(넘으면 안내만). `AGENT_CALL_LIMIT`·`HOST_COMMAND_LIMIT` 제거, 범위 유효 시간은 호출 사이 시간. `status`·`cancel`·`attachment_read`·`file_list`·`file_read` 삭제(첨부는 보관 경로로 읽음). 결과 미확인·문서 변경은 실행 결과의 `notices`, 답 유실 뒤 읽기 허용(`HOST_RESULT_UNKNOWN`), 읽기 도구 병렬, 스크립트 정책은 파일·프로세스·네트워크·코드 적재·문서 닫기·저장·되돌리기 규칙만(엔진·`CodePolicy.cs`·`DirectScripts.cs`), 대량 삭제 기준 500. 오류 코드에 `next` 힌트, 스키마 오류에 `fields`.
 - **실측:** 실제 Claude 2.1.287(haiku)로 작업 폴더 안 읽기는 묻지 않고, 밖 읽기는 게이트를 거쳐 허용, 밖 쓰기는 거절 뒤 턴이 이어짐(단발·대화 프로세스 모두). 실제 Codex 0.157.1 app-server로 셸이 작업 폴더에서 돌고 밖 쓰기는 게이트가 거절해 파일이 생기지 않음. 처음 `on-request`에서는 Codex가 Windows에서 루트 밖에 승인 없이 써서 `untrusted`로 바꿨다.
-- **남은 것:** 화면(`src/ui/**`): 작업 상한 창의 호출·실행 수 입력(이제 무의미)과 `AGENT_CALL_LIMIT`·`HOST_COMMAND_LIMIT` 문구 정리, 권한 카드는 기존 질문 카드(`file-access`)를 그대로 쓴다. 호스트(`hosts/**`, T-121 쪽): 레이어 삭제(`layer-delete`) 보호 판정 제거 여부, ZWCAD 쪽 대량 삭제 기본값(엔진이 500을 보냄). 셸 판정은 명령 인자의 경로만 본다(프로그램이 스스로 여는 경로는 못 봄).
+- **화면(2026-10-06):** 작업 상한 창을 'AI 응답 대기' 하나(출력 없는 시간, 30~600초)로 줄였고 호출·실행 수 입력과 진행 줄의 실행 분모(`실행 n/12회`)를 없앴다. 계약의 두 값은 저장된 요청 호환으로 기존 값을 그대로 보낸다. `AGENT_CALL_LIMIT`·`HOST_COMMAND_LIMIT` 문구는 T-122 전에 저장된 요청에만 남으므로 '이전 판의 상한, 지금은 없음'으로 바꿨다. 권한 카드(`file-access`)는 머리 '권한 확인', 권장 단추 '거절하고 계속', 긴 경로 줄바꿈. 시험 `browser-execution-limits`, `work-stages`.
+- **남은 것:** 호스트(`hosts/**`, T-121 쪽): 레이어 삭제(`layer-delete`) 보호 판정 제거 여부, ZWCAD 쪽 대량 삭제 기본값(엔진이 500을 보냄). 셸 판정은 명령 인자의 경로만 본다(프로그램이 스스로 여는 경로는 못 봄).
 
 ## T-123 모델 전체 JSON 전송 제거 (RESEARCH-14 §1)
 
@@ -137,7 +139,8 @@ ADR-032를 사용자가 확인한 뒤 ARCH-01 §5에 반영하고 구현한다. 
 - AI 턴: `tool-call`(요청 ID·도구·ms·크기·코드), `cli-start`/`cli-exit`(CLI 버전·모델·effort·종료 코드·실패 시 stderr 끝 2 KB, 키 제거). `src/ai`는 `ClaudeCli` 생성자의 spawn 감싸기 한 곳만 바꿨다.
 - Rhino·ZWCAD 플러그인 `rhino-*`/`zwcad-*.jsonl`, 셸 `shell-*.jsonl`(공용 `hosts/common/DiagnosticLog.cs`). 세 C# 빌드 오류 0.
 - 화면 오류 수신 `POST /api/v1/diagnostics/client`, 진단 묶음 `POST /api/v1/diagnostics/bundle`·`tools/diagnostics/bundle.mjs`, 보기 `tools/diagnostics/view.mjs`.
-- 남은 것: 화면 쪽 연결(`window` `error`/`unhandledrejection` → client 엔드포인트, 설정의 [진단 묶음 내보내기] 단추) — 화면 작업 세션 뒤. 설치본 갱신 뒤 실제 로그 확인.
+- 화면(2026-10-06): `src/ui/client-errors.ts`가 `window` `error`/`unhandledrejection`을 client 엔드포인트로 보낸다(메시지·스택·스크립트·줄·열·경로·빌드 파일 이름, 주소의 query·hash와 입력 글은 보내지 않음, 화면 쪽 1분 10건·같은 오류 1번, 보내는 중의 오류는 버림). 설정 '상태 · 오류' 탭의 [진단 묶음 내보내기]가 `POST /diagnostics/bundle`의 파일 경로를 보이고 [경로 복사]를 둔다. 데스크톱 셸에 폴더 열기 메시지가 없어 [폴더 열기]는 두지 않았다. 시험 `tests/core/client-errors.test.mjs`, `browser-workspace-controls`.
+- 남은 것: 설치본 갱신 뒤 실제 로그 확인, 셸에 폴더 열기를 더하면 진단 묶음 옆에 연결.
 
 ## T-123 검토 뒤 남은 일 (2026-10-06)
 

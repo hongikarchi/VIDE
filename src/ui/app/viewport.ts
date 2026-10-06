@@ -213,10 +213,6 @@ export function initViewport2() {
           source.source === 'overlay' ? overlayPicked(source) : applySelection(ids, mode),
         (event) => {
           if (event.type === 'stroke') {
-            if (sketchState.strokes.length >= 200) {
-              message('스케치 하나에 200획까지 그릴 수 있습니다. 먼저 첨부하세요.');
-              return;
-            }
             sketchState.strokes.push(event.stroke);
           } else sketchState.strokes.splice(event.index, 1);
           draw();

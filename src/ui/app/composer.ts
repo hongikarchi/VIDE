@@ -2,7 +2,7 @@
 // attachments, request routing (view, setting, app action, jig start) and sending.
 import { requestAdmission, waitingOf } from '../../contracts/request-scope.ts';
 import { requestMode } from '../../contracts/workspace.ts';
-import { attachmentPreview, batchRefusal, addViewCopy, uploadAttachments } from '../attachments.ts';
+import { attachmentPreview, addViewCopy, uploadAttachments } from '../attachments.ts';
 import { element as $, readableError } from '../elements.ts';
 import {
   models,
@@ -637,11 +637,8 @@ export async function attachPathImage(path: string) {
     const kept = await attachImagePath(api, projectId, path);
     if (sessionState.project?.id !== projectId || draftState.draftConversation !== conversation)
       throw Error('대화가 바뀌어 이미지 첨부를 취소했습니다.');
-    if (!draftState.state.files.some((entry) => entry.id === kept.id)) {
-      const refusal = batchRefusal([], [...draftState.state.files, kept]);
-      if (refusal) throw Error(refusal);
+    if (!draftState.state.files.some((entry) => entry.id === kept.id))
       draftState.state.files.push(kept);
-    }
     render();
     // A large image gets the smaller copy the model sees, as a picked file does.
     void addViewCopy(projectId, kept);
@@ -792,15 +789,13 @@ export function cycleMode() {
 }
 /**
  * Composer attachments (SPEC-01.12): any type, picked, pasted or dropped; the engine keeps each
- * file and the draft holds its record. A batch over the limits is refused as a whole.
+ * file and the draft holds its record (no size or count cap, ADR-031 7).
  */
 export async function attachFiles(files: File[]) {
   if (!files.length) return;
   try {
     if (!sessionState.project || !sessionState.ready) throw Error('프로젝트를 연 뒤 첨부하세요.');
     if (sessionState.busy) throw Error('현재 요청 전송이 끝난 뒤 첨부하세요.');
-    const refusal = batchRefusal(files, draftState.state.files);
-    if (refusal) throw Error(refusal);
     const original = draftState.state,
       conversation = draftState.draftConversation;
     message(`파일 ${files.length}개를 첨부하는 중입니다.`);
@@ -875,13 +870,7 @@ export function initComposer1() {
       )
         return { count: 0 };
       return {
-        count:
-          sessionState.ready &&
-          !sessionState.busy &&
-          count &&
-          draftState.state.pins.length + count <= 100
-            ? count
-            : 0,
+        count: sessionState.ready && !sessionState.busy ? count : 0,
       };
     },
     insert: (label) => {

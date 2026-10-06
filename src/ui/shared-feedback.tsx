@@ -3,7 +3,6 @@ import { z } from 'zod';
 import { api } from './gateway.ts';
 import { receivedFeedbackSchema, type ReceivedFeedback } from '../contracts/shared-feedback.ts';
 import type { DraftState } from './model.ts';
-import { requestBody } from './model.ts';
 
 export function attachSharedFeedback(state: DraftState, note: ReceivedFeedback) {
   if (state.baseRequestId !== note.requestId)
@@ -23,20 +22,9 @@ export function attachSharedFeedback(state: DraftState, note: ReceivedFeedback) 
     text = JSON.stringify(note, null, 2),
     sketches = input.sketches ?? [];
   if (state.files.some((file) => file.name === name)) throw Error('이미 첨부한 의견입니다.');
-  if (
-    text.length > 50000 ||
-    state.files.length >= 100 ||
-    state.sketches.length + sketches.length > 100
-  )
-    throw Error('초안 첨부 한도를 넘었습니다. 기존 초안을 정리한 뒤 시도하세요.');
-  if (requestBody({ ...state, instructions: [...state.instructions, input.body] }).length > 20000)
-    throw Error('요청 문장이 20,000자를 넘습니다.');
-  if (input.body.trim() && state.instructions.length >= 100)
-    throw Error('요청 목록은 100개까지입니다.');
   const pin = object && state.pins.find((pin) => pin.id === object.id);
   if (pin && (pin.basis !== note.requestId || pin.role !== 'target'))
     throw Error('기존 객체 첨부의 기준과 역할을 먼저 확인하세요.');
-  if (object && !pin && state.pins.length >= 100) throw Error('요청 객체는 100개까지입니다.');
   state.files.push({
     name,
     text,

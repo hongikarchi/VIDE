@@ -168,9 +168,11 @@ export const errors: Record<string, string> = {
 Object.assign(errors, {
   HOST_UNAVAILABLE: 'Rhino 설치와 호스트 연결 상태를 확인하세요.',
   HOST_REJECTED: 'Rhino가 형상 생성을 완료하지 못했습니다. 입력을 수정해 다시 요청할 수 있습니다.',
+  // Only requests stored before T-122 carry these two: the engine has no call or execute cap now.
   HOST_COMMAND_LIMIT:
-    '설정한 호스트 실행 횟수에 도달했습니다. 마지막 후보를 확인하고 후속 요청의 상한을 조정하세요.',
-  AGENT_CALL_LIMIT: '설정한 도구 호출 횟수에 도달했습니다.',
+    '이전 판의 호스트 실행 횟수 상한에 걸려 멈춘 요청입니다. 지금은 상한이 없으니 다시 보내면 이어서 실행합니다.',
+  AGENT_CALL_LIMIT:
+    '이전 판의 도구 호출 횟수 상한에 걸려 멈춘 요청입니다. 지금은 상한이 없으니 다시 보내면 이어서 실행합니다.',
   INVALID_GEOMETRY: 'AI의 형상 제안이 검증을 통과하지 못했습니다.',
   PROJECT_BUSY: '같은 대상의 작업이 진행 중입니다. 다른 문서를 선택하거나 완료를 기다리세요.',
   INTERVENTION_REVIEW_REQUIRED:
@@ -318,7 +320,7 @@ Object.assign(errors, {
   METHOD_NOT_ALLOWED: '이 판의 VIDE가 지원하지 않는 요청입니다. 앱을 다시 열거나 업데이트하세요.',
   INTERNAL_ERROR: 'VIDE 내부 오류가 났습니다. 다시 시도하고, 반복되면 피드백으로 알려 주세요.',
   JSON_REQUIRED: '요청 형식이 맞지 않습니다. 앱을 새로고침한 뒤 다시 시도하세요.',
-  INPUT_TOO_LARGE: '보낸 내용이 너무 큽니다(1 MB 한도). 첨부나 글을 줄여 다시 보내세요.',
+  INPUT_TOO_LARGE: '보낸 내용이 너무 큽니다. 첨부나 글을 줄여 다시 보내세요.',
   // Project folders (SPEC-01.13).
   FOLDER_NOT_FOUND: '이 PC에 그 폴더가 없습니다. 경로를 확인하세요.',
   FOLDER_NOT_ALLOWED:
